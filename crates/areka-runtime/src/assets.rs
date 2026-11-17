@@ -118,7 +118,7 @@ pub struct LoopTables {
 /// バルーン表の scope キーを seriko のアクタ鍵語彙へ変換する（起動シームの転送・Req 5.6）。
 ///
 /// boot 側の `u32` scope を `SerikoLoopConfig.balloon_tables` が要求する [`ActorKey`] へ
-/// `ActorKey::from(scope.to_string())` で写す。この写像は attach（`frame.rs`）・文字層の再追従・
+/// `ActorKey::from(scope.to_string())` で写す。この写像は attach（`frame/attach.rs`）・文字層の再追従・
 /// `target_map::scope_of` の逆写像と**同一語彙**であり、ここで別語彙を作らないことが scope 同定の
 /// 一貫性を保つ要点である。表そのものは値移送（内容は変えない）。
 ///
@@ -148,7 +148,7 @@ pub struct BootAssets {
     /// スコープごとの起動時オンの静的 bind 集合（シェルの `*.bindgroup{N}.default,1`・要件 14.1）。
     pub static_binds: DefaultBinds,
     /// bind 名前解決情報（`MountModel.bindgroups` の名前宣言由来・`(カテゴリ, パーツ)`→着せ替え ID）。
-    /// task 7.2 で `spawn_seriko` の actor 構築へ手渡す（本タスクは起動時資産への保持のみ）。
+    /// `wire_runtime` が `spawn_seriko_clocked` の actor 構築へ手渡す（bind cue の着せ替え名の解決）。
     pub bind_resolver: BindResolver,
     /// SERIKO ループ表（シェル面 1 表＋バルーン面の scope 別表・面種非依存＝裁定 (a)）。
     /// 既に保持する `EmoWorld` スナップショットから `AnimationTable::from_world` で構築する
@@ -212,7 +212,7 @@ pub struct BootAssets {
 ///   → [`BootWiringError::ShellEmpty`]。
 /// - バルーン系列解決／target 構築失敗（走査失敗・面 0 不在・bake 脱落）
 ///   → [`BootWiringError::Balloon`]（`#[from] BalloonLoadError`・真因ログは権威側が既に出す）。
-#[allow(dead_code)] // 本番の起動はシェル名つきの兄弟を通る（呼び手はテスト）
+#[cfg(any(test, feature = "test-support"))] // 本番の起動はシェル名つきの兄弟を通る（呼び手はテスト）
 pub fn build_boot_assets(
     ghost_root: &Path,
     balloon_root: &Path,

@@ -2,11 +2,12 @@ use super::*;
 use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
-/// 選びの種は抽選の種と別に引く（spec: seriko-pattern-calls 要件 3.6）: 続けて引いた 2 つの種が
-/// 違う（同じ種だと選びと抽選が同じ列を引き、別にした意味が無い）。
+/// 選びの種は抽選の種と別に引く（spec: seriko-pattern-calls 要件 3.6）: `wire_runtime` が使う
+/// 2 つの種が違う（同じ種だと選びと抽選が同じ列を引き、別にした意味が無い）。
 #[test]
-fn lottery_and_pick_seeds_are_drawn_separately() {
-    assert_ne!(entropy_seed(), entropy_seed());
+fn pick_and_draw_seeds_differ() {
+    let (draw, pick) = entropy_seeds();
+    assert_ne!(draw, pick);
 }
 
 /// 取り違え防止の檻（task 4.3・要件 1.1）: `build_boot_assets` への隣接 `u16` 2 引数

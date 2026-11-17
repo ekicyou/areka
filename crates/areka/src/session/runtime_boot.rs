@@ -11,7 +11,9 @@ use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
 
 use areka_ghost::sink::BootCueSink;
-use areka_ghost::{GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode};
+use areka_ghost::{
+    GhostBootError, GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode,
+};
 use areka_kanade::KanadeNotice;
 use areka_parsers::charset::DefaultEncoding;
 use bevy_ecs::world::World;
@@ -35,7 +37,7 @@ use areka_runtime::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
 use areka_runtime::window_state_cue::WindowStateCueSink;
 use areka_runtime::zorder_cue::ZOrderCueSink;
 
-pub(crate) use areka_runtime::{CueSinkSources, RuntimeBootError};
+pub(crate) use areka_runtime::CueSinkSources;
 
 /// 受信端が窓の側に無い線の手元の端（実行系の成立後にだけ World へ据える）。
 pub(super) struct RuntimeLines {
@@ -112,7 +114,7 @@ pub(crate) fn boot_runtime(
     sources: &CueSinkSources,
     kanade_stop: Sender<KanadeNotice>,
     shell: Option<&str>,
-) -> Result<GhostRuntime, RuntimeBootError> {
+) -> Result<GhostRuntime, GhostBootError> {
     let RuntimeInputs {
         ghost_root,
         balloon_root: _,
@@ -145,7 +147,7 @@ pub(crate) fn boot_runtime(
                     "runtime: ghost boot に失敗（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
                 );
             }
-            return Err(RuntimeBootError::Boot(err));
+            return Err(err);
         }
     };
     install_lines(world, &ghost_root, &runtime, lines);

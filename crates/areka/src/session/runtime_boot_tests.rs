@@ -14,7 +14,7 @@ use std::sync::mpsc::{self, Receiver};
 use areka_emo_present::PresentCommand;
 use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
-use areka_ghost::{ShioriWiring, TickerMode};
+use areka_ghost::{GhostBootError, ShioriWiring, TickerMode};
 use areka_kanade::{BootOrigin, CloseReason, ShioriBackend};
 use areka_seriko::{BindResolver, SerikoLoopConfig, SurfaceResolver, spawn_seriko};
 use bevy_ecs::world::World;
@@ -217,7 +217,8 @@ fn failed_boot_leaves_world_unchanged() {
 
     let result = boot_runtime(&mut world, inputs, &rig.sources, mpsc::channel().0, None);
 
-    assert!(matches!(result, Err(RuntimeBootError::Boot(_))));
+    // 無いフォルダはマウントで落ちる（失敗の種類まで見る）。
+    assert!(matches!(result, Err(GhostBootError::Mount(_))));
     assert_eq!(installed(&world), 0, "失敗では受信端を据えない");
 }
 

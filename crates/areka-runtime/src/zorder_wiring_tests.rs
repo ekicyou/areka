@@ -316,11 +316,11 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
         "説明文を落とす処理が本文まで落としている"
     );
     assert!(
-        !code.contains("依存方向（レイヤ規律・design.md"),
+        !code.contains("各サブモジュールが機能の実装を持つ。"),
         "説明文が落ちていない（走査が恒真になっている）"
     );
     assert!(
-        raw.contains("依存方向（レイヤ規律・design.md"),
+        raw.contains("各サブモジュールが機能の実装を持つ。"),
         "対照の前提が崩れている（素の全文に説明文が無い）"
     );
 }

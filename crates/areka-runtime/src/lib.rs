@@ -5,11 +5,6 @@
 //! 側の表示指令を表示層の指令へ変換するアダプタ 1 個＋各エンジンの結線＋二段の観測に徹する
 //! （design.md「変更境界」・R10.4）。
 //!
-//! 依存方向（レイヤ規律・design.md「依存方向（レイヤ規律）」）:
-//! `target_map`（純粋・std のみ）→ `adapter`（seriko/emo-present 型）→ `talk_clock`（sakura 型＋clock）
-//! → `assets`（parsers/atlas/compose/seriko/emo-present）→ `frame`（bevy_ecs World・emo-present/emo-text 駆動）
-//! → `ghost_session.rs`／`main.rs`（全結線）。左のモジュールは右を import しない。
-//!
 //! 各サブモジュールが機能の実装を持つ。
 
 pub mod adapter;
@@ -167,23 +162,16 @@ pub struct CueSinkSources {
     pub window_state_tx: Sender<WindowStateDirective>,
 }
 
-/// 実行系の側の起動の失敗（分類した記録は起動の関数［[`BootRuntimeFn`]］が残す）。
-#[derive(Debug, thiserror::Error)]
-pub enum RuntimeBootError {
-    /// `areka_ghost::boot_with_origin` の失敗。
-    #[error("実行系の起動に失敗")]
-    Boot(#[source] GhostBootError),
-}
-
 /// 実行系の側の起動（本番は `session::runtime_boot::boot_runtime`・[`wire_runtime`] の手順 5 で呼ぶ）。
 /// 同期の関数のポインタで受け、`wire_runtime` を総称にしない（字面 `pub fn wire_runtime(` を照合するテストのため）。
-pub(crate) type BootRuntimeFn = fn(
+/// `Err` は `areka_ghost::boot_with_origin` の失敗そのもの（分類した記録は起動の関数が残す）。
+pub type BootRuntimeFn = fn(
     &mut World,
     RuntimeInputs,
     &CueSinkSources,
     Sender<KanadeNotice>,
     Option<&str>,
-) -> Result<areka_ghost::GhostRuntime, RuntimeBootError>;
+) -> Result<areka_ghost::GhostRuntime, GhostBootError>;
 
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
 ///
@@ -369,7 +357,7 @@ fn build_boot_assets_for(
 /// 起動前の解決（`install::startup::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
 /// 結線するので、`MountError::StartPointMissing` は解決後の消失（起動中の削除等）に限られ
 /// `warn!` どまり。他（読取不能／bake／
-/// balloon 失敗等）は真に予期しない失敗として `error!` で区別する（main の
+/// balloon 失敗等）は真に予期しない失敗として `error!` で区別する（本体の `boot_config.rs` の
 /// `is_benign_boot_error` と同じ分類方針）。boot 自体の
 /// `GhostBootError` は別途 本体の `is_benign_boot_error`（R7.4）が分類する。
 fn classify_wiring_error(err: &BootWiringError) {
@@ -422,7 +410,7 @@ const _: fn() = || {
 ///    倒し、`ghost_session::boot_ghost_strict` は `Err` を返す）。
 /// 2. [`EmoPresenter::new`]／[`TextLayerRuntime::new`]（`Rc<RefCell<>>`）／[`spawn_emo_text`]
 ///    （UI スレッド前提）。
-/// 3. [`TalkClock::new`]（`dola::runtime::clock::now` 注入）／[`ClockedTextSink::new`]。
+/// 3. [`TalkClock::new`]（`dola::runtime::clock::now` 注入・`ClockedTextSink::new` は本体の `session/runtime_boot.rs` が組む）。
 /// 4. `mpsc::channel::<PresentCommand>()`／[`PresentBridge::new`]（差し替えの荷物の置き場を
 ///    `RuntimeWiring` と共有）／[`spawn_seriko_clocked`]（時計 `seriko_clock` は刻みと共有）。
 ///    **SurfaceResolver 突き合わせ（Task 4.1 申し送り）**: `resolver`（非 Clone）は `spawn_seriko_clocked`
@@ -550,12 +538,11 @@ pub fn wire_runtime(
         shell: shell_table,
         balloon: balloon_scope_tables,
     } = loop_tables;
-    // バルーン表の転送（要件 5.6）: `LoopTables.balloon` は既に scope 別の写像（`build_boot_assets` の
+    // バルーン表の転送（要件 5.6）: `LoopTables.balloon` は既に scope 別の写像（`build_balloon_assets_with_limits` の
     // 構築ループ内で単一導出済み）ゆえ、ここは scope キーをアクタ鍵語彙へ写す値移送だけを行う。
     let balloon_tables = actor_keyed_balloon_tables(balloon_scope_tables);
     // 選び（`alternative*`）の種は抽選とは別に引く（spec: seriko-pattern-calls 要件 3.6）。
-    let seed = entropy_seed();
-    let pick_seed = entropy_seed();
+    let (seed, pick_seed) = entropy_seeds();
     // 再現可能性の観測点（R7.4/7.5）: 本番 seed を info! に出力し、同一 seed で run を再現可能にする。
     info!(
         seed,
@@ -737,4 +724,9 @@ fn entropy_seed() -> u64 {
     std::collections::hash_map::RandomState::new()
         .build_hasher()
         .finish()
+}
+
+/// 抽選の種と選び（`alternative*`）の種を別々に引く（spec: seriko-pattern-calls 要件 3.6）。
+fn entropy_seeds() -> (u64, u64) {
+    (entropy_seed(), entropy_seed())
 }

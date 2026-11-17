@@ -23,7 +23,7 @@ use crate::target_map::{balloon_target, scope_of, shell_target};
 
 /// `DisplayCommand` → `PresentCommand` の純変換（DD-5・`target_map` を利用）。
 ///
-/// 可変状態・I/O を持たない純関数で、4 写像を与える（R3.6）:
+/// 可変状態・I/O を持たない純関数で、次の写像を与える（R3.6）:
 /// - `Show { scope, surface_id, binds, pattern }` → シェル表示対象へ `ShowSurface`。`surface_id`
 ///   （数値）・`binds`・`pattern` を**非改変で転写**する（R3.1／R5.1）。
 /// - `Hide { scope }` → シェル表示対象の `Hide`（R3.2）。
@@ -411,9 +411,9 @@ mod tests {
         );
     }
 
-    /// 非数値 scope（例 "側"）は 4 写像すべてで `None`（呼び手が `warn!`＋drop）。
+    /// 非数値 scope（例 "側"）は Show／Hide／ShowBalloon／HideBalloon の写像で `None`（呼び手が `warn!`＋drop）。
     #[test]
-    fn non_numeric_scope_returns_none_for_all_variants() {
+    fn non_numeric_scope_returns_none_for_show_hide_and_balloon_variants() {
         let bad = || ActorKey::from("側");
 
         assert!(

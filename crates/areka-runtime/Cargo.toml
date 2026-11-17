@@ -58,7 +58,7 @@ shiori-host32-host = { path = "../shiori-host32-host" }
 areka-placement = { path = "../areka-placement", features = ["test-support"] }
 # 書き出した PNG を RGBA で読む（本体の表と同じ版・同じ機能で、Cargo.lock に新しいクレートは増えない）。
 image = { version = "0.25.10", default-features = false, features = ["png"] }
-# 実濾過（EnvFilter）の観測と examples の購読者（本体の表と同じ版・ワークスペースの表から受ける）。
+# examples の購読者（本体の表と同じ版・ワークスペースの表から受ける）。
 tracing-subscriber = { workspace = true }
 # examples の smoke 自動 close の計時（本体・wintf と同じく workspace の表から引く・Cargo.lock に新しいクレートは増えない）。
 async-io = { workspace = true }
