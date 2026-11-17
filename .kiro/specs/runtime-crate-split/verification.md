@@ -699,3 +699,62 @@
 - 直した 2 か所目（8.3 から引き継いだもの・`doc/` は 5.9 の範囲の中）: `doc/ideas/novel-platform.md` 23 行の `` `runtime/mod.rs` の `derive_scopes` `` を `` `crates/areka-runtime/src/lib.rs` の `derive_scopes` `` へ（`fn derive_scopes` は `crates/areka-runtime/src/lib.rs` 345 行に実在）。`src/` を付けない書き方なので 5.9 の式には当たらず、10.3 の目で見る式でだけ見えていた。パスの字面だけを変え、文の残りは変えていない。
 - `doc/` のほかの文書（8.3 の 10 本の外）: `rg -o '.{0,30}[^-]runtime/[A-Za-z_./]*' doc`（wintf・dola・`areka-runtime` を除く）と `rg -o 'areka::runtime\b|crate::runtime::|crates/areka/src/runtime/|src/runtime\.rs' doc` で探した。残ったのは `doc/click-through.md` 103・129 行（wintf の `runtime/`）と、`crates/areka-ghost/src/runtime.rs`（`areka-ghost` の自分のファイル）を名指す `COMPAT_ARCHITECTURE.md` 299 行・`ukadoc-coverage/briefing-assets.md` 221 行・`ssp-mcp/log-convention.md` 62 行だけ。本体の旧い runtime を指すものは 0 件で、ほかに直した文書は無い。
 - `tools/` への申し送り: 5.12 は発動しなかった。設計の検証の最後の申し送り（`tools/load-flake.ps1` の `-Binary` に `areka-runtime-lib`＝`-p areka-runtime --lib` を足す）は、完了の申し送りで `audit-tools-scripts` の着地の前後に応じて書く（`tools/` は触っていない）。
+
+## 11. 段 8（9.1）
+
+非挙動（確かめだけ）。対応する要件: 1.6, 1.7, 1.9, 2.7, 3.10, 4.7, 5.11, 5.12, 5.13, 7.1, 7.2, 7.3, 7.4, 7.9。コードと `tools/` は 1 行も書いていない。書いたのはこの節・`THIRD-PARTY-NOTICES.md`（作り直し）・`target/runtime-crate-split/tests-after.txt`（11.7）だけ。基準は `HEAD` `ac47159f3` の上の作業ツリー。`main` は `5b3a361c9` のまま進んでいない（`git merge-base HEAD main` も同じ）。`doc/ukadoc-coverage/report/*.md` の `M` は改行の正規化だけ（差分は空）で、この節の対象外。
+
+### 11.1 警告 0（1.6・7.4）
+
+- `cargo check --workspace --all-targets`: 完了（`Finished`）。警告は 1 件だけ: `shiori-abi` の manifest の `unused dependency windows`。この作業の前からある既存のもので、この spec の持ち物ではない（`areka-runtime` と `areka` と `areka-placement` の警告は 0）。
+
+### 11.2 本番が本体を引かない（1.5・2.7）
+
+- 式（設計の Verification の逐語）: `rg -n "crate::(session|ghost_session|input_events|install|update|readme|mcp|log_history|boot_config|boot_resolve|roots|app_exit|desk|menu|is_benign_boot_error|insert_persist_wiring|restore_merged_placements|crate_source_test_support|scope_bind_fixture_test_support)\b|\bareka::[a-z_]+::" crates/areka-runtime`
+- 結果: 2 行。どちらも `crates/areka-runtime/src/placement_tests/transition_judge_offset_signoff_tests.rs` の 131・132 行の `//!` の説明で、ログの出所（`RUST_LOG` の対象）の文字列 `areka::persist::restore=info` を書いたもの。crate の道ではなく、コードでもない（テスト専用ファイルの説明）。本番のファイルの当たりは 0。式の `\bareka::[a-z_]+::` が出所の文字列にも当たる（式の取りこぼしではなく過検出）。**説明できる過検出として受け入れる（controller の裁定・コードは直さない）**。
+- `cargo tree -p areka-runtime -e normal`: 本体（`areka`）の行 0・番人の crate（`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`）の行 0（`scopeguard` だけが文字列で当たるが別の crate）。直の依存は `areka-{actor,emo-atlas,emo-compose,emo-present,emo-text,ghost,kanade,parsers,placement,sakura,seriko,sylphya}`・`bevy_ecs`・`dola`・`thiserror`・`tracing`・`windows`・`wintf`。
+
+### 11.3 `Cargo.lock`・根の `Cargo.toml`（1.7・1.9）
+
+- `git diff main -- Cargo.toml`: 空。
+- `git diff main -- Cargo.lock`: 2 か所だけ。⑴ `areka` の依存に `"areka-runtime",` の 1 行 ⑵ `[[package]] name = "areka-runtime"` の 1 項目（版 0.1.0・依存 25 本はすべてワークスペース内か既存の crate で、新しい外の crate は 0）。
+
+### 11.4 本番のファイルの差分（5.11・7.1〜7.3）
+
+`git diff --stat main`: 458 ファイル・+8041/−4296（`doc/ukadoc-coverage/ledger/*.toml` などの台帳の差も数に入る。これらの出所は段 7 のコミット `ac47159f3`＝`git log main..HEAD -- doc/ukadoc-coverage` の唯一の当たり。台帳の中身の確かめは本節では行っていない）。本番（`crates/areka-runtime/src`・`crates/areka/src` のテストと支えを除いた非テストのファイルと `areka-placement` の本番）を `-M` の差分で見た。ファイルの数は R 59・M 42・A 2・D 1。コメント・説明の行を除き、可視性（`pub(crate)`・`pub(in …)` → `pub`）・道（`super::super::`・`crate::runtime::` → `crate::`）・空白を正規化した後に残る変更を種類で仕分けた。
+
+| 種類 | 当たったファイル | 判定 |
+|---|---|---|
+| 可視性・道・説明 | 移した 59 本の大半・`areka` の `input_events/*`・`mcp/*`・`session/*`・`ghost_session*.rs`・`app_exit.rs`・`boot_config.rs` | 道（`runtime::X` → `areka_runtime::X`）と可視性だけ |
+| `rustfmt` の折り返しの変更 | `balloon_visibility_phase.rs`・`frame/scale_text.rs`・`frame/wiring.rs`・`shell_balloon_resolve.rs`・`shell_carry.rs`・`app_exit.rs` | 道が短くなって 1 行に収まる・または逆。字面だけで意味は同じ |
+| 宣言の印（`cfg`・`#[path]`・`mod`） | `lib.rs`・`balloon_visibility.rs`・`frame.rs`・`frame/{drain_resnap,status_report,switch,window_state,wiring}.rs`・`consumer_ledger.rs`・`shell_*`・`areka-placement/src/{follow,follow/work_area,transition_diag}.rs`・`main.rs` | `test-support` で開く印（`#[cfg(any(test, feature = "test-support"))]` ほか）・テストの宣言の移し替え・`test_open` の再公開（設計 D4）。本番の関数の中身は変わらない |
+| 本番の項目の書き換え | `session_hooks.rs` の `FALLBACK`（`#[cfg(test)]` の本体の口を引く分岐を外し `NO_BODY` 1 本へ）・`areka-placement/src/follow.rs` の再公開（`MonitorSnapshot`・`work_area_for_window` ほか、テストだけが使う項目を `test-support` の下へ） | 設計 D5（口の倒れ先）・D4 のとおり。本番の振る舞いは変わらない |
+| 新規・削除 | A: `areka-runtime/src/spine.rs`・`areka-runtime/src/frame/work_area_sync.rs`／D: `areka/src/runtime/frame/work_area_sync.rs` | `spine.rs` は旧い `areka/src/runtime/spine.rs`（−569 行）の ⑴⑵ の層を `areka-runtime` へ移したもの（3.2・D4）。`work_area_sync.rs` は `areka-runtime/src/frame/` へ移した（246 → 275 行・`rustfmt` の折り返しと可視性・道） |
+
+- 目視で本番の中身（関数の本文）が変わったと読めた所: 0 件。ただし差の量が大きいので、**レビューで `session_hooks.rs`・`frame/work_area_sync.rs`・`spine.rs` を実物で読み直すことを勧める**（この 3 つが本番の項目の書き換え・新規として上の表の「可視性・道・説明」の外に出るため）。
+
+### 11.5 第三者の表（7.9）
+
+- `cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md`: 成功。差は 2 行: `MIT License (262 crate)` → `(263 crate)` と `areka-runtime 0.1.0` の 1 行の追加。
+
+### 11.6 完了の申し送りの下書き（5.12・5.13）
+
+1. **`tools/load-flake.ps1` の `-Binary`**: 今の選択肢は `areka-bin`（既定）・`wintf-lib`・`areka-placement-lib`（69 行の `ValidateSet`・209 行の `switch`・52 行の説明）。ここへ `areka-runtime-lib`（`-p areka-runtime --lib`）を足す。`audit-tools-scripts` は `main` に着地していない（`git log main -- tools/load-flake.ps1` の最新は `343ec0350` #447・roadmap の C21 は同じウェーブで走行中・`.kiro/specs/audit-tools-scripts` は未アーカイブ）＝**この spec の完了の時点で先に着地していなければ `audit-tools-scripts` の側が足す**と roadmap の約束 ⑴ に書いてある。着地の前後の判断は完了の時の `main` で行い、先に着地していれば完了の申し送りで `audit-tools-scripts` の後続（`tools/load-flake.ps1` に触る次の spec）を名指して足させる。
+2. **`tools/` の残り**: 0 件（`git diff --stat main -- tools` は空・`rg -n "src/runtime/|areka::runtime" tools` は 0 件。段 7 の 10.1 と同じ）。
+3. **本体の `Cargo.toml` の直に使わなくなる依存の行（`audit-areka-app` へ）**: 粗い確かめ（`crates/areka` の `[dependencies]` の各 crate について、テスト・支えを除いた `src` の中の `<crate>::` の使いを探す）では、直に使われなくなった行は 0 件（`dola`・`areka-seriko` を含め、本体の `install/`・`readme/`・`mcp/`・`ghost_session.rs` などに今も使いが残る）。よって完了の申し送りに書く行は無い見込み。`audit-areka-app` が改めて数える。`[dev-dependencies]` の `real-run-kit` は `src` に使いが無く `examples`・`tests` の 7 ファイルが使う（正しい）。
+4. 2.7 の式が説明の中のログの出所の文字列に当たる 2 行（11.2）は、`audit-emo2-boot-*` の見直しの対象に書き足せる（式を `rg -n` で回す前提の説明の書き方の問題）。
+
+### 11.7 テストの名前の多重集合の比べ（3.10・4.7・7.1〜7.3）
+
+- 取り方: 完了の時の `cargo test --workspace --no-fail-fast -- --list`（終了コード 0・`error` 行 0）を `target/runtime-crate-split/tests-after.txt` に取り、`: test$` の行の名前の末尾（`::` で区切った最後）の多重集合を `tests-before.txt` と比べた。`test-all.ps1` は直していない。
+- 数: 前 14143 本・後 14144 本（+1）。差が出た名前は次の 3 つだけ。
+
+| 名前の末尾 | 前後の差 | 対応 |
+|---|---|---|
+| `emo2_boot_talk_reveals_without_moving_glyphs` | −1 | 旧い名前。`emo2_boot` を `runtime` に改めた名前（下の行）へ置き換わった（段 1〜3 の改名） |
+| `runtime_talk_reveals_without_moving_glyphs` | +1 | 上の行の新しい名前 |
+| `crash_filter_is_installed_before_the_tests_start` | +1 | `areka-runtime` の lib のテストの実行ファイルに足した、落ちの報告の番人（3.8・D6）の新しいテスト |
+
+- 見込みと一致: −1・+1・+1 の 3 つだけで、ほかの名前の増減は 0。
+- `areka-runtime` の lib のテストの実行ファイル: 取得時の標準エラーに `Running unittests src\lib.rs (... areka_runtime-....exe)` が現れる（`--list` に拾われる・3.10）。
+- 文書のテスト: `Doc-tests areka_runtime` は走るが、`(line N): test` の行は前 66・後 66 で同数（上の多重集合の比べにも差として出ない）。新しく回る文書のテストは無い。囲みを `text` にする直しは要らず、コードも触っていない。
