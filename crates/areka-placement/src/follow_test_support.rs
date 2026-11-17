@@ -94,14 +94,20 @@ pub(super) fn dragging_state(initial_window: (i32, i32), drag_start: (i32, i32))
     }
 }
 
-/// 偽の HWND では wintf の開始の腕が始めの窓位置を取れず `None` で入る。これまでの檻の期待
-/// （`(0,0)` 起点）を保つため `(0,0)` に置く。窓位置からの作り直しは 164 の檻で行う。
-// shortcut: 偽の HWND の rig で旧来の (0,0) 起点を戻すだけ、task 3.2 が本物の窓位置の手伝いに置き換えてこれを消す
-pub(crate) fn zero_unknown_drag_origin(world: &mut World) {
-    let mut q = world.query::<&mut DraggingState>();
-    for mut ds in q.iter_mut(world) {
-        ds.initial_window_pos.get_or_insert((0.0, 0.0));
-    }
+/// 偽の HWND では wintf の開始の腕が始めの窓位置を取れず `None` で入る。製品と同じく
+/// 始めの位置を窓の位置（枠の無い偽の窓では `WindowPos.position`）にする観測者を足す。
+/// 挿入の場で書くので、開始と終了を同じ配りで流す速いドラッグにも効く。
+pub(crate) fn drag_origin_at_window(world: &mut World) {
+    world.add_observer(
+        |on: On<Insert, DraggingState>, mut q: Query<(&mut DraggingState, &WindowPos)>| {
+            if let Ok((mut ds, wp)) = q.get_mut(on.entity)
+                && let Some(p) = wp.position
+            {
+                ds.initial_window_pos
+                    .get_or_insert((p.x as f32, p.y as f32));
+            }
+        },
+    );
 }
 
 /// カーソル座標付き DragEvent（start_position は DraggingState と同値・実 flow 準拠）。

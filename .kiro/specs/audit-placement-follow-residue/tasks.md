@@ -38,7 +38,7 @@
   - 完了の状態: 足した檻が緑で、`None` を `(0,0)` で写す形に戻すと落ちる
   - _Dispatch: standard — 新しい腕と記録の札を追随の流れに入れる_
   - _Requirements: 2.1, 2.2, 2.3, 2.5, 2.8, 9.6_
-- [ ] 3.2 離したときの檻と、偽の HWND の (0,0) に寄りかかった期待を作り直す
+- [x] 3.2 離したときの檻と、偽の HWND の (0,0) に寄りかかった期待を作り直す
   - `follow_drag_end_gate_tests.rs`: 開始の後に始めの位置を窓の位置にする手伝いを足し、`destination()` を「窓の位置＋差」へ作り直す。`None` で `on_char_drag_end` → 記憶に入る位置が今の位置（(0,0)＋差でない）の檻を、吸着した窓と `Free` の窓で足す
   - 本体 `input_events/drag_tests.rs` の説明の「(0,0) のまま入る」を直し、`set_initial_window_pos` を呼ばずに (0,0) に寄りかかった檻があれば同じ手伝いを足す（C22 の触るファイルの列の外・持ち主は今走っていない）
   - 完了の状態: `cargo test -p areka-placement` と本体の `input_events` の檻が緑で、離したときの檻が (0,0) を基準にした位置を書く形に戻すと落ちる
@@ -163,3 +163,4 @@
 
 ## Implementation Notes
 - 2.2: 偽の HWND では wintf が始めの位置を `None` で入れるため、`follow::drag_end_gate_tests::fast_drag_places_window_at_destination_and_persists_once` が 3.2 まで赤（進行役が認めた）。テストの仮の手伝い `follow::test_support::zero_unknown_drag_origin`（`shortcut:` 付き・`balloon_lock_drag_tests.rs` と `follow_drag_end_gate_tests.rs` の `Rig::tick` から呼ぶ）は 3.2 で窓の位置の手伝いへ替えて消す。`follow_drag_end_gate_tests.rs:204` の「(0,0) のまま入る」も 3.2 で直す
+- 3.2: 2.2 の借りは返した（`zero_unknown_drag_origin` を消し、テストの支えの `drag_origin_at_window`＝`DraggingState` の挿入の観測者で始めの位置を窓の位置にする、へ替えた・分からないの檻は手伝い無しの `Rig::unknown_origin()`）

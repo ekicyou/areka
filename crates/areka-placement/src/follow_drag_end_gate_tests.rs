@@ -9,6 +9,8 @@
 //!   窓の位置が変わらない・キーワードで決めたバルーンの位置の素材が残る。
 //! - T7-4・T7-6: 本物のドラッグと閾値を越えた後の取り消しは 1 件。
 //! - T7-5: 速いドラッグ（開始と終了が同じ配り）でキャラ窓が行き先へ置かれ 1 件保存。
+//! - 始めの位置が分からないドラッグ（偽の HWND のまま）を離すと、吸着した窓も `Free` の窓も
+//!   今の位置を記憶へ書く（(0,0)＋差を書かない・audit-placement-follow-residue 要件 2.4）。
 
 use std::time::Instant;
 
@@ -21,13 +23,15 @@ use wintf::ecs::drag::{
 use wintf::ecs::{PhysicalPoint, Point, Window, WindowPos};
 
 use super::test_support::{
-    SylphyaRig, fake_handle, position_of, rect, window_pos_at, window_pos_sized,
+    SylphyaRig, drag_origin_at_window, fake_handle, position_of, rect, window_pos_at,
+    window_pos_sized,
 };
 use super::{
     Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, on_balloon_drag_end, on_char_drag_end,
     project_anchor,
 };
 use crate::config::BalloonXMode;
+use crate::persist::{char_pos_entries, char_pos_to_origin_x};
 use crate::resolver::{Anchor, PointPx, SizePx};
 use crate::spawn::{BalloonKeywordBase, BalloonWindowMarker, CharWindowMarker};
 
@@ -58,7 +62,15 @@ struct Rig {
 }
 
 impl Rig {
+    /// 製品と同じく、開始の腕が始めの位置を窓の位置で入れる組み立て。
     fn new() -> Self {
+        let mut rig = Self::unknown_origin();
+        drag_origin_at_window(&mut rig.world);
+        rig
+    }
+
+    /// 偽の HWND のまま（開始の腕が始めの位置を `None` で入れる）組み立て。
+    fn unknown_origin() -> Self {
         let sylphya = SylphyaRig::fake();
 
         // `dispatch_drag_events` が引くリソース（wintf の `EcsWorld::new` と同じ登録）。
@@ -121,7 +133,6 @@ impl Rig {
     /// 1 回の画面更新として配る。
     fn tick(&mut self) {
         dispatch_drag_events(&mut self.world);
-        crate::follow::test_support::zero_unknown_drag_origin(&mut self.world);
     }
 
     /// 投函済みの保存がすべて書き終わってから Ghost スコープを読む。
@@ -177,34 +188,24 @@ fn same_pairs(actual: &[(PersistKey, String)], expected: &[(PersistKey, String)]
     actual.len() == expected.len() && expected.iter().all(|e| actual.contains(e))
 }
 
-/// キャラ窓の保存 1 組（原点＝下端中央基準: 左上 x ＋ w/2）。
+/// 下端に吸着したキャラ窓の保存 1 組（原点＝下端中央基準: 左上 x ＋ w/2）。
 fn char_pair(top_left: Point) -> Vec<(PersistKey, String)> {
-    let scope = SCOPE as u32;
-    vec![
-        (
-            PersistKey::WindowPos {
-                scope,
-                axis: Axis::X,
-            },
-            (top_left.x + CHAR_SIZE.w / 2).to_string(),
-        ),
-        (
-            PersistKey::WindowPos {
-                scope,
-                axis: Axis::Y,
-            },
-            top_left.y.to_string(),
-        ),
-    ]
+    char_pair_as(Anchor::Bottom, top_left)
+}
+
+/// `anchor` の記憶の形でのキャラ窓の保存 1 組。
+fn char_pair_as(anchor: Anchor, top_left: Point) -> Vec<(PersistKey, String)> {
+    let pos = PointPx {
+        x: top_left.x,
+        y: top_left.y,
+    };
+    char_pos_entries(SCOPE as u32, char_pos_to_origin_x(anchor, pos, CHAR_SIZE))
 }
 
 /// 開始の腕が入れた `DraggingState` から受け手が復元するキャラ窓の行き先。
 ///
-/// 偽の HWND では開始の腕の枠の座標変換（`client_to_window_coords`）が失敗し、
-/// `DraggingState.initial_window_pos` が `(0,0)` のまま入る。そのため行き先は
-/// `(0,0) + (離したカーソル − 押したカーソル)` をアンカー辺へ射影した値になる。
-/// これはテストの組み立ての都合（偽の窓の座標変換の失敗）に寄りかかった期待値で、
-/// 製品では `initial_window_pos` に `WindowPos.position` の枠込みの値が入る。
+/// 始めの位置は [`drag_origin_at_window`] が窓の位置（`CHAR_START`）で入れるので、行き先は
+/// `CHAR_START + (離したカーソル − 押したカーソル)` をアンカー辺へ射影した値になる。
 fn destination() -> Point {
     destination_at(CURSOR)
 }
@@ -212,8 +213,8 @@ fn destination() -> Point {
 /// `end` で離したときの行き先（取り消しは開始の位置で離すので `DRAG_START` を渡す）。
 fn destination_at(end: (i32, i32)) -> Point {
     let raw = PointPx {
-        x: end.0 - DRAG_START.0,
-        y: end.1 - DRAG_START.1,
+        x: CHAR_START.x + end.0 - DRAG_START.0,
+        y: CHAR_START.y + end.1 - DRAG_START.1,
     };
     let snapshot = MonitorSnapshot {
         work_areas: vec![rect(0, 0, 1920, 1200)],
@@ -364,8 +365,8 @@ fn real_drag_persists_once_for_char_and_balloon() {
 }
 
 /// T7-5（要件 2.3・5.4）: 速いドラッグ（開始と終了を積んでから配る 1 回）→ キャラ窓が
-/// 行き先へ置かれ、その位置が 1 組保存される。行き先の期待値は [`destination`] の
-/// とおり偽の窓の座標変換の失敗に寄りかかる。修正前は赤（開始が終了に上書きされて
+/// 行き先へ置かれ、その位置が 1 組保存される。始めの位置は挿入の場で窓の位置になるので、
+/// 同じ配りの終了もそれを読む。修正前は赤（開始が終了に上書きされて
 /// `DraggingState` が入らず、窓は押す前の位置のまま・保存値も押す前の位置）。
 #[test]
 fn fast_drag_places_window_at_destination_and_persists_once() {
@@ -412,6 +413,34 @@ fn cancel_after_threshold_persists_as_today() {
     );
 
     rig.close();
+}
+
+/// 始めの位置が分からないドラッグを離す（audit-placement-follow-residue 要件 2.4・2.8）:
+/// 吸着した窓も `Free` の窓も、窓は今の位置のまま・記憶に入るのも今の位置。
+/// (0,0)＋差（`destination` から窓の位置を引いた所）を書く形に戻すと落ちる。
+#[test]
+fn unknown_origin_drag_end_persists_current_position() {
+    for anchor in [Anchor::Bottom, Anchor::Free] {
+        let mut rig = Rig::unknown_origin();
+        rig.world.get_mut::<Anchored>(rig.char_w).unwrap().0 = anchor;
+
+        rig.put(started(rig.char_w));
+        rig.tick();
+        rig.put(ended(rig.char_w, false));
+        rig.tick();
+
+        assert_eq!(
+            position_of(&rig.world, rig.char_w),
+            CHAR_START,
+            "{anchor:?}: 始めの位置が分からないのに窓が動いた"
+        );
+        let saved = rig.saved();
+        assert!(
+            same_pairs(&window_pos_keys(&saved), &char_pair_as(anchor, CHAR_START)),
+            "{anchor:?}: 今の位置が 1 組保存されていない: {saved:?}"
+        );
+        rig.close();
+    }
 }
 
 /// 表のテストで外す部品（指摘 7）。

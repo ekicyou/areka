@@ -99,6 +99,8 @@ impl Rig {
                 OnDrag(on_char_drag),
             ))
             .id();
+        // 製品と同じく、ドラッグの始めの位置を窓の位置で入れる（偽の HWND の `None` に寄りかからない）。
+        super::super::follow::test_support::drag_origin_at_window(&mut world);
         Self {
             world,
             store,
@@ -115,7 +117,6 @@ impl Rig {
 
     fn tick(&mut self) {
         dispatch_drag_events(&mut self.world);
-        crate::follow::test_support::zero_unknown_drag_origin(&mut self.world);
     }
 
     /// 始まり → 配る。
