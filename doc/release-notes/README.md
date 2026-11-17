@@ -101,7 +101,7 @@ https://github.com/ponapalt/claudia
 
 ## 書かないもの
 
-- **spec 名**（開発の中で使う仕様の名前。`areka-P0-` で始まる）。見出しにも文章にも書かない。PR の題名を写すときは、頭の「種類(spec 名): 」を外し、使う人の言葉に書き直す。
+- **spec 名**（開発の中で使う仕様の名前。`.kiro/specs/` と `.kiro/specs/completed/` のフォルダの名前で、旧名の `areka-P0-` で始まるものを含む）。見出しにも文章にも書かない。PR の題名を写すときは、頭の「種類(spec 名): 」を外し、使う人の言葉に書き直す。
 - **詳しいリリースノートへのリンク**。リリースの自動の処理が、本文の末尾に区切りの線とリンクの文を足す。見どころのファイルには書かない。
 - **出典の断り書きの段落**（上の「出典のリンク」）。
 
@@ -141,7 +141,7 @@ pwsh -NoProfile -File tools/release-notes.ps1 -Check -Version 0.0.3
 | `missing-file` | `doc/release-notes/v{版}.md` が無い | 名前と置き場所を確かめる |
 | `no-highlight` | `### ` で始まる行が 1 つも無い | 見どころを 1 つ以上書く |
 | `heading-no-pr` | 見出しの行末が `(#番号)`・`(#番号, #番号)` の形でない | 「見出しの末尾の PR の番号」の形に直す |
-| `spec-name` | `areka-P0-` が現れる | その名前を外し、使う人の言葉に書き直す |
+| `spec-name` | spec 名（`.kiro/specs/` と `.kiro/specs/completed/` のフォルダの名前。旧名の `areka-P0-` で始まるものを含む）が現れる | その名前を外し、使う人の言葉に書き直す |
 | `no-source-link` | `[Claudia](https://github.com/ponapalt/claudia)` が無い | 最初の「Claudia」を出典へのリンクにする |
 | `first-name-not-linked` | 最初に現れる「Claudia」がリンクでない | リンクより前に在る「Claudia」を外すか、そこをリンクにする |
 

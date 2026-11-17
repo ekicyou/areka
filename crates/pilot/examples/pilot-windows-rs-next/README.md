@@ -1,0 +1,988 @@
+# pilot-windows-rs-next 一次記録
+
+先進坑（使い捨て）。成果物はコードでなく知見。本書が正本で、design はここを参照し同じ結果を二重に書かない。
+
+**判定は開発者が下す。** 各節の「判定」欄は空けてある。
+
+## 第 1 幕: 動機
+
+### 対応する本坑
+
+この先進坑は、windows-rs の移行の本体（`windows` クレート 0.62 をやめ、`windows-core` ほか 0.101 と `windows-bindgen` の束縛で Windows の API を呼ぶ形へ移る）の前に掘った。本体の各本はこの先進坑の go を前提にし（`_Depends(confirmed): pilot-windows-rs-next`）、brief は go の後に `/kiro-discovery` で書く。名前と切り方は仮で、ロードマップ（`.kiro/steering/roadmap.md`）では v0.2.0 の段に「windows-rs の移行の本体（先進坑の go の後に起票・6〜8 本の見込み）」として載り、名前が決まっているのは最後の `emo-text-windows-text` だけである。brief の Downstream の 8 本:
+
+1. 束縛を作る道具と、食い違いを全体テストで止める段
+2. `wintf-winmsg-executor` と `dola`（C の関数だけ）
+3. COM の型をほかのクレートとやり取りしないクレート（`areka-update`・`shiori-host32-*` など）
+4. SHIORI の `#[interface]`・`#[implement]`（`shiori-abi` ほか）
+5. `wintf`
+6. `areka-emo-*`・`areka-placement`・`areka`
+7. `windows` 0.62 をワークスペースから外す締め
+8. `emo-text-windows-text`（`areka-emo-text` の DirectWrite を呼ぶ下回りを `windows-text` に任せる）
+
+問いと本坑の対応: 問い 1 → 2 本目・問い 2・3 → 1 本目（束縛の置き場と形）・問い 4・5 → 5 本目・問い 6 → 4 本目・問い 7 → 8 本目・問い 8 → 2〜6 本目（i686 の SHIORI の側）・問い 9・10 → 全部の規模と刻み方。刻み方の案は第 3 幕の「刻み方の案と規模の見立て」の節。
+
+### 何が怪しくて掘ったか
+
+- **方向が今までと違う**: 開発者が 2026-11-14 に決めた行き先は「`windows` の版を上げる」でなく、`windows` クレートを使わず `windows-bindgen` の束縛で API を呼ぶ形（WinRT の合成も `windows-bindgen` で作り、`windows-composition` へは乗り換えない）。areka の書き方のほとんどが変わる。
+- **手間を甘く見ていないか**: 最初の見立て（1 本・16 タスク前後）では足りず、6〜8 本の見込みになった（開発者「ここの移行コストを甘く見て無いか？」）。束縛をどこに置くか・どの形で作るかで本体の切り方が変わるが、どれも試さないと決められなかった（問い 2・3）。
+- **束縛の形が大きく違う**: `HWND` が生のポインタの別名・列挙が `i32`／`u32`・戻り値の無い COM メソッドが `HRESULT`・スライスが「ポインタ＋長さ」・`_Impl` が `HRESULT` を返す・`HSTRING` に `Display` が無い、と上流の文書から読めた。これが bevy の Component（問い 5）・COM の実装（問い 6）・WinRT の合成（問い 4）・32bit と arm64（問い 8）で本当に通るかは、文書だけでは分からなかった。
+- **上流が未公開で動く**: 0.101 は公開の前（git の master）で、`windows-text` は 2026-11-06 にできたばかり。縦書き（問い 7）は開発者が上流へ出した要望への答えで、開発者は上流に「実アプリで各段を確かめる」と伝えている。
+- **規模と機械的に回せるか**: 移行の本体を安い実装係（Sonnet）で回せるか（開発者「方針さえ決まれば、やることは機械的だから実装サブエージェントはsonnetでもいけそう」）と、全数がどれだけあるか（問い 9・10）が分かっていなかった。
+
+### 置き場の形が二坑モデルの例外である理由
+
+二坑モデル（`.kiro/steering/two-tunnel.md`）は「探索のコードは `crates/pilot` の例に置く」と定めるが、この先進坑は `crates/pilot/examples/pilot-windows-rs-next/` の下に自分の `[workspace]` と `Cargo.lock` を持つ独立のワークスペースを置いた（要件 1.2）。1 つのパッケージが `windows_core` の名前で持てる版は 1 つだけで、`#[implement]`・`#[interface]` と `windows-bindgen` の出力は `windows_core::` を名指しし、`crates/pilot` は既に 0.62 を持つからである。独立にしたので、上流の git の依存は本線の `Cargo.lock` に入らず、本線の全体テストにも乗らない（本線のワークスペースの一員にしないので、葉の隔離はかえって強い）。この例外はこの spec の要件・設計・タスクにだけ書き、共通の文書（`two-tunnel.md`・`workflow.md`）は直していない。
+
+### この記録の使い方
+
+成果物はコードでなく知見である（要件 1.11）。置き場のコードは本坑へ写さない。本坑はこの一次記録と書き換えの対応表（`REWRITE_TABLE.md`）を見て、自分のクレートの上で掘り直す。
+
+## 第 2 幕: 概要
+
+### クレートの一覧と役
+
+| クレート（フォルダ） | 問い | 役（走らせる物） | 依存（置き場の中・上流・借りる物） |
+|---|---|---|---|
+| `q1-winmsg` | 1・8 | `wintf-winmsg-executor` の写しを `.sys()` の束縛へ移した物（例 `basic`・`threads`。例は元のまま） | `windows-link`・`async-task`・build に `windows-bindgen`。edition 2021・`[lib] name = "wintf_winmsg_executor"` |
+| `q2-placement/plan1-wintf`・`plan1-emo` | 2（案 1） | 束縛をクレートごとに持つ案（bin `q2-plan1-emo`） | `windows-core`・build に `windows-bindgen`（両方が自分の束縛を持つ）。emo → wintf |
+| `q2-placement/plan2-wintf`・`plan2-emo` | 2（案 2） | wintf 役が束縛を公開する案（bin `q2-plan2-emo`） | `windows-core`。束縛は wintf 役だけ（build に `windows-bindgen`）。emo → wintf |
+| `q2-placement/plan3-bind`・`plan3-wintf`・`plan3-emo` | 2（案 3） | 共有の束縛のクレートを置く案（bin `q2-plan3-emo`） | `windows-core`。束縛は bind だけ（build に `windows-bindgen`）。wintf → bind・emo → bind と wintf |
+| `q3-default`・`q3-minimal` | 3・8 | `dwrite.rs`＋`d2d/mod.rs` の写しを既定の形と `.minimal()`＋手書きの包みで組んだ 2 つ（各 bin。画面の外の GPU で墨を数え `==` を確かめる） | `windows-core`・`windows-numerics`・`tracing`・build に `windows-bindgen` |
+| `bind-next` | 4・6・7 の土台 | 共有の既定の形の束縛（`filters/*.txt` を全部読む lib。比べの材料ではない） | `windows-core`・`windows-numerics`・`windows-collections`（束縛が名指しした兄弟だけ）・build に `windows-bindgen` |
+| `q4-wuc` | 4 | `wuc.rs` の写しと画面の撮り（lib）・合成の各段を実の窓で通す bin `q4-demo`（窓を出す） | `bind-next`・`q1`（`q1-winmsg` を名前を変えて）・`windows-core`・`windows-numerics`・`png`・`tracing`・`tracing-subscriber`（`env-filter` なし。この 3 つは 7.2 の `q4-demo` で足した） |
+| `q5-hwnd` | 5 | `HWND` の包みを bevy の Component にする（lib の試験・bin `q5-verify`） | `windows-core`・`bevy_ecs`・build に `windows-bindgen` |
+| `q6-com` | 6 | SHIORI の 1 組の `#[interface]`・`#[implement]` と下線の描き手（bin） | `bind-next`・`windows-core` |
+| `q7-vertical` | 7・要件 13.5 | 今の側と `windows-text` の縦書きの比べ（bin `vt-compare`）・透過の窓のバルーンとクリックの当たり（bin `vt-balloon`・窓を出す） | `bind-next`・`q4-wuc`・`q1`・`windows-core`・`windows-text`・借りる `wintf`・`areka-emo-text`・`areka-parsers`・`areka-sakura`・`png`・`bevy_ecs`・`tracing`・`tracing-subscriber` |
+| `q9-api-count` | 9 | SCIP の索引から本線の API の全数を数える道具（bin） | `scip`・`protobuf` |
+| `q10-winmsg` | 10 | Sonnet が対応表だけで移した問い 1 の写し（例 `q10-basic`／`q10-threads` は `../q1-winmsg/examples/` を path で指す・11.1） | `q1-winmsg` と同じ形 |
+
+`q2-placement` の 7 つのパッケージ名は `q2-<フォルダ名>`（例 `q2-plan1-wintf`）。フォルダ名は本線のクレートと同じ名前を使わない。
+
+### 引いた上流のコミットと確かめた日
+
+- 固定の rev: `f37e2f9046cf9710fe00285436c4d22ad6053d72`（microsoft/windows-rs の master・コミットの日 2026-11-14 14:13:16 -0600・「Add submitted-frame input support (#5384)」）
+- 確かめた日: 2026-11-16（1.2 で取り寄せ、置き場の中で `cargo check --workspace` が骨組みのまま通った）。問い 1〜10 の確かめは全部この rev の上で 2026-11-16〜17 に行った。
+- rev は最後まで動かしていない（要件 2.5 の「進めない所に当たったら、動かす前に理由と先の rev を書く」に当たる所は無かった）。`Cargo.lock` の windows-rs の `source` はこの rev の 1 つだけ。
+- 0.101 は公開の前の版である。公開の版（crates.io）では API が動きうるので、ここの結果は公開の後に変わりうる（第 3 幕の「公開の後の注意」）。
+
+### `Cargo.lock` の種にした本線のコミット
+
+- 本線（main）のコミット: `5b3a361c95c5fb494fdf7845576cf20f1aa20c07`（この作業木の土台も同じ。作業木の HEAD は `43381ae7842d826a15ee350028b2345eb61f8a6c`、`git diff main -- Cargo.lock` は空）
+- 借りた本線のクレート（`wintf`・`areka-emo-text`・`areka-parsers`・`areka-sakura`・推移の `wintf-winmsg-executor`）は、この作業木の中で path の依存として読んだ。読んだ作業木のコミットは `bb069a60207397e70d3067a44ede49d9b8a31354`（8.2 の時点）で、このクレートたちの最後の変更は本線の `715f58198d4af5f9920e739d4d1438d98840beeb`（2026-11-15）。作業木の土台（`5b3a361c`）から最後の確かめ（12.2・HEAD `a1e5ded8a`）まで、これらのフォルダの差分は 0。
+- `image-webp` は本線の根の `[patch.crates-io]`（git）が置き場に効かないので crates.io の版へ解き直される。解き直された版: crates.io の `image-webp` 0.2.4（本線の `Cargo.lock` は git の 0.2.5＝`image-rs/image-webp` rev `75f81091`）
+
+### 取り寄せた兄弟のクレート・`cargo tree -d`・フィルターの行数と生成した行数
+
+**取り寄せ（1.2・2026-11-16）**
+
+- 上流の git は既定の `CARGO_HOME`（この機械では `c:\rust\cargo`）へ cargo がそのまま取り寄せた。`git/db/windows-rs-a5de4a2dc783ec71` が約 1.5 GB、取り出しは `git/checkouts/windows-rs-a5de4a2dc783ec71/f37e2f9`。解決は止まらず、rev は動かしていない（要件 2.5 の手順は使っていない）。
+- 置き場の `Cargo.lock` の windows-rs の `source` は `git+https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9710fe00285436c4d22ad6053d72#f37e2f9046cf9710fe00285436c4d22ad6053d72` の 1 つだけ（11 パッケージがこの source）。
+- 取り出しの中に兄弟のクレートが在る: `windows-future`・`windows-collections`・`windows-reference`・`windows-time`（どれも `crates/libs/<名前>`・0.101.0）。どれも今はどのクレートも引いていないので `Cargo.lock` には出ない。
+- `scip` は本線の `Cargo.lock` に無い。置き場で crates.io の `scip` 0.10.0 に解けた。
+- 借りる `wintf`（推移で本物の `wintf-winmsg-executor`）と `q1-winmsg` は同じライブラリ名 `wintf_winmsg_executor` で `q7-vertical` の同じ木に入り、組めた（`q7-vertical` が直に引くのは `q1` だけ）。cargo は断らなかったので `q1-winmsg` のライブラリ名は変えていない。
+- 気付き: 置き場の中で打つと、`.cargo/config.toml` の相対の `target-dir`（`../../../../target/...`）がそのままパスに残って長くなり、proc-macro のリンクで `LNK1104`（ファイルを開けない）で止まった。走らせ方の節のとおり `--target-dir` を絶対パスで渡すと通る。
+
+**`cargo tree -d -e normal -p q7-vertical --depth 1`（抜粋・`windows-core` の 2 版が同じ木に並ぶ・要件 13.5 の材料）**
+
+```
+windows-core v0.62.2
+├── areka-emo-text v0.1.0 (crates/areka-emo-text)
+├── windows v0.62.2
+├── windows-collections v0.3.2
+├── windows-future v0.3.2
+├── windows-numerics v0.3.1
+└── wintf v0.1.0 (crates/wintf)
+
+windows-core v0.101.0 (https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9710fe00285436c4d22ad6053d72#f37e2f90)
+├── bind-next v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/bind-next)
+├── q4-wuc v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/q4-wuc)
+├── q7-vertical v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/q7-vertical)
+├── windows-numerics v0.101.0 (https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9710fe00285436c4d22ad6053d72#f37e2f90)
+└── windows-text v0.101.0 (https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9710fe00285436c4d22ad6053d72#f37e2f90)
+
+windows-link v0.2.1
+├── windows-core v0.62.2 (*)
+├── ...（windows-future・windows-numerics・windows-result・windows-strings・windows-sys・windows-threading）
+
+windows-link v0.100.1 (https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9710fe00285436c4d22ad6053d72#f37e2f90)
+├── q1-winmsg v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/q1-winmsg)
+├── windows-core v0.101.0 (...) (*)
+├── windows-result v0.100.1 (...)
+└── windows-strings v0.100.1 (...)
+```
+
+同じく 2 版が並ぶ物: `windows-implement` 0.60.2／0.101.0・`windows-interface` 0.59.3／0.101.0・`windows-numerics` 0.3.1／0.101.0・`windows-result` 0.4.1／0.100.1・`windows-strings` 0.5.1／0.100.1。パスは作業木の根からの相対に縮めた。
+
+#### bind-next（1.3）
+
+`build.rs` が `filters/*.txt`（`common`・`q4-wuc`・`q6-renderer`・`q7-text`）を全部読み、既定の形の束縛を `OUT_DIR/bindings.rs` へ書き、`lib.rs` が `include!` する（束縛はコミットしない）。名指しは関数・型の短い名前（`CoInitializeEx` のように）で、`Windows.Win32.…` の長い名前は「could not resolve filter entry」で断られた。
+
+フィルターの行数（12.2 で今のファイルから数え直した。名指し＝`//` の注と空の行を除いた行。1.3 の後、7.1・6.2・8.3・8.6 で足し、8.3 と 8.6 で 2 つ以上の問いが使う名前を `common.txt` へ移した＝設計の決まり）:
+
+| フィルター | ファイルの行 | 名指し | 注 | 中身の移り |
+|---|--:|--:|--:|---|
+| `common.txt` | 54 | 51 | 3 | 1.3 の 11（COM の初期化 2・D3D11 3・D2D 4・DXGI 2）に、8.3 で q4・q6 から 9、8.6 で q4 から 31 を移した |
+| `q4-wuc.txt` | 28 | 22 | 6 | 7.1 の 37＋7.2 の 20 から、8.3 で 4、8.6 で 31 を `common.txt` へ出した |
+| `q6-renderer.txt` | 7 | 6 | 1 | 6.2 の 11 から、8.3 で 5 を `common.txt` へ出した |
+| `q7-text.txt` | 44 | 38 | 6 | 8.3 の 21＋8.6 の 17 |
+| 計 | 133 | 117 | 16 | |
+
+生成した `bindings.rs`（`OUT_DIR` の下・コミットしない）: 1.3 の時点で 7,742 行（common の 11 件だけで。依存の型を自動で引くため名指しの約 700 倍）・6.2 の後 9,402 行・7.1 の後 13,881 行・今（8.6 の後・12.2 で組み直して数えた）**15,757 行**。束縛が名指しした兄弟は `windows-numerics`（`windows_numerics::Vector2`／`Matrix4x4`・1.3）と `windows-collections`（7.1）だけで、`Cargo.toml` に足した。`windows-future`・`windows-reference`・`windows-time` は名指しされず足していない。`build.rs` の `.implements`（下線の描き手の 3 つ）は 6.2 で足した。ただし既定の形は `.implements` を呼ばなくても `_Impl` を出し（描き手の 3 つにも出る）、`.implements` は出す `_Impl` を並べた名前の分だけに絞る口である（問い 6 の節の訂正）。
+
+### RunCommands（走らせ方）
+
+**根の差し替え**: 下のコマンドは、本線の作業木の根が `C:\home\maz\git\areka` のときの絶対パスで書いてある。別の作業木（例: この spec を掘った `C:\home\maz\git\areka\.claude\worktrees\kiro-start-pilot-windows-rs-next-86646c`）で打つときは、`--manifest-path` と `--target-dir` と exe のパスの頭の `C:\home\maz\git\areka` をその作業木の根に差し替える。どのディレクトリからでも動く（cwd に頼らない）。
+
+```
+cargo <run|build|test|clippy> --manifest-path C:\home\maz\git\areka\crates\pilot\examples\pilot-windows-rs-next\Cargo.toml --target-dir C:\home\maz\git\areka\target\pilot-windows-rs-next -j 4 -p <クレート> [--bin|--example <名前>] [--target <三つ組>]
+```
+
+- `--target-dir` は必ず絶対パスで渡す。置き場の中で打って `.cargo/config.toml` の相対の `target-dir` に任せると、パスが長くなって proc-macro のリンクが `LNK1104` で落ちる（1.2）。
+- クロスのビルド（`--target i686-pc-windows-msvc`・`--target aarch64-pc-windows-msvc`）は PowerShell から打つ。i686 の exe は x64 の Windows で走らせる。aarch64 は走らせる機械が無いので組んでリンクが通るまで（確定 5）。
+- 窓を出す例（`q4-demo`・`vt-balloon`）は排他テストの机を持ってから走らせ、終えたらすぐ机を返す。`vt-balloon` は `SendInput` でカーソルを動かしてクリックする（終わりに元の位置へ戻す）。ほかの bin と試験は窓を出さない（画面の外の GPU だけのものも机は要らない）。
+- ビルドの出力・`OUT_DIR`・`out\<問い>\` はどれも `--target-dir` の下に出る。生成した束縛はコミットしない。
+
+走らせる物ごとのコマンド（`<M>`＝`--manifest-path C:\home\maz\git\areka\crates\pilot\examples\pilot-windows-rs-next\Cargo.toml`・`<T>`＝`--target-dir C:\home\maz\git\areka\target\pilot-windows-rs-next`。打つときは両方を上の全文に戻す）:
+
+| 問い | 走らせる物 | コマンド | 机 |
+|---|---|---|---|
+| 1・8 | 例 `basic`・`threads`（x64） | `cargo run <M> <T> -p q1-winmsg --example basic`（`threads` も同じ） | 要らない |
+| 1・8 | 同（i686・PowerShell） | `cargo build <M> <T> -p q1-winmsg --examples --target i686-pc-windows-msvc` → `C:\home\maz\git\areka\target\pilot-windows-rs-next\i686-pc-windows-msvc\debug\examples\basic.exe` | 要らない |
+| 1・8 | 同（aarch64・PowerShell・リンクまで） | `cargo build <M> <T> -p q1-winmsg --examples --target aarch64-pc-windows-msvc` | 要らない |
+| 2 | 3 案の bin | `cargo run <M> <T> -p q2-plan1-emo`（`q2-plan2-emo`・`q2-plan3-emo` も同じ） | 要らない（画面の外の GPU） |
+| 3・8 | 2 形の bin | `cargo run <M> <T> -p q3-default`（`q3-minimal` も同じ。i686・aarch64 は `-p q3-default -p q3-minimal --target …` で組む） | 要らない（画面の外の GPU） |
+| 4 | 撮りの試験 | `cargo test <M> <T> -p q4-wuc` | 要らない（窓を作らない） |
+| 4 | `q4-demo` | `cargo build <M> <T> -p q4-wuc --bin q4-demo` → `C:\home\maz\git\areka\target\pilot-windows-rs-next\debug\q4-demo.exe` | **排他テストの机** |
+| 5 | 試験・`q5-verify` | `cargo test <M> <T> -p q5-hwnd`・`cargo run <M> <T> -p q5-hwnd --bin q5-verify` | 要らない |
+| 6 | bin | `cargo run <M> <T> -p q6-com`・`cargo test <M> <T> -p q6-com` | 要らない |
+| 7 | 比べと換算の試験 | `cargo test <M> <T> -p q7-vertical --lib` | 要らない（画面の外の GPU） |
+| 7 | `vt-compare` | `cargo run <M> <T> -p q7-vertical --bin vt-compare` | 要らない（画面の外の GPU） |
+| 7 | `vt-balloon` | `cargo build <M> <T> -p q7-vertical --bin vt-balloon` → `C:\home\maz\git\areka\target\pilot-windows-rs-next\debug\vt-balloon.exe` | **排他テストの机** |
+| 9 | 数えの道具 | 問い 9 の節の「再現の手順」（索引づくりは重いのでほかの重いビルドと並べない） | 要らない |
+| 10 | 例 `q10-basic`・`q10-threads` | `cargo run <M> <T> -p q10-winmsg --example q10-basic`（`q10-threads` も同じ） | 要らない |
+
+窓を出す exe の上限時間は `AREKA_APP_SMOKE_EXIT_MS`（既定 30000 ms）で、上限の内で自分で終わる（ExitContract）。
+
+### ExitContract（窓を出す例の終了コード）
+
+| コード | 意味 |
+|---|---|
+| 0 | 正常（上限時間に到達、または `vt-balloon` の当たりが一致） |
+| 2 | 初期化の失敗（段の名前をログに出す） |
+| 3 | 窓が外から閉じられた（判定に使わない） |
+| 4 | `vt-balloon` の当たりが食い違った |
+
+上限時間は環境変数 `AREKA_APP_SMOKE_EXIT_MS`（既定 30000 ms）。
+
+### 置き場の決まりの確かめ（12.4）
+
+置き場の `*.rs`・`Cargo.toml`・`.cargo/config.toml`（git 管理の 80 ファイル）だけを grep した（README などの文書は決まりの語を説明に含むので外す）。
+
+- [x] 0 件: `std::env::temp_dir`・捕捉先の 4 語（`with_default(`・`set_default(`・`set_global_default(`・`install_global_capture_all(`）・`env-filter`・manifest の `log-capture-kit`／`sample-ghost-kit`／`real-run-kit`・`state.actors()`・検体のパスの組み立て・`D3D_DRIVER_TYPE_WARP`・`C:\tmp`・新しい側の `windows` クレートの名指し（`windows =`・`use windows::`）
+- [x] 直下に `main.rs` 無し（bin の `main.rs` は各クレートの `src/` の中だけ）。根の `Cargo.toml` は `[package]` の無い仮想の manifest
+- [x] `publish = false`: 根の `[workspace.package]` に `publish = false`、17 のメンバーが全部 `publish.workspace = true` で受ける（根 1 ＋ 17 = 18 manifest）
+- [x] `.rs` の最長は 501 行（`q7-vertical/src/bin/vt-balloon.rs`）で 1,000 行以下
+- [x] 生成した束縛のコミットは 0 件（`q3-minimal/src/bindings.rs` の名前は同じだが 78 行の手書きの包みで、生成物は `OUT_DIR` へ出す）
+- [x] `evidence/` の絵: `q4-wuc.png` 64x64（200 B）・`q7-balloon.png` 92x272（6,507 B）・`q7-old.png` 310x250（3,826 B）・`q7-new-none.png` 310x250（3,821 B）・`q7-diff-none-origin.png` 310x250（1,755 B）
+- [x] `git diff --stat main -- Cargo.toml Cargo.lock crates/pilot/Cargo.toml deny.toml tools` は空。出荷するクレート（`crates` から `crates/pilot` を除く）の差分も空。本線の `cargo metadata --no-deps` の members 37 件に置き場のクレートは 0 件
+- [x] 本線の見張りの試験が緑: `log-capture-kit` の 6 本 = `doc_tree_guard_test` 8・`file_length_guard_test` 6・`sample_path_guard_test` 21・`temp_path_guard_test` 16・`with_default_guard_test` 24・`workspace_scan_test` 20（すべて passed・0 failed）、`areka` の `runtime::frame::attach_tests`（`frame_attach_tests.rs`）21 passed。1,000 行の見張りは `file_length_guard_test`
+
+注: `q9-api-count/src/count_tests.rs` に `real-run-kit` の文字列が 3 か所あるが、数えの道具の試験の入力で manifest の依存ではなく、見張りは緑のまま。
+
+### CopyLedger（写した量と手間）
+
+写した量は元のファイルの本番の行（試験の行と問い 10 の写しを除く）を元のファイルごとに 1 回数える。書き換えの行数は `git diff --numstat <写した直後> <移した後> -- <クレートのフォルダ>`。
+
+| 問い | 元のファイル | 写した行数 | 書き換えの行数 | 直しの回数 | 時間 |
+|---|---|---|---|---|---|
+| 1 | `src/lib.rs`（本番の部分のみ） | 270 | +15／−19 | | |
+| 1 | `src/util/mod.rs` | 7 | 0 | | |
+| 1 | `src/util/msg_filter_hook.rs` | 64 | +7／−9 | | |
+| 1 | `src/util/window.rs` | 373（写した試験の 68 を含む・本番だけは 305） | +43／−32 | | |
+| 1 | `examples/basic.rs` | 36 | 0（変えない） | | |
+| 1 | `examples/threads.rs` | 37 | 0（変えない） | | |
+| 1 | 新しく足した `build.rs`・`filters.txt` | — | +12・+32 | | |
+| 1 | 計（2.2 の x64 まで） | 787（写した試験の 68 を含む・本番だけは 719） | 写しの書き換え +65／−60（新しいファイルを入れて +109／−60） | 4 | 約 12 分 |
+| 3 | `wintf/src/com/dwrite.rs` | 154 | 既定: +28／−15（末尾の試験の 3 行を消した分を含む） | | |
+| 3 | `wintf/src/com/d2d/mod.rs` | 158 | 既定: +3／−5 | | |
+| 3 | 既定の形で新しく足した `build.rs`・`filters.txt`・`src/main.rs`（確かめの bin）・`Cargo.toml` | — | +11・+47・+214／−1・+2 | | |
+| 3 | `.minimal()` で新しく足した `build.rs`・`filters.txt`・`src/bindings.rs`（束縛の取り込み＋手書きの包み）・`src/main.rs`（確かめの bin）・`Cargo.toml` | — | +12・+49・+78・+211／−1・+2 | | |
+| 3 | 計（`q3-default` と `q3-minimal` は同じ元を写すので 1 回と数える） | 312 | 既定（3.1）: 写しの書き換え +31／−20（新しいファイルを入れて +305／−21）。`.minimal()`（3.2）: 写しの書き換え +31／−20（既定と同じ）（新しいファイルを入れて +383／−21） | 既定: 4・`.minimal()`: 1 | 既定: 約 7 分・`.minimal()`: 約 6 分 |
+| 4 | `wintf/src/com/wuc.rs`（`7e0373f47`。本番の部分のみ。末尾の試験 126 行は写さない） | 127 | 写しの書き換え +22／−16（`wuc.rs`）。新しく書いた `capture.rs` +121・`tests/capture.rs` +19・`bind-next` の `filters/q4-wuc.txt` +43／−1・`Cargo.toml` +2 | 3 | 約 8 分（写し 約 2 分・移し 約 6 分） |
+| 6 | `crates/shiori-abi/src/interface.rs`（`020fa1248`。先頭の属性と `use` 5・`IShiori` の定義 39・試験の中の定数 4 と実装 `MockBrain` 34・試験の中の呼び出し 15。間の空行 4 は数えない） | 97（写した試験の 53 を含む・本番だけは 44） | +69／−50（`shiori.rs` +66／−49・`main.rs` +3／−1。大半は試験の中から外へ出した字下げで、`IShiori` の定義は 0） | 1 | 約 6 分 |
+
+**写した量の合計（12.1）**: 要件 1.8 とこの表の頭の数え方（本番の行だけ）で 719＋312＋127＋44＝**1,202 行**（問い 1 は例 2 本の 73 行を含む・問い 3 は 2 つの写しを 1 回・問い 10 の写しは数えない）。1,500 行を 298 行下回った（約 80%）。表の写した行数をそのまま足すと 787＋312＋127＋97＝1,323 行になるが、これは下の注の試験の 121 行を含んだ数で、要件の言う写した量ではない。
+
+- 数え方の注: 上の行の中に、元のファイルの試験の中から写した行が 2 つ在る。問い 1 の `util/window.rs` の 373 行は末尾の `#[cfg(test)] mod test`（写した直後の 306〜373 行目＝68 行。問い 10 で人の手で消した 68 行と同じ塊）を含み、問い 6 の 97 行は試験の中の定数 4・`MockBrain` 34・呼び出し 15（＝53 行）を含む。この 121 行を除いた本番だけの行が上の合計の 1,202 行（1,323−121）。
+- 問い 4 は 7.1 の移しだけを数える。7.2 で足した `q4-demo`（`src/bin/q4-demo.rs` +267／−1・`filters/q4-wuc.txt` +22・`d349d9b80..e415ead57`）は実の窓で段を通す確かめの bin で、写しの移しではないので、書き換えにも手間にも入れない。
+
+**手間の実数（12.1・`git diff --numstat <写した直後> <移した後>` を 12.1 で打ち直して上の表と同じ数を得た）**
+
+書き換えの行数は写しのファイルの足し＋引き（新しいファイル・確かめの bin・`Cargo.toml` は入れない）。フィルターの名指しは注の行と空の行を除いた行。時間と直しの回数は各問いの節に書かれた実数（実装係のモデルの作業の時間で、写し・レビュー・実の窓の走り・クロスのビルドは入れない）。
+
+| 問い | 写した直後 → 移した後 | 書き換えの行数 | フィルターの名指し（行） | 直しの回数 | 時間 |
+|---|---|---|---|---|---|
+| 1 | `f75365db0` → `24a82b1ac` | 125（+65／−60） | 32（32） | 4 | 約 12 分 |
+| 3（既定） | `a2288ed43` → `a0ac4cc9b` | 51（+31／−20） | 44（47） | 4 | 約 7 分 |
+| 3（`.minimal()`） | `09970d23a` → `9da6d8886` | 51（+31／−20） | 45（49） | 1 | 約 6 分 |
+| 4 | `cd2fb49c7` → `d349d9b80` | 38（+22／−16） | 37（43） | 3 | 約 6 分（移しだけ） |
+| 6 | `429ddf9c5` → `a59c52789` | 119（+69／−50） | 0（`#[interface]` を手で宣言し束縛を使わない） | 1 | 約 6 分 |
+| 計（`.minimal()` を除く） | | **333** | **113** | **12** | **約 31 分** |
+
+- `.minimal()` は 3.1 の書き換えをそのまま当てた後の手間なので、計に入れない（同じ写しを 2 度数えない）。
+- 問い 3 の 7 分と問い 4 の 6 分には、確かめの bin（`src/main.rs` +214）と撮りの道具（`capture.rs` +121）を書いた時間も入っている。移しだけの手間はこれより少ない（分けて測っていない）。
+
+**1 行あたり・1 API あたりの手間（測った数から出した値）**
+
+- 1 行あたり: 31 分 ÷ 333 行 ＝ **約 0.093 分（約 5.6 秒）／行**。直しは 12 回 ÷ 333 行 ＝ 約 0.036 回／行（約 28 行に 1 回）。
+- 1 API あたり（フィルターの名指し 1 つ）: 問い 6 はフィルターを使わないので除き、25 分 ÷ 113 ＝ **約 0.22 分（約 13 秒）／名指し**。
+- 問い 9 の数へつなぐ較正: 問い 1 の写しは本線の `wintf-winmsg-executor` の本番の全部で、問い 9 の表のその行は 48 記号・出現 165 回。だから書き換えの行は出現 1 回あたり 125 ÷ 165 ＝ 約 0.76 行、手間は 12 分 ÷ 48 記号 ＝ 0.25 分／記号。ただし問い 9 の本番の 165 回には問い 1 が写さなかった `lib.rs` の試験の塊（321 行）も入るので、0.76 は小さめに出ている。
+- 見本は 4 つの写し・333 行だけで、問い 1 の 1 本の較正に頼る。下の見積もりは「測った数 × 構造上の見立て」で、測った数ではない。
+
+**問い 9 の全数に掛けた見積もり（見積もり・測っていない）**
+
+- 行から（A）: 出現の回数 × 0.76 行 × 0.093 分 ＝ 出現 × 約 0.0705 分。
+  - 本番 5,496 回 → 書き換え 約 4,160 行・**約 390 分（約 6.5 時間）**・直し 約 150 回。
+  - 試験 6,332 回 → 約 4,800 行・約 450 分（約 7.4 時間）・直し 約 170 回。
+  - 本番＋試験 11,828 回 → 約 8,960 行・**約 830 分（約 14 時間）**・直し 約 320 回。
+- API から（B）: フィルターに名指すのは型・関数・定数ほか（メソッドはインターフェースと一緒に出る）なので、問い 9 の合計の行の型＋関数＋定数ほか × 0.22 分。
+  - 本番 203＋143＋330＝676 → **約 150 分（約 2.5 時間）**。
+  - 本番＋試験 221＋190＋451＝862 → 約 190 分（約 3.2 時間）。
+  - 照らし合わせ: 問い 1 の 0.25 分／記号で 944 記号を掛けると約 240 分、1,210 記号で約 300 分。
+- 問い 9 が数えない物: `#[implement]` 55 か所・`#[interface]` 6 か所。問い 6 の 6.1 は宣言 1 つと実装 1 つで約 6 分だったので、1 か所 約 3 分として 61 か所 → 約 180 分（約 3 時間・見積もり）。6.2（描き手の `_Impl` 3 つ）の時間は記録に無いので入れていない。
+- 幅: 本番だけで約 2.5〜6.5 時間、試験まで含めて約 3.2〜14 時間、これに COM の実装の約 3 時間を足す（どれも実装係の作業の時間で、レビュー・全体テスト・実機の確かめは入らない）。A と B の開きは、B が「名指し 1 つ」を単位にして出現の回数（同じ型を何度も書き換える分）を見ないことから来る。
+- 本番と試験の分け目は動く: 問い 9 の本番には本線のファイルの中の試験の塊（131 塊・約 2.19 万行）が入っているので、本番の見積もりは多め・試験は少なめに出る。和（本番＋試験）は動かない。
+
+## 第 3 幕: 検証結果
+
+見立ての候補: go／違う／直す。各節に「見立ての候補」「学び」「確かめた日」「止まった所・理由・代わりの見立て」（空なら「無し」）を置き、「判定」の欄は空けてある（判定は開発者が下す）。見立ての理由は「測った数」と「構造上の見立て」を分けて書き、1 つの写しの数を一般化しない。
+
+- 上流の rev は全部の問いで `f37e2f9046cf9710fe00285436c4d22ad6053d72` のまま、最後まで動かしていない（要件 2.5 の手順は使っていない＝進めない所に当たらなかった）。
+- 結果は公開の前の 0.101 の上の物で、公開の後に変わりうる（この幕の終わりの「公開の後の注意」）。
+
+| 問い | 見立ての候補 | 確かめた日 | 止まった所 |
+|---|---|---|---|
+| 1 C の関数だけのクレート（`.sys()`） | go | 2026-11-16 | 無し |
+| 2 束縛の置き場所 | 案 3（共有の束縛のクレート）を既定の形で | 2026-11-16 | 無し |
+| 3 束縛の形 | 既定の形が go・`.minimal()` は本線の既定としては違う | 2026-11-16 | 無し |
+| 4 WinRT の合成 | go | 2026-11-16・17 | 無し |
+| 5 `HWND` の持ち方 | go | 2026-11-16・17 | 無し |
+| 6 COM の実装 | go | 2026-11-16 | 無し（6.2 の `.implements` の名前で 1 回止まり直して通った） |
+| 7 `windows-text` の縦書き | go | 2026-11-17 | 無し |
+| 8 32bit と arm64 のリンク | go | 2026-11-16 | 無し |
+| 9 規模 | 直す（`wintf` を独立に刻む形が候補） | 2026-11-17 | 無し |
+| 10 機械的に回せるか | go（レビューが見る点つき） | 2026-11-17 | 無し |
+
+### 問い 1: C の関数だけのクレート（`.sys()`）
+
+- 見立ての候補: go（x64・i686 の走行が元と一致し、aarch64 はリンクまで通った。写しの側の直しは 2.3 で 0）。
+- 確かめた日: 2026-11-16（x64・2.2、i686・aarch64・2.3）
+- 束縛: `q1-winmsg/build.rs` が `.sys().flat()` で `OUT_DIR/bindings.rs` を書く。フィルター `q1-winmsg/filters.txt` は **32 行**（関数 17・定数と型 15。`WM_CREATE`・`WM_DESTROY` は写した `window.rs` の試験のためだけ）。生成した `bindings.rs` は **151 行**。頼るのは `windows-link` だけ（`.sys()`＋`.flat()` は核の型を束縛の中に書く）。
+- 書き換え（`git diff --numstat f75365db0 -- q1-winmsg`・作業木と写した直後の比べ）: `lib.rs` +15／−19・`util/msg_filter_hook.rs` +7／−9・`util/window.rs` +43／−32・`util/mod.rs` と例 2 本は 0。新しいファイルは `build.rs` +12・`filters.txt` +32。手間は直し 4 回・約 12 分。
+- 比べ（x64・debug）: 写しは `target/pilot-windows-rs-next/debug/examples/{basic,threads}.exe`、元は本線の根で `cargo run -p wintf-winmsg-executor --example basic|threads`。
+  - `basic`: 全文一致（14 行）・終了コード 0 と 0。
+  - `threads`: `main` の行の並び（`main hello`→`main async hello`→`main async bye`→`main bye`）一致・終了コード 0 と 0。`thread` の側の行の集まり（2 本のスレッドが同じ文を出す `n_poll=` を含む）は両方とも `thread hello`・`thread async hello`・`thread async bye`・`thread bye` が各 1、`n_poll=0`〜`3` が各 2 で同じ。
+- 学び:
+  - この rev の `.sys()` は C のヘッダーの形で出る: `HWND = *mut HWND__`・`DWORD`／`UINT`・`LPVOID`。`windows` の新しい型の `WINDOW_EX_STYLE`／`WINDOW_STYLE` は無く `DWORD`（公開の `Window::new_ex` の引数の型も `DWORD` に変わった）。
+  - `WM_*`・`CS_DBLCLKS`・`WH_MSGFILTER`・`GWLP_*` の定数は `i32` で出て、`UINT` を取る所（`PostMessageW` の `msg`・`WNDCLASSW::style`・wndproc の `msg` との比べ）に `as u32` が要る（7 か所）。書き換えの大半はこれと `Option`→ヌルのポインタ、`LRESULT(0)`→`0`、`.0` の剥がし。
+  - 上流の穴: `IDC_ARROW` が `PCSTR` 型で出るのに `PCSTR` 自体は束縛に出ず、フィルターで名指しすると「type or namespace not found: `PCSTR`」で断られる。写しの束縛のモジュールに `pub type PCSTR = *const u8;` を 1 行足し、`LoadCursorW` へは `IDC_ARROW as _` で渡した（上流へ返す候補）。
+  - `w!` は `.sys()` に無い（`windows-link` だけなので）。クラス名は NUL で終わる `[u16; 22]` の `static` を const の式で組んだ。
+  - 失敗の扱いは元を保った: `CreateWindowExW` のヌル→`WindowCreationError`、`SetWindowsHookExW` のヌル→`assert!` で止める（元は `.unwrap()`）。
+  - 写しの `lib.rs` の `#![doc = include_str!("../README.md")]` は消した（元の README は写さない。文書の中身は振る舞いに関わらず、置き場に余計なファイルを増やさないため）。
+  - 束縛のモジュールには `#![allow(non_camel_case_types, non_snake_case, dead_code, clippy::all)]` が要った（無いと clippy の `upper_case_acronyms` が 26 件）。
+  - i686 の `GetWindowLongPtrW`／`SetWindowLongPtrW` は、束縛が `#[cfg(target_arch = "x86")]` で `GetWindowLongW`／`SetWindowLongW` への別名を出す（`link!("user32.dll" "system" "GetWindowLongW" fn GetWindowLongPtrW(..) -> LONG)`。x64・aarch64・arm64ec は `LONG_PTR` の本来の口）。i686 の生成物（`target/pilot-windows-rs-next/i686-pc-windows-msvc/debug/build/q1-winmsg/<ハッシュ>/out/bindings.rs`）でも同じ 2 組を確かめた。写しの `window.rs` は 4 か所とも `as _`／`as *const _` で渡しているので、32bit の型（`LONG`＝`i32`）と 64bit の型（`LONG_PTR`＝`isize`）の差をそのまま吸い、**写しの側で的ごとに分ける `cfg` は 0 か所**で済んだ。
+- 比べ（i686・debug・2.3）: PowerShell から `cargo build ... -p q1-winmsg --examples --target i686-pc-windows-msvc`（16.8 秒・直し 0 回）。出来た `target/pilot-windows-rs-next/i686-pc-windows-msvc/debug/examples/{basic,threads}.exe`（PE の machine＝`0x014C`）を x64 の Windows で走らせ、2.2 と同じ元（x64 の本線の例の出力）と比べた。
+  - `basic`: 全文一致（14 行）・終了コード 0 と 0。
+  - `threads`: `main` の行の並び（`main hello`→`main async hello`→`main async bye`→`main bye`）一致・終了コード 0 と 0。`main` 以外の行の集まり（`thread` の 4 行各 1、`n_poll=0`〜`3` 各 2）も同じ。
+- aarch64（2.3・組んでリンクまで）: `cargo build ... -p q1-winmsg --examples --target aarch64-pc-windows-msvc`（7.9 秒・直し 0 回）。例 2 本ともリンクが通り、`target/pilot-windows-rs-next/aarch64-pc-windows-msvc/debug/examples/{basic,threads}.exe` の PE の machine は `0xAA64`。走らせる機械が無いので走行は見ていない（確定 5）。
+- 止まった所・理由・代わりの見立て: 無し（i686・aarch64 とも止まらず、写しのコードもフィルターも変えていない）。
+- 判定: （開発者が下す）
+
+### 問い 2: 束縛の置き場所（3 案）
+
+- 見立ての候補: 案 3（共有の束縛のクレート）を既定の形で組む（4.3）。判定は開発者が下す。
+  - 理由 1（受け渡し）: 案 3 は `cast` の行 0・受け渡しの `from_raw` 0・重なった型 0。案 1 はこの写しでは入口 1 つに `cast` 1 行（入口が増えれば増える見込み）が要り、同じ型が 71 個 2 つの束縛に出て、生成した行も 1,548 行多い。しかも案 1 は emo-text 役の入口が wintf 役の型を名指すので wintf 役のクレートに頼ったままで、束縛を分けても依存は切れない（分ける見返りが無い）。
+  - 理由 2（案 2 との違い）: 案 2 も手当て 0・重なり 0 で、生成した束縛は案 3 とバイトまで同じ。違いは置き場だけだが、案 2 では wintf 役のフィルターが emo-text 役の要る口（`filters-for-emo.txt`）まで抱え、wintf 役の公開の口が束縛の全部（`pub use`）になる。案 3 なら役ごとのフィルターのファイルを共有のクレートに並べて持て、wintf 役の公開の口は自分の口のままで済む。本線では wintf に頼るクレートが emo-text のほかにも在る（`areka-emo-present`・`areka-placement`・`areka`）ので、型の出どころを wintf の公開の口から外しておく方が、どのクレートからも同じ 1 つの束縛を名指せる（構造上の見立て・測っていない）。
+  - 理由 3（形）: 問い 3 では、形を変えても呼ぶ側の書き換え・振る舞い・`==`・的ごとの結果は同じで、`.minimal()` は生成した行の約 9% と引き換えに手で守る包み（自由関数 4 本で 78 行）を足す。共有のクレート 1 つに束縛を集めるなら、生成した行は `build.rs` が出し直すだけなので、既定の形を推す。
+  - 推さない物: 3 案とも組めたので「組めなかったから外す」案は無い。案 1 は組めたが、上の理由 1 で推さない。
+  - `bind-next`（問い 4・6・7 の土台）は案 3 と同じ形だが、問い 2 の比べの材料ではない。上の理由は `q2-placement` の 3 案と問い 3 の 2 形の結果だけから取った。
+- 3 案の比べ（4.3。数は 4.1・4.2 の結果）:
+
+  | | 案 1（クレートごとに束縛） | 案 2（wintf 役が束縛を公開） | 案 3（共有の束縛のクレート） |
+  |---|---|---|---|
+  | 組めたか（x64・実の GPU） | 組めた・`ink=858`・直し 2 回 | 組めた・`ink=858`・直し 1 回 | 組めた・`ink=858`・直し 1 回 |
+  | 受け渡しの `cast` の行 | 1（emo-text 役の入口） | 0 | 0 |
+  | 受け渡しの `from_raw` | 0 | 0 | 0 |
+  | 型を名指す口 | wintf 役が自分の束縛を `pub use`（依存は切れない） | wintf 役の公開の束縛 | 共有のクレートの束縛 |
+  | 束縛の数 | 2 | 1（wintf 役の中） | 1（別のクレート） |
+  | 同じ型が 2 つの束縛に出た数 | 71（インターフェース 29・構造体 16・別名と列挙 26） | 0 | 0 |
+  | 生成した行 | 9,510（2,717＋6,793） | 7,962（案 3 とバイトまで同じ） | 7,962 |
+  | フィルターの持ち方 | 役ごとに別（20 件・13 件。21 行・15 行のファイル） | wintf 役が両役の和（20 件・13 件。21 行・15 行のファイル） | 共有のクレートが両役の和（20 件・13 件。21 行・15 行のファイルを 2 つ読む） |
+
+- 参照の口（4.3・要件 4.3）: 固定の rev（`f37e2f9046cf9710fe00285436c4d22ad6053d72`・`windows-bindgen` 0.101.0）に、ほかのクレートの束縛の型を参照させる公開の口は**無い**。根拠（cargo の git の取り寄せ `c:\rust\cargo\git\checkouts\windows-rs-a5de4a2dc783ec71\f37e2f9\crates\libs\bindgen`）:
+  - 組み立ての口: `src/lib.rs` 76〜87 行の `pub struct Bindgen` の欄は `input`・`input_default`・`filter`・`output`・`derive`・`implement`・`compose`・`rustfmt`・`layout`・`style`・`dead_code` だけで、参照の欄が無い。`impl Bindgen`（184 行〜）の公開のメソッドも `new`・`input`・`input_default`・`input_bytes`・`input_byte_sets`・`inputs`・`output`・`filter`・`filter_file`・`filter_files`・`filters`・`derive`・`derives`・`rustfmt`・`flat`・`package`・`implement_all`・`implement`・`implements`・`compose`・`composes`・`sys`・`minimal`・`extern_fns`・`dead_code`・`write` だけで、どれも参照を受けない。
+  - コマンドの口: `src/cli.rs` 106〜139 行が受けるのは `--in`・`--out`・`--filter`・`--filter-file`・`--rustfmt`・`--derive`・`--flat`・`--package`・`--sys`・`--minimal`・`--dead-code`・`--extern`・`--implement`・`--compose` だけで、ほかは 139 行の `panic!("invalid option ...")` で断る。0.62 の `--reference`（research.md 3.2・docs.rs の 0.62 のソース）は無い。
+  - 中の仕組みは在るが閉じている: `src/references.rs`（78 行）が「この型はこのクレートが持つ」を表し、`src/paths.rs` 72〜80 行が当たった型に `クレート名::` を前に付けて書く。だが `mod references;`（`src/lib.rs` 16 行）は非公開で、表を埋めるのは `src/lib.rs` 491〜574 行の決め打ちの 5 つ（`windows_future`・`windows_collections`・`windows_reference`・`windows_time`・`windows_numerics`。`.sys()` では入れない）だけ。束縛が `windows_numerics::Vector2` を名指したのはこの決め打ちのため（1.3・3.1）で、利用者のクレート（`q2_plan1_wintf` など）を足す道は無い。
+  - 文書: `readme.md` の「Choose output and inputs」の表（55〜90 行）にも参照の口は無く、84 行は「出力が名指す兄弟のクレートを依存に足せ」と言うだけ。
+  - 案 1 への効き: 口が無いので、案 1 の重なり（71 個）と入口の `cast` は bindgen の側では消せない。
+- 共通の描く本体（4.1）: `q2-placement/shared/draw_body.rs`（66 行）。DirectWrite の工場・書式・配置を作り、受け取った `ID2D1DeviceContext` へ文字を 1 行（`q2 placement 墨`・Segoe UI 20）描く `draw_line` と、premultiplied BGRA の α>0 の画素を数える `count_ink`。中身は案ごとに変えない。各案の emo-text 役の `src/lib.rs` が、型の出どころを `use <束縛>::*; use windows_core::*;` で決めてから `#[path = "../../shared/draw_body.rs"] mod draw_body;` で読む（本体の頭は `use super::*;`）。
+- 確かめの bin: 各案の emo-text 役の `src/main.rs`。wintf 役の `create_target(256, 64)`（ハードウェアの D3D11 → D2D の装置と文脈 → 描く先の `ID2D1Bitmap1` を `SetTarget`・CPU で読む `ID2D1Bitmap1`）→ emo-text 役の `draw_line` → wintf 役の `read_back`（`CopyFromBitmap`＋`Map` で BGRA）→ `count_ink` を出す。墨が 0 なら `E_FAIL` で終了コード 2。どの失敗も `error=` を stderr に出して 2 で終わる（黙って通る道は無い）。
+- 案 3（共有の束縛のクレート・4.1）:
+  - 組めたか: 組めた。直し 1 回（clippy の `chunks_exact` の指摘を `as_chunks::<4>()` へ。束縛と型の受け渡しの直しは 0 回）。実の GPU（画面の外・机なし）で `cargo run -p q2-plan3-emo` が `[q2-plan3] ink=858`・終了コード 0。
+  - 受け渡しの手当て: 無し。wintf 役（`q2-plan3-wintf`）と emo-text 役（`q2-plan3-emo`）が同じ `q2-plan3-bind` の `ID2D1DeviceContext` を使うので、`Target.context` をそのまま `&` で渡すだけ。`cast` の行 0・`from_raw` 0（wintf 役の中の `D2D1CreateFactory` の受け取りの `from_raw` 1 つは受け渡しでなく工場を作る口の形）。
+  - 重なった束縛の量: 同じ型が 2 つの束縛に出た数 0（束縛は 1 つだけ）。フィルターは両役の和で、wintf 役の `filters-wintf.txt` 20 件・emo-text 役の `filters-emo.txt` 13 件（21 行・15 行のファイル）、両方に名指しした物は `ID2D1DeviceContext` の 1 つ（`build.rs` が `filter_files` で 2 つを読み、重なりは bindgen が 1 つにまとめる）。生成した `bindings.rs` は 7,962 行（既定の形・`.flat()`）。
+  - 手で書いた行: `plan3-bind` 16 行（`build.rs` 13・`src/lib.rs` 3）・`plan3-wintf/src/lib.rs` 92 行・`plan3-emo` 37 行（`src/lib.rs` 7・`src/main.rs` 30）。
+  - 学び: 継いだメソッド（`BeginDraw`・`Clear`・`DrawTextLayout`・`EndDraw`・`GetSize`）は emo-text 役の側で `ID2D1RenderTarget` を名指ししないと出ない（3.1 と同じ）。案 3 ではこの名指しが共有のクレートのフィルターに入るので、wintf 役も使わない基の口まで抱える（和にした分だけ束縛が太る）。
+- 案 1（クレートごとに束縛・4.2）:
+  - 組めたか: 組めた。直し 2 回（bin の `E_FAIL` が wintf 役の束縛に無く `q2_plan1_emo` から出すよう直した・clippy の 1 要素の `for` を `println!` 2 行へ。型の受け渡しの直しは 0 回）。実の GPU（画面の外・机なし）で `q2-plan1-emo` が `[q2-plan1] ink=858`・終了コード 0（案 3 と同じ数）。
+  - 受け渡しの手当て: `cast` の行 1（`plan1-emo/src/lib.rs` の入口 `draw_line(context: &q2_plan1_wintf::ID2D1DeviceContext, …)` の中の `context.cast::<ID2D1DeviceContext>()?`。両方の型が同じ IID の `windows_core::Interface` なので、クレートをまたいでも `QueryInterface` で自分の型の参照が取れた）。受け渡しの `from_raw` 0。wintf 役の中の `D2D1CreateFactory` の受け取りの `from_raw` 1 つは、案 3 と同じく工場を作る口の形で受け渡しではない。emo-text 役の `DWriteCreateFactory` は描く本体の `.cast()` のままで `from_raw` は要らない。
+  - 型を名指す口: emo-text 役の入口の引数が wintf 役の型なので、wintf 役は自分の束縛を `pub use bindings::*;` で公開し、emo-text 役は wintf 役のクレートに頼る（束縛は別でも依存は切れない）。emo-text 役の束縛は外へ出さない（bin が使う `E_FAIL` だけ `pub use`）。
+  - 重なった束縛の量: 同じ型が 2 つの束縛に出た数 71（インターフェース 29〔`ID2D1DeviceContext`・`ID2D1RenderTarget`・`ID2D1Bitmap1`・`ID2D1Device`・`IDXGISurface`・`IWICBitmapSource` ほか〕・構造体 16〔`D2D1_PIXEL_FORMAT`・`D2D_SIZE_U`・`D2D1_BITMAP_PROPERTIES1` ほか〕・型の別名と列挙 26〔`DXGI_FORMAT`・`D2D1_ALPHA_MODE`・`IID` ほか〕。定数と関数の重なりは 0）。名指しは同じ 2 つのフィルター（wintf 役 20 件・emo-text 役 13 件、両方に名指しは `ID2D1DeviceContext` の 1 つ）でも、依存の型を自動で引くので、この写しでは名指し 1（両方に名指しした `ID2D1DeviceContext`）に対し重なり 71 が出た。
+  - 生成した行数: wintf 役だけ 2,717 行・emo-text 役だけ 6,793 行・合わせて 9,510 行（案 3 の和の 7,962 行より 1,548 行多い＝重なりの分）。
+  - 手で書いた行: `plan1-wintf` 108 行（`build.rs` 11・`src/lib.rs` 97〔案 3 の wintf 役の本体と同じ＋自分の束縛の `include!` と公開の 6 行〕）・`plan1-emo` 59 行（`build.rs` 11・`src/lib.rs` 18・`src/main.rs` 30）。フィルターは案 3 の 2 つを写した物（`filters-wintf.txt` 20 件・`filters-emo.txt` 13 件。21 行・15 行のファイル）。
+- 案 2（wintf 役が束縛を公開・4.2）:
+  - 組めたか: 組めた。直し 1 回（案 1 と同じ clippy の 1 要素の `for`。型の受け渡しの直しは 0 回）。実の GPU（画面の外・机なし）で `q2-plan2-emo` が `[q2-plan2] ink=858`・終了コード 0（案 3 と同じ数）。
+  - 受け渡しの手当て: 無し。emo-text 役は自分の束縛を持たず（`build.rs` 無し）、`use q2_plan2_wintf::*; use windows_core::*;` で wintf 役が公開した型（`ID2D1DeviceContext`・`IDWriteFactory`・`IDWriteTextFormat`・`IDWriteTextLayout`・`DWriteCreateFactory` ほか）をそのまま使う。`cast` の行 0・受け渡しの `from_raw` 0（wintf 役の中の `D2D1CreateFactory` の `from_raw` 1 つは工場を作る口の形）。
+  - 重なった束縛の量: 同じ型が 2 つの束縛に出た数 0（束縛は wintf 役の 1 つだけ）。wintf 役のフィルターは自分の `filters-wintf.txt`（20 件）に emo-text 役のための `filters-for-emo.txt`（13 件）を足した和で、wintf 役は自分で使わない DirectWrite の口まで抱えて公開する。生成した `bindings.rs` は 7,962 行で、案 3 の物とバイトまで同じ（フィルターの中身が同じ和のため）。
+  - 手で書いた行: `plan2-wintf` 109 行（`build.rs` 12・`src/lib.rs` 97）・`plan2-emo` 37 行（`src/lib.rs` 7・`src/main.rs` 30）。案 3 との違いは、束縛の置き場が wintf 役のクレートの中か別のクレートかだけ。
+- 学び（4.3）:
+  - 3 案とも、COM の型は束縛をまたいでも同じ IID の `windows_core::Interface` なので、受け渡しの難しさは「型の名前がどこに在るか」だけに出た。振る舞い（墨の数）は 3 案で同じ。
+  - bindgen は名指しの依存の型を自動で引くので、束縛を 2 つに分けると、この写しでは名指し 1（両方に名指しした `ID2D1DeviceContext`）に対し重なり 71 が出た。束縛は 1 つにまとめるのが安い。
+  - 参照の口が無いので、束縛を分ける案は bindgen の側で重なりを消せない。
+- 確かめた日: 2026-11-16（案 3・x64・4.1／案 1・案 2・x64・4.2／比べと上流のソースの確かめ・4.3）
+- 止まった所・理由・代わりの見立て: 3 案とも無し。
+- 判定: （開発者が下す）
+
+### 問い 3: 束縛の形（既定か `.minimal()`）
+
+- 見立ての候補: 既定の形が go。`.minimal()` は本線の既定の形としては「違う」（3.3）。
+  - 2 形とも、x64・i686 で同じ墨の数（722）を出し、`==` の結果も同じ。aarch64 はどちらもリンクまで通った。形の違いは、的ごとの結果には出ない。
+  - `.minimal()` で減るのは生成した行だけ（833 行・約 9%）。その代わり、自由関数の包みを 78 行手で書くことになる。生成した行は `build.rs` が出し直すので守る手間が要らないが、手書きの包みは守る手間が要る。自由関数が 4 本のこの写しでも 78 行あった。自由関数と取っ手が多い所（問い 1・5 の窓の取っ手）では、包みも呼ぶ側の書き換えも増えると見る。
+  - 呼ぶ側の書き換えは 2 形で同じ（写しは +31／−20 で 1 字も違わない）。`.minimal()` で減る物は呼ぶ側には無い。
+- 2 形の比べ（3.3）:
+
+  | | 既定の形（`q3-default`） | `.minimal()`（`q3-minimal`） |
+  |---|---|---|
+  | フィルターの行（名指し） | 47（44） | 49（45。`ID3D11Device` を足した） |
+  | 生成した束縛の行 | 8,889 | 8,056（−833） |
+  | 手書きの包みの行 | 0 | 78（自由関数 4 本と束縛の取り込み） |
+  | 写しの書き換え（`dwrite.rs`＋`d2d/mod.rs`） | +31／−20 | +31／−20（同じ） |
+  | 確かめの bin の書き換え | +214／−1 | +211／−1（違いは `mod bindings;` と `HMODULE` の 1 行ずつ） |
+  | 全部の差分 | +305／−21 | +383／−21 |
+  | 直しの回数・時間 | 4 回・約 7 分 | 1 回・約 6 分（3.1 の書き換えを当てた後） |
+  | 墨の数（x64・i686） | 722・722 | 722・722 |
+  | `==`（番地の違う同じ物で真・別の物で偽） | 真・偽（x64・i686） | 真・偽（x64・i686） |
+  | aarch64 | リンクまで通った | リンクまで通った |
+
+- 確かめた日: 2026-11-16（既定の形・x64・3.1）／2026-11-16（`.minimal()` の形・x64・3.2）／2026-11-16（2 形の i686・aarch64・3.3）
+- i686 と aarch64（3.3）:
+  - PowerShell から `cargo build ... -p q3-default -p q3-minimal --target i686-pc-windows-msvc`（18.5 秒・直し 0 回）。出来た `target/pilot-windows-rs-next/i686-pc-windows-msvc/debug/{q3-default,q3-minimal}.exe`（PE の machine＝`0x014C`）を x64 の Windows で 3 回ずつ走らせた。画面の外の描画なので机は取らない。
+    - 2 形とも、3 回とも終了コード 0。`clusters=12`・`overhang_right=-142.13281`・`ink=722` で、x64 の exe（同じ日に 3 回ずつ走らせ直した）と同じ。
+    - `==` も x64 と同じ: `same_via_unknown=true`・`same_unknown=true`・`different_object_ne=true`・`same_object_other_address=true`（番地は `raw_d3d=0xf263b4`・`raw_dxgi=0xf25f3c` のように違う）。
+  - `cargo build ... -p q3-default -p q3-minimal --target aarch64-pc-windows-msvc`（7.7 秒・直し 0 回）。2 形ともリンクが通り、`target/pilot-windows-rs-next/aarch64-pc-windows-msvc/debug/{q3-default,q3-minimal}.exe` の PE の machine は `0xAA64`。走らせる機械が無いので走行は見ていない（確定 5）。
+  - 生成した `bindings.rs` は、x64・i686・aarch64 の 3 つで 1 バイトも違わない（既定 8,889 行・`.minimal()` 8,056 行とも中身の要約が一致）。`target_arch` の `cfg` は 0 か所。呼び出しの規約は `link!` と COM の表の `"system"` が的ごとに決めるので、束縛にも写しにも的ごとの分けは要らなかった。
+  - 写し・包み・bin のコードは 3.3 で 1 行も変えていない。
+- 既定の形（`q3-default`・3.1）:
+  - 束縛: `q3-default/build.rs` が既定の形（`.flat()` だけ足す）で `OUT_DIR/bindings.rs` を書く。フィルター `q3-default/filters.txt` は 47 行で、名指しは 44（写しの分が 18・確かめの bin の分が 26・`//` の注が 3 行）。生成した `bindings.rs` は **8,889 行**。頼るのは `windows-core`・`windows-numerics`（`Matrix3x2`／`Vector2`／`Matrix4x4` を束縛がこの名で出す）と、写しの `tracing`。
+  - 書き換え（`git diff --numstat a2288ed43 -- q3-default`。作業木と写した直後の比べで、まだ追跡していない新しいファイルも数えた）: 写しは `dwrite.rs` +28／−15・`d2d/mod.rs` +3／−5（計 +31／−20）。ほかに `Cargo.toml` +2、新しいファイルの `build.rs` +11・`filters.txt` +47、確かめの bin の `src/main.rs` +214／−1（骨組みの 1 行と差し替え）。全部で +305／−21。手間は直し 4 回（組み 3 回・clippy 1 回）・約 7 分。
+  - 写しの末尾の `#[cfg(test)] #[path = "dwrite_cluster_tests.rs"] mod tests;`（3 行）は消した（試験は写さない）。上の −15 に入っている。
+  - 確かめの bin（x64・debug・実の GPU・画面の外の描画なので机は取らない）: `target/pilot-windows-rs-next/debug/q3-default.exe` の終了コードは 0。ハードウェアの D3D11（`D3D_DRIVER_TYPE_HARDWARE`・`D3D11_CREATE_DEVICE_BGRA_SUPPORT`）→ `IDXGIDevice` → `ID2D1Factory1::CreateDevice` → 写しの `create_device_context` と進む。256×64 の `ID2D1Bitmap1`（TARGET）へ写しの `create_text_format`（Segoe UI・20 DIP・ja-jp）・`create_text_layout`（`q3 default 墨`）・`draw_text_layout` で黒く描き、CPU_READ の絵へ `CopyFromBitmap` して `Map` で読む。**α>0 の墨の画素は 722**（3 回走らせて 3 回とも同じ）・クラスタは 12。写しの残りの口（`set_transform`・`get_overhang_metrics`・`fill_rectangle`・`fill_ellipse`・`draw_bitmap`・`close`）も通した（後の 4 つは `ID2D1CommandList` へ記録した）。
+  - `==`（`assert` は全部通った）:
+    - `ID2D1CommandList` を `cast` で `IUnknown` へ移し、また `ID2D1CommandList` へ戻した参照と比べると真。
+    - `IUnknown` へ `cast` した物と、QueryInterface を通らずに `into` で移した物を比べると真（この 2 つは番地も同じ）。
+    - 別に作った `ID2D1CommandList` と比べると偽。
+    - 番地の違う参照: 同じ D3D11 の装置を `ID3D11Device` と `IDXGIDevice` から `IUnknown` へ `into` で移すと番地が違うのに、`==` は真。番地でなく COM の同一性で比べている。
+    - 中身: `define_interface!` が `PartialEq` を derive して、中の `IUnknown` の `eq` に任せる。その `eq` は番地が同じならすぐ真で、違えば両方を `IUnknown` へ `cast` してから番地を比べる（`windows-core` の `unknown.rs` 49〜55 行・`imp/mod.rs` 110 行）。既定の形では、`SurfaceComposite::same_root` と `GraphicsCommandList` の導出の `PartialEq` が頼っている COM の同一性の比べがそのまま残る。
+- 学び（既定の形）:
+  - この rev の既定の形は、0.62 の `windows` クレートより C のヘッダーに近い形で出る。
+    - 戻り値の無い COM メソッドは `Result<()>` でなく `HRESULT` を返す（`Close`・`EndDraw`・`CopyFromBitmap`・`Unmap`・`GetClusterMetrics`）。`.ok()` が要る。
+    - 戻り値を out の引数で返すメソッドは、値を返す形にならない（`GetOverhangMetrics(&mut)`・`Map(options, &mut)`）。
+    - スライスの引数は「ポインタ＋長さ」に戻る（`CreateTextLayout(ptr, len, ..)`・`GetClusterMetrics(Option<*mut>, max, *mut)`）。
+    - 文字列は `PCWSTR` でなく `*const WCHAR` で出る。写しは `Param<PCWSTR>` のまま受けて `.param().abi().0` で渡した。
+    - 型の名前は `UINT32`・`FLOAT`・`DWORD`・`LPVOID` のまま出る。
+    - ファクトリの関数は総称の形（`DWriteCreateFactory::<T>(type)`・`D2D1CreateFactory::<T>(type, opts)`）にならない。`DWriteCreateFactory(type, &IID) -> Result<IUnknown>` と `D2D1CreateFactory(type, &IID, opts, *mut *mut c_void) -> HRESULT` で出るので、前者は `cast`、後者は `from_raw` で受けた。
+    - `#define` の定数（`COINIT_MULTITHREADED`・`D3D11_CREATE_DEVICE_BGRA_SUPPORT`・`D3D11_SDK_VERSION`・`ERROR_INSUFFICIENT_BUFFER`・`FACILITY_WIN32`）は `i32` で出て、`UINT` を取る所で `as u32` が要る。
+    - `D3D11CreateDevice` には `featurelevels: UINT` の引数がある（0 を渡す）。
+    - `windows_numerics` のフィールドは小文字（`Vector2 { x, y }`）。
+  - 継いだメソッドは、基のインターフェースをフィルターで名指ししないと出ない。`ID2D1DeviceContext` の `Clear`／`DrawTextLayout` ほかは `ID2D1RenderTarget` の、`IDWriteFactory2` の `CreateTextFormat`／`CreateTextLayout` は `IDWriteFactory` の名指しが要った（`IDWriteFactory1` も足した）。足すと、`Deref` の鎖をたどって元と同じ呼び方で届く。
+  - `HRESULT::from_win32` はこの rev の `windows-result` に無い。`HRESULT::from_components(1, FACILITY_WIN32, ERROR_INSUFFICIENT_BUFFER)` で組んだ。訂正（12.2）: 変換の口そのものは在る＝`windows_result::WIN32_ERROR(pub u32)` の `to_hresult()`（上流 `crates/libs/result/src/win32_error.rs` 24 行）。ただ束縛は `ERROR_INSUFFICIENT_BUFFER` を `i32` の定数で出し `WIN32_ERROR` の型にしないので、0.62 の `ERROR_….to_hresult()` の綴りのままでは呼べない（`WIN32_ERROR(ERROR_… as u32).to_hresult()` と包めば呼べる。使い捨ての確かめ `target\pilot-windows-rs-next\tmp\probe-rt` で `ERROR_INVALID_WINDOW_HANDLE` を包んだ値が `from_components` の値＝`0x80070578` と等しかった・2026-11-17）。
+  - 写しの `create_text_format` は 8 引数で、clippy の `too_many_arguments`（-D warnings）に止められる。写しは変えずに、bin の根に `#![allow(clippy::too_many_arguments)]` を置いた。
+  - 写しの中の失敗の扱いは元を保った（`sizing_outcome` の `tracing::error!`＋`Err`）。bin の失敗は `[q3-default] error=` を出して終了コード 2 で終わる。墨が 0 ならそれも失敗にする。
+- `.minimal()` の形（`q3-minimal`・3.2）:
+  - 束縛: `q3-minimal/build.rs` が `.flat()`＋`.minimal()` で `OUT_DIR/bindings.rs` を書く（`.flat()` は 3.1 と同じ条件で比べるために付けた）。フィルター `q3-minimal/filters.txt` は 49 行で、3.1 の 47 行に `ID3D11Device` の名指しを 1 つ（と注を 1 行）足した。生成した `bindings.rs` は **8,056 行**（既定は 8,889 行）。`ID3D11Device` を名指ししないと 6,172 行だが、それでは包みが装置を型で受けられない。既定の形では `D3D11CreateDevice` の包みが `ID3D11Device` を引くので、名指ししなくても出る。
+  - `.minimal()` が出さない物（この rev の `windows-bindgen` の `lib.rs` の `Style::Minimal`・`cpp_fn.rs` 192 行）: 自由関数は生の `link!` だけになる（ポインタと `HRESULT`。`Option`・`Param`・`Result` の包みなし）。取っ手は裸の別名になる（`HMODULE = *mut HINSTANCE__`。newtype の口は無いが、`Default` は生のポインタ自身の物〔ヌル・Rust 1.88 から〕が在る＝12.2 の訂正）。継いだメソッドの転送は出ない。文字列の包み（`&str`／`String`）は WinRT の `HSTRING` の引数と戻り値にだけ効く。COM のメソッドの包みは既定と同じ形で出る（`Option<*const T>`・`Result<T>`・`Param<T>`）。
+  - 手書きの包み（`q3-minimal/src/bindings.rs`・**78 行**・束縛の取り込みの 5 行を含む）: 自由関数 4 本（`CoInitializeEx`・`D3D11CreateDevice`・`D2D1CreateFactory`・`DWriteCreateFactory`）を、既定の形と同じ呼び方で同じ名前のまま書いた。自分のモジュールに書いた名前は `pub use raw::*` の glob より強いので、写しも bin も `use bindings::*` のままで包みに届く。
+    - 継いだメソッドの転送は書かずに済んだ。`.minimal()` も `interface_hierarchy!` と `Deref` の鎖は出す（`Deref` の impl は 69 個・既定は 43 個）。基のインターフェースを名指ししてあれば（3.1 と同じフィルター）、`ctx.Clear`・`ctx.BeginDraw`・`dw.CreateTextFormat` ほかは鎖をたどって元の呼び方で届く。
+    - 文字列の包みも書かずに済んだ。Win32 の `PCWSTR`／`*const WCHAR` の引数は既定と同じ形で出る。
+    - 取っ手の便利な口は包みにせず、bin の 1 行で受けた（`HMODULE::default()` を `core::ptr::null_mut()` にした）。訂正（12.2）: この 1 行は要らない書き換えだった。生のポインタは `Default`（ヌル）を持つので `HMODULE::default()` のままでも組める（使い捨ての確かめ `probe-rt` で 3 形とも `HWND::default()`・`HMODULE::default()` がヌルで組めた・rustc 1.100.0）。`core::ptr::null_mut()` は同じ値の別の綴り。
+  - 書き換え（`git diff --numstat 09970d23a -- q3-minimal`。作業木と写した直後の比べで、まだ追跡していない新しいファイルも `wc -l` で数えた）: 写しは `dwrite.rs` +28／−15・`d2d/mod.rs` +3／−5（計 +31／−20。3.1 の書き換えをそのまま当てて 1 字も変わらない）。末尾の `#[cfg(test)] #[path = "dwrite_cluster_tests.rs"] mod tests;`（3 行）は 3.1 と同じく消した（−15 に入っている）。ほかに `Cargo.toml` +2、新しいファイルの `build.rs` +12・`filters.txt` +49・`src/bindings.rs` +78、確かめの bin の `src/main.rs` +211／−1。全部で +383／−21。bin が 3.1 と違うのは、`mod bindings { include! }` の 4 行を `mod bindings;` の 1 行にしたことと、`HMODULE::default()` の 1 行と、出力の名前（`[q3-minimal]`）だけ。手間は直し 1 回（組み 1 回で、自由関数 4 本の 8 つの誤り。包みを書いて次の組みで通った。clippy・fmt は一度で通った）・約 6 分。
+  - 確かめの bin（x64・debug・実の GPU・画面の外の描画なので机は取らない）: `target/pilot-windows-rs-next/debug/q3-minimal.exe` の終了コードは 0。中身は 3.1 と同じ（Segoe UI・20 DIP・ja-jp・`q3 default 墨`・256×64）。**α>0 の墨の画素は 722**（3 回走らせて 3 回とも同じ。3.1 と同じ）・クラスタは 12・`overhang_right=-142.13281`（3.1 と同じ）。
+  - `==`（`assert` は全部通った。`.minimal()` でも番地だけの比べに変わらない）:
+    - `cast` で `IUnknown` を通って戻した `ID2D1CommandList` と比べると真。`IUnknown` の `cast` と `into` の比べも真。別の `ID2D1CommandList` とは偽。
+    - 番地の違う参照: 同じ D3D11 の装置を `ID3D11Device` と `IDXGIDevice` から `IUnknown` へ `into` で移すと、番地が違うのに `==` は真だった（`raw_d3d=0x2cf5fc81770`・`raw_dxgi=0x2cf5fc80f78` ほか 3 回とも番地が違って真）。`PartialEq` は束縛でなく `windows-core` の `IUnknown::eq` の持ち物なので、束縛の形を変えても COM の同一性の比べは残る。
+- 学び（`.minimal()` の形）:
+  - この写しの範囲（COM のメソッドが主で、自由関数は 4 本）では、`.minimal()` で手書きが要ったのは自由関数の包みだけだった（78 行）。呼ぶ側は bin の 2 か所が変わっただけ。
+  - `.minimal()` は自由関数が引く型を連れてこない（`D3D11CreateDevice` の `ID3D11Device`）。包みが型で受けたいなら、フィルターで名指しする。
+  - 取っ手が裸のポインタの別名になるので、newtype の便利な口（`is_invalid` ほか）は無くなる。`HMODULE::default()` は生のポインタの `Default` で組める（12.2 の訂正・初めは「使えない」と書いていた）。取っ手を多く扱う写し（問い 1・5 の窓の取っ手）では、`is_invalid` → `is_null` などの書き換えが増えると見る。
+- 学び（2 形の比べ・3.3）:
+  - 形を選んでも、呼ぶ側の書き換え・振る舞い・`==`・的ごとの結果は変わらない。違いは「生成した行の量」と「手で守る包みの量」の取り替えだけ。
+  - COM のメソッドが主の写しでは、`.minimal()` が省く物（自由関数の包み・取っ手の便利な口）が少ないので、減る生成の行も約 9% にとどまる。
+  - 既定の形の束縛も 3 つの的で同じ物が出る。的ごとに束縛を出し直す手当ては要らない。
+- 止まった所・理由・代わりの見立て: 無し（x64・i686 の走行、aarch64 のリンクとも止まらなかった）。
+- 判定: （開発者が下す）
+
+### 問い 4: WinRT（`windows-bindgen` で合成）
+
+- 見立ての候補: go（`wintf` の合成の組み方〔DispatcherQueue → Compositor → DesktopWindowTarget → D2D の装置からの描画の装置 → 描画面 → SpriteVisual〕は、`windows-composition` に乗り換えずに `windows-bindgen` の既定の形の束縛のまま実の窓で全段通った。直しは型の決まり〔既定のインターフェースの名指し・相互運用の戻りの `cast`〕だけで、組み方は変わらない）
+- 確かめた日: 2026-11-16（7.1・束縛と写しの移し）／2026-11-17（7.2・`q4-demo` の実の窓・x64・実の GPU・排他テストの机を持って 2 回走らせた）
+- 段ごとの結果（7.2・`q4-demo`）:
+  - 1 回目の走り（DPI の認識なし）: 全段が `ok` で終了コード 0。ところが進行役（主の会話）が撮った絵を目で見ると、256x256 の絵の左と上にデスクトップのアイコンが写り、マゼンタは (100,100) から右下の角までしか無かった。当時の確かめ（真ん中の 1 点だけ）は偶然に通っていた。
+  - 原因: exe が DPI を認識しておらず、画面が 192 DPI（200%）だった。窓は論理の座標（(100,100)・256x256 → 物理では (200,200)・512x512）で置かれ、撮りの `GetWindowRect` と画面の DC からの `BitBlt` は物理の画素 (100,100)〜(356,356) を読んだので、窓の左上が絵の (100,100) にずれた。撮りの書き方と visual・描画面の大きさは原因ではない。
+  - 直し: `q4-demo` の最初の段に `dpi_awareness`（`SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)`）を足した。確かめも、真ん中の 1 点から 5 点（4 隅を 4 px 内側に・真ん中）へ強めた（1 回目の絵なら (4,4) がデスクトップで落ちる）。
+  - 2 回目の走り（直した後）: 終了コード 0（上限時間 30000 ms に着いて自分で終わった）。出た行:
+
+    ```
+    [q4] step=dpi_awareness ok
+    [q4] step=out_dir ok
+    [q4] step=window ok
+    [q4] step=popup ok
+    [q4] step=dispatcher_queue ok
+    [q4] step=compositor ok
+    [q4] step=desktop_window_target ok
+    [q4] step=d2d_device ok
+    [q4] step=graphics_device ok
+    [q4] step=drawing_surface ok
+    [q4] step=sprite_visual ok
+    [q4] step=paint ok
+    [q4] step=capture ok
+    [q4] pixel x=4 y=4 rgb=255,0,255 ok
+    [q4] pixel x=251 y=4 rgb=255,0,255 ok
+    [q4] pixel x=4 y=251 rgb=255,0,255 ok
+    [q4] pixel x=251 y=251 rgb=255,0,255 ok
+    [q4] pixel x=128 y=128 rgb=255,0,255 ok
+    [q4] step=check_color ok
+    [q4] done exit_ms=30000
+    ```
+
+  - 撮った絵は作業木の `target\pilot-windows-rs-next\out\q4\q4-demo.png`（256x256・コミットしない）。真ん中の 64x64 を切って `evidence/q4-wuc.png` に置いた。進行役も撮った絵を目で見て、256x256 の全面がマゼンタだと確かめた。画面の DC からの撮りに WUC の中身は写る（DWM が合成した後の画素）。
+- 学び（7.2・実の窓）:
+  - DPI を認識しない exe は、拡大率が 100% より大きい画面で、窓の座標（論理）と画面の DC の撮り（物理）が食い違い、撮りがずれる。段は全部 `ok` で終わるので、行だけ見ても気付けない。撮った絵の確かめは 1 点でなく 4 隅と真ん中で見る。
+  - `vt-balloon`（8.6）も、設計どおり Per Monitor v2 の DPI の認識が要る（無いと同じずれで当たりの位置も狂う）。
+  - `q1` の束縛（`.sys()`）の `HWND` と `bind-next`（既定の形）の `HWND` は、どちらも `*mut HWND__` の別名だが `HWND__` が別の型なので、そのままでは渡せない。`window.hwnd().cast()`（ポインタの型だけ移す）が 1 か所要った。束縛を 2 つ持つと取っ手の受け渡しにこの手当てが要る（問い 2 の案 1 の重なりと同じ形）。
+  - `q1` の窓は `new_ex` で拡張のスタイルしか取らない（スタイルは 0）ので、`WS_POPUP` は作った後に `SetWindowLongPtrW(GWL_STYLE)` と `SetWindowPos(SWP_FRAMECHANGED)` で付けた。`q1` の束縛は非公開なので、この名指しは `bind-next` に置いた。
+  - 問い 4 のフィルターに 7.2 で 20 件を足した（足すだけ・消した物なし）: 装置の作り方の定数 4（`D3D_DRIVER_TYPE_HARDWARE`・`D3D11_CREATE_DEVICE_BGRA_SUPPORT`・`D3D11_SDK_VERSION`・`D2D1_FACTORY_TYPE_SINGLE_THREADED`）・塗りの基のインターフェース 1（`ID2D1RenderTarget`。`Clear` はこれを名指ししないと出ない）・窓の形と見せ方 9（`SetWindowLongPtrW`・`SetWindowPos`・`GWL_STYLE`・`WS_POPUP`・`WS_EX_NOREDIRECTIONBITMAP`・`HWND_TOPMOST`・`SWP_FRAMECHANGED`・`SWP_SHOWWINDOW`・`SWP_NOACTIVATE`）・メッセージの回し 4（`PeekMessageW`・`TranslateMessage`・`DispatchMessageW`・`PM_REMOVE`）・DPI 2（`SetProcessDpiAwarenessContext`・`DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2`）。フィルターは 65 行（名指し 57・注 8）になった。`windows-numerics` の `Vector2` の欄はこの rev では小文字（`x`・`y`）。
+  - 塗りは `BeginDraw` の文脈に `Clear` だけで、`BeginDraw` の返す位置の平行移動（atlas offset）は使っていない（描画面 1 枚では全面が塗られた）。図形を置く移行の本体では、その平行移動を足して描く。
+  - 直しの回数（7.2）: 3（`Vector2` の欄の名前のビルドの失敗・clippy の「宣言した所で閉包を呼ぶ」・1 回目の走りの DPI のずれ）。
+- 止まった所・理由・代わりの見立て: 無し（今の形のまま全段が通った。1 回目の撮りのずれは exe の DPI の認識の不足で、合成の段の問題ではない）
+- 学び（7.1・束縛と写しの移し）:
+  - WinRT の合成も Win32 の相互運用も、`bind-next` の 1 つのフィルターで既定の形の束縛に出た。名前空間のモジュールは WinRT が `bind_next::Windows::UI::Composition::Compositor`・`bind_next::Windows::System::DispatcherQueueController`、Win32 は全部 `bind_next::Windows::Win32::*` の 1 段（相互運用の `ICompositorInterop` ほか・`CreateDispatcherQueueController`・GDI も同じ段）。
+  - WinRT のクラスの名指しだけでは、クラスの型・`new()`・`RuntimeName` は出るがメソッドは 1 つも出ない（既定のインターフェースの `ICompositor_Vtbl` が空）。メソッドはクラスの既定のインターフェース（`ICompositor`・`ICompositionTarget`・`ICompositionGraphicsDevice`・`IVisual`・`ISpriteVisual`）を名指ししたときに、クラスの `impl` に出る。Win32 の「継いだメソッドは基のインターフェースを名指ししないと出ない」と同じ型の決まり。名指しが欠けても build は通るので、呼ぶ側で初めて気付く。
+  - 生成した束縛が実際に名指しした兄弟のクレート: `windows-collections` だけ（`ICompositor` から `Compositor` に出る `CreateEffectFactoryWithProperties` の `IIterable<HSTRING>` の 1 か所）。`windows-future`・`windows-reference`・`windows-time` は名指しされなかった。`ICompositor` を名指しする前（クラスだけ）は兄弟のクレートを 1 つも要らなかった。`bind-next/Cargo.toml` へ `windows-collections` を足した（消した物は無し）。ほかは `windows-core` と、`Vector2` ほかで既に在る `windows-numerics`。
+  - 問い 4 のフィルターの行数: 43 行（名指し 37・注 6）。束縛の全体（4 つのフィルターの和）は 13,881 行。
+  - 相互運用の戻りは、`windows` 0.62 の手書きの型と違い、インターフェースで出る: `CreateGraphicsDevice` は `ICompositionGraphicsDevice`、`CreateDesktopWindowTarget` は `IDesktopWindowTarget`、`CreateDispatcherQueueController` は `PDISPATCHERQUEUECONTROLLER`（＝`IDispatcherQueueController` の別名）。写しはクラスを返す口のまま、中で `?.cast()` してクラスへ移した（3 か所）。`BeginDraw` は `T: Interface` の総称で出るので、`let dc: ID2D1DeviceContext = …` の注釈のままで書き換えは要らなかった。`EndDraw` は `HRESULT` を返すので `.ok()` を足した（問い 3 と同じ）。`CreateCompositionSurfaceForSwapChain`／`CreateGraphicsDevice` の引数は `Param<IUnknown>` で、`&IDXGISwapChain1`・`&ID2D1Device` をそのまま渡せた。
+  - `HWND` が裸のポインタの別名（問い 5）なので、`HWND` を取る安全な公開の関数（`create_desktop_window_target`・`capture_window_png`）に clippy の `not_unsafe_ptr_arg_deref` が立つ。取っ手は OS へ渡すだけなので関数ごとに `allow` した。移行の本体では 1 か所の決め（`allow` か newtype の包みか）が要る。
+  - 定数の型: `DQTYPE_THREAD_CURRENT`・`DQTAT_COM_*` は `i32` の別名の型で出て、`DispatcherQueueOptions` の欄と合う。GDI の `BI_RGB`・`DIB_RGB_COLORS` は `i32` で出て、`DWORD`／`UINT`（`u32`）の欄へは `as u32` が要る。`SRCCOPY` は `DWORD`。
+  - 画面の撮り（`src/capture.rs`・新しく書いた）: `GetWindowRect` → `GetDC(None)` → `CreateCompatibleDC`／`CreateCompatibleBitmap` → `BitBlt(SRCCOPY)` → `GetDIBits`（32 bpp・上から下）→ BGRA を RGBA に並べ替えて `png` 0.18.1 で書く。`cargo test -p q4-wuc`（`tests/capture.rs`＝窓を作らずデスクトップの窓の矩形を撮り、PNG の幅と高さが矩形と合うことを確かめる。一時の PNG は `CARGO_TARGET_TMPDIR` に書いてすぐ消す）が通る。WUC の中身が写るかは 7.2 の実の窓で確かめる。
+  - 書き換えの行数（`git diff --numstat cd2fb49c7 <移した後> -- q4-wuc bind-next`、まだ積んでいない新しいファイルを含む）: `wuc.rs` +22／−16（`use` の入れ替えと、`?.cast()` 3 か所・`.ok()` 1 か所・`allow` 1 か所とそれぞれの注）・`capture.rs` +121（新しい）・`tests/capture.rs` +19（新しい）・`filters/q4-wuc.txt` +43／−1・`bind-next/Cargo.toml` +2。
+  - 直しの回数: 3（`windows-collections` が無いビルドの失敗・新しい撮りの `BOOL` の must_use の警告・clippy の 3 件〔`not_unsafe_ptr_arg_deref` 2・`as_chunks_mut`〕）。写しの `wuc.rs` は `use` を入れ替えた最初のビルドで通った（clippy の `allow` を除く）。時間は約 8 分（写し 約 2 分・移し 約 6 分）。
+  - 束縛の形は既定だけで確かめた。WinRT の `.minimal()`（class の口を出さない）は移行の本体の起票で確かめる点として残す。
+- 判定: （開発者が下す）
+
+### 問い 5: `HWND` の持ち方
+
+- 見立ての候補: go（`HWND` は包めば bevy の Component に持たせられる。ただし包みの `Send`／`Sync` は自分で名乗る必要がある）
+- 学び:
+  - この rev では、既定・`.minimal()`・`.sys()` の 3 形とも `HWND` は `pub type HWND = *mut HWND__;`（`HWND__ { unused: i32 }`）という裸のポインタの別名で、newtype ではない（設計の「既定の形は newtype」という見込みは外れた）。3 形で違うのは周りの口だけ（既定の `IsWindow` は `Option<HWND>` を取り `windows_core::BOOL` を返す。`.minimal()` は自由関数を生の `link!` だけで出し、`IsWindow(HWND) -> BOOL`。`.sys()` の `HWND` は q1 の実物で同じ別名）。
+  - 裸のポインタは `Send`／`Sync` でないので、`#[derive(Component)]` は包みを黙って受け取らず `*mut HWND__ cannot be sent between threads safely` で断る（RED に使った）。`unsafe impl Send/Sync` を包みに足すと通る。
+  - 通した所: `q5-hwnd/src/lib.rs`（2 つの包み `WindowHandleDefault`・`WindowHandleMinimal`）。`cargo test -p q5-hwnd`（3 本: `wrappers_are_send_sync`＝`Send + Sync` の型の検査・`hwnd_is_raw_pointer_alias`＝両形の `HWND` が `*mut HWND__` そのものである型の一致を組んで確かめ、実物の取っ手が `!is_null()`・`desktop_handle_via_world`＝世界に入れて別のシステムが読み `IsWindow` が真）と `q5-verify`（世界を別スレッドへ渡して読み、`[q5] default IsWindow=true minimal IsWindow=true`・終了コード 0）が通る。机は不要（デスクトップの窓の取っ手を読むだけ）。
+- `Send`／`Sync` を名乗ってよい根拠: `HWND` は OS の中でプロセスをまたいで通じる番号で、値（ポインタの数値）を別のスレッドから読んで持ち回るだけなら何も参照しないので安全。危ないのは「窓に触る呼び出し」（`SetWindowPos`・`DestroyWindow` など）で、窓を作ったスレッドへ送る決まりが要る。この決まりは型では守れないので包みの外（呼ぶ側の設計）で守る。今の `wintf` の `WindowHandle` が同じ根拠で名乗っているのと同じ。名乗るのは包みだけで、束縛の `HWND` 自体には足さない（孤児規則で足せない）。
+- 形ごとの口（`HWND` に当たる物。包みの `Hash` の導出は通った（両方の包みに `Hash` を導出している）・`is_invalid` は無い・`Default` は生のポインタ自身の物が在る）:
+
+| 口 | 既定 | `.minimal()` | `.sys()`（q1 の実物） |
+|----|------|--------------|----------------------|
+| `HWND` の型 | `*mut HWND__` の別名 | `*mut HWND__` の別名 | `*mut HWND__` の別名 |
+| `Hash` | 在る（ポインタの `Hash`＝番地の値） | 在る（同） | 在る（同） |
+| `Default` | 在る（生のポインタ自身の `Default`＝ヌル・Rust 1.88 から。`HWND::default()` はヌル） | 在る（同） | 在る（同） |
+| 無効の判定（`is_invalid`） | 束縛は出さない。`.is_null()`（`std` のポインタの口）で代用 | 同 | 同 |
+| `PartialEq`／`Eq`／`Debug`（包みの導出に要る） | 在る | 在る | 在る（ポインタの口。`HWND__` の `Debug`／`Eq` は出ない） |
+
+  - 0.62 との違い: `windows` 0.62.2 の `HWND` は `pub struct HWND(pub *mut c_void)` の newtype で、導出は `Clone`・`Copy`・`Debug`・`PartialEq`・`Eq` だけ（`Hash` は無い）、`is_invalid` と `Default` は在った（`windows-0.62.2/src/Windows/Win32/Foundation/mod.rs` 5668〜5680 行）。この rev では逆に `Hash` が新しく在り（ポインタの `Hash`）、`is_invalid` が無くなった。`Default` は残る（newtype の導出でなく、生のポインタ自身の物）。
+  - 訂正（12.2）: 5 の時点ではこの表の `Default` の行を「無い」と書いていた。生のポインタは Rust 1.88 から `Default`（ヌル）を持つので誤りだった（10 のレビューで分かり、使い捨ての確かめ `target\pilot-windows-rs-next\tmp\probe-rt` で 3 形とも `HWND::default()` が組めてヌルになることを確かめた・rustc 1.100.0）。
+  - 見立て: 「無い」口は `windows` 0.62 の newtype の `HWND`（`is_invalid` が在った）と違う点なので、移行の本体で `.is_invalid()` を使う所は `.is_null()` へ書き換える。`HWND::default()` は書き換えなくてよい（対応表の `HWND` の行と「取っ手の `Default`」の行）。
+- 確かめた日: 2026-11-16（5）／2026-11-17（`Default` の訂正の確かめ）
+- 止まった所・理由・代わりの見立て: 無し
+- 判定: （開発者が下す）
+
+### 問い 6: COM の実装（`#[interface]`・`#[implement]`）
+
+- 見立ての候補（6.1・SHIORI の 1 組）: go。`IShiori` の宣言（`Get` が `HRESULT` を直に返す・`Notify` が `Result<()>`）は 1 字も変えずに `windows-core` 0.101 の `#[interface]` で組め、`#[implement(IShiori)]` の `IShiori_Impl` も宣言の戻り値のまま書けた。
+  - 走らせた結果: `q6-com` の bin が `q6 IShiori::Get hr=0x00000000 response=pong` を出す（`Get` が実装の `MockBrain` まで届き、`S_OK` と move-out した応答の `HSTRING` が返る。続く `Notify` も `Ok`）。
+  - 写しの書き換え（`429ddf9c5` からの numstat）: `shiori.rs` +66／−49・`main.rs` +3／−1。中身の書き換えは `use` の 1 行・`crate::error::SHIORI_S_PENDING` を写しの中の定数へ向けた 2 行・bin から呼ぶ `run()` の包みだけで、残りは試験の中から外へ出した字下げ。
+- 学び（6.1）:
+  - 0.101 の `#[interface]` は `IUnknown_Vtbl` を呼ぶ側の `use` に要らない（0.62 の写しの `use` に在ると「使っていない」の警告）。
+  - 0.101 の `HSTRING` は `Display` を持たない（`hstring.rs` に `display()`・`to_string_lossy()`・`to_os_string()` と `Debug` は在る）。`{}` で出す所や `.to_string()` を呼ぶ所（`shiori-abi` の試験の `MockHost` の `key.to_string()` など）は書き換えが要る。これは構造上の見立てで、本線の呼び出しの数は数えていない。
+- 見立ての候補（6.2・下線の描き手）: go。`IDWriteTextRenderer1`・`IDWriteTextRenderer`・`IDWritePixelSnapping` の `_Impl` を `q6-com/src/renderer.rs` に新しく書き（元の `viewbox_draw_underline.rs` は写していない）、`#[implement(IDWriteTextRenderer1)]` の 1 つの型で 3 つとも組めた。
+  - 走らせた結果: 「下線 underline」の全体に下線を付けた `IDWriteTextLayout::Draw` にこの描き手を渡すと、`q6 DrawUnderline x=0 y=28 width=154.52344 thickness=1.3399279 orientation=0 renderer1=true` が 1 本集まる（Segoe UI 24・ja-jp・400×100。`y` は基線の y に `DWRITE_UNDERLINE::offset` を足した値）。DirectWrite は `IDWriteTextRenderer1` を問い合わせて見つけ、角つきの版の `DrawUnderline` を呼んだ（基の版は呼ばれない）。crate の試験 `renderer::tests::collects_at_least_one_underline` が 1 本以上・幅と太さが正を確かめる。
+  - `bind-next` の変え方: `filters/q6-renderer.txt` に 11 の名指し（`DWriteCreateFactory`・`IDWriteFactory`・`IDWriteTextFormat`・`IDWriteTextLayout`・描き手の 3 つ・定数 4 つ）と、`build.rs` に `.implements([...])` の 1 呼び出し（3 つの名前）。兄弟の依存は増えなかった。このうち 5 つ（`IDWriteTextLayout`・`DWriteCreateFactory`・`IDWriteFactory`・`DWRITE_FACTORY_TYPE_SHARED`・`DWRITE_FONT_STRETCH_NORMAL`）は 8.3 で `common.txt` へ移したので、今の `q6-renderer.txt` の名指しは 6（束縛はフィルターの和なので中身は変わらない）。
+- 学び（6.2・対応表の材料）:
+  - `.implements` の名前は `Windows.Win32.IDWriteTextRenderer1` の形（この rev のメタデータは名前空間が `Windows.Win32` の 1 段で、`Windows.Win32.Graphics.DirectWrite.…` の段が無い）。短い名前（`IDWriteTextRenderer1`）も段の在る長い名前も、合わなければ **何も言わずに** 無視され、`_Impl` のトレイトが出ないだけで build は通る（フィルターの長い名前が断られるのと逆）。最初の 1 回はこれで `_Impl` が 0 だった。
+  - 訂正（12.2・10 の確かめで分かった）: 6.2 は「`_Impl` を出すには `.implements` が要る」と読んだが、読み違いだった。既定の形は `.implements` を 1 度も呼ばなくても `_Impl` を出す。どのインターフェースに出すかは bindgen が決める: `.implements` を呼ばない `q3-default` の束縛では、名指した DirectWrite の 6 つ（`IDWriteFactory`・`IDWriteFactory1`・`IDWriteFactory2`・`IDWriteFontCollection`・`IDWriteTextFormat`・`IDWriteTextLayout`）と、名指さずに引かれた `IDWriteNumberSubstitution` の 7 つに出て、名指した D2D・D3D11・DXGI のインターフェースには出なかった（12.2 で生成物の `pub trait …_Impl` を数えた）。`.implements` を呼ぶと、出す `_Impl` が並べた名前の分だけに絞られ、名前が合わなければ 0 になる（上の「最初の 1 回は 0」はこれ）。使い捨ての確かめ `target\pilot-windows-rs-next\tmp\probe-rt` の `build.rs`（2026-11-17 に走らせ直した）: フィルターに描き手の 3 つを名指して `.implements` を呼ばないと `_Impl` は 3 つとも出た。`.implements` に一番下の `IDWriteTextRenderer1` だけを並べると、フィルターが 3 つでも出たのは `IDWriteTextRenderer1_Impl` だけで、フィルターも 1 つだけだと 1 つも出なかった。3 つとも並べると 3 つとも出た。`bind-next` が `.implements` を呼ぶのは、`_Impl` を描き手の 3 つに絞る（ほかの名指したインターフェースの `_Impl` を出さない）効きとして残してある（今の束縛の `pub trait …_Impl` は 3 つ）。
+  - 既定の形の `_Impl` は、戻り値の無い COM メソッドも全部 `-> windows_core::HRESULT` を返す形で出る（0.62 の `windows` の `Result<()>` と違う）。書き方は `HRESULT(0)` を返し、失敗は `HRESULT(0x8000_4003u32 as i32)` のように値で返す（この rev に `S_OK`・`E_POINTER` の定数は名指ししないと無い）。`?` は使えないので、中で `Result` を使うなら最後に `.into()`／`match` で `HRESULT` へ落とす。
+  - 引数の形: 出の引数は生のポインタ（`*mut BOOL`・`*mut DWRITE_MATRIX`・`*mut f32`）、入の構造体も `*const DWRITE_UNDERLINE`、COM の引数は `windows_core::Ref<IUnknown>`、文脈は `*const c_void`。`FLOAT` は `f32`、`DWRITE_GLYPH_ORIENTATION_ANGLE` ほかの列挙は `i32` の別名。
+  - 継いだ版（`IDWriteTextRenderer1`）を実装すると、基の `IDWriteTextRenderer_Impl`（角の無い 4 つ）と `IDWritePixelSnapping_Impl` も実装が要る（同じ名前の `DrawUnderline` が 2 つのトレイトに並ぶので別々の `impl` に書く）。`#[implement]` に並べるのは一番下の 1 つでよい。
+  - 呼ぶ側: `IDWriteTextLayout::Draw` は `Param<IDWriteTextRenderer>` を取り、`&IDWriteTextRenderer1` をそのまま渡せる。`SetUnderline`・`Draw` は `HRESULT` を返すので `.ok()?`。集めた物は `AsImpl::as_impl()` で実装の型へ戻して読む。
+- 確かめた日: 2026-11-16（6.1・6.2）
+- 止まった所・理由・代わりの見立て: 無し（6.1）。6.2 は上の `.implements` の名前の形で 1 回止まり、名前空間を直して通った。
+- 判定: （開発者が下す）
+
+### 問い 7: `windows-text` の縦書き
+
+- 見立ての候補: go（下の 8.2〜8.6 のまとめ）。
+  - 画素: areka の 10 個の字形の指定を `set_font_features` に当てた `windows-text` の 1 列は、今の側（借りた `areka-emo-text`）とバイトまで同じ絵になった（違う画素 0・最大の差 0・8.5）。指定が無いと 651 画素違い、開き括弧が 10 px 上がる。同じと見るかは開発者が決める（合格の閾値は置かない）。
+  - 透過の窓: Windows.UI.Composition の描画面へ自前の D2D で描いた縦書きのバルーン（カラー絵文字・範囲の色つきの選択肢 2 つ）が実の画面に出て、`SendInput` のクリックが 2 つとも狙いの選択肢に当たった（8.6）。
+  - 範囲の色は借りた DirectWrite の型の `SetDrawingEffect` で付いた（8.4）。下線の位置は `decorations()` で取れたが列の左に出るので、areka の正典の決まり（列の右）には自前で位置を決めて塗る（8.4）。`TextLayout::new` は NaN・負の大きさで panic するので、入る前に値を確かめる（8.4）。
+- 学び（まとめ。細目は各小節）:
+  - `windows-text` に無くて自前で補った所は 4 つ当たった: ⑴ GDI の名前で書体を引く口（`IDWriteGdiInterop::CreateFontFromLOGFONT` を `bind-next` から直に呼んだ）⑵ 範囲の色（`as_interface` で借りた `IDWriteTextLayout::SetDrawingEffect`）⑶ 下線を列の右へ（`decorations()` の矩形を鏡に映して自前で塗る）⑷ `TextLayout::new` の panic の手前の値の確かめ。どれも「DirectWrite を直に呼ぶ」か「自前で補う」で済み、止まらなかった。要件 8.9 のほかの物（文中のインラインオブジェクト・字送り・縦中横・文字単位の折り返し）は、この 1 列とバルーンの確かめでは要る所に当たらなかった（確かめていない）。上流へ返す文案（`UPSTREAM_DRAFT.md`・12.3）に載せる。
+  - 下線の左右の区別（8.4 のレビュー）: 本線の今の縦書きの書き手は、字の下線（書体の下線の指定）を列の **左** に描く（`crates/areka-emo-text/src/underline.rs:8`＝DirectWrite の `offset` と太さのまま、D2D の既定の向きへ回す）。選択肢の下線は本線ではまだ描かれていない（`crates/areka-emo-text/src/actor_decoration.rs:178-183`＝`cursor.style underline` は未対応で `SquareFill` へ縮退）。「選択肢の下線は列の右」は正典の決まり（`crates/areka-emo-text/src/draw.rs:36`）で、8.4 の `ranges::to_column_right` はこの決まりに合わせる手当ての見立てであり、今の本線の振る舞いを写した物ではない。`windows-text` の `decorations()` が列の左に出すのは、今の本線の字の下線と同じ側。
+  - 新旧の COM の型は 1 度もつながず（橋は無し）、`windows-core` 0.62 と 0.101 が同じ過程で並んで動いた（8.5・段階の移行の材料）。
+  - 位置の単位が 3 つ在る: areka の文字の位置（拡張書記素クラスタの序数）・`windows-text` の UTF-8 のバイト位置・DirectWrite の UTF-16。areka の位置を正本にし、渡す所でだけ換算する（8.4）。
+  - 窓を出す bin は Per Monitor v2 の DPI の認識を最初に宣言し、描画面の文脈に `SetDpi(96, 96)` を置くと、配置・窓・クリックの座標が 1 つに揃う（8.6・7.2）。
+- 確かめた日: 2026-11-17（8.1〜8.6）
+- 止まった所・理由・代わりの見立て: 無し（8.2〜8.6 とも止まらなかった。揃えられなかった描く条件は 8.2 の表の △ の行）。
+- 判定: （開発者が下す）
+
+#### 今の側で描く（8.2）
+
+- 描き方: `q7-vertical/src/old_side.rs` の `draw(text) -> Result<Shot, String>`（`vt-compare` が呼ぶ口）。借りた `areka-emo-text` の公開の API だけで描く——文字列のバルーン定義を `areka_parsers::balloon::parse_str` に通し、`TextLayerRuntime::register_actor`（`TextSlotBinding::new(slot, window, 1.0, IMAGE, IMAGE)`・`ResolvedBalloonText::resolve`）→ `apply_cue`（`CueCommand::Text`）→ `present_frame(.., 100.0)` → `surface(..).read_back()`。装置は `wintf::ecs::{GraphicsCore, WucGraphicsResource}`、予約スロットは `bevy_ecs` の `Visual`＋`ChildOf` の 2 つの実体（本線の試験の `spawn_reserved_slot` と同じ形）。窓は出さない（画面の外のハードウェアの GPU だけ）。非公開の所へ手を入れた所は無い（止まった所は無し）。
+- 借りた本線の中身: 作業木の `bb069a602`（`crates/areka-emo-text`・`crates/wintf` の最後の変更は `715f58198`）。
+- 設定の出どころ: `crates/areka-emo-text/tests/decoration_readback/vertical.rs` の `shoot_column`（と `decoration_readback/mod.rs` の `model_with`・`shoot`）と同じ値——`font.name` はぱすたの候補列・`font.height,20`・`font.color` は 0,0,0・validrect は 4 辺とも 5 px 内側・`writing_mode,vertical_rl`・k=1。供給面は validrect の内側だけを持つので、列の先頭の字の枠の上端が面の y=0。
+- 本線の試験と違えた所: 絵の高さだけ。本線の 320×200 だと面が 310×190 で、比べの文の 12 字（240 px）が 2 列に折り返した（墨の x が 268..287 と 290..309）。1 列にするため 320×260（面 310×250）にした。幅・原点・validrect は同じ。
+- 測った値（`cargo test -p q7-vertical --lib old_side -- --nocapture`・2026-11-17）: 墨（α≠0）1020 画素・x=290..309（1 列）・y=12..225（開き括弧の墨は字の枠の下半分から）。色の付いた画素（B・G・R が揃わない）は絵文字ありで 289・絵文字なしで 0（字はグレースケールの塗り・絵文字は色つき）。
+- COM: 借りた側は `windows` 0.62 を q7-vertical の直の依存に持たないので、OS の同じ `CoInitializeEx(None, COINIT_MULTITHREADED)` を `bind_next::Windows::Win32::CoInitializeEx(None, 0)` で呼んだ（アパートメントはスレッドの物なので、どの束縛から呼んでも同じ）。
+
+描く条件の表（今の側が `present_frame` の経路で使う値。所は作業木 `bb069a602` の行。4 列目は 8.3 の新しい側＝○ 揃えた・△ 揃えられなかった所がある）:
+
+| 条件 | 値 | 所 | 新しい側（8.3） |
+|------|----|----|----|
+| COM のアパートメント | MTA（`COINIT_MULTITHREADED`）。本番の UI スレッドも試験の World も同じ | `crates/wintf/src/runtime/mod.rs:123`・`crates/areka-emo-text/tests/support/fixture.rs:233` | ○ MTA（`CoInitializeEx(None, 0)`・`new_side::render` の頭） |
+| D3D11 の装置 | `D3D_DRIVER_TYPE_HARDWARE`・`D3D11_CREATE_DEVICE_BGRA_SUPPORT`（debug 組みは `D3D11_CREATE_DEVICE_DEBUG` も・SDK の部品が無ければ外して作り直す） | `crates/wintf/src/ecs/graphics/core.rs:273`・`:276`・`:281` | △ `HARDWARE`＋`BGRA_SUPPORT` は同じ。debug 組みの `D3D11_CREATE_DEVICE_DEBUG` は付けない（検証の層で描く画素は変わらない見立て・測っていない） |
+| D2D の工場・DWrite の工場 | `D2D1_FACTORY_TYPE_MULTI_THREADED`・`DWRITE_FACTORY_TYPE_SHARED` | `crates/wintf/src/ecs/graphics/core.rs:268`・`:162` | ○ D2D は `D2D1_FACTORY_TYPE_MULTI_THREADED`。DWrite は `windows-text` が内に持つ工場（`IDWriteFactory5`・`DWRITE_FACTORY_TYPE_SHARED`。取り出せない）で、SHARED どうし。別の工場の配置を自前の D2D の文脈で描けた |
+| D2D の描く文脈 | 文字の層が自前で 1 つ作る（`D2D1_DEVICE_CONTEXT_OPTIONS_NONE`） | `crates/areka-emo-text/src/viewbox_draw.rs:199` | ○ 自前で 1 つ作る（`D2D1_DEVICE_CONTEXT_OPTIONS_NONE`） |
+| 文字のアンチエイリアスの形 | 指定しない（`SetTextAntialiasMode` の呼び出しが経路に 0）＝ 文脈の既定 `D2D1_TEXT_ANTIALIAS_MODE_DEFAULT`。測ると黒い字の墨は B=G=R（グレースケール・ClearType ではない） | 呼び出し無し（`crates/areka-emo-text/src`・`crates/wintf/src` を grep）・測りは上 | ○ 指定しない |
+| 描画の設定（`IDWriteRenderingParams`） | 指定しない（`SetTextRenderingParams` の呼び出しが 0）＝ 文脈の既定 | 呼び出し無し | ○ 指定しない |
+| 図形のアンチエイリアス | 文脈の既定（per-primitive）。ダーティ矩形のクリップだけ `D2D1_ANTIALIAS_MODE_ALIASED` | `crates/areka-emo-text/src/viewbox_draw_render.rs:394`（`PushAxisAlignedClip`） | △ 文脈の既定は同じ。ダーティ矩形のクリップ（`PushAxisAlignedClip`・ALIASED）は掛けず面の全体へ 1 回描く（字の墨はクリップの内側なので画素は変わらない見立て） |
+| DPI | 描き先の bitmap が 96×96。文脈に `SetDpi` は呼ばない（既定 96） | `crates/areka-emo-text/src/draw.rs:774`（`create_d2d_target_bitmap`・`viewbox_draw_render.rs:636` から） | ○ 描き先の bitmap は 96×96・`SetDpi` は呼ばない |
+| 単位 | `SetUnitMode` は呼ばない＝既定の DIP。96 DPI なので 1 DIP＝1 画素。拡大は `SetTransform(scale(k))` の 1 か所（ここでは k=1） | `crates/areka-emo-text/src/viewbox_draw_render.rs:184`・`:400` | ○ `SetUnitMode` を呼ばない（DIP＝画素）。`SetTransform` は呼ばない（既定の単位行列＝今の側の k=1 と同じ） |
+| 面の画素の形式 | 描き先の bitmap は `DXGI_FORMAT_B8G8R8A8_UNORM`＋`D2D1_ALPHA_MODE_PREMULTIPLIED`（`TARGET｜CANNOT_DRAW`）。描画面のテクスチャは B8G8R8A8・全 0 で初期化。供給面は合成の swap chain（B8G8R8A8・`DXGI_ALPHA_MODE_PREMULTIPLIED`・`FLIP_SEQUENTIAL`） | `crates/areka-emo-text/src/draw.rs:771`・`:772`・`crates/areka-emo-text/src/surface.rs:91`・`:364`・`crates/wintf/src/com/dxgi.rs:49`・`:58`・`:59` | △ 描画面のテクスチャ（B8G8R8A8・DEFAULT・RENDER_TARGET・全 0）と描き先の bitmap（同じ props）は同じ。合成の swap chain は作らない（読み戻しはどちらも描画面のテクスチャからなので比べには入らない） |
+| 描く前の消し | ダーティ矩形ごとに `Clear(None)`（透明・premultiplied の全 0） | `crates/areka-emo-text/src/viewbox_draw_render.rs:397` | ○ `Clear(None)`（面の全体） |
+| 筆の色 | 単色の筆。`font.color` を r/g/b ÷255・a=1.0（ここでは黒 0,0,0,1） | `crates/areka-emo-text/src/viewbox_draw.rs:347`〜`:353`・`crates/areka-emo-text/src/viewbox_draw_render.rs:367` | ○ 単色の黒（0,0,0,1） |
+| `DrawTextLayout` の指定 | `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`（本番は定数そのもの） | `crates/areka-emo-text/src/draw.rs:179`・`:180`・呼び出しは `crates/areka-emo-text/src/viewbox_draw_render.rs:424`〜`:429` | ○ `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT` |
+| 読み戻し | front を staging へ `CopyResource` → `Map(READ)` → 密の BGRA（stride＝幅×4） | `crates/areka-emo-text/src/surface.rs:467` | ○ 同じ（staging へ `CopyResource` → `Map(READ)` → 行ごとに密へ） |
+
+- 設計が名指した `crates/wintf/src/ecs/graphics/systems/surface.rs`（`CompositionDrawingSurface`）と `crates/wintf/src/com/wuc.rs` は、文字の層の経路では描き先にならない。文字の層の面は `wintf::com::dxgi::create_composition_swap_chain` の swap chain と自前の描画面のテクスチャ（上の表）で、wintf から借りるのは装置と工場と swap chain を作る関数だけ。
+
+#### 新しい側で描く（8.3）
+
+- 描き方: `q7-vertical/src/new_side.rs`。`vt-compare`（8.5）が呼ぶ口は `draw(text, Features) -> Result<Shot, String>`（`Features::None`＝字形の指定なし・`Features::Areka`＝areka の 10 個）。8.4 が範囲の色を付けてから描けるよう、`layout(text, Features) -> Result<TextLayout, String>` と `render(&TextLayout) -> Result<Shot, String>` にも分けてある。面の大きさは `new_side::SURFACE`＝`old_side::IMAGE` から validrect の内側（310×250）で、今の側の供給面と同じ。
+- 流れ: `windows_text::TextFormat`（`WritingMode::VerticalRightToLeft`）→ `TextLayout::new` → `as_interface::<bind_next::…::IDWriteTextLayout>()` で借りる（QueryInterface なし）→ ハードウェアの D3D11（BGRA）＋ multi-threaded の D2D の文脈 → 描画面のテクスチャを `CreateBitmapFromDxgiSurface` で巻いて `SetTarget` → `Clear(None)` → `DrawTextLayout(.., ENABLE_COLOR_FONT)` → staging へ写して読み戻す。窓は出さない。
+- 橋: 無し。借りた側（`windows` 0.62）の型は新しい側に 1 つも出ない。`windows-text` と `bind-next` は同じ `windows-core` 0.101 の上なので、`as_interface` の借用だけでつながり、生ポインタで渡した所は無い。
+- 試験（実 GPU・机なし・`cargo test -p q7-vertical --lib new_side -- --nocapture`・2026-11-17）: 2 通りとも面が 310×250・墨が右端の 1 列・先頭の字が上端から・絵文字が色つき、を assert。測った値は下。今の側（8.2）と同じ数え方。
+
+| 字形の指定 | 墨（α≠0） | 墨の x | 墨の y | 色の付いた画素 |
+|---|---|---|---|---|
+| 今の側（8.2・参考） | 1020 | 290..309 | 12..225 | 289 |
+| 新しい側・無し | 1023 | 290..309 | 2..225 | 289 |
+| 新しい側・areka の 10 個 | 1020 | 290..309 | 12..225 | 289 |
+
+- 読み（数だけ・画素の比べは 8.5）: 字形の指定なしでは墨の上端が y=2（開き括弧が em の上半分に寄る＝既定の組の `vpal` 相当の位置の調整）。areka の 10 個を当てると上端が今の側と同じ y=12 に戻り、墨の数も 1020 で揃う。
+
+配置の条件（今の側の上の表に無い、文字の配置を決める値。所は作業木 `bb069a602` の行）:
+
+| 条件 | 今の側の値 | 所 | 新しい側（8.3） |
+|---|---|---|---|
+| 書体の解き方 | 候補ごとに家族名（顔は Regular）→ GDI の名前（`CreateFontFromLOGFONT`・太さ 400・DEFAULT_CHARSET・家族名は `GetFamilyNames` の先頭） | `crates/areka-emo-text/src/draw_catalog.rs:231`・`:311`・`:320`・`:343` | △ 家族名は `windows_text::FontCollection::find`。GDI の名前で引く口が `windows-text` に無いので、その枝は `bind-next` の DirectWrite（`IDWriteGdiInterop::CreateFontFromLOGFONT`）を直に呼んで写した。この機械では両側とも `游ゴシック Medium` が家族名に当たらず GDI の名前で `Yu Gothic`・太さ 500・Normal に解けた。全滅のときの既定の書体へ戻る枝は写していない（Err にする）。幅（stretch）は `windows-text` の書式が NORMAL に固定で、NORMAL でない顔は揃えられない（その候補は飛ばす） |
+| 大きさ | `font.height`＝20（em） | `crates/areka-emo-text/src/draw.rs:415` | ○ 20 |
+| 言語 | `ja-JP` | `crates/areka-emo-text/src/draw.rs:183` | ○ `with_locale("ja-JP")` |
+| 行内方向・行送り方向・寄せ | TOP_TO_BOTTOM・RIGHT_TO_LEFT・LEADING・NEAR | `crates/areka-emo-text/src/draw.rs:360`・`:372` | ○ `VerticalRightToLeft`（同じ組）・寄せは既定（Leading・NEAR） |
+| 箱 | （`block_extent`＝20, `PROBE_MAX_EXTENT`＝1e6） | `crates/areka-emo-text/src/draw.rs:496`・`:190`・`draw_line_store.rs:15` | ○ `TextLayout::new(text, .., 20, 1e6)` |
+| 行間 | 配置に `SetLineSpacing(UNIFORM, 20, 10)` | `crates/areka-emo-text/src/draw.rs:507` | △ 値は同じ（`LineSpacing::Uniform { height: 20, baseline: 10 }`）。入れ所が違う: `windows-text` は書式の `IDWriteTextFormat2::SetLineSpacing`（`leadingBefore` 0・`fontLineGapUsage` 既定）で、配置はそれを受け継ぐ |
+| 字形の指定 | 縦書きは常に 10 個を値 1 で全範囲 | `crates/areka-emo-text/src/draw.rs:456`・`:515` | ○ `Features::Areka` で `set_font_features(.., &VERTICAL_FEATURES)`。`Features::None` は今の側に無い比べの枝 |
+| 縦の字形の向き・切り詰め・代替の書体 | 呼ばない（既定・既定・システムの代替） | 呼び出し無し | ○ `windows-text` が既定の値（DEFAULT・NONE・`SetFontFallback(None)`＝システムの代替）を明示で入れる |
+| 原点 | `(dx + block_offset, dy)`（列の住人の平行移動） | `crates/areka-emo-text/src/viewbox_draw_render.rs:228` | △ 住人の平行移動は読み解かず、`(面の幅 − 20, 0)`＝(290, 0) を置いた。墨の x が今の側と同じ 290..309 に出たことで合わせを確かめた |
+
+- `bind-next` のフィルター: `q7-text.txt` に 21 件（D2D の工場・文脈・色つきの字形の指定 3・描き先の bitmap 4・テクスチャと読み戻し 6・GDI の名前の枝 8。ほかに注の行）。問い 7 も使う名前は設計の決まりどおり `common.txt` へ移した: `q4-wuc.txt` から `D3D_DRIVER_TYPE_HARDWARE`・`D3D11_CREATE_DEVICE_BGRA_SUPPORT`・`D3D11_SDK_VERSION`・`ID2D1RenderTarget`、`q6-renderer.txt` から `IDWriteTextLayout`・`DWriteCreateFactory`・`IDWriteFactory`・`DWRITE_FACTORY_TYPE_SHARED`・`DWRITE_FONT_STRETCH_NORMAL`（束縛はフィルターの和なので中身は変わらず、q4・q6 も組めた）。`Cargo.toml` の兄弟の依存は足していない（要らなかった）。
+
+#### 範囲の色・下線の位置・`TextLayout::new` の panic（8.4）
+
+- 置き場: `q7-vertical/src/ranges.rs`（と試験 `ranges_tests.rs`）。新しい側の `new_side::render` に、描く直前の手を挟む `render_with(layout, |dc, raw| ..)` を足した（筆は描く文脈と同じ装置で作る要があるため）。`bind-next` のフィルターに足した名前は無い（`IDWriteTextLayout::SetDrawingEffect`・`ID2D1SolidColorBrush`・`DWRITE_TEXT_RANGE` は既に名指した物から出ていた）。
+- 試験（実 GPU・画面の外・机なし・`cargo test -p q7-vertical --lib ranges -- --nocapture`・2026-11-17）。文は比べの文、範囲は「待って」（areka の文字の位置 6..9＝UTF-8 18..27＝UTF-16 6..9）、字形の指定は areka の 10 個。
+
+範囲の色（要件 8.5）:
+- `windows-text` に範囲の色の口は無い。借りた `IDWriteTextLayout`（`as_interface`）の `SetDrawingEffect(赤の単色の筆, DWRITE_TEXT_RANGE)` で付けられた。D2D の `DrawTextLayout` が描く効果として筆を拾う。
+- 測った値: 赤の画素（premultiplied で B=G=0・R>0）は **299**（色なしの絵では 0）。黒の墨（B=G=R=0・α>0）は 731 → 432 で、減った 299 がちょうど赤の 299。範囲の y（`range_bounds` の 120..180）の中に黒は 0・外に赤は 0。範囲の外の字・絵文字はそのまま。
+
+下線の位置（要件 8.4）:
+- `set_underline(バイト範囲, true)` → `decorations()` で取れた。配置の座標で **x=-0.62..0.40・y=120..180**（太さ約 1.02）。列の箱（`range_bounds`）は x=0..20 なので、下線は **列の左** に出て、箱の左端をまたぐ。描いた絵でも同じ矩形（面の座標＝x に 290 を足す）の中に墨が 61 画素あり、`decorations()` の位置と描かれる所は合う。
+- 手当て（`ranges::to_column_right`）: areka の正典の決まり（選択肢の下線は列の右＝`crates/areka-emo-text/src/draw.rs:36`。本線の今の縦書きの字の下線は列の左に描き〔`underline.rs:8`〕、選択肢の下線はまだ描いていない〔`actor_decoration.rs:178-183`〕）には、DirectWrite の下線は描かせず（`set_underline` は位置を取るためだけ）、`decorations()` の矩形を列の箱の左右の中で鏡に映して自前で塗る（左端からの距離を右端からの距離にする）。鏡に映すと右端を約 0.6 越えるので、越えた分は内へ寄せる（列が面の右端に接すると越えた分が切れて細る。今の側の字の下線の、面に収まらない線を内へ寄せる考え〔`underline.rs:10-12`〕と同じ）。寄せた位置は x=18.98..20.00・y と太さはそのまま。列の箱の左右は `TextLayout::metrics()` の `left`・`left + width`（1 列の配置）で取った。何列もの配置では列ごとの箱が要り、`line_metrics` か `range_bounds` の列ごとの矩形から取る見立て（測っていない）。
+
+`TextLayout::new` の panic（要件 8.6）:
+- `windows-text` は DirectWrite の失敗を中で `unwrap` する。測った入力（`catch_unwind` で確かめた）: 箱の幅 NaN・幅 -1・高さ NaN は `CreateTextLayout` が `E_INVALIDARG`（0x80070057）で **panic**（`layout.rs:159`）。字の大きさ NaN の書式は、書式を初めて使う `TextLayout::new` の中の `CreateTextFormat` で panic（`format.rs:304`）。幅 +∞ は panic しない。上流の注は「負の大きさで panic」だけを書き、NaN は書いていない。
+- 本体での扱いの見立て: 入る前に値を確かめる（`ranges::checked_layout` の候補: 字の大きさは正の有限・箱の幅と高さは NaN でなく負でない・文の UTF-16 の長さが u32 に収まる。だめなら `Err` を返し、本体は `error!` を書いて描かない）。`TextLayout::new` を呼ぶ所は境の 1 か所にまとめ、そこより外に panic を出さない。値を確かめても残る失敗（工場の失敗・メモリ不足）は確かめられないので、上流へ `try_new`（`Result` を返す口）を求める文案に載せる。`catch_unwind` で境で止める案は、本線の組みが `panic = 'unwind'`（根の `Cargo.toml`）なので効きはするが、`unwrap` の panic を通常の失敗の経路にする形になり、panic の時点の記録も `human-panic` 側へ流れるので、確かめの後ろの最後の網に留める見立て。
+- 位置の換算の扱い: areka の文字の位置（拡張書記素クラスタの序数）を正本にし、DirectWrite／`windows-text` へ渡す所でだけ換算する。`windows-text` の範囲の口（`set_underline`・`range_bounds` ほか）は UTF-8 のバイト位置で、`choices::cluster_to_byte` で直す（クラスタの境目は必ず `char` の境目なので、`windows-text` の「`char` の境目でないと panic」には当たらない）。借りた DirectWrite の口（`SetDrawingEffect`）は UTF-16 で、`choices::cluster_to_utf16` で直す。戻り（`hit_test_point` の UTF-8 のバイト位置）は `choices::byte_to_cluster` で戻す。試験は絵文字（クラスタ 10＝UTF-8 30..34＝UTF-16 10..12）で 3 つの単位が別れることを固定した。
+
+#### 旧と新の比べ（8.5・`vt-compare`）
+
+- 走らせ方: `cargo run --manifest-path C:\home\maz\git\areka\crates\pilot\examples\pilot-windows-rs-next\Cargo.toml --target-dir C:\home\maz\git\areka\target\pilot-windows-rs-next -p q7-vertical --bin vt-compare`（別の作業木では根を差し替える＝RunCommands の頭の注。画面の外の GPU だけ・窓は出さない・机は取らない）。終了コードは ExitContract のとおり（0＝出し終えた・2＝描く／書く段の失敗で段の名前を stderr に出す）。2026-11-17 の走りは 0。
+- 流れ: 同じ過程・同じスレッドで MTA を始め、`old_side::draw(TEXT)` で 1 枚、`new_side::draw(TEXT, Features::None)`・`Features::Areka` で 2 枚を、呼ぶたびに作る別々の装置で描く。各新しい側を今の側と `diff::compare` で比べる。比べは 2 通り: ⑴ 同じ原点のまま（違う画素・最大の差）⑵ ±8 px の平行移動で違う画素が最も少ない所（2 枚の矩形の和で数える）。新旧の COM の型はつながない（渡したのは読み戻した BGRA だけ）。
+- 出す物: `target\pilot-windows-rs-next\out\q7\`（`current_exe` から作業木の `target` の下に組む）に `q7-old.png`・`q7-new-none.png`・`q7-new-areka.png`（premultiplied を白の上に重ねた RGB）・差の絵 `q7-diff-<none|areka>-<origin|best>.png`（違う画素＝赤・同じ墨＝灰・それ以外＝白）・数の表 `q7-compare.md`。
+
+| 新しい側の字形の指定 | 同じ原点: 違う画素 | 同じ原点: 最大の差 | 最良のずれ (dx, dy) | 最良のずれ: 違う画素 |
+|---|---|---|---|---|
+| 無し | 651 | 255 | (0, 0) | 651 |
+| areka の 10 個 | 0 | 0 | (0, 0) | 0 |
+
+面はどれも 310×250（大きさの違いは無し）。同じ原点で違う画素を字の枠（縦に 20 px）ごとに数えると（上から 13 枠・文は「「ちょっと、待って。🍣」」の 12 字）:
+
+- 無し: `[92, 90, 89, 103, 78, 0, 0, 103, 96, 0, 0, 0, 0]`＝開き括弧・ち・ょ・っ・と・っ・て の 7 字が違い、、・待・。・🍣・」は同じ。
+- areka の 10 個: 全部 0。`q7-old.png` と `q7-new-areka.png` はバイトまで同じファイルになった。
+
+証拠の絵（`evidence/`・小さな物だけ写した。areka の 10 個の新しい側は今の側とバイトまで同じなので写していない。areka の差の絵は全部が灰と白）:
+
+| 今の側 | 新しい側・無し | 差（無し・同じ原点＝最良のずれ） |
+|---|---|---|
+| ![今の側](evidence/q7-old.png) | ![新しい側・無し](evidence/q7-new-none.png) | ![差・無し](evidence/q7-diff-none-origin.png) |
+
+- 開き括弧の位置（要件 8.3）: areka の 10 個を当てると、開き括弧の枠（いちばん上の枠）の違う画素は 0 で、平行移動を探しても最良のずれは (0, 0)・違い 0。開き括弧は今の側と画素で同じ所に出る。字形の指定が無いと、開き括弧の墨は y=12..19 から y=2..9 へ 10 px 上がる（墨の文字の絵で読んだ）。これは ±8 px の探す幅の外で、しかも 1 字だけの動きなので、絵の全体の平行移動では吸えず最良のずれは (0, 0) のまま 651 が残る。ほかに小書きの ょ・っ が約 2〜4 px 上がり、ち・と・て は墨の形が少し違う。どの字形の指定の有無でこうなるか（既定で当たる指定の中身）は確かめていない。
+- 読み方の注意: 新しい側の原点 (面の幅 − 20, 0)＝(290, 0) は第 1 列の自然な置き場として置いた値で、今の側の絵を見て合わせた値ではないが、今の側の列の住人の平行移動を読み解いて写した値でもない。だから「同じ原点で x のずれ 0」は列の置き場が揃う独立の証拠ではない（1 列・k=1・この面の大きさで、両側の自然な置き場が同じ値になった、と読む）。何列もの配置や k≠1 では列の置き場を別に確かめる要がある。y の原点 0 も同じく供給面の上端という自然な値。
+- 同じと見るかは開発者が決める（合格の閾値は置かない・確定 4）。
+
+#### 透過の窓のバルーンとクリックの当たり（8.6・`vt-balloon`）
+
+- 走らせ方（排他テストの机を持ってから・どのディレクトリからでも動く・別の作業木では根を差し替える＝RunCommands の頭の注。2026-11-17 の走りはこの spec の作業木 `C:\home\maz\git\areka\.claude\worktrees\kiro-start-pilot-windows-rs-next-86646c` を根にした）:
+  - 組む: `cargo build --manifest-path C:\home\maz\git\areka\crates\pilot\examples\pilot-windows-rs-next\Cargo.toml --target-dir C:\home\maz\git\areka\target\pilot-windows-rs-next -p q7-vertical --bin vt-balloon`
+  - 走らせる: `C:\home\maz\git\areka\target\pilot-windows-rs-next\debug\vt-balloon.exe`（上限時間は `AREKA_APP_SMOKE_EXIT_MS`・既定 30000 ms。当たりを確かめ終えたらすぐ自分で終わる）
+- 置き場: `q7-vertical/src/bin/vt-balloon.rs`。
+- 流れ:
+  1. Per Monitor v2 の DPI の認識を最初に宣言する。
+  2. 問い 1 の写しの窓（`WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST`・後から `WS_POPUP` と `HWND_TOPMOST`・92×272 px）に、問い 4 の合成（DispatcherQueue → Compositor → DesktopWindowTarget → D2D の装置 → 合成のグラフィックスの装置 → 描画面 → SpriteVisual）を通す。
+  3. 描画面の `BeginDraw` の文脈へ自前の Direct2D で描く。白の角丸の背景・`DrawTextLayout`（`D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`）。文は比べの文の 1 列と選択肢 2 列（`🍣を食べる`・`やめておく`）。配置は `new_side::layout(.., Features::Areka)` を `set_max_size` で 3 列の幅にした物。選択肢は借りた `IDWriteTextLayout::SetDrawingEffect` で青。文脈の DPI は `SetDpi(96, 96)` に固定し、配置の座標＝窓の画素にした。
+  4. 窓を画面の DC から撮り（`q4_wuc::capture`）、絵を確かめる。
+  5. 選択肢ごとに、`range_bounds` の最初の矩形の中心へ `SendInput`（仮想画面の絶対の位置で動かし、左ボタンを押して離す）。`WM_LBUTTONDOWN` の lParam の位置から余白を引いて `windows-text` の `hit_test_point` に渡す。`is_inside` なら UTF-8 のバイト位置を `choices::byte_to_utf16` → `choices::choice_at` で選択肢の番号へ直し、`[q7] hit choice=<番号> target=<番号>` を出す。
+  6. カーソルを `SetCursorPos` で元の位置へ戻す。カーソルの位置を取った後は、両方押し終えたときだけでなく、外から閉じられたとき・`range_bounds` が空のとき・`SendInput` が失敗したときも、同じ 1 か所を通って戻してから終わる。
+- 終了コード（ExitContract）: 0＝両方の選択肢で当たりが一致・2＝初期化の失敗（段の名前と HRESULT を `tracing::error!` に出す。絵の確かめの失敗もここ）・3＝窓が外から閉じられた・4＝当たりが食い違った（2 秒の内にクリックが届かなかったときも含む）。
+- 狙いは 1 つでなく選択肢 2 つとも押す。当たりの写しが定数でなく、押した所で選択肢を見分けていることまで 1 回の走りで見るため。
+- 走った結果（2026-11-17・排他テストの机を持って 1 回）: 終了コード 0。出た行は下（全部）。
+
+```
+[q7] step=dpi_awareness ok
+[q7] step=out_dir ok
+[q7] step=layout ok
+[q7] step=window ok
+[q7] step=popup ok
+[q7] step=dispatcher_queue ok
+[q7] step=compositor ok
+[q7] step=desktop_window_target ok
+[q7] step=d2d_device ok
+[q7] step=graphics_device ok
+[q7] step=drawing_surface ok
+[q7] step=sprite_visual ok
+[q7] step=paint ok
+[q7] step=capture ok
+[q7] capture=C:\home\maz\git\areka\.claude\worktrees\kiro-start-pilot-windows-rs-next-86646c\target\pilot-windows-rs-next\out\q7\vt-balloon.png
+[q7] pixel x=8 y=8 rgb=255,255,255 ok
+[q7] pixel x=83 y=8 rgb=255,255,255 ok
+[q7] pixel x=8 y=263 rgb=255,255,255 ok
+[q7] pixel x=83 y=263 rgb=255,255,255 ok
+[q7] pixels blue=461 warm=354
+[q7] step=check_pixels ok
+[q7] step=window_rect ok
+[q7] step=cursor_pos ok
+[q7] step=send_input ok
+[q7] click x=46 y=65 aim x=46 y=65 range=45..48 inside=true
+[q7] hit choice=1 target=1
+[q7] step=send_input ok
+[q7] click x=26 y=66 aim x=26 y=66 range=61..64 inside=true
+[q7] hit choice=2 target=2
+[q7] cursor restored x=1123 y=1009
+```
+
+- 当たりの結果: 選択肢 1 は狙い (46, 65) にクリックが届き、当たった字は UTF-8 の 45..48（`🍣を食べる` の「食」）で `hit choice=1 target=1`。選択肢 2 は (26, 66) に届き、61..64（`やめておく` の「て」）で `hit choice=2 target=2`。どちらも狙いの画素と `WM_LBUTTONDOWN` の位置が 1 px も違わなかった（Per Monitor v2 と `SetDpi(96, 96)` で、窓・描画面・配置・`SendInput` の座標が同じ物理の画素に揃った）。カーソルは元の位置へ戻った。
+- 絵の確かめが示すこと: ⑴ 4 隅（角丸の 8 px 内側）が白＝描画面の中身が窓の矩形いっぱいに、ずれずに画面へ出た（DPI がずれると隅が白でなくなる・7.2 の学び）。真ん中の点は文字の列に当たって色が決まらないので、5 点目には使わず、代わりに次の 2 つを数えた。⑵ 青の画素 461＝`SetDrawingEffect` の範囲の色が合成を通っても選択肢に付いた。⑶ 暖色の画素（R が B より 48 超高い）354＝寿司の絵文字がカラーフォントのまま出た（黒の字と青のふちには出ない色）。
+- 撮った絵は進行役（主の会話）も開いて目で確かめた: 白のバルーン・黒の縦書きの文（色つきの 🍣）・その左に青の選択肢 2 列で、描いた物と合う。
+- 証拠の絵（`evidence/q7-balloon.png`・撮った絵そのまま 92×272）:
+
+![vt-balloon の撮った絵](evidence/q7-balloon.png)
+
+- COM: ここは DispatcherQueue に初期化させた ASTA（`DQTAT_COM_ASTA`・`q4-demo` と同じ）で、`vt-compare` の MTA と違う。`vt-compare` は今の側の GPU の World（MTA）と描く条件を揃えて画素を比べるために MTA にしたが、`vt-balloon` は画素を比べず、窓・DispatcherQueue・Compositor が同じ UI スレッドに要る（WUC は呼ぶスレッドの DispatcherQueue を求める）ので、本体の窓のスレッドと同じ形を取った。`windows-text` の配置と当たりの判定は ASTA でもそのまま動いた。
+- `bind-next` のフィルター: `q7-text.txt` に 17 件足した（`WS_EX_TOPMOST`・`SendInput`・`INPUT`・`INPUT_MOUSE`・`MOUSEINPUT`・`MOUSEEVENTF_` の 5 つ・`GetSystemMetrics`・`SM_` の仮想画面の 4 つ・`GetCursorPos`・`SetCursorPos`）。問い 7 も直に名指す名前 31 件を、設計の決まりどおり `q4-wuc.txt` から `common.txt` へ移した（合成のクラスと既定のインターフェース・相互運用の 3 つ・`DQTAT_COM_ASTA`・`GetWindowRect`・窓の形と見せ方・メッセージの回し・DPI）。束縛はフィルターの和なので中身は変わらず、`q4-demo` も組めた。`D2D1_ROUNDED_RECT`・`D2D_RECT_F`・`INPUT_0` は名指さずに出た。第 2 幕のフィルターの行数の表は 12.2 で直した。
+- 見立ての候補: go。`windows-text` の配置を借りた DirectWrite の型として WUC の描画面へ自前の D2D で描き、カラー絵文字・範囲の色・当たりの判定（UTF-8 のバイト位置 → UTF-16 → 選択肢）まで、本体のバルーンと同じ形の実の窓で通った。判定は開発者が下す。
+- 学び:
+  - `windows-text` の `hit_test_point` は UTF-8 のバイト範囲を返す（DirectWrite の UTF-16 でない）。`choices::choice_at` は UTF-16 を受けるので、バイト → UTF-16 の換算を 1 つ挟んだ。本体へ入れるなら、選択肢の範囲をバイトで持つか UTF-16 で持つかを 1 つに決めると換算が要らない。
+  - `windows-text` の `Rect` は `left`・`top`・`right`・`bottom` の 4 辺（幅と高さの欄は無い）。
+  - この rev の束縛の `SendInput` は入力の配列を `*mut INPUT` で受け、`INPUT_MOUSE` は `i32` で出る（`INPUT::type` は `u32`）。
+  - 描画面の `BeginDraw` の文脈の DPI に頼らず `SetDpi(96, 96)` を置くと、配置の座標・窓の画素・クリックの位置が 1 つの座標に揃い、当たりの換算に倍率が要らない。
+- 確かめた日: 2026-11-17。
+- 止まった所・理由・代わりの見立て: 無し。
+
+### 問い 8: 32bit と arm64 のリンク
+
+- 見立ての候補: go（問い 1 の `.sys()`・問い 3 の既定と `.minimal()` の 3 つの束縛とも、i686 は x64 と同じに走り、aarch64 はリンクまで通った。写しの側の直しは 0）。
+- 3 つの的の結果（2.3・3.3）:
+
+  | クレート（束縛の形） | x64 | i686（x64 の Windows で走らせた） | aarch64 |
+  |---|---|---|---|
+  | `q1-winmsg`（`.sys()`） | 走った・元と一致 | 走った・例 2 本の出力と終了コードが x64 と同じ | 組めてリンクが通るまで |
+  | `q3-default`（既定） | 走った・墨 722・`==` 通った | 走った・墨 722・`==` 同じ・終了コード 0 | 組めてリンクが通るまで |
+  | `q3-minimal`（`.minimal()`） | 走った・墨 722・`==` 通った | 走った・墨 722・`==` 同じ・終了コード 0 | 組めてリンクが通るまで |
+
+  - aarch64 は走らせる機械が無いので、確かめたのは「組めてリンクが通るまで」（PE の machine＝`0xAA64`）。走行は見ていない（確定 5）。
+  - 組みの時間（debug）: i686 は `q1-winmsg` 16.8 秒・`q3-*` 2 本 18.5 秒、aarch64 は 7.9 秒・7.7 秒。直しはどれも 0 回。
+- 学び:
+  - 問い 1（2.3）: i686 は組めて x64 の Windows で走り、例 2 本の出力と終了コードが元と同じ。aarch64 は例 2 本ともリンクまで通った（走らせていない）。`.sys()` の束縛は `*LongPtrW` の 32bit の別名を `cfg(target_arch = "x86")` で自分で出すので、呼ぶ側に的ごとの分けは要らなかった。取り込みは `windows-link` の `link!` だけで、的ごとの import ライブラリの指定も要らなかった。
+  - 問い 3（3.3）: 既定の形と `.minimal()` の確かめの bin は、i686 で x64 と同じ墨の数・`==` の結果・終了コードになった。aarch64 は 2 本ともリンクまで通った（走らせていない）。COM の束縛（DirectWrite・Direct2D・D3D11・DXGI）も、生成した `bindings.rs` は 3 つの的で 1 バイトも違わず、`target_arch` の `cfg` は 0 か所。COM の表と `link!` の `"system"` が x86 の `stdcall` を吸うので、的ごとの分けも import ライブラリの指定も要らなかった。
+- 確かめた日: 2026-11-16（問い 1・2.3）／2026-11-16（問い 3・3.3）
+- 止まった所・理由・代わりの見立て: 無し（問い 1・問い 3 とも）。
+- 判定: （開発者が下す）
+
+### 問い 9: 規模（API の全数）
+
+- 数えた本線: `main` の `5b3a361c95c5fb494fdf7845576cf20f1aa20c07`（この作業木の `crates/pilot` と `.kiro` の外は `main` と差分 0。作業木の HEAD は `561567f6`）
+- 道具の版: rust-analyzer `1.100.0 (0ef1bc386 2026-11-09)`・cargo `1.100.0`・`scip` クレート 0.10.0。本線の `windows` は 0.62.2（索引の記号の綴り）
+- 索引: 126 MB・作るのに 344 秒（rust-analyzer の「Generating SCIP」は 297 秒）。終了コード 0。ログに `Duplicate symbol` 348 件と `Bug: definition … should have been in an SCIP document` 3 件が出たが、どれも本線の側の記号で、windows-rs の包みの記号は 0 件（数えに響かない）
+- 再現の手順（どのディレクトリからでも。別の作業木では根を差し替える。索引はコミットしない。2 行目の `git diff` が何か 1 行でも出したら、根が数えた本線と違うので索引を作らずに止める）:
+
+```
+rust-analyzer --version
+git -C C:\home\maz\git\areka diff --stat 5b3a361c95c5fb494fdf7845576cf20f1aa20c07 -- . ":(exclude)crates/pilot" ":(exclude).kiro"
+rust-analyzer scip C:\home\maz\git\areka --output C:\home\maz\git\areka\target\pilot-windows-rs-next\out\q9\index.scip
+cargo run --manifest-path C:/home/maz/git/areka/crates/pilot/examples/pilot-windows-rs-next/Cargo.toml --target-dir C:/home/maz/git/areka/target/pilot-windows-rs-next -j 4 -p q9-api-count -- C:/home/maz/git/areka/target/pilot-windows-rs-next/out/q9/index.scip
+```
+
+- 結果（道具の出力そのまま。`crates/pilot` は数えない。windows-rs の記号を 1 つも参照しないクレート・部分は行が無い）:
+
+各欄は「記号の数（出現の回数）」。計は型・メソッド・関数・定数ほかの和（型の下の欄とマクロは別）。
+
+| クレート | 印 | コード | 型 | メソッド | 関数 | 定数ほか | 計 | 型の下の欄 | マクロ |
+|---|---|---|--:|--:|--:|--:|--:|--:|--:|
+| areka | 出荷する | 本番 | 31 (293) | 46 (213) | 24 (69) | 59 (139) | 160 (714) | 44 (56) | 1 (3) |
+| areka | 出荷する | 試験 | 40 (355) | 42 (251) | 71 (291) | 84 (385) | 237 (1282) | 42 (150) | 1 (10) |
+| areka-actor | 出荷する | 試験 | 2 (4) | 0 (0) | 2 (4) | 1 (2) | 5 (10) | 0 (0) | 0 (0) |
+| areka-emo-atlas | 出荷する | 本番 | 7 (22) | 15 (18) | 1 (2) | 11 (22) | 34 (64) | 0 (0) | 0 (0) |
+| areka-emo-atlas | 出荷する | 試験 | 4 (7) | 7 (7) | 2 (4) | 24 (29) | 37 (47) | 0 (0) | 0 (0) |
+| areka-emo-present | 出荷する | 本番 | 10 (19) | 9 (9) | 0 (0) | 4 (8) | 23 (36) | 14 (14) | 0 (0) |
+| areka-emo-present | 出荷する | 試験 | 13 (21) | 15 (20) | 2 (8) | 9 (20) | 39 (69) | 15 (15) | 0 (0) |
+| areka-emo-text | 出荷する | 本番 | 72 (426) | 89 (173) | 0 (0) | 36 (97) | 197 (696) | 85 (195) | 0 (0) |
+| areka-emo-text | 出荷する | 試験 | 42 (216) | 54 (113) | 4 (14) | 32 (181) | 132 (524) | 41 (90) | 0 (0) |
+| areka-ghost | 出荷する | 本番 | 6 (31) | 9 (19) | 5 (10) | 4 (8) | 24 (68) | 1 (3) | 1 (2) |
+| areka-ghost | 出荷する | 試験 | 3 (14) | 5 (11) | 1 (2) | 0 (0) | 9 (27) | 0 (0) | 0 (0) |
+| areka-placement | 出荷する | 本番 | 2 (6) | 3 (18) | 0 (0) | 9 (33) | 14 (57) | 4 (28) | 0 (0) |
+| areka-placement | 出荷する | 試験 | 10 (79) | 17 (41) | 21 (59) | 26 (99) | 74 (278) | 8 (59) | 1 (15) |
+| areka-update | 出荷する | 本番 | 4 (17) | 5 (9) | 12 (24) | 7 (14) | 28 (64) | 11 (15) | 1 (2) |
+| areka-update | 出荷する | 試験 | 4 (9) | 3 (5) | 2 (4) | 1 (2) | 10 (20) | 0 (0) | 0 (0) |
+| dola | 出荷する | 本番 | 0 (0) | 0 (0) | 2 (4) | 0 (0) | 2 (4) | 0 (0) | 0 (0) |
+| real-run-kit | 試験の道具 | 本番 | 7 (16) | 4 (4) | 7 (14) | 2 (4) | 20 (38) | 3 (3) | 1 (3) |
+| shiori-abi | 出荷する | 本番 | 10 (178) | 12 (86) | 0 (0) | 0 (0) | 22 (264) | 1 (15) | 0 (0) |
+| shiori-abi | 出荷する | 試験 | 5 (43) | 5 (22) | 0 (0) | 0 (0) | 10 (65) | 0 (0) | 0 (0) |
+| shiori-host32-helper | 出荷する | 本番 | 14 (45) | 6 (12) | 15 (39) | 10 (20) | 45 (116) | 4 (5) | 1 (5) |
+| shiori-host32-helper | 出荷する | 試験 | 8 (22) | 1 (2) | 6 (10) | 4 (10) | 19 (44) | 4 (4) | 0 (0) |
+| shiori-host32-host | 出荷する | 本番 | 9 (39) | 9 (18) | 14 (32) | 10 (28) | 42 (117) | 8 (11) | 0 (0) |
+| shiori-host32-host | 出荷する | 試験 | 9 (40) | 0 (0) | 11 (25) | 8 (23) | 28 (88) | 7 (12) | 1 (4) |
+| shiori-host32-ipc | 出荷する | 本番 | 6 (25) | 1 (3) | 3 (6) | 5 (13) | 15 (47) | 7 (19) | 0 (0) |
+| shiori-host32-ipc | 出荷する | 試験 | 9 (20) | 3 (3) | 7 (14) | 4 (7) | 23 (44) | 3 (3) | 1 (3) |
+| shiori-host32-testdll | 試験の道具 | 本番 | 8 (25) | 1 (1) | 6 (16) | 3 (6) | 18 (48) | 4 (13) | 0 (0) |
+| shiori-host32-testdll-loadu | 試験の道具 | 本番 | 2 (11) | 0 (0) | 3 (8) | 1 (2) | 6 (21) | 1 (8) | 0 (0) |
+| shiori4-testdll | 試験の道具 | 本番 | 8 (61) | 14 (29) | 0 (0) | 0 (0) | 22 (90) | 3 (9) | 0 (0) |
+| wintf | 出荷する | 本番 | 135 (1479) | 158 (612) | 79 (232) | 231 (761) | 603 (3084) | 130 (724) | 1 (10) |
+| wintf | 出荷する | 試験 | 93 (1542) | 131 (878) | 69 (359) | 212 (1055) | 505 (3834) | 108 (895) | 2 (275) |
+| wintf-winmsg-executor | 出荷する | 本番 | 13 (79) | 2 (8) | 19 (35) | 14 (43) | 48 (165) | 11 (33) | 1 (8) |
+| **合計** | 出荷する | 本番 | 203 (2659) | 268 (1198) | 143 (453) | 330 (1186) | 944 (5496) | 247 (1118) | 2 (30) |
+| **合計** | 出荷する | 試験 | 132 (2372) | 194 (1353) | 111 (794) | 287 (1813) | 724 (6332) | 151 (1228) | 2 (307) |
+| **合計** | 出荷する | 本番＋試験 | 221 (5031) | 348 (2551) | 190 (1247) | 451 (2999) | 1210 (11828) | 298 (2346) | 2 (337) |
+| **合計** | 試験の道具 | 本番 | 20 (113) | 19 (34) | 14 (38) | 6 (12) | 59 (197) | 10 (33) | 1 (3) |
+| **合計** | 試験の道具 | 試験 | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| **合計** | 試験の道具 | 本番＋試験 | 20 (113) | 19 (34) | 14 (38) | 6 (12) | 59 (197) | 10 (33) | 1 (3) |
+| **合計** | 全部 | 本番＋試験 | 221 (5144) | 348 (2585) | 190 (1285) | 451 (3011) | 1210 (12025) | 298 (2379) | 2 (340) |
+
+- 数え方の注（表を読むときに必ず合わせて読む）:
+  - 本線のファイルの中の `#[cfg(test)] mod … {`（131 塊・約 2.19 万行・主に wintf／areka／areka-emo-text／shiori-abi）は、索引に属性が無いので「本番」に数わっている。本番の数はその分だけ多めで、試験の数は少なめ。
+  - `#[implement]` 55 か所・`#[interface]` 6 か所は包みが `windows-implement`・`windows-interface` で、数える 5 つの包み（`windows`・`windows_core`・`windows_numerics`・`windows_strings`・`windows_result`）の外なのでマクロの欄に数わらない（マクロの欄の 2 つは `windows_core` の `interface!`／`w!` の類）。COM の実装の手間は問い 6 の数で見る。
+  - 索引は x64（この PC の既定の的）の `cfg` で作った。`cfg(target_arch = "x86")` だけの所（shiori-host32 の 32bit の側の一部）は数わらない。
+  - 「計」は同じ記号を 1 つと数える。合計の行はクレートをまたいでも 1 つと数えるので、各行の和より小さい。
+
+- 見立ての候補: 直す — 出荷する本番の参照は 944 記号（型 203・メソッド 268・関数 143・定数ほか 330）・出現 5,496 回、試験まで含めると 1,210 記号・出現 11,828 回。その半分強（本番 603 記号・出現 3,084 回）が `wintf` 1 本に集まるので、移行の本体は `wintf` を独立に刻み、ほかのクレートは束ねて刻む形が候補（規模の見立ては「刻み方の案」の節で手間の実数を掛けて出す）。
+- 学び:
+  - rust-analyzer の SCIP は Windows で文書のパスを `crates\wintf\src\…` と逆斜線で綴る。9.1 の道具は `/` を前提にしていて、初回は全部 0 を出した（エラーにならない）。`tally` で逆斜線を `/` にそろえる 1 行を足し、試験の 1 件の見本を逆斜線の綴りに変えた（直し 1 回・`q9-api-count/src/count.rs`・`count_tests.rs`）。あわせて、`crates/<名前>/`（`crates/pilot` を除く）に当てはまる文書が 1 つも無い索引は全部 0 の表を出さず、標準エラーに `no documents under crates/ matched …` を出して終了コード 1 で止まるようにした（試験 `tally_fails_when_no_document_is_under_crates`）。
+  - 索引づくりは本線の全部を 5〜6 分で通り、代わりの数え方（`windows` を外して「見つからない」を集める形）に倒す必要は無かった。
+  - 試験のコードの参照（出現 6,332 回）は本番（5,496 回）より多い。移行の本体の書き換えの量は試験の側も同じだけ見込む。
+- 確かめた日: 2026-11-17
+- 止まった所・理由・代わりの見立て: 無し（索引づくりは落ちず、代わりの数え方は使っていない）。
+- 判定: （開発者が下す）
+
+### 問い 10: 機械的に回せるか（Sonnet）
+
+- 見立ての候補: go（対応表だけを渡した Sonnet の移しが、人の手の直し 4 か所〔どれも振る舞いに関わらない〕で置き場に組めて、例 2 本が問い 1 と同じ比べ方で元と一致した）。ただし取りこぼしの 3 種は機械で捕まらない形が残る（11.2: `.sys()` の `BOOL` を捨てる形・「ポインタ＋長さ」の長さの誤り・失敗の記録を消す形の一部）ので、移行の本体は機械の確かめに加えて、下の「レビューが見る点の一覧」を人のレビューで見る前提で回す。
+- 確かめた日: 2026-11-17（11.1・11.2）
+- 砂場と下請けの回（11.1）:
+  - 砂場 `target\pilot-windows-rs-next\q10-sandbox\` に、本線 `crates/wintf-winmsg-executor`（main `5b3a361c`）の `src/`（試験のモジュールと `lib.rs` 1 行目の `#![doc = include_str!("../README.md")]` を含めて写したまま）・`README.md`・例 2 本・`REWRITE_TABLE.md`・0.62 のままの manifest・0.101 の依存の行（`DEPS-0.101.txt`）を置いた。移し終えた問い 1 の写しは置かない。
+  - 進行役が `model: "sonnet"` の下請けに、対応表と砂場の場所と「組めて例が走るまで」の指示だけを渡した。下請けの報告: 警告 0 で組めて、`basic`・`threads` とも終了コード 0（元との比べは下請けはしていない）。試験のモジュールは触っていない（`windows::` のままで `cargo test` では組めない）。i686 は見ていない。
+- `q1-winmsg/` を読まなかった確かめ: 下請けの道具の呼び出しの記録（会話の記録の jsonl）を、呼び出しの id で重なりを除いて読んだ（記録は同じ `tool_use` を何度も載せるので、id で除かないと数が膨らむ）。読んだ道具はレビュー係の `rv_dump.py`（`tool_use` を id ごとに 1 回だけ出す）。呼び出しは 17 回（Read／Glob 12・Bash 4・SubagentHandback 1）で、全部が砂場の中。全部の呼び出しの入力で `q1-winmsg`・`q1_winmsg`・`crates/`・`crates\` は 0 回。砂場の外を指す文字列は、下請け自身の Bash の本文（`Cargo.toml` の依存の書き換え）にある github の URL だけで、`DEPS-0.101.txt` から写した物。下請けが目にした `q1-winmsg`・`crates/` の字は道具の結果の中だけ（`REWRITE_TABLE.md`・`SANDBOX.md` の出典の欄）。やり直しは無し。
+- 下請けが対応表だけでは決まらず自分で決めた所（下請けの報告から）:
+  1. 改行（CRLF）の扱い。
+  2. `pub type PCSTR = *const u8;` の置き場（束縛のモジュールの中・`include!` の前）と、そのモジュールの `#![allow(non_camel_case_types, non_snake_case, dead_code, clippy::all)]`。問い 1 の写しと同じ形になった。
+  3. `SetWindowsHookExW` の失敗（元は `.unwrap()`）→ `assert!(!handle.is_null(), "SetWindowsHookExW failed")`。問い 1 と同じ扱い。
+  4. `CreateWindowExW` の窓の名前の `None` → `ptr::null()`（組んだときの誤りで分かった）。
+  5. フィルターの名前 30 個の選び。問い 1 の `filters.txt`（32）との違いは `WM_CREATE`・`WM_DESTROY` が無いことだけ（問い 1 では `window.rs` の試験のためだけに入れた 2 つ）。生成した `bindings.rs` は 149 行（問い 1 は 151 行）。
+  6. `pub(crate) mod bindings` を doc の属性の後に置いた。
+  7. 束縛のモジュールの見える範囲を `pub(crate)`（対応表と問い 1 の写しは `mod`）。
+  8. 公開の型が生の型になった（`WindowMessage` の欄・`new_ex(ex_style: DWORD)`）。doc のコメントは古いまま。問い 1 でも `new_ex` の引数は `DWORD` になった。
+  9. `Some(LRESULT(0))` → `Some(0)`。
+- 下請けの書き換えの量（生の差・`cargo fmt` の前。元＝本線の `src/`、後＝砂場。`git diff --no-index --numstat`、`window.rs` は生の NUL の字で二進と見なされるので `diff --text --strip-trailing-cr` で数えた）: `lib.rs` +17／−14・`util/msg_filter_hook.rs` +7／−9・`util/window.rs` +37／−25・`util/mod.rs` 0。新しいファイルは `build.rs` 4 行・`filters.txt` 30 行。manifest の差は進行役が外したワークスペースの継承と混ざるので数えない。問い 1 の写し（`lib.rs` +15／−19・`msg_filter_hook.rs` +7／−9・`window.rs` +43／−32〔試験も移した〕）と同じ桁。
+- 置き場への写し: 砂場の `src/`・`build.rs`・`filters.txt` を `q10-winmsg/` へ写した（例は写さない）。manifest は 1.2 の骨組み（`windows-link`・`async-task`・`windows-bindgen` を `[workspace.dependencies]` から）のまま、`[[example]]` の `q10-basic`・`q10-threads`（`path = "../q1-winmsg/examples/basic.rs"`・`threads.rs`）を足した。
+- 人の手で直した所（4 か所。どれも振る舞いを変えない）:
+  1. `lib.rs` 1 行目の `#![doc = include_str!("../README.md")]` を消した — `q10-winmsg` に README を置かないので組めない（`couldn't read q10-winmsg\src\../README.md`）。問い 1 の写しと同じ扱い。
+  2. `lib.rs` の `#[cfg(test)] mod test`（321 行）を消した — 下請けは触っておらず `windows::` のまま。設計の「写すのは本番の `src/` だけ」に合わせた。
+  3. `util/window.rs` の `#[cfg(test)] mod test`（68 行）を消した — 同じく `Option<HWND>`・`WPARAM(0)` と、フィルターに無い `WM_CREATE`・`WM_DESTROY` を使うままで、`cargo test` では組めない。2 と同じ理由。
+  4. `util/window.rs` のクラス名の `b"wintf-winmsg-executor\0"` が、逃がし `\0` でなく生の NUL の字（0x00）で書かれていたのを `\0` に直した — rustc は通すが、git と grep がファイルを二進と見なし差分が数えられない。値は同じ。原因は道具の層: 下請けのコマンドの Python は正しく逃がしていた（逃がしを解く `'''` の文字列の中の `b"wintf-winmsg-executor\\0"`）が、Bash の道具はコマンドを渡す途中でシェルが走る前に `\\` を `\` に半分にするので、Python が受け取ったのは `\0` で、NUL を書いた。同じ Bash の道具で確かめた（2026-11-17）: `<<'EOF'` のヒアドキュメントに `A\\0B` と書いて `target\q10-probe\heredoc.txt` へ出すと、中身は `A\0B`（`od -c` で `A \ 0 B \n`、逆斜線は 1 つ）。対応表の `w!` の行（2 字の `\0`）は正しく、表の誤りでも下請けのモデルの誤りでもない。
+  - 人の手の直しに数えない物: `cargo fmt` をかけた（`build.rs` +6／−1・`lib.rs` +2／−7・`msg_filter_hook.rs` +1／−1。`use` の並びと 1 行への詰めだけ）。
+- 組めたか・走ったか（x64・debug）: `cargo build -p q10-winmsg --examples` 警告 0・`cargo clippy -p q10-winmsg --examples -- -D warnings` 通る・`cargo fmt --all -- --check` 通る。写しは `target/pilot-windows-rs-next/debug/examples/{q10-basic,q10-threads}.exe`、元は問い 1 の 2.2 と同じ本線の例の出力。
+  - `q10-basic`: 全文一致（14 行）・終了コード 0 と 0。
+  - `q10-threads`: `main` の行の並び（`main hello`→`main async hello`→`main async bye`→`main bye`）一致・終了コード 0 と 0。`thread` の側の行の集まり（`thread` の 4 行各 1、`n_poll=0`〜`3` 各 2）も同じ。
+  - i686・aarch64 は見ていない（11.1 の範囲外）。
+- 学び:
+  - 対応表だけで、下請けは問い 1 とほぼ同じ書き換え（`as u32` の付け足し・`Option`→ヌルのポインタ・`LRESULT(0)`→`0`・`.0` の剥がし・`PCSTR` の 1 行・`w!` の代わりの `[u16; 22]` の `static`）にたどり着いた。対応表に無かった所は、組んだときの誤りで分かる物（窓の名前のヌル）と、見える範囲・置き場の好みの物だった。
+  - 試験のモジュールは「組めて例が走るまで」の指示では手が付かない（`cargo build` は `#[cfg(test)]` を組まないので）。移行の本体で試験も移させるなら、指示に `cargo test` が組めることを入れる。
+  - 逃がしを書いた後はバイトで確かめる（生の NUL の字が 1 つ入っていた。rustc も clippy も黙って通す）。Bash の道具がコマンドの `\\` を `\` に変えるので、コマンドの本文に逃がしを書いて写させると化ける。
+  - 公開の型が生の型に変わる所（`DWORD`・`WindowMessage` の欄）は、組めても doc のコメントが古いまま残る。レビューが見る点。
+- 取りこぼしの 3 種をわざと入れた結果（11.2・2026-11-17・x64・1 つ入れては戻し、毎回 `git diff` が空なのを確かめた）。道具は `cargo build -p <crate>` と `cargo clippy -p <crate> -- -D warnings -W clippy::let_underscore_must_use`（置き場の manifest・絶対の `--target-dir`）。入れる前の `q10-winmsg`・`q3-default` は両方の道具で警告 0（置き場の根の manifest の `unused workspace dependency` 5 件は除く）。
+
+  | 種類 | 入れた先 | 入れ方 | build | clippy | 捕まえた名前 |
+  |---|---|---|---|---|---|
+  | ⑴ 戻り値を見ない | `q10-winmsg` `util/window.rs:79` `Drop` の `DestroyWindow`（`.sys()`・`BOOL`＝`i32`） | 文として捨てる（元の `let _ =` を消して `unsafe { DestroyWindow(self.hwnd) };` にした。入れたのはこの形） | 捕まらない | 捕まらない | なし |
+  | ⑴ 同上 | 同上 | `let _ =` で捨てる（`window.rs:79` の元のコードのまま。入れていない） | 捕まらない | 捕まらない | なし（元から `let _ =` で `BOOL` を捨てる所は 6 か所＝`PostMessageW`（`lib.rs:79`・`lib.rs:240`・`lib.rs:249`）・`TranslateMessage`（`lib.rs:192`）・`DestroyWindow`（`util/window.rs:79`）・`UnhookWindowsHookEx`（`util/msg_filter_hook.rs:43`）。どれも警告 0） |
+  | ⑴ 戻り値を見ない | `q3-default` `main.rs` の `readback.Unmap()`（既定の形・`HRESULT`） | 文として捨てる（`unsafe { readback.Unmap() };`） | 捕まる | 捕まる | rustc `unused_must_use`（`unused windows_core::HRESULT that must be used`） |
+  | ⑴ 同上 | 同上 | `let _ =` で捨てる | 捕まらない | 捕まる | clippy `let_underscore_must_use`（`non-binding let on an expression with #[must_use] type`）。`-W` で足した lint で、既定では無い |
+  | ⑵ 「ポインタ＋長さ」の長さの誤り | `q3-default` `dwrite.rs` `create_text_layout` の `CreateTextLayout` の長さ | `text_slice.len() as u32 + 1`（1 つ多い） | 捕まらない | 捕まらない | なし（`*const u16` と `u32` の組は型が合う。実行時にだけ表れる） |
+  | ⑶ 失敗を記録しない経路 | `q10-winmsg` `util/window.rs:183` の `CreateWindowExW` の失敗（`hwnd.is_null()`） | 中身の無い分岐（`if hwnd.is_null() {}`） | 捕まらない | 捕まる | clippy `needless_ifs`（`` this `if` branch is empty ``）。既定の lint で、`-D warnings` で止まる |
+  | ⑶ 同上 | 同上 | 中身がコメントだけの分岐（`if hwnd.is_null() {` `// failure ignored` `}`） | 捕まらない | 捕まらない | なし |
+  | ⑶ 同上 | 同上 | `if` ごと消す（`return Err(..)` を含む 3 行を消して先へ進む。組める） | 捕まらない | 捕まらない | なし |
+
+  - 読み取り: 戻り値の取りこぼしは、`HRESULT`（`#[must_use]`）なら文として捨てる形は rustc、`let _ =` の形は clippy の `let_underscore_must_use` が捕まえる。`.sys()` の `BOOL`（生の `i32`）は `#[must_use]` が付かず、どちらの形も機械では捕まらない。`let_underscore_must_use` は型の `#[must_use]` を見るので、生の型の戻り値には効かない。
+  - ⑵は機械では捕まらない（型は合う）。⑶は形しだいで、本当に空の分岐だけ clippy の `needless_ifs` が捕まえ、中身がコメントだけの分岐と `if` ごと消した形は通る（記録の有無は文法の問題でない）。実行時には、⑵の `+1` は NUL まで読んで次のメモリを触りうる。
+  - 範囲: 設計が名指しした組だけを見た（⑴は `BOOL` の `.sys()` と `HRESULT` の COM の両方、⑵は `q3-default`、⑶は `q10-winmsg`）。`HRESULT` 側の `BOOL` 同等の確かめ（`q10-winmsg` に `HRESULT` を返す呼び出し）は見ていない。
+- 止まった所・理由・代わりの見立て: 無し（止まらなかった。直しは上の 4 か所）。
+- 判定: （開発者が下す）
+
+### 刻み方の案と規模の見立て
+
+移行の本体の刻み方の案（12.1）。規模は CopyLedger の「問い 9 の全数に掛けた見積もり」と同じ掛け算で、クレートの群ごとの問い 9 の数（出現の回数・名指す数＝型＋関数＋定数ほか）に掛けた **見積もり** で、測った数ではない。A＝出現 × 約 0.0705 分、B＝名指す数 × 約 0.22 分。時間は実装係の作業の時間。どの案を採るか・どう刻むかは開発者が決める。
+
+**⑴ 束縛を作る道具（先に 1 本）**
+
+- 中身: 問い 2 の案 3（共有の束縛のクレート・既定の形）を本線に建てる。`bind-next` と同じく `build.rs`（`windows-bindgen` を呼ぶ・問い 1 では 12 行）がクレートの群ごとのフィルターのファイルを全部読み、`OUT_DIR` へ書いて `include!` する（生成した束縛はコミットしない）。`_Impl` は `.implements` を呼ばなくても出る。出す `_Impl` を絞るなら `.implements([...])`（名前は `Windows.Win32.<名前>` の形・合わなければ黙って 0・継いだ版を実装するなら基の名前も並べる・問い 6 の訂正）。
+- 規模: 道具そのものは `build.rs` 十数行と空のフィルター。名指しの量は群ごとの移しの中で足していく（下の B は名指しの手間を含む）。名指しの総数は問い 9 の合計の行で本番 676・本番＋試験 862（群ごとの和はクレートをまたぐ同じ記号を何度も数えるので、これより大きい）。
+- 生成する行は名指しに比例しない（1.3 では名指し 11 件で 7,742 行・依存の型を自動で引く。`bind-next` の 4 つのフィルターの和は 7.1 の時点で 13,881 行）ので、生成の行数の見積もりは出さない。
+
+**⑵ クレートの群ごとの移行**
+
+問い 9 が「`wintf` を独立に刻み、ほかは束ねる」を候補にしたので、その形で並べた（群の分け方そのものは案）。
+
+| 群 | クレート | 本番: 記号（出現） | 試験: 記号（出現） | 本番: 名指す数 | A 本番／試験 | B 本番／試験 |
+|---|---|---|---|---|---|---|
+| メッセージの回し | `wintf-winmsg-executor` | 48（165） | — | 46 | 約 12 分／— | 約 10 分／— |
+| 描く土台 | `wintf` | 603（3,084） | 505（3,834） | 445 | 約 217 分／約 270 分 | 約 98 分／約 83 分 |
+| 文字 | `areka-emo-text` | 197（696） | 132（524） | 108 | 約 49 分／約 37 分 | 約 24 分／約 17 分 |
+| 本体 | `areka` | 160（714） | 237（1,282） | 114 | 約 50 分／約 90 分 | 約 25 分／約 43 分 |
+| SHIORI | `shiori-abi`・`shiori-host32-helper`・`-host`・`-ipc` | 124（544） | 80（241） | 96 | 約 38 分／約 17 分 | 約 21 分／約 16 分 |
+| そのほか | `areka-emo-atlas`・`-emo-present`・`-ghost`・`-placement`・`-update`・`dola`・`areka-actor`（試験だけ） | 125（293） | 174（451） | 84 | 約 21 分／約 32 分 | 約 19 分／約 28 分 |
+| 試験の道具 | `real-run-kit`・`shiori-host32-testdll`・`-testdll-loadu`・`shiori4-testdll` | 66（197） | — | 47 | 約 14 分／— | 約 10 分／— |
+
+- 群の記号の数はクレートの行の和（クレートをまたぐ同じ記号を重ねて数える）。出現の和は本番 5,496・試験 6,332 で問い 9 の合計と合う。名指す数は各クレートの行の型＋関数＋定数ほかの和。
+- 測った所との照らし合わせ: 「メッセージの回し」は問い 1 そのもので、実の手間は約 12 分・直し 4 回（A の較正に使ったので A と一致するのは当たり前）。同じ移しを Sonnet が対応表だけで回した（問い 10・人の手の直し 4 か所）。
+- `#[implement]`・`#[interface]`（問い 9 の外・61 か所・約 180 分の見積もり）は、どの群に何か所あるかを数えていないので表に入れていない。
+- SHIORI の群は x64 の `cfg` で数えたので、`cfg(target_arch = "x86")` だけの 32bit の側は数に入っていない（問い 9 の注）。i686 は問い 8 で束縛の形ごとに直し 0 だった。
+- 試験の側を移すなら、指示に `cargo test` が組めることを入れる（問い 10 の学び: 「組めて例が走るまで」の指示では試験の塊に手が付かない）。
+
+**⑶ `windows` 0.62 を外す締め（最後に 1 本）**
+
+- 中身: 全部の群が 0.101 に乗った後、本線の根の `[workspace.dependencies.windows]`（`Cargo.toml:46`・`version = "0.62"` と features の一覧）・`windows-core = "0.62.2"`（`Cargo.toml:20`）・`windows-numerics = "0.3.1"`（`Cargo.toml:19`）を外し、0.62 系を名指す manifest（`crates/*/Cargo.toml` のうち `crates/pilot` を除く 19 本＝`windows` を名指す 18 本＋`windows-core` だけを名指す `crates/shiori4-testdll/Cargo.toml:23` の 1 本。`grep -lE '^\s*(windows(-core)?\s*=|windows(-core)?\.workspace|\[(target\.[^]]*\.)?(dev-)?dependencies\.windows(-core)?\])' crates/*/Cargo.toml | grep -v '^crates/pilot/' | wc -l` で 19）から依存の行を消す。`cargo tree -d` から 0.62 系（`windows` 0.62.2・`windows-core` 0.62.2 ほか、1.2 の表で 2 版が並んだ物の古い側）が消えたことを確かめる。
+- 規模: コードの書き換えは 0 行の見込み（群ごとの移しで呼ぶ所は全部移っている前提）。manifest の行の削除が根の 3 か所と 19 本、`Cargo.lock` は cargo が出し直す。ほかの締めより小さい（構造上の見立て）。
+
+**⑷ `windows-text` の採用（文字の群の後）**
+
+- 中身: `areka-emo-text` の縦書きの配置を `windows-text` の `TextFormat`／`TextLayout` に置き換える。問い 7 で、areka の 10 個の字形の指定を当てると今の側とバイトまで同じ絵（違う画素 0・8.5）になった。
+- 前の条件: `windows-text` は `windows-core` 0.101 の上なので、文字の群が 0.101 に乗ってから（`as_interface` で `IDWriteTextLayout` を借りるのは同じ版の中だけ・8.3）。
+- 規模（見積もり）: 置き場では 1 列・1 文を描く新しい側が `new_side.rs` 372 行、範囲の色・下線・panic の手当てが `ranges.rs` 152 行（試験 `ranges_tests.rs` 135 行は別）。置き換える先の候補は `areka-emo-text/src` のうち `IDWriteTextLayout` か `CreateTextLayout` を含む 12 ファイル・計 6,907 行（試験の塊も含む・grep）。`windows-text` に無くて自前で補う所は問い 7 で 4 つ当たった（GDI の名前で書体を引く口・範囲の色〔`SetDrawingEffect` を借りた配置へ〕・下線を列の右へ〔`decorations()` を鏡に映して自前で塗る〕・`TextLayout::new` の panic の手前の値の確かめ）。手間の率（A・B）は COM の型を移す書き換えから出した物で、配置の置き換えには当てはまらないので、時間の見積もりは出さない。
+
+- 判定: （開発者が下す）
+
+### 段階の移行の可否の材料
+
+本線で `windows-core` 0.62 と 0.101 を同じ依存の木に並べ、クレートごとに移す段階の移行ができるかの材料（要件 13.5）。可否は開発者が決める。
+
+- 同じ過程で並んで動いた（8.5・2026-11-17）: `vt-compare` は 1 つの過程・1 つのスレッドで、借りた `areka-emo-text`＋`wintf`（`windows` 0.62・`windows-core` 0.62.2）で 1 枚、`windows-text`＋`bind-next`（`windows-core` 0.101.0）で 2 枚を描いて終了コード 0 で終わった。COM は MTA を 1 回始め（`bind-next` の束縛で呼んだ・アパートメントはスレッドの物）、両側はそれぞれ自分の D3D11・D2D の装置を作った。新旧の COM の型は 1 度もつながず（橋は無し）、渡したのは読み戻した BGRA の `Vec<u8>` だけ。
+- 組めた（1.2・8.5）: 2 版は同じ木に入って cargo が断らず、同じ名前の型（`IUnknown` ほか）は版ごとに別の型として共存した。`wintf-winmsg-executor` と同じライブラリ名の `q1-winmsg` も同じ木に入った。
+- `cargo tree -d -e normal -p q7-vertical --depth 1`（8.5 の時点・置き場の中で打った・抜粋・パスは作業木の根からの相対に縮めた）:
+
+```
+windows-collections v0.3.2
+└── windows v0.62.2
+
+windows-collections v0.101.0 (https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9710fe00285436c4d22ad6053d72#f37e2f90)
+└── bind-next v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/bind-next)
+
+windows-core v0.62.2
+├── areka-emo-text v0.1.0 (crates/areka-emo-text)
+├── windows v0.62.2 (*)
+├── windows-collections v0.3.2 (*)
+├── windows-future v0.3.2
+├── windows-numerics v0.3.1
+└── wintf v0.1.0 (crates/wintf)
+
+windows-core v0.101.0 (https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9710fe00285436c4d22ad6053d72#f37e2f90)
+├── bind-next v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/bind-next) (*)
+├── q4-wuc v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/q4-wuc)
+├── q7-vertical v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/q7-vertical)
+├── windows-collections v0.101.0 (...) (*)
+├── windows-numerics v0.101.0 (...)
+└── windows-text v0.101.0 (...)
+
+windows-link v0.2.1
+├── windows-core v0.62.2 (*)
+├── ...（windows-future・windows-numerics・windows-result・windows-strings・windows-sys・windows-threading）
+
+windows-link v0.100.1 (...)
+├── q1-winmsg v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/q1-winmsg)
+├── windows-core v0.101.0 (...) (*)
+├── windows-result v0.100.1 (...)
+└── windows-strings v0.100.1 (...)
+```
+
+  ほかに 2 版が並ぶ物: `windows-implement` 0.60.2／0.101.0・`windows-interface` 0.59.3／0.101.0・`windows-numerics` 0.3.1／0.101.0・`windows-result` 0.4.1／0.100.1・`windows-strings` 0.5.1／0.100.1。1.2 の時点から増えたのは `windows-collections` 0.101.0（`bind-next` が引く）。
+- 並べる代わりに払う物（構造上の見立て・測っていない）: 2 版の `windows-core` 系の 7 つのクレートを 2 度組む時間と exe の大きさ。境では COM の型を渡せないので、移す途中のクレートどうしは画素・数・生ポインタのような版に依らない物で受け渡すことになる（`as_interface` は同じ版の中だけ）。
+- 刻み方との関わり（構造上の見立て・測っていない）: 境で COM の型を渡せないので、群ごとに移すなら、型を公開の口で渡す群どうし（`wintf` とそれに頼る `areka-emo-text`・`areka-emo-present`・`areka-placement`・`areka`・問い 2 の理由 2）は、同じ版に乗るまで境に版に依らない受け渡しを置くか、続けて移すことになる。`windows-text` は 0.101 の側にしか置けない（刻み方の案の ⑷）。
+- 本線の決まりの側で分かっている事: 本線の `deny.toml` の `[bans]` は `multiple-versions = "warn"`（`deny.toml:47`）で、重複の版は警告に留まり、それだけでは止まらない（`cargo deny` を走らせて確かめてはいない）。
+- 確かめていない事: 本線のワークスペース（根の `Cargo.lock`）での解決。ここは独立の置き場の `Cargo.lock` での結果で、本線の `cargo deny` にも通していない。
+- 可否の判定: （開発者が下す）
+
+### レビューが見る点の一覧（問い 10）
+
+移行の本体で、機械（`cargo build`・`cargo clippy -- -D warnings -W clippy::let_underscore_must_use`）が捕まえなかった種類を、人のレビューが見る（11.2 の入れた結果から）。
+
+1. `.sys()` の `BOOL`（生の `i32`）を返す呼び出しの戻り値を捨てていないか。文として捨てる形も `let _ =` も機械は通す。`PostMessageW`・`DestroyWindow`・`UnhookWindowsHookEx` のように捨ててよい物は元のとおりか、捨ててはいけない物（失敗が後に響く物）は検査しているかを見る。
+2. 「ポインタ＋長さ」の組の長さが元と同じか（`CreateTextLayout` の長さの `+1` ずれなど）。型が合うので機械は通す。長さを作る式（`len()` に足し引きが無いか・NUL を含めるか）を元と見比べる。
+3. 失敗の経路が元と同じ形で残り、記録（`error!`）か `Err` で伝えているか（窓の作成の失敗を黙って先へ進める形など）。本当に空の分岐（`{}`）は clippy の `needless_ifs` が捕まえるが、中身がコメントだけの分岐と、検査の `if` ごと消えた形は機械が通す。元にあった検査が残っているか・分岐の中に `return Err` か記録があるかを元と見比べる。
+4. 機械が捕まえた物も、道具の設定が前提になる: `HRESULT` を文として捨てる形は rustc の既定の `unused_must_use` が捕まえるが、`let _ =` の形は `clippy::let_underscore_must_use` を有効にしたときだけ。移行の本体の CI でこの lint を有効にするか決める（有効にしても `BOOL` は捕まらない）。
+
+### 公開の後の注意
+
+ここの結果は全部、公開の前の windows-rs の master の 1 つの rev（`f37e2f9046cf9710fe00285436c4d22ad6053d72`・2026-11-14）の上で 2026-11-16〜17 に確かめた物である。0.101 系（`windows-core`・`windows-bindgen`・`windows-text` ほか）が crates.io に公開された後は、次が変わりうる。移行の本体は、公開の版に乗る時点でこの記録の該当する所を確かめ直す。
+
+- 束縛の形: `windows-bindgen` が出す型（`HWND` が生のポインタの別名・`i32` の定数・`HRESULT` を返す COM メソッド・「ポインタ＋長さ」・`.sys()` の `PCSTR` の欠け）は、上流が出力を変えれば変わる。対応表（`REWRITE_TABLE.md`）の行はこの rev の生成物から起こした。
+- `windows-bindgen` の口: フィルターの名前の書き方（短い名前・`could not resolve filter entry`）・`.implements` の名前の形（`Windows.Win32.<名前>`・合わなければ黙って 0）・参照の口が無いこと（問い 2）・兄弟のクレートの決め打ちの 5 つ。公開の版で口が増えれば、問い 2 の案 1 の重なりの見立ても変わる。
+- `windows-text`: 2026-11-06 にできたクレートで、API（`TextLayout::new` が panic する・位置が UTF-8 のバイト・範囲の色の口が無い・`decorations()` の下線が列の左）はまだ動きうる。上流へ返す文案（`UPSTREAM_DRAFT.md`）が求める `try_new` などが入れば、問い 7 の手当ても変わる。画素の比べ（違う画素 0）は、この機械の書体と GPU の結果でもある。
+- 版の番号と依存の木: `windows-link` 0.100.1・`windows-result`／`windows-strings` 0.100.1 ほか、ここで並んだ版は公開の版で変わりうる。段階の移行の材料（`cargo tree -d`）はこの rev の物。
+- 公開の制約（brief）: crates.io へ出すクレート（`wintf`・`dola`・`wintf-winmsg-executor`）は git の依存を持てない。公開の前に移行の本体を本線へ入れるかは、この先進坑の外の判断（開発者が決める）。
+
+### 総合の判定
+
+判定は開発者が下す。

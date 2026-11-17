@@ -85,7 +85,9 @@ use super::chain_finalize::{
 use super::chain_rule::{ChainRule, ChainView, edge_partner};
 use super::diag::PlacementRoute;
 use super::dpi_sync::{self, DpiSyncHold};
-use super::follow::{ClampScene, move_window_with_route, place_chain_in_work_area};
+use super::follow::{
+    ClampScene, move_window_with_route, place_chain_in_work_area, rejudge_all_balloons,
+};
 use super::resolver::PointPx;
 use super::spawn::GhostWindows;
 use super::sticky_group_ledger::StickyGroupLedger;
@@ -421,6 +423,8 @@ where
     for (entity, x, y) in applied {
         move_window_with_route(world, entity, x, y, PlacementRoute::ChainRealign);
     }
+    // 先に書いたスコープのバルーンは後から書いた窓を知らずに判定したので、全窓を書き終えた今の位置で判定し直す（要件 2.10）。
+    rejudge_all_balloons(world);
 
     debug!(
         scopes,

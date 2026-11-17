@@ -96,6 +96,8 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     // スコープ → 窓の印の表を出す系（mcp-scope-rect-property 要件 3.3）。
     ghost_session_scope_rect::register(world);
     areka_placement::balloon_syncscale::register(world);
+    // 全スコープのバルーンの判定し直しの系（balloon-flip-side-rules 要件 2.10）。
+    areka_placement::follow::register_balloon_rejudge(world);
 }
 
 /// 起動窓の準備が descript から**1 度だけ**読み取った値のうち、呼び手（`main`）が下流へ

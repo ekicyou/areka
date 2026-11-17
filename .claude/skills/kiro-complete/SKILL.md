@@ -45,7 +45,7 @@ argument-hint: <feature-name>
 - **繰り返し仕様は移動しない** — 繰り返し実行型の仕様は常に `.kiro/specs/` 直下に留まる
 - **未解決問題を取りこぼさない** — アーカイブした後では拾い漏れに気付けない。DoD ゲートより前に棚卸しし、原則その場で直し、例外に当たるものだけ申し送り・起票する（冒頭ステップ）
 - **移動はコードを壊し得る** — ソースが spec 文書を実ファイル読みしていればアーカイブ移動で壊れる。参照検索はソース全域まで及ぼし（ステップ4-2）、**全体テストは移動をコミットした後に回す**（ステップ5）
-- **全体テストは 1 回・移動の後で回す** — 全体テストの 1 回は約 19 分かかる。以前は移動の前（DoD ゲート）と後（移動後ゲート）で 2 回回していたが、**移動後の 1 回は移動前の 1 回を包含する**（同じコードに加えて移動の影響まで見る）ので、整形・ライセンスも込みで移動後の 1 回にまとめる。確かめる範囲は減らず、待ち時間が半分になる
+- **全体テストは 1 回・移動の後で回す** — 全体テストの 1 回は約 21 分かかる。以前は移動の前（DoD ゲート）と後（移動後ゲート）で 2 回回していたが、**移動後の 1 回は移動前の 1 回を包含する**（同じコードに加えて移動の影響まで見る）ので、整形・ライセンスも込みで移動後の 1 回にまとめる。確かめる範囲は減らず、待ち時間が半分になる
 - **待ち時間は並行レーンで使う** — 全体テストは裏で回し、その間にテストの結果に左右されない作業（ROADMAP・steering・スキル文書の更新、PR 文面の下書き、`gh` の認証確認）を進める。並行レーンで触ってよいものは**テストが読まないファイルだけ**に限る（ステップ6）
 - **全テストは全体テストのスクリプト `tools/test-all.ps1` で回す** — `cargo test --workspace` を直に叩くと i686 の準備が抜け、終了コードも見落としやすい（ステップ5）
 
@@ -79,7 +79,7 @@ argument-hint: <feature-name>
 3  completed/ へ移動・spec.json │
 4  参照パスの更新               │
 5  アーカイブのコミット → 全体テスト（-Format -License）を裏で起動 ─┐
-6  並行レーン: ROADMAP／steering／スキル文書・PR 文面の下書き      │ 並行（約 19 分）
+6  並行レーン: ROADMAP／steering／スキル文書・PR 文面の下書き      │ 並行（約 21 分）
 7  完了通知を待って判定 → 最終コミット ←────────────────────────┘
 8  PR 作成 → squash マージ
 ```
@@ -433,8 +433,8 @@ git rev-parse --short HEAD   # 起動時のコミット。ステップ7-3 の差
 pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # Bash／PowerShell ツールの run_in_background で起動する
 ```
 
-- **必ず `run_in_background` で起動し、完了通知を待つ**（約 19 分・2026-09-24 実測で x64 全テストだけ 838 秒）。前面で回すとツールの時間切れで途中の結果しか残らないうえ、待ち時間に何もできない。起動したらすぐステップ6 へ進む（机の番を待つ間に進めていたら、その続き）。
-- **段**（末尾の一覧に出る名前は英語）: `add i686 target`（i686 ターゲット導入）→ `build i686 artifacts`（helper・偽 DLL 2 つ）→ `cargo fmt (format)`（`cargo fmt --all`・`-Format`）→ `fmt --check` → `x64 workspace tests`（`--no-fail-fast -j 4`）→ `dola toml feature tests`（機能 `toml` を有効にした `dola` のテスト・取り寄せが赤でも回る）→ `i686 tests (host-32)` → `crates.io pre-publish check (package only)`（`wintf`・`dola`・`wintf-winmsg-executor` の公開前の確認）→ `encoding check`（道具の文字コードの判定・`tools/encoding-check.ps1`・約 40 秒）→ `release notes check`（リリースノートの道具の自分の検査・`tools/release-notes.ps1 -SelfTest`）→ `roadmap overview check`（俯瞰の HTML の道具の自分の検査・`.claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest`）→ `i686 helper sync check`（隣の helper を揃える道具の自分の検査・`tools/sync-i686-helper.ps1 -SelfTest`）→ `cargo deny check` → `cargo about generate`（この 2 段は `-License`）→ `i686 helper beside areka.exe`（最後の段・`target\debug\` の `areka.exe` の隣の helper を i686 版へ揃える）。
+- **必ず `run_in_background` で起動し、完了通知を待つ**（約 21 分・2026-09-24 実測で x64 全テストだけ 838 秒）。前面で回すとツールの時間切れで途中の結果しか残らないうえ、待ち時間に何もできない。起動したらすぐステップ6 へ進む（机の番を待つ間に進めていたら、その続き）。
+- **段**（末尾の一覧に出る名前は英語）: `sample fetch`（検体の URL の行の取り寄せ・`tools/sample-fetch.ps1`・最初の段）→ `add i686 target`（i686 ターゲット導入）→ `build i686 artifacts`（helper・偽 DLL 2 つ）→ `cargo fmt (format)`（`cargo fmt --all`・`-Format`）→ `fmt --check` → `x64 workspace tests`（`--no-fail-fast -j 4`）→ `dola toml feature tests`（機能 `toml` を有効にした `dola` のテスト・取り寄せが赤でも回る）→ `i686 tests (host-32)` → `crates.io pre-publish check (package only)`（`wintf`・`dola`・`wintf-winmsg-executor` の公開前の確認）→ `encoding check`（道具の文字コードの判定・`tools/encoding-check.ps1`・約 40 秒）→ `release notes check`（リリースノートの道具の自分の検査・`tools/release-notes.ps1 -SelfTest`）→ `roadmap overview check`（俯瞰の HTML の道具の自分の検査・`.claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest`）→ `i686 helper sync check`（隣の helper を揃える道具の自分の検査・`tools/sync-i686-helper.ps1 -SelfTest`）→ `sample fetch check`（取り寄せの道具の自分の検査・`tools/sample-fetch.ps1 -SelfTest`）→ `package check`（梱包の道具の自分の検査・`tools/package.ps1 -SelfTest`）→ `exe install check`（exe を机へ置く道具の自分の検査・`tools/exe-install.selftest.ps1`）→ `load flake check`（揺れるテストの道具の自分の検査・`tools/load-flake.ps1 -SelfTest`）→ `mouse input check`（マウス入力の道具の自分の検査・`tools/mouse-input.ps1 -SelfTest`）→ `app icon check`（アプリアイコンの道具の自分の検査・`tools/app-icon.ps1 -SelfTest`）→ `cursor art check`（カーソルの絵の道具の自分の検査・`tools/cursor-art.ps1 -SelfTest`）→ `perf loop selftest`（性能改善ループの道具の自分の検査・`tools/perf/perf-loop.ps1 selftest`・いちばん長い）→ `cargo deny check` → `cargo about generate`（この 2 段は `-License`）→ `i686 helper beside areka.exe`（最後の段・`target\debug\` の `areka.exe` の隣の helper を i686 版へ揃える）。
 - **Format Gate**: `-Format` が「`cargo fmt --all` で整形 → `--check` で確認」をテストの前の段で行う。整形差分はステップ7 のコミットに取り込む。`cargo fmt` が構文エラーで失敗したら中断して報告する（コンパイルできないコードが残っている）。Rust ワークスペースでないリポジトリはチェックリストに「(整形対象不在により省略)」と注記する。
 - **License Gate**: MIT 配布を守るライセンス健全性ゲート。`-License` がテストの後に直列で回す（テストと同時に回すと rustc がメモリ不足で落ちる）。
   - (a) 汚染ゲート `cargo deny check`: 強コピーレフト（GPL/LGPL/AGPL/MPL 等）や許可外ライセンスの混入を検出する（`deny.toml` があるときだけ意味を持つ）。

@@ -1,0 +1,28 @@
+// q4-wuc: wuc.rs の写しと合成の各段・画面の撮り（7.1）。1 行 1 つの名指し（// の注は数えない）。
+// 合成（WinRT）
+ICompositionSurface
+// DispatcherQueue
+DispatcherQueueController
+CreateDispatcherQueueController
+DispatcherQueueOptions
+DQTYPE_THREAD_CURRENT
+DQTAT_COM_NONE
+// 相互運用
+ID2D1DeviceContext3
+IDXGISwapChain1
+// 画面の撮り（GDI）
+GetDC
+ReleaseDC
+CreateCompatibleDC
+CreateCompatibleBitmap
+SelectObject
+BitBlt
+GetDIBits
+DeleteObject
+DeleteDC
+SRCCOPY
+BI_RGB
+DIB_RGB_COLORS
+GetDesktopWindow
+// q4-demo（7.2）: D2D の工場（窓の形・メッセージの回し・DPI は問い 7 も使うので 8.6 で、装置の作り方の定数と ID2D1RenderTarget は 8.3 で common へ移した）
+D2D1_FACTORY_TYPE_SINGLE_THREADED

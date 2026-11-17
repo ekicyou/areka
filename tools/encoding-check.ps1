@@ -29,9 +29,11 @@
           (case-insensitive, any scope) are followed through string constants, arrays, +,
           parentheses and other variables (each once); pipelines, command results, members and
           method values are not followed
-       E  tools/package.ps1 (metadata and nar-sample-path), tools/crates-io.ps1 (metadata) and the
-          run bodies of .github/workflows/release.yml (metadata) each have an Invoke-Utf8Child
-          call with that element
+       E  tools/package.ps1 (nar-sample-path), tools/tool-common.ps1 (metadata) and
+          tools/crates-io.ps1 (metadata) each have an Invoke-Utf8Child call with that element
+       F  the function Step of tools/test-all.ps1, run here with a green step and then a step whose
+          command is not found, records 0 and then a non-zero exit code (a stale $LASTEXITCODE
+          would turn a missing cargo or a mistyped command green)
   3. cp932 child: this script starts itself with -Cp932Child as a windowless child that has its
      own console (Invoke-Utf8Child -OwnConsole). Only that child sets its own console to code
      page 932 (Set-OwnConsoleCp932), then checks with the fixed sample {"description":"<U+7248>",
@@ -47,46 +49,45 @@
        perf calibration  Invoke-Child with a plain -File (no prefix) must break the sample
        perf real         Invoke-PwshChild must deliver the 3 lines exactly
        perf console      the child's console must still be 932 / 932 (read from the OS)
+     Each child check runs by name (own console, calibration, production, real, perf load, perf
+     calibration, perf real, perf console); a throw becomes FAIL cp932 child: <name>: uncaught:
+     <ASCII reason> and the next check still runs (a failed perf load skips the 3 perf checks).
+     A non-zero grandchild exit adds its last stderr line.
      The parent copies the child's lines, fails on a non-zero exit, reads the version itself and
      fails unless the child's version=<v> line is the same, and fails if its own two console code
      pages (read from the OS, not the .NET cache) changed. The parent never sets its own console.
+     Calibration cp932 child injected failure: the parent starts one more child with
+     -FailCheck 'perf load' and needs a non-zero exit, a FAIL line naming perf load with the
+     reason's U+7248 as an ASCII escape, the PASS line of production and the version= line.
   All failures are collected and printed, then the exit code is decided once.
   Writes nothing, creates no temporary files, prints ASCII only, never prints the environment.
 
   Run: pwsh -NoProfile -File tools/encoding-check.ps1
-  (-Cp932Child and -PerfSampleChild are internal; run by hand from a terminal they change nothing,
+  (-Cp932Child, -PerfSampleChild and -FailCheck are internal; run by hand from a terminal they change nothing,
   print one ASCII line and exit with 1.)
 #>
 using namespace System.Management.Automation.Language
 #Requires -Version 7
 param(
     [switch]$Cp932Child,      # internal: only the windowless child started by this script uses it
-    [switch]$PerfSampleChild  # internal: the sample writer started by that child
+    [switch]$PerfSampleChild, # internal: the sample writer started by that child
+    [string]$FailCheck        # internal: with -Cp932Child, the named child check throws (calibration)
 )
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
-# Invoke-Utf8Child: read a child's output as UTF-8 regardless of the console code page
-. (Join-Path $PSScriptRoot 'utf8-child.ps1')
+# Invoke-Utf8Child (UTF-8 child output) and Show-Ascii
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
 
 $NonAscii = '[^\t\r\n\x20-\x7E]'
 $SelfWhere = 'tools/encoding-check.ps1'
 $CallWordSet = @('metadata', 'nar-sample-path')
 # Rule E: where an Invoke-Utf8Child call must carry each element
 $RequiredCalls = [ordered]@{
-    'tools/package.ps1'             = @('metadata', 'nar-sample-path')
+    'tools/package.ps1'             = @('nar-sample-path')
+    'tools/tool-common.ps1'         = @('metadata')
     'tools/crates-io.ps1'           = @('metadata')
-    '.github/workflows/release.yml' = @('metadata')
-}
-
-# Printable form: non-ASCII and control chars become \uXXXX, text longer than $Max is cut
-# ($Max 0 = never cut).
-function Show-Ascii([string]$s, [int]$Max = 80) {
-    $t = -join ($s.ToCharArray() | ForEach-Object {
-            if ([int]$_ -ge 0x20 -and [int]$_ -le 0x7E) { $_ } else { '\u{0:X4}' -f [int]$_ }
-        })
-    if ($Max -gt 0 -and $t.Length -gt $Max) { $t.Substring(0, $Max - 3) + '...' } else { $t }
 }
 
 # Leaf name of a command (cargo, & 'cargo.exe', C:\x\chcp.com), or $null.
@@ -296,10 +297,30 @@ function Get-TargetResult([string]$Text, [string]$Where, [bool]$IsYaml) {
     [pscustomobject]@{ Findings = $f.ToArray(); CallWords = $w.ToArray() }
 }
 
+# Rule F: runs the function Step of $Text (tools/test-all.ps1) as test-all does (no StrictMode,
+# errors continue) with a green step, then a step whose command is not found. $null = the codes
+# are 0 and then non-zero; else the reason.
+function Get-StepRecordFinding([string]$Text) {
+    $fn = [Parser]::ParseInput($Text, [ref]$null, [ref]$null).Find({ param($n) $n -is [FunctionDefinitionAst] -and $n.Name -ceq 'Step' }, $true)
+    if ($null -eq $fn) { return 'no function Step' }
+    $codes = @(& {
+            Set-StrictMode -Off
+            $ErrorActionPreference = 'Continue'
+            $results = [ordered]@{}
+            . ([scriptblock]::Create($fn.Extent.Text))
+            Step 'green' { $global:LASTEXITCODE = 0 }
+            Step 'missing' { encoding-check-no-such-command }
+            $results['green'].Code, $results['missing'].Code
+        } 2>$null 6>$null)
+    if ($codes.Count -ne 2 -or $codes[0] -ne 0 -or $null -eq $codes[1] -or $codes[1] -eq 0) {
+        return "after a green step, a step whose command is not found was recorded as exit code $(if ($codes.Count -eq 2 -and $null -ne $codes[1]) { $codes[1] } else { 'none' })"
+    }
+    $null
+}
+
 # ---- 3. cp932 child: shared parts ----
 $root = Split-Path -Parent $PSScriptRoot
 $pwsh = [Environment]::ProcessPath
-$VersionPattern = '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$'
 
 # The console code pages read from the OS now: @(<output>, <input>). [Console]::OutputEncoding
 # is cached by .NET and misses a rewrite by a child. The type is built in memory, once.
@@ -321,17 +342,17 @@ function Set-OwnConsoleCp932 {
     [Console]::InputEncoding = $cp932
 }
 
-# Version of the areka package read with Invoke-Utf8Child cargo metadata. Throws (ASCII message).
-function Read-ArekaVersion {
-    $r = Invoke-Utf8Child cargo @('metadata', '--no-deps', '--locked', '--format-version', '1',
-        '--manifest-path', (Join-Path $root 'Cargo.toml'))
-    if ($r.Code) { throw "cargo metadata exited with code $($r.Code): $(Show-Ascii ([string]($r.ErrLines | Select-Object -Last 1)))" }
-    try { $meta = $r.Out | ConvertFrom-Json } catch { throw 'cargo metadata output is not JSON' }
-    $pkgs = @($meta.packages | Where-Object { $_.name -ceq 'areka' })
-    if ($pkgs.Count -ne 1) { throw "expected exactly one areka package, got $($pkgs.Count)" }
-    $v = [string]$pkgs[0].version
-    if ($v -cnotmatch $VersionPattern) { throw "areka version is not a version: $(Show-Ascii $v)" }
-    $v
+# ': <last non-empty line>' of a child's stderr lines (ASCII), or '' when there is none.
+function Format-LastErr {
+    param($Lines)
+    # pwsh error views carry ANSI colour codes; drop them so the reason itself is the last line
+    $l = @($Lines | ForEach-Object { [string]$_ -replace '\x1B\[[0-9;]*m', '' } | Where-Object { $_.Trim() -ne '' })
+    if ($l.Count) { ": $(Show-Ascii $l[-1])" } else { '' }
+}
+
+if ($FailCheck -and -not $Cp932Child) {
+    '-FailCheck is internal; run tools/encoding-check.ps1 without it'
+    exit 1
 }
 
 if ($PerfSampleChild) {
@@ -356,13 +377,28 @@ if ($Cp932Child) {
     $bad = [System.Collections.Generic.List[string]]::new()
     $same = { param([string]$a, [string]$b) [string]::Equals($a, $b, [StringComparison]::Ordinal) }
 
-    try {
-        Set-OwnConsoleCp932
-        $cp = [Console]::OutputEncoding.CodePage
-        if ($cp -eq 932) { 'PASS cp932 child: own console code page 932' }
-        else { $bad.Add("FAIL cp932 child: own console code page is $cp, not 932") }
+    # One child check by name: a throw becomes 'FAIL cp932 child: <name>: uncaught: <reason>' and the
+    # next check still runs. With -FailCheck <name> it throws before the body (calibration
+    # cp932 child injected failure). Dot-source the call when the body must define names in the
+    # caller's scope (perf load).
+    function Invoke-ChildCheck {
+        param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][scriptblock]$Body)
+        try {
+            if ($FailCheck -ceq $Name) { throw "injected failure for the calibration: $Name `u{7248}" }
+            . $Body
+        }
+        catch { $bad.Add("FAIL cp932 child: ${Name}: uncaught: $(Show-Ascii $_.Exception.Message)") }
     }
-    catch { $bad.Add("FAIL cp932 child: cannot set own console to 932: $(Show-Ascii $_.Exception.Message)") }
+
+    Invoke-ChildCheck 'own console' {
+        try {
+            Set-OwnConsoleCp932
+            $cp = [Console]::OutputEncoding.CodePage
+            if ($cp -eq 932) { 'PASS cp932 child: own console code page 932' }
+            else { $bad.Add("FAIL cp932 child: own console code page is $cp, not 932") }
+        }
+        catch { $bad.Add("FAIL cp932 child: cannot set own console to 932: $(Show-Ascii $_.Exception.Message)") }
+    }
 
     # The sample is written as raw UTF-8 bytes by a child pwsh. U+7248 ends with 0x88, a lead byte
     # in 932, so a 932 decoder swallows the following double quote.
@@ -372,56 +408,77 @@ if ($Cp932Child) {
     $emit = "[Console]::OpenStandardOutput().Write([Convert]::FromBase64String('$b64'))"
 
     # calibration: the plain call must break the sample on this console
-    $raw = @(& $pwsh -NoProfile -NonInteractive -Command $emit 2>&1) -join "`n"
-    if ($LASTEXITCODE) { $bad.Add("FAIL cp932 child: calibration: sample writer exited with code $LASTEXITCODE") }
-    else {
-        $readOk = $false
-        try { $readOk = & $same ($raw | ConvertFrom-Json).description $desc } catch { }
-        if ($readOk) { $bad.Add('FAIL cp932 child: calibration: the plain call read the sample intact; cannot detect a regression on this console') }
-        else { "PASS cp932 child: calibration (the plain call breaks the sample: $(Show-Ascii $raw))" }
+    Invoke-ChildCheck 'calibration' {
+        $items = @(& $pwsh -NoProfile -NonInteractive -Command $emit 2>&1)
+        $raw = $items -join "`n"
+        if ($LASTEXITCODE) {
+            $errs = $items | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }
+            $bad.Add("FAIL cp932 child: calibration: sample writer exited with code $LASTEXITCODE$(Format-LastErr $errs)")
+        }
+        else {
+            $readOk = $false
+            try { $readOk = & $same ($raw | ConvertFrom-Json).description $desc } catch { }
+            if ($readOk) { $bad.Add('FAIL cp932 child: calibration: the plain call read the sample intact; cannot detect a regression on this console') }
+            else { "PASS cp932 child: calibration (the plain call breaks the sample: $(Show-Ascii $raw))" }
+        }
     }
 
     # production: Invoke-Utf8Child must read the sample exactly
-    try {
-        $r = Invoke-Utf8Child $pwsh @('-NoProfile', '-NonInteractive', '-Command', $emit)
-        if ($r.Code) { throw "sample writer exited with code $($r.Code)" }
-        $exact = $false
-        try { $j = $r.Out | ConvertFrom-Json; $exact = (& $same $j.description $desc) -and (& $same $j.version '0.0.1') } catch { }
-        if ($exact) { 'PASS cp932 child: production (Invoke-Utf8Child reads the sample exactly)' }
-        else { $bad.Add("FAIL cp932 child: production: Invoke-Utf8Child read the sample as $(Show-Ascii $r.Out 0)") }
+    Invoke-ChildCheck 'production' {
+        try {
+            $r = Invoke-Utf8Child $pwsh @('-NoProfile', '-NonInteractive', '-Command', $emit)
+            if ($r.Code) { throw "sample writer exited with code $($r.Code)$(Format-LastErr $r.ErrLines)" }
+            $exact = $false
+            try { $j = $r.Out | ConvertFrom-Json; $exact = (& $same $j.description $desc) -and (& $same $j.version '0.0.1') } catch { }
+            if ($exact) { 'PASS cp932 child: production (Invoke-Utf8Child reads the sample exactly)' }
+            else { $bad.Add("FAIL cp932 child: production: Invoke-Utf8Child read the sample as $(Show-Ascii $r.Out 0)") }
+        }
+        catch { $bad.Add("FAIL cp932 child: production: $(Show-Ascii $_.Exception.Message)") }
     }
-    catch { $bad.Add("FAIL cp932 child: production: $(Show-Ascii $_.Exception.Message)") }
 
     # real: the version of the current workspace
-    try { "version=$(Read-ArekaVersion)" }
-    catch { $bad.Add("FAIL cp932 child: real: $(Show-Ascii $_.Exception.Message)") }
+    Invoke-ChildCheck 'real' {
+        try { "version=$(Get-ArekaVersion)" }
+        catch { $bad.Add("FAIL cp932 child: real: $(Show-Ascii $_.Exception.Message)") }
+    }
 
     # perf: the real Invoke-PwshChild of tools/perf on this 932 console. The grandchild is this
     # script with -PerfSampleChild. perf-loop.common.ps1 sets StrictMode 3.0, so it is loaded only
-    # inside this scope, after the 3 checks above.
+    # inside this scope, after the 3 checks above; if loading fails the 3 perf checks are skipped.
     & {
-        . (Join-Path $root 'tools/perf/perf-loop.common.ps1')
+        $perfLoaded = $false
+        . Invoke-ChildCheck 'perf load' {
+            . (Join-Path $root 'tools/perf/perf-loop.common.ps1')
+            $perfLoaded = $true
+        }
+        if (-not $perfLoaded) { return }
         $s = "`u{7248}`u{2460}`u{1F600}"
         $want = @("out1=$s", "out2=$s", "err1=$s") -join "`n"
 
         # perf calibration: the plain -File call (no prefix) must break the sample
-        $r = Invoke-Child -Exe $pwsh -Arguments @('-NoProfile', '-NonInteractive', '-File', $PSCommandPath, '-PerfSampleChild') -Quiet
-        $got = (@($r.Out) + @($r.Err)) -join "`n"
-        if ($r.Code) { $bad.Add("FAIL cp932 child: perf calibration: sample writer exited with code $($r.Code)") }
-        elseif (& $same $got $want) { $bad.Add('FAIL cp932 child: perf calibration: the plain call read the sample intact; cannot detect a regression on this console') }
-        else { "PASS cp932 child: perf calibration (the plain call breaks the sample: $(Show-Ascii $got 0))" }
+        Invoke-ChildCheck 'perf calibration' {
+            $r = Invoke-Child -Exe $pwsh -Arguments @('-NoProfile', '-NonInteractive', '-File', $PSCommandPath, '-PerfSampleChild') -Quiet
+            $got = (@($r.Out) + @($r.Err)) -join "`n"
+            if ($r.Code) { $bad.Add("FAIL cp932 child: perf calibration: sample writer exited with code $($r.Code)$(Format-LastErr $r.Err)") }
+            elseif (& $same $got $want) { $bad.Add('FAIL cp932 child: perf calibration: the plain call read the sample intact; cannot detect a regression on this console') }
+            else { "PASS cp932 child: perf calibration (the plain call breaks the sample: $(Show-Ascii $got 0))" }
+        }
 
         # perf real: Invoke-PwshChild must deliver the 3 lines exactly
-        $r = Invoke-PwshChild -ScriptPath $PSCommandPath -Arguments @('-PerfSampleChild') -Quiet
-        $got = (@($r.Out) + @($r.Err)) -join "`n"
-        $exact = $r.Code -eq 0 -and @($r.Out).Count -eq 2 -and @($r.Err).Count -eq 1 -and (& $same $got $want)
-        if ($exact) { 'PASS cp932 child: perf real (Invoke-PwshChild delivers the 3 sample lines exactly)' }
-        else { $bad.Add("FAIL cp932 child: perf real: code $($r.Code), Invoke-PwshChild read $(Show-Ascii $got 0)") }
+        Invoke-ChildCheck 'perf real' {
+            $r = Invoke-PwshChild -ScriptPath $PSCommandPath -Arguments @('-PerfSampleChild') -Quiet
+            $got = (@($r.Out) + @($r.Err)) -join "`n"
+            $exact = $r.Code -eq 0 -and @($r.Out).Count -eq 2 -and @($r.Err).Count -eq 1 -and (& $same $got $want)
+            if ($exact) { 'PASS cp932 child: perf real (Invoke-PwshChild delivers the 3 sample lines exactly)' }
+            else { $bad.Add("FAIL cp932 child: perf real: code $($r.Code), Invoke-PwshChild read $(Show-Ascii $got 0)$(if ($r.Code) { Format-LastErr $r.Err })") }
+        }
 
         # perf console: the child must leave this console at 932 (a rewrite prefix would change it)
-        $cps = Get-ConsoleCodePages
-        if ($cps[0] -eq 932 -and $cps[1] -eq 932) { 'PASS cp932 child: perf console still 932 after Invoke-PwshChild' }
-        else { $bad.Add("FAIL cp932 child: perf console changed by Invoke-PwshChild: output $($cps[0]), input $($cps[1])") }
+        Invoke-ChildCheck 'perf console' {
+            $cps = Get-ConsoleCodePages
+            if ($cps[0] -eq 932 -and $cps[1] -eq 932) { 'PASS cp932 child: perf console still 932 after Invoke-PwshChild' }
+            else { $bad.Add("FAIL cp932 child: perf console changed by Invoke-PwshChild: output $($cps[0]), input $($cps[1])") }
+        }
     }
 
     $bad
@@ -484,7 +541,16 @@ foreach ($s in $calib) {
         $fails.Add("FAIL calibration ${exp}: $($s.Name) (got: $(if ($rules.Count) { $rules -join ',' } else { 'none' }))")
     }
 }
-if ($fails.Count -eq 0) { "PASS calibration ($($calib.Count) samples)" }
+$stepCalib = @(
+    @{ Name = 'Step without the reset'; Text = 'function Step([string]$Name, [scriptblock]$Command) { & $Command; $results[$Name] = [pscustomobject]@{ Code = $LASTEXITCODE } }'; Bad = $true }
+    @{ Name = 'no function Step'; Text = 'function Other { }'; Bad = $true }
+    @{ Name = 'Step with the reset'; Text = 'function Step([string]$Name, [scriptblock]$Command) { $global:LASTEXITCODE = -1; & $Command; $results[$Name] = [pscustomobject]@{ Code = $LASTEXITCODE } }'; Bad = $false }
+)
+foreach ($s in $stepCalib) {
+    $got = Get-StepRecordFinding $s.Text
+    if ($s.Bad -ne ($null -ne $got)) { $fails.Add("FAIL calibration $(if ($s.Bad) { 'F' } else { 'pass' }): $($s.Name) (got: $(if ($null -ne $got) { 'F' } else { 'none' }))") }
+}
+if ($fails.Count -eq 0) { "PASS calibration ($($calib.Count + $stepCalib.Count) samples)" }
 
 # ---- 2. static rules over the real files ----
 $targets = @(Get-ChildItem -LiteralPath (Join-Path $root 'tools') -Filter '*.ps1' -File) +
@@ -506,6 +572,9 @@ foreach ($where in $RequiredCalls.Keys) {
         else { $fails.Add("FAIL ${where}: E no Invoke-Utf8Child call with $w") }
     }
 }
+$stepWhy = Get-StepRecordFinding (Get-Content -LiteralPath (Join-Path $root 'tools/test-all.ps1') -Raw -Encoding utf8)
+if ($null -eq $stepWhy) { 'PASS tools/test-all.ps1: F Step records a step whose command is not found as red' }
+else { $fails.Add("FAIL tools/test-all.ps1: F $stepWhy") }
 
 # ---- 3. cp932 child ----
 $child = $null
@@ -517,17 +586,34 @@ if ($null -ne $child) {
     $childLines | Where-Object { -not $_.StartsWith('FAIL ') }
     foreach ($e in $child.ErrLines) { "cp932 child stderr: $(Show-Ascii $e 0)" }
     foreach ($f in $childFails) { $fails.Add($f) }
-    if ($child.Code -and $childFails.Count -eq 0) { $fails.Add("FAIL cp932 child: exit code $($child.Code)") }
+    if ($child.Code -and $childFails.Count -eq 0) { $fails.Add("FAIL cp932 child: exit code $($child.Code)$(Format-LastErr $child.ErrLines)") }
     $childVersion = @($childLines | Where-Object { $_.StartsWith('version=') })
     if ($childVersion.Count -eq 1) {
         try {
-            $mine = 'version=' + (Read-ArekaVersion)
+            $mine = 'version=' + (Get-ArekaVersion)
             if ([string]::Equals($childVersion[0], $mine, [StringComparison]::Ordinal)) { "PASS cp932 child: $mine is the version this process read" }
             else { $fails.Add("FAIL cp932 child: child printed $($childVersion[0]) but this process read $mine") }
         }
         catch { $fails.Add("FAIL cp932 child: this process cannot read the version: $(Show-Ascii $_.Exception.Message)") }
     }
     elseif ($childFails.Count -eq 0) { $fails.Add("FAIL cp932 child: expected one version= line, got $($childVersion.Count)") }
+}
+
+# calibration: a child whose 'perf load' check throws must name it in a FAIL line (with the
+# non-ASCII reason as \u7248), keep the earlier checks' lines and exit non-zero.
+$inj = $null
+try { $inj = Invoke-Utf8Child $pwsh @('-NoProfile', '-NonInteractive', '-File', $PSCommandPath, '-Cp932Child', '-FailCheck', 'perf load') -OwnConsole }
+catch { $fails.Add("FAIL cp932 child injected failure: cannot start: $(Show-Ascii $_.Exception.Message)") }
+if ($null -ne $inj) {
+    $injLines = @($inj.Out -split '\r?\n')
+    $missing = @(
+        if (-not $inj.Code) { 'non-zero exit code' }
+        if (-not @($injLines | Where-Object { $_.StartsWith('FAIL cp932 child: perf load: uncaught: ') -and $_.Contains('\u7248') }).Count) { 'FAIL cp932 child: perf load: uncaught: line with \u7248' }
+        if (-not @($injLines | Where-Object { $_.StartsWith('PASS cp932 child: production') }).Count) { 'PASS cp932 child: production line' }
+        if (-not @($injLines | Where-Object { $_.StartsWith('version=') }).Count) { 'version= line' }
+    )
+    if ($missing.Count) { $fails.Add("FAIL cp932 child injected failure: $($missing -join ', ')$(Format-LastErr $inj.ErrLines)") }
+    else { "PASS cp932 child injected failure (exit code $($inj.Code), perf load named, earlier checks kept)" }
 }
 $cpAfter = Get-ConsoleCodePages
 if (($cpBefore -join ',') -ceq ($cpAfter -join ',')) { "PASS own console code pages unchanged (output $($cpAfter[0]), input $($cpAfter[1]))" }

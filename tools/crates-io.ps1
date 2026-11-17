@@ -58,8 +58,8 @@ param([switch]$Verify, [string]$Version, [switch]$Pending)
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
-# 子の出力を端末の文字コードに依らず UTF-8 で読む関数 Invoke-Utf8Child
-. (Join-Path $PSScriptRoot 'utf8-child.ps1')
+# 子の出力を UTF-8 で読む Invoke-Utf8Child と link.exe の手当て Get-MsvcLinkPath（共通の下回り）
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
 # =============================================================================
@@ -76,8 +76,11 @@ function Say([string]$Text, [ConsoleColor]$Color) {
     if ($Pending) { [Console]::Error.WriteLine($Text) } else { Write-Host $Text -ForegroundColor $Color }
 }
 
+# 失敗の行の組み立ては 1 か所。子の出力や例外の文に ASCII 外が混じっても \uXXXX に替える
+function Format-FailLine([string]$Message) { Show-Ascii "FAIL $Message" 0 }
+
 function Fail([string]$Message) {
-    Say "FAIL $Message" Red
+    Say (Format-FailLine $Message) Red
     exit 1
 }
 
@@ -239,6 +242,15 @@ Calibrate 'workflow shape' 'on: as a one-line list' (Test-Workflow 'w.yml' ($flo
 Calibrate 'workflow shape' 'no on:' (Test-Workflow 'w.yml' ($flow -replace '(?m)^on:', 'xon:')) $false 'w.yml', 'on:'
 Calibrate 'workflow shape' 'contains secrets.' (Test-Workflow 'w.yml' ($flow -replace 'github\.token', 'secrets.GITHUB_TOKEN')) $false 'w.yml', 'secrets.'
 
+# 失敗の行は ASCII だけ（U+65E5 は \u65E5 になる）
+$line = Format-FailLine "x $([char]0x65E5)"
+if ($line -cnotmatch '^[\x20-\x7E]*$' -or -not $line.Contains('\u65E5')) { Fail "calibration 'fail line is ascii': got '$line'" }
+# 索引を読む Invoke-WebRequest は全部 -TimeoutSec を持つ（無いと索引が応えないとき永久に待つ）
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($PSCommandPath, [ref]$null, [ref]$null)
+$web = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Invoke-WebRequest' }, $true))
+$bare = @($web | Where-Object { -not ($_.CommandElements | Where-Object { $_ -is [System.Management.Automation.Language.CommandParameterAst] -and $_.ParameterName -eq 'TimeoutSec' }) })
+if (-not $web -or $bare) { Fail "calibration 'index read has a timeout': $($web.Count) call(s), $($bare.Count) without -TimeoutSec" }
+
 # =============================================================================
 # 2〜6. 実物の判定
 # =============================================================================
@@ -274,7 +286,7 @@ if ($Pending) {
         $low = $name.ToLowerInvariant()
         if ($low.Length -lt 4) { Fail "pending: $name is shorter than 4 characters; its index path rule is not implemented" }
         $url = "$INDEX_URL$($low.Substring(0, 2))/$($low.Substring(2, 2))/$low"
-        try { $res = Invoke-WebRequest -Uri $url -SkipHttpErrorCheck }
+        try { $res = Invoke-WebRequest -Uri $url -SkipHttpErrorCheck -TimeoutSec 60 }
         catch { Fail "pending: cannot read the index of $name ($($_.Exception.Message))" }
         $err = Test-Index $name ([int]$res.StatusCode)
         if ($err) { Fail "pending: $err" }
@@ -301,10 +313,8 @@ $crateDir = "$WORK_DIR/package/tmp-crate"
 Remove-Item -Path "$crateDir/*.crate", "$WORK_DIR/package/*.crate" -Force -ErrorAction Ignore
 $pArgs = $PUBLISH | ForEach-Object { '-p', $_ }
 if ($Verify) {
-    # test-all.ps1 と同じ手当て: MSVC 以外の link.exe（Git Bash の coreutils）を PATH から外す
-    $env:PATH = ($env:PATH -split ';' | Where-Object {
-            -not $_ -or -not (Test-Path (Join-Path $_ 'link.exe')) -or (Test-Path (Join-Path $_ 'cl.exe'))
-        }) -join ';'
+    # MSVC 以外の link.exe（Git Bash の coreutils）を PATH から外す
+    $env:PATH = Get-MsvcLinkPath $env:PATH
     $step = 'cargo publish --dry-run'
     cargo publish --dry-run --allow-dirty --locked --target-dir $WORK_DIR @pArgs
 } else {

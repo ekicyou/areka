@@ -1,0 +1,9 @@
+[package]
+name = "q6-com"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+bind-next = { path = "../bind-next" }
+windows-core = { workspace = true }

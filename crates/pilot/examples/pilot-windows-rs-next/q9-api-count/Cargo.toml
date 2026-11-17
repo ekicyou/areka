@@ -1,0 +1,9 @@
+[package]
+name = "q9-api-count"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+scip = { workspace = true }
+protobuf = { workspace = true }

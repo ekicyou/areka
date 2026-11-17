@@ -528,6 +528,7 @@ fn apply_author_balloon_offset_scale(
         warn_if_saturated(scope, "x", raw.0, x);
         warn_if_saturated(scope, "y", raw.1, y);
         sc.balloon_offset = Some((x.value, y.value));
+        sc.balloon_offset_descript_x = x.value;
     }
 }
 

@@ -705,6 +705,22 @@ $SelfTestChecks = @(
         Assert-SelfTest ($p.Exe -like '*\WindowsApps\python.exe') "without py: $(ConvertTo-SelfTestAscii "$($p.Exe)") (want the WindowsApps python as the last choice)"
     } }
 
+    [pscustomobject]@{ Name = 'python-verdict'; Body = {
+        # python の版の判断（純関数）: 見つからない・読めない・足りない・ちょうど・十分の 5 通り
+        $min = [Version]'3.11'
+        $cases = @(
+            @{ F = $false; V = $null;      Ok = $false; Note = 'python not found' }
+            @{ F = $true;  V = $null;      Ok = $false; Note = 'cannot read the python version' }
+            @{ F = $true;  V = '3.10.4';   Ok = $false; Note = 'python 3.10.4 (need 3.11 or later)' }
+            @{ F = $true;  V = '3.11.0';   Ok = $true;  Note = 'python 3.11.0 (need 3.11 or later)' }
+            @{ F = $true;  V = '3.13.17';  Ok = $true;  Note = 'python 3.13.17 (need 3.11 or later)' }
+        )
+        foreach ($c in $cases) {
+            $r = Get-PythonVerdict -Found $c.F -VersionText $c.V -Min $min
+            Assert-SelfTest ($r.Ok -eq $c.Ok -and $r.Note -ceq $c.Note) "verdict found=$($c.F) '$($c.V)': ok=$($r.Ok) note='$(ConvertTo-SelfTestAscii $r.Note)' (want ok=$($c.Ok) '$($c.Note)')"
+        }
+    } }
+
     [pscustomobject]@{ Name = 'ab-resume'; Body = {
         # measure-ab -Resume: 済んだ走行は使い、済んでいない走行は脇へ退けて採り直す（済んだ走行のために 3 で止めない）
         function Write-Problem { param([string]$Message) }

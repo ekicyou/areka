@@ -51,26 +51,15 @@ jobs:
         id: version
         run: |
           # 入力は環境変数だけ（GITHUB_REF_TYPE・GITHUB_REF_NAME）。手元でも差し替えて同じ本文を回せる
-          # 版は tools/utf8-child.ps1 の Invoke-Utf8Child で読む（tools/package.ps1 と同じ・areka パッケージの version）
+          # 版は tools/tool-common.ps1 の Get-ArekaVersion で読む（tools/package.ps1 などと同じ・areka パッケージの version）
           # 段は作業ツリーの根で回る（取り出しの後）ので ./tools から読み込める
-          . ./tools/utf8-child.ps1
-          $r = Invoke-Utf8Child cargo @('metadata', '--no-deps', '--locked', '--format-version', '1')
-          if ($r.Code) {
-            Write-Host ('cannot read the version (cargo metadata exited with code {0}: {1})' -f $r.Code, ($r.ErrLines | Select-Object -Last 1))
-            exit 1
-          }
+          . ./tools/tool-common.ps1
           try {
-            $meta = $r.Out | ConvertFrom-Json
+            $version = Get-ArekaVersion
           } catch {
-            Write-Host "cannot read the version (cargo metadata output is not valid JSON: $_)"
+            Write-Host "cannot read the version ($($_.Exception.Message))"
             exit 1
           }
-          $pkg = @($meta.packages | Where-Object { $_.name -ceq 'areka' })
-          if ($pkg.Count -ne 1) {
-            Write-Host "cannot read the version (cargo metadata has $($pkg.Count) areka package(s))"
-            exit 1
-          }
-          $version = "$($pkg[0].version)"
           if ($env:GITHUB_REF_TYPE -ceq 'tag') {
             $tagVersion = $env:GITHUB_REF_NAME
             if ($tagVersion.StartsWith('v', [StringComparison]::Ordinal)) { $tagVersion = $tagVersion.Substring(1) }

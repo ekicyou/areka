@@ -1,20 +1,28 @@
 //! visual 層の配線の係。
 
+use std::collections::HashSet;
+
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
-use tracing::{error, trace, warn};
+use tracing::{error, trace};
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
+use windows::Win32::Graphics::Direct2D::ID2D1Geometry;
 
-use super::draw::builder::{NodeData, build};
-use super::world_visual::{FillData, ReportedIssues, fill_world_visuals};
+use super::draw::builder::{NodeData, TreeFrame, build};
+use super::promotion::Phase;
+use super::promotion_round::{PromotionData, RoundContext, demote_unseen, run_round};
+use super::world_visual::{FillData, ReportedIssues, TreeScan, fill_world_visuals};
 use super::{
-    DrawTree, OwnSurface, Visual, VisualDrawContent, VisualTransform, WorldVisual,
-    has_window_ancestor, insert_graphics_parts, wants_own_surface,
+    AutoPromotion, DrawCommand, DrawTree, OwnSurface, SurfacePlacement, Visual, VisualDrawContent,
+    VisualTransform, WorldVisual, has_window_ancestor, insert_graphics_parts, wants_own_surface,
 };
 use crate::ecs::graphics::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
-use crate::ecs::graphics::systems::format_entity_name;
-use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore};
-use crate::ecs::layout::Arrangement;
+use crate::ecs::graphics::systems::{
+    calculate_surface_size_from_global_arrangement, format_entity_name,
+};
+use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
+use crate::ecs::graphics::{FrameTime, GraphicsCommandList, GraphicsCore};
+use crate::ecs::layout::{Arrangement, GlobalArrangement};
 use crate::numerics::Aabb;
 
 /// 持ち主か節かを決める部品の有無。
@@ -27,7 +35,10 @@ type RuleData = (
 
 /// 窓の下の `Visual` に、規則 [`wants_own_surface`] の答えどおり描画面の 3 部品を入れる・外す
 /// （外すときは根の部品 `DrawTree` も一緒に外す・`DrawTree` は根にだけ在る）。
-/// 見る変化は親の変化（子孫も・上限つき）・節の部品（`WorldVisual`）の追加・目印と命令の列の出入り。
+/// 見る変化は親の変化（子孫も・上限つき）・節の部品（`WorldVisual`）の追加・目印と命令の列の出入り・
+/// 上げ下げの相の変化（`AutoPromotion` は相が変わった回だけ変化の印が立つ）。
+/// 目印か命令の列が入った節は上げ下げの状態を初期化し、用意中か上げた形で持っていた `DrawTree` を
+/// 外す（手動の持ち主の根として組み直させる・要件 2.2）。
 /// `WorldVisual` は装置の失いでも外れないので、失いの回に節が持ち主へ化けることはない。
 /// `PreRenderSurface` の先頭で回し、入れた `VisualGraphics` は同じ回に作られる。
 pub fn sync_surface_owner_parts(
@@ -43,6 +54,18 @@ pub fn sync_surface_owner_parts(
             )>,
         ),
     >,
+    manual: Query<
+        Entity,
+        (
+            With<Visual>,
+            Or<(Added<OwnSurface>, Added<GraphicsCommandList>)>,
+        ),
+    >,
+    // 相の変化の拾い（0）と状態の初期化・相の読み（1）は同じ部品を読み書きするので分ける。
+    mut promotions: ParamSet<(
+        Query<Entity, (With<Visual>, Changed<AutoPromotion>)>,
+        Query<&mut AutoPromotion>,
+    )>,
     mut removed_own: RemovedComponents<OwnSurface>,
     mut removed_list: RemovedComponents<GraphicsCommandList>,
     reparented: Query<Entity, Changed<ChildOf>>,
@@ -64,6 +87,23 @@ pub fn sync_surface_owner_parts(
     >,
 ) {
     let mut targets: Vec<Entity> = added.iter().collect();
+    targets.extend(promotions.p0().iter());
+    let mut states = promotions.p1();
+    for e in manual.iter() {
+        let Ok(mut a) = states.get_mut(e) else {
+            continue;
+        };
+        if a.rule.phase() == Phase::Node {
+            // 相は変わらない: 履歴だけ消し、変化の印を立てない。
+            a.bypass_change_detection().rule.reset();
+        } else {
+            a.rule.reset();
+            commands.entity(e).remove::<DrawTree>();
+        }
+        let a = a.bypass_change_detection();
+        a.skip_memo = None;
+        a.built = false;
+    }
     targets.extend(removed_own.read());
     targets.extend(removed_list.read());
     // 親の変化で要るのは入れることだけ。ふだんは待つものが無いので子孫を歩かない。
@@ -89,7 +129,11 @@ pub fn sync_surface_owner_parts(
         let Ok((has_list, has_own, is_node, has_parts)) = visuals.get(e) else {
             continue; // 消えた実体・Visual でない実体
         };
-        if wants_own_surface(has_list, has_own, is_node) {
+        let auto_owner = promotions
+            .p1()
+            .get(e)
+            .is_ok_and(|a| a.rule.phase() != Phase::Node);
+        if wants_own_surface(has_list, has_own, is_node, auto_owner) {
             let joined = has_window_ancestor(
                 e,
                 |w| windows.contains(w),
@@ -146,47 +190,71 @@ impl TreeEdits<'_, '_> {
     }
 }
 
-/// 描画面の持ち主（根）ごとに節の `WorldVisual`・`VisualVersion` を埋め、組み直す回だけ
-/// 平らな列を作って根の部品 [`DrawTree`] へ書く・入れる。直下に節が無く自分の `VisualDrawContent` も
-/// 無い根からは外す。根の自分の中身は列の先頭の 1 件になり、変わった回に根の版を上げて組み直す。
-/// 持ち主の `VisualTransform` は WUC では効かないので、入った・変わった回に `warn!` を 1 行残して無視する。
+/// 根として回す手動の描画面の持ち主の部品（自動で上げた持ち主の部分の列もここから書く）。
+type RootData = (
+    Entity,
+    Ref<'static, Arrangement>,
+    Option<Ref<'static, Children>>,
+    Option<&'static mut DrawTree>,
+    Option<&'static Name>,
+    Option<Ref<'static, VisualDrawContent>>,
+    Option<&'static GlobalArrangement>,
+);
+
+/// 節の種類（自動で上げた持ち主も含む・手動の持ち主を除く）。
+type NodeKind = (
+    With<WorldVisual>,
+    Without<OwnSurface>,
+    Without<GraphicsCommandList>,
+);
+
+/// 手動の描画面の持ち主（根）ごとに、節の `WorldVisual`・`VisualVersion` と走査の列を埋め、1 回の判断
+/// （`run_round`・時刻 `FrameTime` が無い回は相を進めない）で描く列を分け、組み直す回だけ親の列を
+/// 根の部品 [`DrawTree`] へ書く・入れる。直下に節が無く自分の `VisualDrawContent` も無い根からは外す。
+/// 根の自分の中身は列の先頭の 1 件になり、変わった回に根の版を上げて組み直す。
 ///
-/// 装置が無効な回も埋めることはする（版の上がりと行列を捨てない・装置は要らない）が、組まない
+/// 自動で上げた持ち主（節の種類）は根として回さず、親の根の回で部分の列を組む（根を組み直す回と、
+/// まだ `DrawTree` を持たない回）。組んだ部分の列は全部の根を回した後にまとめて書き（根の問い合わせを
+/// 回している間は別の実体を可変で借りられない）、用意中の部分を書いた回に描いた印を立てる。
+/// 全部の根を回した後、前の回に控えた自動の持ち主のうちどの走査の列にも現れなかった実体を見えないとして
+/// 戻し（全部の節を歩かない）、どの根の回でも書かなかった置き場を外す。
+///
+/// 装置が無効な回も埋めることと判断はする（版の上がりと行列を捨てない・装置は要らない）が、組まない
 /// （図形は工場から作る）。立ち直りの回は `Res<GraphicsCore>` の変化で全部の根を組み直す。
-/// 節の書き込み（`FillData`）と読み取り（`NodeData`）は同じ部品を取るので `ParamSet` で分ける（B0001）。
+/// 節の書き込み（`FillData`）・読み取り（`NodeData`）・判断（`PromotionData`）は同じ部品を取るので
+/// `ParamSet` で分ける（B0001）。
 /// `PreRenderSurface` の見た目の管理の後・描画面の作成の前に回す（入れた根の部品は同じ回に拾われる）。
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn update_draw_trees(
     mut commands: Commands,
     graphics: Option<Res<GraphicsCore>>,
-    mut roots: Query<(
-        Entity,
-        Ref<Arrangement>,
-        Option<Ref<Children>>,
-        Option<&mut DrawTree>,
-        Option<&Name>,
-        Option<Ref<VisualDrawContent>>,
-        Option<Ref<VisualTransform>>,
-        Ref<VisualGraphics>,
-    )>,
-    node_kinds: Query<(), (With<WorldVisual>, Without<VisualGraphics>)>,
-    mut set: ParamSet<(Query<FillData>, Query<NodeData>)>,
+    wuc: Option<Res<WucGraphicsResource>>,
+    frame_time: Option<Res<FrameTime>>,
+    mut roots: Query<RootData, With<VisualGraphics>>,
+    node_kinds: Query<(), NodeKind>,
+    with_tree: Query<(), With<DrawTree>>,
+    placed: Query<Entity, With<SurfacePlacement>>,
+    mut set: ParamSet<(Query<FillData>, Query<NodeData>, Query<PromotionData>)>,
     mut edits: TreeEdits,
-    mut visited: Local<Vec<(Entity, usize)>>,
+    mut scan: Local<TreeScan>,
     mut reported: Local<ReportedIssues>,
+    mut autos: Local<HashSet<Entity>>,
 ) {
     let removed_any = edits.any();
     let factory = graphics.as_ref().and_then(|g| g.d2d_factory());
     let core_changed = graphics.as_ref().is_some_and(|g| g.is_changed());
-    for (root, arrangement, kids, tree, name, own, transform, graphics_parts) in roots.iter_mut() {
-        if transform.is_some_and(|t| t.is_changed() || graphics_parts.is_added()) {
-            warn!(
-                entity = %format_entity_name(root, name),
-                "[update_draw_trees] 描画面の持ち主の VisualTransform は WUC では効かないので無視する"
-            );
+    let device_ready = graphics.as_ref().is_some_and(|g| g.is_valid())
+        && wuc.as_ref().is_some_and(|w| w.is_valid());
+    let now = frame_time.map(|t| t.0);
+    let mut written = HashSet::new();
+    let mut seen = HashSet::new();
+    let mut segment_trees: Vec<(Entity, Vec<DrawCommand>, ID2D1Geometry)> = Vec::new();
+    for (root, arrangement, kids, tree, name, own, global) in roots.iter_mut() {
+        if node_kinds.contains(root) {
+            continue; // 自動で上げた持ち主は親の根の回が組む
         }
         let own_changed = own.as_ref().is_some_and(|c| c.is_changed());
-        if own_changed && let Ok((.., Some(mut version), _, _, _)) = set.p0().get_mut(root) {
+        if own_changed && let Ok((.., Some(mut version), _, _)) = set.p0().get_mut(root) {
             version.bump();
         }
         let top: &[Entity] = kids.as_deref().map_or(&[], |k| &**k);
@@ -207,11 +275,39 @@ pub fn update_draw_trees(
             arrangement.is_changed(),
             top,
             kids.as_ref().is_some_and(|k| k.is_changed()),
-            &mut visited,
+            &mut scan,
             &mut reported,
         ) || own_changed;
+        let ctx = RoundContext {
+            now,
+            device_ready,
+            scale: global.map_or(1.0, |g| g.scale_x()),
+            host_px: global
+                .and_then(calculate_surface_size_from_global_arrangement)
+                .unwrap_or((0, 0)),
+        };
+        let plan = run_round(
+            &ctx,
+            &scan,
+            &mut set.p2(),
+            &mut commands,
+            &mut written,
+            &mut reported,
+        );
+        seen.extend(plan.autos.iter().copied());
         let Some(factory) = factory else { continue };
-        if !needs_rebuild(changed, removed_any, core_changed, tree.is_some()) {
+        let rebuild = needs_rebuild(
+            changed || plan.moved,
+            removed_any,
+            core_changed,
+            tree.is_some(),
+        );
+        let mut segments = plan
+            .segments
+            .iter()
+            .filter(|seg| rebuild || !with_tree.contains(seg.owner))
+            .peekable();
+        if !rebuild && segments.peek().is_none() {
             continue;
         }
         let unit_rect = match tree.as_ref().and_then(|t| t.unit_rect.clone()) {
@@ -236,6 +332,30 @@ pub fn update_draw_trees(
                 }
             },
         };
+        for seg in segments {
+            let (w, h) = seg.origin.size_px;
+            let nodes = set.p1();
+            let owner_name = nodes.get(seg.owner).ok().and_then(|d| d.5);
+            let mut out = Vec::new();
+            build(
+                &mut out,
+                factory,
+                &unit_rect,
+                Aabb::new(0.0, 0.0, w as f32, h as f32),
+                &nodes,
+                &TreeFrame::Segment {
+                    owner: seg.owner,
+                    owner_name,
+                    origin_px: seg.origin.px,
+                    scale: ctx.scale,
+                },
+                &seg.visited,
+            );
+            segment_trees.push((seg.owner, out, unit_rect.clone()));
+        }
+        if !rebuild {
+            continue;
+        }
         let viewport = Aabb::new(0.0, 0.0, arrangement.size.width, arrangement.size.height);
         let mut out = Vec::new();
         build(
@@ -244,28 +364,65 @@ pub fn update_draw_trees(
             &unit_rect,
             viewport,
             &set.p1(),
-            root,
-            name,
-            &visited,
+            &TreeFrame::Root {
+                root,
+                root_name: name,
+            },
+            &plan.host_visited,
         );
         trace!(
             root = %format_entity_name(root, name),
-            nodes = visited.len(),
+            nodes = plan.host_visited.len(),
             commands = out.len(),
             "[update_draw_trees] 木を組み直した"
         );
-        match tree {
-            Some(mut tree) => {
-                tree.commands = out;
-                tree.unit_rect = Some(unit_rect);
-            }
-            None => {
-                commands.entity(root).insert(DrawTree {
-                    commands: out,
-                    unit_rect: Some(unit_rect),
-                });
-            }
+        write_tree(&mut commands, root, tree, out, unit_rect, false);
+    }
+    for (owner, out, unit_rect) in segment_trees {
+        let Ok((.., tree, _, _, _)) = roots.get_mut(owner) else {
+            continue; // 3 部品が外れた
+        };
+        write_tree(&mut commands, owner, tree, out, unit_rect, true);
+        if let Ok((Some(mut auto), ..)) = set.p2().get_mut(owner)
+            && auto.rule.phase() == Phase::Preparing
+        {
+            auto.bypass_change_detection().built = true;
         }
     }
+    if let Some(now) = now {
+        demote_unseen(now, autos.difference(&seen).copied(), &mut set.p2());
+        *autos = seen;
+    } else {
+        autos.extend(seen); // 時刻が無い回は戻さず、時刻のある回まで控える
+    }
+    for e in placed.iter().filter(|e| !written.contains(e)) {
+        commands.entity(e).remove::<SurfacePlacement>();
+    }
     reported.end_round();
+}
+
+/// 組んだ列を根の部品へ書く（無ければ入れる）。`device_px` は部分の列（物理ピクセル）か。根の木は
+/// いつも偽で書くので、部分の列だった木が手動の持ち主の木になっても古い真が残らない。
+fn write_tree(
+    commands: &mut Commands,
+    e: Entity,
+    tree: Option<Mut<DrawTree>>,
+    out: Vec<DrawCommand>,
+    unit_rect: ID2D1Geometry,
+    device_px: bool,
+) {
+    match tree {
+        Some(mut tree) => {
+            tree.commands = out;
+            tree.unit_rect = Some(unit_rect);
+            tree.device_px = device_px;
+        }
+        None => {
+            commands.entity(e).insert(DrawTree {
+                commands: out,
+                unit_rect: Some(unit_rect),
+                device_px,
+            });
+        }
+    }
 }

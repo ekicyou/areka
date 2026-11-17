@@ -221,3 +221,66 @@ fn t_r8_balloon_none_at_exact_center_goes_left() {
         );
     }
 }
+
+// ------------------------------------------------------------------
+// balloon-flip-side-rules 件 2: 右に出す腕の descript の分は左向きが＋（3.1・3.2・3.5・3.6）
+// ------------------------------------------------------------------
+
+/// descript の分 `d`・合流後の総量 `total` を持つ構成（右の腕の檻用）。
+fn cfg_descript(side: BalloonSide, total_x: i32, descript_x: i32) -> ScopeConfig {
+    ScopeConfig {
+        balloon_offset_descript_x: descript_x,
+        ..scope_cfg_balloon(Some(0), side, Some((total_x, 0)))
+    }
+}
+
+/// キャラ窓の右端と、その scope のバルーン x を返す。
+fn right_edge_and_balloon_x(cfg: ScopeConfig) -> (i32, i32) {
+    let dpi = 96;
+    let out = resolve_placement(
+        &cfg_of(vec![(0, cfg)]),
+        work_area(dpi),
+        &[input(0, px(400, dpi), px(600, dpi))],
+        MEASURE_DPI,
+    );
+    (out[0].char_pos.x + out[0].char_size.w, out[0].balloon_pos.x)
+}
+
+/// 右に出す＋descript 30（合流後 30）→ 右端 − 30（直す前は + 30）。
+#[test]
+fn right_arm_descript_offset_goes_toward_the_shell() {
+    let (edge, bx) = right_edge_and_balloon_x(cfg_descript(BalloonSide::Right, 30, 30));
+    assert_eq!(bx, edge - 30);
+}
+
+/// 左に出す腕は変えない（descript 30 → キャラ左隣 + 30）。
+#[test]
+fn left_arm_descript_offset_unchanged() {
+    let dpi = 96;
+    let inp = input(0, px(400, dpi), px(600, dpi));
+    let bw = inp.balloon_size.w;
+    let out = resolve_placement(
+        &cfg_of(vec![(0, cfg_descript(BalloonSide::Left, 30, 30))]),
+        work_area(dpi),
+        &[inp],
+        MEASURE_DPI,
+    );
+    assert_eq!(out[0].balloon_pos.x, out[0].char_pos.x - bw + 30);
+}
+
+/// `Auto` で右に決まる形（キャラが作業領域の中央より左）でも右端 − 30。
+#[test]
+fn auto_resolving_right_descript_offset_goes_toward_the_shell() {
+    let dpi = 96;
+    let mut cfg = cfg_descript(BalloonSide::Auto, 30, 30);
+    cfg.default_x = Some(px(40000, dpi)); // 左端へクランプ＝中央より左
+    let (edge, bx) = right_edge_and_balloon_x(cfg);
+    assert_eq!(bx, edge - 30);
+}
+
+/// 右・descript 0・`windowposition.x` の分 −237（合流後 −237）→ 右端 − 237（今の式と同一）。
+#[test]
+fn right_arm_windowposition_part_only_keeps_current_formula() {
+    let (edge, bx) = right_edge_and_balloon_x(cfg_descript(BalloonSide::Right, -237, 0));
+    assert_eq!(bx, edge - 237);
+}

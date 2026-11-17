@@ -66,6 +66,9 @@ pub struct ScopeConfig {
     /// `balloon.offsetx`/`balloon.offsety`。軸ごとに決まり、書かれない軸は 0。どちらも無ければ
     /// None（emo2 は未使用＝None）。
     pub balloon_offset: Option<(i32, i32)>,
+    /// `balloon_offset.x` のうち descript の `balloon.offsetx` から来た分（既定 0）。
+    /// 解く時点では生値、作者の拡大率の換算の後は換算値。`windowposition.x` の分は入らない。
+    pub balloon_offset_descript_x: i32,
     /// `windowposition.limit` の解決値（正典既定 `true`＝画面内へ維持する・1.2）。
     /// 供給元はバルーン定義側の取得経路であり descript KV ではない。
     /// 未収載 scope が [`ScopeConfig::default()`] で配置される既存契約により、
@@ -84,6 +87,7 @@ impl Default for ScopeConfig {
             default_y: None,
             balloon_alignment: BalloonSide::Left,
             balloon_offset: None,
+            balloon_offset_descript_x: 0,
             // 正典既定 1（有効・1.2）。未指定・未収載・定義読み取り失敗のいずれも
             // この既定へ落ちる。
             balloon_limit: true,
@@ -286,6 +290,7 @@ fn resolve_scope(
         default_y,
         balloon_alignment,
         balloon_offset,
+        balloon_offset_descript_x: offset_x.unwrap_or(0),
         balloon_limit: canonical.balloon_limit,
         balloon_x_mode: canonical.balloon_x_mode,
     }
