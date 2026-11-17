@@ -17,7 +17,7 @@
 | 鎖の寄せ | 18.10 の表の F の列（T6・T8）・C14（`opposite`）・C16・`RestoredWindow::mark` と `keep_restored_groups` の説明 | 1 |
 | ドラッグの始めの位置 | 164（`audit-wintf-input` の申し送り件 1） | 2 |
 | 1,000 行 | `follow/drag_follow.rs` の分け方 | 3 |
-| 写し | 83・91 の残り・2 回目（`point`・`contained`・`Store`・記録の捕まえの写し・220・219・218）・358・426・431・432・491・511 | 4 |
+| 写し | 83・91 の残り・2 回目（`point`・`contained`・`Store`・記録の捕まえの写し・220・219・218）・358・426・431・432・491・511・`audit-placement-core` 19.2 の `transition_diag.rs` の作業領域の写し | 4 |
 | 記憶へ書く回数 | 7 回目（組のドラッグの終わり） | 5 |
 | アンカーの変化の書き込み | 4 回目（`PlacementRoute::AnchorChange` の振る舞い） | 6 |
 | 古い文と名前の無い番号 | 3 回目・4 回目の文・`follow.rs` の古い名前・名前の無い番号（48 ファイル・218 行と 18 ファイル・39 行）・`audit-emo2-boot-spine` の brief の申し送り ⑵ | 7 |
@@ -59,8 +59,8 @@
 1. When 記憶から戻した窓を作業領域へ寄せる, the areka shall 窓 n の組の相手を、鎖の決まり（`audit-placement-core` の `research.md` 18.10「この仕様で行く」3）の「鎖の前の窓」＝n より下の番号で鎖に入る一番近いスコープとする。**仮定**: 鎖に入るかは、覚えた印と同じく descript の揃え方で見る（`ChainView::Saved`・印は次の起動が読むので・brief の Approach）
 2. When n の 1 つ下の番号のスコープが左右の辺のスコープで、n の覚えた印が `left`／`right` である, the areka shall n を鎖の前の窓（辺のスコープを飛ばした窓）との組として寄せ、辺のスコープと n を 1 つの組にしない（18.10 の表の T6）
 3. When 中のスコープが欠けたゴースト（例: スコープ 0 と 2 だけ）で、2 の覚えた印が `left`／`right` である, the areka shall 0 と 2 を 1 つの組として寄せ、窓ごとに寄せない（T8）
-4. While 窓が鎖に入らない（左右の辺のスコープ）, the areka shall その窓を寄せの組の相手にしない
-5. When 寄せた組が作業領域に入らない, the areka shall 反対の側へ回すかどうかを、鎖の決まりに照らして確かめた結果のとおりに扱い、その理由を説明に書く（C14）。**仮定**: 今の振る舞い（`JoinLeftOffset` は反対の側へ回さず端へ寄せる・`JoinLeft`／`JoinRight` は反対の側へ回す）が鎖の決まりと合い、振る舞いは変えずに説明だけを書く（未決 3）
+4. While 窓が鎖に入らない（左右の辺のスコープ）, the areka shall その窓を**覚えた印での**組の相手にしない。記憶の矩形が隣り合う・重なる組（完了した `window-work-area-clamp` 要件 4.1）は、今と同じく番号の続く対 (n−1, n) に当て、辺のスコープも番号が続けば矩形で組にする（18.10 の表の T5・T7・T29 の F の列「合う」を動かさない）
+5. When 起動の確定か詰め直し（`place_chain_in_work_area`）で、付けた窓が作業領域に入らない, the areka shall 反対の側へ回すかを今の振る舞いのまま保つ（`JoinLeftOffset` は回さず端へ寄せる＝C14・`JoinLeft`／`JoinRight` は回し、辺のスコープとの組は反対の側がほぼ画面の外なので端へ寄せる）。その理由を `opposite` の説明に書き、辺のスコープとの組が端へ寄せられることを壊れたら落ちるテストで固定する（記憶からの寄せ `keep_restored_groups` は `opposite` を通らない・ギャップ分析 2.2）
 6. The areka shall 寄せの後の最後の位置を、今と同じく起動の確定が鎖の決まりどおりに直す形のまま保つ
 7. The 本見直し shall 寄せの組を説明する文（`RestoredWindow::mark`・`keep_restored_groups`）に、組を「鎖の前の窓との組」と書き、「番号が続く対 (n−1, n)」と書かない
 8. The 本見直し shall 追随の持ち物に鎖の式の写しを残さない（`audit-placement-core` の `research.md` 18.10「これで終わる理由」2 の grep で、追随の `joined_with_prev` の当たりが消える）
@@ -72,13 +72,14 @@
 
 #### Acceptance Criteria
 
-1. If ドラッグを始めた窓の位置が取れない, then the areka shall (0,0) をドラッグの始めの位置として扱わない
-2. If ドラッグを始めた窓の位置が取れない, then the areka shall その回のドラッグで、分からない始めの位置を基準に追随の窓（組の相手・バルーン）を動かさない。**仮定**: 追随の窓は今の位置にとどまり、ドラッグした窓自身の扱いは wintf の今の守り（位置が無いときは窓を動かさない）のままとする（未決 5）
-3. If ドラッグを始めた窓の位置が取れない, then the areka shall 位置が分からなかったことを、どの窓のドラッグかが分かる形で記録に残す（記録の水準は設計で決める・記録の無い失敗の道を作らない）
-4. When ドラッグを始めた窓の位置が取れる, the areka shall 今と同じ振る舞いで追随の窓を動かす
-5. When ドラッグの状態の形を変える, the 本見直し shall ドラッグの状態を組む所と読む所（brief の再測定の 11 か所と読み手・wintf の中の控え `DragState::Dragging.initial_window_pos` を型でそろえるならそれも）を、ツリー全体で探して全部直す
-6. The 本見直し shall 「位置が分からない」の持たせ方（型に持たせるか、位置が分からないときはドラッグの状態を作らないか）を設計で比べ、wintf の公開の段（crates.io）への影響を設計に書く
-7. The 本見直し shall 1〜4 の振る舞いを、wintf の側と追随の側でそれぞれ壊れたら落ちるテストで固定する
+1. If ドラッグを始めた窓の位置が取れない（窓に `WindowPos`・位置が無い、または HWND の座標の変換が失敗した）, then the areka shall (0,0) をドラッグの始めの位置として扱わない
+2. If ドラッグを始めた窓の位置が取れない, then the areka shall その回のドラッグで、分からない始めの位置を基準に窓を動かさない。対象は追随の窓（組の相手・バルーン）と、areka が書くドラッグした窓そのもの（吸着した窓・組に入った窓）。組に無い窓は wintf の今の守り（位置が無いときは窓を動かさない）のまま。**仮定**: どの窓も今の位置にとどまる（未決 5）
+3. If ドラッグを始めた窓の位置が取れない, then the areka shall 位置が分からなかったことを、どの窓のドラッグかが分かる形で記録に残す（wintf は今も `warn!` を 1 行出す・追随の側の記録の水準と回数は設計で決める・記録の無い失敗の道を作らない）
+4. If ドラッグを始めた窓の位置が取れないままドラッグが終わる, then the areka shall (0,0) を基準にした位置を記憶へ書かない
+5. When ドラッグを始めた窓の位置が取れる, the areka shall 今と同じ振る舞いで窓を動かす
+6. When ドラッグの状態の形を変える, the 本見直し shall ドラッグの状態を組む所と読む所（brief の再測定の 11 か所と読み手・wintf の中の控え `DragState::Dragging.initial_window_pos` を型でそろえるならそれも）を、ツリー全体で探して全部直す。偽の HWND で座標の変換が失敗する道に寄りかかったテストの期待（`follow_drag_end_gate_tests.rs` の `destination()`・本体の `input_events/drag_test_support.rs` ほか）も作り直す
+7. The 本見直し shall 「位置が分からない」の持たせ方（型に持たせるか、位置が分からないときはドラッグの状態を作らないか）を設計で比べ、wintf の公開の段（crates.io）への影響を設計に書く
+8. The 本見直し shall 1〜5 の振る舞いを、wintf の側と追随の側でそれぞれ壊れたら落ちるテストで固定する
 
 ### Requirement 3: `follow/drag_follow.rs` を 1,000 行の上限の下に入れる
 
@@ -96,11 +97,11 @@
 
 #### Acceptance Criteria
 
-1. The 本見直し shall 次の写しを消し、共有の側を使う形にする: 83（`assert_no_event`）・91 の残り（`follow/move_shift.rs` の `windowposition::scale_signed` を根の `scale_signed` へ）・2 回目（`follow_test_support.rs` の `point`・`contained`・`Store` の写し、`follow_move_shift_tests.rs` の `k`＝220、`follow_sticky_follow_drag_tests.rs` の `events_of`＝219）・358 と 426（`follow_test_support.rs` の 5 つの部品を crate の中へ開き、`spawn_follow_pipeline_tests.rs`・`balloon_limit_flip_tests.rs`・`balloon_lock_drag_tests.rs` の写しを消す）・431（`follow/visibility.rs` の `clamp_x_into` を resolver の `clamp_axis` へ）・432（`follow/work_area.rs` の `MonitorSnapshot::from_monitors` の式を根の `work_area_px` へ）・491（`balloon_limit.rs` の 2 か所・`reseed.rs`・`persist.rs` の手組みの矩形を `rect_at` へ）・511（`code_only`・`SharedFakeIo`）
+1. The 本見直し shall 次の写しを消し、共有の側を使う形にする: 83（`assert_no_event`）・91 の残り（`follow/move_shift.rs` の `windowposition::scale_signed` を根の `scale_signed` へ）・2 回目（`follow_test_support.rs` の `point`・`contained`・`Store` の写し＝511 の `SharedFakeIo` と同じ所、`follow_move_shift_tests.rs` の `k`＝220、`follow_sticky_follow_drag_tests.rs` の `events_of`＝219）・358 と 426（`follow_test_support.rs` の 5 つの部品を crate の中へ開き、`spawn_follow_pipeline_tests.rs`・`balloon_limit_flip_tests.rs`・`balloon_lock_drag_tests.rs` の写しを消す）・431（`follow/visibility.rs` の `clamp_x_into` を resolver の `clamp_axis` へ）・432（`follow/work_area.rs` の `MonitorSnapshot::from_monitors` の式を根の `work_area_px` へ）・491（`balloon_limit.rs` の 2 か所・`reseed.rs`・`persist.rs` の手組みの矩形を `rect_at` へ）・511（`code_only`・`SharedFakeIo`）・`audit-placement-core` の `research.md` 19.2 が申し送った `transition_diag.rs` の `live_work_area_bottom`（作業領域の矩形の手組み＝432 と同じ形）
 2. Where 記録の捕まえの手書きの写し（`follow_transition_diag_tests.rs` の `resize_under_filter`・`follow_window_move_diag_tests.rs` の `window_move_output_under_filter`）, the 本見直し shall 共有の `capture_under_filter` へ寄せず、`diag_tests.rs` と同じく捕まえ損ねを見張る番兵を足す（`env-filter` を宣言してよい crate は wintf だけ・380）
 3. The 本見直し shall `follow/sticky_follow.rs` の略称 `scg`（218）を、略さない名前にする
 4. When 写しを消す, the 本見直し shall 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使い手を確かめる
-5. When 本番の式を共有の部品へ差し替える（431・432・491）, the areka shall 窓の位置と矩形を今と同じに保つ
+5. When 本番の式を共有の部品へ差し替える（431・432・491・`transition_diag.rs`）, the areka shall 窓の位置と矩形を今と同じに保つ
 6. The 本見直し shall 432 に合わせて `follow/work_area.rs` の説明が消えた `primary_work_area` を名指さないように直し、`lib.rs` の「根を引く子」の文に 1 行足す
 
 ### Requirement 5: 組のドラッグの終わりで記憶へ 1 回で書く（7 回目）
@@ -131,9 +132,9 @@
 #### Acceptance Criteria
 
 1. The 本見直し shall 消えた名前や今の本番の道と違う名前を指す説明を、今の事実に直す（`follow.rs` の `persist::apply_restored_placements`＝本番は `restore_and_judge`・`audit-emo2-boot-spine` の brief の申し送り ⑵ の `crates/areka-runtime/src/placement_tests/transition_judge.rs` の古い置き場と「bin crate ゆえ `main.rs` が宣言する」の文）
-2. The 本見直し shall 受け持つ範囲（`crates/areka-placement/src/` の `follow*`・`transition_*`、`crates/areka-runtime/src/placement_tests/transition_*`）の名前の無い古い spec の task 番号・指摘番号・要件の番号（`follow/move_shift.rs` の「監査の指摘 1」・`follow.rs` の「task 1.4」「task 2.4」・`follow/drag_follow.rs` の「2.4」「4.5」を含む）を、消すか spec の名前を足す（`audit-placement-core` の 165・166〜207 と同じ形）
+2. The 本見直し shall 受け持つ範囲（`crates/areka-placement/src/` の `follow*`・`transition_*`、`crates/areka-runtime/src/placement_tests/transition_*`）の名前の無い古い spec の task 番号・指摘番号・要件の番号（`follow/move_shift.rs` の「監査の指摘 1」「監査の指摘 5」・`follow.rs` の「task 1.4」「task 2.4」・`follow/drag_follow.rs` の「2.4」「4.5」・二重角括弧で包んだ task 番号 `[[4.6 の教訓]]` の形の 16 行を含む）を、消すか spec の名前を足す（`audit-placement-core` の 165・166〜207 と同じ形）
 3. The 本見直し shall コードの説明に開発者の記憶の帳面の名（`follow_drag_tests.rs` の `[[test-only-decision-branches-not-proven-wiring]]`）を残さない
-4. When 直し終える, the 本見直し shall 受け持つ範囲で `git grep -nE "(task|タスク) ?[0-9]+"` と `git grep -nE "指摘 ?[0-9]+"` の当たりを仕分け、残る行がすべて spec の名前の付いた行であることを示す
+4. When 直し終える, the 本見直し shall 受け持つ範囲で `git grep -nE "(task|タスク) ?[0-9]+"`・`git grep -nE "指摘 ?[0-9]+"`・`git grep -nE "\[\[[0-9]+\.[0-9]+"` の当たりを仕分け、残る行がすべて spec の名前の付いた行であることを示す
 
 ### Requirement 8: 直さずに残してよいもの
 
@@ -153,7 +154,7 @@
 
 #### Acceptance Criteria
 
-1. The 本見直し shall どのファイルも 1,000 行の番人（`crates/log-capture-kit/tests/file_length_guard_test.rs`）の上限を越えさせない（行を足すなら新しいファイルへ。3 の置き場では新しいファイルを足せないので、行を増やさない直しにとどめる）
+1. The 本見直し shall どのファイルも 1,000 行の番人（`crates/log-capture-kit/tests/file_length_guard_test.rs`）の上限を越えさせない（行を足すなら新しいファイルへ。3 の置き場では新しいファイルを足せないので、行を増やさない直しにとどめる）。例外表に載るファイル（今もう上限を越えている `follow/window_move.rs` ほか）は番人が行を数えないので 2 に従い、行を足すのは文の直しに要る分だけにする
 2. The 本見直し shall 番人の例外表とその数の行を変えず、表に載るファイル（`follow/window_move.rs`・`crates/areka-runtime/src/placement_tests/transition_judge_verdict_tests.rs` ほか）を割らない（表は `audit-test-kits` の持ち物・割るなら次のウェーブへ申し送る）
 3. The 本見直し shall `crates/areka-runtime/src/placement_tests/` の下にファイルを足さず、消さない（その `mod.rs` は `audit-emo2-boot-spine` の持ち物）。上限に近いファイル（`transition_judge.rs`・`transition_judge_tests.rs` はどちらも 999 行）は、行を増やさない直しにとどめる
 4. The 本見直し shall 依存を足さない（`Cargo.toml` の依存と `Cargo.lock` を変えない）
@@ -177,7 +178,8 @@
 ## 未決（要件の討議で決める）
 
 1. **直した後に audit をかけ直すか**（要件 10.5）: 仮定＝かけ直さない。brief の Approach は「要件の討議で決める」としている。
-2. **164 を同じ範囲の 2 本目に切るか**: 仮定＝切らずに 1 本で進める（見立て M 14〜19 タスク）。brief の Constraints は 20 タスクを越えそうなら切ってよいとしているが、2026-11-16 の決めごと（一度切り出した spec を規模を理由に後から分けない・20 タスクは spec の上限ではない）とどちらを取るかを確かめる。
-3. **C14 の `opposite`**（要件 1.5）: 仮定＝今の振る舞い（`JoinLeftOffset` は反対の側へ回さず端へ寄せる・`JoinLeft`／`JoinRight` は反対の側へ回す）を鎖の決まりに照らして確かめ、合えば振る舞いを変えずに説明を書く。要件 1 の直しで組の相手が鎖の前の窓になった後、辺のスコープとの組（520 の直しで足したもの）がこの寄せに来るかどうかもギャップ分析で確かめる。
-4. **4 回目の `AnchorChange` の振る舞い**（要件 6.2）: 仮定＝正しい書き込みで見張りが鳴るなら、鳴らないように直す。鳴らないと分かれば説明の直しだけにする。
-5. **位置が分からないドラッグでの見え方**（要件 2.2）: 仮定＝その回のドラッグでは追随の窓を動かさない（今の位置にとどまる）。代わりの案は、最初の移動の知らせで位置を取り直して追随を始める形。どちらにしても (0,0) は基準にしない。
+2. ~~164 を同じ範囲の 2 本目に切るか~~: ギャップ分析の見立てが 14〜17 タスクで 20 の下に入り、2026-11-16 の決めごと（一度切り出した spec を規模を理由に後から分けない）もあるので切らない（自明な直しで閉じた）。
+3. ~~C14 の `opposite`~~: ギャップ分析 2.2 で、`opposite` は記憶からの寄せを通らず、起動の確定と詰め直しの道だけと分かった。振る舞いを変えず説明とテストを置く形で要件 1.5 に書き直した（自明な直しで閉じた）。
+4. ~~4 回目の `AnchorChange` の振る舞い~~: 要件 6 のとおり、テストで鳴るかを確かめてから直す。ギャップ分析 2.7 はコードからは鳴ると読んだ。直し方（D1〜D3）は設計で決める。
+5. **位置が分からないドラッグでの見え方**（要件 2.2）: 仮定＝その回のドラッグではどの窓も動かさない（今の位置にとどまる）。代わりの案は、最初の移動の知らせで位置を取り直して追随を始める形。どちらにしても (0,0) は基準にしない。
+6. **名前の無い要件の番号をどこまで直すか**（要件 7.2）: 受け持つ範囲の名前の無い要件の番号は約 540 行（ギャップ分析 2.8・粗い数）。挙げた所だけか、全部か。
