@@ -124,7 +124,7 @@
   - _Depends: 3.6_
   - _Dispatch: mechanical — 期待値と消す物を設計が与える_
   - _Requirements: 3.1, 3.3, 4.7, 6.1_
-- [ ] 5.2 一周の足場と駆動を直す［T14・20・21・24・80・82〜87 番］
+- [x] 5.2 一周の足場と駆動を直す［T14・20・21・24・80・82〜87 番］
   - 20・21 番: 足場の配置と題名の写し・偽の窓のハンドルの写し・水準の数えの写しを消し、配置の crate のテストの支えと frame のテストの支えを使うだけにする（`frame*`・`areka-placement` は変えない）
   - 24・80 番: 渡す本数の説明を直し、注入時刻の上限を段の表から const で導く。82 番: 採取時刻の自己検査は残し、中の `Vec` をやめて `any` 1 回にする
   - 83・84・87 番: 要らない `allow(dead_code)`・`let _ =`・重ねた `#[cfg(test)]` を消す（警告が出たら読み手の事実を確かめ直す）。85 番: 2 本目も印を立てて assert の文に出す。86 番: 窓の一覧から Entity だけを取る
@@ -227,3 +227,4 @@
 - 3.4・66 番: 寄せた `index_of` の置き場は `crate::source_text_test_support`（設計は名指ししていない）。
 - 3.6: 残りの行番号の注記（`areka-runtime/src/spine.rs` の `real.rs:136`／`:151`、本体の `spine_conformance_judge.rs` の `同 :449-451`）と、公開の `hold()`・`join_thread_bounded` の doc から私有になった `NO_ROW`・`wait_thread_end` へのリンク（`private_intra_doc_links`）は 8.2 のかけ直しで直す。
 - 4・78 番: 縛るテストは `reload_tests.rs` の組み立てでは shell の回が kanade と無関係に `no_context` で止まり、`accept_skin` の送り損ねの道（`reload.rs` の `end_skins(world, "kanade_gone")`）を縛れなかった。`reload_skin_tests.rs` の結線つきの組み立てへ移し、3 回目をバルーンにした（design.md の 78 番の節と行数の表を合わせた）。77 番の `SkinStep` は `pub(crate)` の `ReloadStage::Skins` の欄に出るので公開のまま（外すと `private_interfaces`）。
+- 5.2: `spine_conformance_lap_tests.rs` 末尾の「接続宣言は 3 本で確定済み」が今の数と合わない（どの指摘の対象でもない）。8.2 のかけ直しで扱う。

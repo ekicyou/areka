@@ -42,7 +42,6 @@
 //! `areka_placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
 
 // `spine` の代わりの親を兼ねる（⑴ ⑵ を子へ渡す）。下の `use` は旧 `spine.rs` の頭の行で、⑶ と子のテストが使う。
-use areka_placement::follow::OffsetBase;
 use areka_runtime::spine::*;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -71,21 +70,21 @@ use log_capture_kit::{LineFormat, capture_lines};
 use crate::sample_test_support::acquire_emo2;
 use sample_ghost_kit::SampleRoot;
 use shiori_host32_host::ExitKind;
-use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{DPI, GraphicsCore, Point, WindowHandle, WindowPos, WucGraphicsResource};
+use wintf::ecs::{DPI, GraphicsCore, Point, WindowPos, WucGraphicsResource};
 use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
 
-use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use areka_placement::source::GhostTitles;
+use areka_placement::spawn::test_support::{titles, two_scope_placements};
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
+use areka_placement::test_support::give_fake_handles;
 
 use crate::session::ghost_quit::KanadeNoticeRx;
 use areka_runtime::adapter::PresentBridge;
 use areka_runtime::assets::{
     BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets,
 };
+use areka_runtime::frame::test_support::count_level;
 use areka_runtime::frame::{
     RuntimeWiring, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with, run_text_phase,
     run_text_scale_phase,
@@ -181,48 +180,6 @@ fn make_world_with_gpu() -> (GpuPermit, World) {
     (gpu, world)
 }
 
-/// scope0/scope1 の 2 スコープぶんの合成配置（areka_placement::spawn テストの emo2 相当値を踏襲）。
-///
-/// attach フェーズは窓 `Entity` のみを消費し `WindowPos`/寸法は読まないため、位置値は attach の
-/// 成否に無関係（`GhostWindows::scopes()` が `[0,1]` を返すことだけが load-bearing）。両 scope の
-/// `balloon_size` が同値なのは合成値をそのまま踏襲しているだけで、実 fixture の scope 別バルーン
-/// 採寸（scope0 と scope1 は解決する系列が異なり `validrect` も異なる）を表すものではない。
-fn two_scope_placements() -> Vec<ScopePlacement> {
-    vec![
-        ScopePlacement {
-            scope: 0,
-            char_pos: PointPx { x: 1483, y: 733 },
-            char_size: SizePx { w: 434, h: 687 },
-            balloon_pos: PointPx { x: 1071, y: 708 },
-            balloon_size: SizePx { w: 223, h: 158 },
-            balloon_offset: PointPx { x: -412, y: -25 },
-            balloon_offset_base: OffsetBase::unpinned(PointPx { x: -412, y: -25 }),
-            // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
-            balloon_limit: true,
-            anchor: Anchor::Bottom,
-            balloon_keyword_base: None,
-        },
-        ScopePlacement {
-            scope: 1,
-            char_pos: PointPx { x: 1049, y: 1063 },
-            char_size: SizePx { w: 278, h: 357 },
-            balloon_pos: PointPx { x: 1334, y: 1044 },
-            balloon_size: SizePx { w: 223, h: 158 },
-            balloon_offset: PointPx { x: 285, y: -19 },
-            balloon_offset_base: OffsetBase::unpinned(PointPx { x: 285, y: -19 }),
-            // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
-            balloon_limit: true,
-            anchor: Anchor::Bottom,
-            balloon_keyword_base: None,
-        },
-    ]
-}
-
-/// 窓タイトル（emo2 相当）。
-fn titles() -> GhostTitles {
-    GhostTitles::from_scope_titles([(0, "むらさき".to_string()), (1, "エモ".to_string())])
-}
-
 /// 事前 queue 済みメッセージを全て処理し queue が空になった時点で抜ける bounded pump
 /// （draw_readback_test/attach_wiring の決定論パターン——WM_QUIT は posted が尽きた後に配送）。
 ///
@@ -255,12 +212,6 @@ fn pump_until_idle() {
 fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
     let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
     lines
-}
-
-/// 捕捉行のうち指定 level（例 `"ERROR"`）の件数を数える。
-fn count_level(logs: &[String], level: &str) -> usize {
-    let needle = format!("level={level}");
-    logs.iter().filter(|l| l.contains(&needle)).count()
 }
 
 // ===========================================================================
@@ -358,7 +309,6 @@ pub(crate) struct SpineHarness {
     /// frame 三相結線状態（presenter/rx/runtime/clock/assets）。`run_attach_phase` の駆動対象。
     wiring: RuntimeWiring,
     /// 文字層ランタイムの観測用クローン（6.2/6.3 が `present_frame`/`read_back` に使う）。
-    #[allow(dead_code)] // 読むのは一部のテストだけ
     runtime: Rc<RefCell<TextLayerRuntime>>,
     /// ghost ランタイム（`dispatcher()` への Tick 注入・`shutdown()` の駆動）。
     ghost: GhostRuntime,
@@ -553,21 +503,21 @@ impl SpineHarness {
         // ── move channel＋実 MoveCueSink（wire_runtime 手順4 と同型・S-3 形＝task 9.3） ──
         // talk スレッドの MoveCueSink が送出端、UI スレッドの RuntimeWiring が受信端 move_rx（frame 相
         // drain＝run_move_drain_phase・task 9.2）を保持する。9.1 の throwaway 送出端を実 MoveCueSink へ
-        // 差し替え、production `wire_runtime` の sink 構成（現在は 13 本＝`runtime_boot.rs` の `runtime_sinks`）を spine でも
-        // 忠実に再現する。
+        // 差し替える。本番の sink（`runtime_boot.rs` の `runtime_sinks`）13 本のうち、spine は先頭 4 本だけを
+        // 同じ順で渡す（Z 順・readme・切替・読み直し・窓の状態などの残り 9 本は渡さず、その cue は届け先が無い）。
         let (move_tx, move_rx) = mpsc::channel::<PositionCue>();
         let move_sink = MoveCueSink::new(move_tx);
 
         // ── lifecycle channel＋実 BalloonLifecycleSink（wire_runtime 手順4 と同型・task 4.1） ──
         // talk スレッドの BalloonLifecycleSink が送出端、UI スレッドの RuntimeWiring が受信端
-        // lifecycle_rx（バルーン可視性相＝task 4.4 が drain）を保持する。production と同じ sink 構成を
-        // spine でも忠実に再現するため、throwaway ではなく実 sink を登録する。
+        // lifecycle_rx（バルーン可視性相＝task 4.4 が drain）を保持する。本番の 4 本目と同じ実 sink を
+        // throwaway でなく登録する。
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
         let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx, clock.clone());
 
         // ── scripted boot（実 sink 注入・TickerMode::Disabled＝Tick 注入で駆動・R8.3） ──
         // sinks は broadcast 登録先で surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）／
-        // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（production mod.rs と同順・S-3 形）。
+        // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（本番 13 本のうち先頭 4 本だけを同じ順で・S-3 形）。
         // 起動の選択肢は本番の窓の在るゴーストと同じ組み立て（strict の判定・FromSylphya・Ansi）を使う。
         // App スコープ root は不要（None＝App 層不在縮退・ghost/shell スコープは emo2 mount 由来）。
         let options = crate::session::runtime_boot::runtime_boot_options(
@@ -688,7 +638,6 @@ impl SpineHarness {
         drop(world);
         drop(runtime);
         drop(text_pump);
-        let _ = shiori_handle;
         // 検体の複製は最後に捨てる（`SpineHarness::sample` の用心・テストの裏付けは無い）。
         drop(sample);
         drop(gpu);
@@ -698,42 +647,29 @@ impl SpineHarness {
 // テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming タスク 8.1・要件 1.7 / 3.1 / 3.2）。
 // 本ファイルはハーネス本体（scripted backend・fixture・有界待機・ログ捕捉・SpineHarness）を保持し、
 // 観測ケースはテーマごとの兄弟ファイル `spine_<テーマ>_tests.rs` に置く。
-#[cfg(test)]
 #[path = "spine_boot_smoke_tests.rs"]
 mod boot_smoke_tests;
-#[cfg(test)]
 #[path = "spine_close_wiring_tests.rs"]
 mod close_wiring_tests;
-#[cfg(test)]
 #[path = "spine_conformance_lap_tests.rs"]
 mod conformance_lap_tests;
-#[cfg(test)]
 #[path = "spine_conformance_script.rs"]
 mod conformance_script;
-#[cfg(test)]
 #[path = "spine_conformance_support.rs"]
 mod conformance_support;
-#[cfg(test)]
 #[path = "spine_display_tests.rs"]
 mod display_tests;
-#[cfg(test)]
 #[path = "spine_move_cue_tests.rs"]
 mod move_cue_tests;
-#[cfg(test)]
 #[path = "spine_seriko_loop_tests.rs"]
 mod seriko_loop_tests;
-#[cfg(test)]
 #[path = "spine_settle_tests.rs"]
 mod settle_tests;
-#[cfg(test)]
 #[path = "spine_talk_close_tests.rs"]
 mod talk_close_tests;
-#[cfg(test)]
 #[path = "spine_test_support.rs"]
 mod test_support;
-#[cfg(test)]
 #[path = "spine_text_scale_tests.rs"]
 mod text_scale_tests;
-#[cfg(test)]
 #[path = "spine_third_scope_talk_tests.rs"]
 mod third_scope_talk_tests;

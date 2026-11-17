@@ -1,6 +1,6 @@
 use super::{
-    Duration, Entity, GhostWindows, HWND, Instant, Point, SPIN_WAIT, SpineHarness, WindowHandle,
-    WindowPos, World, all_shown, run_move_drain_with,
+    Duration, Entity, GhostWindows, Instant, Point, SPIN_WAIT, SpineHarness, WindowPos, World,
+    all_shown, give_fake_handles, run_move_drain_with,
 };
 
 // ===========================================================================
@@ -8,36 +8,13 @@ use super::{
 // move channel→frame 相 drain→apply→実窓移動）。
 //
 // 9.1 が置いた throwaway `(_move_tx, move_rx)` を実 `MoveCueSink`（`SpineHarness::boot_with` の
-// sinks 第 3 要素）へ差し替えた S-3 形（production `wire_runtime` と同じ sink 構成——task 4.1 で
-// 4 本目の `BalloonLifecycleSink` が加わったが move の第 3 要素という位置は変わらない）の上で、
+// sinks 第 3 要素）へ差し替えた S-3 形（本番 13 本のうち先頭 4 本だけを同じ順で渡す——move は本番と
+// 同じ第 3 要素）の上で、
 // `\1\![move,...]` を含む OnBoot talk を実 sink 経路で流し、`MoveDirective` が move channel へ届き
 // frame 相 drain（`run_move_drain_phase`＝task 9.2）で対象窓が fixture 検算位置へ即時移動することを
 // 固定する。9.2 の frame 相配線が spine で end-to-end に生きていることの自動檻（headless・sleep 不使用・
 // 注入 Tick のみ・手動実機確認は Task 11 に一本化）。
 // ===========================================================================
-
-/// 偽 HWND の WindowHandle（実窓なし・headless 決定論シーム・follow.rs/frame.rs の fake_handle 相当）。
-fn fake_handle(raw: usize) -> WindowHandle {
-    WindowHandle {
-        hwnd: HWND(raw as *mut _),
-    }
-}
-
-/// spine World の各キャラ／バルーン窓へ偽 WindowHandle を付与する（`enqueue_window_set_pos` が
-/// WindowPos を書ける条件＝WindowHandle 実在。`spawn_ghost_windows` は実窓生成前ゆえ handle 未付与で、
-/// これが無いと `move_window_to` は warn＋no-op に縮退し窓が動かない）。
-fn attach_fake_window_handles(world: &mut World, gw: &GhostWindows) {
-    let mut raw = 0x100usize;
-    for scope in gw.scopes().collect::<Vec<_>>() {
-        for e in [
-            gw.char_window(scope).unwrap(),
-            gw.balloon_window(scope).unwrap(),
-        ] {
-            world.entity_mut(e).insert(fake_handle(raw));
-            raw += 0x10;
-        }
-    }
-}
 
 /// entity の WindowPos.position を読む（未設定は panic で検出）。
 fn window_position(world: &World, e: Entity) -> Point {
@@ -94,7 +71,7 @@ fn spine_move_cue_drives_window_move_end_to_end() {
         .get_resource::<GhostWindows>()
         .expect("spine World には GhostWindows が挿入済み")
         .clone();
-    attach_fake_window_handles(&mut harness.world, &gw);
+    give_fake_handles(&mut harness.world, &gw);
     // 観測 scope は 1（`\1` が正典どおり scope1 へ切替・doc 参照）。対象＝scope1（エモ）char 窓・基準＝scope0。
     let target = gw.char_window(1).expect("scope1（エモ＝相方）の char 窓");
 

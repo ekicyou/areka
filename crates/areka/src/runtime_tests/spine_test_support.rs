@@ -42,12 +42,9 @@ pub(super) fn variant_name(cmd: &PresentCommand) -> &'static str {
 /// **実行機依存**である（96 の機械もあれば 120/144/192 の機械もある）。固定値を書き込むと
 /// 「たまたま同値＝k 不変」で檻が空虚化するため、現在値を読んでから別の値を選ぶ。
 pub(super) fn bump_balloon_window_dpi(harness: &mut SpineHarness, scope: usize) -> u16 {
-    let ghost_windows = harness
+    let window = harness
         .world
-        .get_resource::<GhostWindows>()
-        .expect("spawn_ghost_windows が GhostWindows を挿入済み")
-        .clone();
-    let window = ghost_windows
+        .resource::<GhostWindows>()
         .balloon_window(scope)
         .expect("当該 scope の balloon 窓");
     bump_window_dpi(harness, window)
@@ -59,12 +56,9 @@ pub(super) fn bump_balloon_window_dpi(harness: &mut SpineHarness, scope: usize) 
 /// SERIKO ループが載るのは**シェル**の表示スロットゆえ、ループ継続の檻（要件 4.3 の
 /// 「進行中挙動の喪失なし」）はシェル窓側の DPI を動かさなければ空虚になる。
 pub(super) fn bump_char_window_dpi(harness: &mut SpineHarness, scope: usize) -> u16 {
-    let ghost_windows = harness
+    let window = harness
         .world
-        .get_resource::<GhostWindows>()
-        .expect("spawn_ghost_windows が GhostWindows を挿入済み")
-        .clone();
-    let window = ghost_windows
+        .resource::<GhostWindows>()
         .char_window(scope)
         .expect("当該 scope の char 窓");
     bump_window_dpi(harness, window)

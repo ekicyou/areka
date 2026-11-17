@@ -68,10 +68,9 @@ use super::conformance_support::{
     StageSink, WaitInjection,
 };
 use super::{
-    ActorKey, CloseReason, Entity, GhostWindows, HWND, LoopDriver, Point, PresentCommand,
-    RecordedCall, RecordedStatus, ScriptedShioriHandle, SpineHarness, TalkLifecycleSignal,
-    WindowHandle, WindowPos, World, all_shown, capture_logs, count_level, run_attach_phase,
-    run_move_drain_with,
+    ActorKey, CloseReason, Entity, GhostWindows, LoopDriver, Point, PresentCommand, RecordedCall,
+    RecordedStatus, ScriptedShioriHandle, SpineHarness, TalkLifecycleSignal, WindowPos, World,
+    all_shown, capture_logs, count_level, give_fake_handles, run_attach_phase, run_move_drain_with,
 };
 use areka_kanade::{ChoiceInput, MouseButton, MouseEventKind, MouseInput};
 
@@ -303,27 +302,6 @@ struct LapLedgers {
 // 走行の道具
 // ===========================================================================
 
-/// 偽 HWND の `WindowHandle`（実窓なし・headless 決定論シーム・`spine_move_cue_tests.rs` と同形）。
-fn fake_handle(raw: usize) -> WindowHandle {
-    WindowHandle {
-        hwnd: HWND(raw as *mut _),
-    }
-}
-
-/// 各キャラ／バルーン窓へ偽 `WindowHandle` を付与する（これが無いと移動が warn＋no-op へ縮退する）。
-fn attach_fake_window_handles(world: &mut World, windows: &GhostWindows) {
-    let mut raw = 0x100usize;
-    for scope in windows.scopes().collect::<Vec<_>>() {
-        for entity in [
-            windows.char_window(scope).expect("キャラ窓"),
-            windows.balloon_window(scope).expect("バルーン窓"),
-        ] {
-            world.entity_mut(entity).insert(fake_handle(raw));
-            raw += 0x10;
-        }
-    }
-}
-
 /// entity の `WindowPos.position` を読む（未設定は `None`）。
 fn window_position(world: &World, entity: Entity) -> Option<Point> {
     world.get::<WindowPos>(entity).and_then(|pos| pos.position)
@@ -376,7 +354,7 @@ fn has_notify(calls: &[RecordedCall], id: &str, tail_ref: &str) -> bool {
 
 /// 段の駆動の結果を受け取り、失敗なら**段名を名指しして**走行を落とす（沈黙の失敗を作らない）。
 fn expect_stage(outcome: Result<StageObservation, StageFailure>) -> StageObservation {
-    expect_stage_with(outcome, || String::new())
+    expect_stage_with(outcome, String::new)
 }
 
 /// [`expect_stage`] に、その段が読んでいた観測の**内訳**を添える。
@@ -453,7 +431,6 @@ fn assert_budget_not_exhausted(observed: &StageObservation, stage: &LapStage) {
         capacity,
         observed.injected_at_ms.len()
     );
-    let _ = reached;
 }
 
 /// [`PLAYOUT_TICKS`] が、製品が報告した占有終端を実際に覆っていることを検算する。
@@ -542,13 +519,14 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
     let mut stages = LapStages::new();
     let mut display: Vec<(&'static str, CollectedCommand)> = Vec::new();
 
-    // 移動の反映口（実窓生成前ゆえ handle 未付与）を埋め、位置調整段の対象窓を決める。
+    // 移動の反映口（実窓生成前ゆえ handle 未付与・無いと移動が warn＋no-op へ縮退する）を偽 HWND で埋め、
+    // 位置調整段の対象窓を決める。
     let windows = harness
         .world
         .get_resource::<GhostWindows>()
         .expect("spine World には GhostWindows が挿入済み")
         .clone();
-    attach_fake_window_handles(&mut harness.world, &windows);
+    give_fake_handles(&mut harness.world, &windows);
     let move_target = windows.char_window(1).expect("相方（scope1）のキャラ窓");
     let move_origin = window_position(&harness.world, move_target);
     assert!(
@@ -908,6 +886,5 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
 // 主題単位の分割（R2.11）: 3 つの列の等値照合は兄弟ファイルへ置き、**本ファイルの末尾から**接続する。
 // 本ファイルは 1 ファイル 1,000 行の見張りまで余白が僅かで、`spine.rs` の接続宣言は 3 本で確定済み
 // ゆえ、経路をそちらへ増やさない（task 2.3 が支援層で踏んだ手順と同じ）。
-#[cfg(test)]
 #[path = "spine_conformance_judge.rs"]
 mod conformance_judge;

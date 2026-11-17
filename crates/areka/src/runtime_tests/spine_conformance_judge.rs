@@ -165,22 +165,13 @@ fn assert_sequence_eq<T: PartialEq + std::fmt::Debug>(label: &str, actual: &[T],
 /// 1 段では 2 つ選べない）。ゆえに「**同名のいずれかの区間**に入っていること」を見る。
 fn assert_display_collected_within_declared_stage(display: &[(&'static str, CollectedCommand)]) {
     for (index, (stage, collected)) in display.iter().enumerate() {
-        let intervals: Vec<&'static str> = LAP_STAGES
-            .iter()
-            .filter(|declared| declared.name == *stage)
-            .map(|declared| declared.name)
-            .collect();
-        assert!(
-            !intervals.is_empty(),
-            "駆動器の自己検査が失敗: 表示指令 [{index}] の段名「{stage}」が段の宣言に無い（製品の退行ではなく駆動が壊れている）"
-        );
         let inside = LAP_STAGES.iter().any(|declared| {
             declared.name == *stage
                 && (declared.begin_ms..=declared.limit_ms).contains(&collected.collected_at_ms)
         });
         assert!(
             inside,
-            "駆動器の自己検査が失敗: 表示指令 [{index}]（段「{stage}」）の採取時の注入時刻 {}ms が宣言区間の外（製品の退行ではなく駆動が壊れている）",
+            "駆動器の自己検査が失敗: 表示指令 [{index}]（段「{stage}」）の採取時の注入時刻 {}ms が同名の宣言区間のどれにも入らない（段名が宣言に無いか区間の外・製品の退行ではなく駆動が壊れている）",
             collected.collected_at_ms
         );
     }

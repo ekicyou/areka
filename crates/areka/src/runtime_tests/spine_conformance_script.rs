@@ -150,8 +150,8 @@ pub(super) const LAP_STAGES: &[LapStage] = &[
 ///
 /// この値が 1 時間（3,600,000 ms）に満たないことが、毎秒の変化通知の Ref0 が走行を通じて
 /// `"0"` で一定になる根拠である（Ref0 は注入時刻を時へ割った値＝
-/// `crates/areka-kanade/src/schedule/events.rs`）。180,000 ms は 1 時間の 20 分の 1 に満たない。
-pub(super) const LAP_INJECT_LIMIT_MS: u64 = 180_000;
+/// `crates/areka-kanade/src/schedule/events.rs`）。今の最終段の上限 180,000 ms は 1 時間の 20 分の 1 に満たない。
+pub(super) const LAP_INJECT_LIMIT_MS: u64 = LAP_STAGES[LAP_STAGES.len() - 1].limit_ms;
 
 // ===========================================================================
 // 毎秒の変化通知の応答本数（task 2.2 の規則・本数を駆動器から借りない）

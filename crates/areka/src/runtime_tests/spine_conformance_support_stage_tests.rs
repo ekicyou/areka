@@ -292,11 +292,14 @@ fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {
     // 上の檻の (ii-a) と同じ待ち（据え置き時刻の再生側 Tick）。
     let probe = handle.clone();
     let mark = harness.progress_probe().expect("足場は進みの目印を持つ");
+    let mut dispatcher_closed = false;
     let began = wait_until(
         "boot 中の終了指示の OnClose の照会",
         Progress::Count(&*mark),
         || {
-            let _ = harness.inject(&Injection::DispatcherTick, 11_000);
+            if harness.inject(&Injection::DispatcherTick, 11_000).is_err() {
+                dispatcher_closed = true;
+            }
             probe
                 .non_status_calls()
                 .iter()
@@ -307,7 +310,7 @@ fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {
     .is_ok();
     assert!(
         began,
-        "boot 中に届いた終了指示が握手を始めていない: {:?}",
+        "boot 中に届いた終了指示が握手を始めていない（dispatcher の受信端が閉じたか: {dispatcher_closed}）: {:?}",
         handle.non_status_calls()
     );
 

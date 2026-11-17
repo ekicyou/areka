@@ -752,9 +752,7 @@ pub(super) fn project_display(command: &PresentCommand) -> DisplayProjection {
 
 // 主題単位の分割（R2.11）: 駆動器を縛る檻は兄弟ファイルへ置く。`spine.rs` は design が接続宣言
 // 3 本に固定しているため、本ファイルの側から接続する。
-#[cfg(test)]
 #[path = "spine_conformance_support_tests.rs"]
 mod driver_tests;
-#[cfg(test)]
 #[path = "spine_conformance_support_stage_tests.rs"]
 mod stage_tests;
