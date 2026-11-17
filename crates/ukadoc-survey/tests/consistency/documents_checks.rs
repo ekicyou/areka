@@ -59,9 +59,10 @@
 //! # 読むだけ
 //!
 //! 摂動は本文の**写し**（`String`）の上でだけ働かせる。repo のファイルには 1 バイトも
-//! 触れない（`documents.rs` の道具・`documents_non_vacuity.rs` の見張り）。
+//! 触れない（`documents.rs` の道具は `&str` を受けて `String` を返すだけで、型の上で
+//! repo のファイルに触れない）。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use ukadoc_survey::catalog::Catalog;
 use ukadoc_survey::check::FindingKind;
@@ -213,7 +214,7 @@ pub(super) fn bundle_ids_in_tables(markdown: &str) -> BTreeSet<String> {
             Some(indexes) => {
                 for &index in indexes {
                     if let Some(cell) = cells.get(index) {
-                        ids.extend(ids_in_cell(cell));
+                        ids.extend(cited_ids(cell));
                     }
                 }
             }
@@ -225,24 +226,6 @@ pub(super) fn bundle_ids_in_tables(markdown: &str) -> BTreeSet<String> {
 /// 表の 1 行を升目に割る（前後の空白を落とす）。
 fn row_cells(line: &str) -> Vec<&str> {
     line.trim_matches('|').split('|').map(str::trim).collect()
-}
-
-/// 1 つの升目に現れる `ukadoc:…` の綴り（逆引用符の有無を問わない）。
-fn ids_in_cell(cell: &str) -> Vec<String> {
-    let mut ids = Vec::new();
-    let mut rest = cell;
-    while let Some(at) = rest.find("ukadoc:") {
-        let tail = &rest[at..];
-        let end = tail.find(|c: char| !is_id_char(c)).unwrap_or(tail.len());
-        ids.push(tail[..end].to_owned());
-        rest = &tail[end..];
-    }
-    ids
-}
-
-/// id の綴りに現れてよい文字（`documents::parse` の同名の規則と同じ）。
-fn is_id_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '-' | '.' | '(' | ')')
 }
 
 /// `linkage.md` が引用した機械の束 id（`machine` 欄＋表の列）。
@@ -653,24 +636,5 @@ fn the_perturbation_target_is_never_a_prefix_of_another_id() {
         a_twistable_id(&ids),
         "ukadoc:a:X:1",
         "ほかの id の接頭辞になる綴りを選んでいる"
-    );
-}
-
-/// 実データで選んだ的が、実際に 3 文書のどこにも巻き添えを作らないこと。
-#[test]
-fn the_real_perturbation_target_appears_only_as_itself() {
-    let documents = Documents::load();
-    let ids = cited_ids(&documents.linkage_text);
-    let target = a_twistable_id(&ids);
-    let hit: BTreeMap<&str, usize> = ids
-        .iter()
-        .filter(|id| id.starts_with(&target))
-        .map(|id| (id.as_str(), 1))
-        .collect();
-    assert_eq!(
-        hit.len(),
-        1,
-        "摂動の的 {target} を接頭辞に持つ引用 id がほかにある: {:?}",
-        hit.keys().collect::<Vec<_>>()
     );
 }

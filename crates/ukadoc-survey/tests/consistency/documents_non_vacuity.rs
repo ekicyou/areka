@@ -16,7 +16,7 @@
 //!   `completed/` の直下の数）と、同じ較正。
 //! - 判定 ⑹ の母数の下限（作り直した全体報告の本文の長さ・その束の表の行数）と、同じ較正。
 //!
-//! 母数の器（[`Floors`]）と壊す道具 5 つの**較正**は兄弟の `documents_tools.rs` にある
+//! 母数の器（[`Floors`]）と壊す道具 4 つの**較正**は兄弟の `documents_tools.rs` にある
 //! （1 ファイル 1,000 行の目安・`structure.md`）。
 //!
 //! # 判定 ⑴ の下限は `linkage.md` と `briefing.md` の 2 本ぶん
@@ -461,7 +461,7 @@ fn the_floors_of_the_citation_and_bundle_checks_turn_red_when_the_source_goes_em
 /// 判定 ⑶ が数えている相手が 0 件でないこと（要件 11.4）。
 ///
 /// 見るのは 2 つ——名前付き束の数と、人手で足した構成 id の数である。帰属が空の
-/// `linkage.md`（束 0・`[tally]` が全部 0）は、腕 a〜g のうち a・c・d・e が
+/// `linkage.md`（束 0・`[tally]` が全部 0）は、腕 a〜g（d は欠番）のうち a・c・e が
 /// **母数 0 でそろって緑**になる。数えるものが無いことを「食い違いが無い」と読ませない。
 #[test]
 fn the_attribution_check_has_something_to_judge() {

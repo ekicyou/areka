@@ -3,14 +3,17 @@
 //!
 //! # ⑶ が主張すること
 //!
-//! `linkage.md` の束（名前付き束と単独項目）について、7 つの腕を並べる。
+//! `linkage.md` の束（名前付き束と単独項目）について、6 つの腕を並べる
+//! （腕 d は腕 b に畳んだので欠番）。
 //!
 //! - **a 互いに素**: 同じ構成 id が 2 つの束に属さない。
 //! - **b 過不足なし**: 構成 id の和集合が、状態が `implemented`・`vocabulary-only`・
-//!   `degraded`・`absent` である台帳の全項目とちょうど一致する。
-//! - **c 由来**: `hand` が `members` の部分集合であり、`members ∖ hand`（機械由来と
-//!   名乗る id）が、その束が引用した機械の束の構成 id の和集合に含まれる。
-//! - **d 除外**: `alias`・`not-applicable` の id が構成に 1 つも現れない（要件 4.3）。
+//!   `degraded`・`absent` である台帳の全項目とちょうど一致する。`alias`・
+//!   `not-applicable` の id が構成に現れないこと（要件 4.3）も、ここで「対象 4 状態の
+//!   項目でない」として見る。
+//! - **c 由来**: `members ∖ hand`（機械由来と名乗る id。`hand` が `members` の部分集合
+//!   であることは読み手が先に確かめて止まる）が、その束が引用した機械の束の構成 id の
+//!   和集合に含まれる。
 //! - **e 導出**: `themes`・`domains` が [`derive_bundle`] の値と一致し、
 //!   `breakage = "該当なし"` の束は全構成 id が `implemented` である。
 //! - **f 合計**: `[tally]` の数が数え直しと一致する（6 つの鍵とドメイン別の 4 欄）。
@@ -20,7 +23,7 @@
 //! ——構成 id を 1 つ抜けば b が「どの束にも属さない」と言い、f が「`from_machine` が
 //! 1 多い」と言う。どちらも正しい所見なので、どちらかを黙らせるのではなく、腕ごとに
 //! 「ちょうど 1 件」を確かめる。判定そのもの（実データが緑であること）は
-//! [`the_attribution_of_every_target_item_splits_across_the_bundles`] が 7 つまとめて見る。
+//! [`the_attribution_of_every_target_item_splits_across_the_bundles`] が 6 つまとめて見る。
 //!
 //! # 導出は二重に実装しない（設計 D-4）
 //!
@@ -37,8 +40,8 @@
 //! # 読むだけ
 //!
 //! 摂動は本文の**写し**（`String`）か、読み終えた骨組みの**写し**（[`Linkage`]）の上で
-//! だけ働かせる。repo のファイルには 1 バイトも触れない（`documents_non_vacuity.rs` の
-//! 見張りが実ファイルの中身と更新時刻で確かめる）。
+//! だけ働かせる。repo のファイルには 1 バイトも触れない（道具は `&str` を受けて
+//! `String` を返すだけで、型の上で repo のファイルに触れない）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -61,9 +64,6 @@ const TARGET_STATUSES: [Status; 4] = [
     Status::Degraded,
     Status::Absent,
 ];
-
-/// 束の構成から除く 2 状態（要件 4.3）。
-const EXCLUDED_STATUSES: [Status; 2] = [Status::Alias, Status::NotApplicable];
 
 // ---------------------------------------------------------------------------
 // 台帳から数え直す側
@@ -125,15 +125,6 @@ impl LedgerFacts {
             .values()
             .filter(|(_, actual)| *actual == status)
             .count()
-    }
-
-    /// 束の構成から除く 2 状態の項目 id を 1 つ（較正の的）。
-    fn an_excluded_id(&self) -> &str {
-        self.entries
-            .iter()
-            .find(|(_, (_, status))| EXCLUDED_STATUSES.contains(status))
-            .map(|(id, _)| id.as_str())
-            .expect("台帳に alias・not-applicable の項目が 1 つも無い")
     }
 }
 
@@ -229,7 +220,7 @@ fn coverage_findings(linkage: &Linkage, facts: &LedgerFacts) -> Vec<String> {
                     format!("状態が {}", status.as_key())
                 });
             findings.push(format!(
-                "{LINKAGE_MD}: 束 {name} の構成 id {id} が対象 4 状態の項目でない（{status}）"
+                "{LINKAGE_MD}: 束 {name} の構成 id {id} が対象 4 状態の項目でない（{status}・alias と not-applicable は束の構成から除く・要件 4.3）"
             ));
         }
     }
@@ -250,16 +241,6 @@ fn provenance_findings(
         if bundle.single {
             continue;
         }
-        let members: BTreeSet<&str> = bundle.members.iter().map(EntryId::as_str).collect();
-        for hand in &bundle.hand {
-            if !members.contains(hand.as_str()) {
-                findings.push(format!(
-                    "{LINKAGE_MD}: 束 {name} の hand の {} が members に無い（hand は members の部分集合・要件 4.1 ⑶）",
-                    hand.as_str()
-                ));
-            }
-        }
-
         let known = machine_members_of(bundle.machine.iter().map(EntryId::as_str), machine);
         let by_hand: BTreeSet<&str> = bundle.hand.iter().map(EntryId::as_str).collect();
         for member in &bundle.members {
@@ -270,26 +251,6 @@ fn provenance_findings(
             findings.push(format!(
                 "{LINKAGE_MD}: 束 {name} の構成 id {id} が、引用した機械の束の構成 id に無い（人手で足したなら hand に印を付ける・要件 4.1 ⑶）"
             ));
-        }
-    }
-    findings
-}
-
-/// 腕 d: `alias`・`not-applicable` の id が構成に 1 つも現れないこと（要件 4.3）。
-fn excluded_findings(linkage: &Linkage, facts: &LedgerFacts) -> Vec<String> {
-    let mut findings = Vec::new();
-    for (name, bundle) in &linkage.bundles {
-        for member in &bundle.members {
-            let id = member.as_str();
-            let Some(status) = facts.status_of(id) else {
-                continue;
-            };
-            if EXCLUDED_STATUSES.contains(&status) {
-                findings.push(format!(
-                    "{LINKAGE_MD}: 束 {name} の構成 id {id} は状態が {}（束の構成から除く・要件 4.3）",
-                    status.as_key()
-                ));
-            }
         }
     }
     findings
@@ -431,19 +392,19 @@ fn tally_findings(linkage: &Linkage, facts: &LedgerFacts) -> Vec<String> {
     }
 
     for domain in Domain::ALL {
-        let declared = tally.singles_by_domain.get(&domain).copied();
+        // 4 欄がそろっていることは読み手（`read_linkage`）が先に確かめて止まる。
+        let declared = tally
+            .singles_by_domain
+            .get(&domain)
+            .copied()
+            .expect("読み手が [tally.singles_by_domain] の 4 欄を先に確かめている");
         let actual = recount.singles_by_domain.get(&domain).copied().unwrap_or(0);
-        match declared {
-            None => findings.push(format!(
-                "{LINKAGE_MD}: [tally.singles_by_domain] に {} の欄が無い（0 のドメインも省けない・要件 11.5）",
-                domain.as_key()
-            )),
-            Some(declared) if declared != actual => findings.push(mismatch(
+        if declared != actual {
+            findings.push(mismatch(
                 &format!("[tally.singles_by_domain] の {}", domain.as_key()),
                 declared,
                 actual,
-            )),
-            Some(_) => {}
+            ));
         }
     }
     findings
@@ -489,7 +450,7 @@ fn identity_findings(linkage: &Linkage, facts: &LedgerFacts) -> Vec<String> {
     findings
 }
 
-/// 判定 ⑶ の所見（7 つの腕をまとめたもの）。空なら成り立っている。
+/// 判定 ⑶ の所見（6 つの腕をまとめたもの）。空なら成り立っている。
 fn attribution_findings(
     linkage: &Linkage,
     briefing: &Briefing,
@@ -500,7 +461,6 @@ fn attribution_findings(
     let mut findings = disjoint_findings(linkage);
     findings.extend(coverage_findings(linkage, facts));
     findings.extend(provenance_findings(linkage, machine));
-    findings.extend(excluded_findings(linkage, facts));
     findings.extend(derived_findings(linkage, briefing, ledgers, facts));
     findings.extend(tally_findings(linkage, facts));
     findings.extend(identity_findings(linkage, facts));
@@ -555,6 +515,37 @@ fn dropping_one_member_turns_the_coverage_arm_red() {
         &findings,
         &format!("束 {name} から構成 id {target} を 1 つ抜いた"),
         &[LINKAGE_MD, &target],
+    );
+}
+
+/// 摂動 1 の裏: alias か not-applicable の id を名前付き束の構成に混ぜると、腕 b の
+/// 「対象 4 状態の項目でない」が**ちょうどその 1 件**を名指して赤になる（要件 4.3）。
+#[test]
+fn smuggling_one_excluded_id_into_a_bundle_turns_the_coverage_arm_red() {
+    let repo = RepoData::load();
+    let documents = Documents::load();
+    let facts = LedgerFacts::collect(&repo.ledgers);
+
+    assert_no_findings(
+        "摂動の前から赤い（摂動が赤の原因だと言えない）",
+        &coverage_findings(&documents.linkage, &facts),
+    );
+
+    let id = an_excluded_id(&facts);
+    let name = a_named_bundle(&documents.linkage);
+    let mut broken = documents.linkage.clone();
+    broken
+        .bundles
+        .get_mut(&name)
+        .unwrap_or_else(|| panic!("束 {name} が写しに無い"))
+        .members
+        .push(EntryId::parse(&id).unwrap_or_else(|err| panic!("{id} を id として読めない: {err}")));
+
+    let findings = coverage_findings(&broken, &facts);
+    assert_single_finding(
+        &findings,
+        &format!("束 {name} に対象外の {id} を混ぜた"),
+        &[LINKAGE_MD, &name, &id],
     );
 }
 
@@ -639,36 +630,6 @@ fn removing_one_hand_mark_turns_the_provenance_arm_red() {
     assert_single_finding(
         &findings,
         &format!("束 {name} の hand から {id} を外した"),
-        &[LINKAGE_MD, &name, &id],
-    );
-}
-
-/// 腕 d: 除外した状態の id を 1 つ混ぜると赤になる（要件 4.3）。
-#[test]
-fn smuggling_one_excluded_id_turns_the_excluded_arm_red() {
-    let repo = RepoData::load();
-    let documents = Documents::load();
-    let facts = LedgerFacts::collect(&repo.ledgers);
-
-    assert_no_findings(
-        "摂動の前から赤い（摂動が赤の原因だと言えない）",
-        &excluded_findings(&documents.linkage, &facts),
-    );
-
-    let id = facts.an_excluded_id().to_owned();
-    let name = a_plain_bundle(&documents.linkage);
-    let mut broken = documents.linkage.clone();
-    broken
-        .bundles
-        .get_mut(&name)
-        .unwrap_or_else(|| panic!("束 {name} が写しに無い"))
-        .members
-        .push(EntryId::parse(&id).unwrap_or_else(|err| panic!("{id} を id として読めない: {err}")));
-
-    let findings = excluded_findings(&broken, &facts);
-    assert_single_finding(
-        &findings,
-        &format!("束 {name} に除外した id {id} を混ぜた"),
         &[LINKAGE_MD, &name, &id],
     );
 }
@@ -803,6 +764,26 @@ fn a_droppable_member(linkage: &Linkage, text: &str) -> (String, String) {
     panic!("抜いてよい構成 id が 1 つも無い");
 }
 
+/// 台帳で状態が alias か not-applicable の id を 1 つ選ぶ。
+fn an_excluded_id(facts: &LedgerFacts) -> String {
+    facts
+        .entries
+        .iter()
+        .find(|(_, (_, status))| matches!(status, Status::Alias | Status::NotApplicable))
+        .map(|(id, _)| id.clone())
+        .expect("alias も not-applicable も台帳に 1 つも無い（腕 b の除外を較正できない）")
+}
+
+/// 単独項目でない束を 1 つ選ぶ（単独項目は構成を 1 つしか持てない）。
+fn a_named_bundle(linkage: &Linkage) -> String {
+    linkage
+        .bundles
+        .iter()
+        .find(|(_, bundle)| !bundle.single)
+        .map(|(name, _)| name.clone())
+        .expect("名前付き束が 1 つも無い")
+}
+
 /// 「2 つ目の住処」を選ぶ——ある束の id を、別の束へ入れる組み合わせ。
 ///
 /// 返すのは（元の束名, 入れる先の束名, id）。腕 a は束名の文字順で最初に見つけた束を
@@ -839,16 +820,6 @@ fn a_hand_mark(
         }
     }
     panic!("人手の印が 1 つも無い（腕 c を較正できない）");
-}
-
-/// 単独項目でない束を 1 つ選ぶ。
-fn a_plain_bundle(linkage: &Linkage) -> String {
-    linkage
-        .bundles
-        .iter()
-        .find(|(_, bundle)| !bundle.single)
-        .map(|(name, _)| name.clone())
-        .expect("名前付き束が 1 つも無い")
 }
 
 /// `themes` を 1 つ以上持つ束を選ぶ。

@@ -133,9 +133,13 @@ impl LedgerFacts {
         self.rows.iter().filter(|fact| keep(fact)).count()
     }
 
-    /// `priority` がその段階の 1 文字で始まる項目数（腕 b の `items`）。
-    fn items_of(&self, stage: Stage) -> usize {
-        self.count(|fact| fact.priority.starts_with(stage.as_key()))
+    /// `priority` がその段階の 1 文字で始まる項目数（腕 b の `items`・腕 f の `[[after]]`）。
+    /// `domain` を渡せばそのドメインの項目だけを数える。
+    fn items_of(&self, stage: Stage, domain: Option<Domain>) -> usize {
+        self.count(|fact| {
+            domain.is_none_or(|domain| fact.domain == domain)
+                && fact.priority.starts_with(stage.as_key())
+        })
     }
 }
 
@@ -237,7 +241,7 @@ pub(super) fn stage_count_findings(briefing: &Briefing, facts: &LedgerFacts) -> 
         for (key, declared, actual) in [
             ("bundles", declared.bundles, bundles),
             ("singles", declared.singles, singles),
-            ("items", declared.items, facts.items_of(stage)),
+            ("items", declared.items, facts.items_of(stage, None)),
         ] {
             if declared != actual {
                 findings.push(count_mismatch(
@@ -616,8 +620,7 @@ pub(super) fn distribution_findings(briefing: &Briefing, facts: &LedgerFacts) ->
         let domain = after.domain;
         for stage in Stage::ALL {
             let declared = after.stages.get(&stage).copied().unwrap_or_default();
-            let actual = facts
-                .count(|fact| fact.domain == domain && fact.priority.starts_with(stage.as_key()));
+            let actual = facts.items_of(stage, Some(domain));
             if declared != actual {
                 let what = format!("[[after]] {} の {}", domain.as_key(), stage.as_key());
                 findings.push(count_mismatch(&what, declared, actual));

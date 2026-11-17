@@ -19,7 +19,7 @@ use ukadoc_survey::io::paths;
 
 use super::read_text;
 
-/// 本 spec 自身の spec ディレクトリの**名前**（要件 12.8）。
+/// 本 spec 自身の spec ディレクトリの**名前**。
 pub(super) const OWN_SPEC_DIR: &str = "areka-P0-ukadoc-coverage-roadmap";
 
 /// spec を置くディレクトリ（ワークスペース根からの相対）。
@@ -350,25 +350,6 @@ fn line_offsets(text: &str) -> Vec<(usize, &str)> {
         at += line.len() + 1;
     }
     rows
-}
-
-/// 束名を 1 つ消す（その名前が現れる行を丸ごと落とす）。
-pub(super) fn drop_bundle_name(text: &str, name: &str) -> String {
-    let needle = format!("\"{name}\"");
-    let mut kept = Vec::new();
-    let mut dropped = 0;
-    for line in text.lines() {
-        if line.contains(&needle) {
-            dropped += 1;
-            continue;
-        }
-        kept.push(line);
-    }
-    assert_eq!(
-        dropped, 1,
-        "束名 {name} を書いた行が写しにちょうど 1 行ない（{dropped} 行あった）"
-    );
-    kept.join("\n")
 }
 
 /// 本文にちょうど 1 度だけ現れる綴りの位置。

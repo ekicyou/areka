@@ -63,7 +63,7 @@ fn every_bundle_carries_one_stage_and_one_rank_that_the_ledgers_agree_with() {
 ///
 /// 消すのは骨組みの写しの上である。本文の写しから `bundle = "…"` の行だけを落とすと
 /// `[[rank]]` が `bundle` も `singles` も持たない行になり、読み手が**判定より前に**
-/// 落ちる（`documents.rs` の `drop_bundle_name` はそのために使えない）。
+/// 落ちる。
 #[test]
 fn dropping_one_bundle_name_turns_the_coverage_arm_red() {
     let documents = Documents::load();
