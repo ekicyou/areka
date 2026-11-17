@@ -212,17 +212,7 @@ fn section_body(body: &str, heading: &str) -> String {
     }
 }
 
-// ---- 完了条件の前半: 2 回作ると同じ本文（要件 7.3） ----
-
-#[test]
-fn rendering_the_same_ledger_twice_gives_the_same_body() {
-    let ledger = sample();
-    let first = render_domain(&ledger, &THEMES);
-    let second = render_domain(&ledger, &THEMES);
-    assert_eq!(first, second);
-    // 空文字どうしを比べて満足しないこと（否定・同一の主張は対象が空だと恒真）。
-    assert!(!first.is_empty());
-}
+// ---- 版面の逐語の釘（要件 7.3・7.4） ----
 
 #[test]
 fn the_body_is_pinned_verbatim() {
@@ -230,64 +220,12 @@ fn the_body_is_pinned_verbatim() {
     assert_eq!(render_domain(&sample(), &THEMES), expected_body());
 }
 
-#[test]
-fn the_body_writes_only_line_feeds() {
-    let body = render_domain(&sample(), &THEMES);
-    // バイトを直に数える（`grep -c` の類は空パターンに退化して嘘をつく）。
-    assert_eq!(
-        body.as_bytes()
-            .iter()
-            .filter(|byte| **byte == b'\r')
-            .count(),
-        0
-    );
-    assert!(
-        body.as_bytes()
-            .iter()
-            .filter(|byte| **byte == b'\n')
-            .count()
-            > 20
-    );
-}
-
-#[test]
-fn the_body_carries_no_wall_clock() {
-    // 生成日時を書かない（要件 7.3・設計 Data Models）。この見本に現れる数字は
-    // 件数（1 桁）と版番号（`2.10` など）だけなので、4 桁続く数字があれば年号など
-    // 時刻由来のものが混ざったことになる。
-    let body = render_domain(&sample(), &THEMES);
-    let mut run = 0usize;
-    for ch in body.chars() {
-        run = if ch.is_ascii_digit() { run + 1 } else { 0 };
-        assert!(run < 4, "本文に 4 桁続く数字がある: {body}");
-    }
-}
-
 // ---- 完了条件の後半: 未分類がどのページに何件あるか（要件 6.9） ----
-
-#[test]
-fn the_page_table_says_how_many_unclassified_entries_remain_on_each_page() {
-    let body = render_domain(&sample(), &THEMES);
-    let section = section_body(&body, "## ページ別の状態の分布");
-
-    // 見本の未分類は page_one 2 件・page_two 1 件（**件数が違う**ので、ページ別の表と
-    // 合計 1 行を区別できる）。
-    assert!(
-        section.contains("| page_one | 1 | 0 | 0 | 0 | 1 | 0 | 2 | 4 |"),
-        "{section}"
-    );
-    assert!(
-        section.contains("| page_two | 1 | 0 | 0 | 1 | 0 | 0 | 1 | 3 |"),
-        "{section}"
-    );
-    // 合計だけを載せた表に落ちていないこと。合計 3 件はこの節に現れない。
-    assert!(!section.contains("| 合計 | 3 |"), "{section}");
-}
 
 #[test]
 fn the_page_table_is_in_name_order_even_when_id_order_disagrees() {
     // 数字（0x30）は区切りのコロン（0x3A）より小さいので、`a0` を持つ id は `a` を
-    // 持つ id より前に来る。ページ名としては `a` が先である（タスク 3.4 の実測）。
+    // 持つ id より前に来る。ページ名としては `a` が先である（バイト順の比べ）。
     let ledger = ledger_of(
         Domain::Shiori,
         &["a", "a0"],
@@ -310,33 +248,12 @@ fn the_page_table_is_in_name_order_even_when_id_order_disagrees() {
     assert!(a < a0, "{section}");
 }
 
-// ---- 見出しの構成と並び（設計 report 節の 5 項目） ----
-
-#[test]
-fn the_five_items_appear_in_the_order_the_design_gives() {
-    let body = render_domain(&sample(), &THEMES);
-    let order = [
-        section_at(&body, "## 状態の分布"),
-        section_at(&body, "## ページ別の状態の分布"),
-        section_at(&body, "## SSP 世代別の対応表"),
-        section_at(&body, "## 別名の一覧"),
-        section_at(&body, "## テーマ別の状態分布"),
-        section_at(&body, "## ドメイン内で関連が閉じている束"),
-    ];
-    let mut sorted = order;
-    sorted.sort_unstable();
-    assert_eq!(order.to_vec(), sorted.to_vec());
-}
+// ---- 見出し ----
 
 #[test]
 fn the_heading_names_this_ledgers_domain() {
-    // 綴りを焼き付けていないこと（別のドメインを渡せば見出しが変わる）。
-    let property = render_domain(&sample(), &THEMES);
-    assert!(
-        property.starts_with("# property の網羅状況\n"),
-        "{property}"
-    );
-
+    // 綴りを焼き付けていないこと（逐語の本文は property だけなので、別のドメインを
+    // 渡せば見出しが変わることをここで見る）。
     let shiori = ledger_of(
         Domain::Shiori,
         &["page_one"],
@@ -346,94 +263,7 @@ fn the_heading_names_this_ledgers_domain() {
     assert!(body.starts_with("# shiori の網羅状況\n"), "{body}");
 }
 
-// ---- ⑴ 状態の分布（要件 7.8） ----
-
-#[test]
-fn the_overall_distribution_uses_the_plain_japanese_names_in_the_frozen_order() {
-    let section = section_body(&render_domain(&sample(), &THEMES), "## 状態の分布");
-    let labels: Vec<&str> = section
-        .lines()
-        .filter_map(|line| line.strip_prefix("| "))
-        .filter_map(|line| line.split(" | ").next())
-        .filter(|label| *label != "状態" && !label.starts_with("---"))
-        .collect();
-    assert_eq!(
-        labels,
-        vec![
-            "実装済み",
-            "語彙のみ",
-            "縮退",
-            "未対応",
-            "別名",
-            "対象外",
-            "未分類",
-            "合計",
-        ]
-    );
-}
-
-#[test]
-fn the_wide_tables_head_their_columns_with_the_plain_japanese_names() {
-    // ページ・世代・テーマの 3 表は列に 7 語彙を並べる。呼び名は要件 7.8 の平易な
-    // 日本語（英字の綴りではない）で、並びは要件 2.2 の順。
-    let body = render_domain(&sample(), &THEMES);
-    let expected = "| 実装済み | 語彙のみ | 縮退 | 未対応 | 別名 | 対象外 | 未分類 | 合計 |";
-    for (heading, first) in [
-        ("## ページ別の状態の分布", "ページ"),
-        ("## SSP 世代別の対応表", "世代"),
-        ("## テーマ別の状態分布", "テーマ"),
-    ] {
-        let section = section_body(&body, heading);
-        assert!(
-            section.contains(&format!("| {first} {expected}")),
-            "{section}"
-        );
-        // 英字の綴りが漏れていないこと（`implemented` などは台帳側の綴り）。
-        assert!(!section.contains("implemented"), "{section}");
-        assert!(!section.contains("not-applicable"), "{section}");
-    }
-}
-
-#[test]
-fn the_overall_distribution_keeps_the_zero_rows() {
-    // 0 件の欄を消すと「0 件だった」と「そもそも数えていない」が区別できない。
-    let section = section_body(&render_domain(&sample(), &THEMES), "## 状態の分布");
-    assert!(section.contains("| 語彙のみ | 0 |"), "{section}");
-    assert!(section.contains("| 対象外 | 0 |"), "{section}");
-}
-
-// ---- ⑵ 世代別の対応表 ----
-
-#[test]
-fn the_generation_table_names_the_unknown_generation_and_orders_by_name() {
-    let section = section_body(&render_domain(&sample(), &THEMES), "## SSP 世代別の対応表");
-    let names: Vec<&str> = section
-        .lines()
-        .filter_map(|line| line.strip_prefix("| "))
-        .filter_map(|line| line.split(" | ").next())
-        .filter(|name| *name != "世代" && !name.starts_with("---"))
-        .collect();
-    // 名前順であって数値順ではない（`2.10` が `2.9` より前）。空文字は「世代不明」で、
-    // 最古の世代へ混ぜない（要件 4.2）。
-    assert_eq!(names, vec!["2.10", "2.3", "2.9", "世代不明"]);
-    assert!(
-        section.contains("| 世代不明 | 0 | 0 | 0 | 1 | 0 | 0 | 2 | 3 |"),
-        "{section}"
-    );
-}
-
 // ---- ⑶ 別名の一覧 ----
-
-#[test]
-fn the_alias_list_shows_the_alias_row_and_the_id_it_points_at() {
-    let section = section_body(&render_domain(&sample(), &THEMES), "## 別名の一覧");
-    assert!(
-        section.contains("| ukadoc:page_one:delta:1 | ukadoc:page_one:echo:1 |"),
-        "{section}"
-    );
-    // 別名でない行は混ざらない。
-    assert!(!section.contains("ukadoc:page_one:foxtrot:1"), "{section}");
-}
 
 #[test]
 fn an_alias_row_without_a_target_says_so_instead_of_going_missing() {
@@ -465,40 +295,6 @@ fn an_empty_alias_list_says_there_is_none() {
 // ---- ⑷ テーマ別の状態分布（要件 4.4 の 8 テーマ） ----
 
 #[test]
-fn the_theme_table_lists_all_eight_themes_in_name_order_including_the_empty_ones() {
-    let section = section_body(&render_domain(&sample(), &THEMES), "## テーマ別の状態分布");
-    let names: Vec<&str> = section
-        .lines()
-        .filter_map(|line| line.strip_prefix("| "))
-        .filter_map(|line| line.split(" | ").next())
-        .filter(|name| *name != "テーマ" && !name.starts_with("---"))
-        .collect();
-    // 名前順は UTF-8 のバイト順であって五十音順ではない（タスク 3.4 の確定）。
-    assert_eq!(
-        names,
-        vec![
-            "交わり",
-            "掛け合い",
-            "更新",
-            "気配",
-            "気配り",
-            "装い",
-            "触れ合い",
-            "記憶",
-        ]
-    );
-    // 0 件のテーマも欄が残る（見本で使ったのは 3 つだけ）。
-    assert!(
-        section.contains("| 記憶 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |"),
-        "{section}"
-    );
-    assert!(
-        section.contains("| 触れ合い | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |"),
-        "{section}"
-    );
-}
-
-#[test]
 fn a_theme_name_that_only_the_argument_carries_still_gets_a_row() {
     // テーマ名は引数から来る（設計 D-11「入力はその台帳 1 本とテーマ名だけ」）。
     // 引数を無視して定数だけを見る実装をここで捕まえる。
@@ -517,33 +313,6 @@ fn a_theme_name_that_only_the_argument_carries_still_gets_a_row() {
 }
 
 // ---- ⑸ ドメイン内で関連が閉じている束（設計 D-11） ----
-
-#[test]
-fn a_bundle_whose_members_all_belong_to_this_ledger_is_listed() {
-    let section = section_body(
-        &render_domain(&sample(), &THEMES),
-        "## ドメイン内で関連が閉じている束",
-    );
-    assert!(
-        section.contains(
-            "| ukadoc:page_one:charlie:1 | ukadoc:page_one:charlie:1, \
-             ukadoc:page_one:delta:1, ukadoc:page_one:echo:1, ukadoc:page_two:alpha:1 |"
-        ),
-        "{section}"
-    );
-}
-
-#[test]
-fn a_bundle_reaching_an_id_outside_this_ledger_is_not_listed() {
-    // 負の主張は必ず正の主張と対で置く（対象が空だと恒真になる・タスク 1.6 の教訓）。
-    // 上のテストが「載る束が実在する」ことを言い、こちらが「伸びた束は載らない」を言う。
-    let section = section_body(
-        &render_domain(&sample(), &THEMES),
-        "## ドメイン内で関連が閉じている束",
-    );
-    assert!(!section.contains("ukadoc:other_page:zulu:1"), "{section}");
-    assert!(!section.contains("ukadoc:page_two:golf:1"), "{section}");
-}
 
 #[test]
 fn several_links_leaving_the_same_id_all_become_edges() {

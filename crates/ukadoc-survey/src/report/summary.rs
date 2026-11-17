@@ -45,14 +45,15 @@
 //! # 呼び名は 1 か所でしか綴らない
 //!
 //! 状態の平易な日本語（要件 7.8）は [`Status::as_japanese`] が正本で、ここでは綴り
-//! 直さない。ただし冒頭の表の列見出し「未分類」だけは字面として書いている——状態の
-//! 描画ではなく列の名前だからだが、`as_japanese` の綴りが変わればここも直すこと。
+//! 直さない。冒頭の表の列見出し「未分類」も `as_japanese` から埋める。
 //! 改行は `\n` だけを使う（設計 D-6）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::bundle::{Bundle, bundles};
-use super::tally::{StatusCounts, Tally, status_counts, tally};
+use super::tally::{
+    StatusCounts, Tally, push_status_header, push_status_row, status_counts, tally, theme_names,
+};
 use crate::catalog::Catalog;
 use crate::ledger::Ledger;
 use crate::model::{EntryId, Status};
@@ -101,7 +102,10 @@ pub fn render_summary(catalog: &Catalog, ledgers: &[Ledger], themes: &[&str]) ->
 
     // ⑴ 冒頭——各台帳の項目数と未分類件数。合計 1 行に畳まない。
     out.push_str("\n## 台帳ごとの項目数と未分類件数\n\n");
-    out.push_str("| ドメイン | 項目数 | 未分類 |\n| --- | ---: | ---: |\n");
+    out.push_str(&format!(
+        "| ドメイン | 項目数 | {} |\n| --- | ---: | ---: |\n",
+        Status::Unclassified.as_japanese()
+    ));
     for (ledger, counted) in &tallies {
         out.push_str(&format!(
             "| {} | {} | {} |\n",
@@ -172,73 +176,18 @@ fn owning_domain<'a>(ordered: &[&'a Ledger]) -> BTreeMap<&'a str, &'static str> 
     owner
 }
 
-/// 7 語彙を列に並べた表の見出しを書く。
-///
-/// 列の名前は [`Status::as_japanese`] から引き、[`Status::ALL`] の順に並べる
-/// （要件 2.2 の語彙の順・要件 7.8 の呼び名）。ここで綴り直さない。
-///
-/// 表の形はドメイン別報告と揃えているが、版面はそれぞれの報告が自分で持つ。片方の
-/// 版面を変えたときにもう片方が黙って動かないようにするためである（ドメイン別報告の
-/// 版面は要件 7.4 の新しさの検査が、この報告の版面は判定 ⑹ がバイト単位で固定する）。
-fn push_status_header(out: &mut String, first: &str) {
-    out.push_str(&format!("| {first}"));
-    for status in Status::ALL {
-        out.push_str(&format!(" | {}", status.as_japanese()));
-    }
-    out.push_str(" | 合計 |\n| ---");
-    // 1 列目を除く残り（7 語彙＋合計）はすべて右寄せ。
-    for _ in 0..Status::ALL.len() + 1 {
-        out.push_str(" | ---:");
-    }
-    out.push_str(" |\n");
-}
-
-/// 7 語彙を列に並べた表の 1 行を書く。
-///
-/// [`StatusCounts`] は 7 語彙すべてを持つので、0 件の列も欠けない。
-fn push_status_row(out: &mut String, label: &str, counts: &StatusCounts) {
-    out.push_str(&format!("| {label}"));
-    for (_, count) in counts.rows() {
-        out.push_str(&format!(" | {count}"));
-    }
-    out.push_str(&format!(" | {} |\n", counts.total()));
-}
-
 /// 台帳ごとのテーマ別集計を足し合わせる。
 ///
 /// どの項目がどのテーマに数えられるかの規則は [`tally`] が持つ。ここで台帳の項目を
 /// 数え直すと同じ規則が 2 か所に散るので、出来上がった分布どうしを足す。
-/// [`StatusCounts`] は 1 件ずつ数える口しか持たないので、件数の分だけ足している
-/// （台帳の項目数は数千件までなので、この数え直しは目に見える手間にならない）。
 fn merged_themes(tallies: &[(&Ledger, Tally)]) -> BTreeMap<String, StatusCounts> {
     let mut merged: BTreeMap<String, StatusCounts> = BTreeMap::new();
     for (_, counted) in tallies {
         for (theme, counts) in &counted.by_theme {
-            let target = merged.entry(theme.clone()).or_default();
-            for (status, count) in counts.rows() {
-                for _ in 0..*count {
-                    target.add(*status);
-                }
-            }
+            merged.entry(theme.clone()).or_default().merge(counts);
         }
     }
     merged
-}
-
-/// 並べるテーマ名を名前順で決める。
-///
-/// 引数のテーマ名と、台帳が実際に使った名前の**両方**を並べる。引数だけを見ると台帳に
-/// 書かれた見知らぬ名前の件数が消え、台帳だけを見ると 1 件も使われていないテーマの
-/// 欄が消える。
-fn theme_names<'a>(
-    by_theme: &'a BTreeMap<String, StatusCounts>,
-    themes: &[&'a str],
-) -> Vec<&'a str> {
-    let mut names: BTreeSet<&str> = by_theme.keys().map(String::as_str).collect();
-    for theme in themes {
-        names.insert(theme);
-    }
-    names.into_iter().collect()
 }
 
 /// ⑶ 束の一覧を書く。並びは束 id の昇順（[`bundles`] が並べている）。

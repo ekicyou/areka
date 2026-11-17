@@ -315,26 +315,11 @@ fn each_generation_carries_the_status_distribution_of_its_entries() {
 // ---- テーマ別の状態分布（要件 7.1 の 4 つ目） ----
 
 #[test]
-fn all_eight_themes_appear_even_when_no_entry_carries_them() {
+fn only_the_themes_an_entry_wears_appear() {
     let got = tally(&sample());
     // 並びは名前順（設計 report 節の事後条件「ページとテーマと束 id は名前順」）。
-    // 8 テーマの綴りは要件 4.4 の凍結語彙。
-    assert_eq!(
-        name_keys(&got.by_theme),
-        vec![
-            "交わり",
-            "掛け合い",
-            "更新",
-            "気配",
-            "気配り",
-            "装い",
-            "触れ合い",
-            "記憶",
-        ]
-    );
-    let empty = got.by_theme.get("記憶").expect("8 テーマは必ず並ぶ");
-    assert_eq!(empty.total(), 0);
-    assert_eq!(empty.rows().len(), 7);
+    // 1 件も使われていないテーマの 0 件の行は報告の側が並べる（`report::domain`）。
+    assert_eq!(name_keys(&got.by_theme), vec!["更新", "気配", "触れ合い"]);
 }
 
 #[test]
@@ -344,7 +329,7 @@ fn a_theme_carries_the_status_distribution_of_the_entries_that_wear_it() {
         got.by_theme
             .get(name)
             .map(japanese)
-            .expect("8 テーマは必ず並ぶ")
+            .expect("見本が使ったテーマは欄を持つ")
     };
 
     // 気配 は実装済み 1 件（alpha）と未分類 1 件（charlie）。
@@ -363,13 +348,7 @@ fn a_theme_carries_the_status_distribution_of_the_entries_that_wear_it() {
     assert_eq!(theme("更新")[0], ("実装済み", 1));
     assert_eq!(theme("触れ合い")[0], ("実装済み", 1));
     // 気配 と 気配り は片方が他方の接頭辞。前方一致で拾うと 気配り が汚れる。
-    assert_eq!(
-        got.by_theme
-            .get("気配り")
-            .map(StatusCounts::total)
-            .expect("8 テーマは必ず並ぶ"),
-        0
-    );
+    assert!(!got.by_theme.contains_key("気配り"));
 }
 
 #[test]
@@ -385,7 +364,7 @@ fn an_entry_with_two_themes_is_counted_under_both() {
 fn a_theme_name_outside_the_frozen_eight_gets_a_row_of_its_own() {
     // `ledger::read` は 8 テーマ以外の綴りを落とすので、この形はそこを通っては
     // 現れない。それでも黙って捨てない——捨てると手で組んだ台帳で件数だけが
-    // 合わなくなる。8 テーマが必ず並ぶという約束はこの場合も破れない。
+    // 合わなくなる。
     let ledger = ledger_of(vec![entry(
         "ukadoc:page_one:charlie:1",
         Status::Absent,
@@ -393,7 +372,7 @@ fn a_theme_name_outside_the_frozen_eight_gets_a_row_of_its_own() {
         &["知らないテーマ"],
     )]);
     let got = tally(&ledger);
-    assert_eq!(got.by_theme.len(), 9);
+    assert_eq!(name_keys(&got.by_theme), vec!["知らないテーマ"]);
     assert_eq!(
         got.by_theme
             .get("知らないテーマ")
@@ -401,7 +380,6 @@ fn a_theme_name_outside_the_frozen_eight_gets_a_row_of_its_own() {
             .expect("知らない綴りも欄を持つ"),
         1
     );
-    assert!(got.by_theme.contains_key("記憶"));
 }
 
 // ---- 2 回続けて同じ答え（要件 7.3） ----
@@ -416,5 +394,17 @@ fn running_twice_yields_the_same_tally() {
     assert_eq!(first.overall.total(), 6);
     assert_eq!(first.by_page.len(), 2);
     assert_eq!(first.by_generation.len(), 4);
-    assert_eq!(first.by_theme.len(), 8);
+    assert_eq!(first.by_theme.len(), 3);
+}
+
+// ---- 分布どうしの足し合わせ ----
+
+#[test]
+fn merging_adds_the_counts_status_by_status() {
+    let mut total = status_counts(sample().entries.values());
+    total.merge(&status_counts(sample().entries.values()));
+    assert_eq!(total.get(Status::Implemented), 4);
+    assert_eq!(total.get(Status::Alias), 2);
+    assert_eq!(total.get(Status::Absent), 0);
+    assert_eq!(total.total(), 12);
 }

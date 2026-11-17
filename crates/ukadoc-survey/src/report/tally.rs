@@ -22,21 +22,28 @@
 //!
 //! # 0 件の欄を消さない
 //!
-//! 状態の分布は 7 語彙すべてを、件数 0 のものも欠かさず持つ。テーマ別は 8 テーマ
-//! すべてを持つ。欄ごと消すと「0 件だった」と「そもそも数えていない」が読み手には
-//! 区別できない。ページ別の未分類 0 件が見えることは要件 6.9 が要る形でもある
-//! （未分類の件数は台帳側に宣言値を持たせず、この分布を正とする）。
+//! 状態の分布は 7 語彙すべてを、件数 0 のものも欠かさず持つ。欄ごと消すと「0 件
+//! だった」と「そもそも数えていない」が読み手には区別できない。ページ別の未分類 0 件が
+//! 見えることは要件 6.9 が要る形でもある（未分類の件数は台帳側に宣言値を持たせず、
+//! この分布を正とする）。テーマ別は台帳が使った名前だけを持つ。1 件も使われていない
+//! テーマの 0 件の行は、報告の側が引数のテーマ名から並べる（[`theme_names`]）。
 //!
 //! # 呼び名は 1 か所でしか綴らない
 //!
 //! 報告に出す平易な日本語（要件 7.8）は [`Status::as_japanese`] が正本で、ここでは
 //! 綴り直さない（[`StatusCounts::japanese_rows`] がそこから引く）。同じ語彙を 2 か所に
 //! 綴ると、片方を並べ替える誤りが往復のテストを素通りする。
+//!
+//! # 表の見出しと行の道具もここに 1 つ
+//!
+//! ドメイン別報告と全体報告は同じ 7 語彙の列を持つ表を書く。見出しと行の書き方は
+//! [`push_status_header`]・[`push_status_row`] の 1 か所に置き、並べるテーマ名の決め方
+//! ([`theme_names`]) も同じ。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ledger::{Ledger, LedgerEntry};
-use crate::model::{PageName, Status, THEMES};
+use crate::model::{PageName, Status};
 
 /// `introduced` が空のときの世代の名前（設計 report 節）。
 ///
@@ -91,6 +98,13 @@ impl StatusCounts {
         self.rows.iter().map(|row| row.1).sum()
     }
 
+    /// 別の分布の件数を状態ごとに足す。
+    pub fn merge(&mut self, other: &StatusCounts) {
+        for (row, (_, count)) in self.rows.iter_mut().zip(&other.rows) {
+            row.1 += count;
+        }
+    }
+
     /// 要件 2.2 の順に並んだ「状態・件数」。
     pub fn rows(&self) -> &[(Status, usize)] {
         &self.rows
@@ -120,7 +134,7 @@ pub struct Tally {
     pub by_page: BTreeMap<PageName, StatusCounts>,
     /// 世代別の状態の分布（世代名の順）。世代は [`generation_of`] が決める。
     pub by_generation: BTreeMap<String, StatusCounts>,
-    /// テーマ別の状態の分布（テーマ名の順）。要件 4.4 の 8 テーマは 0 件でも必ず並ぶ。
+    /// テーマ別の状態の分布（テーマ名の順）。台帳が 1 件でも使ったテーマだけが現れる。
     pub by_theme: BTreeMap<String, StatusCounts>,
 }
 
@@ -130,11 +144,7 @@ pub fn tally(ledger: &Ledger) -> Tally {
 
     let mut by_page: BTreeMap<PageName, StatusCounts> = BTreeMap::new();
     let mut by_generation: BTreeMap<String, StatusCounts> = BTreeMap::new();
-    // 8 テーマは項目が 1 つも付いていなくても並べる（0 件が見える形にする）。
-    let mut by_theme: BTreeMap<String, StatusCounts> = THEMES
-        .into_iter()
-        .map(|theme| (theme.to_owned(), StatusCounts::new()))
-        .collect();
+    let mut by_theme: BTreeMap<String, StatusCounts> = BTreeMap::new();
 
     for entry in ledger.entries.values() {
         // ページは id から取る。前置きの `pages` は見ない（設計 D-11。前置きと id の
@@ -150,8 +160,8 @@ pub fn tally(ledger: &Ledger) -> Tally {
             .add(entry.status);
 
         // 台帳の `values` は `ledger::read` が 8 テーマに限っている（要件 6.10）。
-        // それでも知らない綴りを黙って捨てず、自分の欄を持たせる——捨てると手で
-        // 組んだ台帳で件数だけが合わなくなる。
+        // 知らない綴りも黙って捨てず、自分の欄を持たせる——捨てると手で組んだ台帳で
+        // 件数だけが合わなくなる。
         for value in &entry.values {
             by_theme.entry(value.clone()).or_default().add(entry.status);
         }
@@ -175,6 +185,48 @@ pub fn status_counts<'a>(entries: impl Iterator<Item = &'a LedgerEntry>) -> Stat
         counts.add(entry.status);
     }
     counts
+}
+
+/// 7 語彙を列に並べた表の見出しを書く。
+///
+/// 列の名前は [`Status::as_japanese`] から引き、[`Status::ALL`] の順に並べる
+/// （要件 2.2 の語彙の順・要件 7.8 の呼び名）。ここで綴り直さない。
+pub(super) fn push_status_header(out: &mut String, first: &str) {
+    out.push_str(&format!("| {first}"));
+    for status in Status::ALL {
+        out.push_str(&format!(" | {}", status.as_japanese()));
+    }
+    out.push_str(" | 合計 |\n| ---");
+    // 1 列目を除く残り（7 語彙＋合計）はすべて右寄せ。
+    for _ in 0..Status::ALL.len() + 1 {
+        out.push_str(" | ---:");
+    }
+    out.push_str(" |\n");
+}
+
+/// 7 語彙を列に並べた表の 1 行を書く。
+///
+/// [`StatusCounts`] は 7 語彙すべてを持つので、0 件の列も欠けない。
+pub(super) fn push_status_row(out: &mut String, label: &str, counts: &StatusCounts) {
+    out.push_str(&format!("| {label}"));
+    for (_, count) in counts.rows() {
+        out.push_str(&format!(" | {count}"));
+    }
+    out.push_str(&format!(" | {} |\n", counts.total()));
+}
+
+/// 並べるテーマ名を名前順で決める。
+///
+/// 引数のテーマ名と、台帳が実際に使った名前の**両方**を並べる。引数だけを見ると台帳に
+/// 書かれた見知らぬ名前の件数が消え、台帳だけを見ると 1 件も使われていないテーマの
+/// 欄が消える。
+pub(super) fn theme_names<'a>(
+    by_theme: &'a BTreeMap<String, StatusCounts>,
+    themes: &[&'a str],
+) -> Vec<&'a str> {
+    let mut names: BTreeSet<&str> = by_theme.keys().map(String::as_str).collect();
+    names.extend(themes.iter().copied());
+    names.into_iter().collect()
 }
 
 /// 登場した版から世代を取る（設計 report 節）。

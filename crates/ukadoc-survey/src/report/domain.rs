@@ -35,10 +35,8 @@
 //! 状態の平易な日本語（要件 7.8）は [`Status::as_japanese`] が正本で、ここでは綴り
 //! 直さない。同じ語彙を 2 か所に綴ると、片方を並べ替える誤りがテストを素通りする。
 
-use std::collections::{BTreeMap, BTreeSet};
-
 use super::bundle::{Bundle, bundles};
-use super::tally::{StatusCounts, tally};
+use super::tally::{StatusCounts, push_status_header, push_status_row, tally, theme_names};
 use crate::ledger::Ledger;
 use crate::model::{EntryId, Status};
 
@@ -103,50 +101,6 @@ pub fn render_domain(ledger: &Ledger, themes: &[&str]) -> String {
     push_bundle_list(&mut out, &closed_bundles(ledger));
 
     out
-}
-
-/// 7 語彙を列に並べた表の見出しを書く。
-///
-/// 列の名前は [`Status::as_japanese`] から引き、[`Status::ALL`] の順に並べる
-/// （要件 2.2 の語彙の順・要件 7.8 の呼び名）。ここで綴り直さない。
-fn push_status_header(out: &mut String, first: &str) {
-    out.push_str(&format!("| {first}"));
-    for status in Status::ALL {
-        out.push_str(&format!(" | {}", status.as_japanese()));
-    }
-    out.push_str(" | 合計 |\n| ---");
-    // 1 列目を除く残り（7 語彙＋合計）はすべて右寄せ。
-    for _ in 0..Status::ALL.len() + 1 {
-        out.push_str(" | ---:");
-    }
-    out.push_str(" |\n");
-}
-
-/// 7 語彙を列に並べた表の 1 行を書く。
-///
-/// [`StatusCounts`] は 7 語彙すべてを持つので、0 件の列も欠けない。
-fn push_status_row(out: &mut String, label: &str, counts: &StatusCounts) {
-    out.push_str(&format!("| {label}"));
-    for (_, count) in counts.rows() {
-        out.push_str(&format!(" | {count}"));
-    }
-    out.push_str(&format!(" | {} |\n", counts.total()));
-}
-
-/// 並べるテーマ名を名前順で決める。
-///
-/// 引数のテーマ名と、台帳が実際に使った名前の**両方**を並べる。引数だけを見ると台帳に
-/// 書かれた見知らぬ名前の件数が消え、台帳だけを見ると 1 件も使われていないテーマの
-/// 欄が消える。
-fn theme_names<'a>(
-    by_theme: &'a BTreeMap<String, StatusCounts>,
-    themes: &[&'a str],
-) -> Vec<&'a str> {
-    let mut names: BTreeSet<&str> = by_theme.keys().map(String::as_str).collect();
-    for theme in themes {
-        names.insert(theme);
-    }
-    names.into_iter().collect()
 }
 
 /// ⑶ 別名の一覧を書く。

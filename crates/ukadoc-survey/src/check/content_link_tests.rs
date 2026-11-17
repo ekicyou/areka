@@ -720,9 +720,14 @@ fn the_theme_vocabulary_comes_from_the_input_not_from_a_constant() {
         ..world.input()
     });
 
+    // 報告は渡されたテーマ名から 0 件の行を並べるので、「気配」を使っていない 3 つの
+    // ドメインの報告からは 0 件の行が消え、本文が食い違う（古い報告の所見）。
     assert_eq!(
         kinds(&outcome.findings),
-        vec![(FindingKind::UnknownTheme, 2)]
+        vec![
+            (FindingKind::UnknownTheme, 2),
+            (FindingKind::DomainReportStale, 3)
+        ]
     );
     assert_eq!(
         ids(&outcome.findings, FindingKind::UnknownTheme),
