@@ -82,7 +82,7 @@
   - 完了の状態: ⑴〜⑸ が緑で、印の線を (n−1, n) で引く形に戻すと ⑴ か ⑵ が落ちる。設計の G1 が 0 行／`follow/` の下 0 で、`cargo test -p areka-placement` が緑
   - _Dispatch: standard, effort high — 束ね方の新しい組み立てと、鎖の答えとの一致を檻で詰める_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 1.7, 1.8, 7.1, 8.4, 9.5_
-- [ ] 6.2 記憶の戻しの道で T6・T8 の組の差が保たれる檻を置く
+- [x] 6.2 記憶の戻しの道で T6・T8 の組の差が保たれる檻を置く
   - `persist_restore_group_tests.rs`: `apply_restored_placements` に T6 ⑴・T8 の形の揃え方つきの配置と記憶を渡し、組の差が保たれることを見る（World を持たない純関数の道）
   - 完了の状態: 2 本の檻が緑で、6.1 の印の線を (n−1, n) に戻すと落ちる
   - _Dispatch: mechanical — 設計が入力の形と期待を与えている_
