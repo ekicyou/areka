@@ -5,7 +5,7 @@
 //!
 //! 状態の呼び名は [`Status::as_japanese`] が正本なので、期待値はそこから引かず
 //! **逐語の文字列**で書く。実装側の対応表を参照すると表を表自身と比べるだけになり、
-//! 綴りの取り違えを 1 件も捕まえられない（タスク 1.5 の教訓）。
+//! 綴りの取り違えを 1 件も捕まえられない。
 
 use std::collections::BTreeMap;
 
@@ -174,7 +174,7 @@ fn the_page_distribution_is_in_name_order_even_when_id_order_disagrees() {
     // 区切りのコロン（0x3A）より数字（0x30）の方が小さいので、`a0` を持つ id は
     // `a` を持つ id より前に来る。ページ名としては `a` が先である。
     //
-    // 実データの 38 ページに今この形の対は無いが、`spec_shiori3` は既にあるので
+    // 実データに今この形の対は無いが、`spec_shiori3` は既にあるので
     // `spec_shiori` が 1 ページ増えればその日に生じる。
     let ledger = ledger_of(vec![
         entry("ukadoc:a0:x:1", Status::Implemented, "", &[]),
@@ -390,7 +390,7 @@ fn running_twice_yields_the_same_tally() {
     let first: Tally = tally(&ledger);
     let second: Tally = tally(&ledger);
     assert_eq!(first, second);
-    // 空の主張にならないよう、非空であることも言う（タスク 1.6 の教訓）。
+    // 空の主張にならないよう、非空であることも言う。
     assert_eq!(first.overall.total(), 6);
     assert_eq!(first.by_page.len(), 2);
     assert_eq!(first.by_generation.len(), 4);

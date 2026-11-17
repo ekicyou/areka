@@ -283,7 +283,7 @@ grep -o '^"ukadoc:list_propertysystem:[^"]*"' doc/ukadoc-coverage/catalog.toml
 ### 伺からしさのテーマ
 
 `values` に書けるのは `values.md` に見出しとして並ぶ 8 つの名前だけである
-（気配・触れ合い・掛け合い・装い・記憶・交わり・気配り・更新）。他の綴りは `UnknownTheme` で失敗する。
+（気配・触れ合い・掛け合い・装い・記憶・交わり・気配り・更新）。他の綴りは台帳の読み込みの段で失敗する。
 
 付与の規則は 1 つだけ。
 
@@ -564,7 +564,7 @@ cargo run -p ukadoc-survey -- report-summary  # 全体報告
 
 ## 検査が失敗したときの読み方
 
-`cargo test -p ukadoc-survey` や `cargo run -p ukadoc-survey -- check` が出す所見は 14 種ある。
+`cargo test -p ukadoc-survey` や `cargo run -p ukadoc-survey -- check` が出す所見は 13 種ある。
 所見にはどのファイルのどの id かが必ず付く。
 
 | 所見 | 意味 | だいたいの直し方 |
@@ -581,7 +581,6 @@ cargo run -p ukadoc-survey -- report-summary  # 全体報告
 | `LinkEndpointMissing` | 関連・別名・置き換えの相手がカタログに無い | 相手 id を写し直す |
 | `AliasChain` | `alias_of` の指す先がまた別名 | 正典の行を直接指す |
 | `IntroducedNotInCatalogVersions` | 書いた登場版がカタログの版番号に無い | カタログの `versions` から選び直す |
-| `UnknownTheme` | テーマ名が `values.md` に無い | 綴りを直す |
 | `DomainReportStale` | 報告が台帳と食い違う | `report` を走らせ直す（場所が `report/summary.md` なら `report-summary`） |
 
 状態の語・テーマ名・関連の種別の**綴り違い**は、これより手前の読み込みの段で落ちる。

@@ -10,8 +10,8 @@
 //! 3. どちらでもなければ [`EvidenceIndex::unresolved`] へ回す。ここでは赤にしない
 //!    ——赤にするのは検査の段（`SourceUrlNotInCatalog`）である。
 //!
-//! カタログには**ある項目の URL が別の項目の URL の先頭部分になっている例が無い**
-//! ので、完全一致で曖昧さなく 1 件に定まる。アンカーを持たない項目は項目 URL と
+//! 同じ URL を持つ 2 項目はカタログの組み立て（`catalog::build`）が拒むので、
+//! 完全一致で曖昧さなく 1 件に定まる。アンカーを持たない項目は項目 URL と
 //! ページ URL の綴りが同じになるが、1 段目が先なので項目の証拠になる。
 //!
 //! 同じ URL が複数のファイルに現れても赤にしない（設計 D-4）。証拠は id ごとに
@@ -47,11 +47,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::candidates::{
+use super::extract::extract;
+use super::lex::{
     SLICE_START, line_offsets, read_raw_string, read_string, skip_block_comment, skip_char_literal,
     skip_line_comment, slice_element_names,
 };
-use super::extract::extract;
 use super::{EvidenceIndex, NameMatchFailure, UnmatchedName, UnresolvedUrl, UrlHit};
 use crate::catalog::Catalog;
 use crate::model::{EntryId, PageName};

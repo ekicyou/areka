@@ -13,12 +13,11 @@
 //! 対で置く。出た所見は種類ごとの**件数の等式**で
 //! 主張するので、意図しない種類が 1 件でも混ざれば赤になる。
 //!
-//! # 道連れになる所見が 2 つある
+//! # 道連れになる所見がある
 //!
-//! `CatalogIdInMultipleLedgers` は `LedgerIdPageMismatch` を、`PageNotAssigned` は
-//! `CatalogIdMissingFromLedgers` を必ず連れてくる（1 ページ 1 ドメインが仕様の
-//! 不変条件なので、どんな見本でも避けられない）。この 2 つだけは 2 種類を明示して
-//! 主張する。
+//! 1 か所を壊すと、別の種類の所見が道連れに出ることがある（`CatalogIdInMultipleLedgers`
+//! と `LedgerIdPageMismatch`、`PageNotAssigned` と担当違いなど）。連れてくる相方は見本の
+//! 組み方で変わる。道連れのあるテストは出た種類を全部明示して主張する。
 //!
 //! # `[ledger].domain` の食い違いのテストは無い
 //!
@@ -102,7 +101,6 @@ fn the_untouched_sample_world_has_no_findings() {
     let world = World::normal();
     let outcome = run(&world.input());
     assert_eq!(kinds(&outcome.findings), vec![]);
-    assert_eq!(outcome.findings.len(), 0);
 }
 
 /// 検査が見ている材料が空でないことを、肯定の側から数える。

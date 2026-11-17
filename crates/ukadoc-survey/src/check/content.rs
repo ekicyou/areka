@@ -1,13 +1,15 @@
-//! 内容の検査（要件 6.5・6.6・6.7・6.8・6.10・6.11）。
+//! 内容の検査（要件 6.5・6.6・6.7・6.10・6.11）。
 //!
 //! 台帳の中身と、ソースに置かれた正典 URL を判定する。設計 check 節の「判定の内訳」
-//! から、この段が受け持つのは次の 6 種である。
+//! から、この段が受け持つのは次の 5 種である。
 //!
 //! - `SourceUrlNotInCatalog`（6.5・6.10）——ソースの URL がカタログに無い
 //! - `ImplementedWithoutEvidence`（6.6）——実装済みなのに証拠が 1 件も無い
 //! - `LinkEndpointMissing` / `AliasChain`（6.7・2.4）——関連の相手と別名の連鎖
 //! - `IntroducedNotInCatalogVersions`（6.7）——登場版がカタログの版番号と矛盾
-//! - `UnknownTheme`（6.8）——テーマ名がテーマ定義に無い
+//!
+//! テーマ名（要件 6.8）はここでは見ない。綴り違いは `ledger::read` が読み込みの段で
+//! 落とすので、検査に届く台帳はもう定義の外のテーマ名を持たない。
 //!
 //! ここは純粋層で、ファイルにもスナップショットにも触らない（要件 6.2）。失敗も
 //! しない——食い違いは [`Finding`] として全部集めて返し、1 件目で止めない（設計
@@ -52,7 +54,7 @@ use crate::model::{EntryId, Status};
 ///
 /// 並びは決まっている——まずソースの URL を（`unresolved` の並びのまま）、続いて
 /// 台帳を渡された順に見て、1 本ごとに項目を id の byte 昇順で、1 項目ごとに
-/// 証拠 → 関連 → 別名の連鎖 → 登場版 → テーマの順に見る。同じ入力なら同じ並びで
+/// 証拠 → 関連 → 別名の連鎖 → 登場版の順に見る。同じ入力なら同じ並びで
 /// 返る（要件 7.3 の決まり方を検査の出力にも通す）。
 pub fn check(input: &CheckInput) -> Vec<Finding> {
     let mut findings = Vec::new();
@@ -63,7 +65,6 @@ pub fn check(input: &CheckInput) -> Vec<Finding> {
             check_link_endpoints(input, ledger, entry, &mut findings);
             check_alias_chain(input, ledger, entry, &mut findings);
             check_introduced(input, ledger, entry, &mut findings);
-            check_themes(input, ledger, entry, &mut findings);
         }
     }
     findings
@@ -239,37 +240,8 @@ fn check_introduced(
     ));
 }
 
-/// テーマ名がテーマ定義に実在するか（要件 6.8）。
-///
-/// 突き合わせは**完全一致**である。8 つのうち「気配」と「気配り」は片方が他方の
-/// 接頭辞なので、部分一致で拾うと別のテーマを取り違える。
-///
-/// 照らす相手は [`CheckInput::themes`] であって定数ではない。定義そのものが凍結の
-/// 対象（要件 4.4・2.6）で、その正本は `doc/ukadoc-coverage/values.md` の側にある。
-///
-/// **1 件目で止めない**。1 つの項目が 0 個以上のテーマを持つので、綴り違いが 2 つ
-/// 並ぶことはある。
-fn check_themes(
-    input: &CheckInput,
-    ledger: &Ledger,
-    entry: &LedgerEntry,
-    findings: &mut Vec<Finding>,
-) {
-    for value in &entry.values {
-        if input.themes.contains(&value.as_str()) {
-            continue;
-        }
-        findings.push(Finding::new(
-            FindingKind::UnknownTheme,
-            Some(entry.id.clone()),
-            ledger_file(ledger.domain),
-            format!("テーマ定義に無いテーマ名: {value}"),
-        ));
-    }
-}
-
 // 在中テストは 2 本に分かれている。1 本にまとめると 1,000 行を超えるので、判定の
-// 主題で割った（URL と証拠／関連・別名・版・テーマ）。数え方と場所の綴りは
+// 主題で割った（URL と証拠／関連・別名・版）。数え方と場所の綴りは
 // `check::test_support` に集めてある。
 #[cfg(test)]
 #[path = "content_tests.rs"]

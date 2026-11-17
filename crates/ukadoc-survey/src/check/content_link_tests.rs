@@ -1,4 +1,4 @@
-//! `content.rs` の在中テスト——**関連・別名・登場版・テーマ**（要件 6.7・6.8・6.13）。
+//! `content.rs` の在中テスト——**関連・別名・登場版**（要件 6.7・6.13）。
 //!
 //! ソースの正典 URL と証拠の側は姉妹モジュール `content_tests` が持つ
 //! （要件 6.5・6.6）。共用の道具は `check::test_support` にある。主張の作法
@@ -8,14 +8,14 @@
 //! # ここが背負う 2 つの守り
 //!
 //! - **「全部を挙げる」**——`LinkEndpointMissing`・
-//!   `IntroducedNotInCatalogVersions`・`UnknownTheme` は違反 2 件の**間に正しい項目を
-//!   挟んだ**見本で件数まで主張する。
+//!   `IntroducedNotInCatalogVersions` は違反 2 件の**間に正しい項目を挟んだ**見本で
+//!   件数まで主張する。
 //! - **台帳を渡す並びに左右されない**（要件 7.3）——
 //!   `AliasChain` だけが相手の状態を別の台帳から引くので、並びが結果に漏れうる唯一の
 //!   判定である。逆順で 1 度通すテストがそこを釘付けする。
 
 use super::super::test_support::{
-    details, entry_mut, id, ids, kinds, ledger_place, of_kind, only_one, places,
+    details, entry_mut, id, ids, kinds, ledger_place, only_one, places,
 };
 use super::super::{CheckInput, FindingKind, run};
 use crate::ledger::Ledger;
@@ -420,8 +420,8 @@ fn an_introduced_version_outside_the_catalog_versions_is_a_finding() {
 /// して並べる（要件 7.1。`2.3.53` → `2.3`）ので、`2.3` は台帳を書く人が素直に打ち込む
 /// 綴りである。前方一致で拾う実装はそれを黙って受け入れ、以後どの版で入ったのかが
 /// 判らなくなる。`2.4.00` を使う前のテストは先頭の節から違うので、完全一致と前方一致を
-/// 見分けられない。テーマ名について同じ穴を塞いだ
-/// [`a_theme_name_that_merely_prefixes_a_real_theme_is_a_finding`] の対である。
+/// 見分けられない。テーマ名の接頭辞の穴は読み込みの段（`model::parse_theme`）が塞いでおり、
+/// その守りは `model_tests::theme_outside_the_vocabulary_is_rejected` である。
 #[test]
 fn a_prefix_of_a_catalog_version_is_not_a_match() {
     let mut world = World::normal();
@@ -606,143 +606,6 @@ fn every_conflicting_introduced_is_reported_not_just_the_first() {
 }
 
 // ---------------------------------------------------------------------------
-// テーマ名がテーマ定義に実在するか（要件 6.8）
-// ---------------------------------------------------------------------------
-
-/// テーマ名を 1 文字変えると `UnknownTheme` が 1 件だけ出る。
-#[test]
-fn a_one_character_change_in_a_theme_name_is_a_finding() {
-    let mut world = World::normal();
-    entry_mut(
-        &mut world,
-        Domain::Shiori,
-        "ukadoc:list_shiori_event:OnBoot:1",
-    )
-    .values = vec!["気酉".to_owned()];
-    world.refresh_reports();
-
-    let outcome = run(&world.input());
-    assert_eq!(
-        kinds(&outcome.findings),
-        vec![(FindingKind::UnknownTheme, 1)]
-    );
-    let finding = only_one(&outcome.findings, FindingKind::UnknownTheme);
-    assert_eq!(
-        finding.id.as_ref().map(EntryId::as_str),
-        Some("ukadoc:list_shiori_event:OnBoot:1")
-    );
-    assert_eq!(finding.place, ledger_place("shiori"));
-    assert_eq!(finding.detail, "テーマ定義に無いテーマ名: 気酉");
-}
-
-/// テーマ名の突き合わせは**完全一致**である。
-///
-/// 「触れ合い」の頭だけを書いた「触れ合」は所見になる。部分一致で拾う実装は
-/// ここで赤になる（8 つのうち「気配」と「気配り」は片方が他方の接頭辞なので、
-/// 緩めると別のテーマを取り違える）。
-#[test]
-fn a_theme_name_that_merely_prefixes_a_real_theme_is_a_finding() {
-    let mut world = World::normal();
-    entry_mut(
-        &mut world,
-        Domain::SakuraScript,
-        "ukadoc:list_sakura_script:_5c_73_5bID_5d:1",
-    )
-    .values = vec!["触れ合".to_owned()];
-    world.refresh_reports();
-
-    let outcome = run(&world.input());
-    assert_eq!(
-        kinds(&outcome.findings),
-        vec![(FindingKind::UnknownTheme, 1)]
-    );
-    assert_eq!(
-        only_one(&outcome.findings, FindingKind::UnknownTheme).detail,
-        "テーマ定義に無いテーマ名: 触れ合"
-    );
-}
-
-/// 1 つの項目に知らないテーマ名が 2 つあれば、**2 件とも**所見になる。
-///
-/// 要件 6.8 は「台帳に書かれたテーマ名が」——つまり全部が——定義に実在することを
-/// 求める。2 つの誤りの**間に正しいテーマ名を 1 つ挟んである**ので、項目ごとに
-/// 1 件だけ報告する実装も、最初の正しい名前で打ち切る実装も、ここで赤になる。
-#[test]
-fn every_unknown_theme_in_one_entry_is_reported_not_just_the_first() {
-    let mut world = World::normal();
-    entry_mut(
-        &mut world,
-        Domain::Shiori,
-        "ukadoc:list_shiori_event:OnClose:1",
-    )
-    .values = vec!["気酉".to_owned(), "更新".to_owned(), "更辛".to_owned()];
-    world.refresh_reports();
-
-    let outcome = run(&world.input());
-    assert_eq!(
-        kinds(&outcome.findings),
-        vec![(FindingKind::UnknownTheme, 2)]
-    );
-    assert_eq!(
-        details(&outcome.findings, FindingKind::UnknownTheme),
-        vec![
-            "テーマ定義に無いテーマ名: 気酉",
-            "テーマ定義に無いテーマ名: 更辛",
-        ]
-    );
-    assert_eq!(
-        ids(&outcome.findings, FindingKind::UnknownTheme),
-        vec![
-            "ukadoc:list_shiori_event:OnClose:1",
-            "ukadoc:list_shiori_event:OnClose:1",
-        ]
-    );
-}
-
-/// テーマ名は渡されたテーマ定義に照らす（凍結された 8 つを実装に埋め込まない）。
-///
-/// 定義の側から「気配」を外すと、それを書いている 2 つの項目が所見になる。
-/// `THEMES` を直に見る実装はここで赤になる。
-#[test]
-fn the_theme_vocabulary_comes_from_the_input_not_from_a_constant() {
-    let world = World::normal();
-    let narrowed: [&str; 7] = [
-        "触れ合い",
-        "掛け合い",
-        "装い",
-        "記憶",
-        "交わり",
-        "気配り",
-        "更新",
-    ];
-    let outcome = run(&CheckInput {
-        themes: &narrowed,
-        ..world.input()
-    });
-
-    // 報告は渡されたテーマ名から 0 件の行を並べるので、「気配」を使っていない 3 つの
-    // ドメインの報告からは 0 件の行が消え、本文が食い違う（古い報告の所見）。
-    assert_eq!(
-        kinds(&outcome.findings),
-        vec![
-            (FindingKind::UnknownTheme, 2),
-            (FindingKind::DomainReportStale, 3)
-        ]
-    );
-    assert_eq!(
-        ids(&outcome.findings, FindingKind::UnknownTheme),
-        vec![
-            "ukadoc:list_shiori_event:OnBoot:1",
-            "ukadoc:list_shiori_event:OnClose:1",
-        ]
-    );
-    for finding in of_kind(&outcome.findings, FindingKind::UnknownTheme) {
-        assert_eq!(finding.detail, "テーマ定義に無いテーマ名: 気配");
-        assert_eq!(finding.place, ledger_place("shiori"));
-    }
-}
-
-// ---------------------------------------------------------------------------
 // 1 件目で止めない・同じ入力なら同じ結果（設計 Error Handling・要件 7.3）
 // ---------------------------------------------------------------------------
 
@@ -761,15 +624,18 @@ fn two_breakages_of_different_kinds_produce_both_findings() {
         Domain::Property,
         "ukadoc:list_propertysystem:system.year:1",
     )
-    .values = vec!["記憶り".to_owned()];
+    .links = vec![Link {
+        kind: LinkKind::SameFeature,
+        to: id("ukadoc:list_propertysystem:system.zzz:1"),
+    }];
     world.refresh_reports();
 
     let outcome = run(&world.input());
     assert_eq!(
         kinds(&outcome.findings),
         vec![
+            (FindingKind::LinkEndpointMissing, 1),
             (FindingKind::IntroducedNotInCatalogVersions, 1),
-            (FindingKind::UnknownTheme, 1),
         ]
     );
     assert_eq!(
@@ -781,7 +647,7 @@ fn two_breakages_of_different_kinds_produce_both_findings() {
         ledger_place("shiori")
     );
     assert_eq!(
-        only_one(&outcome.findings, FindingKind::UnknownTheme).place,
+        only_one(&outcome.findings, FindingKind::LinkEndpointMissing).place,
         ledger_place("property")
     );
 }
@@ -801,7 +667,16 @@ fn the_same_input_yields_the_same_content_findings_in_the_same_order() {
         Domain::Shiori,
         "ukadoc:list_shiori_event:OnClose:1",
     )
-    .values = vec!["気酉".to_owned(), "更辛".to_owned()];
+    .links = vec![
+        Link {
+            kind: LinkKind::Triggers,
+            to: id("ukadoc:list_shiori_event:OnGhostBooted:1"),
+        },
+        Link {
+            kind: LinkKind::SameFeature,
+            to: id("ukadoc:list_shiori_event:OnNoSuchEvent:1"),
+        },
+    ];
     entry_mut(&mut world, Domain::Assets, "ukadoc:descript_ghost:name:1").supersedes =
         vec![id("ukadoc:descript_ghost:charsets:1")];
     world.refresh_reports();

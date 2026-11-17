@@ -4,7 +4,7 @@
 //! （要件 6.2・設計 File Structure Plan）。
 //!
 //! 見本の関連の対は**わざと乱した順**で書く。整列済みの見本は「整列する」摂動を
-//! 素通りさせるので、並び順を主張するテストの見本にはならない（タスク 2.5 の教訓）。
+//! 素通りさせるので、並び順を主張するテストの見本にはならない。
 
 use super::{Bundle, bundles};
 use crate::model::EntryId;
@@ -93,14 +93,14 @@ fn each_connected_component_becomes_exactly_one_bundle() {
 #[test]
 fn shuffling_the_input_changes_neither_the_bundle_ids_nor_the_list_order() {
     // 2 つの見本が本当に別物であることを先に主張する。同じ列を 2 回渡しただけの
-    // テストは並び替えを 1 つも試していない（タスク 2.5 の教訓）。
+    // テストは並び替えを 1 つも試していない。
     assert_ne!(scrambled(), shuffled());
 
     let from_scrambled = bundles(&scrambled());
     let from_shuffled = bundles(&shuffled());
 
     // 互いに等しいだけでは「同じ誤りを 2 回した」と区別が付かないので、逐語の
-    // 期待値とも突き合わせる（タスク 1.3・1.4 の教訓）。
+    // 期待値とも突き合わせる。
     assert_eq!(from_scrambled, expected());
     assert_eq!(from_shuffled, expected());
     assert_eq!(from_scrambled, from_shuffled);
@@ -294,8 +294,7 @@ fn an_id_that_appears_in_no_link_never_appears_in_a_bundle() {
         .flat_map(|bundle| bundle.members.iter())
         .map(EntryId::as_str)
         .collect();
-    // 否定の主張だけだと対象が空でも真になるので、非空の主張と対で置く
-    // （タスク 1.6 の教訓）。
+    // 否定の主張だけだと対象が空でも真になるので、非空の主張と対で置く。
     assert_eq!(seen, vec!["ukadoc:page_a:alpha:1", "ukadoc:page_a:bravo:1"]);
     assert!(!seen.contains(&"ukadoc:page_b:mike:1"));
 }

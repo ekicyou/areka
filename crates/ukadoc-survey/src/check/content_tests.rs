@@ -1,7 +1,7 @@
 //! `content.rs` の在中テスト——**ソースの正典 URL と証拠**（要件 6.5・6.6・6.10・6.13）。
 //!
-//! 関連・別名・版・テーマの側は姉妹モジュール `content_link_tests` が持つ
-//! （要件 6.7・6.8）。共用の道具は `check::test_support` にある。
+//! 関連・別名・版の側は姉妹モジュール `content_link_tests` が持つ
+//! （要件 6.7）。共用の道具は `check::test_support` にある。
 //!
 //! # 主張はすべて入口を通す
 //!
@@ -44,7 +44,7 @@ use crate::model::{Domain, EntryId, Status};
 // 見本が見るべき材料を持っていること
 // ---------------------------------------------------------------------------
 
-/// 内容の 6 判定それぞれに、見るべき材料が見本にあることを肯定の側から数える。
+/// 内容の 5 判定それぞれに、見るべき材料が見本にあることを肯定の側から数える。
 ///
 /// 台帳が空・証拠が空・関連が空の入力なら「所見 0 件」は無条件に真になる。判定が
 /// 実際に何かを走査している土台をここで固定する（要件 6.13 の「検査対象が 0 件で
@@ -106,16 +106,6 @@ fn the_sample_world_holds_material_for_every_content_judgement() {
         .count();
     assert_eq!(introduced, 6, "登場版の書かれた台帳の項目");
     assert_eq!(versioned, 7, "版番号を持つカタログの項目");
-
-    // テーマの側（要件 6.8）。
-    let values: usize = input
-        .ledgers
-        .iter()
-        .flat_map(|ledger| ledger.entries.values())
-        .map(|entry| entry.values.len())
-        .sum();
-    assert_eq!(values, 7, "テーマの書かれた欄");
-    assert_eq!(input.themes.len(), 8, "突き合わせ相手のテーマ");
 }
 
 // ---------------------------------------------------------------------------

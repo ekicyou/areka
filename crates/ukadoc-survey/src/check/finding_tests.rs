@@ -63,10 +63,10 @@ fn the_rendered_body_is_pinned_verbatim() {
 #[test]
 fn the_line_of_a_finding_carries_its_id() {
     let findings = vec![Finding::new(
-        FindingKind::UnknownTheme,
+        FindingKind::LinkEndpointMissing,
         Some(id("ukadoc:list_shiori_event:OnBoot:1")),
         ledger_place("shiori"),
-        "テーマ定義に無い名前: きはい",
+        "関連の相手がカタログに無い: きはい",
     )];
     let body = render(&findings);
     assert!(
@@ -78,7 +78,7 @@ fn the_line_of_a_finding_carries_its_id() {
         "場所が本文に無い:\n{body}"
     );
     assert!(
-        body.contains("テーマ定義に無い名前: きはい"),
+        body.contains("関連の相手がカタログに無い: きはい"),
         "詳細が本文に無い:\n{body}"
     );
 }
@@ -182,7 +182,7 @@ fn findings_in_one_place_are_ordered_by_id_not_by_input_order() {
 
 /// 種類ごとの塊は [`FindingKind::ALL`] の並びで出る。
 ///
-/// 入力を逆順に与えても本文の並びは変わらない。14 種すべてを 1 件ずつ与えて、
+/// 入力を逆順に与えても本文の並びは変わらない。13 種すべてを 1 件ずつ与えて、
 /// 見出しの並びを逐語で釘付けする。
 #[test]
 fn the_kind_blocks_come_out_in_the_declared_order() {
@@ -225,7 +225,6 @@ fn the_kind_blocks_come_out_in_the_declared_order() {
         "LinkEndpointMissing",
         "AliasChain",
         "IntroducedNotInCatalogVersions",
-        "UnknownTheme",
         "DomainReportStale",
     ]
     .into_iter()
@@ -253,19 +252,18 @@ fn the_kind_keys_are_pinned_verbatim() {
             "LinkEndpointMissing",
             "AliasChain",
             "IntroducedNotInCatalogVersions",
-            "UnknownTheme",
             "DomainReportStale",
         ]
     );
 }
 
-/// 所見の種類は 14 種。数え落としも重複も落とす。
+/// 所見の種類は 13 種。数え落としも重複も落とす。
 #[test]
-fn all_fourteen_kinds_are_declared_once_each() {
-    assert_eq!(FindingKind::ALL.len(), 14);
+fn all_thirteen_kinds_are_declared_once_each() {
+    assert_eq!(FindingKind::ALL.len(), 13);
     let distinct: BTreeSet<&'static str> =
         FindingKind::ALL.iter().map(FindingKind::as_key).collect();
-    assert_eq!(distinct.len(), 14, "同じ綴りが 2 度出ている");
+    assert_eq!(distinct.len(), 13, "同じ綴りが 2 度出ている");
 }
 
 /// 本文は入力の並びに依らない（要件 7.3 の決定論を検査の出力にも通す）。
@@ -285,10 +283,10 @@ fn the_body_does_not_depend_on_the_input_order() {
             "id の順に並んでいない",
         ),
         Finding::new(
-            FindingKind::UnknownTheme,
+            FindingKind::AliasChain,
             Some(id("ukadoc:spec_web:a:1")),
             ledger_place("shiori"),
-            "テーマ定義に無い名前",
+            "別名の指す先がまた別名",
         ),
     ];
     let first = render(&findings);

@@ -647,43 +647,40 @@ fn an_introduced_version_outside_the_catalog_turns_red() {
     expect_exactly(&copy.findings(), &[]);
 }
 
-/// 要件 6.8——テーマ名の綴りが違うと赤くなり、定義にある綴りなら赤くならない。
+/// 要件 6.8——テーマ名の綴りが違うと、id と場所つきで台帳の読み取りが止まり、定義にある
+/// 綴りなら読める。
 ///
-/// 摂動は「気配り」の末尾に空白 1 つを足したものである。テーマ定義には「気配」と
-/// 「気配り」の 2 つがあり、片方が他方の接頭辞なので、部分一致で拾う実装はこの
-/// 摂動を素通りさせる。
+/// テーマ名の綴りは検査の段には届かない（`ledger::read` が `model::parse_theme` で、
+/// 検査へ渡すのと同じ 8 つの綴りと完全一致で読む）。だから状態の綴りと同じく読み取りの
+/// 段で確かめる。摂動は「気配り」の末尾に空白 1 つを足したものである。テーマ定義には
+/// 「気配」と「気配り」の 2 つがあり、片方が他方の接頭辞なので、部分一致や前後の空白
+/// 落としで読む実装はこの摂動を素通りさせる。
 #[test]
-fn a_misspelled_theme_turns_red() {
-    let data = RepoData::load();
-    let anchor = anchor_id();
-    let report = "doc/ukadoc-coverage/report/shiori.md";
+fn a_misspelled_theme_stops_the_ledger_read() {
+    let path = paths::ledger_path(Domain::Shiori);
+    let text = files::read_normalized(&path).unwrap_or_else(|err| panic!("{err}"));
 
-    let mut copy = Perturbed::of(data);
-    copy.entry_mut(Domain::Shiori, &anchor).values = vec!["気配り ".to_owned()];
+    let (id, broken) = replace_first_line(&text, "values = ", r#"values = ["気配り "]"#);
+    let err =
+        read_ledger(&broken, Domain::Shiori).expect_err("綴りの違うテーマ名が読み取りを素通りした");
+    let body = err.to_string();
 
-    let findings = copy.findings();
-    expect_exactly(
-        &findings,
-        &[
-            (FindingKind::UnknownTheme, Some(ANCHOR_ID), SHIORI_LEDGER),
-            (FindingKind::DomainReportStale, None, report),
-            (FindingKind::DomainReportStale, None, SUMMARY_REPORT),
-        ],
+    assert!(
+        body.contains(&id),
+        "失敗の本文が id を名指していない: {body}"
     );
     assert!(
-        render(&findings).contains("気配り "),
-        "本文が綴りの違うテーマ名そのものを載せていない"
+        body.contains(SHIORI_LEDGER),
+        "失敗の本文が場所を名指していない: {body}"
+    );
+    assert!(
+        body.contains("気配り "),
+        "失敗の本文が綴りの違うテーマ名そのものを載せていない: {body}"
     );
 
-    // 定義にある綴りなら、テーマの所見は出ない（テーマの分布が変わるので報告 2 本は古い）。
-    copy.entry_mut(Domain::Shiori, &anchor).values = vec!["気配り".to_owned()];
-    expect_exactly(
-        &copy.findings(),
-        &[
-            (FindingKind::DomainReportStale, None, report),
-            (FindingKind::DomainReportStale, None, SUMMARY_REPORT),
-        ],
-    );
+    // 定義にある綴りなら読める。
+    let (_, fixed) = replace_first_line(&text, "values = ", r#"values = ["気配り"]"#);
+    read_ledger(&fixed, Domain::Shiori).expect("定義にある綴りのテーマ名で読み取りが止まった");
 }
 
 /// 要件 6.10——状態の綴りが 7 つのいずれでもないと、id と場所つきで読み取りが止まる。
@@ -699,7 +696,7 @@ fn a_status_word_outside_the_seven_stops_the_ledger_read() {
     // 壊す前は読める。
     read_ledger(&text, Domain::Shiori).expect("実データの台帳が読めない");
 
-    let (id, broken) = break_first_status(&text, "jissou");
+    let (id, broken) = replace_first_line(&text, "status = ", r#"status = "jissou""#);
     let err = read_ledger(&broken, Domain::Shiori)
         .expect_err("語彙に無い状態の綴りが読み取りを素通りした");
     let body = err.to_string();
@@ -718,8 +715,9 @@ fn a_status_word_outside_the_seven_stops_the_ledger_read() {
     );
 }
 
-/// 本文の最初の `status = ...` を語彙に無い綴りへ替え、その項目の id と替えた本文を返す。
-fn break_first_status(text: &str, bad: &str) -> (String, String) {
+/// 本文で `prefix` から始まる最初の行を `replacement` へ替え、その項目の id と替えた本文を
+/// 返す。
+fn replace_first_line(text: &str, prefix: &str, replacement: &str) -> (String, String) {
     let mut id: Option<String> = None;
     let mut broken = false;
     let mut out: Vec<String> = Vec::new();
@@ -729,8 +727,8 @@ fn break_first_status(text: &str, bad: &str) -> (String, String) {
             if let Some(rest) = line.strip_prefix("[entry.\"") {
                 id = rest.strip_suffix("\"]").map(str::to_owned);
             }
-            if line.starts_with("status = ") {
-                out.push(format!("status = \"{bad}\""));
+            if line.starts_with(prefix) {
+                out.push(replacement.to_owned());
                 broken = true;
                 continue;
             }
@@ -738,9 +736,9 @@ fn break_first_status(text: &str, bad: &str) -> (String, String) {
         out.push(line.to_owned());
     }
 
-    assert!(broken, "台帳の本文に status の行が無い");
+    assert!(broken, "台帳の本文に {prefix} の行が無い");
     (
-        id.expect("status の行の前に項目の見出しが無い"),
+        id.unwrap_or_else(|| panic!("{prefix} の行の前に項目の見出しが無い")),
         out.join("\n"),
     )
 }

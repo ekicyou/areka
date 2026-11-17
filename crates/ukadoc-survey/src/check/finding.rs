@@ -12,7 +12,7 @@
 //!
 //! # 本文そのものが契約
 //!
-//! この本文はテストの失敗メッセージであり、実行ファイルの標準エラー出力でもある。
+//! この本文はテストの失敗メッセージであり、実行ファイルの標準出力でもある。
 //! 版面（件数の行・種類ごとの塊・字下げ 2 段）は設計「Data Models」→「検査の出力」
 //! が逐語で決めており、在中テストがそれを釘付けしている。
 
@@ -53,13 +53,16 @@ impl Finding {
     }
 }
 
-/// 食い違いの種類（14 種）。
+/// 食い違いの種類（13 種）。
 ///
 /// **並びが出力の並びである**。[`render`] は種類ごとに塊を作り、その塊を
 /// [`Self::ALL`] の順に並べる。ここを並べ替えると本文が変わる。
 ///
 /// `[ledger].domain` の食い違いの種類は無い。それは `ledger::read` の段で落ちる
 /// （`Ledger` は `domain` を 1 つしか持たず、その値はファイル名から来るため）。
+/// テーマ名の綴り違いの種類も無い。それも `ledger::read` が `model::parse_theme` で
+/// 落とす（検査へ渡すテーマ名と同じ `THEMES` に完全一致で照らすので、検査の段に届く
+/// 台帳は綴り違いを持てない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FindingKind {
     /// 台帳の id がカタログに無い（要件 6.3）。
@@ -86,15 +89,13 @@ pub enum FindingKind {
     AliasChain,
     /// 台帳の登場版がカタログの版番号の中に無い（要件 6.7）。
     IntroducedNotInCatalogVersions,
-    /// テーマ名がテーマ定義に無い（要件 6.8）。
-    UnknownTheme,
-    /// ドメイン別報告が台帳から作り直した本文と一致しない（要件 7.4・7.5）。
+    /// ドメイン別報告か全体報告が台帳から作り直した本文と一致しない（要件 7.4・7.5）。
     DomainReportStale,
 }
 
 impl FindingKind {
-    /// 14 種すべて。**出力の並びの正本**でもある。
-    pub const ALL: [Self; 14] = [
+    /// 13 種すべて。**出力の並びの正本**でもある。
+    pub const ALL: [Self; 13] = [
         Self::LedgerIdNotInCatalog,
         Self::CatalogIdMissingFromLedgers,
         Self::CatalogIdInMultipleLedgers,
@@ -107,7 +108,6 @@ impl FindingKind {
         Self::LinkEndpointMissing,
         Self::AliasChain,
         Self::IntroducedNotInCatalogVersions,
-        Self::UnknownTheme,
         Self::DomainReportStale,
     ];
 
@@ -127,7 +127,6 @@ impl FindingKind {
             Self::LinkEndpointMissing => "LinkEndpointMissing",
             Self::AliasChain => "AliasChain",
             Self::IntroducedNotInCatalogVersions => "IntroducedNotInCatalogVersions",
-            Self::UnknownTheme => "UnknownTheme",
             Self::DomainReportStale => "DomainReportStale",
         }
     }
