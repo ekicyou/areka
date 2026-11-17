@@ -716,9 +716,11 @@ fn the_io_error_is_shown_in_ascii_only() {
             std::io::Error::from_raw_os_error(5)
         ),
     );
+    let path = Path::new("C:").join("作業").join("x");
+    let spelled = ascii(&path.to_string_lossy());
     let refused = SampleError::Io {
         what: "create the work folder",
-        path: Path::new("C:").join("作業").join("x"),
+        path,
         source,
     };
 
@@ -728,6 +730,10 @@ fn the_io_error_is_shown_in_ascii_only() {
     assert!(text.contains("os error 5"), "{text}");
     assert!(text.contains("create the work folder"), "{text}");
     assert!(text.contains("\\u{"), "日本語は逃がして残る: {text}");
+    assert!(
+        text.contains(&spelled),
+        "パスの綴り {spelled} が文に在る: {text}"
+    );
 }
 
 /// `Io` 以外の表示も、名前・パス・展開器の日本語の文を ASCII に写す（`nar-sample-path` が

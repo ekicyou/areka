@@ -317,6 +317,11 @@ fn folding_a_missing_tree_fails_loudly() {
         message.starts_with("list ") && message.is_ascii() && message.contains("\\u{"),
         "読めなかったフォルダのパスを ASCII に逃がして文に添える: {message}"
     );
+    let spelled = crate::ascii(&root.to_string_lossy());
+    assert!(
+        message.contains(&spelled),
+        "パスの綴り {spelled} が文に在る: {message}"
+    );
 }
 
 #[test]

@@ -1,6 +1,6 @@
 //! 見本 `fold-samples` の写しの式と書き先の順のテスト。
 //!
-//! 引数の読み（`parse_args`）の 1 本を除き、どれも [`WorkDir`] の下に組んだ偽のリポジトリ根で
+//! `parse_args` と `installed_path` を直に呼ぶものを除き、どれも [`WorkDir`] の下に組んだ偽のリポジトリ根で
 //! `fold_one` を回し、本物の `vendors/` には触らない。`git` を呼ぶ `run` は通らない（追跡の
 //! 一覧は引数で渡す）。
 
@@ -156,10 +156,10 @@ fn a_two_level_companion_source_with_other_case_round_trips_without_mismatches()
     );
 }
 
-/// 追跡ファイルが 0 件なら、panic でなく ASCII の文の `Err` で断る（終了コード 1・
-/// audit-test-kits かけ直し 5 回目 E2）。
+/// 追跡ファイルが 0 件なら、panic でなく固定の英語の文の `Err` で断る（パスは `main` の
+/// `ascii` が写す。終了コード 1・audit-test-kits かけ直し 5 回目 E2）。
 #[test]
-fn no_tracked_files_is_an_ascii_error_not_a_panic() {
+fn no_tracked_files_is_a_fixed_english_error_not_a_panic() {
     let work = WorkDir::new().unwrap();
     let fake_root = work.path().join("repo");
     let (source, _) = ghost_with_companion(&fake_root);

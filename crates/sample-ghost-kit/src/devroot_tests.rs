@@ -369,6 +369,11 @@ fn a_cleanup_failure_is_written_to_the_given_sink_and_not_found_writes_nothing()
         failed.is_ascii() && failed.contains("\\u{"),
         "日本語のパスは逃がして ASCII だけで書く: {failed}"
     );
+    let spelled = crate::ascii(&path.to_string_lossy());
+    assert!(
+        failed.contains(&spelled),
+        "パスの綴り {spelled} が文に在る: {failed}"
+    );
 
     let mut not_found = Vec::new();
     write_cleanup(

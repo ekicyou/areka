@@ -49,3 +49,13 @@
 - レビューの差し戻し 1 回: 初めの文「各テストの説明が持ち」が偽だった（mcp_tests.rs の 17 本のうち `///` の説明を持つのは 4 本だけ）→「各テストの名前と説明が持ち」に直した
 - R3: `run.rs` の「番犬と同じ 60 秒」を消した。`launch.rs` の公開の説明に、同じ理由の写しが 2 か所あった（`safety_exit` の「既定 45 秒」・`deadline` の「既定 60 秒」）。指摘の行の外だが、これも「既定は `run.rs` の `Limits::default`」に替えた。crate の説明に既定の秒数の写しは残っていない（1 回目 R5 と合う）
 - R1・R2・R4・R6 は説明と `shortcut:` だけ。どの差分もコメントの行だけで、振る舞いは変わらない。較正・削除・改名は無し
+
+## 束 A の直しの控え（承認済み）
+- 較正:
+  - U1: nar_writer.rs の `with_path` でパスの `ascii(..)` を外す → `folding_a_missing_tree_fails_loudly` が赤。`ascii("x")` に替えると、新しく足した綴りの確かめで赤
+  - U2: bin の `ascii(&extra)` を外す → `an_extra_argument_exits_with_2` が赤（レビューでも取り直した）
+- U1 の確かめは、テストが決めた日本語のパスを `ascii` に通した綴りを探す。OS の文の言語によって結果は変わらない
+- 改名 E2: `no_tracked_files_is_an_ascii_error_not_a_panic` → `no_tracked_files_is_a_fixed_english_error_not_a_panic`。旧名の git grep の当たりは 3 件で、テストの定義と round5.md・round6.md（記録なので直さない）
+- E3 はコメントだけで、処理の順は変えていない
+- E5 は当てない（2 回目 S6 の決めのまま）
+- S1〜S4・U3・E1・E4 は説明の直しだけ

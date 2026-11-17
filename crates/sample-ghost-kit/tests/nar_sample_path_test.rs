@@ -234,19 +234,22 @@ fn no_argument_exits_with_2() {
 /// 2 つ目より後の引数は黙って捨てずに、標準エラーへ ASCII の理由を出して終了コード 2。
 /// 標準出力には何も出さない（`tools/package.ps1` は引数を 1 つしか渡さない）。名前は
 /// 登記済みのもの（余分な引数を捨てると 0 で終わる形を赤にする）で、根を作ってしまう
-/// 形でも私有の場所の下だけを触る。
+/// 形でも私有の場所の下だけを触る。余分な引数は日本語にして、`ascii` で写すことも見る。
 #[test]
 fn an_extra_argument_exits_with_2() {
     let private = WorkDir::new().expect("私有の場所");
     let (code, out, err) = finish(
         std::process::Command::new(COMMAND)
             .arg("emo2-kakukaku-wplimit")
-            .arg("extra")
+            .arg("余分")
             .env("CARGO_TARGET_DIR", private.path()),
     );
     assert_eq!(code, Some(2), "余分な引数の終了コード: {err}");
     assert!(out.is_empty(), "標準出力には何も出さないこと: {out:?}");
-    assert_eq!(err, "nar-sample-path: unexpected argument extra\n");
+    assert_eq!(
+        err,
+        "nar-sample-path: unexpected argument \\u{4F59}\\u{5206}\n"
+    );
 }
 
 /// 登記の URL の行の (名前, URL)。母数 0 で緑にしない較正つき。
