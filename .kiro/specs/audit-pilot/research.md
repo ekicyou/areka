@@ -420,3 +420,51 @@ audit はかけていない（【仮定 1】）。入れた場合に変わるこ
 ## 14. 範囲の外で気付いたこと（その範囲の持ち物として残す）
 
 - 無し。範囲の外のファイルで直すべき所は見つけていない（4 節の読み手は、名前と行数を守れば壊れない）。
+
+## 15. 設計の段の調べと決め（2026-11-17・`kiro-spec-design`）
+
+> 設計の段（`/kiro-design` の中のサブエージェント）が、12 節の調べものをコードを読んで解き、13 節の振り分けで設計へ回った点を決めた記録。決めの本文と約束は `design.md` が正本で、ここは根拠と測りだけ。
+
+### 15.1 調べの種類と使った物
+
+- 調べの種類: **light**（今の実行例の中の直しだけ・新しい依存も外の API も無い）。外の文書は引いていない。
+- 使ったスキルと手引き: `kiro-spec-design`（`rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）と、ponytail の「いちばん小さく完全な直し」の作法（消せる物は消す・呼び元／テスト／見本まで追う・非自明な直しには小さなテストを 1 本）。
+- 読んだコード: `shiori-host-32` の 9 ファイル全部、`pilot-clickthrough-alpha-toggle/main.rs` 全部、`crates/pilot/Cargo.toml`、`crates/wintf-winmsg-executor/src/lib.rs:110-270`・`src/util/window.rs:200-304`、`crates/log-capture-kit/tests/file_length_guard_test.rs:55-110`、`log-capture-kit` のほかの番人の頭、`.kiro/steering/structure.md:148-186`（テストの置き場の決まり）。
+- 気付いたこと: 5 節のうち `shiori-host-32/helper.rs`・`shiori3.rs`・`crates/pilot/README.md`・`REPORT.md` を指す行番号のいくつかは、今のファイルの行数を越えている（例 `shiori3.rs:161`・ファイルは 109 行）。指摘の中身（何をどう直すか）は今のコードと合っていたので、設計は行番号でなく名前で指す。
+
+### 15.2 12 節の調べものの答え
+
+1. **実行例の 49 本は今もテストとして組み立てられるか**: **組み立てられる。** `cargo test -p pilot --examples --no-run`（x64・PowerShell・このワークツリーの `target\` を新しく作った）を 1 回回し、7 本の実行例（`_template`・`pilot-balloon-asset-swap`・`pilot-clickthrough-alpha-toggle`・`pilot-dropfiles-on-wuc-window`・`shiori-host-32`・`shiori-host-32-helper`・`wintf-winmsg-executor`）のテストの exe が全部できた。1 分 55 秒・終了コード 0・`pilot` の組み立てに警告 0。**走らせてはいない**（赤が出るかは実装の最初のタスクで見る）。走るテストの中身は読んだ: どれも純粋な関数か、見えない窓・`cmd.exe`／`ping 127.0.0.1` を起こすもので、画面・GPU・検体を使わない。例外は `shiori_proxy.rs` の `load_pasta_dll_and_call_load_without_crash`（32bit の本物の `pasta.dll`）だけ。
+2. **i686 の helper の組み立てが全体テストに無い**: `tools/` に段を足さない（11 節の案 C は採らない）。実装の最後の実機の確かめ ⑴（要件 4.8）で、どのみち i686 の helper を組むので、同じ日に `cargo test -p pilot --example shiori-host-32-helper --target i686-pc-windows-msvc` を 1 回回す。README の学び 3「共有モジュールは i686 でも `cargo test --target i686-pc-windows-msvc` を回すこと」とも合う。
+3. **1 の件は `WM_CAPTURECHANGED` か `MK_LBUTTON` か**: **`WM_CAPTURECHANGED`。** `wintf-winmsg-executor` の窓の手続き（`wndproc_typed`）は全部のメッセージを閉包へ渡し、閉包が `None` を返したときだけ `DefWindowProcW` へ回す（`window.rs:263-304`）＝届く。捕まえを失った瞬間に 1 回だけ来るので取りこぼしが無く、`MK_LBUTTON` を見る形のように次のマウスの動きまで遅れない。`WM_LBUTTONUP` の中の `ReleaseCapture` が自分の窓へ送る `WM_CAPTURECHANGED` は、`dragging.swap(false)` が `false` を返すので二重に片付けない。
+4. **9 の件は `SetTimer` にできるか**: **できる。** `MessageLoop::run` は `GetMessageW(None, 0, 0)` でスレッドの全部のメッセージを受け、目覚ましの印でないものは全部フィルタへ渡す（`lib.rs:182-205`）。`SetTimer(hwnd, ..)` の `WM_TIMER` はこのスレッドの列に来るのでフィルタが毎回見る。message-only の窓も `WM_TIMER` を受ける。窓の手続きは `WM_TIMER` に `None` を返し、`DefWindowProcW` は何もしない。i686 での実走は実機の確かめ ⑴ が初めて。
+5. **ほかの番人が足すテストに求めること**: `temp_path_guard_test.rs`＝`std::env::temp_dir` の呼び出しを例外表の外に置かない／`sample_path_guard_test.rs`＝検体の置き場の綴りを窓口の外に書かない／`with_default_guard_test.rs`＝捕捉の直接の呼び出しを書かない。設計が足すテストはどれも一時フォルダ・検体・ログの捕捉を使わないので当たらない。`workspace_scan_test.rs` は新しいファイルを足しても壊れない（在るべきファイルを消さない）。
+
+### 15.3 13 節の振り分けで設計へ回った点の決め
+
+- **20 の件（ghostdir と親の HWND の通り道）**: **引数だけ**にする（`argv[1]=ghostdir`・`argv[2]=parent_hwnd`）。理由: helper のほかのモード（`--selftest-load`・`--selftest-loop`）も引数で、通り道が 1 つになる。開発者の端末に残った環境変数が勝つ道が無くなる。README の実行法（`HELPER_EXE` だけ）は変わらない。
+- **1 の件のテストの置き場**: 兄弟のファイル `pilot-clickthrough-alpha-toggle/main_drag_tests.rs`（`#[path]` つきの接続宣言・モジュール名 `drag_tests`）。`main.rs` の中の `mod tests` に足すと、直しの後の約 990 行が 1,000 行を越え直す（要件 6.1）。新しいテストのモジュールは兄弟のファイルに置く決まり（`structure.md`「Unit Tests」）にも合う。既存の 7 本は動かさない（ファイルを割らない＝C22 の約束 ⑵）。
+- **5 の件で helper の実行例を `test = true` にするか**: **する。** x64 で走れない本物の `pasta.dll` のテストだけを `#[cfg(target_arch = "x86")]` で囲む（要件 4.6「走れる組み立てだけに限る」）。helper にだけある `shiori_proxy.rs` の ANSI のテストと、新しい `helper_window_tests.rs`（終了コード）を全体テストで走らせられる。
+
+### 15.4 まとめ方（synthesis）
+
+- **まとめられたもの（generalization）**: 起こし役のスレッドつきの待ち 2 つ（親の HELLO 待ち・helper の UNLOAD 待ち）は「この窓で、条件か期限まで回す」1 つの `ipc::pump_until` になる。`WM_COPYDATA` の中身の取り出し 2 つは `ipc::copydata_payload` 1 つに、送り 2 つは `send_copydata` 1 つ（1 往復は「受け皿を空に→送る→取る」の 3 行）になる。HWND の下 32 ビットの取り出しは `ipc::hwnd_to_u32` 1 つ。
+- **作るか使うか（build vs adopt）**: 待ちの起こしは、自前のスレッドで `WM_NULL` を撃つのをやめ、Windows の `SetTimer` を使う。子のプロセスを止めるのは std の `Child::kill`／`wait` をそのまま使う（新しい道具を作らない）。送りの失敗の見分けは Win32 の `GetLastError` の値をそのまま持つ（`SendFailed(u32)`）。
+- **削ったもの（simplification）**: `MsgTag::Load`・`From`／`TryFrom`・`PAYLOAD_HEADER_LEN`・`PeerGone`・`encode_hwnd_le`／`decode_hwnd_le`・`DEFAULT_TIMEOUT`・`HelperState`・数え 6 つ・使われない窓のアクセサ・`poll_exit`・`wait_clean`・`HelperHandle.helper_hwnd`・`module_loaded`・`build_onboot` の引数・環境変数の通り道・`applier_done` の旗。
+- **片側だけが使う物の置き場**: `ipc.rs` は親と helper の両方に取り込まれるので、6 つの `#![allow(dead_code)]` を消すと片側だけの物が警告になる。受け皿セル `ResponseSlot` と 1 往復の送りは親だけが使うので `parent_window.rs` へ移し（`ParentMessageWindow::request`）、`ipc.rs` には両方が使う物だけを残す。項目ごとの `allow` で済ませる形は採らない（決め 3 の「許す範囲を狭める」の向きに、移す方が強く合う）。README の学び 1 は `ResponseSlot` を名前だけで書き、置き場を書いていないので食い違わない（書き足しは 7 の件で書く）。
+- **応答が来ないことの呼び名**: 送りが通ったのに受け皿が空のことを `Timeout` と呼ぶのをやめ、`request` の `Ok(None)` にする（新しい型を足さない）。go(1) の失敗の文は、時間切れ・送れない・応答なしの 3 つで、確かめる向きを分けて出す。
+- **終了コード**: helper は UNLOAD を受けずに上限で抜けたら 4、pasta を読めないまま UNLOAD で抜けたら 5（ギャップ分析の 2 の「困る場面」が挙げた `entries=None` の 0 も直す）。親の判定（0 だけが合格）は変えない。
+
+### 15.5 設計の討議へ回す点（OPEN QUESTIONS・仮定つき）
+
+`design.md` は下の仮定で書いた。討議で違う答えになったら、その箇所だけを直す。
+
+1. 応答が来なかったことを `ParentMessageWindow::request` の `Ok(None)` で分ける（3 の件の延長）。仮定: 分ける。
+2. helper の終了コードに 5（pasta を読めないまま UNLOAD で抜けた）を足す。仮定: 足す（4 だけにする案もある）。
+3. 20 の件は引数だけ（環境変数を消す）。仮定: 引数だけ。
+4. 9 の件の待ちは `SetTimer`（起こし役のスレッドを消す）。仮定: `SetTimer`。i686 の実機で動かなければスレッドを `pump_until` の中の 1 か所に戻す。
+5. 1 の件は `WM_CAPTURECHANGED`。仮定: `WM_CAPTURECHANGED`（`MK_LBUTTON` は見ない）。
+6. 新しいテストのファイル 3 本（`main_drag_tests.rs`・`helper_window_tests.rs`・`parent_window_tests.rs`）を足す。要件 4.6 の「新しい依存とファイルは足さない」は、実行例のテストを全体テストに乗せる配線（`Cargo.toml` の `test = true`）について言ったもので、テストの置き場の決まり（`structure.md`）と要件 6.1 で足すテストのファイルは含まない、と読んだ。仮定: この読み。
+7. 18 の件のテストは、テストの exe が読んでいない System32 の DLL を 1 つ選び、前と後に `GetModuleHandleW` で「読まれていない」を確かめる（前の確かめが外れたら黙って通らず落ちる）。候補は `dciman32.dll`。仮定: この形（実装で別の DLL に替えてよい）。
+8. 一次記録の書き足しは、要件 5.3 が挙げた 1・2・3・7・11・15・16 の 7 件だけにする。6（子を止める）・9（待ちの起こし方）・12（`wait_kind`）・20（引数だけ）も走らせ方のコードを変えるが、記録の文に書かれた事柄ではないので書き足さない。仮定: 7 件だけ。
+9. `ipc.rs` のテストは親と helper の 2 つのテストの exe で 2 回走る（約 1 秒ずつ増える）。仮定: 受け入れる。
