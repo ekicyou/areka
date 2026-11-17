@@ -31,7 +31,7 @@
 - R8 launch_tests.rs ~237「段が info より細かくても」→ 「段が何であっても」
 
 ## log-capture-kit src・temp-path-kit（束 C）
-- L1 capture_calibration_test.rs ~65-73 の子が `AREKA_LOG_CAPTURE_PROBES` を受け継ぐ → `run_child` の `Command` に `.env_remove("AREKA_LOG_CAPTURE_PROBES")`、probe_tests.rs ~5-7 の説明に無効側で ⒜ の 2 本が順しだいで赤になり得ることを添える
+- L1 capture_calibration_test.rs ~65-73 の子が `AREKA_LOG_CAPTURE_PROBES` を受け継ぐ → `run_child` の `Command` に `.env_remove("AREKA_LOG_CAPTURE_PROBES")`、probe_tests.rs ~5-7 の説明に無効側で ⒜ のうち窓の内側で他スレッドが先に登録する 1 本が順しだいで赤になり得ることを添える（レビューが測って 2 本ではなく 1 本と確かめた）
 - L2 probe.rs ~150-153「3 本とも」→ 消す
 - T1 temp-path-kit の「要件 12.1」に spec の名（lib.rs ~87・lib_tests.rs ~1・28）→ lib_tests の module doc に 1 行・lib.rs の括弧に spec の名
 
@@ -43,3 +43,6 @@
 - G5 doc_tree_guard_test.rs ~551-582 `a_docs_dir_turns_the_guard_red` が別の検査 2 つを抱える → 別のテストに分ける
 - G6 temp_path_guard_test.rs ~359-375 の「2 ファイルとも読めている」→ `GATEWAY_FILES` の 2 つとも確かめる
 - G7 with_default_guard_test.rs ~291 のテスト名の一部が偽 → `the_shared_crate_definition_really_holds_the_direct_calls`
+
+## 束 C の直しの控え（承認済み）
+- 較正: L1 は親で `AREKA_LOG_CAPTURE_PROBES=off` を立てて較正を回す → 直す前は `bare_capture_drops_what_hardened_capture_keeps` が赤、直した後は緑。無効側では `captures_event_whose_callsite_another_thread_registers_inside_the_window` だけが赤（`--test-threads=1` で測った）

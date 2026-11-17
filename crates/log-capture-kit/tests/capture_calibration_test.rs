@@ -69,6 +69,8 @@ fn run_child(test_name: &str, mode: &str) {
         // 他の窓（＝他の dispatcher）を作らせないことが較正の前提。
         .args([test_name, "--exact", "--ignored"])
         .env(MODE_ENV, mode)
+        // 親が測定のために常駐を切っていても、子の hardened は kit の既定の常駐で走らせる。
+        .env_remove("AREKA_LOG_CAPTURE_PROBES")
         .output()
         .unwrap_or_else(|e| panic!("子（{mode}）を起動できなかった: {e}"));
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();

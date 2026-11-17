@@ -149,7 +149,7 @@ fn probes_choice(text: &str) -> bool {
 ///
 /// 「プロセス寿命で 1 度だけ読む」は、**回数を数えなければ判別できない**。毎回読む形へ変えても
 /// 同一プロセス内では答えが動かないので、判定の一致だけを見る檻は恒真になる——タスク 11.1 の
-/// レビューが、`probes_requested()` を毎回呼ぶ変異を当てても檻が 3 本とも緑のままであることを
+/// レビューが、`probes_requested()` を毎回呼ぶ変異を当てても檻が緑のままであることを
 /// 実測した。ここで実際に数えることで、その変異が赤になる。
 #[cfg(test)]
 static PROBES_ENV_READS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);

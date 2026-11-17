@@ -74,7 +74,7 @@ static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
 /// 一時パスの名前を組み立てる唯一の式。
 ///
 /// プロセス識別子と連番を**引数で受ける**ので、別プロセスを起こさずに
-/// 「識別子が違えば別名になる」を決定論的に確かめられる（要件 12.1 の自己テスト）。
+/// 「識別子が違えば別名になる」を決定論的に確かめられる（spec `areka-P0-test-cage-determinism` の要件 12.1 の自己テスト）。
 /// 実際に作る側（[`TempPath::new`]）もこの関数を通る。
 fn compose_name(label: &str, process_id: u32, serial: u32) -> String {
     format!("areka-{label}-{process_id}-{serial}")
