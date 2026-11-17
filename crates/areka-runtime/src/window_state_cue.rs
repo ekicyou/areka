@@ -5,7 +5,7 @@
 //!
 //! 1. **自己選別**——手前へ出す指令の運搬名（[`RAISE_TAG_CARRIER`]）と、名前＋第 1 引数が
 //!    `("set", "windowstate")` の組だけを拾い、他は担当外として `debug!` で読み飛ばす。
-//! 2. **読み分け**——純関数 [`parse_window_state`] が第 2 引数を**小文字ちょうど**で読む
+//! 2. **読み分け**——純関数 `parse_window_state` が第 2 引数を**小文字ちょうど**で読む
 //!    （`stayontop`→オン・`!stayontop`→オフ・それ以外は読めない＝状態を変えず `warn!`）。
 //!    第 3 引数以降は第 2 引数で決めた上で余りとして `debug!` に残す。`\v` は引数の有無に
 //!    関わらず手前へ出す。
@@ -18,7 +18,8 @@
 //! # 宛名の規律
 //!
 //! 開けない荷物の `set` を警告する持ち主は `ZOrderCueSink` のままとし、ここは `debug!` だけ
-//! に留める（二重の警告を出さない）。
+//! に留める（二重の警告を出さない）。運搬名 `\v` の持ち主は本 sink だけなので、その荷物が
+//! 開けないときはここが `warn!` を残す。
 //!
 //! # 黙って諦めない
 //!
@@ -28,7 +29,7 @@
 use std::sync::mpsc::Sender;
 
 use areka_parsers::sakura::RAISE_TAG_CARRIER;
-use dola::cue::TalkCue;
+use dola::cue::{CueCommand, TalkCue};
 use tracing::{debug, warn};
 use wintf::ecs::world::tick_wake;
 
@@ -43,7 +44,7 @@ pub enum WindowStateDirective {
 
 /// [`parse_window_state`] の読み分けの結果。
 #[derive(Debug, PartialEq, Eq)]
-pub enum ParsedWindowState<'a> {
+enum ParsedWindowState<'a> {
     /// 指令が決まった。`extra` は第 2 引数より後ろの余り（`\v` では引数の全部）。
     Directive {
         directive: WindowStateDirective,
@@ -64,7 +65,7 @@ const SELECTOR_WINDOWSTATE: &str = "windowstate";
 ///
 /// `set` では `params[0]` が選別子 `windowstate`・`params[1]` が第 2 引数・`params[2..]` が
 /// 余り。`\v`（[`RAISE_TAG_CARRIER`]）では引数の全部が余り。
-pub fn parse_window_state<'a>(name: &str, params: &'a [&'a str]) -> ParsedWindowState<'a> {
+fn parse_window_state<'a>(name: &str, params: &'a [&'a str]) -> ParsedWindowState<'a> {
     if name == RAISE_TAG_CARRIER {
         return ParsedWindowState::Directive {
             directive: WindowStateDirective::Raise,
@@ -104,8 +105,17 @@ impl WindowStateCueSink {
 
 impl dola::cue::CueSink for WindowStateCueSink {
     fn emit(&mut self, cue: TalkCue) {
-        // 1) 開封。開けない荷物は宛名に関わらず `debug!` だけ（警告は `ZOrderCueSink` の持ち場）。
+        // 1) 開封。運搬名 `\v` の持ち主は本 sink だけなので、その荷物が開けなければ `warn!`。
+        //    他の開けない荷物は `debug!` だけ（`set` の警告は `ZOrderCueSink` の持ち場）。
         let Some((name, params)) = cue.command.as_command_carrier() else {
+            if matches!(&cue.command, CueCommand::Custom { command, .. } if command == RAISE_TAG_CARRIER)
+            {
+                warn!(
+                    command = ?cue.command,
+                    "WindowStateCueSink: 手前へ出す指令の荷物が開けないので手前へ出さない"
+                );
+                return;
+            }
             debug!(
                 command = ?cue.command,
                 "WindowStateCueSink: 開けない荷物・キャリアでない cue を良性に読み飛ばす（担当外・宛名の規律）"

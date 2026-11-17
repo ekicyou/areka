@@ -10,6 +10,7 @@
 // 5.4・7.3）。
 
 use super::*;
+use crate::frame::test_support::count_level;
 use areka_ghost::sink::BootCueSink;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
@@ -43,12 +44,6 @@ fn drain(rx: &Receiver<NoUserBreakSignal>) -> Vec<NoUserBreakSignal> {
 fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
     let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
     lines
-}
-
-/// 捕捉行のうち指定した水準の件数を数える。
-fn count_level(logs: &[String], level: &str) -> usize {
-    let needle = format!("level={level}");
-    logs.iter().filter(|line| line.contains(&needle)).count()
 }
 
 // ---------------------------------------------------------------- 受理

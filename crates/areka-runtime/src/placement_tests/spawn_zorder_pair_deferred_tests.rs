@@ -1,4 +1,4 @@
-//! 先送りした正典語彙が areka 側の本番コードに入り込んでいないことを固定するテストの、本体の片割れ
+//! 先送りした正典語彙が areka 側の本番コードに入り込んでいないことを固定するテストの、`areka-runtime` の片割れ
 //! （要件 8.1／8.3／8.4／8.5、重なり順のグループ機構の要件 10.4／11.4、spec: placement-crate-split
 //! 要件 5.2・5.3）。
 //!
@@ -9,7 +9,7 @@
 //! 新設したもの）・帯の語の持ち主のファイル・`areka-runtime` の `src` の木を見る。wintf 側の
 //! 本番ファイル 8 本は `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` が持つ。
 //! 語の表と走査器は 2 つの片割れが共に使う `areka_placement::test_support::zorder_pair_deferred` に
-//! 1 つだけあり、ここでは本体の実物で較正する。
+//! 1 つだけあり、ここでは`areka-runtime` の実物で較正する。
 //!
 //! # 走査の範囲・語の表・行コメントを除いてから探す理由
 //!
@@ -26,20 +26,20 @@ use areka_placement::test_support::zorder_pair_deferred::{
     code_only, deferred_hits, read_source, rust_sources_under, zorder_production_sources,
 };
 
-/// 重なり順のグループ機構（`areka-P0-scope-zorder-pinning`）が本体に新設した本番ファイル
+/// 重なり順のグループ機構（`areka-P0-scope-zorder-pinning`）が`areka-runtime` に新設した本番ファイル
 /// （`CARGO_MANIFEST_DIR` からの相対）。下の
 /// `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
-/// 「本体に実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
+/// 「`areka-runtime` に実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
 const PRODUCTION_FILES: [&str; 3] = [
     "src/zorder_cue.rs",
     "src/frame/zorder_drain.rs",
     "src/frame/zorder_descript.rs",
 ];
 
-/// 帯の語を持つ本体の本番ファイル（`stay-on-top-directives` の受け口と取り出しの相）。
+/// 帯の語を持つ`areka-runtime` の本番ファイル（`stay-on-top-directives` の受け口と取り出しの相）。
 const BAND_FILES: [&str; 2] = ["src/window_state_cue.rs", "src/frame/window_state.rs"];
 
-/// 先送り語彙は、重なり順の 2 機構が書いた本体の本番ファイルのコードに 1 つも無い。
+/// 先送り語彙は、重なり順の 2 機構が書いた`areka-runtime` の本番ファイルのコードに 1 つも無い。
 #[test]
 fn deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources() {
     assert_vocabulary_absent(
@@ -49,7 +49,7 @@ fn deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources()
     );
 }
 
-/// 走査の道具が実際に語を見つけられること、そしてコメントだけを落としていることを、本体の実物で固定する。
+/// 走査の道具が実際に語を見つけられること、そしてコメントだけを落としていることを、`areka-runtime` の実物で固定する。
 #[test]
 fn the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
     assert_needles_are_detected();
@@ -98,14 +98,14 @@ fn the_band_files_are_where_the_band_words_live() {
     }
 }
 
-/// 走査対象の一覧が、本体に実在する本番ファイルへ両方向で追随していることを固定する
+/// 走査対象の一覧が、`areka-runtime` に実在する本番ファイルへ両方向で追随していることを固定する
 /// （名簿がずれても「無い」の主張は緑のままなので、守りが静かに狭まらないように）。
 #[test]
 fn the_scanned_roster_covers_every_zorder_production_source_in_this_crate() {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let actual = zorder_production_sources(manifest);
 
-    // ① 道具の較正（本体の実物で）: 既知の正例が挙がり、木に在る既知の偽例
+    // ① 道具の較正（`areka-runtime` の実物で）: 既知の正例が挙がり、木に在る既知の偽例
     //   （テスト・テスト専用の道具立て）は挙がらない。
     assert!(
         actual.contains(&"src/zorder_cue.rs".to_string()),

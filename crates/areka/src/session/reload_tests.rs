@@ -312,7 +312,6 @@ fn descript_words_warn_per_word_and_no_words_refuses() {
         notes: DescriptNotes {
             unsupported: vec!["headline".to_owned(), "calendar skin".to_owned()],
             unknown: vec!["nosuchword".to_owned()],
-            empty: true,
         },
     };
     let (verdict, events) = capture(|| request_reload(&mut rig.world, req));
@@ -357,7 +356,6 @@ fn accepted_leaves_one_started_record() {
         notes: DescriptNotes {
             unsupported: Vec::new(),
             unknown: vec!["x".to_owned()],
-            empty: false,
         },
     };
     let (verdict, events) = capture(|| request_reload(&mut rig.world, req));

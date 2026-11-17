@@ -105,8 +105,6 @@ pub struct DescriptNotes {
     pub unsupported: Vec<String>,
     /// 上の語でも ghost／shell／balloon でもない語。
     pub unknown: Vec<String>,
-    /// 読み直せる語が 1 つも無い。
-    pub empty: bool,
 }
 
 pub(crate) fn parse_descript_params(param: &str) -> (DescriptParts, DescriptNotes) {
@@ -138,7 +136,6 @@ pub(crate) fn parse_descript_params(param: &str) -> (DescriptParts, DescriptNote
             _ => push_once(&mut notes.unknown, word.to_string()),
         }
     }
-    notes.empty = !(parts.ghost || parts.shell || parts.balloon);
     (parts, notes)
 }
 

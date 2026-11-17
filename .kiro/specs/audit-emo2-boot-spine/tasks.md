@@ -68,7 +68,7 @@
   - _Boundary: areka-runtime の consumer_ledger 一式と、本体の台帳の合意テスト・切替の cue のテスト（まだ本体の置き場）_
   - _Dispatch: mechanical — 設計が表の型と失敗の文を与える_
   - _Requirements: 3.1, 3.3, 5.5_
-- [ ] 3.4 (P) cue・読み直しの引数・配置のテストを直す［T11・14・15・63〜73 番］
+- [x] 3.4 (P) cue・読み直しの引数・配置のテストを直す［T11・14・15・63〜73 番］
   - 先に 15 番の縛るテスト（`\v` を運ぶ荷物が開けない分が `warn!` 1 件）に改め、直す前は debug なので赤になることを見てから、運び役のときだけ `warn!` にする
   - 14・67 番: z 順の配線のテストで重ねて見る分と説明の 2 か所、重なったテスト 2 本を消す。63〜65 番: 説明の言い回しを直す。66 番: 写しの補助 3 つを既にある支えへ寄せる（`count_level` は使うだけ）
   - 68・69 番: 窓の状態の読みの `pub` を外し、配置のテストの宣言の印を 1 か所だけ `mod` にする（`transition_*` の中身に触らない）。70 番: 送りに失敗したときだけ書く。73 番: スレッドの後始末の失敗を捨てない
@@ -222,3 +222,6 @@
 - clippy の `-D warnings` は依存の `wintf`・`areka-seriko` の既存の警告で止まる。触ったファイルの警告だけを見る。木全体の grep は `git grep` で（`target/` を読むと時間切れ）。
 - 1.2: 揺れの根は、会話の輪の終わりの条件が `TalkEnded` だけを待ち、seriko のスレッドから届く目印の面 2100 を待たなかったこと（`TalkEnded` は台詞のスレッドが直に送り seriko を待たない）。門（`ShowGate`）で毎回の赤を 5/5 で確かめ、終わりの条件を表明と同じ式 `ran_past_scope_two` にして 5/5 緑。
 - 3.3: 正準台帳の表は設計の `const CANONICAL: [...; 43]` でなく `CANONICAL_ROWS: &[...]`（手で持つ件数を除く 58 番の趣旨）。
+- 3.4・72 番: 前提が崩れた。`cargo check -p areka-runtime --lib` に「never read」は出ない（derive の `PartialEq` が全部の欄を読む）。`cfg_attr(expect(dead_code))` は付けずに閉じた（8.1 の記録に載せる）。
+- 3.4・65 番: `spawn_zorder_pair_deferred_tests.rs` の言い換えで、和文と `` `areka-runtime` `` のあいだの空白が揃っていない所がある。8.2 のかけ直しで揃える。
+- 3.4・66 番: 寄せた `index_of` の置き場は `crate::source_text_test_support`（設計は名指ししていない）。

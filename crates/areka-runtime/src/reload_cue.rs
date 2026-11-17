@@ -15,7 +15,7 @@
 //! 受信端 [`ReloadRx`] とその据え付け [`wire_reload_rx`] もここに置く。受け口の dispatcher への登録と
 //! 受信端の据え付けは `runtime_boot` が行う。毎フレームの取り出し（`try_iter` の呼び手）は `reload::drain`。
 
-use std::sync::mpsc::{Receiver, Sender, TryIter};
+use std::sync::mpsc::{Receiver, SendError, Sender, TryIter};
 
 use bevy_ecs::world::World;
 use dola::cue::{CueCommand, TalkCue};
@@ -74,11 +74,11 @@ impl dola::cue::CueSink for ReloadCueSink {
         };
 
         // 3) 送り出し。受信端が閉じていても台本は殺さない。
-        let target = format!("{:?}", reload.target);
-        if self.tx.send(reload).is_err() {
+        if let Err(SendError(reload)) = self.tx.send(reload) {
             warn!(
                 event = "reload_cue_send_failed",
-                target, "[ReloadCueSink] 読み直しの要求を送り出せなかった（受信端が閉じている）"
+                target = ?reload.target,
+                "[ReloadCueSink] 読み直しの要求を送り出せなかった（受信端が閉じている）"
             );
         }
     }

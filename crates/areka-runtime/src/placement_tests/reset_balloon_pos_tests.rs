@@ -142,7 +142,10 @@ impl Rig {
     fn finish(self) {
         let _residue = drain_window_pos_commands();
         self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.parts
+            .handle
+            .join()
+            .expect("アクターのスレッドが panic せずに終わる");
     }
 }
 
@@ -389,7 +392,7 @@ fn boot_basis_and_switch_basis_give_the_same_positions() {
             folder: "master".to_string(),
             balloon_dir: emo2_balloon_root(),
         })
-        .unwrap_or_else(|_| panic!("同じシェルの資産づくりは成功する"));
+        .unwrap_or_else(|e| panic!("同じシェルの資産づくりは成功する: {e:?}"));
         let SwapBuilt::Shell {
             source, balloon, ..
         } = built

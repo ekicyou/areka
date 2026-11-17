@@ -31,7 +31,7 @@ use crate::boot_config::BootContext;
 use crate::exit_wait::{self, WorkGate};
 use crate::ghost_session::GhostSlot;
 use crate::log_history::TARGET_ERROR;
-use areka_runtime::reload_args::{DescriptNotes, ReloadTarget, ScriptReload};
+use areka_runtime::reload_args::{DescriptNotes, DescriptParts, ReloadTarget, ScriptReload};
 use areka_runtime::reload_cue::ReloadRx;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::skin_switch::{SkinKind, SkinSwitchInFlight, SkinVerdict};
@@ -264,7 +264,13 @@ pub(crate) fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVer
             "descript の読み直しの知らない語を飛ばす"
         );
     }
-    if req.notes.empty {
+    // 読み直せる語が 1 つも無い（正本は対象の 3 つの印・要件 7.5）。
+    if let ReloadTarget::Descript(DescriptParts {
+        ghost: false,
+        shell: false,
+        balloon: false,
+    }) = req.target
+    {
         tracing::warn!(
             target: TARGET_ERROR,
             ghost = %ghost,

@@ -15,6 +15,8 @@
 // =============================================================================
 
 use super::*;
+use crate::frame::test_support::count_level;
+use crate::source_text_test_support::{code_only, index_of};
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use log_capture_kit::{LineFormat, capture_lines};
@@ -94,29 +96,6 @@ fn accepted_set() -> ZOrderDirective {
 fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
     let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
     lines
-}
-
-/// 捕捉行のうち指定した水準（`"WARN"`／`"DEBUG"`）の件数を数える。
-fn count_level(logs: &[String], level: &str) -> usize {
-    let needle = format!("level={level}");
-    logs.iter().filter(|line| line.contains(&needle)).count()
-}
-
-/// 註釈の行を落とす——説明文に書いてあるだけの綴りを「在る」と数えないため
-/// （`tick_gate_config_producers_tests.rs` と同じ流儀）。
-fn code_only(src: &str) -> String {
-    src.lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// コメントを除いたソースにおける字面の位置（無ければその場で落とす）。
-///
-/// 檻が「在る・無い」だけでなく**前後関係**を主張するための道具である。
-fn index_of(code: &str, needle: &str) -> usize {
-    code.find(needle)
-        .unwrap_or_else(|| panic!("コードに `{needle}` の字面が無い（檻の前提が崩れている）"))
 }
 
 // ---------------------------------------------------------------- 受理する 2 組
@@ -305,8 +284,9 @@ fn t_zcs8_non_carrier_cues_send_nothing() {
 
 /// 宛名規律: 開封できない `Custom` のうち**自分宛**（`set`／`reset`）は警告 1 本。
 ///
-/// 開封できない形では選別子が読めないので、宛名は名前だけで判ずる。今この 2 つの名前を
-/// 担当しているのは本 sink だけであり、壊れ物を報せる責任はこちらにある。
+/// 開封できない形では選別子が読めないので、宛名は名前だけで判ずる。この 2 つの名前は
+/// 他の受け口も持つが、開けない形の `set`／`reset` を警告する持ち主は本 sink だけであり、
+/// 壊れ物を報せる責任はこちらにある。
 #[test]
 fn t_zcs9_broken_own_address_warns_once() {
     for command in ["set", "reset"] {

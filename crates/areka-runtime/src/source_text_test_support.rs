@@ -9,6 +9,15 @@ pub fn code_only(source: &str) -> String {
         .join("\n")
 }
 
+/// 字面の現れる位置（無ければその場で落として、檻の前提が崩れたことを名指しで告げる）。
+///
+/// 檻が「在る・無い」だけでなく**前後関係**を主張するための道具である。
+pub fn index_of(haystack: &str, needle: &str) -> usize {
+    haystack
+        .find(needle)
+        .unwrap_or_else(|| panic!("檻の錨が本文に見当たらない（前提が崩れている）: {needle}"))
+}
+
 /// 空白の連なりを 1 つに詰める（改行や字下げの入り方で檻が壊れないようにする）。
 pub fn squeeze(source: &str) -> String {
     source.split_whitespace().collect::<Vec<_>>().join(" ")

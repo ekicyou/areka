@@ -10,6 +10,8 @@
 // =============================================================================
 
 use super::*;
+use crate::frame::test_support::count_level;
+use crate::source_text_test_support::code_only;
 use areka_parsers::sakura::RAISE_TAG_CARRIER;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
@@ -53,22 +55,9 @@ fn run(cue: TalkCue) -> (Vec<WindowStateDirective>, Vec<String>) {
     (drain(&rx), logs)
 }
 
-fn count_level(logs: &[String], level: &str) -> usize {
-    let needle = format!("level={level}");
-    logs.iter().filter(|line| line.contains(&needle)).count()
-}
-
 fn lines_at<'a>(logs: &'a [String], level: &str) -> Vec<&'a String> {
     let needle = format!("level={level}");
     logs.iter().filter(|line| line.contains(&needle)).collect()
-}
-
-/// 註釈の行を落とす（説明文の綴りを「在る」と数えない）。
-fn code_only(src: &str) -> String {
-    src.lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 const ON: WindowStateDirective = WindowStateDirective::StayOnTop { on: true };
@@ -279,7 +268,9 @@ fn t_wsc9_extra_arguments_are_recorded_and_the_directive_is_sent() {
     assert!(!logs.iter().any(|l| l.contains("extra=")), "{logs:?}");
 }
 
-/// 他人宛・開けない荷物・キャリアでない cue は送らず、警告せず、`debug!` で必ず残す。
+/// 他人宛・開けない荷物（`\v` の運搬名を除く）・キャリアでない cue は送らず、警告せず、
+/// `debug!` で必ず残す。`\v` を運ぶ荷物が開けないときは、運搬名の持ち主は本 sink だけなので
+/// 送らずに `warn!` を 1 件残す。
 #[test]
 fn t_wsc10_skips_send_nothing_and_leave_a_debug_record() {
     let skipped = vec![
@@ -287,7 +278,6 @@ fn t_wsc10_skips_send_nothing_and_leave_a_debug_record() {
         carrier_cue("0", "change", &["ghost", "x"]),
         carrier_cue("0", "set", &[]),
         broken_custom_cue("set"),
-        broken_custom_cue(RAISE_TAG_CARRIER),
         broken_custom_cue("noexist"),
         TalkCue {
             at: 0.0,
@@ -319,6 +309,14 @@ fn t_wsc10_skips_send_nothing_and_leave_a_debug_record() {
             "読み飛ばしを残す: {label} {logs:?}"
         );
     }
+
+    let (sent, logs) = run(broken_custom_cue(RAISE_TAG_CARRIER));
+    assert!(sent.is_empty(), "開けない `\\v` は送らない: {sent:?}");
+    assert_eq!(
+        count_level(&logs, "WARN"),
+        1,
+        "開けない `\\v` の荷物は警告 1 件（運搬名の持ち主は本 sink だけ）: {logs:?}"
+    );
 }
 
 /// 受信端が閉じていても台本を殺さない——警告を残して続ける。

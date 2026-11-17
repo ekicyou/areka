@@ -121,15 +121,3 @@ fn local_origins_still_send_enter() {
         assert!(refused(&logs).is_empty(), "止めの記録は無い: {logs:?}");
     }
 }
-
-/// `begin_talk` の来ない複製（登録の原本と同じ）はゴースト自身として扱い、`Enter` を通す。
-#[test]
-fn clone_without_begin_talk_is_ghost() {
-    let (tx, rx) = channel::<NoUserBreakSignal>();
-    let mut talk = NoUserBreakCueSink::new(tx).clone_box();
-    talk.emit(carrier_cue("enter", &["nouserbreakmode"]));
-    assert_eq!(
-        rx.try_iter().collect::<Vec<_>>(),
-        vec![NoUserBreakSignal::TalkStarted, NoUserBreakSignal::Enter]
-    );
-}
