@@ -581,16 +581,16 @@ impl ShioriByteProxy {
 | # | タスク | 指摘・要件 | 触るファイル | 並べられるか |
 |---|---|---|---|---|
 | 1 | 実行例のテストの配線と最初の走り | 5・24・4.6 | `Cargo.toml`・`shiori_proxy.rs`（cfg だけ） | 先頭 |
-| 2 | 送りの層の決まり（送りの失敗・受け・HWND・消すもの） | 3（`send_copydata`）・8・11・21⑶・10（ipc の分） | `ipc.rs` と、消す名前・移す関数の呼び元の行（`parent_window.rs`・`helper_window.rs`・`main.rs`） | 1 の後 |
+| 2 | 送りの層の決まり（送りの失敗・受け・HWND・消すもの） | 3（`send_copydata`）・8・11（`DEFAULT_TIMEOUT` を除く）・21⑶・10（ipc の分） | `ipc.rs` と、消す名前・移す関数の呼び元の行（`parent_window.rs`・`helper_window.rs`・`main.rs`） | 1 の後 |
 | 3 | 待ちを 1 つに（`pump_until`） | 9・21⑵ | `ipc.rs`・`parent_window.rs`・`helper_window.rs` | 2 の後 |
-| 4 | 親の窓と 1 往復の送り | 7・13（親）・10 | `parent_window.rs`・`parent_window_tests.rs`・`ipc.rs`（移す元）・`main.rs`（呼び元） | 3 の後 |
+| 4 | 親の窓と 1 往復の送り | 7・13（親）・10・3（err(1) の送りを `send_request` から `send_copydata` へ替える呼び元の直し。経った時間の下限の判定は 6） | `parent_window.rs`・`parent_window_tests.rs`・`ipc.rs`（移す元）・`main.rs`（呼び元＝go(1)・probe・err(1)） | 3 の後 |
 | 5 | 子のプロセスの見張り | 4・6・12・20（親）・10 | `process_host.rs`・`main.rs`（呼び元） | 4 の後 |
 | 6 | 親の駆動 | 3（go(1)・err(1)）・12（`Go2Record`）・14・19・10・11⑺ | `main.rs`（shiori-host-32）・`shiori3.rs` | 5 の後 |
 | 7 | helper の終わり方と窓 | 2・13（helper）・21⑴・10 | `helper_window.rs`・`helper_window_tests.rs` | 6 の後 |
-| 8 | helper の入口と pasta の読み | 18・20（helper）・10・11⑺ | `helper.rs`・`shiori_proxy.rs` | 7 の後 |
+| 8 | helper の入口と pasta の読み | 18・20（helper）・10・11⑺・11（`ipc::DEFAULT_TIMEOUT` を消す＝読み手の `main.rs:73` は 6、`helper_window.rs` の 2 か所は 7 で外れ、最後の `helper.rs` をここで外してから消す） | `helper.rs`・`shiori_proxy.rs`・`ipc.rs`（`DEFAULT_TIMEOUT` の 1 件） | 7 の後 |
 | 9 | 警告 0 の確かめと i686 の組み立て | 10 | （直しの残り） | 8 の後 |
-| 10 | クリック透過の先進坑 | 1・15・16・17・27 | clickthrough `main.rs`・`main_drag_tests.rs` | 1 の後（2〜9 と並べられる＝触るファイルが重ならない） |
-| 11 | 番人の表の 1 件（申し合わせ・取り込み・外す） | 7.1〜7.3・7.6 | `file_length_guard_test.rs` | 10 の後・`audit-test-kits` の着地待ち |
+| 10 | クリック透過の先進坑 | 1・15・16・17・27 | clickthrough `main.rs`・`main_drag_tests.rs` | 1 の後（2〜9 と並べられる＝触るファイルが重ならない）。完了の条件: `main.rs` が 1,000 行を下回った後、タスク 11 が済むまでの間に赤でよいのは `log-capture-kit` の `every_over_limit_exception_is_still_over_the_limit` の 1 本だけ（ほかの赤は直してから完了）。タスク 11 の着地待ちの間も 12〜14 は先へ進めてよい |
+| 11 | 番人の表の 1 件（申し合わせ・取り込み・外す） | 7.1〜7.3・7.6 | `file_length_guard_test.rs` | 10 の後・`audit-test-kits` の着地待ち（待つ間は 12〜14 を進める）。外した後に赤だった 1 本が緑に戻ることを確かめる |
 | 12 | バルーン差し替えと文書 | 22・23・25・26・4.7・5.3 | `observe.rs`・`observe_tests.rs`・README 4 本・REPORT・`two-tunnel.md` | 1 の後（並べられる・一次記録の書き足しは 6・8・10 の後） |
 | 13 | 実機の確かめ | 4.5・4.8 | — | 9・10 の後 |
 | 14 | かけ直し（新しい指摘 0 まで） | 4.1・4.2 | 範囲全部 | 12・13 の後 |

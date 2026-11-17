@@ -98,7 +98,7 @@ brief で決まらなかった点は、2026-11-17 の要件の討議で開発者
 3. The 本 spec shall 直したバグ・危ない所ごとに、それが壊れたら落ちる決定論のテストを 1 本ずつ持ち、そのテストが全体テストで実際に走る（ビルドされるだけでは足りない）
 4. When 実装の最後, the 本 spec の検証 shall 全体テスト（`pwsh -NoProfile -File tools/test-all.ps1`）を回して緑を確かめる
 5. When 指摘を確かめるのに先進坑を実機の画面で動かすとき, the 本 spec の検証 shall 画面の操作を排他テストの机で順を取って SendInput で行い、終わったらすぐ机を返す
-6. The 本 spec の直し shall `crates/pilot` の実行例のうちテストを持つものを、全体テストの `cargo test --workspace` で組み立てて走らせる形にする（`Cargo.toml` の実行例の `test = true`・新しい依存とファイルは足さない）。32bit の本物の `pasta.dll` を読むテストのように x64 で走れないものは、走れる組み立てだけに限る（討議の決め 2）
+6. The 本 spec の直し shall `crates/pilot` の実行例のうちテストを持つものを、全体テストの `cargo test --workspace` で組み立てて走らせる形にする（`Cargo.toml` の実行例の `test = true`・この配線のために新しい依存・ファイル・全体テストの段は足さない。直しのテストを置く兄弟のファイルは `structure.md` の決まりと要件 6.1 に従って足してよい）。32bit の本物の `pasta.dll` を読むテストのように x64 で走れないものは、走れる組み立てだけに限る（討議の決め 2）
 7. The 本 spec の直し shall `.kiro/steering/two-tunnel.md` の「examples 腐敗検出」を先送りした箇所に、`crates/pilot` の実行例のテストは全体テストで走らせる（2026-11-17 裁定・この spec）ことを書き足す
 8. When 実装の最後, the 本 spec の検証 shall 実機で 1 回ずつ確かめ直す: ⑴ 32bit の先進坑を i686 の helper と検体 emo2 の本物の `pasta.dll` で、正常系と `--selftest-errors` の異常系 ⑵ クリック透過の先進坑で、押したまま Alt+Tab して捕まえが外れたときにドラッグが終わること。走らせる前に、SSP などで pasta のゴーストが `127.0.0.1:9276` を握っていないことを確かめる（討議の決め 6）
 
