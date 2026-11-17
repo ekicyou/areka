@@ -297,3 +297,6 @@
 - 後で（audit へ）: 本体の `runtime_tests/balloon_visibility_phase_tests.rs` の `world_at` は `areka-runtime` の支えと同じ中身の前からの写し。
 - 段 7（5.9）へ: 古い説明が残る — `areka-runtime/src/hit_region.rs:48-54`（probe が `#[path]` で取り込む前提）・`areka/examples/emo-present/reconcile.rs:15,25`・`areka/src/input_events/mod.rs:379`（`collision-probe.rs` を本体の example として指す）。
 - 段 6: 超えたファイルは 0 で割らなかった。`transition_judge.rs`・`transition_judge_tests.rs` は 999 行（余裕 1 行）。段 7 の説明の書き換えで行を増やさない（増えたら D9 で兄弟へ出す）。
+- 完了時にその場で解決: `tools/load-flake.ps1` に `-Binary areka-runtime-lib`（`-p areka-runtime --lib`）を足し、使い方の例の `-Filter runtime::frame` を `-Binary areka-runtime-lib -Filter frame` に直し、`-SelfTest` の `cargo args` の期待を 4 対象にした（`audit-tools-scripts`〔#470〕の申し送り。要件 5.11 の「tools/ に触らない」は同じウェーブの約束で、相手が先に着地して理由が無くなったため・自分の検査と文字コードの検査は緑）。
+- 完了時にその場で解決: `audit-emo2-boot-spine` の brief の申し送りの `hit_region.rs` の項目の札「⑷」を、frame 専用の ⑷ と紛れないよう「ほかに一緒に伝えること」に改めた。
+- 完了時に申し送り: `shiori-abi` の manifest の警告（`windows` の未使用・#225 から）を `shiori4-api` の brief へ（`shiori-abi` を撤去する spec）。本体の `Cargo.toml` の古くなった依存の説明と、直に使わなくなった依存の数え直しを `audit-areka-app` の brief へ。

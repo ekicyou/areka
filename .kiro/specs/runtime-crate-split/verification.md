@@ -862,3 +862,9 @@
 - `cargo fmt --all -- --check` → 差分なし。
 - `cargo check -p areka --bin areka --tests` → 警告 0・エラー 0。`cargo check -p areka --examples` → 警告 0（`reconcile.rs` の注を直したため）。
 - `cargo test -p log-capture-kit --test file_length_guard_test` → `6 passed; 0 failed`。
+
+## 15. 完了時の手当て（kiro-complete の棚卸）
+
+- 11.6 ⑴⑵ の `tools/` の 3 項目と 48 行の `-Filter runtime::frame` は、後続の spec へ渡さず完了時にその場で直した（`3c37870bb`）。要件 5.11 が `tools/` に触らないとしていたのは同じウェーブの約束 ⑴（`audit-tools-scripts` と書き換えるファイルを重ねない）のためで、`audit-tools-scripts` が #470 で先に着地し、その spec 自身が brief.md でこの spec に直すよう申し送ったので、約束の理由が無くなった。`pwsh -NoProfile -File tools/load-flake.ps1 -SelfTest` は終了コード 0（`ok selftest cargo args` を含む）、`tools/encoding-check.ps1` は `all passed`。完了の全体テストの `load flake check` の段でも確かめる
+- 申し送り: `shiori-abi` の警告 → `shiori4-api` の brief、本体の `Cargo.toml` の依存の説明と数え直し → `audit-areka-app` の brief
+- 棚卸の数: その場で解決 2 件・申し送り 2 件・起票 0 件

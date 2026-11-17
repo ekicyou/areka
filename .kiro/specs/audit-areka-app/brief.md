@@ -99,3 +99,8 @@
 - **件 8（名前の無い task 番号・古い置き場）**: `src/smoke_exit.rs:1`・`:8`・`:67` の「task 2.3」。`examples/collision-probe/fixture.rs:23` の「main.rs／他 example と同名」（今は `src/smoke_exit.rs:44`）。`src/main_restore_seam_tests.rs:24` が自分の `plant_minimal_ghost` を「persist.rs の `plant_minimal_ghost` と同型」と書く（その関数は消えた）。同じ所の「`resolve` が成功する」も、`load_restored_state` がシェルを解かなくなったので古い。
 - **件 9（呼び手の数・届かない腕）**: `src/runtime/frame/drain_resnap.rs:596` が `persist_unremembered_char_positions` の本番の呼び手を「ここ 1 か所だけ」と書く（`reset_pos.rs` も呼ぶ）。同じファイル `:478` の `ChainDeferReason::DpiSyncHeld` の腕は、`collect_chain_states` がその値を返さないので届かない（害は無い）。
 - **件 10（テストの支えの写し）**: `src/runtime/move_cue_apply_move_tests.rs:52` の `attach_fake_handles` は `areka_placement::test_support::give_fake_handles` の写し。`SharedFakeIo` の写し（配置の crate の 512）が `src/boot_resolve_tests.rs`・`src/input_events/drag_test_support.rs`・`src/main_persist_wiring_seam_tests.rs` にある（`areka_placement::test_support::SharedFakeIo` を使う）。同じ名の型が `src/runtime/frame/switch_finish_tests.rs:59`・`src/runtime/move_cue_apply_move_sticky_tests.rs:201`・`src/runtime/move_cue_place_tests.rs:330` にもある（写しかを着手のときに確かめる）。
+
+## 申し送り（runtime-crate-split より）
+
+- `crates/areka/src/runtime/` を新しい crate `crates/areka-runtime` へ移した（PR は `runtime-crate-split`）。本体の `crates/areka/Cargo.toml` の依存の説明のうち、runtime が使うために通常依存へ上げたと書く行（58・62〜63・71 行ほか「runtime 統合結線…で通常依存へ昇格」「placement の採寸…で通常依存へ昇格」）は、使い手が `areka-runtime` へ移って理由が古くなった。行と説明は変えていない。
+- 本体が直に使わなくなった依存の行は、粗い確かめ（`[dependencies]` の crate 名を本体の本番の `src` で grep）では 0 件だった。`use` を経ない使い方（マクロ・型の再公開）まで含めて数え直し、要らない行は外し、残す行の説明を今の使い手に合わせる。
