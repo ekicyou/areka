@@ -48,9 +48,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::bundle::{Bundle, bundles};
+use super::bundle::{Bundle, all_links, bundles};
 use super::tally::{
-    StatusCounts, Tally, push_status_header, push_status_row, status_counts, tally, theme_names,
+    StatusCounts, Tally, push_overall_table, push_status_header, push_status_row, push_theme_table,
+    status_counts, tally,
 };
 use crate::catalog::Catalog;
 use crate::ledger::Ledger;
@@ -117,11 +118,7 @@ pub fn render_summary(catalog: &Catalog, ledgers: &[Ledger], themes: &[&str]) ->
     // ⑵ 状態の分布——全体。
     let overall = status_counts(ordered.iter().flat_map(|ledger| ledger.entries.values()));
     out.push_str("\n## 状態の分布\n\n");
-    out.push_str("| 状態 | 件数 |\n| --- | ---: |\n");
-    for (name, count) in overall.japanese_rows() {
-        out.push_str(&format!("| {name} | {count} |\n"));
-    }
-    out.push_str(&format!("| 合計 | {} |\n", overall.total()));
+    push_overall_table(&mut out, &overall);
 
     // ⑵ 状態の分布——ドメイン別。
     out.push_str("\n## ドメイン別の状態の分布\n\n");
@@ -140,12 +137,7 @@ pub fn render_summary(catalog: &Catalog, ledgers: &[Ledger], themes: &[&str]) ->
     // ⑷ テーマ別の状態分布——全体。
     let by_theme = merged_themes(&tallies);
     out.push_str("\n## テーマ別の状態分布\n\n");
-    push_status_header(&mut out, "テーマ");
-    for name in theme_names(&by_theme, themes) {
-        let empty = StatusCounts::new();
-        let counts = by_theme.get(name).unwrap_or(&empty);
-        push_status_row(&mut out, name, counts);
-    }
+    push_theme_table(&mut out, &by_theme, themes);
 
     out
 }
@@ -232,25 +224,6 @@ fn crossing_bundles<'a>(
             Some((bundle, domains.into_iter().collect()))
         })
         .collect()
-}
-
-/// 4 台帳の `links` を辺の列にする。
-///
-/// **1 つの id から何本でも辺が出る**（要件 4.3 の関連は種別違いで何本でも書ける）。
-/// 元 id を鍵にした表で集めると 2 本目以降が黙って落ち、繋がるはずの束が割れる。
-///
-/// `alias_of`・`supersedes` の欄は辺にしない（`links` の kind としてなら辺になる）。
-/// 束は `links` だけで作る（設計 D-11）。
-fn all_links(ordered: &[&Ledger]) -> Vec<(EntryId, EntryId)> {
-    let mut edges: Vec<(EntryId, EntryId)> = Vec::new();
-    for ledger in ordered {
-        for entry in ledger.entries.values() {
-            for link in &entry.links {
-                edges.push((entry.id.clone(), link.to.clone()));
-            }
-        }
-    }
-    edges
 }
 
 #[cfg(test)]

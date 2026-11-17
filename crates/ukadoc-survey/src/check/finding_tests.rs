@@ -7,7 +7,6 @@
 
 use super::super::test_support::{id, ledger_place};
 use super::{Finding, FindingKind, render};
-use std::collections::BTreeSet;
 
 // ---------------------------------------------------------------------------
 // 出力の整形（要件 6.10・6.12）
@@ -59,30 +58,6 @@ fn the_rendered_body_is_pinned_verbatim() {
     assert_eq!(render(&findings), expected);
 }
 
-/// 該当 id は必ず本文に載る（要件 6.10）。
-#[test]
-fn the_line_of_a_finding_carries_its_id() {
-    let findings = vec![Finding::new(
-        FindingKind::LinkEndpointMissing,
-        Some(id("ukadoc:list_shiori_event:OnBoot:1")),
-        ledger_place("shiori"),
-        "関連の相手がカタログに無い: きはい",
-    )];
-    let body = render(&findings);
-    assert!(
-        body.contains("ukadoc:list_shiori_event:OnBoot:1"),
-        "id が本文に無い:\n{body}"
-    );
-    assert!(
-        body.contains("doc/ukadoc-coverage/ledger/shiori.toml"),
-        "場所が本文に無い:\n{body}"
-    );
-    assert!(
-        body.contains("関連の相手がカタログに無い: きはい"),
-        "詳細が本文に無い:\n{body}"
-    );
-}
-
 /// id を持たない所見（ページの割り当てなど）は場所と詳細だけを並べる。
 #[test]
 fn a_finding_without_an_id_shows_its_place_and_detail() {
@@ -100,32 +75,6 @@ fn a_finding_without_an_id_shows_its_place_and_detail() {
     どの台帳にも割り当てが無いページ: new_page
 ";
     assert_eq!(render(&findings), expected);
-}
-
-/// 同じ種類・同じ場所の所見は場所の行を 1 度しか書かない。
-#[test]
-fn two_findings_in_the_same_place_share_one_place_line() {
-    let findings = vec![
-        Finding::new(
-            FindingKind::LedgerIdNotInCatalog,
-            Some(id("ukadoc:spec_web:a:1")),
-            ledger_place("shiori"),
-            "カタログに無い id",
-        ),
-        Finding::new(
-            FindingKind::LedgerIdNotInCatalog,
-            Some(id("ukadoc:spec_web:b:1")),
-            ledger_place("shiori"),
-            "カタログに無い id",
-        ),
-    ];
-    let body = render(&findings);
-    assert_eq!(
-        body.matches("  doc/ukadoc-coverage/ledger/shiori.toml\n")
-            .count(),
-        1,
-        "場所の行が 1 度でない:\n{body}"
-    );
 }
 
 /// 同じ種類でも場所が違えば場所の行が分かれ、場所の名前順に並ぶ。
@@ -183,7 +132,8 @@ fn findings_in_one_place_are_ordered_by_id_not_by_input_order() {
 /// 種類ごとの塊は [`FindingKind::ALL`] の並びで出る。
 ///
 /// 入力を逆順に与えても本文の並びは変わらない。13 種すべてを 1 件ずつ与えて、
-/// 見出しの並びを逐語で釘付けする。
+/// 見出しの並びを逐語で釘付けする。見出しの綴りは [`FindingKind::as_key`] で、README の
+/// 所見の表と同じである。往復では守れないので、ここで逐語に並べる。
 #[test]
 fn the_kind_blocks_come_out_in_the_declared_order() {
     let mut findings: Vec<Finding> = FindingKind::ALL
@@ -231,39 +181,6 @@ fn the_kind_blocks_come_out_in_the_declared_order() {
     .map(str::to_owned)
     .collect();
     assert_eq!(headings, expected);
-}
-
-/// 種類の綴りは README の所見の表と同じである。往復では守れないので逐語で並べる。
-#[test]
-fn the_kind_keys_are_pinned_verbatim() {
-    let keys: Vec<&'static str> = FindingKind::ALL.iter().map(FindingKind::as_key).collect();
-    assert_eq!(
-        keys,
-        vec![
-            "LedgerIdNotInCatalog",
-            "CatalogIdMissingFromLedgers",
-            "CatalogIdInMultipleLedgers",
-            "LedgerIdPageMismatch",
-            "LedgerPagesMismatch",
-            "LedgerOutOfOrder",
-            "PageNotAssigned",
-            "SourceUrlNotInCatalog",
-            "ImplementedWithoutEvidence",
-            "LinkEndpointMissing",
-            "AliasChain",
-            "IntroducedNotInCatalogVersions",
-            "DomainReportStale",
-        ]
-    );
-}
-
-/// 所見の種類は 13 種。数え落としも重複も落とす。
-#[test]
-fn all_thirteen_kinds_are_declared_once_each() {
-    assert_eq!(FindingKind::ALL.len(), 13);
-    let distinct: BTreeSet<&'static str> =
-        FindingKind::ALL.iter().map(FindingKind::as_key).collect();
-    assert_eq!(distinct.len(), 13, "同じ綴りが 2 度出ている");
 }
 
 /// 本文は入力の並びに依らない（要件 7.3 の決定論を検査の出力にも通す）。

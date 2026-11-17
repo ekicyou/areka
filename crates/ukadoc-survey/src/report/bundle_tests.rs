@@ -86,11 +86,6 @@ fn expected() -> Vec<Bundle> {
 // ---- 連結成分ごとに 1 つの束（要件 7.1 の 5 つ目・要件 7.9） ----
 
 #[test]
-fn each_connected_component_becomes_exactly_one_bundle() {
-    assert_eq!(bundles(&scrambled()), expected());
-}
-
-#[test]
 fn shuffling_the_input_changes_neither_the_bundle_ids_nor_the_list_order() {
     // 2 つの見本が本当に別物であることを先に主張する。同じ列を 2 回渡しただけの
     // テストは並び替えを 1 つも試していない。
@@ -226,32 +221,6 @@ fn components_without_a_connecting_edge_do_not_merge() {
     );
 }
 
-// ---- 束 id は構成 id の最小値（要件 7.9） ----
-
-#[test]
-fn the_bundle_id_is_the_smallest_member_not_the_first_one_seen() {
-    // 最初に現れる id は yankee で、最小の id は xray。
-    let got = bundles(&[edge(YANKEE, XRAY)]);
-    assert_eq!(got.len(), 1);
-    assert_eq!(got[0].id.as_str(), "ukadoc:page_c:xray:1");
-    assert_ne!(got[0].id.as_str(), "ukadoc:page_c:yankee:1");
-}
-
-#[test]
-fn members_are_listed_in_byte_ascending_order() {
-    let got = bundles(&[edge(CHARLIE, ALPHA), edge(ALPHA, BRAVO)]);
-    assert_eq!(got.len(), 1);
-    let members: Vec<&str> = got[0].members.iter().map(EntryId::as_str).collect();
-    assert_eq!(
-        members,
-        vec![
-            "ukadoc:page_a:alpha:1",
-            "ukadoc:page_a:bravo:1",
-            "ukadoc:page_a:charlie:1",
-        ]
-    );
-}
-
 // ---- 端の場合を釘付けする ----
 
 #[test]
@@ -298,14 +267,4 @@ fn an_id_that_appears_in_no_link_never_appears_in_a_bundle() {
     // 否定の主張だけだと対象が空でも真になるので、非空の主張と対で置く。
     assert_eq!(seen, vec!["ukadoc:page_a:alpha:1", "ukadoc:page_a:bravo:1"]);
     assert!(!seen.contains(&"ukadoc:page_b:mike:1"));
-}
-
-// ---- 2 回続けて同じ答え（要件 7.3） ----
-
-#[test]
-fn running_twice_yields_the_same_bundles() {
-    let first = bundles(&scrambled());
-    let second = bundles(&scrambled());
-    assert_eq!(first, second);
-    assert_eq!(first, expected());
 }

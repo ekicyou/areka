@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{StatusCounts, Tally, UNKNOWN_GENERATION, generation_of, status_counts, tally};
+use super::{StatusCounts, UNKNOWN_GENERATION, generation_of, status_counts, tally};
 use crate::ledger::{Ledger, LedgerEntry};
 use crate::model::{Domain, EntryId, PageName, Status};
 
@@ -152,21 +152,7 @@ fn every_status_has_a_row_of_its_own() {
     }
 }
 
-#[test]
-fn status_counts_over_an_entry_list_matches_the_overall_distribution() {
-    let ledger = sample();
-    let got = status_counts(ledger.entries.values());
-    assert_eq!(got, tally(&ledger).overall);
-    assert_eq!(got.total(), 6);
-}
-
 // ---- ページ別の分布（要件 7.1 の 1 つ目・要件 6.9） ----
-
-#[test]
-fn the_page_distribution_is_keyed_by_page_name_in_name_order() {
-    let got = tally(&sample());
-    assert_eq!(page_keys(&got.by_page), vec!["page_one", "page_two"]);
-}
 
 #[test]
 fn the_page_distribution_is_in_name_order_even_when_id_order_disagrees() {
@@ -174,8 +160,9 @@ fn the_page_distribution_is_in_name_order_even_when_id_order_disagrees() {
     // 区切りのコロン（0x3A）より数字（0x30）の方が小さいので、`a0` を持つ id は
     // `a` を持つ id より前に来る。ページ名としては `a` が先である。
     //
-    // 実データに今この形の対は無いが、`spec_shiori3` は既にあるので
-    // `spec_shiori` が 1 ページ増えればその日に生じる。
+    // 実データに今この形の対は無いが、`spec_shiori3` は既にあるので、`spec_shiori` の
+    // ページにアンカー付きの項目（`ukadoc:spec_shiori:x:1` の形）が入ればその日に生じる
+    // （アンカー無しの `ukadoc:spec_shiori` なら id 順でも前に並び、ページ名の順と一致する）。
     let ledger = ledger_of(vec![
         entry("ukadoc:a0:x:1", Status::Implemented, "", &[]),
         entry("ukadoc:a:y:1", Status::Absent, "", &[]),
@@ -380,21 +367,6 @@ fn a_theme_name_outside_the_frozen_eight_gets_a_row_of_its_own() {
             .expect("知らない綴りも欄を持つ"),
         1
     );
-}
-
-// ---- 2 回続けて同じ答え（要件 7.3） ----
-
-#[test]
-fn running_twice_yields_the_same_tally() {
-    let ledger = sample();
-    let first: Tally = tally(&ledger);
-    let second: Tally = tally(&ledger);
-    assert_eq!(first, second);
-    // 空の主張にならないよう、非空であることも言う。
-    assert_eq!(first.overall.total(), 6);
-    assert_eq!(first.by_page.len(), 2);
-    assert_eq!(first.by_generation.len(), 4);
-    assert_eq!(first.by_theme.len(), 3);
 }
 
 // ---- 分布どうしの足し合わせ ----

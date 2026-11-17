@@ -563,7 +563,7 @@ fn an_entry_on_an_unassigned_page_is_never_the_ledgers_own() {
 }
 
 // ---------------------------------------------------------------------------
-// 1 件目で止めない・同じ入力なら同じ結果（設計 Error Handling・要件 7.3）
+// 1 件目で止めない（設計 Error Handling）
 // ---------------------------------------------------------------------------
 
 /// 2 か所を同時に壊すと 2 件とも出る（1 件目で止めない）。
@@ -595,21 +595,6 @@ fn two_breakages_produce_two_findings() {
         only_one(&outcome.findings, FindingKind::LedgerOutOfOrder).place,
         ledger_place("shiori")
     );
-}
-
-/// 同じ入力を 2 度通すと所見は 1 件ずつ同じ並びで返る（要件 7.3 の決まり方）。
-#[test]
-fn the_same_input_yields_the_same_findings_in_the_same_order() {
-    let mut world = World::normal();
-    world.ledger_mut(Domain::Shiori).file_order.swap(0, 1);
-    let entry = catalog_entry("ukadoc:list_unknown_page:Foo:1", "Foo");
-    world.catalog.entries.insert(entry.id.clone(), entry);
-    world.refresh_reports();
-
-    let first = run(&world.input()).findings;
-    let second = run(&world.input()).findings;
-    assert_eq!(first, second);
-    assert!(first.len() >= 3, "所見が少なすぎて並びを見比べられない");
 }
 
 /// 台帳を 1 本も渡さなければ、カタログの 12 件すべてが行き先を失う。

@@ -37,8 +37,9 @@
 //! # 表の見出しと行の道具もここに 1 つ
 //!
 //! ドメイン別報告と全体報告は同じ 7 語彙の列を持つ表を書く。見出しと行の書き方は
-//! [`push_status_header`]・[`push_status_row`] の 1 か所に置き、並べるテーマ名の決め方
-//! ([`theme_names`]) も同じ。
+//! [`push_status_header`]・[`push_status_row`] の 1 か所に置き、「状態 | 件数」の表
+//! ([`push_overall_table`]) とテーマ別の表 ([`push_theme_table`]・並べる名前は
+//! [`theme_names`]) も同じ。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -215,12 +216,34 @@ pub(super) fn push_status_row(out: &mut String, label: &str, counts: &StatusCoun
     out.push_str(&format!(" | {} |\n", counts.total()));
 }
 
+/// 「状態 | 件数」の表を合計の行まで書く（ドメイン別報告と全体報告の「状態の分布」）。
+pub(super) fn push_overall_table(out: &mut String, counts: &StatusCounts) {
+    out.push_str("| 状態 | 件数 |\n| --- | ---: |\n");
+    for (name, count) in counts.japanese_rows() {
+        out.push_str(&format!("| {name} | {count} |\n"));
+    }
+    out.push_str(&format!("| 合計 | {} |\n", counts.total()));
+}
+
+/// テーマ別の表を書く。並べる名前は [`theme_names`] が決め、使われていないテーマは 0 件の行になる。
+pub(super) fn push_theme_table(
+    out: &mut String,
+    by_theme: &BTreeMap<String, StatusCounts>,
+    themes: &[&str],
+) {
+    push_status_header(out, "テーマ");
+    let empty = StatusCounts::new();
+    for name in theme_names(by_theme, themes) {
+        push_status_row(out, name, by_theme.get(name).unwrap_or(&empty));
+    }
+}
+
 /// 並べるテーマ名を名前順で決める。
 ///
 /// 引数のテーマ名と、台帳が実際に使った名前の**両方**を並べる。引数だけを見ると台帳に
 /// 書かれた見知らぬ名前の件数が消え、台帳だけを見ると 1 件も使われていないテーマの
 /// 欄が消える。
-pub(super) fn theme_names<'a>(
+fn theme_names<'a>(
     by_theme: &'a BTreeMap<String, StatusCounts>,
     themes: &[&'a str],
 ) -> Vec<&'a str> {

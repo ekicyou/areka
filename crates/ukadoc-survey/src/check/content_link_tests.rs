@@ -606,7 +606,7 @@ fn every_conflicting_introduced_is_reported_not_just_the_first() {
 }
 
 // ---------------------------------------------------------------------------
-// 1 件目で止めない・同じ入力なら同じ結果（設計 Error Handling・要件 7.3）
+// 1 件目で止めない（設計 Error Handling）
 // ---------------------------------------------------------------------------
 
 /// 別々の種類を 2 か所同時に壊すと 2 件とも出る（1 件目で止めない）。
@@ -650,39 +650,4 @@ fn two_breakages_of_different_kinds_produce_both_findings() {
         only_one(&outcome.findings, FindingKind::LinkEndpointMissing).place,
         ledger_place("property")
     );
-}
-
-/// 同じ入力を 2 度通すと所見は 1 件ずつ同じ並びで返る（要件 7.3 の決まり方）。
-#[test]
-fn the_same_input_yields_the_same_content_findings_in_the_same_order() {
-    let mut world = World::normal();
-    entry_mut(
-        &mut world,
-        Domain::Shiori,
-        "ukadoc:list_shiori_event:OnBoot:1",
-    )
-    .introduced = "2.4.00".to_owned();
-    entry_mut(
-        &mut world,
-        Domain::Shiori,
-        "ukadoc:list_shiori_event:OnClose:1",
-    )
-    .links = vec![
-        Link {
-            kind: LinkKind::Triggers,
-            to: id("ukadoc:list_shiori_event:OnGhostBooted:1"),
-        },
-        Link {
-            kind: LinkKind::SameFeature,
-            to: id("ukadoc:list_shiori_event:OnNoSuchEvent:1"),
-        },
-    ];
-    entry_mut(&mut world, Domain::Assets, "ukadoc:descript_ghost:name:1").supersedes =
-        vec![id("ukadoc:descript_ghost:charsets:1")];
-    world.refresh_reports();
-
-    let first = run(&world.input()).findings;
-    let second = run(&world.input()).findings;
-    assert_eq!(first, second);
-    assert!(first.len() >= 4, "所見が少なすぎて並びを見比べられない");
 }

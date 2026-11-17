@@ -16,8 +16,7 @@
 use super::*;
 use crate::catalog::Catalog;
 use crate::catalog::read::read;
-use crate::evidence::extract::extract;
-use crate::evidence::resolve::resolve;
+use crate::evidence::resolve::index_of;
 use crate::evidence::{EvidenceIndex, NameMatchFailure};
 
 /// 見本のファイルパス（実物の許可表の置き場と同じ綴り）。
@@ -94,12 +93,7 @@ fn catalog() -> Catalog {
 
 /// 同じ本文から証拠の索引を作る。
 fn index(list: &[(&str, &str)]) -> EvidenceIndex {
-    let sources = sources(list);
-    let mut hits = Vec::new();
-    for (path, text) in &sources {
-        hits.extend(extract(path, text));
-    }
-    resolve(&hits, &sources, &catalog())
+    index_of(&sources(list), &catalog())
 }
 
 /// 候補を「(種類, 文字列)」の並びへ畳む（パスは別に確かめる）。

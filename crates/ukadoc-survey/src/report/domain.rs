@@ -35,8 +35,10 @@
 //! 状態の平易な日本語（要件 7.8）は [`Status::as_japanese`] が正本で、ここでは綴り
 //! 直さない。同じ語彙を 2 か所に綴ると、片方を並べ替える誤りがテストを素通りする。
 
-use super::bundle::{Bundle, bundles};
-use super::tally::{StatusCounts, push_status_header, push_status_row, tally, theme_names};
+use super::bundle::{Bundle, all_links, bundles};
+use super::tally::{
+    push_overall_table, push_status_header, push_status_row, push_theme_table, tally,
+};
 use crate::ledger::Ledger;
 use crate::model::{EntryId, Status};
 
@@ -62,11 +64,7 @@ pub fn render_domain(ledger: &Ledger, themes: &[&str]) -> String {
 
     // ⑴ 状態の分布——ドメイン全体。
     out.push_str("\n## 状態の分布\n\n");
-    out.push_str("| 状態 | 件数 |\n| --- | ---: |\n");
-    for (name, count) in tally.overall.japanese_rows() {
-        out.push_str(&format!("| {name} | {count} |\n"));
-    }
-    out.push_str(&format!("| 合計 | {} |\n", tally.overall.total()));
+    push_overall_table(&mut out, &tally.overall);
 
     // ⑴ 状態の分布——ページ別。未分類の件数はこの表が正である（要件 6.9）。
     out.push_str("\n## ページ別の状態の分布\n\n");
@@ -89,12 +87,7 @@ pub fn render_domain(ledger: &Ledger, themes: &[&str]) -> String {
 
     // ⑷ テーマ別の状態分布。
     out.push_str("\n## テーマ別の状態分布\n\n");
-    push_status_header(&mut out, "テーマ");
-    for name in theme_names(&tally.by_theme, themes) {
-        let empty = StatusCounts::new();
-        let counts = tally.by_theme.get(name).unwrap_or(&empty);
-        push_status_row(&mut out, name, counts);
-    }
+    push_theme_table(&mut out, &tally.by_theme, themes);
 
     // ⑸ ドメイン内で関連が閉じている束。
     out.push_str("\n## ドメイン内で関連が閉じている束\n\n");
@@ -153,9 +146,9 @@ fn push_bundle_list(out: &mut String, closed: &[Bundle]) {
 /// だけで、前置きは手書きで陳腐化しうる側なので採らない（集計も同じ理由で `entries` を
 /// 正としている）。この物差しは要件 6.3・6.4 が緑である限り「このドメインに属する」と
 /// 一致する——検査が赤の間だけ、まだ台帳に書かれていない同ドメインの id を指す束が
-/// どちらの報告からも落ちる。
+/// どちらの報告からも落ちる。別名は ⑶ の一覧が受け持つ。
 fn closed_bundles(ledger: &Ledger) -> Vec<Bundle> {
-    bundles(&domain_links(ledger))
+    bundles(&all_links(&[ledger]))
         .into_iter()
         .filter(|bundle| {
             bundle
@@ -164,24 +157,6 @@ fn closed_bundles(ledger: &Ledger) -> Vec<Bundle> {
                 .all(|member| ledger.entries.contains_key(member))
         })
         .collect()
-}
-
-/// 台帳の `links` を辺の列にする。
-///
-/// **1 つの id から何本でも辺が出る**（要件 4.3 の関連は種別違いで何本でも書ける）。
-/// 元 id を鍵にした表で集めると 2 本目以降が黙って落ち、繋がるはずの束が割れる。
-///
-/// `alias_of`・`supersedes` の欄は辺にしない（`links` の kind としてなら辺になる）。
-/// 束は `links` だけで作る（設計 D-11）。
-/// 別名は ⑶ の一覧が受け持つ。
-fn domain_links(ledger: &Ledger) -> Vec<(EntryId, EntryId)> {
-    let mut edges: Vec<(EntryId, EntryId)> = Vec::new();
-    for entry in ledger.entries.values() {
-        for link in &entry.links {
-            edges.push((entry.id.clone(), link.to.clone()));
-        }
-    }
-    edges
 }
 
 #[cfg(test)]
