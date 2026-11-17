@@ -29,11 +29,10 @@ use areka_seriko::{
 };
 use bevy_ecs::world::World;
 use dola::cue::{CueCommand, CueSink, TalkCue};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::{DPI, GraphicsCore, WucGraphicsResource};
 
-use areka_runtime::adapter::PresentBridge;
-use areka_runtime::target_map::balloon_target;
+use crate::adapter::PresentBridge;
+use crate::target_map::balloon_target;
 
 /// 合図を処理する時計の始まり（ミリ秒）。
 const START: u64 = 1_000;
@@ -49,19 +48,11 @@ const BLUE_254: [u8; 4] = [0, 0, 254, 255];
 const GREEN_254: [u8; 4] = [0, 254, 0, 255];
 
 fn fixture(sub: &str) -> PathBuf {
-    crate::crate_source_test_support::crate_path(
+    crate::source_text_test_support::crate_path(
         "areka-emo-compose",
         "tests/fixtures/animated-playback",
     )
     .join(sub)
-}
-
-/// WIC の読み手に要る COM の MTA 初期化（既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視）。
-fn com_init() {
-    // SAFETY: テストスレッドごとの COM 初期化。結果は既初期化でも続けてよいので捨てる。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
 }
 
 fn cue(scope: &str, command: CueCommand) -> TalkCue {
@@ -151,7 +142,6 @@ fn runs(frames: impl IntoIterator<Item = u32>) -> Vec<u32> {
 /// `alpha.webp`（100・0・70）は 3 周（510 ms）で 2 番に止まって 6 区間。2 つの `rgb.apng` は同じ子。
 #[test]
 fn shell_films_play_from_the_real_reader_to_the_composer() {
-    com_init();
     let arm = WicDecoderArm::new().expect("WIC の工場が作れる");
     let target = load_shell_target(&fixture("shell"), &arm).expect("検体のシェルは読める");
     let world = target.build_world();
@@ -213,7 +203,6 @@ fn shell_films_play_from_the_real_reader_to_the_composer() {
 
 /// 検体のバルーンの面（面 0 ＝ `balloons0.png`・面 1 ＝ `balloons1.png`）を本物の読み手で焼く。
 fn load_balloon() -> (EmoWorld, AtlasTable) {
-    com_init();
     let dir = fixture("balloon");
     let faces = resolve_balloon_faces(&dir, 0).expect("面 0 は解決できる");
     let arm = WicDecoderArm::new().expect("WIC の工場が作れる");
@@ -386,9 +375,8 @@ impl Race {
 }
 
 /// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
-fn gpu_world() -> (areka_runtime::spine::GpuPermit, World) {
-    com_init();
-    let gpu = areka_runtime::spine::GpuPermit::take();
+fn gpu_world() -> (crate::spine::GpuPermit, World) {
+    let gpu = crate::spine::GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");

@@ -37,6 +37,3 @@ mod zorder_wiring_tests;
 // 構造の両方から押さえる。
 #[path = "frame_schedule_tests.rs"]
 mod frame_schedule_tests;
-// 本物の読み手から合成まで、動く絵をシェルとバルーンで通す（areka-P0-animated-image-playback task 5.4）。
-#[path = "film_playback_e2e_tests.rs"]
-mod film_playback_e2e_tests;

@@ -160,7 +160,7 @@
   - 完了: 檻 4 本が `areka-runtime` で緑で、本体の spine 系のテストも緑。待ちの芯のファイルが 1,000 行を越えない
   - _Dispatch: standard — 引数を足した形への呼び手の付け替えと、時計を差した檻の確かめ_
   - _Requirements: 3.1, 3.2, 4.3, 4.4, 6.1_
-- [ ] 6.5 film の E2E を `areka-runtime` へ移し、別の crate のファイルを読む口を下ろす［T15・102 番・96 番の film の分］
+- [x] 6.5 film の E2E を `areka-runtime` へ移し、別の crate のファイルを読む口を下ろす［T15・102 番・96 番の film の分］
   - 別の crate のファイルを読む関数（在ることを確かめ無ければ panic）を `areka-runtime` のソースの文のテストの支えへ移し、本体の読み口はその出し直しの 1 行にして説明の規則の文を直す（マクロは本体に残す）
   - film の E2E 3 本を `git mv` で移し、`lib.rs` に `#[path]` のテストの宣言を足し、fixture は下ろした関数を呼ぶ。COM の初期化の呼び出しは消す
   - 完了: 3 本が `areka-runtime` で緑で、本体の読み口を使う本体のテストも緑。範囲の外の差分は本体の読み口の 1 ファイルだけ
@@ -230,3 +230,4 @@
 - 5.2: `spine_conformance_lap_tests.rs` 末尾の「接続宣言は 3 本で確定済み」が今の数と合わない（どの指摘の対象でもない）。8.2 のかけ直しで扱う。
 - 6.1: zorder_wiring の 2 ファイルに分ける前の番号の節見出しが残る（本体の ⑶・⑷、areka-runtime の ⑴）。8.2 のかけ直しで振り直す。
 - 6.4: `pause` を足したのは設計の 95 番どおり `settle_bounded_with` だけ（tasks.md の「2 つの関数に」は字面の違い）。本体の足場は既にある `use areka_runtime::spine::*;` で引く。
+- 6.5: `doc/COMPAT_ARCHITECTURE.md` §8 の 2 行のパスを新しい置き場へ直した（C22 の `collisionex-regions` も §8 に追記するので、そのセッションへ知らせ済み）。`areka-test-wait-wording` の brief は `crates/areka/src` の下だけを数えるので、film の E2E が `areka-runtime` へ移ったことを 8.1 で申し送る（要件 7.8）。

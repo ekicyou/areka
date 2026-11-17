@@ -80,6 +80,11 @@ pub(crate) mod sample_test_support;
 #[path = "source_text_test_support.rs"]
 pub mod source_text_test_support;
 
+// film の E2E（本物の読み手から合成まで・spec: audit-emo2-boot-spine 設計「102 番」）。
+#[cfg(test)]
+#[path = "film_playback_e2e_tests.rs"]
+mod film_playback_e2e_tests;
+
 // タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
 // 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
 // 持つので、到達性・相順・字面の 3 方向でここが受け持つ。

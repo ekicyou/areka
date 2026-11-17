@@ -1,4 +1,4 @@
-//! 本体のテストが別の crate のファイルを読むときの、たった 1 つの読み口
+//! 本体と `areka-runtime` のテストが別の crate のファイルを読むときの読み口は `areka-runtime` の `crate_path` 1 つ
 //! （spec: placement-crate-split 要件 5.4・5.5）。
 //!
 //! 読んでよいのは、本体が依存する crate（依存の向きに下の crate）だけ。`krate` は `crates/` の下の
@@ -9,8 +9,6 @@
 //!
 //! どちらの口も読み先が無ければ黙って通らない: `crate_source!` はコンパイルが止まり、
 //! `crate_path` は panic する。
-
-use std::path::PathBuf;
 
 /// `crates/<krate>/<path>` の中身を、コンパイルの時に読む（無ければコンパイルが止まる）。
 macro_rules! crate_source {
@@ -26,19 +24,8 @@ macro_rules! crate_source {
 }
 pub(crate) use crate_source;
 
-/// `crates/<krate>/<path>` の道を返す。在ることを確かめ、無ければ panic する（要件 5.5）。
-pub(crate) fn crate_path(krate: &str, path: &str) -> PathBuf {
-    let full = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join(krate)
-        .join(path);
-    assert!(
-        full.exists(),
-        "下の crate の読み先が無い（置き場所が変わったか）: {}",
-        full.display()
-    );
-    full
-}
+/// 読み口の本体は `areka-runtime` の `crate_path`（本体と `areka-runtime` のテストで 1 つ）。
+pub(crate) use areka_runtime::source_text_test_support::crate_path;
 
 mod tests {
     use super::*;
