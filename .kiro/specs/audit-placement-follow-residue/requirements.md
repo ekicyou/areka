@@ -70,7 +70,7 @@
 6. The areka shall 寄せの後の最後の位置を、今と同じく起動の確定が鎖の決まりどおりに直す形のまま保つ
 7. The 本見直し shall 寄せの組を説明する文（`RestoredWindow::mark`・`keep_restored_groups`）に、組を「鎖の前の窓との組」と書き、「番号が続く対 (n−1, n)」と書かない
 8. The 本見直し shall 追随の持ち物に鎖の式の写しを残さない（`audit-placement-core` の `research.md` 18.10「これで終わる理由」2 の grep で、追随の `joined_with_prev` の当たりが消える）
-9. The 本見直し shall 2 と 3 の振る舞いを、18.10 の表の T6・T8 の形の World で、壊れたら落ちるテストで固定する
+9. The 本見直し shall 2 と 3 の振る舞いを、18.10 の表の T6・T8 の形の入力（揃え方つきの配置と記憶）で、壊れたら落ちるテストで固定する（記憶の戻しの道は World を持たない純関数・設計の討議）
 
 ### Requirement 2: ドラッグの始めの位置が分からないとき（164）
 

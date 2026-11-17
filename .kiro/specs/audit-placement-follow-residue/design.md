@@ -131,10 +131,10 @@ graph TB
 | 1b | 記憶の矩形の組（R1〜R3） | **R1**: 印の組は（鎖の前の窓, n）、矩形の組は今と同じ番号の続く対 (n−1, n) | 18.10 の表の T5・T7・T29 の F の列「合う」を動かさない（要件 1.4）。R2 は完了した `window-work-area-clamp` 要件 4.1 の読みを狭める裁定になる |
 | 1c | 組の束ね方 | 「ひと続き」をやめ、印の組と矩形の組をつないだ**つながりの束**にする | 鎖の前の窓との組は並びの中で飛び飛びになる（辺のスコープを挟む）ので、隣どうしを伸ばす形では作れない |
 | 2 | 164 の持たせ方（3.1 の A1〜A3） | **A1**: `DraggingState.initial_window_pos: Option<(f32, f32)>`。`None`＝始めの位置が取れなかった | 前例 `WindowDragContext.initial_window_pos: Option<Point>` と同じ形。在る無しを見る 7 か所の意味を保つ。取り違えを型が許さない。wintf の中の控えは `move_window && is_some()` で既に守っているので型をそろえない |
-| 2b | 離したときに位置が出せないとき | 今の「`DraggingState` が無いとき」の縮退（`WindowPos.position`＝動いていない今の位置で書く）を通す（**仮定**・未決 2） | 新しい枝を作らない。書くのは今いる所で、(0,0) を基準にした位置ではない（要件 2.4） |
+| 2b | 離したときに位置が出せないとき | 今の「`DraggingState` が無いとき」の縮退（`WindowPos.position`＝動いていない今の位置で書く）を通す（設計の討議で自明な直しとして閉じた） | 新しい枝を作らない。書くのは今いる所で、(0,0) を基準にした位置ではない（要件 2.4）。保存を飛ばしても記憶の値は同じなので、枝を足す理由が無い |
 | 2c | 追随の側の記録 | `policy_mapped_position` が「始めの位置が分からない」で `None` を返すたびに `debug!` を 1 行（記録の札 `CHAR_DRAG_ORIGIN_UNKNOWN_TAG`・`entity` 付き）。wintf の始めの `warn!` 1 行（`entity`・`window`・理由）はそのまま | 「どの窓か」は wintf の `warn!` が持つ。追随の側は今の「`DraggingState` 不在」の `debug!` と同じ回数と水準にそろえ、状態を足さない |
 | 3 | C14 の `opposite`（3.3） | **C1**: 振る舞いを変えず doc と檻 | 18.10 の C14 どおり。辺のスコープとの組の反対の側はほぼ画面の外で、結果は端へ寄せる |
-| 4 | `drag_follow.rs` の分け方（3.5） | バルーン単独のドラッグの塊（503〜1000 行）と記録の札（26〜33 行）を `follow/balloon_drag.rs` へ移す | 塊のあいだの呼び合いは一方向（⑴⑵ は ⑶ を呼ばない）。外への名前は `follow.rs` から今のまま |
+| 4 | `drag_follow.rs` の分け方（3.5） | バルーン単独のドラッグの塊（503〜1000 行・`known_position` を除く）と記録の札（26〜33 行）を `follow/balloon_drag.rs` へ移す。`known_position`（550 行）は残る側の `guard_balloon_position`（488 行）も呼ぶので `drag_follow.rs` に残して `pub(super)` にし、`balloon_drag.rs` は `super::drag_follow::known_position` を引く。`CW_USEDEFAULT` の `use` は両方のファイルに置く | 塊のあいだの呼び合いは、`known_position` の 1 つを除いて一方向（⑴⑵ は ⑶ を呼ばない）。外への名前は `follow.rs` から今のまま（設計の検証の指摘 2） |
 | 5 | 4 回目の直し方（3.4 の D1〜D3） | **D3**（**仮定**・未決 1）: `reanchor_char_windows` は札のある窓を見送り `debug!` を残す。札が外れるフレームの拡大率の相の書き込みが、入れ直した揃え方で置く | 札は「古い作業領域で射影した中間の矩形を書かない」ためにある（`dpi_sync.rs` の doc・要件 5.8）。シェルの置き直しも作業領域へ射影する書き込みなので見送るのが札の意味に合い、`AnchorChange` は「見送りが覆う経路」のまま正しくなる（`EXPECTED` の表も変わらない） |
 | 6 | `rect_at` の開け方 | `visibility.rs:111` の `rect_at` を `pub(crate)` にし、`follow.rs:166` の私有の `use` から外して `pub(crate) use self::visibility::rect_at;` を 1 行足す | `pub(super)` の項目は広く出し直せない（research 4 節 9） |
 | 7 | 7 回目の束の印 | 相手の束と動かした窓の束を 1 つにして `persist_entries` を 1 回だけ呼ぶ。足される印は今の N+1 回の和と同じ（下の「記憶へ 1 回」） | `send_entries` は束の位置の鍵から触れる組の印を足し、同じ印の鍵を重ねない |
@@ -172,8 +172,8 @@ crates/wintf/src/ecs/drag/mod.rs  # DraggingState の欄の型
 
 **1,000 行（要件 3）**
 
-- `crates/areka-placement/src/follow/drag_follow.rs` — 503〜1000 行（`on_balloon_drag`・`known_position`・`reestablish_balloon_follow`・`on_balloon_drag_end`・`retire_keyword_base_on_save`・`apply_release_limit_correction`）と 26〜33 行（`BALLOON_DRAG_BASE_UNPINNED_TAG`）を外す。中身・記録の文・順は変えない。
-- `crates/areka-placement/src/follow/balloon_drag.rs`（新）— 外した塊。`use` は `super::`（ファサード）から引く。
+- `crates/areka-placement/src/follow/drag_follow.rs` — 503〜1000 行（`on_balloon_drag`・`reestablish_balloon_follow`・`on_balloon_drag_end`・`retire_keyword_base_on_save`・`apply_release_limit_correction`）と 26〜33 行（`BALLOON_DRAG_BASE_UNPINNED_TAG`）を外す。`known_position`（550 行）は残して `pub(super)` にする（決め 4）。中身・記録の文・順は変えない。
+- `crates/areka-placement/src/follow/balloon_drag.rs`（新）— 外した塊。`use` は `super::`（ファサード）から引き、`known_position` は `super::drag_follow::known_position`、`CW_USEDEFAULT` は自前の `use`。
 - `crates/areka-placement/src/follow.rs` — `mod balloon_drag;` を足し、78〜82 行の `on_balloon_drag`・`on_balloon_drag_end` の再束縛を `self::balloon_drag::` へ。52・64 行の `drag_follow::on_balloon_drag_end` の名指しを直す。
 - 名指しの文を直す（説明だけ）: `resolver.rs:103`・`:150`、`resolver_resolve_balloon_tests.rs:126`、`spawn.rs:200`・`:229`、`windowposition.rs:16`、`diag.rs:213`、`follow/window_move.rs:168`（`drag_follow::retire_keyword_base_on_save`）、`follow_balloon_drag_tests.rs:7`（`use super::balloon_drag::BALLOON_DRAG_BASE_UNPINNED_TAG`）。**`resolver.rs`・`spawn.rs`・`windowposition.rs`・`diag.rs`・`resolver_resolve_balloon_tests.rs` は C22 の触るファイルの列の外**（同じ crate・同じウェーブで `areka-placement` に触る相手はいない＝約束 ⑷）。
 
@@ -211,7 +211,8 @@ crates/wintf/src/ecs/drag/mod.rs  # DraggingState の欄の型
 
 - `crates/areka-placement/src/follow/sticky_follow.rs` — `finish_char_drag` が相手の束を返す。
 - `crates/areka-placement/src/follow/drag_follow.rs` — `on_char_drag_end` が束を 1 つにして 1 回書く。
-- テスト: `follow_sticky_follow_drag_tests.rs`（呼びの 8 か所は戻りを使わない形のまま・回数の檻を足す）。
+- テスト: `follow_sticky_follow_drag_tests.rs` — `finish_char_drag` を直に呼んで相手の位置を `rig.saved()` で見る 3 本（147・203・240 行・要件 5.2 を固める檻）は、返る束の中身を見る形へ書き直す。`let ((), events) = capture(..)` の 3 か所（158・277・354 行）は戻りの型に合わせる。ほかの呼びは戻りを使わない形のまま。回数の檻は `on_char_drag_end` を通して足す（設計の検証の指摘 1）。
+- 書き手の一覧の文（説明だけ）: `persist.rs:9-12`（「書く呼び手は次の 4 か所」）・`persist_save.rs:33`（`PersistWiring`）・`follow/drag_follow.rs:135`。**`persist_save.rs` は C22 の触るファイルの列の外**（同じ crate・同じウェーブに触る相手はいない）。
 
 **アンカーの変化（要件 6）**
 
@@ -644,11 +645,11 @@ graph LR
 ### 単体（配置の crate）
 
 1. 鎖の寄せ（`follow_work_area_clamp_restore_tests.rs`・`ChainRule::from_terms` で鎖を組む）: ⑴ T8＝0 と 2 だけ・2 の印 `right`・記憶が外で隣り合う → 1 つの組として同じ量だけ寄せる ⑵ T6 ⑴＝0 下端・1 右の辺・2 下端・2 の印 `right` → 0 と 2 を組にする ⑶ T6 ⑵＝1 右の辺で記憶の矩形が 2 と離れている・2 の印 `right` → 1 と 2 を組にしない ⑷ 0・1・2 が鎖に入り 1 が記憶に無い・2 の印 `right` → 0 と 2 を組にしない（今の `apart_or_non_consecutive_pairs_are_not_grouped` の書き直し） ⑸ T5＝0 が右の辺・1 下端・記憶の矩形が重なる → 組にする（矩形の線は辺のスコープにも当たる）。どれも印の線を (n−1, n) で引く形に戻すと落ちる。
-2. 鎖の寄せの道（`persist_restore_group_tests.rs`・`apply_restored_placements` に T6・T8 の形の `ScopePlacement`（揃え方つき）と記憶を渡す）: T8 と T6 ⑴ で組の差が保たれる（要件 1.9。この道は World を持たない純関数なので、檻は配置と記憶の形で T6・T8 を組む＝**仮定**・未決 5）。
+2. 鎖の寄せの道（`persist_restore_group_tests.rs`・`apply_restored_placements` に T6・T8 の形の `ScopePlacement`（揃え方つき）と記憶を渡す）: T8 と T6 ⑴ で組の差が保たれる（要件 1.9。この道は World を持たない純関数なので、檻は配置と記憶の形で T6・T8 を組む。要件 1.9 の文もそう直した）。
 3. C14（`follow_work_area_clamp_chain_tests.rs`）: ⑴ 作業領域 0..1000・右の辺のスコープ（`Keep(DesktopEdge)`・x 400・幅 600）の左に `JoinLeft` で付けた幅 500 の窓 → 左に入らず反対の側も入らず `Edge`（x 0） ⑵ `JoinLeftOffset` の窓が入らないとき反対の側を試さず `Edge`。`opposite` を変えると落ちる。
 4. 164 の追随（`follow_drag_tests.rs`）: 吸着した組の窓に `initial_window_pos: None` の `DraggingState` と相手とバルーンを持たせて `on_char_drag` → 窓・バルーン・相手の位置が前と同じ・`CHAR_DRAG_ORIGIN_UNKNOWN_TAG` の `debug!` が 1 行。`(0,0)` で写すと落ちる。
 5. 164 の離したとき（`follow_drag_end_gate_tests.rs`）: `None` で `on_char_drag_end` → 記憶に入る位置は今の位置（(0,0)＋差でない）。`Free` の窓でも同じ。今ある関門の檻は、開始の後に `initial_window_pos` を窓の位置にする手伝いを足し、`destination()` を「窓の位置＋差」へ作り直す（偽の HWND の (0,0) に寄りかからない）。
-6. 記憶へ 1 回（`follow_sticky_follow_drag_tests.rs`・共有の `SharedFakeIo::commit_count`）: 相手 2 つの組のドラッグを `on_char_drag_end` で終える → 書き込みの回数が 1・束に 3 窓の位置と今と同じ印。N+1 回に戻すと落ちる。
+6. 記憶へ 1 回（`follow_sticky_follow_drag_tests.rs`・共有の `SharedFakeIo::commit_count`）: 相手 2 つの組のドラッグを `on_char_drag_end` で終える → 書き込みの回数が 1・束に 3 窓の位置と今と同じ印。N+1 回に戻すと落ちる。`finish_char_drag` を直に呼ぶ 3 本の檻は、返る束に相手の元の位置（面の move のずれを引いた位置）と `saved_form_anchor` の形が入ることを見る（要件 5.2）。
 7. 4 回目（`reseed_tests.rs`）: ⑴ 赤を先に: 札のある窓に揃え方 `top` のシェルを入れて `reanchor_char_windows` → 直す前は `debug_assert!` で落ちる（`#[should_panic]` の形で置き、直した後に下の ⑵ へ書き換える） ⑵ 直した後: 札のある窓は位置が前のまま・`reseed_held` の `debug!`・札の無い窓は新しい揃え方へ動く ⑶ 札を外して `resize_window_to(.., DpiReproject)` → 新しい揃え方の位置に置かれる（見送った揃え方が後で当たる）。
 8. 写しと本番の式: 差し替えた式の今の檻がそのまま通る（要件 4.5）。記録の捕まえの番兵は、捕まえの窓を閉じたまま出すと panic する形を 1 本ずつ（`diag_tests.rs` と同じ）。
 
@@ -694,8 +695,8 @@ graph LR
 ## 未決（設計の討議へ）
 
 1. **4 回目の直し方**: 設計は D3（札のある窓は `reanchor_char_windows` が見送り、札が外れるフレームの拡大率の相が新しい揃え方で置く）で書いた。ギャップ分析は D1（`AnchorChange` を見送らない側へ移す）を推していた。D3 を推す理由は、札が「古い作業領域で射影した中間の矩形を書かない」ためにあり、シェルの置き直しも作業領域へ射影する書き込みだから。D1 なら直す所は `deferral_covers_route` の腕 1 つ・檻の `EXPECTED` の 1 行・doc で、`reseed.rs` は変えない。
-2. **164 で離したときに位置が出せないとき**: 設計は今の縮退（動いていない今の位置で確定と保存）を通す形で書いた。保存を飛ばす形もある（記憶は同じ値なのでどちらも壊れないが、飛ばすなら新しい枝が 1 つ要る）。
+2. ~~164 で離したときに位置が出せないとき~~: 今の縮退を通す（決め 2b・自明な直しで閉じた）。
 3. **素の要件の番号**: 要件 7.4 の grep に当たらない「（4.2/4.3/4.7）」の形を、同じ説明の中の番号を直すときに同じ規則で扱う形で書いた（確かめは 7.4 の 4 つの grep）。設計の記号（`D13`・`DD15`・`C5`）は的にしない。範囲を広げる（素の番号を全部探す）か狭める（grep に当たるものだけ）かを決める。
 4. **wintf の公開の段の知らせ**: `DraggingState.initial_window_pos` の型の変更を、PR の本文と完了の記録に書く形で書いた。リリースの告知や文書に載せるかを決める。
-5. **要件 1.9 の「World で」**: 記憶の戻しの道（`restore_and_judge`）は World を持たない純関数なので、T6・T8 の檻は配置（揃え方つきの `ScopePlacement`）と記憶の形で組む形で書いた。World を通す檻が要るなら、本体の起動の檻（`frame_chain_*`）に足すことになり、触るファイルが増える。
-6. **C22 の触るファイルの列の外**: `chain_rule.rs`（決め 1）・`resolver.rs`・`spawn.rs`・`windowposition.rs`・`diag.rs`・`resolver_resolve_balloon_tests.rs`（`drag_follow` の名指しの文だけ）・本体 `input_events/drag_tests.rs`（説明と、要れば檻）。同じウェーブに触る相手はいない。触ってよいかを確かめる。
+5. ~~要件 1.9 の「World で」~~: 記憶の戻しの道は World を持たない純関数なので、檻は配置と記憶の形で T6・T8 を組む。要件 1.9 の文を「T6・T8 の形の入力で」に直した（自明な直しで閉じた）。
+6. ~~C22 の触るファイルの列の外~~: 触る（自明な直しで閉じた）。列の外のファイルは `chain_rule.rs`（決め 1）・`resolver.rs`・`spawn.rs`・`windowposition.rs`・`diag.rs`・`resolver_resolve_balloon_tests.rs`（`drag_follow` の名指しの文だけ）・`lib.rs`・`persist_save.rs`・`spawn_follow_pipeline_tests.rs`・`balloon_lock_drag_tests.rs`（どれも `areka-placement`）と、本体 `input_events/drag_tests.rs`（説明と、要れば檻）。C22 の 5 本のどれもこれらに触らない（約束 ⑷ で `audit-emo2-boot-spine` は `areka-placement` に触らない・本体の `input_events/` の持ち主 `input-crate-split`・`audit-areka-input-menu` は C23 以後）。
