@@ -124,10 +124,34 @@ fn hand_over_without_wiring_warns_and_drops_the_carry() {
     assert!(!world.contains_non_send::<RuntimeWiring>());
 }
 
-/// 置き場にゴーストが居なくても panic せず、何も送らない（`warn!` で残す）。
+/// 置き場にゴーストが居なければ「出し直す」の記録を出さず、`reload_shell_replay_unavailable` の
+/// `warn!` を 1 件だけ残して何も送らない（62 番）。出すものが無ければ記録も 0 件。
 #[test]
-fn replay_without_a_ghost_does_not_panic() {
+fn replay_without_a_ghost_warns_once_and_restores_nothing() {
     let world = World::new();
-    replay(&world, &[(0, CarriedShow::Carried(0))], &[]);
-    replay(&world, &[], &[]);
+    let count = |events: &[log_capture_kit::CapturedEvent], level, name: &str| {
+        events
+            .iter()
+            .filter(|e| e.level == level && e.field_str("event") == Some(name))
+            .count()
+    };
+    let ((), events) = log_capture_kit::capture(|| {
+        replay(&world, &[(0, CarriedShow::Carried(0))], &[]);
+    });
+    assert_eq!(
+        count(
+            &events,
+            tracing::Level::WARN,
+            "reload_shell_replay_unavailable"
+        ),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(
+        count(&events, tracing::Level::INFO, "reload_shell_restored"),
+        0,
+        "{events:?}"
+    );
+    let ((), events) = log_capture_kit::capture(|| replay(&world, &[], &[]));
+    assert!(events.is_empty(), "{events:?}");
 }

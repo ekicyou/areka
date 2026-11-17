@@ -271,11 +271,20 @@ pub fn hand_over(world: &mut World, carry: Option<ShellCarry>) {
 /// 装着の相で決めた面と着せ替えを置き場のゴーストの seriko へ、着せ替えは `\![bind,…]`・面は
 /// `\s[面]` と同じ合図で送る（着せ替えが先: 面の出ていないスコープの着せ替えは状態だけが変わり、
 /// 続く面の最初の `Show` が着せ替えた集合を載せる＝既定の姿が 1 度も出ない）。決め方ごとに記録を 1 件残す（戻した・出さない・落とした
-/// は `warn!`）。
+/// は `warn!`）。送り手が無ければ決め方の記録は出さず、`reload_shell_replay_unavailable` の `warn!` を 1 件だけ残す。
 pub fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32, CarriedBinds)]) {
     if shows.is_empty() && binds.is_empty() {
         return;
     }
+    // 送り手を先に確かめる: 無いのに「出し直す」と書かない（62 番）。
+    let Some(sink) = (SessionHooks::of(world).seriko_sink)(world) else {
+        warn!(
+            event = "reload_shell_replay_unavailable",
+            "置き場のゴーストの seriko が無いので、読み直しの前の面を出し直せない"
+        );
+        return;
+    };
+    let mut sink = sink.clone();
     for (scope, decided) in binds {
         for r in &decided.replays {
             info!(
@@ -323,14 +332,6 @@ pub fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32, Carrie
             ),
         }
     }
-    let Some(sink) = (SessionHooks::of(world).seriko_sink)(world) else {
-        warn!(
-            event = "reload_shell_carry_unavailable",
-            "置き場のゴーストの seriko が無いので、読み直しの前の面を出し直せない"
-        );
-        return;
-    };
-    let mut sink = sink.clone();
     emit_binds(&mut sink, binds);
     emit_shows(&mut sink, shows);
 }

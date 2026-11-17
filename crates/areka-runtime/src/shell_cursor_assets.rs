@@ -28,7 +28,7 @@ pub struct ShellCursorAssets {
     /// 読んだファイル（番号＝`Shape::File` の値）。
     pub files: Vec<CursorFile>,
     /// .cur を窓の DPI の寸法ごとに作った控え（(番号, 寸法) → カーソル）。資源と一緒に捨てる。
-    pub sized: RefCell<HashMap<(usize, u32), Option<OwnedCursor>>>,
+    pub(crate) sized: RefCell<HashMap<(usize, u32), Option<OwnedCursor>>>,
 }
 
 // 要件 2.5: 公開の `ShellCursorAssets::files` が名指すので開ける
@@ -142,7 +142,7 @@ fn log_issue(issue: &CursorIssue) {
 /// シェルのフォルダ → `ghost\master` の順で最初に在るファイルを読む（要件 6.4）。失敗は名前ごとに
 /// 1 度だけ記録する（呼び手が名前ごとに 1 度だけ呼ぶ・要件 6.7）。
 fn load_file(name: &str, dirs: &[&Path]) -> Option<CursorFile> {
-    let Ok(paths) = candidate_paths(name, dirs) else {
+    let Some(paths) = candidate_paths(name, dirs) else {
         warn!(
             file = name,
             "カーソルのファイル名が探す場所のフォルダの外を指すので読まない"

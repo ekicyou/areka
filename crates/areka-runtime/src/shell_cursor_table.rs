@@ -95,11 +95,6 @@ pub(crate) enum ShapeReason {
     NotCurOrAni,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum PathReason {
-    OutsideFolder,
-}
-
 /// 場面の名前（番号の前の綴り）。`mousedown` は `mouserightdown` の頭ではないので順は問わない。
 const SCENES: [(&str, CursorScene); 5] = [
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#mouseup_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1
@@ -285,8 +280,8 @@ pub(crate) fn parse_shape(value: &str) -> Result<Shape<String>, ShapeReason> {
 
 /// ファイル名の探す候補（`dirs` の順＝シェルのフォルダ → `ghost\master`・要件 6.4）。
 /// 絶対パス・ドライブ付き・根から始まる・上のフォルダへ出る（`..`）名前は断る（要件 6.6）。
-/// 実在は確かめない（CursorAssets が見る）。
-pub(crate) fn candidate_paths(name: &str, dirs: &[&Path]) -> Result<Vec<PathBuf>, PathReason> {
+/// 実在は確かめない（CursorAssets が見る）。断った名前は `None`。
+pub(crate) fn candidate_paths(name: &str, dirs: &[&Path]) -> Option<Vec<PathBuf>> {
     let outside = Path::new(name).components().any(|c| {
         matches!(
             c,
@@ -296,9 +291,9 @@ pub(crate) fn candidate_paths(name: &str, dirs: &[&Path]) -> Result<Vec<PathBuf>
         )
     });
     if outside {
-        return Err(PathReason::OutsideFolder);
+        return None;
     }
-    Ok(dirs.iter().map(|dir| dir.join(name)).collect())
+    Some(dirs.iter().map(|dir| dir.join(name)).collect())
 }
 
 #[cfg(test)]

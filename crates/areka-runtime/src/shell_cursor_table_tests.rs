@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use areka_parsers::shell::parse_cursor_braces;
 
 use super::{
-    CursorIssue, CursorScene, GhostCursorKeys, PathReason, RowReason, Shape, ShapeReason,
-    SystemCursor, candidate_paths, parse_shape, read_cursor_braces, read_ghost_cursor_keys,
+    CursorIssue, CursorScene, GhostCursorKeys, RowReason, Shape, ShapeReason, SystemCursor,
+    candidate_paths, parse_shape, read_cursor_braces, read_ghost_cursor_keys,
 };
 
 type Rows = BTreeMap<(u32, String, CursorScene), Shape<String>>;
@@ -377,11 +377,7 @@ fn candidate_paths_refuse_names_outside_the_folder() {
         "..\\a.cur",
         "sub\\..\\..\\a.cur",
     ] {
-        assert_eq!(
-            candidate_paths(name, &dirs),
-            Err(PathReason::OutsideFolder),
-            "{name}"
-        );
+        assert_eq!(candidate_paths(name, &dirs), None, "{name}");
     }
 }
 
@@ -390,7 +386,7 @@ fn candidate_paths_are_shell_then_ghost_master() {
     let dirs = [Path::new("C:\\shell"), Path::new("C:\\ghost\\master")];
     assert_eq!(
         candidate_paths("cur\\a.cur", &dirs),
-        Ok(vec![
+        Some(vec![
             PathBuf::from("C:\\shell\\cur\\a.cur"),
             PathBuf::from("C:\\ghost\\master\\cur\\a.cur"),
         ])
@@ -398,7 +394,7 @@ fn candidate_paths_are_shell_then_ghost_master() {
     // `..` を含む綴りでも、上のフォルダへ出る部分でなければ断らない。
     assert_eq!(
         candidate_paths("a..b.cur", &dirs),
-        Ok(vec![
+        Some(vec![
             PathBuf::from("C:\\shell\\a..b.cur"),
             PathBuf::from("C:\\ghost\\master\\a..b.cur")
         ])
