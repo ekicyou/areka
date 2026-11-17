@@ -297,3 +297,57 @@ fn a_rename_onto_a_non_empty_folder_fails_and_onto_an_empty_folder_replaces() {
     );
     assert!(!source.exists(), "移した元は残らないこと");
 }
+
+/// 設定値が空・空白だけなら無いものとして祖先の探しへ戻る（指摘 69）。
+#[test]
+fn a_blank_target_dir_falls_back_to_the_ancestor_search() {
+    let exe = Path::new(r"C:\x\target\debug\deps\t.exe");
+    for blank in ["", "   "] {
+        assert_eq!(
+            find_target_dir(Some(blank), exe).expect("祖先に target がある"),
+            Path::new(r"C:\x\target"),
+            "{blank:?}"
+        );
+    }
+}
+
+/// 手動用の根の中を削除を拒む形で掴まれていると、黙って重ねず `Io` で断る（指摘 23）。
+#[test]
+fn manual_root_refuses_a_tree_it_cannot_remove() {
+    let namespace = WorkDir::new().expect("私有の名前空間");
+    let nar = || {
+        Ok(crate::NarBuilder::new()
+            .file(
+                "install.txt",
+                &crate::install_txt(&[
+                    "charset,UTF-8",
+                    "type,ghost",
+                    "name,held",
+                    "directory,held",
+                ]),
+            )
+            .done()
+            .file("mark.txt", b"held")
+            .done()
+            .bytes())
+    };
+    let manual = manual_root_in(namespace.path(), "held", nar).expect("1 度目は作れる");
+    let held_file = manual.join("ghost").join("held").join("mark.txt");
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(&held_file)
+        .expect("中のファイルを開けるはず");
+
+    let refused = manual_root_in(namespace.path(), "held", nar);
+    match &refused {
+        Err(SampleError::Io { what, path, .. }) => {
+            assert_eq!(*what, "remove the manual root before rebuilding it");
+            assert_eq!(*path, manual);
+        }
+        other => panic!("掴まれた木は Io で断ること: {other:?}"),
+    }
+    assert!(held_file.is_file(), "掴まれたファイルは消えていない");
+    drop(held);
+    std::fs::remove_dir_all(&manual).expect("閉じたあとは消せる");
+}

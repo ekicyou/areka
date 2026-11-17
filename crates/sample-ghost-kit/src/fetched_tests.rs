@@ -330,3 +330,37 @@ fn archive_path_of_rows() {
     );
     assert_eq!(sum, path.with_file_name("x.nar.sha256"));
 }
+
+/// ハッシュのファイルのパスがフォルダなら、NotFound ではない読みの誤りとして `Io`（指摘 69）。
+#[test]
+fn a_checksum_path_that_is_a_folder_is_an_io_error() {
+    let ns = WorkDir::new().expect("私有の名前空間");
+    let folder = fetched_checksum_path_in(ns.path(), "dir");
+    std::fs::create_dir_all(&folder).expect("フォルダを置ける");
+
+    let refused = verified_nar_in(ns.path(), "dir");
+    assert!(
+        matches!(&refused, Err(SampleError::Io { path, what, .. })
+            if *path == folder && is_ascii_only(what)),
+        "{refused:?}"
+    );
+}
+
+/// Windows PowerShell の `>` が書く UTF-16 のハッシュのファイルは UTF-8 でないので不正（指摘 69）。
+#[test]
+fn a_utf16_checksum_file_is_invalid() {
+    let ns = WorkDir::new().expect("私有の名前空間");
+    let text = sum_line(b"x", "utf16");
+    let utf16: Vec<u8> = [0xFEFF_u16]
+        .into_iter()
+        .chain(text.encode_utf16())
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    let path = put(&fetched_checksum_path_in(ns.path(), "utf16"), &utf16);
+
+    let refused = verified_nar_in(ns.path(), "utf16");
+    assert!(
+        matches!(&refused, Err(SampleError::FetchedChecksumInvalid { path: p, .. }) if *p == path),
+        "{refused:?}"
+    );
+}

@@ -213,6 +213,15 @@ fn an_unregistered_name_prints_the_reason_to_standard_error_and_exits_with_two()
     }
 }
 
+/// 引数なしは名前の空の未登録として、標準エラーに理由を出して終了コード 2（指摘 69）。
+#[test]
+fn no_argument_exits_with_2() {
+    let (code, out, err) = finish(&mut std::process::Command::new(COMMAND));
+    assert_eq!(code, Some(2), "引数なしの終了コード: {err}");
+    assert!(out.is_empty(), "標準出力には何も出さないこと: {out:?}");
+    assert!(!err.is_empty(), "理由を標準エラーに出すこと");
+}
+
 /// 登記の URL の行の (名前, URL)。母数 0 で緑にしない較正つき。
 fn url_rows() -> Vec<(&'static str, &'static str)> {
     let rows: Vec<_> = SAMPLES

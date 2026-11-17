@@ -257,6 +257,29 @@ fn install_txt_joins_with_crlf() {
     );
 }
 
+/// 局所ヘッダの時刻と日付（オフセット 10..14）は時計を読まない固定値（指摘 25）。
+#[test]
+fn every_local_header_carries_the_fixed_dos_time() {
+    let nar = NarBuilder::new()
+        .dir("ghost")
+        .file("a.txt", b"one")
+        .done()
+        .file("b.txt", b"two")
+        .deflate()
+        .done()
+        .bytes();
+    let mut at = 0;
+    let mut seen = 0;
+    while let Some(found) = nar[at..].windows(4).position(|w| w == b"PK") {
+        let local = at + found;
+        assert_eq!(u16_at(&nar, local + 10), 0x0000, "DOS 時刻");
+        assert_eq!(u16_at(&nar, local + 12), 0x0021, "DOS 日付");
+        seen += 1;
+        at = local + 4;
+    }
+    assert!(seen >= 3, "較正: 局所ヘッダを全件見たこと: {seen}");
+}
+
 // ---- 木を畳む入口 ----
 
 #[test]
@@ -501,4 +524,20 @@ fn every_fixture_the_testing_strategy_lists_can_be_built() {
             .bytes();
         assert!(!bytes.is_empty(), "{how:?} を立てても書庫は組める");
     }
+}
+
+/// 畳む順は名前のバイト順（大文字が小文字より先）で、NTFS の `read_dir` の順（大小無視）
+/// とは食い違う（指摘 25）。
+#[test]
+fn folding_orders_entries_by_byte_order() {
+    let root = scratch("fold-order");
+    std::fs::write(root.join("a.txt"), b"a").expect("書ける");
+    std::fs::write(root.join("B.txt"), b"b").expect("書ける");
+
+    let names: Vec<Vec<u8>> = parse(&fold_tree(&root).expect("木を畳める").bytes())
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    assert_eq!(names, vec![b"B.txt".to_vec(), b"a.txt".to_vec()]);
+    std::fs::remove_dir_all(&root).expect("片付けられる");
 }

@@ -138,7 +138,7 @@ fn acquiring_the_same_fetched_archive_twice_uses_the_same_master_copy() {
 }
 
 #[test]
-fn a_mismatching_archive_never_reaches_the_master_copy_shelf() {
+fn resolving_a_mismatching_archive_leaves_the_master_copy_shelf_empty() {
     let ns = private_namespace();
     place_on_shelf(ns.path(), b"mismatch", false);
 
@@ -152,7 +152,7 @@ fn a_mismatching_archive_never_reaches_the_master_copy_shelf() {
 }
 
 #[test]
-fn the_check_runs_on_every_acquire_even_when_the_master_copy_exists() {
+fn resolving_again_after_the_master_copy_exists_still_checks_the_archive() {
     let ns = private_namespace();
     place_on_shelf(ns.path(), b"again", true);
     cached_root_in(ns.path(), URL_ROW.name, &resolve(ns.path()).unwrap().1).expect("原本を作る");
@@ -164,4 +164,63 @@ fn the_check_runs_on_every_acquire_even_when_the_master_copy_exists() {
         resolve(ns.path()),
         Err(SampleError::FetchedNarMismatch { .. })
     ));
+}
+
+/// 子として起こされたことを伝える環境変数。
+const CHILD_VAR: &str = "SAMPLE_GHOST_KIT_TAMPER_CHILD";
+
+/// 子に走らせるテストの完全な名前。
+const CHILD_TEST: &str = "devroot::fetched_tests::the_tampered_shelf_child_acquires_and_is_refused";
+
+/// 窓口の入口 [`SampleRoot::acquire`] が、食い違う置き場の書庫を配らない（指摘 22）。
+///
+/// 上の 2 本は `sample_nar_for` までしか通らない。ここは自分の実行体を子として起こし、
+/// 私有の `CARGO_TARGET_DIR` に食い違う棚を置いて、本物の入口 `acquire` を通す。
+#[test]
+fn acquire_refuses_a_tampered_fetched_archive() {
+    if std::env::var(CHILD_VAR).is_ok() {
+        return; // 子として起こされたときに孫を作らない。
+    }
+    let home = private_namespace();
+    let namespace = home.path().join(NAMESPACE);
+    let name = "pasta-in-windows";
+    let nar = fetched_path_in(&namespace, name);
+    std::fs::create_dir_all(nar.parent().expect("置き場には親がある")).expect("棚を作れるはず");
+    std::fs::write(&nar, b"tampered archive").expect("書庫を置けるはず");
+    std::fs::write(
+        fetched_checksum_path_in(&namespace, name),
+        format!("{}  {name}.nar\n", sha256_hex(b"the published archive")),
+    )
+    .expect("ハッシュのファイルを置けるはず");
+
+    let out = std::process::Command::new(std::env::current_exe().expect("テストバイナリの場所"))
+        .args(["--exact", CHILD_TEST, "--test-threads", "1"])
+        .env("CARGO_TARGET_DIR", home.path())
+        .env(CHILD_VAR, "1")
+        .output()
+        .expect("子を起こせること");
+    assert!(
+        out.status.success(),
+        "子が食い違いの拒否を確かめられなかった: {}\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("1 passed"),
+        "較正: 子のテストが実際に走ったこと: {}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+}
+
+/// 上の検査が起こす子。親の走行では環境変数が無いので何もしない。
+#[test]
+fn the_tampered_shelf_child_acquires_and_is_refused() {
+    if std::env::var(CHILD_VAR).is_err() {
+        return;
+    }
+    let refused = crate::SampleRoot::acquire("pasta-in-windows");
+    assert!(
+        matches!(refused, Err(SampleError::FetchedNarMismatch { .. })),
+        "{refused:?}"
+    );
 }

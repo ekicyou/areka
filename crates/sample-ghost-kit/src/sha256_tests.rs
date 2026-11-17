@@ -37,3 +37,23 @@ fn one_million_a() {
         "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"
     );
 }
+
+// 下の 2 つの答えは `python -c "import hashlib; print(hashlib.sha256(b'a' * N).hexdigest())"`
+// （N は 55 と 64）で作った。55 は最後のブロックに詰めの印と長さが 1 ブロックで収まる最大、
+// 64 は最後のブロックが空になり詰めだけの 1 ブロックが足される境目。
+
+#[test]
+fn digest_of_55_bytes_matches_the_known_answer() {
+    assert_eq!(
+        sha256_hex(&[b'a'; 55]),
+        "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318"
+    );
+}
+
+#[test]
+fn digest_of_64_bytes_matches_the_known_answer() {
+    assert_eq!(
+        sha256_hex(&[b'a'; 64]),
+        "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb"
+    );
+}
