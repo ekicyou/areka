@@ -14,7 +14,7 @@
 //! （打ち切り方は `areka-runtime` の `spine.rs` の頭の説明にある 3 通り）。待機の形は**3 種**:
 //!
 //! - **純粋ポーリング**（各反復が系を進めない・別スレッドの到着を読むだけ）→ [`wait_until`]。
-//!   密 yield（[`DENSE_SPIN`](wait::DENSE_SPIN) の窓）で速い経路の検出遅延を犠牲にせず、窓を過ぎたら
+//!   密 yield（`DENSE_SPIN`（`spine_wait.rs`）の窓）で速い経路の検出遅延を犠牲にせず、窓を過ぎたら
 //!   [`BACKOFF_SLEEP`] へ落としてコア占有をやめる（PR #96 で導入）。
 //! - **ハイブリッド**（毎反復 Tick を注入して系を進めつつ別スレッドの結果も待つ）→
 //!   こちらも [`wait_until`]（進みの目印つき・目印は SHIORI の呼び出しの数・汲みが数を返す呼出点はそれと汲んだ数の和）を使い、
@@ -28,11 +28,9 @@
 //!   **`SETTLE_MIN` の最小持続 かつ 連続 `SETTLE_QUIET_ROUNDS` 回 0 件**の両立で（どちらも `areka-runtime` の `spine_wait.rs`）、反復間は
 //!   [`BACKOFF_SLEEP`] の短い sleep のみ（要件 4.2・4.4）。負荷で回収機会が縮まないことが要点。
 //!
-//! 詳細な根拠は [`drive_shell_shown`] の doc を参照。
-//! 決定論 spine の**土台**。本 task（6.1）はハーネス（scripted `ShioriBackend`＋実 sink 結線＋
-//! GPU World＋frame フェーズ直接駆動）と、boot→Tick→attach 到達をスモークレベルで固定する
-//! `#[test]` を所有する。豊富な観測（S1 ピクセル readback・S2 typewriter・S3 `\b` 配送・
-//! S5 close 握手）は後続 task（6.2/6.3）が本ハーネスの上に構築する。
+//! 詳細な根拠は `spine_seriko_loop_tests.rs` の `drive_shell_shown` の doc を参照。
+//! 本ファイルは足場（scripted `ShioriBackend`＋実 sink 結線＋GPU World＋frame フェーズ直接駆動）だけを持ち、
+//! `#[test]` は兄弟のテストファイルに置く。
 //!
 //! # 構造上の逸脱（設計 File Structure との差分・CONCERNS 相当）
 //!
@@ -148,7 +146,7 @@ fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
 }
 
 // ===========================================================================
-// SpineHarness（再利用可能な結線ハーネス・6.2/6.3 がこの上に構築する）
+// SpineHarness（再利用可能な結線ハーネス・兄弟のテストがこの上に構築する）
 // ===========================================================================
 
 /// spine ハーネスの SERIKO ループ駆動モード（task 9.4・design「結線・資産・実機経路（spine.rs）」）。
@@ -250,7 +248,6 @@ pub(crate) struct SpineHarness {
     /// scripted backend の発火列観測ハンドル（boot 系列・close 系列の照合）。
     shiori_handle: ScriptedShioriHandle,
     /// 文字層 UI アクター（`spawn_emo_text` の pump アクター）の生存ハンドル（drain は `pump_text`）。
-    #[allow(dead_code)] // 持って生かすだけで読まない
     text_pump: JoinHandle<()>,
     /// SERIKO ループ tick の直接注入端（task 9.4）。`spawn_seriko` が返す `SerikoSink` の clone で、
     /// `inject_seriko_tick`（`send_tick` 直接注入・loop ticker 不起動・R7.2/7.3）に使う。surface_sink 本体は
@@ -324,13 +321,13 @@ impl SpineHarness {
         driver: LoopDriver,
         gate: Option<ShowGate>,
     ) -> SpineHarness {
-        // ── headless GPU World（MTA COM＋実 GPU・R8.4）＋合成 GhostWindows（scope [0,1]） ──
+        // ── headless GPU World（実 GPU・R8.4）＋合成 GhostWindows（scope [0,1]） ──
         let (gpu, mut world) = make_world_with_gpu();
         spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
         // 本体の口を据える（本番の `ghost_session::register_systems` と同じ口・設計 D5）。
         crate::session::hooks::install(&mut world);
 
-        // ── 構築入力（実 emo2 検体・COM は make_world_with_gpu で初期化済み） ──
+        // ── 構築入力（実 emo2 検体・COM はプロセスの寿命の MTA（runtime_tests/mod.rs）） ──
         // 検体はこの起動専用に取得する。起動記録の無い新品が配られるので（要件 7.4）、同じ
         // プロセスで何度起動しても毎回 OnFirstBoot から始まる台本が成り立つ。
         // 作者基準 DPI は emo2 検体の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
@@ -572,7 +569,7 @@ impl SpineHarness {
         let calls = || shiori_handle.call_count();
         run_bounded_watching("spine ghost shutdown", Progress::Count(&calls), move || {
             // 正規 close（DD-10 と同じ User）。ForceQuit ゆえ OnClose は NOTIFY で消化される。
-            // 降ろしの失敗は捨てずに落とす（待つ側へ `［相手が居ない］` の赤として届く・3 番）。
+            // 降ろしの失敗は捨てずに落とす（待つ側へ `［相手が居ない］` の赤として届く）。
             ghost
                 .shutdown(CloseReason::User { scope: 0 })
                 .expect("spine ghost shutdown");

@@ -114,8 +114,11 @@ pub(crate) fn parse_descript_params(param: &str) -> (DescriptParts, DescriptNote
         balloon: false,
     };
     let mut notes = DescriptNotes::default();
-    let push_once = |list: &mut Vec<String>, word: String| {
-        if !list.contains(&word) {
+    // 台本は信用できない入力なので、重複は集合で見る（`Vec::contains` だと語の数の 2 乗になる）。
+    // `unsupported` と `unknown` に入る語は重ならないので、集合は 1 つで足りる。
+    let mut seen = std::collections::HashSet::new();
+    let mut push_once = |list: &mut Vec<String>, word: String| {
+        if seen.insert(word.clone()) {
             list.push(word);
         }
     };

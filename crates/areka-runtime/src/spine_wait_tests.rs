@@ -5,7 +5,6 @@ use std::time::{Duration, Instant};
 use super::wait::{
     DENSE_SPIN, GPU_PERMIT_IDLE, GpuSlots, PermitVerdict, WAIT_CAP, join_bounded,
     join_thread_bounded, judge_permit_wait, run_bounded_watching, wait_recv, wait_thread_end_with,
-    wait_until_idle_with,
 };
 use super::{BACKOFF_SLEEP, Progress, SPIN_WAIT, WaitFailure, run_bounded, wait_until_with};
 
@@ -373,7 +372,8 @@ fn a_thread_whose_inner_count_keeps_moving_is_not_cut_off() {
         inner.set(inner.get() + 1);
         inner.get()
     };
-    // 1 秒ずつ進む時計で 120 回確かめた後に終わる＝待ち始めから約 120 秒（SPIN_WAIT の 4 倍）。
+    // `is_finished` は 1 回の反復で条件と進みの目印に 2 度読まれるので、60 回の反復で終わる
+    // ＝1 秒ずつ進む時計で待ち始めから約 60 秒（SPIN_WAIT の 2 倍）。
     let checks = Cell::new(0u32);
     drive_thread_end(
         Duration::from_secs(1),
@@ -384,7 +384,6 @@ fn a_thread_whose_inner_count_keeps_moving_is_not_cut_off() {
             checks.get() > 120
         },
     );
-    assert!(checks.get() > 120, "終わるまで待った");
 }
 
 /// 終わらないスレッドの打ち切りの文は、std のスレッドでもアクターでも同じ頭で始まる（要件 4.4）。
@@ -548,30 +547,5 @@ fn a_permit_wait_with_returns_is_never_cut_by_the_total_limit() {
         .to_string();
     for want in ["2／上限 2", "［止まった］", "500.0 秒", "1500.0 秒"] {
         assert!(text.contains(want), "「{want}」が文に無い: {text}");
-    }
-}
-
-/// 芯の内側の形は渡した `idle` で `［止まった］` にする（`wait_until_with` の 30 秒より短くても）。
-#[test]
-fn the_inner_wait_core_stalls_at_the_given_idle() {
-    let base = Instant::now();
-    let reads = Cell::new(0u32);
-    let zero = || 0u64;
-    let result = wait_until_idle_with(
-        || {
-            reads.set(reads.get() + 1);
-            base + Duration::from_secs(1) * reads.get()
-        },
-        |_| {},
-        "短い idle",
-        Progress::Count(&zero),
-        Duration::from_secs(5),
-        || false,
-    );
-    match result {
-        Err(WaitFailure::Stalled { idle, .. }) => {
-            assert_eq!(idle, Duration::from_secs(5), "渡した idle で打ち切る")
-        }
-        other => panic!("［止まった］のはず: {other:?}"),
     }
 }

@@ -111,7 +111,7 @@ fn snapshot_keeps_only_the_shown_scopes() {
     );
 }
 
-/// 控えを渡す先の結線が無ければ `warn!` を 1 件残して捨てる（panic しない）。
+/// ⑶ 控えを渡す先の結線が無ければ `warn!` を 1 件残して捨てる（panic しない）。
 #[test]
 fn hand_over_without_wiring_warns_and_drops_the_carry() {
     let mut world = World::new();
@@ -127,7 +127,7 @@ fn hand_over_without_wiring_warns_and_drops_the_carry() {
 }
 
 /// 置き場にゴーストが居なければ「出し直す」の記録を出さず、`reload_shell_replay_unavailable` の
-/// `warn!` を 1 件だけ残して何も送らない（62 番）。出すものが無ければ記録も 0 件。
+/// `warn!` を 1 件だけ残して何も送らない。出すものが無ければ記録も 0 件。
 #[test]
 fn replay_without_a_ghost_warns_once_and_restores_nothing() {
     let world = World::new();
@@ -182,7 +182,7 @@ fn wear(category: &str, part: &str, on: bool) -> BindReplay {
     }
 }
 
-/// ⑵ 着ていた着せ替え（既定に無い 101）は名前で着る。名前の無くなった着せ替え（999）は落とす。
+/// ⑷ 着ていた着せ替え（既定に無い 101）は名前で着る。名前の無くなった着せ替え（999）は落とす。
 #[test]
 fn decide_binds_keeps_a_worn_bind_and_drops_an_undefined_one() {
     let decided = decide_binds(0, &set(&[101, 999]), &set(&[]), &set(&[]), &names(&[]));
@@ -190,14 +190,14 @@ fn decide_binds_keeps_a_worn_bind_and_drops_an_undefined_one() {
     assert_eq!(decided.dropped, vec![999]);
 }
 
-/// ⑵ 控えと読み直したシェルの既定が同じ（着せ替えを変えていない）なら何も送らない。
+/// ⑷ 控えと読み直したシェルの既定が同じ（着せ替えを変えていない）なら何も送らない。
 #[test]
 fn decide_binds_sends_nothing_without_a_difference() {
     let decided = decide_binds(0, &set(&[100]), &set(&[100]), &set(&[100]), &names(&[]));
     assert_eq!(decided, CarriedBinds::default());
 }
 
-/// ⑵ 脱いでいた既定（200）は脱ぐ。同じカテゴリを着る合図（服 B）があり複数可でなければ、既定の服 A は
+/// ⑷ 脱いでいた既定（200）は脱ぐ。同じカテゴリを着る合図（服 B）があり複数可でなければ、既定の服 A は
 /// 脱ぐ合図を送らない（排他の置き換えが外す）。複数可のカテゴリなら脱ぐ合図も送る。
 #[test]
 fn decide_binds_sheds_a_removed_default_unless_an_exclusive_wear_covers_it() {
@@ -226,7 +226,7 @@ fn char2_names() -> BindResolver {
     names_of("charset,UTF-8\r\nchar2.bindgroup101.name,服,B\r\n")
 }
 
-/// シェルの descript.txt `shell` を持つゴーストを作業フォルダ（`target\\` の下）に組み、本番と同じ
+/// シェルの descript.txt `shell` を持つゴーストを作業フォルダ（`target\` の下）に組み、本番と同じ
 /// シェルの読み（`resolve_with_shell` → `BindResolver::from_groups`）で着せ替えの名前表を作る。
 fn names_of(shell: &str) -> BindResolver {
     let work = sample_ghost_kit::WorkDir::new().expect("作業フォルダを取れる");
@@ -246,7 +246,7 @@ fn names_of(shell: &str) -> BindResolver {
     BindResolver::from_groups(&model.bindgroups)
 }
 
-/// ⑵ スコープ 2 は自分（`char2`）の名前表で引く: 名前の在る着た服 B は着る、`char2` に名前の無い
+/// ⑷ スコープ 2 は自分（`char2`）の名前表で引く: 名前の在る着た服 B は着る、`char2` に名前の無い
 /// 脱いだ服 A は落とす（本体側の名前表は引かない・要件 14.2）。
 #[test]
 fn decide_binds_looks_up_a_char_scope_in_its_own_names() {
@@ -259,7 +259,7 @@ fn decide_binds_looks_up_a_char_scope_in_its_own_names() {
     assert_eq!(sakura_only.dropped, vec![101, 100]);
 }
 
-/// ⑵ 台本で触っていない既定を descript で書き換えた（帽子 C の既定 1→0・服 B の既定 0→1）なら、
+/// ⑷ 台本で触っていない既定を descript で書き換えた（帽子 C の既定 1→0・服 B の既定 0→1）なら、
 /// 読み直したシェルの既定がそのまま効き、合図は 1 つも送らない（読み直しで書き換えが見える）。
 ///
 /// # 非空虚性
@@ -286,7 +286,7 @@ fn decide_binds_lets_an_edited_default_take_effect() {
     assert_eq!(on, CarriedBinds::default());
 }
 
-/// ⑵ 台本で着た・脱いだ分は、既定が書き換わっても持ち越す: 前の既定 {100, 200} から帽子 C を脱ぎ服 B を
+/// ⑷ 台本で着た・脱いだ分は、既定が書き換わっても持ち越す: 前の既定 {100, 200} から帽子 C を脱ぎ服 B を
 /// 着た控え {101}（服は排他なので A も外れた）を、既定 {100, 200} のままのシェルにも既定 {200} に
 /// 書き換えたシェルにも出し直す。
 #[test]

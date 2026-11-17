@@ -28,7 +28,7 @@ pub(super) async fn run_setup(tx: CommandSender) {
 /// 装着アセット構築（probe 側）→ `ProbeBoot` 挿入を一括で行う（UI スレッド）。
 ///
 /// 失敗は log-first（`error!`）で中断する（受け入れ probe ゆえ失敗を
-/// loud に観測させる。終了は Ctrl+C／smoke env）。
+/// loud に観測させる。終了は smoke env のみ）。
 fn build_and_spawn(world: &mut World) {
     let ghost_root = emo2_root();
     let balloon_dir = balloon_root();
@@ -40,13 +40,13 @@ fn build_and_spawn(world: &mut World) {
             tracing::error!(
                 error = %e,
                 ghost_root = %ghost_root.display(),
-                "collision-probe: 配置準備に失敗（実モニタ列挙が要る＝実 DPI モニタ上で実行すること）— 中止"
+                "collision-probe: 配置準備に失敗（真因は直前の error!）— 中止"
             );
             return;
         }
     };
 
-    // MonitorSnapshot（bottom 吸着 resize が work area を引く消費用・`crates/areka-placement/examples/window-placement.rs:251-255` 前例）。
+    // MonitorSnapshot（bottom 吸着 resize が work area を引く消費用・`crates/areka-placement/examples/window-placement.rs` の `build_and_spawn` 前例）。
     world.insert_resource(areka_placement::follow::MonitorSnapshot::from_monitors(
         &wintf::ecs::window::monitor::enumerate_monitors(),
     ));
@@ -76,7 +76,7 @@ fn build_and_spawn(world: &mut World) {
     };
 
     // ⑤ マウス経路照合の観測シーム: probe 窓へ `OnPointerMoved` を1行装着（donor `OnPointerPressed`
-    // 前例＝`emo-present/input.rs:20` と同型・placement 非改変）。
+    // 前例＝`emo-present/input.rs` の `on_shell_pressed` と同型・placement 非改変）。
     //
     // **本 probe に `OnPointerPressed` は付かない**（2026-08-05 実機で確認・冒頭 doc「使い方」参照）。
     // かつて終了を担っていた stand-in `spawn_ghost_windows` の `OnPointerPressed(on_ghost_pressed)` は
@@ -100,7 +100,9 @@ fn build_and_spawn(world: &mut World) {
     };
     let shell_dir = ghost_root.join("shell/master");
     let Some((emo_world, atlas)) = load_shell_assets(&shell_dir, &decoder) else {
-        tracing::error!("collision-probe: shell アセット構築に失敗 — 中止（窓は配置済み）");
+        tracing::error!(
+            "collision-probe: shell アセット構築に失敗（真因は直前の error!）— 中止（窓は配置済み）"
+        );
         return;
     };
 
@@ -119,25 +121,15 @@ fn build_and_spawn(world: &mut World) {
 
 /// shell dir から scope0 装着用の `(EmoWorld, AtlasTable)` を**シェル読み込みの権威**
 /// （`load_shell_target`）で構築する（emo-present donor `load_shell_assets` と同経路）。
-/// 失敗時は log-first で `None`。
+/// 失敗時は `None`（失敗の `error!` は権威が出す）。
 ///
 /// 一覧・`surfaces.txt` の読取と解析・面の画像の決定・焼くまでは権威が 1 回で行う
 /// （`areka_emo_present::shell_target`）。文字コードの扱い（`charset` 宣言に従う）・焼く段で
 /// 落ちた絵の `warn!` も権威側が持つので、この probe は呼ぶだけである——本番（`build_boot_assets_with_shell`）・
 /// 採寸（`build_shell_assets`）と同じ入口を通るため、この probe が見る絵は本番と食い違わない。
 fn load_shell_assets(shell_dir: &Path, decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable)> {
-    let target = match load_shell_target(shell_dir, decoder) {
-        Ok(t) => t,
-        Err(e) => {
-            // load_shell_target は内部で error! 済み（一覧失敗／読取失敗／面 0 個）。文脈のみ添える。
-            tracing::error!(
-                dir = %shell_dir.display(),
-                error = %e,
-                "collision-probe: shell の読み込みに失敗"
-            );
-            return None;
-        }
-    };
+    // 3 つの失敗（一覧失敗／読取失敗／面 0 個）の error! は load_shell_target が出す。
+    let target = load_shell_target(shell_dir, decoder).ok()?;
     let atlas = target.atlas().clone();
     Some((target.build_world(), atlas))
 }

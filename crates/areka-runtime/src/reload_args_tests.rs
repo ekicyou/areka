@@ -9,12 +9,6 @@ fn toks(items: &[&str]) -> Vec<String> {
     items.iter().map(|s| s.to_string()).collect()
 }
 
-const ALL: DescriptParts = DescriptParts {
-    ghost: true,
-    shell: true,
-    balloon: true,
-};
-
 fn parts(ghost: bool, shell: bool, balloon: bool) -> DescriptParts {
     DescriptParts {
         ghost,
@@ -52,7 +46,7 @@ fn mcp_target_six_words() {
     );
     assert_eq!(
         McpTarget::parse("descript"),
-        McpTarget::Target(ReloadTarget::Descript(ALL))
+        McpTarget::Target(ReloadTarget::Descript(DescriptParts::ALL))
     );
     assert_eq!(McpTarget::parse("makoto"), McpTarget::Makoto);
 }
@@ -69,7 +63,7 @@ fn mcp_target_ignores_ascii_case() {
     );
     assert_eq!(
         McpTarget::parse("DeScRiPt"),
-        McpTarget::Target(ReloadTarget::Descript(ALL))
+        McpTarget::Target(ReloadTarget::Descript(DescriptParts::ALL))
     );
     assert_eq!(McpTarget::parse("MAKOTO"), McpTarget::Makoto);
 }
@@ -111,7 +105,7 @@ fn script_seven_spellings() {
     assert_eq!(script("reload", &["balloon"]), plain(ReloadTarget::Balloon));
     assert_eq!(
         script("reload", &["descript"]),
-        plain(ReloadTarget::Descript(ALL))
+        plain(ReloadTarget::Descript(DescriptParts::ALL))
     );
     assert_eq!(
         script("reload", &["descript", "shell balloon"]),
@@ -183,7 +177,10 @@ fn descript_single_and_pairs() {
         desc("shell balloon"),
         (parts(false, true, true), notes(&[], &[]))
     );
-    assert_eq!(desc("ghost shell balloon"), (ALL, notes(&[], &[])));
+    assert_eq!(
+        desc("ghost shell balloon"),
+        (DescriptParts::ALL, notes(&[], &[]))
+    );
 }
 
 #[test]

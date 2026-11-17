@@ -1,8 +1,8 @@
 //! ghost の読み直しでシェルの着せ替えを持ち越す送り方の決定論テスト
 //! （areka-P0-mcp-reload 要件 3.8・12.1）。
 //!
-//! ⑴ 読み直しでなければ控えない（印が無い World は `None`）
-//! ⑶ 送り方: 置き場のゴーストの seriko へ `\![bind,…]`・`\s[面]` と同じ合図が着せ替えから先に届き、
+//! - 読み直しでなければ控えない（印が無い World は `None`）
+//! - 送り方: 置き場のゴーストの seriko へ `\![bind,…]`・`\s[面]` と同じ合図が着せ替えから先に届き、
 //!    seriko の最初の `Show` がもう着せ替えた集合を載せる
 //!
 //! 面の決め方・控えの組み方・着せ替えの決め方（`decide_binds`）は、`areka-runtime` の同じ名前のファイルにある。
@@ -20,7 +20,7 @@ use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::reload::carries_shell_state;
 
-/// ⑴ 読み直しの印が無ければ控えない（ふつうの切替・起動は今までどおり）。控えが無ければ渡しもしない。
+/// 読み直しの印が無ければ控えない（ふつうの切替・起動は今までどおり）。控えが無ければ渡しもしない。
 #[test]
 fn nothing_is_carried_without_a_ghost_reload() {
     let mut world = World::new();
@@ -30,7 +30,7 @@ fn nothing_is_carried_without_a_ghost_reload() {
     assert!(!world.contains_non_send::<RuntimeWiring>());
 }
 
-/// ⑶ 着せ替えごとに `\![bind,…]`、決めた面ごとに `\s[面]` と同じ合図が着せ替えから先に届き、seriko の
+/// 着せ替えごとに `\![bind,…]`、決めた面ごとに `\s[面]` と同じ合図が着せ替えから先に届き、seriko の
 /// scope 0 の**最初の** `Show` がもう着せ替えた集合（101）を載せる（既定の姿が 1 度も出ない）。出さない
 /// 面は届かない。
 ///

@@ -12,8 +12,22 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 use tracing::Level;
 
-use super::test_support::{NO_MEMO, by_name, folder, never};
 use super::*;
+
+fn by_name(name: &str) -> SkinSpec {
+    SkinSpec::Name(name.to_owned())
+}
+
+fn never(_: usize) -> usize {
+    panic!("乱数は引かない")
+}
+
+const NO_MEMO: Result<&str, NotFoundReason> = Err(NotFoundReason::LastInstalledNone);
+
+/// 解いた先のフォルダ名（失敗は理由のまま）。
+fn folder(result: Result<SkinCandidate, NotFoundReason>) -> Result<String, NotFoundReason> {
+    result.map(|c| c.folder)
+}
 
 fn cand(folder: &str, name: Option<&str>, hidden: bool) -> SkinCandidate {
     SkinCandidate {

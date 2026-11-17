@@ -12,7 +12,7 @@
 //!
 //! 受信端が閉じていても（ゴーストが居ない場面）台本は殺さない（`warn!` を残して継続する）。
 //!
-//! 受信端 [`ReloadRx`] とその据え付け [`wire_reload_rx`] もここに置く。受け口の dispatcher への登録と
+//! 受信端 `ReloadRx` とその据え付け `wire_reload_rx` もここに置く。受け口の dispatcher への登録と
 //! 受信端の据え付けは `runtime_boot` が行う。毎フレームの取り出し（`try_iter` の呼び手）は `reload::drain`。
 
 use std::sync::mpsc::{Receiver, SendError, Sender, TryIter};

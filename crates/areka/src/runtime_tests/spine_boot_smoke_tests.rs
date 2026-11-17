@@ -21,7 +21,7 @@ use super::{
 ///   シェル装着成功）を装着サマリ `info!` で観測でき、ERROR は 0 件。
 /// - **ハンドル生存**: attach 後も seriko worker は稼働中・dispatcher は再度 Tick を受理する。
 ///
-/// 豊富な観測（S1 ピクセル readback・S2 typewriter・S3 `\b`・S5 close 握手）は 6.2/6.3 の担当。
+/// 豊富な観測（S1 ピクセル readback・S2 typewriter・S3 `\b`・S5 close 握手）は兄弟のテストファイルが持つ。
 #[test]
 fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     // 最小 talk（1 サーフェス cue・テキストなし）で決定論を単純に保つ。
@@ -161,7 +161,7 @@ fn spine_preview_reaches_text_layer_through_production_chain() {
     harness.shutdown_bounded();
 }
 
-/// 足場の後片付けは、ゴーストの降ろしの失敗を隠さない（3 番・要件 3.1・4.1）。
+/// 足場の後片付けは、ゴーストの降ろしの失敗を隠さない（要件 3.1・4.1）。
 ///
 /// 標準の台本から `OnClose` だけを抜いて起こす。降ろしは `OnClose` を NOTIFY で送るので、
 /// 台本に無い呼び出しで偽の SHIORI が panic し、`shutdown` は `Err` を返す。後片付けがそれを

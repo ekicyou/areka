@@ -10,6 +10,7 @@
 // 5.4・7.3）。
 
 use super::*;
+use crate::consumer_ledger::test_support::carrier_cue;
 use crate::frame::test_support::count_level;
 use areka_ghost::sink::BootCueSink;
 use dola::DynamicValue;
@@ -18,16 +19,6 @@ use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Receiver, channel};
 
 // ---------------------------------------------------------------- 道具立て
-
-/// `\![name,tokens...]` の汎用キャリア cue を組む（正準形＝`Custom` の String 配列）。
-fn carrier_cue(name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
 
 /// 受け口と受信端の組を作る。
 fn sink() -> (NoUserBreakCueSink, Receiver<NoUserBreakSignal>) {

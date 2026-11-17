@@ -80,7 +80,7 @@ pub(crate) mod sample_test_support;
 #[path = "source_text_test_support.rs"]
 pub mod source_text_test_support;
 
-// film の E2E（本物の読み手から合成まで・spec: audit-emo2-boot-spine 設計「102 番」）。
+// film の E2E（本物の読み手から合成まで・本体から移した・spec: audit-emo2-boot-spine）。
 #[cfg(test)]
 #[path = "film_playback_e2e_tests.rs"]
 mod film_playback_e2e_tests;
@@ -315,14 +315,14 @@ pub struct RuntimeInputs {
     pub boot_origin: BootOrigin,
 }
 
-/// M-boot の scope 集合を導出する（design DD-12・line 460「placement と同じ入力から自前導出」）。
+/// M-boot の scope 集合を導出する（design DD-12「placement と同じ入力から自前導出」）。
 ///
 /// emo2 fixture は sakura（scope0）＋kero（scope1）の 2 scope 構成であり、placement の
 /// `detect_scopes`（scope0 常設・`kero.*` 存在で scope1）も emo2 に対し `[0, 1]` を返す。
 /// placement の実結果は `ghost_session::prepare_ghost_windows` の async クロージャへ move 済みで同期参照不能
 /// （DD-12）ゆえ、本関数が同じ scope 集合を独立に導出する。導出の二元性（placement の動的
 /// `detect_scopes` との厳密一致は取らない）は M1 受容トレードオフとして増分申し送り（design
-/// line 460）。窓と資産の不一致は [`frame::plan_attachments`]（DD-12）が missing/unused へ分類し
+/// DD-12）。窓と資産の不一致は [`frame::plan_attachments`]（DD-12）が missing/unused へ分類し
 /// 優しく縮退するため、多少のズレでも hang/crash しない。
 fn derive_scopes() -> Vec<u32> {
     vec![0, 1]
@@ -407,10 +407,10 @@ const _: fn() = || {
 /// 結線＋二段の観測に徹する。
 ///
 /// # 7 手順（design「wire_runtime の統括」）
-/// 1. [`build_boot_assets_for`]（`scopes` は [`derive_scopes`] で placement と同じ入力から自前導出・
+/// 1. `build_boot_assets_for`（`scopes` は `derive_scopes` で placement と同じ入力から自前導出・
 ///    DD-12。作者基準 DPI は引数 `author_dpi`＝placement の準備が読んだ値をそのまま搬送・
 ///    task 4.3。シェルは引数 `shell`＝配置の準備が決めた起動のシェルで、手順5 の起動へも
-///    同じ値を渡す・areka-P0-shell-balloon-switch 要件 6.4）。`Err` は [`classify_wiring_error`]（起点不在＝`warn!`・他＝`error!`・R7.3）の上
+///    同じ値を渡す・areka-P0-shell-balloon-switch 要件 6.4）。`Err` は `classify_wiring_error`（起点不在＝`warn!`・他＝`error!`・R7.3）の上
 ///    `wired=false` を呼び手へ返す（`ghost_session::boot_ghost` は `LogSink`×2 フォールバック boot へ
 ///    倒し、`ghost_session::boot_ghost_strict` は `Err` を返す）。
 /// 2. [`EmoPresenter::new`]／[`TextLayerRuntime::new`]（`Rc<RefCell<>>`）／[`spawn_emo_text`]
@@ -422,7 +422,7 @@ const _: fn() = || {
 ///    が値消費し、`static_binds`（Clone）は clone して seriko へ渡す。`RuntimeWiring` が保持する
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
 /// 5. 受け口の送出端の束（`CueSinkSources`）を組み、実行系の側の起動（引数 `boot_runtime`＝[`BootRuntimeFn`]）
-///    （束の複製から 13 本の sink を組んで `areka_ghost::boot_with_origin`・成立後にだけ受信端を据える）を呼ぶ。
+///    （束の複製から sink を組んで `areka_ghost::boot_with_origin`・成立後にだけ受信端を据える）を呼ぶ。
 ///    `shiori`／`ticker`／`app_profile_dir` は [`RuntimeInputs`] の値＝本番は `Helper`／`Real`。`Err` は既存 本体の `is_benign_boot_error`（R7.4）で
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false`。停止通知の送出端は
 ///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
@@ -608,7 +608,7 @@ pub fn wire_runtime(
     // 持ち主は `GhostSession` だけで、降ろす最初の段で落ちる。boot 失敗時は下で tick_sink と一緒に落とす。
     let session_sink = surface_sink.clone();
     // 受け口の送出端の束（areka-P0-mcp-reload 要件 4.2）: 窓の側がここで 1 度組み、実行系を
-    // 起こすたびに複製から 13 本の sink を組む。
+    // 起こすたびに複製から sink を組む。
     let sources = CueSinkSources {
         surface: surface_sink,
         text: emo_text_sink,

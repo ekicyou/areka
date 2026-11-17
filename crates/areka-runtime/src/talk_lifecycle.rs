@@ -35,7 +35,7 @@
 //!
 //! # 待ち時間の指定
 //!
-//! `\![set,balloontimeout,時間]` の cue だけを拾い、時間の欄を [`parse_balloon_timeout`] で読んで
+//! `\![set,balloontimeout,時間]` の cue だけを拾い、時間の欄を `parse_balloon_timeout` で読んで
 //! [`TalkLifecycleSignal::BalloonTimeout`] を送る（要件 9.1〜9.4・7.5）。他の `\![set,…]` は
 //! 読み飛ばす。台本の順に配られた cue だけが届くので、指定に達する前に止まったトークでは
 //! 効かない（要件 9.8）。
@@ -63,10 +63,10 @@ use super::talk_clock::TalkClock;
 ///
 /// 受信側は [`TalkStarted`](Self::TalkStarted) で計測をリセットし、以降の
 /// [`DisplayEndAt`](Self::DisplayEndAt) を max 集約する（重複・順不同の値に対して単調）。
-// 判断側の消費は着地済み（`balloon_visibility.rs` の観測スナップショットが本型を運び、計測の
-// 破棄と占有終端の更新に使う）。送出側の構築点も着地済み——`wire_runtime`（`crates/areka-runtime/src/lib.rs`）が
-// channel を作り、送出端を `GhostBootOptions.sinks` 4 本目の [`BalloonLifecycleSink`] へ、受信端を
-// `RuntimeWiring::lifecycle_rx` へ渡す（task 4.1）。受信端から取り出す配線は task 4.4。
+// 判断側は `balloon_visibility.rs` の観測スナップショットで本型を運び、計測の破棄と占有終端の
+// 更新に使う。`wire_runtime`（`crates/areka-runtime/src/lib.rs`）が channel を作り、送出端を
+// `GhostBootOptions.sinks` 4 本目の [`BalloonLifecycleSink`] へ、受信端を
+// `RuntimeWiring::lifecycle_rx` へ渡す。受信端は `balloon_visibility_phase.rs` の可視性の相が毎フレーム取り出す。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TalkLifecycleSignal {
     /// この talk の観測が始まった（複製後の初回 `emit` で 1 回だけ・全 `DisplayEndAt` に先行）。
@@ -238,7 +238,7 @@ impl BootCueSink for BalloonLifecycleSink {
         Box::new(Self::new(self.tx.clone(), self.clock.clone()))
     }
 
-    // 出どころは使わない（引数の追随だけ・task 6.1）。
+    // 出どころは使わない（`BootCueSink::begin_talk` の引数の形に合わせただけ）。
     fn begin_talk(&mut self, talk_id: TalkId, _origin: ScriptOrigin) {
         self.talk_id = Some(talk_id);
     }

@@ -47,7 +47,7 @@
 //! （消費者は自らの名前と選別子で自己選別する）。両者は一致していなければならないが、
 //! 依存はしない——`ZOrderCueSink` が受理する組と、正準台帳に載る zorder の 2 行
 //! （`("set", Some("zorder"))`・`("reset", Some("zorder"))`）が同じであることは、本モジュールの
-//! テストがその組を名指しで固定する。`runtime` の 11 の受け口については、表の全行と、表に
+//! テストがその組を名指しで固定する。`runtime` の受け口については、表の全行と、表に
 //! 無い組の掛け合わせを実際に配って一致を固定する（`areka` の `runtime_tests/consumer_ledger_agreement_tests.rs`・
 //! areka-P0-mcp-author-tools 要件 3.11）。見本の組が表の行と一致することの判定は、この crate の
 //! `consumer_ledger_agreement_tests.rs` にある。
@@ -66,61 +66,7 @@ type LedgerKey = (String, Option<String>);
 /// dola はコマンド名語彙を持たないため、本 enum は**結線層が誰にコマンド名を割り当てたか**を
 /// 宣言するためだけの識別子である（実際の消費は各消費者が自らの名前で自己選別する）。
 ///
-/// - [`MoveSink`](CommandConsumer::MoveSink): 窓の位置の指令（`\![move]` と
-///   `\![execute,resetwindowpos]`）を消費する [`MoveCueSink`](super::move_cue::MoveCueSink)
-///   （talk スレッド側名前選別 sink）。正準台帳が `move` と `(execute, resetwindowpos)` の 2 行を
-///   登記する（areka-P0-move-canon 要件 8.7）。吸着・窓の組・バルーン位置初期化の 5 行
-///   （`(set, alignmenttodesktop|alignmentondesktop|sticky-window)`・`(reset, sticky-window)`・
-///   `(execute, resetballoonpos)`）も同じ受け口に登記する（areka-P0-window-link-directives）。
-///   バルーンの動かせない指定の 2 行（`(lock, balloonmove)`・`(unlock, balloonmove)`）も同じ
-///   受け口に登記する（descript-window-keys 要件 5.7）。
-/// - [`Seriko`](CommandConsumer::Seriko): `\![bind]`（着せ替え）を消費する表示系 seriko。
-///   正準台帳（[`ConsumerLedger::canonical`]）が `bind` → `Seriko` を登記する（task 7.2）。
-/// - [`ZOrderSink`](CommandConsumer::ZOrderSink): 重なり指定・重なり解除を消費する
-///   [`ZOrderCueSink`](super::zorder_cue::ZOrderCueSink)。正準台帳が `(set, zorder)`・
-///   `(reset, zorder)` の 2 組を登記する（要件 11.2）。
-/// - [`ReadmeSink`](CommandConsumer::ReadmeSink): 開く系の受け口（説明書を含む）
-///   本体の `readme::readme_cue::ReadmeCueSink`。正準台帳が `(open, readme|file|browser|
-///   explorer|editor|mailer)` の 6 組と運搬名 `\j`（選別子なし）を登記する（要件 4.5・
-///   areka-P0-open-external-tags 要件 9.2）。
-/// - [`UserBreakSink`](CommandConsumer::UserBreakSink): 中断の無効化の区間の出入りを消費する
-///   [`NoUserBreakCueSink`](super::user_break_cue::NoUserBreakCueSink)。正準台帳が
-///   `(enter, nouserbreakmode)`・`(leave, nouserbreakmode)` の 2 組を登記する
-///   （areka-P0-balloon-break 要件 5.1／5.2）。
-/// - [`TextLayer`](CommandConsumer::TextLayer): 文字装飾 `\f[...]` を消費する文字レンダリング層
-///   （`areka_emo_text` の `state_decoration.rs` が同じ運搬名で自己選別する）。正準台帳が
-///   運搬名 [`FONT_TAG_CARRIER`](areka_sakura::contract::FONT_TAG_CARRIER) →
-///   `TextLayer` を登記する（areka-P0-text-decoration-canon 要件 2.4）。
-/// - [`ChangeSink`](CommandConsumer::ChangeSink): `\![change,ghost,…]` を消費する
-///   [`ChangeCueSink`](super::change_cue::ChangeCueSink)。正準台帳が `(change, ghost)` の 1 組を
-///   登記する（areka-P0-ghost-shell-balloon-switch 要件 1.10）。
-/// - [`SwitchSink`](CommandConsumer::SwitchSink): `\![change,shell,…]`・`\![change,balloon,…]` を
-///   消費する [`SwitchCueSink`](super::switch_cue::SwitchCueSink)。正準台帳が `(change, shell)`・
-///   `(change, balloon)` の 2 組を登記する（areka-P0-shell-balloon-switch 要件 1.15）。
-/// - [`InstallSink`](CommandConsumer::InstallSink): `\![execute,install,…]` を消費する
-///   本体の `install::install_cue::InstallCueSink`。正準台帳が `(execute, install)` の
-///   1 組だけを登記する（areka-P0-ghost-install 要件 1.5〜1.7）。
-/// - [`UpdateSink`](CommandConsumer::UpdateSink): `\![updatebymyself]`・`\![update,…]`・
-///   `\![updateother,…]` を消費する 本体の `update::update_cue::UpdateCueSink`。正準台帳が
-///   3 つの名前を選別子なしで登記する（areka-P0-network-update 要件 1.5〜1.8）。
-/// - [`ScriptCompile`](CommandConsumer::ScriptCompile): `\![set,choicetimeout,…]` を読む台本の
-///   組み立て（`areka_sakura::compile`）。正準台帳が `(set, choicetimeout)` の 1 組を登記する
-///   （areka-P0-mcp-author-tools 要件 3.2）。
-/// - [`PropertyWrite`](CommandConsumer::PropertyWrite): プロパティの書き込みの cue を消費する
-///   `areka_ghost` の `PropSetCueSink`。正準台帳が運搬名
-///   [`PROP_SET_CUE_NAME`](areka_ghost::prop_sink::PROP_SET_CUE_NAME) を選別子なしで登記する
-///   （areka-P0-mcp-author-tools 要件 3.2）。
-/// - [`PropertyRead`](CommandConsumer::PropertyRead): プロパティの読みの cue を消費する
-///   `areka_ghost` の `PropGetCueSink`。正準台帳が `(get, property)` の 1 組を登記する
-///   （shell-scale-linkage 要件 1.8）。
-/// - [`ReloadSink`](CommandConsumer::ReloadSink): `\![reload,…]`・`\![reloadsurface]` を消費する
-///   [`ReloadCueSink`](super::reload_cue::ReloadCueSink)。正準台帳が `(reload, ghost|shiori|shell|
-///   balloon|descript)` の 5 組と `reloadsurface`（選別子なし）を登記する（areka-P0-mcp-reload
-///   要件 11.1）。
-/// - [`WindowStateSink`](CommandConsumer::WindowStateSink): 常に手前の指令を消費する
-///   [`WindowStateCueSink`](super::window_state_cue::WindowStateCueSink)。正準台帳が
-///   `(set, windowstate)` と運搬名 [`RAISE_TAG_CARRIER`](areka_parsers::sakura::RAISE_TAG_CARRIER)
-///   （選別子なし）の 2 行を登記する（stay-on-top-directives 要件 1.8）。
+/// 各担当が受け持つ名前と選別子は、変種ごとの説明に書く（ここに一覧を写さない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandConsumer {
     /// 窓の位置の指令（`\![move]`・`\![execute,resetwindowpos]`・`\![set,alignmenttodesktop,方向]`
@@ -350,7 +296,7 @@ impl ConsumerLedger {
     /// 2. 無ければ、`selector` とちょうど同じ選別子つきの登記を引く。名簿に無い第 1 引数と、
     ///    第 1 引数の無い出現はどちらも `None`＝担当なしになる。
     ///
-    /// 相互排他（[`LedgerError::SelectorConflict`]）により ⑴ と ⑵ は同時に成り立たないので、
+    /// 相互排他（[`LedgerError::SelectorConflict`]）により 1 と 2 は同時に成り立たないので、
     /// 1 出現が引く担当は高々 1 つである（要件 11.3）。未登記名は `None`——自己選別モデルでは
     /// 担当のいないコマンドは良性の未処理であって、異常ではない（要件 11.2）。
     pub fn consumer_of(&self, name: &str, selector: Option<&str>) -> Option<CommandConsumer> {
@@ -363,7 +309,7 @@ impl ConsumerLedger {
             .copied()
     }
 
-    /// 正準台帳を構築する。行の一覧は [`CANONICAL_ROWS`] が正本で、ここは 1 行ずつ
+    /// 正準台帳を構築する。行の一覧は `CANONICAL_ROWS` が正本で、ここは 1 行ずつ
     /// [`try_register`](Self::try_register) するだけ（一覧を説明に写さない）。
     ///
     /// zorder の 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は

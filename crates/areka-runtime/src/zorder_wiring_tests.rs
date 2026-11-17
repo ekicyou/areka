@@ -3,7 +3,7 @@
 // （task 6.3・要件 5.1／5.2）の決定論テストのうち、`areka-runtime` の側にあるもの
 //
 // この task が足すのは判断ではなく**配線**である。受け口も台帳も相の本体も既に在って
-// 兄弟のテストが判断を全部押さえているので、ここで測るのは次の 2 点だけになる。
+// 兄弟のテストが判断を全部押さえているので、ここで測るのは次の 3 点だけになる。
 //
 // 1. タグを含む台本が受け口へ届くと、指令が**台帳適用の相まで**通ること（到達性・zwi01／02）。
 // 2. 相順と相の呼出の字面（zwi06／07）。呼出を丸ごと削っても判断のテストは 1 本も赤くならず
@@ -28,6 +28,7 @@ use wintf::ecs::window::ZOrderChainPlan;
 use super::frame::run_zorder_drain_phase;
 use super::source_text_test_support::{code_only, index_of, squeeze};
 use super::zorder_cue::{ZOrderCueSink, ZOrderDirective};
+use crate::consumer_ledger::test_support::carrier_cue;
 use areka_placement::follow::OffsetBase;
 use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
@@ -35,16 +36,6 @@ use areka_placement::spawn::spawn_ghost_windows;
 use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
 // ---------------------------------------------------------------- 道具立て
-
-/// `\![name,tokens...]` の汎用キャリア cue を組む（正準形＝`Custom` の String 配列）。
-fn carrier_cue(name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
 
 /// 文字の cue（台本の大半はこれで、受け口には全部届く）。
 fn text_cue(text: &str) -> TalkCue {
@@ -91,7 +82,7 @@ fn world_with_scopes(scopes: &[usize]) -> World {
 }
 
 // ---------------------------------------------------------------------------
-// ⑴ 到達性——タグを含む台本が台帳適用の相まで届く（完了状態）
+// 到達性——タグを含む台本が台帳適用の相まで届く（完了状態）
 // ---------------------------------------------------------------------------
 
 /// 台本に混ざった `\![set,zorder,1,0]` が、受け口→受け渡し口→取り出しの相を通って

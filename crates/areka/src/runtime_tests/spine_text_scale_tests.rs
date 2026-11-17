@@ -1,7 +1,7 @@
 use super::test_support::bump_balloon_window_dpi;
 use super::{
-    BindSet, PatternState, PresentCommand, SpineHarness, balloon_target, run_attach_phase,
-    run_dpi_phase, run_text_phase, run_text_scale_phase, shell_target,
+    BindSet, PatternState, PresentCommand, SpineHarness, balloon_target, run_dpi_phase,
+    run_text_phase, run_text_scale_phase, shell_target,
 };
 
 /// balloon target の適用 k（`applied_scale`）を読む短縮（`None`＝表示状態が未確立は前提違反ゆえ panic）。
@@ -184,7 +184,7 @@ element1,balloon,talk,10,10
 }
 ";
     let mut harness = SpineHarness::boot(r"\s[0]\e");
-    run_attach_phase(&mut harness.wiring, &mut harness.world);
+    harness.attach_all();
     // 最初の `\s[0]` 相当（本番 adapter が組む指令と同型）でシェルの窓の表示を確立する。
     harness.wiring.apply_present(
         &mut harness.world,

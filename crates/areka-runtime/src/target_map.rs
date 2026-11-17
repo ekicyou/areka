@@ -3,7 +3,7 @@
 //! 本仕様が新たに正本として確立する唯一の契約（design.md「依存方向」の最左・R3.5）。
 //! DD-3 の採番規約（シェル表示対象＝`2*scope`／バルーン表示対象＝`2*scope+1`）で
 //! scope からシェル／バルーン両表示対象への互いに素な写像を与え、`ActorKey` の数値 parse
-//! （非数値は `None`）を担う。
+//! （数でない、または大きすぎる番号は `None`）を担う。
 //!
 //! 不変条件（DD-3）: `shell_target` は偶数・`balloon_target` は奇数の `TargetId` を返すため、
 //! 全 scope にわたりシェル表示対象とバルーン表示対象は決して衝突しない（互いに素）。
@@ -14,8 +14,7 @@ use areka_sakura::ActorKey;
 
 /// scope 番号 → シェル表示対象（正本）。
 ///
-/// DD-3 の採番規約により `TargetId(2 * scope)`（常に偶数）。scope0 → `TargetId(0)` で
-/// donor（emo-present.rs の `boot_present_system`）が用いる `TargetId(0)` 慣行を包含する。
+/// DD-3 の採番規約により `TargetId(2 * scope)`（常に偶数）。scope0 → `TargetId(0)`。
 ///
 /// 前提: `scope` は `i32::MAX` 以下（入口の [`scope_of`] が守る）。
 pub fn shell_target(scope: u32) -> TargetId {

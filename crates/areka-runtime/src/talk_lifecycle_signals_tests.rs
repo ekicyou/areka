@@ -12,6 +12,7 @@
 // =============================================================================
 
 use super::*;
+use crate::consumer_ledger::test_support::carrier_cue;
 use crate::talk_clock::TalkClock;
 use areka_ghost::sink::BootCueSink;
 use areka_sakura::TalkId;
@@ -40,16 +41,6 @@ fn text_cue(at: f64, duration: f64) -> TalkCue {
         actor: ActorKey::from("0"),
         command: CueCommand::Text("あ".into()),
         duration,
-    }
-}
-
-/// `\![name,tokens...]` の運び手の cue。
-fn carrier_cue(name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
     }
 }
 

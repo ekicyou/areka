@@ -7,10 +7,10 @@
 
 use super::super::settle_bounded;
 use super::super::test_support::boot_finished;
+use super::super::{ExitKind, LoopDriver, wait_until};
 use super::driver_tests::{second_change_calls, stage};
-use super::{ExitKind, LoopDriver, ScriptedShioriBackend, SpineHarness};
 use super::{Injection, LapDriver, RecordedCall, StagePlan, StageSink, WaitInjection};
-use super::{Progress, wait_until};
+use super::{Progress, ScriptedShioriBackend, SpineHarness};
 use areka_kanade::CloseReason;
 // 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
 use areka_runtime::spine::test_support::status_calls;
@@ -85,8 +85,7 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
     let (backend, handle) = ScriptedShioriBackend::builder()
         .notify("OnInitialize", Ok(()))
         .get("OnFirstBoot", Ok(None))
-        // 起動挨拶を持たせない（204）。持たせると close 指示が active talk 中に届いた場合に保留され、
-        // 消化に毎秒の変化通知が要る＝本檻が測りたい経路と別の非決定が混ざる。
+        // 起動挨拶は持たせない（204）。起動で走るのは記録トークだけになる（doc の前提）。
         .get("OnBoot", Ok(None))
         .notify("basewareversion", Ok(()))
         // 終了段の応答は実物に合わせて `\-`（ゴースト終了）で終える。運行側は別れの台詞を
@@ -247,16 +246,16 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
 ///
 /// # 交錯順を決定論にする仕掛け
 ///
-/// 台本受け口は照会・片道のどちらでも**最初に進行状態の記録へ書く**（`spine.rs` が
-/// 呼ぶ `record_status`・本体は `areka-runtime` の `spine.rs` の `record_status`）。ゆえにその台帳の錠を
+/// 台本受け口は照会・片道のどちらでも**最初に進行状態の記録へ書く**（`areka-runtime` の
+/// `spine.rs` の `record_status`）。ゆえにその台帳の錠を
 /// テスト側が握っていれば受け口は次の呼出の入口で止まり、**応答が kanade へ帰らない**。起動の前に
 /// 錠を握り、握ったまま終了指示を投函すれば、kanade は必ず boot 系列に居るあいだにそれを受け取る
 /// （保留記録＝`crates/areka-kanade/src/schedule/boot.rs`・実体は同ファイル）。錠を放すと起動が
 /// 進み、`Steady{talk: Some}`（起動記録トーク）へ保留を抱えたまま入る——上の檻が稀に踏んでいた形と
 /// 同じ状態である。台本の応答は 1 件も差し替えていない（遅らせているのは**返る時点**だけ）。
 ///
-/// **`calls` の側の錠を握ってはならない。** 死活問い合わせの記録も同じ錠を取るため
-/// （`spine.rs`）、受け口は起動系列へ入る前に止まり、起動そのものが進まなくなる（実測: 錠を
+/// **`calls` の側の錠を握ってはならない。** `get`／`notify` は進行状態を書いた直後に `calls` の
+/// 錠を取るので、最初の呼び出し（`OnInitialize`）で止まり、起動そのものが進まなくなる（実測: 錠を
 /// 握ったまま 30 秒経っても `basewareversion` が記録されない）。
 ///
 /// 檻に入れる判断分岐:

@@ -10,16 +10,17 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
+use std::time::{Duration, Instant};
 
 use areka_emo_present::PresentCommand;
 use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
+use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{GhostBootError, GhostRuntime, ShioriWiring, TickerMode};
-use areka_kanade::{BootOrigin, CloseReason, ShioriBackend};
+use areka_kanade::{BootOrigin, CloseReason, MonotonicMs, ShioriBackend};
 use areka_seriko::{BindResolver, SerikoLoopConfig, SurfaceResolver, spawn_seriko};
 use bevy_ecs::world::World;
 use dola::cue::{ActorKey, CueCommand, TalkCue};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::*;
 use crate::input_events::user_break::UserBreakWiring;
@@ -31,9 +32,10 @@ use areka_runtime::RuntimeInputs;
 use areka_runtime::adapter::PresentBridge;
 use areka_runtime::reload_cue::ReloadRx;
 use areka_runtime::spine::{
-    Progress, ScriptedShioriBackend, ScriptedShioriHandle, run_bounded_watching,
+    Progress, ScriptedShioriBackend, ScriptedShioriHandle, run_bounded_watching, wait_until,
 };
 use areka_runtime::talk_clock::TalkClock;
+use areka_runtime::user_break_cue::NoUserBreakSignal;
 use sample_ghost_kit::SampleRoot;
 
 /// 窓の側の束の持ち物（seriko と文字の線を生かしておく）。
@@ -99,13 +101,6 @@ fn installed(world: &World) -> usize {
     .into_iter()
     .filter(|b| *b)
     .count()
-}
-
-fn com() {
-    // SAFETY: 起動の資産の読み込みに要る COM 初期化（既初期化の S_FALSE 等は無視・assets.rs 同流儀）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
 }
 
 /// 束から 13 本が組まれ、12 本目が読み直しの受け口・13 本目が常に手前の受け口（どちらも
@@ -228,7 +223,6 @@ fn failed_boot_leaves_world_unchanged() {
 /// 起動に成功したときだけ受信端 5 つが World に据わる。
 #[test]
 fn successful_boot_installs_receivers() {
-    com();
     let rig = rig();
     let sample = acquire_emo2();
     let (backend, handle) = ScriptedShioriBackend::builder().build();
@@ -268,6 +262,39 @@ fn shut_down(what: &str, runtime: GhostRuntime, handle: ScriptedShioriHandle) {
     run_bounded_watching(what, Progress::Count(&calls), move || {
         let _ = runtime.shutdown(CloseReason::User { scope: 0 });
     });
+}
+
+/// 注入する Tick 1 回で台詞の時計を進める幅（合成の ms）。
+const TICK_STEP_MS: u64 = 100;
+/// Tick を注入する実時間の最小間隔（`SwitchRig` と同じ・spin の反復ごとに投函して受信箱を溢れさせない）。
+const TICK_EVERY: Duration = Duration::from_millis(1);
+
+/// 足場は `TickerMode::Disabled` なので、台詞の時計は dispatcher へ合成の Tick を注入して進める。
+/// Tick は実時間で [`TICK_EVERY`] に 1 つまでに間引き、中断の線の合図を `Leave` が届くまで読んで返す
+/// （同じ読みで後ろの合図まで入ることがある）。子の通しのテスト 2 本が使う。
+fn signals_until_leave(world: &World, runtime: &GhostRuntime) -> Vec<NoUserBreakSignal> {
+    let wiring = world
+        .get_non_send::<UserBreakWiring>()
+        .expect("成功で中断の持ち物が据わる");
+    let mut signals = Vec::new();
+    let mut clock_ms = 0;
+    let mut last_tick: Option<Instant> = None;
+    let reached = wait_until("OnBoot の Leave", Progress::Unknown, || {
+        if last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
+            last_tick = Some(Instant::now());
+            clock_ms += TICK_STEP_MS;
+            let _ = runtime.dispatcher().send(DispatcherMsg::Tick {
+                now: MonotonicMs(clock_ms),
+            });
+        }
+        signals.extend(wiring.flag_rx().try_iter());
+        signals.contains(&NoUserBreakSignal::Leave)
+    });
+    assert!(
+        reached.is_ok(),
+        "Leave まで届かない（届いた分 {signals:?}）: {reached:?}"
+    );
+    signals
 }
 
 // 台本の出どころを起動の道で通すテスト（areka-P0-script-security-level・同じ組み方を借りる）。

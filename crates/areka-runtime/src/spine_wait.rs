@@ -24,7 +24,7 @@ use crate::crash_report_test_support as crash_report;
 ///
 /// 進みの目印がある待ち（[`Progress::Count`]）では「相手が状態を進めなかった時間」の上限、目印の
 /// 無い待ち（[`Progress::Unknown`]）では待ち始めからの総時間の上限として使う。
-/// 目印がある待ちの総時間の上限は別に [`WAIT_CAP`] で置く。
+/// 目印がある待ちの総時間の上限は別に `WAIT_CAP` で置く。
 ///
 /// # 反復回数で打ち切ってはならない
 ///
@@ -126,7 +126,7 @@ pub enum WaitFailure {
         /// 確かめの間でしか判じられないので、1 回が同期で長く塞がると打ち切りもその分遅れる。
         last_step: Duration,
     },
-    /// 相手は進み続けていたが、総時間の上限 [`WAIT_CAP`] に届いた。
+    /// 相手は進み続けていたが、総時間の上限 `WAIT_CAP` に届いた。
     CapReached {
         what: String,
         waited: Duration,
@@ -196,28 +196,15 @@ impl fmt::Display for WaitFailure {
 /// - 条件の確かめが打ち切りの判定より先。届いていれば、どれだけ時間がかかっていても成功。
 ///   最初の確かめで真なら時計を読まずに返る。
 /// - 目印は条件の確かめの直後に読む。前回より増えていれば進みの無い時間を 0 に戻す。
-///   増えないまま [`SPIN_WAIT`] に届けば `Stalled`、待ち始めから [`WAIT_CAP`] に届けば `CapReached`。
+///   増えないまま [`SPIN_WAIT`] に届けば `Stalled`、待ち始めから `WAIT_CAP` に届けば `CapReached`。
 /// - 目印なしは待ち始めから [`SPIN_WAIT`] に届けば `TimedOut`。
-/// - 反復の間は、待ち始めから [`DENSE_SPIN`] までは `yield_now`、その後は毎回 `pause(BACKOFF_SLEEP)`
+/// - 反復の間は、待ち始めから `DENSE_SPIN` までは `yield_now`、その後は毎回 `pause(BACKOFF_SLEEP)`
 ///   で CPU を返す（要件 2.5）。この休みは時刻を進めるためのものではなく、観測の内容を変えない。
 pub fn wait_until_with(
-    now: impl FnMut() -> Instant,
-    pause: impl FnMut(Duration),
-    what: &str,
-    progress: Progress<'_>,
-    cond: impl FnMut() -> bool,
-) -> Result<(), WaitFailure> {
-    wait_until_idle_with(now, pause, what, progress, SPIN_WAIT, cond)
-}
-
-/// 芯の内側の形。`idle` は目印つきの待ちの「相手が進まない」上限（[`wait_until_with`] では [`SPIN_WAIT`]）。
-/// 目印なし（[`Progress::Unknown`]）の総時間 [`SPIN_WAIT`] と、総時間の上限 [`WAIT_CAP`] は変わらない。
-pub(super) fn wait_until_idle_with(
     mut now: impl FnMut() -> Instant,
     mut pause: impl FnMut(Duration),
     what: &str,
     progress: Progress<'_>,
-    idle_limit: Duration,
     mut cond: impl FnMut() -> bool,
 ) -> Result<(), WaitFailure> {
     if cond() {
@@ -262,7 +249,7 @@ pub(super) fn wait_until_idle_with(
             last_move = t;
         }
         let idle = t.saturating_duration_since(last_move);
-        if idle >= idle_limit {
+        if idle >= SPIN_WAIT {
             return Err(WaitFailure::Stalled {
                 what: what(),
                 waited,
@@ -397,7 +384,7 @@ pub(super) fn wait_thread_end_with(
     }
 }
 
-/// std のスレッドの終わりを [`wait_thread_end`] で待ってから同じスレッドで `join` する。立った後の `join` は
+/// std のスレッドの終わりを `wait_thread_end` で待ってから同じスレッドで `join` する。立った後の `join` は
 /// OS のスレッドの後始末だけを待つので打ち切らない（待つ相手の処理はもう終わっている）。
 pub fn join_thread_bounded<T>(
     what: &str,
@@ -443,7 +430,7 @@ pub(super) const SETTLE_QUIET_ROUNDS: u32 = 50;
 
 /// 「尽きるのが正常」の回収ループ。`step` は 1 反復分の回収（drain）を行い**回収件数**を返す。
 ///
-/// 終了条件は **[`SETTLE_MIN`] を満たし かつ 連続 [`SETTLE_QUIET_ROUNDS`] 回 0 件**の両立で、
+/// 終了条件は **`SETTLE_MIN` を満たし かつ 連続 `SETTLE_QUIET_ROUNDS` 回 0 件**の両立で、
 /// どちらか一方では返らない。両立しないまま [`SPIN_WAIT`] を超えたら必ず返る（hang しない）。
 /// 反復の間は [`BACKOFF_SLEEP`] の短い sleep だけを挟む（有界 poll-backoff＝要件 4.4。
 /// **時刻を進めるための sleep ではない**——時刻前進は呼出側が前段で決定論的に注入し終えており、
@@ -500,8 +487,9 @@ pub(super) struct GpuSlots {
 
 /// 許可の待ちの「許可が 1 つも返らない」上限（要件 6.1・6.6）。
 ///
-/// 決め方（設計の議題 4）: 許可の持ち時間の最長の 2 倍以上・[`SPIN_WAIT`] の 30 秒を下回らない。件 1 の直しは
-/// 当てていないので材料は 4.1 の X1（負荷 44 本・最長 249.2 秒）で、その 2 倍を丸めた 500 秒（`load-repro.md` の ⑻）。
+/// 決め方（areka-test-binary-stability の設計の議題 4）: 許可の持ち時間の最長の 2 倍以上・[`SPIN_WAIT`] の
+/// 30 秒を下回らない。テストのプロセスが `STATUS_ACCESS_VIOLATION` で落ちる件の直しを当てる前に測った X1
+/// （負荷 44 本・最長 249.2 秒）が材料で、その 2 倍を丸めた 500 秒（`load-repro.md` の ⑻）。
 /// 許可の待ちには総時間の上限（[`WAIT_CAP`]）を効かせない（2026-11-02 開発者の裁定「案 2」・⑻）。返りが目印で、
 /// GPU のテストは有限なので、返り続ける限り待ちはいつか終わる。要件 6.1 の上限はこの 500 秒の線で満たす。
 /// 許可の待ちの `［止まった］` は負荷の下でも許す赤に入れない（1 つも返らないのは本当の待ち合い）。
@@ -549,8 +537,8 @@ impl fmt::Display for PermitWaitFailure {
 
 /// テストのプロセスに 1 つの数え（同時に 4 つ）。2 つでは負荷の下の赤が 0 件でも静かな机の `--bin areka` の
 /// 全部が中央値 95.2 秒に延び（直す前 64.1 秒）、8 つでは 64.7 秒でも負荷の下に赤が 2 件残った。間の 4 つを、
-/// 所要時間の線（直す前の 1.20 倍）とともに選んだ（`load-repro.md` の 5）。areka-test-binary-stability の
-/// 件 1 の直しの後も 4 のまま（5.1）。
+/// 所要時間の線（直す前の 1.20 倍）とともに選んだ（`load-repro.md` の 5）。areka-test-binary-stability で
+/// テストのプロセスが `STATUS_ACCESS_VIOLATION` で落ちる件を直した後も 4 のまま。
 static GPU_SLOTS: GpuSlots = GpuSlots::new(4);
 
 impl GpuSlots {
@@ -642,7 +630,8 @@ impl GpuSlots {
         })
     }
 
-    /// 待たずに取る（空きが無ければ `None`）。檻 16 が実時間を待たずに数えを確かめるための口。
+    /// 待たずに取る（空きが無ければ `None`）。`gpu_slots_hold_at_most_the_capacity_and_a_returned_permit_frees_one` が
+    /// 実時間を待たずに数えを確かめるための口。
     #[cfg(test)]
     pub(super) fn try_take(&'static self) -> Option<GpuPermit> {
         let mut held = self.held.lock().unwrap_or_else(PoisonError::into_inner);

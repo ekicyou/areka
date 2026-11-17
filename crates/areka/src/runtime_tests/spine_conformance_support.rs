@@ -17,8 +17,8 @@ use std::time::{Duration, Instant};
 
 use super::conformance_script::{LapStage, TICK_STEP_MS};
 use super::{
-    ExitKind, LoopDriver, Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriHandle,
-    ShioriBackend, SpineHarness, WaitFailure, shell_target, wait_until, wait_until_with,
+    Progress, RecordedCall, ScriptedShioriBackend, ShioriBackend, SpineHarness, WaitFailure,
+    wait_until_with,
 };
 use areka_emo_present::PresentCommand;
 use areka_ghost::dispatcher::DispatcherMsg;
@@ -432,7 +432,7 @@ impl StageSink for SpineHarness {
         taken
     }
 
-    /// SHIORI の呼び出し（`Status` を除く）の数＋採った表示の指令の数。
+    /// SHIORI の呼び出しの数（受け口は死活の問い合わせを記録しない）＋採った表示の指令の数。
     fn progress_probe(&self) -> Option<Box<dyn Fn() -> u64>> {
         let handle = self.shiori_handle.clone();
         Some(Box::new(move || {
@@ -678,18 +678,6 @@ fn injection_capacity(begin_ms: u64, limit_ms: u64) -> usize {
     (limit_ms - begin_ms).div_ceil(TICK_STEP_MS) as usize
 }
 
-/// 注入の種別名（記録と失敗メッセージのための短い語）。
-fn injection_kind(injection: &Injection) -> &'static str {
-    match injection {
-        Injection::KanadeTick => "kanade-tick",
-        Injection::DispatcherTick => "dispatcher-tick",
-        Injection::Mouse(_) => "mouse",
-        Injection::Choice(_) => "choice",
-        Injection::CloseRequest(_) => "close-request",
-        Injection::KanadeProbe => "kanade-probe",
-    }
-}
-
 // ===========================================================================
 // 表示指令の投影（design D3「記録の突合に使う投影関数」・task 3.2）
 // ===========================================================================
@@ -750,8 +738,7 @@ pub(super) fn project_display(command: &PresentCommand) -> DisplayProjection {
     }
 }
 
-// 主題単位の分割（R2.11）: 駆動器を縛る檻は兄弟ファイルへ置く。`spine.rs` は design が接続宣言
-// 3 本に固定しているため、本ファイルの側から接続する。
+// 主題単位の分割（R2.11）: 駆動器の檻は支援層の子として置く。
 #[path = "spine_conformance_support_tests.rs"]
 mod driver_tests;
 #[path = "spine_conformance_support_stage_tests.rs"]

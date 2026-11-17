@@ -1,7 +1,6 @@
 use super::*;
 use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 use temp_path_kit::TempPath;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 /// 選びの種は抽選の種と別に引く（spec: seriko-pattern-calls 要件 3.6）: `wire_runtime` が使う
 /// 2 つの種が違う（同じ種だと選びと抽選が同じ列を引き、別にした意味が無い）。
@@ -20,11 +19,7 @@ fn pick_and_draw_seeds_differ() {
 /// `wire_runtime` 本体は生の `u16` を触らず、この関数だけが位置引数へ落とす。
 #[test]
 fn build_boot_assets_for_pairs_shell_and_balloon_author_dpi() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE 等は無視・assets.rs 同流儀）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
+    // bake の WIC デコードに要る COM は、テストのプロセスの寿命の MTA（`crash_report_test_support`）が持つ。
     let assets = build_boot_assets_for(
         &emo2_root(),
         &emo2_balloon_root(),

@@ -124,7 +124,7 @@ fn drive_talk(
     let probe = || shiori.call_count() + received.get();
     let reached = wait_until(what, Progress::Count(&probe), || {
         // 会話が始まるまでは時刻を据え置く。着地より先に頭打ちへ届くと、dispatcher が最初の Tick で
-        // 会話の起点を頭打ちに付け、その後の時刻が動かず再生が凍る（load-repro.md ⑽）。
+        // 会話の起点を頭打ちに付け、その後の時刻が動かず再生が凍る（areka-test-binary-stability/load-repro.md ⑽）。
         if seen.borrow().first_talk().is_some() {
             *now = (*now + TICK_STEP_MS).min(cap);
         }

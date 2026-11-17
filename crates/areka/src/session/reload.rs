@@ -4,6 +4,7 @@
 //! `reload` の 2 つの入口は、ここの [`request_reload`] 1 本だけを通る。窓口は 終了の途中 → 別の読み直し
 //! → ゴースト切替 → シェル／バルーン切替 → ネットワーク更新 → インストール → 文脈 の順に判定し、
 //! 断りはどれも `warn!(reload_refused)` を 1 件残す（終了の途中だけは `debug!`・返事は落とす）。
+//! 最後に、読み直せる語の無い descript を `warn!(reload_descript_no_words)` で断る（`reload_refused` は出さない）。
 //! 受理したら `info!(reload_started)` を残し、対象ごとの始め方へ渡す。
 
 use std::collections::VecDeque;
@@ -88,7 +89,8 @@ impl RefusedReason {
 
 /// 進行中の印（World の NonSend・高々 1 つ）。在れば次の読み直しは断る。
 ///
-/// 消すのは対象ごとの終わり（6.2〜6.4）と終了の片付け [`discard_for_exit`]。
+/// 消すのは対象ごとの終わり（ゴーストの切替の [`on_switch_end`]・SHIORI の切れ目の [`poll_destroy`]・
+/// shell／balloon の列の [`skin_phase_ended`]／[`advance_skins`]）と終了の片付け [`discard_for_exit`]。
 pub(crate) struct ReloadInFlight {
     pub target: ReloadTarget,
     pub origin: ReloadOrigin,
@@ -670,9 +672,9 @@ fn end_skins(world: &mut World, reason: &str) {
     }
 }
 
-/// 差し替えの相の分かれ目（呼び手 `frame/switch.rs` の `finish_shell`／`finish_balloon`）: 印が `Skins` で、
-/// 終えようとしている相の `kind`・`dir`（`SkinSwitchInFlight.target.dir`）が窓口の控えた予約の鍵と一致
-/// するときだけ真。印があっても他人の予約（利用者の `\![change,shell,…]` など）なら偽。相は印を
+/// 差し替えの相の分かれ目（呼び手は `areka-runtime` の `frame/switch.rs` の `finish_shell`／`finish_balloon`
+/// で、口の束（`hooks.rs`）を通って届く）: 印が `Skins` で、終えようとしている相の `kind`・`dir`
+/// （`SkinSwitchInFlight.target.dir`）が窓口の控えた予約の鍵と一致するときだけ真。印があっても他人の予約（利用者の `\![change,shell,…]` など）なら偽。相は印を
 /// World から外して進むので、鍵は呼び手が渡す。
 pub(crate) fn skin_is_reload(world: &World, kind: SkinKind, dir: &Path) -> bool {
     world.get_non_send::<ReloadInFlight>().is_some_and(|f| {

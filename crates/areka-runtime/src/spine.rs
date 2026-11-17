@@ -1,4 +1,4 @@
-//! 決定論 spine テストハーネス（R8・tasks.md task 6.1）のうち、本体を引かない支えの 2 層。
+//! 決定論 spine テストハーネスのうち、本体を引かない支えの 2 層。
 //!
 //! - ⑴ 待ちの部品と GPU の装置の許可 `GpuPermit`（子のファイル `spine_wait.rs`）。
 //! - ⑵ 台本の SHIORI（`ScriptedShioriBackend` 一式・[`HOMEURL_RESOURCE`]・進行状態の記録の型と本体）と
@@ -8,7 +8,7 @@
 //! テストは本体の部品も使うので、本体の `runtime_tests/spine.rs` に置く（spec: runtime-crate-split 設計 D4）。
 //! このモジュールは `#[cfg(any(test, feature = "test-support"))]` で立ち、本体のテストは `test-support` で使う。
 //!
-//! **「sleep 不使用」の射程（R7.9・2026-07-31 に明確化）**: spine で言う sleep 不使用とは
+//! **「sleep 不使用」の射程（2026-07-31 に明確化）**: spine で言う sleep 不使用とは
 //! **時刻を進めるために sleep しない**ことであり（時刻前進は注入 Tick のみ＝決定論の源）、
 //! **有界待機の poll-backoff に用いる短い sleep は明示例外**である。反復回数のみの上限は CPU
 //! 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出すため、待機はすべて壁時計で有界化してある。
@@ -36,7 +36,7 @@ use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use self::hold_support::{HoldAt, HoldGate};
 
 // ===========================================================================
-// 進行状態の記録（第 2 系統・R3.8）の型と本体
+// 進行状態の記録（第 2 系統）の型と本体
 //
 // 台本の SHIORI（下）が書き込み、本体の適合一周走行（`runtime_tests/spine_conformance_support.rs`）が
 // 読む。定義は 1 つで、⑵ と同じ所に置く（spec: runtime-crate-split 段 2 の記録「設計からの外れ」）。
@@ -78,12 +78,12 @@ pub(crate) fn snapshot_status_calls(ledger: &StatusLedger) -> Vec<RecordedStatus
 }
 
 // ===========================================================================
-// ScriptedShioriBackend（DD-11・areka 側 spine ローカルの最小 fake）
+// ScriptedShioriBackend（areka 側 spine ローカルの最小 fake）
 //
 // `areka_kanade::ShioriBackend` を実装する台本 fake。プロセス spawn・実窓・i686 成果物を
-// 一切要さない（純 x64・R8.6）。応答・終了結果は事前登録し、`status()` は固定値を返す。
+// 一切要さない（純 x64）。応答・終了結果は事前登録し、`status()` は固定値を返す。
 // トレイト形状・戻り値型は `crates/areka-ghost/tests/ghost/spine_e2e_test.rs` の
-// `ScriptedShioriBackend`（task 4.1 成果物）を正典として写した最小版。
+// `ScriptedShioriBackend` を正典として写した最小版。
 // ===========================================================================
 
 /// backend が受領した 1 呼出の記録（照合用）。`Get`/`Notify` は id・references を保持する。
@@ -150,9 +150,9 @@ impl ScriptedShioriBackendBuilder {
     /// backend 本体（アクタースレッドへ move する側）と、テストが照合に使う
     /// [`ScriptedShioriHandle`] のペアを構築する。
     ///
-    /// # username prefetch の既定台本（task 8.2・R9.1/9.2・kanade prefetch boot 図）
+    /// # username prefetch の既定台本（kanade prefetch boot 図）
     ///
-    /// sylphya 機能（task 6.2/8.2）が正典 boot 系列へ **username SHIORI Resource GET prefetch**
+    /// sylphya 機能が正典 boot 系列へ **username SHIORI Resource GET prefetch**
     /// （OnInitialize NOTIFY の後・OnFirstBoot GET の前）を追加した。全 boot がこの prefetch を発行
     /// するため、テストが `username` GET を明示台本化していなければ **既定で `Ok(None)`（NoContent）**
     /// を 1 件補う。「カスタム username 無し」＝既定 username 世界（204→既定・既定は sakura 常駐）を
@@ -188,7 +188,7 @@ impl ScriptedShioriBackendBuilder {
 /// 更新の窓口が定常到達のたびに照会する Resource の名前（台本に無ければ NoContent で答える）。
 pub const HOMEURL_RESOURCE: &str = "homeurl";
 
-/// 台本化したテスト専用 SHIORI backend（`areka_kanade::ShioriBackend` 実装・R8.1/R8.6）。
+/// 台本化したテスト専用 SHIORI backend（`areka_kanade::ShioriBackend` 実装）。
 ///
 /// `OnBalloonTimeout` だけは列の照合の外（実時間で決まるので、台本に無ければ記録せず 204 で答える）。
 pub struct ScriptedShioriBackend {
@@ -196,9 +196,9 @@ pub struct ScriptedShioriBackend {
     notify_scripts: HashMap<String, VecDeque<Result<(), RequestError>>>,
     unload_script: Option<Result<ExitKind, ShutdownError>>,
     calls: Arc<Mutex<Vec<RecordedCall>>>,
-    /// 進行状態の記録（第 2 系統・R3.8）。既存 `calls` とは別の台帳で、書き込みのみ。
+    /// 進行状態の記録（第 2 系統）。既存 `calls` とは別の台帳で、書き込みのみ。
     status_calls: StatusLedger,
-    /// 「解かれるまで固まる」台本と解く手の置き場（要件 7.1・`spine_hold_support.rs`）。
+    /// 「解かれるまで固まる」台本と解く手の置き場（`spine_hold_support.rs`）。
     gate: Arc<HoldGate>,
 }
 
@@ -291,7 +291,7 @@ impl ShioriBackend for ScriptedShioriBackend {
 #[derive(Clone)]
 pub struct ScriptedShioriHandle {
     calls: Arc<Mutex<Vec<RecordedCall>>>,
-    /// 進行状態の記録（第 2 系統・R3.8）の共有台帳。取り出し口は [`Self::status_calls`]。
+    /// 進行状態の記録（第 2 系統）の共有台帳。取り出し口は [`Self::status_calls`]。
     status_calls: StatusLedger,
     gate: Arc<HoldGate>,
 }
@@ -308,7 +308,7 @@ impl ScriptedShioriHandle {
         self.calls.lock().expect("calls mutex poisoned").len() as u64
     }
 
-    /// 進行状態の記録（呼出 id と組み立て済み進行状態の対）のスナップショットを返す（R3.8）。
+    /// 進行状態の記録（呼出 id と組み立て済み進行状態の対）のスナップショットを返す。
     pub fn status_calls(&self) -> Vec<RecordedStatus> {
         snapshot_status_calls(&self.status_calls)
     }

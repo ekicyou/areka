@@ -1,12 +1,6 @@
 use super::{DPI, Entity, GhostWindows, PresentCommand, RecordedCall, SpineHarness};
 
-// ===========================================================================
-// task 6.2 spine 観測ケース（S1 boot→表示／S3 `\b` 配送／S4 `\b` なし完走）
-//
-// 6.1 の `SpineHarness` の上に構築する。実 sink 経路の末端（`EmoPresenter::apply` の実描画→
-// `read_back`）まで観測境界を延ばす（R8.2）。sleep 不使用・注入 Tick と有界 drain のみ（R8.3）・
-// 実 GPU（MTA・R8.4）・x64 完結（R8.6）。
-// ===========================================================================
+// 観測の補助（不透明の数・variant 名・DPI の差し替え）。
 
 /// BGRA 密配列（`stride=width*4`）のうち α バイト（各 4 バイト画素の index 3）が非 0 の画素数を数える。
 ///
@@ -35,16 +29,6 @@ pub(super) fn variant_name(cmd: &PresentCommand) -> &'static str {
         _ => "<unknown>",
     }
 }
-
-// ===========================================================================
-// 文字層 k 追従の実経路観測（emo-dpi-scaling task 7.2・D11-3/D11-4・R8.1/8.5/8.6）
-//
-// `run_text_scale_phase` は「presenter の現適用 k と文字層 binding の k が食い違っていれば
-// 組み直す」フェーズである。判定の権威（同値 k／未登録の no-op）は emo-text 側（task 7.1）に
-// あり、GPU 不要の判断分岐は frame.rs in-crate が持つ。ここでしか観測できないのは
-// **実 attach で `text_slot_view` が `Some` になっている本番経路**——すなわち「実際に文字層が
-// 新 k へ組み直されたか」そのものであり、以下 2 ケースがそれを実 GPU・実 fixture で固定する。
-// ===========================================================================
 
 /// バルーン窓の `DPI` を**現在値と必ず異なる値**へ差し替え、その新 DPI を返す。
 ///

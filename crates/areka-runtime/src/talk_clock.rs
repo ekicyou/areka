@@ -100,7 +100,7 @@ impl<T: dola::cue::CueSink + Clone> ClockedTextSink<T> {
 }
 
 /// 演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する（`areka_ghost::boot` の broadcast
-/// 登録先が要求する形・task 7.1）。broadcast 下では担当外 cue（`Emote` 等）も本 sink へ届くが、
+/// 登録先が要求する形）。broadcast 下では担当外 cue（`Emote` 等）も本 sink へ届くが、
 /// `observe_cue` は `cue.at` 一貫で epoch を単調 max 推定するため無害（設計 §Revalidation Triggers）。
 /// 内側 sink（本番は `EmoTextSink`）へ `CueSink::emit` で非改変転送し、先渡し（`preview`）も
 /// 時刻を観測せずに内側へ通す。選択待ちの始まり（`choice_wait_began`）も同じく内側へ通す。
@@ -230,8 +230,8 @@ mod tests {
     }
 
     /// boot の型境界（`dola::cue::CueSink + Clone + Send + 'static`）を `ClockedTextSink<T>` が
-    /// 保つことをコンパイル時に固定する（具体 `EmoTextSink` 結線は task 5.1 の責務ゆえ、
-    /// ここでは汎用の Send な `CueSink` 実装で型のみを表明する）。
+    /// 保つことをコンパイル時に固定する。型の境界だけを汎用の Send な `CueSink` 実装で確かめる
+    /// （具体の `EmoTextSink` との結線は `crates/areka/src/session/runtime_boot.rs` にある）。
     fn assert_send_clone_static<T: dola::cue::CueSink + Clone + Send + 'static>() {
         fn require<X: Send + Clone + 'static>() {}
         require::<ClockedTextSink<T>>();

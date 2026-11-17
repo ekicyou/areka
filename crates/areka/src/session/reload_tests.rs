@@ -34,7 +34,7 @@ use areka_runtime::shell_balloon_resolve::SkinCandidate;
 
 struct Rig {
     world: World,
-    _kanade: Receiver<KanadeMsg>,
+    kanade: Receiver<KanadeMsg>,
     ghost: String,
     _temp: TempPath,
 }
@@ -58,7 +58,7 @@ fn rig(label: &str) -> Rig {
         .to_string();
     Rig {
         world,
-        _kanade: kanade,
+        kanade,
         ghost,
         _temp: temp,
     }
@@ -479,7 +479,7 @@ fn ghost_reload_reserves_the_current_ghost() {
         .clone();
     let (verdict, events) = capture(|| request_reload(&mut rig.world, mcp(ReloadTarget::Ghost)));
     let sent = rig
-        ._kanade
+        .kanade
         .try_iter()
         .map(|m| match m {
             KanadeMsg::ChangeGhost(c) => Some((c.raise_event, c.target.dir)),
@@ -674,7 +674,7 @@ fn start_shiori_reload(rig: &mut Rig) -> (Vec<Option<GapRaise>>, ReplySender<Tal
     );
     let mut raises = Vec::new();
     let mut reply = None;
-    for msg in rig._kanade.try_iter() {
+    for msg in rig.kanade.try_iter() {
         if let KanadeMsg::AwaitTalkGap { raise, reply: r } = msg {
             raises.push(raise);
             reply = Some(r);
@@ -718,7 +718,7 @@ fn shiori_reload_raises_on_destroy_and_reached_reserves_the_switch() {
         .expect("受け手は印にある");
     let ((), events) = capture(|| drain(&mut rig.world));
     let sent = rig
-        ._kanade
+        .kanade
         .try_iter()
         .map(|m| match m {
             KanadeMsg::ChangeGhost(c) => Some((c.raise_event, c.target.dir)),
@@ -802,7 +802,7 @@ fn shiori_gap_replies_other_than_reached_drop_the_mark() {
             })
             .collect::<Vec<_>>();
         let switched = rig
-            ._kanade
+            .kanade
             .try_iter()
             .any(|m| matches!(m, KanadeMsg::ChangeGhost(_)));
         got.push((

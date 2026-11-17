@@ -180,11 +180,7 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
     //    目印は SHIORI の呼び出しの数だけ（解放の後は増えない＝30 秒で［止まった］）。
     let what = "kanade の停止通知の UI への到着";
     wait_until(what, Progress::Count(&probe), || {
-        if run_ghost_quit_phase(&mut harness.world) {
-            return true;
-        }
-        std::thread::sleep(BACKOFF);
-        false
+        run_ghost_quit_phase(&mut harness.world)
     })
     .unwrap_or_else(|failure| panic!("{failure}／{what}: 通知の配線が繋がっていない"));
     assert_eq!(

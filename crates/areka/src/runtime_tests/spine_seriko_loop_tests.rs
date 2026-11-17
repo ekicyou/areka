@@ -6,7 +6,7 @@ use super::{
     shell_target, wait_until,
 };
 
-/// 常時発火 rng（1/N 抽選で必ず 0 を返す＝毎境界で抽選通過・actor.rs／looper.rs `always_fire` と同旨）。
+/// 常時発火 rng（1/N 抽選で必ず 0 を返す＝毎境界で抽選通過・`areka-seriko` の `looper_tests.rs` の `always_fire` と同旨）。
 ///
 /// 「固定注入乱数列」の最小形（発見的 entropy 非依存・R7.1/7.2）。毎境界で抽選を通すので定数 0 で足りる
 /// （発火の順と回数は下の golden が固定する）。
@@ -64,6 +64,9 @@ fn shell_pattern_frame(cmd: &PresentCommand, shown_surface: u32, anim_id: u32) -
 /// `require_bind` を含む）まで有界スピンする。観測できた指令は drain 済みゆえ、復帰後の rx は talk 由来
 /// 指令について空——以降 `inject_seriko_tick` が発行する loop 指令だけを純粋に観測できる。
 ///
+/// `apply` が真なら汲んだ指令を**実 presenter へ適用**する。ループ継続の檻は「表示が生きていること」を
+/// readback で見るので、適用まで要る。偽なら指令は観測するだけで捨てる。
+///
 /// `require_bind` は `\![bind,...]` 貫通の証跡: bind 適用は表示中 scope で **binds 更新済みの Show 再発行**
 /// （`apply_bind`→`BindApplyOutcome::Changed`）を生むため、「shell surface が該当 bind id を含んで表示された」
 /// = current_binds へ当該 id が書き込まれた（＝bind ゲートが ON になった）ことの end-to-end 証跡になる。
@@ -90,7 +93,12 @@ fn shell_pattern_frame(cmd: &PresentCommand, shown_surface: u32, anim_id: u32) -
 /// worker へ譲れずに busy-spin が worker を CPU 飢餓させる。値 200µs は `areka-kanade` の
 /// `drive_ticks_until_disconnect` で開発者裁定により根治として採用されているものと同じ。決定論檻の
 /// 「no sleep」原則に対する**明示例外**（競合飢餓の根治には必須）。
-fn drive_shell_shown(harness: &mut SpineHarness, surface_id: u32, require_bind: Option<u32>) {
+fn drive_shell_shown(
+    harness: &mut SpineHarness,
+    surface_id: u32,
+    require_bind: Option<u32>,
+    apply: bool,
+) {
     let what = "OnBoot talk の scope0 shell の面の表示";
     let mut satisfied = false;
     let received = Cell::new(0u64);
@@ -113,6 +121,9 @@ fn drive_shell_shown(harness: &mut SpineHarness, surface_id: u32, require_bind: 
                 && require_bind.is_none_or(|id| binds.contains(id))
             {
                 satisfied = true;
+            }
+            if apply {
+                harness.wiring.apply_present(&mut harness.world, cmd);
             }
         }
         if satisfied {
@@ -184,7 +195,7 @@ fn spine_e2e_kero_blink_one_cycle_golden() {
         areka_seriko::seeded_rng(0),
     );
     // 表示中ゲート前提: surface2100 を scope0 shell へ表示（seriko ScopeStates に記録）。bind 不要（Random）。
-    drive_shell_shown(&mut harness, 2100, None);
+    drive_shell_shown(&mut harness, 2100, None, false);
 
     // 起動 tick（境界初期化・非跨ぎ・無発行）。以降は境界 1000 のみを跨いで 1 周を歩く（2000 未到達＝再抽選なし）。
     harness.inject_seriko_tick(0);
@@ -242,7 +253,7 @@ fn spine_e2e_sakura_blink_after_bind_one_cycle_golden() {
     );
     // 表示中＋bind ON 前提: scope0 shell surface1000 が binds に 1400 を含んで表示される
     // （\![bind] 貫通で current_binds へ 1400 が書き込まれた end-to-end 証跡＝bind 再発行 Show）。
-    drive_shell_shown(&mut harness, 1000, Some(1400));
+    drive_shell_shown(&mut harness, 1000, Some(1400), false);
 
     // 起動 tick（境界初期化）。以降は境界 1000 のみを跨ぎ 1 周を歩く（2000 未到達＝再抽選なし）。
     harness.inject_seriko_tick(0);
@@ -298,7 +309,7 @@ fn spine_e2e_sakura_blink_default_off_emits_nothing() {
         always_fire_rng(),
         areka_seriko::seeded_rng(0),
     );
-    drive_shell_shown(&mut harness, 1000, None); // bind なし＝1400/1401/1402 は全 OFF（R3.4 既定）
+    drive_shell_shown(&mut harness, 1000, None, false); // bind なし＝1400/1401/1402 は全 OFF（R3.4 既定）
 
     // 境界を複数跨ぐ seriko tick を注入し、発行が一切現れないことを固定する（起動 tick→1000/2000/…の境界跨ぎ）。
     harness.inject_seriko_tick(0); // 起動 tick（境界初期化）
@@ -357,48 +368,6 @@ fn shell_physical_size(harness: &SpineHarness, scope: u32) -> (u32, u32) {
         .presenter()
         .target_physical_size(shell_target(scope))
         .expect("表示済みの shell target は物理寸を持つ")
-}
-
-/// dispatcher tick で OnBoot talk を駆動しつつ、届いた `PresentCommand` を**実 presenter へ適用**し、
-/// scope0 shell が `surface_id` を表示する（＝実描画が成立する）まで有界スピンする。
-///
-/// [`drive_shell_shown`] は観測のみで指令を捨てるため presenter 側に表示が成立しない。ループ継続の
-/// 檻は「表示が生きていること」を readback で見るため、適用まで行うこの版が要る。
-///
-/// 有界性は [`drive_shell_shown`] と同じく**進みの目印つきの [`wait_until`] ＋ 200µs poll-backoff sleep**（R7.9）。
-/// 目印も同じ（SHIORI の呼び出しの数と汲んだ指令の数の和・seriko の tick を注入しないので絞らない）。
-/// 反復回数上限が CPU 競合下で数 ms で尽きる偽陽性、R7.8 との判別根拠（観測 `shown` はラッチ・呼出点の
-/// 台本は全 cue `at=0.0` ＝観測を壊す後続 cue が無い）、`yield_now`（Windows では `SwitchToThread` ＝同一
-/// プロセッサにしか譲らない）を避ける理由、および「no sleep」原則への明示例外である旨は
-/// [`drive_shell_shown`] の doc を参照。
-fn drive_shell_shown_and_presented(harness: &mut SpineHarness, surface_id: u32) {
-    let what = "OnBoot talk の scope0 shell の面の表示と適用";
-    let mut shown = false;
-    let received = Cell::new(0u64);
-    let shiori = harness.shiori_handle.clone();
-    let probe = || shiori.call_count() + received.get();
-    let mut now = 0u64;
-    wait_until(what, Progress::Count(&probe), || {
-        now += 1;
-        harness.inject_dispatcher_tick(now);
-        for cmd in harness.wiring.drain_received() {
-            received.set(received.get() + 1);
-            if matches!(&cmd, PresentCommand::ShowSurface { target, surface_id: sid, .. }
-                if *target == shell_target(0) && *sid == surface_id)
-            {
-                shown = true;
-            }
-            harness.wiring.apply_present(&mut harness.world, cmd);
-        }
-        if shown {
-            return true;
-        }
-        std::thread::sleep(Duration::from_micros(200));
-        false
-    })
-    .unwrap_or_else(|failure| {
-        panic!("{failure}／{what}: surface {surface_id} が出ない（boot→talk→sink 経路不通）")
-    });
 }
 
 /// seriko tick を 1 発注入して 1 件の指令を回収し、**実 presenter へ適用**したうえで、その指令が
@@ -474,7 +443,7 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
 
     // 実 attach（視覚資源を本番経路で生成）→ 表示中ゲート成立まで talk を駆動して実適用する。
     harness.attach_all();
-    drive_shell_shown_and_presented(&mut harness, 2100);
+    drive_shell_shown(&mut harness, 2100, None, true);
 
     let base_k0 = harness
         .wiring

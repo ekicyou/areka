@@ -546,7 +546,6 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
 
     // ── 段 1: 起動（注入なし・組立が起こした起動の系列が最後の basewareversion まで揃うのを待つ） ──
     let probe = handle.clone();
-    sink.advance_gate = AdvanceGate::Always;
     let report = handle.clone();
     let boot = expect_stage_with(
         driver.run_stage(
@@ -560,7 +559,7 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
         ),
         || {
             format!(
-                "起動の系列の呼出 {} 件（最後の basewareversion で成立）。**この段は注入を 1 件も行わない**ので、0 件なら組立そのものが有界時間内に走っていない——一周の駆動ではなく、既存の兄弟テストが同じ待ちで共有する起動の飢餓（`spine_boot_smoke_tests.rs` と `spine_conformance_support_tests.rs` の `boot_finished`）と同じ系統である",
+                "起動の系列の呼出 {} 件（最後の basewareversion で成立）。**この段は注入を 1 件も行わない**ので、0 件なら組立そのものが有界時間内に走っていない——一周の駆動ではなく、既存の兄弟テストが同じ待ちで共有する起動の飢餓（`spine_close_wiring_tests.rs`・`spine_conformance_support_tests.rs` の `boot_finished`）と同じ系統である",
                 report.non_status_calls().len()
             )
         },
@@ -874,8 +873,6 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
     harness.shutdown_bounded();
 }
 
-// 主題単位の分割（R2.11）: 3 つの列の等値照合は兄弟ファイルへ置き、**本ファイルの末尾から**接続する。
-// 本ファイルは 1 ファイル 1,000 行の見張りまで余白が僅かで、`spine.rs` の接続宣言は 3 本で確定済み
-// ゆえ、経路をそちらへ増やさない（task 2.3 が支援層で踏んだ手順と同じ）。
+// 主題単位の分割（R2.11）: 3 つの列の等値照合（判定）は兄弟ファイルへ分け、本ファイルの末尾から接続する。
 #[path = "spine_conformance_judge.rs"]
 mod conformance_judge;

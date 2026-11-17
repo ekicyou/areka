@@ -5,11 +5,11 @@
 //! # 片割れの分担
 //!
 //! 配置の crate の片割れ（`crates/areka-placement/src/spawn_zorder_pair_deferred_tests.rs`）が、
-//! 配置の本番ファイル 4 本・窓の印・配置の `src` の木を見る。ここは`areka-runtime` の 3 本（グループ機構が
+//! 配置の本番ファイル 4 本・窓の印・配置の `src` の木を見る。ここは `areka-runtime` の 3 本（グループ機構が
 //! 新設したもの）・帯の語の持ち主のファイル・`areka-runtime` の `src` の木を見る。wintf 側の
 //! 本番ファイル 8 本は `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` が持つ。
 //! 語の表と走査器は 2 つの片割れが共に使う `areka_placement::test_support::zorder_pair_deferred` に
-//! 1 つだけあり、ここでは`areka-runtime` の実物で較正する。
+//! 1 つだけあり、ここでは `areka-runtime` の実物で較正する。
 //!
 //! # 走査の範囲・語の表・行コメントを除いてから探す理由
 //!
@@ -26,7 +26,7 @@ use areka_placement::test_support::zorder_pair_deferred::{
     code_only, deferred_hits, read_source, rust_sources_under, zorder_production_sources,
 };
 
-/// 重なり順のグループ機構（`areka-P0-scope-zorder-pinning`）が`areka-runtime` に新設した本番ファイル
+/// 重なり順のグループ機構（`areka-P0-scope-zorder-pinning`）が `areka-runtime` に新設した本番ファイル
 /// （`CARGO_MANIFEST_DIR` からの相対）。下の
 /// `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
 /// 「`areka-runtime` に実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
@@ -36,10 +36,10 @@ const PRODUCTION_FILES: [&str; 3] = [
     "src/frame/zorder_descript.rs",
 ];
 
-/// 帯の語を持つ`areka-runtime` の本番ファイル（`stay-on-top-directives` の受け口と取り出しの相）。
+/// 帯の語を持つ `areka-runtime` の本番ファイル（`stay-on-top-directives` の受け口と取り出しの相）。
 const BAND_FILES: [&str; 2] = ["src/window_state_cue.rs", "src/frame/window_state.rs"];
 
-/// 先送り語彙は、重なり順の 2 機構が書いた`areka-runtime` の本番ファイルのコードに 1 つも無い。
+/// 先送り語彙は、重なり順の 2 機構が書いた `areka-runtime` の本番ファイルのコードに 1 つも無い。
 #[test]
 fn deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources() {
     assert_vocabulary_absent(

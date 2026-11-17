@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::frame::test_support::count_level;
-use crate::source_text_test_support::code_only;
+use crate::source_text_test_support::{code_only, index_of};
 use areka_parsers::sakura::RAISE_TAG_CARRIER;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
@@ -342,10 +342,8 @@ fn t_wsc11_disconnected_receiver_is_recorded_and_does_not_panic() {
 fn t_wsc12_zorder_wake_is_marked_once_after_the_send() {
     let code = code_only(include_str!("window_state_cue.rs"));
     assert_eq!(code.matches("tick_wake::mark(").count(), 1);
-    let mark_at = code
-        .find("tick_wake::mark(tick_wake::ZORDER)")
-        .expect("重なりの旗を立てる");
-    let send_at = code.find("self.tx.send(").expect("送り出しがある");
+    let mark_at = index_of(&code, "tick_wake::mark(tick_wake::ZORDER)");
+    let send_at = index_of(&code, "self.tx.send(");
     assert!(
         send_at < mark_at,
         "旗は送り出しの後（送出={send_at}・旗={mark_at}）"

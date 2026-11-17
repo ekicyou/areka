@@ -3,8 +3,8 @@
 //! `map_display_command`（`DisplayCommand`→`PresentCommand` の純変換・DD-5・`target_map` を利用）と
 //! `PresentBridge`（seriko の `SurfaceOutput` 本番実装・`mpsc::Sender` へ非ブロック送出）を
 //! 所有する。`ShowBalloon`／`HideBalloon` はバルーン表示対象へ `BindSet::default()` 付きで
-//! 配送する（R5.1／R5.2）。送出失敗（受信端 drop）は `debug!`・非数値 scope の drop は
-//! `warn!` で log-first 観測する（R3.7・design.md「Error Categories and Responses」）。
+//! 配送する（R5.1／R5.2）。送出失敗（受信端 drop）は `debug!`・数でない、または大きすぎる
+//! scope の drop は `warn!` で log-first 観測する（R3.7・design.md「Error Categories and Responses」）。
 //!
 //! 本ファイルは task 2.4（`map_display_command` 純変換）と task 2.5（`PresentBridge`＝
 //! `SurfaceOutput` 本番実装・UI 配送）を実装する。定義を替えた合図 `Rebased` は、橋渡しが持つ
@@ -36,8 +36,8 @@ use crate::target_map::{balloon_target, scope_of, shell_target};
 /// - `MoveShift { scope, x, y }` / `MoveShiftBalloon { scope, x, y }` → シェル／バルーン表示対象の
 ///   `MoveShift`（値はそのまま・spec: seriko-pattern-calls 要件 7.1・7.6）。
 ///
-/// `reply` は常に `None`（撃ちっぱなし・fire-and-forget）。scope（`ActorKey`）が非数値のとき
-/// （`scope_of` が `None`）は本関数も `None` を返し、呼び手（`PresentBridge::send`）が `warn!` ＋
+/// `reply` は常に `None`（撃ちっぱなし・fire-and-forget）。scope（`ActorKey`）が数でない、
+/// または大きすぎるとき（`scope_of` が `None`）は本関数も `None` を返し、呼び手（`PresentBridge::send`）が `warn!` ＋
 /// 当該指令 drop で握り潰さず log-first 観測する（R3.7）。
 ///
 /// `DisplayCommand` は `#[non_exhaustive]` でないため網羅 `match` で全経路を尽くす
@@ -141,9 +141,9 @@ impl PresentBridge {
 impl SurfaceOutput for PresentBridge {
     /// seriko worker から届いた `DisplayCommand` を写像し、成功時のみ UI へ非ブロック配送する。
     ///
-    /// - 写像成功（数値 scope）: `PresentCommand` を `tx.send`。受信端 drop（＝shutdown 中の
+    /// - 写像成功（`scope_of` が番号を返す scope）: `PresentCommand` を `tx.send`。受信端 drop（＝shutdown 中の
     ///   期待事象）で失敗しても **panic せず** `debug!` で観測して破棄する（log-first・R3.7）。
-    /// - 写像不能（非数値 scope＝[`map_display_command`] が `None`）: `warn!` で観測して drop する
+    /// - 写像不能（数でない、または大きすぎる scope＝[`map_display_command`] が `None`）: `warn!` で観測して drop する
     ///   （握り潰さない・design.md「Error Categories and Responses」配送時）。
     ///
     /// `SurfaceOutput::send` は infallible（`-> ()`）契約ゆえ、いかなる配送失敗でも panic させない。
@@ -157,7 +157,7 @@ impl SurfaceOutput for PresentBridge {
         match map_display_command(command) {
             // 写像成功: UI フレーム drain 側へ非ブロック配送。
             Some(cmd) => self.deliver(cmd),
-            // 写像不能（非数値 scope）: 握り潰さず warn! で観測して drop（R3.6/R3.7・DD-5）。
+            // 写像不能（数でない、または大きすぎる scope）: 握り潰さず warn! で観測して drop（R3.6/R3.7・DD-5）。
             None => {
                 tracing::warn!(
                     "PresentBridge: 数でない、または大きすぎる scope の DisplayCommand を写像できず drop しました"

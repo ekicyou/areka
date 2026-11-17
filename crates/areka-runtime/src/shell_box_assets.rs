@@ -25,18 +25,18 @@ pub struct ShellBoxAssets {
     pub aliases: BTreeMap<String, Vec<u32>>,
     /// 面の表に在るサーフェス番号（`EmoWorld::surface_ids`）。
     pub surface_ids: BTreeSet<u32>,
-    /// 箱の `font.name` のフォントを探す場所の順（[`box_font_search_dirs`]）。
+    /// 箱の `font.name` のフォントを探す場所の順（`box_font_search_dirs`）。
     pub font_dirs: Vec<PathBuf>,
     /// スコープごとの戻り先の候補の並び（`DefaultSurfaces::candidates`・descript-window-keys 要件 3.2）。
     pub fallback_candidates: BTreeMap<ActorKey, Vec<u32>>,
-    /// スコープ → 箱の名前 → 矢印の絵（シェルのフォルダから解いたもの・[`resolve_box_markers`]）。
+    /// スコープ → 箱の名前 → 矢印の絵（シェルのフォルダから解いたもの・`resolve_box_markers`）。
     /// 足りない番号は文字の層がスコープの普通のバルーンの絵で埋める（balloon-scroll-arrows 要件 7.3）。
     pub markers: BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>,
 }
 
 impl ShellBoxAssets {
     /// 文字の層へ渡す（装着の相とシェルの切替が呼ぶ）。箱の配置の直後に戻り先の引き直しを呼ぶ。`\s` の解決の閉包は、別名の写しから
-    /// seriko と同じ解決器を組み、面の表に在る番号だけを通す（[`resolve_for_text`]）。
+    /// seriko と同じ解決器を組み、面の表に在る番号だけを通す（`resolve_for_text`）。
     pub fn hand_to(self, runtime: &mut TextLayerRuntime, world: &mut World) {
         let ShellBoxAssets {
             layout,

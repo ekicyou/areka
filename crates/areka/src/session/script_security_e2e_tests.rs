@@ -8,16 +8,11 @@
 
 use super::*;
 use crate::session::ghost_switch_test_support::standard_script;
-use areka_ghost::dispatcher::DispatcherMsg;
-use areka_kanade::{MonotonicMs, ShioriUnblock};
-use areka_runtime::spine::wait_until;
+use areka_kanade::ShioriUnblock;
 use areka_runtime::user_break_cue::NoUserBreakSignal;
 use shiori_host32_host::{
     ExitKind, HelperStatus, RequestError, RequestHeaders, ShutdownError, ValueReply,
 };
-
-/// 注入する Tick 1 回で台詞の時計を進める幅（合成の ms）。
-const TICK_STEP_MS: u64 = 100;
 
 /// 区間に入って出るだけの起動の台本（`Leave` は出どころによらず届く＝読み終わりの目印）。
 const ON_BOOT: &str = r"\0\![enter,nouserbreakmode]\![leave,nouserbreakmode]\e";
@@ -76,7 +71,6 @@ impl ShioriBackend for LeveledBackend {
 /// emo2 検体を偽の SHIORI で起こし、`OnBoot` のトークが中断を禁じる線へ送った合図を
 /// `Leave` まで読んで返す（読み終えたら降ろす）。
 fn boot_signals(on_boot_level: Option<&'static str>) -> Vec<NoUserBreakSignal> {
-    com();
     let rig = rig();
     let sample = acquire_emo2();
     let (inner, handle) = standard_script(ON_BOOT).build();
@@ -89,24 +83,7 @@ fn boot_signals(on_boot_level: Option<&'static str>) -> Vec<NoUserBreakSignal> {
     let runtime = boot_runtime(&mut world, inputs, &rig.sources, mpsc::channel().0, None)
         .expect("偽の SHIORI と emo2 検体で実行系が起きる");
 
-    let wiring = world
-        .get_non_send::<UserBreakWiring>()
-        .expect("成功で中断の持ち物が据わる");
-    // 足場は `TickerMode::Disabled` なので、台詞の時計は dispatcher へ Tick を注入して進める。
-    let mut signals = Vec::new();
-    let mut clock_ms = 0;
-    let reached = wait_until("OnBoot の中断の合図", Progress::Unknown, || {
-        clock_ms += TICK_STEP_MS;
-        let _ = runtime.dispatcher().send(DispatcherMsg::Tick {
-            now: MonotonicMs(clock_ms),
-        });
-        signals.extend(wiring.flag_rx().try_iter());
-        signals.contains(&NoUserBreakSignal::Leave)
-    });
-    assert!(
-        reached.is_ok(),
-        "Leave まで届かない（届いた分 {signals:?}）: {reached:?}"
-    );
+    let mut signals = signals_until_leave(&world, &runtime);
 
     shut_down("script_security ghost shutdown", runtime, handle);
     drop(sample);

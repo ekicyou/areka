@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use super::{SETTLE_MIN, SETTLE_QUIET_ROUNDS, SPIN_WAIT, settle_bounded, settle_bounded_with};
 
 // ===========================================================================
-// task 4.1 — 「尽きるのが正常」の回収待ちの有界化（要件 4.2・4.4／design Flow 4・C3）
+// 「尽きるのが正常」の回収待ちの有界化
 //
 // [`settle_bounded`] は 2 つの条件の**両方**が満たされるまで返らない（最小持続 [`SETTLE_MIN`]
 // かつ 連続空観測 [`SETTLE_QUIET_ROUNDS`] 回）。本ファイルはヘルパを**単独で**駆動し、
@@ -39,7 +39,7 @@ fn drive(per_step: Duration, mut outcome: impl FnMut(u32) -> usize) -> u32 {
     steps.get()
 }
 
-/// 連続空観測が先に満たされても、最小持続 [`SETTLE_MIN`] に達するまで返らない（要件 4.2）。
+/// 連続空観測が先に満たされても、最小持続 [`SETTLE_MIN`] に達するまで返らない。
 ///
 /// 毎反復 0 件（＝`SETTLE_QUIET_ROUNDS` は早々に満たされる）・1 反復 1ms の注入時計。
 /// 返るのは `SETTLE_MIN` を満たす反復。最小持続の条件を外すと呼出回数が
@@ -61,7 +61,7 @@ fn settle_bounded_does_not_return_before_the_minimum_duration() {
     );
 }
 
-/// 最小持続が先に満たされても、連続 [`SETTLE_QUIET_ROUNDS`] 回の空観測に達するまで返らない（要件 4.2）。
+/// 最小持続が先に満たされても、連続 [`SETTLE_QUIET_ROUNDS`] 回の空観測に達するまで返らない。
 ///
 /// 1 反復 100ms の注入時計＝2 反復で `SETTLE_MIN` を満たす。最初の 1 反復だけ 1 件回収して
 /// 連続空回数を 0 へ戻すので、返るのは `1 + SETTLE_QUIET_ROUNDS` 反復目。連続空回数の条件を
@@ -88,7 +88,7 @@ fn settle_bounded_does_not_return_before_the_consecutive_quiet_rounds() {
     );
 }
 
-/// 一度も空にならなくても上限 [`SPIN_WAIT`] で必ず返る（hang しない・要件 4.2）。
+/// 一度も空にならなくても上限 [`SPIN_WAIT`] で必ず返る（hang しない）。
 #[test]
 fn settle_bounded_returns_at_the_upper_bound_even_when_never_quiet() {
     let per_step = Duration::from_secs(1);
@@ -103,7 +103,7 @@ fn settle_bounded_returns_at_the_upper_bound_even_when_never_quiet() {
     );
 }
 
-/// 既定の [`settle_bounded`] は実時計に繋がっており、panic せずに返る（要件 4.4・design C3）。
+/// 既定の [`settle_bounded`] は実時計に繋がっており、panic せずに返る。
 ///
 /// 実時間で判定するのは**下限だけ**（単調時計では下回りようがない）。上限は測らないので
 /// 並列負荷で赤にならない。

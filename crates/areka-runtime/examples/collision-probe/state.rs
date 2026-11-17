@@ -30,6 +30,6 @@ pub(super) struct ProbeBoot {
     pub(super) phase: ProbePhase,
     /// 現表示サーフェスの **native 原寸**（作者定義 px・WaitingAttach で確定・ログ用）。
     pub(super) native_size: (u32, u32),
-    /// 本番 resize で適用した **k 適用後の物理寸**（`target_physical_size` の値・③ assert の期待側）。
+    /// 本番 resize で要求した **k 適用後の物理寸**（`target_physical_size` の値・③ の失敗メッセージ用）。
     pub(super) physical_size: (u32, u32),
 }

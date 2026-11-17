@@ -9,7 +9,7 @@
 //! 許可の持ち手・生きているスレッドの一覧・積み上げを、決めた行の形で標準エラーの OS のハンドルへ直に書き
 //! （libtest の捕まえも `std` の標準エラーの錠も通らない）、次の受け手へ回す。ふだんの緑の走行では何も書かない。
 //!
-//! 同じ初期化子で、プロセスの寿命の MTA を立てる（`CoIncrementMTAUsage`・件 3 の直し）。テストのスレッドが
+//! 同じ初期化子で、プロセスの寿命の MTA を立てる（`CoIncrementMTAUsage`）。テストのスレッドが
 //! 足場ごとに入って出る一時的な MTA が解体され、放された DLL を後から呼んで落ちるのを防ぐ（2026-11-01 の対照の
 //! 走行で候補 B と決めた）。そのため、COM を初期化していないテストのスレッドも暗黙の MTA に居る。
 //!
@@ -146,7 +146,7 @@ static WRITING: AtomicBool = AtomicBool::new(false);
 
 /// プロセスの読み込みの初め（libtest の main より前）に 1 度だけ走る。
 pub extern "C" fn install() {
-    // 一時的な MTA の解体の後に放された DLL を呼ぶ落ち（件 3）を防ぐ: プロセスの寿命の MTA を立てる
+    // 一時的な MTA の解体の後に放された DLL を呼ぶ落ちを防ぐ: プロセスの寿命の MTA を立てる
     // （クッキーは返さない・プロセスの終わりまで持つ）。
     // SAFETY: 引数の無い COM の呼び出し。
     if let Err(e) = unsafe { CoIncrementMTAUsage() } {
@@ -198,7 +198,7 @@ static MISSED: AtomicUsize = AtomicUsize::new(0);
 /// 表に入らなかった許可の行の番号。
 const NO_ROW: usize = usize::MAX;
 
-/// 今のスレッドを許可の持ち手として載せ、行の番号を返す（入りきらなければ [`NO_ROW`]）。
+/// 今のスレッドを許可の持ち手として載せ、行の番号を返す（入りきらなければ `usize::MAX`）。
 pub fn hold() -> usize {
     let thread = std::thread::current();
     let name = thread.name().unwrap_or("");
@@ -525,8 +525,8 @@ fn crash_filter_is_installed_before_the_tests_start() {
     );
 }
 
-/// 初期化子はプロセスの寿命の MTA を立てている（件 3 の直し）: COM を初期化していない新しいスレッドも、
-/// 暗黙の MTA に居る。
+/// 初期化子はプロセスの寿命の MTA を立てている（一時的な MTA の解体の後に放された DLL を呼ぶ落ちの直し）:
+/// COM を初期化していない新しいスレッドも、暗黙の MTA に居る。
 #[test]
 fn initializer_keeps_a_process_lifetime_mta() {
     use windows::Win32::System::Com::{
@@ -575,15 +575,10 @@ fn line_cuts_an_overlong_line_at_a_char_boundary_with_a_mark() {
 
 /// 較正（要件 1.2）: 許可を取り `GraphicsCore` を作った後（GPU の DLL を読み込んだ後も受け手が生きていることを
 /// 見るため）、名前の無いスレッドで例外を起こす。出力に落ちたスレッド（名前なし）・持ち手の行のこのテストの名前・
-/// 生きているスレッドの一覧が出ることを `load-flake.ps1` の summary で見る（タスク 2.4）。
+/// 生きているスレッドの一覧が出ることを `load-flake.ps1` の summary で見る。
 #[test]
 #[ignore = "較正: わざとプロセスを落とす（要件 1.2）"]
 fn crash_report_names_the_running_test() {
-    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
     let _gpu = crate::spine::GpuPermit::take();
     let _core = wintf::ecs::GraphicsCore::new().expect("GraphicsCore::new 失敗");
     // `std::thread::spawn` は名前を付けない（`Builder::name` を使わない）。

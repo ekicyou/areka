@@ -276,7 +276,7 @@ pub fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32, Carrie
     if shows.is_empty() && binds.is_empty() {
         return;
     }
-    // 送り手を先に確かめる: 無いのに「出し直す」と書かない（62 番）。
+    // 送り手を先に確かめる: 無いのに「出し直す」と書かない。
     let Some(sink) = (SessionHooks::of(world).seriko_sink)(world) else {
         warn!(
             event = "reload_shell_replay_unavailable",

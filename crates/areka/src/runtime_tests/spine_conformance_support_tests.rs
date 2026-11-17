@@ -2,9 +2,8 @@
 //!
 //! `spine_conformance_support.rs` は 1 ファイル 1,000 行の分量規律（R2.11・
 //! `.kiro/steering/structure.md`）に収まらないため、**主題単位に分けて接続する**——駆動器と
-//! 進行状態の記録の本体は支援層に残し、駆動器を縛る檻だけを本ファイルへ分けた。接続宣言は支援層の
-//! 末尾に置く（`spine.rs` は design が接続宣言 3 本に固定しているため、
-//! 経路をそちらへ増やさない）。
+//! 進行状態の記録の本体は支援層に残し、駆動器を縛る檻だけを本ファイルへ分けた。駆動器の檻は
+//! 支援層の子として置く。
 //!
 //! 本ファイルは**期待値を持たない**。段の区間の逐語は `spine_conformance_script.rs` の領分であり、
 //! 檻は自分が使う段を自前で宣言する（借りると、台本の宣言を変えたときに檻が黙って追随する）。
@@ -16,13 +15,25 @@ use std::time::{Duration, Instant};
 
 use super::super::settle_bounded;
 use super::super::test_support::boot_finished;
+use super::super::{ExitKind, LoopDriver, ScriptedShioriHandle, shell_target, wait_until};
 use super::{
     ClosedInboxes, Inbox, Injection, LapDriver, LapStage, PresentCommand, RecordedCall,
-    StageFailure, StagePlan, StageSink, WaitFailure, WaitInjection, injection_kind,
+    StageFailure, StagePlan, StageSink, WaitFailure, WaitInjection,
 };
-use super::{ExitKind, LoopDriver, ScriptedShioriBackend, ScriptedShioriHandle, SpineHarness};
-use super::{Progress, shell_target, wait_until};
+use super::{Progress, ScriptedShioriBackend, SpineHarness};
 use areka_kanade::{ChoiceInput, CloseReason, MouseEventKind, MouseInput};
+
+/// 檻の偽物が注入を記録するときの種別名。
+fn injection_kind(injection: &Injection) -> &'static str {
+    match injection {
+        Injection::KanadeTick => "kanade-tick",
+        Injection::DispatcherTick => "dispatcher-tick",
+        Injection::Mouse(_) => "mouse",
+        Injection::Choice(_) => "choice",
+        Injection::CloseRequest(_) => "close-request",
+        Injection::KanadeProbe => "kanade-probe",
+    }
+}
 
 // 段の駆動器の受け入れ確認（task 2.3・R2.10・R3.2）
 // ===========================================================================

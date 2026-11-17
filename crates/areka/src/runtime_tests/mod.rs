@@ -26,14 +26,9 @@ mod shell_carry;
 pub(crate) mod spine;
 mod strict_judges;
 
-// タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
-// 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
-// 持つので、到達性・相順・字面の 3 方向でここが受け持つ。
+// タグ入口の結線と shell 設定の起動時結線のうち、本体の側の字面（`runtime_boot.rs`・`main.rs`）を押さえる 2 本。
 #[path = "zorder_wiring_tests.rs"]
 mod zorder_wiring_tests;
-// 毎フレームの相の登録先の檻（areka-P0-present-gpu-transform-scale task 4.2・T-N10）。
-// 裁定 2026-09-12 で登録先が 1 巡の末尾の段から `Update` へ移った——絵の着地を文字と同じ巡に
-// 揃えるための移動であり、実窓を持たない檻には挙動として映らないので、字面と `Schedules` の
-// 構造の両方から押さえる。
+// 終了相（`ghost_quit_system`）の登録の形と、毎フレームの相が無い World での終了の 1 本。
 #[path = "frame_schedule_tests.rs"]
 mod frame_schedule_tests;

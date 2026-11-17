@@ -1,4 +1,4 @@
-//! 偽の SHIORI（[`ScriptedShioriBackend`]）の「解かれるまで固まる」台本（要件 7.1）。
+//! 偽の SHIORI（[`ScriptedShioriBackend`](super::ScriptedShioriBackend)）の「解かれるまで固まる」台本。
 //!
 //! 指定した呼び出し（GET・NOTIFY の id 指定・UNLOAD）に入ると、外から解く手（`unblock_handle`）が
 //! 呼ばれるまで待ち、解かれたら失敗を返す。

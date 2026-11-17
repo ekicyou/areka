@@ -1,5 +1,5 @@
 // =============================================================================
-// BalloonLifecycleSink 決定論テスト（task 2.1・Requirements 4.1 / 4.5 / 4.8 / 7.2 / 7.8）
+// BalloonLifecycleSink 決定論テスト（Requirements 4.1 / 4.5 / 4.8 / 7.2 / 7.8）
 //
 // design.md「Testing Strategy → Unit Tests ②」の 4 系統:
 //   ⑴ 初回 emit の `TalkStarted` 先行（Ordering 契約）
@@ -21,7 +21,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{TryRecvError, channel};
 use std::time::Duration;
 
-// task 6.3（台本レベルの観測）で使う実経路の部品。
+// 台本レベルの会話終了観測で使う実経路の部品。
 use areka_ghost::sink::BootCueSink;
 use areka_sakura::CompiledTalk;
 use areka_sakura::duration::CHAR_NOMINAL_MS;
@@ -380,7 +380,7 @@ fn construction_and_clone_emit_nothing() {
 }
 
 // =============================================================================
-// 台本レベルの会話終了観測（task 6.3・Requirements 4.1 / 9.1）
+// 台本レベルの会話終了観測（Requirements 4.1 / 9.1）
 //
 // 上の 9 本は手組みの `TalkCue` を直接 `emit` する単体檻である。ここから下は
 // **実台本** を parse → compile → `CuePlayer` と通し、本番と同じ経路で sink が受け取る
@@ -443,7 +443,7 @@ fn ends_of(signals: &[TalkLifecycleSignal]) -> Vec<f64> {
         .collect()
 }
 
-/// 完了条件（task 6.3）: **待機を含む台本**で占有終端が台本の占有区間の終端と一致する
+/// 完了条件: **待機を含む台本**で占有終端が台本の占有区間の終端と一致する
 /// （Requirement 4.1）。あわせて会話開始の通知が占有終端の通知に先行する。
 ///
 /// 台本 `\0あい\w9\e` の占有終端の導出（実行結果からは読まない）:
@@ -536,7 +536,7 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
 ///
 /// 3 本目の脚は、1 本目の cue を実際に浴びたインスタンスからの複製を試す。今日の dispatcher は
 /// 登録 sink を emit しないため複製元は常に未使用だが、本 sink はその上流の暗黙不変条件に
-/// 依存せず境界を戻す設計であり（`talk_lifecycle.rs` の `Clone` 実装の注記）、実台本の
+/// 依存せず境界を戻す設計であり（`talk_lifecycle.rs` の `impl BootCueSink`（`clone_box`）の注記）、実台本の
 /// 占有終端でもその保証が成り立つことをここで押さえる。
 #[test]
 fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
