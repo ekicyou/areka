@@ -680,3 +680,8 @@ mod interval_trigger_tests;
 #[cfg(test)]
 #[path = "decode_pattern_target_tests.rs"]
 mod pattern_target_tests;
+
+/// `collisionex` の記録の型と読み手を固定する兄弟テスト（collisionex-regions 要件 4.7・4.9 ほか）。
+#[cfg(test)]
+#[path = "decode_collisionex_tests.rs"]
+mod collisionex_tests;

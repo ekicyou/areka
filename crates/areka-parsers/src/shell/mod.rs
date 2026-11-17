@@ -73,9 +73,9 @@ mod pattern_word_tests;
 pub use boxes::{BoxBrace, BoxDefinition, BoxElementLine, BoxSurfaceLines, parse_boxes};
 pub use cursor::{CursorBrace, parse_cursor_braces};
 pub use model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionRegion,
-    CollisionShape, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell, ShellIssue,
-    SortOrder, Surface, SurfaceAlias, SurfaceAppend,
+    AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionExFault, CollisionName,
+    CollisionRegion, CollisionShape, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern,
+    ShapeCounts, Shell, ShellIssue, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
 };
 pub use parse::{ShellText, parse, parse_all};
 pub use pattern_word::{PatternWord, canonical_method_name, pattern_word, same_canonical};

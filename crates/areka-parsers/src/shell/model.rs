@@ -340,7 +340,7 @@ pub enum ShellIssue {
     UnclosedAtEnd { heading: String, line: usize },
     /// `}` が抜け、次の `{` で区切り直したブレス（中身は残した・指摘 33）。
     ClosedByNextBrace { heading: String, line: usize },
-    /// 読めない数の記述子・項目を飛ばした（0 にしない・指摘 36）。`text` は飛ばした欄の原文。
+    /// 読めない数の記述子・項目を飛ばした（0 にしない・指摘 36）。`text` は飛ばした行の欄を `,` で繋いだもの。
     UnreadableNumber { heading: String, text: String },
     /// シェル全体の範囲の幅の合計が上限を越える範囲の記述子を飛ばした（指摘 6）。
     RangeTooWide { heading: String, text: String },
@@ -348,6 +348,40 @@ pub enum ShellIssue {
     WaitRange { heading: String, text: String },
     /// ブレスの外の `}` だけの行・見出しの無い `{` だけの行を読み飛ばした。1 始まりの行の番号。
     StrayBrace { line: usize },
+    /// collisionex の行を使わなかった、または前から求める数だけを使った（理由つき）。`text` は行の欄を `,` で繋いだもの。
+    CollisionEx {
+        heading: String,
+        text: String,
+        fault: CollisionExFault,
+    },
+    /// 楕円・円・多角形・region の行を型へ運んだが、まだ当たり判定として働かない（読み込みごとに 1 件）。
+    /// `heading`・`text` は最初に並びへ入れたその行のもの。
+    ShapesInactive {
+        heading: String,
+        text: String,
+        counts: ShapeCounts,
+    },
+}
+
+/// `collisionex` の行を使わなかった（または一部だけ使った）理由。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)] // #[non_exhaustive] を付けない（ShellIssue と同じ）
+pub enum CollisionExFault {
+    UnknownShape,
+    MissingCoordinates,
+    OddCoordinates,
+    NotInteger,
+    BadRegion,
+    /// この理由だけは行を使う（前から求める数だけ）。
+    ExtraFields,
+}
+
+/// まだ働かない形の行の数（読み込み 1 回ぶん）。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ShapeCounts {
+    pub ellipse: usize,
+    pub circle: usize,
+    pub polygon: usize,
+    pub region: usize,
 }
 
 impl ShellIssue {
@@ -359,7 +393,9 @@ impl ShellIssue {
             | ShellIssue::ClosedByNextBrace { .. }
             | ShellIssue::UnreadableNumber { .. }
             | ShellIssue::WaitRange { .. }
-            | ShellIssue::StrayBrace { .. } => tracing::Level::WARN,
+            | ShellIssue::StrayBrace { .. }
+            | ShellIssue::CollisionEx { .. }
+            | ShellIssue::ShapesInactive { .. } => tracing::Level::WARN,
         }
     }
 
@@ -383,6 +419,37 @@ impl ShellIssue {
             ),
             ShellIssue::StrayBrace { line } => format!(
                 "shell: surfaces.txt の {line} 行目の括弧はブレスの見出しに続かないので読み飛ばした"
+            ),
+            ShellIssue::CollisionEx {
+                heading,
+                text,
+                fault,
+            } => {
+                let (reason, effect) = match fault {
+                    CollisionExFault::UnknownShape => ("形の名前を知らない", "当たり判定にしない"),
+                    CollisionExFault::MissingCoordinates => {
+                        ("座標が足りない", "当たり判定にしない")
+                    }
+                    CollisionExFault::OddCoordinates => {
+                        ("多角形の座標の数が奇数", "当たり判定にしない")
+                    }
+                    CollisionExFault::NotInteger => {
+                        ("整数として読めない欄がある", "当たり判定にしない")
+                    }
+                    CollisionExFault::BadRegion => ("region の欄が不正", "当たり判定にしない"),
+                    CollisionExFault::ExtraFields => ("欄が多い", "前から求める数だけを使った"),
+                };
+                format!(
+                    "shell: surfaces.txt のブレス `{heading}` の collisionex の行 `{text}` は{reason}ので{effect}"
+                )
+            }
+            ShellIssue::ShapesInactive {
+                heading,
+                text,
+                counts,
+            } => format!(
+                "shell: 楕円 {}・円 {}・多角形 {}・region {} 行を型へ運んだが、まだ当たり判定として働かない（ID の描き先に塗るのは hit-id-pass）。最初の行はブレス `{heading}` の `{text}`",
+                counts.ellipse, counts.circle, counts.polygon, counts.region
             ),
         }
     }
