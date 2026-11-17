@@ -642,6 +642,7 @@
 | ケ | `crates/ukadoc-survey/src/evidence/candidates.rs:L26-L30`・`L42-L46` | `audit-ukadoc-survey`（C22 で並走中） | `consumer_ledger.rs` の `register(` の数の実測が古い。57 番を直すと、さらに数が変わる |
 
 - 申し送りの書き方（brief に書き足すか、走っているセッションへ伝えるか）は、要件 7.1・7.7・7.8 に従う。ア・イ・ウ・ケは今のウェーブで決める（議題 9）。
+- 2026-11-17 の要件の討議（議題 5・推奨案で確定）で済ませた: ア・イ・オの 1 つは `audit-emo2-boot-frame`、ウ・オの 1 つは `audit-emo2-boot-switch`、オの 1 つ・キ・クは `audit-areka-app` の brief へ書き足した。ケは並走中の `audit-ukadoc-survey` のセッションへ伝えた。エ・カは `/kiro-complete` の未解決の棚卸で扱う。
 
 ---
 

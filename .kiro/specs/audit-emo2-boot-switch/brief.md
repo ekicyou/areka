@@ -97,3 +97,10 @@
   - 4.2 ⑷ 渡し口（`#[cfg(feature = "test-support")]` の `pub fn`・開けた私有の項目 7 に渡し口 7）: `balloon_visibility_phase` の `collect_observations`・`observe_scope_boxes`・`notify_timeout`・`emit_visibility_logs`（同名 4・`balloon_visibility_phase_test_support.rs`）・`BalloonVisibilityState` の欄 `per_scope`（`&mut`）・`display_end`・`observation_failure_logged.runtime`（`per_scope`・`display_end`・`observation_failure_logged_runtime`）。
   - 4.2 の案 C（テストを `#[test]` 関数の単位で割った）のうちこの spec の分: `balloon_visibility_phase_tests.rs`（1 戻し〔`dragging_requires_both_balloon_window_and_drag_marker`〕・14 残り）・`balloon_visibility_phase_box_tests.rs`（6 戻し・4 残り）。両方が使う補助 `runtime`・`world_at` は `balloon_visibility_phase_test_support.rs`（既存）にある。**本体の `runtime_tests/balloon_visibility_phase_tests.rs` の `world_at`（146 行）は、この支えの `world_at` と同じ中身の前からの写し**なので、支えの側の 1 つにまとめられる。
   - 6.1 examples: 持ち物の分に関わる変更は 0 件。
+
+## audit-emo2-boot-spine からの申し送り（2026-11-17）
+
+`audit-emo2-boot-spine` のギャップ分析（`.kiro/specs/audit-emo2-boot-spine/research.md` の 6 節）で、範囲の外のこの spec の持ち場に見つけた件。中身は向こうでは直さない。
+
+- **ウ（件 6 の 2 本）**: `crates/areka/src/runtime_tests/balloon_visibility_phase_tests.rs:L714`・`L789` のテスト関数 2 本は、補助ごと `areka-runtime` へ戻せる（`world_at` の写しは上の runtime-crate-split の申し送りに既にある）。
+- **オ（`code_only` の写し）**: `crates/areka-runtime/src/balloon_visibility_phase_zorder_chain_tests.rs:L257` の `code_only` は、`source_text_test_support::code_only` と 1 字も違わない。そちらを使う形に寄せる。

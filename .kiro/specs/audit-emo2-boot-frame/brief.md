@@ -134,3 +134,11 @@
 | `live_work_area_bottom` | `log_char_ground` | 公開のまま（本番が使う関数） |
 
   `audit` で見直すとき、「公開のまま」の行は本番が使う語なので切り替えない。表の全体と緑の証跡は `.kiro/specs/completed/runtime-crate-split/verification.md` の 6.4。
+
+## audit-emo2-boot-spine からの申し送り（2026-11-17）
+
+`audit-emo2-boot-spine` のギャップ分析（`.kiro/specs/audit-emo2-boot-spine/research.md` の 6 節）で、範囲の外のこの spec の持ち場に見つけた件。中身は向こうでは直さない。
+
+- **ア（1 番の片割れ）**: `crates/areka-runtime/src/frame/dpi.rs:L404-L413` で、窓の側から来る scope に `2*scope+1` を掛ける所が、大きな scope であふれる。`audit-emo2-boot-spine` は台本の側（`target_map.rs` の `2*scope`）を、上限を超える番号を `None` にして warn で捨てる形に直す。こちらも同じ上限でそろえる。
+- **イ（件 6 の 1 本）**: `crates/areka/src/runtime_tests/frame/window_state_tests.rs:L144` のテスト関数は、補助を分ければ `areka-runtime` へ戻せる（dev-dependencies は既にある）。
+- **オ（`code_only` の写し）**: `crates/areka-runtime/src/frame/zorder_drain_tests.rs:L465` の `code_only` は、`source_text_test_support::code_only` と 1 字も違わない。そちらを使う形に寄せる。
