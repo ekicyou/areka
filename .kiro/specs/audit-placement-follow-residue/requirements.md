@@ -62,7 +62,7 @@
 
 #### Acceptance Criteria
 
-1. When 記憶から戻した窓を作業領域へ寄せる, the areka shall 窓 n の組の相手を、鎖の決まり（`audit-placement-core` の `research.md` 18.10「この仕様で行く」3）の「鎖の前の窓」＝n より下の番号で鎖に入る一番近いスコープとする。**仮定**: 鎖に入るかは、覚えた印と同じく descript の揃え方で見る（`ChainView::Saved`・印は次の起動が読むので・brief の Approach）
+1. When 記憶から戻した窓を作業領域へ寄せる, the areka shall 窓 n の組の相手を、鎖の決まり（`audit-placement-core` の `research.md` 18.10「この仕様で行く」3）の「鎖の前の窓」＝n より下の番号で鎖に入る一番近いスコープとする。鎖に入るかは、覚えた印と同じく descript の揃え方で見る（`ChainView::Saved`・印は次の起動が読むので・brief の Approach。記憶の戻しは起動の前で台本の吸着が無いので、`ScopePlacement::anchor` と同じ答えになる＝ギャップ分析 2.1）
 2. When n の 1 つ下の番号のスコープが左右の辺のスコープで、n の覚えた印が `left`／`right` である, the areka shall n を鎖の前の窓（辺のスコープを飛ばした窓）との組として寄せ、辺のスコープと n を 1 つの組にしない（18.10 の表の T6）
 3. When 中のスコープが欠けたゴースト（例: スコープ 0 と 2 だけ）で、2 の覚えた印が `left`／`right` である, the areka shall 0 と 2 を 1 つの組として寄せ、窓ごとに寄せない（T8）
 4. While 窓が鎖に入らない（左右の辺のスコープ）, the areka shall その窓を**覚えた印での**組の相手にしない。記憶の矩形が隣り合う・重なる組（完了した `window-work-area-clamp` 要件 4.1）は、今と同じく番号の続く対 (n−1, n) に当て、辺のスコープも番号が続けば矩形で組にする（18.10 の表の T5・T7・T29 の F の列「合う」を動かさない）
@@ -127,7 +127,7 @@
 #### Acceptance Criteria
 
 1. The 本見直し shall DPI の同期の待ち（`DpiSyncHold`）を持つ窓のあいだにシェルを切り替えたとき、`reseed::reanchor_char_windows` の正しい書き込みで見張りが鳴るかを、テストで確かめる
-2. If 1 で正しい書き込みに見張りが鳴る, then the areka shall その書き込みを違反として記録しない。**仮定**: 鳴るなら鳴らないように直す（直し方は設計で決める・未決 4）
+2. If 1 で正しい書き込みに見張りが鳴る, then the areka shall その書き込みを違反として記録しない（直し方は設計で決める・ギャップ分析 3.4 の D1〜D3）。鳴らないと分かれば、3 の説明の直しだけにする
 3. The 本見直し shall `follow/window_move.rs` の `PlacementRoute::AnchorChange` の説明（「本番では未結線・現に到達しない」）・`resize_window_to` の上流の一覧・`follow/keyword_base.rs` の `AnchorChange` の扱いの説明を、今の事実（シェルの切り替えのたびに `reanchor_char_windows` が書く）に合わせる
 4. The 本見直し shall 1 で確かめた振る舞いを、壊れたら落ちるテストで固定する
 
