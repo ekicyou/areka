@@ -114,21 +114,26 @@ pub(crate) fn plan_ledger_init(
 /// 初期の台帳を作って既存の台帳へ差し込む（要件 3.3・3.3a）。
 ///
 /// 実際の取り寄せ（[`read_if_present`]）と実際の書き手（置き場を作って
-/// [`files::write_lf`] を呼ぶ）を [`ledger_init_with`] へ渡すだけの 1 行である。
+/// [`files::write_lf`] を呼ぶ）と告げ手（結果を 1 行告げる）を [`ledger_init_with`] へ
+/// 渡すだけの 1 行である。
 ///
 /// # 常時テストが届かない 1 か所
 ///
 /// 残るのは**この 1 行が何を渡すか**だけである。判断も順番も [`ledger_init_with`] に
-/// あり、そちらは取り寄せも書き手も引数で受けるので、ファイルを 1 つも作らずに
+/// あり、そちらは取り寄せも書き手も告げ手も引数で受けるので、ファイルを 1 つも作らずに
 /// 確かめてある（`generate_tests.rs`）。そのテストは [`ledger_init_with`] を直に
 /// 呼ぶので、ここが渡す `&read_if_present` を「いつも `None`」を返す関数へ差し替えても
 /// 常時テストは緑のままである。捕まえるのは実データでの通し確認——`ledger-init` を
 /// 走らせて台帳 4 本が 1 バイトも変わらないことを見る——だけである。
 pub fn ledger_init() -> Result<(), SurveyError> {
-    ledger_init_with(&read_if_present, &mut |target: &Path, body: &str| {
-        ensure_parent(target)?;
-        files::write_lf(target, body)
-    })
+    ledger_init_with(
+        &read_if_present,
+        &mut |target: &Path, body: &str| {
+            ensure_parent(target)?;
+            files::write_lf(target, body)
+        },
+        &mut |target: &Path, count: usize| announce(target, &format!("{count} 項目")),
+    )
 }
 
 /// 台帳 4 本の本文を決めてから、渡された書き手でそのとおりに書く（要件 3.3・3.3a・1.8）。
@@ -140,12 +145,16 @@ pub fn ledger_init() -> Result<(), SurveyError> {
 /// 全部決まってから書き始める。途中の 1 本で落ちたときに、その前の台帳だけが
 /// 書き換わって残ることが無い（要件 1.8）。
 ///
-/// 取り寄せと書き手を引数で受けるのは、この順番をファイルを 1 つも作らずに確かめる
-/// ためである（設計 File Structure Plan）。書き手を「控えるだけ」に差し替えれば、
+/// 告げる（`say` に場所と件数を渡す）のは 4 本を全部書き終えてからである。告げる先が
+/// 途中で閉じても、書き出しは 4 本とも済んでいる。
+///
+/// 取り寄せと書き手と告げ手を引数で受けるのは、この順番をファイルを 1 つも作らずに
+/// 確かめるためである（設計 File Structure Plan）。書き手を「控えるだけ」に差し替えれば、
 /// repo の台帳を 1 本も書かずに走らせられる。
 pub(crate) fn ledger_init_with(
     read_existing: &dyn Fn(&Path) -> Result<Option<String>, SurveyError>,
     write: &mut dyn FnMut(&Path, &str) -> Result<(), SurveyError>,
+    say: &mut dyn FnMut(&Path, usize) -> Result<(), SurveyError>,
 ) -> Result<(), SurveyError> {
     // 読む段が全部済むまで、書き出しに進まない。
     let assignment = PageAssignment::canonical();
@@ -154,7 +163,9 @@ pub(crate) fn ledger_init_with(
 
     for plan in &plans {
         write(&plan.target, &plan.body)?;
-        announce(&plan.target, &format!("{} 項目", plan.count))?;
+    }
+    for plan in &plans {
+        say(&plan.target, plan.count)?;
     }
     Ok(())
 }
@@ -162,16 +173,16 @@ pub(crate) fn ledger_init_with(
 /// ドメイン別の報告 4 本を作り直す（要件 7.1・7.3）。
 ///
 /// 実際の読み手（[`files::read_normalized`]）と実際の書き手（置き場を作って
-/// [`files::write_lf`] を呼び、結果を 1 行告げる）を [`report_with`] へ渡すだけの
-/// 1 行である。
+/// [`files::write_lf`] を呼ぶ）と告げ手（結果を 1 行告げる）を [`report_with`] へ
+/// 渡すだけの 1 行である。
 pub fn report() -> Result<(), SurveyError> {
     report_with(
         &files::read_normalized,
-        &mut |target: &Path, body: &str, count: usize| {
+        &mut |target: &Path, body: &str| {
             ensure_parent(target)?;
-            files::write_lf(target, body)?;
-            announce(target, &format!("{count} 項目"))
+            files::write_lf(target, body)
         },
+        &mut |target: &Path, count: usize| announce(target, &format!("{count} 項目")),
     )
 }
 
@@ -180,11 +191,13 @@ pub fn report() -> Result<(), SurveyError> {
 /// 各報告の入力はその台帳 1 本とテーマ名だけである（設計 D-11）。カタログもソースも
 /// 証拠も読まない。書くのは読む段と描く段が全部済んでからなので、3 本目の台帳が
 /// 読めない走行は 1 本も書かない——1 本ずつ「読む→書く」だと、前の 2 本だけが
-/// 書き換わって新旧の混ざった報告が残る。書き手が受け取る 3 つ目は台帳の項目数で、
-/// 読み手と書き手を引数で受けるのは [`priority_apply_with`] と同じ理由である。
+/// 書き換わって新旧の混ざった報告が残る。告げ手が受け取る件数は台帳の項目数で、
+/// 告げるのは 4 本を全部書き終えてから、読み手・書き手・告げ手を引数で受けるのは
+/// [`priority_apply_with`] と同じ理由である。
 pub(crate) fn report_with(
     read: &dyn Fn(&Path) -> Result<String, SurveyError>,
-    write: &mut dyn FnMut(&Path, &str, usize) -> Result<(), SurveyError>,
+    write: &mut dyn FnMut(&Path, &str) -> Result<(), SurveyError>,
+    say: &mut dyn FnMut(&Path, usize) -> Result<(), SurveyError>,
 ) -> Result<(), SurveyError> {
     let ledgers = load_ledgers_with(read)?;
     let plans: Vec<(PathBuf, String, usize)> = Domain::ALL
@@ -199,8 +212,11 @@ pub(crate) fn report_with(
         })
         .collect();
 
-    for (target, body, count) in &plans {
-        write(target, body, *count)?;
+    for (target, body, _) in &plans {
+        write(target, body)?;
+    }
+    for (target, _, count) in &plans {
+        say(target, *count)?;
     }
     Ok(())
 }
@@ -224,17 +240,14 @@ pub fn report_summary() -> Result<(), SurveyError> {
 
 /// 確定した `priority` を台帳 4 本へ書き戻す（要件 7.1・7.2・7.6・1.4）。
 ///
-/// 実際の読み手（[`files::read_normalized`]）と実際の書き手（[`files::write_lf`] を
-/// 呼んで結果を 1 行告げる）を [`priority_apply_with`] へ渡すだけの 1 行である。
+/// 実際の読み手（[`files::read_normalized`]）と実際の書き手（[`files::write_lf`]）と
+/// 告げ手（結果を 1 行告げる）を [`priority_apply_with`] へ渡すだけの 1 行である。
 /// 置き場は作らない——読む台帳が既にそこに在る以上、親は必ず在る。
 pub fn priority_apply() -> Result<(), SurveyError> {
     priority_apply_with(
         &files::read_normalized,
-        &mut |target: &Path, body: &str, changed: usize| {
-            files::write_lf(target, body)?;
-            announce(target, &format!("変更 {changed} 項目"))?;
-            Ok(())
-        },
+        &mut |target: &Path, body: &str| files::write_lf(target, body),
+        &mut |target: &Path, changed: usize| announce(target, &format!("変更 {changed} 項目")),
     )
 }
 
@@ -251,14 +264,17 @@ pub fn priority_apply() -> Result<(), SurveyError> {
 /// 2. 全項目の `priority` を導く。導けない id があれば id を挙げて止まる。
 /// 3. 4 本ぶんの本文を決める。決められない台帳が 1 本でもあれば止まる。
 /// 4. **4 本が全部決まってから**書き始める。
+/// 5. 4 本を全部書き終えてから、1 本ずつ告げる。
 ///
-/// 3 と 4 を分けてあるので、途中で落ちた走行は 1 バイトも書かない。読み手と書き手を
+/// 3 と 4 を分けてあるので、途中で落ちた走行は 1 バイトも書かない。4 と 5 を分けて
+/// あるので、告げる先が途中で閉じても 4 本とも書き終えている。読み手・書き手・告げ手を
 /// 引数で受けるのは、この順番をファイルを 1 つも作らずに確かめるためである
-/// （[`ledger_init_with`] と同じ形）。書き手が受け取る 3 つ目は**変更した項目数**で、
+/// （[`ledger_init_with`] と同じ形）。告げ手が受け取る件数は**変更した項目数**で、
 /// 2 度目の走行が 0 になることが冪等の主張である。
 pub(crate) fn priority_apply_with(
     read: &dyn Fn(&Path) -> Result<String, SurveyError>,
-    write: &mut dyn FnMut(&Path, &str, usize) -> Result<(), SurveyError>,
+    write: &mut dyn FnMut(&Path, &str) -> Result<(), SurveyError>,
+    say: &mut dyn FnMut(&Path, usize) -> Result<(), SurveyError>,
 ) -> Result<(), SurveyError> {
     // 読む段が全部済むまで、導出にも書き出しにも進まない。
     let linkage = parse::read_linkage(&read(&paths::linkage_path())?)?;
@@ -285,8 +301,11 @@ pub(crate) fn priority_apply_with(
         plans.push((target.as_path(), body, changed_count(ledger, &wanted)));
     }
 
-    for (target, body, changed) in &plans {
-        write(target, body, *changed)?;
+    for (target, body, _) in &plans {
+        write(target, body)?;
+    }
+    for (target, _, changed) in &plans {
+        say(target, *changed)?;
     }
     Ok(())
 }

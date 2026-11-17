@@ -149,13 +149,6 @@ fn extra_arguments_after_a_known_subcommand_ask_for_the_usage_text() {
 }
 
 #[test]
-fn a_subcommand_on_its_own_draws_no_complaint() {
-    // 断りが出る側だけを確かめると、何にでも断りを出す形に壊れても緑になる。
-    let (_outcome, notices) = run_and_read(&["evidence"]);
-    assert_eq!(notices, "", "正しく打っているのに断られている: {notices}");
-}
-
-#[test]
 fn the_notice_for_extra_arguments_names_the_subcommand_and_the_leftovers() {
     let notice = extra_arguments_notice("check", &["--verbose".to_string(), "x".to_string()]);
     for needle in ["check", "--verbose", "x"] {

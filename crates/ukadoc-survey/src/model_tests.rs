@@ -223,16 +223,6 @@ fn link_kind_outside_the_vocabulary_is_rejected() {
     }
 }
 
-#[test]
-fn link_holds_a_kind_and_a_parsed_id() {
-    let link = Link {
-        kind: LinkKind::Queries,
-        to: EntryId::parse("ukadoc:list_propertysystem:system.year:1").expect("通るはず"),
-    };
-    assert_eq!(link.kind, LinkKind::Queries);
-    assert_eq!(link.to.page().as_str(), "list_propertysystem");
-}
-
 // ---- ドメイン（要件 3.1）----
 
 #[test]

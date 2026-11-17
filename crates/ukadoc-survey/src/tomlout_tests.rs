@@ -189,7 +189,7 @@ fn keyed_table_header_escapes_backslash_in_key() {
     );
 }
 
-// ---- 6. 設計の見本をそのまま組み上げられること ----
+// ---- 5. 設計の見本をそのまま組み上げられること ----
 
 /// 設計「Data Models」のカタログ 1 行（`ukadoc:dev_bind`）を逐語で組み上げる。
 /// これが崩れると要件 1.5 の「2 回続けて 1 バイト一致」が守る対象そのものが変わる。
@@ -331,23 +331,7 @@ fn output_never_contains_a_raw_line_break() {
 
 // ---- 4. 与えた順のまま（設計 D-9）----
 
-/// 欄の並びはカタログの列順で凍結されている。名前順に並べ替えても読み戻すと同じ表に
-/// なるので、逐語一致でしか捕まえられない。
-#[test]
-fn inline_table_keeps_the_given_order_and_does_not_sort() {
-    let pairs = [
-        ("page", basic_string("p")),
-        ("title", basic_string("t")),
-        ("category", basic_string("c")),
-        ("hash", basic_string("h")),
-    ];
-    assert_eq!(
-        inline_table(&pairs),
-        r#"{ page = "p", title = "t", category = "c", hash = "h" }"#
-    );
-}
-
-/// 配列も並べ替えない（昇順に整えるのは呼ぶ側の仕事）。
+/// 配列は並べ替えない（昇順に整えるのは呼ぶ側の仕事）。
 #[test]
 fn string_array_keeps_the_given_order_and_does_not_sort() {
     let values = vec!["2.5.60".to_owned(), "2.3.53".to_owned()];

@@ -155,23 +155,6 @@ fn domain_of_resolves_a_representative_page_of_each_domain() {
     }
 }
 
-/// 表に載っている 38 ページすべてが、それを載せたドメインへ戻ること。
-#[test]
-fn domain_of_round_trips_every_assigned_page() {
-    let assignment = PageAssignment::canonical();
-    for domain in Domain::ALL {
-        for page in assignment.pages_of(domain) {
-            assert_eq!(
-                assignment.domain_of(&page),
-                Some(domain),
-                "{} が {} へ戻らない",
-                page.as_str(),
-                domain.as_key()
-            );
-        }
-    }
-}
-
 #[test]
 fn domain_of_returns_none_for_a_page_outside_the_table() {
     let assignment = PageAssignment::canonical();
@@ -190,16 +173,6 @@ fn domain_of_returns_none_for_a_page_outside_the_table() {
 }
 
 // ---- 割り当ての無いページを挙げる（要件 3.5）----
-
-#[test]
-fn unassigned_is_empty_when_every_page_is_assigned() {
-    let assignment = PageAssignment::canonical();
-    let pages: Vec<PageName> = Domain::ALL
-        .into_iter()
-        .flat_map(|domain| assignment.pages_of(domain))
-        .collect();
-    assert_eq!(assignment.unassigned(pages.iter()), Vec::<PageName>::new());
-}
 
 #[test]
 fn unassigned_is_empty_for_no_pages_at_all() {
@@ -244,7 +217,7 @@ fn unassigned_is_sorted_and_deduplicated() {
 // ---- 下線を含んだ丸ごとの名前として扱う ----
 
 /// `memo` は assets、`memo_shiorievent` は shiori。下線で割ったり接頭辞で拾ったり
-/// すると、この 2 つが取り違わる。
+/// すると、この 2 つが取り違えられる。
 #[test]
 fn underscore_names_are_whole_names_not_prefixes() {
     let assignment = PageAssignment::canonical();

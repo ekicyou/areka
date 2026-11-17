@@ -81,9 +81,6 @@ pub struct RawEntry {
     pub url: String,
 }
 
-/// entry が持つ欄の綴り（要件付録 B 手順 1）。
-const ENTRY_FIELDS: [&str; 6] = ["id", "title", "source", "category", "content", "url"];
-
 /// スナップショットの場所。環境変数 `AREKA_UKADOC_SNAPSHOT` が既定より優先する。
 ///
 /// 環境変数が無いときは `APPDATA` から既定の場所を組み立てる。`APPDATA` も無ければ
@@ -269,18 +266,18 @@ fn root_string(root: &Map<String, Value>, key: &str) -> Result<String, SurveyErr
     }
 }
 
-/// entry 1 件を写す。どの位置のどの欄が違うかを本文に載せる。
+/// entry 1 件を写す（欄の綴りは要件付録 B 手順 1）。どの位置のどの欄が違うかを本文に載せる。
 fn raw_entry(item: &Value, index: usize) -> Result<RawEntry, SurveyError> {
     let table = item
         .as_object()
         .ok_or_else(|| shape(format!("entries[{index}] が表ではない（{}）", kind(item))))?;
     Ok(RawEntry {
-        id: entry_string(table, index, ENTRY_FIELDS[0])?,
-        title: entry_string(table, index, ENTRY_FIELDS[1])?,
-        source: entry_string(table, index, ENTRY_FIELDS[2])?,
-        category: entry_string(table, index, ENTRY_FIELDS[3])?,
-        content: entry_string(table, index, ENTRY_FIELDS[4])?,
-        url: entry_string(table, index, ENTRY_FIELDS[5])?,
+        id: entry_string(table, index, "id")?,
+        title: entry_string(table, index, "title")?,
+        source: entry_string(table, index, "source")?,
+        category: entry_string(table, index, "category")?,
+        content: entry_string(table, index, "content")?,
+        url: entry_string(table, index, "url")?,
     })
 }
 

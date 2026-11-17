@@ -31,6 +31,7 @@ use crate::check::{Finding, FindingKind};
 use crate::diff::CatalogDiff;
 use crate::error::SurveyError;
 use crate::evidence::candidates::candidates;
+use crate::evidence::resolve::index_of;
 use crate::evidence::{
     Candidate, CandidateKind, EvidenceIndex, NameMatchFailure, UnmatchedName, UnresolvedUrl,
 };
@@ -306,7 +307,7 @@ fn no_candidate_ever_appears_in_the_evidence_listing() {
         ),
     ];
 
-    let index = lib_test_support::evidence(&catalog, &sources);
+    let index = index_of(&sources, &catalog);
     let found = candidates(&sources);
 
     // 見本が空回りしていないこと（どちらかが 0 件なら、混ざらないのは当たり前になる）。

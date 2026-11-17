@@ -6,8 +6,9 @@
 //!
 //! **否定の主張には必ず肯定の主張を対で置く**。「調査クレートのファイルが 1 つも
 //! 無い」は、走査が何も返さなくても成立してしまう。だから同じテストの中で
-//! 「実在する既知のファイルが入っている」ことも確かめる（設計
-//! Existing Architecture Analysis が借りる 3 系統目の作法）。
+//! 「調査クレートの外の `.rs` が入っている」ことも確かめる（設計
+//! Existing Architecture Analysis が借りる 3 系統目の作法）。よそのクレートの
+//! ファイルを名指しはしない——よその spec の整理で偽の赤になるからである。
 
 use std::sync::OnceLock;
 
@@ -21,29 +22,28 @@ fn walked() -> &'static [(String, String)] {
     WALKED.get_or_init(|| walk(&workspace_root()).expect("ワークスペースの走査は通るはず"))
 }
 
-/// 走査に必ず現れる既知の実在ファイル（areka の語彙台帳。設計 D-5 が名指ししている）。
-const KNOWN_FILES: &[&str] = &[
-    "crates/areka-sylphya/src/vocab/dotted.rs",
-    "crates/areka-sylphya/src/vocab/shiori_resource.rs",
-];
-
 // ---- 自分自身を除く（設計 D-3）----
 
 /// 調査クレート由来のファイルが 1 つも混じらないこと。
 ///
 /// 混じると、見本データに書いた ukadoc の URL が本物の証拠として読まれる。
-/// 肯定側（既知のファイルが入っている・非空）を同じテストに置いて、
+/// 肯定側（調査クレートの外の `.rs` が入っている・本番とテストの両方がある）を同じテストに置いて、
 /// 走査が空を返して素通りする形を塞ぐ。
 #[test]
 fn walk_excludes_the_survey_crate_itself() {
     let files = walked();
 
     // 肯定側——走査が実際に動いていること。
-    assert!(!files.is_empty(), "1 本も走査できていない");
-    for known in KNOWN_FILES {
+    assert!(
+        files
+            .iter()
+            .any(|(path, _)| path.ends_with(".rs") && !path.starts_with("crates/ukadoc-survey/")),
+        "調査クレートの外の .rs が 1 本も走査できていない"
+    );
+    for part in ["/src/", "/tests/"] {
         assert!(
-            files.iter().any(|(path, _)| path == known),
-            "実在するはずのファイルが走査に無い: {known}"
+            files.iter().any(|(path, _)| path.contains(part)),
+            "{part} を含むパスが 1 本も無い"
         );
     }
 
@@ -167,17 +167,10 @@ fn walk_returns_bodies_without_carriage_returns() {
     for (path, body) in files {
         assert!(!body.contains('\r'), "復帰文字が残っている: {path}");
     }
-    // 肯定側——既知のファイルの中身が実際に読めている。
-    let known = "crates/areka-sylphya/src/vocab/dotted.rs";
-    let body = files
-        .iter()
-        .find(|(path, _)| path == known)
-        .map(|(_, body)| body)
-        .unwrap_or_else(|| panic!("既知のファイルが無い: {known}"));
-    assert!(!body.is_empty(), "本文が空: {known}");
+    // 肯定側——中身が実際に読めている（空の本文ばかりではない）。
     assert!(
-        body.contains("ukadoc"),
-        "正典 URL の手掛かりが読めていない: {known}"
+        files.iter().any(|(_, body)| !body.is_empty()),
+        "どのファイルの本文も空"
     );
 }
 

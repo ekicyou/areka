@@ -149,7 +149,7 @@ fn sample_files(members: &[&str], property_note: &str) -> BTreeMap<String, Strin
     files
 }
 
-/// 書き手が受け取った 1 本ぶん（場所・本文・変更件数）。
+/// 書き手が受け取った 1 本ぶん（場所・本文）と、告げ手が受け取った変更件数。
 type Written = (String, String, usize);
 
 /// 見本を読ませて書き戻しを 1 度走らせる。ファイルは 1 つも作らない。
@@ -168,15 +168,75 @@ fn apply_over(
             .ok_or_else(|| files::io_error(path, "見本に無い"))
     };
 
-    let mut written: Vec<Written> = Vec::new();
+    let mut bodies: Vec<(String, String)> = Vec::new();
+    let mut said: Vec<(String, usize)> = Vec::new();
     let outcome = {
-        let mut record = |target: &Path, body: &str, changed: usize| -> Result<(), SurveyError> {
-            written.push((under_coverage(target), body.to_owned(), changed));
+        let mut record = |target: &Path, body: &str| -> Result<(), SurveyError> {
+            bodies.push((under_coverage(target), body.to_owned()));
             Ok(())
         };
-        priority_apply_with(&read, &mut record)
+        let mut say = |target: &Path, changed: usize| -> Result<(), SurveyError> {
+            said.push((under_coverage(target), changed));
+            Ok(())
+        };
+        priority_apply_with(&read, &mut record, &mut say)
     };
+    let places: Vec<&str> = said.iter().map(|(place, _)| place.as_str()).collect();
+    let written_places: Vec<&str> = bodies.iter().map(|(place, _)| place.as_str()).collect();
+    assert_eq!(places, written_places, "告げた場所が書いた場所と違う");
+    let written = bodies
+        .into_iter()
+        .zip(said)
+        .map(|((place, body), (_, changed))| (place, body, changed))
+        .collect();
     (outcome, asked.into_inner(), written)
+}
+
+/// 書き手（場所と本文を受ける）。
+type WriteFn<'a> = dyn FnMut(&Path, &str) -> Result<(), SurveyError> + 'a;
+
+/// 告げ手（場所と件数を受ける）。
+type SayFn<'a> = dyn FnMut(&Path, usize) -> Result<(), SurveyError> + 'a;
+
+/// 告げ手が 2 本目で落ちる（出力の先が途中で閉じた）ときに、書き手が受け取った場所。
+fn written_when_the_second_announcement_fails(
+    run: &mut dyn FnMut(&mut WriteFn<'_>, &mut SayFn<'_>) -> Result<(), SurveyError>,
+) -> (Result<(), SurveyError>, Vec<String>) {
+    let mut written: Vec<String> = Vec::new();
+    let mut said = 0_usize;
+    let outcome = {
+        let mut record = |target: &Path, _: &str| -> Result<(), SurveyError> {
+            written.push(under_coverage(target));
+            Ok(())
+        };
+        let mut say = |target: &Path, _: usize| -> Result<(), SurveyError> {
+            said += 1;
+            if said == 2 {
+                return Err(files::io_error(target, "告げる先が閉じた"));
+            }
+            Ok(())
+        };
+        run(&mut record, &mut say)
+    };
+    (outcome, written)
+}
+
+#[test]
+fn a_closed_output_on_the_second_announcement_still_leaves_all_four_ledgers_written() {
+    // 1 本書くたびに告げると、2 本目の告知で落ちたときに 3・4 本目が書かれず、
+    // 新旧の混ざった台帳が残る。告げるのは 4 本を書き終えてから。
+    let files = sample_files(&SAMPLE_IDS, "");
+    let read = |path: &Path| -> Result<String, SurveyError> {
+        files
+            .get(&under_coverage(path))
+            .cloned()
+            .ok_or_else(|| files::io_error(path, "見本に無い"))
+    };
+    let (outcome, written) = written_when_the_second_announcement_fails(&mut |write, say| {
+        priority_apply_with(&read, write, say)
+    });
+    outcome.expect_err("告げる先が閉じたのに成功した");
+    assert_eq!(written, LEDGER_FILES, "告げる前に書き終えていない");
 }
 
 #[test]
@@ -300,13 +360,34 @@ fn report_over(files: &BTreeMap<String, String>) -> (Result<(), SurveyError>, Ve
     };
     let mut written: Vec<String> = Vec::new();
     let outcome = {
-        let mut record = |target: &Path, _: &str, _: usize| -> Result<(), SurveyError> {
+        let mut record = |target: &Path, _: &str| -> Result<(), SurveyError> {
             written.push(under_coverage(target));
             Ok(())
         };
-        report_with(&read, &mut record)
+        report_with(&read, &mut record, &mut |_: &Path, _: usize| Ok(()))
     };
     (outcome, written)
+}
+
+#[test]
+fn a_closed_output_on_the_second_announcement_still_leaves_all_four_reports_written() {
+    // 台帳の書き戻しと同じ順番（告げるのは 4 本を書き終えてから）を報告の側でも見る。
+    let files = sample_files(&SAMPLE_IDS, "");
+    let read = |path: &Path| -> Result<String, SurveyError> {
+        files
+            .get(&under_coverage(path))
+            .cloned()
+            .ok_or_else(|| files::io_error(path, "見本に無い"))
+    };
+    let (outcome, written) = written_when_the_second_announcement_fails(&mut |write, say| {
+        report_with(&read, write, say)
+    });
+    outcome.expect_err("告げる先が閉じたのに成功した");
+    assert_eq!(
+        written.len(),
+        4,
+        "告げる前に報告 4 本を書き終えていない: {written:?}"
+    );
 }
 
 #[test]

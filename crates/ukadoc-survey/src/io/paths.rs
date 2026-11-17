@@ -86,8 +86,8 @@ pub fn domain_report_path(domain: Domain) -> PathBuf {
 
 /// 全体報告（`doc/ukadoc-coverage/report/summary.md`）。
 ///
-/// 常時検査の対象である。判定 ⑹ が、このファイルの本文を
-/// `report::summary::render_summary` の出力と**全文一致**で突き合わせる（証拠の表は
+/// 常時検査の対象である。`check::freshness` が `DomainReportStale` として、このファイルの
+/// 本文を `report::summary::render_summary` の出力と**全文一致**で見張る（証拠の表は
 /// `evidence` の副手続きが出すので、突き合わせの両側はカタログと台帳 4 本だけから
 /// 決まる）。作り直さずに台帳を変えれば赤になる。
 pub fn summary_report_path() -> PathBuf {

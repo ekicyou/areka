@@ -44,8 +44,7 @@ use crate::check::{CheckInput, Finding, render as render_findings, run as run_ch
 use crate::diff::{CatalogDiff, diff as diff_catalogs};
 use crate::error::SurveyError;
 use crate::evidence::candidates::candidates as collect_candidates;
-use crate::evidence::extract::extract;
-use crate::evidence::resolve::resolve;
+use crate::evidence::resolve::index_of;
 use crate::evidence::{Candidate, CandidateKind, EvidenceIndex, NameMatchFailure};
 use crate::io::{files, paths, snapshot, sources};
 use crate::ledger::Ledger;
@@ -357,17 +356,10 @@ pub(crate) fn render_diff(delta: &CatalogDiff, notice: Option<&str>) -> String {
     out
 }
 
-/// ソースを走査して証拠の索引を組む（取り出し → 解決）。
-///
-/// `check` と `evidence` が同じ経路を通るための 1 か所。片方だけが別の集め方を
-/// すると、検査が見た証拠と `evidence` が並べた証拠が食い違う。
+/// ソースを走査して証拠の索引を組む（取り出し → 解決は [`index_of`]）。
 fn collect_evidence(catalog: &Catalog) -> Result<EvidenceIndex, SurveyError> {
     let sources = sources::walk(&paths::workspace_root())?;
-    let hits: Vec<_> = sources
-        .iter()
-        .flat_map(|(path, text)| extract(path, text))
-        .collect();
-    Ok(resolve(&hits, &sources, catalog))
+    Ok(index_of(&sources, catalog))
 }
 
 #[cfg(test)]

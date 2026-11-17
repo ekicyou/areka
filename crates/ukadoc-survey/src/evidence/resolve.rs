@@ -65,6 +65,18 @@ const FULLWIDTH_LAST: u32 = 0xFF5E;
 /// 全角形から対応する ASCII への隔たり。
 const FULLWIDTH_OFFSET: u32 = 0xFEE0;
 
+/// ソース文の組から証拠の索引を作る（取り出し → 解決）。
+///
+/// `check`・`evidence` の副手続きとテストの見本が同じ経路を通るための 1 か所。
+/// 片方だけが別の集め方をすると、検査が見た証拠と `evidence` が並べた証拠が食い違う。
+pub fn index_of(sources: &[(String, String)], catalog: &Catalog) -> EvidenceIndex {
+    let hits: Vec<UrlHit> = sources
+        .iter()
+        .flat_map(|(path, text)| extract(path, text))
+        .collect();
+    resolve(&hits, sources, catalog)
+}
+
 /// URL を項目 id へ解決する。ページ URL は語彙表の目印として扱う。
 ///
 /// `hits` は取り出しの段（[`extract`]）が返した URL、`sources` は走査で読んだ

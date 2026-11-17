@@ -17,9 +17,9 @@ path = "src/main.rs"
 # カタログ・台帳の「読み取り」だけに使う。書き出しは src/tomlout.rs の自前組み立てに
 # 閉じる（設計 D-9・付録 A が凍結した書き方と toml の書き出しが一致しないため）。
 toml = { workspace = true }
-# SurveyError の定義。全クレート共通の規約（tech.md:56）。
+# SurveyError の定義。全クレート共通の規約（tech.md）。
 thiserror = { workspace = true }
 # スナップショット JSON の読み取りだけに使う。ルートの Cargo.toml を触らないため
-# 版はクレート側に書く（設計 D-2・前例 crates/dola/Cargo.toml:21-23）。
+# 版はクレート側に書く（設計 D-2・前例 crates/dola/Cargo.toml）。
 # serde の派生機能は使わないので serde は直接依存に加えない。
 serde_json = "1"

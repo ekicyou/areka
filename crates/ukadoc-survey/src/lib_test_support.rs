@@ -32,8 +32,7 @@ use crate::assignment::PageAssignment;
 use crate::catalog::{CATALOG_FORMAT, Catalog, CatalogEntry, SnapshotMeta};
 use crate::check::CheckInput;
 use crate::evidence::EvidenceIndex;
-use crate::evidence::extract::extract;
-use crate::evidence::resolve::resolve;
+use crate::evidence::resolve::index_of;
 use crate::hash::HASH_ALGORITHM;
 use crate::ledger::{Ledger, LedgerEntry};
 use crate::model::{Domain, EntryId, Link, LinkKind, Status, THEMES};
@@ -427,27 +426,15 @@ fn entry_of(row: &LedgerRow) -> LedgerEntry {
 }
 
 /// 見本のソース文（パスと本文の組）。
-pub(crate) fn sources() -> Vec<(String, String)> {
+fn sources() -> Vec<(String, String)> {
     SOURCE_FILES
         .iter()
         .map(|(path, text)| ((*path).to_owned(), (*text).to_owned()))
         .collect()
 }
 
-/// ソース文から証拠の索引を作る。
-///
-/// 実行ファイルと同じ経路（取り出し → 解決）を通す。索引を手で組むと、ソース文を
-/// 壊しても索引が変わらない見本ができてしまう。
-pub(crate) fn evidence(catalog: &Catalog, sources: &[(String, String)]) -> EvidenceIndex {
-    let hits: Vec<_> = sources
-        .iter()
-        .flat_map(|(path, text)| extract(path, text))
-        .collect();
-    resolve(&hits, sources, catalog)
-}
-
 /// 台帳 4 本からドメイン別報告 4 本を作る（要件 7.4 の突き合わせ相手）。
-pub(crate) fn domain_reports(ledgers: &[Ledger]) -> BTreeMap<Domain, String> {
+fn domain_reports(ledgers: &[Ledger]) -> BTreeMap<Domain, String> {
     ledgers
         .iter()
         .map(|ledger| (ledger.domain, render_domain(ledger, &THEMES)))
@@ -474,7 +461,8 @@ impl World {
         let catalog = catalog();
         let ledgers = ledgers();
         let sources = sources();
-        let evidence = evidence(&catalog, &sources);
+        // 索引を手で組むと、ソース文を壊しても索引が変わらない見本ができてしまう。
+        let evidence = index_of(&sources, &catalog);
         let domain_reports = domain_reports(&ledgers);
         let summary_report = render_summary(&catalog, &ledgers, &THEMES);
         Self {
@@ -528,7 +516,7 @@ impl World {
 
     /// いまのソース文から証拠の索引を作り直す。
     pub(crate) fn refresh_evidence(&mut self) {
-        self.evidence = evidence(&self.catalog, &self.sources);
+        self.evidence = index_of(&self.sources, &self.catalog);
     }
 
     /// いまのカタログと台帳からドメイン別報告と全体報告を作り直す。
