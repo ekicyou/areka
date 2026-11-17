@@ -51,27 +51,41 @@ fn place_on_shelf(namespace: &Path, mark: &[u8], matching: bool) -> Vec<u8> {
     bytes
 }
 
-fn resolve(namespace: &Path) -> Result<PathBuf, SampleError> {
+fn resolve(namespace: &Path) -> Result<(PathBuf, Vec<u8>), SampleError> {
     sample_nar_for(&URL_ROW, || Ok(namespace.to_path_buf()))
+}
+
+/// 窓口の入口へ渡す、確かめたバイトの出どころ。
+fn verified(namespace: &Path) -> impl Fn() -> Result<Vec<u8>, SampleError> + '_ {
+    move || resolve(namespace).map(|(_, bytes)| bytes)
 }
 
 #[test]
 fn a_vendored_row_resolves_to_the_repository_nar_without_asking_for_the_namespace() {
-    assert_eq!(
-        sample_nar_for(&VENDORED_ROW, || panic!(
-            "リポジトリに置く行は置き場を見ない"
-        ))
-        .expect("リポジトリに置く行は照合なしで決まる"),
-        nar_dir().join("vendored-row-probe.nar")
+    // 固定入力の行の `.nar` は置いていないので読めないが、読みに行く先はリポジトリの綴り。
+    let refused = sample_nar_for(&VENDORED_ROW, || {
+        panic!("リポジトリに置く行は置き場を見ない")
+    });
+    assert!(
+        matches!(&refused, Err(SampleError::Io { path, .. })
+            if *path == nar_dir().join("vendored-row-probe.nar")),
+        "{refused:?}"
     );
-    // 登記表の今の行は全部この形（今の 9 本の引き方は変わらない）。
+    // 登記表の今の行は全部この形（今の 9 本の引き方は変わらない）。読んだバイトも返す。
     for sample in crate::SAMPLES
         .iter()
         .filter(|s| s.source == SampleSource::Vendored)
     {
+        let (nar, bytes) = sample_nar(sample.name).expect("登記済みの名前は引ける");
         assert_eq!(
-            sample_nar(sample.name).expect("登記済みの名前は引ける"),
+            nar,
             nar_dir().join(format!("{}.nar", sample.name)),
+            "{}",
+            sample.name
+        );
+        assert_eq!(
+            bytes,
+            std::fs::read(&nar).expect("読める"),
             "{}",
             sample.name
         );
@@ -92,14 +106,18 @@ fn a_url_row_with_a_matching_checksum_reaches_the_same_tree_as_a_current_row() {
     let mark = b"fetched";
     place_on_shelf(ns.path(), mark, true);
 
-    let nar = resolve(ns.path()).expect("合う置き場の書庫は通る");
+    let (nar, bytes) = resolve(ns.path()).expect("合う置き場の書庫は通る");
     assert_eq!(nar, fetched_path_in(ns.path(), URL_ROW.name));
+    assert_eq!(
+        bytes,
+        std::fs::read(&nar).expect("読める"),
+        "確かめたバイトも返す"
+    );
 
-    let copy =
-        fresh_root_in(ns.path(), URL_ROW.name, &resolve(ns.path()).unwrap()).expect("複製を配れる");
+    let copy = fresh_root_in(ns.path(), URL_ROW.name, verified(ns.path())).expect("複製を配れる");
     assert_eq!(contents(copy.path()), whole_ghost_tree(URL_ROW.name, mark));
-    let manual = manual_root_in(ns.path(), URL_ROW.name, &resolve(ns.path()).unwrap())
-        .expect("手で使う根を配れる");
+    let manual =
+        manual_root_in(ns.path(), URL_ROW.name, verified(ns.path())).expect("手で使う根を配れる");
     assert_eq!(contents(&manual), whole_ghost_tree(URL_ROW.name, mark));
 }
 
@@ -108,9 +126,9 @@ fn acquiring_the_same_fetched_archive_twice_uses_the_same_master_copy() {
     let ns = private_namespace();
     let bytes = place_on_shelf(ns.path(), b"twice", true);
 
-    let first = cached_root_in(ns.path(), URL_ROW.name, &resolve(ns.path()).unwrap())
+    let first = cached_root_in(ns.path(), URL_ROW.name, &resolve(ns.path()).unwrap().1)
         .expect("1 回目は原本を作る");
-    let second = cached_root_in(ns.path(), URL_ROW.name, &resolve(ns.path()).unwrap())
+    let second = cached_root_in(ns.path(), URL_ROW.name, &resolve(ns.path()).unwrap().1)
         .expect("2 回目は同じ原本を使う");
     assert_eq!(first, second);
     assert_eq!(
@@ -124,7 +142,8 @@ fn a_mismatching_archive_never_reaches_the_master_copy_shelf() {
     let ns = private_namespace();
     place_on_shelf(ns.path(), b"mismatch", false);
 
-    let refused = resolve(ns.path()).and_then(|nar| cached_root_in(ns.path(), URL_ROW.name, &nar));
+    let refused =
+        resolve(ns.path()).and_then(|(_, bytes)| cached_root_in(ns.path(), URL_ROW.name, &bytes));
     assert!(
         matches!(refused, Err(SampleError::FetchedNarMismatch { .. })),
         "{refused:?}"
@@ -136,7 +155,7 @@ fn a_mismatching_archive_never_reaches_the_master_copy_shelf() {
 fn the_check_runs_on_every_acquire_even_when_the_master_copy_exists() {
     let ns = private_namespace();
     place_on_shelf(ns.path(), b"again", true);
-    cached_root_in(ns.path(), URL_ROW.name, &resolve(ns.path()).unwrap()).expect("原本を作る");
+    cached_root_in(ns.path(), URL_ROW.name, &resolve(ns.path()).unwrap().1).expect("原本を作る");
 
     // 原本が在っても、置き場の書庫がハッシュのファイルと合わなくなれば通さない。
     std::fs::write(fetched_path_in(ns.path(), URL_ROW.name), b"tampered")

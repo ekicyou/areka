@@ -64,7 +64,7 @@ fn read_shelf(
 }
 
 /// 置き場のハッシュのファイルと書庫を読み、書庫の SHA-256 がハッシュのファイルと合えば
-/// 書庫のパスを返す（要件 3.4・3.9）。大きさは見ない（登記に無い）。
+/// 書庫のパスと確かめたバイトを返す（要件 3.4・3.9・決め D13）。大きさは見ない（登記に無い）。
 ///
 /// # Errors
 ///
@@ -74,7 +74,7 @@ fn read_shelf(
 pub(crate) fn verified_nar_in(
     namespace: &Path,
     name: &'static str,
-) -> Result<PathBuf, SampleError> {
+) -> Result<(PathBuf, Vec<u8>), SampleError> {
     let (text, checksum_path) = read_shelf(
         name,
         fetched_checksum_path_in(namespace, name),
@@ -100,7 +100,7 @@ pub(crate) fn verified_nar_in(
             actual_sha256,
         });
     }
-    Ok(path)
+    Ok((path, bytes))
 }
 
 /// 取り寄せの段のコマンドの文（絶対パス・どのディレクトリからでも動く形）。

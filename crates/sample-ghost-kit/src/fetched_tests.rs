@@ -194,7 +194,10 @@ fn matching_archive_returns_shelf_path() {
     let good = tiny_nar("x", b"good");
     let placed = place(ns.path(), "x", &good);
     place_checksum(ns.path(), "x", &sum_line(&good, "x"));
-    assert_eq!(verified_nar_in(ns.path(), "x").expect("合えば通る"), placed);
+    assert_eq!(
+        verified_nar_in(ns.path(), "x").expect("合えば通る"),
+        (placed, good)
+    );
 }
 
 // ---- 表示が ASCII ----

@@ -103,7 +103,8 @@ fn refused(
     registry: &'static Sample,
 ) -> (String, String, Vec<String>) {
     let nar = probe_nar(fixtures, tag, kind, directory, companion);
-    let copy = devroot::fresh_root_in(home, tag, &nar).expect("固定入力の複製は取れるはず");
+    let copy = devroot::fresh_root_in(home, tag, || Ok(std::fs::read(&nar).expect("読める")))
+        .expect("固定入力の複製は取れるはず");
     let err = SampleRoot::from_copy(registry, copy)
         .err()
         .unwrap_or_else(|| panic!("登記と食い違う展開結果（{tag}）は失敗になるはず"));
@@ -346,7 +347,10 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
         GHOST_WITH_BALLOON.name,
         Some(PROBE_BALLOON),
     );
-    let copy = devroot::fresh_root_in(home.path(), "probe-agrees", &good).expect("複製");
+    let copy = devroot::fresh_root_in(home.path(), "probe-agrees", || {
+        Ok(std::fs::read(&good).expect("読める"))
+    })
+    .expect("複製");
     let acquired =
         SampleRoot::from_copy(&GHOST_WITH_BALLOON, copy).expect("登記どおりなら通るはず");
     assert!(acquired.folder().is_dir(), "本体のフォルダが実在する");
@@ -508,7 +512,7 @@ fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
     for sample in SAMPLES {
         let root = WorkDir::new().expect("空の根は取れるはず");
         // URL の行は置き場の照合を通った書庫。落ちたら失敗の文（取り寄せの段のコマンド）で止まる。
-        let nar = devroot::sample_nar(sample.name).unwrap_or_else(|err| panic!("{err}"));
+        let (nar, _) = devroot::sample_nar(sample.name).unwrap_or_else(|err| panic!("{err}"));
 
         let archive = areka_nar::NarArchive::open(&nar)
             .unwrap_or_else(|err| panic!("検体 {} の .nar は受理されるはず: {err}", sample.name));

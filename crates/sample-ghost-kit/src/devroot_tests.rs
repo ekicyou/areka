@@ -165,24 +165,76 @@ fn the_lease_refuses_deletion_while_it_is_held() {
 #[test]
 fn the_configured_target_dir_wins_over_the_ancestor_search() {
     let chosen = find_target_dir(
-        Some("some-target"),
+        Some(r"D:\elsewhere\tgt"),
         Path::new(r"C:\x\target\debug\deps\t.exe"),
     )
     .expect("設定値があればそれを使う");
-    assert!(
-        chosen.ends_with("some-target"),
-        "環境変数の指定が祖先探索より優先されること: {}",
-        chosen.display()
-    );
-    assert!(
-        chosen.is_absolute(),
-        "相対の指定でも絶対パスにして返すこと: {}",
-        chosen.display()
+    assert_eq!(
+        chosen,
+        Path::new(r"D:\elsewhere\tgt"),
+        "絶対の指定は祖先探索より優先され、そのまま使うこと"
     );
 
     let found = find_target_dir(None, Path::new(r"C:\x\target\debug\deps\t.exe"))
         .expect("祖先に target があれば見つかる");
     assert_eq!(found, Path::new(r"C:\x\target"));
+}
+
+/// 相対の設定値は、実行体の祖先のうちその値で終わる最も近いものに解く（決め D4）。
+///
+/// cargo は起こした場所の上で解き、テストの実行体はパッケージの場所で走るので、
+/// 作業フォルダの上で解くと別の場所（ソースの木の中）を指してしまう。
+#[test]
+fn a_relative_target_dir_is_resolved_against_the_exe_ancestors() {
+    let exe = Path::new(r"C:\tgt\repo\tgt\debug\deps\t.exe");
+    assert_eq!(
+        find_target_dir(Some("tgt"), exe).expect("祖先に在る"),
+        Path::new(r"C:\tgt\repo\tgt"),
+        "その値で終わる祖先のうち実行体に最も近いもの"
+    );
+    assert_eq!(
+        find_target_dir(Some(r"out\tgt"), Path::new(r"C:\repo\out\tgt\debug\t.exe"))
+            .expect("2 段の値も祖先に在る"),
+        Path::new(r"C:\repo\out\tgt"),
+        "複数の段の値も段ごとに照らす"
+    );
+
+    // 祖先に無ければ今までどおり作業フォルダの上で絶対にする。
+    let fallback = find_target_dir(Some("not-an-ancestor"), exe).expect("絶対にできる");
+    assert!(
+        fallback.is_absolute() && fallback.ends_with("not-an-ancestor"),
+        "祖先に無い値は作業フォルダの上で解く: {}",
+        fallback.display()
+    );
+}
+
+/// 死んだプロセスが残した同じ名前の札やフォルダに当たっても、次の連番で取り直す（指摘 7）。
+///
+/// 残りの札は他人の物かもしれないので消さない（片付けるのは掃除の仕事）。
+#[test]
+fn a_leftover_lease_or_folder_with_the_same_name_is_skipped() {
+    let namespace = WorkDir::new().expect("私有の名前空間");
+    let work = namespace.path().join(WORK);
+    let pid = std::process::id();
+    std::fs::create_dir_all(work.join(format!("{pid}-1"))).expect("残りのフォルダを置ける");
+    let left_lease = work.join(format!("{pid}-0{LOCK_SUFFIX}"));
+    std::fs::write(&left_lease, b"").expect("残りの札を置ける");
+
+    let mut serials = 0..;
+    let got = WorkDir::in_namespace_with(namespace.path(), || serials.next().expect("連番"))
+        .expect("残りを飛ばして取れること");
+
+    assert_eq!(
+        got.path(),
+        work.join(format!("{pid}-2")),
+        "空いた連番まで進む"
+    );
+    assert_eq!(exists(&got), (true, true));
+    assert!(left_lease.is_file(), "残りの札は消さない");
+    assert!(
+        !work.join(format!("{pid}-1{LOCK_SUFFIX}")).exists(),
+        "フォルダが先客で取れなかった連番の、自分の札は畳む"
+    );
 }
 
 #[test]

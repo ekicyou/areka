@@ -236,7 +236,7 @@ impl SampleRoot {
     /// [`SampleError::Io`]・[`SampleError::TargetDirNotFound`]。
     pub fn acquire(name: &str) -> Result<SampleRoot, SampleError> {
         let sample = registered(name)?;
-        SampleRoot::from_copy(sample, devroot::fresh_root(sample.name)?)
+        SampleRoot::from_copy(sample, devroot::fresh_root(sample)?)
     }
 
     /// 配られた複製を**登記と照合**してから窓口の形に組む（要件 1.1・1.2・1.3）。
@@ -511,7 +511,7 @@ fn check_registry(sample: &'static Sample, root: &Path) -> Result<(), SampleErro
 /// [`SampleError::RegistryMismatch`]（実在しないパスを印字しない）。
 pub fn manual_paths(name: &str) -> Result<Vec<(String, PathBuf)>, SampleError> {
     let sample = registered(name)?;
-    let root = devroot::manual_root(sample.name)?;
+    let root = devroot::manual_root(sample)?;
     check_registry(sample, &root)?;
     let mut printed = vec![
         ("root".to_owned(), root.clone()),
