@@ -142,7 +142,7 @@
   - _Requirements: 5.3_
 
 - [ ] 13. 実機で 1 回ずつ確かめ直す
-- [ ] 13.1 32bit の先進坑を i686 の helper と本物の `pasta.dll` で確かめる
+- [x] 13.1 32bit の先進坑を i686 の helper と本物の `pasta.dll` で確かめる
   - 走らせる前に `netstat -ano` で `127.0.0.1:9276` を握るプロセスが無いことを確かめる（あれば持ち主のセッションに降ろしてもらう）
   - i686 の helper を組み、`HELPER_EXE` に絶対パスを入れて親を走らせ、go 基準(1)(2) の PASS と終了コード 0 を見る。`--selftest-errors` で err(1)（経った時間が下限と上限の間）・err(2) の PASS を見る
   - 待ちのタイマーが i686 で動かなければ、起こし役のスレッドを待ちの中の 1 か所に戻す（design のリスクの手当て）
@@ -187,3 +187,4 @@
 - タスク 9: i686 の helper のテストは 12 本（本物の pasta.dll の 1 本を含む）で緑
 - タスク 10: 後に log-capture-kit の番人で赤は 2 本（every_over_limit_exception_is_still_over_the_limit と the_measurement_is_not_vacuous_and_matches_the_allow_table）。どちらも例外表に残る clickthrough の main.rs 1 件が原因で、タスク 11 で両方緑に戻す
 - タスク 12.2: wintf-winmsg-executor/README.md の「概要」に event-listener = "5" の書き方が残る（タスク 1 から { workspace = true }）。design の行 25 の 3 か所の外なのでタスク 14 のかけ直しで拾う
+- タスク 13.1（2026-11-17 実機・本物の 32bit pasta.dll）: go(1) PASS（Value 223 bytes・往復 19 ms）・go(2) PASS（生存 4.01 s・kind=Clean）・終了コード 0。--selftest-errors: err(1) PASS（時間切れ 500 ms・下限 400〜上限 1,500 の間）・err(2) PASS（強制終了を 6 ms で検出）・終了コード 0。i686 でもタイマーの待ちは動き、起こし役の戻しは要らなかった
