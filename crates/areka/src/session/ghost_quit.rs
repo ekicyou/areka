@@ -1,5 +1,5 @@
 //! 終わる相: kanade の運行の通知の受け口・終わる相の本体と system・その登録（runtime-module-untangle
-//! で `runtime/frame.rs`・`runtime/mod.rs` から相ごと移した。中身と記録の文は変えていない）。
+//! で旧 runtime の `frame.rs`・`mod.rs`（今の `crates/areka-runtime/src/frame.rs`・`lib.rs`）から相ごと移した。中身と記録の文は変えていない）。
 
 use std::sync::mpsc::Receiver;
 

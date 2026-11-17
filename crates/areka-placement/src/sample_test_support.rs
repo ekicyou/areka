@@ -1,6 +1,6 @@
 //! 見本のゴーストの入口（配置のテストだけ・`sample-ghost-kit` はここからだけ引く）。
 //!
-//! 本体の側の同じ働きの入口は本体の `runtime/sample_test_support.rs`（crate ごとに 1 つ・
+//! 本体の側の同じ働きの入口は`crates/areka/src/sample_test_support.rs` と `crates/areka-runtime/src/sample_test_support.rs`（crate ごとに 1 つ・
 //! spec: placement-crate-split 要件 3.2）。
 
 use std::path::PathBuf;

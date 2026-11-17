@@ -143,7 +143,7 @@ pub enum LineFormat {
     /// `level={level} target={target}` から始める形。
     ///
     /// 出所: `areka-seriko/src/lib_test_support.rs`・`areka-emo-atlas/src/log_capture.rs`・
-    /// `areka-emo-compose/src/log_capture.rs`・`areka/src/emo2_boot/*`。
+    /// `areka-emo-compose/src/log_capture.rs`・`areka-runtime/src/*`。
     LevelTargetFields,
     /// `level={level}` から始める形（宛先を載せない）。
     ///

@@ -511,7 +511,7 @@ fn balloon_drag_end_resets_the_shift_without_double_counting() {
     let _residue = drain_window_pos_commands();
 }
 
-/// 毎フレームのずれの相（本体の `runtime/frame/move_shift.rs`）の判定をなぞる: 今の値でなく札も
+/// 毎フレームのずれの相（`areka-runtime` の `frame/move_shift.rs`）の判定をなぞる: 今の値でなく札も
 /// 無ければ当てる。
 fn run_frame_phase(world: &mut World, window: Entity, want: (i64, i64)) {
     if !shift_is_current(world, window, want, ScaleRatio::ONE)

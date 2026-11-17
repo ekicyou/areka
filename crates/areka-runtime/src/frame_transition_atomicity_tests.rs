@@ -54,7 +54,7 @@
 //! `origin=zorder-pair`）。
 //!
 //! ゆえに**キュー上で `tag.origin` を数える形は、本番のどんな退行でも赤にならない**。
-//! 本ファイルは判定器と**同一の述語**（`transition_judge.rs:609-613`＝`kind=write` 行の
+//! 本ファイルは判定器と**同一の述語**（`transition_judge.rs` の `summarize` の `KIND_WRITE` の腕（`path_a_writes` を数える所）＝`kind=write` 行の
 //! `origin` と `stage` を別々に数え、食い違いが均されずに見える形）を観測行へ当てる。
 //!
 //! そのうえで、この決定論の 0 が言っているのは「遷移フレームの観測窓に経路 A の行が
@@ -147,7 +147,7 @@ fn writes_for(writes: &[SetWindowPosCommand], scope: u32, kind: &str) -> Vec<Set
 /// 捕捉行のうち経路 A（`WM_DPICHANGED` 受理時の同期書込）の書込行を数える。
 ///
 /// 戻り値は `(origin=dpi-suggested の件数, stage=sync の件数)`。**2 つを別々に返す**のは
-/// 判定器がそうしているからである（`transition_judge.rs:609-613`＝`path_a_writes` は
+/// 判定器がそうしているからである（`transition_judge.rs` の `summarize` の `KIND_WRITE` の腕＝`path_a_writes` は
 /// `origin` で数え、`sync_stage_writes` は裏取りとして別に持つ。片方へ均すと両者の
 /// 食い違いが見えなくなる＝task 2.2 の裁定）。
 ///

@@ -207,8 +207,8 @@
   - _Dispatch: mechanical — 設計の D9 が測るファイルと割り方を決めている_
   - _Requirements: 1.10_
 
-- [ ] 8. runtime を名指す所を書き換える（段 7）
-- [ ] 8.1 (P) ログの出所の名前で読む所を書き換える
+- [x] 8. runtime を名指す所を書き換える（段 7）
+- [x] 8.1 (P) ログの出所の名前で読む所を書き換える
   - 触るファイルはこれだけ: `crates/areka/tests/stay_on_top_real_run.rs`（`RUST_LOG` の 6 つ）・`crates/areka/src/log_history_tests.rs`（124 行を `classify(Level::INFO, "areka_runtime")` が `None` の確かめへ）・`crates/areka/tests/emo2_real_run/common_tests.rs`（ログの行の見本）・`doc/ssp-mcp/log-convention.md`（135 行）。これらのファイルの中の古いパスもここで直す
   - `log_history.rs` の `RULES` は変えず、警告以上の分類が出所に頼らない（runtime を名指す行が無い）ことを記録する
   - 直書きの出所（6.2）と語彙の出所（6.3）が runtime の本番に 0 件であることを grep して記録する。ログの本文（`runtime: 実 sink 結線が成立しました（wire 成立）` ほか）は 1 文字も変えない
@@ -216,7 +216,7 @@
   - _Boundary: PathRewrite（上に挙げた 4 ファイル）_
   - _Dispatch: mechanical — 設計が書き換える行と新しい値を挙げている_
   - _Requirements: 6.2, 6.3, 6.4, 6.6, 6.8, 7.8_
-- [ ] 8.2 (P) crates の説明の中の古いパスと古い名前を書き換える
+- [x] 8.2 (P) crates の説明の中の古いパスと古い名前を書き換える
   - 触る範囲: `crates/` の下の説明とテストの値のうち、8.1 の持つファイルを除くもの（`tools/` は触らない）
   - `rg -n 'emo2_boot|Emo2Wiring' crates -g '!crates/areka/**'` の 14 ファイル 21 行を今の名前（`runtime::…`・`wire_runtime`・`frame_system`）と移した先の場所へ。`areka-emo-text/src/actor_lookahead_tests.rs` の `emo2_boot_talk_reveals_without_moving_glyphs` を `runtime_talk_reveals_without_moving_glyphs` へ改め、`log-capture-kit/src/event_tests.rs` の出所の値 5 行（と期待の文字列）を `"areka_runtime"` へ
   - `src/runtime/`・`placement_tests/transition_judge` ほか移したテストのパスを名指す説明（`areka-placement` の 11 ファイル・wintf・`areka-emo-present`・`areka-emo-text`・`shiori-host32-host`・本体と `areka-runtime` の中の説明・examples の説明ほか）を対応の表どおりに。`areka-runtime` の `lib.rs` 69 行・`spine.rs` 33 行の `tests/emo2_boot_spine_test.rs` は完了した spec の名前で指す説明へ
@@ -227,7 +227,7 @@
   - _Boundary: PathRewrite（crates の説明とテストの値・8.1 の 4 ファイルを除く）_
   - _Dispatch: mechanical — 設計の対応の表と D13 が書き換え先を決めている_
   - _Requirements: 3.8, 4.3, 5.8, 5.9, 5.10, 7.3_
-- [ ] 8.3 (P) 文書の中の runtime のパスを書き換える
+- [x] 8.3 (P) 文書の中の runtime のパスを書き換える
   - 触るファイルはこれだけ: `doc/COMPAT_ARCHITECTURE.md`（パスの文字だけ）・`doc/ukadoc-coverage/ledger/{sakura-script,shiori,property,assets}.toml`（根拠の場所の行だけ）・`doc/ukadoc-coverage/briefing-assets.md`・`briefing-shiori.md`・`doc/ssp-mcp/areka-tools.md`・`doc/emo2-conformance-scope.md`・`doc/click-through.md`（`doc/ssp-mcp/log-convention.md` は 8.1）
   - `src/` を付けない書き方（`runtime/x.rs`）で本体の runtime を指すものも書き換え、`rg -n "[^/]runtime/[a-z_/]+\.rs"` の当たりを 1 件ずつ目で確かめて、書き換えた一覧と wintf・dola の自分のものとして残した一覧を実装の記録に残す
   - `doc/ukadoc-coverage/report/` は手で直さず、網羅台帳の道具で作り直す
@@ -235,7 +235,7 @@
   - _Boundary: PathRewrite（doc の上に挙げたファイル）_
   - _Dispatch: mechanical — 設計の対応の表がパスの書き換え先を決めている_
   - _Requirements: 5.5, 5.9_
-- [ ] 8.4 (P) steering の `structure.md`・`tech.md` を書き換える
+- [x] 8.4 (P) steering の `structure.md`・`tech.md` を書き換える
   - `structure.md` に `### Runtime Crate（areka-runtime）` の節（Location・Contains〔`lib.rs`・`frame/`・`spine*`・`placement_tests/`・`test-support` で開く支え〕・Dependencies・本体を引かない約束）を足す
   - 本体の節の `runtime/` の行を「`runtime_tests/` はテスト専用・本体を引く runtime のテストの置き場」へ、`placement_tests/` の行を本体に残る分へ合わせ、依存の行に `areka-runtime` を足し、171 行の例のパスと `log-capture-kit` を使う crate の数（20 → 21）を直す
   - `tech.md` 90 行の `spine_wait.rs` のパスを `crates/areka-runtime/src/spine_wait.rs` へ。`roadmap.md` は書かない
@@ -243,14 +243,14 @@
   - _Boundary: PathRewrite（`.kiro/steering/structure.md`・`tech.md`）_
   - _Dispatch: mechanical — 設計が足す節と直す行を挙げている_
   - _Requirements: 5.6_
-- [ ] 8.5 (P) 3 本の audit の brief の受け持ちと申し送りを書く
+- [x] 8.5 (P) 3 本の audit の brief の受け持ちと申し送りを書く
   - `audit-emo2-boot-{frame,spine,switch}` の brief の「受け持つファイル」を、D14 の名前の型で `crates/areka-runtime/` と `crates/areka/src/runtime_tests/` の両方に当てて書き換える（spine の残りに `areka-runtime` の `Cargo.toml`・`examples/`・`src/placement_tests/` のうち `transition_*` でないもの・本体の `session/` の e2e 2 本を入れ、`src/placement_tests/transition_*` は外す）
   - 3 本に「runtime-crate-split からの申し送り」の節を足す: ⑴ 直さなかった不具合（あれば）⑵ 理由の文が古くなった `#[allow(...)]` の一覧（属性と文は変えない）⑶ 2.5・4.2・6.1 で開けた項目 ⑷ `audit-placement-follow` の範囲の外の古い参照 3 件（frame だけ）⑸ 6.4 の扱いの表（frame だけ）。`hit_region.rs` の「`crate::` フリー規律」の文は spine へ
   - 完了の状態: `areka-runtime` と `runtime_tests/` のどのファイルも、ちょうど 1 本の audit の持ち物か `audit-placement-follow-residue` の持ち物になり、申し送りの節が 3 本にある
   - _Boundary: PathRewrite（3 本の brief）_
   - _Dispatch: mechanical — 設計の D14 が受け持ちの型と申し送りの項目を決めている_
   - _Requirements: 2.5, 4.8, 5.7, 7.1_
-- [ ] 8.6 旧いパス・旧い名前・旧い出所の名前が残っていないことを確かめる
+- [x] 8.6 旧いパス・旧い名前・旧い出所の名前が残っていないことを確かめる
   - 古いパス（5.9）: 設計の Verification の `rg` を `crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md` で回し、wintf・dola の自分の `runtime/` と新しい置き場の `crates/areka-runtime/src/placement_tests/` を除いて 0 件
   - 古い名前（5.10）: `rg -n 'emo2_boot|Emo2Wiring' crates -g '!crates/areka/**'` が 0 件。古い出所の名前（6.7）: `rg -n "areka::runtime(::|=|\b)"` が同じ範囲で 0 件（`crate::runtime_tests` は当たらない）
   - ほかの番人の表（`temp_path_guard_test.rs`・`with_default_guard_test.rs`・`sample_path_guard_test.rs`）に runtime と移したテストのパスが 0 件であることを記録する

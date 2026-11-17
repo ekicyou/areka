@@ -8,9 +8,10 @@
 
 ## Current State
 
-- 受け持つファイル（2026-11-13 `runtime-module-untangle` で書き換えた＝前は `crates/areka/src/emo2_boot/` のうち、ほかの 2 本の持ち物でないもの全部。新旧は roadmap の「本体の crate 分け」の新旧のパスの対応表）:
-  - `crates/areka/src/runtime/` のうち、`audit-emo2-boot-frame`・`audit-emo2-boot-switch` の持ち物でないもの全部（`mod.rs`・`spine*`・`consumer_ledger*`・`adapter*`・`assets*`・`talk_*`・`session_hooks.rs`・`scope_scale.rs`・`reload_args*`・`reload_cue*`・`shell_carry*`・`shell_balloon_resolve*` ほか）。`runtime-crate-split` で `crates/areka-runtime/src/` へもう一度移る。
-  - `crates/areka/src/session/` の `hooks.rs`・`reload.rs`・`reload_tests.rs`・`reload_skin_tests.rs`・`runtime_boot.rs`・`runtime_boot_tests.rs`・`switch_copy.rs`・`switch_copy_tests.rs`・`same_folder_pin.rs`・`same_folder_pin_tests.rs`。
+- 受け持つファイル（2026-11-17 `runtime-crate-split` で書き換えた＝前は 2026-11-13 `runtime-module-untangle` の `crates/areka/src/runtime/` のうち、ほかの 2 本の持ち物でないもの全部。名前の型を `crates/areka-runtime/` と `crates/areka/src/runtime_tests/` の両方に当てる。新旧は roadmap の「本体の crate 分け」の新旧のパスの対応表）:
+  - `crates/areka-runtime/` と `crates/areka/src/runtime_tests/` のうち、`audit-emo2-boot-frame`・`audit-emo2-boot-switch` の持ち物でないもの全部（`lib.rs`・`spine*`・`consumer_ledger*`・`adapter*`・`assets*`・`talk_*`・`session_hooks.rs`・`scope_scale.rs`・`reload_args*`・`reload_cue*`・`switch_cue*`・`shell_carry*`・`shell_balloon_resolve*`・`strict_judges*`・`crash_report_test_support.rs`・`source_text_test_support.rs`・`wire_tests.rs` ほか。本体の `runtime_tests/mod.rs`・`runtime_tests/spine.rs`（`SpineHarness` の足場）を含む）。
+  - `crates/areka-runtime/` の `Cargo.toml`・`examples/`（`collision-probe`）・`src/placement_tests/` のうち `transition_*` でないもの（`mod.rs`・`measure_bake_log_tests.rs`・`reset_balloon_pos_tests.rs`・`spawn_zorder_pair_deferred_tests.rs`）。`crates/areka-runtime/src/placement_tests/transition_*`（判定器の一族）はこの spec の持ち物でなく、`audit-placement-follow-residue` の持ち物。
+  - `crates/areka/src/session/` の `hooks.rs`・`reload.rs`・`reload_tests.rs`・`reload_skin_tests.rs`・`runtime_boot.rs`・`runtime_boot_tests.rs`・`switch_copy.rs`・`switch_copy_tests.rs`・`same_folder_pin.rs`・`same_folder_pin_tests.rs`。runtime から `git mv` で寄せた e2e の 2 本 `script_security_e2e_tests.rs`・`readme_script_e2e_tests.rs`（`runtime_boot_tests.rs` が `#[path]` で読む兄弟）もここに入る。
   - 前に受け持っていた install・update・readme の cue（`install_cue*`・`update_cue*`・`readme_cue*`）は、`crates/areka/src/install/`・`update/`・`readme/` へ移り、`audit-areka-install-update` の受け持ちに入った（同 brief の Upstream のとおり）＝この spec の受け持ちではない。
 - 大きさ: 64 ファイル・コード 9,105 行・テスト 12,538 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
@@ -87,3 +88,26 @@
 `runtime-module-untangle`（`emo2_boot` を `runtime` と `session` へ分けた spec）は振る舞いを変えなかった。作業中に直したくなった所は直さず、ここへ書いた。行番号は 2026-11-13（`93aca049f`）のもので、着手のときに確かめ直す。
 
 - **不具合の候補: 揺れるテスト `runtime::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits`**（`crates/areka/src/runtime/spine_third_scope_talk_tests.rs` 182 行目）。`cargo test -p areka -j 4` の 1 回で赤、単独 3 回と全体 1 回は緑。待ちの形（時刻か順序の前提）を調べ、テストの本質を外さずに直す。
+
+## runtime-crate-split からの申し送り（2026-11-17）
+
+`runtime-crate-split`（`runtime` を crate `areka-runtime` へ分けた spec）は振る舞いを変えなかった。作業中に直したくなった所は直さず、ここへ書いた。行番号は 2026-11-17 時点のもので、着手のときに確かめ直す。受け持つファイルの置き場は、上の「Current State」のとおり `crates/areka-runtime/` と `crates/areka/src/runtime_tests/` の両方。
+
+- **⑴ 直さなかった不具合**: 0 件（`runtime-crate-split` は作業中に不具合を見つけていない）。上の 2026-11-13 の揺れるテスト（`spine_third_scope_talk_tests`）は、`runtime-crate-split` では直していない。
+
+- **⑵ 理由の文が古くなった `#[allow(...)]`**（属性と文は変えていない）:
+  - `crates/areka-runtime/src/assets.rs` 215 行の `#[allow(dead_code)] // 本番の起動はシェル名つきの兄弟を通る（呼び手はテスト）`: `build_boot_assets` は lib の `pub fn` になったので、`dead_code` の許可がまだ要るか確かめる（理由の文は今も事実）。
+  - `crates/areka-runtime/src/placement_tests/transition_judge.rs` 47〜50 行の説明（`audit-placement-follow-residue` の持ち物）: 「areka は lib ターゲットを持たない bin crate ゆえ…`main.rs` が `#[cfg(test)]` の下で宣言する `placement_tests` に置いて」は、今は `areka-runtime` の `lib.rs` が宣言する。属性ではなく説明の文なので、残りの `#[allow]` の一覧と一緒に、持ち主の `audit-placement-follow-residue` へ伝える。
+  - frame の持ち物の `frame.rs`・`frame/wiring.rs` の分は `audit-emo2-boot-frame` の同じ節にある。この spec の持ち物で、ほかに理由が bin を言う `#[allow]` は 0 件。
+
+- **⑶ `runtime-crate-split` で私有から開けた項目**（この spec の持ち物の分。全体の一覧は `.kiro/specs/runtime-crate-split/verification.md` の 2.5・4.2・6.1）:
+  - 2.5（`pub(crate)` → `pub`・全体 112 件）のうち 76 件: `lib.rs` 22・`reload_args.rs` 6・`reload_cue.rs` 5・`scope_scale.rs` 4・`session_hooks.rs` 1・`shell_balloon_resolve.rs` 9・`shell_box_assets.rs` 1・`shell_carry.rs` 3・`shell_cursor_assets.rs` 3・`shell_cursor_table.rs` 5・`skin_facts_copy.rs` 1・`special_name.rs` 6・`strict_judges.rs` 1・`switch_cue.rs` 2・`talk_lifecycle.rs` 4・`user_break_cue.rs` 3。`pub` の項目が名指す型 11 には「要件 2.5: 公開の `<名前>` が名指すので開ける」の 1 行が付いている（`DescriptParts`・`ScopeScaleTable`・`NotFoundReason`・`ShellBoxAssets`・`ShellCarry`・`CursorFile`・`UnresolvedReason`・`TalkTimeout` ほか）。使われない `pub(crate)` は消していない。
+  - 3.2: `spine`・`spine_wait`・`spine_hold_support` の `pub(crate)` を `pub` にした。`spine::{BACKOFF_SLEEP, SPIN_WAIT, join_bounded}` の再公開・`ScriptedShioriHandle::status_calls`（`pub fn`）・`frame_test_support`・`frame_balloon_runtime_test_support` を `test-support` の下で開けた。進行状態の記録 4 つ（`RecordedStatus`・`StatusLedger`・`record_status`・`snapshot_status_calls`）は設計の外れとして `areka-runtime` の `spine.rs` の ⑵ の隣へ下ろした（本体は出し直し）。
+  - 4.2 ⑴ のうち: `assets::{build_shell_assets_with_limits, build_balloon_assets_with_limits}`・`DescriptParts::ALL`・`ScopeScaleTable::set`・`percent_text`・`NO_BODY`・`LastInstalledShell`・`LastInstalledBalloon`・`ShellBoxAssets::hand_to`・`ShellCursorAssets::hand_to`・`shell_carry` の `CarriedShow`・`BindReplay`（`category`・`part`・`on`）・`CarriedBinds`（`replays`・`dropped`）・`decide`・`decide_binds`・`snapshot`・`replay`・`ArekaStrictJudges`（`canonical`）・`SwapPayload`・`SwapSlot`。`NO_BODY` は口の倒れ先で、`areka-runtime` のテストでは記録なし・本番のビルドでは記録つき。
+  - 4.2 ⑷ 渡し口のうちこの spec の分: `ScriptedShioriHandle` の欄 `status_calls`（`spine::test_support`）の 1 本。開けた私有の項目は全体で 19（tracing を呼ぶ関数 8・欄 11）・渡し口は全体で 22。
+  - 4.2 の案 C（テストを `#[test]` 関数の単位で割った）のうちこの spec の分: `assets_tests.rs`（13 戻し・1 残り）・`assets_shell_tests.rs`（2 戻し・1 残り）・`consumer_ledger_agreement_tests.rs`（1 戻し・4 残り）・`shell_balloon_resolve_tests.rs`（5 戻し・本体に 4 残り）・`shell_carry_tests.rs`（4 戻し・本体に 8 残り）・`wire_tests.rs`（2 戻し・1 残り）・`strict_judges_tests.rs`（4 戻し・`doc_tables` の 4 残り）・`zorder_wiring_tests.rs`（7 戻し・2 残り）。両方が使う補助は新しい支えのファイル（`consumer_ledger_test_support.rs`・`shell_balloon_resolve_test_support.rs`・`shell_carry_test_support.rs`・`source_text_test_support.rs`）へ 1 つだけ置いた。
+  - **番人の crate を引く補助を使う 17 本の関数は、本体に残した**（`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit` は `test-support` に置けないので、写しを作らず、その補助を使う関数も本体に残した・設計 D4。内訳は `.kiro/specs/runtime-crate-split/verification.md` の 4.6＝表の「番人の補助で本体」12 本と `switch_cue_tests.rs` の 5 本）。これらは本体の項目を引かないのに本体にある。`audit` で番人の crate の使い方を直すときは、`areka-runtime` へ戻せるか見直す。
+  - 本体の `runtime_tests/balloon_visibility_phase_tests.rs` の `world_at`（146 行）は、`areka-runtime` の支え（`balloon_visibility_phase_test_support.rs` の `world_at`）と同じ中身の前からの写しである（`audit-emo2-boot-switch` の持ち物のファイルだが、支えは `areka-runtime` の側なので、両方の `audit` が見るところ）。支えの側へ 1 つにまとめられる（本体のテストは `areka_runtime::` の支えを引く）。
+  - 6.1 examples: `crates/areka/examples/collision-probe*` を `crates/areka-runtime/examples/` へ移した。`#[path]` の私有の取り込みを外し、`areka_runtime::hit_region`・`areka_runtime::target_map` を公開面で読む。子ファイルの接続 7 本の `#[path]` は example のルートの規則のために残した。`pub` にした項目は 0 件。
+
+- **⑷ 一緒に伝えること（`hit_region.rs` の説明）**: `crates/areka-runtime/src/hit_region.rs` の頭の説明の「`crate::` フリー規律（この配置の決定的制約）」（45〜57 行）は、examples が `#[path]` で取り込んでいた理由（probe からの `#[path]` include）が古くなった（今の probe は crate の公開面で読む）。`runtime-crate-split` はリンクの字面だけを直し、規律の文は直していない。非テストコードが `crate::` を使ってよいかを見直し、文を事実に直す（`lib.rs` が `is_benign_boot_error` への本体の呼び出しを持たなくなったか、`#[path]` include がもう無いかも確かめる）。

@@ -100,8 +100,8 @@ pub struct KanadeStopped {
 /// その結果 `HitRegion::surface_point` をそのまま本型へ詰める。**kanade は受け取った値を無変換で
 /// Reference0/1 へ転写するだけ**であり、縮約の式も k も持たない。
 ///
-/// 座標契約の正本（受領空間・吸収点・配信空間・shell 窓限定の旨）は `areka` bin の
-/// `emo2_boot::hit_region` モジュール冒頭 doc である。なお正典（ukadoc）の `OnMouseMove`
+/// 座標契約の正本（受領空間・吸収点・配信空間・shell 窓限定の旨）は `areka_runtime::hit_region`
+/// モジュール冒頭 doc である。なお正典（ukadoc）の `OnMouseMove`
 /// Reference0/1 は「ローカル座標」としか規定しておらず空間を定義していない（SSP は k=1.0 恒等ゆえ
 /// 二義性が生じない）ため、サーフェス px を採ることは **areka 側の裁定**である（R1.8）。k=1.0 では
 /// 縮約が恒等ゆえ従前の配信値と完全に一致する。

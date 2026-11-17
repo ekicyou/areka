@@ -20,7 +20,7 @@
 //! ゆえに本テストは是正後も緑のまま、**観測そのものの契約**（源が古ければ差が出る・
 //! 一致すれば 0・表が引けなければ番兵）を固定し続ける。要件 7.3 が求める「是正前に失敗し
 //! 是正後に通過する」対テストは、フレームを進めて同期段を通す
-//! 本体の `runtime/frame_work_area_sync_tests.rs` の
+//! `areka-runtime` の `frame_work_area_sync_tests.rs` の
 //! `lowering_the_scale_lands_the_ground_point_on_the_new_work_area_bottom_in_one_write`
 //! が持つ（是正前 −48px で赤・是正後 0 で緑を実行で記録済み）。
 

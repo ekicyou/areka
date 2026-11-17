@@ -39,7 +39,7 @@ fn emit_fixture_events() {
     tracing::warn!(target: "areka_emo_atlas", set = 0, rel_path = "clear.png", "surface missing");
     tracing::error!(target: "areka_emo_present::presenter", scale = 1.25f64, ok = true, "boom");
     tracing::debug!(target: "wintf::transition", count = 3u32);
-    tracing::info!(target: "areka::emo2_boot", b = 1i64, a = 2i64, "order probe");
+    tracing::info!(target: "areka_runtime", b = 1i64, a = 2i64, "order probe");
     tracing::trace!(target: "t::esc", text = "quo\"te\ttab", "esc");
     tracing::warn!(target: "areka_kanade::resource", event = "shiori_load", outcome = "ok", "raw probe");
 }
@@ -50,7 +50,7 @@ const LEVEL_TARGET_FIELDS_FIXTURE: &[&str] = &[
     "level=WARN target=areka_emo_atlas message=surface missing set=0 rel_path=\"clear.png\"",
     "level=ERROR target=areka_emo_present::presenter message=boom scale=1.25 ok=true",
     "level=DEBUG target=wintf::transition count=3",
-    "level=INFO target=areka::emo2_boot message=order probe b=1 a=2",
+    "level=INFO target=areka_runtime message=order probe b=1 a=2",
     "level=TRACE target=t::esc message=esc text=\"quo\\\"te\\ttab\"",
     "level=WARN target=areka_kanade::resource message=raw probe event=\"shiori_load\" outcome=\"ok\"",
 ];
@@ -274,7 +274,7 @@ fn capture_lines_returns_formatted_lines_and_the_closure_result() {
 #[test]
 fn capture_lines_does_not_leak_the_sentinel() {
     let ((), lines) = capture_lines(LineFormat::LevelTargetFields, || {
-        tracing::info!(target: "areka::emo2_boot", "only mine");
+        tracing::info!(target: "areka_runtime", "only mine");
     });
     // 陽性対照（自分のイベントは 1 件捕れている）と対で見る。
     assert_eq!(lines.len(), 1, "実際: {lines:?}");
@@ -385,7 +385,7 @@ fn field_names_sorted_is_ascending_and_includes_message() {
     let (events, _, _) = run_fixture();
     let ev = events
         .iter()
-        .find(|e| e.target == "areka::emo2_boot")
+        .find(|e| e.target == "areka_runtime")
         .expect("見本の order probe イベント");
 
     // 訪問順は message → b → a。整列列は昇順（`emo-present` の `field_names()` 互換）。
@@ -404,7 +404,7 @@ fn fields_map_is_name_to_debug_representation() {
     let (events, _, _) = run_fixture();
     let ev = events
         .iter()
-        .find(|e| e.target == "areka::emo2_boot")
+        .find(|e| e.target == "areka_runtime")
         .expect("見本の order probe イベント");
 
     let expected: BTreeMap<&str, &str> = [("a", "2"), ("b", "1"), ("message", "order probe")]

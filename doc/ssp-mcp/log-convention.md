@@ -132,7 +132,7 @@ tracing::warn!(
 ## 7. 履歴に届かないもの
 
 - debug・trace の出来事（取り決めの target でも）。
-- 規則の表のどの target にも当たらない info の出来事（例: `areka::alert` の問いかけの行、`areka::runtime` の info）。
+- 規則の表のどの target にも当たらない info の出来事（例: `areka::alert` の問いかけの行、`areka_runtime` の info）。
 - `areka::install::install_cue` の info の出来事（規則の表の `areka::install` には当てない）。
 - `tracing` も `log` クレートも通らない出力（`println!`・`eprintln!`・パニックの報告）。
 - `log` クレートで出した info 以下の行。`log` クレートの warn 以上は `error` に残る（target は `log` として届くが、warn 以上はどの target でも `error` なので変わらない）。

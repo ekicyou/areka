@@ -15,8 +15,8 @@
 //! ゴーストごとに n 回・同期呼出）・`attach_balloon_pointer_handlers`（`ghost_session::prepare_ghost_windows`
 //! の窓 spawn 直後クロージャ内）。
 //! 本 mod の公開項目はこの 3 入口のいずれかから到達する（バルーンの上の滞在の集合は runtime の型
-//! `BalloonHover`（`runtime/balloon_hover.rs`）へ分けた。書くのはこの mod・読むのはバルーン可視性の相
-//! ——`runtime/frame.rs:170` から呼ばれる `run_balloon_visibility_phase`）。
+//! `BalloonHover`（`crates/areka-runtime/src/balloon_hover.rs`）へ分けた。書くのはこの mod・読むのはバルーン可視性の相
+//! ——`crates/areka-runtime/src/frame.rs` から呼ばれる `run_balloon_visibility_phase`）。
 //!
 //! 上流契約（collision-geometry の resolver・`RuntimeWiring::runtime()` の読み口）は消費のみ行い、
 //! 逆方向依存（上流が balloon.rs を知る）は禁止（design「依存方向」）。

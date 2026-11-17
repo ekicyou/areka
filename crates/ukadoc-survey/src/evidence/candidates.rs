@@ -26,7 +26,7 @@
 //! 当てて数えたところ、設計の挙げる 3 か所の件数と一致した——⑴ は
 //! `crates/areka-kanade/src/schedule/events.rs` の 11 件と
 //! `crates/areka-kanade/src/schedule/resources.rs` の 1 件、⑵ は
-//! `crates/areka/src/emo2_boot/consumer_ledger.rs` の 4 件。全体では 381 件
+//! `crates/areka-runtime/src/consumer_ledger.rs` の 4 件。全体では 381 件
 //! （⑴ 254・⑵ 4・⑶ 24・⑷ 99）である。
 //!
 //! **この件数は常時走るテストでは守らない**（要件 6.2）。当て推量の出力を契約に

@@ -340,7 +340,7 @@ pub(super) const EMO2_BOOT_FINAL: [&str; 2] = ["イイジャン！", "‥‥え�
 /// 待ちのタグで別々の合図になって届いても、表示済みの字は動かず、「‥」は最初から
 /// 出終わったときと同じ 2 行目の頭に出る（要件 1.1・1.2・1.4・2.5・5.1・5.2）。
 #[test]
-fn emo2_boot_talk_reveals_without_moving_glyphs() {
+fn runtime_talk_reveals_without_moving_glyphs() {
     let stages = walk(EMO2_BOOT_TALK, "1", &budoux_model(), NINE_WIDE);
     let last = stages.last().expect("段階がある");
     assert_eq!(

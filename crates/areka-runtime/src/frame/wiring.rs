@@ -313,7 +313,7 @@ impl RuntimeWiring {
         self.attached
     }
 
-    /// 文字層 runtime への共有ハンドル読み口（design「アクセサ（runtime/frame.rs）」・
+    /// 文字層 runtime への共有ハンドル読み口（design「アクセサ（`crates/areka-runtime/src/frame.rs`）」・
     /// `RuntimeWiring::runtime()`・Req 4.1）。
     ///
     /// choice-interact のバルーン選択肢対話配線（`super::super::input_events::balloon`）が、この借用を

@@ -9,8 +9,8 @@
 //! areka 側の 7 本——ペア機構の 2 本（ペア宣言を付ける組立＝`spawn.rs`、その記録＝`diag.rs`）と、
 //! グループ機構が新設した 5 本——は crate ごとに 2 つの片割れで受け持つ（spec:
 //! placement-crate-split 要件 5.2・5.3）。本ファイルは配置の crate の片割れで、配置の 4 本と
-//! 配置の `src` の木を見る。本体の 3 本（`runtime` のもの）・帯のファイル・本体の `src` の木は
-//! 本体の `crates/areka/src/placement_tests/spawn_zorder_pair_deferred_tests.rs` が見る。
+//! 配置の `src` の木を見る。`areka-runtime` の 3 本・帯のファイル・`areka-runtime` の `src` の木は
+//! `crates/areka-runtime/src/placement_tests/spawn_zorder_pair_deferred_tests.rs` が見る。
 //! 語の表と走査器は 2 つの片割れが共に使う [`crate::test_support::zorder_pair_deferred`] に
 //! 1 つだけあり、どちらの片割れも自分の crate の実物で較正する。
 //!
@@ -40,8 +40,8 @@
 //!
 //! wintf 側と同じく語の表は 2 つに分かれる。最小化・タスクバーの語（`DEFERRED_NEEDLES`）は今も
 //! 先送りのまま。常に手前の帯の語（`BAND_NEEDLES`）は `stay-on-top-directives` が実装したが、
-//! areka 側でそれを持つのは本体の受け口（`runtime/window_state_cue.rs`）と取り出しの相
-//! （`runtime/frame/window_state.rs`）だけと決めてある。よってどちらの表の語も重なり順の機構の
+//! areka 側でそれを持つのは`areka-runtime` の受け口（`crates/areka-runtime/src/window_state_cue.rs`）と取り出しの相
+//! （`crates/areka-runtime/src/frame/window_state.rs`）だけと決めてある。よってどちらの表の語も重なり順の機構の
 //! 本番ファイルには無いことを主張し続ける（帯の語の持ち主に語が在る対照は本体の片割れが持つ）。
 //!
 //! # 行コメントを除いてから探す理由

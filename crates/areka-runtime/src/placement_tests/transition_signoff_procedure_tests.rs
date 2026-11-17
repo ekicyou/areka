@@ -44,11 +44,11 @@ use areka_placement::transition_diag::{
     PLACEMENT_KIND_ALL, SNAPSHOT_FIELDS,
 };
 
-/// 手順書のリポジトリ相対パス（`crates/areka` から見た相対）。
+/// 手順書のリポジトリ相対パス（`crates/areka-runtime` から見た相対）。
 const PROCEDURE_RELATIVE_PATH: &str =
     "../../.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md";
 
-/// 本リポジトリが備える手順書の出所（`crates/areka` から見た相対パス）。
+/// 本リポジトリが備える手順書の出所（`crates/areka-runtime` から見た相対パス）。
 ///
 /// 採取者が「この語を grep せよ」と読む文書は、時期によって 1 本とは限らない。先行仕様
 /// （atom）の手順書は完了アーカイブに在り、**他仕様の文書は書き換えない**（要件 6.6）ので、
@@ -58,7 +58,7 @@ const PROCEDURE_RELATIVE_PATH: &str =
 /// モジュール doc であり（design「実機サインオフ」の 5）、本檻はそれを 1 個の文書として読む。
 const PROCEDURE_SOURCES: &[&str] = &[PROCEDURE_RELATIVE_PATH, OFFSET_PROCEDURE_RELATIVE_PATH];
 
-/// 本仕様の手順書のリポジトリ相対パス（`crates/areka` から見た相対）。
+/// 本仕様の手順書のリポジトリ相対パス（`crates/areka-runtime` から見た相対）。
 ///
 /// 文書は独立した `.md` ではなく**ランナーのモジュール doc** に置いてある（design の指定）。
 /// 手順書は `//!` の行だけなので、本檻は `.rs` の出所から `//!` の行だけを読む（関数名や

@@ -1,5 +1,5 @@
 //! バルーン可視性の**判断中核**（純関数 [`decide`]）とその状態モデル
-//! （design.md「BalloonVisibilityController（`runtime/balloon_visibility.rs`）」・
+//! （design.md「BalloonVisibilityController（`crates/areka-runtime/src/balloon_visibility.rs`）」・
 //! Requirements 2.1〜2.7 / 3.1 / 3.2 / 3.3 / 3.6 / 4.2 / 4.3 / 4.5 / 4.6 / 4.7 / 4.8 / 4.9 /
 //! 5.1〜5.3 / 5.5 / 5.6 / 8.2 / 8.3 / 8.6 / 9.5）。
 //!

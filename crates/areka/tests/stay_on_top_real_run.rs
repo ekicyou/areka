@@ -48,10 +48,10 @@ use windows::core::{BOOL, w};
 
 const REAL_RUN_ENV: &str = "AREKA_STAY_ON_TOP_REAL_RUN";
 /// 判定の分岐（受け口・状態・帯・組・鎖・シェルの切り替えの組の保ち）を debug まで開ける。
-const RUST_LOG: &str = "info,kanade=debug,areka::runtime::window_state_cue=debug,\
-areka::runtime::zorder_cue=debug,areka::runtime::frame::window_state=debug,\
-areka::runtime::frame::zorder_drain=debug,areka::runtime::frame::zorder_descript=debug,\
-areka::runtime::frame::switch=debug,wintf::ecs::window=debug";
+const RUST_LOG: &str = "info,kanade=debug,areka_runtime::window_state_cue=debug,\
+areka_runtime::zorder_cue=debug,areka_runtime::frame::window_state=debug,\
+areka_runtime::frame::zorder_drain=debug,areka_runtime::frame::zorder_descript=debug,\
+areka_runtime::frame::switch=debug,wintf::ecs::window=debug";
 const SAKURA: &str = "むらさき";
 const KERO: &str = "エモ";
 const STATE_CHANGED: &str = "[window_state] 常に手前の状態が変わった";

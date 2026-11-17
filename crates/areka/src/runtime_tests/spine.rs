@@ -34,7 +34,7 @@
 //!
 //! # 構造上の逸脱（設計 File Structure との差分・CONCERNS 相当）
 //!
-//! design.md の File Structure は spine を外部結合テスト `tests/emo2_boot_spine_test.rs` に置くが、
+//! 完了した spec `areka-P0-emo2-boot` の design.md の File Structure は spine を外部結合テストに置くが、
 //! `areka` は `[[bin]]` のみ（`[lib]` 無し）で外部 `tests/` から bin 内部項目
 //! （`crate::{PresentBridge, RuntimeWiring, run_attach_phase, ...}`）へ到達できない。
 //! spine は Tick 注入＋GPU readback＋frame フェーズ直接駆動を **in-process** で行う必要があり

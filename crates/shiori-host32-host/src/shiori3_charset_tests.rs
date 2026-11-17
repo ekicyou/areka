@@ -50,7 +50,7 @@ const FAMILIES: &[(&str, &str, &[u8])] = &[
 ///
 /// 要求の形は emo2 の OnBoot GET と同形にした——`sender` は `Shiori3Client` の既定
 /// `DEFAULT_SENDER`（`client.rs` の既定 sender の定義行）、`Reference0` は
-/// `crates/areka/src/runtime/spine_conformance_script.rs` の `SHELL_NAME`（emo2 のシェル名・
+/// `crates/areka/src/runtime_tests/spine_conformance_script.rs` の `SHELL_NAME`（emo2 のシェル名・
 /// `検体 emo2 の shell/master/descript.txt` の
 /// `name` 行の逐語）で、非 ASCII を含むため
 /// 「UTF-8 経路のバイト列が 1 バイトも変わらない」を実際に検査できる。

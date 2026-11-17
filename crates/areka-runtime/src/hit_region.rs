@@ -45,14 +45,14 @@
 //! # `crate::` フリー規律（この配置の決定的制約）
 //!
 //! **非テストコードは `crate::` パスを一切使わず、`super::target_map` と外部 crate
-//! （`areka_emo_present`）のみを参照する。** この規律が probe（`examples/collision-probe.rs`・
-//! Task 4.1）からの `#[path]` include を成立させる唯一の条件である（design「File Structure Plan →
+//! （`areka_emo_present`）のみを参照する。** この規律が probe（`crates/areka-runtime/examples/collision-probe.rs`・
+//! Task 4.1）からの `#[path]` include を成立させる唯一の条件である（今の probe は `areka_runtime::hit_region` を crate の公開面で読む）（design「File Structure Plan →
 //! 配置の決定的制約」）。同じ性質に依存していた前例が、配置を crate に分ける前の
 //! `examples/window-placement.rs`（配置の `mod.rs` を `#[path]` で include・`crate::` パス無しゆえ成立）
 //! である（今は `crates/areka-placement/examples/window-placement.rs` にあり、crate の公開面を使う）。
 //!
-//! これを破ると `collision-probe.rs`（ひいては `cargo build --examples`／`cargo test --workspace`）が
-//! コンパイル不能となり、7.3 の実 DPI 証跡取得経路が失われる。`runtime/mod.rs` 自体は非テスト
+//! これを破ると `crates/areka-runtime/examples/collision-probe.rs`（ひいては `cargo build --examples`／`cargo test --workspace`）が
+//! コンパイル不能となり、7.3 の実 DPI 証跡取得経路が失われる。`lib.rs` 自体は非テスト
 //! コードに 本体の `is_benign_boot_error` の実呼出を持つため `#[path]` include 不能＝だから本ファイルは
 //! `crate::` フリーでなければならない。`#[cfg(test)]` 内では `crate::`／`super::` を自由に使ってよい。
 

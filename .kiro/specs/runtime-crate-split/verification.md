@@ -539,3 +539,163 @@
 ### 7.3 緑
 
 - `cargo test -p log-capture-kit --test file_length_guard_test`: 6 本緑。
+
+## 8. 段 7（8.1・8.2）
+
+非挙動。タスク 8.1・8.2。要件 3.8・4.3・5.8〜5.10・6.2〜6.4・6.6・6.8・7.3・7.8。赤は書き換えの前の grep の件数。ログの本文は 1 文字も変えていない（変えた行は出所の値・説明・テストの見本だけ）。
+
+### 8.1 ログの出所の名前（4 ファイル）
+
+赤（書き換えの前）:
+
+| grep | 件数 |
+|---|---|
+| `rg -n 'areka::runtime' crates/areka/tests/stay_on_top_real_run.rs crates/areka/src/log_history_tests.rs crates/areka/tests/emo2_real_run/common_tests.rs doc/ssp-mcp/log-convention.md` | 8（`stay_on_top_real_run.rs` 51〜54 行に 6 つ・`log_history_tests.rs` 124 行・`common_tests.rs` 28 行・`log-convention.md` 135 行） |
+
+書き換え（値だけ・ほかの行は触れていない）:
+
+- `stay_on_top_real_run.rs`: `RUST_LOG` の `areka::runtime::<道>=debug` 6 つを `areka_runtime::<道>=debug` へ（`window_state_cue`・`zorder_cue`・`frame::window_state`・`frame::zorder_drain`・`frame::zorder_descript`・`frame::switch`。6 つとも `areka-runtime` に同じ名前のモジュールがあることを確かめた）。
+- `log_history_tests.rs` 124 行: `classify(Level::INFO, "areka_runtime")` が `None`（`areka` は完全一致だけの規則・`areka_runtime` はどの規則にも当たらない）。
+- `emo2_real_run/common_tests.rs` 28 行: 見本の行の出所を `areka_runtime`。
+- `doc/ssp-mcp/log-convention.md` 135 行: 例の `areka::runtime` を `areka_runtime`。
+- 4 ファイルの中の古いパス（`src/runtime`・`runtime/`・`crate::runtime`）は 0 件で、直す所は無かった。
+- `log_history.rs` の `RULES` は変えていない（差分 0）。runtime を名指す行は元から無く、警告以上は `classify` が出所を見ずに `error` へ振る（`warn_and_error_go_to_error_regardless_of_target`）ので、分け方は前後で同じ。
+
+緑（書き換えの後）:
+
+| 確かめ | 結果 |
+|---|---|
+| `cargo test -p areka --bin areka -- log_history` | 43 本緑 |
+| `rg -n 'areka::runtime(::\|=\|\b)' crates tools` | 0 件 |
+| 6.2（直書きの出所）: `rg -n 'target\s*:' crates/areka-runtime/src crates/areka-runtime/examples`（`*_tests.rs`・`*test_support*`・`placement_tests/` を除く） | 当たりは構造体の欄名・引数名だけで、tracing の `target:` の文字列は 0 件 |
+| 6.3（語彙の出所）: `rg -n '"areka(::\|_)[a-z_:]*"\|areka::runtime\|areka::emo2' crates/areka-runtime/src`（同じ除外） | 0 件。`TARGET_SCRIPT`（`areka_kanade::script_log::TARGET`）・`TARGET_ERROR`（`"areka::log::error"`）は `log_history.rs`（本体）にだけ在り、runtime の本番に 0 件 |
+
+### 8.2 `crates/` の説明とテストの値（8.1 の 4 ファイルを除く）
+
+赤（書き換えの前）: `rg -n 'emo2_boot|Emo2Wiring' crates -g '!crates/areka/**'` は 14 ファイル 21 行（`areka-parsers` 2・`areka-ghost` 2・`areka-seriko` 2・`wintf` 1・`areka-emo-text` 2・`areka-kanade` 5・`log-capture-kit` 6〔`event.rs` 1・`event_tests.rs` 5〕・`ukadoc-survey` 1）。`crates/areka/src/runtime_tests/spine.rs` 37 行に `tests/emo2_boot_spine_test.rs` が 1 行。
+
+書き換え:
+
+- 古い名前: 説明の行は今の道（`areka_runtime::adapter`・`areka_runtime::frame`・`areka_runtime::hit_region`・`areka` の `session::reload`）と移した先のファイルへ。`log-capture-kit/src/event_tests.rs` の出所の値 5 行（と期待の文字列 1 行）は `"areka_runtime"` へ。`actor_lookahead_tests.rs` の関数は `runtime_talk_reveals_without_moving_glyphs` へ改名。`runtime_tests/spine.rs` 37 行は完了した spec `areka-P0-emo2-boot` の名前で指す説明へ（ファイル名は書かない）。
+- 古いパス（`crates/areka/src/runtime/…`・`crates/areka/src/placement_tests/transition_*`・`runtime/frame/…` ほか）は、`areka-placement`（12 ファイル）・`wintf`（`test_crash_report.rs`・`runtime/tick_bridge.rs`・`ecs/window/{zorder_chain,zorder_pair_test_support,mod}.rs`・`ecs/world/tick_wake.rs`）・`areka-emo-present`（`presenter.rs`・`presenter/{refresh,transition_record}.rs`）・`areka-emo-text`・`shiori-host32-host`・`ukadoc-survey`・`areka-runtime` 自身（`talk_lifecycle.rs`・`balloon_visibility.rs`・`balloon_background_tests.rs`・`frame/wiring.rs`・`frame_transition_branch_tests.rs`・`placement_tests/transition_judge_offset_signoff_tests.rs`）・本体（`input_events/balloon.rs`・`session/ghost_quit.rs`・`placement_tests/measure_template_tests.rs`・`shell_balloon_switch_session_balloon_tests.rs`・`runtime_tests/spine_conformance_support_stage_tests.rs`・`tests/emo2_real_run.rs`）で、`crates/areka-runtime/src/…`・`crates/areka/src/runtime_tests/…` の今の場所へ。
+- `areka-placement/src/test_crash_report.rs`・`wintf/src/test_crash_report.rs` の 1 行目の「写しの相手」は `crates/areka-runtime/src/crash_report_test_support.rs`。
+- `frame_transition_atomicity_tests.rs` 57・150 行の `transition_judge.rs:609-613` は「`summarize` の `KIND_WRITE` の腕（`path_a_writes` を数える所）」と名前で指した（行番号は書かない・同じ行の中で直したので行数は変わらない）。
+- `spine_conformance_support_stage_tests.rs` 37 行の `runtime/spine.rs:490-499` は、移す前から行がずれていた（そこは `titles()`）。「`SpineHarness::new` が検体の複製 `SampleRoot` を毎回作る」と名前で指す形へ。
+- `hit_region.rs` 48〜55 行: probe のパス（`crates/areka-runtime/examples/collision-probe.rs`）・今の probe が crate の公開面で読むこと・`runtime/mod.rs` → `lib.rs` だけを直した。「`crate::` フリー規律」の文の意味は変えていない（spine の監査 8.5 へ申し送り）。
+- `areka/src/placement_tests/zorder_{group,inversion}_branch_coverage_tests.rs` の見出しの値 `"runtime/…"` は `"areka-runtime/…"` へ（見出しは表示にだけ使い、`rsplit('/')` で最後のファイル名を取る使い方は同じ）。
+- 手を付けなかった `runtime/…`: `wintf` 自身の `runtime/{tick_bridge,mod,window_factory,window_registry}.rs`・`dola` 自身の `runtime/…` と `tests/runtime/…`・`wintf/src/ecs/dola/mod.rs` の dola の `runtime/…`。`areka-placement` ほかの「`runtime::frame`」のような**モジュールの道**の言い方は、今の名前（`areka_runtime::frame` の道と同じ綴り）のまま。`areka_runtime` の `crates/areka-runtime/src/…` は `[^/]runtime/…\.rs` の grep に `-runtime/` で当たるが、旧いパスではない。
+- `transition_judge.rs`・`transition_judge_tests.rs` はどちらも 999 行のまま（今回は触れていない）。変更はどのファイルでも行数が変わらない（差分の挿入と削除が同数）。分割は不要で、例外表も触れていない。
+
+緑:
+
+| 確かめ | 結果 |
+|---|---|
+| `rg -n 'emo2_boot\|Emo2Wiring' crates -g '!crates/areka/**'` | 0 件 |
+| `rg -n 'emo2_boot' crates`（本体を含む） | 0 件 |
+| `rg -n 'crates/areka/src/runtime/\|src/runtime/\|placement_tests/(transition_judge\|transition_signoff\|reset_balloon_pos\|measure_bake_log\|spawn_zorder_pair_deferred)' crates`（`wintf`・`dola` の自分の `runtime/` を除く） | 当たりは新しい置き場を名指す 4 行（`areka-placement` と `frame_transition_branch_tests.rs` の説明 2 行・番人の表の項目 1 行・`transition_signoff_procedure_tests.rs` の `src/placement_tests/…` の相対の値 1 行）だけ。旧いパスは 0 件 |
+| `cargo test -p log-capture-kit` | 全部緑（`file_length_guard_test`・`event_tests` を含む） |
+| `cargo test -p areka-emo-text -- runtime_talk_reveals_without_moving_glyphs` | 1 本緑 |
+| `cargo check --workspace --all-targets` | 緑。警告は既存の `shiori-abi` の `windows` の 1 件だけ（新しい警告 0）。`stay_on_top_real_run.rs`・`emo2_real_run/common_tests.rs` はここで組むだけで実行していない |
+| `cargo fmt --all -- --check` | 差分 0 |
+
+## 9. 段 7（8.3・8.4・8.5）
+
+非挙動（文書と steering と brief の書き換えだけ）。対応する要件: 2.5, 4.8, 5.5, 5.6, 5.7, 5.9, 7.1。本番のコード・テスト・`tools/` は 1 行も書いていない。
+
+### 9.1 8.3 文書の中の runtime のパス
+
+- 赤（書き換える前・`HEAD` の `git grep`）: 設計の Verification の式（`crates/areka/src/runtime/|src/runtime/|placement_tests/(transition_judge|transition_signoff|reset_balloon_pos|measure_bake_log|spawn_zorder_pair_deferred)|areka::runtime(::|=|\b)|emo2_boot|Emo2Wiring`）を 8.3 のファイル 10 本（`click-through.md` 含む）へ回して 99 行・10 ファイル（`COMPAT_ARCHITECTURE.md` 41・`sakura-script.toml` 34・`shiori.toml` 7・`property.toml` 6・`briefing-assets.md` 5・`areka-tools.md` 2・`click-through.md` 1・`emo2-conformance-scope.md` 1・`briefing-shiori.md` 1・`assets.toml` 1）。`crates/areka/src/runtime/<ファイル>.rs` の字面は 124 か所。`src/` を付けない書き方（`runtime/x.rs`）の当たりは 11 行。
+- 書き換え（機械＋目）: `crates/areka/src/runtime/<道>.rs` を、`crates/areka-runtime/src/<道>.rs` に実在すればそこへ、なければ `crates/areka/src/runtime_tests/<道>.rs` へ（`mod.rs` は `lib.rs`）。未解決は 0。書き換えた字面は 124 か所（`COMPAT_ARCHITECTURE.md` 60・`sakura-script.toml` 34・`shiori.toml` 9・`property.toml` 9・`briefing-assets.md` 7・`areka-tools.md` 2・`emo2-conformance-scope.md` 1・`briefing-shiori.md` 1・`assets.toml` 1）。
+- 案 C で同じ名前のテストのファイルが `areka-runtime` と本体の `runtime_tests/` の両方にあるもの（`frame/window_state_tests.rs`・`shell_balloon_resolve_tests.rs`・`strict_judges_tests.rs`）は、名指されたテストの関数がどちらにあるかを `fn` の名前で調べて 1 件ずつ書き分けた。
+  - `COMPAT_ARCHITECTURE.md` 227・228 行: `frame/window_state_tests.rs` の `script_playback_turns_on_raises_and_turns_off`・`raise_keeps_state_and_marks` は `areka-runtime`、`log_fields_for_change_unchanged_and_raise`・`log_ghost_falls_back_to_dash_and_raise_reports_normal_band` は本体の `runtime_tests/frame/window_state_tests.rs`（2 つのパスを書いた）。
+  - `COMPAT_ARCHITECTURE.md` 326・328・330・385 行: `shell_balloon_resolve_tests.rs` の `shell_lastinstalled_resolves_only_within_the_current_ghost`・`balloon_lastinstalled_resolves_only_when_in_the_catalog`・`hidden_shell_by_name_and_the_current_one_are_candidates`・`balloon_candidates_put_the_ghost_inner_first` は本体の `runtime_tests/`。329 行の `random_picks_among_visible_others_with_the_injected_pick`・`random_with_no_other_candidate_is_the_current_one` は `areka-runtime` のまま。
+  - `doc/ssp-mcp/areka-tools.md` 6 行: `strict_judges_tests.rs`（この文書を `include_str!` で読む）は本体の `crates/areka/src/runtime_tests/strict_judges_tests.rs`。
+- 行番号つきの所を移した後の行で確かめた（移す前の `bd2dee303` の同じ行の文字と比べた）: `COMPAT_ARCHITECTURE.md` の `zorder_descript.rs:63`・`zorder_cue.rs:128`・`transition_judge.rs:711`（`crates/areka-runtime/src/placement_tests/transition_judge.rs` へ書き換え。711・723・760 行は同じ文字）は一致。`briefing-assets.md` の `assets.rs:331`・`:322`・`:415`・`:343`（`pub(crate)` → `pub` の 1 語の差だけ）は一致。**`lib.rs` は 5 行ずれた**ので、`runtime/mod.rs:385`（`warn!(`）→ `lib.rs:390`、`:392`（`error!(`）→ `lib.rs:397` に直した（`briefing-assets.md` 221・228・229 行の 4 か所と、229 行にあった `runtime/mod.rs:392` の字面）。
+- `rg -n "[^/]runtime/[a-z_/]+\.rs"` の当たりを目で確かめた（この式は `areka-runtime/…` の `-runtime/` にも当たるので、`crates/areka-runtime/src/` と `crates/wintf/src/runtime/` を除いて読んだ）:
+  - 書き換えた（本体の runtime の旧い書き方で `src/` を付けないもの・`doc/COMPAT_ARCHITECTURE.md` の 8 行 11 か所）: 134 行 `runtime/move_cue_args.rs`・136 行 `runtime/move_cue_geometry.rs`・137 行 `runtime/move_cue_place.rs`・174 行 `runtime/move_cue_geometry.rs` と `runtime/frame/drain_resnap.rs`・213 行 `runtime/frame_work_area_resnap_tests.rs`・`runtime/frame_transition_atomicity_tests.rs`・`runtime/frame/balloon_offset_follow.rs`・369 行 `runtime/frame/drain_resnap.rs`・428 行 同・432 行 同 → どれも `crates/areka-runtime/src/<同じ道>`（`frame_work_area_resnap_tests.rs`・`frame_transition_atomicity_tests.rs` は `areka-runtime` に実在・本体の `runtime_tests/` には無い）。
+  - wintf・dola の自分のものとして残した（`crates/wintf/src/runtime/` と `crates/dola/src/runtime/` の中）: `doc/click-through.md` 3 行（`crates/wintf/src/runtime/mod.rs`）・103 行 `runtime/mod.rs`（`wire_click_through`）・129 行 `runtime/tick_bridge.rs`（`relay_vblank`）、`doc/COMPAT_ARCHITECTURE.md` 299 行・360 行の `crates/wintf/src/runtime/wndproc_bridge*.rs`、`.kiro/steering/structure.md` 110・113〜118 行（wintf の `runtime/` の Contains）・254 行（dola の `runtime/`）・271 行（dola の `runtime/clock.rs`）、`.kiro/steering/tech.md` 53・55 行（dola の `runtime/interpolator/`・`runtime/clock.rs`）。
+  - 8.3 では書き換えなかった（8.3 の触るファイルの外）: `doc/ideas/novel-platform.md` 23 行の `runtime/mod.rs` の `derive_scopes`（今は `crates/areka-runtime/src/lib.rs` 345 行）。8.6 で書き換えた（10.5）。
+- 緑（書き換えた後）: 上の式を 8.3 のファイルへ回して 4 行・2 ファイルのみ＝すべて wintf の `crates/wintf/src/runtime/` を名指す行（`click-through.md` 3 行・`COMPAT_ARCHITECTURE.md` 299・360 行）と、新しい置き場 `crates/areka-runtime/src/placement_tests/transition_judge.rs`（231 行）。`areka::runtime` と `emo2_boot|Emo2Wiring` は 0 件。
+- `doc/ukadoc-coverage/report/` は手で直さず、網羅台帳の道具で作り直した: `cargo run -q -p ukadoc-survey -- report`・`-- report-summary`（`report/` 5 本を書き直した）。作り直した後の `git diff -- doc/ukadoc-coverage/report` は空（報告は項目の数と状態しか書かず、根拠の場所のパスを書かない）。`git status` が `M` に見えるのは行末の正規化だけで、内容の差は 0。続けて `cargo run -q -p ukadoc-survey -- check` は「食い違い 0 件」・終了コード 0、`cargo test -p ukadoc-survey` は緑。
+
+### 9.2 8.4 steering
+
+- 赤: `rg -n "crates/areka/src/runtime/|src/runtime/" .kiro/steering/structure.md .kiro/steering/tech.md` が `structure.md` 171・259 行・`tech.md` 90 行など。
+- `structure.md`: ① `### Runtime Crate（areka-runtime）` の節を `### Placement Crate` の後に足した（Location・Purpose・Contains〔`lib.rs`・`frame/`・`spine*`・`placement_tests/`・`examples/`・`test-support` で開く支え〕・Features・`*_cue.rs` の同型〔本体の節にあったものをここへ移した〕・Dependencies・本体を引かない約束・Consumers）。② 本体の節の `runtime/` の行を `runtime_tests/`（テスト専用・本体を引く runtime のテストの置き場）の行へ、`placement_tests/` の行を本体に残る分（`measure_template`・`spawn_assembly`・`measure_bake_count`・分岐の対応表 2 本と支え）と移った分（`transition_judge*`・`transition_signoff*` ほか）へ。③ 本体の依存の行に `areka-runtime` を足した。④ 171 行の例のパス `areka/src/runtime/spine.rs` → `areka-runtime/src/spine.rs`。⑤ 259 行の `crates/areka/src/runtime/frame.rs` → `crates/areka-runtime/src/frame.rs`。⑥ `log-capture-kit` を使う crate の数 20 → 21（`areka-runtime` を足した。`crates/*/Cargo.toml` で `log-capture-kit` を引く crate は `log-capture-kit` 自身を除いて 21）。
+- `tech.md`: 90 行の `spine_wait.rs` のパス → `crates/areka-runtime/src/spine_wait.rs`。`roadmap.md` は書いていない。
+- 緑: 2 つの steering を `src/runtime/|areka::runtime|placement_tests/(transition_judge|…)` で grep して、wintf・dola の自分の `runtime/` を除いて 0 件。新しい crate の節がある。`emo2_boot` の語が `structure.md` に 2 行残る（`session/` の行と新しい節の「旧名」の説明＝歴史の説明で、5.10 の範囲〔`crates`〕の外）。
+
+### 9.3 8.5 3 本の audit の brief
+
+- 受け持つファイルの当て方（D14）: `git ls-files crates/areka-runtime crates/areka/src/runtime_tests` の 276 ファイルに、次の規則を `crates/areka-runtime/src/` と `crates/areka/src/runtime_tests/` の基準からの相対のパスで当てた。
+  - `placement_tests/transition_*` → `audit-placement-follow-residue`
+  - `frame/` の下・`frame.rs`・`frame_*` → `audit-emo2-boot-frame`
+  - `switch_assets*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`・`change_cue*`・`skin_switch.rs`・`balloon_hover.rs`・`shell_box_hover.rs` → `audit-emo2-boot-switch`
+  - それ以外（`Cargo.toml`・`examples/`・`placement_tests/` の `transition_*` でないもの・`lib.rs` ほか）→ `audit-emo2-boot-spine`
+- 結果（スクリプトの出力）: 276 ファイルのうち、frame 99（`areka-runtime` 66・本体 33）・switch 48（41・7）・spine 113（79・34）・residue 16（`areka-runtime`）。どのファイルも当たる規則は 1 つだけ（重なり 0）・どれにも当たらないファイル 0。`crates/areka-runtime` 202・`crates/areka/src/runtime_tests` 74。
+- 本体の `session/` へ移した e2e の 2 本（`script_security_e2e_tests.rs`・`readme_script_e2e_tests.rs`）は上の一覧の外にあるので spine の持ち物として別に挙げた（spine は 115 ファイル）。合わせて 278 ファイルが 4 つの持ち主のどれか 1 つだけ。
+- brief の書き換え: 3 本の「Current State」の「受け持つファイル」の行を、D14 のとおり `crates/areka-runtime/` と `crates/areka/src/runtime_tests/` の両方に当てた形へ（spine は `Cargo.toml`・`examples/`・`placement_tests/` の `transition_*` でないものを入れ、`transition_*` は外して `audit-placement-follow-residue` と書いた。`session/` の分は残し、e2e の 2 本を足した）。`audit-placement-follow-residue` の brief は書いていない。
+- 3 本に節「runtime-crate-split からの申し送り（2026-11-17）」を足した。内容（⑴〜⑸）:
+  - ⑴ 直さなかった不具合: 0 件。
+  - ⑵ 理由の文が古くなった `#[allow(...)]`（属性と文は変えていない・`rg -n "#!?\[allow\(" crates/areka-runtime crates/areka/src/runtime_tests` の全部を読んだ）: frame の `frame.rs` 96〜97 行の文と `unused_imports` 17 本（98〜134 行）・152 行の文と 153 行・`frame/wiring.rs` 12 行の文と 13 行（理由が「`areka` は lib target を持たない bin クレート」）。spine の `assets.rs` 215 行 `#[allow(dead_code)]`（lib の `pub fn` になったので、許可がまだ要るか確かめる）と、`audit-placement-follow-residue` の持ち物の `transition_judge.rs` 47〜50 行の説明（`main.rs` が `placement_tests` を宣言する）。switch は 0 件。
+  - ⑶ 開けた項目: 2.5（`pub(crate)` → `pub` 112 件）を持ち主ごとに frame 10・switch 26・spine 76 に分け、4.2 の ⑴〜⑷（開けた私有の項目 19・渡し口 22＝frame は 11 と 14・switch は 7 と 7・spine は 1 と 1）・案 C の割り方の表の行・6.1（`pub` にした項目 0 件）を持ち主ごとに書いた。
+  - ⑷ `audit-placement-follow` の範囲の外の古い参照 3 件（frame だけ）: `drain_resnap.rs` 554 行と `frame_chain_finalize_tests.rs` 200 行の「唯一の位置ライター」・`frame_work_area_resnap_hold_tests.rs` 429 行の `should_panic` に `cfg_attr(not(debug_assertions), ignore …)` が無い件・`frame/move_shift.rs` 75 行の注。spine には `hit_region.rs` 45〜57 行の「`crate::` フリー規律」の文（examples が `#[path]` で取り込んでいた理由が古くなった）。
+  - ⑸ 6.4 の扱いの表（frame だけ・12 行）。
+  - spine にだけ: 番人の crate を引く補助を使う 17 本の関数（D4）が本体に残っていること。本体の `runtime_tests/balloon_visibility_phase_tests.rs` の `world_at`（146 行）が `areka-runtime` の支え `balloon_visibility_phase_test_support.rs` の `world_at` と同じ中身の前からの写しであること（switch にも書き、支えの側へ 1 つにまとめられると提案した）。
+- 緑: 3 本の brief に節がある（`rg -c "runtime-crate-split からの申し送り" .kiro/specs/audit-emo2-boot-{frame,spine,switch}/brief.md` が各 1）。
+
+### 9.4 旧いパスの grep（触ったファイルの範囲）
+
+| 式 | 範囲 | 結果 |
+|---|---|---|
+| `crates/areka/src/runtime/\|src/runtime/\|placement_tests/(transition_judge\|…)` | 8.3 の 10 本・`structure.md`・`tech.md`・`doc/ukadoc-coverage/report` | wintf の `crates/wintf/src/runtime/` と新しい置き場 `crates/areka-runtime/src/placement_tests/` を除いて 0 件 |
+| `areka::runtime(::\|=\|\b)` | 同上 | 0 件 |
+| `emo2_boot\|Emo2Wiring` | 8.3 の 10 本 | 0 件 |
+| `crates/areka/src/runtime/`（旧パス）| 3 本の brief | 歴史の説明（「前は…」）として書いた 3 行だけ。5.9 の範囲〔`crates tools doc steering`〕の外 |
+
+### 9.5 申し送り
+
+- `doc/ideas/novel-platform.md` 23 行の `runtime/mod.rs` の `derive_scopes` は旧い置き場（今は `crates/areka-runtime/src/lib.rs`）。8.3 の触るファイルの外なので 8.3 では直さず 8.6 へ渡した。8.6 で `crates/areka-runtime/src/lib.rs` へ書き換えた（10.5）。
+- `audit-placement-follow-residue` の brief には書き込んでいない（8.5 の境界の外）。その持ち物のファイルは `crates/areka-runtime/src/placement_tests/transition_*`（16 ファイル）。
+
+## 10. 段 7（8.6）
+
+非挙動（確かめだけ）。対応する要件: 5.1, 5.9, 5.10, 5.11, 5.12, 6.7。`tools/` は 1 行も書いていない。残りを直した所は 10.5 の 2 か所（説明の文 3 行と `doc/` の文書の 1 行・テストの実行ファイルは変わらない）。基準は `HEAD` `be73dd1e8` の上の作業ツリー（8.1〜8.5 の未コミットの差分を含む）。
+
+### 10.1 grep の結果
+
+| 項目 | 式（設計の Verification の逐語） | 範囲 | 結果 |
+|---|---|---|---|
+| 古いパス（5.9） | `rg -n "crates/areka/src/runtime/\|src/runtime/\|placement_tests/(transition_judge\|transition_signoff\|reset_balloon_pos\|measure_bake_log\|spawn_zorder_pair_deferred)"` | `crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md` | 生の当たり 12 行 → 除外（下の 10.2）後 0 件 |
+| 古い名前（5.10） | `rg -n 'emo2_boot\|Emo2Wiring' crates -g '!crates/areka/**'` | `crates`（本体を除く） | 0 件 |
+| 古い出所の名前（6.7） | `rg -n "areka::runtime(::\|=\|\b)"` | 5.9 と同じ範囲 | 0 件（`crate::runtime_tests` は当たらない） |
+| `tools/`（5.11） | `git diff --stat main -- tools` | `tools` | 空（`git merge-base HEAD main` と `main` はどちらも `5b3a361c9`＝main は進んでいないので `main` との比べと同じ） |
+| `tools/`（5.12） | `rg -n "src/runtime/\|areka::runtime" tools` | `tools` | 0 件（5.12 は発動しない・申し送りなし） |
+| 目で見る式（5.9） | `rg -n "[^/]runtime/[a-z_/]+\.rs"` | 5.9 と同じ範囲 | 10.3 |
+
+### 10.2 5.9 の生の当たり 12 行の仕分け
+
+- 新しい置き場 `crates/areka-runtime/src/placement_tests/` を名指す（7 行）: `doc/COMPAT_ARCHITECTURE.md` 231 行・`crates/areka-runtime/src/frame_transition_branch_tests.rs` 14 行・`crates/areka-placement/src/spawn_zorder_pair_deferred_tests.rs` 13 行・`crates/log-capture-kit/tests/file_length_guard_test.rs` 71 行・`crates/wintf/src/runtime/tick_bridge.rs` 387 行と `crates/wintf/src/ecs/window/zorder_pair_test_support.rs` 92 行（どちらも手本の道が `crates/areka-runtime/src/placement_tests/transition_signoff_tests.rs`）・`crates/areka-runtime/src/placement_tests/transition_signoff_procedure_tests.rs` 67 行（`CARGO_MANIFEST_DIR` からの相対 `src/placement_tests/…`。今の持ち主は `areka-runtime` で、実在する）。
+- wintf の自分の `runtime/`（4 行）: `.kiro/steering/structure.md` 110 行・`doc/COMPAT_ARCHITECTURE.md` 299・360 行・`doc/click-through.md` 3 行（どれも `crates/wintf/src/runtime/…`）。
+- dola の自分の `runtime/`（1 行）: `crates/dola/tests/runtime/conflict_resolution_test/error_handling.rs` 87 行（dola の `src/runtime/facade_tests.rs`）。
+- 本体の旧い runtime を名指す行: 0 件。
+
+### 10.3 `[^/]runtime/[a-z_/]+\.rs` の当たりを目で確かめた
+
+- 式: `rg -n "[^/]runtime/[a-z_/]+\.rs" crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md`（`doc/ideas/novel-platform.md` を書き換えた後）。当たりは 185 行・211 か所（`rg -o` で数えた）。
+- `areka-runtime/…`（新しい置き場）を名指す 185 か所: `-runtime/` の前はどれも `areka`（`rg -o "[a-z]*[^/]runtime/[a-z_/]+\.rs"` の頭を数えて `areka-runtime/` 185・ほか 0）。`crates/areka/src/placement_tests/zorder_{group,inversion}_branch_coverage_tests.rs` の `"areka-runtime/frame/…"`・`"areka-runtime/zorder_cue_tests.rs"` の 26 か所は `src/` を付けない名札だが、名指すファイルは `crates/areka-runtime/src/` に実在する（`frame/zorder_descript_tests.rs`・`zorder_cue_tests.rs` ほか）。書き換えた `doc/ideas/novel-platform.md` 23 行もここに入る。
+- wintf か dola の自分のもの 26 か所: `structure.md` 113〜118 行（wintf の `runtime/` の節）・271 行と `tech.md` 55 行（dola の `runtime/clock.rs`）・`doc/click-through.md` 103・129 行（wintf の `wire_click_through`・`relay_vblank`）・`crates/wintf/src/runtime/mod.rs` 210 行・`crates/wintf/src/ecs/**` の説明 7 か所・`crates/dola/tests/runtime.rs` の `#[path]` 6 行・`crates/wintf/src/ecs/dola/mod.rs` 80・82 行（dola の `runtime/`）。
+- 本体の旧い runtime を指すもの: 0 件（範囲の中にも外にも残りは無い）。
+
+### 10.4 ほかの番人の表
+
+- `crates/log-capture-kit/tests/temp_path_guard_test.rs`・`with_default_guard_test.rs`・`sample_path_guard_test.rs` を `rg -n "runtime|placement_tests|areka-runtime"` で回して 0 件。三つの表のどの項目にも runtime と移したテストのパスは無い（`with_default_guard_test.rs` の表は `areka-placement` の分だけ）。
+- `file_length_guard_test.rs` の例外の表は 8.1〜8.5 のとおり `crates/areka-runtime/src/placement_tests/` を名指す（10.2 のとおり新しい置き場）。
+- `cargo test -p log-capture-kit`（crate の全部）: 9 つの実行ファイルが全部緑（30・1〔2 ignored〕・8・6・21・16・24・20・4 本）。
+
+### 10.5 直したもの・申し送り
+
+- 直した 1 か所（8.1〜8.5 の持ち主の中・説明の文だけ）: `crates/areka-runtime/src/placement_tests/transition_signoff_procedure_tests.rs` の `PROCEDURE_RELATIVE_PATH`・`PROCEDURE_SOURCES` の説明 3 行の「`crates/areka` から見た相対」を「`crates/areka-runtime` から見た相対」へ（手順書の道は `CARGO_MANIFEST_DIR` から引くので、持ち主が移った後は `areka-runtime` が正しい。コードと行数は変わらない・906 行のまま）。`transition_judge{,_tests}.rs` は触っていない。`cargo fmt --all -- --check` は緑。
+- 直した 2 か所目（8.3 から引き継いだもの・`doc/` は 5.9 の範囲の中）: `doc/ideas/novel-platform.md` 23 行の `` `runtime/mod.rs` の `derive_scopes` `` を `` `crates/areka-runtime/src/lib.rs` の `derive_scopes` `` へ（`fn derive_scopes` は `crates/areka-runtime/src/lib.rs` 345 行に実在）。`src/` を付けない書き方なので 5.9 の式には当たらず、10.3 の目で見る式でだけ見えていた。パスの字面だけを変え、文の残りは変えていない。
+- `doc/` のほかの文書（8.3 の 10 本の外）: `rg -o '.{0,30}[^-]runtime/[A-Za-z_./]*' doc`（wintf・dola・`areka-runtime` を除く）と `rg -o 'areka::runtime\b|crate::runtime::|crates/areka/src/runtime/|src/runtime\.rs' doc` で探した。残ったのは `doc/click-through.md` 103・129 行（wintf の `runtime/`）と、`crates/areka-ghost/src/runtime.rs`（`areka-ghost` の自分のファイル）を名指す `COMPAT_ARCHITECTURE.md` 299 行・`ukadoc-coverage/briefing-assets.md` 221 行・`ssp-mcp/log-convention.md` 62 行だけ。本体の旧い runtime を指すものは 0 件で、ほかに直した文書は無い。
+- `tools/` への申し送り: 5.12 は発動しなかった。設計の検証の最後の申し送り（`tools/load-flake.ps1` の `-Binary` に `areka-runtime-lib`＝`-p areka-runtime --lib` を足す）は、完了の申し送りで `audit-tools-scripts` の着地の前後に応じて書く（`tools/` は触っていない）。

@@ -2,7 +2,7 @@
 //!
 //! 出典 spec: `areka-P0-choice-render`（断りの無い要件の番号と design.md の参照はこの spec のもの・別の spec のものはその場で名を書く）。
 //!
-//! design.md「Testing Strategy > E2E/実機 item 1（emo2_boot 統合）」の正典述語を張る:
+//! design.md「Testing Strategy > E2E/実機 item 1（runtime 統合）」の正典述語を張る:
 //! **実 emo2 fixture ＋ menu.pasta 経路でメニュー cue 列 →選択肢描画〔headless readback〕**。
 //!
 //! `choice_fixture_test.rs` は tests 配下の **test-local** 最小 fixture で parse→resolve と

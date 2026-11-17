@@ -90,7 +90,7 @@ const SCOPE_BLOCK: [GroupWindowKind; 2] = [GroupWindowKind::Balloon, GroupWindow
 
 /// 要素 1 つを省略記法（`bN`／`sN`）の字面へ。
 ///
-/// 指令消化の相（`runtime/frame/zorder_drain.rs`）が受理行の `members=`・`normalized=`
+/// 指令消化の相（`crates/areka-runtime/src/frame/zorder_drain.rs`）が受理行の `members=`・`normalized=`
 /// 欄と、拒否の理由 `DuplicateElement` に使う字面である。
 pub fn element_text(element: &GroupElement) -> String {
     format!("{}{}", kind_char(element.kind), element.scope)

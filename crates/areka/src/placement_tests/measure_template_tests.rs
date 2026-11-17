@@ -3,7 +3,7 @@
 //!
 //! 配置の crate の片割れ（`crates/areka-placement/src/measure_template_tests.rs`）が、採寸と表示の
 //! 外形の一致と、配置のファイル（`measure.rs`・`measure_first_frame.rs`・
-//! `examples/window-placement.rs`）の走査を持つ。ここは本体のファイル（`runtime/assets.rs`・
+//! `examples/window-placement.rs`）の走査を持つ。ここは本体のファイル（`crates/areka-runtime/src/assets.rs`・
 //! 本体の examples）がシェルの読み込みを自前でやり直していないことを見張る。採寸側と起動側の
 //! どちらか一方だけが自前の読み込みへ戻ると、外形の一致はその場では緑のまま、実機でだけ
 //! 「採寸した窓の大きさと表示された絵の外形が食い違う」形で現れる（要件 3.6）。

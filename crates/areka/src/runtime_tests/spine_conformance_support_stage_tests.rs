@@ -34,7 +34,7 @@ use areka_runtime::spine::test_support::status_calls;
 /// # 終了段の待ちが「据え置き時刻の再生側 Tick」でなければならない理由（task 5.5・R2.10）
 ///
 /// **前提（構造で決まっている）**——本ハーネスの起動は**必ず**起動記録トークを起こす。fixture の
-/// 永続状態は起動のたびに消され（`crates/areka/src/runtime/spine.rs:490-499`）、初回起動と判定
+/// 永続状態は起動のたびに消され（`SpineHarness::new` が検体の複製 `SampleRoot` を毎回作る・`crates/areka/src/runtime_tests/spine.rs`）、初回起動と判定
 /// された boot は起動記録の書込 cue を `first_boot_epilogue` へ据える
 /// （`crates/areka-ghost/src/runtime.rs:459-464`）。ゆえに `OnBoot` が 204 でも kanade は「空
 /// script＋末尾 SET 1 件」の記録トークを起こし（`crates/areka-kanade/src/schedule/boot.rs:253-273`）、

@@ -1,5 +1,5 @@
 //! 会話の**表示終了時刻**（待機を含む占有区間の終端）を UI スレッドへ届ける観測
-//! （design.md「BalloonLifecycleSink（`runtime/talk_lifecycle.rs`）」・決定 D4＝α・
+//! （design.md「BalloonLifecycleSink（`crates/areka-runtime/src/talk_lifecycle.rs`）」・決定 D4＝α・
 //! Requirements 4.1 / 4.5 / 4.8 / 7.2 / 7.8）。
 //!
 //! # 何を観測するか
@@ -64,7 +64,7 @@ use super::talk_clock::TalkClock;
 /// 受信側は [`TalkStarted`](Self::TalkStarted) で計測をリセットし、以降の
 /// [`DisplayEndAt`](Self::DisplayEndAt) を max 集約する（重複・順不同の値に対して単調）。
 // 判断側の消費は着地済み（`balloon_visibility.rs` の観測スナップショットが本型を運び、計測の
-// 破棄と占有終端の更新に使う）。送出側の構築点も着地済み——`wire_runtime`（`runtime/mod.rs`）が
+// 破棄と占有終端の更新に使う）。送出側の構築点も着地済み——`wire_runtime`（`crates/areka-runtime/src/lib.rs`）が
 // channel を作り、送出端を `GhostBootOptions.sinks` 4 本目の [`BalloonLifecycleSink`] へ、受信端を
 // `RuntimeWiring::lifecycle_rx` へ渡す（task 4.1）。受信端から取り出す配線は task 4.4。
 #[derive(Debug, Clone, Copy, PartialEq)]
