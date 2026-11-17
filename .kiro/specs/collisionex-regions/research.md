@@ -246,3 +246,19 @@
 
 - 指針: 「全部を直す最小の変更」（ponytail）。新しい本番のファイル・作り方の関数・由来の欄・予算の変更は足さない。
 - ウェーブ C22 の表の「形の検査の新しいファイル」は作らない（触るファイルは表より減る）。表に無いのは parsers の `parse.rs`・`mod.rs` と emo-compose の `fold.rs` とその檻で、初版と同じ。
+
+## 12. SSP の測り 2（2026-11-17・設計の討議の議題 2）
+
+- 手順は 9 節と同じ（`．さくら` に試しのシェルを着せ、`SendInput` でマウスを動かし、`ssp_shiori_log.txt` の `OnMouseMove` の Reference4 を読む・排他テストの机を取った・終わったら `master` のシェルへ戻して閉じ、試しのシェルを消した）。今回は点ごとに「最後に送られた `OnMouseMove`」だけを読み、マウスの下が `．さくら` の本体の窓であることを確かめてから動かした。試しのシェルは `evidence/ssp-probe-trailing-comma-surfaces.txt`。
+
+| 点（画像の座標） | 当たり判定 | Reference4 |
+| --- | --- | --- |
+| (50,50) | `collisionex1,TrailRect,rect,20,20,80,80,`（末尾に `,`） | `TrailRect` |
+| (150,50) | `collisionex2,TrailPoly,polygon,120,20,180,20,180,80,120,80,`（末尾に `,`） | `TrailPoly` |
+| (50,150) | `collisionex3,PlainRect,rect,20,120,80,180` | `PlainRect` |
+| (150,150)・(170,170) | `collisionex4,OddPoly,polygon,120,120,180,120,180,180,120`（座標が 7 つ） | 空 |
+| (5,290)・(290,290) | — | 空 |
+
+- SSP のエラーログ: 「shell\collisionex-probe\surfaces.txt:Line=12:Collision=4 定義ミスです。 [PointCountIsOdd]」の 1 行だけ。末尾に `,` のある 2 行には何も出なかった。
+- **読み**: 行の末尾の `,`（最後の空の欄）は SSP では欄として数えない（決め 8・要件 1.10）。座標が奇数個の `polygon` は警告して使わない＝決め A4 と同じ。
+- 途中で `．さくら` の kero の窓が本体の窓の左に重なり、最初の 2 回の読みが崩れた（kero の窓は同じ当たり判定を持つ別の面）。kero を隠し直して読み直した値だけを表に書いた。

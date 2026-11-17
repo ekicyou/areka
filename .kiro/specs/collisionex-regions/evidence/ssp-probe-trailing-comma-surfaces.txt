@@ -1,0 +1,13 @@
+charset,UTF-8
+descript
+{
+version,1
+}
+surface0-99
+{
+element0,overlay,surface0.png,0,0
+collisionex1,TrailRect,rect,20,20,80,80,
+collisionex2,TrailPoly,polygon,120,20,180,20,180,80,120,80,
+collisionex3,PlainRect,rect,20,120,80,180
+collisionex4,OddPoly,polygon,120,120,180,120,180,180,120
+}

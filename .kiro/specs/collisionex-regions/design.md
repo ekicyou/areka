@@ -186,6 +186,7 @@ flowchart TD
 | 1.7 | 形の名前は ASCII の大小文字を区別しない | CollisionExReader | `eq_ignore_ascii_case` | 読みの流れ |
 | 1.8 | `collision*` と書いた順に 1 つの並び | CollisionExReader | `decode_collisions` の 1 回の走査 | — |
 | 1.9 | `collision*` の読みを変えない | CollisionExReader | `decode_collisions` の既存の枝 | — |
+| 1.10 | 行の末尾の空の欄 1 つは数えない | CollisionExReader | `decode_collisionex_row` | 読みの流れ |
 | 2.1 | `rect` は閉区間で当たる（`collision*` と同じ判定） | HitResolve | `hits` の `Rect` の腕 | — |
 | 2.2 | 反転した `rect` は当たらない | HitResolve | `hits` の `Rect` の腕（並べ直さない） | — |
 | 2.3 | 楕円・円・多角形・`region` は当たらず下を続ける | HitResolve | `hits` の偽の腕・逆順の `find` | — |
@@ -253,7 +254,7 @@ flowchart TD
 | Requirements | 1.1, 1.2, 1.3, 1.4, 1.5, 5.1 |
 
 **Responsibilities & Constraints**
-- `collision*` と `collisionex*` を同じ型で持つ。由来（どちらの綴りで書いたか）は持たない（要件が区別を求めず、使い手が居ない・OPEN QUESTION 4）。
+- `collision*` と `collisionex*` を同じ型で持つ。由来（どちらの綴りで書いたか）は持たない（要件が区別を求めず、使い手が居ない・決め 8）。
 - `CollisionShape` に `#[non_exhaustive]` を付けない。5 つの形は ukadoc が閉じて定める集合で拡張の継ぎ目ではなく、別 crate の emo-compose の `match`（`hits`・`shifted`）をワイルドカードなしの網羅に保ち、腕を足したときに漏れをコンパイルで見つけるため（`ShellIssue` の前例・`RegionPriority` と同じ理由）。
 - 型は値を運ぶだけで、幾何のメソッドを持たない（ずらしは emo-compose の `hit_import.rs`）。
 - `CollisionRegion` は `region` の行の欄と、画像を置く位置 `x`・`y` を持つ。構文に置く位置の欄は無く、読みでは `(0, 0)`。子のサーフェスから持ち込むと element定義の X,Y だけずれる（3.4）。
@@ -305,7 +306,7 @@ pub struct CollisionRegion {
 - 番号の読み（数字だけ・`u32` に収まる）は `collision*` と同じ。数字だけでない残り（`collisionexfoo` など）は今の `collision*` と同じく記録なしに飛ばす（要件 4.8 は番号が無い・桁あふれだけを言う）。番号が読めない行は `ShellIssue::UnreadableNumber` を積み、`text` に欄を `,` で繋いだ行を入れる（4.8・4.9）。
 - 欄の位置: 0＝`collisionexN`・1＝名前・2＝形・3 以降＝座標（または `region` の欄）。名前の欄が無ければ空の名前。
 - 座標は `i64` として読む（`str::parse::<i64>`・字句の段が前後の空白を除いた後）。読めない欄は `NotInteger`（`collision*` の「0 にする」とは別の規則・1.9 は変えない）。
-- 判定の順と理由は「System Flows」の図のとおり。`region` の領域反転は `true`・`false` の完全一致（OPEN QUESTION 3）。
+- 判定の順と理由は「System Flows」の図のとおり。`region` の領域反転は ASCII の大小文字を区別せずに `true`・`false` と読む（決め 8）。行が `,` で終わる（最後の欄が空）ときは、その空の欄 1 つを数える前に除く（要件 1.10・決め 8・SSP の測り）。
 - 読めた `ellipse`・`circle`・`polygon`・`region` の行は、並びに積んだうえで `Reading::inactive` で数える（4.7）。`rect` は数えない。
 - ファイルを開かず、記録も出さない（記録は `Reading` に積むだけ・5.2）。
 
@@ -335,7 +336,7 @@ impl Reading {
 **Implementation Notes**
 - Integration: `decode.rs` の頭の説明（「collisionex は値にしない」）と `decode_collisions`・`dispatch_block` の注記を書き直す。`decode.rs` は約 800 行で 1,000 行を越えない。
 - Validation: `decode_collisionex_tests.rs` が形ごと・大小文字・混ぜた順・理由ごとの記録と「並びに入るか」を固定する。
-- Risks: 末尾の `,`（空の欄）も欄として数えるので、多角形の行の末尾に `,` があると奇数として使われない（OPEN QUESTION 2）。
+- Risks: 除くのは末尾の空の欄 1 つだけ。途中の空の欄（`10,,20`）は欄として数え、整数として読めないので `NotInteger`。
 
 ### parsers / model・decode・parse
 
@@ -436,7 +437,7 @@ fn shifted(shape: CollisionShape, dx: i64, dy: i64) -> CollisionShape;
 **Responsibilities & Constraints**
 - `Numbers.cuts` と、畳み込みの最後に前の行を除く処理を消す。波括弧も追記も、後の行を書いた順に末尾へ足す（後に書いた方が手前・3.2・3.3）。
 - 警告（3.7）: element番号の二重定義と同じ仕組みで、`add_lines` が波括弧（`Source::Brace`）の行を足すとき、その面にすでにある collision番号（前の波括弧・追記で足した番号＝`numbers.collisions`）を持つ行を数え、1 件以上なら記述子 1 つにつき（面ごとに）1 行の `warn!` を出す。欄は `surface_id`・`collision`（最初に重なった番号）・`count`（重なった行の数）、文言は「collision番号の二重定義: 前の行も残して両方を足す（SSP と同じ）」。追記（`Source::Append`）が足す行は数えず警告しない（3.7）。`records` が `Quiet` なら出さない。
-- 同じ波括弧の中だけで番号が重なる行は、今と同じく両方を残し、警告しない（**仮定・OPEN QUESTION 1**）。
+- 同じ波括弧の中だけで番号が重なる行は、今と同じく両方を残し、警告しない（決め 8・§8 に areka の裁量として書く）。
 - `body_lines` は変えない（件数で数える）。
 
 **Contracts**: Service [x]
@@ -521,14 +522,14 @@ fn shifted(shape: CollisionShape, dx: i64, dy: i64) -> CollisionShape;
 - 点 1 つの判定の仕事は今と同じ（並びの件数に比例・まだ働かない形は定数で偽）。
 - 予算の数え方と値は変えない。多角形を持ち込み・範囲の見出しで写すと、メモリは頂点の数だけ増えるが、今の予算も名前やファイル名の長さを数えておらず、同じ種類の増え方（research.md 11 節）。クローディアは多角形 28 行・5〜7 頂点。
 
-## Open Questions（設計の討議へ）
+## 設計の討議の決め（2026-11-17）
 
-入力で決めきれず、仮定を置いて書いた所。答えで設計が変わるものだけを挙げる。
+設計の討議で開発者が全議題を推奨案で承認した（要件の決め 8）。初版の Open Questions はすべて閉じた。
 
-1. **同じ波括弧の中だけで collision番号が重なる行を警告するか**（FoldCollisions）: 仮定＝警告しない（両方を残すのは今と同じ）。要件 3.7 の「同じサーフェスで同じ番号が重なったとき」は広く読めるが、要件 6.4 は `collision*` だけのシェルの記録を変えてよいのを 2 つ以上のブレスに書いたときに限り、element番号の二重定義も同じブレスの中は警告しない。SSP の同じブレスの中の重なりは測っていない。
-2. **行の末尾の `,`（空の欄）**（CollisionExReader）: 仮定＝空の欄も欄として数える（要件どおり）。多角形の行の末尾に `,` があると座標の数が奇数になって使われず、矩形などは多すぎる欄として記録が 1 件出る。SSP の振る舞いは測っていない（クローディアの行に末尾の `,` は無い）。
-3. **`region` の領域反転の大小文字**（CollisionExReader）: 仮定＝`true`・`false` の完全一致（要件 4.6 の綴りどおり）。形の名前は SSP に合わせて大小文字を区別しないので、そろえるなら区別しない側。`region` は働かないので、`hit-id-pass` の段で測って決め直してもよい。
-4. **由来（`collision` か `collisionex` か）を型に残さないこと**（ShellModel）: 仮定＝残さない。今の使い手は居ない（重なりは区別しない・要件 3.1）。`collision-sort` を忠実にする後の仕様や、`hit-id-pass` が `rect` を ID の描き先へ寄せるかの決めで要るなら、その仕様で足す。
+1. 同じ波括弧の中だけで collision番号が重なる行は警告しない（両方は残す）。要件 3.7 に 1 文足した。
+2. 行の末尾の `,`（最後の空の欄）は欄として数えない。SSP で測って決めた（`research.md` 12 節）。要件 1.10。
+3. `region` の領域反転は大小文字を区別しない。要件 4.6。
+4. 由来は型に残さない。
 
 ## Supporting References
 - ukadoc [descript_shell_surfaces の collisionex*](https://ukatech.shillest.net/ukadoc-spec/descript_shell_surfaces.html#collisionex-star)・[caption_z-axis](https://ukatech.shillest.net/ukadoc-spec/descript_shell_surfaces.html#caption_z-axis)。
