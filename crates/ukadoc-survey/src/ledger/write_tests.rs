@@ -623,3 +623,86 @@ fn an_unreadable_body_is_not_repaired() {
         other => panic!("読み取りの失敗として落ちること: {other}"),
     }
 }
+
+/// 項目の間に見出しのコメントを置いた本文。コメントは**後ろの**項目（YEAR）に付く。
+const COMMENT_BEFORE_YEAR: &str = r#"[ledger]
+domain = "property"
+pages = ["list_propertysystem"]
+
+[entry."ukadoc:list_propertysystem:balloon.scope(ID).width:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+# --- 群 3 ---
+[entry."ukadoc:list_propertysystem:system.year:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+"#;
+
+/// 備考の最後の行が `#` で始まり、その行で文字列を閉じて次の見出しが続く本文。
+const NOTE_ENDING_IN_HASH: &str = r#"[ledger]
+domain = "property"
+pages = ["list_propertysystem"]
+
+[entry."ukadoc:list_propertysystem:balloon.scope(ID).width:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = """
+# この行はコメントでなく備考の最後の行"""
+[entry."ukadoc:list_propertysystem:system.year:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+"#;
+
+/// 差し込んだ項目はコメントの前に入り、コメントは付いていた項目の真上に残る（指摘 25）。
+///
+/// 対の腕。備考の中の `#` の行は前の塊の尻尾のコメントではないので、その前には差し込まない
+/// （差し込むと複数行の文字列が割れて本文が読めなくなる）。
+#[test]
+fn an_inserted_entry_goes_before_the_comment_heading_the_next_entry() {
+    let month = render_initial_entry(&id(MONTH));
+    let out = merge_initial(
+        Some(COMMENT_BEFORE_YEAR),
+        Domain::Property,
+        &pages(),
+        &ids(&[BALLOON, MONTH, YEAR]),
+    )
+    .expect("差し込めるはず");
+    assert_eq!(
+        out,
+        COMMENT_BEFORE_YEAR.replacen("# --- 群 3 ---\n", &format!("{month}# --- 群 3 ---\n"), 1)
+    );
+
+    let head = "[entry.\"ukadoc:list_propertysystem:system.year:1\"]\n";
+    let out = merge_initial(
+        Some(NOTE_ENDING_IN_HASH),
+        Domain::Property,
+        &pages(),
+        &ids(&[BALLOON, MONTH, YEAR]),
+    )
+    .expect("差し込めるはず");
+    assert_eq!(
+        out,
+        NOTE_ENDING_IN_HASH.replacen(head, &format!("{month}{head}"), 1)
+    );
+    read(&out, Domain::Property).expect("備考を割らずに差し込んだ本文は読めるはず");
+}

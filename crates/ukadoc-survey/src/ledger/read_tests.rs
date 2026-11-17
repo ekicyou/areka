@@ -557,3 +557,59 @@ fn an_unreadable_body_names_the_file() {
     let err = err_of(&text);
     assert_mentions(&err, &[FILE]);
 }
+
+/// 備考の行頭に、TOML の見出しとして読めない `[entry.` の行がある台帳。
+const NOTE_WITH_BROKEN_HEAD: &str = r#"[ledger]
+domain = "property"
+pages = ["list_propertysystem"]
+
+[entry."ukadoc:list_propertysystem:system.year:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = """
+[entry.x の説明]
+"""
+"#;
+
+/// 塊への切り分けの失敗も、どの台帳かを名指す（要件 6.12）。
+///
+/// 切り分けはドメインを知らないので、読み取りが置き場を差し替える。
+#[test]
+fn a_split_failure_names_the_ledger_file() {
+    match err_of(NOTE_WITH_BROKEN_HEAD) {
+        SurveyError::TomlParse { path, reason } => {
+            assert_eq!(path, FILE);
+            assert!(reason.contains("[entry.x の説明]"), "{reason}");
+        }
+        other => panic!("見出しの読めない失敗ではない: {other}"),
+    }
+
+    match err_of(NOTE_WITH_HEAD) {
+        SurveyError::LedgerSplitMismatch { detail } => {
+            assert!(detail.starts_with(FILE), "置き場が頭に無い: {detail}");
+        }
+        other => panic!("切り分けの食い違いではない: {other}"),
+    }
+}
+
+/// 1 項目に同じテーマを 2 度書くと、id とテーマを挙げて落ちる（要件 4.4・6.10）。
+///
+/// 黙って受けると、テーマ別の表でその項目が 2 件に数えられる。
+#[test]
+fn a_theme_written_twice_in_one_entry_is_rejected() {
+    let text = tweak(
+        r#"values = ["気配", "更新"]"#,
+        r#"values = ["気配", "更新", "気配"]"#,
+    );
+
+    let err = err_of(&text);
+    match &err {
+        SurveyError::TomlParse { path, .. } => assert_eq!(path, FILE),
+        other => panic!("形の崩れとして落ちること: {other}"),
+    }
+    assert_mentions(&err, &[YEAR, "values", "気配"]);
+}

@@ -17,6 +17,7 @@
 //! - 付録 A.2 が必須とする欄が無い・型が違う
 //! - **知らない欄がある**
 //! - 項目 id が 2 形のどちらでもない（要件 1.9）
+//! - 1 つの項目の `values` に同じテーマが 2 度ある（黙って受けるとテーマ別の表で 2 件に数えられる）
 //! - 前置きのドメイン名が読んでいるファイルのドメインと食い違う
 //!
 //! 「知らない欄」を落とすのは要件 2.3 と 6.9 がここに載っているからである。台帳に
@@ -29,11 +30,13 @@
 //! `entries` は `BTreeMap` なので id の byte 昇順に並び替わり、**本文の順は失われる**。
 //! それを知っているのは行を見て切り分ける [`blocks::split`] だけなので、読み取りは
 //! 必ずそこを通し、返った塊の並びを `file_order` にする（設計 D-12）。ついでに
-//! 「切り分けた id の集合が `toml` の鍵の集合と一致する」較正も相続する。
+//! 「切り分けた id の集合が `toml` の鍵の集合と一致する」較正も相続する。本文を `toml`
+//! で読むのは 1 度だけで、読んだ表を切り分けに渡す。
 //!
 //! # 失敗に添える場所
 //!
 //! ドメインが分かるので、置き場は `<ドメイン>` を伏せずに綴れる（[`ledger_file`]）。
+//! 切り分けの失敗も、伏せた置き場をここで差し替えてから上げる。
 //! `io::paths::ledger_path` は呼ばない——あれはワークスペース根から組み立てた絶対
 //! パスを返すので、失敗の本文が計算機ごとに変わってしまう（要件 6.1 の決定性）。
 
@@ -86,15 +89,20 @@ const PROLOGUE_PLACE: &str = "[ledger]";
 pub fn read(text: &str, domain: Domain) -> Result<Ledger, SurveyError> {
     let file = ledger_file(domain);
 
-    // 先に本文全体を読む。読めない本文はここで、ドメインまで綴った置き場を添えて
-    // 落とす（切り分けはドメインを知らないので `<ドメイン>` としか書けない）。
     let root: toml::Table = text
         .parse()
         .map_err(|err| malformed(&file, format!("TOML として読めない: {err}")))?;
 
     // 本文に現れた順は `toml` の表からは取れない（鍵で並び替えられている）。それを
-    // 知っているのは切り分けだけなので、必ずここを通す（設計 D-12）。
-    let (_, blocks) = blocks::split(text)?;
+    // 知っているのは切り分けだけなので、必ずここを通す（設計 D-12）。切り分けは
+    // ドメインを知らないので、失敗の置き場をここで台帳のファイルに差し替える。
+    let (_, blocks) = blocks::split_parsed(text, &root).map_err(|err| match err {
+        SurveyError::TomlParse { reason, .. } => malformed(&file, reason),
+        SurveyError::LedgerSplitMismatch { detail } => SurveyError::LedgerSplitMismatch {
+            detail: format!("{file}: {detail}"),
+        },
+        other => other,
+    })?;
     let file_order: Vec<EntryId> = blocks.into_iter().map(|block| block.id).collect();
 
     let (declared, pages) = read_prologue(&root, &file)?;
@@ -254,9 +262,15 @@ fn read_values(
     id: &EntryId,
 ) -> Result<Vec<String>, SurveyError> {
     let raws = string_array_field(item, place, "values", file)?;
-    let mut themes = Vec::with_capacity(raws.len());
+    let mut themes: Vec<String> = Vec::with_capacity(raws.len());
     for raw in &raws {
         let theme = parse_theme(raw).map_err(|err| err.at(file, id.as_str()))?;
+        if themes.iter().any(|seen| seen == theme) {
+            return Err(malformed(
+                file,
+                format!("{place}: 欄 values にテーマ {theme} が 2 度ある"),
+            ));
+        }
         themes.push(theme.to_owned());
     }
     Ok(themes)

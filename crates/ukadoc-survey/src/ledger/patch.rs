@@ -24,6 +24,14 @@
 //! どちらを直すべきかを機械が決めることはできないので、id を挙げて落ちる（黙って
 //! 片方を選ぶと、人の書いた備考が書き換わるか、確定値が入らないまま緑になる）。
 //!
+//! 当たりが 1 本でも、それが本物の欄とは限らない（欄を `priority="C1"` と書き、備考の
+//! 行頭に `priority = "…"` がある本文）。そこで当たった行が `priority = ` ＋ 今の値の
+//! [`basic_string`] と 1 バイトも違わないことを確かめ（行末のコメントもここで断る）、
+//! 組み上げた本文を `toml` で読み直して各 id の値が求めたとおりかを見る。
+//!
+//! 頭では並びが厳密な昇順かを確かめる（`ledger::write` と同じ確かめ）。備考に隠れた
+//! 見出しを、的外れの「priority の行が無い」でなく並びの崩れとして名指すためである。
+//!
 //! # 呼ぶ側が負う前提
 //!
 //! 本文は**復帰文字を落としたもの**であること（[`crate::ledger::blocks::split`] の
@@ -34,7 +42,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 
 use crate::error::SurveyError;
-use crate::ledger::{any_ledger_file, blocks};
+use crate::ledger::{ENTRY_TABLE, any_ledger_file, blocks, write};
 use crate::model::EntryId;
 use crate::tomlout::basic_string;
 
@@ -51,13 +59,17 @@ const PRIORITY_HEAD: &str = "priority = ";
 /// # 落ちる場合
 ///
 /// - 本文を塊へ切り分けられない（[`crate::ledger::blocks::split`] の失敗をそのまま返す）
-/// - 塊の中に行頭の `priority = ` が無い、または 2 本以上ある
+/// - 塊が id の厳密な昇順に並んでいない（[`SurveyError::LedgerOutOfOrder`]）
+/// - 塊の中に行頭の `priority = ` が無い・2 本以上ある・今の値の綴りと違う、または
+///   書き直した本文を読み直した値が求めた値と違う
 ///   （[`SurveyError::DeriveMismatch`]。本文に id を挙げる）
 pub fn replace_priority(
     text: &str,
     wanted: &BTreeMap<EntryId, String>,
 ) -> Result<String, SurveyError> {
-    let (prologue, blocks) = blocks::split(text)?;
+    let root = parse(text)?;
+    let (prologue, blocks) = blocks::split_parsed(text, &root)?;
+    write::check_strictly_ascending(&blocks, &any_ledger_file())?;
 
     let mut out = String::with_capacity(text.len());
     out.push_str(&text[..prologue]);
@@ -66,6 +78,14 @@ pub fn replace_priority(
         // `wanted` に無い塊も行を数える。欄が欠けている（または備考の行頭に紛れている）
         // 台帳は次の書き戻しで黙って壊れるので、写す前に告げる。
         let line = priority_line(body, &block.id)?;
+        let current = priority_of(&root, &block.id)
+            .ok_or_else(|| undecidable(&block.id, "priority の欄が文字列でない"))?;
+        if body[line.clone()] != format!("{PRIORITY_HEAD}{}", basic_string(current)) {
+            return Err(undecidable(
+                &block.id,
+                "行頭の priority の行が欄の値の綴りと違う（行末のコメントか、備考の中の行）",
+            ));
+        }
         match wanted.get(&block.id) {
             None => out.push_str(body),
             Some(value) => {
@@ -76,7 +96,35 @@ pub fn replace_priority(
             }
         }
     }
+
+    let reread = parse(&out)?;
+    for block in &blocks {
+        if let Some(value) = wanted.get(&block.id)
+            && priority_of(&reread, &block.id) != Some(value.as_str())
+        {
+            return Err(undecidable(
+                &block.id,
+                "書き直した本文の priority が求めた値にならない（備考の中の行に当たった）",
+            ));
+        }
+    }
     Ok(out)
+}
+
+/// 本文を `toml` で読む。
+fn parse(text: &str) -> Result<toml::Table, SurveyError> {
+    text.parse().map_err(|err| SurveyError::TomlParse {
+        path: any_ledger_file(),
+        reason: format!("TOML として読めない: {err}"),
+    })
+}
+
+/// `toml` が読んだ項目の `priority` の値。
+fn priority_of<'a>(root: &'a toml::Table, id: &EntryId) -> Option<&'a str> {
+    root.get(ENTRY_TABLE)?
+        .get(id.as_str())?
+        .get("priority")?
+        .as_str()
 }
 
 /// 塊の中の `priority` 行の範囲（塊の先頭からのバイト位置・改行は含まない）を返す。

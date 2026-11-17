@@ -35,7 +35,8 @@
 //! だった場合、集合としては一致してしまうので [`split`] は素通りする。塞ぐのはここ
 //! ではなく、台帳の並びを**厳密な昇順**で確かめる側（差し込みの
 //! [`SurveyError::LedgerOutOfOrder`] と整合検査の `FindingKind::LedgerOutOfOrder`）で、
-//! 同じ id が 2 度現れれば重複として落ちる。読み取り（`ledger::read`）は並びを見ない。
+//! 同じ id が 2 度現れれば重複として落ちる。差し込み（`ledger::write`）と `priority` の
+//! 置き換え（`ledger::patch`）はその確かめを頭で通し、読み取り（`ledger::read`）は並びを見ない。
 //!
 //! # 呼ぶ側が負う前提
 //!
@@ -83,6 +84,19 @@ pub struct Block {
 /// - 切り分けた id の集合が `toml` の読んだ鍵の集合と食い違う
 ///   （[`SurveyError::LedgerSplitMismatch`]）
 pub fn split(text: &str) -> Result<(usize, Vec<Block>), SurveyError> {
+    let root: toml::Table = text
+        .parse()
+        .map_err(|err| unreadable(format!("TOML として読めない: {err}")))?;
+    split_parsed(text, &root)
+}
+
+/// [`split`] の、本文を `toml` で読んだ表を呼ぶ側から受ける形（同じ本文を 2 度読まない）。
+///
+/// `root` は `text` を読んだものであること。
+pub(super) fn split_parsed(
+    text: &str,
+    root: &toml::Table,
+) -> Result<(usize, Vec<Block>), SurveyError> {
     let heads = scan_heads(text)?;
     let prologue = heads.first().map_or(text.len(), |(start, _)| *start);
 
@@ -96,7 +110,7 @@ pub fn split(text: &str) -> Result<(usize, Vec<Block>), SurveyError> {
         });
     }
 
-    calibrate(text, &blocks)?;
+    calibrate(root, &blocks)?;
     Ok((prologue, blocks))
 }
 
@@ -142,10 +156,7 @@ fn header_id(line: &str) -> Result<EntryId, SurveyError> {
 ///
 /// 集合として比べる。順序も重複も見ない——重複を見抜くのは並びを厳密な昇順で確かめる
 /// 側の仕事である（設計 D-12）。
-fn calibrate(text: &str, blocks: &[Block]) -> Result<(), SurveyError> {
-    let root: toml::Table = text
-        .parse()
-        .map_err(|err| unreadable(format!("TOML として読めない: {err}")))?;
+fn calibrate(root: &toml::Table, blocks: &[Block]) -> Result<(), SurveyError> {
     let read: BTreeSet<&str> = match root.get(ENTRY_TABLE) {
         // `[entry]` が 1 つも無い台帳は項目 0 件。塊も 0 個なら一致する。
         None => BTreeSet::new(),

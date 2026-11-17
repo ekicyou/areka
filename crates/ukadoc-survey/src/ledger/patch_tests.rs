@@ -281,3 +281,124 @@ fn a_value_needing_escapes_is_written_so_it_reads_back() {
     assert_eq!(after.entries[&id(YEAR_ID)].priority, odd);
     assert!(out.contains(r#"priority = "A\"1\\""#), "{out}");
 }
+
+// ---- 当たった行が本物の欄か（指摘 7） ----
+
+/// 本物の欄を空白なしの `priority="C1"`（TOML として正しい）で書き、備考の行頭に今の値と
+/// 同じ綴りの `priority = "C1"` を置いた本文。
+///
+/// 行頭の `priority = ` は備考の 1 本だけなので、行を数えるだけでは当たりが 1 本に決まる。
+/// 当たった行の綴りも今の値と同じなので、綴りの照合も素通りする。捕まえるのは、書き直した
+/// 本文を読み直して値が求めたとおりかを見る確かめだけである。
+const PRIORITY_ONLY_IN_NOTE: &str = r#"[ledger]
+domain = "property"
+pages = ["list_propertysystem"]
+
+[entry."ukadoc:list_propertysystem:system.year:1"]
+status = "implemented"
+priority="C1"
+values = []
+links = []
+note = """
+次の行は備考の一部であって、この項目の欄ではない。
+priority = "C1"
+"""
+"#;
+
+/// 備考の行頭の `priority = ` にしか当たらない塊は、備考を書き換えずに id を挙げて落ちる。
+#[test]
+fn a_priority_line_found_only_inside_a_note_is_refused() {
+    assert_eq!(
+        toml_priority(PRIORITY_ONLY_IN_NOTE),
+        "C1",
+        "toml は空白なしの欄を priority として読む（見本が狙いどおりであること）"
+    );
+
+    match replace_priority(PRIORITY_ONLY_IN_NOTE, &wanted(&[(YEAR_ID, "A1")]))
+        .expect_err("備考の行を書き換えずに落ちるはず")
+    {
+        SurveyError::DeriveMismatch { reason, .. } => {
+            assert!(reason.contains(YEAR_ID), "{reason}");
+            assert!(reason.contains("priority"), "{reason}");
+        }
+        other => panic!("置き換える行を決められない失敗として落ちること: {other}"),
+    }
+}
+
+/// 行末にコメントを付けた `priority` の行を持つ本文。
+const PRIORITY_WITH_COMMENT: &str = r#"[ledger]
+domain = "property"
+pages = ["list_propertysystem"]
+
+[entry."ukadoc:list_propertysystem:system.year:1"]
+status = "implemented"
+priority = "C1"  # 仮置き
+values = []
+links = []
+note = ""
+"#;
+
+/// 行末のコメントを黙って消さず、id を挙げて落ちる。
+#[test]
+fn a_priority_line_with_a_trailing_comment_is_refused() {
+    assert_eq!(toml_priority(PRIORITY_WITH_COMMENT), "C1");
+
+    match replace_priority(PRIORITY_WITH_COMMENT, &wanted(&[(YEAR_ID, "A1")]))
+        .expect_err("コメントを消して書き換えずに落ちるはず")
+    {
+        SurveyError::DeriveMismatch { reason, .. } => {
+            assert!(reason.contains(YEAR_ID), "{reason}");
+        }
+        other => panic!("置き換える行を決められない失敗として落ちること: {other}"),
+    }
+
+    // 較正。コメントを外しただけで通る＝落ちた理由は行末のコメントにある。
+    let plain = PRIORITY_WITH_COMMENT.replace("  # 仮置き", "");
+    let out = replace_priority(&plain, &wanted(&[(YEAR_ID, "A1")]))
+        .expect("コメントが無ければ置き換えられるはず");
+    assert!(out.contains("\npriority = \"A1\"\n"), "{out}");
+}
+
+// ---- 並びの確かめ（指摘 24） ----
+
+/// 1 つ目の項目の備考の行頭に、後ろに実在する項目の見出しと同じ綴りの行がある本文。
+///
+/// `toml` の鍵の集合は 2 件のままなので、`blocks::split` の較正は素通りする。
+const HEADING_HIDDEN_IN_NOTE: &str = r#"[ledger]
+domain = "property"
+pages = ["list_propertysystem"]
+
+[entry."ukadoc:list_propertysystem:balloon.scope(ID).width:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = """
+[entry."ukadoc:list_propertysystem:system.year:1"]
+"""
+
+[entry."ukadoc:list_propertysystem:system.year:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+"#;
+
+/// 備考に隠れた見出しは、`priority` の行の有無より先に並びの崩れとして名指される。
+#[test]
+fn a_heading_hidden_in_a_note_fails_as_out_of_order() {
+    match replace_priority(HEADING_HIDDEN_IN_NOTE, &wanted(&[(YEAR_ID, "A1")]))
+        .expect_err("同じ id が 2 度並べば落ちるはず")
+    {
+        SurveyError::LedgerOutOfOrder { file, id: named } => {
+            assert_eq!(file, "doc/ukadoc-coverage/ledger/<ドメイン>.toml");
+            assert_eq!(named, YEAR_ID);
+        }
+        other => panic!("並び順の失敗として落ちること: {other}"),
+    }
+}

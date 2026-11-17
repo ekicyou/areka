@@ -25,7 +25,14 @@
 //! ためである。備考の複数行文字列の中に行頭の `[entry."…"]` が既にある id と同じ綴りで
 //! 現れると、`blocks::split` の較正（`toml` の鍵**集合**との一致）では見抜けない
 //! （設計 D-12 が明記する盲点）。`ledger-init` は整合検査より先に走るので、ここが緩いと
-//! 盲点は永久に開いたままになる。
+//! 盲点は永久に開いたままになる。`priority-apply` も同じ確かめを頭で通す
+//! （[`crate::ledger::patch::replace_priority`]）。
+//!
+//! # 差し込む位置とコメント
+//!
+//! 塊の終わりは次の見出しの直前なので、項目の真上に書いたコメントは 1 つ前の塊の尻尾に
+//! 入る。差し込む塊は、その尻尾に続く行頭 `#` の連続した行の**前**に置く——後ろに置くと、
+//! 次の項目に付いていたコメントが差し込んだ項目に付いたように読める。
 //!
 //! # 1 バイトの安定
 //!
@@ -160,7 +167,7 @@ fn render_prologue(domain: Domain, pages: &[PageName]) -> String {
 /// 前置きも既存の塊もバイト列のまま写す。触るのは「塊と塊の間」だけである。
 fn splice(text: &str, domain: Domain, wanted: &BTreeSet<&EntryId>) -> Result<String, SurveyError> {
     let (prologue_end, blocks) = blocks::split(text)?;
-    check_strictly_ascending(&blocks, domain)?;
+    check_strictly_ascending(&blocks, &ledger_file(domain))?;
 
     let present: BTreeSet<&EntryId> = blocks.iter().map(|block| &block.id).collect();
     let missing: Vec<&EntryId> = wanted
@@ -173,15 +180,22 @@ fn splice(text: &str, domain: Domain, wanted: &BTreeSet<&EntryId>) -> Result<Str
     out.push_str(&text[..prologue_end]);
 
     let mut next = 0usize;
+    // 前の塊の尻尾のコメント。次の塊の前に差し込む項目より後ろに写す。
+    let mut held = "";
     for block in &blocks {
         // 欠けている id のうち、この塊より前に来るものを先に置く。
         while next < missing.len() && *missing[next] < block.id {
             push_entry(&mut out, missing[next]);
             next += 1;
         }
-        out.push_str(&text[block.start..block.end]);
+        out.push_str(held);
+        let body = &text[block.start..block.end];
+        let cut = trailing_comments_start(body);
+        out.push_str(&body[..cut]);
+        held = &body[cut..];
     }
-    // 最後の塊より後ろに来るものが残っている。
+    // 最後の塊の尻尾は後ろに続く項目の見出しではないので、そのまま写してから足す。
+    out.push_str(held);
     while next < missing.len() {
         push_entry(&mut out, missing[next]);
         next += 1;
@@ -189,16 +203,36 @@ fn splice(text: &str, domain: Domain, wanted: &BTreeSet<&EntryId>) -> Result<Str
     Ok(out)
 }
 
+/// 塊の尻尾に続く行頭 `#` の連続した行の始まり（無ければ塊の終わり）。
+///
+/// 備考の複数行文字列の最後の行が `#` で始まることもある。そこで切ると文字列が割れるので、
+/// 切った前半が TOML として読めないときは切らない。
+fn trailing_comments_start(body: &str) -> usize {
+    let mut cut = body.len();
+    for line in body.split_inclusive('\n').rev() {
+        if !line.starts_with('#') {
+            break;
+        }
+        cut -= line.len();
+    }
+    if cut < body.len() && body[..cut].parse::<toml::Table>().is_err() {
+        return body.len();
+    }
+    cut
+}
+
 /// 塊が id の**厳密な**昇順に並んでいることを確かめる（設計 D-12）。
 ///
 /// 等しい隣り合わせも落とす。これが備考の中に隠れた重複を捕まえる唯一の場所である
 /// （切り分けの較正は集合で比べるので素通りする）。並べ替えはしない——手で書いた本文を
 /// 機械が並べ直すと、持ち主の意図した並びが黙って消える。
-fn check_strictly_ascending(blocks: &[Block], domain: Domain) -> Result<(), SurveyError> {
+///
+/// `file` は失敗に添える台帳の置き場。
+pub(super) fn check_strictly_ascending(blocks: &[Block], file: &str) -> Result<(), SurveyError> {
     for pair in blocks.windows(2) {
         if pair[1].id <= pair[0].id {
             return Err(SurveyError::LedgerOutOfOrder {
-                file: ledger_file(domain),
+                file: file.to_owned(),
                 // 順序を破っている側、つまり**後ろに来てしまった** id を告げる。
                 id: pair[1].id.as_str().to_owned(),
             });
