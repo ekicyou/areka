@@ -673,6 +673,12 @@ const OWNER_ROW: &str = "```toml\n\
      spec = \"areka-P0-done\"\n\
      items = 1\n\
      ```\n";
+const RESERVED_ROW: &str = "```toml\n\
+     [[reserved]]\n\
+     name = \"areka-P0-later\"\n\
+     none = true\n\
+     reason = \"まだ束が無い\"\n\
+     ```\n";
 const TEMPLATE_ROW: &str = "```toml\n\
      [[template]]\n\
      name = \"yaya\"\n\
@@ -704,6 +710,7 @@ fn each_single_break_of_the_samples_is_rejected_naming_its_field() {
 
     linkage(BUNDLE_BLOCK, SINGLE_BLOCK).expect("見本の帰属は読めるはず");
     roadmap(SPEC_BLOCK).expect("見本の spec 表は読めるはず");
+    roadmap(RESERVED_ROW).expect("見本の [[reserved]] の 1 行は読めるはず");
     for row in [AFTER_ROW, BARRIER_ROW, OWNER_ROW, TEMPLATE_ROW] {
         briefing(row).expect("見本の配列表の 1 行は読めるはず");
     }
@@ -855,6 +862,11 @@ fn each_single_break_of_the_samples_is_rejected_naming_its_field() {
         (
             "同じ name の [[spec]]",
             roadmap(&format!("{SPEC_BLOCK}\n{SPEC_BLOCK}")),
+            "name",
+        ),
+        (
+            "同じ name の [[reserved]]",
+            roadmap(&format!("{RESERVED_ROW}\n{RESERVED_ROW}")),
             "name",
         ),
     ];

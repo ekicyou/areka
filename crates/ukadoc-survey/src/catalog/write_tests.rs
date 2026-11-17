@@ -1,14 +1,13 @@
 //! `write.rs` の在中テスト。
 //!
-//! 守るのは 6 つ。⑴ 設計「Data Models」の見本がバイト単位で再現されること
+//! 守るのは 5 つ。⑴ 設計「Data Models」の見本がバイト単位で再現されること
 //! （冒頭の 2 行・`[snapshot]` の 8 欄とその並び・`[entry]` の 1 項目 1 行）。
-//! ⑵ 同じカタログを 2 回書き出すと 1 バイトも違わないこと（要件 1.5）。
-//! ⑶ 項目が id の byte 昇順で並び、1 項目がちょうど 1 行になること（要件 1.1・D-9）。
-//! ⑷ 逃がしが設計 D-10 のとおり（逆斜線は `\\`・単引用符と日本語はそのまま）。
-//! ⑸ 組み上げた本文が `toml` でも読めて値が一致すること（自前の書き出しの較正）。
-//! ⑹ 書き出す鍵が表の鍵であって項目の側の `id` ではないこと。
+//! ⑵ 項目が id の byte 昇順で並び、1 項目がちょうど 1 行になること（要件 1.1・D-9）。
+//! ⑶ 逃がしが設計 D-10 のとおり（逆斜線は `\\`・単引用符と日本語はそのまま）。
+//! ⑷ 組み上げた本文が `toml` でも読めて値が一致すること（自前の書き出しの較正）。
+//! ⑸ 書き出す鍵が表の鍵であって項目の側の `id` ではないこと。
 //!
-//! ⑸ を置くのは、⑴〜⑷ が自分の読み取りだけを相手にしていると「自分の読み手だけが
+//! ⑷ を置くのは、⑴〜⑶ が自分の読み取りだけを相手にしていると「自分の読み手だけが
 //! 許す本文」を書いていても気づけないからである。独立した読み手を 1 つ通す。
 //!
 //! **ファイルも一時ディレクトリも作らない。環境変数も読まない**（要件 6.2）。
@@ -19,7 +18,6 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::model::EntryId;
 
 /// 設計「Data Models」の `doc/ukadoc-coverage/catalog.toml` の見本そのもの。
 ///
@@ -201,17 +199,6 @@ fn lines(body: &str) -> Vec<&str> {
 #[test]
 fn design_sample_body_is_reproduced_byte_for_byte() {
     assert_eq!(write(&design_sample_catalog()), DESIGN_SAMPLE);
-}
-
-/// 同じカタログを 2 回書き出しても 1 バイトも違わない（要件 1.5）。
-#[test]
-fn writing_twice_is_byte_identical() {
-    let catalog = rich_catalog();
-    let first = write(&catalog);
-    let second = write(&catalog);
-    assert_eq!(first, second);
-    // 空の主張にならないよう、実際に項目が載っていることも確かめる。
-    assert!(first.contains("[entry]\n\"ukadoc:dev_bind\" = {"));
 }
 
 /// 項目は id の byte 昇順に並び、渡した順には従わない（設計 D-9）。

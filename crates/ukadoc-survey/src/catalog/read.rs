@@ -33,6 +33,7 @@ use std::collections::BTreeMap;
 use super::{Catalog, CatalogEntry, ENTRY_COLUMNS, SNAPSHOT_FIELDS, SnapshotMeta};
 use crate::documents::fields::{
     field, malformed, reject_unknown_keys, required_table, string_array_field, string_field,
+    usize_field,
 };
 use crate::error::SurveyError;
 use crate::io::paths::CATALOG_FILE;
@@ -121,8 +122,8 @@ fn read_snapshot(root: &toml::Table) -> Result<SnapshotMeta, SurveyError> {
         package_version: string_field(table, place, "package_version", CATALOG_FILE)?,
         snapshot_version: integer_field(table, place, "snapshot_version")?,
         generated_at: string_field(table, place, "generated_at", CATALOG_FILE)?,
-        total_entries: count_field(table, place, "total_entries")?,
-        ukadoc_entries: count_field(table, place, "ukadoc_entries")?,
+        total_entries: usize_field(table, place, "total_entries", CATALOG_FILE)?,
+        ukadoc_entries: usize_field(table, place, "ukadoc_entries", CATALOG_FILE)?,
         catalog_format: format_field(table, place, "catalog_format")?,
         hash_algorithm: string_field(table, place, "hash_algorithm", CATALOG_FILE)?,
     })
@@ -200,17 +201,6 @@ fn integer_field(table: &toml::Table, place: &str, key: &str) -> Result<i64, Sur
     field(table, place, key, CATALOG_FILE)?
         .as_integer()
         .ok_or_else(|| malformed(CATALOG_FILE, format!("{place}: 欄 {key} が整数でない")))
-}
-
-/// 件数の欄。負の数は入らない。
-fn count_field(table: &toml::Table, place: &str, key: &str) -> Result<usize, SurveyError> {
-    let value = integer_field(table, place, key)?;
-    usize::try_from(value).map_err(|_| {
-        malformed(
-            CATALOG_FILE,
-            format!("{place}: 欄 {key} の値 {value} は件数にならない"),
-        )
-    })
 }
 
 /// 形の版の欄。負の数も大きすぎる数も入らない。

@@ -18,6 +18,7 @@
 //! - **知らない欄がある**
 //! - 項目 id が 2 形のどちらでもない（要件 1.9）
 //! - 1 つの項目の `values` に同じテーマが 2 度ある（黙って受けるとテーマ別の表で 2 件に数えられる）
+//! - 1 つの項目の `supersedes` に同じ id が、`links` に同じ（種別, 相手）が 2 度ある
 //! - 前置きのドメイン名が読んでいるファイルのドメインと食い違う
 //! - 根に `[ledger]`・`[entry]` のほかの鍵がある
 //!
@@ -153,8 +154,8 @@ fn read_entries(
 
     let mut entries: BTreeMap<EntryId, LedgerEntry> = BTreeMap::new();
     for (raw_id, value) in table {
-        // 綴りが 2 形のどちらでもなければ、ここで `BadEntryId` になる（要件 1.9）。
-        let id = EntryId::parse(raw_id)?;
+        // 綴りが 2 形のどちらでもなければ、置き場つきで落とす（要件 1.9・6.10）。
+        let id = EntryId::parse(raw_id).map_err(|err| at_ledger_file(err, file))?;
         let place = place_of(raw_id);
         let item = value
             .as_table()
@@ -244,7 +245,14 @@ fn read_supersedes(
     let raws = string_array_field(item, place, "supersedes", file)?;
     let mut ids = Vec::with_capacity(raws.len());
     for raw in &raws {
-        ids.push(reference_id(raw, place, "supersedes", file)?);
+        let id = reference_id(raw, place, "supersedes", file)?;
+        if ids.contains(&id) {
+            return Err(malformed(
+                file,
+                format!("{place}: 欄 supersedes に {} が 2 度ある", id.as_str()),
+            ));
+        }
+        ids.push(id);
     }
     Ok(ids)
 }
@@ -296,10 +304,21 @@ fn read_links(
         let raw_kind = string_field(table, &where_at, "kind", file)?;
         let kind = LinkKind::parse(&raw_kind).map_err(|err| err.at(file, id.as_str()))?;
         let raw_to = string_field(table, &where_at, "to", file)?;
-        links.push(Link {
+        let link = Link {
             kind,
             to: reference_id(&raw_to, place, "to", file)?,
-        });
+        };
+        // 黙って受けると、相手がカタログに無いとき同じ所見が 2 件出る。
+        if links.contains(&link) {
+            return Err(malformed(
+                file,
+                format!(
+                    "{place}: 欄 links に（{raw_kind}, {}）が 2 度ある",
+                    link.to.as_str()
+                ),
+            ));
+        }
+        links.push(link);
     }
     Ok(links)
 }

@@ -2,7 +2,7 @@
 //! 検査・失敗の作り方。
 //!
 //! 欄の道具（[`malformed`]・[`reject_unknown_keys`]・[`field`]・[`string_field`]・
-//! [`string_array_field`]・[`required_table`]・[`as_table`]）はクレートの中へ開き、
+//! [`string_array_field`]・[`usize_field`]・[`required_table`]・[`as_table`]）はクレートの中へ開き、
 //! `catalog::read` と `ledger::read` もここを呼ぶ。失敗の文面を直す場所はここ 1 か所
 //! きりである。3 文書の置き場の綴りもここに置く。
 //!
@@ -222,7 +222,7 @@ pub(super) fn bool_field(
 }
 
 /// 0 以上の整数の欄。
-pub(super) fn usize_field(
+pub(crate) fn usize_field(
     table: &toml::Table,
     place: &str,
     key: &str,

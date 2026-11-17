@@ -64,6 +64,8 @@ pub(crate) fn at_ledger_file(err: SurveyError, file: &str) -> SurveyError {
         SurveyError::LedgerSplitMismatch { detail } => SurveyError::LedgerSplitMismatch {
             detail: format!("{file}: {detail}"),
         },
+        // 素の id の失敗は綴りしか持たず、4 本のどの台帳かが本文に出ない（要件 6.10）。
+        SurveyError::BadEntryId { raw } => malformed(file, format!("項目 id の形が違う: {raw}")),
         other => other,
     }
 }

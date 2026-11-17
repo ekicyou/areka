@@ -15,7 +15,6 @@
 
 use super::*;
 use crate::catalog::write::write;
-use crate::model::{EntryId, PageName};
 
 /// 手で書いた見本の本文。
 ///
@@ -217,7 +216,8 @@ fn wrong_typed_string_is_rejected() {
 fn negative_count_is_rejected() {
     let body = mutated("ukadoc_entries = 1749", "ukadoc_entries = -1");
     let message = read_error(&body).to_string();
-    assert!(message.contains("ukadoc_entries"), "{message}");
+    // 文面は `documents::fields` の 1 か所が決める（3 文書・台帳と同じ文）。
+    assert!(message.contains("欄 ukadoc_entries が負"), "{message}");
 }
 
 /// 項目 id が 2 形のどちらでもなければ落ちる（要件 1.9）。

@@ -474,7 +474,7 @@ fn a_link_without_kind_or_to_is_rejected() {
 
 // ---- 項目 id の形（要件 1.9） ----
 
-/// 表の鍵が 2 形のどちらでもなければ失敗する。
+/// 表の鍵が 2 形のどちらでもなければ、どの台帳かを添えて失敗する（要件 6.10）。
 #[test]
 fn a_malformed_table_key_is_rejected() {
     let text = tweak(
@@ -483,10 +483,60 @@ fn a_malformed_table_key_is_rejected() {
     );
 
     let err = err_of(&text);
-    match err {
-        SurveyError::BadEntryId { raw } => assert_eq!(raw, "ukadoc"),
-        other => panic!("項目 id の形の失敗ではない: {other}"),
+    match &err {
+        SurveyError::TomlParse { path, reason } => {
+            assert_eq!(path, FILE);
+            assert_eq!(reason, "項目 id の形が違う: ukadoc");
+        }
+        other => panic!("置き場つきの形の崩れとして落ちること: {other}"),
     }
+}
+
+/// 1 項目の `supersedes` に同じ id を 2 度書くと、id と欄を挙げて落ちる。
+#[test]
+fn a_superseded_id_written_twice_in_one_entry_is_rejected() {
+    let text = tweak(
+        r#"supersedes = ["ukadoc:list_propertysystem:system.year.old:1"]"#,
+        r#"supersedes = ["ukadoc:list_propertysystem:system.year.old:1", "ukadoc:list_propertysystem:system.year.old:1"]"#,
+    );
+
+    let err = err_of(&text);
+    match &err {
+        SurveyError::TomlParse { path, .. } => assert_eq!(path, FILE),
+        other => panic!("形の崩れとして落ちること: {other}"),
+    }
+    assert_mentions(
+        &err,
+        &[
+            YEAR,
+            "supersedes",
+            "ukadoc:list_propertysystem:system.year.old:1",
+        ],
+    );
+}
+
+/// 1 項目の `links` に同じ（種別, 相手）を 2 度書くと、id と欄を挙げて落ちる。
+///
+/// 黙って受けると、相手がカタログに無いとき同じ所見が 2 件出る。
+#[test]
+fn a_link_written_twice_in_one_entry_is_rejected() {
+    let link = r#"  { kind = "same-feature", to = "ukadoc:list_propertysystem:system.month:1" },"#;
+    let text = tweak(link, &format!("{link}\n{link}"));
+
+    let err = err_of(&text);
+    match &err {
+        SurveyError::TomlParse { path, .. } => assert_eq!(path, FILE),
+        other => panic!("形の崩れとして落ちること: {other}"),
+    }
+    assert_mentions(
+        &err,
+        &[
+            YEAR,
+            "links",
+            "same-feature",
+            "ukadoc:list_propertysystem:system.month:1",
+        ],
+    );
 }
 
 /// 欄に書かれた相手 id が 2 形のどちらでもなければ、**どの項目の**どの欄かを添えて失敗する。

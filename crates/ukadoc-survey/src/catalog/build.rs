@@ -51,7 +51,7 @@ pub(crate) fn page_not_assigned(pages: &[PageName]) -> SurveyError {
 /// 受け取る文書は `source` が `ukadoc` 以外の entry を含んでいてよい。ふるい分けは
 /// この段の判断で、入出力層は判断を持たない（設計 catalog「事前条件」）。
 ///
-/// 失敗するのは 4 つの場合だけで、いずれも何がどう悪いかを本文に載せる。
+/// 次の場合に失敗し、いずれも何がどう悪いかを本文に載せる。
 ///
 /// - 正典由来の id が 2 形のどちらでもない → [`SurveyError::BadEntryId`]（要件 1.9）
 /// - 同じ id が 2 度現れる → [`SurveyError::SnapshotShape`]

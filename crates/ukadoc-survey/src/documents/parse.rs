@@ -774,6 +774,12 @@ pub fn read_roadmap_draft(markdown: &str) -> Result<RoadmapDraft, SurveyError> {
             name,
         });
     }
+    reject_repeated(
+        reserved.iter().map(|row| row.name.as_str()),
+        "[[reserved]]",
+        "name",
+        &file,
+    )?;
 
     Ok(RoadmapDraft {
         briefs: Briefs {
