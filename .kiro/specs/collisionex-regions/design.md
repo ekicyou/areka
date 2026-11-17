@@ -131,7 +131,7 @@ crates/areka-emo-compose/src/
 - `crates/areka-emo-compose/src/{fold_merge_tests,row_budget_tests}.rs` — 前の行を除くと固定した檻（`later_brace_adds_same_element_number_and_drops_same_animation_number`・`append_and_second_brace_match_the_ssp_2_9_29_measurements`・`brace_drops_earlier_same_numbered_collisions_and_keeps_written_order`）を、両方を残す振る舞いと警告 1 行へ書き直し、`.right` の読み（`fold_merge_tests.rs` 164 行）を書き換える。
 - `crates/areka-emo-compose/src/hit_import_tests.rs` — 子から持ち込む 5 つの形のずらしと、親の同じ名前の `region` が子を落とす檻を足す（3.4・3.5・8.2）。
 - `crates/areka-parsers/src/shell/decode_tests_element_collision_tests.rs` — 19 行の説明「collisionex はここでは扱わない」を、`collisionex` の檻の置き場（`decode_collisionex_tests.rs`）を指す説明へ直す。
-- `crates/areka-emo-present/src/shell_target_element_base_tests.rs` — クローディアを読む `claudia_base_surfaces_are_full_size_without_warnings` に、warn 以上がちょうど 1 行で `ShapesInactive` の文言に楕円 32・円 0・多角形 28・`region` 0 が載る検査を数行足し、名前と説明（「警告は 0 件」）を事実に合わせて直す（8.6 の決定論の側）。
+- `crates/areka-emo-present/src/shell_target_element_base_tests.rs` — クローディアを読む `claudia_base_surfaces_are_full_size_without_warnings` に、warn 以上が `ShapesInactive` の 1 行（楕円 32・円 0・多角形 28・`region` 0）と `draw-methods-canon` が持つ surface28 の `base` の pattern 3 行だけで、同じ collision番号の警告が 0 行である検査（実装の段で数え直した・設計の「ちょうど 1 行」は数え違い）を数行足し、名前と説明（「警告は 0 件」）を事実に合わせて直す（8.6 の決定論の側）。
 - `crates/areka-emo-present/src/presenter_test_support.rs` — `hit_coll` の中身を `CollisionShape::Rect` へ。658 行の直書きは `hit_coll(..)` の呼び出しへ替える（890 行のまま・行は増やさない）。
 - `doc/ukadoc-coverage/ledger/assets.toml`・`doc/ukadoc-coverage/report/assets.md`・`doc/ukadoc-coverage/report/summary.md` — 2 行の書き直しと報告の作り直し（報告は機械で作る）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 に行を足し、【上書き】の行の collision の決めを書き直す。
