@@ -282,7 +282,7 @@ flowchart LR
 | 20 | 枝ごとの「走る行／隠れる行」の対: `#` 付きで中に `"` を含む生の文字列・`\"`・`b"…"`・`br#"…"#`・`'\''`・CRLF の入力 | `workspace_scan_test.rs` | `strip_comments_keeps_code_after_every_literal_kind`（表の形の 1 本・6 行） | G1 |
 | 21 | 手で組んだ `CapturedEvent`（`event_tests.rs:244` と同じ形）で 0 件・2 件・欠けた項目の `#[should_panic]` と通る 1 本 | `expect_tests.rs` | `expect_one_rejects_zero_matches`・`expect_one_rejects_two_matches`・`expect_field_rejects_a_missing_field`・`expect_one_returns_the_single_match` | L1 |
 | 22 | 自分の実行体を子で起こす形（`devroot_cache_tests.rs:487-536`）で、私用の `CARGO_TARGET_DIR` に食い違う棚を置き、子の中で `SampleRoot::acquire("pasta-in-windows")` が `FetchedNarMismatch` を返すことを確かめる。今の 2 本の名前を中身に合わせる | `devroot_fetched_tests.rs` | `acquire_refuses_a_tampered_fetched_archive` | S4 |
-| 23 | 私用の名前空間で 1 度作り、中のファイルを削除を拒む共有モード（`FILE_SHARE_READ`）で開き、2 度目が「手動用の根の作り直し」の `Io` を返す | `devroot_tests.rs` | `manual_root_refuses_a_tree_it_cannot_remove` | S4 |
+| 23 | 私用の名前空間で 1 度作り、中のファイルを削除を拒む共有モード（`FILE_SHARE_READ`）で開き、2 度目が手動用の根の作り直しの `Io` を返す（`what` は 32 の直しの後の英語の ASCII の文で照らす） | `devroot_tests.rs` | `manual_root_refuses_a_tree_it_cannot_remove` | S4 |
 | 24 | 55 バイトと 64 バイトの既知の答えを足す（答えは `python -c "import hashlib"` で作って逐語で置き、作り方を説明に 1 行） | `sha256_tests.rs` | `digest_of_55_bytes_matches_the_known_answer`・`digest_of_64_bytes_matches_the_known_answer` | S4 |
 | 25 | 局所ヘッダの時刻と日付（オフセット 10..14）が `0x0000`・`0x0021` であることを確かめる。畳み込みのテストに名前の対 `B.txt`・`a.txt` を足す | `nar_writer_tests.rs` | `every_local_header_carries_the_fixed_dos_time`・`folding_orders_entries_by_byte_order` | S4 |
 | 26 | D2 | `launch_tests.rs` | `relied_targets_name_the_modules_that_emit_the_relied_lines` | R4 |
