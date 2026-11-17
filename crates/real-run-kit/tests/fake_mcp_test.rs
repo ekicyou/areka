@@ -16,7 +16,7 @@ fn close_ok(mut run: Run) {
     assert_eq!(run.close().by, EndedBy::UserClose);
 }
 
-/// 4.2・4.6: 成功の答えは文と失敗でない印。つなぎを使い回して 2 回目も通る。
+/// 4.2・4.6: 成功の答えは文と失敗でない印。2 回目も通る（つなぎの使い回しは `mcp_tests.rs` が確かめる）。
 #[test]
 fn call_returns_text() {
     let mut run = fake("listen;window").spawn();
@@ -117,8 +117,8 @@ fn call_until_finds_on_third_call() {
     close_ok(run);
 }
 
-/// 3（D1）: 受け口が JSON-RPC の誤りを答えたら `Refused`。つなぎを捨てないので続く正しい呼び出しも
-/// 通る（輸送の失敗の猶予を待たないことは `mcp_tests.rs` が確かめる）。
+/// 3（D1）: 受け口が JSON-RPC の誤りを答えたら `Refused`。続く正しい呼び出しも通る（つなぎの
+/// 使い回しと、輸送の失敗の猶予を待たないことは `mcp_tests.rs` が確かめる）。
 #[test]
 fn an_mcp_error_reply_is_refused_on_the_same_link() {
     let mut run = fake("listen;window").spawn();

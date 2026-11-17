@@ -6,7 +6,7 @@
 
 use sample_ghost_kit::ascii;
 use std::ffi::OsString;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, PoisonError};
@@ -95,7 +95,7 @@ pub(crate) fn ensure(
         }
     };
     if !(is_i686_pe(&dest) && same_copy(&src, &dest)) {
-        place(&src, &dest);
+        place(&src, &dest, &mut std::io::stderr());
     }
     dest
 }
@@ -105,19 +105,27 @@ pub(crate) fn ensure(
 /// 置いた・使用中で替えられない）。32bit でなければ理由を添えて panic する。
 ///
 /// 通した置き先が元と長さか更新時刻で違う（古い写しのまま走る）ときは、その旨の ASCII の 1 行を
-/// 標準エラーへ出し、同じ行を返す（同じ写しなら黙って `None`）。
-fn place(src: &Path, dest: &Path) -> Option<String> {
+/// `out` へ書く（同じ写しなら何も書かない）。一時名を消せなかったときも ASCII の 1 行を `out` へ
+/// 書く（複製の失敗のときは続く panic の文に添える）。`out` は本番では標準エラーで、`eprintln!` は
+/// libtest が通ったテストの分を捨てるので直に書く。
+fn place(src: &Path, dest: &Path, out: &mut dyn Write) {
     static SERIAL: AtomicU64 = AtomicU64::new(0);
     let serial = SERIAL.fetch_add(1, Ordering::Relaxed);
     let mut tmp = dest.as_os_str().to_owned();
     tmp.push(format!(".{}.{serial}.tmp", std::process::id()));
     let tmp = PathBuf::from(tmp);
     if let Err(e) = std::fs::copy(src, &tmp) {
-        let _ = std::fs::remove_file(&tmp);
-        panic!("{} → {} の複製に失敗: {e}", src.display(), tmp.display());
+        let note = remove_tmp(&tmp).map_or_else(String::new, |l| format!("（{l}）"));
+        panic!(
+            "{} → {} の複製に失敗: {e}{note}",
+            src.display(),
+            tmp.display()
+        );
     }
     if let Err(e) = std::fs::rename(&tmp, dest) {
-        let _ = std::fs::remove_file(&tmp);
+        if let Some(line) = remove_tmp(&tmp) {
+            let _ = writeln!(out, "{line}");
+        }
         assert!(
             is_i686_pe(dest),
             "{} → {} の改名に失敗し、置き先も 32bit（i686）ではありません: {e}",
@@ -125,16 +133,27 @@ fn place(src: &Path, dest: &Path) -> Option<String> {
             dest.display()
         );
         if !same_copy(src, dest) {
-            let line = format!(
+            let _ = writeln!(
+                out,
                 "real-run-kit: could not replace {} ({}); using the existing 32-bit copy",
                 ascii(&dest.display().to_string()),
                 ascii(&e.to_string())
             );
-            eprintln!("{line}");
-            return Some(line);
         }
     }
-    None
+}
+
+/// 一時名を消す。消せたとき・既に無いときは `None`、ほかの失敗はその旨の ASCII の 1 行。
+fn remove_tmp(tmp: &Path) -> Option<String> {
+    match std::fs::remove_file(tmp) {
+        Ok(()) => None,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => Some(format!(
+            "real-run-kit: could not remove {} ({})",
+            ascii(&tmp.display().to_string()),
+            ascii(&e.to_string())
+        )),
+    }
 }
 
 #[cfg(test)]

@@ -73,31 +73,36 @@ impl Tail {
     }
 }
 
+/// 2 つの出力のファイルの、頭から読む `Tail`。
+pub(crate) fn tails(files: [&Path; 2]) -> [Tail; 2] {
+    files.map(|p| Tail::new(p.to_path_buf()))
+}
+
 fn contains(hay: &[u8], needle: &[u8]) -> bool {
     needle.is_empty() || hay.windows(needle.len()).any(|w| w == needle)
 }
 
 /// 2 つの出力のファイルに `needles` のどれかが現れるまで待ち、その番号を返す（3.2・3.5・3.7）。
+/// `tails` の読んだ位置から続けて読むので、呼び手が待ち直すたびに頭から読み直さない。
 ///
 /// 1 回ごとに ⑴ 増えた分に文字列があればその番号 ⑵ 子が終わっていれば、もう 1 度だけ増えた分を
 /// 読んでから `ChildExited` ⑶ 締切を過ぎていれば `Deadline` ⑷ `poll` だけ待って ⑴ へ。
 pub(crate) fn wait_any(
-    files: [&Path; 2],
+    tails: &mut [Tail; 2],
     needles: &[&str],
     child: &mut Child,
     deadline: Instant,
     poll: Duration,
 ) -> Result<usize, WaitEnd> {
-    let mut tails = files.map(|p| Tail::new(p.to_path_buf()));
     let scan = |tails: &mut [Tail; 2]| tails.iter_mut().find_map(|t| t.scan(needles));
     loop {
-        if let Some(i) = scan(&mut tails) {
+        if let Some(i) = scan(tails) {
             return Ok(i);
         }
         // 終わりを見られないのは取っ手の故障。終わったとは言えないので見回りを続け、締切で終える。
         if let Ok(Some(status)) = child.try_wait() {
             // 終わる直前に書かれた分を取りこぼさない。
-            return scan(&mut tails).ok_or(WaitEnd::ChildExited(ChildExited { status }));
+            return scan(tails).ok_or(WaitEnd::ChildExited(ChildExited { status }));
         }
         if Instant::now() >= deadline {
             return Err(WaitEnd::Deadline);

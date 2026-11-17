@@ -231,7 +231,7 @@ impl McpChannel {
             return Ok(());
         }
         let needles = [LISTEN_STARTED, LISTEN_FAILED, LISTEN_OFF];
-        match output::wait_any(files, &needles, child, end, poll) {
+        match output::wait_any(&mut output::tails(files), &needles, child, end, poll) {
             Ok(0) => {
                 self.listening = true;
                 Ok(())

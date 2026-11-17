@@ -64,3 +64,7 @@
 ## 束 C の直しの控え（承認済み）
 - 較正: L5 は手組みを古い形（引用符つき・`str_raw: Some`）に戻す → `ちょうど_1_件なら返し_項目も引ける` が赤。消したもの: temp-path-kit の重なる `assert_ne!` 1 つ（名前の付いたものは無し）
 - 残り（3 回目で見る）: temp-path-kit の `要件 12.1` に spec の名の注記が無い（L8 は log-capture-kit だけを挙げた）
+
+## 束 B の直しの控え（承認済み）
+- 較正: R1 は行を書かない形に → `rename_failure_passes_with_an_ascii_line_when_dest_is_another_32bit_copy` が赤（書き先を引数で受け、`Vec<u8>` に書かれた字面を確かめる）。R7 は消しの失敗を捨てる → `remove_tmp_reports_only_a_failure_other_than_not_found` が赤。R2 は応答と断りの腕でつなぎを捨てる → `the_link_is_kept_after_a_reply_and_after_a_refusal` が赤。R3 は古い `split('[')` に戻す → `compose_rust_log_table` が赤。R8 は `wait_any` の頭で位置を戻す → `a_second_wait_continues_from_where_the_tails_stopped` が赤
+- 改名・消し: `four_launch_variants_resolve_positional_args_and_root` → `launch_variants_resolve_positional_args_and_root`（tasks.md の過去の控えが旧名を挙げる・直さない）、手助け `target_test_roots_of` を消した（使い手は同じファイルの 1 だけ）

@@ -171,7 +171,6 @@ fn wait_exit_ends_by_safety_exit() {
 #[test]
 fn drop_closes_running_window() {
     let marks = TempPath::under_target("rr-mark");
-    std::fs::create_dir_all(marks.path()).unwrap();
     let mark = marks.child("mark.txt");
     let run = fake("window").env("REAL_RUN_FAKE_MARK", &mark).spawn();
     let pid = run.pid();

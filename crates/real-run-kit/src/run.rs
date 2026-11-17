@@ -132,7 +132,7 @@ impl Run {
         let files = [self.stdout.as_path(), self.stderr.as_path()];
         let deadline = Instant::now() + self.limits.deadline;
         match output::wait_any(
-            files,
+            &mut output::tails(files),
             &[needle],
             &mut self.child,
             deadline,

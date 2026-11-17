@@ -210,7 +210,7 @@ impl RealRun {
 
     /// 子へ渡す形を組む。起動の約束の綴りはここだけが書く（8.2・8.3）。順は
     /// ⑴ 開発者の書ける根を外す（1.5）→ ⑵ 窓口の既定 → ⑶ 呼び手の論理の指定 → ⑷ 呼び手の `env`（1.6）。
-    /// ⑵⑶ は値が決まった後の 1 回の指定にまとめて書く（開発者のほかの 3 つはここで上書きされる）。
+    /// ⑵⑶ は値が決まった後の 1 回の指定にまとめて書く（開発者のほかの変数はここで上書きされる）。
     /// パスはどれも絶対（`\\?\` なし＝1.9）。
     fn child_command(
         &self,
@@ -371,7 +371,8 @@ const RELIED_TARGETS: [&str; 2] = ["areka_mcp::server", "areka::app_exit"];
 ///
 /// ⑴ 出所そのものか親を名指していれば足さない ⑵ 全体の段が info・debug・trace（数字の 3〜5）なら
 /// 足さない ⑶ 全体の段が warn・error・off（数字の 0〜2・指定なし＝off）で名指しも無いときだけ足す。
-/// 空は既定の `info`。
+/// 空は既定の `info`。span を付けた指定（`[` を含む・例 `areka_mcp::server[req]=debug`）は
+/// その span の中の行だけを開けるので名指しに数えない。
 ///
 /// 「名指し」は `EnvFilter` と同じ規則で決める。`EnvFilter` は出所を `::` の切れ目なしの素の
 /// 前方一致で照らす（tracing-subscriber 0.3.23 `filter/env/directive.rs:246`
@@ -383,14 +384,18 @@ fn compose_rust_log(base: &str) -> String {
     }
     let mut global_open = false;
     let mut named: Vec<&str> = Vec::new();
-    for d in base.split(',').map(str::trim).filter(|d| !d.is_empty()) {
+    for d in base
+        .split(',')
+        .map(str::trim)
+        .filter(|d| !d.is_empty() && !d.contains('['))
+    {
         match d.split_once('=') {
-            Some((target, _)) => named.push(target.split('[').next().unwrap_or("").trim()),
+            Some((target, _)) => named.push(target.trim()),
             None => match d.to_ascii_lowercase().as_str() {
                 // 数字の段は EnvFilter の読みと同じ（0＝off・1＝error・2＝warn・3＝info・4＝debug・5＝trace）。
                 "info" | "debug" | "trace" | "3" | "4" | "5" => global_open = true,
                 "warn" | "error" | "off" | "0" | "1" | "2" => global_open = false,
-                _ => named.push(d.split('[').next().unwrap_or("")),
+                _ => named.push(d),
             },
         }
     }

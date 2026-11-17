@@ -302,7 +302,9 @@ fn rename_failure_passes_silently_when_dest_is_the_same_32bit_copy() {
     // `std::fs::copy` は更新時刻も写すので、長さと更新時刻が元と同じ写しになる。
     std::fs::copy(&src, bed.dest()).unwrap();
     let _held = hold(&bed.dest());
-    assert_eq!(place(&src, &bed.dest()), None);
+    let mut out = Vec::new();
+    place(&src, &bed.dest(), &mut out);
+    assert!(out.is_empty(), "{:?}", String::from_utf8_lossy(&out));
     assert_eq!(tag_of(&bed.dest()), "src");
     no_tmp_left(&bed.dest_dir);
 }
@@ -314,7 +316,13 @@ fn rename_failure_passes_with_an_ascii_line_when_dest_is_another_32bit_copy() {
     write_pe(&src, I386, "src");
     write_pe(&bed.dest(), I386, "other-process");
     let _held = hold(&bed.dest());
-    let line = place(&src, &bed.dest()).expect("古い写しのまま走る旨の行");
+    let mut out = Vec::new();
+    place(&src, &bed.dest(), &mut out);
+    let text = String::from_utf8(out).unwrap();
+    let line = text
+        .strip_suffix('\n')
+        .expect("古い写しのまま走る旨の 1 行");
+    assert_eq!(line.lines().count(), 1, "{text:?}");
     // 先に置かれた物がそのまま使われる。
     assert_eq!(tag_of(&bed.dest()), "other-process");
     assert!(line.is_ascii(), "{line}");
@@ -338,10 +346,30 @@ fn rename_failure_fails_with_the_reason_when_dest_is_not_32bit() {
     write_pe(&bed.dest(), AMD64, "x64");
     let held = hold(&bed.dest());
     let text = panic_text(|| {
-        place(&src, &bed.dest());
+        place(&src, &bed.dest(), &mut Vec::new());
     });
     drop(held);
     assert!(text.contains(&bed.dest().display().to_string()), "{text}");
     assert!(text.contains("改名"), "{text}");
     no_tmp_left(&bed.dest_dir);
+}
+
+/// 一時名を消せないとき（ほかが削除の共有なしで開いている）は ASCII の 1 行、消せた・既に無いは無言。
+#[test]
+fn remove_tmp_reports_only_a_failure_other_than_not_found() {
+    let bed = Bed::new();
+    let tmp = bed.dest_dir.join("held.tmp");
+    std::fs::write(&tmp, b"x").unwrap();
+    let held = hold(&tmp);
+    let line = remove_tmp(&tmp).expect("消せない旨の行");
+    drop(held);
+    assert!(line.is_ascii(), "{line}");
+    assert!(
+        line.starts_with("real-run-kit: could not remove ")
+            && line.contains(&ascii(&tmp.display().to_string())),
+        "{line}"
+    );
+    assert_eq!(remove_tmp(&tmp), None);
+    assert!(!tmp.exists());
+    assert_eq!(remove_tmp(&tmp), None);
 }

@@ -38,7 +38,7 @@ fn plain(exe: &str) -> Command {
 fn removes_the_user_root_and_sets_the_kit_defaults() {
     let cmd = plain("areka.exe");
     let e = envs(&cmd);
-    // 書ける根は外したまま（1.5）。ほかの 3 つは窓口の既定で上書き（受け継がない）。
+    // 書ける根は外したまま（1.5）。ほかの変数は窓口の既定で上書き（受け継がない）。
     assert_eq!(e.get("AREKA_USER_ROOT"), Some(&None));
     assert_eq!(
         set(&e, "AREKA_ROOT"),
@@ -129,9 +129,9 @@ fn relative_paths_become_absolute_without_verbatim_prefix() {
     }
 }
 
-/// 4 通りの位置の引数と根（1.1・1.4）。検体は本物の写しを取る。
+/// 位置の引数と根の決まり方（1.1・1.4）。検体は本物の写しを取る。
 #[test]
-fn four_launch_variants_resolve_positional_args_and_root() {
+fn launch_variants_resolve_positional_args_and_root() {
     let dirs = RunDirs::create(Some("emo2"));
     let sample = dirs.sample().unwrap();
     let emo2 = sample.folder().to_path_buf();
@@ -256,6 +256,11 @@ fn compose_rust_log_table() {
         ),
         // 段の無い出所の指定も名指し。
         ("warn,areka", "warn,areka".into()),
+        // span を付けた指定はその span の中だけを開けるので名指しではない。
+        (
+            "warn,areka_mcp::server[req]=debug",
+            format!("warn,areka_mcp::server[req]=debug{S}{X}"),
+        ),
     ];
     for (base, want) in table {
         assert_eq!(&compose_rust_log(base), want, "base={base:?}");

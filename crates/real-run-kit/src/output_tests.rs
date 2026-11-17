@@ -39,7 +39,7 @@ fn appended_later_needle_ends_wait() {
     };
     let mut child = living_child();
     let got = wait_any(
-        [&out, &err],
+        &mut tails([&out, &err]),
         &["見つからない", "MCP: 待受を始めた"],
         &mut child.0,
         Instant::now() + FAR,
@@ -47,6 +47,33 @@ fn appended_later_needle_ends_wait() {
     );
     writer.join().unwrap();
     assert_eq!(got, Ok(1));
+}
+
+/// 待ち直しは渡された `tails` の読んだ位置から続ける（前の待ちが読んだ分を読み直さない）。
+#[test]
+fn a_second_wait_continues_from_where_the_tails_stopped() {
+    let dir = TempPath::under_target("output-resume");
+    let (out, err) = (dir.child("stdout.txt"), dir.child("stderr.txt"));
+    append(&out, b"ONCE\n");
+    let mut tails = tails([&out, &err]);
+    let mut child = living_child();
+    let first = wait_any(
+        &mut tails,
+        &["ONCE"],
+        &mut child.0,
+        Instant::now() + FAR,
+        POLL,
+    );
+    assert_eq!(first, Ok(0));
+    let second = wait_any(
+        &mut tails,
+        &["ONCE"],
+        &mut child.0,
+        Instant::now() + Duration::from_millis(100),
+        POLL,
+    );
+    drop(child);
+    assert_eq!(second, Err(WaitEnd::Deadline));
 }
 
 /// 2 回の追記の境目（多バイトの字の途中）をまたいだ文字列を拾う。
@@ -74,7 +101,7 @@ fn exited_child_ends_wait_with_exit_code() {
     let (out, err) = (dir.child("stdout.txt"), dir.child("stderr.txt"));
     let mut child = Command::new("cmd").args(["/c", "exit 3"]).spawn().unwrap();
     let got = wait_any(
-        [&out, &err],
+        &mut tails([&out, &err]),
         &["来ない"],
         &mut child,
         Instant::now() + FAR,
@@ -98,7 +125,7 @@ fn needle_written_just_before_exit_is_found() {
         .spawn()
         .unwrap();
     let got = wait_any(
-        [&out, &err],
+        &mut tails([&out, &err]),
         &["LAST_LINE"],
         &mut child,
         Instant::now() + FAR,
@@ -121,7 +148,7 @@ fn deadline_ends_wait_and_text_has_paths_and_tail() {
     let mut child = living_child();
     let start = Instant::now();
     let got = wait_any(
-        [&out, &err],
+        &mut tails([&out, &err]),
         &["来ない"],
         &mut child.0,
         start + Duration::from_millis(200),
@@ -149,7 +176,6 @@ fn deadline_ends_wait_and_text_has_paths_and_tail() {
 #[test]
 fn read_text_panics_with_the_path_when_the_file_cannot_be_read() {
     let dir = TempPath::under_target("output-unreadable");
-    std::fs::create_dir_all(dir.path()).unwrap();
     let text = panic_text(|| {
         read_text(dir.path());
     });
@@ -161,7 +187,6 @@ fn read_text_panics_with_the_path_when_the_file_cannot_be_read() {
 #[test]
 fn failure_text_names_an_unreadable_file() {
     let dir = TempPath::under_target("output-unreadable-tail");
-    std::fs::create_dir_all(dir.path()).unwrap();
     let err = dir.child("stderr.txt");
     append(&err, b"ERR_MARK\n");
     let text = failure_text(&["来ない"], Duration::from_millis(1), [dir.path(), &err]);

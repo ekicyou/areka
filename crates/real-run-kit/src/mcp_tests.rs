@@ -299,6 +299,34 @@ fn an_mcp_error_reply_is_refused_without_waiting_for_the_grace() {
     assert!(took < Duration::from_secs(5), "猶予を待った: {took:?}");
 }
 
+/// D-10: 答え（成功も JSON-RPC の誤りも）の後はつなぎを持ち続け、次の呼び出しが使い回す。
+#[test]
+fn the_link_is_kept_after_a_reply_and_after_a_refusal() {
+    let server = serve("答え");
+    let port = server.local_addr().unwrap().port();
+    let dir = TempPath::under_target("mcp-link-kept");
+    let (out, err) = (dir.child("stdout.txt"), dir.child("stderr.txt"));
+    std::fs::write(
+        &out,
+        format!("INFO MCP: 待受を始めた url=http://127.0.0.1:{port}/api/mcp/v1\n"),
+    )
+    .unwrap();
+    let mut child = living_child();
+    let mut mcp = McpChannel::new(port);
+    let l = waits(Duration::from_secs(10));
+    let first = mcp.call(&mut child.0, [&out, &err], "echo", "{}", &l);
+    assert_eq!(first.expect("答える").text, "答え");
+    assert!(mcp.link.is_some(), "成功の答えの後につなぎを捨てた");
+    let refused = mcp.call(&mut child.0, [&out, &err], "echo", r#"{"text":5}"#, &l);
+    assert!(
+        matches!(refused, Err(McpError::Refused { .. })),
+        "{refused:?}"
+    );
+    assert!(mcp.link.is_some(), "誤りの答えの後につなぎを捨てた");
+    drop(child);
+    drop(server);
+}
+
 /// 28: 名乗りの確かめで別の相手だけが答えたら、その番号と名乗りを訳に書く。
 #[test]
 fn another_server_answering_is_named_in_the_reason() {

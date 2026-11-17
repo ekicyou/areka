@@ -186,6 +186,8 @@ fn close_or_kill(
 ) -> Result<ExitStatus, Stopped> {
     let end = Instant::now() + deadline;
     let mut last_send = "まだ送っていない".to_string();
+    // 送り直しをまたいで読んだ位置を持つ（送り直すたびに頭から読み直さない）。
+    let mut tails = output::tails(files);
     loop {
         // 送る直前に生きていることを見る（5.6）。
         if let Ok(Some(status)) = child.try_wait() {
@@ -196,7 +198,7 @@ fn close_or_kill(
         }
         last_send = send_close(child.id());
         let next = (Instant::now() + close_retry).min(end);
-        match output::wait_any(files, &ACK, child, next, poll) {
+        match output::wait_any(&mut tails, &ACK, child, next, poll) {
             // 受け取った後は送り直さず、終わりだけを待つ。
             Ok(_) => return wait_until(child, end, poll).ok_or_else(|| kill(child, last_send)),
             Err(WaitEnd::ChildExited(exited)) => return Ok(exited.status),
