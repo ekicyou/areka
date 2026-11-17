@@ -239,7 +239,8 @@ fn crossing_bundles<'a>(
 /// **1 つの id から何本でも辺が出る**（要件 4.3 の関連は種別違いで何本でも書ける）。
 /// 元 id を鍵にした表で集めると 2 本目以降が黙って落ち、繋がるはずの束が割れる。
 ///
-/// `alias_of` と `supersedes` は辺にしない。束は `links` だけで作る（設計 D-11）。
+/// `alias_of`・`supersedes` の欄は辺にしない（`links` の kind としてなら辺になる）。
+/// 束は `links` だけで作る（設計 D-11）。
 fn all_links(ordered: &[&Ledger]) -> Vec<(EntryId, EntryId)> {
     let mut edges: Vec<(EntryId, EntryId)> = Vec::new();
     for ledger in ordered {

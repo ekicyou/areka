@@ -7,10 +7,11 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use super::super::{priority_apply_with, report_with};
-use super::{LEDGER_FILES, under_coverage};
+use super::{
+    LEDGER_FILES, reader_over, under_coverage, written_when_the_second_announcement_fails,
+};
 use crate::documents::fields::{self, document_file};
 use crate::error::SurveyError;
-use crate::io::files;
 use crate::model::{Domain, EntryId};
 
 // ---------------------------------------------------------------------------
@@ -159,13 +160,10 @@ fn apply_over(
     files: &BTreeMap<String, String>,
 ) -> (Result<(), SurveyError>, Vec<String>, Vec<Written>) {
     let asked: RefCell<Vec<String>> = RefCell::new(Vec::new());
+    let from_table = reader_over(files);
     let read = |path: &Path| -> Result<String, SurveyError> {
-        let spelled = under_coverage(path);
-        asked.borrow_mut().push(spelled.clone());
-        files
-            .get(&spelled)
-            .cloned()
-            .ok_or_else(|| files::io_error(path, "見本に無い"))
+        asked.borrow_mut().push(under_coverage(path));
+        from_table(path)
     };
 
     let mut bodies: Vec<(String, String)> = Vec::new();
@@ -192,46 +190,12 @@ fn apply_over(
     (outcome, asked.into_inner(), written)
 }
 
-/// 書き手（場所と本文を受ける）。
-type WriteFn<'a> = dyn FnMut(&Path, &str) -> Result<(), SurveyError> + 'a;
-
-/// 告げ手（場所と件数を受ける）。
-type SayFn<'a> = dyn FnMut(&Path, usize) -> Result<(), SurveyError> + 'a;
-
-/// 告げ手が 2 本目で落ちる（出力の先が途中で閉じた）ときに、書き手が受け取った場所。
-fn written_when_the_second_announcement_fails(
-    run: &mut dyn FnMut(&mut WriteFn<'_>, &mut SayFn<'_>) -> Result<(), SurveyError>,
-) -> (Result<(), SurveyError>, Vec<String>) {
-    let mut written: Vec<String> = Vec::new();
-    let mut said = 0_usize;
-    let outcome = {
-        let mut record = |target: &Path, _: &str| -> Result<(), SurveyError> {
-            written.push(under_coverage(target));
-            Ok(())
-        };
-        let mut say = |target: &Path, _: usize| -> Result<(), SurveyError> {
-            said += 1;
-            if said == 2 {
-                return Err(files::io_error(target, "告げる先が閉じた"));
-            }
-            Ok(())
-        };
-        run(&mut record, &mut say)
-    };
-    (outcome, written)
-}
-
 #[test]
 fn a_closed_output_on_the_second_announcement_still_leaves_all_four_ledgers_written() {
     // 1 本書くたびに告げると、2 本目の告知で落ちたときに 3・4 本目が書かれず、
     // 新旧の混ざった台帳が残る。告げるのは 4 本を書き終えてから。
     let files = sample_files(&SAMPLE_IDS, "");
-    let read = |path: &Path| -> Result<String, SurveyError> {
-        files
-            .get(&under_coverage(path))
-            .cloned()
-            .ok_or_else(|| files::io_error(path, "見本に無い"))
-    };
+    let read = reader_over(&files);
     let (outcome, written) = written_when_the_second_announcement_fails(&mut |write, say| {
         priority_apply_with(&read, write, say)
     });
@@ -352,12 +316,7 @@ fn a_document_that_cannot_be_read_stops_with_the_absolute_path_it_looked_for() {
 
 /// 見本の台帳を読ませて報告の書き出しを 1 度走らせ、書き手が受け取った場所を返す。
 fn report_over(files: &BTreeMap<String, String>) -> (Result<(), SurveyError>, Vec<String>) {
-    let read = |path: &Path| -> Result<String, SurveyError> {
-        files
-            .get(&under_coverage(path))
-            .cloned()
-            .ok_or_else(|| files::io_error(path, "見本に無い"))
-    };
+    let read = reader_over(files);
     let mut written: Vec<String> = Vec::new();
     let outcome = {
         let mut record = |target: &Path, _: &str| -> Result<(), SurveyError> {
@@ -373,12 +332,7 @@ fn report_over(files: &BTreeMap<String, String>) -> (Result<(), SurveyError>, Ve
 fn a_closed_output_on_the_second_announcement_still_leaves_all_four_reports_written() {
     // 台帳の書き戻しと同じ順番（告げるのは 4 本を書き終えてから）を報告の側でも見る。
     let files = sample_files(&SAMPLE_IDS, "");
-    let read = |path: &Path| -> Result<String, SurveyError> {
-        files
-            .get(&under_coverage(path))
-            .cloned()
-            .ok_or_else(|| files::io_error(path, "見本に無い"))
-    };
+    let read = reader_over(&files);
     let (outcome, written) = written_when_the_second_announcement_fails(&mut |write, say| {
         report_with(&read, write, say)
     });

@@ -135,8 +135,9 @@ fn a_chain_merges_no_matter_which_end_the_later_edge_hangs_from() {
 
 #[test]
 fn two_links_converging_on_the_same_id_merge() {
-    // 同じ id を**指す**対が 2 つ。台帳の日常の形である——旧い綴り 2 つが同じ
-    // 正典 id を `alias_of` で指すと、対は (旧1, 新)・(旧2, 新) になる。
+    // 同じ id を**指す**対が 2 つ。台帳の日常の形である——旧い綴り 2 つが `links` の
+    // `kind = "alias_of"` で同じ正典 id を指すと、対は (旧1, 新)・(旧2, 新) になる
+    // （`alias_of` の欄は辺にならない）。
     //
     // 書かれた向きにしか繋がりを認めない実装はここで 2 束に割れ、`linkage.md` が
     // 引用している束 id が黙って付け替わる（要件 7.9 の安定した束 id が防ごうと
@@ -154,8 +155,8 @@ fn two_links_converging_on_the_same_id_merge() {
 
 #[test]
 fn two_links_leaving_the_same_id_merge() {
-    // 同じ id から**出る**対が 2 つ（1 つの正典 id が 2 つの旧 id を `supersedes`
-    // する形）。上の収束形と対になる発散形で、向きの契約を両側から言う。
+    // 同じ id から**出る**対が 2 つ（1 つの正典 id が `links` の
+    // `kind = "supersedes"` で 2 つの旧 id を指す形）。上の収束形と対になる発散形で、向きの契約を両側から言う。
     let got = bundles(&[edge(BRAVO, ALPHA), edge(BRAVO, CHARLIE)]);
     assert_eq!(
         got,

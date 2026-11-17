@@ -72,8 +72,8 @@ pub(super) const UNASSIGNED_PAGE_ID: &str = "ukadoc:no_such_page_for_the_test:Wh
 /// 書き換える確認は人手で 1 度だけ行った——常時テストがファイルを書き換えると、並行に
 /// 走る他のテストがその途中の状態を読む。
 ///
-/// 直に書き換える欄だけを兄弟（`checks.rs`）へ開ける。台帳は [`Perturbed::ledger_mut`]・
-/// [`Perturbed::entry_mut`] を通す決まりなので閉じたままにする。
+/// 直に書き換える欄だけを兄弟（`checks.rs`・`documents_checks.rs`）へ開ける。台帳は
+/// [`Perturbed::ledger_mut`]・[`Perturbed::entry_mut`] を通す決まりなので閉じたままにする。
 pub(super) struct Perturbed<'a> {
     data: &'a RepoData,
     pub(super) catalog: Catalog,

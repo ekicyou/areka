@@ -14,7 +14,7 @@
 //! - 4 本を全部書き終えてから告げるか（[`ledger_init_with`]）
 //!
 //! 台帳の前置きに担当ページを並べる順（名前順）は `assignment_tests.rs` が逐語で
-//! 固定している。2 つ目と 3 つ目は 4 つ目の再実行の主張も捕まえるが、
+//! 固定している。2 つ目と 3 つ目が守る壊れ方は 4 つ目の再実行の主張も捕まえるが、
 //! それは repo の台帳に手で書いた値が載っているからで、台帳の中身に頼らずに立つよう
 //! 手で書いた見本と追跡ファイルで別に確かめる——理由はこのファイルの後半に書いた。
 //!
@@ -27,7 +27,7 @@
 //! 「スナップショットがその環境に無くても整合検査は赤にならない（repo 内のカタログを
 //! 正本として検査する）」であって、repo のファイルを読むことをむしろ前提にしている。
 //! 在中テストが repo の追跡ファイルを読む前例も既にある（`io/files_tests.rs` が
-//! `Cargo.toml` を読む）。4 つ目から後の主張はこの読みだけを使う。
+//! `Cargo.toml` を読む）。3 つ目から後の主張はこの読みだけを使う。
 
 // `priority-apply` の節。共有の定数と小道具は子のこのモジュールにだけ見える。
 #[path = "generate_priority_tests.rs"]
@@ -254,6 +254,47 @@ fn under_coverage(path: &Path) -> String {
         Some(at) => spelled[at..].to_owned(),
         None => spelled,
     }
+}
+
+/// 見本の表（`doc/ukadoc-coverage/` から先の綴り → 本文）から読む読み手。表に無い場所は読めない。
+fn reader_over(
+    files: &BTreeMap<String, String>,
+) -> impl Fn(&Path) -> Result<String, SurveyError> + '_ {
+    move |path| {
+        files
+            .get(&under_coverage(path))
+            .cloned()
+            .ok_or_else(|| files::io_error(path, "見本に無い"))
+    }
+}
+
+/// 書き手（場所と本文を受ける）。
+type WriteFn<'a> = dyn FnMut(&Path, &str) -> Result<(), SurveyError> + 'a;
+
+/// 告げ手（場所と件数を受ける）。
+type SayFn<'a> = dyn FnMut(&Path, usize) -> Result<(), SurveyError> + 'a;
+
+/// 告げ手が 2 本目で落ちる（出力の先が途中で閉じた）ときに、書き手が受け取った場所。
+fn written_when_the_second_announcement_fails(
+    run: &mut dyn FnMut(&mut WriteFn<'_>, &mut SayFn<'_>) -> Result<(), SurveyError>,
+) -> (Result<(), SurveyError>, Vec<String>) {
+    let mut written: Vec<String> = Vec::new();
+    let mut said = 0_usize;
+    let outcome = {
+        let mut record = |target: &Path, _: &str| -> Result<(), SurveyError> {
+            written.push(under_coverage(target));
+            Ok(())
+        };
+        let mut say = |target: &Path, _: usize| -> Result<(), SurveyError> {
+            said += 1;
+            if said == 2 {
+                return Err(files::io_error(target, "告げる先が閉じた"));
+            }
+            Ok(())
+        };
+        run(&mut record, &mut say)
+    };
+    (outcome, written)
 }
 
 /// 4 本ぶんの計画を組み立てる。渡した本文と、取り寄せに聞かれた場所を返す。
@@ -568,22 +609,9 @@ fn a_failure_from_the_writer_comes_back_unchanged() {
 fn a_closed_output_on_the_second_announcement_still_leaves_all_four_ledgers_written() {
     // 1 本書くたびに告げると、2 本目の告知で落ちたとき（出力の先が途中で閉じた）に
     // 3・4 本目が書かれずに残る。告げるのは 4 本を書き終えてから。
-    let mut written: Vec<String> = Vec::new();
-    let mut said = 0_usize;
-    let outcome = {
-        let mut record = |target: &Path, _: &str| -> Result<(), SurveyError> {
-            written.push(under_coverage(target));
-            Ok(())
-        };
-        let mut say = |target: &Path, _: usize| -> Result<(), SurveyError> {
-            said += 1;
-            if said == 2 {
-                return Err(files::io_error(target, "告げる先が閉じた"));
-            }
-            Ok(())
-        };
-        ledger_init_with(&read_if_present, &mut record, &mut say)
-    };
+    let (outcome, written) = written_when_the_second_announcement_fails(&mut |write, say| {
+        ledger_init_with(&read_if_present, write, say)
+    });
     outcome.expect_err("告げる先が閉じたのに成功した");
     assert_eq!(written, LEDGER_FILES, "告げる前に書き終えていない");
 }

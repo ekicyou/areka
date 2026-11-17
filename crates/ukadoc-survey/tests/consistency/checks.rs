@@ -109,7 +109,7 @@ fn real_repo_data_produces_no_findings() {
     assert!(outcome.findings.is_empty(), "{}", render(&outcome.findings));
 }
 
-/// 今の `catalog.toml` を読んで書き直すと、元の本文と 1 バイトも変わらないこと（カタログの読み書きが往復で変わらない）。
+/// 今の `catalog.toml` を読んで書き直すと、元の本文と 1 バイトも変わらないこと。
 ///
 /// カタログの書き手と読み手が割れると、再生成のたびに差分が出る。
 #[test]
