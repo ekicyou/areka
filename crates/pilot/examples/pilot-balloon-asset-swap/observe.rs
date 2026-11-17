@@ -2,7 +2,6 @@
 //!
 //! 規則の唯一の定義は design.md §Observer。ここはそれを写しただけで、閾値を変えるなら先に design を直す。
 //! World を読む部分（tick の記録・当たり判定の採取）と、観測の窓・集計ログ・較正の合否もここ。
-#![allow(dead_code)] // TickRecord の h_p・h_q・h_both（Debug 出力のログでしか読まない）
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -31,8 +30,11 @@ pub struct TickRecord {
     pub ended_qpc: i64,
     pub rect: RECT,
     pub hit: HitClass,
+    #[allow(dead_code)] // Debug 出力のログでしか読まない
     pub h_p: f32,
+    #[allow(dead_code)] // Debug 出力のログでしか読まない
     pub h_q: f32,
+    #[allow(dead_code)] // Debug 出力のログでしか読まない
     pub h_both: f32,
     pub covered: bool,
     pub k_ok: bool,
