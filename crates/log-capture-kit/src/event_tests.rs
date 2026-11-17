@@ -30,7 +30,7 @@ use crate::capture::{SENTINEL_TARGET, run_with_subscriber};
 // ── 見本のイベント列 ────────────────────────────────────────────────────────────────
 //
 // 宛先はすべて明示する（既定の宛先は発行元のモジュールパスになり、このファイルが移動した
-// だけで見本が変わってしまうため）。7 件で次を網羅する: メッセージのみ／文字列＋整数
+// だけで見本が変わってしまうため）。次を網羅する:メッセージのみ／文字列＋整数
 // フィールド／浮動小数＋真偽値／**メッセージ無し**／記述順と訪問順の関係／引用符とタブの
 // エスケープ／`record_str` 経路の生値。
 
@@ -361,8 +361,8 @@ fn fields_map_is_name_to_debug_representation() {
     assert_eq!(ev.fields_map(), expected);
 }
 
-/// 同名フィールドが 2 度現れたら**後勝ち**（`placement` の `BTreeMap::insert`・`emo-present` の
-/// `HashMap::insert` と同じ）。整形だけは訪問順どおり 2 度出す。
+/// 同名フィールドが 2 度現れたら**後勝ち**（移行前の `placement` の `BTreeMap::insert`・
+/// `emo-present` の `HashMap::insert` と同じ）。整形だけは訪問順どおり 2 度出す。
 #[test]
 fn duplicate_field_names_resolve_to_the_last_occurrence() {
     let ev = CapturedEvent {

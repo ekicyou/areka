@@ -201,7 +201,9 @@
 //!
 //! # 依存方向の規律
 //!
-//! 本 crate はワークスペース内のどの crate にも依存しない leaf であり、`publish = false`。
+//! 本 crate の `[dependencies]` はワークスペース内のどの crate も引かない leaf であり、
+//! `publish = false`（`[dev-dependencies]` には、見張りのテストが検体の登記表を読むために
+//! `sample-ghost-kit` を引く）。
 //! 消費側は **`[dev-dependencies]` からのみ**引く。`[dependencies]`（および
 //! `[build-dependencies]`）に現れた時点で規律違反であり、番人テストが赤にする。
 //! この規律により、`wintf` のような下層 crate が上位の本番 crate へ依存を持つことなく

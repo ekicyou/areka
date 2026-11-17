@@ -10,15 +10,29 @@
 
 use super::{
     PROBES_ENV, PROBES_OFF, PROBES_ON, ensure_interest_probes, interest_probes_enabled,
-    probes_env_read_count,
+    probes_choice, probes_env_read_count,
 };
+
+/// 値は逐語で比べる。前後に空白のある値は `on`／`off` と見なさず断る。
+#[test]
+#[should_panic(expected = "AREKA_LOG_CAPTURE_PROBES の値が不正")]
+fn a_value_with_surrounding_spaces_is_rejected() {
+    probes_choice(" on");
+}
+
+/// 綴りがちょうど合う値は、それぞれの側に決まる。
+#[test]
+fn the_exact_values_choose_their_side() {
+    assert!(probes_choice(PROBES_ON));
+    assert!(!probes_choice(PROBES_OFF));
+}
 
 /// 指定と判定が食い違わない。**「立てたつもりで立っていない」を炙り出すための対照**で、
 /// 未設定なら既定（常駐する）でなければならない。
 #[test]
 fn the_decision_agrees_with_what_the_environment_actually_says() {
     let requested = std::env::var(PROBES_ENV).ok();
-    match requested.as_deref().map(str::trim) {
+    match requested.as_deref() {
         None => assert!(
             interest_probes_enabled(),
             "{PROBES_ENV} が未設定なら既定＝常駐する（導入前と 1 ビットも変えない）"

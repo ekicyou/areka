@@ -251,3 +251,12 @@ fn a_directory_that_cannot_be_removed_is_reported_in_one_ascii_line() {
     }
     assert!(!kept.exists(), "閉じた後も消えていない");
 }
+
+/// 知らせの字を ASCII にする規則: 印字できる ASCII はそのまま、制御文字（DEL を含む）と
+/// ASCII の外は `\u{XXXX}`（4 桁以上の大文字の 16 進）に置き換える。
+#[test]
+fn ascii_keeps_printable_ascii_and_escapes_the_rest() {
+    assert_eq!(ascii("a b~"), "a b~");
+    assert_eq!(ascii("\t\u{7F}"), "\\u{0009}\\u{007F}");
+    assert_eq!(ascii("\u{3042}\u{1F600}"), "\\u{3042}\\u{1F600}");
+}

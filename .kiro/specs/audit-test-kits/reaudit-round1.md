@@ -53,3 +53,7 @@
 - 較正: S1 は表示を ascii 無しに戻す → `the_other_errors_are_shown_in_ascii_only` が赤。S3 は `ends_with(dir)` に戻す → `a_relative_target_dir_is_resolved_against_the_exe_ancestors` が赤（`..\tgt`）。U1 は写しかけを消さない → `a_master_reclaimed_during_the_copy_is_fetched_again_once` が赤（`stale.txt` が残る）。U3 は名前の行の照らしを常に真に → `the_layout_check_passes_only_a_named_balloon_inside_the_ghost_folder` が赤
 - 消した／改名した: `tiny_ghost_nar`・`bytes_of`・`probe_nar` の `fixtures` 引数・`tiny_nar`（どれも crate の中だけ）。テスト `a_vertical_balloon_outside_the_ghost_folder_is_rejected` は `the_layout_check_passes_only_a_named_balloon_inside_the_ghost_folder` に寄せた（completed の 7 文書が旧名を挙げる・直さない）。`a_url_row_with_a_matching_checksum_reaches_the_same_tree_as_a_current_row` → `a_url_row_with_a_matching_checksum_hands_out_the_whole_tree`
 - 残す（範囲の外・`/kiro-complete` の棚卸で扱う）: `vendors/sample_ghost/README.md` の 288-292 行が `fold-samples` の古い日本語の出力（「不一致 0 件」「全ての検体で一致」）を引く。`vendors/` は触らない約束（C22）なのでそのまま
+
+## 束 C の直しの控え（承認済み）
+- 較正: L3 は `trim` を戻す → `a_value_with_surrounding_spaces_is_rejected` が赤。T1 は写しの `ascii` から制御文字の枝を外す → `ascii_keeps_printable_ascii_and_escapes_the_rest` が赤
+- 改名: `ensure_interest_probes_is_idempotent_across_threads` → `ensure_interest_probes_can_be_called_from_many_threads_at_once`（completed/areka-P0-test-cage-determinism/verification/summary.md が旧名を 6 か所挙げる・直さない）。消したもの: 番兵の重なる確かめ 1 つ（名前の付いたものは無し）

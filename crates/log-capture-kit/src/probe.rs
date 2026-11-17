@@ -127,7 +127,13 @@ fn probes_requested() -> bool {
     let text = raw.to_str().unwrap_or_else(|| {
         panic!("{PROBES_ENV} の値が Unicode ではない: {raw:?}");
     });
-    match text.trim() {
+    probes_choice(text)
+}
+
+/// 指定の値を逐語で読む（前後の空白も綴りの一部で、` on` は `on` ではない）。
+/// `on`／`off` のほかは panic する。
+fn probes_choice(text: &str) -> bool {
+    match text {
         PROBES_ON => true,
         PROBES_OFF => false,
         other => panic!(

@@ -86,8 +86,8 @@ impl CapturedEvent {
 
     /// フィールドの **Debug 表現**（文字列値なら引用符つき）。無ければ `None`。
     ///
-    /// 行整形に載るのと同じ文字列で、移行前の `placement::LogEvent::field` と同じ値を返す
-    /// （欠落時に panic するかどうかだけが違い、判定はアダプタ側に委ねる）。
+    /// 行整形に載るのと同じ文字列で、移行前の `placement::LogEvent::field` が返していたのと
+    /// 同じ値を返す（違ったのは欠落時に panic したかどうかだけで、その判定はアダプタ側に委ねる）。
     pub fn field(&self, name: &str) -> Option<&str> {
         self.last(name).map(|v| v.debug.as_str())
     }
@@ -105,16 +105,16 @@ impl CapturedEvent {
 
     /// フィールド名の昇順・重複なしの一覧（`message` を含む）。
     ///
-    /// `emo-present` の `CapturedEvent::field_names()`（`HashMap` の鍵を `sort_unstable`）と
-    /// 同じ列を返す。「フィールド集合をちょうどで固定する」判定に使う。
+    /// 移行前の `emo-present` の `CapturedEvent::field_names()`（`HashMap` の鍵を `sort_unstable`）
+    /// が返していたのと同じ列を返す。「フィールド集合をちょうどで固定する」判定に使う。
     pub fn field_names_sorted(&self) -> Vec<&str> {
         self.fields_map().into_keys().collect()
     }
 
     /// フィールド名 → Debug 表現の写像（`message` を含む）。
     ///
-    /// `placement` の `LogEvent.fields`（`BTreeMap<String, String>` を `insert` で組む）と
-    /// 同じ内容。同名が 2 度現れた場合は**後勝ち**で、これも移行元と同じ。
+    /// 移行前の `placement` の `LogEvent.fields`（`BTreeMap<String, String>` を `insert` で
+    /// 組んでいた）と同じ内容。同名が 2 度現れた場合は**後勝ち**で、これも移行前と同じ。
     pub fn fields_map(&self) -> BTreeMap<&str, &str> {
         self.fields
             .iter()

@@ -187,10 +187,6 @@ fn sentinel_is_removed_before_returning() {
 
     assert_eq!(value, 42);
     assert!(
-        events.iter().all(|e| e.target != SENTINEL_TARGET),
-        "対照イベントが呼出側へ漏れている: {events:?}"
-    );
-    assert!(
         events.is_empty(),
         "何も発火していない窓が空でない: {events:?}"
     );
@@ -216,12 +212,13 @@ fn extracts_events_even_while_the_shared_sink_is_still_held() {
     );
 }
 
-// ---- 常駐の仕掛けは冪等 --------------------------------------------------
+// ---- 常駐の仕掛けは多スレッドから同時に呼べる ----------------------------
 
-/// 設計の Invariants: 常駐 probe はプロセス寿命で 1 度だけ確立され、多スレッドから
-/// 同時に呼んでも安全（冪等）。
+/// 設計の Invariants: `ensure_interest_probes` を多スレッドから同時に呼んでも panic せず、
+/// その後に窓が開ける（番兵検査が通る）。1 度だけ確立されることは
+/// `probe::tests::the_environment_is_read_exactly_once_for_the_whole_process` が数えて確かめる。
 #[test]
-fn ensure_interest_probes_is_idempotent_across_threads() {
+fn ensure_interest_probes_can_be_called_from_many_threads_at_once() {
     ensure_interest_probes();
     ensure_interest_probes();
 
@@ -232,6 +229,6 @@ fn ensure_interest_probes_is_idempotent_across_threads() {
         h.join().expect("probe 確立スレッドは panic しない");
     }
 
-    // 冪等呼出のあとでも窓は生きている（番兵検査が通る）。
+    // 同時の呼出のあとでも窓は生きている（番兵検査が通る）。
     let ((), _events) = capture(|| {});
 }
