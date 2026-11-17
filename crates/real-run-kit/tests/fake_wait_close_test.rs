@@ -6,27 +6,13 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Duration;
 
-use real_run_kit::{EndedBy, RealRun, Run};
+mod common;
+
+use common::{alive, fake, panic_message};
+use real_run_kit::{EndedBy, Run};
 use temp_path_kit::TempPath;
-
-/// 偽の子を手順つきで立てる指定（32bit の仲介は揃えない）。
-fn fake(steps: &str) -> RealRun {
-    RealRun::new(env!("CARGO_BIN_EXE_real-run-fake-areka"))
-        .without_host32_helper()
-        .env("REAL_RUN_FAKE_STEPS", steps)
-}
-
-/// その番号のプロセスが偽の子として生きているか（`tasklist` の行に実行ファイルの名前が在るか）。
-fn alive(pid: u32) -> bool {
-    let out = Command::new("tasklist")
-        .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-        .output()
-        .expect("tasklist を起こせない");
-    String::from_utf8_lossy(&out.stdout).contains("real-run-fake-areka")
-}
 
 /// `f` の中の panic を捕まえて文を返す。`f` は立てた子の番号と回の置き場を `seen` へ控える。
 /// 残った回の置き場は消す（落ちた回の証拠＝6.1 は 5.3 の試験が確かめる）。
@@ -35,12 +21,7 @@ fn expect_panic(f: impl FnOnce(&mut Option<(u32, PathBuf)>)) -> (String, u32) {
     let err = catch_unwind(AssertUnwindSafe(|| f(&mut seen))).expect_err("panic するはず");
     let (pid, run_dir) = seen.expect("子を立てる前に落ちた");
     let _ = std::fs::remove_dir_all(&run_dir);
-    let text = err
-        .downcast_ref::<String>()
-        .cloned()
-        .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
-        .unwrap_or_default();
-    (text, pid)
+    (panic_message(&*err), pid)
 }
 
 fn note(run: &Run, seen: &mut Option<(u32, PathBuf)>) {
@@ -199,13 +180,12 @@ fn drop_closes_running_window() {
     assert!(!alive(pid), "破棄の後も子（PID {pid}）が生きている");
 }
 
-/// 9.1: 2 つの走りを同時に立てると、置き場と番号が別。
+/// 9.1: 2 つの走りを同時に立てると、置き場が別（空きの番号が別であることは OS が保証しないので見ない）。
 #[test]
 fn two_runs_at_once_are_separate() {
     let mut a = fake("window").spawn();
     let mut b = fake("window").spawn();
     assert_ne!(a.run_dir(), b.run_dir());
-    assert_ne!(a.mcp_port(), b.mcp_port());
     assert_eq!(a.close().by, EndedBy::UserClose);
     assert_eq!(b.close().by, EndedBy::UserClose);
 }

@@ -29,12 +29,11 @@ assert_eq!(ended.by, EndedBy::UserClose, "{}", run.output());
 
 ### 立て方
 
-`RealRun::new(env!("CARGO_BIN_EXE_areka"))` に、起動するものを `.launch(..)` で 1 つ選び、`.spawn()` で子を起こす。立て方は次の 5 通り。
+`RealRun::new(env!("CARGO_BIN_EXE_areka"))` に、起動するものを `.launch(..)` で 1 つ選び、`.spawn()` で子を起こす。立て方は次の 4 通り。
 
 | 指定 | 起動するもの |
 |---|---|
 | `Launch::Sample { name, balloon }` | 検体のゴースト（`sample-ghost-kit` の名前）。その回だけの写しを取り、ゴーストのフォルダ（と同梱バルーンのフォルダ）を位置の引数で渡す |
-| `Launch::Ghost { folder, balloon }` | 任意のゴーストのフォルダ（とバルーンのフォルダ）を位置の引数で渡す |
 | `Launch::SampleRoot { name }` | 検体の写しの根を根として渡す（どのゴーストを起こすかは areka が根から決める） |
 | `Launch::Root(path)` | 任意の根を根として渡す |
 | `Launch::Empty`（既定） | その回だけの空の根 |

@@ -3,7 +3,7 @@
 //! 振る舞いは環境変数 `REAL_RUN_FAKE_STEPS` の手順（`;` 区切り・左から順）で選ぶ。
 //! 手順が尽きたら終了コード 0 で終わる。知らない手順は標準エラーに書いて終了コード 64。
 //!
-//! - `out:<文>`・`err:<文>`: 標準出力・標準エラーへ 1 行。
+//! - `out:<文>`: 標準出力へ 1 行。
 //! - `flood:<KiB>`: 標準出力へその量（64 バイトの行の並び）を書く。
 //! - `env`: 受け取った環境変数（[`ENV_NAMES`]）と位置の引数を 1 行ずつ出す
 //!   （`env <名>=<値>`・無ければ `env <名> 無い`・引数は `arg <番号>=<値>`）。
@@ -72,7 +72,6 @@ fn main() {
         let (name, arg) = step.split_once(':').unwrap_or((step, ""));
         match name {
             "out" => println!("{arg}"),
-            "err" => eprintln!("{arg}"),
             "flood" => flood(arg.parse().unwrap_or_else(|_| bad(step))),
             "env" => print_env(),
             "listen" => _alive.push(areka_mcp::start(

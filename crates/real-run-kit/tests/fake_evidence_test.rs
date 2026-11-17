@@ -10,18 +10,15 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use real_run_kit::{EndedBy, Launch, RealRun};
+mod common;
+
+use common::{alive, fake};
+use real_run_kit::{EndedBy, Launch};
 
 /// 子のプロセスで落ちる筋書きを走らせる印。
 const CHILD_FLAG: &str = "REAL_RUN_EVIDENCE_CHILD";
 /// 窓口が残した場所を名指す行の頭（evidence.rs の `finish`）。
 const KEPT_HEAD: &str = "落ちた回の証拠を残しました: ";
-
-fn fake(steps: &str) -> RealRun {
-    RealRun::new(env!("CARGO_BIN_EXE_real-run-fake-areka"))
-        .without_host32_helper()
-        .env("REAL_RUN_FAKE_STEPS", steps)
-}
 
 /// ワークスペースの `target\test-roots`（temp-path-kit の置き場と同じ決め方: このクレートの 2 つ上の根）。
 /// `CARGO_TARGET_DIR` や `--target` で成果物の場所が変わっても、窓口の置き場はここに決まっている。
@@ -32,14 +29,6 @@ fn target_test_roots() -> PathBuf {
         .expect("crates/real-run-kit の 2 つ上がワークスペースの根")
         .join("target")
         .join("test-roots")
-}
-
-fn alive(pid: u32) -> bool {
-    let out = Command::new("tasklist")
-        .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-        .output()
-        .expect("tasklist を起こせない");
-    String::from_utf8_lossy(&out.stdout).contains("real-run-fake-areka")
 }
 
 /// 6.3: 成功で終わった回は、取っ手を捨てると置き場が消える。

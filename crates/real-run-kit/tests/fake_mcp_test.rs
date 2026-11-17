@@ -7,14 +7,10 @@
 
 use std::time::Duration;
 
-use real_run_kit::{EndedBy, McpError, RealRun, Run};
+mod common;
 
-/// 偽の子を手順つきで立てる（32bit の仲介は揃えない）。
-fn fake(steps: &str) -> RealRun {
-    RealRun::new(env!("CARGO_BIN_EXE_real-run-fake-areka"))
-        .without_host32_helper()
-        .env("REAL_RUN_FAKE_STEPS", steps)
-}
+use common::fake;
+use real_run_kit::{EndedBy, McpError, Run};
 
 /// 閉じて利用者と同じ閉じ方だったことを確かめる。
 fn close_ok(mut run: Run) {

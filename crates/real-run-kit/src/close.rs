@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use crate::output::{self, WaitEnd};
 
 /// 閉じる知らせを受け取った印の行（kanade と結線した起動／未結線の起動の直ちの終了・ほかの出所の先着）。
-const ACK: [&str; 2] = ["event=\"os_close_request\"", "event=\"app_exit\""];
+const ACK: [&str; 2] = ["event=\"os_close_request\"", EXIT_LINE];
 
 /// 終わり方の行（`quit_app` の `info`）。閉じる引用符まで含めて `app_exit_again` などと分ける。
 const EXIT_LINE: &str = "event=\"app_exit\"";
@@ -160,11 +160,7 @@ impl Stopped {
 }
 
 fn ended(status: ExitStatus, files: [&Path; 2]) -> Ended {
-    let text = files
-        .iter()
-        .map(|p| String::from_utf8_lossy(&std::fs::read(p).unwrap_or_default()).into_owned())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let text = files.map(output::read_text).join("\n");
     Ended {
         status,
         by: ended_by(&text),

@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use crate::evidence::RunDirs;
 use crate::i686::{self, I686Spec};
+use crate::mcp::McpChannel;
 use crate::run::{Limits, Run};
 
 /// 起動するもの（1.1）。既定は `Empty`。
@@ -21,11 +22,6 @@ pub enum Launch {
     Sample {
         name: String,
         balloon: Option<String>,
-    },
-    /// ⑵ 任意のゴーストのフォルダ（とバルーンのフォルダ）を位置の引数で渡す。
-    Ghost {
-        folder: PathBuf,
-        balloon: Option<PathBuf>,
     },
     /// ⑶ 検体の写しの根を根として渡す（どのゴーストを起こすかは areka が根から決める）。
     SampleRoot { name: String },
@@ -163,7 +159,6 @@ impl RealRun {
             f(&Staged {
                 ghost_folder: r.ghost.as_deref(),
                 root: &r.root,
-                run_dir: dirs.run(),
                 i686_target: &i686_target,
             });
         }
@@ -179,15 +174,17 @@ impl RealRun {
         cmd.stdin(Stdio::null())
             .stdout(log_file(&dirs.stdout_log()))
             .stderr(log_file(&dirs.stderr_log()));
+        let mcp = McpChannel::new(port);
         let child = cmd
             .spawn()
             .unwrap_or_else(|err| panic!("子を起こせませんでした: {} ({err})", exe.display()));
-        Run::new(child, dirs, port, self.limits)
+        Run::new(child, dirs, mcp, port, self.limits)
     }
 
     /// 子へ渡す形を組む。起動の約束の綴りはここだけが書く（8.2・8.3）。順は
-    /// ⑴ 開発者の 4 つを外す（1.5）→ ⑵ 窓口の既定 → ⑶ 呼び手の論理の指定 → ⑷ 呼び手の `env`（1.6）。
-    /// ⑵⑶ は値が決まった後の 1 回の指定にまとめて書く。パスはどれも絶対（`\\?\` なし＝1.9）。
+    /// ⑴ 開発者の書ける根を外す（1.5）→ ⑵ 窓口の既定 → ⑶ 呼び手の論理の指定 → ⑷ 呼び手の `env`（1.6）。
+    /// ⑵⑶ は値が決まった後の 1 回の指定にまとめて書く（開発者のほかの 3 つはここで上書きされる）。
+    /// パスはどれも絶対（`\\?\` なし＝1.9）。
     fn child_command(
         &self,
         positional: &[&Path],
@@ -196,14 +193,7 @@ impl RealRun {
         port: u16,
     ) -> Command {
         let mut cmd = Command::new(abs(&self.areka_exe));
-        for key in [
-            "AREKA_ROOT",
-            "AREKA_USER_ROOT",
-            "AREKA_PROFILE_DIR",
-            "AREKA_MCP_PORT",
-        ] {
-            cmd.env_remove(key);
-        }
+        cmd.env_remove("AREKA_USER_ROOT");
         let rust_log = compose_rust_log(self.rust_log.as_deref().unwrap_or("info"));
         cmd.env("AREKA_ROOT", abs(root))
             .env("AREKA_PROFILE_DIR", abs(profile))
@@ -230,12 +220,11 @@ impl RealRun {
 pub struct Staged<'a> {
     ghost_folder: Option<&'a Path>,
     root: &'a Path,
-    run_dir: &'a Path,
     i686_target: &'a Path,
 }
 
 impl Staged<'_> {
-    /// Sample・Ghost のときの起動するゴーストのフォルダ（Sample は写しの中）。
+    /// Sample のときの起動するゴーストのフォルダ（写しの中）。
     pub fn ghost_folder(&self) -> Option<&Path> {
         self.ghost_folder
     }
@@ -243,11 +232,6 @@ impl Staged<'_> {
     /// 子へ渡す根。
     pub fn root(&self) -> &Path {
         self.root
-    }
-
-    /// 回の置き場。
-    pub fn run_dir(&self) -> &Path {
-        self.run_dir
     }
 
     /// 試験用の 32bit の成果物を `dest_dir` へ揃えてそのパスを返す（2.5）。規則は仲介と同じ。
@@ -305,11 +289,6 @@ fn resolve(what: &Launch, dirs: &RunDirs) -> Resolved {
                 root: empty,
             }
         }
-        Launch::Ghost { folder, balloon } => Resolved {
-            ghost: Some(abs(folder)),
-            balloon: balloon.as_deref().map(abs),
-            root: empty,
-        },
         Launch::SampleRoot { .. } => Resolved {
             ghost: None,
             balloon: None,

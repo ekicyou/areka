@@ -106,12 +106,27 @@ pub(crate) fn wait_any(
     }
 }
 
+/// 記録のファイルの全文（読めない字は U+FFFD）。読めなければ空の文字にせず、パスと理由で落ちる。
+pub(crate) fn read_text(path: &Path) -> String {
+    match std::fs::read(path) {
+        Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
+        Err(err) => panic!("記録のファイルを読めない: {} ({err})", path.display()),
+    }
+}
+
 /// 締切切れの文（3.4・5.4 で共用）: 待っていた文字列・待った時間・2 つのファイルの場所・
 /// 各ファイルの末尾 64 KiB（全文はファイルにある旨を添える）。末尾は全文から取る。
+/// 破棄の道からも呼ぶので、読めないファイルは落ちずに読めない旨とパスを文へ埋め込む。
 pub(crate) fn failure_text(needles: &[&str], waited: Duration, files: [&Path; 2]) -> String {
     let mut text = format!("締切切れ: {needles:?} を {waited:?} 待ったが現れなかった\n");
     for path in files {
-        let bytes = std::fs::read(path).unwrap_or_default();
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                text.push_str(&format!("--- {} は読めない（{err}） ---\n", path.display()));
+                continue;
+            }
+        };
         let tail = &bytes[bytes.len().saturating_sub(TAIL_BYTES)..];
         text.push_str(&format!(
             "--- {} の末尾 {} バイト（全 {} バイト・全文はファイルにある） ---\n{}\n",

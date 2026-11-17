@@ -306,9 +306,8 @@ async fn watch_exit(child: &mut Child, poll: Duration) -> ChildExited {
 fn line_with(files: [&Path; 2], needle: &str) -> String {
     files
         .iter()
-        .filter_map(|p| std::fs::read(p).ok())
-        .find_map(|bytes| {
-            String::from_utf8_lossy(&bytes)
+        .find_map(|p| {
+            output::read_text(p)
                 .lines()
                 .find(|l| l.contains(needle))
                 .map(str::to_string)

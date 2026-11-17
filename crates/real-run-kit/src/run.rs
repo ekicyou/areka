@@ -14,7 +14,7 @@ use crate::output::{self, ChildExited, WaitEnd};
 
 /// 既定の時間（D-13）。`safety_exit < deadline` を兄弟のテストが固定する（1.8）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Limits {
+pub(crate) struct Limits {
     /// 各待ちの始まりから数える締切（今の番犬と同じ 60 秒）。
     pub deadline: Duration,
     /// 子の起動から数える保険の自動終了（締切より短い＝窓口が止めるより先に子が自分で終わる）。
@@ -58,12 +58,19 @@ pub struct Run {
 
 impl Run {
     /// 起こした子と回の置き場から取っ手を作る（起こすのは launch）。
-    pub(crate) fn new(child: Child, dirs: RunDirs, port: u16, limits: Limits) -> Run {
+    /// MCP の呼び口は子を起こす前に組んで渡す（組めずに落ちても子を置き去りにしない）。
+    pub(crate) fn new(
+        child: Child,
+        dirs: RunDirs,
+        mcp: McpChannel,
+        port: u16,
+        limits: Limits,
+    ) -> Run {
         Run {
             child,
             stdout: dirs.stdout_log(),
             stderr: dirs.stderr_log(),
-            mcp: McpChannel::new(port),
+            mcp,
             limits,
             port,
             ended: None,
@@ -97,13 +104,17 @@ impl Run {
     }
 
     /// 標準出力の全文。走りの途中でも終わった後でも読める（3.6）。読めない字は U+FFFD。
+    ///
+    /// # Panics
+    ///
+    /// ファイルを読めないとき（パスと理由）。
     pub fn stdout(&self) -> String {
-        read_lossy(&self.stdout)
+        output::read_text(&self.stdout)
     }
 
     /// 標準エラーの全文（`stdout` と同じ読み方）。
-    pub fn stderr(&self) -> String {
-        read_lossy(&self.stderr)
+    fn stderr(&self) -> String {
+        output::read_text(&self.stderr)
     }
 
     /// 標準出力・改行・標準エラー。
@@ -212,10 +223,6 @@ fn waits(l: &Limits) -> Waits {
         call_retry: l.call_retry,
         exit_grace: l.exit_grace,
     }
-}
-
-fn read_lossy(path: &Path) -> String {
-    String::from_utf8_lossy(&std::fs::read(path).unwrap_or_default()).into_owned()
 }
 
 #[cfg(test)]

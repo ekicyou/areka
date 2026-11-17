@@ -2,22 +2,13 @@
 //! 手で書いた出力のファイルでの待受の観測を確かめる。偽の子と本物の受け口との試験は 5.2。
 
 use super::*;
+use crate::test_support::living_child;
 use rmcp::model::{CallToolResult, ContentBlock};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use temp_path_kit::TempPath;
 
 /// 見回りの間隔（試験は短く回す）。
 const POLL: Duration = Duration::from_millis(10);
-
-/// 締切まで生き続ける子（終わりの分岐へ入らない相手）。試験の終わりに止める。
-fn living_child() -> Child {
-    Command::new("ping")
-        .args(["-n", "60", "127.0.0.1"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap()
-}
 
 /// 締切だけを変え、見回り・呼び直し・猶予は短くした時間。
 fn waits(deadline: Duration) -> Waits {
@@ -92,14 +83,13 @@ fn failed_listen_line_is_returned_whole_with_port() {
     let mut child = living_child();
     let mut mcp = McpChannel::new(9821);
     let got = mcp.call(
-        &mut child,
+        &mut child.0,
         [&out, &err],
         "echo",
         "{}",
         waits(Duration::from_secs(30)),
     );
-    child.kill().unwrap();
-    child.wait().unwrap();
+    drop(child);
     match got {
         Err(McpError::ListenFailed { port, line: got }) => {
             assert_eq!(port, 9821);
@@ -116,14 +106,13 @@ fn listen_off_line_is_listen_failed() {
     std::fs::write(&out, "INFO MCP: 待ち受けない（AREKA_MCP_PORT が 0）\n").unwrap();
     let mut child = living_child();
     let got = McpChannel::new(9822).call(
-        &mut child,
+        &mut child.0,
         [&out, &err],
         "echo",
         "{}",
         waits(Duration::from_secs(30)),
     );
-    child.kill().unwrap();
-    child.wait().unwrap();
+    drop(child);
     assert!(
         matches!(got, Err(McpError::ListenFailed { port: 9822, ref line }) if line.contains("待ち受けない（AREKA_MCP_PORT が 0）")),
         "{got:?}"
@@ -136,14 +125,13 @@ fn no_listen_line_until_deadline_is_unreachable() {
     let (out, err) = (dir.child("stdout.txt"), dir.child("stderr.txt"));
     let mut child = living_child();
     let got = McpChannel::new(9823).call(
-        &mut child,
+        &mut child.0,
         [&out, &err],
         "echo",
         "{}",
         waits(Duration::from_millis(100)),
     );
-    child.kill().unwrap();
-    child.wait().unwrap();
+    drop(child);
     match got {
         Err(McpError::Unreachable { target, .. }) => assert_eq!(target, "127.0.0.1:9823"),
         other => panic!("Unreachable でない: {other:?}"),
@@ -188,32 +176,22 @@ fn display_names_the_contents() {
 fn call_until_returns_listen_failed_as_is() {
     let dir = TempPath::under_target("mcp-until-off");
     let (out, err) = (dir.child("stdout.txt"), dir.child("stderr.txt"));
+    std::fs::write(&out, "").unwrap();
     std::fs::write(&err, "INFO MCP: 待ち受けない（AREKA_MCP_PORT が 0）\n").unwrap();
     let mut child = living_child();
     let got = McpChannel::new(9825).call_until(
-        &mut child,
+        &mut child.0,
         [&out, &err],
         "get_log",
         "{}",
         "never",
         waits(Duration::from_secs(30)),
     );
-    child.kill().unwrap();
-    child.wait().unwrap();
+    drop(child);
     assert!(
         matches!(got, Err(McpError::ListenFailed { port: 9825, .. })),
         "{got:?}"
     );
-}
-
-/// 落ちても止める子（`should_panic` の試験で巻き戻しの間に止める）。
-struct KillOnDrop(Child);
-
-impl Drop for KillOnDrop {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
 }
 
 /// 同じ過程に本物の受け口を立てる。ツール `echo` はいつも `text` を答える。
@@ -254,7 +232,7 @@ fn call_until_deadline_panics_with_the_last_reply() {
         format!("INFO MCP: 待受を始めた addr=127.0.0.1:{port}\n"),
     )
     .unwrap();
-    let mut child = KillOnDrop(living_child());
+    let mut child = living_child();
     // 呼び直しの間隔を締切より長くし、眠りが締切ちょうどで覚める形を作る。
     let mut w = waits(Duration::from_secs(3));
     w.call_retry = Duration::from_secs(30);
@@ -269,7 +247,7 @@ fn call_until_deadline_panics_with_the_last_reply() {
 fn call_until_deadline_before_any_reply_panics() {
     let dir = TempPath::under_target("mcp-until-no-listen");
     let (out, err) = (dir.child("stdout.txt"), dir.child("stderr.txt"));
-    let mut child = KillOnDrop(living_child());
+    let mut child = living_child();
     let got = McpChannel::new(9826).call_until(
         &mut child.0,
         [&out, &err],

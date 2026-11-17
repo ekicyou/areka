@@ -2,9 +2,10 @@
 //! 終わった子（`cmd /c exit 3`）で、待ちの分岐と締切切れの文を確かめる。
 
 use super::*;
+use crate::test_support::{living_child, panic_text};
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use temp_path_kit::TempPath;
 
 /// 見回りの間隔（試験は短く回す）。
@@ -19,16 +20,6 @@ fn append(path: &Path, bytes: &[u8]) {
         .open(path)
         .unwrap();
     f.write_all(bytes).unwrap();
-}
-
-/// 締切まで生き続ける子（終わりの分岐へ入らない相手）。試験の終わりに止める。
-fn living_child() -> Child {
-    Command::new("ping")
-        .args(["-n", "60", "127.0.0.1"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap()
 }
 
 #[test]
@@ -47,12 +38,10 @@ fn appended_later_needle_ends_wait() {
     let got = wait_any(
         [&out, &err],
         &["見つからない", "MCP: 待受を始めた"],
-        &mut child,
+        &mut child.0,
         Instant::now() + FAR,
         POLL,
     );
-    child.kill().unwrap();
-    child.wait().unwrap();
     writer.join().unwrap();
     assert_eq!(got, Ok(1));
 }
@@ -131,12 +120,11 @@ fn deadline_ends_wait_and_text_has_paths_and_tail() {
     let got = wait_any(
         [&out, &err],
         &["来ない"],
-        &mut child,
+        &mut child.0,
         start + Duration::from_millis(200),
         POLL,
     );
-    child.kill().unwrap();
-    child.wait().unwrap();
+    drop(child);
     assert_eq!(got, Err(WaitEnd::Deadline));
     assert!(start.elapsed() >= Duration::from_millis(200));
 
@@ -152,4 +140,31 @@ fn deadline_ends_wait_and_text_has_paths_and_tail() {
         assert!(text.contains(want), "{want:?} が無い:\n{text}");
     }
     assert!(!text.contains("HEAD_MARK"), "末尾 64 KiB の外が入った");
+}
+
+/// 12: 読めないファイル（ここではフォルダ）は空の文字にせず、パスと理由で落ちる。
+#[test]
+fn read_text_panics_with_the_path_when_the_file_cannot_be_read() {
+    let dir = TempPath::under_target("output-unreadable");
+    std::fs::create_dir_all(dir.path()).unwrap();
+    let text = panic_text(|| {
+        read_text(dir.path());
+    });
+    assert!(text.contains(&dir.path().display().to_string()), "{text}");
+    assert!(text.contains("読めない"), "{text}");
+}
+
+/// 12: 締切切れの文は破棄の道からも組むので落ちず、読めない旨とパスを文に埋め込む。
+#[test]
+fn failure_text_names_an_unreadable_file() {
+    let dir = TempPath::under_target("output-unreadable-tail");
+    std::fs::create_dir_all(dir.path()).unwrap();
+    let err = dir.child("stderr.txt");
+    append(&err, b"ERR_MARK\n");
+    let text = failure_text(&["来ない"], Duration::from_millis(1), [dir.path(), &err]);
+    assert!(
+        text.contains(&format!("{} は読めない", dir.path().display())),
+        "{text}"
+    );
+    assert!(text.contains("ERR_MARK"), "{text}");
 }

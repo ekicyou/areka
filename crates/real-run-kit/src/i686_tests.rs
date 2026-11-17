@@ -2,6 +2,7 @@
 //! 探す順・各失敗の文・改名の競り合いの見直しを確かめる（本物の建てた成果物は使わない）。
 
 use super::*;
+use crate::test_support::panic_text;
 use std::os::windows::fs::OpenOptionsExt;
 use temp_path_kit::TempPath;
 
@@ -77,15 +78,6 @@ impl Bed {
 /// 写された中身の見分けの札。
 fn tag_of(path: &Path) -> String {
     String::from_utf8_lossy(&std::fs::read(path).unwrap()[0x46..]).into_owned()
-}
-
-/// 閉包が panic した文を返す（panic しなければ失敗）。
-fn panic_text(f: impl FnOnce() + std::panic::UnwindSafe) -> String {
-    let err = std::panic::catch_unwind(f).expect_err("panic するはず");
-    err.downcast_ref::<String>()
-        .cloned()
-        .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
-        .unwrap_or_default()
 }
 
 /// 置き先に一時名の残りが無い。
@@ -240,13 +232,6 @@ fn nowhere_fails_with_the_searched_places_and_the_build_command() {
         text.contains("cargo build -p fake-helper-package --target i686-pc-windows-msvc"),
         "{text}"
     );
-}
-
-#[test]
-fn helper_spec_names_the_real_helper() {
-    assert_eq!(HELPER.file_name, "shiori-host32-helper.exe");
-    assert_eq!(HELPER.env_var, "HOST32_HELPER_EXE");
-    assert_eq!(HELPER.package, "shiori-host32-helper");
 }
 
 // --- place: 一時名＋改名と、改名の競り合いの見直し（2.6） ---

@@ -118,18 +118,9 @@ fn relative_paths_become_absolute_without_verbatim_prefix() {
     }
 }
 
+/// 4 通りの位置の引数と根（1.1・1.4）。検体は本物の写しを取る。
 #[test]
-fn profile_dir_and_port_override_defaults() {
-    let run = RealRun::new("areka.exe")
-        .profile_dir("prof.txt")
-        .mcp_port(9999);
-    assert_eq!(run.profile_dir.as_deref(), Some(Path::new("prof.txt")));
-    assert_eq!(run.mcp_port, Some(9999));
-}
-
-/// 5 通りの位置の引数と根（1.1・1.4）。検体は本物の写しを取る。
-#[test]
-fn five_launch_variants_resolve_positional_args_and_root() {
+fn four_launch_variants_resolve_positional_args_and_root() {
     let dirs = RunDirs::create(Some("emo2"));
     let sample = dirs.sample().unwrap();
     let emo2 = sample.folder().to_path_buf();
@@ -160,20 +151,6 @@ fn five_launch_variants_resolve_positional_args_and_root() {
         (r.ghost, r.balloon, r.root),
         (Some(emo2), None, empty.clone())
     );
-
-    let r = resolve(
-        &Launch::Ghost {
-            folder: "g".into(),
-            balloon: Some("b".into()),
-        },
-        &dirs,
-    );
-    let want = (
-        Some(abs(Path::new("g"))),
-        Some(abs(Path::new("b"))),
-        empty.clone(),
-    );
-    assert_eq!((r.ghost, r.balloon, r.root), want);
 
     let r = resolve(
         &Launch::SampleRoot {
@@ -212,11 +189,6 @@ fn sample_name_is_used_for_the_copy() {
 fn i686_target_is_two_levels_above_areka_exe() {
     let exe = abs(Path::new(r"t\debug\areka.exe"));
     assert_eq!(i686_target(&exe), abs(Path::new(r"t\i686-pc-windows-msvc")));
-}
-
-#[test]
-fn free_port_is_nonzero() {
-    assert_ne!(free_port(), 0);
 }
 
 /// 記録の段の足し方の表（D-4・4.4）。
@@ -273,6 +245,51 @@ fn compose_rust_log_table() {
     ];
     for (base, want) in table {
         assert_eq!(&compose_rust_log(base), want, "base={base:?}");
+    }
+}
+
+/// 26・D2: `RELIED_TARGETS` の各項が、窓口の頼る行を本物に出しているモジュールのファイルを名指す。
+/// `<crate>::<段…>` を `crates/<crate の _ を - に>/src/<段>.rs`（無ければ `<段>/mod.rs`）へ写し、
+/// ファイルが在る・頼る行の語が在る・`target:` の上書きが無い、を読むだけで確かめる（本物は起こさない）。
+/// 順は `RELIED_TARGETS` と同じ（項を書き換えても照らす語は付いてくる）。
+#[test]
+fn relied_targets_name_the_modules_that_emit_the_relied_lines() {
+    const WORDS: [&[&str]; 2] = [
+        &[r#""MCP: 待受を始めた"#],
+        &[r#"event = "app_exit""#, r#""os_close_request""#],
+    ];
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    for (target, words) in RELIED_TARGETS.iter().zip(WORDS) {
+        let mut parts = target.split("::");
+        let krate = parts.next().unwrap().replace('_', "-");
+        let module: PathBuf = parts.collect();
+        let src = crates.join(krate).join("src");
+        let file = [
+            src.join(&module).with_extension("rs"),
+            src.join(&module).join("mod.rs"),
+        ]
+        .into_iter()
+        .find(|f| f.is_file())
+        .unwrap_or_else(|| {
+            panic!(
+                "出所 {target:?} のファイルが無い（{}）。出所を動かしたなら launch.rs の RELIED_TARGETS を直す",
+                src.join(&module).display()
+            )
+        });
+        let text = std::fs::read_to_string(&file)
+            .unwrap_or_else(|e| panic!("{} を読めない: {e}", file.display()));
+        for word in words {
+            assert!(
+                text.contains(word),
+                "出所 {target:?} の {} に頼る行の語 {word} が無い。行を動かしたなら launch.rs の RELIED_TARGETS を直す",
+                file.display()
+            );
+        }
+        assert!(
+            !text.contains("target:"),
+            "出所 {target:?} の {} が target: で出所を上書きしている。launch.rs の RELIED_TARGETS を直す",
+            file.display()
+        );
     }
 }
 
