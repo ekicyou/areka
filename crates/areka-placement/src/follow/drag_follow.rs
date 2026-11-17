@@ -19,6 +19,9 @@ use super::sticky_follow::{
     CharDragSession, drag_anchor, drag_wintf_moves, finish_char_drag, follow_partners_on_drag,
 };
 
+/// 始めの位置が分からないドラッグで窓を動かさなかった記録の札（決定論テストが逐語で固定する）。
+pub(super) const CHAR_DRAG_ORIGIN_UNKNOWN_TAG: &str = "[char-drag] OriginUnknown";
+
 /// `OnDrag` ハンドラ: ドラッグ中のキャラ窓の移動とバルーン追従（4.2/4.3/4.7）。
 ///
 /// 冒頭で `ev.target == entity` を検査し、他 entity 宛イベントには何もしない
@@ -257,8 +260,11 @@ pub fn on_char_drag_end(
 /// 復元した生座標へ [`project_anchor`] を適用する——リサイズ（[`resize_window_to`]）と同一の
 /// 射影 T を通し、座標系変換を二重化しない（Req1.6）。
 ///
-/// `None` は「[`DraggingState`] 不在で生座標を復元できない」場合のみ（実 flow では
-/// dispatch が DragEvent より先に挿入するため起きない・`debug!` の上で no-op）。
+/// `None` は生座標を復元できない 2 つの場合: ⑴ [`DraggingState`] 不在（実 flow では
+/// dispatch が DragEvent より先に挿入するため起きない）⑵ 始めの窓位置が分からない
+/// （`initial_window_pos: None`・[`CHAR_DRAG_ORIGIN_UNKNOWN_TAG`]）。どちらも `debug!` を 1 行残し、
+/// `on_char_drag` は書かずに戻り（バルーンも組の相手も動かさない）、`on_char_drag_end` は
+/// 今の `WindowPos.position` へ縮退して確定と保存を通す。
 /// 寸法不明・snapshot 不在は [`project_anchor`] が identity へ縮退する。
 fn policy_mapped_position(
     world: &World,
@@ -273,8 +279,13 @@ fn policy_mapped_position(
         );
         return None;
     };
-    // 始めの位置が分からない（`None`）なら復元できないので写さない（振る舞いは 164 の追随で直す）
-    let origin = ds.initial_window_pos?;
+    let Some(origin) = ds.initial_window_pos else {
+        debug!(
+            ?entity,
+            "{CHAR_DRAG_ORIGIN_UNKNOWN_TAG} ドラッグの始めの窓位置が分からないため生ドラッグ座標を復元できない（写像スキップ・窓は動かさない）"
+        );
+        return None;
+    };
     let raw = PointPx {
         // 実カーソル・窓座標の範囲で溢れないが、極端入力でも panic しない契約
         x: (origin.0 as i32).saturating_add(cursor.x.saturating_sub(ds.drag_start_pos.x)),

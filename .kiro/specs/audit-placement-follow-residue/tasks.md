@@ -32,7 +32,7 @@
   - _Requirements: 2.5, 2.6, 9.5_
 
 - [ ] 3. 始めの位置が分からないドラッグで窓を動かさない（164 の振る舞い）
-- [ ] 3.1 追随のキャラ窓のドラッグに「分からない」の腕と記録を入れる
+- [x] 3.1 追随のキャラ窓のドラッグに「分からない」の腕と記録を入れる
   - `policy_mapped_position` は始めの位置が `None` のとき `None` を返し、`CHAR_DRAG_ORIGIN_UNKNOWN_TAG` の `debug!` を `entity` 付きで 1 行残す（設計の CharDragOrigin の形）。`on_char_drag` は書かずに戻り、バルーンと組の相手も動かさない。`on_char_drag_end` は今の「`DraggingState` 不在」の縮退（今の `WindowPos.position`）で確定と保存を通す
   - `follow_drag_tests.rs` に檻を足す: 吸着した組の窓に `None` の状態と相手とバルーンを持たせて `on_char_drag` → 3 つの位置が前と同じで札の `debug!` が 1 行
   - 完了の状態: 足した檻が緑で、`None` を `(0,0)` で写す形に戻すと落ちる

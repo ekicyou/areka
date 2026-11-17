@@ -1,21 +1,25 @@
 use crate::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::Point;
-use wintf::ecs::drag::DragConfig;
+use wintf::ecs::drag::{DragConfig, DraggingState};
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::drain_window_pos_commands;
 
+use super::super::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
+use super::drag_follow::CHAR_DRAG_ORIGIN_UNKNOWN_TAG;
+use super::sticky_follow::begin_char_drag;
 use super::test_support::{
     SylphyaRig, drag_end_event_at, drag_event, drag_event_at, dragging_state, fake_handle,
     odd_edge_snapshot, position_of, rect, single_monitor_snapshot, window_pos_at, window_pos_sized,
 };
 use super::{
-    Anchored, BalloonFollow, MonitorSnapshot, PlacementRoute, move_window_to, on_balloon_drag,
-    on_char_drag, on_char_drag_end, resize_window_to,
+    Anchored, BalloonFollow, CharWindowMarker, MonitorSnapshot, PlacementRoute, move_window_to,
+    on_balloon_drag, on_char_drag, on_char_drag_end, resize_window_to,
 };
 use crate::resolver::Anchor;
 use crate::resolver::PointPx;
 use crate::resolver::SizePx;
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
 // on_char_drag（4.2/4.3/4.4・U4）
@@ -330,6 +334,58 @@ fn on_char_drag_balloon_follows_policy_applied_position() {
             y: char_pos.y + offset.y
         }
     );
+}
+
+/// (164) 始めの位置が分からない（`initial_window_pos: None`）ドラッグは、吸着した組の窓でも
+/// ドラッグした窓・バルーン・組の相手のどれも動かさず、札の `debug!` を 1 行残す（2.2・2.3・9.6）。
+/// `None` を `(0,0)` で写すと窓が左上へ飛んで落ちる。
+#[test]
+fn on_char_drag_with_unknown_origin_moves_nothing_and_logs_once() {
+    let mut world = World::new();
+    world.insert_resource(single_monitor_snapshot());
+    let spawn = |world: &mut World, scope: usize, raw: usize, x: i32| {
+        let balloon = world
+            .spawn((fake_handle(raw + 1), window_pos_at(x - 400, 381)))
+            .id();
+        let char = world
+            .spawn((
+                fake_handle(raw),
+                window_pos_sized(x, 356, 434, 687), // 下端に吸着済み
+                CharWindowMarker { scope },
+                Anchored(Anchor::Bottom),
+                DragConfig {
+                    move_window: false,
+                    ..Default::default()
+                },
+                BalloonFollow::new(balloon, OffsetBase::unpinned(PointPx { x: -400, y: 25 })),
+            ))
+            .id();
+        (char, balloon)
+    };
+    let (window, balloon) = spawn(&mut world, 0, 0x1000, 1207);
+    let (partner, _) = spawn(&mut world, 1, 0x1010, 600);
+    seed_sticky_descript(&mut world, None);
+    assert!(apply_set_sticky(&mut world, &["0".into(), "1".into()]));
+    begin_char_drag(&mut world, window);
+    let start = (1400, 600);
+    world.entity_mut(window).insert(DraggingState {
+        drag_start_pos: Point::new(start.0, start.1),
+        initial_window_pos: None,
+    });
+    let before = [window, balloon, partner].map(|e| position_of(&world, e));
+
+    let ev = Phase::Bubble(drag_event_at(window, start, (1450, 650)));
+    let (consumed, events) = capture(|| on_char_drag(&mut world, window, window, &ev));
+
+    assert!(!consumed);
+    assert_eq!(
+        [window, balloon, partner].map(|e| position_of(&world, e)),
+        before
+    );
+    let rec = expect_one(&events, CHAR_DRAG_ORIGIN_UNKNOWN_TAG);
+    assert_eq!(rec.level, tracing::Level::DEBUG);
+    assert_eq!(rec.expect_field("entity"), format!("{window:?}"));
+    let _residue = drain_window_pos_commands();
 }
 
 /// (f) DragEnd: 最終カーソル位置へ同写像を適用する（accumulator の
