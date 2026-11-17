@@ -44,7 +44,7 @@ const UNLOAD_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// go 基準(2) のメッセージループ生存観測窓 N（要件 5.2・design.md §214–232）。
 /// helper の message loop がこの N 秒を破綻なく生存し続けることを親が観測する。
-/// helper 側 backstop（`run_helper` の 30s・helper.rs §88）より十分短く、ハーネス安全な短尺。
+/// helper 側 backstop（helper.rs が `run_helper` へ渡す 30s）より十分短く、ハーネス安全な短尺。
 const SURVIVAL_WINDOW: Duration = Duration::from_secs(4);
 /// 生存窓の間、親が helper 生死を `poll_exit_kind` で見る間隔（この刻みで N 秒を消化する）。
 const SURVIVAL_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -322,7 +322,7 @@ fn drive_go_criterion_1<'p>(
 ///
 /// 全ステップは bounded: 生存窓は N（`SURVIVAL_WINDOW`）＋刻み、UNLOAD は `UNLOAD_TIMEOUT`。
 /// clean unload 待ち（`wait_kind`）は helper が UNLOAD で即 clean 終了するため実質即返り、
-/// 最悪でも helper 側 backstop（`run_helper` 30s・helper.rs §88）が上限を保証する（ハングしない）。
+/// 最悪でも helper 側 backstop（helper.rs が `run_helper` へ渡す 30s）が上限を保証する（ハングしない）。
 fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String> {
     println!("=== go 基準(2): メッセージループ {SURVIVAL_WINDOW:?} 生存 → clean unload を観測 ===");
 

@@ -84,7 +84,7 @@
   - _Dispatch: standard — DLL の後片付けと読まれていない DLL を選ぶテストが要る_
   - _Requirements: 3.1, 3.2, 3.3, 4.3, 6.2, 6.3_
 
-- [ ] 9. `shiori-host-32` の警告 0 と i686 の組み立てを確かめる（指摘 10 の仕上げ）
+- [x] 9. `shiori-host-32` の警告 0 と i686 の組み立てを確かめる（指摘 10 の仕上げ）
   - 先に `rustup target list --installed` で `i686-pc-windows-msvc` が入っていることを確かめる（無ければ止めて報告）
   - 6 つのファイルに `#![allow(dead_code)]` と「本タスク・後続タスク・scaffolding・skeleton」の注記が残っていないことを確かめ、残りを消すか今の姿に書き直す
   - x64 の親・helper（通常とテスト）と、i686 の helper の組み立て（`cargo build`／`cargo test -p pilot --example shiori-host-32-helper --target i686-pc-windows-msvc`）で警告 0 にする
@@ -184,3 +184,4 @@
 - タスク 3: main.rs の err(1) の注記に heartbeat の語が残る（HEAD から誤り）。タスク 6 で消す
 - タスク 6: err(1) の下限・上限の判定は単体テストが無い（design の Testing Strategy に行が無い）。実機の確かめ 13.1 で見る
 - タスク 8: DLL の後片付けのテストは msimg32.dll をテストの exe がほかで読んでいない前提。helper のテストで msimg32 を読む物を足したら別の DLL に替える
+- タスク 9: i686 の helper のテストは 12 本（本物の pasta.dll の 1 本を含む）で緑
