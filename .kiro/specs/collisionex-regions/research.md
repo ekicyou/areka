@@ -167,3 +167,41 @@
 - SSP のエラーログ: 番号 4・5 のどちらにも「shell\collisionex-probe\surfaces.txt:Line=17:Surface=0/Collision=4 二重定義されています。 (…Line=12)」の形の警告が面ごとに出た。形の名前の大小文字・`polygon` の交差には何も出なかった。
 - **読み**: ⑴ `collision*` と `collisionex*` の番号は 1 つの並び（A2）。SSP は重複を警告して両方を残し、どちらも当たる＝areka の既存の決め（後のブレスが前の同じ collision番号の行を除く・§8・`fold.rs` の `numbers.cuts`）とずれていた。開発者の裁定（2026-11-17）でこの仕様の中で SSP に合わせる（`fold.rs` の collision の足し方を element と同じ「両方を足して警告」へ）。⑵ 交差する多角形は巻き数の規則（A3＝偶奇から改めた）。⑶ 形の名前は大小文字を区別しない（A5）。
 - **測らなかった所**: 楕円・円の周の上と大きさ 0 の形（A8＝areka の裁量）・`circle`・`region`。
+
+## 10. 設計の段の調べと決め（2026-11-17・`/kiro-spec-design -y`）
+
+### 10.1 要約
+
+- **調べの種類**: 軽い調べ（既存の仕組みの拡張）。新しい依存・外の API は無いので、Web の調べはしなかった。読んだのは steering（`product.md`・`tech.md`・`structure.md` のテストの命名と 1,000 行・`roadmap.md` の C22 の行・`logging.md`）、設計の雛形、本書 1〜9 節、`brief.md`、`evidence/ssp-probe-surfaces.txt`、コード（`shell/{model,decode,parse,lexer,mod}.rs`・emo-compose の `{hit,hit_import,fold,budget,lib}.rs` と檻・emo-present の `shell_target.rs`・`presenter_test_support.rs`）。
+- **使った指針**: 設計の決めは「全部を直す最小の変更」（ponytail の指針）に寄せた。抽象・作り方の関数・由来の欄など、今の要件が使わないものは足さない。
+- **主な所見**: ⑴ `Collision` の 4 欄を読むのは emo-compose の `hit.rs`・`hit_import.rs` と檻だけで、areka 本体・emo-present の本番は名前の文字列しか読まない（本体に触らずに済む） ⑵ 同じ collision番号の前の行を除くのは `fold.rs` の `Numbers.cuts` と最後の `retain` だけ（消せば両方が残る） ⑶ element番号の二重定義の `warn!` は「後の波括弧が足す行のうち、面にすでにある番号の行」を数える形で、同じブレスの中の重なりは警告していない ⑷ 予算（`VISIT_BUDGET`・`IMPORT_BUDGET`・`HitMemo`・`MAX_COPIED_LINES`）は当たり判定を 1 件 1 で数えており、頂点の多い多角形を写すと量が頂点の数だけ膨らむ ⑸ 字句の段は末尾の空の欄も 1 つの欄として返す。
+
+### 10.2 決め（設計の段へ回された項目・8 節）
+
+| 項目（5 節の番号） | 決め | 理由 |
+| --- | --- | --- |
+| 1 型の形 | `Collision { index, shape: CollisionShape, name }`。形は `Rect(CollisionBounds)`・`Ellipse(CollisionBounds)`・`Circle { x, y, radius }`・`Polygon(Vec<(i64, i64)>)`・`Region(CollisionRegion)` | 4 欄を残すと矩形の値が二重になる。矩形と楕円は同じ 4 欄なので同じ構造体を使う。檻の作り方の関数は足さない（直書きは約 20 か所で、`coll`・`hit_coll` の中身を直せば呼び手は直らなくてよい） |
+| 2 `#[non_exhaustive]` | 付けない（`CollisionShape`・`CollisionExFault` とも） | 5 つの形は ukadoc が閉じて定める集合で拡張の継ぎ目ではない。emo-compose の `match` をワイルドカードなしの網羅に保ち、`hit-id-pass` などが腕を変えたときに判定とずらしの漏れをコンパイルで見つける（`ShellIssue` の前例） |
+| 3 `region` の置く位置 | `CollisionRegion { file, red, green, blue, invert, x, y }` の `x`・`y`。読みでは 0,0、持ち込みで element定義の X,Y だけずれる | 要件 3.4 が「`region` は置く位置」をずらすと言う。`hit-id-pass` との受け渡しの契約 |
+| 4 由来を型に残すか | 残さない | 使い手が居ない（重なりは区別しない）。要るなら `collision-sort` を忠実にする仕様で足す（設計の OPEN QUESTION 6） |
+| 5 整数の算術の範囲 | 浮動小数を使わず、検査つきの `i128`／`u128`。溢れたら当たらない。円は `i64` の全域で厳密、楕円は幅と高さがおよそ 2^32 未満、多角形は座標の差がおよそ 2^63 未満で厳密 | 要件 2.10 は「異常終了せず決まった結果」。読みで座標を `i32` に限る案は、持ち込みのずらしで範囲を越えうるので退けた。256 ビットの掛け算の自作は実のシェルに無い大きさのためのコードになるので退けた（OPEN QUESTION 3） |
+| 7 多角形の細部 | 巻き数の規則（SSP の測り）＋辺の上は当たる（外積 0 かつ辺の囲みの中）。頂点の重なり・一直線は面積 0 で辺の上だけ当たる。頂点の数に上限は設けず、重さで予算に数える | 正典に上限が無い。頂点の数の上限より、予算を重さで数える方が今の予算の保証（指摘 79・129・130）をそのまま多角形へ広げられる |
+| 8 予算の数え方 | 当たり判定の重さ＝多角形は頂点の数（最小 1）・ほかは 1。`budget::weight`・`weights` を足し、`surface_rows`・`body_lines`・持ち込みの量・持ち越し・`HitMemo` を重さで数える。予算の値は変えない | 件数のままだと、範囲の見出し（最大 8,193 面）や入れ子の持ち込み（2^20 件）で同じ多角形の頂点が写され、メモリと点 1 つの判定の仕事が頂点の数だけ膨らむ。矩形・楕円・円・`region` だけのシェルは重さ＝件数で振る舞いが変わらない（OPEN QUESTION 1） |
+| 11 記録の型 | `ShellIssue::CollisionEx { heading, text, fault: CollisionExFault }` と `ShellIssue::RegionInactive { heading, text, count }`。番号が読めない行は既存の `UnreadableNumber`（`text` に欄を `,` で繋いだ行） | 理由の語を型で持つと `message()` が理由ごとに書き分けられ、檻が理由を名指しで固定できる。欄の名前 `text` は既存の `UnreadableNumber.text` に合わせた（既存の `line` は行の番号） |
+| 12 ファイルの置き場 | 候補 C。読みは `decode.rs` の兄弟の関数 `decode_collisionex_row`、形の算術は新しい `crates/areka-emo-compose/src/hit_shape.rs` | ウェーブ表の「形の検査の新しいファイル」と一致。`hit.rs` は述語を替えるだけで、入出力の契約と中の檻は無傷 |
+
+- **同じ collision番号の警告**（要件 3.7）: element番号の二重定義と同じ仕組み（`add_lines` が後の波括弧の行を足すとき、面にすでにある番号の行を数え、記述子ごとに 1 行）。同じ波括弧の中だけの重なりは警告しない（OPEN QUESTION 2・要件 6.4 との整合）。
+- **`region` の記録**（要件 4.7）: `Reading` に数と最初の行を控え、`parse_all` の輪の後の `reading.finish()` で 1 件だけ積む。記録の列の最後に入る。
+- **判定の順**（読み）: 形 → 座標の数 → 多角形の奇数 → 使う欄の整数 → 多すぎる欄。`region` は欄の検査を 1 つにまとめる。1 行に複数の理由が当てはまっても記録は 1 件。
+
+### 10.3 合成の見方（generalization・build vs adopt・simplification）
+
+- **まとめた所**: 要件 2（内外）と 3.4（ずらし）は「形の算術」という 1 つの責務なので、`hit_shape.rs` の 2 つの関数（`contains`・`translated`）にまとめた。`hit.rs` と `hit_import.rs` は形を知らない。
+- **作るか借りるか**: 点の内外（閉じた楕円・円・巻き数の多角形）は標準の整数の算術で数十行に収まり、ワークスペースの依存に幾何の crate は無い。依存を足さない約束（C22 ⑸）もあるので自作する。
+- **削った所**: 由来の欄・檻の作り方の関数・頂点の共有（`Arc`）・同じブレスの中の警告の新しい関数・`hit.rs` の口の形の変更・字句の段から原文を運ぶ変更は入れない。`presenter/hit.rs` と areka 本体は変更なし。
+
+### 10.4 危険と手当て
+
+- 頂点の重さで数えると持ち込みの持ち越しの切り方（列の前から落とす）が件数から重さに変わる＝`row_budget_tests.rs` に重さの檻を足して固定する。
+- 同じ collision番号の前の行を除かなくなるので、番号を書き直す前提のシェルでは前の行も当たり、警告が増える＝SSP と同じ振る舞い（開発者の裁定 2026-11-17）。§8 の【上書き】の行を書き直す。
+- 台帳の報告（`report/assets.md`・`summary.md`）は機械で作り直すので、同じウェーブの `audit-ukadoc-survey`（`crates/ukadoc-survey/` だけを触る）が報告の作り方を変えると、着地の順で作り直しが要る。
