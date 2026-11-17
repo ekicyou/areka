@@ -26,7 +26,7 @@ pub(super) const OWN_SPEC_DIR: &str = "areka-P0-ukadoc-coverage-roadmap";
 const SPECS_DIR: &str = ".kiro/specs";
 
 /// 完了した spec を集めるディレクトリの名前（`.kiro/specs/` の直下）。
-const COMPLETED_DIR: &str = "completed";
+pub(super) const COMPLETED_DIR: &str = "completed";
 
 /// spec ディレクトリを spec だと見分ける目印（要件 10.2 の「brief 済み」）。
 const BRIEF_FILE: &str = "brief.md";
@@ -86,11 +86,10 @@ impl Documents {
         // 直下を先・`completed/` を後に読む。移しは「直下→`completed/`」の 1 方向なので、
         // 2 つの読みのどの時点で移っても、その spec は少なくとも一方に見える。
         let specs_root = paths::workspace_root().join(SPECS_DIR);
-        let spec_dirs = child_dirs(&specs_root)?
-            .into_iter()
-            .filter(|name| name != COMPLETED_DIR && name != OWN_SPEC_DIR)
-            .filter(|name| specs_root.join(name).join(BRIEF_FILE).is_file())
-            .collect();
+        let spec_dirs = spec_dir_names(child_dirs(&specs_root)?.into_iter().map(|name| {
+            let has_brief = specs_root.join(&name).join(BRIEF_FILE).is_file();
+            (name, has_brief)
+        }));
         let completed_specs = child_dirs(&specs_root.join(COMPLETED_DIR))?
             .into_iter()
             .collect();
@@ -106,6 +105,20 @@ impl Documents {
             completed_specs,
         })
     }
+}
+
+/// 直下のフォルダの名前と「brief.md があるか」の組から、spec の名前だけを残す。
+///
+/// `completed`・本 spec・brief の無い名前は落とす。brief の無いフォルダは作りかけの
+/// spec なので、赤にせず一覧から外すだけにする。
+pub(super) fn spec_dir_names(
+    entries: impl IntoIterator<Item = (String, bool)>,
+) -> BTreeSet<String> {
+    entries
+        .into_iter()
+        .filter(|(name, has_brief)| *has_brief && name != COMPLETED_DIR && name != OWN_SPEC_DIR)
+        .map(|(name, _)| name)
+        .collect()
 }
 
 /// そのディレクトリの直下にあるディレクトリの名前。

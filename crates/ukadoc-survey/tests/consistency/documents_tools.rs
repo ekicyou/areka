@@ -10,6 +10,7 @@
 //!
 //! - 母数の下限を集める器（[`Floors`]）の較正——下限を下回れば赤になり、下限 0 は
 //!   主張として受け付けない。
+//! - spec の一覧の絞り（[`spec_dir_names`]）の例——brief の無い名前は赤にせず落とす。
 //! - 引用 id の取り出し（[`cited_ids`]）の較正。
 //! - 写しを 1 か所だけ壊す道具 5 つの較正——狙った 1 か所だけが変わり、狙いが無ければ
 //!   止まり、repo のファイルには 1 バイトも触れない。
@@ -23,8 +24,8 @@ use ukadoc_survey::io::paths;
 
 use super::RepoData;
 use super::documents::{
-    Documents, Floors, cited_ids, drop_bundle_name, drop_member, shift_count, shift_row_count,
-    twist_id, twisted_id,
+    COMPLETED_DIR, Documents, Floors, OWN_SPEC_DIR, cited_ids, drop_bundle_name, drop_member,
+    shift_count, shift_row_count, spec_dir_names, twist_id, twisted_id,
 };
 
 /// 母数の器が、下限を下回った行を**すべて**名指すこと。
@@ -76,6 +77,25 @@ fn the_floor_container_stays_quiet_when_every_row_is_met() {
         "満たしているのに違反を挙げている"
     );
     floors.assert_met();
+}
+
+/// spec の一覧の絞りが、brief の無い名前・`completed`・本 spec を赤にせず落とすこと。
+///
+/// `/kiro-spec-init` などで作ったばかりのフォルダには brief.md が無い。それで全体テストが
+/// 赤になってはならず、一覧から黙って落ちればよい。
+#[test]
+fn the_spec_listing_drops_brief_less_names_without_turning_red() {
+    let names = spec_dir_names([
+        ("brief-on".to_owned(), true),
+        ("brief-less".to_owned(), false),
+        (COMPLETED_DIR.to_owned(), true),
+        (OWN_SPEC_DIR.to_owned(), true),
+    ]);
+    assert_eq!(
+        names,
+        BTreeSet::from(["brief-on".to_owned()]),
+        "brief 持ちの名前だけが残っていない"
+    );
 }
 
 /// 引用 id の取り出しが引用符と逆引用符の両方を拾い、重複を畳むこと。

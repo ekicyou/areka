@@ -301,46 +301,6 @@ fn the_spec_directory_listing_excludes_this_spec_and_completed() {
         "本 spec {OWN_SPEC_DIR} が直下の brief 持ちと completed/ のちょうど一方に居ない\
          （直下={live}・completed={completed}）。除外が空回りしている"
     );
-
-    // 一覧をここでもう 1 度、独立に組み直して突き合わせる。同じ関数の答えを同じ関数で
-    // 言い換えても「読み込みが読み込みに同意する」だけになる（`non_vacuity.rs` の
-    // 割り当ての事例と同じ理由）。
-    let mut again = BTreeSet::new();
-    let mut brief_less = BTreeSet::new();
-    for entry in std::fs::read_dir(&specs_root).expect(".kiro/specs を開けない") {
-        let entry = entry.expect(".kiro/specs の直下を読めない");
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if name == "completed" || name == OWN_SPEC_DIR {
-            continue;
-        }
-        if entry.path().join("brief.md").is_file() {
-            again.insert(name);
-        } else {
-            brief_less.insert(name);
-        }
-    }
-    assert_eq!(
-        documents.spec_dirs, again,
-        "一覧が .kiro/specs の直下を独立に数え直した結果と食い違う"
-    );
-
-    // brief を持たない直下のディレクトリは今の実データに無い（0 も書く・要件 11.5）。
-    // つまり brief の絞りは実データでは 1 件も落としておらず、
-    // 「brief 持ちだけを拾う」の側は生きた反例で較正できていない。反例が現れたら
-    // ここが名前付きで赤くなるので、そのときに数え直すこと。絞りが働くこと自体は
-    // すぐ下の `completed` で見る。
-    assert_eq!(
-        brief_less,
-        BTreeSet::new(),
-        "brief.md を持たない spec ディレクトリが直下に現れた（0 件の写真が古い）"
-    );
-    assert!(
-        !specs_root.join("completed").join("brief.md").is_file(),
-        "completed が brief.md を持っている（名前で除かなくても落ちる、の前提が崩れた）"
-    );
 }
 
 /// spec ディレクトリの一覧が空に落ちたとき、上の下限が**実際に**赤になること。
