@@ -170,9 +170,31 @@ fn claudia_like_collisionex_rows_enter_the_list_in_written_order() {
 }
 
 /// 使わない行は並びに入らず 1 件の記録、欄が多い行だけは前から使って 1 件の記録（4.1〜4.6・4.10）。
+/// 理由が 2 つ当てはまる行は System Flows の図で先の理由 1 つだけ（未知の形→数→奇数→整数／region→欄が多い）。
 #[test]
 fn faults_record_once_and_only_extra_fields_enter_the_list() {
-    let cases: [(&str, Option<CollisionExFault>, bool); 14] = [
+    let cases: [(&str, Option<CollisionExFault>, bool); 18] = [
+        // 2 つの理由が重なる行: 先の理由だけ
+        (
+            "collisionex0,a,polygon,1,2,3,4,5,6,x",
+            Some(CollisionExFault::OddCoordinates),
+            false,
+        ),
+        (
+            "collisionex0,a,rect,1,x,3",
+            Some(CollisionExFault::MissingCoordinates),
+            false,
+        ),
+        (
+            "collisionex0,a,star",
+            Some(CollisionExFault::UnknownShape),
+            false,
+        ),
+        (
+            "collisionex0,a,region,,1,2,3,false,x",
+            Some(CollisionExFault::BadRegion),
+            false,
+        ),
         (
             "collisionex0,a,star,1,2,3,4",
             Some(CollisionExFault::UnknownShape),
@@ -313,5 +335,241 @@ collisionex1,b,circle,1,2,3
                 ..ShapeCounts::default()
             },
         }]
+    );
+}
+
+fn region(file: &str, rgb: (u8, u8, u8), invert: bool) -> CollisionShape {
+    CollisionShape::Region(CollisionRegion {
+        file: file.into(),
+        red: rgb.0,
+        green: rgb.1,
+        blue: rgb.2,
+        invert,
+        x: 0,
+        y: 0,
+    })
+}
+
+/// 5 つの形の欄が型へ運ばれる。形の名前は大小文字を区別せず、名前は空も大小文字もそのまま（1.1〜1.7・1.10）。
+#[test]
+fn each_shape_carries_its_fields_and_names_stay_verbatim() {
+    let (list, _) = surface0(
+        "collisionex0,,RECT,-1,-2,3,4
+collisionex1,MiXed,Ellipse,1,2,3,4
+collisionex2,,cIrCle,-5,6,7
+collisionex3,Poly,POLYGON,9,8,7,6,5,4,3,2,
+collisionex4,File,Region,Dir/A.png,0,128,255",
+    );
+    assert_eq!(
+        list,
+        vec![
+            coll(0, "", rect(-1, -2, 3, 4)),
+            coll(
+                1,
+                "MiXed",
+                CollisionShape::Ellipse(CollisionBounds {
+                    left: 1,
+                    top: 2,
+                    right: 3,
+                    bottom: 4
+                })
+            ),
+            coll(
+                2,
+                "",
+                CollisionShape::Circle {
+                    x: -5,
+                    y: 6,
+                    radius: 7
+                }
+            ),
+            // 頂点は書いた順・行末の `,` は欄に数えない
+            coll(
+                3,
+                "Poly",
+                CollisionShape::Polygon(vec![(9, 8), (7, 6), (5, 4), (3, 2)])
+            ),
+            coll(4, "File", region("Dir/A.png", (0, 128, 255), false)),
+        ]
+    );
+}
+
+/// 領域反転は大小文字を区別せず、省略は false（1.7）。
+#[test]
+fn region_invert_is_case_insensitive_and_defaults_to_false() {
+    let (list, issues) = surface0(
+        "collisionex0,a,region,f.png,1,2,3
+collisionex1,b,region,f.png,1,2,3,False
+collisionex2,c,region,f.png,1,2,3,TRUE
+collisionex3,d,region,f.png,1,2,3,tRuE
+collisionex4,e,region,f.png,1,2,3,false,",
+    );
+    let inverts: Vec<bool> = list
+        .iter()
+        .map(|c| match &c.shape {
+            CollisionShape::Region(r) => r.invert,
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(inverts, [false, false, true, true, false]);
+    assert!(
+        issues
+            .iter()
+            .all(|i| matches!(i, ShellIssue::ShapesInactive { .. })),
+        "{issues:?}"
+    );
+}
+
+/// 読めない行の後の行が読まれ続け、collision* と交互に書いた並びが書いた順（1.8・4.8）。
+#[test]
+fn rows_after_unreadable_rows_keep_being_read_in_written_order() {
+    let (list, issues) = surface0(
+        "collisionex0,a,rect,1,1,2,2
+collisionex,x,rect,1,1,2,2
+collision1,0,0,5,5,b
+collisionexzz,x,rect,1,1,2,2
+collisionex2,c,rect,3,3,4,4
+collisionex99999999999,x,rect,1,1,2,2
+collision3,0,0,6,6,d
+collisionex4,e,star,1,2,3,4
+collisionex5,f,rect,7,7,8,8",
+    );
+    let names: Vec<&str> = list.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["a", "b", "c", "d", "f"]);
+    assert_eq!(
+        issues,
+        vec![
+            ShellIssue::UnreadableNumber {
+                heading: "surface0".into(),
+                text: "collisionex,x,rect,1,1,2,2".into()
+            },
+            ShellIssue::UnreadableNumber {
+                heading: "surface0".into(),
+                text: "collisionex99999999999,x,rect,1,1,2,2".into()
+            },
+            ex(
+                "collisionex4,e,star,1,2,3,4",
+                CollisionExFault::UnknownShape
+            ),
+        ]
+    );
+}
+
+/// `surface.append*` の中でも同じに読み、記録の見出しは append の見出し（1.8・4.9）。
+#[test]
+fn rows_inside_surface_append_are_read_and_recorded_under_its_heading() {
+    let text = parse_all(
+        "surface.append0
+{
+collisionex0,a,circle,1,2,3
+collisionex1,b,rect,1,2,3
+collision2,0,0,1,1,c
+collisionex3,d,rect,1,2,3,4,
+}
+",
+    );
+    let append = &text.shell.appends[0].collisions;
+    let names: Vec<&str> = append.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["a", "c", "d"]);
+    assert_eq!(
+        text.issues,
+        vec![
+            ShellIssue::CollisionEx {
+                heading: "surface.append0".into(),
+                text: "collisionex1,b,rect,1,2,3".into(),
+                fault: CollisionExFault::MissingCoordinates,
+            },
+            ShellIssue::ShapesInactive {
+                heading: "surface.append0".into(),
+                text: "collisionex0,a,circle,1,2,3".into(),
+                counts: ShapeCounts {
+                    circle: 1,
+                    ..ShapeCounts::default()
+                },
+            },
+        ]
+    );
+}
+
+/// まだ働かない形の記録は最後に 1 件・並びへ入れた形だけを数え・最初の行を運ぶ。使わない行は数えない（4.7）。
+#[test]
+fn shapes_inactive_is_last_exactly_one_and_counts_only_kept_shapes() {
+    let (_, issues) = surface0(
+        "collisionex0,r,rect,1,2,3,4
+collisionex1,bad,ellipse,1,2
+collisionex2,p,polygon,0,0,1,1,2,2
+collisionex3,e,ellipse,0,0,9,9,extra
+collisionex4,g,region,f.png,1,2,3
+collisionex5,h,circle,1,2,3",
+    );
+    assert_eq!(issues.len(), 3, "{issues:?}");
+    assert_eq!(
+        issues[0],
+        ex(
+            "collisionex1,bad,ellipse,1,2",
+            CollisionExFault::MissingCoordinates
+        )
+    );
+    assert_eq!(
+        issues[1],
+        ex(
+            "collisionex3,e,ellipse,0,0,9,9,extra",
+            CollisionExFault::ExtraFields
+        )
+    );
+    assert_eq!(
+        issues[2],
+        ShellIssue::ShapesInactive {
+            heading: "surface0".into(),
+            text: "collisionex2,p,polygon,0,0,1,1,2,2".into(),
+            counts: ShapeCounts {
+                ellipse: 1,
+                circle: 1,
+                polygon: 1,
+                region: 1
+            },
+        }
+    );
+}
+
+/// まだ働かない形の記録はシェル全体で 1 件・ブレスをまたいで数え、最初のブレスの最初の行を運ぶ（4.7）。
+#[test]
+fn shapes_inactive_is_one_record_for_the_whole_shell_across_sections() {
+    let text = parse_all(
+        "surface0
+{
+collisionex0,a,ellipse,0,0,9,9
+}
+surface1
+{
+collisionex0,b,star,1
+collisionex1,c,circle,1,2,3
+}
+surface.append0
+{
+collisionex0,d,polygon,0,0,1,1,2,2
+collisionex1,e,region,f.png,1,2,3
+}
+",
+    );
+    assert_eq!(
+        text.issues,
+        vec![
+            ShellIssue::CollisionEx {
+                heading: "surface1".into(),
+                text: "collisionex0,b,star,1".into(),
+                fault: CollisionExFault::UnknownShape,
+            },
+            ShellIssue::ShapesInactive {
+                heading: "surface0".into(),
+                text: "collisionex0,a,ellipse,0,0,9,9".into(),
+                counts: ShapeCounts {
+                    ellipse: 1,
+                    circle: 1,
+                    polygon: 1,
+                    region: 1
+                },
+            },
+        ]
     );
 }
