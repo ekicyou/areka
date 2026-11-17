@@ -282,7 +282,44 @@
 7. `rect_at` の開け方（`visibility.rs:111` も `pub(crate)` に・4 節 9）。
 8. 7 回目の束の印（7 節 1）。
 
-## 8. 次の段
+## 8. 次の段（要件の段の時点）
 
 - 要件の討議（`kiro-requirements-discussion`）で、下の議題を決める。決まったら `/kiro-design audit-placement-follow-residue`。
 - 議題の材料: 3.1（164 の持たせ方・A1 を推す）・3.2（鎖の渡し方 B1 と矩形の組 R1 を推す・要件 1.4 の書き直し）・3.3（C14・C1 を推す・要件 1.5 の置き場）・3.4（4 回目・テストの後に D1 を推す）・3.6 と 4 節 8（要件 7.2 の幅）・4 節 6（`transition_diag.rs` の写しを入れるか）・4 節 7（`[[…]]` の 16 行を入れるか）・未決 1（audit のかけ直し）・未決 5（位置が分からないドラッグの見え方＝A1 なら「その回は動かない」）。
+
+## 9. 設計の段（2026-11-17 `kiro-spec-design`）
+
+> 測ったツリーは枝の頭 `c66f7ee54`。決めと契約は `design.md` が正本で、ここは調べの記録。
+
+### 9.1 調べの形と使ったもの
+
+- 調べの形: **light**（今ある crate の中の直し・新しい依存も外の API も無い）。外の調べ（WebSearch）は要らなかった。下請けは使わず、主の流れでコードを読んだ。
+- 使った規則: `kiro-spec-design` の `rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、テンプレート `.kiro/settings/templates/specs/design.md`。領域のスキル（pasta・ghost の書き方ほか）は当たらない。
+- 読んだ所: 7.1 の 8 件の決めに要るコード（`chain_rule.rs`・`persist.rs` の `restore_and_judge`／`restored_windows`・`work_area_clamp.rs`・wintf の `ecs/drag/{mod,dispatch}.rs`・`state/mod.rs`・`mouse_move.rs`・`areka-runtime` の `frame/dpi.rs`・`drag_follow.rs`・`sticky_follow.rs`・`persist_save.rs`・`window_move.rs`・`reseed.rs`・`dpi_sync.rs`）と、`audit-placement-core` の `research.md` 18.10（場合の表 T5〜T8・T29・「これで終わる理由」）、`doc/crates-io-publish.md`。
+
+### 9.2 わかったこと
+
+1. **4 回目は鳴る（7 節 2 の答え）**: 配置の crate の一時の試し（`reseed_tests.rs` の末尾に足して走らせ、走らせた後に `git checkout` で消した）で、`booted_world(96)` のキャラ窓 0 に `DpiSyncHold` を付け、揃え方 `top` のシェルを `apply_shell_descript` で入れてから `reanchor_char_windows` を呼ぶと、`window_move.rs:686` の `debug_assert!` が「DpiSyncHold のある窓へ窓書込が到達した: … route=Some(AnchorChange) since_frame=3」で落ちた。`resize_window_to` の手前に札を見る所は無い。本番で札のある間にシェルの切り替えの後始末が走るのを止める所も無い（2.7 のとおり）。
+2. **札が外れるフレームの書き込みは今の揃え方で置く（D3 の前提）**: 拡大率の相（`dpi.rs:337-489` の `dpi_phase_with`）は札のある窓を `Changed<DPI>` が無くても毎フレーム対象に入れ（`:355-363`）、通ったフレームで `reconcile_window_size`（→ `resize_window_to(.., DpiReproject)`）か `reproject_char_window_at_current_size`（→ 同じ）を呼ぶ。`resize_window_to` は窓の `Anchored` で射影するので、`apply_shell_descript` が入れ直した揃え方が当たる。打ち切り（30 フレーム）の後も同じ道。
+3. **札の意味**: `dpi_sync.rs` の doc は、札が「新しい寸のまま旧作業領域下端へ接地した中間矩形」の 2 段書込（要件 5.8）を止めるためにあると書く。シェルの置き直しも `project_anchor` で作業領域へ射影する書き込みなので、札のある間に書くとこの中間の矩形を書きうる。`\![move]`（`MoveCue`）は明示の座標を書くので射影しない（見送らない側にいる理由が違う）。→ 設計の決め 5 は D3（未決 1 として討議に回す）。
+4. **7 回目の束の印（7 節 1 の答え）**: `persist_save::send_entries` は束の位置の鍵から触れる組の印を足し（`adjacency_marks_with`）、同じ印の鍵を重ねない。`clamped_old_memory` は「束が位置を書かないスコープ」の印を外すが、N+1 回のどの回でも、位置を書いたスコープ j の印は j の回で書かれていた。1 つの束にしても書く印の集まりは同じ。違うのは ⑴ 「印を書き足さない」の `info!` の行の数（束の数 → 1） ⑵ 相手の組の印を読む時点（今の最後の書き込みと同じ＝ドラッグ中に変わった向きの当て直しの後）。
+5. **鎖の寄せの入力**: `restored_windows` は `placements`（全スコープ・`ScopePlacement::anchor` つき）を受けるので、そこから `ChainRule::from_terms` で鎖を組める。`ChainView::Saved` は `descript` だけを読む（`chain_rule.rs:93`）ので、`default_x: None`・`live: descript` で答えは変わらない。
+6. **R1 と 18.10 の表**: T6 の F の列が「規則と違う」とするのは印の読み（辺のスコープと n を印で組にする）。辺のスコープと n の記憶の矩形が隣り合うときに組にするのは T5 の行（「番号が続けば記憶の矩形で組にする（重なりも組・`work-area-clamp` 4.1）」・扱い「合う」）の振る舞い。R1 はこれを保つ（7 節 4 の答え）。
+7. **164 の触る所**: `git grep -ln DraggingState -- .` は 31 ファイル（`vendors/`・`.kiro/` を除く）。欄の型で直しが要るのは組む所 11 か所（brief の再測定のとおり）と `.0`／`.1` で読む所（`drag_follow.rs:291-293`・`mouse_move.rs:404-405`・`frame/dpi.rs:229-240`・`frame_dpi_drag_grab_tests.rs:34-35`・`:78`・`:137-138`・`drag_test_support.rs:245-249`・`dispatch_test.rs:117`）。ほかは在る無しを見るだけ（`chain_realign.rs`・`work_area_clamp.rs`・`move_shift.rs`・`sticky_follow.rs`・wintf `systems.rs` 本体・`dispatch_order_tests.rs`・`wndproc_bridge_drag_cancel_tests.rs`・`examples/taffy_flex_demo/drag.rs` は説明だけ）。`balloon_lock_drag_tests.rs:313`・`dispatch_order_tests.rs:216`・`mouse_move_dispatch_tests.rs:133`・`clickthrough/controller_tests.rs:26` の `initial_window_pos` は `WindowDragContext` か wintf の中の控えの欄で、触らない。
+8. **164 で `Free` の窓にも穴があった**: 今は `on_char_drag_end` が `Free` の窓にも `policy_mapped_position` を当てるので、位置が分からない回は離したときに (0,0)＋差の所へ書き、その位置を記憶へ書いていた（ドラッグ中は wintf が動かさない）。A1 の `None` で同じ縮退に入り、この穴も閉じる。
+9. **wintf の公開の段**: crates.io の wintf は 0.1.0（タグ `v0.1.0`）。次のリリースは v0.2.0（まだ出していない）。公開の段（`crates-io.yml`・`tools/crates-io.ps1`）に API の差を見る確かめは無い（`semver` の字面は `release.yml` のタグの読み比べだけ）。
+10. **名前の無い番号の今の数（要件 7.4 の仕分けの形）**: `.kiro/specs` と `.kiro/specs/completed` のフォルダ名（496）のどれも行の中身に含まない行は、task 190／218 行（45 ファイル）・指摘 36／39 行（17 ファイル）・二重角括弧 16／16 行（4 ファイル）・要件 541／577 行（56 ファイル）。
+11. **写しの grep の今の当たり**: `fn (clamp_x_into|assert_no_event|point|contained|code_only|k|events_of)\b|struct SharedFakeIo` は写しの 8 行だけ、`fn (drag_event|point_of|window_pos)\b` は 358・426 の写しの 3 行だけ（ほかの当たりが無いので、直した後の 0 行を確かめに使える）。
+12. **鎖の見方を組む所の今の列**（18.10「これで終わる理由」2 の grep を `git grep` で）: `chain_finalize.rs:159`・`chain_realign.rs:284`・`chain_rule.rs`（74・93・97・101・264）・`persist_save.rs:203`・`resolver.rs`（314・340・525・531）。`follow/` の下は 0（`joined_with_prev` は `judge_adjacency` を呼ぶのでこの grep には当たらない＝要件 1.8 の確かめは `joined_with_prev` の名前の grep を足す）。
+
+### 9.3 まとめ（design-synthesis）
+
+- **一般化**: 4 回目（シェルの置き直し）と詰め直し（`ChainRealign`）は、どちらも「呼び手が自前で札を見て見送る」形で「見送りが覆う経路」に入る。経路語の分け方を増やさず、この形にそろえた（D3）。164 は wintf の控え `WindowDragContext` と同じ「`Option` で分からないを持つ」形にそろえた。
+- **作るか使うか**: 新しく作る部品は無い。鎖の前の窓は `ChainRule::prev`、矩形は `rect_at`、作業領域は `work_area_px`、寄せは `clamp_axis`、テストの支えは `test_support`・`placement_shared_test_support` の共有の部品を使う。新しいファイルは `follow/balloon_drag.rs`（移すだけ）だけ。
+- **削ったもの**: 組の束ねに専用の型（union-find の型）を作らない（スコープは数個・番号の付け替えで足りる）。追随の側に「ドラッグの始めだけ記録する」ための状態を足さない（今の `debug!` と同じ回数）。wintf の中の控え `DragState::Dragging.initial_window_pos` の型はそろえない（`move_window && is_some()` で既に守っている）。`chain_rule.rs` に新しい口を作らず、テストの口 `from_terms` を開くだけにした。
+
+### 9.4 設計の段の危うさ
+
+- 164 の偽の HWND に寄りかかった檻の数は、型を変えて `cargo test` を回すまで読み切れない（`follow_drag_end_gate_tests.rs` の `destination()` の 8 か所のほか、本体の `input_events/drag_*`）。直し方は 1 つ（開始の後に位置を入れる手伝い）なので、数が増えてもタスクは増えない見込み。
+- D3 は札のある窓だけ新しい揃え方が最大 30 フレーム遅れる。D1 を採るなら遅れは無いが、札の間に古い作業領域で射影した位置を 1 度書く。
+- 名前の無い番号は 60 ファイル・約 780 行の手の直しで、出どころの spec を決める読みが要る（`git log -S` で引く）。機械の置き換えにしない。
