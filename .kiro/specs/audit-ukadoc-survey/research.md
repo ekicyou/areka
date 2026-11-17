@@ -592,7 +592,8 @@
 **79. 注記に古い実測・経緯が残っていて、今のデータと食い違う**（下の各所）（仮 E12・F11・A16 の残り・C11 の残り・R12・D12・B18 の注記・F10）
 - `tests/consistency/checks.rs:500-503`（census の 6.5 は今は NonEmpty）・`non_vacuity.rs:5-9,42,101`（実測 1,089 本→今 2,557 本・「初期台帳は全行が未分類」・覆った要件 7.6 の理由）・`linkage_checks.rs:41-47`（target 1552 ほか→実 1550・1351・172）・`spec_checks.rs:32-43`・`documents_checks.rs:62-74`（「briefing の引用 id は 0 件」と `documents_non_vacuity.rs:28-30` の下限 100 が食い違う・1,553 は引き下げ前の数）・`documents_tools.rs:326-338`・`src/cli/generate.rs:89-91,129-130`・`generate_tests.rs:7-18,252-255,689-691`（「台帳は今すべて未分類」→実際は 1,749 項目すべてに状態・「束も 0 行」→67 本）・`src/io/paths_tests.rs:165`（覆った要件 7.6）・`src/tomlout.rs:58`・`src/check/freshness_tests.rs:486,513-514,539`（当時のテスト本数）・`tests/consistency.rs:8-13`（兄弟のモジュールを 5 つしか挙げない＝13 ある）・`src/evidence/candidates.rs:26-30,43-45,50-51,201-204`・`candidates_tests.rs:322`・`extract_tests.rs:40-42`（行番号つきのパスはファイルを触るたびにずれる）・`src/catalog/write_tests.rs:236`（「冒頭 13 行」→コードは 14）・`src/cli/inspect.rs:36-37`（完了 spec のタスク 8.1 を指す先送りの文・追う spec が無い）。
 - 読み係 F の挙げた `tests/consistency/documents.rs:68-76` の読む順（completed を後に読むので、移す途中の spec がどちらにも無く見える隙間）もここで直す＝`completed_specs` を先に読む（2 行の入れ替え・spec_checks の腕 b は和集合で見るので害が消える）。
-- **直し**: 日付つきの実測の段落を消し、今の事実の 1 行に直す。行番号つきのパスから行番号を消す（パスそのものは `input-crate-split` が動かすときにその場で直す）。
+- 2026-11-17 `audit-emo2-boot-spine` からの申し送り（向こうの research.md 6 節「ケ」）: `candidates.rs:26-30`・`:42-46` が書く `crates/areka-runtime` の `consumer_ledger.rs` の `register(` の呼び出し数は今すでに古く、向こうの指摘 57（台帳の登録の重複の直し）が着地するとさらに変わる＝数え直さず、数を書かない形に直す（着地の順に縛られない）。
+- **直し**: 日付つきの実測の段落を消し、今の事実の 1 行に直す（ほかの持ち場の変更で動く数は書かない）。行番号つきのパスから行番号を消す（パスそのものは `input-crate-split` が動かすときにその場で直す）。
 - **外への約束**: なし（`documents.rs` の読む順の入れ替えも合否の条件は同じ）。
 - **範囲の外へ**: なし（`candidates.rs` の説明の中のパスは、`input-crate-split` が `crates/areka/src/input_events/balloon.rs` を動かすときに向こうで直す）。
 - **残す候補**: `src/cli/inspect.rs:36-37` は ⑵ に当たりうる（わざと置いた先送りの文）。ほかは該当なし。
