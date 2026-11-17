@@ -592,7 +592,7 @@ fn real_data() -> (DocTree, String, bool) {
     (walk_doc(&root), read_guide(&root), docs_dir_exists(&root))
 }
 
-/// 食い違いを件数を頭に 1 件 1 行で並べる（`file_length_guard_test.rs` と同じ形）。
+/// 食い違いを件数を頭に 1 件 1 行で並べる。
 fn render(found: &BTreeSet<Finding>) -> String {
     let mut out = format!("食い違いが {} 件ある:", found.len());
     for f in found {
@@ -609,18 +609,10 @@ fn doc_tree_matches_the_guide() {
 }
 
 #[test]
-fn every_reading_finds_something() {
-    let (tree, guide, _) = real_data();
-    assert!(!tree.direct.is_empty(), "{DIRECT_ENTRIES} が 0 件");
+fn the_whole_doc_tree_reading_finds_something() {
+    // 直下の実物と 2 つの表が空なら主検査が EmptyReading で赤にする。主検査が見ないのは全部の読み取りだけ。
+    let (tree, _, _) = real_data();
     assert!(!tree.all.is_empty(), "doc/ の下の全部が 0 件");
-    assert!(
-        !table_first_cells(&guide, DIRECT_HEADING).0.is_empty(),
-        "{DIRECT_TABLE} が 0 件"
-    );
-    assert!(
-        !table_first_cells(&guide, EXCEPTION_HEADING).0.is_empty(),
-        "{EXCEPTION_TABLE} が 0 件"
-    );
 }
 
 #[test]

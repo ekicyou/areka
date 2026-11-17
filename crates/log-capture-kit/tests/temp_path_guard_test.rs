@@ -44,8 +44,6 @@
 //!   固定名を組む式が実際に当たること（実ファイルを汚さずに済む）。
 //! - [`every_exception_still_has_a_real_hit`] — 表の全項目に**今も**当たりがあること。
 //!   列挙が空振りしていれば表の全件が「実体無し」になって必ず赤になる。
-//!   （この検査は飾りではない——タスク 10.7 が `areka-sylphya/src/persist/io.rs` を窓口へ
-//!   寄せた直後、表に残っていた同ファイルの項目をこの検査が名指しで赤にした。）
 //! - [`the_measurement_is_not_vacuous`] — 列挙が現実的な規模であり、入口の呼出が確かに
 //!   どこかに在ること（主検査の 0 件を空振りから区別する陽性の対）。集合が表と一致することは
 //!   [`no_temp_dir_entry_point_lives_outside_the_allow_table`] と
@@ -78,19 +76,22 @@ const TOKEN_QUALIFIED: &str = concat!("env::temp_", "dir");
 
 /// 入口を `use` で裸にした綴り。
 ///
-/// 修飾つきの形の内側にも現れるが、[`scan_tokens`] は当たった語の内側から次の語を探さない
+/// 修飾つきの形の後ろ半分と重なるが、[`scan_tokens`] は当たった語の内側から次の語を探さない
 /// ので 1 呼出が 2 件に数えられることはない（規則は `workspace_scan/mod.rs` の `scan_tokens` の語の重なりの規則。
 /// この規則が実際に効いていることは [`the_two_spellings_never_double_count_one_call`] が
 /// 見本で固定する）。左端はアンカーされるので、名前の末尾がたまたま同じ綴りで終わる
 /// 助走関数（実在: `unique_temp_dir`・`make_unique_temp_dir`）には当たらない。
 const TOKEN_BARE: &str = concat!("temp_", "dir(");
 
+/// 波括弧の中の別名（`use std::env::{… as …}` の形）。修飾つきの綴りにも裸の綴りにも当たらない。
+const TOKEN_BRACED_ALIAS: &str = concat!("temp_", "dir as");
+
 /// 名前にプロセス識別子を織り込む呼出（例外の**分類が飾りでない**ことを裏取りするのに使う）。
 const TOKEN_PROCESS_ID: &str = concat!("process::", "id(");
 
 /// 主検査の走査語。
 fn entry_point_tokens() -> Vec<&'static str> {
-    vec![TOKEN_QUALIFIED, TOKEN_BARE]
+    vec![TOKEN_QUALIFIED, TOKEN_BARE, TOKEN_BRACED_ALIAS]
 }
 
 // ---------------------------------------------------------------------------
@@ -117,15 +118,13 @@ enum Why {
 /// 残った分だけが載る。件数は [`ALLOWED_COUNT`] と、種別ごとの件数の定数が逐語で持つ
 /// （ここには書かない）。窓口の `src/` も走査に入るが、窓口の当たりは 0 件なので表には載らない。
 ///
-/// 表に置き去りにした項は [`every_exception_still_has_a_real_hit`] が赤にする
-/// （かつて `crates/areka-sylphya/src/persist/io.rs` が窓口へ寄せられた直後に、残っていた
-/// 同ファイルの項をこの検査が名指しで赤にした）。
+/// 表に置き去りにした項は [`every_exception_still_has_a_real_hit`] が赤にする。
 ///
 /// **理由欄に行番号を書かない**——書けば当該ファイルへの無関係な編集で表が陳腐化し、
 /// 本仕様が触らないと決めたファイルを触らせる圧力になる（`file_length_guard_test.rs` の
 /// 例外表の doc が同じ理由で行数を書かないのと同型）。
 const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
-    // ── ⒜ 既にプロセス識別子で一意化している件（今は 0 件）───────────────────────────
+    // ── ⒜ 既にプロセス識別子で一意化している件 ───────────────────────────
     //
     // 設計 C8 が「例外表に載せるか窓口へ寄せるかを実装時に決め、根拠を記録する」と
     // 定めた当の項目。**載せる**を採った。根拠は 2 点。
@@ -136,25 +135,6 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
     //    負う移行を、直す必要のないファイルへ広げることになる。
     // ⑵ 表に載せても**素通りにはならない**——[`each_exception_declares_whether_it_uniquifies_by_process_identifier`]
     //    が「一意化している」という主張をソースと突き合わせるので、後から一意化を外せば赤になる。
-    // `crates/areka-sylphya/src/persist/io.rs` はかつてここに載っていたが、タスク 10.7 が
-    // 入口 3 箇所すべてを窓口へ寄せたので**当たりが 0 件になり、表から落とした**（本表の
-    // doc の「表に置き去りにした項は」の段落を参照）。
-    // host の結合テスト（`lifecycle_cyclic_e2e`・`lifecycle_kill_e2e`・`shiori_load_e2e`・
-    // `shiori_request_e2e`）もかつてここに載っていたが、audit-shiori-host32 のタスク 1.1 が
-    // `tests/common/mod.rs` の `TestRoot`（`target\test-roots\` の下）へ寄せたので表から落とした。
-    // helper の `main_loopback_tests.rs`・`shiori_proxy.rs`・`shiori_proxy_loadu_tests.rs` と
-    // `crates/shiori-host32-testdll-loadu/src/lib.rs`（後ろの 2 つは areka-P0-shiori-loadu が足した）も
-    // かつてここに載っていたが、audit-shiori-host32 のタスク 1.3 が helper の
-    // `src/proxy_test_support.rs` の `TestRoot`（同じく `target\test-roots\` の下）と loadu の
-    // 同じ形の根へ寄せたので表から落とした。
-    // 最後に残った `crates/shiori-host32-host/src/process_host.rs` も、audit-shiori-host32 の
-    // タスク 4.1 が `.bat` を手で組み直す写しのテストを消し（組み立ては `helper_command` の
-    // 中身を読むテストへ）、入口を使わなくなったので表から落とした。これで audit-shiori-host32 の
-    // 範囲の項はすべて表から外れた。
-    // `crates/areka-placement/src/measure_tests.rs`（同 crate 内の自前の一時フォルダ）もかつてここに
-    // 載っていたが、audit-placement-core のかけ直し（タスク 8.1）が自前の実装をやめたので当たりが
-    // 0 件になり、表から落とした。
-    // ── ⒜ の追加 1 件（2026-09-29・areka-P0-network-update）─────────────────────
     //
     // テストの一時パスではなく**本番の落とし場所**。要件 6.6 が「OS の一時フォルダの下の areka
     // 専用の場所」と定め、7 日の掃除が前回までの走行の残りを見つけるにはフォルダが固定である
@@ -166,11 +146,6 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
         "本番の落とし場所 %TEMP%\\areka\\download\\（要件 6.6）。フォルダは 7 日の掃除のために固定、\
          中のファイル名はプロセス識別子＋単調連番で一意化済み。テストは差し替えの口で窓口の一時フォルダを渡す",
     ),
-    // ── ⒝ 読み出しのみ（要件 12.2・設計 C8 が名指しで対象外と定めた 2 件）は 0 件 ───
-    // `crates/shiori-host32-host/tests/error_paths.rs` は audit-shiori-host32 のタスク 1.1 が
-    // `TestRoot` へ寄せ、`crates/areka-placement/src/placement_monitor_tests.rs` は
-    // audit-placement-core のかけ直し（タスク 8.1）が不在パスを入口から組み立てなくなったので、
-    // どちらも表から落とした。
 ];
 
 /// [`ALLOWED_ENTRY_POINT_USES`] の件数（逐語）。表を増やすときはここも編集する（要件 12.4）。
@@ -302,11 +277,6 @@ fn the_allow_table_declares_the_size_of_each_category() {
 /// 2026-08-27 訂正）。**つまり本検査は、自分を素通りした欠陥の存在を
 /// 知っている。**
 ///
-/// # 是正後に残る「入口が複数あるファイル」は 0 件（2026-08-27 実測・2026-11-13 改め）
-///
-/// 2026-08-27 の実測では `crates/shiori-host32-helper/src/shiori_proxy.rs`（入口 3・識別子 2）と
-/// `crates/shiori-host32-host/src/process_host.rs`（入口 3・識別子 1）がここにあったが、
-/// audit-shiori-host32 のタスク 1.3 と 4.1 が入口を使わない形へ寄せて表から落ちた。
 /// **今の表の項目が将来入口を増やしたときに、この穴へ落ちるかどうかまでは本検査は見ていない。**
 ///
 /// # なぜ行単位へ強めないのか
@@ -471,7 +441,7 @@ fn the_bare_spelling_of_the_entry_point_is_detected_too() {
 
 #[test]
 fn the_two_spellings_never_double_count_one_call() {
-    // 裸の綴りは修飾つきの綴りの内側にも現れる。1 呼出が 2 件に数えられると、
+    // 裸の綴りは修飾つきの綴りの後ろ半分と重なる。1 呼出が 2 件に数えられると、
     // 件数を語る主張が静かにずれる。
     let source = format!("    let root = std::{TOKEN_QUALIFIED}();\n");
     assert_eq!(
@@ -484,8 +454,7 @@ fn the_two_spellings_never_double_count_one_call() {
 #[test]
 fn the_entry_point_passed_without_a_call_is_detected() {
     // `(` 無しの渡し方（呼ばずに関数として渡す形）。
-    let name = TOKEN_QUALIFIED.trim_end_matches('(');
-    let source = format!("    let make = std::{name};\n    let root = (make)();\n");
+    let source = format!("    let make = std::{TOKEN_QUALIFIED};\n    let root = (make)();\n");
     assert_eq!(
         scan_tokens(&source, &entry_point_tokens()),
         vec![(1usize, TOKEN_QUALIFIED.to_string())],
@@ -496,12 +465,22 @@ fn the_entry_point_passed_without_a_call_is_detected() {
 #[test]
 fn an_aliased_import_of_the_entry_point_is_detected() {
     // `use … as` の別名。別名での呼出は裸の綴りに当たらないので、use の行で捕まえる。
-    let name = TOKEN_QUALIFIED.trim_end_matches('(');
-    let source = format!("use std::{name} as scratch_root;\n");
+    let source = format!("use std::{TOKEN_QUALIFIED} as scratch_root;\n");
     assert_eq!(
         scan_tokens(&source, &entry_point_tokens()),
         vec![(1usize, TOKEN_QUALIFIED.to_string())],
         "`use … as` の別名を検知できていない"
+    );
+}
+
+#[test]
+fn an_aliased_import_inside_braces_is_detected() {
+    // 波括弧の中の別名は `env::` の直後に関数名が来ないので、修飾つきの綴りに当たらない。
+    let source = format!("use std::env::{{self, {TOKEN_BRACED_ALIAS} scratch_root}};\n");
+    assert_eq!(
+        scan_tokens(&source, &entry_point_tokens()),
+        vec![(1usize, TOKEN_BRACED_ALIAS.to_string())],
+        "波括弧の中の `use … as` の別名を検知できていない"
     );
 }
 
@@ -571,7 +550,7 @@ fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
     //（コメント除去を通す上の検査は、コメントへ植えた走査語を 1 件も拾わない）。
     //
     // 1 行に**両方の綴りが当たる**のが正しい期待値である——`raw_occurrences` は
-    // アンカーも語の重なりの規則も持たない素の部分一致で、修飾つきの綴りの内側にある
+    // アンカーも語の重なりの規則も持たない素の部分一致で、修飾つきの綴りの後ろ半分と重なる
     // 裸の綴りを別に数える。要件 12.2 の実測に使った grep がまさにそう振る舞うので、
     // ここを賢くして 1 件へ丸めると母数の見方が実測とずれる。
     let planted = format!("// 説明: かつては std::{TOKEN_QUALIFIED}() と書いていた");

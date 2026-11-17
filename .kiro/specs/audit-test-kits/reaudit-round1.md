@@ -61,3 +61,8 @@
 ## 束 B の直しの控え（承認済み）
 - 較正: R1 は行を出さない形に → `rename_failure_passes_with_an_ascii_line_when_dest_is_another_32bit_copy` が赤。R3 は `3|4|5` の腕を外す → `compose_rust_log_table` が赤。R5 は誤りの答えを `Transport` に → `an_mcp_error_reply_is_refused_without_waiting_for_the_grace` が赤（締切まで待つ）。D2 の数の一致は語の表の 1 行を消す → `relied_targets_name_the_modules_that_emit_the_relied_lines` が赤
 - 改名: `rename_failure_passes_when_dest_is_already_32bit` を `rename_failure_passes_silently_when_dest_is_the_same_32bit_copy` と `rename_failure_passes_with_an_ascii_line_when_dest_is_another_32bit_copy` に分けた、`removes_four_developer_vars_and_sets_defaults` → `removes_the_user_root_and_sets_the_kit_defaults`（どちらも completed/runtime-module-untangle/test-name-tails-{before,after}.txt が旧名を挙げる・直さない）
+
+## 束 D の直しの控え（承認済み）
+- 較正: G2 は足した `subscriber::…` の 3 語を外す → `an_aliased_import_or_an_uncalled_direct_capture_is_detected` が赤。G4 は `TOKEN_BRACED_ALIAS` を外す → `an_aliased_import_inside_braces_is_detected` が赤。今の木での違反はどちらも 0
+- 改名: `all_four_shapes_of_a_bundled_balloon_path_are_detected` → `every_shape_of_a_bundled_balloon_path_is_detected`（completed の 6 文書が旧名を挙げる）、`every_reading_finds_something` → `the_whole_doc_tree_reading_finds_something`（completed/doc-tree-tidy/design.md と runtime-module-untangle の 2 つの名前の列が旧名を挙げる・直さない）
+- G1 の時間（参考・判定にしない）: `sample_path_guard_test` だけを回して 23.2 秒 → 9.5 秒（レビューの回では机の負荷で 38.7 秒）

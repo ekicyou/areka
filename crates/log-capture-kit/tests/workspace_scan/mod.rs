@@ -365,7 +365,7 @@ fn is_ident_char(c: char) -> bool {
 ///    両方に当たって 2 件に数えられるのを防ぐ。
 ///
 /// 規則 2 は本番で生きている: 一時パスの見張りの修飾つきの綴り（`env::` を前に置いた形）は
-/// 裸の綴りを内側に含み、規則 2 が無いと 1 つの呼出が 2 件に数えられる。語の一覧を持つのは
+/// 後ろ半分で裸の綴りと重なり、規則 2 が無いと 1 つの呼出が 2 件に数えられる。語の一覧を持つのは
 /// 見張り側なので、語が増えたときに黙って壊れないよう規則として固定してある。
 /// 規則が生きていることは較正テストが縛る（`workspace_scan_test.rs` の
 /// `scan_tokens_returns_the_longer_of_two_tokens_that_start_at_the_same_place` と
@@ -374,7 +374,9 @@ pub fn scan_tokens(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
     let mut order: Vec<&str> = tokens.to_vec();
     order.sort_by_key(|t| std::cmp::Reverse(t.len()));
     // 語の頭の文字で先に篩う（決め D7）。どの語の頭でもない文字では語の輪を回さない。
-    let firsts: Vec<char> = order.iter().filter_map(|t| t.chars().next()).collect();
+    let mut firsts: Vec<char> = order.iter().filter_map(|t| t.chars().next()).collect();
+    firsts.sort_unstable();
+    firsts.dedup();
 
     let stripped = strip_comments(src);
     let mut hits = Vec::new();
@@ -382,8 +384,9 @@ pub fn scan_tokens(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
         let mut prev_is_ident = false;
         let mut skip_until = 0usize;
         for (at, ch) in line.char_indices() {
-            if at >= skip_until && firsts.contains(&ch) {
-                for token in &order {
+            if at >= skip_until && firsts.binary_search(&ch).is_ok() {
+                // 頭の文字が違う語は当たりようがないので回さない（長い順は保たれる）。
+                for token in order.iter().filter(|t| t.starts_with(ch)) {
                     if prev_is_ident && needs_left_anchor(token) {
                         continue;
                     }
@@ -671,7 +674,7 @@ pub fn render<T: Display>(items: &[T]) -> String {
 /// コメントを**除かずに**生テキストから走査語を探す（純関数）。
 ///
 /// 着手前の実測に使った `rg`／`grep` と同じ見方（アンカーもコメント除去もしない素の
-/// 部分一致）にそろえてある。修飾つきの綴りの内側にある裸の綴りも別に数える。
+/// 部分一致）にそろえてある。修飾つきの綴りと重なる裸の綴りも別に数える。
 /// **母数が動く条件をそのまま写すのが目的なので、ここを賢くしてはいけない。**
 pub fn raw_occurrences<T: AsRef<str>>(src: &str, tokens: &[T]) -> Vec<(usize, String)> {
     let mut hits = Vec::new();

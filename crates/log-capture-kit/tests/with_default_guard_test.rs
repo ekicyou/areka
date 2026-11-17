@@ -2,7 +2,7 @@
 //!
 //! # 何を見張るか（4 つ）
 //!
-//! 1. **捕捉先を直接差す呼出**（3 語）が、共有 crate の定義（`crates/log-capture-kit/src/`）と
+//! 1. **捕捉先を直接差す呼出**（3 つの関数の、`(` つきの裸の綴りと `subscriber::` つきの綴り）が、共有 crate の定義（`crates/log-capture-kit/src/`）と
 //!    例外表 [`ALLOWED_DIRECT_CALLS`] の外に 1 件も無いこと（要件 2.6・8.1）。
 //! 2. **全スレッド捕捉の窓口**の利用が、別表 [`ALLOWED_GLOBAL_CAPTURE`] に載ったファイルだけで
 //!    あること（要件 1.6。既定の捕捉 API と混同させないための明示表）。
@@ -63,6 +63,13 @@ const TOKEN_WITH_DEFAULT: &str = concat!("with_", "default(");
 const TOKEN_SET_DEFAULT: &str = concat!("set_", "default(");
 /// プロセス全体へ捕捉先を据える呼出。
 const TOKEN_SET_GLOBAL_DEFAULT: &str = concat!("set_global_", "default(");
+/// 上の 3 つの `subscriber::` つきの綴り。`(` を付けないので、呼出のほか `use … as` の別名と、
+/// 呼ばずに渡す形にも当たる。
+const TOKEN_SUBSCRIBER_WITH_DEFAULT: &str = concat!("subscriber::with_", "default");
+/// 同上。
+const TOKEN_SUBSCRIBER_SET_DEFAULT: &str = concat!("subscriber::set_", "default");
+/// 同上。
+const TOKEN_SUBSCRIBER_SET_GLOBAL_DEFAULT: &str = concat!("subscriber::set_global_", "default");
 /// 共有 crate の全スレッド捕捉の窓口。
 const TOKEN_INSTALL_GLOBAL_CAPTURE: &str = concat!("install_global_capture_", "all(");
 
@@ -72,6 +79,9 @@ fn direct_call_tokens() -> Vec<&'static str> {
         TOKEN_WITH_DEFAULT,
         TOKEN_SET_GLOBAL_DEFAULT,
         TOKEN_SET_DEFAULT,
+        TOKEN_SUBSCRIBER_WITH_DEFAULT,
+        TOKEN_SUBSCRIBER_SET_GLOBAL_DEFAULT,
+        TOKEN_SUBSCRIBER_SET_DEFAULT,
     ]
 }
 
@@ -303,9 +313,13 @@ fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
     let planted = format!(
         "// 説明: かつては tracing::subscriber::{TOKEN_WITH_DEFAULT}sub, || {{}}); と書いていた"
     );
+    // 素の部分一致なので、修飾つきの綴りと、それと重なる裸の綴りの両方が当たる。
     assert_eq!(
         raw_occurrences(&planted, &tokens),
-        vec![(1usize, TOKEN_WITH_DEFAULT.to_string())],
+        vec![
+            (1usize, TOKEN_WITH_DEFAULT.to_string()),
+            (1usize, TOKEN_SUBSCRIBER_WITH_DEFAULT.to_string()),
+        ],
         "コメントの中でも生テキスト走査は当たらねばならない（当たらないなら本検査は恒真）"
     );
 
@@ -549,8 +563,8 @@ fn scanning_finds_the_token_only_when_it_is_real_code() {
     let live = format!("    tracing::subscriber::{TOKEN_WITH_DEFAULT}sub, || {{}});");
     assert_eq!(
         scan_tokens(&live, &direct_call_tokens()),
-        vec![(1usize, TOKEN_WITH_DEFAULT.to_string())],
-        "素の直接呼出は 1 件として出るはず"
+        vec![(1usize, TOKEN_SUBSCRIBER_WITH_DEFAULT.to_string())],
+        "素の直接呼出は 1 件として出るはず（修飾つきの綴りが先に当たり、裸の綴りは重ねて数えない）"
     );
 
     let commented =
@@ -571,6 +585,29 @@ fn scanning_finds_the_token_only_when_it_is_real_code() {
         scan_tokens(&global, &direct_call_tokens()),
         Vec::new(),
         "⑴ の語集合は全スレッド捕捉の窓口に当たってはいけない（表を取り違える）"
+    );
+}
+
+#[test]
+fn an_aliased_import_or_an_uncalled_direct_capture_is_detected() {
+    // `use … as` の別名と `(` 無しの渡し方。どちらも `(` つきの裸の綴りには当たらない。
+    let aliased = format!("use tracing::{TOKEN_SUBSCRIBER_WITH_DEFAULT} as scoped;\n");
+    assert_eq!(
+        scan_tokens(&aliased, &direct_call_tokens()),
+        vec![(1usize, TOKEN_SUBSCRIBER_WITH_DEFAULT.to_string())],
+        "`use … as` の別名を検知できていない"
+    );
+    let uncalled = format!(
+        "    let a = tracing::{TOKEN_SUBSCRIBER_SET_DEFAULT};\n    \
+         let b = tracing::{TOKEN_SUBSCRIBER_SET_GLOBAL_DEFAULT};\n"
+    );
+    assert_eq!(
+        scan_tokens(&uncalled, &direct_call_tokens()),
+        vec![
+            (1usize, TOKEN_SUBSCRIBER_SET_DEFAULT.to_string()),
+            (2usize, TOKEN_SUBSCRIBER_SET_GLOBAL_DEFAULT.to_string()),
+        ],
+        "呼ばずに渡す形を検知できていない"
     );
 }
 
