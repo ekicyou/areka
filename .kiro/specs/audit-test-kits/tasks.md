@@ -23,7 +23,7 @@
   - _Requirements: 3.1, 4.1, 4.3, 4.5, 6.2, 6.5, 6.6_
 
 - [ ] 2. log-capture-kit の記録の捕まえ（src）
-- [ ] 2.1 ちょうど 1 件の確かめのテストを足し、範囲の外の写しを消す（L1: 21・38・件 1）
+- [x] 2.1 ちょうど 1 件の確かめのテストを足し、範囲の外の写しを消す（L1: 21・38・件 1）
   - 21: 兄弟の新しいテストのファイル `expect_tests.rs` を作り、手で組んだ捕まえた記録（`event_tests.rs` の手組みと同じ形）で 0 件・2 件・欠けた項目の `#[should_panic]` 3 本と、通る 1 本を置く
   - 38: `expect_one` と `expect_field` に `#[track_caller]` を付ける
   - 件 1: `areka-emo-present` の `scale_tests.rs` の自前の `expect_one`（251-263 行あたり）を消して道具の側を取り込み、`areka-emo-text` の `attach_wiring_test.rs` の自前の `expect_one`・`ExpectField`（133-166 行あたり）を消して `use log_capture_kit::{ExpectField, capture, expect_one};` にする。新しいソースファイルは足さない（要件 7.11）。主張の強さは変えない（要件 5.2）
@@ -210,3 +210,5 @@
   - 4.1: `Io` の表示を `ascii` 無しに戻す → `the_io_error_is_shown_in_ascii_only` が赤。元のシェルの確かめを外す → `copying_a_missing_shell_leaves_no_empty_folder` が赤。消す前の grep（code の行）: `fetched_archive_path` 5・`fetched_checksum_path` 4・`on_shelf` 3（どれも sample-ghost-kit の中・消した後 0。ほかは本 spec の文書と `completed/areka-P0-sample-url-fetch` だけ）
 - 作業木に取り寄せの検体が無いと `sample-ghost-kit` の往復のテスト 4 本が `FetchedNarMissing` で赤になる。先に `tools/sample-fetch.ps1` を回す（4.1 で回した）
 - `doc/testing.md` の 75・163 行（32 の新しい英語の行の読み手）は 5.3 で直す
+  - 2.1: `expect_one` を `hits.len().min(1)` にして 2 件を通す → `該当が_2_件なら失敗する` が赤。消す前の grep（HEAD）: 私用の `fn expect_one` は `scale_tests.rs` 1・`attach_wiring_test.rs` 1、`trait ExpectField` は `attach_wiring_test.rs` 1（消した後は `log-capture-kit/src/expect.rs` の 2 だけ）。範囲の外の 6 ファイル（design.md の表）を触るほかの作業木の枝は 0（2.1 の前に `git diff main...<枝>` で確かめた）
+- 範囲の外: `cargo clippy -p areka-emo-present`／`areka-emo-text` は依存の `wintf` の 51 件の誤りで通らない（本 spec は wintf を 1 行の言い直しのほか触らない）。`/kiro-complete` の棚卸で扱う
