@@ -3385,3 +3385,109 @@ Opus
 7. **その先の C21〜C23**（「その先のウェーブ」）: C21 は 5 本（`pilot-windows-rs-next` と `audit-tools-scripts` が入り、`audit-pilot` は C22 へ＝範囲が `crates/pilot/` 全部で先進坑の新しい置き場を含む・先進坑のほうがぶら下がる数が多い）。C22 は 4 本、C23 は前の見込みの 4 本。v0.2.0 の着地は移行の本体を数えずに約 10 ウェーブ（C20〜C29）で前の見込みと同じ。移行の本体を足すと延びる（数は起票のときに）。
 8. **見つけた穴・決めの要る点**: ⑴ v0.2.0 の公開が windows-rs の上流に掛かるようになった。crates.io へ出すクレートは git の依存を持てないので、移行の本体の途中で `wintf`・`dola`・`wintf-winmsg-executor` が 0.101 系の git 版を引くと、上流の公開まで v0.2.0 を出せない（案 A）か、v0.2.0 では `wintf` を crates.io へ出さない（案 B）。 ⑵ 移行の本体と v0.2.0 の `wintf` の作り直し（`wintf-surface-auto-promotion`・`draw-methods-canon`・`draw-methods-blend`・`compose-f16-precision`・`element-clipping-option`・`hit-id-pass`）の順。どちらも `wintf` の `com/`・`ecs/graphics/` を広く書き換えるので同じウェーブには並ばない。起票のときに決める。 ⑶ 「次のリリースへの申し送り」に `wintf` の公開面の変更の項目が無かった（`wintf-visual-tree`・`wintf-d2d-composite-rules`）＝足した。利用者に見える振る舞いの変更（記録の的の改名・32bit の中継の DLL の探し方）も足した。 ⑷ 本体の外の 43 ファイルに残る古い名前 `emo2_boot` を、`runtime-module-untangle` が `runtime-crate-split` に任せたのに brief に書いていなかった＝足した。 ⑸ 版の段の v0.2.0 の行の数が直っていなかった＝直した。
 9. **開発者に決めてほしいこと**（どれも C20 の着手を止めない）: ⑴ 8 の ⑴（git 版と v0.2.0 の公開＝案 A か案 B か）。推す＝先進坑の結果を見てから決める（それまでは案 A の「公開しないクレートと C の関数だけのクレートを先に移す」順で進めてよい）。 ⑵ 「windows-text導入関係」の読み（取り込みから `emo-text-windows-text` まで全部を v0.2.0）でよいか。 ⑶ 持ち越し＝棚卸㊱の裁定の 9（版の外の spec を待つ v0.2.0 の 4 本など・全文は history「2026-11-14 棚卸㊲退避」）。
+
+## 2026-11-17 棚卸㊴退避（`roadmap.md` から逐語で移した・main `7f41b53e`）
+
+棚卸㊴（2026-11-17）で `roadmap.md` から移した、棚卸㊳のときの記述の全文。C21 の 5 本は 11-17 に全部着地した（PR#468〜PR#472）。直列の列は 1 行足しただけなので移していない。
+
+### 旧「組済みのウェーブ」の行（棚卸㊳）
+
+- **組済みのウェーブ**: **C21（2026-11-16 棚卸㊳・5 本）＝今の版 v0.2.0 の `balloon-flip-side-rules`（11-17 着地）・`wintf-surface-auto-promotion`（11-17 着地）・`pilot-windows-rs-next`（11-17 着地）＋v0.2.0 の前に済ませる見直しと crate 分け 2 本（`runtime-crate-split`〔11-17 着地〕・`audit-tools-scripts`〔11-17 着地〕）**（「ウェーブ編成」の表）。C21 は 11-17 に全部着地した。C20（棚卸㊲・8 本）は 11-14〜11-15 に全部着地した（PR#458〜PR#464・PR#466）。C20 の行の全文は history「2026-11-16 棚卸㊳退避」。
+
+### 旧「1 本だけの席」の行（棚卸㊳）
+
+> **1 ウェーブに 1 本だけの席**: ⑴ 依存を足す spec と版上げ（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md`）＝C21 は `runtime-crate-split`（ワークスペースにクレート `areka-runtime` を足す）が使う（見込みの C22 は空き・C23 は `input-crate-split`・C24 以降は空き） ⑵ emo-text に新しいソースファイルを足す spec（`lib.rs` の純粋な一覧の数の行）＝C21 は空き・見込みの C22 は `balloon-text-visual-tree`（`areka-emo-text` に新しいファイルを足す）・C23 以降は空き。
+
+### 旧ウェーブ表の C21 の行（棚卸㊳）
+
+| Wave | ユニット（並べた順） | 開始コマンド | 編成根拠（触るファイルと、同じウェーブの間の約束） |
+|---|---|---|---|
+| **C21**（5 本・今の版 v0.2.0 の 3 本＋v0.2.0 の前に済ませる見直しと crate 分け 2 本・Opus 5・Fable 0） | v0.2.0＝① ✅ `balloon-flip-side-rules`（11-17 着地・B・S 4〜7・バルーンが相方の窓に重なる件と右の向きの疑い）② ✅ `wintf-surface-auto-promotion`（11-17 着地・A・M 10〜15・描画面の自動の昇格・降格）③ ✅ `pilot-windows-rs-next`（11-17 着地・A・M 10〜14・windows-rs の移行の先進坑）／見直しと crate 分け＝④ ✅ `runtime-crate-split`（11-17 着地・A・10〜12 の見立てだが範囲が大きい＝本番 約 21,000 行・テストと支え 約 53,700 行・211 ファイル）⑤ ✅ `audit-tools-scripts`（11-17 着地・A・指摘の数で決まる・見込み 20 未満） | 下の塊 | 触るファイル＝① `crates/areka-placement/src/{balloon_limit,resolver}.rs`・`follow/window_move.rs` の呼び出し 1 か所とその兄弟のテスト ② wintf の `ecs/graphics/visual/{mod,systems,world_visual}.rs` とそのテスト・`draw/emit_test_support.rs`・おそらく `systems/{visual_sync,render}.rs`・`draw/README.md`（`Cargo.toml` に触らない） ③ 新しい `crates/pilot/examples/pilot-windows-rs-next/` の下だけ ④ 新しい `crates/areka-runtime/`・`crates/areka/src/runtime/` の全部（テスト込み）・`mcp/{check_script,dump_balloon,dump_surface}.rs`・`input_events/user_break.rs`・`placement_tests/transition_judge*`・`examples/collision-probe.rs`・`log_history.rs`・`main.rs`・`crates/areka/Cargo.toml`・`Cargo.lock`・説明書のパス。本体の外の 14 ファイルの説明の行（約 21 行）だけ書き換える ⑤ `tools/*.ps1`（`tools/perf` の外・15 本）と `release-notes-fixture/`。**約束**: ⑴ ④ は `tools/` に触らず、`doc/COMPAT_ARCHITECTURE.md` はパスの書き換えだけ。`tools/load-flake.ps1` の `-Binary` の選択肢は ⑤ と申し合わせる（④ が先に着地したら ⑤ が選択肢を足し、⑤ が先なら ④ の完了の申し送りで拾う） ⑵ ② は `Cargo.toml` に触らない・③ は `crates/pilot/examples/pilot-windows-rs-next/` の下に新しいファイルを置くだけ（`crates/pilot/Cargo.toml` と根の `Cargo.toml` に触らない・そのフォルダの直下に `main.rs` を置かない＝`crates/pilot` の例として組まれて全体テストが赤になる・束縛の生成物は 1,000 行の番人に掛からない形で） ⑶ ① は `crates/areka/src/runtime/` の下のファイルに触らず、記録の語（`flipped` ほか）を変えない（変えるなら ④ と申し合わせる） ⑷ `Cargo.lock` の席は ④ だけ ⑸ ⑤ は ④ と、`tools/load-flake.ps1` の選択肢のほかに書き換えるファイルが重ならない。**この 5 本に入れなかったもの**: `balloon-text-visual-tree`（④ と `runtime/frame/` の 4 ファイルと `mcp/dump_balloon.rs` を分け合う）と `audit-placement-follow-residue`（① と `balloon_limit.rs`・`follow/window_move.rs`、④ と `runtime/frame_*_tests.rs`・`runtime/frame/dpi.rs` を分け合う）は C22 へ（2026-11-16 棚卸㊳の測り）。空き 3 席に入れる版に縛らない割り込みは 6 本を測ったが、どれも入れられなかった（頭でない・大きさが 10 を越える・crate 分けと同じ台帳や `runtime/` のテストを書き換える・静かな机が要る）。 |
+
+### 旧ウェーブ表の「次のウェーブの候補」の行（棚卸㊳）
+
+| Wave | ユニット（並べた順） | 開始コマンド | 編成根拠（触るファイルと、同じウェーブの間の約束） |
+|---|---|---|---|
+| **次のウェーブの候補**（次の棚卸で組む） | **今の版は v0.2.0**（25 本＝2026-11-14 棚卸㊲で windows-rs の移行の 2 本を版に縛らない列から移した・開発者「windows-text導入関係は、次のリリースに含めてください。」）。C21 の後の見込みは下の「その先のウェーブ」（C22〜C24）。windows-rs の移行の本体（6〜8 本の見込み・最後は `areka-emo-text` の `windows-text` の採用）も v0.2.0 に入るが、起票は先進坑 `pilot-windows-rs-next`（C21）の go の後なので、今の見込みには数えていない。移行の本体を数えない v0.2.0 の着地は**約 9 ウェーブ（C21〜C29 の見込み）**で前の見込みと同じ。移行の本体は `wintf` と `areka-*` の `windows::` の行をほぼ全部書き換え、v0.2.0 の `wintf` の作り直しの spec 群と触るファイルが大きく重なるので、本体の数と切り方しだいで**数ウェーブ延びる**（起票のときに数え直す）。さらに v0.2.0 の公開は、crates.io へ出すクレート（`wintf`・`dola`・取り込みの後の `wintf-winmsg-executor`）が git の依存を持てないので、上流の windows-rs 0.101 系と `windows-text` の crates.io の公開を待つか、移行のあいだ `wintf` を crates.io へ出さないか（案 B）を決める必要がある（「棚卸㊲の裁定」の 8）。一番長い道は前の見込みどおり、本体の crate 分けの直列（C21〜C24 の見込み）→ 本体の見直し（`audit-areka-app`・`audit-areka-install-update`・`audit-emo2-boot-switch`）→ `dola-interrupt-ticks`（1 本だけで）→ `draw-methods-canon`・`sylphya-sqlite-kvs` ほか → `talk-anchor-interrupt-ticks`・`element-clipping-option`・`mcp-set-property` → `draw-methods-blend`・`compose-f16-precision`・`seriko-talk-clock-fidelity`。版の外の spec を待つ 4 本（`shiori4-api`・`seriko-talk-clock-fidelity`・`element-clipping-option`・`collisionex-regions`）の決めは、まだ開発者から返っていない（「棚卸㊲の裁定」の 9）。待ちの突き合わせは各 brief の最新の「再測定」の節と history「2026-11-16 棚卸㊳退避」 | — | — |
+
+### 旧 C21 の開始コマンド（棚卸㊳）
+
+**C21 の開始コマンド**（`/kiro-next` の報告と同じ形・俯瞰の HTML がこの塊をコピーのボタンつきで出す・`/kiro-wave` はこの塊と spec 台帳の Fable の列を読む）:
+
+```
+Wave C21 5本（v0.2.0 3本＋見直しと crate 分け 2本）
+```
+
+### 旧「その先のウェーブ」（2026-11-16 の見込み・C22〜C24）
+
+### その先のウェーブ（2026-11-16 の見込み）
+
+見込みは次の棚卸で測り直す（C21 が全部着地したと置いて組んだ・v0.2.0 の spec と、v0.2.0 が待つ見直しと crate 分けだけで組んだ＝割り込みはその棚卸で選ぶ。windows-rs の移行の本体はまだ起票していないので入れていない＝先進坑の go の後の起票で、早ければ C23 に最初の 1 本〔束縛を作る道具と見張り・`wintf-winmsg-executor`・`dola`〕が入りうる）。前の見込みからの動き: `balloon-text-visual-tree`（v0.2.0）と `audit-placement-follow-residue` が新しく先頭に入り、`input-crate-split` を C22 から C23 へ、`audit-areka-input-menu` を C23 から C24 へ下げた（`audit-placement-follow-residue` が `input_events/drag_test_support.rs`・`runtime/frame/dpi.rs` を先に書き換えるので、同じファイルを通る `input-crate-split`・`audit-areka-input-menu`・`audit-emo2-boot-frame` はその後。`audit-placement-follow-residue` は `runtime-crate-split` と `balloon-flip-side-rules` の後）。
+
+| ウェーブ | spec | 入る条件 | 要件定義 |
+|---|---|---|---|
+| C22（見込み・5 本） | `balloon-text-visual-tree`（v0.2.0）・`audit-placement-follow-residue`・`audit-test-kits`・`audit-ukadoc-survey`・`audit-pilot` | C21 の全部の着地（`balloon-text-visual-tree` は `runtime-crate-split` を、`audit-placement-follow-residue` は `balloon-flip-side-rules` と `runtime-crate-split` を、`audit-test-kits` は `runtime-crate-split` を、`audit-pilot` は `pilot-windows-rs-next` を待つ）。**約束**: `balloon-text-visual-tree` は wintf の `visual/`・`render.rs` に触らず、`areka-emo-text` に新しいファイルを足す席を使う。`audit-placement-follow-residue` は 164 の洗い出しに `initial_window_pos` の読み手と書き手（`runtime/frame/dpi.rs`・wintf の `ecs/window_proc/mouse_move.rs`・`input_events/drag_test_support.rs`・`frame_dpi_drag_grab_tests.rs`）を足す。`Cargo.lock` の席は空き | どれも Opus |
+| C23（見込み・4 本） | `input-crate-split`・`session-module-gather`・`audit-emo2-boot-frame`・`audit-emo2-boot-spine` | C22 の全部の着地（`input-crate-split` と `audit-emo2-boot-frame` は `audit-placement-follow-residue` を待つ）。`session-module-gather` が `audit-placement-follow-residue`・`input-crate-split` と触るファイルを分け合わないかを次の棚卸で確かめる。windows-rs の移行の本体の最初の 1 本が起票されていれば、触るファイルの重なりを測って空いた席に入れる。**約束**: `input-crate-split` は `log-capture-kit/src/event*.rs`・`real-run-kit`・`ukadoc-survey/src/evidence/candidates.rs` の説明の中のパスを見直しの 2 本へ任せる。`Cargo.lock` の席は `input-crate-split` | どれも Opus |
+| C24（見込み・4 本） | `session-crate-split`・`window-resetwindowpos-hold`・`collisionex-regions`・`audit-areka-input-menu` | C23 の全部の着地（`audit-areka-input-menu` は `input-crate-split` と `audit-placement-follow-residue` を待つ。`session-crate-split` は `session-module-gather` を待つ）。`window-resetwindowpos-hold` は `drain_resnap.rs` で `balloon-text-visual-tree`・`audit-emo2-boot-frame` と重なるので、その 2 本の後 | どれも Opus |
+
+C24 の後も v0.2.0 は約 5 ウェーブ（C25〜C29 の見込み）と windows-rs の移行の本体（起票の後に数え直す）が残る＝C25 `audit-areka-app`・`audit-areka-install-update`・`audit-emo2-boot-switch`（範囲の `ghost_switch*` が `session-crate-split` まで本体に居る）・`hit-id-pass`（Fable）・`balloon-script-offset-align` → C26 `dola-interrupt-ticks`（Fable・1 本だけで）→ C27 `draw-methods-canon`（Fable）・`sylphya-sqlite-kvs`（Fable）・`ghost-switch-balloon-fallback`・`talk-thread-count-growth`・`talk-script-metadata`・`instant-to-interrupt-ticks` → C28 `talk-anchor-interrupt-ticks`・`element-clipping-option`・`mcp-set-property`・`ghost-alias-file` → C29 `draw-methods-blend`・`compose-f16-precision`・`seriko-talk-clock-fidelity`。`doc-compat-architecture-rename` は crate 分けと名指す見直しが着地した後の 1 ウェーブ。
+
+```
+Wave C22（見込み）5本（v0.2.0 1本＋見直しと crate 分け 4本）
+【本来の次の版 v0.2.0】
+Opus
+/kiro-start balloon-text-visual-tree
+
+【v0.2.0 の作り直しの前に済ませる見直しと crate 分け】
+Opus
+/kiro-start audit-placement-follow-residue
+/kiro-start audit-test-kits
+/kiro-start audit-ukadoc-survey
+/kiro-start audit-pilot
+```
+
+```
+Wave C23（見込み）4本（見直しと crate 分け 4本）
+【v0.2.0 の作り直しの前に済ませる見直しと crate 分け】
+Opus
+/kiro-start input-crate-split
+/kiro-start session-module-gather
+/kiro-start audit-emo2-boot-frame
+/kiro-start audit-emo2-boot-spine
+```
+
+```
+Wave C24（見込み）4本（v0.2.0 2本＋見直しと crate 分け 2本）
+【本来の次の版 v0.2.0】
+Opus
+/kiro-start window-resetwindowpos-hold
+/kiro-start collisionex-regions
+
+【v0.2.0 の作り直しの前に済ませる見直しと crate 分け】
+Opus
+/kiro-start session-crate-split
+/kiro-start audit-areka-input-menu
+```
+
+### 旧「直接修正候補」の棚卸㊳の分
+
+> **2026-11-16 棚卸㊳で直した**（どれも動きを変えない・説明と数だけ）: ⑴ spec 台帳 `balloon-flip-side-rules` の行の古いパス（`placement/…` → `crates/areka-placement/src/…`）と、着地済みの `placement-crate-split` と同じウェーブに置かない旨を `audit-placement-follow-residue` へ直した ⑵ 台帳の `runtime-crate-split` の規模（本番 約 12,000 行 → 約 21,000 行・テストと支え 約 53,700 行）と前提の着地の印 ⑶ 台帳の前提欄の着地の印（`wintf-visual-damage-redraw`・`wintf-winmsg-executor-import`）と、`balloon-text-visual-tree` が `wintf-surface-auto-promotion` を待たない旨 ⑷ `focus.md` の基準実数（完了 358・brief 138・今の版 v0.2.0・C21）。
+>
+> **直さずに各 spec へ渡したもの**: ⑴ 測り直した brief の古い記述＝`balloon-flip-side-rules`・`wintf-surface-auto-promotion`・`pilot-windows-rs-next`・`balloon-text-visual-tree`・`runtime-crate-split`・`audit-tools-scripts`・`audit-placement-follow-residue` の「2026-11-16 棚卸㊳の再測定」の節（`wintf-surface-auto-promotion` の brief に規模・モデル・触るファイルが無かったので書いた・`runtime-crate-split` の `dump_surface.rs` の行の移り・`audit-placement-follow-residue` の 164 の洗い出しの漏れ）と、割り込み候補を測ったときの `areka-test-wait-wording`・`seriko-interval-combinations`・`anchor-style-canon` の節 ⑵ `audit-tools-perf-run` の完了の研究メモ §13 に残っていた持ち主の無い 1 件（`encoding check` が子の思わぬ失敗の表示を見ない）＝`audit-tools-scripts` の brief の「件 2」 ⑶ `crates/areka/src/runtime/frame_work_area_resnap_hold_tests.rs` 429 行目の `#[should_panic]` に `cfg_attr(not(debug_assertions), ignore = …)` が無い（コードなので直さない）＝`runtime-crate-split` が `runtime/` を移すときに拾う ⑷ `doc/ukadoc-coverage/ledger/assets.toml` の `always:1` の注（持ち主の名前が `seriko-trigger-intervals` のまま）と「駆動する 3 つの語」の言い回し 9 か所・`doc/ukadoc-coverage/README.md` の「全 1,749 項目」＝台帳の書き換えを持つ `ukadoc-catalog-refresh`・`coverage-roadmap-refresh` と `seriko-interval-combinations` が拾う（台帳の行は持ち主の spec と同時に動かす）。
+>
+> **2026-11-14 棚卸㊲で直したもの・渡したもの**の全文は history「2026-11-16 棚卸㊳退避」の旧「直接修正候補」節。2026-11-13 棚卸㊱のぶんは history「2026-11-14 棚卸㊲退避」。それより前は、そこから辿る。
+
+### 旧「棚卸㊳の裁定」
+
+## 棚卸㊳の裁定（2026-11-16・main `715f5819`・開発者指示＝`/kiro-next` の定めどおり）
+
+> 棚卸㊲（11-14・main `df6f4e03`）の後、C20 の 8 本が 11-14〜11-15 に全部着地した（PR#458〜PR#464・PR#466）。ほかに 11-14〜11-15 に完了の棚卸で 4 本を起票した（`balloon-text-visual-tree`・`audit-placement-follow-residue`・`defaultx-canon`・`pasta-idle-surface-cost-measure`）。動いている spec は 0 本（`element-animation-easing`・`shell-balloon-scale-setting` の枝は古い起票だけの枝）。今の版は v0.2.0（まだ公開していない・24 本）。
+
+1. **測り直した範囲**: 速い道（C20 が全部着地・前の棚卸が C21〜C23 を見込んでいた・起票は着地した spec の完了の棚卸の 4 本だけ）。見込みの C21 の 5 本と、新しく先頭に入った 2 本（`balloon-text-visual-tree`・`audit-placement-follow-residue`）を 1 つのサブエージェントで測り直し（7 本とも brief に「2026-11-16 棚卸㊳の再測定」の節を書いた）、空き 3 席の割り込みの候補 6 本（`ukadoc-catalog-refresh`・`clippy-199-lints`・`areka-test-wait-wording`・`seriko-interval-combinations`・`anchor-style-canon`・`coverage-roadmap-refresh`）を別のサブエージェントで測った（brief へ書いたのは 3 本）。残り物は道具（`leftovers.py`）の出力が 696 行・200 KB と大きいので、手で読まずサブエージェント 1 つ（読むだけ）に仕分けさせた。
+2. **残り物の仕分け**: 起票が要るもの 0・ほかの spec へ渡し済み 約 31 件（17 本）・止まっているもの 1 件（`audit-tools-perf-judge` の実際の xperf の記録での確かめ＝開発者の昇格した PowerShell が要る・spec には立てないと決めてある）・持ち主の無かった 1 件を `audit-tools-scripts` の brief へ足した。揺れたテスト 3 本は最後の全体テストで再発しなかったので起票しない。
+3. **ウェーブ C21 を 5 本で組んだ**（Opus 5・Fable 0）: v0.2.0 の `balloon-flip-side-rules`・`wintf-surface-auto-promotion`・`pilot-windows-rs-next` ＋ 見直しと crate 分けの `runtime-crate-split`（`Cargo.lock` の席）・`audit-tools-scripts`。前の棚卸の見込みと同じ。7 本とも着手できる先頭だが、`runtime-crate-split` と `balloon-text-visual-tree`（`runtime/frame/` の 4 ファイルと `mcp/dump_balloon.rs`）・`audit-placement-follow-residue`（`runtime/frame_*_tests.rs`・`runtime/frame/dpi.rs`）、`balloon-flip-side-rules` と `audit-placement-follow-residue`（`balloon_limit.rs`・`follow/window_move.rs`）が重なるので、後者の 2 本は C22 へ。一番長い道（crate 分けの直列）を止めないために `runtime-crate-split` を C21 に残した。
+4. **空き 3 席は空けたまま**（版に縛らない割り込みの条件を満たすものが無い）: 6 本とも、頭でない（`seriko-interval-combinations`・`anchor-style-canon`・`coverage-roadmap-refresh`）・大きさが 10 を越える（`ukadoc-catalog-refresh`・`clippy-199-lints`・`anchor-style-canon`・`coverage-roadmap-refresh`）・`runtime-crate-split` と同じファイルを書き換える（`areka-test-wait-wording` のテスト 15 か所は `runtime/` の中・`ukadoc-catalog-refresh` と `coverage-roadmap-refresh` は `runtime/` を指す台帳の行 約 40 件と `briefing*.md`）・v0.2.0 の作り直しの場所（`clippy-199-lints` の `wintf` の警告 53 件・`seriko-interval-combinations` の `plan.rs` ほか）・静かな机か実機が要る（`areka-test-wait-wording`・`seriko-interval-combinations`）のどれかに当たった。
+5. **その先の C22〜C24 を組み直した**（「その先のウェーブ」）: C22 に `balloon-text-visual-tree`・`audit-placement-follow-residue` が入り、`input-crate-split` を C23 へ、`audit-areka-input-menu` を C24 へ下げた（`audit-placement-follow-residue` が `input_events/drag_test_support.rs`・`runtime/frame/dpi.rs` を先に書き換える）。v0.2.0 の着地は移行の本体を数えずに約 9 ウェーブ（C21〜C29）で、`input-crate-split` と `audit-areka-input-menu` は一番長い道の外なので前の見込みと同じ。
+6. **モデル**: 7 本とも Opus。`wintf-surface-auto-promotion` は「ヒステリシスの純粋な関数」で、新しい並行や時刻の保証を設計するものではないので Opus のまま（境目の 1 本）。`audit-placement-follow-residue` の wintf の公開型の変更は前例がある（`WindowDragContext.initial_window_pos: Option<Point>`）ので Opus。
+7. **見つけた穴・決めの要る点**: ⑴ `audit-placement-follow-residue` の 164 の洗い出しが、`DraggingState` を作る 11 か所だけを数えていて、`initial_window_pos` の読み手と書き手（`runtime/frame/dpi.rs`・wintf の `mouse_move.rs`・`drag_test_support.rs`・`frame_dpi_drag_grab_tests.rs`）を数えていない＝要件の段で足す（20 を越えたら 164 を 2 本目へ切る）。 ⑵ `runtime-crate-split` の規模は brief の「本番 約 12,000 行」が古い（本番 約 21,000 行・テストと支え 約 53,700 行・211 ファイル）＝要件の段でタスクの数を測り直す。 ⑶ `balloon-flip-side-rules` が記録の語を変えると `runtime/` のテストが赤になるかは確かめていない＝C21 の約束 ⑶ で `runtime/` に触らず語を変えない形にした。 ⑷ 持ち越し＝棚卸㊲の裁定の 8・9（v0.2.0 の公開が上流の 0.101 系に掛かる件・案 A か案 B か・版の外の spec を待つ 4 本の決め）はまだ開発者から返っていない（全文は history「2026-11-16 棚卸㊳退避」）。
+8. **開発者に決めてほしいこと**（どれも C21 の着手を止めない）: ⑴ 上の 7 の ⑷（git 版と v0.2.0 の公開＝案 A か案 B か・推す＝先進坑 `pilot-windows-rs-next` の結果を見てから決める）。 ⑵ 版の外の spec を待つ v0.2.0 の 4 本（`shiori4-api`・`seriko-talk-clock-fidelity`・`element-clipping-option`・`collisionex-regions`）の決め（まだ返っていない）。

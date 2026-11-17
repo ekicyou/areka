@@ -111,3 +111,16 @@
   - 6.1 examples: `crates/areka/examples/collision-probe*` を `crates/areka-runtime/examples/` へ移した。`#[path]` の私有の取り込みを外し、`areka_runtime::hit_region`・`areka_runtime::target_map` を公開面で読む。子ファイルの接続 7 本の `#[path]` は example のルートの規則のために残した。`pub` にした項目は 0 件。
 
 - **ほかに一緒に伝えること（`hit_region.rs` の説明）**: `crates/areka-runtime/src/hit_region.rs` の頭の説明の「`crate::` フリー規律（この配置の決定的制約）」（45〜57 行）は、examples が `#[path]` で取り込んでいた理由（probe からの `#[path]` include）が古くなった（今の probe は crate の公開面で読む）。`runtime-crate-split` はリンクの字面だけを直し、規律の文は直していない。非テストコードが `crate::` を使ってよいかを見直し、文を事実に直す（`lib.rs` が `is_benign_boot_error` への本体の呼び出しを持たなくなったか、`#[path]` include がもう無いかも確かめる）。
+
+## 2026-11-17 棚卸㊴の再測定（main 7f41b53e）
+- **前提の変化**: 待っていた `runtime-crate-split` は 11-17 に着地し、受け持つファイルの書き換え（Current State）と申し送り（上の節）を残した。申し送りは main で確かめて全部合っている（`assets.rs` 215 行の `#[allow(dead_code)]`＝`pub fn build_boot_assets`・`placement_tests/transition_judge.rs` 47〜50 行の古い説明・`hit_region.rs` 45〜57 行の「`crate::` フリー規律」・`runtime_tests/balloon_visibility_phase_tests.rs` 146 行の `world_at` の写し・揺れるテストは今 `crates/areka/src/runtime_tests/spine_third_scope_talk_tests.rs` 182 行）。
+- **触るファイル（今の実測）**: Current State の型を当てると `.rs` 124 本・計 32,140 行（`areka-runtime` の本番 42 本 9,966 行・`runtime_tests/` 34 本は全部テスト・`session/` 12 本）。起票の「64 ファイル・21,643 行」の約 1.5 倍。1,000 行に近いのは `spine_conformance_lap_tests.rs` 913・`spine_conformance_script.rs` 894・`session/reload_tests.rs` 857・`assets_tests.rs` 810・`session/reload.rs` 774・`lib.rs` 758。audit #16 は範囲の外の `crates/areka-actor/src/{ui,lib}.rs`・`tests/{toy_ui_pump_test,ui_span_test}.rs`・`crates/areka-emo-text/src/{actor,actor_test_support}.rs` と、`crates/areka-runtime/src/lib.rs` 254 行の `BootWiringError::SpawnUi` に及ぶ。
+- **規模**: 指摘の数で決まる。範囲が広がったうえ、申し送りだけで 7 件（#16・揺れるテスト・`dead_code`・`hit_region.rs` の説明・開けた `pub` 76 件の見直し・本体に残した 17 本の関数を戻せるか・`world_at` の写し）あるので 20 を越えやすい。越えたら Constraints のとおり、指摘の組ごとに同じ範囲の 2 本目へ切る。
+- **先に要るもの**: 無し（`mcp-reload` も `runtime-crate-split` も着地した）。
+- **`balloon-text-visual-tree` と同じウェーブか**: 名指しのファイルの重なりは 0（向こうは `areka-runtime/src/frame/` の 4 本・`mcp/dump_balloon.rs`・`areka-emo-text` の `surface.rs`・`actor_present.rs` ほか・`mount.rs`）。並べる約束＝こちらは `frame/`・`frame*.rs`（`audit-emo2-boot-frame` の持ち物）に触らず、`areka-emo-text` は `actor.rs`・`actor_test_support.rs` だけ。向こうは `areka-runtime/src/lib.rs` と `areka-emo-text/src/actor.rs`・`actor_test_support.rs` に触らない。
+- **`audit-placement-follow-residue` と同じウェーブか**: 重なりは 0。並べる約束＝向こうは `areka-runtime/src/placement_tests/` にファイルを足さず消さない（`placement_tests/mod.rs` はこちらの持ち物）。
+- **重なる相手**: `input-crate-split`（`session/runtime_boot.rs` 198 行・`runtime_boot_tests.rs` の `crate::input_events::`）・`session-module-gather`（`session/hooks.rs`・`reload*`・`runtime_boot*`・`switch_copy*`・`same_folder_pin*`・`runtime_tests/` の数本が、移すモジュールを `crate::` で引く）。見込みの C23 でこの 2 本と並べているのは、向こうが元のパスの出し直しを置く約束が無い限り成り立たない。
+- **優先度の区分**: A（見直しの方針・開発者「とにかく指摘事項は全部直す方針」）。
+- **要件定義のモデル**: Opus（crate の中の直し。#16 は公開の戻り値を細くするだけで、新しい境目は作らない）。
+- **分割の案**: 今は無し（越えたときだけ上のとおり）。
+- **古くなった記述**: Current State の「大きさ: 64 ファイル…」（上の実測へ）・Upstream の「`mcp-reload`（2026-10-19 に着手中）」（着地済み）・追記の audit #16 の呼び手「`emo2_boot/mod.rs` の `SpawnUi`」（今は `crates/areka-runtime/src/lib.rs` 254 行）。
