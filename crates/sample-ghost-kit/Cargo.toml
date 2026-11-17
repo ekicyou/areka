@@ -8,6 +8,14 @@ authors.workspace = true
 license.workspace = true
 publish = false # テストだけが使う道具
 repository.workspace = true
+# 兄弟のテストのファイル `examples/fold-samples_tests.rs` を別の見本と見なさせない。
+autoexamples = false
+
+# 見本の単体テストを `cargo test` で回す（写しの式と書き先の順を縛る）。
+[[example]]
+name = "fold-samples"
+path = "examples/fold-samples.rs"
+test = true
 
 [dependencies]
 thiserror = { workspace = true }

@@ -34,10 +34,17 @@
 //!
 //! 畳んだ `.nar` を本番の展開器で空の根へ入れ、**インストール済み形の全ファイル**を
 //! 元の追跡ファイルと 1 バイト単位で突き合わせる。同梱バルーンを持つ検体は
-//! `<元>/<取り出し元>/…` → `<根>/balloon/<directory>/…`、それ以外は
+//! `<元>/<取り出し元>/…` → `<根>/ghost/<directory>/balloon/<バルーンの directory>/…`
+//! （`areka-nar` の置き方と同じく、ゴーストのフォルダの中）、それ以外は
 //! `<元>/…` → `<根>/ghost/<directory>/…` の写像で、**和**が元のツリーに一致する
 //! ことを見る（片側だけ数えても抜けは見えない）。写像の元は `install.txt` の解釈結果
 //! だけで、登記表の綴りは使わない（`--from` でも同じ突き合わせが働く）。
+//!
+//! # どこへ書くか
+//!
+//! 畳んだ `.nar` はまず作業の置き場 `target/fold-samples/out/<名>.nar` に書いて往復を
+//! 照らし、不一致が 0 件のときだけ `vendors/sample_ghost/<名>.nar` へ写す。確かめが
+//! 落ちても、それまでの正しい `.nar` は消えない。
 
 use areka_nar::{InstallKind, InstallManifest, InstallRequest, NarArchive, SingleRoot};
 use sample_ghost_kit::fold_tree;
@@ -59,15 +66,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         None => None,
     };
 
-    let root = workspace_root();
-    let scratch = root.join("target").join("fold-samples");
-    if scratch.exists() {
-        fs::remove_dir_all(&scratch)?;
-    }
-
     // 畳む対象。`--from` は登記表を見ない＝まだ登記していない検体でも畳める。
-    let sources: Vec<PathBuf> = match &from {
-        Some(spelled) => vec![resolve(&root, spelled)?],
+    // 確かめは作業の置き場を消す前に（書き損じの呼び出しで置き場を消さない）。
+    let root = workspace_root();
+    let source = match &from {
+        Some(spelled) => resolve(&root, spelled)?,
         None => {
             return Err(
                 "--from <展開形のフォルダ> を書くこと（登記表は展開形の在処を持たない）".into(),
@@ -75,13 +78,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let mut mismatches = 0usize;
-    for source in &sources {
-        mismatches += fold_one(&root, &scratch, source, check_only)?;
+    let scratch = root.join("target").join("fold-samples");
+    if scratch.exists() {
+        fs::remove_dir_all(&scratch)?;
     }
 
+    let tracked = tracked_files(&source)?;
+    let mismatches = fold_one(&root, &scratch, &source, &tracked, check_only)?;
     if mismatches != 0 {
         return Err(format!("不一致が {mismatches} 件ある").into());
+    }
+    if !check_only {
+        let name = folder_name(&source)?;
+        fs::copy(folded_nar(&scratch, &name), vendored_nar(&root, &name))?;
     }
     println!("全ての検体で一致");
     Ok(())
@@ -89,20 +98,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 /// 展開形のフォルダ 1 本を畳み、空の根へ戻して突き合わせる。返すのは不一致の件数。
 ///
-/// `.nar` の名前はフォルダ名から採る（登記表を引かない）。
+/// `.nar` の名前はフォルダ名から採る（登記表を引かない）。`tracked` は `source` からの
+/// 相対パス（`/` 区切り）の追跡ファイルの一覧。畳んだ `.nar` は作業の置き場へ書き、
+/// `vendors/` へは書かない（写すのは不一致 0 を見た `main`）。`check_only` なら畳まずに
+/// `vendors/` の既にある `.nar` を照らす。
 fn fold_one(
     root: &Path,
     scratch: &Path,
     source: &Path,
+    tracked: &[String],
     check_only: bool,
 ) -> Result<usize, Box<dyn Error>> {
-    let name = source
-        .file_name()
-        .and_then(|raw| raw.to_str())
-        .ok_or_else(|| format!("{} からフォルダ名が採れない", source.display()))?
-        .to_owned();
-
-    let tracked = tracked_files(source)?;
+    let name = folder_name(source)?;
     assert!(
         !tracked.is_empty(),
         "{} の追跡ファイルが 0 件（畳む対象が無い＝突き合わせが恒真になる。\
@@ -112,7 +119,7 @@ fn fold_one(
 
     // 追跡ファイルだけを作業フォルダへ写す。
     let stage = scratch.join("stage").join(&name);
-    for relative in &tracked {
+    for relative in tracked {
         let to = stage.join(relative.replace('/', MAIN_SEPARATOR_STR));
         fs::create_dir_all(to.parent().expect("写し先には必ず親がある"))?;
         fs::copy(source.join(relative), &to)?;
@@ -124,13 +131,14 @@ fn fold_one(
         "{name} の写しの数が追跡の数と違う"
     );
 
-    let nar = root
-        .join("vendors")
-        .join("sample_ghost")
-        .join(format!("{name}.nar"));
-    if !check_only {
-        fold_tree(&stage)?.write_to(&nar)?;
-    }
+    let nar = if check_only {
+        vendored_nar(root, &name)
+    } else {
+        let out = folded_nar(scratch, &name);
+        fs::create_dir_all(out.parent().expect("書き先には必ず親がある"))?;
+        fold_tree(&stage)?.write_to(&out)?;
+        out
+    };
 
     // 往復——空の根へ入れて、元のツリーと突き合わせる。
     let dest_root = scratch.join("roundtrip").join(&name);
@@ -188,6 +196,27 @@ fn fold_one(
     Ok(mismatches.len())
 }
 
+/// `.nar` の名前に使うフォルダ名。
+fn folder_name(source: &Path) -> Result<String, Box<dyn Error>> {
+    Ok(source
+        .file_name()
+        .and_then(|raw| raw.to_str())
+        .ok_or_else(|| format!("{} からフォルダ名が採れない", source.display()))?
+        .to_owned())
+}
+
+/// 畳んだ `.nar` を往復の確かめの前に置く作業の置き場。
+fn folded_nar(scratch: &Path, name: &str) -> PathBuf {
+    scratch.join("out").join(format!("{name}.nar"))
+}
+
+/// 確かめを通った `.nar` の保管先。
+fn vendored_nar(root: &Path, name: &str) -> PathBuf {
+    root.join("vendors")
+        .join("sample_ghost")
+        .join(format!("{name}.nar"))
+}
+
 /// `--from` に書かれた綴りをフォルダに解く。呼んだ場所からでもリポジトリ根からでも書ける。
 fn resolve(root: &Path, spelled: &str) -> Result<PathBuf, Box<dyn Error>> {
     let as_written = PathBuf::from(spelled);
@@ -203,22 +232,23 @@ fn resolve(root: &Path, spelled: &str) -> Result<PathBuf, Box<dyn Error>> {
 
 /// 元のツリーの相対パスが、インストール済み形でどこへ置かれるか（要件 8.4 の写像）。
 ///
-/// 同梱バルーンの取り出し元の配下は 1 階層剥がしてバルーン格納先へ、それ以外は本体の
-/// 置き場へ。判断の元は `install.txt` の解釈結果だけで、登記の綴りは使わない。
+/// 同梱バルーンの取り出し元の配下は 1 階層剥がして本体のフォルダの中のバルーン格納先
+/// （`<根>/<格納先>/<directory>/balloon/<バルーンの directory>/`・`areka-nar` の置き方と
+/// 同じ）へ、それ以外は本体の置き場へ。判断の元は `install.txt` の解釈結果だけで、登記の
+/// 綴りは使わない。
 fn installed_path(root: &Path, manifest: &InstallManifest, relative: &str) -> PathBuf {
-    for companion in &manifest.companions {
-        if let Some(tail) = strip_folder(relative, &companion.source_directory) {
-            return root.join("balloon").join(&companion.directory).join(tail);
-        }
-    }
     let store = match manifest.kind {
         InstallKind::Ghost => "ghost",
         InstallKind::Balloon => "balloon",
         other => panic!("検体に {other:?} は居ない（居るなら写像を足すこと）"),
     };
-    root.join(store)
-        .join(&manifest.directory)
-        .join(relative.replace('/', MAIN_SEPARATOR_STR))
+    let body = root.join(store).join(&manifest.directory);
+    for companion in &manifest.companions {
+        if let Some(tail) = strip_folder(relative, &companion.source_directory) {
+            return body.join("balloon").join(&companion.directory).join(tail);
+        }
+    }
+    body.join(relative.replace('/', MAIN_SEPARATOR_STR))
 }
 
 /// `relative` が `folder` の配下なら、剥がした残りを OS の区切りで返す。
@@ -274,7 +304,7 @@ fn walk(dir: &Path) -> io::Result<BTreeSet<PathBuf>> {
     Ok(found)
 }
 
-/// 根の直下の格納先ごとのファイル数を「ghost/emo2=90 balloon/emo2-kakukaku=20」の形で。
+/// 根の直下の格納先ごとのファイル数を「ghost/emo2=110」の形で（同梱バルーンは本体のフォルダの中に数える）。
 fn folder_counts(root: &Path, files: &BTreeSet<PathBuf>) -> String {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for file in files {
@@ -297,3 +327,7 @@ fn folder_counts(root: &Path, files: &BTreeSet<PathBuf>) -> String {
 fn workspace_root() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
+
+#[cfg(test)]
+#[path = "fold-samples_tests.rs"]
+mod tests;

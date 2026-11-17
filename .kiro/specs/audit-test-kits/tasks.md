@@ -115,7 +115,7 @@
   - 完了の姿: 5 本が緑で、各直しを外すと赤（較正）。`cargo test -p sample-ghost-kit` が緑で、`vendors/sample_ghost/README.md` の 154・169 行の書き方が D4 の後も正しいことを確かめて控える
   - _Dispatch: standard, effort high — 複数プロセスの取り合いでの連番の輪と 1 度のやり直しの道_
   - _Requirements: 2.7, 3.1, 4.1, 4.3, 4.4, 4.5_
-- [ ] 4.3 `fold-samples` の写し先と書き先の順を直し、見本のテストを常時回す（S3: 2・8・56）
+- [x] 4.3 `fold-samples` の写し先と書き先の順を直し、見本のテストを常時回す（S3: 2・8・56）
   - `sample-ghost-kit` の `Cargo.toml` を `autoexamples = false` と `[[example]] name = "fold-samples" path = "examples/fold-samples.rs" test = true` にする（依存は足さない）
   - 2: 同梱バルーンの写し先を `root/<store>/<manifest.directory>/balloon/<companion.directory>/<残り>` に（`areka-nar` の置き方と同じ）。説明を直す
   - 8: `fold_one` は追跡の一覧を引数で受け、畳んだ `.nar` を `target\fold-samples\out\<名>.nar` に書いて往復を照らす。`vendors/` へは `main` が不一致 0 のときだけ写す
@@ -222,3 +222,4 @@
 - 完了の時（`/kiro-complete`）: main へ squash マージしたら audit-pilot のセッション（`local_7968efdc-07d1-48f5-9b97-9aaac8a5ce1b`）へ一言知らせる（file_length の例外表から 1 件と件数の行を外すのを待っている）
   - 4.2: 較正（どれも 1 つだけ外して赤）: 札の `AlreadyExists` の分岐を殺す・フォルダの `AlreadyExists` の分岐を殺す → `a_leftover_lease_or_folder_with_the_same_name_is_skipped`、相対の確かめを殺す → `a_relative_target_dir_is_resolved_against_the_exe_ancestors`、据え付けで元のパスを読み直す → `staging_uses_the_verified_bytes_not_a_second_read`、やり直しの腕を殺す → `a_master_reclaimed_during_the_copy_is_fetched_again_once`、`discard_older_cache_shelves` の呼びを外す → `an_older_generation_cache_shelf_is_discarded`。消す前の grep: `owner_is_gone` はコード 7（devroot.rs 2・devroot_sweep_tests.rs 5）・本 spec の文書 7・completed 3（消した後のコード 0）、消したテスト `only_a_removed_lease_means_the_owner_is_gone` は定義 1 だけ、`WorkDir::lock_path` の crate の外の使い手 0。設計の素描と違う所（どれも crate の中）: `cached_root_in` から `nar: &Path` を外した・`sample_nar` は使い手がテストだけになり `#[cfg(test)]`・`fresh_root_in`／`manual_root_in` はバイトの出どころを関数で受ける（D5 のやり直しで読み直すため）・据え付けの `.nar` は 2 つ目の `WorkDir` に書く。`vendors/sample_ghost/README.md` の 154・169 行は D4 の後も正しい（触らない）
   - 4.2 の残り（6.1 のかけ直しで見る）: `devroot.rs` の中の 9 か所ほどの説明と `fetched.rs` の module doc がまだ `cache/` と書く（設計の行 54 は module doc だけを求める）
+  - 4.3: 同梱バルーンの写し先を古い式 `root/balloon/<dir>/…` に戻す → `a_ghost_with_a_companion_balloon_round_trips_without_mismatches` が赤（不一致 4）。`fold_one` の書き先を `vendors/` の側に戻す → `fold_one_never_writes_the_vendored_archive` が赤（見張りのバイトが上書き）。消した名前の付いたものは無し（grep 不要）。`vendors/`・`Cargo.lock`・根の `Cargo.toml` の差分 0。本物の木への `fold-samples` の `main` は回していない（8.1）。数の行の例が「ghost/emo2=110」に変わる（同梱バルーンをゴーストのフォルダの中に数える）が、字面で読む道具は無い
