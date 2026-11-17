@@ -191,7 +191,7 @@ impl fmt::Display for Finding {
             }
             Self::MalformedRow { heading, line } => write!(
                 f,
-                "doc/README.md の {line} 行目（{heading}）: 1 列目がバッククォートの名前 1 つでない。表の書き方に合わせる"
+                "{GUIDE} の {line} 行目（{heading}）: 1 列目がバッククォートの名前 1 つでない。表の書き方に合わせる"
             ),
             Self::EmptyReading(what) => write!(
                 f,

@@ -52,7 +52,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use workspace_scan::{
     Hit, allowed_paths, has_dev_dependency_on, manifest_fixture, manifest_lines, mentions_crate,
     production_dependencies_on, raw_occurrences, read_source, render, scan_sources, scan_tokens,
-    unlisted, walk_workspace_sources, workspace_manifests,
+    stale_entries, unlisted, walk_workspace_sources, workspace_manifests,
 };
 
 // ---------------------------------------------------------------------------
@@ -196,15 +196,6 @@ fn kit_definition_sources() -> Vec<String> {
         .collect()
 }
 
-/// 例外表にあるのに当たりが 1 件も無い項目（＝陳腐化した例外）を返す（純関数）。
-fn stale_entries(hits: &[Hit], allow: &[(&str, &str)]) -> Vec<String> {
-    allow
-        .iter()
-        .filter(|(path, _)| !hits.iter().any(|h| h.path == *path))
-        .map(|(path, _)| (*path).to_string())
-        .collect()
-}
-
 // ---------------------------------------------------------------------------
 // manifest（⑶⑷）
 // ---------------------------------------------------------------------------
@@ -219,11 +210,21 @@ const FEATURE_ENV_FILTER: &str = "env-filter";
 const ENV_FILTER_OWNER: &str = "wintf";
 
 /// 共有 crate の依存宣言で `env-filter` フィーチャを有効にしているか（純関数）。
+///
+/// インライン表の中の複数行の配列も読むため、共有 crate を名指す鍵の行から次に `=` を含む行までを
+/// その依存の値とみる（[`kit_default_enables_env_filter`] と同じ形）。下位表の形は見出しが名指す。
+// shortcut: 値は次に = を含む行で終わる（同じインライン表の後ろの鍵でも切れる）。配列を取る鍵が features のほかに増えたら鍵の名で読む
 fn declares_env_filter_feature(src: &str) -> bool {
+    let mut in_kit = false;
     manifest_lines(src).iter().any(|l| {
-        !l.is_header
-            && (mentions_crate(&l.text, KIT_PACKAGE) || mentions_crate(&l.section, KIT_PACKAGE))
-            && l.text.contains(FEATURE_ENV_FILTER)
+        if l.is_header {
+            in_kit = false;
+            return false;
+        }
+        if l.text.contains('=') {
+            in_kit = mentions_crate(&l.text, KIT_PACKAGE);
+        }
+        (in_kit || mentions_crate(&l.section, KIT_PACKAGE)) && l.text.contains(FEATURE_ENV_FILTER)
     })
 }
 
@@ -340,7 +341,7 @@ fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
     let mut violations = Vec::new();
     for path in FILES_THAT_MUST_NOT_SPELL_THE_TOKENS {
         for (line, token) in raw_occurrences(&read_source(path), &tokens) {
-            violations.push(format!("  {path}:{line} ({token})"));
+            violations.push(Hit::new(*path, line, token));
         }
     }
     assert!(
@@ -349,7 +350,7 @@ fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
          ⒜ 見張りが自分自身を違反として拾い ⒝ 着手前インベントリの `rg -l` による\
          捕捉サイト計数の母数が黙って動く（コメントは見張りが除去するが `rg` は除去しない）。\
          concat! で 2 片に割ること:\n{}",
-        violations.join("\n")
+        render(&violations)
     );
 }
 
@@ -733,6 +734,26 @@ fn the_env_filter_feature_is_detected_only_when_it_is_actually_declared() {
         "log-capture-kit = { path = \"../log-capture-kit\", features = [\"env-filter\"] }",
     );
     assert!(declares_env_filter_feature(&on), "宣言を検出できていない");
+
+    // インライン表の中の配列を複数行に割った形。鍵の行にフィーチャ名が無い。
+    let multi_line = manifest_fixture(
+        "dev-dependencies",
+        "log-capture-kit = { path = \"../log-capture-kit\", features = [\n    \"env-filter\",\n] }",
+    );
+    assert!(
+        declares_env_filter_feature(&multi_line),
+        "複数行の配列で書いた宣言を見落としている"
+    );
+    // 次の鍵の行で値は終わる（後ろの別の依存のフィーチャを拾わない）。
+    let next_key = manifest_fixture(
+        "dev-dependencies",
+        "log-capture-kit = { path = \"../log-capture-kit\", features = [\n] }\n\
+         tracing-subscriber = { workspace = true, features = [\n    \"env-filter\",\n] }",
+    );
+    assert!(
+        !declares_env_filter_feature(&next_key),
+        "次の鍵の行の依存のフィーチャを共有 crate の宣言と誤読している"
+    );
 
     let off = manifest_fixture("dev-dependencies", KIT_DEP_LINE);
     assert!(

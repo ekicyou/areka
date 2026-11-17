@@ -65,8 +65,8 @@ mod workspace_scan;
 use std::collections::BTreeSet;
 
 use workspace_scan::{
-    allowed_paths, allowed_paths_without, raw_occurrences, read_source, render, scan_sources,
-    scan_tokens, unlisted, walk_workspace_sources,
+    Hit, allowed_paths, allowed_paths_without, raw_occurrences, read_source, render, scan_sources,
+    scan_tokens, stale_entries, unlisted, walk_workspace_sources,
 };
 
 // ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ const TOKEN_QUALIFIED: &str = concat!("env::temp_", "dir");
 /// ので 1 呼出が 2 件に数えられることはない（規則は `workspace_scan/mod.rs` の `scan_tokens` の語の重なりの規則。
 /// この規則が実際に効いていることは [`the_two_spellings_never_double_count_one_call`] が
 /// 見本で固定する）。左端はアンカーされるので、名前の末尾がたまたま同じ綴りで終わる
-/// 助走関数（実在: `unique_temp_dir`・`make_unique_temp_dir`）には当たらない。
+/// 助走関数（実在: `unique_temp_dir`）には当たらない。
 const TOKEN_BARE: &str = concat!("temp_", "dir(");
 
 /// 波括弧の中の別名（`use std::env::{… as …}` の形）。修飾つきの綴りにも裸の綴りにも当たらない。
@@ -329,10 +329,7 @@ fn every_exception_still_has_a_real_hit() {
     // あわせて、窓口へ寄って入口を叩かなくなった項目を表に置き去りにできなくする
     //（例外が減る方向だけが自然になる）。
     let hits = scan_sources(&watched_sources(), &entry_point_tokens());
-    let stale: Vec<&str> = allowed_paths(ALLOWED_ENTRY_POINT_USES)
-        .into_iter()
-        .filter(|path| !hits.iter().any(|h| h.path == *path))
-        .collect();
+    let stale = stale_entries(&hits, ALLOWED_ENTRY_POINT_USES);
     assert!(
         stale.is_empty(),
         "例外表に載っているのに当たりが 1 件も無い（走査が空振りしているか、事情が消えた）。\
@@ -493,7 +490,7 @@ fn an_aliased_import_inside_braces_is_detected() {
 
 #[test]
 fn a_helper_whose_name_merely_ends_with_the_same_spelling_is_not_a_hit() {
-    // 実在の助走関数（`unique_temp_dir`・`make_unique_temp_dir`）に当たってはいけない。
+    // 名前の末尾が同じ綴りの助走関数（実在の `unique_temp_dir` と、見本の `make_unique_temp_dir`）に当たってはいけない。
     // 当たると例外表が偽陽性で膨らみ、表の意味が失われる。
     let source = format!(
         "fn unique_{TOKEN_BARE}tag: &str) -> TempPath {{\n    \
@@ -570,15 +567,15 @@ fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
         "コメントの中でも生テキスト走査は当たらねばならない（当たらないなら本検査は恒真）"
     );
 
-    let violations: Vec<String> = raw_occurrences(&read_source(THIS_GUARD), &tokens)
+    let violations: Vec<Hit> = raw_occurrences(&read_source(THIS_GUARD), &tokens)
         .into_iter()
-        .map(|(line, token)| format!("  {THIS_GUARD}:{line} （語: {token}）"))
+        .map(|(line, token)| Hit::new(THIS_GUARD, line, token))
         .collect();
     assert!(
         violations.is_empty(),
         "走査語はコメントの中も含めて逐語で書いてはいけない。\
          ⒜ 見張りが自分自身を違反として拾い ⒝ 要件 12.2 の実測に使った grep の母数が黙って動く\
          （コメントは見張りが除去するが grep は除去しない）。concat! で 2 片に割ること:\n{}",
-        violations.join("\n")
+        render(&violations)
     );
 }

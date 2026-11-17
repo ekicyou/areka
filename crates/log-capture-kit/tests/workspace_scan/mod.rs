@@ -372,13 +372,21 @@ fn is_ident_char(c: char) -> bool {
 /// 規則が生きていることは較正テストが縛る（`workspace_scan_test.rs` の
 /// `scan_tokens_returns_the_longer_of_two_tokens_that_start_at_the_same_place` と
 /// `scan_tokens_does_not_count_one_call_twice_when_a_longer_token_contains_a_shorter_one`）。
-pub fn scan_tokens(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
-    let mut order: Vec<&str> = tokens.to_vec();
+pub fn scan_tokens<T: AsRef<str>>(src: &str, tokens: &[T]) -> Vec<(usize, String)> {
+    let mut order: Vec<&str> = tokens.iter().map(AsRef::as_ref).collect();
     order.sort_by_key(|t| std::cmp::Reverse(t.len()));
-    // 語の頭の文字で先に篩う（audit-test-kits 決め D7）。どの語の頭でもない文字では語の輪を回さない。
-    let mut firsts: Vec<char> = order.iter().filter_map(|t| t.chars().next()).collect();
-    firsts.sort_unstable();
-    firsts.dedup();
+    // 語を頭の文字ごとの組に 1 度だけ分け（組の中は長い順のまま）、文字ごとに二分探索で引く
+    // （audit-test-kits 決め D7）。どの語の頭でもない文字では語の輪を回さない。
+    let mut groups: Vec<(char, Vec<&str>)> = Vec::new();
+    for token in order {
+        let Some(first) = token.chars().next() else {
+            continue;
+        };
+        match groups.binary_search_by_key(&first, |(c, _)| *c) {
+            Ok(at) => groups[at].1.push(token),
+            Err(at) => groups.insert(at, (first, vec![token])),
+        }
+    }
 
     let stripped = strip_comments(src);
     let mut hits = Vec::new();
@@ -386,9 +394,13 @@ pub fn scan_tokens(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
         let mut prev_is_ident = false;
         let mut skip_until = 0usize;
         for (at, ch) in line.char_indices() {
-            if at >= skip_until && firsts.binary_search(&ch).is_ok() {
-                // 頭の文字が違う語は当たりようがないので回さない（長い順は保たれる）。
-                for token in order.iter().filter(|t| t.starts_with(ch)) {
+            let group = if at >= skip_until {
+                groups.binary_search_by_key(&ch, |(c, _)| *c).ok()
+            } else {
+                None
+            };
+            if let Some(group) = group {
+                for token in &groups[group].1 {
                     if prev_is_ident && needs_left_anchor(token) {
                         continue;
                     }
@@ -610,7 +622,7 @@ impl std::fmt::Display for FileLines {
 }
 
 /// 与えられたファイル群を走査する。
-pub fn scan_sources(paths: &[String], tokens: &[&str]) -> Vec<Hit> {
+pub fn scan_sources<T: AsRef<str>>(paths: &[String], tokens: &[T]) -> Vec<Hit> {
     let mut hits = Vec::new();
     for path in paths {
         for (line, token) in scan_tokens(&read_source(path), tokens) {
@@ -661,6 +673,16 @@ pub fn unlisted<T: AllowEntry>(hits: &[Hit], allow: &[T]) -> Vec<Hit> {
     hits.iter()
         .filter(|h| !allow.iter().any(|entry| entry.path() == h.path))
         .cloned()
+        .collect()
+}
+
+/// 例外表にあるのに当たりが 1 件も無い項目（＝陳腐化した例外）のパスを返す（純関数）。
+pub fn stale_entries<T: AllowEntry>(hits: &[Hit], allow: &[T]) -> Vec<String> {
+    allow
+        .iter()
+        .map(AllowEntry::path)
+        .filter(|path| !hits.iter().any(|h| h.path == *path))
+        .map(str::to_string)
         .collect()
 }
 

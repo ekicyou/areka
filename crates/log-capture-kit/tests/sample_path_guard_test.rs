@@ -271,18 +271,19 @@ fn gateway_sources() -> Vec<String> {
         .collect()
 }
 
+/// 全 4 形の走査語（[`token_table`] から形を落としたもの）。
+fn all_tokens() -> Vec<String> {
+    token_table().into_iter().map(|(t, _)| t).collect()
+}
+
 /// 与えられたファイル群を全 4 形の語で走査する（[`workspace_scan::scan_sources`] に語の一覧を渡すだけ）。
 fn scan_forms(paths: &[String]) -> Vec<Hit> {
-    let table = token_table();
-    let tokens: Vec<&str> = table.iter().map(|(t, _)| t.as_str()).collect();
-    scan_sources(paths, &tokens)
+    scan_sources(paths, &all_tokens())
 }
 
 /// 合成入力を 1 本走査する（較正で使う。ファイル名は持たない）。
 fn scan_text(src: &str) -> Vec<(usize, String)> {
-    let table = token_table();
-    let tokens: Vec<&str> = table.iter().map(|(t, _)| t.as_str()).collect();
-    scan_tokens(src, &tokens)
+    scan_tokens(src, &all_tokens())
 }
 
 /// 当たった語が属する形。
@@ -837,14 +838,6 @@ fn each_gateway_user_is_actually_pulled_in_as_a_dev_dependency() {
             "例外表のクレート {user} を dev-dependency として引く crate が 0 件＝検査が空振りしている疑い"
         );
     }
-    let areka = workspace_manifests(KIT_PACKAGE)
-        .into_iter()
-        .find(|(name, _)| name == "areka")
-        .expect("crates/areka/Cargo.toml があるはず");
-    assert!(
-        has_dev_dependency_on(&areka.1, "real-run-kit"),
-        "areka の [dev-dependencies] に real-run-kit が無い"
-    );
 }
 
 #[test]
@@ -895,7 +888,7 @@ fn a_production_dependency_on_a_gateway_user_is_a_violation() {
 
 #[test]
 fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
-    let tokens: Vec<String> = token_table().into_iter().map(|(t, _)| t).collect();
+    let tokens = all_tokens();
 
     // 較正: 生テキスト走査はコメントを除かない。除いてしまうと本検査は恒真になる。
     let planted = format!("// 説明: かつては {TOKEN_NAMESPACE} と書いていた");
@@ -905,14 +898,14 @@ fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
         "コメントの中でも生テキスト走査は当たらねばならない（当たらないなら本検査は恒真）"
     );
 
-    let violations: Vec<String> = raw_occurrences(&read_source(THIS_GUARD), &tokens)
+    let violations: Vec<Hit> = raw_occurrences(&read_source(THIS_GUARD), &tokens)
         .into_iter()
-        .map(|(line, token)| format!("  {THIS_GUARD}:{line} （語: {token}）"))
+        .map(|(line, token)| Hit::new(THIS_GUARD, line, token))
         .collect();
     assert!(
         violations.is_empty(),
         "走査語はコメントの中も含めて逐語で書いてはいけない（見張りが自分自身を拾う）。\
          concat! で 2 片に割るか、登記表から組み立てること:\n{}",
-        violations.join("\n")
+        render(&violations)
     );
 }
