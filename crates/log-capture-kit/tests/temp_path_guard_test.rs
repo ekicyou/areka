@@ -62,7 +62,10 @@ mod workspace_scan;
 
 use std::collections::BTreeSet;
 
-use workspace_scan::{read_source, scan_tokens, walk_workspace_sources};
+use workspace_scan::{
+    allowed_paths, allowed_paths_without, raw_occurrences, read_source, render, scan_sources,
+    scan_tokens, unlisted, walk_workspace_sources,
+};
 
 // ---------------------------------------------------------------------------
 // 走査語（逐語で置かないため 2 片に割る。module doc を参照）
@@ -213,67 +216,9 @@ const THIS_GUARD: &str = "crates/log-capture-kit/tests/temp_path_guard_test.rs";
 // 走査の取り回し
 // ---------------------------------------------------------------------------
 
-/// 走査で当たった 1 件。
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct Hit {
-    /// ワークスペース根からの相対パス（区切りは `/`）。
-    path: String,
-    /// 1 始まりの行番号。
-    line: usize,
-    /// 当たった語。
-    token: String,
-}
-
 /// 見張りの対象（窓口を含む全ソース。窓口も外さない）。
 fn watched_sources() -> Vec<String> {
     walk_workspace_sources()
-}
-
-/// 与えられたファイル群を走査する。
-fn scan_sources(paths: &[String], tokens: &[&str]) -> Vec<Hit> {
-    let mut hits = Vec::new();
-    for path in paths {
-        for (line, token) in scan_tokens(&read_source(path), tokens) {
-            hits.push(Hit {
-                path: path.clone(),
-                line,
-                token,
-            });
-        }
-    }
-    hits
-}
-
-/// 例外表のパスだけを取り出す（判定に渡す形）。
-fn allowed_paths() -> Vec<&'static str> {
-    ALLOWED_ENTRY_POINT_USES
-        .iter()
-        .map(|(path, _, _)| *path)
-        .collect()
-}
-
-/// 例外表から 1 件だけ落としたパスの一覧を作る（要件 12.5 の自己テストで使う）。
-fn allowed_paths_without(dropped: &str) -> Vec<&'static str> {
-    allowed_paths()
-        .into_iter()
-        .filter(|path| *path != dropped)
-        .collect()
-}
-
-/// 例外表に載っていない当たり（＝違反）を返す（純関数）。
-fn unlisted(hits: &[Hit], allow: &[&str]) -> Vec<Hit> {
-    hits.iter()
-        .filter(|h| !allow.contains(&h.path.as_str()))
-        .cloned()
-        .collect()
-}
-
-/// 違反の一覧を人が読める形にする（どのファイルの何行目かが分かること）。
-fn render(hits: &[Hit]) -> String {
-    hits.iter()
-        .map(|h| format!("  {}:{} （語: {}）", h.path, h.line, h.token))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +228,7 @@ fn render(hits: &[Hit]) -> String {
 #[test]
 fn no_temp_dir_entry_point_lives_outside_the_allow_table() {
     let hits = scan_sources(&watched_sources(), &entry_point_tokens());
-    let violations = unlisted(&hits, &allowed_paths());
+    let violations = unlisted(&hits, &allowed_paths(ALLOWED_ENTRY_POINT_USES));
     assert!(
         violations.is_empty(),
         "テスト用の一時パスは共通窓口（temp-path-kit の TempPath）から取ること。\
@@ -328,12 +273,14 @@ fn the_allow_table_declares_its_own_size_and_reasons() {
 fn the_allow_table_has_no_duplicate_entries() {
     // 同じパスが 2 度載ると、件数の宣言を通ったまま実質の例外が 1 件減る
     //（＝表の見かけの大きさと効き目が食い違う）。
-    let unique: BTreeSet<&str> = allowed_paths().into_iter().collect();
+    let unique: BTreeSet<&str> = allowed_paths(ALLOWED_ENTRY_POINT_USES)
+        .into_iter()
+        .collect();
     assert_eq!(
         unique.len(),
         ALLOWED_COUNT,
         "例外表に重複した項目がある: {:?}",
-        allowed_paths()
+        allowed_paths(ALLOWED_ENTRY_POINT_USES)
     );
 }
 
@@ -425,7 +372,7 @@ fn every_exception_still_has_a_real_hit() {
     // あわせて、窓口へ寄って入口を叩かなくなった項目を表に置き去りにできなくする
     //（例外が減る方向だけが自然になる）。
     let hits = scan_sources(&watched_sources(), &entry_point_tokens());
-    let stale: Vec<&str> = allowed_paths()
+    let stale: Vec<&str> = allowed_paths(ALLOWED_ENTRY_POINT_USES)
         .into_iter()
         .filter(|path| !hits.iter().any(|h| h.path == *path))
         .collect();
@@ -455,7 +402,9 @@ fn the_measurement_is_not_vacuous_and_matches_the_allow_table() {
     );
 
     let found: BTreeSet<&str> = hits.iter().map(|h| h.path.as_str()).collect();
-    let listed: BTreeSet<&str> = allowed_paths().into_iter().collect();
+    let listed: BTreeSet<&str> = allowed_paths(ALLOWED_ENTRY_POINT_USES)
+        .into_iter()
+        .collect();
     assert_eq!(
         found, listed,
         "実測した集合が例外表と一致しない。新たな迂回なら窓口へ寄せるか表へ明示的に追加し、\
@@ -501,12 +450,15 @@ fn dropping_a_known_exception_turns_the_guard_red() {
     // 見本で作った両側は下の合成入力の検査が持っており、ここで確かめたいのは
     //「この表とこのワークスペースの組み合わせで、見張りが本当に鳴るか」である。
     assert!(
-        allowed_paths().contains(&CALIBRATION_DROPPED_ENTRY),
+        allowed_paths(ALLOWED_ENTRY_POINT_USES).contains(&CALIBRATION_DROPPED_ENTRY),
         "較正で外す 1 件は例外表の項目でなければならない: {CALIBRATION_DROPPED_ENTRY}"
     );
 
     let hits = scan_sources(&watched_sources(), &entry_point_tokens());
-    let violations = unlisted(&hits, &allowed_paths_without(CALIBRATION_DROPPED_ENTRY));
+    let violations = unlisted(
+        &hits,
+        &allowed_paths_without(ALLOWED_ENTRY_POINT_USES, CALIBRATION_DROPPED_ENTRY),
+    );
     assert!(
         !violations.is_empty(),
         "例外表から 1 件外しても違反が 0 件＝見張りは鳴っていない（何も検知できていない）"
@@ -623,23 +575,6 @@ fn the_guard_file_itself_is_not_a_hit() {
         Vec::new(),
         "見張り自身が走査語を逐語で持ってしまっている（concat! で割ること）"
     );
-}
-
-/// コメントを**除かずに**生テキストから走査語を探す（純関数）。
-///
-/// 要件 12.2 の実測に使った `rg`／`grep` と同じ見方（アンカーもコメント除去もしない素の
-/// 部分一致）にそろえてある。**母数が動く条件をそのまま写すのが目的なので、ここを
-/// 賢くしてはいけない。**
-fn raw_occurrences(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
-    let mut hits = Vec::new();
-    for (index, line) in src.lines().enumerate() {
-        for token in tokens {
-            if line.contains(token) {
-                hits.push((index + 1, (*token).to_string()));
-            }
-        }
-    }
-    hits
 }
 
 #[test]

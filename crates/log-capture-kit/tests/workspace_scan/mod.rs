@@ -5,18 +5,18 @@
 //!
 //! # 部品の分け方
 //!
-//! ファイルシステムに触るのは [`walk_workspace_sources`]・[`read_source`]・
-//! [`measure_workspace_sources`] の 3 本だけで、残り（[`strip_comments`]・[`scan_tokens`]・
-//! [`line_count`]・[`over_limit`]）は**入出力だけで完結する純粋な関数**である。
+//! ファイルシステムに触るのは木の読みの置き場（`sources`）・[`read_source`]・
+//! [`workspace_manifests`]（と下請けの列挙）だけで、[`walk_workspace_sources`]・
+//! [`measure_workspace_sources`] は置き場から読む。残り（[`skip_dir`]・[`strip_comments`]・
+//! [`scan_tokens`]・[`line_count`]・[`over_limit`] ほか）は**入出力だけで完結する純粋な関数**である。
 //! 純粋な側は文字列の見本で自己較正できるので、「違反 0 件だから緑」という形の見張りが
 //! 道具の故障で緑になっていないことを別立てで示せる（較正は `tests/workspace_scan_test.rs`）。
 //!
 //! # 語の一致規則
 //!
 //! [`scan_tokens`] は語の**左端をアンカーする**（直前の文字が `[A-Za-z0-9_]` なら不一致）。
-//! アンカーが無いと `fn test_offset_default` の開き括弧までの形（実在:
-//! `crates/wintf/src/ecs/types.rs`）が走査語 `set_default` ＋開き括弧に部分一致して
-//! 偽陽性になる。
+//! アンカーが無いと、名前の終わりがたまたま走査語と同じ関数（例: `test_off` を前に置いた
+//! `set_default` ＋開き括弧の形）が部分一致して偽陽性になる。
 //!
 //! アンカーが効くのは**語の 1 文字目が `[A-Za-z0-9_]` のとき**だけである。区切り文字から
 //! 始まる語（例: パスの区切りを先頭に置いて「名前を継ぎ足した形」だけを狙う語）にまで
@@ -33,19 +33,28 @@
 //!
 //! [`line_count`] は**改行の個数**を返す。着手前インベントリ
 //!（`.kiro/specs/completed/areka-P0-test-cage-determinism/verification/remeasure.md` §6）が
-//! 同じ定義で 1,000 行超 11 件を採っているので、番人の例外表と数え方が一致する。
+//! 同じ定義で上限越えを採っているので、番人の例外表と数え方が一致する。
 
-// 本 module は 3 つの試験対象（較正・迂回検知の見張り・行数の見張り）から共有され、
-// どの試験対象も道具箱の一部しか使わない。未使用の警告は共有の副作用なので黙らせる。
+// 本 module は見張りの試験対象のどれからも共有され、どの試験対象も道具箱の一部しか
+// 使わない。未使用の警告は共有の副作用なので黙らせる。
 #![allow(dead_code)]
 
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
-/// 1 ファイルの行数の上限（`structure.md:176` の目安）。
+/// 1 ファイルの行数の上限（`structure.md` の Unit Tests の節の「1 ファイル 1,000 行以下の目安」）。
 pub const LINE_LIMIT: usize = 1000;
 
-/// 列挙から外すディレクトリ名。生成物と外部取り込み。
-const EXCLUDED_DIRS: &[&str] = &["target", "vendors", ".git"];
+/// 列挙で入らないディレクトリか（純関数）。
+///
+/// 飛ばすのはビルドの出力＝`Cargo.toml` の隣の `target` だけ。モジュールを割った
+/// `src/<module>/target/` のようなフォルダは名前が同じでも飛ばさない（飛ばすと割ったファイルが
+/// 見張りから黙って消える）。走査は `crates/` から始まるので、根の `vendors` と `.git` は
+/// ここで名指ししない。
+pub fn skip_dir(name: &str, parent_has_manifest: bool) -> bool {
+    parent_has_manifest && name == "target"
+}
 
 /// 走査したファイルとその行数の組。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,16 +89,32 @@ pub fn workspace_root() -> PathBuf {
 /// `crates/**/*.rs` を列挙する。
 ///
 /// 本番（`src/`）・テスト（`tests/`）・実行例（`examples/`）・本番の隣に置いた兄弟テスト
-/// ファイル（`<stem>_*.rs`）をすべて含み、生成物（`target/`）と外部取り込み（`vendors/`）は
-/// 除く。戻り値はワークスペース根からの相対パスで、区切りは `/`、**昇順・重複無し**。
+/// ファイル（`<stem>_*.rs`）をすべて含み、ビルドの出力（[`skip_dir`]）は除く。
+/// 戻り値はワークスペース根からの相対パスで、区切りは `/`、**昇順・重複無し**。
 /// 順序を固定するのは、見張りが落ちたときの出力を再現可能にするため。
 pub fn walk_workspace_sources() -> Vec<String> {
-    let root = workspace_root();
-    let mut found = Vec::new();
-    collect_rs_files(&root.join("crates"), &root, &mut found);
-    found.sort();
-    found.dedup();
-    found
+    sources().iter().map(|(path, _)| path.clone()).collect()
+}
+
+/// 列挙した全ソースの `(相対パス, 本文)`（相対パスの昇順）。
+///
+/// 見張りはどれも木全体を読むので、テストの実行体ごとに 1 度だけ読んで置いておく（決め D7）。
+fn sources() -> &'static [(String, String)] {
+    static SOURCES: OnceLock<Vec<(String, String)>> = OnceLock::new();
+    SOURCES.get_or_init(|| {
+        let root = workspace_root();
+        let mut found = Vec::new();
+        collect_rs_files(&root.join("crates"), &root, &mut found);
+        found.sort();
+        found.dedup();
+        found
+            .into_iter()
+            .map(|path| {
+                let text = read_from_disk(&root, &path);
+                (path, text)
+            })
+            .collect()
+    })
 }
 
 fn collect_rs_files(dir: &Path, root: &Path, out: &mut Vec<String>) {
@@ -97,13 +122,14 @@ fn collect_rs_files(dir: &Path, root: &Path, out: &mut Vec<String>) {
         Ok(entries) => entries,
         Err(err) => panic!("列挙できないディレクトリがある: {} ({err})", dir.display()),
     };
+    let has_manifest = dir.join("Cargo.toml").is_file();
     for entry in entries {
         let entry = entry.expect("ディレクトリ項目の読み取りに失敗した");
         let path = entry.path();
         let file_type = entry.file_type().expect("種別の判定に失敗した");
         let name = entry.file_name().to_string_lossy().into_owned();
         if file_type.is_dir() {
-            if EXCLUDED_DIRS.contains(&name.as_str()) {
+            if skip_dir(&name, has_manifest) {
                 continue;
             }
             collect_rs_files(&path, root, out);
@@ -117,8 +143,18 @@ fn collect_rs_files(dir: &Path, root: &Path, out: &mut Vec<String>) {
 }
 
 /// ワークスペース根からの相対パスでソースを読む（不正な UTF-8 は置換文字にする）。
+///
+/// 列挙に入るファイルは置き場から返し、入らないファイルだけをディスクから読む。
 pub fn read_source(rel_path: &str) -> String {
-    let full = workspace_root().join(rel_path);
+    let all = sources();
+    match all.binary_search_by(|(path, _)| path.as_str().cmp(rel_path)) {
+        Ok(at) => all[at].1.clone(),
+        Err(_) => read_from_disk(&workspace_root(), rel_path),
+    }
+}
+
+fn read_from_disk(root: &Path, rel_path: &str) -> String {
+    let full = root.join(rel_path);
     let bytes = std::fs::read(&full)
         .unwrap_or_else(|err| panic!("ソースを読めない: {} ({err})", full.display()));
     String::from_utf8_lossy(&bytes).into_owned()
@@ -126,12 +162,9 @@ pub fn read_source(rel_path: &str) -> String {
 
 /// 列挙した全ソースの行数を測る。
 pub fn measure_workspace_sources() -> Vec<FileLines> {
-    walk_workspace_sources()
-        .into_iter()
-        .map(|path| {
-            let lines = line_count(&read_source(&path));
-            FileLines::new(path, lines)
-        })
+    sources()
+        .iter()
+        .map(|(path, text)| FileLines::new(path.clone(), line_count(text)))
         .collect()
 }
 
@@ -331,15 +364,17 @@ fn is_ident_char(c: char) -> bool {
 /// 2. 当たった語の**内側**からは次の語を探さない。1 つの呼出が、修飾つきの語と裸の語の
 ///    両方に当たって 2 件に数えられるのを防ぐ。
 ///
-/// **現時点の本番の語集合（`with_default`・`set_global_default`・`set_default` の 3 つに
-/// 開き括弧を付けた形）はどの 2 語も重ならない**ので、この 2 規則は今は 1 件も動かしていない。語の一覧を持つのは
-/// 見張り側（要件 8）なので、語が増えたときに黙って壊れないよう規則として固定してある。
+/// 規則 2 は本番で生きている: 一時パスの見張りの修飾つきの綴り（`env::` を前に置いた形）は
+/// 裸の綴りを内側に含み、規則 2 が無いと 1 つの呼出が 2 件に数えられる。語の一覧を持つのは
+/// 見張り側なので、語が増えたときに黙って壊れないよう規則として固定してある。
 /// 規則が生きていることは較正テストが縛る（`workspace_scan_test.rs` の
 /// `scan_tokens_returns_the_longer_of_two_tokens_that_start_at_the_same_place` と
 /// `scan_tokens_does_not_count_one_call_twice_when_a_longer_token_contains_a_shorter_one`）。
 pub fn scan_tokens(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
     let mut order: Vec<&str> = tokens.to_vec();
     order.sort_by_key(|t| std::cmp::Reverse(t.len()));
+    // 語の頭の文字で先に篩う（決め D7）。どの語の頭でもない文字では語の輪を回さない。
+    let firsts: Vec<char> = order.iter().filter_map(|t| t.chars().next()).collect();
 
     let stripped = strip_comments(src);
     let mut hits = Vec::new();
@@ -347,7 +382,7 @@ pub fn scan_tokens(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
         let mut prev_is_ident = false;
         let mut skip_until = 0usize;
         for (at, ch) in line.char_indices() {
-            if at >= skip_until {
+            if at >= skip_until && firsts.contains(&ch) {
                 for token in &order {
                     if prev_is_ident && needs_left_anchor(token) {
                         continue;
@@ -387,13 +422,28 @@ pub struct ManifestLine {
 }
 
 /// TOML の行末コメントを落とす。引用符の内側の `#` はコメントではない。
+///
+/// 開いた引用符の種類を覚える（`"…"` の中の `'` や、`'…'` の中の `"` では閉じない）。
+/// 逃がしの `\` は `"…"` の中だけにある（`'…'` は逃がしを持たない）。
 fn strip_toml_comment(line: &str) -> &str {
-    let mut in_string = false;
+    let mut open: Option<char> = None;
+    let mut escaped = false;
     for (at, ch) in line.char_indices() {
-        match ch {
-            '"' | '\'' => in_string = !in_string,
-            '#' if !in_string => return &line[..at],
-            _ => {}
+        match open {
+            Some(quote) => {
+                if escaped {
+                    escaped = false;
+                } else if quote == '"' && ch == '\\' {
+                    escaped = true;
+                } else if ch == quote {
+                    open = None;
+                }
+            }
+            None => match ch {
+                '"' | '\'' => open = Some(ch),
+                '#' => return &line[..at],
+                _ => {}
+            },
         }
     }
     line
@@ -500,13 +550,14 @@ fn collect_manifests(dir: &Path, out: &mut Vec<PathBuf>) {
         Ok(entries) => entries,
         Err(err) => panic!("列挙できないディレクトリがある: {} ({err})", dir.display()),
     };
+    let has_manifest = dir.join("Cargo.toml").is_file();
     for entry in entries {
         let entry = entry.expect("ディレクトリ項目の読み取りに失敗した");
         let path = entry.path();
         let file_type = entry.file_type().expect("種別の判定に失敗した");
         let name = entry.file_name().to_string_lossy().into_owned();
         if file_type.is_dir() {
-            if EXCLUDED_DIRS.contains(&name.as_str()) {
+            if skip_dir(&name, has_manifest) {
                 continue;
             }
             collect_manifests(&path, out);
@@ -514,4 +565,139 @@ fn collect_manifests(dir: &Path, out: &mut Vec<PathBuf>) {
             out.push(path);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// 見張りが共有する取り回し（判定の語と例外表は各見張りが持つ）
+// ---------------------------------------------------------------------------
+
+/// 走査で当たった 1 件。
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Hit {
+    /// ワークスペース根からの相対パス（区切りは `/`）。
+    pub path: String,
+    /// 1 始まりの行番号。
+    pub line: usize,
+    /// 当たった語。
+    pub token: String,
+}
+
+impl Hit {
+    pub fn new(path: impl Into<String>, line: usize, token: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            line,
+            token: token.into(),
+        }
+    }
+}
+
+impl std::fmt::Display for Hit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{} （語: {}）", self.path, self.line, self.token)
+    }
+}
+
+impl std::fmt::Display for FileLines {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ({} 行)", self.path, self.lines)
+    }
+}
+
+/// 与えられたファイル群を走査する。
+pub fn scan_sources(paths: &[String], tokens: &[&str]) -> Vec<Hit> {
+    let mut hits = Vec::new();
+    for path in paths {
+        for (line, token) in scan_tokens(&read_source(path), tokens) {
+            hits.push(Hit::new(path.clone(), line, token));
+        }
+    }
+    hits
+}
+
+/// 例外表の 1 項（先頭がパスの組）。見張りごとに表の形が違うので、パスの取り出しだけをそろえる。
+pub trait AllowEntry {
+    fn path(&self) -> &str;
+}
+
+impl AllowEntry for &str {
+    fn path(&self) -> &str {
+        self
+    }
+}
+
+impl<A> AllowEntry for (&str, A) {
+    fn path(&self) -> &str {
+        self.0
+    }
+}
+
+impl<A, B> AllowEntry for (&str, A, B) {
+    fn path(&self) -> &str {
+        self.0
+    }
+}
+
+/// 例外表のパスだけを取り出す（判定に渡す形）。
+pub fn allowed_paths<T: AllowEntry>(table: &[T]) -> Vec<&str> {
+    table.iter().map(AllowEntry::path).collect()
+}
+
+/// 例外表から 1 件だけ落としたパスの一覧を作る（見張りの較正で使う）。
+pub fn allowed_paths_without<'a, T: AllowEntry>(table: &'a [T], dropped: &str) -> Vec<&'a str> {
+    allowed_paths(table)
+        .into_iter()
+        .filter(|path| *path != dropped)
+        .collect()
+}
+
+/// 例外表に載っていない当たり（＝違反）を返す（純関数）。
+pub fn unlisted<T: AllowEntry>(hits: &[Hit], allow: &[T]) -> Vec<Hit> {
+    hits.iter()
+        .filter(|h| !allow.iter().any(|entry| entry.path() == h.path))
+        .cloned()
+        .collect()
+}
+
+/// 違反の一覧を人が読める形にする（どのファイルの何行目かが分かること）。
+pub fn render<T: Display>(items: &[T]) -> String {
+    items
+        .iter()
+        .map(|item| format!("  {item}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// コメントを**除かずに**生テキストから走査語を探す（純関数）。
+///
+/// 着手前の実測に使った `rg`／`grep` と同じ見方（アンカーもコメント除去もしない素の
+/// 部分一致）にそろえてある。修飾つきの綴りの内側にある裸の綴りも別に数える。
+/// **母数が動く条件をそのまま写すのが目的なので、ここを賢くしてはいけない。**
+pub fn raw_occurrences<T: AsRef<str>>(src: &str, tokens: &[T]) -> Vec<(usize, String)> {
+    let mut hits = Vec::new();
+    for (index, line) in src.lines().enumerate() {
+        for token in tokens {
+            if line.contains(token.as_ref()) {
+                hits.push((index + 1, token.as_ref().to_string()));
+            }
+        }
+    }
+    hits
+}
+
+/// 開発側の依存として `package` を引いているか（純関数・較正の陽性側）。
+pub fn has_dev_dependency_on(src: &str, package: &str) -> bool {
+    manifest_lines(src).iter().any(|l| {
+        l.section.contains("dev-dependencies")
+            && if l.is_header {
+                mentions_crate(&l.section, package)
+            } else {
+                mentions_crate(&l.text, package)
+            }
+    })
+}
+
+/// manifest の見本。依存行だけを差し替えて両側を作る（依存行は必ず 6 行目）。
+pub fn manifest_fixture(section: &str, line: &str) -> String {
+    format!("[package]\nname = \"demo\"\n\n[{section}]\ntracing = {{ workspace = true }}\n{line}\n")
 }

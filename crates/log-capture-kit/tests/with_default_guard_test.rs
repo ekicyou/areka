@@ -50,8 +50,9 @@ mod workspace_scan;
 use std::collections::{BTreeMap, BTreeSet};
 
 use workspace_scan::{
-    ManifestLine, manifest_lines, mentions_crate, production_dependencies_on, read_source,
-    scan_tokens, walk_workspace_sources, workspace_manifests,
+    Hit, has_dev_dependency_on, manifest_fixture, manifest_lines, mentions_crate,
+    production_dependencies_on, raw_occurrences, read_source, render, scan_sources, scan_tokens,
+    unlisted, walk_workspace_sources, workspace_manifests,
 };
 
 // ---------------------------------------------------------------------------
@@ -159,27 +160,6 @@ const ALLOWED_GLOBAL_CAPTURE_COUNT: usize = 3;
 // 走査（⑴⑵）
 // ---------------------------------------------------------------------------
 
-/// 走査で当たった 1 件。
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct Hit {
-    /// ワークスペース根からの相対パス（区切りは `/`）。
-    path: String,
-    /// 1 始まりの行番号。
-    line: usize,
-    /// 当たった語。
-    token: String,
-}
-
-impl Hit {
-    fn new(path: impl Into<String>, line: usize, token: impl Into<String>) -> Self {
-        Self {
-            path: path.into(),
-            line,
-            token: token.into(),
-        }
-    }
-}
-
 /// 見張りの対象（共有 crate の定義を除いた全ソース）。
 fn watched_sources() -> Vec<String> {
     walk_workspace_sources()
@@ -196,25 +176,6 @@ fn kit_definition_sources() -> Vec<String> {
         .collect()
 }
 
-/// 与えられたファイル群を走査する。
-fn scan_sources(paths: &[String], tokens: &[&str]) -> Vec<Hit> {
-    let mut hits = Vec::new();
-    for path in paths {
-        for (line, token) in scan_tokens(&read_source(path), tokens) {
-            hits.push(Hit::new(path.clone(), line, token));
-        }
-    }
-    hits
-}
-
-/// 例外表に載っていない当たり（＝違反）を返す（純関数）。
-fn unlisted(hits: &[Hit], allow: &[(&str, &str)]) -> Vec<Hit> {
-    hits.iter()
-        .filter(|h| !allow.iter().any(|(path, _)| *path == h.path))
-        .cloned()
-        .collect()
-}
-
 /// 例外表にあるのに当たりが 1 件も無い項目（＝陳腐化した例外）を返す（純関数）。
 fn stale_entries(hits: &[Hit], allow: &[(&str, &str)]) -> Vec<String> {
     allow
@@ -222,14 +183,6 @@ fn stale_entries(hits: &[Hit], allow: &[(&str, &str)]) -> Vec<String> {
         .filter(|(path, _)| !hits.iter().any(|h| h.path == *path))
         .map(|(path, _)| (*path).to_string())
         .collect()
-}
-
-/// 違反の一覧を人が読める形にする。
-fn render(hits: &[Hit]) -> String {
-    hits.iter()
-        .map(|h| format!("  {}:{} ({})", h.path, h.line, h.token))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -245,38 +198,11 @@ const FEATURE_ENV_FILTER: &str = "\"env-filter\"";
 /// `env-filter` を宣言してよい唯一の crate。
 const ENV_FILTER_OWNER: &str = "wintf";
 
-/// 開発側の依存表か。
-fn is_dev_dependency_section(section: &str) -> bool {
-    section.contains("dev-dependencies")
-}
-
-/// 共有 crate を名指ししているか（`-` 表記と `_` 表記の両方）。
-fn mentions_kit(text: &str) -> bool {
-    mentions_crate(text, KIT_PACKAGE)
-}
-
-/// 製品側依存に共有 crate が現れている行を返す（要件 1.3／11.5）。
-fn production_kit_dependencies(src: &str) -> Vec<ManifestLine> {
-    production_dependencies_on(src, KIT_PACKAGE)
-}
-
-/// 開発側依存に共有 crate が現れているか（純関数・較正の陽性側）。
-fn has_dev_kit_dependency(src: &str) -> bool {
-    manifest_lines(src).iter().any(|l| {
-        is_dev_dependency_section(&l.section)
-            && if l.is_header {
-                mentions_kit(&l.section)
-            } else {
-                mentions_kit(&l.text)
-            }
-    })
-}
-
 /// 共有 crate の依存宣言で `env-filter` フィーチャを有効にしているか（純関数）。
 fn declares_env_filter_feature(src: &str) -> bool {
     manifest_lines(src).iter().any(|l| {
         !l.is_header
-            && (mentions_kit(&l.text) || mentions_kit(&l.section))
+            && (mentions_crate(&l.text, KIT_PACKAGE) || mentions_crate(&l.section, KIT_PACKAGE))
             && l.text.contains(FEATURE_ENV_FILTER)
     })
 }
@@ -371,22 +297,6 @@ const FILES_THAT_MUST_NOT_SPELL_THE_TOKENS: &[&str] = &[
     "crates/log-capture-kit/tests/workspace_scan_test.rs",
     "crates/log-capture-kit/tests/file_length_guard_test.rs",
 ];
-
-/// コメントを**除かずに**生テキストから走査語を探す（純関数）。
-///
-/// 着手前インベントリの `rg -l` と同じ見方（アンカーもコメント除去もしない素の部分一致）に
-/// そろえてある。**母数が動く条件をそのまま写すのが目的なので、ここを賢くしてはいけない。**
-fn raw_occurrences(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
-    let mut hits = Vec::new();
-    for (index, line) in src.lines().enumerate() {
-        for token in tokens {
-            if line.contains(token) {
-                hits.push((index + 1, (*token).to_string()));
-            }
-        }
-    }
-    hits
-}
 
 #[test]
 fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
@@ -488,7 +398,7 @@ const KNOWN_DEV_DEPENDENTS: &[&str] = &[
 fn the_shared_crate_never_appears_in_a_production_dependency_table() {
     let mut violations: Vec<String> = Vec::new();
     for (name, text) in workspace_manifests(KIT_PACKAGE) {
-        for line in production_kit_dependencies(&text) {
+        for line in production_dependencies_on(&text, KIT_PACKAGE) {
             violations.push(format!(
                 "  crates/{name}/Cargo.toml:{} [{}] {}",
                 line.line, line.section, line.text
@@ -513,7 +423,7 @@ fn the_shared_crate_is_actually_pulled_in_as_a_dev_dependency() {
     );
     let dev: BTreeMap<String, bool> = manifests
         .iter()
-        .map(|(name, text)| (name.clone(), has_dev_kit_dependency(text)))
+        .map(|(name, text)| (name.clone(), has_dev_dependency_on(text, KIT_PACKAGE)))
         .collect();
     for known in KNOWN_DEV_DEPENDENTS {
         assert_eq!(
@@ -640,11 +550,6 @@ fn scanning_finds_the_token_only_when_it_is_real_code() {
     );
 }
 
-/// manifest の見本。依存行だけを差し替えて両側を作る（依存行は必ず 6 行目）。
-fn manifest_fixture(section: &str, line: &str) -> String {
-    format!("[package]\nname = \"demo\"\n\n[{section}]\ntracing = {{ workspace = true }}\n{line}\n")
-}
-
 /// 見本の依存行（共有 crate を引く素の形）。
 const KIT_DEP_LINE: &str = "log-capture-kit = { path = \"../log-capture-kit\" }";
 
@@ -652,7 +557,7 @@ const KIT_DEP_LINE: &str = "log-capture-kit = { path = \"../log-capture-kit\" }"
 fn a_production_dependency_on_the_shared_crate_is_a_violation() {
     for section in ["dependencies", "build-dependencies"] {
         let src = manifest_fixture(section, KIT_DEP_LINE);
-        let found = production_kit_dependencies(&src);
+        let found = production_dependencies_on(&src, KIT_PACKAGE);
         assert_eq!(
             found.len(),
             1,
@@ -668,12 +573,12 @@ fn a_dev_dependency_on_the_shared_crate_is_not_a_violation() {
     for section in ["dev-dependencies", "target.'cfg(windows)'.dev-dependencies"] {
         let src = manifest_fixture(section, KIT_DEP_LINE);
         assert_eq!(
-            production_kit_dependencies(&src),
+            production_dependencies_on(&src, KIT_PACKAGE),
             Vec::new(),
             "[{section}] は開発側なので違反ではない"
         );
         assert!(
-            has_dev_kit_dependency(&src),
+            has_dev_dependency_on(&src, KIT_PACKAGE),
             "[{section}] は開発側の依存として検出されるはず"
         );
     }
@@ -683,7 +588,7 @@ fn a_dev_dependency_on_the_shared_crate_is_not_a_violation() {
 fn a_target_specific_production_dependency_is_still_a_violation() {
     let src = manifest_fixture("target.'cfg(windows)'.dependencies", KIT_DEP_LINE);
     assert_eq!(
-        production_kit_dependencies(&src).len(),
+        production_dependencies_on(&src, KIT_PACKAGE).len(),
         1,
         "プラットフォーム別の製品側依存も違反"
     );
@@ -693,7 +598,7 @@ fn a_target_specific_production_dependency_is_still_a_violation() {
 fn a_sub_table_production_dependency_is_still_a_violation() {
     // `[dependencies.log-capture-kit]` の形。見出し自身が名前を持つので行の中身には現れない。
     let src = "[package]\nname = \"demo\"\n\n[dependencies.log-capture-kit]\npath = \"../log-capture-kit\"\n";
-    let found = production_kit_dependencies(src);
+    let found = production_dependencies_on(src, KIT_PACKAGE);
     assert_eq!(found.len(), 1, "下位表の形も拾うはず: {found:?}");
     assert!(found[0].is_header, "見出し行 1 件として報告されるはず");
 }
@@ -705,7 +610,7 @@ fn a_commented_out_dependency_is_not_a_violation() {
         "# log-capture-kit = { path = \"../log-capture-kit\" }",
     );
     assert_eq!(
-        production_kit_dependencies(&src),
+        production_dependencies_on(&src, KIT_PACKAGE),
         Vec::new(),
         "コメントアウトされた依存は違反ではない"
     );
@@ -715,7 +620,7 @@ fn a_commented_out_dependency_is_not_a_violation() {
         "tracing-subscriber = { workspace = true } # log-capture-kit ではない",
     );
     assert_eq!(
-        production_kit_dependencies(&trailing),
+        production_dependencies_on(&trailing, KIT_PACKAGE),
         Vec::new(),
         "行末コメントの中の名前を拾ってはいけない"
     );
@@ -726,7 +631,7 @@ fn a_hash_inside_a_quoted_value_is_not_a_comment() {
     // 較正: コメント除去が乱暴だと引用符の中で行が切れ、依存行が消えて違反を見落とす。
     let src = "[dependencies]\ndemo = { git = \"https://example.invalid/x#tag\", package = \"log-capture-kit\" }\n";
     assert_eq!(
-        production_kit_dependencies(src).len(),
+        production_dependencies_on(src, KIT_PACKAGE).len(),
         1,
         "引用符の内側の # で行を切ってはいけない"
     );

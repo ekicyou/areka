@@ -27,7 +27,7 @@ mod workspace_scan;
 
 use workspace_scan::{
     FileLines, LINE_LIMIT, line_count, needs_left_anchor, over_limit, production_dependencies_on,
-    scan_tokens, strip_comments, walk_workspace_sources,
+    scan_tokens, skip_dir, strip_comments, walk_workspace_sources, workspace_root,
 };
 
 /// 走査語（逐語で置かないため 2 片に割る。上の module doc を参照）。
@@ -88,8 +88,8 @@ fn scan_tokens_reports_nothing_when_the_same_call_is_only_in_comments() {
 
 #[test]
 fn scan_tokens_anchors_the_token_so_an_identifier_suffix_is_not_a_hit() {
-    // `fn test_offset_default` の開き括弧までの形は走査語 `set_default` ＋開き括弧を含む
-    //（実在: `crates/wintf/src/ecs/types.rs`）。アンカーが無いと偽陽性になる。
+    // 名前の終わりがたまたま走査語と同じ関数（`test_off` ＋ `set_default` ＋開き括弧の形）。
+    // アンカーが無いと偽陽性になる。
     let decoy = format!("fn test_off{TOKEN_SET_DEFAULT}) {{}}");
     assert_eq!(
         scan_tokens(&decoy, &tokens()),
@@ -254,7 +254,7 @@ fn the_limit_is_the_one_thousand_lines_the_rule_names() {
     // よって見本は逐語の行数で書き、閾値はここで 1 度だけ直に主張する。
     assert_eq!(
         LINE_LIMIT, 1000,
-        "1 ファイル 1,000 行は要件 10.1 と structure.md:176 が名指しした値"
+        "1 ファイル 1,000 行は要件 10.1 と structure.md の Unit Tests の節が名指しした値"
     );
 }
 
@@ -316,7 +316,7 @@ fn over_limit_treats_the_limit_itself_as_within_bounds() {
 /// 上から「統合テストの入れ子」「実行例」「本番の隣に置いた兄弟テストファイル」「共有 crate 自身」。
 const KNOWN_SOURCES: &[&str] = &[
     "crates/areka-ghost/tests/ghost/spine_e2e_test.rs",
-    "crates/pilot/examples/pilot-clickthrough-alpha-toggle/main.rs",
+    "crates/areka/examples/emo-present/balloon.rs",
     "crates/areka/src/runtime_tests/spine_display_tests.rs",
     "crates/log-capture-kit/tests/capture_calibration_test.rs",
 ];
@@ -350,18 +350,106 @@ fn walk_does_not_vacuously_contain_everything() {
 }
 
 #[test]
-fn walk_excludes_build_artifacts_and_vendored_sources() {
+fn walk_stays_inside_crates_and_skips_only_build_output() {
+    let root = workspace_root();
     for path in walk_workspace_sources() {
         assert!(path.ends_with(".rs"), "拡張子が .rs でない: {path}");
         assert!(path.starts_with("crates/"), "走査範囲の外: {path}");
-        assert!(!path.contains("/target/"), "生成物を拾っている: {path}");
-        assert!(
-            !path.contains("/vendors/"),
-            "外部取り込みを拾っている: {path}"
-        );
         assert!(
             !path.contains('\\'),
             "区切り文字が正規化されていない: {path}"
+        );
+        // `target` の段に入ってよいのは、親に `Cargo.toml` が無いとき（モジュールのフォルダ）だけ。
+        let segments: Vec<&str> = path.split('/').collect();
+        for (at, segment) in segments.iter().enumerate() {
+            if *segment == "target" && at + 1 < segments.len() {
+                let parent = root.join(segments[..at].join("/"));
+                assert!(
+                    !parent.join("Cargo.toml").is_file(),
+                    "ビルドの出力を拾っている: {path}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn only_a_target_next_to_a_manifest_is_skipped() {
+    assert!(
+        skip_dir("target", true),
+        "Cargo.toml の隣の target はビルドの出力なので飛ばす"
+    );
+    assert!(
+        !skip_dir("target", false),
+        "モジュールを割った target フォルダを飛ばすと、割ったファイルが見張りから黙って消える"
+    );
+    for name in ["vendors", ".git"] {
+        assert!(
+            !skip_dir(name, true),
+            "{name} は名前だけで飛ばさない（走査は crates/ から始まる）"
+        );
+    }
+}
+
+/// コメント除去の枝ごとに「走る行」と「隠れる行」を対で縛る（表の 1 行が 1 つの枝）。
+///
+/// どの行も、リテラルの中に `//` を置き、その後ろに走るコードと本物の行末コメントを置く。
+/// 枝が壊れるとリテラルが早く閉じて（または閉じずに）、走るコードが消えるか隠れる行が残る。
+#[test]
+fn strip_comments_keeps_code_after_every_literal_kind() {
+    // (枝, 入力, 走る行, 隠れる行)
+    let rows: [(&str, &str, &str, &str); 6] = [
+        (
+            "# 付きで中に引用符を含む生の文字列",
+            r##"let s = r#"a "// b"#; live_raw(); // hidden_raw"##,
+            "live_raw();",
+            "hidden_raw",
+        ),
+        (
+            "逃がした引用符",
+            r#"let s = "a \" // b"; live_escape(); // hidden_escape"#,
+            "live_escape();",
+            "hidden_escape",
+        ),
+        (
+            "バイト文字列",
+            r#"let s = b"a // b"; live_byte(); // hidden_byte"#,
+            "live_byte();",
+            "hidden_byte",
+        ),
+        (
+            "# 付きのバイトの生の文字列",
+            r##"let s = br#"a "// b"#; live_raw_byte(); // hidden_raw_byte"##,
+            "live_raw_byte();",
+            "hidden_raw_byte",
+        ),
+        (
+            "逃がした単引用符の文字",
+            r#"let c = ('\'','"'); live_char(); // hidden_char"#,
+            "live_char();",
+            "hidden_char",
+        ),
+        (
+            "CRLF の行をまたぐ文字列",
+            "let s = \"a\r\n// b\"; live_crlf(); // hidden_crlf\r\nnext_line();\r\n",
+            "live_crlf();",
+            "hidden_crlf",
+        ),
+    ];
+    for (branch, src, live, hidden) in rows {
+        let stripped = strip_comments(src);
+        assert!(
+            stripped.contains(live),
+            "{branch}: 走るコードが消えている: {stripped:?}"
+        );
+        assert!(
+            !stripped.contains(hidden),
+            "{branch}: 行末コメントが残っている: {stripped:?}"
+        );
+        assert_eq!(
+            stripped.matches('\n').count(),
+            src.matches('\n').count(),
+            "{branch}: 改行の数が変わった（行番号が狂う）: {stripped:?}"
         );
     }
 }
@@ -411,6 +499,26 @@ demo = { package = \"sample_ghost_kit\" }
         1,
         "`_` 表記の名前を拾えていない"
     );
+}
+
+/// 較正: TOML のコメント除去は**開いた引用符の種類**を覚え、`"…"` の中の逃がしを飛ばす。
+///
+/// 取り違えると引用符の内側の `#` で行が切れ、依存の行が消えて本番依存の見張りが見逃す。
+#[test]
+fn a_hash_inside_a_quoted_value_with_the_other_quote_is_not_a_comment() {
+    for value in [
+        r#""https://x/it's#v""#,
+        r##"'https://x/a"#v'"##,
+        r##""https://x/a\"#v""##,
+    ] {
+        let src =
+            format!("[dependencies]\ndemo = {{ git = {value}, package = \"log-capture-kit\" }}\n");
+        assert_eq!(
+            production_dependencies_on(&src, "log-capture-kit").len(),
+            1,
+            "引用符の取り違えで行が切れている: {value}"
+        );
+    }
 }
 
 /// 左端のアンカーは**識別子で始まる語にだけ**効く（要件 1.8）。

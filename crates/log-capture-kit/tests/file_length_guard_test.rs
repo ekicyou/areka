@@ -46,7 +46,9 @@ mod workspace_scan;
 
 use std::collections::BTreeSet;
 
-use workspace_scan::{FileLines, LINE_LIMIT, measure_workspace_sources, over_limit};
+use workspace_scan::{
+    LINE_LIMIT, allowed_paths, allowed_paths_without, measure_workspace_sources, over_limit, render,
+};
 
 // ---------------------------------------------------------------------------
 // 例外表
@@ -84,39 +86,13 @@ const OVER_LIMIT_ALLOWED_COUNT: usize = 4;
 const CALIBRATION_DROPPED_ENTRY: &str = "crates/areka-runtime/src/frame_transition_branch_tests.rs";
 
 // ---------------------------------------------------------------------------
-// 表と実測の取り回し
-// ---------------------------------------------------------------------------
-
-/// 例外表のパスだけを取り出す（判定に渡す形）。
-fn allowed_paths() -> Vec<&'static str> {
-    OVER_LIMIT_ALLOWED.iter().map(|(path, _)| *path).collect()
-}
-
-/// 例外表から 1 件だけ落としたパスの一覧を作る（要件 10.3 の自己検査で使う）。
-fn allowed_paths_without(dropped: &str) -> Vec<&'static str> {
-    allowed_paths()
-        .into_iter()
-        .filter(|path| *path != dropped)
-        .collect()
-}
-
-/// 違反の一覧を人が読める形にする。
-fn render(files: &[FileLines]) -> String {
-    files
-        .iter()
-        .map(|f| format!("  {} ({} 行)", f.path, f.lines))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-// ---------------------------------------------------------------------------
 // 主検査（要件 10.1）
 // ---------------------------------------------------------------------------
 
 #[test]
 fn no_source_file_exceeds_the_line_limit_outside_the_allow_table() {
     let measured = measure_workspace_sources();
-    let violations = over_limit(&measured, &allowed_paths());
+    let violations = over_limit(&measured, &allowed_paths(OVER_LIMIT_ALLOWED));
     assert!(
         violations.is_empty(),
         "1 ファイル 1,000 行の目安（structure.md:176）を超えるファイルがある。\
@@ -159,12 +135,12 @@ fn the_over_limit_allow_table_declares_its_own_size_and_reasons() {
 fn the_over_limit_allow_table_has_no_duplicate_entries() {
     // 同じパスが 2 度載ると、件数の宣言を通ったまま実質の例外が 1 件減る
     //（＝表の見かけの大きさと効き目が食い違う）。
-    let unique: BTreeSet<&str> = allowed_paths().into_iter().collect();
+    let unique: BTreeSet<&str> = allowed_paths(OVER_LIMIT_ALLOWED).into_iter().collect();
     assert_eq!(
         unique.len(),
         OVER_LIMIT_ALLOWED_COUNT,
         "例外表に重複した項目がある: {:?}",
-        allowed_paths()
+        allowed_paths(OVER_LIMIT_ALLOWED)
     );
 }
 
@@ -201,12 +177,15 @@ fn dropping_a_known_exception_turns_the_guard_red() {
     // 走査器の較正（workspace_scan_test.rs）が既に持っており、ここで確かめたいのは
     // 「この表とこのワークスペースの組み合わせで、番人が本当に鳴るか」である。
     assert!(
-        allowed_paths().contains(&CALIBRATION_DROPPED_ENTRY),
+        allowed_paths(OVER_LIMIT_ALLOWED).contains(&CALIBRATION_DROPPED_ENTRY),
         "較正で外す 1 件は例外表の項目でなければならない: {CALIBRATION_DROPPED_ENTRY}"
     );
 
     let measured = measure_workspace_sources();
-    let violations = over_limit(&measured, &allowed_paths_without(CALIBRATION_DROPPED_ENTRY));
+    let violations = over_limit(
+        &measured,
+        &allowed_paths_without(OVER_LIMIT_ALLOWED, CALIBRATION_DROPPED_ENTRY),
+    );
     let paths: Vec<&str> = violations.iter().map(|f| f.path.as_str()).collect();
     assert_eq!(
         paths,
@@ -239,7 +218,7 @@ fn the_measurement_is_not_vacuous_and_matches_the_allow_table() {
     );
 
     let found: BTreeSet<&str> = all_over.iter().map(|f| f.path.as_str()).collect();
-    let listed: BTreeSet<&str> = allowed_paths().into_iter().collect();
+    let listed: BTreeSet<&str> = allowed_paths(OVER_LIMIT_ALLOWED).into_iter().collect();
     assert_eq!(
         found, listed,
         "実測した超過ファイルの集合が例外表と一致しない。\

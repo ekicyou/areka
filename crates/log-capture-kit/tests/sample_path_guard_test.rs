@@ -65,8 +65,8 @@ use std::collections::BTreeSet;
 use sample_ghost_kit::SAMPLES;
 
 use workspace_scan::{
-    manifest_lines, mentions_crate, production_dependencies_on, read_source, scan_tokens,
-    walk_workspace_sources, workspace_manifests,
+    has_dev_dependency_on, manifest_fixture, production_dependencies_on, raw_occurrences,
+    read_source, scan_tokens, walk_workspace_sources, workspace_manifests,
 };
 
 // ---------------------------------------------------------------------------
@@ -656,18 +656,6 @@ fn a_spelling_in_a_comment_is_not_a_hit_but_the_same_line_of_code_is() {
 // 本番依存の見張り（要件 1.7・10.3）
 // ---------------------------------------------------------------------------
 
-/// 開発側の依存として `package` を引いているか（純関数・較正の陽性側）。
-fn has_dev_dependency(src: &str, package: &str) -> bool {
-    manifest_lines(src).iter().any(|l| {
-        l.section.contains("dev-dependencies")
-            && if l.is_header {
-                mentions_crate(&l.section, package)
-            } else {
-                mentions_crate(&l.text, package)
-            }
-    })
-}
-
 /// 例外表のクレートか。
 fn is_gateway_user(name: &str) -> bool {
     GATEWAY_USERS.iter().any(|(user, _)| *user == name)
@@ -707,7 +695,7 @@ fn the_sample_gateway_is_actually_pulled_in_as_a_dev_dependency() {
     );
     let dev: Vec<&str> = manifests
         .iter()
-        .filter(|(_, text)| has_dev_dependency(text, KIT_PACKAGE))
+        .filter(|(_, text)| has_dev_dependency_on(text, KIT_PACKAGE))
         .map(|(name, _)| name.as_str())
         .collect();
     assert!(
@@ -715,11 +703,6 @@ fn the_sample_gateway_is_actually_pulled_in_as_a_dev_dependency() {
         "窓口 crate を dev-dependency として引いている crate が少なすぎる＝名前の照合が \
          壊れている疑い: {dev:?}"
     );
-}
-
-/// manifest の見本。依存行だけを差し替えて両側を作る（依存行は必ず 6 行目）。
-fn manifest_fixture(section: &str, line: &str) -> String {
-    format!("[package]\nname = \"demo\"\n\n[{section}]\ntracing = {{ workspace = true }}\n{line}\n")
 }
 
 /// 見本の依存行（窓口 crate を引く素の形）。
@@ -759,7 +742,7 @@ fn a_dev_dependency_on_the_sample_gateway_is_not_a_violation() {
             "[{section}] は開発側なので違反ではない"
         );
         assert!(
-            has_dev_dependency(&src, KIT_PACKAGE),
+            has_dev_dependency_on(&src, KIT_PACKAGE),
             "[{section}] は開発側の依存として検出されるはず"
         );
     }
@@ -815,7 +798,7 @@ fn each_gateway_user_is_actually_pulled_in_as_a_dev_dependency() {
     for (user, _) in GATEWAY_USERS {
         let dev: Vec<String> = workspace_manifests(user)
             .into_iter()
-            .filter(|(_, text)| has_dev_dependency(text, user))
+            .filter(|(_, text)| has_dev_dependency_on(text, user))
             .map(|(name, _)| name)
             .collect();
         assert!(
@@ -828,7 +811,7 @@ fn each_gateway_user_is_actually_pulled_in_as_a_dev_dependency() {
         .find(|(name, _)| name == "areka")
         .expect("crates/areka/Cargo.toml があるはず");
     assert!(
-        has_dev_dependency(&areka.1, "real-run-kit"),
+        has_dev_dependency_on(&areka.1, "real-run-kit"),
         "areka の [dev-dependencies] に real-run-kit が無い"
     );
 }
@@ -872,7 +855,7 @@ fn a_production_dependency_on_a_gateway_user_is_a_violation() {
         Vec::new(),
         "[dev-dependencies] は違反ではない"
     );
-    assert!(has_dev_dependency(&dev, "real-run-kit"));
+    assert!(has_dev_dependency_on(&dev, "real-run-kit"));
 }
 
 // ---------------------------------------------------------------------------
@@ -886,19 +869,6 @@ fn the_guard_file_itself_is_not_a_hit() {
         Vec::new(),
         "見張り自身が走査語を逐語で持ってしまっている（concat! で割るか登記表から組むこと）"
     );
-}
-
-/// コメントを**除かずに**生テキストから走査語を探す（純関数）。
-fn raw_occurrences(src: &str, tokens: &[String]) -> Vec<(usize, String)> {
-    let mut hits = Vec::new();
-    for (index, line) in src.lines().enumerate() {
-        for token in tokens {
-            if line.contains(token.as_str()) {
-                hits.push((index + 1, token.clone()));
-            }
-        }
-    }
-    hits
 }
 
 #[test]

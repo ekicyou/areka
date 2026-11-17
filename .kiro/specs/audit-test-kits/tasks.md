@@ -43,7 +43,7 @@
   - _Requirements: 3.1, 3.3, 5.3, 7.1, 7.2, 7.3_
 
 - [ ] 3. log-capture-kit の見張り（tests）
-- [ ] 3.1 見張りの走査部品を直し、手助けを寄せる（G1: 17・19・20・30・33・72・73 の mod.rs と workspace_scan_test の分）
+- [x] 3.1 見張りの走査部品を直し、手助けを寄せる（G1: 17・19・20・30・33・72・73 の mod.rs と workspace_scan_test の分）
   - 17: 飛ばす決めを純関数 `skip_dir(name, parent_has_manifest)` に（`target` は親に `Cargo.toml` があるときだけ・`vendors` と `.git` を外す）。`workspace_scan_test.rs` の飛ばしのテスト（352-367 行あたり）を改める
   - 19: 列挙の証人を `crates/areka/examples/emo-present/balloon.rs` にする
   - 20: 剥がしの枝ごとの「走る行／隠れる行」の表の形のテスト 1 本（6 行）
@@ -214,3 +214,4 @@
 - 範囲の外: `cargo clippy -p areka-emo-present`／`areka-emo-text` は依存の `wintf` の 51 件の誤りで通らない（本 spec は wintf を 1 行の言い直しのほか触らない）。`/kiro-complete` の棚卸で扱う
   - 2.2: 足したテスト無し（較正なし）。消す前の grep（コードの宣言のほかは本 spec の文書と `completed/areka-P0-test-cage-determinism/verification/` だけ）: `format_line_is_byte_identical_to_current_formatting_code` 1・`level_is_rendered_with_display_not_debug` 1・`capture_lines_does_not_leak_the_sentinel` 1・`establishing_the_probes_is_idempotent` 1・`the_switch_variable_lives_in_the_workspace_namespace` 1（completed にも 0）・`FieldCollector` は道具の外 0・`interest_probes_enabled` は道具の外 0。41 の `capture_tests.rs` は `DONE` の数の 3 行だけを消し、テストは残した。`interest_probes_enabled` は `#[cfg(test)] pub(crate)`（使い手がテストだけで、`pub(crate)` だけだと clippy の dead_code）
   - 2.2: 39 の「それに含まれる重なりの 1 本」は research.md の引く `capture_tests.rs:385-388`・389-392 が在らず（253 行）、名指しの 3 本で Lean -49 に合うので、見つからないものとして消さなかった（6.1 のかけ直しで拾う）
+  - 3.1: `skip_dir` を名前だけの古い除外に戻す → `only_a_target_next_to_a_manifest_is_skipped` が赤。TOML の剥がしを 1 つの切替に戻し `\"` 飛ばしを外す → `a_hash_inside_a_quoted_value_with_the_other_quote_is_not_a_comment` が赤。生の文字列の `#` の数を 0 と数える／普通の文字列と文字の逃がしの枝を外す（3 通り）→ `strip_comments_keeps_code_after_every_literal_kind` が赤。各見張りのテスト数は移しの前後で同じ（file_length 6・sample_path 21・temp_path 16・with_default 24）。改名: `walk_excludes_build_artifacts_and_vendored_sources` → `walk_stays_inside_crates_and_skips_only_build_output`。消す前の grep: `mentions_kit` は本 spec の research.md 1・completed 1、`production_kit_dependencies` は本 spec 1・completed 3、`has_dev_kit_dependency`・`is_dev_dependency_section` は 0。30 の時間（参考）: `cargo test -p log-capture-kit --tests` の実行体の和で前 約 64 秒 → 後 約 24 秒
