@@ -29,14 +29,15 @@
 
 - 受け持つ 125 ファイル（`research.md` の 1.1 の表）の直し: `crates/areka-runtime/` のうち `frame/`・`frame*.rs`・切替の見直しの持ち物・`placement_tests/transition_*` を除く全部（`Cargo.toml`・`examples/collision-probe*`・`placement_tests/mod.rs` の宣言の印を含む）、本体の `runtime_tests/` の受け持ちの分、本体の `session/` の `hooks.rs`・`reload*`・`runtime_boot*`・`switch_copy*`・`same_folder_pin*`・e2e の 2 本。
 - `areka-runtime` の公開の面の次の変化（議題 4 で「読み手を同じ変更で全部直す」と確定した分）: `BootWiringError::SpawnUi` の削除（4 番）・`RuntimeBootError` の削除と `BootRuntimeFn` の戻りの形（48 番）・`BootRuntimeFn` を `pub` に（49 番）・外に使い手の無い 5 項目の狭め（36 番）・`DescriptNotes.empty` の削除（71 番）・使い手の無い `pub` の狭め（46・53・59・60・68・69・77 番）・新しい event 名 `reload_shell_replay_unavailable`（62 番）。
-- テストの支え（`#[cfg(any(test, feature = "test-support"))]`）への足し算: `consumer_ledger::test_support::carrier_cue`（97 番）・`spine::settle_bounded`／`settle_bounded_with`（95 番）・`source_text_test_support::crate_path`（102 番・未決 1 の仮置き）。
+- テストの支え（`#[cfg(any(test, feature = "test-support"))]`）への足し算: `consumer_ledger::test_support::carrier_cue`（97 番）・`spine::settle_bounded`／`settle_bounded_with`（95 番）・`source_text_test_support::crate_path`（102 番・設計の討議の議題 1 で確定）。
 - 本体の spine の足場（`crates/areka/src/runtime_tests/spine.rs`）の形の変化: 目印の面を止める門（2 番）・降ろしの失敗で落ちる後片付け（3 番）・装着の前提を 1 本にした `attach_all`（99 番）。
 
 ### 範囲の外（持たないもの）
 
 - 範囲の外のファイルの見直し。範囲の外で変えるのは、この spec の直しで壊れる呼び手だけ（要件 3.2・7.2）:
   - 4 番（件 1）: `crates/areka-actor/src/{ui,lib}.rs`・`crates/areka-actor/tests/{toy_ui_pump_test,ui_span_test}.rs`・`crates/areka-emo-text/` の 13 ファイル（`research.md` の 3 節の表）・本体の `crates/areka/src/input_events/balloon_choice_settle_tests.rs`（持ち主 `audit-areka-input-menu` は走っていない・要件 5.1 で申し合わせなしと確定）。
-  - 102 番（未決 1 の仮置き）: `crates/areka/src/crate_source_test_support.rs` の `crate_path` を `areka-runtime` の読み口の出し直しにする 1 行と、その説明（持ち主 `audit-areka-app` は走っていない）。
+  - 102 番（設計の討議の議題 1）: `crates/areka/src/crate_source_test_support.rs` の `crate_path` を `areka-runtime` の読み口の出し直しにする 1 行と、その説明（持ち主 `audit-areka-app` は走っていない）。
+  - 54 番（設計の討議の議題 2）: `RecordedCall::Status` の枝を消して壊れる match の腕 1 行ずつ＝`crates/areka/src/update/worker_path_tests.rs`・`crates/areka/src/shell_balloon_switch_session_lap_tests.rs`・`crates/areka/src/ghost_session_switch_tests.rs`・`crates/areka/src/session/ghost_switch_talk_clock_tests.rs`（持ち主はどれも C22 で走っていない）。`RecordedCall` はテストのときだけ作られる型（`#[cfg(any(test, feature = "test-support"))]` の `spine`）で、本番の約束ではない。`crates/areka-ghost/tests/ghost/` の `RecordedCall` は別の型なので触らない。
   - 条件つき（実装で要ると分かったときだけ・条件が立ったことを検証の記録に書く）: 62 番の読み手 `crates/areka/src/session/ghost_switch_reload_tests.rs`（持ち主 `audit-emo2-boot-switch` は C22 で走っていない）。
 - 触らない（C22 の約束・要件 7.3〜7.5）: `crates/areka-runtime/src/frame/`・`frame*.rs`（`frame_test_support::count_level` は使うだけ）・`crates/areka-placement/`（`test_support` は使うだけ）・`crates/log-capture-kit/tests/file_length_guard_test.rs`・`placement_tests/transition_*` の中身・`vendors/`。
 - emo-text に新しいソースファイルを足さない（4 番は既にあるファイルを直すだけ）。
@@ -57,7 +58,7 @@
 - `areka_runtime::BootRuntimeFn` の戻りが `Result<GhostRuntime, GhostBootError>` になり、`RuntimeBootError` が消える（48 番）。`BootRuntimeFn` は `pub type` になる（49 番）。名前で読む所は本体の `session/runtime_boot.rs`・`runtime_boot_tests.rs` だけ。本番で `boot_runtime` を `wire_runtime` へ渡す `crates/areka/src/ghost_session.rs`（`wire_runtime(` の呼び出し）は型が合えば直しは要らない（変えずにコンパイルが通ることを確かめる）。
 - `areka_runtime::reload_args::DescriptNotes` の欄 `empty` が消える（71 番）。読み手は本体の `session/reload.rs`・`reload_tests.rs`。
 - 本体の spine の足場の `shutdown_bounded` が、ゴーストの降ろしの失敗（アクターのスレッドの panic）で赤になる（3 番）。使い手は本体の spine 系のテスト 11 ファイル（呼び出し 22 か所・`grep -rn "\.shutdown_bounded()" crates/areka/src` の数）。`ghost_session_restart_tests.rs` は自前の `shutdown_bounded` を持ち、既に `.expect("降ろすのは成功する")` にしている（使い手ではなく、同じ直しの前例）。後から足場を使う spec（`audit-emo2-boot-frame`・`audit-emo2-boot-switch` ほか）は、降ろしの失敗を隠せない。
-- 偽の SHIORI（`areka_runtime::spine::ScriptedShioriBackend`）が `Status` を記録しなくなる（54 番）。`non_status_calls`・`call_count` の結果は変わらない（今も `Status` を除いて返す）。
+- 偽の SHIORI（`areka_runtime::spine::ScriptedShioriBackend`）が `Status` を記録しなくなり、`RecordedCall::Status` の枝が消える（54 番・議題 2）。`non_status_calls`・`call_count` の結果は変わらない（今も `Status` を除いて返す）。後から偽の SHIORI の記録を match する spec は `Status` の腕を書かない。
 - ログの行: `reload_shell_replay_unavailable` が増え、出し直しで seriko が無いときの `reload_shell_carry_unavailable` がそれへ替わる（62 番）。表示の指令の写像不能の `warn!` の文が「数でない・大きすぎる scope」を言う形へ替わる（1 番）。`\v` の荷物の開けない枝が `warn!` になる（15 番）。どれも字面で読む実機の確かめ・`tools/perf/`・手順書は 0 件（`research.md` の 2 節と、この設計の時点の grep）。読み手のテストは同じ変更で直す。
 - テストの置き場: `switch_cue`・`shell_balloon_resolve`・`shell_carry` の純粋な 6 本・`wire`・`settle`・film の E2E が本体から `areka-runtime` へ移る（件 6・34・95・102 番）。本体の `runtime_tests/mod.rs` の宣言が減る。
 
@@ -100,14 +101,14 @@ graph TB
 
 ## ファイルの構成
 
-範囲の中で新しく作るファイルは 0（移す 3 本は `git mv`）。範囲の外で変えるのは、4 番の 18 ファイルと、102 番の 1 ファイル（未決 1 の仮置き）だけ。
+範囲の中で新しく作るファイルは 0（移す 3 本は `git mv`）。範囲の外で変えるのは、4 番の 18 ファイル・102 番の 1 ファイル・54 番の 4 ファイルと、条件つきの 62 番の 1 ファイルだけ。
 
 ### 移すファイル（`git mv`・中身は直しに合わせて改める）
 
 ```
 crates/areka/src/runtime_tests/switch_cue_tests.rs        -> crates/areka-runtime/src/switch_cue_tests.rs          # 27 番（import を crate::skin_switch::SkinKind に）
 crates/areka/src/runtime_tests/spine_settle_tests.rs      -> crates/areka-runtime/src/spine_settle_tests.rs        # 95 番（settle の部品と一緒に）
-crates/areka/src/runtime_tests/film_playback_e2e_tests.rs -> crates/areka-runtime/src/film_playback_e2e_tests.rs   # 102 番（未決 1 の仮置き）・96 番の CoInitializeEx も消す
+crates/areka/src/runtime_tests/film_playback_e2e_tests.rs -> crates/areka-runtime/src/film_playback_e2e_tests.rs   # 102 番（議題 1）・96 番の CoInitializeEx も消す
 ```
 
 ### 消すファイル
@@ -132,7 +133,7 @@ crates/areka/src/runtime_tests/film_playback_e2e_tests.rs -> crates/areka-runtim
 - `src/consumer_ledger.rs`・`src/consumer_ledger_tests.rs`・`src/consumer_ledger_test_support.rs`・`src/consumer_ledger_agreement_tests.rs` — 11・13・57〜59・97 番。
 - `src/shell_carry.rs`・`src/shell_carry_tests.rs`・`src/shell_balloon_resolve_tests.rs`・`src/shell_cursor_assets.rs`・`src/shell_cursor_table.rs`・`src/zorder_wiring_tests.rs` — 11・12・14・26・33・60〜62 番。
 - `src/window_state_cue.rs`・`src/window_state_cue_tests.rs`・`src/zorder_cue.rs`・`src/zorder_cue_tests.rs`・`src/user_break_cue_tests.rs`・`src/user_break_cue_origin_tests.rs`・`src/reload_args.rs`・`src/reload_args_tests.rs`・`src/reload_cue.rs`・`src/script_restriction.rs`・`src/switch_cue.rs`（テストの宣言）・`src/placement_tests/mod.rs`（69 番の宣言の印だけ）・`src/placement_tests/{spawn_zorder_pair_deferred_tests,reset_balloon_pos_tests}.rs` — 14・15・27・63〜73 番。
-- `src/source_text_test_support.rs` — 102 番（`crate_path` を足す・未決 1 の仮置き）。
+- `src/source_text_test_support.rs` — 102 番（`crate_path` を足す・議題 1）。
 
 **本体 `crates/areka/src/`**
 - `runtime_tests/spine.rs` — 2（門）・3・4（`spawn_emo_text` の `expect` を消す）・9・20・21・24・35（説明）・83・84・87・95（settle を `areka-runtime` から引く）・98・99 番。
@@ -145,7 +146,8 @@ crates/areka/src/runtime_tests/film_playback_e2e_tests.rs -> crates/areka-runtim
 
 **範囲の外（直しで壊れる呼び手だけ）**
 - 4 番: `crates/areka-actor/src/{ui,lib}.rs`・`tests/{toy_ui_pump_test,ui_span_test}.rs`・`crates/areka-emo-text/src/{actor,actor_test_support,sink,sink_probe_tests,sink_talk_end_tests,actor_tests,actor_lookahead_tests,actor_runtime_frame_tests}.rs`・`tests/{attach_wiring_test,draw_readback_test,pipeline_test,viewbox_scroll_test}.rs`・`examples/emo-text-layer/drive.rs`・本体の `input_events/balloon_choice_settle_tests.rs`。
-- 102 番（未決 1 の仮置き）: `crates/areka/src/crate_source_test_support.rs`（`crate_path` を `areka_runtime::source_text_test_support::crate_path` の出し直しにし、説明の規則の文を合わせる）。
+- 102 番（議題 1）: `crates/areka/src/crate_source_test_support.rs`（`crate_path` を `areka_runtime::source_text_test_support::crate_path` の出し直しにし、説明の規則の文を合わせる）。
+- 54 番（議題 2）: `crates/areka/src/{update/worker_path_tests,shell_balloon_switch_session_lap_tests,ghost_session_switch_tests,session/ghost_switch_talk_clock_tests}.rs` の `RecordedCall::Status` の腕 1 行ずつ。
 
 ## 流れ
 
@@ -352,12 +354,12 @@ wait_until(what, Progress::Count(&probe), || {
 - コードの直しは要らない見込み（`research.md` の 78 番は「固定するテストが無い」の指摘）。縛るテストを 1 本足す（`session/reload_tests.rs`）`reload_requests_after_kanade_died_fail_once_and_leave_no_mark`: 送る相手（kanade）の受信端を落としてから shiori・ghost・shell を 1 回ずつ要求し、`reload_failed` の記録が各 1 件で、印 `ReloadInFlight` が World に残らない（4 回目の要求が `reload_in_flight` で断られない）。
 - テストが赤になったら、印が残る道（`reload.rs` の L383-L386・L405-L407・L572-L573）を直す（要件 4.2）。
 
-### 102 番 film の E2E を `areka-runtime` へ（未決 1 の仮置き）
+### 102 番 film の E2E を `areka-runtime` へ（設計の討議の議題 1 で確定）
 
 - 読み口は 1 つのまま、置き場を `areka-runtime` へ下ろす: `crate_path(krate, path) -> PathBuf`（在ることを確かめ、無ければ panic）を `areka-runtime/src/source_text_test_support.rs`（`pub mod`・`test-support`）へ移し、本体の `crate_source_test_support.rs` の `crate_path` は `pub(crate) use areka_runtime::source_text_test_support::crate_path;` の出し直しにする。`crate_source!` のマクロ（呼び手の crate の `CARGO_MANIFEST_DIR` で展開される）は本体に残す。本体のファイルの説明の規則の文（「本体のテストが別の crate のファイルを読むときの、たった 1 つの読み口」）は「本体と `areka-runtime` のテストが別の crate のファイルを読むときの読み口は `areka-runtime` の `crate_path` 1 つ」に直す。
 - `CARGO_MANIFEST_DIR` は `areka-runtime` でも `crates/areka-runtime` で、`..` の先の `crates/<krate>` は同じフォルダ＝読む道は今と同じ。
 - film の E2E 3 本を `areka-runtime/src/film_playback_e2e_tests.rs` へ移し（`lib.rs` に `#[cfg(test)] #[path] mod film_playback_e2e_tests;`）、`fixture` は `crate::source_text_test_support::crate_path(..)` を呼ぶ。使う crate（emo-atlas・compose・present・sakura・seriko・dola・wintf・windows・bevy_ecs）はどれも `areka-runtime` の依存にある。96 番の `com_init` は消す（`areka-runtime` のテストの実行ファイルにも、プロセスの寿命の MTA を立てる `crash_report_test_support` の据え付けがある＝本体と同じ）。
-- 仮置きでない案（未決 1）: 移さずに 102 番を ⑴（placement-crate-split 要件 5.4・5.5「読み口は 1 つ」）として残す。
+- 選ばなかった案: 移さずに 102 番を ⑴（placement-crate-split 要件 5.4・5.5「読み口は 1 つ」）として残す。読み口は 1 つのまま置き場を下ろせるので、残す理由が無い（2026-11-17 の設計の討議）。
 
 ## 指摘ごとの直し方（1〜102）
 
@@ -420,7 +422,7 @@ wait_until(what, Progress::Count(&probe), || {
 | 41 | 「4 写像」を消し、テストの名前 `all_variants` を見ている種類に合わせる | — | T5 |
 | 42 | assets の説明 2 か所を直す | — | T5 |
 | 43 | probe の説明を今の終わり方・`_with_shell`・`frame/` に直す | — | T6 |
-| 44 | 自動終了の値が読めないとき `warn!` を 1 行出す | —（examples は全体テストで走らない・記録の足し・未決 3） | T6 |
+| 44 | 自動終了の値が読めないとき `warn!` を 1 行出す | —（examples は全体テストでコンパイルまで・記録の足し・議題 3 で縛るテストを置かないと確定） | T6 |
 | 45 | `let _ = tx.send(..)` の失敗で `error!` を出す | —（同上） | T6 |
 | 46 | `acquire_emo2` を私有にし、説明の 1 つ目の箇条を消す | — | T5 |
 | 47 | Cargo の注釈を「examples の購読者」にする | — | T5 |
@@ -430,7 +432,7 @@ wait_until(what, Progress::Count(&probe), || {
 | 51 | 行番号を外し、関数名・定数名だけにする | — | T8 |
 | 52 | `HOLDER_ROWS` の説明を「2 つずつ取る檻が 2 本で同時に 4 つ」に直す | — | T8 |
 | 53 | `HOLDER_ROWS`・`NO_ROW` の `pub` を外す | — | T8 |
-| 54 | `status()` は `HelperStatus::Running` を返すだけにし、`Status` の push・除く filter・欄 `status` を消す。`RecordedCall::Status` の枝は残す（未決 2） | — | T8 |
+| 54 | `status()` は `HelperStatus::Running` を返すだけにし、`Status` の push・除く filter・欄 `status` を消す。`RecordedCall::Status` の枝も消し、読み手の match の腕（範囲の中の `spine_boot_smoke_tests.rs`・範囲の外の 4 ファイル）と `spine_conformance_judge.rs` の説明の文を直す（議題 2） | — | T8 |
 | 55 | 子が自分で `use std::time::{Duration, Instant}` し、親の 3 行を消す | — | T8 |
 | 56 | 3 行を消す | — | T8 |
 | 57 | 正準台帳を表 `const CANONICAL: [(&str, Option<&str>, CommandConsumer); 43]` と `for` にし、各行は `try_register(..).unwrap_or_else(\|e\| panic!("正準台帳: ({name}, {selector:?}) は一意（重複・排他違反は編集ミス）: {e:?}"))`。説明の 3 つの手写しの一覧は消し、「表 `CANONICAL` が正本」と書く | —（`samples_cover_exactly_the_ledger_rows` が行の集合を守る） | T9 |
@@ -478,7 +480,7 @@ wait_until(what, Progress::Count(&probe), || {
 | 99 | 足場に `fn attach_all(&mut self)`（`capture_logs(run_attach_phase)`・`planned=2 attached=2`・ERROR 0 の 3 つを確かめる）を 1 本置き、11 か所から呼ぶ | — | T17 |
 | 100 | doc に「足場は emo2 の 2 scope」と書き、assert は「足場の窓の scope がえみりの形と同じ」に読み替えて残す | — | T17 |
 | 101 | 本体の側の t_zwi05 の対照の 3 行を消す | — | T17 |
-| 102 | 読み口を `areka-runtime` へ下ろし、film の E2E を移す（上の節・未決 1） | — | T15 |
+| 102 | 読み口を `areka-runtime` へ下ろし、film の E2E を移す（上の節・議題 1） | — | T15 |
 
 ### 直さない・回した指摘（要件 2.5・5.9 の記録）
 
@@ -506,7 +508,7 @@ wait_until(what, Progress::Count(&probe), || {
 | T5 | lib.rs・assets・hit_region・wire: 5〜8・41・42・46〜49 | `lib.rs`・`assets.rs`・`hit_region.rs`・`adapter.rs`・`wire_tests.rs`・`sample_test_support.rs`・`Cargo.toml`・本体の `session/runtime_boot{,_tests}.rs` | T1・T4 |
 | T6 | examples: 43〜45 | `examples/collision-probe*` | — |
 | T7 | assets と当たり判定のテスト: 37〜40 | `assets_tests.rs`・`hit_region.rs` | T5 |
-| T8 | spine の足場（`areka-runtime`）と公開の戻し: 9（runtime 側）・10・36・50〜56 | `spine.rs`・`spine_wait*.rs`・`spine_hold_support.rs`・`talk_clock.rs`・`talk_lifecycle_tests.rs`・`crash_report_test_support.rs`・`shell_carry.rs`（`decide`） | — |
+| T8 | spine の足場（`areka-runtime`）と公開の戻し: 9（runtime 側）・10・36・50〜56 | `spine.rs`・`spine_wait*.rs`・`spine_hold_support.rs`・`talk_clock.rs`・`talk_lifecycle_tests.rs`・`crash_report_test_support.rs`・`shell_carry.rs`（`decide`）・54 番の match の腕（本体の `spine_boot_smoke_tests.rs`・範囲の外の 4 ファイル） | T3（`spine_boot_smoke_tests.rs` を触る束の順） |
 | T9 | 台帳: 13・57〜59・97 | `consumer_ledger*.rs`・本体の `consumer_ledger_agreement_tests.rs`・`switch_cue_tests.rs`（まだ本体） | — |
 | T10 | シェルの資産: 12・60〜62 | `shell_carry*.rs`・`shell_cursor_*.rs` | T8 |
 | T11 | cue と `placement_tests/`: 14・15・63〜73 | cue の各ファイル・`reload_args*.rs`・`script_restriction.rs`・`placement_tests/{mod,spawn_zorder_pair_deferred_tests,reset_balloon_pos_tests}.rs`・本体の `session/reload{,_tests}.rs`（71 番） | — |
@@ -520,7 +522,7 @@ wait_until(what, Progress::Count(&probe), || {
 | T19 | かけ直しの audit（最大 5 回・要件 9.1〜9.3・9.6・9.7） | 範囲の全部 | T18 |
 | T20 | 全体テストと既定の枝との差分の確かめ（要件 9.4・9.5） | 範囲の全部 | T19 |
 
-- 並べて進められる組: T1・T6・T7（T5 の後）・T8・T9・T11 は互いにファイルが重ならない。本体の `runtime_tests/spine.rs` を触る T2 → T3 → T4 → T14 → T15 → T16 → T17 は直列。
+- 並べて進められる組: T1・T6・T7（T5 の後）・T8（T3 の後）・T9・T11 は互いにファイルが重ならない。本体の `runtime_tests/spine.rs` を触る T2 → T3 → T4 → T14 → T15 → T16 → T17 は直列。
 - 規模の見立て: 20 タスク（ギャップ分析の見込み 20〜24・手間 L）。1 本のまま進める（要件 2.6）。
 
 ## 1,000 行の番人
@@ -545,7 +547,7 @@ wait_until(what, Progress::Count(&probe), || {
 | 要件 | 中身 | 受け持つ所 |
 |---|---|---|
 | 1.1・1.2・1.3・1.4・1.5・1.6・1.7 | 洗い出し | 済み（`research.md` の 1〜4 節）。T19 のかけ直しで同じ作法（範囲だけ・`main` を取り込んで測り直す・上限なし・全部読む・通し番号と組と場所・約束の印） |
-| 2.1・2.2・2.3・2.4・2.5・2.6 | 討議で確定 | 済み（requirements.md の「要件の討議で確定したこと」）。この設計の「直さない・回した指摘」の表（2.5）・未決 1 の ⑴ の案（2.4）・「タスクの束と順」の規模の記録（2.6）。⑶ に当たる指摘は 0 件で、2.3 の測りは要らない |
+| 2.1・2.2・2.3・2.4・2.5・2.6 | 討議で確定 | 済み（requirements.md の「要件の討議で確定したこと」）。この設計の「直さない・回した指摘」の表（2.5）・「タスクの束と順」の規模の記録（2.6）。⑶ に当たる指摘は 0 件で、2.3 の測りは要らない |
 | 3.1 | 全部直す | 「指摘ごとの直し方」の 100 行・T1〜T17 |
 | 3.2 | 呼び出し元まで | 4・48・71 番の読み手（「範囲の外」と各節）・移し替えの宣言（T15）。各タスクで形を変えた項目の名前をツリー全体で grep する |
 | 3.3 | 消す前に確かめる | 「消すファイル」の節・13・14・23・32・37〜39・67・90 番ほか。各タスクの完了の条件 |
@@ -553,7 +555,7 @@ wait_until(what, Progress::Count(&probe), || {
 | 4.1 | 1 件 1 本のテスト | 各行の「縛るテスト」（1・2・3・15・62・78 番）とテストの強さの直し（12・17・18・28・29・85・91・92 番） |
 | 4.2 | 赤から立てる | 1・2・3・15・62・78 番の節に「直しの前は赤」を書いた。2 番は門で順を作る |
 | 4.3 | 決定論 | 1・15・62 番は純関数か記録の捕捉。2 番は門（`Condvar`）で順を固定。3 番は台本に無い呼び出しで必ず panic。78 番は受信端を落として決まった失敗。35 番は進みの目印で負荷に打ち切られない |
-| 4.4 | 全体テストの中で回る | 移したテストは `areka-runtime` の `#[cfg(test)]`（`cargo test -p areka-runtime`）で回る。examples の 44・45 番はテストを持たない（未決 3） |
+| 4.4 | 全体テストの中で回る | 移したテストは `areka-runtime` の `#[cfg(test)]`（`cargo test -p areka-runtime`）で回る。examples の 44・45 番はテストを持たない（議題 3 で確定・コンパイルは全体テストで通る） |
 | 4.5 | `target` の下 | 34 番の作らない子の道は `TempPath::under_target`。26・33 番の検体は `temp-path-kit`・`sample-ghost-kit`（どちらもワークツリーの `target\` の下） |
 | 4.6 | 実 GPU | 3 番の縛るテストと spine 系はどれも今の足場の実 GPU（`GpuPermit`） |
 | 4.7 | 古びたテストを改める | 8・12・15・30・48・62 番のテストを的を外さずに改める。消すテスト（13・14・32・37〜39・67・90・101 番）は、残るテストが同じ中身を守ることを行ごとに確かめる |
@@ -624,8 +626,10 @@ wait_until(what, Progress::Count(&probe), || {
 - 他人のゴーストの台本は信用できない入力。1 番は、台本 1 行で seriko のスレッドが落ちる（デバッグ）か別の窓の絵が変わる（リリース）道を、入口の 1 か所で閉じる。
 - 2 番の門はテストの足場の中だけにあり、本番の `PresentBridge` の道に入らない。鍵を捨てると門は開くので、テストが落ちても seriko のスレッドを止めたままにしない。
 
-## 未決（設計の討議の議題の候補）
+## 設計の討議で確定したこと（2026-11-17・全議題を推奨案で確定）
 
-1. **102 番の置き場**: 仮置き＝読み口 `crate_path` を `areka-runtime` のテストの支えへ下ろし、本体はその出し直しにして、film の E2E 3 本を `areka-runtime` へ移す（範囲の外の `crates/areka/src/crate_source_test_support.rs` を 1 行と説明だけ直す）。もう 1 つの案＝移さずに 102 番を ⑴（placement-crate-split 要件 5.4・5.5「本体のテストの読み口は 1 つ」）として残す。
-2. **54 番の `RecordedCall::Status` の枝**: 仮置き＝枝は残す（偽の SHIORI は `Status` を記録しなくなるが、型の枝は読み手の match のために残す・議題 4 の約束の変化の一覧に入っていないため）。もう 1 つの案＝枝も消し、範囲の外の 4 ファイル（`update/worker_path_tests.rs`・`shell_balloon_switch_session_lap_tests.rs`・`ghost_session_switch_tests.rs`・`session/ghost_switch_talk_clock_tests.rs`）と範囲の中の `spine_boot_smoke_tests.rs` の match の腕を 1 行ずつ消す（かけ直しの audit で「作られない枝」と言われない）。
-3. **縛るテストを置く組の範囲（要件 4.1）**: 仮置き＝「バグと危ない所」はギャップ分析が挙げた 1・2・3・15・78 番に、記録の道を直す 62 番を足した 6 件。examples の 44・45 番（手で動かす probe の記録の足し）は全体テストで走るテストを持てないので、縛るテストを置かない。もう 1 つの案＝`examples` に `test = true` を付けて自動終了の値の読みの単体テストを置く（`Cargo.toml` の `[[example]]` の書き足し・依存は増えない）。
+開発者が「推奨どおり承認」で 3 件を確定した。
+
+1. **102 番の置き場**: 読み口 `crate_path` を `areka-runtime` のテストの支えへ下ろし、本体はその出し直しにして、film の E2E 3 本を `areka-runtime` へ移す（範囲の外の `crates/areka/src/crate_source_test_support.rs` は 1 行と説明だけ）。
+2. **54 番の `RecordedCall::Status` の枝**: 消す。`RecordedCall` はテストのときだけ作られる型で本番の約束でなく、残すとかけ直しの audit で「作られない枝」と言われる。読み手の match の腕（範囲の外の 4 ファイル・範囲の中の `spine_boot_smoke_tests.rs`）を同じ変更で 1 行ずつ消す（要件 3.2・持ち主はどれも C22 で走っていない）。
+3. **縛るテストを置く組の範囲（要件 4.1）**: 1・2・3・15・62・78 番の 6 件。examples の 44・45 番（手で動かす probe の記録の足し）には縛るテストを置かない（直す行よりテストが大きくなる・全体テストでコンパイルまでは通る）。
