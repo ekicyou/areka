@@ -15,8 +15,9 @@ use areka_emo_atlas::{
     PackConfig, Placement, Point, Rect, SetId, Size, SurfaceSet, UseSelfAlpha, bake_with_limits,
 };
 use areka_parsers::shell::{
-    Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element, ElementPath,
-    Interval, Pattern, Shell, SortOrder, Surface, SurfaceAppend, parse,
+    Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
+    DrawMethod, Element, ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAppend,
+    parse,
 };
 use bevy_ecs::component::Component;
 use bevy_ecs::world::World;
@@ -386,10 +387,12 @@ pub(crate) fn coll(
 ) -> Collision {
     Collision {
         index,
-        left,
-        top,
-        right,
-        bottom,
+        shape: CollisionShape::Rect(CollisionBounds {
+            left,
+            top,
+            right,
+            bottom,
+        }),
         name: CollisionName::new(name.to_string()),
     }
 }

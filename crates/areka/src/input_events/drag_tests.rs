@@ -6,7 +6,7 @@
 //! 渡した位置が正しいことを読み戻す）。
 //!
 //! 終了の座標を見るテスト（A4・A6）と保存を比べるテスト（A7）は、開始を配った直後に
-//! `DraggingState.initial_window_pos` を開始時の窓位置で上書きし（偽の窓では `(0,0)` のまま入るため）、
+//! `DraggingState.initial_window_pos` を開始時の窓位置で上書きし（偽の窓では `None` のまま入るため）、
 //! ドラッグの間の窓の移動は窓の位置を直に書いて作る（[`begin_drag`]）。
 
 use std::time::Instant;

@@ -1,11 +1,11 @@
-//! 既定位置の追跡規則（design D9／D16・要件 6.2）の決定論テスト。
+//! 既定位置の追跡規則（design D9／D16・`areka-P0-dpi-transition-atomicity` 要件 6.2）の決定論テスト。
 //!
 //! # ここが押さえる是正
 //!
 //! 連鎖の再解決は「現在位置が既定位置と一致するか」で**明示的に再配置されたスコープ**を
-//! 除外する（`scope-chain-gap` 7.3）。拡大率が変わると全スコープの位置がシステム側の都合で
+//! 除外する（`areka-P0-scope-chain-gap` 要件 7.3）。拡大率が変わると全スコープの位置がシステム側の都合で
 //! 動くため、既定位置を据え置いたままだと全件が「明示的に動かされた」へ倒れ、遷移後の
-//! 解き直しが丸ごと空振りする。要件 6.2 はこれを名指しで禁じており、D9／D16 が
+//! 解き直しが丸ごと空振りする。`areka-P0-dpi-transition-atomicity` 要件 6.2 はこれを名指しで禁じており、D9／D16 が
 //! **単一の窓書込口で既定位置を追随させる**規則を定めた。
 //!
 //! 本ファイルはその規則そのもの——3 つの条件（route がシステム由来・対象がキャラ窓・
@@ -104,14 +104,14 @@ fn write_at(world: &mut World, window: Entity, to: PointPx, route: Option<Placem
 }
 
 // ---------------------------------------------------------------------------
-// 追随する側（要件 6.2・D9 の 3 条件がすべて揃う形）
+// 追随する側（`areka-P0-dpi-transition-atomicity` 要件 6.2・D9 の 3 条件がすべて揃う形）
 // ---------------------------------------------------------------------------
 
 /// **是正前は赤・是正後は緑**: システム由来の再アンカーが、一致していた既定位置を書込先へ
 /// 連れて行く。
 ///
 /// 是正前は既定位置が `DEFAULT_POS` に据え置かれ、現在位置（`REANCHORED`）と食い違う
-/// ——連鎖の除外判定がこの食い違いを「明示的に動かされた」と読むのが要件 6.2 の欠陥である。
+/// ——連鎖の除外判定がこの食い違いを「明示的に動かされた」と読むのが`areka-P0-dpi-transition-atomicity` 要件 6.2 の欠陥である。
 #[test]
 fn a_system_reanchor_carries_the_default_position_to_the_written_spot() {
     let (mut world, char_window, _balloon) = world_with_one_scope();
@@ -131,7 +131,7 @@ fn a_system_reanchor_carries_the_default_position_to_the_written_spot() {
     assert_eq!(
         default_pos(&world),
         Some(REANCHORED),
-        "システム由来の再アンカーで既定位置が書込先へ追随していない（要件 6.2・D9）"
+        "システム由来の再アンカーで既定位置が書込先へ追随していない（`areka-P0-dpi-transition-atomicity` 要件 6.2・D9）"
     );
     assert_eq!(
         current_pos(&world, char_window),

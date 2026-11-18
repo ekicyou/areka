@@ -134,3 +134,8 @@
 | `live_work_area_bottom` | `log_char_ground` | 公開のまま（本番が使う関数） |
 
   `audit` で見直すとき、「公開のまま」の行は本番が使う語なので切り替えない。表の全体と緑の証跡は `.kiro/specs/completed/runtime-crate-split/verification.md` の 6.4。
+
+## audit-placement-follow-residue からの申し送り（2026-11-17）
+
+- シェルの切り替えの置き直し（`crates/areka-placement/src/reseed.rs` の `reanchor_char_windows`）は、整合待ちの札（`DpiSyncHold`）のある窓を置き直さず `debug!`（`event = "reseed_held"`・scope）を残すようになった。札のある窓は、シェルの切り替えの直後は札が外れるまで（最大 30 フレーム）前の揃え方のまま残り、札が外れるフレームの拡大率の相（`frame/dpi.rs`）の `DpiReproject` で新しい揃え方に置かれる前提。
+- この前提は配置の crate の中の檻（`reseed_tests.rs` の ⑶・`resize_window_to(.., DpiReproject)` を直に呼ぶ）でしか固めていない。札が外れるフレームに本番の相が本当にその窓を書くかを、起動のフレームの見直しのときに確かめる（論点・参照: `.kiro/specs/completed/audit-placement-follow-residue/design.md` の決め 5・ReseedHold・Revalidation Triggers の 4 つ目）。

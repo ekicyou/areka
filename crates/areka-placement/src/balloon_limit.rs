@@ -32,7 +32,7 @@
 
 use tracing::{info, warn};
 
-use super::follow::{MonitorSnapshot, work_area_for_window};
+use super::follow::{MonitorSnapshot, rect_at, work_area_for_window};
 use super::resolver::{PointPx, RectPx, ScopePlacement, SizePx, clamp_axis};
 
 // =============================================================================
@@ -199,12 +199,7 @@ pub(crate) fn place_balloon_in_work_area(
         let placed = clamp_rect_to_work_area(mirrored, size, area);
         // 映しても x が変わらない（真上・真下の中央揃え）か、映した先も横に入らなければ押し込み。
         if mirrored.x != pos.x && placed.x == mirrored.x {
-            let target = RectPx {
-                left: placed.x,
-                top: placed.y,
-                right: placed.x.saturating_add(size.w),
-                bottom: placed.y.saturating_add(size.h),
-            };
+            let target = rect_at(placed, size);
             if let Some(&(scope, _)) = chars
                 .iter()
                 .find(|(_, other)| counted_overlap(target, char_rect, *other))
@@ -289,12 +284,7 @@ pub fn apply_balloon_limit(
 
 /// 配置のキャラ窓の矩形（列を組む側と判定の側で共有する式）。
 fn char_rect_of(p: &ScopePlacement) -> RectPx {
-    RectPx {
-        left: p.char_pos.x,
-        top: p.char_pos.y,
-        right: p.char_pos.x.saturating_add(p.char_size.w),
-        bottom: p.char_pos.y.saturating_add(p.char_size.h),
-    }
+    rect_at(p.char_pos, p.char_size)
 }
 
 /// [`apply_balloon_limit`] の要素写像（1 scope 分）。

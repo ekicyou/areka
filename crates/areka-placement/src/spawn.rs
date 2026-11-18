@@ -197,7 +197,7 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
 /// 檻の主張ではなく構造の帰結である。
 // spawn が構築し、`reseed::reinstall_balloon`・`face_windowposition::apply_face_windowposition` が
 // 入れ直し、runtime 関門（`follow::enqueue_window_set_pos`）・解放時の補正
-// （`follow::drag_follow::apply_release_limit_correction`）と檻が読む。
+// （`follow::balloon_drag::apply_release_limit_correction`）と檻が読む。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BalloonLimit(pub bool);
 
@@ -226,7 +226,7 @@ pub struct BalloonLimit(pub bool);
 /// - 起動時: `persist::merge_scope` が保存 offset 両軸を読めた scope へ `None` を置く
 ///   （そもそも付与されない）。
 /// - セッション中: バルーン単独ドラッグの DragEnd 書込と同じ観測点で
-///   `follow::drag_follow::retire_keyword_base_on_save` が除去する。
+///   `follow::balloon_drag::retire_keyword_base_on_save` が除去する。
 ///
 /// 起動時だけに置いていた頃は、実表示寸が採寸寸と一致する**ふつうの**ゴースト
 /// （＝再解決が同寸 skip で素材を消費しない）で、ドラッグ後の寸法変化がキーワード既定を

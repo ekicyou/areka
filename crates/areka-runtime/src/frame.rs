@@ -330,7 +330,7 @@ pub fn frame_system(world: &mut World) {
     // 窓を置いた後に、その位置を元にずれを当てる。連鎖の確定・解き直しより前に置き、それらが
     // ずらした後の位置を読む。
     move_shift::run_move_shift_phase(&wiring.presenter, world);
-    // 初期配置の確定（scg 要件 7・C6）: 再アンカーが landing して全スコープの実表示寸が
+    // 初期配置の確定（areka-P0-scope-chain-gap 要件 7・C6）: 再アンカーが landing して全スコープの実表示寸が
     // 確定したフレームで**一度だけ**連鎖を解き直し、サーフェス差替で崩れた隣接を戻す。
     // resnap の**後**に置く（各窓の再アンカー結果を入力として受け取るため）。
     finalize_chain_once(&wiring.presenter, world);

@@ -1051,8 +1051,8 @@ not_applicable = 0
 page = "descript_shell_surfaces"
 implemented = 34
 vocabulary_only = 49
-degraded = 6
-absent = 44
+degraded = 7
+absent = 43
 alias = 4
 not_applicable = 0
 ```

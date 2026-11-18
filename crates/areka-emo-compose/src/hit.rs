@@ -26,7 +26,7 @@
 //! 線形走査のままでよい。
 
 use crate::scale::ScaleRatio;
-use areka_parsers::shell::Collision;
+use areka_parsers::shell::{Collision, CollisionShape};
 
 /// 当たり判定の重なり解決規則（型シーム・要件 2.3）。
 ///
@@ -91,8 +91,22 @@ pub fn hit_region_in(
         RegionPriority::Painter => collisions
             .iter()
             .rev()
-            .find(|c| c.left <= x && x <= c.right && c.top <= y && y <= c.bottom)
+            .find(|c| hits(&c.shape, x, y))
             .map(|c| c.name.as_str()),
+    }
+}
+
+/// 形 `shape` が今の判定で点 (x, y) に当たるか（矩形だけ・ほかの形は hit-id-pass まで当たらない）。
+///
+/// NOTE: `_` アームを置かない（形の腕を足したとき網羅漏れをコンパイルで見つけるため）。
+fn hits(shape: &CollisionShape, x: i64, y: i64) -> bool {
+    match shape {
+        // 閉区間（反転した矩形は並べ直さず当たらない）。
+        CollisionShape::Rect(b) => b.left <= x && x <= b.right && b.top <= y && y <= b.bottom,
+        CollisionShape::Ellipse(_)
+        | CollisionShape::Circle { .. }
+        | CollisionShape::Polygon(_)
+        | CollisionShape::Region(_) => false,
     }
 }
 
@@ -674,4 +688,50 @@ mod tests {
             "k=5/4: i64 極値（panic なし）",
         );
     }
+    /// 矩形以外の形は並びに残ったまま当たらず、下の矩形へ続く（要件 2.3・5.3）。
+    #[test]
+    fn non_rect_shapes_never_hit_and_fall_through() {
+        use areka_parsers::shell::{
+            CollisionBounds, CollisionName, CollisionRegion, CollisionShape,
+        };
+        let b = CollisionBounds {
+            left: 0,
+            top: 0,
+            right: 10,
+            bottom: 10,
+        };
+        let mut m = master_with(vec![coll(0, 0, 0, 10, 10, "Under")]);
+        let shapes = [
+            CollisionShape::Ellipse(b),
+            CollisionShape::Circle {
+                x: 5,
+                y: 5,
+                radius: 9,
+            },
+            CollisionShape::Polygon(vec![(0, 0), (10, 0), (10, 10)]),
+            CollisionShape::Region(CollisionRegion {
+                file: "a.png".into(),
+                red: 0,
+                green: 0,
+                blue: 0,
+                invert: false,
+                x: 0,
+                y: 0,
+            }),
+        ];
+        for shape in shapes {
+            let mut c = coll(1, 0, 0, 0, 0, "Top");
+            c.shape = shape;
+            c.name = CollisionName::new("Top".into());
+            m.collisions.push(c);
+        }
+        assert_eq!(
+            hit_region_in(&m.collisions, 5, 5, RegionPriority::Painter),
+            Some("Under")
+        );
+    }
 }
+
+#[cfg(test)]
+#[path = "hit_order_tests.rs"]
+mod order_tests;

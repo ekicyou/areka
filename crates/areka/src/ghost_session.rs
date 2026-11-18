@@ -299,7 +299,7 @@ pub(crate) fn prepare_ghost_windows(
         );
         // 動かせない指定の帳簿も窓を作った後に据える（据える前に作った窓へ書き手が届く・要件 4.1）。
         areka_placement::balloon_lock::seed_balloon_lock(world, &balloon_dontmove);
-        // 記憶から戻したスコープは既定配置ではない（scg 7.3）。台帳の既定位置を外し
+        // 記憶から戻したスコープは既定配置ではない（areka-P0-scope-chain-gap 7.3）。台帳の既定位置を外し
         // 覚えた印を据える——起動の並べ直しは今の位置でなく印で決める（left/right は今の幅で
         // 隣り合わせ、none・印なし・組の窓・台本の印は動かさない・dpi-realign-remembered-chain 6.3〜6.5）。
         // 既定位置を残すと利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として

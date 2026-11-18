@@ -8,8 +8,9 @@
 //! - subset 外/不正断片でもパニックせず部分認識を返す（要件 9.3）。
 
 use super::model::{
-    Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element, ElementPath,
-    Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
+    Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
+    DrawMethod, Element, ElementPath, Interval, Pattern, Shell, Surface, SurfaceAlias,
+    SurfaceAppend,
 };
 use super::{ShellIssue, parse, parse_all};
 
@@ -85,10 +86,12 @@ smile,[0,1,2]
             }],
             collisions: vec![Collision {
                 index: 0,
-                left: 1,
-                top: 2,
-                right: 3,
-                bottom: 4,
+                shape: CollisionShape::Rect(CollisionBounds {
+                    left: 1,
+                    top: 2,
+                    right: 3,
+                    bottom: 4,
+                }),
                 name: CollisionName::new("Head".to_string()),
             }],
             animations: vec![Animation {
@@ -111,10 +114,12 @@ smile,[0,1,2]
             elements: vec![],
             collisions: vec![Collision {
                 index: 0,
-                left: 5,
-                top: 6,
-                right: 7,
-                bottom: 8,
+                shape: CollisionShape::Rect(CollisionBounds {
+                    left: 5,
+                    top: 6,
+                    right: 7,
+                    bottom: 8,
+                }),
                 name: CollisionName::new("Bust".to_string()),
             }],
             animations: vec![],

@@ -1,5 +1,5 @@
 // =============================================================================
-// 初期配置の確定（finalize_chain_once）の結線檻（scg 要件 7.1/7.3/7.4・design C6）
+// 初期配置の確定（finalize_chain_once）の結線檻（areka-P0-scope-chain-gap 要件 7.1/7.3/7.4・design C6）
 //
 // 判定そのものは areka_placement::chain_finalize の純関数檻が全網羅する。ここで固定するのは
 // **結線の振る舞い**——いつ駆動し、いつ見送り、二度目に駆動しないこと。
@@ -74,7 +74,11 @@ fn finalize_closes_the_gap_by_moving_the_follower_only() {
         "Y は動かさない（下端吸着は再アンカーが保つ・7.2）"
     );
     // 隣接不変量: scope1 の右端＝scope0 の左端。
-    assert_eq!(1483 - (1205 + 278), 0, "確定後は隙間 0（scg 7.1）");
+    assert_eq!(
+        1483 - (1205 + 278),
+        0,
+        "確定後は隙間 0（areka-P0-scope-chain-gap 7.1）"
+    );
     assert!(
         world.get_resource::<ChainFinalized>().is_some(),
         "確定標識が立つ（7.4）"
@@ -280,7 +284,7 @@ fn finalize_does_not_pull_back_a_scope_followed_by_a_sticky_move() {
 }
 
 // -----------------------------------------------------------------------------
-// 確定が見送られ続けたときの一発診断（scg 6.5・design C6）
+// 確定が見送られ続けたときの一発診断（areka-P0-scope-chain-gap 6.5・design C6）
 //
 // 定石は `move_cue_move_severity_log_tests.rs` と同じ——硬化機構の唯一の定義元
 // `log-capture-kit` の捕捉窓へ委譲する。判定そのものの回数は純関数檻が固定しており、ここで

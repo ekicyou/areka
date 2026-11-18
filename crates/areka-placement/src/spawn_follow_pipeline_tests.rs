@@ -24,24 +24,11 @@ use crate::test_support::give_fake_handles;
 // あり、兄弟モジュールのテストは自ファイル内という repo 慣行に従いここに置く。
 // -------------------------------------------------------------------------
 
-use std::time::Instant;
-
-use wintf::ecs::drag::DragEvent;
-
 use crate::config::build_placement_config;
 use crate::follow::move_window_to;
+use crate::follow::test_support::drag_event;
 use crate::resolver::{RectPx, ScopeInput, resolve_placement};
 use crate::test_support::kv;
-
-/// ドラッグイベント（wndproc 移動済み後の Bubble 配送を模す・follow_test_support.rs と同型）。
-fn drag_event(target: Entity) -> DragEvent {
-    DragEvent {
-        target,
-        start_position: Point::new(0, 0),
-        position: Point::new(10, 10),
-        timestamp: Instant::now(),
-    }
-}
 
 /// 実パイプライン（KV → config → resolver → spawn）で組んだ World。
 ///

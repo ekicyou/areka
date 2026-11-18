@@ -146,18 +146,20 @@ fn undrawn_ops_count_no_pixels() {
     assert_eq!(ops.len(), 201);
 }
 
-/// 指摘 131: 波括弧が置き換えるのは、最後の波括弧より前の同じ番号の collision。波括弧・追記・波括弧・追記の
-/// 順に同じ番号を足しても、並びは「最後の波括弧より前の同じ番号を除き、後は書いた順」になる（並びだけを見る
-/// 檻で、除く回数は見ない）。
+/// 波括弧・追記・波括弧・追記・波括弧の順に同じ collision番号を足しても、どの行も除かれず並びは書いた順
+/// （spec: collisionex-regions 要件 3.3・3.7・SSP 2.9 の測り）。警告は、すでにある番号を足した波括弧ごとに
+/// 1 行（2 つ目の波括弧は collision0 が 2 行・3 つ目は collision1 が 1 行）で、追記と最初の波括弧は黙る。
 #[test]
-fn brace_drops_earlier_same_numbered_collisions_and_keeps_written_order() {
+fn brace_and_append_keep_every_same_numbered_collision_in_written_order() {
     let text = "charset,UTF-8\n\
         surface0\n{\ncollision0,0,0,1,1,A\ncollision1,0,0,1,1,B\n}\n\
         surface.append0\n{\ncollision0,0,0,1,1,C\n}\n\
         surface0\n{\ncollision0,0,0,1,1,D\ncollision0,0,0,1,1,E\n}\n\
         surface.append0\n{\ncollision0,0,0,1,1,F\ncollision1,0,0,1,1,G\n}\n\
         surface0\n{\ncollision1,0,0,1,1,H\n}\n";
-    let world = EmoWorld::build(&parse(text));
+    let mut built = None;
+    let logs = capture_logs(|| built = Some(EmoWorld::build(&parse(text))));
+    let world = built.expect("面の表");
     let names: Vec<&str> = world
         .surface(0)
         .expect("面 0")
@@ -165,7 +167,20 @@ fn brace_drops_earlier_same_numbered_collisions_and_keeps_written_order() {
         .iter()
         .map(|c| c.name.as_str())
         .collect();
-    assert_eq!(names, ["D", "E", "F", "H"]);
+    assert_eq!(names, ["A", "B", "C", "D", "E", "F", "G", "H"]);
+    let warned: Vec<&str> = logs
+        .lines()
+        .filter(|l| l.contains("level=WARN") && l.contains("collision番号の二重定義"))
+        .collect();
+    assert_eq!(warned.len(), 2, "{logs}");
+    assert!(
+        warned[0].contains("collision=0") && warned[0].contains("count=2"),
+        "{logs}"
+    );
+    assert!(
+        warned[1].contains("collision=1") && warned[1].contains("count=1"),
+        "{logs}"
+    );
 }
 
 /// 指摘 136: 重なりの `warn!` は（面, 記述子）ごとに 1 行で、重なった数を `count` に書く。2 つ目の波括弧が element
