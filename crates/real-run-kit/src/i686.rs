@@ -4,7 +4,9 @@
 //! 32bit の前提を満たさない（x64 の仲介は 32bit の SHIORI の DLL を読めず接続に落ちる）。
 //! そこで PE の頭の機械の種類で判定し、32bit の物だけを置き先へ揃える。
 
+use sample_ghost_kit::ascii;
 use std::ffi::OsString;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, PoisonError};
@@ -23,11 +25,15 @@ pub(crate) const HELPER: I686Spec<'static> = I686Spec {
     package: "shiori-host32-helper",
 };
 
-/// PE の頭の機械の種類が i386（`0x014c`）か。読めない・短いは偽。
+/// PE の頭の機械の種類が i386（`0x014c`）か。読めない・短いは偽。先頭の 0x400 バイトだけ読む。
 pub(crate) fn is_i686_pe(path: &Path) -> bool {
-    let Ok(b) = std::fs::read(path) else {
+    let mut b = Vec::new();
+    let Ok(f) = std::fs::File::open(path) else {
         return false;
     };
+    if f.take(0x400).read_to_end(&mut b).is_err() {
+        return false;
+    }
     let at = |i: usize, n: usize| b.get(i..i.checked_add(n)?);
     let Some(pe) = at(0x3c, 4).map(|s| u32::from_le_bytes(s.try_into().unwrap()) as usize) else {
         return false;
@@ -35,12 +41,19 @@ pub(crate) fn is_i686_pe(path: &Path) -> bool {
     pe.checked_add(4).and_then(|i| at(i, 2)) == Some(&[0x4c, 0x01][..])
 }
 
+/// 長さと更新時刻が同じか（`std::fs::copy` は更新時刻も写すので、同じ元の写しなら同じ）。
+fn same_copy(a: &Path, b: &Path) -> bool {
+    let key = |p: &Path| std::fs::metadata(p).map(|m| (m.len(), m.modified().ok()));
+    matches!((key(a), key(b)), (Ok(x), Ok(y)) if x == y)
+}
+
 /// `spec` の成果物を `dest_dir` へ 32bit で揃えて、そのパスを返す（要件 2.1〜2.6）。
 ///
 /// `env_value` は `spec.env_var` の値、`i686_target` は `<target>\i686-pc-windows-msvc`。
-/// 置き先が 32bit ならそのまま。そうでなければ元を 環境変数 → debug → release の順に
-/// 32bit であるものから選んで写す。環境変数が指す物が無いか 32bit でなければ、黙って
-/// ほかへ移らずに panic する。どこにも無ければ探した場所と建て方を添えて panic する。
+/// 先に元を 環境変数 → debug → release の順に 32bit であるものから選び、置き先が無い・
+/// 32bit でない・元と長さか更新時刻が違うときだけ写す。環境変数が指す物が無いか 32bit で
+/// なければ、置き先が 32bit でも黙ってほかへ移らずに panic する。元がどこにも無く置き先が
+/// 32bit ならそれを使う。それも無ければ探した場所と建て方を添えて panic する。
 pub(crate) fn ensure(
     spec: &I686Spec,
     env_value: Option<OsString>,
@@ -54,9 +67,6 @@ pub(crate) fn ensure(
     let name = spec.file_name;
     let env_var = spec.env_var;
     let dest = dest_dir.join(name);
-    if is_i686_pe(&dest) {
-        return dest;
-    }
     let src = match env_value.map(PathBuf::from) {
         Some(p) => {
             assert!(
@@ -69,46 +79,80 @@ pub(crate) fn ensure(
         }
         None => {
             let places = ["debug", "release"].map(|p| i686_target.join(p).join(name));
-            places
-                .iter()
-                .find(|p| is_i686_pe(p))
-                .cloned()
-                .unwrap_or_else(|| {
-                    panic!(
-                        "32bit（i686）の {name} が見つかりません。探した場所: 環境変数 {env_var}（未設定）・{}・{}。\
-                         PowerShell で先に建ててください: cargo build -p {} --target i686-pc-windows-msvc",
-                        places[0].display(),
-                        places[1].display(),
-                        spec.package
-                    )
-                })
+            let Some(p) = places.iter().find(|p| is_i686_pe(p)) else {
+                if is_i686_pe(&dest) {
+                    return dest;
+                }
+                panic!(
+                    "32bit（i686）の {name} が見つかりません。探した場所: 環境変数 {env_var}（未設定）・{}・{}。\
+                     PowerShell で先に建ててください: cargo build -p {} --target i686-pc-windows-msvc",
+                    places[0].display(),
+                    places[1].display(),
+                    spec.package
+                )
+            };
+            p.clone()
         }
     };
-    place(&src, &dest);
+    if !(is_i686_pe(&dest) && same_copy(&src, &dest)) {
+        place(&src, &dest, &mut std::io::stderr());
+    }
     dest
 }
 
 /// `src` を `<dest>.<pid>.<連番>.tmp` へ写してから `dest` へ改名する（書きかけを起動させない・
 /// 要件 2.6）。改名に失敗したら置き先を見直し、32bit になっていれば通す（別のプロセスが先に
 /// 置いた・使用中で替えられない）。32bit でなければ理由を添えて panic する。
-fn place(src: &Path, dest: &Path) {
+///
+/// 通した置き先が元と長さか更新時刻で違う（古い写しのまま走る）ときは、その旨の ASCII の 1 行を
+/// `out` へ書く（同じ写しなら何も書かない）。一時名を消せなかったときも ASCII の 1 行を `out` へ
+/// 書く（複製の失敗のときは続く panic の文に添える）。`out` は本番では標準エラーで、`eprintln!` は
+/// libtest が通ったテストの分を捨てるので直に書く。
+fn place(src: &Path, dest: &Path, out: &mut dyn Write) {
     static SERIAL: AtomicU64 = AtomicU64::new(0);
     let serial = SERIAL.fetch_add(1, Ordering::Relaxed);
     let mut tmp = dest.as_os_str().to_owned();
     tmp.push(format!(".{}.{serial}.tmp", std::process::id()));
     let tmp = PathBuf::from(tmp);
     if let Err(e) = std::fs::copy(src, &tmp) {
-        let _ = std::fs::remove_file(&tmp);
-        panic!("{} → {} の複製に失敗: {e}", src.display(), tmp.display());
+        let note = remove_tmp(&tmp).map_or_else(String::new, |l| format!("（{l}）"));
+        panic!(
+            "{} → {} の複製に失敗: {e}{note}",
+            src.display(),
+            tmp.display()
+        );
     }
     if let Err(e) = std::fs::rename(&tmp, dest) {
-        let _ = std::fs::remove_file(&tmp);
+        if let Some(line) = remove_tmp(&tmp) {
+            let _ = writeln!(out, "{line}");
+        }
         assert!(
             is_i686_pe(dest),
             "{} → {} の改名に失敗し、置き先も 32bit（i686）ではありません: {e}",
             tmp.display(),
             dest.display()
         );
+        if !same_copy(src, dest) {
+            let _ = writeln!(
+                out,
+                "real-run-kit: could not replace {} ({}); using the existing 32-bit copy",
+                ascii(&dest.display().to_string()),
+                ascii(&e.to_string())
+            );
+        }
+    }
+}
+
+/// 一時名を消す。消せたとき・既に無いときは `None`、ほかの失敗はその旨の ASCII の 1 行。
+fn remove_tmp(tmp: &Path) -> Option<String> {
+    match std::fs::remove_file(tmp) {
+        Ok(()) => None,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => Some(format!(
+            "real-run-kit: could not remove {} ({})",
+            ascii(&tmp.display().to_string()),
+            ascii(&e.to_string())
+        )),
     }
 }
 

@@ -1,8 +1,9 @@
 //! 起動の指定（RealRun）と、子へ渡す形の組み立て・子の起こし方
 //! （要件 1.1〜1.7・1.9・1.10・2.1・2.5・3.1・4.1・4.4・8.1〜8.3・9.1）。
 //!
-//! 子へ伝える形（環境変数の名前・位置の引数の並べ方）を綴るのは `child_command` の 1 か所だけ
-//! （8.2・8.3）。起動オプションへ移すときはここを替える。
+//! 子へ伝える形（環境変数の名前・位置の引数の並べ方）を組むのは `child_command` の 1 か所だけ
+//! （8.2・8.3）。起動オプションへ移すときはここを替える。MCP の番号の環境変数の名前だけは、呼び手の
+//! `env` から同じ名前を探す `port` も使うので、どちらも `areka_mcp::PORT_ENV` を引く。
 
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
@@ -10,8 +11,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use areka_mcp::PORT_ENV;
+
 use crate::evidence::RunDirs;
 use crate::i686::{self, I686Spec};
+use crate::mcp::McpChannel;
 use crate::run::{Limits, Run};
 
 /// 起動するもの（1.1）。既定は `Empty`。
@@ -21,11 +25,6 @@ pub enum Launch {
     Sample {
         name: String,
         balloon: Option<String>,
-    },
-    /// ⑵ 任意のゴーストのフォルダ（とバルーンのフォルダ）を位置の引数で渡す。
-    Ghost {
-        folder: PathBuf,
-        balloon: Option<PathBuf>,
     },
     /// ⑶ 検体の写しの根を根として渡す（どのゴーストを起こすかは areka が根から決める）。
     SampleRoot { name: String },
@@ -89,31 +88,34 @@ impl RealRun {
         self
     }
 
-    /// MCP の番号（既定は空いた番号＝4.1）。
+    /// MCP の番号（既定は空いた番号＝4.1）。`env` で `AREKA_MCP_PORT` を積むとそちらが勝つ。
     pub fn mcp_port(mut self, port: u16) -> RealRun {
         self.mcp_port = Some(port);
         self
     }
 
-    /// 記録の段（既定は `info`）。窓口が頼る行の出所が絞られていれば info を足す（4.4）。
+    /// 記録の段（既定は `info`）。全体の段が info より絞られていて、窓口が頼る行の出所を名指す指定が
+    /// 無いときは、その出所に info を足す（4.4）。名指す指定があれば、その段が何であっても足さない。
     pub fn rust_log(mut self, filter: &str) -> RealRun {
         self.rust_log = Some(filter.to_owned());
         self
     }
 
-    /// 保険の自動終了（既定 45 秒）。
+    /// 保険の自動終了（既定は `run.rs` の `Limits::default`）。
     pub fn safety_exit(mut self, after: Duration) -> RealRun {
         self.limits.safety_exit = after;
         self
     }
 
-    /// どの待ちにも使う締切（3.3・既定 60 秒）。
+    /// どの待ちにも使う締切（3.3・既定は `run.rs` の `Limits::default`）。
     pub fn deadline(mut self, limit: Duration) -> RealRun {
         self.limits.deadline = limit;
         self
     }
 
     /// 任意の環境変数。窓口の既定と論理の指定より後に置く＝何でも上書きできる（1.6）。
+    /// `AREKA_MCP_PORT` を積んだときは、最後の値が子の待ち受ける番号で窓口が話す番号
+    /// （番号として読めなければ `spawn` が落ちる）。
     pub fn env(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> RealRun {
         self.env
             .push((key.as_ref().to_owned(), value.as_ref().to_owned()));
@@ -137,7 +139,8 @@ impl RealRun {
     /// # Panics
     ///
     /// 仲介が揃わない（2.3・2.4）・検体を取れない・子を起こせない（実行ファイルの場所と理由＝1.10）。
-    /// 起こせなかった回の置き場は、panic の途中で破棄されるので落ちた回として残る（6.1）。
+    /// 回の置き場を作り終えた後に落ちたときだけ、置き場は panic の途中で破棄されて落ちた回として残る（6.1）。
+    /// それより前（実行ファイル・仲介・置き場と検体の写し）で落ちた回は残らない。
     pub fn spawn(mut self) -> Run {
         let exe = abs(&self.areka_exe);
         // 仲介は exe の隣を見るので、先に exe を確かめて場所と理由で落とす（1.10）。
@@ -163,11 +166,10 @@ impl RealRun {
             f(&Staged {
                 ghost_folder: r.ghost.as_deref(),
                 root: &r.root,
-                run_dir: dirs.run(),
                 i686_target: &i686_target,
             });
         }
-        let port = self.mcp_port.unwrap_or_else(free_port);
+        let port = self.port();
         let positional: Vec<&Path> = r
             .ghost
             .iter()
@@ -179,15 +181,43 @@ impl RealRun {
         cmd.stdin(Stdio::null())
             .stdout(log_file(&dirs.stdout_log()))
             .stderr(log_file(&dirs.stderr_log()));
+        let mcp = McpChannel::new(port);
         let child = cmd
             .spawn()
             .unwrap_or_else(|err| panic!("子を起こせませんでした: {} ({err})", exe.display()));
-        Run::new(child, dirs, port, self.limits)
+        Run::new(child, dirs, mcp, port, self.limits)
     }
 
-    /// 子へ渡す形を組む。起動の約束の綴りはここだけが書く（8.2・8.3）。順は
-    /// ⑴ 開発者の 4 つを外す（1.5）→ ⑵ 窓口の既定 → ⑶ 呼び手の論理の指定 → ⑷ 呼び手の `env`（1.6）。
-    /// ⑵⑶ は値が決まった後の 1 回の指定にまとめて書く。パスはどれも絶対（`\\?\` なし＝1.9）。
+    /// 子が待ち受ける番号＝窓口が話す番号。呼び手の `env` の最後の `AREKA_MCP_PORT` が勝つ
+    /// （子と同じく前後の空白を除いて u16 として読む。Windows の環境変数の名前は大文字小文字を見ない）。
+    ///
+    /// # Panics
+    ///
+    /// その値を番号として読めないとき（子は既定の候補へ移り、窓口はどの番号か分からない）。
+    fn port(&self) -> u16 {
+        let set = self
+            .env
+            .iter()
+            .rev()
+            .find(|(k, _)| k.eq_ignore_ascii_case(PORT_ENV));
+        match set {
+            Some((_, v)) => v
+                .to_str()
+                .and_then(|s| s.trim().parse().ok())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "env の {PORT_ENV}={v:?} を番号（0〜65535）として読めない。番号は `.mcp_port(n)` で渡す"
+                    )
+                }),
+            None => self.mcp_port.unwrap_or_else(free_port),
+        }
+    }
+
+    /// 子へ渡す形を組む。起動の約束の綴りはここだけが書く（8.2・8.3。MCP の番号の名前は
+    /// `areka_mcp::PORT_ENV` を引く）。順は
+    /// ⑴ 開発者の書ける根を外す（1.5）→ ⑵ 窓口の既定 → ⑶ 呼び手の論理の指定 → ⑷ 呼び手の `env`（1.6）。
+    /// ⑵⑶ は値が決まった後の 1 回の指定にまとめて書く（開発者のほかの変数はここで上書きされる）。
+    /// パスはどれも絶対（`\\?\` なし＝1.9）。
     fn child_command(
         &self,
         positional: &[&Path],
@@ -196,18 +226,11 @@ impl RealRun {
         port: u16,
     ) -> Command {
         let mut cmd = Command::new(abs(&self.areka_exe));
-        for key in [
-            "AREKA_ROOT",
-            "AREKA_USER_ROOT",
-            "AREKA_PROFILE_DIR",
-            "AREKA_MCP_PORT",
-        ] {
-            cmd.env_remove(key);
-        }
+        cmd.env_remove("AREKA_USER_ROOT");
         let rust_log = compose_rust_log(self.rust_log.as_deref().unwrap_or("info"));
         cmd.env("AREKA_ROOT", abs(root))
             .env("AREKA_PROFILE_DIR", abs(profile))
-            .env("AREKA_MCP_PORT", port.to_string())
+            .env(PORT_ENV, port.to_string())
             .env("AREKA_NO_ALERT", "1")
             .env("NO_COLOR", "1")
             // 開発者の PASTA_DEBUG=1 を受け継ぐと、SSP などのほかの pasta が握る 9276 とぶつかり LOAD に失敗する
@@ -230,12 +253,11 @@ impl RealRun {
 pub struct Staged<'a> {
     ghost_folder: Option<&'a Path>,
     root: &'a Path,
-    run_dir: &'a Path,
     i686_target: &'a Path,
 }
 
 impl Staged<'_> {
-    /// Sample・Ghost のときの起動するゴーストのフォルダ（Sample は写しの中）。
+    /// Sample のときの起動するゴーストのフォルダ（写しの中）。
     pub fn ghost_folder(&self) -> Option<&Path> {
         self.ghost_folder
     }
@@ -243,11 +265,6 @@ impl Staged<'_> {
     /// 子へ渡す根。
     pub fn root(&self) -> &Path {
         self.root
-    }
-
-    /// 回の置き場。
-    pub fn run_dir(&self) -> &Path {
-        self.run_dir
     }
 
     /// 試験用の 32bit の成果物を `dest_dir` へ揃えてそのパスを返す（2.5）。規則は仲介と同じ。
@@ -305,11 +322,6 @@ fn resolve(what: &Launch, dirs: &RunDirs) -> Resolved {
                 root: empty,
             }
         }
-        Launch::Ghost { folder, balloon } => Resolved {
-            ghost: Some(abs(folder)),
-            balloon: balloon.as_deref().map(abs),
-            root: empty,
-        },
         Launch::SampleRoot { .. } => Resolved {
             ghost: None,
             balloon: None,
@@ -361,13 +373,17 @@ fn log_file(path: &Path) -> File {
 /// 窓口が頼る行の出所（待受の行・閉じる知らせの受け取りと終わり方の行）。
 const RELIED_TARGETS: [&str; 2] = ["areka_mcp::server", "areka::app_exit"];
 
-/// 窓口が頼る出所の実効の段が info より絞られているときだけ `,<出所>=info` を足す（D-4・4.4）。
+/// 全体の段が info より絞られていて、窓口が頼る出所を名指す指定が無いときだけ、その出所に
+/// `,<出所>=info` を足す（D-4・4.4）。
 ///
-/// ⑴ 出所そのものか親を名指していれば足さない ⑵ 全体の段が info・debug・trace なら足さない
-/// ⑶ 全体の段が warn・error・off（指定なし＝off）で名指しも無いときだけ足す。空は既定の `info`。
+/// ⑴ 全体の段が info・debug・trace（数字の 3〜5）なら、どの出所にも足さない ⑵ 全体の段が warn・
+/// error・off（数字の 0〜2・指定なし＝off）なら、出所ごとに、名指す指定が無いものにだけ足す
+/// ⑶ 名指す指定がある出所には、その段が何であっても足さない（呼び手が `=off` で閉じた出所は閉じたまま）。
+/// 空は既定の `info`。span を付けた指定（`[` を含む・例 `areka_mcp::server[req]=debug`）は
+/// その span の中の行だけを開けるので名指しに数えない。
 ///
 /// 「名指し」は `EnvFilter` と同じ規則で決める。`EnvFilter` は出所を `::` の切れ目なしの素の
-/// 前方一致で照らす（tracing-subscriber 0.3.23 `filter/env/directive.rs:246`
+/// 前方一致で照らす（tracing-subscriber 0.3.23 `filter/env/directive.rs`
 /// `meta.target().starts_with(&target[..])`）。`areka=debug` は `areka_mcp::server` も覆うので、
 /// そこへ `=info` を足すと debug を info へ下げてしまう。
 fn compose_rust_log(base: &str) -> String {
@@ -376,13 +392,18 @@ fn compose_rust_log(base: &str) -> String {
     }
     let mut global_open = false;
     let mut named: Vec<&str> = Vec::new();
-    for d in base.split(',').map(str::trim).filter(|d| !d.is_empty()) {
+    for d in base
+        .split(',')
+        .map(str::trim)
+        .filter(|d| !d.is_empty() && !d.contains('['))
+    {
         match d.split_once('=') {
-            Some((target, _)) => named.push(target.split('[').next().unwrap_or("").trim()),
+            Some((target, _)) => named.push(target.trim()),
             None => match d.to_ascii_lowercase().as_str() {
-                "info" | "debug" | "trace" => global_open = true,
-                "warn" | "error" | "off" => global_open = false,
-                _ => named.push(d.split('[').next().unwrap_or("")),
+                // 数字の段は EnvFilter の読みと同じ（0＝off・1＝error・2＝warn・3＝info・4＝debug・5＝trace）。
+                "info" | "debug" | "trace" | "3" | "4" | "5" => global_open = true,
+                "warn" | "error" | "off" | "0" | "1" | "2" => global_open = false,
+                _ => named.push(d),
             },
         }
     }

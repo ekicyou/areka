@@ -7,12 +7,14 @@
 //!
 //! # なぜ要るか
 //!
-//! 検体の在処を各テストが自前で綴ると、保管の形を変えるときに 38 か所を追いかけ回すことに
+//! 検体の在処を各テストが自前で綴ると、保管の形を変えるときに使う所を全部追いかけ回すことに
 //! なる。窓口を 1 つ通しておけば、直すのは本 crate の中だけで済む。
 //!
 //! # 引き方
 //!
-//! 消費 crate の `Cargo.toml` に 1 行加える。**`[dev-dependencies]` からのみ**引く。
+//! 消費 crate の `Cargo.toml` に 1 行加える。**`[dev-dependencies]` から**引く
+//! （本番の crate の `[dependencies]` には置かない）。例外は `[[bin]]` を持つテスト専用の
+//! `real-run-kit` だけで、これは `[dependencies]` に置く。
 //!
 //! ```toml
 //! [dev-dependencies]
@@ -236,7 +238,7 @@ impl SampleRoot {
     /// [`SampleError::Io`]・[`SampleError::TargetDirNotFound`]。
     pub fn acquire(name: &str) -> Result<SampleRoot, SampleError> {
         let sample = registered(name)?;
-        SampleRoot::from_copy(sample, devroot::fresh_root(sample.name)?)
+        SampleRoot::from_copy(sample, devroot::fresh_root(sample)?)
     }
 
     /// 配られた複製を**登記と照合**してから窓口の形に組む（要件 1.1・1.2・1.3）。
@@ -245,12 +247,12 @@ impl SampleRoot {
     /// `.nar` の `install.txt` が別の `directory` や別の種別を名乗っていると、組んだ位置は
     /// 実在しないパスになる。黙って配らずに [`SampleError::RegistryMismatch`] を返す。
     ///
-    /// 兄弟テストは私有の名前空間と自前の `.nar` から取った複製をここへ渡して、4 通りの
-    /// 食い違い（フォルダ名・種別・同梱の欠け・同梱の余り）を通す。
+    /// 兄弟テストは私有の名前空間と自前の `.nar` から取った複製をここへ渡して、
+    /// 食い違い（フォルダ名・種別・同梱の欠け・同梱の余り など）を通す。
     fn from_copy(sample: &'static Sample, copy: WorkDir) -> Result<SampleRoot, SampleError> {
         check_registry(sample, copy.path())?;
         let root = copy.path().to_path_buf();
-        let folder = root.join(sample.kind.store()).join(sample.name);
+        let folder = body_folder(sample, &root);
         let balloons = sample
             .balloons
             .iter()
@@ -379,21 +381,29 @@ impl SampleRoot {
         name: &str,
     ) -> Result<(), SampleError> {
         let shell = self.folder.join("shell");
+        let source = shell.join(from);
+        if !source.is_dir() {
+            return Err(SampleError::Io {
+                what: "find the shell to copy",
+                path: source,
+                source: std::io::ErrorKind::NotFound.into(),
+            });
+        }
         let to = shell.join(to_folder);
         std::fs::create_dir(&to).map_err(|source| SampleError::Io {
-            what: "写す先のシェルのフォルダの作成",
+            what: "create the folder of the copied shell",
             path: to.clone(),
             source,
         })?;
-        devroot::copy_tree(&shell.join(from), &to)?;
+        devroot::copy_tree(&source, &to)?;
         let descript = to.join("descript.txt");
         let bytes = std::fs::read(&descript).map_err(|source| SampleError::Io {
-            what: "写したシェルの descript.txt の読み取り",
+            what: "read descript.txt of the copied shell",
             path: descript.clone(),
             source,
         })?;
         std::fs::write(&descript, named_descript(&bytes, name)).map_err(|source| SampleError::Io {
-            what: "写したシェルの descript.txt の書き込み",
+            what: "write descript.txt of the copied shell",
             path: descript,
             source,
         })
@@ -403,12 +413,19 @@ impl SampleRoot {
 /// `descript.txt` のバイト列の `name,` の行を `name,<name>` に替える。無ければ末尾に足す。
 ///
 /// 行の終わり（CRLF／LF）は元の行のものを残し、足すときはファイルに CRLF が在れば CRLF に
-/// する。他の行は 1 バイトも変えない。
+/// する。他の行は 1 バイトも変えない。1 行目の頭の BOM は外して照らし、置き換えても残す。
 fn named_descript(bytes: &[u8], name: &str) -> Vec<u8> {
+    const BOM: &[u8] = b"\xEF\xBB\xBF";
     let line_of = |end: &[u8]| [b"name,", name.as_bytes(), end].concat();
     let mut out = Vec::with_capacity(bytes.len() + name.len() + 8);
     let mut found = false;
-    for line in bytes.split_inclusive(|b| *b == b'\n') {
+    for (index, mut line) in bytes.split_inclusive(|b| *b == b'\n').enumerate() {
+        if index == 0
+            && let Some(rest) = line.strip_prefix(BOM)
+        {
+            out.extend_from_slice(BOM);
+            line = rest;
+        }
         if line.starts_with(b"name,") {
             let body = line.len()
                 - line
@@ -436,7 +453,8 @@ fn named_descript(bytes: &[u8], name: &str) -> Vec<u8> {
     out
 }
 
-/// URL の行の書庫を置く場所（`<名前空間>\fetched\<name>.nar`）。`nar-sample-path --fetch-list` が使う。
+/// URL の行の置き場の 2 つのパス `(書庫, ハッシュのファイル)`
+/// （`<名前空間>\fetched\<name>.nar`・`<name>.nar.sha256`）。`nar-sample-path --fetch-list` が使う。
 ///
 /// 今の行（Vendored）には置き場が無いので `Ok(None)`。
 ///
@@ -444,26 +462,16 @@ fn named_descript(bytes: &[u8], name: &str) -> Vec<u8> {
 ///
 /// 名前空間（ビルド成果物の置き場の下）が決まらなければ [`SampleError::TargetDirNotFound`]
 /// か [`SampleError::Io`]。
-pub fn fetched_archive_path(sample: &Sample) -> Result<Option<PathBuf>, SampleError> {
-    on_shelf(sample, fetched::fetched_path_in)
-}
-
-/// 同じく、置き場のハッシュのファイル（`<名前空間>\fetched\<name>.nar.sha256`）。
-///
-/// # Errors
-///
-/// [`fetched_archive_path`] と同じ。
-pub fn fetched_checksum_path(sample: &Sample) -> Result<Option<PathBuf>, SampleError> {
-    on_shelf(sample, fetched::fetched_checksum_path_in)
-}
-
-fn on_shelf(
-    sample: &Sample,
-    position: fn(&Path, &str) -> PathBuf,
-) -> Result<Option<PathBuf>, SampleError> {
+pub fn fetched_shelf(sample: &Sample) -> Result<Option<(PathBuf, PathBuf)>, SampleError> {
     match sample.source {
         SampleSource::Vendored => Ok(None),
-        SampleSource::Fetched { .. } => Ok(Some(position(&devroot::namespace_dir()?, sample.name))),
+        SampleSource::Fetched { .. } => {
+            let namespace = devroot::namespace_dir()?;
+            Ok(Some((
+                fetched::fetched_path_in(&namespace, sample.name),
+                fetched::fetched_checksum_path_in(&namespace, sample.name),
+            )))
+        }
     }
 }
 
@@ -512,14 +520,11 @@ fn check_registry(sample: &'static Sample, root: &Path) -> Result<(), SampleErro
 /// [`SampleError::RegistryMismatch`]（実在しないパスを印字しない）。
 pub fn manual_paths(name: &str) -> Result<Vec<(String, PathBuf)>, SampleError> {
     let sample = registered(name)?;
-    let root = devroot::manual_root(sample.name)?;
+    let root = devroot::manual_root(sample)?;
     check_registry(sample, &root)?;
     let mut printed = vec![
         ("root".to_owned(), root.clone()),
-        (
-            "folder".to_owned(),
-            root.join(sample.kind.store()).join(sample.name),
-        ),
+        ("folder".to_owned(), body_folder(sample, &root)),
     ];
     printed.extend(sample.balloons.iter().map(|balloon| {
         (
@@ -534,24 +539,32 @@ pub fn manual_paths(name: &str) -> Result<Vec<(String, PathBuf)>, SampleError> {
 ///
 /// 本体が 1 つと同梱バルーンが 0 個以上。照合の期待値であり、位置を組み立てる式でもある。
 fn declared_elements(sample: &Sample) -> Vec<String> {
-    let mut declared = vec![format!("{}/{}", sample.kind.store(), sample.name)];
-    declared.extend(
+    let body = body_folder(sample, Path::new(""));
+    let mut elements = vec![body.clone()];
+    elements.extend(
         sample
             .balloons
             .iter()
-            .map(|balloon| format!("{}/{}/balloon/{balloon}", sample.kind.store(), sample.name)),
+            .map(|balloon| body.join("balloon").join(balloon)),
     );
+    // 照合の相手（`installed_elements`）は `/` で継ぐので、区切りを揃える。
+    let mut declared: Vec<String> = elements
+        .iter()
+        .map(|element| element.to_string_lossy().replace('\\', "/"))
+        .collect();
     declared.sort();
     declared
+}
+
+/// 本体の置かれる位置 `<根>/<格納先>/<名前>`。窓口・手で使う根・照合・同梱の位置が使う唯一の式。
+fn body_folder(sample: &Sample, root: &Path) -> PathBuf {
+    root.join(sample.kind.store()).join(sample.name)
 }
 
 /// 同梱バルーンの置かれる位置。書庫の本体の中の `balloon\<directory>`（spec:
 /// `areka-P0-ghost-inner-balloon` 要件 7.1）なので、根の `balloon/` ではない。
 fn companion_folder(sample: &Sample, root: &Path, balloon: &str) -> PathBuf {
-    root.join(sample.kind.store())
-        .join(sample.name)
-        .join("balloon")
-        .join(balloon)
+    body_folder(sample, root).join("balloon").join(balloon)
 }
 
 /// 展開された根の直下に**実際に**在る要素を `<格納先>/<名前>` の形で名前順に並べる。
@@ -583,7 +596,7 @@ fn shelf_entries(shelf: &Path) -> Result<Vec<String>, SampleError> {
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(source) => {
             return Err(SampleError::Io {
-                what: "展開結果の走査",
+                what: "list the installed tree",
                 path: shelf.to_path_buf(),
                 source,
             });
@@ -594,7 +607,7 @@ fn shelf_entries(shelf: &Path) -> Result<Vec<String>, SampleError> {
             entry
                 .map(|entry| entry.file_name().to_string_lossy().into_owned())
                 .map_err(|source| SampleError::Io {
-                    what: "展開結果の走査",
+                    what: "list the installed tree",
                     path: shelf.to_path_buf(),
                     source,
                 })
@@ -614,7 +627,11 @@ fn known_sample_names() -> Vec<&'static str> {
 #[non_exhaustive]
 pub enum SampleError {
     /// 登記されていない検体名。
-    #[error("unknown sample {requested:?}; known samples: {known:?}")]
+    #[error(
+        "unknown sample {}; known samples: {}",
+        ascii(&format!("{requested:?}")),
+        ascii(&format!("{known:?}"))
+    )]
     UnknownSample {
         /// 渡された名前。
         requested: String,
@@ -622,7 +639,12 @@ pub enum SampleError {
         known: Vec<&'static str>,
     },
     /// その検体が同時にインストールしないバルーン名。
-    #[error("sample {sample:?} does not install balloon {requested:?}; known balloons: {known:?}")]
+    #[error(
+        "sample {} does not install balloon {}; known balloons: {}",
+        ascii(&format!("{sample:?}")),
+        ascii(&format!("{requested:?}")),
+        ascii(&format!("{known:?}"))
+    )]
     UnknownBalloon {
         /// 検体名。
         sample: &'static str,
@@ -632,7 +654,12 @@ pub enum SampleError {
         known: &'static [&'static str],
     },
     /// 展開結果の要素が登記（種別・フォルダ名・同梱バルーン）と食い違う。
-    #[error("sample {sample:?} installed {installed:?} but the registry declares {expected}")]
+    #[error(
+        "sample {} installed {} but the registry declares {}",
+        ascii(&format!("{sample:?}")),
+        ascii(&format!("{installed:?}")),
+        ascii(expected)
+    )]
     RegistryMismatch {
         /// 検体名。
         sample: &'static str,
@@ -642,16 +669,23 @@ pub enum SampleError {
         installed: Vec<String>,
     },
     /// ビルド成果物の置き場が決まらない（`CARGO_TARGET_DIR` も祖先の `target` も無い）。
-    #[error("build output directory not found from {started_from:?}; set CARGO_TARGET_DIR")]
+    #[error(
+        "build output directory not found from {}; set CARGO_TARGET_DIR",
+        ascii(&format!("{started_from:?}"))
+    )]
     TargetDirNotFound {
         /// 祖先を辿り始めた場所（実行ファイル）。
         started_from: PathBuf,
     },
     /// 検体の `.nar` が受理されなかった（原本を作れない）。
-    #[error("sample archive refused: {0}")]
+    #[error("sample archive refused: {}", ascii(&.0.to_string()))]
     Nar(#[from] areka_nar::NarError),
     /// 開発用の根のファイル操作の失敗。何をしようとしたのかを添える。
-    #[error("{what} failed at {path:?}: {source}")]
+    #[error(
+        "{what} failed at {}: {}",
+        ascii(&path.to_string_lossy()),
+        ascii(&source.to_string())
+    )]
     Io {
         /// 何をしようとしたか。
         what: &'static str,
@@ -700,7 +734,7 @@ pub enum SampleError {
 mod devroot;
 mod fetched;
 pub use devroot::WorkDir;
-pub use fetched::checksum_url;
+pub use fetched::{ascii, checksum_url};
 
 mod nar_writer;
 pub use nar_writer::{Corrupt, Damage, EntryBuilder, NarBuilder, fold_tree, install_txt};

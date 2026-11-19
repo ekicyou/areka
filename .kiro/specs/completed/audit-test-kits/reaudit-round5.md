@@ -1,0 +1,99 @@
+# 6.1 かけ直し 5 回目の指摘（34 件・必ず直す 0）と仕分け
+
+監査役は 6 人です。4 回目までの 5 人に加え、`examples/` を読む切れ端 E を足しました。4 回目までは `examples/` がどの切れ端にも入っていませんでした。
+
+指摘は監査役の推奨の直し方で直します。外への約束が変わるもの（G1・G2・G5・L1・S1・E2・E3）は、audit 系の議題は推奨案で承認してよいという取り決め（11-04）に従い、進行役が推奨案を採りました。
+
+「必ず直す」は 0 件です。ただし道具の振る舞いに関わる指摘が残っています（見張りの判定 G1・G2・G5、`capture_under_filter` の panic の L1、後片付けの行の S1・S5、見本の道具の E1〜E3）。そのため、この回では打ち切りの条件（要件 9.6）を満たしません。5 回目を直したあとで、6 回目を 1 回かけます。
+
+連鎖（前の回の直しが呼んだもの）は、束ごと Fable に任せて矛盾を解かせます。束 B と束 D がそれに当たります。
+
+## sample-ghost-kit（束 A）
+- S1 devroot.rs ~529 `discard_older_cache_shelves` の `entries.flatten()` が、読めない項目を黙って捨てる → `reclaim_stale` と同じ `report_cleanup("list the namespace", ..)`
+- S2 devroot.rs ~434-453 `cached_root` の説明が `cached_root_in` の役目を書いていて、偽が 2 つある（連鎖: 4 回目 S4）→ 役目と `# Errors` を `cached_root_in` へ移し、偽の 2 文を直す。`cached_root` にはテストの入口の 1 行を残す
+- S3 devroot.rs ~896 の `[`sample_nar`]` → `[`sample_nar_for`]`（連鎖: 4 回目 S1）
+- S4 devroot.rs ~180-183 `WorkDir` の説明が同じことを 2 度言う → 1 段落に畳む（連鎖: 4 回目 S6）
+- S5 devroot.rs ~610-627 `discard_tree_with` の `gc-…lock` の札が、`AlreadyExists` のとき次の連番で取り直さない → `in_namespace_with` と同じに、`AlreadyExists` なら次の連番で取り直す
+- S6 Cargo.toml:4 の description → `NarBuilder` と `WorkDir` を足す
+- U1 tests/pasta_inner_balloon_test.rs ~57-74 の「外に置いた形」が偽（実際はゴーストのフォルダの中で、`balloon/` ではない所）→ 文を直す（連鎖: 1 回目 U3）
+- U2 nar_writer_tests.rs ~309-320 `folding_a_missing_tree_fails_loudly` → 無いフォルダの名前を日本語にし、`is_ascii` と `\u{` を確かめる
+- U3 lib_tests.rs ~684「（かけ直し 4 回目 S7）」→ spec の名を付ける
+- U4 devroot_fetched_tests.rs:1 の `[`sample_nar`]` → `[`sample_nar_for`]`（連鎖: 4 回目 S1）
+- U5 sha256_tests.rs ~3-5 の数（「試験値 4 つ」「3 通り」）→ 数を外し、境目の 2 本を書く
+- U6 lib_tests.rs ~396「小さい方」→「リポジトリに置くゴーストのうち `.nar` が最も小さいもの」
+- U7 lib_tests.rs ~401「表示と同じ綴り」→「Debug の綴り」
+- U8 devroot_tests.rs ~434-443 の対照 → `os error 32` に締め、5 の枝に檻が無いことを `shortcut:` で書く（4 回目の「5 回目で見る」）
+- U9 fetched_tests.rs ~305-306 中身の無い `is_ascii_only(what)` → `*what == "read the fetched checksum file"`
+- E1 examples/fold-samples.rs ~292-296 `strip_folder` が、2 段以上の取り出し元と、大小の違う非 ASCII の名前を照らせない → 各段を `to_uppercase` で照らす。テスト 1 本（2 段の `balloon.source.directory` で不一致が 0）
+- E2 fold-samples.rs ~145-150 追跡ファイルが 0 件のとき、日本語の panic で落ちる → ASCII の `Err`（`no tracked files under <path> (git add the unfolded tree first)`）。終了コードは 101 から 1 に
+- E3 fold-samples.rs ~280 `installed_path` の panic → `Result` にし、ASCII の `unsupported kind`
+- E4 fold-samples.rs ~135・fold-samples_tests.rs ~4 で `main` と `run` を取り違えている → `run` に
+
+## real-run-kit（束 B・連鎖を含むので Fable）
+- R1 tests/fake_wait_close_test.rs ~53-54・62-65 のコメントに既定の「60 秒」が写っている。1 回目 R5 の決めと字面でぶつかり、既定が 30 秒以下になると檻が黙って効かなくなる（連鎖: 4 回目 C2）→ 秒数を外し、限界を `shortcut:` で書く。4 回目の C2 の整理と 1 回目 R5 の両方と辻褄が合う形にする
+- R2 launch.rs ~370・94-95 `compose_rust_log`・`rust_log` の見出しの説明が、振る舞いと表に合わない → 振る舞いに合わせて直す（挙動は変えない）
+- R3 launch.rs ~4-5・197・227 の `"AREKA_MCP_PORT"` の手書き 2 か所 → `areka_mcp::PORT_ENV` を使い、説明を直す
+- R4 i686_tests.rs ~489-498・527-531 の ASCII の確かめが、パスの部分では空振りする → 置き先のフォルダ名を日本語にし、`\u{` を確かめる
+- R5 tests/fake_evidence_test.rs ~207-214・235 で、ASCII に逃がしたパスを本物のパスとして読む → `target_test_roots()` の中身から、`ascii` の写しが一致するものを選ぶ
+- R6 mcp_tests.rs:1-4・output_tests.rs:1-2 の module doc の一覧の抜けと取り違え → 直す（連鎖: 3 回目 R3・4 回目 R2）
+- R7 launch_tests.rs ~183 `sample_name_is_used_for_the_copy` の名前が偽 → `sample_name_is_given_only_for_sample_launches` などに改名
+
+## log-capture-kit src（束 C）
+- L1 filter.rs:94 `EnvFilter::new` が、綴りの誤った指令を黙って捨てる → `try_new` と panic。`#[should_panic]` を 1 本足し、wintf の `capture_under_filter` の呼び手のテストも回して確かめる
+- L2 lib.rs:71「値の取り出しは 3 本」→ 数を外す（連鎖: 4 回目 L2）
+
+## log-capture-kit の見張り（束 D・連鎖を含むので Fable）
+- G1 with_default_guard_test.rs ~217-229 `declares_env_filter_feature` が 4 回目の直しで後退した。複数行の配列の `[features]` で `"log-capture-kit/env-filter"` と書いた形を見落とす（連鎖: 4 回目 G2）→ 行ごとの名指しの条件を戻して足す。較正の見本に陽性を 1 つ足す
+- G2 同じ関数が、下位表の名前を変えて共有 crate を引く形（`[dev-dependencies.lck]` と `package = "log-capture-kit"`）を見ない → section 単位の印を持つ。見本を 1 つ足す。G1 と一緒に直す
+- G3 doc_tree_guard_test.rs ~244-269 `check_all` が、読み取りが空のときも `StaleException` を並べる → `!tree.direct.is_empty()` を条件に足す
+- G4 workspace_scan_test.rs:114「下の 2 本」→ 名前を書く
+- G5 with_default_guard_test.rs ~313-319 の手書きの `FILES_THAT_MUST_NOT_SPELL_THE_TOKENS` が、見張りの一部しか見ない → `crates/log-capture-kit/tests/` の下から、例外表に載るものを除いて引く
+- G6 workspace_scan/mod.rs ~150-156・625-633 で、コメントの除去を何度もやり直す → 除去済みの本文を `OnceLock` に持たせる（当たりは同じ。前後の時間を控える）
+
+## 束 C の直しの控え（承認済み）
+- L1: `EnvFilter::new` を、既定の ERROR を保つ `EnvFilter::builder().with_default_directive(LevelFilter::ERROR.into()).parse(..)` に替え、解釈できない指令で panic するようにした。`try_new` は既定の ERROR を持たず、空の指令の振る舞いが変わるので使わない（レビューが tracing-subscriber 0.3.23 の原文で、正しい入力では `new` と同じ振る舞いだと確かめた）
+- 較正: `parse_lossy` に戻す → `a_misspelled_directive_panics_instead_of_being_dropped` が赤
+- 呼び手は wintf の 39 ファイル（`ecs/test_support.rs` の再輸出を通す）。使う指令はどれも解釈できる。窓と GPU を立てない呼び手のテスト 252 本は緑。実窓・実 GPU の呼び手は 6.2 の全体テストで確かめる
+- L2: 「値の取り出しは 3 本」の数を外した
+
+## 束 D の直しの控え（承認済み・G1 は連鎖 4 回目 G2 → 5 回目 G1 として Fable が直し、Fable が回をまたいで確かめた）
+- 較正（実装係とレビューの両方で取った）:
+  - G1: 行そのものの名指しの条件を外す → `the_env_filter_feature_is_detected_in_a_features_array_split_over_lines` が赤
+  - G2: 下位表の `package =` の印を外す → `the_env_filter_feature_is_detected_in_a_renamed_sub_table` が赤
+  - G3: `!tree.direct.is_empty()` を外す → `an_empty_reading_is_named_and_turns_the_guard_red` が赤
+  - G5: `temp_path_guard_test.rs` のコメントに走査語を植える → `the_guard_files_never_spell_the_tokens_out_not_even_inside_comments` が赤（前の手書きの表では見ていなかったファイル）
+- 連鎖の結論: 4 回目 G2 の直しは「鍵の行から次の `=` の行まで」を足したときに、3 回目までの「行そのものが共有 crate とフィーチャ名を持つ」条件を落としていた。`declares_env_filter_feature` を 1 度だけ書き直し、次の 4 つのどれかに当たれば宣言とみる形にした。4 回目の見本と `shortcut:` の行は残り、`shortcut:` の行を 1 行足した。3 回目 G3 の `shortcut:` には触っていない
+  - 行そのものの名指し
+  - 鍵の行から次の `=` の行まで
+  - 見出しの名指し
+  - 下位表の `package =`
+- G5: 手書きの表 `FILES_THAT_MUST_NOT_SPELL_THE_TOKENS` を消し、`tests/` の下から例外表に載るものを除いて引く関数にした。見る範囲は 4 ファイルから 7 ファイルになり、今の木の当たりは 0 のまま。消す前の git grep は、このファイルの外では reaudit-round5.md と completed の tasks.md の 1 件ずつ（直さない）
+- G6: コメントを除いた本文をファイルごとの `OnceLock` に置いた。新旧の当たりを全 2,656 ファイルで比べて同じだった（一時テストは消した）。時間は揺れが大きく、速くなったとは言えない（with_default 4.4 秒 → 2.9〜3.7 秒・temp_path 4.1 秒 → 4.2〜5.4 秒・sample_path 4.6 秒 → 6.2〜8.3 秒、並走の中で 1 度ずつ測った値）
+- 足したテスト 2 本（G1・G2）。名前の付いたテストの削除・改名は無し
+
+## 束 A の直しの控え（承認済み）
+- 較正（実装係が取り、E1・S5 はレビューでも取り直した）:
+  - S5: `AlreadyExists` の取り直しの枝を外す → `a_leftover_gc_lease_with_the_same_name_is_skipped` が赤
+  - E1: `strip_folder` を古い形に戻す → `a_two_level_companion_source_with_other_case_round_trips_without_mismatches` が赤
+  - E2: panic に戻す → `no_tracked_files_is_an_ascii_error_not_a_panic` が赤
+  - E3: panic に戻す → `an_unsupported_kind_is_an_ascii_error_not_a_panic` が赤
+- S1 は項目ごとに `report_cleanup("list the namespace", ..)` を出して続ける（`reclaim_stale` と同じ形）。Windows では `read_dir` の項目の失敗を決まって作る手が無いので、テストは足していない
+- S5 の `discard_tree_with` は連番の出どころを `impl FnMut() -> u32` で受け、`AlreadyExists` なら次の連番で取り直す。git grep の当たり 3 か所（定義・`discard_tree`・掃除のテスト）を全部直した
+- E1 は段ごとに `to_uppercase` で照らす。`ß` のように大文字が 2 字になる字では areka-nar の `names::fold` より甘いので、`shortcut:` で書いた（その場合も不一致として表に出る）
+- E2・E3 は ASCII の `Err` にした（終了コードは 101 から 1）。パスは `main` の出口の `ascii` が写す。中の約束を確かめる `assert` は、1 回目 S2 のとおり家の形のまま
+- U8 の対照を `os error 32` に締めた。os error 5 の枝に檻が無いことは `shortcut:` で書いた（4 回目の「5 回目で見る」はこれで閉じる）
+- U1 の変数 `outside` を `misplaced` に改名した（テスト名ではない）。名前の付いたテストの削除・改名は無し
+
+## 束 B の直しの控え（承認済み・R1 は連鎖 4 回目 C2 → 5 回目 R1 として Fable が直し、Fable が回をまたいで確かめた）
+- 連鎖の結論: 秒数を外して限界を `shortcut:` で書いた。上限は定数 `SHORT_DEADLINE_CAGE`（30 秒）に出し、説明から既定の「60 秒」を外した。既定から導く案は採らなかった。既定の締切（`Limits`）は `pub(crate)` で結合テストから読めず、読み口を足すと公開の API が変わるため。`shortcut:` には「既定がこの上限より短くなると、指定が効かなくても緑のまま。既定を縮めるときは上限を置き直す」と書いた
+  - 1 回目 R5: 既定の秒数の写しは残っていない
+  - 4 回目 R4: 値を読み返す確かめは足していない
+  - 4 回目 C2: 檻は開いていない（較正をやり直した）
+- 較正（実装係とレビューの両方で取った）:
+  - R1: `launch.rs` の締切の代入を外す → `fake_wait_close_test` の締切の 3 本が赤（約 61 秒・121 秒）
+  - R4: `i686.rs` のパスの `ascii()` 2 か所を外す → `rename_failure_passes_with_an_ascii_line_when_dest_is_another_32bit_copy` と `remove_tmp_reports_only_a_failure_other_than_not_found` が赤
+  - R5: 較正なし。ワークツリーのパスが ASCII なので、直す前も後も緑になる
+- R3: `launch.rs` の手書きの `"AREKA_MCP_PORT"` を `areka_mcp::PORT_ENV` に替えた。値は同じで、子へ渡す形も変わらない。結合テストは名前を字で持ったままなので、名前そのものの固定は残る
+- R5: 標準エラーの行をパスとして読むのをやめ、`target_test_roots()` の直下から `ascii` の写しが一致するものを選ぶ。一致が無ければ panic
+- 改名 R7: `sample_name_is_used_for_the_copy` → `sample_name_is_given_only_for_sample_launches`。改名の前の git grep の当たりは 4 件で、定義（直した）、`completed/runtime-module-untangle` の 2 件（直さない）、reaudit-round5.md（この回の記録）
+- レビューの気付きで文を 2 か所直した。檻のコメントの「上限以下」を「上限より短く」に、mcp_tests.rs の module doc の組の取り違えを直した

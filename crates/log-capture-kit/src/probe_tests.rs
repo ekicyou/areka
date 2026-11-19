@@ -1,25 +1,38 @@
 //! 切替点の檻（要件 13.1・設計 C9）。
 //!
+//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
+//!
 //! ここで縛れるのは**同一プロセス内で決まる判定**だけである。常駐の有無はプロセス寿命で
-//! 1 度きりなので、1 回の走行で両側を見ることはできない。無効側の実挙動——取りこぼした
-//! 捕捉窓が黙って空を返さず失敗を宣告すること（要件 13.2）——は
-//! `tests/capture_calibration_test.rs` の子プロセス較正が縛る。
+//! 1 度きりなので、1 回の走行で両側を見ることはできない。無効側（`off`）の実挙動を縛る
+//! テストはこの crate に無い。無効側で走らせると、`capture_tests.rs` の (a) のうち窓の
+//! 内側で他スレッドが先に登録する 1 本
+//! （`captures_event_whose_callsite_another_thread_registers_inside_the_window`）は
+//! 実行順しだいで赤になり得る（常駐が無いと同じプロセスの dispatcher の数で色が決まる）。
+//! 既定の走行は変数を立てないので常駐側だけを通り、
+//! `tests/capture_calibration_test.rs` の子プロセス較正が比べるのも硬化の無い素の捕捉と
+//! [`crate::capture`] で、この切替の無効側ではない。無効側を通るのは、測定のために変数を
+//! 手で立てて走らせたときだけである。
 //!
 //! 本ファイルの檻は**どちらの側で走らせても緑**である。それが狙いで、A/B の両側で
 //! 「指定が確かにこのプロセスまで届いた」ことを同じ形で示す役に立てる。
 
 use super::{
     PROBES_ENV, PROBES_OFF, PROBES_ON, ensure_interest_probes, interest_probes_enabled,
-    probes_env_read_count,
+    probes_choice, probes_env_read_count,
 };
 
-/// 変数名はワークスペースの規約（`AREKA_` 名前空間）に従う。
+/// 値は逐語で比べる。前後に空白のある値は `on`／`off` と見なさず断る。
 #[test]
-fn the_switch_variable_lives_in_the_workspace_namespace() {
-    assert!(
-        PROBES_ENV.starts_with("AREKA_"),
-        "実行時の環境変数は AREKA_ 名前空間（既存の較正用変数と同じ流儀）: {PROBES_ENV}"
-    );
+#[should_panic(expected = "AREKA_LOG_CAPTURE_PROBES の値が不正")]
+fn a_value_with_surrounding_spaces_is_rejected() {
+    probes_choice(" on");
+}
+
+/// 綴りがちょうど合う値は、それぞれの側に決まる。
+#[test]
+fn the_exact_values_choose_their_side() {
+    assert!(probes_choice(PROBES_ON));
+    assert!(!probes_choice(PROBES_OFF));
 }
 
 /// 指定と判定が食い違わない。**「立てたつもりで立っていない」を炙り出すための対照**で、
@@ -27,7 +40,7 @@ fn the_switch_variable_lives_in_the_workspace_namespace() {
 #[test]
 fn the_decision_agrees_with_what_the_environment_actually_says() {
     let requested = std::env::var(PROBES_ENV).ok();
-    match requested.as_deref().map(str::trim) {
+    match requested.as_deref() {
         None => assert!(
             interest_probes_enabled(),
             "{PROBES_ENV} が未設定なら既定＝常駐する（導入前と 1 ビットも変えない）"
@@ -43,25 +56,6 @@ fn the_decision_agrees_with_what_the_environment_actually_says() {
         ),
         Some(other) => panic!("{PROBES_ENV} の値が不正: {other:?}"),
     }
-}
-
-/// 確立は冪等で、何度呼んでも判定は動かない。
-///
-/// **この檻が縛るのは「判定が動かない」ことだけ**である。読み取り回数は縛れない——毎回読む形へ
-/// 変えても同一プロセス内では答えが同じなので、判定の一致は恒真になる（タスク 11.1 のレビューが
-/// 変異で実測した）。回数のほうは次の
-/// [`the_environment_is_read_exactly_once_for_the_whole_process`] が縛る。
-#[test]
-fn establishing_the_probes_is_idempotent() {
-    ensure_interest_probes();
-    let first = interest_probes_enabled();
-    ensure_interest_probes();
-    ensure_interest_probes();
-    assert_eq!(
-        first,
-        interest_probes_enabled(),
-        "常駐の確立を繰り返すと判定が動いた（`OnceLock` に畳まれていない）"
-    );
 }
 
 /// 環境変数を読むのは**プロセス寿命で 1 度きり**である（要件 13.1・測定対象への上乗せが無いこと）。

@@ -1,5 +1,7 @@
-//! 原本（`cache/<検体>-<刻印>/`）の兄弟テスト——刻印・初回の展開・古い原本の回収・
-//! 多重プロセスの競合（要件 7.2・7.3・7.6・7.7・7.8）。
+//! 原本（[`CACHE`] の `<検体>-<刻印>/`）の兄弟テスト——刻印・初回の展開・古い原本の回収・
+//! 多重プロセスの競合（要件 7.2・7.3・7.6・7.7・7.8・9.5）。
+//!
+//! spec の名を添えていない番号は spec `areka-P0-nar-install` のもの。
 //!
 //! # 私有の名前空間で測る
 //!
@@ -10,21 +12,21 @@
 //!
 //! # 固定入力は自分で組む
 //!
-//! 検体の実物（6.6 MB）ではなく [`crate::NarBuilder`] で組んだ最小のゴーストを使う。
+//! 検体の実物ではなく [`crate::NarBuilder`] で組んだ最小のゴーストを使う。
 //! **中身の長さを変えずに**目印だけ書き換えられるので、刻印が長さだけでなく CRC でも
 //! 決まっていることを判定できる。実物の `.nar` と `nar_dir()` の綴りは、下の多重
 //! プロセスの検査が [`cached_root`] 経由で通す。
 //!
 //! # 「半端な原本の自己修復」を測らない理由
 //!
-//! `cache/<検体>-<刻印>/` は「名前が合えば完全」という約束で運用する（作業フォルダで
+//! [`CACHE`] の `<検体>-<刻印>/` は「名前が合えば完全」という約束で運用する（作業フォルダで
 //! 組んでから `rename` で入れ、消すときは先に `rename` で出す）。だから手で半分消した
 //! 原本が完全とみなされるのは**設計どおり**であり、そこを検査にすると設計と逆の要求を
 //! 固定してしまう。代わりに「据え付け前の木は答えにならない」ことを測る。
 
 use super::*;
 
-/// 多重プロセスの検査に使う検体。登記の中で `.nar` が一番小さいもの。
+/// 多重プロセスの検査に使う検体。`.nar` が小さい方の検体（最小ではない。`areka-balloon` の方が小さい）。
 pub(super) const RACE_SAMPLE: &str = "emo2-kakukaku-wplimit";
 
 /// 子として起こされたことを伝える環境変数（値は子の番号）。
@@ -38,11 +40,11 @@ pub(super) fn private_namespace() -> WorkDir {
     WorkDir::new().expect("私有の名前空間は取れるはず")
 }
 
-/// 最小のゴースト 1 体だけを含む `.nar` を組んで置く。
+/// 最小のゴースト 1 体だけを含む `.nar` のバイト列（原本の作りは確かめたバイトを受ける＝
+/// audit-test-kits 決め D13 なので、ファイルを介さない）。
 ///
 /// `mark` は中身の目印で、長さを変えずに中身だけ変えられる。
-pub(super) fn tiny_ghost_nar(dir: &Path, name: &str, mark: &[u8]) -> PathBuf {
-    let nar = dir.join(format!("{name}.nar"));
+pub(super) fn tiny_ghost_bytes(name: &str, mark: &[u8]) -> Vec<u8> {
     crate::NarBuilder::new()
         .file("install.txt", &manifest_of(name))
         .done()
@@ -50,12 +52,10 @@ pub(super) fn tiny_ghost_nar(dir: &Path, name: &str, mark: &[u8]) -> PathBuf {
         .done()
         .file("mark.txt", mark)
         .done()
-        .write_to(&nar)
-        .expect("固定入力の .nar を置けるはず");
-    nar
+        .bytes()
 }
 
-/// [`tiny_ghost_nar`] が書く `install.txt`。期待値の木と綴りを共有する。
+/// [`tiny_ghost_bytes`] が書く `install.txt`。期待値の木と綴りを共有する。
 fn manifest_of(name: &str) -> Vec<u8> {
     crate::install_txt(&[
         "charset,UTF-8",
@@ -65,10 +65,10 @@ fn manifest_of(name: &str) -> Vec<u8> {
     ])
 }
 
-/// [`tiny_ghost_nar`] の検体が完全に展開されたときの木の**全内容**。
+/// [`tiny_ghost_bytes`] の検体が完全に展開されたときの木の**全内容**。
 ///
 /// 「完全な原本」を 1 ファイルずつ確かめる形は、隣のファイルが落ちていても緑になる。
-/// 完了状態の 2 本はこの写像との等値で judge する。
+/// 原本・複製・手で使う根の完了状態を見るテストは、この写像との等値で判定する。
 pub(super) fn whole_ghost_tree(
     name: &str,
     mark: &[u8],
@@ -101,7 +101,7 @@ pub(super) fn shelf(namespace: &Path, name: &str) -> Vec<String> {
     out
 }
 
-/// 原本の名前（`cache/` の中の 1 件の綴り）。
+/// 原本の名前（[`CACHE`] の中の 1 件の綴り）。
 fn leaf(path: &Path) -> String {
     path.file_name()
         .expect("原本には名前がある")
@@ -165,20 +165,14 @@ fn the_stamp_is_split_off_from_the_end_so_a_name_prefix_is_not_confused_for_the_
     }
 }
 
-// ---- 初回の展開と刻印の変化（完了状態の 2 本） ----
+// ---- 初回の展開と刻印の変化 ----
 
 /// 原本が無い状態からの取得が、刻印を名前に含む**完全な原本 1 つ**に落ち着く（要件 7.2）。
 #[test]
 fn an_acquire_with_no_master_copy_installs_exactly_one_complete_master_copy() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-fresh", b"one");
-    let bytes = std::fs::read(&nar).expect("組んだ .nar は読める");
-
-    // 陽性側を先に。これが無いと後の「1 つ」は何も作らなくても緑になる。
-    assert!(
-        shelf(namespace.path(), CACHE).is_empty(),
-        "始めは原本が 1 つも無いこと"
-    );
+    let nar = tiny_ghost_bytes("probe-fresh", b"one");
+    let bytes = &nar;
 
     let master = cached_root_in(namespace.path(), "probe-fresh", &nar).expect("原本を作れること");
 
@@ -187,7 +181,7 @@ fn an_acquire_with_no_master_copy_installs_exactly_one_complete_master_copy() {
         format!(
             "probe-fresh-{}-{:08x}",
             bytes.len(),
-            areka_nar::crc32(&bytes)
+            areka_nar::crc32(bytes)
         ),
         "原本の名前は `<検体>-<長さ>-<crc32 8 桁>`"
     );
@@ -229,11 +223,11 @@ fn an_acquire_with_no_master_copy_installs_exactly_one_complete_master_copy() {
 #[test]
 fn a_changed_nar_installs_a_new_master_copy_and_the_old_one_is_reclaimed() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-restamp", b"one");
+    let nar = tiny_ghost_bytes("probe-restamp", b"one");
     let old = cached_root_in(namespace.path(), "probe-restamp", &nar).expect("1 度目");
     assert_eq!(mark_of(&old, "probe-restamp"), b"one");
 
-    let nar = tiny_ghost_nar(namespace.path(), "probe-restamp", b"two");
+    let nar = tiny_ghost_bytes("probe-restamp", b"two");
     let new = cached_root_in(namespace.path(), "probe-restamp", &nar).expect("2 度目");
 
     assert_ne!(new, old, "刻印が変われば別の原本になること");
@@ -254,12 +248,12 @@ fn a_changed_nar_installs_a_new_master_copy_and_the_old_one_is_reclaimed() {
 #[test]
 fn reclaiming_one_sample_leaves_another_samples_master_copy_alone() {
     let namespace = private_namespace();
-    let other = tiny_ghost_nar(namespace.path(), "probe-twin-extra", b"one");
+    let other = tiny_ghost_bytes("probe-twin-extra", b"one");
     let kept = cached_root_in(namespace.path(), "probe-twin-extra", &other).expect("隣の原本");
 
-    let nar = tiny_ghost_nar(namespace.path(), "probe-twin", b"one");
+    let nar = tiny_ghost_bytes("probe-twin", b"one");
     cached_root_in(namespace.path(), "probe-twin", &nar).expect("1 度目");
-    let nar = tiny_ghost_nar(namespace.path(), "probe-twin", b"two");
+    let nar = tiny_ghost_bytes("probe-twin", b"two");
     let new = cached_root_in(namespace.path(), "probe-twin", &nar).expect("2 度目");
 
     assert!(
@@ -278,17 +272,17 @@ fn reclaiming_one_sample_leaves_another_samples_master_copy_alone() {
     );
 }
 
-/// 退避（`cache/` から出す `rename`）に失敗しても取得は成功し、次の取得で回収し直す
+/// 退避（[`CACHE`] から出す `rename`）に失敗しても取得は成功し、次の取得で回収し直す
 /// （要件 7.3・7.7）。
 ///
 /// 古い原本の中のファイルを開いたまま取得する。**Windows は子孫が開かれている
 /// フォルダの `rename` を拒む**（下の較正で実測する。共有モードに削除を足しても同じ）
-/// ので、回収は最初の一歩で失敗する。それでも取得は止まらず、古い原本は `cache/` に
+/// ので、回収は最初の一歩で失敗する。それでも取得は止まらず、古い原本は [`CACHE`] に
 /// **無傷のまま**残る（半端に消しかけた木にはならない）。
 #[test]
 fn a_reclaim_that_cannot_move_the_stale_copy_keeps_going_and_retries_on_the_next_acquire() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-held", b"one");
+    let nar = tiny_ghost_bytes("probe-held", b"one");
     let old = cached_root_in(namespace.path(), "probe-held", &nar).expect("1 度目");
     let inside = old.join("ghost").join("probe-held").join("mark.txt");
     let before = contents(&old);
@@ -298,7 +292,7 @@ fn a_reclaim_that_cannot_move_the_stale_copy_keeps_going_and_retries_on_the_next
     );
     let held = std::fs::File::open(&inside).expect("原本の中のファイルは開けるはず");
 
-    let nar = tiny_ghost_nar(namespace.path(), "probe-held", b"two");
+    let nar = tiny_ghost_bytes("probe-held", b"two");
     let new = cached_root_in(namespace.path(), "probe-held", &nar)
         .expect("回収が失敗しても取得は成功すること");
 
@@ -308,7 +302,7 @@ fn a_reclaim_that_cannot_move_the_stale_copy_keeps_going_and_retries_on_the_next
     assert_eq!(
         contents(&old),
         before,
-        "退避に失敗した古い原本は 1 バイトも欠けないこと（`cache/` に半端な木を作らない）"
+        "退避に失敗した古い原本は 1 バイトも欠けないこと（原本の棚に半端な木を作らない）"
     );
     assert_eq!(
         shelf(namespace.path(), CACHE),
@@ -338,12 +332,11 @@ fn a_reclaim_that_cannot_move_the_stale_copy_keeps_going_and_retries_on_the_next
 #[test]
 fn a_refused_nar_leaves_the_previous_master_copy_in_place() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-refused", b"one");
+    let nar = tiny_ghost_bytes("probe-refused", b"one");
     let old = cached_root_in(namespace.path(), "probe-refused", &nar).expect("1 度目");
 
     // 終端記録を落とした書庫＝読取層が受理しない別の刻印の入力。
-    let broken = namespace.path().join("probe-refused-broken.nar");
-    crate::NarBuilder::new()
+    let broken = crate::NarBuilder::new()
         .file(
             "install.txt",
             &crate::install_txt(&[
@@ -354,8 +347,7 @@ fn a_refused_nar_leaves_the_previous_master_copy_in_place() {
         )
         .done()
         .damage(crate::Damage::NoEocd)
-        .write_to(&broken)
-        .expect("壊した .nar を置ける");
+        .bytes();
 
     let err = cached_root_in(namespace.path(), "probe-refused", &broken)
         .expect_err("受理されない .nar は失敗になること");
@@ -375,15 +367,71 @@ fn a_refused_nar_leaves_the_previous_master_copy_in_place() {
     );
 }
 
+/// 原本は確かめたバイトから作り、パスのファイルを読み直さない（audit-test-kits 決め D13・指摘 52）。
+///
+/// 確かめた後にパスのファイルを違うバイトへ替えておく。読み直す作りなら、刻印は確かめた
+/// バイトのものなのに中身は替えた後のもの、という食い違った原本ができる。
+#[test]
+fn staging_uses_the_verified_bytes_not_a_second_read() {
+    let namespace = private_namespace();
+    let nar = namespace.path().join("probe-verified.nar");
+    std::fs::write(&nar, tiny_ghost_bytes("probe-verified", b"good")).expect("置ける");
+    let verified = std::fs::read(&nar).expect("読める");
+    std::fs::write(&nar, tiny_ghost_bytes("probe-verified", b"evil")).expect("替えられる");
+    assert_ne!(
+        std::fs::read(&nar).expect("読める"),
+        verified,
+        "パスのファイルは替わっている"
+    );
+
+    let master =
+        cached_root_in(namespace.path(), "probe-verified", &verified).expect("原本を作れること");
+
+    assert_eq!(
+        leaf(&master),
+        format!("probe-verified-{}", stamp(&verified))
+    );
+    assert_eq!(
+        contents(&master),
+        whole_ghost_tree("probe-verified", b"good"),
+        "中身も確かめたバイトのもの"
+    );
+}
+
+/// 原本の棚を作るとき、名前を上げる前の世代の棚（`cache\` など）を退ける（audit-test-kits 指摘 54）。
+#[test]
+fn an_older_generation_cache_shelf_is_discarded() {
+    let namespace = private_namespace();
+    let old = namespace.path().join("cache").join("probe-old-1-deadbeef");
+    std::fs::create_dir_all(&old).expect("古い世代の原本を置ける");
+    std::fs::write(old.join("a.txt"), b"a").expect("中身");
+    let other = namespace.path().join("fetched");
+    std::fs::create_dir_all(&other).expect("隣の棚を置ける");
+    assert!(old.is_dir(), "古い世代の棚を先に置けていること");
+
+    let nar = tiny_ghost_bytes("probe-generation", b"one");
+    let master = cached_root_in(namespace.path(), "probe-generation", &nar).expect("原本");
+
+    assert!(master.is_dir());
+    assert!(
+        !namespace.path().join("cache").exists(),
+        "古い世代の棚が消えること"
+    );
+    assert!(other.is_dir(), "`cache` で始まらない棚には触らない");
+    assert!(
+        shelf(namespace.path(), WORK).is_empty(),
+        "退けた木も札も残らない: {:?}",
+        shelf(namespace.path(), WORK)
+    );
+}
+
 // ---- 作り直し（要件 7.7・7.8） ----
 
 /// 名前空間を丸ごと消しても、次の取得で作り直す（要件 7.8）。
 #[test]
 fn deleting_the_whole_namespace_rebuilds_the_master_copy_on_the_next_acquire() {
-    // `.nar` は名前空間の外に置く（消す対象に入れない）。
-    let fixtures = private_namespace();
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(fixtures.path(), "probe-wipe", b"one");
+    let nar = tiny_ghost_bytes("probe-wipe", b"one");
 
     let first = cached_root_in(namespace.path(), "probe-wipe", &nar).expect("1 度目");
     assert_eq!(mark_of(&first, "probe-wipe"), b"one");
@@ -403,18 +451,13 @@ fn deleting_the_whole_namespace_rebuilds_the_master_copy_on_the_next_acquire() {
 
 /// 作業フォルダに半端な木が在っても cache-hit にならない（要件 7.7）。
 ///
-/// 「名前が合う原本は完全」は `cache/` の中でだけ成り立つ約束なので、据え付け前の木を
+/// 「名前が合う原本は完全」は [`CACHE`] の中でだけ成り立つ約束なので、据え付け前の木を
 /// 原本と同じ名前で `work/` に置いても答えにしてはならない。
 #[test]
 fn a_half_built_tree_in_the_work_shelf_is_never_taken_as_the_master_copy() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-half", b"one");
-    let bytes = std::fs::read(&nar).expect("読める");
-    let stamped = format!(
-        "probe-half-{}-{:08x}",
-        bytes.len(),
-        areka_nar::crc32(&bytes)
-    );
+    let nar = tiny_ghost_bytes("probe-half", b"one");
+    let stamped = format!("probe-half-{}", stamp(&nar));
 
     // 据え付け前の半端な木を、原本と同じ名前で作業の棚に置く。
     let decoy = namespace.path().join(WORK).join(&stamped);
@@ -426,7 +469,7 @@ fn a_half_built_tree_in_the_work_shelf_is_never_taken_as_the_master_copy() {
     assert_eq!(
         master,
         namespace.path().join(CACHE).join(&stamped),
-        "答えは `cache/` の下"
+        "答えは原本の棚の下"
     );
     assert_eq!(mark_of(&master, "probe-half"), b"one", "答えは完全な木");
     assert!(
@@ -444,13 +487,14 @@ fn a_half_built_tree_in_the_work_shelf_is_never_taken_as_the_master_copy() {
 #[test]
 fn a_lost_race_discards_its_own_stage_and_keeps_the_winner() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-race", b"one");
+    let nar = tiny_ghost_bytes("probe-race", b"one");
     let winner = cached_root_in(namespace.path(), "probe-race", &nar).expect("勝者を置く");
     std::fs::write(winner.join("winner.txt"), b"w").expect("勝者の目印");
 
     stage_into_cache(
         namespace.path(),
         &namespace.path().join(CACHE),
+        "probe-race",
         &nar,
         &winner,
     )
@@ -473,11 +517,11 @@ fn a_lost_race_discards_its_own_stage_and_keeps_the_winner() {
 }
 
 /// 空の名前空間へ 4 つのプロセスが同時に取得を始めても、全員が完全な木を受け取り、
-/// `cache/` に半端な木が残らない（要件 7.6・9.5）。
+/// [`CACHE`] に半端な木が残らない（要件 7.6・9.5）。
 ///
 /// 子は**自分自身のテストバイナリ**で、`--exact` で下の子側のテストだけを走らせる。
 /// 子の名前空間は `CARGO_TARGET_DIR` で私有の場所へ振るので、この検査の外で走っている
-/// テストの原本にも作業フォルダにも触らない。実物の `.nar` をこの経路だけが通るので、
+/// テストの原本にも作業フォルダにも触らない。子は実物の `.nar` を [`cached_root`] から通すので、
 /// `nar_dir()` の綴りもここで確かめられる。
 ///
 /// 子の待ちに**期限を置かないのは意図**である。この repo は壁時計の期限で何度も痛い目に
@@ -525,7 +569,7 @@ fn four_processes_racing_the_first_install_all_get_a_complete_tree() {
         .join("descript.txt");
     assert!(
         descript.is_file(),
-        "`cache/` に残るのは完全な木であること: {}",
+        "原本の棚に残るのは完全な木であること: {}",
         descript.display()
     );
     let leftovers = shelf(&namespace, WORK);

@@ -201,8 +201,8 @@ fn io_display_carries_phase_path_and_source() {
 fn io_keeps_what_was_committed_and_whether_it_was_rolled_back() {
     let element = InstalledElement {
         kind: ElementKind::Balloon,
-        name: "emo2-kakukaku".to_string(),
-        path: PathBuf::from(r"C:\root\balloon\emo2-kakukaku"),
+        name: "kaku".to_string(),
+        path: PathBuf::from(r"C:\root\balloon\kaku"),
         target_ghost: None,
         existing: ExistingState::New,
     };

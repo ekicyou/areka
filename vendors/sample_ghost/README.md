@@ -112,7 +112,7 @@ URL の行の検体:
   sha256 `ebc87c6daa108116b9afdc6608059aa35ffbe183e0da83eb1b01888c824d39c0`
 - 中身は SSP の `ghost/emily4/` から起動記録（`ghost/master/profile/`・`shell/master/profile/`・`ghost/master/yaya_variable.cfg`）を除いたもの。**SSP の走行の残り `ghost/master/yaya_ssp_debug.log`（356 バイト）が 1 本入っている**が、受け取ったバイト列のまま置いた（deflate と無圧縮が混在＝239／21）。
 - ライセンス（書庫の中の `readme.txt` が出どころ）: 「Emily/Phase4.5（ghost/emily4フォルダ以下）」は **CC BY-NC 4.0**（<https://creativecommons.org/licenses/by-nc/4.0/deed.ja>）。このリポジトリの MIT ライセンスは**この 1 本には及ばない**。`konnoyayame` のシェルと同じく、**開発用の検体としてだけ使い、areka の配布物へ同梱しない**。
-- **同梱のバルーンは入らない。** `install.txt` が `balloon.directory,emily4`・`balloon.source.directory,balloon` を名乗るのに、書庫に `balloon/` が無い（SSP ではバルーンが別の `balloon/emily4/` に入っているため、ゴーストのフォルダだけを畳むと抜ける）。`areka-nar` は取り出し元の無い同梱のバルーンを断らずに飛ばし、ゴースト `emily4` だけを入れる（`<根>/balloon/emily4/` は作らない）。飛ばしたことは記録に 1 件（鍵 `balloon.source.directory`・値 `balloon`・置き場 `emily4`）残り、areka の画面からのインストールでは警告のダイアログが 1 つ出る。起動するとバルーンは、ほかに当たるものが無ければ既定のバルーンになる。登記表の行もこの形（ゴースト 1 つ・同梱のバルーン 0）で、判定は `crates/sample-ghost-kit/src/lib_tests.rs` の `emily4_nar_installs_the_ghost_alone_and_skips_its_missing_companion`。
+- **同梱のバルーンは入らない。** `install.txt` が `balloon.directory,emily4`・`balloon.source.directory,balloon` を名乗るのに、書庫に `balloon/` が無い（SSP ではバルーンが別の `balloon/emily4/` に入っているため、ゴーストのフォルダだけを畳むと抜ける）。`areka-nar` は取り出し元の無い同梱のバルーンを断らずに飛ばし、ゴースト `emily4` だけを入れる（`<根>/balloon/emily4/` は作らない）。飛ばしたことは記録に 1 件（鍵 `balloon.source.directory`・値 `balloon`・置き場 `emily4`）残り、areka の画面からのインストールでは警告のダイアログが 1 つ出る。起動するとバルーンは、ほかに当たるものが無ければ既定のバルーンになる。登記表の行もこの形（ゴースト 1 つ・同梱のバルーン 0）で、判定は `crates/sample-ghost-kit/src/lib_tests.rs` の `every_sample_nar_installs_exactly_the_elements_its_registry_row_declares`（登記表の行ごとに入る物・飛ばした同梱・警告を確かめる）。
 
 ### `dot_sakura.nar` の出どころとライセンス
 
@@ -123,7 +123,7 @@ URL の行の検体:
 - それでもこのリポジトリに置く根拠は、開発者の言葉（2026-10-10）「どっとさくらは私の実装なので、検体として利用する分には問題ない。私のサイトで公開してます」。このリポジトリの MIT ライセンスは**この 1 本には及ばない**。`konnoyayame` のシェル・`emily4` と同じく、**開発用の検体としてだけ使い、areka の配布物へ同梱しない**。
 - 見る物: 華和梨 7.4 の 32 ビットの SHIORI・Shift_JIS の辞書・α の無い絵（`tRNS` を持つ絵は 0 枚）・同梱バルーン `bottle` の連番のオンラインの印 `online0`〜`online15` と赤の抜き色。
 - **URL の行にしない理由**: 取り寄せ先の隣にハッシュのファイル `dot_sakura.nar.sha256` が無い（2026-10-22 に確かめて 404）。URL の行には隣の `<URL>.sha256` が要る（「検体を 1 本足す手順」）。サイトにハッシュのファイルが置かれたら、URL の行へ移せる。
-- 入れた結果: ゴースト `dot_sakura` と同梱のバルーン `bottle`（`<根>/balloon/bottle/`）が入り、飛ばした同梱は 0 件・警告も 0 件。書庫の最上位の `delete.txt`・`updates.txt`・`readme.txt` は、`ghost/dot_sakura/` の直下に普通のファイルとして置かれる（areka はインストールのときに `delete.txt` を読まない）。判定は `crates/sample-ghost-kit/src/lib_tests.rs` の `dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings`（入る 2 件・飛ばした同梱 0・警告 0 と、`delete.txt`・`updates.txt` の置き場を確かめる）。
+- 入れた結果: ゴースト `dot_sakura` と同梱のバルーン `bottle`（`<根>/balloon/bottle/`）が入り、飛ばした同梱は 0 件・警告も 0 件。書庫の最上位の `delete.txt`・`updates.txt`・`readme.txt` は、`ghost/dot_sakura/` の直下に普通のファイルとして置かれる（areka はインストールのときに `delete.txt` を読まない）。判定は `crates/sample-ghost-kit/src/lib_tests.rs` の `every_sample_nar_installs_exactly_the_elements_its_registry_row_declares`（入る 2 件・飛ばした同梱 0・警告 0 と、`delete.txt`・`updates.txt` の置き場を確かめる）。
 - 差し替えるとき: サイトの新しい `.nar` をそのまま置き、この節のハッシュ・大きさ・日と上の表の 2 つの数を書き直す。
 
 ### `pasta-in-windows`（URL の行）の出どころ
@@ -285,9 +285,9 @@ git check-ignore --no-index crates/areka/dic09_Test.txt                         
 
 数が 0 のまま緑になる経路も塞いである——追跡ファイルが 0 件でないこと・作業フォルダへの写しの数が追跡の数と等しいこと・写像が 2 つの元を同じ宛先へ潰していないことを、走るたびに判定する。
 
-印字はこの形で、末尾の「不一致 0 件」と最後の「全ての検体で一致」が揃って初めて通ったことになる（不一致があれば終了コードが 0 にならない）。
+印字はこの形（ASCII だけ）で、末尾の `mismatches 0` と最後の `round trip matched` が揃って初めて通ったことになる（不一致があれば終了コードが 0 にならない）。
 
 ```
-<フォルダ名>: 追跡 20 ファイル / 展開 20 ファイル / balloon/emo2-kakukaku-wplimit=20 / .nar 33906 バイト / 不一致 0 件
-全ての検体で一致
+<フォルダ名>: tracked 20 files / installed 20 files / balloon/emo2-kakukaku-wplimit=20 / .nar 33906 bytes / mismatches 0
+round trip matched
 ```

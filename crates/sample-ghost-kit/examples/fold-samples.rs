@@ -26,96 +26,138 @@
 //! # 何を入れるか——`git ls-files` が唯一の出どころ（要件 8.3）
 //!
 //! フォルダを走査して入れると、追跡外の永続化フォルダ（`ghost/master/profile/`）まで
-//! 入る。emo2 の木は今日、ディスク上 157 ファイル・追跡 110 ファイルで、走査と追跡が
-//! 47 件ずれている。そこで**追跡ファイルだけを作業フォルダへ写してから畳む**。写しは
+//! 入る（emo2 の木では走査と追跡がずれていた）。そこで**追跡ファイルだけを作業フォルダへ
+//! 写してから畳む**。写しは
 //! バイトの複製なので、改行も文字コードも変わらない（要件 8.7）。
 //!
 //! # 何と突き合わせるか（要件 8.4）
 //!
 //! 畳んだ `.nar` を本番の展開器で空の根へ入れ、**インストール済み形の全ファイル**を
 //! 元の追跡ファイルと 1 バイト単位で突き合わせる。同梱バルーンを持つ検体は
-//! `<元>/<取り出し元>/…` → `<根>/balloon/<directory>/…`、それ以外は
-//! `<元>/…` → `<根>/ghost/<directory>/…` の写像で、**和**が元のツリーに一致する
+//! `<元>/<取り出し元>/…` → `<根>/<格納先>/<directory>/balloon/<バルーンの directory>/…`
+//! （`areka-nar` の置き方と同じく、ゴーストのフォルダの中）、それ以外は
+//! `<元>/…` → `<根>/<格納先>/<directory>/…`（格納先はゴーストが `ghost`、バルーンが `balloon`）の写像で、**和**が元のツリーに一致する
 //! ことを見る（片側だけ数えても抜けは見えない）。写像の元は `install.txt` の解釈結果
 //! だけで、登記表の綴りは使わない（`--from` でも同じ突き合わせが働く）。
+//!
+//! # どこへ書くか
+//!
+//! 畳んだ `.nar` はまず作業の置き場 `target/fold-samples/out/<名>.nar` に書いて往復を
+//! 照らし、不一致が 0 件のときだけ `vendors/sample_ghost/<名>.nar` へ写す。確かめが
+//! 落ちても、それまでの正しい `.nar` は消えない。
 
 use areka_nar::{InstallKind, InstallManifest, InstallRequest, NarArchive, SingleRoot};
-use sample_ghost_kit::fold_tree;
+use sample_ghost_kit::{ascii, fold_tree};
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::path::{MAIN_SEPARATOR_STR, Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitCode};
 use std::{fs, io};
 
-fn main() -> Result<(), Box<dyn Error>> {
+/// 端末へ出す文は英語の ASCII だけ（OS の日本語の文も `ascii` に写す）。
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("fold-samples: {}", ascii(&error.to_string()));
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let check_only = args.iter().any(|arg| arg == "--check");
-    let from = match args.iter().position(|arg| arg == "--from") {
-        Some(at) => Some(
-            args.get(at + 1)
-                .ok_or("--from の後にフォルダを書くこと")?
-                .clone(),
-        ),
-        None => None,
+    let (from, check_only) = parse_args(&args)?;
+
+    // 畳む対象。`--from` は登記表を見ない＝まだ登記していない検体でも畳める。
+    // 引数の読みは作業の置き場を消す前に（書き損じの呼び出しで置き場を消さない）。
+    let root = workspace_root();
+    let source = match &from {
+        Some(spelled) => resolve(&root, spelled)?,
+        None => {
+            return Err(
+                "--from <unfolded folder> is required (the registry does not hold where unfolded trees are)"
+                    .into(),
+            );
+        }
     };
 
-    let root = workspace_root();
     let scratch = root.join("target").join("fold-samples");
     if scratch.exists() {
         fs::remove_dir_all(&scratch)?;
     }
 
-    // 畳む対象。`--from` は登記表を見ない＝まだ登記していない検体でも畳める。
-    let sources: Vec<PathBuf> = match &from {
-        Some(spelled) => vec![resolve(&root, spelled)?],
-        None => {
-            return Err(
-                "--from <展開形のフォルダ> を書くこと（登記表は展開形の在処を持たない）".into(),
-            );
-        }
-    };
-
-    let mut mismatches = 0usize;
-    for source in &sources {
-        mismatches += fold_one(&root, &scratch, source, check_only)?;
-    }
-
+    let tracked = tracked_files(&source)?;
+    let mismatches = fold_one(&root, &scratch, &source, &tracked, check_only)?;
     if mismatches != 0 {
-        return Err(format!("不一致が {mismatches} 件ある").into());
+        return Err(format!("{mismatches} mismatches").into());
     }
-    println!("全ての検体で一致");
+    if !check_only {
+        let name = folder_name(&source)?;
+        let (from, to) = (folded_nar(&scratch, &name), vendored_nar(&root, &name));
+        fs::copy(&from, &to).map_err(|err| copy_failed(&from, &to, &err))?;
+    }
+    println!("round trip matched");
     Ok(())
+}
+
+/// 写しの失敗の文に両端のパスを添える（ASCII は `main` の出口が写す）。
+fn copy_failed(from: &Path, to: &Path, err: &io::Error) -> String {
+    format!("copy {} to {}: {err}", from.display(), to.display())
+}
+
+/// 引数を `--from <フォルダ>` と `--check` に読む。ほかの語は黙って捨てずに断る
+/// （打ち間違えた `--check` を無視して `vendors/` を書き直さないため）。
+fn parse_args(args: &[String]) -> Result<(Option<String>, bool), Box<dyn Error>> {
+    let mut from = None;
+    let mut check_only = false;
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--check" => check_only = true,
+            "--from" => {
+                from = Some(
+                    rest.next()
+                        .ok_or("--from must be followed by a folder")?
+                        .clone(),
+                );
+            }
+            other => return Err(format!("unknown argument {other}").into()),
+        }
+    }
+    Ok((from, check_only))
 }
 
 /// 展開形のフォルダ 1 本を畳み、空の根へ戻して突き合わせる。返すのは不一致の件数。
 ///
-/// `.nar` の名前はフォルダ名から採る（登記表を引かない）。
+/// `.nar` の名前はフォルダ名から採る（登記表を引かない）。`tracked` は `source` からの
+/// 相対パス（`/` 区切り）の追跡ファイルの一覧。畳んだ `.nar` は作業の置き場へ書き、
+/// `vendors/` へは書かない（写すのは不一致 0 を見た `run`）。`check_only` なら畳まずに
+/// `vendors/` の既にある `.nar` を照らす。
 fn fold_one(
     root: &Path,
     scratch: &Path,
     source: &Path,
+    tracked: &[String],
     check_only: bool,
 ) -> Result<usize, Box<dyn Error>> {
-    let name = source
-        .file_name()
-        .and_then(|raw| raw.to_str())
-        .ok_or_else(|| format!("{} からフォルダ名が採れない", source.display()))?
-        .to_owned();
-
-    let tracked = tracked_files(source)?;
-    assert!(
-        !tracked.is_empty(),
-        "{} の追跡ファイルが 0 件（畳む対象が無い＝突き合わせが恒真になる。\
-         展開形が消えているなら --from で在るフォルダを指すこと）",
-        source.display()
-    );
+    let name = folder_name(source)?;
+    // 追跡ファイルが 0 件だと畳む対象が無く、突き合わせが恒真になる。
+    if tracked.is_empty() {
+        return Err(format!(
+            "no tracked files under {} (git add the unfolded tree first)",
+            source.display()
+        )
+        .into());
+    }
 
     // 追跡ファイルだけを作業フォルダへ写す。
     let stage = scratch.join("stage").join(&name);
-    for relative in &tracked {
+    for relative in tracked {
         let to = stage.join(relative.replace('/', MAIN_SEPARATOR_STR));
         fs::create_dir_all(to.parent().expect("写し先には必ず親がある"))?;
-        fs::copy(source.join(relative), &to)?;
+        let from = source.join(relative);
+        fs::copy(&from, &to).map_err(|err| copy_failed(&from, &to, &err))?;
     }
     let staged = walk(&stage)?;
     assert_eq!(
@@ -124,13 +166,14 @@ fn fold_one(
         "{name} の写しの数が追跡の数と違う"
     );
 
-    let nar = root
-        .join("vendors")
-        .join("sample_ghost")
-        .join(format!("{name}.nar"));
-    if !check_only {
-        fold_tree(&stage)?.write_to(&nar)?;
-    }
+    let nar = if check_only {
+        vendored_nar(root, &name)
+    } else {
+        let out = folded_nar(scratch, &name);
+        fs::create_dir_all(out.parent().expect("書き先には必ず親がある"))?;
+        fold_tree(&stage)?.write_to(&out)?;
+        out
+    };
 
     // 往復——空の根へ入れて、元のツリーと突き合わせる。
     let dest_root = scratch.join("roundtrip").join(&name);
@@ -145,12 +188,12 @@ fn fold_one(
     let expected: BTreeMap<PathBuf, PathBuf> = tracked
         .iter()
         .map(|relative| {
-            (
-                installed_path(&dest_root, manifest, relative),
+            Ok((
+                installed_path(&dest_root, manifest, relative)?,
                 source.join(relative),
-            )
+            ))
         })
-        .collect();
+        .collect::<Result<_, String>>()?;
     assert_eq!(
         expected.len(),
         tracked.len(),
@@ -161,24 +204,28 @@ fn fold_one(
     let mut mismatches = Vec::new();
     for path in &actual {
         if !expected.contains_key(path) {
-            mismatches.push(format!("元に無いものが置かれた: {}", path.display()));
+            mismatches.push(format!(
+                "placed but not in the source: {}",
+                ascii(&path.to_string_lossy())
+            ));
         }
     }
     for (path, origin) in &expected {
         if !actual.contains(path) {
-            mismatches.push(format!("置かれなかった: {}", path.display()));
+            mismatches.push(format!("not placed: {}", ascii(&path.to_string_lossy())));
             continue;
         }
         if fs::read(path)? != fs::read(origin)? {
-            mismatches.push(format!("バイトが違う: {}", path.display()));
+            mismatches.push(format!("bytes differ: {}", ascii(&path.to_string_lossy())));
         }
     }
 
     println!(
-        "{name}: 追跡 {tracked} ファイル / 展開 {actual} ファイル / {folders} / .nar {size} バイト / 不一致 {bad} 件",
+        "{name}: tracked {tracked} files / installed {actual} files / {folders} / .nar {size} bytes / mismatches {bad}",
+        name = ascii(&name),
         tracked = tracked.len(),
         actual = actual.len(),
-        folders = folder_counts(&dest_root, &actual),
+        folders = ascii(&folder_counts(&dest_root, &actual)),
         size = fs::metadata(&nar)?.len(),
         bad = mismatches.len(),
     );
@@ -186,6 +233,27 @@ fn fold_one(
         println!("  ! {line}");
     }
     Ok(mismatches.len())
+}
+
+/// `.nar` の名前に使うフォルダ名。
+fn folder_name(source: &Path) -> Result<String, Box<dyn Error>> {
+    Ok(source
+        .file_name()
+        .and_then(|raw| raw.to_str())
+        .ok_or_else(|| format!("cannot take a folder name from {}", source.display()))?
+        .to_owned())
+}
+
+/// 畳んだ `.nar` を往復の確かめの前に置く作業の置き場。
+fn folded_nar(scratch: &Path, name: &str) -> PathBuf {
+    scratch.join("out").join(format!("{name}.nar"))
+}
+
+/// 確かめを通った `.nar` の保管先。
+fn vendored_nar(root: &Path, name: &str) -> PathBuf {
+    root.join("vendors")
+        .join("sample_ghost")
+        .join(format!("{name}.nar"))
 }
 
 /// `--from` に書かれた綴りをフォルダに解く。呼んだ場所からでもリポジトリ根からでも書ける。
@@ -198,34 +266,49 @@ fn resolve(root: &Path, spelled: &str) -> Result<PathBuf, Box<dyn Error>> {
     if from_root.is_dir() {
         return Ok(from_root);
     }
-    Err(format!("--from に書かれた {spelled} がフォルダとして見つからない").into())
+    Err(format!("--from {spelled} is not a folder").into())
 }
 
 /// 元のツリーの相対パスが、インストール済み形でどこへ置かれるか（要件 8.4 の写像）。
 ///
-/// 同梱バルーンの取り出し元の配下は 1 階層剥がしてバルーン格納先へ、それ以外は本体の
-/// 置き場へ。判断の元は `install.txt` の解釈結果だけで、登記の綴りは使わない。
-fn installed_path(root: &Path, manifest: &InstallManifest, relative: &str) -> PathBuf {
-    for companion in &manifest.companions {
-        if let Some(tail) = strip_folder(relative, &companion.source_directory) {
-            return root.join("balloon").join(&companion.directory).join(tail);
-        }
-    }
+/// 同梱バルーンの取り出し元の配下は取り出し元の段を剥がして本体のフォルダの中のバルーン格納先
+/// （`<根>/<格納先>/<directory>/balloon/<バルーンの directory>/`・`areka-nar` の置き方と
+/// 同じ）へ、それ以外は本体の置き場へ。判断の元は `install.txt` の解釈結果だけで、登記の
+/// 綴りは使わない。検体に居ない種別（シェル・追加ファイル）は写像を持たないので断る。
+fn installed_path(
+    root: &Path,
+    manifest: &InstallManifest,
+    relative: &str,
+) -> Result<PathBuf, String> {
     let store = match manifest.kind {
         InstallKind::Ghost => "ghost",
         InstallKind::Balloon => "balloon",
-        other => panic!("検体に {other:?} は居ない（居るなら写像を足すこと）"),
+        other => return Err(format!("unsupported kind {other:?} (add a mapping for it)")),
     };
-    root.join(store)
-        .join(&manifest.directory)
-        .join(relative.replace('/', MAIN_SEPARATOR_STR))
+    let body = root.join(store).join(&manifest.directory);
+    for companion in &manifest.companions {
+        if let Some(tail) = strip_folder(relative, &companion.source_directory) {
+            return Ok(body.join("balloon").join(&companion.directory).join(tail));
+        }
+    }
+    Ok(body.join(relative.replace('/', MAIN_SEPARATOR_STR)))
 }
 
-/// `relative` が `folder` の配下なら、剥がした残りを OS の区切りで返す。
+/// `relative` が `folder`（`/` 区切りで 1 段以上）の配下なら、剥がした残りを OS の区切りで返す。
+///
+/// 各段は `to_uppercase` で大小を畳んで照らす（展開器も段ごとに大小を畳む。ASCII だけを
+/// 畳むと、大小の違う非 ASCII の名前を取り出し元の外と見誤る）。
 fn strip_folder(relative: &str, folder: &str) -> Option<String> {
-    let (head, tail) = relative.split_once('/')?;
-    head.eq_ignore_ascii_case(folder)
-        .then(|| tail.replace('/', MAIN_SEPARATOR_STR))
+    let mut rest = relative;
+    for part in folder.split('/') {
+        let (head, tail) = rest.split_once('/')?;
+        // shortcut: to_uppercase は ß→SS のように 2 字になる字で areka-nar の names::fold より甘い（不一致としては表に出る）。検体にそういう字が入ったら fold と同じ 1 字対 1 字の畳みにする
+        if head.to_uppercase() != part.to_uppercase() {
+            return None;
+        }
+        rest = tail;
+    }
+    Some(rest.replace('/', MAIN_SEPARATOR_STR))
 }
 
 /// `dir` の配下の追跡ファイルを、`dir` からの相対パス（`/` 区切り）で名前順に返す。
@@ -240,7 +323,7 @@ fn tracked_files(dir: &Path) -> Result<Vec<String>, Box<dyn Error>> {
         .output()?;
     if !output.status.success() {
         return Err(format!(
-            "git ls-files が失敗した（{}）: {}",
+            "git ls-files failed ({}): {}",
             output.status,
             String::from_utf8_lossy(&output.stderr)
         )
@@ -274,7 +357,7 @@ fn walk(dir: &Path) -> io::Result<BTreeSet<PathBuf>> {
     Ok(found)
 }
 
-/// 根の直下の格納先ごとのファイル数を「ghost/emo2=90 balloon/emo2-kakukaku=20」の形で。
+/// 根の直下の格納先ごとのファイル数を「ghost/<名>=<件数>」の形で（同梱バルーンは本体のフォルダの中に数える）。
 fn folder_counts(root: &Path, files: &BTreeSet<PathBuf>) -> String {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for file in files {
@@ -297,3 +380,7 @@ fn folder_counts(root: &Path, files: &BTreeSet<PathBuf>) -> String {
 fn workspace_root() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
+
+#[cfg(test)]
+#[path = "fold-samples_tests.rs"]
+mod tests;

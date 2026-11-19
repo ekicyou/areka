@@ -35,10 +35,10 @@ fn plain(exe: &str) -> Command {
 }
 
 #[test]
-fn removes_four_developer_vars_and_sets_defaults() {
+fn removes_the_user_root_and_sets_the_kit_defaults() {
     let cmd = plain("areka.exe");
     let e = envs(&cmd);
-    // 書ける根は外したまま（1.5）。ほかの 3 つは窓口の既定で上書き（受け継がない）。
+    // 書ける根は外したまま（1.5）。ほかの変数は窓口の既定で上書き（受け継がない）。
     assert_eq!(e.get("AREKA_USER_ROOT"), Some(&None));
     assert_eq!(
         set(&e, "AREKA_ROOT"),
@@ -64,12 +64,10 @@ fn logical_settings_then_caller_env_wins_last() {
     let run = RealRun::new("areka.exe")
         .rust_log("warn")
         .safety_exit(Duration::from_millis(1500))
-        .deadline(Duration::from_secs(7))
         .env("NO_COLOR", "0")
         .env("AREKA_USER_ROOT", "u")
         .env("AREKA_MCP_PORT", "9")
         .env("EXTRA", "x");
-    assert_eq!(run.limits.deadline, Duration::from_secs(7));
     let cmd = run.child_command(&[], Path::new("r"), Path::new("p"), 4321);
     let e = envs(&cmd);
     assert_eq!(set(&e, "AREKA_APP_SMOKE_EXIT_MS"), "1500");
@@ -81,6 +79,17 @@ fn logical_settings_then_caller_env_wins_last() {
     assert_eq!(set(&e, "AREKA_USER_ROOT"), "u");
     assert_eq!(set(&e, "AREKA_MCP_PORT"), "9");
     assert_eq!(set(&e, "EXTRA"), "x");
+}
+
+/// audit-test-kits 指摘 10: 最後に積まれた `AREKA_MCP_PORT` が番号として読めなければ、`.mcp_port(n)` を案内して落ちる。
+#[test]
+#[should_panic(expected = "`.mcp_port(n)`")]
+fn an_unreadable_mcp_port_override_panics_with_the_mcp_port_hint() {
+    RealRun::new("areka.exe")
+        .mcp_port(4321)
+        .env("AREKA_MCP_PORT", "9900")
+        .env("areka_mcp_port", "x")
+        .port();
 }
 
 #[test]
@@ -118,18 +127,9 @@ fn relative_paths_become_absolute_without_verbatim_prefix() {
     }
 }
 
+/// 位置の引数と根の決まり方（1.1・1.4）。検体は本物の写しを取る。
 #[test]
-fn profile_dir_and_port_override_defaults() {
-    let run = RealRun::new("areka.exe")
-        .profile_dir("prof.txt")
-        .mcp_port(9999);
-    assert_eq!(run.profile_dir.as_deref(), Some(Path::new("prof.txt")));
-    assert_eq!(run.mcp_port, Some(9999));
-}
-
-/// 5 通りの位置の引数と根（1.1・1.4）。検体は本物の写しを取る。
-#[test]
-fn five_launch_variants_resolve_positional_args_and_root() {
+fn launch_variants_resolve_positional_args_and_root() {
     let dirs = RunDirs::create(Some("emo2"));
     let sample = dirs.sample().unwrap();
     let emo2 = sample.folder().to_path_buf();
@@ -162,20 +162,6 @@ fn five_launch_variants_resolve_positional_args_and_root() {
     );
 
     let r = resolve(
-        &Launch::Ghost {
-            folder: "g".into(),
-            balloon: Some("b".into()),
-        },
-        &dirs,
-    );
-    let want = (
-        Some(abs(Path::new("g"))),
-        Some(abs(Path::new("b"))),
-        empty.clone(),
-    );
-    assert_eq!((r.ghost, r.balloon, r.root), want);
-
-    let r = resolve(
         &Launch::SampleRoot {
             name: "emo2".into(),
         },
@@ -194,7 +180,7 @@ fn five_launch_variants_resolve_positional_args_and_root() {
 }
 
 #[test]
-fn sample_name_is_used_for_the_copy() {
+fn sample_name_is_given_only_for_sample_launches() {
     assert_eq!(sample_name(&Launch::Empty), None);
     assert_eq!(sample_name(&Launch::Root("x".into())), None);
     let s = Launch::SampleRoot {
@@ -212,11 +198,6 @@ fn sample_name_is_used_for_the_copy() {
 fn i686_target_is_two_levels_above_areka_exe() {
     let exe = abs(Path::new(r"t\debug\areka.exe"));
     assert_eq!(i686_target(&exe), abs(Path::new(r"t\i686-pc-windows-msvc")));
-}
-
-#[test]
-fn free_port_is_nonzero() {
-    assert_ne!(free_port(), 0);
 }
 
 /// 記録の段の足し方の表（D-4・4.4）。
@@ -237,6 +218,9 @@ fn compose_rust_log_table() {
         ("trace", "trace".into()),
         ("debug", "debug".into()),
         ("INFO", "INFO".into()),
+        // 数字の段は出所の名ではない（3 以上は info 以上・2 以下は warn 以下）。
+        ("3", "3".into()),
+        ("2", format!("2{S}{X}")),
         // 空・未設定 → 既定の info。
         ("", "info".into()),
         ("  ", "info".into()),
@@ -248,7 +232,7 @@ fn compose_rust_log_table() {
             "warn,areka=debug,areka_mcp=trace",
             "warn,areka=debug,areka_mcp=trace".into(),
         ),
-        // 出所そのものを名指していれば足さない（段が info より細かくても）。
+        // 出所そのものを名指していれば足さない（段が何であっても）。
         (
             "warn,areka::app_exit=trace",
             format!("warn,areka::app_exit=trace{S}"),
@@ -270,9 +254,65 @@ fn compose_rust_log_table() {
         ),
         // 段の無い出所の指定も名指し。
         ("warn,areka", "warn,areka".into()),
+        // span を付けた指定はその span の中だけを開けるので名指しではない。
+        (
+            "warn,areka_mcp::server[req]=debug",
+            format!("warn,areka_mcp::server[req]=debug{S}{X}"),
+        ),
     ];
     for (base, want) in table {
         assert_eq!(&compose_rust_log(base), want, "base={base:?}");
+    }
+}
+
+/// audit-test-kits 指摘 26・audit-test-kits 決め D2: `RELIED_TARGETS` の各項が、窓口の頼る行を本物に出しているモジュールのファイルを名指す。
+/// `<crate>::<段…>` を `crates/<crate の _ を - に>/src/<段>.rs`（無ければ `<段>/mod.rs`）へ写し、
+/// ファイルが在る・頼る行の語が在る・`target:` の上書きが無い、を読むだけで確かめる（本物は起こさない）。
+/// 順は `RELIED_TARGETS` と同じ（項を書き換えても照らす語は付いてくる）。
+#[test]
+fn relied_targets_name_the_modules_that_emit_the_relied_lines() {
+    const WORDS: &[&[&str]] = &[
+        &[r#""MCP: 待受を始めた"#],
+        &[r#"event = "app_exit""#, r#""os_close_request""#],
+    ];
+    // zip は短い方で黙って止まるので、項と語の表の数が揃っていることを先に確かめる。
+    assert_eq!(
+        RELIED_TARGETS.len(),
+        WORDS.len(),
+        "RELIED_TARGETS の項と照らす語の表の数が違う"
+    );
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    for (target, &words) in RELIED_TARGETS.iter().zip(WORDS) {
+        let mut parts = target.split("::");
+        let krate = parts.next().unwrap().replace('_', "-");
+        let module: PathBuf = parts.collect();
+        let src = crates.join(krate).join("src");
+        let file = [
+            src.join(&module).with_extension("rs"),
+            src.join(&module).join("mod.rs"),
+        ]
+        .into_iter()
+        .find(|f| f.is_file())
+        .unwrap_or_else(|| {
+            panic!(
+                "出所 {target:?} のファイルが無い（{}）。出所を動かしたなら launch.rs の RELIED_TARGETS を直す",
+                src.join(&module).display()
+            )
+        });
+        let text = std::fs::read_to_string(&file)
+            .unwrap_or_else(|e| panic!("{} を読めない: {e}", file.display()));
+        for word in words {
+            assert!(
+                text.contains(word),
+                "出所 {target:?} の {} に頼る行の語 {word} が無い。行を動かしたなら launch.rs の RELIED_TARGETS を直す",
+                file.display()
+            );
+        }
+        assert!(
+            !text.contains("target:"),
+            "出所 {target:?} の {} が target: で出所を上書きしている。launch.rs の RELIED_TARGETS を直す",
+            file.display()
+        );
     }
 }
 

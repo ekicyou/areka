@@ -3,16 +3,18 @@
 //! 閉じる知らせは `taskkill /PID <番号>`（`/F` なし・`/T` なし）＝利用者が窓を閉じるのと同じ
 //! 閉じる要求。送る直前に取っ手の `try_wait` で子が生きていることを見るので、届くのは窓口が
 //! 起こした子だけ（取っ手を持つ間、OS はその番号を使い回さない＝5.6）。止めるのは取っ手への
-//! `Child::kill` だけで、名前やほかの番号では止めない。時間はすべて引数で受ける（`Limits` に頼らない）。
+//! `Child::kill` だけで、名前やほかの番号では止めない。時間は呼び手が渡す
+//! （`close`・`wait_exit` は欄ごとの値・`stop_on_drop` は `Limits`）。既定の値はここでは作らない。
 
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus};
 use std::time::{Duration, Instant};
 
 use crate::output::{self, WaitEnd};
+use crate::run::Limits;
 
 /// 閉じる知らせを受け取った印の行（kanade と結線した起動／未結線の起動の直ちの終了・ほかの出所の先着）。
-const ACK: [&str; 2] = ["event=\"os_close_request\"", "event=\"app_exit\""];
+const ACK: [&str; 2] = ["event=\"os_close_request\"", EXIT_LINE];
 
 /// 終わり方の行（`quit_app` の `info`）。閉じる引用符まで含めて `app_exit_again` などと分ける。
 const EXIT_LINE: &str = "event=\"app_exit\"";
@@ -97,21 +99,28 @@ pub(crate) fn close(
     }
 }
 
-/// 破棄から呼ぶ形（5.5）: `close` と同じ手順で、締切で止めても panic せず、止めた旨を標準エラーへ 1 行書く。
-pub(crate) fn stop_quietly(
-    child: &mut Child,
-    files: [&Path; 2],
-    deadline: Duration,
-    poll: Duration,
-    close_retry: Duration,
-) {
-    if let Err(stop) = close_or_kill(child, files, deadline, poll, close_retry) {
+/// 破棄から呼ぶ形（5.5・audit-test-kits 指摘 9）: `close` と同じ手順で閉じる知らせを送り直しつつ締切まで待つ。締切で子を止めて
+/// 回収したら、panic の途中なら ASCII の 1 行を標準エラーへ書くだけ（二重の panic にしない）、違えば理由を
+/// 書いて panic する（閉じ忘れて子を止めた回を緑にしない）。
+pub(crate) fn stop_on_drop(child: &mut Child, files: [&Path; 2], limits: &Limits) {
+    let Err(stop) = close_or_kill(
+        child,
+        files,
+        limits.deadline,
+        limits.poll,
+        limits.close_retry,
+    ) else {
+        return;
+    };
+    if std::thread::panicking() {
         eprintln!(
-            "real-run-kit: 締切 {deadline:?} の内に閉じる知らせで終わらなかった子（PID {}）を止めた（最後の閉じる知らせ: {}・出力: {} と {}）",
-            stop.pid,
-            stop.last_send,
-            files[0].display(),
-            files[1].display(),
+            "real-run-kit: stopped child {} that did not close within {:?} (dropped while panicking)",
+            stop.pid, limits.deadline,
+        );
+    } else {
+        panic!(
+            "{}\nclose() も wait_exit() も呼ばずに取っ手を捨てた（破棄の閉じる知らせで子が終わらなかった）",
+            stop.failure("破棄", limits.deadline, files),
         );
     }
 }
@@ -136,7 +145,7 @@ pub(crate) fn wait_exit(
 /// 締切で止めた子の記録。
 struct Stopped {
     pid: u32,
-    /// 最後の `taskkill` の結果（終了コードと文）。
+    /// 最後の `taskkill` の結果（終了コード）。
     last_send: String,
     /// 回収の結果。
     reaped: Result<ExitStatus, String>,
@@ -160,11 +169,7 @@ impl Stopped {
 }
 
 fn ended(status: ExitStatus, files: [&Path; 2]) -> Ended {
-    let text = files
-        .iter()
-        .map(|p| String::from_utf8_lossy(&std::fs::read(p).unwrap_or_default()).into_owned())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let text = files.map(output::read_text).join("\n");
     Ended {
         status,
         by: ended_by(&text),
@@ -182,6 +187,8 @@ fn close_or_kill(
 ) -> Result<ExitStatus, Stopped> {
     let end = Instant::now() + deadline;
     let mut last_send = "まだ送っていない".to_string();
+    // 送り直しをまたいで読んだ位置を持つ（送り直すたびに頭から読み直さない）。
+    let mut tails = output::tails(files);
     loop {
         // 送る直前に生きていることを見る（5.6）。
         if let Ok(Some(status)) = child.try_wait() {
@@ -192,7 +199,7 @@ fn close_or_kill(
         }
         last_send = send_close(child.id());
         let next = (Instant::now() + close_retry).min(end);
-        match output::wait_any(files, &ACK, child, next, poll) {
+        match output::wait_any(&mut tails, &ACK, child, next, poll) {
             // 受け取った後は送り直さず、終わりだけを待つ。
             Ok(_) => return wait_until(child, end, poll).ok_or_else(|| kill(child, last_send)),
             Err(WaitEnd::ChildExited(exited)) => return Ok(exited.status),
@@ -201,18 +208,14 @@ fn close_or_kill(
     }
 }
 
-/// 強制なしの閉じる知らせを 1 度送り、終了コードと文を返す（判定は終了コードだけ・文は診断に添える）。
+/// 強制なしの閉じる知らせを 1 度送り、終了コードを返す。taskkill の出力は OEM のコードページ（日本語の
+/// 環境では cp932）で、UTF-8 として読むと化けるので捨てる。
 fn send_close(pid: u32) -> String {
     match Command::new("taskkill")
         .args(["/PID", &pid.to_string()])
         .output()
     {
-        Ok(out) => format!(
-            "taskkill /PID {pid} の終了コード {:?}（{} {}）",
-            out.status.code(),
-            String::from_utf8_lossy(&out.stdout).trim(),
-            String::from_utf8_lossy(&out.stderr).trim(),
-        ),
+        Ok(out) => format!("taskkill /PID {pid} の終了コード {:?}", out.status.code()),
         Err(e) => format!("taskkill /PID {pid} を起こせなかった: {e}"),
     }
 }

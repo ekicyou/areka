@@ -1,7 +1,9 @@
 //! 1 ファイル 1,000 行の目安の機械的な番人（要件 10.1・10.2・10.3・10.4）。
 //!
-//! `.kiro/steering/structure.md:176` は「1 ファイル 1,000 行以下」を目安に掲げているが、
-//! これまで誰も測っていなかった。本ファイルはその目安を実行テストにする。
+//! 要件の番号は spec `areka-P0-test-cage-determinism` のもの。
+//!
+//! `.kiro/steering/structure.md` の Test Naming Conventions の項は「1 ファイル 1,000 行以下」を
+//! 目安に掲げているが、これまで誰も測っていなかった。本ファイルはその目安を実行テストにする。
 //!
 //! # 何を見張るか
 //!
@@ -13,7 +15,7 @@
 //!
 //! 本仕様が作るのは見張りだけで、現に超過している既存ファイルの分割・縮小は行わない
 //! （要件 10.4。並走する仕様との衝突を避けるための裁定）。よって例外表は着手時点の
-//! 超過ファイル 11 件で始まり、導入した時点では赤にならない。合流してくる仕事が新しく
+//! 超過ファイルで始まり、導入した時点では赤にならない。合流してくる仕事が新しく
 //! 1,000 行を超えるファイルを作れば、その仕事の側で赤になる——それが番人の役割である。
 //!
 //! 例外表が**暗黙に増えない**ようにするため、`const` であることに加えて次を要求する
@@ -29,15 +31,16 @@
 //! # 「0 件なら緑」への較正（要件 10.3）
 //!
 //! 主検査は「違反 0 件なら緑」の形で、**道具が壊れていても緑**になる——列挙が 1 ファイルも
-//! 拾えていなくても、行数が全部 0 に測れても、結果は同じ空集合である。よって陽性側の相棒を
-//! 3 本置く。
+//! 拾えていなくても、行数が全部 0 に測れても、結果は同じ空集合である。よって次の陽性側の相棒を
+//! 置く。
 //!
 //! - [`every_over_limit_exception_is_still_over_the_limit`] は、表の全項目に**今も**超過の実体が
 //!   あること。列挙が空振りしていれば表の全項目が「実体無し」になって必ず赤になる。
-//! - [`the_measurement_is_not_vacuous_and_matches_the_allow_table`] は、実測した超過ファイルの集合が
-//!   表と**完全に一致**すること（要件 10.2 の「着手時の実測と一致」の固定）。
-//! - [`dropping_a_known_exception_turns_the_guard_red`] は、既知の 1 件を表から外すと、実データで
-//!   その 1 件が返ること（要件 10.3 が名指しで求める自己検査）。
+//! - [`the_measurement_is_not_vacuous`] は、列挙が現実的な規模で、いちばん長いファイルが上限の
+//!   半分を越えること（[`measurement_is_plausible`]）。上限越えのファイルが 1 件も無くなっても
+//!   （表が空になっても）赤にならない。
+//! - [`dropping_a_known_exception_turns_the_guard_red`] は、表の先頭の項を外すと、実データで
+//!   その 1 件が返ること（要件 10.3 が名指しで求める自己検査）。表が空なら何もしない。
 //!
 //! 上限そのもの（`LINE_LIMIT` が 1000 であること）と、行数の数え方・境界・列挙の被覆は
 //! 走査器の較正（`workspace_scan_test.rs`）が縛る。ここでは表と実データの対応だけを見る。
@@ -46,7 +49,10 @@ mod workspace_scan;
 
 use std::collections::BTreeSet;
 
-use workspace_scan::{FileLines, LINE_LIMIT, measure_workspace_sources, over_limit};
+use workspace_scan::{
+    FileLines, LINE_LIMIT, allowed_paths, allowed_paths_without, measure_workspace_sources,
+    over_limit, render,
+};
 
 // ---------------------------------------------------------------------------
 // 例外表
@@ -54,8 +60,7 @@ use workspace_scan::{FileLines, LINE_LIMIT, measure_workspace_sources, over_limi
 
 /// 上限を超えていても赤にしないファイル（相対パス・理由）。
 ///
-/// 初期値は着手時点の実測 11 件で、`verification/remeasure.md` §6（2026-08-23 採取）と
-/// ファイル名・件数がともに一致する。**行数は理由欄に書かない**——書けば当該ファイルへの
+/// **行数は理由欄に書かない**——書けば当該ファイルへの
 /// 無関係な編集で表が陳腐化し、本仕様が触らないと決めたファイル（要件 10.4）を触らせる
 /// 圧力になる。表が表すのは「上限を超えている」という事実だけで、超過の程度ではない。
 const OVER_LIMIT_ALLOWED: &[(&str, &str)] = &[
@@ -80,33 +85,11 @@ const OVER_LIMIT_ALLOWED: &[(&str, &str)] = &[
 /// [`OVER_LIMIT_ALLOWED`] の件数（逐語）。表を増やすときはここも編集する（要件 10.2）。
 const OVER_LIMIT_ALLOWED_COUNT: usize = 4;
 
-/// 要件 10.3 の自己検査で表から外す 1 件。表の項目でなければならない。
-const CALIBRATION_DROPPED_ENTRY: &str = "crates/areka-runtime/src/frame_transition_branch_tests.rs";
-
-// ---------------------------------------------------------------------------
-// 表と実測の取り回し
-// ---------------------------------------------------------------------------
-
-/// 例外表のパスだけを取り出す（判定に渡す形）。
-fn allowed_paths() -> Vec<&'static str> {
-    OVER_LIMIT_ALLOWED.iter().map(|(path, _)| *path).collect()
-}
-
-/// 例外表から 1 件だけ落としたパスの一覧を作る（要件 10.3 の自己検査で使う）。
-fn allowed_paths_without(dropped: &str) -> Vec<&'static str> {
-    allowed_paths()
-        .into_iter()
-        .filter(|path| *path != dropped)
-        .collect()
-}
-
-/// 違反の一覧を人が読める形にする。
-fn render(files: &[FileLines]) -> String {
-    files
-        .iter()
-        .map(|f| format!("  {} ({} 行)", f.path, f.lines))
-        .collect::<Vec<_>>()
-        .join("\n")
+/// 列挙と計測が空振りしていないことの目安（純関数）。いちばん長いファイルが上限の半分を越えるか。
+///
+/// 上限越えのファイルが 1 件も無くなっても（表が空になっても）真になる形にしてある。
+fn measurement_is_plausible(files: &[FileLines]) -> bool {
+    files.iter().any(|f| f.lines > LINE_LIMIT / 2)
 }
 
 // ---------------------------------------------------------------------------
@@ -116,10 +99,10 @@ fn render(files: &[FileLines]) -> String {
 #[test]
 fn no_source_file_exceeds_the_line_limit_outside_the_allow_table() {
     let measured = measure_workspace_sources();
-    let violations = over_limit(&measured, &allowed_paths());
+    let violations = over_limit(&measured, &allowed_paths(OVER_LIMIT_ALLOWED));
     assert!(
         violations.is_empty(),
-        "1 ファイル 1,000 行の目安（structure.md:176）を超えるファイルがある。\
+        "1 ファイル 1,000 行の目安（structure.md の Test Naming Conventions）を超えるファイルがある。\
          分割して収めるか、やむを得ない場合は理由付きで OVER_LIMIT_ALLOWED へ明示的に\
          追加すること（表と OVER_LIMIT_ALLOWED_COUNT の 2 箇所）:\n{}",
         render(&violations)
@@ -138,7 +121,6 @@ fn the_over_limit_allow_table_declares_its_own_size_and_reasons() {
         "例外表の件数が宣言と食い違う。項目の追加は表と件数の 2 箇所を明示的に編集すること（要件 10.2）"
     );
 
-    let measured = measure_workspace_sources();
     for (path, reason) in OVER_LIMIT_ALLOWED {
         assert!(
             !reason.trim().is_empty(),
@@ -148,10 +130,6 @@ fn the_over_limit_allow_table_declares_its_own_size_and_reasons() {
             !path.contains('*') && path.ends_with(".rs"),
             "例外はファイル 1 件を逐語で指すこと（総括的な指定は暗黙の増加を許す）: {path}"
         );
-        assert!(
-            measured.iter().any(|f| f.path == *path),
-            "例外表が実在しないファイルを指している: {path}"
-        );
     }
 }
 
@@ -159,12 +137,12 @@ fn the_over_limit_allow_table_declares_its_own_size_and_reasons() {
 fn the_over_limit_allow_table_has_no_duplicate_entries() {
     // 同じパスが 2 度載ると、件数の宣言を通ったまま実質の例外が 1 件減る
     //（＝表の見かけの大きさと効き目が食い違う）。
-    let unique: BTreeSet<&str> = allowed_paths().into_iter().collect();
+    let unique: BTreeSet<&str> = allowed_paths(OVER_LIMIT_ALLOWED).into_iter().collect();
     assert_eq!(
         unique.len(),
         OVER_LIMIT_ALLOWED_COUNT,
         "例外表に重複した項目がある: {:?}",
-        allowed_paths()
+        allowed_paths(OVER_LIMIT_ALLOWED)
     );
 }
 
@@ -200,17 +178,20 @@ fn dropping_a_known_exception_turns_the_guard_red() {
     // 要件 10.3 の自己検査。見本ではなく**実データ**で行う——見本で作った両側は
     // 走査器の較正（workspace_scan_test.rs）が既に持っており、ここで確かめたいのは
     // 「この表とこのワークスペースの組み合わせで、番人が本当に鳴るか」である。
-    assert!(
-        allowed_paths().contains(&CALIBRATION_DROPPED_ENTRY),
-        "較正で外す 1 件は例外表の項目でなければならない: {CALIBRATION_DROPPED_ENTRY}"
-    );
+    // 表が空なら外す項が無いので何もしない（合成の較正が残る）。
+    let Some((dropped, _)) = OVER_LIMIT_ALLOWED.first() else {
+        return;
+    };
 
     let measured = measure_workspace_sources();
-    let violations = over_limit(&measured, &allowed_paths_without(CALIBRATION_DROPPED_ENTRY));
+    let violations = over_limit(
+        &measured,
+        &allowed_paths_without(OVER_LIMIT_ALLOWED, dropped),
+    );
     let paths: Vec<&str> = violations.iter().map(|f| f.path.as_str()).collect();
     assert_eq!(
         paths,
-        vec![CALIBRATION_DROPPED_ENTRY],
+        vec![*dropped],
         "例外表から外した 1 件だけが違反として返るはず（外して緑なら番人は鳴っていない）"
     );
     assert!(
@@ -221,28 +202,34 @@ fn dropping_a_known_exception_turns_the_guard_red() {
 }
 
 #[test]
-fn the_measurement_is_not_vacuous_and_matches_the_allow_table() {
-    // 陽性側の相棒。⑴ 列挙が現実的な規模であること ⑵ 上限超過が確かに存在すること
-    // ⑶ その集合が例外表と**完全に一致**すること（要件 10.2 の「着手時の実測と一致」）。
+fn the_measurement_is_not_vacuous() {
+    // 陽性側の相棒。列挙が現実的な規模で、いちばん長いファイルが上限の半分を越えること。
+    // 上限を越えるファイルがあることは要求しない（要求すると最後の 1 件を割った側が赤になる）。
     let measured = measure_workspace_sources();
     assert!(
         measured.len() > 500,
         "列挙が極端に少ない＝走査が空振りしている疑い: {} 件",
         measured.len()
     );
-
-    let all_over = over_limit(&measured, &[]);
     assert!(
-        !all_over.is_empty(),
-        "上限を超えるファイルが 1 件も無い。着手時の実測は 11 件だったので、\
-         行数の計測か列挙が壊れている疑いが濃い"
+        measurement_is_plausible(&measured),
+        "上限の半分を越えるファイルが 1 件も無い。行数の計測か列挙が壊れている疑いが濃い"
     );
+}
 
-    let found: BTreeSet<&str> = all_over.iter().map(|f| f.path.as_str()).collect();
-    let listed: BTreeSet<&str> = allowed_paths().into_iter().collect();
-    assert_eq!(
-        found, listed,
-        "実測した超過ファイルの集合が例外表と一致しない。\
-         新たな超過なら分割するか表へ明示的に追加し、解消したのなら表から削除すること"
-    );
+#[test]
+fn the_vacuity_check_needs_no_over_limit_file() {
+    // 上限越えが 1 件も無い列でも、長いファイルがあれば真。短いものだけ・空なら偽。
+    let under_limit = [
+        FileLines::new("a.rs", LINE_LIMIT),
+        FileLines::new("b.rs", LINE_LIMIT / 2 + 1),
+    ];
+    assert!(over_limit(&under_limit, &[]).is_empty());
+    assert!(measurement_is_plausible(&under_limit));
+
+    assert!(!measurement_is_plausible(&[FileLines::new(
+        "c.rs",
+        LINE_LIMIT / 2
+    )]));
+    assert!(!measurement_is_plausible(&[]));
 }

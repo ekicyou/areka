@@ -1,12 +1,15 @@
 //! `capture_under_filter` の自己テスト（feature `env-filter` のときだけコンパイルされる）。
 //!
-//! 本 API の契約は `wintf` の 96 呼出がそのまま回帰スイートになる形で決まっている
+//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
+//!
+//! 本 API の契約は `wintf` の呼出がそのまま回帰スイートになる形で決まっている
 //! （設計 `## Components and Interfaces` → `#### C1 log-capture-kit`）。よってここで固定
-//! するのは、その 96 呼出が依存している 3 点である。
+//! するのは、その呼出が依存している次の点である。
 //!
 //! ⒜ **directive が実際に効く**（部分一致の模倣ではなく [`tracing_subscriber::EnvFilter`]
 //!   による実濾過）。⒝ **番兵行が戻り値に現れない**（呼出側の主張が番兵の分だけ変わらない）。
 //!   ⒞ **行の形**（ANSI 無し・レベル・宛先・本文・フィールド）。
+//!   ⒟ **解釈できない指令は panic する**（黙って捨てない。spec `audit-test-kits` で足した約束）。
 //!
 //! 「出ない」ことの主張は、同じ窓で必ず「出る」側の対照を隣に置く（不在だけの主張は
 //! 捕捉が死んでいても緑になるため）。発行点の interest はプロセス大域に焼き付くので、
@@ -21,8 +24,10 @@ const TARGET_DROP: &str = "log_capture_kit::selftest::filter_drop";
 const TARGET_EMPTY: &str = "log_capture_kit::selftest::filter_empty_directives";
 const TARGET_COMMA: &str = "log_capture_kit::selftest::filter_trailing_comma";
 const TARGET_SHAPE: &str = "log_capture_kit::selftest::filter_line_shape";
+const TARGET_NO_SENTINEL: &str = "log_capture_kit::selftest::filter_no_sentinel";
 const TARGET_OFF: &str = "log_capture_kit::selftest::filter_everything_off";
 const TARGET_BARE: &str = "log_capture_kit::selftest::filter_bare_level";
+const TARGET_TYPO: &str = "log_capture_kit::selftest::filter_misspelled_level";
 
 // ---- ⒜ directive が実際に効く --------------------------------------------
 
@@ -119,6 +124,17 @@ fn a_trailing_comma_in_the_directives_changes_nothing() {
     }
 }
 
+// ---- ⒟ 解釈できない指令は panic する ------------------------------------
+
+/// 綴りの誤った指令（ここでは水準 `debgu`）は黙って捨てず panic する。
+///
+/// 捨てると残りの指令だけで濾過が組まれ、手順書の指定と別物の濾過のまま緑になりうる。
+#[test]
+#[should_panic(expected = "directive を解釈できない")]
+fn a_misspelled_directive_panics_instead_of_being_dropped() {
+    let _ = capture_under_filter(&format!("info,{TARGET_TYPO}=debgu"), || {});
+}
+
 // ---- ⒝ 番兵は内部で通し、戻り値からは消える ------------------------------
 
 /// 要件 1.2: 呼出側の directive が**何も通さない**場合でも番兵検査は成立し、
@@ -142,7 +158,7 @@ fn a_directive_that_passes_nothing_yields_an_empty_string_not_a_sentinel_line() 
 #[test]
 fn the_returned_string_never_mentions_the_sentinel_target() {
     let out = capture_under_filter("info", || {
-        tracing::info!(target: TARGET_SHAPE, "番兵検査の対照本文");
+        tracing::info!(target: TARGET_NO_SENTINEL, "番兵検査の対照本文");
     });
 
     assert!(
@@ -184,11 +200,11 @@ fn stripping_panics_when_no_sentinel_line_is_present() {
     let _ = strip_sentinel_lines("先頭の行\n末尾の行\n");
 }
 
-// ---- ⒞ 行の形（96 呼出が読んでいる文字列そのもの） -----------------------
+// ---- ⒞ 行の形（`wintf` の呼出が読んでいる文字列そのもの） -----------------------
 
 /// 要件 1.2: 1 イベント 1 行・ANSI 無し・レベル／宛先／本文／フィールドが載る。
 ///
-/// `wintf` の 96 呼出は `contains("stage=begin")` のようにこの形の内側を読む。
+/// `wintf` の呼出は `contains("stage=begin")` のようにこの形の内側を読む。
 /// 整形器の設定を変えるとここが赤になる。
 #[test]
 fn one_event_becomes_one_plain_line_carrying_level_target_message_and_fields() {

@@ -1,13 +1,21 @@
 [package]
 name = "sample-ghost-kit"
 workspace = "../.."
-description = "検体ゴースト／バルーンを名前で引く窓口をワークスペースで唯一定義するテスト専用の leaf crate（spec: areka-P0-nar-install）: 登記表 SAMPLES と SampleRoot の 3 読み口"
+description = "検体ゴースト／バルーンを名前で引く窓口をワークスペースで唯一定義するテスト専用の crate（本番の crate の `[dependencies]` には置かない・`[[bin]]` を持つテスト専用の real-run-kit だけは `[dependencies]` に置く・spec: areka-P0-nar-install）: 登記表 SAMPLES と SampleRoot の 3 読み口・固定入力の .nar を組む NarBuilder・札付きの作業フォルダ WorkDir"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 publish = false # テストだけが使う道具
 repository.workspace = true
+# 兄弟のテストのファイル `examples/fold-samples_tests.rs` を別の見本と見なさせない。
+autoexamples = false
+
+# 見本の単体テストを `cargo test` で回す（写しの式と書き先の順を縛る）。
+[[example]]
+name = "fold-samples"
+path = "examples/fold-samples.rs"
+test = true
 
 [dependencies]
 thiserror = { workspace = true }
@@ -17,4 +25,4 @@ areka-nar = { path = "../areka-nar" }
 # 決定論テストの固定入力を組む `nar_writer` の deflate（圧縮）側だけに使う。
 # 本クレートはテスト専用で本番の依存グラフには入らないため、圧縮側を引いてよい
 # （本番の `areka-nar` は伸長側だけを使い、検査がそれを見張る）。
-miniz_oxide = { version = "0.9", default-features = false, features = ["with-alloc"] }
+miniz_oxide = { workspace = true }

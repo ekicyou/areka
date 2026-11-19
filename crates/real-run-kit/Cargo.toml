@@ -18,13 +18,14 @@ path = "src/bin/real-run-fake-areka.rs"
 # 新しい外部のクレートは 0 個（要件 10.4）。根の [workspace.dependencies] は変えない。
 # [[bin]] は [dependencies] しか使えないので、偽の子が使うものもここに置く。
 [dependencies]
-# 検体を名前で引く（見張り sample_path_guard_test の例外 1 件＝D-2）。
+# 検体を名前で引く（見張り sample_path_guard_test の例外＝D-2）。
 sample-ghost-kit = { path = "../sample-ghost-kit" }
 # 回の置き場（target の下）。
 temp-path-kit = { path = "../temp-path-kit" }
 # 待受の観測（scan）と既定の時間（config::Timeouts）を中継と同じ定義から読む。
 areka-mcp-bridge = { path = "../areka-mcp-bridge" }
-# 偽の子だけが使う本物の受け口（start・ToolRegistry など）。
+# 本物の受け口（start・ToolRegistry など）。偽の子と、mcp_tests が同じプロセスに立てる受け口が使う。
+# 窓口の launch も、待受の番号の環境変数の名前（PORT_ENV）をここから引く。
 areka-mcp = { path = "../areka-mcp" }
 # 落ちた回の写しの複写（copy_tree_atomic＝D-6）。
 areka-user-data = { path = "../areka-user-data" }
