@@ -1,7 +1,7 @@
 //! 本体の口の束の中身と据え付け（runtime-module-untangle design「SessionHooksImpl」）。
 //!
-//! 各関数は置き換える前の `runtime` の 1 か所のコードを移したもの。記録は持たない（記録は
-//! `runtime` の呼び手に残る）。
+//! 各関数は `areka-runtime` が口（`SessionHooks`）から引く本体の読み書き。記録は持たない（記録は
+//! `areka-runtime` の呼び手に残る）。
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
@@ -20,7 +20,7 @@ use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::skin_switch::SkinKind;
 
 /// 口の中身。
-pub(crate) const HOOKS: SessionHooks = SessionHooks {
+const HOOKS: SessionHooks = SessionHooks {
     kanade: kanade_of,
     seriko_sink: seriko_sink_of,
     ghost_ref_name,
@@ -39,7 +39,7 @@ pub(crate) fn install(world: &mut World) {
 }
 
 /// 置き場のゴースト（無ければ `None`）。
-fn session(world: &World) -> Option<&GhostSession> {
+pub(super) fn session(world: &World) -> Option<&GhostSession> {
     world.get_non_send::<GhostSlot>()?.0.as_ref()
 }
 

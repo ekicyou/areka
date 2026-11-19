@@ -1,7 +1,7 @@
 use super::test_support::bump_balloon_window_dpi;
 use super::{
-    BindSet, PatternState, PresentCommand, SpineHarness, balloon_target, capture_logs,
-    run_attach_phase, run_dpi_phase, run_text_phase, run_text_scale_phase, shell_target,
+    BindSet, PatternState, PresentCommand, SpineHarness, balloon_target, run_dpi_phase,
+    run_text_phase, run_text_scale_phase, shell_target,
 };
 
 /// balloon target の適用 k（`applied_scale`）を読む短縮（`None`＝表示状態が未確立は前提違反ゆえ panic）。
@@ -13,27 +13,23 @@ fn balloon_applied_scale(harness: &SpineHarness, scope: u32) -> f32 {
         .expect("attach で不可視のまま確立済みの balloon target は適用 k を持つ")
 }
 
-/// **可視バルーンの DPI 変化**（Flow 2 の正常系・R8.1）: `Changed<DPI>` → `run_dpi_phase` で
+/// **可視バルーンの DPI 変化**: `Changed<DPI>` → `run_dpi_phase` で
 /// 適用 k が跳ねたあと、`run_text_scale_phase` が文字層 binding を新 k へ組み直すことを
 /// **実 attach（`text_slot_view` が `Some`）の本番経路**で固定する。
 ///
-/// 併せて churn ガード（R8.5）——k が動いていないフレームでは再構築が 1 件も起きない——を
+/// 併せて churn ガード——k が動いていないフレームでは再構築が 1 件も起きない——を
 /// 変化の前後**両方**で観測する。毎フレーム走査という cadence が「毎フレーム再生成」に
 /// 退化していないことは、この 2 点でしか区別できない。
 #[test]
 fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
     let mut harness = SpineHarness::boot(r"\s[0]\e");
 
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter().any(|l| l.contains("attached=2")),
-        "前提: attach 完了（balloon の不可視のままの確立＝文字層 actor 登録済み）が観測できない: {logs:?}"
-    );
+    harness.attach_all();
 
     // attach 相はバルーンを不可視のまま確立する（`areka-P0-balloon-visibility` Requirement 1.1）。
     // 本ケースの主題は**可視**バルーンの DPI 変化ゆえ、その前提をここで明示的に組む——不可視のままだと
     // `refresh_scale` の可視ゲート（Hide/全透明退化を蘇らせない）に阻まれて適用 k が動かず、
-    // 観測すべき Flow 2 の正常系そのものが成立しない（不可視経路は下のケースが所有する）。
+    // 観測すべき正常系そのものが成立しない（不可視経路は下のケースが所有する）。
     harness
         .wiring
         .show_balloon_target(&mut harness.world, balloon_target(0))
@@ -56,7 +52,7 @@ fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
     // churn ガード（変化前）: k が動いていないフレームでは 1 件も再構築しない。
     assert!(
         run_text_scale_phase(&mut harness.wiring, &mut harness.world).is_empty(),
-        "k 不変のフレームで文字層を組み直してはならない（R8.5）"
+        "k 不変のフレームで文字層を組み直してはならない"
     );
 
     // DPI 変化 → dpi 相（refresh_scale で再表示・窓寸 reconcile）。
@@ -72,18 +68,18 @@ fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
     assert_eq!(
         run_text_scale_phase(&mut harness.wiring, &mut harness.world),
         vec![0u32],
-        "適用 k が変わった balloon scope の文字層 binding が新 k へ組み直される（R8.1・D11-4）"
+        "適用 k が変わった balloon scope の文字層 binding が新 k へ組み直される"
     );
     // churn ガード（変化後）: 直後のフレームは同値 k ゆえ再構築ゼロ。
     assert!(
         run_text_scale_phase(&mut harness.wiring, &mut harness.world).is_empty(),
-        "組み直した直後のフレームは同値 k ＝ no-op（毎フレーム再生成の禁止・R8.5）"
+        "組み直した直後のフレームは同値 k ＝ no-op（毎フレーム再生成の禁止）"
     );
 
     harness.shutdown_bounded();
 }
 
-/// **不可視中の DPI 変化が `Show` で着地する**（R8.1・6.5 一次実走の欠陥の本丸）:
+/// **不可視中の DPI 変化が `Show` で着地する**（一次実走の欠陥の本丸）:
 /// `\b[-1]`→（DPI 変化）→`\b[0]` の順で、文字層が最終的に**新 k** へ着地することを固定する。
 ///
 /// # なぜこの順序が本質なのか
@@ -104,11 +100,7 @@ fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
 fn spine_dpi_change_while_balloon_hidden_lands_on_next_show() {
     let mut harness = SpineHarness::boot(r"\s[0]\e");
 
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter().any(|l| l.contains("attached=2")),
-        "前提: attach 完了が観測できない: {logs:?}"
-    );
+    harness.attach_all();
     let k_attached = balloon_applied_scale(&harness, 0);
     assert!(
         run_text_scale_phase(&mut harness.wiring, &mut harness.world).is_empty(),
@@ -134,7 +126,7 @@ fn spine_dpi_change_while_balloon_hidden_lands_on_next_show() {
     );
     assert!(
         run_text_scale_phase(&mut harness.wiring, &mut harness.world).is_empty(),
-        "不可視の間は文字層も動かない（適用 k がまだ旧値＝同値 k の no-op・R8.5）"
+        "不可視の間は文字層も動かない（適用 k がまだ旧値＝同値 k の no-op）"
     );
 
     // (3) `\b[0]` 相当の再表示: ここで `apply_show` が**新 DPI**で k を導出し適用する。
@@ -158,11 +150,11 @@ fn spine_dpi_change_while_balloon_hidden_lands_on_next_show() {
     assert_eq!(
         run_text_scale_phase(&mut harness.wiring, &mut harness.world),
         vec![0u32],
-        "不可視中の DPI 変化でも、再表示後のフレームで文字層 binding が新 k へ着地する（R8.1）"
+        "不可視中の DPI 変化でも、再表示後のフレームで文字層 binding が新 k へ着地する"
     );
     assert!(
         run_text_scale_phase(&mut harness.wiring, &mut harness.world).is_empty(),
-        "着地後は同値 k ＝ no-op（R8.5）"
+        "着地後は同値 k ＝ no-op"
     );
 
     harness.shutdown_bounded();
@@ -192,7 +184,7 @@ element1,balloon,talk,10,10
 }
 ";
     let mut harness = SpineHarness::boot(r"\s[0]\e");
-    run_attach_phase(&mut harness.wiring, &mut harness.world);
+    harness.attach_all();
     // 最初の `\s[0]` 相当（本番 adapter が組む指令と同型）でシェルの窓の表示を確立する。
     harness.wiring.apply_present(
         &mut harness.world,

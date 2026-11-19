@@ -26,6 +26,7 @@ use crate::model::EntryId;
 
 pub mod candidates;
 pub mod extract;
+mod lex;
 pub mod resolve;
 
 /// ソースの 1 行から取り出した正典 URL 1 件（要件 5.1）。

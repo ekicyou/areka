@@ -1,13 +1,13 @@
 //! バルーンの上の滞在の集合（`BalloonHover`・UI スレッドの NonSend）。
 //!
 //! 可視性の相（`balloon_visibility_phase`）が読み、入力の側（`input_events::balloon` の移動・離脱）が書く。
-//! 旧 `BalloonWiring::balloon_hover` を分けたもの（runtime-module-untangle 3.3）——`BalloonWiring` ごと
+//! 旧 `BalloonWiring::balloon_hover` を分けたもの（runtime-module-untangle）——`BalloonWiring` ごと
 //! 下ろすと選択の送り口まで連れて来るため、集合だけを runtime の型にする。置くのは `BalloonWiring` と
 //! 同じ所・同じ時（本番は `input_events::balloon::wire_balloon_choice`）。
 
 use std::collections::HashSet;
 
-/// ポインタがバルーン窓の上に居る scope の集合（areka-P0-balloon-visibility 5.2）。
+/// ポインタがバルーン窓の上に居る scope の集合（areka-P0-balloon-visibility 要件 5.2）。
 ///
 /// 選択肢行の追跡（`BalloonWiring::hover`）とは**別概念の独立した軸**——こちらは「バルーンの上に
 /// 居るか」だけを表す（選択肢の有無・行ヒットの有無に依存しない）。

@@ -1,8 +1,8 @@
-//! サインオフ手順書の判定語が判定器の実装と一致することの檻（task 4.1・要件 8.1／8.5）。
+//! サインオフ手順書の判定語が判定器の実装と一致することの檻（`areka-P0-dpi-transition-atomicity` 要件 8.1／8.5）。
 //!
 //! 手順書（`.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md`）は
 //! 「第三者が同一手順を再実行できる粒度」で判定語を並べる文書である。文書の側で語を 1 つ
-//! 書き間違えると、採取者は**存在しない語を grep して 0 件を得る**——それは要件 8.5 が
+//! 書き間違えると、採取者は**存在しない語を grep して 0 件を得る**——それは `areka-P0-dpi-transition-atomicity` 要件 8.5 が
 //! 名指しで禁じている「消灯した観測点を発生 0 回の根拠に用いる」形そのものであり、しかも
 //! 実機を回した後にしか気づけない。ゆえに文書と判定器の語彙の一致は人の目視ではなく
 //! 実行テストで固定する。
@@ -51,10 +51,10 @@ const PROCEDURE_RELATIVE_PATH: &str =
 /// 本リポジトリが備える手順書の出所（`crates/areka-runtime` から見た相対パス）。
 ///
 /// 採取者が「この語を grep せよ」と読む文書は、時期によって 1 本とは限らない。先行仕様
-/// （atom）の手順書は完了アーカイブに在り、**他仕様の文書は書き換えない**（要件 6.6）ので、
+/// （atom）の手順書は完了アーカイブに在り、**他仕様の文書は書き換えない**（`areka-P0-balloon-offset-dpi` 要件 6.6）ので、
 /// 新しい種別は自分の仕様の手順書が引き受ける。
 ///
-/// 本仕様（balloon-offset-dpi）の手順書は **task 8.2 が置いた**——出所はランナーと同居する
+/// 本仕様（`areka-P0-balloon-offset-dpi`）の手順書は **task 8.2 が置いた**——出所はランナーと同居する
 /// モジュール doc であり（design「実機サインオフ」の 5）、本檻はそれを 1 個の文書として読む。
 const PROCEDURE_SOURCES: &[&str] = &[PROCEDURE_RELATIVE_PATH, OFFSET_PROCEDURE_RELATIVE_PATH];
 
@@ -68,19 +68,19 @@ const OFFSET_PROCEDURE_RELATIVE_PATH: &str =
 
 /// どの手順書もまだ名指ししていないレコード種別（**期限つきの保留**）。
 ///
-/// 語彙を先に建てる（task 5.1）と、手順書（task 8.2）が置かれるまでのあいだ「発行側には
+/// 語彙を先に建てる（`areka-P0-balloon-offset-dpi` の task 5.1）と、手順書（task 8.2）が置かれるまでのあいだ「発行側には
 /// 在るが、どの手順書にも載っていない」種別が生じる。黙って除外すると
 /// 「未達が spec の内側から見えない」形になるので、ここへ名指しで残す。
 ///
 /// **この保留欄は自ら消える。** 檻は ⑴ 載っていない種別が保留欄の内側に収まること
 /// （`missing ⊆ pending`）だけでなく、⑵ 保留欄の種別が**まだ本当に載っていない**こと
-/// （`pending ∩ covered = ∅`）も見る。task 8.2 が本仕様の手順書を [`PROCEDURE_SOURCES`] へ
+/// （`pending ∩ covered = ∅`）も見る。`areka-P0-balloon-offset-dpi` の task 8.2 が本仕様の手順書を [`PROCEDURE_SOURCES`] へ
 /// 足したので、唯一の保留であった `offset` は**ここから消えた**（残していれば ⑵ が赤になる）。
 /// 空であることが正常な状態であり、次に保留が生じたときだけ行が増える。
 ///
 /// # 現在の保留
 ///
-/// **無し。** task 8.3 が新設した `windpi` が唯一の保留だったが、task 8.5 が本仕様の手順書へ
+/// **無し。** `areka-P0-balloon-offset-dpi` の task 8.3 が新設した `windpi` が唯一の保留だったが、task 8.5 が本仕様の手順書へ
 /// `kind=windpi` を書いたので⑵の検査が実際に赤くなり（`保留欄に残っているが、もう手順書に
 /// 載っている種別がある: ["windpi"]`）、この行を消して緑へ戻した。自壊は設計どおりに働いた。
 const PENDING_PROCEDURE_KINDS: &[&str] = &[];
@@ -260,7 +260,7 @@ fn validate_record_line(record: &str) -> Result<(), String> {
 
 #[test]
 fn the_procedure_only_quotes_record_lines_the_emitters_can_produce() {
-    // 出所は**集合の全体**を読む（task 8.2）。先行仕様の手順書だけを読んでいると、本仕様の
+    // 出所は**集合の全体**を読む。先行仕様の手順書だけを読んでいると、本仕様の
     // 手順書が引く観測行の例を誰も検査しない＝新しい種別の例が静かに検査の外へ落ちる。
     let text = procedure_sources_text();
     let examples: Vec<&str> = text.lines().filter_map(record_part).collect();
@@ -284,7 +284,7 @@ fn the_procedure_only_quotes_record_lines_the_emitters_can_produce() {
 fn the_procedure_names_every_record_kind_the_emitters_produce() {
     let text = procedure_sources_text();
     // 点灯表が 1 種でも落ちていると、その観測点は「どの手順書も触れていない」＝採取者が
-    // 点灯を確かめる術を持たないまま 0 件を根拠にできてしまう（要件 8.5）。
+    // 点灯を確かめる術を持たないまま 0 件を根拠にできてしまう（`areka-P0-dpi-transition-atomicity` 要件 8.5）。
     let missing: BTreeSet<&str> = all_kinds()
         .into_iter()
         .filter(|kind| !contains_token(&text, &format!("{FIELD_KIND}={kind}")))
@@ -303,7 +303,7 @@ fn the_procedure_names_every_record_kind_the_emitters_produce() {
     assert!(
         stale.is_empty(),
         "保留欄に残っているが、もう手順書に載っている種別がある: {stale:?}\n  \
-         task 8.2 が本仕様の手順書を出所集合へ足したら、保留欄の当該行を消すこと"
+         本仕様の手順書を出所集合へ足したら、保留欄の当該行を消すこと"
     );
 }
 
@@ -359,7 +359,7 @@ fn the_procedure_names_the_runner_vocabulary_verbatim() {
 #[test]
 fn the_offset_procedure_names_its_runner_vocabulary_verbatim() {
     // 本仕様（追随レコード）の手順書とランナーの語。字面が 1 つでもずれると、採取者は
-    // 存在しない語を grep して 0 件を得る（要件 8.5 が名指しで禁じている形）。
+    // 存在しない語を grep して 0 件を得る（`areka-P0-dpi-transition-atomicity` 要件 8.5 が名指しで禁じている形）。
     let text = read_procedure(OFFSET_PROCEDURE_RELATIVE_PATH);
     let mut words: Vec<&str> = vec![
         TRANSITION_LOG_ENV,
@@ -383,15 +383,15 @@ fn the_offset_procedure_names_its_runner_vocabulary_verbatim() {
 
 #[test]
 fn the_offset_procedure_states_what_the_judge_does_not_see() {
-    // 「違反 0 件」を「全部正しい」と読ませないための欄（task 8.1 のレビュー由来）。
+    // 「違反 0 件」を「全部正しい」と読ませないための欄（レビュー由来）。
     // 見出しごと消えると、緑の読み違えが静かに戻ってくる。
     let text = read_procedure(OFFSET_PROCEDURE_RELATIVE_PATH);
     for phrase in [
         "判定器が見ないもの",
         "素の追従スコープ",
         "重なり順",
-        "task 10.1",
-        // 5 件目（task 8.1 の限界 ⒟ の後半）。**task 8.7 で逐語句を差し替えた**——8.6 が
+        "`areka-P0-balloon-offset-dpi` のタスク 10.1",
+        // 5 件目（`areka-P0-balloon-offset-dpi` タスク 8.1 の限界 ⒟ の後半）。**逐語句を差し替えた**——判定器が
         // 判定 ⑷ の母数を観測行の全体から作るようにしたので、旧句「最初の遷移起点より前に
         // 出た記録は 1 件も判定されない」は**偽になった**（⑷ の母数は起点より前の門の行を
         // 読む）。偽になった句を要求し続けると、手順書が真実を書いた日にこの檻が赤くなる。
@@ -414,8 +414,8 @@ fn the_offset_procedure_forbids_the_shapes_that_make_a_false_red() {
     // アーキテクチャを確かめる」を**必須**として書いていること。どれを落としても、正しい
     // 実装のまま赤になる（あるいは 1 行も採れない）ログが採れてしまう。
     //
-    // **task 8.7 で入れ替えた**。旧版はここで「キーワード指定を**素材未消費のまま**遷移へ
-    // 1 度通す」も要求していたが、その手は 8.6 で不要になり手順書から撤去された——母数を
+    // **入れ替えた**。旧版はここで「キーワード指定を**素材未消費のまま**遷移へ
+    // 1 度通す」も要求していたが、その手は不要になり手順書から撤去された——母数を
     // 観測行の全体から作るようになったので、門の行が遷移の内側に在る必要が無い。しかも
     // その手は**人の手では原理的に実行できなかった**（素材は起動 +0.73 秒に areka 自身が
     // 消費し、最初の起点は必ずそれより後）。撤去済みの手を要求し続ける檻は、手順書が正しく
@@ -464,7 +464,7 @@ fn with_count_placeholders(line: &str) -> String {
 #[test]
 fn the_offset_procedure_quotes_the_pass_line_the_report_prints() {
     // §6.1 の合格語は `OffsetReport` の `Display` そのものである。書式だけを変えると、
-    // 手順書の合格語が静かに古くなり、採取者は**存在しない語を読む**（要件 8.5 が名指しで
+    // 手順書の合格語が静かに古くなり、採取者は**存在しない語を読む**（`areka-P0-dpi-transition-atomicity` 要件 8.5 が名指しで
     // 禁じている形）。ゆえに文言は手書きせず Display から起こして突合する。
     let printed = judge_offset_log("").to_string();
     let first = printed

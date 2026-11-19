@@ -25,7 +25,16 @@
 //! ためである。備考の複数行文字列の中に行頭の `[entry."…"]` が既にある id と同じ綴りで
 //! 現れると、`blocks::split` の較正（`toml` の鍵**集合**との一致）では見抜けない
 //! （設計 D-12 が明記する盲点）。`ledger-init` は整合検査より先に走るので、ここが緩いと
-//! 盲点は永久に開いたままになる。
+//! 重複した塊のまま差し込みが通る（次の整合検査では `check::structure::check_file_order` が
+//! 同じ形で拾う）。`priority-apply` も同じ確かめを頭で通す
+//! （[`crate::ledger::patch::replace_priority`]）。
+//!
+//! # 差し込む位置とコメント
+//!
+//! 塊の終わりは次の見出しの直前なので、項目の真上に書いたコメントは 1 つ前の塊（最初の
+//! 項目なら前置き）の尻尾に入る。差し込む塊は、その尻尾に続く行頭 `#` の連続した行の
+//! **前**に置く——後ろに置くと、次の項目に付いていたコメントが差し込んだ項目に付いたように
+//! 読める。
 //!
 //! # 1 バイトの安定
 //!
@@ -37,22 +46,13 @@
 use std::collections::BTreeSet;
 
 use super::blocks::{self, Block};
+use super::{ENTRY_TABLE, at_ledger_file, ledger_file};
 use crate::error::SurveyError;
 use crate::model::{Domain, EntryId, PageName, Status};
 use crate::tomlout::{basic_string, keyed_table_header, string_array};
 
-/// 台帳を置くディレクトリ（`io::paths::ledger_path` と同じ場所・ワークスペース根から）。
-///
-/// `io::paths` は呼ばない——あれはワークスペース根から組み立てた絶対パスを返すので、
-/// 失敗の本文が計算機ごとに変わってしまう（要件 6.1 の決定性）。純粋層が入出力層に
-/// 触らない形も保てる。綴りの正本は `Domain::as_key` 1 つきりである。
-const LEDGER_DIR: &str = "doc/ukadoc-coverage/ledger";
-
 /// 前置きの表の見出し。
 const LEDGER_HEADER: &str = "[ledger]";
-
-/// 項目を置く表の名前。
-const ENTRY_TABLE: &str = "entry";
 
 /// 冒頭の注意書きのうち、ドメインに依らない 2 行（要件付録 A.1 の逐語）。
 ///
@@ -87,7 +87,7 @@ const INITIAL_COLUMNS: [&str; 7] = [
 ///
 /// # 落ちる場合
 ///
-/// - 既存本文を塊に切り分けられない（[`blocks::split`] の失敗をそのまま上げる）
+/// - 既存本文を塊に切り分けられない（[`blocks::split`] の失敗に台帳の置き場を添えて上げる）
 /// - 既存の塊が id の**厳密な**昇順に並んでいない（[`SurveyError::LedgerOutOfOrder`]。
 ///   同じ id が 2 度現れる場合もここで落ちる・設計 D-12）
 pub fn merge_initial(
@@ -155,10 +155,7 @@ fn render_prologue(domain: Domain, pages: &[PageName]) -> String {
 
     push_line(&mut out, LEDGER_HEADER);
     push_field(&mut out, "domain", &basic_string(domain.as_key()));
-    let names: Vec<String> = pages
-        .iter()
-        .map(|page| page.as_str().to_owned())
-        .collect::<Vec<String>>();
+    let names: Vec<String> = pages.iter().map(|page| page.as_str().to_owned()).collect();
     push_field(&mut out, "pages", &string_array(&names));
     push_line(&mut out, "");
     out
@@ -168,29 +165,40 @@ fn render_prologue(domain: Domain, pages: &[PageName]) -> String {
 ///
 /// 前置きも既存の塊もバイト列のまま写す。触るのは「塊と塊の間」だけである。
 fn splice(text: &str, domain: Domain, wanted: &BTreeSet<&EntryId>) -> Result<String, SurveyError> {
-    let (prologue_end, blocks) = blocks::split(text)?;
-    check_strictly_ascending(&blocks, domain)?;
+    let file = ledger_file(domain);
+    let (prologue_end, blocks) = blocks::split(text).map_err(|err| at_ledger_file(err, &file))?;
+    check_strictly_ascending(&blocks, &file)?;
 
     let present: BTreeSet<&EntryId> = blocks.iter().map(|block| &block.id).collect();
     let missing: Vec<&EntryId> = wanted
         .iter()
         .copied()
         .filter(|id| !present.contains(id))
-        .collect::<Vec<&EntryId>>();
+        .collect();
 
     let mut out = String::with_capacity(text.len());
-    out.push_str(&text[..prologue_end]);
+    // 最初の塊の真上のコメントは前置きの尻尾にあるので、前置きも同じく切る。
+    let prologue = &text[..prologue_end];
+    let cut = trailing_comments_start(prologue);
+    out.push_str(&prologue[..cut]);
 
     let mut next = 0usize;
+    // 前の塊（または前置き）の尻尾のコメント。次の塊の前に差し込む項目より後ろに写す。
+    let mut held = &prologue[cut..];
     for block in &blocks {
         // 欠けている id のうち、この塊より前に来るものを先に置く。
         while next < missing.len() && *missing[next] < block.id {
             push_entry(&mut out, missing[next]);
             next += 1;
         }
-        out.push_str(&text[block.start..block.end]);
+        out.push_str(held);
+        let body = &text[block.start..block.end];
+        let cut = trailing_comments_start(body);
+        out.push_str(&body[..cut]);
+        held = &body[cut..];
     }
-    // 最後の塊より後ろに来るものが残っている。
+    // 最後の塊の尻尾は後ろに続く項目の見出しではないので、そのまま写してから足す。
+    out.push_str(held);
     while next < missing.len() {
         push_entry(&mut out, missing[next]);
         next += 1;
@@ -198,16 +206,39 @@ fn splice(text: &str, domain: Domain, wanted: &BTreeSet<&EntryId>) -> Result<Str
     Ok(out)
 }
 
+/// 塊の尻尾に続く行頭 `#` の連続した行の始まり（無ければ塊の終わり）。
+///
+/// 備考の複数行文字列の最後の行が `#` で始まることもある。そこで切ると文字列が割れるので、
+/// 末尾から 1 行ずつ切る位置を見て、切った前半が TOML として読める最も前の位置を採る。
+/// どこで切っても読めなければ切らない。
+fn trailing_comments_start(body: &str) -> usize {
+    let mut at = body.len();
+    let mut cut = body.len();
+    for line in body.split_inclusive('\n').rev() {
+        if !line.starts_with('#') {
+            break;
+        }
+        at -= line.len();
+        if body[..at].parse::<toml::Table>().is_ok() {
+            cut = at;
+        }
+    }
+    cut
+}
+
 /// 塊が id の**厳密な**昇順に並んでいることを確かめる（設計 D-12）。
 ///
-/// 等しい隣り合わせも落とす。これが備考の中に隠れた重複を捕まえる唯一の場所である
-/// （切り分けの較正は集合で比べるので素通りする）。並べ替えはしない——手で書いた本文を
+/// 等しい隣り合わせも落とす。差し込みと `priority` の置換は、備考の中に隠れた重複をここで
+/// 捕まえる（整合検査では `check::structure::check_file_order` が同じ形で拾う。切り分けの
+/// 較正は集合で比べるので素通りする）。並べ替えはしない——手で書いた本文を
 /// 機械が並べ直すと、持ち主の意図した並びが黙って消える。
-fn check_strictly_ascending(blocks: &[Block], domain: Domain) -> Result<(), SurveyError> {
+///
+/// `file` は失敗に添える台帳の置き場。
+pub(super) fn check_strictly_ascending(blocks: &[Block], file: &str) -> Result<(), SurveyError> {
     for pair in blocks.windows(2) {
         if pair[1].id <= pair[0].id {
             return Err(SurveyError::LedgerOutOfOrder {
-                file: ledger_file(domain),
+                file: file.to_owned(),
                 // 順序を破っている側、つまり**後ろに来てしまった** id を告げる。
                 id: pair[1].id.as_str().to_owned(),
             });
@@ -227,11 +258,6 @@ fn push_entry(out: &mut String, id: &EntryId) {
         out.push('\n');
     }
     out.push_str(&render_initial_entry(id));
-}
-
-/// 失敗の本文に添える台帳の置き場（要件 6.12）。
-fn ledger_file(domain: Domain) -> String {
-    format!("{LEDGER_DIR}/{}.toml", domain.as_key())
 }
 
 /// `名前 = 値` の 1 行。値は組み上がった TOML の値の断片を受け取る。

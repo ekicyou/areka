@@ -28,10 +28,10 @@ pub struct ShellCursorAssets {
     /// 読んだファイル（番号＝`Shape::File` の値）。
     pub files: Vec<CursorFile>,
     /// .cur を窓の DPI の寸法ごとに作った控え（(番号, 寸法) → カーソル）。資源と一緒に捨てる。
-    pub sized: RefCell<HashMap<(usize, u32), Option<OwnedCursor>>>,
+    pub(crate) sized: RefCell<HashMap<(usize, u32), Option<OwnedCursor>>>,
 }
 
-// 要件 2.5: 公開の `ShellCursorAssets::files` が名指すので開ける
+// runtime-crate-split 要件 2.5: 公開の `ShellCursorAssets::files` が名指すので開ける
 pub enum CursorFile {
     /// 目録を確かめた .cur のバイト列（窓の DPI ごとに from_cur_bytes で作る）。
     Cur(Vec<u8>),
@@ -40,7 +40,7 @@ pub enum CursorFile {
 }
 
 /// 表を作り、名前ごとに 1 度だけファイルを探して作る。作れなかった名前を使う行と差し替えは外す
-/// （行が無いのと同じ既定になる・要件 6.5・6.6）。
+/// （行が無いのと同じ既定になる・shell-mouse-cursor 要件 6.5・6.6）。
 pub(crate) fn build_shell_cursors(
     braces: &[CursorBrace],
     ghost_kv: &BTreeMap<String, String>,
@@ -139,10 +139,10 @@ fn log_issue(issue: &CursorIssue) {
     }
 }
 
-/// シェルのフォルダ → `ghost\master` の順で最初に在るファイルを読む（要件 6.4）。失敗は名前ごとに
-/// 1 度だけ記録する（呼び手が名前ごとに 1 度だけ呼ぶ・要件 6.7）。
+/// シェルのフォルダ → `ghost\master` の順で最初に在るファイルを読む（shell-mouse-cursor 要件 6.4）。失敗は名前ごとに
+/// 1 度だけ記録する（呼び手が名前ごとに 1 度だけ呼ぶ・shell-mouse-cursor 要件 6.7）。
 fn load_file(name: &str, dirs: &[&Path]) -> Option<CursorFile> {
-    let Ok(paths) = candidate_paths(name, dirs) else {
+    let Some(paths) = candidate_paths(name, dirs) else {
         warn!(
             file = name,
             "カーソルのファイル名が探す場所のフォルダの外を指すので読まない"
@@ -200,7 +200,7 @@ impl ShellCursorAssets {
     }
 
     /// NonSend の資源を入れ替える: 新しい資源を入れ、全部のキャラクターの窓へ出し直し、最後に出した形の
-    /// 控えを消してから前の資源を捨てる（捨てるカーソルを出さない・design.md「シェル・ゴーストの入れ替えの順」）。
+    /// 控えを消してから前の資源を捨てる（捨てるカーソルを出さない・shell-mouse-cursor design.md「シェル・ゴーストの入れ替えの順」）。
     pub fn hand_to(self, world: &mut World) {
         let old = world.remove_non_send::<ShellCursorAssets>();
         world.insert_non_send(self);

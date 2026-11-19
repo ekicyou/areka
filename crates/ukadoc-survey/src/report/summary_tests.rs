@@ -4,17 +4,15 @@
 //! （要件 6.2・設計 File Structure Plan）。
 //!
 //! 期待値は実装側の定数を参照せず**逐語の文字列**で書く。実装の表を実装の表自身と
-//! 比べるだけのテストは、綴りの取り違えも並べ替えも 1 件も捕まえない（タスク 1.5 の
-//! 教訓）。本文の全文を釘付けするテストを 1 本置いてある（タスク 3.5 の教訓——版面
-//! そのものが契約である）。
+//! 比べるだけのテストは、綴りの取り違えも並べ替えも 1 件も捕まえない。本文の全文を
+//! 釘付けするテストを 1 本置いてある（版面そのものが契約である）。
 //!
-//! # 時刻の主張は 2 回描いても守れない（タスク 3.5 の教訓）
+//! # 時刻はカタログの値だけ
 //!
-//! 2 回続けて描くテストは、秒単位の壁時計を焼き込んでも素通りする（2 回の描画は
-//! マイクロ秒差なので同じ値になる）。全体報告には**カタログの生成日時 1 つだけ**が
-//! 載るので、ドメイン別報告の「4 桁続く数字が無い」はそのままでは使えない。ここでは
-//! 「時刻を含む行を数え、1 行だけであること・その 1 行が生成日時であること」を主張し、
-//! 数える道具自身も既知の例で較正する。
+//! 全体報告に載る時刻は**カタログの生成日時 1 つだけ**で、2 回続けて描いても壁時計は
+//! 見つからない（マイクロ秒差で同じ値になる）。そこで時刻の行は逐語の本文の一部として
+//! 固定し、別の日時を渡すと本文がそれに変わることを
+//! [`the_snapshot_time_comes_from_the_catalog_and_is_not_baked_in`] が見る。
 
 use std::collections::BTreeMap;
 
@@ -83,7 +81,7 @@ fn ledger_of(domain: Domain, pages: &[&str], rows: &[Row]) -> Ledger {
 
 /// 見本のカタログ。全体報告が読むのは [`SnapshotMeta::generated_at`] だけだが、
 /// 他の欄には**わざと 4 桁の数字**（`2983`・`1749`）を入れてある。本文に紛れ込めば
-/// 時刻を数えるテストが赤くなる。
+/// 逐語の比べが赤くなる。
 fn catalog_of(generated_at: &str) -> Catalog {
     Catalog {
         snapshot: SnapshotMeta {
@@ -102,12 +100,13 @@ fn catalog_of(generated_at: &str) -> Catalog {
 
 const GENERATED_AT: &str = "2026-08-24T04:08:57.881Z";
 
-/// 見本の台帳 4 本。**渡す順は名前順でも要件 3.1 の並びでもない**（タスク 2.5 の
-/// 教訓——整列済みの見本は並び順を 1 つも守らない）。
+/// 見本の台帳 4 本。**渡す順は名前順でも要件 3.1 の並びでもない**（整列済みの見本は
+/// 並び順を 1 つも守らない）。
 ///
 /// - 項目数と未分類件数は**4 本とも違う値**（3/2・5/3・2/0・4/1）。同じ値だと台帳
 ///   ごとの表と合計 1 行の区別が付かない。
-/// - `s:1` は**1 つの id から 2 本の関連**を出す（タスク 3.4・3.5 からの申し送り）。
+/// - `s:1` は**1 つの id から 2 本の関連**を出す（元 id ごとに 1 本の入れ物で集めると
+///   2 本目以降が黙って落ちる）。
 /// - `OnBoot:1` → `alpha:1` と `s:1` → `OnBoot:1` で 3 ドメインに跨る束が 1 つできる。
 /// - `x:1` → `y:1` は property の中で閉じる（跨がない束の負の対照）。
 /// - `charlie:1` → `ghost:1` の相手は**どの台帳にも無い**（所属不明の負の対照）。
@@ -271,99 +270,26 @@ fn section_body(body: &str, heading: &str) -> String {
     }
 }
 
-/// 1 行が時刻を含むか。年（4 桁続く数字）か時計（数字・コロン・数字）を探す。
-///
-/// 道具そのものが壊れていないことは [`the_time_detector_notices_a_wall_clock`] が
-/// 両向きで確かめる（緑は道具が壊れていても出る）。
-fn looks_like_a_time(line: &str) -> bool {
-    let bytes = line.as_bytes();
-    let mut run = 0usize;
-    for (index, byte) in bytes.iter().enumerate() {
-        if byte.is_ascii_digit() {
-            run += 1;
-            if run >= 4 {
-                return true;
-            }
-            if index + 2 < bytes.len()
-                && bytes[index + 1] == b':'
-                && bytes[index + 2].is_ascii_digit()
-            {
-                return true;
-            }
-        } else {
-            run = 0;
-        }
-    }
-    false
-}
-
-// ---- 完了条件の前半: 2 回作ると同じ本文（要件 7.3） ----
-
-#[test]
-fn rendering_the_same_input_twice_gives_the_same_body() {
-    let catalog = catalog_of(GENERATED_AT);
-    let ledgers = sample_ledgers();
-    let first = render_summary(&catalog, &ledgers, &THEMES);
-    let second = render_summary(&catalog, &ledgers, &THEMES);
-    assert_eq!(first, second);
-    // 空文字どうしを比べて満足しないこと（同一の主張は対象が空だと恒真）。
-    assert!(!first.is_empty());
-}
+// ---- 版面の逐語の釘（要件 7.3・11.2） ----
 
 #[test]
 fn the_body_is_pinned_verbatim() {
-    // 版面そのものが契約である（タスク 3.5 の教訓）。
+    // 前提の確認——見本の台帳は名前順でも要件 3.1 の並び（shiori・assets・
+    // sakura-script・property）でもない順で渡している。本文が名前順に並ぶのは
+    // 渡された順に頼らないからで、この前提が崩れると逐語の比べが並べ替えを守らない。
+    let arrived: Vec<&str> = sample_ledgers()
+        .iter()
+        .map(|ledger| ledger.domain.as_key())
+        .collect();
+    assert_eq!(
+        arrived,
+        vec!["property", "shiori", "sakura-script", "assets"]
+    );
+    // 版面そのものが契約である。
     assert_eq!(sample_body(), expected_body());
 }
 
-#[test]
-fn the_body_writes_only_line_feeds() {
-    let body = sample_body();
-    // バイトを直に数える（`grep -c` の類は空パターンに退化して嘘をつく）。
-    assert_eq!(
-        body.as_bytes()
-            .iter()
-            .filter(|byte| **byte == b'\r')
-            .count(),
-        0
-    );
-    assert!(
-        body.as_bytes()
-            .iter()
-            .filter(|byte| **byte == b'\n')
-            .count()
-            > 20
-    );
-}
-
-// ---- 完了条件の後半: 時刻を含む行は生成日時の 1 行だけ（要件 7.3） ----
-
-#[test]
-fn the_time_detector_notices_a_wall_clock() {
-    // 道具の較正。既知の例で両向きに確かめる（[[subagent-tooling-can-be-wrong-calibrate-it]]）。
-    assert!(looks_like_a_time("生成日時: 2026-09-04T12:00:00Z"));
-    assert!(looks_like_a_time("12:34 に作りました"));
-    assert!(!looks_like_a_time("| assets | 3 | 2 |"));
-    assert!(!looks_like_a_time("| ukadoc:list_shell:alpha:1 | 1 |"));
-    assert!(!looks_like_a_time("4 本の台帳を跨ぐ報告なので"));
-}
-
-#[test]
-fn the_only_line_carrying_a_time_is_the_snapshot_generated_at() {
-    let body = sample_body();
-    let timed: Vec<&str> = body
-        .lines()
-        .filter(|line| looks_like_a_time(line))
-        .collect();
-    // 壁時計の行を 1 行足せばここが 2 になる（2 回描画の一致では守れない・タスク 3.5）。
-    assert_eq!(timed.len(), 1, "{body}");
-    assert!(timed[0].contains(GENERATED_AT), "{}", timed[0]);
-    assert!(
-        timed[0].starts_with("スナップショットの生成日時は"),
-        "{}",
-        timed[0]
-    );
-}
+// ---- 時刻はカタログから来る（要件 7.3） ----
 
 #[test]
 fn the_snapshot_time_comes_from_the_catalog_and_is_not_baked_in() {
@@ -376,174 +302,11 @@ fn the_snapshot_time_comes_from_the_catalog_and_is_not_baked_in() {
     assert!(!body.contains(GENERATED_AT), "{body}");
 }
 
-// ---- 冒頭: 各台帳の項目数と未分類件数（要件 7.2） ----
-
-#[test]
-fn the_head_gives_each_ledgers_item_count_and_unclassified_count() {
-    let section = section_body(&sample_body(), "## 台帳ごとの項目数と未分類件数");
-    // 4 本とも値が違うので、台帳ごとの表と合計 1 行を区別できる。
-    assert!(section.contains("| assets | 3 | 2 |"), "{section}");
-    assert!(section.contains("| property | 5 | 3 |"), "{section}");
-    assert!(section.contains("| sakura-script | 2 | 0 |"), "{section}");
-    assert!(section.contains("| shiori | 4 | 1 |"), "{section}");
-    // 合計 1 行に畳んでいないこと（14 件・未分類 6 件）。
-    assert!(!section.contains("| 14 |"), "{section}");
-    assert!(!section.contains("合計"), "{section}");
-}
-
-#[test]
-fn the_sections_appear_in_the_order_the_design_gives() {
-    let body = sample_body();
-    let order = [
-        section_at(&body, "## 元にしたカタログ"),
-        section_at(&body, "## 台帳ごとの項目数と未分類件数"),
-        section_at(&body, "## 状態の分布"),
-        section_at(&body, "## ドメイン別の状態の分布"),
-        section_at(&body, "## ドメインを跨いで繋がった束"),
-        section_at(&body, "## テーマ別の状態分布"),
-    ];
-    let mut sorted = order;
-    sorted.sort_unstable();
-    assert_eq!(order.to_vec(), sorted.to_vec());
-}
-
-// ---- 状態の分布（全体・ドメイン別・要件 7.2・7.8） ----
-
-#[test]
-fn the_overall_distribution_uses_the_plain_japanese_names_in_the_frozen_order() {
-    let section = section_body(&sample_body(), "## 状態の分布");
-    let labels: Vec<&str> = section
-        .lines()
-        .filter_map(|line| line.strip_prefix("| "))
-        .filter_map(|line| line.split(" | ").next())
-        .filter(|label| *label != "状態" && !label.starts_with("---"))
-        .collect();
-    assert_eq!(
-        labels,
-        vec![
-            "実装済み",
-            "語彙のみ",
-            "縮退",
-            "未対応",
-            "別名",
-            "対象外",
-            "未分類",
-            "合計",
-        ]
-    );
-    // 0 件の欄も残る（「0 件だった」と「数えていない」を区別できるように）。
-    assert!(section.contains("| 語彙のみ | 0 |"), "{section}");
-    assert!(section.contains("| 別名 | 0 |"), "{section}");
-    // 英字の綴りは台帳側のもので、報告には出ない。
-    assert!(!section.contains("vocabulary-only"), "{section}");
-}
-
-#[test]
-fn the_domain_tables_are_in_name_order_even_though_the_ledgers_arrive_in_another_order() {
-    // 前提の確認——見本は名前順でも要件 3.1 の並び（shiori・assets・sakura-script・
-    // property）でもない順で渡している。
-    let arrived: Vec<&str> = sample_ledgers()
-        .iter()
-        .map(|ledger| ledger.domain.as_key())
-        .collect();
-    assert_eq!(
-        arrived,
-        vec!["property", "shiori", "sakura-script", "assets"]
-    );
-
-    let body = sample_body();
-    for heading in [
-        "## 台帳ごとの項目数と未分類件数",
-        "## ドメイン別の状態の分布",
-    ] {
-        let section = section_body(&body, heading);
-        let names: Vec<&str> = section
-            .lines()
-            .filter_map(|line| line.strip_prefix("| "))
-            .filter_map(|line| line.split(" | ").next())
-            .filter(|name| !name.starts_with("---") && name.is_ascii())
-            .collect();
-        // 名前順は UTF-8 のバイト順（`sakura-script` が `shiori` より前）。
-        assert_eq!(
-            names,
-            vec!["assets", "property", "sakura-script", "shiori"],
-            "{section}"
-        );
-    }
-}
-
-#[test]
-fn the_per_domain_distribution_shows_each_ledgers_own_numbers() {
-    let section = section_body(&sample_body(), "## ドメイン別の状態の分布");
-    assert!(
-        section.contains(
-            "| ドメイン | 実装済み | 語彙のみ | 縮退 | 未対応 | 別名 | 対象外 | 未分類 | 合計 |"
-        ),
-        "{section}"
-    );
-    assert!(
-        section.contains("| assets | 1 | 0 | 0 | 0 | 0 | 0 | 2 | 3 |"),
-        "{section}"
-    );
-    assert!(
-        section.contains("| shiori | 1 | 0 | 1 | 1 | 0 | 0 | 1 | 4 |"),
-        "{section}"
-    );
-    // 4 本を足した 1 行に畳んでいないこと（全体の分布は別の節が持つ）。
-    assert!(!section.contains(" | 14 |"), "{section}");
-}
-
 // ---- ドメインを跨いで繋がった束（設計 D-11） ----
 
 #[test]
-fn a_bundle_spanning_several_domains_is_listed_with_the_domains_it_crosses() {
-    let section = section_body(&sample_body(), "## ドメインを跨いで繋がった束");
-    assert!(
-        section.contains(
-            "| ukadoc:list_sakura_script:s:1 | assets, sakura-script, shiori | \
-             ukadoc:list_sakura_script:s:1, ukadoc:list_sakura_script:t:1, \
-             ukadoc:list_shell:alpha:1, ukadoc:list_shiori_event:OnBoot:1 |"
-        ),
-        "{section}"
-    );
-}
-
-#[test]
-fn a_bundle_closed_inside_one_domain_is_not_listed() {
-    // 負の主張は必ず正の主張と対で置く（対象が空だと恒真になる・タスク 1.6 の教訓）。
-    let section = section_body(&sample_body(), "## ドメインを跨いで繋がった束");
-    assert!(
-        section.contains("| ukadoc:list_sakura_script:s:1 |"),
-        "{section}"
-    );
-    // property の中で閉じた束（x → y）は property の報告の担当。
-    assert!(
-        !section.contains("ukadoc:list_propertysystem:x:1"),
-        "{section}"
-    );
-    assert!(
-        !section.contains("ukadoc:list_propertysystem:y:1"),
-        "{section}"
-    );
-}
-
-#[test]
-fn a_bundle_member_missing_from_every_ledger_is_marked_instead_of_going_missing() {
-    // どの台帳にも無い id へ伸びた束は、ドメイン別報告からも落ちる。ここが落とすと
-    // どの報告にも現れなくなるので、載せたうえで所属が無いことを書く。
-    let section = section_body(&sample_body(), "## ドメインを跨いで繋がった束");
-    assert!(
-        section.contains(
-            "| ukadoc:list_shell:charlie:1 | assets, （台帳に無い） | \
-             ukadoc:list_shell:charlie:1, ukadoc:list_shell:ghost:1 |"
-        ),
-        "{section}"
-    );
-}
-
-#[test]
 fn several_links_leaving_the_same_id_all_become_edges() {
-    // タスク 3.4・3.5 からの申し送り: 関連を「元 id ごとに 1 本」の入れ物で集めると
+    // 関連を「元 id ごとに 1 本」の入れ物で集めると
     // 2 本目以降が黙って落ちる。`hub` は別々のドメインの 2 つの id へ関連を出すので、
     // 辺が 1 本でも落ちれば束は 3 件にまとまらない。
     let ledgers = vec![
@@ -612,45 +375,6 @@ fn an_empty_cross_domain_bundle_list_says_there_is_none() {
 // ---- テーマ別の状態分布（全体・要件 4.4 の 8 テーマ） ----
 
 #[test]
-fn the_theme_table_lists_all_eight_themes_in_name_order_including_the_empty_ones() {
-    let section = section_body(&sample_body(), "## テーマ別の状態分布");
-    let names: Vec<&str> = section
-        .lines()
-        .filter_map(|line| line.strip_prefix("| "))
-        .filter_map(|line| line.split(" | ").next())
-        .filter(|name| *name != "テーマ" && !name.starts_with("---"))
-        .collect();
-    // 名前順は UTF-8 のバイト順であって五十音順ではない（タスク 3.4 の確定）。
-    assert_eq!(
-        names,
-        vec![
-            "交わり",
-            "掛け合い",
-            "更新",
-            "気配",
-            "気配り",
-            "装い",
-            "触れ合い",
-            "記憶",
-        ]
-    );
-    // 0 件のテーマも欄が残る。
-    assert!(
-        section.contains("| 更新 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |"),
-        "{section}"
-    );
-    // 台帳を跨いで足し合わせた数（`気配` は shiori と property に 1 件ずつ）。
-    assert!(
-        section.contains("| 気配 | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 2 |"),
-        "{section}"
-    );
-    assert!(
-        section.contains("| 装い | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |"),
-        "{section}"
-    );
-}
-
-#[test]
 fn a_theme_name_that_only_the_argument_carries_still_gets_a_row() {
     // テーマ名は引数から来る。引数を無視して定数だけを見る実装をここで捕まえる。
     let mut themes: Vec<&str> = THEMES.to_vec();
@@ -661,70 +385,4 @@ fn a_theme_name_that_only_the_argument_carries_still_gets_a_row() {
         section.contains("| あいうえお | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |"),
         "{section}"
     );
-}
-
-// ---- 証拠の表は本文に無い（要件 11.2・設計 D-5） ----
-
-/// その行がまるごと本文に在るか。[`section_at`] と違い、無いときに panic しない。
-///
-/// 「無いこと」を主張する道具なので、既知の在る行・既知の無い行・行の一部でしかない
-/// 綴りの 3 通りで較正する（[`the_line_detector_is_calibrated_both_ways`]）。
-fn contains_line(body: &str, line: &str) -> bool {
-    body.contains(&format!("\n{line}\n"))
-}
-
-#[test]
-fn the_line_detector_is_calibrated_both_ways() {
-    let body = sample_body();
-    assert!(contains_line(&body, "## テーマ別の状態分布"), "{body}");
-    assert!(!contains_line(&body, "## そんな節は無い"), "{body}");
-    // 行の一部でしかない綴りは在ると答えない。
-    assert!(body.contains("## テーマ別"), "{body}");
-    assert!(!contains_line(&body, "## テーマ別"), "{body}");
-}
-
-#[test]
-fn the_body_has_no_evidence_table() {
-    // 証拠の件数は `evidence` 副手続きの出力に一本化した（開発者裁定 2026-09-12）。
-    // ソース木を歩いて数える値を本文に残すと、他 spec が URL のコメントを 1 行足す
-    // だけで判定 ⑹ が赤になる（要件 11.2）。
-    let body = sample_body();
-    assert!(
-        !contains_line(&body, "## ドメインごとの証拠あり件数"),
-        "{body}"
-    );
-    // 母数 0 の緑を恒真にしない対の腕——他の節はちゃんと出ている。
-    for heading in [
-        "## 元にしたカタログ",
-        "## 台帳ごとの項目数と未分類件数",
-        "## 状態の分布",
-        "## ドメイン別の状態の分布",
-        "## ドメインを跨いで繋がった束",
-        "## テーマ別の状態分布",
-    ] {
-        assert!(contains_line(&body, heading), "{heading} が本文から消えた");
-    }
-    // 「証拠」の語が残るのは冒頭 2 行目の案内 1 か所だけ（表の見出しだけ消して
-    // 行が残る実装をここで捕まえる）。
-    assert_eq!(body.matches("証拠").count(), 1, "{body}");
-    // 本文の最後の節はテーマ別の状態分布である。
-    assert!(
-        body.trim_end()
-            .ends_with("| 記憶 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |"),
-        "{body}"
-    );
-}
-
-#[test]
-fn the_second_line_says_the_standing_check_judges_this_report() {
-    // 逐語の釘付け（要件 11.2・設計 D-5）。旧文言「新しさは常時検査の合否に入れません」
-    // は判定 ⑹ の採用で事実でなくなった。
-    let body = sample_body();
-    // 行 0 は見出し、行 1 は空行、行 2 が案内の 1 行目、行 3 が 2 行目。
-    let second = body.lines().nth(3).expect("冒頭の 2 行目が無い");
-    assert_eq!(
-        second,
-        "この報告はカタログと台帳から決まり、常時検査が新しさを判定します。証拠の件数は `evidence` 副手続きで読みます。"
-    );
-    assert!(!body.contains("常時検査の合否に入れません"), "{body}");
 }

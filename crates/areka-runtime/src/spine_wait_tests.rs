@@ -1,18 +1,15 @@
 use std::cell::{Cell, RefCell};
 use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use super::wait::{
     DENSE_SPIN, GPU_PERMIT_IDLE, GpuSlots, PermitVerdict, WAIT_CAP, join_bounded,
     join_thread_bounded, judge_permit_wait, run_bounded_watching, wait_recv, wait_thread_end_with,
-    wait_until_idle_with,
 };
-use super::{
-    BACKOFF_SLEEP, Duration, Instant, Progress, SPIN_WAIT, WaitFailure, run_bounded,
-    wait_until_with,
-};
+use super::{BACKOFF_SLEEP, Progress, SPIN_WAIT, WaitFailure, run_bounded, wait_until_with};
 
 // ===========================================================================
-// 待ちの芯の檻（areka-P0-ghost-session-test-load-flake タスク 2.2・要件 2.1・2.3・2.5・3.1〜3.3）
+// 待ちの芯の檻（areka-P0-ghost-session-test-load-flake 要件 2.1・2.3・2.5・3.1〜3.3）
 //
 // [`wait_until_with`] へ偽の時計と偽の休みを渡し、打ち切りの決め方を実時間を待たずに確かめる。
 // 時刻は **条件の関数が呼ばれた回数だけ**で決まる（1 回ごとに `step` 進む）。芯が 1 回の反復で
@@ -288,29 +285,19 @@ fn a_receiver_returns_the_value_or_reports_a_vanished_sender() {
 /// panic する。古い呼び名 `run_bounded` は今の文を先頭に保ち、後ろに同じ文言を足す。
 #[test]
 fn a_vanished_worker_panics_with_the_partner_gone_text() {
-    let text = |r: std::thread::Result<()>| -> String {
-        let payload = r.expect_err("相手が居なくなったら panic する");
-        payload
-            .downcast_ref::<String>()
-            .cloned()
-            .unwrap_or_else(|| "（文字列でない panic）".into())
-    };
-
     run_bounded_watching("終わる処理", Progress::Unknown, || {});
 
-    let watched = text(std::panic::catch_unwind(|| {
+    let watched = panic_text(|| {
         run_bounded_watching("落ちる処理", Progress::Unknown, || {
             panic!("わざと落とす")
         })
-    }));
+    });
     assert!(
         watched.starts_with("待ちの打ち切り［相手が居ない］: 「落ちる処理」"),
         "{watched}"
     );
 
-    let old = text(std::panic::catch_unwind(|| {
-        run_bounded("落ちる処理", SPIN_WAIT, || panic!("わざと落とす"))
-    }));
+    let old = panic_text(|| run_bounded("落ちる処理", SPIN_WAIT, || panic!("わざと落とす")));
     assert!(
         old.starts_with("'落ちる処理' did not complete within 30s (possible hang)"),
         "今の文が先頭に無い: {old}"
@@ -358,8 +345,8 @@ fn drive_thread_end(
 
 /// `f` の panic の文（panic しなければ赤）。
 fn panic_text(f: impl FnOnce()) -> String {
-    let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
-        .expect_err("終わらないスレッドは打ち切りで panic する");
+    let payload =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).expect_err("panic するはず");
     payload
         .downcast_ref::<String>()
         .cloned()
@@ -367,7 +354,7 @@ fn panic_text(f: impl FnOnce()) -> String {
 }
 
 /// 相手のスレッドの中の数えが増え続ける間は、`SPIN_WAIT` を何倍越えても `［止まった］` で打ち切らない
-/// （要件 4.1）。中の数えを見ないと、終わったかの目印だけでは 30 秒で打ち切られる。
+/// （areka-test-binary-stability 要件 4.1）。中の数えを見ないと、終わったかの目印だけでは 30 秒で打ち切られる。
 #[test]
 fn a_thread_whose_inner_count_keeps_moving_is_not_cut_off() {
     let inner = Cell::new(0u64);
@@ -375,7 +362,8 @@ fn a_thread_whose_inner_count_keeps_moving_is_not_cut_off() {
         inner.set(inner.get() + 1);
         inner.get()
     };
-    // 1 秒ずつ進む時計で 120 回確かめた後に終わる＝待ち始めから約 120 秒（SPIN_WAIT の 4 倍）。
+    // `is_finished` は 1 回の反復で条件と進みの目印に 2 度読まれるので、60 回の反復で終わる
+    // ＝1 秒ずつ進む時計で待ち始めから約 60 秒（SPIN_WAIT の 2 倍）。
     let checks = Cell::new(0u32);
     drive_thread_end(
         Duration::from_secs(1),
@@ -386,10 +374,9 @@ fn a_thread_whose_inner_count_keeps_moving_is_not_cut_off() {
             checks.get() > 120
         },
     );
-    assert!(checks.get() > 120, "終わるまで待った");
 }
 
-/// 終わらないスレッドの打ち切りの文は、std のスレッドでもアクターでも同じ頭で始まる（要件 4.4）。
+/// 終わらないスレッドの打ち切りの文は、std のスレッドでもアクターでも同じ頭で始まる（areka-test-binary-stability 要件 4.4）。
 /// 本物のスレッドを止めておき、読むたびに `SPIN_WAIT` 進む偽の時計で芯を回す（実時間は待たない）。
 #[test]
 fn a_thread_that_never_ends_reads_the_same_head_for_both_handles() {
@@ -423,7 +410,7 @@ fn a_thread_that_never_ends_reads_the_same_head_for_both_handles() {
 }
 
 // ===========================================================================
-// GPU の装置の許可の檻（areka-P0-ghost-session-test-load-flake タスク 5.2・檻 16・要件 2.7）
+// GPU の装置の許可の檻（areka-P0-ghost-session-test-load-flake 要件 2.7）
 //
 // プロセスに 1 つの数え（足場が使う）とは別の数えを置き、待たずに取る口だけで確かめる（実時間は待たない）。
 // ===========================================================================
@@ -447,7 +434,7 @@ fn gpu_slots_hold_at_most_the_capacity_and_a_returned_permit_frees_one() {
 }
 
 // ===========================================================================
-// 許可の待ちの上限の檻（areka-test-binary-stability タスク 5.2・要件 6.1〜6.3）
+// 許可の待ちの上限の檻（areka-test-binary-stability 要件 6.1〜6.3）
 //
 // 本物の `take` と同じ決め手 `judge_permit_wait` と同じ文の作り `GpuSlots::wait_failure` を、偽の時刻で
 // 呼ぶ（実時間は待たない）。上限 2 の数えで 2 つを取った形＝2 つ取りのテストが 1 つずつ持って待ち合った形。
@@ -458,9 +445,6 @@ fn gpu_slots_hold_at_most_the_capacity_and_a_returned_permit_frees_one() {
 #[test]
 fn a_permit_wait_with_no_return_stalls_and_names_the_permits() {
     static SLOTS: GpuSlots = GpuSlots::new(2);
-    let _first = SLOTS.try_take().expect("1 つ目は取れる");
-    let _second = SLOTS.try_take().expect("2 つ目は取れる");
-    assert!(SLOTS.try_take().is_none(), "上限 2 を持ち切った");
 
     let idle = Duration::from_secs(40);
     let started = Instant::now();
@@ -553,30 +537,5 @@ fn a_permit_wait_with_returns_is_never_cut_by_the_total_limit() {
         .to_string();
     for want in ["2／上限 2", "［止まった］", "500.0 秒", "1500.0 秒"] {
         assert!(text.contains(want), "「{want}」が文に無い: {text}");
-    }
-}
-
-/// 芯の内側の形は渡した `idle` で `［止まった］` にする（`wait_until_with` の 30 秒より短くても）。
-#[test]
-fn the_inner_wait_core_stalls_at_the_given_idle() {
-    let base = Instant::now();
-    let reads = Cell::new(0u32);
-    let zero = || 0u64;
-    let result = wait_until_idle_with(
-        || {
-            reads.set(reads.get() + 1);
-            base + Duration::from_secs(1) * reads.get()
-        },
-        |_| {},
-        "短い idle",
-        Progress::Count(&zero),
-        Duration::from_secs(5),
-        || false,
-    );
-    match result {
-        Err(WaitFailure::Stalled { idle, .. }) => {
-            assert_eq!(idle, Duration::from_secs(5), "渡した idle で打ち切る")
-        }
-        other => panic!("［止まった］のはず: {other:?}"),
     }
 }

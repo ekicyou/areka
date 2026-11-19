@@ -1,11 +1,12 @@
 //! `build.rs` の在中テスト。
 //!
-//! 守るのは 6 つ。⑴ 正典以外の出典が落ち、全件数と正典の件数が別々に記録されること
+//! 守るのは 7 つ。⑴ 正典以外の出典が落ち、全件数と正典の件数が別々に記録されること
 //! （要件 1.4・1.6）。⑵ 版番号の抽出規則が逐語どおりで、2 つ以上あっても 1 つに
 //! 絞られないこと（要件 1.2）。⑶ 本文がカタログのどこにも残らず、印はハッシュだけで
 //! あること（要件 1.3・9.4）。⑷ id の 2 形が同じ形で収まること（要件 1.9）。
 //! ⑸ 割り当ての無いページがページ名付きで失敗すること（要件 3.5）。⑹ 冒頭の情報が
-//! スナップショットから素通しで写ること（要件 1.6）。
+//! スナップショットから素通しで写ること（要件 1.6）。⑺ 同じ id・同じ URL・同じページ
+//! URL の 2 項目が黙って畳まれずに失敗すること。
 //!
 //! **スナップショットのファイルは 1 度も読まない。環境変数も読まないし書かない。
 //! ファイルも一時ディレクトリも作らない**（要件 6.2・設計 File Structure Plan）。
@@ -180,8 +181,7 @@ fn a_version_is_taken_only_when_neither_side_is_a_digit_or_a_dot() {
         // 前後が空白なら拾う。
         ("SSP 2.3.53 以降", vec!["2.3.53"]),
         // 直前が英字でも拾う。実データの `SSP2.3.00以降` がこの形で、語の境界で
-        // 切ると本文 4 件から版番号が落ちる（dev_nar・dev_update・OnMouseWheel・
-        // OnMouseGesture）。
+        // 切るとその本文から版番号が落ちる。
         ("SSP2.3.00以降の場合", vec!["2.3.00"]),
         // 4 つ目の欄が続くものは拾わない（直後が小数点）。
         ("1.2.3.4", vec![]),
@@ -258,14 +258,12 @@ fn both_id_forms_are_held_the_same_way() {
         .get(&EntryId::parse("ukadoc:dev_bind").expect("形は正しい"))
         .expect("ページ全体の id も入るはず");
     assert_eq!(page_wide.page.as_str(), "dev_bind");
-    assert!(!page_wide.id.has_anchor());
 
     let anchored = catalog
         .entries
         .get(&EntryId::parse("ukadoc:list_propertysystem:system.year:1").expect("形は正しい"))
         .expect("アンカー付きの id も入るはず");
     assert_eq!(anchored.page.as_str(), "list_propertysystem");
-    assert!(anchored.id.has_anchor());
 
     // 2 形は同じ表に、id の byte 昇順で並ぶ（設計 D-9）。
     assert_eq!(
@@ -293,18 +291,62 @@ fn a_malformed_id_fails_and_names_the_spelling() {
 
 #[test]
 fn the_same_id_twice_fails_instead_of_being_folded() {
-    // 表に畳むと 1 件が黙って消え、正典の件数だけが減る（要件 1.8 の「黙って
-    // 失敗しない」）。
+    // 表に畳むと 1 件が黙って消え、正典の件数だけが減る（要件 1.8 の、壊れた
+    // スナップショットで失敗する）。
     let err = build_error(vec![
         ukadoc("ukadoc:dev_bind", "本文"),
         ukadoc("ukadoc:dev_bind", "別の本文"),
     ]);
 
     match &err {
+        // 2 件は URL も同じなので、id の確かめを消しても URL の確かめが落とす。
+        // 失敗がどちらの確かめから来たかを文で見分ける。
         SurveyError::SnapshotShape { detail } => assert!(
-            detail.contains("ukadoc:dev_bind"),
-            "どの id かが載るはず: {detail}"
+            detail.contains("同じ項目 id") && detail.contains("ukadoc:dev_bind"),
+            "同じ id の失敗として、どの id かが載るはず: {detail}"
         ),
+        other => panic!("形の違いとして返るはず: {other:?}"),
+    }
+}
+
+#[test]
+fn the_same_url_on_two_ids_fails_and_names_both() {
+    // URL から id を引く逆引きは 1 対 1 が前提。2 つ目を通すと、その URL の証拠が
+    // 片方の id にだけ黙って付く。
+    let first = ukadoc("ukadoc:dev_bind", "本文");
+    let mut second = ukadoc("ukadoc:dev_nar", "本文");
+    second.url = first.url.clone();
+    let err = build_error(vec![first, second]);
+
+    match &err {
+        SurveyError::SnapshotShape { detail } => {
+            for name in [
+                "ukadoc:dev_bind",
+                "ukadoc:dev_nar",
+                "https://ssp.shillest.net/ukadoc/manual/ukadoc:dev_bind.html",
+            ] {
+                assert!(detail.contains(name), "{name} が載るはず: {detail}");
+            }
+        }
+        other => panic!("形の違いとして返るはず: {other:?}"),
+    }
+}
+
+#[test]
+fn two_pages_folding_onto_one_page_url_fail_and_name_both() {
+    // ページ URL からページを引く 2 段目は 1 対 1 が前提。2 つ目を通すと、そのページの
+    // 証拠が別のページに黙って付く。
+    let first = ukadoc("ukadoc:dev_bind", "本文");
+    let mut second = ukadoc("ukadoc:dev_nar", "本文");
+    second.url = format!("{}#anchor", first.url);
+    let err = build_error(vec![first, second]);
+
+    match &err {
+        SurveyError::SnapshotShape { detail } => {
+            for name in ["dev_bind", "dev_nar", "ukadoc:dev_bind.html"] {
+                assert!(detail.contains(name), "{name} が載るはず: {detail}");
+            }
+        }
         other => panic!("形の違いとして返るはず: {other:?}"),
     }
 }

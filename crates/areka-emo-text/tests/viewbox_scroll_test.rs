@@ -155,8 +155,7 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
         .borrow_mut()
         .register_actor(actor.clone(), binding, resolved);
 
-    let (mut sink, _handle) =
-        spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+    let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
 
     // ── 充填セッション: あふれ前の上限（V=8 行）を emit する ──
     for i in 0..FILL_LINES {

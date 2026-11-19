@@ -1,5 +1,5 @@
 // =============================================================================
-// BalloonLifecycleSink の 3 つの知らせの檻（areka-P0-balloon-lifecycle-events task 4.1・
+// BalloonLifecycleSink の知らせの檻（areka-P0-balloon-lifecycle-events
 // 要件 5.2 / 5.6 / 7.5 / 9.1〜9.4 / 9.8）
 //
 //   ⑴ 配送から受け取った番号が開始の合図に載る（受け取っていなければ無し）
@@ -8,31 +8,17 @@
 //   ⑶ `\![set,balloontimeout,時間]` の時間の欄の読み（正・0・負・省略・空・読めない値）と、
 //      他の `\![set,…]` を拾わないこと・拾うたびの 1 行の記録
 //
-// 時刻はすべて注入した時計で進める（実時間の待機なし・要件 8.2）。
+// 時刻はすべて注入した時計で進める（実時間の待機なし・areka-P0-balloon-lifecycle-events 要件 8.2）。
 // =============================================================================
 
 use super::*;
-use crate::talk_clock::TalkClock;
+use crate::consumer_ledger::test_support::carrier_cue;
+use crate::talk_clock::{controllable_clock, set_now};
 use areka_ghost::sink::BootCueSink;
 use areka_sakura::TalkId;
 use dola::cue::{ActorKey, CueCommand, TalkCue};
 use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Receiver, channel};
-use std::sync::{Arc, Mutex};
-
-/// 壁時刻を書き換えられる時計と、それを読む `TalkClock`。
-fn controllable_clock() -> (Arc<Mutex<f64>>, TalkClock) {
-    let now = Arc::new(Mutex::new(0.0f64));
-    let now_for_clock = Arc::clone(&now);
-    let clock = TalkClock::new(Arc::new(move || {
-        *now_for_clock.lock().expect("test clock mutex poisoned")
-    }));
-    (now, clock)
-}
-
-fn set_now(now: &Arc<Mutex<f64>>, wall: f64) {
-    *now.lock().expect("test clock mutex poisoned") = wall;
-}
 
 fn text_cue(at: f64, duration: f64) -> TalkCue {
     TalkCue {
@@ -40,16 +26,6 @@ fn text_cue(at: f64, duration: f64) -> TalkCue {
         actor: ActorKey::from("0"),
         command: CueCommand::Text("あ".into()),
         duration,
-    }
-}
-
-/// `\![name,tokens...]` の運び手の cue。
-fn carrier_cue(name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
     }
 }
 
@@ -130,7 +106,7 @@ fn talk_started_without_begin_talk_has_no_number() {
 // -----------------------------------------------------------------------------
 
 /// 落ちた瞬間の talk 相対秒（注入した時計の値そのもの・丸めない）で、終わりの合図が 1 回だけ出て、
-/// そのトークの合図の最後に並ぶ（要件 5.2）。
+/// そのトークの合図の最後に並ぶ（areka-P0-balloon-lifecycle-events 要件 5.2）。
 #[test]
 fn talk_ended_carries_the_injected_clock_once_when_dropped() {
     let (tx, rx) = channel();
@@ -182,7 +158,7 @@ fn sink_that_sent_nothing_sends_no_talk_ended() {
 }
 
 /// 時計に起点が無ければ、終わりの合図は時刻無しで出て、時刻が取れなかったことが記録される
-/// （要件 5.6）。
+/// （areka-P0-balloon-lifecycle-events 要件 5.6）。
 #[test]
 fn talk_ended_without_epoch_has_no_time_and_is_logged() {
     let (tx, rx) = channel();
@@ -221,7 +197,7 @@ fn talk_clock_now_talk_time_reads_the_injected_clock() {
 // ⑶ 待ち時間の指定
 // -----------------------------------------------------------------------------
 
-/// 時間の欄の読み（要件 9.1〜9.4）。
+/// 時間の欄の読み（areka-P0-balloon-lifecycle-events 要件 9.1〜9.4）。
 #[test]
 fn parse_balloon_timeout_reads_every_shape_of_the_value() {
     let cases: &[(Option<&str>, TalkTimeout, bool)] = &[
@@ -277,7 +253,7 @@ fn sink_picks_only_set_balloontimeout() {
     );
 }
 
-/// 拾うたびに 1 行記録する。読めた値は INFO、読めなかった値は WARN でその値を載せる（要件 7.5）。
+/// 拾うたびに 1 行記録する。読めた値は INFO、読めなかった値は WARN でその値を載せる（areka-P0-balloon-lifecycle-events 要件 7.5）。
 #[test]
 fn each_pick_is_logged_in_one_line_with_the_unreadable_value() {
     let (tx, _rx) = channel();

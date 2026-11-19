@@ -24,12 +24,51 @@
 
 use std::collections::BTreeMap;
 
+use crate::documents::fields::malformed;
+use crate::error::SurveyError;
+use crate::io::paths::COVERAGE_DIR;
 use crate::model::{Domain, EntryId, Link, PageName, Status};
 
 pub mod blocks;
 pub mod patch;
 pub mod read;
 pub mod write;
+
+/// 項目を置く表の名前。
+pub const ENTRY_TABLE: &str = "entry";
+
+/// その台帳の置き場の相対の綴り（区切りは `/`）。失敗の本文と所見の場所に載る。
+///
+/// `io::paths::ledger_path` と同じ場所を指す。あちらは絶対パスで、本文に載せると
+/// 計算機ごとに変わってしまう。
+pub fn ledger_file(domain: Domain) -> String {
+    ledger_file_named(domain.as_key())
+}
+
+/// ドメインの分からない口（塊への切り分け）が失敗に添える場所。
+pub(crate) fn any_ledger_file() -> String {
+    ledger_file_named("<ドメイン>")
+}
+
+fn ledger_file_named(name: &str) -> String {
+    format!("{COVERAGE_DIR}/ledger/{name}.toml")
+}
+
+/// 切り分けが伏せて添えた置き場（[`any_ledger_file`]）を、読んでいる台帳の置き場に差し替える。
+///
+/// 切り分けはドメインを知らない。ドメインの分かる口（読み取り・差し込み・`priority` の
+/// 置換）は、切り分けの失敗をここに通してから上げる。
+pub(crate) fn at_ledger_file(err: SurveyError, file: &str) -> SurveyError {
+    match err {
+        SurveyError::TomlParse { reason, .. } => malformed(file, reason),
+        SurveyError::LedgerSplitMismatch { detail } => SurveyError::LedgerSplitMismatch {
+            detail: format!("{file}: {detail}"),
+        },
+        // 素の id の失敗は綴りしか持たず、4 本のどの台帳かが本文に出ない（要件 6.10）。
+        SurveyError::BadEntryId { raw } => malformed(file, format!("項目 id の形が違う: {raw}")),
+        other => other,
+    }
+}
 
 /// 台帳の 1 項目（要件付録 A.2 の欄）。
 ///

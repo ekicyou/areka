@@ -1,13 +1,15 @@
-//! 内容の検査（要件 6.5・6.6・6.7・6.8・6.10・6.11）。
+//! 内容の検査（要件 6.5・6.6・6.7・6.10・6.11）。
 //!
 //! 台帳の中身と、ソースに置かれた正典 URL を判定する。設計 check 節の「判定の内訳」
-//! から、この段が受け持つのは次の 6 種である。
+//! から、この段が受け持つのは次の 5 種である。
 //!
 //! - `SourceUrlNotInCatalog`（6.5・6.10）——ソースの URL がカタログに無い
 //! - `ImplementedWithoutEvidence`（6.6）——実装済みなのに証拠が 1 件も無い
 //! - `LinkEndpointMissing` / `AliasChain`（6.7・2.4）——関連の相手と別名の連鎖
 //! - `IntroducedNotInCatalogVersions`（6.7）——登場版がカタログの版番号と矛盾
-//! - `UnknownTheme`（6.8）——テーマ名がテーマ定義に無い
+//!
+//! テーマ名（要件 6.8）はここでは見ない。綴り違いは `ledger::read` が読み込みの段で
+//! 落とすので、検査に届く台帳はもう定義の外のテーマ名を持たない。
 //!
 //! ここは純粋層で、ファイルにもスナップショットにも触らない（要件 6.2）。失敗も
 //! しない——食い違いは [`Finding`] として全部集めて返し、1 件目で止めない（設計
@@ -30,8 +32,8 @@
 //! # 証拠のファイルパスの一覧はここでは作らない
 //!
 //! 要件 2.3・5.5 は「証拠は台帳に書かず、検査の出力に id ごとのファイルパスとして
-//! 列挙する」と言う。その列挙を作るのは入口の実行ファイル（タスク 6.3。「所見の本文と、
-//! id ごとの証拠のファイルパスを並べて出す」）であって、この判定ではない。ここが作る
+//! 列挙する」と言う。その列挙を作るのは入口の実行ファイル（所見の本文と id ごとの証拠の
+//! ファイルパスを並べて出す）であって、この判定ではない。ここが作る
 //! のは食い違いだけで、証拠のある項目については所見を 1 件も出さない——出すと
 //! 「所見が空なら緑」（設計 check 節の事後条件）が成り立たなくなる。
 //!
@@ -45,19 +47,14 @@
 
 use super::{CheckInput, Finding, FindingKind};
 use crate::evidence::EvidenceIndex;
-use crate::ledger::{Ledger, LedgerEntry};
-use crate::model::{Domain, EntryId, Status};
-
-/// その台帳の場所（所見の「場所」に載る綴り）。
-fn ledger_file(domain: Domain) -> String {
-    format!("doc/ukadoc-coverage/ledger/{}.toml", domain.as_key())
-}
+use crate::ledger::{Ledger, LedgerEntry, ledger_file};
+use crate::model::{EntryId, Status};
 
 /// 内容の食い違いを集める。
 ///
 /// 並びは決まっている——まずソースの URL を（`unresolved` の並びのまま）、続いて
 /// 台帳を渡された順に見て、1 本ごとに項目を id の byte 昇順で、1 項目ごとに
-/// 証拠 → 関連 → 別名の連鎖 → 登場版 → テーマの順に見る。同じ入力なら同じ並びで
+/// 証拠 → 関連 → 別名の連鎖 → 登場版の順に見る。同じ入力なら同じ並びで
 /// 返る（要件 7.3 の決まり方を検査の出力にも通す）。
 pub fn check(input: &CheckInput) -> Vec<Finding> {
     let mut findings = Vec::new();
@@ -68,7 +65,6 @@ pub fn check(input: &CheckInput) -> Vec<Finding> {
             check_link_endpoints(input, ledger, entry, &mut findings);
             check_alias_chain(input, ledger, entry, &mut findings);
             check_introduced(input, ledger, entry, &mut findings);
-            check_themes(input, ledger, entry, &mut findings);
         }
     }
     findings
@@ -167,9 +163,10 @@ fn check_link_endpoints(
 /// 直す人に「どこを直せばよいか」を 1 段目より的確に示せない。指す先が別名なら
 /// その先も別名の行として独立に判定される。
 ///
-/// 相手がどの台帳にも無い場合は何も言わない——その申し立ては
-/// [`FindingKind::LinkEndpointMissing`] が受け持つ（状態を引けない相手を「別名だ」と
-/// 決めつけない）。
+/// 相手がどの台帳にも無い場合は何も言わない（状態を引けない相手を「別名だ」と
+/// 決めつけない）。カタログに無ければ [`FindingKind::LinkEndpointMissing`] が、
+/// カタログにあってどの台帳にも無ければ構造の検査の
+/// [`FindingKind::CatalogIdMissingFromLedgers`] が申し立てる。
 fn check_alias_chain(
     input: &CheckInput,
     ledger: &Ledger,
@@ -203,7 +200,7 @@ fn check_alias_chain(
 /// である。
 ///
 /// - **カタログ側の版番号が空なら見ない**。正典の本文に版番号が 1 つも現れない項目は
-///   実測で多数あり、そこに書かれた登場版を否定する根拠はカタログに無い。
+///   現に多数あり、そこに書かれた登場版を否定する根拠はカタログに無い。
 /// - **台帳の登場版が空なら見ない**。空文字は「世代不明」であって最古ではない
 ///   （要件 4.2）。まだ版を調べていない行を赤にすると、調べる前に嘘を書く力が働く。
 ///
@@ -243,43 +240,9 @@ fn check_introduced(
     ));
 }
 
-/// テーマ名がテーマ定義に実在するか（要件 6.8）。
-///
-/// 突き合わせは**完全一致**である。8 つのうち「気配」と「気配り」は片方が他方の
-/// 接頭辞なので、部分一致で拾うと別のテーマを取り違える。
-///
-/// 照らす相手は [`CheckInput::themes`] であって定数ではない。定義そのものが凍結の
-/// 対象（要件 4.4・2.6）で、その正本は `doc/ukadoc-coverage/values.md` の側にある。
-///
-/// **1 件目で止めない**。1 つの項目が 0 個以上のテーマを持つので、綴り違いが 2 つ
-/// 並ぶことはある。
-fn check_themes(
-    input: &CheckInput,
-    ledger: &Ledger,
-    entry: &LedgerEntry,
-    findings: &mut Vec<Finding>,
-) {
-    for value in &entry.values {
-        if input.themes.contains(&value.as_str()) {
-            continue;
-        }
-        findings.push(Finding::new(
-            FindingKind::UnknownTheme,
-            Some(entry.id.clone()),
-            ledger_file(ledger.domain),
-            format!("テーマ定義に無いテーマ名: {value}"),
-        ));
-    }
-}
-
-// 在中テストは 3 本に分かれている。1 本にまとめると 1,000 行を超えて要件 9.6 に
-// 反するので、判定の主題で割った（URL と証拠／関連・別名・版・テーマ）。数え方と
-// 場所の綴りは `content_test_support` に集めてある——両方に写すと、片方だけが
-// 本文の変更に追随しなくなる。
-#[cfg(test)]
-#[path = "content_test_support.rs"]
-mod test_support;
-
+// 在中テストは 2 本に分かれている。1 本にまとめると 1,000 行を超えるので、判定の
+// 主題で割った（URL と証拠／関連・別名・版）。数え方と場所の綴りは
+// `check::test_support` に集めてある。
 #[cfg(test)]
 #[path = "content_tests.rs"]
 mod tests;

@@ -1,5 +1,5 @@
 // =============================================================================
-// BalloonLifecycleSink の「選択肢を出した」の合図の檻（areka-P0-balloon-text-bugs task 3.1・
+// BalloonLifecycleSink の「選択肢を出した」の合図の檻（areka-P0-balloon-text-bugs
 // 要件 1.2 / 1.3 / 1.4 / 1.8 / 1.13 / 4.1）
 //
 //   ⑴ 選択肢の合図 2 つでも `ChoiceShown` は 1 回・`TalkStarted` の後で `TalkEnded` の前
@@ -9,10 +9,9 @@
 // =============================================================================
 
 use super::*;
-use crate::talk_clock::TalkClock;
+use crate::frame::test_support::zero_clock;
 use areka_ghost::sink::BootCueSink;
 use dola::cue::{ActorKey, CueCommand, TalkCue};
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, channel};
 
 fn cue(actor: &str, command: CueCommand) -> TalkCue {
@@ -42,8 +41,7 @@ fn text(actor: &str) -> TalkCue {
 /// 登録の原本を作る（終わりの時刻はこの檻の関心外なので、時計は止めたままでよい）。
 fn registered() -> (BalloonLifecycleSink, Receiver<TalkLifecycleSignal>) {
     let (tx, rx) = channel();
-    let clock = TalkClock::new(Arc::new(|| 0.0));
-    (BalloonLifecycleSink::new(tx, clock), rx)
+    (BalloonLifecycleSink::new(tx, zero_clock()), rx)
 }
 
 /// 1 トークぶんの受け口へ cue を流して落とし、届いた合図の列を返す。

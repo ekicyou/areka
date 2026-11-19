@@ -4,7 +4,7 @@
 //! 置き場のゴーストは kanade の送出端だけを持つテスト用の組み立て（名前が無いので、記録のゴースト名は
 //! ルートフォルダの絶対パス）。判定は集めてから 1 回。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 
 use areka_actor::ReplySender;
@@ -34,7 +34,7 @@ use areka_runtime::shell_balloon_resolve::SkinCandidate;
 
 struct Rig {
     world: World,
-    _kanade: Receiver<KanadeMsg>,
+    kanade: Receiver<KanadeMsg>,
     ghost: String,
     _temp: TempPath,
 }
@@ -45,7 +45,28 @@ fn rig(label: &str) -> Rig {
     let root = BasewareRoot::new(temp.path().to_path_buf());
     let mut world = World::new();
     world.init_resource::<Schedules>();
-    world.insert_resource(BootContext {
+    world.insert_resource(boot_context(&temp, &root));
+    let (tx, kanade) = mpsc::channel();
+    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
+        Some(tx),
+        root.ghost_dir("A"),
+    ))));
+    register(&mut world);
+    let ghost = std::path::absolute(root.ghost_dir("A"))
+        .unwrap()
+        .display()
+        .to_string();
+    Rig {
+        world,
+        kanade,
+        ghost,
+        _temp: temp,
+    }
+}
+
+/// 起動の文脈（今のゴースト `A`・今のバルーン `kaku`・根は `temp`）。`skin_tests` も使う。
+pub(super) fn boot_context(temp: &TempPath, root: &BasewareRoot) -> BootContext {
+    BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
         roots_origin: crate::roots::RootsOrigin::EnvVar,
         app_profile_dir: temp.path().join("profile"),
@@ -67,22 +88,6 @@ fn rig(label: &str) -> Rig {
                 folder: Some("kaku".to_owned()),
             },
         },
-    });
-    let (tx, kanade) = mpsc::channel();
-    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-        Some(tx),
-        root.ghost_dir("A"),
-    ))));
-    register(&mut world);
-    let ghost = std::path::absolute(root.ghost_dir("A"))
-        .unwrap()
-        .display()
-        .to_string();
-    Rig {
-        world,
-        _kanade: kanade,
-        ghost,
-        _temp: temp,
     }
 }
 
@@ -124,11 +129,12 @@ fn plant_ghost_switch(world: &mut World) {
     });
 }
 
-fn plant_skin_switch(world: &mut World) {
+/// 他人のシェル／バルーンの切替の予約を直に置く（利用者の `\![change,shell,…]` の代わり）。`skin_tests` も使う。
+pub(super) fn plant_skin_switch(world: &mut World, kind: SkinKind, dir: &Path) {
     world.insert_non_send(SkinSwitchInFlight {
-        kind: SkinKind::Shell,
+        kind,
         target: SkinCandidate {
-            dir: PathBuf::from("planted"),
+            dir: dir.to_path_buf(),
             folder: "planted".to_owned(),
             name: None,
             hidden: false,
@@ -171,13 +177,13 @@ fn refuse(
 
 /// 判定は 別の読み直し → ゴースト切替 → シェル／バルーン切替 → 更新 → インストール → 文脈 の順。
 /// 断りの全部を立ててから 1 つずつ外し、各段で `reload_refused` が理由とゴースト名つきで 1 件だけ残り、
-/// 印は置かれない（要件 2.1・9.1・9.2・12.1 ⑶）。
+/// 印は置かれない（areka-P0-mcp-reload 要件 2.1・9.1・9.2・12.1 ⑶）。
 #[test]
 fn refusals_in_order_leave_one_record_each() {
     let mut rig = rig("areka-reload-refusals");
     plant_reload(&mut rig.world);
     plant_ghost_switch(&mut rig.world);
-    plant_skin_switch(&mut rig.world);
+    plant_skin_switch(&mut rig.world, SkinKind::Shell, Path::new("planted"));
     insert_running_desk_for_test(&mut rig.world);
     insert_busy_desk_for_test(&mut rig.world);
     rig.world.remove_resource::<BootContext>();
@@ -254,7 +260,7 @@ fn missing_ghost_or_kanade_is_no_context() {
 
 /// 終了の途中: 門が閉じたら、ほかの断りより先に `Closing` を返し、warn 以上を残さず（`debug!` の
 /// `reload_refused`・reason=closing だけ）始めない。終了の片付けは印を `reload_dropped` で下ろす
-/// （要件 2.2）。
+/// （areka-P0-mcp-reload 要件 2.2）。
 #[test]
 fn closing_returns_closing_and_exit_drops_the_mark() {
     let mut rig = rig("areka-reload-closing");
@@ -297,7 +303,7 @@ fn closing_returns_closing_and_exit_drops_the_mark() {
 }
 
 /// descript の語: 無い種類・知らない語は語ごとに `warn!` 1 件、読み直せる語が無ければ
-/// `reload_descript_no_words` 1 件で `NoWords`（`reload_started` は残らない・要件 7.4・7.5）。
+/// `reload_descript_no_words` 1 件で `NoWords`（`reload_started` は残らない・areka-P0-mcp-reload 要件 7.4・7.5）。
 #[test]
 fn descript_words_warn_per_word_and_no_words_refuses() {
     let mut rig = rig("areka-reload-descript-words");
@@ -312,7 +318,6 @@ fn descript_words_warn_per_word_and_no_words_refuses() {
         notes: DescriptNotes {
             unsupported: vec!["headline".to_owned(), "calendar skin".to_owned()],
             unknown: vec!["nosuchword".to_owned()],
-            empty: true,
         },
     };
     let (verdict, events) = capture(|| request_reload(&mut rig.world, req));
@@ -347,7 +352,7 @@ fn descript_words_warn_per_word_and_no_words_refuses() {
 
 /// 受理: `reload_started` が対象・出どころ・ゴースト名・読むフォルダつきで 1 件。ここの置き場（結線も seriko の送り手も
 /// 無い）では descript の列のシェルの段が始められず、印を下ろして `reload_failed`（no_context）を
-/// `TARGET_ERROR` で残す（要件 1.6・9.3・列の本体は `reload_skin_tests.rs`）。
+/// `TARGET_ERROR` で残す（areka-P0-mcp-reload 要件 1.6・9.3・列の本体は `reload_skin_tests.rs`）。
 #[test]
 fn accepted_leaves_one_started_record() {
     let mut rig = rig("areka-reload-started");
@@ -357,7 +362,6 @@ fn accepted_leaves_one_started_record() {
         notes: DescriptNotes {
             unsupported: Vec::new(),
             unknown: vec!["x".to_owned()],
-            empty: false,
         },
     };
     let (verdict, events) = capture(|| request_reload(&mut rig.world, req));
@@ -462,7 +466,7 @@ fn plant_switching(world: &mut World, target: ReloadTarget, reserved: PathBuf) {
 
 /// ghost の受理: 目録を引かず今のゴーストの場所で `raise_event: false` の切替を kanade へ送り、
 /// 立った予約の鍵（切替先の場所）を印に控える。自分の予約なので由来は `Reloaded{Ghost}`、実行系だけの
-/// 組み直しは偽（要件 2.4・3.1・3.2）。
+/// 組み直しは偽（areka-P0-mcp-reload 要件 2.4・3.1・3.2）。
 #[test]
 fn ghost_reload_reserves_the_current_ghost() {
     let mut rig = rig("areka-reload-ghost-start");
@@ -475,7 +479,7 @@ fn ghost_reload_reserves_the_current_ghost() {
         .clone();
     let (verdict, events) = capture(|| request_reload(&mut rig.world, mcp(ReloadTarget::Ghost)));
     let sent = rig
-        ._kanade
+        .kanade
         .try_iter()
         .map(|m| match m {
             KanadeMsg::ChangeGhost(c) => Some((c.raise_event, c.target.dir)),
@@ -516,7 +520,7 @@ fn ghost_reload_reserves_the_current_ghost() {
 }
 
 /// 予約の各終わり方を終わりの記録 1 件へ写して印を下ろす: 定常（切替先）は `reload_done`、それ以外は
-/// `reload_failed(reason)` を `TARGET_ERROR`＋ゴースト名で（要件 3.7・8.4・9.2・9.3・12.1 ⑹）。
+/// `reload_failed(reason)` を `TARGET_ERROR`＋ゴースト名で（areka-P0-mcp-reload 要件 3.7・8.4・9.2・9.3・12.1 ⑹）。
 #[test]
 fn switch_end_leaves_one_end_record_and_drops_the_mark() {
     let mut rig = rig("areka-reload-switch-end");
@@ -597,7 +601,7 @@ fn switch_end_leaves_one_end_record_and_drops_the_mark() {
 
 /// 印があっても他人の予約（鍵が違う・予約が無い）なら述語は偽で、終わりは `reload_failed(overtaken)`。
 /// 自分の予約の shiori の印なら実行系だけの組み直しが真・由来は `Reloaded{Shiori}`。印の無い終わりは
-/// 何も残さない（要件 3.2・9.3・12.1 ⑹）。
+/// 何も残さない（areka-P0-mcp-reload 要件 3.2・9.3・12.1 ⑹）。
 #[test]
 fn foreign_reservation_is_false_and_ends_as_overtaken() {
     let mut rig = rig("areka-reload-overtaken");
@@ -670,7 +674,7 @@ fn start_shiori_reload(rig: &mut Rig) -> (Vec<Option<GapRaise>>, ReplySender<Tal
     );
     let mut raises = Vec::new();
     let mut reply = None;
-    for msg in rig._kanade.try_iter() {
+    for msg in rig.kanade.try_iter() {
         if let KanadeMsg::AwaitTalkGap { raise, reply: r } = msg {
             raises.push(raise);
             reply = Some(r);
@@ -691,7 +695,7 @@ fn awaiting(world: &World) -> bool {
 /// shiori の受理: 台詞の切れ目の待ちに `OnDestroy`（Ref0＝`reload`・NOTIFY）を載せて送り、印は
 /// `AwaitingDestroy`（予約はまだ無い・返事が来るまで覗いても変わらない）。`Reached` が届くと `drain` が
 /// 今のゴーストの場所で `raise_event: false` の切替を送り、`SwitchInFlight` が立ち、印は自分の予約の
-/// `Switching` になる＝実行系だけの組み直しが真・由来は `Reloaded{Shiori}`（要件 2.4・4.1）。
+/// `Switching` になる＝実行系だけの組み直しが真・由来は `Reloaded{Shiori}`（areka-P0-mcp-reload 要件 2.4・4.1）。
 #[test]
 fn shiori_reload_raises_on_destroy_and_reached_reserves_the_switch() {
     let mut rig = rig("areka-reload-shiori-start");
@@ -714,7 +718,7 @@ fn shiori_reload_raises_on_destroy_and_reached_reserves_the_switch() {
         .expect("受け手は印にある");
     let ((), events) = capture(|| drain(&mut rig.world));
     let sent = rig
-        ._kanade
+        .kanade
         .try_iter()
         .map(|m| match m {
             KanadeMsg::ChangeGhost(c) => Some((c.raise_event, c.target.dir)),
@@ -762,9 +766,9 @@ fn shiori_reload_raises_on_destroy_and_reached_reserves_the_switch() {
     );
 }
 
-/// 切れ目の返事が `Reached` でない: 利用者の取りやめ・ほかの切替（`Left`）は `warn!`、許可表の漏れ
-/// （`NotSent`）と kanade の脱落（返信端の drop）は `error!` で、どれも `reload_failed(gap_*)` を
-/// `TARGET_ERROR`＋ゴースト名で 1 件残して印を下ろし、切替は送らない（要件 4.1・9.1・9.3）。
+/// 切れ目の返事が `Reached` でない: 利用者の取りやめと台詞の切れ目に達しなかった（`Left`）は `warn!`、許可表の漏れ
+/// （`NotSent`）と kanade の脱落（返信端の drop）は `error!` で、どれも `reload_failed`（`gap_cancelled`／`gap_left`／`gap_not_sent`／`kanade_gone`）を
+/// `TARGET_ERROR`＋ゴースト名で 1 件残して印を下ろし、切替は送らない（areka-P0-mcp-reload 要件 4.1・9.1・9.3）。
 #[test]
 fn shiori_gap_replies_other_than_reached_drop_the_mark() {
     let mut rig = rig("areka-reload-shiori-gap");
@@ -798,7 +802,7 @@ fn shiori_gap_replies_other_than_reached_drop_the_mark() {
             })
             .collect::<Vec<_>>();
         let switched = rig
-            ._kanade
+            .kanade
             .try_iter()
             .any(|m| matches!(m, KanadeMsg::ChangeGhost(_)));
         got.push((
@@ -831,7 +835,7 @@ fn shiori_gap_replies_other_than_reached_drop_the_mark() {
     );
 }
 
-/// シェルの面の持ち越し（要件 3.8）は、自分の予約の ghost の読み直しのときだけ真。shiori の読み直し・
+/// シェルの面の持ち越し（areka-P0-mcp-reload 要件 3.8）は、自分の予約の ghost の読み直しのときだけ真。shiori の読み直し・
 /// 他人の予約・予約なし・印なしは偽（ふつうの切替と shiori の読み直しは今までどおり）。
 #[test]
 fn shell_state_is_carried_only_by_its_own_ghost_reload() {

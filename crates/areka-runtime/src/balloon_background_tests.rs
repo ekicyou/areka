@@ -1,5 +1,5 @@
 // =============================================================================
-// `face_origin_color` の兄弟テスト（要件 4.6・design「balloon_background.rs＋配線」）
+// `face_origin_color` の兄弟テスト（areka-P0-text-decoration-canon 要件 4.6）
 //
 // `MemoryDecoder`＋`bake` で **本番と同じ焼き込み経路**を通した 3 つの画像（不透明・半透明・
 // トリム付き）を作り、それぞれ「原点画素の色」「白」「白」になることを固定する。加えて面が
@@ -169,11 +169,10 @@ fn semi_transparent_origin_falls_back_to_white_with_one_record() {
         color
     });
 
-    assert_ne!(
-        color, SEMI_ORIGIN_RGB_IF_ALPHA_IGNORED,
-        "α を見ずに画素の色をそのまま採ってはならない（半透明は背景色として使えない）: {lines:?}"
+    assert_eq!(
+        color, WHITE,
+        "半透明の原点画素は白へ落とす（α を見ない実装は {SEMI_ORIGIN_RGB_IF_ALPHA_IGNORED:?} を返して赤になる）: {lines:?}"
     );
-    assert_eq!(color, WHITE, "半透明の原点画素は白へ落とす: {lines:?}");
     assert_eq!(
         sentinel_count(&lines),
         1,
@@ -198,13 +197,9 @@ fn trimmed_away_origin_falls_back_to_white_with_one_record() {
         color
     });
 
-    assert_ne!(
-        color, TRIMMED_BBOX_RGB_IF_TRIM_IGNORED,
-        "トリムで原点が bbox の外に出たとき、bbox 左上の別画素を読んではならない: {lines:?}"
-    );
     assert_eq!(
         color, WHITE,
-        "原点が bbox の外なら白へ落とす（原点は透明だった）: {lines:?}"
+        "原点が bbox の外なら白へ落とす（`trim_offset` を見ずに bbox 左上を読む実装は {TRIMMED_BBOX_RGB_IF_TRIM_IGNORED:?} を返して赤になる）: {lines:?}"
     );
     assert_eq!(
         sentinel_count(&lines),
@@ -291,4 +286,28 @@ fn the_fallback_white_is_the_text_layers_default_background() {
         DEFAULT_BALLOON_BACKGROUND, WHITE,
         "落とし先は `areka_emo_text::draw::DEFAULT_BALLOON_BACKGROUND`（白）と同じ値"
     );
+}
+
+/// 契約違反（頁が無い・画素が頁の外）の理由は `warn!`、それ以外のふつうに起きる理由は `debug!` で残す
+/// （焼く段が壊れたことを既定のログ水準でも見えるようにする）。
+#[test]
+fn contract_violation_reasons_are_warned_and_ordinary_ones_stay_debug() {
+    let cases = [
+        (REASON_FACE_MISSING, "DEBUG"),
+        (REASON_EMPTY_ENTRY, "DEBUG"),
+        (REASON_ORIGIN_TRIMMED_AWAY, "DEBUG"),
+        (REASON_NOT_OPAQUE, "DEBUG"),
+        (REASON_PAGE_MISSING, "WARN"),
+        (REASON_PIXEL_OUT_OF_RANGE, "WARN"),
+    ];
+    for (reason, level) in cases {
+        let (color, lines) =
+            capture_lines(LineFormat::LevelTargetFields, || fall_back(OPAQUE, reason));
+        assert_eq!(color, WHITE, "{reason}: 白へ落とす: {lines:?}");
+        assert_eq!(lines.len(), 1, "{reason}: 記録は 1 件: {lines:?}");
+        assert!(
+            lines[0].starts_with(&format!("level={level} ")),
+            "{reason}: 水準は {level}: {lines:?}"
+        );
+    }
 }

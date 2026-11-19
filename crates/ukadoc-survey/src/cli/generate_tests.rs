@@ -4,18 +4,20 @@
 //! カタログ再生成はスナップショットが要るので、ここでは走らせない（完了条件は
 //! 実データでの通し確認の側にある）。台帳の初期化は取り寄せと書き手を引数で受けるので、
 //! 書き手を「控えるだけ」に差し替えればファイルを 1 つも作らずに走らせられる。
-//! このファイルが確かめるのは 6 つで、はじめの 3 つは入出力に 1 度も触れずに決まる。
+//! このファイルが確かめるのは次の箇条で、はじめの 2 つは入出力に 1 度も触れずに決まる。
 //!
 //! - どの id をどの台帳へ入れるか（[`select_ids_by_domain`]）
-//! - 台帳の前置きに担当ページをどの順で並べるか（[`prologue_pages`]）
 //! - 既存の台帳の本文を差し込みへ渡しているか（[`plan_ledger_init`]・要件 3.3a）
 //! - 既存の台帳を実際に取り寄せられるか（[`read_if_present`]・要件 3.3a）
 //! - repo の台帳 4 本が再実行で 1 バイトも変わらないか（[`ledger_init_with`]・要件 3.3a）
 //! - 4 本の本文が全部決まるまで 1 本も書き始めないか（[`ledger_init_with`]・要件 1.8）
+//! - 書き手の失敗を握り潰さず、そのまま返すか（[`ledger_init_with`]）
+//! - 4 本を全部書き終えてから告げるか（[`ledger_init_with`]）
 //!
-//! 2 つ目は一度書けば以後バイト列のまま写される（要件 3.3a）ので、順序の取り決めは
-//! ここで逐語に固定しておく。3 つ目と 4 つ目は生成物を見比べても分からない——理由は
-//! このファイルの後半に書いた。
+//! 台帳の前置きに担当ページを並べる順（名前順）は `assignment_tests.rs` が逐語で
+//! 固定している。2 つ目と 3 つ目が守る壊れ方は 4 つ目の再実行の主張も捕まえるが、
+//! それは repo の台帳に手で書いた値が載っているからで、台帳の中身に頼らずに立つよう
+//! 手で書いた見本と追跡ファイルで別に確かめる——理由はこのファイルの後半に書いた。
 //!
 //! # 作らない。ただし repo の追跡ファイルは読む
 //!
@@ -25,16 +27,19 @@
 //! **repo に追跡されているファイルを読むことは禁じられていない。** 要件 6.2 は
 //! 「スナップショットがその環境に無くても整合検査は赤にならない（repo 内のカタログを
 //! 正本として検査する）」であって、repo のファイルを読むことをむしろ前提にしている。
-//! 在中テストが repo の追跡ファイルを読む前例も既にある（`io/files_tests.rs:129` が
-//! `Cargo.toml` を読む）。4 つ目の主張はこの読みだけを使う。
+//! 在中テストが repo の追跡ファイルを読む前例も既にある（`io/files_tests.rs` が
+//! `Cargo.toml` を読む）。3 つ目から後の主張はこの読みだけを使う。
+
+// `priority-apply` の節。共有の定数と小道具は子のこのモジュールにだけ見える。
+#[path = "generate_priority_tests.rs"]
+mod priority;
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::{
-    LedgerPlan, ledger_init_with, plan_ledger_init, priority_apply_with, prologue_pages,
-    read_if_present, select_ids_by_domain,
+    LedgerPlan, ledger_init_with, plan_ledger_init, read_if_present, select_ids_by_domain,
 };
 use crate::assignment::PageAssignment;
 use crate::catalog::{Catalog, CatalogEntry};
@@ -103,26 +108,6 @@ fn each_sample_id_lands_in_the_ledger_that_owns_its_page() {
 }
 
 #[test]
-fn no_id_is_dropped_and_no_id_is_placed_twice() {
-    // 要件 3.2（同じ id を 2 つ以上の台帳に置かない）と、黙って 1 件落とす壊れ方の対。
-    let catalog = lib_test_support::catalog();
-    let buckets = select_ids_by_domain(&catalog, &PageAssignment::canonical())
-        .expect("見本のカタログはすべて割り当て済みのページのはず");
-
-    let mut placed: Vec<&str> = buckets
-        .values()
-        .flat_map(|ids| ids.iter().map(EntryId::as_str))
-        .collect();
-    let before = placed.len();
-    placed.sort_unstable();
-    placed.dedup();
-    assert_eq!(placed.len(), before, "同じ id が 2 つの台帳へ入っている");
-
-    let all: Vec<&str> = catalog.entries.keys().map(EntryId::as_str).collect();
-    assert_eq!(placed, all, "カタログの id と台帳へ入った id が一致しない");
-}
-
-#[test]
 fn a_domain_that_owns_no_entry_still_gets_a_bucket() {
     // 台帳は 4 本と決まっている（要件 3.1）。項目 0 件のドメインの鍵が消えると、
     // その台帳だけが書き出されずに黙って欠ける。
@@ -133,11 +118,6 @@ fn a_domain_that_owns_no_entry_still_gets_a_bucket() {
     let buckets = select_ids_by_domain(&catalog, &PageAssignment::canonical())
         .expect("見本のカタログはすべて割り当て済みのページのはず");
 
-    let keys: Vec<&str> = buckets.keys().map(Domain::as_key).collect();
-    let mut sorted = keys.clone();
-    sorted.sort_unstable();
-    sorted.dedup();
-    assert_eq!(sorted.len(), 4, "台帳 4 本ぶんの鍵が揃っていない: {keys:?}");
     for domain in Domain::ALL {
         let ids = buckets
             .get(&domain)
@@ -184,75 +164,13 @@ fn an_entry_whose_page_belongs_to_no_ledger_is_named_and_refused() {
     );
 }
 
-#[test]
-fn the_prologue_lists_the_pages_in_name_order() {
-    // 前置きは一度書いたら以後バイト列のまま写される（要件 3.3a）ので、順序の
-    // 取り決めはここで凍る。期待値は実装の表を引かず、独立した綴りで書く。
-    let pages: Vec<String> = prologue_pages(&PageAssignment::canonical(), Domain::Shiori)
-        .iter()
-        .map(|page| page.as_str().to_owned())
-        .collect();
-    assert_eq!(
-        pages,
-        vec![
-            "list_plugin_event",
-            "list_shiori_event",
-            "list_shiori_event_ex",
-            "list_shiori_resource",
-            "memo_shiorievent",
-            "spec_dll",
-            "spec_fmo_mutex",
-            "spec_headline",
-            "spec_plugin",
-            "spec_shiori3",
-            "spec_sstp",
-            "spec_web",
-        ],
-        "前置きの担当ページが名前順でない"
-    );
-}
-
-#[test]
-fn the_prologue_order_is_not_the_transcription_order_of_the_requirement_table() {
-    // 名前順を選んだことの対照。要件 3.1 の表の転記順（件数の多い順に近い並び）を
-    // 渡す実装に差し替えると、上のテストと合わせてここが赤になる。
-    let pages = prologue_pages(&PageAssignment::canonical(), Domain::Shiori);
-    let first = pages.first().expect("shiori は 12 ページ持つはず");
-    assert_eq!(
-        first.as_str(),
-        "list_plugin_event",
-        "名前順なら先頭は list_plugin_event（要件 3.1 の転記順なら list_shiori_event）"
-    );
-    assert_eq!(pages.len(), 12, "shiori の担当ページが 12 ページでない");
-}
-
-#[test]
-fn a_one_page_domain_still_declares_its_page() {
-    // 1 ページのドメインは並び順を 1 つも守らない（タスク 2.5 の教訓）ので、
-    // 上の 2 本は 12 ページの shiori で書いた。こちらは「空にならない」だけを見る。
-    for (domain, page) in [
-        (Domain::SakuraScript, "list_sakura_script"),
-        (Domain::Property, "list_propertysystem"),
-    ] {
-        let pages = prologue_pages(&PageAssignment::canonical(), domain);
-        let spelled: Vec<&str> = pages.iter().map(PageName::as_str).collect();
-        assert_eq!(
-            spelled,
-            vec![page],
-            "ドメイン {} の担当ページが違う",
-            domain.as_key()
-        );
-    }
-}
-
 // ---------------------------------------------------------------------------
 // 既存本文を渡している配線（要件 3.3a）
 // ---------------------------------------------------------------------------
 //
-// 台帳が今はすべて未分類なので、既存本文を渡し忘れても**生成物は 1 バイトも
-// 変わらない**。つまり出来上がったファイルを見比べても、この取り違えは 1 件も
-// 見つからない。見つからないまま調査 spec が手で状態・担当・優先度を書き込むと、
-// 次の `ledger-init` がそれを黙って初期値へ戻す。
+// 既存本文を渡し忘れると、手で書き込んだ状態・担当・優先度を次の `ledger-init` が
+// 黙って初期値へ戻す。下の再実行の主張（repo の台帳との比較）もこれを捕まえるが、
+// それは repo の台帳に手で書いた値が載っているあいだだけである。
 //
 // そこで [`plan_ledger_init`] は既存本文の取り寄せを引数で受ける。ここでは手で
 // 書いた本文を渡し、その綴りが返る本文に生き残ることを確かめる。ファイルは
@@ -334,6 +252,47 @@ fn under_coverage(path: &Path) -> String {
     }
 }
 
+/// 見本の表（`doc/ukadoc-coverage/` から先の綴り → 本文）から読む読み手。表に無い場所は読めない。
+fn reader_over(
+    files: &BTreeMap<String, String>,
+) -> impl Fn(&Path) -> Result<String, SurveyError> + '_ {
+    move |path| {
+        files
+            .get(&under_coverage(path))
+            .cloned()
+            .ok_or_else(|| files::io_error(path, "見本に無い"))
+    }
+}
+
+/// 書き手（場所と本文を受ける）。
+type WriteFn<'a> = dyn FnMut(&Path, &str) -> Result<(), SurveyError> + 'a;
+
+/// 告げ手（場所と件数を受ける）。
+type SayFn<'a> = dyn FnMut(&Path, usize) -> Result<(), SurveyError> + 'a;
+
+/// 告げ手が 2 本目で落ちる（出力の先が途中で閉じた）ときに、書き手が受け取った場所。
+fn written_when_the_second_announcement_fails(
+    run: &mut dyn FnMut(&mut WriteFn<'_>, &mut SayFn<'_>) -> Result<(), SurveyError>,
+) -> (Result<(), SurveyError>, Vec<String>) {
+    let mut written: Vec<String> = Vec::new();
+    let mut said = 0_usize;
+    let outcome = {
+        let mut record = |target: &Path, _: &str| -> Result<(), SurveyError> {
+            written.push(under_coverage(target));
+            Ok(())
+        };
+        let mut say = |target: &Path, _: usize| -> Result<(), SurveyError> {
+            said += 1;
+            if said == 2 {
+                return Err(files::io_error(target, "告げる先が閉じた"));
+            }
+            Ok(())
+        };
+        run(&mut record, &mut say)
+    };
+    (outcome, written)
+}
+
 /// 4 本ぶんの計画を組み立てる。渡した本文と、取り寄せに聞かれた場所を返す。
 fn plan_with(hand: &[(&str, &str)]) -> (Vec<LedgerPlan>, Vec<String>) {
     let asked: RefCell<Vec<String>> = RefCell::new(Vec::new());
@@ -383,8 +342,8 @@ fn the_plan_asks_for_each_ledger_at_its_own_place_and_writes_back_there() {
 
 #[test]
 fn a_hand_written_ledger_survives_the_plan_byte_for_byte() {
-    // 要件 3.3a の本体。既存本文を渡し忘れると、この主張だけが赤くなる
-    // （生成物の比較も件数の比較も、今の台帳では 1 件も捕まえない）。
+    // 要件 3.3a の本体。既存本文を渡し忘れると、repo の台帳の中身に関わらずこの
+    // 主張が赤くなる。
     let (plans, _) = plan_with(&[
         (LEDGER_FILES[3], HAND_PROPERTY),
         (LEDGER_FILES[2], HAND_SAKURA),
@@ -412,42 +371,6 @@ fn a_hand_written_ledger_survives_the_plan_byte_for_byte() {
 }
 
 #[test]
-fn the_hand_written_columns_are_still_spelled_the_way_the_owner_wrote_them() {
-    // 上の逐語比較とは別に、「手で書いた値が生き残る」ことだけを名指しで書く。
-    // 期待値の組み立て方をどう変えても、この主張は独立に立っている。
-    let (plans, _) = plan_with(&[(LEDGER_FILES[3], HAND_PROPERTY)]);
-    let body = &plans[3].body;
-
-    for needle in [
-        "status = \"implemented\"",
-        "introduced = \"2.4.03\"",
-        "owner = \"areka-P0-ukadoc-survey-property\"",
-        "priority = \"A1\"",
-        "values = [ \"対話の手触り\" ]",
-        "手で書いた備考の 1 行目。",
-        "status=\"degraded\"",
-        "priority=\"C3\"",
-    ] {
-        assert!(
-            body.contains(needle),
-            "手で書いた {needle} が消えている（既存本文が渡っていない）"
-        );
-    }
-    // 巻き戻ったときに現れる形そのもの——手書きの id の塊が初期値で書かれている——が
-    // 1 つも無いこと。既存本文を渡し忘れると、これがそのまま本文に現れる。
-    for id in [
-        "ukadoc:list_propertysystem:currentghost.name:1",
-        "ukadoc:list_propertysystem:system.year:1",
-    ] {
-        let rolled_back = render_initial_entry(&EntryId::parse(id).expect("2 形のはず"));
-        assert!(
-            !body.contains(&rolled_back),
-            "手書きの塊 {id} が初期値へ巻き戻っている"
-        );
-    }
-}
-
-#[test]
 fn a_ledger_with_no_existing_body_gets_the_generated_prologue() {
     // 既存が無いドメインは新規に組み立てる（要件 3.3）。前置きの担当ページを
     // 渡し忘れる壊し方をここで捕まえる。
@@ -458,7 +381,7 @@ fn a_ledger_with_no_existing_body_gets_the_generated_prologue() {
             .body
             .starts_with("# doc/ukadoc-coverage/ledger/shiori.toml\n"),
         "shiori の前置きが生成されていない: {}",
-        &plans[0].body[..plans[0].body.len().min(80)]
+        plans[0].body.chars().take(80).collect::<String>()
     );
     assert!(
         plans[0].body.contains("\"list_plugin_event\""),
@@ -481,7 +404,7 @@ fn a_ledger_with_no_existing_body_gets_the_generated_prologue() {
 //
 // ここは判断の分岐なので釘付けする。`Ok(true)` の枝を `Ok(None)` へ潰すと、実在する
 // 台帳に「無い」と答えるようになり、次の `ledger-init` が既存の記入をすべて初期値へ
-// 戻す（要件 3.3a が禁じる形そのもの）。生成物の比較では 1 件も捕まらない。
+// 戻す（要件 3.3a が禁じる形そのもの）。
 //
 // repo に追跡されている台帳を **読むだけ** である。ファイルは作らず、一時ディレクトリも
 // 使わない。
@@ -495,10 +418,7 @@ fn read_if_present_returns_the_committed_ledger_and_none_for_a_missing_sibling()
 
     // 空の本文やよそのファイルで誤魔化されないよう、その台帳自身の 1 行目を見る。
     assert!(
-        body.starts_with(
-            "# doc/ukadoc-coverage/ledger/property.toml
-"
-        ),
+        body.starts_with("# doc/ukadoc-coverage/ledger/property.toml\n"),
         "返った本文が property の台帳のものではない: {}",
         body.lines().next().unwrap_or_default()
     );
@@ -514,10 +434,7 @@ fn read_if_present_returns_the_committed_ledger_and_none_for_a_missing_sibling()
         .expect("repo に追跡されている台帳は読めるはず")
         .unwrap_or_else(|| panic!("実在する台帳に None が返った: {}", other.display()));
     assert!(
-        other_body.starts_with(
-            "# doc/ukadoc-coverage/ledger/shiori.toml
-"
-        ),
+        other_body.starts_with("# doc/ukadoc-coverage/ledger/shiori.toml\n"),
         "返った本文が shiori の台帳のものではない: {}",
         other_body.lines().next().unwrap_or_default()
     );
@@ -541,8 +458,8 @@ fn read_if_present_returns_the_committed_ledger_and_none_for_a_missing_sibling()
 // ---------------------------------------------------------------------------
 //
 // ここまでの一群が見るのは計画の中身だけである。残るのは [`ledger_init_with`] が持つ
-// **順番**——4 本ぶんの本文が全部決まってから書き始める——と、決めた本文をそのまま
-// 書き手へ渡していることである。
+// **順番**——4 本ぶんの本文が全部決まってから書き始め、4 本を書き終えてから告げる——と、
+// 決めた本文をそのまま書き手へ渡していることである。
 //
 // 書き手を引数で受けるので、ファイルを 1 つも作らずに走らせられる。書き出しの実物
 // （置き場を作って `files::write_lf` を呼ぶ）を渡すのは `ledger_init()` の 1 行だけで、
@@ -563,8 +480,10 @@ fn re_running_the_init_writes_the_committed_ledgers_with_the_very_same_bytes() {
             written.push((target.to_path_buf(), body.to_owned()));
             Ok(())
         };
-        ledger_init_with(&read_if_present, &mut record)
-            .expect("repo のカタログと台帳なら計画も書き出しも通るはず");
+        ledger_init_with(&read_if_present, &mut record, &mut |_: &Path, _: usize| {
+            Ok(())
+        })
+        .expect("repo のカタログと台帳なら計画も書き出しも通るはず");
     }
 
     assert_eq!(written.len(), 4, "書き出した本数が台帳 4 本でない");
@@ -627,7 +546,8 @@ fn a_failure_on_the_fourth_ledger_leaves_the_first_three_unwritten() {
             writes += 1;
             Ok(())
         };
-        ledger_init_with(&read, &mut count).expect_err("4 本目が読めないのに成功した")
+        ledger_init_with(&read, &mut count, &mut |_: &Path, _: usize| Ok(()))
+            .expect_err("4 本目が読めないのに成功した")
     };
 
     assert_eq!(
@@ -658,7 +578,10 @@ fn a_failure_from_the_writer_comes_back_unchanged() {
                 reason: MARKER.to_owned(),
             })
         };
-        ledger_init_with(&read_if_present, &mut refuse).expect_err("書き手が落ちたのに成功した")
+        ledger_init_with(&read_if_present, &mut refuse, &mut |_: &Path, _: usize| {
+            Ok(())
+        })
+        .expect_err("書き手が落ちたのに成功した")
     };
 
     assert_eq!(
@@ -678,271 +601,13 @@ fn a_failure_from_the_writer_comes_back_unchanged() {
     }
 }
 
-// priority-apply（要件 7.1・7.2・7.6・1.4・12.2）
-// ---------------------------------------------------------------------------
-//
-// 書き戻しは 2 文書と台帳 4 本を読んで 4 本を書き直す。ここで見るのはその**順番**
-// （6 本を読み、導き、4 本の本文が全部決まってから書く）と、「1 バイトも書かない」
-// という主張が本物であることである。読み手も書き手も引数で受けるので、ファイルを
-// 1 つも作らずに走らせられる（[`priority_apply_with`]）。
-//
-// 実データは相手にしない。3 文書はまだ骨組みだけで束も順位も 0 行なので、実データを
-// 相手にした走行は「どの束にも属さない」で落ちるのが正しい（欠陥ではない）。見本の
-// 本文だけをここで組み立てる。
-
-/// 見本の項目 id（[`Domain::ALL`] と同じ並び＝shiori・assets・sakura-script・property）。
-const SAMPLE_IDS: [&str; 4] = [
-    "ukadoc:list_shiori_event:OnBoot:1",
-    "ukadoc:descript_shell:seriko.zorder:1",
-    "ukadoc:list_sakura_script:_5c_65:1",
-    "ukadoc:list_propertysystem:system.year:1",
-];
-
-/// 見本の束の名前。
-const SAMPLE_BUNDLE: &str = "見本の束";
-
-/// 見本の帰属と順位から決まる `priority`（段階 A の順位 1）。
-const SAMPLE_PRIORITY: &str = "A1";
-
-/// `linkage.md` の置き場（`doc/ukadoc-coverage/` から先の綴り）。
-const LINKAGE_FILE: &str = "doc/ukadoc-coverage/linkage.md";
-
-/// `briefing.md` の置き場。
-const BRIEFING_FILE: &str = "doc/ukadoc-coverage/briefing.md";
-
-/// 見本の台帳 1 本（項目 1 件）。備考は呼び手が決める。
-fn sample_ledger(domain: Domain, id: &str, priority: &str, note: &str) -> String {
-    let page = EntryId::parse(id)
-        .expect("見本の id は要件 1.9 の 2 形のいずれかのはず")
-        .page();
-    format!(
-        "# 見本の台帳（{domain_key}）\n\n\
-         [ledger]\n\
-         domain = \"{domain_key}\"\n\
-         pages = [\"{page}\"]\n\n\
-         [entry.\"{id}\"]\n\
-         status = \"absent\"\n\
-         introduced = \"\"\n\
-         owner = \"\"\n\
-         priority = \"{priority}\"\n\
-         values = []\n\
-         links = []\n\
-         note = \"\"\"\n{note}\"\"\"\n",
-        domain_key = domain.as_key(),
-        page = page.as_str(),
-    )
-}
-
-/// 見本の `linkage.md`。構成 id は呼び手が決める（外した id は帰属を失う）。
-fn sample_linkage(members: &[&str]) -> String {
-    let listed: String = members.iter().map(|id| format!("  \"{id}\",\n")).collect();
-    format!(
-        "# 束の名付けと帰属（見本）\n\n\
-         ```toml\n\
-         [bundle.\"{SAMPLE_BUNDLE}\"]\n\
-         machine = []\n\
-         members = [\n{listed}]\n\
-         hand = []\n\
-         domains = [\"shiori\", \"assets\", \"sakura-script\", \"property\"]\n\
-         foundation = \"見本の基盤\"\n\
-         breakage = \"黙って壊れる\"\n\
-         themes = []\n\
-         ```\n\n\
-         ```toml\n\
-         [tally]\n\
-         target = 4\n\
-         from_machine = 4\n\
-         by_hand = 0\n\
-         singles = 0\n\
-         alias_excluded = 0\n\
-         not_applicable_excluded = 0\n\n\
-         [tally.singles_by_domain]\n\
-         shiori = 0\n\
-         assets = 0\n\
-         sakura-script = 0\n\
-         property = 0\n\
-         ```\n"
-    )
-}
-
-/// 見本の `briefing.md`（段階 A の順位 1 に見本の束を置くだけ）。
-fn sample_briefing() -> String {
-    let stages: String = ["A", "B", "C", "D", "E"]
-        .iter()
-        .map(|stage| format!("[stage.{stage}]\nbundles = 0\nsingles = 0\nitems = 0\n\n"))
-        .collect();
-    format!(
-        "# 段階と順位（見本）\n\n\
-         ```toml\n{stages}```\n\n\
-         ```toml\n\
-         [[rank]]\n\
-         stage = \"A\"\n\
-         rank = 1\n\
-         bundle = \"{SAMPLE_BUNDLE}\"\n\
-         ```\n\n\
-         ```toml\n\
-         [priority_blank]\n\
-         alias = 0\n\
-         not_applicable = 0\n\
-         ```\n"
-    )
-}
-
-/// 見本の 6 文書。鍵は `doc/ukadoc-coverage/` から先の綴り。
-///
-/// `members` は帰属に載せる id、`property_note` は 4 本目の台帳の備考である
-/// （備考の**行頭**に `priority = ` を置くと、その台帳の本文だけが決まらなくなる）。
-fn sample_files(members: &[&str], property_note: &str) -> BTreeMap<String, String> {
-    let mut files = BTreeMap::new();
-    files.insert(LINKAGE_FILE.to_owned(), sample_linkage(members));
-    files.insert(BRIEFING_FILE.to_owned(), sample_briefing());
-    for (index, domain) in Domain::ALL.into_iter().enumerate() {
-        let note = if domain == Domain::Property {
-            property_note
-        } else {
-            ""
-        };
-        files.insert(
-            LEDGER_FILES[index].to_owned(),
-            sample_ledger(domain, SAMPLE_IDS[index], "", note),
-        );
-    }
-    files
-}
-
-/// 書き手が受け取った 1 本ぶん（場所・本文・変更件数）。
-type Written = (String, String, usize);
-
-/// 見本を読ませて書き戻しを 1 度走らせる。ファイルは 1 つも作らない。
-///
-/// 返るのは ⑴ 走行の結果、⑵ 読みに来た場所の並び、⑶ 書き手が受け取った並びである。
-fn apply_over(
-    files: &BTreeMap<String, String>,
-) -> (Result<(), SurveyError>, Vec<String>, Vec<Written>) {
-    let asked: RefCell<Vec<String>> = RefCell::new(Vec::new());
-    let read = |path: &Path| -> Result<String, SurveyError> {
-        let spelled = under_coverage(path);
-        asked.borrow_mut().push(spelled.clone());
-        files
-            .get(&spelled)
-            .cloned()
-            .ok_or_else(|| files::io_error(path, "見本に無い"))
-    };
-
-    let mut written: Vec<Written> = Vec::new();
-    let outcome = {
-        let mut record = |target: &Path, body: &str, changed: usize| -> Result<(), SurveyError> {
-            written.push((under_coverage(target), body.to_owned(), changed));
-            Ok(())
-        };
-        priority_apply_with(&read, &mut record)
-    };
-    (outcome, asked.into_inner(), written)
-}
-
 #[test]
-fn the_derived_priority_lands_in_every_one_of_the_four_ledgers() {
-    // 対の腕（母数 0 の緑を潰す）。冪等の主張だけを置くと、1 行も書き換えない実装でも
-    // 緑になる。まず「確かに書き換わる」を見る。
-    let (outcome, asked, written) = apply_over(&sample_files(&SAMPLE_IDS, ""));
-    outcome.expect("見本の 2 文書と台帳 4 本なら書き戻せるはず");
-
-    let mut expected_reads = vec![LINKAGE_FILE.to_owned(), BRIEFING_FILE.to_owned()];
-    expected_reads.extend(LEDGER_FILES.iter().map(|file| (*file).to_owned()));
-    assert_eq!(asked, expected_reads, "読みに来た文書が 6 本と違う");
-
-    let places: Vec<&str> = written.iter().map(|(place, _, _)| place.as_str()).collect();
-    assert_eq!(places, LEDGER_FILES, "書き出す先が台帳 4 本と違う");
-
-    let filled = format!("priority = \"{SAMPLE_PRIORITY}\"");
-    for (index, (place, body, changed)) in written.iter().enumerate() {
-        assert_eq!(*changed, 1, "{place} の変更件数が 1 件でない");
-        assert!(
-            body.contains(&filled),
-            "{place} に確定値が入っていない: {body}"
-        );
-        // 置き換えるのは priority の 1 行だけ（要件 12.2）。戻せば元の本文に一致する。
-        let before = sample_ledger(Domain::ALL[index], SAMPLE_IDS[index], "", "");
-        assert_eq!(
-            body.replace(&filled, "priority = \"\""),
-            before,
-            "{place} の priority 以外の行が変わっている"
-        );
-    }
-}
-
-#[test]
-fn re_running_the_write_back_changes_no_item_and_leaves_the_bodies_byte_for_byte() {
-    // 冪等（設計「入口 / cli::generate::priority_apply」）。1 度目の本文をそのまま
-    // 食わせて、変更件数が 0 で本文が 1 バイトも変わらないことを見る。
-    let (outcome, _, first) = apply_over(&sample_files(&SAMPLE_IDS, ""));
-    outcome.expect("1 度目が通らないと 2 度目の主張が立たない");
-
-    let mut second_input = sample_files(&SAMPLE_IDS, "");
-    for (place, body, _) in &first {
-        second_input.insert(place.clone(), body.clone());
-    }
-
-    let (outcome, _, second) = apply_over(&second_input);
-    outcome.expect("2 度目も通るはず");
-
-    assert_eq!(second.len(), 4, "2 度目に書き出した本数が 4 本でない");
-    for (index, (place, body, changed)) in second.iter().enumerate() {
-        assert_eq!(*changed, 0, "2 度目なのに {place} の変更件数が 0 でない");
-        assert_eq!(
-            body, &first[index].1,
-            "2 度目の {place} の本文が 1 バイト以上変わっている"
-        );
-    }
-}
-
-#[test]
-fn an_id_that_belongs_to_no_bundle_stops_the_run_before_a_single_write() {
-    // 導出に失敗する id があれば挙げて止まり、1 本も書かない（要件 7.1・1.4）。
-    // 4 本目（property）の id だけを帰属から外す。
-    let (outcome, asked, written) = apply_over(&sample_files(&SAMPLE_IDS[..3], ""));
-    let err = outcome.expect_err("帰属の無い id があるのに書き戻せてしまった");
-
-    assert!(written.is_empty(), "導出に失敗したのに書き出している");
-    assert_eq!(asked.len(), 6, "6 本を読み終える前に落ちている");
-    let body = err.to_string();
-    assert!(
-        body.contains(SAMPLE_IDS[3]),
-        "どの id が導けないかが本文に無い: {body}"
-    );
-}
-
-#[test]
-fn a_body_that_cannot_be_decided_on_the_fourth_ledger_leaves_the_first_three_unwritten() {
-    // 4 本の本文が全部決まってから書く（設計「入口 / cli::generate::priority_apply」）。
-    // 4 本目の備考の**行頭**に `priority = ` を置くと、その台帳だけが「どの行を直す
-    // べきか決められない」で落ちる。順番が逆なら、先に決まっている 3 本が書き換わって
-    // 残る。
-    let (outcome, _, written) = apply_over(&sample_files(&SAMPLE_IDS, "priority = \"備考の中\"\n"));
-    let err = outcome.expect_err("置き換える行を決められないのに書き戻せてしまった");
-
-    assert!(written.is_empty(), "4 本が決まる前に書き始めている");
-    let body = err.to_string();
-    assert!(
-        body.contains(SAMPLE_IDS[3]),
-        "どの項目で決められなかったかが本文に無い: {body}"
-    );
-}
-
-#[test]
-fn a_document_that_cannot_be_read_stops_with_the_absolute_path_it_looked_for() {
-    // 1 本でも読めなければ探した絶対パスを添えて止まり、1 バイトも書かない
-    // （要件 1.4）。読み手の失敗を包み直して場所を落とすと、ここが赤くなる。
-    for missing in [LINKAGE_FILE, BRIEFING_FILE, LEDGER_FILES[3]] {
-        let mut files = sample_files(&SAMPLE_IDS, "");
-        files.remove(missing);
-        let (outcome, _, written) = apply_over(&files);
-        let err = outcome.expect_err("読めない文書があるのに書き戻せてしまった");
-        assert!(written.is_empty(), "{missing} が読めないのに書き出している");
-        let body = err.to_string().replace('\\', "/");
-        assert!(
-            body.contains(missing),
-            "探した場所が失敗の本文に無い（{missing}）: {body}"
-        );
-    }
+fn a_closed_output_on_the_second_announcement_still_leaves_all_four_ledgers_written() {
+    // 1 本書くたびに告げると、2 本目の告知で落ちたとき（出力の先が途中で閉じた）に
+    // 3・4 本目が書かれずに残る。告げるのは 4 本を書き終えてから。
+    let (outcome, written) = written_when_the_second_announcement_fails(&mut |write, say| {
+        ledger_init_with(&read_if_present, write, say)
+    });
+    outcome.expect_err("告げる先が閉じたのに成功した");
+    assert_eq!(written, LEDGER_FILES, "告げる前に書き終えていない");
 }

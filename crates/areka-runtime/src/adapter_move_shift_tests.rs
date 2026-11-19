@@ -1,5 +1,5 @@
 //! ずれの命令をシェル／バルーンの対象の提示の命令へ写す橋渡しの兄弟テスト
-//! （spec: seriko-pattern-calls task 5.4・要件 7.1・7.6・3.8）。
+//! （spec: seriko-pattern-calls 要件 7.1・7.6・3.8）。
 
 use areka_emo_present::PresentCommand;
 use areka_sakura::ActorKey;

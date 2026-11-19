@@ -27,78 +27,55 @@
 //! 地の文の「`…` を束 id とする」のような言い回しは相手にしない。機械の束の id は
 //! それ自体が項目 id でもあるので、地の文では束 id と構成 id を綴りで見分けられない
 //! ——拾えば構成 id を束 id として名指して必ず赤になる。地の文に書かれた綴りが実在
-//! すること自体は ⑴ が見ている。2026-09-12 時点で、この取りこぼしに当たるのは
-//! `linkage.md`「補修した関連」「機械の束の分割」「例示の 3 連鎖」の 3 節にある
-//! 言い回しで、いずれも同じ id を上の 2 つの出どころでも引用している。
+//! すること自体は ⑴ が見ている。
 //!
 //! # ⑹ が主張すること
 //!
 //! `report/summary.md` の本文（復帰文字を落としたもの）が、カタログと台帳 4 本から
-//! 作り直した本文と**全文一致**すること（設計 D-5）。上流（完了 spec
-//! `ukadoc-survey-toolkit` の要件 7.6）はこの報告を常時検査から外していたが、外した理由
-//! ——調査 4 本が並走して同じファイルを取り合う——は 4 本の完了で消えたので、本 spec の
-//! 要件 11.2 が除外を覆した。
+//! 作り直した本文と**全文一致**すること（設計 D-5・要件 11.2）。判定そのものは
+//! `check::run` の新しさの検査が持ち、実データの緑は `checks.rs` の
+//! `real_repo_data_produces_no_findings` が見る。ここには写しの全体報告を壊すと赤に
+//! なる腕だけを置く。
 //!
 //! 突き合わせ相手が「証拠あり件数」を持たないのが要である。あの表はソース木を歩いて
 //! 数える値なので、判定に入れると別の spec が正典 URL のコメントを 1 行足すだけで
-//! ここが赤くなる。表は `evidence` 副手続きの出力へ一本化した（開発者裁定 2026-09-12）。
+//! ここが赤くなる。だからその表は `evidence` 副手続きの出力だけに置く。
 //!
 //! # 報告の束の一覧は「列数」ではなく「表の見出し」で見つける
 //!
 //! 束の一覧は 2 種類ある。`report/summary.md`「ドメインを跨いで繋がった束」は
 //! **3 列**（束 id・跨ぐドメイン・構成 id）で、ドメイン別報告 4 本「ドメイン内で関連が
 //! 閉じている束」は **2 列**（束 id・構成 id）である。列数を決め打ちすると片方を丸ごと
-//! 取り落とし、取り落とした側の束を引用した文書が「報告に無い束 id」で偽の赤になる
-//! （2026-09-12 の実測で、決め打ちが落とすのは 123 行のうち 48 行または 75 行）。
+//! 取り落とし、取り落とした側の束を引用した文書が「報告に無い束 id」で偽の赤になる。
 //!
 //! さらに、ドメイン別報告には**別名の一覧**という別の表があり、そちらの行も
-//! `| ukadoc:` で始まる。行の綴りだけで拾うと別名 27 件が束 id の一覧に紛れ込み、
+//! `| ukadoc:` で始まる。行の綴りだけで拾うと別名が束 id の一覧に紛れ込み、
 //! 別名を束 id として引用した文書が偽の緑になる。
 //!
 //! だから拾い方は「見出しが [`BUNDLE_TABLE_HEADER`] で始まる表の 1 列目」にする。
 //! 見出しは両方の束の表に共通で（`report::domain`・`report::summary` の
 //! `push_bundle_list` が書く）、別名の表の見出し（`| 別名の id |`）とは違う。
 //!
-//! # 数えたもの（2026-09-12・段 1 の後に数え直した実測）
-//!
-//! - `linkage.md` の引用 id: **1,553 件**。内訳は `members` の和集合 1,552 件（＝
-//!   `[tally].target`）と、地の文だけに現れる別名 1 件
-//!   （`ukadoc:list_sakura_script:_5c7:1`・「過剰だった関連」の節）。
-//! - `briefing.md`・`roadmap-draft.md` の引用 id: **どちらも 0 件**（まだ骨組みで、
-//!   本文は段 4・段 5 が書く）。下限を置くのはその 2 段の持ち物である。
-//! - 裸の id: 3 文書とも **0 件**。`report.md` の綴り: 3 文書とも **0 件**。
-//! - 報告 5 本の束の一覧: **123 行・122 種**（summary 75 行・sakura-script 23 行・
-//!   shiori 25 行・assets 0 行・property 0 行）。1 種だけ summary と sakura-script の
-//!   両方に現れる。
-//! - 3 文書が引用した機械の束 id: **47 種**（すべて `linkage.md`。`machine` 欄 47 種と
-//!   表の列 3 種で、表の 3 種は `machine` 欄にも在る）。
-//!
 //! # 読むだけ
 //!
 //! 摂動は本文の**写し**（`String`）の上でだけ働かせる。repo のファイルには 1 バイトも
-//! 触れない（`documents.rs` の道具・`documents_non_vacuity.rs` の見張り）。
+//! 触れない（`documents.rs` の道具は `&str` を受けて `String` を返すだけで、型の上で
+//! repo のファイルに触れない）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use ukadoc_survey::catalog::Catalog;
+use ukadoc_survey::check::FindingKind;
 use ukadoc_survey::documents::Linkage;
 use ukadoc_survey::documents::parse::{bare_id_tokens, read_linkage};
-use ukadoc_survey::model::{Domain, EntryId, THEMES};
-use ukadoc_survey::report::summary::render_summary;
+use ukadoc_survey::model::{Domain, EntryId};
 
 use super::RepoData;
-use super::documents::{Documents, cited_ids, shift_row_count, twist_id, twisted_id};
-
-/// 3 文書のワークスペース根からの相対パス（失敗の本文はこの綴りで名指す）。
-const LINKAGE_MD: &str = "doc/ukadoc-coverage/linkage.md";
-const BRIEFING_MD: &str = "doc/ukadoc-coverage/briefing.md";
-const ROADMAP_MD: &str = "doc/ukadoc-coverage/roadmap-draft.md";
-
-/// 全体報告のワークスペース根からの相対パス（判定 ⑹ の失敗の本文はこの綴りで名指す）。
-const SUMMARY_MD: &str = "doc/ukadoc-coverage/report/summary.md";
-
-/// 全体報告を作り直す副手続き（判定 ⑹ が赤くなったときの直し方）。
-const REBUILD_SUMMARY: &str = "cargo run -p ukadoc-survey -- report-summary";
+use super::documents::{
+    BRIEFING_MD, Documents, LINKAGE_MD, ROADMAP_MD, assert_no_findings, cited_ids, shift_row_count,
+    twist_id, twisted_id,
+};
+use super::perturb::{Perturbed, SUMMARY_REPORT, expect_exactly};
 
 /// 判定 ⑹ の摂動が狙う行のラベル（「状態の分布」の表の 3 行目）。
 ///
@@ -111,6 +88,17 @@ const DEGRADED_ROW: &str = "縮退";
 /// 実在パスは `doc/ukadoc-coverage/report/summary.md` である。この綴りが 3 文書の
 /// どこかにあれば、読み手は存在しないファイルを探しに行く。
 const STALE_REPORT_SPELLING: &str = "report.md";
+
+/// 古い報告名がファイル名として現れるか。直前の 1 文字が ASCII の英数字・`-`・`_`・
+/// `.` のときは数えない（`gap-report.md` のような別のファイル名の一部）。それ以外
+/// （行頭・`/`・逆引用符・空白・全角の括弧など）は数える。
+fn names_stale_report(text: &str) -> bool {
+    text.match_indices(STALE_REPORT_SPELLING).any(|(at, _)| {
+        text[..at].chars().next_back().is_none_or(|before| {
+            !(before.is_ascii_alphanumeric() || matches!(before, '-' | '_' | '.'))
+        })
+    })
+}
 
 /// 報告の束の一覧の表の見出しの始まり（列数に依らない目印）。
 const BUNDLE_TABLE_HEADER: &str = "| 束 id |";
@@ -148,9 +136,11 @@ pub(super) fn bundle_ids_in_report(text: &str) -> Vec<String> {
 /// `push_bundle_list`）。
 ///
 /// 構成 id まで読むのは判定 ⑶-c（`members ∖ hand` が引用した機械の束の構成 id に
-/// 含まれる）の相手を作るためで、束 id だけが要る判定 ⑵ は上の
-/// [`bundle_ids_in_report`] を通す。拾い方を 2 つ書くと片方だけが古びる。
-pub(super) fn bundle_rows_in_report(text: &str) -> Vec<(String, Vec<String>)> {
+/// 含まれる）の相手を作るためで、判定 ⑵ の束 id も [`machine_bundle_members`] を
+/// 通してここから取る。報告 1 本の束 id の列だけが要る所（読み取りの較正・全体報告の
+/// 束の表の行数）は上の [`bundle_ids_in_report`] を通す。拾い方を 2 つ書くと片方
+/// だけが古びる。
+fn bundle_rows_in_report(text: &str) -> Vec<(String, Vec<String>)> {
     let lines: Vec<&str> = text.lines().collect();
     let mut rows = Vec::new();
     let mut at = 0;
@@ -187,16 +177,32 @@ fn is_rule_cell(cell: &str) -> bool {
 }
 
 /// 報告 5 本の束の一覧に在る束 id の全種（設計 判定 ⑵）。
-pub(super) fn report_bundle_ids(repo: &RepoData, summary_text: &str) -> BTreeSet<String> {
-    let mut ids: BTreeSet<String> = bundle_ids_in_report(summary_text).into_iter().collect();
+///
+/// 報告の歩き方は [`machine_bundle_members`] の 1 か所にまとめる（2 か所に写すと
+/// 歩く報告の組が片方だけ変わる）。
+pub(super) fn report_bundle_ids(repo: &RepoData) -> BTreeSet<String> {
+    machine_bundle_members(repo).into_keys().collect()
+}
+
+/// 報告 5 本の束の一覧から読んだ「機械の束 id → その構成 id」。
+///
+/// 同じ束 id が `report/summary.md` とドメイン別報告の両方に現れることがあるので、
+/// 構成 id は和集合にする（片方だけを採ると判定 ⑶-c が偽の赤になる）。
+pub(super) fn machine_bundle_members(repo: &RepoData) -> BTreeMap<String, BTreeSet<String>> {
+    let mut rows: Vec<(String, Vec<String>)> = bundle_rows_in_report(&repo.summary_report);
     for domain in Domain::ALL {
         let report = repo
             .domain_reports
             .get(&domain)
             .unwrap_or_else(|| panic!("{domain:?} のドメイン別報告が読み込まれていない"));
-        ids.extend(bundle_ids_in_report(report));
+        rows.extend(bundle_rows_in_report(report));
     }
-    ids
+
+    let mut by_id: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (id, members) in rows {
+        by_id.entry(id).or_default().extend(members);
+    }
+    by_id
 }
 
 /// 3 文書の表のうち、見出しが [`BUNDLE_ID_HEADER`] で終わる列に並ぶ id。
@@ -235,7 +241,7 @@ pub(super) fn bundle_ids_in_tables(markdown: &str) -> BTreeSet<String> {
             Some(indexes) => {
                 for &index in indexes {
                     if let Some(cell) = cells.get(index) {
-                        ids.extend(ids_in_cell(cell));
+                        ids.extend(cited_ids(cell));
                     }
                 }
             }
@@ -247,24 +253,6 @@ pub(super) fn bundle_ids_in_tables(markdown: &str) -> BTreeSet<String> {
 /// 表の 1 行を升目に割る（前後の空白を落とす）。
 fn row_cells(line: &str) -> Vec<&str> {
     line.trim_matches('|').split('|').map(str::trim).collect()
-}
-
-/// 1 つの升目に現れる `ukadoc:…` の綴り（逆引用符の有無を問わない）。
-fn ids_in_cell(cell: &str) -> Vec<String> {
-    let mut ids = Vec::new();
-    let mut rest = cell;
-    while let Some(at) = rest.find("ukadoc:") {
-        let tail = &rest[at..];
-        let end = tail.find(|c: char| !is_id_char(c)).unwrap_or(tail.len());
-        ids.push(tail[..end].to_owned());
-        rest = &tail[end..];
-    }
-    ids
-}
-
-/// id の綴りに現れてよい文字（`documents::parse` の同名の規則と同じ）。
-fn is_id_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '-' | '.' | '(' | ')')
 }
 
 /// `linkage.md` が引用した機械の束 id（`machine` 欄＋表の列）。
@@ -318,44 +306,11 @@ fn citation_findings(files: &[(&'static str, &str)], catalog: &Catalog) -> Vec<S
                 "{name}: id {token} が地の文に裸で書かれている（引用符か逆引用符で囲むこと・設計 D-1）"
             ));
         }
-        if text.contains(STALE_REPORT_SPELLING) {
+        if names_stale_report(text) {
             findings.push(format!(
                 "{name}: 実在しない報告のファイル名 {STALE_REPORT_SPELLING} が書かれている（実在パスは doc/ukadoc-coverage/report/summary.md・要件 1.2）"
             ));
         }
-    }
-    findings
-}
-
-/// 判定 ⑹ の所見。空なら成り立っている。
-///
-/// 突き合わせるのは全文である（設計 D-5）。食い違ったら**最初に食い違った行**を行番号
-/// 付きで名指す——本文は 145 行あるので、「一致しない」とだけ言われても手の付けようが
-/// ない。行数が違うだけのときは、足りない側にその旨を書く。
-fn summary_findings(summary_text: &str, rendered: &str) -> Vec<String> {
-    if summary_text == rendered {
-        return Vec::new();
-    }
-    let mut findings = Vec::new();
-    let repo: Vec<&str> = summary_text.lines().collect();
-    let fresh: Vec<&str> = rendered.lines().collect();
-    for (at, (left, right)) in repo.iter().zip(fresh.iter()).enumerate() {
-        if left != right {
-            findings.push(format!(
-                "{SUMMARY_MD}:{}: 台帳から作り直した本文と食い違う（ファイルの側「{left}」／作り直した側「{right}」）。{REBUILD_SUMMARY} を走らせること",
-                at + 1
-            ));
-            break;
-        }
-    }
-    if findings.is_empty() {
-        findings.push(format!(
-            "{SUMMARY_MD}: 本文の量が食い違う（ファイルの側 {} 行 {} 文字／作り直した側 {} 行 {} 文字）。{REBUILD_SUMMARY} を走らせること",
-            repo.len(),
-            summary_text.chars().count(),
-            fresh.len(),
-            rendered.chars().count()
-        ));
     }
     findings
 }
@@ -378,16 +333,6 @@ fn bundle_findings(
     findings
 }
 
-/// 所見が 1 つでもあれば、その全部を名指して止まる。
-fn assert_no_findings(judgement: &str, findings: &[String]) {
-    assert!(
-        findings.is_empty(),
-        "{judgement}（{} 件）:\n{}",
-        findings.len(),
-        findings.join("\n")
-    );
-}
-
 // ---------------------------------------------------------------------------
 // 実データで緑（要件 11.1 ⑴ ⑵）
 // ---------------------------------------------------------------------------
@@ -397,10 +342,13 @@ fn assert_no_findings(judgement: &str, findings: &[String]) {
 fn every_id_cited_by_the_three_documents_exists_in_the_catalog() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let files = three_documents(&documents);
+    let files = three_documents(documents);
 
     let findings = citation_findings(&files, &repo.catalog);
-    assert_no_findings("3 文書の引用 id が台帳の正典と食い違う", &findings);
+    assert_no_findings(
+        "3 文書の引用がカタログ・書き方の決まりと食い違う",
+        &findings,
+    );
 }
 
 /// ⑵ 3 文書が引用した機械の束 id が全数、報告 5 本の束の一覧に在る。
@@ -408,26 +356,15 @@ fn every_id_cited_by_the_three_documents_exists_in_the_catalog() {
 fn every_machine_bundle_id_cited_by_the_three_documents_is_listed_in_the_reports() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let known = report_bundle_ids(&repo, &documents.summary_text);
-    let cited = cited_bundle_ids(&documents.linkage, &documents);
+    let known = report_bundle_ids(repo);
+    let cited = cited_bundle_ids(&documents.linkage, documents);
 
     let findings = bundle_findings(&cited, &known);
     assert_no_findings("3 文書の機械の束 id が報告と食い違う", &findings);
 }
 
-/// ⑹ `report/summary.md` の本文が、カタログと台帳 4 本から作り直した本文と全文一致する。
-#[test]
-fn the_summary_report_is_as_fresh_as_the_ledgers() {
-    let repo = RepoData::load();
-    let documents = Documents::load();
-    let rendered = render_summary(&repo.catalog, &repo.ledgers, &THEMES);
-
-    let findings = summary_findings(&documents.summary_text, &rendered);
-    assert_no_findings("全体報告が台帳より古い", &findings);
-}
-
 // ---------------------------------------------------------------------------
-// 写しを 1 か所だけ壊すと赤（要件 11.3）
+// 写しの狙った綴り・1 つの欄だけを壊すと赤（要件 11.3）
 // ---------------------------------------------------------------------------
 
 /// ⑴ 写しの id を 1 文字変えると、**ちょうどその 1 件**が名指しで赤になる。
@@ -459,20 +396,20 @@ fn twisting_one_cited_id_turns_the_citation_check_red() {
     );
 
     // 壊す前は緑であること（赤の原因が摂動だと言い切るために要る）。
-    let untouched = three_documents(&documents);
+    let untouched = three_documents(documents);
     assert_no_findings(
         "摂動の前から赤い（摂動が赤の原因だと言えない）",
         &citation_findings(&untouched, &repo.catalog),
     );
 }
 
-/// ⑵ 写しの由来の id（`machine` 欄）を 1 文字変えると、**ちょうどその 1 件**が
+/// ⑵ 写しが引用した機械の束 id（`machine` 欄か表の束 id の列）を 1 文字変えると、**ちょうどその 1 件**が
 /// 名指しで赤になる。
 #[test]
 fn twisting_one_machine_bundle_id_turns_the_bundle_check_red() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let known = report_bundle_ids(&repo, &documents.summary_text);
+    let known = report_bundle_ids(repo);
 
     let cited = linkage_bundle_ids(&documents.linkage, &documents.linkage_text);
     let target = a_twistable_id(&cited);
@@ -501,49 +438,29 @@ fn twisting_one_machine_bundle_id_turns_the_bundle_check_red() {
     // 壊す前は緑であること。
     assert_no_findings(
         "摂動の前から赤い（摂動が赤の原因だと言えない）",
-        &bundle_findings(&cited_bundle_ids(&documents.linkage, &documents), &known),
+        &bundle_findings(&cited_bundle_ids(&documents.linkage, documents), &known),
     );
 }
 
-/// ⑹ 写しの本文の数字を 1 つ変えると、**その行が**行番号付きで名指されて赤になる。
+/// ⑹ 写しの全体報告の数字を 1 つ変えると、全体報告の場所で古さの所見が 1 件だけ出る。
 ///
-/// 狙うのは「状態の分布」の縮退の件数で、実データの 22 を 23 にする。1 桁だけの違いで
-/// あって行の形は変わらないので、拾い方が「行の形が同じなら一致」といった緩い比べ方に
-/// なっていればここで緑のまま残る。
+/// 狙うのは「状態の分布」の縮退の件数で、1 つ増やす。1 桁だけの違いで行の形は変わらない
+/// ので、「行の形が同じなら一致」といった緩い比べ方ならここで緑のまま残る。壊す前の写しが
+/// 緑であることは `checks.rs` の `the_untouched_copy_of_real_data_is_still_green` が見る。
 #[test]
 fn shifting_one_number_in_the_summary_turns_the_freshness_check_red() {
-    let repo = RepoData::load();
-    let documents = Documents::load();
-    let rendered = render_summary(&repo.catalog, &repo.ledgers, &THEMES);
-    let broken = shift_row_count(&documents.summary_text, DEGRADED_ROW);
+    let mut copy = Perturbed::of(RepoData::load());
+    copy.summary_report = shift_row_count(&copy.summary_report, DEGRADED_ROW);
 
-    let findings = summary_findings(&broken, &rendered);
-    assert_eq!(
-        findings.len(),
-        1,
-        "1 か所だけ壊したのに赤が 1 件でない:\n{}",
-        findings.join("\n")
+    let findings = copy.findings();
+    expect_exactly(
+        &findings,
+        &[(FindingKind::DomainReportStale, None, SUMMARY_REPORT)],
     );
     assert!(
-        findings[0].contains(SUMMARY_MD) && findings[0].contains(REBUILD_SUMMARY),
-        "失敗の本文がファイル名と直し方を名指していない: {}",
-        findings[0]
-    );
-    let row = broken
-        .lines()
-        .position(|line| line.starts_with(&format!("| {DEGRADED_ROW} |")))
-        .expect("摂動した行が写しから消えた")
-        + 1;
-    assert!(
-        findings[0].contains(&format!("{SUMMARY_MD}:{row}:")),
-        "食い違った行を行番号で名指していない（{row} 行目のはず）: {}",
-        findings[0]
-    );
-
-    // 壊す前は緑であること（赤の原因が摂動だと言い切るために要る）。
-    assert_no_findings(
-        "摂動の前から赤い（摂動が赤の原因だと言えない）",
-        &summary_findings(&documents.summary_text, &rendered),
+        findings[0].detail.contains("report-summary"),
+        "所見が直し方の副手続きを名指していない: {}",
+        findings[0].detail
     );
 }
 
@@ -578,33 +495,71 @@ fn a_single_bare_id_turns_the_citation_check_red() {
 }
 
 /// ⑴ の「`report.md` の綴りは 0 件」に、1 件混ぜると赤になる腕を付ける（要件 1.2）。
+///
+/// パスの後ろ・逆引用符の中に加えて、全角の括弧や鉤括弧の直後でも数える。
 #[test]
 fn the_stale_report_spelling_turns_the_citation_check_red() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let smuggled = format!(
-        "{}\n\n根拠は `doc/ukadoc-coverage/{STALE_REPORT_SPELLING}` にある。\n",
-        documents.briefing_text
-    );
+    for spelling in [
+        format!("`doc/ukadoc-coverage/{STALE_REPORT_SPELLING}`"),
+        format!("（{STALE_REPORT_SPELLING}）"),
+        format!("「{STALE_REPORT_SPELLING}」"),
+    ] {
+        let smuggled = format!(
+            "{}\n\n根拠は {spelling} にある。\n",
+            documents.briefing_text
+        );
 
-    let files = [
-        (LINKAGE_MD, documents.linkage_text.as_str()),
-        (BRIEFING_MD, smuggled.as_str()),
-        (ROADMAP_MD, documents.roadmap_text.as_str()),
-    ];
-    let findings = citation_findings(&files, &repo.catalog);
+        let files = [
+            (LINKAGE_MD, documents.linkage_text.as_str()),
+            (BRIEFING_MD, smuggled.as_str()),
+            (ROADMAP_MD, documents.roadmap_text.as_str()),
+        ];
+        let findings = citation_findings(&files, &repo.catalog);
 
-    assert_eq!(
-        findings.len(),
-        1,
-        "古い報告名を 1 件混ぜたのに赤が 1 件でない:\n{}",
-        findings.join("\n")
-    );
-    assert!(
-        findings[0].contains(BRIEFING_MD) && findings[0].contains(STALE_REPORT_SPELLING),
-        "失敗の本文がファイル名と綴りを名指していない: {}",
-        findings[0]
-    );
+        assert_eq!(
+            findings.len(),
+            1,
+            "古い報告名を {spelling} の形で 1 件混ぜたのに赤が 1 件でない:\n{}",
+            findings.join("\n")
+        );
+        assert!(
+            findings[0].contains(BRIEFING_MD) && findings[0].contains(STALE_REPORT_SPELLING),
+            "失敗の本文がファイル名と綴りを名指していない: {}",
+            findings[0]
+        );
+    }
+}
+
+/// ⑴ の古い報告名は**ファイル名として**現れたときだけ赤にする——直前が英数字・`-`・
+/// `_`・`.` のとき（`gap-report.md` のような別のファイル名の一部）は赤くならない
+/// （要件 1.2）。
+#[test]
+fn a_file_name_that_merely_ends_in_report_md_keeps_the_citation_check_green() {
+    let repo = RepoData::load();
+    let documents = Documents::load();
+    for spelling in [
+        "`gap-report.md`",
+        "`gap_report.md`",
+        "`old.report.md`",
+        "`myreport.md`",
+    ] {
+        let smuggled = format!(
+            "{}\n\n根拠は {spelling} にある。\n",
+            documents.briefing_text
+        );
+
+        let files = [
+            (LINKAGE_MD, documents.linkage_text.as_str()),
+            (BRIEFING_MD, smuggled.as_str()),
+            (ROADMAP_MD, documents.roadmap_text.as_str()),
+        ];
+        assert_no_findings(
+            &format!("別のファイル名の一部 {spelling} を古い報告名として数えた"),
+            &citation_findings(&files, &repo.catalog),
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -664,9 +619,8 @@ fn the_bundle_list_scan_reads_both_shapes_and_skips_the_alias_table() {
 #[test]
 fn both_report_shapes_contribute_bundle_ids_in_the_real_data() {
     let repo = RepoData::load();
-    let documents = Documents::load();
 
-    let crossing = bundle_ids_in_report(&documents.summary_text);
+    let crossing = bundle_ids_in_report(&repo.summary_report);
     assert!(
         !crossing.is_empty(),
         "report/summary.md の「ドメインを跨いで繋がった束」から束 id を 1 件も拾えていない"
@@ -750,24 +704,5 @@ fn the_perturbation_target_is_never_a_prefix_of_another_id() {
         a_twistable_id(&ids),
         "ukadoc:a:X:1",
         "ほかの id の接頭辞になる綴りを選んでいる"
-    );
-}
-
-/// 実データで選んだ的が、実際に 3 文書のどこにも巻き添えを作らないこと。
-#[test]
-fn the_real_perturbation_target_appears_only_as_itself() {
-    let documents = Documents::load();
-    let ids = cited_ids(&documents.linkage_text);
-    let target = a_twistable_id(&ids);
-    let hit: BTreeMap<&str, usize> = ids
-        .iter()
-        .filter(|id| id.starts_with(&target))
-        .map(|id| (id.as_str(), 1))
-        .collect();
-    assert_eq!(
-        hit.len(),
-        1,
-        "摂動の的 {target} を接頭辞に持つ引用 id がほかにある: {:?}",
-        hit.keys().collect::<Vec<_>>()
     );
 }

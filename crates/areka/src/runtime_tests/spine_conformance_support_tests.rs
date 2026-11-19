@@ -1,12 +1,11 @@
-//! 段の駆動器（design D6）の受け入れ確認（areka-P0-emo2-conformance-e2e・task 2.3・R2.10・R3.2）。
+//! 段の駆動器（design D6）の受け入れ確認（areka-P0-emo2-conformance-e2e・R2.10・R3.2）。
 //!
-//! `spine_conformance_support.rs` は 1 ファイル 1,000 行の分量規律（R2.11・
-//! `.kiro/steering/structure.md:176`）に収まらないため、**主題単位に分けて接続する**——駆動器と
-//! 進行状態の記録の本体は支援層に残し、駆動器を縛る檻だけを本ファイルへ分けた。接続宣言は支援層の
-//! 末尾に置く（`spine.rs` は design が接続宣言 3 本に固定しており余白も 44 行しかないため、
-//! 経路をそちらへ増やさない）。
+//! `spine_conformance_support.rs` は 1 ファイル 1,000 行の分量規律（areka-P0-emo2-conformance-e2e の R2.11・
+//! `.kiro/steering/structure.md`）に収まらないため、**主題単位に分けて接続する**——駆動器は
+//! 支援層に残し、駆動器を縛る檻と進行状態の記録の檻を本ファイルへ分けた（進行状態の記録の取り出し口の本体は `areka-runtime` の `spine`）。
+//! 檻は支援層の子として置く。
 //!
-//! 本ファイルは**期待値を持たない**。段の区間の逐語は `spine_conformance_script.rs` の領分であり、
+//! 本ファイルは**台本の期待値を持たない**。段の区間の逐語は `spine_conformance_script.rs` の領分であり、
 //! 檻は自分が使う段を自前で宣言する（借りると、台本の宣言を変えたときに檻が黙って追随する）。
 
 use std::cell::Cell;
@@ -14,15 +13,32 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+use super::super::settle_bounded;
+use super::super::test_support::boot_finished;
+use super::super::{ExitKind, LoopDriver, ScriptedShioriHandle, shell_target, wait_until};
 use super::{
     ClosedInboxes, Inbox, Injection, LapDriver, LapStage, PresentCommand, RecordedCall,
-    StageFailure, StagePlan, StageSink, WaitFailure, WaitInjection, injection_kind,
+    StageFailure, StagePlan, StageSink, WaitFailure, WaitInjection,
 };
-use super::{ExitKind, LoopDriver, ScriptedShioriBackend, ScriptedShioriHandle, SpineHarness};
-use super::{Progress, shell_target, wait_until};
-use areka_kanade::{ChoiceInput, CloseReason, MouseEventKind, MouseInput};
+use super::{Progress, RecordedStatus, ScriptedShioriBackend, ShioriBackend, SpineHarness};
+use areka_kanade::{
+    ChoiceInput, CloseReason, ExecutionSnapshot, MonotonicMs, MouseEventKind, MouseInput,
+    ShioriCall,
+};
 
-// 段の駆動器の受け入れ確認（task 2.3・R2.10・R3.2）
+/// 檻の偽物が注入を記録するときの種別名。
+fn injection_kind(injection: &Injection) -> &'static str {
+    match injection {
+        Injection::KanadeTick => "kanade-tick",
+        Injection::DispatcherTick => "dispatcher-tick",
+        Injection::Mouse(_) => "mouse",
+        Injection::Choice(_) => "choice",
+        Injection::CloseRequest(_) => "close-request",
+        Injection::KanadeProbe => "kanade-probe",
+    }
+}
+
+// 段の駆動器の受け入れ確認（areka-P0-emo2-conformance-e2e の R2.10・R3.2）
 // ===========================================================================
 
 /// 檻用の段宣言を組む（区間の逐語は `spine_conformance_script.rs` の領分ゆえ、檻は自前で宣言する）。
@@ -69,7 +85,7 @@ impl FakeStageSink {
     }
 
     /// 目印を持たない投函先。`［進みは不明］` の形そのものを確かめる檻だけが使う（目印を持つと
-    /// 打ち切りが `［止まった］` になり、確かめたい形を踏めない・要件 7.3 の例外・`load-repro.md` の ⑵）。
+    /// 打ち切りが `［止まった］` になり、確かめたい形を踏めない・areka-test-binary-stability 要件 7.3 の例外・`load-repro.md` の ⑵）。
     fn silent_unmarked() -> Self {
         FakeStageSink {
             injections: None,
@@ -122,7 +138,7 @@ impl StageSink for FakeStageSink {
     }
 }
 
-/// 完了条件が成立しないまま有界時間が尽きたら、**段名を名指しした失敗を呼び手へ返す**（R1.6）。
+/// 完了条件が成立しないまま有界時間が尽きたら、**段名を名指しした失敗を呼び手へ返す**（areka-P0-emo2-conformance-e2e の R1.6）。
 ///
 /// 檻に入れる判断分岐:
 /// - **素通りさせないこと**: 尽きた結果を「観測なし」の成功として返さない。`Ok` で返ると、後段の
@@ -183,12 +199,12 @@ fn stage_driver_returns_named_timeout_instead_of_silent_success() {
     );
 }
 
-/// 注入時刻が段の上限に達したら**以後は注入せず観測だけを待つ**（design D6 の不変条件）。
+/// 注入時刻が段の上限に達したら**以後は注入せず観測だけを待つ**（areka-P0-emo2-conformance-e2e の design D6 の不変条件）。
 ///
 /// 檻に入れる判断分岐:
 /// - **頭打ちで注入が止まること**: 投函の時刻列が上限の手前で終わる。止まらないと注入時刻が観測を
 ///   追い越し、待っている条件そのものが壊れて永久に不成立になる（`SPIN_WAIT` の doc の実測）。
-/// - **止まった後も観測は続くこと**: 最後の注入より 3 反復あとに払い出した 1 件が、頭打ち後の注入
+/// - **止まった後も観測は続くこと**: 頭打ちの後の反復で払い出した 1 件が、頭打ち後の注入
 ///   時刻つきで採取できている。「注入を止める」を「待つのをやめる」と取り違えると採れない。
 #[test]
 fn stage_driver_stops_injecting_at_the_limit_and_keeps_observing() {
@@ -230,7 +246,7 @@ fn stage_driver_stops_injecting_at_the_limit_and_keeps_observing() {
     );
 }
 
-/// 注入時刻は走行を通じて単調増加し、各段の上限を超えない（design D6 の不変条件）。
+/// 注入時刻は走行を通じて単調増加し、各段の上限を超えない（areka-P0-emo2-conformance-e2e の design D6 の不変条件）。
 ///
 /// 檻に入れる判断分岐: ⑴ 2 段ぶんの注入時刻を 1 本に並べて非減少である ⑵ 各段の幅は刻み
 /// （1,000ms）の整数倍ではない（1,500ms）ので、上限で止めていなければ注入時刻が段の外へ出て次段の
@@ -389,7 +405,7 @@ fn stage_driver_refuses_a_plan_that_cannot_fit_in_the_stage_interval() {
     assert!(sink.injected.is_empty(), "断る前に注入してしまっている");
 }
 
-/// 採取時の注入時刻が段の宣言区間の外なら、**製品の退行と区別できる形**で失敗する（design D3）。
+/// 採取時の注入時刻が段の宣言区間の外なら、**製品の退行と区別できる形**で失敗する（areka-P0-emo2-conformance-e2e の design D3）。
 ///
 /// 檻に入れる判断分岐: ⑴ 区間が逆転した段宣言（下限 > 上限）で駆動すると最初の採取で検査が落ちる
 /// ——落ちなければ採取が黙って続き、後段の段名の食い違いとして**製品の退行に化ける** ⑵ 失敗が
@@ -430,7 +446,7 @@ fn stage_driver_self_check_names_a_collection_outside_the_declared_interval() {
     );
 }
 
-/// 投函先が既に閉じていたことを握り潰さず、完了条件と成果の両方へ渡す（design D1 の終了段）。
+/// 投函先が既に閉じていたことを握り潰さず、完了条件と成果の両方へ渡す（areka-P0-emo2-conformance-e2e の design D1 の終了段）。
 /// 檻に入れる判断分岐: 終了段の完了条件は kanade の自己終了の観測を含む——投函の `Err` を捨てると
 /// その観測点が消え、代わりに panic させると段名が消える。どちらでもない形で運ぶ。
 #[test]
@@ -462,15 +478,15 @@ fn stage_driver_reports_a_closed_inbox_without_swallowing_or_panicking() {
     assert_eq!(sink.injected, vec![("close-request", 1_000)]);
 }
 
-/// 毎秒の変化通知は **kanade の送信端へ直接**投函され、待ちの繰り返しは 1 件も増やさない（R3.2）。
+/// 毎秒の変化通知は **kanade の送信端へ直接**投函され、待ちの繰り返しは 1 件も増やさない（areka-P0-emo2-conformance-e2e の R3.2）。
 ///
 /// 檻に入れる判断分岐:
 /// - **投函先が kanade であり本数が 1 対 1 であること**: kanade Tick を 1 本投函すると
-///   `OnSecondChange` がちょうど 1 件現れる（`schedule/steady.rs:669-718`）。dispatcher 側へ投げて
+///   `OnSecondChange` がちょうど 1 件現れる（`schedule/steady.rs`）。dispatcher 側へ投げて
 ///   いたら 0 件のままである（`spine.rs` の標準台本が `OnSecondChange` を持たないのはこのため）。
 /// - **待ちが増やさないこと**: 完了条件が成立しない段を有界待ち切れまで回しても件数が 1 のまま
 ///   ＝繰り返す注入（再生側）が SHIORI 呼出を 1 件も起こしていない。交信の列は等値照合ゆえ
-///   （R2.3）、待ちの最中に 1 本でも増えると期待列が満たせなくなる。
+///   （areka-P0-emo2-conformance-e2e の R2.3）、待ちの最中に 1 本でも増えると期待列が満たせなくなる。
 #[test]
 fn kanade_tick_raises_one_second_change_where_the_waiting_injection_raises_none() {
     let (backend, handle) = ScriptedShioriBackend::builder()
@@ -487,15 +503,17 @@ fn kanade_tick_raises_one_second_change_where_the_waiting_injection_raises_none(
         .build();
     let mut harness = SpineHarness::boot_with(backend, handle.clone(), LoopDriver::Inert);
 
-    // 起動系列 5 呼出が揃うまで待つ（目印は SHIORI の呼び出しの数）。
+    // 起動の系列が最後の basewareversion まで終わるのを待つ（目印は SHIORI の呼び出しの数）。
     let calls = || handle.call_count();
     assert!(
-        wait_until("起動系列 5 呼出", Progress::Count(&calls), || {
-            handle.non_status_calls().len() >= 5
-        })
+        wait_until(
+            "起動の系列（最後は basewareversion）",
+            Progress::Count(&calls),
+            || { boot_finished(&handle.non_status_calls()) }
+        )
         .inspect_err(|failure| eprintln!("{failure}"))
         .is_ok(),
-        "起動系列 5 呼出が有界内に揃わない"
+        "起動の系列（最後は basewareversion）が有界内に終わらない"
     );
     assert_eq!(
         second_change_calls(&handle),
@@ -553,6 +571,14 @@ fn kanade_tick_raises_one_second_change_where_the_waiting_injection_raises_none(
         ),
         "待ちの繰り返しだけの段が段名つきの待ち切れで返っていない: {timed_out:?}"
     );
+    // 負の検証は回収（settle）で届くのを待ってから読む（待ちが打ち切られた直後の 1 回読みでは、非同期の記録が間に合わない）。
+    let mut seen = handle.non_status_calls().len();
+    settle_bounded(|| {
+        let now = handle.non_status_calls().len();
+        let fresh = now.saturating_sub(seen);
+        seen = now;
+        fresh
+    });
     assert_eq!(
         second_change_calls(&handle),
         1,
@@ -578,7 +604,7 @@ pub(super) fn second_change_calls(handle: &ScriptedShioriHandle) -> usize {
 }
 
 // ===========================================================================
-// 据え置きの門の受け入れ確認（task 3.1 の再提出・design D6 の危険欄・R2.10）
+// 据え置きの門の受け入れ確認（areka-P0-emo2-conformance-e2e の design D6 の危険欄・R2.10）
 // ===========================================================================
 
 /// 据え置きの門だけを検査する投函先（起動を伴わずに駆動器の時刻の進め方を見る）。
@@ -622,7 +648,7 @@ impl StageSink for HoldingSink {
 ///
 /// 檻に入れる判断分岐:
 /// - **据え置き中も投函は続くこと**: 再生側 Tick が止まると、待っている会話は永久に起動しない
-///   （駆動器が注入をやめると再生が凍る＝design D6 の危険欄）。
+///   （駆動器が注入をやめると再生が凍る＝areka-P0-emo2-conformance-e2e の design D6 の危険欄）。
 /// - **据え置き中は時刻が 1 ミリ秒も動かないこと**: 動くと予算が減り、着地が遅いと上限へ達して
 ///   同じ凍り方をする。実測ではこれが高負荷で装着段・選択確定段を赤くしていた。
 /// - **門が開いたら刻みどおり進むこと**: 据え置きが解けない実装は再生を進める相へ進めない。
@@ -630,7 +656,7 @@ impl StageSink for HoldingSink {
 ///   止まっているはずの台本へ再生が流し込まれ、次段の選択確定が棄却される。
 ///
 /// 期待する投函列は「据え置き 5 本（すべて下限）＋前進 4 本（刻みどおり）＋余韻 0 本」である。
-/// 区間は 19 本ぶん取ってあるので、余韻で注入が続けば必ず 4 本ぶん余計に並ぶ。
+/// 区間は期待の列より長く取ってあるので、余韻の間に注入が続けば投函列が期待の列より長くなる。
 #[test]
 fn stage_driver_holds_the_injection_clock_until_the_landing_is_observed() {
     let stage = LapStage {
@@ -675,4 +701,123 @@ fn stage_driver_holds_the_injection_clock_until_the_landing_is_observed() {
         "投函が段の区間の外へ出ている: {:?}",
         observed.injected_at_ms
     );
+}
+
+// ===========================================================================
+// 進行状態の記録（第 2 系統）の受け入れ確認（areka-P0-emo2-conformance-e2e の R3.8）
+// ===========================================================================
+
+/// 進行状態の記録が**選択待ちを会話中と区別して**読めることを固定する（areka-P0-emo2-conformance-e2e の R3.8）。
+///
+/// 檻に入れる判断分岐:
+/// - **付随参照だけでは足りないこと**: 会話中のみと会話中かつ選択待ちの 2 つのスナップショットから
+///   本番の構築関数が組む毎秒の変化通知は、**参照列が 1 バイトも違わない**（Ref3 の源は
+///   `talk_active` だけ）。既存の呼出記録は参照列までしか持たないので、ここで区別が消える。
+/// - **新しい取り出し口が区別を回復すること**: 同じ 3 呼出を台本受け口へ通すと、進行状態の記録には
+///   組み立て済みのヘッダ値がそのまま残り、選択待ちの回だけが `talking,choosing` として読める。
+/// - **ヘッダ行を出さない場合の表し方**: 全状態が非アクティブなら記録は `None`（＝ヘッダ行なし）。
+/// - **既存の記録が変わらないこと**: 同じ走行で `non_status_calls()` が従来どおり 3 件を返す。
+#[test]
+fn status_ledger_reads_choosing_where_references_cannot() {
+    // ── 実状態（非アクティブ・会話中・会話中かつ選択待ち。いずれも本番で起こりうる組み合わせのみ） ──
+    // 選択待ちの間も会話の枠は占有されたままゆえ、選択待ちは常に talk_active と同時に真になる。
+    let idle = ExecutionSnapshot::INACTIVE;
+    let talking = ExecutionSnapshot {
+        talk_active: true,
+        choice_active: false,
+        ..ExecutionSnapshot::INACTIVE
+    };
+    let choosing = ExecutionSnapshot {
+        talk_active: true,
+        choice_active: true,
+        ..ExecutionSnapshot::INACTIVE
+    };
+
+    // ── (1) 付随参照は会話中と選択待ちを区別しない（＝記録の第 2 系統が要る理由・areka-P0-emo2-conformance-e2e の R3.8） ──
+    let talking_call = areka_kanade::events::on_second_change(MonotonicMs(0), &talking);
+    let choosing_call = areka_kanade::events::on_second_change(MonotonicMs(0), &choosing);
+    assert_eq!(
+        call_references(&talking_call),
+        call_references(&choosing_call),
+        "会話中と選択待ちで参照列が違うなら Ref3 で区別できてしまい、進行状態の記録は要らない"
+    );
+
+    // ── (2) 同じ 3 呼出を台本受け口へ通す ──
+    let (mut backend, handle) = ScriptedShioriBackend::builder()
+        .get("OnSecondChange", Ok(None))
+        .notify("OnSecondChange", Ok(()))
+        .notify("OnSecondChange", Ok(()))
+        .build();
+    let idle_call = areka_kanade::events::on_second_change(MonotonicMs(0), &idle);
+    drive_call(&mut backend, &idle_call);
+    drive_call(&mut backend, &talking_call);
+    drive_call(&mut backend, &choosing_call);
+
+    // ── (3) 新しい取り出し口から進行状態が読める（選択待ちが会話中と別物として現れる） ──
+    assert_eq!(
+        handle.status_calls(),
+        vec![
+            RecordedStatus {
+                id: "OnSecondChange".to_string(),
+                status: None,
+            },
+            RecordedStatus {
+                id: "OnSecondChange".to_string(),
+                status: Some("talking".to_string()),
+            },
+            RecordedStatus {
+                id: "OnSecondChange".to_string(),
+                status: Some("talking,choosing".to_string()),
+            },
+        ],
+        "進行状態の記録が組み立て済みのヘッダ値（無いときは None）を呼出順に保持していない"
+    );
+
+    // ── (4) 既存の呼出記録は素通し（追補は書き込みのみで既存の読み手を増やさない） ──
+    let existing = handle.non_status_calls();
+    assert_eq!(
+        existing.len(),
+        3,
+        "既存の呼出記録が追補で変質している: {existing:?}"
+    );
+    assert!(
+        matches!(existing[0], RecordedCall::Get { .. })
+            && matches!(existing[1], RecordedCall::Notify { .. })
+            && matches!(existing[2], RecordedCall::Notify { .. }),
+        "既存の呼出記録の別（照会・片道）が従来どおりに残っていない: {existing:?}"
+    );
+}
+
+/// [`ShioriCall`] の参照列を借りる（照会・片道のどちらでも同じ位置にある）。
+fn call_references(call: &ShioriCall) -> &[String] {
+    match call {
+        ShioriCall::Get { references, .. } | ShioriCall::Notify { references, .. } => references,
+    }
+}
+
+/// 本番の構築関数が組んだ [`ShioriCall`] を、別と id と参照列と**組み立て済み進行状態**の
+/// まま台本受け口へ通す（`crates/areka-kanade/src/shiori/real.rs` と同じ渡し方）。
+fn drive_call(backend: &mut ScriptedShioriBackend, call: &ShioriCall) {
+    match call {
+        ShioriCall::Get {
+            id,
+            references,
+            status,
+        } => {
+            let wire = status.render();
+            backend
+                .get(id.as_str(), references, wire.as_deref())
+                .expect("台本の照会応答は Ok");
+        }
+        ShioriCall::Notify {
+            id,
+            references,
+            status,
+        } => {
+            let wire = status.render();
+            backend
+                .notify(id.as_str(), references, wire.as_deref())
+                .expect("台本の片道応答は Ok");
+        }
+    }
 }

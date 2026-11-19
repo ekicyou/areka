@@ -210,7 +210,7 @@ pub enum PlacementRoute {
     ///
     /// 関門（`enqueue_window_set_pos` 内）が行う補正は本語を名乗らない——そちらは
     /// **元書込の route を保つ**。補正は同一書込の一部であって別書込ではないからである（DD7）。
-    // 発行者は `follow::drag_follow::apply_release_limit_correction` ただ 1 箇所。
+    // 発行者は `follow::balloon_drag::apply_release_limit_correction` ただ 1 箇所。
     BalloonLimitRelease,
     /// 作業領域の変化を契機とする現寸での再スナップ
     /// （areka-P0-dpi-transition-atomicity C6 `work_area_sync::resnap_for_work_area_change`）。

@@ -443,8 +443,7 @@ pub(crate) fn spawn_message_drain(name: &str) -> (EmoTextSink, Arc<Mutex<Vec<Tex
                 },
             )
         },
-    )
-    .expect("spawn_ui on the test (pump) thread must succeed");
+    );
     (EmoTextSink::new(tx), records)
 }
 

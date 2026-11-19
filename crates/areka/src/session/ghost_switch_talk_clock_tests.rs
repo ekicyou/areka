@@ -68,7 +68,6 @@ fn line(call: &RecordedCall, root: &str) -> String {
         RecordedCall::Get { id, references } => ("GET", id.as_str(), references.as_slice()),
         RecordedCall::Notify { id, references } => ("NOTIFY", id.as_str(), references.as_slice()),
         RecordedCall::Unload => ("UNLOAD", "", &[][..]),
-        RecordedCall::Status => ("STATUS", "", &[][..]),
     };
     format!("{kind} {id} {:?}", refs.join("|").replace(root, "<root>"))
 }

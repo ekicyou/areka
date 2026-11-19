@@ -1,35 +1,34 @@
-//! 母数の器（[`Floors`]）と、実データの写しを 1 か所だけ壊す道具 5 つの較正
-//! （要件 11.3・11.4・設計「入口 / `tests/consistency`」）。
+//! 母数の器（[`Floors`]）と、実データの写しの狙った綴り・1 つの欄だけを壊す道具
+//! 4 つの較正（要件 11.3・11.4・設計「入口 / `tests/consistency`」）。
 //!
 //! 道具そのものは兄弟の `documents.rs` にあり、そこにはテストの本体を 1 つも置かない。
 //! 母数の下限そのものの主張は `documents_non_vacuity.rs` にある。2 つに割ってあるのは
-//! 1 ファイル 1,000 行の目安を守るためである（`structure.md:176`・設計「1,000 行の
+//! 1 ファイル 1,000 行の目安を守るためである（`structure.md`・設計「1,000 行の
 //! 番人」）——判定 ⑸ の母数を足す前に、較正の側をこちらへ移した。
 //!
 //! # ここに置くもの
 //!
 //! - 母数の下限を集める器（[`Floors`]）の較正——下限を下回れば赤になり、下限 0 は
 //!   主張として受け付けない。
+//! - spec の一覧の絞り（[`spec_dir_names`]）の例——brief の無い名前は赤にせず落とす。
 //! - 引用 id の取り出し（[`cited_ids`]）の較正。
-//! - 写しを 1 か所だけ壊す道具 5 つの較正——狙った 1 か所だけが変わり、狙いが無ければ
-//!   止まり、repo のファイルには 1 バイトも触れない。
+//! - 写しの狙った綴り・1 つの欄だけを壊す道具 4 つの較正——狙ったところだけが変わり、
+//!   狙いが無ければ止まる。道具は `&str` を受けて `String` を返すだけで、型の上で repo のファイルには
+//!   触れない。
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
-use std::time::SystemTime;
 
 use ukadoc_survey::documents::Stage;
-use ukadoc_survey::io::paths;
 
 use super::documents::{
-    Documents, Floors, cited_ids, drop_bundle_name, drop_member, shift_count, shift_row_count,
-    twist_id, twisted_id,
+    COMPLETED_DIR, Documents, Floors, OWN_SPEC_DIR, cited_ids, drop_member, shift_count,
+    shift_row_count, spec_dir_names, twist_id, twisted_id,
 };
 
 /// 母数の器が、下限を下回った行を**すべて**名指すこと。
 #[test]
 fn the_floor_container_reports_every_row_that_falls_short() {
-    let mut floors = Floors::new();
+    let mut floors = Floors::default();
     floors
         .at_least("足りている数", 5, 1)
         .at_least("足りない数", 0, 1)
@@ -54,7 +53,7 @@ fn the_floor_container_reports_every_row_that_falls_short() {
 /// 母数の器が、下限 0（＝何も主張していない）を違反として扱うこと。
 #[test]
 fn the_floor_container_refuses_a_floor_of_zero() {
-    let mut floors = Floors::new();
+    let mut floors = Floors::default();
     floors.at_least("母数 0 でも通る下限", 1_000, 0);
 
     let short = floors.short();
@@ -65,16 +64,37 @@ fn the_floor_container_refuses_a_floor_of_zero() {
     );
 }
 
-/// 満たしている器は止まらないこと（較正の反対側）。
+/// 満たしている器は止まらないこと（較正の反対側）。実数が下限ちょうどでも緑である。
 #[test]
 fn the_floor_container_stays_quiet_when_every_row_is_met() {
-    let mut floors = Floors::new();
-    floors.at_least("足りている数", 2, 1);
+    let mut floors = Floors::default();
+    floors
+        .at_least("足りている数", 2, 1)
+        .at_least("ちょうど", 1, 1);
     assert!(
         floors.short().is_empty(),
         "満たしているのに違反を挙げている"
     );
     floors.assert_met();
+}
+
+/// spec の一覧の絞りが、brief の無い名前・`completed`・本 spec を赤にせず落とすこと。
+///
+/// `/kiro-spec-init` などで作ったばかりのフォルダには brief.md が無い。それで全体テストが
+/// 赤になってはならず、一覧から黙って落ちればよい。
+#[test]
+fn the_spec_listing_drops_brief_less_names_without_turning_red() {
+    let names = spec_dir_names([
+        ("brief-on".to_owned(), true),
+        ("brief-less".to_owned(), false),
+        (COMPLETED_DIR.to_owned(), true),
+        (OWN_SPEC_DIR.to_owned(), true),
+    ]);
+    assert_eq!(
+        names,
+        BTreeSet::from(["brief-on".to_owned()]),
+        "brief 持ちの名前だけが残っていない"
+    );
 }
 
 /// 引用 id の取り出しが引用符と逆引用符の両方を拾い、重複を畳むこと。
@@ -103,7 +123,7 @@ members = [\"ukadoc:list_shiori_event:OnBoot:1\", \"ukadoc:list_shiori_event:OnC
 fn twisting_an_id_changes_exactly_one_character() {
     let id = "ukadoc:list_shiori_event:OnBoot:1";
     let twisted = twisted_id(id);
-    assert_eq!(twisted, "ukadoc:list_shiori_event:OnBoot:X");
+    assert_eq!(twisted, "ukadoc:list_shiori_event:OnBoot:0");
     assert_eq!(
         twisted.chars().count(),
         id.chars().count(),
@@ -171,16 +191,15 @@ fn shifting_a_count_moves_the_number_by_one() {
     );
 }
 
-/// 同じ鍵が別の表と地の文にも現れるとき、錨が狙った表の中だけを見ること。
+/// 同じ鍵が別の表と、囲みの後ろの地の文にも現れるとき、錨が狙った表の中だけを見ること。
 ///
 /// これがこの道具の要である。錨を本文全体に置くと、`briefing.md` の `[stage.A]`〜
-/// `[stage.E]` が同じ鍵を 5 回持つだけで摂動が空振りして止まり、`linkage.md` の
-/// 地の文に恒等式を半角の `=` で書くだけで同じことが起きる（設計 D-2）。
+/// `[stage.E]` が同じ鍵を 5 回持つだけで摂動が空振りして止まる（設計 D-2）。地の文は
+/// 囲みの最後の表の後ろに逆引用符なしで `singles = 0` と書いてあり、表の範囲が閉じの
+/// ` ``` ` を越えてはみ出すと、鍵が 2 度現れて止まる。
 #[test]
 fn shifting_a_count_looks_only_inside_the_named_table() {
     let markdown = "\
-恒等式は target = from_machine + by_hand + singles である。
-
 ```toml
 [stage.A]
 bundles = 7
@@ -192,6 +211,8 @@ bundles = 4
 singles = 0
 items = 96
 ```
+
+地の文に singles = 0 と書いても、表の欄ではない。
 ";
     let shifted = shift_count(markdown, "[stage.B]", "singles");
     assert!(
@@ -203,7 +224,7 @@ items = 96
         "狙った段階の欄を動かせていない:\n{shifted}"
     );
     assert!(
-        shifted.contains("恒等式は target = from_machine"),
+        shifted.contains("地の文に singles = 0 と書いても"),
         "地の文まで書き換えている:\n{shifted}"
     );
 }
@@ -223,17 +244,6 @@ fn shifting_a_count_reaches_every_stage_block_of_the_real_briefing() {
             "{table} の singles を 1 ずらせていない"
         );
     }
-}
-
-/// 束名を 1 つ消す摂動が、その名前を書いた行だけを落とすこと。
-#[test]
-fn dropping_a_bundle_name_removes_its_line() {
-    let toml = "[[rank]]\nstage = \"B\"\nbundle = \"更新\"\nrank = 1\n";
-    assert_eq!(
-        drop_bundle_name(toml, "更新"),
-        "[[rank]]\nstage = \"B\"\nrank = 1",
-        "束名を書いた行だけを落とせていない"
-    );
 }
 
 /// 表の行の数をずらす摂動が、狙った行の数だけを 1 動かすこと。
@@ -266,7 +276,7 @@ fn shifting_a_row_count_moves_the_number_by_one() {
     );
 }
 
-/// 狙いが無いのに素通りしないこと（5 つの道具それぞれ）。
+/// 狙いが無いのに素通りしないこと（4 つの道具それぞれ）。
 #[test]
 #[should_panic(expected = "写しに id ukadoc:no:such:1 が無い")]
 fn twisting_an_absent_id_stops() {
@@ -293,12 +303,6 @@ fn shifting_a_count_in_an_absent_table_stops() {
 
 #[test]
 #[should_panic(expected = "ちょうど 1 行ない")]
-fn dropping_an_absent_bundle_name_stops() {
-    drop_bundle_name("[[rank]]\nrank = 1\n", "更新");
-}
-
-#[test]
-#[should_panic(expected = "ちょうど 1 行ない")]
 fn shifting_an_absent_row_count_stops() {
     shift_row_count("| 縮退 | 22 |\n", "未対応");
 }
@@ -307,94 +311,4 @@ fn shifting_an_absent_row_count_stops() {
 #[should_panic(expected = "ちょうど 1 行ない")]
 fn shifting_a_row_count_of_a_repeated_label_stops() {
     shift_row_count("| 縮退 | 22 |\n| 縮退 | 23 |\n", "縮退");
-}
-
-/// 壊す道具が repo のファイルに 1 バイトも触れないこと（要件 11.3 の前提）。
-///
-/// 5 つの道具を**合成の写し**の上で一通り働かせ、うち `twist_id`・`shift_count`・
-/// `shift_row_count` の 3 つは**実データの写し**（前 2 つは `linkage.md`、最後は
-/// `report/summary.md` の本文）の上でも働かせる。前後でファイルの
-/// 中身と更新時刻が変わらないことを見る——写しの上だけで働く関数だという主張は、
-/// こうして実ファイルを見ないと「たまたま今は書いていない」と区別できない。
-///
-/// 残る 2 つ（`drop_member`・`drop_bundle_name`）は合成の写しだけに掛ける。実データで
-/// 掛けられないからではなく、**狙いを 1 つに決める理屈がここには無い**からである。
-/// どちらの道具も「写しにちょうど 1 度だけ現れる綴り」を要求するので、実データでは
-/// 狙いを選ぶ側の理屈（どの id・どの束名なら 1 度きりか）が要る。それは帰属の判定
-/// （⑶ ⑷）の持ち物なので、選び方はそちらへ置く。
-///
-/// 2026-09-13 に段 4 の後で数え直した実測（**この段落は 2 度古びている**——初版は
-/// 3 文書が骨組みだったころの写真のまま、2026-09-12 の版は段 1 の写真のままで、
-/// どちらも `briefing.md` を 0 件と書いていた。**数を doc に書く限りこの壊れ方は
-/// 繰り返す**ので、増減したら日付ごと採り直すこと）:
-///
-/// - 3 文書の `ukadoc:` の出現: `linkage.md` **3,135 件**・`briefing.md` **337 件**・
-///   `roadmap-draft.md` **0 件**。
-/// - `linkage.md` の `members = `: **67 件**（束 63・単独項目 4）。
-/// - `briefing.md` の `bundle = `: **63 件**（段 4 が書いた。`[[rank]]` は **66 行**で、
-///   差の 3 行は単独項目を並べた `singles` の行である）。
-/// - `linkage.md` の引用符付き id で**ちょうど 1 度**現れるもの: **151 件**
-///   （`drop_member` の狙いになりうる綴り）。束名 67 のうち、その綴りを引用符付きで
-///   書いた行が 1 行きりのもの: **62 件**（`drop_bundle_name` の狙いになりうる名前）。
-#[test]
-fn the_breaking_tools_do_not_touch_the_repository_files() {
-    let watched: Vec<PathBuf> = vec![
-        paths::linkage_path(),
-        paths::briefing_path(),
-        paths::roadmap_draft_path(),
-        paths::summary_report_path(),
-    ];
-    let before: Vec<(Vec<u8>, SystemTime)> = watched.iter().map(fingerprint).collect();
-
-    let documents = Documents::load();
-    let id = "ukadoc:list_shiori_event:OnBoot:1";
-    let sample = format!(
-        "[bundle.\"起動\"]\nmembers = [\"{id}\", \"ukadoc:list_shiori_event:OnClose:1\"]\n\n[tally]\ntarget = 2\n"
-    );
-    let _ = twist_id(&sample, id);
-    let _ = drop_member(&sample, id);
-    let _ = shift_count(&sample, "[tally]", "target");
-    let _ = drop_bundle_name(&sample, "起動");
-    let _ = shift_row_count("| 縮退 | 22 |\n", "縮退");
-    // 実データの写しの上でも働かせる（写しを取り違えて元を触る壊れ方を見る）。
-    let _ = shift_count(&documents.linkage_text, "[tally]", "target");
-    let _ = shift_row_count(&documents.summary_text, "縮退");
-    let cited = cited_ids(&documents.linkage_text);
-    let first = cited
-        .iter()
-        .next()
-        .expect("linkage.md が id を 1 つも引用していない");
-    let _ = twist_id(&documents.linkage_text, first);
-
-    let after: Vec<(Vec<u8>, SystemTime)> = watched.iter().map(fingerprint).collect();
-    for (path, (before, after)) in watched.iter().zip(before.iter().zip(after.iter())) {
-        assert_eq!(
-            before.0.len(),
-            after.0.len(),
-            "{} の長さが変わった（道具が repo のファイルを書き換えた）",
-            path.display()
-        );
-        assert_eq!(
-            before.0,
-            after.0,
-            "{} の中身が変わった（道具が repo のファイルを書き換えた）",
-            path.display()
-        );
-        assert_eq!(
-            before.1,
-            after.1,
-            "{} の更新時刻が変わった（道具が repo のファイルへ書き戻した）",
-            path.display()
-        );
-    }
-}
-
-/// ファイルの中身と更新時刻。
-fn fingerprint(path: &PathBuf) -> (Vec<u8>, SystemTime) {
-    let bytes =
-        std::fs::read(path).unwrap_or_else(|err| panic!("{} を読めない: {err}", path.display()));
-    let modified = std::fs::metadata(path)
-        .and_then(|meta| meta.modified())
-        .unwrap_or_else(|err| panic!("{} の更新時刻を読めない: {err}", path.display()));
-    (bytes, modified)
 }

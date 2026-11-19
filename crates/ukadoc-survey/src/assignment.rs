@@ -10,10 +10,8 @@
 //! 仕立てはカタログを建てる段の仕事で、ここは「割り当ての無いページ」を並べて返す
 //! ところまでを受け持つ。
 //!
-//! 実測（スナップショットの `source` が `ukadoc` の全 1,749 件）でのドメイン別件数は
-//! shiori 677・assets 542・sakura-script 342・property 188 で、合計 1,749。要件 3.1 の
-//! 表と一致する。件数そのものはこの層の API では扱わない——数えるのは実データを持つ
-//! 段の仕事だからである。
+//! ページ単位の割り当てだけを持ち、項目の件数はこの層の API では扱わない——数えるのは
+//! 実データを持つ段の仕事だからである。
 //!
 //! ここは純粋層で、ファイルにもスナップショットにも触らない（要件 6.2）。
 
@@ -92,8 +90,7 @@ fn canonical_pages(domain: Domain) -> &'static [&'static str] {
 /// 中身はページ名を鍵とする 1 本の表なので、1 ページに 2 つのドメインは持てない
 /// （設計の不変条件はこの形で構造的に守られる）。表の元になる並びに同じ名前を
 /// 2 度書いた場合だけは畳むときに黙って上書きされるので、そちらは在中テスト
-/// `source_table_has_thirty_eight_pairwise_distinct_page_names` と
-/// `folding_the_table_loses_no_page` が赤にする。
+/// `source_table_has_thirty_eight_pairwise_distinct_page_names` が赤にする。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PageAssignment {
     by_page: BTreeMap<PageName, Domain>,

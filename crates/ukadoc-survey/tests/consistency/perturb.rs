@@ -1,8 +1,8 @@
-//! 実データの写しを 1 か所だけ壊す道具（設計 File Structure Plan）。
+//! 実データの壊してよい写しと、壊した結果の見方の道具（設計 File Structure Plan）。
 //!
 //! テストの本体はここに 1 つも無い。壊す相手（[`Perturbed`]）と、壊した結果の見方
 //! （[`expect_exactly`]）と、摂動で持ち込む綴りの定数だけを置く。使う側は
-//! `consistency/checks.rs` の ⑶ の一群である。
+//! `consistency/checks.rs` と `consistency/documents_checks.rs` の摂動である。
 //!
 //! # repo のファイルには 1 バイトも触れない
 //!
@@ -17,7 +17,7 @@ use ukadoc_survey::evidence::EvidenceIndex;
 use ukadoc_survey::evidence::extract::extract;
 use ukadoc_survey::evidence::resolve::resolve;
 use ukadoc_survey::ledger::{Ledger, LedgerEntry};
-use ukadoc_survey::model::{Domain, EntryId, THEMES};
+use ukadoc_survey::model::{Domain, EntryId};
 
 use super::RepoData;
 
@@ -26,7 +26,7 @@ use super::RepoData;
 /// # 錨は「どの台帳からも指されていない id」でなければならない
 ///
 /// 錨を使う摂動のいくつかは「所見が**ちょうど** 1 件」を主張する（`checks.rs` の
-/// `a_ledger_id_that_left_the_catalog_turns_red` と `the_check_survives_lines_moving`）。
+/// `a_ledger_id_that_left_the_catalog_turns_red`）。
 /// 錨をカタログから抜くと、**その id を関連の相手に書いている台帳の行がもう 1 件
 /// 赤くなる**（`LinkEndpointMissing`）ので、指されている id を錨にすると期待が 1 件
 /// では足りなくなる。実際、以前の錨 `ukadoc:list_shiori_event:OnBoot:1` は
@@ -43,11 +43,8 @@ use super::RepoData;
 /// - shiori の台帳にだけ実在し、状態が `implemented` であること
 /// - 正典 URL の証拠が 1 件以上あり、そこに `ANCHOR_SOURCE` が**含まれない**こと
 /// - `links` が空で、`introduced` が空であること
-/// - テーマが `["気配り"]` **ではない**こと（`a_misspelled_theme_turns_red` が
-///   書き換える先と同じだと摂動が空振りする）
 ///
-/// 2026-09-06 の時点でこの条件を満たす id は 5 つあり（`OnFirstBoot`・`OnInitialize`・
-/// `OnMouseDoubleClick`・`OnMouseMove`・`basewareversion`）、名前順の先頭を採った。
+/// 錨には、この条件を満たす id のうち名前順の先頭を採った。
 /// **台帳が育つと「どこからも指されていない id」は減る**ので、また同じことが起きたら
 /// 同じ条件でもう一度絞り直すこと。
 pub(super) const ANCHOR_ID: &str = "ukadoc:list_shiori_event:OnFirstBoot:1";
@@ -60,6 +57,9 @@ pub(super) const SHIORI_LEDGER: &str = "doc/ukadoc-coverage/ledger/shiori.toml";
 /// assets の台帳の場所。
 pub(super) const ASSETS_LEDGER: &str = "doc/ukadoc-coverage/ledger/assets.toml";
 
+/// 全体報告の場所。
+pub(super) const SUMMARY_REPORT: &str = "doc/ukadoc-coverage/report/summary.md";
+
 /// カタログにも台帳にも無い id（摂動で持ち込む綴り）。
 pub(super) const ABSENT_ID: &str = "ukadoc:list_shiori_event:OnNoSuchEventForTheTest:1";
 
@@ -68,18 +68,18 @@ pub(super) const UNASSIGNED_PAGE_ID: &str = "ukadoc:no_such_page_for_the_test:Wh
 
 /// 実データの写し。**repo のファイルには 1 バイトも触れない**。
 ///
-/// 手を入れるのはこの写しの上だけで、テストが終われば消える。台帳のファイルそのものを
-/// 書き換える確認は人手で 1 度だけ行った——常時テストがファイルを書き換えると、並行に
-/// 走る他のテストがその途中の状態を読む。
+/// 手を入れるのはこの写しの上だけで、テストが終われば消える。常時テストがファイルを
+/// 書き換えると、並行に走る他のテストがその途中の状態を読む。
 ///
-/// 直に書き換える欄だけを兄弟（`checks.rs`）へ開ける。台帳は [`Perturbed::ledger_mut`]・
-/// [`Perturbed::entry_mut`] を通す決まりなので閉じたままにする。
+/// 直に書き換える欄だけを兄弟（`checks.rs`・`documents_checks.rs`）へ開ける。台帳は
+/// [`Perturbed::ledger_mut`]・[`Perturbed::entry_mut`] を通す決まりなので閉じたままにする。
 pub(super) struct Perturbed<'a> {
     data: &'a RepoData,
     pub(super) catalog: Catalog,
     ledgers: Vec<Ledger>,
     pub(super) evidence: EvidenceIndex,
     pub(super) domain_reports: BTreeMap<Domain, String>,
+    pub(super) summary_report: String,
 }
 
 impl<'a> Perturbed<'a> {
@@ -91,18 +91,20 @@ impl<'a> Perturbed<'a> {
             ledgers: data.ledgers.clone(),
             evidence: data.evidence.clone(),
             domain_reports: data.domain_reports.clone(),
+            summary_report: data.summary_report.clone(),
         }
     }
 
-    /// 写しから検査の入力を組む。割り当て表とテーマ名は本物をそのまま借りる。
+    /// 写しから検査の入力を組む。写しの持つ欄は写しから渡し、残りの欄は
+    /// [`RepoData::input`] の組み方をそのまま借りる（欄が増えても組み方は 1 か所）。
     fn input(&self) -> CheckInput<'_> {
         CheckInput {
             catalog: &self.catalog,
             ledgers: &self.ledgers,
-            assignment: &self.data.assignment,
-            themes: &THEMES,
             evidence: &self.evidence,
             domain_reports: &self.domain_reports,
+            summary_report: &self.summary_report,
+            ..self.data.input()
         }
     }
 
@@ -121,11 +123,10 @@ impl<'a> Perturbed<'a> {
 
     /// その台帳の項目 1 つ（写し）。
     pub(super) fn entry_mut(&mut self, domain: Domain, id: &EntryId) -> &mut LedgerEntry {
-        let key = id.clone();
         self.ledger_mut(domain)
             .entries
-            .get_mut(&key)
-            .unwrap_or_else(|| panic!("{} の台帳に {} が無い", domain.as_key(), key.as_str()))
+            .get_mut(id)
+            .unwrap_or_else(|| panic!("{} の台帳に {} が無い", domain.as_key(), id.as_str()))
     }
 }
 

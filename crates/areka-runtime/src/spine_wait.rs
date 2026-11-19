@@ -1,12 +1,17 @@
-//! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`run_bounded`・スレッドの終わりの待ち）。
+//! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`run_bounded`・スレッドの終わりの待ち・回収の `settle_bounded`）。
 //!
 //! 締切から下は `spine.rs` から移したもの。親の `spine.rs` が同じ名前で出し直すので、
-//! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。古い呼び名
-//! `run_bounded` は形を保ったまま芯の上に載せ、打ち切りの文言を出すようにした。スレッドの終わりの
-//! 待ちは見張りのスレッドをやめ、芯 [`wait_thread_end`] 1 本で std 版とアクター版を待つ（総時間の引数は無い）。
+//! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。打ち切りの決め方は待ちごとに、それぞれの
+//! 関数の説明に書く。芯 [`wait_until_with`] を通るのは [`wait_until`]・[`wait_until_paced`]・[`wait_recv`]・
+//! スレッドの終わりの待ち [`wait_thread_end`]（見張りのスレッドは生まず、std 版とアクター版を同じ芯で待つ・
+//! 総時間の引数は無い）。`run_bounded` は芯を通らず総時間の `recv_timeout` で切り、芯から借りるのは失敗の
+//! 文言だけ。GPU の許可の待ち（[`GpuPermit`]）と回収（[`settle_bounded`]）は自分の決め方を持つ。
 //!
 //! 待ちの芯 [`wait_until_with`] は、打ち切りを「待ち始めからの総時間」でなく「相手が状態を進めなかった
-//! 時間」で決め、届かなかった理由を [`WaitFailure`] の 4 つに分けて返す（areka-P0-ghost-session-test-load-flake）。
+//! 時間」で決め、届かなかった理由を [`WaitFailure`] の variant に分けて返す（areka-P0-ghost-session-test-load-flake）。
+//!
+//! 休みの決まり: 反復の間の休みは芯が持つ（[`wait_until`] は空回しの窓を過ぎると自分で眠る）ので、
+//! 芯へ渡す条件の中で重ねて眠らない。条件の中で Tick を入れる輪だけは [`wait_until_paced`] を使う。
 
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -22,7 +27,7 @@ use crate::crash_report_test_support as crash_report;
 ///
 /// 進みの目印がある待ち（[`Progress::Count`]）では「相手が状態を進めなかった時間」の上限、目印の
 /// 無い待ち（[`Progress::Unknown`]）では待ち始めからの総時間の上限として使う。
-/// 目印がある待ちの総時間の上限は別に [`WAIT_CAP`] で置く。
+/// 目印がある待ちの総時間の上限は別に `WAIT_CAP` で置く。
 ///
 /// # 反復回数で打ち切ってはならない
 ///
@@ -38,10 +43,9 @@ use crate::crash_report_test_support as crash_report;
 ///
 /// - **対象（[`wait_until`] を使う）**: 待機対象が別スレッドの進行であり、各反復が**何も進めない**
 ///   純粋なポーリング（`non_status_calls()` / `drain_received()` を読むだけのループ）。
-/// - **対象（本猶予の期限だけを借りる。ただし期限は十分条件ではない）**: 各反復で
+/// - **対象（[`wait_until_paced`] を使う。ただし期限は十分条件ではない）**: 各反復で
 ///   `inject_dispatcher_tick` により**系を進めつつ**、同じ反復で `drain_received()` 等により
-///   **別スレッドの結果も待つ**ハイブリッドのループ（[`wait_until`] は純粋ポーリング専用ゆえ
-///   流用しない）。ここでは打ち切りを時刻期限にするだけでは足りず、**注入する simulated time が
+///   **別スレッドの結果も待つ**ループ。ここでは打ち切りを時刻期限にするだけでは足りず、**注入する simulated time が
 ///   待っている観測を追い越さない**ことを構造で保証しなければならない。追い越しうる時刻には必ず
 ///   上限（頭打ち）を置くこと。実測: S2 Phase 1 は毎反復 `now += 5` が 210 反復（実時間 ~0.6 秒）で
 ///   Clear cue の時刻を跨ぎ、リビール観測が間に合わないと**待っている条件そのものが破壊**されて
@@ -53,7 +57,7 @@ use crate::crash_report_test_support as crash_report;
 ///   限られる。台詞は「自分が最初に見た Tick からの経過」を届いた順に消化するので、注入の側の数が
 ///   先へ行っても増えるのは順番待ちの列だけで、相手が見る時刻の並びは飢えていないときと変わらない。
 ///   合成の締切を持つ kanade は足場では Tick を 1 つも受け取らない（`TickerMode::Disabled`）。受け手が
-///   締切も後戻りする状態も持たないので、追い越しで壊れる条件が無い（要件 2.6・設計「2.6 の満たし方」）。
+///   締切も後戻りする状態も持たないので、追い越しで壊れる条件が無い（areka-P0-ghost-session-test-load-flake 要件 2.6・設計「2.6 の満たし方」）。
 ///   上の spine の族の Tick 注入の待ちは受け手が kanade なので、頭打ちの決まりはそのまま残る。
 /// - **非対象**: 別スレッドの進行を待たず、注入 Tick 列そのものが仕事量であるループ。時刻で打ち切ると
 ///   注入列が短くなり意味が変わる。
@@ -65,7 +69,7 @@ pub const SPIN_WAIT: Duration = Duration::from_secs(30);
 /// 進みの目印がある待ちの、待ち始めからの総時間の上限。
 ///
 /// 相手が進み続ける限り [`SPIN_WAIT`] では打ち切らないので、終わらない繰り返しでも必ず返るように
-/// 別の上限を置く（要件 3.3）。届いたら [`WaitFailure::CapReached`]（負荷で遅いか、終わらない繰り返し）。
+/// 別の上限を置く（areka-P0-ghost-session-test-load-flake 要件 3.3）。届いたら [`WaitFailure::CapReached`]（負荷で遅いか、終わらない繰り返し）。
 pub(super) const WAIT_CAP: Duration = Duration::from_secs(300);
 
 /// `yield_now()` の空回しで待つ窓（待ち始めからの時間）。過ぎたら反復ごとに [`BACKOFF_SLEEP`] 休む。
@@ -85,7 +89,7 @@ pub(super) const WAIT_CAP: Duration = Duration::from_secs(300);
 /// ならない（[`SPIN_WAIT`] の doc と同じ理由）ので、窓も時間で持つ。
 ///
 /// # 60 ms の根拠
-/// `spine.rs` の `SETTLE_MIN` の doc の実測（本機 22 論理 CPU）で、`yield_now` 5,000 回は無負荷
+/// 同じファイルの [`SETTLE_MIN`] の doc の実測（本機 22 論理 CPU）で、`yield_now` 5,000 回は無負荷
 /// 0.31 ms。旧予算 1_000_000 回を同じ割合で時間に直すと約 62 ms になる。60 ms なら、速い待ちの
 /// 空回しは旧形とほぼ同じ長さのまま（**成功する待機を旧形より遅くしない**）、重い待ちだけが 60 ms で
 /// CPU を返すようになる。予算を小さく取ると、正常でも数百 ms 待つ呼出点が [`BACKOFF_SLEEP`] の粒度に
@@ -110,7 +114,7 @@ pub enum Progress<'a> {
     Count(&'a dyn Fn() -> u64),
 }
 
-/// 待ちが届かずに終わった理由。`Display` の先頭の `［…］` で 4 つを見分ける（要件 3.1・3.2）。
+/// 待ちが届かずに終わった理由。`Display` の先頭の `［…］` で variant を見分ける（areka-P0-ghost-session-test-load-flake 要件 3.1・3.2）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WaitFailure {
     /// 相手が `idle` のあいだ 1 度も進まなかった＝止まった。
@@ -124,7 +128,7 @@ pub enum WaitFailure {
         /// 確かめの間でしか判じられないので、1 回が同期で長く塞がると打ち切りもその分遅れる。
         last_step: Duration,
     },
-    /// 相手は進み続けていたが、総時間の上限 [`WAIT_CAP`] に届いた。
+    /// 相手は進み続けていたが、総時間の上限 `WAIT_CAP` に届いた。
     CapReached {
         what: String,
         waited: Duration,
@@ -190,32 +194,19 @@ impl fmt::Display for WaitFailure {
 /// 時計 `now` と休み `pause` を差し替えられる継ぎ目で、檻（`spine_wait_tests.rs`・足場の檻）は偽の時計を
 /// 渡して実時間を待たずに打ち切りを確かめる（`settle_bounded_with` と同じ型）。
 ///
-/// 決め方（設計の流れ図）:
+/// 決め方:
 /// - 条件の確かめが打ち切りの判定より先。届いていれば、どれだけ時間がかかっていても成功。
 ///   最初の確かめで真なら時計を読まずに返る。
 /// - 目印は条件の確かめの直後に読む。前回より増えていれば進みの無い時間を 0 に戻す。
-///   増えないまま [`SPIN_WAIT`] に届けば `Stalled`、待ち始めから [`WAIT_CAP`] に届けば `CapReached`。
+///   増えないまま [`SPIN_WAIT`] に届けば `Stalled`、待ち始めから `WAIT_CAP` に届けば `CapReached`。
 /// - 目印なしは待ち始めから [`SPIN_WAIT`] に届けば `TimedOut`。
-/// - 反復の間は、待ち始めから [`DENSE_SPIN`] までは `yield_now`、その後は毎回 `pause(BACKOFF_SLEEP)`
-///   で CPU を返す（要件 2.5）。この休みは時刻を進めるためのものではなく、観測の内容を変えない。
+/// - 反復の間は、待ち始めから `DENSE_SPIN` までは `yield_now`、その後は毎回 `pause(BACKOFF_SLEEP)`
+///   で CPU を返す（areka-P0-ghost-session-test-load-flake 要件 2.5）。この休みは時刻を進めるためのものではなく、観測の内容を変えない。
 pub fn wait_until_with(
-    now: impl FnMut() -> Instant,
-    pause: impl FnMut(Duration),
-    what: &str,
-    progress: Progress<'_>,
-    cond: impl FnMut() -> bool,
-) -> Result<(), WaitFailure> {
-    wait_until_idle_with(now, pause, what, progress, SPIN_WAIT, cond)
-}
-
-/// 芯の内側の形。`idle` は目印つきの待ちの「相手が進まない」上限（[`wait_until_with`] では [`SPIN_WAIT`]）。
-/// 目印なし（[`Progress::Unknown`]）の総時間 [`SPIN_WAIT`] と、総時間の上限 [`WAIT_CAP`] は変わらない。
-pub(super) fn wait_until_idle_with(
     mut now: impl FnMut() -> Instant,
     mut pause: impl FnMut(Duration),
     what: &str,
     progress: Progress<'_>,
-    idle_limit: Duration,
     mut cond: impl FnMut() -> bool,
 ) -> Result<(), WaitFailure> {
     if cond() {
@@ -260,7 +251,7 @@ pub(super) fn wait_until_idle_with(
             last_move = t;
         }
         let idle = t.saturating_duration_since(last_move);
-        if idle >= idle_limit {
+        if idle >= SPIN_WAIT {
             return Err(WaitFailure::Stalled {
                 what: what(),
                 waited,
@@ -290,10 +281,42 @@ pub fn wait_until(
     wait_until_with(Instant::now, std::thread::sleep, what, progress, cond)
 }
 
+/// [`wait_until_paced`] が条件が偽の反復のたびに眠る長さ（Tick を入れる間隔）。
+///
+/// 値は `areka-kanade` のテストの `drive_ticks_until_disconnect` が開発者の裁定で採った 200µs と同じ。
+pub const INJECT_PACE: Duration = Duration::from_micros(200);
+
+/// 条件の中で Tick を入れて系を進めながら別スレッドの結果も待つ輪のための [`wait_until`]。
+///
+/// 芯の休みは渡さず、条件が偽の反復のたびに [`INJECT_PACE`] 眠る。[`wait_until`] のままだと空回しの窓
+/// （`DENSE_SPIN`）のあいだ `yield_now` の速さで Tick を入れ続け、受け手の待ち行列を溢れさせながら
+/// worker から CPU を奪う。この眠りは Tick を入れる間隔を最初の反復から保つためのもので、時刻を
+/// 進めるためのものではない（時刻を進めるのは入れる Tick だけ）。打ち切りの決め方は [`wait_until`] と同じ。
+/// 入れる時刻が観測を追い越さないこと（[`SPIN_WAIT`] の説明の頭打ち）は呼び手が別に守る。
+pub fn wait_until_paced(
+    what: &str,
+    progress: Progress<'_>,
+    mut cond: impl FnMut() -> bool,
+) -> Result<(), WaitFailure> {
+    wait_until_with(
+        Instant::now,
+        |_| {},
+        what,
+        progress,
+        || {
+            if cond() {
+                return true;
+            }
+            std::thread::sleep(INJECT_PACE);
+            false
+        },
+    )
+}
+
 /// 受け口に 1 件届くまで待ち、届いた値を返す。打ち切りの決め方は [`wait_until`] と同じ。
 ///
 /// 空回しはしない。1 回ごとに `recv_timeout` で [`BACKOFF_SLEEP`] だけ眠り、届けばすぐ起きる。
-/// 区切って起きるのは進みの目印を読んで打ち切りを判じるため（要件 2.5）。送り手が何も送らずに
+/// 区切って起きるのは進みの目印を読んで打ち切りを判じるため（areka-P0-ghost-session-test-load-flake 要件 2.5）。送り手が何も送らずに
 /// 居なくなれば、待たずに [`WaitFailure::Disconnected`]。
 pub fn wait_recv<T>(
     what: &str,
@@ -373,15 +396,11 @@ pub fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, 
 
 /// スレッドの終わりを待つ芯。目印は「相手のスレッドの中の進み（`inner`・あれば）＋終わったか（0→1）」で、
 /// 打ち切りは芯 [`wait_until`] のまま（目印が 30 秒増えなければ `［止まった］`）。どの呼び手も
-/// `'{what}' join did not complete (possible hang) — {failure}` で panic する（要件 4.1・4.4）。
+/// `'{what}' join did not complete (possible hang) — {failure}` で panic する（areka-test-binary-stability 要件 4.1・4.4）。
 /// 見張りのスレッドは生まない（生まれるスレッドもローダーの錠を待ち、負荷の下で `［進みは不明］` の赤になった・
-/// `load-repro.md` の 4.3 の 7）。`inner` が無ければ目印は条件と同時にしか増えないので、打ち切りの文言の進みは
-/// 常に 0 回で、出口は 30 秒の `［止まった］`（相手のスレッドが終われなかった・要件 2.7 の読み）だけ。
-pub fn wait_thread_end(
-    what: &str,
-    inner: Option<&dyn Fn() -> u64>,
-    is_finished: impl Fn() -> bool,
-) {
+/// areka-P0-ghost-session-test-load-flake の `load-repro.md` の 4.3 の 7）。`inner` が無ければ目印は条件と同時にしか増えないので、打ち切りの文言の進みは
+/// 常に 0 回で、出口は 30 秒の `［止まった］`（相手のスレッドが終われなかった・areka-P0-ghost-session-test-load-flake 要件 2.7 の読み）だけ。
+fn wait_thread_end(what: &str, inner: Option<&dyn Fn() -> u64>, is_finished: impl Fn() -> bool) {
     wait_thread_end_with(Instant::now, std::thread::sleep, what, inner, is_finished);
 }
 
@@ -399,7 +418,7 @@ pub(super) fn wait_thread_end_with(
     }
 }
 
-/// std のスレッドの終わりを [`wait_thread_end`] で待ってから同じスレッドで `join` する。立った後の `join` は
+/// std のスレッドの終わりを `wait_thread_end` で待ってから同じスレッドで `join` する。立った後の `join` は
 /// OS のスレッドの後始末だけを待つので打ち切らない（待つ相手の処理はもう終わっている）。
 pub fn join_thread_bounded<T>(
     what: &str,
@@ -417,11 +436,80 @@ pub fn join_bounded(what: &str, handle: ActorHandle) -> Result<(), ActorError> {
     handle.join()
 }
 
+/// 「尽きるのが正常」の回収（settle）が満たすべき**壁時計の最小持続**（areka-P0-test-cage-determinism 要件 4.2・4.5）。
+///
+/// 回収機会を反復回数で与えると、CPU 競合下（並列 `cargo test`・ウイルス対策の再スキャン）では
+/// 数 ms で反復が尽き、**残余を出す欠陥があっても空のまま緑になる**（空虚な緑）。負検証は
+/// 「出ないこと」を主張するので、機会が縮む方向の変動は誰にも赤にされない。よって最低限の
+/// 観測時間は壁時計で与える。
+///
+/// 初期値 200ms（areka-P0-test-cage-determinism design C3）を実測のうえ据え置いた。置き換え対象の旧ループ（`yield_now` 5,000 回）が
+/// 実際に占める時間を本機（22 論理 CPU）で測ると **無負荷 0.31ms**（7/7・振れ幅 0.306〜0.314）／
+/// **4 スレッド占有 0.93・8.4・22.6ms**／**22 スレッド占有 3.7・5.5・390ms**——負荷次第で 3 桁動き、
+/// 平常時は 1ms 未満しか待たない。200ms の床は平常値の 600 倍以上を常に与え、上振れ（390ms）とも
+/// 同じ桁なので**どの負荷でも旧形より回収機会が縮まない**（areka-P0-test-cage-determinism 要件 4.5）。この床の内側には
+/// [`BACKOFF_SLEEP`] 粒度の反復が実測 約 130 回入る（1ms 指定の sleep は実測 1.5ms 粒度）。
+/// 代償は 1 呼出点あたり 0.2 秒。
+pub(super) const SETTLE_MIN: Duration = Duration::from_millis(200);
+
+/// 回収が尽きたと見なすのに要する**連続して 0 件だった反復数**（areka-P0-test-cage-determinism 要件 4.2）。
+///
+/// 壁時計だけでは「たまたま静かな 200ms」を通してしまうので、観測量の側からも条件を置く。
+/// 1 反復ごとに [`BACKOFF_SLEEP`] を挟むので、50 回は「50ms 以上どのスレッドからも 1 件も
+/// 来なかった」ことを意味する。初期値（areka-P0-test-cage-determinism design C3）を据え置いた。無負荷では [`SETTLE_MIN`] の
+/// 内側に約 130 反復入るので本条件は先に満たされるが、sleep 粒度が伸びる負荷下（Windows の
+/// タイマ分解能が落ちると 1 反復 15ms 級＝200ms で 13 反復）では**こちらが効いて反復を伸ばす**。
+/// 2 条件は入れ替わりで律速する関係にあり、片方だけでは負荷下の回収機会を保証できない。
+pub(super) const SETTLE_QUIET_ROUNDS: u32 = 50;
+
+/// 「尽きるのが正常」の回収ループ。`step` は 1 反復分の回収（drain）を行い**回収件数**を返す。
+///
+/// 終了条件は **`SETTLE_MIN` を満たし かつ 連続 `SETTLE_QUIET_ROUNDS` 回 0 件**の両立で、
+/// どちらか一方では返らない。両立しないまま [`SPIN_WAIT`] を超えたら必ず返る（hang しない）。
+/// 反復の間は [`BACKOFF_SLEEP`] の短い sleep だけを挟む（有界 poll-backoff＝areka-P0-test-cage-determinism 要件 4.4。
+/// **時刻を進めるための sleep ではない**——時刻前進は呼出側が前段で決定論的に注入し終えており、
+/// 本ヘルパは観測しかしない）。
+///
+/// 本ヘルパは **panic しない**。合否の宣告は呼出側の既存 assert のまま（areka-P0-test-cage-determinism 要件 4.5・4.6）。
+pub fn settle_bounded(step: impl FnMut() -> usize) {
+    settle_bounded_with(Instant::now, std::thread::sleep, step);
+}
+
+/// 時計 `now` と休み `pause` を差し替えられる [`settle_bounded`] の内側（檻の継ぎ目・`spine_settle_tests.rs`）。
+///
+/// 「最小持続に達するまで返らない」を実時間の計測で確かめると並列負荷で合否が動く——areka-P0-test-cage-determinism が
+/// 直そうとしている当の病になる。時計を差し替えられるようにして、檻の期待値を**反復回数という
+/// 整数**へ落とし、休みも眠らないものを渡せるようにするための継ぎ目（[`wait_until_with`] と同じ型）。
+/// 本番の呼出点は常に [`settle_bounded`]（実時計・本物の `sleep`）を使う。
+pub(super) fn settle_bounded_with(
+    mut now: impl FnMut() -> Instant,
+    mut pause: impl FnMut(Duration),
+    mut step: impl FnMut() -> usize,
+) {
+    let started = now();
+    let mut quiet = 0u32;
+    loop {
+        if step() == 0 {
+            quiet += 1;
+        } else {
+            quiet = 0;
+        }
+        let elapsed = now().saturating_duration_since(started);
+        if elapsed >= SETTLE_MIN && quiet >= SETTLE_QUIET_ROUNDS {
+            return;
+        }
+        if elapsed > SPIN_WAIT {
+            return;
+        }
+        pause(BACKOFF_SLEEP);
+    }
+}
+
 /// GPU の装置を同時に持てる数の数え（areka-P0-ghost-session-test-load-flake 要件 2.7・設計「足場のスレッドの絞り」）。
 ///
 /// D3D11 の装置は装置ごとにドライバのスレッドを生み、Windows ではスレッドの始まりと終わりがプロセスに
 /// 1 つのローダーの錠を取る。負荷の下で装置が多く並ぶと、起こしたばかりのゴーストのスレッドが始まれずに
-/// 待ちの打ち切りの赤になった（`load-repro.md` の 4.2）。数えは `std` だけで書き、どの足場からも届く
+/// 待ちの打ち切りの赤になった（areka-P0-ghost-session-test-load-flake の `load-repro.md` の 4.2）。数えは `std` だけで書き、どの足場からも届く
 /// ここに置く。
 pub(super) struct GpuSlots {
     held: Mutex<usize>,
@@ -431,12 +519,13 @@ pub(super) struct GpuSlots {
     returned: AtomicU64,
 }
 
-/// 許可の待ちの「許可が 1 つも返らない」上限（要件 6.1・6.6）。
+/// 許可の待ちの「許可が 1 つも返らない」上限（areka-test-binary-stability 要件 6.1・6.6）。
 ///
-/// 決め方（設計の議題 4）: 許可の持ち時間の最長の 2 倍以上・[`SPIN_WAIT`] の 30 秒を下回らない。件 1 の直しは
-/// 当てていないので材料は 4.1 の X1（負荷 44 本・最長 249.2 秒）で、その 2 倍を丸めた 500 秒（`load-repro.md` の ⑻）。
-/// 許可の待ちには総時間の上限（[`WAIT_CAP`]）を効かせない（2026-11-02 開発者の裁定「案 2」・⑻）。返りが目印で、
-/// GPU のテストは有限なので、返り続ける限り待ちはいつか終わる。要件 6.1 の上限はこの 500 秒の線で満たす。
+/// 決め方（areka-test-binary-stability の設計の議題 4）: 許可の持ち時間の最長の 2 倍以上・[`SPIN_WAIT`] の
+/// 30 秒を下回らない。テストのプロセスが `STATUS_ACCESS_VIOLATION` で落ちる件の直しを当てる前に測った X1
+/// （負荷 44 本・最長 249.2 秒）が材料で、その 2 倍を丸めた 500 秒（areka-test-binary-stability の `load-repro.md` の ⑻）。
+/// 許可の待ちには総時間の上限（[`WAIT_CAP`]）を効かせない（2026-11-02 開発者の裁定「案 2」・areka-test-binary-stability の `load-repro.md` の ⑻）。返りが目印で、
+/// GPU のテストは有限なので、返り続ける限り待ちはいつか終わる。areka-test-binary-stability 要件 6.1 の上限はこの 500 秒の線で満たす。
 /// 許可の待ちの `［止まった］` は負荷の下でも許す赤に入れない（1 つも返らないのは本当の待ち合い）。
 pub(super) const GPU_PERMIT_IDLE: Duration = Duration::from_secs(500);
 
@@ -462,7 +551,7 @@ pub(super) fn judge_permit_wait(
     }
 }
 
-/// 許可の待ちの打ち切り（要件 6.2）。持たれている数と上限を頭に付けた [`WaitFailure`]。
+/// 許可の待ちの打ち切り（areka-test-binary-stability 要件 6.2）。持たれている数と上限を頭に付けた [`WaitFailure`]。
 #[derive(Debug)]
 pub(super) struct PermitWaitFailure {
     pub held: usize,
@@ -482,8 +571,8 @@ impl fmt::Display for PermitWaitFailure {
 
 /// テストのプロセスに 1 つの数え（同時に 4 つ）。2 つでは負荷の下の赤が 0 件でも静かな机の `--bin areka` の
 /// 全部が中央値 95.2 秒に延び（直す前 64.1 秒）、8 つでは 64.7 秒でも負荷の下に赤が 2 件残った。間の 4 つを、
-/// 所要時間の線（直す前の 1.20 倍）とともに選んだ（`load-repro.md` の 5）。areka-test-binary-stability の
-/// 件 1 の直しの後も 4 のまま（5.1）。
+/// 所要時間の線（直す前の 1.20 倍）とともに選んだ（areka-P0-ghost-session-test-load-flake の `load-repro.md` の 5）。areka-test-binary-stability で
+/// テストのプロセスが `STATUS_ACCESS_VIOLATION` で落ちる件を直した後も 4 のまま。
 static GPU_SLOTS: GpuSlots = GpuSlots::new(4);
 
 impl GpuSlots {
@@ -575,7 +664,8 @@ impl GpuSlots {
         })
     }
 
-    /// 待たずに取る（空きが無ければ `None`）。檻 16 が実時間を待たずに数えを確かめるための口。
+    /// 待たずに取る（空きが無ければ `None`）。`gpu_slots_hold_at_most_the_capacity_and_a_returned_permit_frees_one` が
+    /// 実時間を待たずに数えを確かめるための口。
     #[cfg(test)]
     pub(super) fn try_take(&'static self) -> Option<GpuPermit> {
         let mut held = self.held.lock().unwrap_or_else(PoisonError::into_inner);
@@ -630,3 +720,7 @@ impl Drop for GpuPermit {
         self.slots.freed.notify_one();
     }
 }
+
+#[cfg(test)]
+#[path = "spine_settle_tests.rs"]
+mod settle_tests;

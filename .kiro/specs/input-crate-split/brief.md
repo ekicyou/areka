@@ -97,3 +97,7 @@
 - **優先度の区分**: A（開発者「この際、areka crateのコードベースが大きすぎる問題をサルベージすべき」）。
 - **要件定義のモデル**: Opus（crate 分けの前例は `runtime-crate-split`・`placement-crate-split`。向きを逆にする口にも前例 `SessionHooks` がある）。
 - **分割の案**: 無し。
+
+## `audit-ukadoc-survey` からの申し送り（2026-11-19・完了時の棚卸）
+
+- 上の節（棚卸㊴の再測定）の「`crates/ukadoc-survey/src/evidence/candidates.rs` 51 行の説明の中の `input_events/` のパス」は、`audit-ukadoc-survey` のタスク 3.4 で古いパスごと消した。本 spec がこのファイルで直すことはもう無い（`log-capture-kit` の 2 か所は元のまま）。

@@ -1,15 +1,15 @@
-//! 合流（C2）を通った随伴の追従を、判定器が**数に入れられる**ことの檻（task 6.6）。
+//! 合流（C2）を通った随伴の追従を、判定器が**数に入れられる**ことの檻（`areka-P0-dpi-transition-atomicity` タスク 6.6）。
 //!
 //! # 何が壊れていたか
 //!
 //! 判定器の裁定⑴ は当初「随伴の同一フレーム性はバルーンの `origin=BalloonFollow` の
-//! **書込**で測る」であった。task 5.3 の合流が着地すると、同一 tick・同一窓のジオメトリ
+//! **書込**で測る」であった。合流が着地すると、同一 tick・同一窓のジオメトリ
 //! 指令は**先着の枠へ畳まれ**、合流後の 1 本は先着の経路語を名乗る
 //! （`crates/wintf/src/ecs/window/command.rs` の `merge_into`＝「タグは先着の値を保つ」）。
 //! バルーン窓は寸の指令（`KeepPositionResize`）が先に積まれるので、後から積まれた随伴の
 //! 位置指令は `kind=write` から消え、`origin=BalloonFollow` の書込が 1 本も残らない。
 //!
-//! 結果として `balloon_pairs_checked` が 0 になり、要件 4.3 の合否は「違反なし」ではなく
+//! 結果として `balloon_pairs_checked` が 0 になり、`areka-P0-dpi-transition-atomicity` 要件 4.3 の合否は「違反なし」ではなく
 //! **未測定**（`Violation::Unmeasured(Quantity::BalloonSameFrame)`）として落ちた。2026-08-21 の
 //! 実機再採取（7 遷移）では 5 遷移が `pairs=0`・残る 2 遷移も片側だけが測れており、キャラ窓
 //! ごとに数えて**計 12 件**が落ちた。追従そのものは成立していた（記録票の突合＝offset が
@@ -258,7 +258,7 @@ fn a_companion_follow_folded_into_another_command_is_measured_and_a_late_one_sti
     );
     assert!(
         !late.balloon_same_frame,
-        "随伴が次フレームで着地したことは要件 4.3 の違反として立たなければならない"
+        "随伴が次フレームで着地したことは `areka-P0-dpi-transition-atomicity` 要件 4.3 の違反として立たなければならない"
     );
     assert!(
         flagged_as_another_frame(&late),
@@ -385,7 +385,7 @@ fn a_merge_target_written_before_the_companion_command_is_not_its_landing() {
 // 実機ログの回帰（2026-08-21 の再採取・遷移 #3）
 // ---------------------------------------------------------------------------
 
-/// 2026-08-21 の実機再採取（task 7.1）の**遷移 #3 の全 56 レコードを逐語で**埋め込んだもの。
+/// 2026-08-21 の実機再採取（`areka-P0-dpi-transition-atomicity` タスク 7.1）の**遷移 #3 の全 56 レコードを逐語で**埋め込んだもの。
 ///
 /// 出所は `atom-71-recapture-1\atom-signoff.log`（リポジトリ外・書き換え禁止。記録票
 /// `meta.txt` と対）で、`kind=monitor` の 3 本目の起点（`frame=14884`・192→96）から次の起点
@@ -551,7 +551,7 @@ fn the_recaptured_transition_measures_both_companions_and_passes_the_determinist
     }
 
     // 決定論系統は**全件合格**になる（是正前はこの遷移で 2 件の未測定が立っていた）。実機
-    // 専用系統の µs 2 種は task 7.1 の持ち分なので、ここでは当てない。
+    // 専用系統の µs 2 種は `areka-P0-dpi-transition-atomicity` のタスク 7.1 の持ち分なので、ここでは当てない。
     assert_eq!(judge(&summary, &Bounds::deterministic()), Ok(()));
 }
 
@@ -559,7 +559,7 @@ fn the_recaptured_transition_measures_both_companions_and_passes_the_determinist
 fn the_recaptured_transition_still_flags_a_companion_that_lands_a_frame_late() {
     // 実機ログの形のままでは「違反が立たないこと」しか測れない。合流先の書込（scope=1 の
     // バルーンの seq=0）を 1 フレーム遅らせると、同じ入力が従来どおり違反として立つ——
-    // 是正が要件 4.3 の見張りを殺していないことの対である。
+    // 是正が `areka-P0-dpi-transition-atomicity` 要件 4.3 の見張りを殺していないことの対である。
     let lines: Vec<String> = RECAPTURE_TRANSITION_3.lines().map(str::to_owned).collect();
     let late = replace_once(
         &lines,
@@ -579,7 +579,7 @@ fn the_recaptured_transition_still_flags_a_companion_that_lands_a_frame_late() {
 }
 
 // ---------------------------------------------------------------------------
-// 直の書込と合流先の書込が同じ窓に混ざる形（audit の指摘 14 ⑴）
+// 直の書込と合流先の書込が同じ窓に混ざる形（`audit-placement-follow` の指摘 14 ⑴）
 // ---------------------------------------------------------------------------
 
 /// 随伴の着地が 2 本ある遷移を組む（起点フレームと次フレームに 1 本ずつ）。

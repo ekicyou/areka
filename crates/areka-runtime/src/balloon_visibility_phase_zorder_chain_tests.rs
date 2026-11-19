@@ -35,6 +35,7 @@ use wintf::ecs::window::{ChainPlan, ZOrderChainPlan};
 use super::issue_show;
 use super::test_support::attach_headless;
 use crate::frame::run_zorder_drain_phase;
+use crate::source_text_test_support::code_only;
 use crate::target_map::balloon_target;
 use crate::zorder_cue::ZOrderDirective;
 use areka_placement::follow::OffsetBase;
@@ -249,18 +250,6 @@ fn a_simulated_redisplay_does_not_move_the_chain_plan_by_one_bit() {
 // ---------------------------------------------------------------------------
 // ⑵ 撤去の完了——退役した引き金への参照が配線層から消えている
 // ---------------------------------------------------------------------------
-
-/// 説明文（`//` で始まる行）を落とし、コードだけの本文を返す。
-///
-/// **対照は必ずこの側へ当てる**。落とす前の本文に当てると、説明文に綴りがあるだけで
-/// 「在る」と読み、コード行を全部消しても緑のまま通る。
-fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
 
 /// 退役した引き金の綴りが、配線層のどこにも（説明文にも）残っていない。
 ///

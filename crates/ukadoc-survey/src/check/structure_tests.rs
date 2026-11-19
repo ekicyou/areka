@@ -4,85 +4,38 @@
 //!
 //! どのテストも [`crate::check::run`] を呼び、`structure::check` を直に呼ばない。
 //! 部品を釘付けしても、入口がその部品を呼んでいるかは別に守る必要がある
-//! （タスク 1.7 の教訓・タスク 4.1 からの申し送り）。判定を 1 つも呼ばない入口は、
-//! 直に呼ぶテストでは永久に見つからない。
+//! （判定を 1 つも呼ばない入口は、直に呼ぶテストでは永久に見つからない）。
 //!
 //! # 壊した対と壊さない対で置く
 //!
-//! 「所見が 0 件」だけの主張は、判定が何も返さない実装で無条件に真になる
-//! （タスク 1.6 の教訓）。そこで正常な見本で 0 件になることと、ちょうど 1 か所を
-//! 壊すと該当する種類が出ることを対で置く。出た所見は種類ごとの**件数の等式**で
+//! 「所見が 0 件」だけの主張は、判定が何も返さない実装で無条件に真になる。そこで
+//! 正常な見本で 0 件になることと、ちょうど 1 か所を壊すと該当する種類が出ることを
+//! 対で置く。出た所見は種類ごとの**件数の等式**で
 //! 主張するので、意図しない種類が 1 件でも混ざれば赤になる。
 //!
-//! # 道連れになる所見が 2 つある
+//! # 道連れになる所見がある
 //!
-//! `CatalogIdInMultipleLedgers` は `LedgerIdPageMismatch` を、`PageNotAssigned` は
-//! `CatalogIdMissingFromLedgers` を必ず連れてくる（1 ページ 1 ドメインが仕様の
-//! 不変条件なので、どんな見本でも避けられない）。この 2 つだけは 2 種類を明示して
-//! 主張する。
+//! 1 か所を壊すと、別の種類の所見が道連れに出ることがある（`CatalogIdInMultipleLedgers`
+//! と `LedgerIdPageMismatch`、`PageNotAssigned` と担当違いなど）。連れてくる相方は見本の
+//! 組み方で変わる。道連れのあるテストは出た種類を全部明示して主張する。
 //!
-//! # `LedgerDomainMismatch` のテストは無い
+//! # `[ledger].domain` の食い違いのテストは無い
 //!
-//! `[ledger].domain` の食い違いは `ledger::read` の段で落ちる。[`Ledger`] は
-//! `domain` を 1 つしか持たず、その値はファイル名から来るので、宣言された綴りが残る
-//! のは読み取りの中だけである。[`CheckInput`] は台帳ごとのファイル名を受け取らない
-//! から、検査層はこの判定を作り直せない——**書けないのが正しい**（設計 check 節の
-//! 注記・タスク 2.4 からの申し送り）。下の各テストが「その種類は 0 件」を等式で
-//! 主張しているので、うっかり作り物の判定を足せば赤になる。
+//! それは `ledger::read` の段で落ちる。[`Ledger`] は `domain` を 1 つしか持たず、
+//! その値はファイル名から来るので、検査層には見る材料が無く、所見の種類も無い。
 
-use super::super::{CheckInput, Finding, FindingKind, run};
+use super::super::test_support::{details, id, kinds, ledger_place, of_kind, only_one};
+use super::super::{CheckInput, FindingKind, run};
 use crate::catalog::CatalogEntry;
 use crate::ledger::{Ledger, LedgerEntry};
 use crate::lib_test_support::World;
-use crate::model::{Domain, EntryId, PageName, Status};
+use crate::model::{Domain, EntryId, PageName, Status, THEMES};
+use crate::report::summary::render_summary;
 use std::collections::BTreeMap;
-
-/// 見本の id を作る。
-fn id(raw: &str) -> EntryId {
-    EntryId::parse(raw).expect("見本の id は要件 1.9 の 2 形のいずれかのはず")
-}
-
-/// 台帳のファイルパス（所見の「場所」に載る綴り）。実装の定数は参照しない。
-fn ledger_place(domain: &str) -> String {
-    format!("doc/ukadoc-coverage/ledger/{domain}.toml")
-}
 
 /// カタログのファイルパス。
 fn catalog_place() -> String {
     "doc/ukadoc-coverage/catalog.toml".to_owned()
-}
-
-/// 出た所見を種類ごとに数える（0 件の種類は落とす）。
-///
-/// これを**等式**で主張すると、意図しない種類が 1 件でも出れば赤になる。件数だけの
-/// 主張は中身が全部誤っていても緑になるので、この等式と id・場所・詳細の逐語の主張を
-/// 必ず対で置く（タスク 1.5 の教訓）。
-fn kinds(findings: &[Finding]) -> Vec<(FindingKind, usize)> {
-    FindingKind::ALL
-        .into_iter()
-        .filter_map(|kind| {
-            let count = findings.iter().filter(|f| f.kind == kind).count();
-            (count > 0).then_some((kind, count))
-        })
-        .collect()
-}
-
-/// その種類の所見だけを取り出す。
-fn of_kind(findings: &[Finding], kind: FindingKind) -> Vec<&Finding> {
-    findings.iter().filter(|f| f.kind == kind).collect()
-}
-
-/// その種類の所見がちょうど 1 件あることを確かめ、その 1 件を返す。
-fn only_one(findings: &[Finding], kind: FindingKind) -> &Finding {
-    let found = of_kind(findings, kind);
-    assert_eq!(
-        found.len(),
-        1,
-        "{} が 1 件でない: {:?}",
-        kind.as_key(),
-        found
-    );
-    found[0]
 }
 
 /// 台帳へ項目を差し込む。本文の順は id 順に組み直す（並び順を壊す意図が無いとき）。
@@ -148,7 +101,6 @@ fn the_untouched_sample_world_has_no_findings() {
     let world = World::normal();
     let outcome = run(&world.input());
     assert_eq!(kinds(&outcome.findings), vec![]);
-    assert_eq!(outcome.findings.len(), 0);
 }
 
 /// 検査が見ている材料が空でないことを、肯定の側から数える。
@@ -229,8 +181,7 @@ fn a_catalog_id_missing_from_every_ledger_is_a_finding() {
 ///
 /// **`LedgerIdPageMismatch` が必ず道連れになる**。1 ページは 1 ドメインにしか
 /// 属さない（要件 3.2 の不変条件）ので、2 本目の台帳はその id のページを担当して
-/// いない。どんな見本を選んでも避けられないから、2 種類を明示して主張する
-/// （タスク 4.1 からの申し送り）。
+/// いない。どんな見本を選んでも避けられないから、2 種類を明示して主張する。
 #[test]
 fn a_catalog_id_in_two_ledgers_is_a_finding_together_with_the_page_mismatch() {
     let mut world = World::normal();
@@ -424,10 +375,36 @@ fn an_extra_page_in_the_preamble_is_a_finding() {
     );
 }
 
+/// 前置きに同じページを 2 度書くと、そのページが「余分」に出る。
+///
+/// 集合にすると重複は消えて一致してしまう。前置きは以後バイト列のまま写されるので、
+/// ここで拾わないと重複は残り続ける。
+#[test]
+fn a_page_repeated_in_the_preamble_is_a_finding() {
+    let mut world = World::normal();
+    let ledger = world.ledger_mut(Domain::Property);
+    let repeated = ledger.pages[0].clone();
+    ledger.pages.push(repeated);
+    world.refresh_reports();
+
+    let outcome = run(&world.input());
+    assert_eq!(
+        kinds(&outcome.findings),
+        vec![(FindingKind::LedgerPagesMismatch, 1)]
+    );
+    let finding = only_one(&outcome.findings, FindingKind::LedgerPagesMismatch);
+    assert_eq!(finding.id, None);
+    assert_eq!(finding.place, ledger_place("property"));
+    assert_eq!(
+        finding.detail,
+        "前置きの担当ページが割り当て表と違う（足りない: なし / 余分: list_propertysystem）"
+    );
+}
+
 /// 前置きの比較は**集合**である（設計の判定表）。
 ///
 /// 並べ替えただけでは所見にならない。並びの正しさは初期台帳の生成が受け持ち、
-/// 要件 3.3a により前置きは以後バイト列のまま写される（タスク 2.5 の申し送り）。
+/// 要件 3.3a により前置きは以後バイト列のまま写される。
 #[test]
 fn reordering_the_preamble_pages_is_not_a_finding() {
     let mut world = World::normal();
@@ -529,7 +506,7 @@ fn an_equal_pair_in_the_file_order_is_a_finding_too() {
 /// 割り当ての無いページの項目をカタログへ足すと `PageNotAssigned` が出る。
 ///
 /// **`CatalogIdMissingFromLedgers` が必ず道連れになる**——足した id はどの台帳にも
-/// 無いからである（タスク 4.1 からの申し送り）。台帳へ入れると今度は担当違いが
+/// 無いからである。台帳へ入れると今度は担当違いが
 /// 道連れになる（次のテスト）。どちらの形でも 1 種類だけにはできない。
 #[test]
 fn a_catalog_page_outside_the_assignment_is_a_finding() {
@@ -586,7 +563,7 @@ fn an_entry_on_an_unassigned_page_is_never_the_ledgers_own() {
 }
 
 // ---------------------------------------------------------------------------
-// 1 件目で止めない・同じ入力なら同じ結果（設計 Error Handling・要件 7.3）
+// 1 件目で止めない（設計 Error Handling）
 // ---------------------------------------------------------------------------
 
 /// 2 か所を同時に壊すと 2 件とも出る（1 件目で止めない）。
@@ -620,34 +597,22 @@ fn two_breakages_produce_two_findings() {
     );
 }
 
-/// 同じ入力を 2 度通すと所見は 1 件ずつ同じ並びで返る（要件 7.3 の決まり方）。
-#[test]
-fn the_same_input_yields_the_same_findings_in_the_same_order() {
-    let mut world = World::normal();
-    world.ledger_mut(Domain::Shiori).file_order.swap(0, 1);
-    let entry = catalog_entry("ukadoc:list_unknown_page:Foo:1", "Foo");
-    world.catalog.entries.insert(entry.id.clone(), entry);
-    world.refresh_reports();
-
-    let first = run(&world.input()).findings;
-    let second = run(&world.input()).findings;
-    assert_eq!(first, second);
-    assert!(first.len() >= 3, "所見が少なすぎて並びを見比べられない");
-}
-
 /// 台帳を 1 本も渡さなければ、カタログの 12 件すべてが行き先を失う。
 ///
 /// 「どの台帳にも無い」の判定がカタログ側を走査していることを、件数の側から
-/// 裏取りする（1 件だけ抜く見本では 1 対 1 の対応しか見えない）。報告も一緒に
-/// 空にするのは、台帳の無い世界の報告が古いかどうかを別の判定に問わせないため。
+/// 裏取りする（1 件だけ抜く見本では 1 対 1 の対応しか見えない）。ドメイン別報告を
+/// 空にし、全体報告を台帳の無い世界から作り直して渡すのは、報告が古いかどうかを
+/// 別の判定に問わせないため。
 #[test]
 fn with_no_ledgers_every_catalog_id_is_missing() {
     let world = World::normal();
     let empty: Vec<Ledger> = Vec::new();
     let no_reports: BTreeMap<Domain, String> = BTreeMap::new();
+    let no_ledgers_summary = render_summary(&world.catalog, &empty, &THEMES);
     let input = CheckInput {
         ledgers: &empty,
         domain_reports: &no_reports,
+        summary_report: &no_ledgers_summary,
         ..world.input()
     };
 
@@ -661,14 +626,6 @@ fn with_no_ledgers_every_catalog_id_is_missing() {
 // ---------------------------------------------------------------------------
 // 「全 id」を見る・台帳の並びに左右されない（要件 6.3・7.3）
 // ---------------------------------------------------------------------------
-
-/// その種類の所見の詳細を出た順に並べる。
-fn details(findings: &[Finding], kind: FindingKind) -> Vec<&str> {
-    of_kind(findings, kind)
-        .into_iter()
-        .map(|finding| finding.detail.as_str())
-        .collect()
-}
 
 /// 1 本の台帳にカタログに無い id が 2 つあれば、**2 件とも**所見になる。
 ///

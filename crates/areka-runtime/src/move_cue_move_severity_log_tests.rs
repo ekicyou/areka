@@ -20,46 +20,11 @@
 // =============================================================================
 
 use super::*;
-use dola::DynamicValue;
+use crate::consumer_ledger::test_support::broken_custom_cue;
+use crate::frame::test_support::{capture_logs, count_level};
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{TryRecvError, channel};
 
-/// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines
-}
-
-/// 捕捉行のうち指定 level（例 `"WARN"`／`"DEBUG"`）の件数を数える。
-fn count_level(logs: &[String], level: &str) -> usize {
-    let needle = format!("level={level}");
-    logs.iter().filter(|l| l.contains(&needle)).count()
-}
-
-/// 非正準 params（`as_command_carrier()==None`）で宛名だけを差し替えた壊れ Custom cue を組む。
-/// `params: DynamicValue::Null` は String Array でないため `as_command_carrier()` が None を返す
-/// （テスト前提: 正準条件を満たさない実データ）——だが `Custom{command}` フィールドは読める。
-fn broken_custom_cue(actor: &str, command: &str) -> TalkCue {
-    let cue = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command: CueCommand::Custom {
-            command: command.to_string(),
-            params: DynamicValue::Null,
-        },
-        duration: 0.0,
-    };
-    // テスト前提の明示: この params 形は確かに非正準（開封が None）である。
-    assert_eq!(
-        cue.command.as_command_carrier(),
-        None,
-        "params=Null は非正準ゆえ as_command_carrier()==None（宛名分岐枝に入る前提）"
-    );
-    cue
-}
-
-/// D8④ アーム①: 宛名 `move` で params 非正準（自分宛の壊れ物）→ **WARN=1**・送出なし。
 #[test]
 fn broken_move_addressed_custom_warns_once() {
     let (tx, rx) = channel::<PositionCue>();

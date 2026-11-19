@@ -7,8 +7,9 @@
 use super::decode::decode;
 use super::lexer::lex;
 use super::model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
-    ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias,
+    AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape,
+    DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell, SortOrder, Surface,
+    SurfaceAlias,
 };
 
 // テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming タスク 8.5・要件 1.7 / 3.1 / 3.2）。

@@ -1,22 +1,22 @@
 //! `\![set,zorder,...]`／`\![reset,zorder]` の受け口——**自己選別と送り出しだけ**を行う層
-//! （design「ZOrderCueSink」・要件 1.7／4.4／8.3／11.2）。
+//! （areka-P0-scope-zorder-pinning design「ZOrderCueSink」・要件 1.7／4.4／8.3／11.2）。
 //!
 //! 台本の演出は演者ごとに振り分けられずに全員へ配られるので、本 sink にも文字も演技も
 //! 他人宛のコマンドも届く。ここで行うのは次の 2 つに限る。
 //!
 //! 1. **自己選別**——コマンド名と第 1 引数の組が `("set", "zorder")` か `("reset", "zorder")`
 //!    のものだけを受理し、それ以外は担当外として読み飛ばす（読み飛ばした側で重なりの
-//!    状態には一切触れない＝要件 4.4／11.2）。
+//!    状態には一切触れない＝areka-P0-scope-zorder-pinning 要件 4.4／11.2）。
 //! 2. **送り出し**——受理したものは[`ZOrderDirective`]として送り出し、画面更新を促す旗を
 //!    立てる。**この層はトークンを解釈しない**（解釈には台帳の状態が要るので、後段の
 //!    取り出しの相の担当である）。
 //!
-//! # `MoveCueSink` との意図的な差＝実行スコープを読まない（要件 1.7）
+//! # `MoveCueSink` との意図的な差＝実行スコープを読まない（areka-P0-scope-zorder-pinning 要件 1.7）
 //!
 //! 本 sink の骨格は `move_cue.rs` の `MoveCueSink::emit` と同型だが、**1 点だけ違う**。
 //! `MoveCueSink` は移動対象を `cue.actor`（タグを実行したスコープ）から取るのに対し、
 //! 本 sink は `cue.actor` を**読まない**。重なりの意味を決めるのはタグに書かれたスコープ
-//! 番号だけであり、どのスコープがタグを実行したかは意味に影響しない（要件 1.7）。
+//! 番号だけであり、どのスコープがタグを実行したかは意味に影響しない（areka-P0-scope-zorder-pinning 要件 1.7）。
 //! `\0` が書いても `\1` が書いても `\![set,zorder,1,0]` は同じ指令になる。
 //! この差は兄弟のテストが両側から固定している——実行スコープを振っても指令が変わらない
 //! ことと、本ファイルのコードにその欄を読む綴りが無いことの 2 つである。
@@ -24,7 +24,7 @@
 //! # 宛名の規律（開封できない荷物の水準の分け方）
 //!
 //! 汎用キャリアの正準形は「文字列の配列」であり、そうでない `Custom` は開封できない。
-//! 開封できない荷物は**宛名**で水準を分ける（`move_cue.rs:489-505` の先例）——自分宛の
+//! 開封できない荷物は**宛名**で水準を分ける（`MoveCueSink::emit` の宛名の規律が先例）——自分宛の
 //! 壊れ物は警告、他人宛は良性の読み飛ばしとして記録する（報せる責任は宛名の担当者にある）。
 //! ただし開封できない形では**第 1 引数が読めない**ので、宛名は名前だけで判ずるほかない。
 //! `set`／`reset` の名前には本 sink のほかに、窓の位置の受け口（`MoveCueSink` の吸着・組の
@@ -32,7 +32,7 @@
 //! ここへ届かず（第 1 引数で読み飛ばす）、開けない形の `set`／`reset` を警告する持ち主は本 sink
 //! 1 つのままとする（ほかの担当は開けない形を `debug!` に留め、二重の警告を出さない）。
 //!
-//! # 黙って諦めない（要件 8.3）
+//! # 黙って諦めない（areka-P0-scope-zorder-pinning 要件 8.3）
 //!
 //! 読み飛ばし・送出の失敗のいずれの経路も、必ず理由を記録してから抜ける。受け口が
 //! 閉じていても台本は殺さない（記録して継続する）。
@@ -71,7 +71,7 @@ fn is_own_address(command: &str) -> bool {
     command == NAME_SET || command == NAME_RESET
 }
 
-/// `\![set,zorder,...]`／`\![reset,zorder]` の受け口（design「ZOrderCueSink」）。
+/// `\![set,zorder,...]`／`\![reset,zorder]` の受け口（areka-P0-scope-zorder-pinning design「ZOrderCueSink」）。
 ///
 /// 配送は台本ごとに受け口を複製するため [`Clone`] が要る。内側の送信端は常に複製でき、
 /// どの複製も単一の受信端（取り出しの相）へ届くので、複製しても配送の意味は変わらない。
@@ -115,7 +115,7 @@ impl dola::cue::CueSink for ZOrderCueSink {
 
         // 2) 自己選別。担当は「名前＋第 1 引数」の 2 組だけで、他は全て担当外である
         //    （`\![set,他]`／`\![reset,他]` を含む＝読み飛ばした側で重なりを変えない・
-        //    要件 4.4／11.2）。第 1 引数が無い場合も担当外へ落ちる。
+        //    areka-P0-scope-zorder-pinning 要件 4.4／11.2）。第 1 引数が無い場合も担当外へ落ちる。
         let selector = params.first().copied().unwrap_or_default();
         let directive = match (name, selector) {
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2czorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1
@@ -127,7 +127,7 @@ impl dola::cue::CueSink for ZOrderCueSink {
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breset_2czorder_5d:1
             (NAME_RESET, SELECTOR_ZORDER) => {
                 // 正典の解除は引数を取らない。余分が書かれていても解除として受理し、
-                // 運ばなかったことを記録する（黙って捨てない・要件 8.3）。
+                // 運ばなかったことを記録する（黙って捨てない・areka-P0-scope-zorder-pinning 要件 8.3）。
                 if params.len() > 1 {
                     debug!(
                         extra = ?&params[1..],
@@ -139,8 +139,7 @@ impl dola::cue::CueSink for ZOrderCueSink {
             _ => {
                 debug!(
                     name,
-                    selector,
-                    "ZOrderCueSink: 担当外のコマンドを良性に読み飛ばす（自己選別・要件 11.2）"
+                    selector, "ZOrderCueSink: 担当外のコマンドを良性に読み飛ばす（自己選別）"
                 );
                 return;
             }

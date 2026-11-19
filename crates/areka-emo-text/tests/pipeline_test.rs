@@ -78,8 +78,7 @@ fn run_channel_pipeline(cues: Vec<TalkCue>) -> TextLayerState {
                     |_| Ok(()),
                 )
             },
-        )
-        .expect("spawn_ui on the pipeline pump thread must succeed");
+        );
         let sink = EmoTextSink::new(tx);
 
         // ワーカースレッドから emit（受信端はワーカー側・単一 worker ゆえ FIFO 決定論）。

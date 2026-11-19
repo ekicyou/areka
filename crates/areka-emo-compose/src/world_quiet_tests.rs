@@ -15,12 +15,14 @@ const SHELL: &str = "\
 surface0
 {
 element0,overlay,a.png,0,0
+collision0,0,0,1,1,A
 animation1.interval,always
 animation1.pattern0,overlay,10,100,0,0
 }
 surface0
 {
 element1,overlay,b.png,0,0
+collision0,0,0,1,1,B
 }
 surface.append0
 {
@@ -37,13 +39,14 @@ kero.surface.alias
 }
 ";
 
-/// この檻のシェルで出る 4 件の文言（`fold.rs`）。
+/// この檻のシェルで出る 5 件の文言（`fold.rs`）。
 const DUPLICATE: &str = "surface id 重複";
 const REDEFINE: &str = "animation番号の二重定義";
 const MISSING: &str = "surface.append 対象 id が未存在";
+const COLLISION_TWICE: &str = "collision番号の二重定義";
 const COPY_LIMIT: &str = "範囲の見出しで写す行の数が畳み込みの上限を越えた";
 
-/// 面の表を組む段の記録の文言の全部（`fold.rs` の 12 本・`base_image.rs` の 1 本）。
+/// 面の表を組む段の記録の文言の全部（`fold.rs` の 13 本・`base_image.rs` の 1 本）。
 const ALL_TEXTS: &[&str] = &[
     COPY_LIMIT,
     "DefRef::Surface が surfaces 範囲外を指す",
@@ -55,6 +58,7 @@ const ALL_TEXTS: &[&str] = &[
     "SurfaceIndex は指すが SurfaceMaster component が欠落: スキップ",
     REDEFINE,
     "element番号の二重定義",
+    COLLISION_TWICE,
     "未知の AppendTarget 記述子",
     "SurfaceIndex は指すが SurfaceMaster component が欠落: 作り直す",
     "SurfaceIndex は指すが SurfaceMaster component が欠落: 面の画像を使わずスキップ",
@@ -98,8 +102,8 @@ fn quiet_build_emits_no_fold_records_and_same_table() {
     let quiet_logs =
         capture_logs(|| quiet = Some(EmoWorld::build_with_images_quiet(&shell, &images)));
 
-    // 対照: 出す入口は 4 件を 1 行ずつ出す。
-    for text in [DUPLICATE, REDEFINE, MISSING, COPY_LIMIT] {
+    // 対照: 出す入口は 5 件を 1 行ずつ出す。
+    for text in [DUPLICATE, REDEFINE, MISSING, COPY_LIMIT, COLLISION_TWICE] {
         assert_eq!(count(&emit_logs, text), 1, "出す入口の {text}: {emit_logs}");
     }
     // 出さない入口は、面の表を組む段の記録の文言がどれも 0 行。

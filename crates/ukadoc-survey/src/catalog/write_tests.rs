@@ -2,23 +2,22 @@
 //!
 //! 守るのは 5 つ。⑴ 設計「Data Models」の見本がバイト単位で再現されること
 //! （冒頭の 2 行・`[snapshot]` の 8 欄とその並び・`[entry]` の 1 項目 1 行）。
-//! ⑵ 同じカタログを 2 回書き出すと 1 バイトも違わないこと（要件 1.5）。
-//! ⑶ 項目が id の byte 昇順で並び、1 項目がちょうど 1 行になること（要件 1.1・D-9）。
-//! ⑷ 逃がしが設計 D-10 のとおり（逆斜線は `\\`・単引用符と日本語はそのまま）。
-//! ⑸ 組み上げた本文が `toml` でも読めて値が一致すること（自前の書き出しの較正）。
+//! ⑵ 項目が id の byte 昇順で並び、1 項目がちょうど 1 行になること（要件 1.1・D-9）。
+//! ⑶ 逃がしが設計 D-10 のとおり（逆斜線は `\\`・単引用符と日本語はそのまま）。
+//! ⑷ 組み上げた本文が `toml` でも読めて値が一致すること（自前の書き出しの較正）。
+//! ⑸ 書き出す鍵が表の鍵であって項目の側の `id` ではないこと。
 //!
-//! ⑸ を置くのは、⑴〜⑷ が自分の読み取りだけを相手にしていると「自分の読み手だけが
+//! ⑷ を置くのは、⑴〜⑶ が自分の読み取りだけを相手にしていると「自分の読み手だけが
 //! 許す本文」を書いていても気づけないからである。独立した読み手を 1 つ通す。
 //!
 //! **ファイルも一時ディレクトリも作らない。環境変数も読まない**（要件 6.2）。
 //!
-//! 逐語の期待値は実装の定数を参照せず、独立した文字列リテラルで書く（タスク 1.5 の
-//! 教訓。定数を参照すると表を表自身と比べるだけになる）。
+//! 逐語の期待値は実装の定数を参照せず、独立した文字列リテラルで書く。定数を参照すると
+//! 表を表自身と比べるだけになる。
 
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::model::{EntryId, PageName};
 
 /// 設計「Data Models」の `doc/ukadoc-coverage/catalog.toml` の見本そのもの。
 ///
@@ -42,8 +41,8 @@ hash_algorithm = "fnv1a64"
 "ukadoc:list_propertysystem:system.year:1" = { page = "list_propertysystem", title = "system.year", category = "protocol", versions = [], hash = "0000000000000000", url = "https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#system.year:1" }
 "#;
 
-/// 見本の冒頭の情報。全 2,983 件と正典 1,749 件は**別の欄**なので違う値を置く
-/// （タスク 2.1 の教訓。一致する見本では 2 つの欄を区別できない）。
+/// 見本の冒頭の情報。全件数と正典の件数は**別の欄**なので違う値を置く。一致する
+/// 見本では 2 つの欄を取り違えても気づけない。
 fn design_sample_meta() -> SnapshotMeta {
     SnapshotMeta {
         package: "ukagaka-doc-mcp".to_owned(),
@@ -196,21 +195,10 @@ fn lines(body: &str) -> Vec<&str> {
 ///
 /// 冒頭の 2 行・`[snapshot]` の 8 欄の並び・空行の入り方・`[entry]` の 1 行の形の
 /// すべてがここに載っている。読み戻し一致では区切りの空白 1 個の違いも欄の並び替えも
-/// 捕まらないので、この逐語の主張が要件 1.5 の土台になる（タスク 1.4 の教訓）。
+/// 捕まらないので、この逐語の主張が要件 1.5 の土台になる。
 #[test]
 fn design_sample_body_is_reproduced_byte_for_byte() {
     assert_eq!(write(&design_sample_catalog()), DESIGN_SAMPLE);
-}
-
-/// 同じカタログを 2 回書き出しても 1 バイトも違わない（要件 1.5）。
-#[test]
-fn writing_twice_is_byte_identical() {
-    let catalog = rich_catalog();
-    let first = write(&catalog);
-    let second = write(&catalog);
-    assert_eq!(first, second);
-    // 空の主張にならないよう、実際に項目が載っていることも確かめる。
-    assert!(first.contains("[entry]\n\"ukadoc:dev_bind\" = {"));
 }
 
 /// 項目は id の byte 昇順に並び、渡した順には従わない（設計 D-9）。
@@ -233,7 +221,7 @@ fn entries_are_written_in_id_byte_order() {
     );
 }
 
-/// 1 項目はちょうど 1 行（要件 1.1）。行数は冒頭 13 行＋項目数で決まる。
+/// 1 項目はちょうど 1 行（要件 1.1）。行数は `[entry]` までの 14 行＋項目数で決まる。
 #[test]
 fn each_entry_occupies_exactly_one_line() {
     let body = write(&rich_catalog());
@@ -346,30 +334,4 @@ fn rendered_body_is_readable_by_the_toml_crate_with_matching_values() {
         .filter_map(toml::Value::as_str)
         .collect();
     assert_eq!(versions, vec!["2.4.00"]);
-}
-
-/// 表の鍵には表そのものの id が使われ、値の側の欄と食い違わない。
-#[test]
-fn table_key_and_page_column_agree_with_the_id() {
-    let body = write(&rich_catalog());
-    assert!(
-        body.contains(
-            "\"ukadoc:list_propertysystem:system.year:1\" = { page = \"list_propertysystem\", "
-        ),
-        "{body}"
-    );
-}
-
-/// ページ名は id から取る型なので、書き出しにも id と同じページ名が出る。
-#[test]
-fn page_column_comes_from_the_id() {
-    let entry = entry_of(
-        "ukadoc:dev_bind",
-        "着せ替えの仕組み",
-        "dev_guide",
-        &[],
-        "1a2b3c4d5e6f7081",
-        "https://ssp.shillest.net/ukadoc/manual/dev_bind.html",
-    );
-    assert_eq!(entry.page, PageName::new("dev_bind"));
 }

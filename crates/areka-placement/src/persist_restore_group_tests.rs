@@ -5,6 +5,7 @@
 //! （当て直しで y=864）。記憶の x は下端中央の原点（左上 + 320）。
 
 use super::*;
+use crate::resolver::RectPx;
 use crate::shared_test_support::placement_sized;
 
 const CSZ: SizePx = SizePx { w: 640, h: 840 };
@@ -117,6 +118,53 @@ fn partner_visible_group_keeps_per_window_results() {
     let mut entries = remembered(0, 2000, off, None);
     entries.extend(remembered(1, 5000, off, Some("right")));
     assert_eq!(xs(&restore(&entries)), vec![2000, 2240]);
+}
+
+/// 揃え方つきの配置（スコープ番号が飛んでもよい）。
+fn placement_at(scope: usize, anchor: Anchor) -> ScopePlacement {
+    ScopePlacement {
+        anchor,
+        ..placement(scope)
+    }
+}
+
+/// T8（audit-placement-follow-residue 要件 1.3）: 中のスコープが無い（0 と 2 だけ）起動でも、
+/// 2 の印 `right` は鎖の前の窓 0 との組の印で、組の差 640 が保たれる（(n−1, n) の線では組にならず落ちる）。
+#[test]
+fn missing_middle_scope_keeps_the_pair_spacing() {
+    let off = PointPx { x: -200, y: 0 };
+    let mut entries = remembered(0, 5000, off, None);
+    entries.extend(remembered(2, 5640, off, Some("right")));
+    let out = apply_restored_placements(
+        vec![
+            placement_at(0, Anchor::Bottom),
+            placement_at(2, Anchor::Bottom),
+        ],
+        &entries,
+        &desk(),
+    );
+    assert_eq!(xs(&out), vec![1600, 2240], "組の差 640 が保たれていない");
+}
+
+/// T6 ⑴（要件 1.2）: 0 下端・1 右の辺・2 下端で 2 の印が `right` なら、辺を飛ばして 0 と 2 が組になり
+/// 差 640 が保たれる（(n−1, n) の線では辺の 1 と組んで落ちる）。
+#[test]
+fn edge_scope_between_keeps_the_pair_spacing() {
+    let off = PointPx { x: -200, y: 0 };
+    let mut entries = remembered(0, 5000, off, None);
+    entries.extend(remembered(1, 9000, off, Some("separate")));
+    entries.extend(remembered(2, 5640, off, Some("right")));
+    let out = apply_restored_placements(
+        vec![
+            placement_at(0, Anchor::Bottom),
+            placement_at(1, Anchor::Right),
+            placement_at(2, Anchor::Bottom),
+        ],
+        &entries,
+        &desk(),
+    );
+    let (a, c) = (out[0].char_pos.x, out[2].char_pos.x);
+    assert_eq!((a, c), (1600, 2240), "0 と 2 の差 640 が保たれていない");
 }
 
 /// 判定は組の寄せの後の配置で読む: 全員が外の組は寄せたので真・どれも見えている組は偽（要件 4.6）。
