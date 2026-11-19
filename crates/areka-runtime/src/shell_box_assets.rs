@@ -16,7 +16,7 @@ use areka_seriko::{SurfaceResolver, SurfaceTarget};
 use bevy_ecs::world::World;
 
 /// 文字の層へ渡す箱の束（シェル 1 つぶん）。既定値は箱の無いシェル（空の表・探す場所なし）。
-// 要件 2.5: 公開の `BootAssets::boxes`・`ShellAssets::boxes` が名指すので開ける
+// runtime-crate-split 要件 2.5: 公開の `BootAssets::boxes`・`ShellAssets::boxes` が名指すので開ける
 #[derive(Default)]
 pub struct ShellBoxAssets {
     /// 箱の定義の表とサーフェス番号ごとの置き場所の表（`ShellTarget::boxes`）。
@@ -25,18 +25,18 @@ pub struct ShellBoxAssets {
     pub aliases: BTreeMap<String, Vec<u32>>,
     /// 面の表に在るサーフェス番号（`EmoWorld::surface_ids`）。
     pub surface_ids: BTreeSet<u32>,
-    /// 箱の `font.name` のフォントを探す場所の順（[`box_font_search_dirs`]）。
+    /// 箱の `font.name` のフォントを探す場所の順（`box_font_search_dirs`）。
     pub font_dirs: Vec<PathBuf>,
     /// スコープごとの戻り先の候補の並び（`DefaultSurfaces::candidates`・descript-window-keys 要件 3.2）。
     pub fallback_candidates: BTreeMap<ActorKey, Vec<u32>>,
-    /// スコープ → 箱の名前 → 矢印の絵（シェルのフォルダから解いたもの・[`resolve_box_markers`]）。
+    /// スコープ → 箱の名前 → 矢印の絵（シェルのフォルダから解いたもの・`resolve_box_markers`）。
     /// 足りない番号は文字の層がスコープの普通のバルーンの絵で埋める（balloon-scroll-arrows 要件 7.3）。
     pub markers: BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>,
 }
 
 impl ShellBoxAssets {
     /// 文字の層へ渡す（装着の相とシェルの切替が呼ぶ）。箱の配置の直後に戻り先の引き直しを呼ぶ。`\s` の解決の閉包は、別名の写しから
-    /// seriko と同じ解決器を組み、面の表に在る番号だけを通す（[`resolve_for_text`]）。
+    /// seriko と同じ解決器を組み、面の表に在る番号だけを通す（`resolve_for_text`）。
     pub fn hand_to(self, runtime: &mut TextLayerRuntime, world: &mut World) {
         let ShellBoxAssets {
             layout,
@@ -65,7 +65,7 @@ impl ShellBoxAssets {
 }
 
 /// スコープごと・置き場所を持つ箱ごとに、矢印の絵をシェルのフォルダから解く
-/// （読み込みの時だけ呼ぶ・名前の順はスコープごと・要件 2.1・7.3）。
+/// （読み込みの時だけ呼ぶ・名前の順はスコープごと・balloon-scroll-arrows 要件 2.1・7.3）。
 ///
 /// 同じ (スコープ, `arrow.filename`) は 1 回だけ解いて共有する（警告を箱の数だけ出さない）。
 pub(crate) fn resolve_box_markers(
@@ -108,13 +108,13 @@ pub(crate) fn resolve_box_markers(
         .collect()
 }
 
-/// 箱のフォントを探す場所の順（シェルのフォルダ、ゴーストのフォルダの順・要件 3.10）。
+/// 箱のフォントを探す場所の順（シェルのフォルダ、ゴーストのフォルダの順・areka-P0-shell-balloon 要件 3.10）。
 pub(crate) fn box_font_search_dirs(shell_dir: &Path, ghost_dir: &Path) -> Vec<PathBuf> {
     vec![shell_dir.to_path_buf(), ghost_dir.to_path_buf()]
 }
 
 /// `\s` の鍵を seriko と同じ解決で番号にし、今のシェルの面の表に無ければ「解決できない」にする
-/// （要件 4.1・5.1・design.md「箱の束の結線」）。
+/// （areka-P0-shell-balloon 要件 4.1・5.1・design.md「箱の束の結線」）。
 ///
 /// 表示の層は面の表に無い番号へ切り替えられず前の表示を保つので、文字の層もそれに合わせて
 /// 何も変えない。記録は呼び手（seriko と文字の層）が出す。

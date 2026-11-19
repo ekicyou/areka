@@ -1,25 +1,28 @@
+use shiori_host32_host::ExitKind;
+
 use super::{
-    Progress, RecordedCall, SpineHarness, capture_logs, count_level, run_attach_phase,
+    LoopDriver, Progress, RecordedCall, ScriptedShioriBackend, SpineHarness, capture_logs,
     run_text_phase, wait_until,
 };
 
 // ===========================================================================
-// task 6.1 スモークテスト
+// 足場のスモークテスト（areka-P0-emo2-boot 要件 8）
 // ===========================================================================
 
-/// 観測可能な完了条件（tasks.md task 6.1）: ハーネスが scripted ghost を boot させ、Tick 注入に
-/// より attach 準備状態まで **panic なく** 到達することをスモークレベルで固定する（R8.1/8.3/8.4/8.6）。
+/// 観測可能な完了条件: ハーネスが scripted ghost を boot させ、Tick 注入に
+/// より attach 準備状態まで **panic なく** 到達することをスモークレベルで固定する
+/// （areka-P0-emo2-boot 要件 8.1・8.3・8.4・8.6）。
 ///
 /// 檻に入れる判断分岐:
-/// - **scripted boot 発火**: boot 系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion）が
+/// - **scripted boot 発火**: boot 系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion）が
 ///   scripted backend へ (method,id) 順で届く（＝「scripted ghost を boot させた」直接証跡）。
-/// - **Tick 注入の疎通**: `dispatcher()` への Tick 送出が Ok（ghost スタック生存・sleep 不使用）。
+/// - **Tick 注入の疎通**: `dispatcher()` への Tick 送出が Ok（ghost スタック生存・時刻は注入だけで進める）。
 /// - **attach 到達**: 実 GPU の World（MTA）＋合成 `GhostWindows` 上で `run_attach_phase`
-///   が **panic せず** 完走し、DD-12 の縮退がバグを隠さない檻＝`planned==attached==2`（全 scope の
+///   が **panic せず** 完走し、縮退がバグを隠さない檻＝`planned==attached==2`（全 scope の
 ///   シェル装着成功）を装着サマリ `info!` で観測でき、ERROR は 0 件。
 /// - **ハンドル生存**: attach 後も seriko worker は稼働中・dispatcher は再度 Tick を受理する。
 ///
-/// 豊富な観測（S1 ピクセル readback・S2 typewriter・S3 `\b`・S5 close 握手）は 6.2/6.3 の担当。
+/// 豊富な観測（S1 ピクセル readback・S2 typewriter・S3 `\b`・S5 close 握手）は兄弟のテストファイルが持つ。
 #[test]
 fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     // 最小 talk（1 サーフェス cue・テキストなし）で決定論を単純に保つ。
@@ -27,9 +30,9 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
 
     // ── (1) scripted boot 発火: boot 系列が backend へ (method,id) 順で届く ──
     // boot 系列は kanade スレッド上の同期往復のみで完走する（Tick 不要）。実スレッド境界を跨ぐため
-    // 有界スピン待機（sleep なし・yield_now のみ）で 6 呼出の到達を待ってから照合する。task 8.2 の
-    // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）と、挨拶の台詞を再生の前に
-    // かける OnTranslate（OnBoot の後・偽の SHIORI の既定は 204）が加わり boot 系列は 6 呼出。
+    // [`wait_until`]（休みは芯が持つ）で下の照合の列の到達を待ってから照合する。boot 系列には
+    // username prefetch GET（OnInitialize 後・OnFirstBoot 前）と、挨拶の台詞を再生の前に
+    // かける OnTranslate（OnBoot の後・偽の SHIORI の既定は 204）が入る。
     // 打ち切りは反復回数でなく [`wait_until`] の進みの目印（SHIORI の呼び出しの数）で判じる。
     let mut boot_calls = Vec::new();
     let handle = harness.shiori_handle.clone();
@@ -45,7 +48,6 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
             RecordedCall::Notify { id, .. } => ("notify", id.as_str()),
             RecordedCall::Get { id, .. } => ("get", id.as_str()),
             RecordedCall::Unload => ("unload", ""),
-            RecordedCall::Status => ("status", ""),
         })
         .collect();
     assert!(
@@ -65,26 +67,16 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
         "boot 系列が正典順序（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion）で発火していない"
     );
 
-    // ── (2) Tick 注入の疎通（ghost スタック生存・sleep 不使用・R8.3） ──
+    // ── (2) Tick 注入の疎通（ghost スタック生存・時刻は注入だけで進める） ──
     harness.inject_dispatcher_tick(1);
 
     // ── 実 ClockedTextSink<EmoTextSink> の UI ドレインが headless に pump できることを裏付ける
-    //    （pending なし／ありに関わらず panic しない・R8 の実 sink 経路の疎通確認）。 ──
+    //    （pending なし／ありに関わらず panic しない・areka-P0-emo2-boot 要件 8 の実 sink 経路の疎通確認）。 ──
     harness.pump_text();
 
-    // ── (3) attach 到達: run_attach_phase を GPU World＋合成 GhostWindows 上で駆動し、DD-12 の
-    //    「計画件数＝実装着件数」を装着サマリで観測する（縮退がバグを隠さない檻・R8.1）。 ──
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter()
-            .any(|l| l.contains("planned=2") && l.contains("attached=2")),
-        "attach 到達（planned=2 attached=2＝全 scope のシェル装着成功）が観測できない: {logs:?}"
-    );
-    assert_eq!(
-        count_level(&logs, "ERROR"),
-        0,
-        "attach フェーズで ERROR が発火した（装着失敗・log-first）: {logs:?}"
-    );
+    // ── (3) attach 到達: run_attach_phase を GPU World＋合成 GhostWindows 上で駆動し、
+    //    「計画件数＝実装着件数」を装着サマリで観測する（縮退がバグを隠さない檻）。 ──
+    harness.attach_all();
 
     // ── (4) ハンドル生存: seriko worker 稼働中・dispatcher は再度 Tick を受理する ──
     assert!(
@@ -93,15 +85,15 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     );
     harness.inject_dispatcher_tick(2);
 
-    // ── 後片付け: 正規終了＋全ハンドル有界 join（hang させない・R8.3 の観測点＝有界 join のみ） ──
+    // ── 後片付け: 正規終了＋全ハンドル有界 join（hang させない・観測点＝有界 join のみ） ──
     harness.shutdown_bounded();
 }
 
 // ===========================================================================
-// budoux-reveal-reflow task 6.2: 先渡しが本番の鎖を通って文字の層へ届く
+// areka-P0-budoux-reveal-reflow: 先渡しが本番の鎖を通って文字の層へ届く
 // ===========================================================================
 
-/// 観測可能な完了条件（budoux-reveal-reflow tasks.md 6.2・要件 2.1）: 本番の鎖（トークごとの写し →
+/// 観測可能な完了条件（areka-P0-budoux-reveal-reflow 要件 2.1）: 本番の鎖（トークごとの写し →
 /// 時刻の受け手の飾り `ClockedTextSink` → 文字の層の受け手 `EmoTextSink`）を通ったトークで、
 /// 文字の層が先渡しを受け取った `debug!` 行が 1 件以上あり、「先渡しが無い」の warn が 0 件である。
 ///
@@ -118,12 +110,7 @@ fn spine_preview_reaches_text_layer_through_production_chain() {
     let mut harness = SpineHarness::boot(r"\s[0]こんにちは\e");
 
     // 字の提示（文節の折り返しなら warn の分岐）を踏めるよう、先に装着しておく。
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert_eq!(
-        count_level(&logs, "ERROR"),
-        0,
-        "attach で ERROR なし: {logs:?}"
-    );
+    harness.attach_all();
 
     // 受け取りの行の後に本番の字の適用が届き、その後の回で提示まで回したら止める（空回しの字の適用は
     // 受け取りの行より前に出る）。warn 0 件の判定が、字を提示した後の回まで覆うようにするため。
@@ -173,4 +160,26 @@ fn spine_preview_reaches_text_layer_through_production_chain() {
     assert_eq!(missing, 0, "「先渡しが無い」の warn が出た: {logs:?}");
 
     harness.shutdown_bounded();
+}
+
+/// 足場の後片付けは、ゴーストの降ろしの失敗を隠さない。
+///
+/// 標準の台本から `OnClose` だけを抜いて起こす。降ろしは `OnClose` を NOTIFY で送るので、
+/// 台本に無い呼び出しで偽の SHIORI が panic し、`shutdown` は `Err` を返す。後片付けがそれを
+/// `.expect` で落とすので、待つ側には `［相手が居ない］` の赤として届く。
+///
+/// # 非空虚性
+///
+/// - 後片付けが `shutdown` の戻りを捨てていれば、panic せずに通り抜け、`should_panic` が落ちる。
+#[test]
+#[should_panic(expected = "［相手が居ない］: 「spine ghost shutdown」")]
+fn shutdown_bounded_fails_when_the_shiori_thread_panics() {
+    let (backend, shiori_handle) = ScriptedShioriBackend::builder()
+        .notify("OnInitialize", Ok(()))
+        .get("OnFirstBoot", Ok(None))
+        .get("OnBoot", Ok(Some(r"\s[0]\e".to_string())))
+        .notify("basewareversion", Ok(()))
+        .unload(Ok(ExitKind::Clean))
+        .build();
+    SpineHarness::boot_with(backend, shiori_handle, LoopDriver::Inert).shutdown_bounded();
 }

@@ -1,10 +1,7 @@
 //! シェル名つきの資産づくり（`build_boot_assets_with_shell`）のテスト
 //! （spec: areka-P0-shell-balloon-switch 要件 4.4・6.4・8.8）。
-//!
-//! `assets_tests.rs` は上限の近いファイルゆえ行を足さず、兄弟のここへ置く。
 
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-
+// bake の WIC デコードに要る COM は、テストのプロセスの寿命の MTA（`crash_report_test_support`）が持つ。
 use super::*;
 use crate::sample_test_support::emo2_balloon_root;
 
@@ -19,10 +16,6 @@ const ONLY_IN_SECOND: u32 = 777;
 /// 既定のシェルを読む実装は、面 777 を持たないので赤になる。
 #[test]
 fn named_shell_builds_assets_from_that_shells_pictures() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
     let rpost =
         sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
     rpost

@@ -58,8 +58,7 @@ fn emit_with_wraps_only_name_form_balloon_cues() {
             recs.lock().expect("records lock").push(msg);
             Ok(ControlFlow::Continue(()))
         },
-    )
-    .expect("spawn_ui on the test (pump) thread must succeed");
+    );
     let mut sink = EmoTextSink::new(tx);
     let (probe, _found) = recording_probe();
 
@@ -106,8 +105,7 @@ fn drain_reports_missing_box_once_and_not_for_present_box() {
             rt.state
                 .route_surface(&ActorKey::from("0"), SurfaceKeyOutcome::Show(0));
         }
-        let (mut sink, _drain) =
-            spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+        let (mut sink, _drain) = spawn_emo_text(Rc::clone(&runtime));
         let (present, present_found) = recording_probe();
         let (missing, missing_found) = recording_probe();
 

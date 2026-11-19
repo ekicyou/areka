@@ -1,12 +1,10 @@
 use std::cell::Cell;
+use std::time::{Duration, Instant};
 
-use super::{
-    Duration, Instant, SETTLE_MIN, SETTLE_QUIET_ROUNDS, SPIN_WAIT, settle_bounded,
-    settle_bounded_with,
-};
+use super::{SETTLE_MIN, SETTLE_QUIET_ROUNDS, SPIN_WAIT, settle_bounded, settle_bounded_with};
 
 // ===========================================================================
-// task 4.1 — 「尽きるのが正常」の回収待ちの有界化（要件 4.2・4.4／design Flow 4・C3）
+// 「尽きるのが正常」の回収待ちの有界化
 //
 // [`settle_bounded`] は 2 つの条件の**両方**が満たされるまで返らない（最小持続 [`SETTLE_MIN`]
 // かつ 連続空観測 [`SETTLE_QUIET_ROUNDS`] 回）。本ファイルはヘルパを**単独で**駆動し、
@@ -15,10 +13,10 @@ use super::{
 //
 // # 壁時計に依存しない檻の作り方
 //
-// 「時間が経つまで返らない」を実時間の計測で確かめると、並列負荷で合否が動く（本仕様が
-// まさに直そうとしている病）。そこで内側の継ぎ目 [`settle_bounded_with`] へ**注入時計**を渡し、
+// 「時間が経つまで返らない」を実時間の計測で確かめると、並列負荷で合否が動く（areka-P0-test-cage-determinism が
+// 直した病）。そこで内側の継ぎ目 [`settle_bounded_with`] へ**注入時計**を渡し、
 // 時刻を `step` の呼出回数だけの関数にする。期待値は整数の呼出回数になり、実時間は一切
-// 判定に入らない（実行に要する実時間＝反復数 × [`BACKOFF_SLEEP`] は変わるが、合否は変わらない）。
+// 判定に入らない。休み `pause` も眠らないものを渡すので、反復ごとの本物の sleep も無い。
 // ===========================================================================
 
 /// 注入時計で [`settle_bounded_with`] を駆動し、`step` の呼出回数を返す。
@@ -31,6 +29,7 @@ fn drive(per_step: Duration, mut outcome: impl FnMut(u32) -> usize) -> u32 {
     let steps = Cell::new(0u32);
     settle_bounded_with(
         || base + per_step * steps.get(),
+        |_| {},
         || {
             let n = steps.get() + 1;
             steps.set(n);
@@ -40,7 +39,7 @@ fn drive(per_step: Duration, mut outcome: impl FnMut(u32) -> usize) -> u32 {
     steps.get()
 }
 
-/// 連続空観測が先に満たされても、最小持続 [`SETTLE_MIN`] に達するまで返らない（要件 4.2）。
+/// 連続空観測が先に満たされても、最小持続 [`SETTLE_MIN`] に達するまで返らない。
 ///
 /// 毎反復 0 件（＝`SETTLE_QUIET_ROUNDS` は早々に満たされる）・1 反復 1ms の注入時計。
 /// 返るのは `SETTLE_MIN` を満たす反復。最小持続の条件を外すと呼出回数が
@@ -62,7 +61,7 @@ fn settle_bounded_does_not_return_before_the_minimum_duration() {
     );
 }
 
-/// 最小持続が先に満たされても、連続 [`SETTLE_QUIET_ROUNDS`] 回の空観測に達するまで返らない（要件 4.2）。
+/// 最小持続が先に満たされても、連続 [`SETTLE_QUIET_ROUNDS`] 回の空観測に達するまで返らない。
 ///
 /// 1 反復 100ms の注入時計＝2 反復で `SETTLE_MIN` を満たす。最初の 1 反復だけ 1 件回収して
 /// 連続空回数を 0 へ戻すので、返るのは `1 + SETTLE_QUIET_ROUNDS` 反復目。連続空回数の条件を
@@ -89,7 +88,7 @@ fn settle_bounded_does_not_return_before_the_consecutive_quiet_rounds() {
     );
 }
 
-/// 一度も空にならなくても上限 [`SPIN_WAIT`] で必ず返る（hang しない・要件 4.2）。
+/// 一度も空にならなくても上限 [`SPIN_WAIT`] で必ず返る（hang しない）。
 #[test]
 fn settle_bounded_returns_at_the_upper_bound_even_when_never_quiet() {
     let per_step = Duration::from_secs(1);
@@ -104,7 +103,7 @@ fn settle_bounded_returns_at_the_upper_bound_even_when_never_quiet() {
     );
 }
 
-/// 既定の [`settle_bounded`] は実時計に繋がっており、panic せずに返る（要件 4.4・design C3）。
+/// 既定の [`settle_bounded`] は実時計に繋がっており、panic せずに返る。
 ///
 /// 実時間で判定するのは**下限だけ**（単調時計では下回りようがない）。上限は測らないので
 /// 並列負荷で赤にならない。

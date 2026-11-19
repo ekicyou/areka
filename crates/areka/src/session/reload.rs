@@ -4,6 +4,7 @@
 //! `reload` の 2 つの入口は、ここの [`request_reload`] 1 本だけを通る。窓口は 終了の途中 → 別の読み直し
 //! → ゴースト切替 → シェル／バルーン切替 → ネットワーク更新 → インストール → 文脈 の順に判定し、
 //! 断りはどれも `warn!(reload_refused)` を 1 件残す（終了の途中だけは `debug!`・返事は落とす）。
+//! 最後に、読み直せる語の無い descript を `warn!(reload_descript_no_words)` で断る（`reload_refused` は出さない）。
 //! 受理したら `info!(reload_started)` を残し、対象ごとの始め方へ渡す。
 
 use std::collections::VecDeque;
@@ -26,12 +27,13 @@ use super::ghost_switch::{
     GhostSpec, SwitchEnd, SwitchInFlight, SwitchRequest, SwitchTarget, SwitchVerdict,
     WelcomeAttempt, accept_switch,
 };
+use super::hooks;
 use super::shell_balloon_switch::{SwitchContext, accept_skin};
 use crate::boot_config::BootContext;
 use crate::exit_wait::{self, WorkGate};
 use crate::ghost_session::GhostSlot;
 use crate::log_history::TARGET_ERROR;
-use areka_runtime::reload_args::{DescriptNotes, ReloadTarget, ScriptReload};
+use areka_runtime::reload_args::{DescriptNotes, DescriptParts, ReloadTarget, ScriptReload};
 use areka_runtime::reload_cue::ReloadRx;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::skin_switch::{SkinKind, SkinSwitchInFlight, SkinVerdict};
@@ -56,7 +58,7 @@ pub(crate) struct ReloadRequest {
 pub(crate) enum ReloadVerdict {
     Accepted,
     Refused(RefusedReason),
-    /// 終了の途中（始めない・MCP は返事を落とす・要件 2.2）。
+    /// 終了の途中（始めない・MCP は返事を落とす・areka-P0-mcp-reload 要件 2.2）。
     Closing,
 }
 
@@ -88,7 +90,8 @@ impl RefusedReason {
 
 /// 進行中の印（World の NonSend・高々 1 つ）。在れば次の読み直しは断る。
 ///
-/// 消すのは対象ごとの終わり（6.2〜6.4）と終了の片付け [`discard_for_exit`]。
+/// 消すのは対象ごとの終わり（ゴーストの切替の [`on_switch_end`]・SHIORI の切れ目の [`poll_destroy`]・
+/// shell／balloon の列の [`skin_phase_ended`]／[`advance_skins`]）と終了の片付け [`discard_for_exit`]。
 pub(crate) struct ReloadInFlight {
     pub target: ReloadTarget,
     pub origin: ReloadOrigin,
@@ -142,7 +145,7 @@ pub(crate) fn register(world: &mut World) {
 /// shiori の切れ目の返事を覗く（[`poll_destroy`]・Input の系）。
 ///
 /// 受信端が無ければ取り出しは無操作（LogSink の起動・結線の前）。受信端の借用を切ってから窓口を呼ぶ。
-pub(crate) fn drain(world: &mut World) {
+fn drain(world: &mut World) {
     let pending: Vec<ScriptReload> = match world.get_non_send::<ReloadRx>() {
         Some(rx) => rx.try_iter().collect(),
         None => {
@@ -166,10 +169,10 @@ pub(crate) fn drain(world: &mut World) {
     poll_destroy(world);
 }
 
-/// 印が `AwaitingDestroy` なら切れ目の返事を覗く（要件 2.4・4.1）。まだなら何もしない。`Reached` なら
+/// 印が `AwaitingDestroy` なら切れ目の返事を覗く（areka-P0-mcp-reload 要件 2.4・4.1）。まだなら何もしない。`Reached` なら
 /// 印を下ろして [`start_switch`] へ（予約が立てば `Switching` の印に替わる）。それ以外は始めずに
-/// 印を下ろし、`reload_failed(gap_*)` を 1 件残す（利用者の取りやめ・ほかの切替は `warn!`、許可表の
-/// 漏れと kanade の脱落は `error!`・要件 9.1・9.3）。
+/// 印を下ろし、`reload_failed`（`gap_cancelled`／`gap_left`／`gap_not_sent`／`kanade_gone`）を 1 件残す（台詞の切れ目に達しなかった＝利用者の取りやめと
+/// `TalkGap::Left`（理由は left 欄）は `warn!`、許可表の漏れと kanade の脱落は `error!`・areka-P0-mcp-reload 要件 9.1・9.3）。
 fn poll_destroy(world: &mut World) {
     let Some(reply) = world
         .get_non_send::<ReloadInFlight>()
@@ -212,7 +215,7 @@ fn poll_destroy(world: &mut World) {
         left = ?left,
         target = ?target,
         origin = ?origin,
-        "台詞の切れ目に達しなかった（利用者の取りやめ・ほかの切替）ので shiori を読み直さない"
+        "台詞の切れ目に達しなかった（利用者の取りやめ、または left 欄の理由）ので shiori を読み直さない"
     );
 }
 
@@ -245,7 +248,7 @@ pub(crate) fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVer
         );
         return ReloadVerdict::Refused(reason);
     }
-    // descript の語の仕分けの記録（要件 7.4・7.5）。
+    // descript の語の仕分けの記録（areka-P0-mcp-reload 要件 7.4・7.5）。
     for word in &req.notes.unsupported {
         tracing::warn!(
             target: TARGET_ERROR,
@@ -264,7 +267,13 @@ pub(crate) fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVer
             "descript の読み直しの知らない語を飛ばす"
         );
     }
-    if req.notes.empty {
+    // 読み直せる語が 1 つも無い（正本は対象の 3 つの印・areka-P0-mcp-reload 要件 7.5）。
+    if let ReloadTarget::Descript(DescriptParts {
+        ghost: false,
+        shell: false,
+        balloon: false,
+    }) = req.target
+    {
         tracing::warn!(
             target: TARGET_ERROR,
             ghost = %ghost,
@@ -287,7 +296,7 @@ pub(crate) fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVer
     ReloadVerdict::Accepted
 }
 
-/// 重なり（要件 2.1）と文脈の判定。判定の順はここの並びのとおり。
+/// 重なり（areka-P0-mcp-reload 要件 2.1）と文脈の判定。判定の順はここの並びのとおり。
 fn overlap_or_context(world: &World) -> Option<RefusedReason> {
     if world.get_non_send::<ReloadInFlight>().is_some() {
         return Some(RefusedReason::ReloadInFlight);
@@ -304,10 +313,7 @@ fn overlap_or_context(world: &World) -> Option<RefusedReason> {
     if crate::install::desk::is_busy(world) {
         return Some(RefusedReason::Installing);
     }
-    let has_kanade = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .is_some_and(|session| session.kanade().is_some());
+    let has_kanade = hooks::session(world).is_some_and(|session| session.kanade().is_some());
     if !has_kanade || world.get_resource::<BootContext>().is_none() {
         return Some(RefusedReason::NoContext);
     }
@@ -336,7 +342,7 @@ fn start(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, ghost: S
     }
 }
 
-/// ghost の読み直し（要件 3.1）: 目録を引かず今のゴースト（`BootContext.current.ghost`）から切替先を組み、
+/// ghost の読み直し（areka-P0-mcp-reload 要件 3.1）: 目録を引かず今のゴースト（`BootContext.current.ghost`）から切替先を組み、
 /// `raise_event: false` で [`accept_switch`] を呼ぶ。受理されたら立った予約の鍵を印に控えて置く。
 /// 受理されなければ印を置かずに `reload_failed(not_accepted)`（`accept_switch` が理由を記録済み）。
 fn start_switch(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, ghost: String) {
@@ -387,7 +393,7 @@ fn start_switch(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, g
     }
 }
 
-/// shiori の読み直し（要件 2.4・4.1）: 台詞の切れ目の待ちに `OnDestroy`（Reference0＝`reload`・NOTIFY）
+/// shiori の読み直し（areka-P0-mcp-reload 要件 2.4・4.1）: 台詞の切れ目の待ちに `OnDestroy`（Reference0＝`reload`・NOTIFY）
 /// の印を載せて kanade へ送り、返事の受け手を `AwaitingDestroy` の印に置く（返事は [`drain`] が覗く）。
 /// 送れなければ印を置かずに `reload_failed(kanade_gone)`。
 fn start_shiori(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, ghost: String) {
@@ -397,9 +403,7 @@ fn start_shiori(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, g
         references: vec!["reload".to_owned()],
         method: ShioriMethod::Notify,
     });
-    let sent = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
+    let sent = hooks::session(world)
         .and_then(|session| session.kanade())
         .is_some_and(|k| k.send(KanadeMsg::AwaitTalkGap { raise, reply }).is_ok());
     if !sent {
@@ -414,7 +418,7 @@ fn start_shiori(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, g
     });
 }
 
-/// 失敗の終わりの記録（要件 9.2・`TARGET_ERROR`＋`ghost`）。
+/// 失敗の終わりの記録（areka-P0-mcp-reload 要件 9.2・`TARGET_ERROR`＋`ghost`）。
 fn failed(ghost: &str, target: &ReloadTarget, origin: ReloadOrigin, reason: &str) {
     tracing::error!(
         target: TARGET_ERROR,
@@ -438,7 +442,7 @@ fn own_switch(world: &World) -> Option<&ReloadInFlight> {
 }
 
 /// ゴースト切替の予約が下りる全部の出口から（呼び手 `ghost_switch::end_switch`・**予約を下ろす前**に呼ぶ）。
-/// 印が `Switching` なら終わりの記録を 1 件残して印を下ろす（要件 3.7・8.4）。予約が窓口自身の
+/// 印が `Switching` なら終わりの記録を 1 件残して印を下ろす（areka-P0-mcp-reload 要件 3.7・8.4）。予約が窓口自身の
 /// ものでなければ `reload_failed(overtaken)`。印が無い・別の段なら何もしない。
 pub(crate) fn on_switch_end(world: &mut World, end: SwitchEnd) {
     if !matches!(
@@ -476,7 +480,7 @@ pub(crate) fn on_switch_end(world: &mut World, end: SwitchEnd) {
     failed(&flight.ghost, &flight.target, flight.origin, reason);
 }
 
-/// `switch_to` が由来を決めるとき（要件 3.2・3.3）: 印が ghost／shiori の読み直しで、進行中の予約が
+/// `switch_to` が由来を決めるとき（areka-P0-mcp-reload 要件 3.2・3.3）: 印が ghost／shiori の読み直しで、進行中の予約が
 /// 窓口自身のものなら `Some(Reloaded{scope})`。他人の予約なら `None`（既存の由来のまま）。
 pub(crate) fn boot_origin_override(world: &World) -> Option<BootOrigin> {
     let scope = match own_switch(world)?.target {
@@ -494,12 +498,12 @@ pub(crate) fn wants_runtime_only(world: &World) -> bool {
 }
 
 /// `switch_to` の分かれ目: 印が ghost の読み直しで、進行中の予約が窓口自身のものなら真（窓を作り直す
-/// 前に表示中の面を控え、作り直した窓へ出し直す・要件 3.8）。
+/// 前に表示中の面を控え、作り直した窓へ出し直す・areka-P0-mcp-reload 要件 3.8）。
 pub(crate) fn carries_shell_state(world: &World) -> bool {
     own_switch(world).is_some_and(|f| f.target == ReloadTarget::Ghost)
 }
 
-/// 対象から段の列を組む（Flow 4・要件 5.1・6.1・7.1・7.2）: `shell`（`reloadsurface` も）→ `[Shell]`、
+/// 対象から段の列を組む（Flow 4・areka-P0-mcp-reload 要件 5.1・6.1・7.1・7.2）: `shell`（`reloadsurface` も）→ `[Shell]`、
 /// `balloon` → `[Balloon]`、`descript` → 語の集合から（`ghost` は `Names`＋`Shell`＝ゴーストの descript の
 /// 配置の値はシェルの差し替えの後始末が入れ直す・重なった段は 1 度）。
 fn skin_steps(target: &ReloadTarget) -> VecDeque<SkinStep> {
@@ -521,8 +525,8 @@ fn skin_steps(target: &ReloadTarget) -> VecDeque<SkinStep> {
 
 /// 列を進める: 先頭の段を取り、`Names` は同期で済ませて次へ、`Shell`／`Balloon` は今のフォルダから
 /// 組んだ切替先で `accept_skin(raise: None)` を呼んで予約の鍵を印に控えて戻る（終わりは差し替えの相の
-/// [`skin_phase_ended`] が告げる）。列が空なら `reload_done` を残して印を下ろす（要件 8.4）。始められ
-/// なければ `reload_failed` を残して印を下ろす（要件 9.3）。
+/// [`skin_phase_ended`] が告げる）。列が空なら `reload_done` を残して印を下ろす（areka-P0-mcp-reload 要件 8.4）。始められ
+/// なければ `reload_failed` を残して印を下ろす（areka-P0-mcp-reload 要件 9.3）。
 fn advance_skins(world: &mut World) {
     loop {
         let Some(step) = world
@@ -585,13 +589,11 @@ fn advance_skins(world: &mut World) {
 }
 
 /// 今のシェル（実行系のマウントの `shell.dir`）／今のバルーン（`BootContext.current.balloon.dir`）を
-/// 目録を引かずに切替先として組む（要件 5.1・6.1）。実行系が無くシェルが分からなければ `None`。
+/// 目録を引かずに切替先として組む（areka-P0-mcp-reload 要件 5.1・6.1）。実行系が無くシェルが分からなければ `None`。
 fn current_skin(world: &World, ctx: &SwitchContext, kind: SkinKind) -> Option<SkinCandidate> {
     let (dir, folder) = match kind {
         SkinKind::Shell => {
-            let dir = world
-                .get_non_send::<GhostSlot>()
-                .and_then(|slot| slot.0.as_ref())
+            let dir = hooks::session(world)
                 .and_then(|session| session.runtime())
                 .map(|runtime| runtime.mount().shell.dir.clone())?;
             (dir, ctx.current_shell.clone()?)
@@ -614,7 +616,7 @@ fn current_skin(world: &World, ctx: &SwitchContext, kind: SkinKind) -> Option<Sk
     })
 }
 
-/// `Names` の段（要件 7.3・7.6・design「descript の読み直しで替える値」）: ゴーストの descript.txt を
+/// `Names` の段（areka-P0-mcp-reload 要件 7.3・7.6・design「descript の読み直しで替える値」）: ゴーストの descript.txt を
 /// 今のシェルの名前つきで読み直し、名前（`set_names`＝sylphya の静的構成も）と readme の置き場を替える。
 /// 読めなければ今の値を保って `reload_descript_read_failed` を残し、真を返して列を続ける。実行系が無く
 /// 名前を替えられなければ偽。sylphya への投函の barrier は待たない（読み手は次に問い合わせるとき見る）。
@@ -623,10 +625,8 @@ fn reload_names(world: &mut World) -> bool {
         .get_non_send::<ReloadInFlight>()
         .map(|f| f.ghost.clone())
         .unwrap_or_default();
-    let Some((root, shell)) = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .map(|s| (s.ghost_dir().to_path_buf(), s.current_shell_folder()))
+    let Some((root, shell)) =
+        hooks::session(world).map(|s| (s.ghost_dir().to_path_buf(), s.current_shell_folder()))
     else {
         return false;
     };
@@ -664,9 +664,9 @@ fn end_skins(world: &mut World, reason: &str) {
     }
 }
 
-/// 差し替えの相の分かれ目（呼び手 `frame/switch.rs` の `finish_shell`／`finish_balloon`）: 印が `Skins` で、
-/// 終えようとしている相の `kind`・`dir`（`SkinSwitchInFlight.target.dir`）が窓口の控えた予約の鍵と一致
-/// するときだけ真。印があっても他人の予約（利用者の `\![change,shell,…]` など）なら偽。相は印を
+/// 差し替えの相の分かれ目（呼び手は `areka-runtime` の `frame/switch.rs` の `finish_shell`／`finish_balloon`
+/// で、口の束（`hooks.rs`）を通って届く）: 印が `Skins` で、終えようとしている相の `kind`・`dir`
+/// （`SkinSwitchInFlight.target.dir`）が窓口の控えた予約の鍵と一致するときだけ真。印があっても他人の予約（利用者の `\![change,shell,…]` など）なら偽。相は印を
 /// World から外して進むので、鍵は呼び手が渡す。
 pub(crate) fn skin_is_reload(world: &World, kind: SkinKind, dir: &Path) -> bool {
     world.get_non_send::<ReloadInFlight>().is_some_and(|f| {
@@ -716,7 +716,7 @@ pub(crate) fn skin_phase_ended(world: &mut World, kind: SkinKind, dir: &Path) {
 
 /// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 印があれば `info!(reload_dropped, reason=exit)` を
 /// 残して下ろす。
-pub(crate) fn discard_for_exit(world: &mut World) {
+fn discard_for_exit(world: &mut World) {
     if let Some(dropped) = world.remove_non_send::<ReloadInFlight>() {
         tracing::info!(
             event = "reload_dropped",
@@ -732,35 +732,18 @@ pub(crate) fn discard_for_exit(world: &mut World) {
 /// 置き場のゴーストの名前（`get_active_ghost_list` と同じ綴り＝descript の `name`、無ければルート
 /// フォルダの絶対パス・末尾の区切りなし）。置き場が空なら空文字列。
 fn ghost_name(world: &World) -> String {
-    let Some(session) = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-    else {
+    let Some(session) = hooks::session(world) else {
         return String::new();
     };
-    match session
-        .names()
-        .and_then(|n| n.name.clone())
-        .filter(|n| !n.is_empty())
-    {
-        Some(name) => name,
-        None => {
-            let dir = session.ghost_dir();
-            std::path::absolute(dir)
-                .unwrap_or_else(|_| dir.to_path_buf())
-                .display()
-                .to_string()
-                .trim_end_matches(['\\', '/'])
-                .to_owned()
-        }
-    }
+    areka_ghost::config::listed_name(
+        session.names().and_then(|n| n.name.as_deref()),
+        session.ghost_dir(),
+    )
 }
 
 /// 読むゴーストのフォルダ（同梱の根から起こすと 2 回目からは写しを読むので、どこを読んだかを記録に残す）。
 fn ghost_dir(world: &World) -> String {
-    world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
+    hooks::session(world)
         .map(|session| session.ghost_dir().display().to_string())
         .unwrap_or_default()
 }

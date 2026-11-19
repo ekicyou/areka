@@ -1,4 +1,4 @@
-//! `SwitchCueSink` の自己選別と送り出しの決定論テスト（要件 1.2・1.3・1.4・1.15）。
+//! `SwitchCueSink` の自己選別と送り出しの決定論テスト（areka-P0-shell-balloon-switch 要件 1.2・1.3・1.4・1.15）。
 //!
 //! 確かめること: `\![change,shell,名]` が名前を無変形で要求 1 件（`raise_event` 偽）にすること・
 //! `--option=raise-event` で真になること・バルーンの `raise-event` は `warn!` 1 件で要求は偽で出す
@@ -6,23 +6,12 @@
 //! 0 件・受信端が落ちていても落ちずに記録すること。
 
 use super::*;
-use crate::session::shell_balloon_switch::SkinKind;
-use dola::DynamicValue;
+use crate::consumer_ledger::test_support::{broken_custom_cue, carrier_cue};
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 use std::sync::mpsc::{Receiver, channel};
 
 // ---------------------------------------------------------------- 道具立て
-
-/// `\![name,tokens...]` の汎用キャリア cue を組む。
-fn carrier_cue(name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
 
 fn sink() -> (SwitchCueSink, Receiver<SkinRequestRaw>) {
     let (tx, rx) = channel();
@@ -54,7 +43,7 @@ fn raw(kind: SkinKind, name: &str, raise_event: bool) -> SkinRequestRaw {
 
 // ---------------------------------------------------------------- シェル
 
-/// `\![change,shell,名]` は名前を無変形で運ぶ要求 1 件（`OnShellChanging` は送らない・要件 1.2）。
+/// `\![change,shell,名]` は名前を無変形で運ぶ要求 1 件（`OnShellChanging` は送らない・areka-P0-shell-balloon-switch 要件 1.2）。
 #[test]
 fn change_shell_with_name_sends_one_request_without_raise_event() {
     let (sent, events) = emit_one("change", &["shell", "Shell B/2"]);
@@ -66,7 +55,7 @@ fn change_shell_with_name_sends_one_request_without_raise_event() {
     assert_eq!(warns(&events), Vec::<Option<&str>>::new(), "警告なし");
 }
 
-/// シェルの `--option=raise-event` 付きは `raise_event` 真（要件 1.3）。
+/// シェルの `--option=raise-event` 付きは `raise_event` 真（areka-P0-shell-balloon-switch 要件 1.3）。
 #[test]
 fn shell_raise_event_option_sets_raise_event() {
     let (sent, events) = emit_one("change", &["shell", "B", "--option=raise-event"]);
@@ -84,7 +73,7 @@ fn shell_unknown_option_warns_and_still_sends() {
 
 // ---------------------------------------------------------------- バルーン
 
-/// `\![change,balloon,名]` はバルーンの要求 1 件（警告なし・要件 1.4）。
+/// `\![change,balloon,名]` はバルーンの要求 1 件（警告なし・areka-P0-shell-balloon-switch 要件 1.4）。
 #[test]
 fn change_balloon_with_name_sends_one_request() {
     let (sent, events) = emit_one("change", &["balloon", "Balloon Y"]);
@@ -92,7 +81,7 @@ fn change_balloon_with_name_sends_one_request() {
     assert_eq!(warns(&events), Vec::<Option<&str>>::new(), "警告なし");
 }
 
-/// バルーンの `raise-event` は効かない——`warn!` 1 件を残し、要求は偽で出す（要件 1.4）。
+/// バルーンの `raise-event` は効かない——`warn!` 1 件を残し、要求は偽で出す（areka-P0-shell-balloon-switch 要件 1.4）。
 #[test]
 fn balloon_raise_event_warns_and_sends_without_raise_event() {
     let (sent, events) = emit_one("change", &["balloon", "Y", "--option=raise-event"]);
@@ -124,7 +113,7 @@ fn missing_name_warns_and_sends_nothing() {
 // ---------------------------------------------------------------- 担当外
 
 /// `ghost`・裸の `change`・他の名前は 0 件で警告も出さない（`(change,ghost)` は `ChangeCueSink` の
-/// 持ち場・要件 1.15）。
+/// 持ち場・areka-P0-shell-balloon-switch 要件 1.15）。
 #[test]
 fn not_ours_is_benign_skip_without_warning() {
     let cases: [(&str, &[&str]); 4] = [
@@ -161,24 +150,14 @@ fn non_carrier_cue_is_benign_skip() {
 #[test]
 fn unopenable_change_is_skipped_without_warning() {
     let (mut sink, rx) = sink();
-    let ((), events) = capture(|| {
-        sink.emit(TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::Custom {
-                command: "change".into(),
-                params: DynamicValue::Null,
-            },
-            duration: 0.0,
-        })
-    });
+    let ((), events) = capture(|| sink.emit(broken_custom_cue("0", "change")));
     assert_eq!(rx.try_iter().count(), 0);
     assert!(warns(&events).is_empty());
 }
 
 // ---------------------------------------------------------------- 送出の失敗
 
-/// 受信端が落ちていても落ちず、送れなかったことを記録する（受信端を結ぶまでの本番もこの形）。
+/// 受信端が落ちていても落ちず、送れなかったことを記録する。
 #[test]
 fn dropped_receiver_is_logged_and_does_not_panic() {
     let (mut sink, rx) = sink();

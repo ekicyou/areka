@@ -8,13 +8,13 @@ use super::{
 // Pointer handler（⑤ マウス経路照合＋解決 live ログ）
 // ---------------------------------------------------------------------------
 
-/// probe 窓の `OnPointerMoved` ハンドラ（⑤・donor `on_shell_pressed`＝`emo-present/input.rs:20` と同型）。
+/// probe 窓の `OnPointerMoved` ハンドラ（⑤・donor `emo-present/input.rs` の `on_shell_pressed` と同型）。
 ///
 /// 記録行ごとに **本番マウス経路** `PointerState.client_point` と **クエリ系** `ScreenToClient(GetCursorPos())`
 /// をペア列（client_x/y・s2c_x/y・Δx/Δy）で live ログし、Δ=(0,0) の厳密一致を人手検証させる。加えて
 /// s2c で得た**目視由来**の client 点を [`resolve_hit_region`] へ渡し解決結果（Head/Bust/None）を併記する。
 ///
-/// **反トートロジー（7.3(a)）**: 狙点は `GetCursorPos`（実カーソル＝目視由来）からのみ得る。collision 実値
+/// **反トートロジー（areka-P0-collision-geometry 要件 7.3(a)）**: 狙点は `GetCursorPos`（実カーソル＝目視由来）からのみ得る。collision 実値
 /// から合成した screen 座標の `SetCursorPos`/`SendInput` 注入は**行わない**（本ハンドラも一切呼ばない）。
 ///
 /// ペア列は不透明域（Head/Bust）行のみに出る——透明域はクリック透過でイベントが窓へ届かず、本ハンドラが
@@ -25,7 +25,7 @@ pub(super) fn on_probe_pointer_moved(
     _entity: Entity,
     ev: &Phase<PointerState>,
 ) -> bool {
-    // Bubble 相のみ処理（Tunnel は伝播続行）。伝播は止めない（false）＝ダブルクリック終了ハンドラと共存。
+    // Bubble 相のみ処理（Tunnel は伝播続行）。伝播は止めない（false）（本 probe に終了ハンドラは無い・本番の終わり方はメニューの「終了」）。
     let Phase::Bubble(state) = ev else {
         return false;
     };
@@ -70,7 +70,7 @@ pub(super) fn on_probe_pointer_moved(
     let (surface_x, surface_y) = hit.surface_point;
     let region = hit.region.as_deref().unwrap_or("None");
 
-    // 常設 greppable ログ（要件 4.1/4.5・design CollisionProbe 節）。`client=` は目視由来の狙点
+    // 常設 greppable ログ（areka-P0-collision-dpi-hittest 要件 4.1/4.5・design CollisionProbe 節）。`client=` は目視由来の狙点
     // （s2c 経路）、`surface=` はその点を presenter が ÷k 縮約した SHIORI 配信空間の値。
     tracing::info!(
         client_x = client.x,

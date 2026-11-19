@@ -164,8 +164,7 @@ fn drain_with_choices() -> (Rc<RefCell<TextLayerRuntime>>, EmoTextSink, EmoTextS
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let (original, _join) =
-        spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the test (pump) thread");
+    let (original, _join) = spawn_emo_text(Rc::clone(&runtime));
     let mut talk = original.clone();
     talk.emit(choice("0", "a"));
     talk.emit(choice("1", "b"));

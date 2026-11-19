@@ -2,7 +2,7 @@
 //!
 //! ukadoc が出どころで実行を制限するタグを 1 つの表に持つ単一の権威。受け口はここを引き、
 //! `permits` が偽ならそのタグの合図を送らない。未実装の行（`enforced: false`）は今の扱いを
-//! 変えない（4.6）。`\![leave,nouserbreakmode]` は ukadoc が制限しないので載せない（4.5）。
+//! 変えない（areka-P0-script-security-level 要件 4.6）。`\![leave,nouserbreakmode]` は ukadoc が制限しないので載せない（areka-P0-script-security-level 要件 4.5）。
 //! 網羅台帳に `\![execute,…]` の 3 行がまだ無いため、出典は台帳でなく ukadoc の URL で書く。
 
 use areka_sakura::contract::ScriptOrigin;
@@ -32,7 +32,7 @@ pub(crate) enum Restriction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RestrictionRow {
     pub tag: RestrictedTag,
-    /// 記録と台帳に出す綴り（要件 4.1 の綴り）。
+    /// 記録と台帳に出す綴り（areka-P0-script-security-level 要件 4.1 の綴り）。
     pub display: &'static str,
     pub restriction: Restriction,
     /// ukadoc の注記の要旨。

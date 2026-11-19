@@ -274,8 +274,7 @@ mod tests {
                     |_| Ok(()),
                 )
             },
-        )
-        .expect("spawn_ui on the test (pump) thread must succeed");
+        );
         (EmoTextSink::new(tx), terminated, records)
     }
 

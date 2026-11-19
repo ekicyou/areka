@@ -95,11 +95,6 @@ pub(crate) enum ShapeReason {
     NotCurOrAni,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum PathReason {
-    OutsideFolder,
-}
-
 /// 場面の名前（番号の前の綴り）。`mousedown` は `mouserightdown` の頭ではないので順は問わない。
 const SCENES: [(&str, CursorScene); 5] = [
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#mouseup_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1
@@ -176,7 +171,7 @@ fn read_row(fields: &[String]) -> Result<(String, CursorScene, Shape<String>), R
 }
 
 /// 転記済みの cursorブレスを表にする。同じ鍵は後勝ちで、前の行を `RowReplaced` で報告する。
-/// 当たり判定名は綴りどおりで、面の当たり判定と突き合わせない（要件 1.6）。
+/// 当たり判定名は綴りどおりで、面の当たり判定と突き合わせない（shell-mouse-cursor 要件 1.6）。
 pub(crate) fn read_cursor_braces(braces: &[CursorBrace]) -> (CursorRows<String>, Vec<CursorIssue>) {
     let mut rows = BTreeMap::new();
     // 鍵ごとに、今使っている行の見出しと原文（後の行に替わったときの報告用）。
@@ -212,7 +207,7 @@ pub(crate) fn read_cursor_braces(braces: &[CursorBrace]) -> (CursorRows<String>,
 }
 
 /// ゴーストの descript からカーソルの差し替えを読む（`mousecursor`、無ければ旧い綴りの `cursor`）。
-/// `mousecursor.text`・`mousecursor.wait` は読んで `unused` に並べるだけ（出す場面が無い・要件 5.7）。
+/// `mousecursor.text`・`mousecursor.wait` は読んで `unused` に並べるだけ（出す場面が無い・shell-mouse-cursor 要件 5.7）。
 pub(crate) fn read_ghost_cursor_keys(
     kv: &BTreeMap<String, String>,
 ) -> (GhostCursorKeys<String>, Vec<CursorIssue>) {
@@ -283,10 +278,10 @@ pub(crate) fn parse_shape(value: &str) -> Result<Shape<String>, ShapeReason> {
     }
 }
 
-/// ファイル名の探す候補（`dirs` の順＝シェルのフォルダ → `ghost\master`・要件 6.4）。
-/// 絶対パス・ドライブ付き・根から始まる・上のフォルダへ出る（`..`）名前は断る（要件 6.6）。
-/// 実在は確かめない（CursorAssets が見る）。
-pub(crate) fn candidate_paths(name: &str, dirs: &[&Path]) -> Result<Vec<PathBuf>, PathReason> {
+/// ファイル名の探す候補（`dirs` の順＝シェルのフォルダ → `ghost\master`・shell-mouse-cursor 要件 6.4）。
+/// 絶対パス・ドライブ付き・根から始まる・上のフォルダへ出る（`..`）名前は断る（shell-mouse-cursor 要件 6.6）。
+/// 実在は確かめない（CursorAssets が見る）。断った名前は `None`。
+pub(crate) fn candidate_paths(name: &str, dirs: &[&Path]) -> Option<Vec<PathBuf>> {
     let outside = Path::new(name).components().any(|c| {
         matches!(
             c,
@@ -296,11 +291,11 @@ pub(crate) fn candidate_paths(name: &str, dirs: &[&Path]) -> Result<Vec<PathBuf>
         )
     });
     if outside {
-        return Err(PathReason::OutsideFolder);
+        return None;
     }
-    Ok(dirs.iter().map(|dir| dir.join(name)).collect())
+    Some(dirs.iter().map(|dir| dir.join(name)).collect())
 }
 
 #[cfg(test)]
 #[path = "shell_cursor_table_tests.rs"]
-mod tests;
+pub(crate) mod tests;

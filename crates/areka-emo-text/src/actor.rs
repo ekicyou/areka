@@ -16,7 +16,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use areka_actor::UiSpawnError;
 use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement};
 use areka_emo_present::TextSlotView;
 use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
@@ -720,7 +719,7 @@ impl TextLayerRuntime {
 /// Risks 参照・spawn 時 debug! 診断で緩和）。
 pub fn spawn_emo_text(
     runtime: Rc<RefCell<TextLayerRuntime>>,
-) -> Result<(EmoTextSink, wintf_winmsg_executor::JoinHandle<()>), UiSpawnError> {
+) -> (EmoTextSink, wintf_winmsg_executor::JoinHandle<()>) {
     let (tx, handle) = areka_actor::spawn_ui("emo-text", move |msg: TextMsg| {
         handle_text_msg_with(
             msg,
@@ -773,8 +772,8 @@ pub fn spawn_emo_text(
                 )),
             },
         )
-    })?;
-    Ok((EmoTextSink::new(tx), handle))
+    });
+    (EmoTextSink::new(tx), handle)
 }
 
 #[path = "actor_attach.rs"]

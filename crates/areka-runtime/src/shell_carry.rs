@@ -1,8 +1,8 @@
 //! ghost の読み直しでシェルの状態（スコープごとの表示中の面と着せ替え）を作り直した窓へ持ち越す
 //! （areka-P0-mcp-reload 要件 3.8・2026-10-19 の開発者の裁定）。
 //!
-//! ghost の読み直しは自分自身への切替と同じく窓を閉じて作り直す（要件 3.1）。新しい窓のシェルは
-//! 最初の `\s` まで出さない決まり（defect #5）で、読み直しは起動の挨拶を送らない（要件 3.3）ので、
+//! ghost の読み直しは自分自身への切替と同じく窓を閉じて作り直す（areka-P0-mcp-reload 要件 3.1）。新しい窓のシェルは
+//! 最初の `\s` まで出さない決まり（defect #5）で、読み直しは起動の挨拶を送らない（areka-P0-mcp-reload 要件 3.3）ので、
 //! 控えが無いと姿が出ないまま残り、着せ替えも既定へ戻る。そこで、窓口自身の ghost の読み直しのときだけ:
 //!
 //! 1. 降ろす前に、表示層が最後に確立した各スコープのシェルの面と着せ替えの集合を控える
@@ -37,7 +37,7 @@ use areka_placement::spawn::GhostWindows;
 
 /// 控えたシェルの状態（スコープ → 表示中の面・最後に表示したときの着せ替えの集合）。
 /// 非表示・未表示のスコープは面が載らない。一度も表示していないスコープは着せ替えも載らない。
-// 要件 2.5: 公開の `capture_for_reload`・`hand_over` が名指すので開ける
+// runtime-crate-split 要件 2.5: 公開の `capture_for_reload`・`hand_over` が名指すので開ける
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ShellCarry {
     surfaces: BTreeMap<u32, u32>,
@@ -76,7 +76,7 @@ pub enum CarriedShow {
         passed_over: Option<u32>,
     },
     /// 控えた面も候補の並びのどの面も無い（出さない）。`descript` は候補の先頭（descript の既定の面）で、
-    /// 記録に候補の並びを載せるために持つ（要件 3.3）。
+    /// 記録に候補の並びを載せるために持つ（descript-window-keys 要件 3.3）。
     Skipped { missing: u32, descript: u32 },
 }
 
@@ -110,7 +110,11 @@ pub struct CarriedBinds {
 /// 控えた面 `carried` を読み直したシェルで出せるか決める（純粋）。在ればそのまま、無ければ戻り先の
 /// 候補の並び `candidates`（`areka_placement::descript_window_keys::fallback_candidates`）の最初に在る面、
 /// どれも無ければ出さない（descript-window-keys 要件 3.1・3.3・3.4）。
-pub fn decide(carried: u32, candidates: &[u32], exists: impl Fn(u32) -> bool) -> CarriedShow {
+pub(crate) fn decide(
+    carried: u32,
+    candidates: &[u32],
+    exists: impl Fn(u32) -> bool,
+) -> CarriedShow {
     if exists(carried) {
         return CarriedShow::Carried(carried);
     }
@@ -267,11 +271,20 @@ pub fn hand_over(world: &mut World, carry: Option<ShellCarry>) {
 /// 装着の相で決めた面と着せ替えを置き場のゴーストの seriko へ、着せ替えは `\![bind,…]`・面は
 /// `\s[面]` と同じ合図で送る（着せ替えが先: 面の出ていないスコープの着せ替えは状態だけが変わり、
 /// 続く面の最初の `Show` が着せ替えた集合を載せる＝既定の姿が 1 度も出ない）。決め方ごとに記録を 1 件残す（戻した・出さない・落とした
-/// は `warn!`）。
+/// は `warn!`）。送り手が無ければ決め方の記録は出さず、`reload_shell_replay_unavailable` の `warn!` を 1 件だけ残す。
 pub fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32, CarriedBinds)]) {
     if shows.is_empty() && binds.is_empty() {
         return;
     }
+    // 送り手を先に確かめる: 無いのに「出し直す」と書かない。
+    let Some(sink) = (SessionHooks::of(world).seriko_sink)(world) else {
+        warn!(
+            event = "reload_shell_replay_unavailable",
+            "置き場のゴーストの seriko が無いので、読み直しの前の面を出し直せない"
+        );
+        return;
+    };
+    let mut sink = sink.clone();
     for (scope, decided) in binds {
         for r in &decided.replays {
             info!(
@@ -319,14 +332,6 @@ pub fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32, Carrie
             ),
         }
     }
-    let Some(sink) = (SessionHooks::of(world).seriko_sink)(world) else {
-        warn!(
-            event = "reload_shell_carry_unavailable",
-            "置き場のゴーストの seriko が無いので、読み直しの前の面を出し直せない"
-        );
-        return;
-    };
-    let mut sink = sink.clone();
     emit_binds(&mut sink, binds);
     emit_shows(&mut sink, shows);
 }

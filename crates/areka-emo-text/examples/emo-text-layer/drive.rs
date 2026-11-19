@@ -143,12 +143,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
     }
 
     // ── UI ドレイン起動＋actor routing 登録（結線側が actor→target 対応を所有） ──
-    let (sink, drain) = match spawn_emo_text(Rc::clone(&demo.runtime)) {
-        Ok(pair) => pair,
-        Err(e) => {
-            setup_abort(&format!("spawn_emo_text に失敗: {e}"));
-        }
-    };
+    let (sink, drain) = spawn_emo_text(Rc::clone(&demo.runtime));
     demo.runtime
         .borrow_mut()
         .register_actor_view(actor0(), &view0, &demo.model);

@@ -104,3 +104,11 @@
 
 - `crates/areka/src/runtime/` を新しい crate `crates/areka-runtime` へ移した（PR は `runtime-crate-split`）。本体の `crates/areka/Cargo.toml` の依存の説明のうち、runtime が使うために通常依存へ上げたと書く行（58・62〜63・71 行ほか「runtime 統合結線…で通常依存へ昇格」「placement の採寸…で通常依存へ昇格」）は、使い手が `areka-runtime` へ移って理由が古くなった。行と説明は変えていない。
 - 本体が直に使わなくなった依存の行は、粗い確かめ（`[dependencies]` の crate 名を本体の本番の `src` で grep）では 0 件だった。`use` を経ない使い方（マクロ・型の再公開）まで含めて数え直し、要らない行は外し、残す行の説明を今の使い手に合わせる。
+
+## audit-emo2-boot-spine からの申し送り（2026-11-17）
+
+`audit-emo2-boot-spine` のギャップ分析（`.kiro/specs/completed/audit-emo2-boot-spine/research.md` の 6 節）で、範囲の外のこの spec の持ち場に見つけた件。中身は向こうでは直さない。
+
+- **オ（`code_only` の写し）**: `crates/areka/src/tick_gate_config_producers_tests.rs:L70` の `code_only` は、`source_text_test_support::code_only` と 1 字も違わない。そちらを使う形に寄せる。
+- **キ（古い説明）**: `crates/areka/src/boot_config.rs:L617`・`L621-L622` の `is_benign_boot_error` の説明は「`wire_runtime` が再利用する」と書くが、呼び手は `ghost_session.rs:L783`・`session/runtime_boot.rs:L137` だけ。
+- **ク（古い説明）**: `crates/areka/examples/emo-present/setup.rs:L88` の「本番（`build_boot_assets`）」は古い（`audit-emo2-boot-spine` の 43 番と同じ形の文）。

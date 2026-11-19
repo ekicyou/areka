@@ -1,15 +1,20 @@
 //! `consumer_ledger_agreement_tests.rs` の檻が `areka-runtime` と本体の両方で使う見本の表と台帳の鍵（写しを作らない・spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+//!
+//! 受け口のテストが使う cue の作り手（汎用キャリアの `carrier_cue`・演者つきの `actor_carrier_cue`・
+//! 開けない荷物の `broken_custom_cue`）もここに置く。受け口ごとに写しを持たない。
 
 use super::{ConsumerLedger, LedgerKey};
 use areka_ghost::prop_sink::PROP_SET_CUE_NAME;
 use areka_parsers::sakura::{JUMP_TAG_CARRIER, MARKER_COMMAND, RAISE_TAG_CARRIER};
 use areka_sakura::contract::FONT_TAG_CARRIER;
+use dola::DynamicValue;
+use dola::cue::{ActorKey, CueCommand, TalkCue};
 use std::collections::BTreeSet;
 
 // ---------------------------------------------------------------- 見本
 
 /// 絶対パスの書庫（`install_cue_tests.rs` の見本と同じ形。fs は読まない）。
-pub const ABSOLUTE: &str = r"C:\areka-install-cue-test\in\hana.nar";
+const ABSOLUTE: &str = r"C:\areka-install-cue-test\in\hana.nar";
 
 /// 表の各行の見本＝（名前, 選別子, 引数の列）。引数の列は第 1 引数から書く。
 ///
@@ -115,4 +120,41 @@ pub fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)>
 /// 表の行の組（名前, 選別子）の全部。
 pub fn ledger_keys(ledger: &ConsumerLedger) -> BTreeSet<LedgerKey> {
     ledger.table.keys().cloned().collect()
+}
+
+/// `\![name,args...]` の汎用キャリア cue を `\0` の演者で組む（各受け口のテストと同じ正準形）。
+pub fn carrier_cue(name: &str, args: &[&str]) -> TalkCue {
+    actor_carrier_cue("0", name, args)
+}
+
+/// `\![name,args...]` の汎用キャリア cue を演者 `actor` で組む（正準形＝`Custom` の String 配列）。
+pub fn actor_carrier_cue(actor: &str, name: &str, args: &[&str]) -> TalkCue {
+    TalkCue {
+        at: 0.0,
+        actor: ActorKey::from(actor),
+        command: CueCommand::command_carrier(name, args.iter().map(|s| s.to_string()).collect()),
+        duration: 0.0,
+    }
+}
+
+/// 開けない `Custom`（`params` が String 配列でない）を宛名 `command` と演者 `actor` で組む。
+///
+/// `DynamicValue::Null` は配列ではないので `as_command_carrier()` は `None` を返す。
+/// それでも宛名（`Custom{command}`）は読めるため、受け口の宛名で分ける枝へ入る。
+pub fn broken_custom_cue(actor: &str, command: &str) -> TalkCue {
+    let cue = TalkCue {
+        at: 0.0,
+        actor: ActorKey::from(actor),
+        command: CueCommand::Custom {
+            command: command.to_string(),
+            params: DynamicValue::Null,
+        },
+        duration: 0.0,
+    };
+    assert_eq!(
+        cue.command.as_command_carrier(),
+        None,
+        "params=Null は開封できない形である（宛名で分ける枝に入る前提）"
+    );
+    cue
 }

@@ -4,8 +4,8 @@
 //! （起動と背景のスレッドの資産づくりと同じ道）。
 
 use temp_path_kit::TempPath;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
+// bake の WIC デコードに要る COM は、テストのプロセスの寿命の MTA（`crash_report_test_support`）が持つ。
 use super::*;
 
 fn png(path: &Path, w: u32, h: u32) {
@@ -22,10 +22,6 @@ fn text(path: &Path, body: &str) {
 /// 既定の名前の順はスコープごと（スコープ 0 は `arrow0`、スコープ 1 は `arrowk0` を先に採る）。バルーンは面 0 と、自分の設定ファイルで `arrow.filename` を替えた面 1 を持つ。
 #[test]
 fn boot_assets_carry_face_definitions_and_box_arrow_images() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
     let root = TempPath::under_target("assets-markers");
     let ghost = root.path().join("ghost").join("master");
     let shell = root.path().join("shell").join("master");

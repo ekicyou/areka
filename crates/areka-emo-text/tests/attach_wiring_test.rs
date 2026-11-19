@@ -221,8 +221,7 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
         .register_actor_view(kero.clone(), &view1, &model);
 
     // ── 通し結線: sink emit（\0/\1 交互）→ UI ドレイン → 状態機械 ──
-    let (mut sink, _handle) =
-        spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+    let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
     sink.emit(cue("0", 0.0, CueCommand::Text("アヒルやアヒル".into())));
     sink.emit(cue("1", 0.0, CueCommand::Text("ふむ".into())));
     sink.close();

@@ -5,7 +5,7 @@
 //! 宣言するので、本番のビルドには入らない。
 
 pub(crate) mod transition_judge;
-pub(crate) mod transition_judge_offset;
+mod transition_judge_offset;
 
 mod measure_bake_log_tests;
 mod reset_balloon_pos_tests;
