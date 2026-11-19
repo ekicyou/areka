@@ -29,9 +29,10 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
 
 -Burners 0 は負荷なし。静かな机の所要時間の測定（design「Performance」）に使う。
 
--NoCapture は libtest に `--nocapture` を渡す。libtest は緑のテストの標準エラーを捨てるので、
-これが無いと `sample-ghost-kit:` の後片付けの失敗は赤のテストの分しか残らない（要件 5.1 は
-赤に依らず数える）。付けても赤の名前は末尾の `failures:` の一覧から取れる（失敗の文言は
+-NoCapture は libtest に `--nocapture` を渡す。`sample-ghost-kit:` の後片付けの失敗の行は
+標準エラーへ直に書かれる（libtest の捕捉を通らない）ので、付けなくても緑のテストの分まで
+残る（要件 5.1 は赤に依らず数える）。付けると、テストが `eprintln!` で書くほかの行も捨てられずに
+残る。付けても赤の名前は末尾の `failures:` の一覧から取れる（失敗の文言は
 `---- 名前 stdout ----` の囲みでなく、その場の panic の行として出る）。直す前と後で揃えること。
 
 終了コード:
