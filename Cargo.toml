@@ -31,6 +31,9 @@ bitflags = "2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dola = { version = "0.1.0", path = "crates/dola" }
 async-io = { version = "2.6", default-features = false }
+# deflate の伸長と圧縮（areka-nar・areka・sample-ghost-kit が同じ指定で引く）。既定機能を切り、
+# 伸長 API に必須の with-alloc だけを明示する（areka-nar の要件 10.2）。
+miniz_oxide = { version = "0.9", default-features = false, features = ["with-alloc"] }
 
 [workspace.dependencies.bevy_ecs]
 version = "0.19"
