@@ -251,3 +251,16 @@ fn read(path: &Path) -> String {
         .trim()
         .to_owned()
 }
+
+/// 知らない手順は、ASCII だけの 1 行を標準エラーへ書いて終了コード 64 で終わる（偽の子の約束）。
+#[test]
+fn an_unknown_step_exits_with_64_and_an_ascii_line() {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_real-run-fake-areka"))
+        .env("REAL_RUN_FAKE_STEPS", "無い手順")
+        .output()
+        .expect("偽の子を起こせる");
+    assert_eq!(out.status.code(), Some(64));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.is_ascii(), "ASCII だけのはず: {err}");
+    assert!(err.contains("real-run-fake-areka: unknown step"), "{err}");
+}

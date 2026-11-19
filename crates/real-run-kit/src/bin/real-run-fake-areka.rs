@@ -139,9 +139,12 @@ fn main() {
     quit(0);
 }
 
-/// 知らない（読めない）手順: 標準エラーに書いて 64 で終わる。
+/// 知らない（読めない）手順: 標準エラーに ASCII の 1 行を書いて 64 で終わる。
 fn bad(step: &str) -> ! {
-    eprintln!("real-run-fake-areka: 知らない手順: {step:?}");
+    eprintln!(
+        "real-run-fake-areka: unknown step {}",
+        step.escape_default()
+    );
     quit(64);
 }
 
