@@ -142,6 +142,10 @@
 - **ア（1 番の片割れ）**: `crates/areka-runtime/src/frame/dpi.rs:L404-L413` で、窓の側から来る scope に `2*scope+1` を掛ける所が、大きな scope であふれる。`audit-emo2-boot-spine` は台本の側（`target_map.rs` の `2*scope`）を、上限を超える番号を `None` にして warn で捨てる形に直す。こちらも同じ上限でそろえる。
 - **イ（件 6 の 1 本）**: `crates/areka/src/runtime_tests/frame/window_state_tests.rs:L144` のテスト関数は、補助を分ければ `areka-runtime` へ戻せる（dev-dependencies は既にある）。
 - **オ（`code_only` の写し）**: `crates/areka-runtime/src/frame/zorder_drain_tests.rs:L465` の `code_only` は、`source_text_test_support::code_only` と 1 字も違わない。そちらを使う形に寄せる。
+- **完了の時の棚卸（2026-11-19）**: `audit-emo2-boot-spine` のかけ直しで、範囲の中の写しは共通の置き場へ寄せた。`frame*` のファイルは触らない約束の中なので、次の 3 つが残っている。
+  - `crates/areka-runtime/src/frame_chain_finalize_tests.rs` の私有の `capture_logs` は、`frame_test_support::capture_logs` と同じ形。共通のほうを使う形に寄せる。
+  - `crates/areka-runtime/src/frame_drain_text_tests.rs` の `controllable_clock`・`set_now` は、`talk_clock.rs` に置いた `#[cfg(test)]` の `controllable_clock`・`set_now` と同じ形。そちらを使う形に寄せる。
+  - `crates/areka-runtime/src/frame/drain_resnap_tests.rs` のコメントの「`load-repro.md` の ⑹」に持ち主の spec が無い。`load-repro.md` は `areka-P0-ghost-session-test-load-flake` と `areka-test-binary-stability` の 2 本にあるので、同じ文に持ち主を名乗らせる。
 
 ## audit-placement-follow-residue からの申し送り（2026-11-17）
 

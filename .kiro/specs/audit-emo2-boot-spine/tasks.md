@@ -235,3 +235,5 @@
 - 7.2: 35 番の 10 か所のうち 2 か所は 7.1 でまばたきのスモークと一緒に消えた（`da72765f9`）。残る 8 か所を `wait_until` に。呼び出しの数だけを目印にしたのは 5 か所（move の汲みは数を返さない・ほかは汲む物が無い）。`frame/switch_tests.rs` の 5 秒の輪は 35 番の対象外で残る。
 - 7.3: 装着の前提の写しは研究の 11 か所に加えて一周の駆動のテストの 1 か所も `attach_all` へ寄せた。`spine.rs` の `make_world_with_gpu` の `CoInitializeEx` も消した（`runtime_tests/mod.rs` がプロセスの寿命の MTA を据える）。範囲の外に残る写し: `input_events/balloon_choice_settle_tests.rs` の `pump_until_idle`。
 - 8.2 へ: この spec でコードの注釈に指摘の番号（「3 番」「62 番」「102 番」など）を書いた所がある。後で読む人には意味が通らないので、かけ直しで事実の文へ直す。
+- 完了時にその場で解決: 範囲の中に残った汎用の cue の手組み 4 か所（`runtime_boot_tests.rs`・`script_restriction_tests.rs`）と、範囲の外の `install`・`readme`・`update` の cue のテストの `carrier_cue` の写しを、共有の `carrier_cue` に寄せた。`adapter.rs`・`move_cue_move_severity_log_tests.rs` の `capture_logs`／`count_level` の写しは `frame::test_support` のものに寄せた（`c72512565`）。`readme_cue_tests.rs` の `capture_logs` は、共有のほうが `#[cfg(test)]` で本体の crate から見えないので残した。
+- 完了時の申し送り: `frame*` の中の写し 2 つ（`frame_chain_finalize_tests.rs` の `capture_logs`・`frame_drain_text_tests.rs` の `controllable_clock`）と、`frame/drain_resnap_tests.rs` の持ち主の無い `load-repro.md` の参照は、触らない約束の中なので `audit-emo2-boot-frame` の brief.md へ申し送った。
