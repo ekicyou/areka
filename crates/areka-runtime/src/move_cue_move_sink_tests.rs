@@ -3,19 +3,9 @@
 // =============================================================================
 
 use super::*;
+use crate::consumer_ledger::test_support::actor_carrier_cue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use std::sync::mpsc::{TryRecvError, channel};
-
-/// `\![name,tokens...]` 汎用キャリア cue を組む（正準形＝`Custom` の String Array）。
-fn carrier_cue(actor: &str, name: &str, tokens: &[&str]) -> TalkCue {
-    let toks: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command: CueCommand::command_carrier(name, toks),
-        duration: 0.0,
-    }
-}
 
 /// 線から届いた指令が「移動」であることを確かめて中身を返す。
 fn as_move(cue: PositionCue) -> MoveDirective {
@@ -30,7 +20,7 @@ fn as_move(cue: PositionCue) -> MoveDirective {
 fn move_carrier_sends_directive() {
     let (tx, rx) = channel::<PositionCue>();
     let mut sink = MoveCueSink::new(tx);
-    sink.emit(carrier_cue(
+    sink.emit(actor_carrier_cue(
         "0",
         "move",
         &["-353", "", "", "0", "base", "base"],
@@ -52,7 +42,7 @@ fn non_move_carrier_is_benign_skip() {
     for name in ["bind", "raise", "unknownfoo"] {
         let (tx, rx) = channel::<PositionCue>();
         let mut sink = MoveCueSink::new(tx);
-        sink.emit(carrier_cue("0", name, &["1", "2"]));
+        sink.emit(actor_carrier_cue("0", name, &["1", "2"]));
         assert_eq!(
             rx.try_recv(),
             Err(TryRecvError::Empty),
@@ -80,7 +70,7 @@ fn non_carrier_cue_is_benign_skip() {
 fn scope_reflects_actor() {
     let (tx, rx) = channel::<PositionCue>();
     let mut sink = MoveCueSink::new(tx);
-    sink.emit(carrier_cue(
+    sink.emit(actor_carrier_cue(
         "1",
         "move",
         &["-353", "", "", "0", "base", "base"],
@@ -94,7 +84,7 @@ fn scope_reflects_actor() {
 fn non_numeric_actor_is_skipped() {
     let (tx, rx) = channel::<PositionCue>();
     let mut sink = MoveCueSink::new(tx);
-    sink.emit(carrier_cue("sakura", "move", &["-353"]));
+    sink.emit(actor_carrier_cue("sakura", "move", &["-353"]));
     assert_eq!(
         rx.try_recv(),
         Err(TryRecvError::Empty),
@@ -107,7 +97,7 @@ fn non_numeric_actor_is_skipped() {
 fn named_form_is_sent() {
     let (tx, rx) = channel::<PositionCue>();
     let mut sink = MoveCueSink::new(tx);
-    sink.emit(carrier_cue(
+    sink.emit(actor_carrier_cue(
         "1",
         "move",
         &[
@@ -132,7 +122,7 @@ fn clone_reaches_same_receiver() {
     let (tx, rx) = channel::<PositionCue>();
     let sink = MoveCueSink::new(tx);
     let mut clone = sink.clone();
-    clone.emit(carrier_cue(
+    clone.emit(actor_carrier_cue(
         "0",
         "move",
         &["10", "", "", "0", "base", "base"],
@@ -158,7 +148,7 @@ fn execute_resetwindowpos_sends_reset() {
     ] {
         let (tx, rx) = channel::<PositionCue>();
         let mut sink = MoveCueSink::new(tx);
-        sink.emit(carrier_cue("0", "execute", tokens));
+        sink.emit(actor_carrier_cue("0", "execute", tokens));
         assert_eq!(rx.try_recv(), Ok(PositionCue::ResetWindowPos), "{tokens:?}");
         assert_eq!(rx.try_recv(), Err(TryRecvError::Empty), "送出は 1 件のみ");
     }
@@ -177,7 +167,7 @@ fn other_execute_and_position_tags_are_not_sent() {
     for (name, tokens) in cases {
         let (tx, rx) = channel::<PositionCue>();
         let mut sink = MoveCueSink::new(tx);
-        sink.emit(carrier_cue("0", name, tokens));
+        sink.emit(actor_carrier_cue("0", name, tokens));
         assert_eq!(
             rx.try_recv(),
             Err(TryRecvError::Empty),
@@ -244,7 +234,7 @@ fn window_link_pairs_send_their_cues() {
     for (actor, name, tokens, expected) in cases {
         let (tx, rx) = channel::<PositionCue>();
         let mut sink = MoveCueSink::new(tx);
-        sink.emit(carrier_cue(actor, name, tokens));
+        sink.emit(actor_carrier_cue(actor, name, tokens));
         assert_eq!(rx.try_recv(), Ok(expected), "{name},{tokens:?}");
         assert_eq!(rx.try_recv(), Err(TryRecvError::Empty), "送出は 1 件のみ");
     }
@@ -258,7 +248,7 @@ fn alignment_with_non_numeric_actor_is_dropped_with_warn() {
         let (tx, rx) = channel::<PositionCue>();
         let mut sink = MoveCueSink::new(tx);
         let (_, events) = log_capture_kit::capture(|| {
-            sink.emit(carrier_cue("sakura", "set", &[selector, "top"]))
+            sink.emit(actor_carrier_cue("sakura", "set", &[selector, "top"]))
         });
         assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
         let expected = format!("set,{selector}");
@@ -283,7 +273,7 @@ fn crossed_window_link_pairs_are_not_sent() {
     for (name, tokens) in cases {
         let (tx, rx) = channel::<PositionCue>();
         let mut sink = MoveCueSink::new(tx);
-        sink.emit(carrier_cue("0", name, tokens));
+        sink.emit(actor_carrier_cue("0", name, tokens));
         assert_eq!(
             rx.try_recv(),
             Err(TryRecvError::Empty),

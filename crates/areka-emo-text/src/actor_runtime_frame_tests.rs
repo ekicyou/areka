@@ -45,8 +45,7 @@ fn close_terminates_drain_cleanly_after_applying_cues_on_real_pump() {
         let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         )));
-        let (mut sink, _handle) =
-            spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+        let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
         assert_eq!(
             Rc::strong_count(&runtime),
             2,
@@ -100,8 +99,7 @@ fn dropping_all_sinks_terminates_drain_cleanly_after_applying_queued_cues() {
         let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         )));
-        let (mut sink, _handle) =
-            spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+        let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
         let sink2 = sink.clone();
 
         sink.emit(cue("1", 0.0, CueCommand::Text("残置".into())));
@@ -143,8 +141,7 @@ fn cue_failure_is_logged_and_drain_continues_processing_subsequent_cues() {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let (mut sink, _handle) =
-        spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+    let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
 
     // 借用を保持したまま pump——drain handler は try_borrow_mut に失敗し Err（基盤が
     // error!＋継続）。当該 cue は失われるが drain は死なない。

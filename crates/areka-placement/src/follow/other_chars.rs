@@ -1,5 +1,5 @@
 //! 判定に入れるキャラ窓の矩形の列（balloon-flip-side-rules・設計 OtherChars・要件 2.6／2.8／2.9）と、
-//! 起動の並べ直しの後に全スコープのバルーンを判定し直す系（設計 RejudgeSystem・要件 2.7／2.10／4.4）。
+//! 起動の並べ直しの後に全スコープのバルーンを判定し直す系（設計 RejudgeSystem・balloon-flip-side-rules 要件 2.7／2.10／4.4）。
 //!
 //! 「表示している」は、キャラ窓の子の描画面の `Visual.is_visible` のどれかが真かで読む（設計 D3・前提 A2）。
 //! ほかの子が窓に付くようになると黙って「表示している」に倒れるので、そのときはこの読み方を確かめ直す。
@@ -16,7 +16,7 @@ use crate::chain_finalize::ChainFinalized;
 use crate::resolver::RectPx;
 use crate::spawn::GhostWindows;
 
-/// 判定に入れるキャラ窓の矩形の列（スコープの昇順）。矩形が決まらない窓と表示していない窓は入れない（要件 2.6）。
+/// 判定に入れるキャラ窓の矩形の列（スコープの昇順）。矩形が決まらない窓と表示していない窓は入れない（balloon-flip-side-rules 要件 2.6）。
 ///
 /// 自分のスコープも外さない（判定の核が数えない）。`GhostWindows` が無ければ空の列で、記録はしない。
 pub(super) fn shown_char_rects(world: &World) -> Vec<(usize, RectPx)> {
@@ -63,10 +63,10 @@ fn rejudge_balloons_after_chain_finalize(world: &mut World) {
     rejudge_all_balloons(world);
 }
 
-/// 全スコープの `BalloonLimit(true)` のバルーンを今のキャラ窓の位置で判定し直す（要件 2.10）。
+/// 全スコープの `BalloonLimit(true)` のバルーンを今のキャラ窓の位置で判定し直す（balloon-flip-side-rules 要件 2.10）。
 ///
 /// 呼び手＝上の系・`reset_window_positions`・`realign_chain_once_with`（窓を書き終えた後）。
-/// 随伴の引き金は並べ直しの書き込みと同じ `MoveCue`（新しい語を作らない・要件 4.2）。
+/// 随伴の引き金は並べ直しの書き込みと同じ `MoveCue`（新しい語を作らない・balloon-flip-side-rules 要件 4.2）。
 pub(crate) fn rejudge_all_balloons(world: &mut World) {
     let Some(gw) = world.get_resource::<GhostWindows>() else {
         warn!(

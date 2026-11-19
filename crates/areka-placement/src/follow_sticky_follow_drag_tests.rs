@@ -1,9 +1,9 @@
-//! ドラッグの控えと、組の相手を同じ量だけ動かす手続きの決定論の檻（task 3.1・要件 2.4／3.6／
-//! 4.1〜4.5／9.3・設計「sticky_follow」・設計の決め 4）。
+//! ドラッグの控えと、組の相手を同じ量だけ動かす手続きの決定論の檻（areka-P0-window-link-directives 要件 2.4／3.6／
+//! `areka-P0-window-link-directives` 要件 4.1〜4.5／9.3・設計「sticky_follow」・設計の決め 4）。
 //!
 //! 窓は偽の部品（偽 HWND・`WindowPos`・`Anchored`・`CharWindowMarker`・`DragConfig`・
-//! `BalloonFollow`）だけで組み、帳簿は 2.1 の `apply_set_sticky` で据える。関数は受け手を通さず
-//! 直接呼ぶ（受け手へのつなぎは task 3.2）。
+//! `BalloonFollow`）だけで組み、帳簿は `apply_set_sticky` で据える。関数は受け手を通さず
+//! 直接呼ぶ（受け手へのつなぎは `areka-P0-window-link-directives` タスク 3.2）。
 
 use std::collections::HashMap;
 
@@ -27,7 +27,8 @@ use super::{
     AnchorSource, Anchored, BalloonFollow, CharWindowMarker, OffsetBase, apply_char_shift,
 };
 use crate::resolver::{Anchor, PointPx};
-use log_capture_kit::{CapturedEvent, capture};
+use crate::shared_test_support::events_with;
+use log_capture_kit::capture;
 
 /// キャラクターの窓の大きさ（物理 px・96 の倍数を避ける）。
 const W: i32 = 434;
@@ -74,13 +75,6 @@ fn world_with_snapshot() -> World {
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
     world
-}
-
-fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
 }
 
 fn finish(world: World) {
@@ -135,28 +129,24 @@ fn bottom_partner_takes_only_horizontal_delta() {
         }
     );
     assert!(
-        events_of(&events, "sticky_follow").is_empty(),
+        events_with(&events, "sticky_follow").is_empty(),
         "途中の 1 回ごとは記録しない: {events:?}"
     );
     finish(world);
 }
 
-/// 終わりは最終の量で相手を書き、相手の位置を記憶の形（下吸着なら下端中央）で書き、
+/// 終わりは最終の量で相手を書き、相手の位置を記憶の形（下吸着なら下端中央）で束にして返し、
 /// `sticky_follow`（drag）を 1 行記録して控えを外す（4.5・9.3）。
 #[test]
 fn finish_writes_partner_persists_logs_and_clears_session() {
-    let rig = SylphyaRig::fake();
     let mut world = world_with_snapshot();
-    rig.wire(&mut world);
     let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
     let partner = spawn_char(&mut world, 1, Anchor::Bottom, (900, WA_BOTTOM - H));
     group(&mut world, &["0", "1"]);
 
     begin_char_drag(&mut world, dragged.char);
     follow_partners_on_drag(&mut world, dragged.char, point(520, 210));
-    let ((), events) = capture(|| {
-        finish_char_drag(&mut world, dragged.char, point(537, 180));
-    });
+    let (entries, events) = capture(|| finish_char_drag(&mut world, dragged.char, point(537, 180)));
 
     let final_x = 900 + 37;
     assert_eq!(
@@ -168,7 +158,7 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
     );
     assert!(world.get_resource::<CharDragSession>().is_none());
 
-    let logged = events_of(&events, "sticky_follow");
+    let logged = events_with(&events, "sticky_follow");
     assert_eq!(logged.len(), 1, "{events:?}");
     let e = logged[0];
     assert_eq!(e.field_str("trigger"), Some("drag"));
@@ -177,7 +167,7 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
     assert_eq!(e.field("dx"), Some("37"));
     assert_eq!(e.field("dy"), Some("-20"));
 
-    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
+    let loaded: HashMap<PersistKey, String> = entries.into_iter().collect();
     let key = |axis| PersistKey::WindowPos { scope: 1, axis };
     assert_eq!(
         loaded.get(&key(Axis::X)),
@@ -187,13 +177,11 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
         loaded.get(&key(Axis::Y)),
         Some(&(WA_BOTTOM - H).to_string())
     );
-    // ドラッグした窓自身の記憶は受け手が書く（ここでは書かない）。
+    // ドラッグした窓自身の束は受け手が足す（ここでは入れない）。
     assert!(!loaded.contains_key(&PersistKey::WindowPos {
         scope: 0,
         axis: Axis::X
     }));
-
-    rig.close();
     finish(world);
 }
 
@@ -201,9 +189,7 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
 /// （seriko-pattern-calls task 6.2・要件 7.8）。窓はずれたまま動く。
 #[test]
 fn finish_persists_partner_position_without_its_pattern_shift() {
-    let rig = SylphyaRig::fake();
     let mut world = world_with_snapshot();
-    rig.wire(&mut world);
     let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
     let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
     group(&mut world, &["0", "1"]);
@@ -215,7 +201,7 @@ fn finish_persists_partner_position_without_its_pattern_shift() {
     ));
 
     begin_char_drag(&mut world, dragged.char);
-    finish_char_drag(&mut world, dragged.char, point(537, 180));
+    let entries = finish_char_drag(&mut world, dragged.char, point(537, 180));
 
     assert_eq!(
         position_of(&world, partner.char),
@@ -224,23 +210,19 @@ fn finish_persists_partner_position_without_its_pattern_shift() {
             y: 150 + 25 - 20
         }
     );
-    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
+    let loaded: HashMap<PersistKey, String> = entries.into_iter().collect();
     // 揃えない置き方の記憶は左上のまま。
     let key = |axis| PersistKey::WindowPos { scope: 1, axis };
     assert_eq!(loaded.get(&key(Axis::X)), Some(&(900 + 37).to_string()));
     assert_eq!(loaded.get(&key(Axis::Y)), Some(&(150 - 20).to_string()));
-
-    rig.close();
     finish(world);
 }
 
-/// 組の相手の記憶の形も descript の向きで選ぶ（指摘 11 ⑵・4.8）: descript は下吸着で台本が
+/// 組の相手の記憶の形も descript の向きで選ぶ（`audit-placement-follow` 指摘 11 ⑵・`areka-P0-window-link-directives` 要件 4.8）: descript は下吸着で台本が
 /// 揃えない置き方へ変えた相手は、左上でなく下端中央の x で書く。
 #[test]
 fn finish_persists_partner_in_descript_form_not_current_anchor() {
-    let rig = SylphyaRig::fake();
     let mut world = world_with_snapshot();
-    rig.wire(&mut world);
     let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
     let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
     world.entity_mut(partner.char).insert(AnchorSource {
@@ -250,31 +232,27 @@ fn finish_persists_partner_in_descript_form_not_current_anchor() {
     group(&mut world, &["0", "1"]);
 
     begin_char_drag(&mut world, dragged.char);
-    finish_char_drag(&mut world, dragged.char, point(537, 180));
+    let entries = finish_char_drag(&mut world, dragged.char, point(537, 180));
 
     assert_eq!(position_of(&world, partner.char), Point { x: 937, y: 130 });
-    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
+    let loaded: HashMap<PersistKey, String> = entries.into_iter().collect();
     let key = |axis| PersistKey::WindowPos { scope: 1, axis };
     assert_eq!(loaded.get(&key(Axis::X)), Some(&(937 + W / 2).to_string()));
     assert_eq!(loaded.get(&key(Axis::Y)), Some(&130.to_string()));
-
-    rig.close();
     finish(world);
 }
 
-/// 組の相手に `Anchored` が無ければ、動かさず記憶にも書かず `warn!` を 1 行残す（指摘 11 ⑵）。
+/// 組の相手に `Anchored` が無ければ、動かさず記憶にも書かず `warn!` を 1 行残す（`audit-placement-follow` 指摘 11 ⑵）。
 #[test]
 fn partner_without_anchored_is_warned_and_left_unmoved() {
-    let rig = SylphyaRig::fake();
     let mut world = world_with_snapshot();
-    rig.wire(&mut world);
     let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
     let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
     world.entity_mut(partner.char).remove::<Anchored>();
     group(&mut world, &["0", "1"]);
 
     begin_char_drag(&mut world, dragged.char);
-    let ((), events) = capture(|| finish_char_drag(&mut world, dragged.char, point(537, 180)));
+    let (entries, events) = capture(|| finish_char_drag(&mut world, dragged.char, point(537, 180)));
 
     assert_eq!(position_of(&world, partner.char), Point { x: 900, y: 150 });
     let warned: Vec<_> = events
@@ -284,16 +262,7 @@ fn partner_without_anchored_is_warned_and_left_unmoved() {
     assert_eq!(warned.len(), 1, "{events:?}");
     assert_eq!(warned[0].level, tracing::Level::WARN);
     assert_eq!(warned[0].field("scope"), Some("1"));
-    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
-    assert!(
-        !loaded.contains_key(&PersistKey::WindowPos {
-            scope: 1,
-            axis: Axis::X
-        }),
-        "{loaded:?}"
-    );
-
-    rig.close();
+    assert!(entries.is_empty(), "{entries:?}");
     finish(world);
 }
 
@@ -311,7 +280,7 @@ fn without_session_partner_stays_and_skip_is_logged() {
         finish_char_drag(&mut world, a.char, point(600, 300));
     });
     assert_eq!(position_of(&world, b.char), Point { x: 900, y: 150 });
-    let skipped = events_of(&events, "sticky_follow_skipped");
+    let skipped = events_with(&events, "sticky_follow_skipped");
     assert_eq!(skipped.len(), 2, "{events:?}");
     for e in skipped {
         assert_eq!(e.field_str("reason"), Some("no_session"));
@@ -324,7 +293,7 @@ fn without_session_partner_stays_and_skip_is_logged() {
         follow_partners_on_drag(&mut world, a.char, point(600, 300));
     });
     assert_eq!(position_of(&world, b.char), Point { x: 900, y: 150 });
-    let skipped = events_of(&events, "sticky_follow_skipped");
+    let skipped = events_with(&events, "sticky_follow_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].field_str("reason"), Some("other_window"));
     assert!(world.get_resource::<CharDragSession>().is_some());
@@ -333,7 +302,7 @@ fn without_session_partner_stays_and_skip_is_logged() {
     let ((), events) = capture(|| {
         follow_partners_on_drag(&mut world, lone.char, point(0, 0));
     });
-    assert!(events_of(&events, "sticky_follow_skipped").is_empty());
+    assert!(events_with(&events, "sticky_follow_skipped").is_empty());
     finish(world);
 }
 
@@ -346,15 +315,15 @@ fn absent_member_is_logged_at_begin_and_left_out() {
     group(&mut world, &["0", "1", "2"]);
 
     let ((), events) = capture(|| begin_char_drag(&mut world, dragged.char));
-    let absent = events_of(&events, "sticky_member_absent");
+    let absent = events_with(&events, "sticky_member_absent");
     assert_eq!(absent.len(), 1, "{events:?}");
     assert_eq!(absent[0].field("scope"), Some("2"));
     assert_eq!(absent[0].field_str("when"), Some("drag"));
 
-    let ((), events) = capture(|| finish_char_drag(&mut world, dragged.char, point(510, 200)));
+    let (_, events) = capture(|| finish_char_drag(&mut world, dragged.char, point(510, 200)));
     assert_eq!(position_of(&world, partner.char), Point { x: 910, y: 150 });
     assert_eq!(
-        events_of(&events, "sticky_follow")[0].field("partners"),
+        events_with(&events, "sticky_follow")[0].field("partners"),
         Some("[1]")
     );
     finish(world);
@@ -484,4 +453,105 @@ fn drag_end_early_returns_do_not_leave_the_session() {
         );
         finish(world);
     }
+}
+
+/// 相手 2 つの組のドラッグの終わりは、動かした窓と相手 2 つの位置を 1 つの束で記憶へ 1 回だけ
+/// 書く（`audit-placement-follow-residue` 要件 5.1〜5.3・設計の DragEndPersist）。束の中身は今までの N+1 回の和と同じ。
+/// 隣り合いの印まで見るため、窓の一式はこのファイルの偽の部品でなく本番の `spawn_ghost_windows`
+/// で組む（一式が無いと印は足されない）。組の外のスコープ 3 は鎖の次の窓として印が付く。
+#[test]
+fn drag_end_of_a_group_writes_memory_once() {
+    use wintf::ecs::WindowPos;
+    use wintf::ecs::pointer::Phase;
+
+    use super::on_char_drag_end;
+    use super::test_support::drag_end_event_at;
+    use crate::resolver::{ScopePlacement, SizePx};
+    use crate::shared_test_support::placement_sized;
+    use crate::source::GhostTitles;
+    use crate::spawn::spawn_ghost_windows;
+
+    let rig = SylphyaRig::fake();
+    let mut world = world_with_snapshot();
+    rig.wire(&mut world);
+    // (スコープ, 向き, 左上)。組の外の 3 は、終わりの 2（137..137+W）の右の辺にちょうど付く。
+    let layout = [
+        (0, Anchor::Free, (500, 200)),
+        (1, Anchor::Bottom, (900, WA_BOTTOM - H)),
+        (2, Anchor::Free, (100, 150)),
+        (3, Anchor::Free, (137 + W, 130)),
+    ];
+    let placements: Vec<ScopePlacement> = layout
+        .iter()
+        .map(|&(scope, anchor, (x, y))| ScopePlacement {
+            anchor,
+            ..placement_sized(
+                scope,
+                PointPx { x, y },
+                OFFSET,
+                false,
+                SizePx { w: W, h: H },
+                SizePx { w: 200, h: 100 },
+            )
+        })
+        .collect();
+    let titles = GhostTitles::from_scope_titles((0..4).map(|s| (s, format!("s{s}"))));
+    let windows = spawn_ghost_windows(&mut world, &placements, &titles);
+    let chars: Vec<Entity> = (0..4)
+        .map(|s| {
+            let char = windows.char_window(s).expect("キャラ窓が spawn される");
+            let balloon = windows
+                .balloon_window(s)
+                .expect("バルーン窓が spawn される");
+            world
+                .entity_mut(char)
+                .insert(fake_handle(0x1000 + s * 0x10));
+            world
+                .entity_mut(balloon)
+                .insert(fake_handle(0x1001 + s * 0x10));
+            char
+        })
+        .collect();
+    group(&mut world, &["0", "1", "2"]);
+    let before = rig.commit_count();
+
+    begin_char_drag(&mut world, chars[0]);
+    // wintf が動かした所（`DraggingState` の無い終わりは今の位置で確定する）。
+    world.get_mut::<WindowPos>(chars[0]).unwrap().position = Some(Point { x: 537, y: 180 });
+    let ev = Phase::Bubble(drag_end_event_at(chars[0], (537, 180)));
+    assert!(!on_char_drag_end(&mut world, chars[0], chars[0], &ev));
+
+    assert_eq!(rig.commit_count() - before, 1, "記憶へ書いた回数");
+    assert_eq!(position_of(&world, chars[0]), Point { x: 537, y: 180 });
+    assert_eq!(
+        position_of(&world, chars[1]),
+        Point {
+            x: 937,
+            y: WA_BOTTOM - H
+        }
+    );
+    assert_eq!(position_of(&world, chars[2]), Point { x: 137, y: 130 });
+    assert_eq!(position_of(&world, chars[3]), Point { x: 137 + W, y: 130 });
+    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
+    let pos = |scope, axis| PersistKey::WindowPos { scope, axis };
+    let mark = |scope| PersistKey::WindowAdjacent { scope };
+    // N+1 回の和: 0 の回が 1 の印、1 の回が 1・2 の印、2 の回が 2・3 の印を書いていた。
+    // 組の 1・2 は `none`、組の外の 3 は画面の並びで `right`（0 は鎖の頭で印を持たない）。
+    let expected: HashMap<PersistKey, String> = [
+        (pos(0, Axis::X), 537.to_string()),
+        (pos(0, Axis::Y), 180.to_string()),
+        (pos(1, Axis::X), (937 + W / 2).to_string()),
+        (pos(1, Axis::Y), (WA_BOTTOM - H).to_string()),
+        (pos(2, Axis::X), 137.to_string()),
+        (pos(2, Axis::Y), 130.to_string()),
+        (mark(1), "none".to_string()),
+        (mark(2), "none".to_string()),
+        (mark(3), "right".to_string()),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(loaded, expected);
+
+    rig.close();
+    finish(world);
 }

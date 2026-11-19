@@ -1,4 +1,4 @@
-//! 刻みと seriko が同じ時計を読むことの檻（spec: areka-P0-animated-image-playback 要件 1.6・2.9・タスク 5.2）。
+//! 刻みと seriko が同じ時計を読むことの檻（spec: areka-P0-animated-image-playback 要件 1.6・2.9）。
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};

@@ -403,7 +403,7 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
 }
 
 // ---------------------------------------------------------------------------
-// 実表示寸での連鎖再解決（scg 要件 7・design C6）
+// 実表示寸での連鎖再解決（areka-P0-scope-chain-gap 要件 7・design C6）
 // ---------------------------------------------------------------------------
 
 /// 初期配置を**実表示寸**で一度きり確定させる（要件 7.1/7.4）。
@@ -428,7 +428,7 @@ pub(super) fn finalize_chain_once(presenter: &EmoPresenter, world: &mut World) {
 /// いずれか 1 つでも欠ける scope があれば**確定させずに戻る**（部分適用しない）。窓破棄後の
 /// フレームでも `WindowPos` 不在で見送るだけで、panic もログ汚染もしない。
 ///
-/// # 見送りの可観測性（scg 6.5）
+/// # 見送りの可観測性（areka-P0-scope-chain-gap 6.5）
 ///
 /// 見送りの理由は「ゴースト待ち」と「areka 自身の待ち」に仕分ける。仕分けは理由の全列挙子を
 /// 書いた `match` で決める（理由が増えたら、足した側がコンパイルエラーでどちらかを選ぶ）。
@@ -485,7 +485,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     // 組ごとの決め（dpi-realign-remembered-chain design BootRemembered）。記憶に位置の無い
     // スコープ（既定の位置がある）は、既定のままなら resolver と同じ揃え方の規則で解き直し
     // （`boot_default_decision`）、既定から動かされたか台本の `\![move]` が置いた窓
-    // （x が既定のままでも・scg 7.3）は動かさない。記憶から戻したスコープ（既定の位置が無い）は
+    // （x が既定のままでも・areka-P0-scope-chain-gap 7.3）は動かさない。記憶から戻したスコープ（既定の位置が無い）は
     // 「台本の印 → 組の窓 → 覚えた印」の順で決める（6.3〜6.5）。基準は前の窓の解いた後の x（resolve_chain）。
     //
     // 鎖に入るスコープと組の決めは鎖の規則（`areka_placement::chain_rule`）で組む: 揃え方と
@@ -548,7 +548,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
                 scope = m.scope,
                 from_x = pos.x,
                 to_x = m.to.x,
-                "chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・scg 7.1）"
+                "chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・areka-P0-scope-chain-gap 7.1）"
             );
         }
         // 反映は move_window_to のみ（唯一の位置ライター・バルーン随伴 offset 維持を内包）。
@@ -599,7 +599,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     debug!(
         scopes,
         moved = moves.len(),
-        "chain_finalize: 初期配置を確定（以後のサーフェス切替では駆動しない・scg 7.4）"
+        "chain_finalize: 初期配置を確定（以後のサーフェス切替では駆動しない・areka-P0-scope-chain-gap 7.4）"
     );
 }
 
@@ -711,7 +711,7 @@ fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
     Ok((states, targets))
 }
 
-/// 見送りを 1 フレームぶん記録し、有界の待ちを超えていれば**一度だけ**診断を出す（scg 6.5）。
+/// 見送りを 1 フレームぶん記録し、有界の待ちを超えていれば**一度だけ**診断を出す（areka-P0-scope-chain-gap 6.5）。
 ///
 /// 呼び手（[`finalize_chain_once_with`]）は **areka 自身の理由**だけを渡す。ゴースト待ち
 /// （窓が無い・スコープが無い・まだ一度も表示されていない）はここへ来ないので、数は「areka 自身の理由で
@@ -731,7 +731,7 @@ fn defer_chain_finalize(world: &mut World, reason: ChainDeferReason) {
         // 構造化フィールドの `scope` は grep 用（本文の Display は人が読む側）。
         scope = ?reason.scope(),
         reason = %reason,
-        "chain_finalize: 初期配置の確定が続けて見送られている（隣接が崩れたままの可能性・scg 7.1/6.5）"
+        "chain_finalize: 初期配置の確定が続けて見送られている（隣接が崩れたままの可能性・areka-P0-scope-chain-gap 7.1/6.5）"
     );
 }
 

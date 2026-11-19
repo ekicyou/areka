@@ -57,19 +57,9 @@ use tracing::Instrument;
 ///
 /// # 戻り値
 ///
-/// `Ok((`[`UiSender`]`, `[`JoinHandle`](wintf_winmsg_executor::JoinHandle)`))`。`UiSender` は
+/// `(`[`UiSender`]`, `[`JoinHandle`](wintf_winmsg_executor::JoinHandle)`)`。`UiSender` は
 /// Clone・Send な送信端。`JoinHandle` は drain タスクの join ハンドルだが、**drop してもタスクは
 /// 停止しない**（executor 仕様＝detach。停止は Close／全 `UiSender` drop の 2 経路のみ）。
-///
-/// # Errors
-///
-/// [`UiSpawnError::NotUiThread`] は「UI スレッド外呼び出しを**検出できた**場合」の戻り値として
-/// 予約された経路である。ただし executor 0.0.5 は当該前提違反を検出する手段を公開しておらず
-/// （下記 Risks）、本クレートは非依存原則により Win32 を直接叩かない（`windows` は dev 専用依存）。
-/// そのため現状 `spawn_ui` はこの `Err` を返さず、誤用は Risks の log-first（`debug!` 診断文脈＋
-/// rustdoc 警告）で扱う。検出手段（結線層の Win32 前提チェック・将来の executor API）が用意され
-/// 次第、その `Err` 経路がここに接続される。**処置判断（落とすか縮退か）は結線層の権限**であり、
-/// 基盤は panic しない。
 ///
 /// # Risks（誤用時挙動・log-first / 安易な panic 禁止・開発者指示 2026-07-04）
 ///
@@ -84,7 +74,7 @@ use tracing::Instrument;
 pub fn spawn_ui<M, E>(
     name: &str,
     mut handler: impl FnMut(M) -> Result<ControlFlow<()>, E> + 'static,
-) -> Result<(UiSender<M>, wintf_winmsg_executor::JoinHandle<()>), UiSpawnError>
+) -> (UiSender<M>, wintf_winmsg_executor::JoinHandle<()>)
 where
     M: Send + 'static,
     E: std::fmt::Display + 'static,
@@ -126,7 +116,7 @@ where
         .instrument(span),
     );
 
-    Ok((UiSender { tx }, handle))
+    (UiSender { tx }, handle)
 }
 
 /// UI アクター宛の送信端（Clone・Send・非ブロック）。
@@ -164,20 +154,6 @@ impl<M: Send> UiSender<M> {
             async_channel::TrySendError::Full(msg) => UiSendError(msg),
         })
     }
-}
-
-/// `spawn_ui` の失敗（UI スレッド前提の違反）。
-///
-/// 検出可能な前提違反を `error!` 記録のうえ返す経路として予約された型。panic はしない
-/// （処置判断は結線層の権限）。検出手段の詳細と現状の制約は [`spawn_ui`] の Risks を参照。
-#[derive(Debug, thiserror::Error)]
-pub enum UiSpawnError {
-    /// `spawn_ui` が UI（pump）スレッド以外で呼ばれた（検出できた場合）。
-    #[error("spawn_ui('{actor}') called off the UI (pump) thread")]
-    NotUiThread {
-        /// 誤用が観測されたアクターの名前。
-        actor: String,
-    },
 }
 
 /// [`UiSender::send`] の失敗（UI アクター停止後の送信）。未達メッセージを同梱して返す。

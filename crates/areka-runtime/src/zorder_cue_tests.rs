@@ -1,5 +1,5 @@
 // =============================================================================
-// ZOrderCueSink の自己選別と指令送出の決定論テスト（task 3.1・要件 1.7／4.4／8.3／11.2）
+// ZOrderCueSink の自己選別と指令送出の決定論テスト（areka-P0-scope-zorder-pinning 要件 1.7／4.4／8.3／11.2）
 //
 // この層が受け持つのは 2 つだけである——「自分宛のタグだけを拾うこと」と「拾ったものを
 // 解釈せずそのまま送ること」。ゆえに檻も 2 方向から挟む: 受理する 2 組は指令が出ること、
@@ -15,44 +15,13 @@
 // =============================================================================
 
 use super::*;
-use dola::DynamicValue;
+use crate::consumer_ledger::test_support::{actor_carrier_cue, broken_custom_cue};
+use crate::frame::test_support::{capture_logs, count_level};
+use crate::source_text_test_support::{code_only, index_of};
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 // ---------------------------------------------------------------- 道具立て
-
-/// `\![name,tokens...]` の汎用キャリア cue を組む（正準形＝`Custom` の String 配列）。
-fn carrier_cue(actor: &str, name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
-
-/// 開封できない `Custom`（`params` が String 配列でない）を宛名だけ差し替えて組む。
-///
-/// `DynamicValue::Null` は配列ではないので `as_command_carrier()` は `None` を返す。
-/// それでも宛名（`Custom{command}`）は読めるため、宛名規律の分岐へ入る。
-fn broken_custom_cue(actor: &str, command: &str) -> TalkCue {
-    let cue = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command: CueCommand::Custom {
-            command: command.to_string(),
-            params: DynamicValue::Null,
-        },
-        duration: 0.0,
-    };
-    assert_eq!(
-        cue.command.as_command_carrier(),
-        None,
-        "params=Null は開封できない形である（宛名で severity を分ける枝に入る前提）"
-    );
-    cue
-}
 
 /// キャリアでない cue（文字・演技・待ち）の一覧。
 fn non_carrier_cues() -> Vec<TalkCue> {
@@ -90,35 +59,6 @@ fn accepted_set() -> ZOrderDirective {
     }
 }
 
-/// クロージャ実行中に**現在のスレッド**で発火した記録を 1 行 1 件で返す。
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines
-}
-
-/// 捕捉行のうち指定した水準（`"WARN"`／`"DEBUG"`）の件数を数える。
-fn count_level(logs: &[String], level: &str) -> usize {
-    let needle = format!("level={level}");
-    logs.iter().filter(|line| line.contains(&needle)).count()
-}
-
-/// 註釈の行を落とす——説明文に書いてあるだけの綴りを「在る」と数えないため
-/// （`tick_gate_config_producers_tests.rs` と同じ流儀）。
-fn code_only(src: &str) -> String {
-    src.lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// コメントを除いたソースにおける字面の位置（無ければその場で落とす）。
-///
-/// 檻が「在る・無い」だけでなく**前後関係**を主張するための道具である。
-fn index_of(code: &str, needle: &str) -> usize {
-    code.find(needle)
-        .unwrap_or_else(|| panic!("コードに `{needle}` の字面が無い（檻の前提が崩れている）"))
-}
-
 // ---------------------------------------------------------------- 受理する 2 組
 
 /// `\![set,zorder,1,0]` は重なり指定の指令になり、第 1 引数より後ろのトークンだけを運ぶ。
@@ -126,7 +66,7 @@ fn index_of(code: &str, needle: &str) -> usize {
 fn t_zcs1_set_zorder_becomes_a_set_directive_carrying_the_element_tokens() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
-    sink.emit(carrier_cue("0", "set", &["zorder", "1", "0"]));
+    sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
     assert_eq!(
         only_one(&rx),
         accepted_set(),
@@ -139,7 +79,7 @@ fn t_zcs1_set_zorder_becomes_a_set_directive_carrying_the_element_tokens() {
 fn t_zcs2_reset_zorder_becomes_a_reset_directive() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
-    sink.emit(carrier_cue("0", "reset", &["zorder"]));
+    sink.emit(actor_carrier_cue("0", "reset", &["zorder"]));
     assert_eq!(only_one(&rx), ZOrderDirective::Reset);
 }
 
@@ -153,7 +93,7 @@ fn t_zcs3_tokens_are_forwarded_verbatim_without_interpretation() {
 
     let mut params = vec!["zorder"];
     params.extend_from_slice(&raw);
-    sink.emit(carrier_cue("0", "set", &params));
+    sink.emit(actor_carrier_cue("0", "set", &params));
 
     let ZOrderDirective::Set { tokens } = only_one(&rx) else {
         panic!("重なり指定の指令のはず");
@@ -165,9 +105,9 @@ fn t_zcs3_tokens_are_forwarded_verbatim_without_interpretation() {
     );
 }
 
-// ---------------------------------------------------------------- 要件 1.7
+// ---------------------------------------------------------------- areka-P0-scope-zorder-pinning 要件 1.7
 
-/// **要件 1.7**: タグを実行したスコープを読まない。実行スコープの値を変えても、
+/// **areka-P0-scope-zorder-pinning 要件 1.7**: タグを実行したスコープを読まない。実行スコープの値を変えても、
 /// 送り出される指令は 1 バイトも変わらない（`MoveCueSink` との意図的な差はここ）。
 #[test]
 fn t_zcs4_executing_scope_does_not_change_the_directive() {
@@ -179,12 +119,12 @@ fn t_zcs4_executing_scope_does_not_change_the_directive() {
     for actor in actors {
         let (tx, rx) = channel::<ZOrderDirective>();
         let mut sink = ZOrderCueSink::new(tx);
-        sink.emit(carrier_cue(actor, "set", &["zorder", "1", "0"]));
+        sink.emit(actor_carrier_cue(actor, "set", &["zorder", "1", "0"]));
         set_directives.push(only_one(&rx));
 
         let (tx, rx) = channel::<ZOrderDirective>();
         let mut sink = ZOrderCueSink::new(tx);
-        sink.emit(carrier_cue(actor, "reset", &["zorder"]));
+        sink.emit(actor_carrier_cue(actor, "reset", &["zorder"]));
         reset_directives.push(only_one(&rx));
     }
 
@@ -192,19 +132,19 @@ fn t_zcs4_executing_scope_does_not_change_the_directive() {
         assert_eq!(
             *got,
             accepted_set(),
-            "実行スコープ {actor:?} でも重なり指定の指令は同じ（要件 1.7）"
+            "実行スコープ {actor:?} でも重なり指定の指令は同じ"
         );
     }
     for (actor, got) in actors.iter().zip(&reset_directives) {
         assert_eq!(
             *got,
             ZOrderDirective::Reset,
-            "実行スコープ {actor:?} でも重なり解除の指令は同じ（要件 1.7）"
+            "実行スコープ {actor:?} でも重なり解除の指令は同じ"
         );
     }
 }
 
-/// 要件 1.7 を字面からも押さえる: 本番コードは実行スコープの欄（`cue.actor`）を読まない。
+/// areka-P0-scope-zorder-pinning 要件 1.7 を字面からも押さえる: 本番コードは実行スコープの欄（`cue.actor`）を読まない。
 ///
 /// 振る舞いの檻（`t_zcs4`）だけでは足りない。`let _executing_scope = cue.actor.as_str();`
 /// のように**振る舞いを 1 つも変えない**読み取りを足すと、振る舞い側の檻は全て緑のまま
@@ -227,13 +167,13 @@ fn t_zcs5_production_code_never_reads_the_executing_scope() {
     );
     assert!(
         !code.contains("actor"),
-        "本番コードは実行スコープの欄を読まない（要件 1.7・`MoveCueSink` との差）"
+        "本番コードは実行スコープの欄を読まない（`MoveCueSink` との差）"
     );
 }
 
 // ---------------------------------------------------------------- 惜しい組
 
-/// **要件 4.4／11.2**: 名前が合っていても選別子が違えば担当外——1 本も送らず、
+/// **areka-P0-scope-zorder-pinning 要件 4.4／11.2**: 名前が合っていても選別子が違えば担当外——1 本も送らず、
 /// 受け口の中身は先に流した 1 本のままである（＝重なりの状態を変えていない）。
 #[test]
 fn t_zcs6_near_miss_selectors_send_nothing() {
@@ -251,35 +191,35 @@ fn t_zcs6_near_miss_selectors_send_nothing() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
     // 受け口が生きている目印を先に 1 本置く（「出ない」の主張を空虚にしないため）。
-    sink.emit(carrier_cue("0", "set", &["zorder", "1", "0"]));
+    sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
 
     for (name, tokens) in near_misses {
-        sink.emit(carrier_cue("0", name, tokens));
+        sink.emit(actor_carrier_cue("0", name, tokens));
     }
 
     assert_eq!(
         drain(&rx),
         vec![accepted_set()],
-        "惜しい組はどれも指令を増やさない（受理された 1 本だけが残る・要件 4.4／11.2）"
+        "惜しい組はどれも指令を増やさない（受理された 1 本だけが残る）"
     );
 }
 
-/// **要件 11.2**: 担当外のコマンド名は、第 1 引数が `zorder` であっても読み飛ばす
+/// **areka-P0-scope-zorder-pinning 要件 11.2**: 担当外のコマンド名は、第 1 引数が `zorder` であっても読み飛ばす
 /// （`\![move,zorder,…]` のような綴りを横取りしない）。
 #[test]
 fn t_zcs7_other_command_names_send_nothing_even_with_the_zorder_selector() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
-    sink.emit(carrier_cue("0", "set", &["zorder", "1", "0"]));
+    sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
 
     for name in ["move", "bind", "raise", "zorder", "unknownfoo"] {
-        sink.emit(carrier_cue("0", name, &["zorder", "1", "0"]));
+        sink.emit(actor_carrier_cue("0", name, &["zorder", "1", "0"]));
     }
 
     assert_eq!(
         drain(&rx),
         vec![accepted_set()],
-        "担当外の名前は選別子が合っていても読み飛ばす（要件 11.2）"
+        "担当外の名前は選別子が合っていても読み飛ばす"
     );
 }
 
@@ -288,7 +228,7 @@ fn t_zcs7_other_command_names_send_nothing_even_with_the_zorder_selector() {
 fn t_zcs8_non_carrier_cues_send_nothing() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
-    sink.emit(carrier_cue("0", "set", &["zorder", "1", "0"]));
+    sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
 
     for cue in non_carrier_cues() {
         sink.emit(cue);
@@ -297,7 +237,7 @@ fn t_zcs8_non_carrier_cues_send_nothing() {
     assert_eq!(
         drain(&rx),
         vec![accepted_set()],
-        "キャリアでない cue は指令を増やさない（要件 11.2）"
+        "キャリアでない cue は指令を増やさない"
     );
 }
 
@@ -305,8 +245,9 @@ fn t_zcs8_non_carrier_cues_send_nothing() {
 
 /// 宛名規律: 開封できない `Custom` のうち**自分宛**（`set`／`reset`）は警告 1 本。
 ///
-/// 開封できない形では選別子が読めないので、宛名は名前だけで判ずる。今この 2 つの名前を
-/// 担当しているのは本 sink だけであり、壊れ物を報せる責任はこちらにある。
+/// 開封できない形では選別子が読めないので、宛名は名前だけで判ずる。この 2 つの名前は
+/// 他の受け口も持つが、開けない形の `set`／`reset` を警告する持ち主は本 sink だけであり、
+/// 壊れ物を報せる責任はこちらにある。
 #[test]
 fn t_zcs9_broken_own_address_warns_once() {
     for command in ["set", "reset"] {
@@ -382,16 +323,16 @@ fn t_zcs11_addressee_alone_decides_the_severity() {
     );
 }
 
-// ---------------------------------------------------------------- 要件 8.3
+// ---------------------------------------------------------------- areka-P0-scope-zorder-pinning 要件 8.3
 
-/// **要件 8.3**: 読み飛ばすどの経路でも、理由を残さないまま黙って諦めない。
+/// **areka-P0-scope-zorder-pinning 要件 8.3**: 読み飛ばすどの経路でも、理由を残さないまま黙って諦めない。
 #[test]
 fn t_zcs12_every_skip_leaves_a_record() {
     let mut skipped: Vec<TalkCue> = vec![
-        carrier_cue("0", "set", &["surface", "1"]),
-        carrier_cue("0", "reset", &["balloon"]),
-        carrier_cue("0", "set", &[]),
-        carrier_cue("0", "move", &["zorder", "1", "0"]),
+        actor_carrier_cue("0", "set", &["surface", "1"]),
+        actor_carrier_cue("0", "reset", &["balloon"]),
+        actor_carrier_cue("0", "set", &[]),
+        actor_carrier_cue("0", "move", &["zorder", "1", "0"]),
         broken_custom_cue("0", "set"),
         broken_custom_cue("0", "noexist"),
     ];
@@ -402,10 +343,7 @@ fn t_zcs12_every_skip_leaves_a_record() {
         let (tx, _rx) = channel::<ZOrderDirective>();
         let mut sink = ZOrderCueSink::new(tx);
         let logs = capture_logs(|| sink.emit(cue));
-        assert!(
-            !logs.is_empty(),
-            "読み飛ばしは必ず理由を残す（要件 8.3）: {label}"
-        );
+        assert!(!logs.is_empty(), "読み飛ばしは必ず理由を残す: {label}");
     }
 }
 
@@ -415,12 +353,12 @@ fn t_zcs12_every_skip_leaves_a_record() {
 fn t_zcs13_reset_with_trailing_tokens_is_still_reset_and_is_recorded() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
-    let logs = capture_logs(|| sink.emit(carrier_cue("0", "reset", &["zorder", "1", "0"])));
+    let logs = capture_logs(|| sink.emit(actor_carrier_cue("0", "reset", &["zorder", "1", "0"])));
 
     assert_eq!(only_one(&rx), ZOrderDirective::Reset);
     assert!(
         !logs.is_empty(),
-        "運ばなかったトークンがあることを記録する（要件 8.3）: {logs:?}"
+        "運ばなかったトークンがあることを記録する: {logs:?}"
     );
 }
 
@@ -430,7 +368,7 @@ fn t_zcs13_reset_with_trailing_tokens_is_still_reset_and_is_recorded() {
 ///
 /// 旗はプロセスで 1 組しか無く areka のテストは並列に走るので、動的に読むと他のテストの
 /// 巻き添えで揺れる（`tick_gate_config_producers_tests.rs` は「立っていないはず」を主張
-/// しない、と明記している）。テストの独立性（要件 10.3）を壊さずに置き場所を固定するため、
+/// しない、と明記している）。テストの独立性（areka-P0-scope-zorder-pinning 要件 10.3）を壊さずに置き場所を固定するため、
 /// ここではコメントを除いたソース上の**前後関係**を主張する。
 ///
 /// 「字面が在る」だけでは足りない。旗を `emit` の先頭（自己選別より前）へ持ち上げた実装は、
@@ -445,11 +383,11 @@ fn t_zcs14_the_zorder_wake_is_marked_after_the_self_selection() {
     assert_eq!(
         code.matches("tick_wake::mark(").count(),
         1,
-        "旗を立てる呼出はちょうど 1 つ（要件 7.4 の生産者）"
+        "旗を立てる呼出はちょうど 1 つ"
     );
     assert!(
         code.contains("tick_wake::mark(tick_wake::ZORDER)"),
-        "立てるのは重なりの旗（要件 7.4 の生産者）"
+        "立てるのは重なりの旗"
     );
 
     let mark_at = index_of(&code, "tick_wake::mark(");
@@ -471,7 +409,7 @@ fn t_zcs15_clone_reaches_the_same_receiver() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let sink = ZOrderCueSink::new(tx);
     let mut cloned = sink.clone();
-    cloned.emit(carrier_cue("0", "set", &["zorder", "1", "0"]));
+    cloned.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
     assert_eq!(only_one(&rx), accepted_set());
 }
 
@@ -481,10 +419,10 @@ fn t_zcs16_disconnected_receiver_is_recorded_and_does_not_panic() {
     let (tx, rx) = channel::<ZOrderDirective>();
     drop(rx);
     let mut sink = ZOrderCueSink::new(tx);
-    let logs = capture_logs(|| sink.emit(carrier_cue("0", "set", &["zorder", "1", "0"])));
+    let logs = capture_logs(|| sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"])));
     assert_eq!(
         count_level(&logs, "WARN"),
         1,
-        "送れなかったことを警告として残す（黙って捨てない・要件 8.3）: {logs:?}"
+        "送れなかったことを警告として残す（黙って捨てない）: {logs:?}"
     );
 }

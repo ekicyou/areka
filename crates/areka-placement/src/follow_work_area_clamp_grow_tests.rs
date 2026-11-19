@@ -64,7 +64,7 @@ fn grow(world: &World, window: Entity, route: PlacementRoute, size: SizePx) -> P
 }
 
 /// ⑶ 200% で y=864 の 640×840 が 1108×1368 になると、下端が 1704 以下へ収まり x は変わらない
-/// （はみ出した向きにだけ動かす・要件 3.1・3.2）。`Clamp`（info・how=grown）が残る。
+/// （はみ出した向きにだけ動かす・`window-work-area-clamp` 要件 3.1・3.2）。`Clamp`（info・how=grown）が残る。
 /// 面の再スナップと窓寸の照合の両経路で同じ。
 #[test]
 fn grown_default_free_window_is_lifted_only_vertically() {
@@ -92,7 +92,7 @@ fn grown_default_free_window_is_lifted_only_vertically() {
 }
 
 /// 既定の位置と違う窓（ドラッグの後）・台本の印の窓・ドラッグ中の窓・既定の位置の無い窓
-/// （記憶から戻した窓）は動かさず、`Keep`（debug・理由の語）を残す（要件 3.5・7.6）。
+/// （記憶から戻した窓）は動かさず、`Keep`（debug・理由の語）を残す（`window-work-area-clamp` 要件 3.5・7.6）。
 /// 各形は同じ World の 1 か所だけを変えて作り、変える前は寄せられることを同じ捕捉で確かめる。
 #[test]
 fn explicitly_placed_or_remembered_windows_are_kept() {
@@ -171,7 +171,7 @@ fn other_routes_anchors_and_non_char_windows_are_untouched_and_silent() {
     );
 }
 
-/// ⑸ 作業領域より大きい窓は左辺と上辺が作業領域の左辺と上辺に合う（要件 7.2）。
+/// ⑸ 作業領域より大きい窓は左辺と上辺が作業領域の左辺と上辺に合う（`window-work-area-clamp` 要件 7.2）。
 #[test]
 fn oversized_window_aligns_left_and_top() {
     let (world, window) = world_free(Some(desk()));
@@ -204,7 +204,7 @@ fn grown_window_that_still_fits_is_kept() {
     assert!(guard_events(&events, WORK_AREA_CLAMP_TAG).is_empty());
 }
 
-/// ⑹ モニタの写しが無いと動かさず `Unresolved` の warn が出る（要件 7.4）。空の写しも同じ
+/// ⑹ モニタの写しが無いと動かさず `Unresolved` の warn が出る（`window-work-area-clamp` 要件 7.4）。空の写しも同じ
 /// （reason=no-work-area）。対照: 同じ捕捉窓で写しの有る World は `Clamp` を出す。
 #[test]
 fn missing_snapshot_warns_unresolved_with_contrast() {
@@ -232,7 +232,7 @@ fn missing_snapshot_warns_unresolved_with_contrast() {
 }
 
 /// ⑶ 大きさを変える書き込み（`resize_window_to`）を通すと、寄せた位置と新しい大きさがキャラ窓へ
-/// 1 回で書かれ（要件 7.3）、既定の位置が寄せた先へ運ばれ（要件 7.5）、バルーンが同じだけ付いて
+/// 1 回で書かれ（`window-work-area-clamp` 要件 7.3）、既定の位置が寄せた先へ運ばれ（要件 7.5）、バルーンが同じだけ付いて
 /// 動く（ずらしは変えない）。
 #[test]
 fn resize_write_clamps_once_carries_default_and_moves_balloon() {
@@ -278,7 +278,7 @@ fn resize_write_clamps_once_carries_default_and_moves_balloon() {
     );
 }
 
-/// 指摘 11 ⑹ 作業領域は今の位置でなく提案の位置に置いた窓のモニタから引く（要件 7.1）。
+/// `audit-placement-follow` 指摘 11 ⑹ 作業領域は今の位置でなく提案の位置に置いた窓のモニタから引く（`window-work-area-clamp` 要件 7.1）。
 /// 今の位置（既定の位置）は主の画面、提案は右の画面（高さ 1200）に載る: 右の画面の上辺へ
 /// 合い x は変わらない。主の画面で収めると (1772, 336) になる。
 #[test]

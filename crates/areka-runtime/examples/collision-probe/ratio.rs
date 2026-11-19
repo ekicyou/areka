@@ -1,37 +1,17 @@
 use super::ScaleRatio;
-use super::fixture::{EXPECT_K_ENV, RATIO_PARTS_MAX_DEN};
+use super::fixture::EXPECT_K_ENV;
 
 // ---------------------------------------------------------------------------
 // 実適用 k の表示と期待ゲート（env `AREKA_COLLISION_PROBE_EXPECT_K`）
 // ---------------------------------------------------------------------------
 
 /// [`ScaleRatio`] を `"<num>/<den>"` 表記へ整形する（常設 greppable ログ・assert メッセージ共通）。
-///
-/// 既約分子・分母を復元できなかった場合（[`RATIO_PARTS_MAX_DEN`] 超過の病的比）は `Debug` 表記へ縮退する
-/// ——ログ表現の縮退であって判定には一切関与しない（無言では落とさない）。
 pub(super) fn format_ratio(k: ScaleRatio) -> String {
-    match ratio_parts(k) {
-        Some((num, den)) => format!("{num}/{den}"),
-        None => format!("{k:?}"),
-    }
+    let (num, den) = k.parts();
+    format!("{num}/{den}")
 }
 
-/// [`ScaleRatio`] の既約 `(num, den)` を**公開面のみ**で復元する（ログ表記専用）。
-///
-/// `ScaleRatio` は `num`／`den` アクセサを公開していない（`scale.rs` の申し送り: アクセサ新設は W6.5
-/// `scale-exact-rational` の領分であり本 spec では追加しない）。そこで乗算方向の権威
-/// [`ScaleRatio::scale_len`] と `ScaleRatio::new` の**正準化された等価判定**だけで復元する:
-/// 分母候補 `d` を 1 から増やし `new(scale_len(d), d) == k` が最初に成立した `d` が既約分母である
-/// （`gcd(num, den) == 1` ゆえ `0 < d < den` では `d·num/den` が整数にならず、丸めた比の正準形が `k` に
-/// 一致することはない）。厳密であり、÷k の再実装でも丸め規約の持ち込みでもない。
-fn ratio_parts(k: ScaleRatio) -> Option<(u32, u32)> {
-    (1..=RATIO_PARTS_MAX_DEN).find_map(|den| {
-        let num = k.scale_len(den);
-        (ScaleRatio::new(num, den) == Some(k)).then_some((num, den))
-    })
-}
-
-/// 期待 k ゲート（要件 4.1）: env [`EXPECT_K_ENV`] が指定されているときだけ、実適用 k との厳密一致を
+/// 期待 k ゲート（areka-P0-collision-dpi-hittest 要件 4.1）: env [`EXPECT_K_ENV`] が指定されているときだけ、実適用 k との厳密一致を
 /// hard assert する（design Error Handling「probe 期待 k 不一致 → hard assert で loud fail」）。
 ///
 /// 未指定なら**何も assert しない**（実測ログのみ）——開発機の k がいくつであっても probe をそのまま

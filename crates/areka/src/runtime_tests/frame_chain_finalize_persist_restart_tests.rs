@@ -65,7 +65,7 @@ fn first_run(ghost: &MinimalGhost, drag: bool) -> [Point; 2] {
         let cursor = (start.x + 50, start.y + 50);
         world.entity_mut(body).insert(DraggingState {
             drag_start_pos: Point::new(cursor.0, cursor.1),
-            initial_window_pos: (start.x as f32, start.y as f32),
+            initial_window_pos: Some((start.x as f32, start.y as f32)),
         });
         let ev = Phase::Bubble(DragEndEvent {
             target: body,

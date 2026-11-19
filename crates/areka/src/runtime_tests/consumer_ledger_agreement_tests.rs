@@ -1,25 +1,19 @@
 //! 正準台帳と `runtime` の 11 の受け口の自己選別の一致の檻（areka-P0-mcp-author-tools
 //! 要件 3.2・3.11・design「`\!` の表の仕上げ」の「一致のテスト」）。
 //!
-//! 表は宣言するだけで、受け口は自分の名前と第 1 引数で自己選別する（両者は依存しない）。
-//! `check_script` は表を引いて「知らない `\!`」を答えるので、表と受け口の選別がずれると
-//! 「検査だけが通して再生で落ちる」「検査だけが落として再生で通る」が生まれる。ここで固定する。
-//!
 //! 11 の受け口をそれぞれ本物の送信端つきで組み、1 つの `\!` の cue を全員へ配って、どの送信端に
 //! 指令が届いたかを見る（配送は全員へ同じ cue を配る broadcast なので、本番と同じ形）。
 //!
-//! 1. 表が担当を言う各行（受け口の既存のテストから取った引数つきの見本）→ その担当の受け口だけに
-//!    届く。担当が `runtime` の外（seriko の `bind`・文字の層の `\f`・台本の組み立ての
-//!    `set,choicetimeout`・プロパティの書き込みと読み）の行は、11 のどれにも届かない。
-//! 2. 表に出てくる名前の全部 × 表に出てくる第 1 引数の全部（＋第 1 引数なし＋どこにも無い語）の
-//!    掛け合わせのうち、表に無い組 → 11 のどれにも届かない（受け口が表に無い組を拾えば赤）。
-//!    引数の列は「第 1 引数＋同じ名前の見本の第 2 引数から先（尾）」で組む。切替・書庫の受け口は
-//!    選別子の後ろに引数が無いと何も送らないので、尾を付けないと選別がゆるんでも赤にならない。
+//! 1. 表が担当を言う各行（見本つき）→ その担当の受け口だけに届く。担当が `runtime` の外の行は
+//!    11 のどれにも届かない。
+//! 2. 表に出てくる名前 × 第 1 引数（＋第 1 引数なし＋どこにも無い語）の掛け合わせのうち、
+//!    表に無い組 → 11 のどれにも届かない。引数の列は「第 1 引数＋同じ名前の見本の尾」で組む。
 //!    尾の無い形（第 1 引数だけ）も配り、第 1 引数なしは裸と空の第 1 引数（`""`＋尾）の両方を配る。
+//! 3. `set,position` 系・`reload` の仲間など、表に無い名前も 11 のどれにも届かない。
 //!
-//! 見本の一覧は表の行とちょうど同じ組を持つこと自体も判定する（行を足して見本を足し忘れれば赤）。
+//! 見本の組が表の行と一致することの判定は、`areka-runtime` の同じ名前のファイルにある。
 
-use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+use dola::cue::CueSink;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::mpsc::channel;
@@ -32,7 +26,7 @@ use super::super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use super::super::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
 use super::super::window_state_cue::WindowStateCueSink;
 use super::super::zorder_cue::ZOrderCueSink;
-use super::test_support::{ledger_keys, samples};
+use super::test_support::{carrier_cue, ledger_keys, samples};
 use super::{CommandConsumer, ConsumerLedger};
 use crate::install::install_cue::{InstallCueSink, StartFetch};
 use crate::readme::readme_cue::ReadmeCueSink;
@@ -62,16 +56,6 @@ fn runtime_sink_of(consumer: CommandConsumer) -> Option<CommandConsumer> {
         | CommandConsumer::ScriptCompile
         | CommandConsumer::PropertyWrite
         | CommandConsumer::PropertyRead => None,
-    }
-}
-
-/// `\![name,args...]` の汎用キャリア cue を組む（各受け口のテストと同じ正準形）。
-fn carrier_cue(name: &str, args: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, args.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
     }
 }
 
@@ -272,7 +256,7 @@ fn set_and_reset_position_reach_no_sink() {
     }
 }
 
-/// 本 spec が拾わない `\![reload,makoto]`・`\![reload,aigraph]` は表に行が無く、11 の受け口の
+/// areka-P0-mcp-reload が拾わない `\![reload,makoto]`・`\![reload,aigraph]` は表に行が無く、11 の受け口の
 /// どれにも届かない（areka-P0-mcp-reload 要件 10.3・11.1・11.3）。
 #[test]
 fn reload_makoto_and_aigraph_reach_no_sink() {

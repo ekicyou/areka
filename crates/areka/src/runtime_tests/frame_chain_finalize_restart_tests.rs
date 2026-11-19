@@ -91,7 +91,7 @@ fn next_window_set_finalizes_once_like_first_boot() {
     let char1 = gw2.char_window(1).unwrap();
     let spawned_x = pos_of(&world, char1).map(|p| p.x);
     let second = capture_lines(LineFormat::LevelTargetFields, || {
-        // 2 回呼ぶ: 1 回目で確定し、2 回目は一度きり（scg 7.4）で駆動しない。
+        // 2 回呼ぶ: 1 回目で確定し、2 回目は一度きり（areka-P0-scope-chain-gap 7.4）で駆動しない。
         finalize_chain_once_with(&settled_sizes(), &mut world);
         finalize_chain_once_with(&settled_sizes(), &mut world);
     })

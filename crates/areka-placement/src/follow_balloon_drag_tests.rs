@@ -4,7 +4,7 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{DPI, Point, WindowPos};
 
-use super::drag_follow::BALLOON_DRAG_BASE_UNPINNED_TAG;
+use super::balloon_drag::BALLOON_DRAG_BASE_UNPINNED_TAG;
 use super::test_support::{
     drag_end_event_at, drag_event, drag_event_at, dragging_state, fake_handle, position_of,
     single_monitor_snapshot, window_pos_at, window_pos_sized,
@@ -15,7 +15,7 @@ use crate::resolver::PointPx;
 use log_capture_kit::{capture, expect_one};
 
 // -------------------------------------------------------------------------
-// on_balloon_drag: バルーン単独ドラッグの相対位置記憶（task 8.3・4.8・DD16）
+// on_balloon_drag: バルーン単独ドラッグの相対位置記憶（`areka-P0-window-placement` タスク 8.3・要件 4.8・DD16）
 // wndproc がバルーン窓を移動済み（WindowPos 更新済み）の状態を模して呼び、
 // offset の記憶更新・キャラ窓不動・以後の consumer 追従を決定論検証する。
 // 座標は 96 の倍数を避け、x/y で符号・値の異なる offset を使う
@@ -82,7 +82,7 @@ fn on_balloon_drag_updates_offset_and_char_window_is_unmoved() {
         world.get::<BalloonFollow>(char_w).unwrap().offset(),
         derived
     );
-    // **確立点の檻**（要件 3.5・design D14）: ドラッグ結果は現在値だけでなく
+    // **確立点の檻**（`areka-P0-balloon-offset-dpi` 要件 3.5・design D14）: ドラッグ結果は現在値だけでなく
     // **基準**も焼き直し、その基準はドラッグ時点のキャラ窓の表示 DPI へ係留される。
     // これが無いと、次の拡大率遷移が古い基準から引き直して静かにずれる。
     assert_eq!(
@@ -295,7 +295,7 @@ fn on_balloon_drag_without_positions_is_graceful() {
 }
 
 // -------------------------------------------------------------------------
-// 表示 DPI を読めないキャラ窓での確立（要件 5.2／5.4／9.4・design D15）
+// 表示 DPI を読めないキャラ窓での確立（`areka-P0-balloon-offset-dpi` 要件 5.2／5.4／9.4・design D15）
 //
 // # なぜこの檻が要るのか
 //
@@ -353,7 +353,7 @@ fn on_balloon_drag_without_display_dpi_establishes_unpinned_base_and_warns() {
         derived,
         "表示 DPI を読めなくてもドラッグ結果は失われない（確立点で見送らない）"
     );
-    // (b) 基準は**未係留**で確立される（96 を発明しない・要件 5.2／5.4）。
+    // (b) 基準は**未係留**で確立される（96 を発明しない・`areka-P0-balloon-offset-dpi` 要件 5.2／5.4）。
     assert_eq!(
         follow.base(),
         OffsetBase {
@@ -363,13 +363,13 @@ fn on_balloon_drag_without_display_dpi_establishes_unpinned_base_and_warns() {
         "未係留で確立していない（基準 DPI を発明した／基準を焼き直していない）"
     );
 
-    // (c) 無ログの縮退経路は作らない（要件 9.4）。
+    // (c) 無ログの縮退経路は作らない（`areka-P0-balloon-offset-dpi` 要件 9.4）。
     let rec = expect_one(&events, BALLOON_DRAG_BASE_UNPINNED_TAG);
     assert_eq!(rec.level, tracing::Level::WARN, "未係留の確立は warn 水準");
 }
 
 // -------------------------------------------------------------------------
-// 離したときの追従の基準の出し直し（指摘 3・DD6・要件 3.1／8.1）
+// 離したときの追従の基準の出し直し（`audit-placement-follow` 指摘 3・DD6・要件 3.1／8.1）
 // 最後の OnDrag の知らせと最終確定位置はずれ得る。離した後の追従の基準は、保存した値と
 // 同じ最終確定位置から出し直され、補正の前の位置を指す。
 // -------------------------------------------------------------------------
@@ -445,7 +445,7 @@ fn releasing_at_a_position_past_the_last_drag_reestablishes_the_follow_from_the_
     assert_eq!(
         follow.offset(),
         saved,
-        "離した後の追従のオフセットが最後の OnDrag の値のまま（指摘 3）"
+        "離した後の追従のオフセットが最後の OnDrag の値のまま（`audit-placement-follow` 指摘 3）"
     );
     assert_eq!(
         follow.base(),

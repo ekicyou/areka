@@ -1,0 +1,173 @@
+# 実装の計画: audit-placement-follow-residue
+
+- 順は設計の「作業の順」に従う。塊ごとにコミットを分ける。push・PR はしない（完了の段の仕事）。
+- 行の番号は設計のツリー（`c66f7ee54`）のもの。触る前にその場で測り直す。
+- `(P)` は説明だけを直すタスク（11.2〜11.4）にだけ付ける。コードを直すタスクは同じワークツリーで同じ crate を組んで確かめるので、ファイルが重ならなくても並べない。
+- 重い走行は赤が出たテストだけに絞って回し直す。全体テストは最後のタスク（12）で 1 回、排他テストの机で順を取る。
+- 守る約束（どのタスクにも当たる）: 1,000 行の番人の例外表と、表に載るファイル（`follow/window_move.rs`・`transition_judge_verdict_tests.rs` ほか）を割らない。`crates/areka-runtime/src/placement_tests/` の下にファイルを足し引きしない。999 行の `transition_judge.rs`・`transition_judge_tests.rs` は行を増やさない。`Cargo.toml`・`Cargo.lock`・`vendors/` に触らない。clippy の指摘の機械的な直しをしない。
+- 設計の「作業の順」からの寄せ: `follow.rs:122-123` の古い名と番号は鎖の寄せ（6.1）が直す（古い文の 10 は触らない）。`follow.rs` は 1・6.1・8 が触るので、この 3 つは並べない。
+
+- [x] 1. `follow/drag_follow.rs` を 2 つに分ける（移すだけの段）
+  - 着手の前に、brief の件の行の番号を今の枝の頭で引き直し、ずれた行を `research.md` の 9 節の終わりに書き足す
+  - バルーン単独のドラッグの塊と記録の札を新しい `follow/balloon_drag.rs` へ移す。境目・`known_position` を残して `pub(super)` にすること・`CW_USEDEFAULT` の `use` を両方に置くこと・ファサードの再束縛の直しは設計の「決め 4」と Modified Files の「1,000 行」のとおり。中身・記録の文・順は変えない
+  - 移した名前を名指す説明（設計が挙げる `resolver.rs`・`spawn.rs`・`windowposition.rs`・`diag.rs`・`resolver_resolve_balloon_tests.rs`・`follow/window_move.rs:168`・`follow_balloon_drag_tests.rs:7`・`follow.rs:52`・`:64`）と、設計の一覧に漏れていた `crates/areka-runtime/src/placement_tests/transition_judge_offset_signoff_tests.rs:117`（`drag_follow.rs` に在ると書く文）を新しい置き場へ直す。説明だけで、例外表のファイルは文に要る分の行だけ・`placement_tests/` の下はファイルを足し引きしない
+  - 完了の状態: 分けた前後で `cargo test -p areka-placement` のテストの名前と数が同じで緑・`drag_follow.rs` と `balloon_drag.rs` がどちらも 1,000 行の下・`cargo test -p log-capture-kit --test file_length_guard_test` が緑・`git grep -nE "drag_follow(::|\.rs.{0,30})(on_balloon_drag|reestablish_balloon_follow|retire_keyword_base_on_save|apply_release_limit_correction|BALLOON_DRAG_BASE_UNPINNED_TAG)" -- crates` が 0 行（移した 5 つの名前と記録の札を `::` と `.rs` の両方の形で）
+  - _Dispatch: mechanical — 設計が移す行の範囲と行き先と名前の開け方を決めている_
+  - _Requirements: 3.1, 3.2, 3.3, 9.1, 10.1_
+
+- [x] 2. ドラッグの状態の型に「始めの位置が分からない」を持たせる
+- [x] 2.1 wintf の `DraggingState` の始めの位置を `Option` にし、wintf の中を直す
+  - 欄の型と doc（`None` の意味）・配りの `unwrap_or((0,0))` をやめて取れないときは `None` を入れ、今の `warn!` 1 行（`entity`・`window`・理由）はそのまま・`debug!` の欄も `Option` で出す
+  - wndproc の `dragging_window_origin` は live が在り始めの位置が `Some` のときだけそれを使い、`None` なら控えへ。`move_window` の守り（控えの `move_window && is_some()`）は変えない。中の控え `DragState::Dragging.initial_window_pos` の型はそろえない（設計の決め 2）
+  - wintf のテストを直し、檻を足す: `ecs/drag/systems.rs`・`tests/drag/dispatch_test.rs`（位置の取れる窓は `Some((100.0, 200.0))`）・`ecs/drag/dispatch_order_tests.rs`（始めの位置の無い場面で `None`・`unwrap_or((0,0))` に戻すと落ちる）・`ecs/window_proc/mouse_move_drag_origin_tests.rs`（live が在り `None` → 控えの値）
+  - 完了の状態: `cargo test -p wintf` が緑で、足した 2 つの檻が `(0,0)` を入れる形に戻すと落ちる。この時点では wintf の外の crate は組めなくてよい（2.2 で戻す）
+  - _Dispatch: mechanical — 設計が型・doc・配りと wndproc の形と檻の期待を与えている_
+  - _Requirements: 2.1, 2.3, 2.5, 2.6, 2.7, 2.8_
+- [x] 2.2 wintf の外の組む所と読む所を型に合わせ、ツリーを組めるようにする
+  - コンパイラの示す組む所を `Some(..)` で包み、`.0`／`.1` で読む所は `None` を素通しする最小の形にする（振る舞いの直しは 3 が入れる）。在る無しだけを見る所（設計が挙げる 8 か所）は変えない
+  - 設計の「164」の一覧のテストの支えと檻を直す: `follow_test_support.rs` の `dragging_state`・`frame_dpi_drag_grab_tests.rs`・`frame_chain_realign_exclusion_tests.rs`・本体の `frame_chain_finalize_persist_restart_tests.rs`・`frame_chain_rule_tests.rs`・`input_events/drag_test_support.rs`（doc の「(0,0) のまま」を「`None` のまま」へ）
+  - 漏れが無いことを `git grep -n "initial_window_pos" -- crates` で確かめる
+  - 完了の状態: `cargo check --workspace --all-targets` が緑で、`cargo test -p areka-placement`・`-p areka-runtime` の今の檻が緑（位置の取れるドラッグの振る舞いは変わらない）
+  - _Dispatch: mechanical — 型を変えた後のコンパイラの示す所を設計の最小の形で直す_
+  - _Requirements: 2.5, 2.6, 9.5_
+
+- [x] 3. 始めの位置が分からないドラッグで窓を動かさない（164 の振る舞い）
+- [x] 3.1 追随のキャラ窓のドラッグに「分からない」の腕と記録を入れる
+  - `policy_mapped_position` は始めの位置が `None` のとき `None` を返し、`CHAR_DRAG_ORIGIN_UNKNOWN_TAG` の `debug!` を `entity` 付きで 1 行残す（設計の CharDragOrigin の形）。`on_char_drag` は書かずに戻り、バルーンと組の相手も動かさない。`on_char_drag_end` は今の「`DraggingState` 不在」の縮退（今の `WindowPos.position`）で確定と保存を通す
+  - `follow_drag_tests.rs` に檻を足す: 吸着した組の窓に `None` の状態と相手とバルーンを持たせて `on_char_drag` → 3 つの位置が前と同じで札の `debug!` が 1 行
+  - 完了の状態: 足した檻が緑で、`None` を `(0,0)` で写す形に戻すと落ちる
+  - _Dispatch: standard — 新しい腕と記録の札を追随の流れに入れる_
+  - _Requirements: 2.1, 2.2, 2.3, 2.5, 2.8, 9.6_
+- [x] 3.2 離したときの檻と、偽の HWND の (0,0) に寄りかかった期待を作り直す
+  - `follow_drag_end_gate_tests.rs`: 開始の後に始めの位置を窓の位置にする手伝いを足し、`destination()` を「窓の位置＋差」へ作り直す。`None` で `on_char_drag_end` → 記憶に入る位置が今の位置（(0,0)＋差でない）の檻を、吸着した窓と `Free` の窓で足す
+  - 本体 `input_events/drag_tests.rs` の説明の「(0,0) のまま入る」を直し、`set_initial_window_pos` を呼ばずに (0,0) に寄りかかった檻があれば同じ手伝いを足す（C22 の触るファイルの列の外・持ち主は今走っていない）
+  - 完了の状態: `cargo test -p areka-placement` と本体の `input_events` の檻が緑で、離したときの檻が (0,0) を基準にした位置を書く形に戻すと落ちる
+  - _Dispatch: standard — 寄りかかった期待を見つけて前提ごと作り直す_
+  - _Requirements: 2.4, 2.6, 2.8_
+- [x] 3.3 拡大率の相の掴みの置き直しを「分からない」で止める
+  - `areka-runtime` の `realign_drag_grab` は始めの位置が `None` なら置き直さず `debug!` を 1 行。`rescale_drag_grab` の形は変えない
+  - `frame_dpi_drag_grab_tests.rs` に檻: 位置の分からないドラッグ中に大きさが変わっても `None` のまま・位置の分かるドラッグは今のまま
+  - 完了の状態: `cargo test -p areka-runtime frame_dpi_drag_grab` が緑で、`None` を置き直す形に戻すと落ちる
+  - _Dispatch: mechanical — 設計が腕と記録と檻の期待を与えている_
+  - _Requirements: 2.1, 2.3, 2.8, 9.6_
+
+- [x] 4. 追随のテストの支えの写しを共有の部品へ寄せる
+- [x] 4.1 `follow_test_support.rs` の写しを消して共有の部品を使う
+  - 83（`assert_no_event`）・2 回目（`point`・`contained`）・511（`code_only`・`SharedFakeIo`／`SylphyaRig`）の写しを消し、使い手を `test_support`・`placement_shared_test_support` の共有へ向ける。消す前に `git grep` で使い手を全部確かめる（文字列での参照を含む）。`contained` は飽和の足し算になるので、期待が変わる檻が無いかを使い手で確かめる
+  - 完了の状態: 設計の G4 の 1 つ目の grep のうち `follow_test_support.rs` の当たりが 0 行で、`cargo test -p areka-placement` が緑
+  - _Dispatch: mechanical — 写しと共有の行き先を設計の表が対で与えている_
+  - _Requirements: 4.1, 4.4_
+- [x] 4.2 ほかのテストの写しを消す（358・426・220・219）
+  - `follow_test_support.rs` の 5 つの部品（`position_of`・`drag_event`・`drag_end_event_at`・`window_pos_sized`・`point_of`）を `pub(crate)` にし、`spawn_follow_pipeline_tests.rs`・`balloon_limit_flip_tests.rs`・`balloon_lock_drag_tests.rs` の写しを消す
+  - `follow_move_shift_tests.rs` の `k` を `placement_shared_test_support::k` へ、`follow_sticky_follow_drag_tests.rs` の `events_of` を `events_with` へ
+  - 完了の状態: 設計の G4 の 1 つ目と 2 つ目の grep が 0 行で、`cargo test -p areka-placement` が緑
+  - _Dispatch: mechanical — 写しと共有の行き先を設計の表が対で与えている_
+  - _Requirements: 4.1, 4.4_
+
+- [x] 5. 組のドラッグの終わりで記憶へ 1 回で書く（7 回目）
+  - `finish_char_drag` が相手の記憶の束を返し、`on_char_drag_end` が動かした窓の束と合わせて `persist_entries` を 1 回だけ呼ぶ（設計の DragEndPersist の形・`CharWindowMarker` が無いときは今の `warn!` と相手の束だけ）。束の中身と書く時機は今と同じ
+  - `follow_sticky_follow_drag_tests.rs`: 直に呼ぶ 3 本の檻を、返る束に相手の元の位置と `saved_form_anchor` の形が入ることを見る形へ書き直し、`capture` の 3 か所を戻りの型に合わせる。相手 2 つの組を `on_char_drag_end` で終えて `SharedFakeIo::commit_count` が 1・束に 3 窓の位置と今と同じ印、の檻を足す
+  - 書き手の一覧の文（`persist.rs:9-12`・`persist_save.rs:33`・`follow/drag_follow.rs:135`）を 1 回の形へ直す
+  - 完了の状態: 回数の檻が緑で、N+1 回に戻すと落ちる。`cargo test -p areka-placement` が緑
+  - _Depends: 3.1, 4.1_
+  - _Dispatch: standard — 戻りの型を変えて書き込みの束ね方を呼び手へ移す_
+  - _Requirements: 5.1, 5.2, 5.3, 9.5_
+
+- [x] 6. 記憶から戻した窓の寄せの組を鎖の決まりに合わせる
+- [x] 6.1 `keep_restored_groups` を鎖の前の窓との組のつながりの束にする
+  - `chain_rule.rs` の `from_terms` の `#[cfg(test)]` を外して doc を直す（規則は変えない・C22 の触るファイルの列の外）。`restore_and_judge` が全スコープの揃え方から `ChainRule` を組んで渡す
+  - `keep_restored_groups` を設計の RestoreGroup の形にする: 印の線は `chain.prev(ChainView::Saved, n)`（n が鎖に入り印が `left`／`right` で相手が記憶の窓のときだけ）、矩形の線は今の (n−1, n)。2 つをつないだ束ごとに今の判定と記録の語で寄せる。束と束の中の並びはスコープの昇順。`joined_with_prev` を消す
+  - `RestoredWindow::mark`・`keep_restored_groups`・`persist.rs:362` の doc と `follow.rs:122-123` の古い名（`restore_and_judge`）と名前の無い番号を直す。組を「番号が続く対 (n−1, n)」と書かない
+  - `follow_work_area_clamp_restore_tests.rs`: 呼び 10 か所に鎖を渡し、設計の Testing の単体 1 の ⑴〜⑸（T8・T6 ⑴・T6 ⑵・1 が記憶に無い・T5）を置く。`apart_or_non_consecutive_pairs_are_not_grouped` は ⑷ へ書き直す
+  - 完了の状態: ⑴〜⑸ が緑で、印の線を (n−1, n) で引く形に戻すと ⑴ か ⑵ が落ちる。設計の G1 が 0 行／`follow/` の下 0 で、`cargo test -p areka-placement` が緑
+  - _Dispatch: standard, effort high — 束ね方の新しい組み立てと、鎖の答えとの一致を檻で詰める_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 1.7, 1.8, 7.1, 8.4, 9.5_
+- [x] 6.2 記憶の戻しの道で T6・T8 の組の差が保たれる檻を置く
+  - `persist_restore_group_tests.rs`: `apply_restored_placements` に T6 ⑴・T8 の形の揃え方つきの配置と記憶を渡し、組の差が保たれることを見る（World を持たない純関数の道）
+  - 完了の状態: 2 本の檻が緑で、6.1 の印の線を (n−1, n) に戻すと落ちる
+  - _Dispatch: mechanical — 設計が入力の形と期待を与えている_
+  - _Requirements: 1.2, 1.3, 1.9_
+- [x] 6.3 `opposite`（C14）の理由を書き、端へ寄せる振る舞いを固める
+  - `opposite` の doc に設計の ChainClamp の 2 つ（`JoinLeftOffset` は回さない・辺のスコープとの組は回すが反対の側がほぼ画面の外で端へ）と、記憶からの寄せが通らないことを書く。振る舞いは変えない
+  - `follow_work_area_clamp_chain_tests.rs` に設計の Testing の単体 3 の ⑴ ⑵ を置く
+  - 完了の状態: 2 本の檻が緑で、`opposite` を変えると落ちる
+  - _Dispatch: mechanical — 設計が doc の中身と檻の入力と期待を与えている_
+  - _Requirements: 1.5_
+
+- [x] 7. シェルの切り替えの置き直しを整合待ちの札のある窓で見送る（4 回目）
+  - 先に `reseed_tests.rs` に赤の檻を置く: 札のある窓に揃え方 `top` のシェルを入れて `reanchor_char_windows` → `debug_assert!` が `route=Some(AnchorChange)` で落ちる（`#[should_panic]` で確かめ、その結果を実装の記録に残す）
+  - `reanchor_char_windows` は札のある窓を置き直さず `debug!`（`event = "reseed_held"`・scope）を残す。札の無い窓は今のまま。経路語の分け方と檻の `EXPECTED` は変えない
+  - 赤の檻を設計の Testing の単体 7 の ⑵ ⑶ へ書き換える（札のある窓は前のまま・`reseed_held`・札の無い窓は動く／札を外して `DpiReproject` で新しい揃え方に置かれる）
+  - `follow/window_move.rs` の `AnchorChange` の説明と `resize_window_to` の上流の一覧、`follow/keyword_base.rs` の説明を今の事実へ直す（例外表のファイルは文に要る分の行だけ）
+  - 完了の状態: ⑵ ⑶ が緑で、見送りを外すと `debug_assert!` で落ちる。`cargo test -p areka-placement` が緑
+  - _Dispatch: standard — 赤の確かめから見送りの腕と後で当たる檻までを組む_
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 9.2, 9.6_
+
+- [x] 8. 本番の式の写しを共有の部品へ差し替える
+  - 設計の SharedCopies の表の本番の行のとおり: 91 の残り（`move_shift.rs` の根の `scale_signed`）・431（`clamp_x_into` を消して `resolver::clamp_axis`）・432（`from_monitors` を `work_area_px` へ・doc の `primary_work_area` を消す）・491（5 か所を `rect_at` へ・`rect_at` を `pub(crate)` にして `follow.rs` から crate へ出す）・`transition_diag::live_work_area_bottom` を `work_area_px` へ
+  - `lib.rs` の「根を引く子」の文に設計の 1 行を足す。`clamp_x_into` を名指す 2 つのテストの文を直す
+  - 完了の状態: 設計の G4 の 3 つ目の grep のうち `windowposition::scale_signed` が 0 行・`clamp_x_into` が 0 行で、今の limit・反転・記憶の戻し・可視・作業領域・移り変わりの記録の檻がそのまま緑（位置と矩形は変わらない）
+  - _Depends: 6.1, 7_
+  - _Dispatch: mechanical — 差し替える式と行き先を設計の表が対で与えている_
+  - _Requirements: 4.1, 4.4, 4.5, 4.6_
+
+- [x] 9. 手書きの記録の捕まえに番兵を足す
+  - `follow_transition_diag_tests.rs` の `resize_under_filter`・`follow_window_move_diag_tests.rs` の `window_move_output_under_filter` に、`diag_tests.rs` と同じ番兵（窓の中で 1 行出し、捕まらなければ panic）を足す。`capture_under_filter` へは寄せず、`env-filter` を宣言しない
+  - 完了の状態: 2 つの番兵の檻が緑で、捕まえの窓を閉じたまま出すと panic する
+  - _Dispatch: mechanical — 写す見本（`diag_tests.rs`）が形を決めている_
+  - _Requirements: 4.2_
+
+- [x] 10. 古い文を今の事実に直す
+  - 設計の StaleText のとおり: `follow_drag_tests.rs:144` の帳面の名を消して言いたいことを平らな文で残す・`crates/areka-runtime/src/placement_tests/transition_judge.rs:45-50` の置き場と宣言の文を今の事実へ（同じ行の数で）・`follow/sticky_follow.rs:379` の `scg` を spec の名前へ
+  - 完了の状態: 設計の G3 が 0 行・G4 の 3 つ目の grep の `scg` が 0 行・`transition_judge.rs` の行の数が 999 のまま
+  - _Dispatch: mechanical — 設計が直す文の中身を与えている_
+  - _Requirements: 4.3, 7.1, 7.3, 9.3_
+
+- [x] 11. 受け持つ範囲の名前の無い番号を消すか spec の名前を足す
+- [x] 11.1 配置の crate の本番のファイルの番号を直す
+  - `crates/areka-placement/src/follow*`・`transition_*` のうち `_tests.rs`・`*test_support*` でないファイル（今の数で約 275 行）を、設計の NumberCleanup の規則 1〜6 で直す（`follow/move_shift.rs` の「監査の指摘 1」「監査の指摘 5」・`follow.rs` の「task 1.4」「task 2.4」・`follow/drag_follow.rs` の「2.4」「4.5」を含む）。`follow.rs:52`・`:64` の「task 3.4」は 1 が同じ行の名指しを直した後なので、行をその場で測り直してから直す
+  - 完了の状態: 設計の G2 の 4 つの grep を本番のファイルに絞った unnamed が 0
+  - _Depends: 5, 6.3, 7, 8, 9, 10_
+  - _Dispatch: mechanical — 直し方の規則を設計が決めていて、行ごとに当てはめる_
+  - _Requirements: 7.2, 9.1, 9.2_
+- [x] 11.2 (P) 配置の crate のテストの番号を直す（前半）
+  - `crates/areka-placement/src/transition_diag_tests.rs` と、`crates/areka-placement/src/follow*` の `_tests.rs` と `*test_support*` のうち `git grep -l` の名前の順で `follow_s` より前のファイルを、同じ規則で直す（二重角括弧の 16 行のうち当たる分を含む）。11.1〜11.4 の受け持ちを合わせると G2 のパスの全部になる
+  - 完了の状態: G2 の 4 つの grep を受け持つファイルに絞った unnamed が 0
+  - _Boundary: placement transition_diag_tests and follow tests before follow_s_
+  - _Depends: 5, 6.3, 7, 8, 9, 10_
+  - _Dispatch: mechanical — 直し方の規則を設計が決めていて、行ごとに当てはめる_
+  - _Requirements: 7.2_
+- [x] 11.3 (P) 配置の crate のテストの番号を直す（後半）
+  - 11.2 の残りのテストのファイル（`follow_s` から後）を、同じ規則で直す
+  - 完了の状態: G2 の 4 つの grep を受け持つファイルに絞った unnamed が 0
+  - _Boundary: placement follow tests from follow_s_
+  - _Depends: 5, 6.3, 7, 8, 9, 10_
+  - _Dispatch: mechanical — 直し方の規則を設計が決めていて、行ごとに当てはめる_
+  - _Requirements: 7.2_
+- [x] 11.4 (P) `areka-runtime` の `placement_tests/transition_*` の番号を直す
+  - 16 ファイル（約 187 行）を同じ規則で直す。ファイルを足し引きせず、999 行の 2 ファイルは同じ行の中で書き換える。例外表の `transition_judge_verdict_tests.rs` は割らない
+  - 完了の状態: G2 の 4 つの grep をこの置き場に絞った unnamed が 0・`transition_judge.rs`・`transition_judge_tests.rs` が 999 行のまま
+  - _Boundary: runtime placement_tests transition_
+  - _Depends: 10_
+  - _Dispatch: mechanical — 直し方の規則を設計が決めていて、行ごとに当てはめる_
+  - _Requirements: 7.2, 9.2, 9.3_
+
+- [x] 12. 確かめと全体テスト
+  - 設計の「確かめ」の G1〜G6 を回す: G2 の 4 つとも unnamed=0・G1・G3・G4 が 0 行・G5 の 2 ファイルの行の数と番人が緑・G6 が空
+  - 残す件が 0 であること（要件 8 の 3 つに当たる件・裁定を覆す直し・SSP と ukadoc に関わる振る舞いの変更が無いこと）を確かめ、設計の段で足した件が無ければ要件の「確定した件」はそのまま
+  - 全体テスト `pwsh -NoProfile -File tools/test-all.ps1` を 1 回（排他テストの机で順を取る）。実機の根と一時フォルダは `target` の下だけ。audit はかけ直さない
+  - G1〜G6 の結果と行の数、wintf 0.2.0 の壊れる変更の知らせ（設計の「公開の段への影響」）の文を実装の記録に残す
+  - 完了の状態: G1〜G6 が設計の形の結果で、全体テストが緑で、その結果が記録にある
+  - _Dispatch: mechanical — 確かめの手順と合格の形を設計が逐語で与えている_
+  - _Requirements: 7.4, 8.1, 8.2, 8.3, 8.5, 9.4, 9.7, 9.8, 10.2, 10.3, 10.4, 10.5_
+
+## Implementation Notes
+- 2.2: 偽の HWND では wintf が始めの位置を `None` で入れるため、`follow::drag_end_gate_tests::fast_drag_places_window_at_destination_and_persists_once` が 3.2 まで赤（進行役が認めた）。テストの仮の手伝い `follow::test_support::zero_unknown_drag_origin`（`shortcut:` 付き・`balloon_lock_drag_tests.rs` と `follow_drag_end_gate_tests.rs` の `Rig::tick` から呼ぶ）は 3.2 で窓の位置の手伝いへ替えて消す。`follow_drag_end_gate_tests.rs:204` の「(0,0) のまま入る」も 3.2 で直す
+- 3.2: 2.2 の借りは返した（`zero_unknown_drag_origin` を消し、テストの支えの `drag_origin_at_window`＝`DraggingState` の挿入の観測者で始めの位置を窓の位置にする、へ替えた・分からないの檻は手伝い無しの `Rig::unknown_origin()`）
+- 4.2: G4 の 1 つ目の grep の残り 1 行（`follow/visibility.rs` の `clamp_x_into`）は本番の写しで、8 の持ち分。8 の完了で 0 行になる
+- 5: 隣り合いの印を確かめる檻は `GhostWindows` が要る（無いと `push_adjacency_marks` が早帰りして印 0 個どうしの比べになる）。本番の `spawn_ghost_windows` で窓の一式を組むこと
+- 6.1: 設計の Testing の「どれも (n−1, n) に戻すと落ちる」は ⑷ ⑸ に当たらない言い過ぎ（⑷ は鎖の相手の取り違え・⑸ は矩形の線の辺のスコープを守る檻）。辺のスコープ n の印の線を止める `chain.joins` は `edge_scope_mark_does_not_group_with_chain_prev` が守る
+- 11.1: G2 の grep は規則 5（task 番号を消した説明に残る素の要件番号）を測らない。11.2〜11.4 は、差分で足したコメント行のうち `\d+\.\d+` を含み spec のフォルダ名を含まない行を数える検査（違反 0）も完了の確かめに入れる。出どころは `git log --reverse -S` を crates の全体にかけて元のコミットの題と spec の本文で決める（移しただけのコミットで題が隠れる）
+- 7: 赤の確かめ（直す前）: `reseed_tests.rs` の `#[should_panic(expected = "route=Some(AnchorChange)")]` の檻で、`window_move.rs:686` の `debug_assert!` が「DpiSyncHold のある窓へ窓書込が到達した: entity=3v0 route=Some(AnchorChange) since_frame=1」で鳴った（should panic ok）。見送りを外す変異では ⑵ ⑶ が同じ文で落ちる
+- 完了の棚卸へ（feature の検証で見つけた・この spec の要件は満たす）: ⑴ `defaultx-canon/brief.md` の「この読みを使う道」に 4 つ目（`persist::restore_and_judge` が `ChainRule::from_terms` で `default_x: None` の Saved の鎖を組む）を申し送る ⑵ `audit-emo2-boot-frame/brief.md` へ、reseed が `DpiSyncHold` の窓を見送りシェルの切り替えの直後は最大 30 フレーム前の揃え方のまま残る点（設計の Revalidation Trigger 4・札が外れるフレームの dpi の相の本番の道は結合テストで固めていない）を申し送る ⑶ wintf 0.2.0 の壊れる変更の知らせ（`research.md`）を完了の PR の本文に入れる ⑷ 範囲の外に略称 `scg` が残る（`areka-runtime/src/frame.rs:333`・`frame/drain_resnap.rs`・`frame_chain_finalize_tests.rs`・`areka/src/ghost_session.rs:302`・`main_restore_seam_tests.rs`・`runtime_tests/frame_chain_finalize_*`）⑸ 設計の Testing の「どれも (n−1, n) に戻すと落ちる」は ⑷ ⑸ に当たらない（6.1 の記録）
+- 完了時にその場で解決: ⑷ 範囲の外の略称 `scg` を `areka-P0-scope-chain-gap` へ（8 ファイル・説明と記録と assert の文だけ・`real-machine-run.ps1` の照合の頭の字は変わらない）／⑸ design.md の Testing 単体 1 の「どれも落ちる」を ⑴〜⑶ と ⑷ ⑸ の落ち方へ直した。申し送り 2 件: ⑴ `defaultx-canon/brief.md`・⑵ `audit-emo2-boot-frame/brief.md`。⑶ は PR の本文へ。起票 0 件

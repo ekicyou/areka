@@ -3,15 +3,12 @@
 //! `TalkClock`（cue 観測による単調 max epoch 推定・クロック注入可・負値 0.0 clamp・
 //! epoch 未確立は `None`）と `ClockedTextSink<T: dola::cue::CueSink + Clone>`（`emit` 時に
 //! `observe_cue` した後に内側 sink へ透過転送）を所有する（sakura 契約型＋dola clock を消費）。
-//!
-//! 骨格のみ。`TalkClock::new`／`observe_cue`／`talk_time` と `ClockedTextSink` の実装は
-//! tasks.md task 2.2 が担う。
 
 use std::sync::{Arc, Mutex};
 
 use areka_sakura::TalkCue;
 
-/// talk 起点相対秒（`talk_time`）の時刻源（design.md「時刻源 / talk_clock」・R2.2/R2.3）。
+/// talk 起点相対秒（`talk_time`）の時刻源（areka-P0-emo2-boot design.md「時刻源 / talk_clock」・要件 2.2 / 2.3）。
 ///
 /// cue 到着観測（`observe_cue`）から talk 開始壁時刻（epoch）を**単調 max** で推定し、毎フレーム
 /// の `talk_time = frame_now − epoch`（負値は 0.0 clamp・epoch 未確立は `None`）を供給する。
@@ -37,9 +34,9 @@ impl TalkClock {
     /// cue 到着観測（worker スレッドから呼ばれる）。`epoch = max(epoch, clock() - at)`。
     ///
     /// 単調 max: 新 talk は到着壁時刻が前方へ跳ぶため epoch が自動リベースされ、talk 内ジッタ
-    /// （より小さい `clock() - at`）は max に負けて逆行しない（design.md「時刻源 / talk_clock」）。
+    /// （より小さい `clock() - at`）は max に負けて逆行しない（areka-P0-emo2-boot design.md「時刻源 / talk_clock」）。
     pub fn observe_cue(&self, at: f64) {
-        // クロック取得は Mutex の外で行い、保持は代入の一瞬のみに留める（design State Management）。
+        // クロック取得は Mutex の外で行い、保持は代入の一瞬のみに留める（areka-P0-emo2-boot design State Management）。
         let candidate = (self.clock)() - at;
         match self.epoch.lock() {
             Ok(mut guard) => {
@@ -82,7 +79,7 @@ impl TalkClock {
     }
 }
 
-/// 単一の出力契約 [`dola::cue::CueSink`] に talk 時刻観測を挟むデコレータ（design.md「時刻源 / talk_clock」）。
+/// 単一の出力契約 [`dola::cue::CueSink`] に talk 時刻観測を挟むデコレータ（areka-P0-emo2-boot design.md「時刻源 / talk_clock」）。
 ///
 /// `emit` ごとに `cue.at` を [`TalkClock::observe_cue`] へ渡して epoch を推定し、その後 cue を
 /// **非改変**で内側 sink（本番は `EmoTextSink`）へ透過転送する。`T: Send` のとき自動的に `Send`
@@ -103,8 +100,8 @@ impl<T: dola::cue::CueSink + Clone> ClockedTextSink<T> {
 }
 
 /// 演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する（`areka_ghost::boot` の broadcast
-/// 登録先が要求する形・task 7.1）。broadcast 下では担当外 cue（`Emote` 等）も本 sink へ届くが、
-/// `observe_cue` は `cue.at` 一貫で epoch を単調 max 推定するため無害（設計 §Revalidation Triggers）。
+/// 登録先が要求する形）。broadcast 下では担当外 cue（`Emote` 等）も本 sink へ届くが、
+/// `observe_cue` は `cue.at` 一貫で epoch を単調 max 推定するため無害（areka-P0-emo2-boot 設計 §Revalidation Triggers）。
 /// 内側 sink（本番は `EmoTextSink`）へ `CueSink::emit` で非改変転送し、先渡し（`preview`）も
 /// 時刻を観測せずに内側へ通す。選択待ちの始まり（`choice_wait_began`）も同じく内側へ通す。
 impl<T: dola::cue::CueSink + Clone> dola::cue::CueSink for ClockedTextSink<T> {
@@ -134,27 +131,30 @@ impl<T: dola::cue::CueSink + Clone> dola::cue::CueSink for ClockedTextSink<T> {
     }
 }
 
+/// テスト用の可制御クロック: 返り値の `Arc<Mutex<f64>>` に「壁時刻」を書けば、
+/// `TalkClock` がその時刻を読む（決定論・注入クロック）。
+#[cfg(test)]
+pub(crate) fn controllable_clock() -> (Arc<Mutex<f64>>, TalkClock) {
+    let now = Arc::new(Mutex::new(0.0f64));
+    let now_for_clock = Arc::clone(&now);
+    let clock = TalkClock::new(Arc::new(move || {
+        *now_for_clock.lock().expect("test clock mutex poisoned")
+    }));
+    (now, clock)
+}
+
+/// 可制御クロックの「壁時刻」を書き換える。
+#[cfg(test)]
+pub(crate) fn set_now(now: &Arc<Mutex<f64>>, wall: f64) {
+    *now.lock().expect("test clock mutex poisoned") = wall;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use areka_sakura::{ActorKey, CueCommand};
     use dola::cue::CueSink;
     use std::sync::{Arc, Mutex};
-
-    /// テスト用の可制御クロック: 返り値の `Arc<Mutex<f64>>` に「壁時刻」を書けば、
-    /// クロージャがその時刻を返す（決定論・注入クロック）。
-    fn controllable_clock() -> (Arc<Mutex<f64>>, Arc<dyn Fn() -> f64 + Send + Sync>) {
-        let now = Arc::new(Mutex::new(0.0f64));
-        let now_for_clock = Arc::clone(&now);
-        let clock: Arc<dyn Fn() -> f64 + Send + Sync> =
-            Arc::new(move || *now_for_clock.lock().expect("test clock mutex poisoned"));
-        (now, clock)
-    }
-
-    /// 可制御クロックの「壁時刻」を書き換える。
-    fn set_now(now: &Arc<Mutex<f64>>, wall: f64) {
-        *now.lock().expect("test clock mutex poisoned") = wall;
-    }
 
     /// テスト用の記録 `CueSink`（`ClockedTextSink<T: dola::cue::CueSink + Clone>` に載せるため Clone）。
     #[derive(Clone)]
@@ -233,8 +233,8 @@ mod tests {
     }
 
     /// boot の型境界（`dola::cue::CueSink + Clone + Send + 'static`）を `ClockedTextSink<T>` が
-    /// 保つことをコンパイル時に固定する（具体 `EmoTextSink` 結線は task 5.1 の責務ゆえ、
-    /// ここでは汎用の Send な `CueSink` 実装で型のみを表明する）。
+    /// 保つことをコンパイル時に固定する。型の境界だけを汎用の Send な `CueSink` 実装で確かめる
+    /// （具体の `EmoTextSink` との結線は `crates/areka/src/session/runtime_boot.rs` にある）。
     fn assert_send_clone_static<T: dola::cue::CueSink + Clone + Send + 'static>() {
         fn require<X: Send + Clone + 'static>() {}
         require::<ClockedTextSink<T>>();
@@ -243,8 +243,7 @@ mod tests {
     /// 観測可能な完了条件: 新 talk 到着で epoch が前方へリベースされる（単調 max）。
     #[test]
     fn new_talk_rebases_epoch_forward() {
-        let (now, clock) = controllable_clock();
-        let tc = TalkClock::new(clock);
+        let (now, tc) = controllable_clock();
         // PROBE は epoch より十分大きく取り talk_time が clamp されないようにする
         // （epoch = PROBE - talk_time(PROBE) で epoch 値を逆算できる）。
         const PROBE: f64 = 10_000.0;
@@ -294,8 +293,7 @@ mod tests {
     /// talk 内ジッタ（より小さい candidate）は単調 max に負けて epoch を下げない。
     #[test]
     fn intra_talk_jitter_does_not_lower_epoch() {
-        let (now, clock) = controllable_clock();
-        let tc = TalkClock::new(clock);
+        let (now, tc) = controllable_clock();
         const PROBE: f64 = 10_000.0;
 
         // epoch 確立: 壁 100.0・at 0.0 → epoch = 100.0。
@@ -321,8 +319,7 @@ mod tests {
     /// epoch 未確立（observe_cue 未呼出）は `talk_time` が常に `None`。
     #[test]
     fn fresh_clock_has_no_epoch() {
-        let (_now, clock) = controllable_clock();
-        let tc = TalkClock::new(clock);
+        let (_now, tc) = controllable_clock();
         assert_eq!(tc.talk_time(0.0), None);
         assert_eq!(tc.talk_time(12_345.6), None);
         assert_eq!(tc.talk_time(-5.0), None);
@@ -331,8 +328,7 @@ mod tests {
     /// `frame_now < epoch` の負値経過は 0.0 へ clamp（境界 `==` はちょうど 0.0）。
     #[test]
     fn talk_time_clamps_negative_to_zero() {
-        let (now, clock) = controllable_clock();
-        let tc = TalkClock::new(clock);
+        let (now, tc) = controllable_clock();
         // epoch = 500.0。
         set_now(&now, 500.0);
         tc.observe_cue(0.0);
@@ -350,9 +346,8 @@ mod tests {
     /// `ClockedTextSink::emit` は (a) 内側へ cue を非改変転送し、(b) `cue.at` を観測する。
     #[test]
     fn clocked_sink_forwards_cue_unchanged_and_observes_at() {
-        let (now, clock) = controllable_clock();
+        let (now, tc) = controllable_clock();
         set_now(&now, 300.0);
-        let tc = TalkClock::new(clock);
         let inner = RecordingTextSink::new();
         // inner を clone してテスト側の観測ハンドルを保持（Arc 共有ゆえ内側の記録が見える）。
         let mut sink = ClockedTextSink::new(inner.clone(), tc.clone());
@@ -394,8 +389,7 @@ mod tests {
     /// （先渡しは「その時刻に届いた」出来事ではないので、トークの頭の時刻の見積もりに混ぜない）。
     #[test]
     fn clocked_sink_passes_preview_through_without_observing() {
-        let (now, clock) = controllable_clock();
-        let tc = TalkClock::new(clock);
+        let (now, tc) = controllable_clock();
         let inner = RecordingTextSink::new();
         let mut sink = ClockedTextSink::new(inner.clone(), tc.clone());
 
@@ -446,8 +440,7 @@ mod tests {
     /// 何もしないに落ちて押下で済まなくなる・areka-P0-balloon-text-bugs 要件 1.10/1.11）、時刻は観測しない。
     #[test]
     fn clocked_sink_forwards_choice_wait_began() {
-        let (_now, clock) = controllable_clock();
-        let tc = TalkClock::new(clock);
+        let (_now, tc) = controllable_clock();
         let inner = RecordingTextSink::new();
         let mut sink = ClockedTextSink::new(inner.clone(), tc.clone());
 
@@ -467,8 +460,7 @@ mod tests {
     /// 1 回だけ通す（通さないと名前の形の `\b` の知らせが文字の層へ届かない・spec mcp-strict-errors）。
     #[test]
     fn clocked_sink_forwards_emit_with_after_observing_time() {
-        let (now, clock) = controllable_clock();
-        let tc = TalkClock::new(clock);
+        let (now, tc) = controllable_clock();
         let inner = RecordingTextSink::new();
         let mut sink = ClockedTextSink::new(inner.clone(), tc.clone());
         let probe = dola::cue::CueProbe::new(|_| {});

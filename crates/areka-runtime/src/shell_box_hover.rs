@@ -1,7 +1,7 @@
 //! 箱の上の滞在（`ShellBoxHover`）と毎フレームの整え（`settle_box_hover`）。
 //!
 //! 可視性の相（`balloon_visibility_phase`）が読み、入力の側（`input_events::shell_box`）が書く。
-//! 入力の側は `pub(crate) use` で出し直す（runtime-module-untangle 3.3・中身は `input_events/shell_box.rs` から移したまま）。
+//! 入力の側は `pub(crate) use` で出し直す（runtime-module-untangle・中身は `input_events/shell_box.rs` から移したまま）。
 
 use std::collections::HashMap;
 

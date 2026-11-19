@@ -1,4 +1,4 @@
-//! 偽の SHIORI（[`ScriptedShioriBackend`]）の「解かれるまで固まる」台本（要件 7.1）。
+//! 偽の SHIORI（[`ScriptedShioriBackend`](super::ScriptedShioriBackend)）の「解かれるまで固まる」台本。
 //!
 //! 指定した呼び出し（GET・NOTIFY の id 指定・UNLOAD）に入ると、外から解く手（`unblock_handle`）が
 //! 呼ばれるまで待ち、解かれたら失敗を返す。
@@ -15,8 +15,6 @@
 //! 固まるのは台本 1 件につき最初の 1 回だけで、固まった呼び出しは台本の応答を
 //! 消費しない（2 回目以降の同じ呼び出しは台本どおりに返る）。解く手が先に呼ばれていれば待たずに
 //! 通る（順序に依らない）。
-//!
-//! 本体（`spine.rs`）が 1,000 行の目安に近いので、台本の部品はこの兄弟ファイルに置く。
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -48,7 +46,7 @@ struct GateState {
 }
 
 /// 固まる往復（shiori のアクタースレッド）と解く手（別スレッド）の置き場。
-pub struct HoldGate {
+pub(super) struct HoldGate {
     state: Mutex<GateState>,
     wake: Condvar,
     unblock_calls: AtomicUsize,

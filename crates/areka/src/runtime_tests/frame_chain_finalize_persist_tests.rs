@@ -273,7 +273,7 @@ fn partner_moved_by_shiori_before_finalize_is_not_written() {
 
 /// テスト 11c（要件 1.7）: 並べ終える前に、記憶に位置が無い相方を `\![move]`（基準は自分・Y だけ
 /// 動かす・時間 0）で**縦にだけ**動かすと、x は既定のままでも台本が置いた窓なので並べ直しは
-/// 相方を動かさず（scg 7.3）、相方は書かれず本体だけ書かれる（台本の y は既定の位置に入らない）。
+/// 相方を動かさず（areka-P0-scope-chain-gap 7.3）、相方は書かれず本体だけ書かれる（台本の y は既定の位置に入らない）。
 /// 相方の記憶には目印を入れておき、書けば目印が消えることで見分ける。
 #[test]
 fn partner_moved_only_vertically_by_shiori_before_finalize_is_not_written() {
@@ -306,7 +306,7 @@ fn partner_moved_only_vertically_by_shiori_before_finalize_is_not_written() {
     assert_eq!(
         (partner.x, partner.y),
         (start.x, start.y - 33),
-        "並べ直しは台本が置いた相方をそこから動かさない（scg 7.3）"
+        "並べ直しは台本が置いた相方をそこから動かさない（areka-P0-scope-chain-gap 7.3）"
     );
     let saved = store.load();
     assert_eq!(

@@ -108,8 +108,7 @@ impl Rig {
         let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         )));
-        let (sink, drain) =
-            spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+        let (sink, drain) = spawn_emo_text(Rc::clone(&runtime));
         Rig {
             runtime,
             world: World::new(),

@@ -1,61 +1,41 @@
 // =============================================================================
-// タグ入口の結線（task 6.2・要件 11.2）と、shell 設定由来の基底の起動時結線
-// （task 6.3・要件 5.1／5.2）の決定論テスト
+// タグ入口の結線（areka-P0-scope-zorder-pinning 要件 11.2）と、shell 設定由来の基底の起動時結線
+// （areka-P0-scope-zorder-pinning 要件 5.1／5.2）の決定論テストのうち、`areka-runtime` の側にあるもの
 //
-// この task が足すのは判断ではなく**配線**である。受け口も台帳も相の本体も既に在って
-// 兄弟のテストが判断を全部押さえているので、ここで測るのは 3 点だけになる。
+// ここで確かめるのは判断ではなく**配線**である。受け口も台帳も相の本体も既に在って
+// 兄弟のテストが判断を全部押さえているので、ここで測るのは次の 3 点だけになる。
 //
-// 1. タグを含む台本が受け口へ届くと、指令が**台帳適用の相まで**通ること（到達性）。
-// 2. その相が**鎖の適用系より前**に走ること（相順）。
-// 3. 結線の字面そのもの（受け渡し口・入口の登録・受け渡し構造・相の呼出）。
-//
-// 3 を字面で押さえるのは、配線の欠けが挙動に現れにくいからである。呼出を丸ごと削っても
-// 判断のテストは 1 本も赤くならず（task 4.2／5.1／5.2 で三度実証済み）、相順に至っては
-// 「是正が 1 心拍ぶん遅れる」だけなので、実窓を持たない檻には**原理的に**映らない。
-//
-// 相順は 2 で挙動としても測る——ただし測れるのは「確定段へ `.before` で載せた仕事が
-// 同じ巡のうちに適用系から見えるか」という**機構**であって、本番の `frame_system`
-// がその形で載っていることは 3 の字面が受け持つ（本番の相は `RuntimeWiring` が挿さっていない
-// World では丸ごと無操作なので、headless の檻からは観測できない）。
+// 1. タグを含む台本が受け口へ届くと、指令が**台帳適用の相まで**通ること（到達性・zwi01／02）。
+// 2. 相順と相の呼出の字面（zwi06／07）。呼出を丸ごと削っても判断のテストは 1 本も赤くならず
+//    （実際に削って確かめてある）、相順に至っては「是正が 1 心拍ぶん遅れる」だけなので、
+//    実窓を持たない檻には**原理的に**映らない。
+// 3. shell 設定由来の基底を据える側（`lib.rs`）の字面（zwi09）。据える行を落としても
+//    「設定を書いていないゴースト」と全く同じ挙動になるので、挙動を見る檻には映らない。
 //
 // 字面の走査は必ず**説明文を落とした本文**へ当てる。素の全文には本ファイルの説明の語も
 // 相手ファイルの doc の語も入るので、当てる先を間違えると検査が恒真になる
-// （task 3.1 の教訓。各檻の末尾に両方向の対照を置いてある）。
+// （各檻の末尾に両方向の対照を置いてある）。
 //
-// task 6.3 が足す 2 本（⑷）も同じ性質を持つ——設定の値を起動の段まで運ぶ経路は、
-// 途中の 1 行を落としても「設定を書いていないゴースト」と全く同じ挙動になるので、
-// 挙動を見る檻には**原理的に**映らない。運ぶ側（`main.rs`）と据える側（`mod.rs`）の
-// 字面をそれぞれ名指しで押さえる。据えた値が実際に効くことは兄弟の
-// `frame/zorder_descript_tests.rs` が挙動で受け持つ。
+// 起動の結線の字面（zwi05）と、設定の値を `main` から結線へ運ぶ行の字面（zwi08）は、
+// `areka` の `runtime_tests/` の同じ名前のファイルにある。
 // =============================================================================
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use std::sync::mpsc::channel;
-use wintf::ecs::FrameFinalize;
-use wintf::ecs::window::{ZOrderChainPlan, apply_zorder_chain};
+use wintf::ecs::window::ZOrderChainPlan;
 
 use super::frame::run_zorder_drain_phase;
-use super::source_text_test_support::{code_only, squeeze};
+use super::source_text_test_support::{code_only, index_of, squeeze};
 use super::zorder_cue::{ZOrderCueSink, ZOrderDirective};
+use crate::consumer_ledger::test_support::carrier_cue;
 use areka_placement::follow::OffsetBase;
 use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
-use areka_placement::spawn::{spawn_ghost_windows, wire_zorder_pair};
+use areka_placement::spawn::spawn_ghost_windows;
 use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
 // ---------------------------------------------------------------- 道具立て
-
-/// `\![name,tokens...]` の汎用キャリア cue を組む（正準形＝`Custom` の String 配列）。
-fn carrier_cue(name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
 
 /// 文字の cue（台本の大半はこれで、受け口には全部届く）。
 fn text_cue(text: &str) -> TalkCue {
@@ -101,22 +81,15 @@ fn world_with_scopes(scopes: &[usize]) -> World {
     world
 }
 
-/// 字面の現れる位置（無ければその場で落として、檻の前提が崩れたことを名指しで告げる）。
-fn index_of(haystack: &str, needle: &str) -> usize {
-    haystack
-        .find(needle)
-        .unwrap_or_else(|| panic!("檻の錨が本文に見当たらない（前提が崩れている）: {needle}"))
-}
-
 // ---------------------------------------------------------------------------
-// ⑴ 到達性——タグを含む台本が台帳適用の相まで届く（完了状態）
+// 到達性——タグを含む台本が台帳適用の相まで届く（完了状態）
 // ---------------------------------------------------------------------------
 
 /// 台本に混ざった `\![set,zorder,1,0]` が、受け口→受け渡し口→取り出しの相を通って
-/// **台帳に載る**（task 6.2 の完了状態）。
+/// **台帳に載る**。
 ///
 /// 台本には他人宛の演出も文字も流れるので、同じ受け口へまとめて浴びせる。届いてよいのは
-/// 1 本だけであり、他の cue は台帳にも受け口にも痕跡を残さない（要件 11.2）。
+/// 1 本だけであり、他の cue は台帳にも受け口にも痕跡を残さない（areka-P0-scope-zorder-pinning 要件 11.2）。
 #[test]
 fn t_zwi01_a_script_tag_reaches_the_ledger_through_the_wired_channel() {
     let (tx, rx) = channel::<ZOrderDirective>();
@@ -169,7 +142,7 @@ fn t_zwi01_a_script_tag_reaches_the_ledger_through_the_wired_channel() {
 }
 
 /// 逆側——重なりのタグを 1 本も含まない台本では、受け口の Resource すら作られない
-/// （要件 11.2「担当が存在しないコマンドは従来どおり良性に読み飛ばされる」）。
+/// （areka-P0-scope-zorder-pinning 要件 11.2「担当が存在しないコマンドは従来どおり良性に読み飛ばされる」）。
 ///
 /// 上の檻だけでは「何を浴びせても 1 本載る」形と区別が付かない。
 #[test]
@@ -196,72 +169,8 @@ fn t_zwi02_a_script_without_the_tag_leaves_the_mechanism_absent() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// ⑵ 相順——確定段へ `.before` で載せた仕事は同じ巡のうちに適用系から見える
-// ---------------------------------------------------------------------------
-
-/// 確定段の stand-in——受け口の印を立てるだけの最小の仕事（本番では取り出しの相が立てる）。
-fn raise_the_dirty_mark(mut plan: ResMut<ZOrderChainPlan>) {
-    plan.dirty = true;
-}
-
-/// 本番と同じ順序で確定段を組んだ World（`wire_zorder_pair` が 4 本を先に載せる）。
-///
-/// 本番の登録の入口（`ghost_session::register_systems`）も `wire_zorder_pair` で確定段へ 4 本を
-/// 載せる。同じ段に後から載せる仕事は、順序指定を落とすと適用系との前後が定まらない。
-fn wired_finalize_world() -> World {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    world.insert_resource(ZOrderChainPlan {
-        chain: None,
-        dirty: false,
-    });
-    wire_zorder_pair(&mut world);
-    world
-}
-
-/// 適用系より**前**に載せた仕事は、同じ巡のうちに適用系が読む。
-///
-/// 読めた証拠は印が降りていることである——印は適用系だけが降ろす。適用系が先に走っていれば
-/// その巡の印はまだ立っておらず、後から立った印はそのまま残る（下の対の檻）。
-#[test]
-fn t_zwi03_work_placed_before_the_chain_apply_is_seen_in_the_same_pass() {
-    let mut world = wired_finalize_world();
-    world.resource_mut::<Schedules>().add_systems(
-        FrameFinalize,
-        raise_the_dirty_mark.before(apply_zorder_chain),
-    );
-
-    world.run_schedule(FrameFinalize);
-
-    assert!(
-        !world.resource::<ZOrderChainPlan>().dirty,
-        "適用系より前に立てた印が同じ巡で消費されていない（相順の機構が効いていない）"
-    );
-}
-
-/// 逆側——適用系より**後ろ**に載せると、その巡は誰も読まない（組み替えが 1 心拍ぶん遅れる）。
-///
-/// 片側だけでは空虚である。印が常に降りる World でも、常に残る World でも、片方の主張は
-/// 緑になる。この対があって初めて「印の値が相順を読んでいる」と言える。
-#[test]
-fn t_zwi04_work_placed_after_the_chain_apply_is_one_heartbeat_late() {
-    let mut world = wired_finalize_world();
-    world.resource_mut::<Schedules>().add_systems(
-        FrameFinalize,
-        raise_the_dirty_mark.after(apply_zorder_chain),
-    );
-
-    world.run_schedule(FrameFinalize);
-
-    assert!(
-        world.resource::<ZOrderChainPlan>().dirty,
-        "適用系より後ろに立てた印がその巡で消えている（対照が成立していない＝上の檻が空虚）"
-    );
-}
-
-/// 毎フレームの相は**鎖の適用系より前**に走る（task 3.2 の必須事項）——ただしその順序を
-/// 与えるのは `.before` ではなく**段そのものの並び**である（裁定 2026-09-12・要件 2.4）。
+/// 毎フレームの相は**鎖の適用系より前**に走る——ただしその順序を
+/// 与えるのは `.before` ではなく**段そのものの並び**である。
 ///
 /// 相の登録先は 1 巡の末尾の段（`FrameFinalize`）から `Update` へ移った（絵の着地を文字と
 /// 同じ巡に揃えるため）。段をまたぐ順序指定は書けないので、順序を担うのは 13 段の並びに
@@ -269,9 +178,9 @@ fn t_zwi04_work_placed_after_the_chain_apply_is_one_heartbeat_late() {
 /// 適用系が読む。
 ///
 /// 後ろに載ると、相が組んだ望む鎖を適用系が読むのが 1 心拍ぶん遅れる。遅れるだけで結果は
-/// 同じなので、挙動を見る檻には映らない——ここは 3 点を名指しで押さえる。本番の登録先が
-/// `Update` であること（旧い `.before` の形が残っていないこと）・適用系が末尾の段に載る
-/// こと・その 2 段が 1 巡でこの前後関係に回ること。登録先そのものの構造の檻は
+/// 同じなので、挙動を見る檻には映らない——ここは 2 点を名指しで押さえる。本番の登録先が
+/// `Update` であること（旧い `.before` の形が残っていないこと）・その段が 1 巡で末尾の段
+/// より前に回ること。登録先そのものの構造の檻は
 /// `frame_schedule_tests.rs`（T-N10）が受け持つ。
 #[test]
 fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
@@ -286,13 +195,6 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
     assert!(
         !squeezed.contains("frame_system.before(apply_zorder_chain)"),
         "旧い段内の順序指定（`.before(apply_zorder_chain)`）が残っている（段をまたぐ順序は指定できない）"
-    );
-
-    // 適用系は末尾の段に載る（`wire_zorder_pair` が 4 本を据える）。
-    let world = wired_finalize_world();
-    assert!(
-        world.resource::<Schedules>().contains(FrameFinalize),
-        "鎖の適用系が末尾の段に載っていない（前後関係の相手が居ない）"
     );
 
     // その 2 段は 1 巡でこの前後に回る（並びの正本は wintf・`try_tick_world` の実行順）。
@@ -316,11 +218,11 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
         "説明文を落とす処理が本文まで落としている"
     );
     assert!(
-        !code.contains("依存方向（レイヤ規律・design.md"),
+        !code.contains("各サブモジュールが機能の実装を持つ。"),
         "説明文が落ちていない（走査が恒真になっている）"
     );
     assert!(
-        raw.contains("依存方向（レイヤ規律・design.md"),
+        raw.contains("各サブモジュールが機能の実装を持つ。"),
         "対照の前提が崩れている（素の全文に説明文が無い）"
     );
 }
@@ -330,7 +232,7 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
 /// `\![move]` の取り出しは areka-P0-move-canon（design D4）で再スナップの後へ移ったが、
 /// 本相の置き場は変えていない（鎖の適用系より前であることは段の並びが担う）。
 ///
-/// 呼出を丸ごと削っても判断の檻は 1 本も赤くならない（task 4.2／5.1／5.2 で三度実証）。
+/// 呼出を丸ごと削っても判断の檻は 1 本も赤くならない（実際に削って確かめてある）。
 /// ここが唯一その削除を捕まえる。
 #[test]
 fn t_zwi07_the_frame_calls_the_zorder_drain_after_the_size_reconcile() {
@@ -376,7 +278,7 @@ fn t_zwi07_the_frame_calls_the_zorder_drain_after_the_size_reconcile() {
     );
 }
 
-/// 結線は台帳へ基底を据えてから結線状態を World へ載せる（要件 5.1 の適用時点）。
+/// 結線は台帳へ基底を据えてから結線状態を World へ載せる（areka-P0-scope-zorder-pinning 要件 5.1 の適用時点）。
 ///
 /// 順序が逆になると結線状態は既に move 済みで種を蒔けない（コンパイルが通らない）ため、
 /// ここが押さえるのは**呼出が 1 つだけ在ること**と**載せるより手前に在ること**である。

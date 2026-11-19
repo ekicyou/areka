@@ -1,6 +1,6 @@
 //! `ArekaStrictJudges` の答えが `check_script` と同じ物差しの写しであること（spec: mcp-strict-errors 要件 2.7）。
 
-// ---- 文書を読む通しの檻（spec: mcp-strict-errors task 9.2・要件 2.2・2.4・2.7・4.5・7.1・7.2・7.6） ----
+// ---- 文書を読む通しの檻（spec: mcp-strict-errors 要件 2.2・2.4・2.7・4.5・7.1・7.2・7.6） ----
 //
 // 実の走査（`parse_noted` → `compile_strict`）・覆い（`StrictTap`）・事実を入れた表情の受け口
 // （`SerikoSink`）・areka の判定・文字の層の受け手（`EmoTextSink`）を、`talk_handler` でテストの
@@ -29,11 +29,11 @@ mod doc_tables {
     };
     use bevy_ecs::world::World;
     use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-    use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-    use wintf::executor::{FilterResult, MessageLoop};
 
     use crate::log_history::{FieldText, Kind, TARGET_ERROR, draft};
     use crate::mcp::check_script_judge::diagnose;
+    // この中の汲み尽くしは背骨の足場（`spine.rs`）のものを使う。
+    use crate::runtime_tests::spine::pump_until_idle;
     use areka_runtime::consumer_ledger::ConsumerLedger;
     use areka_runtime::shell_box_assets::ShellBoxAssets;
     use areka_runtime::strict_judges::ArekaStrictJudges;
@@ -146,13 +146,6 @@ element1,balloon,a,0,0
         }
     }
 
-    /// このスレッドの待ち行列に積まれた伝言を全部汲んでから抜ける（`spine.rs` の `pump_until_idle` と同じ定石）。
-    fn pump_until_idle() {
-        // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ。
-        unsafe { PostQuitMessage(0) };
-        MessageLoop::run(|_, _| FilterResult::Forward);
-    }
-
     /// 台本を strict で最後まで（選択肢で終わるなら選択待ちまで）再生し、残った strict の記録を順に返す。
     fn play(script: &str) -> Vec<Rec> {
         let ((), events) = log_capture_kit::capture(|| {
@@ -175,8 +168,7 @@ element1,balloon,a,0,0
                 command: CueCommand::Emote { key: "0".into() },
                 duration: 0.0,
             });
-            let (text, _drain) =
-                spawn_emo_text(Rc::clone(&runtime)).expect("このスレッドで文字の線を起こせる");
+            let (text, _drain) = spawn_emo_text(Rc::clone(&runtime));
             // 表情の受け口: 今のシェルとバルーンの事実を入れる。
             let (surface, _seriko) = spawn_seriko(
                 SurfaceResolver::new(aliases()),
@@ -229,13 +221,13 @@ element1,balloon,a,0,0
             .collect()
     }
 
-    /// 記録の target はエラーログの target（`get_log` の `log_type=error` で読める・2.2）。
+    /// 記録の target はエラーログの target（`get_log` の `log_type=error` で読める・mcp-strict-errors 要件 2.2）。
     #[test]
     fn record_target_is_the_error_log_target() {
         assert_eq!(RECORD_TARGET, TARGET_ERROR);
     }
 
-    /// ⑶ の 17 行: 「出る台本」で文書の種類と文面の記録が 1 件残り、「出ない台本」で残らない（7.1・2.4）。
+    /// ⑶ の 17 行: 「出る台本」で文書の種類と文面の記録が 1 件残り、「出ない台本」で残らない（mcp-strict-errors 要件 7.1・2.4）。
     #[test]
     fn diagnostic_rows_replay_as_the_document_says() {
         // （種類, 場合, 文面）。
@@ -255,7 +247,6 @@ element1,balloon,a,0,0
             _ => "—",
         };
         let rows = table("diagnostic-rows");
-        let mut checked = 0;
         for c in &rows {
             let row: usize = c[0].parse().expect("行の番号");
             let kind = unquote(&c[1]);
@@ -300,12 +291,11 @@ element1,balloon,a,0,0
             for script in &green {
                 assert_eq!(play(script), [], "{row} 行目 {script}");
             }
-            checked += 1;
         }
-        assert_eq!((checked, rows.len()), (17, 17), "確かめた行の数と ⑶ の行数");
+        assert_eq!(rows.len(), 17, "⑶ の行数");
     }
 
-    /// 誤りを複数含む台本で、記録の種類・位置・綴り・文面・順が `check_script` の診断と同じ（7.2・2.7）。
+    /// 誤りを複数含む台本で、記録の種類・位置・綴り・文面・順が `check_script` の診断と同じ（mcp-strict-errors 要件 7.2・2.7）。
     #[test]
     fn records_match_check_script_diagnostics() {
         let script = r"\s[99999]あ\x\![nosuch]\b[99]\f[sub,1]\_w[abc]い\_u[0]\s[-2]\_a[x]う\_a[y]え\_a\![set,choicetimeout,abc]\f[colour,red]\_a";
@@ -335,7 +325,7 @@ element1,balloon,a,0,0
     }
 
     /// 検出点の表: 列挙の名前の集まりと「点」の列が同じで数も同じ。各行の赤の台本でその点の記録が
-    /// ちょうど 1 件、緑の台本で 0 件（4.5・7.6）。
+    /// ちょうど 1 件、緑の台本で 0 件（mcp-strict-errors 要件 4.5・7.6）。
     #[test]
     fn detection_point_table_matches_the_enumeration() {
         let rows = table("strict-points");

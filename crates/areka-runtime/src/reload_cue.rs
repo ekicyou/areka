@@ -1,4 +1,4 @@
-//! `\![reload,…]`・`\![reloadsurface]` の受け口（design「ReloadCueSink」・要件 1.4・1.5・10.3）。
+//! `\![reload,…]`・`\![reloadsurface]` の受け口（areka-P0-mcp-reload design「ReloadCueSink」・要件 1.4・1.5・10.3）。
 //!
 //! 骨格は `change_cue.rs` と同型。台本の演出は全員へ配られるので、本受け口にも他人宛のコマンドが
 //! 届く。ここで行うのは次の 2 つに限る。
@@ -6,16 +6,16 @@
 //! 1. **自己選別**——`reload_args::parse_script` が `Some` を返す綴り（`\![reload,ghost|shiori|
 //!    shell|balloon|descript(,パラメータ)]`・`\![reloadsurface]`）だけを受理する。`\![reload,makoto]`・
 //!    `\![reload,aigraph]`・引数なしの `\![reload]`・他の名前は担当外として `debug!` で読み飛ばす
-//!    （要件 1.5・10.3）。
+//!    （areka-P0-mcp-reload 要件 1.5・10.3）。
 //! 2. **送り出し**——`parse_script` の写し（対象と descript の語の仕分け）をそのまま UI へ送る。
 //!    断る・始めるの判定は UI 側の窓口（`reload::request_reload`）の仕事である。
 //!
 //! 受信端が閉じていても（ゴーストが居ない場面）台本は殺さない（`warn!` を残して継続する）。
 //!
-//! 受信端 [`ReloadRx`] とその据え付け [`wire_reload_rx`] もここに置く。受け口の dispatcher への登録と
+//! 受信端 `ReloadRx` とその据え付け `wire_reload_rx` もここに置く。受け口の dispatcher への登録と
 //! 受信端の据え付けは `runtime_boot` が行う。毎フレームの取り出し（`try_iter` の呼び手）は `reload::drain`。
 
-use std::sync::mpsc::{Receiver, Sender, TryIter};
+use std::sync::mpsc::{Receiver, SendError, Sender, TryIter};
 
 use bevy_ecs::world::World;
 use dola::cue::{CueCommand, TalkCue};
@@ -23,7 +23,7 @@ use tracing::{debug, warn};
 
 use super::reload_args::{ScriptReload, parse_script};
 
-/// `\![reload,…]` の受け口（design「ReloadCueSink」）。
+/// `\![reload,…]` の受け口（areka-P0-mcp-reload design「ReloadCueSink」）。
 ///
 /// 配送は台本ごとに受け口を複製するため [`Clone`] が要る（どの複製も単一の受信端へ届く）。
 #[derive(Clone)]
@@ -74,11 +74,11 @@ impl dola::cue::CueSink for ReloadCueSink {
         };
 
         // 3) 送り出し。受信端が閉じていても台本は殺さない。
-        let target = format!("{:?}", reload.target);
-        if self.tx.send(reload).is_err() {
+        if let Err(SendError(reload)) = self.tx.send(reload) {
             warn!(
                 event = "reload_cue_send_failed",
-                target, "[ReloadCueSink] 読み直しの要求を送り出せなかった（受信端が閉じている）"
+                target = ?reload.target,
+                "[ReloadCueSink] 読み直しの要求を送り出せなかった（受信端が閉じている）"
             );
         }
     }

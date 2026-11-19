@@ -190,8 +190,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
         .register_actor_view(actor.clone(), &view, &model);
 
     // ── セッション 1: 5 グリフ（at=0.1）を実 sink→UI ドレインで状態機械へ ──
-    let (mut sink, _handle) =
-        spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+    let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
     sink.emit(cue("0", 0.1, CueCommand::Text("あいうえお".into())));
     pump_until_idle();
 
@@ -363,8 +362,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
     // ── セッション 1: 列 0＝■■（at=0.0）＋列 1〜7＝■ 各 1（at=0.5）
     //    → 列 i の左端は 120 − 12 − 14i（右上起点・pitch 14）。列 7 は左端 10 ≥ 0 で収まり、
     //    列 8 は左端 −4 < 0 であふれる＝8 列があふれ前の上限 ──
-    let (mut sink, _handle) =
-        spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+    let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
     sink.emit(cue("0", 0.0, CueCommand::Text("■■".into())));
     for _ in 0..7 {
         sink.emit(cue("0", 0.5, CueCommand::NewLine { ratio: 1.0 }));

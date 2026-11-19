@@ -24,7 +24,7 @@ pub(super) const KEYWORD_UNRESOLVED_TAG: &str = "[balloon-keyword] Unresolved";
 const KEYWORD_BASE_UNPINNED_TAG: &str = "[balloon-keyword] BaseUnpinned";
 
 /// キーワード由来のバルーン基本位置を**実表示寸**から導出し直し、素材を消費する
-/// （[`resize_window_to`] 手順 5a 専用・要件 4.2/4.3/4.4/4.7）。
+/// （[`resize_window_to`] 手順 5a 専用・areka-P0-windowposition-limit 要件 4.2/4.3/4.4/4.7）。
 ///
 /// # なぜ必要なのか（実機で確認された欠陥）
 ///
@@ -37,15 +37,16 @@ const KEYWORD_BASE_UNPINNED_TAG: &str = "[balloon-keyword] BaseUnpinned";
 ///
 /// # 一度きりであること（4.7）と、その発火条件
 ///
-/// 要件 4.7 はキーワードの適用を「初期既定位置の供給」にとどめると定める。ゆえに
+/// areka-P0-windowposition-limit 要件 4.7 はキーワードの適用を「初期既定位置の供給」にとどめると定める。ゆえに
 /// **キャラ窓の寸が最初に変わった一度だけ**発火して [`BalloonKeywordBase`] を消費し、
 /// 以後の寸法変化では中央へ揃え直さない——`Side` と同じ配置時確定の静的 offset として
 /// 振る舞う（4.4 の現行契約）。
 ///
 /// 発火条件を route ではなく**寸の変化**に置いているのは、どの route が最初に実表示寸を
 /// 運ぶかが frame の相順に依存するからである（`DpiReproject`／`ReportedSizeReconcile`／
-/// `Resnap` はいずれも presenter が報告した実表示寸を運び得る。`AnchorChange` だけは
-/// 現在の表示寸をそのまま渡す）。寸が変わらない書込では配置時の offset がその寸に対して
+/// `Resnap` はいずれも presenter が報告した実表示寸を運び得る。シェルの切り替えの
+/// `reseed::reanchor_char_windows` が書く `AnchorChange` だけは現在の表示寸をそのまま渡す）。
+/// 寸が変わらない書込では配置時の offset がその寸に対して
 /// 正しいままなので、素材を残して次の機会へ譲る。
 ///
 /// # 幾何は書き写さない
@@ -55,7 +56,7 @@ const KEYWORD_BASE_UNPINNED_TAG: &str = "[balloon-keyword] BaseUnpinned";
 /// （`balloon_pos − char_pos` の定義そのもの）——確定位置を足してから引き直すより
 /// 飽和演算の影響を受けず、`BalloonFollow.offset` の単位とも一致する。
 ///
-/// # 縮退（log-first・要件 6.3 の流儀）
+/// # 縮退（log-first・areka-P0-windowposition-limit 要件 6.3 の流儀）
 ///
 /// [`BalloonFollow`] 不在・バルーン entity 破棄済み・バルーンの現寸が未確定（`None` と
 /// `CW_USEDEFAULT` センチネルの双方）のいずれでも [`KEYWORD_UNRESOLVED_TAG`] の `warn!` を
@@ -144,7 +145,7 @@ pub(super) fn rederive_keyword_balloon_offset(
     };
 
     let old_offset = follow.offset();
-    // **確立点**——再導出した基本位置を新しい基準として焼き直す（design D14・要件 3.3）。
+    // **確立点**——再導出した基本位置を新しい基準として焼き直す（design D14・areka-P0-balloon-offset-dpi 要件 3.3）。
     // 追従 Component を借りる前に表示 DPI を読む（同時借用を避ける順序）。
     let current_dpi = world.get::<DPI>(char_window).copied();
     if let Some(mut f) = world.get_mut::<BalloonFollow>(char_window) {
@@ -153,7 +154,7 @@ pub(super) fn rederive_keyword_balloon_offset(
             None => {
                 // 表示 DPI を読めない窓。値は確定しているが属する空間が分からないので
                 // 永続値の腕と同じ**未係留**で確立する（最初の観測で値を変えずに係留・
-                // 要件 5.2／5.4）。基準 DPI を発明すると次の遷移で二重に拡大する。
+                // areka-P0-balloon-offset-dpi 要件 5.2／5.4）。基準 DPI を発明すると次の遷移で二重に拡大する。
                 let balloon = f.balloon;
                 *f = BalloonFollow::new(balloon, OffsetBase::unpinned(new_offset));
                 // 再導出そのものは**成立している**ので [`KEYWORD_UNRESOLVED_TAG`] は

@@ -9,24 +9,14 @@
 // 出ることを固定する。
 
 use super::*;
+use crate::consumer_ledger::test_support::carrier_cue;
 use areka_ghost::sink::BootCueSink;
 use areka_sakura::TalkId;
 use areka_sakura::contract::{ScriptOrigin, SecurityLevel, SstpKind};
-use dola::cue::{ActorKey, CueCommand, TalkCue};
 use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Receiver, channel};
 
 const TALK: TalkId = TalkId(42);
-
-/// `\![name,tokens...]` の汎用キャリア cue を組む。
-fn carrier_cue(name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
 
 /// 配送と同じ手順（複製の直後に 1 回 `begin_talk`）でトークの受け口を作る。
 fn talk_sink(origin: ScriptOrigin) -> (Box<dyn BootCueSink>, Receiver<NoUserBreakSignal>) {
@@ -66,7 +56,7 @@ const NOT_OWNED_SSTP: ScriptOrigin = ScriptOrigin {
     ..ScriptOrigin::MCP_NOTIFY
 };
 
-/// 外部扱いのトークでは `Enter` を送らず warn が 1 件。始まり・`Leave`・終わりは今どおり（4.2・4.4・4.5）。
+/// 外部扱いのトークでは `Enter` を送らず warn が 1 件。始まり・`Leave`・終わりは今どおり（areka-P0-script-security-level 要件 4.2・4.4・4.5）。
 #[test]
 fn external_treated_talk_refuses_enter_and_keeps_other_signals() {
     for origin in [LOWERED, NOT_OWNED_SSTP] {
@@ -99,7 +89,7 @@ fn external_treated_talk_refuses_enter_and_keeps_other_signals() {
     }
 }
 
-/// ゴースト自身・MCP の SEND・MCP の NOTIFY（いずれも `local`）では今どおり `Enter` が出る（4.3）。
+/// ゴースト自身・MCP の SEND・MCP の NOTIFY（いずれも `local`）では今どおり `Enter` が出る（areka-P0-script-security-level 要件 4.3）。
 #[test]
 fn local_origins_still_send_enter() {
     for origin in [
@@ -120,16 +110,4 @@ fn local_origins_still_send_enter() {
         );
         assert!(refused(&logs).is_empty(), "止めの記録は無い: {logs:?}");
     }
-}
-
-/// `begin_talk` の来ない複製（登録の原本と同じ）はゴースト自身として扱い、`Enter` を通す。
-#[test]
-fn clone_without_begin_talk_is_ghost() {
-    let (tx, rx) = channel::<NoUserBreakSignal>();
-    let mut talk = NoUserBreakCueSink::new(tx).clone_box();
-    talk.emit(carrier_cue("enter", &["nouserbreakmode"]));
-    assert_eq!(
-        rx.try_iter().collect::<Vec<_>>(),
-        vec![NoUserBreakSignal::TalkStarted, NoUserBreakSignal::Enter]
-    );
 }

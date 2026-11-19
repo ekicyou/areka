@@ -1,4 +1,4 @@
-//! 同じフォルダ名の差し替えの決定論テスト（areka-P0-baseware-root-list task 4.2・要件 8.4・8.7・12.5）。
+//! 同じフォルダ名の差し替えの決定論テスト（areka-P0-baseware-root-list・要件 8.4・8.7・12.5）。
 
 use areka_ghost::catalog_roots::list_ghosts;
 use areka_ghost::{BasewareRoot, BasewareRoots};

@@ -2,7 +2,8 @@
 //!
 //! 判定は自分で持たず、`check_script` と同じ物差し（`\!` の受け取り手の台帳
 //! [`ConsumerLedger::consumer_of`]・文字の層の `\f` の分類 [`classify_font_tag`]）の答えを写すだけにする。
-//! 本番の 3 つの構築（窓の無いゴースト・窓の在るゴーストの実行系・spine）が [`production`] を入れる。
+//! [`production`] を入れるのは本体の `session/runtime_boot.rs` の `runtime_boot_options` で、窓の在る実行系も
+//! 窓の無いゴースト（`boot_config.rs` の `ghost_boot_options`）もここを通る。spine の足場は入れない。
 
 use std::sync::Arc;
 

@@ -1,4 +1,4 @@
-//! 偽の SHIORI のテスト（「解かれるまで固まる」台本＝要件 7.1・呼び出しの数）。
+//! 偽の SHIORI のテスト（「解かれるまで固まる」台本＝areka-P0-session-mark-residue 要件 7.1・呼び出しの数）。
 //!
 //! 固まった呼び出しは別スレッドで走らせ、`holding()` が立ったのを見てから解く。固まっている間は
 //! 呼び出しが戻れない（条件変数で待っている）ので、「解く前に戻っていない」の判定は時刻に依らない。
@@ -154,7 +154,7 @@ fn without_hold_at_nothing_holds() {
     assert_eq!(handle.unblock_calls(), 0);
 }
 
-/// 呼び出しの数（待ちの進みの目印・areka-P0-ghost-session-test-load-flake 3.1）は、状態の問い合わせを
+/// 呼び出しの数（待ちの進みの目印・areka-P0-ghost-session-test-load-flake）は、状態の問い合わせを
 /// 何回しても増えず、`Get`・`Notify`・`Unload` の 1 回ごとに 1 つ増える。
 #[test]
 fn call_count_skips_status_queries_and_counts_every_other_call() {

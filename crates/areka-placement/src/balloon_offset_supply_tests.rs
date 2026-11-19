@@ -230,7 +230,7 @@ fn merged_offset(ghost_root: &Path, balloon_dir: &Path, primary_dpi: u32) -> Opt
 // 6. 語彙（綴りの檻）
 // -------------------------------------------------------------------------
 
-/// 飽和の記録語の綴りを**逐語で**固定する（`balloon_limit.rs`／`drag_follow.rs` の
+/// 飽和の記録語の綴りを**逐語で**固定する（`balloon_limit.rs`／`balloon_drag.rs` の
 /// `*_TAG` と同じ流儀）。
 ///
 /// 実機ログの grep（要件 8.3）と決定論テストが同じ定数を参照する以上、綴りは契約で

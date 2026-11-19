@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::BalloonXMode;
+use crate::resolver::RectPx;
 use crate::shared_test_support::placement_sized;
 use log_capture_kit::{ExpectField, capture};
 

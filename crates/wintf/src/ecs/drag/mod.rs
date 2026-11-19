@@ -73,8 +73,10 @@ impl Default for DragConfig {
 pub struct DraggingState {
     /// ドラッグ開始位置（スクリーン座標、物理ピクセル）
     pub drag_start_pos: PhysicalPoint,
-    /// ドラッグを始めたときの窓の位置（枠を含むスクリーン座標・物理ピクセル・整数の値）
-    pub initial_window_pos: (f32, f32),
+    /// ドラッグを始めたときの窓の位置（枠を含むスクリーン座標・物理ピクセル・整数の値）。
+    /// `None` は位置が取れなかった（窓に位置が無い・座標の変換が失敗した）ドラッグで、
+    /// その回は窓を動かさない。
+    pub initial_window_pos: Option<(f32, f32)>,
 }
 
 /// ドラッグ制約コンポーネント

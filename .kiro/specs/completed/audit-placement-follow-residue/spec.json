@@ -1,0 +1,26 @@
+{
+  "feature_name": "audit-placement-follow-residue",
+  "created_at": "2026-11-17T12:23:10+09:00",
+  "updated_at": "2026-11-17T12:37:57Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-11-17T12:37:57Z"
+    }
+  },
+  "ready_for_implementation": false
+}

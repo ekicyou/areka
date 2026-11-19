@@ -1,9 +1,9 @@
-//! 実行系の側の起動（design「RuntimeBoot と CueSinkSources」・要件 4.2・13.4）。
+//! 実行系の側の起動（areka-P0-mcp-reload の design「RuntimeBoot と CueSinkSources」・要件 4.2・13.4）。
 //!
 //! 起動の結線は「窓の側」（資産・presenter・文字の層・seriko・loop ticker・`RuntimeWiring`）と
 //! 「実行系の側」（`GhostRuntime`）の 2 段に分かれる。窓の側が受け口の送出端の束
-//! [`CueSinkSources`] を 1 度組み、[`boot_runtime`] が束の複製から 13 本の sink を組んで実行系を
-//! 起こす。受信端が窓の側に無い線（readme・中断を禁じる旗・ゴーストの切替・シェル／バルーンの
+//! [`CueSinkSources`] を 1 度組み、[`boot_runtime`] が束の複製から sink（並びは
+//! [`runtime_sinks`]）を組んで実行系を起こす。受信端が窓の側に無い線（readme・中断を禁じる旗・ゴーストの切替・シェル／バルーンの
 //! 切替・読み直し）はここで新しく張り、実行系が成立したときだけ World へ据える——失敗したとき
 //! World は変わらない。
 
@@ -11,7 +11,9 @@ use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
 
 use areka_ghost::sink::BootCueSink;
-use areka_ghost::{GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode};
+use areka_ghost::{
+    GhostBootError, GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode,
+};
 use areka_kanade::KanadeNotice;
 use areka_parsers::charset::DefaultEncoding;
 use bevy_ecs::world::World;
@@ -35,28 +37,28 @@ use areka_runtime::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
 use areka_runtime::window_state_cue::WindowStateCueSink;
 use areka_runtime::zorder_cue::ZOrderCueSink;
 
-pub(crate) use areka_runtime::{CueSinkSources, RuntimeBootError};
+pub(crate) use areka_runtime::CueSinkSources;
 
 /// 受信端が窓の側に無い線の手元の端（実行系の成立後にだけ World へ据える）。
-pub(super) struct RuntimeLines {
+struct RuntimeLines {
     readme_rx: Receiver<crate::readme::ReadmeRequest>,
     no_user_break_rx: Receiver<NoUserBreakSignal>,
-    /// 中断を受け入れた UI が同じ線へ「中断された」を送る送出端の複製（areka-P0-balloon-break task 3.3）。
+    /// 中断を受け入れた UI が同じ線へ「中断された」を送る送出端の複製（areka-P0-balloon-break）。
     user_break_lifecycle_tx: Sender<TalkLifecycleSignal>,
     change_rx: Receiver<ChangeRequestRaw>,
     switch_rx: Receiver<SkinRequestRaw>,
-    pub(super) reload_rx: Receiver<ScriptReload>,
+    reload_rx: Receiver<ScriptReload>,
 }
 
-/// 束の複製から 13 本の sink を組む（並びは旗の順序の保証を担うので変えない）。
+/// 束の複製から sink の列を組む（並びは旗の順序の保証を担うので変えない）。
 ///
 /// 1. surface（seriko）2. 時刻付きの文字 3. `\![move]` 4. 表示ライフサイクル（文字より**後**——
-/// 起床旗 PRESENT が文字 cue より先に倒れないため・draw-load-parity 3.5）5. 重なり
+/// 起床旗 PRESENT が文字 cue より先に倒れないため・areka-P0-draw-load-parity）5. 重なり
 /// 6. 開く系（readme）7. 中断を禁じる旗 8. ゴーストの切替 9. インストール 10. 更新
-/// 11. シェル／バルーンの切替 12. 読み直し（areka-P0-mcp-reload）13. 常に手前。5 本目から後ろはどれも
+/// 11. シェル／バルーンの切替 12. 読み直し（areka-P0-mcp-reload）13. 常に手前。重なりから後ろはどれも
 /// 「名前＋第 1 引数」で自分宛だけを拾い、文字 cue に依存しないため末尾に足して構わない。
 /// インストールと更新の送出端はプロセスに 1 つの窓口から借りる（窓口が無ければ受信端の無い送出端）。
-pub(super) fn runtime_sinks(
+fn runtime_sinks(
     world: &World,
     sources: &CueSinkSources,
 ) -> (Vec<Box<dyn BootCueSink>>, RuntimeLines) {
@@ -101,8 +103,8 @@ pub(super) fn runtime_sinks(
     (sinks, lines)
 }
 
-/// 実行系の側の起動: 束の複製から 13 本の sink を組んで `boot_with_origin` を呼び、成立したら
-/// 受信端を World へ据える。`Err` のとき World は変わっていない。
+/// 実行系の側の起動: 束の複製から sink（並びは [`runtime_sinks`]）を組んで `boot_with_origin` を
+/// 呼び、成立したら受信端を World へ据える。`Err` のとき World は変わっていない。
 ///
 /// 停止通知の送出端は引数 `kanade_stop` をそのまま kanade へ渡す（ここでは channel を作らない）。
 /// 起動の由来は kanade の起動の根（`OnBoot`／`OnGhostChanged`／読み直し）の選択へ渡る。
@@ -112,7 +114,7 @@ pub(crate) fn boot_runtime(
     sources: &CueSinkSources,
     kanade_stop: Sender<KanadeNotice>,
     shell: Option<&str>,
-) -> Result<GhostRuntime, RuntimeBootError> {
+) -> Result<GhostRuntime, GhostBootError> {
     let RuntimeInputs {
         ghost_root,
         balloon_root: _,
@@ -133,19 +135,19 @@ pub(crate) fn boot_runtime(
     ) {
         Ok(runtime) => runtime,
         Err(err) => {
-            // R7.4: 既存 main と同一方針で分類（起点不在＝良性 warn・他＝error）。
+            // 分類は `is_benign_boot_error`（起点が無い＝良性 warn・ほか＝error）。
             if crate::is_benign_boot_error(&err) {
                 warn!(
                     error = %err,
-                    "runtime: ghost boot の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
+                    "runtime: ghost boot の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録）"
                 );
             } else {
                 error!(
                     error = %err,
-                    "runtime: ghost boot に失敗（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
+                    "runtime: ghost boot に失敗（実 sink 結線は不成立・帰結は呼び手が記録）"
                 );
             }
-            return Err(RuntimeBootError::Boot(err));
+            return Err(err);
         }
     };
     install_lines(world, &ghost_root, &runtime, lines);
@@ -189,7 +191,7 @@ fn install_lines(
         switch_rx,
         reload_rx,
     } = lines;
-    // 説明書の置き場はゴーストの根と定義の `readme` キーから起動時に 1 度だけ決まる（要件 4.5）。
+    // 説明書の置き場はゴーストの根と定義の `readme` キーから起動時に 1 度だけ決まる。
     let readme_path = crate::readme::resolve_path(ghost_root, runtime.mount().readme.as_deref());
     crate::readme::wire_readme(world, readme_path, readme_rx);
     ghost_switch::wire_change_rx(world, change_rx);

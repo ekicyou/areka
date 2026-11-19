@@ -40,6 +40,9 @@ version = 2
 yanked = "warn"
 # 見逃す勧告は 1 件ずつ理由と持ち主の spec を書く（2026-10-15 開発者の判断）
 ignore = [
+    # chrono は保守されていない（安全な上げ先なし）。公式 MCP SDK の rmcp・schemars を通した間接の依存で areka は直接使わない。
+    # 持ち主: /update（v0.2.0 の前の依存の更新で rmcp が chrono を外したかを確かめる・2026-11-17 開発者の承認）
+    { id = "RUSTSEC-2026-0543", reason = "rmcp/schemars 経由の間接依存・安全な上げ先なし・持ち主 /update" },
 ]
 
 [bans]

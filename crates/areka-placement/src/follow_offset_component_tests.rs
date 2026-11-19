@@ -103,7 +103,7 @@ fn anchor_base_dpi_pins_without_moving_the_value() {
     assert_eq!(
         follow.base().offset,
         point(-120, 45),
-        "係留は基準値を 1 bit も動かさない（要件 5.2）"
+        "係留は基準値を 1 bit も動かさない（`areka-P0-balloon-offset-dpi` 要件 5.2）"
     );
     assert_eq!(follow.base().dpi, Some(dpi(120)));
     assert_eq!(
@@ -127,7 +127,7 @@ fn apply_rescaled_moves_the_value_but_never_the_base() {
     assert_eq!(
         follow.base(),
         base,
-        "追随は基準対を変えない——出力を入力へ戻さないので誤差が連鎖しない（要件 3.1）"
+        "追随は基準対を変えない——出力を入力へ戻さないので誤差が連鎖しない（`areka-P0-balloon-offset-dpi` 要件 3.1）"
     );
 }
 
@@ -177,7 +177,7 @@ fn apply_rescaled_after_reestablish_derives_from_the_reestablished_base() {
             offset: point(70, 70),
             dpi: Some(dpi(120)),
         },
-        "ドラッグ由来の基準が確立したあとの追随は、その新しい基準を起点にする（要件 3.5）"
+        "ドラッグ由来の基準が確立したあとの追随は、その新しい基準を起点にする（`areka-P0-balloon-offset-dpi` 要件 3.5）"
     );
 }
 

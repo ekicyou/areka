@@ -448,7 +448,6 @@ pub(super) fn kinds(calls: &[RecordedCall]) -> Vec<String> {
             RecordedCall::Get { id, .. } => format!("GET {id}"),
             RecordedCall::Notify { id, .. } => format!("NOTIFY {id}"),
             RecordedCall::Unload => "UNLOAD".to_owned(),
-            RecordedCall::Status => "STATUS".to_owned(),
         })
         .collect()
 }

@@ -1,4 +1,4 @@
-//! 終了指示から窓が閉じるまでの一本道の檻（areka-P0-emo2-conformance-e2e タスク 6.9・R15.6 ⑷）。
+//! 終了指示から窓が閉じるまでの一本道の檻（areka-P0-emo2-conformance-e2e 要件 15.6 ⑷）。
 //!
 //! 症状 C（2026-09-07 走行 A の項目 13）は「終了操作が終了挨拶を素通りして即座に窓を消す」もので
 //! あった。機序は 2 つの欠落——操作が `CloseRequest` を送らないことと、握手が終わっても窓を閉じる
@@ -10,19 +10,18 @@
 //!
 //! 併せて `OnClose` が **NOTIFY ではない**ことを固定する。強制終了（`ForceQuit`）経路は `OnClose` を
 //! 片道 NOTIFY で消化して辞書の終了挨拶を照会しない——それが症状 C の見え方そのものであり、
-//! Method の取り違えは「挨拶が出ない」と同義である（R15.5 の生ログ判定も同じ語で読む）。
+//! Method の取り違えは「挨拶が出ない」と同義である（areka-P0-emo2-conformance-e2e の R15.5 の生ログ判定も同じ語で読む）。
 //!
-//! sleep は poll-backoff にのみ用い、時刻は注入 Tick だけが進める（spine の待ちの規律・R7.9）。
-
-use std::time::Duration;
+//! 時刻は注入 Tick だけが進める（待ちの休みの決まりは `areka-runtime` の `spine_wait.rs`）。
 
 use areka_kanade::KanadeMsg;
 use bevy_ecs::prelude::With;
 use shiori_host32_host::ExitKind;
 
+use super::test_support::boot_finished;
 use super::{
-    CloseReason, Entity, Instant, LoopDriver, Progress, RecordedCall, SPIN_WAIT,
-    ScriptedShioriBackend, SpineHarness, wait_until,
+    CloseReason, Entity, LoopDriver, Progress, RecordedCall, ScriptedShioriBackend, SpineHarness,
+    wait_until, wait_until_paced,
 };
 use crate::session::ghost_quit::run_ghost_quit_phase;
 use areka_placement::spawn::GhostWindowMarker;
@@ -42,9 +41,6 @@ const BOOT_TALK: &str = r"\s[0]\e";
 
 /// 1 反復あたりの注入時刻の進み幅（ms）。再生を確実に終端まで運ぶため大きめに取る。
 const TICK_STEP_MS: u64 = 100;
-
-/// ポーリングの間隔（spine の「ハイブリッド待ち」の poll-backoff・R7.9）。
-const BACKOFF: Duration = Duration::from_micros(200);
 
 /// `GhostWindowMarker` 窓の現数。
 fn ghost_count(harness: &mut SpineHarness) -> usize {
@@ -69,7 +65,7 @@ fn close_handshake_backend() -> SpineHarness {
     SpineHarness::boot_with(backend, shiori_handle, LoopDriver::Inert)
 }
 
-/// 終了指示 → `OnClose` GET → 終了挨拶 → 解放 → 停止通知 → 終了相 1 回で窓 0（R15.6 ⑷）。
+/// 終了指示 → `OnClose` GET → 終了挨拶 → 解放 → 停止通知 → 終了相 1 回で窓 0（areka-P0-emo2-conformance-e2e の R15.6 ⑷）。
 ///
 /// # 非空虚性
 ///
@@ -85,19 +81,23 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
         "前提: 合成 GhostWindows でゴースト窓が立っている"
     );
 
-    // ── 起動系列（非 Status 5 呼出）の完了を待つ。終了指示を boot の途中で差し込むと、
+    // ── 起動の系列（最後は basewareversion）の完了を待つ。終了指示を boot の途中で差し込むと、
     //    再生完了通知が `BootVersion` 滞在中に届いて捨てられる狭い窓を踏み得る。 ──
     let mut boot_calls = Vec::new();
-    let handle = harness.shiori_handle.clone();
-    let calls = || handle.call_count();
-    let _ = wait_until("起動系列 5 呼出", Progress::Count(&calls), || {
-        boot_calls = harness.shiori_handle.non_status_calls();
-        boot_calls.len() >= 5
-    })
+    let shiori = harness.shiori_handle.clone();
+    let probe = || shiori.call_count();
+    let _ = wait_until(
+        "起動の系列（最後は basewareversion）",
+        Progress::Count(&probe),
+        || {
+            boot_calls = harness.shiori_handle.non_status_calls();
+            boot_finished(&boot_calls)
+        },
+    )
     .inspect_err(|failure| eprintln!("{failure}"));
     assert!(
-        boot_calls.len() >= 5,
-        "前提: 起動系列 5 呼出が有界内に発火する: {boot_calls:?}"
+        boot_finished(&boot_calls),
+        "前提: 起動の系列（最後は basewareversion）が有界内に終わる: {boot_calls:?}"
     );
 
     // ── 終了指示（製品では右クリックメニューの「終了」が送るのと同じ 1 件） ──
@@ -110,25 +110,27 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
         .expect("kanade は生存しており終了指示を受け取る");
 
     // ── 再生を運ぶ（起動 talk の完了 → 保留していた終了指示の消化 → OnClose GET → 終了挨拶 →
-    //    その再生完了 → 解放）。時刻は注入 Tick だけが進める。 ──
+    //    その再生完了 → 解放）。時刻は注入 Tick だけが進める。打ち切りは待ちの芯の進みの目印
+    //    （SHIORI の呼び出しの数。この輪は表示の指令を汲まないので足さない）。Tick を入れる輪なので
+    //    [`wait_until_paced`]。 ──
+    let what = "終了指示 → 終了挨拶 → 解放";
     let mut now = 0u64;
-    let mut calls = Vec::new();
-    let deadline = Instant::now() + SPIN_WAIT;
-    let mut unloaded = false;
-    while Instant::now() < deadline {
+    wait_until_paced(what, Progress::Count(&probe), || {
         now += TICK_STEP_MS;
         harness.inject_dispatcher_tick(now);
-        calls = harness.shiori_handle.non_status_calls();
-        if calls.iter().any(|c| matches!(c, RecordedCall::Unload)) {
-            unloaded = true;
-            break;
-        }
-        std::thread::sleep(BACKOFF);
-    }
-    assert!(
-        unloaded,
-        "終了指示 → 終了挨拶 → 解放 が有界内に完走しない（握手の配線が繋がっていない）: {calls:?}"
-    );
+        harness
+            .shiori_handle
+            .non_status_calls()
+            .iter()
+            .any(|c| matches!(c, RecordedCall::Unload))
+    })
+    .unwrap_or_else(|failure| {
+        panic!(
+            "{failure}／{what}: 完走しない（握手の配線が繋がっていない）: {:?}",
+            harness.shiori_handle.non_status_calls()
+        )
+    });
+    let calls = harness.shiori_handle.non_status_calls();
 
     // ⑴ OnClose は **GET**（辞書へ終了挨拶を照会した証跡）。NOTIFY は強制終了経路であり、
     //    それが現れるなら挨拶を素通りしている（症状 C そのもの）。
@@ -137,13 +139,13 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
         .position(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"));
     assert!(
         get_index.is_some(),
-        "OnClose は GET で照会される（正規の握手・R15.5）: {calls:?}"
+        "OnClose は GET で照会される（正規の握手）: {calls:?}"
     );
     assert!(
         !calls
             .iter()
             .any(|c| matches!(c, RecordedCall::Notify { id, .. } if id == "OnClose")),
-        "OnClose の NOTIFY は現れない（強制終了経路を通っていない・R15.5）: {calls:?}"
+        "OnClose の NOTIFY は現れない（強制終了経路を通っていない）: {calls:?}"
     );
 
     // ⑵ 解放はちょうど 1 件で、OnClose GET より後に現れる。
@@ -165,27 +167,20 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
     );
 
     // ⑶ 停止通知を終了相が読み、ゴースト窓が 0 になる。通知は解放の記録の直後（マイクロ秒級）に
-    //    投函されるため、相を有界に回して消化を待つ（時刻は進めない＝純粋ポーリング）。
-    let deadline = Instant::now() + SPIN_WAIT;
-    let mut quit_consumed = false;
-    while Instant::now() < deadline {
-        if run_ghost_quit_phase(&mut harness.world) {
-            quit_consumed = true;
-            break;
-        }
-        std::thread::sleep(BACKOFF);
-    }
-    assert!(
-        quit_consumed,
-        "kanade の停止通知が有界内に UI へ届かない（通知の配線が繋がっていない）"
-    );
+    //    投函されるため、相を有界に回して消化を待つ（時刻は進めない＝純粋ポーリング）。汲む物が無いので
+    //    目印は SHIORI の呼び出しの数だけ（解放の後は増えない）。
+    let what = "kanade の停止通知の UI への到着";
+    wait_until(what, Progress::Count(&probe), || {
+        run_ghost_quit_phase(&mut harness.world)
+    })
+    .unwrap_or_else(|failure| panic!("{failure}／{what}: 通知の配線が繋がっていない"));
     assert_eq!(
         ghost_count(&mut harness),
         0,
-        "終了相 1 回で全ゴースト窓が閉じる（R15.4）"
+        "終了相 1 回で全ゴースト窓が閉じる"
     );
 
     // 後片付け（既存の有界な畳み方）。kanade は自ら停止済みゆえ `ForceQuit` の送出は失敗し、
-    // ghost 側は冪等に `debug!` で流して join を完走する（R15.4 の「以後の終了統括は冪等」）。
+    // ghost 側は冪等に `debug!` で流して join を完走する（areka-P0-emo2-conformance-e2e の R15.4 の「以後の終了統括は冪等」）。
     harness.shutdown_bounded();
 }
