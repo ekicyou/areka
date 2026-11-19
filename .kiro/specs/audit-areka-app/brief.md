@@ -107,7 +107,7 @@
 
 ## audit-emo2-boot-spine からの申し送り（2026-11-17）
 
-`audit-emo2-boot-spine` のギャップ分析（`.kiro/specs/audit-emo2-boot-spine/research.md` の 6 節）で、範囲の外のこの spec の持ち場に見つけた件。中身は向こうでは直さない。
+`audit-emo2-boot-spine` のギャップ分析（`.kiro/specs/completed/audit-emo2-boot-spine/research.md` の 6 節）で、範囲の外のこの spec の持ち場に見つけた件。中身は向こうでは直さない。
 
 - **オ（`code_only` の写し）**: `crates/areka/src/tick_gate_config_producers_tests.rs:L70` の `code_only` は、`source_text_test_support::code_only` と 1 字も違わない。そちらを使う形に寄せる。
 - **キ（古い説明）**: `crates/areka/src/boot_config.rs:L617`・`L621-L622` の `is_benign_boot_error` の説明は「`wire_runtime` が再利用する」と書くが、呼び手は `ghost_session.rs:L783`・`session/runtime_boot.rs:L137` だけ。

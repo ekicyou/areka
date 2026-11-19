@@ -100,7 +100,7 @@
 
 ## audit-emo2-boot-spine からの申し送り（2026-11-17）
 
-`audit-emo2-boot-spine` のギャップ分析（`.kiro/specs/audit-emo2-boot-spine/research.md` の 6 節）で、範囲の外のこの spec の持ち場に見つけた件。中身は向こうでは直さない。
+`audit-emo2-boot-spine` のギャップ分析（`.kiro/specs/completed/audit-emo2-boot-spine/research.md` の 6 節）で、範囲の外のこの spec の持ち場に見つけた件。中身は向こうでは直さない。
 
 - **ウ（件 6 の 2 本）**: `crates/areka/src/runtime_tests/balloon_visibility_phase_tests.rs:L714`・`L789` のテスト関数 2 本は、補助ごと `areka-runtime` へ戻せる（`world_at` の写しは上の runtime-crate-split の申し送りに既にある）。
 - **オ（`code_only` の写し）**: `crates/areka-runtime/src/balloon_visibility_phase_zorder_chain_tests.rs:L257` の `code_only` は、`source_text_test_support::code_only` と 1 字も違わない。そちらを使う形に寄せる。
