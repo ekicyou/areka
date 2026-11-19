@@ -76,14 +76,10 @@ const OVER_LIMIT_ALLOWED: &[(&str, &str)] = &[
         "crates/areka-runtime/src/placement_tests/transition_judge_verdict_tests.rs",
         "着手前から超過している本番の隣の兄弟テストファイル。分割は本仕様の範囲外（要件 10.4）",
     ),
-    (
-        "crates/pilot/examples/pilot-clickthrough-alpha-toggle/main.rs",
-        "着手前から超過している実行例。分割は本仕様の範囲外（要件 10.4）",
-    ),
 ];
 
 /// [`OVER_LIMIT_ALLOWED`] の件数（逐語）。表を増やすときはここも編集する（要件 10.2）。
-const OVER_LIMIT_ALLOWED_COUNT: usize = 4;
+const OVER_LIMIT_ALLOWED_COUNT: usize = 3;
 
 /// 列挙と計測が空振りしていないことの目安（純関数）。いちばん長いファイルが上限の半分を越えるか。
 ///

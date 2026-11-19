@@ -44,6 +44,8 @@ updated_at: 2026-10-23
 
 将来 inbound 依存の混入が現実の問題になった場合は、機械チェック（`cargo metadata` 走査による依存方向ガード・`cargo-deny`・examples 腐敗検出等）の追加を**別途依頼できる**。本仕様ではこれを実装しない（YAGNI 方針）。構造的隔離＋人手レビューで足りる間は追加しない。
 
+**例外（2026-11-17 裁定・`audit-pilot`）**: examples 腐敗検出のうち、`crates/pilot` の実行例が持つテストの分は先送りしない。テストを持つ実行例は `crates/pilot/Cargo.toml` の `[[example]]` で `test = true` にし、全体テスト（`cargo test --workspace`）で組み立てて走らせる。32bit の本物の `pasta.dll` を読むテストのように x64 で走れないものは `#[cfg(target_arch = "x86")]` で、走れる組み立てだけに限る。依存の向きの機械ガード（`cargo metadata` 走査・`cargo-deny`）はこれまでどおり先送りする。
+
 ### 隔離保全許可（要件 5.2）
 
 葉ノード隔離の不変条件が満たされている限り、先進坑コードを**物理削除する代わりに**知見クレート `crates/pilot` へ**隔離保全**してよい。捨てるべきは「production への依存」であって「知見」ではない。隔離されている限り残しておける。

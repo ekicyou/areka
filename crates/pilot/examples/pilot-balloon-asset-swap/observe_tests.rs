@@ -423,7 +423,6 @@ fn row_spells_out_every_count_including_zeros() {
     assert!(row(&o).contains(" 途中 "));
 }
 
-/// 当たり判定の閾値の境（0.9 と 0.1 は含む）。
 #[test]
 fn tick_rect_takes_the_move_queued_in_the_same_tick_only() {
     let r = |w| RECT {
@@ -438,6 +437,7 @@ fn tick_rect_takes_the_move_queued_in_the_same_tick_only() {
     assert_eq!(effective_rect(None, 7, actual), actual);
 }
 
+/// 当たり判定の閾値の境（0.9 と 0.1 は含む）。
 #[test]
 fn hit_rule_thresholds_are_inclusive() {
     let nan = f32::NAN;
