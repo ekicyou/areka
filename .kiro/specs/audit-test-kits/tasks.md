@@ -245,4 +245,10 @@
       - mcp_tests の説明の往復: 3 回目 R3 → 6 回目 R5
       - 走査器の写し: 5 回目 G6・G5 → 6 回目 G1・G2
     - 2 回目の決めを打ち消す往復の組（6 回目 E5）は当てなかった。
-6.2: 全体テスト（`tools/test-all.ps1`・コミット `5c9a93f9c`）は 21 の段が全部 OK で緑。`main` との差分は、C22 のほかの 5 本のファイル・上限越えの表の 4 ファイルと表の行・`vendors/`・`Cargo.lock`・根の `Cargo.toml`・`.claude/`・`tools/` が 0、`event.rs:150`・`event_tests.rs:18-19`・121 と `areka::app_exit` の字面も無変更。範囲の外の差分 8 本は design.md の表の行と 4.5 の裁定の `doc/COMPAT_ARCHITECTURE.md` だけで、足した依存は 0。検証の記録は research.md の 14 節に書いた。持ち主のセッションの確認は 2.1 の分しか控えが残らない旨も 14.11 に書いた。
+  - 6.2: 全体テスト（`tools/test-all.ps1`・コミット `5c9a93f9c`）は 21 の段が全部 OK で緑。`main` との差分は、C22 のほかの 5 本のファイル・上限越えの表の 4 ファイルと表の行・`vendors/`・`Cargo.lock`・根の `Cargo.toml`・`.claude/`・`tools/` が 0、`event.rs:150`・`event_tests.rs:18-19`・121 と `areka::app_exit` の字面も無変更。範囲の外の差分 8 本は design.md の表の行と 4.5 の裁定の `doc/COMPAT_ARCHITECTURE.md` だけで、足した依存は 0。検証の記録は research.md の 14 節に書いた。持ち主のセッションの確認は 2.1 の分しか控えが残らない旨も 14.11 に書いた。
+- 完了時にその場で解決（`/kiro-complete` の棚卸・4 件。申し送り 0 件・起票 0 件）:
+  - 偽の子の知らない手順の行が日本語だった → ASCII の行に（テスト `an_unknown_step_exits_with_64_and_an_ascii_line` を添えた）
+  - `tools/load-flake.ps1` の `-NoCapture` の説明が、かけ直し 3 回目 S1 の後に古くなっていた → 今の後片付けの行（標準エラーへ直に書く）に合わせた
+  - `vendors/sample_ghost/README.md` の消したテストの名前 2 か所と、ASCII になる前の `fold-samples` の印字の例 → 今の名前と印字に
+  - かけ直し 2 回目 S7（3 つの crate が `miniz_oxide` を同じ指定で別々に書く）→ 根の `[workspace.dependencies]` へまとめた（`Cargo.lock` は変わらない）
+  - wintf の clippy の 51 件は、担当の spec `clippy-199-lints` の brief が既に挙げている（「依存の wintf に 53 件」）ので、申し送らない
