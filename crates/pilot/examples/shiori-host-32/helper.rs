@@ -1,4 +1,4 @@
-//! host-32 先進坑: 32bit helper バイナリのエントリ（最小スケルトン）。
+//! host-32 先進坑: 32bit helper バイナリのエントリ。
 //!
 //! i686 ターゲット（`i686-pc-windows-msvc`）でビルドする独立 example。サブフォルダの
 //! `helper.rs` は Cargo の auto-discovery 対象外ゆえ、`pilot/Cargo.toml` に明示
@@ -7,8 +7,15 @@
 //!
 //! 観測（i686）: `cargo build -p pilot --example shiori-host-32-helper --target i686-pc-windows-msvc`。
 //!
-//! 本タスク（1.1）は scaffolding のみ。message-only 窓生成・メッセージループ・
-//! `pasta.dll` 動的ロードなどの実体は後続タスクで実装する。
+//! 値は引数だけで受け取る（環境変数は読まない）。モード:
+//! - `--selftest-load [ghostdir]`: pasta.dll を読み `load(ghostdir)` を呼ぶ。
+//! - `--selftest-loop [secs]`: 同じプロセスの親役の窓と HELLO〜UNLOAD を往復する。
+//! - `<ghostdir> <parent_hwnd>`: 本番。親が `argv[1]=ghostdir`・`argv[2]=parent_hwnd`（10 進）で起こす。
+//!
+//! 終了コード: 0＝成功・2＝`--selftest-load` の失敗か窓／HELLO の失敗・3＝`--selftest-loop` の失敗・
+//! 4＝UNLOAD が来ないまま上限で抜けた・5＝UNLOAD で抜けたが pasta を読めていなかった。
+//! ghostdir を省くと検体 emo2 の ghost/master を使う。
+//!
 //! 葉ノード隔離（命綱・要件 7.2）: コードは本フォルダ配下のみ。
 
 // 親と同一の WM_COPYDATA プロトコル（IpcChannel）を helper ターゲットへも取り込む。
@@ -23,7 +30,7 @@ mod ipc;
 mod shiori_proxy;
 
 // HelperMessageWindow（message-only 窓＋メッセージループ・design.md §415–443）も helper（i686）
-// 専用。`wintf-winmsg-executor` の窓/ループを本境界へ閉じる（task 3.2）。
+// 専用。`wintf-winmsg-executor` の窓/ループを本境界へ閉じる。
 #[path = "helper_window.rs"]
 mod helper_window;
 
@@ -33,12 +40,10 @@ mod helper_window;
 mod sample_support;
 
 fn main() {
-    // i686 セルフテスト観測（task 3.1・go 基準(1) precursor・requirements 3.3）:
+    // i686 セルフテスト観測（go 基準(1) precursor・requirements 3.3）:
     //   shiori-host-32-helper.exe --selftest-load <ghostdir>
     // pasta.dll を動的ロード→3 エントリ解決→load(ghostdir) 無 crash 完了→unload を実行し、
     // 結果を標準出力へ出す（親が観測）。ghostdir 省略時は検体 emo2 の ghost/master を既定。
-    // ※ cargo test 経由の観測は同 example の ipc.rs #[cfg(test)] が i686 でビルド不能
-    //    （usize >> 32 overflow・本タスク境界外）なため、本実行時セルフテストでも観測できる。
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--selftest-load") {
         let ghostdir = args
@@ -46,7 +51,7 @@ fn main() {
             .position(|a| a == "--selftest-load")
             .and_then(|i| args.get(i + 1))
             .map(std::path::PathBuf::from)
-            .unwrap_or_else(default_fixture_ghostdir);
+            .unwrap_or_else(sample_support::emo2_ghost_master);
         match shiori_proxy::selftest_load(&ghostdir) {
             Ok(msg) => {
                 println!("{msg}");
@@ -59,10 +64,10 @@ fn main() {
         }
     }
 
-    // in-process loopback セルフテスト（task 3.2・go 基準(2) helper 側の核・要件 5.1/5.2/5.3）:
+    // in-process loopback セルフテスト（go 基準(2) helper 側の核・要件 5.1/5.2/5.3）:
     //   shiori-host-32-helper.exe --selftest-loop <secs>
     // stand-in parent 窓が HELLO を実 WM_COPYDATA で受領・helper HWND を復号確認 →
-    // N 秒ループ生存 → UNLOAD 清掃終了、までを単独実証する（実クロスプロセス親は task 4.1）。
+    // N 秒ループ生存 → UNLOAD 清掃終了、までを単独実証する。
     if args.iter().any(|a| a == "--selftest-loop") {
         let secs = args
             .iter()
@@ -85,49 +90,23 @@ fn main() {
     }
 
     // 本番 helper 実行経路（親が起動・design.md §415–443）:
-    //   親が PARENT_HWND（u32 10 進）と GHOSTDIR を env（無ければ arg[2]/arg[1]）で渡す
-    //   （process_host.rs の PARENT_HWND_ENV / GHOSTDIR_ENV と同名・spawn の arg 並びに一致）。
+    //   argv[1]=ghostdir・argv[2]=parent_hwnd（u32 10 進）＝process_host.rs::spawn の並び。
     // pasta を eager ロードし窓を立て HELLO を送り、UNLOAD までループを回して clean unload する。
-    // 実クロスプロセス往復（親駆動）は task 4.1 で完成。ここでは helper 側を起動しループを回す。
-    if let Some(parent_hwnd) = read_parent_hwnd(&args) {
-        let ghostdir = read_ghostdir(&args).unwrap_or_else(default_fixture_ghostdir);
+    if let Some(parent_hwnd) = args.get(2).and_then(|s| s.trim().parse::<u32>().ok()) {
+        let ghostdir = std::path::PathBuf::from(&args[1]);
         // UNLOAD が来なくても暴走しないよう上限（先進坑・ハーネス保護）。親駆動時は UNLOAD で早期停止。
         let code =
             helper_window::run_helper(parent_hwnd, &ghostdir, std::time::Duration::from_secs(30));
         std::process::exit(code);
     }
 
-    println!("pilot shiori-host-32-helper (i686 helper): skeleton placeholder");
+    println!("pilot shiori-host-32-helper (i686 helper)");
+    println!("  --selftest-load [ghostdir]   pasta.dll を読み load(ghostdir) を呼ぶ");
+    println!("  --selftest-loop [secs]       同じプロセスで HELLO〜UNLOAD を往復する（既定 3 秒）");
     println!(
-        "  modes: --selftest-load <ghostdir> | --selftest-loop <secs> | (env PARENT_HWND[+GHOSTDIR] で本番起動)"
+        "  <ghostdir> <parent_hwnd>     本番。親が argv[1]=ghostdir argv[2]=parent_hwnd（10 進）で起こす"
     );
-    // 共有プロトコルが helper ターゲットへ取り込まれていることの最小確認。
-    let _ = ipc::DEFAULT_TIMEOUT;
-}
-
-/// 親 HWND（u32 ワイヤ値）を env `PARENT_HWND`（無ければ arg[2]・10 進）から読む
-/// （process_host.rs::PARENT_HWND_ENV / spawn の argv[2] と同名・同並び）。
-fn read_parent_hwnd(args: &[String]) -> Option<u32> {
-    if let Ok(v) = std::env::var("PARENT_HWND") {
-        if let Ok(n) = v.trim().parse::<u32>() {
-            return Some(n);
-        }
-    }
-    // arg[2] = parent_hwnd（process_host.rs::spawn の argv 並び）。arg[0]=exe, arg[1]=ghostdir。
-    args.get(2).and_then(|s| s.trim().parse::<u32>().ok())
-}
-
-/// ghostdir を env `GHOSTDIR`（無ければ arg[1]）から読む（process_host.rs::GHOSTDIR_ENV と同名）。
-fn read_ghostdir(args: &[String]) -> Option<std::path::PathBuf> {
-    if let Ok(v) = std::env::var("GHOSTDIR") {
-        if !v.trim().is_empty() {
-            return Some(std::path::PathBuf::from(v));
-        }
-    }
-    args.get(1).map(std::path::PathBuf::from)
-}
-
-/// 検体の窓口から emo2 の ghostdir（pasta.dll の在処）を得る。
-fn default_fixture_ghostdir() -> std::path::PathBuf {
-    crate::sample_support::emo2_ghost_master()
+    println!("  ghostdir を省くと検体 emo2 の ghost/master");
+    println!("  終了コード: 0=成功 2=selftest-load か窓/HELLO の失敗 3=selftest-loop の失敗");
+    println!("              4=UNLOAD が来ず上限で抜けた 5=UNLOAD で抜けたが pasta を読めていない");
 }

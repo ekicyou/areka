@@ -45,6 +45,8 @@ crates/pilot/examples/
   並列に進行しても相互の merge 衝突は発生しない。細粒度・独立ゆえ多重並列で掘れる。
 - **実行法**: `cargo run -p pilot --example <spec>` がサブフォルダ example の標準呼出。
   雛形は `cargo run -p pilot --example _template` で動作確認できる。
+- 本線から独立したワークスペースを置く例外: `examples/pilot-windows-rs-next/` は `main.rs` を持たず、自分の `Cargo.toml`（`[workspace]`）と `Cargo.lock` を持つ。根の `members` に入らないので全体テストに乗らない。
+- テストを持つ実行例は `Cargo.toml` の `[[example]]` に `test = true` を書き、全体テストで走らせる（2026-11-17 裁定・`two-tunnel.md`）。x64 で走れないテストは `#[cfg(target_arch = "x86")]` で囲む。
 
 ### 着手手順
 

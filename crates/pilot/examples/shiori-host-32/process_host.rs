@@ -1,62 +1,70 @@
-//! host-32 先進坑: ProcessHost コンポーネント（x64 親に閉じる・design.md §285–327）。
+//! host-32 先進坑: 子のプロセスの見張り（x64 の親だけが取り込む）。
 //!
-//! i686 helper プロセスを `std::process::Command` で起動し、その生死/終了コードを
-//! **IPC レイヤと直交**に監視する（要件 1.1/1.2/1.3/1.4/2.4）。本モジュールは親 x64
-//! ターゲットからのみ `#[path = "process_host.rs"] mod process_host;` で取り込み、
-//! helper（i686）からは参照しない（プロセス分離・要件 1.5）。
+//! i686 の helper を `std::process::Command` で起こし、生き死にと終わり方を
+//! 送りの層とは別に見る（要件 1.1〜1.4・2.4）。helper（i686）からは取り込まない（要件 1.5）。
 //!
-//! 跨ビットネス規約（design.md §339 / ipc.rs §3）に従い、親 HWND は **u32** ワイヤ値
-//! として子へ受け渡す（arg/env）。これにより本モジュールは `windows` クレート不要の
-//! std-only で完結する（HWND 型を引きずらない）。
-//!
-//! 本タスク（2.2）のスコープ:
-//!   - `spawn(helper_exe, ghostdir, parent_hwnd)`: helper exe を起動し ghostdir/親 HWND を
-//!     arg/env で渡す（§305–313 / §324）。
-//!   - `poll_exit`: 非ブロッキング生存監視（`try_wait`・要件 1.2/2.4）。
-//!   - `wait_clean`: clean shutdown 待ち＋終了コード取得（要件 1.3）。
-//!   - 終了コードの clean/異常分類（要件 1.4）。
-//! メッセージ窓・WM_COPYDATA 往復・HELLO ハンドシェイクは後続タスク（4.1）であり、
-//! ここでは `helper_hwnd` は常に `None`（確定は task 4.1）。
+//! 親の HWND は下 32 ビットの 10 進で引数に載せて渡す（`argv[1]=ghostdir`・
+//! `argv[2]=parent_hwnd`）。環境変数では渡さない。
+//! 持ち手（`HelperHandle`）が捨てられるとき、子がまだ動いていれば止めて待つ。
+//! 親がどの `?` で抜けても helper が残らない。
 
-#![allow(dead_code)] // 一部 API（wait_clean 等）は main.rs の 2.2 スライスからのみ使用。
-
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 
-/// helper exe パスを渡すための環境変数名（design.md §324 確定）。
-/// 親はこの環境変数（無ければ第 1 CLI 引数）で helper exe パスを受ける。
+/// 親が helper の exe を受ける環境変数の名前（空でない値なら引数より先に使う）。
 pub const HELPER_EXE_ENV: &str = "HELPER_EXE";
 
-/// 子へ親 HWND を渡す環境変数名（u32 LE ワイヤ値・ipc.rs §3 / design.md §339）。
-pub const PARENT_HWND_ENV: &str = "PARENT_HWND";
-
-/// 子へ ghostdir を渡す環境変数名（SHIORI `load` に渡す `検体 emo2 の ghost/master`）。
-pub const GHOSTDIR_ENV: &str = "GHOSTDIR";
-
-/// 起動済 helper プロセスのハンドル（design.md §306–309）。
-///
-/// `helper_hwnd` は HELLO（task 4.1）受領後に確定する。本タスク（2.2）では常に `None`。
-pub struct HelperHandle {
-    /// 子プロセスハンドル（終了コード/生死監視の単一ソース）。
-    pub child: Child,
-    /// helper のメッセージ窓 HWND（u32 ワイヤ値）。HELLO 受領後に確定（task 4.1）。
-    pub helper_hwnd: Option<u32>,
+/// helper の exe を選ぶ。`env` が空でない値ならそれ、無ければ `args`（exe 名を除いた引数）の
+/// うち `--` で始まらない最初のもの。どちらも無ければ `None`。
+pub fn resolve_helper_exe(
+    env: Option<String>,
+    args: impl IntoIterator<Item = String>,
+) -> Option<PathBuf> {
+    if let Some(p) = env.filter(|p| !p.is_empty()) {
+        return Some(PathBuf::from(p));
+    }
+    args.into_iter()
+        .find(|a| !a.starts_with("--"))
+        .map(PathBuf::from)
 }
 
-/// helper の終了種別（要件 1.4: clean / 異常を観測可能な形に分類）。
+/// 起こした helper の持ち手。
+pub struct HelperHandle {
+    /// 子のプロセス（終わり方と生き死にを見る唯一の元）。
+    pub child: Child,
+}
+
+impl Drop for HelperHandle {
+    /// まだ動いていれば記録を出してから止めて待つ（待ち終えた後は何もしない）。
+    fn drop(&mut self) {
+        // 見えない（try_wait の失敗）ときも止めにいく。
+        if let Ok(Some(_)) = self.child.try_wait() {
+            return;
+        }
+        let pid = self.child.id();
+        eprintln!("[process_host] helper (pid {pid}) がまだ動いているので止める");
+        if let Err(e) = self.child.kill() {
+            eprintln!("[process_host] helper (pid {pid}) を止められなかった: {e}");
+        }
+        if let Err(e) = self.child.wait() {
+            eprintln!("[process_host] helper (pid {pid}) の終わりを待てなかった: {e}");
+        }
+    }
+}
+
+/// helper の終わり方（要件 1.4: clean と異常を見分けられる形に分ける）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitKind {
     /// 終了コード 0 = clean shutdown（要件 1.3）。
     Clean,
-    /// 非ゼロ終了コード = 異常終了（要件 1.4）。
+    /// 0 でない終了コード = 異常終了（要件 1.4）。
     Abnormal(i32),
-    /// 終了コードを取得できない異常終了（シグナル/強制終了等）。
+    /// 終了コードが取れない終わり方（強制終了など）。
     Terminated,
 }
 
 impl ExitKind {
-    /// 終了コード（`Option<i32>`: None = コード不明）を観測可能な分類へ写像する。
-    /// `None`（コードなし＝シグナル等で終了）は `Terminated`（異常）として扱う。
+    /// 終了コード（`None` = コードが無い）を分類へ写す。`None` は `Terminated`（異常）。
     pub fn classify(code: Option<i32>) -> ExitKind {
         match code {
             Some(0) => ExitKind::Clean,
@@ -71,18 +79,11 @@ impl ExitKind {
     }
 }
 
-/// ProcessHost: helper プロセスの起動と生存監視（design.md §285–327）。
+/// helper のプロセスの起こしと見張り。
 pub struct ProcessHost;
 
 impl ProcessHost {
-    /// i686 helper exe を起動する（design.md §313 / §305）。
-    ///
-    /// `ghostdir`（SHIORI `load` 対象）と `parent_hwnd`（u32 ワイヤ値）を **arg と env の
-    /// 両方**で渡す。helper スケルトンは現状これらを無視するが（後続タスクで消費）、
-    /// 起動配線そのものが本タスクの観測対象である。
-    ///
-    /// arg 並び: `argv[1] = ghostdir`, `argv[2] = parent_hwnd(10 進)`。
-    /// env: `GHOSTDIR` / `PARENT_HWND`。
+    /// i686 の helper を起こす。`argv[1] = ghostdir`・`argv[2] = parent_hwnd`（10 進）。
     pub fn spawn(
         helper_exe: &Path,
         ghostdir: &Path,
@@ -91,36 +92,12 @@ impl ProcessHost {
         let child = Command::new(helper_exe)
             .arg(ghostdir)
             .arg(parent_hwnd.to_string())
-            .env(GHOSTDIR_ENV, ghostdir)
-            .env(PARENT_HWND_ENV, parent_hwnd.to_string())
             .spawn()?;
-        Ok(HelperHandle {
-            child,
-            helper_hwnd: None,
-        })
+        Ok(HelperHandle { child })
     }
 
-    /// 子の生死を **非ブロッキング**で確認する（design.md §315・要件 1.2/2.4）。
-    ///
-    /// `Some(code)` で終了（終了コード確定）・`None` で稼働中。`try_wait` ゆえ IPC レイヤと
-    /// 直交した生存監視として何度でも呼べる。終了コードが取得できない異常終了（シグナル等）は
-    /// `Some(i32::MIN)` を返さず、本関数では「コードなし」を `None` と区別するため
-    /// `poll_exit_kind` を別途用意する。
-    pub fn poll_exit(handle: &mut HelperHandle) -> Option<i32> {
-        match handle.child.try_wait() {
-            // 終了済: ExitStatus からコードを取得（None=シグナル終了は便宜上 -1 とせず
-            // poll_exit_kind 側で Terminated と分類）。ここではコードを返す契約ゆえ、
-            // コード不明時は None を返さず最も近い観測値として -1 を返す。
-            Ok(Some(status)) => Some(status.code().unwrap_or(-1)),
-            // 稼働中。
-            Ok(None) => None,
-            // try_wait 自体の失敗は稼働継続不能だが、観測としては「不明」。-1 を返す。
-            Err(_) => Some(-1),
-        }
-    }
-
-    /// 非ブロッキング生存監視 ＋ 終了分類（要件 1.2/1.4/2.4）。
-    /// `None` = 稼働中。`Some(ExitKind)` = 終了済（clean/異常を分類）。
+    /// 生き死にを待たずに見る（要件 1.2・2.4）。`None` = 動いている。
+    /// `try_wait` 自体の失敗は見張れないので `Terminated` とする。
     pub fn poll_exit_kind(handle: &mut HelperHandle) -> Option<ExitKind> {
         match handle.child.try_wait() {
             Ok(Some(status)) => Some(ExitKind::classify(status.code())),
@@ -129,42 +106,20 @@ impl ProcessHost {
         }
     }
 
-    /// clean shutdown を待つ（design.md §317・要件 1.3）。ブロックして終了コードを返す。
-    /// 終了コードが取得できない異常終了（シグナル等）は `-1` を返す。
-    pub fn wait_clean(mut handle: HelperHandle) -> std::io::Result<i32> {
-        let status = handle.child.wait()?;
-        Ok(status.code().unwrap_or(-1))
-    }
-
-    /// `wait_clean` の分類版: ブロックして `ExitKind`（clean/異常）を返す（要件 1.3/1.4）。
+    /// 終わるまで待って終わり方を返す（要件 1.3・1.4）。
     pub fn wait_kind(mut handle: HelperHandle) -> std::io::Result<ExitKind> {
         let status = handle.child.wait()?;
         Ok(ExitKind::classify(status.code()))
     }
 
-    /// helper を**強制終了**する（task 5.2・異常系観測用の ADDITIVE ヘルパ）。
-    ///
-    /// `std::process::Child::kill()` で子プロセスを強制終了させ、その後の
-    /// `poll_exit_kind` / `wait_kind` が clean(0) ではない異常終了（`Terminated` または
-    /// 非ゼロ `Abnormal`）を観測できるようにする（要件 1.4「予期せぬ終了の検出・記録」・2.4）。
-    /// 既存の spawn/poll/wait ロジックは変更しない（純粋に追加のみ）。
-    ///
-    /// Windows では `TerminateProcess` 相当で、終了コードは非 0（通常 1）になる。
-    /// clean unload（UNLOAD → exit 0）とは明確に区別される観測点。
+    /// helper を強制終了する（err(2) の異常終了の観測用）。
+    /// Windows では `TerminateProcess` で、終了コードは 0 でない（clean unload と見分けられる）。
     pub fn terminate(handle: &mut HelperHandle) -> std::io::Result<()> {
         handle.child.kill()
     }
 }
 
-// ============================================================================
-// 単体テスト（観測可能な受け入れ基準・task 2.2）
-//
-// 注意: 本テストは i686 helper exe の有無に依存しない自己完結テストである。
-// ProcessHost の責務は「子プロセスの起動 → 終了コード/生死の監視」であり、どの exe を
-// 起動するかは付随的。ゆえに決定的・可搬な stand-in プロセス（`cmd.exe /c exit N`）で
-// その配線を検証する。REAL helper の起動は main.rs の 2.2 スライス（手動実行）で実証する。
-// ============================================================================
-
+// 子のプロセスを使うテスト。helper の exe には頼らず、`cmd.exe`・`ping` を代わりに起こす。
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,88 +127,138 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    /// テスト用 stand-in: `cmd.exe /c exit <code>` をハンドル化する。
-    /// ProcessHost::spawn は helper exe を取るが、ここでは終了コード制御のため
-    /// Command を直接組み、HelperHandle に包む（spawn と同じ Child 監視経路を通す）。
+    /// `cmd.exe /c exit <code>` を持ち手に包む。
     fn spawn_exit(code: i32) -> HelperHandle {
         let child = Command::new("cmd.exe")
             .args(["/c", &format!("exit {code}")])
             .spawn()
             .expect("cmd.exe must spawn on Windows");
-        HelperHandle {
-            child,
-            helper_hwnd: None,
+        HelperHandle { child }
+    }
+
+    fn strings(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// 指摘 4: exe の選び方の表。
+    #[test]
+    fn resolve_helper_exe_table() {
+        assert_eq!(
+            resolve_helper_exe(None, strings(&["--selftest-errors", "h.exe"])),
+            Some(PathBuf::from("h.exe")),
+            "--selftest-errors の後ろの exe を選ぶ"
+        );
+        assert_eq!(
+            resolve_helper_exe(None, strings(&["--selftest-errors"])),
+            None,
+            "exe が無ければ None"
+        );
+        assert_eq!(
+            resolve_helper_exe(Some(String::new()), strings(&["h.exe"])),
+            Some(PathBuf::from("h.exe")),
+            "空の環境変数は無いのと同じ"
+        );
+        assert_eq!(
+            resolve_helper_exe(Some("a.exe".to_string()), strings(&["h.exe"])),
+            Some(PathBuf::from("a.exe")),
+            "環境変数が引数に勝つ"
+        );
+    }
+
+    /// テストが落ちても子を残さないため、握ったハンドルで最後に止めて閉じる。
+    struct ProcessGuard(windows::Win32::Foundation::HANDLE);
+
+    impl Drop for ProcessGuard {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = windows::Win32::System::Threading::TerminateProcess(self.0, 1);
+                let _ = windows::Win32::Foundation::CloseHandle(self.0);
+            }
         }
     }
 
-    /// 要件 1.3: clean shutdown（終了コード 0）を `wait_clean` で取得し、clean と分類する。
+    /// 指摘 6: 持ち手を捨てると、まだ動いている子が止まる。
     #[test]
-    fn wait_clean_captures_zero_and_classifies_clean() {
-        let handle = spawn_exit(0);
-        let code = ProcessHost::wait_clean(handle).expect("wait must succeed");
-        assert_eq!(code, 0, "clean exit must report code 0");
-        assert_eq!(ExitKind::classify(Some(code)), ExitKind::Clean);
-        assert!(ExitKind::classify(Some(code)).is_clean());
+    fn dropping_handle_kills_running_child() {
+        use windows::Win32::Foundation::WAIT_OBJECT_0;
+        use windows::Win32::System::Threading::{
+            OpenProcess, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, WaitForSingleObject,
+        };
+
+        let child = Command::new("ping")
+            .args(["-n", "30", "127.0.0.1"])
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .expect("ping must spawn on Windows");
+        let pid = child.id();
+        let guard = ProcessGuard(
+            unsafe { OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_TERMINATE, false, pid) }
+                .expect("OpenProcess must succeed for our own child"),
+        );
+        let handle = HelperHandle { child };
+
+        drop(handle);
+
+        let wait = unsafe { WaitForSingleObject(guard.0, 0) };
+        assert_eq!(
+            wait, WAIT_OBJECT_0,
+            "持ち手を捨てた後、子のプロセスは終わっていなければならない"
+        );
     }
 
-    /// 要件 1.4: 非ゼロ終了コードを捕捉し、異常（Abnormal）と分類する。
+    /// 要件 1.3: 終了コード 0 を `wait_kind` で Clean と見る。
     #[test]
-    fn wait_captures_nonzero_and_classifies_abnormal() {
-        let handle = spawn_exit(3);
-        let kind = ProcessHost::wait_kind(handle).expect("wait must succeed");
-        assert_eq!(
-            kind,
-            ExitKind::Abnormal(3),
-            "non-zero exit must be Abnormal(3)"
-        );
+    fn wait_kind_classifies_zero_as_clean() {
+        let kind = ProcessHost::wait_kind(spawn_exit(0)).expect("wait must succeed");
+        assert_eq!(kind, ExitKind::Clean);
+        assert!(kind.is_clean());
+    }
+
+    /// 要件 1.4: 0 でない終了コードを Abnormal と見る。
+    #[test]
+    fn wait_kind_classifies_nonzero_as_abnormal() {
+        let kind = ProcessHost::wait_kind(spawn_exit(3)).expect("wait must succeed");
+        assert_eq!(kind, ExitKind::Abnormal(3));
         assert!(!kind.is_clean());
     }
 
-    /// 要件 1.2/2.4: 非ブロッキング生存監視。稼働中は `None`、終了後に `Some(code)`。
+    /// 要件 1.2・2.4: 待たずに見る。動いている間は `None`、終わった後は `Some(Clean)`。
     #[test]
-    fn poll_exit_is_none_while_running_then_some_after_exit() {
-        // 稼働中を観測するため、短時間スリープしてから 0 終了するプロセスを起動。
-        // `ping -n 2 127.0.0.1` は約 1 秒待つ（cmd の timeout は対話端末で不安定なため ping を用いる）。
+    fn poll_exit_kind_is_none_while_running_then_clean_after_exit() {
+        // `ping -n 2` は約 1 秒待つ（cmd の timeout は対話端末で不安定なため ping を使う）。
         let child = Command::new("cmd.exe")
             .args(["/c", "ping -n 2 127.0.0.1 >NUL & exit 0"])
             .spawn()
             .expect("cmd.exe must spawn");
-        let mut handle = HelperHandle {
-            child,
-            helper_hwnd: None,
-        };
+        let mut handle = HelperHandle { child };
 
-        // 起動直後は稼働中（None）であることを観測（非ブロッキング）。
         assert_eq!(
-            ProcessHost::poll_exit(&mut handle),
+            ProcessHost::poll_exit_kind(&mut handle),
             None,
-            "poll_exit must be None while the child is still running"
+            "poll_exit_kind must be None while the child is still running"
         );
 
-        // 終了を待つ（ポーリングして Some に変わるまで・上限ガード付き）。
-        let mut observed: Option<i32> = None;
+        let mut observed = None;
         for _ in 0..200 {
-            if let Some(code) = ProcessHost::poll_exit(&mut handle) {
-                observed = Some(code);
+            if let Some(kind) = ProcessHost::poll_exit_kind(&mut handle) {
+                observed = Some(kind);
                 break;
             }
             thread::sleep(Duration::from_millis(50));
         }
         assert_eq!(
             observed,
-            Some(0),
-            "poll_exit must become Some(0) after the child exits cleanly"
+            Some(ExitKind::Clean),
+            "poll_exit_kind must become Some(Clean) after the child exits cleanly"
         );
-
-        // 分類版でも clean を観測（終了後は何度呼んでも Some）。
-        // 既に try_wait で回収済みでも try_wait は終了ステータスを返し続ける。
-        match ProcessHost::poll_exit_kind(&mut handle) {
-            Some(kind) => assert_eq!(kind, ExitKind::Clean),
-            None => panic!("poll_exit_kind must report Some after exit"),
-        }
+        // 終わった後は何度見ても同じ。
+        assert_eq!(
+            ProcessHost::poll_exit_kind(&mut handle),
+            Some(ExitKind::Clean)
+        );
     }
 
-    /// ExitKind 分類表（要件 1.3/1.4）: 0=Clean, 非0=Abnormal, None=Terminated。
+    /// 分類の表（要件 1.3・1.4）: 0=Clean・0 でない=Abnormal・None=Terminated。
     #[test]
     fn exit_kind_classification_table() {
         assert_eq!(ExitKind::classify(Some(0)), ExitKind::Clean);

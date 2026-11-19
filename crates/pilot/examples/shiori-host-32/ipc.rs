@@ -1,25 +1,24 @@
-//! host-32 先進坑: WM_COPYDATA トランスポート規約（親 x64 / helper i686 共有）。
+//! host-32 先進坑: 親（x64）と helper（i686）が両方使う WM_COPYDATA の送り・受けの決まり。
 //!
-//! 本モジュールは **IpcChannel** コンポーネント（design.md §329–374）の単一ソースであり、
 //! 親（`main.rs`）と helper（`helper.rs`）の双方から `#[path = "ipc.rs"] mod ipc;` で
-//! 取り込まれる（design.md §150–153 / §168）。プロトコル定義を一箇所に集約することで、
-//! x64⇄i686 の跨ビットネス規約のズレを構造的に防ぐ。
+//! 取り込まれる。決まりを一箇所に置くことで、x64⇄i686 の跨ビットネス規約のズレを防ぐ。
 //!
-//! 本タスク（1.2）が確立するのは **規約とビルディングブロック**のみ:
-//!   - メッセージ種別タグ `MsgTag`（`dwData` の低 32bit に載る・跨ビットネス安全）
-//!   - ペイロード規約（生バイト列・`cbData`=長さ・ポインタ/HANDLE/struct を載せない）
-//!   - HWND の u32 LE ワイヤ表現（エンコード/デコード）
-//!   - `SendMessageTimeout`（`SMTO_ABORTIFHUNG`）による送出規約（ハングしない）
-//! 実走の 1 往復（応答待ち・再入受領）は後続タスク 4.1 の範囲であり本モジュールには含めない。
+//! - `dwData` の下 32 ビット＝メッセージ種別タグ（`MsgTag`）。
+//! - `cbData`＝中身の長さ。中身は生のバイト列で、固定ヘッダを持たない。ポインタ・HANDLE・
+//!   struct は載せない（跨ビットネスで有効なのは生のバイト列だけ）。
+//! - HWND は下 32 ビット（`hwnd_to_u32`）の `to_le_bytes` で運ぶ。
+//! - 送りは `SendMessageTimeoutW`（`SMTO_ABORTIFHUNG` ＋上限）で、ハングしない。
 
-#![allow(dead_code)] // 本タスクは規約とビルディングブロックの確立のみ。実走呼び出しは後続タスク。
-
-use core::cell::RefCell;
+use core::cell::Cell;
 use core::time::Duration;
+use std::time::Instant;
 
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{ERROR_TIMEOUT, GetLastError, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
-use windows::Win32::UI::WindowsAndMessaging::{SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_COPYDATA};
+use windows::Win32::UI::WindowsAndMessaging::{
+    KillTimer, SMTO_ABORTIFHUNG, SendMessageTimeoutW, SetTimer, WM_COPYDATA,
+};
+use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 // ============================================================================
 // 1. メッセージ種別タグ（MsgTag）
@@ -27,40 +26,32 @@ use windows::Win32::UI::WindowsAndMessaging::{SMTO_ABORTIFHUNG, SendMessageTimeo
 
 /// `WM_COPYDATA` の `COPYDATASTRUCT.dwData` に載せるメッセージ種別タグ。
 ///
-/// 跨ビットネス規約（design.md §117 / §339）: `dwData` は `ULONG_PTR`（x64=64bit /
-/// i686=32bit）だが、本タグは **低 32bit のみ**を使用する。`#[repr(u32)]` ゆえ判別子は
-/// 必ず `u32` に収まり、`(tag as usize) >> 32 == 0` が常に成り立つ（跨ビットネス安全）。
-///
-/// ペイロード（生バイト列）はここには載らない — タグは「種別」のみを表し、本体は
-/// `COPYDATASTRUCT.lpData`（長さ `cbData`）で渡す。
+/// `dwData` は `ULONG_PTR`（x64=64bit / i686=32bit）だが、タグは **下 32 ビットだけ**を使う。
+/// 判別子 2 は欠番（値は変えない）。
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MsgTag {
-    /// helper → 親: メッセージ窓 HWND ハンドシェイク（ペイロード = HWND の u32 LE）。
+    /// helper → 親: メッセージ窓 HWND ハンドシェイク（中身 = `hwnd_to_u32(..).to_le_bytes()`）。
     Hello = 1,
-    /// 親 → helper: `pasta.dll` ロード指示（ペイロード = ghostdir バイト列）。
-    Load = 2,
-    /// 親 → helper: SHIORI/3.0 リクエスト（ペイロード = 生 SHIORI3 バイト列）。
+    /// 親 → helper: SHIORI/3.0 リクエスト（中身 = 生 SHIORI3 バイト列）。
     Request = 3,
-    /// helper → 親: SHIORI/3.0 応答（ペイロード = 生 SHIORI3 バイト列）。
+    /// helper → 親: SHIORI/3.0 応答（中身 = 生 SHIORI3 バイト列）。
     Response = 4,
     /// 親 → helper: `pasta.dll` アンロード指示。
     Unload = 5,
 }
 
 impl MsgTag {
-    /// タグを `u32` 判別子へ。`dwData` へ載せる際の低 32bit 表現。
+    /// `dwData` の下 32 ビットへ載せる判別子。
     #[inline]
     pub const fn as_u32(self) -> u32 {
         self as u32
     }
 
-    /// 受信側（inbound）: `dwData` の低 32bit から `MsgTag` を復元する。
-    /// 未知の値は `Err(raw)` を返す（不正フレームの観測点）。
+    /// `dwData` の下 32 ビットから `MsgTag` を戻す。未知の値は `Err(raw)`。
     pub fn try_from_u32(raw: u32) -> Result<Self, u32> {
         match raw {
             x if x == MsgTag::Hello.as_u32() => Ok(MsgTag::Hello),
-            x if x == MsgTag::Load.as_u32() => Ok(MsgTag::Load),
             x if x == MsgTag::Request.as_u32() => Ok(MsgTag::Request),
             x if x == MsgTag::Response.as_u32() => Ok(MsgTag::Response),
             x if x == MsgTag::Unload.as_u32() => Ok(MsgTag::Unload),
@@ -69,100 +60,40 @@ impl MsgTag {
     }
 }
 
-impl From<MsgTag> for u32 {
-    #[inline]
-    fn from(tag: MsgTag) -> u32 {
-        tag.as_u32()
-    }
-}
-
-impl TryFrom<u32> for MsgTag {
-    type Error = u32;
-    #[inline]
-    fn try_from(raw: u32) -> Result<Self, u32> {
-        MsgTag::try_from_u32(raw)
-    }
-}
-
 // ============================================================================
-// 2. ペイロード規約（生バイト列・cbData=長さ・ポインタ/HANDLE/struct 禁止）
+// 2. HWND の下 32 ビット
 // ============================================================================
 
-/// **ペイロード規約**（design.md §338–339 / requirements 2.1）。
-///
-/// - WM_COPYDATA のペイロードは **生バイト列**である。固定ヘッダ・手動フレーミングは持たず、
-///   メッセージ境界は OS が `COPYDATASTRUCT.cbData`（バイト長）で画定する。
-/// - ペイロードには **ポインタ・HANDLE・Rust/C の struct を一切載せない**。跨ビットネスで
-///   有効なのは生バイト列のみ（HWND は §3 の u32 LE 表現で別途受け渡す）。
-/// - `dwData` は種別タグ（§1）専用であり、本体データは載せない。
-///
-/// 本定数は「ペイロードに構造を持たせない」契約の宣言的アンカーである（コードでヘッダ長を
-/// 0 と固定することで、フレーミングが `cbData` のみに依存することを表現する）。
-pub const PAYLOAD_HEADER_LEN: usize = 0;
-
-// ============================================================================
-// 3. HWND ワイヤ表現（u32 LE）
-// ============================================================================
-
-/// HWND を **u32 リトルエンディアン** 4 バイトへエンコードする（design.md §117 / §339）。
-///
-/// HWND は USER ハンドルゆえ **32bit 有意**であり、x64 側は上位 32bit を zero/sign-extend
-/// しているにすぎない。跨ビットネスで安全に運べるのは下位 32bit のみなので、ワイヤ表現は
-/// 常に u32 LE（4 バイト固定）とする。ポインタ幅（x64=8 / i686=4）をそのまま載せてはならない。
+/// HWND の下 32 ビット（USER ハンドルは 32 ビットで足りる）。HELLO の中身はこれの `to_le_bytes`。
 #[inline]
-pub fn encode_hwnd_le(hwnd: HWND) -> [u8; 4] {
-    // HWND(*mut c_void) の数値をいったん usize で取り出し、下位 32bit のみワイヤへ。
-    let raw = hwnd.0 as usize as u32;
-    raw.to_le_bytes()
+pub fn hwnd_to_u32(hwnd: HWND) -> u32 {
+    hwnd.0 as usize as u32
 }
 
-/// u32 LE 4 バイトから HWND の 32bit 有意値（USER ハンドル）を復元する。
-///
-/// 復元側がポインタ幅 64bit の x64 親であっても、まず 32bit 値として読み、その後
-/// `HWND(value as usize as *mut _)` で zero-extend する（design.md §339）。
-#[inline]
-pub fn decode_hwnd_le(bytes: [u8; 4]) -> u32 {
-    u32::from_le_bytes(bytes)
-}
-
-/// `decode_hwnd_le` で得た 32bit 値を、当該プロセスのポインタ幅の `HWND` へ復元する。
-/// x64 では上位 32bit を 0 で埋める（zero-extend）。
+/// 下 32 ビットの値をこのプロセスのポインタ幅の `HWND` へ戻す。x64 では上を 0 で埋める。
 #[inline]
 pub fn hwnd_from_u32(value: u32) -> HWND {
     HWND(value as usize as *mut core::ffi::c_void)
 }
 
 // ============================================================================
-// 4. SendMessageTimeout 送出規約（ハングしない）
+// 3. 送り（SendMessageTimeoutW）と受け（COPYDATASTRUCT の取り出し）
 // ============================================================================
 
-/// IPC 送出の失敗種別（design.md §365）。
+/// 送りの失敗の種類。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpcError {
-    /// `timeout` 内に `SendMessageTimeout` が返らなかった（要件 2.3: ハングしない）。
+    /// `GetLastError() == ERROR_TIMEOUT`（上限に達した・`SMTO_ABORTIFHUNG` の打ち切り）。
     Timeout,
-    /// 送出自体が失敗した（`SendMessageTimeout` が 0 を返す等）。
-    SendFailed,
-    /// 送出先ウィンドウが消滅していた（peer プロセス終了）。
-    PeerGone,
+    /// ほかの Win32 エラー（窓が無い 1400 など）。値は `GetLastError` のまま。
+    SendFailed(u32),
 }
 
-/// 送出のデフォルトタイムアウト規約（要件 2.3）。後続タスクが必要に応じて上書きする。
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// **送出規約**: `SendMessageTimeout`（`SMTO_ABORTIFHUNG` ＋タイムアウト）で WM_COPYDATA を
-/// 1 通送る薄いラッパ（design.md §340 / requirements 2.3）。
+/// WM_COPYDATA を 1 通送る。`dwData`＝`tag` の下 32 ビット・`cbData`＝`payload` の長さ・
+/// `wParam`＝`self_hwnd`。`SMTO_ABORTIFHUNG` ＋ `timeout` で、相手が詰まってもハングしない。
 ///
-/// - `SMTO_ABORTIFHUNG`: 送出先がハング中なら即座に打ち切る（ハングしない契約）。
-/// - `timeout`: ミリ秒粒度で `SendMessageTimeoutW` に渡す。期限超過は `Err(Timeout)`。
-/// - ペイロードは生バイト列（§2）。`cbData` に長さ、`dwData` に種別タグ（低 32bit）を載せる。
-///
-/// 本ラッパは「片道送出」の規約確立まで。応答（helper→親の 2nd WM_COPYDATA）待ちは
-/// 後続タスク 4.1 の範囲であり、本関数は戻り値を待たない（`Ok(())` で送出成功のみ表す）。
-///
-/// # Safety
-/// `SendMessageTimeoutW` は FFI。`target` は有効な HWND（ハンドシェイク確定済）であること、
-/// `payload` は呼び出し中生存していること（`COPYDATASTRUCT.lpData` がこれを指す）が前提。
+/// 送りが 0 を返したら直後に 1 回だけ `GetLastError` を読み、`ERROR_TIMEOUT` なら
+/// `Err(Timeout)`、ほかは `Err(SendFailed(code))` を返す。応答は待たない。
 pub fn send_copydata(
     target: HWND,
     self_hwnd: HWND,
@@ -170,19 +101,17 @@ pub fn send_copydata(
     payload: &[u8],
     timeout: Duration,
 ) -> Result<(), IpcError> {
-    // 生バイト列を指す COPYDATASTRUCT を組み立てる。lpData は payload を指すだけで、
-    // ポインタ自体はワイヤに載らない（OS が cbData バイトを marshal する）。
+    // lpData は payload を指すだけで、ポインタ自体はワイヤに載らない（OS が cbData バイトを写す）。
     let cds = COPYDATASTRUCT {
-        dwData: tag.as_u32() as usize, // ★ 低 32bit のみ使用（跨ビットネス安全）
-        cbData: payload.len() as u32,  // ★ メッセージ境界 = cbData（手動フレーミング不要）
+        dwData: tag.as_u32() as usize,
+        cbData: payload.len() as u32,
         lpData: payload.as_ptr() as *mut core::ffi::c_void,
     };
 
     let timeout_ms = timeout.as_millis().min(u32::MAX as u128) as u32;
 
     let mut result: usize = 0;
-    // SAFETY: target は有効 HWND 前提。&cds は本呼び出し中生存。SMTO_ABORTIFHUNG ＋
-    // timeout により無期限ブロックしない（要件 2.3）。
+    // SAFETY: &cds と payload は本呼び出しの間生きている。target が無効なら OS がエラーを返す。
     let ret: LRESULT = unsafe {
         SendMessageTimeoutW(
             target,
@@ -195,214 +124,283 @@ pub fn send_copydata(
         )
     };
 
-    if ret.0 == 0 {
-        // 0 = タイムアウト or 失敗。GetLastError で区別可能だが先進坑では Timeout 既定。
+    if ret.0 != 0 {
+        return Ok(());
+    }
+    // 送りの直後に 1 回だけ読む（間に別の Win32 呼び出しを挟まない）。
+    // SAFETY: 引数なしの Win32 呼び出し。
+    let code = unsafe { GetLastError() };
+    if code == ERROR_TIMEOUT {
         Err(IpcError::Timeout)
     } else {
-        Ok(())
+        Err(IpcError::SendFailed(code.0))
     }
 }
 
-// ============================================================================
-// 5. 受け皿セル（ResponseSlot）＋ 1 往復 send_request（再入受領・task 4.1）
-// ============================================================================
-
-/// **受け皿セル**（design.md §209・議題 2 確定）。親の応答 WndProc と `send_request` が
-/// 共有する single-in-flight の応答格納先。
-///
-/// 往復は同時に 1 つ（`Invariants: single-in-flight`・design.md §369）ゆえ内部可変は
-/// `RefCell` で足りる（UI スレッド固定・reader スレッド不要）。`send_request` が送出前に
-/// `clear()` し、応答 WndProc が `store()` し、`SendMessageTimeout` 復帰後に `take()` する。
-///
-/// **デッドロック回避の核**（design.md §210）: 応答を受ける WndProc は本セルへ payload を
-/// 格納して**即 return**するのみ。それ以上の跨プロセス `SendMessage` を発行しない
-/// （REQUEST 待ち ⊃ RESPONSE 受領 WndProc の厳密な入れ子 ＝ 循環待ちなし）。
-#[derive(Default)]
-pub struct ResponseSlot {
-    inner: RefCell<Option<Vec<u8>>>,
-}
-
-impl ResponseSlot {
-    pub fn new() -> Self {
-        Self {
-            inner: RefCell::new(None),
-        }
-    }
-
-    /// 送出直前に空にする（前往復の残骸を排除・single-in-flight の前提）。
-    pub fn clear(&self) {
-        *self.inner.borrow_mut() = None;
-    }
-
-    /// 応答 WndProc が RESPONSE payload を格納する（再入受領・即 return）。
-    pub fn store(&self, bytes: Vec<u8>) {
-        *self.inner.borrow_mut() = Some(bytes);
-    }
-
-    /// `SendMessageTimeout` 復帰後に取り出す（`None` なら未受領＝Timeout）。
-    pub fn take(&self) -> Option<Vec<u8>> {
-        self.inner.borrow_mut().take()
-    }
-}
-
-/// **1 往復送信**（design.md §353–365・IpcChannel Service Interface）。
-///
-/// `send_copydata`（片道）を土台に、応答（helper→親の 2nd WM_COPYDATA）を**受け皿セル方式**で
-/// 再入受領する（design.md §209）。手順:
-///   1. `slot.clear()` — 受け皿を空に（single-in-flight）。
-///   2. `SendMessageTimeout(target, WM_COPYDATA, REQUEST)` — 親はここでブロック。
-///      待機中、Windows が helper の RESPONSE(2nd WM_COPYDATA) を親 WndProc へ**再入配送**し、
-///      WndProc が `slot.store()` して即 return する（跨プロセス SendMessage を発行しない・§210）。
-///   3. `SendMessageTimeout` 復帰後 `slot.take()` — `Some(bytes)=>Ok`、空=>`Err(Timeout)`。
-///
-/// `SMTO_ABORTIFHUNG` ＋ `timeout` で wedged peer をハングさせない（要件 2.3）。往復は
-/// single-in-flight（同時に 1 つ・design.md §369）。
+/// 受けた WM_COPYDATA の LPARAM から（タグ＝`dwData` の下 32 ビット, 中身の写し）を取り出す。
+/// `lparam` が null なら `None`。`cbData` が 0 なら中身は空。
 ///
 /// # Safety
-/// `target` は有効な HWND（ハンドシェイクで確定）。`payload` は本呼び出し中生存。
-/// `slot` は親の応答 WndProc が参照する受け皿と**同一**でなければならない（再入受領の要）。
-pub fn send_request(
-    target: HWND,
-    self_hwnd: HWND,
-    tag: MsgTag,
-    payload: &[u8],
-    timeout: Duration,
-    slot: &ResponseSlot,
-) -> Result<Vec<u8>, IpcError> {
-    // ① 受け皿を空に（前往復の残骸排除・single-in-flight）。
-    slot.clear();
-
-    // ② REQUEST を同期送出（親はここでブロック）。待機中に RESPONSE が再入配送され、
-    //    親 WndProc が slot.store() する（design.md §209）。
-    let cds = COPYDATASTRUCT {
-        dwData: tag.as_u32() as usize, // 低 32bit のみ（跨ビットネス安全）
-        cbData: payload.len() as u32,  // メッセージ境界 = cbData（手動フレーミング不要）
-        lpData: payload.as_ptr() as *mut core::ffi::c_void,
-    };
-    let timeout_ms = timeout.as_millis().min(u32::MAX as u128) as u32;
-    let mut result: usize = 0;
-    // SAFETY: target 有効前提。&cds は本呼び出し中生存。SMTO_ABORTIFHUNG＋timeout でハングしない。
-    let ret: LRESULT = unsafe {
-        SendMessageTimeoutW(
-            target,
-            WM_COPYDATA,
-            WPARAM(self_hwnd.0 as usize),
-            LPARAM(&cds as *const COPYDATASTRUCT as isize),
-            SMTO_ABORTIFHUNG,
-            timeout_ms,
-            Some(&mut result as *mut usize),
-        )
-    };
-
-    if ret.0 == 0 {
-        // 0 = REQUEST 送出自体がタイムアウト/失敗（helper が REQUEST を捌けなかった）。
-        return Err(IpcError::Timeout);
+/// `lparam` は WM_COPYDATA の LPARAM（OS が `COPYDATASTRUCT` を指すことを約束する）か null。
+pub unsafe fn copydata_payload(lparam: LPARAM) -> Option<(u32, Vec<u8>)> {
+    let cds = lparam.0 as *const COPYDATASTRUCT;
+    if cds.is_null() {
+        return None;
     }
-
-    // ③ 受け皿から応答を取り出す。再入受領が成立していれば Some、未受領なら Timeout。
-    match slot.take() {
-        Some(bytes) => Ok(bytes),
-        None => Err(IpcError::Timeout),
-    }
+    // SAFETY: 呼び元の約束により cds は有効な COPYDATASTRUCT を指す。
+    let cds = unsafe { &*cds };
+    let tag_raw = (cds.dwData as u64 & 0xFFFF_FFFF) as u32;
+    let len = cds.cbData as usize;
+    let payload = if len == 0 || cds.lpData.is_null() {
+        Vec::new()
+    } else {
+        // SAFETY: lpData は cbData バイト有効（OS が写した受け側の写し）。
+        unsafe { std::slice::from_raw_parts(cds.lpData as *const u8, len).to_vec() }
+    };
+    Some((tag_raw, payload))
 }
 
 // ============================================================================
-// 単体テスト（観測可能な受け入れ基準・task 1.2）
+// 4. 待ち（pump_until）
+// ============================================================================
+
+/// 待ちのタイマーの ID（窓ごとの ID なので、窓の持ち主のほかのタイマーと重ならない値）。
+const PUMP_TIMER_ID: usize = 0x5049;
+/// ループを起こす間隔。
+const PUMP_TICK_MS: u32 = 50;
+
+/// `hwnd` の窓に `SetTimer`（50 ms）を掛けて `MessageLoop::run` を回し、`done()` が真になるか
+/// `deadline` で抜ける。抜けた後に `KillTimer`。戻り値は抜けたときの `done()`。
+///
+/// `hwnd` はこのスレッドが作った窓で、ほかの `MessageLoop::run` のフィルタの中から呼ばない。
+/// 無入力でも `WM_TIMER` がループを起こすので、起こし役のスレッドは要らない。
+pub fn pump_until(hwnd: HWND, deadline: Instant, done: impl Fn() -> bool) -> bool {
+    let first = done();
+    if first || Instant::now() >= deadline {
+        return first;
+    }
+    // SAFETY: hwnd はこのスレッドが作った窓（呼び元の約束）。TIMERPROC 無しなので WM_TIMER が届く。
+    if unsafe { SetTimer(Some(hwnd), PUMP_TIMER_ID, PUMP_TICK_MS, None) } == 0 {
+        // SAFETY: 引数なしの Win32 呼び出し。
+        let code = unsafe { GetLastError() };
+        eprintln!("[ipc] SetTimer に失敗（待たずに戻る）: {}", code.0);
+        return first;
+    }
+    let last = Cell::new(first);
+    MessageLoop::run(|msg_loop, _msg| {
+        let d = done();
+        last.set(d);
+        if d || Instant::now() >= deadline {
+            msg_loop.quit();
+        }
+        FilterResult::Forward
+    });
+    // SAFETY: 上で掛けた同じ窓・同じ ID のタイマーを外す。
+    if let Err(e) = unsafe { KillTimer(Some(hwnd), PUMP_TIMER_ID) } {
+        eprintln!("[ipc] KillTimer に失敗: {e}");
+    }
+    last.get()
+}
+
+// ============================================================================
+// 単体テスト
 // ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// 全 `MsgTag` が低 32bit に収まる（`(tag as usize) >> 32 == 0`）こと、
-    /// および u32 へ往復ロスレスであること（design.md §339 跨ビットネス規約）。
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc;
+
+    use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
+    use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
+
+    /// 判別子の値（1・3・4・5）が下 32 ビットに収まり、u32 を往復すること。
     #[test]
-    fn msgtag_fits_in_low_32bits_and_roundtrips() {
-        for tag in [
-            MsgTag::Hello,
-            MsgTag::Load,
-            MsgTag::Request,
-            MsgTag::Response,
-            MsgTag::Unload,
+    fn msgtag_discriminants_roundtrip() {
+        for (tag, raw) in [
+            (MsgTag::Hello, 1u32),
+            (MsgTag::Request, 3),
+            (MsgTag::Response, 4),
+            (MsgTag::Unload, 5),
         ] {
-            // 低 32bit のみ占有（ULONG_PTR の上位 32bit は常に 0）。
-            // 評価は u64 で行う（i686 では usize=32bit ゆえ `usize >> 32` が
-            // overflow lint でコンパイルエラーになる・跨ビットネス可搬性）。
-            let as_dwdata = u64::from(tag.as_u32());
-            assert_eq!(
-                as_dwdata >> 32,
-                0,
-                "{tag:?} must occupy only the low 32 bits of dwData"
-            );
-
-            // u32 値自体が u32::MAX 以下（自明だが規約の明示）。
-            assert!(u64::from(tag.as_u32()) <= u64::from(u32::MAX));
-
-            // u32 へ往復ロスレス。
-            let raw = tag.as_u32();
-            let back = MsgTag::try_from_u32(raw).expect("known tag must round-trip");
-            assert_eq!(back, tag, "{tag:?} must round-trip through u32 losslessly");
-
-            // From/TryFrom 経路も一致。
-            let via_into: u32 = tag.into();
-            assert_eq!(via_into, raw);
-            assert_eq!(MsgTag::try_from(raw).unwrap(), tag);
+            assert_eq!(tag.as_u32(), raw, "{tag:?} の判別子");
+            assert_eq!(MsgTag::try_from_u32(raw), Ok(tag), "{tag:?} の往復");
         }
     }
 
-    /// 未知の判別子は `Err(raw)` を返す（不正フレームの観測点）。
+    /// 未知の判別子（欠番の 2 を含む）は `Err(raw)`。
     #[test]
     fn msgtag_unknown_discriminant_is_err() {
-        assert_eq!(MsgTag::try_from_u32(0), Err(0));
-        assert_eq!(MsgTag::try_from_u32(6), Err(6));
-        assert_eq!(MsgTag::try_from_u32(u32::MAX), Err(u32::MAX));
-    }
-
-    /// HWND の u32 LE エンコード/デコードがサンプル値を往復すること（design.md §339）。
-    #[test]
-    fn hwnd_u32_le_roundtrips() {
-        // 代表的な 32bit 有意ハンドル値（USER ハンドルは 32bit 有意）。
-        for sample in [0x0000_0001u32, 0x1234_5678u32, 0xDEAD_BEEFu32, u32::MAX] {
-            let hwnd = hwnd_from_u32(sample);
-            let bytes = encode_hwnd_le(hwnd);
-            // リトルエンディアン並びの明示確認。
-            assert_eq!(
-                bytes,
-                sample.to_le_bytes(),
-                "LE byte order for {sample:#010x}"
-            );
-            let decoded = decode_hwnd_le(bytes);
-            assert_eq!(decoded, sample, "u32 LE round-trip for {sample:#010x}");
-            // HWND まで戻して同値（当該プロセス幅へ zero-extend）。
-            assert_eq!(hwnd_from_u32(decoded).0 as usize as u32, sample);
+        for raw in [0u32, 2, 6, u32::MAX] {
+            assert_eq!(MsgTag::try_from_u32(raw), Err(raw));
         }
     }
 
-    /// ペイロード規約: 固定ヘッダ長は 0（フレーミングは cbData のみに依存）。
+    /// HWND の下 32 ビットが往復し、HELLO の中身（to_le_bytes）からも戻ること。
     #[test]
-    fn payload_has_no_fixed_header() {
-        assert_eq!(PAYLOAD_HEADER_LEN, 0);
+    fn hwnd_u32_roundtrips() {
+        for sample in [0x0000_0001u32, 0x1234_5678u32, 0xDEAD_BEEFu32, u32::MAX] {
+            let hwnd = hwnd_from_u32(sample);
+            assert_eq!(hwnd_to_u32(hwnd), sample, "{sample:#010x} の往復");
+            let bytes = hwnd_to_u32(hwnd).to_le_bytes();
+            assert_eq!(
+                u32::from_le_bytes(bytes),
+                sample,
+                "{sample:#010x} の LE 往復"
+            );
+        }
     }
 
-    /// 受け皿セル（ResponseSlot）の semantics（task 4.1・design.md §209）:
-    /// clear→take=None、store→take=Some（1 回で消費）、再 take=None（single-in-flight）。
+    /// 手で組んだ COPYDATASTRUCT からタグが下 32 ビットになり、中身が写ること。
     #[test]
-    fn response_slot_clear_store_take_semantics() {
-        let slot = ResponseSlot::new();
-        // 初期/clear 後は空（未受領 = Timeout 相当）。
-        assert_eq!(slot.take(), None);
-        slot.clear();
-        assert_eq!(slot.take(), None);
+    fn copydata_payload_takes_low_32_bits_and_copies_bytes() {
+        let body = b"GET SHIORI/3.0\r\n\r\n";
+        // x64 では dwData の上 32 ビットに値を入れる（i686 では切り捨てられて 3 だけになる）。
+        let cds = COPYDATASTRUCT {
+            dwData: ((0xABCD_u64 << 32) | 3) as usize,
+            cbData: body.len() as u32,
+            lpData: body.as_ptr() as *mut core::ffi::c_void,
+        };
+        // SAFETY: cds は本ブロックの間生きている COPYDATASTRUCT。
+        let got = unsafe { copydata_payload(LPARAM(&cds as *const COPYDATASTRUCT as isize)) };
+        assert_eq!(got, Some((3, body.to_vec())));
 
-        // WndProc が store → send_request が take で 1 回だけ取り出す。
-        slot.store(b"Value: hello".to_vec());
-        assert_eq!(slot.take().as_deref(), Some(&b"Value: hello"[..]));
-        // 取り出し済みは空（次往復のため）。
-        assert_eq!(slot.take(), None);
+        // cbData 0 は空。
+        let empty = COPYDATASTRUCT {
+            dwData: 5,
+            cbData: 0,
+            lpData: core::ptr::null_mut(),
+        };
+        // SAFETY: 同上。
+        let got = unsafe { copydata_payload(LPARAM(&empty as *const COPYDATASTRUCT as isize)) };
+        assert_eq!(got, Some((5, Vec::new())));
 
-        // clear は残骸を排除する（前往復の応答を次往復に持ち越さない）。
-        slot.store(b"stale".to_vec());
-        slot.clear();
-        assert_eq!(slot.take(), None);
+        // null の LPARAM は None。
+        // SAFETY: null は約束の範囲（None を返す）。
+        assert_eq!(unsafe { copydata_payload(LPARAM(0)) }, None);
+    }
+
+    /// 作って壊した窓へ送ると、窓が無いエラー（1400）の送りの失敗になる（時間切れと呼ばない）。
+    #[test]
+    fn send_to_destroyed_window_is_send_failed_1400() {
+        let window = Window::new_checked(
+            WindowType::MessageOnly,
+            (),
+            |_s: Pin<&()>, _m: WindowMessage| -> Option<LRESULT> { None },
+        )
+        .expect("message-only 窓を作れる");
+        let hwnd = window.hwnd();
+        drop(window); // DestroyWindow
+
+        let got = send_copydata(
+            hwnd,
+            HWND::default(),
+            MsgTag::Request,
+            b"x",
+            Duration::from_millis(100),
+        );
+        assert_eq!(got, Err(IpcError::SendFailed(1400)));
+    }
+
+    /// 別スレッドで WM_COPYDATA を受けると 1 秒眠る窓へ 100 ms で送ると時間切れ。
+    #[test]
+    fn send_to_sleeping_window_is_timeout() {
+        let (tx, rx) = mpsc::channel::<u32>();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_thread = stop.clone();
+        let sleeper = std::thread::spawn(move || {
+            let window = Window::new_checked(
+                WindowType::MessageOnly,
+                (),
+                |_s: Pin<&()>, m: WindowMessage| -> Option<LRESULT> {
+                    if m.msg == WM_COPYDATA {
+                        std::thread::sleep(Duration::from_secs(1));
+                        return Some(LRESULT(0));
+                    }
+                    None
+                },
+            )
+            .expect("message-only 窓を作れる");
+            tx.send(hwnd_to_u32(window.hwnd())).unwrap();
+            MessageLoop::run(|msg_loop, _msg| {
+                if stop_thread.load(Ordering::Relaxed) {
+                    msg_loop.quit();
+                }
+                FilterResult::Forward
+            });
+            drop(window);
+        });
+        let target = hwnd_from_u32(rx.recv_timeout(Duration::from_secs(5)).unwrap());
+
+        let started = Instant::now();
+        let got = send_copydata(
+            target,
+            HWND::default(),
+            MsgTag::Request,
+            b"x",
+            Duration::from_millis(100),
+        );
+        let elapsed = started.elapsed();
+
+        stop.store(true, Ordering::Relaxed);
+        // SAFETY: target は sleeper スレッドが持つ窓。WM_NULL でループを起こすだけ。
+        unsafe {
+            let _ = PostMessageW(Some(target), 0, WPARAM(0), LPARAM(0));
+        }
+        sleeper.join().unwrap();
+
+        assert_eq!(got, Err(IpcError::Timeout));
+        assert!(
+            elapsed < Duration::from_millis(900),
+            "眠りの 1 秒を待たずに戻る: {elapsed:?}"
+        );
+    }
+
+    fn message_only_window() -> Window<()> {
+        Window::new_checked(
+            WindowType::MessageOnly,
+            (),
+            |_s: Pin<&()>, _m: WindowMessage| -> Option<LRESULT> { None },
+        )
+        .expect("message-only 窓を作れる")
+    }
+
+    /// 条件が偽のままなら、起こし役のスレッド無しで約 150 ms の期限に偽で抜ける。
+    #[test]
+    fn pump_until_returns_false_at_deadline_without_waker_thread() {
+        let window = message_only_window();
+        let started = Instant::now();
+        let got = pump_until(window.hwnd(), started + Duration::from_millis(150), || {
+            false
+        });
+        let elapsed = started.elapsed();
+        assert!(!got);
+        assert!(
+            elapsed >= Duration::from_millis(150) && elapsed < Duration::from_secs(2),
+            "期限の付近で抜ける: {elapsed:?}"
+        );
+    }
+
+    /// 条件が 3 回目の呼び出しで真になると、期限（5 秒）よりずっと前に真で抜ける。
+    #[test]
+    fn pump_until_returns_true_soon_after_condition_holds() {
+        let window = message_only_window();
+        let calls = core::cell::Cell::new(0u32);
+        let started = Instant::now();
+        let got = pump_until(window.hwnd(), started + Duration::from_secs(5), || {
+            calls.set(calls.get() + 1);
+            calls.get() >= 3
+        });
+        let elapsed = started.elapsed();
+        assert!(got);
+        assert_eq!(calls.get(), 3, "真になった後は呼ばない");
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "期限を待たずに抜ける: {elapsed:?}"
+        );
     }
 }

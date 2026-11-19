@@ -15,7 +15,7 @@
 ## 概要（何を作ったか）
 
 - 実装内容:
-  - `WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TRANSPARENT` の透過トップモスト窓（初期＝クリック透過 ON）。
+  - `WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT` の枠なし（`WS_POPUP`）透過トップモスト窓（初期＝クリック透過 ON・`WS_EX_LAYERED` はフラグのみ）。
   - DComp パイプライン（D3D11→DXGI／`IDCompositionSurface`→Visual／Target→Commit）＋ Direct2D で透明 Clear（α=0）＋窓中心・半径 200px の不透明円（α=1）を描画。クリック（`WM_LBUTTONDOWN`）で円の色をトグルして DComp 再描画。
   - 別 `std::thread` が 16ms 周期でカーソルを監視し、αマスク（窓中心・半径 200px の円。描画円と同一領域・物理座標）判定で、状態変化フレームのみ UI スレッドへ起床通知（`event_listener`・tokio 不使用）。
   - UI スレッド（`spawn_local`）が差分時のみ `WS_EX_TRANSPARENT` を加除（`SetWindowLongPtr`＋`SetWindowPos(SWP_FRAMECHANGED)`）。`WS_EX_NOREDIRECTIONBITMAP`／`WS_EX_TOPMOST` は保持。
