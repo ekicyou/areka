@@ -61,3 +61,9 @@
 - `candidates` の違いはテストのファイルの 2 つだけ。`crates/areka/src/placement_tests/zorder_branch_coverage_test_support.rs`（候補 2 つ）と `crates/areka/src/runtime_tests/spine_conformance_script.rs`（候補 10 個）の計 12 件が、今の道具では候補から外れる（指摘 3 の `_tests/` の下をテストとして扱う直し・Implementation Notes の 3.4）。そのぶん先頭の合計の行（798 件→786 件）と `[AllowListElement]` の件数の行（639 件→627 件）も 12 減る。ほかの行は同じ。
 - 回した後の `doc/ukadoc-coverage/` の木（19 ファイル）は、手引きを含めても 2 つの木でバイトまで同じで、写した元の `HEAD` の中身とも同じ（書き出しはしたが中身が変わらない）。
 - **許された違いのほかは 0 件。** 写した 2 つの木は確かめた後に消した。
+
+## 全体テストと所要時間（タスク 9.3）
+
+- `pwsh -NoProfile -File tools/test-all.ps1` を排他テストの机を持って 1 回回した。結果: `all steps green`（終了コード 0）。主な行: x64 workspace tests 808 秒 OK・dola toml feature tests 53 秒 OK・i686 tests (host-32) 43 秒 OK・fmt --check 7 秒 OK・encoding check 25 秒 OK・perf loop selftest 77 秒 OK。ほかの検査も全部 OK。
+- 所要時間（Performance の「後」）: 「前」と同じ測り方（テストの実行ファイルを先に作ってから `cargo test -p ukadoc-survey` を回し、各実行ファイルの finished in を足す）で 約 2.9 秒（単体 526 本 0.58 秒・cli_streams 5 本 0.70 秒・consistency 105 本 1.56 秒・doc-test 5 本 0.03 秒・もう 1 本の実行ファイル 0 本 0.00 秒）。全部緑。
+- 「前」約 40.9 秒 → 「後」約 2.9 秒。主に consistency が 36.11 秒から 1.56 秒になった。
