@@ -1,5 +1,5 @@
 //! 合図 `StageAck` をバルーンの対象へ写す橋渡しの兄弟テスト
-//! （spec: areka-P0-animated-image-playback task 5.1・要件 2.3・6.1）。
+//! （spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
 
 use areka_emo_present::PresentCommand;
 use areka_sakura::ActorKey;

@@ -10,18 +10,16 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use real_run_kit::{EndedBy, Launch, RealRun};
+mod common;
+
+use common::{alive, fake};
+use real_run_kit::{EndedBy, Launch};
+use sample_ghost_kit::ascii;
 
 /// 子のプロセスで落ちる筋書きを走らせる印。
 const CHILD_FLAG: &str = "REAL_RUN_EVIDENCE_CHILD";
 /// 窓口が残した場所を名指す行の頭（evidence.rs の `finish`）。
-const KEPT_HEAD: &str = "落ちた回の証拠を残しました: ";
-
-fn fake(steps: &str) -> RealRun {
-    RealRun::new(env!("CARGO_BIN_EXE_real-run-fake-areka"))
-        .without_host32_helper()
-        .env("REAL_RUN_FAKE_STEPS", steps)
-}
+const KEPT_HEAD: &str = "real-run-kit: kept failed run: ";
 
 /// ワークスペースの `target\test-roots`（temp-path-kit の置き場と同じ決め方: このクレートの 2 つ上の根）。
 /// `CARGO_TARGET_DIR` や `--target` で成果物の場所が変わっても、窓口の置き場はここに決まっている。
@@ -32,14 +30,6 @@ fn target_test_roots() -> PathBuf {
         .expect("crates/real-run-kit の 2 つ上がワークスペースの根")
         .join("target")
         .join("test-roots")
-}
-
-fn alive(pid: u32) -> bool {
-    let out = Command::new("tasklist")
-        .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-        .output()
-        .expect("tasklist を起こせない");
-    String::from_utf8_lossy(&out.stdout).contains("real-run-fake-areka")
 }
 
 /// 6.3: 成功で終わった回は、取っ手を捨てると置き場が消える。
@@ -64,20 +54,25 @@ fn panic_keeps_run_dir_and_names_it() {
         .expect("試験の実行ファイルの写しを起こせない");
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
-    let kept: Vec<PathBuf> = stderr
+    let kept: Vec<&str> = stderr
         .lines()
         .filter_map(|l| l.strip_prefix(KEPT_HEAD))
-        .map(PathBuf::from)
         .collect();
     assert!(out.status.success(), "子のプロセス:\n{stdout}\n{stderr}");
     assert_eq!(kept.len(), 1, "場所を名指す行が 1 行でない:\n{stderr}");
-    let dir = &kept[0];
+    // 行のパスは `ascii` を通した写し（ASCII の外の字は `\u{XXXX}` の形）なので、パスとしては読まない。
+    // 置き場の中から、写しが行と一致するものを選ぶ。
+    let dir = &std::fs::read_dir(target_test_roots())
+        .expect("target\\test-roots を読めない")
+        .map(|e| e.expect("target\\test-roots の項目を読めない").path())
+        .find(|p| ascii(&p.display().to_string()) == kept[0])
+        .unwrap_or_else(|| {
+            panic!(
+                "名指された場所が target\\test-roots の直下に無い: {}",
+                kept[0]
+            )
+        });
     let checks = std::panic::catch_unwind(|| {
-        assert!(
-            dir.starts_with(target_test_roots()),
-            "target\\test-roots の下に無い: {}",
-            dir.display()
-        );
         for leaf in ["root", "profile", "stdout.log", "stderr.log"] {
             assert!(dir.join(leaf).exists(), "{leaf} が残っていない");
         }

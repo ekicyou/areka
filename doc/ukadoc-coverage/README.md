@@ -252,6 +252,9 @@ grep -o '^"ukadoc:list_propertysystem:[^"]*"' doc/ukadoc-coverage/catalog.toml
 
 **⚠ 束に出したい繋がりは、専用の欄だけでなく `links` にも書くこと。**
 報告に出る「関連が閉じている束」は `links` だけから組み立てる（設計 D-11）。
+ドメイン別報告の束は、そのドメインの台帳の `links` の中で閉じているという意味で、他の台帳から
+入ってくる `links` は見ない。それが加わると同じ id が全体報告（`summary.md`）のより大きな跨ぐ束の一部として載る。
+束 id は構成 id のうち最も小さいものなので、入ってくる側の id が小さければ別の束 id に、そうでなければ同じ束 id のまま中身が増えて載る。
 `alias_of` の欄だけで結んだ対は「別名の一覧」に出るので目には入るが、**`supersedes` の欄だけで
 結んだ対はドメイン別報告のどこにも現れない**。書いたのに読めない、という形になる。
 両方に書いても構わない（付録 A.2 が許している）ので、繋がりとして見せたいなら `links` にも
@@ -283,7 +286,7 @@ grep -o '^"ukadoc:list_propertysystem:[^"]*"' doc/ukadoc-coverage/catalog.toml
 ### 伺からしさのテーマ
 
 `values` に書けるのは `values.md` に見出しとして並ぶ 8 つの名前だけである
-（気配・触れ合い・掛け合い・装い・記憶・交わり・気配り・更新）。他の綴りは `UnknownTheme` で失敗する。
+（気配・触れ合い・掛け合い・装い・記憶・交わり・気配り・更新）。他の綴りは台帳の読み込みの段で失敗する。
 
 付与の規則は 1 つだけ。
 
@@ -432,10 +435,12 @@ pub const SHIORI_RESOURCE_IDS: &[&str] = &[
 
 ```
 cargo run -p ukadoc-survey -- report          # ドメイン別 4 本
+cargo run -p ukadoc-survey -- report-summary  # 全体報告
 ```
 
-ドメイン別報告 4 本は、対応する台帳から作り直した本文と**バイト単位で一致**していなければならない。
-食い違うと `DomainReportStale` で失敗し、どのドメインを作り直せばよいかを教えてくれる。
+ドメイン別報告 4 本は対応する台帳から、全体報告 `summary.md` はカタログと台帳 4 本から作り直した本文と
+**バイト単位で一致**していなければならない。食い違うと `DomainReportStale` で失敗し、場所としてどの報告を
+作り直せばよいかを教えてくれる。
 台帳と報告は同じコミットに入れること。
 
 ### 誰が何を作り直すか
@@ -451,7 +456,7 @@ cargo run -p ukadoc-survey -- report          # ドメイン別 4 本
 その 4 本は 2026-09-06 までに全部完了して取り合う相手が居なくなったので、**統合調査
 （`ukadoc-coverage-roadmap`）がこの除外を覆した**（完了 spec `ukadoc-survey-toolkit` の要件 7.6）。
 いま `summary.md` の本文はカタログと台帳 4 本だけから決まり、作り直した本文と 1 文字でも違えば
-標準のテスト実行が赤になる。台帳を直したら `report` と `report-summary` の両方を走らせること。
+`check` も標準のテスト実行も赤になる。台帳を直したら `report` と `report-summary` の両方を走らせること。
 
 ### ⚠ 世代別の表が全部「世代不明」なのは、正しい状態である
 
@@ -499,7 +504,9 @@ cargo run -p ukadoc-survey -- report          # ドメイン別 4 本
 ### 束 id は人の文書から引用する
 
 報告に出る「関連が閉じている束」には、構成 id だけから決まる安定した id が付く
-（構成 id のうち文字順で最も小さいもの）。束の**名付けと解説は道具が出さない**——
+（構成 id のうち文字順で最も小さいもの）。ドメイン別報告の束は自分の台帳の `links` だけで
+閉じているもので、他の台帳から関連が入ると、全体報告ではその束を含むより大きな跨ぐ束が載る。
+入ってくる側の id が小さければ別の束 id に、そうでなければ同じ束 id のまま中身が増えて載る。引用するときはどちらの報告の束 id かを確かめること。束の**名付けと解説は道具が出さない**——
 それは統合担当が `doc/ukadoc-coverage/linkage.md` に人の言葉で書く。
 
 機械の一覧と人の文章を別のファイルに分けてあるので、報告を作り直しても人の文が消えることは無い。
@@ -562,7 +569,7 @@ cargo run -p ukadoc-survey -- report          # ドメイン別 4 本
 
 ## 検査が失敗したときの読み方
 
-`cargo test -p ukadoc-survey` や `cargo run -p ukadoc-survey -- check` が出す所見は 15 種ある。
+`cargo test -p ukadoc-survey` や `cargo run -p ukadoc-survey -- check` が出す所見は 13 種ある。
 所見にはどのファイルのどの id かが必ず付く。
 
 | 所見 | 意味 | だいたいの直し方 |
@@ -571,7 +578,6 @@ cargo run -p ukadoc-survey -- report          # ドメイン別 4 本
 | `CatalogIdMissingFromLedgers` | カタログの id がどの台帳にも無い | `ledger-init` を走らせる |
 | `CatalogIdInMultipleLedgers` | 同じ id が 2 つ以上の台帳にある | 担当ページの側の台帳に 1 つだけ残す |
 | `LedgerIdPageMismatch` | その id のページは別ドメインの担当 | 正しい台帳へ移す |
-| `LedgerDomainMismatch` | `[ledger].domain` がファイル名と違う | 前置きを直す |
 | `LedgerPagesMismatch` | `[ledger].pages` が担当ページと違う | 前置きを直す |
 | `LedgerOutOfOrder` | 項目が id の厳密な昇順でない | 名指しされた id の位置を直す |
 | `PageNotAssigned` | カタログに担当の無いページが現れた | 道具の担当者へ（割り当て表の追加が要る） |
@@ -580,8 +586,7 @@ cargo run -p ukadoc-survey -- report          # ドメイン別 4 本
 | `LinkEndpointMissing` | 関連・別名・置き換えの相手がカタログに無い | 相手 id を写し直す |
 | `AliasChain` | `alias_of` の指す先がまた別名 | 正典の行を直接指す |
 | `IntroducedNotInCatalogVersions` | 書いた登場版がカタログの版番号に無い | カタログの `versions` から選び直す |
-| `UnknownTheme` | テーマ名が `values.md` に無い | 綴りを直す |
-| `DomainReportStale` | 報告が台帳と食い違う | `report` を走らせ直す |
+| `DomainReportStale` | 報告が台帳と食い違う | `report` を走らせ直す（場所が `report/summary.md` なら `report-summary`） |
 
 状態の語・テーマ名・関連の種別の**綴り違い**は、これより手前の読み込みの段で落ちる。
 その場合もファイルと id が出るので、そのまま直せばよい。

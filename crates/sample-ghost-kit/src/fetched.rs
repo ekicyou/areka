@@ -2,7 +2,7 @@
 //! 3.9・4.1・4.2）。
 //!
 //! 置き場の棚の名前 `fetched` を持つ唯一の所。窓口はこの棚に書かず（書くのは取り寄せの段と
-//! 開発者だけ）、`devroot` の掃除（`work\`）と回収（`cache\`）もこの棚を走査しない。通信の
+//! 開発者だけ）、`devroot` の掃除（`work\`）と回収（[`CACHE`](crate::devroot::CACHE)）もこの棚を走査しない。通信の
 //! 部品も子のプロセスも持たない（要件 3.3）。
 
 use std::path::{Path, PathBuf};
@@ -14,7 +14,7 @@ use crate::sha256::sha256_hex;
 const FETCHED: &str = "fetched";
 
 /// ハッシュのファイルの後ろの綴り。公開の `<url>.sha256` と、置き場の `<name>.nar.sha256` の
-/// 両方に使う唯一の所（実装の段の裁定 2）。
+/// 両方に使う唯一の所（areka-P0-sample-url-fetch 実装の段の裁定 2）。
 pub(crate) const CHECKSUM_SUFFIX: &str = ".sha256";
 
 /// `<namespace>\fetched\<name>.nar`。
@@ -64,7 +64,7 @@ fn read_shelf(
 }
 
 /// 置き場のハッシュのファイルと書庫を読み、書庫の SHA-256 がハッシュのファイルと合えば
-/// 書庫のパスを返す（要件 3.4・3.9）。大きさは見ない（登記に無い）。
+/// 書庫のパスと確かめたバイトを返す（要件 3.4・3.9・audit-test-kits 決め D13）。大きさは見ない（登記に無い）。
 ///
 /// # Errors
 ///
@@ -74,11 +74,11 @@ fn read_shelf(
 pub(crate) fn verified_nar_in(
     namespace: &Path,
     name: &'static str,
-) -> Result<PathBuf, SampleError> {
+) -> Result<(PathBuf, Vec<u8>), SampleError> {
     let (text, checksum_path) = read_shelf(
         name,
         fetched_checksum_path_in(namespace, name),
-        "取り寄せたハッシュのファイルの読み取り",
+        "read the fetched checksum file",
     )?;
     let Some(expected_sha256) = std::str::from_utf8(&text).ok().and_then(parse_checksum) else {
         return Err(SampleError::FetchedChecksumInvalid {
@@ -89,7 +89,7 @@ pub(crate) fn verified_nar_in(
     let (bytes, path) = read_shelf(
         name,
         fetched_path_in(namespace, name),
-        "取り寄せた書庫の読み取り",
+        "read the fetched archive",
     )?;
     let actual_sha256 = sha256_hex(&bytes);
     if actual_sha256 != expected_sha256 {
@@ -100,7 +100,7 @@ pub(crate) fn verified_nar_in(
             actual_sha256,
         });
     }
-    Ok(path)
+    Ok((path, bytes))
 }
 
 /// 取り寄せの段のコマンドの文（絶対パス・どのディレクトリからでも動く形）。
@@ -115,7 +115,7 @@ pub(crate) fn fetch_command() -> String {
 }
 
 /// ASCII の外の字と制御文字を `\u{XXXX}` に写す。
-pub(crate) fn ascii(text: &str) -> String {
+pub fn ascii(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
         if c.is_ascii() && !c.is_ascii_control() {

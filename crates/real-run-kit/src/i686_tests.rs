@@ -2,6 +2,7 @@
 //! 探す順・各失敗の文・改名の競り合いの見直しを確かめる（本物の建てた成果物は使わない）。
 
 use super::*;
+use crate::test_support::panic_text;
 use std::os::windows::fs::OpenOptionsExt;
 use temp_path_kit::TempPath;
 
@@ -79,15 +80,6 @@ fn tag_of(path: &Path) -> String {
     String::from_utf8_lossy(&std::fs::read(path).unwrap()[0x46..]).into_owned()
 }
 
-/// 閉包が panic した文を返す（panic しなければ失敗）。
-fn panic_text(f: impl FnOnce() + std::panic::UnwindSafe) -> String {
-    let err = std::panic::catch_unwind(f).expect_err("panic するはず");
-    err.downcast_ref::<String>()
-        .cloned()
-        .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
-        .unwrap_or_default()
-}
-
 /// 置き先に一時名の残りが無い。
 fn no_tmp_left(dir: &Path) {
     let left: Vec<_> = std::fs::read_dir(dir)
@@ -133,13 +125,61 @@ fn is_i686_pe_is_false_for_missing_and_short_files() {
 // --- ensure: 置き先 ---
 
 #[test]
-fn dest_already_32bit_is_returned_as_is_without_looking_at_sources() {
+fn an_env_var_pointing_at_a_non_i686_file_panics_even_when_the_neighbour_is_i686() {
     let bed = Bed::new();
     write_pe(&bed.dest(), I386, "dest");
-    // 元を見に行けば環境変数の無い指し先で panic するはず＝見に行かないことの証。
-    let got = bed.ensure(Some(&bed.other("missing.exe")));
+    let env = bed.other("env64.exe");
+    write_pe(&env, AMD64, "env");
+    // 隣が 32bit でも環境変数を必ず確かめる（打ち間違いを黙って見逃さない）。
+    let text = panic_text(|| {
+        bed.ensure(Some(&env));
+    });
+    assert!(text.contains(SPEC.env_var), "{text}");
+    assert!(text.contains(&env.display().to_string()), "{text}");
+    assert_eq!(tag_of(&bed.dest()), "dest");
+}
+
+#[test]
+fn without_any_source_the_i686_neighbour_is_used() {
+    let bed = Bed::new();
+    write_pe(&bed.dest(), I386, "dest");
+    let got = bed.ensure(None);
     assert_eq!(got, bed.dest());
     assert_eq!(tag_of(&got), "dest");
+}
+
+#[test]
+fn a_newer_source_replaces_a_stale_i686_neighbour() {
+    let bed = Bed::new();
+    // 長さは同じ・更新時刻だけが古い隣（前の回に置いた写し）。
+    write_pe(&bed.dest(), I386, "old");
+    set_mtime(&bed.dest(), std::time::SystemTime::UNIX_EPOCH);
+    write_pe(&bed.debug(), I386, "new");
+    let got = bed.ensure(None);
+    assert_eq!(tag_of(&got), "new");
+    no_tmp_left(&bed.dest_dir);
+}
+
+#[test]
+fn a_neighbour_matching_the_source_is_not_copied_again() {
+    let bed = Bed::new();
+    write_pe(&bed.debug(), I386, "debug");
+    bed.ensure(None);
+    // 長さと更新時刻を保ったまま隣の札だけ替える。2 回目に写せば札が戻る。
+    let mtime = std::fs::metadata(bed.dest()).unwrap().modified().unwrap();
+    write_pe(&bed.dest(), I386, "debuX");
+    set_mtime(&bed.dest(), mtime);
+    bed.ensure(None);
+    assert_eq!(tag_of(&bed.dest()), "debuX");
+}
+
+fn set_mtime(path: &Path, t: std::time::SystemTime) {
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(t)
+        .unwrap();
 }
 
 #[test]
@@ -242,13 +282,6 @@ fn nowhere_fails_with_the_searched_places_and_the_build_command() {
     );
 }
 
-#[test]
-fn helper_spec_names_the_real_helper() {
-    assert_eq!(HELPER.file_name, "shiori-host32-helper.exe");
-    assert_eq!(HELPER.env_var, "HOST32_HELPER_EXE");
-    assert_eq!(HELPER.package, "shiori-host32-helper");
-}
-
 // --- place: 一時名＋改名と、改名の競り合いの見直し（2.6） ---
 
 /// 削除の共有を許さずに開く＝改名で置き換えられない（動いている子が使っている状態）。
@@ -262,16 +295,47 @@ fn hold(path: &Path) -> std::fs::File {
 }
 
 #[test]
-fn rename_failure_passes_when_dest_is_already_32bit() {
+fn rename_failure_passes_silently_when_dest_is_the_same_32bit_copy() {
     let bed = Bed::new();
     let src = bed.other("src.exe");
     write_pe(&src, I386, "src");
-    write_pe(&bed.dest(), I386, "other-process");
+    // `std::fs::copy` は更新時刻も写すので、長さと更新時刻が元と同じ写しになる。
+    std::fs::copy(&src, bed.dest()).unwrap();
     let _held = hold(&bed.dest());
-    place(&src, &bed.dest());
-    // 先に置かれた物がそのまま使われる。
-    assert_eq!(tag_of(&bed.dest()), "other-process");
+    let mut out = Vec::new();
+    place(&src, &bed.dest(), &mut out);
+    assert!(out.is_empty(), "{:?}", String::from_utf8_lossy(&out));
+    assert_eq!(tag_of(&bed.dest()), "src");
     no_tmp_left(&bed.dest_dir);
+}
+
+#[test]
+fn rename_failure_passes_with_an_ascii_line_when_dest_is_another_32bit_copy() {
+    let bed = Bed::new();
+    let src = bed.other("src.exe");
+    write_pe(&src, I386, "src");
+    // 置き先のフォルダ名を ASCII の外の字にする（行のパスの部分が写しを通ることを見る）。
+    let dest_dir = bed.dest_dir.join("置き先");
+    let dest = dest_dir.join(SPEC.file_name);
+    write_pe(&dest, I386, "other-process");
+    let _held = hold(&dest);
+    let mut out = Vec::new();
+    place(&src, &dest, &mut out);
+    let text = String::from_utf8(out).unwrap();
+    let line = text
+        .strip_suffix('\n')
+        .expect("古い写しのまま走る旨の 1 行");
+    assert_eq!(line.lines().count(), 1, "{text:?}");
+    // 先に置かれた物がそのまま使われる。
+    assert_eq!(tag_of(&dest), "other-process");
+    assert!(line.is_ascii() && line.contains("\\u{"), "{line}");
+    assert!(
+        line.starts_with("real-run-kit: could not replace ")
+            && line.ends_with("; using the existing 32-bit copy"),
+        "{line}"
+    );
+    assert!(line.contains(&ascii(&dest.display().to_string())), "{line}");
+    no_tmp_left(&dest_dir);
 }
 
 #[test]
@@ -281,9 +345,33 @@ fn rename_failure_fails_with_the_reason_when_dest_is_not_32bit() {
     write_pe(&src, I386, "src");
     write_pe(&bed.dest(), AMD64, "x64");
     let held = hold(&bed.dest());
-    let text = panic_text(|| place(&src, &bed.dest()));
+    let text = panic_text(|| {
+        place(&src, &bed.dest(), &mut Vec::new());
+    });
     drop(held);
     assert!(text.contains(&bed.dest().display().to_string()), "{text}");
     assert!(text.contains("改名"), "{text}");
     no_tmp_left(&bed.dest_dir);
+}
+
+/// 一時名を消せないとき（ほかが削除の共有なしで開いている）は ASCII の 1 行、消せた・既に無いは無言。
+#[test]
+fn remove_tmp_reports_only_a_failure_other_than_not_found() {
+    let bed = Bed::new();
+    // フォルダ名を ASCII の外の字にする（行のパスの部分が写しを通ることを見る）。
+    let tmp = bed.dest_dir.join("置き先").join("held.tmp");
+    std::fs::create_dir_all(tmp.parent().unwrap()).unwrap();
+    std::fs::write(&tmp, b"x").unwrap();
+    let held = hold(&tmp);
+    let line = remove_tmp(&tmp).expect("消せない旨の行");
+    drop(held);
+    assert!(line.is_ascii() && line.contains("\\u{"), "{line}");
+    assert!(
+        line.starts_with("real-run-kit: could not remove ")
+            && line.contains(&ascii(&tmp.display().to_string())),
+        "{line}"
+    );
+    assert_eq!(remove_tmp(&tmp), None);
+    assert!(!tmp.exists());
+    assert_eq!(remove_tmp(&tmp), None);
 }

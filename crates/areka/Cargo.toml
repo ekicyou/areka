@@ -49,7 +49,7 @@ tracing-subscriber = { workspace = true }
 async-io = { workspace = true }
 # MCP の画像の写し（areka-P0-mcp-dump-images・要件 5.1）で PNG の IDAT を圧縮する。
 # areka-nar と同じ版・同じ機能の指定で、Cargo.lock に新しいクレートは増えない。
-miniz_oxide = { version = "0.9", default-features = false, features = ["with-alloc"] }
+miniz_oxide = { workspace = true }
 bevy_ecs = { workspace = true }
 # ファイルを選ぶ画面（GetOpenFileNameW）の機能は本クレートで上乗せし、根の
 # [workspace.dependencies.windows] は変えない（areka-P0-ghost-install 要件 10.6・

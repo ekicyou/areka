@@ -1,6 +1,7 @@
 //! 呼出側の判定を短く書くための補助（[`expect_one`]・[`ExpectField`]）。
 //!
 //! 旧 `placement/test_support.rs` から中身を変えずに移した（spec: placement-crate-split 要件 3.1）。
+//! 移した後で、spec `audit-test-kits` が失敗の位置を呼出側に出すための `#[track_caller]` を足した。
 
 use crate::CapturedEvent;
 
@@ -10,10 +11,12 @@ use crate::CapturedEvent;
 /// トレイトより先に解決されるため、この補助は**別名**でなければ黙って無視される。
 pub trait ExpectField {
     /// 構造化フィールドの Debug 表現。欠落は失敗。
+    #[track_caller]
     fn expect_field(&self, name: &str) -> &str;
 }
 
 impl ExpectField for CapturedEvent {
+    #[track_caller]
     fn expect_field(&self, name: &str) -> &str {
         self.field(name)
             .unwrap_or_else(|| panic!("ログフィールド `{name}` が無い: {:?}", self.fields_map()))
@@ -21,6 +24,7 @@ impl ExpectField for CapturedEvent {
 }
 
 /// メッセージに `needle` を含むイベントが**ちょうど 1 件**在ることを主張して返す。
+#[track_caller]
 pub fn expect_one<'a>(events: &'a [CapturedEvent], needle: &str) -> &'a CapturedEvent {
     let hits: Vec<&CapturedEvent> = events
         .iter()
@@ -33,3 +37,7 @@ pub fn expect_one<'a>(events: &'a [CapturedEvent], needle: &str) -> &'a Captured
     );
     hits[0]
 }
+
+#[cfg(test)]
+#[path = "expect_tests.rs"]
+mod tests;

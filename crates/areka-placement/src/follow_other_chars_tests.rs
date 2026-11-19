@@ -3,7 +3,7 @@
 //! World は本番の `spawn_ghost_windows` で組み、描画面の子（`Visual` を持つ `ChildOf` の子）は
 //! テストが手で付ける（本番では `areka-emo-present` の装着が付ける）。
 //!
-//! 後半は起動の並べ直しの後の判定し直しの系（task 4.1・要件 2.7／2.10／4.4／5.1／5.2／6.4）。
+//! 後半は起動の並べ直しの後の判定し直しの系（`balloon-flip-side-rules` task 4.1・要件 2.7／2.10／4.4／5.1／5.2／6.4）。
 
 use bevy_ecs::prelude::*;
 use wintf::ecs::{Visual, WindowPos};
@@ -115,7 +115,7 @@ fn window_with_undetermined_size_is_excluded() {
 
 #[test]
 fn three_scopes_come_in_ascending_order() {
-    // spawn に渡す順を崩しても、列はスコープの昇順（要件 2.8）。
+    // spawn に渡す順を崩しても、列はスコープの昇順（`balloon-flip-side-rules` 要件 2.8）。
     let (mut world, chars) = spawn_scopes(&[(2, 100), (0, 1301), (1, 700)]);
     for &c in &chars {
         attach_surface(&mut world, c, true);
@@ -141,7 +141,7 @@ fn no_ghost_windows_gives_empty_list_without_logging() {
 }
 
 // ---------------------------------------------------------------------------
-// 起動の並べ直しの後の判定し直し（task 4.1・設計 RejudgeSystem）
+// 起動の並べ直しの後の判定し直し（`balloon-flip-side-rules` task 4.1・設計 RejudgeSystem）
 // ---------------------------------------------------------------------------
 
 /// 作業領域（開発者の机の主の画面）・キャラ窓の寸・バルーンの寸（`balloon_limit_flip_tests.rs` と同じ形）。
@@ -212,8 +212,8 @@ fn clamp_lines(events: &[log_capture_kit::CapturedEvent]) -> usize {
 }
 
 /// (a)(b) 本体を左端へ動かしてバルーンを右隣（1108〜1980 × 904〜1304）へ並べ替えた後、相方の窓を
-/// その映した先に重なる位置へ動かす。印を入れるまでは本体のバルーンは動かず（要件 2.7）、印を入れた巡で
-/// 押し込みの位置に書かれ（要件 2.10）、印の後の 2 回目の巡では系が走らない。
+/// その映した先に重なる位置へ動かす。印を入れるまでは本体のバルーンは動かず（`balloon-flip-side-rules` 要件 2.7）、印を入れた巡で
+/// 押し込みの位置に書かれ（`balloon-flip-side-rules` 要件 2.10）、印の後の 2 回目の巡では系が走らない。
 #[test]
 fn rejudge_after_chain_finalize_pushes_the_balloon_onto_the_moved_partner_once() {
     let (mut world, c0, b0, c1) = rejudge_world(pt(1200, 904), pt(1108, 0), true);
@@ -248,7 +248,7 @@ fn rejudge_after_chain_finalize_pushes_the_balloon_onto_the_moved_partner_once()
     assert_eq!(pos_of(&world, b0), pt(0, 904), "2 回目の巡では走らない");
 }
 
-/// (c) どの窓も重ならず収まる形 → 系を回しても全バルーンの位置がビット同一で、`Clamp` の行が増えない（要件 6.4）。
+/// (c) どの窓も重ならず収まる形 → 系を回しても全バルーンの位置がビット同一で、`Clamp` の行が増えない（`balloon-flip-side-rules` 要件 6.4）。
 #[test]
 fn rejudge_without_overlap_keeps_every_balloon_bit_identical() {
     let (mut world, c0, b0, c1) = rejudge_world(pt(1200, 904), pt(1800, 0), true);
@@ -293,7 +293,7 @@ fn rejudge_skips_balloons_with_limit_disabled() {
     );
 }
 
-/// キャラ窓の位置が決まらないスコープは `[balloon-limit] Unresolved` を残して飛ばし、ほかのスコープは続ける（要件 4.4）。
+/// キャラ窓の位置が決まらないスコープは `[balloon-limit] Unresolved` を残して飛ばし、ほかのスコープは続ける（`balloon-flip-side-rules` 要件 4.4）。
 #[test]
 fn rejudge_skips_a_scope_whose_char_position_is_undetermined() {
     let (mut world, c0, b0, _) = rejudge_world(pt(1200, 904), pt(1800, 0), true);

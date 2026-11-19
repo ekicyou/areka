@@ -1,16 +1,18 @@
 //! 一時パスの共通窓口を迂回する新設を検知する見張り（要件 12.4・12.5・12.7）。
 //!
+//! 要件・設計・タスクの番号は、spec の名を添えていないものは spec `areka-P0-test-cage-determinism` のもの。
+//!
 //! # 何を見張るか
 //!
-//! 一時ディレクトリの**入口**（`std::env::temp_dir`）の呼出が、例外表
-//! [`ALLOWED_ENTRY_POINT_USES`] の外に 1 件も無いこと。窓口 crate（`crates/temp-path-kit/src/`）
-//! も走査から外さない（[`the_gateway_is_scanned_and_holds_no_entry_point`]）。入口は 2 通りの綴りで書けるので両方を走査する（[`entry_point_tokens`]）。
+//! 一時ディレクトリの**入口**（標準ライブラリの `env` モジュールの一時フォルダを返す関数）への言及が、例外表
+//! [`ALLOWED_ENTRY_POINT_USES`] の外に 1 件も無いこと（呼出に限らず、`use … as` の別名や呼ばずに渡す形も含む）。窓口 crate（`crates/temp-path-kit/src/`）
+//! も走査から外さない（[`the_gateway_is_scanned_and_holds_no_entry_point`]）。入口の書き方の綴りはどれも走査する（[`entry_point_tokens`]）。
 //!
 //! # なぜログ捕捉 crate に住んでいるのか
 //!
 //! 窓口は `temp-path-kit`、見張りはここ——**別 crate に分かれるのは意図的な設計**である
 //! （設計 C8）。この `tests/` はワークスペース全体の見張りの置き場で（設計 C6）、走査器
-//! `workspace_scan/mod.rs`（ファイル列挙・コメント除去・語の走査）を 4 本目の見張りとして
+//! `workspace_scan/mod.rs`（ファイル列挙・コメント除去・語の走査）を、ほかの見張りと
 //! 共有する。見張りを窓口 crate へ置くと走査器が複製される。
 //!
 //! # 判定の規則は「固定名かどうか」を見ない（意図的）
@@ -44,48 +46,59 @@
 //!   固定名を組む式が実際に当たること（実ファイルを汚さずに済む）。
 //! - [`every_exception_still_has_a_real_hit`] — 表の全項目に**今も**当たりがあること。
 //!   列挙が空振りしていれば表の全件が「実体無し」になって必ず赤になる。
-//!   （この検査は飾りではない——タスク 10.7 が `areka-sylphya/src/persist/io.rs` を窓口へ
-//!   寄せた直後、表に残っていた同ファイルの項目をこの検査が名指しで赤にした。）
-//! - [`the_measurement_is_not_vacuous_and_matches_the_allow_table`] — 実測した集合が表と
-//!   **完全に一致**すること（要件 12.4 の「移行後の実測値で開始」の固定）。
+//! - [`the_measurement_is_not_vacuous`] — 列挙が現実的な規模であり、入口の呼出が確かに
+//!   どこかに在ること（主検査の 0 件を空振りから区別する陽性の対）。集合が表と一致することは
+//!   [`no_temp_dir_entry_point_lives_outside_the_allow_table`] と
+//!   [`every_exception_still_has_a_real_hit`] の 2 本で固める。
 //!
 //! # 走査語を逐語で書かない約束
 //!
-//! 本ファイルは `crates/` の下にあるので走査対象そのものでもある。走査語を開き括弧まで
-//! 含めた形で書くと ⒜ 見張りが自分自身を違反として拾い ⒝ 要件 12.2 の実測に使った
+//! 本ファイルは `crates/` の下にあるので走査対象そのものでもある。走査語を開き括弧の
+//! 有無を問わず逐語で書くと ⒜ 見張りが自分自身を違反として拾い ⒝ 要件 12.2 の実測に使った
 //! `rg`／`grep` の母数が黙って動く。そこで走査語は `concat!` で 2 片から組み立て、
-//! ファイルの字面には 1 度も現れないようにする（`with_default_guard_test.rs:17-28` と
+//! ファイルの字面には 1 度も現れないようにする（`with_default_guard_test.rs` の「走査語を逐語で書かない約束」と
 //! 同じ約束）。守れていることは
-//! [`the_guard_file_never_spells_the_tokens_out_not_even_inside_comments`] が縛る。
+//! [`the_guard_files_never_spell_the_tokens_out_not_even_inside_comments`] が、見張りの置き場
+//! （共有 crate の `tests/`）のうち例外表に載らない全ファイルを生テキストで見て縛る。
 
 mod workspace_scan;
 
 use std::collections::BTreeSet;
 
-use workspace_scan::{read_source, scan_tokens, walk_workspace_sources};
+use workspace_scan::{
+    allowed_paths, allowed_paths_without, files_that_must_not_spell_the_tokens, raw_occurrences,
+    raw_scan_sources, read_source, render, scan_sources, scan_tokens, stale_entries, unlisted,
+    walk_workspace_sources,
+};
 
 // ---------------------------------------------------------------------------
 // 走査語（逐語で置かないため 2 片に割る。module doc を参照）
 // ---------------------------------------------------------------------------
 
-/// 入口の修飾つきの綴り（`std::env::` を前置した形・`use std::env;` の形の両方に当たる）。
-const TOKEN_QUALIFIED: &str = concat!("env::temp_", "dir(");
+/// 入口の修飾つきの綴り。`(` を付けないので、呼出のほか `use … as` の別名と、呼ばずに渡す形にも当たる。
+const TOKEN_QUALIFIED: &str = concat!("env::temp_", "dir");
 
 /// 入口を `use` で裸にした綴り。
 ///
-/// 修飾つきの形の内側にも現れるが、[`scan_tokens`] は当たった語の内側から次の語を探さない
-/// ので 1 呼出が 2 件に数えられることはない（規則は `workspace_scan/mod.rs:318-332`。
+/// 修飾つきの形の後ろ半分と重なるが、[`scan_tokens`] は当たった語の内側から次の語を探さない
+/// ので 1 呼出が 2 件に数えられることはない（規則は `workspace_scan/mod.rs` の `scan_tokens` の語の重なりの規則。
 /// この規則が実際に効いていることは [`the_two_spellings_never_double_count_one_call`] が
 /// 見本で固定する）。左端はアンカーされるので、名前の末尾がたまたま同じ綴りで終わる
-/// 助走関数（実在: `unique_temp_dir`・`make_unique_temp_dir`）には当たらない。
+/// 助走関数（実在: `unique_temp_dir`）には当たらない。
 const TOKEN_BARE: &str = concat!("temp_", "dir(");
+
+/// 波括弧の中の別名（`use std::env::{… as …}` の形）。修飾つきの綴りにも裸の綴りにも当たらない。
+const TOKEN_BRACED_ALIAS: &str = concat!("temp_", "dir as");
 
 /// 名前にプロセス識別子を織り込む呼出（例外の**分類が飾りでない**ことを裏取りするのに使う）。
 const TOKEN_PROCESS_ID: &str = concat!("process::", "id(");
 
 /// 主検査の走査語。
+// shortcut: 波括弧の中で別名を付けずに取り込み（`use std::env::{…}`）、呼ばずに渡す形は当たらない
+// （どの行にも修飾も `(` も `as` も現れない）。関数名だけの語を足すと説明や助走関数の名前に当たって
+// 偽陽性が膨らむので足さない。走査器が `use` の木を読むようになったら塞ぐ。
 fn entry_point_tokens() -> Vec<&'static str> {
-    vec![TOKEN_QUALIFIED, TOKEN_BARE]
+    vec![TOKEN_QUALIFIED, TOKEN_BARE, TOKEN_BRACED_ALIAS]
 }
 
 // ---------------------------------------------------------------------------
@@ -108,79 +121,38 @@ enum Why {
 
 /// 窓口を通さずに入口を叩いてよいファイル（相対パス・種別・理由）。
 ///
-/// **初期値は移行（タスク 10.2・10.3・10.4）と、その取りこぼしの是正（タスク 10.7）が
-/// 完了した後の実測 16 件**で、この見張り自身が空の表で走ったときに返した集合と逐語で
-/// 一致する（`crates/**/*.rs` を列挙し、窓口の `src/` を除き、コメント除去後に入口の
-/// 呼出を持つファイル＝**16 ファイル・20 箇所**。2026-08-27 実測）。「窓口の `src/` を除き」は
-/// 当時の測り方の記録で、今は窓口も走査に入る（窓口の当たりは 0 件なので集合は変わらない）。
+/// 表が表すのは「窓口の外で入口を叩くファイル」で、移行と、その取りこぼしの是正が済んだ後に
+/// 残った分だけが載る。件数は [`ALLOWED_COUNT`] と、種別ごとの件数の定数が逐語で持つ
+/// （ここには書かない）。窓口の `src/` も走査に入るが、窓口の当たりは 0 件なので表には載らない。
 ///
-/// # 起草の「16 ファイル」との突合
-///
-/// タスク 10.5 の task 文は「既にプロセス識別子で一意化している **16 ファイル**を例外表に
-/// 載せるか窓口へ寄せるかを決め、根拠を記録する」と書いている。この 16 は要件 12.1 が同じ
-/// 日付で記録した「移植元と同じ型（プロセス識別子＋単調連番＋`Drop` の再帰削除）が**実在
-/// する** 16 ファイル」と同じ母数で、**入口を叩くファイルの数ではない**。
-///
-/// 本表が数えるのは「窓口の `src/` の外で入口を叩くファイル」——実測 16 ファイル・20 箇所、
-/// 内訳は一意化 13・読み出しのみ 2・固定名が仕様 1。**総数がたまたま同じ 16 なので取り違え
-/// やすい**が別の集合であり、初期値で「一意化している」と名乗る項目は 13 件しかない。起草の 16 を
-/// [`PROCESS_UNIQUE_COUNT`] へそのまま写してはならない。
-///
-/// なお 10.7 の**前**の実測は 17 ファイル・23 箇所だった。差の 1 ファイル・3 箇所は
-/// `crates/areka-sylphya/src/persist/io.rs`（入口 3 箇所のうち固定名で書込・削除を行う 2 箇所を
-/// 要件 12.2 の対象選定が取りこぼしていた）で、10.7 が 3 箇所すべてを窓口へ寄せたため表から
-/// 落ちた。表に置き去りにすると [`every_exception_still_has_a_real_hit`] が赤にする。
+/// 表に置き去りにした項は [`every_exception_still_has_a_real_hit`] が赤にする。
 ///
 /// **理由欄に行番号を書かない**——書けば当該ファイルへの無関係な編集で表が陳腐化し、
-/// 本仕様が触らないと決めたファイルを触らせる圧力になる（`file_length_guard_test.rs:58-60`
-/// が同じ理由で行数を書かないのと同型）。
+/// 本仕様が触らないと決めたファイルを触らせる圧力になる（`file_length_guard_test.rs` の
+/// 例外表の doc が同じ理由で行数を書かないのと同型）。
 const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
-    // ── ⒜ 既にプロセス識別子で一意化している件（今は 0 件）───────────────────────────
+    // ── ⒜ 既にプロセス識別子で一意化している件 ───────────────────────────
     //
     // 設計 C8 が「例外表に載せるか窓口へ寄せるかを実装時に決め、根拠を記録する」と
     // 定めた当の項目。**載せる**を採った。根拠は 2 点。
     //
-    // ⑴ 要件 12.2 の移行対象は「入口から組み立て、**かつ書込または削除を行う** 20 ファイル」
+    // ⑴ 要件 12.2 の移行対象は「入口から組み立て、**かつ書込または削除を行う**ファイル」
     //    で、これらは対象外（＝既に正しい）と要件そのものが定めている。窓口へ寄せる作業は
     //    要件が範囲外と宣言した変更であり、要件 12.3（既存の主張・期待値・本数を変えない）を
     //    負う移行を、直す必要のないファイルへ広げることになる。
     // ⑵ 表に載せても**素通りにはならない**——[`each_exception_declares_whether_it_uniquifies_by_process_identifier`]
     //    が「一意化している」という主張をソースと突き合わせるので、後から一意化を外せば赤になる。
-    // `crates/areka-sylphya/src/persist/io.rs` はかつてここに載っていたが、タスク 10.7 が
-    // 入口 3 箇所すべてを窓口へ寄せたので**当たりが 0 件になり、表から落とした**（本表の
-    // doc の「起草の 16 ファイルとの突合」を参照）。
-    // host の結合テスト 4 件（`lifecycle_cyclic_e2e`・`lifecycle_kill_e2e`・`shiori_load_e2e`・
-    // `shiori_request_e2e`）もかつてここに載っていたが、audit-shiori-host32 のタスク 1.1 が
-    // `tests/common/mod.rs` の `TestRoot`（`target\test-roots\` の下）へ寄せたので表から落とした。
-    // helper の `main_loopback_tests.rs`・`shiori_proxy.rs`・`shiori_proxy_loadu_tests.rs` と
-    // `crates/shiori-host32-testdll-loadu/src/lib.rs`（後の 2 件は areka-P0-shiori-loadu が足した）も
-    // かつてここに載っていたが、audit-shiori-host32 のタスク 1.3 が helper の
-    // `src/proxy_test_support.rs` の `TestRoot`（同じく `target\test-roots\` の下）と loadu の
-    // 同じ形の根へ寄せたので表から落とした。
-    // 最後に残った `crates/shiori-host32-host/src/process_host.rs` も、audit-shiori-host32 の
-    // タスク 4.1 が `.bat` を手で組み直す写しのテストを消し（組み立ては `helper_command` の
-    // 中身を読むテストへ）、入口を使わなくなったので表から落とした。これで audit-shiori-host32 の
-    // 範囲の 10 件はすべて表から外れた。
-    // `crates/areka-placement/src/measure_tests.rs`（同 crate 内の自前の一時フォルダ）もかつてここに
-    // 載っていたが、audit-placement-core のかけ直し（タスク 8.1）が自前の実装をやめたので当たりが
-    // 0 件になり、表から落とした。
-    // ── ⒜ の追加 1 件（2026-09-29・areka-P0-network-update）─────────────────────
     //
-    // テストの一時パスではなく**本番の落とし場所**。要件 6.6 が「OS の一時フォルダの下の areka
+    // テストの一時パスではなく**本番の落とし場所**。areka-P0-network-update 要件 6.6 が「OS の一時フォルダの下の areka
     // 専用の場所」と定め、7 日の掃除が前回までの走行の残りを見つけるにはフォルダが固定である
     // 必要がある（窓口の一意なフォルダでは掃除が成立しない・本番へ dev-dependency は持ち込めない）。
     // フォルダの中のファイル名はプロセス識別子＋単調連番で一意化している。
     (
         "crates/areka/src/install/fetch_url.rs",
         Why::ProcessUnique,
-        "本番の落とし場所 %TEMP%\\areka\\download\\（要件 6.6）。フォルダは 7 日の掃除のために固定、\
+        "本番の落とし場所 %TEMP%\\areka\\download\\（areka-P0-network-update 要件 6.6）。フォルダは 7 日の掃除のために固定、\
          中のファイル名はプロセス識別子＋単調連番で一意化済み。テストは差し替えの口で窓口の一時フォルダを渡す",
     ),
-    // ── ⒝ 読み出しのみ（要件 12.2・設計 C8 が名指しで対象外と定めた 2 件）は 0 件 ───
-    // `crates/shiori-host32-host/tests/error_paths.rs` は audit-shiori-host32 のタスク 1.1 が
-    // `TestRoot` へ寄せ、`crates/areka-placement/src/placement_monitor_tests.rs` は
-    // audit-placement-core のかけ直し（タスク 8.1）が不在パスを入口から組み立てなくなったので、
-    // どちらも表から落とした。
 ];
 
 /// [`ALLOWED_ENTRY_POINT_USES`] の件数（逐語）。表を増やすときはここも編集する（要件 12.4）。
@@ -206,74 +178,13 @@ const GATEWAY_FILES: [&str; 2] = [
     "crates/temp-path-kit/src/lib_tests.rs",
 ];
 
-/// 本ファイル自身の相対パス（自己検査で使う）。
-const THIS_GUARD: &str = "crates/log-capture-kit/tests/temp_path_guard_test.rs";
-
 // ---------------------------------------------------------------------------
 // 走査の取り回し
 // ---------------------------------------------------------------------------
 
-/// 走査で当たった 1 件。
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct Hit {
-    /// ワークスペース根からの相対パス（区切りは `/`）。
-    path: String,
-    /// 1 始まりの行番号。
-    line: usize,
-    /// 当たった語。
-    token: String,
-}
-
 /// 見張りの対象（窓口を含む全ソース。窓口も外さない）。
 fn watched_sources() -> Vec<String> {
     walk_workspace_sources()
-}
-
-/// 与えられたファイル群を走査する。
-fn scan_sources(paths: &[String], tokens: &[&str]) -> Vec<Hit> {
-    let mut hits = Vec::new();
-    for path in paths {
-        for (line, token) in scan_tokens(&read_source(path), tokens) {
-            hits.push(Hit {
-                path: path.clone(),
-                line,
-                token,
-            });
-        }
-    }
-    hits
-}
-
-/// 例外表のパスだけを取り出す（判定に渡す形）。
-fn allowed_paths() -> Vec<&'static str> {
-    ALLOWED_ENTRY_POINT_USES
-        .iter()
-        .map(|(path, _, _)| *path)
-        .collect()
-}
-
-/// 例外表から 1 件だけ落としたパスの一覧を作る（要件 12.5 の自己テストで使う）。
-fn allowed_paths_without(dropped: &str) -> Vec<&'static str> {
-    allowed_paths()
-        .into_iter()
-        .filter(|path| *path != dropped)
-        .collect()
-}
-
-/// 例外表に載っていない当たり（＝違反）を返す（純関数）。
-fn unlisted(hits: &[Hit], allow: &[&str]) -> Vec<Hit> {
-    hits.iter()
-        .filter(|h| !allow.contains(&h.path.as_str()))
-        .cloned()
-        .collect()
-}
-
-/// 違反の一覧を人が読める形にする（どのファイルの何行目かが分かること）。
-fn render(hits: &[Hit]) -> String {
-    hits.iter()
-        .map(|h| format!("  {}:{} （語: {}）", h.path, h.line, h.token))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +194,7 @@ fn render(hits: &[Hit]) -> String {
 #[test]
 fn no_temp_dir_entry_point_lives_outside_the_allow_table() {
     let hits = scan_sources(&watched_sources(), &entry_point_tokens());
-    let violations = unlisted(&hits, &allowed_paths());
+    let violations = unlisted(&hits, &allowed_paths(ALLOWED_ENTRY_POINT_USES));
     assert!(
         violations.is_empty(),
         "テスト用の一時パスは共通窓口（temp-path-kit の TempPath）から取ること。\
@@ -307,7 +218,6 @@ fn the_allow_table_declares_its_own_size_and_reasons() {
         "例外表の件数が宣言と食い違う。項目の追加は表と件数の 2 箇所を明示的に編集すること（要件 12.4）"
     );
 
-    let sources = walk_workspace_sources();
     for (path, _, reason) in ALLOWED_ENTRY_POINT_USES {
         assert!(
             !reason.trim().is_empty(),
@@ -317,10 +227,6 @@ fn the_allow_table_declares_its_own_size_and_reasons() {
             !path.contains('*') && path.ends_with(".rs"),
             "例外はファイル 1 件を逐語で指すこと（総括的な指定は暗黙の増加を許す）: {path}"
         );
-        assert!(
-            sources.contains(&(*path).to_string()),
-            "例外表が実在しないファイルを指している: {path}"
-        );
     }
 }
 
@@ -328,12 +234,14 @@ fn the_allow_table_declares_its_own_size_and_reasons() {
 fn the_allow_table_has_no_duplicate_entries() {
     // 同じパスが 2 度載ると、件数の宣言を通ったまま実質の例外が 1 件減る
     //（＝表の見かけの大きさと効き目が食い違う）。
-    let unique: BTreeSet<&str> = allowed_paths().into_iter().collect();
+    let unique: BTreeSet<&str> = allowed_paths(ALLOWED_ENTRY_POINT_USES)
+        .into_iter()
+        .collect();
     assert_eq!(
         unique.len(),
         ALLOWED_COUNT,
         "例外表に重複した項目がある: {:?}",
-        allowed_paths()
+        allowed_paths(ALLOWED_ENTRY_POINT_USES)
     );
 }
 
@@ -370,14 +278,9 @@ fn the_allow_table_declares_the_size_of_each_category() {
 /// `crates/areka-sylphya/src/persist/io.rs` を丸ごと取りこぼしていた——入口 3 箇所のうち識別子を
 /// 使うのは 1 箇所だけで、残り 2 箇所は**固定名で書込と削除**を行っていた。取りこぼしは
 /// タスク 10.5 のレビューで初めて見つかり、タスク 10.7 が事実のほうを是正した（要件 12.2 の
-/// 2026-08-27 訂正・対象は 20 → 21 ファイル）。**つまり本検査は、自分を素通りした欠陥の存在を
+/// 2026-08-27 訂正）。**つまり本検査は、自分を素通りした欠陥の存在を
 /// 知っている。**
 ///
-/// # 是正後に残る「入口が複数あるファイル」は 0 件（2026-08-27 実測・2026-11-13 改め）
-///
-/// 2026-08-27 の実測では `crates/shiori-host32-helper/src/shiori_proxy.rs`（入口 3・識別子 2）と
-/// `crates/shiori-host32-host/src/process_host.rs`（入口 3・識別子 1）がここにあったが、
-/// audit-shiori-host32 のタスク 1.3 と 4.1 が入口を使わない形へ寄せて表から落ちた。
 /// **今の表の項目が将来入口を増やしたときに、この穴へ落ちるかどうかまでは本検査は見ていない。**
 ///
 /// # なぜ行単位へ強めないのか
@@ -425,10 +328,7 @@ fn every_exception_still_has_a_real_hit() {
     // あわせて、窓口へ寄って入口を叩かなくなった項目を表に置き去りにできなくする
     //（例外が減る方向だけが自然になる）。
     let hits = scan_sources(&watched_sources(), &entry_point_tokens());
-    let stale: Vec<&str> = allowed_paths()
-        .into_iter()
-        .filter(|path| !hits.iter().any(|h| h.path == *path))
-        .collect();
+    let stale = stale_entries(&hits, ALLOWED_ENTRY_POINT_USES);
     assert!(
         stale.is_empty(),
         "例外表に載っているのに当たりが 1 件も無い（走査が空振りしているか、事情が消えた）。\
@@ -437,9 +337,9 @@ fn every_exception_still_has_a_real_hit() {
 }
 
 #[test]
-fn the_measurement_is_not_vacuous_and_matches_the_allow_table() {
-    // 陽性側の相棒。⑴ 列挙が現実的な規模であること ⑵ 入口の呼出が確かに存在すること
-    // ⑶ その集合が例外表と**完全に一致**すること（要件 12.4 の「移行後の実測値で開始」）。
+fn the_measurement_is_not_vacuous() {
+    // 陽性側の相棒。⑴ 列挙が現実的な規模であること ⑵ 入口の呼出が確かにどこかに在ること。
+    // 集合が例外表と一致することは表の外の 0 件と、表の行ごとの当たりの 2 本が固める。
     let watched = watched_sources();
     assert!(
         watched.len() > 500,
@@ -450,23 +350,15 @@ fn the_measurement_is_not_vacuous_and_matches_the_allow_table() {
     let hits = scan_sources(&watched, &entry_point_tokens());
     assert!(
         !hits.is_empty(),
-        "入口の呼出が 1 件も無い。移行後の実測は 16 ファイル・20 箇所だったので、\
+        "入口の呼出が 1 件も無い。移行後も入口を叩くファイルは残っているはずなので、\
          走査か列挙が壊れている疑いが濃い"
-    );
-
-    let found: BTreeSet<&str> = hits.iter().map(|h| h.path.as_str()).collect();
-    let listed: BTreeSet<&str> = allowed_paths().into_iter().collect();
-    assert_eq!(
-        found, listed,
-        "実測した集合が例外表と一致しない。新たな迂回なら窓口へ寄せるか表へ明示的に追加し、\
-         解消したのなら表から削除すること"
     );
 }
 
 #[test]
 fn the_gateway_is_scanned_and_holds_no_entry_point() {
     // 窓口も主検査の走査に入る（案 B）。⑴ 2 ファイルが走査の一覧に在る
-    // ⑵ 同じ 2 ファイルが確かに読めている（プロセス識別子の語で lib.rs に当たる）
+    // ⑵ 同じ 2 ファイルが確かに読めている（プロセス識別子の語が 2 ファイルとも当たる）
     // ⑶ そのうえで入口の語の当たりが 0 件。⑴⑵ が「0 件」を空振りから区別する陽性の対。
     let watched = watched_sources();
     for file in GATEWAY_FILES {
@@ -478,10 +370,12 @@ fn the_gateway_is_scanned_and_holds_no_entry_point() {
 
     let gateway: Vec<String> = GATEWAY_FILES.iter().map(|p| p.to_string()).collect();
     let pid_hits = scan_sources(&gateway, &[TOKEN_PROCESS_ID]);
-    assert!(
-        pid_hits.iter().any(|h| h.path == GATEWAY_FILES[0]),
-        "窓口の lib.rs にプロセス識別子の語が 1 件も無い＝走査が空振りしている疑い"
-    );
+    for file in GATEWAY_FILES {
+        assert!(
+            pid_hits.iter().any(|h| h.path == file),
+            "窓口のファイルにプロセス識別子の語が 1 件も無い＝走査が空振りしている疑い: {file}"
+        );
+    }
 
     let hits = scan_sources(&gateway, &entry_point_tokens());
     assert!(
@@ -501,12 +395,15 @@ fn dropping_a_known_exception_turns_the_guard_red() {
     // 見本で作った両側は下の合成入力の検査が持っており、ここで確かめたいのは
     //「この表とこのワークスペースの組み合わせで、見張りが本当に鳴るか」である。
     assert!(
-        allowed_paths().contains(&CALIBRATION_DROPPED_ENTRY),
+        allowed_paths(ALLOWED_ENTRY_POINT_USES).contains(&CALIBRATION_DROPPED_ENTRY),
         "較正で外す 1 件は例外表の項目でなければならない: {CALIBRATION_DROPPED_ENTRY}"
     );
 
     let hits = scan_sources(&watched_sources(), &entry_point_tokens());
-    let violations = unlisted(&hits, &allowed_paths_without(CALIBRATION_DROPPED_ENTRY));
+    let violations = unlisted(
+        &hits,
+        &allowed_paths_without(ALLOWED_ENTRY_POINT_USES, CALIBRATION_DROPPED_ENTRY),
+    );
     assert!(
         !violations.is_empty(),
         "例外表から 1 件外しても違反が 0 件＝見張りは鳴っていない（何も検知できていない）"
@@ -524,7 +421,7 @@ fn a_fixed_name_built_from_the_entry_point_is_detected() {
     // 陽性の合成入力（実ファイルを汚さずに済む）。要件 12.4 が名指しする欠陥の形そのもの。
     let source = format!(
         "fn plant() -> PathBuf {{\n    \
-         let root = std::{TOKEN_QUALIFIED}).join(\"areka-fixed-name\");\n    \
+         let root = std::{TOKEN_QUALIFIED}().join(\"areka-fixed-name\");\n    \
          std::fs::create_dir_all(&root).unwrap();\n    root\n}}\n"
     );
     assert_eq!(
@@ -536,7 +433,7 @@ fn a_fixed_name_built_from_the_entry_point_is_detected() {
 
 #[test]
 fn the_bare_spelling_of_the_entry_point_is_detected_too() {
-    // `use std::env::temp_dir;` と書けば修飾は消える。裸の綴りも走査語に含めているので当たる。
+    // `use` で関数名だけを取り込めば修飾は消える。裸の綴りも走査語に含めているので当たる。
     let source = format!("    let root = {TOKEN_BARE}).join(\"areka-fixed-name\");\n");
     assert_eq!(
         scan_tokens(&source, &entry_point_tokens()),
@@ -547,9 +444,9 @@ fn the_bare_spelling_of_the_entry_point_is_detected_too() {
 
 #[test]
 fn the_two_spellings_never_double_count_one_call() {
-    // 裸の綴りは修飾つきの綴りの内側にも現れる。1 呼出が 2 件に数えられると、
-    // 件数を語る主張（実測 20 箇所）が静かにずれる。
-    let source = format!("    let root = std::{TOKEN_QUALIFIED});\n");
+    // 裸の綴りは修飾つきの綴りの後ろ半分と重なる。1 呼出が 2 件に数えられると、
+    // 件数を語る主張が静かにずれる。
+    let source = format!("    let root = std::{TOKEN_QUALIFIED}();\n");
     assert_eq!(
         scan_tokens(&source, &entry_point_tokens()),
         vec![(1usize, TOKEN_QUALIFIED.to_string())],
@@ -558,8 +455,41 @@ fn the_two_spellings_never_double_count_one_call() {
 }
 
 #[test]
+fn the_entry_point_passed_without_a_call_is_detected() {
+    // `(` 無しの渡し方（呼ばずに関数として渡す形）。
+    let source = format!("    let make = std::{TOKEN_QUALIFIED};\n    let root = (make)();\n");
+    assert_eq!(
+        scan_tokens(&source, &entry_point_tokens()),
+        vec![(1usize, TOKEN_QUALIFIED.to_string())],
+        "呼ばずに渡す形を検知できていない（`(` を走査語に含めると抜けられる）"
+    );
+}
+
+#[test]
+fn an_aliased_import_of_the_entry_point_is_detected() {
+    // `use … as` の別名。別名での呼出は裸の綴りに当たらないので、use の行で捕まえる。
+    let source = format!("use std::{TOKEN_QUALIFIED} as scratch_root;\n");
+    assert_eq!(
+        scan_tokens(&source, &entry_point_tokens()),
+        vec![(1usize, TOKEN_QUALIFIED.to_string())],
+        "`use … as` の別名を検知できていない"
+    );
+}
+
+#[test]
+fn an_aliased_import_inside_braces_is_detected() {
+    // 波括弧の中の別名は `env::` の直後に関数名が来ないので、修飾つきの綴りに当たらない。
+    let source = format!("use std::env::{{self, {TOKEN_BRACED_ALIAS} scratch_root}};\n");
+    assert_eq!(
+        scan_tokens(&source, &entry_point_tokens()),
+        vec![(1usize, TOKEN_BRACED_ALIAS.to_string())],
+        "波括弧の中の `use … as` の別名を検知できていない"
+    );
+}
+
+#[test]
 fn a_helper_whose_name_merely_ends_with_the_same_spelling_is_not_a_hit() {
-    // 実在の助走関数（`unique_temp_dir`・`make_unique_temp_dir`）に当たってはいけない。
+    // 名前の末尾が同じ綴りの助走関数（実在の `unique_temp_dir` と、見本の `make_unique_temp_dir`）に当たってはいけない。
     // 当たると例外表が偽陽性で膨らみ、表の意味が失われる。
     let source = format!(
         "fn unique_{TOKEN_BARE}tag: &str) -> TempPath {{\n    \
@@ -577,7 +507,7 @@ fn a_helper_whose_name_merely_ends_with_the_same_spelling_is_not_a_hit() {
 fn a_fixed_name_in_a_comment_is_not_a_hit_but_the_same_line_of_code_is() {
     // 要件 12.7。**対で置く**——コメント側が 0 件でも走査そのものが空振りなら同じ結果になるので、
     // 実行行側で 1 件当たることを同じテストの中で示す。
-    let body = format!("let root = std::{TOKEN_QUALIFIED}).join(\"areka-fixed-name\");");
+    let body = format!("let root = std::{TOKEN_QUALIFIED}().join(\"areka-fixed-name\");");
 
     let commented = format!("    // かつては {body} と書いていた\n");
     assert_eq!(
@@ -611,39 +541,11 @@ fn a_fixed_name_in_a_comment_is_not_a_hit_but_the_same_line_of_code_is() {
 }
 
 // ---------------------------------------------------------------------------
-// 見張り自身が走査語を逐語で持たないこと
+// 見張りの置き場のファイルが走査語を逐語で持たないこと
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_guard_file_itself_is_not_a_hit() {
-    let mut tokens = entry_point_tokens();
-    tokens.push(TOKEN_PROCESS_ID);
-    assert_eq!(
-        scan_sources(&[THIS_GUARD.to_string()], &tokens),
-        Vec::new(),
-        "見張り自身が走査語を逐語で持ってしまっている（concat! で割ること）"
-    );
-}
-
-/// コメントを**除かずに**生テキストから走査語を探す（純関数）。
-///
-/// 要件 12.2 の実測に使った `rg`／`grep` と同じ見方（アンカーもコメント除去もしない素の
-/// 部分一致）にそろえてある。**母数が動く条件をそのまま写すのが目的なので、ここを
-/// 賢くしてはいけない。**
-fn raw_occurrences(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
-    let mut hits = Vec::new();
-    for (index, line) in src.lines().enumerate() {
-        for token in tokens {
-            if line.contains(token) {
-                hits.push((index + 1, (*token).to_string()));
-            }
-        }
-    }
-    hits
-}
-
-#[test]
-fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
+fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
     let mut tokens = entry_point_tokens();
     tokens.push(TOKEN_PROCESS_ID);
 
@@ -651,10 +553,10 @@ fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
     //（コメント除去を通す上の検査は、コメントへ植えた走査語を 1 件も拾わない）。
     //
     // 1 行に**両方の綴りが当たる**のが正しい期待値である——`raw_occurrences` は
-    // アンカーも語の重なりの規則も持たない素の部分一致で、修飾つきの綴りの内側にある
+    // アンカーも語の重なりの規則も持たない素の部分一致で、修飾つきの綴りの後ろ半分と重なる
     // 裸の綴りを別に数える。要件 12.2 の実測に使った grep がまさにそう振る舞うので、
     // ここを賢くして 1 件へ丸めると母数の見方が実測とずれる。
-    let planted = format!("// 説明: かつては std::{TOKEN_QUALIFIED}) と書いていた");
+    let planted = format!("// 説明: かつては std::{TOKEN_QUALIFIED}() と書いていた");
     assert_eq!(
         raw_occurrences(&planted, &tokens),
         vec![
@@ -664,15 +566,14 @@ fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
         "コメントの中でも生テキスト走査は当たらねばならない（当たらないなら本検査は恒真）"
     );
 
-    let violations: Vec<String> = raw_occurrences(&read_source(THIS_GUARD), &tokens)
-        .into_iter()
-        .map(|(line, token)| format!("  {THIS_GUARD}:{line} （語: {token}）"))
-        .collect();
+    // 例外表に載るもの（意図して入口を書くファイル）だけを除く。
+    let allowed = allowed_paths(ALLOWED_ENTRY_POINT_USES);
+    let violations = raw_scan_sources(&files_that_must_not_spell_the_tokens(&allowed), &tokens);
     assert!(
         violations.is_empty(),
         "走査語はコメントの中も含めて逐語で書いてはいけない。\
          ⒜ 見張りが自分自身を違反として拾い ⒝ 要件 12.2 の実測に使った grep の母数が黙って動く\
          （コメントは見張りが除去するが grep は除去しない）。concat! で 2 片に割ること:\n{}",
-        violations.join("\n")
+        render(&violations)
     );
 }

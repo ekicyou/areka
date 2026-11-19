@@ -18,10 +18,11 @@ areka-parsers = { path = "../areka-parsers" }
 encoding_rs = { workspace = true }
 # deflate（方式 8）の伸長のみ。2026-09-18 開発者承認の意図的依存追加で、
 # zip コンテナの読み手は本クレートが std だけで持つ（zip・flate2 は入れない）。
-# 既定機能を切り、伸長 API に必須の with-alloc だけを明示する（要件 10.2）。
+# 既定機能を切り、伸長 API に必須の with-alloc だけを明示する（要件 10.2・指定は根の
+# [workspace.dependencies]）。
 # 圧縮側は機能では切れないので、areka-nar/src が miniz_oxide::deflate を
 # 綴らないことを常設の検査で見張る。
-miniz_oxide = { version = "0.9", default-features = false, features = ["with-alloc"] }
+miniz_oxide = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 

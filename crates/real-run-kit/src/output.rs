@@ -15,7 +15,7 @@ pub(crate) const TAIL_BYTES: usize = 64 * 1024;
 
 /// 子が待ちの途中で終わった（3.5・4.8）。締切切れと見分けられる値。
 ///
-/// 下の段の close・mcp も使うので、ここで定める。run とクレートの入口が再輸出する。
+/// 下の段の close・mcp も使うので、ここで定める。クレートの入口（lib.rs）が再輸出する。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChildExited {
     /// 子の終わり方（終了コードは `status.code()`）。
@@ -73,31 +73,36 @@ impl Tail {
     }
 }
 
+/// 2 つの出力のファイルの、頭から読む `Tail`。
+pub(crate) fn tails(files: [&Path; 2]) -> [Tail; 2] {
+    files.map(|p| Tail::new(p.to_path_buf()))
+}
+
 fn contains(hay: &[u8], needle: &[u8]) -> bool {
     needle.is_empty() || hay.windows(needle.len()).any(|w| w == needle)
 }
 
 /// 2 つの出力のファイルに `needles` のどれかが現れるまで待ち、その番号を返す（3.2・3.5・3.7）。
+/// `tails` の読んだ位置から続けて読むので、呼び手が待ち直すたびに頭から読み直さない。
 ///
 /// 1 回ごとに ⑴ 増えた分に文字列があればその番号 ⑵ 子が終わっていれば、もう 1 度だけ増えた分を
 /// 読んでから `ChildExited` ⑶ 締切を過ぎていれば `Deadline` ⑷ `poll` だけ待って ⑴ へ。
 pub(crate) fn wait_any(
-    files: [&Path; 2],
+    tails: &mut [Tail; 2],
     needles: &[&str],
     child: &mut Child,
     deadline: Instant,
     poll: Duration,
 ) -> Result<usize, WaitEnd> {
-    let mut tails = files.map(|p| Tail::new(p.to_path_buf()));
     let scan = |tails: &mut [Tail; 2]| tails.iter_mut().find_map(|t| t.scan(needles));
     loop {
-        if let Some(i) = scan(&mut tails) {
+        if let Some(i) = scan(tails) {
             return Ok(i);
         }
         // 終わりを見られないのは取っ手の故障。終わったとは言えないので見回りを続け、締切で終える。
         if let Ok(Some(status)) = child.try_wait() {
             // 終わる直前に書かれた分を取りこぼさない。
-            return scan(&mut tails).ok_or(WaitEnd::ChildExited(ChildExited { status }));
+            return scan(tails).ok_or(WaitEnd::ChildExited(ChildExited { status }));
         }
         if Instant::now() >= deadline {
             return Err(WaitEnd::Deadline);
@@ -106,12 +111,27 @@ pub(crate) fn wait_any(
     }
 }
 
+/// 記録のファイルの全文（読めない字は U+FFFD）。読めなければ空の文字にせず、パスと理由で落ちる。
+pub(crate) fn read_text(path: &Path) -> String {
+    match std::fs::read(path) {
+        Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
+        Err(err) => panic!("記録のファイルを読めない: {} ({err})", path.display()),
+    }
+}
+
 /// 締切切れの文（3.4・5.4 で共用）: 待っていた文字列・待った時間・2 つのファイルの場所・
 /// 各ファイルの末尾 64 KiB（全文はファイルにある旨を添える）。末尾は全文から取る。
+/// 破棄の道からも呼ぶので、読めないファイルは落ちずに読めない旨とパスを文へ埋め込む。
 pub(crate) fn failure_text(needles: &[&str], waited: Duration, files: [&Path; 2]) -> String {
     let mut text = format!("締切切れ: {needles:?} を {waited:?} 待ったが現れなかった\n");
     for path in files {
-        let bytes = std::fs::read(path).unwrap_or_default();
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                text.push_str(&format!("--- {} は読めない（{err}） ---\n", path.display()));
+                continue;
+            }
+        };
         let tail = &bytes[bytes.len().saturating_sub(TAIL_BYTES)..];
         text.push_str(&format!(
             "--- {} の末尾 {} バイト（全 {} バイト・全文はファイルにある） ---\n{}\n",

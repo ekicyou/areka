@@ -53,11 +53,11 @@ pub struct ScopeAssets {
     pub initial_surface_id: u32,
 }
 
-/// 1 scope 分のバルーン表示資産（[`ScopeAssets`] と対称・design D4=S1）。
+/// 1 scope 分のバルーン表示資産（[`ScopeAssets`] と対称・areka-P0-kero-balloon design D4=S1）。
 ///
 /// scope・表示 World・アトラス・**その scope 専用の**マージ済み定義を 1 件に束ねる。
 /// 「全 scope 共有のバルーン定義 1 本」を型として表現できなくすることが本保持器の要点であり
-/// （旧 `BootAssets.balloon_model` の撤去・Req 2.1）、ある scope のバルーンが別 scope の系列
+/// （旧 `BootAssets.balloon_model` の撤去・areka-P0-kero-balloon 要件 2.1）、ある scope のバルーンが別 scope の系列
 /// 由来の定義で駆動される事故を構造的に防ぐ。
 ///
 /// `emo_world` は当該 scope が解決した系列から build した非 Clone World（装着で move 消費）。
@@ -70,17 +70,16 @@ pub struct BalloonScopeAssets {
     /// 当該 scope の bake 済みアトラス。
     pub atlas: AtlasTable,
     /// scope 別の面ごとの定義の束（面ごとに 2 層マージ済みのモデル＋その面の矢印の絵・
-    /// 文字層・`windowposition`／`validrect` の源・Req 2.1・balloon-scroll-arrows 要件 1.7）。
+    /// 文字層・`windowposition`／`validrect` の源・areka-P0-kero-balloon 要件 2.1・balloon-scroll-arrows 要件 1.7）。
     pub definitions: ScopeBalloonDefinitions,
-    /// バルーンの背景色（面 0 の焼き込み済み画像の原点画素・sRGB 非 premultiplied・要件 4.6）。
+    /// バルーンの背景色（面 0 の焼き込み済み画像の原点画素・sRGB 非 premultiplied・areka-P0-text-decoration-canon 要件 4.6）。
     ///
     /// 無効表示（`\f[disable]`）の文字色を「既定の文字色を背景色の側へ寄せた色」として導く
     /// ための混色の相手。原点画素が採れないとき（面が引けない・全透明・トリムで原点が bbox の
-    /// 外・α が 255 でない）は白へ落ちる（導出と記録は [`super::balloon_background`]）。
+    /// 外・α が 255 でない）は白へ落ちる（導出と記録は `balloon_background` モジュール）。
     ///
     /// 消費点は `frame/attach.rs` の `connect_balloon_text`——装着（`register_actor_view`）の
-    /// **前**に `TextLayerRuntime::set_balloon_background` へ渡す（task 7.3 で結線済み。
-    /// 順序は `frame_attach_tests.rs` の
+    /// **前**に `TextLayerRuntime::set_balloon_background` へ渡す（順序は `frame_attach_tests.rs` の
     /// `connect_balloon_text_hands_the_background_over_before_attaching` が見張る）。
     /// 導出そのものは `assets_tests.rs` の emo2 fixture テストが固定している。
     pub background_color: (u8, u8, u8),
@@ -88,10 +87,10 @@ pub struct BalloonScopeAssets {
     pub name: String,
 }
 
-/// SERIKO ループ表の一括（シェル面 1 表＋バルーン面の scope 別表・design「結線・資産・実機経路
+/// SERIKO ループ表の一括（シェル面 1 表＋バルーン面の scope 別表・areka-P0-seriko-loop design「結線・資産・実機経路
 /// （assets.rs）」）。
 ///
-/// 面種非依存（裁定 (a)）: 同一 `AnimationTable::from_world` がシェル世界・バルーン世界の双方から
+/// 面種非依存（areka-P0-seriko-loop の裁定 (a)）: 同一 `AnimationTable::from_world` がシェル世界・バルーン世界の双方から
 /// 同型に表を組む。`shell`／`balloon` は **surface ID 名前空間の別**（emo2 はシェル surface0 と
 /// バルーン面 0 が別物）であり能力の仕切りではない。いずれの表も同一評価経路で駆動される。
 ///
@@ -103,22 +102,22 @@ pub struct LoopTables {
     /// 単数なのは **シェル面に限る**前提の帰結である: 全 scope が同一 `Shell` から build されるため
     /// 表の内容が scope 非依存になる。バルーン面にこの前提は無い（下記 `balloon` 参照）。
     pub shell: AnimationTable,
-    /// バルーン面の **scope 別**ループ表（キー＝scope 番号・design D9'・Req 5.6）。
+    /// バルーン面の **scope 別**ループ表（キー＝scope 番号・areka-P0-kero-balloon design D9'・Req 5.6）。
     ///
     /// バルーン World は scope ごとに解決される系列（`balloons*`／`balloonk*` 等）が異なるため、
     /// ある scope のバルーンが別 scope の系列由来の定義で駆動されない形を型で担保する。各表は
     /// 当該 scope の `EmoWorld` から `from_world` で導出する（導出は構築ループ内の単一導出点）。
     ///
-    /// キー集合は `BootAssets.balloons` の scope 集合と一致する（Data Models 不変条件 (c)）。
+    /// キー集合は `BootAssets.balloons` の scope 集合と一致する（scope ごとに 1 表ずつ導出するため）。
     /// 表は `spawn_seriko` が attach より前に消費し `BalloonScopeAssets` は attach で move 消費される
-    /// ため、表を資産へ同梱せず本並行構造で持つ（D9' 裁定）。反復順の決定論のため `BTreeMap`。
+    /// ため、表を資産へ同梱せず本並行構造で持つ（areka-P0-kero-balloon 設計 D9' 裁定）。反復順の決定論のため `BTreeMap`。
     pub balloon: BTreeMap<u32, AnimationTable>,
 }
 
-/// バルーン表の scope キーを seriko のアクタ鍵語彙へ変換する（起動シームの転送・Req 5.6）。
+/// バルーン表の scope キーを seriko のアクタ鍵語彙へ変換する（起動シームの転送・areka-P0-kero-balloon 要件 5.6）。
 ///
 /// boot 側の `u32` scope を `SerikoLoopConfig.balloon_tables` が要求する [`ActorKey`] へ
-/// `ActorKey::from(scope.to_string())` で写す。この写像は attach（`frame.rs`）・文字層の再追従・
+/// `ActorKey::from(scope.to_string())` で写す。この写像は attach（`frame/attach.rs`）・文字層の再追従・
 /// `target_map::scope_of` の逆写像と**同一語彙**であり、ここで別語彙を作らないことが scope 同定の
 /// 一貫性を保つ要点である。表そのものは値移送（内容は変えない）。
 ///
@@ -133,7 +132,7 @@ pub fn actor_keyed_balloon_tables(
         .collect()
 }
 
-/// 表示結線に必要な load-time 資産の一括（design「構築入力 / assets」Service Interface）。
+/// 表示結線に必要な load-time 資産の一括（areka-P0-emo2-boot design「構築入力 / assets」Service Interface）。
 ///
 /// 事後条件: 返る資産だけで attach フェーズが完結する（以後ファイル I/O なし）。
 pub struct BootAssets {
@@ -141,16 +140,16 @@ pub struct BootAssets {
     pub shells: Vec<ScopeAssets>,
     /// scope ごとのバルーン表示資産（面 0 初期表示・World／アトラス／scope 別定義の 3 点組）。
     ///
-    /// 不変条件 (a): この scope 集合は `shells` の scope 集合と一致する（DD-12 の対応関係）。
+    /// この scope 集合は `shells` の scope 集合と一致する（areka-P0-kero-balloon 設計の不変条件 (a)・areka-P0-emo2-boot 設計 DD-12 の対応関係）。
     pub balloons: Vec<BalloonScopeAssets>,
     /// `Emote{key}` → surface 解決器（`EmoWorld::alias_snapshot()` 由来）。
     pub resolver: SurfaceResolver,
-    /// スコープごとの起動時オンの静的 bind 集合（シェルの `*.bindgroup{N}.default,1`・要件 14.1）。
+    /// スコープごとの起動時オンの静的 bind 集合（シェルの `*.bindgroup{N}.default,1`・areka-P0-offline-surface-dump 要件 14.1）。
     pub static_binds: DefaultBinds,
     /// bind 名前解決情報（`MountModel.bindgroups` の名前宣言由来・`(カテゴリ, パーツ)`→着せ替え ID）。
-    /// task 7.2 で `spawn_seriko` の actor 構築へ手渡す（本タスクは起動時資産への保持のみ）。
+    /// `wire_runtime` が `spawn_seriko_clocked` の actor 構築へ手渡す（bind cue の着せ替え名の解決）。
     pub bind_resolver: BindResolver,
-    /// SERIKO ループ表（シェル面 1 表＋バルーン面の scope 別表・面種非依存＝裁定 (a)）。
+    /// SERIKO ループ表（シェル面 1 表＋バルーン面の scope 別表・面種非依存＝areka-P0-seriko-loop の裁定 (a)）。
     /// 既に保持する `EmoWorld` スナップショットから `AnimationTable::from_world` で構築する
     /// （新規ファイル I/O なし）。`spawn_seriko` の actor 構築へ手渡す（起動シームが
     /// [`actor_keyed_balloon_tables`] で scope キーをアクタ鍵語彙へ写して転送する）。
@@ -160,7 +159,7 @@ pub struct BootAssets {
     /// 表示スケール k＝窓の実モニタ DPI ÷ 作者基準 DPI の**分母**。attach 相が
     /// `attach_target(.., author_dpi)` へそのまま供給する（搬送のみ・値の解釈はしない）。
     pub shell_author_dpi: u16,
-    /// バルーン面の作者基準 DPI（ukadoc balloon descript `dpi`・既定 96・同 D1）。
+    /// バルーン面の作者基準 DPI（ukadoc balloon descript `dpi`・既定 96・areka-P0-emo-dpi-scaling 設計 D1）。
     ///
     /// シェルとは別パッケージ・別キーゆえ独立に保持する（両者が異なる宣言値を持ち得る）。
     pub balloon_author_dpi: u16,
@@ -170,7 +169,7 @@ pub struct BootAssets {
     pub cursors: ShellCursorAssets,
 }
 
-/// 構築入力（[`BootAssets`]）を一括組立する（tasks.md task 2.6・design「構築入力 / assets」）。
+/// 構築入力（[`BootAssets`]）を一括組立する（areka-P0-emo2-boot design「構築入力 / assets」）。
 ///
 /// 既定の解決のシェルを読む形で、中身は `shell: None` で [`build_boot_assets_with_shell`] へ
 /// 委ねるだけである（シェルの側は [`build_shell_assets`]、バルーンの側は [`build_balloon_assets`]）。
@@ -181,14 +180,14 @@ pub struct BootAssets {
 /// 受け取る。`AtlasTable` は安価 Clone）。
 /// balloon は scope ごとに 系列解決（`resolve_balloon_faces`）→ 構築
 /// （`build_balloon_target_from_faces`）→ 定義読込（`load_scope_balloon_definitions`）を行い
-/// [`BalloonScopeAssets`] へ束ねる（scope 専用の定義を保持する＝共有 1 本を作らない・Req 2.1）。
+/// [`BalloonScopeAssets`] へ束ねる（scope 専用の定義を保持する＝共有 1 本を作らない・areka-P0-kero-balloon 要件 2.1）。
 /// `SurfaceResolver` は `EmoWorld::alias_snapshot()` から、static bindset は shell descript KV の
-/// シェルの着せ替えの読み（`MountModel.bindgroups`）からスコープごとに組む（要件 14.1〜14.3）。
+/// シェルの着せ替えの読み（`MountModel.bindgroups`）からスコープごとに組む（areka-P0-offline-surface-dump 要件 14.1〜14.3）。
 ///
-/// 作者基準 DPI（`shell_author_dpi`／`balloon_author_dpi`・areka-P0-emo-dpi-scaling task 4.1）は
-/// **呼び手が読んだ値をそのまま搬送する**（本関数は解釈も再読取もしない）。設計 Flow 3 手順1 が
+/// 作者基準 DPI（`shell_author_dpi`／`balloon_author_dpi`・areka-P0-emo-dpi-scaling）は
+/// **呼び手が読んだ値をそのまま搬送する**（本関数は解釈も再読取もしない）。areka-P0-emo-dpi-scaling の設計 Flow 3 手順1 が
 /// 定めるとおり、boot シームが `DescriptSource::shell_author_dpi()`／`load_balloon_author_dpi()`
-/// （areka_placement::source・task 2.1）で **1 度だけ**読み、同じ値を採寸の k₀（`MeasureScaling`）と
+/// （areka_placement::source）で **1 度だけ**読み、同じ値を採寸の k₀（`MeasureScaling`）と
 /// attach（`attach_target`）の双方へ配ることで、両者が同一の分母に載ることを保証する。
 /// ここで descript を読み直すと (a) 既に読んだファイルの二重 I/O になり、(b) 採寸と attach が
 /// 別々の読取結果に載る隙（読取間の差し替え）を作るため、内部読取は採らない。縮退梯子
@@ -197,13 +196,14 @@ pub struct BootAssets {
 ///
 /// # 事前条件
 /// - 呼び出しスレッドは COM 初期化済み（`WicDecoderArm` 前提・本番は MTA UI スレッド）。
-/// - `scopes` は呼び手（`wire_runtime`）が placement と同じ入力から自前導出する（DD-12）。
-/// - `shell_author_dpi`／`balloon_author_dpi` は縮退梯子適用済みの非ゼロ値（task 2.1 の読取器出力）。
+/// - `scopes` は呼び手（`wire_runtime` の `derive_scopes`）が渡す固定の最大の組 `[0, 1]`（ゴーストは読まない・
+///   scope 1 が無いゴーストでは `frame::plan_attachments` が unused に分ける）。
+/// - `shell_author_dpi`／`balloon_author_dpi` は縮退梯子適用済みの非ゼロ値（`DescriptSource` の読取器の出力）。
 ///
 /// # 事後条件
 /// - 返る資産だけで attach フェーズが完結する（**以後ファイル I/O なし**）。全 I/O は本関数内で完結。
 ///
-/// # 失敗（log-first・panic しない・R7.3）
+/// # 失敗（log-first・panic しない・areka-P0-emo2-boot 要件 7.3）
 /// - `resolve_with_shell` 失敗 → [`BootWiringError::Mount`]（`StartPointMissing` 系は呼び手が warn 分類）。
 /// - WIC デコーダ生成失敗 → [`BootWiringError::Decoder`]。
 /// - シェルのフォルダの一覧失敗／`surfaces.txt` が在るのに読めない／`descript.txt` 読取失敗
@@ -212,7 +212,7 @@ pub struct BootAssets {
 ///   → [`BootWiringError::ShellEmpty`]。
 /// - バルーン系列解決／target 構築失敗（走査失敗・面 0 不在・bake 脱落）
 ///   → [`BootWiringError::Balloon`]（`#[from] BalloonLoadError`・真因ログは権威側が既に出す）。
-#[allow(dead_code)] // 本番の起動はシェル名つきの兄弟を通る（呼び手はテスト）
+#[cfg(any(test, feature = "test-support"))] // 本番の起動はシェル名つきの兄弟を通る（呼び手はテスト）
 pub fn build_boot_assets(
     ghost_root: &Path,
     balloon_root: &Path,
@@ -284,7 +284,7 @@ pub struct ShellAssets {
     pub shells: Vec<ScopeAssets>,
     /// `Emote{key}` → surface 解決器（先頭 World の `alias_snapshot()` 由来）。
     pub resolver: SurfaceResolver,
-    /// スコープごとの起動時オンの静的 bind 集合（シェルの `*.bindgroup{N}.default,1`・要件 14.1）。
+    /// スコープごとの起動時オンの静的 bind 集合（シェルの `*.bindgroup{N}.default,1`・areka-P0-offline-surface-dump 要件 14.1）。
     pub static_binds: DefaultBinds,
     /// bind 名前解決情報（`MountModel.bindgroups` 由来）。
     pub bind_resolver: BindResolver,
@@ -315,7 +315,7 @@ pub struct BalloonAssets {
     pub author_dpi: u16,
 }
 
-/// シェルの側だけの資産を作る（[`build_boot_assets`] のシェルの半分・要件 4.4・6.4）。
+/// シェルの側だけの資産を作る（[`build_boot_assets`] のシェルの半分・areka-P0-shell-balloon-switch 要件 4.4・6.4）。
 ///
 /// `shell` が `Some(名)` なら `shell/<名>/`、`None` なら既定の解決のシェルを読む
 /// （`resolve_with_shell`）。失敗の種類は [`build_boot_assets`] のシェルの側と同じ。
@@ -353,15 +353,24 @@ pub fn build_shell_assets_with_limits(
     let model = resolve_with_shell(ghost_root, DefaultEncoding::Ansi, shell)
         .map_err(BootWiringError::Mount)?;
 
-    // 名前の表はシェルの着せ替えの読みから 3 種類のスコープ分を組む（要件 14.2・14.3）。
+    // 名前の表はシェルの着せ替えの読みから 3 種類のスコープ分を組む（areka-P0-offline-surface-dump 要件 14.2・14.3）。
     let bind_resolver = BindResolver::from_groups(&model.bindgroups);
 
     let shell_dir = model.shell.dir;
 
+    // 着せ替えの読みは descript.txt が無くても空で返るので、読めないシェルの起動の失敗は焼く前にここで残す。
+    let descript_path = shell_dir.join(DESCRIPT_TXT);
+    if let Err(source) = std::fs::read(&descript_path) {
+        return Err(BootWiringError::ShellRead {
+            path: descript_path,
+            source,
+        });
+    }
+
     // シェル: 読み込みの権威を **1 回**呼ぶ（一覧 → surfaces.txt の読取と解析 → 面の表 →
     // 使う画像 → 焼く）。文字コードの扱い・記録・失敗の種類はすべて権威が持つ
     // （`areka_emo_present::shell_target`）。採寸（`areka_placement::measure`）も同じ入口を通るので、
-    // 「番号 → 面の画像」の対応・土台の絵・透過の扱いが表示と採寸で食い違わない（要件 3.6）。
+    // 「番号 → 面の画像」の対応・土台の絵・透過の扱いが表示と採寸で食い違わない（areka-P0-shell-implicit-surface 要件 3.6）。
     let mut target = load_shell_target_with_limits(&shell_dir, decoder, limits)?;
     let atlas = target.atlas().clone();
     let bake_failures = target.bake_errors().iter().map(|e| e.to_string()).collect();
@@ -425,18 +434,10 @@ pub fn build_shell_assets_with_limits(
         &model.shiori.dir,
     );
 
-    // 着せ替えの読みは descript.txt が無くても空で返るので、読めないシェルの起動の失敗はここで残す。
-    let descript_path = shell_dir.join(DESCRIPT_TXT);
-    if let Err(source) = std::fs::read(&descript_path) {
-        return Err(BootWiringError::ShellRead {
-            path: descript_path,
-            source,
-        });
-    }
-    // 既定の組はスコープ 0 に `sakura.*`・1 に `kero.*`・2 以上に `char*.*`（要件 14.1）。
+    // 既定の組はスコープ 0 に `sakura.*`・1 に `kero.*`・2 以上に `char*.*`（areka-P0-offline-surface-dump 要件 14.1）。
     let static_binds = DefaultBinds::from_groups(&model.bindgroups);
 
-    // シェル面のループ表（面種非依存＝裁定 (a)・**新規ファイル I/O なし**＝保持済み World の再利用のみ）。
+    // シェル面のループ表（面種非依存＝areka-P0-seriko-loop の裁定 (a)・**新規ファイル I/O なし**＝保持済み World の再利用のみ）。
     // 全 scope が同一 `Shell` から build 済みゆえ内容は scope 非依存＝先頭 World から 1 度だけ
     // 組めば足りる（この前提が成り立つのは **シェル面に限る**）。scope 資産が不在（空 scopes 等）
     // なら空表を明示（`AnimationTable::empty()`）。
@@ -458,7 +459,7 @@ pub fn build_shell_assets_with_limits(
     })
 }
 
-/// バルーンの側だけの資産を作る（[`build_boot_assets`] のバルーンの半分・要件 4.4）。
+/// バルーンの側だけの資産を作る（[`build_boot_assets`] のバルーンの半分・areka-P0-shell-balloon-switch 要件 4.4）。
 ///
 /// 失敗の種類は [`build_boot_assets`] のバルーンの側と同じ（[`BootWiringError::Balloon`]）。
 pub fn build_balloon_assets(
@@ -490,17 +491,17 @@ pub fn build_balloon_assets_with_limits(
     // （`build_balloon_target_from_faces`）と定義読込（`load_scope_balloon_definitions`）の双方へ
     // 使い回す——公開ラッパ `build_balloon_target` を使うとディレクトリ列挙が scope あたり
     // 2 回走るため、解決済み面列を受ける版を直接呼ぶ。
-    // 2 層マージ規則・層別ログレベル（D8）・確定値の info!（R6.3）はすべて権威クレート
+    // 2 層マージ規則・層別ログレベル（areka-P0-kero-balloon 設計 D8）・確定値の info!（要件 6.3）はすべて権威クレート
     // （`areka-emo-present` の `balloon`）が持ち、本シームは呼ぶだけである（Req 2.1）。
-    // SERIKO のバルーン側ループ表もこのループ内で **同一箇所から**導出する（単一導出点・D9'）。
+    // SERIKO のバルーン側ループ表もこのループ内で **同一箇所から**導出する（単一導出点・areka-P0-kero-balloon 設計 D9'）。
     // シェル面と違いバルーン World は scope ごとに別系列から build されるため、「先頭 World から
-    // 1 度だけ組めば足りる」という前提はバルーン面には無い（Req 5.6）。表は当該 scope の World から
+    // 1 度だけ組めば足りる」という前提はバルーン面には無い（areka-P0-kero-balloon 要件 5.6）。表は当該 scope の World から
     // `from_world` で組むだけで **新規ファイル I/O は起きない**。表を `BalloonScopeAssets` へ同梱
     // しないのは、表を spawn_seriko が attach より前に消費するのに対し資産は attach で move 消費
     // されるためで（消費タイミングが交差する）、並行構造の `LoopTables.balloon` 側で保持する。
     let mut balloons = Vec::with_capacity(scopes.len());
     let mut balloon_tables: BTreeMap<u32, AnimationTable> = BTreeMap::new();
-    // 普通のバルーンの名前＝バルーンのフォルダ名（名前の無い根なら道のりそのもの・要件 3.12）。
+    // 普通のバルーンの名前＝バルーンのフォルダ名（名前の無い根なら道のりそのもの・areka-P0-shell-balloon 要件 3.12）。
     let name = balloon_root.file_name().map_or_else(
         || balloon_root.display().to_string(),
         |n| n.to_string_lossy().into_owned(),
@@ -517,7 +518,7 @@ pub fn build_balloon_assets_with_limits(
             use_self_alpha,
             limits,
         )?;
-        // 面 0 必在（R1.7）は `resolve_balloon_faces` が権威として施行済みゆえ先頭は必ず存在する。
+        // 面 0 必在（areka-P0-kero-balloon 要件 1.7）は `resolve_balloon_faces` が権威として施行済みゆえ先頭は必ず存在する。
         // 万一の不在は権威の契約違反であり、log-first で真因を残して構築失敗に畳む（無言で
         // 定義なしのバルーンを組まない）。
         let Some(face0) = faces.first() else {
@@ -539,7 +540,7 @@ pub fn build_balloon_assets_with_limits(
             decoder,
             AlphaParams { use_self_alpha },
         );
-        // 無効表示の混色の相手＝面 0 の原点画素（要件 4.6）。採れないときは白＋`debug!`。
+        // 無効表示の混色の相手＝面 0 の原点画素（areka-P0-text-decoration-canon 要件 4.6）。採れないときは白＋`debug!`。
         let background_color = balloon_background::face_origin_color(&atlas, &face0.file_name);
         // 表は World を資産へ move する前に、この scope の World から導出する（単一導出点）。
         balloon_tables.insert(scope, AnimationTable::from_world(&emo_world));
@@ -554,7 +555,7 @@ pub fn build_balloon_assets_with_limits(
     }
 
     // バルーン面のループ表は系列が scope ごとに異なるため、上の構築ループ内で scope ごとに
-    // 導出済みである（キー集合＝`balloons` の scope 集合・不変条件 (c)・scope 資産不在なら空写像）。
+    // 導出済みである（キー集合＝`balloons` の scope 集合・scope 資産不在なら空写像）。
     Ok(BalloonAssets {
         balloons,
         loop_tables: balloon_tables,

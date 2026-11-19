@@ -1,17 +1,19 @@
 //! `event.rs` の自己テスト（設計 C1 Implementation Notes → Validation ⒠⒡⒢）。
 //!
-//! 中心にあるのは **byte 一致**である。移行対象 crate は今日、自前の Layer／Subscriber で
+//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
+//!
+//! 中心にあるのは **byte 一致**である。移行の前、対象 crate は自前の Layer／Subscriber で
 //! 1 イベントを 1 行へ整形しており、その行の文字列を `contains` や `starts_with` で判定する
-//! テストが多数ぶら下がっている。整形が 1 バイトでも違えば、それらは移行と同時に静かに
+//! テストが多数ぶら下がっていた。整形が 1 バイトでも違えば、それらは移行と同時に静かに
 //! 意味を変える。そこで本ファイルは 2 段で固定する。
 //!
-//! 1. **逐語の見本**（[`LEVEL_TARGET_FIELDS_FIXTURE`]／[`LEVEL_FIELDS_FIXTURE`]）— 移行対象の
-//!    現行整形コードを 1 文字も変えずに走らせて得た**実出力**をそのまま置いたもの。
-//! 2. **差分検査**（[`LegacyLineFormatting`]）— その現行整形コードの逐語写しを本ファイル内に
-//!    持ち、**同一のイベント列**に対して [`format_line`] と 1 バイト単位で突き合わせる。
-//!    見本が古びても差分検査は毎回走るので、両者が同時に嘘をつくことはない。
+//! 1. **逐語の見本**（[`LEVEL_TARGET_FIELDS_FIXTURE`]／[`LEVEL_FIELDS_FIXTURE`]）— 移行前の
+//!    整形コードを 1 文字も変えずに走らせて得た**実出力**をそのまま置いたもの。
+//! 2. **逐語写し**（[`LegacyLineFormatting`]）— その整形コードの写しを本ファイル内に持ち、
+//!    見本と [`format_line`] の両方に 1 バイト単位で突き合わせる。写しと見本のどちらかだけを
+//!    直すと赤になるので、両者が同時に嘘をつくことはない。
 //!
-//! 逐語写しの出所（`format!`／`write!` の並びは 1 文字も変えていない）:
+//! 逐語写しを移した時点の出所（今はどれも `capture_lines` を呼ぶ。下の並びは出自の記録）:
 //! - 宛先を含む形: `crates/areka-seriko/src/lib_test_support.rs` の `capture_logs` と
 //!   `crates/areka-emo-atlas/src/log_capture.rs`・`crates/areka-emo-compose/src/log_capture.rs`
 //!   の同型。
@@ -30,7 +32,7 @@ use crate::capture::{SENTINEL_TARGET, run_with_subscriber};
 // ── 見本のイベント列 ────────────────────────────────────────────────────────────────
 //
 // 宛先はすべて明示する（既定の宛先は発行元のモジュールパスになり、このファイルが移動した
-// だけで見本が変わってしまうため）。7 件で次を網羅する: メッセージのみ／文字列＋整数
+// だけで見本が変わってしまうため）。次を網羅する:メッセージのみ／文字列＋整数
 // フィールド／浮動小数＋真偽値／**メッセージ無し**／記述順と訪問順の関係／引用符とタブの
 // エスケープ／`record_str` 経路の生値。
 
@@ -44,7 +46,7 @@ fn emit_fixture_events() {
     tracing::warn!(target: "areka_kanade::resource", event = "shiori_load", outcome = "ok", "raw probe");
 }
 
-/// [`emit_fixture_events`] を現行の「宛先を含む形」で整形した**実出力**（逐語）。
+/// [`emit_fixture_events`] を移行前の「宛先を含む形」の整形コードで整形した**実出力**（逐語）。
 const LEVEL_TARGET_FIELDS_FIXTURE: &[&str] = &[
     "level=INFO target=areka_seriko::table message=table built",
     "level=WARN target=areka_emo_atlas message=surface missing set=0 rel_path=\"clear.png\"",
@@ -55,7 +57,7 @@ const LEVEL_TARGET_FIELDS_FIXTURE: &[&str] = &[
     "level=WARN target=areka_kanade::resource message=raw probe event=\"shiori_load\" outcome=\"ok\"",
 ];
 
-/// [`emit_fixture_events`] を現行の「宛先を含まない形」で整形した**実出力**（逐語）。
+/// [`emit_fixture_events`] を移行前の「宛先を含まない形」の整形コードで整形した**実出力**（逐語）。
 const LEVEL_FIELDS_FIXTURE: &[&str] = &[
     "level=INFO message=table built",
     "level=WARN message=surface missing set=0 rel_path=\"clear.png\"",
@@ -66,13 +68,13 @@ const LEVEL_FIELDS_FIXTURE: &[&str] = &[
     "level=WARN message=raw probe event=\"shiori_load\" outcome=\"ok\"",
 ];
 
-// ── 現行整形コードの逐語写し ────────────────────────────────────────────────────────
+// ── 移行前の整形コードの逐語写し ──────────────────────────────────────────────────────
 
-/// 正準型と**同じイベント列**から、現行整形コードの逐語写しで行を組む subscriber。
+/// 正準型と**同じイベント列**から、移行前の整形コードの逐語写しで行を組む subscriber。
 ///
 /// 逐語写しから唯一外したのは「番兵イベントを行に積まない」ことだけで、整形そのもの
 /// （`format!`／`write!` の並び）は 1 文字も変えていない。番兵は [`crate::capture`] が窓の
-/// 生存を示すために内側で 1 件発火するもので、移行対象 crate には存在しない。
+/// 生存を示すために内側で 1 件発火するもので、移行前の整形コードには無かった。
 #[derive(Clone, Default)]
 struct LegacyLineFormatting {
     events: Arc<Mutex<Vec<CapturedEvent>>>,
@@ -99,7 +101,7 @@ impl tracing::Subscriber for LegacyLineFormatting {
             return;
         }
 
-        // ↓ `areka-seriko/src/lib_test_support.rs`（＝`areka-emo-atlas`／`areka-emo-compose` も同一）逐語
+        // ↓ 移した時点の出所: `areka-seriko/src/lib_test_support.rs`（＝`areka-emo-atlas`／`areka-emo-compose` も同一）逐語
         {
             use tracing::field::{Field, Visit};
             let meta = ev.metadata();
@@ -141,7 +143,7 @@ impl tracing::Subscriber for LegacyLineFormatting {
     fn exit(&self, _span: &tracing::span::Id) {}
 }
 
-/// 見本イベント列を 1 度だけ発火し、正準型・現行整形（2 形）を同時に取る。
+/// 見本イベント列を 1 度だけ発火し、正準型・移行前の整形（2 形）を同時に取る。
 fn run_fixture() -> (Vec<CapturedEvent>, Vec<String>, Vec<String>) {
     let sub = LegacyLineFormatting::default();
     let sink = Arc::clone(&sub.events);
@@ -164,7 +166,7 @@ fn level_target_fields_matches_verbatim_fixture() {
     assert_eq!(
         legacy,
         LEVEL_TARGET_FIELDS_FIXTURE.to_vec(),
-        "現行整形コードの逐語写しが見本と違う（見本が古い）"
+        "移行前の整形コードの逐語写しが見本と違う（見本か写しのどちらかが変わった）"
     );
 
     let formatted: Vec<String> = events
@@ -174,7 +176,7 @@ fn level_target_fields_matches_verbatim_fixture() {
     assert_eq!(
         formatted,
         LEVEL_TARGET_FIELDS_FIXTURE.to_vec(),
-        "整形結果が現行出力の逐語見本と 1 バイト違う"
+        "整形結果が移行前の出力の逐語見本と 1 バイト違う"
     );
 }
 
@@ -185,7 +187,7 @@ fn level_fields_matches_verbatim_fixture() {
     assert_eq!(
         legacy,
         LEVEL_FIELDS_FIXTURE.to_vec(),
-        "現行整形コードの逐語写しが見本と違う（見本が古い）"
+        "移行前の整形コードの逐語写しが見本と違う（見本か写しのどちらかが変わった）"
     );
 
     let formatted: Vec<String> = events
@@ -195,46 +197,7 @@ fn level_fields_matches_verbatim_fixture() {
     assert_eq!(
         formatted,
         LEVEL_FIELDS_FIXTURE.to_vec(),
-        "整形結果が現行出力の逐語見本と 1 バイト違う"
-    );
-}
-
-/// 見本が古びても効く側の検査。**同一のイベント列**に対して、現行整形コードの逐語写しと
-/// [`format_line`] を毎回突き合わせる。
-#[test]
-fn format_line_is_byte_identical_to_current_formatting_code() {
-    let (events, legacy_with, legacy_without) = run_fixture();
-
-    assert!(
-        !events.is_empty(),
-        "イベントが 1 件も捕れていない（この検査は空列に対して恒真になる）"
-    );
-    assert_eq!(events.len(), legacy_with.len());
-    assert_eq!(events.len(), legacy_without.len());
-
-    for (i, ev) in events.iter().enumerate() {
-        assert_eq!(
-            format_line(ev, LineFormat::LevelTargetFields),
-            legacy_with[i],
-            "{i} 件目（宛先を含む形）が現行整形コードと違う"
-        );
-        assert_eq!(
-            format_line(ev, LineFormat::LevelFields),
-            legacy_without[i],
-            "{i} 件目（宛先を含まない形）が現行整形コードと違う"
-        );
-    }
-}
-
-/// レベルは `Display`（`INFO`）で載る。`Debug`（`Level(Info)`）ではない。
-#[test]
-fn level_is_rendered_with_display_not_debug() {
-    let (events, _, _) = run_fixture();
-    let line = format_line(&events[0], LineFormat::LevelFields);
-    assert!(line.starts_with("level=INFO"), "実際: {line}");
-    assert!(
-        !line.contains("Level("),
-        "レベルが Debug 表現で載っている: {line}"
+        "整形結果が移行前の出力の逐語見本と 1 バイト違う"
     );
 }
 
@@ -268,19 +231,6 @@ fn capture_lines_returns_formatted_lines_and_the_closure_result() {
             "level=WARN target=areka_emo_atlas message=surface missing set=0 rel_path=\"clear.png\""
                 .to_string()
         ]
-    );
-}
-
-#[test]
-fn capture_lines_does_not_leak_the_sentinel() {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, || {
-        tracing::info!(target: "areka_runtime", "only mine");
-    });
-    // 陽性対照（自分のイベントは 1 件捕れている）と対で見る。
-    assert_eq!(lines.len(), 1, "実際: {lines:?}");
-    assert!(
-        !lines.iter().any(|l| l.contains(SENTINEL_TARGET)),
-        "番兵が漏れている: {lines:?}"
     );
 }
 
@@ -332,8 +282,8 @@ fn field_str_returns_the_raw_value_and_field_returns_the_debug_representation() 
         .find(|e| e.target == "areka_kanade::resource")
         .expect("見本の raw probe イベント");
 
-    // `areka-kanade`／`areka-ghost`／`areka-sylphya` の `assert_logged` は生値の完全一致で
-    // 判定するため、引用符を剥がす仕事はアダプタ側ではなく kit の `field_str` が担う。
+    // 消費側のテストは `field_str(..) == Some("…")` の生値の完全一致で判定するため、
+    // 引用符を剥がす仕事は消費側ではなく kit の `field_str` が担う。
     assert_eq!(ev.field_str("event"), Some("shiori_load"));
     assert_eq!(ev.field_str("outcome"), Some("ok"));
     assert_eq!(ev.field("event"), Some("\"shiori_load\""));
@@ -388,7 +338,7 @@ fn field_names_sorted_is_ascending_and_includes_message() {
         .find(|e| e.target == "areka_runtime")
         .expect("見本の order probe イベント");
 
-    // 訪問順は message → b → a。整列列は昇順（`emo-present` の `field_names()` 互換）。
+    // 訪問順は message → b → a。整列列は昇順（移行前の `emo-present` の `field_names()` 互換）。
     assert_eq!(
         ev.fields
             .iter()
@@ -413,8 +363,8 @@ fn fields_map_is_name_to_debug_representation() {
     assert_eq!(ev.fields_map(), expected);
 }
 
-/// 同名フィールドが 2 度現れたら**後勝ち**（`placement` の `BTreeMap::insert`・`emo-present` の
-/// `HashMap::insert` と同じ）。整形だけは訪問順どおり 2 度出す。
+/// 同名フィールドが 2 度現れたら**後勝ち**（移行前の `placement` の `BTreeMap::insert`・
+/// `emo-present` の `HashMap::insert` と同じ）。整形だけは訪問順どおり 2 度出す。
 #[test]
 fn duplicate_field_names_resolve_to_the_last_occurrence() {
     let ev = CapturedEvent {

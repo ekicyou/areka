@@ -11,26 +11,31 @@
 //!
 //! # 置き場の見つけ方
 //!
-//! `CARGO_TARGET_DIR` が設定されていればそれ、無ければ**実行ファイルの祖先で名前が
-//! `target` の最初のフォルダ**。どちらでも決まらなければ、探索の起点を付けて
+//! `CARGO_TARGET_DIR` が設定されていればそれ（相対の値は、実行ファイルの祖先のうち、その値の頭の `.`・`..` を
+//! 外した名前の段で終わる最も近いもの・無ければ作業フォルダの上で絶対にしたもの）、無ければ**実行ファイルの
+//! 祖先で名前が `target` の最初のフォルダ**。どちらでも決まらなければ、探索の起点を付けて
 //! [`SampleError::TargetDirNotFound`] を返す（黙って別の場所へ落ちない）。
 //!
 //! # 配るもの
 //!
 //! ```text
 //! <置き場>/nar-samples/
-//! ├── cache/<検体>-<長さ>-<crc32 8 桁>/  # 読み専用の原本（ベースウェアの根の形）
+//! ├── <CACHE>/<検体>-<長さ>-<crc32 8 桁>/  # 読み専用の原本（ベースウェアの根の形）
 //! └── work/
-//!     ├── <プロセス識別子>-<連番>/       # 配る空の根・展開中の原本
+//!     ├── <プロセス識別子>-<連番>/       # 配る空の根・展開中の原本・確かめた書庫の写し（`<名>.nar`）
 //!     ├── <プロセス識別子>-<連番>.lock   # 生存の札（開いたまま持つ）
-//!     └── gc-<プロセス識別子>-<連番>/    # `cache/` から退き上げた古い原本
+//!     ├── gc-<プロセス識別子>-<連番>/    # 退けた木（古い原本・残骸・`<CACHE>` でない `cache…` の棚）
+//!     └── gc-<プロセス識別子>-<連番>.lock # 退けた木の札
 //! ```
+//!
+//! [`CACHE`] でない `cache…` の棚（前の世代の `cache/` も、新しい世代の棚も含む）は、原本を
+//! 作るときに退ける。
 //!
 //! # 原本の不変条件——「名前が合う原本は完全」
 //!
 //! 原本の名前には `.nar` の**丸ごとの長さと CRC-32**（刻印）が入る。原本は必ず作業
-//! フォルダで組んでから `rename` で `cache/` へ入れ、消すときは先に `work/gc-…/` へ
-//! `rename` してから消す。だから `cache/<検体>-<刻印>/` が見えている間は常に完全で、
+//! フォルダで組んでから `rename` で [`CACHE`] へ入れ、消すときは先に `work/gc-…/` へ
+//! `rename` してから消す。だから [`CACHE`]`/<検体>-<刻印>/` が見えている間は常に完全で、
 //! 半端な木が「使える根」として見えることがない（要件 7.7）。
 //!
 //! 刻印が変われば名前が変わるので、原本を作り直す判定は名前の有無だけで済む
@@ -85,7 +90,7 @@
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::os::windows::fs::OpenOptionsExt;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use areka_nar::{InstallRequest, NarArchive, SingleRoot};
@@ -114,6 +119,10 @@ const MANUAL: &str = "manual";
 /// 読むことだけを共有する（＝削除は拒む）共有モード `FILE_SHARE_READ`。
 const FILE_SHARE_READ: u32 = 1;
 
+/// 読み・書き・削除を全部共有する共有モード（消去待ちの札を見分けるときに、誰とも
+/// ぶつからずに開いてみるため）。
+const FILE_SHARE_ALL: u32 = 7;
+
 /// 生存の札の綴り。木の名前にこれを付けた隣が、その木の札になる。
 const LOCK_SUFFIX: &str = ".lock";
 
@@ -124,10 +133,27 @@ static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
 ///
 /// 環境変数の値と実行ファイルの場所を**引数で受ける**ので、環境を書き換えずに
 /// （＝並走するテストに影響を与えずに）両方の経路と失敗を判定できる。
+///
+/// 相対の値は、実行ファイルの祖先のうちその値で終わる最も近いものを使う（audit-test-kits 決め D4）。
+/// cargo は起こした場所の上で解くが、テストの実行体はパッケージの場所で走るので、作業
+/// フォルダの上で解くと別の場所を指す。どちらで起こしても実行体は `<target>\debug\…` の
+/// 下にあるので祖先に現れる。照らすのは頭の `.`・`..` を外した名前の段だけ（`..\tgt` の
+/// `..` は起こした場所の上の印で、祖先の名前には現れない）。名前の段が無いか、祖先に
+/// 無ければ作業フォルダの上で絶対にする。
 fn find_target_dir(configured: Option<&str>, exe: &Path) -> Result<PathBuf, SampleError> {
     if let Some(dir) = configured.map(str::trim).filter(|dir| !dir.is_empty()) {
+        let named: PathBuf = Path::new(dir)
+            .components()
+            .skip_while(|part| matches!(part, Component::CurDir | Component::ParentDir))
+            .collect();
+        if Path::new(dir).is_relative()
+            && !named.as_os_str().is_empty()
+            && let Some(found) = exe.ancestors().find(|ancestor| ancestor.ends_with(&named))
+        {
+            return Ok(found.to_path_buf());
+        }
         return std::path::absolute(dir).map_err(|source| SampleError::Io {
-            what: "ビルド成果物の置き場の絶対化",
+            what: "make the build output directory absolute",
             path: PathBuf::from(dir),
             source,
         });
@@ -143,7 +169,7 @@ fn find_target_dir(configured: Option<&str>, exe: &Path) -> Result<PathBuf, Samp
 /// 本仕様専用の名前空間の絶対パス。
 pub(crate) fn namespace_dir() -> Result<PathBuf, SampleError> {
     let exe = std::env::current_exe().map_err(|source| SampleError::Io {
-        what: "実行ファイルの場所の取得",
+        what: "find the running executable",
         path: PathBuf::new(),
         source,
     })?;
@@ -151,10 +177,8 @@ pub(crate) fn namespace_dir() -> Result<PathBuf, SampleError> {
     Ok(find_target_dir(configured.as_deref(), &exe)?.join(NAMESPACE))
 }
 
-/// 破棄で木ごと消える、札付きの使い捨ての作業フォルダ。
-///
-/// `areka-nar` のテストはこれを「空の根」として借りる（OS の一時フォルダを使わずに
-/// 済ませるための唯一の窓）。
+/// テストが空の根として借りる、札付きの使い捨ての作業フォルダ。破棄で木ごと消える
+/// （OS の一時フォルダを使わずに済ませるため・要件 7.10）。
 #[derive(Debug)]
 pub struct WorkDir {
     path: PathBuf,
@@ -179,45 +203,66 @@ impl WorkDir {
 
     /// 名前空間を指定して 1 つ取る。
     ///
-    /// 原本の組み上げは `rename` で `cache/` へ入れるので、作業フォルダは**原本と同じ
+    /// 原本の組み上げは `rename` で [`CACHE`] へ入れるので、作業フォルダは**原本と同じ
     /// 名前空間**（＝同じボリューム）に居なければならない。テストも私有の名前空間を
     /// 渡して、走っている他のテストと混ざらずに全体を作り直せる。
     fn in_namespace(namespace: &Path) -> Result<WorkDir, SampleError> {
+        WorkDir::in_namespace_with(namespace, || NEXT_SERIAL.fetch_add(1, Ordering::Relaxed))
+    }
+
+    /// [`WorkDir::in_namespace`] の本体。連番の出どころを引数で受けるので、同じ名前の残りが
+    /// ある場合を決定論で試せる。
+    ///
+    /// 死んだプロセスの札やフォルダが同じ名前で残っていたら（プロセス識別子の使い回し）、
+    /// 次の連番で取り直す。残りの札は他人の物かもしれないので消さない（掃除が拾う）。
+    fn in_namespace_with(
+        namespace: &Path,
+        mut next_serial: impl FnMut() -> u32,
+    ) -> Result<WorkDir, SampleError> {
         let work = namespace.join(WORK);
         std::fs::create_dir_all(&work).map_err(|source| SampleError::Io {
-            what: "作業フォルダの棚の作成",
+            what: "create the work shelf",
             path: work.clone(),
             source,
         })?;
 
-        let stem = format!(
-            "{}-{}",
-            std::process::id(),
-            NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
-        );
-        let lock = work.join(format!("{stem}{LOCK_SUFFIX}"));
-        let lease = open_lease(&lock).map_err(|source| SampleError::Io {
-            what: "生存の札の作成",
-            path: lock.clone(),
-            source,
-        })?;
+        loop {
+            let stem = format!("{}-{}", std::process::id(), next_serial());
+            let lock = work.join(format!("{stem}{LOCK_SUFFIX}"));
+            let lease = match open_lease(&lock) {
+                Ok(lease) => lease,
+                Err(source) if source.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(source) => {
+                    return Err(SampleError::Io {
+                        what: "create the lease file",
+                        path: lock,
+                        source,
+                    });
+                }
+            };
 
-        let path = work.join(&stem);
-        if let Err(source) = std::fs::create_dir(&path) {
-            // 札だけが残らないよう、作れなかったときはその場で畳む。
-            retire_lease(Some(lease), &lock);
-            return Err(SampleError::Io {
-                what: "作業フォルダの作成",
-                path,
-                source,
-            });
+            let path = work.join(&stem);
+            match std::fs::create_dir(&path) {
+                Ok(()) => {
+                    return Ok(WorkDir {
+                        path,
+                        lock,
+                        lease: Some(lease),
+                    });
+                }
+                Err(source) => {
+                    // 札だけが残らないよう、作れなかったときはその場で畳む（自分の札）。
+                    retire_lease(Some(lease), &lock);
+                    if source.kind() != std::io::ErrorKind::AlreadyExists {
+                        return Err(SampleError::Io {
+                            what: "create the work folder",
+                            path,
+                            source,
+                        });
+                    }
+                }
+            }
         }
-
-        Ok(WorkDir {
-            path,
-            lock,
-            lease: Some(lease),
-        })
     }
 
     /// 配られた作業フォルダそのもの（絶対パス）。
@@ -225,13 +270,9 @@ impl WorkDir {
         &self.path
     }
 
-    /// 生存の札のパス。札が守られていることを確かめるテストが読む。
-    ///
-    /// 借り手が使うのは [`WorkDir::path`] だけなので `pub(crate)` に絞りたいところだが、
-    /// 今日の呼び手はテストだけなので絞ると本体のビルドで「使われていない」の警告が出る。
-    /// 掃除は棚の走査から札の綴りを自分で組むのでこの読み口を通らない——非テストの
-    /// 呼び手が現れたときに絞ればよい。
-    pub fn lock_path(&self) -> &Path {
+    /// 生存の札のパス。札が守られていることを確かめるテストだけが読む。
+    #[cfg(test)]
+    pub(crate) fn lock_path(&self) -> &Path {
         &self.lock
     }
 }
@@ -245,9 +286,13 @@ impl WorkDir {
     /// （spec: `areka-P0-ghost-session-test-load-flake` 要件 5.2・檻
     /// `a_work_dir_keeps_its_lease_while_its_tree_is_being_removed`）。
     fn release_with(&mut self, remove_tree: impl FnOnce(&Path) -> std::io::Result<()>) {
-        // 原本として `cache/` へ移した後は木が既に無い（`NotFound`）。それは後始末の
+        // 原本として `CACHE` へ移した後は木が既に無い（`NotFound`）。それは後始末の
         // 目的が達成された状態なので、札だけを閉じて消す。
-        report_cleanup("作業フォルダの後始末", remove_tree(&self.path), &self.path);
+        report_cleanup(
+            "remove the work folder",
+            remove_tree(&self.path),
+            &self.path,
+        );
         retire_lease(self.lease.take(), &self.lock);
     }
 }
@@ -263,8 +308,32 @@ fn open_lease(lock: &Path) -> std::io::Result<File> {
 
 /// 札を閉じてから消す（開いたままでは削除を共有していないので自分でも消せない）。
 fn retire_lease(lease: Option<File>, lock: &Path) {
+    retire_lease_to(&mut std::io::stderr(), lease, lock);
+}
+
+/// [`retire_lease`] の本体。書き先を受け取るのは [`write_cleanup`] と同じ理由。
+///
+/// 閉じた直後に並走する掃除が先に札を消すと、札は消去待ちになり、こちらの
+/// `remove_file` は `PermissionDenied`（os error 5）で断られる。そのうえ札を何の権限も
+/// 求めずに全部共有で開くこともできない（消去待ちか、もう無い）なら、札を消すという目的は
+/// 掃除が果たしているので黙って通す（偽の後始末の失敗の行を出さない）。属性の読み
+/// （`symlink_metadata`）は消去待ちの札でも通るので見分けに使えない（兄弟テストが実測）。
+fn retire_lease_to(out: &mut dyn std::io::Write, lease: Option<File>, lock: &Path) {
     drop(lease);
-    report_cleanup("生存の札の後始末", std::fs::remove_file(lock), lock);
+    let result = match std::fs::remove_file(lock) {
+        Err(err)
+            if err.kind() == std::io::ErrorKind::PermissionDenied
+                && OpenOptions::new()
+                    .access_mode(0)
+                    .share_mode(FILE_SHARE_ALL)
+                    .open(lock)
+                    .is_err() =>
+        {
+            Ok(())
+        }
+        other => other,
+    };
+    write_cleanup(out, "remove the lease file", result, lock);
 }
 
 impl Drop for WorkDir {
@@ -285,32 +354,54 @@ pub(crate) fn nar_dir() -> PathBuf {
     ))
 }
 
+/// テストが名前から引く入口（[`sample_nar_for`] へ登記の行を渡すだけ。未登録の名前なら
+/// [`SampleError::UnknownSample`]）。
+#[cfg(test)]
+pub(crate) fn sample_nar(name: &str) -> Result<(PathBuf, Vec<u8>), SampleError> {
+    sample_nar_for(crate::registered(name)?, namespace_dir)
+}
+
 /// 登記の行から、展開に使う書庫のパスを決める唯一の式（spec: `areka-P0-sample-url-fetch`
 /// 要件 1.4・3.1・3.2・3.4・3.8・3.9）。
 ///
 /// リポジトリに置く行は今と同じ `vendors/sample_ghost/<name>.nar`（置き場を見ない）。URL の行は
 /// 置き場のハッシュのファイルと SHA-256 が合った置き場の書庫（[`crate::fetched::verified_nar_in`]）。
-/// 窓口の 3 つの入口は取得のたびにここを通るので、照合も取得のたびに行われ、落ちた書庫は
+/// 窓口の入口（[`fresh_root`]・[`manual_root`]）は取得のたびにここを通るので、照合も取得のたびに行われ、落ちた書庫は
 /// 原本の作り（[`cached_root_in`]）へ渡らない。
+///
+/// 返すのは書庫のパスと**読んだバイト**（audit-test-kits 決め D13）。原本の刻印と据え付けはこのバイトから
+/// 作り、パスのファイルを読み直さない（読み直すと、確かめていないバイトで原本を作りうる）。
+///
+/// 名前空間は URL の行のときだけ求める（テストは私有の名前空間と固定入力の行を渡す）。
 ///
 /// # Errors
 ///
-/// 未登録の名前なら [`SampleError::UnknownSample`]。URL の行の照合の失敗は
+/// リポジトリの `.nar` が読めなければ [`SampleError::Io`]。URL の行の照合の失敗は
 /// [`crate::fetched::verified_nar_in`] と同じ。
-pub(crate) fn sample_nar(name: &str) -> Result<PathBuf, SampleError> {
-    sample_nar_for(crate::registered(name)?, namespace_dir)
-}
-
-/// [`sample_nar`] の本体。名前空間は URL の行のときだけ求める（テストは私有の名前空間と
-/// 固定入力の行を渡す）。
 fn sample_nar_for(
     sample: &'static Sample,
     namespace: impl FnOnce() -> Result<PathBuf, SampleError>,
-) -> Result<PathBuf, SampleError> {
+) -> Result<(PathBuf, Vec<u8>), SampleError> {
     match sample.source {
-        SampleSource::Vendored => Ok(nar_dir().join(format!("{}.nar", sample.name))),
+        SampleSource::Vendored => {
+            let nar = nar_dir().join(format!("{}.nar", sample.name));
+            let bytes = std::fs::read(&nar).map_err(|source| SampleError::Io {
+                what: "read the sample .nar",
+                path: nar.clone(),
+                source,
+            })?;
+            Ok((nar, bytes))
+        }
         SampleSource::Fetched { .. } => crate::fetched::verified_nar_in(&namespace()?, sample.name),
     }
+}
+
+/// 窓口の入口へ渡す、検体 1 つの確かめたバイトの出どころ（呼ぶたびに読み直して確かめる）。
+fn verified_bytes<'a>(
+    sample: &'static Sample,
+    namespace: &'a Path,
+) -> impl Fn() -> Result<Vec<u8>, SampleError> + 'a {
+    move || sample_nar_for(sample, || Ok(namespace.to_path_buf())).map(|(_, bytes)| bytes)
 }
 
 /// `.nar` 1 本の刻印＝**丸ごとの長さ**と **CRC-32**（要件 7.3）。
@@ -321,7 +412,7 @@ fn stamp(bytes: &[u8]) -> String {
     format!("{}-{:08x}", bytes.len(), areka_nar::crc32(bytes))
 }
 
-/// `cache/` の 1 件の名前を `(検体名, 刻印)` に割る。割れなければ `None`。
+/// [`CACHE`] の 1 件の名前を `(検体名, 刻印)` に割る。割れなければ `None`。
 ///
 /// 検体名自身が `-` を含む（`emo2-kakukaku-wplimit`）ので、**前から**数えると
 /// `emo2` の原本を探しているつもりで `emo2-kakukaku-wplimit` の原本に当たってしまう。
@@ -338,66 +429,71 @@ fn split_stamp(entry: &str) -> Option<(&str, &str)> {
     shaped.then(|| (name, &entry[name.len() + 1..]))
 }
 
-/// 検体 1 つの原本（`cache/<検体>-<刻印>/`）を用意して、その絶対パスを返す
-/// （要件 7.2・7.3・7.6・7.7・7.8）。
-///
-/// 原本は**誰にも配らない**。配るのは [`fresh_root`] がここから取る複製である。
-/// 掃除は取得の入口（[`fresh_root`]）が走らせるので、この関数は棚を片付けない。
-///
-/// 窓口 `SampleRoot::acquire` は複製を配る [`fresh_root`] だけを通るので、**原本を直に
-/// 求める呼び手はテストだけ**である（多重プロセスの検査が、実物の `.nar` と
-/// [`nar_dir`] の綴りを本物の経路で通す唯一の場所）。公開したままでは「検体を得る唯一の
-/// 入口は `SampleRoot`」（要件 1.1）が嘘になるので、テスト専用と明示して閉じてある。
-///
-/// # Errors
-///
-/// `.nar` が読めない・原本を据え付けられないとき [`SampleError::Io`]、`.nar` が
-/// 受理されないとき [`SampleError::Nar`]。古い原本の回収に失敗しても**失敗にはしない**
-/// （標準エラーへ出して取得を続ける＝要件 7.3）。
+/// テストが名前から引く入口（実物の `.nar` と本当の名前空間で [`cached_root_in`] を通す）。
 #[cfg(test)]
 pub(crate) fn cached_root(name: &str) -> Result<PathBuf, SampleError> {
-    cached_root_in(&namespace_dir()?, name, &sample_nar(name)?)
+    cached_root_in(&namespace_dir()?, name, &sample_nar(name)?.1)
 }
 
-/// 名前空間と `.nar` を明示して原本を用意する。
+/// 名前空間と `.nar` のバイトを明示して、検体 1 つの原本（[`CACHE`]`/<検体>-<刻印>/`）を
+/// 用意し、その絶対パスを返す（要件 7.2・7.3・7.6・7.7・7.8）。
+///
+/// 原本は**誰にも配らない**。配るのは [`fresh_root_in`] と [`manual_root_in`] がここから取る
+/// 複製である。作業の棚の掃除（[`sweep`]）は [`fresh_root_in`] が走らせるのでここでは
+/// 走らせないが、原本の棚は片付ける: 同じ検体の刻印違いの原本を回収し（[`reclaim_stale`]）、
+/// 原本を据え付けるときは [`CACHE`] でない `cache…` の棚を退ける
+/// （[`discard_older_cache_shelves`]）。
 ///
 /// テストは私有の名前空間と自前で組んだ `.nar` を渡す（並走する他のテストを巻き込まずに
 /// 「原本が無い」「刻印が変わった」「名前空間ごと消えた」を作れる）。
-fn cached_root_in(namespace: &Path, name: &str, nar: &Path) -> Result<PathBuf, SampleError> {
-    let bytes = std::fs::read(nar).map_err(|source| SampleError::Io {
-        what: "検体の .nar の読み取り",
-        path: nar.to_path_buf(),
-        source,
-    })?;
+///
+/// # Errors
+///
+/// 原本を据え付けられないとき [`SampleError::Io`]、`.nar` が受理されないとき
+/// [`SampleError::Nar`]。古い原本の回収と古い棚の退けに失敗しても**失敗にはしない**
+/// （標準エラーへ出して取得を続ける＝要件 7.3）。
+fn cached_root_in(namespace: &Path, name: &str, bytes: &[u8]) -> Result<PathBuf, SampleError> {
     let cache = namespace.join(CACHE);
-    let stamp = stamp(&bytes);
+    let stamp = stamp(bytes);
     let master = cache.join(format!("{name}-{stamp}"));
 
     // 名前が合う原本は完全（不変条件）。だから在るかどうかだけを見る。
     if !master.is_dir() {
-        stage_into_cache(namespace, &cache, nar, &master)?;
+        stage_into_cache(namespace, &cache, name, bytes, &master)?;
     }
     reclaim_stale(namespace, &cache, name, &stamp);
     Ok(master)
 }
 
-/// 空の根へ展開してから、`rename` 1 回で `cache/` へ据え付ける。
+/// 空の根へ展開してから、`rename` 1 回で [`CACHE`] へ据え付ける。
 ///
 /// 展開の間ずっと作業フォルダの札が開いているので、並走する別プロセスの掃除には
 /// 消されない。`rename` が成功した後の作業フォルダの [`Drop`] は木が無いことを許容する。
+///
+/// `areka-nar` は書庫をパスからしか開けないので、確かめたバイトを別の札付きの作業フォルダの
+/// 中の `<名>.nar` へ書いてから開く（audit-test-kits 決め D13。展開先に混ぜないために分ける）。
 fn stage_into_cache(
     namespace: &Path,
     cache: &Path,
-    nar: &Path,
+    name: &str,
+    bytes: &[u8],
     master: &Path,
 ) -> Result<(), SampleError> {
     std::fs::create_dir_all(cache).map_err(|source| SampleError::Io {
-        what: "原本の棚の作成",
+        what: "create the cache shelf",
         path: cache.to_path_buf(),
         source,
     })?;
     let work = WorkDir::in_namespace(namespace)?;
-    let archive = NarArchive::open(nar)?;
+    discard_older_cache_shelves(namespace);
+    let scratch = WorkDir::in_namespace(namespace)?;
+    let nar = scratch.path().join(format!("{name}.nar"));
+    std::fs::write(&nar, bytes).map_err(|source| SampleError::Io {
+        what: "write the verified .nar for staging",
+        path: nar.clone(),
+        source,
+    })?;
+    let archive = NarArchive::open(&nar)?;
     archive.install(&InstallRequest {
         roots: &SingleRoot(work.path()),
         target_ghost: None,
@@ -410,16 +506,43 @@ fn stage_into_cache(
         // 捨てて（`Drop` が消す）勝者の木を使う。
         Err(_) if master.is_dir() => Ok(()),
         Err(source) => Err(SampleError::Io {
-            what: "原本の据え付け",
+            what: "move the master copy into the cache",
             path: master.to_path_buf(),
             source,
         }),
     }
 }
 
+/// [`CACHE`] でない `cache…` の棚（名前が `cache` で始まり [`CACHE`] でないフォルダ。前の世代も
+/// 新しい世代も含む）を退ける（audit-test-kits 指摘 54）。数を上げるたびに古い棚が `cargo clean` まで残るのを防ぐ。失敗は
+/// [`discard_tree`] と同じく人の読める形に出して続ける。
+fn discard_older_cache_shelves(namespace: &Path) {
+    let entries = match std::fs::read_dir(namespace) {
+        Ok(entries) => entries,
+        Err(err) => return report_cleanup("list the namespace", Err(err), namespace),
+    };
+    let shelf = namespace.join(WORK);
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                report_cleanup("list the namespace", Err(err), namespace);
+                continue;
+            }
+        };
+        let older = entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.starts_with("cache") && name != CACHE);
+        if older && entry.path().is_dir() {
+            discard_tree(&shelf, &entry.path(), "older generation cache shelf");
+        }
+    }
+}
+
 /// 同じ検体の刻印違いの原本を回収する（要件 7.3・7.9）。
 ///
-/// 先に `work/gc-…/` へ `rename` してから消すので、途中で落ちても `cache/` の下に
+/// 先に `work/gc-…/` へ `rename` してから消すので、途中で落ちても [`CACHE`] の下に
 /// 半端な木は残らない（残るのは `work/` の下の消し残しで、次の取得の掃除が拾う）。
 ///
 /// 失敗しても**取得は続ける**。別のプロセスが複写中・ウイルス対策が掴んでいる、は
@@ -427,25 +550,25 @@ fn stage_into_cache(
 ///
 /// 実測: Windows は**子孫のファイルが開かれているフォルダの `rename` を拒む**
 /// （共有モードに書き込みと削除を足しても同じ）。掴まれている古い原本は最初の一歩で
-/// 失敗するので、`cache/` に無傷のまま残り、次の取得で改めて回収される（兄弟テスト
+/// 失敗するので、[`CACHE`] に無傷のまま残り、次の取得で改めて回収される（兄弟テスト
 /// `a_reclaim_that_cannot_move_the_stale_copy_keeps_going_and_retries_on_the_next_acquire`）。
 fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
     let entries = match std::fs::read_dir(cache) {
         Ok(entries) => entries,
-        Err(err) => return report_cleanup("古い原本の走査", Err(err), cache),
+        Err(err) => return report_cleanup("list the old master copies", Err(err), cache),
     };
     let shelf = namespace.join(WORK);
     for entry in entries {
         let entry = match entry {
             Ok(entry) => entry,
             Err(err) => {
-                report_cleanup("古い原本の走査", Err(err), cache);
+                report_cleanup("list the old master copies", Err(err), cache);
                 continue;
             }
         };
         let raw = entry.file_name();
         // 名前を読めない・刻印の形をしていないものは、この仕様が置いた原本ではない。
-        // 黙って消さずに残す（`cache/` の下は掃除の対象でもない）。
+        // 黙って消さずに残す（`CACHE` の下は掃除の対象でもない）。
         let Some((sample, stamp)) = raw.to_str().and_then(split_stamp) else {
             continue;
         };
@@ -454,11 +577,11 @@ fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
         }
         let stale = entry.path();
         if let Err(err) = std::fs::create_dir_all(&shelf) {
-            report_cleanup("回収の棚の作成", Err(err), &shelf);
+            report_cleanup("create the shelf for reclaiming", Err(err), &shelf);
             continue;
         }
-        // `cache/` の外へ出すのが先。「名前が合う原本は完全」を一瞬も破らない。
-        discard_tree(&shelf, &stale, "古い原本");
+        // `CACHE` の外へ出すのが先。「名前が合う原本は完全」を一瞬も破らない。
+        discard_tree(&shelf, &stale, "old master copy");
     }
 }
 
@@ -472,10 +595,20 @@ fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
 /// （共有モードに書き込みと削除を足しても同じ）。掴まれている木は最初の一歩で失敗する
 /// ので無傷のまま残り、次の取得で改めて片付けられる。
 fn discard_tree(shelf: &Path, tree: &Path, what: &str) {
-    discard_tree_with(shelf, tree, what, |gc| std::fs::remove_dir_all(gc));
+    discard_tree_with(
+        shelf,
+        tree,
+        what,
+        || NEXT_SERIAL.fetch_add(1, Ordering::Relaxed),
+        |gc| std::fs::remove_dir_all(gc),
+    );
 }
 
-/// [`discard_tree`] の手順。木を消す関数を受け取るのは [`WorkDir::release_with`] と同じ理由。
+/// [`discard_tree`] の手順。木を消す関数を受け取るのは [`WorkDir::release_with`] と同じ理由、
+/// 連番の出どころを受け取るのは [`WorkDir::in_namespace_with`] と同じ理由。
+///
+/// 死んだプロセスの `gc-…` の札が同じ名前で残っていたら（プロセス識別子の使い回し）、
+/// [`WorkDir::in_namespace_with`] と同じに次の連番で取り直す（残りの札は消さない）。
 ///
 /// 退けた先の `gc-…` にも、移す**前に**札を作り、木を消し終えてから閉じて消す。札の無い
 /// `gc-` の木は、消している間に並走する掃除から「札の無い残骸」に見え、同じ木を別の
@@ -485,36 +618,34 @@ fn discard_tree_with(
     shelf: &Path,
     tree: &Path,
     what: &str,
+    mut next_serial: impl FnMut() -> u32,
     remove_tree: impl FnOnce(&Path) -> std::io::Result<()>,
 ) {
-    let stem = format!(
-        "gc-{}-{}",
-        std::process::id(),
-        NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
-    );
-    let gc = shelf.join(&stem);
-    let lock = shelf.join(format!("{stem}{LOCK_SUFFIX}"));
-    let lease = match open_lease(&lock) {
-        Ok(lease) => lease,
-        // 札が無いまま移すと上の窓が開く。移さずに残し、次の取得の掃除に任せる。
-        Err(err) => return report_cleanup(&format!("{what}の退避の札の作成"), Err(err), &lock),
+    let (gc, lock, lease) = loop {
+        let stem = format!("gc-{}-{}", std::process::id(), next_serial());
+        let lock = shelf.join(format!("{stem}{LOCK_SUFFIX}"));
+        match open_lease(&lock) {
+            Ok(lease) => break (shelf.join(&stem), lock, lease),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            // 札が無いまま移すと上の窓が開く。移さずに残し、次の取得の掃除に任せる。
+            Err(err) => {
+                return report_cleanup(
+                    &format!("create the lease for moving aside the {what}"),
+                    Err(err),
+                    &lock,
+                );
+            }
+        }
     };
     match std::fs::rename(tree, &gc) {
-        Ok(()) => report_cleanup(&format!("退避した{what}の削除"), remove_tree(&gc), &gc),
-        Err(err) => report_cleanup(&format!("{what}の退避"), Err(err), tree),
+        Ok(()) => report_cleanup(
+            &format!("remove the moved-aside {what}"),
+            remove_tree(&gc),
+            &gc,
+        ),
+        Err(err) => report_cleanup(&format!("move aside the {what}"), Err(err), tree),
     }
     retire_lease(Some(lease), &lock);
-}
-
-/// 札を消そうとした結果から、相方の木を消してよいかを決める（要件 7.5・7.7）。
-///
-/// `Ok` だけが「持ち主は居ない」。失敗は**どれも触らない**——共有違反は生きている
-/// 利用者が握っている札で、`NotFound` は別のプロセスが同時に回収している最中である。
-/// 後者を「持ち主が居ない」と読むと、回収中の相手の木を横から消してしまう。同じ
-/// ファイルの [`report_cleanup`] が `NotFound` を成功として通すので、この取り違えは
-/// 机上の話ではない（兄弟テストが 3 つの入力を全部通す）。
-fn owner_is_gone(removal: &std::io::Result<()>) -> bool {
-    removal.is_ok()
 }
 
 /// 作業の棚の残骸を片付ける（要件 7.7・7.9）。取得のたびに 1 度走る。
@@ -527,7 +658,7 @@ fn sweep(namespace: &Path) {
     let entries = match std::fs::read_dir(&shelf) {
         Ok(entries) => entries,
         // 棚がまだ無いのは、片付ける残骸が無いのと同じ。
-        Err(err) => return report_cleanup("作業の棚の走査", Err(err), &shelf),
+        Err(err) => return report_cleanup("list the work shelf", Err(err), &shelf),
     };
     let mut held = std::collections::HashSet::new();
     let mut trees = Vec::new();
@@ -535,7 +666,7 @@ fn sweep(namespace: &Path) {
         let entry = match entry {
             Ok(entry) => entry,
             Err(err) => {
-                report_cleanup("作業の棚の走査", Err(err), &shelf);
+                report_cleanup("list the work shelf", Err(err), &shelf);
                 continue;
             }
         };
@@ -543,7 +674,12 @@ fn sweep(namespace: &Path) {
         // 名前を読めないものは、この仕様が置いた物ではない。黙って消さずに残す。
         let Some(name) = raw.to_str() else { continue };
         if let Some(stem) = name.strip_suffix(LOCK_SUFFIX) {
-            if !owner_is_gone(&std::fs::remove_file(entry.path())) {
+            // 札を消せた（`Ok`）ときだけ「持ち主は居ない」（要件 7.5・7.7）。失敗は**どれも
+            // 触らない**——共有違反は生きている利用者が握っている札で、`NotFound` は別の
+            // プロセスが同時に回収している最中である。後者を「持ち主が居ない」と読むと、
+            // 回収中の相手の木を横から消してしまう。[`report_cleanup`] が `NotFound` を
+            // 成功として通すので、この取り違えは机上の話ではない。
+            if std::fs::remove_file(entry.path()).is_err() {
                 held.insert(stem.to_owned());
             }
             continue;
@@ -552,12 +688,12 @@ fn sweep(namespace: &Path) {
             Ok(kind) if kind.is_dir() => trees.push((name.to_owned(), entry.path())),
             // 木でないものも、この仕様が置いた物ではない（上と同じ扱い）。
             Ok(_) => {}
-            Err(err) => report_cleanup("棚の要素の種別の読み取り", Err(err), &entry.path()),
+            Err(err) => report_cleanup("read the type of a shelf entry", Err(err), &entry.path()),
         }
     }
     for (name, tree) in trees {
         if !held.contains(&name) {
-            discard_tree(&shelf, &tree, "残骸");
+            discard_tree(&shelf, &tree, "leftover tree");
         }
     }
 }
@@ -567,15 +703,16 @@ fn sweep(namespace: &Path) {
 /// 取得のたびに ⑴ 棚を掃除し、⑵ 原本を用意し、⑶ 札を先に開いてから原本を複写する。
 /// 返った値を束縛している間だけ複製が生き、破棄で木と札の両方が消える。
 ///
-/// 窓口 `SampleRoot::acquire` が内側から呼ぶ。crate の外へは出さない——検体を得る
-/// 唯一の入口は `SampleRoot` である（要件 1.1）。
+/// 窓口 `SampleRoot::acquire` が内側から呼ぶ。crate の外へは出さない——使い捨ての複製を
+/// 得る唯一の入口は `SampleRoot` である（手で使う根は [`crate::manual_paths`]。要件 1.1）。
 ///
 /// # Errors
 ///
-/// 原本を用意できないとき [`cached_root`] と同じ失敗、複写できないとき
+/// 原本を用意できないとき [`cached_root_in`] と同じ失敗、複写できないとき
 /// [`SampleError::Io`]。掃除の失敗は**失敗にしない**（人の読める形に出して続ける）。
-pub(crate) fn fresh_root(name: &str) -> Result<WorkDir, SampleError> {
-    fresh_root_in(&namespace_dir()?, name, &sample_nar(name)?)
+pub(crate) fn fresh_root(sample: &'static Sample) -> Result<WorkDir, SampleError> {
+    let namespace = namespace_dir()?;
+    fresh_root_in(&namespace, sample.name, verified_bytes(sample, &namespace))
 }
 
 /// 検体 1 つの**手で使う根**（`manual/<検体>/`）を配り直して、その絶対パスを返す
@@ -588,20 +725,22 @@ pub(crate) fn fresh_root(name: &str) -> Result<WorkDir, SampleError> {
 ///
 /// # Errors
 ///
-/// 原本を用意できないとき [`cached_root`] と同じ失敗、前回の木を消せない・複写できない
+/// 原本を用意できないとき [`cached_root_in`] と同じ失敗、前回の木を消せない・複写できない
 /// とき [`SampleError::Io`]。**消せない木を黙って配り直さない**——前回の起動記録が残った
 /// 根を「新品」として印字するのは、この窓口が唯一避けたい事故である。
-pub(crate) fn manual_root(name: &str) -> Result<PathBuf, SampleError> {
-    manual_root_in(&namespace_dir()?, name, &sample_nar(name)?)
+pub(crate) fn manual_root(sample: &'static Sample) -> Result<PathBuf, SampleError> {
+    let namespace = namespace_dir()?;
+    manual_root_in(&namespace, sample.name, verified_bytes(sample, &namespace))
 }
 
-/// 名前空間と `.nar` を明示して手で使う根を配り直す（テストが私有の名前空間を渡す）。
+/// 名前空間と `.nar` のバイトの出どころを明示して手で使う根を配り直す（テストが私有の
+/// 名前空間を渡す）。出どころは原本が複写の途中で退けられたときにもう 1 度だけ呼ぶ。
 pub(crate) fn manual_root_in(
     namespace: &Path,
     name: &str,
-    nar: &Path,
+    nar: impl Fn() -> Result<Vec<u8>, SampleError>,
 ) -> Result<PathBuf, SampleError> {
-    let master = cached_root_in(namespace, name, nar)?;
+    let master = cached_root_in(namespace, name, &nar()?)?;
     let manual = namespace.join(MANUAL).join(name);
     match std::fs::remove_dir_all(&manual) {
         Ok(()) => {}
@@ -610,31 +749,64 @@ pub(crate) fn manual_root_in(
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => {}
         Err(source) => {
             return Err(SampleError::Io {
-                what: "手動用の根の作り直し",
+                what: "remove the manual root before rebuilding it",
                 path: manual,
                 source,
             });
         }
     }
-    copy_tree(&master, &manual)?;
+    copy_master(&master, &manual, || {
+        cached_root_in(namespace, name, &nar()?)
+    })?;
     Ok(manual)
 }
 
-/// 名前空間と `.nar` を明示して複製を配る（テストが私有の名前空間を渡す）。
+/// 名前空間と `.nar` のバイトの出どころを明示して複製を配る（テストが私有の名前空間を渡す）。
 ///
 /// 窓口の兄弟テストも、登記と食い違う展開結果を作るためにここから複製を取る。
 pub(crate) fn fresh_root_in(
     namespace: &Path,
     name: &str,
-    nar: &Path,
+    nar: impl Fn() -> Result<Vec<u8>, SampleError>,
 ) -> Result<WorkDir, SampleError> {
     sweep(namespace);
-    let master = cached_root_in(namespace, name, nar)?;
+    let master = cached_root_in(namespace, name, &nar()?)?;
     // 札はフォルダより先に開かれる（`WorkDir` の約束）。複写はその後なので、組み上がる
     // 途中の複製が札の無い木として棚に見えることはない。
     let copy = WorkDir::in_namespace(namespace)?;
-    copy_tree(&master, copy.path())?;
+    copy_master(&master, copy.path(), || {
+        cached_root_in(namespace, name, &nar()?)
+    })?;
     Ok(copy)
+}
+
+/// 原本を複写する。複写が落ち、原本がもう無いときだけ、`again` で原本を用意し直して
+/// 1 度だけ写し直す（audit-test-kits 決め D5）。
+///
+/// 原本が消えるのは、違うバイトを読んだ別のプロセスが刻印違いとして退けたとき。
+/// `again` は今の書庫のバイトを読み直すので、勝った側の原本に合流して終わる。
+fn copy_master(
+    master: &Path,
+    to: &Path,
+    again: impl FnOnce() -> Result<PathBuf, SampleError>,
+) -> Result<(), SampleError> {
+    match copy_tree(master, to) {
+        Err(_) if !master.exists() => {
+            // 消えた原本の写しかけを新しい原本の複製に混ぜない。
+            match std::fs::remove_dir_all(to) {
+                Err(source) if source.kind() != std::io::ErrorKind::NotFound => {
+                    return Err(SampleError::Io {
+                        what: "remove the partial copy before copying again",
+                        path: to.to_path_buf(),
+                        source,
+                    });
+                }
+                _ => {}
+            }
+            copy_tree(&again()?, to)
+        }
+        done => done,
+    }
 }
 
 /// 原本の木をそっくり複写する。
@@ -646,23 +818,23 @@ pub(crate) fn copy_tree(from: &Path, to: &Path) -> Result<(), SampleError> {
     let mut stack = vec![(from.to_path_buf(), to.to_path_buf())];
     while let Some((src, dst)) = stack.pop() {
         std::fs::create_dir_all(&dst).map_err(|source| SampleError::Io {
-            what: "複製のフォルダの作成",
+            what: "create a folder of the copy",
             path: dst.clone(),
             source,
         })?;
         let entries = std::fs::read_dir(&src).map_err(|source| SampleError::Io {
-            what: "原本の走査",
+            what: "list the master copy",
             path: src.clone(),
             source,
         })?;
         for entry in entries {
             let entry = entry.map_err(|source| SampleError::Io {
-                what: "原本の走査",
+                what: "list the master copy",
                 path: src.clone(),
                 source,
             })?;
             let kind = entry.file_type().map_err(|source| SampleError::Io {
-                what: "原本の要素の種別の読み取り",
+                what: "read the type of a master copy entry",
                 path: entry.path(),
                 source,
             })?;
@@ -671,7 +843,7 @@ pub(crate) fn copy_tree(from: &Path, to: &Path) -> Result<(), SampleError> {
                 stack.push((entry.path(), target));
             } else {
                 std::fs::copy(entry.path(), &target).map_err(|source| SampleError::Io {
-                    what: "原本の複写",
+                    what: "copy a file of the master copy",
                     path: target,
                     source,
                 })?;
@@ -688,14 +860,31 @@ pub(crate) fn copy_tree(from: &Path, to: &Path) -> Result<(), SampleError> {
 /// 呼び手へ伝える道がここしかない。本 crate はテスト専用で記録層に依存しない
 /// （依存を足さない）ため、宛先は標準エラー出力にする。既に無いのは後始末の目的が
 /// 達成された状態なので黙って通す。残った木と札は次の走行が回収する。
+///
+/// `eprintln!` は libtest が捕まえ、通ったテストの分を捨てるので、標準エラー出力の
+/// 手綱へ直に書く（通ったテストの後始末の失敗も走行の記録に残る）。
 fn report_cleanup(what: &str, result: std::io::Result<()>, path: &Path) {
+    write_cleanup(&mut std::io::stderr(), what, result, path);
+}
+
+/// [`report_cleanup`] の本体。書き先を受け取るのは兄弟テストが字面を読むため。
+fn write_cleanup(
+    out: &mut dyn std::io::Write,
+    what: &str,
+    result: std::io::Result<()>,
+    path: &Path,
+) {
     if let Err(err) = result {
         if err.kind() == std::io::ErrorKind::NotFound {
             return;
         }
-        eprintln!(
-            "sample-ghost-kit: {what}に失敗した（次の走行で回収する）: {} ({err})",
-            path.display()
+        // 頭の `sample-ghost-kit:` と `os error N` は `tools/load-flake.ps1` が字面で読む。
+        // 書けなければ伝える先が無いので捨てる。
+        let _ = writeln!(
+            out,
+            "sample-ghost-kit: cleanup failed ({what}): {} ({})",
+            crate::ascii(&path.to_string_lossy()),
+            crate::ascii(&err.to_string())
         );
     }
 }
@@ -704,7 +893,7 @@ fn report_cleanup(what: &str, result: std::io::Result<()>, path: &Path) {
 #[path = "devroot_tests.rs"]
 mod tests;
 
-/// 原本（`cache/`）の兄弟テスト。1 ファイル 1,000 行の上限に収めるために分けただけで、
+/// 原本（[`CACHE`]）の兄弟テスト。1 ファイル 1,000 行の上限に収めるために分けただけで、
 /// 見ている物は同じ [`WorkDir`] と同じ名前空間。
 #[cfg(test)]
 #[path = "devroot_cache_tests.rs"]
@@ -716,7 +905,7 @@ mod cache_tests;
 #[path = "devroot_sweep_tests.rs"]
 mod sweep_tests;
 
-/// 行から書庫のパスを決める解決（`sample_nar`）の兄弟テスト。URL の行は固定入力の行と私有の
+/// 行から書庫のパスを決める解決（[`sample_nar_for`]）の兄弟テスト。URL の行は固定入力の行と私有の
 /// 名前空間で作る。
 #[cfg(test)]
 #[path = "devroot_fetched_tests.rs"]

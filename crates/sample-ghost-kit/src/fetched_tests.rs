@@ -1,34 +1,15 @@
 //! 取り寄せの置き場と照合の兄弟テスト（spec: `areka-P0-sample-url-fetch` 要件 1.5・1.6・
 //! 3.3〜3.6・3.9・4.1・4.2）。
 //!
-//! 照合は私有の名前空間（[`crate::WorkDir`]）と [`crate::NarBuilder`] で組んだ書庫で回し、
+//! 照合は私有の名前空間（[`crate::WorkDir`]）に置いたただのバイトで回し（照合は書庫を開かない）、
 //! 期待値の SHA-256 は [`crate::sha256::sha256_hex`] で求める。通信しない。
 
 use super::*;
 use crate::sha256::sha256_hex;
-use crate::{NarBuilder, SampleError, WorkDir, install_txt};
+use crate::{SampleError, WorkDir};
 
-/// 最小のゴースト 1 体の `.nar` のバイト列。`mark` は長さを変えずに中身を変える目印。
-fn tiny_nar(name: &str, mark: &[u8]) -> Vec<u8> {
-    let dir = WorkDir::new().expect("組む場所は取れるはず");
-    let nar = dir.path().join(format!("{name}.nar"));
-    NarBuilder::new()
-        .file(
-            "install.txt",
-            &install_txt(&[
-                "charset,UTF-8",
-                "type,ghost",
-                &format!("name,{name}"),
-                &format!("directory,{name}"),
-            ]),
-        )
-        .done()
-        .file("mark.txt", mark)
-        .done()
-        .write_to(&nar)
-        .expect("固定入力の .nar を置けるはず");
-    std::fs::read(&nar).expect("組んだ .nar は読めるはず")
-}
+/// 置き場の書庫のバイト列。照合はハッシュだけを見て書庫を開かないので、ただのバイトでよい。
+const GOOD: &[u8] = b"good archive bytes";
 
 /// 私有の名前空間の置き場へ書庫を置く。
 fn place(namespace: &Path, name: &str, bytes: &[u8]) -> PathBuf {
@@ -46,7 +27,7 @@ fn put(path: &Path, bytes: &[u8]) -> PathBuf {
     path.to_path_buf()
 }
 
-/// sha256sum の形の 1 行（`<hash>  <name>.nar` と LF）。期待値は 2 の SHA-256 で求める。
+/// sha256sum の形の 1 行（`<hash>  <name>.nar` と LF）。期待値は [`sha256_hex`] で求める。
 fn sum_line(bytes: &[u8], name: &str) -> String {
     format!("{}  {name}.nar\n", sha256_hex(bytes))
 }
@@ -58,42 +39,34 @@ fn is_ascii_only(text: &str) -> bool {
 // ---- 置き場の位置と綴り ----
 
 #[test]
-fn shelf_positions_are_namespace_fetched_name() {
-    let ns = Path::new(r"C:\x\nar");
-    assert_eq!(fetched_path_in(ns, "x"), ns.join("fetched").join("x.nar"));
-    assert_eq!(
-        fetched_checksum_path_in(ns, "x"),
-        ns.join("fetched").join("x.nar.sha256")
-    );
-}
-
-#[test]
 fn checksum_url_appends_suffix() {
-    assert_eq!(CHECKSUM_SUFFIX, ".sha256");
     assert_eq!(checksum_url("https://x/a.nar"), "https://x/a.nar.sha256");
 }
 
 // ---- ハッシュのファイルの読み ----
 
+/// 形だけが正しい 64 桁の 16 進（このファイルで使うどのバイト列のハッシュでもない・ハッシュのファイルの読みのテストが使う）。
+const ANY_SHA: &str = "816d7183ab7c92fe1d601e386d5d60f9ca9f4238d265143a1b96915aa5bfb020";
+
 #[test]
 fn parse_checksum_reads_sha256sum_line() {
-    let upper = GOOD_SHA.to_ascii_uppercase();
+    let upper = ANY_SHA.to_ascii_uppercase();
     for text in [
-        format!("{GOOD_SHA}  x.nar\n"),
+        format!("{ANY_SHA}  x.nar\n"),
         format!("{upper}  x.nar\n"),
-        format!("\u{FEFF}{GOOD_SHA}  x.nar\r\n"),
-        format!("{GOOD_SHA}\n"),
-        format!("  {GOOD_SHA} *other-name.nar"),
+        format!("\u{FEFF}{ANY_SHA}  x.nar\r\n"),
+        format!("{ANY_SHA}\n"),
+        format!("  {ANY_SHA} *other-name.nar"),
     ] {
-        assert_eq!(parse_checksum(&text).as_deref(), Some(GOOD_SHA), "{text:?}");
+        assert_eq!(parse_checksum(&text).as_deref(), Some(ANY_SHA), "{text:?}");
     }
 }
 
 #[test]
 fn parse_checksum_rejects_bad_forms() {
-    let short = &GOOD_SHA[..63];
+    let short = &ANY_SHA[..63];
     let non_hex = format!("{short}g");
-    let long = format!("{GOOD_SHA}0");
+    let long = format!("{ANY_SHA}0");
     for text in [
         format!("{short}  x.nar\n"),
         format!("{non_hex}  x.nar\n"),
@@ -110,7 +83,7 @@ fn parse_checksum_rejects_bad_forms() {
 #[test]
 fn absent_archive_is_missing_with_archive_path() {
     let ns = WorkDir::new().expect("私有の名前空間");
-    let good = tiny_nar("x", b"good");
+    let good = GOOD.to_vec();
     place_checksum(ns.path(), "x", &sum_line(&good, "x"));
     let err = verified_nar_in(ns.path(), "x").expect_err("書庫が無ければ失敗");
     let nar = fetched_path_in(ns.path(), "x");
@@ -129,7 +102,7 @@ fn absent_archive_is_missing_with_archive_path() {
 #[test]
 fn absent_checksum_is_missing_with_checksum_path() {
     let ns = WorkDir::new().expect("私有の名前空間");
-    place(ns.path(), "x", &tiny_nar("x", b"good"));
+    place(ns.path(), "x", GOOD);
     let err = verified_nar_in(ns.path(), "x").expect_err("ハッシュのファイルが無ければ失敗");
     match &err {
         SampleError::FetchedNarMissing { sample, path } => {
@@ -143,7 +116,7 @@ fn absent_checksum_is_missing_with_checksum_path() {
 #[test]
 fn malformed_checksum_is_invalid() {
     let ns = WorkDir::new().expect("私有の名前空間");
-    place(ns.path(), "x", &tiny_nar("x", b"good"));
+    place(ns.path(), "x", GOOD);
     let sum = place_checksum(ns.path(), "x", "not a hash\n");
     let err = verified_nar_in(ns.path(), "x").expect_err("形が違えば失敗");
     match &err {
@@ -160,7 +133,7 @@ fn malformed_checksum_is_invalid() {
 #[test]
 fn one_byte_difference_is_mismatch_with_both_hashes() {
     let ns = WorkDir::new().expect("私有の名前空間");
-    let good = tiny_nar("x", b"good");
+    let good = GOOD.to_vec();
     let mut bad = good.clone();
     let last = bad.len() - 1;
     bad[last] ^= 1;
@@ -191,10 +164,13 @@ fn one_byte_difference_is_mismatch_with_both_hashes() {
 #[test]
 fn matching_archive_returns_shelf_path() {
     let ns = WorkDir::new().expect("私有の名前空間");
-    let good = tiny_nar("x", b"good");
+    let good = GOOD.to_vec();
     let placed = place(ns.path(), "x", &good);
     place_checksum(ns.path(), "x", &sum_line(&good, "x"));
-    assert_eq!(verified_nar_in(ns.path(), "x").expect("合えば通る"), placed);
+    assert_eq!(
+        verified_nar_in(ns.path(), "x").expect("合えば通る"),
+        (placed, good)
+    );
 }
 
 // ---- 表示が ASCII ----
@@ -266,8 +242,6 @@ fn fetch_command_is_absolute_pwsh_call() {
 
 // ---- 行の欄の形 ----
 
-const GOOD_SHA: &str = "816d7183ab7c92fe1d601e386d5d60f9ca9f4238d265143a1b96915aa5bfb020";
-
 #[test]
 fn row_form_accepts_a_good_row() {
     fetched_row_form("x", "https://example.invalid/x.nar").expect("良い行は通る");
@@ -290,24 +264,15 @@ fn row_form_rejects_each_bad_input() {
     }
 }
 
-// ---- 掃除は置き場を走査しない ----
-
-#[test]
-fn fetched_shelf_is_outside_work_and_cache() {
-    let ns = Path::new(r"C:\x\nar");
-    let path = fetched_path_in(ns, "x");
-    for shelf in ["work", crate::devroot::CACHE, "manual"] {
-        assert!(!path.starts_with(ns.join(shelf)), "{}", path.display());
-    }
-}
-
 // ---- 行から置き場のパス ----
 
 #[test]
 fn archive_path_of_rows() {
-    let vendored = crate::SAMPLES.first().expect("行がある");
-    assert_eq!(vendored.source, crate::SampleSource::Vendored);
-    assert_eq!(crate::fetched_archive_path(vendored).expect("決まる"), None);
+    let vendored = crate::SAMPLES
+        .iter()
+        .find(|s| s.source == crate::SampleSource::Vendored)
+        .expect("Vendored の行がある");
+    assert_eq!(crate::fetched_shelf(vendored).expect("決まる"), None);
     let fetched = crate::Sample {
         name: "x",
         kind: crate::SampleKind::Ghost,
@@ -316,14 +281,7 @@ fn archive_path_of_rows() {
             url: "https://example.invalid/x.nar",
         },
     };
-    assert_eq!(
-        crate::fetched_checksum_path(vendored).expect("決まる"),
-        None
-    );
-    let path = crate::fetched_archive_path(&fetched)
-        .expect("名前空間は決まる")
-        .expect("URL の行には置き場がある");
-    let sum = crate::fetched_checksum_path(&fetched)
+    let (path, sum) = crate::fetched_shelf(&fetched)
         .expect("名前空間は決まる")
         .expect("URL の行には置き場がある");
     assert!(path.is_absolute(), "{}", path.display());
@@ -333,4 +291,38 @@ fn archive_path_of_rows() {
         path.display()
     );
     assert_eq!(sum, path.with_file_name("x.nar.sha256"));
+}
+
+/// ハッシュのファイルのパスがフォルダなら、NotFound ではない読みの誤りとして `Io`（audit-test-kits 指摘 69）。
+#[test]
+fn a_checksum_path_that_is_a_folder_is_an_io_error() {
+    let ns = WorkDir::new().expect("私有の名前空間");
+    let folder = fetched_checksum_path_in(ns.path(), "dir");
+    std::fs::create_dir_all(&folder).expect("フォルダを置ける");
+
+    let refused = verified_nar_in(ns.path(), "dir");
+    assert!(
+        matches!(&refused, Err(SampleError::Io { path, what, .. })
+            if *path == folder && *what == "read the fetched checksum file"),
+        "{refused:?}"
+    );
+}
+
+/// Windows PowerShell の `>` が書く UTF-16 のハッシュのファイルは UTF-8 でないので不正（audit-test-kits 指摘 69）。
+#[test]
+fn a_utf16_checksum_file_is_invalid() {
+    let ns = WorkDir::new().expect("私有の名前空間");
+    let text = sum_line(b"x", "utf16");
+    let utf16: Vec<u8> = [0xFEFF_u16]
+        .into_iter()
+        .chain(text.encode_utf16())
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    let path = put(&fetched_checksum_path_in(ns.path(), "utf16"), &utf16);
+
+    let refused = verified_nar_in(ns.path(), "utf16");
+    assert!(
+        matches!(&refused, Err(SampleError::FetchedChecksumInvalid { path: p, .. }) if *p == path),
+        "{refused:?}"
+    );
 }

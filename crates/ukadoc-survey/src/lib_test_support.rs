@@ -1,24 +1,24 @@
 //! 全モジュールのテストが共用する見本データの組み立て（テスト専用）。
 //!
 //! ここが作るのは**正常な状態の小さな世界**である。カタログ 12 件・台帳 4 本・
-//! ソース文 3 本・ドメイン別報告 4 本が互いに矛盾なく揃っており、整合検査
+//! ソース文 3 本・ドメイン別報告 4 本・全体報告が互いに矛盾なく揃っており、整合検査
 //! （[`crate::check::run`]）を通しても食い違いは 1 件も出ない。
 //!
 //! # 壊し方はここに置かない
 //!
-//! 検査の各判定（タスク 4.2〜4.4）は、この正常な世界の**ちょうど 1 か所**を壊して
+//! 検査の各判定のテストは、この正常な世界の**ちょうど 1 か所**を壊して
 //! 所見が 1 件だけ出ることを確かめる。壊し方はそれぞれのテストファイルの中に閉じる
 //! ——ここに壊れた見本を並べると、どのテストがどれを使っているかが読めなくなり、
 //! 1 つの見本を直すと関係の無いテストが赤くなる。
 //!
 //! # 報告は台帳から作り直して持つ
 //!
-//! [`World::domain_reports`] は手書きではなく [`render_domain`] の出力である。手書き
-//! にすると新しさの検査（要件 7.4）が最初から赤になる。**台帳を壊したら
-//! [`World::refresh_reports`] を呼ぶこと**——呼ばないと、壊した判定の所見に加えて
-//! `DomainReportStale` まで出てしまい「1 件だけ出る」が成り立たない。逆に報告の側を
-//! 壊す判定（タスク 4.4）は作り直してはいけない。同じことがソース文と証拠の索引
-//! （[`World::refresh_evidence`]）にも当てはまる。
+//! [`World::domain_reports`] と [`World::summary_report`] は手書きではなく
+//! [`render_domain`]・[`render_summary`] の出力である。手書きにすると新しさの検査
+//! （要件 7.4）が最初から赤になる。**台帳を壊したら [`World::refresh_reports`] を
+//! 呼ぶこと**——呼ばないと、壊した判定の所見に加えて `DomainReportStale` まで出てしまい
+//! 「1 件だけ出る」が成り立たない。逆に報告の側を壊す新しさの判定のテストは作り直しては
+//! いけない。同じことがソース文と証拠の索引（[`World::refresh_evidence`]）にも当てはまる。
 //!
 //! # ファイルには 1 つも触らない
 //!
@@ -32,12 +32,12 @@ use crate::assignment::PageAssignment;
 use crate::catalog::{CATALOG_FORMAT, Catalog, CatalogEntry, SnapshotMeta};
 use crate::check::CheckInput;
 use crate::evidence::EvidenceIndex;
-use crate::evidence::extract::extract;
-use crate::evidence::resolve::resolve;
+use crate::evidence::resolve::index_of;
 use crate::hash::HASH_ALGORITHM;
 use crate::ledger::{Ledger, LedgerEntry};
 use crate::model::{Domain, EntryId, Link, LinkKind, Status, THEMES};
 use crate::report::domain::render_domain;
+use crate::report::summary::render_summary;
 
 /// 正典 URL の根。実データと同じ綴りで、フラグメントの前までがページ URL になる。
 const URL_BASE: &str = "https://ssp.shillest.net/ukadoc/manual/";
@@ -57,7 +57,7 @@ struct CatalogRow {
 /// 6 ページ・6 カテゴリにまたがり、**アンカー無しの 2 形**（`ukadoc:spec_shiori3`・
 /// `ukadoc:manual_shell`）も含む（要件 1.9）。版番号は 0 個・1 個・2 個の 3 通りを
 /// 揃えてある——1 通りしか無いと「版番号を 1 つに絞る」取り違えが素通りする。
-/// 見出しには逆斜線を含むものを 1 件入れてある（設計 D-10）。
+/// 見出しには逆斜線を含むものを 2 件入れてある（設計 D-10）。
 const CATALOG_ROWS: [CatalogRow; 12] = [
     CatalogRow {
         id: "ukadoc:descript_ghost:charset:1",
@@ -350,7 +350,7 @@ pub(crate) fn catalog() -> Catalog {
 /// 見本の冒頭情報。
 ///
 /// `total_entries` と `ukadoc_entries` は**違う値**にしてある。同じ値の見本では
-/// 2 つの欄を取り違えても気づけない（タスク 2.1 の教訓）。
+/// 2 つの欄を取り違えても気づけない。
 fn snapshot_meta() -> SnapshotMeta {
     SnapshotMeta {
         package: "ukagaka-doc-mcp".to_owned(),
@@ -426,27 +426,15 @@ fn entry_of(row: &LedgerRow) -> LedgerEntry {
 }
 
 /// 見本のソース文（パスと本文の組）。
-pub(crate) fn sources() -> Vec<(String, String)> {
+fn sources() -> Vec<(String, String)> {
     SOURCE_FILES
         .iter()
         .map(|(path, text)| ((*path).to_owned(), (*text).to_owned()))
         .collect()
 }
 
-/// ソース文から証拠の索引を作る。
-///
-/// 実行ファイルと同じ経路（取り出し → 解決）を通す。索引を手で組むと、ソース文を
-/// 壊しても索引が変わらない見本ができてしまう。
-pub(crate) fn evidence(catalog: &Catalog, sources: &[(String, String)]) -> EvidenceIndex {
-    let hits: Vec<_> = sources
-        .iter()
-        .flat_map(|(path, text)| extract(path, text))
-        .collect();
-    resolve(&hits, sources, catalog)
-}
-
 /// 台帳 4 本からドメイン別報告 4 本を作る（要件 7.4 の突き合わせ相手）。
-pub(crate) fn domain_reports(ledgers: &[Ledger]) -> BTreeMap<Domain, String> {
+fn domain_reports(ledgers: &[Ledger]) -> BTreeMap<Domain, String> {
     ledgers
         .iter()
         .map(|ledger| (ledger.domain, render_domain(ledger, &THEMES)))
@@ -464,6 +452,7 @@ pub(crate) struct World {
     pub(crate) sources: Vec<(String, String)>,
     pub(crate) evidence: EvidenceIndex,
     pub(crate) domain_reports: BTreeMap<Domain, String>,
+    pub(crate) summary_report: String,
 }
 
 impl World {
@@ -472,8 +461,10 @@ impl World {
         let catalog = catalog();
         let ledgers = ledgers();
         let sources = sources();
-        let evidence = evidence(&catalog, &sources);
+        // 索引を手で組むと、ソース文を壊しても索引が変わらない見本ができてしまう。
+        let evidence = index_of(&sources, &catalog);
         let domain_reports = domain_reports(&ledgers);
+        let summary_report = render_summary(&catalog, &ledgers, &THEMES);
         Self {
             catalog,
             ledgers,
@@ -481,6 +472,7 @@ impl World {
             sources,
             evidence,
             domain_reports,
+            summary_report,
         }
     }
 
@@ -493,6 +485,7 @@ impl World {
             themes: &THEMES,
             evidence: &self.evidence,
             domain_reports: &self.domain_reports,
+            summary_report: &self.summary_report,
         }
     }
 
@@ -523,14 +516,15 @@ impl World {
 
     /// いまのソース文から証拠の索引を作り直す。
     pub(crate) fn refresh_evidence(&mut self) {
-        self.evidence = evidence(&self.catalog, &self.sources);
+        self.evidence = index_of(&self.sources, &self.catalog);
     }
 
-    /// いまの台帳からドメイン別報告を作り直す。
+    /// いまのカタログと台帳からドメイン別報告と全体報告を作り直す。
     ///
-    /// 台帳を壊す判定（タスク 4.2・4.3）はこれを呼ぶ。呼ばないと報告の側も古くなり、
-    /// 所見が 2 種類出る。
+    /// 台帳を壊す判定のテストはこれを呼ぶ。呼ばないと報告の側も古くなり、所見が 2 種類
+    /// 出る。
     pub(crate) fn refresh_reports(&mut self) {
         self.domain_reports = domain_reports(&self.ledgers);
+        self.summary_report = render_summary(&self.catalog, &self.ledgers, &THEMES);
     }
 }

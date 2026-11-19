@@ -1,4 +1,4 @@
-//! `devroot` の兄弟テスト。
+//! `devroot` の兄弟テスト。要件の番号は spec `areka-P0-nar-install` のもの。
 //!
 //! # 「残っていない」を空振りにしない
 //!
@@ -31,7 +31,7 @@ fn exists(work: &WorkDir) -> (bool, bool) {
 }
 
 #[test]
-fn the_work_dir_lives_under_the_spec_namespace_and_never_in_the_os_temp_dir() {
+fn the_work_dir_is_absolute_and_named_after_the_process_with_its_lease_beside_it() {
     let work = WorkDir::new().expect("ビルド成果物の置き場は見つかるはず");
     let path = work.path();
 
@@ -39,19 +39,6 @@ fn the_work_dir_lives_under_the_spec_namespace_and_never_in_the_os_temp_dir() {
         path.is_absolute(),
         "借り手に渡すのは絶対パス: {}",
         path.display()
-    );
-    let namespace = namespace_dir().expect("名前空間は組めるはず");
-    assert_eq!(
-        namespace.file_name().and_then(|name| name.to_str()),
-        Some(NAMESPACE),
-        "名前空間はビルド成果物の置き場の直下の専用フォルダ（要件 7.1）: {}",
-        namespace.display()
-    );
-    assert!(
-        path.starts_with(&namespace),
-        "作業フォルダは本仕様専用の名前空間の下に作ること（要件 7.1）: {} / {}",
-        path.display(),
-        namespace.display()
     );
     // 名前は `<プロセス識別子>-<連番>`、札はその隣に `.lock` を付けた名前。
     let stem = path
@@ -165,24 +152,83 @@ fn the_lease_refuses_deletion_while_it_is_held() {
 #[test]
 fn the_configured_target_dir_wins_over_the_ancestor_search() {
     let chosen = find_target_dir(
-        Some("some-target"),
+        Some(r"D:\elsewhere\tgt"),
         Path::new(r"C:\x\target\debug\deps\t.exe"),
     )
     .expect("設定値があればそれを使う");
-    assert!(
-        chosen.ends_with("some-target"),
-        "環境変数の指定が祖先探索より優先されること: {}",
-        chosen.display()
-    );
-    assert!(
-        chosen.is_absolute(),
-        "相対の指定でも絶対パスにして返すこと: {}",
-        chosen.display()
+    assert_eq!(
+        chosen,
+        Path::new(r"D:\elsewhere\tgt"),
+        "絶対の指定は祖先探索より優先され、そのまま使うこと"
     );
 
     let found = find_target_dir(None, Path::new(r"C:\x\target\debug\deps\t.exe"))
         .expect("祖先に target があれば見つかる");
     assert_eq!(found, Path::new(r"C:\x\target"));
+}
+
+/// 相対の設定値は、実行体の祖先のうちその値で終わる最も近いものに解く（audit-test-kits 決め D4）。
+///
+/// cargo は起こした場所の上で解き、テストの実行体はパッケージの場所で走るので、
+/// 作業フォルダの上で解くと別の場所（ソースの木の中）を指してしまう。
+#[test]
+fn a_relative_target_dir_is_resolved_against_the_exe_ancestors() {
+    let exe = Path::new(r"C:\tgt\repo\tgt\debug\deps\t.exe");
+    assert_eq!(
+        find_target_dir(Some("tgt"), exe).expect("祖先に在る"),
+        Path::new(r"C:\tgt\repo\tgt"),
+        "その値で終わる祖先のうち実行体に最も近いもの"
+    );
+    assert_eq!(
+        find_target_dir(Some(r"out\tgt"), Path::new(r"C:\repo\out\tgt\debug\t.exe"))
+            .expect("2 段の値も祖先に在る"),
+        Path::new(r"C:\repo\out\tgt"),
+        "複数の段の値も段ごとに照らす"
+    );
+    for spelled in [r"..\tgt", r".\tgt"] {
+        assert_eq!(
+            find_target_dir(Some(spelled), exe).expect("頭の . と .. を外して祖先に在る"),
+            Path::new(r"C:\tgt\repo\tgt"),
+            "頭の . と .. を外した名前の段で照らす: {spelled}"
+        );
+    }
+
+    // 祖先に無ければ今までどおり作業フォルダの上で絶対にする。
+    let fallback = find_target_dir(Some("not-an-ancestor"), exe).expect("絶対にできる");
+    assert!(
+        fallback.is_absolute() && fallback.ends_with("not-an-ancestor"),
+        "祖先に無い値は作業フォルダの上で解く: {}",
+        fallback.display()
+    );
+}
+
+/// 死んだプロセスが残した同じ名前の札やフォルダに当たっても、次の連番で取り直す（audit-test-kits 指摘 7）。
+///
+/// 残りの札は他人の物かもしれないので消さない（片付けるのは掃除の仕事）。
+#[test]
+fn a_leftover_lease_or_folder_with_the_same_name_is_skipped() {
+    let namespace = WorkDir::new().expect("私有の名前空間");
+    let work = namespace.path().join(WORK);
+    let pid = std::process::id();
+    std::fs::create_dir_all(work.join(format!("{pid}-1"))).expect("残りのフォルダを置ける");
+    let left_lease = work.join(format!("{pid}-0{LOCK_SUFFIX}"));
+    std::fs::write(&left_lease, b"").expect("残りの札を置ける");
+
+    let mut serials = 0..;
+    let got = WorkDir::in_namespace_with(namespace.path(), || serials.next().expect("連番"))
+        .expect("残りを飛ばして取れること");
+
+    assert_eq!(
+        got.path(),
+        work.join(format!("{pid}-2")),
+        "空いた連番まで進む"
+    );
+    assert_eq!(exists(&got), (true, true));
+    assert!(left_lease.is_file(), "残りの札は消さない");
+    assert!(
+        !work.join(format!("{pid}-1{LOCK_SUFFIX}")).exists(),
+        "フォルダが先客で取れなかった連番の、自分の札は畳む"
+    );
 }
 
 #[test]
@@ -244,4 +290,163 @@ fn a_rename_onto_a_non_empty_folder_fails_and_onto_an_empty_folder_replaces() {
         b"src"
     );
     assert!(!source.exists(), "移した元は残らないこと");
+}
+
+/// 設定値が空・空白だけなら無いものとして祖先の探しへ戻る（audit-test-kits 指摘 69）。
+#[test]
+fn a_blank_target_dir_falls_back_to_the_ancestor_search() {
+    let exe = Path::new(r"C:\x\target\debug\deps\t.exe");
+    for blank in ["", "   "] {
+        assert_eq!(
+            find_target_dir(Some(blank), exe).expect("祖先に target がある"),
+            Path::new(r"C:\x\target"),
+            "{blank:?}"
+        );
+    }
+}
+
+/// 手動用の根の中を削除を拒む形で掴まれていると、黙って重ねず `Io` で断る（audit-test-kits 指摘 23）。
+#[test]
+fn manual_root_refuses_a_tree_it_cannot_remove() {
+    let namespace = WorkDir::new().expect("私有の名前空間");
+    let nar = || {
+        Ok(crate::NarBuilder::new()
+            .file(
+                "install.txt",
+                &crate::install_txt(&[
+                    "charset,UTF-8",
+                    "type,ghost",
+                    "name,held",
+                    "directory,held",
+                ]),
+            )
+            .done()
+            .file("mark.txt", b"held")
+            .done()
+            .bytes())
+    };
+    let manual = manual_root_in(namespace.path(), "held", nar).expect("1 度目は作れる");
+    let held_file = manual.join("ghost").join("held").join("mark.txt");
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(&held_file)
+        .expect("中のファイルを開けるはず");
+
+    let refused = manual_root_in(namespace.path(), "held", nar);
+    match &refused {
+        Err(SampleError::Io { what, path, .. }) => {
+            assert_eq!(*what, "remove the manual root before rebuilding it");
+            assert_eq!(*path, manual);
+        }
+        other => panic!("掴まれた木は Io で断ること: {other:?}"),
+    }
+    assert!(held_file.is_file(), "掴まれたファイルは消えていない");
+    drop(held);
+}
+
+/// 後始末の失敗は書き先へ `sample-ghost-kit: cleanup failed (` で始まる 1 行を書き、
+/// 既に無い（`NotFound`）ときは何も書かない（`tools/load-flake.ps1` がこの頭と
+/// `os error N` を字面で読む）。
+#[test]
+fn a_cleanup_failure_is_written_to_the_given_sink_and_not_found_writes_nothing() {
+    let path = Path::new("掴まれた木");
+
+    let mut failed = Vec::new();
+    write_cleanup(
+        &mut failed,
+        "remove the work folder",
+        Err(std::io::Error::from_raw_os_error(5)),
+        path,
+    );
+    let failed = String::from_utf8(failed).expect("ASCII で書く");
+    assert!(
+        failed.starts_with("sample-ghost-kit: cleanup failed (remove the work folder): "),
+        "頭の字面: {failed}"
+    );
+    assert!(failed.contains("os error 5"), "os error N を保つ: {failed}");
+    assert!(
+        failed.is_ascii() && failed.contains("\\u{"),
+        "日本語のパスは逃がして ASCII だけで書く: {failed}"
+    );
+    let spelled = crate::ascii(&path.to_string_lossy());
+    assert!(
+        failed.contains(&spelled),
+        "パスの綴り {spelled} が文に在る: {failed}"
+    );
+
+    let mut not_found = Vec::new();
+    write_cleanup(
+        &mut not_found,
+        "remove the work folder",
+        Err(std::io::ErrorKind::NotFound.into()),
+        path,
+    );
+    assert!(not_found.is_empty(), "既に無いのは黙って通す");
+}
+
+/// 並走する掃除が先に消して消去待ちになった札は、`retire_lease` が何も書かない
+/// （audit-test-kits かけ直し 4 回目 S2）。
+///
+/// 削除を共有する手綱で札を開いたまま、`FILE_FLAG_DELETE_ON_CLOSE` の手綱を閉じて先に
+/// 消すと、残りの手綱を閉じるまで札は消去待ちになる——掃除が消している最中の札と同じ
+/// 状態である（`remove_file` で先に消すと、今の Windows は名前をその場で外すので消去待ちが
+/// 作れない）。
+#[test]
+fn a_lease_already_pending_deletion_by_a_sweeper_writes_no_cleanup_line() {
+    const DELETE: u32 = 0x0001_0000;
+    const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;
+    let namespace = WorkDir::new().expect("私有の名前空間");
+    let lock = namespace.path().join("pending.lock");
+    let sweeper = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .share_mode(FILE_SHARE_ALL)
+        .open(&lock)
+        .expect("相方の札は開けるはず");
+    drop(
+        std::fs::OpenOptions::new()
+            .access_mode(DELETE)
+            .share_mode(FILE_SHARE_ALL)
+            .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
+            .open(&lock)
+            .expect("閉じたら消す手綱で開けるはず"),
+    );
+
+    // 前提の実測: 消去待ちの札への `remove_file` は os error 5 で断られる。
+    let refused = std::fs::remove_file(&lock).expect_err("消去待ちの札は消せない");
+    assert_eq!(
+        refused.raw_os_error(),
+        Some(5),
+        "消去待ちは os error 5: {refused}"
+    );
+    // 前提の実測: 消去待ちの札でも属性は読める（だから見分けは開いてみることで行う）。
+    assert!(
+        std::fs::symlink_metadata(&lock).is_ok(),
+        "消去待ちの札の属性は読める"
+    );
+
+    let mut out = Vec::new();
+    retire_lease_to(&mut out, None, &lock);
+    drop(sweeper);
+    assert!(
+        out.is_empty(),
+        "掃除が先に消した札は後始末の失敗ではない: {}",
+        String::from_utf8_lossy(&out)
+    );
+    assert!(!lock.exists(), "相方を閉じれば札は消えている");
+
+    // 較正: 持ち主が握っている札（削除を共有しない）を消せないのは本物の失敗として書く
+    // （共有違反の os error 32）。
+    // shortcut: os error 5 で断られたのに全部共有で開ける札（＝本物の失敗として書く枝）には
+    // 檻が無い。消去待ちでない札で os error 5 を決定論で作る手が見つかったら足す。
+    let held = WorkDir::in_namespace(namespace.path()).expect("握られた札");
+    let mut out = Vec::new();
+    retire_lease_to(&mut out, None, held.lock_path());
+    let line = String::from_utf8(out).expect("ASCII で書く");
+    assert!(
+        line.starts_with("sample-ghost-kit: cleanup failed (remove the lease file): ")
+            && line.contains("os error 32"),
+        "握られている札を消せないのは書く: {line}"
+    );
 }

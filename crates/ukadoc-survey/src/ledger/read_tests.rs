@@ -1,7 +1,7 @@
 //! `read.rs` の在中テスト。
 //!
 //! 見本の本文はここに直に書く（実装側の定数を参照しない）。参照すると表を表自身と
-//! 比べるだけになり、綴りの取り違えを 1 件も捕まえられない（タスク 1.5 の教訓）。
+//! 比べるだけになり、綴りの取り違えを 1 件も捕まえられない。
 //!
 //! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない
 //! （要件 6.2・設計 File Structure Plan）。
@@ -148,7 +148,7 @@ fn id(raw: &str) -> EntryId {
 
 /// 付録 A.2 の欄がすべて、それぞれの型の値として読まれる。
 ///
-/// 件数ではなく逐語で釘付けする（タスク 1.5 の教訓）。
+/// 件数ではなく逐語で釘付けする（件数だけでは綴り違いを捕まえない）。
 #[test]
 fn reads_every_column_of_the_appendix_sample() {
     let ledger = sample();
@@ -248,7 +248,7 @@ fn an_empty_ledger_reads_to_no_entries() {
     assert!(ledger.file_order.is_empty());
 }
 
-/// 読み取りは塊への切り分けを必ず通る（タスク 1.7 の教訓＝入口の配線は別に守る）。
+/// 読み取りは塊への切り分けを必ず通る（入口の配線は別に守る）。
 ///
 /// 備考の中の行頭見出しは `toml` の鍵集合と食い違うので、切り分けの較正が落とす。
 /// `toml` だけで読んで本文の順を鍵から作る実装は、ここで緑になってしまう。
@@ -270,7 +270,7 @@ fn read_goes_through_the_block_split() {
 // ---- 語彙（要件 2.2・4.3・4.4・6.10） ----
 
 /// 状態の綴りを 1 文字変えると読み取りが失敗し、**どの id のどの欄か**が本文に載る
-/// （タスク 2.4 の完了条件・要件 2.2・6.10）。
+/// （要件 2.2・6.10）。
 #[test]
 fn a_one_character_status_typo_names_the_id_and_the_field() {
     let text = tweak(r#"status = "implemented""#, r#"status = "implementad""#);
@@ -474,7 +474,7 @@ fn a_link_without_kind_or_to_is_rejected() {
 
 // ---- 項目 id の形（要件 1.9） ----
 
-/// 表の鍵が 2 形のどちらでもなければ失敗する。
+/// 表の鍵が 2 形のどちらでもなければ、どの台帳かを添えて失敗する（要件 6.10）。
 #[test]
 fn a_malformed_table_key_is_rejected() {
     let text = tweak(
@@ -483,10 +483,60 @@ fn a_malformed_table_key_is_rejected() {
     );
 
     let err = err_of(&text);
-    match err {
-        SurveyError::BadEntryId { raw } => assert_eq!(raw, "ukadoc"),
-        other => panic!("項目 id の形の失敗ではない: {other}"),
+    match &err {
+        SurveyError::TomlParse { path, reason } => {
+            assert_eq!(path, FILE);
+            assert_eq!(reason, "項目 id の形が違う: ukadoc");
+        }
+        other => panic!("置き場つきの形の崩れとして落ちること: {other}"),
     }
+}
+
+/// 1 項目の `supersedes` に同じ id を 2 度書くと、id と欄を挙げて落ちる。
+#[test]
+fn a_superseded_id_written_twice_in_one_entry_is_rejected() {
+    let text = tweak(
+        r#"supersedes = ["ukadoc:list_propertysystem:system.year.old:1"]"#,
+        r#"supersedes = ["ukadoc:list_propertysystem:system.year.old:1", "ukadoc:list_propertysystem:system.year.old:1"]"#,
+    );
+
+    let err = err_of(&text);
+    match &err {
+        SurveyError::TomlParse { path, .. } => assert_eq!(path, FILE),
+        other => panic!("形の崩れとして落ちること: {other}"),
+    }
+    assert_mentions(
+        &err,
+        &[
+            YEAR,
+            "supersedes",
+            "ukadoc:list_propertysystem:system.year.old:1",
+        ],
+    );
+}
+
+/// 1 項目の `links` に同じ（種別, 相手）を 2 度書くと、id と欄を挙げて落ちる。
+///
+/// 黙って受けると、相手がカタログに無いとき同じ所見が 2 件出る。
+#[test]
+fn a_link_written_twice_in_one_entry_is_rejected() {
+    let link = r#"  { kind = "same-feature", to = "ukadoc:list_propertysystem:system.month:1" },"#;
+    let text = tweak(link, &format!("{link}\n{link}"));
+
+    let err = err_of(&text);
+    match &err {
+        SurveyError::TomlParse { path, .. } => assert_eq!(path, FILE),
+        other => panic!("形の崩れとして落ちること: {other}"),
+    }
+    assert_mentions(
+        &err,
+        &[
+            YEAR,
+            "links",
+            "same-feature",
+            "ukadoc:list_propertysystem:system.month:1",
+        ],
+    );
 }
 
 /// 欄に書かれた相手 id が 2 形のどちらでもなければ、**どの項目の**どの欄かを添えて失敗する。
@@ -556,4 +606,73 @@ fn an_unreadable_body_names_the_file() {
 
     let err = err_of(&text);
     assert_mentions(&err, &[FILE]);
+}
+
+/// 備考の行頭に、TOML の見出しとして読めない `[entry.` の行がある台帳。
+const NOTE_WITH_BROKEN_HEAD: &str = r#"[ledger]
+domain = "property"
+pages = ["list_propertysystem"]
+
+[entry."ukadoc:list_propertysystem:system.year:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = """
+[entry.x の説明]
+"""
+"#;
+
+/// 塊への切り分けの失敗も、どの台帳かを名指す（要件 6.12）。
+///
+/// 切り分けはドメインを知らないので、読み取りが置き場を差し替える。
+#[test]
+fn a_split_failure_names_the_ledger_file() {
+    match err_of(NOTE_WITH_BROKEN_HEAD) {
+        SurveyError::TomlParse { path, reason } => {
+            assert_eq!(path, FILE);
+            assert!(reason.contains("[entry.x の説明]"), "{reason}");
+        }
+        other => panic!("見出しの読めない失敗ではない: {other}"),
+    }
+
+    match err_of(NOTE_WITH_HEAD) {
+        SurveyError::LedgerSplitMismatch { detail } => {
+            assert!(detail.starts_with(FILE), "置き場が頭に無い: {detail}");
+        }
+        other => panic!("切り分けの食い違いではない: {other}"),
+    }
+}
+
+/// 1 項目に同じテーマを 2 度書くと、id とテーマを挙げて落ちる（要件 4.4・6.10）。
+///
+/// 黙って受けると、テーマ別の表でその項目が 2 件に数えられる。
+#[test]
+fn a_theme_written_twice_in_one_entry_is_rejected() {
+    let text = tweak(
+        r#"values = ["気配", "更新"]"#,
+        r#"values = ["気配", "更新", "気配"]"#,
+    );
+
+    let err = err_of(&text);
+    match &err {
+        SurveyError::TomlParse { path, .. } => assert_eq!(path, FILE),
+        other => panic!("形の崩れとして落ちること: {other}"),
+    }
+    assert_mentions(&err, &[YEAR, "values", "気配"]);
+}
+
+/// 根に `[ledger]` と `[entry]` のほかの鍵があれば落ちる（黙って読み飛ばさない）。
+#[test]
+fn an_unknown_root_key_is_rejected() {
+    let text = tweak("[ledger]\n", "unclassified_count = 42\n\n[ledger]\n");
+
+    let err = err_of(&text);
+    match &err {
+        SurveyError::TomlParse { path, .. } => assert_eq!(path, FILE),
+        other => panic!("形の崩れとして落ちること: {other}"),
+    }
+    assert_mentions(&err, &["根", "unclassified_count"]);
 }

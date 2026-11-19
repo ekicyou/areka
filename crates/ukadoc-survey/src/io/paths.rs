@@ -7,7 +7,7 @@
 //!
 //! 根は **`CARGO_MANIFEST_DIR` の 2 段上**。この crate の manifest は
 //! `crates/ukadoc-survey/` にあるので、2 段上がワークスペース根になる
-//! （前例: `crates/log-capture-kit/tests/workspace_scan/mod.rs:64`）。
+//! （前例: `crates/log-capture-kit/tests/workspace_scan/mod.rs`）。
 //!
 //! ここで使うのは**コンパイル時に埋め込まれる `env!`** であって、実行時の環境変数
 //! ではない。実行時に読むと、テストがどのディレクトリから起動されたかで答えが変わり、
@@ -28,8 +28,22 @@ use crate::model::Domain;
 /// この crate の manifest のあるディレクトリ（コンパイル時に決まる）。
 const MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
+/// 置き場のディレクトリの綴り。`concat!` で相対の綴りを組むために字句で持つ。
+macro_rules! coverage_dir {
+    () => {
+        "doc/ukadoc-coverage"
+    };
+}
+
 /// カタログ・台帳・報告を置くディレクトリの名前（ワークスペース根からの相対）。
-const COVERAGE_DIR: &str = "doc/ukadoc-coverage";
+///
+/// 失敗の本文と所見の場所に載る相対の綴りはどれもここから作る（台帳は
+/// `ledger::ledger_file`、3 文書は `documents::fields::document_file`）。絶対パスの
+/// 関数を使わないのは、本文が計算機ごとに変わってしまうからである。
+pub const COVERAGE_DIR: &str = coverage_dir!();
+
+/// カタログの置き場の相対の綴り（区切りは `/`）。[`catalog_path`] と同じ場所を指す。
+pub const CATALOG_FILE: &str = concat!(coverage_dir!(), "/catalog.toml");
 
 /// ワークスペース根の絶対パス。
 ///
@@ -72,12 +86,10 @@ pub fn domain_report_path(domain: Domain) -> PathBuf {
 
 /// 全体報告（`doc/ukadoc-coverage/report/summary.md`）。
 ///
-/// 常時検査の対象である。完了 spec toolkit の要件 7.6 がここを対象外にしていたのは
-/// 並走する調査 4 本が同じファイルを取り合うからで、その理由は 4 本の完了で消えた
-/// ——除外は `ukadoc-coverage-roadmap` の要件 11.2 が覆した。いまは判定 ⑹ が、この
-/// ファイルの本文を `report::summary::render_summary` の出力と**全文一致**で突き合わせる
-/// （証拠の表は本文から外して `evidence` の副手続きへ移したので、突き合わせの両側は
-/// カタログと台帳 4 本だけから決まる）。作り直さずに台帳を変えれば赤になる。
+/// 常時検査の対象である。`check::freshness` が `DomainReportStale` として、このファイルの
+/// 本文を `report::summary::render_summary` の出力と**全文一致**で見張る（証拠の表は
+/// `evidence` の副手続きが出すので、突き合わせの両側はカタログと台帳 4 本とテーマ名
+/// だけから決まる）。作り直さずに台帳を変えれば赤になる。
 pub fn summary_report_path() -> PathBuf {
     coverage_dir().join("report").join("summary.md")
 }

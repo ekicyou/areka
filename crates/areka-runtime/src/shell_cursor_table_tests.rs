@@ -1,4 +1,4 @@
-//! `shell_cursor_table.rs` の兄弟テスト（shell-mouse-cursor tasks.md 2.1・要件 1.1〜1.4・1.6・5.1〜5.4・
+//! `shell_cursor_table.rs` の兄弟テスト（shell-mouse-cursor 要件 1.1〜1.4・1.6・5.1〜5.4・
 //! 5.6〜5.8・6.4・6.6・7.2）。
 //!
 //! cursorブレスはテストの中の surfaces.txt の文面を `parse_cursor_braces` で転記して使う（検体は読まない）。
@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use areka_parsers::shell::parse_cursor_braces;
 
 use super::{
-    CursorIssue, CursorScene, GhostCursorKeys, PathReason, RowReason, Shape, ShapeReason,
-    SystemCursor, candidate_paths, parse_shape, read_cursor_braces, read_ghost_cursor_keys,
+    CursorIssue, CursorScene, GhostCursorKeys, RowReason, Shape, ShapeReason, SystemCursor,
+    candidate_paths, parse_shape, read_cursor_braces, read_ghost_cursor_keys,
 };
 
 type Rows = BTreeMap<(u32, String, CursorScene), Shape<String>>;
@@ -20,7 +20,7 @@ fn rows_of(text: &str) -> (Rows, Vec<CursorIssue>) {
     (rows.rows, issues)
 }
 
-fn key(scope: u32, region: &str, scene: CursorScene) -> (u32, String, CursorScene) {
+pub(crate) fn key(scope: u32, region: &str, scene: CursorScene) -> (u32, String, CursorScene) {
     (scope, region.to_string(), scene)
 }
 
@@ -28,7 +28,7 @@ fn file(name: &str) -> Shape<String> {
     Shape::File(name.to_string())
 }
 
-fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+pub(crate) fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
     pairs
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -211,7 +211,7 @@ mouseup0,Head,system:help
 
 #[test]
 fn region_names_are_kept_as_spelled_without_surface_check() {
-    // 面の当たり判定と突き合わせない（1.6）・綴りどおり（大小で別の鍵）。
+    // 面の当たり判定と突き合わせない・綴りどおり（大小で別の鍵）。
     let (rows, issues) = rows_of(
         "\
 sakura.cursor
@@ -377,11 +377,7 @@ fn candidate_paths_refuse_names_outside_the_folder() {
         "..\\a.cur",
         "sub\\..\\..\\a.cur",
     ] {
-        assert_eq!(
-            candidate_paths(name, &dirs),
-            Err(PathReason::OutsideFolder),
-            "{name}"
-        );
+        assert_eq!(candidate_paths(name, &dirs), None, "{name}");
     }
 }
 
@@ -390,7 +386,7 @@ fn candidate_paths_are_shell_then_ghost_master() {
     let dirs = [Path::new("C:\\shell"), Path::new("C:\\ghost\\master")];
     assert_eq!(
         candidate_paths("cur\\a.cur", &dirs),
-        Ok(vec![
+        Some(vec![
             PathBuf::from("C:\\shell\\cur\\a.cur"),
             PathBuf::from("C:\\ghost\\master\\cur\\a.cur"),
         ])
@@ -398,7 +394,7 @@ fn candidate_paths_are_shell_then_ghost_master() {
     // `..` を含む綴りでも、上のフォルダへ出る部分でなければ断らない。
     assert_eq!(
         candidate_paths("a..b.cur", &dirs),
-        Ok(vec![
+        Some(vec![
             PathBuf::from("C:\\shell\\a..b.cur"),
             PathBuf::from("C:\\ghost\\master\\a..b.cur")
         ])

@@ -413,7 +413,7 @@ fn a_window_attached_to_a_side_edge_scope_is_kept_by_the_exclusions() {
                 .expect("char 窓がある");
             world.entity_mut(window).insert(DraggingState {
                 drag_start_pos: Point::new(0, 0),
-                initial_window_pos: (0.0, 0.0),
+                initial_window_pos: Some((0.0, 0.0)),
             });
         }
     };

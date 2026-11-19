@@ -1,7 +1,7 @@
 [package]
 name = "log-capture-kit"
 workspace = "../.."
-description = "ログ捕捉テストの硬化機構をワークスペースで唯一定義するテスト専用の leaf crate（spec: areka-P0-test-cage-determinism）: 常駐 probe・捕捉窓・正準イベント型・行整形・全スレッド捕捉"
+description = "ログ捕捉テストの硬化機構をワークスペースで唯一定義するテスト専用の leaf crate（spec: areka-P0-test-cage-determinism）: 常駐 probe・捕捉窓・正準イベント型・行整形・全スレッド捕捉・判定の補助（expect_one・ExpectField）・EnvFilter 濾過つきの捕捉 capture_under_filter（feature env-filter）"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -25,5 +25,6 @@ env-filter = ["dep:tracing-subscriber"]
 [dev-dependencies]
 # 検体パスの見張り（sample_path_guard_test）が走査語を作るのに登記表 SAMPLES を読む。
 # 名前の一覧を見張り側へ手書きで写すと、検体を 1 つ足した瞬間に見張りが黙って穴を開ける。
-# テスト専用の leaf 同士なので依存の向きは崩れない（本番側には出ない）。
+# 依存は輪になる: 本 crate →(dev) sample-ghost-kit →(本番の依存) areka-nar →(dev) 本 crate。
+# cargo は輪が [dev-dependencies] を通る限り許す。本 crate の本体は sample-ghost-kit を引かないので本番側には出ない。
 sample-ghost-kit = { path = "../sample-ghost-kit" }

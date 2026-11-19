@@ -6,7 +6,7 @@
 //! 準備が解いた位置そのもの（同じ窓寸・作業領域・DPI）なので、ドラッグでずらした後に初期化すると
 //! そこへ戻ることを確かめる。記憶は実物のアクター（`spawn_sylphya`）と偽の保存先に置いて読み戻す
 //! （`reset_pos_tests.rs` と同じやり方）。初期化は記憶のずらしの鍵を消す（次の起動は
-//! キーワードから標準を導き直す・audit-placement-core 指摘 17・50）。
+//! キーワードから標準を導き直す）。
 
 use std::collections::HashMap;
 use std::fs;
@@ -37,7 +37,6 @@ use areka_placement::spawn::{BalloonKeywordBase, GhostWindows, spawn_ghost_windo
 use areka_placement::sticky_group_ledger::StickyGroupLedger;
 use areka_placement::test_support::{
     KEYWORD_BALLOON_DESCRIPT, SharedFakeIo, WA, give_fake_handles, synth_declared_dpi_ghost,
-    with_com_initialized,
 };
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
@@ -142,7 +141,10 @@ impl Rig {
     fn finish(self) {
         let _residue = drain_window_pos_commands();
         self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.parts
+            .handle
+            .join()
+            .expect("アクターのスレッドが panic せずに終わる");
     }
 }
 
@@ -179,130 +181,128 @@ fn keyword_fixture(root: &TempPath) -> (PathBuf, PathBuf) {
     (ghost, balloon)
 }
 
-/// 7.1・7.2・7.3・9.5: ドラッグでずらしたバルーンが標準の位置（起動の準備が解いた位置）へ戻り、
+/// areka-P0-window-link-directives 要件 7.1・7.2・7.3・9.5: ドラッグでずらしたバルーンが標準の位置（起動の準備が解いた位置）へ戻り、
 /// 部品のずらしの基準とキーワードの素材が標準どおりに入り、記憶のずらしの鍵が消え、
 /// スコープごとに 1 行記録される。キャラクターの窓・`Anchored`・`AnchorSource`・組の帳簿は変わらない。
 #[test]
 fn dragged_balloons_return_to_standard_and_forget_the_offsets() {
-    with_com_initialized(|| {
-        let kw_root = TempPath::new("placement-prepare");
-        let (kw_ghost, kw_balloon) = keyword_fixture(&kw_root);
-        for (ghost, balloon, expect_keyword) in [
-            (emo2_root(), emo2_balloon_root(), false),
-            (kw_ghost, kw_balloon, true),
-        ] {
-            let mut rig = Rig::new(&ghost, &balloon, None);
-            // 吸着の向きを台本で変えた形・組を持つ形にしておく（初期化が触らないことを見る）。
-            let c0 = rig.char_window(0);
-            rig.world.entity_mut(c0).insert((
-                Anchored(Anchor::Top),
-                AnchorSource {
-                    descript: Anchor::Bottom,
-                    by_script: true,
-                },
-            ));
-            let mut ledger = StickyGroupLedger::default();
-            ledger
-                .try_add_script_group([0, 1].into_iter().collect())
-                .unwrap();
-            rig.world.insert_resource(ledger.clone());
-            rig.drag_balloons();
-            for scope in rig.windows.scopes().collect::<Vec<_>>() {
-                persist_entries(&rig.world, balloon_offset_entries(scope as u32, DRAGGED));
-            }
-
-            let scopes: Vec<usize> = rig.windows.scopes().collect();
-            let chars_before: Vec<(Point, Option<Anchored>, Option<AnchorSource>)> = scopes
-                .iter()
-                .map(|&s| {
-                    let c = rig.char_window(s);
-                    (
-                        rig.pos(c),
-                        rig.world.get::<Anchored>(c).copied(),
-                        rig.world.get::<AnchorSource>(c).copied(),
-                    )
-                })
-                .collect();
-
-            let (reset, events) =
-                capture(|| reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Menu));
-            assert!(reset, "{}: 戻したバルーンがある", ghost.display());
-            assert!(events_named(&events, "balloon_pos_reset_skipped").is_empty());
-
-            let store = rig.load();
-            let logs = events_named(&events, "balloon_pos_reset");
-            assert_eq!(logs.len(), scopes.len(), "スコープごとに 1 行: {events:?}");
-            for (i, p) in rig.placements.iter().enumerate() {
-                let case = format!("{} scope={}", ghost.display(), p.scope);
-                let c = rig.char_window(p.scope);
-                assert_eq!(
-                    rig.balloon_pos(p.scope),
-                    Point::new(p.balloon_pos.x, p.balloon_pos.y),
-                    "{case}: 標準の位置へ戻る"
-                );
-                assert_eq!(
-                    rig.world.get::<BalloonFollow>(c).unwrap().base(),
-                    p.balloon_offset_base,
-                    "{case}: 標準のずらしが部品に入る"
-                );
-                let keyword = rig
-                    .world
-                    .get::<BalloonKeywordBase>(c)
-                    .map(|k| (k.mode, k.adjust));
-                assert_eq!(keyword, p.balloon_keyword_base, "{case}: キーワードの素材");
-                // キャラクターの窓・向き・出どころは変わらない（7.2）。
-                assert_eq!(
-                    (
-                        rig.pos(c),
-                        rig.world.get::<Anchored>(c).copied(),
-                        rig.world.get::<AnchorSource>(c).copied(),
-                    ),
-                    chars_before[i],
-                    "{case}: キャラクターの窓は触らない"
-                );
-                // 記憶のずらしの鍵は消える（7.3）。
-                let off = p.balloon_offset_base.offset;
-                assert_eq!(
-                    saved_offset(&store, p.scope as u32),
-                    None,
-                    "{case}: 記憶にずらしが残らない: {store:?}"
-                );
-                // 記録の欄（9.5）。
-                let log = logs
-                    .iter()
-                    .find(|e| e.field("scope") == Some(p.scope.to_string().as_str()))
-                    .unwrap_or_else(|| panic!("{case}: 記録が無い: {events:?}"));
-                assert_eq!(log.level, tracing::Level::INFO);
-                for (key, want) in [
-                    ("to_x", p.balloon_pos.x),
-                    ("to_y", p.balloon_pos.y),
-                    ("offset_x", off.x),
-                    ("offset_y", off.y),
-                ] {
-                    assert_eq!(
-                        log.field(key),
-                        Some(want.to_string().as_str()),
-                        "{case} {key}"
-                    );
-                }
-                assert_eq!(log.field_str("trigger"), Some("menu"), "{case}");
-            }
-            if expect_keyword {
-                assert!(
-                    rig.placements
-                        .iter()
-                        .any(|p| p.balloon_keyword_base.is_some()),
-                    "前提: キーワードの検体はキーワードの素材を持つ"
-                );
-            }
-            assert_eq!(
-                rig.world.get_resource::<StickyGroupLedger>(),
-                Some(&ledger),
-                "組の帳簿は変わらない"
-            );
-            rig.finish();
+    let kw_root = TempPath::new("placement-prepare");
+    let (kw_ghost, kw_balloon) = keyword_fixture(&kw_root);
+    for (ghost, balloon, expect_keyword) in [
+        (emo2_root(), emo2_balloon_root(), false),
+        (kw_ghost, kw_balloon, true),
+    ] {
+        let mut rig = Rig::new(&ghost, &balloon, None);
+        // 吸着の向きを台本で変えた形・組を持つ形にしておく（初期化が触らないことを見る）。
+        let c0 = rig.char_window(0);
+        rig.world.entity_mut(c0).insert((
+            Anchored(Anchor::Top),
+            AnchorSource {
+                descript: Anchor::Bottom,
+                by_script: true,
+            },
+        ));
+        let mut ledger = StickyGroupLedger::default();
+        ledger
+            .try_add_script_group([0, 1].into_iter().collect())
+            .unwrap();
+        rig.world.insert_resource(ledger.clone());
+        rig.drag_balloons();
+        for scope in rig.windows.scopes().collect::<Vec<_>>() {
+            persist_entries(&rig.world, balloon_offset_entries(scope as u32, DRAGGED));
         }
-    });
+
+        let scopes: Vec<usize> = rig.windows.scopes().collect();
+        let chars_before: Vec<(Point, Option<Anchored>, Option<AnchorSource>)> = scopes
+            .iter()
+            .map(|&s| {
+                let c = rig.char_window(s);
+                (
+                    rig.pos(c),
+                    rig.world.get::<Anchored>(c).copied(),
+                    rig.world.get::<AnchorSource>(c).copied(),
+                )
+            })
+            .collect();
+
+        let (reset, events) =
+            capture(|| reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Menu));
+        assert!(reset, "{}: 戻したバルーンがある", ghost.display());
+        assert!(events_named(&events, "balloon_pos_reset_skipped").is_empty());
+
+        let store = rig.load();
+        let logs = events_named(&events, "balloon_pos_reset");
+        assert_eq!(logs.len(), scopes.len(), "スコープごとに 1 行: {events:?}");
+        for (i, p) in rig.placements.iter().enumerate() {
+            let case = format!("{} scope={}", ghost.display(), p.scope);
+            let c = rig.char_window(p.scope);
+            assert_eq!(
+                rig.balloon_pos(p.scope),
+                Point::new(p.balloon_pos.x, p.balloon_pos.y),
+                "{case}: 標準の位置へ戻る"
+            );
+            assert_eq!(
+                rig.world.get::<BalloonFollow>(c).unwrap().base(),
+                p.balloon_offset_base,
+                "{case}: 標準のずらしが部品に入る"
+            );
+            let keyword = rig
+                .world
+                .get::<BalloonKeywordBase>(c)
+                .map(|k| (k.mode, k.adjust));
+            assert_eq!(keyword, p.balloon_keyword_base, "{case}: キーワードの素材");
+            // キャラクターの窓・向き・出どころは変わらない。
+            assert_eq!(
+                (
+                    rig.pos(c),
+                    rig.world.get::<Anchored>(c).copied(),
+                    rig.world.get::<AnchorSource>(c).copied(),
+                ),
+                chars_before[i],
+                "{case}: キャラクターの窓は触らない"
+            );
+            // 記憶のずらしの鍵は消える。
+            let off = p.balloon_offset_base.offset;
+            assert_eq!(
+                saved_offset(&store, p.scope as u32),
+                None,
+                "{case}: 記憶にずらしが残らない: {store:?}"
+            );
+            // 記録の欄。
+            let log = logs
+                .iter()
+                .find(|e| e.field("scope") == Some(p.scope.to_string().as_str()))
+                .unwrap_or_else(|| panic!("{case}: 記録が無い: {events:?}"));
+            assert_eq!(log.level, tracing::Level::INFO);
+            for (key, want) in [
+                ("to_x", p.balloon_pos.x),
+                ("to_y", p.balloon_pos.y),
+                ("offset_x", off.x),
+                ("offset_y", off.y),
+            ] {
+                assert_eq!(
+                    log.field(key),
+                    Some(want.to_string().as_str()),
+                    "{case} {key}"
+                );
+            }
+            assert_eq!(log.field_str("trigger"), Some("menu"), "{case}");
+        }
+        if expect_keyword {
+            assert!(
+                rig.placements
+                    .iter()
+                    .any(|p| p.balloon_keyword_base.is_some()),
+                "前提: キーワードの検体はキーワードの素材を持つ"
+            );
+        }
+        assert_eq!(
+            rig.world.get_resource::<StickyGroupLedger>(),
+            Some(&ledger),
+            "組の帳簿は変わらない"
+        );
+        rig.finish();
+    }
 }
 
 /// 初期化は戻した全スコープのずらしの鍵を 1 回の commit で消し、ほかの表（窓の位置・
@@ -310,207 +310,199 @@ fn dragged_balloons_return_to_standard_and_forget_the_offsets() {
 /// ずらしの基準とキーワードの素材）になる。
 #[test]
 fn reset_forgets_offsets_in_one_commit_and_next_boot_uses_the_keyword_standard() {
-    with_com_initialized(|| {
-        let root = TempPath::new("placement-prepare");
-        let (ghost, balloon) = keyword_fixture(&root);
-        let mut rig = Rig::new(&ghost, &balloon, None);
-        let scopes: Vec<usize> = rig.windows.scopes().collect();
-        assert_eq!(scopes.len(), 2, "前提: 2 スコープの検体");
+    let root = TempPath::new("placement-prepare");
+    let (ghost, balloon) = keyword_fixture(&root);
+    let mut rig = Rig::new(&ghost, &balloon, None);
+    let scopes: Vec<usize> = rig.windows.scopes().collect();
+    assert_eq!(scopes.len(), 2, "前提: 2 スコープの検体");
+    assert!(
+        rig.placements
+            .iter()
+            .all(|p| p.balloon_keyword_base.is_some()),
+        "前提: どのスコープもキーワードの素材を持つ"
+    );
+    rig.drag_balloons();
+    for &scope in &scopes {
+        let c = rig.pos(rig.char_window(scope));
+        let mut entries = char_pos_entries(scope as u32, PointPx { x: c.x, y: c.y });
+        entries.extend(balloon_offset_entries(scope as u32, DRAGGED));
+        persist_entries(&rig.world, entries);
+    }
+    let adjacent = PersistKey::WindowAdjacent { scope: 1 };
+    persist_entries(&rig.world, vec![(adjacent, "left".to_owned())]);
+    let seeded = rig.load();
+    for &scope in &scopes {
         assert!(
-            rig.placements
-                .iter()
-                .all(|p| p.balloon_keyword_base.is_some()),
-            "前提: どのスコープもキーワードの素材を持つ"
+            saved_offset(&seeded, scope as u32).is_some(),
+            "前提: ずらしを覚えている"
         );
-        rig.drag_balloons();
-        for &scope in &scopes {
-            let c = rig.pos(rig.char_window(scope));
-            let mut entries = char_pos_entries(scope as u32, PointPx { x: c.x, y: c.y });
-            entries.extend(balloon_offset_entries(scope as u32, DRAGGED));
-            persist_entries(&rig.world, entries);
-        }
-        let adjacent = PersistKey::WindowAdjacent { scope: 1 };
-        persist_entries(&rig.world, vec![(adjacent, "left".to_owned())]);
-        let seeded = rig.load();
-        for &scope in &scopes {
-            assert!(
-                saved_offset(&seeded, scope as u32).is_some(),
-                "前提: ずらしを覚えている"
-            );
-        }
-        assert!(
-            seeded.contains_key(&adjacent),
-            "前提: 隣り合いの印を覚えている"
-        );
-        let before = rig.commit_count();
+    }
+    assert!(
+        seeded.contains_key(&adjacent),
+        "前提: 隣り合いの印を覚えている"
+    );
+    let before = rig.commit_count();
 
-        assert!(reset_balloon_positions(
-            &mut rig.world,
-            BalloonResetTrigger::Menu
-        ));
+    assert!(reset_balloon_positions(
+        &mut rig.world,
+        BalloonResetTrigger::Menu
+    ));
 
+    assert_eq!(
+        rig.commit_count() - before,
+        1,
+        "2 スコープでも commit は 1 回"
+    );
+    let store = rig.load();
+    let kept: HashMap<PersistKey, String> = seeded
+        .into_iter()
+        .filter(|(k, _)| !matches!(k, PersistKey::BalloonOffset { .. }))
+        .collect();
+    assert!(!kept.is_empty(), "前提: ずらしのほかの表がある");
+    assert_eq!(store, kept, "ずらしの鍵だけが消え、ほかの表は残る");
+
+    let entries: Vec<(PersistKey, String)> = store.into_iter().collect();
+    let snapshot = MonitorSnapshot {
+        work_areas: vec![WA],
+    };
+    let restored = apply_restored_placements(rig.placements.clone(), &entries, &snapshot);
+    for (r, p) in restored.iter().zip(&rig.placements) {
         assert_eq!(
-            rig.commit_count() - before,
-            1,
-            "2 スコープでも commit は 1 回"
+            (r.balloon_offset_base, r.balloon_keyword_base),
+            (p.balloon_offset_base, p.balloon_keyword_base),
+            "scope={}: 次の起動はキーワードの標準",
+            p.scope
         );
-        let store = rig.load();
-        let kept: HashMap<PersistKey, String> = seeded
-            .into_iter()
-            .filter(|(k, _)| !matches!(k, PersistKey::BalloonOffset { .. }))
-            .collect();
-        assert!(!kept.is_empty(), "前提: ずらしのほかの表がある");
-        assert_eq!(store, kept, "ずらしの鍵だけが消え、ほかの表は残る");
-
-        let entries: Vec<(PersistKey, String)> = store.into_iter().collect();
-        let snapshot = MonitorSnapshot {
-            work_areas: vec![WA],
-        };
-        let restored = apply_restored_placements(rig.placements.clone(), &entries, &snapshot);
-        for (r, p) in restored.iter().zip(&rig.placements) {
-            assert_eq!(
-                (r.balloon_offset_base, r.balloon_keyword_base),
-                (p.balloon_offset_base, p.balloon_keyword_base),
-                "scope={}: 次の起動はキーワードの標準",
-                p.scope
-            );
-        }
-        rig.finish();
-    });
+    }
+    rig.finish();
 }
 
-/// 7.4: 起動の準備が置く材料と、同じシェルへ切り替えたときの資産づくりから置く材料で、
+/// areka-P0-window-link-directives 要件 7.4: 起動の準備が置く材料と、同じシェルへ切り替えたときの資産づくりから置く材料で、
 /// 初期化したバルーンの位置が同じになる（どちらも起動の標準の位置）。
 #[test]
 fn boot_basis_and_switch_basis_give_the_same_positions() {
-    with_com_initialized(|| {
-        let built = build_swap(&SwitchBuildRequest::Shell {
-            ghost_root: emo2_root(),
-            folder: "master".to_string(),
-            balloon_dir: emo2_balloon_root(),
-        })
-        .unwrap_or_else(|_| panic!("同じシェルの資産づくりは成功する"));
-        let SwapBuilt::Shell {
-            source, balloon, ..
-        } = built
-        else {
-            panic!("シェルの依頼にはシェルの結果が返る");
-        };
-        let switch_basis = DefaultPlacementBasis { source, balloon };
+    let built = build_swap(&SwitchBuildRequest::Shell {
+        ghost_root: emo2_root(),
+        folder: "master".to_string(),
+        balloon_dir: emo2_balloon_root(),
+    })
+    .unwrap_or_else(|e| panic!("同じシェルの資産づくりは成功する: {e:?}"));
+    let SwapBuilt::Shell {
+        source, balloon, ..
+    } = built
+    else {
+        panic!("シェルの依頼にはシェルの結果が返る");
+    };
+    let switch_basis = DefaultPlacementBasis { source, balloon };
 
-        for basis in [None, Some(switch_basis)] {
-            let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), basis);
-            rig.drag_balloons();
-            assert!(reset_balloon_positions(
-                &mut rig.world,
-                BalloonResetTrigger::Script
-            ));
-            let got: Vec<Point> = rig.windows.scopes().map(|s| rig.balloon_pos(s)).collect();
-            let want: Vec<Point> = rig
-                .placements
-                .iter()
-                .map(|p| Point::new(p.balloon_pos.x, p.balloon_pos.y))
-                .collect();
-            assert_eq!(got, want, "標準の位置へ戻る");
-            rig.finish();
-        }
-    });
+    for basis in [None, Some(switch_basis)] {
+        let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), basis);
+        rig.drag_balloons();
+        assert!(reset_balloon_positions(
+            &mut rig.world,
+            BalloonResetTrigger::Script
+        ));
+        let got: Vec<Point> = rig.windows.scopes().map(|s| rig.balloon_pos(s)).collect();
+        let want: Vec<Point> = rig
+            .placements
+            .iter()
+            .map(|p| Point::new(p.balloon_pos.x, p.balloon_pos.y))
+            .collect();
+        assert_eq!(got, want, "標準の位置へ戻る");
+        rig.finish();
+    }
 }
 
 /// 材料を 1 つ外す手。
 type Strip = fn(&mut World);
 
-/// 7.1: 材料（`DefaultPlacementBasis`・`GhostWindows`）が無ければ `warn!` だけで何もしない
+/// 材料（`DefaultPlacementBasis`・`GhostWindows`）が無ければ `warn!` だけで何もしない
 /// （バルーンは動かず、記憶のずらしも消さない）。
 #[test]
 fn missing_material_only_warns() {
-    with_com_initialized(|| {
-        let cases: [(&str, Strip); 2] = [
-            ("no_default_basis", |w| {
-                w.remove_resource::<DefaultPlacementBasis>();
-            }),
-            ("no_ghost_windows", |w| {
-                w.remove_resource::<GhostWindows>();
-            }),
-        ];
-        for (reason, strip) in cases {
-            let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), None);
-            rig.drag_balloons();
-            persist_entries(&rig.world, balloon_offset_entries(0, DRAGGED));
-            assert_eq!(
-                saved_offset(&rig.load(), 0),
-                dragged_saved(),
-                "前提: ずらしを覚えている"
-            );
-            let before: Vec<Point> = rig.windows.scopes().map(|s| rig.balloon_pos(s)).collect();
-            strip(&mut rig.world);
-            let (reset, events) =
-                capture(|| reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Shortcut));
-            assert!(!reset, "{reason}: 何もしない");
-            let skips = events_named(&events, "balloon_pos_reset_skipped");
-            assert_eq!(skips.len(), 1, "{reason}: warn が 1 行: {events:?}");
-            assert_eq!(skips[0].level, tracing::Level::WARN);
-            assert_eq!(skips[0].field_str("reason"), Some(reason));
-            assert_eq!(skips[0].field_str("trigger"), Some("shortcut"));
-            assert!(events_named(&events, "balloon_pos_reset").is_empty());
-            let after: Vec<Point> = rig.windows.scopes().map(|s| rig.balloon_pos(s)).collect();
-            assert_eq!(after, before, "{reason}: バルーンは動かない");
-            assert_eq!(
-                saved_offset(&rig.load(), 0),
-                dragged_saved(),
-                "{reason}: 記憶のずらしは消さない"
-            );
-            rig.finish();
-        }
-    });
+    let cases: [(&str, Strip); 2] = [
+        ("no_default_basis", |w| {
+            w.remove_resource::<DefaultPlacementBasis>();
+        }),
+        ("no_ghost_windows", |w| {
+            w.remove_resource::<GhostWindows>();
+        }),
+    ];
+    for (reason, strip) in cases {
+        let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), None);
+        rig.drag_balloons();
+        persist_entries(&rig.world, balloon_offset_entries(0, DRAGGED));
+        assert_eq!(
+            saved_offset(&rig.load(), 0),
+            dragged_saved(),
+            "前提: ずらしを覚えている"
+        );
+        let before: Vec<Point> = rig.windows.scopes().map(|s| rig.balloon_pos(s)).collect();
+        strip(&mut rig.world);
+        let (reset, events) =
+            capture(|| reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Shortcut));
+        assert!(!reset, "{reason}: 何もしない");
+        let skips = events_named(&events, "balloon_pos_reset_skipped");
+        assert_eq!(skips.len(), 1, "{reason}: warn が 1 行: {events:?}");
+        assert_eq!(skips[0].level, tracing::Level::WARN);
+        assert_eq!(skips[0].field_str("reason"), Some(reason));
+        assert_eq!(skips[0].field_str("trigger"), Some("shortcut"));
+        assert!(events_named(&events, "balloon_pos_reset").is_empty());
+        let after: Vec<Point> = rig.windows.scopes().map(|s| rig.balloon_pos(s)).collect();
+        assert_eq!(after, before, "{reason}: バルーンは動かない");
+        assert_eq!(
+            saved_offset(&rig.load(), 0),
+            dragged_saved(),
+            "{reason}: 記憶のずらしは消さない"
+        );
+        rig.finish();
+    }
 }
 
 /// 標準の位置を解けないスコープ（窓の部品が欠けた）は scope・reason つきの `warn!` で外し、
 /// 残りのスコープは戻す。記憶のずらしの鍵も戻したスコープの分だけ消し、外したスコープの分は残す。
 #[test]
 fn unresolved_scope_is_skipped_with_scope_and_the_rest_reset() {
-    with_com_initialized(|| {
-        let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), None);
-        rig.drag_balloons();
-        let mut entries = balloon_offset_entries(0, DRAGGED);
-        entries.extend(balloon_offset_entries(1, DRAGGED));
-        persist_entries(&rig.world, entries);
-        let b0 = rig.windows.balloon_window(0).unwrap();
-        rig.world.get_mut::<WindowPos>(b0).unwrap().size = None;
-        let stuck = rig.balloon_pos(0);
+    let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), None);
+    rig.drag_balloons();
+    let mut entries = balloon_offset_entries(0, DRAGGED);
+    entries.extend(balloon_offset_entries(1, DRAGGED));
+    persist_entries(&rig.world, entries);
+    let b0 = rig.windows.balloon_window(0).unwrap();
+    rig.world.get_mut::<WindowPos>(b0).unwrap().size = None;
+    let stuck = rig.balloon_pos(0);
 
-        let (reset, events) =
-            capture(|| reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Script));
-        assert!(reset, "残りのスコープは戻す");
-        let skips = events_named(&events, "balloon_pos_reset_skipped");
-        assert_eq!(skips.len(), 1, "{events:?}");
-        assert_eq!(skips[0].level, tracing::Level::WARN);
-        assert_eq!(skips[0].field("scope"), Some("0"));
-        assert_eq!(skips[0].field_str("reason"), Some("not_resolved"));
-        assert_eq!(rig.balloon_pos(0), stuck, "外したスコープは動かない");
-        // 残ったスコープ 1 だけで解くので位置は起動と違い得る——今の部品のずらしで付いたことを見る。
-        let c1 = rig.char_window(1);
-        let off = rig.world.get::<BalloonFollow>(c1).unwrap().offset();
-        assert_ne!(off, DRAGGED, "スコープ 1 は標準のずらしへ入れ直される");
-        let char1 = rig.pos(c1);
-        assert_eq!(
-            rig.balloon_pos(1),
-            Point::new(char1.x + off.x, char1.y + off.y)
-        );
-        let logs = events_named(&events, "balloon_pos_reset");
-        assert_eq!(logs.len(), 1);
-        assert_eq!(logs[0].field_str("trigger"), Some("script"));
-        let store = rig.load();
-        assert_eq!(
-            saved_offset(&store, 0),
-            dragged_saved(),
-            "外したスコープのずらしは残る: {store:?}"
-        );
-        assert_eq!(
-            saved_offset(&store, 1),
-            None,
-            "戻したスコープのずらしは消える: {store:?}"
-        );
-        rig.finish();
-    });
+    let (reset, events) =
+        capture(|| reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Script));
+    assert!(reset, "残りのスコープは戻す");
+    let skips = events_named(&events, "balloon_pos_reset_skipped");
+    assert_eq!(skips.len(), 1, "{events:?}");
+    assert_eq!(skips[0].level, tracing::Level::WARN);
+    assert_eq!(skips[0].field("scope"), Some("0"));
+    assert_eq!(skips[0].field_str("reason"), Some("not_resolved"));
+    assert_eq!(rig.balloon_pos(0), stuck, "外したスコープは動かない");
+    // 残ったスコープ 1 だけで解くので位置は起動と違い得る——今の部品のずらしで付いたことを見る。
+    let c1 = rig.char_window(1);
+    let off = rig.world.get::<BalloonFollow>(c1).unwrap().offset();
+    assert_ne!(off, DRAGGED, "スコープ 1 は標準のずらしへ入れ直される");
+    let char1 = rig.pos(c1);
+    assert_eq!(
+        rig.balloon_pos(1),
+        Point::new(char1.x + off.x, char1.y + off.y)
+    );
+    let logs = events_named(&events, "balloon_pos_reset");
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0].field_str("trigger"), Some("script"));
+    let store = rig.load();
+    assert_eq!(
+        saved_offset(&store, 0),
+        dragged_saved(),
+        "外したスコープのずらしは残る: {store:?}"
+    );
+    assert_eq!(
+        saved_offset(&store, 1),
+        None,
+        "戻したスコープのずらしは消える: {store:?}"
+    );
+    rig.finish();
 }

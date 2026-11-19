@@ -17,7 +17,10 @@
 //! - 付録 A.2 が必須とする欄が無い・型が違う
 //! - **知らない欄がある**
 //! - 項目 id が 2 形のどちらでもない（要件 1.9）
+//! - 1 つの項目の `values` に同じテーマが 2 度ある（黙って受けるとテーマ別の表で 2 件に数えられる）
+//! - 1 つの項目の `supersedes` に同じ id が、`links` に同じ（種別, 相手）が 2 度ある
 //! - 前置きのドメイン名が読んでいるファイルのドメインと食い違う
+//! - 根に `[ledger]`・`[entry]` のほかの鍵がある
 //!
 //! 「知らない欄」を落とすのは要件 2.3 と 6.9 がここに載っているからである。台帳に
 //! 証拠の欄は無く、未分類件数を宣言する欄も無い。黙って読み飛ばすと、手で書いた
@@ -29,31 +32,29 @@
 //! `entries` は `BTreeMap` なので id の byte 昇順に並び替わり、**本文の順は失われる**。
 //! それを知っているのは行を見て切り分ける [`blocks::split`] だけなので、読み取りは
 //! 必ずそこを通し、返った塊の並びを `file_order` にする（設計 D-12）。ついでに
-//! 「切り分けた id の集合が `toml` の鍵の集合と一致する」較正も相続する。
+//! 「切り分けた id の集合が `toml` の鍵の集合と一致する」較正も相続する。本文を `toml`
+//! で読むのは 1 度だけで、読んだ表を切り分けに渡す。
 //!
 //! # 失敗に添える場所
 //!
 //! ドメインが分かるので、置き場は `<ドメイン>` を伏せずに綴れる（[`ledger_file`]）。
+//! 切り分けの失敗も、伏せた置き場を差し替えてから上げる（[`at_ledger_file`]）。
 //! `io::paths::ledger_path` は呼ばない——あれはワークスペース根から組み立てた絶対
 //! パスを返すので、失敗の本文が計算機ごとに変わってしまう（要件 6.1 の決定性）。
-//! 純粋層が入出力層に触らない形も保てる。綴りの正本は `Domain::as_key` 1 つきりで、
-//! そこは両者で共有している。
 
 use std::collections::BTreeMap;
 
 use super::blocks;
-use super::{Ledger, LedgerEntry};
+use super::{ENTRY_TABLE, Ledger, LedgerEntry, at_ledger_file, ledger_file};
+use crate::documents::fields::{
+    as_table, field, malformed, reject_unknown_keys, required_table, string_array_field,
+    string_field,
+};
 use crate::error::SurveyError;
 use crate::model::{Domain, EntryId, Link, LinkKind, PageName, Status, parse_theme};
 
-/// 台帳を置くディレクトリ（`io::paths::ledger_path` と同じ場所・ワークスペース根から）。
-const LEDGER_DIR: &str = "doc/ukadoc-coverage/ledger";
-
 /// 前置きの表の名前。
 const LEDGER_TABLE: &str = "ledger";
-
-/// 項目を置く表の名前。
-const ENTRY_TABLE: &str = "entry";
 
 /// 前置きに置いてよい欄のすべて（要件付録 A.1）。
 ///
@@ -90,15 +91,17 @@ const PROLOGUE_PLACE: &str = "[ledger]";
 pub fn read(text: &str, domain: Domain) -> Result<Ledger, SurveyError> {
     let file = ledger_file(domain);
 
-    // 先に本文全体を読む。読めない本文はここで、ドメインまで綴った置き場を添えて
-    // 落とす（切り分けはドメインを知らないので `<ドメイン>` としか書けない）。
     let root: toml::Table = text
         .parse()
         .map_err(|err| malformed(&file, format!("TOML として読めない: {err}")))?;
 
+    // 根の知らない鍵を黙って読み飛ばすと、手で書いた欄が書いたつもりのまま素通りする。
+    reject_unknown_keys(&root, &[LEDGER_TABLE, ENTRY_TABLE], "根", &file)?;
+
     // 本文に現れた順は `toml` の表からは取れない（鍵で並び替えられている）。それを
     // 知っているのは切り分けだけなので、必ずここを通す（設計 D-12）。
-    let (_, blocks) = blocks::split(text)?;
+    let (_, blocks) =
+        blocks::split_parsed(text, &root).map_err(|err| at_ledger_file(err, &file))?;
     let file_order: Vec<EntryId> = blocks.into_iter().map(|block| block.id).collect();
 
     let (declared, pages) = read_prologue(&root, &file)?;
@@ -121,26 +124,9 @@ pub fn read(text: &str, domain: Domain) -> Result<Ledger, SurveyError> {
     })
 }
 
-/// 失敗の本文に添える台帳の置き場。
-fn ledger_file(domain: Domain) -> String {
-    format!("{LEDGER_DIR}/{}.toml", domain.as_key())
-}
-
-/// 台帳の形が違うことを告げる失敗。置き場を必ず添える（要件 6.12）。
-fn malformed(file: &str, reason: impl Into<String>) -> SurveyError {
-    SurveyError::TomlParse {
-        path: file.to_owned(),
-        reason: reason.into(),
-    }
-}
-
 /// 前置きを読む（要件付録 A.1）。
 fn read_prologue(root: &toml::Table, file: &str) -> Result<(Domain, Vec<PageName>), SurveyError> {
-    let table = root
-        .get(LEDGER_TABLE)
-        .ok_or_else(|| malformed(file, format!("{PROLOGUE_PLACE} が無い")))?
-        .as_table()
-        .ok_or_else(|| malformed(file, format!("{PROLOGUE_PLACE} が表でない")))?;
+    let table = required_table(root, LEDGER_TABLE, PROLOGUE_PLACE, file)?;
     reject_unknown_keys(table, &LEDGER_FIELDS, PROLOGUE_PLACE, file)?;
 
     let raw = string_field(table, PROLOGUE_PLACE, "domain", file)?;
@@ -163,15 +149,15 @@ fn read_entries(
 ) -> Result<BTreeMap<EntryId, LedgerEntry>, SurveyError> {
     let table = match root.get(ENTRY_TABLE) {
         None => return Ok(BTreeMap::new()),
-        Some(value) => value
-            .as_table()
-            .ok_or_else(|| malformed(file, format!("[{ENTRY_TABLE}] が表でない")))?,
+        Some(value) => as_table(value, &format!("[{ENTRY_TABLE}]"), file)?,
     };
 
     let mut entries: BTreeMap<EntryId, LedgerEntry> = BTreeMap::new();
     for (raw_id, value) in table {
-        // 綴りが 2 形のどちらでもなければ、ここで `BadEntryId` になる（要件 1.9）。
-        let id = EntryId::parse(raw_id)?;
+        // `read` から来る鍵は切り分け（`blocks::split_parsed`）が見出しの id を先に
+        // 確かめているので、ここでは失敗しない（失敗の文面を決めるのは切り分けの側）。
+        // それでも素の id の失敗を外へ出さない決まりは読み手 3 つで同じにしておく。
+        let id = EntryId::parse(raw_id).map_err(|err| at_ledger_file(err, file))?;
         let place = place_of(raw_id);
         let item = value
             .as_table()
@@ -261,7 +247,14 @@ fn read_supersedes(
     let raws = string_array_field(item, place, "supersedes", file)?;
     let mut ids = Vec::with_capacity(raws.len());
     for raw in &raws {
-        ids.push(reference_id(raw, place, "supersedes", file)?);
+        let id = reference_id(raw, place, "supersedes", file)?;
+        if ids.contains(&id) {
+            return Err(malformed(
+                file,
+                format!("{place}: 欄 supersedes に {} が 2 度ある", id.as_str()),
+            ));
+        }
+        ids.push(id);
     }
     Ok(ids)
 }
@@ -277,9 +270,15 @@ fn read_values(
     id: &EntryId,
 ) -> Result<Vec<String>, SurveyError> {
     let raws = string_array_field(item, place, "values", file)?;
-    let mut themes = Vec::with_capacity(raws.len());
+    let mut themes: Vec<String> = Vec::with_capacity(raws.len());
     for raw in &raws {
         let theme = parse_theme(raw).map_err(|err| err.at(file, id.as_str()))?;
+        if themes.iter().any(|seen| seen == theme) {
+            return Err(malformed(
+                file,
+                format!("{place}: 欄 values にテーマ {theme} が 2 度ある"),
+            ));
+        }
         themes.push(theme.to_owned());
     }
     Ok(themes)
@@ -307,10 +306,21 @@ fn read_links(
         let raw_kind = string_field(table, &where_at, "kind", file)?;
         let kind = LinkKind::parse(&raw_kind).map_err(|err| err.at(file, id.as_str()))?;
         let raw_to = string_field(table, &where_at, "to", file)?;
-        links.push(Link {
+        let link = Link {
             kind,
             to: reference_id(&raw_to, place, "to", file)?,
-        });
+        };
+        // 黙って受けると、相手がカタログに無いとき同じ所見が 2 件出る。
+        if links.contains(&link) {
+            return Err(malformed(
+                file,
+                format!(
+                    "{place}: 欄 links に（{raw_kind}, {}）が 2 度ある",
+                    link.to.as_str()
+                ),
+            ));
+        }
+        links.push(link);
     }
     Ok(links)
 }
@@ -332,66 +342,6 @@ fn reference_id(raw: &str, place: &str, key: &str, file: &str) -> Result<EntryId
 /// 項目の失敗に添える場所。項目 id を必ず含む（要件 6.10）。
 fn place_of(raw_id: &str) -> String {
     format!("[{ENTRY_TABLE}.\"{raw_id}\"]")
-}
-
-/// 知らない欄が混じっていないことを確かめる（要件 2.3・6.9 はここに載っている）。
-fn reject_unknown_keys(
-    table: &toml::Table,
-    allowed: &[&str],
-    place: &str,
-    file: &str,
-) -> Result<(), SurveyError> {
-    for key in table.keys() {
-        if !allowed.contains(&key.as_str()) {
-            return Err(malformed(file, format!("{place}: 知らない欄 {key}")));
-        }
-    }
-    Ok(())
-}
-
-/// 欄を 1 つ取り出す。無ければ落ちる。
-fn field<'a>(
-    table: &'a toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<&'a toml::Value, SurveyError> {
-    table
-        .get(key)
-        .ok_or_else(|| malformed(file, format!("{place}: 欄 {key} が無い")))
-}
-
-/// 文字列の欄。
-fn string_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<String, SurveyError> {
-    field(table, place, key, file)?
-        .as_str()
-        .map(str::to_owned)
-        .ok_or_else(|| malformed(file, format!("{place}: 欄 {key} が文字列でない")))
-}
-
-/// 文字列の配列の欄。要素の 1 つでも文字列でなければ落ちる。
-fn string_array_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<Vec<String>, SurveyError> {
-    let array = field(table, place, key, file)?
-        .as_array()
-        .ok_or_else(|| malformed(file, format!("{place}: 欄 {key} が配列でない")))?;
-    let mut values = Vec::with_capacity(array.len());
-    for element in array {
-        let value = element.as_str().ok_or_else(|| {
-            malformed(file, format!("{place}: 欄 {key} に文字列でない要素がある"))
-        })?;
-        values.push(value.to_owned());
-    }
-    Ok(values)
 }
 
 #[cfg(test)]

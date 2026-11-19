@@ -50,8 +50,7 @@ fn the_ui_actor_span_is_entered_only_while_polled() {
         handler_seen.store(handler_depth.load(Ordering::SeqCst), Ordering::SeqCst);
         let _ = reply.send(());
         Ok::<_, &'static str>(ControlFlow::Continue(()))
-    })
-    .expect("spawn_ui on the pump (test) thread must succeed");
+    });
     // 全送り手が落ちるとタスクが終わって区間を出てしまうので、測るまで 1 つ握っておく。
     let keep_alive = ui_tx.clone();
 

@@ -18,7 +18,7 @@
 //!
 //! 腕 b が主張するのは**表の各名前の実在**だけで、生きたディレクトリの総数との一致は
 //! 主張しない。総数と比べると他 spec が brief を 1 本足すたびにここが赤くなり、
-//! `roadmap-draft.md` が全 spec の共有ファイルになる（W13「共有ファイル 0」）。
+//! `roadmap-draft.md` が全 spec の共有ファイルになる。
 //! 赤になるのは表の spec が**改名・削除**されたときだけで、そのときは表を直す。
 //! [`adding_another_spec_directory_stays_green_and_removing_a_listed_one_turns_red`]
 //! がその両側を較正する。
@@ -29,101 +29,50 @@
 //! である。`/kiro-complete` が `completed/` へ移す際に書き換えるのは実ファイル読みの
 //! パスなので、名前だけを持つこの一群は移動の前後で同じ結果を返す。
 //!
-//! # 数えたもの（2026-09-13 の実測）
-//!
-//! - `[[spec]]`: **27 行**（`[briefs].count` と一致）。うち束を持つ 13 行・
-//!   `none = true` の 14 行。
-//! - `[[reserved]]`: **18 行**（うち `none = true` が 7 行）。
-//! - `[[owner_completed]]`: **14 行**・`items` の合計 **41 件**。
-//! - 台帳 4 本の非空の宛先: **416 件**・**27 種**（`[[spec]]` の 13 種と
-//!   `[[owner_completed]]` の 14 種でちょうど尽きる）。13 種のうち
-//!   `areka-P0-charset-canon` は既定ブランチで完了して封じる場所へ移ったが、腕 b が
-//!   照らす相手は進行中と完了済みの和なので、表に残っていても赤にならない。
-//! - `.kiro/specs/completed/`: **176 本**（数え方: 直下の**ディレクトリ**を数えた。
-//!   直下には単独の `.md` が 1 本混じっているので、`ls` の行数 177 とは 1 ずれる）。
-//!
 //! # 読むだけ
 //!
 //! 摂動は本文の**写し**（`String`）か、読み終えた骨組み・台帳の**写し**
 //! （[`RoadmapDraft`]・[`Briefing`]・[`Ledger`]）の上でだけ働かせる。repo のファイルには
 //! 1 バイトも触れない。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use ukadoc_survey::documents::parse::read_roadmap_draft;
 use ukadoc_survey::documents::{Briefing, BundleRef, Linkage, RoadmapDraft};
-use ukadoc_survey::ledger::Ledger;
+use ukadoc_survey::ledger::ledger_file;
 use ukadoc_survey::model::Status;
 
 use super::RepoData;
-use super::briefing_arms::{BRIEFING_MD, ledger_file};
-use super::documents::{Documents, shift_count};
-
-/// 失敗の本文に載る `roadmap-draft.md` の置き場。
-const ROADMAP_MD: &str = "doc/ukadoc-coverage/roadmap-draft.md";
-
-/// 失敗の本文に載る `linkage.md` の置き場。
-const LINKAGE_MD: &str = "doc/ukadoc-coverage/linkage.md";
+use super::briefing_arms::{Fact, LedgerFacts};
+use super::documents::{
+    BRIEFING_MD, Documents, LINKAGE_MD, ROADMAP_MD, assert_no_findings, assert_single_finding,
+    shift_count,
+};
 
 // ---------------------------------------------------------------------------
 // 台帳の宛先の数え直し
 // ---------------------------------------------------------------------------
 
-/// 台帳 4 本の**非空の宛先**を 1 度だけ畳んだもの（腕 c・e・f の出どころ）。
+/// 判定 ⑸ の数え方（台帳の畳みは `briefing_arms.rs` の [`LedgerFacts`] を共有する）。
 ///
-/// 腕ごとに台帳を歩き直すと同じ数え方が 3 か所へ散らばり、片方だけ直したときに
-/// 気づけない（`briefing_arms::LedgerFacts` と同じ理由）。
-struct OwnerFacts {
-    /// 宛先の名前 → その名前を持つ項目（台帳の置き場・id の綴り・状態）。
-    by_owner: BTreeMap<String, Vec<OwnedItem>>,
-}
-
-/// 宛先を持つ項目 1 件。
-struct OwnedItem {
-    /// 台帳の置き場（失敗の本文に載る）。
-    file: String,
-    /// 項目 id の綴り（失敗の本文に載る）。
-    id: String,
-    /// 状態（腕 e が実装済みか縮退であることを見る）。
-    status: Status,
-}
-
-impl OwnerFacts {
-    /// 台帳 4 本から畳む。空文字列の宛先は持たない。
-    fn collect(ledgers: &[Ledger]) -> Self {
-        let mut by_owner: BTreeMap<String, Vec<OwnedItem>> = BTreeMap::new();
-        for ledger in ledgers {
-            let file = ledger_file(ledger.domain);
-            for (id, entry) in &ledger.entries {
-                if entry.owner.is_empty() {
-                    continue;
-                }
-                by_owner
-                    .entry(entry.owner.clone())
-                    .or_default()
-                    .push(OwnedItem {
-                        file: file.clone(),
-                        id: id.as_str().to_owned(),
-                        status: entry.status,
-                    });
-            }
-        }
-        Self { by_owner }
+/// 腕 c・e・f が同じ宛先の数え方を見る。腕ごとに台帳を歩き直すと同じ数え方が 3 か所へ
+/// 散らばり、片方だけ直したときに気づけない。
+impl LedgerFacts {
+    /// その名前を宛先に持つ項目（id の綴り, 項目）。id の文字順。
+    fn owned<'a>(&'a self, owner: &'a str) -> impl Iterator<Item = (&'a str, &'a Fact)> + 'a {
+        self.rows
+            .iter()
+            .filter(move |(_, fact)| fact.owner == owner)
+            .map(|(id, fact)| (id.as_str(), fact))
     }
 
-    /// その名前を宛先に持つ項目の数。
-    fn count(&self, owner: &str) -> usize {
-        self.by_owner.get(owner).map_or(0, Vec::len)
-    }
-
-    /// その名前を宛先に持つ項目。
-    fn items(&self, owner: &str) -> &[OwnedItem] {
-        self.by_owner.get(owner).map_or(&[], Vec::as_slice)
-    }
-
-    /// 現れた宛先の名前（文字順）。
-    fn owners(&self) -> impl Iterator<Item = &str> {
-        self.by_owner.keys().map(String::as_str)
+    /// 現れた非空の宛先の名前（文字順・重複無し）。
+    fn owners(&self) -> BTreeSet<&str> {
+        self.rows
+            .values()
+            .map(|fact| fact.owner.as_str())
+            .filter(|owner| !owner.is_empty())
+            .collect()
     }
 }
 
@@ -175,12 +124,12 @@ fn spec_existence_findings(
 // ---------------------------------------------------------------------------
 
 /// 腕 c: `owner_count` が台帳の数え直しと一致すること。
-fn owner_count_findings(roadmap: &RoadmapDraft, owners: &OwnerFacts) -> Vec<String> {
+fn owner_count_findings(roadmap: &RoadmapDraft, owners: &LedgerFacts) -> Vec<String> {
     roadmap
         .specs
         .iter()
         .filter_map(|row| {
-            let actual = owners.count(&row.name);
+            let actual = owners.owned(&row.name).count();
             (row.owner_count != actual).then(|| {
                 format!(
                     "{ROADMAP_MD}: [[spec]] {} の owner_count は {} と書いてあるが、\
@@ -238,7 +187,7 @@ fn bundle_reference_findings(roadmap: &RoadmapDraft, linkage: &Linkage) -> Vec<S
 fn owner_completed_findings(
     briefing: &Briefing,
     completed_specs: &BTreeSet<String>,
-    owners: &OwnerFacts,
+    owners: &LedgerFacts,
 ) -> Vec<String> {
     let mut findings = Vec::new();
     for row in &briefing.owner_completed {
@@ -248,7 +197,7 @@ fn owner_completed_findings(
                 "{BRIEFING_MD}: {place} のディレクトリが .kiro/specs/completed/ に無い"
             ));
         }
-        let items = owners.items(&row.spec);
+        let items: Vec<(&str, &Fact)> = owners.owned(&row.spec).collect();
         if row.items != items.len() {
             findings.push(format!(
                 "{BRIEFING_MD}: {place} の items は {} と書いてあるが、\
@@ -257,13 +206,13 @@ fn owner_completed_findings(
                 items.len()
             ));
         }
-        for item in items {
+        for (id, item) in items {
             if !matches!(item.status, Status::Implemented | Status::Degraded) {
                 findings.push(format!(
                     "{BRIEFING_MD}: {place} を宛先に持つ {} の {} が {} である\
                      （完了済み spec に残す宛先は実装済みか縮退だけ・要件 7.4 ⑵）",
-                    item.file,
-                    item.id,
+                    ledger_file(item.domain),
+                    id,
                     item.status.as_key()
                 ));
             }
@@ -281,7 +230,7 @@ fn owner_completed_findings(
 fn owner_destination_findings(
     roadmap: &RoadmapDraft,
     briefing: &Briefing,
-    owners: &OwnerFacts,
+    owners: &LedgerFacts,
 ) -> Vec<String> {
     let listed: BTreeSet<&str> = roadmap
         .specs
@@ -292,61 +241,35 @@ fn owner_destination_findings(
 
     owners
         .owners()
+        .into_iter()
         .filter(|owner| !listed.contains(owner))
         .map(|owner| {
-            let item = &owners.items(owner)[0];
+            let (id, item) = owners
+                .owned(owner)
+                .next()
+                .expect("現れた宛先なのに項目が無い");
             format!(
                 "{}: {} の宛先 {owner} が {ROADMAP_MD} の [[spec]] にも \
                  {BRIEFING_MD} の [[owner_completed]] にも無い（要件 7.4 ⑶）",
-                item.file, item.id
+                ledger_file(item.domain),
+                id
             )
         })
         .collect()
 }
 
-// ---------------------------------------------------------------------------
-// 摂動と較正の共通の道具
-// ---------------------------------------------------------------------------
-
-/// 所見が 1 つでもあれば、その全部を名指して止まる。
-fn assert_no_findings(judgement: &str, findings: &[String]) {
-    assert!(
-        findings.is_empty(),
-        "{judgement}（{} 件）:\n{}",
-        findings.len(),
-        findings.join("\n")
-    );
-}
-
-/// 摂動の後の所見がちょうど 1 件で、その本文が指定の綴りを全部含むこと。
-fn assert_single_finding(findings: &[String], what: &str, must_name: &[&str]) {
-    assert_eq!(
-        findings.len(),
-        1,
-        "{what} で赤が 1 件でない:\n{}",
-        findings.join("\n")
-    );
-    for needle in must_name {
-        assert!(
-            findings[0].contains(needle),
-            "失敗の本文が {needle} を名指していない: {}",
-            findings[0]
-        );
-    }
-}
-
 /// 実データ一式（6 つの腕がどれも同じものを見る）。
 struct Fixture {
-    repo: RepoData,
-    documents: Documents,
-    owners: OwnerFacts,
+    repo: &'static RepoData,
+    documents: &'static Documents,
+    owners: LedgerFacts,
 }
 
 impl Fixture {
     fn load() -> Self {
         let repo = RepoData::load();
         let documents = Documents::load();
-        let owners = OwnerFacts::collect(&repo.ledgers);
+        let owners = LedgerFacts::collect(&repo.ledgers);
         Self {
             repo,
             documents,
@@ -449,28 +372,52 @@ fn twisting_one_spec_name_turns_the_existence_arm_red() {
 /// 書き換え先はどちらの一覧にも無い名前にする。こうすると ⑴ もとの spec の
 /// `owner_count` が 1 件足りなくなり（腕 c）、⑵ 行き先の無い宛先が 1 件できる（腕 f）。
 /// 2 つの腕が別々の壊れ方を見ていることは、それぞれちょうど 1 件で赤くなることで分かる。
+///
+/// 書き換える項目は、宛先が `[[spec]]` の表にあるものから選ぶ。腕 c は表の行しか
+/// 見ないので、完了した spec（`[[owner_completed]]` の側）を宛先に持つ項目を選ぶと
+/// 腕 c は赤にならない。
 #[test]
 fn rewriting_one_owner_turns_the_count_and_destination_arms_red() {
     let fixture = Fixture::load();
     assert_no_findings("摂動の前から赤い", &fixture.findings());
 
+    let listed: BTreeSet<&str> = fixture
+        .documents
+        .roadmap
+        .specs
+        .iter()
+        .map(|row| row.name.as_str())
+        .collect();
+    let on_the_table = |owner: &str| listed.contains(owner);
     let mut ledgers = fixture.repo.ledgers.clone();
+    assert!(
+        ledgers
+            .iter()
+            .flat_map(|ledger| ledger.entries.values())
+            .any(|entry| on_the_table(&entry.owner)),
+        "宛先が [[spec]] の表にある項目が 1 件も無い——この摂動で書き換える項目を選べない"
+    );
     let stranger = "areka-P0-not-a-spec";
     let (file, id, was) = {
         let ledger = ledgers
             .iter_mut()
-            .find(|ledger| ledger.entries.values().any(|entry| !entry.owner.is_empty()))
-            .expect("非空の宛先を持つ台帳が無い");
+            .find(|ledger| {
+                ledger
+                    .entries
+                    .values()
+                    .any(|entry| on_the_table(&entry.owner))
+            })
+            .expect("選べる項目があると確かめたのに台帳が見つからない");
         let file = ledger_file(ledger.domain);
         let (id, entry) = ledger
             .entries
             .iter_mut()
-            .find(|(_, entry)| !entry.owner.is_empty())
-            .expect("非空の宛先を持つ項目が無い");
+            .find(|(_, entry)| on_the_table(&entry.owner))
+            .expect("選べる項目があると確かめたのに項目が見つからない");
         let was = std::mem::replace(&mut entry.owner, stranger.to_owned());
         (file, id.as_str().to_owned(), was)
     };
-    let broken = OwnerFacts::collect(&ledgers);
+    let broken = LedgerFacts::collect(&ledgers);
 
     assert_single_finding(
         &owner_count_findings(&fixture.documents.roadmap, &broken),
@@ -591,8 +538,9 @@ fn a_completed_owner_outside_the_completed_directory_turns_the_completed_arm_red
 
 /// 腕 e: 完了済みの宛先に実装済みでも縮退でもない項目が 1 件混じると赤になる。
 ///
-/// 実データでは 41 件すべてが実装済みか縮退なので、この主張は**母数はあるが違反が
-/// 0 件**である。1 件混ぜて赤にできなければ、何も見ていないのと同じ（要件 11.3）。
+/// 実データでは完了済みの宛先の項目がすべて実装済みか縮退なので、この主張は
+/// **母数はあるが違反が 0 件**である。1 件混ぜて赤にできなければ、何も見ていないのと
+/// 同じ（要件 11.3）。
 #[test]
 fn a_completed_owner_with_an_unfinished_item_turns_the_completed_arm_red() {
     let fixture = Fixture::load();
@@ -620,7 +568,7 @@ fn a_completed_owner_with_an_unfinished_item_turns_the_completed_arm_red() {
         entry.status = Status::Absent;
         (file, id.as_str().to_owned())
     };
-    let broken = OwnerFacts::collect(&ledgers);
+    let broken = LedgerFacts::collect(&ledgers);
 
     assert_single_finding(
         &owner_completed_findings(

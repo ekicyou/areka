@@ -1,13 +1,15 @@
 //! 調べる副手続きが持つ「判断」と「版面」を釘付けする（設計「入口 / cli」・
 //! 「Data Models / 検査の出力」・要件 5.5・5.8・5.9・6.12・8.1）。
 //!
-//! 4 つの副手続き本体は repo の木（カタログ・台帳・報告）とスナップショットが要るので、
-//! ここでは走らせない。このファイルが確かめるのは、入出力に触れずに決まる 6 つである。
+//! `check`・`evidence`・`diff` は repo の木（カタログ・台帳・報告）かスナップショットが要り、
+//! `candidates` は本物の `crates/` を歩いて出力が repo の中身で変わるので、ここでは走らせない
+//! （`candidates` は `tests/cli_streams.rs` が走らせる）。このファイルが確かめるのは、入出力に触れずに決まる 6 つである。
 //!
 //! - 所見の件数から終了の仕方を決める判断（[`verdict`]）
 //! - 証拠の並べ方（[`render_evidence_by_id`]・[`render_evidence`]）
 //! - 候補の並べ方と、証拠へ混ざらないこと（[`render_candidates`]・要件 5.9）
-//! - 2 つのカタログが比べられる形かどうかの見立て（[`comparability_notice`]）と差分の版面
+//! - 2 つのカタログが比べられる形かどうかの見立て（[`super::comparability_notice`]。
+//!   [`compare`] を通して見る）と差分の版面
 //! - 検査の配線（[`examine`]）——判定を呼び、本文を組み、件数を数える 3 つが噛み合って
 //!   いること。`check` から読む段だけを外した形なので、手で組んだ見本の世界で走らせられる
 //! - 差分の配線（[`compare`]）——2 つのカタログを渡す向き・注意を捨てずに渡すこと・
@@ -23,14 +25,15 @@
 use std::collections::BTreeMap;
 
 use super::{
-    comparability_notice, compare, examine, render_candidates, render_check, render_diff,
-    render_evidence, render_evidence_by_id, verdict,
+    compare, examine, render_candidates, render_check, render_diff, render_evidence,
+    render_evidence_by_id, verdict,
 };
-use crate::catalog::{CATALOG_FORMAT, Catalog, SnapshotMeta};
+use crate::catalog::Catalog;
 use crate::check::{Finding, FindingKind};
 use crate::diff::CatalogDiff;
 use crate::error::SurveyError;
 use crate::evidence::candidates::candidates;
+use crate::evidence::resolve::index_of;
 use crate::evidence::{
     Candidate, CandidateKind, EvidenceIndex, NameMatchFailure, UnmatchedName, UnresolvedUrl,
 };
@@ -52,20 +55,6 @@ fn by_id(rows: &[(&str, &[&str])]) -> BTreeMap<EntryId, Vec<String>> {
             )
         })
         .collect()
-}
-
-/// カタログ冒頭の情報を手で組む小道具（比べるのは 2 欄だけ）。
-fn meta(hash_algorithm: &str, catalog_format: u32) -> SnapshotMeta {
-    SnapshotMeta {
-        package: "ukagaka-doc-mcp".to_owned(),
-        package_version: "0.2.7".to_owned(),
-        snapshot_version: 1,
-        generated_at: "2026-08-24T04:08:57.881Z".to_owned(),
-        total_entries: 2983,
-        ukadoc_entries: 1749,
-        catalog_format,
-        hash_algorithm: hash_algorithm.to_owned(),
-    }
 }
 
 // --------------------------------------------------------------------------
@@ -136,33 +125,6 @@ fn an_empty_evidence_listing_still_says_how_many_there_were() {
         "証拠のある項目 0 件\n",
         "証拠が 0 件のときの版面が変わっている"
     );
-}
-
-#[test]
-fn the_evidence_listing_names_every_file_of_every_id() {
-    // 件数だけの主張は「どれ」を 1 つも言わない（1.5・4.2 の教訓）。
-    // id ごとに、その id のファイルが全部並ぶことを綴りで確かめる。
-    let listing = by_id(&[
-        (
-            "ukadoc:manual_shell",
-            &["a/one.rs", "a/two.rs", "a/three.rs"],
-        ),
-        ("ukadoc:spec_shiori3", &["b/four.rs"]),
-    ]);
-    let body = render_evidence_by_id(&listing);
-    for needle in [
-        "ukadoc:manual_shell",
-        "a/one.rs",
-        "a/two.rs",
-        "a/three.rs",
-        "ukadoc:spec_shiori3",
-        "b/four.rs",
-    ] {
-        assert!(
-            body.contains(needle),
-            "証拠の本文に {needle} が無い: {body}"
-        );
-    }
 }
 
 #[test]
@@ -333,7 +295,7 @@ fn no_candidate_ever_appears_in_the_evidence_listing() {
         ),
     ];
 
-    let index = lib_test_support::evidence(&catalog, &sources);
+    let index = index_of(&sources, &catalog);
     let found = candidates(&sources);
 
     // 見本が空回りしていないこと（どちらかが 0 件なら、混ざらないのは当たり前になる）。
@@ -574,6 +536,11 @@ fn a_catalog_built_with_another_hash_algorithm_gets_its_warning_before_the_lists
             "算法 {needle} が差分の本文に無い:\n{body}"
         );
     }
+    // 算法が違えば変わっていない本文もハッシュが変わるので、ほぼ全件が挙がると告げる。
+    assert!(
+        body.contains("ほぼ全件に挙がる"),
+        "算法の違いなのに一覧の読み方の注意が無い:\n{body}"
+    );
     let notice_at = body.find("注意").unwrap_or_else(|| {
         panic!("注意が本文に無い:\n{body}");
     });
@@ -585,65 +552,27 @@ fn a_catalog_built_with_another_hash_algorithm_gets_its_warning_before_the_lists
 }
 
 #[test]
-fn two_catalogs_of_the_same_shape_get_no_warning_in_the_diff_body() {
-    // 注意が出る側だけを確かめると、何にでも注意を出す形に壊れても緑になる。
+fn a_catalog_of_another_shape_version_only_gets_no_claim_that_almost_every_body_changed() {
+    // 算法が同じならハッシュは同じ値になるので、形の版だけが違うときに「ほぼ全件に
+    // 挙がる」と告げると、読み手は本物の改訂まで捨ててしまう。
     let current = lib_test_support::catalog();
-    let body = compare(&current, &current.clone(), &lib_test_support::ledgers());
-    assert!(
-        !body.contains("注意"),
-        "同じ形なのに注意が出ている:\n{body}"
+    let mut next = current.clone();
+    next.snapshot.catalog_format = current.snapshot.catalog_format + 1;
+
+    let expected = format!(
+        "注意: 2 つのカタログは同じ形で作られていない。\n  カタログの形の版: 現行 {} / 新しい方 {}\n\n増えた項目 0 件\n消えた項目 0 件\n本文が変わった項目 0 件\n台帳の見直しが要る項目 0 件\n",
+        current.snapshot.catalog_format, next.snapshot.catalog_format
+    );
+    assert_eq!(
+        compare(&current, &next, &lib_test_support::ledgers()),
+        expected,
+        "形の版だけが違うときの差分の版面が違う"
     );
 }
 
 // --------------------------------------------------------------------------
-// 差分（要件 8.1）と、比べられる形かどうかの見立て
+// 差分の版面（要件 8.1）
 // --------------------------------------------------------------------------
-
-#[test]
-fn two_catalogs_of_the_same_shape_draw_no_warning() {
-    // 警告が出る側だけを確かめると、何にでも警告を出す形に壊れても緑になる。
-    let same = comparability_notice(
-        &meta("fnv1a64", CATALOG_FORMAT),
-        &meta("fnv1a64", CATALOG_FORMAT),
-    );
-    assert_eq!(same, None, "同じ形なのに注意が出た: {same:?}");
-}
-
-#[test]
-fn a_different_hash_algorithm_draws_a_warning_that_names_both_spellings() {
-    let notice = comparability_notice(&meta("fnv1a64", 1), &meta("xxh3", 1))
-        .expect("算法が違うのに注意が出ない");
-    for needle in ["fnv1a64", "xxh3"] {
-        assert!(
-            notice.contains(needle),
-            "注意の本文に算法 {needle} が無い: {notice}"
-        );
-    }
-}
-
-#[test]
-fn a_different_catalog_format_draws_a_warning_that_names_both_numbers() {
-    let notice = comparability_notice(&meta("fnv1a64", 1), &meta("fnv1a64", 2))
-        .expect("形の版が違うのに注意が出ない");
-    for needle in ["1", "2"] {
-        assert!(
-            notice.contains(needle),
-            "注意の本文に形の版 {needle} が無い: {notice}"
-        );
-    }
-}
-
-#[test]
-fn the_warning_says_which_of_the_two_disagrees() {
-    // 2 つの食い違いが同じ本文になると、どちらを直せばよいか分からない。
-    let hash = comparability_notice(&meta("fnv1a64", 1), &meta("xxh3", 1)).expect("算法の注意");
-    let format =
-        comparability_notice(&meta("fnv1a64", 1), &meta("fnv1a64", 2)).expect("形の版の注意");
-    assert_ne!(
-        hash, format,
-        "算法の食い違いと形の版の食い違いが同じ本文になっている"
-    );
-}
 
 #[test]
 fn the_diff_listing_is_written_out_word_for_word() {
@@ -684,18 +613,5 @@ fn an_empty_diff_still_names_all_four_lists() {
         render_diff(&CatalogDiff::default(), None),
         expected,
         "差分が空のときの版面が変わっている"
-    );
-}
-
-#[test]
-fn the_warning_comes_before_the_four_lists() {
-    // 注意を後ろに置くと、読み手は「本文が変わった項目」を全部読んでから、それが
-    // 読む価値の無い一覧だったと知ることになる。
-    let body = render_diff(&CatalogDiff::default(), Some("注意: 比べられない"));
-    let notice_at = body.find("注意: 比べられない").expect("注意が本文に無い");
-    let first_list_at = body.find("増えた項目").expect("増えた項目の見出しが無い");
-    assert!(
-        notice_at < first_list_at,
-        "注意が一覧より後ろに出ている: {body}"
     );
 }

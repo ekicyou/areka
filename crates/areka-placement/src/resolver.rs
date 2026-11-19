@@ -100,7 +100,7 @@ pub struct ScopePlacement {
     /// （起動時＝`main.rs` の `restore_merged_placements` が呼ぶ
     /// `balloon_limit::apply_balloon_limit`／実行時＝
     /// `follow::window_move::enqueue_window_set_pos` の runtime 関門／バルーン単独ドラッグの
-    /// 解放時＝`follow::drag_follow::on_balloon_drag_end`）。
+    /// 解放時＝`follow::balloon_drag::on_balloon_drag_end`）。
     pub balloon_pos: PointPx,
     /// バルーン窓寸（入力の転記）。
     pub balloon_size: SizePx,
@@ -147,7 +147,7 @@ pub struct ScopePlacement {
     /// （要件 4.7「保存値優先・キーワードの適用は初期既定位置の供給にとどめる」・
     /// `persist::merge_scope`）。要件 4.7 は While 節（状態）ゆえ、**セッション中に**
     /// 保存値が生まれたとき（バルーン単独ドラッグの DragEnd 書込）も同じ観測点で素材が
-    /// 退役する（`follow::drag_follow::retire_keyword_base_on_save`）——起動時の規則
+    /// 退役する（`follow::balloon_drag::retire_keyword_base_on_save`）——起動時の規則
     /// だけでは状態条件を満たさない。
     ///
     /// # なぜ「採寸した寸」ではなく「実表示寸」で導出し直す必要があるのか

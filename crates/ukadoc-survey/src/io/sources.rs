@@ -28,8 +28,8 @@ use std::path::Path;
 use crate::error::SurveyError;
 use crate::io::files;
 
-/// 列挙から外すディレクトリ名。生成物・外部取り込み・版管理
-/// （`crates/log-capture-kit/tests/workspace_scan/mod.rs:41` と同じ）。
+/// クレートの直下（`crates/<名前>/<除外>`）でだけ外すディレクトリ名。生成物・外部取り込み・
+/// 版管理。深い所の同じ名前（`target` という名の Rust モジュールなど）は外さない。
 const EXCLUDED_DIRS: &[&str] = &["target", "vendors", ".git"];
 
 /// 走査の起点（ワークスペース根からの相対）。
@@ -50,7 +50,6 @@ pub fn walk(root: &Path) -> Result<Vec<(String, String)>, SurveyError> {
     let mut found = Vec::new();
     collect(&root.join(SOURCE_ROOT), SOURCE_ROOT, &mut found)?;
     found.sort();
-    found.dedup();
 
     let mut out = Vec::with_capacity(found.len());
     for rel in found {
@@ -73,7 +72,7 @@ fn collect(dir: &Path, rel: &str, out: &mut Vec<String>) -> Result<(), SurveyErr
         // 相対パスははじめから `/` で綴る（後から区切りを置き換えない）。
         let child = format!("{rel}/{name}");
         if file_type.is_dir() {
-            if EXCLUDED_DIRS.contains(&name.as_str()) || child == SELF_CRATE_DIR {
+            if is_excluded(&child) {
                 continue;
             }
             collect(&path, &child, out)?;
@@ -82,6 +81,15 @@ fn collect(dir: &Path, rel: &str, out: &mut Vec<String>) -> Result<(), SurveyErr
         }
     }
     Ok(())
+}
+
+/// 走査から外すディレクトリか（`child` は根からの相対）。
+fn is_excluded(child: &str) -> bool {
+    let at_crate_top = matches!(
+        child.split('/').collect::<Vec<_>>()[..],
+        [_, _, name] if EXCLUDED_DIRS.contains(&name)
+    );
+    at_crate_top || child == SELF_CRATE_DIR
 }
 
 #[cfg(test)]

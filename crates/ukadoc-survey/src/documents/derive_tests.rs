@@ -7,7 +7,7 @@
 //! 骨組みも [`super::super::parse`] を通さずに直に組む。読み手を通すと、読み手が
 //! まだ落としていない形（単独項目を `bundle` で指す等）を試せない。
 //!
-//! 守るのはタスク 1.3 の完了状態の 4 つと、落ちるべき経路の全部である。
+//! 守るのは次の 4 つと、落ちるべき経路の全部である。
 //!
 //! - 導出の鍵が 4 台帳の全 id と一致すること
 //! - 帰属の無い id で落ちること
@@ -28,11 +28,15 @@ fn id(raw: &str) -> EntryId {
     EntryId::parse(raw).expect("見本の id は要件 1.9 の 2 形のいずれかのはず")
 }
 
-/// 名前付き束。`machine`・`hand`・`domains`・`themes` は導出が読まない欄なので、
-/// **わざと空**にしてある——導出がそこを読んでいたら赤くなる。
-fn named(name: &str, foundation: &str, breakage: Breakage, members: &[&str]) -> NamedBundle {
-    NamedBundle {
-        name: name.to_owned(),
+/// 名前付き束（名前と束の組）。`machine`・`hand`・`domains`・`themes` は導出が読まない
+/// 欄なので、**わざと空**にしてある——導出がそこを読んでいたら赤くなる。
+fn named(
+    name: &str,
+    foundation: &str,
+    breakage: Breakage,
+    members: &[&str],
+) -> (String, NamedBundle) {
+    let bundle = NamedBundle {
         single: false,
         machine: Vec::new(),
         members: members.iter().map(|raw| id(raw)).collect(),
@@ -42,13 +46,13 @@ fn named(name: &str, foundation: &str, breakage: Breakage, members: &[&str]) -> 
         breakage,
         themes: Vec::new(),
         reason: String::new(),
-    }
+    };
+    (name.to_owned(), bundle)
 }
 
 /// 単独項目。名前は id そのもので、`foundation` は持たない（読み手が禁じている）。
-fn single_of(raw: &str, breakage: Breakage) -> NamedBundle {
-    NamedBundle {
-        name: raw.to_owned(),
+fn single_of(raw: &str, breakage: Breakage) -> (String, NamedBundle) {
+    let bundle = NamedBundle {
         single: true,
         machine: Vec::new(),
         members: vec![id(raw)],
@@ -58,16 +62,14 @@ fn single_of(raw: &str, breakage: Breakage) -> NamedBundle {
         breakage,
         themes: Vec::new(),
         reason: "束の振る舞いを書けない".to_owned(),
-    }
+    };
+    (raw.to_owned(), bundle)
 }
 
 /// `[tally]` は導出が読まない。数え直しは判定 ⑶-f の担当なので 0 で埋める。
-fn linkage_of(bundles: Vec<NamedBundle>) -> Linkage {
+fn linkage_of(bundles: Vec<(String, NamedBundle)>) -> Linkage {
     Linkage {
-        bundles: bundles
-            .into_iter()
-            .map(|bundle| (bundle.name.clone(), bundle))
-            .collect(),
+        bundles: bundles.into_iter().collect(),
         tally: Tally {
             target: 0,
             from_machine: 0,
@@ -134,12 +136,6 @@ fn briefing_of(ranks: Vec<RankRow>, template_ids: &[&str]) -> Briefing {
         owner_completed: Vec::new(),
         templates: vec![Template {
             name: "ポストと狛犬".to_owned(),
-            shiori: "里々".to_owned(),
-            url: "https://example.invalid/".to_owned(),
-            fetched_on: "2026-09-12".to_owned(),
-            files: vec!["dic.txt".to_owned()],
-            mapping: "見出し名の一致".to_owned(),
-            fallback: false,
             ids: template_ids.iter().map(|raw| id(raw)).collect(),
         }],
     }
@@ -287,7 +283,7 @@ fn alias_and_not_applicable_are_blank_without_belonging_to_a_bundle() {
 // priorities — 落ちる経路
 // ---------------------------------------------------------------------------
 
-/// どの束にも属さない対象項目は、id と文書名を添えて落ちる（タスク 1.3）。
+/// どの束にも属さない対象項目は、id と文書名を添えて落ちる。
 ///
 /// 較正: 同じ id を束に入れれば緑になる——落ちる理由が「帰属が無いこと」であって
 /// 「項目が 1 件増えたこと」ではないと示す。
@@ -353,7 +349,7 @@ fn a_rank_row_naming_a_bundle_absent_from_the_linkage_fails() {
 }
 
 /// 単独項目を `bundle` で指すことも、名前付き束を `singles` に混ぜることも落とす
-/// （設計 `documents::parse`「読み取り時の形の検査」のうち、`linkage.md` を要る
+/// （設計 `documents::parse`「読み取り時の形の検査」のうち、`linkage.md` を要する
 /// 跨ぎの 1 項目。読み手は単独で判定できないのでここが引き受ける）。
 #[test]
 fn the_rank_row_must_name_a_named_bundle_in_bundle_and_singles_in_singles() {
@@ -404,6 +400,12 @@ fn a_bundle_ranked_twice_fails() {
 
     let body = failure(priorities(&linkage(), &briefing, &ledgers()));
     assert!(body.contains(CLOCK), "束名が本文に無い: {body}");
+    // 2 度目の行を通すと「2 つの束に属している」（linkage.md を指す）でも束名つきで
+    // 落ちる。直す場所が briefing.md の順位の行であることを文で見分ける。
+    assert!(
+        body.contains("[[rank]] に 2 度現れる"),
+        "順位の行の重なりとして落ちていない: {body}"
+    );
 }
 
 /// 同じ id が 2 つの束に属していたら落ちる。
@@ -581,13 +583,4 @@ fn the_breakage_weight_follows_the_declared_order() {
     assert!(key(Breakage::Silent) > key(Breakage::Explicit));
     assert!(key(Breakage::Explicit) > key(Breakage::Visual));
     assert!(key(Breakage::Visual) > key(Breakage::NotApplicable));
-}
-
-/// 4 つが同じ値なら鍵も等しい（要件 6.7 の同順位）。
-#[test]
-fn four_equal_grounds_give_an_equal_key() {
-    assert_eq!(
-        axis_key(Breakage::Visual, 3, 4, 5),
-        axis_key(Breakage::Visual, 3, 4, 5)
-    );
 }

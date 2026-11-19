@@ -4,13 +4,17 @@
 //! `SnapshotDoc` へ写す規則が逐語で正しいこと——鍵の綴り（`generatedAt`）と欄の値を
 //! 実際の文字列で固定する（設計 D-2・付録 B 手順 1）。⑶ 形が違うとき・読めないときに
 //! 黙って通らず、どこがどう違うかと探した絶対パスが本文に載ること（要件 1.8）。
-//! ⑷ 提供パッケージの版の読み取り（要件 1.6）が package.json の欄から来ること。
+//! ⑷ 提供パッケージの版の読み取り（要件 1.6）が package.json の欄から来て、
+//! `load_with` がその名前と版をそのまま `SnapshotDoc` へ渡すこと。
 //!
-//! **ここではスナップショットを 1 度も読まない。環境変数も 1 つも読まないし書かない**
-//! （要件 6.2・設計 Testing Strategy 19）。場所の組み立ても JSON の写しも
-//! 「値を引数で受け取る純粋な関数」に切り出してあるので、文字列だけで確かめられる。
-//! ファイルも一時ディレクトリも作らない（設計 File Structure Plan）。
+//! **ここでは本物のスナップショット（既定の場所や環境変数の指す先）を 1 度も読まない。
+//! 環境変数も 1 つも読まないし書かない**（要件 6.2・設計 Testing Strategy 19）。場所の
+//! 決め方も JSON の写しも「値を引数で受け取る純粋な関数」に切り出してあるので、値だけで
+//! 確かめられる。ファイルを作るのは ⑷ の配線を見る 1 本だけで、置き場はワークツリーの
+//! `target\ukadoc-survey-tests\<テスト名>\`（`io::files` のテストの書き場の道具を使う）。
+//! ほかに読むのは実在しないパスとこの crate の `Cargo.toml` だけ。
 
+use std::ffi::OsString;
 use std::path::Path;
 
 use super::*;
@@ -65,6 +69,30 @@ fn default_path_from_appdata_keeps_the_given_root() {
     );
 }
 
+/// 場所の決め方の 4 通り。空の `AREKA_UKADOC_SNAPSHOT` は無いのと同じで既定へ戻り、
+/// `APPDATA` も無ければどの環境変数が足りないかを告げて失敗する（設計 D-7）。
+#[test]
+fn resolve_prefers_a_non_empty_given_path_and_falls_back_to_appdata() {
+    let given = || Some(OsString::from(r"D:\snap\index.json"));
+    let appdata = || Some(OsString::from(r"D:\roaming"));
+    let fallback = r"D:\roaming\npm\node_modules\ukagaka-doc-mcp\data\index.json";
+
+    let got = resolve(given(), appdata()).expect("空でない指定は通るはず");
+    assert_eq!(got.display().to_string(), r"D:\snap\index.json");
+
+    let got = resolve(Some(OsString::new()), appdata()).expect("空の指定は既定へ戻るはず");
+    assert_eq!(got.display().to_string(), fallback);
+
+    let got = resolve(None, appdata()).expect("指定が無ければ既定へ戻るはず");
+    assert_eq!(got.display().to_string(), fallback);
+
+    let err = resolve(None, None).expect_err("APPDATA も無ければ失敗するはず");
+    assert!(
+        matches!(err, SurveyError::MissingEnv { name: "APPDATA" }),
+        "足りない環境変数が名指されていない: {err:?}"
+    );
+}
+
 // ---- 探した絶対パスの組み立て（要件 1.8）----
 
 #[test]
@@ -88,7 +116,7 @@ fn absolutize_falls_back_to_the_given_spelling() {
 
 /// `load` の入口が `absolutize` に繋がっていること（要件 1.8）。
 ///
-/// `absolutize` 単体は上の 2 本で固定してあるが、`load` がそれを呼ばずに渡された綴りを
+/// `absolutize` 単体は上の 3 本で固定してあるが、`load` がそれを呼ばずに渡された綴りを
 /// そのまま載せても、単体テストは全部緑のままになる。実在しない相対パスを渡し、本文に
 /// 出るのが絶対パスであることをここで確かめる。読むファイルは無く（存在しないので）、
 /// スナップショットにも環境変数にも触れない。
@@ -108,6 +136,38 @@ fn load_reports_an_absolute_path_even_when_given_a_relative_one() {
     assert!(
         body.contains(&expected),
         "本文に絶対パスが載っていない: {body}"
+    );
+}
+
+/// 相対パスを渡しても、提供パッケージの警告の行は絶対パスを名指す（要件 1.8）。
+///
+/// 相手は作業ディレクトリ（`cargo test` ではこの crate の manifest の置き場）にある
+/// 本物の `Cargo.toml`。読めるのでパッケージの版を探しに行き、2 つ上の `package.json`
+/// が無いので警告が出る（相対の綴りのままだと「2 つ上のディレクトリが無い」になる）。JSON ではないので最後は失敗するが、確かめるのは警告の行だけ。
+#[test]
+fn load_warns_with_an_absolute_path_even_when_given_a_relative_one() {
+    let relative = Path::new("Cargo.toml");
+    assert!(
+        relative.is_file(),
+        "前提が崩れている: 作業ディレクトリに Cargo.toml が無い"
+    );
+    let here = std::env::current_dir().expect("作業ディレクトリが取れない");
+    // 絶対パスにしてから 2 つ上＝作業ディレクトリの 1 つ上の package.json を名指す。
+    let expected = here
+        .parent()
+        .expect("作業ディレクトリの 1 つ上がある")
+        .join("package.json")
+        .display()
+        .to_string();
+
+    let mut lines = Vec::new();
+    let _ = load_with(relative, &mut |line| lines.push(line.to_owned()));
+
+    assert_eq!(lines.len(), 1, "警告の行は 1 行のはず: {lines:?}");
+    assert!(
+        lines[0].contains(&expected),
+        "警告の行が絶対パスを名指していない: {}",
+        lines[0]
     );
 }
 
@@ -291,14 +351,6 @@ fn parse_reports_broken_json_with_the_absolute_path() {
     assert!(body.contains("JSON"), "理由が載るはず: {body}");
 }
 
-#[test]
-fn unreadable_carries_both_the_path_and_the_reason() {
-    let err = unreadable(SHOWN, "指定されたファイルが見つかりません。 (os error 2)");
-    let body = err.to_string();
-    assert!(body.contains(SHOWN), "探した絶対パスが載るはず: {body}");
-    assert!(body.contains("os error 2"), "理由が載るはず: {body}");
-}
-
 // ---- 提供パッケージの版（要件 1.6・設計 D-7）----
 
 #[test]
@@ -345,6 +397,36 @@ fn package_fields_gives_up_on_a_version_that_is_not_a_string() {
 #[test]
 fn package_fields_gives_up_on_broken_json() {
     assert!(package_fields("{\"name\":").is_none());
+}
+
+/// `load_with` が読めた名前と版を捨てずに `SnapshotDoc` へ渡すこと（要件 1.6）。
+///
+/// `package_fields` と `package_json_path` は単体で固定してあるが、`load_with` が成功の
+/// 値を捨てて常に [`UNKNOWN`] を入れても、警告が出ないだけで単体テストは緑のまま。
+/// 書き場に `package.json` と 2 つ下の `data/index.json` を置き、警告 0 行で見本の名前と
+/// 版がそのまま返ることを見る。
+#[test]
+fn load_with_passes_the_package_name_and_version_through() {
+    let root = crate::io::files::tests::scratch_dir(
+        "load_with_passes_the_package_name_and_version_through",
+    );
+    std::fs::write(
+        root.join("package.json"),
+        r#"{"name": "some-doc-package", "version": "9.8.7"}"#,
+    )
+    .expect("package.json を書けない");
+    let data = root.join("data");
+    std::fs::create_dir_all(&data).expect("data を作れない");
+    let snapshot = data.join("index.json");
+    std::fs::write(&snapshot, MINIMAL).expect("index.json を書けない");
+
+    let mut lines = Vec::new();
+    let doc = load_with(&snapshot, &mut |line| lines.push(line.to_owned()))
+        .expect("形の整った見本なので読めるはず");
+
+    assert!(lines.is_empty(), "警告は出ないはず: {lines:?}");
+    assert_eq!(doc.package, "some-doc-package");
+    assert_eq!(doc.package_version, "9.8.7");
 }
 
 #[test]

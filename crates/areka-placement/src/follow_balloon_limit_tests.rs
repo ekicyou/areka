@@ -16,8 +16,8 @@ use crate::spawn::{BalloonLimit, GhostWindows};
 use log_capture_kit::{ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
-// runtime 関門の wiring 檻（task 3.3・design「C7: runtime 関門」・
-// Testing Strategy Integration 1・要件 2.1/2.2/2.6/2.7/2.8/2.9/5.5/6.1/6.3）
+// runtime 関門の wiring 檻（`areka-P0-windowposition-limit` task 3.3・design「C7: runtime 関門」・
+// Testing Strategy Integration 1・`areka-P0-windowposition-limit` 要件 2.1/2.2/2.6/2.7/2.8/2.9/5.5/6.1/6.3）
 //
 // 何を固定するか: 純関数のクランプ式（`balloon_limit_tests.rs` が全網羅）ではなく、
 // **単一ライター `enqueue_window_set_pos` の内側で実際に走るか・誰に対して走るか・
@@ -28,10 +28,10 @@ use log_capture_kit::{ExpectField, capture, expect_one};
 //       （はみ出していなければ `limit_correction` は `None` を返し、緑が何も
 //       意味しなくなる）
 //   (2) **キャラ窓は動かない**こと——バルーン側の成果とキャラ窓側の挙動を
-//       読み違えない（2.8 は構造保証だが、位置 assert でも二重に固定する）
+//       読み違えない（`areka-P0-windowposition-limit` 要件 2.8 は構造保証だが、位置 assert でも二重に固定する）
 //   (3) 判定語のリテラルを檻側にも持つ（本体定数と独立に固定する既存規約）
 //   (4) 縮退（解決不能）では**書込が通る**ことまで見る——「補正しない」だけでは
-//       素通しの証明にならない（要件 6.3 の log-first と対）
+//       素通しの証明にならない（`areka-P0-windowposition-limit` 要件 6.3 の log-first と対）
 //
 // World は実 spawn（`spawn_ghost_windows`）で組む。`BalloonLimit` の付与も
 // `BalloonWindowMarker` も `GhostWindows` も本番の構築経路そのものであり、
@@ -44,8 +44,8 @@ const RUNTIME_CONTEXT: &str = "runtime-gate";
 /// [`base_world`] のキャラ窓を下辺から 8px はみ出させた World（縦 600 → 640・下端 1051 > 1043）。
 ///
 /// 押し込みを主張する檻の前提合わせ（window-work-area-clamp task 5.2）: キャラ窓が収まって
-/// いてバルーンだけが横にはみ出すと反対の側へ並べ替える（要件 5.3）ため、キャラ窓を
-/// はみ出させて今の押し込みの経路を通す（要件 5.6）。中心は域内に残るので帰属は正常腕のまま。
+/// いてバルーンだけが横にはみ出すと反対の側へ並べ替える（`window-work-area-clamp` 要件 5.3）ため、キャラ窓を
+/// はみ出させて今の押し込みの経路を通す（`window-work-area-clamp` 要件 5.6）。中心は域内に残るので帰属は正常腕のまま。
 fn char_overflowing_world(balloon_limit: bool) -> (World, Entity, Entity) {
     let mut placement = base_placement(balloon_limit);
     placement.char_size.h = 640;
@@ -433,7 +433,7 @@ fn runtime_gate_result_is_identical_for_hidden_and_visible_balloons() {
 fn the_reference_work_area_is_the_one_the_char_window_belongs_to() {
     let mut placement = base_placement(true);
     placement.char_pos = PointPx { x: -800, y: 300 };
-    // キャラ窓を左モニタの下辺からはみ出させ、押し込みの経路で基準モニタを問う（要件 5.6）。
+    // キャラ窓を左モニタの下辺からはみ出させ、押し込みの経路で基準モニタを問う（`window-work-area-clamp` 要件 5.6）。
     placement.char_size.h = 720;
     placement.balloon_pos = PointPx { x: -500, y: 700 };
     placement.balloon_offset = PointPx { x: 300, y: 400 };
@@ -480,7 +480,7 @@ fn the_reference_work_area_is_the_one_the_char_window_belongs_to() {
 /// 基準が解決できない 4 経路すべてで、警告のうえ**書込が通る**こと。
 ///
 /// 「補正しない」だけでは素通しの証明にならない——位置が実際に書かれ、戻り値が
-/// `true` であることまで見る（要件 2.2 の書込を関門が落とさない）。
+/// `true` であることまで見る（`areka-P0-windowposition-limit` 要件 2.2 の書込を関門が落とさない）。
 #[test]
 fn unresolvable_reference_warns_and_lets_the_write_through() {
     let proposed = out_of_area();

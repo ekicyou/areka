@@ -22,11 +22,34 @@ pub mod write;
 /// 古い形のカタログを読んだときに「読めるが意味が違う」状態を見分けられる。
 pub const CATALOG_FORMAT: u32 = 1;
 
+/// 冒頭の情報に置いてよい欄のすべて（要件 1.6・設計 D-9）。読み手と書き手が共有する。
+///
+/// 並びは書き出しの並び（設計「Data Models」の見本の逐語）。`total_entries` と
+/// `ukadoc_entries` を入れ替えても TOML としては読めてしまうので、`write_tests.rs`
+/// の逐語テストがこの並びを守る。
+pub(super) const SNAPSHOT_FIELDS: [&str; 8] = [
+    "package",
+    "package_version",
+    "snapshot_version",
+    "generated_at",
+    "total_entries",
+    "ukadoc_entries",
+    "catalog_format",
+    "hash_algorithm",
+];
+
+/// 項目 1 行の列の並び（設計「Data Models」の列表・D-9）。読み手と書き手が共有する。
+///
+/// 並べ替えても TOML としては同じ表に読み戻るので、要件 1.5 が守る対象そのものが
+/// 変わってしまう。ここを触ったら `write_tests.rs` の逐語テストが赤になる。
+pub(super) const ENTRY_COLUMNS: [&str; 6] =
+    ["page", "title", "category", "versions", "hash", "url"];
+
 /// カタログ冒頭に記録するスナップショットの情報（要件 1.6）。
 ///
 /// [`Self::total_entries`] と [`Self::ukadoc_entries`] は別物である。前者は
-/// スナップショットに入っていた全 entry の件数（実測 2,983 件。ukadoc 以外の出典も
-/// 含む）、後者はそのうちカタログへ残した正典由来の件数（実測 1,749 件）。
+/// スナップショットに入っていた全 entry の件数（ukadoc 以外の出典も含む）、後者は
+/// そのうちカタログへ残した正典由来の件数。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotMeta {
     /// スナップショットを配るパッケージの名前。
@@ -63,7 +86,7 @@ pub struct CatalogEntry {
     /// カテゴリ。
     pub category: String,
     /// 本文に現れた版番号のすべて。重複を除き文字列として昇順（要件 1.2）。
-    /// 1 つも無ければ空。**1 つに絞らない**——2 つ以上を持つ項目が実測 23 件ある。
+    /// 1 つも無ければ空。**1 つに絞らない**——2 つ以上を持つ項目が実データにある。
     pub versions: Vec<String>,
     /// 本文のハッシュ（16 桁の 16 進小文字）。
     pub hash: String,

@@ -3,12 +3,9 @@
 //! 回の置き場は `TempPath::under_target("rr")`（`target\test-roots\` の下）。落ちたかは破棄の時の
 //! `std::thread::panicking()` で決め、落ちた回だけ検体の写しを `<回>\sample\` へ複写して残す（D-6・D-7）。
 
-use sample_ghost_kit::SampleRoot;
+use sample_ghost_kit::{SampleRoot, ascii};
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
-
-/// 中身のあるフォルダを配られたときに取り直す上限（D-7）。
-const CREATE_TRIES: usize = 16;
 
 /// 走り 1 回の置き場と検体の写し。破棄で、落ちた回なら残し、成功なら消す。
 pub(crate) struct RunDirs {
@@ -25,28 +22,10 @@ impl RunDirs {
     ///
     /// # Panics
     ///
-    /// 中身の無いフォルダが 16 回で取れないとき・検体の写しを取れないとき（理由つき）。
+    /// 回の置き場・検体の写しを取れないとき（理由つき）。
     pub(crate) fn create(sample: Option<&str>) -> RunDirs {
-        RunDirs::create_with(sample, || TempPath::under_target("rr"))
-    }
-
-    /// `create` の核。配るフォルダを引数で受ける（兄弟のテストが中身のあるフォルダを配る）。
-    fn create_with(sample: Option<&str>, mut fresh: impl FnMut() -> TempPath) -> RunDirs {
-        let dir = (0..CREATE_TRIES)
-            .find_map(|_| {
-                let dir = fresh();
-                let empty = std::fs::read_dir(dir.path()).is_ok_and(|mut d| d.next().is_none());
-                if empty {
-                    Some(dir)
-                } else {
-                    // 前に残した落ちた回と同じ名前を引いた（番号の使い回し）。消さずに取り直す。
-                    std::mem::forget(dir);
-                    None
-                }
-            })
-            .unwrap_or_else(|| {
-                panic!("回の置き場: 中身の無いフォルダが {CREATE_TRIES} 回で取れなかった")
-            });
+        // 前の回が残した同じ名前のフォルダは TempPath が配らない（新しく作れた名前だけを配る）。
+        let dir = TempPath::under_target("rr");
         let run = dir.path().to_path_buf();
         let root = run.join("root");
         let profile = run.join("profile");
@@ -112,14 +91,18 @@ impl RunDirs {
             let to = self.run.join("sample");
             if let Err(err) = areka_user_data::copy_tree_atomic(sample.root(), &to, &self.run) {
                 eprintln!(
-                    "落ちた回の検体の写しを複写できませんでした: {} -> {} ({err})",
-                    sample.root().display(),
-                    to.display()
+                    "real-run-kit: could not copy the failed run's sample: {} -> {} ({})",
+                    ascii(&sample.root().display().to_string()),
+                    ascii(&to.display().to_string()),
+                    ascii(&err.to_string()),
                 );
             }
         }
         std::mem::forget(dir);
-        eprintln!("落ちた回の証拠を残しました: {}", self.run.display());
+        eprintln!(
+            "real-run-kit: kept failed run: {}",
+            ascii(&self.run.display().to_string())
+        );
     }
 }
 

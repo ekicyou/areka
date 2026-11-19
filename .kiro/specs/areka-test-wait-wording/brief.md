@@ -83,3 +83,8 @@
 - **要件定義のモデル**: Opus のまま。
 - **分割の案**: なし。
 - **見つけた穴・古くなった記述**: Problem・Current State・Boundary Candidates・Out of Boundary の `emo2_boot/` は `runtime/` へ読み替える（`spine_wait.rs` は `runtime-crate-split` の後はさらに新しい crate の中）。
+
+## audit-emo2-boot-spine からの申し送り（2026-11-17）
+
+- **film の E2E の移動**: `audit-emo2-boot-spine` のタスク 6.5 で、`crates/areka/src/runtime_tests/film_playback_e2e_tests.rs` を `crates/areka-runtime/src/film_playback_e2e_tests.rs` へ移した。この brief の「自前の `recv_timeout` の締切」の数え方は `crates/areka/src` の下だけなので、film の E2E の 1 か所（旧 290 行あたり）は数えの対象が `crates/areka-runtime/src` へ移る。数え直すときは `git grep -n "recv_timeout(" -- crates/areka/src crates/areka-runtime/src` で両方を見る（要件 7.8・出どころ: `.kiro/specs/completed/audit-emo2-boot-spine/research.md` の 13 節）。
+- **spine 系 6 本の `Instant::now() +` の締切は 0 になった**: `audit-emo2-boot-spine` のタスク 7.1（`da72765f9`・2 か所）と 7.2（`036c7ad44`・8 か所）で、`crates/areka/src/runtime_tests/spine_{close_wiring,display,move_cue,seriko_loop,talk_close,third_scope_talk}_tests.rs` の `Instant::now() +` の締切 10 か所を消した（`git grep -c "Instant::now() +"` で `main` 10 → 今 0）。このため、上の 2026-11-16 の節の「数え直し」の `Instant::now() +` 14 と「触るファイル」の spine 系 6 本は今の事実と合わない。数え直すときは `git grep -n "Instant::now() +" -- crates/areka/src crates/areka-runtime/src` で両方を見る（要件 7.8・出どころ: `.kiro/specs/completed/audit-emo2-boot-spine/research.md` の 13 節）。

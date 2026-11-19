@@ -40,4 +40,8 @@ pub use close::{Ended, EndedBy};
 pub use launch::{Launch, RealRun, Staged};
 pub use mcp::{McpError, ToolReply};
 pub use output::ChildExited;
-pub use run::{Limits, Run};
+pub use run::Run;
+
+#[cfg(test)]
+#[path = "lib_test_support.rs"]
+mod test_support;

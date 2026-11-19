@@ -85,7 +85,7 @@
 //!   `install_thread_start_hook`・`ThreadStartHook`・`ThreadStartHookAlreadyInstalled`
 //!   （スレッド開始フック＝生成点で 1 度呼ばれる呼ばれ口。何を登録するかは統合側が決める）
 //! - 純粋層 [`reply`]: `reply_channel`・`ReplySender`・`ReplyReceiver`・`ReplyError`
-//! - UI ブリッジ層 [`ui`]: `spawn_ui`・`UiSender`・`UiSendError`・`UiSpawnError`
+//! - UI ブリッジ層 [`ui`]: `spawn_ui`・`UiSender`・`UiSendError`
 
 pub mod reply;
 pub mod spawn;
@@ -96,4 +96,4 @@ pub use spawn::{
     ActorError, ActorHandle, ThreadStartHook, ThreadStartHookAlreadyInstalled,
     install_thread_start_hook, run_inbox, spawn_actor,
 };
-pub use ui::{UiSendError, UiSender, UiSpawnError, spawn_ui};
+pub use ui::{UiSendError, UiSender, spawn_ui};

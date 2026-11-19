@@ -1,45 +1,35 @@
-//! 自前の道具を実データで較正する（タスク 8.4・要件 4.4・5.4・6.8・6.13）。
+//! 自前の道具を実データで較正する（要件 4.4・5.4・6.8・6.13）。
 //!
 //! ここにあるのは 3 つの較正である。どれも「小さな見本で緑」ではなく、**repo に実在
 //! する本物のデータ**を相手にして、道具が壊れたら赤くなることだけを目的にしている。
 //!
 //! 1. **テーマ定義の見出し**（要件 4.4・6.8）— `doc/ukadoc-coverage/values.md` の
 //!    `##` の見出し 8 つが [`THEMES`] と**順序まで**一致すること。
-//! 2. **自前の TOML 書き出し**（要件 1.5・付録 A.3）— カタログの見出し 1,749 件を
+//! 2. **自前の TOML 書き出し**（要件 1.5・付録 A.3）— カタログの見出しすべてを
 //!    [`tomlout`] で組み上げ、`toml` で読み戻すと元の文字列に戻ること。
 //! 3. **語彙表経路**（要件 5.4）— 既存の語彙台帳 `SHIORI_RESOURCE_IDS` の 159 要素を
 //!    設計 D-5 の規則で拾い、`list_shiori_resource` ページの見出しへ 159 件すべてが
 //!    1 件に定まって対応付くこと。突き合わせは件数ではなく**文字列そのもの**で行う。
 //!
-//! # なぜ ⑴ が鎖の要なのか（8.1 からの申し送り）
+//! # なぜ ⑴ が鎖の要なのか
 //!
-//! 要件 6.8（台帳のテーマ名が定義に実在すること）は 3 段の鎖で成り立つ。
+//! 要件 6.8（台帳のテーマ名が定義に実在すること）は 2 段の鎖で成り立つ。
 //!
-//! - 台帳のテーマ名 ∈ `CheckInput::themes`（判定本体・`check/content.rs:263`）
-//! - `CheckInput::themes` == [`THEMES`]（タスク 8.1 が `checks.rs` で釘付け済み）
+//! - 台帳のテーマ名 ∈ [`THEMES`]（`ledger::read` の `parse_theme`。綴り違いは読み込みの段で落ちる）
 //! - [`THEMES`] == `values.md` の見出し（**このファイル**）
 //!
-//! 3 段目に見張りが要るのは、`values.md` を書き換えても**どの報告も変わらない**から
-//! である——`report/tally.rs:134` は集計表を [`THEMES`] から直接埋め、
-//! `report/domain.rs:139-149` はそれと引数を足し合わせる（和）だけなので、テーマの
-//! 行が減ることがない。だから `values.md` の書き換えは新しさの検査にも所見にも出ない。
+//! 2 段目に見張りが要るのは、`values.md` を書き換えても**どの報告も変わらない**から
+//! である——報告のテーマの表は、台帳が使った名前と引数の [`THEMES`] を足し合わせた
+//! もの（和・`report::tally::theme_names`）で行を決めるので、テーマの行が減ることが
+//! ない。だから `values.md` の書き換えは新しさの検査にも所見にも出ない。
 //! ここが唯一の見張りである。
 //!
-//! # ⑶ の後半（実データでの語彙表経路）は今日成り立つ
+//! # ⑶ の後半（実データでの語彙表経路）
 //!
-//! タスク 8.4 の完了条件には「実データの解決で語彙表経路により解決した件数が 0 でない」
-//! も含まれる。道具を建てた当初、これは**構造的に成り立たなかった**——走査対象のどこにも
-//! 正典 URL の 1 行コメントが 1 つも置かれておらず、語彙表経路の入口はページ URL の
-//! 目印なので、入口に届く証拠が 1 件も無かった。だから空振りの緑を置く代わりに
-//! **0 件であること自体を主張**にし、誰かが目印を置いた瞬間に赤くして書き換えを促す
-//! 仕掛けにしてあった。
-//!
-//! **その仕掛けは設計どおり発火した。** 調査 spec（`areka-P0-ukadoc-survey-shiori`）が
-//! 要件 5.4 どおり語彙表へ `/// ukadoc: <ページ URL>` を置いたためである。指示どおり
-//! 主張を裏返し、[`the_vocabulary_route_binds_items_on_todays_real_data`] が
+//! かつて「0 件である」を主張していたが、語彙表へページ URL の目印が置かれたので
+//! 非空の主張へ裏返した。[`the_vocabulary_route_binds_items_on_todays_real_data`] が
 //! **入口（目印がある）と出口（項目 URL だけでは説明の付かない証拠がある）の 2 段**で
-//! 非空を主張する。`checks.rs` の国勢調査も同じ回に 6.5（ソースの正典 URL）と 6.11
-//! （証拠の付いた項目）を非空へ移してある。
+//! 非空を主張する。
 //!
 //! 較正の本体（⑶ の前半）は repo の状態に依らない——設計 Testing Strategy 17a の
 //! 但し書き「ページ URL のコメントが置かれる前は、取り出し関数を直接呼んで確かめる」が
@@ -52,15 +42,14 @@
 //! ⑶ の較正は実物の語彙表 1 本を相手にするので、その 1 本に現れない書き方は動かして
 //! も結果が変わらない。次の 2 つは**この repo の実データでは書き換えても振る舞いが
 //! 同じ**であり、**この較正では捕まらない**。どちらも捕まえていないのはこの較正だけ
-//! であって、crate の中のテストが合成データで赤にしている（各項に file:line を挙げる）。
+//! であって、crate の中のテストが合成データで赤にしている（各項にテストの名前を挙げる）。
 //!
-//! - **要素の走査が行コメントを読み飛ばすこと**（`resolve::slice_element_names`）。
-//!   語彙表のスライスの中の注記は 7 行ある。そのうち
-//!   `crates/areka-sylphya/src/vocab/shiori_resource.rs:114` の 1 行だけが ASCII の
-//!   角括弧を含む（`[変更不可]`）。それでも差が出ないのは、この 1 組が**釣り合って
+//! - **要素の走査が行コメントを読み飛ばすこと**（`evidence::lex::slice_element_names`）。
+//!   語彙表のスライスの中の注記のうち、ASCII の角括弧を含むのは `[変更不可]` の 1 行
+//!   だけである。それでも差が出ないのは、この 1 組が**釣り合って
 //!   いて `[` が先に来る**からで、`[` で深さが 1 に上がり `]` で 0 へ戻り、走査が
-//!   表の終わりだと読む `b']' if depth == 0` の腕（`evidence/resolve.rs:267`）に
-//!   落ちないためである。残り 6 行には ASCII の引用符・コンマ・角括弧が 1 つも無い。
+//!   表の終わりだと読む `b']' if depth == 0` の腕に落ちないためである。ほかの注記には
+//!   ASCII の引用符・コンマ・角括弧が 1 つも無い。
 //!   したがって**差が出る条件**は次のどれかが注記に現れたときである。前の 4 つは
 //!   表がそこで終わったことになり以降の要素が黙って消え、最後の 1 つは表を読み切れず
 //!   要素が丸ごと落ちる。
@@ -70,18 +59,19 @@
 //!   3. ASCII のコンマ
 //!   4. ASCII の二重引用符
 //!   5. 釣り合わない `(` または `{` ——深さが 0 へ戻らないので本物の `]` まで
-//!      呑み込み、走査が末尾まで走って何も返さない。実測: 行コメントの読み飛ばしを
-//!      外した状態で `shiori_resource.rs:209` の注記に `(` を 1 つ足すと、解決できる
-//!      件数が 159 から 0 になる。
+//!      呑み込み、走査が末尾まで走って何も返さない（行コメントの読み飛ばしを外した
+//!      状態で注記に `(` を 1 つ足すと、解決できる件数が 0 になる）。
 //!
-//!   合成データでは `src/evidence/resolve_tests.rs:440` がこれを赤にしている。
+//!   合成データでは `resolve_tests::comments_inside_the_table_are_not_read_as_structure`
+//!   がこれを赤にしている。
 //! - **全角形から ASCII への写し**（`resolve::to_ascii_form`）。実データで効くのは
 //!   全角空白 1 文字だけで、それは [`char::is_whitespace`] でもあるため空白の
 //!   畳み込みが同じ結果を出す（`resolve::normalized` の注記がこのことを先に書いて
 //!   いる）。**正規化そのもの**を外せば
 //!   [`the_vocabulary_route_maps_all_159_resource_ids_to_titles`] は赤くなる。全角形の
 //!   帯（`FF01..=FF5E`）の写しだけを外した場合はこの較正では捕まらず、合成データの
-//!   `src/evidence/resolve_tests.rs:508`（半角 `~` と全角 `～` の突き合わせ）が赤にする。
+//!   `resolve_tests::a_half_width_tilde_matches_a_full_width_tilde_after_normalization`
+//!   が赤にする。
 
 use std::collections::BTreeSet;
 
@@ -135,7 +125,7 @@ fn values_md_freezes_exactly_eight_themes() {
     );
 }
 
-/// 見出しの段の形が凍結されていること（7.1 からの申し送り）。
+/// 見出しの段の形が凍結されていること。
 ///
 /// 抽出は `##` をテーマ名専用とみなす前提に立っている。`#` が 2 本になったり
 /// `###` が現れたりすると、抽出の前提が黙って崩れる。前提そのものを主張にする。
@@ -187,10 +177,7 @@ fn heading(line: &str) -> Option<(usize, &str)> {
 // 較正 ⑵ 自前の TOML 書き出しの読み戻し（要件 1.5・付録 A.3）
 // ---------------------------------------------------------------------------
 
-/// カタログの見出しの実測件数（設計 D-1・タスク 7.2 の実測）。
-const CATALOG_ENTRIES: usize = 1_749;
-
-/// 自前の書き出しで組んだ本文を `toml` で読み戻すと、見出し 1,749 件が元に戻る。
+/// 自前の書き出しで組んだ本文を `toml` で読み戻すと、見出しすべてが元に戻る。
 ///
 /// 組み立てには [`keyed_table_header`] と [`basic_string`] を通す。ここを通さずに
 /// 文字列をそのまま並べると、読み戻しの一致は**自分自身との比較**になって何も
@@ -199,13 +186,7 @@ const CATALOG_ENTRIES: usize = 1_749;
 #[test]
 fn the_own_toml_writer_round_trips_every_catalog_title() {
     let data = RepoData::load();
-    assert_eq!(
-        data.catalog.entries.len(),
-        CATALOG_ENTRIES,
-        "カタログの件数が実測と違う（この較正は 1,749 件すべてを回す）"
-    );
-
-    let document = catalog_titles_document(&data);
+    let document = catalog_titles_document(data);
     let root: toml::Table = document
         .parse()
         .unwrap_or_else(|err| panic!("自前の書き出しが TOML として読めない: {err}"));
@@ -216,7 +197,7 @@ fn the_own_toml_writer_round_trips_every_catalog_title() {
 
     assert_eq!(
         entries.len(),
-        CATALOG_ENTRIES,
+        data.catalog.entries.len(),
         "読み戻した項目の数が書き出した数と違う（キーが衝突して畳まれていないか）"
     );
     for (id, entry) in &data.catalog.entries {
@@ -295,8 +276,7 @@ fn catalog_titles_document(data: &RepoData) -> String {
 // 較正 ⑶ 語彙表経路（要件 5.4・設計 D-5・Testing Strategy 17a）
 // ---------------------------------------------------------------------------
 
-/// 既存の語彙台帳（要件 9.2 の「置き換えない」相手）。
-const VOCABULARY_PATH: &str = "crates/areka-sylphya/src/vocab/shiori_resource.rs";
+use super::documents::SHIORI_RESOURCE_RS as VOCABULARY_PATH;
 
 /// その語彙表のスライス定数の書き出し。走査の起点であり、この綴りは本文で 1 度だけ
 /// 現れる（テストがそれを確かめる）。
@@ -305,7 +285,7 @@ const VOCABULARY_CONST: &str = "pub const SHIORI_RESOURCE_IDS: &[&str] = &[";
 /// 語彙表が写しているページ。
 const RESOURCE_PAGE: &str = "list_shiori_resource";
 
-/// 語彙表の要素数（`areka-sylphya` 側の件数檻と同じ 159・R1.4）。
+/// 語彙表の要素数（`areka-sylphya` 側の件数檻と同じ 159）。
 const RESOURCE_IDS: usize = 159;
 
 /// 素の綴りではカタログの見出しと食い違う唯一の要素（語彙表の側・半角空白）。
@@ -329,7 +309,7 @@ const FULLWIDTH_TITLE: &str = "(入力ボックス種類).defaultleft\u{3000}(�
 #[test]
 fn the_vocabulary_route_maps_all_159_resource_ids_to_titles() {
     let data = RepoData::load();
-    let source = source_text(&data, VOCABULARY_PATH);
+    let source = source_text(data, VOCABULARY_PATH);
 
     let expected = elements_by_line(source);
     assert_eq!(
@@ -338,7 +318,7 @@ fn the_vocabulary_route_maps_all_159_resource_ids_to_titles() {
         "語彙表の要素数が {RESOURCE_IDS} でない（areka-sylphya 側の件数檻と食い違う）"
     );
 
-    let page_url = page_url_of(&data, RESOURCE_PAGE);
+    let page_url = page_url_of(data, RESOURCE_PAGE);
 
     // **足す前**——実ソースの語彙表には、調査 spec が要件 5.4 どおりに置いた目印が
     // すでに 1 行ある。だから「目印はちょうど 1 件」では見られない。代わりに、この
@@ -391,7 +371,7 @@ fn the_vocabulary_route_maps_all_159_resource_ids_to_titles() {
     );
 
     // 逐語の突き合わせ。結んだ先の見出しを取り出し、語彙表の要素と文字列で比べる。
-    let titles = data.catalog.titles_of_page(&page_of(&data, RESOURCE_PAGE));
+    let titles = data.catalog.titles_of_page(&page_of(data, RESOURCE_PAGE));
     let mut resolved: Vec<&str> = Vec::with_capacity(index.by_id.len());
     for (id, paths) in &index.by_id {
         assert_eq!(
@@ -426,14 +406,14 @@ fn the_vocabulary_route_maps_all_159_resource_ids_to_titles() {
     );
 }
 
-/// 正規化がこの較正で現に働いていること（設計 D-5 の実測 158/159 → 159/159）。
+/// 正規化がこの較正で現に働いていること（素の綴りでは 158/159・正規化の後は 159/159・設計 D-5）。
 ///
 /// 素の綴りで食い違う 1 件がちょうど 1 つあることを固定する。この 1 件が消えると、
 /// 上の較正は正規化を 1 度も通らずに緑になり、見張りとして空回りする。
 #[test]
 fn exactly_one_element_needs_normalization_to_match_its_title() {
     let data = RepoData::load();
-    let source = source_text(&data, VOCABULARY_PATH);
+    let source = source_text(data, VOCABULARY_PATH);
     let expected = elements_by_line(source);
 
     let odd: Vec<&String> = expected
@@ -447,7 +427,7 @@ fn exactly_one_element_needs_normalization_to_match_its_title() {
         odd.len()
     );
 
-    let page = page_of(&data, RESOURCE_PAGE);
+    let page = page_of(data, RESOURCE_PAGE);
     let titles: BTreeSet<&str> = data
         .catalog
         .titles_of_page(&page)
@@ -470,21 +450,13 @@ fn exactly_one_element_needs_normalization_to_match_its_title() {
     assert_eq!(
         raw_matches,
         RESOURCE_IDS - 1,
-        "素の綴りで一致する要素が 158 件でない（設計 D-5 の実測）"
+        "素の綴りで一致する要素が {} 件でない（設計 D-5 の実測）",
+        RESOURCE_IDS - 1
     );
 }
 
-/// 実データの語彙表経路が現に項目を結んでいる（タスク 8.4 の完了条件の後半）。
-///
-/// **この主張はかつて「0 件である」の側に立っていた。** 道具を建てた当初はソースに
-/// 正典 URL が 1 つも置かれておらず、語彙表経路の入口——ページ URL の目印——に届く
-/// 証拠が 1 件も無かったので、空振りの緑を置く代わりに 0 件そのものを主張にし、誰かが
-/// 目印を置いた瞬間に赤くして非空の主張への書き換えを促す仕掛けにしてあった。
-///
-/// **その仕掛けは設計どおり発火した。** 調査 spec（`areka-P0-ukadoc-survey-shiori`）が
-/// 要件 5.4 どおり語彙表 `crates/areka-sylphya/src/vocab/shiori_resource.rs` へ
-/// `/// ukadoc: <ページ URL>` を置いたためである。そこで書き換えの指示どおり、非空の
-/// 主張を 2 段で置く。
+/// 実データの語彙表経路が現に項目を結んでいる（語彙表経路の較正の後半・来歴は
+/// このファイルの冒頭）。
 ///
 /// ⑴ **入口**——目印がソースに 1 件以上ある。
 /// ⑵ **出口**——実データの証拠索引に、**項目 URL の 1 行コメントだけでは説明の付かない**

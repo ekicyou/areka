@@ -55,7 +55,7 @@ pub fn monitor(frame: u32, old_dpi: u32, new_dpi: u32, old_bottom: i32, new_bott
     )
 }
 
-/// 窓の表示 DPI の書き換え（task 8.3 の新起点）。欄は [`monitor`] の先頭 3 欄と同名・同義。
+/// 窓の表示 DPI の書き換え（窓の拡大率が変わったことを表す新起点）。欄は [`monitor`] の先頭 3 欄と同名・同義。
 pub fn windpi(frame: u32, entity: &str, old_dpi: u32, new_dpi: u32) -> String {
     record(
         frame,
@@ -136,7 +136,7 @@ pub fn enqueue(
 /// 合流（C2）を通ると後着の指令は先着の枠へ畳まれ、`merged_into_seq` に**先着の通し番号**
 /// （一括書込の `write` の `seq` と同じ数え方）が載る。畳まれた側の経路語は書込の行に残ら
 /// ないので、この形を組めないと「合流で書込が消えた随伴」を檻へ入れられない
-/// （task 6.6 の欠陥そのもの）。
+/// （`areka-P0-dpi-transition-atomicity` タスク 6.6 の欠陥そのもの）。
 pub fn enqueue_merged_into(
     frame: u32,
     t_us: u64,
@@ -249,7 +249,7 @@ pub fn parse_ok(line: &str) -> TransitionRecord {
     record
 }
 
-/// 上限を 1 つも破らない遷移 1 本（task 3.2 の対照）。
+/// 上限を 1 つも破らない遷移 1 本（判定の対照）。
 ///
 /// 2 系統（[`super::Bounds::deterministic`]／[`super::Bounds::signoff`]）の**どちらでも合格**
 /// する形にしてある。上限判定のテストはここから 1 箇所だけを壊して赤を作るので、この対照が

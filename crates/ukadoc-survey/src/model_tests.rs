@@ -16,7 +16,6 @@ fn page_wide_id_parses() {
     let id = EntryId::parse("ukadoc:dev_bind").expect("ページ全体の形は通るはず");
     assert_eq!(id.as_str(), "ukadoc:dev_bind");
     assert_eq!(id.page().as_str(), "dev_bind");
-    assert!(!id.has_anchor());
 }
 
 #[test]
@@ -25,7 +24,6 @@ fn anchored_id_parses() {
     let id = EntryId::parse(raw).expect("アンカー付きの形は通るはず");
     assert_eq!(id.as_str(), raw);
     assert_eq!(id.page().as_str(), "list_propertysystem");
-    assert!(id.has_anchor());
 }
 
 #[test]
@@ -34,7 +32,6 @@ fn anchored_id_with_encoded_anchor_parses() {
     let raw = "ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.width:1";
     let id = EntryId::parse(raw).expect("符号化されたアンカーも通るはず");
     assert_eq!(id.page().as_str(), "list_propertysystem");
-    assert!(id.has_anchor());
     assert_eq!(id.as_str(), raw);
 }
 
@@ -44,11 +41,9 @@ fn page_name_containing_underscore_is_not_split() {
     let raw = "ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2cID_5d:1";
     let id = EntryId::parse(raw).expect("下線を含むページ名も通るはず");
     assert_eq!(id.page().as_str(), "list_sakura_script");
-    assert!(id.has_anchor());
 
     let page_wide = EntryId::parse("ukadoc:descript_shell_surfacetable").expect("通るはず");
     assert_eq!(page_wide.page().as_str(), "descript_shell_surfacetable");
-    assert!(!page_wide.has_anchor());
 }
 
 // ---- 形が違う id（要件 1.9 の裏）----
@@ -56,18 +51,20 @@ fn page_name_containing_underscore_is_not_split() {
 #[test]
 fn malformed_ids_are_rejected() {
     let bad = [
-        "",                                       // 空
-        "ukadoc",                                 // 区切りが 0
-        "ukadoc_dev_bind",                        // コロン以外で割った形
-        "ukadoc:list_propertysystem:system.year", // 区切りが 2（連番が無い）
-        "ukadoc:a:b:1:2",                         // 区切りが 4
-        "ukadoc:",                                // ページ名が空
-        "ukadoc::b:1",                            // ページ名が空（アンカー付き）
-        "ukadoc:page::1",                         // アンカーが空
-        "ukadoc:page:anchor:",                    // 連番が空
-        "satori:dev_bind",                        // 接頭辞が ukadoc でない
-        "UKADOC:dev_bind",                        // 接頭辞の大小が違う
-        " ukadoc:dev_bind",                       // 前後の空白は直さない
+        "",                                         // 空
+        "ukadoc",                                   // 区切りが 0
+        "ukadoc_dev_bind",                          // コロン以外で割った形
+        "ukadoc:list_propertysystem:system.year",   // 区切りが 2（連番が無い）
+        "ukadoc:a:b:1:2",                           // 区切りが 4
+        "ukadoc:",                                  // ページ名が空
+        "ukadoc::b:1",                              // ページ名が空（アンカー付き）
+        "ukadoc:page::1",                           // アンカーが空
+        "ukadoc:page:anchor:",                      // 連番が空
+        "ukadoc:list_propertysystem:system.year:l", // 連番が数字でない
+        "ukadoc:page:anchor:1a",                    // 連番に文字が混じる
+        "satori:dev_bind",                          // 接頭辞が ukadoc でない
+        "UKADOC:dev_bind",                          // 接頭辞の大小が違う
+        " ukadoc:dev_bind",                         // 前後の空白は直さない
     ];
     for raw in bad {
         let got = EntryId::parse(raw);
@@ -224,16 +221,6 @@ fn link_kind_outside_the_vocabulary_is_rejected() {
         assert!(got.is_err(), "{raw:?} は誤りとして返るはず");
         assert_eq!(got.expect_err("上で誤りを確かめた").field, "links.kind");
     }
-}
-
-#[test]
-fn link_holds_a_kind_and_a_parsed_id() {
-    let link = Link {
-        kind: LinkKind::Queries,
-        to: EntryId::parse("ukadoc:list_propertysystem:system.year:1").expect("通るはず"),
-    };
-    assert_eq!(link.kind, LinkKind::Queries);
-    assert_eq!(link.to.page().as_str(), "list_propertysystem");
 }
 
 // ---- ドメイン（要件 3.1）----

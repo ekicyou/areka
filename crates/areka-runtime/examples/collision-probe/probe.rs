@@ -14,7 +14,7 @@ use super::{
 /// 駆動する probe 起動 system（`&mut World` 排他・donor `boot_present_system` と同作法: remove→駆動→insert）。
 ///
 /// フェーズ機械（`ProbePhase`）で「表示＋本番 resize」と「（次フレーム以降の）`GetClientRect` 検証」を
-/// 分離する——`SetWindowPosCommand` は発行 tick の World 借用解放後に flush されるため（`tick_bridge.rs:199-200`）、
+/// 分離する——`SetWindowPosCommand` は発行 tick の World 借用解放後に flush されるため（wintf `tick_bridge.rs` の `tick_one_frame`）、
 /// 同 tick 内の `GetClientRect` は旧寸を返す。ゆえに resize と検証は別フレームに分ける。
 pub(super) fn boot_probe_system(world: &mut World) {
     let phase = match world.get_non_send::<ProbeBoot>() {
@@ -60,11 +60,10 @@ fn attach_show_and_resize(world: &mut World) {
         boot.char_window,
         emo_world,
         atlas,
-        // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を供給する。
+        // 作者基準 DPI は配置の準備が shell descript（`seriko.dpi`）から読んだ値（窓寸の k₀ と同じ出所）。
         // **実適用 k は実行機の表示スケールが決める**（窓生成時に wintf が実モニタ DPI を `DPI`
-        // component へ初期化するため初回表示で確定する）——k=96/96=1.0 になるのは実行機が 100%
-        // 表示のときだけであり、125%/200% で実行すれば k は 5/4・2/1 になる（DPI 追従駆動は不要）。
-        96,
+        // component へ初期化するため初回表示で確定する・DPI 追従駆動は不要）。
+        boot.author_dpi,
     );
 
     // donor 必須逸脱 #1/#2: surface1000 を有効 bind 実値付きで表示する。
@@ -107,7 +106,7 @@ fn attach_show_and_resize(world: &mut World) {
     boot.native_size = native;
     boot.physical_size = physical;
 
-    // 常設 greppable ログ（要件 4.1/4.5・design CollisionProbe 節）。実機サインオフはこの 1 行を grep して
+    // 常設 greppable ログ（areka-P0-collision-dpi-hittest 要件 4.1/4.5・design CollisionProbe 節）。実機サインオフはこの 1 行を grep して
     // 「その水準で適用された k と実表示物理寸」を採取し、2 実行の physical が互いに異なることを照合する。
     let k_text = format_ratio(applied);
     tracing::info!(
@@ -128,7 +127,7 @@ fn attach_show_and_resize(world: &mut World) {
     assert_expected_ratio(applied);
 
     // ④ 描画一致の anchor（マウス非依存・read_back）: Head/Bust 中心の画素が不透明であることを
-    // hard assert する。**描画証跡であって判定証跡ではない**（要件 4.4）。
+    // hard assert する。**描画証跡であって判定証跡ではない**（areka-P0-collision-dpi-hittest 要件 4.4）。
     assert_drawn_anchor(&boot.presenter, target, applied, native);
 
     // donor 必須逸脱 #3: 本番の反映関数で placeholder 誤寸 → **物理寸**へ resize（戻り値 true を assert）。
@@ -139,7 +138,7 @@ fn attach_show_and_resize(world: &mut World) {
             w: physical.0 as i32,
             h: physical.1 as i32,
         },
-        // 表示実寸への再スナップ＝毎フレーム再スナップと同一の経路（Req 1.2・task 1.4）。
+        // 表示実寸への再スナップ＝毎フレーム再スナップと同一の経路。
         areka_placement::diag::PlacementRoute::Resnap,
     );
     assert!(
@@ -247,7 +246,7 @@ fn verify_physical_size_match(world: &mut World) {
 /// `areka-P0-present-gpu-transform-scale` 要件 6.2）であるため、collision 座標を**そのまま**画素 index へ
 /// 写す（×k の写像は不要になった）。
 ///
-/// # 証跡としての位置づけ（要件 4.4）
+/// # 証跡としての位置づけ（areka-P0-collision-dpi-hittest 要件 4.4）
 ///
 /// 本検査は「その位置に絵が描かれている」ことしか語らない**描画証跡**であり、**当たり判定の証跡ではない**。
 /// 判定の証跡は ⑤ の目視由来経路（`GetCursorPos`→`ScreenToClient`→`resolve_hit_region`）だけであり、
@@ -267,7 +266,7 @@ fn assert_drawn_anchor(
     assert_eq!(
         bytes.len(),
         native_len,
-        "collision-probe: read_back バイト長 {} が native 原寸長 {native_len}（{}x{}×4）と不一致 — k={} の拡大が読み戻しへ漏れている（要件 6.2）",
+        "collision-probe: read_back バイト長 {} が native 原寸長 {native_len}（{}x{}×4）と不一致 — k={} の拡大が読み戻しへ漏れている",
         bytes.len(),
         native.0,
         native.1,
@@ -305,7 +304,7 @@ fn native_anchor((left, top, right, bottom): (i64, i64, i64, i64), label: &str) 
 }
 
 /// `read_back`（`stride = width*4`・BGRA・上端起点の密配列）の画素 `(px, py)` が不透明（α=0xFF）であることを
-/// hard assert する。範囲外・バイト長不足も loud に落とす（④ の観測失敗を silent にしない）。
+/// hard assert する。範囲外も loud に落とす（④ の観測失敗を silent にしない・バイト長は呼び手が確かめ済み）。
 fn assert_pixel_opaque(bytes: &[u8], (w, h): (u32, u32), (px, py): (u32, u32), label: &str) {
     assert!(
         px < w && py < h,
@@ -313,11 +312,6 @@ fn assert_pixel_opaque(bytes: &[u8], (w, h): (u32, u32), (px, py): (u32, u32), l
     );
     // BGRA 密配列: 画素 (px,py) の α は offset (py*w+px)*4 + 3。
     let idx = ((py * w + px) * 4 + 3) as usize;
-    assert!(
-        idx < bytes.len(),
-        "collision-probe: {label} 中心 ({px},{py}) の α index={idx} が read_back バイト長 {} の外",
-        bytes.len()
-    );
     let alpha = bytes[idx];
     assert_eq!(
         alpha, 0xFF,

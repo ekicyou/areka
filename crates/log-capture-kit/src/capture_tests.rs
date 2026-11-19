@@ -1,15 +1,16 @@
 //! 捕捉窓そのものの決定性を固定する自己テスト。
 //!
+//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
+//!
 //! 「他スレッドが先に同じ発行点を踏む」場面は待ち時間ではなく [`std::thread::JoinHandle::join`]
 //! で順序を確定させる（時間に色が依存するテストを作らない、という本ワークスペースの規律）。
 //! 各テストは**自分専用の発行点**（専用の宛先を持つ module 直下の関数）を使う。発行点の
 //! interest はプロセス大域に焼き付くため、発行点を共有すると他テストの実行順で条件が変わる。
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use super::*;
-use crate::event::{CapturedEvent, FieldCollector, FieldValue};
+use crate::event::CapturedEvent;
 
 // ---- テスト専用の発行点（1 テスト 1 宛先） --------------------------------
 
@@ -111,16 +112,10 @@ impl tracing::Subscriber for SentinelDroppingSubscriber {
     fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
     fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
     fn event(&self, event: &tracing::Event<'_>) {
-        let mut fields: Vec<(String, FieldValue)> = Vec::new();
-        event.record(&mut FieldCollector(&mut fields));
         self.0
             .lock()
             .expect("捕捉バッファは毒化していない")
-            .push(CapturedEvent {
-                level: *event.metadata().level(),
-                target: event.metadata().target().to_string(),
-                fields,
-            });
+            .push(CapturedEvent::from_event(event));
     }
     fn enter(&self, _span: &tracing::span::Id) {}
     fn exit(&self, _span: &tracing::span::Id) {}
@@ -194,10 +189,6 @@ fn sentinel_is_removed_before_returning() {
 
     assert_eq!(value, 42);
     assert!(
-        events.iter().all(|e| e.target != SENTINEL_TARGET),
-        "対照イベントが呼出側へ漏れている: {events:?}"
-    );
-    assert!(
         events.is_empty(),
         "何も発火していない窓が空でない: {events:?}"
     );
@@ -223,31 +214,23 @@ fn extracts_events_even_while_the_shared_sink_is_still_held() {
     );
 }
 
-// ---- 常駐の仕掛けは冪等 --------------------------------------------------
+// ---- 常駐の仕掛けは多スレッドから同時に呼べる ----------------------------
 
-/// 設計の Invariants: 常駐 probe はプロセス寿命で 1 度だけ確立され、多スレッドから
-/// 同時に呼んでも安全（冪等）。
+/// 設計の Invariants: `ensure_interest_probes` を多スレッドから同時に呼んでも panic せず、
+/// その後に窓が開ける（番兵検査が通る）。1 度だけ確立されることは
+/// `probe::tests::the_environment_is_read_exactly_once_for_the_whole_process` が数えて確かめる。
 #[test]
-fn ensure_interest_probes_is_idempotent_across_threads() {
-    static DONE: AtomicUsize = AtomicUsize::new(0);
-
+fn ensure_interest_probes_can_be_called_from_many_threads_at_once() {
     ensure_interest_probes();
     ensure_interest_probes();
 
     let hands: Vec<_> = (0..8)
-        .map(|_| {
-            std::thread::spawn(|| {
-                ensure_interest_probes();
-                DONE.fetch_add(1, Ordering::SeqCst);
-            })
-        })
+        .map(|_| std::thread::spawn(ensure_interest_probes))
         .collect();
     for h in hands {
         h.join().expect("probe 確立スレッドは panic しない");
     }
 
-    assert_eq!(DONE.load(Ordering::SeqCst), 8);
-
-    // 冪等呼出のあとでも窓は生きている（番兵検査が通る）。
+    // 同時の呼出のあとでも窓は生きている（番兵検査が通る）。
     let ((), _events) = capture(|| {});
 }

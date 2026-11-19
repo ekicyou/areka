@@ -191,7 +191,7 @@ impl fmt::Display for Finding {
             }
             Self::MalformedRow { heading, line } => write!(
                 f,
-                "doc/README.md の {line} 行目（{heading}）: 1 列目がバッククォートの名前 1 つでない。表の書き方に合わせる"
+                "{GUIDE} の {line} 行目（{heading}）: 1 列目がバッククォートの名前 1 つでない。表の書き方に合わせる"
             ),
             Self::EmptyReading(what) => write!(
                 f,
@@ -259,7 +259,7 @@ fn check_all(tree: &DocTree, guide: &str, docs_exists: bool) -> BTreeSet<Finding
     if !tree.direct.is_empty() && !rows.is_empty() {
         found.extend(check_direct(&tree.direct, &rows));
     }
-    if !exceptions.is_empty() {
+    if !tree.direct.is_empty() && !exceptions.is_empty() {
         found.extend(check_names(&tree.all, &exceptions));
     }
     if docs_exists {
@@ -519,9 +519,9 @@ fn an_exception_row_with_nothing_to_cover_turns_red() {
     );
 }
 
-#[test]
-fn a_docs_dir_turns_the_guard_red() {
-    let tree = DocTree {
+/// 見本の案内と食い違いの無い `doc/` の木。
+fn sample_tree() -> DocTree {
+    DocTree {
         direct: BTreeSet::from(["README.md", "archive/"].map(String::from)),
         all: BTreeSet::from(
             [
@@ -533,7 +533,12 @@ fn a_docs_dir_turns_the_guard_red() {
             ]
             .map(String::from),
         ),
-    };
+    }
+}
+
+#[test]
+fn a_docs_dir_turns_the_guard_red() {
+    let tree = sample_tree();
 
     assert_eq!(check_all(&tree, SAMPLE_GUIDE, false), BTreeSet::new());
     assert_eq!(
@@ -547,17 +552,32 @@ fn a_docs_dir_turns_the_guard_red() {
         line.contains("根の docs フォルダ") && !line.contains(concat!("docs", "/")), // 語を分けて、この行も検索に当てない
         "{line}"
     );
+}
 
+#[test]
+fn an_empty_reading_is_named_and_turns_the_guard_red() {
     // 3 つの読み取りのどれかが 0 件なら、どれかを名指して赤にする。
     let empty = DocTree {
         direct: BTreeSet::new(),
-        all: tree.all.clone(),
+        all: sample_tree().all,
     };
     assert_eq!(
         check_all(&empty, "", false),
         BTreeSet::from([DIRECT_ENTRIES, DIRECT_TABLE, EXCEPTION_TABLE].map(Finding::EmptyReading))
     );
+    // 実物の読み取りだけが 0 件のとき、例外の表の行を「覆う破れが無い」と並べない。
+    let nothing_read = DocTree {
+        direct: BTreeSet::new(),
+        all: BTreeSet::new(),
+    };
+    assert_eq!(
+        check_all(&nothing_read, SAMPLE_GUIDE, false),
+        BTreeSet::from([Finding::EmptyReading(DIRECT_ENTRIES)])
+    );
+}
 
+#[test]
+fn an_unlisted_entry_and_a_row_naming_nothing_are_findings() {
     // 表に無い直下の実物と、名指すものの無い行（置き字の行を除く）。
     let direct = BTreeSet::from(
         ["README.md", "extra.md", "roadmap-overview-2026-10-16.html"].map(String::from),
@@ -592,7 +612,7 @@ fn real_data() -> (DocTree, String, bool) {
     (walk_doc(&root), read_guide(&root), docs_dir_exists(&root))
 }
 
-/// 食い違いを件数を頭に 1 件 1 行で並べる（`file_length_guard_test.rs` と同じ形）。
+/// 食い違いを件数を頭に 1 件 1 行で並べる。
 fn render(found: &BTreeSet<Finding>) -> String {
     let mut out = format!("食い違いが {} 件ある:", found.len());
     for f in found {
@@ -606,21 +626,6 @@ fn doc_tree_matches_the_guide() {
     let (tree, guide, docs_exists) = real_data();
     let found = check_all(&tree, &guide, docs_exists);
     assert!(found.is_empty(), "{}", render(&found));
-}
-
-#[test]
-fn every_reading_finds_something() {
-    let (tree, guide, _) = real_data();
-    assert!(!tree.direct.is_empty(), "{DIRECT_ENTRIES} が 0 件");
-    assert!(!tree.all.is_empty(), "doc/ の下の全部が 0 件");
-    assert!(
-        !table_first_cells(&guide, DIRECT_HEADING).0.is_empty(),
-        "{DIRECT_TABLE} が 0 件"
-    );
-    assert!(
-        !table_first_cells(&guide, EXCEPTION_HEADING).0.is_empty(),
-        "{EXCEPTION_TABLE} が 0 件"
-    );
 }
 
 #[test]

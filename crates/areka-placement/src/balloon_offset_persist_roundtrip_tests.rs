@@ -66,6 +66,7 @@
 use super::restore_tests::{ALL_ANCHORS, BSZ, CSZ, placement};
 use super::*;
 use crate::follow::{BalloonFollow, OffsetBase, OffsetRescale, rescale_follow_offset};
+use crate::resolver::RectPx;
 use bevy_ecs::entity::Entity;
 use wintf::ecs::DPI;
 

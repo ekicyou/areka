@@ -25,7 +25,7 @@
 //! ```
 //!
 //! 併せて、テストから `tracing::info!` などを発火するので **`tracing` が消費 crate 側から
-//! 引けること**が要る（本 crate の依存は伝播しない）。消費する 21 crate はいずれも既に
+//! 引けること**が要る（本 crate の依存は伝播しない）。消費する crate はいずれも既に
 //! `[dependencies]` に `tracing` を持っているので追加の作業は無いが、新しい crate から
 //! 引くときは 2 行になる。
 //!
@@ -38,7 +38,7 @@
 //! 発火したイベント列が返る。戻り値は一切加工されずそのまま返るので、被検査コードの結果と
 //! ログの両方を 1 回の実行で見られる。
 //!
-//! 値の取り出しは 3 本。[`CapturedEvent::message`] が本文、[`CapturedEvent::field`] が
+//! 値は次のように取り出す。[`CapturedEvent::message`] が本文、[`CapturedEvent::field`] が
 //! フィールドの **Debug 表現**（文字列なら引用符つき）、[`CapturedEvent::field_str`] が
 //! **生値**（引用符なし）である。
 //!
@@ -148,19 +148,15 @@
 //! # そのほかの窓口
 //!
 //! - [`capture_lines`] — 捕捉結果をその場で 1 行 1 イベントへ整形する。形は [`LineFormat`]
-//!   の 2 種（宛先を載せる／載せない）で、既存の自前整形の出力を 1 バイトも違わずに再現する。
+//!   の 2 種（宛先を載せる／載せない）で、移行前の自前整形の出力を 1 バイトも違わずに再現する。
 //! - [`format_line`] — 既に手元にある [`CapturedEvent`] を同じ規則で 1 行にする。
 //! - [`count_levels`] — レベル別の件数（[`LevelCounts`]）だけを見る。警告 0 件の主張などに使う。
 //! - [`CapturedEvent::field_names_sorted`]／[`CapturedEvent::fields_map`] — フィールド集合を
 //!   ちょうどで固定する判定に使う（いずれも Debug 表現・名前の昇順）。
+//! - [`expect_one`] — メッセージに語を含むイベントが**ちょうど 1 件**在ることを主張して返す。
+//! - [`ExpectField::expect_field`] — フィールドの Debug 表現を引き、欠落を失敗にする。
 //! - [`ensure_interest_probes`] — 常駐の仕掛けを窓を開かずに確立する（冪等）。[`capture`] が
 //!   内部で呼ぶので、通常は消費側が直接呼ぶ必要は無い。
-//! - [`interest_probes_enabled`] — 常駐の仕掛けが実際に確立されているかを返す。**測定専用の
-//!   切替**（環境変数 `AREKA_LOG_CAPTURE_PROBES=off` で常駐を止める・要件 13.1）が、測定対象の
-//!   プロセスまで本当に届いていたかを、切替と同じ経路で確かめるための窓口である。
-//!   **捕捉テストがこれを読んで分岐してはならない**——硬化の有無で主張が変わるテストは、
-//!   硬化が効いていないときに黙って別のことを確かめて緑になる。それは本 crate が
-//!   根絶するために作られた当の形である。
 //! - `capture_under_filter`（feature `env-filter`）— `RUST_LOG` 相当の directive を実際に
 //!   適用し、濾過を通過した整形済み出力だけを 1 本の文字列で返す。
 //!
@@ -173,7 +169,7 @@
 //!   落ちて主張が空振りになる）。
 //! - `capture_under_filter` は番兵の行を「行が番兵の宛先文字列 `log_capture_kit::sentinel` を
 //!   含むか」で見分けて取り除く。呼出側のログ本文がその字面を含むと、その行ごと戻り値から
-//!   消える（現行の消費サイトに該当は無いことを実測で確認済み）。
+//!   消える。
 //!
 //! # 機序: なぜ「スレッドローカルだから安全」が誤りなのか
 //!
@@ -207,7 +203,9 @@
 //!
 //! # 依存方向の規律
 //!
-//! 本 crate はワークスペース内のどの crate にも依存しない leaf であり、`publish = false`。
+//! 本 crate の `[dependencies]` はワークスペース内のどの crate も引かない leaf であり、
+//! `publish = false`（`[dev-dependencies]` には、見張りのテストが検体の登記表を読むために
+//! `sample-ghost-kit` を引く）。
 //! 消費側は **`[dev-dependencies]` からのみ**引く。`[dependencies]`（および
 //! `[build-dependencies]`）に現れた時点で規律違反であり、番人テストが赤にする。
 //! この規律により、`wintf` のような下層 crate が上位の本番 crate へ依存を持つことなく
@@ -229,4 +227,4 @@ pub use expect::{ExpectField, expect_one};
 #[cfg(feature = "env-filter")]
 pub use filter::capture_under_filter;
 pub use global::install_global_capture_all;
-pub use probe::{ensure_interest_probes, interest_probes_enabled};
+pub use probe::ensure_interest_probes;

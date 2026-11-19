@@ -1,7 +1,7 @@
 //! `write.rs` の在中テスト。
 //!
 //! 見本も期待する本文もここに直に書く（実装側の定数を参照しない）。参照すると表を
-//! 表自身と比べるだけになり、綴りの取り違えを 1 件も捕まえられない（タスク 1.5 の教訓）。
+//! 表自身と比べるだけになり、綴りの取り違えを 1 件も捕まえられない。
 //!
 //! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない
 //! （要件 6.2・設計 File Structure Plan）。
@@ -104,7 +104,7 @@ fn without_block(text: &str, target: &EntryId) -> String {
 /// 既存本文が無ければ、付録 A.1 の形で全項目を書き出す。
 ///
 /// 期待する本文を丸ごと逐語で置く。読み戻し一致だけでは区切りの空白 1 個の違いを
-/// 捕まえられないが、1 バイトの安定はそこに載っている（タスク 1.4・2.2 の教訓）。
+/// 捕まえられないが、1 バイトの安定はそこに載っている。
 #[test]
 fn a_missing_body_is_rendered_in_the_appendix_a_shape() {
     let text = merge_initial(None, Domain::Property, &pages(), &ids(&[BALLOON, MONTH]))
@@ -261,7 +261,7 @@ note = ""
 /// 書き出した本文は台帳として読み戻せる（付録 A.2 が必須とする欄が全部ある）。
 ///
 /// 逐語テストと対で置く。読み戻し一致は「単射」しか言わないが、逐語は「欄が足りない」
-/// を言えない（タスク 1.4 の教訓）。
+/// を言えない。
 #[test]
 fn the_rendered_body_reads_back_as_a_ledger() {
     let text = full();
@@ -284,7 +284,7 @@ fn the_rendered_body_reads_back_as_a_ledger() {
     }
 }
 
-// ---- 塊を 1 つ落として差し込み直す（タスク 2.5 の完了条件） ----
+// ---- 塊を 1 つ落として差し込み直す ----
 
 /// 落とした塊だけが戻り、他の塊は 1 バイトも動かない。
 ///
@@ -455,7 +455,7 @@ fn nothing_missing_leaves_the_hand_written_body_untouched() {
     assert_eq!(spliced, HAND_WRITTEN);
 }
 
-/// 同じ本文をもう一度通しても変わらない（タスク 6.2 の完了条件が載っている）。
+/// 同じ本文をもう一度通しても変わらない（冪等）。
 #[test]
 fn splicing_the_same_body_again_changes_nothing() {
     let once = full();
@@ -562,10 +562,10 @@ note = """
 """
 "#;
 
-/// 同じ id が 2 度現れたら、重複として落ちる（設計 D-12・タスク 2.3 からの申し送り）。
+/// 同じ id が 2 度現れたら、重複として落ちる（設計 D-12）。
 ///
-/// 判定が「非減少」だとここは通ってしまい、盲点は永久に開いたままになる。
-/// `ledger-init` は整合検査より先に走るので、塞ぐ場所はここしかない。
+/// 判定が「非減少」だとここは通ってしまう。`ledger-init` は整合検査より先に走るので、
+/// ここが緩いと重複した塊のまま差し込みが通る。
 #[test]
 fn a_duplicate_id_hidden_in_a_note_fails_as_out_of_order() {
     let (_, blocks) = blocks::split(DUPLICATE_IN_NOTE).expect("較正は素通りするはず");
@@ -591,7 +591,7 @@ fn a_duplicate_id_hidden_in_a_note_fails_as_out_of_order() {
 /// 塊が 1 つだけの本文は、比べる隣が無いので並び順で落ちない。
 ///
 /// 「順序を破る隣が無い」ことを言う対照。全称の主張だけだと対象が空でも真になる
-/// （タスク 1.6 の教訓）ので、落ちる側と対で置く。
+/// ので、落ちる側と対で置く。
 #[test]
 fn a_single_block_body_passes_the_order_check() {
     let one = merge_initial(None, Domain::Property, &pages(), &ids(&[YEAR]))
@@ -612,14 +612,167 @@ fn a_single_block_body_passes_the_order_check() {
     assert_eq!(order, [BALLOON, YEAR]);
 }
 
-/// 切り分けが失敗する本文は、そのまま失敗が上がる（繕わない）。
+/// 切り分けが失敗する本文は繕わずに落ち、失敗はどのドメインの台帳かを名指す。
 #[test]
 fn an_unreadable_body_is_not_repaired() {
     let failure = merge_initial(Some("[entry.\n"), Domain::Property, &pages(), &[])
         .expect_err("読めない本文は落ちるはず");
 
     match failure {
-        SurveyError::TomlParse { .. } => {}
+        SurveyError::TomlParse { path, .. } => {
+            assert_eq!(path, "doc/ukadoc-coverage/ledger/property.toml");
+        }
         other => panic!("読み取りの失敗として落ちること: {other}"),
     }
+
+    // 備考の行頭に実在しない id の見出しがあると、切り分けの較正が食い違う。
+    let hidden = r#"[entry."ukadoc:list_propertysystem:system.year:1"]
+note = """
+[entry."ukadoc:list_propertysystem:ghost:1"]
+"""
+"#;
+    match merge_initial(Some(hidden), Domain::Property, &pages(), &[])
+        .expect_err("切り分けの食い違いは落ちるはず")
+    {
+        SurveyError::LedgerSplitMismatch { detail } => {
+            assert!(
+                detail.starts_with("doc/ukadoc-coverage/ledger/property.toml"),
+                "置き場が頭に無い: {detail}"
+            );
+        }
+        other => panic!("切り分けの食い違いとして落ちること: {other}"),
+    }
+}
+
+/// 項目の間に見出しのコメントを置いた本文。コメントは**後ろの**項目（YEAR）に付く。
+const COMMENT_BEFORE_YEAR: &str = r#"[ledger]
+domain = "property"
+pages = ["list_propertysystem"]
+
+[entry."ukadoc:list_propertysystem:balloon.scope(ID).width:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+# --- 群 3 ---
+[entry."ukadoc:list_propertysystem:system.year:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+"#;
+
+/// 備考の最後の行が `#` で始まり、その行で文字列を閉じて次の見出しが続く本文。
+const NOTE_ENDING_IN_HASH: &str = r#"[ledger]
+domain = "property"
+pages = ["list_propertysystem"]
+
+[entry."ukadoc:list_propertysystem:balloon.scope(ID).width:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = """
+# この行はコメントでなく備考の最後の行"""
+[entry."ukadoc:list_propertysystem:system.year:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+"#;
+
+/// 差し込んだ項目はコメントの前に入り、コメントは付いていた項目の真上に残る。
+///
+/// 対の腕。備考の中の `#` の行は前の塊の尻尾のコメントではないので、その前には差し込まない
+/// （差し込むと複数行の文字列が割れて本文が読めなくなる）。
+#[test]
+fn an_inserted_entry_goes_before_the_comment_heading_the_next_entry() {
+    let month = render_initial_entry(&id(MONTH));
+    let out = merge_initial(
+        Some(COMMENT_BEFORE_YEAR),
+        Domain::Property,
+        &pages(),
+        &ids(&[BALLOON, MONTH, YEAR]),
+    )
+    .expect("差し込めるはず");
+    assert_eq!(
+        out,
+        COMMENT_BEFORE_YEAR.replacen("# --- 群 3 ---\n", &format!("{month}# --- 群 3 ---\n"), 1)
+    );
+
+    let head = "[entry.\"ukadoc:list_propertysystem:system.year:1\"]\n";
+    let out = merge_initial(
+        Some(NOTE_ENDING_IN_HASH),
+        Domain::Property,
+        &pages(),
+        &ids(&[BALLOON, MONTH, YEAR]),
+    )
+    .expect("差し込めるはず");
+    assert_eq!(
+        out,
+        NOTE_ENDING_IN_HASH.replacen(head, &format!("{month}{head}"), 1)
+    );
+    read(&out, Domain::Property).expect("備考を割らずに差し込んだ本文は読めるはず");
+}
+
+/// 最初の項目の真上のコメントは前置きの尻尾にある。最初の項目より小さい id を差し込んでも、
+/// コメントは付いていた項目の真上に残る。
+#[test]
+fn an_entry_inserted_before_the_first_one_goes_before_its_comment() {
+    let body = COMMENT_BEFORE_YEAR.replacen(
+        &format!("{}\n", render_initial_entry(&id(BALLOON)).trim_end()),
+        "",
+        1,
+    );
+    assert!(
+        body.contains("pages = [\"list_propertysystem\"]\n\n\n# --- 群 3 ---\n[entry."),
+        "見本の形が狙いどおりでない: {body}"
+    );
+
+    let month = render_initial_entry(&id(MONTH));
+    let out = merge_initial(
+        Some(&body),
+        Domain::Property,
+        &pages(),
+        &ids(&[MONTH, YEAR]),
+    )
+    .expect("差し込めるはず");
+    assert_eq!(
+        out,
+        body.replacen("# --- 群 3 ---\n", &format!("{month}# --- 群 3 ---\n"), 1)
+    );
+}
+
+/// `#` で始まる行で閉じる備考の後ろに本物のコメントが続いても、コメントの前に差し込む。
+///
+/// 備考の最後の行は切らない（切ると文字列が割れる）。切るのは本物のコメントの行だけ。
+#[test]
+fn a_comment_after_a_note_ending_in_hash_still_heads_its_entry() {
+    let head = "[entry.\"ukadoc:list_propertysystem:system.year:1\"]\n";
+    let body = NOTE_ENDING_IN_HASH.replacen(head, &format!("# --- 群 3 ---\n{head}"), 1);
+    let month = render_initial_entry(&id(MONTH));
+    let out = merge_initial(
+        Some(&body),
+        Domain::Property,
+        &pages(),
+        &ids(&[BALLOON, MONTH, YEAR]),
+    )
+    .expect("差し込めるはず");
+    assert_eq!(
+        out,
+        body.replacen("# --- 群 3 ---\n", &format!("{month}# --- 群 3 ---\n"), 1)
+    );
+    read(&out, Domain::Property).expect("備考を割らずに差し込んだ本文は読めるはず");
 }

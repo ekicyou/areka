@@ -51,8 +51,7 @@ fn runtime_in_choice_wait() -> (Rc<RefCell<TextLayerRuntime>>, EmoTextSink, Join
     for cue in anchor_cues(ACTOR) {
         rt.borrow_mut().apply_cue(&cue);
     }
-    let (mut sink, join) =
-        spawn_emo_text(Rc::clone(&rt)).expect("このスレッドで文字の線を起こせる");
+    let (mut sink, join) = spawn_emo_text(Rc::clone(&rt));
     sink.choice_wait_began();
     pump_until_idle();
     let actor = ActorKey::from(ACTOR);

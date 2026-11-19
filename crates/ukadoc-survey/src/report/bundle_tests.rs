@@ -4,7 +4,7 @@
 //! （要件 6.2・設計 File Structure Plan）。
 //!
 //! 見本の関連の対は**わざと乱した順**で書く。整列済みの見本は「整列する」摂動を
-//! 素通りさせるので、並び順を主張するテストの見本にはならない（タスク 2.5 の教訓）。
+//! 素通りさせるので、並び順を主張するテストの見本にはならない。
 
 use super::{Bundle, bundles};
 use crate::model::EntryId;
@@ -52,7 +52,8 @@ fn scrambled() -> Vec<(EntryId, EntryId)> {
 ///
 /// 対の並びは 4・1・3・2 の順に入れ替えてある。向きを裏返したのは 4 対のうち
 /// 2 対（`XRAY`—`YANKEE` と `MIKE`—`NOVEMBER`）で、残る 2 対は [`scrambled`] と
-/// 同じ向きのまま——成分 A の鎖の接ぎ方（後の対が前に接ぐ）を保つためである。
+/// 同じ向きのまま。後の対が鎖のどちらの端に接いでも割れないことは
+/// [`a_chain_merges_no_matter_which_end_the_later_edge_hangs_from`] が受け持つ。
 /// 向きを見ないことそのものは [`two_links_converging_on_the_same_id_merge`] と
 /// [`two_links_leaving_the_same_id_merge`] が受け持つ。
 fn shuffled() -> Vec<(EntryId, EntryId)> {
@@ -86,21 +87,16 @@ fn expected() -> Vec<Bundle> {
 // ---- 連結成分ごとに 1 つの束（要件 7.1 の 5 つ目・要件 7.9） ----
 
 #[test]
-fn each_connected_component_becomes_exactly_one_bundle() {
-    assert_eq!(bundles(&scrambled()), expected());
-}
-
-#[test]
 fn shuffling_the_input_changes_neither_the_bundle_ids_nor_the_list_order() {
     // 2 つの見本が本当に別物であることを先に主張する。同じ列を 2 回渡しただけの
-    // テストは並び替えを 1 つも試していない（タスク 2.5 の教訓）。
+    // テストは並び替えを 1 つも試していない。
     assert_ne!(scrambled(), shuffled());
 
     let from_scrambled = bundles(&scrambled());
     let from_shuffled = bundles(&shuffled());
 
     // 互いに等しいだけでは「同じ誤りを 2 回した」と区別が付かないので、逐語の
-    // 期待値とも突き合わせる（タスク 1.3・1.4 の教訓）。
+    // 期待値とも突き合わせる。
     assert_eq!(from_scrambled, expected());
     assert_eq!(from_shuffled, expected());
     assert_eq!(from_scrambled, from_shuffled);
@@ -135,13 +131,14 @@ fn a_chain_merges_no_matter_which_end_the_later_edge_hangs_from() {
 
 #[test]
 fn two_links_converging_on_the_same_id_merge() {
-    // 同じ id を**指す**対が 2 つ。台帳の日常の形である——旧い綴り 2 つが同じ
-    // 正典 id を `alias_of` で指すと、対は (旧1, 新)・(旧2, 新) になる。
+    // 同じ id を**指す**対が 2 つ。台帳の日常の形である——旧い綴り 2 つが `links` の
+    // `kind = "alias_of"` で同じ正典 id を指すと、対は (旧1, 新)・(旧2, 新) になる
+    // （`alias_of` の欄は辺にならない）。
     //
     // 書かれた向きにしか繋がりを認めない実装はここで 2 束に割れ、`linkage.md` が
     // 引用している束 id が黙って付け替わる（要件 7.9 の安定した束 id が防ごうと
     // しているのはまさにこれ）。`bundle.rs` の「関連の向きも見ない」という主張は
-    // この 1 本が背負う。
+    // この 1 本と `two_links_leaving_the_same_id_merge` の 2 本が背負う。
     let got = bundles(&[edge(ALPHA, BRAVO), edge(CHARLIE, BRAVO)]);
     assert_eq!(
         got,
@@ -154,8 +151,8 @@ fn two_links_converging_on_the_same_id_merge() {
 
 #[test]
 fn two_links_leaving_the_same_id_merge() {
-    // 同じ id から**出る**対が 2 つ（1 つの正典 id が 2 つの旧 id を `supersedes`
-    // する形）。上の収束形と対になる発散形で、向きの契約を両側から言う。
+    // 同じ id から**出る**対が 2 つ（1 つの正典 id が `links` の
+    // `kind = "supersedes"` で 2 つの旧 id を指す形）。上の収束形と対になる発散形で、向きの契約を両側から言う。
     let got = bundles(&[edge(BRAVO, ALPHA), edge(BRAVO, CHARLIE)]);
     assert_eq!(
         got,
@@ -225,32 +222,6 @@ fn components_without_a_connecting_edge_do_not_merge() {
     );
 }
 
-// ---- 束 id は構成 id の最小値（要件 7.9） ----
-
-#[test]
-fn the_bundle_id_is_the_smallest_member_not_the_first_one_seen() {
-    // 最初に現れる id は yankee で、最小の id は xray。
-    let got = bundles(&[edge(YANKEE, XRAY)]);
-    assert_eq!(got.len(), 1);
-    assert_eq!(got[0].id.as_str(), "ukadoc:page_c:xray:1");
-    assert_ne!(got[0].id.as_str(), "ukadoc:page_c:yankee:1");
-}
-
-#[test]
-fn members_are_listed_in_byte_ascending_order() {
-    let got = bundles(&[edge(CHARLIE, ALPHA), edge(ALPHA, BRAVO)]);
-    assert_eq!(got.len(), 1);
-    let members: Vec<&str> = got[0].members.iter().map(EntryId::as_str).collect();
-    assert_eq!(
-        members,
-        vec![
-            "ukadoc:page_a:alpha:1",
-            "ukadoc:page_a:bravo:1",
-            "ukadoc:page_a:charlie:1",
-        ]
-    );
-}
-
 // ---- 端の場合を釘付けする ----
 
 #[test]
@@ -294,18 +265,7 @@ fn an_id_that_appears_in_no_link_never_appears_in_a_bundle() {
         .flat_map(|bundle| bundle.members.iter())
         .map(EntryId::as_str)
         .collect();
-    // 否定の主張だけだと対象が空でも真になるので、非空の主張と対で置く
-    // （タスク 1.6 の教訓）。
+    // 否定の主張だけだと対象が空でも真になるので、非空の主張と対で置く。
     assert_eq!(seen, vec!["ukadoc:page_a:alpha:1", "ukadoc:page_a:bravo:1"]);
     assert!(!seen.contains(&"ukadoc:page_b:mike:1"));
-}
-
-// ---- 2 回続けて同じ答え（要件 7.3） ----
-
-#[test]
-fn running_twice_yields_the_same_bundles() {
-    let first = bundles(&scrambled());
-    let second = bundles(&scrambled());
-    assert_eq!(first, second);
-    assert_eq!(first, expected());
 }

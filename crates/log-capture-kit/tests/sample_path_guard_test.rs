@@ -1,5 +1,7 @@
 //! 検体ゴースト／バルーンの在処を窓口の外で綴っていないか見張る常設検査（要件 1.7・1.8・10.3）。
 //!
+//! 要件・設計・タスクの番号は、spec の名を添えていないものは spec `areka-P0-nar-install` のもの。
+//!
 //! # 何を見張るか
 //!
 //! 検体の置き場を指す綴りが、窓口 crate の定義（`crates/sample-ghost-kit/src/`）の外の
@@ -37,15 +39,14 @@
 //!
 //! - 合成入力で 4 形すべてが当たること・正規の使い方と説明文とコメントには当たらないこと。
 //! - 列挙が現実的な規模であること（母数 0 の緑を排除する）。
-//! - 除外領域を走査すると確かに当たりがあり、除外を外すと違反が出ること
-//!   （＝除外が飾りでない）。
+//! - 除外領域を走査すると、あると宣言した形の当たりが確かにあること（＝除外が飾りでない）。
 //! - 本番依存の見張りは合成マニフェストで赤を作れること。
 //!
-//! # 除外領域の実体は今日どこまであるか（恒真化への備え）
+//! # 除外領域の実体はどこまであるか（恒真化への備え）
 //!
-//! 設計の較正は「除外領域に ⑴〜⑷ の実体があること」を求めているが、**今日実体がある
-//! のは ⑶ だけである**——⑵ と ⑷ は構造的に字面にならず、⑴ は窓口が段 ③ で旧置き場を
-//! 綴らなくなって消えた。実体の無い形を黙って落とすと、除外が飾りになっても気付けない。
+//! 設計の較正は「除外領域に ⑴〜⑷ の実体があること」を求めているが、**実体の無い形がある**
+//! （構造的に字面にならない形や、窓口が綴らなくなって消えた形）。どの形に実体があるかは
+//! [`EXCLUSION_FORMS`] が宣言する。実体の無い形を黙って落とすと、除外が飾りになっても気付けない。
 //! そこで [`EXCLUSION_FORMS`] が 4 形それぞれに「今日あるか・無いならなぜか」を明示し、
 //! [`the_exclusion_declares_which_forms_it_holds`] が**両方向**で判定する——あると宣言した
 //! 形が消えたら赤、無いと宣言した形が現れたら赤（宣言を書き換えさせる）。段 ③ で ⑶ の
@@ -53,10 +54,12 @@
 //!
 //! # 走査語を逐語で書かない約束
 //!
-//! 本ファイルは `crates/` の下にあるので走査対象そのものでもある。語を逐語で書くと
-//! 見張りが自分自身を違反として拾う。⑴⑶ は `concat!` で 2 片に割り、⑵⑷ は登記表から
-//! 組み立てるので字面には現れない。守れていることは
-//! [`the_guard_file_never_spells_the_tokens_out_not_even_inside_comments`] が縛る。
+//! 本ファイルは `crates/` の下にあるので走査対象そのものでもある。語を実行行に逐語で書くと
+//! 見張りが自分自身を違反として拾う。コメントの中なら見張りは拾わない（主検査はコメントを除く）が、
+//! 綴りを `rg`／`grep` で検索して数えるときの母数が黙って動く。⑴⑶ は `concat!` で 2 片に割り、
+//! ⑵⑷ は登記表から組み立てるので字面には現れない。守れていることは
+//! [`the_guard_files_never_spell_the_tokens_out_not_even_inside_comments`] が、見張りの置き場
+//! （共有 crate の `tests/`）の全ファイルを生テキストで見て縛る。
 
 mod workspace_scan;
 
@@ -65,8 +68,9 @@ use std::collections::BTreeSet;
 use sample_ghost_kit::SAMPLES;
 
 use workspace_scan::{
-    manifest_lines, mentions_crate, production_dependencies_on, read_source, scan_tokens,
-    walk_workspace_sources, workspace_manifests,
+    Hit, files_that_must_not_spell_the_tokens, has_dev_dependency_on, manifest_fixture,
+    production_dependencies_on, raw_occurrences, raw_scan_sources, render, scan_sources,
+    scan_tokens, walk_workspace_sources, workspace_manifests,
 };
 
 // ---------------------------------------------------------------------------
@@ -91,7 +95,7 @@ const GATEWAY_DEFINITION_PREFIX: &str = "crates/sample-ghost-kit/src/";
 /// 窓口 crate のパッケージ名（本番依存の見張りが使う）。
 const KIT_PACKAGE: &str = "sample-ghost-kit";
 
-/// 本番の表に窓口 crate を持ってよいクレートの例外表（設計 D-2）。
+/// 本番の表に窓口 crate を持ってよいクレートの例外表（areka-P0-real-run-mcp-kit 設計 D-2）。
 ///
 /// 表のクレート自身はどこの本番の表にも載れない（[`a_gateway_user_never_appears_in_a_production_dependency_table`]）。
 /// 本番の道で窓口 crate に届くには「本番の表に窓口 crate を持つクレート」を通るしかないので、
@@ -104,9 +108,6 @@ const GATEWAY_USERS: &[(&str, &str)] = &[(
 
 /// [`GATEWAY_USERS`] の件数（逐語）。表と食い違えば赤。
 const GATEWAY_USERS_COUNT: usize = 1;
-
-/// 本見張り自身の相対パス。
-const THIS_GUARD: &str = "crates/log-capture-kit/tests/sample_path_guard_test.rs";
 
 /// 走査語の 4 形。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -139,10 +140,15 @@ impl Form {
             Form::CheckedInTree => SAMPLES
                 .iter()
                 .flat_map(|s| {
-                    [
-                        format!("{VENDOR_PARENT}/{}/", s.name),
-                        format!("{VENDOR_PARENT}/{}\"", s.name),
-                    ]
+                    // 区切りは `/`・生の `\`・逃がしの `\\`。終わりは区切りの続き（`\\` も
+                    // `\` で始まる）か閉じの `"`。
+                    [("/", "/"), ("\\", "\\"), ("\\\\", "\\")]
+                        .into_iter()
+                        .flat_map(move |(sep, end)| {
+                            let tree =
+                                format!("{}{sep}{}", VENDOR_PARENT.replace('/', sep), s.name);
+                            [format!("{tree}{end}"), format!("{tree}\"")]
+                        })
                 })
                 .collect(),
             Form::Namespace => vec![TOKEN_NAMESPACE.to_owned()],
@@ -154,6 +160,12 @@ impl Form {
                             format!("join(\"{b}\")"),
                             format!("{b}/"),
                             format!("/{b}\""),
+                            format!("\\{b}\""),
+                            format!("\\{b}\\"),
+                            // shortcut: 生の文字列が `<名>\` で始まる形（`r"<名>\…"`）は捕まえない。
+                            // `<名>\` 単独は `\n` などの逃がしと字面で見分けられないので、走査器が
+                            // 文字列の種類を読むようになったら足す。
+                            format!("{b}\\\\"),
                             format!("{}(\"{b}\")", s.name),
                         ]
                     })
@@ -208,12 +220,12 @@ enum Presence {
     Retired(&'static str),
 }
 
-/// 4 形それぞれの、除外領域における実体の有無（2026-09-18 実測）。
+/// 4 形それぞれの、除外領域における実体の有無。
 ///
-/// 設計の較正は「除外領域に ⑴〜⑷ の実体があること」を求めているが、実測で実体がある
-/// のは ⑶ の 1 形だけである。⑵ と ⑷ は窓口が実行時に組むので字面にならず、⑴ は窓口が
-/// 段 ③ で旧置き場を綴らなくなって消えた。実体の無い形を黙って落とすと較正が恒真になる
-/// ので、理由つきで宣言し、現れたら赤になるようにしてある（module doc を参照）。
+/// 設計の較正は「除外領域に ⑴〜⑷ の実体があること」を求めているが、実体の無い形がある。
+/// どの形に実体があり、無い形はなぜ無いかは各項が持つ（ここには写さない）。実体の無い形を
+/// 黙って落とすと較正が恒真になるので、理由つきで宣言し、現れたら赤になるようにしてある
+/// （module doc を参照）。
 const EXCLUSION_FORMS: &[(Form, Presence)] = &[
     (
         Form::OldLocation,
@@ -243,19 +255,6 @@ const EXCLUSION_FORMS: &[(Form, Presence)] = &[
 // 走査の取り回し
 // ---------------------------------------------------------------------------
 
-/// 走査で当たった 1 件。
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct Hit {
-    /// ワークスペース根からの相対パス（区切りは `/`）。
-    path: String,
-    /// 1 始まりの行番号。
-    line: usize,
-    /// 当たった語。
-    token: String,
-    /// 語が属する形。
-    form: Form,
-}
-
 /// 見張りの対象（窓口の定義を除いた全ソース）。
 fn watched_sources() -> Vec<String> {
     walk_workspace_sources()
@@ -272,50 +271,37 @@ fn gateway_sources() -> Vec<String> {
         .collect()
 }
 
-/// 与えられたファイル群を全 4 形で走査する。
-fn scan_sources(paths: &[String]) -> Vec<Hit> {
-    let table = token_table();
-    let tokens: Vec<&str> = table.iter().map(|(t, _)| t.as_str()).collect();
-    let mut hits = Vec::new();
-    for path in paths {
-        for (line, token) in scan_tokens(&read_source(path), &tokens) {
-            let form = table
-                .iter()
-                .find(|(t, _)| *t == token)
-                .map(|(_, f)| *f)
-                .expect("当たった語は必ず一覧の中にある");
-            hits.push(Hit {
-                path: path.clone(),
-                line,
-                token,
-                form,
-            });
-        }
-    }
-    hits
+/// 全 4 形の走査語（[`token_table`] から形を落としたもの）。
+fn all_tokens() -> Vec<String> {
+    token_table().into_iter().map(|(t, _)| t).collect()
+}
+
+/// 与えられたファイル群を全 4 形の語で走査する（[`workspace_scan::scan_sources`] に語の一覧を渡すだけ）。
+fn scan_forms(paths: &[String]) -> Vec<Hit> {
+    scan_sources(paths, &all_tokens())
 }
 
 /// 合成入力を 1 本走査する（較正で使う。ファイル名は持たない）。
 fn scan_text(src: &str) -> Vec<(usize, String)> {
-    let table = token_table();
-    let tokens: Vec<&str> = table.iter().map(|(t, _)| t.as_str()).collect();
-    scan_tokens(src, &tokens)
+    scan_tokens(src, &all_tokens())
 }
 
-/// 違反の一覧を人が読める形にする。
-fn render(hits: &[Hit]) -> String {
-    hits.iter()
-        .map(|h| {
-            format!(
-                "  {}:{} （{}・語: {}）",
-                h.path,
-                h.line,
-                h.form.label(),
-                h.token
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+/// 当たった語が属する形。
+fn form_of(token: &str) -> Form {
+    token_table()
+        .into_iter()
+        .find(|(t, _)| t == token)
+        .map(|(_, form)| form)
+        .expect("当たった語は必ず一覧の中にある")
+}
+
+/// 違反の一覧を人が読める形にする（[`workspace_scan::render`] の各行に形の名前を添える）。
+fn render_with_forms(hits: &[Hit]) -> String {
+    let lines: Vec<String> = hits
+        .iter()
+        .map(|h| format!("{h}・{}", form_of(&h.token).label()))
+        .collect();
+    render(&lines)
 }
 
 /// 較正に使う `(ゴースト名, 同梱バルーン名)` の組を登記表から 1 つ選ぶ。
@@ -334,14 +320,14 @@ fn a_bundled_balloon() -> (&'static str, &'static str) {
 
 #[test]
 fn no_sample_path_spelling_lives_outside_the_gateway() {
-    let violations = scan_sources(&watched_sources());
+    let violations = scan_forms(&watched_sources());
     assert!(
         violations.is_empty(),
         "検体の在処を自分で綴っている箇所がある。検体は窓口 `sample_ghost_kit::SampleRoot` \
          から名前で引くこと（`acquire` でゴースト／バルーンを、同梱バルーンは `balloon` を \
          呼ぶ）。窓口を通しておけば、段 ③ で保管が `.nar` へ変わっても呼び手は 1 行も \
          書き換えずに済む（要件 1.7・1.8）:\n{}",
-        render(&violations)
+        render_with_forms(&violations)
     );
 }
 
@@ -366,11 +352,6 @@ fn the_scan_is_not_vacuous() {
          GATEWAY_DEFINITION_PREFIX を直すこと: {GATEWAY_DEFINITION_PREFIX}"
     );
 
-    assert_eq!(
-        token_table().len(),
-        FORMS.iter().map(|f| f.tokens().len()).sum::<usize>(),
-        "走査語の一覧と形ごとの語数が食い違う"
-    );
     for form in FORMS {
         assert!(
             !form.tokens().is_empty(),
@@ -378,25 +359,6 @@ fn the_scan_is_not_vacuous() {
             form.label()
         );
     }
-}
-
-#[test]
-fn removing_the_exclusion_turns_the_guard_red() {
-    // 除外が飾りでないことの直接の証明。除外を外して全ソースを走査すると違反が出て、
-    // その違反は**すべて除外領域の中**にある。
-    let hits = scan_sources(&walk_workspace_sources());
-    assert!(
-        !hits.is_empty(),
-        "除外を外しても当たりが 0 件＝走査そのものが何も検知していない"
-    );
-    let outside: Vec<&Hit> = hits
-        .iter()
-        .filter(|h| !h.path.starts_with(GATEWAY_DEFINITION_PREFIX))
-        .collect();
-    assert!(
-        outside.is_empty(),
-        "除外領域の外に当たりがある（主検査と食い違う）: {outside:?}"
-    );
 }
 
 #[test]
@@ -410,8 +372,8 @@ fn the_exclusion_declares_which_forms_it_holds() {
         "宣言は 4 形すべてを設計の順に 1 度ずつ並べること（漏れた形は判定されない）"
     );
 
-    let hits = scan_sources(&gateway_sources());
-    let found: BTreeSet<Form> = hits.iter().map(|h| h.form).collect();
+    let hits = scan_forms(&gateway_sources());
+    let found: BTreeSet<Form> = hits.iter().map(|h| form_of(&h.token)).collect();
 
     let mut present = 0usize;
     for (form, presence) in EXCLUSION_FORMS {
@@ -524,10 +486,7 @@ fn the_checked_in_sample_tree_is_detected_but_the_nar_file_name_is_not() {
 
     // 末尾 `/` を付けずにフォルダで閉じる綴りも同じ形である。
     let bare = format!("{VENDOR_PARENT}/{name}\"");
-    let positive = format!(
-        "    let dir = repo.join(\"{bare});
-"
-    );
+    let positive = format!("    let dir = repo.join(\"{bare});\n");
     assert_eq!(
         scan_text(&positive),
         vec![(1usize, bare)],
@@ -562,7 +521,7 @@ fn the_extraction_namespace_is_detected() {
 }
 
 #[test]
-fn all_four_shapes_of_a_bundled_balloon_path_are_detected() {
+fn the_non_backslash_shapes_of_a_bundled_balloon_path_are_detected() {
     let (ghost, balloon) = a_bundled_balloon();
     for token in [
         format!("join(\"{balloon}\")"),
@@ -586,6 +545,79 @@ fn all_four_shapes_of_a_bundled_balloon_path_are_detected() {
         vec![(1usize, format!("/{balloon}\""))],
         "パス文字列の末尾に名前を継ぎ足した形を検知できていない"
     );
+}
+
+#[test]
+fn a_backslash_spelled_bundled_balloon_path_is_detected() {
+    // Windows の区切り `\` で組んだ形も同じ ⑷ である（生の文字列の `\` と逃がしの `\\` の両方）。
+    let (_, balloon) = a_bundled_balloon();
+    let before = format!("\\{balloon}\"");
+    let middle = format!("\\{balloon}\\");
+    let after = format!("{balloon}\\\\");
+    for (line, token) in [
+        (
+            format!("    let dsc = root.join(r\"balloon\\{balloon}\\descript.txt\");\n"),
+            &middle,
+        ),
+        (
+            format!("    let dir = root.join(r\"balloon\\{balloon}\");\n"),
+            &before,
+        ),
+        (
+            format!("    let dir = root.join(\"balloon\\\\{balloon}\");\n"),
+            &before,
+        ),
+        (
+            format!("    let dsc = root.join(\"balloon\\\\{balloon}\\\\descript.txt\");\n"),
+            &middle,
+        ),
+        (
+            format!("    let dsc = dir.join(\"{balloon}\\\\descript.txt\");\n"),
+            &after,
+        ),
+    ] {
+        assert_eq!(
+            scan_text(&line),
+            vec![(1usize, token.clone())],
+            "`\\` で同梱バルーンのパスを組む形を検知できていない: {line}"
+        );
+    }
+
+    // 近接の陰性: 名前の直後の逃がし（`\n`・`\r`）はパスの区切りではない。
+    let descript = format!("    let d = \"balloon0.directory,{balloon}\\r\\n\";\n");
+    assert_eq!(
+        scan_text(&descript),
+        Vec::new(),
+        "名前の後ろの逃がしに当たっている"
+    );
+}
+
+#[test]
+fn a_backslash_spelled_checked_in_tree_is_detected() {
+    let name = SAMPLES
+        .first()
+        .map(|s| s.name)
+        .expect("検体が 1 つ以上登記されている");
+    // 区切りは生の文字列の `\` と逃がしの `\\` の 2 つ、終わりは `\` と `"` の 2 つ。
+    for (open, sep) in [("r\"", "\\"), ("\"", "\\\\")] {
+        let tree = format!("{}{sep}{name}", VENDOR_PARENT.replace('/', sep));
+        for (line, token) in [
+            (
+                format!("    let dic = repo.join({open}{tree}{sep}dic\");\n"),
+                format!("{tree}\\"),
+            ),
+            (
+                format!("    let dir = repo.join({open}{tree}\");\n"),
+                format!("{tree}\""),
+            ),
+        ] {
+            assert_eq!(
+                scan_text(&line),
+                vec![(1usize, token)],
+                "`\\` で綴った展開形の検体フォルダを検知できていない: {line}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -656,18 +688,6 @@ fn a_spelling_in_a_comment_is_not_a_hit_but_the_same_line_of_code_is() {
 // 本番依存の見張り（要件 1.7・10.3）
 // ---------------------------------------------------------------------------
 
-/// 開発側の依存として `package` を引いているか（純関数・較正の陽性側）。
-fn has_dev_dependency(src: &str, package: &str) -> bool {
-    manifest_lines(src).iter().any(|l| {
-        l.section.contains("dev-dependencies")
-            && if l.is_header {
-                mentions_crate(&l.section, package)
-            } else {
-                mentions_crate(&l.text, package)
-            }
-    })
-}
-
 /// 例外表のクレートか。
 fn is_gateway_user(name: &str) -> bool {
     GATEWAY_USERS.iter().any(|(user, _)| *user == name)
@@ -707,7 +727,7 @@ fn the_sample_gateway_is_actually_pulled_in_as_a_dev_dependency() {
     );
     let dev: Vec<&str> = manifests
         .iter()
-        .filter(|(_, text)| has_dev_dependency(text, KIT_PACKAGE))
+        .filter(|(_, text)| has_dev_dependency_on(text, KIT_PACKAGE))
         .map(|(name, _)| name.as_str())
         .collect();
     assert!(
@@ -715,11 +735,6 @@ fn the_sample_gateway_is_actually_pulled_in_as_a_dev_dependency() {
         "窓口 crate を dev-dependency として引いている crate が少なすぎる＝名前の照合が \
          壊れている疑い: {dev:?}"
     );
-}
-
-/// manifest の見本。依存行だけを差し替えて両側を作る（依存行は必ず 6 行目）。
-fn manifest_fixture(section: &str, line: &str) -> String {
-    format!("[package]\nname = \"demo\"\n\n[{section}]\ntracing = {{ workspace = true }}\n{line}\n")
 }
 
 /// 見本の依存行（窓口 crate を引く素の形）。
@@ -759,14 +774,14 @@ fn a_dev_dependency_on_the_sample_gateway_is_not_a_violation() {
             "[{section}] は開発側なので違反ではない"
         );
         assert!(
-            has_dev_dependency(&src, KIT_PACKAGE),
+            has_dev_dependency_on(&src, KIT_PACKAGE),
             "[{section}] は開発側の依存として検出されるはず"
         );
     }
 }
 
 // ---------------------------------------------------------------------------
-// 例外表のクレート（設計 D-2）
+// 例外表のクレート（areka-P0-real-run-mcp-kit 設計 D-2）
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -804,7 +819,7 @@ fn a_gateway_user_never_appears_in_a_production_dependency_table() {
     assert!(
         violations.is_empty(),
         "例外表のクレートは窓口 crate を本番の表に持つので、どこの本番の表にも載れない\
-         （載ると窓口 crate が配布物の依存へ入る＝要件 10.3）:\n{}",
+         （載ると窓口 crate が配布物の依存へ入る＝areka-P0-real-run-mcp-kit 要件 10.3）:\n{}",
         violations.join("\n")
     );
 }
@@ -815,7 +830,7 @@ fn each_gateway_user_is_actually_pulled_in_as_a_dev_dependency() {
     for (user, _) in GATEWAY_USERS {
         let dev: Vec<String> = workspace_manifests(user)
             .into_iter()
-            .filter(|(_, text)| has_dev_dependency(text, user))
+            .filter(|(_, text)| has_dev_dependency_on(text, user))
             .map(|(name, _)| name)
             .collect();
         assert!(
@@ -823,14 +838,6 @@ fn each_gateway_user_is_actually_pulled_in_as_a_dev_dependency() {
             "例外表のクレート {user} を dev-dependency として引く crate が 0 件＝検査が空振りしている疑い"
         );
     }
-    let areka = workspace_manifests(KIT_PACKAGE)
-        .into_iter()
-        .find(|(name, _)| name == "areka")
-        .expect("crates/areka/Cargo.toml があるはず");
-    assert!(
-        has_dev_dependency(&areka.1, "real-run-kit"),
-        "areka の [dev-dependencies] に real-run-kit が無い"
-    );
 }
 
 #[test]
@@ -872,38 +879,16 @@ fn a_production_dependency_on_a_gateway_user_is_a_violation() {
         Vec::new(),
         "[dev-dependencies] は違反ではない"
     );
-    assert!(has_dev_dependency(&dev, "real-run-kit"));
+    assert!(has_dev_dependency_on(&dev, "real-run-kit"));
 }
 
 // ---------------------------------------------------------------------------
-// 見張り自身が走査語を逐語で持たないこと
+// 見張りの置き場のファイルが走査語を逐語で持たないこと
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_guard_file_itself_is_not_a_hit() {
-    assert_eq!(
-        scan_sources(&[THIS_GUARD.to_owned()]),
-        Vec::new(),
-        "見張り自身が走査語を逐語で持ってしまっている（concat! で割るか登記表から組むこと）"
-    );
-}
-
-/// コメントを**除かずに**生テキストから走査語を探す（純関数）。
-fn raw_occurrences(src: &str, tokens: &[String]) -> Vec<(usize, String)> {
-    let mut hits = Vec::new();
-    for (index, line) in src.lines().enumerate() {
-        for token in tokens {
-            if line.contains(token.as_str()) {
-                hits.push((index + 1, token.clone()));
-            }
-        }
-    }
-    hits
-}
-
-#[test]
-fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
-    let tokens: Vec<String> = token_table().into_iter().map(|(t, _)| t).collect();
+fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
+    let tokens = all_tokens();
 
     // 較正: 生テキスト走査はコメントを除かない。除いてしまうと本検査は恒真になる。
     let planted = format!("// 説明: かつては {TOKEN_NAMESPACE} と書いていた");
@@ -913,14 +898,13 @@ fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
         "コメントの中でも生テキスト走査は当たらねばならない（当たらないなら本検査は恒真）"
     );
 
-    let violations: Vec<String> = raw_occurrences(&read_source(THIS_GUARD), &tokens)
-        .into_iter()
-        .map(|(line, token)| format!("  {THIS_GUARD}:{line} （語: {token}）"))
-        .collect();
+    // 本見張りの除外は窓口の定義の領域だけで、見張りの置き場に載る例外は無い。
+    let violations = raw_scan_sources(&files_that_must_not_spell_the_tokens(&[]), &tokens);
     assert!(
         violations.is_empty(),
-        "走査語はコメントの中も含めて逐語で書いてはいけない（見張りが自分自身を拾う）。\
+        "走査語はコメントの中も含めて逐語で書いてはいけない（コメントは見張りが除くが、\
+         検索で数える母数は動く）。\
          concat! で 2 片に割るか、登記表から組み立てること:\n{}",
-        violations.join("\n")
+        render(&violations)
     );
 }

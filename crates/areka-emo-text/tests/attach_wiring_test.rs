@@ -30,7 +30,7 @@ use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::{ExpectField, capture, expect_one};
 use wintf::ecs::{DPI, GraphicsCommandList, VisualGraphics};
 
 /// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
@@ -130,40 +130,6 @@ fn setup_target_with_dpis(
 // 有効判定の再計算 ⑶ 番兵イベントによる空振り検出、の 3 点でこれを塞ぐ（機序の逐条解説は
 // `log_capture_kit` の crate doc と同 crate の `src/probe.rs`）。
 
-/// 捕捉した 1 イベント。共有機構の正準型をそのまま使う（`level` ＋ フィールド）。
-type LogEvent = CapturedEvent;
-
-/// 構造化フィールドの Debug 表現を取り出し、**欠落は失敗**とする判定アダプタ
-/// （フィールド名も実機サインオフの判定契約のうち）。
-///
-/// `field` ではなく別名にしてあるのは、[`CapturedEvent`] が同名の固有メソッドを持つためで
-/// ある。拡張トレイトに `field` を生やすと固有メソッドが黙って優先され、欠落時に panic する
-/// はずの判定が `None` を返すだけになる（緑のまま契約が消える）。
-trait ExpectField {
-    fn expect_field(&self, name: &str) -> &str;
-}
-
-impl ExpectField for LogEvent {
-    fn expect_field(&self, name: &str) -> &str {
-        self.field(name)
-            .unwrap_or_else(|| panic!("ログフィールド `{name}` が無い: {:?}", self.fields))
-    }
-}
-
-/// メッセージに `needle` を含むイベントが**ちょうど 1 件**在ることを主張して返す。
-fn expect_one<'a>(events: &'a [LogEvent], needle: &str) -> &'a LogEvent {
-    let hits: Vec<&LogEvent> = events
-        .iter()
-        .filter(|e| e.message().contains(needle))
-        .collect();
-    assert_eq!(
-        hits.len(),
-        1,
-        "`{needle}` を含むログがちょうど 1 件ではない: {events:?}"
-    );
-    hits[0]
-}
-
 // ── 共通補助 ─────────────────────────────────────────────────────────────────────────
 
 /// テスト用 BalloonModel（幾何は既定: validrect 未指定＝画像全域・font 未指定＝既定）。
@@ -221,8 +187,7 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
         .register_actor_view(kero.clone(), &view1, &model);
 
     // ── 通し結線: sink emit（\0/\1 交互）→ UI ドレイン → 状態機械 ──
-    let (mut sink, _handle) =
-        spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+    let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
     sink.emit(cue("0", 0.0, CueCommand::Text("アヒルやアヒル".into())));
     sink.emit(cue("1", 0.0, CueCommand::Text("ふむ".into())));
     sink.close();

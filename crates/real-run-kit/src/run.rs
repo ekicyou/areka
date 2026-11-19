@@ -1,7 +1,8 @@
 //! 走りの取っ手（Run）・既定の時間・出力の読み口・破棄の順（要件 1.8・3.2〜3.6・4.2・4.9・5.1〜5.5）。
 //!
 //! 待ち・呼び出し・閉じ方は下の段（output・mcp・close）に任せ、既定の時間の各欄を引数として渡す。
-//! 破棄では、子が生きていれば静かに閉じてから（5.5）、欄の破棄として回の置き場が残すか消すかを決める。
+//! 破棄では、子が生きていれば閉じてから（5.5・閉じずに止めたら panic＝audit-test-kits 指摘 9）、欄の破棄として回の置き場が
+//! 残すか消すかを決める。
 
 use std::path::{Path, PathBuf};
 use std::process::Child;
@@ -9,13 +10,13 @@ use std::time::{Duration, Instant};
 
 use crate::close::{self, Ended};
 use crate::evidence::RunDirs;
-use crate::mcp::{McpChannel, McpError, ToolReply, Waits};
+use crate::mcp::{McpChannel, McpError, ToolReply};
 use crate::output::{self, ChildExited, WaitEnd};
 
 /// 既定の時間（D-13）。`safety_exit < deadline` を兄弟のテストが固定する（1.8）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Limits {
-    /// 各待ちの始まりから数える締切（今の番犬と同じ 60 秒）。
+pub(crate) struct Limits {
+    /// 各待ちの始まりから数える締切。
     pub deadline: Duration,
     /// 子の起動から数える保険の自動終了（締切より短い＝窓口が止めるより先に子が自分で終わる）。
     pub safety_exit: Duration,
@@ -58,12 +59,19 @@ pub struct Run {
 
 impl Run {
     /// 起こした子と回の置き場から取っ手を作る（起こすのは launch）。
-    pub(crate) fn new(child: Child, dirs: RunDirs, port: u16, limits: Limits) -> Run {
+    /// MCP の呼び口は子を起こす前に組んで渡す（組めずに落ちても子を置き去りにしない）。
+    pub(crate) fn new(
+        child: Child,
+        dirs: RunDirs,
+        mcp: McpChannel,
+        port: u16,
+        limits: Limits,
+    ) -> Run {
         Run {
             child,
             stdout: dirs.stdout_log(),
             stderr: dirs.stderr_log(),
-            mcp: McpChannel::new(port),
+            mcp,
             limits,
             port,
             ended: None,
@@ -97,13 +105,17 @@ impl Run {
     }
 
     /// 標準出力の全文。走りの途中でも終わった後でも読める（3.6）。読めない字は U+FFFD。
+    ///
+    /// # Panics
+    ///
+    /// ファイルを読めないとき（パスと理由）。
     pub fn stdout(&self) -> String {
-        read_lossy(&self.stdout)
+        output::read_text(&self.stdout)
     }
 
     /// 標準エラーの全文（`stdout` と同じ読み方）。
-    pub fn stderr(&self) -> String {
-        read_lossy(&self.stderr)
+    fn stderr(&self) -> String {
+        output::read_text(&self.stderr)
     }
 
     /// 標準出力・改行・標準エラー。
@@ -120,7 +132,7 @@ impl Run {
         let files = [self.stdout.as_path(), self.stderr.as_path()];
         let deadline = Instant::now() + self.limits.deadline;
         match output::wait_any(
-            files,
+            &mut output::tails(files),
             &[needle],
             &mut self.child,
             deadline,
@@ -138,9 +150,8 @@ impl Run {
     /// ツールを 1 回呼ぶ（4.2〜4.8）。`args_json` は JSON の object の文（`"{}"` 可・読めなければ panic）。
     pub fn call(&mut self, tool: &str, args_json: &str) -> Result<ToolReply, McpError> {
         let files = [self.stdout.as_path(), self.stderr.as_path()];
-        let waits = waits(&self.limits);
         self.mcp
-            .call(&mut self.child, files, tool, args_json, waits)
+            .call(&mut self.child, files, tool, args_json, &self.limits)
     }
 
     /// 答えの文に `needle` が現れるまで呼び直す（4.9）。
@@ -155,9 +166,14 @@ impl Run {
         needle: &str,
     ) -> Result<ToolReply, McpError> {
         let files = [self.stdout.as_path(), self.stderr.as_path()];
-        let waits = waits(&self.limits);
-        self.mcp
-            .call_until(&mut self.child, files, tool, args_json, needle, waits)
+        self.mcp.call_until(
+            &mut self.child,
+            files,
+            tool,
+            args_json,
+            needle,
+            &self.limits,
+        )
     }
 
     /// 利用者と同じ閉じ方で閉じる（5.1・5.3）。2 度目からは同じ終わりを返す。
@@ -192,30 +208,17 @@ impl Run {
 }
 
 impl Drop for Run {
-    /// ⑴ 子が生きていれば静かに閉じる（締切で止める・panic しない＝5.5）。⑵ この本体の後に欄が
-    /// 破棄され、`RunDirs` が残すか消すかを決める（子がファイルを掴んだまま複写・削除しない）。
+    /// ⑴ 子が生きていれば閉じる知らせで閉じる（締切で止めたら、panic の途中でなければ panic＝audit-test-kits 指摘 9）。
+    /// ⑵ この本体の後に（本体の panic の unwind の中でも）欄が破棄され、`RunDirs` が残すか消すかを
+    /// 決める（子がファイルを掴んだまま複写・削除しない）。
     fn drop(&mut self) {
         if self.ended.is_some() {
             return;
         }
         let files = [self.stdout.as_path(), self.stderr.as_path()];
-        let l = self.limits;
-        // 既に終わっていれば、stop_quietly は送らずに回収して戻る。
-        close::stop_quietly(&mut self.child, files, l.deadline, l.poll, l.close_retry);
+        // 既に終わっていれば、stop_on_drop は送らずに回収して戻る。
+        close::stop_on_drop(&mut self.child, files, &self.limits);
     }
-}
-
-fn waits(l: &Limits) -> Waits {
-    Waits {
-        deadline: l.deadline,
-        poll: l.poll,
-        call_retry: l.call_retry,
-        exit_grace: l.exit_grace,
-    }
-}
-
-fn read_lossy(path: &Path) -> String {
-    String::from_utf8_lossy(&std::fs::read(path).unwrap_or_default()).into_owned()
 }
 
 #[cfg(test)]

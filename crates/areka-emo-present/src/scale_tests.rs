@@ -246,21 +246,7 @@ fn derive_scale_never_panics_and_always_yields_usable_scale() {
 // crate doc にあり、ここには写さない）。
 
 use crate::balloon::test_support::count_message;
-use log_capture_kit::{CapturedEvent, capture};
-
-/// メッセージに `needle` を含むイベントが**ちょうど 1 件**在ることを主張して返す。
-fn expect_one<'a>(events: &'a [CapturedEvent], needle: &str) -> &'a CapturedEvent {
-    let hits: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.message().contains(needle))
-        .collect();
-    assert_eq!(
-        hits.len(),
-        1,
-        "`{needle}` を含むログがちょうど 1 件ではない: {events:?}"
-    );
-    hits[0]
-}
+use log_capture_kit::{capture, expect_one};
 
 /// 要件 1.4／設計「Error Handling」: DPI 不在縮退は **`error!`** を発火する。
 ///

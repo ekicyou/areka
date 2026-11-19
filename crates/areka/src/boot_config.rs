@@ -9,13 +9,13 @@
 //! 檻 `main_config_input_tests.rs` / `main_ghost_wiring_tests.rs`。
 
 // ---------------------------------------------------------------------------
-// Config Inputs (task 2.1)
+// Config Inputs
 // ---------------------------------------------------------------------------
 
 /// 構成入力（解決済みルートパス）。
 ///
 /// ゴースト／バルーンのルートパスを保持する。値は `main` の起動前の解決（根 → ゴースト →
-/// バルーン）が決めたもので、この型自身はマウントも読取もしない（R6.1）。
+/// バルーン）が決めたもので、この型自身はマウントも読取もしない。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConfigInputs {
     pub(crate) ghost_root: std::path::PathBuf,
@@ -23,10 +23,10 @@ pub(crate) struct ConfigInputs {
 }
 
 // ---------------------------------------------------------------------------
-// 起動した exe の本当の場所（areka-P0-release-package-versioned task 4.1）
+// 起動した exe の本当の場所（areka-P0-release-package-versioned）
 // ---------------------------------------------------------------------------
-// 純粋な判断 `follow_exe_links` と、実 I/O の口 `probe_link`・1 回だけ解いて覚える口 `exe_location`
-// （task 4.2）。根・補助 exe・記憶の置き場の 3 関数が `exe_location` を使う。
+// 純粋な判断 `follow_exe_links` と、実 I/O の口 `probe_link`・1 回だけ解いて覚える口 `exe_location`。
+// 根・補助 exe・記憶の置き場を決める関数が `exe_location` を使う。
 
 /// リンクを 1 段読んだ結果。I/O は呼び手（`probe_link`）か、テストの偽の口が返す。
 pub(crate) enum LinkProbe {
@@ -156,7 +156,7 @@ pub(crate) fn exe_location() -> Option<&'static std::path::Path> {
 }
 
 // ---------------------------------------------------------------------------
-// 起動前の解決（areka-P0-baseware-root-layout task 5.1・`main` が WinApp 構築の前に呼ぶ）
+// 起動前の解決（areka-P0-baseware-root-layout・`main` が WinApp 構築の前に呼ぶ）
 // ---------------------------------------------------------------------------
 
 /// 起動前に決まったもの: 構成入力と、ゴースト・バルーンの決定（経路とフォルダ）と、
@@ -482,7 +482,7 @@ pub(crate) fn resolve_balloon_for_ghost(
 }
 
 // ---------------------------------------------------------------------------
-// Ghost Wiring (task 3.3)
+// Ghost Wiring
 // ---------------------------------------------------------------------------
 
 /// 実行ファイル隣接の 32bit SHIORI helper 実行ファイルパスを解決する（純粋・DD 準拠）。
@@ -498,7 +498,7 @@ pub(crate) fn default_helper_exe_path() -> std::path::PathBuf {
     dir.join("shiori-host32-helper.exe")
 }
 
-/// App スコープの sylphya profile root を解決する（task 8.2・R8.2 の `AREKA_` 冠準拠）。
+/// App スコープの sylphya profile root を解決する（`AREKA_` 冠準拠）。
 ///
 /// - 環境変数 `AREKA_PROFILE_DIR` が設定されていればそのパスを採用する（本番 env は `AREKA_`
 ///   名前空間・記憶 areka-runtime-env-naming）。
@@ -556,42 +556,37 @@ pub(crate) fn remembered(
 }
 
 /// `ghost_root`／helper パスから `GhostBootOptions` を組み立てる純粋ヘルパ
-/// （design.md「main の ghost boot／shutdown 結線」）。
+/// （design.md「main の ghost boot／shutdown 結線」）。strict の判定・既定の文字コード（`Ansi`）・
+/// システム変数の結線は窓の在る起動と同じ [`runtime_boot_options`](crate::session::runtime_boot::runtime_boot_options)
+/// が決める。ここで決めるのは次の 3 つだけ。
 ///
 /// - `shiori`: `shiori_wiring_for(modules, helper_exe)`（「読む」は実行ファイル隣接の 32bit helper・本番結線、「読まない」は差し替え口）。
-/// - `default_encoding`: `DefaultEncoding::Ansi`（charset 未宣言時の SSP 既定・記憶
-///   areka-descript-encoding-ishiori-utf8）。
 /// - `sinks`: 可変長 sink 列（S-3）を `vec![LogSink, DiscardSink]` で埋める。broadcast（D4）で
 ///   全 cue は登録された全 sink へ配られるため、両スロットを `LogSink` にすると 1 cue が 2 回ログ
 ///   される（二重ログ）。記録 sink を **1 本（`LogSink`）だけ**にし、もう一方を破棄専用の
 ///   `DiscardSink` で埋めることで cue ごと 1 回ログへ正す（設計 D4 Topic 2）。
-/// - `system_vars`: 本番 provider（`SystemVarWiring::FromSylphya`＝boot が据えた sylphya reader
-///   由来のスナップショット・R7.1）。
-/// - `app_profile_dir`: App スコープの sylphya profile root。呼び手が渡す（本番の fallback の腕は結線の
-///   入力の置き場＝`default_app_profile_dir()`）。ここで本物の環境から決めないので、テストが書ける根の
-///   形を作らない（user-data-root 要件 10.6）。
 /// - `ticker`: `TickerMode::Real` を既定 `TickerConfig`（`base_interval=50ms`／
 ///   `kanade_interval=1000ms`／実クロック `GetTickCount64`）で駆動する。
 ///
+/// `app_profile_dir`（App スコープの sylphya profile root）は呼び手が渡す（本番の fallback の腕は結線の
+/// 入力の置き場＝`default_app_profile_dir()`）。ここで本物の環境から決めないので、テストが書ける根の
+/// 形を作らない（user-data-root 要件 10.6）。
 pub(crate) fn ghost_boot_options(
     ghost_root: std::path::PathBuf,
     helper_exe: std::path::PathBuf,
     app_profile_dir: Option<std::path::PathBuf>,
     modules: crate::cli::ModulePolicy,
 ) -> areka_ghost::GhostBootOptions {
-    areka_ghost::GhostBootOptions {
-        strict_judges: areka_runtime::strict_judges::production(),
+    crate::session::runtime_boot::runtime_boot_options(
         ghost_root,
-        default_encoding: areka_parsers::charset::DefaultEncoding::Ansi,
-        shiori: shiori_wiring_for(modules, helper_exe),
-        sinks: vec![
+        shiori_wiring_for(modules, helper_exe),
+        vec![
             Box::new(areka_ghost::sink::LogSink::new()),
             Box::new(areka_ghost::sink::DiscardSink::new()),
         ],
-        system_vars: areka_ghost::SystemVarWiring::FromSylphya,
         app_profile_dir,
-        ticker: areka_ghost::TickerMode::Real(Default::default()),
-    }
+        areka_ghost::TickerMode::Real(Default::default()),
+    )
 }
 
 /// SHIORI の読み方の指定から結線を決める純粋な口（要件 7.1）。「読む」は今の補助のプロセス
@@ -614,12 +609,12 @@ pub(crate) fn shiori_wiring_for(
 ///
 /// 起動前の解決（`install::startup::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
 /// boot するので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）に
-/// 限られる。分類は `wire_runtime` のフォールバックが使い続けるため残す。読取不能
+/// 限られる。分類は窓の無い起動（`ghost_session`）が使う。読取不能
 /// （`StartPointUnreadable`）・shell 不在（`ShellDirMissing`）・将来追加される
 /// `#[non_exhaustive]` variant は、真に予期しない I/O 問題として区別する。
 ///
-/// `pub(crate)`: `areka_runtime::wire_runtime`（task 5.1）が boot 失敗（`GhostBootError`）を
-/// 同一方針（起点不在＝良性 `warn!`・他＝`error!`・R7.4）で分類するため再利用する。
+/// `pub(crate)`: 窓の在る起動（`session::runtime_boot::boot_runtime`）も boot 失敗（`GhostBootError`）を
+/// 同じ方針（起点不在＝良性 `warn!`・他＝`error!`）で分類するため再利用する。
 pub(crate) fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
     match err {
         areka_ghost::GhostBootError::Mount(

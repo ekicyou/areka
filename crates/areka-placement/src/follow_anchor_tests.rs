@@ -6,13 +6,13 @@ use crate::resolver::{Anchor, PointPx, SizePx};
 const CHAR_SIZE: SizePx = SizePx { w: 434, h: 687 };
 
 // -------------------------------------------------------------------------
-// project_anchor（変換 T・task 2.1・4.2/DD15・Req1.1/1.2/2.1-2.5/3.1/3.4/5.4）
+// project_anchor（変換 T・`areka-P0-surface-resize-resnap` タスク 2.1・要件 4.2・DD15・要件 1.1/1.2/2.1-2.5/3.1/3.4/5.4）
 // 5 アンカー射影の純粋檻: アンカー辺固定・非アンカー軸保持・Bottom 委譲・
 // Free identity・縮退・モニタ跨ぎ live 算出・べき等の不動点。
 // 座標・work area 辺は 96 の非倍数を含め、隠れた dpi/96 再スケールの檻とする。
 // -------------------------------------------------------------------------
 
-/// #1 Bottom: X 保持・Y=wa.bottom−h（96 非倍数の bottom で再計算を固定・Req1.2/2.1）。
+/// #1 Bottom: X 保持・Y=wa.bottom−h（96 非倍数の bottom で再計算を固定・`areka-P0-surface-resize-resnap` Req1.2/2.1）。
 /// 既に下端一致なら不動点。
 #[test]
 fn project_anchor_bottom_pins_bottom_edge_and_keeps_x() {
@@ -35,7 +35,7 @@ fn project_anchor_bottom_pins_bottom_edge_and_keeps_x() {
     );
 }
 
-/// #1 Top: X 保持・Y=wa.top（96 非倍数の top で再計算を固定・Req2.2）。
+/// #1 Top: X 保持・Y=wa.top（96 非倍数の top で再計算を固定・`areka-P0-surface-resize-resnap` Req2.2）。
 #[test]
 fn project_anchor_top_pins_top_edge_and_keeps_x() {
     let snapshot = odd_edge_snapshot();
@@ -46,7 +46,7 @@ fn project_anchor_top_pins_top_edge_and_keeps_x() {
     );
 }
 
-/// #1 Left: X=wa.left・Y 保持（96 非倍数の left で再計算を固定・Req2.3）。
+/// #1 Left: X=wa.left・Y 保持（96 非倍数の left で再計算を固定・`areka-P0-surface-resize-resnap` Req2.3）。
 #[test]
 fn project_anchor_left_pins_left_edge_and_keeps_y() {
     let snapshot = odd_edge_snapshot();
@@ -57,7 +57,7 @@ fn project_anchor_left_pins_left_edge_and_keeps_y() {
     );
 }
 
-/// #1 Right: X=wa.right−w・Y 保持（96 非倍数の right で再計算を固定・Req2.4）。
+/// #1 Right: X=wa.right−w・Y 保持（96 非倍数の right で再計算を固定・`areka-P0-surface-resize-resnap` Req2.4）。
 #[test]
 fn project_anchor_right_pins_right_edge_and_keeps_y() {
     let snapshot = odd_edge_snapshot();
@@ -71,7 +71,7 @@ fn project_anchor_right_pins_right_edge_and_keeps_y() {
     );
 }
 
-/// #1/#2 Free: raw 素通し（identity・position 再計算なし・Req2.5）。snapshot 有無・
+/// #1/#2 Free: raw 素通し（identity・position 再計算なし・`areka-P0-surface-resize-resnap` Req2.5）。snapshot 有無・
 /// 寸法（非正含む）を問わず常に identity。
 #[test]
 fn project_anchor_free_is_always_identity() {
@@ -106,7 +106,7 @@ fn project_anchor_free_is_always_identity() {
     );
 }
 
-/// #2 縮退（Req3.4）: Bottom/Top/Left/Right とも snapshot 不在(None)/空・非正寸
+/// #2 縮退（`areka-P0-surface-resize-resnap` Req3.4）: Bottom/Top/Left/Right とも snapshot 不在(None)/空・非正寸
 /// （0・負・i32::MIN）で identity 縮退（下端吸着の非正寸縮退と整合・
 /// `wa.right−w`／`wa.bottom−h` の暴走を先に弾く檻・panic しない）。
 #[test]
@@ -143,7 +143,7 @@ fn project_anchor_degrades_to_identity_on_missing_snapshot_or_nonpositive_size()
     }
 }
 
-/// #3 モニタ跨ぎ（Req1.1/2.4）: Right/Bottom は raw 位置の窓中心が属するモニタの
+/// #3 モニタ跨ぎ（`areka-P0-surface-resize-resnap` Req1.1/2.4）: Right/Bottom は raw 位置の窓中心が属するモニタの
 /// 対応辺へ live 算出する（跨いだ先の右端／下端へ再吸着）。下端・右端が異なる
 /// 2 面で固定する。
 #[test]
@@ -195,7 +195,7 @@ fn project_anchor_resolves_per_crossed_monitor() {
     );
 }
 
-/// #5 べき等の不動点（Req3.1）: 既にアンカー辺一致の位置＋同寸で project_anchor が
+/// #5 べき等の不動点（`areka-P0-surface-resize-resnap` Req3.1）: 既にアンカー辺一致の位置＋同寸で project_anchor が
 /// 同値を返す（drag/resize の再適用が振動を生まない基礎）。加えて T∘T = T
 /// （二重適用同値）を Bottom/Right で固定する。
 #[test]

@@ -14,10 +14,14 @@ use super::test_support::{
     BALLOON, CHAR0, booted_world, char_positions, new_shell, position_of, world_from,
 };
 use super::{BalloonPlacementInputs, apply_shell_descript};
+use crate::diag::PlacementRoute;
+use crate::dpi_sync::DpiSyncHold;
 use crate::face_windowposition::BalloonUserMoved;
-use crate::follow::{AnchorSource, Anchored, BalloonFollow, MonitorSnapshot, OffsetBase};
+use crate::follow::{
+    AnchorSource, Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, resize_window_to,
+};
 use crate::persist::balloon_offset_entries;
-use crate::resolver::{Anchor, PointPx, ScopePlacement};
+use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::shared_test_support::TempDir;
 use crate::source::{load_balloon_author_dpi, load_descript_source_for_shell};
@@ -524,4 +528,76 @@ fn t_rs09_balloon_limit_is_reinstalled_from_the_new_placement() {
 
     assert_eq!(limit(&world, 0), Some(BalloonLimit(false)));
     assert_eq!(limit(&world, 1), Some(BalloonLimit(true)));
+}
+
+/// 揃え方 `top` のシェルへ切り替えて置き直す。`held` のスコープのキャラ窓には先に整合待ちの札を付ける。
+fn reanchor_to_top(
+    held: Option<usize>,
+) -> (World, GhostWindows, Vec<log_capture_kit::CapturedEvent>) {
+    let (mut world, windows) = booted_world(96);
+    if let Some(scope) = held {
+        world
+            .entity_mut(windows.char_window(scope).unwrap())
+            .insert(DpiSyncHold { since_frame: 1 });
+    }
+    apply_shell_descript(
+        &mut world,
+        &windows,
+        &new_shell(&[("seriko.alignmenttodesktop", "top")]),
+        &no_balloon(),
+        &[],
+    );
+    let ((), events) = capture(|| super::reanchor_char_windows(&mut world, &windows));
+    (world, windows, events)
+}
+
+/// 4 回目（要件 6.1・6.2・6.4・単体 7 ⑵）: シェルの切り替えの置き直しは整合待ちの札のある窓を
+/// 見送り（位置は前のまま・`reseed_held` の `debug!`）、札の無い窓は新しい揃え方へ動かす。
+/// 見送りを外すと札のある窓への書込が窓書込の口の `debug_assert!`（`route=Some(AnchorChange)`）で落ちる。
+#[test]
+fn t_rs10_reanchor_holds_a_window_with_the_dpi_sync_tag() {
+    let (before_world, before_windows) = booted_world(96);
+    let before = char_positions(&before_world, &before_windows);
+
+    let (world, windows, events) = reanchor_to_top(Some(0));
+    let after = char_positions(&world, &windows);
+
+    assert_eq!(after[0], before[0], "札のある窓は前の位置のまま");
+    assert_ne!(after[1], before[1], "札の無い窓は新しい揃え方へ動く");
+    let held: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("reseed_held"))
+        .map(|e| (e.level, e.expect_field("scope")))
+        .collect();
+    assert_eq!(held, vec![(tracing::Level::DEBUG, "0")], "{events:?}");
+}
+
+/// 単体 7 ⑶: 札を外して拡大率の相の書込（`DpiReproject`）を通すと、見送った窓は入れ直した
+/// 揃え方の位置（札が無かったときの置き直しと同じ位置）に置かれる。
+#[test]
+fn t_rs11_held_window_takes_the_new_alignment_once_the_tag_is_removed() {
+    let (untagged_world, untagged_windows, _) = reanchor_to_top(None);
+    let want = char_positions(&untagged_world, &untagged_windows)[0];
+    let (boot_world, boot_windows) = booted_world(96);
+    assert_ne!(
+        want,
+        char_positions(&boot_world, &boot_windows)[0],
+        "新しい揃え方の位置は前の位置と違う（同じなら檻が空回りする）"
+    );
+
+    let (mut world, windows, _) = reanchor_to_top(Some(0));
+    let c0 = windows.char_window(0).unwrap();
+    world.entity_mut(c0).remove::<DpiSyncHold>();
+    let size = world.get::<WindowPos>(c0).unwrap().size.unwrap();
+    resize_window_to(
+        &mut world,
+        c0,
+        SizePx {
+            w: size.width,
+            h: size.height,
+        },
+        PlacementRoute::DpiReproject,
+    );
+
+    assert_eq!(position_of(&world, c0), want);
 }

@@ -7,7 +7,7 @@
 //! ない（設計 D-3・`io/sources.rs` が実測で守っている）。
 //!
 //! **否定の主張には必ず肯定の主張を対で置く**。「拾われない」だけのテストは、
-//! 何も返さない [`extract`] でも緑になる（タスク 1.6 の教訓）。だから
+//! 何も返さない [`extract`] でも緑になる。だから
 //! 「拾われないもの」と「拾われるもの」を同じ見本・同じテストに入れる。
 
 use super::*;
@@ -37,9 +37,9 @@ fn urls(hits: &[UrlHit]) -> Vec<&str> {
 /// 「ukadoc」の語だけで URL を伴わない行は 1 件も拾われず、URL 付きの行は拾われる。
 ///
 /// 否定側だけでは何も返さない実装が素通りするので、同じ見本に肯定側を入れてある。
-/// 否定側の 5 行は現に作業ツリーにある形を写したもの——`ukadoc:` が文中に埋まった形
-/// （`crates/areka-placement/src/source_tests.rs:291`・`emo-compose/fold.rs:171`）、`ukadoc:` の後に
-/// 説明文が続く形（`sakura/decode_tests.rs:438`）、語だけの形である。
+/// 否定側の 5 行は作業ツリーにある形を写したもの——`ukadoc:` が文中に埋まった形
+/// （`crates/areka-placement/src/source_tests.rs` ほか）、`ukadoc:` の後に説明文が続く形
+/// （`crates/areka-parsers/src/sakura/decode_tests.rs`）、語だけの形である。
 #[test]
 fn a_ukadoc_word_without_a_url_is_never_evidence_but_a_url_line_is() {
     let text = body(&[
@@ -54,10 +54,8 @@ fn a_ukadoc_word_without_a_url_is_never_evidence_but_a_url_line_is() {
 
     let hits = extract(PATH, &text);
 
-    // 肯定側——URL 付きの 1 行だけが拾われる。
+    // URL 付きの 1 行だけが拾われ、語だけの行は 1 件も混ざらない。
     assert_eq!(urls(&hits), vec![URL_TAG_S], "拾われた URL が違う");
-    // 否定側——語だけの行は 1 件も混ざらない。
-    assert_eq!(hits.len(), 1, "URL を伴わない行が混ざった: {hits:?}");
 }
 
 // ---- 3 種のコメント記号と、その優先順位の罠 ----
@@ -85,8 +83,8 @@ fn all_three_comment_markers_are_accepted() {
 
 /// 記号は 3 種ちょうどで、`////` や `//!!` は記号ではない。
 ///
-/// 記号の照合を「長い方から」ではなく「`//` を剥がして残りを見る」に変えると、
-/// `////` の残りが `/ ukadoc: ...` ではなく `ukadoc: ...` に見えてしまう形がある。
+/// 記号の照合を「長い方から」ではなく、先頭の `/` を全部剥がして残りを見る形に変えると、
+/// `////` の残りが `ukadoc: ...` になって通ってしまう。
 /// 肯定側（3 種は通る）を同じテストに置いて、全部落とす実装を塞ぐ。
 #[test]
 fn four_slashes_and_double_bang_are_not_markers() {
@@ -226,7 +224,7 @@ fn the_marker_must_start_the_trimmed_line() {
 /// 複数の証拠は本文に現れた順で返り、どれも渡されたパスを載せる。
 ///
 /// 見本の URL は**わざと名前順に並べていない**。整列済みの見本では「並べ替える」
-/// 実装が素通りするため（タスク 2.5 の教訓）。
+/// 実装が素通りするため。
 #[test]
 fn hits_keep_file_order_and_carry_the_given_path() {
     let text = body(&[

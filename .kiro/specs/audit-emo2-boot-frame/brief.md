@@ -134,3 +134,20 @@
 | `live_work_area_bottom` | `log_char_ground` | 公開のまま（本番が使う関数） |
 
   `audit` で見直すとき、「公開のまま」の行は本番が使う語なので切り替えない。表の全体と緑の証跡は `.kiro/specs/completed/runtime-crate-split/verification.md` の 6.4。
+
+## audit-emo2-boot-spine からの申し送り（2026-11-17）
+
+`audit-emo2-boot-spine` のギャップ分析（`.kiro/specs/completed/audit-emo2-boot-spine/research.md` の 6 節）で、範囲の外のこの spec の持ち場に見つけた件。中身は向こうでは直さない。
+
+- **ア（1 番の片割れ）**: `crates/areka-runtime/src/frame/dpi.rs:L404-L413` で、窓の側から来る scope に `2*scope+1` を掛ける所が、大きな scope であふれる。`audit-emo2-boot-spine` は台本の側（`target_map.rs` の `2*scope`）を、上限を超える番号を `None` にして warn で捨てる形に直す。こちらも同じ上限でそろえる。
+- **イ（件 6 の 1 本）**: `crates/areka/src/runtime_tests/frame/window_state_tests.rs:L144` のテスト関数は、補助を分ければ `areka-runtime` へ戻せる（dev-dependencies は既にある）。
+- **オ（`code_only` の写し）**: `crates/areka-runtime/src/frame/zorder_drain_tests.rs:L465` の `code_only` は、`source_text_test_support::code_only` と 1 字も違わない。そちらを使う形に寄せる。
+- **完了の時の棚卸（2026-11-19）**: `audit-emo2-boot-spine` のかけ直しで、範囲の中の写しは共通の置き場へ寄せた。`frame*` のファイルは触らない約束の中なので、次の 3 つが残っている。
+  - `crates/areka-runtime/src/frame_chain_finalize_tests.rs` の私有の `capture_logs` は、`frame_test_support::capture_logs` と同じ形。共通のほうを使う形に寄せる。
+  - `crates/areka-runtime/src/frame_drain_text_tests.rs` の `controllable_clock`・`set_now` は、`talk_clock.rs` に置いた `#[cfg(test)]` の `controllable_clock`・`set_now` と同じ形。そちらを使う形に寄せる。
+  - `crates/areka-runtime/src/frame/drain_resnap_tests.rs` のコメントの「`load-repro.md` の ⑹」に持ち主の spec が無い。`load-repro.md` は `areka-P0-ghost-session-test-load-flake` と `areka-test-binary-stability` の 2 本にあるので、同じ文に持ち主を名乗らせる。
+
+## audit-placement-follow-residue からの申し送り（2026-11-17）
+
+- シェルの切り替えの置き直し（`crates/areka-placement/src/reseed.rs` の `reanchor_char_windows`）は、整合待ちの札（`DpiSyncHold`）のある窓を置き直さず `debug!`（`event = "reseed_held"`・scope）を残すようになった。札のある窓は、シェルの切り替えの直後は札が外れるまで（最大 30 フレーム）前の揃え方のまま残り、札が外れるフレームの拡大率の相（`frame/dpi.rs`）の `DpiReproject` で新しい揃え方に置かれる前提。
+- この前提は配置の crate の中の檻（`reseed_tests.rs` の ⑶・`resize_window_to(.., DpiReproject)` を直に呼ぶ）でしか固めていない。札が外れるフレームに本番の相が本当にその窓を書くかを、起動のフレームの見直しのときに確かめる（論点・参照: `.kiro/specs/completed/audit-placement-follow-residue/design.md` の決め 5・ReseedHold・Revalidation Triggers の 4 つ目）。

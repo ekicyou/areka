@@ -6,16 +6,16 @@
 //! （形式・原子性・寛容読取・スコープ分離）は sylphya の領分であり、本モジュールは
 //! その契約（[`areka_sylphya::PersistKey`]／[`areka_sylphya::Axis`]）を消費するのみ。
 //!
-//! 記憶への送り口は書く [`persist_entries`] と消す [`forget_entries`] の 2 つで、書く呼び手は次の 4 か所:
-//! - キャラ窓のドラッグの確定（`follow::drag_follow` の `on_char_drag_end`・窓の位置）
-//! - バルーンのドラッグの確定（同じく `on_balloon_drag_end`・バルーンのずらし）
-//! - 組のドラッグの終わり（`follow::sticky_follow` の `finish_char_drag`・組の相手の窓の位置）
+//! 記憶への送り口は書く [`persist_entries`] と消す [`forget_entries`] の 2 つで、書く呼び手は次の 3 か所:
+//! - キャラ窓のドラッグの確定（`follow::drag_follow` の `on_char_drag_end`・窓の位置と、組の相手の
+//!   窓の位置を 1 つの束で 1 回。相手の束は `follow::sticky_follow` の `finish_char_drag` が返す）
+//! - バルーンのドラッグの確定（`follow::balloon_drag` の `on_balloon_drag_end`・バルーンのずらし）
 //! - 起動の最後に並べ終えた時点と、既定の位置への並べ直し（`reset_pos` の `reset_window_positions`）
 //!   の後（どちらも [`persist_unremembered_char_positions`]・記憶に位置が無いキャラの位置と、
 //!   印の無い古い記憶の隣り合いの印）
 //!
 //! 記憶の位置を寄せて表示した起動（[`RestoredPositionsClamped`]）では、送り口（[`persist_entries`] と、
-//! 並べ終えた時点の保存が呼ぶその本体）が 4 か所のどの束からも、印の無い古い記憶へ隣り合いの印を
+//! 並べ終えた時点の保存が呼ぶその本体）が 3 か所のどの束からも、印の無い古い記憶へ隣り合いの印を
 //! 書き足さない（window-work-area-clamp 4.6）。
 //!
 //! 消す呼び手はバルーン位置の初期化（`reset_balloon_pos` の `reset_balloon_positions`・ずらしの鍵）
@@ -48,11 +48,12 @@ use bevy_ecs::world::World;
 use tracing::warn;
 
 use super::chain_finalize::{AdjacencyMark, ChainRect};
+use super::chain_rule::{ChainRule, ChainTerms};
 use super::follow::{
     AnchorSource, Anchored, MonitorSnapshot, OffsetBase, RestoredWindow, keep_restored_groups,
-    project_anchor, work_area_for_window,
+    project_anchor, rect_at, work_area_for_window,
 };
-use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx, clamp_axis};
+use super::resolver::{Anchor, PointPx, ScopePlacement, SizePx, clamp_axis};
 
 /// 永続値の寛容 parse（design C1・6.1）。
 ///
@@ -212,12 +213,7 @@ fn project_restore_parts(
 ) -> (PointPx, PointPx) {
     // wa＝`pos` に置いた窓矩形の中心が属するモニタの work area（最近傍規則込み）。
     // 空 snapshot は identity（架空矩形を発明しない・既存縮退流儀・Req5.1）。
-    let window = RectPx {
-        left: pos.x,
-        top: pos.y,
-        right: pos.x.saturating_add(size.w),
-        bottom: pos.y.saturating_add(size.h),
-    };
+    let window = rect_at(pos, size);
     let Some(wa) = work_area_for_window(snapshot, window) else {
         tracing::info!(
             target: "areka::persist::project",
@@ -242,12 +238,7 @@ fn project_restore_parts(
     // ——実機サインオフ検出: 端付近（右端を数十 px はみ出す）へ置いた Bottom char が、
     // 復元でだけ `wa.right − w` へ内側に寄せられて立ち位置がずれ、追従 balloon もずれた
     // （保存 x=3493・wa.right=3840・w=434 → 復元だけが 3406 へ clamp していた）。
-    let projected_rect = RectPx {
-        left: projected.x,
-        top: projected.y,
-        right: projected.x.saturating_add(size.w),
-        bottom: projected.y.saturating_add(size.h),
-    };
+    let projected_rect = rect_at(projected, size);
     let visible = projected_rect.left < wa.right
         && projected_rect.right > wa.left
         && projected_rect.top < wa.bottom
@@ -359,7 +350,8 @@ fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> O
 /// 相対位置であり、両者の差が恒等式を満たすとは限らない。
 ///
 /// 寄せは 2 段: 窓ごとの寄せは [`project_restore_parts`]（`merge_scope` の中）、組の寄せは
-/// [`super::follow::keep_restored_groups`]（その後・window-work-area-clamp 要件 4.1〜4.4）。
+/// [`super::follow::keep_restored_groups`]（その後・鎖の前の窓との組と記憶の矩形の組をつないだ束ごと・
+/// window-work-area-clamp 要件 4.1〜4.4・audit-placement-follow-residue 要件 1）。
 /// 組の寄せは窓とバルーンの位置を同じ量だけ動かし、`balloon_offset` は変えない（要件 7.7）。
 /// 寄せた位置は記憶へ書き戻さない（要件 4.5・本関数は純関数のまま）。
 ///
@@ -387,8 +379,22 @@ pub fn restore_and_judge(
     entries: &[(PersistKey, String)],
     snapshot: &MonitorSnapshot,
 ) -> (Vec<ScopePlacement>, bool) {
+    // 鎖の見方は記憶の無いスコープも含む全スコープの descript の揃え方（起動の前で台本の吸着は無い）。
+    let chain = ChainRule::from_terms(
+        placements
+            .iter()
+            .map(|p| {
+                let terms = ChainTerms {
+                    descript: p.anchor,
+                    default_x: None,
+                    live: p.anchor,
+                };
+                (p.scope, terms)
+            })
+            .collect(),
+    );
     let (mut merged, windows) = restored_windows(placements, entries, snapshot);
-    for shift in keep_restored_groups(&windows, snapshot) {
+    for shift in keep_restored_groups(&windows, &chain, snapshot) {
         let Some(p) = merged.iter_mut().find(|p| p.scope == shift.scope) else {
             continue; // 組の窓は merged から組んだので必ずある。
         };

@@ -1,5 +1,5 @@
 //! 定義を替えた合図 `Rebased` を置き換えの命令へ写す橋渡しの兄弟テスト
-//! （spec: areka-P0-shell-balloon-switch task 9.1・要件 4.1・4.2・design「Adapter」）。
+//! （spec: areka-P0-shell-balloon-switch 要件 4.1・4.2・design「Adapter」）。
 
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
@@ -94,7 +94,7 @@ fn count(lines: &[String], level: &str, event: &str) -> usize {
         .count()
 }
 
-/// シェルの合図: scope ごとに `2*scope` の置き換えの命令が 1 件ずつ出る。最初の表示は合図の
+/// シェルの合図: scope ごとにシェルの対象（`shell_target(scope)`）の置き換えの命令が 1 件ずつ出る。最初の表示は合図の
 /// 同じ scope の面と着せ替え、合図に無い scope は登録だけ（`show: None`）。返信の送り手は
 /// 同じ scope の受け手と対になり、置き場は空になる。
 #[test]
@@ -148,7 +148,7 @@ fn shell_rebased_maps_to_replace_target_per_scope_on_shell_targets() {
     );
 }
 
-/// バルーンの合図: `2*scope+1` へ写り、最初の表示は合図の面（バルーンは空の着せ替え）。
+/// バルーンの合図: バルーンの対象（`balloon_target(scope)`）へ写り、最初の表示は合図の面（バルーンは空の着せ替え）。
 #[test]
 fn balloon_rebased_maps_to_replace_target_on_balloon_targets() {
     let (p, _receivers) = payload(3, &[0, 1]);

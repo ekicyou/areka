@@ -1,27 +1,27 @@
 // =============================================================================
-// BalloonLifecycleSink 決定論テスト（task 2.1・Requirements 4.1 / 4.5 / 4.8 / 7.2 / 7.8）
+// BalloonLifecycleSink 決定論テスト（areka-P0-balloon-visibility 要件 4.1 / 4.5 / 4.8 / 7.2 / 7.8）
 //
-// design.md「Testing Strategy → Unit Tests ②」の 4 系統:
+// areka-P0-balloon-visibility design.md「Testing Strategy → Unit Tests ②」の系統:
 //   ⑴ 初回 emit の `TalkStarted` 先行（Ordering 契約）
 //   ⑵ `max(sum_on_ms_grid(at, duration))` の単調送出（Idempotency 契約＝max 集約）
-//   ⑶ `Wait` cue の duration が占有終端へ算入されること（Requirement 4.1）
+//   ⑶ `Wait` cue の duration が占有終端へ算入されること（areka-P0-balloon-visibility 要件 4.1）
 //   ⑷ clone 後の会話境界リセット（per-talk clone による talk 境界の自己検出）
 //
 // ＋縮退経路（いずれも無音でないことをログ捕捉で主張する・log-first）:
-//   ⑸ 受信端切断時の送出失敗（WARN＋talk 非破壊・Requirement 4.8）
+//   ⑸ 受信端切断時の送出失敗（WARN＋talk 非破壊・areka-P0-balloon-visibility 要件 4.8）
 //   ⑹ 非有限な占有終端の記録付きスキップ
 //   ⑺ 信号の源は `emit` のみ（構築・複製は無音）
 //
-// 実時間の待機・反復回数のみによる有界化は一切用いない（Requirement 9.2 / 9.3）。
+// 実時間の待機・反復回数のみによる有界化は一切用いない（areka-P0-balloon-visibility 要件 9.2 / 9.3）。
 // =============================================================================
 
 use super::*;
+use crate::frame::test_support::{capture_logs, count_level, zero_clock};
 use dola::cue::{ActorKey, CueCommand, CuePayload, CuePlayer, CueSink, TalkCue};
-use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{TryRecvError, channel};
 use std::time::Duration;
 
-// task 6.3（台本レベルの観測）で使う実経路の部品。
+// 台本レベルの会話終了観測で使う実経路の部品。
 use areka_ghost::sink::BootCueSink;
 use areka_sakura::CompiledTalk;
 use areka_sakura::duration::CHAR_NOMINAL_MS;
@@ -47,11 +47,6 @@ fn wait_cue(at: f64, duration: f64) -> TalkCue {
     cue(at, duration, CueCommand::Wait)
 }
 
-/// 起点を持たない時刻源（本檻は終わりの合図の時刻を見ない・それは `talk_lifecycle_signals_tests.rs`）。
-fn test_clock() -> crate::talk_clock::TalkClock {
-    crate::talk_clock::TalkClock::new(std::sync::Arc::new(|| 0.0))
-}
-
 /// 受信端から届いた信号を全件取り出す（非ブロック・実時間待機なし）。
 fn drain(rx: &std::sync::mpsc::Receiver<TalkLifecycleSignal>) -> Vec<TalkLifecycleSignal> {
     rx.try_iter().collect()
@@ -68,40 +63,12 @@ fn ends(rx: &std::sync::mpsc::Receiver<TalkLifecycleSignal>) -> Vec<f64> {
         .collect()
 }
 
-// -----------------------------------------------------------------------------
-// ログ捕捉（無音破棄でないことを主張するため・log-first）
-//
-// 定石は `move_cue_move_severity_log_tests.rs` と同一——硬化機構の唯一の定義元
-// `log-capture-kit` の捕捉窓へ委譲する（行の形も呼出側の判定内容も移行前と 1 バイト変わらない）。
-//
-// 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
-// のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
-// interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの判定が
-// 焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は「不要」ゆえ、
-// 先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。
-// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算 ⑶ 番兵イベントに
-// よる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の crate doc と
-// 同 crate の `src/probe.rs`）。
-// -----------------------------------------------------------------------------
-
-/// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines
-}
-
-/// 捕捉行のうち指定 level（例 `"WARN"`）の件数を数える。
-fn count_level(logs: &[String], level: &str) -> usize {
-    let needle = format!("level={level}");
-    logs.iter().filter(|l| l.contains(&needle)).count()
-}
-
 /// ⑴ Ordering 契約: per-talk clone の初回 `emit` で `TalkStarted` が 1 回だけ出て、
-/// かつその talk の `DisplayEndAt` 群に**必ず先行**する（Requirement 4.5）。
+/// かつその talk の `DisplayEndAt` 群に**必ず先行**する（areka-P0-balloon-visibility 要件 4.5）。
 #[test]
 fn talk_started_is_emitted_once_and_precedes_display_end() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
+    let mut sink = BalloonLifecycleSink::new(tx, zero_clock());
 
     sink.emit(text_cue(0.0, 0.5));
     sink.emit(text_cue(0.5, 0.25));
@@ -140,7 +107,7 @@ fn talk_started_is_emitted_once_and_precedes_display_end() {
 #[test]
 fn display_end_is_monotonic_max_of_at_plus_duration() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
+    let mut sink = BalloonLifecycleSink::new(tx, zero_clock());
 
     // 終端が 0.5 → 2.0 → （後退 1.0）→ （同値 2.0）→ 3.0 と推移する入力列。
     sink.emit(text_cue(0.0, 0.5)); // end = 0.5（増加）
@@ -162,14 +129,14 @@ fn display_end_is_monotonic_max_of_at_plus_duration() {
     );
 }
 
-/// ⑶ Requirement 4.1: 占有区間の終端は**待機を含む**。`Wait` cue の `duration` が
+/// ⑶ areka-P0-balloon-visibility 要件 4.1: 占有区間の終端は**待機を含む**。`Wait` cue の `duration` が
 /// horizon へ算入され、最後の文字が現れた時刻ではなく台本の占有終端が届く。
 ///
 /// 弁別: 実装が `duration` を落として `at` のみを horizon にすると最終値が 0.5 になり本 assert が落ちる。
 #[test]
 fn wait_cue_duration_is_included_in_occupancy_horizon() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
+    let mut sink = BalloonLifecycleSink::new(tx, zero_clock());
 
     // 文字 @0.0（D=0.5）→ 待機 @0.5（D=1.25）。占有終端 = 0.5 + 1.25 = 1.75。
     sink.emit(text_cue(0.0, 0.5));
@@ -190,7 +157,7 @@ fn wait_cue_duration_is_included_in_occupancy_horizon() {
 #[test]
 fn horizon_matches_dola_occupancy_definition() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
+    let mut sink = BalloonLifecycleSink::new(tx, zero_clock());
 
     let cues = vec![
         cue(0.0, 0.0, CueCommand::ClearAll),
@@ -214,12 +181,12 @@ fn horizon_matches_dola_occupancy_definition() {
 }
 
 /// ⑷ 会話境界の自己検出: dispatcher は talk 起動ごとに登録 sink を clone する
-/// （`areka-ghost/src/dispatcher.rs:290-294`）。clone は会話境界の状態を持ち越さないため、
-/// 2 本目の talk でも `TalkStarted` が改めて出る（Requirement 4.5 の破棄契機）。
+/// （`areka-ghost` の dispatcher）。clone は会話境界の状態を持ち越さないため、
+/// 2 本目の talk でも `TalkStarted` が改めて出る（areka-P0-balloon-visibility 要件 4.5 の破棄契機）。
 #[test]
 fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut registered = BalloonLifecycleSink::new(tx, test_clock());
+    let mut registered = BalloonLifecycleSink::new(tx, zero_clock());
 
     // 1 本目の talk（登録 sink の clone）。
     let mut talk1 = registered.clone_box();
@@ -273,7 +240,7 @@ fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
 }
 
 /// 送信失敗（受信端切断）は talk を殺さない——非 panic・無音破棄でもない（log-first・
-/// `MoveCueSink` と同一規律・Requirement 4.8 の観測可能な縮退）。
+/// `MoveCueSink` と同一規律・areka-P0-balloon-visibility 要件 4.8 の観測可能な縮退）。
 ///
 /// 弁別: 送出結果を `let _ =` で捨てる無音実装は WARN=0 になって落ちる。さらに WARN の件数が
 /// 「送出を試みた回数」そのものなので、切断後も horizon 集約が前進し続けている（0.5→1.0 の
@@ -281,7 +248,7 @@ fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
 #[test]
 fn send_failure_after_receiver_drop_is_logged_and_non_fatal() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
+    let mut sink = BalloonLifecycleSink::new(tx, zero_clock());
     drop(rx);
 
     let logs = capture_logs(|| {
@@ -306,13 +273,13 @@ fn send_failure_after_receiver_drop_is_logged_and_non_fatal() {
 /// 非有限な時刻（NaN/±inf）を持つ壊れた cue は horizon を汚さず、記録付きでスキップされる。
 ///
 /// `+inf` を horizon に採ると受信側の `deadline = display_end + timeout` が到達不能になり、
-/// タイムアウトが永久に成立しなくなる（Requirement 4.8 と同じ「表示を保持する」側の縮退だが、
+/// タイムアウトが永久に成立しなくなる（areka-P0-balloon-visibility 要件 4.8 と同じ「表示を保持する」側の縮退だが、
 /// 無音で起こすと原因が追えない）。NaN が `>` 比較で偶然落ちるだけの実装と、`is_finite` で
 /// 明示的に弾く実装とを、`+inf` の有無と WARN 件数の双方で弁別する。
 #[test]
 fn non_finite_cue_times_are_skipped_with_a_record() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
+    let mut sink = BalloonLifecycleSink::new(tx, zero_clock());
 
     let logs = capture_logs(|| {
         sink.emit(text_cue(0.0, 1.0)); // end = 1.0
@@ -335,11 +302,11 @@ fn non_finite_cue_times_are_skipped_with_a_record() {
 }
 
 /// 占有終端が 0.0 の talk（瞬時 cue のみ）でも `DisplayEndAt(0.0)` が届く——
-/// 「信号が一度も届かない」（Requirement 4.8 の保持側縮退）と区別できる形にする。
+/// 「信号が一度も届かない」（areka-P0-balloon-visibility 要件 4.8 の保持側縮退）と区別できる形にする。
 #[test]
 fn instantaneous_talk_still_reports_zero_horizon() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
+    let mut sink = BalloonLifecycleSink::new(tx, zero_clock());
 
     sink.emit(cue(0.0, 0.0, CueCommand::ClearAll));
 
@@ -361,7 +328,7 @@ fn instantaneous_talk_still_reports_zero_horizon() {
 #[test]
 fn construction_and_clone_emit_nothing() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let sink = BalloonLifecycleSink::new(tx, test_clock());
+    let sink = BalloonLifecycleSink::new(tx, zero_clock());
 
     assert_eq!(
         rx.try_recv(),
@@ -380,9 +347,9 @@ fn construction_and_clone_emit_nothing() {
 }
 
 // =============================================================================
-// 台本レベルの会話終了観測（task 6.3・Requirements 4.1 / 9.1）
+// 台本レベルの会話終了観測（areka-P0-balloon-visibility 要件 4.1 / 9.1）
 //
-// 上の 9 本は手組みの `TalkCue` を直接 `emit` する単体檻である。ここから下は
+// 上の単体の檻は手組みの `TalkCue` を直接 `emit` する。ここから下は
 // **実台本** を parse → compile → `CuePlayer` と通し、本番と同じ経路で sink が受け取る
 // cue から占有終端を組み立てる。単体檻との違いは 2 点:
 //
@@ -396,12 +363,12 @@ fn construction_and_clone_emit_nothing() {
 // `frame_attach_tests.rs::talk_playback_reaches_runtime_wiring_lifecycle_receiver` の台本
 // `\0あい\w9\1うえ\e` に実在する（末尾の文字 cue の終端 0.65 が待機の終端 0.55 を上回る）。
 //
-// 時刻は台本から導いた発火時刻の注入のみで進める（実時間の待機なし・Requirement 9.2/9.3）。
+// 時刻は台本から導いた発火時刻の注入のみで進める（実時間の待機なし・areka-P0-balloon-visibility 要件 9.2/9.3）。
 // =============================================================================
 
 /// `\wN` の 1 ウェイト単位（ミリ秒）。
 ///
-/// 定義は parser 側の非公開定数（`crates/areka-parsers/src/sakura/decode.rs:38` の
+/// 定義は parser 側の非公開定数（`areka-parsers` の sakura decode の
 /// `WAIT_UNIT_MS`・ukadoc 確定の 50ms）。公開されていないため本檻が同値を持つ——
 /// 期待値を実行結果から読まずに導出するための写しであり、値が食い違えば下の
 /// 「台本の占有終端との一致」assert が落ちる。
@@ -410,7 +377,7 @@ const WAIT_UNIT_MS: u64 = 50;
 /// 台本を parse → compile し、cue の発火時刻を昇順に辿って sink へ配送する。
 ///
 /// 注入する時刻は台本自身から導いた発火時刻と、末尾の観測点（占有終端）だけ——実時間の
-/// 待機もスピンも使わず、観測すべき時点を追い越さない（Requirement 9.2 / 9.3）。
+/// 待機もスピンも使わず、観測すべき時点を追い越さない（areka-P0-balloon-visibility 要件 9.2 / 9.3）。
 fn play_script(script: &str, sink: Box<dyn CueSink>) -> CompiledTalk {
     let instructions = areka_parsers::sakura::parse(script);
     let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());
@@ -443,8 +410,8 @@ fn ends_of(signals: &[TalkLifecycleSignal]) -> Vec<f64> {
         .collect()
 }
 
-/// 完了条件（task 6.3）: **待機を含む台本**で占有終端が台本の占有区間の終端と一致する
-/// （Requirement 4.1）。あわせて会話開始の通知が占有終端の通知に先行する。
+/// 完了条件: **待機を含む台本**で占有終端が台本の占有区間の終端と一致する
+/// （areka-P0-balloon-visibility 要件 4.1）。あわせて会話開始の通知が占有終端の通知に先行する。
 ///
 /// 台本 `\0あい\w9\e` の占有終端の導出（実行結果からは読まない）:
 ///
@@ -467,7 +434,7 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
 
     let compiled = play_script(
         r"\0あい\w9\e",
-        Box::new(BalloonLifecycleSink::new(tx, test_clock())),
+        Box::new(BalloonLifecycleSink::new(tx, zero_clock())),
     );
 
     // 前提①: 待機が効いている台本であること——待機以外の cue の終端は占有終端に届かない。
@@ -525,10 +492,10 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
     );
 }
 
-/// 会話境界のリセットを**本番の複製経路**で確かめる（Requirement 4.5 の破棄契機の前提）。
+/// 会話境界のリセットを**本番の複製経路**で確かめる（areka-P0-balloon-visibility 要件 4.5 の破棄契機の前提）。
 ///
 /// dispatcher は登録 sink を talk 起動ごとに `clone_box` で複製する
-/// （`crates/areka-ghost/src/dispatcher.rs:293`）。本檻はその `BootCueSink::clone_box`
+/// （`areka-ghost` の dispatcher）。本檻はその `BootCueSink::clone_box`
 /// をそのまま踏み、2 本の実台本を続けて再生する。
 ///
 /// 2 本目の占有終端（0.05）は 1 本目（0.7）より**小さい**——会話境界が持ち越されると
@@ -536,14 +503,14 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
 ///
 /// 3 本目の脚は、1 本目の cue を実際に浴びたインスタンスからの複製を試す。今日の dispatcher は
 /// 登録 sink を emit しないため複製元は常に未使用だが、本 sink はその上流の暗黙不変条件に
-/// 依存せず境界を戻す設計であり（`talk_lifecycle.rs` の `Clone` 実装の注記）、実台本の
+/// 依存せず境界を戻す設計であり（`talk_lifecycle.rs` の `impl BootCueSink`（`clone_box`）の注記）、実台本の
 /// 占有終端でもその保証が成り立つことをここで押さえる。
 #[test]
 fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
     // `GhostBootOptions.sinks` へ登録される形（複製元）。
     let registered: Box<dyn BootCueSink> =
-        Box::new(BalloonLifecycleSink::new(tx.clone(), test_clock()));
+        Box::new(BalloonLifecycleSink::new(tx.clone(), zero_clock()));
 
     // 1 本目 `\0あいうえお\w9\e`: 文字 5 × 50ms = 0.25 ＋ 待機 9 × 50ms = 0.45 → 終端 0.7。
     // （`\wN` の N は 1 桁のみ——`\w20` は `\w2` ＋ 文字 "0" になる。長い待ちは `\_w[ms]` 形。）
@@ -594,7 +561,7 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
 
     // 3 本目: 1 本目の cue を実際に浴びたインスタンスから複製する。複製元の既知最大は 0.7 まで
     // 上がっているため、境界を引き継ぐ複製では 2 本目と同じ台本（終端 0.05）で通知が 1 件も出ない。
-    let mut used = BalloonLifecycleSink::new(tx, test_clock());
+    let mut used = BalloonLifecycleSink::new(tx, zero_clock());
     for cue in first.sheet.cues() {
         if let CuePayload::Command(command) = &cue.payload {
             used.emit(TalkCue {

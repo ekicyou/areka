@@ -8,17 +8,15 @@
 //! 押し込みに倒れる場面の期待値は、檻の側で [`limit_correction`] を呼んで作る
 //! （「今の押し込みと同じ位置」が主張そのもの）。並べ替えの期待値は檻の側の数で書く。
 
-use std::collections::BTreeSet;
-use std::time::Instant;
-
 use bevy_ecs::prelude::*;
-use wintf::ecs::drag::DragEndEvent;
+use std::collections::BTreeSet;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, SizeI, WindowPos};
 
 use super::gate_tests::snapshot;
 use super::*;
 use crate::balloon_lock::{apply_script_balloon_lock, seed_balloon_lock};
+use crate::follow::test_support::{drag_end_event_at, point_of};
 use crate::follow::{move_window_to, on_balloon_drag_end};
 use crate::shared_test_support::placement_sized;
 use crate::source::GhostTitles;
@@ -333,14 +331,6 @@ fn boot_gate_does_not_flip_when_limit_is_disabled() {
 // 書き込みの関門（要件 5.3・5.6・5.7・5.8）
 // ---------------------------------------------------------------------------
 
-fn point_of(world: &World, entity: Entity) -> PointPx {
-    let p = world
-        .get::<WindowPos>(entity)
-        .and_then(|wp| wp.position)
-        .expect("位置がある");
-    point(p.x, p.y)
-}
-
 /// 実 spawn の World（キャラ窓は作業領域の中ほど・バルーンは左隣）。
 fn world_with(scope: usize, limit: bool) -> (World, Entity, Entity) {
     let mut world = World::new();
@@ -489,12 +479,7 @@ fn release_correction_never_flips() {
         size: Some(SizeI::new(BSZ.w, BSZ.h)),
         ..Default::default()
     });
-    let ev = DragEndEvent {
-        target: balloon,
-        position: Point::new(0, 0),
-        cancelled: false,
-        timestamp: Instant::now(),
-    };
+    let ev = drag_end_event_at(balloon, (0, 0));
     let (_, events) =
         capture(|| on_balloon_drag_end(&mut world, balloon, balloon, &Phase::Bubble(ev)));
     assert_eq!(point_of(&world, balloon), point(0, 904));

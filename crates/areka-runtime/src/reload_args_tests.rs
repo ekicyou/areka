@@ -1,5 +1,5 @@
 // =============================================================================
-// 読み直しの対象の振り分けの決定論檻（design.md Testing Strategy「reload_args_tests.rs」・
+// 読み直しの対象の振り分けの決定論檻（areka-P0-mcp-reload design.md Testing Strategy「reload_args_tests.rs」・
 // 要件 12.1 ⑴⑵⑸・1.2〜1.5・7.2・7.4・7.5・8.5・10.3）
 // =============================================================================
 
@@ -9,12 +9,6 @@ fn toks(items: &[&str]) -> Vec<String> {
     items.iter().map(|s| s.to_string()).collect()
 }
 
-const ALL: DescriptParts = DescriptParts {
-    ghost: true,
-    shell: true,
-    balloon: true,
-};
-
 fn parts(ghost: bool, shell: bool, balloon: bool) -> DescriptParts {
     DescriptParts {
         ghost,
@@ -23,15 +17,14 @@ fn parts(ghost: bool, shell: bool, balloon: bool) -> DescriptParts {
     }
 }
 
-fn notes(unsupported: &[&str], unknown: &[&str], empty: bool) -> DescriptNotes {
+fn notes(unsupported: &[&str], unknown: &[&str]) -> DescriptNotes {
     DescriptNotes {
         unsupported: toks(unsupported),
         unknown: toks(unknown),
-        empty,
     }
 }
 
-// ── ⑴ MCP の `target`（要件 1.2・1.3・12.1 ⑴） ──
+// ── ⑴ MCP の `target`（areka-P0-mcp-reload 要件 1.2・1.3・12.1 ⑴） ──
 
 #[test]
 fn mcp_target_six_words() {
@@ -53,7 +46,7 @@ fn mcp_target_six_words() {
     );
     assert_eq!(
         McpTarget::parse("descript"),
-        McpTarget::Target(ReloadTarget::Descript(ALL))
+        McpTarget::Target(ReloadTarget::Descript(DescriptParts::ALL))
     );
     assert_eq!(McpTarget::parse("makoto"), McpTarget::Makoto);
 }
@@ -70,7 +63,7 @@ fn mcp_target_ignores_ascii_case() {
     );
     assert_eq!(
         McpTarget::parse("DeScRiPt"),
-        McpTarget::Target(ReloadTarget::Descript(ALL))
+        McpTarget::Target(ReloadTarget::Descript(DescriptParts::ALL))
     );
     assert_eq!(McpTarget::parse("MAKOTO"), McpTarget::Makoto);
 }
@@ -91,7 +84,7 @@ fn mcp_target_empty_and_unknown() {
     assert_eq!(McpTarget::parse("ｓｈｅｌｌ"), McpTarget::Unknown);
 }
 
-// ── ⑵ 台本の 7 綴り（要件 1.4・1.5・10.3・12.1 ⑵） ──
+// ── ⑵ 台本の 7 綴り（areka-P0-mcp-reload 要件 1.4・1.5・10.3・12.1 ⑵） ──
 
 fn script(name: &str, params: &[&str]) -> Option<ScriptReload> {
     parse_script(name, &toks(params))
@@ -112,28 +105,13 @@ fn script_seven_spellings() {
     assert_eq!(script("reload", &["balloon"]), plain(ReloadTarget::Balloon));
     assert_eq!(
         script("reload", &["descript"]),
-        plain(ReloadTarget::Descript(ALL))
+        plain(ReloadTarget::Descript(DescriptParts::ALL))
     );
     assert_eq!(
         script("reload", &["descript", "shell balloon"]),
         plain(ReloadTarget::Descript(parts(false, true, true)))
     );
     assert_eq!(script("reloadsurface", &[]), plain(ReloadTarget::Shell));
-}
-
-#[test]
-fn script_and_mcp_descript_agree() {
-    let Some(ScriptReload {
-        target: ReloadTarget::Descript(from_script),
-        ..
-    }) = script("reload", &["descript"])
-    else {
-        panic!("descript が写らない");
-    };
-    assert_eq!(
-        McpTarget::parse("descript"),
-        McpTarget::Target(ReloadTarget::Descript(from_script))
-    );
 }
 
 #[test]
@@ -167,21 +145,21 @@ fn script_descript_param_notes_are_carried() {
         script("reload", &["descript", "shell headline nosuchword"]),
         Some(ScriptReload {
             target: ReloadTarget::Descript(parts(false, true, false)),
-            notes: notes(&["headline"], &["nosuchword"], false),
+            notes: notes(&["headline"], &["nosuchword"]),
         })
     );
 }
 
 #[test]
 fn script_descript_ignores_third_param_and_later() {
-    // `\![reload,descript,shell,balloon]` の `balloon` は見ない（要件 7.2）。
+    // `\![reload,descript,shell,balloon]` の `balloon` は見ない（areka-P0-mcp-reload 要件 7.2）。
     assert_eq!(
         script("reload", &["descript", "shell", "balloon"]),
         plain(ReloadTarget::Descript(parts(false, true, false)))
     );
 }
 
-// ── ⑸ descript のパラメータの語（要件 7.2・7.4・7.5・12.1 ⑸） ──
+// ── ⑸ descript のパラメータの語（areka-P0-mcp-reload 要件 7.2・7.4・7.5・12.1 ⑸） ──
 
 fn desc(param: &str) -> (DescriptParts, DescriptNotes) {
     parse_descript_params(param)
@@ -189,37 +167,31 @@ fn desc(param: &str) -> (DescriptParts, DescriptNotes) {
 
 #[test]
 fn descript_single_and_pairs() {
-    assert_eq!(
-        desc("shell"),
-        (parts(false, true, false), notes(&[], &[], false))
-    );
-    assert_eq!(
-        desc("ghost"),
-        (parts(true, false, false), notes(&[], &[], false))
-    );
+    assert_eq!(desc("shell"), (parts(false, true, false), notes(&[], &[])));
+    assert_eq!(desc("ghost"), (parts(true, false, false), notes(&[], &[])));
     assert_eq!(
         desc("balloon"),
-        (parts(false, false, true), notes(&[], &[], false))
+        (parts(false, false, true), notes(&[], &[]))
     );
     assert_eq!(
         desc("shell balloon"),
-        (parts(false, true, true), notes(&[], &[], false))
+        (parts(false, true, true), notes(&[], &[]))
     );
-    assert_eq!(desc("ghost shell balloon"), (ALL, notes(&[], &[], false)));
+    assert_eq!(
+        desc("ghost shell balloon"),
+        (DescriptParts::ALL, notes(&[], &[]))
+    );
 }
 
 #[test]
 fn descript_duplicates_once() {
     assert_eq!(
         desc("ghost ghost"),
-        (parts(true, false, false), notes(&[], &[], false))
+        (parts(true, false, false), notes(&[], &[]))
     );
     assert_eq!(
         desc("headline headline nosuch nosuch shell"),
-        (
-            parts(false, true, false),
-            notes(&["headline"], &["nosuch"], false)
-        )
+        (parts(false, true, false), notes(&["headline"], &["nosuch"]))
     );
 }
 
@@ -234,7 +206,7 @@ fn descript_unsupported_kinds() {
     ] {
         assert_eq!(
             desc(word),
-            (parts(false, false, false), notes(&[word], &[], true)),
+            (parts(false, false, false), notes(&[word], &[])),
             "{word}"
         );
     }
@@ -244,26 +216,20 @@ fn descript_unsupported_kinds() {
 fn descript_calendar_two_words_are_one() {
     assert_eq!(
         desc("calendar skin"),
-        (
-            parts(false, false, false),
-            notes(&["calendar skin"], &[], true)
-        )
+        (parts(false, false, false), notes(&["calendar skin"], &[]))
     );
     assert_eq!(
         desc("shell calendar plugin balloon"),
-        (
-            parts(false, true, true),
-            notes(&["calendar plugin"], &[], false)
-        )
+        (parts(false, true, true), notes(&["calendar plugin"], &[]))
     );
     // 後ろが skin／plugin でない `calendar` は知らない語。
     assert_eq!(
         desc("calendar shell"),
-        (parts(false, true, false), notes(&[], &["calendar"], false))
+        (parts(false, true, false), notes(&[], &["calendar"]))
     );
     assert_eq!(
         desc("calendar"),
-        (parts(false, false, false), notes(&[], &["calendar"], true))
+        (parts(false, false, false), notes(&[], &["calendar"]))
     );
 }
 
@@ -271,31 +237,19 @@ fn descript_calendar_two_words_are_one() {
 fn descript_unknown_and_empty() {
     assert_eq!(
         desc("nosuchword"),
-        (
-            parts(false, false, false),
-            notes(&[], &["nosuchword"], true)
-        )
+        (parts(false, false, false), notes(&[], &["nosuchword"]))
     );
-    assert_eq!(
-        desc(""),
-        (parts(false, false, false), notes(&[], &[], true))
-    );
-    assert_eq!(
-        desc("   "),
-        (parts(false, false, false), notes(&[], &[], true))
-    );
+    assert_eq!(desc(""), (parts(false, false, false), notes(&[], &[])));
+    assert_eq!(desc("   "), (parts(false, false, false), notes(&[], &[])));
     // カンマは区切りでない＝第 2 引数の全体が 1 語。
     assert_eq!(
         desc("shell,balloon"),
-        (
-            parts(false, false, false),
-            notes(&[], &["shell,balloon"], true)
-        )
+        (parts(false, false, false), notes(&[], &["shell,balloon"]))
     );
     // 大小は区別する（台本の綴りどおり）。
     assert_eq!(
         desc("Shell"),
-        (parts(false, false, false), notes(&[], &["Shell"], true))
+        (parts(false, false, false), notes(&[], &["Shell"]))
     );
 }
 
@@ -303,11 +257,11 @@ fn descript_unknown_and_empty() {
 fn descript_extra_spaces_are_separators() {
     assert_eq!(
         desc("  shell   balloon "),
-        (parts(false, true, true), notes(&[], &[], false))
+        (parts(false, true, true), notes(&[], &[]))
     );
 }
 
-// ── どの入力でも panic しない（要件 8.5） ──
+// ── どの入力でも panic しない（areka-P0-mcp-reload 要件 8.5） ──
 
 #[test]
 fn never_panics_on_tricky_inputs() {

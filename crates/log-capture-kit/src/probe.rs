@@ -1,6 +1,8 @@
 //! 常駐 probe。発行点の interest を `sometimes` に合成し、他スレッドの先着で `never` が
 //! 焼き付く経路を閉じる（プロセス寿命で冪等に確立する）。
 //!
+//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
+//!
 //! # なぜ「素朴な `with_default` 捕捉」では非決定的に取りこぼすのか
 //!
 //! `tracing::subscriber::with_default` が差し替えるのは**スレッドローカルの既定 dispatcher**
@@ -127,7 +129,13 @@ fn probes_requested() -> bool {
     let text = raw.to_str().unwrap_or_else(|| {
         panic!("{PROBES_ENV} の値が Unicode ではない: {raw:?}");
     });
-    match text.trim() {
+    probes_choice(text)
+}
+
+/// 指定の値を逐語で読む（前後の空白も綴りの一部で、` on` は `on` ではない）。
+/// `on`／`off` のほかは panic する。
+fn probes_choice(text: &str) -> bool {
+    match text {
         PROBES_ON => true,
         PROBES_OFF => false,
         other => panic!(
@@ -141,7 +149,7 @@ fn probes_requested() -> bool {
 ///
 /// 「プロセス寿命で 1 度だけ読む」は、**回数を数えなければ判別できない**。毎回読む形へ変えても
 /// 同一プロセス内では答えが動かないので、判定の一致だけを見る檻は恒真になる——タスク 11.1 の
-/// レビューが、`probes_requested()` を毎回呼ぶ変異を当てても檻が 3 本とも緑のままであることを
+/// レビューが、`probes_requested()` を毎回呼ぶ変異を当てても檻が緑のままであることを
 /// 実測した。ここで実際に数えることで、その変異が赤になる。
 #[cfg(test)]
 static PROBES_ENV_READS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -181,17 +189,16 @@ fn probes() -> &'static Option<(tracing::Dispatch, tracing::Dispatch)> {
 /// 何度呼んでも、また複数スレッドから同時に呼んでも安全（[`OnceLock`] が 1 回に畳む）。
 ///
 /// 環境変数 `AREKA_LOG_CAPTURE_PROBES=off` が立っているときだけ、登録せずに戻る
-/// （測定専用の切替・要件 13.1）。立っているかどうかは [`interest_probes_enabled`] で読める。
+/// （測定専用の切替・要件 13.1）。
 pub fn ensure_interest_probes() {
     let _ = probes();
 }
 
 /// 常駐 probe が**実際に確立されているか**を返す（確立がまだなら、その場で判定して確立する）。
 ///
-/// 測定（要件 13.1 の A/B）で「環境変数を立てたつもりで立っていなかった」を炙り出すための
-/// 窓口である。値そのものではなく**この判定の結果**を返すので、変数が測定対象のプロセスまで
-/// 届いていたかどうかを、切替と同じ経路で確かめられる。
-pub fn interest_probes_enabled() -> bool {
+/// 切替の判定の結果をテストから読むための口（テスト専用）。
+#[cfg(test)]
+pub(crate) fn interest_probes_enabled() -> bool {
     probes().is_some()
 }
 

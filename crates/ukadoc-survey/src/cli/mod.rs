@@ -16,14 +16,23 @@
 //! - 終了コードは 0 = 成功・1 = 失敗・2 = 使い方の誤り（設計「Error Handling / 見張り」）。
 //!   実際に終了コードを返すのは実行ファイル側（`main.rs`）で、ここは [`Outcome`] と
 //!   `Err` のどちらを返すかだけを決める。
+//! - 標準出力へ書けなかったとき（出力の先のパイプが閉じたときなど）も panic させず、
+//!   `<標準出力>` を置き場にした `Err` にする（`write_stdout`）。終了コードは 1。
 //!
 //! 知らない名前と余計な引数は、断りの 1 行を標準エラーへ出してから [`Outcome::Usage`] を
 //! 返す。呼び手（`main.rs`）が続けて使い方を出すので、利用者は「何が違ったか」と
 //! 「どう打てばよいか」を続けて読める（要件 6.12）。
 
 use std::io::Write;
+use std::path::Path;
 
+use crate::catalog::Catalog;
+use crate::catalog::read::read as read_catalog;
 use crate::error::SurveyError;
+use crate::io::{files, paths};
+use crate::ledger::Ledger;
+use crate::ledger::read::read as read_ledger;
+use crate::model::Domain;
 
 pub mod generate;
 pub mod inspect;
@@ -128,6 +137,37 @@ fn write_notice<W: Write>(notices: &mut W, body: &str) -> Result<(), SurveyError
         path: "<標準エラー>".to_string(),
         reason: err.to_string(),
     })
+}
+
+/// 結果の本文を標準出力へ書く。書けなかったこと（パイプが閉じたときなど）も黙って
+/// 捨てず、panic もせずに失敗として返す（終了コード 1）。
+fn write_stdout<W: Write>(out: &mut W, body: &str) -> Result<(), SurveyError> {
+    out.write_all(body.as_bytes())
+        .and_then(|()| out.flush())
+        .map_err(|err| SurveyError::Io {
+            path: "<標準出力>".to_string(),
+            reason: err.to_string(),
+        })
+}
+
+/// repo のカタログを読む（`check`・`evidence`・`diff`・`ledger-init`・`report-summary` の共用）。
+pub(super) fn load_catalog() -> Result<Catalog, SurveyError> {
+    read_catalog(&files::read_normalized(&paths::catalog_path())?)
+}
+
+/// 台帳 4 本を渡された読み手で読む（並びは [`Domain::ALL`]）。1 本でも読めなければ止まる。
+pub(super) fn load_ledgers_with(
+    read: &dyn Fn(&Path) -> Result<String, SurveyError>,
+) -> Result<Vec<Ledger>, SurveyError> {
+    Domain::ALL
+        .into_iter()
+        .map(|domain| read_ledger(&read(&paths::ledger_path(domain))?, domain))
+        .collect()
+}
+
+/// repo の台帳 4 本を読む。無ければ探したパスを添えて失敗する（先に `ledger-init`）。
+pub(super) fn load_ledgers() -> Result<Vec<Ledger>, SurveyError> {
+    load_ledgers_with(&files::read_normalized)
 }
 
 /// 知らない名前を打たれたときの断り（打たれた綴りをそのまま映す）。

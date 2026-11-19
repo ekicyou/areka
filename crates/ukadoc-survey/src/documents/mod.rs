@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use crate::model::{Domain, EntryId, PageName};
 
 pub mod derive;
-mod fields;
+pub(crate) mod fields;
 pub mod parse;
 
 // ---------------------------------------------------------------------------
@@ -124,19 +124,18 @@ pub struct Linkage {
     pub tally: Tally,
 }
 
-/// 束 1 つ分（`[bundle."名前"]`・要件 4.1 の 8 項目）。
+/// 束 1 つ分（`[bundle."名前"]`・要件 4.1 の 8 項目）。⑴ 束の名前は
+/// [`Linkage::bundles`] の鍵が持つ。
 ///
 /// 単独項目も同じ型で持つ（[`Self::single`] が真）。型を 1 つにしてあるのは、分割の
 /// 判定も順位の行も同じ規則で扱えるようにするためである（設計 D-2）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NamedBundle {
-    /// ⑴ 束の名前（表の鍵と同じ綴り）。
-    pub name: String,
     /// 単独項目なら真。
     pub single: bool,
     /// ⑵ 由来する機械の束 id（0 個以上）。単独項目は持たない。
     pub machine: Vec<EntryId>,
-    /// ⑶ 構成 id の全列挙。単独項目はちょうど 1 つ。
+    /// ⑶ 構成 id の全列挙（重複なし）。単独項目はちょうど 1 つで、束の名前と同じ綴り。
     pub members: Vec<EntryId>,
     /// ⑶ のうち人手で足した id（[`Self::members`] の部分集合）。単独項目は持たない。
     pub hand: Vec<EntryId>,
@@ -311,22 +310,13 @@ pub struct OwnerCompleted {
 }
 
 /// 参照した標準テンプレート辞書 1 本（`[[template]]`・要件 6.3）。
+///
+/// 人が読むための欄（`shiori`・`url`・`fetched_on`・`files`・`mapping`・`fallback`）は
+/// 読み手が形を確かめるだけで、型には持たない。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Template {
     /// テンプレートの名前。
     pub name: String,
-    /// SHIORI の種別（里々・YAYA など）。
-    pub shiori: String,
-    /// 配布元の URL。退路を使ったときは取得できなかった配布元。
-    pub url: String,
-    /// 取得日。
-    pub fetched_on: String,
-    /// 読んだ辞書ファイル名。
-    pub files: Vec<String>,
-    /// id への写し方。
-    pub mapping: String,
-    /// 退路（要件 6.8）を使ったら真。
-    pub fallback: bool,
     /// 辞書に現れた語彙を写した id。
     pub ids: Vec<EntryId>,
 }
@@ -355,13 +345,12 @@ pub struct Briefs {
     pub snapshot_on: String,
 }
 
-/// spec 表の 1 行（`[[spec]]`・要件 10.2）。
+/// spec 表の 1 行（`[[spec]]`・要件 10.2）。ウェーブ（`wave`）は読み手が形を
+/// 確かめるだけで、型には持たない。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpecRow {
     /// spec 名（ディレクトリ名）。
     pub name: String,
-    /// roadmap.md のウェーブ（W13〜W17・保留）。
-    pub wave: String,
     /// 段階。**属する束がある行だけが持つ**。
     ///
     /// 段階は束が順位表で置かれている段階の写しなので、どの束にも属さない行

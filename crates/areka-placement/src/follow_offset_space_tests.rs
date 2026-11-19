@@ -1,13 +1,13 @@
 //! 単位空間契約の純関数のテスト
-//! （要件 2.2/2.4/2.5/3.1/3.3/3.6・7.5〜7.9・design「Unit Tests」1〜5）。
+//! （`areka-P0-balloon-offset-dpi` 要件 2.2/2.4/2.5/3.1/3.3/3.6・7.5〜7.9・design「Unit Tests」1〜5）。
 //!
 //! 表示 DPI 行列（96 の倍数でない値を分子・分母の両側へ）・負値・`i32::MIN` 近傍・飽和・
 //! 作者基準 DPI の食い違い・[`OffsetRescale`] の 4 腕と値を変えない縮退 3 経路の全到達を見る。
 //!
 //! 期待値はすべて逐語（`assert_eq!`）で置く。近似比較はしない。
 //!
-//! design D8 の「揃えの残差の許容量」の実測（要件 4.4・research §12 の宿題）だけは、
-//! 1,000 行制限（要件 9.6）に収めるため兄弟ファイル `follow_offset_residual_tests.rs`
+//! design D8 の「揃えの残差の許容量」の実測（`areka-P0-balloon-offset-dpi` 要件 4.4・research §12 の宿題）だけは、
+//! 1,000 行制限（`areka-P0-balloon-offset-dpi` 要件 9.6）に収めるため兄弟ファイル `follow_offset_residual_tests.rs`
 //! へ分けてある。
 
 use areka_emo_compose::ScaleRatio;
@@ -44,7 +44,7 @@ fn saturating_axis_is_reported() {
 }
 
 // =========================================================================
-// 判断分岐の全網羅（task 1.3・要件 7.5〜7.9／design「Unit Tests」1〜5）
+// 判断分岐の全網羅（`areka-P0-balloon-offset-dpi` task 1.3・要件 7.5〜7.9／design「Unit Tests」1〜5）
 // =========================================================================
 
 /// 換算結果の 2 軸を値だけの組へ落とす（飽和は別途主張する）。
@@ -53,7 +53,7 @@ fn axis_values(pair: (ScaledAxis, ScaledAxis)) -> (i32, i32) {
 }
 
 // -------------------------------------------------------------------------
-// 1. 往復の bit 同一（要件 3.3／7.8・design D4）
+// 1. 往復の bit 同一（`areka-P0-balloon-offset-dpi` 要件 3.3／7.8・design D4）
 // -------------------------------------------------------------------------
 
 /// `96 → 120 → 192 → 120 → 96` を巡っても、同じ表示 DPI へ戻るたびに初回と bit 同一。
@@ -138,7 +138,7 @@ fn roundtrip_over_non_multiple_dpi_chain_is_bit_identical() {
 }
 
 // -------------------------------------------------------------------------
-// 2. 恒等の素通し（要件 2.2／7.5）
+// 2. 恒等の素通し（`areka-P0-balloon-offset-dpi` 要件 2.2／7.5）
 // -------------------------------------------------------------------------
 
 /// 基準 DPI と現在 DPI が同一なら、どんな値でも 1 bit も動かない。
@@ -191,7 +191,7 @@ fn supply_identity_ratio_passes_raw_through_in_canonical_form() {
 /// 供給側の恒等の**唯一の例外**＝`i32::MIN`（正の側に対応する値が i32 に無い）。
 ///
 /// 大きさ `2_147_483_648` は `i32` へ収まらないため `±i32::MAX` へ飽和し、飽和した事実を
-/// 値として返す（回り込まない・要件 2.5）。`i32::MIN` は窓寸の未確定センチネル
+/// 値として返す（回り込まない・`areka-P0-balloon-offset-dpi` 要件 2.5）。`i32::MIN` は窓寸の未確定センチネル
 /// （`CW_USEDEFAULT`）と同じビット列であり、正当なオフセットとしては供給されない。
 /// ここで固定するのは「恒等でも黙って回り込まない」ことである。
 #[test]
@@ -204,7 +204,7 @@ fn supply_identity_saturates_only_at_i32_min() {
 }
 
 // -------------------------------------------------------------------------
-// 3. 96 の倍数でない表示 DPI の行列（要件 7.6・design「Unit Tests」3）
+// 3. 96 の倍数でない表示 DPI の行列（`areka-P0-balloon-offset-dpi` 要件 7.6・design「Unit Tests」3）
 // -------------------------------------------------------------------------
 
 /// `(基準 DPI, 現在 DPI, 基準値, 期待値)` の逐語表。
@@ -442,7 +442,7 @@ fn shrinking_below_half_pixel_keeps_minimum_one_px() {
     }
 }
 
-/// 下限近傍と飽和の腕——**負の側**も含めて回り込まず `±i32::MAX` で止まる（要件 2.5）。
+/// 下限近傍と飽和の腕——**負の側**も含めて回り込まず `±i32::MAX` で止まる（`areka-P0-balloon-offset-dpi` 要件 2.5）。
 #[test]
 fn saturates_on_both_signs_without_wrapping() {
     for (base_dpi, current) in [(96u16, 192u16), (96, 120), (96, 144)] {
@@ -478,7 +478,7 @@ fn i32_min_shrinks_into_range_without_saturating() {
     );
 }
 
-/// 飽和は 1 軸で起きても判定結果には**まとめて**現れる（要件 2.5 と同型）。
+/// 飽和は 1 軸で起きても判定結果には**まとめて**現れる（`areka-P0-balloon-offset-dpi` 要件 2.5 と同型）。
 #[test]
 fn saturation_flag_is_the_or_of_both_axes() {
     let verdict = rescale_follow_offset(base_at(i32::MAX, 10, 96), dpi(192));
@@ -491,7 +491,7 @@ fn saturation_flag_is_the_or_of_both_axes() {
     );
 }
 
-/// 供給側も負の側で飽和する（task 1.2 の檻は正の側だけを踏んでいた）。
+/// 供給側も負の側で飽和する（`areka-P0-balloon-offset-dpi` task 1.2 の檻は正の側だけを踏んでいた）。
 #[test]
 fn supply_saturates_on_the_negative_side_too() {
     let k = ScaleRatio::new(192, 96).expect("192/96");
@@ -521,7 +521,7 @@ fn supply_scales_by_non_multiple_ratios_verbatim() {
 }
 
 // -------------------------------------------------------------------------
-// 4. 作者基準 DPI の食い違い（要件 7.7／4.4・design D5）
+// 4. 作者基準 DPI の食い違い（`areka-P0-balloon-offset-dpi` 要件 7.7／4.4・design D5）
 // -------------------------------------------------------------------------
 
 /// シェルの作者基準 DPI（テスト内の模型）。
@@ -534,7 +534,7 @@ const BALLOON_AUTHOR_DPI: u32 = 120;
 /// 主張は 2 段。⑴ 同じ生値でもシェル軸とバルーン軸では換算結果が違う（軸の選択は
 /// 供給時にだけ意味を持つ）。⑵ 96 で供給した値を 192 へ**追随**させた結果は、192 で
 /// **供給し直した**値と一致する——シェル軸でもバルーン軸でも。ゆえに遷移の追随に
-/// 軸の選択は生じない（要件 4.4 の「どちらを用いるか」への答え）。
+/// 軸の選択は生じない（`areka-P0-balloon-offset-dpi` 要件 4.4 の「どちらを用いるか」への答え）。
 #[test]
 fn author_dpi_axes_split_on_supply_but_cancel_on_transition() {
     let raw = (40, -40);
@@ -595,7 +595,7 @@ fn transition_verdict_is_axis_independent() {
 }
 
 // -------------------------------------------------------------------------
-// 5. 判定 4 腕と、値を変えない縮退 3 経路の全到達（要件 3.6／9.4）
+// 5. 判定 4 腕と、値を変えない縮退 3 経路の全到達（`areka-P0-balloon-offset-dpi` 要件 3.6／9.4）
 // -------------------------------------------------------------------------
 
 /// 縮退 3 経路（`ZeroBaseDpi`／`ZeroCurrentDpi`／未係留）はいずれも値を変えない。
@@ -663,7 +663,7 @@ fn anchoring_adopts_the_observed_dpi_verbatim() {
 /// 未係留は現在 DPI が 0 でもそのまま係留する（係留は恒等・縮退より**先**に判定される）。
 ///
 /// 永続値の腕は比を組まないので、比を解決できるかどうかを問う前に答えが出る。
-/// 値は動かないため要件 5.2／3.6 の規範はいずれも満たされる。
+/// 値は動かないため`areka-P0-balloon-offset-dpi` 要件 5.2／3.6 の規範はいずれも満たされる。
 #[test]
 fn unpinned_base_anchors_before_any_zero_check() {
     let base = OffsetBase {
@@ -683,7 +683,7 @@ fn unpinned_base_anchors_before_any_zero_check() {
 ///
 /// 恒等の判定が 0 検査より先に置かれているためである。この順序は意図であって事故ではない。
 ///
-/// ⑴ 値はどちらの腕でも 1 bit も動かない——要件 3.6 の規範（「追従オフセットを変更しない」）
+/// ⑴ 値はどちらの腕でも 1 bit も動かない——`areka-P0-balloon-offset-dpi` 要件 3.6 の規範（「追従オフセットを変更しない」）
 ///    は満たされる。腕によって変わるのは呼び手が残す判定語だけである。
 /// ⑵ `base_dpi == current` は**そもそも遷移が起きていない**ことを意味する。表示 DPI が
 ///    0 のまま動いていないという事態は、比を組む側ではなく DPI の供給層が報告すべきもので
@@ -691,7 +691,7 @@ fn unpinned_base_anchors_before_any_zero_check() {
 /// ⑶ 表示 DPI が 0 になる経路は本番に無い（`WM_DPICHANGED` の wparam もモニタ問い合わせも
 ///    非ゼロを返す）。ゆえに判定語が `unchanged` になることの実害も無い。
 ///
-/// 呼び手（追随相・task 6.x）はこの順序を前提に判定語を出すため、逆転させると記録の
+/// 呼び手（追随相・`areka-P0-balloon-offset-dpi` task 6.x）はこの順序を前提に判定語を出すため、逆転させると記録の
 /// 意味が変わる。ここで固定しておく。
 #[test]
 fn zero_on_both_sides_is_unchanged_not_unresolved() {

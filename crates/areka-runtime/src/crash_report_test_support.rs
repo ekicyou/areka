@@ -9,7 +9,7 @@
 //! 許可の持ち手・生きているスレッドの一覧・積み上げを、決めた行の形で標準エラーの OS のハンドルへ直に書き
 //! （libtest の捕まえも `std` の標準エラーの錠も通らない）、次の受け手へ回す。ふだんの緑の走行では何も書かない。
 //!
-//! 同じ初期化子で、プロセスの寿命の MTA を立てる（`CoIncrementMTAUsage`・件 3 の直し）。テストのスレッドが
+//! 同じ初期化子で、プロセスの寿命の MTA を立てる（`CoIncrementMTAUsage`）。テストのスレッドが
 //! 足場ごとに入って出る一時的な MTA が解体され、放された DLL を後から呼んで落ちるのを防ぐ（2026-11-01 の対照の
 //! 走行で候補 B と決めた）。そのため、COM を初期化していないテストのスレッドも暗黙の MTA に居る。
 //!
@@ -37,7 +37,7 @@ use windows::Win32::System::Threading::{
 use windows::core::PCWSTR;
 
 // ---------------------------------------------------------------------------
-// 今の `windows` の機能（Win32_System_Diagnostics_* が無い）に無い kernel32 の関数と構造体（設計の議題 2・
+// 今の `windows` の機能（Win32_System_Diagnostics_* が無い）に無い kernel32 の関数と構造体（areka-test-binary-stability の設計の議題 2・
 // `Cargo.toml` は触らない）。
 // ---------------------------------------------------------------------------
 
@@ -146,7 +146,7 @@ static WRITING: AtomicBool = AtomicBool::new(false);
 
 /// プロセスの読み込みの初め（libtest の main より前）に 1 度だけ走る。
 pub extern "C" fn install() {
-    // 一時的な MTA の解体の後に放された DLL を呼ぶ落ち（件 3）を防ぐ: プロセスの寿命の MTA を立てる
+    // 一時的な MTA の解体の後に放された DLL を呼ぶ落ちを防ぐ: プロセスの寿命の MTA を立てる
     // （クッキーは返さない・プロセスの終わりまで持つ）。
     // SAFETY: 引数の無い COM の呼び出し。
     if let Err(e) = unsafe { CoIncrementMTAUsage() } {
@@ -170,8 +170,9 @@ fn raw_stderr() -> ManuallyDrop<File> {
 // GPU の装置の許可の持ち手の表（`GpuPermit` の取る・返す所から載せ降ろしする・割り当て無し）
 // ---------------------------------------------------------------------------
 
-/// 表の行の数。プロセスの数えの許可 4 つの他に、檻が別の数えで 2 つまで取るので、余らせて置く。
-pub const HOLDER_ROWS: usize = 16;
+/// 表の行の数。プロセスの数え（`GPU_SLOTS` の上限）の許可と、自分の数えで 2 つ取る檻 1 本の分が同時に
+/// 載る。16 行はそれより多い。
+const HOLDER_ROWS: usize = 16;
 const NAME_BYTES: usize = 160;
 
 #[derive(Clone, Copy)]
@@ -195,9 +196,9 @@ static HOLDERS: Mutex<[Holder; HOLDER_ROWS]> = Mutex::new([Holder::EMPTY; HOLDER
 static MISSED: AtomicUsize = AtomicUsize::new(0);
 
 /// 表に入らなかった許可の行の番号。
-pub const NO_ROW: usize = usize::MAX;
+const NO_ROW: usize = usize::MAX;
 
-/// 今のスレッドを許可の持ち手として載せ、行の番号を返す（入りきらなければ [`NO_ROW`]）。
+/// 今のスレッドを許可の持ち手として載せ、行の番号を返す（入りきらなければ `usize::MAX`）。
 pub fn hold() -> usize {
     let thread = std::thread::current();
     let name = thread.name().unwrap_or("");
@@ -524,8 +525,8 @@ fn crash_filter_is_installed_before_the_tests_start() {
     );
 }
 
-/// 初期化子はプロセスの寿命の MTA を立てている（件 3 の直し）: COM を初期化していない新しいスレッドも、
-/// 暗黙の MTA に居る。
+/// 初期化子はプロセスの寿命の MTA を立てている（一時的な MTA の解体の後に放された DLL を呼ぶ落ちの直し）:
+/// COM を初期化していない新しいスレッドも、暗黙の MTA に居る。
 #[test]
 fn initializer_keeps_a_process_lifetime_mta() {
     use windows::Win32::System::Com::{
@@ -547,7 +548,7 @@ fn initializer_keeps_a_process_lifetime_mta() {
     );
 }
 
-/// 最初の受け手が書くのは AV だけ（ふだんの走行で捕まえられて続く例外は書かない・要件 10.3）。
+/// 最初の受け手が書くのは AV だけ（ふだんの走行で捕まえられて続く例外は書かない）。
 #[test]
 fn first_chance_writes_only_access_violations() {
     assert!(should_write_first_chance(0xC000_0005));
@@ -572,17 +573,12 @@ fn line_cuts_an_overlong_line_at_a_char_boundary_with_a_mark() {
     assert!(!text.contains("tail"), "切った後の書き足しは捨てる");
 }
 
-/// 較正（要件 1.2）: 許可を取り `GraphicsCore` を作った後（GPU の DLL を読み込んだ後も受け手が生きていることを
+/// 較正（areka-test-binary-stability 要件 1.2）: 許可を取り `GraphicsCore` を作った後（GPU の DLL を読み込んだ後も受け手が生きていることを
 /// 見るため）、名前の無いスレッドで例外を起こす。出力に落ちたスレッド（名前なし）・持ち手の行のこのテストの名前・
-/// 生きているスレッドの一覧が出ることを `load-flake.ps1` の summary で見る（タスク 2.4）。
+/// 生きているスレッドの一覧が出ることを `load-flake.ps1` の summary で見る。
 #[test]
-#[ignore = "較正: わざとプロセスを落とす（要件 1.2）"]
+#[ignore = "較正: わざとプロセスを落とす"]
 fn crash_report_names_the_running_test() {
-    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
     let _gpu = crate::spine::GpuPermit::take();
     let _core = wintf::ecs::GraphicsCore::new().expect("GraphicsCore::new 失敗");
     // `std::thread::spawn` は名前を付けない（`Builder::name` を使わない）。

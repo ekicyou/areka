@@ -6,41 +6,38 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use real_run_kit::{EndedBy, RealRun, Run};
+mod common;
+
+use common::{alive, fake, panic_message};
+use real_run_kit::{EndedBy, Run};
 use temp_path_kit::TempPath;
 
-/// 偽の子を手順つきで立てる指定（32bit の仲介は揃えない）。
-fn fake(steps: &str) -> RealRun {
-    RealRun::new(env!("CARGO_BIN_EXE_real-run-fake-areka"))
-        .without_host32_helper()
-        .env("REAL_RUN_FAKE_STEPS", steps)
-}
-
-/// その番号のプロセスが偽の子として生きているか（`tasklist` の行に実行ファイルの名前が在るか）。
-fn alive(pid: u32) -> bool {
-    let out = Command::new("tasklist")
-        .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-        .output()
-        .expect("tasklist を起こせない");
-    String::from_utf8_lossy(&out.stdout).contains("real-run-fake-areka")
-}
+/// 短い締切を渡した待ちにかかってよい時間の上限。呼び手が渡す締切と負荷の揺れよりは十分に長く置く。
+///
+/// shortcut: 既定の締切は公開していないので、結合テストからは読めず、この上限をそこから導けない。
+/// 既定の締切がこの上限より短くなると、指定が効かなくてもここは緑のまま。既定の締切を縮めるときは、
+/// この上限をそれより短く置き直す。
+const SHORT_DEADLINE_CAGE: Duration = Duration::from_secs(30);
 
 /// `f` の中の panic を捕まえて文を返す。`f` は立てた子の番号と回の置き場を `seen` へ控える。
 /// 残った回の置き場は消す（落ちた回の証拠＝6.1 は 5.3 の試験が確かめる）。
+///
+/// 呼び手はどれも `.deadline()` で短い締切を渡す。その指定が待ちに届かなければ窓口の既定の締切まで
+/// 待つので、かかった時間が `SHORT_DEADLINE_CAGE` に届いたら落とす（3.3）。
 fn expect_panic(f: impl FnOnce(&mut Option<(u32, PathBuf)>)) -> (String, u32) {
     let mut seen = None;
+    let started = Instant::now();
     let err = catch_unwind(AssertUnwindSafe(|| f(&mut seen))).expect_err("panic するはず");
+    let took = started.elapsed();
     let (pid, run_dir) = seen.expect("子を立てる前に落ちた");
     let _ = std::fs::remove_dir_all(&run_dir);
-    let text = err
-        .downcast_ref::<String>()
-        .cloned()
-        .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
-        .unwrap_or_default();
-    (text, pid)
+    assert!(
+        took < SHORT_DEADLINE_CAGE,
+        "短い締切の指定が効かず {took:?} かかった（既定の締切まで待っている）"
+    );
+    (panic_message(&*err), pid)
 }
 
 fn note(run: &Run, seen: &mut Option<(u32, PathBuf)>) {
@@ -127,6 +124,7 @@ fn child_receives_env_and_args() {
     assert_eq!(value("NO_COLOR"), "1");
     assert_eq!(value("AREKA_APP_SMOKE_EXIT_MS"), "1234");
     assert_eq!(value("RUST_LOG"), "info");
+    assert_eq!(value("PASTA_DEBUG"), "0");
     assert!(out.lines().any(|l| l == "arg 1=--一つめ"), "{out}");
     assert!(out.lines().any(|l| l == "arg 2=二つめ"), "{out}");
     assert!(!out.contains("arg 3="), "{out}");
@@ -190,7 +188,6 @@ fn wait_exit_ends_by_safety_exit() {
 #[test]
 fn drop_closes_running_window() {
     let marks = TempPath::under_target("rr-mark");
-    std::fs::create_dir_all(marks.path()).unwrap();
     let mark = marks.child("mark.txt");
     let run = fake("window").env("REAL_RUN_FAKE_MARK", &mark).spawn();
     let pid = run.pid();
@@ -199,13 +196,51 @@ fn drop_closes_running_window() {
     assert!(!alive(pid), "破棄の後も子（PID {pid}）が生きている");
 }
 
-/// 9.1: 2 つの走りを同時に立てると、置き場と番号が別。
+/// audit-test-kits 指摘 9: `close()` も `wait_exit()` も呼ばずに捨てた取っ手の子が閉じる知らせに答えなければ、破棄が子を止めて
+/// panic し、その unwind の中で回の置き場（証拠）が残る。
+#[test]
+fn dropping_a_run_whose_child_ignores_close_panics_and_keeps_the_evidence() {
+    let run = fake("window-deaf").deadline(Duration::from_secs(2)).spawn();
+    let (pid, dir) = (run.pid(), run.run_dir().to_path_buf());
+    let err = catch_unwind(AssertUnwindSafe(|| drop(run))).expect_err("破棄が panic するはず");
+    let kept = dir.join("stdout.log").is_file();
+    let _ = std::fs::remove_dir_all(&dir);
+    let text = panic_message(&*err);
+    assert!(
+        kept,
+        "閉じ忘れて止めた回の証拠が残っていない: {}",
+        dir.display()
+    );
+    assert!(text.contains("wait_exit() も呼ばずに"), "{text}");
+    assert!(text.contains(&format!("PID {pid}")), "{text}");
+    assert!(!alive(pid), "破棄の後も子（PID {pid}）が生きている");
+}
+
+/// audit-test-kits 指摘 27: 窓ができる前に届いた閉じる知らせは送り直す（最初の送りは窓の無い子に届かない）。
+#[test]
+fn a_close_sent_before_the_window_exists_is_resent() {
+    let mut run = fake("sleep:1500;window")
+        .deadline(Duration::from_secs(10))
+        .spawn();
+    assert_eq!(run.close().by, EndedBy::UserClose, "{}", run.output());
+}
+
+/// audit-test-kits 指摘 27: 受け取りの行が出た後は送り直さない（子は受け取ってから 2.5 秒残り、その間の知らせにも行を出す）。
+#[test]
+fn no_close_is_resent_after_the_acknowledgement() {
+    let mut run = fake("window-linger:2500").spawn();
+    assert_eq!(run.close().by, EndedBy::UserClose, "{}", run.output());
+    let out = run.stdout();
+    let acks = out.matches("event=\"os_close_request\"").count();
+    assert_eq!(acks, 1, "受け取りの行がちょうど 1 行でない:\n{out}");
+}
+
+/// 9.1: 2 つの走りを同時に立てると、置き場が別（空きの番号が別であることは OS が保証しないので見ない）。
 #[test]
 fn two_runs_at_once_are_separate() {
     let mut a = fake("window").spawn();
     let mut b = fake("window").spawn();
     assert_ne!(a.run_dir(), b.run_dir());
-    assert_ne!(a.mcp_port(), b.mcp_port());
     assert_eq!(a.close().by, EndedBy::UserClose);
     assert_eq!(b.close().by, EndedBy::UserClose);
 }
@@ -215,4 +250,17 @@ fn read(path: &Path) -> String {
         .unwrap_or_else(|e| panic!("{} を読めない: {e}", path.display()))
         .trim()
         .to_owned()
+}
+
+/// 知らない手順は、ASCII だけの 1 行を標準エラーへ書いて終了コード 64 で終わる（偽の子の約束）。
+#[test]
+fn an_unknown_step_exits_with_64_and_an_ascii_line() {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_real-run-fake-areka"))
+        .env("REAL_RUN_FAKE_STEPS", "無い手順")
+        .output()
+        .expect("偽の子を起こせる");
+    assert_eq!(out.status.code(), Some(64));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.is_ascii(), "ASCII だけのはず: {err}");
+    assert!(err.contains("real-run-fake-areka: unknown step"), "{err}");
 }

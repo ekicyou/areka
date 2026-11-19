@@ -1,7 +1,7 @@
 //! 実行系の側の起動（`boot_runtime`）の決定論テスト（areka-P0-mcp-reload 要件 4.2・13.4）。
 //!
-//! 確かめること: 束から 13 本の sink が今の並びで組まれ、12 本目が読み直しの受け口・13 本目が
-//! 常に手前の受け口（線へ届く）であること・
+//! 確かめること: 束から sink が今の並び（`runtime_sinks`）で組まれ、最後から 2 本目が読み直しの
+//! 受け口・最後が常に手前の受け口（線へ届く）であること・
 //! 起動に失敗したとき World が変わらないこと・成功したときだけ受信端 5 つが World に据わること。
 
 use std::cell::RefCell;
@@ -10,28 +10,34 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
+use std::time::Instant;
 
 use areka_emo_present::PresentCommand;
 use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
-use areka_ghost::{ShioriWiring, TickerMode};
-use areka_kanade::{BootOrigin, CloseReason, ShioriBackend};
+use areka_ghost::dispatcher::DispatcherMsg;
+use areka_ghost::{GhostBootError, GhostRuntime, ShioriWiring, TickerMode};
+use areka_kanade::{BootOrigin, CloseReason, MonotonicMs, ShioriBackend};
 use areka_seriko::{BindResolver, SerikoLoopConfig, SurfaceResolver, spawn_seriko};
 use bevy_ecs::world::World;
-use dola::cue::{ActorKey, CueCommand, TalkCue};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::*;
 use crate::input_events::user_break::UserBreakWiring;
 use crate::readme::ReadmeWiring;
 use crate::sample_test_support::acquire_emo2;
 use crate::session::ghost_switch::ChangeRx;
+use crate::session::ghost_switch_test_support::{TICK_EVERY, TICK_STEP_MS};
 use crate::session::shell_balloon_switch::SwitchRx;
 use areka_runtime::RuntimeInputs;
 use areka_runtime::adapter::PresentBridge;
+use areka_runtime::consumer_ledger::test_support::carrier_cue;
 use areka_runtime::reload_cue::ReloadRx;
-use areka_runtime::spine::{Progress, ScriptedShioriBackend, run_bounded_watching};
+use areka_runtime::spine::{
+    Progress, ScriptedShioriBackend, ScriptedShioriHandle, run_bounded_watching, wait_until,
+};
 use areka_runtime::talk_clock::TalkClock;
+use areka_runtime::user_break_cue::NoUserBreakSignal;
+use sample_ghost_kit::SampleRoot;
 
 /// 窓の側の束の持ち物（seriko と文字の線を生かしておく）。
 struct Rig {
@@ -51,8 +57,7 @@ fn rig() -> Rig {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let (text, text_pump) =
-        spawn_emo_text(Rc::clone(&runtime)).expect("このスレッドで文字の線を起こせる");
+    let (text, text_pump) = spawn_emo_text(Rc::clone(&runtime));
     let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     let (surface, _seriko) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
@@ -99,14 +104,7 @@ fn installed(world: &World) -> usize {
     .count()
 }
 
-fn com() {
-    // SAFETY: 起動の資産の読み込みに要る COM 初期化（既初期化の S_FALSE 等は無視・assets.rs 同流儀）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-}
-
-/// 束から 13 本が組まれ、12 本目が読み直しの受け口・13 本目が常に手前の受け口（どちらも
+/// 束から組まれる受け口の列は、最後から 2 本目が読み直しの受け口・最後が常に手前の受け口（どちらも
 /// 受信端へ届く）である。
 #[test]
 fn sinks_are_thirteen_with_reload_then_window_state_last() {
@@ -119,33 +117,21 @@ fn sinks_are_thirteen_with_reload_then_window_state_last() {
         "11 本の今の並びの後ろに読み直しの受け口、その後ろに常に手前の受け口"
     );
 
-    let cue = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier("reload", vec!["ghost".to_string()]),
-        duration: 0.0,
-    };
-    sinks[11].emit(cue);
+    sinks[11].emit(carrier_cue("reload", &["ghost"]));
     assert_eq!(
         lines.reload_rx.try_iter().count(),
         1,
-        "12 本目の受け口は読み直しの受信端へ送る"
+        "最後から 2 本目の受け口は読み直しの受信端へ送る"
     );
 
-    let cue = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(
-            "set",
-            vec!["windowstate".to_string(), "stayontop".to_string()],
-        ),
-        duration: 0.0,
-    };
-    sinks.last_mut().expect("13 本目").emit(cue);
+    sinks
+        .last_mut()
+        .expect("最後の受け口")
+        .emit(carrier_cue("set", &["windowstate", "stayontop"]));
     assert_eq!(
         rig.window_state_rx.try_iter().count(),
         1,
-        "13 本目の受け口は常に手前の受信端へ送る"
+        "最後の受け口は常に手前の受信端へ送る"
     );
     assert_eq!(
         lines.reload_rx.try_iter().count(),
@@ -160,22 +146,14 @@ fn sinks_are_thirteen_with_reload_then_window_state_last() {
 fn rebuilt_window_state_sink_reaches_the_same_line() {
     let rig = rig();
     let world = World::new();
-    let on = || TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(
-            "set",
-            vec!["windowstate".to_string(), "stayontop".to_string()],
-        ),
-        duration: 0.0,
-    };
+    let on = || carrier_cue("set", &["windowstate", "stayontop"]);
 
     let (mut first, _) = runtime_sinks(&world, &rig.sources);
-    first.last_mut().expect("13 本目").emit(on());
+    first.last_mut().expect("最後の受け口").emit(on());
     // 読み直し: 前の受け口を落とし、同じ束から組み直す。
     drop(first);
     let (mut rebuilt, _) = runtime_sinks(&world, &rig.sources);
-    rebuilt.last_mut().expect("13 本目").emit(on());
+    rebuilt.last_mut().expect("最後の受け口").emit(on());
 
     assert_eq!(
         rig.window_state_rx.try_iter().count(),
@@ -218,19 +196,33 @@ fn failed_boot_leaves_world_unchanged() {
 
     let result = boot_runtime(&mut world, inputs, &rig.sources, mpsc::channel().0, None);
 
-    assert!(matches!(result, Err(RuntimeBootError::Boot(_))));
+    // 無いフォルダはマウントで落ちる（失敗の種類まで見る）。
+    assert!(matches!(result, Err(GhostBootError::Mount(_))));
     assert_eq!(installed(&world), 0, "失敗では受信端を据えない");
 }
 
 /// 起動に成功したときだけ受信端 5 つが World に据わる。
 #[test]
 fn successful_boot_installs_receivers() {
-    com();
     let rig = rig();
     let sample = acquire_emo2();
     let (backend, handle) = ScriptedShioriBackend::builder().build();
     let mut world = World::new();
-    let inputs = RuntimeInputs {
+    let inputs = emo2_inputs(&sample, backend);
+    assert_eq!(installed(&world), 0);
+
+    let runtime = boot_runtime(&mut world, inputs, &rig.sources, mpsc::channel().0, None)
+        .expect("偽の SHIORI と emo2 検体で実行系が起きる");
+    assert_eq!(installed(&world), 5, "成功で受信端 5 つが据わる");
+
+    shut_down("runtime_boot ghost shutdown", runtime, handle);
+    drop(sample);
+}
+
+/// 偽の SHIORI `backend` で emo2 検体（同梱バルーン `emo2-kakukaku`）を起こす入力（時計は止めたまま）。
+/// 子の通しのテスト 2 本も使う。
+fn emo2_inputs(sample: &SampleRoot, backend: impl ShioriBackend + Send + 'static) -> RuntimeInputs {
+    RuntimeInputs {
         ghost_root: sample.folder().to_path_buf(),
         balloon_root: sample
             .balloon("emo2-kakukaku")
@@ -242,22 +234,43 @@ fn successful_boot_installs_receivers() {
         ticker: TickerMode::Disabled,
         app_profile_dir: None,
         boot_origin: BootOrigin::Plain,
-    };
-    assert_eq!(installed(&world), 0);
+    }
+}
 
-    let runtime = boot_runtime(&mut world, inputs, &rig.sources, mpsc::channel().0, None)
-        .expect("偽の SHIORI と emo2 検体で実行系が起きる");
-    assert_eq!(installed(&world), 5, "成功で受信端 5 つが据わる");
-
+/// 実行系を降ろし、偽の SHIORI の呼び出しの数を進みの目印に終わるまで待つ。子の通しのテスト 2 本も使う。
+fn shut_down(what: &str, runtime: GhostRuntime, handle: ScriptedShioriHandle) {
     let calls = move || handle.call_count();
-    run_bounded_watching(
-        "runtime_boot ghost shutdown",
-        Progress::Count(&calls),
-        move || {
-            let _ = runtime.shutdown(CloseReason::User { scope: 0 });
-        },
+    run_bounded_watching(what, Progress::Count(&calls), move || {
+        let _ = runtime.shutdown(CloseReason::User { scope: 0 });
+    });
+}
+
+/// 足場は `TickerMode::Disabled` なので、台詞の時計は dispatcher へ合成の Tick を注入して進める。
+/// Tick の幅と間引き（実時間で [`TICK_EVERY`] に 1 つまで）は切替の足場 `SwitchRig` の定数を借り、中断の線の合図を `Leave` が届くまで読んで返す
+/// （同じ読みで後ろの合図まで入ることがある）。子の通しのテスト 2 本が使う。
+fn signals_until_leave(world: &World, runtime: &GhostRuntime) -> Vec<NoUserBreakSignal> {
+    let wiring = world
+        .get_non_send::<UserBreakWiring>()
+        .expect("成功で中断の持ち物が据わる");
+    let mut signals = Vec::new();
+    let mut clock_ms = 0;
+    let mut last_tick: Option<Instant> = None;
+    let reached = wait_until("OnBoot の Leave", Progress::Unknown, || {
+        if last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
+            last_tick = Some(Instant::now());
+            clock_ms += TICK_STEP_MS;
+            let _ = runtime.dispatcher().send(DispatcherMsg::Tick {
+                now: MonotonicMs(clock_ms),
+            });
+        }
+        signals.extend(wiring.flag_rx().try_iter());
+        signals.contains(&NoUserBreakSignal::Leave)
+    });
+    assert!(
+        reached.is_ok(),
+        "Leave まで届かない（届いた分 {signals:?}）: {reached:?}"
     );
-    drop(sample);
+    signals
 }
 
 // 台本の出どころを起動の道で通すテスト（areka-P0-script-security-level・同じ組み方を借りる）。
