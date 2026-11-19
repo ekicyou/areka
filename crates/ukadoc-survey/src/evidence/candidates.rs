@@ -105,7 +105,6 @@ fn is_test_path(path: &str) -> bool {
     path.ends_with("_tests.rs")
         || path.ends_with("_test.rs")
         || path.contains("/tests/")
-        || path.starts_with("tests/")
         || path.contains("_tests/")
         || path.ends_with("/tests.rs")
 }

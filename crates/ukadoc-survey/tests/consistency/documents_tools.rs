@@ -191,16 +191,15 @@ fn shifting_a_count_moves_the_number_by_one() {
     );
 }
 
-/// 同じ鍵が別の表と地の文にも現れるとき、錨が狙った表の中だけを見ること。
+/// 同じ鍵が別の表と、囲みの後ろの地の文にも現れるとき、錨が狙った表の中だけを見ること。
 ///
 /// これがこの道具の要である。錨を本文全体に置くと、`briefing.md` の `[stage.A]`〜
-/// `[stage.E]` が同じ鍵を 5 回持つだけで摂動が空振りして止まり、`linkage.md` の
-/// 地の文に恒等式を半角の `=` で書くだけで同じことが起きる（設計 D-2）。
+/// `[stage.E]` が同じ鍵を 5 回持つだけで摂動が空振りして止まる（設計 D-2）。地の文は
+/// 囲みの最後の表の後ろに逆引用符なしで `singles = 0` と書いてあり、表の範囲が閉じの
+/// ` ``` ` を越えてはみ出すと、鍵が 2 度現れて止まる。
 #[test]
 fn shifting_a_count_looks_only_inside_the_named_table() {
     let markdown = "\
-恒等式は target = from_machine + by_hand + singles である。
-
 ```toml
 [stage.A]
 bundles = 7
@@ -212,6 +211,8 @@ bundles = 4
 singles = 0
 items = 96
 ```
+
+地の文に singles = 0 と書いても、表の欄ではない。
 ";
     let shifted = shift_count(markdown, "[stage.B]", "singles");
     assert!(
@@ -223,7 +224,7 @@ items = 96
         "狙った段階の欄を動かせていない:\n{shifted}"
     );
     assert!(
-        shifted.contains("恒等式は target = from_machine"),
+        shifted.contains("地の文に singles = 0 と書いても"),
         "地の文まで書き換えている:\n{shifted}"
     );
 }

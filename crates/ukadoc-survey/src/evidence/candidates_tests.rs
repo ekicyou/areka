@@ -442,7 +442,12 @@ fn 同じ組は一件に畳む() {
 fn テストの置き場の下と_tests_rs_も拾わない() {
     let text = r##"pub const ALLOWED_EVENT_IDS: &[&str] = &["OnBoot"];
 "##;
-    for path in ["crates/x/src/placement_tests/a.rs", "crates/x/src/tests.rs"] {
+    for path in [
+        "crates/x/src/placement_tests/a.rs",
+        "crates/x/src/tests.rs",
+        "crates/x/tests/a.rs",
+        "crates/x/src/a_test.rs",
+    ] {
         assert_eq!(
             candidates(&sources(&[(path, text)])),
             Vec::new(),

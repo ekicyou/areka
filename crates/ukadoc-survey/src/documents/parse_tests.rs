@@ -910,7 +910,8 @@ fn the_three_id_scanners_sort_the_spellings_into_their_own_mouths() {
     let backticked = "ukadoc:list_shiori_event:OnClose:1";
     let markdown = format!(
         "地の文で `{backticked}` を引く。\n\n```toml\n[bundle.\"束\"]\n\
-         members = [\"{quoted}\"]\n```\n\n表の中でも `{backticked}` は同じ扱い。\n"
+         members = [\"{quoted}\"]\n```\n\n表の中でも `{backticked}` は同じ扱い。\n\
+         地の文の引用符付き \"{backticked}\" も裸ではない。\n"
     );
 
     assert_eq!(
@@ -930,6 +931,11 @@ fn the_three_id_scanners_sort_the_spellings_into_their_own_mouths() {
         bare_id_tokens(&markdown).is_empty(),
         "囲まれた綴りを裸の語として拾っている: {:?}",
         bare_id_tokens(&markdown)
+    );
+    assert!(
+        quoted_ids(&markdown).contains(&backticked.to_string()),
+        "地の文の引用符付きを本文全体の引用符の口が拾っていない: {:?}",
+        quoted_ids(&markdown)
     );
 
     // 母数 0 の緑を作らない——裸で書けば、その 1 件だけが挙がる。

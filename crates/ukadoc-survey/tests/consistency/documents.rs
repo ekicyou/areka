@@ -271,16 +271,19 @@ pub(super) fn drop_member(text: &str, id: &str) -> String {
 /// いるので当たらないが、囲まずに書けば同じことが起きる。だから `table`（`[tally]`・`[stage.B]` のような表の見出しの
 /// 行そのもの）で場所を絞り、その表の中でだけ鍵を探す。
 ///
-/// 表の範囲は見出しの次の行から、次に行頭が `[` で始まる行の手前まで（見つからなければ
-/// 本文の終わりまで）。TOML の表は行頭の `[` で始まるので、これで隣の表へはみ出さない。
-/// 囲みを閉じる ` ``` ` の行はこの範囲に入るが、そこに `鍵 = ` は現れない。
+/// 表の範囲は見出しの次の行から、次に行頭が `[` で始まる行と、囲みを閉じる ` ``` ` の行の
+/// 早いほうの手前まで（どちらも無ければ本文の終わりまで）。TOML の表は行頭の `[` で始まり、
+/// 囲みは ` ``` ` で閉じるので、これで隣の表へも、囲みの外（後ろの地の文や次の囲み）へも
+/// はみ出さない。
 pub(super) fn shift_count(text: &str, table: &str, key: &str) -> String {
     let table_line = format!("{table}\n");
     let table_at = only_occurrence(text, &table_line, "ずらす件数の表") + table_line.len();
-    let section_len = text[table_at..]
-        .match_indices("\n[")
-        .map(|(at, _)| at + 1)
-        .next()
+    // 見出し行の改行から探す——表が空で次の行がすぐ `[` や ` ``` ` でも見落とさない。
+    let from_newline = &text[table_at - 1..];
+    let section_len = ["\n[", "\n```"]
+        .iter()
+        .filter_map(|mark| from_newline.find(mark))
+        .min()
         .unwrap_or(text.len() - table_at);
     let section = &text[table_at..table_at + section_len];
 
