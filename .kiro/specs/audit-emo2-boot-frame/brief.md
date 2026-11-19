@@ -142,3 +142,8 @@
 - **ア（1 番の片割れ）**: `crates/areka-runtime/src/frame/dpi.rs:L404-L413` で、窓の側から来る scope に `2*scope+1` を掛ける所が、大きな scope であふれる。`audit-emo2-boot-spine` は台本の側（`target_map.rs` の `2*scope`）を、上限を超える番号を `None` にして warn で捨てる形に直す。こちらも同じ上限でそろえる。
 - **イ（件 6 の 1 本）**: `crates/areka/src/runtime_tests/frame/window_state_tests.rs:L144` のテスト関数は、補助を分ければ `areka-runtime` へ戻せる（dev-dependencies は既にある）。
 - **オ（`code_only` の写し）**: `crates/areka-runtime/src/frame/zorder_drain_tests.rs:L465` の `code_only` は、`source_text_test_support::code_only` と 1 字も違わない。そちらを使う形に寄せる。
+
+## audit-placement-follow-residue からの申し送り（2026-11-17）
+
+- シェルの切り替えの置き直し（`crates/areka-placement/src/reseed.rs` の `reanchor_char_windows`）は、整合待ちの札（`DpiSyncHold`）のある窓を置き直さず `debug!`（`event = "reseed_held"`・scope）を残すようになった。札のある窓は、シェルの切り替えの直後は札が外れるまで（最大 30 フレーム）前の揃え方のまま残り、札が外れるフレームの拡大率の相（`frame/dpi.rs`）の `DpiReproject` で新しい揃え方に置かれる前提。
+- この前提は配置の crate の中の檻（`reseed_tests.rs` の ⑶・`resize_window_to(.., DpiReproject)` を直に呼ぶ）でしか固めていない。札が外れるフレームに本番の相が本当にその窓を書くかを、起動のフレームの見直しのときに確かめる（論点・参照: `.kiro/specs/completed/audit-placement-follow-residue/design.md` の決め 5・ReseedHold・Revalidation Triggers の 4 つ目）。

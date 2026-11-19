@@ -40,7 +40,7 @@ mod tests {
         if with_dragging {
             world.spawn(DraggingState {
                 drag_start_pos: Point::new(10, 20),
-                initial_window_pos: (0.0, 0.0),
+                initial_window_pos: Some((0.0, 0.0)),
             });
         }
         let mut schedule = Schedule::default();

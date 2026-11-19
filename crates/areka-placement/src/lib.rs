@@ -23,7 +23,8 @@
 //!
 //! 根を引く子もある: `reset_pos`→根の `primary_monitor`・`square_dpi`・`work_area_px`、
 //! `reseed`→根の `scale_then_merge`・
-//! `ScopeWindowPositions`・`follow/offset_space`→根の `scale_signed`。
+//! `ScopeWindowPositions`・`follow/offset_space`・`follow/move_shift`→根の `scale_signed`、
+//! `follow/work_area`・`transition_diag`→根の `work_area_px`、`balloon_limit`・`persist`・`reseed`→`follow` の `rect_at`。
 //!
 //! 本ファイルはサブモジュール宣言・失敗型 [`PlacementError`] の出し直しに加え、
 //! 配置準備の合成ルート [`prepare_ghost_windows`]（design「main.rs seam」）

@@ -1,4 +1,4 @@
-//! `transition_judge` の**上限と合否**の決定論テスト（task 3.2）。
+//! `transition_judge` の**上限と合否**の決定論テスト。
 //!
 //! 押さえるのは 3 点である:
 //!
@@ -13,7 +13,7 @@
 //! # 実機専用の上限の**値**は固定しない
 //!
 //! C7 は `visualize_to_write_us`／`flush_total_us` を「非決定なので回帰テストでは固定しない」と
-//! 定める。task 4.3 が値を確定させた後も同じで、根拠は確定台帳 L9 と定数の doc が持つ。よって
+//! 定める。値を確定させた後も同じで、根拠は確定台帳 L9 と定数の doc が持つ。よって
 //! 本モジュールは上限の数字を 1 度も書かず、[`Bounds`] が持つ値を読んでその ±1 で分岐を作る。
 
 use areka_emo_present::presenter::{
@@ -78,7 +78,7 @@ fn the_deterministic_constants_hold_the_values_c7_fixes() {
     assert_eq!(super::GROUND_DIFF_MAX, 0);
     assert_eq!(super::CHAIN_REALIGN_PER_TRANSITION, 1);
     // 待ちの許容だけは**値を固定しない**——正本は本番の整合ゲートの上限であり、ここで値を
-    // 二度書くと task 5.4 が解消した二重定義が檻の側で復活する。固定するのは結線である。
+    // 二度書くと整合待ちの導入で解消した二重定義が檻の側で復活する。固定するのは結線である。
     assert_eq!(
         super::HOLD_FRAME_ALLOWANCE,
         areka_placement::dpi_sync::DPI_SYNC_HOLD_MAX_FRAMES
@@ -88,7 +88,7 @@ fn the_deterministic_constants_hold_the_values_c7_fixes() {
 #[test]
 fn the_signoff_bounds_arm_only_the_real_machine_quantities() {
     let bounds = Bounds::signoff();
-    // 固定するのは**結線**（当該の定数から引いていること）であって値ではない。task 4.3 が
+    // 固定するのは**結線**（当該の定数から引いていること）であって値ではない。
     // 定数を確定値へ差し替えても、この檻は書き換えずに緑のまま追随した。
     assert_eq!(
         bounds.visualize_to_write_us_max,
@@ -104,7 +104,7 @@ fn the_signoff_bounds_arm_only_the_real_machine_quantities() {
 
 #[test]
 fn the_signoff_bounds_are_positive_but_their_values_are_not_fixed_here() {
-    // 値そのものは檻に書かない（C7: 非決定量は回帰テストで固定しない）。task 4.3 が
+    // 値そのものは檻に書かない（C7: 非決定量は回帰テストで固定しない）。上限を
     // 確定させた後も同じで、上限の根拠は確定台帳 L9 と定数の doc が持つ——ここへ値を
     // 写すと、根拠を持たない 2 つ目の正本ができる。
     // 固定してよいのは「0 でないこと」だけ——0 の上限はあらゆる遷移を違反にし、判定を
@@ -395,7 +395,7 @@ fn one_scope_with_a_skipped_balloon(balloon_write_frame: u32) -> Vec<String> {
 #[test]
 fn an_invisible_balloon_that_still_follows_in_the_same_frame_is_a_pass() {
     // 見送りは**サーフェスの再表示**についての事実であって、窓書込の有無ではない。随伴が
-    // 同一フレームで書かれている以上、要件 4.3 は満たされている——ここを違反にすると、
+    // 同一フレームで書かれている以上、`areka-P0-dpi-transition-atomicity` 要件 4.3 は満たされている——ここを違反にすると、
     // 発話していない定常状態（＝サインオフ手順のほぼ全域）で非欠陥が不合格になる。
     let summary = summarize_lines(&one_scope_with_a_skipped_balloon(COMPLIANT_FRAME));
     assert!(
@@ -414,7 +414,7 @@ fn an_invisible_balloon_that_still_follows_in_the_same_frame_is_a_pass() {
 #[test]
 fn an_invisible_balloon_that_follows_in_another_frame_is_still_caught() {
     // 逆向きの檻。見送りを理由に対の検査ごと降りると、**随伴が実際に遅れて動いた**という
-    // 要件 4.3 の欠陥が観測されないまま合格になる。
+    // `areka-P0-dpi-transition-atomicity` 要件 4.3 の欠陥が観測されないまま合格になる。
     let summary = summarize_lines(&one_scope_with_a_skipped_balloon(COMPLIANT_FRAME + 1));
     let violations = violations(&summary, &Bounds::deterministic());
     assert!(
@@ -427,9 +427,9 @@ fn an_invisible_balloon_that_follows_in_another_frame_is_still_caught() {
 ///
 /// バルーン 1 は遷移時点で不可視ゆえ再表示を見送られたが、**随伴の位置書込（`BalloonFollow`）は
 /// 他の窓と同じフレームで届き**、遅れたのは表示された時点の寸書込（`KeepPositionResize`）だけ
-/// である（レポート §3.2 の注「+649ms に表示された時点で新寸へ（Requirement 4.6 の現状維持
-/// 挙動＝欠陥ではない）」）。2 本の書込は**別の義務**を果たす——位置は要件 4.3 が同一フレームで
-/// 求め、寸は要件 4.6 が先送りを許す。経路語で選り分けなければ、遅れた寸が随伴の遅れに化ける。
+/// である（`areka-P0-dpi-transition-atomicity` のレポート §3.2 の注「+649ms に表示された時点で新寸へ（Requirement 4.6 の現状維持
+/// 挙動＝欠陥ではない）」）。2 本の書込は**別の義務**を果たす——位置は `areka-P0-dpi-transition-atomicity` 要件 4.3 が同一フレームで
+/// 求め、寸は `areka-P0-dpi-transition-atomicity` 要件 4.6 が先送りを許す。経路語で選り分けなければ、遅れた寸が随伴の遅れに化ける。
 fn one_scope_with_a_deferred_resize(follow_frame: u32, resize_frame: u32) -> Vec<String> {
     vec![
         monitor(COMPLIANT_FRAME, 96, 192, 1752, 1704),
@@ -471,7 +471,7 @@ fn one_scope_with_a_deferred_resize(follow_frame: u32, resize_frame: u32) -> Vec
             WindowKind::Char.as_str(),
             500,
         ),
-        // 随伴の位置（要件 4.3 が同一フレームで求める側）。
+        // 随伴の位置（`areka-P0-dpi-transition-atomicity` 要件 4.3 が同一フレームで求める側）。
         write(
             follow_frame,
             1_400,
@@ -483,7 +483,7 @@ fn one_scope_with_a_deferred_resize(follow_frame: u32, resize_frame: u32) -> Vec
             WindowKind::Balloon.as_str(),
             400,
         ),
-        // 見送られた寸（要件 4.6 が先送りを許す側）。
+        // 見送られた寸（`areka-P0-dpi-transition-atomicity` 要件 4.6 が先送りを許す側）。
         write(
             resize_frame,
             1_500,
@@ -505,7 +505,7 @@ const DEFERRED_RESIZE_FRAMES: u32 = 40;
 #[test]
 fn a_deferred_resize_after_a_punctual_follow_is_not_a_companion_defect() {
     // 再観測 §3.2 が「欠陥ではない」と書いた形を、判定器が欠陥と呼ばないこと。残るのは
-    // バルーン窓の書込 2 回だけ——これは 6 遷移すべてに出る是正前の量（task 5.3 が 1 回へ
+    // バルーン窓の書込 2 回だけ——これは 6 遷移すべてに出る是正前の量（合流が 1 回へ
     // 落とす）であって、この遷移に固有の判定ではない。
     let summary = summarize_lines(&one_scope_with_a_deferred_resize(
         COMPLIANT_FRAME,
@@ -523,7 +523,7 @@ fn a_deferred_resize_after_a_punctual_follow_is_not_a_companion_defect() {
 
 #[test]
 fn a_late_follow_is_caught_even_when_the_resize_was_punctual() {
-    // 2 本の経路を取り違えたら赤くなる側の檻。位置が遅れた（＝要件 4.3 の欠陥）ときは、
+    // 2 本の経路を取り違えたら赤くなる側の檻。位置が遅れた（＝`areka-P0-dpi-transition-atomicity` 要件 4.3 の欠陥）ときは、
     // 寸が同一フレームで届いていても捕まえなければならない。
     let summary = summarize_lines(&one_scope_with_a_deferred_resize(
         COMPLIANT_FRAME + DEFERRED_RESIZE_FRAMES,
@@ -538,8 +538,8 @@ fn a_late_follow_is_caught_even_when_the_resize_was_punctual() {
 
 #[test]
 fn a_deferred_write_to_a_skipped_window_does_not_extend_the_transition() {
-    // 要件 4.6 の裁定（本 spec で確定）: 見送り窓への書込は遷移の所要（要件 4.4 の
-    // 「全ゴースト窓の遷移」）に数えない。4.6 は当該窓を「変更せずに現状を維持」させる
+    // `areka-P0-dpi-transition-atomicity` 要件 4.6 の裁定（本 spec で確定）: 見送り窓への書込は遷移の所要（要件 4.4 の
+    // 「全ゴースト窓の遷移」）に数えない。`areka-P0-dpi-transition-atomicity` 要件 4.6 は当該窓を「変更せずに現状を維持」させる
     // 規定であり、後から表示された時点の書込は**その遷移の続き**ではないからである。
     // 数えると、再観測 §3.2 が非欠陥と明記した遷移 2 がフレーム上限で不合格になる。
     // 見送り窓への書込でも**随伴の位置**は別の量（`balloon_same_frame`）で見張り続ける。
@@ -564,7 +564,7 @@ fn a_deferred_write_to_a_skipped_window_does_not_extend_the_transition() {
 #[test]
 fn a_skipped_balloon_with_only_a_deferred_resize_is_left_out_of_the_verdict() {
     // 見送り窓に届いたのが**寸だけ**（`KeepPositionResize`）なら、随伴の位置は 1 度も
-    // 書かれていない＝要件 4.6 の現状維持そのものであり、対を求めない。
+    // 書かれていない＝`areka-P0-dpi-transition-atomicity` 要件 4.6 の現状維持そのものであり、対を求めない。
     //
     // 「書込が在るか」で判定すると、この形が「対を検査できるはず」に化けて未測定の違反へ
     // 落ちる——2 本の書込が別の義務を果たすことを、判定側でも取り違えないための檻である。
@@ -586,7 +586,7 @@ fn a_skipped_balloon_with_only_a_deferred_resize_is_left_out_of_the_verdict() {
 
 #[test]
 fn a_skipped_balloon_that_is_never_written_is_left_out_of_the_verdict() {
-    // 見送られたうえ窓書込も 1 度も無い＝現状維持そのもの（要件 4.6）。この対だけは求めない
+    // 見送られたうえ窓書込も 1 度も無い＝現状維持そのもの（`areka-P0-dpi-transition-atomicity` 要件 4.6）。この対だけは求めない
     // ——求めると「動かさなかったこと」が違反に化ける。
     let lines: Vec<String> = one_scope_with_a_skipped_balloon(COMPLIANT_FRAME)
         .into_iter()
@@ -614,7 +614,7 @@ fn a_skipped_balloon_that_is_never_written_is_left_out_of_the_verdict() {
 #[test]
 fn a_character_written_without_its_companion_balloon_is_not_a_pass() {
     // バルーンが見送り窓でもないのに 1 度も書かれていないなら、随伴の同一フレーム性は
-    // 「満たした」のではなく**測れていない**（要件 4.3 の判定対象が欠けている）。
+    // 「満たした」のではなく**測れていない**（`areka-P0-dpi-transition-atomicity` 要件 4.3 の判定対象が欠けている）。
     let without_balloon: Vec<String> = compliant_transition_lines()
         .into_iter()
         .filter(|line| {
@@ -640,7 +640,7 @@ fn a_character_written_without_its_companion_balloon_is_not_a_pass() {
 
 #[test]
 fn a_window_whose_refresh_was_skipped_is_left_out_of_the_verdict() {
-    // 要件 4.6: 寸の再導出結果が得られない窓は現状維持であり、合否から外す。可視化が無い
+    // `areka-P0-dpi-transition-atomicity` 要件 4.6: 寸の再導出結果が得られない窓は現状維持であり、合否から外す。可視化が無い
     // ぶん「量が欠けている」形になるので、除外しないと**見送りそのものが違反に化ける**。
     let mut lines = compliant_transition_lines();
     lines.push(surface(
@@ -735,9 +735,9 @@ fn the_deterministic_family_ignores_the_real_machine_quantities_entirely() {
 
 #[test]
 fn the_current_log_violates_the_per_window_write_bound_before_the_coalescing_correction() {
-    // **是正前の赤**（task 3.2 の観察可能な完了条件）。再観測 §3.2 のバルーン窓 2 回は
-    // task 5.3（同一 tick・同一窓のジオメトリ指令の合流）が 1 回へ落とす。接地点差 −48px は
-    // task 5.1／5.2（作業領域源の同期と再スナップ）が 0 へ落とす。
+    // **是正前の赤**（`areka-P0-dpi-transition-atomicity` タスク 3.2 の観察可能な完了条件）。再観測 §3.2 のバルーン窓 2 回は
+    // 同一 tick・同一窓のジオメトリ指令の合流が 1 回へ落とす。接地点差 −48px は
+    // 作業領域源の同期と再スナップが 0 へ落とす。
     let report = judge_transition_log(REOBSERVATION_TRANSITION_1);
     assert_eq!(report.transitions.len(), 1);
     let violations = report.transitions[0]
@@ -826,9 +826,9 @@ fn the_report_carries_both_families_and_fails_the_log() {
 
 #[test]
 fn the_report_prints_the_quantities_even_when_both_families_pass() {
-    // task 4.3 の裁定: 判定量は**合否によらず**刷る。違反の列挙だけだと `PASS` の系統の量が
-    // 1 つも残らず、是正の前後を「量そのもの」で並べる側（基準値 §7・task 7.3）が生ログから
-    // 手で起こす羽目になる（task 4.2 で実際に起きた）。
+    // `areka-P0-dpi-transition-atomicity` タスク 4.3 の裁定: 判定量は**合否によらず**刷る。違反の列挙だけだと `PASS` の系統の量が
+    // 1 つも残らず、是正の前後を「量そのもの」で並べる側（基準値 §7・`areka-P0-dpi-transition-atomicity` タスク 7.3）が生ログから
+    // 手で起こす羽目になる（`areka-P0-dpi-transition-atomicity` タスク 4.2 で実際に起きた）。
     //
     // 対照の遷移は 2 系統とも合格するので、違反の列挙は 1 行も出ない——ここで量が読めるなら
     // 「刷られているのは違反ではなく量である」ことが確かめられる。
@@ -929,12 +929,12 @@ fn a_log_that_fails_only_the_signoff_family_still_fails_the_report() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑼ の被覆検査が自分の番をできること（task 4.2 の実機採取で判明した穴）
+// ⑼ の被覆検査が自分の番をできること（`areka-P0-dpi-transition-atomicity` タスク 4.2 の実機採取で判明した穴）
 // ---------------------------------------------------------------------------
 
 /// 書込のあった窓が**1 つ残らず**除外される遷移（2 窓とも不可視ゆえの見送り）。
 ///
-/// 除外そのものは要件 4.6 に沿っている。問題は、この形で ⑼ の被覆検査が
+/// 除外そのものは `areka-P0-dpi-transition-atomicity` 要件 4.6 に沿っている。問題は、この形で ⑼ の被覆検査が
 /// `judged_windows` を 1 度も回らないことである——「窓ごとの量が 1 件も無い」が
 /// 合格として通ってしまう（恒真の主張）。
 fn every_written_window_excluded() -> Vec<String> {

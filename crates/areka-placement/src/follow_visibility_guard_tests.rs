@@ -1,6 +1,6 @@
 //! 可視性遷移ガード [`guard_visibility`] の純関数檻。
 //!
-//! # 前提（windowposition-limit 7.3・要件 2.1）
+//! # 前提（`areka-P0-windowposition-limit` 要件 7.3・2.1）
 //!
 //! 本檻が固定するのは**ガード自体の規則**（完全不可視への遷移だけを X clamp で救い、
 //! 部分的なはみ出しには手を出さない）であり、`windowposition.limit` の導入でこの規則は
@@ -200,14 +200,14 @@ fn guard_empty_snapshot_keeps_position() {
     }
 }
 
-// --- guard_visibility: バルーン矩形（S3′・Req 3.4） -----------------------
+// --- guard_visibility: バルーン矩形（S3′・`areka-P0-dpi-window-vanish` 要件 3.4） -----------------------
 //
 // バルーンは**別規則を持たない**——キャラ窓とまったく同一の純関数・同一の
 // 遷移規則へ、バルーン矩形（`char_pos + offset` と バルーン寸）を渡すだけ。
 // `guard_visibility` は窓の種類を持たないので、バルーンの寸は下の横断檻が
 // キャラ窓の寸と並べて全部の腕へ通す（寸だけを変えた写しは置かない）。
 //
-// 前提（windowposition-limit 7.3）: 「部分的なはみ出しには触らない」
+// 前提（`areka-P0-windowposition-limit` 要件 7.3）: 「部分的なはみ出しには触らない」
 // 「画面外へ留置されたものは引き戻さない」はガードの規則としていまも真である。
 // `windowposition.limit` が有効なバルーンについては、この後に走る関門が別途
 // 作業領域内へ補正する——ガード自体は不変で、限界の面倒を見るのは関門である。

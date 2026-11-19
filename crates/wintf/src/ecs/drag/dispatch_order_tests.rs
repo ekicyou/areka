@@ -190,9 +190,10 @@ fn start_on_window_without_position_warns_and_leaves_origin_none() {
     assert!(ctx.move_window, "動かすかは DragConfig のまま真");
     let starts = take::<DragStartEvent>(world);
     assert_eq!(starts.len(), 1, "始まりの知らせは 1 件: {starts:?}");
-    assert!(
-        world.get::<DraggingState>(child).is_some(),
-        "印は今どおり入る"
+    let ds = world.get::<DraggingState>(child).expect("印は今どおり入る");
+    assert_eq!(
+        ds.initial_window_pos, None,
+        "始めの位置が無いのに (0,0) を入れない"
     );
     force_idle();
 }

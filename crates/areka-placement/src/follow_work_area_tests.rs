@@ -5,7 +5,7 @@ use super::{WorkAreaResolution, work_area_for_window_with_origin};
 use crate::resolver::SizePx;
 
 // -------------------------------------------------------------------------
-// MonitorSnapshot / work_area_for_window（task 8.1・DD15 基盤・4.7）
+// MonitorSnapshot / work_area_for_window（`areka-P0-window-placement` 要件 4.7・DD15 基盤）
 // -------------------------------------------------------------------------
 
 use super::{MonitorSnapshot, work_area_for_window};
@@ -124,7 +124,7 @@ fn with_origin_reports_contains_when_center_belongs() {
 }
 
 /// どのモニタにも属さない中心は `NearestFallback` として判別される
-/// （S3 後半＝最近傍フォールバックが異常を無観測で吸収する性質の是正・Req 3.2）。
+/// （S3 後半＝最近傍フォールバックが異常を無観測で吸収する性質の是正・`areka-P0-dpi-window-vanish` 要件 3.2）。
 #[test]
 fn with_origin_reports_nearest_fallback_when_center_belongs_nowhere() {
     for dpi in DPIS {
