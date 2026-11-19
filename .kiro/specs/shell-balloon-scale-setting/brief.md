@@ -51,7 +51,7 @@
 ## Upstream / Downstream
 
 - **Upstream**: v0.2.0 の wintf・dola の基幹の整備（特に `wintf-d2d-composite-rules`＝k を当てる `render_surface` を作り直す・`draw-methods-canon`＝合成を D2D へ移す・`compose-f16-precision`＝k ≠ 1 の丸め）。この 3 本の着地の後の形に乗せる。`dpi-realign-remembered-chain`（拡大率が変わった後の詰め直しの穴・同じ `chain_realign.rs`・`persist.rs`）が先に着地していれば、その形に乗る。
-- **Downstream**: 予約「設定画面と設定ファイル」（表示倍率と「バルーンも連携する」を項目として持つ）・`\![set,scaling]` を受ける spec（表示倍率 × タグの倍率の掛け算に乗る）・`currentghost-property-tree`（`scope.scaling` に実効の倍率を出す）・`hit-id-pass`（逆変換に表示倍率も入る）。
+- **Downstream**: 予約「設定画面と設定ファイル」（表示倍率と「バルーンも連携する」を項目として持つ）・`\![set,scaling]` を受ける spec（`window-timed-directives`・2026-11-19 起票・表示倍率 × タグの倍率の掛け算に乗る）・`currentghost-property-tree`（`scope.scaling` に実効の倍率を出す）・`hit-id-pass`（逆変換に表示倍率も入る）。
 
 ## Existing Spec Touchpoints
 

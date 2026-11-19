@@ -94,3 +94,5 @@
 ## 2026-10-23 `pasta-in-windows-verification` からの申し送り（タスク 5.3・開発者 「0.1.0までに解決しない場合、独立して起票せよ」「原則として、すべての申し送りが0.1.0に解決するのであれば承認する。申し送り漏れはダメですよ。」）
 
 - `currentghost.scope(ID).rect` を v0.1.0 の新しい spec `mcp-scope-rect-property` へ、`currentghost.scope(ID).scaling`・`currentghost.scope(ID).currentmonitor.dpi` を v0.1.0 の新しい spec `shell-scale-linkage` へ移した（`verification.md` 5 節の 20・ぱすたの `dic/tategaki.pasta:53`）。動く値の口の持ち主は `mcp-scope-rect-property` になった。
+
+> **2026-11-19 `/kiro-discovery`**: `currentghost.scope(ID).currentmonitor` の残り 4 葉（`rect`・`work`・`primary`・`bpp`）を新しい spec `scope-currentmonitor-property` へ移した（台本「席替え」が使う・v0.4.0）。
