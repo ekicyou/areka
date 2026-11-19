@@ -1,5 +1,5 @@
-//! 記入例が実データに実在し、道具でそのまま読めることの主張（タスク 12.1・
-//! 要件 2.1・2.6・6.3・6.7・付録 A.1・A.3・付録 B.5）。
+//! 記入例が実データに実在し、道具でそのまま読めることの主張（要件 2.1・2.6・6.3・
+//! 6.7・付録 A.1・A.3・付録 B.5）。
 //!
 //! # なぜ記入例に見張りが要るのか
 //!
@@ -8,9 +8,9 @@
 //! 手本である。手本の id が実在しない綴りだと、写した台帳は要件 6.3
 //! （`LedgerIdNotInCatalog`）で必ず赤くなり、書き手は「道具が壊れている」と読む。
 //!
-//! 実際に 2026-09-05 まで、付録 A.1 の記入例 4 件のうち 3 件は実データに無い綴り
-//! （`balloon.scope(ID).width` など）だった。実在する id へ訂正したのが親の差分で、
-//! **訂正が二度と剥がれない**ようにするのがこのファイルである。
+//! 実際に、付録 A.1 の記入例には実データに無い綴り（`balloon.scope(ID).width` など）が
+//! 混じっていたことがある。実在する id へ訂正したものが**二度と剥がれない**ように
+//! するのがこのファイルである。
 //!
 //! # 何を相手にするか
 //!
@@ -29,8 +29,8 @@
 //!
 //! # 読むだけ
 //!
-//! ファイルも一時ディレクトリも作らない（設計 File Structure Plan）。読むのは要件
-//! 文書と README とカタログと台帳 4 本だけである。
+//! ファイルも一時ディレクトリも作らない（設計 File Structure Plan）。読むのは
+//! `RepoData` の一式と要件文書・README である。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -44,10 +44,10 @@ use super::RepoData;
 
 /// 要件文書の置き場（ワークスペース根からの相対）。
 ///
-/// **`/kiro-complete` の書き換え対象**である。2026-09-05 の完了処理で spec 一式は
-/// `.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/` へ移り、その手順 5-2 が
-/// `crates/` 全域から feature 名を grep してこの綴りを書き換えた。綴りをこの定数 1 つに
-/// 集めてあるのはそのためで——本文中に散らすと、移動後にどれか 1 つが取り残されて
+/// 完了処理（`/kiro-complete`）が `completed/` の綴りへ書き換えた定数である。完了処理は
+/// spec を `completed/` へ移すとき `crates/` 全域から feature 名を grep して綴りを
+/// 書き換える。綴りをこの定数 1 つに集めてあるのはそのためで——本文中に散らすと、
+/// 移動のときにどれか 1 つが取り残されて
 /// [`read_workspace_file`] が「探した絶対パス」を添えて止まる。
 const REQUIREMENTS_MD: &str =
     ".kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md";
@@ -57,15 +57,15 @@ const README_MD: &str = "doc/ukadoc-coverage/README.md";
 
 /// 要件文書の囲みの中にある id の件数の下限。
 ///
-/// 2026-09-05 の実測はちょうど 4 件（別名の項目・その `alias_of` の指す先・
-/// `system.year`・`queries` の指す先）。**下限**にしてあるのは、記入例が増えることは
+/// 4 件は別名の項目・その `alias_of` の指す先・`system.year`・`queries` の指す先。
+/// **下限**にしてあるのは、記入例が増えることは
 /// 起こり得ても減ることは要件 2.6 の凍結に反するからで、増えた分も同じ検査を通る。
 const REQUIREMENTS_ID_FLOOR: usize = 4;
 
 /// README の囲みの中にある id の件数の下限。
 ///
-/// 2026-09-05 の実測はちょうど 3 件（初期状態の見本 1 件と、書き終えた 1 項目の見本に
-/// 現れる 2 件）。下限である理由は [`REQUIREMENTS_ID_FLOOR`] と同じ。
+/// 3 件は初期状態の見本 1 件と、書き終えた 1 項目の見本に現れる 2 件。下限である
+/// 理由は [`REQUIREMENTS_ID_FLOOR`] と同じ。
 const README_ID_FLOOR: usize = 3;
 
 // ---------------------------------------------------------------------------
@@ -75,8 +75,8 @@ const README_ID_FLOOR: usize = 3;
 /// 囲みの中の id を重複を落として文字順に返す。
 ///
 /// 取り出しの実体（[`toml_blocks`]・[`quoted_ids`]）は純粋層の `documents::parse`
-/// にある。ここに写しを置いていたのを 2026-09-12 に寄せた——3 文書の判定が同じ
-/// 取り出しを要るので、読み方が 2 か所に割れると片方だけが直る。
+/// にある。3 文書の判定も同じ取り出しが要るので、ここに写しを置くと読み方が
+/// 2 か所に割れて片方だけが直る。
 fn ids_in_toml_blocks(markdown: &str) -> BTreeSet<String> {
     toml_blocks(markdown)
         .iter()
@@ -112,7 +112,7 @@ fn requirements_ledger_example(markdown: &str) -> String {
 /// 要件文書の囲みの中の id が全部カタログに実在する（要件 2.1・6.3・付録 B.5）。
 #[test]
 fn every_id_in_the_requirements_toml_blocks_exists_in_the_catalog() {
-    let catalog = RepoData::load().catalog;
+    let catalog = &RepoData::load().catalog;
     let ids = ids_in_toml_blocks(&read_workspace_file(REQUIREMENTS_MD));
 
     assert!(
@@ -134,7 +134,7 @@ fn every_id_in_the_requirements_toml_blocks_exists_in_the_catalog() {
 /// README の囲みの中の id が全部カタログに実在する（要件 2.5・6.3）。
 #[test]
 fn every_id_in_the_readme_toml_blocks_exists_in_the_catalog() {
-    let catalog = RepoData::load().catalog;
+    let catalog = &RepoData::load().catalog;
     let ids = ids_in_toml_blocks(&read_workspace_file(README_MD));
 
     assert!(
@@ -262,7 +262,7 @@ fn every_link_target_in_the_requirements_example_exists_in_the_catalog() {
         .collect();
     assert!(
         !links.is_empty(),
-        "付録 A.1 の記入例には `links` の見本が 1 件以上あるはず（空だと この主張が空振りする）"
+        "付録 A.1 の記入例には `links` の見本が 1 件以上あるはず（空だとこの主張が空振りする）"
     );
 
     for to in links {
@@ -277,11 +277,11 @@ fn every_link_target_in_the_requirements_example_exists_in_the_catalog() {
 /// 取り出しの較正——実在しない id を混ぜたら、それが名指しで挙がる。
 ///
 /// これが無いと、[`toml_blocks`] や [`quoted_ids`] が壊れて 0 件を返すだけで、
-/// 上の 4 本が「1 件も違反が無い」と言って緑になる。件数の下限だけでは、下限を
+/// 上の釘付けのテストが「1 件も違反が無い」と言って緑になる。件数の下限だけでは、下限を
 /// 満たしたうえで別の id を取りこぼす壊れ方を捕まえられない。
 #[test]
 fn the_id_scan_reports_an_id_that_the_catalog_does_not_have() {
-    let catalog = RepoData::load().catalog;
+    let catalog = &RepoData::load().catalog;
     let real = "ukadoc:list_propertysystem:system.year:1";
     let fake = "ukadoc:list_propertysystem:balloon.scope(ID).width:1";
 

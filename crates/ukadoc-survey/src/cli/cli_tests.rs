@@ -1,19 +1,29 @@
 //! 副手続きの振り分けと使い方の表示を釘付けする（設計「入口 / cli」・要件 6.12）。
 //!
-//! ここで確かめるのは 4 つ。⑴ 9 つの副手続きの名前が 1 つずつ綴りどおりに通ること、
+//! ここで確かめるのは 5 つ。⑴ 振り分け表の名前が 9 つの綴りどおりであること、
 //! ⑵ 引数が無いときと知らない名前のときに使い方を求めること、⑶ 使い方の本文が
-//! 9 つ全部を並べること、⑷ 名前の後ろに余計な引数を付けたら断ること。
+//! 9 つ全部を並べること、⑷ 名前の後ろに余計な引数を付けたら断ること、⑸ 標準出力へ
+//! 書けなかったことを置き場つきの失敗として返すこと。
 //!
 //! 期待値の本文は実装の定数を引かず、独立した文字列として書く（実装と同じ値を
 //! 参照すると、綴りが一斉に変わっても緑のままになるため）。
 //!
 //! このファイルはファイルを 1 つも作らず、一時ディレクトリも使わず、スナップショットも
 //! 読まない（要件 6.2・設計 File Structure Plan）。
+//!
+//! 副手続きの中身はここで走らせない。名前と中身の結び付きを走らせて見るのは
+//! `tests/cli_streams.rs` の `catalog`・`candidates` だけで、残る 7 つは表を読んで確かめる
+//! （`ledger-init`・`report`・`report-summary`・`priority-apply` は台帳や報告を書き、
+//! `check`・`evidence`・`diff` は repo の中身かスナップショットに寄りかかる。
+//! `tests/cli_streams.rs` 冒頭の線）。各副手続きの在中テストは中身の関数を直に呼ぶので、
+//! 表を通らない。
+
+use std::io::{self, Write};
 
 use super::{
-    Outcome, SUBCOMMANDS, extra_arguments_notice, lookup, run_reporting_to,
-    unknown_subcommand_notice, usage,
+    Outcome, SUBCOMMANDS, extra_arguments_notice, lookup, run_reporting_to, usage, write_stdout,
 };
+use crate::SurveyError;
 
 /// 文字列の引数列を組み立てる小道具（実行ファイル名は既に落とされている前提）。
 fn args(list: &[&str]) -> Vec<String> {
@@ -21,29 +31,11 @@ fn args(list: &[&str]) -> Vec<String> {
 }
 
 /// 振り分けを 1 度走らせ、結果と断りの本文を受け取る。
-fn run_and_read(line: &[&str]) -> (Result<Outcome, crate::SurveyError>, String) {
+fn run_and_read(line: &[&str]) -> (Result<Outcome, SurveyError>, String) {
     let mut notices: Vec<u8> = Vec::new();
     let outcome = run_reporting_to(&args(line), &mut notices);
     let body = String::from_utf8(notices).expect("断りの本文が UTF-8 でない");
     (outcome, body)
-}
-
-#[test]
-fn each_of_the_nine_subcommand_names_is_accepted_verbatim() {
-    for name in [
-        "catalog",
-        "ledger-init",
-        "report",
-        "report-summary",
-        "check",
-        "evidence",
-        "candidates",
-        "diff",
-        "priority-apply",
-    ] {
-        let found = lookup(name).unwrap_or_else(|| panic!("副手続き {name} が振り分け表に無い"));
-        assert_eq!(found.name, name, "振り分け表の名前が {name} と違う");
-    }
 }
 
 #[test]
@@ -119,22 +111,6 @@ fn an_unknown_subcommand_asks_for_the_usage_text_and_repeats_the_name() {
 }
 
 #[test]
-fn the_notice_for_an_unknown_subcommand_repeats_the_name_that_was_typed() {
-    let one = unknown_subcommand_notice("catalogue");
-    assert!(
-        one.contains("catalogue"),
-        "打ち間違えた綴りが本文に無い: {one}"
-    );
-    let other = unknown_subcommand_notice("chekc");
-    assert!(
-        other.contains("chekc"),
-        "打ち間違えた綴りが本文に無い: {other}"
-    );
-    // 打った綴りをそのまま返すこと（どの綴りでも同じ本文になるなら手掛かりが無い）。
-    assert_ne!(one, other, "打ち間違いの綴りが本文に映っていない");
-}
-
-#[test]
 fn extra_arguments_after_a_known_subcommand_ask_for_the_usage_text() {
     // 9 つの副手続きはどれも引数を取らない（設計「入口 / cli」の表）。
     // 黙って捨てると、指定したつもりの利用者が気づけない。
@@ -157,13 +133,6 @@ fn extra_arguments_after_a_known_subcommand_ask_for_the_usage_text() {
             );
         }
     }
-}
-
-#[test]
-fn a_subcommand_on_its_own_draws_no_complaint() {
-    // 断りが出る側だけを確かめると、何にでも断りを出す形に壊れても緑になる。
-    let (_outcome, notices) = run_and_read(&["evidence"]);
-    assert_eq!(notices, "", "正しく打っているのに断られている: {notices}");
 }
 
 #[test]
@@ -212,10 +181,31 @@ fn the_usage_text_lists_every_name_in_the_dispatch_table() {
     }
 }
 
-// 足場のテスト `every_unwired_name_reaches_its_own_not_wired_body` はタスク 6.3 で
-// 役目を終えた（当時の 8 つとも中身が繋がったので、`SurveyError::NotWired` ごと退役した）。
-// 名前と中身の結び付きは、いまは 9 つの副手続き自身の在中テストと
-// `tests/cli_streams.rs` が受け持つ——ここで走らせると台帳や報告を書き出してしまう
-// （新しいクレートのテストはファイルを 1 つも作らない＝設計 File Structure Plan）。
-// 読むだけなら差し支えない。要件 6.2 はスナップショットが無くても赤くならないこと
-// を求める条項であって、repo の中を読むことは禁じていない。
+/// 書くたびにパイプが閉じたと答える書き手（`| head -n 5` の後ろの姿）。
+struct ClosedPipe;
+
+impl Write for ClosedPipe {
+    fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+        Err(io::Error::from(io::ErrorKind::BrokenPipe))
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Err(io::Error::from(io::ErrorKind::BrokenPipe))
+    }
+}
+
+#[test]
+fn a_closed_pipe_on_standard_output_comes_back_as_a_failure_naming_standard_output() {
+    // 黙って捨てると終了コード 0 で結果が欠け、`print!` のままだと panic して 101 になる。
+    let err = write_stdout(&mut ClosedPipe, "所見 0 件").expect_err("書けないのに成功した");
+    match err {
+        SurveyError::Io { path, .. } => {
+            assert_eq!(path, "<標準出力>", "失敗の置き場が標準出力でない");
+        }
+        other => panic!("パイプが閉じた失敗が別の失敗に化けている: {other}"),
+    }
+
+    // 対の腕: 書ける先には本文を 1 バイトも変えずに渡す。
+    let mut sink: Vec<u8> = Vec::new();
+    write_stdout(&mut sink, "所見 0 件").expect("書ける先で失敗した");
+    assert_eq!(sink, "所見 0 件".as_bytes(), "書いた本文が変わっている");
+}

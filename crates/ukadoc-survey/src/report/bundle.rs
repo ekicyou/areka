@@ -6,9 +6,11 @@
 //! # 受け取るのは関連の対だけ
 //!
 //! [`bundles`] は台帳を受け取らない。**どの関連を渡すかは呼ぶ側が決める**。
-//! ドメイン別報告（要件 7.1 の 5 つ目・設計 D-11）はその台帳の `links` のうち両端が
-//! 自ドメインに属するものだけを渡し、全体報告（要件 7.2）はドメインを跨ぐ対も渡す。
-//! ここはその選り分けを知らない。
+//! ドメイン別報告（要件 7.1 の 5 つ目・設計 D-11）はその台帳の `links` を全部渡し、
+//! 返った束のうち構成 id が全部その台帳にあるものだけを残す（外へ伸びた束は丸ごと
+//! 落ちる）。他の台帳からこの台帳の id へ入ってくる関連は渡されないので見えず、そうした
+//! 束は全体報告ではより大きな跨ぐ束の一部として、別の束 id の下に載ることがある。全体報告（要件 7.2）はドメインを跨ぐ対も渡す。ここはその選り分けを
+//! 知らない。
 //!
 //! 関連の向きも見ない。`alias_of` と `supersedes` のように互いに逆向きの種別があり
 //! （要件 4.3）、どちらの向きで書いても同じ束になるべきだからである。
@@ -30,6 +32,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::ledger::Ledger;
 use crate::model::EntryId;
 
 /// 関連で繋がった id の 1 束（連結成分）。
@@ -122,6 +125,25 @@ fn unite(parent: &mut [usize], left: usize, right: usize) {
     if left_root != right_root {
         parent[right_root] = left_root;
     }
+}
+
+/// 台帳の `links` を辺の列にする（ドメイン別報告は 1 本、全体報告は 4 本を渡す）。
+///
+/// **1 つの id から何本でも辺が出る**（要件 4.3 の関連は種別違いで何本でも書ける）。
+/// 元 id を鍵にした表で集めると 2 本目以降が黙って落ち、繋がるはずの束が割れる。
+///
+/// `alias_of`・`supersedes` の欄は辺にしない（`links` の kind としてなら辺になる）。
+/// 束は `links` だけで作る（設計 D-11）。
+pub(super) fn all_links(ledgers: &[&Ledger]) -> Vec<(EntryId, EntryId)> {
+    let mut edges: Vec<(EntryId, EntryId)> = Vec::new();
+    for ledger in ledgers {
+        for entry in ledger.entries.values() {
+            for link in &entry.links {
+                edges.push((entry.id.clone(), link.to.clone()));
+            }
+        }
+    }
+    edges
 }
 
 #[cfg(test)]

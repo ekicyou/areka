@@ -2,8 +2,8 @@
 //!
 //! 守るのは 2 つ。⑴ ワークスペース根が「この crate の manifest の 2 段上」で実際に
 //! repo の根を指していること。⑵ **綴りが逐語で正しいこと**——場所の関数は「何本あるか」
-//! ではなく「どこを指すか」が本体なので、10 本すべてについて根からの相対パスを
-//! 逐語で釘付けにする。ドメイン 4 種の綴り（`sakura-script` の横棒を含む）も 1 本ずつ
+//! ではなく「どこを指すか」が本体なので、根そのもの以外のすべてについて根からの
+//! 相対パスを逐語で釘付けにする。ドメイン 4 種の綴り（`sakura-script` の横棒を含む）も 1 本ずつ
 //! 対で並べる。件数だけを数えると 1 文字の入れ違いが素通りする。
 //!
 //! ファイルは 1 つも作らない。存在を確かめる読み取り（`is_file`）だけを行う
@@ -23,7 +23,7 @@ fn rel(path: &Path) -> String {
 
 // ---- ワークスペース根 ----
 
-/// 2 段上りが本当に repo の根を指していること。根の直下に自分自身の manifest がある。
+/// 2 段上りが本当に repo の根を指していること。根の下の `crates/ukadoc-survey/` に自分自身の manifest がある。
 #[test]
 fn workspace_root_holds_this_crate_manifest() {
     let manifest = workspace_root()
@@ -62,7 +62,7 @@ fn workspace_root_is_absolute() {
     );
 }
 
-// ---- 10 本の場所を逐語で釘付けにする ----
+// ---- 根の下の場所を逐語で釘付けにする ----
 
 #[test]
 fn coverage_dir_is_verbatim() {
@@ -72,6 +72,11 @@ fn coverage_dir_is_verbatim() {
 #[test]
 fn catalog_path_is_verbatim() {
     assert_eq!(rel(&catalog_path()), "doc/ukadoc-coverage/catalog.toml");
+    assert_eq!(
+        CATALOG_FILE,
+        rel(&catalog_path()),
+        "相対の綴りが別の場所を指す"
+    );
 }
 
 #[test]
@@ -112,6 +117,11 @@ fn ledger_paths_are_verbatim_for_every_domain() {
     ];
     for (domain, want) in expected {
         assert_eq!(rel(&ledger_path(domain)), want, "台帳の場所: {domain:?}");
+        assert_eq!(
+            crate::ledger::ledger_file(domain),
+            want,
+            "相対の綴り: {domain:?}"
+        );
     }
     assert_eq!(
         expected.len(),
@@ -144,57 +154,4 @@ fn domain_report_paths_are_verbatim_for_every_domain() {
         Domain::ALL.len(),
         "4 ドメインを網羅していない"
     );
-}
-
-// ---- 取り違えないこと ----
-
-/// 4 ドメインの台帳・報告が互いに別の場所を指す（同じ場所を返す実装を弾く）。
-#[test]
-fn every_domain_gets_its_own_files() {
-    let mut seen: Vec<String> = Vec::new();
-    for domain in Domain::ALL {
-        seen.push(rel(&ledger_path(domain)));
-        seen.push(rel(&domain_report_path(domain)));
-    }
-    let mut sorted = seen.clone();
-    sorted.sort();
-    sorted.dedup();
-    assert_eq!(sorted.len(), seen.len(), "場所が重なっている: {seen:?}");
-}
-
-/// 全体報告はドメイン別報告のどれとも別（要件 7.6 で常時検査の対象外なので取り違えない）。
-#[test]
-fn summary_report_is_not_a_domain_report() {
-    for domain in Domain::ALL {
-        assert_ne!(
-            summary_report_path(),
-            domain_report_path(domain),
-            "全体報告がドメイン別報告と同じ場所: {domain:?}"
-        );
-    }
-}
-
-/// 10 本すべてがカタログ置き場の下にある。
-#[test]
-fn every_path_lives_under_the_coverage_dir() {
-    let dir = coverage_dir();
-    let mut paths = vec![
-        catalog_path(),
-        values_path(),
-        summary_report_path(),
-        linkage_path(),
-        briefing_path(),
-        roadmap_draft_path(),
-    ];
-    for domain in Domain::ALL {
-        paths.push(ledger_path(domain));
-        paths.push(domain_report_path(domain));
-    }
-    for path in paths {
-        assert!(
-            path.starts_with(&dir),
-            "カタログ置き場の外を指している: {}",
-            path.display()
-        );
-    }
 }

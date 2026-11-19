@@ -54,7 +54,7 @@ impl UnknownVocabulary {
 
 /// 項目 id。カタログと台帳の鍵で、`ukadoc:` で始まる 2 形だけを受け付ける（要件 1.9）。
 ///
-/// 並びは中の文字列の byte 昇順（設計 D-9）。実測で id はすべて ASCII なので、これが
+/// 並びは中の文字列の byte 昇順（設計 D-9）。id はすべて ASCII なので、これが
 /// そのまま文字順になる。
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EntryId(String);
@@ -134,8 +134,13 @@ pub fn parse_theme(raw: &str) -> Result<&'static str, UnknownVocabulary> {
 /// 項目 id の区切り。ページ名自身が下線を含むので、下線では割らない（要件付録 B 手順 2）。
 const ID_SEPARATOR: char = ':';
 
-/// 項目 id の先頭に必ず置かれる印。
+/// 項目 id の先頭の欄（コロンで割った 1 欄目。`parse` の形の照合に使う）。
 const ID_PREFIX: &str = "ukadoc";
+
+/// 項目 id の先頭に必ず置かれる印（2 形の共通の頭。本文から id を拾う側が使う）。
+///
+/// [`ID_PREFIX`] に区切りを足した綴りで、2 つは並べて置いて食い違わないようにする。
+pub(crate) const ID_MARK: &str = "ukadoc:";
 
 impl EntryId {
     /// 2 形のいずれかであることを確かめて作る（要件 1.9）。
@@ -145,11 +150,8 @@ impl EntryId {
     /// - ページ全体: `ukadoc:<ページ>`（コロン 1 つ・4 欄でなく 2 欄）
     /// - アンカー付き: `ukadoc:<ページ>:<アンカー>:<連番>`（コロン 3 つ・4 欄）
     ///
-    /// 欄の数で分ける素直な割り方にしてある。スナップショット実測（`source` が
-    /// `ukadoc` の全 1,749 件）で id のコロンは 1 つが 19 件・3 つが 1,730 件で、
-    /// 2 つや 4 つ以上は 1 件も無く、アンカーの中にコロンを含むものも無い。要件 1.9 の
-    /// 「アンカー無し 19 件・アンカー付き 1,730 件」とも一致する。
-    /// どの欄も空であってはならない。
+    /// 欄の数で分ける素直な割り方にしてある。アンカーの中にコロンを含む id は無い。
+    /// どの欄も空であってはならず、連番は数字だけで書かれる。
     pub fn parse(raw: &str) -> Result<Self, SurveyError> {
         let bad = || SurveyError::BadEntryId {
             raw: raw.to_owned(),
@@ -158,7 +160,10 @@ impl EntryId {
         let shaped = match fields.as_slice() {
             [ID_PREFIX, page] => !page.is_empty(),
             [ID_PREFIX, page, anchor, seq] => {
-                !page.is_empty() && !anchor.is_empty() && !seq.is_empty()
+                !page.is_empty()
+                    && !anchor.is_empty()
+                    && !seq.is_empty()
+                    && seq.bytes().all(|b| b.is_ascii_digit())
             }
             _ => false,
         };
@@ -179,11 +184,6 @@ impl EntryId {
             .unwrap_or_default()
             .to_owned();
         PageName(page)
-    }
-
-    /// アンカーを持つか。区切りが 3 つなら真。
-    pub fn has_anchor(&self) -> bool {
-        self.0.matches(ID_SEPARATOR).count() == 3
     }
 
     /// 元の綴り。

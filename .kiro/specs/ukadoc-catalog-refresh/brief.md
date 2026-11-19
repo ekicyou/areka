@@ -102,3 +102,7 @@
   - 本文 Current State の「npm の最新は 0.10.3」は古い（0.11.1）。本文 Constraints の「0.2.7 → 0.10.3 で形が変わっていないか」は 0.11.1 まで広げて確かめる。本文 Approach の「⑵ `diff` で数えて規模を決める」は、id の形が変わったので付け替えを先に作る（棚卸㉙）。
   - 要件の議題（棚卸㉙から持ち越し）: 古い URL を読み替えて残すか、ソースを書き換えるか。完了した spec の文書（`.kiro/specs/completed/`）の古い id は書き換えない、で良いか。
   - `doc/ukadoc-coverage/README.md` 3 行目の「全 1,749 項目」は写しの後に変わる。
+
+## `audit-ukadoc-survey` からの申し送り（2026-11-19・完了時の棚卸）
+
+- **件: 今のスナップショットを道具が読めない**。`audit-ukadoc-survey` のタスク 9.2 で、この機械の既定のスナップショット（`ukagaka-doc-mcp` の `data\index.json`）に対して `cargo run -p ukadoc-survey -- catalog` と `-- diff` を回すと、`main` の道具でも見直し後の道具でも、終了コード 1・標準エラーの 1 行 `項目 id の形が違う: ukadoc:descript_balloon:charset,文字コード` で止まり、何も書き出さない。id の綴りに `,` を含む項目が増えた（スナップショットの形が 0.2.7 から変わった）ためと見られる。本文 Approach の「道具に足りない所が出たら、その直しも範囲に入れる」に当たる。`audit-ukadoc-survey` は振る舞いを変えない見直しなので直していない。

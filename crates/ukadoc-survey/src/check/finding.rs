@@ -12,7 +12,7 @@
 //!
 //! # 本文そのものが契約
 //!
-//! この本文はテストの失敗メッセージであり、実行ファイルの標準エラー出力でもある。
+//! この本文はテストの失敗メッセージであり、実行ファイルの標準出力でもある。
 //! 版面（件数の行・種類ごとの塊・字下げ 2 段）は設計「Data Models」→「検査の出力」
 //! が逐語で決めており、在中テストがそれを釘付けしている。
 
@@ -53,16 +53,16 @@ impl Finding {
     }
 }
 
-/// 食い違いの種類（設計「判定の内訳」の表そのまま・15 種）。
+/// 食い違いの種類（13 種）。
 ///
 /// **並びが出力の並びである**。[`render`] は種類ごとに塊を作り、その塊を
 /// [`Self::ALL`] の順に並べる。ここを並べ替えると本文が変わる。
 ///
-/// [`Self::LedgerDomainMismatch`] だけは検査層が台帳ファイルから作ることが無い。
-/// `[ledger].domain` の食い違いは `ledger::read` の段で落ちる（`Ledger` は
-/// `domain` を 1 つしか持たず、その値はファイル名から来るため）。この種類は他の
-/// 手段で組み立てられた `Ledger` に対する二重の備えとして残してある（設計 check 節の
-/// 注記）。
+/// `[ledger].domain` の食い違いの種類は無い。それは `ledger::read` の段で落ちる
+/// （`Ledger` は `domain` を 1 つしか持たず、その値はファイル名から来るため）。
+/// テーマ名の綴り違いの種類も無い。それも `ledger::read` が `model::parse_theme` で
+/// 落とす（検査へ渡すテーマ名と同じ `THEMES` に完全一致で照らすので、検査の段に届く
+/// 台帳は綴り違いを持てない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FindingKind {
     /// 台帳の id がカタログに無い（要件 6.3）。
@@ -73,8 +73,6 @@ pub enum FindingKind {
     CatalogIdInMultipleLedgers,
     /// id のページがその台帳の担当でない（要件 3.1・3.2）。
     LedgerIdPageMismatch,
-    /// `[ledger].domain` がファイル名のドメインと違う（要件 3.1）。
-    LedgerDomainMismatch,
     /// `[ledger].pages` が割り当て表の担当ページと一致しない（要件 3.1）。
     LedgerPagesMismatch,
     /// 台帳の項目が id の byte 厳密昇順でない（要件 3.3a・付録 A）。
@@ -91,20 +89,17 @@ pub enum FindingKind {
     AliasChain,
     /// 台帳の登場版がカタログの版番号の中に無い（要件 6.7）。
     IntroducedNotInCatalogVersions,
-    /// テーマ名がテーマ定義に無い（要件 6.8）。
-    UnknownTheme,
-    /// ドメイン別報告が台帳から作り直した本文と一致しない（要件 7.4・7.5）。
+    /// ドメイン別報告か全体報告が台帳から作り直した本文と一致しない（要件 7.4・7.5）。
     DomainReportStale,
 }
 
 impl FindingKind {
-    /// 15 種すべて。**出力の並びの正本**でもある（設計「判定の内訳」の表の順）。
-    pub const ALL: [Self; 15] = [
+    /// 13 種すべて。**出力の並びの正本**でもある。
+    pub const ALL: [Self; 13] = [
         Self::LedgerIdNotInCatalog,
         Self::CatalogIdMissingFromLedgers,
         Self::CatalogIdInMultipleLedgers,
         Self::LedgerIdPageMismatch,
-        Self::LedgerDomainMismatch,
         Self::LedgerPagesMismatch,
         Self::LedgerOutOfOrder,
         Self::PageNotAssigned,
@@ -113,7 +108,6 @@ impl FindingKind {
         Self::LinkEndpointMissing,
         Self::AliasChain,
         Self::IntroducedNotInCatalogVersions,
-        Self::UnknownTheme,
         Self::DomainReportStale,
     ];
 
@@ -125,7 +119,6 @@ impl FindingKind {
             Self::CatalogIdMissingFromLedgers => "CatalogIdMissingFromLedgers",
             Self::CatalogIdInMultipleLedgers => "CatalogIdInMultipleLedgers",
             Self::LedgerIdPageMismatch => "LedgerIdPageMismatch",
-            Self::LedgerDomainMismatch => "LedgerDomainMismatch",
             Self::LedgerPagesMismatch => "LedgerPagesMismatch",
             Self::LedgerOutOfOrder => "LedgerOutOfOrder",
             Self::PageNotAssigned => "PageNotAssigned",
@@ -134,7 +127,6 @@ impl FindingKind {
             Self::LinkEndpointMissing => "LinkEndpointMissing",
             Self::AliasChain => "AliasChain",
             Self::IntroducedNotInCatalogVersions => "IntroducedNotInCatalogVersions",
-            Self::UnknownTheme => "UnknownTheme",
             Self::DomainReportStale => "DomainReportStale",
         }
     }

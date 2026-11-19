@@ -8,7 +8,8 @@
 //!
 //! - 純粋層 — ファイルにもスナップショットにも触らない。文字列と値だけを受け取り、
 //!   文字列と値だけを返す（[`model`]・[`assignment`]・[`hash`]・[`tomlout`]・
-//!   [`catalog`]・[`ledger`]・[`evidence`]・[`check`]・[`report`]・[`diff`]）。
+//!   [`catalog`]・[`ledger`]・[`evidence`]・[`documents`]・[`check`]・[`report`]・
+//!   [`diff`]）。
 //! - 入出力層 — 場所の解決・読み書き・走査・JSON の読み込み。判断は持たない（[`io`]）。
 //!
 //! 入口は実行ファイル（[`cli`]）と常時走るテスト（`tests/consistency.rs`）の 2 つで、

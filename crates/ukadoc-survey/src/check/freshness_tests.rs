@@ -1,23 +1,24 @@
-//! `freshness.rs` の在中テスト——**ドメイン別報告と台帳の突き合わせ**
-//! （要件 6.13・7.4・7.5・7.6）。
+//! `freshness.rs` の在中テスト——**報告 5 本（ドメイン別 4 本と全体報告）と台帳の
+//! 突き合わせ**（要件 6.13・7.4・7.5）。
 //!
 //! # 主張はすべて入口を通す
 //!
 //! どのテストも [`crate::check::run`] を呼び、`freshness::check` を直に呼ばない。部品を
-//! 釘付けしても、入口がその部品を呼んでいるかは別に守る必要がある（タスク 4.1 からの
-//! 必須の申し送り。判定を 1 つも呼ばない `run` は直に呼ぶテストでは永久に見つからない）。
+//! 釘付けしても、入口がその部品を呼んでいるかは別に守る必要がある（判定を 1 つも
+//! 呼ばない `run` は直に呼ぶテストでは永久に見つからない）。
 //!
 //! # 壊した対と壊さない対で置く
 //!
-//! 「所見が 0 件」だけの主張は、判定が何も返さない実装で無条件に真になる（タスク 1.6 の
-//! 教訓）。復帰文字の側がとくにそうで、**復帰文字付きでも緑**という主張だけを置くと
-//! 「常に一致と答える」実装が素通りする。だから復帰文字付きで**現に食い違う**本文が
-//! 赤になることを対で置く。
+//! 「所見が 0 件」だけの主張は、判定が何も返さない実装で無条件に真になる。壊していない
+//! 見本で 0 件になる側は `structure_tests::the_untouched_sample_world_has_no_findings`
+//! が `run` を通して全判定まとめて持ち、ここには壊した側を置く。0 件だけの主張が素通りする
+//! のは、復帰文字の側でとくにそうで、**復帰文字付きでも緑**という主張だけを置くと「常に一致と答える」実装が
+//! 素通りする。だから復帰文字付きで**現に食い違う**本文が赤になることを対で置く。
 //!
 //! # 「全部を挙げる」は違反 2 件でしか守れない
 //!
-//! 報告は 4 本ある。1 本だけ壊した見本では「4 本ぜんぶ見る」と「最初の 1 本だけ見る」を
-//! 区別できない（タスク 4.2 からの申し送り）。だから **先頭でも隣り合わせでもない
+//! ドメイン別報告は 4 本ある。1 本だけ壊した見本では「4 本ぜんぶ見る」と「最初の 1 本だけ見る」を
+//! 区別できない。だから **先頭でも隣り合わせでもない
 //! 2 本**（`assets` と `property`）を壊して件数まで主張する。
 //!
 //! # 台帳を渡す並びに左右されない
@@ -28,7 +29,8 @@
 
 use std::collections::BTreeMap;
 
-use super::super::{CheckInput, Finding, FindingKind, run};
+use super::super::test_support::{details, kinds, of_kind, places};
+use super::super::{CheckInput, FindingKind, run};
 use crate::ledger::Ledger;
 use crate::lib_test_support::World;
 use crate::model::{Domain, Status, THEMES};
@@ -38,55 +40,22 @@ use crate::model::{Domain, Status, THEMES};
 // ---------------------------------------------------------------------------
 
 /// 報告のファイルパス（所見の「場所」に載る綴り）。実装の関数は参照しない
-/// ——表を表自身と比べるだけになると転記の誤りを 1 件も捕まえられない（タスク 1.5 の
-/// 教訓）。姉妹の `content_test_support` は `content` の私有モジュールなので、ここからは
-/// 見えない。写すのではなく、この判定に要る分だけを独立した文字列で書く。
+/// ——表を表自身と比べるだけになると転記の誤りを 1 件も捕まえられない。共用の道具は
+/// `check::test_support` にあるが、報告の場所の綴りはこの判定だけが使うので、独立した
+/// 文字列でここに書く。
 fn report_place(domain: &str) -> String {
     format!("doc/ukadoc-coverage/report/{domain}.md")
 }
 
-/// 全体報告の場所。**ここに所見が出てはならない**（要件 7.6）。
+/// 全体報告の場所（実装の綴りは参照しない独立したリテラル）。
 const SUMMARY_PLACE: &str = "doc/ukadoc-coverage/report/summary.md";
+
+/// 全体報告が古いときの所見の本文（直し方の副手続きを名指す）。
+const SUMMARY_STALE_DETAIL: &str = "全体報告がカタログと台帳から作り直した本文と一致しない。手で直さず `report-summary` で作り直すこと";
 
 /// 見本の報告に必ず 1 行だけ現れる注意書き（実装の定数は参照しない独立したリテラル）。
 const HAND_EDIT_LINE: &str =
     "この本文は台帳から機械で作ります。手で書き換えず、食い違いは作り直して直します。";
-
-/// 出た所見を種類ごとに数える（0 件の種類は落とす）。
-///
-/// これを**等式**で主張すると、意図しない種類が 1 件でも出れば赤になる。件数だけの
-/// 主張は中身が全部誤っていても緑になるので、場所と詳細の逐語の主張と必ず対で置く
-/// （タスク 1.5 の教訓）。
-fn kinds(findings: &[Finding]) -> Vec<(FindingKind, usize)> {
-    FindingKind::ALL
-        .into_iter()
-        .filter_map(|kind| {
-            let count = findings.iter().filter(|f| f.kind == kind).count();
-            (count > 0).then_some((kind, count))
-        })
-        .collect()
-}
-
-/// その種類の所見だけを出た順に取り出す。
-fn of_kind(findings: &[Finding], kind: FindingKind) -> Vec<&Finding> {
-    findings.iter().filter(|f| f.kind == kind).collect()
-}
-
-/// その種類の所見の場所を出た順に並べる。
-fn places(findings: &[Finding], kind: FindingKind) -> Vec<&str> {
-    of_kind(findings, kind)
-        .into_iter()
-        .map(|finding| finding.place.as_str())
-        .collect()
-}
-
-/// その種類の所見の詳細を出た順に並べる。
-fn details(findings: &[Finding], kind: FindingKind) -> Vec<&str> {
-    of_kind(findings, kind)
-        .into_iter()
-        .map(|finding| finding.detail.as_str())
-        .collect()
-}
 
 /// 報告の 1 行を書き換える。
 ///
@@ -116,18 +85,8 @@ fn add_carriage_returns(world: &mut World, domain: Domain) {
 }
 
 // ---------------------------------------------------------------------------
-// 壊していない見本（対の片方）と、見るべき材料があること（要件 6.13）
+// 見るべき材料が見本にあること（要件 6.13）
 // ---------------------------------------------------------------------------
-
-/// 正常な見本は所見を 1 件も出さない。
-///
-/// これは否定の主張なので、以下の壊した側の主張と必ず対で読むこと。
-#[test]
-fn the_untouched_sample_world_has_no_findings() {
-    let world = World::normal();
-    let outcome = run(&world.input());
-    assert_eq!(kinds(&outcome.findings), vec![]);
-}
 
 /// 突き合わせる材料が見本にあることを肯定の側から数える（要件 6.13）。
 ///
@@ -136,10 +95,6 @@ fn the_untouched_sample_world_has_no_findings() {
 #[test]
 fn the_sample_world_holds_four_non_empty_domain_reports() {
     let world = World::normal();
-    let outcome = run(&world.input());
-
-    assert_eq!(outcome.stats.domain_reports, 4, "報告の本数");
-    assert_eq!(outcome.stats.non_empty_domain_reports, 4, "空でない本数");
 
     let headings: Vec<&str> = Domain::ALL
         .iter()
@@ -193,8 +148,9 @@ fn rewriting_one_line_of_one_report_is_one_finding_for_that_domain() {
 
 /// 台帳を直して報告を作り直さないと古くなる（現場でいちばん起きる形）。
 ///
-/// 状態を 1 つ変えるだけで報告の分布表が変わる。`refresh_reports()` を呼ばないので
-/// 報告だけが古いまま残り、他の判定は 1 件も出ない。
+/// 状態を 1 つ変えるだけで、そのドメインの報告と全体報告の分布表が変わる。
+/// `refresh_reports()` を呼ばないので報告の 2 本だけが古いまま残り、他の判定は 1 件も
+/// 出ない。
 #[test]
 fn a_ledger_changed_without_regenerating_its_report_is_stale() {
     let mut world = World::normal();
@@ -209,11 +165,11 @@ fn a_ledger_changed_without_regenerating_its_report_is_stale() {
     let outcome = run(&world.input());
     assert_eq!(
         kinds(&outcome.findings),
-        vec![(FindingKind::DomainReportStale, 1)]
+        vec![(FindingKind::DomainReportStale, 2)]
     );
     assert_eq!(
         places(&outcome.findings, FindingKind::DomainReportStale),
-        vec![report_place("property")]
+        vec![report_place("property").as_str(), SUMMARY_PLACE]
     );
 }
 
@@ -224,7 +180,7 @@ fn a_ledger_changed_without_regenerating_its_report_is_stale() {
 /// 報告 4 本すべてが復帰文字付きでも所見は 1 件も出ない。
 ///
 /// これは否定の主張なので、次の「復帰文字付きで現に食い違う」テストと対で読むこと
-/// ——対が無いと「常に一致と答える」実装がここを素通りする（タスク 1.6 の教訓）。
+/// ——対が無いと「常に一致と答える」実装がここを素通りする。
 #[test]
 fn report_bodies_with_carriage_returns_still_match() {
     let mut world = World::normal();
@@ -263,7 +219,7 @@ fn a_report_with_carriage_returns_that_really_differs_is_a_finding() {
 }
 
 // ---------------------------------------------------------------------------
-// 「4 本ぜんぶを見る」（タスク 4.2 からの申し送り）
+// 「4 本ぜんぶを見る」
 // ---------------------------------------------------------------------------
 
 /// 先頭でも隣り合わせでもない 2 本を壊すと、2 件とも出る。
@@ -299,8 +255,7 @@ fn two_stale_reports_are_both_reported() {
 /// 台帳を渡す並びは結果に出ない（要件 7.3）。
 ///
 /// 逆順で通しても、出る所見は場所も詳細も**順番まで**同じである。`World::normal()` は
-/// [`Domain::ALL`] の順で台帳を作るので、この主張は逆順の入力でしか見えない
-/// （タスク 4.2 からの申し送り）。
+/// [`Domain::ALL`] の順で台帳を作るので、この主張は逆順の入力でしか見えない。
 #[test]
 fn the_result_does_not_depend_on_the_order_of_the_ledgers() {
     let mut world = World::normal();
@@ -341,11 +296,8 @@ fn the_result_does_not_depend_on_the_order_of_the_ledgers() {
 /// 突き合わせ相手はその台帳 1 本と**入力のテーマ名**から作る（設計 D-11）。
 ///
 /// 見知らぬテーマ名を 1 つ足すと、報告のテーマ別の表に 0 件の行が 1 本増える。テーマ名を
-/// 別の値（実装の定数など）から取る実装はここで赤になる。8 つは全部残すので
-/// `UnknownTheme` は出ない——出る所見は 4 本の古さだけである。
-///
-/// あわせて、所見の場所が 4 本のドメイン別報告に限られること（要件 7.6。
-/// `summary.md` は常時検査に含めない）もここで固定する。
+/// 別の値（実装の定数など）から取る実装はここで赤になる。出る所見は報告 5 本の古さ
+/// だけで、全体報告が最後に来る。
 #[test]
 fn the_themes_for_the_comparison_come_from_the_input() {
     let world = World::normal();
@@ -358,21 +310,17 @@ fn the_themes_for_the_comparison_come_from_the_input() {
     });
     assert_eq!(
         kinds(&outcome.findings),
-        vec![(FindingKind::DomainReportStale, 4)]
+        vec![(FindingKind::DomainReportStale, 5)]
     );
-    let seen = places(&outcome.findings, FindingKind::DomainReportStale);
     assert_eq!(
-        seen,
+        places(&outcome.findings, FindingKind::DomainReportStale),
         vec![
-            report_place("shiori"),
-            report_place("assets"),
-            report_place("sakura-script"),
-            report_place("property"),
+            report_place("shiori").as_str(),
+            &report_place("assets"),
+            &report_place("sakura-script"),
+            &report_place("property"),
+            SUMMARY_PLACE,
         ]
-    );
-    assert!(
-        !seen.contains(&SUMMARY_PLACE),
-        "全体報告は常時検査に含めない（要件 7.6）"
     );
 }
 
@@ -408,6 +356,7 @@ fn a_domain_report_missing_from_the_input_is_a_finding() {
 ///
 /// 作り直す元が無いので「古い」とは言えない。台帳が 4 本揃っていないことは構造の検査が
 /// `CatalogIdMissingFromLedgers` として拾う（要件 6.4）ので、黙って消えるわけではない。
+/// 全体報告は 3 本の台帳から作り直した本文と比べるので、4 本で作った本文は古い。
 #[test]
 fn a_report_without_a_ledger_is_not_this_judgements_business() {
     let world = World::normal();
@@ -431,8 +380,15 @@ fn a_report_without_a_ledger_is_not_this_judgements_business() {
     });
     assert_eq!(
         kinds(&outcome.findings),
-        vec![(FindingKind::CatalogIdMissingFromLedgers, 3)],
-        "古さの所見は出ず、台帳の欠けは構造の検査が拾う"
+        vec![
+            (FindingKind::CatalogIdMissingFromLedgers, 3),
+            (FindingKind::DomainReportStale, 1),
+        ],
+        "ドメイン別報告の古さの所見は出ず、台帳の欠けは構造の検査が拾う"
+    );
+    assert_eq!(
+        places(&outcome.findings, FindingKind::DomainReportStale),
+        vec![SUMMARY_PLACE]
     );
 }
 
@@ -441,6 +397,7 @@ fn a_report_without_a_ledger_is_not_this_judgements_business() {
 /// 見本は 1 ドメイン 1 本なので、2 本目を見るか捨てるかを見分けられない。ここだけ台帳を
 /// 複製した入力を作って、`check` の doc が主張する防御そのものを釘付けする。台帳が
 /// 重なっていること自体は構造の検査が `CatalogIdInMultipleLedgers` として拾う（要件 6.4）。
+/// 全体報告は 2 本目の行も並べるので、4 本で作った本文とは食い違う。
 #[test]
 fn two_ledgers_of_the_same_domain_are_both_compared() {
     let mut world = World::normal();
@@ -466,12 +423,16 @@ fn two_ledgers_of_the_same_domain_are_both_compared() {
         kinds(&outcome.findings),
         vec![
             (FindingKind::CatalogIdInMultipleLedgers, 3),
-            (FindingKind::DomainReportStale, 2),
+            (FindingKind::DomainReportStale, 3),
         ]
     );
     assert_eq!(
         places(&outcome.findings, FindingKind::DomainReportStale),
-        vec![report_place("assets"), report_place("assets")]
+        vec![
+            report_place("assets").as_str(),
+            &report_place("assets"),
+            SUMMARY_PLACE
+        ]
     );
 }
 
@@ -481,14 +442,14 @@ fn two_ledgers_of_the_same_domain_are_both_compared() {
 
 /// 末尾に空行が 1 つ増えただけでも所見になる。
 ///
-/// 突き合わせを**緩める**摂動の檻である（タスク 2.3 の教訓。等値の判定は必ず緩める
-/// 向きを走らせる）。両側に `trim_end()` を挟む実装——末尾の空白を無かったことにする
-/// ——を当てると、このテストだけが赤くなる（他の 475 本は緑のまま通る）。末尾に空行が
-/// 増えるのは報告を手で開いて保存したときに現に起きる形で、要件 7.7 が禁じ
+/// 突き合わせを**緩める**摂動の檻である（等値の判定は必ず緩める向きを走らせる）。
+/// 両側に `trim_end()` を挟む実装——末尾の空白を無かったことにする——を当てると、
+/// このテストだけが赤くなる（他のテストは緑のまま通る）。末尾に空行が
+/// 増えるのは報告を手で開いて保存したときに現に起きる形で、要件 7.7 が禁じ、
 /// 要件 7.4・7.5 が捕まえることになっているものそのものである。
 ///
 /// 復帰文字を落とすのは保存側の 1 回だけ（設計 D-6）で、それ以外の正規化は 1 つも
-/// 挟まない——本文そのものが契約だから（タスク 3.5 の申し送り）。
+/// 挟まない——本文そのものが契約だから。
 #[test]
 fn a_report_with_one_extra_trailing_newline_is_stale() {
     let mut world = World::normal();
@@ -509,8 +470,8 @@ fn a_report_with_one_extra_trailing_newline_is_stale() {
 
 /// 先頭に空行が 1 つ増えただけでも所見になる。
 ///
-/// 直前の末尾の檻と**対**である（タスク 4.3 の教訓「対になる判定は対で檻を置く」）。
-/// 末尾だけを守っていたときは、両側に `trim_start()` を挟む実装が全 476 本を素通り
+/// 直前の末尾の檻と**対**である（対になる判定は対で檻を置く）。
+/// 末尾だけを守っていたときは、両側に `trim_start()` を挟む実装が全テストを素通り
 /// した。先頭の空白は末尾ほど起きやすくはないが、対の片側だけを守ると「どちらを
 /// 守ったのか」が読む人に伝わらない。
 #[test]
@@ -536,11 +497,10 @@ fn a_report_with_one_extra_leading_newline_is_stale() {
 /// 報告が**渡されていない**ときに黙って飛ばさないことは
 /// `a_domain_report_missing_from_the_input_is_a_finding` が守っているが、**空の本文**で
 /// 飛ばす形はそれとは別の穴である。突き合わせの前に `if stored.is_empty() { return; }`
-/// を挟む実装を当てると、このテストだけが赤くなる（他の 475 本は緑のまま通る）。
+/// を挟む実装を当てると、このテストだけが赤くなる（他のテストは緑のまま通る）。
 ///
-/// `ScanStats::non_empty_domain_reports`（`check/mod.rs`）はまさにこの空回りを心配して
-/// 置かれた欄なので、件数が 3 に減っていることも同じ実行から確かめる——見本が空に
-/// なっていなければ、この檻は何も守らないまま緑になる。
+/// 見本の報告が空になっていなければ、この檻は何も守らないまま緑になる。だから空に
+/// できたことを先に確かめる。
 #[test]
 fn a_report_emptied_to_zero_bytes_is_stale() {
     let mut world = World::normal();
@@ -551,11 +511,6 @@ fn a_report_emptied_to_zero_bytes_is_stale() {
     );
 
     let outcome = run(&world.input());
-    assert_eq!(outcome.stats.domain_reports, 4, "報告は 4 本のまま渡す");
-    assert_eq!(
-        outcome.stats.non_empty_domain_reports, 3,
-        "空でない本数が減っていなければ試験にならない"
-    );
     assert_eq!(
         kinds(&outcome.findings),
         vec![(FindingKind::DomainReportStale, 1)]
@@ -565,5 +520,50 @@ fn a_report_emptied_to_zero_bytes_is_stale() {
     assert_eq!(
         finding.detail,
         "assets の報告が台帳から作り直した本文と一致しない。手で直さず作り直すこと"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 全体報告も同じ突き合わせに入る
+// ---------------------------------------------------------------------------
+
+/// 全体報告を 1 文字変えると、全体報告の場所の所見が 1 件だけ出る。
+///
+/// 本文は直し方の副手続き `report-summary` を名指す（ドメイン別報告の `report` では
+/// 全体報告は直らない）。
+#[test]
+fn changing_one_character_of_the_summary_is_one_finding_at_the_summary() {
+    let mut world = World::normal();
+    let after = world.summary_report.replacen("# ukadoc", "# Ukadoc", 1);
+    assert_ne!(world.summary_report, after, "書き換えが効いていない");
+    world.summary_report = after;
+
+    let outcome = run(&world.input());
+    assert_eq!(
+        kinds(&outcome.findings),
+        vec![(FindingKind::DomainReportStale, 1)]
+    );
+    let finding = &of_kind(&outcome.findings, FindingKind::DomainReportStale)[0];
+    assert_eq!(finding.id, None);
+    assert_eq!(finding.place, SUMMARY_PLACE);
+    assert_eq!(finding.detail, SUMMARY_STALE_DETAIL);
+}
+
+/// 全体報告が復帰文字付きでも所見は出ず、復帰文字付きで現に違えば出る（対で置く）。
+#[test]
+fn the_summary_with_carriage_returns_matches_unless_it_really_differs() {
+    let mut world = World::normal();
+    world.summary_report = world.summary_report.replace('\n', "\r\n");
+    assert!(
+        world.summary_report.contains("\r\n"),
+        "復帰文字が入っていなければ試験にならない"
+    );
+    assert_eq!(kinds(&run(&world.input()).findings), vec![]);
+
+    world.summary_report.push('x');
+    let outcome = run(&world.input());
+    assert_eq!(
+        places(&outcome.findings, FindingKind::DomainReportStale),
+        vec![SUMMARY_PLACE]
     );
 }

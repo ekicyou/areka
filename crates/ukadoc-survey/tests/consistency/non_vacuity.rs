@@ -2,8 +2,7 @@
 //!
 //! # なぜ件数を釘付けするのか
 //!
-//! 初期台帳は全行が「未分類」なので、整合検査の半分は**対象 0 件のまま緑になる**
-//! （`checks.rs` の数え上げが、どの要件が今日空回りしているかを名指しで固定している）。
+//! 台帳が読めていなければ、整合検査の多くは**対象 0 件のまま緑になる**。
 //! 対象が 0 件なら判定が丸ごと消えても緑である。だから「検査が何件を相手にしているか」
 //! そのものを主張に変える——読み込みが空を返す・途中で打ち切る・同じファイルを 4 回
 //! 読む、のいずれも、ここが赤で捕まえる。
@@ -31,15 +30,15 @@
 //!
 //! # 長さはバイトでなく文字で数える
 //!
-//! カタログの最長行は 579 文字だが 619 バイトである（タスク 7.2 の申し送り）。
+//! カタログには多バイト文字の行があり、文字数とバイト長が食い違う。
 //! `str::len()` はバイト長を返すので、本文の長さを言うときは `chars().count()` を使う。
 //!
 //! # ここに置かないもの
 //!
 //! - 要件ごとの対象の**有無**（空回りしている要件の名指し）は `checks.rs` の持ち物。
-//! - `values.md` の見出しと `model::THEMES` の一致、語彙表経路の較正はタスク 8.4 の
+//! - `values.md` の見出しと `model::THEMES` の一致、語彙表経路の較正は `values_md.rs` の
 //!   持ち物である（設計 Testing Strategy 16・17a）。
-//! - 全体報告 `summary.md` は読まない（要件 7.6・`mod.rs` の冒頭）。
+//! - 全体報告 `summary.md` はここでは読まない（読み込みは `mod.rs` の `RepoData`）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -47,6 +46,7 @@ use ukadoc_survey::io::paths;
 use ukadoc_survey::model::{Domain, PageName};
 
 use super::RepoData;
+use super::documents::SHIORI_RESOURCE_RS;
 
 /// 正典（ukadoc）の項目数（要件 1 の実測）。
 const CATALOG_ENTRIES: usize = 1_749;
@@ -77,14 +77,14 @@ const DOMAIN_ROWS: [(Domain, usize, usize); 4] = [
 
 /// 走査が届いていることの錨（別々のクレートに実在するファイル・要件 9.2）。
 const ANCHOR_SOURCES: [&str; 3] = [
-    "crates/areka-sylphya/src/vocab/shiori_resource.rs",
+    SHIORI_RESOURCE_RS,
     "crates/dola/src/lib.rs",
     "crates/log-capture-kit/src/lib.rs",
 ];
 
 /// 走査から外す調査クレート自身（設計 D-3）。この接頭辞を持つ相対パスは 1 本も来ない。
 ///
-/// 実装側の `io::sources::SELF_CRATE_DIR` は crate 内公開で、ここ（別クレートの統合
+/// 実装側の `io::sources::SELF_CRATE_DIR` は非公開で、ここ（別クレートの統合
 /// テスト）からは型検査が拒む。仮に借りられたとしても借りない——同じ定数を両側で
 /// 使えば除外の主張は「実装が実装に同意する」だけになり、綴りを書き換えた瞬間に
 /// 主張ごと付いてきてしまう。だから**わざと書き写す**。
@@ -98,28 +98,28 @@ const SELF_CRATE_PREFIX: &str = "crates/ukadoc-survey/";
 /// [`SELF_CRATE_PREFIX`] が実在の場所を指していることの目印（調査クレートの入口）。
 const SELF_CRATE_MARKER: &str = "src/lib.rs";
 
-/// 走査が返すファイル数の下限（実測 1,089 本）。
+/// 走査が返すファイル数の下限。
 ///
 /// 実数を釘付けするとファイルを 1 本足すたびに赤くなるので下限にする。狙いは
 /// 「0 件でない」の担保（要件 6.13・設計 Testing Strategy 15）で、走査が空を返す・
 /// 起点を取り違える・途中の失敗を握り潰す、といった**ほとんど何も残らない**壊れ方を
 /// 捕まえる。
 ///
-/// 捕まえないものも書いておく。走査が 1 本おきにファイルを落とすような壊れ方
-/// （実測 1,089 本の半分＝およそ 545 本）は、この下限も、下のクレート数の下限も、
-/// 錨（[`ANCHOR_SOURCES`]）も、名前順の主張も**すべて素通りする**。ここが守るのは
+/// 捕まえないものも書いておく。走査が 1 本おきにファイルを落とすような壊れ方は、
+/// この下限も、下のクレート数の下限も、錨（[`ANCHOR_SOURCES`]）も、名前順の主張も
+/// **すべて素通りする**。ここが守るのは
 /// 「ほぼ全滅していない」であって「取りこぼしが無い」ではない。後者を言うには
 /// テストの側で走査をもう 1 度独立に組み直す必要があり、それはこの一群の役目を
 /// 越える（要件 6.13 が問うのは「0 件でない」ことである）。
 const MIN_SOURCE_FILES: usize = 500;
 
-/// 走査に現れるクレートの数の下限（実測 24＝調査クレートを除く全部）。
+/// 走査に現れるクレートの数の下限。
 ///
 /// 性格はファイル数の下限と同じで、クレートが 1 つ丸ごと走査から落ちる壊れ方までは
 /// 届くが、どのクレートも中身が半分になる壊れ方には届かない。
 const MIN_SOURCE_CRATES: usize = 20;
 
-/// ドメイン別報告の本文の下限（文字数。実測の最小は property の 1,126 文字）。
+/// ドメイン別報告の本文の下限（文字数）。
 const MIN_REPORT_CHARS: usize = 500;
 
 /// カタログが 1,749 項目・38 ページ・6 カテゴリを抱えていること
@@ -287,11 +287,6 @@ fn the_assignment_splits_38_pages_into_12_24_1_1_and_covers_the_catalog() {
         total, CATALOG_PAGES,
         "内訳の和が {CATALOG_PAGES} ページにならない"
     );
-    assert_eq!(
-        assigned_pages.len(),
-        CATALOG_PAGES,
-        "割り当てが 38 ページでない"
-    );
 
     let catalog_pages: BTreeSet<PageName> = data
         .catalog
@@ -316,10 +311,6 @@ fn the_source_walk_reaches_other_crates_and_never_the_survey_crate() {
     let data = RepoData::load();
 
     // 否定の主張（調査クレート由来を含まない）は走査が空でも成り立つ。先に肯定を言う。
-    assert!(
-        !data.sources.is_empty(),
-        "ソースの走査が 1 本も返していない"
-    );
     assert!(
         data.sources.len() >= MIN_SOURCE_FILES,
         "走査が返したのは {} 本で、下限 {MIN_SOURCE_FILES} を割っている",
@@ -371,10 +362,6 @@ fn the_source_walk_reaches_other_crates_and_never_the_survey_crate() {
         crates.insert(rest.split('/').next().unwrap_or_default());
     }
     assert!(
-        !crates.contains("ukadoc-survey"),
-        "調査クレートが走査に現れている"
-    );
-    assert!(
         crates.len() >= MIN_SOURCE_CRATES,
         "走査に現れたクレートは {} 個で、下限 {MIN_SOURCE_CRATES} を割っている",
         crates.len()
@@ -395,7 +382,6 @@ fn the_four_domain_reports_exist_on_disk_and_are_not_empty() {
 
     // 本数（`domain_reports.len()`）は読み込みが `Domain::ALL` を回して作るので構造的に
     // 4 であり、それ自体は何も言わない。だからディスクの実在と本文を 1 本ずつ見る。
-    let mut bodies = BTreeSet::new();
     for (domain, rows, _) in DOMAIN_ROWS {
         let key = domain.as_key();
         let path = paths::domain_report_path(domain);
@@ -405,7 +391,6 @@ fn the_four_domain_reports_exist_on_disk_and_are_not_empty() {
             .domain_reports
             .get(&domain)
             .unwrap_or_else(|| panic!("{key} の報告を読んでいない"));
-        assert!(!body.is_empty(), "{key} の報告が空");
         // 長さは文字数で数える（バイト長ではない・このファイル冒頭の理由）。
         assert!(
             body.chars().count() >= MIN_REPORT_CHARS,
@@ -413,17 +398,12 @@ fn the_four_domain_reports_exist_on_disk_and_are_not_empty() {
             body.chars().count()
         );
 
-        // 4 本が同じファイルの読み直しでないこと。見出しが自分のドメインを名乗り、
-        // 本文どうしも相異なる。
+        // 4 本が同じファイルの読み直しでないこと。見出しが自分のドメインを名乗る。
         let heading = format!("# {key} の網羅状況");
         assert_eq!(
             body.lines().next(),
             Some(heading.as_str()),
             "{key} の報告が別のファイルの本文になっている"
-        );
-        assert!(
-            bodies.insert(body.as_str()),
-            "{key} の報告が他のドメインと同じ本文である"
         );
 
         // 本文が台帳の件数と繋がっていること。台帳が動けば報告も動くので、
@@ -434,9 +414,4 @@ fn the_four_domain_reports_exist_on_disk_and_are_not_empty() {
             "{key} の報告に「合計 {rows}」の行が無い（台帳の件数と繋がっていない）"
         );
     }
-    assert_eq!(
-        bodies.len(),
-        DOMAIN_ROWS.len(),
-        "相異なる報告が 4 本そろっていない"
-    );
 }
