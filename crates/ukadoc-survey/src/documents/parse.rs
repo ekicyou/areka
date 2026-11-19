@@ -20,10 +20,10 @@
 //!
 //! # 3 つの口
 //!
-//! 判定 ⑴ が拾う id の口はここに 3 つ置く——囲みの中の引用符付き（[`toml_blocks`]
-//! ＋ [`quoted_ids`] の 2 関数）・地の文の逆引用符付き（[`backticked_ids`]）・どちらにも
-//! 囲まれていない裸の語（[`bare_id_tokens`]・0 件であるべき）。
-//! `tests/consistency/examples.rs` も囲みの中の口はここを呼ぶ。
+//! 判定 ⑴ が拾う id の口はここに 3 つ置く——引用符付き（[`quoted_ids`]。判定 ⑴ は
+//! 本文全体へ掛け、地の文の引用符付きもここで拾う。`tests/consistency/examples.rs` は
+//! [`toml_blocks`] で切った囲みへ掛ける）・地の文の逆引用符付き（[`backticked_ids`]）・
+//! どちらにも囲まれていない裸の語（[`bare_id_tokens`]・0 件であるべき）。
 //!
 //! 「どこからどこまでが囲みか」の見分けは `segments` 1 本で、TOML の口と地の文の
 //! 口が同じ見分け方をする。
@@ -133,7 +133,7 @@ pub fn quoted_ids(text: &str) -> Vec<String> {
 
 /// 地の文で逆引用符に囲まれた `` `ukadoc:…` `` を、現れた順に返す。
 ///
-/// 囲みの中は見ない——あちらは [`quoted_ids`] の持ち場である。
+/// 囲みの中は見ない（引用符付きは [`quoted_ids`] の持ち場）。
 pub fn backticked_ids(markdown: &str) -> Vec<String> {
     let mut ids = Vec::new();
     for line in prose_lines(markdown) {

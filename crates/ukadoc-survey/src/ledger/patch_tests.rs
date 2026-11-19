@@ -184,7 +184,7 @@ fn a_block_without_a_priority_line_fails_naming_the_id() {
         SurveyError::DeriveMismatch { file, reason } => {
             assert_eq!(file, "doc/ukadoc-coverage/ledger/property.toml");
             assert!(reason.contains(YEAR_ID), "{reason}");
-            assert!(reason.contains("priority"), "{reason}");
+            assert!(reason.contains("priority の行が無い"), "{reason}");
         }
         other => panic!("置き換える行を決められない失敗として落ちること: {other}"),
     }

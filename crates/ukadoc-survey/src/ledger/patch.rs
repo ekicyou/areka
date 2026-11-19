@@ -63,8 +63,9 @@ const PRIORITY_HEAD: &str = "priority = ";
 ///
 /// - 本文を塊へ切り分けられない（[`crate::ledger::blocks::split`] の失敗に置き場を添えて返す）
 /// - 塊が id の厳密な昇順に並んでいない（[`SurveyError::LedgerOutOfOrder`]）
-/// - 塊の中に行頭の `priority = ` が無い・2 本以上ある・今の値の綴りと違う、または
-///   書き直した本文を読み直した値が求めた値と違う
+/// - 塊の中に行頭の `priority = ` が無い・2 本以上ある、欄の `priority` が無いか
+///   文字列でない、行が今の値の綴りと違う、または書き直した本文を読み直した値が
+///   求めた値と違う
 ///   （[`SurveyError::DeriveMismatch`]。本文に id を挙げる）
 pub fn replace_priority(
     text: &str,
