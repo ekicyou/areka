@@ -106,12 +106,12 @@ fn permits_truth_table() {
 //
 // 名簿（`consumer_ledger.rs`）は読むだけ（先例 `consumer_ledger_agreement_tests.rs`）。
 
+use super::super::consumer_ledger::test_support::carrier_cue;
 use super::super::consumer_ledger::{CommandConsumer, ConsumerLedger};
 use super::super::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
 use areka_ghost::sink::BootCueSink;
 use areka_parsers::sakura::{Instruction, parse};
 use areka_sakura::TalkId;
-use dola::cue::{ActorKey, CueCommand, TalkCue};
 use std::sync::mpsc::channel;
 
 /// 外部扱いの出どころ（実効のレベルが `external`）。
@@ -189,12 +189,7 @@ fn signal_came_out(
 ) -> bool {
     let (mut talk, came_out) = probe_for(consumer);
     talk.begin_talk(TalkId(7), origin);
-    talk.emit(TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, vec![selector.to_string()]),
-        duration: 0.0,
-    });
+    talk.emit(carrier_cue(name, &[selector]));
     drop(talk);
     came_out()
 }

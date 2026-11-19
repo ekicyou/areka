@@ -258,9 +258,9 @@ mod stage_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::frame::test_support::{capture_logs, count_level};
     use areka_emo_compose::{ComposeMethod, PatternFrame, PatternState};
     use areka_sakura::ActorKey;
-    use log_capture_kit::{LineFormat, capture_lines};
     use std::sync::mpsc::{self, TryRecvError};
 
     /// 非空の `PatternState`（animation `anim_id` に surface `surf` の `Overlay` コマ 1 枚）を作る
@@ -486,30 +486,7 @@ mod tests {
     // ── PresentBridge（SurfaceOutput 本番実装）の檻 ──────────────────────
     //
     // ログ発火（warn/debug）を目視でなく実行テストで決定論的に檻へ入れる（決定論網羅マンデート）。
-    // 捕捉層そのものはここに持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。
-    // 行の形（1 イベント 1 行・`level=… target=…` に続けてフィールドを訪問順で ` name=value`）も
-    // 呼出側の判定内容も、移行前と 1 バイト変わらない。
-    //
-    // 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
-    // のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
-    // interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの
-    // 判定が焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は
-    // 「不要」ゆえ、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても
-    // 取りこぼす。共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算
-    // ⑶ 番兵イベントによる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の
-    // crate doc と同 crate の `src/probe.rs`）。
-
-    /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
-    fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-        let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-        lines
-    }
-
-    /// 捕捉行のうち指定 level（例 `"WARN"`／`"DEBUG"`）の件数を数える。
-    fn count_level(logs: &[String], level: &str) -> usize {
-        let needle = format!("level={level}");
-        logs.iter().filter(|l| l.contains(&needle)).count()
-    }
+    // 捕捉の道具は `frame::test_support` の共有のもの（硬化の機序の解説もそちら）を使う。
 
     /// 有効指令 → 変換済み `PresentCommand` が mpsc 越しに受信側へ**ちょうど 1 件**届く（areka-P0-emo2-boot 要件 3.7）。
     /// `Show{scope:"0"}` が `ShowSurface{shell_target(0), id, binds, reply:None}` として全フィールド

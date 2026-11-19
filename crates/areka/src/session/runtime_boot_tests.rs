@@ -20,7 +20,6 @@ use areka_ghost::{GhostBootError, GhostRuntime, ShioriWiring, TickerMode};
 use areka_kanade::{BootOrigin, CloseReason, MonotonicMs, ShioriBackend};
 use areka_seriko::{BindResolver, SerikoLoopConfig, SurfaceResolver, spawn_seriko};
 use bevy_ecs::world::World;
-use dola::cue::{ActorKey, CueCommand, TalkCue};
 
 use super::*;
 use crate::input_events::user_break::UserBreakWiring;
@@ -31,6 +30,7 @@ use crate::session::ghost_switch_test_support::{TICK_EVERY, TICK_STEP_MS};
 use crate::session::shell_balloon_switch::SwitchRx;
 use areka_runtime::RuntimeInputs;
 use areka_runtime::adapter::PresentBridge;
+use areka_runtime::consumer_ledger::test_support::carrier_cue;
 use areka_runtime::reload_cue::ReloadRx;
 use areka_runtime::spine::{
     Progress, ScriptedShioriBackend, ScriptedShioriHandle, run_bounded_watching, wait_until,
@@ -117,29 +117,17 @@ fn sinks_are_thirteen_with_reload_then_window_state_last() {
         "11 本の今の並びの後ろに読み直しの受け口、その後ろに常に手前の受け口"
     );
 
-    let cue = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier("reload", vec!["ghost".to_string()]),
-        duration: 0.0,
-    };
-    sinks[11].emit(cue);
+    sinks[11].emit(carrier_cue("reload", &["ghost"]));
     assert_eq!(
         lines.reload_rx.try_iter().count(),
         1,
         "最後から 2 本目の受け口は読み直しの受信端へ送る"
     );
 
-    let cue = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(
-            "set",
-            vec!["windowstate".to_string(), "stayontop".to_string()],
-        ),
-        duration: 0.0,
-    };
-    sinks.last_mut().expect("最後の受け口").emit(cue);
+    sinks
+        .last_mut()
+        .expect("最後の受け口")
+        .emit(carrier_cue("set", &["windowstate", "stayontop"]));
     assert_eq!(
         rig.window_state_rx.try_iter().count(),
         1,
@@ -158,15 +146,7 @@ fn sinks_are_thirteen_with_reload_then_window_state_last() {
 fn rebuilt_window_state_sink_reaches_the_same_line() {
     let rig = rig();
     let world = World::new();
-    let on = || TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(
-            "set",
-            vec!["windowstate".to_string(), "stayontop".to_string()],
-        ),
-        duration: 0.0,
-    };
+    let on = || carrier_cue("set", &["windowstate", "stayontop"]);
 
     let (mut first, _) = runtime_sinks(&world, &rig.sources);
     first.last_mut().expect("最後の受け口").emit(on());

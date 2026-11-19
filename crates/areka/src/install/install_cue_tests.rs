@@ -23,6 +23,8 @@ use dola::cue::{ActorKey, CueCommand, CuePlayer, CueSink, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
+use areka_runtime::consumer_ledger::test_support::carrier_cue;
+
 use crate::install::fetch_url::{MakeFetch, spawn_download_with};
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::install::{self, InstallOrigin, desk};
@@ -36,16 +38,6 @@ const URL: &str = "https://example.com/files/hana.nar";
 const BODY: &[u8] = b"PK\x03\x04 nar body";
 /// 取得のスレッドを待つ上限（届けば即座に返る）。
 const BOUND: Duration = Duration::from_secs(30);
-
-/// `\![name,tokens...]` の汎用キャリア cue を組む。
-fn carrier_cue(name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
 
 /// 取得を起こさない前提の受け口（起こせば panic＝ネットへ出る道を塞ぐ）。
 fn sink() -> (InstallCueSink, Receiver<RawInstallRequest>) {

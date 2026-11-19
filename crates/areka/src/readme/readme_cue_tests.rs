@@ -13,22 +13,14 @@
 use super::*;
 use crate::readme::destination::{Destination, OpenKind, classify, link_destinations};
 use areka_parsers::sakura::JUMP_TAG_CARRIER;
+use areka_runtime::consumer_ledger::test_support::carrier_cue;
+use areka_runtime::frame::test_support::count_level;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Receiver, channel};
 
 // ---------------------------------------------------------------- 道具立て
-
-/// `\![name,tokens...]` の汎用キャリア cue を組む（正準形＝`Custom` の String 配列）。
-fn carrier_cue(name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
 
 /// 受け口と受信端の組を作る。
 fn sink() -> (ReadmeCueSink, Receiver<ReadmeRequest>) {
@@ -40,12 +32,6 @@ fn sink() -> (ReadmeCueSink, Receiver<ReadmeRequest>) {
 fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
     let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
     lines
-}
-
-/// 捕捉行のうち指定した水準（`"WARN"`）の件数を数える。
-fn count_level(logs: &[String], level: &str) -> usize {
-    let needle = format!("level={level}");
-    logs.iter().filter(|line| line.contains(&needle)).count()
 }
 
 // ---------------------------------------------------------------- 受理

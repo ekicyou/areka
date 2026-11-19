@@ -21,21 +21,9 @@
 
 use super::*;
 use crate::consumer_ledger::test_support::broken_custom_cue;
+use crate::frame::test_support::{capture_logs, count_level};
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{TryRecvError, channel};
-
-/// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines
-}
-
-/// 捕捉行のうち指定 level（例 `"WARN"`／`"DEBUG"`）の件数を数える。
-fn count_level(logs: &[String], level: &str) -> usize {
-    let needle = format!("level={level}");
-    logs.iter().filter(|l| l.contains(&needle)).count()
-}
 
 #[test]
 fn broken_move_addressed_custom_warns_once() {
