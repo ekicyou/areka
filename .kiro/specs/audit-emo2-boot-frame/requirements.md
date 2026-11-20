@@ -113,7 +113,7 @@
 
 #### Acceptance Criteria
 
-1. The 本 spec の直し shall `crates/areka-runtime/src/frame/wiring.rs` 319 行あたりの説明の文の古いパス（`super::super::input_events::balloon`）を、モジュールのパスを書かずに本体の入力の層を名前で指す文に直す（件 1＝`runtime-module-untangle` の申し送り。`input-crate-split` が同じウェーブで `input_events` を別の crate へ移すため、パスで書くとまた古びる）
+1. The 本 spec の直し shall `crates/areka-runtime/src/frame/wiring.rs` 319 行あたりの説明の文の古いパス（`super::super::input_events::balloon`）を、モジュールのパスを書かずに本体の入力の層を名前で指す文に直す（件 1＝`runtime-module-untangle` の申し送り。`input-crate-split` が同じウェーブで `input_events` を別の crate へ移すため、パスで書くとまた古びる）。同じ理由で、295 行あたりの `input_events/mod.rs` の `resolve_hit_owned` と 326 行あたりの `input_events/balloon.rs` の `on_balloon_pointer_moved` ほかを名指す文も、ファイルのパスを書かずに本体の入力の層の関数を名で指す文に直す（ギャップ分析の 37 番・2026-11-20 `input-crate-split` からの頼み）
 2. The 本 spec の直し shall `crates/areka-runtime/src/frame_transition_atomicity_tests.rs` 47〜53 行と 527 行が他のファイルを行番号で指す所を、関数や項目の名前で指す形に直す（件 2＝`audit-wintf-window` の件 1）
 3. The 本 spec の直し shall `frame/zorder_drain.rs` 52 行・`frame/zorder_descript.rs` 33 行・`frame/zorder_drain_tests.rs` 443 行の「grep 対象が 2 本に割れる」という理由の文を、事実に合う文に直す。事実は、`areka-runtime` の中で記録のマクロを呼ぶと出力先が `areka_runtime::…` になり、サインオフの `RUST_LOG`（`wintf::ecs::window=debug`）の前方一致の絞り込みでは debug の受理の行が点かないこと。だから行の字面と出力先を wintf の 1 か所に保つ（件 3＝`audit-wintf-window` の件 2。同 spec の指摘 34・R2-1 の文「前方一致なので漏れはしない」は wintf の中の 2 つの出力先どうしの話で、`areka-runtime` の側には当てはまらない＝ギャップ分析の 46 番）
 4. The 本 spec の直し shall `frame.rs` 96〜134 行・152〜153 行・`frame/wiring.rs` 12〜13 行の `#[allow(unused_imports)]` と、`frame.rs` 171・178・188 行の許可を、`structure.md` の確かめ方（`cargo rustc -p areka-runtime --lib -- --force-warn unused_imports`）で確かめ、まだ要る許可だけを今の事実に合う理由の文つきで残し、要らない許可は外す（件 4＝`runtime-crate-split` の申し送り ⑵）
