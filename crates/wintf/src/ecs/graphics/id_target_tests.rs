@@ -314,3 +314,131 @@ fn mask_size_out_of_range_is_refused() {
     let edge = IdMask::new(1, 16_384, |_, _| false).unwrap();
     assert_eq!((edge.width(), edge.height()), (1, 16_384));
 }
+
+#[test]
+fn read_tells_unreadable_outside_empty_and_the_new_id() {
+    let dc = warp_dc();
+    let mut target = IdTarget::with_dc(&dc, SIZE).unwrap();
+    assert_eq!(target.read(15, 15), IdRead::Unreadable);
+    let (w, h) = SIZE;
+    for (x, y) in [(w, 0), (0, h), (u32::MAX, u32::MAX)] {
+        assert_eq!(target.read(x, y), IdRead::Outside, "({x},{y})");
+    }
+    assert_eq!(target.gpu_reads(), 0);
+    let mut pictures = IdMaskPictures::new();
+    target
+        .paint_with(&dc, &[rect_shape(5, 10.0, 10.0, 20.0, 20.0)], &mut pictures)
+        .unwrap();
+    assert_eq!(target.read(15, 15), IdRead::Id(id(5)));
+    assert_eq!(target.read(0, 0), IdRead::Empty);
+    assert_eq!(target.read(w - 1, h - 1), IdRead::Empty);
+    assert_eq!(target.read(w, h - 1), IdRead::Outside);
+    target
+        .paint_with(
+            &dc,
+            &[rect_shape(MAX_ID, 10.0, 10.0, 20.0, 20.0)],
+            &mut pictures,
+        )
+        .unwrap();
+    assert_eq!(target.read(15, 15), IdRead::Id(id(MAX_ID)));
+}
+
+#[test]
+fn the_same_point_is_not_read_again_until_repainted() {
+    let dc = warp_dc();
+    let mut target = IdTarget::with_dc(&dc, SIZE).unwrap();
+    let mut pictures = IdMaskPictures::new();
+    target
+        .paint_with(&dc, &[rect_shape(5, 10.0, 10.0, 20.0, 20.0)], &mut pictures)
+        .unwrap();
+    assert_eq!(target.read(15, 15), IdRead::Id(id(5)));
+    assert_eq!(target.read(15, 15), IdRead::Id(id(5)));
+    assert_eq!(target.gpu_reads(), 1);
+    assert_eq!(target.read(0, 0), IdRead::Empty);
+    assert_eq!(target.read(0, 0), IdRead::Empty);
+    assert_eq!(target.gpu_reads(), 2);
+    target
+        .paint_with(&dc, &[rect_shape(6, 0.0, 0.0, 20.0, 20.0)], &mut pictures)
+        .unwrap();
+    assert_eq!(target.read(0, 0), IdRead::Id(id(6)));
+    assert_eq!(target.gpu_reads(), 3);
+}
+
+#[test]
+fn a_failed_paint_reads_unreadable_without_the_gpu() {
+    let dc = warp_dc();
+    let mut target = IdTarget::with_dc(&dc, SIZE).unwrap();
+    let mut pictures = IdMaskPictures::new();
+    target
+        .paint_with(&dc, &[rect_shape(5, 10.0, 10.0, 20.0, 20.0)], &mut pictures)
+        .unwrap();
+    assert_eq!(target.read(15, 15), IdRead::Id(id(5)));
+    let refused = target.paint_with(
+        &dc,
+        &[rect_shape(MAX_ID + 1, 0.0, 0.0, 1.0, 1.0)],
+        &mut pictures,
+    );
+    assert!(refused.is_err());
+    assert_eq!(target.read(15, 15), IdRead::Unreadable);
+    assert_eq!(target.gpu_reads(), 1);
+}
+
+#[test]
+fn a_failed_read_is_logged_once_and_stays_unreadable_until_repainted() {
+    let dc = warp_dc();
+    let mut target = IdTarget::with_dc(&dc, SIZE).unwrap();
+    let mut pictures = IdMaskPictures::new();
+    target
+        .paint_with(&dc, &[rect_shape(5, 10.0, 10.0, 20.0, 20.0)], &mut pictures)
+        .unwrap();
+    assert_eq!(target.read(15, 15), IdRead::Id(id(5)));
+    target.break_staging(&dc);
+    let mut answers = Vec::new();
+    let log = crate::ecs::test_support::capture_under_filter("error", || {
+        answers.push(target.read(0, 0));
+        answers.push(target.read(0, 0));
+        answers.push(target.read(15, 15));
+    });
+    assert_eq!(answers, [IdRead::Unreadable; 3]);
+    assert_eq!(log.matches("[id_target] read failed").count(), 1, "{log}");
+    assert_eq!(target.gpu_reads(), 2);
+    target
+        .paint_with(&dc, &[rect_shape(5, 10.0, 10.0, 20.0, 20.0)], &mut pictures)
+        .unwrap();
+    assert_eq!(target.read(15, 15), IdRead::Unreadable);
+    assert_eq!(target.gpu_reads(), 3);
+}
+
+#[test]
+fn a_pixel_neither_clear_nor_opaque_is_logged_and_unreadable() {
+    let dc = warp_dc();
+    let mut target = IdTarget::with_dc(&dc, SIZE).unwrap();
+    target
+        .paint_with(&dc, &[], &mut IdMaskPictures::new())
+        .unwrap();
+    // SAFETY: Windows API 境界。
+    unsafe {
+        dc.SetTarget(target.bitmap());
+        dc.BeginDraw();
+        dc.Clear(Some(
+            &windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F {
+                r: 0.25,
+                g: 0.25,
+                b: 0.25,
+                a: 0.5,
+            },
+        ));
+        dc.EndDraw(None, None).unwrap();
+        dc.SetTarget(None);
+    }
+    let mut answer = IdRead::Empty;
+    let log = crate::ecs::test_support::capture_under_filter("error", || {
+        answer = target.read(3, 3);
+    });
+    assert_eq!(answer, IdRead::Unreadable);
+    assert_eq!(
+        log.matches("[id_target] unexpected pixel").count(),
+        1,
+        "{log}"
+    );
+}

@@ -5,7 +5,8 @@ use super::composite::create_bitmap;
 use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 use std::num::NonZeroU32;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use tracing::error;
 use windows::Win32::Foundation::{
     D2DERR_RECREATE_TARGET, D2DERR_WRONG_RESOURCE_DOMAIN, E_INVALIDARG,
@@ -116,10 +117,22 @@ pub struct IdTarget {
     bitmap: ID2D1Bitmap1,
     size: (u32, u32),
     generation: u64,
+    /// 写し・Map・Unmap・控えの更新を錠を持ったまま行う（2 つの読みが写し先を取り合わない）。
+    pixel: Mutex<PixelReadState>,
+    gpu_reads: AtomicU64,
 }
 
-// SAFETY: 描き先は D2D1_FACTORY_TYPE_MULTI_THREADED の工場の系列（GraphicsCore の装置）の資源で、
-// 同じ工場の系列への COM 呼び出しは D2D が内部で直列化する。世代は `&mut self` でだけ変わる。
+/// 1 画素の読み戻しの写し先と、この世代の控え（塗るたびに空にする）。
+struct PixelReadState {
+    /// 1×1 の `CPU_READ | CANNOT_DRAW` の写し先。
+    staging: ID2D1Bitmap1,
+    last: Option<(u32, u32, IdRead)>,
+    failed: bool,
+}
+
+// SAFETY: 描き先と写し先は D2D1_FACTORY_TYPE_MULTI_THREADED の工場の系列（GraphicsCore の装置）の
+// 資源で、同じ工場の系列への COM 呼び出しは D2D が内部で直列化する。写し先と控えは `Mutex` の中に置き、
+// 世代は `&mut self` で、読んだ回数は原子の値でだけ変わる。
 unsafe impl Send for IdTarget {}
 unsafe impl Sync for IdTarget {}
 
@@ -248,10 +261,21 @@ impl IdTarget {
         if !side.contains(&size.0) || !side.contains(&size.1) {
             return Err(Error::new(E_INVALIDARG, format!("id target size {size:?}")));
         }
+        let staging = create_bitmap(
+            dc,
+            (1, 1),
+            D2D1_BITMAP_OPTIONS_CPU_READ | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+        )?;
         Ok(Self {
             bitmap: create_bitmap(dc, size, D2D1_BITMAP_OPTIONS_TARGET)?,
             size,
             generation: 0,
+            pixel: Mutex::new(PixelReadState {
+                staging,
+                last: None,
+                failed: false,
+            }),
+            gpu_reads: AtomicU64::new(0),
         })
     }
 
@@ -290,6 +314,10 @@ impl IdTarget {
         pictures: &mut IdMaskPictures,
     ) -> Result<()> {
         let result = self.draw(dc, shapes, pictures);
+        let state = self.pixel.get_mut().unwrap_or_else(|e| e.into_inner());
+        state.last = None;
+        state.failed = false;
+        // 失敗で世代が 0 へ戻るので、世代だけでは控えの古さを見分けられない。
         self.generation = match result {
             Ok(()) => self.generation + 1,
             Err(_) => 0,
@@ -330,9 +358,87 @@ impl IdTarget {
         }
     }
 
+    /// 最後に塗り終えた絵の 1 画素の答え。外なら GPU を読まずに `Outside`。同じ座標は塗り直すまで
+    /// 読み直さない。読みの失敗は 1 度だけ記録し、塗り直すまで GPU に触らずに `Unreadable` を返す。
+    /// `Map(READ)` は GPU が塗りを終えるまで待つ。
+    pub fn read(&self, x: u32, y: u32) -> IdRead {
+        if x >= self.size.0 || y >= self.size.1 {
+            return IdRead::Outside;
+        }
+        if self.generation == 0 {
+            return IdRead::Unreadable;
+        }
+        let mut state = self.pixel.lock().unwrap_or_else(|e| e.into_inner());
+        if state.failed {
+            return IdRead::Unreadable;
+        }
+        if let Some((lx, ly, answer)) = state.last
+            && (lx, ly) == (x, y)
+        {
+            return answer;
+        }
+        self.gpu_reads.fetch_add(1, Ordering::Relaxed);
+        let answer = match read_pixel(&state.staging, &self.bitmap, x, y) {
+            Ok(pixel) => answer_of(pixel, x, y),
+            Err(err) => {
+                error!(
+                    error = ?err,
+                    hresult = format_args!("0x{:08X}", err.code().0),
+                    "[id_target] read failed"
+                );
+                state.failed = true;
+                return IdRead::Unreadable;
+            }
+        };
+        state.last = Some((x, y, answer));
+        answer
+    }
+
+    #[cfg(test)]
+    pub(crate) fn gpu_reads(&self) -> u64 {
+        self.gpu_reads.load(Ordering::Relaxed)
+    }
+
+    /// 写し先を CPU から読めない絵に替え、以後の `Map` を失敗させる。
+    #[cfg(test)]
+    pub(crate) fn break_staging(&self, dc: &ID2D1DeviceContext) {
+        let mut state = self.pixel.lock().unwrap();
+        state.staging = create_bitmap(dc, (1, 1), D2D1_BITMAP_OPTIONS_NONE).unwrap();
+    }
+
     #[cfg(test)]
     pub(crate) fn bitmap(&self) -> &ID2D1Bitmap1 {
         &self.bitmap
+    }
+}
+
+fn read_pixel(staging: &ID2D1Bitmap1, bitmap: &ID2D1Bitmap1, x: u32, y: u32) -> Result<[u8; 4]> {
+    let src = D2D_RECT_U {
+        left: x,
+        top: y,
+        right: x + 1,
+        bottom: y + 1,
+    };
+    // SAFETY: Windows API 境界。`Map(READ)` の `bits` は少なくとも 4 バイトを指す。
+    unsafe {
+        staging.CopyFromBitmap(None, bitmap, Some(&src))?;
+        let mapped = staging.Map(D2D1_MAP_OPTIONS_READ)?;
+        let pixel = *(mapped.bits as *const [u8; 4]);
+        staging.Unmap()?;
+        Ok(pixel)
+    }
+}
+
+/// BGRA の 1 画素を答えに読み分ける。
+fn answer_of([b, g, r, a]: [u8; 4], x: u32, y: u32) -> IdRead {
+    let id = u32::from(b) | u32::from(g) << 8 | u32::from(r) << 16;
+    match (a, NonZeroU32::new(id)) {
+        (0, _) => IdRead::Empty,
+        (255, Some(id)) => IdRead::Id(id),
+        _ => {
+            error!(pixel = ?[b, g, r, a], x, y, "[id_target] unexpected pixel");
+            IdRead::Unreadable
+        }
     }
 }
 
