@@ -320,6 +320,7 @@ finally {
 ### ⑴ `session-module-gather` へ
 
 - 本体の呼び手（`crate::input_events::…`）を `areka_input::…` へ書き換え、出し直し `use areka_input as input_events;`（`crates/areka/src/main.rs`）を外すのは同 spec の持ち物。この spec は外していない。
+- 出し直しの上の `///`（`main.rs` の 63〜67 行。「現状は `throttle` のみ…」）は、元の `mod input_events;` の説明のまま古くなっている。出し直しを外すときに一緒に消す。
 
 ### ⑵ `crates/areka-runtime/src/frame/wiring.rs` の 3 か所
 
