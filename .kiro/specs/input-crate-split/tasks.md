@@ -5,14 +5,14 @@
 - 足す・変えるコードのコメントは `CLAUDE.md` の Comments 節に従う（spec・要件・タスクの番号を書かない）。移すファイルの既にあるコメントの中身は変えない。
 - 実機を使うタスク（1.2・7.3）は排他テストの机を取り、終わったらすぐ返す。SendInput を使う 1.2・7.3 の強制退避は、開発者の許しを得てから走らせる。
 
-- [ ] 1. 着手の証跡を取る
+- [x] 1. 着手の証跡を取る
 - [x] 1.1 着手のときのテストの名前の一覧を残す
   - 枝の先頭（コードを変える前）で、ワークスペース全体のテストの一覧を取り、作業の木の `target/input-crate-split/tests-before.txt` に残す
   - `: test$` の行から名前の末尾の多重集合を作れる形であることを確かめる
   - 一覧のファイルが在り、テストの行の数が記録されている
   - _Dispatch: mechanical — 決まった 1 本のコマンドの出力を残すだけ_
   - _Requirements: 8.2_
-- [ ] 1.2 着手のときの実機の強制退避の記録を取る
+- [x] 1.2 着手のときの実機の強制退避の記録を取る
   - 作業の木の `target\input-crate-split\escape\` に、Ctrl と Shift を押したまま左ボタンを 2 回押し放し、`finally` で全部放す使い捨ての SendInput の手順を置く（`tools/` には足さない）
   - emo2 を絶対パスで起こした areka のキャラ窓に Ctrl+Shift+左ダブルクリックを 1 回入れ、標準エラーの記録を `target/input-crate-split/escape-before.stderr.log` に残す
   - 記録に `mouse_escape_close` → `log_stay_on_top_discard` の記録 → `app_exit origin=Escape` → `run()` の復帰 → 終了の系列が順に残っている。手順の中身は検証の記録に写す
