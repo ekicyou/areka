@@ -56,7 +56,7 @@
   - _Dispatch: standard — 3 つのビルドを測って分ける_
   - _Requirements: 3.1, 3.2, 5.4, 5.5, 7.6_
 
-- [ ] 1.6 札が外れるフレームの書き込みのテストを先に立て、DPI の変化の問いを 1 つにする（T6・6・50 番・件 13）
+- [x] 1.6 札が外れるフレームの書き込みのテストを先に立て、DPI の変化の問いを 1 つにする（T6・6・50 番・件 13）
   - 決定論のハーネスで、札の付いた窓がシェルの切り替えを跨ぎ、札が外れるフレームにちょうど 1 回 `DpiReproject` で書かれ、札の無い窓は揃え方の変化で動くことを確かめるテスト `a_window_held_through_a_shell_switch_is_written_on_the_frame_its_hold_lifts` を立てる
   - その後で DPI の変化の問いを「DPI が変わった、または札が付いている」の 1 つにして和集合の行を消す
   - 完了: 問いを書き損じると新しいテストが赤になることを確かめ、直した後は緑
@@ -269,3 +269,4 @@
 - 1.1: 1 番の `.get(..).iter()` は 7 番の空撃ちと一緒に消えた（足す `.expect` は無し）。観測器が空を返すと赤になることは審査で確かめた。テストの絞り込みはモジュールの道（`frame::text_scale_tests` なら `text_scale_tests`）で指す。clippy の `-D warnings` は既存の `wintf` の警告で落ちるので、触ったファイルに警告が無いことで見る。
 - 1.3: `attach.rs` の書き直した 3 行に `（R4.2）` の要件番号が残っている（審査の提案・止めない）。5.1 の 41 番の物差しで見る。
 - 1.5: `--force-warn unused_imports` の警告は lib 23・lib＋test-support 16・test 11 から 3 つとも 0 件（`cargo rustc -p areka-runtime --lib [--features test-support | --profile test] -- --force-warn unused_imports`）。`CharWindowMarker` は設計の「どこでも使わない」でなくテストだけの名だったので `#[cfg(test)]` に置いた。`frame.rs` の `reconcile_reported_sizes` の説明に task 番号が残る（5.1 の 41 番で見る）。
+- 1.6: 札の腕を落とすと新しいテストのほかに `frame_dpi_sync_hold_tests.rs` の既存の 2 本も赤になる（research の「縛るテストが無い」は言い過ぎだった）。新しいシェルの検体に `kero.name` が無いと scope 1 の揃え方が変わらない。

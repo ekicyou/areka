@@ -28,7 +28,7 @@ use wintf::ecs::{Point, WindowPos};
 
 use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
 use areka_placement::follow::BalloonFollow;
-use log_capture_kit::capture;
+use log_capture_kit::{ExpectField, capture};
 
 use super::test_support::{
     FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, s2_monitors,
@@ -561,5 +561,95 @@ fn a_steady_frame_emits_no_hold_record_while_a_transition_emits_a_proceed() {
     assert!(
         proceeds.iter().all(|m| m.contains("site=dpi")),
         "見送っていないのに拡大率の相以外の点が記録を出している: {proceeds:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// シェルの切り替えを跨いだ札
+// ---------------------------------------------------------------------------
+
+/// 札の付いた窓はシェルの切り替えの置き直しで見送られ、札が外れるフレームに拡大率の相が
+/// 入れ直した揃え方で 1 回だけ書く。札の無い窓は切り替えの段で揃え方の変化として動く。
+#[test]
+fn a_window_held_through_a_shell_switch_is_written_on_the_frame_its_hold_lifts() {
+    let mut harness = FrameHarness::new();
+    let mut source = FakeReports::default();
+    settle(&mut harness, &mut source);
+    let top = s2_work_area_for_dpi(HIGH_DPI).top;
+    let char0 = harness.char_window(0);
+    let char1 = harness.char_window(1);
+
+    harness.set_scope_dpi(0, HIGH_DPI);
+    source.refresh.insert(shell0(), HIGH_SIZE_0);
+    harness.advance_frame();
+    harness.run_placement_phases(&mut source);
+    assert!(
+        harness.world.get::<DpiSyncHold>(char0).is_some(),
+        "scope 0 に札が付いていない（探針が退化している）"
+    );
+    assert!(
+        harness.world.get::<DpiSyncHold>(char1).is_none(),
+        "scope 1 に札が付いた（陽性の対が成立しない）"
+    );
+    let _held = harness.drain_writes();
+
+    let windows = harness
+        .world
+        .resource::<areka_placement::spawn::GhostWindows>()
+        .clone();
+    let mut basis = super::test_support::placement_basis(
+        [("seriko.alignmenttodesktop".to_string(), "top".to_string())].into(),
+        harness.scopes().len(),
+    );
+    basis
+        .source
+        .ghost_kv
+        .insert("kero.name".to_string(), "k".to_string());
+    let ((), events) = capture(|| {
+        areka_placement::reseed::apply_shell_descript(
+            &mut harness.world,
+            &windows,
+            &basis.source,
+            &basis.balloon,
+            &[],
+        );
+        areka_placement::reseed::reanchor_char_windows(&mut harness.world, &windows);
+    });
+    let held: Vec<&str> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("reseed_held"))
+        .map(|e| e.expect_field("scope"))
+        .collect();
+    assert_eq!(held, vec!["0"], "見送りの記録が scope 0 の 1 行でない");
+    let switched = harness.drain_writes();
+    assert!(
+        writes_for(&switched, 0, "char").is_empty(),
+        "札のある窓へ切り替えの段で書いている: {switched:?}"
+    );
+    let moved = writes_for(&switched, 1, "char");
+    assert_eq!(
+        moved
+            .iter()
+            .map(|cmd| (cmd.tag.origin, cmd.y))
+            .collect::<Vec<_>>(),
+        vec![("AnchorChange", top)],
+        "札の無い窓が切り替えの段で新しい揃え方へ動いていない: {switched:?}"
+    );
+
+    harness.set_monitor_table_for_dpi(HIGH_DPI);
+    harness.advance_frame();
+    harness.run_placement_phases(&mut source);
+    let released = harness.drain_writes();
+    assert_eq!(
+        writes_for(&released, 0, "char")
+            .iter()
+            .map(|cmd| (cmd.tag.origin, cmd.y))
+            .collect::<Vec<_>>(),
+        vec![("DpiReproject", top)],
+        "札が外れるフレームに入れ直した揃え方で 1 回だけ書かれていない: {released:?}"
+    );
+    assert!(
+        harness.world.get::<DpiSyncHold>(char0).is_none(),
+        "表が追いついたのに札が外れていない"
     );
 }

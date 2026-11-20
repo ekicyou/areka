@@ -1,7 +1,7 @@
 //! DPI 追従フェーズ（[`AuthorDpis`]・[`classify_ghost_window`]・[`run_dpi_phase`] ほか）。
 
 use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::{Changed, Query, With};
+use bevy_ecs::prelude::{Changed, Or, Query, With};
 use bevy_ecs::system::SystemState;
 use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
@@ -301,7 +301,11 @@ impl ScaleReportSource for EmoPresenter {
     }
 }
 
-/// `Changed<DPI>` の窓と、その窓の scope/種別を引くための marker を一度に取る query 型。
+/// `Changed<DPI>` の窓と整合待ちの札（[`DpiSyncHold`]）を持つ窓、その窓の scope/種別を引くための
+/// marker を一度に取る query 型。
+///
+/// 札の窓は `Changed<DPI>` が立たなくても入れる——前フレームまでに見送った窓は変化を既に
+/// 消費済みであり、入れないと札が永遠に外れない。
 ///
 /// `Changed<DPI>` フィルタは `DPI` component を持つ窓のみへ効く（本番は窓生成時に必ず付与され、
 /// `WM_DPICHANGED` と生成時の `GetDpiForWindow` 実値補正の双方で変化が発火する）。marker は
@@ -314,7 +318,7 @@ pub(super) type DpiChangedQuery = Query<
         Option<&'static CharWindowMarker>,
         Option<&'static BalloonWindowMarker>,
     ),
-    Changed<DPI>,
+    Or<(Changed<DPI>, With<DpiSyncHold>)>,
 >;
 
 /// DPI フェーズの本体（報告源を抽象化した中核・[`run_dpi_phase`] が本番の presenter を渡す）。
@@ -336,7 +340,7 @@ pub(super) type DpiChangedQuery = Query<
 ///
 /// 初回 run は `SystemState::new` の仕様で全窓へマッチするが、k 差分が無ければ報告は `None`
 /// （presenter のゲート）であり、仮に報告があっても同寸なら反映口がべき等 skip する。ゆえに
-/// 初回全マッチは無害に吸収される。`Changed<DPI>` が無いフレームは query が空＝実質 no-op。
+/// 初回全マッチは無害に吸収される。`Changed<DPI>` も札も無いフレームは query が空＝実質 no-op。
 ///
 /// # 失敗（Req4.4）
 ///
@@ -354,23 +358,12 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
     let state = state.get_or_insert_with(|| SystemState::new(world));
     // 変化窓を collect して World の不変借用を即解放してから `&mut World` のループへ入る
     // （`anchor_changed_system` と同じ collect→release→&mut ループ）。
-    let mut targets: Vec<Entity> = state
+    let targets: Vec<Entity> = state
         .get(world)
         .expect("DPI changed query validation should succeed")
         .iter()
         .map(|(entity, ..)| entity)
         .collect();
-    // 整合待ちの札を持つ窓は、`Changed<DPI>` が立たなくても対象へ入れる（設計 C5）——前フレーム
-    // までに見送った窓は変化を既に消費済みであり、和集合にしないと札が永遠に外れない。
-    let held: Vec<Entity> = world
-        .query_filtered::<Entity, With<DpiSyncHold>>()
-        .iter(world)
-        .collect();
-    for window in held {
-        if !targets.contains(&window) {
-            targets.push(window);
-        }
-    }
 
     // 第 1 巡（ゲート）: 全対象の札の付け外しを**処理より前に**済ませる。処理と混ぜて 1 巡に
     // すると、先に解除・処理されたキャラ窓の随伴書込が、まだ札の付いたバルーン窓へ届く
