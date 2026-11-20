@@ -8,16 +8,16 @@ use super::test_support::{
 };
 use super::*;
 
-// ── task 1.4 是正: frame 側 route 割当の檻（Req 1.2／2.4・design D13）──────────
+// ── frame 側 route 割当の檻 ──────────
 //
 // `reconcile_window_size` は **2 呼出元の共通末端**である（DPI 相＝`dpi_phase_with`／
 // drain 後段の報告回収＝`reconcile_reported_sizes`）。ここへ 1 つの route を貼り付けると、
 // `Changed<DPI>` 非依存の報告回収（初回表示の k₀ 補正を含む）まで「DPI 由来」と
-// 名乗ってしまい、Req 1.9 の 2 段 grep 突合（セッション②＝ドラッグ禁止・OS 側 DPI 変更のみ）
-// に**偽陽性**が混じる。ゆえに route は呼出元ごとに別語でなければならない（D13）。
+// 名乗ってしまい、2 段 grep 突合（セッション②＝ドラッグ禁止・OS 側 DPI 変更のみ）
+// に**偽陽性**が混じる。ゆえに route は呼出元ごとに別語でなければならない。
 //
-// 観測境界は `areka_placement::test_support::capture_logs`（`pub(crate)`＝本モジュールから到達可能）
-// による tracing イベント本体で、レコード書式の権威は `areka_placement::diag` の純関数が持つ。
+// 観測の境界は `log_capture_kit::capture` が捕まえる tracing のイベント本体で、
+// レコード書式の権威は `areka_placement::diag` の純関数が持つ。
 
 use areka_placement::diag::DESPAWNED_SKIP_TAG;
 
@@ -46,7 +46,7 @@ fn resnap_from_sizes_records_the_resnap_route() {
     );
 }
 
-/// **D13 の核心**: DPI 相（`Changed<DPI>` 由来）と drain 後段の報告回収（エッジ非依存）は
+/// **核心**: DPI 相（`Changed<DPI>` 由来）と drain 後段の報告回収（エッジ非依存）は
 /// **別々の経路名**で記録される。同一の共通末端を通ることは route の同一性を意味しない。
 #[test]
 fn dpi_phase_and_drain_phase_record_distinct_routes() {
@@ -84,10 +84,10 @@ fn dpi_phase_and_drain_phase_record_distinct_routes() {
     );
 }
 
-/// **完了状態（tasks.md 1.4）**: DPI 変化ゼロの起動で `DpiReproject` レコードが 1 行も出ない。
+/// **完了状態**: DPI 変化ゼロの起動で `DpiReproject` レコードが 1 行も出ない。
 ///
 /// 初回表示の k₀ 補正は drain 後段の報告回収（`reconcile_reported_sizes`）で landing する
-/// （`frame.rs` の `run_dpi_phase` doc「初回表示の k₀ 補正＝Flow 3 手順 5 はこちらの経路で
+/// （`frame/dpi.rs` の `run_dpi_phase` doc「初回表示の k₀ 補正＝Flow 3 手順 5 はこちらの経路で
 /// landing する」）。この走行を `DpiReproject` と名乗らせると、セッション②の受理回数突合が
 /// 起動ごとに偽陽性を拾う。
 #[test]
@@ -120,20 +120,19 @@ fn boot_without_any_dpi_change_emits_no_dpi_reproject_record() {
     );
 }
 
-// ── task 3.2: フレーム層 消費側の存在確認（Req 6.2/6.3・design D8 消費側）────────
+// ── フレーム層 消費側の存在確認 ────────
 //
 // 終了処理でゴースト窓が despawn されると `GhostWindowMarker` の `on_remove` hook
-// （task 3.1）が `GhostWindows` Resource から scope エントリを落とす。だが消費側は
+// が `GhostWindows` Resource から scope エントリを落とす。だが消費側は
 // **Resource の写しを持って回る**（`reconcile_reported_sizes` は冒頭で `.cloned()` する）
-// ため、「レジストリの参照先の窓が既に存在しない」状態（Req 6.3 の If 節そのもの）は
+// ため、「レジストリの参照先の窓が既に存在しない」状態は
 // 構造上あり得る。以下の檻はその陳腐化レジストリを**明示的に組んで**、
-//   (1) 破棄済み scope は warn 以上を 1 行も出さずに打ち切られること（Req 6.2）
-//   (2) 打ち切りが**他 scope の処理を止めない**こと（Req 6.3）
+//   (1) 破棄済み scope は warn 以上を 1 行も出さずに打ち切られること
+//   (2) 打ち切りが**他 scope の処理を止めない**こと
 // を固定する。掃除後の綺麗なレジストリで回しても両者は自明に成立してしまう（＝空虚な檻）
-// ので、探針は必ず「破棄済み entity を指すレジストリ」でなければならない
-// （tasks.md Implementation Notes 2.2 の空虚性の教訓と同型）。
+// ので、探針は必ず「破棄済み entity を指すレジストリ」でなければならない。
 
-/// 破棄済み entity を指したままの**陳腐化レジストリ**を作る（Req 6.3 の状態を再現）。
+/// 破棄済み entity を指したままの**陳腐化レジストリ**を作る。
 ///
 /// `spawn_ghost_windows` の戻り値は Resource とは別の写しゆえ、hook による掃除が
 /// 済んだ後に写しを挿し直せば「登録はあるが指す先が消えている」状態になる。
@@ -179,7 +178,7 @@ fn despawn_skip_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .collect()
 }
 
-/// Req 6.2/6.3（再スナップ相）: 破棄済み scope は debug で打ち切られ、**生存 scope は
+/// 再スナップ相: 破棄済み scope は debug で打ち切られ、**生存 scope は
 /// 処理し切る**。打ち切りは表示側への問い合わせより手前で起きる（＝問い合わせ記録に
 /// 破棄済み scope の target が現れない）。
 #[test]
@@ -221,7 +220,7 @@ fn resnap_skips_despawned_scope_at_debug_and_processes_surviving_scopes() {
     );
 }
 
-/// Req 6.2/6.3（報告回収相）: 破棄済み scope の char／balloon 両 target は debug で
+/// 報告回収相: 破棄済み scope の char／balloon 両 target は debug で
 /// 打ち切られ、生存 scope の報告は反映される。報告は**取り出したうえで**捨てる
 /// （窓が無い以上、次フレームへ持ち越しても反映先が無い＝既存契約の維持）。
 #[test]
@@ -265,7 +264,7 @@ fn drain_reconcile_skips_despawned_scope_at_debug_and_processes_surviving_scopes
     );
 }
 
-/// **完了状態（tasks.md 3.2）**: 終了処理でゴースト窓が破棄された後のフレームで、
+/// **完了状態**: 終了処理でゴースト窓が破棄された後のフレームで、
 /// 破棄済み窓に対する**警告以上のログが 1 行も出ない**（DPI 相・報告回収相・再スナップ相の
 /// 3 相通し）。窓への書込も 1 件も起きない。
 #[test]

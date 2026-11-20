@@ -52,7 +52,7 @@ use super::dpi::reproject_char_window_at_current_size;
 /// 差分の中身（どの作業領域がどう動いたか）は**呼び手が両者を突き合わせて読む**。
 /// 消費者は [`resnap_for_work_area_change`]で、動いた作業領域に属する下端吸着の
 /// キャラ窓だけを現寸で射影し直す。
-// 公開の `FrameHarness::run_work_area_sync`・`run_work_area_resnap`・`run_placement_phases` が名指すので開ける
+// 公開の `FrameHarness::run_work_area_sync`・`run_placement_phases` が名指すので開ける
 #[derive(Debug, Clone)]
 pub struct SnapshotChange {
     /// 差し替え**前**の作業領域源（資源が無かった場合は空）。

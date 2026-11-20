@@ -202,7 +202,7 @@
   - _Dispatch: mechanical — 直し方を設計の表が与える_
   - _Requirements: 2.7, 3.1, 4.1, 5.6, 5.13_
 
-- [ ] 5.3 `frame_*` のテストを直す その 1（T22・61〜78 番・41 番の `frame_attach*`・`frame_balloon_offset_*`・`frame_diag_route_tests.rs`・`frame_harness_tests.rs`・支えの分）
+- [x] 5.3 `frame_*` のテストを直す その 1（T22・61〜78 番・41 番の `frame_attach*`・`frame_balloon_offset_*`・`frame_diag_route_tests.rs`・`frame_harness_tests.rs`・支えの分）
   - 消すテスト（62・63・64・73・78 番）は、残るテストが同じ中身を守ることを 1 本ずつ確かめてから消す。名指す範囲の外の説明 2 行（`move_cue_apply_move_tests.rs`・`assets.rs`）も直す
   - 網羅の檻を、各腕が定数の表の添字を返して一致を主張する形に強める（67 番）。探針の表明を 1 本にまとめる（68 番）
   - 手動なら自動へ戻すことを doc に書き補助を支えへ移す（70 番）。ハーネスの再スナップの口を畳み名指しを直す（71 番）。x64 の見張りを宣言の `cfg` に寄せ、支えの `const` の表明と字面の見張りを消す（72 番）
@@ -284,3 +284,4 @@
 - 4.3: 分岐のテストは 766 行と 331 行（待ちの群）。消した重なりの 4 本の札の腕は、待ちの群の `_at_120`／`_at_192` の 6 本と 1.6 のシェルの切り替えのテストが守る（審査で腕を落として 7 本の赤を確かめた）。94 番で 3 つの DPI を回す形にした `steady_frames_write_nothing_at` は、表を戻した後に接地点が見える下端へ戻ることを見なくなった（`a_work_area_only_change_writes_once_at` が同じ仕組みを守る）。`frame_transition_branch_tests.rs` の頭の説明が要件番号 5.5 を足した・`frame_transition_branch_wait_tests.rs:120` に D15 の「4 点すべて」が残る（5.4 の 41 番の物差しで見る）。
 - 5.1: 説明に残る spec の ID・要件番号は、ログの文字列の中のもの（`attach.rs` R4.2・`drain_resnap.rs` Req3.4／要件 6.3・7.1／scope-chain-gap・`scale_text.rs` R8.6／R2.3）だけ。ログの文を変えるのは 3・4・113 番だけなので触らない。41 番の「atom を spec の名で書く」は、CLAUDE.md の決まりに合わせて参照だけの行を消す形にした。`frame.rs` の `donor パターン: remove→各フェーズ→insert` は `t_zwi07` が字面で読むので残す。
 - 5.2: 56 番の直しは設計（要件 5.13）のとおり `.kiro` の spec の名（`areka-test-binary-stability` の `load-repro.md` の ⑹）をコメントに書いた。CLAUDE.md の決まりとはぶつかる（7.1 の audit で見る）。
+- 5.3: 72 番で支えの x64 の const の表明を消したので、ハーネスに乗るバルーンのオフセットのテスト 4 本の宣言も `cfg(all(test, target_pointer_width = "64"))` に揃えた（ハーネスの使い手は全部 x64 の宣言の下）。`cargo check --target i686-pc-windows-msvc` は `wintf` で落ちるので 32 bit の組み立ては試せていない（前からの問題）。消したテスト: 62・63・64 番（attach 3 本）・68 番（keyword_gate 1 本）・72 番（harness 1 本）。

@@ -53,6 +53,7 @@ fn empty_atlas() -> AtlasTable {
 /// `plan_attachments` が実際に読むのは `shells[*].scope`／`shells[*].initial_surface_id`／
 /// `balloons[*].scope` のみ。残りのフィールド（emo_world／atlas／model／resolver／
 /// static_binds）は最小の headless 値で埋める（COM/GPU/fixture 不要の純合成）。
+/// 装着の相にも渡る。空の値で装着は成り立つ。
 pub fn synth_assets(shells: &[(u32, u32)]) -> BootAssets {
     let balloon_scopes: Vec<u32> = shells.iter().map(|&(scope, _)| scope).collect();
     synth_assets_with_balloons(shells, &balloon_scopes)
@@ -77,7 +78,7 @@ pub fn synth_assets_with_balloons(shells: &[(u32, u32)], balloon_scopes: &[u32])
                 emo_world: empty_world(),
                 atlas: empty_atlas(),
                 definitions: crate::assets::empty_definitions(scope),
-                // headless 純合成のバルーンは面画像を持たない＝背景色は既定の白（要件 4.6）。
+                // headless 純合成のバルーンは面画像を持たない＝背景色は既定の白。
                 background_color: (255, 255, 255),
                 name: String::new(),
             })
@@ -98,12 +99,12 @@ pub fn synth_assets_with_balloons(shells: &[(u32, u32)], balloon_scopes: &[u32])
     }
 }
 
-// ── task 4.2: drain／text フェーズ＋frame_system の檻 ──────────────────────
+// ── drain／text フェーズ＋frame_system の檻 ──────────────────────
 //
 // ログ発火を目視でなく実行テストで決定論的に檻へ入れる。捕捉層そのものはここに持たず、
 // 硬化機構の唯一の定義元 `log-capture-kit` へ委譲する（行の形も呼出側の判定内容も移行前と
 // 1 バイト変わらない）。`EmoPresenter::apply` は未装着 target への `Hide`（reply: None）で
-// `error!(?target_id, ...)` を発火するため（presenter.rs `apply_hide`・reply-less でも
+// `error!(?target_id, ...)` を発火するため（`areka-emo-present` の `presenter/hub.rs` の `apply_hide`・reply-less でも
 // log-first）、この ERROR を観測して drain の apply 到着順（FIFO）を強く檻に入れられる。
 //
 // 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
@@ -140,7 +141,7 @@ pub fn zero_clock() -> TalkClock {
 }
 
 /// headless な `RuntimeWiring`（実 `EmoPresenter`／空 `TextLayerRuntime`／合成 `BootAssets`）を
-/// 注入 `rx`／`clock` で組む（task 4.1 のゲートテストと同型・COM/GPU 不要）。
+/// 注入 `rx`／`clock` で組む（COM/GPU 不要）。
 pub fn headless_wiring_with(rx: Receiver<PresentCommand>, clock: TalkClock) -> RuntimeWiring {
     let mut wiring = super::shared_test_support::wiring_with(
         synth_assets(&[(0, 0)]),
@@ -157,7 +158,7 @@ pub fn headless_wiring_with(rx: Receiver<PresentCommand>, clock: TalkClock) -> R
 /// resnap 檻の 2 スコープ解決済み配置（both Bottom・初期位置は work_area 下端に整合＝
 /// bottom 不変量を満たす: scope0 y=1444−687=757／scope1 y=1444−357=1087）。
 ///
-/// # なぜ `balloon_limit` を無効にしてあるか（areka-P0-windowposition-limit task 3.3）
+/// # なぜ `balloon_limit` を無効にしてあるか
 ///
 /// 本 fixture のキャラ窓は下端接地で背が高く（scope0 は 687 論理 px）、192 水準では
 /// 高さ 1374 px となって work area（top=17）をほぼ埋める。バルーンはキャラ窓の
@@ -167,7 +168,7 @@ pub fn headless_wiring_with(rx: Receiver<PresentCommand>, clock: TalkClock) -> R
 ///
 /// その補正は本 fixture を使う檻の**主題ではない**。ここが固定しているのは DPI 相の
 /// 再射影と窓相対の追従 offset 契約（`balloon_pos − char_pos ≡ offset`）であり、
-/// 補正が混ざると恒等式が成立しなくなって主題が読めなくなる（設計 DD6: 恒等式は
+/// 補正が混ざると恒等式が成立しなくなって主題が読めなくなる（恒等式は
 /// 「resolver／追従計算の出力時点の事後条件」であって表示位置の恒久不変量ではない）。
 /// ゆえに limit を無効にして関門を素通しさせる。limit の挙動そのものは
 /// `crates/areka-placement/src/follow_balloon_limit_tests.rs` が所有し、DPI 起因の寸法変更経路
@@ -186,7 +187,7 @@ fn resnap_placements() -> Vec<ScopePlacement> {
             balloon_size: balloon_spawn_size,
             balloon_offset: BASE_OFFSETS[0],
             balloon_offset_base: OffsetBase::unpinned(BASE_OFFSETS[0]),
-            // windowposition-limit: **無効**（task 3.3 の追随）。理由は下の注記を参照。
+            // windowposition-limit: **無効**。理由は上の注記を参照。
             balloon_limit: false,
             anchor: Anchor::Bottom,
             balloon_keyword_base: None,
@@ -199,7 +200,7 @@ fn resnap_placements() -> Vec<ScopePlacement> {
             balloon_size: balloon_spawn_size,
             balloon_offset: BASE_OFFSETS[1],
             balloon_offset_base: OffsetBase::unpinned(BASE_OFFSETS[1]),
-            // windowposition-limit: **無効**（task 3.3 の追随）。理由は下の注記を参照。
+            // windowposition-limit: **無効**。理由は上の注記を参照。
             balloon_limit: false,
             anchor: Anchor::Bottom,
             balloon_keyword_base: None,
@@ -421,14 +422,14 @@ const S2_MONITOR_BOTTOM: i32 = 1492;
 /// S2 檻のタスクバー**論理**高。実機のタスクバーは論理寸で宣言され `dpi/96` 倍で物理へ伸びる。
 const S2_TASKBAR_LOGICAL_H: i32 = 48;
 
-/// ゴーストが居るモニタの work area を **DPI 水準の関数**として組む（Req 5.6: 絶対 px を
+/// ゴーストが居るモニタの work area を **DPI 水準の関数**として組む（絶対 px を
 /// 判定に直書きしない）。
 ///
 /// 拡大率が上がるとタスクバーの物理高が `dpi/96` 倍に伸び、work area 下端がその分だけ
 /// 上がる——これが「DPI が変われば接地すべき下端が変わる」ことの機構であり、S2 が落として
 /// いるのはまさにこの再導出である。`dpi=96` では `1492−48=1444`＝[`resnap_placements`] の
 /// 初期配置がちょうど満たす下端であり、**96 だけが旧 Y と新 Y の自己整合で通過する**
-/// （Req 5.1／5.4・診断レポート §1.2「なぜ dpi=96 では隠れるか」）。
+/// （診断レポート §1.2「なぜ dpi=96 では隠れるか」）。
 pub fn s2_work_area_for_dpi(dpi: u16) -> RectPx {
     let taskbar_px = S2_TASKBAR_LOGICAL_H * dpi as i32 / 96;
     RectPx {
@@ -439,7 +440,7 @@ pub fn s2_work_area_for_dpi(dpi: u16) -> RectPx {
     }
 }
 
-/// 合成マルチモニタの隣接モニタ（負座標・3200 超座標を含む非対称レイアウト・task 2.2 と同流儀）。
+/// 合成マルチモニタの隣接モニタ（負座標・3200 超座標を含む非対称レイアウト）。
 ///
 /// ゴースト窓の中心は決してここへ入らない。work area 解決が**帰属**（`Contains`）で決まって
 /// いることを [`s2_resolved_work_area`] が毎回自己検査するため、単一モニタで回したときの
@@ -488,7 +489,7 @@ pub fn s2_sources(dpi: u16) -> MonitorSources {
 /// **拡大率を一切変えずに作業領域だけが動く**構成変更の代表例である（タスクバーの自動的に
 /// 隠す設定・位置の変更・多段の表示切替）。この向きの変化では窓の `DPI` が 1 つも変わらない
 /// ので `Changed<DPI>` は立たず、拡大率の相は何もしない——だから作業領域変化を契機とする
-/// 再スナップが要る（task 5.2・要件 5.1／5.2）。
+/// 再スナップが要る。
 pub fn s2_taskbar_hidden_work_area(dpi: u16) -> RectPx {
     RectPx {
         bottom: S2_MONITOR_BOTTOM,
@@ -515,7 +516,7 @@ pub fn s2_monitors_with_work_area(dpi: u16, work_area: RectPx) -> Vec<Monitor> {
 ///
 /// 表そのものは変わる（同期段は作り直す）が、ゴースト窓の接地点に関わる作業領域は 1px も
 /// 動かない——「表が変わっただけでは窓を書かない」を、同期段が実際に発火した状態で問う
-/// ための構成である（要件 5.2 の「変化が無ければ再射影そのものを行わない」の窓ごとの側）。
+/// ための構成である（「変化が無ければ再射影そのものを行わない」の窓ごとの側）。
 pub fn s2_monitors_with_neighbor_work_area(dpi: u16, work_area: RectPx) -> Vec<Monitor> {
     let mut monitors = s2_monitors(dpi);
     monitors[1].work_area = RECT {
@@ -550,18 +551,11 @@ pub fn s2_assert_work_area_bottom_moves(from_dpi: u16, to_dpi: u16) {
     );
 }
 
-// ── task 3.3: 多フレーム駆動ハーネス（要件 7.2／7.5／7.6／7.7）────────────────
+// ── 多フレーム駆動ハーネス────────────────
 //
 // 遷移は 1 フレームでは終わらない——作業領域源の差替・窓の拡大率の変化・報告寸の landing・
 // 連鎖の解き直しが**別々のフレーム**に落ちる。本節はそれを決定論で並べるための駆動口を
-// 与える（実 GPU も実高 DPI モニタも要らない＝要件 7.2）。
-
-/// 常時テストは純 x64（要件 7.5）。i686 で本ハーネスを組もうとしたらビルドで止める
-/// ——「32bit でも走ってしまった」を実行時の観察に委ねない。
-const _: () = assert!(
-    cfg!(target_pointer_width = "64"),
-    "多フレーム駆動ハーネスの常時テストは x64 のみで走る（要件 7.5）"
-);
+// 与える（実 GPU も実高 DPI モニタも要らない）。
 
 /// scope ごとに物理寸を作り分ける [`PhysicalSizeSource`] の fake。
 ///
@@ -598,7 +592,7 @@ pub fn settled_sizes() -> PerTargetSizes {
     PerTargetSizes::new([(0, Some(SPAWN_SIZE_0)), (1, Some(SPAWN_SIZE_1))])
 }
 
-/// **単一スレッド実行器**を明示した空スケジュール（要件 7.6）。
+/// **単一スレッド実行器**を明示した空スケジュール。
 ///
 /// ログ捕捉（`log-capture-kit` の捕捉窓＝**呼出スレッド局所**の dispatcher 差替）に依る
 /// 検証を既定の多スレッド実行器で回すと、システムがワーカースレッドへ載って 1 行も捕捉
@@ -644,10 +638,10 @@ fn harness_monitor(handle: isize, work_area: RectPx, monitor_bottom: i32, dpi: u
 /// | 窓の拡大率 | [`set_window_dpi`](Self::set_window_dpi)／[`set_scope_dpi`](Self::set_scope_dpi) | 各窓の `DPI` |
 ///
 /// 前 2 者は同期段（[`run_work_area_sync`](Self::run_work_area_sync)）が作り直す側であり、
-/// 3 つ目はその入力である。**独立に**差し替えられることが要件 5.3 の観測（接地点と作業領域
+/// 3 つ目はその入力である。**独立に**差し替えられることが観測（接地点と作業領域
 /// 下端の差）の前提である——同じ源から両方を引いたら差は定義上つねに 0 になる。
 ///
-/// # テスト間で状態を残さない（要件 7.7）
+/// # テスト間で状態を残さない
 ///
 /// 後始末は **[`FrameHarness::new`] と `Drop` の両側**にある——窓書込キューの取り出し
 /// （`drain_window_pos_commands`）と観測の写しの初期化（`transition_diag::reset_for_test`）を
@@ -656,7 +650,7 @@ fn harness_monitor(handle: isize, work_area: RectPx, monitor_bottom: i32, dpi: u
 /// `new` の側が要るのは、ハーネスを使わない経路が残した汚れも掬うためである（この向きだけを
 /// 残留の検査が固定している）。`Drop` の側が要るのは、ハーネスを使ったテストの**次に走るのが
 /// ハーネスでない**場合に、キューと写しが汚れたまま渡ってしまうためである——この向きは
-/// areka 側に現在読み手が居ないので**どのテストでも赤にできない**（task 3.3 のレビューで確認）。
+/// areka 側に現在読み手が居ないので**どのテストでも赤にできない**（レビューで確認）。
 /// 検査できない残留を「隔離済み」と言わないために、両側で閉じる。
 /// なお `Drop` はスコープ末尾で走るので、ハーネスを生かしたまま次を組む形（残留の検査そのもの）
 /// は壊れない。
@@ -680,7 +674,7 @@ pub struct FrameHarness {
 }
 
 impl FrameHarness {
-    /// 残留の無い状態から多フレーム駆動を始める（要件 7.7）。
+    /// 残留の無い状態から多フレーム駆動を始める。
     pub fn new() -> Self {
         // 前のテストが残した窓書込指令を捨てる（**実行はしない**＝実 `SetWindowPos` を呼ばない）。
         let _residue = drain_window_pos_commands();
@@ -725,7 +719,7 @@ impl FrameHarness {
 
     /// フレームを 1 つ進め、新しいフレーム番号を返す。
     ///
-    /// 刻印の 2 つの権威を `try_tick_world` と**同一の規律**で進める（D1）: World 資源
+    /// 刻印の 2 つの権威を `try_tick_world` と**同一の規律**で進める: World 資源
     /// （`FrameCount`＋`TickStart`）を更新し、同じ値をスレッド局所の写しへ配る。片方だけ
     /// 進めると、World を借りる観測点と借りない観測点でフレーム系列が割れる。
     pub fn advance_frame(&mut self) -> u32 {
@@ -764,7 +758,7 @@ impl FrameHarness {
         self.set_monitor_table(s2_monitors(dpi));
     }
 
-    /// モニタ別拡大率表（`MonitorDpiTable` 資源）を差し替える（task 5.1 で新設した源）。
+    /// モニタ別拡大率表（`MonitorDpiTable` 資源）を差し替える。
     pub fn set_monitor_dpi_table(&mut self, table: MonitorDpiTable) {
         self.world.insert_resource(table);
     }
@@ -815,11 +809,6 @@ impl FrameHarness {
         dpi_phase_with(source, &mut self.dpi_state, &mut self.world);
     }
 
-    /// 作業領域変化を契機とする再スナップを 1 回回す（本番の拡大率の相の直後の段）。
-    pub fn run_work_area_resnap(&mut self, change: &SnapshotChange) {
-        resnap_for_work_area_change(&mut self.world, change);
-    }
-
     /// 配置に関わる相を**本番と同じ順**で 1 フレームぶん回す
     /// （同期段 → 拡大率の相 → 作業領域再スナップ）。
     ///
@@ -835,14 +824,14 @@ impl FrameHarness {
         let change = self.run_work_area_sync();
         self.run_dpi_phase(source);
         if let Some(change) = &change {
-            self.run_work_area_resnap(change);
+            resnap_for_work_area_change(&mut self.world, change);
         }
         change
     }
 
     /// 報告寸の突合を 1 回回す（本番の drain 相・可視性の相の後段と同一の関数）。
     ///
-    /// 待ち札のある窓へは、この口からも窓書込が出ないことを問う（設計 C5 の「4 点すべて」の
+    /// 待ち札のある窓へは、この口からも窓書込が出ないことを問う（「4 点すべて」の
     /// 2 つ目）。会話中の表情差替（`ShowSurface`）が積む窓寸要求は本番ではこの経路で
     /// landing するので、待ち中の表情差替を組むにはこの駆動口が要る。
     pub fn run_reconcile<S: ScaleReportSource>(&mut self, source: &mut S) {
@@ -867,7 +856,7 @@ impl FrameHarness {
         realign_chain_once_with_source(source, &mut self.world);
     }
 
-    /// 積まれた窓書込指令を**実行せずに**取り出す（D11 の検査口）。
+    /// 積まれた窓書込指令を**実行せずに**取り出す。
     ///
     /// 取り出す先はスレッド全体で 1 本のキューであり、ハーネスごとに分かれていない。
     /// 同一スレッドで 2 つのハーネスを同時に生かすと、どちらの `drain_writes` も
@@ -888,7 +877,7 @@ impl FrameHarness {
 }
 
 impl Drop for FrameHarness {
-    /// 次に走るのがハーネスでない場合に備えて、末尾でも閉じる（要件 7.7）。
+    /// 次に走るのがハーネスでない場合に備えて、末尾でも閉じる。
     ///
     /// `new` 側の後始末だけだと、ハーネスを使ったテストの次にハーネスを使わないテストが
     /// 来たとき、キューと観測の写しが汚れたまま渡る。この向きは areka 側に現在読み手が

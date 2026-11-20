@@ -20,7 +20,9 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use super::{FaceCause, after_drain, changed_faces, select_balloon_face};
-use crate::frame::balloon_runtime_test_support::{balloon_is_manual, manual_balloon_runtime};
+use crate::frame::balloon_runtime_test_support::{
+    balloon_is_manual, manual_balloon_runtime, restart_manual,
+};
 use crate::frame::test_support::{capture_logs, count_level, headless_wiring_with, zero_clock};
 use crate::frame::{RuntimeWiring, balloon_target, shell_target};
 
@@ -107,7 +109,7 @@ fn face_0_2_0_replaces_the_definition_and_markers_and_forgets_manual() {
         "装着は手動を捨てない"
     );
 
-    restart_manual(&wiring);
+    restart_manual(&wiring.runtime, "0");
     assert_eq!(
         select(&mut wiring, &mut world, 2, FaceCause::FaceChange),
         vec![true]
@@ -119,7 +121,7 @@ fn face_0_2_0_replaces_the_definition_and_markers_and_forgets_manual() {
         "面 0→2 で手動を捨てる"
     );
 
-    restart_manual(&wiring);
+    restart_manual(&wiring.runtime, "0");
     assert_eq!(
         select(&mut wiring, &mut world, 0, FaceCause::FaceChange),
         vec![false]
@@ -162,7 +164,7 @@ fn face_switch_hands_the_inline_marker_of_the_face() {
 fn same_face_keeps_manual() {
     let (_permit, mut world, mut wiring, _) = rig();
     select(&mut wiring, &mut world, 2, FaceCause::Attach);
-    restart_manual(&wiring);
+    restart_manual(&wiring.runtime, "0");
     select(&mut wiring, &mut world, 2, FaceCause::BalloonSwitch);
     assert!(balloon_is_manual(&wiring.runtime, "0"));
 }
@@ -180,20 +182,6 @@ fn a_scope_without_definitions_logs_one_error_and_changes_nothing() {
     assert_eq!(logs.len(), 1, "error 以外の行が出ている: {logs:?}");
     assert!(wiring.balloon_faces.is_empty());
     assert!(wiring.balloon_models.is_empty());
-}
-
-/// 手動の位置へ入り直す（`balloon_is_manual` の確かめは手動を自動へ戻すので、次の段の前に戻す）。
-fn restart_manual(wiring: &RuntimeWiring) {
-    use areka_emo_text::place::PlaceKey;
-    use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir};
-    use areka_sakura::ActorKey;
-    let mut rt = wiring.runtime.borrow_mut();
-    let place = PlaceKey::balloon(&ActorKey::from("0"));
-    rt.forget_manual_at(&place, areka_emo_text::scroll_marker::StopReason::Cleared);
-    assert_eq!(
-        rt.scroll_manual_at(&place, ScrollDir::Older, 1),
-        ScrollChange::Started
-    );
 }
 
 /// drain の後の拾い: このフレームで ShowSurface を受けた balloon の target だけを、presenter の

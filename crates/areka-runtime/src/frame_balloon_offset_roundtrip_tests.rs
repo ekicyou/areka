@@ -1,6 +1,5 @@
 //! **拡大率の往復**——遷移が元の水準へ戻ったとき、追従オフセットが基準から引き直されて
-//! bit 同一で戻ることの檻（areka-P0-balloon-offset-dpi・task 6.1 の是正・design D4／D16・
-//! 要件 3.3／7.8／9.4）。
+//! bit 同一で戻ることの檻。
 //!
 //! # ここが押さえる欠陥（2026-08-28 の実装時是正）
 //!
@@ -13,7 +12,7 @@
 //! ```text
 //! 144 で係留 → Anchored  offset=(-512,-48)  base=(-512,-48)@144
 //! 192 へ     → Rescaled  offset=(-683,-64)  base=(-512,-48)@144
-//! 144 へ戻る → Unchanged offset=(-683,-64)  ← 基準へ戻らない（要件 3.3 違反）
+//! 144 へ戻る → Unchanged offset=(-683,-64)  ← 基準へ戻らない（欠陥）
 //! ```
 //!
 //! となり、往復した利用者のバルーンが高 DPI 時の相対位置に取り残される。
@@ -35,8 +34,7 @@
 //!    本ファイルの [`the_display_dpi_round_trip_returns_the_offset_bit_identically`] と
 //!    [`the_offset_is_bit_identical_at_every_revisit_of_a_dpi_chain`] がその列を作る。
 //!
-//! 置き場所を兄弟ファイルにしたのは、行列側が 948 行で 1,000 行制限（要件 9.6）に
-//! 52 行しか残していないためである。
+//! 置き場所を兄弟ファイルにしたのは、行列側が 1,000 行制限に近いためである。
 
 use wintf::ecs::{DPI, Point, WindowPos};
 
@@ -96,7 +94,7 @@ fn follow_at(world: &World, entity: Entity) -> BalloonFollow {
 }
 
 /// **是正の本体**: 一度追随した後に元の表示 DPI へ戻ると、恒等比の腕は
-/// **基準から引き直して** bit 同一の値を Component へ書く（要件 3.3）。
+/// **基準から引き直して** bit 同一の値を Component へ書く。
 ///
 /// 判定語も同時に固定する——値が動いた戻りの遷移で `unchanged` を記録すると、語が嘘になる。
 #[test]
@@ -215,7 +213,7 @@ fn pos_of(harness: &FrameHarness, entity: Entity) -> Point {
 }
 
 /// **戻りの遷移**（96 → 192 → 96）でオフセットが基準へ bit 同一で戻り、
-/// バルーンが実際に元の位置へ帰る（要件 3.3・design D4／D16）。
+/// バルーンが実際に元の位置へ帰る。
 #[test]
 fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
     let mut harness = FrameHarness::new();
@@ -300,7 +298,7 @@ fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
 }
 
 /// 表示 DPI の列 `96 → 120 → 192 → 120 → 96` を巡り、**同じ水準へ戻るたび**に
-/// 初回訪問と bit 同一（要件 3.3／7.8・誤差が往復で累積しない）。
+/// 初回訪問と bit 同一（誤差が往復で累積しない）。
 #[test]
 fn the_offset_is_bit_identical_at_every_revisit_of_a_dpi_chain() {
     let mut harness = FrameHarness::new();
@@ -308,7 +306,6 @@ fn the_offset_is_bit_identical_at_every_revisit_of_a_dpi_chain() {
     settle_at(&mut harness, &mut source, LOW_DPI);
 
     let mut first_seen: Vec<(u16, Vec<PointPx>)> = Vec::new();
-    let mut visits = 0usize;
     for level in [96u16, 120, 192, 120, 96] {
         transition_to(&mut harness, &mut source, level);
         let _writes = harness.drain_writes();
@@ -325,9 +322,7 @@ fn the_offset_is_bit_identical_at_every_revisit_of_a_dpi_chain() {
             ),
             None => first_seen.push((level, offsets)),
         }
-        visits += 1;
     }
-    assert_eq!(visits, 5, "列を最後まで巡っていない");
 
     // 逐語（比 2・比 5/4 の手計算）——列が緑でも値そのものが動いていないことを固定する。
     assert_eq!(

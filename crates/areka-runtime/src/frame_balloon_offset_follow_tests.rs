@@ -1,18 +1,16 @@
-//! **拡大率遷移でのバルーン追従オフセットの追随**——相の結合の行列
-//! （areka-P0-balloon-offset-dpi・task 6.5・design「Testing Strategy > Integration Tests」
-//! 1／2 の後半／4／5／6・要件 3.2／3.5／4.2／7.1／7.3／9.8）。
+//! **拡大率遷移でのバルーン追従オフセットの追随**——相の結合の行列。
 //!
 //! # 本ファイルが持つもの／持たないもの
 //!
 //! 相の結合（`FrameHarness` で本番と同じ順に相を回す）で追随を見る檻は 3 ファイルに分かれる。
 //! 重複を作らないための分担は次のとおりで、本ファイルは**残りの 5 つ**を持つ。
 //!
-//! | design の項目 | 置き場所 |
+//! | 項目 | 置き場所 |
 //! |---|---|
 //! | 1. 遷移 × アンカーの行列 | **本ファイル**（[`the_transition_matrix_follows_the_display_dpi_ratio`]） |
-//! | 2. キーワードとの排他（素材が残る腕・受容残余の腕） | `frame_balloon_offset_keyword_gate_tests.rs`（task 6.3） |
+//! | 2. キーワードとの排他（素材が残る腕・受容残余の腕） | `frame_balloon_offset_keyword_gate_tests.rs` |
 //! | 2. 同（**素材消費後**の腕と揃えの残差） | **本ファイル**（[`the_transition_after_the_material_is_consumed_keeps_the_centering_within_the_allowance`]） |
-//! | 3. べき等 skip の収束 | `frame_balloon_offset_converge_tests.rs`（task 6.2） |
+//! | 3. べき等 skip の収束 | `frame_balloon_offset_converge_tests.rs` |
 //! | 4. 待ち札との共存 | **本ファイル**（[`a_window_held_for_sync_regains_the_follow_after_the_hold_is_released`]） |
 //! | 5. 拡大率が変わらない寸法変化では触らない | **本ファイル**（面の切替／作業領域の再スナップの 2 本） |
 //! | 6. ドラッグ由来にも同一規則 | **本ファイル**（確立の事後条件と追随の 2 本） |
@@ -24,10 +22,10 @@
 //! 紙の上で適用したものであり、追随相を走らせて出た値を写していない——写すと「実装が何を
 //! 出しても緑になる」空虚な行列になる。各値の算術は同定数の doc に逐条で残す。
 //!
-//! # 空振り防止の証人（design Integration 1 が名指しする 3 つ）
+//! # 空振り防止の証人（3 つ）
 //!
 //! 行列の各組は次の 3 点を**主張の前に**固定する。1 つでも欠けると「追随が無くても緑になる
-//! 行列」になり、要件 7.1 の網羅が意味を失う。
+//! 行列」になり、網羅が意味を失う。
 //!
 //! 1. **比が 1 でない**——遷移の前後で表示 DPI が実際に違う。
 //! 2. **オフセットが非ゼロ**——0 は何倍しても 0 なので、追随の有無を区別できない。
@@ -36,15 +34,15 @@
 //! 加えて「旧値と期待値が違う」ことも毎組で主張する。追随が丸ごと無くても値が一致するなら、
 //! その組は探針として退化している。
 //!
-//! # 追随を無効化すると落ちる（是正前は失敗する側・要件 7.4）
+//! # 追随を無効化すると落ちる（是正前は失敗する側）
 //!
 //! 追随の適用（`rescale_balloon_follow_offset` の中の `apply_rescaled` 呼出）を潰すと、
-//! 本ファイルの 7 本のうち**追随を主張する 4 本**が赤になる（実測 2026-08-28）——行列・
-//! 素材消費後の残差・待ち札の解除後・ドラッグ由来の追随。据置きを主張する 3 本（面の切替・
+//! 本ファイルのうち**追随を主張するテスト**が赤になる（実測 2026-08-28）——行列・
+//! 素材消費後の残差・待ち札の解除後・ドラッグ由来の追随。据置きを主張するテスト（面の切替・
 //! 作業領域の再スナップ・ドラッグ確立の事後条件）は緑のまま残る。これらは追随が**走らない
 //! こと**を主張しているので、「全部が赤くなる」ことは正しさの条件ではない。
 //!
-//! ⚠ 相そのもの（関数の先頭で `Unchanged` を返す）を潰すと**7 本すべて**が赤になるが、
+//! ⚠ 相そのもの（関数の先頭で `Unchanged` を返す）を潰すと**すべて**が赤になるが、
 //! 落ちるのは [`settle_at`] の自己検査（基準の係留）であって主張の側ではない——係留も
 //! 同じ関数が担うためである。追随の是正対を確かめたいときは `apply_rescaled` の側を潰す
 //! こと。相ごと潰した結果を「行列が効いている」証拠に使うと帰属を取り違える。
@@ -75,9 +73,9 @@ use super::*;
 // 行列の定義（3 遷移 × 5 アンカー × 2 スコープ＝30 組）
 // ---------------------------------------------------------------------------
 
-/// 表示 DPI 遷移の 3 組（design Integration 1 が名指しする組）。
+/// 表示 DPI 遷移の 3 組。
 ///
-/// `96→120` は比 5/4（96 の倍数でない DPI・要件 7.6）、`96→192` は比 2（丸めが 1 度も
+/// `96→120` は比 5/4（96 の倍数でない DPI）、`96→192` は比 2（丸めが 1 度も
 /// 起きない対照）、`120→192` は比 8/5（分母・分子とも 96 の倍数でない）。
 const TRANSITIONS: [(u16, u16); 3] = [(96, 120), (96, 192), (120, 192)];
 
@@ -89,7 +87,7 @@ const TRANSITIONS: [(u16, u16); 3] = [(96, 120), (96, 192), (120, 192)];
 /// 「同じ期待値が 5 腕すべてで成立する」は空虚な主張ではない。
 ///
 /// 配列は腕が増えてもコンパイルエラーにならないので、[`anchor_enumeration_is_exhaustive`]
-/// が `match` で網羅を構造的に保つ（「全アンカー」が黙って一部アンカーへ縮むのを防ぐ）。
+/// の `match` が新しい腕を足したときにコンパイルを落とす。
 const ANCHORS: [Anchor; 5] = [
     Anchor::Top,
     Anchor::Bottom,
@@ -190,7 +188,7 @@ fn set_anchor(harness: &mut FrameHarness, anchor: Anchor) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. 遷移 × アンカー × スコープの行列（要件 3.1／7.1・design Integration 1）
+// 1. 遷移 × アンカー × スコープの行列
 // ---------------------------------------------------------------------------
 
 /// **完了条件の本体**: 表示 DPI 遷移 3 組 × 全アンカー 5 腕 × 全スコープ 2 つの
@@ -216,8 +214,8 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
             set_anchor(&mut harness, anchor);
             settle_at(&mut harness, &mut source, from);
 
-            // 書込**前**に読む（design Integration 1 の「書込前に読んだ値と突合」）。
-            let before: Vec<(usize, PointPx, Point, Point)> = harness
+            // 書込**前**に読む。
+            let before: Vec<(usize, PointPx, Point)> = harness
                 .scopes()
                 .to_vec()
                 .into_iter()
@@ -225,7 +223,6 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
                     (
                         scope,
                         offset_of(&harness, scope),
-                        pos_of(&harness, harness.char_window(scope)),
                         pos_of(&harness, harness.balloon_window(scope)),
                     )
                 })
@@ -234,7 +231,7 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
             transition_to(&mut harness, &mut source, to);
             let writes = harness.drain_writes();
 
-            for (scope, old_offset, _old_char, old_balloon) in before {
+            for (scope, old_offset, old_balloon) in before {
                 let scope_u32 = u32::try_from(scope).expect("scope は u32 域");
                 let expected = EXPECTED_OFFSETS[t][scope];
 
@@ -253,14 +250,14 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
                     "{anchor:?} {from}→{to} scope={scope}: 期待値が旧値と同じ（この組は追随を観測できない）"
                 );
 
-                // 主張そのもの（要件 3.1）——手計算の逐語値と bit 一致。
+                // 主張そのもの——手計算の逐語値と bit 一致。
                 assert_eq!(
                     offset_of(&harness, scope),
                     expected,
                     "{anchor:?} {from}→{to} scope={scope}: 追随後のオフセットが表示 DPI 比の手計算値でない"
                 );
 
-                // 基準対は追随で動かない（出力を入力へ戻さない＝往復無誤差の前提・要件 3.3）。
+                // 基準対は追随で動かない（出力を入力へ戻さない＝往復無誤差の前提）。
                 let base = follow_of(&harness, scope).base();
                 assert_eq!(
                     (base.offset, base.dpi),
@@ -300,7 +297,7 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
                     );
                 } else {
                     // 追随の行き先がどの作業領域とも交差しない組。可視性ガードが X を
-                    // 引き戻すのが正しい（本仕様の対象外・別の檻が所有）。
+                    // 引き戻すのが正しい（この檻の対象外・別の檻が所有）。
                     clamped += 1;
                     let wa = s2_work_area_for_dpi(to);
                     assert!(
@@ -329,14 +326,14 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. キーワード素材の消費**後**の腕と揃えの残差（要件 4.2／7.3・design D8）
+// 2. キーワード素材の消費**後**の腕と揃えの残差
 // ---------------------------------------------------------------------------
 //
 // 素材が残る腕・受容残余の腕・自己回復は `frame_balloon_offset_keyword_gate_tests.rs`
-// （task 6.3）が持つ。ここが持つのは残る 1 腕——**素材が消費された後の遷移**では見送りが
-// 解けて追随だけが効き、その結果の中央揃えが D8 の許容量（1 軸 ≤3px）以内に収まること。
+// が持つ。ここが持つのは残る 1 腕——**素材が消費された後の遷移**では見送りが
+// 解けて追随だけが効き、その結果の中央揃えが許容量（1 軸 ≤3px）以内に収まること。
 
-/// D8 が定める揃えの残差の許容量（1 軸あたり・物理 px）。
+/// 揃えの残差の許容量（1 軸あたり・物理 px）。
 const ALIGNMENT_ALLOWANCE_PX: i32 = 3;
 
 /// 素材を消費させるための**拡大率不変**の寸法変化（scope 昇順・面の切替と同じ経路）。
@@ -362,7 +359,7 @@ fn ideal_alignment(harness: &FrameHarness, scope: usize) -> PointPx {
     .expect("中央揃えのモードは基本位置を持つ")
 }
 
-/// **素材消費後の腕**（要件 4.2／7.3・design D8）: 素材が消えた後の遷移では追随だけが効き、
+/// **素材消費後の腕**: 素材が消えた後の遷移では追随だけが効き、
 /// 中央揃えの残差が許容量以内に収まる。
 ///
 /// 段取りは 3 つ。⑴ [`LOW_DPI`] で整地して素材を付ける。⑵ **拡大率を変えずに**キャラ窓の
@@ -371,7 +368,7 @@ fn ideal_alignment(harness: &FrameHarness, scope: usize) -> PointPx {
 /// に焼き直される。⑶ 96→192 の遷移を、キャラ窓とバルーン窓の**両方**が倍寸を報告する形で
 /// 起こす。素材はもう無いので見送りは解け、追随が基準から引き直す。
 ///
-/// 残差の出所は D8 の 3 つ（両寸の個別丸め・中点の整数除算・追随の丸め）だけであり、
+/// 残差の出所は 3 つ（両寸の個別丸め・中点の整数除算・追随の丸め）だけであり、
 /// 上限を主張するだけでなく**実値も逐語で固定**する（上限内での悪化を見逃さないため）。
 #[test]
 fn the_transition_after_the_material_is_consumed_keeps_the_centering_within_the_allowance() {
@@ -510,7 +507,7 @@ fn the_transition_after_the_material_is_consumed_keeps_the_centering_within_the_
 }
 
 // ---------------------------------------------------------------------------
-// 4. 待ち札との共存（design Integration 4・先行仕様 atom 設計 C5）
+// 4. 待ち札との共存
 // ---------------------------------------------------------------------------
 
 /// **見送られた窓は追随を失わない**: 拡大率通知が表更新より先に届いて整合待ちの札が付いた
@@ -557,7 +554,7 @@ fn a_window_held_for_sync_regains_the_follow_after_the_hold_is_released() {
     let _waiting = harness.drain_writes();
 
     // 解除フレーム: 表が追いつく。`Changed<DPI>` はもう立たないが、札を持つ窓は対象集合へ
-    // 和集合で入る（設計 C5）——ここで追随が取り戻される。
+    // 和集合で入る——ここで追随が取り戻される。
     harness.set_monitor_table_for_dpi(HIGH_DPI);
     harness.advance_frame();
     harness.run_placement_phases(&mut source);
@@ -585,10 +582,10 @@ fn a_window_held_for_sync_regains_the_follow_after_the_hold_is_released() {
 }
 
 // ---------------------------------------------------------------------------
-// 5. 拡大率が変わらない寸法変化では 1 bit も動かさない（要件 3.2／9.8）
+// 5. 拡大率が変わらない寸法変化では 1 bit も動かさない
 // ---------------------------------------------------------------------------
 
-/// **面の切替**（要件 9.8）: 拡大率を変えずにキャラ窓の実表示寸だけが変わっても、
+/// **面の切替**: 拡大率を変えずにキャラ窓の実表示寸だけが変わっても、
 /// 追従オフセットは 1 bit も動かない。
 ///
 /// 発火条件が `Changed<DPI>` に閉じているので構造的に成立するはずの性質だが、寸法差を
@@ -644,11 +641,11 @@ fn a_surface_swap_at_a_constant_scale_does_not_move_the_offset() {
     }
 }
 
-/// **作業領域の再スナップ**（要件 3.2／9.7）: 拡大率を変えずに作業領域だけが動いても、
+/// **作業領域の再スナップ**: 拡大率を変えずに作業領域だけが動いても、
 /// 追従オフセットは 1 bit も動かない。
 ///
-/// 「随伴バルーンの追従オフセットは変わらない」という下流の期待のうち、**本仕様が上書き
-/// しない側**がこれである（拡大率遷移の側だけが要件 3.1 で反転した・要件 9.7）。
+/// 「随伴バルーンの追従オフセットは変わらない」という下流の期待のうち、**追随の変更が上書き
+/// しない側**がこれである（拡大率遷移の側だけが反転した）。
 #[test]
 fn a_work_area_resnap_at_a_constant_scale_does_not_move_the_offset() {
     let mut harness = FrameHarness::new();
@@ -705,7 +702,7 @@ fn a_work_area_resnap_at_a_constant_scale_does_not_move_the_offset() {
 }
 
 // ---------------------------------------------------------------------------
-// 6. ドラッグ由来にも同一規則（要件 3.5・design Integration 6）
+// 6. ドラッグ由来にも同一規則
 // ---------------------------------------------------------------------------
 
 /// バルーン単独ドラッグで決める相対位置（キャラ窓左上相対・物理 px）。
@@ -739,7 +736,7 @@ fn drag_balloon_to(harness: &mut FrameHarness, scope: usize, offset: PointPx) {
     );
 }
 
-/// **確立の事後条件**（要件 3.5・design D14）: バルーン単独ドラッグは相対位置を新しい
+/// **確立の事後条件**: バルーン単独ドラッグは相対位置を新しい
 /// **基準**として焼き直し、基準 DPI は**その時点の表示 DPI**になる。
 ///
 /// 基準 DPI を刻まない（未係留のまま残す）実装だと次の遷移が係留の腕へ落ち、値が動かない
@@ -774,13 +771,13 @@ fn a_balloon_only_drag_establishes_the_base_at_the_current_display_dpi() {
     }
 }
 
-/// **同一の追随規則**（要件 3.5）: ドラッグで決めた相対位置にも、作者指定由来と同じ
+/// **同一の追随規則**: ドラッグで決めた相対位置にも、作者指定由来と同じ
 /// 表示 DPI 比・同じ丸めが適用される。
 ///
 /// 期待値は手計算（比 5/4・`(2·len·5 + 4) ÷ 8`）:
 /// x は `(2·333·5+4)/8 = 3334/8 = 416.75 → 416`、y は `(2·77·5+4)/8 = 774/8 = 96.75 → 96`。
 /// 符号は基準から引き継ぐので `(−416, −96)` である。作者指定由来の値
-/// （[`EXPECTED_OFFSETS`] の 1 行目）と**同じ算術**で出ていることが要件 3.5 の主張である。
+/// （[`EXPECTED_OFFSETS`] の 1 行目）と**同じ算術**で出ていることがこのテストの主張である。
 #[test]
 fn a_drag_established_offset_follows_by_the_same_rule_as_an_author_specified_one() {
     let mut harness = FrameHarness::new();
@@ -830,22 +827,25 @@ fn a_drag_established_offset_follows_by_the_same_rule_as_an_author_specified_one
         );
     }
 }
-/// [`ANCHORS`] が `Anchor` の腕を 1 つも取りこぼしていないことを**構造で**保つ。
+
+/// [`ANCHORS`] の並びが `match` の腕の添字と揃っていることを主張する。
 ///
-/// 配列は腕が増えても黙って通るため、行列の「全アンカー」が縮んでも誰も気づかない。
-/// `match` を非網羅にすればコンパイルが落ちるので、腕を足した者が必ずここへ来る。
+/// `Anchor` に腕を足すと `match` が非網羅になってコンパイルが落ちるので、足した者は新しい腕の
+/// 添字を決めることになる。ループは `ANCHORS` の要素だけを回すため、表の重複や取りこぼしは
+/// 並びが添字と食い違わない限りここでは捕まらない。
 #[test]
 fn anchor_enumeration_is_exhaustive() {
     for anchor in ANCHORS {
-        // 腕を足すとこの `match` が非網羅になってコンパイルエラーになる。
-        // そのときは `ANCHORS` にも新しい腕を足すこと。
-        match anchor {
-            Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right | Anchor::Free => {}
-        }
+        let slot = match anchor {
+            Anchor::Top => 0,
+            Anchor::Bottom => 1,
+            Anchor::Left => 2,
+            Anchor::Right => 3,
+            Anchor::Free => 4,
+        };
+        assert_eq!(
+            ANCHORS[slot], anchor,
+            "ANCHORS の {slot} 番目が {anchor:?} でない——腕の添字と表の並びを揃えること"
+        );
     }
-    assert_eq!(
-        ANCHORS.len(),
-        5,
-        "ANCHORS の腕数が変わった——行列の期待値と MATRIX_COMBINATIONS を見直すこと"
-    );
 }

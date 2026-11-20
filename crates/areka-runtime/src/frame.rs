@@ -292,7 +292,7 @@ pub mod transition_test_support;
 #[path = "frame_persist_test_support.rs"]
 pub mod persist_test_support;
 
-// 移動の取り出しの置き場の檻。`target_pointer_width = "64"` の檻はどれもハーネスに乗るので、常時テストに x86 を用いない。
+// 移動の取り出しの置き場の檻。x64 だけで回すテストは宣言の `cfg(all(test, target_pointer_width = "64"))` で外す。
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_move_order_tests.rs"]
 mod move_order_tests;
@@ -427,22 +427,22 @@ mod dpi_reproject_tests;
 mod dpi_reproject_none_tests;
 
 // 収束の保証。
-#[cfg(test)]
+#[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_balloon_offset_converge_tests.rs"]
 mod balloon_offset_converge_tests;
 
 // キーワード再導出との排他の門。
-#[cfg(test)]
+#[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_balloon_offset_keyword_gate_tests.rs"]
 mod balloon_offset_keyword_gate_tests;
 
 // 遷移相の結合テスト行列。
-#[cfg(test)]
+#[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_balloon_offset_follow_tests.rs"]
 mod balloon_offset_follow_tests;
 
 // 拡大率の往復で基準へ bit 同一で戻ることの檻。
-#[cfg(test)]
+#[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_balloon_offset_roundtrip_tests.rs"]
 mod balloon_offset_roundtrip_tests;
 

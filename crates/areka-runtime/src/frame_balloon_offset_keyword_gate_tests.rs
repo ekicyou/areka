@@ -1,32 +1,31 @@
-//! **キーワード由来の基本位置との排他の門**（areka-P0-balloon-offset-dpi・task 6.3・
-//! design D7／D8・要件 4.1／4.3／4.4／4.5）の決定論テスト。
+//! **キーワード由来の基本位置との排他の門**の決定論テスト。
 //!
 //! # ここが押さえる欠陥
 //!
 //! キーワードで揃えを指定したスコープには、実表示寸が確定した瞬間に**一度だけ**基本位置を
 //! 導出し直すための素材（[`BalloonKeywordBase`]）がキャラ窓へ付く。素材が未消費のまま
-//! 拡大率遷移を迎えたとき、追随（本仕様）と再導出（先行仕様）の**両方**が offset を書くと
-//! 揃えが 1 回の遷移で二重に動く。要件 4.3 はどちらか一方だけを適用せよと定め、design D7 は
+//! 拡大率遷移を迎えたとき、追随と再導出の**両方**が offset を書くと
+//! 揃えが 1 回の遷移で二重に動く。どちらか一方だけを適用する必要があるので、
 //! **素材があるあいだ追随を見送る**方を採った——再導出は新しい実表示寸から**絶対値として**
 //! 導くので、遷移後の正しい揃えは再導出だけで出せるからである。
 //!
-//! 門は本仕様の新規コード側（[`rescale_balloon_follow_offset`]）にあり、再導出側
+//! 門は追随の新規コード側（[`rescale_balloon_follow_offset`]）にあり、再導出側
 //! （`rederive_keyword_balloon_offset`）の発火条件と「経路で絞らない」設計判断には
-//! 1 文字も触れていない（要件 4.5）。
+//! 1 文字も触れていない。
 //!
-//! # 受容した残余（開発者裁定 2026-08-27・要件 4.4 の記録に含む）
+//! # 受容した残余（開発者裁定 2026-08-27）
 //!
 //! 丸めの偶然でキャラ窓の物理寸が変わらない遷移では、再導出は**寸が変わらないので発火せず**
 //! （`keyword_base.rs` の `old_size == Some(new_size)` の腕）、追随は**素材があるので見送る**
 //! ——揃えの更新が次の寸法変化まで取り残される。この腕は塞がない裁定であり、
-//! [`the_size_held_transition_leaves_the_alignment_until_the_next_size_change`] が
-//! 挙動そのものを固定し、[`the_left_behind_alignment_heals_on_the_next_size_change`] が
+//! [`the_gate_holds_the_offset_and_the_base_pair_bit_identical`] の探針が
+//! 挙動そのもの（受容した残余）を固定し、[`the_left_behind_alignment_heals_on_the_next_size_change`] が
 //! 「次の寸法変化で自己回復する」ことを固定する（沈黙しないことは判定語の檻が持つ）。
 //!
 //! # 門を外すと落ちる対（完了条件）
 //!
 //! - [`the_gate_holds_the_offset_and_the_base_pair_bit_identical`]——門を外すと、素材が
-//!   未消費のままオフセットが表示 DPI 比で動き、さらに task 6.2 の収束がバルーンを
+//!   未消費のままオフセットが表示 DPI 比で動き、さらに収束がバルーンを
 //!   実際に書く（＝揃えが動く）。値と書込の両方で赤になる。
 //! - [`the_gate_records_the_keyword_pending_verdict_without_a_warning`]——門を外すと
 //!   判定語が `rescaled` になって赤になる。
@@ -105,13 +104,16 @@ fn expected_keyword_offset(harness: &FrameHarness, scope: usize) -> PointPx {
 }
 
 // ---------------------------------------------------------------------------
-// 門そのもの（要件 4.3・design D7）
+// 門そのもの
 // ---------------------------------------------------------------------------
 
 /// **完了条件の前半**: 素材が残る遷移では、追随はオフセットも基準対も 1 bit も触らない。
 ///
-/// 門を外すと ⑴ offset が表示 DPI 比で動き ⑵ task 6.2 の収束がバルーンを 1 度書く
+/// 門を外すと ⑴ offset が表示 DPI 比で動き ⑵ 収束がバルーンを 1 度書く
 /// ——値と書込の両方でこのテストが赤になる（＝揃えが実際に二重に動く対）。
+///
+/// 末尾の `assert_ne` は**受容した残余**の腕（寸が据え置きの遷移で揃えが取り残される）が
+/// 起きていること、つまり探針が退化していないことを見る。この腕は塞がない裁定である。
 #[test]
 fn the_gate_holds_the_offset_and_the_base_pair_bit_identical() {
     let mut harness = FrameHarness::new();
@@ -131,7 +133,7 @@ fn the_gate_holds_the_offset_and_the_base_pair_bit_identical() {
     harness.run_placement_phases(&mut source);
     let writes = harness.drain_writes();
 
-    // 揃えが**実際に動いたか**を先に問う——門を外すと収束（task 6.2）がバルーンを 1 度書き、
+    // 揃えが**実際に動いたか**を先に問う——門を外すと収束がバルーンを 1 度書き、
     // その 1 行がここで見える。値の主張より前に置くのは、摂動したときに「動いた」証跡が
     // 先に出るようにするためである。
     assert!(
@@ -154,6 +156,11 @@ fn the_gate_holds_the_offset_and_the_base_pair_bit_identical() {
         assert!(
             has_material(&harness, scope),
             "scope={scope}: 追随の側が素材を消費した（消費は再導出だけの権能・要件 4.5）"
+        );
+        assert_ne!(
+            old.offset(),
+            expected_keyword_offset(&harness, scope),
+            "scope={scope}: 探針が退化している（旧 offset が偶然いまの中央揃えと一致した・受容した残余の腕）"
         );
     }
 }
@@ -185,7 +192,7 @@ fn without_the_material_the_same_transition_still_rescales() {
     }
 }
 
-/// **判定語**（要件 3.7・4.3・design Error Handling）: 見送りは 1 行の記録を残し、
+/// **判定語**: 見送りは 1 行の記録を残し、
 /// **警告ではない**。
 ///
 /// 門を外すとここは `verdict=rescaled` になって赤になる。
@@ -222,7 +229,7 @@ fn the_gate_records_the_keyword_pending_verdict_without_a_warning() {
 }
 
 // ---------------------------------------------------------------------------
-// 再導出だけが書く（要件 4.1・4.5）
+// 再導出だけが書く
 // ---------------------------------------------------------------------------
 
 /// **完了条件の後半**: 素材が残る遷移で寸が変われば、offset を書くのは再導出だけである。
@@ -276,51 +283,8 @@ fn only_the_rederivation_writes_the_offset_when_the_size_changes() {
 }
 
 // ---------------------------------------------------------------------------
-// 受容した残余（開発者裁定 2026-08-27・要件 4.4）
+// 受容した残余（開発者裁定 2026-08-27）
 // ---------------------------------------------------------------------------
-
-/// **受容した残余の腕**: 素材が未消費のまま**寸が据え置き**の遷移を迎えると、追随も
-/// 再導出も走らず、揃えの更新が取り残される。
-///
-/// これは欠陥の記録ではなく**裁定で受容した挙動の固定**である（要件 4.4・design D7／D8）。
-/// 沈黙しないこと（`verdict=keyword-pending` が残ること）は
-/// [`the_gate_records_the_keyword_pending_verdict_without_a_warning`] が持つ。
-#[test]
-fn the_size_held_transition_leaves_the_alignment_until_the_next_size_change() {
-    let mut harness = FrameHarness::new();
-    let mut source = FakeReports::default();
-    settle_at(&mut harness, &mut source, LOW_DPI);
-    attach_material(&mut harness);
-
-    let stale: Vec<(usize, PointPx)> = harness
-        .scopes()
-        .to_vec()
-        .into_iter()
-        .map(|scope| (scope, offset_of(&harness, scope)))
-        .collect();
-
-    raise_scale_without_moving_the_work_area(&mut harness);
-    harness.advance_frame();
-    harness.run_placement_phases(&mut source);
-
-    for (scope, old_offset) in stale {
-        assert_eq!(
-            offset_of(&harness, scope),
-            old_offset,
-            "scope={scope}: 受容した残余の腕なのに offset が動いた"
-        );
-        assert!(
-            has_material(&harness, scope),
-            "scope={scope}: 寸が据え置きなのに素材が消費された"
-        );
-        // 揃えは**古いまま**——新しい寸に対する中央揃えとは一致しない（残余そのもの）。
-        assert_ne!(
-            old_offset,
-            expected_keyword_offset(&harness, scope),
-            "scope={scope}: 探針が退化している（旧 offset が偶然いまの中央揃えと一致した）"
-        );
-    }
-}
 
 /// **自己回復**: 取り残された揃えは、次に寸が変わった時点で再導出が直す。
 #[test]

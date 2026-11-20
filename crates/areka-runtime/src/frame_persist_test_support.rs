@@ -319,7 +319,7 @@ pub mod left_edge {
                     balloon_size: SizePx { w: 223, h: 158 },
                     balloon_offset: OFFSET,
                     balloon_offset_base: OffsetBase::unpinned(OFFSET),
-                    // バルーンの引き戻しを効かせ、キャラ窓を収めれば起きないことを見る（要件 5.2）。
+                    // バルーンの引き戻しを効かせ、キャラ窓を収めれば起きないことを見る。
                     balloon_limit: true,
                     anchor: Anchor::Bottom,
                     balloon_keyword_base: None,

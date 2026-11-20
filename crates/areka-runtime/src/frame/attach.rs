@@ -471,7 +471,7 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
 ///
 /// `background` は当該 scope のバルーン面 0 の原点画素（[`BalloonScopeAssets::background_color`]）。
 /// 無効表示（`\f[disable]`）の文字色を導く混色の相手であり、**装着の前**に渡す。順序は
-/// `frame_attach_tests.rs` の `connect_balloon_text_hands_the_background_over_before_attaching` が見張る。
+/// `frame_attach_tests.rs` の `connect_balloon_text_resolves_text_with_the_background_at_attach_time`（実 GPU）が見張る。
 pub(super) fn connect_balloon_text(
     runtime: &Rc<RefCell<TextLayerRuntime>>,
     view: Option<TextSlotView>,
