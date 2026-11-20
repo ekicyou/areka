@@ -1,0 +1,152 @@
+# Research & Gap Analysis: balloon-flip-ssp-review
+
+> 2026-11-20 `/kiro-validate-gap`（`/kiro-start` の中の下請け）。main `9bf6e32e` の上の、このワークツリーのコードを読んだだけ。SSP と areka の測り・画面の入力はしていない。ukadoc は MCP の検索で `windowposition.limit` の項目を 1 件引いた。
+
+## 1. 要約
+
+- 並べ替え・押し込み・重なりの判定は、どれも `crates/areka-placement/src/balloon_limit.rs` の純関数 `place_balloon_in_work_area`（172 行目）1 本に集まっている。呼び手は起動の関門 `apply_balloon_limit_one`（同 291 行目）と書き込みの関門 `apply_balloon_limit_gate`（`follow/window_move.rs` 984 行目）の 2 つだけ。バルーンのドラッグを離したときの補正（`follow/balloon_drag.rs` 497 行目）は `limit_correction` だけを呼び、並べ替えに入らない。どの案でも、直す所はこの 1 本の関数と、その戻りの型 `BalloonPlace` で足りる。
+- 押し込みの式 `limit_correction`／`clamp_rect_to_work_area` は、キャラクター窓の寄せ（`follow/work_area_clamp.rs` 379 行目・`follow/move_shift.rs`）も使う。どの案でも、この 2 つの式は変えない（変えると要件 8.2 のキャラクター窓の決まりが変わる）。
+- 案 ⑴ でも、要件 7.3〜7.5 の決定論のテスト（10-30 の形・11-16 のドラッグの後の形・どの案でも変わらない形）は今のテストに無いので、足す必要がある。⑴ は「§8 の書き直しだけ」ではなく「§8 の書き直し＋テストの追加」。
+- 案 ⑵ は `place_balloon_in_work_area` の並べ替えの腕を外すだけで、押し込みの結果は今の `Pushed` と同じになる。今の押し込みのテストの多くは、10-30 に並べ替えを避けるためキャラクター窓をはみ出させる「前提合わせ」をしてあるので、⑵ では緑のまま残る見込み。赤になるのは並べ替えそのものを固定したテスト（主に `balloon_limit_flip_tests.rs`）と、判定し直しの 3 本。
+- 案 ⑶ は新しい分岐（横にだけはみ出すときは動かさない）と、「はみ出したまま置いた」記録が要る。今の押し込みのテストのうち、キャラクター窓が収まっていて横にだけはみ出す形を押し込みで固定しているもの（`balloon_limit_gate_tests.rs` の「左辺のみ」「右辺のみ」・`crates/areka/src/main_restore_seam_tests.rs`）が赤になる。⑶ は縦と横の両方にはみ出す形の扱いと、記録の出し方（毎回の書き込みで出るか）を決める必要がある。
+
+## 2. 今のコード（Current State）
+
+### 2.1 決まりを持つ所と呼び手
+
+| 所 | 行 | 役目 |
+|---|---|---|
+| `balloon_limit.rs` `clamp_rect_to_work_area` | 106 | 4 辺を作業領域へ収める式（キャラクター窓の寄せと共有） |
+| `balloon_limit.rs` `limit_correction` | 122 | 収める必要があるときだけ `Some(収めた位置)`（キャラクター窓の寄せ・ドラッグを離したときの補正と共有） |
+| `balloon_limit.rs` `BalloonPlace` | 133 | `Fits`・`Flipped`・`Pushed`・`PushedOverlap { to, scope }`。`how()` は `fits`／`flipped`／`pushed`、`overlap_scope()` は `PushedOverlap` だけ `Some` |
+| `balloon_limit.rs` `place_balloon_in_work_area` | 172 | ① `limit_correction` が `None` なら `Fits` ② キャラクター窓が収まり横の位置が動くなら、縦の中心線で映した位置を試す ③ 映した先が横に入り、ほかのキャラクター窓に重ならなければ `Flipped`、重なれば `PushedOverlap` ④ それ以外は `Pushed` |
+| `balloon_limit.rs` `counted_overlap` | 217 | 重なりの判定（自分の窓に収まる部分は数えない） |
+| `balloon_limit.rs` `apply_balloon_limit`／`apply_balloon_limit_one` | 270／291 | 起動の関門。全スコープのキャラクター窓の矩形の列を組んで判定に渡す。`limit=0` は素通し、作業領域が決まらなければ `[balloon-limit] Unresolved` の `warn!` で素通し、動かしたときだけ `[balloon-limit] Clamp` の `info!`（`how`・`overlap_scope`） |
+| `follow/window_move.rs` `apply_balloon_limit_gate` | 984 | 書き込みの関門。`enqueue_window_set_pos`（706 行目）の中で毎回のバルーンの書き込みに当てる。決まらないものごとに `Unresolved` の `warn!` で素通し。判定の列は `shown_char_rects`（1078 行目） |
+| `follow/other_chars.rs` `shown_char_rects`／`is_shown` | 22／42 | 表示しているキャラクター窓の矩形の列（箱の文字の面 `emo-text-box-surface` は数えない） |
+| `follow/other_chars.rs` `register_balloon_rejudge`／`rejudge_all_balloons` | 54／70 | 判定し直し。`FrameFinalize` に `run_if(resource_added::<ChainFinalized>)` で載せる系と、`reset_pos.rs` 134 行目・`chain_realign.rs` 427 行目からの直の呼び出し。中身は全スコープの `follow_balloon(.., Placement(MoveCue))` |
+| `crates/areka/src/ghost_session.rs` | 100 | `register_balloon_rejudge(world)` の 1 行（このウェーブでは触らない） |
+| `follow/balloon_drag.rs` `apply_release_limit_correction` | 424・497 | 利用者がバルーンを離したときの補正。`limit_correction` だけ（並べ替えない・要件 8.3 で変えない） |
+
+### 2.2 取り違えやすい同じ綴り
+
+- キャラクター窓の鎖の寄せ（`follow/work_area_clamp.rs`）も `how="flipped"` を出すが、記録の語は `[work-area-clamp] Clamp`（39 行目）で、バルーンの `[balloon-limit] Clamp` とは別物。`crates/areka/src/runtime_tests/frame_chain_finalize_clamp_tests.rs`・`frame_chain_finalize_remembered_tests.rs`・`crates/areka-runtime/src/frame_chain_realign_adjacency_tests.rs`・`follow_work_area_clamp_chain_tests.rs` の `how="flipped"` はキャラクター窓の話で、この spec の範囲の外（要件 8.2）。どの案でも触らない。
+
+### 2.3 ほかの安全網
+
+- バルーンの随伴には、可視性の遷移の守り（`follow/drag_follow.rs` 448 行目 `guard_balloon_position`→`evaluate_visibility_guard`）が先にかかり、バルーンが画面から完全に見えなくなる移り方だけを止める。書き込みの関門はその後で最後の言葉を持つ（`follow_balloon_limit_tests.rs` 309 行目の檻）。案 ⑶ で「はみ出しの大きい形」がどう見えるかは、この守りが効く引き金かどうかでも変わる（3.3 の Research Needed）。
+
+### 2.4 ukadoc
+
+- `windowposition.limit,0/1`（https://ukatech.shillest.net/ukadoc-spec/descript_balloon.html#windowposition.limit）: 「バルーンを強制的に画面内に維持するかどうか。1で維持」・既定値 1・「SSPに限り、descript.txtにも書ける」・対応 SSP 2.5.10。
+- 2 点を設計と測りへ渡す: ⑴ ukadoc の語は「画面」で、areka は作業領域で収める（11-16 の測りでは作業領域の右端と画面の右端がどちらも 2880 なので、食い違いの判定には効かない）。⑵ 「descript.txt にも書ける」は、ゴースト・シェル側の descript にも書けるという読みになる。場面 ⑷（`windowposition.limit,1` の明示）は、入っているバルーンに無くても、書き足せば作れる。ただし書き足しは設定の変更に当たるので、要件 1.6 の別の許しが要る。
+
+### 2.5 テストの置き場と大きさ
+
+| ファイル | 行数 | 中身 |
+|---|---|---|
+| `balloon_limit.rs` | 350 | 本体 |
+| `balloon_limit_flip_tests.rs` | 565 | 並べ替え・重なり・2 つの関門・離したときの補正・件 2（右に出すずらし） |
+| `balloon_limit_gate_tests.rs` | 472 | 起動の関門の押し込み（多くはキャラクター窓をはみ出させる前提合わせ `char_overflowing`） |
+| `balloon_limit_tests.rs` | 353 | `limit_correction` の式（関数を変えないので不変） |
+| `follow_balloon_limit_tests.rs` | — | 書き込みの関門の押し込み（前提合わせ `char_overflowing_world`） |
+| `follow_other_chars_tests.rs` | — | `shown_char_rects` 7 本・判定し直し 4 本 |
+| `follow/window_move.rs` | 1,234 | 行数の番人（`crates/log-capture-kit/tests/file_length_guard_test.rs` 72 行目）の例外表に載る。番人は「例外なのに 1,000 行以下」も赤にするが、この spec の増減は数行なので効かない |
+
+## 3. 要件ごとの対応表（Requirement-to-Asset Map）
+
+| 要件 | 今ある物 | 足りない物・制約 |
+|---|---|---|
+| 1 測り | SSP の MCP（`get_property` の `currentghost.scope(n).rect`・`currentghost.balloon.scope(n).rect`）、11-16 の手順（`completed/balloon-flip-side-rules/research.md` 9 節）、排他テストの机 | **Missing**: 4 つの場面の測りそのもの（開発者の机・許しごと）。**Constraint**: 起動の直後は起動し直し、場面 ⑷ は descript の書き足しが要りうる＝どちらも別の許し。**Unknown**: 左の画面（倍率が違う）の座標と撮った画像の対応（11-16 に読み切れなかった） |
+| 1.5 areka の値 | 決定論のテストの形で、同じ矩形を入れれば今の決まりの位置が出る | **Missing**: 測った形ごとの「areka での位置」の表（実機を起こさず、テストか計算で出せる） |
+| 2 裁定の記録 | requirements.md の「決めごと」の節（空） | 文書だけ |
+| 3.1 案 ⑴ | 今のコードのまま | 無し |
+| 3.2 案 ⑵ | `Pushed` の腕・`limit_correction` | **Missing**: 並べ替えの腕を外す直し（数行の削除）。`chars` の引数と `PushedOverlap` を残すか（議題） |
+| 3.3〜3.4 案 ⑶ | `Fits` は「動かさない・記録しない」 | **Missing**: 「キャラクター窓が収まり、横にだけはみ出す」の判定（今の 191 行目の条件の一部と同じ）と、動かさない腕。**Unknown**: 縦と横の両方にはみ出す形をどう置くか（議題） |
+| 3.5 `flipped` を出さない | `how()` の 1 か所 | ⑵・⑶ で `Flipped` が作られなくなれば自然に出ない（型から外すかは議題） |
+| 3.6 2 つの関門で同じ | 両関門が同じ純関数を呼ぶ | 無し（関数 1 本を直せば両方に当たる） |
+| 3.7 スコープ数を決め打ちしない | 純関数はスコープを見ない・`flip_is_the_same_for_every_scope` | 無し |
+| 3.8 `limit=0` | 両関門の入り口 | 無し |
+| 3.9 表示の位置だけ | 両関門は `balloon_pos`／書き込み位置だけを返す | 無し |
+| 3.10 ⑶ と明示の `limit,1` | `BalloonLimit(bool)` は明示か既定かを持たない | **Missing（⑶ で分ける裁定のときだけ）**: 明示と既定を見分ける値。descript の読み（`config.rs`）から関門まで運ぶ道を足す必要があり、規模が 1 段大きくなる。**Research Needed** |
+| 4.1〜4.2 記録 | `[balloon-limit] Clamp` の `how`・`overlap_scope` | 無し（⑴・⑵） |
+| 4.3 ⑶ のはみ出したまま | 無し（`Fits` は記録しない） | **Missing**: 欄か `how` の値。**Constraint**: 書き込みの関門は毎回のバルーンの書き込みで走るので、窓のドラッグ中は毎回出る（今の押し込みの `info!` と同じ頻度）。`Fits` を記録しないのは「毎回の偽の補正の記録」を避けるためだった（`window_move.rs` 978〜983 行目）。⑶ の記録の段（`info`／`debug`）と頻度は議題 |
+| 4.4 `fits` は記録しない | 両関門 | 無し |
+| 4.5〜4.6 失敗の道 | 両関門の `Unresolved` の `warn!` と素通し | 無し。純関数の直しは失敗を増やさない（`Err` を返す新しい道は出ない見込み） |
+| 5 §8 の行 | `doc/COMPAT_ARCHITECTURE.md` 438 行目（`balloon-flip-side-rules` の ⑶ で「見直しはこの spec」と書き足し済み） | **Missing**: 書き直し。行は 1 行に長い文を持つ表の行なので、書き直しで短くなる |
+| 6 ukadoc への文案 | 無し | **Missing**: 文案（research.md の 1 節が仮置き） |
+| 7.1・7.3〜7.5 テスト | 並べ替えのテストは 1108 幅・872 幅の形を使うが、10-30 の形（窓 `0,336` 1108×1368・バルーン 872×900）と 11-16 のドラッグの後の形（窓 `2524,1304,2860,1704`・バルーン 288×203）は無い | **Missing（どの案でも）**: 2 つの形 × 2 つの関門＋変わらない形のテスト |
+| 7.2 赤を先に | — | ⑵・⑶ のとき、直す前に新しいテストを赤で確かめる |
+| 7.6 外した段のテスト | 4 節の表 | 案ごとに扱いが要る |
+| 7.7 見た目の変わる場面の数え | `completed/balloon-flip-side-rules/research.md` 2.6 節の検体の表（`balloon.alignment` とずらし） | **Unknown**: 「今は並べ替えで置かれている場面」は窓の位置しだいで、検体を読むだけでは数が決まらない。数え方（どの検体のどの側のバルーンが窓を端へ寄せたときに並べ替わりうるか）を決める必要がある。**Research Needed** |
+| 8.1〜8.6 変えないもの | 鎖の寄せ・キャラクター窓の戻し・縦の置き方・キーワードの式・離したときの補正・件 2 は、どれも純関数の外か、`limit_correction` だけを使う | 件 2 のテスト（`right_from_start_equals_left_mirrored_for_descript_part`）は並べ替えを使って式を確かめているので、⑵・⑶ では確かめ方を書き換える必要がある（決まり自体は変えない） |
+
+## 4. 案ごとの直す所と変わるテスト
+
+### 案 ⑴ 今のまま
+
+- **直す所**: `doc/COMPAT_ARCHITECTURE.md` 438 行目の書き直し・research.md（測りと文案）・テストの追加（要件 7.3〜7.5。置き場は `balloon_limit_flip_tests.rs`、565 行なので数十行足せる）。記録を足すか（Open Questions 8）で `balloon_limit.rs` に触るかが決まる。
+- **変わるテスト**: 無し（足すだけ）。
+- **ウェーブの約束**: `ghost_session.rs`・`frame/` に触らない。
+- **規模**: 2〜3 タスク（テスト 1・§8 と文案 1・必要なら記録 1）。**Effort S**・**Risk Low**（足すだけで振る舞いが変わらない）。
+
+### 案 ⑵ 押し込みだけ
+
+- **直す所（最小）**: `place_balloon_in_work_area` の 190〜211 行目（映しの腕）を外し、`limit_correction` の結果を `Pushed` で返す。`counted_overlap`・`chars` の引数・`PushedOverlap` は通らなくなる。
+  - 外し方の 2 つ: (a) 関数の中身だけ外し、引数と型は残す（使わない引数・作られない変種が残る＝読み手を迷わせる。Rust は使われない変種に警告を出しうる） (b) `chars`・`PushedOverlap`・`counted_overlap`・`Flipped` を外し、呼び手 2 か所（`apply_balloon_limit` の列の組み立て・`window_move.rs` 1078 行目の `shown_char_rects`）も外す。(b) なら `follow/other_chars.rs` の `shown_char_rects`／`is_shown`／`TEXT_BOX_SURFACE_NAME` が使われなくなり、一緒に外す（`balloon-text-visual-tree` とは、箱の文字の面の名前を読む所が減る向きの重なり）。
+  - ⑵ では純関数の答えが `Fits` か `Pushed` だけになり、`place_balloon_in_work_area` は `limit_correction` と同じになる。関数ごと外して両関門が `limit_correction` を直に呼ぶ形（離したときの補正と同じ形）も取れる。
+- **判定し直しの系**: 押し込みは自分のキャラクター窓と作業領域だけで決まるので、判定し直しても位置は変わらない（同じ位置の書き込みが 1 巡に数本増えるだけ）。残せばこのウェーブの約束を守れる。外すなら `ghost_session.rs` 100 行目の 1 行が要り、次のウェーブへ回る（要件 2.4）。直の呼び手（`reset_pos.rs` 134・`chain_realign.rs` 427）は `areka-placement` の中なので、このウェーブで外せる。ただし系の登録を残したまま中身だけ外すことはできない（登録の関数は `ghost_session.rs` から呼ばれている）ので、「直の呼び手だけ外し、系は残す」か「全部残す」かになる。
+- **変わるテスト（赤になる見込み）**:
+  - `balloon_limit_flip_tests.rs`: 並べ替えを主張する純関数・関門のテスト（`left_side_balloon_of_left_edge_window_flips_to_the_right_keeping_y`・`right_side_balloon_of_right_edge_window_flips_to_the_left`・`flipped_position_overflowing_only_vertically_is_clamped_vertically`・重なりの 7 本・`boot_gate_flips_keeps_offset_and_logs_how`・`boot_gate_pushes_on_overlap_and_logs_the_scope`・`write_gate_flips_and_returns_to_the_original_side`・`write_gate_pushes_on_overlap_with_a_shown_partner`・`write_gate_flips_when_the_partner_is_hidden_or_undetermined`・`balloon_move_locks_do_not_stop_the_flip`・`flip_is_the_same_for_every_scope`）。押し込みに書き換えるか除く。`fallback_cases_return_the_current_push_in`・`fitting_balloon_is_left_alone`・`*_does_not_flip_when_limit_is_disabled`・`release_correction_never_flips` は緑のまま。
+  - 同ファイルの件 2 の 2 本（`right_from_start_equals_left_mirrored_for_descript_part`・`mirror_of_windowposition_part_keeps_current_formula`）: 映しの結果を使って式を確かめているので、映しが無くなれば書き換えるか除く（件 2 の決まり自体は `resolver_resolve_balloon_tests.rs` 226 行目以降の檻が持つ）。
+  - 判定し直しの 3 本: `follow_other_chars_tests.rs` の `rejudge_after_chain_finalize_pushes_the_balloon_onto_the_moved_partner_once`・`reset_pos_tests.rs` 509 行目・`chain_realign_script_moved_tests.rs` 113 行目。どれも「先に並べ替わった後、相方が来て押し込みへ倒れる」を前提にしているので、前提が作れなくなる。系を残すなら「判定し直しても位置が変わらない」形に書き換える。
+  - 前提合わせのテスト（`balloon_limit_gate_tests.rs`・`follow_balloon_limit_tests.rs`・`main_restore_seam_tests.rs`）は、押し込みの位置が今と同じなので緑のまま。前提合わせの説明（「並べ替えを避けるため」）は古くなる。
+- **規模**: 4〜8 タスク。**Effort S〜M**・**Risk Low〜Medium**（削る直しで、押し込みは今の式のまま。危うさは、10-30 の形のバルーンがキャラクター窓に重なって戻ることと、檻の書き換えの量）。
+
+### 案 ⑶ はみ出しを許す
+
+- **直す所**: `place_balloon_in_work_area` で「キャラクター窓が収まり、横にだけはみ出す」なら動かさない腕を足し、それ以外は今の押し込み（要件 3.4）。並べ替えと重なりの腕は ⑵ と同じく外す（外し方の (a)／(b) も同じ）。
+  - 縦と横の両方にはみ出す形（キャラクター窓は収まっている）は、要件 3.3（横にだけ）にも 3.4（縦にはみ出す形は押し込み）にも当たりうる。押し込み（4 辺）にするか、縦だけ収めて横ははみ出したままにするか（1 軸だけ収める式は `clamp_axis` がある）を決める必要がある。
+  - 記録（要件 4.3）: 動かさない腕を `BalloonPlace` の新しい変種にして、`[balloon-limit] Clamp` に `how` の新しい値（例: 綴りは設計で決める）を足すか、別の欄を足すか。記録の語は増やさない（要件 4.2）。ただし今の 2 つの関門は「動かしたときだけ」記録し、位置を書き換える作りなので、「動かさないが記録する」腕を両関門に足す必要がある（`let … else { return }` の形を直す）。
+  - 明示の `limit,1` を分ける裁定（要件 3.10）のときは、`BalloonLimit(bool)` と `ScopePlacement.balloon_limit` に「明示か」を足し、descript の読み（`config.rs`）から運ぶ直しが加わる。
+- **判定し直しの系**: ⑵ と同じ（残しても位置は変わらない）。
+- **変わるテスト（赤になる見込み）**: ⑵ の全部に加えて、キャラクター窓が収まっていて横にだけはみ出す形を押し込みで固定しているもの。
+  - `balloon_limit_gate_tests.rs` `boot_gate_limit_arms_cover_every_edge_at_every_dpi_level`（420 行目でキャラクター窓を作業領域に収め、「左辺のみ」「右辺のみ」の 2 行が押し込みを期待する。四隅の 4 行は縦と横の両方の形＝上の議題しだい）。
+  - `crates/areka/src/main_restore_seam_tests.rs` 216 行目付近（キャラクター窓 `(30,300)-(430,900)` は収まり、バルーンが左へ 20px だけはみ出す形を `(0,310)` への押し込みで固定）。`areka` の crate だが `ghost_session.rs` ではないので、このウェーブで直せる。
+  - `balloon_limit_flip_tests.rs` `fallback_cases_return_the_current_push_in` の `both-sides`・`centered`（キャラクター窓が収まり横にはみ出す）は、⑶ では動かさない側に変わる。
+  - そのほか、バルーンの書き込みは全部書き込みの関門を通るので、横のはみ出しを暗に作っているフレームのテスト（`crates/areka/src/runtime_tests/`・`crates/areka-runtime/src/`）が赤になりうる。静的には数え切れないので、要件 7.2 のとおり直した後の全体のテストで拾う（**Research Needed**）。
+- **規模**: 6〜10 タスク（明示の `limit,1` を分けるならさらに 2〜3）。**Effort M**・**Risk Medium**（新しい分岐と記録の形、縦横の両方の形の裁定、可視性の守りとの関係、暗に横のはみ出しを作るテストの数が読めない）。
+
+### 3 案に共通
+
+- `limit_correction`・`clamp_rect_to_work_area` は変えない（キャラクター窓の寄せと共有）。
+- 要件 7.3〜7.5 のテストはどの案でも足す。7.3（10-30 の形）は作業領域 `0,0,2880,1704` で ⑴ `(1108,336)`・⑵ `(0,336)`・⑶ `(-872,336)`、7.4（11-16 のドラッグの後の形）は ⑴ `(2441,1188)`（映し: 2524＋2860−(2655＋288)）・⑵ `(2592,1188)`（2880−288）・⑶ `(2655,1188)` になることを計算で確かめた（要件の値と合う）。
+- どの案も `areka-runtime` の `frame/` に触らない。`ghost_session.rs` は判定し直しの系の登録を外すときだけ要る。
+
+## 5. 推す方向（決めではない）
+
+- 案の選びは測り（要件 1）の結果しだいなので、ここでは決めない。コードの側から言えるのは次のとおり。
+  - ⑴ と ⑵ は、純関数 1 本の中の削除か無変更で、どちらも危うさが小さい。⑵ は外し方 (b) で関数ごと `limit_correction` に戻すと、離したときの補正と同じ形になりコードが減る。
+  - ⑶ は新しい分岐と記録を持ち込み、縦横の両方の形・記録の頻度・明示の `limit,1` の 3 つの裁定が増える。
+  - ⑵・⑶ とも、判定し直しの系は残しても位置が変わらない見込みなので、このウェーブでは残し、外すかは次のウェーブ（`session-module-gather` などと順を決める）に回すのが約束に沿う。直の呼び手 2 か所だけをこのウェーブで外すかは議題。
+
+## 6. Research Needed（設計の段へ）
+
+1. 要件 1 の 4 つの場面の SSP の振る舞い（測り）。特に場面 ⑴（はみ出しの大きい形）で SSP が戻すかどうかが ⑶ の決め手。
+2. 場面 ⑷ を、入っているバルーンへの書き足しで作るか（ukadoc の「SSPに限り、descript.txtにも書ける」によりゴースト側の descript でも作れる見込み・書き足しは別の許し）。
+3. ⑶ で、可視性の遷移の守り（`guard_balloon_position`）がかかる引き金とかからない引き金で、はみ出しの大きいバルーンの見え方がどう違うか（決定論のテストで確かめられる）。
+4. 要件 7.7 の数え方: 窓の位置しだいで並べ替わる場面を、検体のどの値（`balloon.alignment`・`windowposition.x`・キーワード）から数えるか。キーワード（`center` など）のバルーンは映しても横の位置が変わらないので並べ替わらない（今の 200 行目）。
+5. ⑶ で暗に横のはみ出しを作っているフレームのテストの数（直した後の全体のテストで拾う）。
+6. 左の画面（倍率の違う画面）の座標と撮った画像の対応（11-16 に読み切れなかった・場面の測りで本体を左の画面の左端へ寄せる形を数えるなら要る）。
+
+## 7. 要件の話し合いへの議題（ギャップ分析から出たもの）
+
+1. **案 ⑴ でもテストは足す**: 要件 7.3〜7.5 は今のテストに無い。⑴ の規模は「§8 だけ」でなく「§8＋テスト（＋記録を足すなら記録）」。
+2. **⑵・⑶ の外し方**: 並べ替えの腕だけ外して引数と型を残す (a) か、`chars`・`PushedOverlap`・`Flipped`・`counted_overlap`・`shown_char_rects` まで外す (b) か。(b) なら `overlap_scope` の欄も出なくなり（綴りは消える）、要件 8.6 の「出なくなるだけ」との関係を確かめる。
+3. **判定し直しの直の呼び手**: 系の登録（`ghost_session.rs`）は残す前提で、`reset_pos.rs`・`chain_realign.rs` の直の呼び出しをこのウェーブで外すか、系と一緒に次のウェーブへ回すか。
+4. **⑶ の縦と横の両方にはみ出す形**: 4 辺の押し込みか、縦だけ収めて横ははみ出したままか。
+5. **⑶ の記録の形と段**: `how` の新しい値か別の欄か。書き込みの関門は毎回のバルーンの書き込みで走るので、`info` で出すと窓のドラッグ中は毎回出る。
+6. **⑶ と、利用者がバルーンを離したときの補正の食い違い**: 離したときの補正は今の押し込みのまま（要件 8.3）なので、⑶ では「窓を動かすと横にはみ出したままになるが、バルーンを端で離すと押し込まれる」になる。範囲の外のまま承知するかを確かめる。
+7. **件 2 のテストの確かめ方**: ⑵・⑶ では映しが無くなるので、`right_from_start_equals_left_mirrored_for_descript_part` などを、映しを使わない形（右に出した位置の式だけ）に書き換えるか除くか。件 2 の決まりは変えない。
+8. **要件 7.7 の数え方**: 窓の位置しだいの場面を、何をもって「今は並べ替えで置かれている」と数えるか（Research Needed 4）。
+9. **場面 ⑷ の作り方**: 入っている物に無ければ「測れなかった」で済ませるか、ゴースト側の descript に 1 行書き足して作るか（別の許し・要件 1.2・1.6）。
