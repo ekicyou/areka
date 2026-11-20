@@ -12,7 +12,7 @@
 // 字面の走査は必ず**説明文を落とした本文**へ当てる。素の全文には本ファイルの説明の語も
 // 相手ファイルの doc の語も入るので、当てる先を間違えると検査が恒真になる
 // （zwi08 の末尾に両方向の対照を置いてある。zwi05 が読む `areka-runtime` の
-// `src/lib.rs` の対照は、同じ字面を `areka-runtime` の `frame_schedule_tests.rs` が持つ）。
+// `src/lib.rs` の対照は、同じ字面を `areka-runtime` の `zorder_wiring_tests.rs` の `t_zwi06` の末尾が持つ）。
 //
 // 到達性（zwi01／02）・相順と相の呼出（zwi06／07）・基底を据える順（zwi09）は、`areka-runtime` の
 // 同じ名前のファイルにある。

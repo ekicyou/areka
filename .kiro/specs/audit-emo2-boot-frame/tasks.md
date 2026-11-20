@@ -77,7 +77,7 @@
 
 - [ ] 2. ほかと重ならないテストの直し
 
-- [ ] 2.1 (P) 登録と終わる相のテストを本番の入口へ向ける（T8・8・9・10・57 番の schedule の分）
+- [x] 2.1 (P) 登録と終わる相のテストを本番の入口へ向ける（T8・8・9・10・57 番の schedule の分）
   - 登録の写しを消して本番の登録の関数を呼ぶ（8 番）。終わる相のテストは本番の結線の関数を直に呼び、字面の確かめを消す。置き場は今のまま（9 番）。`ghost_quit.rs` の説明を直す
   - 範囲の中の重なりの字面の照合を消す（10 番・範囲の外は触らない）。両側の `frame_schedule_tests.rs` の見出しを中身に合わせる（57 番）
   - 完了: 両側の `frame_schedule_tests.rs` と本体の終わる相のテストが緑
@@ -271,3 +271,4 @@
 - 1.5: `--force-warn unused_imports` の警告は lib 23・lib＋test-support 16・test 11 から 3 つとも 0 件（`cargo rustc -p areka-runtime --lib [--features test-support | --profile test] -- --force-warn unused_imports`）。`CharWindowMarker` は設計の「どこでも使わない」でなくテストだけの名だったので `#[cfg(test)]` に置いた。`frame.rs` の `reconcile_reported_sizes` の説明に task 番号が残る（5.1 の 41 番で見る）。
 - 1.6: 札の腕を落とすと新しいテストのほかに `frame_dpi_sync_hold_tests.rs` の既存の 2 本も赤になる（research の「縛るテストが無い」は言い過ぎだった）。新しいシェルの検体に `kero.name` が無いと scope 1 の揃え方が変わらない。
 - 1.7: 源を手で置き替えて同期に上書きさせるテストを直した本数は 0 本（2 源の入れ直しは変化として拾い、本番の `prepare_ghost_windows` と同じ道で作り直す）。作り直しの後にもう一度 `SystemState::get` を呼び、自分の `insert_resource` を次の呼び出しで入れ直しと数えないようにした（設計からの小さな逸れ）。
+- 2.1: 字面の対照（`lib.rs` 側）は `areka-runtime` の `zorder_wiring_tests.rs` の `t_zwi06` の末尾だけが持つ。本体の `zorder_wiring_tests.rs` の見出しも合わせた（範囲の外・要件 3.2）。L15 の「同じ字面を」は少し不正確（審査の提案・7.1 の audit で見る）。
