@@ -140,7 +140,7 @@
   - _Dispatch: standard — 欄と時点は設計が与え、成立点の中の順と捨てる時点を組む_
   - _Requirements: 3.8, 4.4, 5.13, 6.3, 6.6, 7.4, 7.6_
 
-- [ ] 6.2 (P) 当たりの既存のテストを、私有状態を直に書く形から実際の表示へ移す
+- [x] 6.2 (P) 当たりの既存のテストを、私有状態を直に書く形から実際の表示へ移す
   - 次の 5 本は表示中の面と実適用の拡大率を私有状態に直に書いて GPU なしで解決を通しており、新しい解決では ID の描き先も α マスクも無くなる。今ある `presenter_test_support.rs` の実 GPU の World（`make_world_with_gpu`）で不透明な絵を持つ面を実際に表示する形へ足場を替える:
     - `presenter_read_accessor_tests.rs` の `client_entry_matches_native_entry_at_identity_scale` と `visible_surface_hit_uses_applied_scale_at_k2`
     - `presenter_nesting_hit_tests.rs` の `client_hit_returns_child_region_names_at_scale_1` と `client_hit_returns_child_region_names_at_scale_2`

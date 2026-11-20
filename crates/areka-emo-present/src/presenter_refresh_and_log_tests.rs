@@ -4,8 +4,8 @@ use areka_emo_compose::BindSet;
 use wintf::ecs::{GraphicsCommandList, GraphicsCore};
 
 use super::test_support::{
-    CapturedEvent, INFO_LINE_MESSAGE, applies, arrangement_of, attach_hit_target,
-    build_target_assets, build_two_face_assets, capture, force_current_surface, hide_ok,
+    CapturedEvent, INFO_LINE_MESSAGE, applies, arrangement_of, attach_and_show_hit_target,
+    attach_hit_target, build_target_assets, build_two_face_assets, capture, force_applied, hide_ok,
     make_world_with_gpu, mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
     tamper_face_1000_slot,
 };
@@ -559,12 +559,12 @@ fn is_applied_absent_warn(e: &CapturedEvent) -> bool {
 /// - `applied` 不在で panic／早期 return する → 判定そのものが取れず RED
 #[test]
 fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent() {
-    let mut world = World::new();
+    let mut world = make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
 
     // T0: 面あり・applied なし（R1.6 の防御分岐・現行公開 API では作れない状態）。
-    attach_hit_target(&mut presenter, &mut world, TargetId(0));
-    force_current_surface(&mut presenter, TargetId(0), 1000);
+    attach_and_show_hit_target(&mut presenter, &mut world, TargetId(0), 96);
+    force_applied(&mut presenter, TargetId(0), None);
     // T1: attach のみ（未表示 scope）＝正常縮退。TargetId(9) は未登録＝正常縮退。
     attach_hit_target(&mut presenter, &mut world, TargetId(1));
 

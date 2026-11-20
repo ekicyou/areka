@@ -1,9 +1,8 @@
 use super::*;
 
 use super::test_support::{
-    attach_hit_target, build_target_assets, build_two_face_assets, force_applied,
-    force_current_surface, hide_ok, invalidate_ok, make_world_with_gpu, show_ok,
-    spawn_window_with_dpi,
+    attach_and_show_hit_target, attach_hit_target, build_target_assets, build_two_face_assets,
+    force_applied, hide_ok, invalidate_ok, make_world_with_gpu, show_ok, spawn_window_with_dpi,
 };
 
 // ── CurrentSurfaceRead: 現サーフェス id 状態のライフサイクル固定（Task 2・R3.1-3.4）───────────
@@ -229,11 +228,10 @@ fn unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point() 
 /// 恒等へ退化して検出できない（それらは `hit.rs` の任意 k 檻と本ファイルの縮退檻の責務）。
 #[test]
 fn client_entry_matches_native_entry_at_identity_scale() {
-    let mut world = World::new();
+    let mut world = make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
-    attach_hit_target(&mut presenter, &mut world, TargetId(0));
-    force_current_surface(&mut presenter, TargetId(0), 1000);
-    force_applied(&mut presenter, TargetId(0), Some(ScaleRatio::ONE));
+    attach_and_show_hit_target(&mut presenter, &mut world, TargetId(0), 96);
+    assert_eq!(presenter.applied_ratio(TargetId(0)), Some(ScaleRatio::ONE));
 
     for (x, y, want, what) in [
         (180, 96, Some("Head"), "領域内（Head）"),
@@ -298,12 +296,10 @@ fn client_entry_matches_native_entry_at_identity_scale() {
 /// 360→180・192→96・420→210・620→310・210→105・310→155。
 #[test]
 fn visible_surface_hit_uses_applied_scale_at_k2() {
-    let mut world = World::new();
+    let mut world = make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
-    attach_hit_target(&mut presenter, &mut world, TargetId(0));
-    force_current_surface(&mut presenter, TargetId(0), 1000);
+    attach_and_show_hit_target(&mut presenter, &mut world, TargetId(0), 192);
     let k2 = ScaleRatio::new(2, 1).expect("2/1 は構築可能");
-    force_applied(&mut presenter, TargetId(0), Some(k2));
 
     // 前提の明示（檻が空虚でないこと＝「面あり × k≠1.0」が本当に組めていること）。
     assert_eq!(
