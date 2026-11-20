@@ -180,16 +180,16 @@ fn t_i1_char_window_has_follow_and_on_drag_balloon_has_on_drag_only() {
 /// `on_ghost_pressed` を退役して差し替え）を持ち、キャラ窓のハンドラ装着はバルーン窓に
 /// 何も付けない（バルーン窓のハンドラは `input_events::balloon::attach_balloon_pointer_handlers`
 /// が別に付ける）。ハンドラ実挙動の檻は input_events の檻が持つので、ここは存在の有無
-/// だけを固定する。装着の関数は areka の側にあり
-/// areka_placement からは見えない（依存の向き）ので、本テストは areka の側に置く。
+/// だけを固定する。装着の関数は areka_input の側にあり
+/// areka_placement からは見えない（依存の向き）ので、本テストは areka_input の側に置く。
 #[test]
 fn t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers() {
     let mut world = World::new();
     let placements = two_scope_placements();
 
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
-    // spawn は areka を見られないのでハンドラを付けない。装着は input_events が担う。
-    crate::input_events::attach_char_pointer_handlers(&mut world);
+    // spawn は入力の crate を見られないのでハンドラを付けない。装着は areka_input が担う。
+    crate::attach_char_pointer_handlers(&mut world);
 
     for e in ghost_window_entities(&mut world) {
         assert_eq!(world.get::<HitTest>(e).copied(), Some(HitTest::none()));

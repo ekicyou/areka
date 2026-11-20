@@ -612,3 +612,6 @@ mod menu_tests;
 #[cfg(test)]
 #[path = "input_events_char_clamp_tests.rs"]
 mod char_clamp_tests;
+
+#[cfg(test)]
+mod spawn_assembly_tests;
