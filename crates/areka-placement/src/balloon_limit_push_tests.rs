@@ -345,26 +345,19 @@ fn world_with(scope: usize, limit: bool) -> (World, Entity, Entity) {
     (world, char_window, balloon)
 }
 
-/// キャラ窓を左端へ動かすと随伴のバルーンが右隣へ並べ替えられ（`how="flipped"`）、
-/// 作業領域の中ほどへ戻すと元の側（左隣）へ戻る（焼き付けない・要件 5.7）。
+/// キャラ窓を左端へ動かすと随伴のバルーンは作業領域の左端へ押し込まれ（`how="pushed"`・
+/// `overlap_scope` は出さない）、中ほどへ戻すと元の側（左隣）へ戻る（焼き付けない）。
 #[test]
-fn write_gate_flips_and_returns_to_the_original_side() {
+fn write_gate_pushes_to_the_edge_and_returns_to_the_original_side() {
     let (mut world, char_window, balloon) = world_with(0, true);
 
     let (_, events) = capture(|| move_window_to(&mut world, char_window, 0, 904));
     assert_eq!(point_of(&world, char_window), point(0, 904));
-    assert_eq!(point_of(&world, balloon), point(1108, 904));
-    let clamp = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
-    assert_eq!(clamp.expect_field("how"), "\"flipped\"");
-    assert_eq!(clamp.expect_field("context"), "\"runtime-gate\"");
-
-    // 対照: キャラ窓ごと左へはみ出すと押し込み。
-    let (_, events) = capture(|| move_window_to(&mut world, char_window, -200, 904));
     assert_eq!(point_of(&world, balloon), point(0, 904));
-    assert_eq!(
-        expect_one(&events, BALLOON_LIMIT_CLAMP_TAG).expect_field("how"),
-        "\"pushed\""
-    );
+    let clamp = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
+    assert_eq!(clamp.expect_field("how"), "\"pushed\"");
+    assert_eq!(clamp.expect_field("context"), "\"runtime-gate\"");
+    assert!(!format!("{clamp:?}").contains("overlap_scope"), "{clamp:?}");
 
     let (_, events) = capture(|| move_window_to(&mut world, char_window, 1200, 904));
     assert_eq!(
@@ -415,53 +408,34 @@ fn world_with_partner(partner_children: &[bool]) -> (World, Entity, Entity, Enti
     (world, c0, b0, c1)
 }
 
-/// 相方の子の描画面が可視で映した先に重なる → 押し込み＋`overlap_scope=Some(1)`（要件 2.3・4.1・4.2）。
+/// 相方のキャラ窓の可視・不可視・寸の未確定のどれでも、自分のバルーンは押し込みの位置（0, 904）。
 #[test]
-fn write_gate_pushes_on_overlap_with_a_shown_partner() {
-    let (mut world, c0, b0, _) = world_with_partner(&[false, true]);
-    let (_, events) = capture(|| move_window_to(&mut world, c0, 0, 904));
-    assert_eq!(point_of(&world, b0), point(0, 904), "押し込みの位置");
-    let clamp = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
-    assert_eq!(clamp.expect_field("how"), "\"pushed\"");
-    assert_eq!(clamp.expect_field("overlap_scope"), "Some(1)");
-    assert_eq!(clamp.expect_field("context"), "\"runtime-gate\"");
-}
-
-/// 同じ形で相方の子が全部不可視、または相方の寸が未確定 → 並べ替え（要件 2.6）。
-#[test]
-fn write_gate_flips_when_the_partner_is_hidden_or_undetermined() {
-    let (mut world, c0, b0, _) = world_with_partner(&[false, false]);
-    let (_, events) = capture(|| move_window_to(&mut world, c0, 0, 904));
-    assert_eq!(point_of(&world, b0), point(1108, 904));
-    let clamp = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
-    assert_eq!(clamp.expect_field("how"), "\"flipped\"");
-    assert_eq!(clamp.expect_field("overlap_scope"), "None");
-
-    let (mut world, c0, b0, c1) = world_with_partner(&[true]);
-    world.entity_mut(c1).insert(WindowPos::default());
-    let (_, events) = capture(|| move_window_to(&mut world, c0, 0, 904));
-    assert_eq!(point_of(&world, b0), point(1108, 904));
-    let clamp = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
-    assert_eq!(clamp.expect_field("how"), "\"flipped\"");
-}
-
-/// `limit=0` のバルーンは書き込みの関門でも並べ替えない。
-#[test]
-fn write_gate_does_not_flip_when_limit_is_disabled() {
-    let (mut world, char_window, balloon) = world_with(0, false);
-    move_window_to(&mut world, char_window, 0, 904);
-    assert_eq!(point_of(&world, balloon), point(-872, 904));
+fn write_gate_ignores_the_partner_window_state() {
+    for (children, undetermined_size) in [
+        (&[false, true][..], false),
+        (&[false, false], false),
+        (&[true], true),
+    ] {
+        let (mut world, c0, b0, c1) = world_with_partner(children);
+        if undetermined_size {
+            world.entity_mut(c1).insert(WindowPos::default());
+        }
+        let (_, events) = capture(|| move_window_to(&mut world, c0, 0, 904));
+        assert_eq!(point_of(&world, b0), point(0, 904), "{children:?}");
+        let clamp = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
+        assert_eq!(clamp.expect_field("how"), "\"pushed\"");
+    }
 }
 
 /// descript（`balloon.dontmove`）と台本（`\![lock,balloonmove]`）の動かせない指定があっても
-/// 並べ替える（要件 5.7）。
+/// 押し込む。
 #[test]
-fn balloon_move_locks_do_not_stop_the_flip() {
+fn balloon_move_locks_do_not_stop_the_push() {
     let (mut world, char_window, balloon) = world_with(1, true);
     seed_balloon_lock(&mut world, &BTreeSet::from([1]));
     apply_script_balloon_lock(&mut world, 1, true);
     move_window_to(&mut world, char_window, 0, 904);
-    assert_eq!(point_of(&world, balloon), point(1108, 904));
+    assert_eq!(point_of(&world, balloon), point(0, 904));
 }
 
 // ---------------------------------------------------------------------------
@@ -470,7 +444,7 @@ fn balloon_move_locks_do_not_stop_the_flip() {
 
 /// 利用者が左端の窓の左隣の外でバルーンを離したときは、並べ替えず今の押し込み（x=0）。
 #[test]
-fn release_correction_never_flips() {
+fn release_correction_pushes_to_the_edge() {
     let (mut world, char_window, balloon) = world_with(0, true);
     move_window_to(&mut world, char_window, 0, 904);
     // wndproc がドラッグでバルーンを左隣の外へ動かし切った状態。
@@ -487,18 +461,14 @@ fn release_correction_never_flips() {
     assert_eq!(clamp.expect_field("context"), "\"release-gate\"");
 }
 
-/// 差分にゴーストやスコープを名指しした分岐が無いことの檻: スコープ 0 と 1 で同じ置き方。
+/// 書き込みの関門にスコープを名指しした分岐が無いことの檻: スコープ 0・1・2 で同じ押し込み。
 #[test]
-fn flip_is_the_same_for_every_scope() {
-    let out = apply_balloon_limit(
-        vec![
-            placement(0, left_edge_char(), left_side_offset(), true),
-            placement(1, left_edge_char(), left_side_offset(), true),
-            placement(2, left_edge_char(), left_side_offset(), true),
-        ],
-        &snapshot(&[WA]),
-    );
-    assert!(out.iter().all(|p| p.balloon_pos == point(1108, 904)));
+fn write_gate_pushes_the_same_for_every_scope() {
+    for scope in 0..=2 {
+        let (mut world, char_window, balloon) = world_with(scope, true);
+        move_window_to(&mut world, char_window, 0, 904);
+        assert_eq!(point_of(&world, balloon), point(0, 904), "scope {scope}");
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -87,6 +87,9 @@ pub(crate) const BALLOON_LIMIT_RUNTIME_CONTEXT: &str = "runtime-gate";
 /// [`BALLOON_LIMIT_RUNTIME_CONTEXT`] の doc と三つ組を成す規約）。
 pub(crate) const BALLOON_LIMIT_RELEASE_CONTEXT: &str = "release-gate";
 
+/// 補正ログの `how` フィールドに出す、作業領域内への押し込みを表す語。
+pub(crate) const BALLOON_LIMIT_PUSHED_HOW: &str = "pushed";
+
 // =============================================================================
 // クランプ核
 // =============================================================================
@@ -148,7 +151,9 @@ impl BalloonPlace {
         match self {
             BalloonPlace::Fits => "fits",
             BalloonPlace::Flipped(_) => "flipped",
-            BalloonPlace::Pushed(_) | BalloonPlace::PushedOverlap { .. } => "pushed",
+            BalloonPlace::Pushed(_) | BalloonPlace::PushedOverlap { .. } => {
+                BALLOON_LIMIT_PUSHED_HOW
+            }
         }
     }
 

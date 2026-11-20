@@ -15,8 +15,8 @@
   - _Dispatch: mechanical — 形と期待の値を設計が表で与える_
   - _Requirements: 3.1, 3.3, 3.6, 3.7, 3.8, 3.9, 4.1, 4.3, 4.4, 7.1, 7.2, 7.3, 7.4, 7.5, 8.5_
 
-- [ ] 2. 書き込みの関門を押し込みだけにする
-- [ ] 2.1 書き込みの関門の判定を押し込みの式の直の呼び出しに替え、記録の欄を外す
+- [x] 2. 書き込みの関門を押し込みだけにする
+- [x] 2.1 書き込みの関門の判定を押し込みの式の直の呼び出しに替え、記録の欄を外す
   - `how` の語 `"pushed"` を持つ定数を配置の決まりの側に 1 つ置き、書き込みの関門はそれを出す。書き込みの関門は親の `follow.rs` の取り込みから名前を得るので、`follow.rs` の `use super::balloon_limit::{…}` に定数を足し、使わなくなる並べ替えの型と関数の名前をこの行から外す（`shown_char_rects` の取り込みと関数は 4.1 まで残り、lib のビルドで使われない警告が出るのは期待どおり）
   - 書き込みの関門は、表示しているキャラクター窓の列を読まず、押し込みの式が「動かす」と答えたときだけ書き換えて記録を 1 行残す（`overlap_scope` の欄は無い）。「動かさない」なら記録しない
   - 判定の前の 5 つの `Unresolved` の分岐とシグネチャは変えない。注の「並べ替えも押し込みも」を押し込みだけの形に直す
@@ -85,3 +85,4 @@
 
 ## Implementation Notes
 - 1.1 直す前の赤（`cargo test -p areka-placement --lib push_table`・両関門とも同じ出方）: 10-30 と 11-16-after-drag は位置（`(1108,336)`・`(2441,1188)`）・`how`（`"flipped"`）・`overlap_scope`（`Some("None")`）が赤。キャラクター窓がはみ出す・縦にはみ出すは `overlap_scope` だけが赤（位置は緑）。収まる・`limit=0` は緑。今は欄が値 `None` で載るので `field("overlap_scope")` は `Some("None")` になる。檻の絞り込みは `push_table`（`balloon_limit_push` では 0 件）。
+- 2.1 の後、`follow_other_chars_tests.rs` の `rejudge_after_chain_finalize_pushes_the_balloon_onto_the_moved_partner_once` は並べ替えを主張したまま赤になる（書き換えは 4.1）。

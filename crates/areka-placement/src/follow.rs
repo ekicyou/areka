@@ -52,8 +52,8 @@ mod work_area_clamp;
 // （`window_move::enqueue_window_set_pos`）と解放時補正
 // （`balloon_drag::on_balloon_drag_end`）が消費する。
 use super::balloon_limit::{
-    BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT, BALLOON_LIMIT_RUNTIME_CONTEXT,
-    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonPlace, limit_correction, place_balloon_in_work_area,
+    BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_PUSHED_HOW, BALLOON_LIMIT_RELEASE_CONTEXT,
+    BALLOON_LIMIT_RUNTIME_CONTEXT, BALLOON_LIMIT_UNRESOLVED_TAG, limit_correction,
 };
 use super::diag::{self, DESPAWNED_SKIP_TAG, PlacementRoute, WindowKind, WindowMoveRecord};
 use super::persist::{
