@@ -42,7 +42,7 @@
   - 足す（テストの支え・`#[cfg(any(test, feature = "test-support"))]`）: `target_map::window_scope`（本番の関数・4 番）・`frame::test_support::gpu_on`（31 番）・`frame::shared_test_support` の結線の補助と、写しから寄せた定数と補助（26・27・28 番）・`frame::persist_test_support`（33 番・本体の `frame_chain_finalize_persist_test_support.rs` の大半を移す）。
   - 消す: `FrameHarness::run_work_area_resnap`（71 番・外の読み手 0）。
 - `RuntimeWiring` の私有の欄 `unconnected_text` を足す（3 番・`pub(super)`）。
-- ログの行: 新しい `info!` 1 行（3 番の繋ぎ直し）・`frame/dpi.rs` と `frame/scale_text.rs` の scope の上限の記録の水準と文（4 番・`error!`→`warn!`）・取り出しの上限の文（113 番）。どれも字面で読む実機の確かめ・`tools/perf/`・手順書は 0 件（`research.md` の 4 節と、この設計の時点の grep）。
+- ログの行: 新しい `info!` 1 行（3 番の繋ぎ直し）・scope の上限の記録（4 番・`frame/dpi.rs` と `frame/scale_text.rs` の `error!` 2 行を消し、`target_map::window_scope` の `warn!` 1 行に寄せる）・取り出しの上限の文（113 番）。どれも字面で読む実機の確かめ・`tools/perf/`・手順書は 0 件（`research.md` の 4 節と、この設計の時点の grep）。
 
 ### 範囲の外（持たないもの）
 
@@ -242,16 +242,23 @@ pub fn scope_of(key: &ActorKey) -> Option<u32> {
     key.as_str().parse::<u32>().ok().filter(|&s| s <= MAX_SCOPE)
 }
 
-/// 窓の印の scope（`CharWindowMarker.scope` ほか）→ scope 番号。`MAX_SCOPE` を越えると `None`。
+/// 窓の印の scope（`CharWindowMarker.scope` ほか）→ scope 番号。`MAX_SCOPE` を越えると
+/// `warn!` を 1 行残して `None`（呼び手は読み飛ばすだけでよい・記録はここ 1 か所）。
 pub fn window_scope(scope: usize) -> Option<u32> {
-    u32::try_from(scope).ok().filter(|&s| s <= MAX_SCOPE)
+    let s = u32::try_from(scope).ok().filter(|&s| s <= MAX_SCOPE);
+    if s.is_none() {
+        warn!(scope, "window scope が上限を越え target を採番できない → この窓を読み飛ばす");
+    }
+    s
 }
 ```
 
+- 記録を残すのは `window_scope` の中の 1 か所だけ（設計の討議 議題 2）。9 か所の呼び手は `None` を読み飛ばすだけで、記録の無い読み飛ばしは残らない。今は届かない道で、入口の上限は `extra-character-windows` が置くので、毎フレームの記録があふれる場面は来ない。
+
 | 場所 | 今 | 直し |
 |---|---|---|
-| `frame/dpi.rs` L415 | `u32::try_from` と `error!` | `window_scope` と `warn!`（台本の側と同じ扱い・要件 5.10）。文は「scope が上限を越え target を採番できない → 再スケールを skip」 |
-| `frame/scale_text.rs` L169 | `u32::try_from` と `error!` | 同上（同じ事実を同じ水準で記録する） |
+| `frame/dpi.rs` L415 | `u32::try_from` と `error!` | `window_scope` で読み飛ばす。`error!` は消す（記録は `window_scope` の `warn!`＝台本の側と同じ扱い・要件 5.10） |
+| `frame/scale_text.rs` L169 | `u32::try_from` と `error!` | 同上 |
 | `frame/attach.rs` L105 | `u32::try_from` | `window_scope`（`None` は今どおり `missing_assets` へ）。変数名 `window_scope` は `scope_usize` に替える |
 | `frame/attach.rs` L458 | `.filter_map(\|&s\| u32::try_from(s).ok())`（`skin_facts_copy::copy` へ渡り、上限の検査なしに `balloon_target` を呼ぶ） | `.filter_map(\|&s\| window_scope(s))`（設計の検証で見つけた 9 か所目） |
 | `frame/drain_resnap.rs` L380 | `scope as u32` | `let Some(s) = window_scope(scope) else { continue };` |
@@ -261,7 +268,7 @@ pub fn window_scope(scope: usize) -> Option<u32> {
 
 - 範囲の外の `balloon_visibility_phase.rs` L464（ク）は触らない。`audit-emo2-boot-switch` の brief に「`window_scope` を使う」と書いて渡す（要件 7.10）。入口の `detect_scopes`（ア・`crates/areka-placement/`）は `extra-character-windows` の brief へ渡す。
 - 縛るテスト:
-  - `target_map.rs` の `mod tests` に `window_scope_rejects_scopes_past_i32_max`（`window_scope(2147483647) == Some(2147483647)`・`window_scope(2147483648) == None`・`window_scope(usize::MAX) == None`）。純関数。
+  - `target_map.rs` の `mod tests` に `window_scope_rejects_scopes_past_i32_max`（`window_scope(2147483647) == Some(2147483647)` で記録 0 行・`window_scope(2147483648) == None`・`window_scope(usize::MAX) == None` でそれぞれ `warn!` 1 行）。
   - `frame_dpi_tests.rs` に `a_window_scope_past_i32_max_is_skipped_with_one_warning`: `GhostWindows` に scope `1 << 31` のキャラ窓を 1 つ置き、DPI を変えて拡大率の相を回す。**直しの前はデバッグのビルドで `2 * scope` があふれて panic＝赤**。直しの後は `warn!` 1 行・その窓への書き込み 0。
 
 ### 2 番 預かりの判定の手間（`frame/move_hold.rs`）
@@ -328,7 +335,8 @@ struct MonitorWatch {
 ### 31 番 GPU の World の組み立て（`frame_test_support.rs`）
 
 - 調べ（`research.md` の 11 節）: `areka-runtime` のテストのバイナリ（`crash_report_test_support.rs` L126-L153）と本体のテストのバイナリ（`runtime_tests/mod.rs` L10-L17）は、どちらもプロセスの寿命の MTA（`CoIncrementMTAUsage`）を始めに据えている。だから各所の `let _ = CoInitializeEx(..)` は要らない（本体の `runtime_tests/spine.rs` L92 は既にそう書いて呼ばない）。
-- 足す補助: `pub fn gpu_on(world: &mut World) -> crate::spine::GpuPermit`（許可を取り、`GraphicsCore` と `WucGraphicsResource` を入れ、許可を返す。COM は呼ばない）。呼び手は許可を先に束縛する（装置より後に捨てる・`spine_wait.rs` の決まり）。
+- COM の初期化の行は消さない（設計の討議 議題 3）。支えの `manual_balloon_runtime` を使うテストを、C23 の `input-crate-split` が新しい crate `areka-input` へ移し、そのテストのバイナリにプロセスの MTA があるかは分からないため。代わりに `let _ =` で捨てていた結果を確かめる: `S_OK`／`S_FALSE` は通し、それ以外は `panic!`（テストの支えなので止める）。申し送りは要らない。
+- 足す補助: `pub fn gpu_on(world: &mut World) -> crate::spine::GpuPermit`（COM を MTA で初期化して結果を確かめ、許可を取り、`GraphicsCore` と `WucGraphicsResource` を入れ、許可を返す）。呼び手は許可を先に束縛する（装置より後に捨てる・`spine_wait.rs` の決まり）。
 - 呼ぶ所: `gpu_attach_world`（`resnap_world()` + `gpu_on`・署名は変えない）・`frame_balloon_runtime_test_support.rs`・本体の `gpu_frame_world`（`dpi_world()` + `gpu_on` + 本体の付け足し）。本体の `runtime_tests/spine.rs` の写しは範囲の外なのでサとして `audit-areka-app` へ渡す。
 
 ### 72 番 x64 の見張りを 1 つに
@@ -385,7 +393,7 @@ struct MonitorWatch {
 | 28 | 3 体の鎖の支え 5 つを `frame_shared_test_support.rs` へ | — | T15 |
 | 29 | `frame_transition_test_support.rs`（新・`cfg(test)`）へ `WindowKind` 受けの `writes_for`・強い方の `settle_at(dpi)`・`scaled`・`warnings_containing`・`offset_of`/`follow_of`/`offset_lines`・`pub const BALLOON_SPAWN_SIZE`・拡大率の定数を 1 つずつ置き、9 本から消す。`resnap_placements` もその定数を使う | — | T16 |
 | 30 | 範囲の中の 5 か所を `areka_placement::test_support::give_fake_handles(world, &gw)` にし私有の `fake_handle` を消す（範囲の外の 2 か所はキで渡す） | — | T13 |
-| 31 | `gpu_on` を置き 3 か所から呼ぶ・COM の初期化の行を消す（上の節） | — | T13 |
+| 31 | `gpu_on` を置き 3 か所から呼ぶ・COM の初期化は残して結果を確かめる（上の節） | — | T13 |
 | 32 | `MinimalGhost(TempPath)`・`TempPath::new(&format!("cpsoe-{label}"))`。`NEXT_GHOST`・自前の消去・`Drop` を消す | — | T17 |
 | 33 | 本体から `areka-runtime` へ移す（上の節） | 移したテストそのもの | T17・T18 |
 | 34 | research どおり（4 本を消し、向こうに無い 4 本を残す・表と見出しを直す） | — | T19 |
@@ -616,10 +624,10 @@ struct MonitorWatch {
 ## 失敗の扱い
 
 - **3 番**: 装着で文字の配置先が無いときは今どおり `warn!` 1 行を残し、控えに入れる。配置先ができたフレームに繋いで `info!` 1 行。配置先が無いまま続くフレームは `text_scale_warned` で 1 回だけ `warn!`（今のまま）。
-- **4 番**: 上限を越える窓の scope は `warn!` を残して読み飛ばす（`dpi.rs`・`scale_text.rs`）。`drain_resnap.rs` の再スナップは読み飛ばし、連鎖の確定は `NotShownYet` で見送る（今の「表示が成り立たない」と同じ道）。panic も別の窓の寸の読み違いも起きない。
+- **4 番**: 上限を越える窓の scope は、`window_scope` が `warn!` を 1 行残し、9 か所の呼び手が読み飛ばす。`drain_resnap.rs` の再スナップは読み飛ばし、連鎖の確定は `NotShownYet` で見送る（今の「表示が成り立たない」と同じ道）。panic も別の窓の寸の読み違いも起きない。
 - **49 番**: モニター 0 台は今どおり `warn!` で今の源を保つ。表が変わらない間は記録を繰り返さない。
 - **20・32 番**: テストの後片付けで、アクターの panic と消せなかった一時フォルダを捨てない（`join_bounded` が赤にし、`TempPath` が標準エラーへ 1 行書く）。
-- **31 番**: COM の初期化を捨てる行が無くなる（プロセスの MTA に頼る）。GPU の装置が作れなければ今どおり `GraphicsCore::new` の失敗で赤。
+- **31 番**: COM の初期化の結果を捨てない（`S_OK`／`S_FALSE` のほかは止める）。GPU の装置が作れなければ今どおり `GraphicsCore::new` の失敗で赤。
 
 ## テストの方針
 
@@ -649,14 +657,17 @@ struct MonitorWatch {
 - 他人のゴーストの descript は信用できない入力。4 番は、窓の scope が大きくなる日（`extra-character-windows`）に、descript 1 行で毎フレームの相が落ちる（デバッグ）か別の窓の寸を書く（リリース）道を、窓の側の入口 1 か所の関数で閉じる。入口の `detect_scopes` の上限は `extra-character-windows` へ渡す。
 - 3 番の繋ぎ直しは、他人のバルーンの面 0 が組めない（`ExtentTooLarge`）ときも、後の面が組めれば文字を出す。組めないままなら今どおり記録 1 行で、毎フレームの記録は増えない。
 
-## 設計の討議へ渡す問い（OPEN QUESTIONS）
+## 設計の討議で確定したこと
 
-設計の討議（`/kiro-design-discussion`）で確かめる。どれも上の本文は仮定の案で書いた。
+2026-11-20 の設計の討議で、開発者が 8 つの議題を全部推奨案で承認した（「設計を承認」）。
 
-1. **3 番の案**: 案 ⑴（文字の拡大率の相で繋ぎ直す）で書いた。ゴーストに見える振る舞いが変わる（装着で繋げなかったバルーンに、後で文字が出る）。案 ⑵（再試行をやめて `error!`）なら説明と記録の水準だけの直しで小さいが、端の場合に文字が永久に出ない。
-2. **4 番の記録の水準**: 要件 5.10 は `dpi.rs` を `warn!` にそろえると書く。同じ事実を記録する `scale_text.rs` L169 の `error!` も `warn!` にそろえる案で書いた。`drain_resnap.rs` L675 の連鎖の確定は `NotShownYet` で見送る案で書いた。
-3. **49 番の見張りの置き場**: World の資源（私有の `MonitorWatch`）に置き、`sync_monitor_snapshot` の署名を変えない案で書いた（前例の `dpi_state` は `RuntimeWiring` の欄だが、ハーネスが `RuntimeWiring` なしで呼ぶため）。モニター 0 台の `warn!` が毎フレームから表の変化の時だけになる。
-4. **72 番の見張りの形**: 宣言の `cfg(all(test, target_pointer_width = "64"))` に寄せ、支えの `const` の表明と字面の見張りを消す案で書いた（逆に `const` の表明に寄せると、16 か所の宣言の cfg を短くできるが、32 bit ではハーネスを使わないテストまで組めない）。
-5. **9 番の置き場**: 本体の `runtime_tests/frame_schedule_tests.rs` を今の置き場のまま直す案で書いた（`session/ghost_quit_*_tests.rs` へ移すのは `session-module-gather` の先回りに近いと見た）。
-6. **33 番の支えの分け方**: `PersistStore` ほかを `areka-runtime` の `frame::persist_test_support`（test-support）へ移し、`MinimalGhost` だけを本体に残す案で書いた。remembered の `boot_from` は組み立ての半分を共有の支えに、記録の捕捉の数行を両側に残す。
-7. **63 番と範囲の外の説明**: 63 番で消すテストを名指す範囲の外の `move_cue_apply_move_tests.rs` L248 の説明を、この spec で直す案で書いた（キの申し送りからその分を外す）。64 番の `assets.rs` L83 も同じ扱い。
+1. **3 番**: 案 ⑴（文字の拡大率の相で繋ぎ直す）。説明の「次フレーム再試行」を事実にする直しで、新しいモードではない。
+2. **4 番の記録**: `window_scope` が `None` を返す前に自分で `warn!` を 1 行残す。9 か所の呼び手は読み飛ばすだけにし、`dpi.rs`・`scale_text.rs` の `error!` は消す。連鎖の確定（`drain_resnap.rs` L675）は `NotShownYet` で見送る。
+3. **31 番の COM**: 初期化の行は消さず、捨てていた結果を確かめる（`S_OK`／`S_FALSE` のほかは止める）。C23 の `input-crate-split` が支えの使い手のテストを `areka-input` へ移すため。申し送りは要らない。
+4. **49 番**: 見張りは World の私有の資源 `MonitorWatch`。`sync_monitor_snapshot` の署名は変えない。初回と、`MonitorSnapshot`・`MonitorDpiTable` の入れ直しでも作り直す（設計の検証の 2 件目）。モニター 0 台の `warn!` は表が変わったフレームに 1 回。
+5. **72 番**: 宣言の `cfg(all(test, target_pointer_width = "64"))` に寄せ、支えの `const` の表明と字面の見張りを消す。
+6. **9 番**: 本体の `runtime_tests/frame_schedule_tests.rs` は今の置き場のまま直す。
+7. **33 番**: `PersistStore` ほかを `areka-runtime` の `frame::persist_test_support` へ移し、`MinimalGhost` だけを本体に残す。`boot_from` は組み立ての半分を共有の支えに、記録の捕捉の数行を両側に残す。
+8. **63・64 番**: 消すテストを名指す範囲の外の説明 2 行（`move_cue_apply_move_tests.rs` L248・`assets.rs` L83）をこの spec で直し、キの申し送りからその分を外す。
+
+設計の検証（`design-validation.md`）の 3 件は、1・2 件目を自明な直しとして設計へ入れ、3 件目を上の 3 で決めた。
