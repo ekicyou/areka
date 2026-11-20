@@ -48,7 +48,7 @@
 ## Scope
 
 - **In**: `\![move]` の時間（名前付きの `--time` と旧い形の時間の欄）・`\![moveasync]`・`\![moveasync,cancel]`・`\![set,scaling]` の 3 つの形・`\![set,alpha]`・`--time` と `--wait`・台本の時刻を進める所・途中の値の計算（等速）・倍率と透明度をゴーストの終わりまで持つ所・`currentghost.scope(ID).scaling` と `OnShellScaling` への反映・読めない値の置き換えと記録・`check_script` の表（`consumer_ledger.rs`）への登記・網羅台帳の持ち主の付け替えと `doc/COMPAT_ARCHITECTURE.md` の行・決定論のテスト。
-- **Out**: 変化の形（`--easing`＝`element-animation-easing`）・遊ぶ人の倍率の設定（`shell-balloon-scale-setting`）・演劇の舞台の中のアクターの位置・大きさ・透明度（pasta の取り決め `novel-areka-contract` の `play` の命令と転換＝`shell-multi-compose`。演劇では正典の `--time` を使わない、と pasta の側で決まっている）・`\![sound,wait]`・`\![wait,syncobject]`（C 群の残り）・SERIKO のコマ間をつなぐ書き方。
+- **Out**: 変化の形（`--easing`＝`element-animation-easing`）・遊ぶ人の倍率の設定（`shell-balloon-scale-setting`）・演劇の舞台（ウィンドウモード）の中のアクターの位置・大きさ・透明度（pasta の取り決め `novel-areka-contract` の `play` の命令と転換＝`shell-multi-compose`）。**舞台を開かない演劇**（デスクトップに浮いたまま 1 行ずつ進む）は、位置・大きさ・透明度を正典のタグで出す、と 2026-11-19 に開発者が決めた（pasta の骨子 `final-model-2026-11-19.md` の 8 章・議題 5）ので、その分はこの spec が受ける（In）。前の文面「演劇では正典の `--time` を使わない」は、議論の途中の案で、決定ではなかった・`\![sound,wait]`・`\![wait,syncobject]`（C 群の残り）・SERIKO のコマ間をつなぐ書き方。
 
 ## Boundary Candidates
 
