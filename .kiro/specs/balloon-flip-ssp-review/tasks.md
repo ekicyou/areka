@@ -86,3 +86,4 @@
 ## Implementation Notes
 - 1.1 直す前の赤（`cargo test -p areka-placement --lib push_table`・両関門とも同じ出方）: 10-30 と 11-16-after-drag は位置（`(1108,336)`・`(2441,1188)`）・`how`（`"flipped"`）・`overlap_scope`（`Some("None")`）が赤。キャラクター窓がはみ出す・縦にはみ出すは `overlap_scope` だけが赤（位置は緑）。収まる・`limit=0` は緑。今は欄が値 `None` で載るので `field("overlap_scope")` は `Some("None")` になる。檻の絞り込みは `push_table`（`balloon_limit_push` では 0 件）。
 - 2.1 の後、`follow_other_chars_tests.rs` の `rejudge_after_chain_finalize_pushes_the_balloon_onto_the_moved_partner_once` は並べ替えを主張したまま赤になる（書き換えは 4.1）。
+- 完了時の棚卸: その場で解決 0 件・申し送り 1 件（balloon-text-visual-tree の brief へ TEXT_BOX_SURFACE_NAME を外したこと）・起票 0 件。起動の関門の記録が無い行は、関門がほかの行を出さないので捕まえが生きていることを確かめていない（檻の限り・直す要は無い）。
