@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use super::chain_finalize_persist_test_support::spawn_shown;
+use super::persist_test_support::spawn_shown;
 use super::test_support::{PerTargetSizes, placement_basis, pos_of};
 use super::*;
 

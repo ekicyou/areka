@@ -344,6 +344,10 @@ pub mod shared_test_support;
 #[path = "frame_transition_test_support.rs"]
 pub mod transition_test_support;
 
+#[cfg(any(test, feature = "test-support"))]
+#[path = "frame_persist_test_support.rs"]
+pub mod persist_test_support;
+
 // move drain の置き場（areka-P0-move-canon task 3.3・design D4）の檻。同じくハーネスに乗るので
 // **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
 #[cfg(all(test, target_pointer_width = "64"))]
@@ -460,6 +464,14 @@ mod resnap_tests;
 #[cfg(test)]
 #[path = "frame_chain_finalize_tests.rs"]
 mod chain_finalize_tests;
+
+#[cfg(test)]
+#[path = "frame_chain_finalize_align_tests.rs"]
+mod chain_finalize_align_tests;
+
+#[cfg(test)]
+#[path = "frame_chain_rule_tests.rs"]
+mod chain_rule_tests;
 
 // 拡大率の違う画面をまたぐドラッグで掴んだ点を窓の大きさの比で置き直す檻
 // （dpi-realign-remembered-chain 要件 4・8.5）。ハーネスに乗るので **x64 のみ**で接続する。

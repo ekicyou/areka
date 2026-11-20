@@ -16,7 +16,7 @@ use wintf::ecs::{Point, SizeI, WindowPos};
 use super::chain_finalize_align_tests::{
     SPAWN, WA, sizes, spawn_resolved, spawn_resolved_scopes, x_of,
 };
-use super::chain_finalize_persist_test_support::PersistStore;
+use super::persist_test_support::PersistStore;
 use super::test_support::PerTargetSizes;
 use super::*;
 use log_capture_kit::{LineFormat, capture_lines};
@@ -266,7 +266,8 @@ fn a_descript_side_edge_scope_realigned_by_the_boot_script_is_not_the_chain_base
                 .clear_default_char_pos(1)
         );
     };
-    let rows: [(&str, Anchor, Option<&dyn Fn(&mut World)>); 4] = [
+    type Row<'a> = (&'a str, Anchor, Option<&'a dyn Fn(&mut World)>);
+    let rows: [Row; 4] = [
         ("T24 下端へ", Anchor::Bottom, None),
         ("T24 free へ", Anchor::Free, None),
         ("T25 台本が動かした", Anchor::Free, Some(&moved_by_script)),
@@ -425,7 +426,8 @@ fn a_window_attached_to_a_side_edge_scope_is_kept_by_the_exclusions() {
         world.entity_mut(window).insert(ScriptPlaced);
     };
     let sticky = |world: &mut World| seed_sticky_descript(world, Some("0,2"));
-    let rows: [(&str, Box<dyn FnOnce(&mut World)>); 4] = [
+    type Row = (&'static str, Box<dyn FnOnce(&mut World)>);
+    let rows: [Row; 4] = [
         ("辺のスコープがドラッグの最中", Box::new(drag(1))),
         ("付けた窓がドラッグの最中", Box::new(drag(2))),
         ("付けた窓を武装の後に台本が置いた", Box::new(script_placed)),

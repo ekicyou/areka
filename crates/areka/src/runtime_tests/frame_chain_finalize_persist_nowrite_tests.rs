@@ -1,19 +1,20 @@
 //! 書かない時点で記憶が書き換わらないことを固定する（areka-P0-char-position-save-on-exit
 //! タスク 4.2・要件 1.2・3.2・3.3・5.3・design Testing Strategy「並べ直しから記憶まで」15）。
 //!
-//! 窓の一式・記憶の送り口・最小のゴーストは共有の部品
+//! 窓の一式と記憶の送り口は `areka_runtime::frame::persist_test_support`、最小のゴーストは
 //! `frame_chain_finalize_persist_test_support.rs` から取る。
 //!
 //! 記憶は `target\` の下の実物のファイル（`PersistStore::real`）に置き、書き手が送られた分を
 //! 書き終えるのを待ってから、ファイルの中身をバイトのまま前後で比べる。比べる前に記憶へ
 //! 中身を入れておく（空どうしの比較にしない）。
 
-use super::chain_finalize_persist_test_support::{
-    MinimalGhost, PREP_SIZES, PersistStore, SHOWN_SIZES, WORK_AREA, persist_world, prep_placements,
-    shown_sizes, spawn_shown, work_area_snapshot,
-};
+use super::chain_finalize_persist_test_support::MinimalGhost;
 use super::test_support::{PerTargetSizes, pos_of, s2_monitors_with_work_area, size_of};
 use super::*;
+use areka_runtime::frame::persist_test_support::{
+    PREP_SIZES, PersistStore, SHOWN_SIZES, WORK_AREA, persist_world, prep_placements, shown_sizes,
+    spawn_shown, work_area_snapshot,
+};
 
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_sylphya::{Axis, PersistKey};
@@ -91,7 +92,7 @@ fn boot_remembered(
 #[test]
 fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
     let ghost = MinimalGhost::plant("nowrite");
-    let store = PersistStore::real(&ghost);
+    let store = PersistStore::real(&ghost.ghost_master());
     let (placements, restored, _) =
         crate::restore_merged_placements(ghost.root(), prep_placements(), &work_area_snapshot());
     assert!(restored.is_empty(), "前提: 初めの起動は記憶が無い");
@@ -209,7 +210,7 @@ fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
 #[test]
 fn offscreen_saved_position_survives_finalize_while_shown_pulled_in() {
     let ghost = MinimalGhost::plant("nowrite-offscreen");
-    let store = PersistStore::real(&ghost);
+    let store = PersistStore::real(&ghost.ghost_master());
     // 本体（スコープ 0）は作業領域の右の外、相方（スコープ 1）は中。値は下端の中央の x・上端の y。
     let offscreen = PointPx {
         x: WORK_AREA.right + 1500,

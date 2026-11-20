@@ -1,15 +1,16 @@
 //! 並べ直しから記憶までを通すテスト（areka-P0-char-position-save-on-exit 要件 1.1・1.3・1.6・
 //! 1.7・4.1・5.4・design Testing Strategy「並べ直しから記憶まで」9〜12・11b・16）。
 //!
-//! 窓の一式・記憶の送り口・最小のゴーストは共有の部品
+//! 窓の一式と記憶の送り口は `areka_runtime::frame::persist_test_support`、最小のゴーストは
 //! `frame_chain_finalize_persist_test_support.rs` から取る。
 
-use super::chain_finalize_persist_test_support::{
-    MinimalGhost, PREP_SIZES, PersistStore, SHOWN_SIZES, persist_world, prep_placements,
-    shown_sizes, spawn_shown, work_area_snapshot,
-};
+use super::chain_finalize_persist_test_support::MinimalGhost;
 use super::test_support::{PerTargetSizes, pos_of, size_of};
 use super::*;
+use areka_runtime::frame::persist_test_support::{
+    PREP_SIZES, PersistStore, SHOWN_SIZES, persist_world, prep_placements, shown_sizes,
+    spawn_shown, work_area_snapshot,
+};
 
 use std::collections::HashMap;
 
@@ -32,7 +33,7 @@ fn support_wired_world_delivers_positions_to_store() {
     for real in [false, true] {
         let ghost = MinimalGhost::plant("support-check");
         let store = if real {
-            PersistStore::real(&ghost)
+            PersistStore::real(&ghost.ghost_master())
         } else {
             PersistStore::fake()
         };

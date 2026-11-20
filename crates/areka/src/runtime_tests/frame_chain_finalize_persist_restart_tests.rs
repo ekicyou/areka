@@ -2,19 +2,19 @@
 //! タスク 4.1・要件 1.2・2.1・2.2・2.3・5.1・5.2・design Testing Strategy「並べ直しから記憶まで」
 //! 13・14）。
 //!
-//! 窓の一式・記憶の送り口・最小のゴーストは共有の部品
+//! 窓の一式と記憶の送り口は `areka_runtime::frame::persist_test_support`、最小のゴーストは
 //! `frame_chain_finalize_persist_test_support.rs` から取る。
 //!
 //! 1 回目も 2 回目も、窓は準備のときの幅（`PREP_SIZES`）で作り、それと違う幅の絵
 //! （`SHOWN_SIZES`）を出して置き直し（再スナップ）を回してから並べ直しを回す。同じ幅のまま
 //! 組むと、書くとき・戻すとき・中央を保って付け替えるときの計算を通らずに緑になる。
 
-use super::chain_finalize_persist_test_support::{
-    MinimalGhost, PersistStore, persist_world, prep_placements, shown_sizes, spawn_shown,
-    work_area_snapshot,
-};
+use super::chain_finalize_persist_test_support::MinimalGhost;
 use super::test_support::{PerTargetSizes, pos_of};
 use super::*;
+use areka_runtime::frame::persist_test_support::{
+    PersistStore, persist_world, prep_placements, shown_sizes, spawn_shown, work_area_snapshot,
+};
 
 use std::time::Instant;
 
@@ -38,7 +38,7 @@ const DRAG_DX: i32 = 300;
 /// 送った書き込みは、その間に書き手が確定している。`barrier` はその「書き手が追いつくだけの
 /// 時間が経った」ことを決定論で置き換えるもので、UI の側の閉じる処理の代わりではない。
 fn first_run(ghost: &MinimalGhost, drag: bool) -> [Point; 2] {
-    let store = PersistStore::real(ghost);
+    let store = PersistStore::real(&ghost.ghost_master());
     let (placements, restored, _) =
         crate::restore_merged_placements(ghost.root(), prep_placements(), &work_area_snapshot());
     assert!(restored.is_empty(), "前提: 1 回目は記憶が無い");
@@ -100,7 +100,7 @@ fn first_run(ghost: &MinimalGhost, drag: bool) -> [Point; 2] {
 /// 並べ直しの移動が 0 件であること（窓への指令が出ない・位置が変わらない）と、並べ直しの前後で
 /// 記憶が同じこと（要件 1.2）もここで確かめる。
 fn second_run(ghost: &MinimalGhost) -> [Point; 2] {
-    let store = PersistStore::real(ghost);
+    let store = PersistStore::real(&ghost.ghost_master());
     let (placements, restored, _) =
         crate::restore_merged_placements(ghost.root(), prep_placements(), &work_area_snapshot());
     assert_eq!(

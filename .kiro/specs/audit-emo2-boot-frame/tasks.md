@@ -153,7 +153,7 @@
 
 - [ ] 4. 本体のテストを `areka-runtime` へ移し、上限越えのファイルを分ける
 
-- [ ] 4.1 一時フォルダの形を直し、規則・揃え・clamp ⑴ を移す（T17・32・33 番の その 1）
+- [x] 4.1 一時フォルダの形を直し、規則・揃え・clamp ⑴ を移す（T17・32・33 番の その 1）
   - 最小のゴーストを `TempPath` で包み、自前の採番・消去・`Drop` を消す（32 番・根はワークツリーの `target\` の下）
   - 保存の支えの大半を `areka-runtime` の `frame::persist_test_support` へ移す（`git mv`）。dev-dependencies を使わず、本番の継ぎ目の包みを直の資源の挿入にし、ゴーストのフォルダをパスで受ける。本体には最小のゴーストだけの同名のファイルを残す
   - 規則と揃えのテストを `git mv` で移し、clamp ⑴ を `areka-runtime` の確定のテストへ移す。両側の `frame.rs` の宣言を付け替える
@@ -279,3 +279,4 @@
 - 3.3: 結線を手で組む箇所は範囲の中に 18（research の「16」は数え違いで一覧の和は 17・1.3 の 1 本で 18）。本体の側の手組みは 26 番の外。共有の支えの `wiring_with(assets, runtime, presenter)` が唯一の手組み。
 - 3.4: `frame_default_pos_track_tests.rs` の `HIGH_SIZE_*`・`raise_the_scale` は共有の同名と値が違う（出現の寸の 2 倍）ので私有のまま `DOUBLED_SIZE_*`・`double_the_scale` に改名した。arm の `settled_sizes` は共有の `high_sizes` と値が同じなので別名にせず消した。共有の支えは 309 行。`LOW_DPI`・`HIGH_DPI` の写しは balloon_offset_*・dpi_sync_hold に残る（3.5 の 29 番で見る）。
 - 3.5: `BALLOON_SPAWN_SIZE`・`BASE_OFFSETS`・`SCALE_120` は新しい `cfg(test)` の支えでなく `frame_shared_test_support.rs` に置いた（`feature = "test-support"` でも組まれる `resnap_placements` が読むため・設計からの逸れ）。`BASE_DPI`→`LOW_DPI`・`SCALE_192`→`HIGH_DPI`。強い方の整地の接地の確かめは Bottom の揃えの人格の窓だけ（follow の揃え方の表が整地の前に揃え方を変えるため）。`attach_material` の「素材は整地の後」の理由は消えた（審査の提案・7.1 で見る）。
+- 4.1: 移したテストは 22 本（規則 15・揃え 6・clamp ⑴ 1）。本体 46→24・`areka-runtime` 12→34 で、名は同じ（設計の「規則 13 本」は数え違いで実数は 15）。clamp ⑴⑻ の共通の配置は `persist_test_support::left_edge` に 1 つ置いた（写さない）。`crates/areka-placement/src/chain_rule_tests.rs:5` が古い置き場（本体の `frame_chain_rule_tests.rs`）を指したまま＝C23 で触らないファイルなので 6 で申し送りに書く。`left_edge::placements` の説明に「（要件 5.2）」が残る（7.1 で見る）。

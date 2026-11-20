@@ -461,3 +461,61 @@ fn finalize_within_the_bounded_wait_emits_no_diagnostic() {
         "前提: 確定は通常どおり隣接を回復している"
     );
 }
+
+/// ⑴⑼ 相方は本体の右の隣へ並べ替えられ、本体は動かない。相方のバルーンはずらしどおりに立ち、
+/// `[balloon-limit] Clamp` は出ない。寄せの行（場面・並べ替え）が 1 つ出る。
+#[test]
+fn partner_flips_to_right_of_body_on_left_edge() {
+    use super::persist_test_support::left_edge::{
+        OFFSET, PRIMARY, SIZES, placements, shown, world,
+    };
+    use super::persist_test_support::spawn_shown;
+    use log_capture_kit::{LineFormat, capture_lines};
+    use wintf::ecs::window::drain_window_pos_commands;
+
+    let mut world = world();
+    let gw = spawn_shown(&mut world, &placements(), &shown());
+    let _resnap = drain_window_pos_commands();
+    let body_before = pos_of(&world, gw.char_window(0).unwrap()).unwrap();
+    assert_eq!(body_before.x, PRIMARY.left, "前提: 本体は主の画面の左端");
+
+    let logs = capture_lines(LineFormat::LevelTargetFields, || {
+        finalize_chain_once_with(&shown(), &mut world)
+    })
+    .1;
+    assert!(
+        world.contains_resource::<ChainFinalized>(),
+        "前提: 並べ終えた"
+    );
+
+    let body = pos_of(&world, gw.char_window(0).unwrap()).unwrap();
+    let partner = pos_of(&world, gw.char_window(1).unwrap()).unwrap();
+    assert_eq!(body, body_before, "本体は動かない");
+    assert_eq!(
+        (partner.x, partner.y),
+        (
+            body.x + SIZES[0].0 as i32,
+            PRIMARY.bottom - SIZES[1].1 as i32
+        ),
+        "相方は本体の右の隣（左へ並べると x=−1108 で主の画面の外）"
+    );
+    let balloon = pos_of(&world, gw.balloon_window(1).unwrap()).unwrap();
+    assert_eq!(
+        (balloon.x, balloon.y),
+        (partner.x + OFFSET.x, partner.y + OFFSET.y),
+        "相方のバルーンはずらしどおり"
+    );
+    let clamp: Vec<&String> = logs
+        .iter()
+        .filter(|l| l.contains("[work-area-clamp] Clamp"))
+        .collect();
+    assert_eq!(clamp.len(), 1, "寄せの行は 1 つ: {logs:?}");
+    for field in ["scene=\"boot-repack\"", "how=\"flipped\"", "scope=1"] {
+        assert!(clamp[0].contains(field), "{field} が無い: {}", clamp[0]);
+    }
+    assert!(
+        !logs.iter().any(|l| l.contains("[balloon-limit] Clamp")),
+        "バルーンだけの寄せは起きない: {logs:?}"
+    );
+    let _residue = drain_window_pos_commands();
+}

@@ -17,9 +17,6 @@ use areka_sylphya::PersistKey;
 use bevy_ecs::prelude::World;
 use wintf::ecs::window::drain_window_pos_commands;
 
-use super::chain_finalize_persist_test_support::{
-    PersistStore, WORK_AREA, persist_world, spawn_shown,
-};
 use super::shared_test_support::{
     GAP_WITHOUT_REALIGN, boot_remembered_at_high, gap, low_sizes, lower_the_scale,
 };
@@ -31,6 +28,9 @@ use areka_placement::follow::OffsetBase;
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use areka_placement::spawn::GhostWindows;
+use areka_runtime::frame::persist_test_support::{
+    PersistStore, WORK_AREA, persist_world, spawn_shown,
+};
 use log_capture_kit::{LineFormat, capture_lines};
 
 /// 覚えたとき（200%）の絵の大きさ（本体・相方）。
