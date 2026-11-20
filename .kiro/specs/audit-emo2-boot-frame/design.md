@@ -42,7 +42,7 @@
   - 足す（テストの支え・`#[cfg(any(test, feature = "test-support"))]`）: `target_map::window_scope`（本番の関数・4 番）・`frame::test_support::gpu_on`（31 番）・`frame::shared_test_support` の結線の補助と、写しから寄せた定数と補助（26・27・28 番）・`frame::persist_test_support`（33 番・本体の `frame_chain_finalize_persist_test_support.rs` の大半を移す）。
   - 消す: `FrameHarness::run_work_area_resnap`（71 番・外の読み手 0）。
 - `RuntimeWiring` の私有の欄 `unconnected_text` を足す（3 番・`pub(super)`）。
-- ログの行: 新しい `info!` 1 行（3 番の繋ぎ直し）・scope の上限の記録（4 番・`frame/dpi.rs` と `frame/scale_text.rs` の `error!` 2 行を消し、`target_map::window_scope` の `warn!` 1 行に寄せる）・取り出しの上限の文（113 番）。どれも字面で読む実機の確かめ・`tools/perf/`・手順書は 0 件（`research.md` の 4 節と、この設計の時点の grep）。
+- ログの行: 新しい `info!` 1 行（3 番の繋ぎ直し）・scope の上限の記録（4 番・`frame/dpi.rs` と `frame/scale_text.rs` の `error!` 2 行を消し、`target_map::window_scope` の `warn!` 1 行に寄せる）・取り出しの上限の文（113 番・`frame/drain_resnap.rs` の「…残りは捨てずに次のフレームで…」を「…残りがあれば次のフレームで…」へ）・`frame/work_area_sync.rs` の `[work_area_sync]` の `warn!` 1 行「見張りの印を進められない（次のフレームで 1 回作り直す）」（7.1 のかけ直しで足した・今の引数では届かない道）。どれも字面で読む実機の確かめ・`tools/perf/`・手順書は 0 件（`research.md` の 4 節と、この設計の時点の grep）。
 
 ### 範囲の外（持たないもの）
 
@@ -51,6 +51,7 @@
   - `crates/areka-runtime/src/spine_wait.rs` — `GpuPermit` の説明の 2 行（14 番で「2 つ取るテスト」が無くなるので事実に合わせる・セ）。
   - `crates/areka-runtime/src/assets.rs` — 83 行あたりの説明 1 行（64 番で消すテストを名指している）。
   - `crates/areka-runtime/src/move_cue_apply_move_tests.rs` — 248 行あたりの説明 1 行（63 番で消すテストを名指している・持ち主 `audit-emo2-boot-switch` は C23 で走っていない）。
+  - `crates/areka/src/runtime_tests/zorder_wiring_tests.rs`（本体） — 説明 1 行（10 番で範囲の中の対照を消すので、`src/lib.rs` の対照の持ち主を `areka-runtime` の `zorder_wiring_tests.rs` の `t_zwi06` へ向け直す・要件 3.2）。
   - `crates/log-capture-kit/tests/file_length_guard_test.rs` — 上限越えの表から `frame_transition_branch_tests.rs` の 1 行を消し、件数を 3 から 2 にする（35 番・C23 の約束 ⑸・要件 7.4）。
   - brief（記録だけ）: `.kiro/specs/{extra-character-windows,test-crash-report-merge,audit-emo2-boot-switch,audit-areka-app,areka-test-wait-wording,window-resetwindowpos-hold}/brief.md`（要件 7.10・3.6）。
 - 触らない（C23 の約束・要件 7.3）: `crates/areka-placement/` の全部（使うだけ）・`crates/areka-runtime/src/hit_region.rs`・本体の `input_events/`・`main.rs`・`ghost_session.rs`・`ghost_session_runtime.rs`・`app_exit.rs`（`close_windows_for_restart` は呼ぶだけ）・`menu/`・`placement_tests/spawn_assembly_tests.rs`・`Cargo.toml`・`Cargo.lock`・`crates/log-capture-kit/src/event.rs` とその試験・`doc/COMPAT_ARCHITECTURE.md` §8・`vendors/`。
@@ -70,6 +71,7 @@
 - 公開の狭め（114 番）と `FrameHarness::run_work_area_resnap` の削除（71 番）。外の読み手は 0 件（grep）。
 - テストの置き場: 本体の `runtime_tests/` から `areka-runtime` へ、`frame_chain_rule_tests.rs`（13 本）・`frame_chain_finalize_align_tests.rs`（6 本）・`frame_chain_finalize_clamp_tests.rs` の ⑴・`frame_chain_finalize_remembered_tests.rs` の ⑶⑷⑸・`frame/window_state_tests.rs` の 1 本が移る（33・99 番・確定 9）。本体の `frame_chain_finalize_persist_test_support.rs` の大半（`PersistStore` ほか）は `areka-runtime` の `frame::persist_test_support` へ移り、本体に残るのは `MinimalGhost` だけになる。`session-module-gather` が直すパスはその分だけ減る。
 - `frame_transition_branch_tests.rs` が 2 本に分かれ、上限越えの表から出る（35 番）。
+- ログの行の足し: `frame/work_area_sync.rs` の `[work_area_sync]` の `warn!`「見張りの印を進められない（次のフレームで 1 回作り直す）」（`SystemState::get` の失敗を捨てずに残す・今の引数では届かない道）。字面の読み手は 0 件。
 
 ## つくり
 
@@ -425,7 +427,7 @@ struct MonitorWatch {
 | 53 | 説明を「順は本体のとおり」へ短くする | — | T20 |
 | 54 | t_zdr09 の `here` を `zorder_drain.rs` と `zorder_descript.rs` の 2 本に | — | T21 |
 | 55 | 適用の閉包に `assert!(applied <= MAX_DRAIN_PER_FRAME)`（目印の決めには触れない・確定 7） | — | T21 |
-| 56 | 「`areka-test-binary-stability` の `load-repro.md` の ⑹」（要件 5.13） | — | T21 |
+| 56 | 持ち主の spec の名は書かず、理由「自前の締切は負荷の下で赤になる」だけを残す（CLAUDE.md の `## Comments`・物差し。T21 で一度 `areka-test-binary-stability` の `load-repro.md` の ⑹ と書き、7.1 のかけ直しで消した・要件 5.13） | — | T21 |
 | 57 | 両側の見出しを自分の持つテストだけにし、もう一方の側を 1 行で指す。本体の `frame_move_order_tests.rs`・`frame_schedule_tests.rs` の写しの見出しを中身に合わせる | — | T21（`frame/` の分）・T8（schedule）・T24（本体の残り） |
 | 58 | 数を書かない | — | T21 |
 | 59 | 束なしの結線で `select_balloon_face(.., 0, 2, FaceChange)` → `error` 1 行と表が空のまま | 足したテスト | T21 |
@@ -651,7 +653,7 @@ struct MonitorWatch {
    - `git diff --stat origin/main...HEAD -- crates/areka-placement/ crates/areka-runtime/src/hit_region.rs crates/areka/src/input_events/ crates/areka/src/main.rs crates/areka/src/ghost_session.rs crates/areka/src/ghost_session_runtime.rs crates/areka/src/app_exit.rs crates/areka/src/menu/ crates/areka-runtime/src/placement_tests/spawn_assembly_tests.rs crates/log-capture-kit/src/event.rs vendors/ Cargo.toml Cargo.lock 'crates/*/Cargo.toml'` が空。
    - `git diff origin/main...HEAD -- doc/COMPAT_ARCHITECTURE.md` が空。
    - `crates/log-capture-kit/tests/file_length_guard_test.rs` の差分が、`frame_transition_branch_tests.rs` の 1 行と件数の行だけ。
-   - 範囲の外のファイルの差分が、「範囲の外（持たないもの）」の範囲の外で変えるファイルの一覧（`target_map.rs`・`spine_wait.rs`・`assets.rs`・`move_cue_apply_move_tests.rs`・`file_length_guard_test.rs`・6 つの brief）だけ。
+   - 範囲の外のファイルの差分が、「範囲の外（持たないもの）」の範囲の外で変えるファイルの一覧（`target_map.rs`・`spine_wait.rs`・`assets.rs`・`move_cue_apply_move_tests.rs`・本体の `zorder_wiring_tests.rs`・`file_length_guard_test.rs`・6 つの brief）だけ。
    - 外への約束の変わった所が「見直しが要る変化」に挙げた分だけ（公開の狭めを grep で示し、ログの文の変化を字面の読み手 0 件と一緒に示す）。
 
 ## 安全の考え

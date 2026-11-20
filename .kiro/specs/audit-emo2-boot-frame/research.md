@@ -1191,3 +1191,47 @@ C23 のほかの 3 本は `hit-id-pass`・`balloon-flip-ssp-review`・`input-cra
 - `doc/COMPAT_ARCHITECTURE.md` の 213 行目付近（⑴ の欄）が、消したテストのある `frame_work_area_resnap_tests.rs` を「作業領域の再スナップ単独で追従オフセットが変わらない」の持ち主と書いている。今の持ち主は `frame_transition_branch_tests.rs` の `a_work_area_only_change_writes_once`。C23 で触らないファイルなので、12.6 の 228 行目と同じく「申し送り先の決まっていない件」に足す（完了の棚卸で起票する）。
 - `crates/areka-placement/src/chain_rule_tests.rs` の 5 行目の古い置き場は、12.5 で `test-crash-report-merge` へ申し送り済み。
 - `crates/areka-placement/src/chain_realign.rs` の 168〜170 行（`arm_chain_realign` の説明）は「キャラ窓の再射影が寸変化を伴って書込を起こしたときに呼ぶ。判断（寸が変わったか・書込が起きたか）は呼び手が持つ」と書く。この spec が武装の条件から `wrote &&` を消した（13.5）ので、今の呼び手（`frame/dpi.rs`）が見るのは窓の種類と窓の寸の前後比べの 2 つだけで、「書込が起きたか」は見ない（寸が変われば書込は必ず起きているので振る舞いは同じ）。`areka-placement` は C23 で触らないので、12.5 の件と同じ `test-crash-report-merge` の brief へ件として足した。
+
+## 14. 仕上げの確かめ（T27・要件 9.4・9.5）
+
+基準は `origin/main`（`aff8f397a`・この枝の merge-base と同じ）、確かめた枝の先頭は `e28eafa5d`。
+
+### 14.1 既定の枝との差分の確かめ（要件 9.5）
+
+| 確かめ | 結果 |
+|---|---|
+| 触らないファイル（`crates/areka-placement/`・`hit_region.rs`・本体の `input_events/`・`main.rs`・`ghost_session.rs`・`ghost_session_runtime.rs`・`app_exit.rs`・`menu/`・`spawn_assembly_tests.rs`・`log-capture-kit` の `event.rs`・`vendors/`・`Cargo.toml`・`Cargo.lock`・`crates/*/Cargo.toml`）の `git diff --stat origin/main...HEAD` | 空 |
+| `doc/COMPAT_ARCHITECTURE.md` の差分 | 空 |
+| `file_length_guard_test.rs` の差分 | `frame_transition_branch_tests.rs` の 1 項目（4 行）を表から消した分と、件数 3 → 2 の 1 行だけ |
+| 範囲の外のファイルの差分（`frame*` の `areka-runtime`・本体の `runtime_tests/` の `frame*`・`session/ghost_quit*`・この spec の文書を除く） | `target_map.rs`・`spine_wait.rs`・`assets.rs`・`move_cue_apply_move_tests.rs`・本体の `runtime_tests/zorder_wiring_tests.rs`（`bfebe28d3`・2.1 の説明 1 行。`src/lib.rs` の対照の持ち主を `areka-runtime` の `t_zwi06` へ向け直した）・`file_length_guard_test.rs`・6 つの brief（`extra-character-windows`・`test-crash-report-merge`・`audit-emo2-boot-switch`・`audit-areka-app`・`areka-test-wait-wording`・`window-resetwindowpos-hold`）だけ。本体の `zorder_wiring_tests.rs` は設計の「範囲の外（持たないもの）」の一覧に無かったので、仕上げで一覧に足した。足した後の一覧と `git diff --name-only origin/main...HEAD` の範囲の外のファイルは一致する（ほかに漏れは無い） |
+| 依存・フォーク・`[patch]`・`vendors/` の差分 | 0（`Cargo`・`vendors`・`.cargo`・`deny` を含む名前の差分ファイルが無い） |
+| 端末へ出す文（`println!`・`eprintln!`・`print!`・`dbg!`）の足し | 0 |
+
+### 14.2 外への約束の変わった所（「見直しが要る変化」に挙げた分）
+
+- 公開の狭め（114 番）: `-pub(crate)`／`-pub` の行は、移した・狭めた分。外の読み手の grep は 0 件。`FrameHarness::run_work_area_resnap`（71 番）の削除も、ツリー全体で読み手 0 件。`frame::wiring` の公開は変わっていない（`origin/main` でも `#[cfg(feature = "test-support")] pub mod wiring;`／`#[cfg(not(feature = "test-support"))] mod wiring;`。差分は宣言の置き場を移し、上の説明の行を消しただけ）。
+- 新しい公開の関数: `target_map::window_scope(usize) -> Option<u32>`（4 番）。
+- ログの文の変化と、字面の読み手（道具・手順書・テスト・スキル）の数:
+  - 消した `error!` 2 行（`dpi.rs` の「dpi: scope が u32 に収まらず…」・`scale_text.rs` の「dpi reconcile: scope が u32 に収まらず…」）: 読み手 0 件。
+  - 足した `warn!`（設計の一覧にある分）: `target_map::window_scope`「window scope が上限を越え target を採番できない → この窓を読み飛ばす」（4 番）: 字面の読み手 0 件。
+  - 足した `warn!`（設計の一覧の外だった分）: `frame/work_area_sync.rs`「[work_area_sync] 見張りの印を進められない（次のフレームで 1 回作り直す）」（7.1 のかけ直しで足した・13.5。今の引数では届かない道）: 字面の読み手 0 件。設計の「境界の約束」のログの行と「見直しが要る変化」に足して、設計とコードを揃えた。
+  - 字面を変えた `warn!`（113 番）: `frame/drain_resnap.rs`「drain: 1 フレームに取り出す上限に達した（残りは捨てずに次のフレームで到着順に適用する）」→「…（残りがあれば次のフレームで到着順に適用する）」: 範囲の外の字面の読み手 0 件（範囲の中の読み手は同じ変更で足した `frame/drain_resnap_tests.rs` の 1 か所だけ）。
+  - 足した `info!`: `frame/scale_text.rs`「text-scale: 装着で繋げなかった文字層を、配置先ができたので繋ぐ」（3 番）: 範囲の外の字面の読み手 0 件（範囲の中の読み手は同じ変更で足した `frame_text_scale_tests.rs` の 1 か所だけ）。
+  - 既存の `info!(skin_switch_done)` は字面を変えていない（説明の行だけ）。
+  - 読み手の数は、それぞれの文の切れ端（「scope が u32 に収まらず」・「window scope が上限を越え」・「見張りの印を進められない」・「次のフレームで 1 回作り直す」・「取り出す上限」・「残りは捨てずに次のフレーム」・「残りがあれば次のフレーム」・「装着で繋げなかった文字層」）を `crates/`・`tools/`・`doc/`・`.claude/`・`.kiro/steering/` に grep して、出した行の外に当たる所で数えた。
+- 設計との揃え: 設計の「指摘ごとの直し方」の 56 番の行は「`areka-test-binary-stability` の `load-repro.md` の ⑹」と spec の名を書くと言っていたが、コードは CLAUDE.md の `## Comments` に合わせて名を消し、理由「自前の締切は負荷の下で赤になる」だけを残した（G3-1・要件 5.13 は消してよいと書く）。設計の 56 番の行を、したことに書き直した。
+
+### 14.3 全体テスト（要件 9.4）
+
+`pwsh -NoProfile -File tools/test-all.ps1` を 1 回回した。確かめた commit は `e28eafa5d`（走り始めに未コミットの変更が 1 件あった: この節の追記）。結果は全部緑（`all steps green`・終了コード 0）。
+
+| 手順 | 結果 |
+|---|---|
+| sample fetch・add i686 target・build i686 artifacts | OK |
+| fmt --check | OK（6 秒） |
+| x64 workspace tests | OK（413 秒） |
+| dola toml feature tests・i686 tests (host-32)・crates.io pre-publish check | OK |
+| encoding・release notes・roadmap overview・i686 helper sync・sample fetch・package・exe install・load flake・mouse input・app icon・cursor art の各 check | OK |
+| perf loop selftest・i686 helper beside areka.exe | OK |
+
+赤のテストは 0 件。
