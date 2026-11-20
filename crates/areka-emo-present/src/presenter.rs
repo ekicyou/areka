@@ -46,6 +46,7 @@
 // （公開項目は下の `pub use` で従来と同一のパス `presenter::<Name>` に再輸出する）。
 mod budget;
 mod hit;
+mod hit_picture;
 mod hub;
 mod read;
 mod refresh;

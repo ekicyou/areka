@@ -44,7 +44,6 @@ pub mod command;
 /// 閉じたコマンドリストへ記録する（拡大率 k を含まない）。`pub(crate)` 内部モジュール。
 pub(crate) mod display;
 /// 当たり判定の並び → ID の形の列（`hit_shapes`）と、`region` のマスクの控え（`HitMasks`）。
-#[cfg_attr(not(test), expect(dead_code))]
 pub(crate) mod hit_shapes;
 /// 読み込みの記録を出すかどうかの口（`LoadRecords`）。読み込みの権威の入口が記録の行を切り替える。
 pub(crate) mod load_records;

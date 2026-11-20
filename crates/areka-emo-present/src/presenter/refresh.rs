@@ -186,6 +186,9 @@ impl EmoPresenter {
         );
         let ids: Vec<TargetId> = self.targets.keys().copied().collect();
         for target in ids {
+            if let Some(t) = self.targets.get_mut(&target) {
+                t.discard_hit_gpu();
+            }
             self.apply(
                 world,
                 PresentCommand::InvalidateCache {

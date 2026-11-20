@@ -4,7 +4,10 @@
 //! `super::show`、`ReplaceTarget`（装着の置き換え）は `super::replace`、DPI 再スケールは `super::refresh`、照会系は `super::read`、当たり判定は `super::hit` に
 //! 分かれる（いずれも同一型 `EmoPresenter` の別 `impl` ブロック）。
 
+use crate::hit_shapes::HitMasks;
+
 use super::budget::FrameBudget;
+use super::hit_picture::HitNotes;
 use super::scale_change::ScaleChange;
 use super::visibility::strip_finite_films;
 use super::{
@@ -92,6 +95,10 @@ impl EmoPresenter {
                 pending_resize: None,
                 partial_base: false,
                 failure_note: None,
+                hit_picture: None,
+                hit_masks: HitMasks::default(),
+                shown_mask: None,
+                hit_notes: HitNotes::default(),
             },
         );
     }

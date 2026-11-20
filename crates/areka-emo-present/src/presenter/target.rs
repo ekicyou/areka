@@ -5,8 +5,15 @@
 //! 構造体に束ねる。フィールドの更新規律は各 doc が正本であり、書き込み点は `presenter` サブツリー内に
 //! 閉じる（`pub(super)` はその範囲を表す＝分割前の「`presenter` 私有」と可視集合が同一）。
 
+use std::sync::Arc;
+
+use wintf::ecs::widget::bitmap_source::AlphaMask;
+
 use super::budget::FrameBudget;
+use super::hit_picture::{HitNotes, HitPicture};
 use super::scale_change::AppliedScale;
+use crate::hit_shapes::HitMasks;
+
 use super::{
     AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, PatternState, ScalePolicy,
     ScaleRatio, VisualMount,
@@ -202,4 +209,11 @@ pub(super) struct PresentTarget {
     /// 成立をはさまずに同じ原因が続くあいだだけ値を持ち、その間の失敗の行は `debug!` になる。対象を
     /// 作るとき空・装置の失敗で `Some`・表示の成立点と装置以外の失敗（合成の失敗・全透明の縮退）で空。
     pub(super) failure_note: Option<(&'static str, i32)>,
+    /// 塗ってある ID の描き先。空・失敗・装置の変化で `None`。`Hide` では残す。
+    pub(super) hit_picture: Option<HitPicture>,
+    /// `region` のマスクの控え（対象の寿命で持つ）。
+    pub(super) hit_masks: HitMasks,
+    /// 表示中の α マスク（クリックの透過へ渡したのと同じ実体）。
+    pub(super) shown_mask: Option<Arc<AlphaMask>>,
+    pub(super) hit_notes: HitNotes,
 }
