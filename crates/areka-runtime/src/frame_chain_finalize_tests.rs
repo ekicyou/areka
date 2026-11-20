@@ -10,8 +10,8 @@
 // =============================================================================
 
 use super::test_support::{
-    PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, placement_basis, pos_of, resnap_world,
-    settled_sizes, size_of,
+    PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, capture_logs, count_level, placement_basis, pos_of,
+    resnap_world, settled_sizes, size_of,
 };
 use super::*;
 
@@ -24,7 +24,6 @@ use areka_placement::resolver::Anchor;
 use areka_placement::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
 
 use areka_emo_compose::ScaleRatio;
-use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::{Point, SizeI};
 
 // `PerTargetSizes`／`SPAWN_SIZE_*`／`settled_sizes` は多フレーム駆動ハーネス（task 3.3）と
@@ -74,8 +73,11 @@ fn finalize_closes_the_gap_by_moving_the_follower_only() {
         "Y は動かさない（下端吸着は再アンカーが保つ・7.2）"
     );
     // 隣接不変量: scope1 の右端＝scope0 の左端。
+    let origin_x = pos_of(&world, char0).map(|p| p.x).unwrap();
+    let follower_x = pos_of(&world, char1).map(|p| p.x).unwrap();
+    let follower_width = size_of(&world, char1).unwrap().width;
     assert_eq!(
-        1483 - (1205 + 278),
+        origin_x - (follower_x + follower_width),
         0,
         "確定後は隙間 0（areka-P0-scope-chain-gap 7.1）"
     );
@@ -134,8 +136,9 @@ fn finalize_runs_only_once_even_if_sizes_change_again() {
         after_first,
         "確定後のサーフェス切替では後続スコープを動かさない（7.4）"
     );
-    assert!(
-        moved_origin_x.is_some(),
+    assert_ne!(
+        moved_origin_x,
+        Some(1483),
         "前提: 起点スコープ側は resnap で再アンカーされている（観測の退化防止）"
     );
 }
@@ -201,7 +204,7 @@ fn finalize_does_not_pull_back_an_explicitly_moved_scope() {
     let (mut world, gw) = resnap_world();
     let char1 = gw.char_window(1).unwrap();
 
-    // 明示的な再配置（唯一の位置ライター経由）。以後 current_x != default_x になる。
+    // 明示的な再配置（台本の移動と同じ口（`move_window_to`）で動かす）。以後 current_x != default_x になる。
     areka_placement::follow::move_window_to(&mut world, char1, 800, 1087);
     assert_eq!(pos_of(&world, char1), Some(Point { x: 800, y: 1087 }));
 
@@ -289,22 +292,7 @@ fn finalize_does_not_pull_back_a_scope_followed_by_a_sticky_move() {
 // 定石は `move_cue_move_severity_log_tests.rs` と同じ——硬化機構の唯一の定義元
 // `log-capture-kit` の捕捉窓へ委譲する。判定そのものの回数は純関数檻が固定しており、ここで
 // 確かめるのは**本番経路が実際に 1 行だけ出す／正常起動では 1 行も出さない**こと。
-//
-// 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
-// のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
-// interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの判定が
-// 焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は「不要」ゆえ、
-// 先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。
-// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算 ⑶ 番兵イベントに
-// よる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の crate doc と
-// 同 crate の `src/probe.rs`）。
 // -----------------------------------------------------------------------------
-
-/// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines
-}
 
 /// 捕捉行のうち指定 level の行だけを抜く。
 fn lines_of_level(logs: &[String], level: &str) -> Vec<String> {
@@ -347,10 +335,10 @@ fn never_shown_scope_is_a_ghost_wait_and_is_not_counted() {
     });
     assert_eq!(
         (
-            lines_of_level(&waiting, "WARN").len(),
-            lines_of_level(&waiting, "INFO").len(),
-            lines_of_level(&waiting, "DEBUG").len(),
-            lines_of_level(&waiting, "TRACE").len(),
+            count_level(&waiting, "WARN"),
+            count_level(&waiting, "INFO"),
+            count_level(&waiting, "DEBUG"),
+            count_level(&waiting, "TRACE"),
             world
                 .get_resource::<ChainFinalizeStall>()
                 .map(|s| (s.deferrals, s.reported)),
@@ -472,4 +460,99 @@ fn finalize_within_the_bounded_wait_emits_no_diagnostic() {
         Some(1205),
         "前提: 確定は通常どおり隣接を回復している"
     );
+}
+
+/// ⑴⑼ 相方は本体の右の隣へ並べ替えられ、本体は動かない。相方のバルーンはずらしどおりに立ち、
+/// `[balloon-limit] Clamp` は出ない。寄せの行（場面・並べ替え）が 1 つ出る。
+#[test]
+fn partner_flips_to_right_of_body_on_left_edge() {
+    use super::persist_test_support::left_edge::{
+        OFFSET, PRIMARY, SIZES, placements, shown, world,
+    };
+    use super::persist_test_support::spawn_shown;
+    use log_capture_kit::{LineFormat, capture_lines};
+    use wintf::ecs::window::drain_window_pos_commands;
+
+    let mut world = world();
+    let gw = spawn_shown(&mut world, &placements(), &shown());
+    let _resnap = drain_window_pos_commands();
+    let body_before = pos_of(&world, gw.char_window(0).unwrap()).unwrap();
+    assert_eq!(body_before.x, PRIMARY.left, "前提: 本体は主の画面の左端");
+
+    let logs = capture_lines(LineFormat::LevelTargetFields, || {
+        finalize_chain_once_with(&shown(), &mut world)
+    })
+    .1;
+    assert!(
+        world.contains_resource::<ChainFinalized>(),
+        "前提: 並べ終えた"
+    );
+
+    let body = pos_of(&world, gw.char_window(0).unwrap()).unwrap();
+    let partner = pos_of(&world, gw.char_window(1).unwrap()).unwrap();
+    assert_eq!(body, body_before, "本体は動かない");
+    assert_eq!(
+        (partner.x, partner.y),
+        (
+            body.x + SIZES[0].0 as i32,
+            PRIMARY.bottom - SIZES[1].1 as i32
+        ),
+        "相方は本体の右の隣（左へ並べると x=−1108 で主の画面の外）"
+    );
+    let balloon = pos_of(&world, gw.balloon_window(1).unwrap()).unwrap();
+    assert_eq!(
+        (balloon.x, balloon.y),
+        (partner.x + OFFSET.x, partner.y + OFFSET.y),
+        "相方のバルーンはずらしどおり"
+    );
+    let clamp: Vec<&String> = logs
+        .iter()
+        .filter(|l| l.contains("[work-area-clamp] Clamp"))
+        .collect();
+    assert_eq!(clamp.len(), 1, "寄せの行は 1 つ: {logs:?}");
+    for field in ["scene=\"boot-repack\"", "how=\"flipped\"", "scope=1"] {
+        assert!(clamp[0].contains(field), "{field} が無い: {}", clamp[0]);
+    }
+    assert!(
+        !logs.iter().any(|l| l.contains("[balloon-limit] Clamp")),
+        "バルーンだけの寄せは起きない: {logs:?}"
+    );
+    let _residue = drain_window_pos_commands();
+}
+
+/// 並べ終えた時点の保存に、相方の寄せた後の位置（下端中央の x・上端の y）が書かれる。
+#[test]
+fn save_at_finalize_writes_clamped_partner_position() {
+    use super::persist_test_support::left_edge::{SIZES, placements, shown, world};
+    use super::persist_test_support::{PersistStore, spawn_shown};
+    use areka_sylphya::{Axis, PersistKey};
+    use wintf::ecs::window::drain_window_pos_commands;
+
+    let mut world = world();
+    let store = PersistStore::fake();
+    store.wire(&mut world);
+    let gw = spawn_shown(&mut world, &placements(), &shown());
+
+    finalize_chain_once_with(&shown(), &mut world);
+
+    let partner = pos_of(&world, gw.char_window(1).unwrap()).unwrap();
+    assert_eq!(
+        partner.x, SIZES[0].0 as i32,
+        "前提: 相方は右の隣へ寄せられた"
+    );
+    let saved = store.load();
+    let get = |axis| {
+        saved
+            .get(&PersistKey::WindowPos { scope: 1, axis })
+            .cloned()
+    };
+    assert_eq!(
+        (get(Axis::X), get(Axis::Y)),
+        (
+            Some((partner.x + SIZES[1].0 as i32 / 2).to_string()),
+            Some(partner.y.to_string())
+        ),
+        "寄せた後の位置が書かれる: {saved:?}"
+    );
+    let _residue = drain_window_pos_commands();
 }

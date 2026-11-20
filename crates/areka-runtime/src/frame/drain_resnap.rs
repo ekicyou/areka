@@ -34,42 +34,36 @@ use areka_placement::sticky_group_ledger::{
 
 use super::move_hold::{ShownRatioSource, release_ready};
 use super::{PositionCue, RuntimeWiring, apply_move_directive, shell_target};
+use crate::target_map::window_scope;
 
-// ---------------------------------------------------------------------------
-// drain・text フェーズ＋排他 system（tasks.md task 4.2・design「UI 毎フレーム結線 / frame」の
-// Responsibilities フェーズ②（drain）／③（text）・Service Interface・DD-1）
-// ---------------------------------------------------------------------------
-
-/// フェーズ②（drain・design「フェーズ②（drain）」・DD-1）: attach 完了後のみ受信済み
+/// 取り出しの相（drain）: attach 完了後のみ受信済み
 /// `PresentCommand` を FIFO で `presenter.apply` へ適用する（画面に載らない途中の `ShowSurface` は畳む）。
 ///
 /// attach 前はチャネルが保留バッファを兼ねる（取りこぼしなし・FIFO）ため **`attached` が立つまで
 /// drain しない**。装着後は届いている指令を非ブロックで**先に集めてから**到着順に
 /// `presenter.apply(world, cmd)` する（集め方・畳み方は [`drain_present_commands`]）。`apply` は `()` を返し、失敗は
 /// `cmd.reply`（本経路は常に `None`＝撃ちっぱなし）経由で、未装着等の異常は presenter 内部で
-/// `error!` 済み（log-first）。本フェーズは panic しない（`SurfaceOutput`→UI の非ブロック配送契約）。
+/// `error!` 済み。本フェーズは panic しない（`SurfaceOutput`→UI の非ブロック配送契約）。
 ///
 /// drain は attach 後にのみ走るため `TargetNotAttached` は原理上発生しない（発生＝結線バグとして
-/// presenter が `error!`・design「適用時（UI）」）。
+/// presenter が `error!`）。
 ///
 /// # 窓寸 reconcile は本フェーズの外側にある
 ///
 /// 本フェーズは**指令の適用だけ**を担う。表示成立点の状態照合報告（`take_pending_resize`）を
 /// 窓へ反映する `reconcile_reported_sizes` は、呼び出し順の所有者である
-/// [`frame_system`](super::frame_system) が本フェーズの**後**に直接呼ぶ
-/// （`areka-P0-balloon-visibility` design 決定 D5・task 4.3）。バルーン可視性の相を
-/// 「全 `\b` 指令の適用後」かつ「表示が積む窓寸要求の消化前」へ挟むための並べ替えであり、
-/// 適用と反映の順序（適用 → 反映）は移動前と変わらない。
+/// [`frame_system`](super::frame_system) が本フェーズの**後**に直接呼ぶ。バルーン可視性の相を
+/// 「全 `\b` 指令の適用後」かつ「表示が積む窓寸要求の消化前」へ挟むため、順は適用 → 反映である。
 pub fn run_drain_phase(wiring: &mut RuntimeWiring, world: &mut World) {
-    // attach 前はチャネルが保留バッファを兼ねる（取りこぼしなし・FIFO）。装着後のみ drain する（DD-1）。
+    // attach 前はチャネルが保留バッファを兼ねる（取りこぼしなし・FIFO）。装着後のみ drain する。
     if !wiring.attached {
         return;
     }
     // wiring.rx（受信端＝shared 借用）と wiring.presenter（mut 借用）は互いに素なフィールドゆえ両立する。
     // apply は () を返し、失敗は cmd.reply（本経路は常に None）経由。未装着等の異常は presenter 内部で
-    // error! 済み（log-first）。撃ちっぱなしの非ブロック配送契約ゆえ本フェーズは panic しない。
+    // error! 済み。撃ちっぱなしの非ブロック配送契約ゆえ本フェーズは panic しない。
     // このフレームで ShowSurface を適用した target を控え、適用の後に今の定義の書き手へ渡す
-    // （drain → 書き手 → 文字層スケール相 → 文字の相・balloon-scroll-arrows 要件 1.7・8.6）。
+    // （drain → 書き手 → 文字層スケール相 → 文字の相）。
     let mut shown: Vec<TargetId> = Vec::new();
     drain_present_commands(&wiring.rx, |cmd| {
         if let PresentCommand::ShowSurface { target, .. } = &cmd
@@ -91,7 +85,7 @@ pub(super) const MAX_DRAIN_PER_FRAME: usize = 1024;
 ///
 /// 1. 届いている指令を**適用より先に**上限 [`MAX_DRAIN_PER_FRAME`] まで集める。`try_iter` を回しながら
 ///    適用すると、送り手（seriko）が送り続けるあいだ尽きず、適用 1 回が送りの間隔より重いと
-///    フレームが終わらない（rerun2 の固まり・task 5.6）。上限を超えた分は捨てずにチャネルに残り、
+///    フレームが終わらない（過去に実機で固まった）。上限を超えた分は捨てずにチャネルに残り、
 ///    次のフレームが到着順に取り出す（当たったら `warn!`）。
 /// 2. 同じ target へ続く `reply` の無い `ShowSurface` は、後ろに同じ target の `ShowSurface` が
 ///    あれば画面に載らないので最後の 1 件だけ適用する（今のコマを出す）。`ShowSurface` 以外の指令は
@@ -104,7 +98,7 @@ pub(super) fn drain_present_commands(
     if cmds.len() == MAX_DRAIN_PER_FRAME {
         warn!(
             cap = MAX_DRAIN_PER_FRAME,
-            "drain: 1 フレームに取り出す上限に達した（残りは捨てずに次のフレームで到着順に適用する）"
+            "drain: 1 フレームに取り出す上限に達した（残りがあれば次のフレームで到着順に適用する）"
         );
     }
     // 後ろから見て、区切りまでのあいだに後の ShowSurface を持つ target を控える。
@@ -137,15 +131,14 @@ pub(super) fn drain_present_commands(
     }
 }
 
-/// move drain フェーズ（`\![move]` の末端結線・design「frame 相で drain→`apply_move_directive`」・
-/// R5.1/5.3/5.5/R6・task 9.2）: talk スレッド（`MoveCueSink`）から mpsc で届いた [`PositionCue`]
+/// move drain フェーズ（`\![move]` の末端結線）: talk スレッド（`MoveCueSink`）から mpsc で届いた [`PositionCue`]
 /// を非ブロックで FIFO 全件 drain し、UI スレッド上で種類ごとに適用する——`Move` は
 /// [`apply_move_directive`]、`ResetWindowPos` は [`reset_window_positions`]（`OnResetWindowPos` は
-/// 送らない・areka-P0-move-canon 要件 8.7）、吸着・組を作る・組を解く・バルーン位置初期化は
-/// `placement` の各関数（areka-P0-window-link-directives）。
+/// 送らない）、吸着・組を作る・組を解く・バルーン位置初期化は
+/// `placement` の各関数。
 ///
 /// `PresentBridge`（[`run_drain_phase`]）と同型の跨ぎパターンだが、ゲートは `attached`（GPU）でなく
-/// **指令ごとの預かり**である（window-work-area-clamp design「MoveHold」・要件 6.2／6.3／6.4）。
+/// **指令ごとの預かり**である。
 /// `\![move]` は動かす窓と基準の窓（`--base`）の両方が最初の面を表示して拡大率が取れるまで預かる
 /// （判定は兄弟の [`release_ready`]）。GPU の装着だけを待つ形は取らない——装着の後でも最初の `\s` の
 /// 前の窓は表示の前の仮の矩形のままで、そこを基準に当てると表示の後の照合で隙間が残る（research 12 節）。
@@ -154,7 +147,7 @@ pub(super) fn drain_present_commands(
 /// `GhostWindows` 未挿入の間はチャネルが保留バッファを兼ねる（[`Receiver::try_iter`] を呼ばず取りこぼさない）。
 ///
 /// 各指令の適用は [`apply_move_directive`]／[`reset_window_positions`] が完結させる: 窓/`WindowPos`/
-/// 作業領域/主モニタ/並べ直しの材料の不在はいずれも同関数内で `warn!`＋`false`（log-first・非 panic・R5.5）ゆえ、本フェーズは
+/// 作業領域/主モニタ/並べ直しの材料の不在はいずれも同関数内で `warn!`＋`false`（非 panic）ゆえ、本フェーズは
 /// 戻り値を捨てて次 directive へ進む（1 件の縮退が他 directive・talk を巻き込まない）。`try_iter` は
 /// チャネルが空か全送信端 drop で尽きる（ブロックしない・empty/disconnected でも panic しない）。
 pub fn run_move_drain_phase(wiring: &RuntimeWiring, world: &mut World) {
@@ -189,7 +182,7 @@ pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
                 reset_window_positions(world);
                 continue;
             }
-            // 吸着・組・バルーン位置初期化（areka-P0-window-link-directives）。記録は各関数の中ゆえ
+            // 吸着・組・バルーン位置初期化。記録は各関数の中ゆえ
             // 戻り値を捨てる。台本の並び（組を作ってから `\![move]`）はこの 1 本の線の順で保たれる。
             PositionCue::SetAlignment { scope, word } => {
                 apply_script_alignment(world, scope, &word);
@@ -207,7 +200,7 @@ pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
                 reset_balloon_positions(world, BalloonResetTrigger::Script);
                 continue;
             }
-            // 台本の lock・unlock（descript-window-keys・要件 5.1・5.2）。記録は関数の中。
+            // 台本の lock・unlock。記録は関数の中。
             PositionCue::BalloonMoveLock { scope, locked } => {
                 apply_script_balloon_lock(world, scope, locked);
                 continue;
@@ -224,37 +217,31 @@ pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
         let k = shown
             .shown_ratio(directive.scope)
             .unwrap_or(ScaleRatio::ONE);
-        // 適用の全縮退（窓・作業領域・主モニタの不在）は apply_move_directive 内で warn!＋false 済み
-        // （log-first・R5.5）。戻り値は捨てて次 directive へ進む（1 件の縮退で talk を殺さない・非 panic）。
+        // 適用の全縮退（窓・作業領域・主モニタの不在）は apply_move_directive 内で warn!＋false 済み。
+        // 戻り値は捨てて次 directive へ進む（1 件の縮退で talk を殺さない・非 panic）。
         apply_move_directive(world, &directive, k);
     }
 }
 
-// ---------------------------------------------------------------------------
-// resnap シーム（tasks.md task 3.2・design「統合シーム（runtime frame.rs）>
-// resnap_shell_targets / resnap_from_sizes」・Req1.3/3.1/3.2/4.1/4.3/4.5・DD-2/DD-5）
-// ---------------------------------------------------------------------------
-
 /// 合成寸法列を受け、shell サーフェス寸が変わった scope の char 窓のみ [`resize_window_to`] を
-/// 駆動する純粋判定部（headless テスト対象・GPU 不要・design「resnap_from_sizes」・
-/// Req1.3/3.1/3.4/4.5）。
+/// 駆動する純粋判定部（headless テスト対象・GPU 不要）。
 ///
 /// [`GhostWindows`] Resource を world から取得（未挿入は no-op＝Preconditions）。各
 /// `(scope, shown_size)` について:
 /// - `char_window(scope)` が `None`（未知 scope）→ skip（再適用対象の char 窓が無い）。
-/// - **非正寸**（`w <= 0 || h <= 0`）→ skip（Req3.4 の防御・[`resize_window_to`] と二重防波堤）。
+/// - **非正寸**（`w <= 0 || h <= 0`）→ skip（[`resize_window_to`] と二重防波堤）。
 /// - char 窓 `WindowPos.size` と `SizeI::new(w, h)` が**異なるときのみ** [`resize_window_to`] を
-///   呼ぶ（同寸は no-op＝冗長駆動回避・Req3.1 べき等）。
+///   呼ぶ（同寸は no-op＝冗長駆動回避）。
 ///
-/// **balloon 窓には一切触れない**（scope→`char_window` 写像のみ・Req4.5/DD-5）。判定・反映は
+/// **balloon 窓には一切触れない**（scope→`char_window` 写像のみ）。判定・反映は
 /// World 操作に閉じ GPU を要しない（GPU 結合は薄い [`resnap_shell_targets`] が担う）。
 pub(super) fn resnap_from_sizes(world: &mut World, sizes: impl Iterator<Item = (usize, SizePx)>) {
-    // GhostWindows（scope→窓 entity の正本）。未挿入は no-op（Preconditions・Req4.5）。
+    // GhostWindows（scope→窓 entity の正本）。未挿入は no-op（Preconditions）。
     let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
         return;
     };
     // scope→char_window を先に解決して collect し、world の不変借用を後段の &mut ループへ跨がせない
-    // （借用衝突回避）。未知 scope・非正寸はここで弾く（Req3.4・二重防波堤）。
+    // （借用衝突回避）。未知 scope・非正寸はここで弾く（二重防波堤）。
     let mut targets: Vec<(Entity, SizePx)> = Vec::new();
     for (scope, shown_size) in sizes {
         let Some(char_window) = ghost_windows.char_window(scope) else {
@@ -271,33 +258,31 @@ pub(super) fn resnap_from_sizes(world: &mut World, sizes: impl Iterator<Item = (
         }
         targets.push((char_window, shown_size));
     }
-    // 反映: char 窓 WindowPos.size と異なるときのみ resize_window_to を駆動（同寸は非発火・Req3.1）。
+    // 反映: char 窓 WindowPos.size と異なるときのみ resize_window_to を駆動（同寸は非発火）。
     for (char_window, shown_size) in targets {
         let current = world.get::<WindowPos>(char_window).and_then(|wp| wp.size);
         if current == Some(SizeI::new(shown_size.w, shown_size.h)) {
-            // 同寸＝冗長駆動を避ける（Req3.1 べき等・正常系ゆえ静穏に skip）。
+            // 同寸＝冗長駆動を避ける（正常系ゆえ静穏に skip）。
             continue;
         }
-        // 異寸のみ: 新寸で T 再適用→一度書き→随伴（resize_window_to が単一ライター・Req1.3）。
-        // 経路タグは Resnap（毎フレーム再スナップ・Req 1.2／task 1.4）。
+        // 異寸のみ: `resize_window_to` が T の再適用と随伴を 1 呼出で書く。
+        // 経路タグは Resnap（毎フレーム再スナップ）。
         resize_window_to(world, char_window, shown_size, PlacementRoute::Resnap);
     }
 }
 
 /// drain 後に shell サーフェス寸法の変化を検知し、変化した char 窓のみアンカー再適用を駆動する
-/// 薄いアダプタ（GPU 結合の thin wiring・`presenter` を read-only 消費・design
-/// 「resnap_shell_targets」・Req3.2/4.1/4.5）。
+/// 薄いアダプタ（`presenter` を read-only 消費）。
 ///
-/// [`GhostWindows`] を取得し `scopes()` を回す。各 scope について
-/// **`presenter.text_slot_view(shell_target(scope))`**（**`balloon_target` は読まない**＝shell
-/// 限定駆動・Req4.5/DD-5）を引き、`None`（初回 `ShowSurface` 前＝未表示）は skip。
-/// `surface_size() -> (u32, u32)`（emo-present 適用点の実寸・Req4.1）を `i32::try_from` で
-/// [`SizePx`] 化し、**変換失敗・0** は skip（Req3.4。`try_from(0)=Ok(0)` ゆえ 0 を明示的に弾く）。
-/// 得た `(scope, SizePx)` 列を [`resnap_from_sizes`] へ渡す——**presenter 借用を解いてから**
-/// （先に `Vec` へ collect してから world を mut 借用・借用衝突回避）。
+/// [`GhostWindows`] の `scopes()` を回し、[`PhysicalSizeSource`]（本番は
+/// [`EmoPresenter::target_physical_size`]＝k 倍後の物理寸）を `shell_target(scope)` で引く
+/// （`balloon_target` は読まない＝shell 限定）。`None`（初回 `ShowSurface` 前＝未表示）は skip。
+/// `i32::try_from` で [`SizePx`] 化し、**変換失敗・0** は skip（`try_from(0)=Ok(0)` ゆえ 0 を
+/// 明示的に弾く）。得た `(scope, SizePx)` 列を [`resnap_from_sizes`] へ渡す——**presenter 借用を
+/// 解いてから**（先に `Vec` へ collect してから world を mut 借用する）。
 ///
-/// 未表示 target・未装着 presenter は全 scope skip（no-op・panic しない）。`GhostWindows` 未挿入
-/// でも安全（`resnap_from_sizes` が no-op）。
+/// 未表示 target・未装着 presenter は全 scope skip（panic しない）。`GhostWindows` 未挿入でも
+/// 安全（`resnap_from_sizes` が no-op）。
 pub(super) fn resnap_shell_targets(presenter: &EmoPresenter, world: &mut World) {
     resnap_with(presenter, world)
 }
@@ -312,8 +297,8 @@ pub(super) fn resnap_shell_targets(presenter: &EmoPresenter, world: &mut World) 
 /// （2026-07-30 是正。それ以前は「コードレビューで足りる」と散文で断っていた）。
 ///
 /// 本トレイトは兄弟の [`ScaleReportSource`] と同型の意図を持つ: **frame 側の結線**を GPU 無しの
-/// 決定論檻へ入れるためのシーム（D9 の振り分け基準 (a)＝判断分岐は in-crate 純テスト）。
-// 要件 2.5: 公開の `FrameHarness::run_resnap`・`run_chain_finalize`・`run_chain_realign` が名指すので開ける
+/// 決定論檻へ入れるためのシーム（判断分岐は in-crate 純テスト）。
+// 公開の `FrameHarness::run_resnap`・`run_chain_finalize`・`run_chain_realign` が名指すので開ける
 pub trait PhysicalSizeSource {
     /// 表示中なら適用済み k を掛けた物理寸を返す。未装着・未表示は `None`。
     fn physical_size(&self, target: TargetId) -> Option<(u32, u32)>;
@@ -331,21 +316,21 @@ impl PhysicalSizeSource for EmoPresenter {
 /// 割らないことが要点で、fake 相手の檻が「本番も同じ判断をしている」ことを担保する
 /// （実装が分岐していると fake は緑のまま本番だけ壊れ得る）。
 ///
-/// # 破棄済み窓の打ち切り（要件 6.2/6.3・design D8 消費側）
+/// # 破棄済み窓の打ち切り
 ///
 /// scope ループの**冒頭**で char 窓 entity の存在を確認し、既に despawn 済みなら
 /// `debug!`（[`DESPAWNED_SKIP_TAG`]）で当該 scope を打ち切って**他 scope は処理し切る**
 /// （終了処理の正常系ゆえ警告以上を出さない）。寸の問い合わせより手前に置くのは、
 /// 破棄済み窓のために表示側へ問い合わせる意味が無いためである。
 pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mut World) {
-    // scope 識別は GhostWindows 経由（Req4.5）。未挿入は shell 寸を引く対象が無い＝no-op。
+    // scope 識別は GhostWindows 経由。未挿入は shell 寸を引く対象が無い＝no-op。
     let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
         return;
     };
     // presenter 借用を解いてから resnap_from_sizes（&mut World）を呼ぶため、先に collect する。
     let mut sizes: Vec<(usize, SizePx)> = Vec::new();
     for scope in ghost_windows.scopes() {
-        // 存在確認（要件 6.2/6.3・design D8 消費側）: レジストリが指す char 窓が既に
+        // 存在確認: レジストリが指す char 窓が既に
         // despawn 済みなら **正常終了系**として debug で打ち切り、**他 scope は処理し切る**。
         // 寸の問い合わせより手前に置く——破棄済みの窓のために表示側へ問い合わせる意味が
         // 無いうえ、素通りさせると下流 `resize_window_to` が破棄済み窓ぶん呼ばれる。
@@ -359,7 +344,7 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
             );
             continue;
         }
-        // 整合ゲート（設計 C5・要件 5.8）: 待ち札のある窓へはこの経路からも書かない。
+        // 整合ゲート: 待ち札のある窓へはこの経路からも書かない。
         // 見送った寸は持ち越し用に溜めない——本関数は毎フレーム**表示側の現物理寸を読み直す**
         // ので、待ちが解けたフレームに同じ食い違いがそのまま再び見える（拡大率の相が先に
         // 1 本書けば、そこで一致してべき等 skip で抜ける）。
@@ -368,19 +353,22 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
         {
             continue;
         }
-        // shell target（偶数=2*scope）のみを読む（balloon_target は読まない＝shell 限定・Req4.5）。
+        // shell target（偶数=2*scope）のみを読む（balloon_target は読まない＝shell 限定）。
         // 窓 client に合わせるべき寸は **物理寸**（k 倍後）であって native 原寸ではない。両者を
         // 選べる `text_slot_view()`（`surface_size()`／`physical_size()` が隣り合う）ではなく、
         // **物理寸だけを返す** `target_physical_size` を引く——消費点に取り違えの選択肢を残さない
         // （native で駆動すると k≠1 で DPI 相 reconcile と同一フレーム内で綱引きになり窓が原寸へ
         // 引き戻される）。丸めは presenter 側が権威 `scaled_extent` で確定済みゆえ通貨変換のみ行う。
-        // 未表示（初回 ShowSurface 前）・未装着は `None` → skip（no-op・遅延化への防御）。
+        // 未表示（初回 ShowSurface 前）・未装着は `None` → skip（遅延化への防御）。
         // shell/balloon の取り違えは `resnap_reads_shell_targets_only_and_ignores_balloon_geometry`
         // と `resnap_queries_shell_targets_only` が排他的に殺す（2026-07-30 実測）。
-        let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
+        let Some(s) = window_scope(scope) else {
             continue;
         };
-        // (u32,u32)→i32 変換失敗は skip（Req3.4）。
+        let Some((w, h)) = source.physical_size(shell_target(s)) else {
+            continue;
+        };
+        // (u32,u32)→i32 変換失敗は skip。
         let (Ok(w), Ok(h)) = (i32::try_from(w), i32::try_from(h)) else {
             debug!(
                 scope,
@@ -388,7 +376,7 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
             );
             continue;
         };
-        // 0 は skip（try_from(0)=Ok(0) ゆえ明示的に弾く・Req3.4）。負値は u32 起点ゆえ生じない。
+        // 0 は skip（try_from(0)=Ok(0) ゆえ明示的に弾く）。負値は u32 起点ゆえ生じない。
         if w == 0 || h == 0 {
             debug!(
                 scope,
@@ -403,10 +391,10 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
 }
 
 // ---------------------------------------------------------------------------
-// 実表示寸での連鎖再解決（areka-P0-scope-chain-gap 要件 7・design C6）
+// 実表示寸での連鎖再解決
 // ---------------------------------------------------------------------------
 
-/// 初期配置を**実表示寸**で一度きり確定させる（要件 7.1/7.4）。
+/// 初期配置を**実表示寸**で一度きり確定させる。
 ///
 /// 本番経路は [`resnap_shell_targets`] と同じく本体を持たず [`finalize_chain_once_with`] へ
 /// 委譲する（実装を 2 つに割らない＝fake 相手の檻が本番の判断を担保する）。
@@ -418,7 +406,7 @@ pub(super) fn finalize_chain_once(presenter: &EmoPresenter, world: &mut World) {
 ///
 /// # 駆動条件（すべて満たしたフレームで 1 度だけ走る）
 ///
-/// - [`ChainFinalized`] 未挿入（＝まだ確定していない・7.4）。
+/// - [`ChainFinalized`] 未挿入（＝まだ確定していない）。
 /// - [`GhostWindows`] が在り、スコープが 1 つ以上ある。
 /// - **全スコープ**について実表示寸が引け、かつ char 窓の `WindowPos` の寸が**それと一致**して
 ///   いる。一致しない間は [`resnap_from_sizes`] の再適用が未 landing＝位置が確定していないため
@@ -428,7 +416,7 @@ pub(super) fn finalize_chain_once(presenter: &EmoPresenter, world: &mut World) {
 /// いずれか 1 つでも欠ける scope があれば**確定させずに戻る**（部分適用しない）。窓破棄後の
 /// フレームでも `WindowPos` 不在で見送るだけで、panic もログ汚染もしない。
 ///
-/// # 見送りの可観測性（areka-P0-scope-chain-gap 6.5）
+/// # 見送りの可観測性
 ///
 /// 見送りの理由は「ゴースト待ち」と「areka 自身の待ち」に仕分ける。仕分けは理由の全列挙子を
 /// 書いた `match` で決める（理由が増えたら、足した側がコンパイルエラーでどちらかを選ぶ）。
@@ -452,7 +440,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     source: &S,
     world: &mut World,
 ) {
-    // 一度きり（7.4）。確定後のサーフェス切替では駆動しない＝会話中に位置が動かない。
+    // 一度きり。確定後のサーフェス切替では駆動しない＝会話中に位置が動かない。
     if world.get_resource::<ChainFinalized>().is_some() {
         return;
     }
@@ -476,17 +464,18 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
                 | ChainDeferReason::NoWindowPos { .. }
                 | ChainDeferReason::IncompleteWindowPos { .. }
                 | ChainDeferReason::ResnapNotLanded { .. }
+                // `collect_chain_states` は返さない（解き直し専用・網羅のため置く）。
                 | ChainDeferReason::DpiSyncHeld { .. } => defer_chain_finalize(world, reason),
             }
             return;
         }
     };
 
-    // 組ごとの決め（dpi-realign-remembered-chain design BootRemembered）。記憶に位置の無い
+    // 組ごとの決め。記憶に位置の無い
     // スコープ（既定の位置がある）は、既定のままなら resolver と同じ揃え方の規則で解き直し
     // （`boot_default_decision`）、既定から動かされたか台本の `\![move]` が置いた窓
-    // （x が既定のままでも・areka-P0-scope-chain-gap 7.3）は動かさない。記憶から戻したスコープ（既定の位置が無い）は
-    // 「台本の印 → 組の窓 → 覚えた印」の順で決める（6.3〜6.5）。基準は前の窓の解いた後の x（resolve_chain）。
+    // （x が既定のままでも）は動かさない。記憶から戻したスコープ（既定の位置が無い）は
+    // 「台本の印 → 組の窓 → 覚えた印」の順で決める。基準は前の窓の解いた後の x（resolve_chain）。
     //
     // 鎖に入るスコープと組の決めは鎖の規則（`areka_placement::chain_rule`）で組む: 揃え方と
     // `defaultx` は並べ直し（`reset_pos::reset_window_positions`）と同じく descript の値から引き、
@@ -501,7 +490,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
 
     // ここで world の shared 借用は終わり、mut 借用して反映へ渡す。
     mark_non_positive_widths(&mut slots);
-    // 解いた鎖を基準の窓のモニタの作業領域の中に置く（window-work-area-clamp 要件 1・2.2）。
+    // 解いた鎖を基準の窓のモニタの作業領域の中に置く。
     // 場面は記録の語だけ: 既定の位置が有れば起動の並べ直し、無ければ記憶からの隣り合わせ。
     let has_default = |scope: usize| {
         states
@@ -518,7 +507,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     .into_iter()
     .filter(|p| p.to != p.from)
     .collect();
-    // 記憶から戻した組は、動かさない組も含めて組ごとに 1 行残す（7.1）。
+    // 記憶から戻した組は、動かさない組も含めて組ごとに 1 行残す。
     for (i, (slot, state)) in slots.iter().zip(&states).enumerate().skip(1) {
         if state.default_x.is_some() {
             continue;
@@ -551,29 +540,27 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
                 "chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・areka-P0-scope-chain-gap 7.1）"
             );
         }
-        // 反映は move_window_to のみ（唯一の位置ライター・バルーン随伴 offset 維持を内包）。
-        // Y は寄せが縦に収めたときだけ変わる（それ以外は今の Y＝下端吸着は再アンカーが保つ・7.2）。
+        // 反映は `move_window_to`（`MoveCue` を名乗る・バルーン随伴の offset 維持を内包）。
+        // Y は寄せが縦に収めたときだけ変わる（それ以外は今の Y＝下端吸着は再アンカーが保つ）。
         move_window_to(world, entity, m.to.x, m.to.y);
     }
 
     // 台帳の既定位置を確定値へ揃える（以後の「既定配置のまま」判定が確定後を基準に働く）。
     //
     // ここを明示的に書くのは、上の反映が `move_window_to`＝`PlacementRoute::MoveCue`
-    // ＝**明示操作**の経路を通るからである。単一の窓書込口の追随規則（atom D9／D16）は
+    // ＝**明示操作**の経路を通るからである。単一の窓書込口の追随規則は
     // システム由来の再アンカーにしか効かないので、両者は重ならない（二重に書かない）。
     //
-    // Y は今の窓の Y でなく**元の既定位置の Y** を載せる（寄せが縦に収めたときだけ寄せた後の Y・
-    // window-work-area-clamp 要件 7.5）。台本の `\![move]` が置いた窓は印
+    // Y は今の窓の Y でなく**元の既定位置の Y** を載せる（寄せが縦に収めたときだけ寄せた後の Y）。台本の `\![move]` が置いた窓は印
     // （`ScriptPlaced`）で並べ直しから外れるので、ここへ来るのは台本の置いていない窓だけで、普段は
     // 今の Y と既定の Y が等しく結果は変わらない。今の Y を載せる形にすると、既定と違う Y が既定へ
-    // 入り得て、並べ終えた時点の保存の「動かされていない」の判定を化かす
-    // （areka-P0-char-position-save-on-exit 要件 1.7）。
+    // 入り得て、並べ終えた時点の保存の「動かされていない」の判定を化かす。
     if !moves.is_empty()
         && let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>()
     {
         for m in &moves {
             // 既定の位置が無いのは記憶から戻した窓を覚えた印で隣り合わせた組。既定の位置を
-            // 付けないので、並べ終えた時点の保存はこの窓の位置を書かない（6.6）。
+            // 付けないので、並べ終えた時点の保存はこの窓の位置を書かない。
             let Some(old_default) = ghost_windows.default_char_pos(m.scope) else {
                 debug!(
                     scope = m.scope,
@@ -581,7 +568,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
                 );
                 continue;
             };
-            // Y は既定の Y を残し、寄せが縦に収めたときだけ寄せた後の Y を載せる（window-work-area-clamp 要件 7.5）。
+            // Y は既定の Y を残し、寄せが縦に収めたときだけ寄せた後の Y を載せる。
             let y = if m.to.y != m.from.y {
                 m.to.y
             } else {
@@ -592,9 +579,9 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     }
 
     world.insert_resource(ChainFinalized);
-    // 記憶に位置が無い窓の位置をここで書く（areka-P0-char-position-save-on-exit 要件 1.1）。
-    // 印の内側に置くので同じ窓の一式で 1 度だけ通り、並べ終える前に終わった回は書かない
-    // （1.6）。動かすスコープが 0 件の回でも呼ぶ。本番の呼び手はここ 1 か所だけ（3.1・3.2）。
+    // 記憶に位置が無い窓の位置をここで書く。
+    // 印の内側に置くので同じ窓の一式で 1 度だけ通り、並べ終える前に終わった回は書かない。
+    // 動かすスコープが 0 件の回でも呼ぶ。確定の側の呼び手はここ。並べ直し（`reset_pos.rs`）も呼ぶ。
     persist_unremembered_char_positions(world);
     debug!(
         scopes,
@@ -604,7 +591,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
 }
 
 // ---------------------------------------------------------------------------
-// DPI 遷移後の連鎖再解決（atom 設計 C4・要件 6.1／6.2／6.3／6.6）
+// DPI 遷移後の連鎖再解決
 // ---------------------------------------------------------------------------
 
 /// 遷移後の連鎖の解き直しを 1 回試みる（`frame_system` が連鎖確定の**直後**に呼ぶ）。
@@ -643,7 +630,7 @@ mod test_open {
 
 /// 確定の走査結果——判定へ渡す状態列と、反映へ渡す `(scope, char 窓 entity, 現在位置)` の列。
 ///
-/// 現在位置を持ち回るのは Y を据え置くため（7.2）。
+/// 現在位置を持ち回るのは Y を据え置くため。
 type ChainScan = (Vec<ScopeChainState>, Vec<(usize, Entity, PointPx)>);
 
 /// 確定に要る入力を集める。駆動条件を 1 つでも欠くスコープがあればその場で打ち切り、
@@ -666,13 +653,16 @@ fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
         // `None` は「既定配置ではない」（記憶から戻したスコープ）。ここでは打ち切らずそのまま渡す。
         // 起動の並べ直しは `None` のスコープを覚えた印で決め（`left`／`right` は今の幅で隣り合わせ、
         // `none`・印なし・組の窓・台本の印は動かさない）、拡大率の変化の後の詰め直しはこの値を
-        // 使わず変わる直前の隣り合いで決める（dpi-realign-remembered-chain 要件 1・6.3〜6.5）。
+        // 使わず変わる直前の隣り合いで決める。
         //
-        // 読む値は「起動時の既定」ではなく**「最後にシステムが置いた既定位置」**である
-        // （atom D9／D16）。システム由来の再アンカーでは単一の窓書込口が同じ量を書込先へ運ぶ。
+        // 読む値は「起動時の既定」ではなく**「最後にシステムが置いた既定位置」**である。
+        // システム由来の再アンカーでは単一の窓書込口が同じ量を書込先へ運ぶ。
         let default_x = ghost_windows.default_char_pos(scope).map(|p| p.x);
         // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
-        let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
+        let Some(s) = window_scope(scope) else {
+            return Err(ChainDeferReason::NotShownYet { scope });
+        };
+        let Some((w, h)) = source.physical_size(shell_target(s)) else {
             return Err(ChainDeferReason::NotShownYet { scope });
         };
         let (Ok(iw), Ok(ih)) = (i32::try_from(w), i32::try_from(h)) else {
@@ -711,7 +701,7 @@ fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
     Ok((states, targets))
 }
 
-/// 見送りを 1 フレームぶん記録し、有界の待ちを超えていれば**一度だけ**診断を出す（areka-P0-scope-chain-gap 6.5）。
+/// 見送りを 1 フレームぶん記録し、有界の待ちを超えていれば**一度だけ**診断を出す。
 ///
 /// 呼び手（[`finalize_chain_once_with`]）は **areka 自身の理由**だけを渡す。ゴースト待ち
 /// （窓が無い・スコープが無い・まだ一度も表示されていない）はここへ来ないので、数は「areka 自身の理由で
@@ -740,7 +730,7 @@ fn defer_chain_finalize(world: &mut World, reason: ChainDeferReason) {
 mod tests;
 
 // 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の関数（中で記録を出す相の部品）へそのまま渡す口（`test-support` のときだけ・
-// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+// 本番の可視性は変えない）。
 #[cfg(feature = "test-support")]
 pub mod test_support {
     use bevy_ecs::world::World;

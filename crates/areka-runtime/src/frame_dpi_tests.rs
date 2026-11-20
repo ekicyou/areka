@@ -1,22 +1,22 @@
 use wintf::ecs::{Point, SizeI};
 
 use super::test_support::{
-    FakeReports, assert_no_write, dpi_world, pos_of, reset_write_witness, size_of,
+    FakeReports, assert_no_write, capture_logs, count_level, dpi_world, pos_of,
+    reset_write_witness, size_of, synth_assets,
 };
 use super::*;
 
-// ── task 4.2: DPI 追従フェーズ（run_dpi_phase／窓寸 reconcile 二経路）の檻 ──────────
+// ── DPI 追従フェーズ（run_dpi_phase／窓寸 reconcile 二経路）の檻 ──────────
 //
 // 判断分岐（窓種別の判定・物理寸の算出・反映口の振り分け・エッジ観測の永続性・二経路の
-// 責任分界）を GPU 不要で決定論に固定する（design「Testing Strategy」振り分け基準 (a)・D9）。
+// 責任分界）を GPU 不要で決定論に固定する。
 // GPU readback 檻（実 k 倍表示の寸法・バイト）は emo-present in-crate＝別プロセス側の領分
-// （R5.1/R5.3）ゆえここでは組まない——本ファイルへ 2 個目の Compositor を持ち込まない。
+// ゆえここでは組まない——本ファイルへ 2 個目の Compositor を持ち込まない。
 //
-// 「書込ゼロ」の観測境界は follow.rs task 2.2 の檻と同一手法を用いる: `SetWindowPosCommand`
-// の TLS キューは wintf 私有で件数を覗く API が無く `flush()` は偽 HWND へ実 Win32 を撃つため
-// 使えない。代わりに **`Arrangement.offset` 同期**（`enqueue_window_set_pos` 内で enqueue と
-// 不可分に対で走る）を witness とし、sentinel が据え置かれたまま＝単一ライター経路を一度も
-// 通っていない＝窓書込 0 件の決定論的証拠とする。
+// 「書込ゼロ」は `Arrangement.offset` 同期を witness に見る。`SetWindowPosCommand` の TLS キュー
+// は `wintf::ecs::window::drain_window_pos_commands` で実行せずに取り出せるが（`FrameHarness` が使う）、
+// `enqueue_window_set_pos` の中で enqueue と不可分に対で走る offset 同期なら取り出しの手続きが
+// 要らない。sentinel が据え置かれたまま＝単一ライター経路を一度も通っていない＝窓書込 0 件。
 
 use areka_emo_compose::ScaleRatio;
 
@@ -48,7 +48,7 @@ fn classify_ghost_window_covers_all_marker_combinations() {
     );
 }
 
-/// 反映口の振り分け（D8）: **char 窓は `resize_window_to`**（アンカー保存＝Bottom 再射影で
+/// 反映口の振り分け: **char 窓は `resize_window_to`**（アンカー保存＝Bottom 再射影で
 /// 位置が動く）・**balloon 窓は `resize_window_keep_position`**（位置維持）。観測可能な差
 /// （position が動く／動かない）で振り分けを反証する。
 #[test]
@@ -173,13 +173,13 @@ fn reconcile_window_size_guards_and_idempotent_skip_write_nothing() {
     assert_no_write(&world, balloon0, "縮退・べき等 skip");
 }
 
-/// **本 task の到達判定（tasks.md 4.2）**: 窓 DPI を差し替えた次のフェーズ実行で、当該窓の
+/// **到達判定**: 窓 DPI を差し替えた次のフェーズ実行で、当該窓の
 /// client が `scaled_extent(applied, native)` と一致する。
 ///
 /// 96→192（k=2/1）へ `DPI` を差し替え、presenter が報告する新物理寸として
 /// `ScaleRatio::scaled_extent(native)` を与える（実 presenter の報告値はこの丸め権威で
 /// 作られる——emo-present in-crate が所有する契約）。`dpi_phase_with` 一回で char 窓の
-/// `WindowPos.size` が同一の `scaled_extent` に一致することを反証する（Req3.1/4.1/4.2）。
+/// `WindowPos.size` が同一の `scaled_extent` に一致することを反証する。
 #[test]
 fn dpi_phase_reconciles_changed_window_to_scaled_extent() {
     let (mut world, gw) = dpi_world();
@@ -251,7 +251,7 @@ fn drain_reconcile_writes_nothing_when_refresh_already_consumed_the_report() {
     );
 }
 
-/// 二経路の責任分界 (2)（**取りこぼさない**・design Flow 3 手順 5）: `refresh_scale` の
+/// 二経路の責任分界 (2)（**取りこぼさない**）: `refresh_scale` の
 /// ゲートが不成立で報告が返らなくても、表示成立点が積んだ未消費要求（初回表示の k₀ 補正）は
 /// drain 後段の reconcile が同一フレーム内で拾って窓寸へ反映する。
 #[test]
@@ -294,18 +294,15 @@ fn dpi_phase_first_run_matches_all_windows_without_churn() {
     // 初回 run は全窓（2 スコープ×char/balloon＝4 target）へマッチする（非空虚性）。
     let mut refreshed = source.calls_of("refresh");
     refreshed.sort_unstable();
+    let mut want = vec![
+        shell_target(0).0,
+        balloon_target(0).0,
+        shell_target(1).0,
+        balloon_target(1).0,
+    ];
+    want.sort_unstable();
     assert_eq!(
-        refreshed,
-        vec![
-            shell_target(0).0,
-            balloon_target(0).0,
-            shell_target(1).0,
-            balloon_target(1).0
-        ]
-        .into_iter()
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>(),
+        refreshed, want,
         "初回 run は全ゴースト窓へマッチする（SystemState::new 仕様）"
     );
     // 報告が無ければ窓へは一切書かない（べき等 skip と合わせて churn ゼロ）。
@@ -356,5 +353,67 @@ fn dpi_phase_without_dpi_change_does_no_work() {
         source.calls_of("refresh"),
         vec![shell_target(1).0],
         "変化した窓の target だけが refresh 対象"
+    );
+}
+
+/// 窓の印の scope が `i32::MAX` を越える窓は、表示対象の番号に直せないので読み飛ばし、
+/// `warn!` を 1 行だけ残す（`2 * scope` があふれて panic せず、桁を切り捨てて別の窓の寸も読まない）。
+#[test]
+fn a_window_scope_past_i32_max_is_skipped_with_one_warning() {
+    let (mut world, gw) = dpi_world();
+    let char1 = gw.char_window(1).expect("char 窓がある");
+    world
+        .entity_mut(char1)
+        .insert((CharWindowMarker { scope: 1 << 31 }, DPI::from_dpi(192, 192)));
+
+    let mut source = FakeReports::default();
+    let mut state = None;
+    let logs = capture_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+
+    assert_eq!(count_level(&logs, "WARN"), 1, "{logs:#?}");
+    assert!(
+        logs.iter()
+            .any(|l| l.contains("level=WARN") && l.contains("target_map")),
+        "記録は window_scope の 1 か所: {logs:#?}"
+    );
+    assert_eq!(count_level(&logs, "ERROR"), 0, "{logs:#?}");
+    assert_no_write(&world, char1, "上限を越える scope の窓");
+    let mut refreshed = source.calls_of("refresh");
+    refreshed.sort_unstable();
+    assert_eq!(
+        refreshed,
+        vec![shell_target(0).0, balloon_target(0).0, balloon_target(1).0],
+        "他の窓は処理を続け、上限を越える窓の寸は別の target でも読まない"
+    );
+}
+
+/// author_dpi の引き当て（取り違え防止）: shell target には shell 宣言・balloon target には
+/// balloon 宣言が渡る。両者 `u16` ゆえ取り違えてもコンパイルは通る——**異なる値**で引き当てを
+/// 反証する（入れ替えれば必ず落ちる）。未知 target は既定 96 へ縮退する（panic しない）。
+#[test]
+fn author_dpis_pairs_shell_and_balloon_declarations() {
+    let assets = synth_assets(&[(0, 0)]);
+    let plan = plan_attachments(&[0usize], &assets);
+    let item = &plan.items[0];
+    // shell=120（125% 原稿）・balloon=72（意図的に異なる値・入れ替え検出用）。
+    let dpis = AuthorDpis {
+        shell: 120,
+        balloon: 72,
+    };
+
+    assert_eq!(
+        dpis.for_target(item, item.shell_target),
+        120,
+        "shell target には shell_author_dpi が渡る"
+    );
+    assert_eq!(
+        dpis.for_target(item, item.balloon_target),
+        72,
+        "balloon target には balloon_author_dpi が渡る"
+    );
+    assert_eq!(
+        dpis.for_target(item, TargetId(9999)),
+        96,
+        "当該 scope のいずれの target でもない＝結線バグ → 既定 96 へ縮退（panic しない）"
     );
 }

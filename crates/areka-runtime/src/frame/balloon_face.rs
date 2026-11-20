@@ -1,5 +1,4 @@
-//! 今の定義の唯一の書き手 [`select_balloon_face`] と、drain の後の面の変化の拾い [`after_drain`]
-//! （balloon-scroll-arrows 要件 1.7・8.6・design「BalloonFaceSelector」）。
+//! 今の定義の唯一の書き手 [`select_balloon_face`] と、drain の後の面の変化の拾い [`after_drain`]。
 //!
 //! 装着（面 0）・drain の後の面の切り替え・バルーンの切り替え（新しい束）が同じ書き手を通る。
 //! 書き手は文字の層の作り直しを呼ばない——同じフレームの後段の文字層スケール相が
@@ -19,7 +18,7 @@ use areka_placement::face_windowposition::apply_face_windowposition;
 
 /// 書き手を呼んだ契機（記録の欄）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FaceCause {
+pub(super) enum FaceCause {
     Attach,
     FaceChange,
     BalloonSwitch,
@@ -27,11 +26,11 @@ pub(crate) enum FaceCause {
 
 /// scope の今の定義を束の面 `face` の定義へ差し替える（今の定義の唯一の書き手）。
 ///
-/// (1) その面の矢印の絵と行の中の印の絵（script-small-tags 要件 5.1・5.2）を文字の層へ入れ、
-/// (2) 面が前と違えば手動の位置を捨て（要件 8.6）、
-/// (3) 面の `windowposition` を配置へ届け（要件 1.7）、(4) `balloon_models[scope]` を面の
+/// (1) その面の矢印の絵と行の中の印の絵を文字の層へ入れ、
+/// (2) 面が前と違えば手動の位置を捨て、
+/// (3) 面の `windowposition` を配置へ届け、(4) `balloon_models[scope]` を面の
 /// モデルにし、(5) 面の番号を覚える。束が無い scope は `error!` で何もしない。
-pub(crate) fn select_balloon_face(
+pub(super) fn select_balloon_face(
     wiring: &mut RuntimeWiring,
     world: &mut World,
     scope: u32,

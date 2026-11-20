@@ -1,4 +1,4 @@
-//! バルーンの表示の届け（areka-P0-status-execution-states 要件 4.1〜4.7・7.1・design「balloon の届け」）。
+//! バルーンの表示の届け。
 //!
 //! フレームの終わり（提示の後）の届けの相で、表示層の照会 2 本（`target_visible`・`current_surface_id`）から
 //! 「見えているバルーンの組」を作り、最後に kanade へ送った組と違うときだけ置き場のゴーストの
@@ -8,13 +8,13 @@
 //! 台帳は `RuntimeWiring::balloon_status`（ゴーストごとに新品）にあり、`frame_system` が提示の相の
 //! 直後に [`run_status_report_phase`] を呼ぶ。窓の可視（可視性の相が発行済み）と箱の写し（同じ
 //! フレームの提示で作り直し済み）がどちらもそのフレームの最終の姿になってから組を作るので、
-//! 届けは画面から遅れない（areka-P0-shell-balloon-frame-align 要件 2.3）。
+//! 届けは画面から遅れない。
 //!
 //! 箱に文字が出ているスコープ（文字の層の `shown_boxes` が空でない）も、普通のバルーンの窓が
-//! 見えているときと同じ形で組に載せる（areka-P0-shell-balloon 要件 5.5・5.6）。
+//! 見えているときと同じ形で組に載せる。
 //!
 //! 同じ相の、文字の層を借りる手前で、窓の知らせ（開いているか・面の番号・出番の世代）も前と違う
-//! scope だけ置き場のゴーストの seriko へ送る（areka-P0-animated-image-playback 要件 2.3・6.1）。
+//! scope だけ置き場のゴーストの seriko へ送る。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -40,7 +40,7 @@ pub struct BalloonStatusLedger {
     last_surface: BTreeMap<u32, u32>,
     /// 文字の層を借りられない旨を記録済みか。
     runtime_busy_logged: bool,
-    /// スコープ → 前に seriko へ知らせた窓の組（animated-image-playback 要件 2.3・6.1）。
+    /// スコープ → 前に seriko へ知らせた窓の組。
     last_stage: BTreeMap<u32, StageTuple>,
 }
 
@@ -49,7 +49,7 @@ type StageTuple = (bool, u32, u64);
 
 /// 1 scope の窓の観測（表示層の照会 3 本・表示層に装着済みの scope だけ）。
 #[derive(Clone)]
-pub struct StageObservation {
+struct StageObservation {
     scope: u32,
     open: bool,
     surface_id: Option<u32>,
@@ -68,8 +68,8 @@ pub struct BalloonObservation {
 /// `character_id = scope` で並べ（入力の順＝昇順）、番号が取れなかった警告の対象を第 2 の返り値に添える。
 ///
 /// 番号は今の `surface_id`。取れないとき、窓が見えていれば 0 で警告の対象、箱だけなら覚えた番号（無ければ 0）で
-/// 警告の対象にしない（areka-P0-shell-balloon-frame-align 要件 3.1・3.2）。
-pub(crate) fn collect_bindings(
+/// 警告の対象にしない。
+fn collect_bindings(
     observed: &[BalloonObservation],
     last_surface: &BTreeMap<u32, u32>,
 ) -> (Vec<BalloonBinding>, Vec<u32>) {
@@ -105,7 +105,7 @@ pub fn run_status_report_phase(wiring: &mut RuntimeWiring, world: &World) {
     let mut scopes: Vec<u32> = wiring.balloon_models.keys().copied().collect();
     scopes.sort_unstable();
     let ledger = &mut wiring.balloon_status;
-    // 窓の知らせは文字の層を借りる手前（借りられないフレームでも届ける・animated-image-playback 要件 2.3）。
+    // 窓の知らせは文字の層を借りる手前（借りられないフレームでも届ける）。
     report_stages(&wiring.presenter, world, ledger, &scopes);
     let Ok(runtime) = wiring.runtime.try_borrow() else {
         if !ledger.runtime_busy_logged {
@@ -121,7 +121,7 @@ pub fn run_status_report_phase(wiring: &mut RuntimeWiring, world: &World) {
     report_balloons(&wiring.presenter, &runtime, world, ledger, &scopes);
 }
 
-/// 窓の知らせ（animated-image-playback 要件 2.3・6.1・design「窓の知らせ」）。装着済みバルーンの
+/// 窓の知らせ。装着済みバルーンの
 /// スコープ（昇順）ごとに表示層の照会 3 本（`target_visible`・`current_surface_id`・
 /// `stage_generation`）を読み、前に知らせた組と違うときだけ置き場のゴーストの seriko へ送る。
 ///
@@ -280,7 +280,7 @@ mod tests;
 #[path = "status_report_stage_tests.rs"]
 mod stage_tests;
 
-// areka-runtime のテストと本体のテストの両方が使う補助（spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+// areka-runtime のテストと本体のテストの両方が使う補助。
 #[cfg(any(test, feature = "test-support"))]
 #[path = "status_report_test_support.rs"]
 pub mod test_support;

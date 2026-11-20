@@ -1,6 +1,4 @@
-//! 重なりの指令を台帳へ適用し、台帳を**鎖の計画**へ射影する相
-//! （design「`zorder_drain`（既存・出口を差し替え）」・要件 1.4／4／5／7.1／8.4／
-//! 14.5／15.3）。
+//! 重なりの指令を台帳へ適用し、台帳を**鎖の計画**へ射影する相。
 //!
 //! 兄弟の [`run_move_drain_phase`](super::drain_resnap::run_move_drain_phase) と同じ
 //! 跨ぎの形である——台本のスレッドが送り出した指令を、画面を持つ側のスレッドで
@@ -12,45 +10,44 @@
 //! `GhostWindows`（スコープ→窓 entity の唯一の正本）が World に居ない間は、指令を
 //! 1 件も取り出さずに戻る。送信端と受信端をつなぐチャネルが**そのまま保留バッファを
 //! 兼ねる**ので、取りこぼしは起きず、窓が生えた最初の相で到着順のまま一括で適用される
-//! （move の相 `drain_resnap.rs` の `run_move_drain_with` と同じ意図・要件 1.4）。取り出してから捨てる形に
+//! （move の相 `drain_resnap.rs` の `run_move_drain_with` と同じ意図）。取り出してから捨てる形に
 //! すると、起動直後の `\![set,zorder,...]` が黙って消える。
 //!
 //! # 出口は「望む鎖 1 本」である
 //!
-//! 台帳はスコープ番号と窓種別のままで持ち、まだ現れていないスコープも取り除かない
-//! （要件 1.4）。窓が実在するかを知っているのはこの相だけなので、
+//! 台帳はスコープ番号と窓種別のままで持ち、まだ現れていないスコープも取り除かない。
+//! 窓が実在するかを知っているのはこの相だけなので、
 //! 「宣言 → 実在する窓の鎖」の写像はここが持つ。並びと繋ぎを決める判断そのものは
 //! 純関数 [`compose_chain`] にあり、この相が足すのは 2 つだけである——在庫のスコープ
 //! 一覧を引くことと、要素 1 つを実在する窓へ解決する規則を渡すことである。
 //!
 //! 「実在する」は 2 段である——`GhostWindows` にそのスコープが載っていること
 //! （まだ生まれていない窓は載らない）と、指している entity が World にまだ居ること
-//! （破棄済みは飛ばす・要件 7.2）。前者だけを見ると、対の後追い破棄の途中で
+//! （破棄済みは飛ばす）。前者だけを見ると、対の後追い破棄の途中で
 //! 既に消えた entity を受け口へ渡してしまう。
 //!
-//! # 公開は内容が前回と異なるときだけ（要件 14.5）
+//! # 公開は内容が前回と異なるときだけ
 //!
 //! 組んだ鎖が受け口の現在の内容と同じなら、書き込みも印立ても行わない。**窓の出現・
 //! 破棄はこの 1 つの門で自然に検出される**——在庫が動けば合成の結果が動くからである。
-//! どのグループにも属さないスコープの出入りも同じ門を通る（要件 7.1／15.3）。
+//! どのグループにも属さないスコープの出入りも同じ門を通る。
 //! 変化の検出に台帳の版（[`ZOrderGroupLedger::version`]）ではなく**合成の結果そのもの**を
 //! 使うのは、版が進んでも結果が動かない場合があるからである（例: まだ 1 枚も窓が無い
 //! スコープだけのグループが受理された巡）。結果の突き合わせは版の判定を包含する。
 //!
 //! グループが 1 つも無い状態では合成が計画そのものを作らず、受け口の Resource すら
 //! 生えない——適用系は仕事を得られず、指令を 1 本も出さない。「既定状態では従来と
-//! 同じ」（要件 6.1／6.4）はこの**不在**によって構造的に成り立つのであって、
+//! 同じ」はこの**不在**によって構造的に成り立つのであって、
 //! 「出さないと判断する」ことによってではない。一度出来た受け口は解除の後も残す。
-//! 消してしまうと、適用系が「張った繋ぎを外せ」という指示を受け取れなくなる
-//! （要件 4.1／15.4）。
+//! 消してしまうと、適用系が「張った繋ぎを外せ」という指示を受け取れなくなる。
 //!
 //! # 記録はすべて wintf の唯一の入口を通す
 //!
 //! 受理・拒否・宣言要素の不在のいずれも、記録を出すのは wintf 側の
 //! [`log_group_applied`]／[`log_group_rejected`]／[`log_chain_absent`] である。
-//! `tracing` の出力先は呼び出し元の module path が既定なので、こちら側でマクロを
-//! 呼ぶと実機サインオフの grep 対象が 2 本に割れる。本モジュールが組むのは
-//! **本文の文字列**だけである。
+//! こちらでマクロを呼ぶと出力先が `areka_runtime::…` になり、`wintf::ecs::window` の前方一致の
+//! 絞り込みでは debug の受理の行が点かない。行の字面と出力先を wintf の 1 か所に保つため、
+//! 本モジュールが組むのは**本文の文字列**だけである。
 
 use std::sync::mpsc::Receiver;
 
@@ -60,6 +57,7 @@ use bevy_ecs::world::World;
 
 use wintf::ecs::window::{ChainPlan, log_chain_absent, log_group_applied, log_group_rejected};
 
+use crate::target_map::window_scope;
 use crate::zorder_cue::ZOrderDirective;
 use areka_placement::spawn::GhostWindows;
 use areka_placement::zorder_chain_compose::{compose_chain, element_text, publish_chain_plan};
@@ -79,8 +77,7 @@ const NO_VALUE: &str = "-";
 // 相の本体
 // ---------------------------------------------------------------------------
 
-/// zorder drain 相（design「`zorder_drain`（既存・出口を差し替え）」・要件 1.4／4／5／
-/// 6.1／7.1／7.2／8.4／14.5／15.3）。
+/// zorder drain 相。
 ///
 /// 順に⑴窓の正本が無ければ何もしない ⑵届いている指令を到着順に台帳へ適用する
 /// ⑶台帳と窓の在庫から望む鎖を組む ⑷窓が無かった宣言要素を報せる
@@ -89,21 +86,20 @@ const NO_VALUE: &str = "-";
 /// # 引数が受け口と台帳を**直接**受け取る理由
 ///
 /// 毎フレームの結線状態（`RuntimeWiring`）から読み出さず、受信端と台帳を引数で受け取る。
-/// 結線状態へ欄を足すのは結線の task（6.2）の担当であり、この相の判断はそれを待たずに
+/// 結線状態へ欄を足すのは結線の側の担当であり、この相の判断はそれを待たずに
 /// 完成させられる——`RuntimeWiring` を 1 バイトも変えずに全分岐を檻へ入れられる形である。
 ///
 /// # 失敗しても台本を殺さない
 ///
 /// 解釈できない指定・不在の窓・閉じた受け口のいずれも、記録を残して次へ進むだけである
-/// （log-first・非 panic）。1 件の縮退が後続の指令や他グループを巻き込まない
-/// （要件 8.1／8.3）。
+/// （非 panic）。1 件の縮退が後続の指令や他グループを巻き込まない。
 pub fn run_zorder_drain_phase(
     rx: &Receiver<ZOrderDirective>,
     ledger: &mut ZOrderGroupLedger,
     world: &mut World,
 ) {
     // ⑴ 窓の正本が無い間はチャネルが保留バッファを兼ねる（`try_iter` を呼ばない＝
-    //    取りこぼさない）。窓が生えた最初の相で到着順のまま一括適用する（要件 1.4）。
+    //    取りこぼさない）。窓が生えた最初の相で到着順のまま一括適用する。
     if world.get_resource::<GhostWindows>().is_none() {
         return;
     }
@@ -130,14 +126,14 @@ pub fn run_zorder_drain_phase(
 // ⑵ 指令の適用（受理と拒否の記録つき）
 // ---------------------------------------------------------------------------
 
-/// 指令を 1 件だけ台帳へ適用し、受理か拒否かを記録する（要件 8.1／8.3／3.2／5.4）。
+/// 指令を 1 件だけ台帳へ適用し、受理か拒否かを記録する。
 ///
 /// 拒否は 2 段のどちらでも起こり得る——トークンの解釈（モード混在・タグ内重複・
 /// 要素 2 個未満・解釈不能）と、台帳への追加（既に他のグループが押さえているスコープ）。
 /// どちらで落ちても**そのタグによる変更は一切行わない**（部分適用の禁止）。台帳が
 /// 書き換わるのは検査を通り切った後だけなので、これは制御の流れで保証される。
 ///
-/// 記録には**受け取ったトークン列**と**拒否理由**の両方を載せる（要件 8.1／8.3）。
+/// 記録には**受け取ったトークン列**と**拒否理由**の両方を載せる。
 /// どちらか一方だと、作者は何を書き間違えたのかを記録から復元できない。
 fn apply_directive(ledger: &mut ZOrderGroupLedger, directive: &ZOrderDirective) {
     match directive {
@@ -152,10 +148,10 @@ fn apply_directive(ledger: &mut ZOrderGroupLedger, directive: &ZOrderDirective) 
             };
             match ledger.try_add_tag_group(members) {
                 Ok(id) => {
-                    // 受理の記録は**台帳に載った後の内容**から組む（design の
-                    // `applied`＝受理時の台帳内容）。正規化の記録も併せて載せる——
-                    // 作者が書いた順をそのまま採らなかったことを報せる材料である
-                    // （要件 2.4）。載せずに捨てると「黙って組み替えた」になる。
+                    // 受理の記録は**台帳に載った後の内容**から組む（`applied`＝
+                    // 受理時の台帳内容）。正規化の記録も併せて載せる——
+                    // 作者が書いた順をそのまま採らなかったことを報せる材料である。
+                    // 載せずに捨てると「黙って組み替えた」になる。
                     let detail = ledger
                         .groups()
                         .iter()
@@ -181,8 +177,7 @@ fn apply_directive(ledger: &mut ZOrderGroupLedger, directive: &ZOrderDirective) 
 // ⑶ 合成（台帳＋窓の在庫 → 望む鎖 1 本）
 // ---------------------------------------------------------------------------
 
-/// 台帳の全グループと窓の在庫から、望む鎖 1 本を組む
-/// （要件 1.4／3.6／7.1／7.2／15.1／15.2）。
+/// 台帳の全グループと窓の在庫から、望む鎖 1 本を組む。
 ///
 /// 並びと繋ぎを決める判断そのものは純関数 [`compose_chain`] が持つ。ここが足すのは
 /// 在庫のスコープ一覧と、要素 1 つを実在する窓へ解決する規則の 2 つだけである。
@@ -190,13 +185,13 @@ fn apply_directive(ledger: &mut ZOrderGroupLedger, directive: &ZOrderDirective) 
 /// `None` は既定状態（グループが 1 つも無い）を意味する。`GhostWindows` が無いときも
 /// 同じく `None` を返す——呼び出し元が先に弾いているので、これは二重の防波堤である。
 fn compose_plan(ledger: &ZOrderGroupLedger, world: &World) -> Option<ChainPlan> {
+    if ledger.groups().is_empty() {
+        return None;
+    }
     let ghost_windows = world.get_resource::<GhostWindows>()?;
-    // 未指定スコープの後方参加（要件 15.1）に使う在庫の一覧。合成側が昇順へ整えて
+    // 未指定スコープの後方参加に使う在庫の一覧。合成側が昇順へ整えて
     // 重複も落とすので、ここでは順も重複も問わない。
-    let all_scopes: Vec<u32> = ghost_windows
-        .scopes()
-        .filter_map(|scope| u32::try_from(scope).ok())
-        .collect();
+    let all_scopes: Vec<u32> = ghost_windows.scopes().filter_map(window_scope).collect();
     compose_chain(ledger.groups(), &all_scopes, &|element| {
         resolve_member(ghost_windows, world, element)
     })
@@ -205,7 +200,7 @@ fn compose_plan(ledger: &ZOrderGroupLedger, world: &World) -> Option<ChainPlan> 
 /// 要素 1 つを実在する窓の entity へ解決する（実在しなければ `None`）。
 ///
 /// 実在の判定は 2 段である——`GhostWindows` に載っていること（まだ生まれていない窓は
-/// 載らない）と、指す entity が World にまだ居ること（破棄済みは飛ばす・要件 7.2）。
+/// 載らない）と、指す entity が World にまだ居ること（破棄済みは飛ばす）。
 /// 前者だけだと、対の後追い破棄の途中で既に消えた entity を受け口へ渡してしまう。
 fn resolve_member(
     ghost_windows: &GhostWindows,
@@ -236,12 +231,12 @@ pub struct ZOrderAbsentReports {
     reported: Vec<(u32, char, u32)>,
 }
 
-/// 窓が無かった宣言要素を記録する（要件 8.3／8.4）。
+/// 窓が無かった宣言要素を記録する。
 ///
 /// # なぜ公開と切り離すのか
 ///
 /// 公開には「受け口を作る理由が無い」「内容が動いていない」の 2 つの早期 return がある。
-/// **要件 8.4 が名指しする「窓が一度も現れないまま推移する」形は鎖が空**なので、
+/// **「窓が一度も現れないまま推移する」形は鎖が空**なので、
 /// 公開に紐付けると報告そのものが消える。既に安定した鎖が在るところへ全欠けのグループを
 /// 足した場合も同様である。不在は**公開とは別の事実**であり、公開の有無に紐付けてはならない。
 ///
@@ -255,7 +250,7 @@ pub struct ZOrderAbsentReports {
 /// 控えは報告の有無を決めるためだけに使い、判断には一切関与しない。
 fn report_absent_elements(world: &mut World, absent: &[(u32, char, u32)]) {
     // 報せるものが無く、控えもまだ無い＝既定状態。Resource を作らずに戻る
-    // （グループが 1 つも無い間は何も生やさない・要件 6.1 と同じ姿勢）。
+    // （グループが 1 つも無い間は何も生やさない）。
     if absent.is_empty() && world.get_resource::<ZOrderAbsentReports>().is_none() {
         return;
     }
@@ -268,7 +263,7 @@ fn report_absent_elements(world: &mut World, absent: &[(u32, char, u32)]) {
     reports.reported = absent.to_vec();
     drop(reports);
 
-    // 出す順は合成が返した順＝宣言の順（決定論・要件 10.3）。
+    // 出す順は合成が返した順＝宣言の順（決定論）。
     for &(group_id, kind, scope) in absent {
         log_chain_absent(group_id, kind, scope);
     }
@@ -281,13 +276,13 @@ fn report_absent_elements(world: &mut World, absent: &[(u32, char, u32)]) {
 /// 受理（`\![set,zorder,...]`）の本文——台帳に載った内容と、各スコープの並びの形。
 ///
 /// `normalized` に載るのは、明示モードで名前の挙がったスコープごとの記録である。
-/// 台帳は書かれた順を組み替えないので（`areka-P0-zorder-scope-inversion` 要件 1・2）、
+/// 台帳は書かれた順を組み替えないので、
 /// 語は書かれた並びの形を語る——`scope:false`（バルーンのすぐ奥にキャラ窓）・
 /// `scope:inverted`（逆転）・`scope:split`（非隣接）・`scope:inverted-split`
-/// （逆転かつ非隣接）の 4 通りである（要件 1.4・2.3）。
+/// （逆転かつ非隣接）の 4 通りである。
 ///
 /// 片方の窓しか書かれていなかったスコープには `+bN`／`+sN` が続き、**こちらが補った
-/// 相棒窓**を名指しする（要件 3.1・3.2）。補った窓は相棒のすぐ隣に入るので、字面は
+/// 相棒窓**を名指しする。補った窓は相棒のすぐ隣に入るので、字面は
 /// 必ず `scope:false+bN` の形になる。
 ///
 /// 数値モードでは調整も補いも起きないので常に番兵になる。
@@ -308,7 +303,7 @@ pub(super) fn set_applied_detail(group: &ZOrderGroup, normalizations: &[Normaliz
 /// 受理（`\![reset,zorder]`）の本文——解除した後に台帳へ残った内容。
 ///
 /// 解除は「何を落としたか」より「何が残ったか」で読む方が短い。基底が在れば残り 1 本、
-/// 無ければ 0 本になる（要件 4.1／4.2）ので、`groups` と `base` の 2 欄で終状態が
+/// 無ければ 0 本になるので、`groups` と `base` の 2 欄で終状態が
 /// 一意に決まる。
 fn reset_applied_detail(ledger: &ZOrderGroupLedger) -> String {
     let base = ledger
@@ -351,7 +346,7 @@ pub(super) fn reject_reason_text(reject: &ZOrderReject) -> String {
 /// 受け取ったトークン列を 1 欄へ（空列は番兵）。
 ///
 /// **解釈前の字面をそのまま**並べる。作者が何を書いたのかが記録から復元できなければ、
-/// 書き間違いを直せない（要件 8.1）。
+/// 書き間違いを直せない。
 fn tokens_text(tokens: &[String]) -> String {
     if tokens.is_empty() {
         return NO_VALUE.to_string();
@@ -377,8 +372,7 @@ fn members_text(members: &[GroupElement]) -> String {
 /// 補ったスコープだけ、そこへ `+bN`／`+sN` を続けて**補った窓そのもの**を名指しする。
 /// 要素列の欄（`members=`）と同じ省略記法を使うので、行の中で照らし合わせられる。
 ///
-/// 隣り合いの語 `false` と補いの綴り `+bN`／`+sN` は既存の読み手のために据え置く
-/// （要件 7.4）。
+/// 隣り合いの語 `false` と補いの綴り `+bN`／`+sN` は既存の読み手のために据え置く。
 fn normalizations_text(normalizations: &[Normalization]) -> String {
     if normalizations.is_empty() {
         return NO_VALUE.to_string();
@@ -402,7 +396,7 @@ fn normalizations_text(normalizations: &[Normalization]) -> String {
 
 #[cfg(test)]
 #[path = "zorder_drain_test_support.rs"]
-mod test_support;
+pub(super) mod test_support;
 
 #[cfg(test)]
 #[path = "zorder_drain_tests.rs"]

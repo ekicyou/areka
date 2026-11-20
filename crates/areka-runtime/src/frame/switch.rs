@@ -1,5 +1,4 @@
-//! 差し替えの相（spec: areka-P0-shell-balloon-switch 要件 1.12・1.14・1.16・5.1・5.4・5.5・5.7・
-//! 5.8・12.2・12.7・12.9・design「SwitchPhase」）。
+//! 差し替えの相。
 //!
 //! drain の直後に毎フレーム 1 回、進行中の印 [`SkinSwitchInFlight`] の段を見る。
 //!
@@ -7,12 +6,10 @@
 //!   塞がない）。中止・取りやめ・無視・失敗なら記録を 1 件残して印を消す（差し替え・イベント・
 //!   記憶は 0）。資産がそろった後に切れ目を受けたら seriko へ差し替えを頼み、頼んだ段へ進む。
 //! - 頼んだ段（完了の段）: 置き換えの返信を `try_recv` だけで覗き、どれかが失敗・脱落なら
-//!   `error!` を 1 件残して印を消す（記憶・通知 0）。全部そろえば後始末（シェル: 配置の値の
-//!   入れ直し → 重なりの基底 → 実行系の今のシェル → `LastShell` → `OnShellChanged`／バルーン:
-//!   文字の模型と背景色 → 可視の記憶 → 今のバルーン → `LastBalloon` → `OnBalloonChange`）を
-//!   して `info!(skin_switch_done)` を残し、印を消す（要件 2.4・2.7・3.2〜3.4・6.1・6.5・6.7）。
+//!   `error!` を 1 件残して印を消す（記憶・通知 0）。全部そろえば後始末（順は `finish_shell`／
+//!   `finish_balloon` のとおり）をして `info!(skin_switch_done)` を残し、印を消す。
 //!
-//! 切替の経路は終了の指示を出さない（要件 5.8）。
+//! 切替の経路は終了の指示を出さない。
 
 use std::sync::PoisonError;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -41,6 +38,7 @@ use crate::skin_switch::{
     SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish, skin_ref_name, skin_ref_path,
 };
 use crate::switch_assets::{SwapBuilt, SwapPayload};
+use crate::target_map::window_scope;
 use areka_placement::balloon_lock::replace_balloon_lock_descript;
 use areka_placement::config::build_placement_config;
 use areka_placement::descript_window_keys::read_balloon_dontmove;
@@ -355,12 +353,12 @@ fn commit(
         .get_resource::<GhostWindows>()
         .into_iter()
         .flat_map(GhostWindows::scopes)
-        .filter_map(|s| u32::try_from(s).ok())
+        .filter_map(window_scope)
         .collect();
     let facts = skin_facts_copy::swapped(wiring.presenter(), &scopes, &built);
     let (targets, replace, finish) = split(built, epoch);
     // seriko は差し替えの依頼で静的な着せ替えを新しいシェルの既定へ置き直す。結線の写しも依頼が届いた
-    // 時点で置き直す（ghost の読み直しで控える着せ替えの基準・areka-P0-mcp-reload 要件 3.8）。
+    // 時点で置き直す（ghost の読み直しで控える着せ替えの基準）。
     let new_static = match &replace {
         SerikoReplace::Shell { static_binds, .. } => Some(static_binds.clone()),
         SerikoReplace::Balloon { .. } => None,
@@ -465,7 +463,7 @@ fn step_committed(
     }
 
     // UI スレッドを止めた時間 `swap_ms`＝このフレームの drain（置き換えの適用はこの中で返信を
-    // そろえた）＋後始末。drain は他の指令も捌くので上限の見積もり（要件 4.4・実機サインオフで記録）。
+    // そろえた）＋後始末。drain は他の指令も捌くので上限の見積もり（実機サインオフで記録）。
     let started = Instant::now();
     match finish {
         SwapFinish::Shell {
@@ -518,9 +516,7 @@ fn poll_replies(
     }
 }
 
-/// シェルの後始末（design「SwitchPhase」の完了の後始末・この順）: 箱の束を文字の層へ渡す
-/// （areka-P0-shell-balloon）→ 配置の値を入れ直す → 重なりの
-/// 基底と並べ直しの材料と窓の組の descript の分を置き直す → 実行系の今のシェルを書き換える → `LastShell` だけを書く → `OnShellChanged`。
+/// シェルの後始末。順は本体のとおり。
 #[allow(clippy::too_many_arguments)] // 後始末の残りの欄をそのまま受ける（箱の束とカーソルを足した形）
 fn finish_shell(
     wiring: &mut RuntimeWiring,
@@ -533,17 +529,16 @@ fn finish_shell(
     boxes: ShellBoxAssets,
     cursors: ShellCursorAssets,
 ) {
-    // 新しいシェルの箱の束を文字の層へ渡す（areka-P0-shell-balloon 要件 6.8）: 前の箱の面と
+    // 新しいシェルの箱の束を文字の層へ渡す: 前の箱の面と
     // 箱の文字を捨て、今のサーフェス番号を保ったまま行き先を新しい表で引き直す（`\s` を書かない
     // 次の台詞が新しいシェルの同じ番号のサーフェスの箱へ入る）。
     boxes.hand_to(&mut wiring.runtime.borrow_mut(), world);
-    // 新しいシェルのカーソルを入れ、今の状態のまま出し直してから前のを捨てる（shell-mouse-cursor 要件 6.8）。
+    // 新しいシェルのカーソルを入れ、今の状態のまま出し直してから前のを捨てる。
     cursors.hand_to(world);
     // 配置の解決は窓寸を入力に取るので、drain が置き換えで積んだ窓寸の報告をここで先に窓へ
     // 反映し、新しいシェルの寸法で解かせる（同じフレームの後段の照合は取り出し済みで何もしない）。
     reconcile_reported_sizes(&mut wiring.presenter, world);
-    // 読み込みはバルーンの面 0 の windowposition だけを読むので、今出している面の値へ替えて解く
-    // （balloon-scroll-arrows 要件 1.7・面の書き手 `select_balloon_face` と同じ取り方）。
+    // 読み込みはバルーンの面 0 の windowposition だけを読むので、今出している面の値へ替えて解く。
     let mut balloon = balloon.clone();
     for (&scope, &face) in &wiring.balloon_faces {
         let Some(definitions) = wiring.balloon_definitions.get(&scope) else {
@@ -562,14 +557,14 @@ fn finish_shell(
     match world.get_resource::<GhostWindows>().cloned() {
         Some(windows) => {
             apply_shell_descript(world, &windows, source, &balloon, restored);
-            // 動かせない指定は descript の段だけを新しいシェルの値へ取り替える（台本の lock は保つ・要件 4.4・5.4）。
+            // 動かせない指定は descript の段だけを新しいシェルの値へ取り替える（台本の lock は保つ）。
             let scopes: Vec<usize> = windows.scopes().collect();
             replace_balloon_lock_descript(
                 world,
                 &read_balloon_dontmove(&source.ghost_kv, &source.shell_kv, &scopes),
             );
             // 揃え方が変わっても窓寸が同じだと後段の再スナップは置き直さないので、ここで新しい
-            // 揃え方へ置き直す（要件 2.7）。
+            // 揃え方へ置き直す。
             reanchor_char_windows(world, &windows);
         }
         None => warn!(
@@ -580,10 +575,10 @@ fn finish_shell(
         ),
     }
     // 重なりの基底は新しいシェルの設定から置き直す。標準の位置の材料は起動の準備と同じ形
-    // （descript の値＋走っているバルーンの配置の値）で置き直す（areka-P0-window-link-directives 要件 7.4）。
+    // （descript の値＋走っているバルーンの配置の値）で置き直す。
     let placement_cfg = build_placement_config(&source.ghost_kv, &source.shell_kv);
     wiring.reseed_zorder_descript_base(placement_cfg.zorder_raw.as_deref());
-    // 窓の組も descript の分だけを新しいシェルの値へ取り替える（台本の組は保つ・要件 6.5）。
+    // 窓の組も descript の分だけを新しいシェルの値へ取り替える（台本の組は保つ）。
     replace_sticky_descript(world, placement_cfg.sticky_window_raw.as_deref());
     world.insert_resource(DefaultPlacementBasis {
         source: source.clone(),
@@ -596,7 +591,7 @@ fn finish_shell(
             "実行系が無いので今のシェルを書き換えられない（更新の対象とメニューの印は古いシェルのまま）"
         );
     }
-    // 読み直し（areka-P0-mcp-reload 要件 5.3）は `LastShell` も `OnShellChanged` も出さない。
+    // 読み直しは `LastShell` も `OnShellChanged` も出さない。
     if (hooks.reload_skin_applied)(world, SkinKind::Shell, &target.dir) {
         return;
     }
@@ -610,10 +605,8 @@ fn finish_shell(
     );
 }
 
-/// バルーンの後始末（design「SwitchPhase」の完了の後始末・この順）: 標準の位置の材料の作者の
-/// DPI（[`DefaultPlacementBasis`]） → scope ごとの定義の束（今の
-/// 面の定義を書き手 [`select_balloon_face`] で入れる・balloon-scroll-arrows 要件 1.7）と背景色 → 可視の記憶 → 今のバルーン → `LastBalloon` だけを書く（argv で起きたプロセスでも）→
-/// `OnBalloonChange`。
+/// バルーンの後始末。順は本体のとおり（今の面の定義は書き手 [`select_balloon_face`] で入れる。
+/// `LastBalloon` は argv で起きたプロセスでも書く）。
 fn finish_balloon(
     wiring: &mut RuntimeWiring,
     world: &mut World,
@@ -638,7 +631,7 @@ fn finish_balloon(
     }
     for (scope, definitions, background) in scopes {
         // 文字の層は同じフレームの再追従が新しいスロットへ結び直す（そのとき背景色も焼き直り、
-        // 警告の名前の欄も新しいバルーンのフォルダ名になる・areka-P0-shell-balloon 要件 3.12）。
+        // 警告の名前の欄も新しいバルーンのフォルダ名になる）。
         let actor = ActorKey::from(scope.to_string());
         {
             let mut runtime = wiring.runtime.borrow_mut();
@@ -651,7 +644,7 @@ fn finish_balloon(
         select_balloon_face(wiring, world, scope, face, FaceCause::BalloonSwitch);
         wiring.balloon_visibility.forget_scope(scope);
     }
-    // 読み直し（areka-P0-mcp-reload 要件 6.3）は決め方も `LastBalloon` も `OnBalloonChange` も替えない。
+    // 読み直しは決め方も `LastBalloon` も `OnBalloonChange` も替えない。
     if (hooks.reload_skin_applied)(world, SkinKind::Balloon, &target.dir) {
         return;
     }
@@ -673,7 +666,7 @@ fn finish_balloon(
 }
 
 /// 実行系の記憶の書き手で書く。書き手が無ければ `warn!(skin_memory_not_recorded)` で、切替は
-/// 成功として扱う（要件 6.1・記憶の縮退は今日と同じ）。
+/// 成功として扱う（記憶の縮退は今日と同じ）。
 fn record_memory(world: &World, hooks: SessionHooks, kind: SkinKind, folder: &str) {
     if !(hooks.record_last_skin)(world, kind, folder) {
         warn!(

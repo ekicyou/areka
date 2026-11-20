@@ -1,4 +1,4 @@
-//! scope → 表示対象（TargetId）写像の正本（純関数・std のみ）。
+//! scope → 表示対象（TargetId）写像の正本（純関数）。
 //!
 //! areka-P0-emo2-boot が正本として確立した契約（同 spec の design.md「依存方向」の最左・要件 3.5）。
 //! areka-P0-emo2-boot 設計 DD-3 の採番規約（シェル表示対象＝`2*scope`／バルーン表示対象＝`2*scope+1`）で
@@ -11,12 +11,16 @@
 
 use areka_emo_present::TargetId;
 use areka_sakura::ActorKey;
+use tracing::warn;
+
+/// scope の上限（`balloon_target` の `2*scope+1` が u32 に収まる最大）。台本の側と窓の側の正本。
+const MAX_SCOPE: u32 = i32::MAX as u32;
 
 /// scope 番号 → シェル表示対象（正本）。
 ///
 /// areka-P0-emo2-boot 設計 DD-3 の採番規約により `TargetId(2 * scope)`（常に偶数）。scope0 → `TargetId(0)`。
 ///
-/// 前提: `scope` は `i32::MAX` 以下（入口の [`scope_of`] が守る）。
+/// 前提: `scope` は `i32::MAX` 以下（入口の [`scope_of`]・[`window_scope`] が守る）。
 pub fn shell_target(scope: u32) -> TargetId {
     TargetId(2 * scope)
 }
@@ -26,7 +30,7 @@ pub fn shell_target(scope: u32) -> TargetId {
 /// areka-P0-emo2-boot 設計 DD-3 の採番規約により `TargetId(2 * scope + 1)`（常に奇数）。同一 scope のシェル表示対象
 /// （偶数）とは偶奇が異なるため必ず異なる id となる。
 ///
-/// 前提: `scope` は `i32::MAX` 以下（入口の [`scope_of`] が守る）。
+/// 前提: `scope` は `i32::MAX` 以下（入口の [`scope_of`]・[`window_scope`] が守る）。
 pub fn balloon_target(scope: u32) -> TargetId {
     TargetId(2 * scope + 1)
 }
@@ -37,11 +41,20 @@ pub fn balloon_target(scope: u32) -> TargetId {
 /// 非数値（例 `"側"`・`"kero"`・空文字・負値・混在）と `i32::MAX` を越える番号は `None` を返し、呼び手（adapter）が
 /// `warn!` ＋当該指令 drop で握り潰さず観測する（log-first・areka-P0-emo2-boot 要件 3 前提）。
 pub fn scope_of(key: &ActorKey) -> Option<u32> {
-    // 上限 `i32::MAX`: `balloon_target` の `2*scope+1` が u32 に収まる最大。
-    key.as_str()
-        .parse::<u32>()
-        .ok()
-        .filter(|&s| s <= i32::MAX as u32)
+    key.as_str().parse::<u32>().ok().filter(|&s| s <= MAX_SCOPE)
+}
+
+/// 窓の印の scope（`CharWindowMarker.scope` ほか）→ scope 番号。`MAX_SCOPE` を越えると
+/// `warn!` を 1 行残して `None`（呼び手は読み飛ばすだけでよい・記録はここ 1 か所）。
+pub fn window_scope(scope: usize) -> Option<u32> {
+    let s = u32::try_from(scope).ok().filter(|&s| s <= MAX_SCOPE);
+    if s.is_none() {
+        warn!(
+            scope,
+            "window scope が上限を越え target を採番できない → この窓を読み飛ばす"
+        );
+    }
+    s
 }
 
 /// 表示対象の窓の種類（採番の偶奇で決まる）。
@@ -151,6 +164,25 @@ mod tests {
         assert_eq!(balloon_target(2147483647), TargetId(u32::MAX));
         assert_eq!(scope_of(&ActorKey::from("2147483648")), None);
         assert_eq!(scope_of(&ActorKey::from("4294967295")), None);
+    }
+
+    #[test]
+    fn window_scope_rejects_scopes_past_i32_max() {
+        let (s, counts) = log_capture_kit::count_levels(|| window_scope(2147483647));
+        assert_eq!(s, Some(2147483647));
+        assert_eq!(counts, log_capture_kit::LevelCounts::default());
+        for scope in [2147483648usize, usize::MAX] {
+            let (s, counts) = log_capture_kit::count_levels(|| window_scope(scope));
+            assert_eq!(s, None, "scope {scope}");
+            assert_eq!(
+                counts,
+                log_capture_kit::LevelCounts {
+                    warn: 1,
+                    ..Default::default()
+                },
+                "scope {scope}"
+            );
+        }
     }
 
     /// 正写像 → 逆写像の往復で恒等（スコープ 0・1・2 × シェル・バルーン）。

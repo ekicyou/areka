@@ -8,7 +8,6 @@
 
 use std::path::Path;
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
 
 use areka_ghost::sink::{DiscardSink, LogSink};
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode};
@@ -18,9 +17,6 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::app_exit::{ExitOrigin, FirstExit, fault_of};
-
-/// 停止通知を待つ上限（有界・宙吊りを防ぐ）。
-const BOUND: Duration = Duration::from_secs(30);
 
 /// 注入する接続失敗の理由。
 const CONNECT_ERR: &str = "logsink-side simulated connect failure";
@@ -75,18 +71,15 @@ fn connect_failure_reaches_quit_app_without_real_sink_wiring() {
         .expect("接続の失敗はアクターの中で起こるので起動そのものは成功する");
 
     // 終了相を有界に回す（本番は毎フレーム 1 回）。
-    let deadline = Instant::now() + BOUND;
-    let mut consumed = false;
-    while !consumed && Instant::now() < deadline {
-        consumed = run_ghost_quit_phase(&mut world);
-        if !consumed {
-            std::thread::sleep(Duration::from_millis(5));
-        }
-    }
+    let reached = areka_runtime::spine::wait_until(
+        "停止通知が終了相へ届く",
+        areka_runtime::spine::Progress::Unknown,
+        || run_ghost_quit_phase(&mut world),
+    );
     // kanade は停止済みなので後始末は冪等に終わる（判定より先に畳んでスレッドを残さない）。
     let shutdown = ghost.shutdown(CloseReason::User { scope: 0 });
 
-    assert!(consumed, "停止通知が {BOUND:?} 以内に終了相へ届く");
+    reached.expect("停止通知が終了相へ届く");
     assert!(
         world
             .get_non_send::<wintf::AppExit>()

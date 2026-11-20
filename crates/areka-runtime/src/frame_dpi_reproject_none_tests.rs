@@ -13,34 +13,26 @@ use super::test_support::{
 };
 use super::*;
 
-// ── task 5.2: S2 是正（位置の権威と寸の権威の分離）の檻 ──────────────────────
+// ── 位置の権威と寸の権威の分離の檻 ──────────────────────
 //
-// 上の `s2_red_*` 4 件が「接地点が保たれる」ことを結果として主張するのに対し、本ブロックは
-// **分離そのもの**（寸を触らずに位置だけが射影を通ること・バルーンは自分では動かないこと・
+// `frame_dpi_reproject_tests.rs` の `s2_red_*` 4 件が「接地点が保たれる」ことを結果として
+// 主張するのに対し、本ブロックは **分離そのもの**（寸を触らずに位置だけが射影を通ること・バルーンは自分では動かないこと・
 // 入力が欠けたら現状維持でログを残すこと）を個別に固定する。
 
 /// **分離の本体**: 再導出結果が得られない（`None`）走行で、**窓寸は一切変わらず**位置だけが
-/// 変化後の work area へ再射影される（S2 是正・design D7・Req 4.1／4.2／4.6）。
+/// 変化後の work area へ再射影される。
 ///
-/// 併せて Req 4.5 の**裏面**を固定する——`s2_dpi_phase_writes_nothing_*` が「接地点が成立して
+/// 併せて「再導出結果が無ければ現状維持」の**裏面**を固定する——`s2_dpi_phase_writes_nothing_*` が「接地点が成立して
 /// いれば書かない」を主張するのに対し、本件は「**現位置が接地点規約に違反していれば書く**」を
 /// 主張する。両者が対で初めて「書込が起きるのは規約違反のときだけ」が檻になる。
 ///
-/// 随伴（Req 4.4）も同時に固定する: バルーン窓は自分の `None` 経路では動かず、
+/// 随伴も同時に固定する: バルーン窓は自分の `None` 経路では動かず、
 /// **キャラ窓確定後の追従**（`route=BalloonFollow`）だけが動かし、恒等式
 /// `balloon − char ≡ BalloonFollow.offset` が保たれる。
 ///
-/// **⚠ 区分（areka-P0-balloon-offset-dpi task 6.4・要件 7.4／7.6・design D13）＝
-/// 拡大率遷移での追従オフセットの追随に対して本檻は空振りであり、追随の証拠にならない。**
-/// 末尾の随伴恒等式は `offset` を書込の**後**に world から読んで `balloon − char` と突き合わせる
-/// ため、追随が書込の途中で `offset` を付け替えても成立し続ける（恒真の言い換え——
-/// `frame_dpi_reproject_tests.rs` の「task 7.2」ブロックが同じ罠を詳述している）。
-///
-/// 実測（task 6.4）: 追随の適用（`frame::balloon_offset_follow::rescale_balloon_follow_offset`
-/// の呼出）を外した走行で、本件は**緑のまま**であった（同走行では追随の檻 13 件が赤になる）。
-/// ゆえに**本件が緑であることを「追随を壊していない」の根拠に使ってはならない**。本檻が持つ
-/// のは「`None` 経路で寸を触らず位置だけが再射影される」という分離の主張であって、追従
-/// オフセットの値についての主張ではない。
+/// **⚠ 拡大率遷移での追従オフセットの追随に対して本檻は空振りであり、緑でも「追随を壊していない」
+/// 根拠にならない。** 理由と実測は `frame_dpi_reproject_tests.rs` の
+/// `s2_control_some_report_path_reprojects_and_keeps_balloon_offset` の説明が持つ。
 #[test]
 fn s2_none_report_path_reprojects_position_without_touching_size() {
     let (mut world, gw) = dpi_world();
@@ -82,7 +74,7 @@ fn s2_none_report_path_reprojects_position_without_touching_size() {
     assert_eq!(
         size_of(&world, char0),
         Some(size_before),
-        "None 経路では窓寸を変えない（前寸維持・Req 4.5 の寸側）"
+        "None 経路では窓寸を変えない（前寸維持）"
     );
     // 位置の権威は独立に働く（分離のもう片側）。
     assert_eq!(
@@ -117,11 +109,11 @@ fn s2_none_report_path_reprojects_position_without_touching_size() {
     assert_eq!(
         (balloon_after.x - cp.x, balloon_after.y - cp.y),
         (offset.x, offset.y),
-        "随伴恒等式 balloon − char ≡ BalloonFollow.offset が崩れている（Req 4.4）"
+        "随伴恒等式 balloon − char ≡ BalloonFollow.offset が崩れている"
     );
 }
 
-/// **バルーン窓の `None` は位置据置き**（tasks 5.2 の明示制約・design D7）。
+/// **バルーン窓の `None` は位置据置き**。
 ///
 /// バルーンの位置は従属量ゆえ、バルーン自身の DPI 変化で位置を動かしてはならない
 /// （動かすとキャラ確定前の位置へ一度飛び、同フレームの追従で再び動く＝二重書込）。
@@ -270,7 +262,7 @@ fn s2_none_report_path_holds_state_and_warns_when_the_window_size_is_undetermine
     );
 }
 
-/// **破棄済み窓は正常終了系**（要件 6.2/6.3・3.2 が敷いた区別を新しい消費点へも適用する）。
+/// **破棄済み窓は正常終了系**（新しい消費点でも同じ区別を守る）。
 ///
 /// 終了処理でゴースト窓が破棄された後のフレームでも DPI 相は走り得る。ここで
 /// 「寸が読めない」を一律 `warn!` にすると終了時ログが良性ノイズで埋まり、上の
@@ -291,7 +283,7 @@ fn s2_reproject_on_despawned_entity_is_debug_only_normal_termination() {
     // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現（follow.rs の同型檻と同じ流儀）。
     assert!(
         events.iter().all(|e| e.level > tracing::Level::INFO),
-        "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+        "破棄済み窓に対して警告以上のログが出ている: {events:?}"
     );
     let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
     assert_eq!(
