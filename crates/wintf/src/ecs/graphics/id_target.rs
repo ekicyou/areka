@@ -2,18 +2,69 @@
 
 use super::GraphicsCore;
 use super::composite::create_bitmap;
+use std::collections::HashMap;
+use std::mem::ManuallyDrop;
 use std::num::NonZeroU32;
+use std::sync::Arc;
 use tracing::error;
-use windows::Win32::Foundation::{D2DERR_RECREATE_TARGET, E_INVALIDARG};
+use windows::Win32::Foundation::{
+    D2DERR_RECREATE_TARGET, D2DERR_WRONG_RESOURCE_DOMAIN, E_INVALIDARG,
+};
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
-use windows::core::{Error, Result};
+use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_A8_UNORM;
+use windows::core::{Error, IUnknown, Interface, Result};
 use windows_numerics::{Matrix3x2, Vector2};
 
 /// ID の上限（24 ビット）。0 は「ID なし」。
 pub const MAX_ID: u32 = 0x00FF_FFFF;
 
 const MAX_SIDE: u32 = 16_384;
+
+/// 画素ごとに「立っている／いない」だけを持つ絵。
+#[derive(Clone, PartialEq, Eq)]
+pub struct IdMask {
+    width: u32,
+    height: u32,
+    /// 行の順の 0 か 255。
+    alpha: Vec<u8>,
+}
+
+impl IdMask {
+    /// 一辺は 1〜16,384。外れたら `None`。
+    pub fn new(width: u32, height: u32, is_set: impl Fn(u32, u32) -> bool) -> Option<Self> {
+        let side = 1..=MAX_SIDE;
+        if !side.contains(&width) || !side.contains(&height) {
+            return None;
+        }
+        let is_set = &is_set;
+        let alpha = (0..height)
+            .flat_map(|y| (0..width).map(move |x| if is_set(x, y) { 255 } else { 0 }))
+            .collect();
+        Some(Self {
+            width,
+            height,
+            alpha,
+        })
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+}
+
+impl std::fmt::Debug for IdMask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IdMask")
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .finish_non_exhaustive()
+    }
+}
 
 /// 形。座標は描き先の画素の単位（左上が (0, 0)）。
 #[derive(Clone, Debug, PartialEq)]
@@ -30,6 +81,12 @@ pub enum IdForm {
     },
     /// 書いた順の頂点。最後の頂点から最初の頂点へ閉じ、巻き数が 0 でない所を塗る。
     Polygon(Vec<(f32, f32)>),
+    /// マスクの左上を (left, top) に置く。立っている画素にだけ ID を置く。
+    Mask {
+        mask: Arc<IdMask>,
+        left: i32,
+        top: i32,
+    },
 }
 
 /// ID（1〜`MAX_ID`）と形の組。
@@ -75,6 +132,110 @@ impl std::fmt::Debug for IdTarget {
     }
 }
 
+/// マスクの GPU の絵の控え。同じ `IdMask`（同じ `Arc` の実体）は 1 度だけ GPU へ載せる。
+/// 装置に結びつくので、装置が作り直されたら使い手が捨てる（新しく作り直す）。
+#[derive(Default)]
+pub struct IdMaskPictures {
+    /// `Arc` の実体の番地 → 実体（握って番地を生かす）と GPU の絵。
+    pictures: HashMap<usize, (Arc<IdMask>, ID2D1Bitmap1)>,
+    device: Option<IUnknown>,
+    created: u64,
+}
+
+// SAFETY: 絵は IdTarget と同じ工場の系列の資源で、同じ根拠で D2D が呼び出しを直列化する。
+// 中身が変わるのは `&mut self` のときだけ。
+unsafe impl Send for IdMaskPictures {}
+unsafe impl Sync for IdMaskPictures {}
+
+impl std::fmt::Debug for IdMaskPictures {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IdMaskPictures")
+            .field("len", &self.len())
+            .field("created", &self.created)
+            .finish()
+    }
+}
+
+impl IdMaskPictures {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 覚えている絵の数。
+    pub fn len(&self) -> usize {
+        self.pictures.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.pictures.is_empty()
+    }
+
+    /// GPU の絵を作った回数の累計。
+    pub fn created(&self) -> u64 {
+        self.created
+    }
+
+    /// 列のマスクのうち、まだ載せていないものを `dc` の装置へ載せる。
+    fn prepare(&mut self, dc: &ID2D1DeviceContext, shapes: &[IdShape]) -> Result<()> {
+        // SAFETY: Windows API 境界。
+        let device: IUnknown = unsafe { dc.GetDevice()? }.cast()?;
+        match &self.device {
+            Some(held) if *held != device => {
+                return Err(Error::new(
+                    D2DERR_WRONG_RESOURCE_DOMAIN,
+                    "id mask pictures belong to another device",
+                ));
+            }
+            Some(_) => {}
+            None => self.device = Some(device),
+        }
+        for shape in shapes {
+            let IdForm::Mask { mask, .. } = &shape.form else {
+                continue;
+            };
+            let key = Arc::as_ptr(mask) as usize;
+            if self.pictures.contains_key(&key) {
+                continue;
+            }
+            let picture = upload(dc, mask)?;
+            self.created += 1;
+            self.pictures.insert(key, (Arc::clone(mask), picture));
+        }
+        Ok(())
+    }
+
+    fn get(&self, mask: &Arc<IdMask>) -> Option<&ID2D1Bitmap1> {
+        self.pictures
+            .get(&(Arc::as_ptr(mask) as usize))
+            .map(|(_, picture)| picture)
+    }
+}
+
+fn upload(dc: &ID2D1DeviceContext, mask: &IdMask) -> Result<ID2D1Bitmap1> {
+    let props = D2D1_BITMAP_PROPERTIES1 {
+        pixelFormat: D2D1_PIXEL_FORMAT {
+            format: DXGI_FORMAT_A8_UNORM,
+            alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+        },
+        dpiX: 96.0,
+        dpiY: 96.0,
+        bitmapOptions: D2D1_BITMAP_OPTIONS_NONE,
+        colorContext: ManuallyDrop::new(None),
+    };
+    // SAFETY: Windows API 境界。`alpha` は `width * height` バイトで、行の幅は `width` バイト。
+    unsafe {
+        dc.CreateBitmap(
+            D2D_SIZE_U {
+                width: mask.width,
+                height: mask.height,
+            },
+            Some(mask.alpha.as_ptr().cast()),
+            mask.width,
+            &props,
+        )
+    }
+}
+
 impl IdTarget {
     /// 一辺 1〜16,384 の描き先を `core` の装置で作る。装置が無ければ `D2DERR_RECREATE_TARGET`。
     pub fn new(core: &GraphicsCore, size: (u32, u32)) -> Result<Self> {
@@ -105,19 +266,30 @@ impl IdTarget {
 
     /// 透明に消してから列の順に、縁のぼかしなしで上書きして塗る（UI スレッドから呼ぶ）。
     /// `MAX_ID` を越える ID を含む列は塗らずに失敗にする。失敗は記録し（装置の失いは記録しない）、
-    /// 世代を 0 に戻す。
-    pub fn paint(&mut self, core: &GraphicsCore, shapes: &[IdShape]) -> Result<()> {
+    /// 世代を 0 に戻す。マスクの GPU の絵は `pictures` から引き、無ければ作って覚える。
+    /// `pictures` が別の装置の絵を持っていたら失敗にする。
+    pub fn paint(
+        &mut self,
+        core: &GraphicsCore,
+        shapes: &[IdShape],
+        pictures: &mut IdMaskPictures,
+    ) -> Result<()> {
         let Some(dc) = core.device_context() else {
             self.generation = 0;
             return Err(no_device());
         };
-        self.paint_with(dc, shapes)
+        self.paint_with(dc, shapes, pictures)
             .inspect_err(|err| report(core, "paint", err))
     }
 
     /// 共有の DC を借りて塗る。戻るとき `dc` は的なし・変換は恒等・ぼかしの設定は元どおり。
-    pub(crate) fn paint_with(&mut self, dc: &ID2D1DeviceContext, shapes: &[IdShape]) -> Result<()> {
-        let result = self.draw(dc, shapes);
+    pub(crate) fn paint_with(
+        &mut self,
+        dc: &ID2D1DeviceContext,
+        shapes: &[IdShape],
+        pictures: &mut IdMaskPictures,
+    ) -> Result<()> {
+        let result = self.draw(dc, shapes, pictures);
         self.generation = match result {
             Ok(()) => self.generation + 1,
             Err(_) => 0,
@@ -125,13 +297,19 @@ impl IdTarget {
         result
     }
 
-    fn draw(&self, dc: &ID2D1DeviceContext, shapes: &[IdShape]) -> Result<()> {
+    fn draw(
+        &self,
+        dc: &ID2D1DeviceContext,
+        shapes: &[IdShape],
+        pictures: &mut IdMaskPictures,
+    ) -> Result<()> {
         if let Some(over) = shapes.iter().find(|s| s.id.get() > MAX_ID) {
             return Err(Error::new(
                 E_INVALIDARG,
                 format!("id {:#X} over MAX_ID", over.id),
             ));
         }
+        pictures.prepare(dc, shapes)?;
         // SAFETY: Windows API 境界。`dc` は UI スレッドだけが使う共有の DC（呼び手の約束）。
         unsafe {
             let factory = dc.GetFactory()?;
@@ -143,7 +321,7 @@ impl IdTarget {
             dc.SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
             dc.SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_SOURCE_OVER);
             dc.Clear(Some(&D2D1_COLOR_F::default()));
-            let filled = fill_all(dc, &factory, shapes);
+            let filled = fill_all(dc, &factory, shapes, pictures);
             let ended = dc.EndDraw(None, None);
             dc.SetAntialiasMode(antialias);
             dc.SetTransform(&Matrix3x2::identity());
@@ -158,8 +336,13 @@ impl IdTarget {
     }
 }
 
-/// `BeginDraw` の中で呼ぶ。
-fn fill_all(dc: &ID2D1DeviceContext, factory: &ID2D1Factory, shapes: &[IdShape]) -> Result<()> {
+/// `BeginDraw` の中で呼ぶ。マスクの絵は `pictures` に載せ終えていること。
+fn fill_all(
+    dc: &ID2D1DeviceContext,
+    factory: &ID2D1Factory,
+    shapes: &[IdShape],
+    pictures: &IdMaskPictures,
+) -> Result<()> {
     // SAFETY: Windows API 境界。`dc` は呼び手が描きを始めた共有の DC。
     unsafe {
         let brush = dc.CreateSolidColorBrush(&D2D1_COLOR_F::default(), None)?;
@@ -195,6 +378,23 @@ fn fill_all(dc: &ID2D1DeviceContext, factory: &ID2D1Factory, shapes: &[IdShape])
                     if let Some(path) = polygon(factory, points)? {
                         dc.FillGeometry(&path, &brush, None);
                     }
+                }
+                IdForm::Mask { mask, left, top } => {
+                    let Some(picture) = pictures.get(mask) else {
+                        continue;
+                    };
+                    let (left, top) = (*left as f32, *top as f32);
+                    dc.FillOpacityMask(
+                        picture,
+                        &brush,
+                        Some(&D2D_RECT_F {
+                            left,
+                            top,
+                            right: left + mask.width as f32,
+                            bottom: top + mask.height as f32,
+                        }),
+                        None,
+                    );
                 }
             }
         }
