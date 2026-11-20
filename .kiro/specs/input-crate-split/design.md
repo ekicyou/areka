@@ -137,7 +137,7 @@ graph TB
 | D3 | 強制退避のテスト 3 本の置き場（4.7・5.1・5.5） | 3 本は本物の `quit_app` を見るので、境をまたぐテストとして本体の `crates/areka/src/app_exit_escape_tests.rs`（`app_exit.rs` の子）へ移す。中身は、World を組んだ直後に `crate::app_exit::install_input_hooks(&mut world)` を呼ぶ 1 行を足すほかは変えない。3 本が使う小道具（`bubble_pointer`・`bubble_pointer_mods`・`ghost_count`・`world_with_wiring`・`stepping_clock`）は、写しを作らず `input_events_tests.rs` から `areka-input` の `pointer_test_support`（`#[cfg(any(test, feature = "test-support"))] pub mod`）へ移し、入力のテストも本体のテストもそこから使う。`MouseWiring::with_clock` は `#[cfg(any(test, feature = "test-support"))] pub(crate)` にする（設計の討議 3 で確定） | 入力に残して口に記録用の関数を据える（5.1 の「本体の部品を偽物に替えない」に当たる）／小道具を本体に写す（写しが増える） |
 | D4 | `file_drop.rs` の置き場（2.2・2.5） | 本体の src 直下 `crates/areka/src/file_drop.rs`（テスト 3 本も同じ所の兄弟）。出所は `areka::file_drop` で、`log_history` のどの決まりにも当たらない＝前と同じ（今の `areka::input_events::file_drop` も当たらない）。`file_drop_wiring_tests.rs` の `include_str!("file_drop.rs")` は兄弟のまま解ける（設計の討議 4 で確定） | `install/` の下（出所が `areka::install::file_drop` になり Update に当たる＝`UNKEPT_TARGETS` に 1 行足す手当てが要る）／`ghost_session/` の下（Status に当たる） |
 | D5 | `shortcut.rs` の置き場（2.1） | `crates/areka/src/menu/shortcut.rs`（テストは `menu/shortcut_tests.rs`）。`menu/mod.rs` に `pub(crate) mod shortcut;` を足す。中の `crate::menu::…` はそのまま解けるので中身は変えない。出所 `areka::menu::shortcut` は決まりに当たらない＝前と同じ | ― |
-| D6 | 出し直しの形（3.4） | `main.rs` の `mod input_events;`（68 行）を `use areka_input as input_events;` に替える。上の 4 行の説明は変えない（古い文の直しは 8.1 で申し送る）。`mod file_drop;` を `mod install;` の近くに 1 行の説明つきで足す（`main.rs` は 989 行 → 991 行） | ― |
+| D6 | 出し直しの形（3.4） | `main.rs` の `mod input_events;`（68 行）を `use areka_input as input_events;` に替える。上の 4 行の説明は変えない（古い文の直しは 8.1 で申し送る）。`mod file_drop;` を `mod install;` の近くに説明なしで足す（`main.rs` は 989 行 → 990 行） | ― |
 | D7 | 自分を指すパス（3.3） | `crate::input_events::` → `crate::`（20 か所）。`pub(in crate::input_events)`（`cursor_pick.rs` 7 か所）は、根が crate になると `pub(crate)` と同じ意味なので字面を `pub(crate)` にする | `pub(in crate)` のまま（意味は同じ・見慣れない字面が残る） |
 | D8 | 同梱のカーソルの絵（1.11） | `crates/areka/cursor/`（`hand.cur`・`grip.cur`・`hand.svg`・`grip.svg`・`README.md`）を `git mv` で `crates/areka-input/cursor/` へ。`cursor_answer.rs` の `include_bytes!("../../cursor/…")` は、ファイルが `src/` 直下へ 1 段浅くなるので `include_bytes!("../cursor/…")`（自分の置き場からの相対のまま）。絵のバイトは変えない | 置き場を変えず `../../areka/cursor/…` を読む（input の crate が本体の置き場を読む・要件の討議で退けた） |
 | D9 | 落ちの報告（5.6） | 前例（runtime-crate-split D6）の形をそのまま使う。`crates/areka-input/src/crash_report_tests.rs`（`lib.rs` の `#[cfg(test)]` の子）に初期化子の `static`（`#[used]`・`#[unsafe(link_section = ".CRT$XCU")]`・`areka_runtime::crash_report_test_support::install` を指す）3 行と、確かめのテスト `crash_filter_is_installed_before_the_tests_start` 1 本を置く。中身の写しは作らない | 写しを置く（写しの統合は `test-crash-report-merge` の持ち物で、増やさない） |
@@ -387,12 +387,11 @@ sequenceDiagram
 
 ```toml
 [features]
-# 本体のテストだけが使う支えを開ける・本体は dev-dependency でだけ付ける（spec: input-crate-split 要件 5.5）。
+# 本体のテストだけが使う支え。本体は dev-dependency でだけ付ける。
 test-support = []
 
 [dependencies]
 wintf = { path = "../wintf" }
-# 入力は実行系と配置の上に乗り、本体（areka）には依存しない（spec: input-crate-split 要件 1.5）。
 areka-runtime = { path = "../areka-runtime" }
 areka-placement = { path = "../areka-placement" }
 areka-emo-compose = { path = "../areka-emo-compose" }
@@ -439,7 +438,7 @@ areka-placement = { path = "../areka-placement", features = ["test-support"] }
   - 子の項目 18: `click::on_char_pointer_released`／`user_break::{UserBreakWiring, register_user_break_drain, wire_user_break, drain_no_user_break_signals, on_left_press}`／`balloon::{BalloonWiring, ChoiceSelection, register_balloon_leave_system, attach_balloon_pointer_handlers, wire_balloon_choice}`／`shell_box::ShellBoxHover`（再輸出を `pub use` へ）／`shell_box_handler::register_box_leave_system`／`choice_drain::{register_choice_drain, wire_choice_drain}`／`char_watch::{register_char_watch, char_watch_with}`／`char_watch::cursor_answer::register_char_cursor`／`balloon_wheel::register_balloon_wheel`。
   - メソッド 7: `MouseWiring::{new, send_close_request, defer_right_double_click, take_pending_right_double_click, send_pending_right_double_click}`・`UserBreakWiring::new`・`BalloonWiring::new`。
 - 外から使われない `pub(crate)`（`throttle`・`ChoiceSelectionInbox`・`ChoiceForwarder`・`hover`／`set_hover`・`send_selection` ほか）はそのまま（3.2）。lib で crate の中から使われない `pub(crate)` が死んだコードの警告を出したら、外から使われているかを確かめて `pub` にする（消さない）。
-- 3.7: `pub` にした関数が `pub(crate)` の型を名指して `private_interfaces` が出たら、その型を `pub` にし、項目の上に 1 行「要件 3.7: 公開の `<名前>` が名指すので開ける」と書く。測った範囲で署名に出る入力の型は `RegionSource`・`PendingDoubleClick`・`ChoiceSelection`（どれも上の一覧に入る）だけで、見込みは 0 件。
+- 3.7: `pub` にした関数が `pub(crate)` の型を名指して `private_interfaces` が出たら、その型を `pub` にする（コードに説明は書かない。開けた項目と理由は Handover ⑶ の一覧に記録する）。測った範囲で署名に出る入力の型は `RegionSource`・`PendingDoubleClick`・`ChoiceSelection`（どれも上の一覧に入る）だけで、見込みは 0 件。
 - 3.3: D7。3.8: 旧 `mod.rs` 505 行の説明のリンク `[`quit_app`]` を「本体の終了の統合操作 `app_exit::quit_app`（出所 `Escape`）を [`InputHooks`](hooks::InputHooks) 経由で呼び」の地の文へ。ほかに本体の項目を指すリンクは測った範囲で 0（`[`crate::…`]` 0 件）。段 3 で `cargo doc -p areka-input --no-deps` の解けないリンクの警告に本体の名が 0 件であることも見る。
 - 記録: 3.7 と `test-support` で開けた項目の一覧を、`audit-areka-input-menu` の brief の申し送りに載せる。
 
@@ -695,4 +694,6 @@ fn crash_filter_is_installed_before_the_tests_start(); // areka_runtime::crash_r
 4. **`file_drop.rs` の置き場（D4）**: 本体の src 直下。
 5. **実機の強制退避の取り方（D13）**: 作業の木の `target\input-crate-split\escape\` の使い捨ての SendInput の手順を段 0 と段 6 で同じく使う。`tools/` に足さない。走らせるのは排他テストの机を取り、開発者の SendInput の許しを得てから。
 6. **`hit-id-pass` との重なり**: このウェーブのあいだは入口の形を保つよう `hit-id-pass` のセッションへ伝える。変えるなら、この仕様の着地の後に `crates/areka-input/src/lib.rs` の呼び手を直す（約束 ⑶ の「本体」に `areka-input` は入らない読み）。
-7. **棚卸への知らせ**: C23 の「触るファイル」に無く、この設計で足したファイル（「同じウェーブとの重なり」の最後の項）は、完了の報告で棚卸のセッションへ伝える。
+7. **コードのコメント**（2026-11-20 の main の取り込みで入った `CLAUDE.md` の Comments 節）: 足す・変えるコメントに spec・要件の番号・タスクの番号を書かない。理由が名前や型で示せないときだけ 1 行の「なぜ」を書く（`publish = false` の理由・`test-support` の用途）。公開の `///`・`//!` は正確で短く保つ。移すファイルの既にあるコメントは中身を変えない（振る舞いと説明を直さない・8.1）。
+8. **`hit-id-pass` の返事**（2026-11-20）: 了解。このウェーブのあいだ向こうは本体の `input_events/mod.rs` に触らない。署名を変えると決まったら、この仕様の着地の後に `crates/areka-input/src/lib.rs` で呼び手を直し、決まった時点で知らせてくる。約束 ⑶ の「本体」に `areka-input` は入らない読みにも合意。向こうの実装はこの仕様の着地の後に main を取り込んでから始める見込み。
+9. **棚卸への知らせ**: C23 の「触るファイル」に無く、この設計で足したファイル（「同じウェーブとの重なり」の最後の項）は、完了の報告で棚卸のセッションへ伝える。
