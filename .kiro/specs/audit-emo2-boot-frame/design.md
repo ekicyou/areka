@@ -226,7 +226,7 @@ if let Some(background) = unconnected_text.remove(&scope) {
 - 装着の側の控え（`if !connect_balloon_text(..)` の 1 行）を装着の相ごと通すテストは置かない。装着の相を文字の配置先の無い状態で通すには面 0 を組めないバルーン（`ExtentTooLarge`）が要り、決定論で作れない。`None` で `false` と `warn!` が返ることは 13 番で強めるテストが縛り、控えに入った後の繋ぎ直しは上のテストが縛る。
 - `unconnected_text` は `text_scale_warned` と同じく `RuntimeWiring::new` で空にする（切り替えで新しい結線を作れば控えも新しくなる）。
 
-### 4 番 窓の側の scope の上限（`target_map.rs`・範囲の中の 8 か所）
+### 4 番 窓の側の scope の上限（`target_map.rs`・範囲の中の 9 か所）
 
 | 項目 | 中身 |
 |---|---|
@@ -253,6 +253,7 @@ pub fn window_scope(scope: usize) -> Option<u32> {
 | `frame/dpi.rs` L415 | `u32::try_from` と `error!` | `window_scope` と `warn!`（台本の側と同じ扱い・要件 5.10）。文は「scope が上限を越え target を採番できない → 再スケールを skip」 |
 | `frame/scale_text.rs` L169 | `u32::try_from` と `error!` | 同上（同じ事実を同じ水準で記録する） |
 | `frame/attach.rs` L105 | `u32::try_from` | `window_scope`（`None` は今どおり `missing_assets` へ）。変数名 `window_scope` は `scope_usize` に替える |
+| `frame/attach.rs` L458 | `.filter_map(\|&s\| u32::try_from(s).ok())`（`skin_facts_copy::copy` へ渡り、上限の検査なしに `balloon_target` を呼ぶ） | `.filter_map(\|&s\| window_scope(s))`（設計の検証で見つけた 9 か所目） |
 | `frame/drain_resnap.rs` L380 | `scope as u32` | `let Some(s) = window_scope(scope) else { continue };` |
 | `frame/drain_resnap.rs` L675 | `scope as u32` | `let Some(s) = window_scope(scope) else { return Err(ChainDeferReason::NotShownYet { scope }) };`（対応する表示対象が無い窓は表示が成り立たない） |
 | `frame/move_shift.rs` L53 | `scope as u32` | `let Some(s) = window_scope(scope) else { continue };` |
@@ -285,17 +286,22 @@ pub fn window_scope(scope: usize) -> Option<u32> {
 struct MonitorWatch {
     changed: SystemState<(Query<'static, 'static, (), Changed<Monitor>>, Query<'static, 'static, (), With<Monitor>>)>,
     /// 前に作り直したときのモニターの数（消えたモニターは Changed に出ないので数で見る）。
-    seen: usize,
+    /// `None` は一度も作り直していない（初回はモニターが 0 台でも必ず作り直しの道を通る）。
+    seen: Option<usize>,
 }
 ```
 
-- `sync_monitor_snapshot(world)` の署名は変えない（`frame.rs` L249 と `frame_test_support.rs` L800 の呼び手・`frame_work_area_sync_tests.rs` L363 の字面の確かめはそのまま）。中で `MonitorWatch` を資源から取り出し（無ければ作る・初回は全部が Changed に見えるので必ず作り直しの道を通る）、「変化が 0 件かつ数が `seen` と同じ」ならすぐ `None` を返す。それ以外は今の `sync_monitor_snapshot_with` を呼び、`seen` を今の数にする。
+- `sync_monitor_snapshot(world)` の署名は変えない（`frame.rs` L249 と `frame_test_support.rs` L800 の呼び手・`frame_work_area_sync_tests.rs` L363 の字面の確かめはそのまま）。中で `MonitorWatch` を資源から取り出し（無ければ作る）、次の 3 つが全部そろうときだけすぐ `None` を返す。どれかが欠けたら今の `sync_monitor_snapshot_with` を呼び、`seen` を `Some(今の数)` にする。
+  1. `seen` が `Some`（初回でない）。
+  2. Monitor の変化が 0 件で、数が `seen` と同じ。
+  3. 資源 `MonitorSnapshot`・`MonitorDpiTable` が前の同期の後に入れ直されていない（`SystemState` の組に `Res<MonitorSnapshot>`・`Res<MonitorDpiTable>` を足し `is_changed()` で見る）。本番の `prepare_ghost_windows`（`crates/areka/src/ghost_session.rs` L235・L287-L288・C23 で触らない）は、ゴーストの切り替えと再起動のたびに `enumerate_monitors()` で両方を入れ直す。そのフレームに今どおり揃え直すための条件（設計の検証の 2 件目）。
 - 調べ（`research.md` の 11 節）: wintf の `apply_monitor_snapshot`（`crates/wintf/src/ecs/layout/systems/monitor_systems.rs` L299-L412）は、値が変わったモニターだけ `get_mut` で書き（`differs_in_value` のとき）、新しいモニターは `spawn`、消えたモニターは `despawn` する。だから Changed は値の変化のときだけ立ち、追加は Changed に入り、消去は数で見える。
 - モニター 0 台のときの `warn!` は、作り直しの道を通るフレーム（表が変わったフレーム）にだけ出る（今は毎フレーム 60 行/秒）。
 - `SystemState` の組が `Resource` の `Send + Sync` を満たさないと組んで分かったら、同じ形を `insert_non_send` で置く（振る舞いは同じ）。
 - `frame.rs` L246 の「定常フレームは無操作」を、この形の事実（「モニターの component が変わらないフレームは表を集めない」）に直す。
 - 前提: 資源 `MonitorSnapshot` を手で置き替えて同期に上書きさせるテストがあれば、モニターの component を書き替える形（本番の道）に改める（要件 4.7）。実装で見つけた本数を記録に書く。
 - 縛るテスト（`frame_work_area_sync_tests.rs`）`an_unchanged_monitor_table_is_not_rebuilt_and_an_empty_one_warns_once`: モニター 0 台の World で `sync_monitor_snapshot` を 3 回 → `warn!` は 1 行。その後モニターを 1 台 `spawn` → 作り直す（`Some`）。そのモニターの作業領域を `get_mut` で変える → 作り直す。何も変えずにもう 1 回 → `None`。**直しの前は `warn!` が 3 行＝赤**。
+- 縛るテスト（同じファイル）`a_reinserted_monitor_snapshot_is_resynced_on_the_next_call`: モニター 1 台で 1 回同期して `None` になる定常に入れた後、`MonitorSnapshot` を `insert_resource` で入れ直す（切り替えの `prepare_ghost_windows` と同じ形）→ 次の呼び出しが作り直す（`Some`）。条件 3 を外すと赤。
 
 ### 6 番 札が外れるフレームの書き込みのテスト（件 13・`frame_dpi_sync_hold_tests.rs`）
 
@@ -352,7 +358,7 @@ struct MonitorWatch {
 |---|---|---|---|
 | 2 | `Blocked.scopes` を `BTreeSet`（上の節） | `blocked_keeps_one_entry_per_window_however_many_cues_wait` | T2 |
 | 3 | 文字の拡大率の相で繋ぎ直す（上の節） | `a_balloon_text_left_unconnected_at_attach_connects_on_the_first_frame_its_view_exists` | T3 |
-| 4 | `window_scope` と 8 か所（上の節） | `window_scope_rejects_scopes_past_i32_max`・`a_window_scope_past_i32_max_is_skipped_with_one_warning` | T4 |
+| 4 | `window_scope` と 9 か所（上の節） | `window_scope_rejects_scopes_past_i32_max`・`a_window_scope_past_i32_max_is_skipped_with_one_warning` | T4 |
 | 5 | 3 つのビルドの測り（`research.md` の 11 節）で 3 種に分ける: どのビルドでも使わない 20 名は消す、テストでだけ使う名（`Entity`・`SystemState`・`PlacementRoute`・`connect_balloon_text`・`GhostWindowClass`・`classify_ghost_window`・`reproject_char_window_at_current_size`・`resnap_from_sizes`）は `#[cfg(test)] use`、テストと test-support の両方で使う名は `#[cfg(any(test, feature = "test-support"))] use`。`L153` の許可を外す。`wiring.rs` の `World`・`TargetId` も `#[cfg(any(test, feature = "test-support"))] use` にして許可を外す。許可は 0 本になる。実装の後に 3 つのビルド（lib・lib＋test-support・test）で `--force-warn unused_imports` を 1 回ずつ回して 0 件を確かめる | — | T5 |
 | 6 | 札が外れるフレームのテストを足す（上の節） | 足したテストそのもの | T6 |
 | 7 | 空撃ちを消し、2 回目も本番の経路で 1 窓だけ DPI を変えて拾った窓がその 1 窓だけであることを見る | 直したテストそのもの | T1 |
@@ -553,7 +559,7 @@ struct MonitorWatch {
 | 2.6 | 規模を記録だけ | 「タスクの束と順」の 27 タスクの記録 |
 | 2.7 | 55・64・67・68・72・80・94 を直す | 各行（55・64・67・68・80 は T21〜T23、72 は T22、94 は T19） |
 | 3.1 | 全部直す | 「指摘ごとの直し方」の 114 行・T1〜T24 |
-| 3.2 | 呼び出し元まで | 「範囲の外（持たないもの）」の範囲の外で変えるファイル・4 番の 8 か所・33・99 番の宣言の付け替え。各タスクで形を変えた項目の名をツリー全体で grep |
+| 3.2 | 呼び出し元まで | 「範囲の外（持たないもの）」の範囲の外で変えるファイル・4 番の 9 か所・33・99 番の宣言の付け替え。各タスクで形を変えた項目の名をツリー全体で grep |
 | 3.3 | 消す前に確かめる | 「消すファイル」の節の grep・62〜64・73・78・89・98・105・110・111 番ほか |
 | 3.4 | 新しい機能を足さない | 足すのは 3 番の繋ぎ直し（説明どおりの再試行を事実にする直し）・4 番の上限・49 番の見張り・テストの支えの部品だけ |
 | 3.5 | 預かりの列は手間だけ | 2 番の節（振る舞いは変えない） |
