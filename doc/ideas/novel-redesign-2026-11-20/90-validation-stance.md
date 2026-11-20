@@ -25,7 +25,7 @@
 ### 2. シェルの中の箱を話の最中に押した時、今は SHIORI へ送っている。設計は、命令なしで送らなくする
 
 - どこ: `01` 5.4「UI が送る条件」・7 章の 6。`05` 5.8 の順 1「台詞の箱のクリック … areka が使う」。
-- 何: 今の areka は、箱の中の単クリックを、話の最中でもシェルへの操作として流す（`crates/areka/src/input_events/shell_box.rs:59-60`・`shell_box_handler.rs:313`）。SHIORI への送りは「話の最中かどうかでは分けない」（`crates/areka-kanade/src/schedule/mouse_events.rs:8`）。普通のバルーンの窓の単クリックは、選択肢の確定のほかは何もしない（`balloon_pressed.rs:158`・`user_break.rs:118-125`）。
+- 何: 今の areka は、箱の中の単クリックを、話の最中でもシェルへの操作として流す（`crates/areka-input/src/shell_box.rs:59-60`・`shell_box_handler.rs:313`）。SHIORI への送りは「話の最中かどうかでは分けない」（`crates/areka-kanade/src/schedule/mouse_events.rs:8`）。普通のバルーンの窓の単クリックは、選択肢の確定のほかは何もしない（`balloon_pressed.rs:158`・`user_break.rs:118-125`）。
 - なぜ困る: 普通のバルーンは「何も無かった所に足す」だが、箱は「今届いているイベントが、命令なしで届かなくなる」。立場の 4 に当たる。舞台では、台詞の箱がアクターのシェルの一部なので、「絵の一部のクリックを、areka が自分で早送りに使う」形になり、退けられた案 3 の隣に来る。決め A の「どこを押したら早送りにするかは、シェルと台本の作りで決まる」とも合わない。
 - 直す向き: 開発者に諮る（4 章の 1）。立場どおりなら、箱の単クリックは今までどおり SHIORI へ投げ、早送りは、台本が並走の 1 本で返す。areka が自分で早送りするのは、普通のバルーンの窓だけに留める。
 - 直すのは: `01`・`05` と、骨組みの 6 章。
@@ -239,7 +239,7 @@
 
 **自分でコードを読んで確かめた物**
 
-- 箱の単クリックは、話の最中でもシェルへの操作になる: `crates/areka/src/input_events/shell_box.rs:50-70`（`judge_box_press`）・`shell_box_handler.rs:227-313`。
+- 箱の単クリックは、話の最中でもシェルへの操作になる: `crates/areka-input/src/shell_box.rs:50-70`（`judge_box_press`）・`shell_box_handler.rs:227-313`。
 - 普通のバルーンの窓の単クリックは、選択肢とアンカーの確定のほかは何もしない: `balloon_pressed.rs:140-208`・`user_break.rs:118-135`。
 - クリックのイベントは、話の最中かどうかで分けない: `crates/areka-kanade/src/schedule/mouse_events.rs:1-140`。台本が返ると段の列が止まる（同 `152-175`）。
 - 絵の Entity は、出ている時だけ α マスクで当たりを決める: `crates/areka-emo-present/src/mount.rs:106-113`。

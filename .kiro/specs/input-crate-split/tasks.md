@@ -104,7 +104,7 @@
   - _Depends: 4.1_
   - _Dispatch: mechanical — 書き換えを対応表が与える_
   - _Requirements: 6.1, 6.2, 6.3_
-- [ ] 6.2 (P) 文書と網羅台帳と実機の手順書のパスと出所の名前を書き換える
+- [x] 6.2 (P) 文書と網羅台帳と実機の手順書のパスと出所の名前を書き換える
   - 互換の設計の文書（§8 の割り当てられた行だけ）・網羅台帳 3 本の別々の行・アンカーの文書・`doc/ideas/` の 6 ファイルのパスと、カーソルの絵の置き場を新しいパスへ書き換える
   - 実機の手順書の `RUST_LOG` と説明の出所の名前と、パスを書き換える
   - 網羅の報告は手で直さず道具で作り直し、網羅の確かめの道具が緑
@@ -165,3 +165,4 @@
 - 範囲の外: `cargo check --workspace --all-targets` に `shiori-abi` の `unused dependency windows`（`crates/shiori-abi/Cargo.toml:16`）が main でも出る。完了の棚卸で起票する。
 - 6.1: 移した `areka-input` のファイルの説明に残る古いパス 6 か所（`balloon.rs` 2・`balloon_hover_flag_tests.rs`・`balloon_moved.rs`・`spawn_assembly_tests.rs` 2）は 6.7 の当たりになるので、パスとモジュールの名だけを書き換えた（意味は変えない）。
 - 6.1: `collision-probe.rs`・`collision-probe/setup.rs` の「`pub(crate)`・内部が `crate::` パス」という理由の文は移した後は古い（結論は依存の向きで成り立つ）。7.4 で `audit-areka-input-menu` へ申し送る。
+- 6.2: 設計のパスの対応表の機械的な形（`input_events::<子>` → `areka_input::<子>`）は、子の子のモジュールでは実物と合わない。実物は `areka_input::char_watch::cursor_answer`・`areka_input::hover_region::cursor_pick`。

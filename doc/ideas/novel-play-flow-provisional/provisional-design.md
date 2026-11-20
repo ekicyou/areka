@@ -80,7 +80,7 @@
 ### 3.5 もう在る物
 
 - 右クリックのメニューを止める道。右ボタンを離すたびに `sakura.popupmenu.visible`／`kero.popupmenu.visible` を照会し、返事で出すかを決める（`crates/areka/src/menu/trigger.rs:3-5`・`145-157`・`menu/captions.rs:68-76`）。台帳は `implemented`（`ledger/shiori.toml:13383-13386`・`14460-14463`）。`char*.popupmenu.visible` は照会しない（`captions.rs:78-94`）。
-- 右クリックは、メニューと関係なく `OnMouseUp`（Reference5＝1）→ `OnMouseClick`（同）で届く（`schedule/mouse_events.rs:33`・`crates/areka/src/input_events/click.rs:155-162`）。話の最中かどうかで分けない（`mouse_events.rs:8`）。
+- 右クリックは、メニューと関係なく `OnMouseUp`（Reference5＝1）→ `OnMouseClick`（同）で届く（`schedule/mouse_events.rs:33`・`crates/areka-input/src/click.rs:155-162`）。話の最中かどうかで分けない（`mouse_events.rs:8`）。
 
 ## 4. 設計
 
@@ -328,7 +328,7 @@ ukadoc の引用（URL は `https://ukatech.shillest.net/ukadoc-spec/`）:
 - 4.2 の「talking が立ち続ける理由」の 3 つの前提: 受け口は完了より前に落ちる・配られる（`drive.rs:483-500` と同コメント）、kanade の往復は同期（`actor.rs:6-17`）、talking は相から導く（`schedule/mod.rs:376-378`）。
 - 閉じたトークは残りの cue を配らない（`drive.rs:491-493`）。
 - 任意の名前を、許可の表でなく出所ごとの決まりで通す前例（`actor.rs:721-735`）。
-- 右クリックの照会と、右クリックのイベントが別々の道で出ること（`menu/trigger.rs`・`input_events/click.rs`）。
+- 右クリックの照会と、右クリックのイベントが別々の道で出ること（`menu/trigger.rs`・`crates/areka-input/src/click.rs`）。
 - ukadoc の 6 項目（5 章の引用）。
 
 読んでいない・机の上だけの物:

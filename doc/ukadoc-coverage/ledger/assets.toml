@@ -2860,7 +2860,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はマウスの移動の通知が要らないという宣言を受け取る経路を持たない。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka はマウスの移動の通知を間引いたうえで送る（areka の input_events::throttle が送出の条件を決める）。要らないと書いてあっても送り続ける。
+areka はマウスの移動の通知を間引いたうえで送る（areka の areka_input::throttle が送出の条件を決める）。要らないと書いてあっても送り続ける。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
 テーマを付けなかった根拠: この欄は機能を切るための宣言で、読まれなくても既定の振る舞いがそのまま残るだけなので、利用者が失うものを 1 つも言えない（テーマを付ける規則は「この項目が無いと利用者はゴーストの何を失うか」に答えられるかどうかの 1 つだけである）。本台帳で `seriko.use_self_alpha` などが「装い」を持つのは、あちらが絵の描き方そのものを決める宣言だからで、切るか切らないかだけを言うこの欄とは別に扱った。
@@ -7190,7 +7190,7 @@ values = ["触れ合い", "装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・debug!。areka はこの場面を正典どおりに読んで使うので、正典どおりに書かれた行については崩れる先が無い。三段のうち最も弱い段を選んだ。
-2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の runtime::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の input_events::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは input_events::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の runtime::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の areka_input::hover_region::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは areka_input::char_watch::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
 この場面は「押す」。当たり判定の上で右以外のボタン（左・中・拡張のボタン。ダブルクリックの 2 回目も）を押すと、この行の形を出し、放すまで保つ（押したまま当たり判定や窓の外へ出ても変えない）。行が無ければ既定の形（当たり判定名が `bust` なら `system:grip`、ほかは `system:finger`。ゴーストの descript の `mousecursor.grip`・`mousecursor` が在ればそちら）を出す。当たり判定の無い所で押したときは形を変えない。クリック・ドラッグと SHIORI へ送るイベントは変えない。
 読めない行（欄が足りない・場面の名前が 5 つのどれでもない・`*` が数でない・形の欄が読めない）は使わず、見出し・行の原文・理由を添えた warn! をシェルの読み込みごとに 1 回出し、同じブレスのほかの行は使う。同じスコープ・当たり判定名・場面の行が 2 つ以上あれば後の行を使い、使わなかった行を warn! で残す。ファイル名の欄の `.cur`・`.ani` はシェルのフォルダ → `ghost\\master` の順で探して読み込みのときに 1 回だけ読み、無い・読めない・壊れている・フォルダの外を指す名前は、ファイル名・探した場所・理由を添えた warn! を名前ごとに 1 回出して、その行を使わずに既定の形へ落とす。形を選び直すたびに、スコープ・当たり判定名・場面・形・出どころを添えた debug!（既定では出ない段）を残す。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
@@ -7209,7 +7209,7 @@ values = ["触れ合い", "装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・debug!。areka はこの場面を正典どおりに読んで使うので、正典どおりに書かれた行については崩れる先が無い。三段のうち最も弱い段を選んだ。
-2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の runtime::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の input_events::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは input_events::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の runtime::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の areka_input::hover_region::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは areka_input::char_watch::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
 この場面は「止まる」。当たり判定の上でボタンを押さずに、OS の設定の「マウスを止めたと見なす時間」（既定 400 ミリ秒）のあいだ動かなかったら、この行の形を出す。カーソルの窓の中の位置が変わったら、その場で乗ったときの形へ戻す。行が無ければ形を替えず、乗ったときの形のままにする（ukadoc の既定の `system:arrow` は使わない。SSP 2.9.23 の 2026-10-29 の測りに合わせた）。
 読めない行（欄が足りない・場面の名前が 5 つのどれでもない・`*` が数でない・形の欄が読めない）は使わず、見出し・行の原文・理由を添えた warn! をシェルの読み込みごとに 1 回出し、同じブレスのほかの行は使う。同じスコープ・当たり判定名・場面の行が 2 つ以上あれば後の行を使い、使わなかった行を warn! で残す。ファイル名の欄の `.cur`・`.ani` はシェルのフォルダ → `ghost\\master` の順で探して読み込みのときに 1 回だけ読み、無い・読めない・壊れている・フォルダの外を指す名前は、ファイル名・探した場所・理由を添えた warn! を名前ごとに 1 回出して、その行を使わずに既定の形へ落とす。形を選び直すたびに、スコープ・当たり判定名・場面・形・出どころを添えた debug!（既定では出ない段）を残す。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
@@ -7228,7 +7228,7 @@ values = ["触れ合い", "装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・debug!。areka はこの場面を正典どおりに読んで使うので、正典どおりに書かれた行については崩れる先が無い。三段のうち最も弱い段を選んだ。
-2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の runtime::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の input_events::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは input_events::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の runtime::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の areka_input::hover_region::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは areka_input::char_watch::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
 この場面は「右を押す」。当たり判定の上で右ボタンを押すと、この行の形を出し、放すまで保つ。行が無ければ既定の `system:finger`（ゴーストの descript の `mousecursor` が在ればそちら）を出す。右クリックのメニューと SHIORI へ送るイベントは変えない。
 読めない行（欄が足りない・場面の名前が 5 つのどれでもない・`*` が数でない・形の欄が読めない）は使わず、見出し・行の原文・理由を添えた warn! をシェルの読み込みごとに 1 回出し、同じブレスのほかの行は使う。同じスコープ・当たり判定名・場面の行が 2 つ以上あれば後の行を使い、使わなかった行を warn! で残す。ファイル名の欄の `.cur`・`.ani` はシェルのフォルダ → `ghost\\master` の順で探して読み込みのときに 1 回だけ読み、無い・読めない・壊れている・フォルダの外を指す名前は、ファイル名・探した場所・理由を添えた warn! を名前ごとに 1 回出して、その行を使わずに既定の形へ落とす。形を選び直すたびに、スコープ・当たり判定名・場面・形・出どころを添えた debug!（既定では出ない段）を残す。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
@@ -7247,7 +7247,7 @@ values = ["触れ合い", "装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・debug!。areka はこの場面を正典どおりに読んで使うので、正典どおりに書かれた行については崩れる先が無い。三段のうち最も弱い段を選んだ。
-2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の runtime::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の input_events::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは input_events::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の runtime::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の areka_input::hover_region::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは areka_input::char_watch::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
 この場面は「乗る」。カーソルが当たり判定の上に入ると、その場でこの行の形を出す（当たり判定から別の当たり判定へ直に移ったときも、移ったその場で替える）。行が無ければ既定の形（当たり判定名が `bust`〔ASCII の大小を区別しない〕なら `system:hand`、ほかは `system:finger`。ゴーストの descript の `mousecursor.hand`・`mousecursor` が在ればそちら）を出す。
 読めない行（欄が足りない・場面の名前が 5 つのどれでもない・`*` が数でない・形の欄が読めない）は使わず、見出し・行の原文・理由を添えた warn! をシェルの読み込みごとに 1 回出し、同じブレスのほかの行は使う。同じスコープ・当たり判定名・場面の行が 2 つ以上あれば後の行を使い、使わなかった行を warn! で残す。ファイル名の欄の `.cur`・`.ani` はシェルのフォルダ → `ghost\\master` の順で探して読み込みのときに 1 回だけ読み、無い・読めない・壊れている・フォルダの外を指す名前は、ファイル名・探した場所・理由を添えた warn! を名前ごとに 1 回出して、その行を使わずに既定の形へ落とす。形を選び直すたびに、スコープ・当たり判定名・場面・形・出どころを添えた debug!（既定では出ない段）を残す。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
@@ -7267,7 +7267,7 @@ values = ["触れ合い", "装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・debug!。areka はこの場面を正典どおりに読んで使うので、正典どおりに書かれた行については崩れる先が無い。三段のうち最も弱い段を選んだ。
-2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の runtime::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の input_events::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは input_events::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
+2026-10-30 から読んで使う（shell-mouse-cursor）。areka-parsers の shell::parse_cursor_braces が `sakura.cursor`・`kero.cursor`・`char*.cursor` のブレスを原文のまま転記し、areka の runtime::shell_cursor_table::read_cursor_braces が 1 行ずつスコープ・当たり判定名・場面・形の組に読む（場面の名前の表 `SCENES` の行に正典 URL を置いた）。形を選ぶのは areka の areka_input::hover_region::cursor_pick（出どころの順は cursorブレス ＞ ゴーストの descript ＞ 既定）、窓の形の問い合わせに答えて形を出すのは areka_input::char_watch::cursor_answer と wintf の ecs::cursor である。当たり判定名は綴りどおりに引き、面の当たり判定と突き合わせない。
 この場面は「ホイール」。当たり判定の上でボタンを押さずに縦のホイールを回すと、この行の形を出す。カーソルの窓の中の位置が変わったら、その場で乗ったときの形へ戻す。行が無ければ形を替えず、乗ったときの形のままにする（ukadoc の既定の `system:arrow` は使わない。SSP 2.9.23 の 2026-10-29 の測りに合わせた）。横のホイールでは形を出し直さない（既知の限り）。
 読めない行（欄が足りない・場面の名前が 5 つのどれでもない・`*` が数でない・形の欄が読めない）は使わず、見出し・行の原文・理由を添えた warn! をシェルの読み込みごとに 1 回出し、同じブレスのほかの行は使う。同じスコープ・当たり判定名・場面の行が 2 つ以上あれば後の行を使い、使わなかった行を warn! で残す。ファイル名の欄の `.cur`・`.ani` はシェルのフォルダ → `ghost\\master` の順で探して読み込みのときに 1 回だけ読み、無い・読めない・壊れている・フォルダの外を指す名前は、ファイル名・探した場所・理由を添えた warn! を名前ごとに 1 回出して、その行を使わずに既定の形へ落とす。形を選び直すたびに、スコープ・当たり判定名・場面・形・出どころを添えた debug!（既定では出ない段）を残す。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
@@ -7728,7 +7728,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
 2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の runtime::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
-出す形: OS の標準の形の矢印（`IDC_ARROW`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+出す形: OS の標準の形の矢印（`IDC_ARROW`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は areka_input::char_watch::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -7745,7 +7745,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
 2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の runtime::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
-出す形: OS の標準の形の十字（`IDC_CROSS`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+出す形: OS の標準の形の十字（`IDC_CROSS`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は areka_input::char_watch::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -7762,7 +7762,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
 2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の runtime::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
-出す形: OS の標準の形の指差し（`IDC_HAND`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+出す形: OS の標準の形の指差し（`IDC_HAND`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は areka_input::char_watch::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -7779,7 +7779,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
 2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の runtime::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
-出す形: areka が同梱する手を握った形の絵（crates/areka/cursor/grip.cur・input_events::cursor_answer の `BUNDLED`）。Windows の標準の形には手を開いた形・手を握った形が無いので、areka が自前の絵を同梱した（2026-10-29 に fal の Ideogram Vector で作った案から開発者が選んだ。白地の手のまわりに 1 px の黒い縁。出どころと許諾は crates/areka/cursor/README.md）。指差し（`system:finger`）と見分けられる。窓のモニターの拡大率の寸法で作り、作れなかった寸法では error! を 1 回残して指差しを出す。
+出す形: areka が同梱する手を握った形の絵（crates/areka-input/cursor/grip.cur・areka_input::char_watch::cursor_answer の `BUNDLED`）。Windows の標準の形には手を開いた形・手を握った形が無いので、areka が自前の絵を同梱した（2026-10-29 に fal の Ideogram Vector で作った案から開発者が選んだ。白地の手のまわりに 1 px の黒い縁。出どころと許諾は crates/areka-input/cursor/README.md）。指差し（`system:finger`）と見分けられる。窓のモニターの拡大率の寸法で作り、作れなかった寸法では error! を 1 回残して指差しを出す。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -7796,7 +7796,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
 2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の runtime::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
-出す形: areka が同梱する手を開いた形の絵（crates/areka/cursor/hand.cur・input_events::cursor_answer の `BUNDLED`）。Windows の標準の形には手を開いた形・手を握った形が無いので、areka が自前の絵を同梱した（2026-10-29 に fal の Ideogram Vector で作った案から開発者が選んだ。白地の手のまわりに 1 px の黒い縁。出どころと許諾は crates/areka/cursor/README.md）。指差し（`system:finger`）と見分けられる。窓のモニターの拡大率の寸法で作り、作れなかった寸法では error! を 1 回残して指差しを出す。
+出す形: areka が同梱する手を開いた形の絵（crates/areka-input/cursor/hand.cur・areka_input::char_watch::cursor_answer の `BUNDLED`）。Windows の標準の形には手を開いた形・手を握った形が無いので、areka が自前の絵を同梱した（2026-10-29 に fal の Ideogram Vector で作った案から開発者が選んだ。白地の手のまわりに 1 px の黒い縁。出どころと許諾は crates/areka-input/cursor/README.md）。指差し（`system:finger`）と見分けられる。窓のモニターの拡大率の寸法で作り、作れなかった寸法では error! を 1 回残して指差しを出す。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 担当 spec は shell-mouse-cursor。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -7814,7 +7814,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
 2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の runtime::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
-出す形: OS の標準の形のヘルプ（`IDC_HELP`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+出す形: OS の標準の形のヘルプ（`IDC_HELP`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は areka_input::char_watch::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -7831,7 +7831,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
 2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の runtime::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
-出す形: OS の標準の形の四方向の移動（`IDC_SIZEALL`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+出す形: OS の標準の形の四方向の移動（`IDC_SIZEALL`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は areka_input::char_watch::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -7848,7 +7848,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
 2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の runtime::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
-出す形: OS の標準の形の禁止（`IDC_NO`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+出す形: OS の標準の形の禁止（`IDC_NO`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は areka_input::char_watch::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -7865,7 +7865,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
 2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の runtime::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
-出す形: OS の標準の形の文字の I（`IDC_IBEAM`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+出す形: OS の標準の形の文字の I（`IDC_IBEAM`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は areka_input::char_watch::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -7882,7 +7882,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: warn!・error!。areka はこの名前を正典どおりに読んで使うので、正典どおりに書かれた名前については崩れる先が無い。三段のうち最も弱い段を選んだ。
 2026-10-30 から読んで使う（shell-mouse-cursor）。cursorブレスの形の欄とゴーストの descript のカーソルの値のどちらにも書ける。areka の runtime::shell_cursor_table::parse_shape が `system:` の後の名前を 10 種の表（`SYSTEM_NAMES` の行に正典 URL を置いた）で読む。`system:` と名前は ASCII の大小を区別しない。10 種のどれでもない名前は warn! を出して、その行（または descript の差し替え）を使わない。
-出す形: OS の標準の形の待ち（`IDC_WAIT`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は input_events::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
+出す形: OS の標準の形の待ち（`IDC_WAIT`）を、利用者が OS で設定した絵と大きさで出す。OS の標準の形は areka_input::char_watch::cursor_answer の register_char_cursor が起動のときに 1 回だけ読み、読めなければ error! を残して、その形を出す所は今の振る舞いのままにする。
 正典が黙る所と正典から離れた所の areka の決め（止まったと見なす時間・行の無い止まった／ホイール・戻る時・押している間・重なった行・両方の綴り・手の絵・大小・寸法・探す順）は doc/COMPAT_ARCHITECTURE.md の §8 に書いた。
 担当 spec は shell-mouse-cursor（2026-10-30 に読んで使うようにした）。
 束: 作り付けのマウスの矢印の語・読む経路が無い（先に要る仕組み: マウスの矢印の差し替え）。束の順位: 26——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。

@@ -12,7 +12,7 @@
   - 前の暫定の設計と検証: `talk-fast-forward`・`sakura-time-directives`・`doc/ideas/novel-play-flow-provisional/` の各 2 本の全部。
   - brief: `talk-fast-forward`・`sakura-time-directives` の頭〜60 行／`dola-interrupt-ticks`・`talk-anchor-interrupt-ticks`・`sakura-raise-directive` の全部。
   - pasta（読むだけ）: `final-model-2026-11-19.md` の 8 章と追記・取り決めの brief の「決定（最終形）」と 2026-11-20 の節。
-  - コード: `crates/dola/src/cue/{schedule,runtime,command,sheet,sink}.rs`（全部）・`crates/areka-sakura/src/compile.rs`（100〜549）・`drive.rs`（230〜末尾）・`contract.rs`（全部）・`crates/areka-ghost/src/dispatcher.rs`（1〜445）・`crates/areka-kanade/src/actor.rs`（頭）・`schedule/mod.rs`（60〜250・360〜703）・`schedule/steady.rs`（670〜884）・`schedule/balloon_events.rs`（頭〜140）・`crates/areka-runtime/src/balloon_visibility_wait.rs`（頭〜250）・`balloon_visibility_decision.rs`（全部）・`talk_clock.rs`（頭〜125）・`crates/areka-emo-text/src/sink.rs`（60〜175）・`state.rs`（300〜345・505〜553）・`crates/areka-talk/src/lib.rs`（40〜116）・`crates/areka/src/input_events/shell_box.rs` の判定 2 つ。
+  - コード: `crates/dola/src/cue/{schedule,runtime,command,sheet,sink}.rs`（全部）・`crates/areka-sakura/src/compile.rs`（100〜549）・`drive.rs`（230〜末尾）・`contract.rs`（全部）・`crates/areka-ghost/src/dispatcher.rs`（1〜445）・`crates/areka-kanade/src/actor.rs`（頭）・`schedule/mod.rs`（60〜250・360〜703）・`schedule/steady.rs`（670〜884）・`schedule/balloon_events.rs`（頭〜140）・`crates/areka-runtime/src/balloon_visibility_wait.rs`（頭〜250）・`balloon_visibility_decision.rs`（全部）・`talk_clock.rs`（頭〜125）・`crates/areka-emo-text/src/sink.rs`（60〜175）・`state.rs`（300〜345・505〜553）・`crates/areka-talk/src/lib.rs`（40〜116）・`crates/areka-input/src/shell_box.rs` の判定 2 つ。
   - ukadoc（MCP）: `\_q`・`\![quicksection,true]`・`\![quicksection,false]`・`\x`・`\x[noclear]`・`\![enter,nouserbreakmode]`。
 - 読んでいない物: steering の 3 本・roadmap・`status.rs`・`crates/areka/src/session/reload.rs`（頭の 60 行だけ）・文字の層の印の描き方・UI の押下の入口（前の検証が読んだ事実を使う）。
 
@@ -80,7 +80,7 @@
 - トークのスレッドは、完了の口（`done`）へ、`TalkDone` のほかに選択待ちの知らせ `ChoiceWaiting` を送る（`:464`）。同じ口を流れるので、順が保たれる。
 - dispatcher は、主の枠 `active` を 1 つ持つ（`crates/areka-ghost/src/dispatcher.rs:116-118`）。新しいトークを始める前に、古いトークを閉じて合流を待つ（`:328-329`・`:420-436`）。古いトークの完了は捨てる（`:368-387`）。
 - `Tick` は 50 ms の格子で届く（`crates/areka-ghost/src/ticker.rs:56-57`・`:69`）。dispatcher が、そのトークの最初の `Tick` からの秒に直して送る（`dispatcher.rs:392-399`）。
-- UI の押下の選択は、dispatcher の inbox を通って kanade へ行く（`dispatcher.rs:52-56`・`:162-178`。UI の側の送り口は `crates/areka/src/input_events/choice_drain.rs:38`）。
+- UI の押下の選択は、dispatcher の inbox を通って kanade へ行く（`dispatcher.rs:52-56`・`:162-178`。UI の側の送り口は `crates/areka-input/src/choice_drain.rs:38`）。
 - kanade からトークへの指示は `TalkCommand` の 3 つ（`Start`・`ResolveChoice`・`CancelChoice`。`crates/areka-talk/src/lib.rs:78-90`）。1 本の線を流れ、順が保たれる。
 
 ### 4.4 kanade とバルーンの見え方
@@ -93,7 +93,7 @@
 - 普通のバルーンの窓は、見えている字が 0 に落ちた巡で隠れる（`balloon_visibility_decision.rs:292-301`）。同じ巡に全消去と次の字が届けば、隠れない（`:270-276`・`:280`）。
 - 字の現れる時刻は、cue の `at` と長さから、cue を受けた時に決まる（`crates/areka-emo-text/src/state.rs:324-333`・`:538-550`）。最初の字は `at` ちょうどに見える。見えるかどうかは、毎フレーム、台詞の時計の読みと比べて決まる（`:307-312`）。
 - 台詞の時計は、今は、届いた cue から起点を見積もる（`talk_clock.rs:38-57`）。v0.2.0 の時刻の土台は、これを「押された起点を読む」に替える（`talk-anchor-interrupt-ticks/brief.md:27`・`:30`・`:37`）。
-- UI の「話している最中か」は、受け口が配る始まりと終わりを畳んだ値である（`crates/areka/src/input_events/shell_box.rs:142-148`）。
+- UI の「話している最中か」は、受け口が配る始まりと終わりを畳んだ値である（`crates/areka-input/src/shell_box.rs:142-148`）。
 
 ## 5. 設計
 
@@ -109,7 +109,7 @@
 | トークのスレッド | `areka-sakura` の `drive.rs`・`contract.rs` | 早送りの伝言・続きを解く・時間の判定・完了の口への「再生の知らせ」 |
 | 中継 | `areka-ghost` の `dispatcher.rs` | 早送りを主のトークへ回す・高速再生の入切を持つ・続きの知らせを kanade へ送る |
 | 運行 | `areka-kanade` の `msg.rs`・`schedule/` に新しいファイル 1 つ | 続きのイベントを投げる腕・返事の扱い |
-| 文字の層・入力 | `areka-emo-text`・`areka` の `input_events/` | `\x` の後の消去・待ちの印・吹き出しのクリックで早送りを送る |
+| 文字の層・入力 | `areka-emo-text`・`areka` の `crates/areka-input/src/` | `\x` の後の消去・待ちの印・吹き出しのクリックで早送りを送る |
 
 ### 5.2 基盤（dola に足す 5 つ）
 
