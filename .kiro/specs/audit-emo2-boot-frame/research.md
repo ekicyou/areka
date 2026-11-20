@@ -1008,7 +1008,7 @@
 - **4.1**: `crates/areka-placement/src/chain_rule_tests.rs` の 5 行目の説明が、移す前の置き場（本体の `frame_chain_rule_tests.rs`）を指したまま。今は `crates/areka-runtime/src/frame_chain_rule_tests.rs`。`areka-placement` は C23 で触らないので、`test-crash-report-merge` の brief へ件として足した（イ〜カと同じ種類の古い注）。
 - **4.2**: `doc/COMPAT_ARCHITECTURE.md` §8（228 行）が `log_ghost_falls_back_to_dash_and_raise_reports_normal_band` を本体の `crates/areka/src/runtime_tests/frame/window_state_tests.rs` と書いている。今は `crates/areka-runtime/src/frame/window_state_tests.rs`。**持ち主を決められなかった**（下の 12.6）。
 
-### 12.6 申し送り先の決まっていない件
+### 12.6 申し送り先の決まっていない件（完了時にその場で直した）
 
 - `doc/COMPAT_ARCHITECTURE.md` §8 の 228 行目の、上の 4.2 のパス 1 か所。
 - `doc/COMPAT_ARCHITECTURE.md` の 213 行目付近（⑴ の欄）の、消したテストのあるファイルの名 1 か所（13.7）。
