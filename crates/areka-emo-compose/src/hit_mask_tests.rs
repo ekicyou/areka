@@ -167,3 +167,127 @@ fn face_tables_share_one_mask_collection() {
     assert!(Arc::ptr_eq(a.region_masks().unwrap(), &masks));
     assert!(Arc::ptr_eq(b.region_masks().unwrap(), &masks));
 }
+
+/// RGBA の組を BGRA の画素へ。
+fn px(r: u8, g: u8, b: u8, a: u8) -> [u8; 4] {
+    [b, g, r, a]
+}
+
+#[test]
+fn alpha_pixels_follow_the_measured_ssp_table() {
+    // A..F と地: α=0 は蓄えた RGB に依らず黒、α≥1 は蓄えた RGB のまま。
+    let image = row(&[
+        px(255, 0, 0, 0),
+        px(255, 0, 0, 128),
+        px(255, 0, 0, 255),
+        px(255, 0, 0, 1),
+        px(255, 0, 0, 254),
+        px(255, 255, 255, 0),
+        px(0, 0, 0, 0),
+    ]);
+    let t = true;
+    let f = false;
+    assert_eq!(
+        bits(&region_mask(&image, [255, 0, 0], false)),
+        [f, t, t, t, t, f, f]
+    );
+    assert_eq!(
+        bits(&region_mask(&image, [255, 0, 0], true)),
+        [t, f, f, f, f, t, t]
+    );
+    assert_eq!(
+        bits(&region_mask(&image, [0, 0, 0], false)),
+        [t, f, f, f, f, t, t]
+    );
+}
+
+#[test]
+fn color_must_match_in_all_three_components() {
+    let image = row(&[
+        px(255, 0, 0, 255),
+        px(254, 0, 0, 255),
+        px(255, 1, 0, 255),
+        px(255, 0, 1, 255),
+        px(0, 255, 0, 255),
+        px(255, 255, 255, 255),
+    ]);
+    assert_eq!(
+        bits(&region_mask(&image, [255, 0, 0], false)),
+        [true, false, false, false, false, false]
+    );
+    assert_eq!(
+        bits(&region_mask(&image, [254, 0, 0], false)),
+        [false, true, false, false, false, false]
+    );
+}
+
+#[test]
+fn inverted_small_image_sets_everything_but_the_color_and_nothing_outside() {
+    let image = DecodedImage {
+        width: 4,
+        height: 4,
+        stride: 16,
+        bgra: (0..16)
+            .flat_map(|i| {
+                if (1..=2).contains(&(i % 4)) && (1..=2).contains(&(i / 4)) {
+                    px(255, 0, 0, 255)
+                } else {
+                    px(255, 255, 255, 255)
+                }
+            })
+            .collect(),
+        has_alpha: true,
+    };
+    let mask = region_mask(&image, [255, 0, 0], true);
+    assert!(!mask.is_set(1, 1));
+    assert!(!mask.is_set(2, 2));
+    assert!(mask.is_set(0, 0));
+    assert!(mask.is_set(3, 3));
+    assert!(mask.is_set(0, 1));
+    assert!(!mask.is_set(4, 4));
+    assert!(!mask.is_set(4, 0));
+    assert!(!mask.is_set(0, 4));
+}
+
+#[test]
+fn spellings_of_one_file_are_read_once() {
+    let base = Path::new("shell");
+    let mut inner = MemoryDecoder::new();
+    inner.insert_unmultiplied(base.join("a/b.png"), row(&[RED]));
+    let decoder = Counting {
+        inner,
+        reads: RefCell::new(Vec::new()),
+    };
+    let regions = [
+        region("a/b.png", [255, 0, 0], false),
+        region(r"A\B.PNG", [255, 0, 0], false),
+        region(r"a\b.Png", [255, 0, 0], false),
+    ];
+    let masks = RegionMasks::load(regions.iter(), base, &decoder);
+
+    assert_eq!(*decoder.reads.borrow(), [base.join("a/b.png")]);
+    for r in &regions {
+        assert_eq!(bits(masks.get(r).expect("mask")), [true]);
+    }
+}
+
+#[test]
+fn unreadable_file_is_read_once_and_recorded_once() {
+    let base = Path::new("shell");
+    let decoder = Counting {
+        inner: MemoryDecoder::new(),
+        reads: RefCell::new(Vec::new()),
+    };
+    let regions = [
+        region("gone.png", [255, 0, 0], false),
+        region("GONE.png", [255, 0, 0], true),
+        region("gone.png", [0, 0, 0], false),
+    ];
+    let masks = RegionMasks::load(regions.iter(), base, &decoder);
+
+    assert_eq!(decoder.reads.borrow().len(), 1);
+    assert_eq!(masks.unreadable().len(), 1);
+    for r in &regions {
+        assert!(masks.get(r).is_none());
+    }
+}
