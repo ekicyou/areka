@@ -60,6 +60,7 @@ use bevy_ecs::world::World;
 
 use wintf::ecs::window::{ChainPlan, log_chain_absent, log_group_applied, log_group_rejected};
 
+use crate::target_map::window_scope;
 use crate::zorder_cue::ZOrderDirective;
 use areka_placement::spawn::GhostWindows;
 use areka_placement::zorder_chain_compose::{compose_chain, element_text, publish_chain_plan};
@@ -193,10 +194,7 @@ fn compose_plan(ledger: &ZOrderGroupLedger, world: &World) -> Option<ChainPlan> 
     let ghost_windows = world.get_resource::<GhostWindows>()?;
     // 未指定スコープの後方参加（要件 15.1）に使う在庫の一覧。合成側が昇順へ整えて
     // 重複も落とすので、ここでは順も重複も問わない。
-    let all_scopes: Vec<u32> = ghost_windows
-        .scopes()
-        .filter_map(|scope| u32::try_from(scope).ok())
-        .collect();
+    let all_scopes: Vec<u32> = ghost_windows.scopes().filter_map(window_scope).collect();
     compose_chain(ledger.groups(), &all_scopes, &|element| {
         resolve_member(ghost_windows, world, element)
     })

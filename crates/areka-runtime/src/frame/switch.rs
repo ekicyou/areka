@@ -41,6 +41,7 @@ use crate::skin_switch::{
     SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish, skin_ref_name, skin_ref_path,
 };
 use crate::switch_assets::{SwapBuilt, SwapPayload};
+use crate::target_map::window_scope;
 use areka_placement::balloon_lock::replace_balloon_lock_descript;
 use areka_placement::config::build_placement_config;
 use areka_placement::descript_window_keys::read_balloon_dontmove;
@@ -355,7 +356,7 @@ fn commit(
         .get_resource::<GhostWindows>()
         .into_iter()
         .flat_map(GhostWindows::scopes)
-        .filter_map(|s| u32::try_from(s).ok())
+        .filter_map(window_scope)
         .collect();
     let facts = skin_facts_copy::swapped(wiring.presenter(), &scopes, &built);
     let (targets, replace, finish) = split(built, epoch);

@@ -38,7 +38,7 @@
   - _Dispatch: standard — 相を跨ぐ新しい分岐を組む_
   - _Requirements: 3.1, 3.4, 4.1, 4.2, 4.6, 6.2, 6.4_
 
-- [ ] 1.4 窓の側の scope の上限を 1 つの関数にし、範囲の中の 9 か所を通す（T4・4 番・件 9）
+- [x] 1.4 窓の側の scope の上限を 1 つの関数にし、範囲の中の 9 か所を通す（T4・4 番・件 9）
   - `target_map` に上限の定数を 1 つ置き、窓の側の入口 `window_scope` を足す。上限を越えたら自分で `warn!` を 1 行残して `None` を返す
   - 9 か所（`dpi.rs`・`scale_text.rs`・`attach.rs` の 2 か所・`drain_resnap.rs` の 2 か所・`move_shift.rs`・`switch.rs`・`zorder_drain.rs`）を設計の表のとおりに替える。`dpi.rs` と `scale_text.rs` の `error!` は消す。連鎖の確定の 1 か所は「まだ表示していない」で見送る
   - 純関数のテスト `window_scope_rejects_scopes_past_i32_max` と、ハーネスのテスト `a_window_scope_past_i32_max_is_skipped_with_one_warning`（直しの前はデバッグのビルドで panic＝赤）を立てる

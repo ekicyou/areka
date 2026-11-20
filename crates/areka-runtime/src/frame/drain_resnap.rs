@@ -34,6 +34,7 @@ use areka_placement::sticky_group_ledger::{
 
 use super::move_hold::{ShownRatioSource, release_ready};
 use super::{PositionCue, RuntimeWiring, apply_move_directive, shell_target};
+use crate::target_map::window_scope;
 
 // ---------------------------------------------------------------------------
 // drain・text フェーズ＋排他 system（tasks.md task 4.2・design「UI 毎フレーム結線 / frame」の
@@ -377,7 +378,10 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
         // 未表示（初回 ShowSurface 前）・未装着は `None` → skip（no-op・遅延化への防御）。
         // shell/balloon の取り違えは `resnap_reads_shell_targets_only_and_ignores_balloon_geometry`
         // と `resnap_queries_shell_targets_only` が排他的に殺す（2026-07-30 実測）。
-        let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
+        let Some(s) = window_scope(scope) else {
+            continue;
+        };
+        let Some((w, h)) = source.physical_size(shell_target(s)) else {
             continue;
         };
         // (u32,u32)→i32 変換失敗は skip（Req3.4）。
@@ -672,7 +676,10 @@ fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
         // （atom D9／D16）。システム由来の再アンカーでは単一の窓書込口が同じ量を書込先へ運ぶ。
         let default_x = ghost_windows.default_char_pos(scope).map(|p| p.x);
         // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
-        let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
+        let Some(s) = window_scope(scope) else {
+            return Err(ChainDeferReason::NotShownYet { scope });
+        };
+        let Some((w, h)) = source.physical_size(shell_target(s)) else {
             return Err(ChainDeferReason::NotShownYet { scope });
         };
         let (Ok(iw), Ok(ih)) = (i32::try_from(w), i32::try_from(h)) else {

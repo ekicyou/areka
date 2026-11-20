@@ -13,6 +13,7 @@ use areka_sakura::ActorKey;
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
 use crate::session_hooks::SessionHooks;
+use crate::target_map::window_scope;
 use crate::{shell_carry, skin_facts_copy};
 use areka_placement::descript_window_keys::fallback_candidates;
 use areka_placement::spawn::GhostWindows;
@@ -77,10 +78,10 @@ pub struct PlannedAttach {
 /// 窓一覧と構築資産を突き合わせ装着計画を返す純関数（DD-12・GPU 不要の決定論単体テスト対象）。
 ///
 /// **`GhostWindows::scopes()`（`window_scopes`・`usize`・正）が唯一の正**（DD-12）。窓一覧を
-/// 走査し、各窓 scope を `u32` へ変換（`u32::try_from`）してから `assets.shells` を `scope`
+/// 走査し、各窓 scope を [`window_scope`] で scope 番号へ直してから `assets.shells` を `scope`
 /// フィールドで照合する:
 /// - 一致 → `items` へ [`PlannedAttach`] を積む（`window_scopes` の出現順を保つ）。
-/// - 不一致、または `u32` に収まらない `usize`（`u32::MAX` 超過＝如何なる資産 scope とも一致し得ない）
+/// - 不一致、または上限（`i32::MAX`）を越える `usize`（表示対象を採番できない）
 ///   → 当該窓 scope（`usize`）を `missing_assets` へ。
 ///
 /// 加えて、`assets.shells` の各 scope のうち `window_scopes` に現れないもの（資産あり窓なし）を
@@ -100,10 +101,9 @@ pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachP
     let mut missing_assets = Vec::new();
 
     // GhostWindows::scopes()（正）を走査し、usize→u32 の吸収をここで一度だけ行う（DD-12）。
-    for &window_scope in window_scopes {
-        // u32 に収まらない usize は如何なる資産 scope（u32）とも一致し得ない → missing 分類。
-        let Ok(scope) = u32::try_from(window_scope) else {
-            missing_assets.push(window_scope);
+    for &scope_usize in window_scopes {
+        let Some(scope) = window_scope(scope_usize) else {
+            missing_assets.push(scope_usize);
             continue;
         };
         // 資産存在の正は shells の scope フィールド。一致した添字を attach フェーズへ運ぶ。
@@ -122,7 +122,7 @@ pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachP
                 });
             }
             // 窓はあるが対応資産が無い → warn!＋skip 縮退の対象（呼び手が観測）。
-            None => missing_assets.push(window_scope),
+            None => missing_assets.push(scope_usize),
         }
     }
 
@@ -458,7 +458,7 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     // strict の判定に使う今のシェルとバルーンの事実を、装着した表示の層から入れる
     // （spec: mcp-strict-errors 要件 4.1）。置き場のゴーストが無ければ判定もしない。
     if let Some(sink) = (SessionHooks::of(world).seriko_sink)(world) {
-        let scopes = window_scopes.iter().filter_map(|&s| u32::try_from(s).ok());
+        let scopes = window_scopes.iter().filter_map(|&s| window_scope(s));
         sink.set_facts(skin_facts_copy::copy(wiring.presenter(), scopes));
     }
 

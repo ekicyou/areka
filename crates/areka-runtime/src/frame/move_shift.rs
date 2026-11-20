@@ -19,7 +19,7 @@ use areka_placement::dpi_sync::{self, HoldSite};
 use areka_placement::follow::{apply_balloon_shift, apply_char_shift, shift_is_current};
 use areka_placement::spawn::GhostWindows;
 
-use super::super::target_map::{balloon_target, shell_target};
+use super::super::target_map::{balloon_target, shell_target, window_scope};
 
 /// 提示のずれと当てた拡大率の読み口（本番は表示層・檻は偽物）。
 pub(super) trait MoveShiftSource {
@@ -50,7 +50,9 @@ pub(super) fn run_move_shift_with<S: MoveShiftSource + ?Sized>(source: &S, world
     };
     let mut windows: Vec<(Entity, TargetId, bool)> = Vec::new();
     for scope in gw.scopes() {
-        let s = scope as u32;
+        let Some(s) = window_scope(scope) else {
+            continue;
+        };
         if let Some(w) = gw.char_window(scope) {
             windows.push((w, shell_target(s), false));
         }

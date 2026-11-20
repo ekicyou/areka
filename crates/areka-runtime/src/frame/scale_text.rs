@@ -12,6 +12,8 @@ use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use areka_placement::dpi_sync::{self, HoldSite};
 use areka_placement::spawn::GhostWindows;
 
+use crate::target_map::window_scope;
+
 use super::{
     GhostWindowKind, RuntimeWiring, ScaleReportSource, TalkClock, balloon_target,
     reconcile_window_size, shell_target,
@@ -176,11 +178,7 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
         return;
     };
     for scope in ghost_windows.scopes() {
-        let Ok(scope32) = u32::try_from(scope) else {
-            error!(
-                scope,
-                "dpi reconcile: scope が u32 に収まらず target を採番できない → skip"
-            );
+        let Some(scope32) = window_scope(scope) else {
             continue;
         };
         for (target, window, kind) in [

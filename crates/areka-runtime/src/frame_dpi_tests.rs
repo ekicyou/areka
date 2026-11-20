@@ -1,7 +1,8 @@
 use wintf::ecs::{Point, SizeI};
 
 use super::test_support::{
-    FakeReports, assert_no_write, dpi_world, pos_of, reset_write_witness, size_of,
+    FakeReports, assert_no_write, capture_logs, count_level, dpi_world, pos_of,
+    reset_write_witness, size_of,
 };
 use super::*;
 
@@ -356,5 +357,36 @@ fn dpi_phase_without_dpi_change_does_no_work() {
         source.calls_of("refresh"),
         vec![shell_target(1).0],
         "変化した窓の target だけが refresh 対象"
+    );
+}
+
+/// 窓の印の scope が `i32::MAX` を越える窓は、表示対象の番号に直せないので読み飛ばし、
+/// `warn!` を 1 行だけ残す（`2 * scope` があふれて panic せず、桁を切り捨てて別の窓の寸も読まない）。
+#[test]
+fn a_window_scope_past_i32_max_is_skipped_with_one_warning() {
+    let (mut world, gw) = dpi_world();
+    let char1 = gw.char_window(1).expect("char 窓がある");
+    world
+        .entity_mut(char1)
+        .insert((CharWindowMarker { scope: 1 << 31 }, DPI::from_dpi(192, 192)));
+
+    let mut source = FakeReports::default();
+    let mut state = None;
+    let logs = capture_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+
+    assert_eq!(count_level(&logs, "WARN"), 1, "{logs:#?}");
+    assert!(
+        logs.iter()
+            .any(|l| l.contains("level=WARN") && l.contains("target_map")),
+        "記録は window_scope の 1 か所: {logs:#?}"
+    );
+    assert_eq!(count_level(&logs, "ERROR"), 0, "{logs:#?}");
+    assert_no_write(&world, char1, "上限を越える scope の窓");
+    let mut refreshed = source.calls_of("refresh");
+    refreshed.sort_unstable();
+    assert_eq!(
+        refreshed,
+        vec![shell_target(0).0, balloon_target(0).0, balloon_target(1).0],
+        "他の窓は処理を続け、上限を越える窓の寸は別の target でも読まない"
     );
 }

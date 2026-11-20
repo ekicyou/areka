@@ -23,6 +23,7 @@ use super::balloon_offset_follow::{
     OffsetFollowOutcome, converge_balloon_after_skipped_write, rescale_balloon_follow_offset,
 };
 use super::{PlannedAttach, RuntimeWiring, balloon_target, shell_target};
+use crate::target_map::window_scope;
 
 // ---------------------------------------------------------------------------
 // DPI 追従フェーズ（areka-P0-emo-dpi-scaling task 4.2・design「areka / runtime（DPI 追従
@@ -410,14 +411,7 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
         if matches!(kind, GhostWindowKind::Char) && before_rects.is_none() {
             before_rects = Some(chain_realign::snapshot_char_rects(world));
         }
-        // target 採番（DD-3: shell=2*scope／balloon=2*scope+1）は u32 域。収まらない scope は
-        // 如何なる target とも対応しない（plan_attachments の usize→u32 境界と同じ扱い）。
-        let Ok(scope) = u32::try_from(scope) else {
-            error!(
-                entity = ?window,
-                scope,
-                "dpi: scope が u32 に収まらず target を採番できない → 再スケールを skip"
-            );
+        let Some(scope) = window_scope(scope) else {
             continue;
         };
         let target = match kind {
