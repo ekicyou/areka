@@ -312,3 +312,39 @@ finally {
 | 本体の `ghost_session_*_tests.rs`・`shell_balloon_switch_session_*_tests.rs`・`app_exit_tests.rs`・`menu/*_tests.rs`・`runtime_tests/` の 8 本・`session/runtime_boot_tests.rs` | 本体（変えない） | 出し直しで通る |
 
 - どの行も本体の部品を偽物に替えていない。
+
+## 完了の申し送り（7.4）
+
+`/kiro-complete` がそのまま brief へ写す一覧。
+
+### ⑴ `session-module-gather` へ
+
+- 本体の呼び手（`crate::input_events::…`）を `areka_input::…` へ書き換え、出し直し `use areka_input as input_events;`（`crates/areka/src/main.rs`）を外すのは同 spec の持ち物。この spec は外していない。
+
+### ⑵ `crates/areka-runtime/src/frame/wiring.rs` の 3 か所
+
+- 2026-11-21 の `origin/main` では、295・319・326 行の説明が古い入力のパス（`input_events/mod.rs`・`input_events::…`・`input_events/balloon.rs`）のまま。`audit-emo2-boot-frame` はまだ着地していない（`.kiro/specs/audit-emo2-boot-frame/` が完了に移っていない）。
+- 受け手は `audit-emo2-boot-frame`（同 spec が 3 か所を直す予定）。着地しても直っていなければ、そのとき `audit-areka-input-menu` へ回す。新しいパスは `crates/areka-input/src/lib.rs`・`areka_input::…`・`crates/areka-input/src/balloon.rs`。
+
+### ⑶ `audit-areka-input-menu` へ
+
+- 古い説明（移したファイルのコメントは中身を変えていない）:
+  - `crates/areka-input/src/lib.rs` の冒頭の説明ほか、本体の中にあった頃の書き方の説明（「The Hand／collisionex」ほか）。
+  - 入力に残る「強制退避の枝へ落ちない」側のテスト 3 本（`input_events_tests.rs` の `handler_wired_ctrl_left_double_click_…`・`handler_left_double_click_without_ctrl_…`、`input_events_menu_tests.rs` の `wired_ctrl_left_double_click_…_partner_window`）の「窓が消えて件数が落ちる」という説明。入力の crate のテストの World には口が据わらないので、移した後は事実でない（合否の力は残る `try_recv` の表明が保つ）。
+  - `input_events_tests.rs` の「強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。」は、3 本を本体の `app_exit_escape_tests.rs` へ移したので何も指していない。
+  - `spawn_assembly_tests.rs` の 176〜181 行の説明は「入力の側」の言い方が本体の中にあった頃のまま（パスとモジュールの名だけは書き換えた）。
+  - `crates/areka-runtime/examples/collision-probe.rs`・`collision-probe/setup.rs` の「`pub(crate)`・内部が `crate::` パスを使う」という理由の文は古い（`attach_char_pointer_handlers` は `pub` になった。結論は依存の向きで成り立つ）。
+  - `cargo doc -p areka-input --no-deps` の警告 20 件（移したコメントの「private item へのリンク」19 件・`MouseWiring::with_clock` の解けないリンク 1 件）。どれも本体の名を指さない。
+- 開けた項目:
+  - 署名のために連れて開けた型（3.7）: 0 件。
+  - 外から使われるので `pub` にした項目: 設計の一覧どおり（9 モジュールと `pub mod hooks`〔`InputHooks` と `escape` の欄〕、根の 8 項目・子の 18 項目・メソッド 7 つ）に、本体の `runtime_tests/frame_shell_box_arrow_tests.rs` が使う `user_break::drain_no_user_break_signals` を足したもの。
+  - `test-support` で開けた項目: `pointer_test_support`（`pub mod`）・`MouseWiring::with_clock`・`user_break` の `flag_rx`・`flag_source_connected`。
+- 理由の文が移した後に事実でなくなる `#[allow(...)]`: 0 件（入力の唯一の `#[allow(dead_code)]`〔`RegionSource::Mock`〕の理由「本番からは構築されない」は移した後も事実）。
+
+### 棚卸のセッションへ（C23 の「触るファイル」に無かった所）
+
+- `crates/areka/src/app_exit_escape_tests.rs`（新設）・`crates/areka/src/menu/shortcut.rs`・`crates/areka/src/file_drop.rs`（と `file_drop_*tests.rs`）の置き場・`crates/areka/src/placement_tests/mod.rs`・`crates/areka/src/log_history_tests.rs`・見張り 4 本（`readme_tests.rs`・`session_end_deadline_tests.rs`・`tick_gate_config_producers_tests.rs`・`update/worker_tests.rs`）・`tools/cursor-art.ps1`・`tools/load-flake.ps1`・`crates/areka/cursor/`（`crates/areka-input/cursor/` へ）。
+
+### 範囲の外の問題（完了の棚卸で起票）
+
+- `cargo check --workspace --all-targets` の `shiori-abi` の `unused dependency windows`（`crates/shiori-abi/Cargo.toml:16`）。main でも出る。
