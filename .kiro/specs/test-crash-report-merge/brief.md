@@ -66,7 +66,7 @@
 
 ## audit-emo2-boot-frame からの申し送り（2026-11-21）
 
-`audit-emo2-boot-frame` の範囲の外（`areka-placement` は C23 のあいだ触れない）で見つけた、古い注と写しの件（`.kiro/specs/audit-emo2-boot-frame/research.md` の 6 節イ〜カと 12.5）。この spec が `areka-placement` に触るときにまとめて直す。
+`audit-emo2-boot-frame` の範囲の外（`areka-placement` は C23 のあいだ触れない）で見つけた、古い注と写しの件（`.kiro/specs/completed/audit-emo2-boot-frame/research.md` の 6 節イ〜カと 12.5）。この spec が `areka-placement` に触るときにまとめて直す。
 
 - **イ**: `crates/areka-placement/src/follow/window_move.rs` の 666 行付近の「見送りの 4 点」は今は 5 点。
 - **ウ**: `crates/areka-placement/src/follow_window_move_hold_watch_tests.rs` の 35 行付近の `INVARIANT_WARNING` は手写し。在ることを確かめる側が無い。

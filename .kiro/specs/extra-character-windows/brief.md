@@ -154,6 +154,6 @@
 
 ## audit-emo2-boot-frame からの申し送り（2026-11-21）
 
-`audit-emo2-boot-frame` の範囲の外で見つけた件（`.kiro/specs/audit-emo2-boot-frame/research.md` の 6 節ア）。
+`audit-emo2-boot-frame` の範囲の外で見つけた件（`.kiro/specs/completed/audit-emo2-boot-frame/research.md` の 6 節ア）。
 
 - **ア**: `crates/areka-placement/src/config.rs` の `detect_scopes`（窓の scope を作る入口）に `i32::MAX` の上限を置く。向こうは窓の側（`crates/areka-runtime/src/target_map.rs` の `window_scope`）に上限を 1 つの関数として置き、範囲の中の 9 か所をそこへ通した＝窓の scope が `i32::MAX` を越える窓は `warn!` を残して読み飛ばす。この spec で scope を増やすと、その上限に初めて届きうる。入口側の上限と、窓の側の `window_scope` を同じ決めにそろえること。

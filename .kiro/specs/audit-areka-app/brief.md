@@ -126,7 +126,7 @@
 
 ## audit-emo2-boot-frame からの申し送り（2026-11-21）
 
-`audit-emo2-boot-frame` の範囲の外で見つけた、本体の側の件（`.kiro/specs/audit-emo2-boot-frame/research.md` の 6 節オ・コ・サ・シ）。
+`audit-emo2-boot-frame` の範囲の外で見つけた、本体の側の件（`.kiro/specs/completed/audit-emo2-boot-frame/research.md` の 6 節オ・コ・サ・シ）。
 
 - **オ（本体の分）**: `crates/areka/src/tick_gate_config_producers_tests.rs` の `code_only` は `source_text_test_support::code_only` の写し。
 - **コ**: `let _ = ….handle.join();` が本体に 8 か所ある（2026-11-21 に grep で数え直した）。記憶の書き手の panic を捨てている。`audit-emo2-boot-frame` の 20 番と同じ型で、`areka_runtime::spine::join_bounded` で待って panic を捨てない形に直す。

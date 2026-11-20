@@ -119,7 +119,7 @@
 
 ## audit-emo2-boot-frame からの申し送り（2026-11-21）
 
-`audit-emo2-boot-frame` の範囲の外で見つけた、この spec の持ち物の件（`.kiro/specs/audit-emo2-boot-frame/research.md` の 6 節キ・ク）。
+`audit-emo2-boot-frame` の範囲の外で見つけた、この spec の持ち物の件（`.kiro/specs/completed/audit-emo2-boot-frame/research.md` の 6 節キ・ク）。
 
 - **キ**: `crates/areka-runtime/src/move_cue_apply_move_tests.rs`・`move_cue_place_tests.rs` に、偽の HWND の輪（`areka_placement::test_support::give_fake_handles`）の写しがある（30 番と同じ形）。写しをやめて共通のものを使う。`move_cue_sink_reaches_runtime_wiring_receiver` の置き場の説明が誤っている件（63 番）は、向こうの直しで済ませるので渡さない。
 - **ク**: `crates/areka-runtime/src/balloon_visibility_phase.rs` の `marker.scope as u32` は、`audit-emo2-boot-frame` で置いた窓の scope の上限の関数（`crates/areka-runtime/src/target_map.rs` の `window_scope`）を使う形に直す（`i32::MAX` を越える scope を読み飛ばす・`warn!` を残す）。
