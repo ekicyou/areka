@@ -65,6 +65,7 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 /// 起動でだけ装着する）なので `PointerLeave` が立たず届かない。
 pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<KanadeNotice>) {
     crate::session::hooks::install(world);
+    crate::app_exit::install_input_hooks(world);
     areka_runtime::register_frame_system(world);
     crate::session::ghost_quit::wire_kanade_stop(world, kanade_stop_rx);
     // 記憶を書けない失敗の受け口と汲み出し（プロセスに 1 回・areka-P0-write-failure-notice）。

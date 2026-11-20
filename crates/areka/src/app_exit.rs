@@ -136,6 +136,15 @@ pub(crate) fn quit_app(world: &mut World, origin: ExitOrigin) -> usize {
     closed
 }
 
+/// 入力の強制退避の口を据える（`register_systems` から窓を開く前に 1 回）。
+pub(crate) fn install_input_hooks(world: &mut World) {
+    world.insert_resource(crate::input_events::hooks::InputHooks {
+        escape: |w| {
+            quit_app(w, ExitOrigin::Escape);
+        },
+    });
+}
+
 /// 起こし直しのために全窓を閉じた証（areka-P0-ghost-restart-unit・design「close_windows_for_restart
 /// + WindowsClosed」）。
 ///

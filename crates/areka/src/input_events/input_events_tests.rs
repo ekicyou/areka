@@ -431,6 +431,7 @@ fn handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sendi
         },
         stepping_clock(1000, 1000),
     );
+    crate::app_exit::install_input_hooks(&mut world);
     world.spawn(GhostWindowMarker);
     let w0 = world.spawn(GhostWindowMarker).id();
     let other = world.spawn_empty().id();
@@ -504,6 +505,7 @@ fn handlers_self_gate_when_mouse_wiring_absent() {
 #[test]
 fn escape_works_without_mouse_wiring() {
     let mut world = World::new();
+    crate::app_exit::install_input_hooks(&mut world);
     world.insert_non_send(wintf::AppExit::new());
     world.spawn(GhostWindowMarker);
     let w = world.spawn(GhostWindowMarker).id();
@@ -587,6 +589,7 @@ fn only_escape_terminates_ghost_windows() {
         },
         stepping_clock(1000, 1000),
     );
+    crate::app_exit::install_input_hooks(&mut world);
     // 実キャラ窓は GhostWindowMarker かつ CharWindowMarker（ハンドラが scope を読める）。
     let w = world
         .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
