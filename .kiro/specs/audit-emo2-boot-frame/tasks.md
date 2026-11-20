@@ -92,7 +92,7 @@
   - _Dispatch: mechanical — 表明の形を設計が与える_
   - _Requirements: 3.1, 4.1, 4.7_
 
-- [ ] 2.3 (P) 本体の箱の檻を強める（T11・15・16・21 番）
+- [x] 2.3 (P) 本体の箱の檻を強める（T11・15・16・21 番）
   - 2 段で向きを見る（15 番）。押した真と、lifecycle と kanade の受け手への中断の到着を表明する（16 番）。結線を `Option` と `take()` で持つ（21 番・前例のとおり）
   - 完了: 本体の `frame_shell_box_*_tests.rs` が実 GPU で緑
   - _Boundary: 本体 frame_shell_box_*_tests_
@@ -272,3 +272,4 @@
 - 1.6: 札の腕を落とすと新しいテストのほかに `frame_dpi_sync_hold_tests.rs` の既存の 2 本も赤になる（research の「縛るテストが無い」は言い過ぎだった）。新しいシェルの検体に `kero.name` が無いと scope 1 の揃え方が変わらない。
 - 1.7: 源を手で置き替えて同期に上書きさせるテストを直した本数は 0 本（2 源の入れ直しは変化として拾い、本番の `prepare_ghost_windows` と同じ道で作り直す）。作り直しの後にもう一度 `SystemState::get` を呼び、自分の `insert_resource` を次の呼び出しで入れ直しと数えないようにした（設計からの小さな逸れ）。
 - 2.1: 字面の対照（`lib.rs` 側）は `areka-runtime` の `zorder_wiring_tests.rs` の `t_zwi06` の末尾だけが持つ。本体の `zorder_wiring_tests.rs` の見出しも合わせた（範囲の外・要件 3.2）。L15 の「同じ字面を」は少し不正確（審査の提案・7.1 の audit で見る）。
+- 2.3: 本体の箱の中断は左ダブルクリックでしか起きないので、話し中の矢印のテストの `press` に `DoubleClick` を渡す。檻のテストの絞り込みは `shell_box_integration_tests`（`shell_box` だと `input_events` の単体も拾う）。ホイールの `back_to_auto(3)` の 3 は `Cage::wheel` の `WheelLines::Lines(3)` と同じ値（審査の提案・定数にしてもよい）。
