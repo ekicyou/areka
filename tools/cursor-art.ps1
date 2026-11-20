@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-  同梱の手の形のカーソル（crates/areka/cursor/hand.svg・grip.svg）から hand.cur・grip.cur を作り直す。
+  同梱の手の形のカーソル（crates/areka-input/cursor/hand.svg・grip.svg）から hand.cur・grip.cur を作り直す。
 
 .DESCRIPTION
-  読み書きするのは、このスクリプトの在るリポジトリの crates/areka/cursor/ だけ（呼ばれた場所によらない）。
+  読み書きするのは、このスクリプトの在るリポジトリの crates/areka-input/cursor/ だけ（呼ばれた場所によらない）。
   組み立て（cargo build）では焼かない。絵を変えたときにだけ回し、出力の .cur をコミットする。
   端末へ出す文は ASCII の英語だけ。ファイルに時刻を書かない（同じ入力からは同じバイト）。
 
@@ -45,7 +45,7 @@ $SIZES = @(32, 40, 48, 56, 64, 72, 80, 88, 96, 128)
 $NAMES = @('hand', 'grip')
 $ARITY = @{ M = 2; L = 2; C = 6; Q = 4; Z = 0 }
 
-$CursorDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'crates/areka/cursor'
+$CursorDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'crates/areka-input/cursor'
 Add-Type -AssemblyName System.Drawing
 
 # 輝度 50% 未満か（整数で: 0.299R + 0.587G + 0.114B < 127.5）

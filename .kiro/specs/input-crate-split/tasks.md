@@ -73,7 +73,7 @@
   - _Dispatch: mechanical — 前例の形をそのまま写す_
   - _Requirements: 5.6, 5.7_
 
-- [ ] 5. ログの出所を読む所・見張り・道具を追従させる
+- [x] 5. ログの出所を読む所・見張り・道具を追従させる
 - [x] 5.1 (P) ログの出所を名前で読むコードと、`get_log` の分け方のテストを直す
   - 実機テスト 2 本の `RUST_LOG`（と説明）と、カーソルの答えのテストの出所の文字列を新しい出所の名前へ書き換える（手順書は 6.2 が持つ）
   - `get_log` の分け方の既にあるテスト `unrelated_info_is_not_kept` に 5 行を足す（テストの名前は増やさない）: `areka_input`・`areka_input::char_watch::cursor_answer`・`areka::file_drop`・`areka::menu::shortcut` の info がどれにも当たらない（`None`）、`areka_input::user_break` の warn が `Error`
@@ -87,7 +87,7 @@
   - _Boundary: WalkGuards_
   - _Dispatch: mechanical — 足す根の形を設計が与える_
   - _Requirements: 5.1, 8.2_
-- [ ] 5.3 (P) 揺れの繰り返しの道具とカーソルの絵の道具を追従させる
+- [x] 5.3 (P) 揺れの繰り返しの道具とカーソルの絵の道具を追従させる
   - 揺れの繰り返しの道具の `-Binary` に `areka-input-lib`（`-p areka-input --lib`）を、選べる値・切り替え・自分の検査の表の 3 か所と説明に足す
   - カーソルの絵の道具が名指す置き場を新しい置き場へ書き換える
   - どちらの道具も今の呼び方の自分の検査が緑
