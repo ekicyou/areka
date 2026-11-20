@@ -257,3 +257,21 @@ finally {
     }
 }
 ```
+
+## 古いパスと古い出所の名前の数え（6.4）
+
+2026-11-21、範囲 `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で `git grep` した。
+
+| 数えたもの | 範囲 | 当たり |
+|---|---|---|
+| 古いパス `crates/areka/src/input_events/` | 範囲の全部 | 0 件 |
+| `src/` を付けない書き方 `input_events/<名>.rs` | 範囲の全部 | 0 件（除いた所の 3 か所だけ） |
+| モジュールの形 `input_events::<名>` | `doc/` と本体の外の crate・`tools/` | 0 件（除いた所の 1 か所だけ） |
+| 古い出所の名前 `areka::input_events` | 範囲の全部 | 0 件 |
+| 古いカーソルの絵の置き場 `crates/areka/cursor` | 範囲の全部 | 0 件 |
+
+- 本体の中の呼び手 `crate::input_events::…`（出し直し `use areka_input as input_events;` で通るもの）は当たりにしない。
+- 除いた所:
+  - `crates/areka-runtime/src/frame/wiring.rs` の説明 3 か所（295・319・326 行。同じウェーブの約束で触らない。`audit-emo2-boot-frame` はまだ直していない）
+  - `doc/roadmap-overview-2026-10-16.html`（日付つきの写し）
+  - 範囲の外: `roadmap-history.md`・`.kiro/specs/completed/`・`roadmap.md`（新旧のパスの対応表を持つ）

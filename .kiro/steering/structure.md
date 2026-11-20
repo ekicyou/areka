@@ -313,7 +313,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 
 ### Input Crate（areka-input）
 **Location**: `/crates/areka-input/`
-**Purpose**: ポインタ・ホイール・クリックの入力の出来事を kanade へ運ぶ層（本体の `input_events/` から分けた・`input-crate-split` 2026-11）。`publish = false`。出所の名前は `areka_input`（`RUST_LOG` は `areka_input::<道>=debug`）。木の根は `src/lib.rs`（旧 `input_events/mod.rs`）で、モジュールは `src/<name>.rs`（例 `areka_input::char_watch::cursor_answer`・`areka_input::hover_region::cursor_pick`）
+**Purpose**: ポインタ・ホイール・クリックの入力の出来事を kanade へ運ぶ層（本体の `input_events/` から分けた・`input-crate-split` 2026-11）。`publish = false`。出所の名前は `areka_input`（`RUST_LOG` は `areka_input::<道>=debug`）。木の根は `src/lib.rs`（本体から移した入力の木の旧 `mod.rs`）で、モジュールは `src/<name>.rs`（例 `areka_input::char_watch::cursor_answer`・`areka_input::hover_region::cursor_pick`）
 **Features**: `test-support`（本体のテストだけが使う支えを開ける・本体は `[dev-dependencies]` でだけ付ける）
 **Cursor**: `cursor/`＝同梱のカーソルの絵（`hand.cur`・`grip.cur` と元の SVG・出どころは `cursor/README.md`）
 **Tests**: 入力の中の `#[cfg(test)]` の子ファイル（`*_tests.rs`・`spawn_assembly_tests.rs`・`crash_report_tests.rs` ほか）。本体を引くテストだけは本体に残る（強制退避の枝の `crates/areka/src/app_exit_escape_tests.rs`）
