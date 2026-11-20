@@ -211,7 +211,7 @@ pub struct Collision {
 /// （使い手の match をワイルドカードなしの網羅に保つ）。
 #[derive(Clone, Debug, PartialEq)]
 pub enum CollisionShape {
-    /// 矩形（今当たるのはこの形だけ）。
+    /// 矩形。
     Rect(CollisionBounds),
     /// 楕円（囲みの長方形）。
     Ellipse(CollisionBounds),
@@ -354,13 +354,6 @@ pub enum ShellIssue {
         text: String,
         fault: CollisionExFault,
     },
-    /// 楕円・円・多角形・region の行を型へ運んだが、まだ当たり判定として働かない（読み込みごとに 1 件）。
-    /// `heading`・`text` は最初に並びへ入れたその行のもの。
-    ShapesInactive {
-        heading: String,
-        text: String,
-        counts: ShapeCounts,
-    },
 }
 
 /// `collisionex` の行を使わなかった（または一部だけ使った）理由。
@@ -375,15 +368,6 @@ pub enum CollisionExFault {
     ExtraFields,
 }
 
-/// まだ働かない形の行の数（読み込み 1 回ぶん）。
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ShapeCounts {
-    pub ellipse: usize,
-    pub circle: usize,
-    pub polygon: usize,
-    pub region: usize,
-}
-
 impl ShellIssue {
     /// 記録の重さ（`RangeTooWide` は error、ほかは warn）。
     pub fn severity(&self) -> tracing::Level {
@@ -394,8 +378,7 @@ impl ShellIssue {
             | ShellIssue::UnreadableNumber { .. }
             | ShellIssue::WaitRange { .. }
             | ShellIssue::StrayBrace { .. }
-            | ShellIssue::CollisionEx { .. }
-            | ShellIssue::ShapesInactive { .. } => tracing::Level::WARN,
+            | ShellIssue::CollisionEx { .. } => tracing::Level::WARN,
         }
     }
 
@@ -443,14 +426,6 @@ impl ShellIssue {
                     "shell: surfaces.txt のブレス `{heading}` の collisionex の行 `{text}` は{reason}ので{effect}"
                 )
             }
-            ShellIssue::ShapesInactive {
-                heading,
-                text,
-                counts,
-            } => format!(
-                "shell: 楕円 {}・円 {}・多角形 {}・region {} 行を型へ運んだが、まだ当たり判定として働かない（ID の描き先に塗るのは hit-id-pass）。最初の行はブレス `{heading}` の `{text}`",
-                counts.ellipse, counts.circle, counts.polygon, counts.region
-            ),
         }
     }
 }

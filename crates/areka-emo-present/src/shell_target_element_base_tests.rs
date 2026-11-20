@@ -386,7 +386,7 @@ const CLAUDIA_EXTENT: (u32, u32) = (333, 500);
 /// 要件 4.3・2.6・3.2・4.7: 無改変の `claudia` を DLL なしで実際の画像の復号で読むと、
 /// `element0,base` の土台に顔の部品を重ねる surface6・11・26 の外形が 333×500 になり、
 /// 描けない部品の警告は 0 件（`overlay`・`base` だけで書かれている）。警告以上の行は、
-/// まだ働かない形の記録 1 行（楕円 32・円 0・多角形 28・region 0）と、`draw-methods-canon` が持つ surface28 の
+/// `draw-methods-canon` が持つ surface28 の
 /// pattern 3 行だけで、同じ collision番号の重なりの警告は無い。`draw-methods-canon` が
 /// `base` の pattern を描けるようにするときは、この期待を更新すること。
 ///
@@ -418,21 +418,11 @@ fn claudia_base_surfaces_are_full_size_and_records_are_fixed() {
             "`element0,base` の面の外形が土台の絵の実寸でない"
         );
         assert_eq!(undrawn_count(&events), 0, "claudia に描けない行は無い");
-        // 警告以上は、まだ働かない形の記録 1 行と、surface28 の animation100 の `base` の pattern 3 行
+        // 警告以上は、surface28 の animation100 の `base` の pattern 3 行
         // （`draw-methods-canon` が持つ警告。`base` の pattern を描けるようにするとき、その spec がこの期待を更新する）
         // だけ。同じ collision番号の重なりの警告は 0 行。
-        let (inactive, others): (Vec<_>, Vec<_>) = warn_lines(&events)
-            .into_iter()
-            .partition(|l| l.contains("まだ当たり判定として働かない"));
         assert_eq!(
-            inactive,
-            vec![
-                "shell: 楕円 32・円 0・多角形 28・region 0 行を型へ運んだが、まだ当たり判定として働かない（ID の描き先に塗るのは hit-id-pass）。最初の行はブレス `surface0` の `collisionex0,Fan,polygon,212,209,250,206,280,222,287,243,235,256`"
-            ],
-            "まだ働かない形の記録は 1 行で、数は楕円 32・円 0・多角形 28・region 0"
-        );
-        assert_eq!(
-            others,
+            warn_lines(&events),
             (0..3)
                 .map(|p| format!(
                     "shell: areka が描けない描画メソッドの pattern を描かない|animation_id=100|method=\"base\"|pattern={p}|surface_id=28"
