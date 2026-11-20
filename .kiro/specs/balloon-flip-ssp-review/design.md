@@ -329,12 +329,11 @@ fn apply_balloon_limit_one(p: ScopePlacement, snapshot: &MonitorSnapshot) -> Sco
 
 - 見た目の変化: 今並べ替えで置かれている場面（`research.md` 10 節の太字）で、バルーンがキャラクター窓に重なって出る（裁定の承知の上）。
 - `follow.rs` の取り込みの行の変更は、同じウェーブの `audit-emo2-boot-frame` と行が近い（Revalidation Triggers）。
-- 設計の話し合いへの議題（どれもこの design.md は推奨の側で書いた・理由と別案は `research.md` 12.4 節）:
-  1. 外し方: (b) 型・関数・引数・欄を外し、両関門は `limit_correction` を直に呼ぶ（(a) 型を残すは使われない変種の警告を押さえる属性が要る）。
-  2. `how` の語: 定数 `BALLOON_LIMIT_PUSHED_HOW` を `balloon_limit.rs` に 1 つ置く。
-  3. 判定し直しの檻: 系の檻 1 本で「印の巡で 1 度だけ走り位置が変わらない」を示し、`reset_pos`・`chain_realign` の 2 本は名前と注だけ直す。
-  4. 件 2 の檻: 映しを使わない形に書き換える（除かない）。
-  5. 檻のファイル名: `balloon_limit_flip_tests.rs` → `balloon_limit_push_tests.rs`。
-  6. `follow/other_chars.rs` の名前: 変えない。
-  7. 11-20 の測りの SSP の版: 2.9.34 と仮に置く（`system.version` が読めなかった）。
-  8. `balloon-text-visual-tree` への申し送り: 完了の棚卸で brief の 96 行へ。
+## 決めごと（2026-11-20 設計の話し合い・開発者「推奨どおり承認」）
+
+- **D1 外し方**: (b)。`BalloonPlace`・`place_balloon_in_work_area`・`counted_overlap`・引数 `chars`・欄 `overlap_scope`・`shown_char_rects`・`is_shown`・`TEXT_BOX_SURFACE_NAME` を外し、両関門は `limit_correction` を直に呼ぶ（(a) は作られない変種の警告を押さえる属性が要り、読み手を迷わせる）。
+- **D2 名前**: `how` の語は定数 `BALLOON_LIMIT_PUSHED_HOW = "pushed"` を `balloon_limit.rs` に 1 つ置く（檻は字の `"\"pushed\""` で比べる）。檻のファイルは `balloon_limit_flip_tests.rs` → `balloon_limit_push_tests.rs`。`follow/other_chars.rs` は名前を変えず注だけ直す（`follow.rs` の行を増やさない）。
+- **D3 判定し直しの檻**: 系の檻 1 本で、巡ごとの `[balloon-limit] Clamp` の行の数（印の無い巡 0・印の巡 1・印の後の巡 0）で「印の巡で 1 度だけ走り、位置は変わらない」を示す。`reset_pos`・`chain_realign` の 2 本は値を変えず名前と注だけ直す。
+- **D4 件 2 の檻**: 除かずに、映しを使わない形へ書き換える（件 2 の決まりは変えない）。
+- **D5 SSP の版**: 11-20 の測りの SSP は 2.9.34 と書く（11-16 と同じ実行ファイル `C:\wintools\ssp\ssp.exe`・`system.version` は読めなかった）。
+- **D6 ほかのセッションへの知らせ**: 実装の前に `audit-emo2-boot-frame` へ `follow.rs` で触る 2 行（`use super::balloon_limit::{…}` と `use self::other_chars::shown_char_rects;`）を知らせる（2026-11-20 に知らせた）。`balloon-text-visual-tree` へは完了の棚卸で brief の 96 行へ申し送る。
