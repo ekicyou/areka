@@ -2,10 +2,10 @@
 //! `frame_chain_realign_adjacency_tests.rs` の記憶から戻した組の起動と拡大率の変化）。`frame_test_support.rs` は
 //! 1,000 行の上限に近いので兄弟のファイルに置く（写しを作らない・spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
 
-use super::RuntimeWiring;
 use super::shell_target;
 use super::test_support::{FakeReports, size_of};
 use super::test_support::{FrameHarness, PerTargetSizes, pos_of, synth_assets, zero_clock};
+use super::{BootAssets, RuntimeWiring};
 use crate::move_cue::PositionCue;
 use crate::talk_lifecycle::TalkLifecycleSignal;
 use crate::zorder_cue::ZOrderDirective;
@@ -21,19 +21,33 @@ use std::sync::mpsc::{self, Sender};
 /// 位置の線の送り口と、それを受ける headless な結線。
 pub fn wiring() -> (Sender<PositionCue>, RuntimeWiring) {
     let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<ZOrderDirective>().1,
+    let mut wiring = wiring_with(
+        synth_assets(&[(0, 0)]),
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
+        EmoPresenter::new(),
     );
+    wiring.move_rx = rx;
     (tx, wiring)
+}
+
+/// 受け口を送り手の無い既定で埋め、時計を 0 で止めた結線。
+pub fn wiring_with(
+    assets: BootAssets,
+    runtime: Rc<RefCell<TextLayerRuntime>>,
+    presenter: EmoPresenter,
+) -> RuntimeWiring {
+    RuntimeWiring::new(
+        presenter,
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<ZOrderDirective>().1,
+        runtime,
+        zero_clock(),
+        assets,
+    )
 }
 
 /// 起動の確定が済んだ定常のハーネス（連鎖の確定は一度きりで、このフレームでは何もしない）。

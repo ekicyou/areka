@@ -1,14 +1,12 @@
-use areka_emo_text::state::TextLayerConfig;
 use std::sync::mpsc;
 use wintf::ecs::Point;
 
 use crate::move_cue::MoveDirective;
 use crate::talk_clock::{controllable_clock, set_now};
-use crate::talk_lifecycle::TalkLifecycleSignal;
 
+use super::shared_test_support::wiring;
 use super::test_support::{
-    all_shown, capture_logs, count_level, headless_wiring_with, pos_of, resnap_world, synth_assets,
-    zero_clock,
+    all_shown, capture_logs, count_level, headless_wiring_with, pos_of, resnap_world, zero_clock,
 };
 use super::*;
 
@@ -210,19 +208,7 @@ fn fixture_move_directive() -> MoveDirective {
 /// gate 閉で未消費の実証）。move はキャラ窓生成後に一括適用され OnFirstBoot 移動を取りこぼさない。
 #[test]
 fn run_move_drain_phase_buffers_until_ghost_windows_present() {
-    let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
-    );
+    let (tx, wiring) = wiring();
     tx.send(PositionCue::Move(fixture_move_directive()))
         .expect("送出は成功する（受信端は wiring 保持）");
 
@@ -259,19 +245,7 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
         "前提: 移動前の scope1 初期位置"
     );
 
-    let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
-    );
+    let (tx, wiring) = wiring();
     tx.send(PositionCue::Move(fixture_move_directive()))
         .expect("送出は成功する");
 
@@ -301,19 +275,7 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
 fn run_move_drain_phase_routes_reset_and_continues_after_its_failure() {
     let (mut world, gw) = resnap_world();
     let target = gw.char_window(1).unwrap();
-    let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
-    );
+    let (tx, wiring) = wiring();
     tx.send(PositionCue::ResetWindowPos)
         .expect("送出は成功する");
     tx.send(PositionCue::Move(fixture_move_directive()))
@@ -346,19 +308,7 @@ fn run_move_drain_phase_routes_reset_and_continues_after_its_failure() {
 fn run_move_drain_phase_logs_ratio_unset_and_applied_scale_and_size() {
     let (mut world, gw) = resnap_world();
     let target = gw.char_window(1).unwrap();
-    let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
-    );
+    let (tx, wiring) = wiring();
     tx.send(PositionCue::Move(fixture_move_directive()))
         .expect("送出は成功する");
 

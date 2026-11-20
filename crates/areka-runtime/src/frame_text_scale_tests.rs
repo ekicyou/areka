@@ -5,6 +5,7 @@ use bevy_ecs::prelude::With;
 use std::sync::mpsc;
 use wintf::ecs::DPI;
 
+use super::shared_test_support::wiring_with;
 use super::test_support::{
     assert_no_write, capture_logs, count_level, dpi_world, gpu_attach_world, headless_wiring_with,
     zero_clock,
@@ -117,7 +118,7 @@ fn text_scale_phase_warns_once_per_scope_when_view_unavailable() {
 fn a_balloon_text_left_unconnected_at_attach_connects_on_the_first_frame_its_view_exists() {
     use crate::assets::build_boot_assets;
     use crate::sample_test_support::{emo2_balloon_root, emo2_root};
-    use crate::talk_lifecycle::TalkLifecycleSignal;
+
     use areka_emo_text::state::TextLayerConfig;
 
     let (_gpu, mut world, _gw) = gpu_attach_world();
@@ -129,16 +130,7 @@ fn a_balloon_text_left_unconnected_at_attach_connects_on_the_first_frame_its_vie
             TextLayerConfig::default(),
         )))
     };
-    let mut wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<PositionCue>().1,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        fresh_runtime(),
-        zero_clock(),
-        assets,
-    );
+    let mut wiring = wiring_with(assets, fresh_runtime(), EmoPresenter::new());
     run_attach_phase(&mut wiring, &mut world);
     assert!(wiring.attached, "前提: 装着が走る");
 

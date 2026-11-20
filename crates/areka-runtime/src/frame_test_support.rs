@@ -19,8 +19,8 @@ use log_capture_kit::CapturedEvent;
 #[cfg(test)]
 use log_capture_kit::{LineFormat, capture_lines};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, mpsc};
 use std::time::Instant;
 use windows::Win32::Foundation::{RECT, S_FALSE, S_OK};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
@@ -141,18 +141,16 @@ pub fn zero_clock() -> TalkClock {
 /// headless な `RuntimeWiring`（実 `EmoPresenter`／空 `TextLayerRuntime`／合成 `BootAssets`）を
 /// 注入 `rx`／`clock` で組む（task 4.1 のゲートテストと同型・COM/GPU 不要）。
 pub fn headless_wiring_with(rx: Receiver<PresentCommand>, clock: TalkClock) -> RuntimeWiring {
-    RuntimeWiring::new(
-        EmoPresenter::new(),
-        rx,
-        mpsc::channel::<PositionCue>().1,
-        mpsc::channel::<crate::talk_lifecycle::TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
+    let mut wiring = super::shared_test_support::wiring_with(
+        synth_assets(&[(0, 0)]),
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
-        clock,
-        synth_assets(&[(0, 0)]),
-    )
+        EmoPresenter::new(),
+    );
+    wiring.rx = rx;
+    wiring.clock = clock;
+    wiring
 }
 
 /// resnap 檻の 2 スコープ解決済み配置（both Bottom・初期位置は work_area 下端に整合＝

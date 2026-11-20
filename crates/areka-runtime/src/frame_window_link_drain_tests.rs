@@ -4,22 +4,13 @@
 //! 受け口（`MoveCueSink`）へ台本と同じ cue を配り、同じ線を `run_move_drain_phase` で取り出す。
 //! 1 本の線なので、同じ台本の `\![set,sticky-window,0,1]` の後の `\![move]` は届いた順に当たる。
 
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::mpsc::{self, Sender};
-
-use areka_emo_present::{EmoPresenter, PresentCommand};
-use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::TextLayerConfig;
 use bevy_ecs::world::World;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{DPI, Point, WindowPos};
 
-use crate::move_cue::{MoveCueSink, PositionCue};
+use crate::move_cue::MoveCueSink;
 use crate::sample_test_support::{emo2_balloon_root, emo2_root};
-use crate::talk_lifecycle::TalkLifecycleSignal;
-use crate::zorder_cue::ZOrderDirective;
 use areka_placement::follow::{BalloonFollow, MonitorSnapshot, OffsetBase};
 use areka_placement::prepare_ghost_windows_with_work_area;
 use areka_placement::resolver::PointPx;
@@ -27,24 +18,13 @@ use areka_placement::spawn::{BalloonKeywordBase, spawn_ghost_windows};
 use areka_placement::sticky_group_ledger::{StickyGroupLedger, seed_sticky_descript};
 use areka_placement::test_support::{WA, give_fake_handles, with_com_initialized};
 
-use super::test_support::{all_shown, pos_of, resnap_world, synth_assets, zero_clock};
+use super::shared_test_support::wiring;
+use super::test_support::{all_shown, pos_of, resnap_world};
 use super::{RuntimeWiring, run_move_drain_phase, run_move_drain_with};
 
 /// 位置の線の送り口を持つ受け口と、それを受ける headless な結線。
 fn sink_and_wiring() -> (MoveCueSink, RuntimeWiring) {
-    let (tx, rx): (Sender<PositionCue>, _) = mpsc::channel();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
-    );
+    let (tx, wiring) = wiring();
     (MoveCueSink::new(tx), wiring)
 }
 

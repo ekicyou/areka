@@ -1,3 +1,4 @@
+use super::shared_test_support::wiring;
 use super::test_support::{FakeSizes, all_shown, pos_of, resnap_world, size_of};
 use super::*;
 
@@ -343,14 +344,12 @@ fn resnap_from_sizes_same_size_repeats_never_change_window_state() {
 /// 左上へ）は寄せた後の矩形を基準に scope1 を置く（要件 3.3）。並べ直しはやり直さない＝どちらの窓も書き込みは 1 回ずつ（要件 3.4）。
 #[test]
 fn a_move_in_the_same_frame_as_a_grow_clamp_uses_the_clamped_rect() {
-    use super::test_support::{
-        FrameHarness, PerTargetSizes, SPAWN_SIZE_1, synth_assets, zero_clock,
-    };
+    use super::test_support::{FrameHarness, PerTargetSizes, SPAWN_SIZE_1};
     use crate::move_cue::{PositionCue, parse_move_directive};
     use areka_placement::chain_finalize::ChainFinalized;
     use areka_placement::follow::Anchored;
     use areka_placement::resolver::Anchor;
-    use std::{cell::RefCell, rc::Rc, sync::mpsc};
+
     use wintf::ecs::WindowHandle;
 
     let mut harness = FrameHarness::new();
@@ -362,19 +361,7 @@ fn a_move_in_the_same_frame_as_a_grow_clamp_uses_the_clamped_rect() {
         harness.world.entity_mut(e).insert(Anchored(Anchor::Free));
     }
 
-    let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<crate::talk_lifecycle::TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::new(RefCell::new(areka_emo_text::actor::TextLayerRuntime::new(
-            areka_emo_text::state::TextLayerConfig::default(),
-        ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
-    );
+    let (tx, wiring) = wiring();
     let tokens: Vec<String> = [
         "--X=0",
         "--Y=0",

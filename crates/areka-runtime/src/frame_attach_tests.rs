@@ -3,11 +3,11 @@ use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::talk_lifecycle::TalkLifecycleSignal;
 use areka_emo_text::state::TextLayerConfig;
 use dola::cue::{CueCommand, TalkCue};
-use std::sync::{Arc, mpsc};
+use std::sync::mpsc;
 
+use super::shared_test_support::{wiring, wiring_with};
 use super::test_support::{
     capture_logs, count_level, gpu_attach_world, synth_assets, synth_assets_with_balloons,
-    zero_clock,
 };
 use super::*;
 
@@ -189,17 +189,12 @@ fn connect_balloon_text_skips_when_view_none() {
 /// （高々 1 回消費の `take` はゲート成立後にのみ行うため未消費）で、panic しないことを headless に固定する。
 #[test]
 fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
-    let mut wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<PositionCue>().1,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
+    let mut wiring = wiring_with(
+        synth_assets(&[(0, 0), (1, 10)]),
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
-        TalkClock::new(Arc::new(|| 0.0)),
-        synth_assets(&[(0, 0), (1, 10)]),
+        EmoPresenter::new(),
     );
     // GraphicsCore/WucGraphicsResource/GhostWindows を一切持たない素の World（ゲート不成立）。
     let mut world = World::new();
@@ -230,17 +225,12 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
 fn run_attach_phase_with_an_invalid_core_does_not_attach() {
     let (_gpu, mut world, _gw) = gpu_attach_world();
     world.resource_mut::<GraphicsCore>().invalidate();
-    let mut wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<PositionCue>().1,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
+    let mut wiring = wiring_with(
+        synth_assets(&[(0, 0), (1, 10)]),
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
-        zero_clock(),
-        synth_assets(&[(0, 0), (1, 10)]),
+        EmoPresenter::new(),
     );
     run_attach_phase(&mut wiring, &mut world);
     assert_eq!(
@@ -275,17 +265,12 @@ fn attach_hands_the_boot_shell_cursors_to_the_world() {
         .rows
         .rows
         .insert(key.clone(), Shape::System(SystemCursor::Cross));
-    let mut wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<PositionCue>().1,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
+    let mut wiring = wiring_with(
+        assets,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
-        zero_clock(),
-        assets,
+        EmoPresenter::new(),
     );
 
     run_attach_phase(&mut wiring, &mut world);
@@ -338,16 +323,7 @@ fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let mut wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<PositionCue>().1,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::clone(&runtime),
-        zero_clock(),
-        assets,
-    );
+    let mut wiring = wiring_with(assets, Rc::clone(&runtime), EmoPresenter::new());
 
     run_attach_phase(&mut wiring, &mut world);
     assert!(
@@ -415,17 +391,12 @@ fn attach_establishes_balloons_invisible_with_slot_and_surface() {
     let (_gpu, mut world, _gw) = gpu_attach_world();
     let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
-    let mut wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<PositionCue>().1,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
+    let mut wiring = wiring_with(
+        assets,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
-        zero_clock(),
-        assets,
+        EmoPresenter::new(),
     );
 
     run_attach_phase(&mut wiring, &mut world);
@@ -469,17 +440,12 @@ fn attach_establishes_balloons_invisible_with_slot_and_surface() {
 fn presenter_accessor_feeds_resolve_hit_region() {
     use crate::hit_region::{HitRegion, resolve_hit_region};
 
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<PositionCue>().1,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
+    let wiring = wiring_with(
+        synth_assets(&[(0, 0), (1, 10)]),
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
-        TalkClock::new(Arc::new(|| 0.0)),
-        synth_assets(&[(0, 0), (1, 10)]),
+        EmoPresenter::new(),
     );
 
     // UI 配線層の読み口から resolver を呼べる（Req 1.3・型が resolve_hit_region の
@@ -508,20 +474,8 @@ fn move_cue_sink_reaches_runtime_wiring_receiver() {
     use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 
     // wire_runtime 手順4 と同型: 単一 channel の送出端を sink へ、受信端を RuntimeWiring へ。
-    let (move_tx, move_rx) = mpsc::channel::<PositionCue>();
+    let (move_tx, wiring) = wiring();
     let mut move_sink = MoveCueSink::new(move_tx);
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        move_rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        TalkClock::new(Arc::new(|| 0.0)),
-        synth_assets(&[(0, 0)]),
-    );
 
     // sink（talk スレッド相当）へ `\![move]` キャリアを emit → 受信端（RuntimeWiring）へ届く。
     move_sink.emit(TalkCue {
@@ -574,18 +528,14 @@ fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
 
     // wire_runtime 手順4/5 と同型: 単一 channel の送出端を sink へ、受信端を RuntimeWiring へ。
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<PositionCue>().1,
-        lifecycle_rx,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
+    let mut wiring = wiring_with(
+        synth_assets(&[(0, 0)]),
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
-        TalkClock::new(Arc::new(|| 0.0)),
-        synth_assets(&[(0, 0)]),
+        EmoPresenter::new(),
     );
+    wiring.lifecycle_rx = lifecycle_rx;
 
     // 待機（`\w9`）を含む実台本（Requirement 4.1 の「占有区間の終端」が最後の文字より後になる形）。
     let instructions = areka_parsers::sakura::parse(r"\0あい\w9\1うえ\e");
@@ -704,17 +654,12 @@ fn connect_balloon_text_resolves_text_with_the_background_at_attach_time() {
         .expect("emo2 fixture の BootAssets 組立は成功する");
     let kero = assets.balloons[1].definitions.face0().model.clone();
 
-    let mut wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<PositionCue>().1,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
+    let mut wiring = wiring_with(
+        assets,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
-        zero_clock(),
-        assets,
+        EmoPresenter::new(),
     );
     run_attach_phase(&mut wiring, &mut world);
     // `TextSlotView` は Copy——同じ view 値を両経路と再追従に使う（差は順序だけ）。
@@ -893,16 +838,7 @@ fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let mut wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<PositionCue>().1,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::clone(&runtime),
-        zero_clock(),
-        assets,
-    );
+    let mut wiring = wiring_with(assets, Rc::clone(&runtime), EmoPresenter::new());
     run_attach_phase(&mut wiring, &mut world);
     assert!(wiring.attached, "前提: ゲート成立で attach が走る");
 
