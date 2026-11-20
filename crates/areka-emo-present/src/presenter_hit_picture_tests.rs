@@ -4,10 +4,15 @@ use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, EmoWorld};
 use wintf::ecs::GraphicsCore;
 
+use areka_parsers::shell::{
+    AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, Surface,
+};
+
 use super::test_support::{
-    attach_and_show, build_balloon, five_shapes_assets, frames, gradient, hit_generation,
-    load_hit_shell, make_world_with_gpu, mask_pictures_created, name_at, set_window_dpi,
-    show_with_ok, spawn_window_with_dpi, straight_image,
+    CapturedEvent, FIVE_SHAPES, FIVE_SHAPES_MASK, attach_and_show, bake_world, build_balloon,
+    capture, elem, five_shapes_assets, frames, gradient, gradient_with_alpha, hit_generation,
+    load_hit_shell, make_world_with_gpu, mask_pictures_created, name_at, set_window_dpi, shell_of,
+    show_ok, show_with_ok, spawn_window_with_dpi, straight_image, warn_count,
 };
 use super::{EmoPresenter, PatternState, TargetId};
 
@@ -214,4 +219,157 @@ fn the_shown_mask_copy_does_not_add_mask_allocations() {
         (warmed, settled),
         "当たり判定の有無で α マスクの確保の数が違う"
     );
+}
+
+fn problems(events: &[CapturedEvent]) -> usize {
+    events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN || e.level == tracing::Level::ERROR)
+        .count()
+}
+
+fn warns_containing(events: &[CapturedEvent], text: &str) -> usize {
+    events
+        .iter()
+        .filter(|e| {
+            e.level == tracing::Level::WARN && e.field("message").is_some_and(|m| m.contains(text))
+        })
+        .count()
+}
+
+fn faint_five_shapes() -> (EmoWorld, AtlasTable) {
+    let mask = straight_image(16, 16, |x, _| {
+        if x < 8 {
+            [0, 0, 255, 255]
+        } else {
+            [255, 0, 0, 255]
+        }
+    });
+    let alpha = |x: u32, _| match x {
+        20 => 127,
+        21 => 128,
+        _ => 255,
+    };
+    load_hit_shell(
+        FIVE_SHAPES,
+        (80, 16, gradient_with_alpha(80, 16, 0x15, alpha)),
+        vec![(FIVE_SHAPES_MASK, mask)],
+    )
+}
+
+#[test]
+fn the_color_picture_alpha_decides_inside_a_shape() {
+    let mut world = make_world_with_gpu();
+    let mut presenter = EmoPresenter::new();
+    attach_and_show(&mut presenter, &mut world, T, faint_five_shapes(), 0, 96);
+
+    assert_eq!(name_at(&presenter, T, 19, 4), Some("B"));
+    assert_eq!(name_at(&presenter, T, 20, 4), None, "α 127 は 0.5 未満");
+    assert_eq!(
+        name_at(&presenter, T, 21, 4),
+        Some("B"),
+        "α 128 は 0.5 以上"
+    );
+    assert_eq!(name_at(&presenter, T, 22, 4), Some("B"));
+}
+
+#[test]
+fn outside_the_face_and_nothing_shown_hit_nothing_and_record_nothing() {
+    let mut world = make_world_with_gpu();
+    let mut presenter = EmoPresenter::new();
+    attach_and_show(&mut presenter, &mut world, T, five_shapes_assets(), 0, 96);
+    let (names, events) = capture(|| {
+        [(-1, 4), (4, -1), (80, 4), (4, 16), (1000, 1000)]
+            .map(|(x, y)| name_at(&presenter, T, x, y))
+    });
+    assert_eq!(names, [None; 5]);
+    assert_eq!(problems(&events), 0, "{events:?}");
+
+    let mut idle = EmoPresenter::new();
+    let window = spawn_window_with_dpi(&mut world, 96);
+    let (emo_world, atlas) = five_shapes_assets();
+    idle.attach_target(T, window, emo_world, atlas, 96);
+    let (name, events) = capture(|| name_at(&idle, T, 2, 2).map(str::to_owned));
+    assert_eq!(name, None);
+    assert_eq!(problems(&events), 0, "{events:?}");
+}
+
+#[test]
+fn a_discarded_target_warns_once_and_the_next_commit_brings_the_name_back() {
+    let mut world = make_world_with_gpu();
+    let mut presenter = EmoPresenter::new();
+    attach_and_show(&mut presenter, &mut world, T, five_shapes_assets(), 0, 96);
+    presenter.targets.get_mut(&T).unwrap().hit_picture = None;
+
+    let (names, events) = capture(|| {
+        [(2, 2), (2, 2), (20, 4)].map(|(x, y)| name_at(&presenter, T, x, y).map(str::to_owned))
+    });
+    assert_eq!(names, [None, None, None]);
+    assert_eq!(warn_count(&events), 1, "{events:?}");
+    assert_eq!(problems(&events), 1, "{events:?}");
+
+    show_binds(&mut presenter, &mut world, 0, 1);
+    assert_eq!(name_at(&presenter, T, 2, 2), Some("R"));
+    assert_eq!(name_at(&presenter, T, 20, 4), Some("B"));
+}
+
+#[test]
+fn a_device_change_follow_up_repaints_and_the_answer_returns() {
+    let mut world = make_world_with_gpu();
+    let mut presenter = EmoPresenter::new();
+    attach_and_show(&mut presenter, &mut world, T, five_shapes_assets(), 0, 96);
+    assert_eq!(name_at(&presenter, T, 2, 2), Some("R"));
+
+    presenter.refresh_after_device_change(&mut world);
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore::new 失敗"));
+    presenter.refresh_after_device_change(&mut world);
+    assert_eq!(hit_generation(&presenter, T), Some(1), "塗り直された");
+    assert_eq!(name_at(&presenter, T, 2, 2), Some("R"));
+    assert_eq!(name_at(&presenter, T, 20, 4), Some("B"));
+}
+
+#[test]
+fn one_over_the_bound_warns_once_and_drops_the_head_side() {
+    let count = crate::hit_shapes::HIT_SHAPE_LIMIT + 1;
+    let rect = |index: usize, name: &str, (left, right): (i64, i64)| Collision {
+        index: index as u32,
+        shape: CollisionShape::Rect(CollisionBounds {
+            left,
+            top: 0,
+            right,
+            bottom: 16,
+        }),
+        name: CollisionName::new(name.to_string()),
+    };
+    let mut collisions = vec![rect(0, "head", (0, 16))];
+    collisions.push(rect(1, "second", (16, 24)));
+    collisions.extend((2..count - 1).map(|i| rect(i, "far", (100, 101))));
+    collisions.push(rect(count - 1, "front", (8, 16)));
+    let (emo_world, atlas) = bake_world(
+        shell_of(vec![Surface {
+            targets: vec![AppendTarget::Single(0)],
+            elements: vec![elem("a.png", 0, 0)],
+            collisions,
+            animations: Vec::new(),
+        }]),
+        vec![("a.png", 80, 16, gradient(80, 16, 0x15))],
+    );
+    let mut world = make_world_with_gpu();
+    let mut presenter = EmoPresenter::new();
+    let window = spawn_window_with_dpi(&mut world, 96);
+    presenter.attach_target(T, window, emo_world, atlas, 96);
+    let ((), events) = capture(|| show_ok(&mut presenter, &mut world, T, 0));
+    assert_eq!(warn_count(&events), 1, "{events:?}");
+    assert_eq!(warns_containing(&events, "上限"), 1, "{events:?}");
+
+    assert_eq!(name_at(&presenter, T, 10, 4), Some("front"));
+    assert_eq!(name_at(&presenter, T, 20, 4), Some("second"));
+    assert_eq!(
+        name_at(&presenter, T, 2, 2),
+        None,
+        "越えた先頭の側は当たらない"
+    );
+
+    let ((), again) = capture(|| show_ok(&mut presenter, &mut world, T, 0));
+    assert_eq!(warn_count(&again), 0, "{again:?}");
 }
