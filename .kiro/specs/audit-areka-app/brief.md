@@ -112,3 +112,14 @@
 - **オ（`code_only` の写し）**: `crates/areka/src/tick_gate_config_producers_tests.rs:L70` の `code_only` は、`source_text_test_support::code_only` と 1 字も違わない。そちらを使う形に寄せる。
 - **キ（古い説明）**: `crates/areka/src/boot_config.rs:L617`・`L621-L622` の `is_benign_boot_error` の説明は「`wire_runtime` が再利用する」と書くが、呼び手は `ghost_session.rs:L783`・`session/runtime_boot.rs:L137` だけ。
 - **ク（古い説明）**: `crates/areka/examples/emo-present/setup.rs:L88` の「本番（`build_boot_assets`）」は古い（`audit-emo2-boot-spine` の 43 番と同じ形の文）。
+
+## 2026-11-20 棚卸㊵の再測定（main 67e0c70e）
+- **前提の変化**: `audit-emo2-boot-spine`（11-19）が上の申し送り（オ・キ・ク）を足した。キは同じ PR で直り、今の `boot_config.rs:616〜617` は「窓の在る起動（`session::runtime_boot::boot_runtime`）も…再利用する」＝残るのは窓の無い起動の呼び手 `ghost_session.rs:783` を挙げていないことだけ。オ（`tick_gate_config_producers_tests.rs:70` の `code_only`）・ク（`examples/emo-present/setup.rs:88` の「本番（`build_boot_assets`）」）は残る。同じ spec は本体の `boot_config.rs`・`ghost_session.rs`・`main_restore_seam_tests.rs`・`crate_source_test_support.rs`・`Cargo.toml` も直した（振る舞いは同じ）。
+- **2026-11-15 の申し送り（`audit-placement-core`）の読み替え**: パスの `src/runtime/` は `crates/areka-runtime/src/` へ移った。件 2 の略称は `scg` が 0（`audit-emo2-boot-spine` が正式の名へ直した）、`atom` が本体の `ghost_session.rs:227・230・259・286`・`main.rs:905`・`main_monitor_snapshot_seam_tests.rs:150` と `areka-runtime` の `frame*` に残る。件 3（`frame_diag_route_tests.rs:19`・名指す `areka_placement::test_support::capture_logs` は今も無い）・件 4（`frame_transition_branch_tests.rs:501・527・545`）・件 9（`frame/drain_resnap.rs:597`）と件 2 の `frame*` の分は `audit-emo2-boot-frame` の持ち物、件 10 の `move_cue_apply_move_tests.rs:52`・`move_cue_apply_move_sticky_tests.rs:201`・`move_cue_place_tests.rs:330` は `audit-emo2-boot-switch` の持ち物になった。件 10 の `input_events/drag_test_support.rs:104` は `audit-areka-input-menu`、`runtime_tests/frame/switch_finish_tests.rs:61` は `audit-emo2-boot-frame`。この spec に残るのは件 1・件 2 の本体の分・件 5・件 7・件 8・件 10 の `boot_resolve_tests.rs:422`・`main_persist_wiring_seam_tests.rs:13`。件 6（`assets_tests.rs`）は `areka-runtime` へ移り、持ち主の `audit-emo2-boot-spine` は着地済み＝着手のときに残っていれば引き取り先を決める。
+- **触るファイル**: `crates/areka/` のうちほかの見直しの持ち物でないもの（今の数え＝`.rs` 164・本番 約 14,500 行・テスト 約 34,500 行・`wc -l`＝起票の 211 ファイル・12,594・18,655 より大きい）。`session-module-gather`・`session-crate-split` の後は大半が `crates/areka-session/src/` へ移る。上限に近いのは `main.rs` 989・`tests/stay_on_top_real_run.rs` 966・`main_session_mark_tests.rs` 951。
+- **規模**: 指摘の数で決まる。範囲が起票より大きく、20 を越える見込みが高い＝要件の討議で指摘の組ごとに同じ範囲の 2 本目を切る（Constraints のとおり）。
+- **先に要るもの**: `session-crate-split`（その前に `input-crate-split`・`session-module-gather`）。見込み C26。
+- **同じウェーブに置けない相手**: crate 分けの 3 本（待つ）・`doc-compat-architecture-rename`（`ghost_session_scope_scale.rs`・`reference_brain.rs` が文書を名指す）・`balloon-flip-ssp-review`（案 ⑶ で `ghost_session.rs`）・`multi-ghost-runtime`。`audit-areka-install-update`・`audit-emo2-boot-switch` とは持ち物が分かれていて 0（同じ C26 でよい）。
+- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- **要件定義のモデル**: Opus（見直しの型どおり）。
+- **分割の案**: 起票のままでは無し。指摘が 20 を越えたら要件の討議で指摘の組で 2 本目。

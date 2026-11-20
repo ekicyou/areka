@@ -42,3 +42,14 @@
 - 依存を足さない。`Cargo.toml`・`Cargo.lock` に触らない。
 - 名前の決まりと表の書き方の正本は `doc/README.md`。
 - **規模**: S（3〜5）。直す所は多いが、どれも語で探して置き換える機械の直し。
+
+## 2026-11-20 棚卸㊵の再測定（main 67e0c70e）
+- **前提の変化**: crate 分けで名指すファイルのパスが変わった＝`crates/areka` は 3 ファイル（`ghost_session_scope_scale.rs`・`install/judge.rs`・`reference_brain.rs`）、`src/placement/persist.rs`・`resolver.rs` は `crates/areka-placement/src/`、`emo2_boot/move_cue_geometry.rs` は `crates/areka-runtime/src/move_cue_geometry.rs`。新しく名指すもの＝照合テスト `crates/log-capture-kit/tests/doc_tree_guard_test.rs`（669 行）・`doc/ideas/` のノベルの暫定の文書 6 本・`doc/roadmap-overview-2026-10-16.html`・`doc/ukadoc-coverage/` の briefing 5 本と `roadmap-draft.md`。
+- **触るファイル**（大文字小文字を区別した `git grep -l`・歴史の場所を除く）: クレート 19（`areka-emo-text` 9・`areka` 3・`areka-placement` 2・`areka-runtime`・`areka-ghost`・`areka-sakura`・`areka-sylphya`・`log-capture-kit` 各 1）・steering 5・根の `README.md`・スキル `kiro-next`・`doc/` の文書 18（台帳を除く）・網羅台帳 4 本の 135 行（`assets` 51・`property` 11・`sakura-script` 44・`shiori` 29）・未完了の spec 67 本の文書。`ukadoc-survey` のコードはこの名前を持たない。`doc/COMPAT_ARCHITECTURE.md` は 637 行（中身は変えない）。
+- **規模**: S（3〜5）のまま。
+- **先に要るもの**: 本体の crate 分けの残り 3 本（`input-crate-split`・`session-module-gather`・`session-crate-split`）と、名指すファイルを受け持つ見直しの残り 3 本（`audit-areka-app`・`audit-areka-install-update`・`audit-emo2-boot-switch`）。起票の 9 本のうち 6 本は着地した。見込みでは C26 の後で、C27 は `dola-interrupt-ticks` が 1 本だけで走る＝早くて C28。
+- **同じウェーブに置けない相手**: 上の 6 本。台帳の 135 行を書き換えるので、同じ台帳の同じ行を書く spec とも当たる。§8 へ追記する spec は改名の追跡で通る見込みだが、古い名前で名指しを足すと残る＝最後の検索で拾う。
+- **優先度の区分**: C（`doc-tree-tidy` のタスク 5.1 の持ち越し・バグでない）。
+- **要件定義のモデル**: Opus（語で探して置き換える機械の直し）。
+- **分割の案**: 無し。
+- **古くなった記述**: Current State の「クレートの 18 ファイル（`crates/areka` 7 …）」・「未完了の spec の brief 60 本あまり」と、Adjacent の「9 本」（上の数え）。
