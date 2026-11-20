@@ -4,8 +4,8 @@
 > 本体の `crates/areka/src/ghost_session.rs` と `crates/areka-runtime/src/frame/` には触らない（同じウェーブの約束）。`follow.rs` の取り込みの 2 行に触ることは `audit-emo2-boot-frame` へ 2026-11-20 に知らせ済み。
 > 注を直すときは `CLAUDE.md` の「Comments」節に従う（古い並べ替えの注は消すのを先に考える・spec 名や要件番号をコードに書かない）。
 
-- [ ] 1. 新しい檻を先に赤で確かめる
-- [ ] 1.1 押し込みだけの決まりを、形の表で両関門に通す檻を書く
+- [x] 1. 新しい檻を先に赤で確かめる
+- [x] 1.1 押し込みだけの決まりを、形の表で両関門に通す檻を書く
   - 並べ替えの檻のファイルを押し込みの檻の名前に改め、親のモジュールの取り込みの行も合わせる（中の今の檻はこのタスクでは消さない）
   - 設計の Testing Strategy の 6 つの形（10-30 の形・11-16 のドラッグの後の形・収まる・`limit=0`・キャラクター窓がはみ出す・縦にはみ出す）を 1 つの表にし、起動の関門と書き込みの関門の両方へ通す。作業領域は `0,0,2880,1704`
   - 各行で、期待の位置・記録の行の数（記録のある行はちょうど 1 行・`how` は字の `"\"pushed\""`・`context` は関門の語・`overlap_scope` の欄が無い）・記録の無い行は捕捉が生きていることを先に確かめてから 0 行、起動の関門では `balloon_offset`・`balloon_offset_base` が入力と同じこと、を主張する
@@ -82,3 +82,6 @@
   - _Depends: 5.1, 5.2_
   - _Dispatch: mechanical — 決まった crate のテストと差分の確かめだけ_
   - _Requirements: 3.3, 3.5, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
+
+## Implementation Notes
+- 1.1 直す前の赤（`cargo test -p areka-placement --lib push_table`・両関門とも同じ出方）: 10-30 と 11-16-after-drag は位置（`(1108,336)`・`(2441,1188)`）・`how`（`"flipped"`）・`overlap_scope`（`Some("None")`）が赤。キャラクター窓がはみ出す・縦にはみ出すは `overlap_scope` だけが赤（位置は緑）。収まる・`limit=0` は緑。今は欄が値 `None` で載るので `field("overlap_scope")` は `Some("None")` になる。檻の絞り込みは `push_table`（`balloon_limit_push` では 0 件）。

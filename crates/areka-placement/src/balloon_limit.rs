@@ -340,11 +340,11 @@ fn apply_balloon_limit_one(
 }
 
 #[cfg(test)]
-#[path = "balloon_limit_flip_tests.rs"]
-mod flip_tests;
-#[cfg(test)]
 #[path = "balloon_limit_gate_tests.rs"]
 mod gate_tests;
+#[cfg(test)]
+#[path = "balloon_limit_push_tests.rs"]
+mod push_tests;
 #[cfg(test)]
 #[path = "balloon_limit_tests.rs"]
 mod tests;

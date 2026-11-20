@@ -563,3 +563,224 @@ fn mirror_of_windowposition_part_keeps_current_formula() {
         BalloonPlace::Flipped(point(char_rect.right + 237, left.y))
     );
 }
+
+// ---------------------------------------------------------------------------
+// 押し込みだけの形の表（両関門に同じ表を通す）
+// ---------------------------------------------------------------------------
+
+struct PushRow {
+    name: &'static str,
+    scope: usize,
+    char_pos: PointPx,
+    char_size: SizePx,
+    offset: PointPx,
+    balloon_size: SizePx,
+    limit: bool,
+    expected: PointPx,
+    recorded: bool,
+    /// 書き込みの関門の檻でキャラ窓を最初に置く位置（バルーンが収まる）。
+    spawn_pos: PointPx,
+}
+
+fn push_rows() -> Vec<PushRow> {
+    let std_char = SizePx { w: 1108, h: 800 };
+    let std_balloon = SizePx { w: 872, h: 400 };
+    vec![
+        PushRow {
+            name: "10-30",
+            scope: 1,
+            char_pos: point(0, 336),
+            char_size: SizePx { w: 1108, h: 1368 },
+            offset: point(-872, 0),
+            balloon_size: SizePx { w: 872, h: 900 },
+            limit: true,
+            expected: point(0, 336),
+            recorded: true,
+            spawn_pos: point(1200, 336),
+        },
+        PushRow {
+            name: "11-16-after-drag",
+            scope: 1,
+            char_pos: point(2524, 1304),
+            char_size: SizePx { w: 336, h: 400 },
+            offset: point(131, -116),
+            balloon_size: SizePx { w: 288, h: 203 },
+            limit: true,
+            expected: point(2592, 1188),
+            recorded: true,
+            spawn_pos: point(1200, 904),
+        },
+        PushRow {
+            name: "fits",
+            scope: 0,
+            char_pos: point(1200, 904),
+            char_size: std_char,
+            offset: point(-872, 0),
+            balloon_size: std_balloon,
+            limit: true,
+            expected: point(328, 904),
+            recorded: false,
+            spawn_pos: point(1300, 904),
+        },
+        PushRow {
+            name: "limit-0",
+            scope: 0,
+            char_pos: point(0, 904),
+            char_size: std_char,
+            offset: point(-872, 0),
+            balloon_size: std_balloon,
+            limit: false,
+            expected: point(-872, 904),
+            recorded: false,
+            spawn_pos: point(1200, 904),
+        },
+        PushRow {
+            name: "char-overflows",
+            scope: 0,
+            char_pos: point(-200, 904),
+            char_size: std_char,
+            offset: point(-872, 0),
+            balloon_size: std_balloon,
+            limit: true,
+            expected: point(0, 904),
+            recorded: true,
+            spawn_pos: point(1200, 904),
+        },
+        PushRow {
+            name: "vertical-overflow",
+            scope: 0,
+            char_pos: point(1200, 904),
+            char_size: std_char,
+            offset: point(-872, 1000),
+            balloon_size: std_balloon,
+            limit: true,
+            expected: point(328, 1304),
+            recorded: true,
+            spawn_pos: point(1200, 300),
+        },
+    ]
+}
+
+fn check_clamp_lines(
+    row: &PushRow,
+    events: &[CapturedEvent],
+    context: &str,
+    alive_tag: Option<&str>,
+    fails: &mut Vec<String>,
+) {
+    let clamps: Vec<&CapturedEvent> = events
+        .iter()
+        .filter(|e| e.message().contains(BALLOON_LIMIT_CLAMP_TAG))
+        .collect();
+    if row.recorded {
+        if clamps.len() != 1 {
+            fails.push(format!(
+                "{} [clamp-count]: {} lines",
+                row.name,
+                clamps.len()
+            ));
+            return;
+        }
+        let c = clamps[0];
+        if c.field("how") != Some("\"pushed\"") {
+            fails.push(format!("{} [how]: {:?}", row.name, c.field("how")));
+        }
+        if c.field("context") != Some(context) {
+            fails.push(format!("{} [context]: {:?}", row.name, c.field("context")));
+        }
+        if c.field("overlap_scope").is_some() {
+            fails.push(format!(
+                "{} [overlap_scope-field]: {:?}",
+                row.name,
+                c.field("overlap_scope")
+            ));
+        }
+    } else {
+        if let Some(tag) = alive_tag {
+            if !events.iter().any(|e| e.message().contains(tag)) {
+                fails.push(format!("{} [capture-alive]: no {tag}", row.name));
+            }
+        }
+        if !clamps.is_empty() {
+            fails.push(format!(
+                "{} [clamp-count]: {} lines, want 0",
+                row.name,
+                clamps.len()
+            ));
+        }
+    }
+}
+
+#[test]
+fn push_table_boot_gate() {
+    let mut fails = Vec::new();
+    for row in push_rows() {
+        let p = placement_sized(
+            row.scope,
+            row.char_pos,
+            row.offset,
+            row.limit,
+            row.char_size,
+            row.balloon_size,
+        );
+        let (out, events) = capture(|| apply_balloon_limit(vec![p], &snapshot(&[WA])));
+        if out[0].balloon_pos != row.expected {
+            fails.push(format!(
+                "{} [position]: got {:?}, want {:?}",
+                row.name, out[0].balloon_pos, row.expected
+            ));
+        }
+        if out[0].balloon_offset != row.offset {
+            fails.push(format!(
+                "{} [balloon_offset]: {:?}",
+                row.name, out[0].balloon_offset
+            ));
+        }
+        if out[0].balloon_offset_base != p.balloon_offset_base {
+            fails.push(format!("{} [balloon_offset_base]", row.name));
+        }
+        check_clamp_lines(&row, &events, "\"boot-gate\"", None, &mut fails);
+    }
+    assert!(fails.is_empty(), "{}", fails.join("\n"));
+}
+
+#[test]
+fn push_table_write_gate() {
+    let mut fails = Vec::new();
+    for row in push_rows() {
+        let mut world = World::new();
+        world.insert_resource(snapshot(&[WA]));
+        let titles = GhostTitles::from_scope_titles([(row.scope, "むらさき".to_string())]);
+        let p = placement_sized(
+            row.scope,
+            row.spawn_pos,
+            row.offset,
+            row.limit,
+            row.char_size,
+            row.balloon_size,
+        );
+        let gw = spawn_ghost_windows(&mut world, &[p], &titles);
+        let char_window = gw.char_window(row.scope).expect("キャラ窓");
+        let balloon = gw.balloon_window(row.scope).expect("バルーン窓");
+        world.entity_mut(char_window).insert(fake_handle(0x1000));
+        world.entity_mut(balloon).insert(fake_handle(0x2000));
+
+        let (_, events) =
+            capture(|| move_window_to(&mut world, char_window, row.char_pos.x, row.char_pos.y));
+        let got = point_of(&world, balloon);
+        if got != row.expected {
+            fails.push(format!(
+                "{} [position]: got {:?}, want {:?}",
+                row.name, got, row.expected
+            ));
+        }
+        check_clamp_lines(
+            &row,
+            &events,
+            "\"runtime-gate\"",
+            Some("[diag.window_move]"),
+            &mut fails,
+        );
+    }
+    assert!(fails.is_empty(), "{}", fails.join("\n"));
+}
