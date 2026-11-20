@@ -151,7 +151,7 @@ fn unshown_scope<S: ShownRatioSource + ?Sized>(
 #[derive(Default)]
 struct Blocked {
     all: bool,
-    scopes: Vec<u32>,
+    scopes: BTreeSet<u32>,
 }
 
 impl Blocked {
@@ -269,3 +269,7 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
     }
     ready
 }
+
+#[cfg(test)]
+#[path = "move_hold_tests.rs"]
+mod tests;
