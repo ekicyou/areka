@@ -7,7 +7,7 @@
 //!    標準出力から消えた info が履歴に残る・履歴の本文が標準出力の同じ行と 1 字も違わない
 //!    （逆斜線入りのパスと二重引用符が JSON を通って戻る）・各行の頭の形と番号の昇順。
 //! 2. 出どころ（spec: areka-P0-script-security-level task 7.2・要件 1.2・1.3・2.2・2.3・2.4・2.8・4.3）:
-//!    `kanade=trace` の `shiori_request` と `areka::input_events::user_break` の debug の記録を標準出力から読む。
+//!    `kanade=trace` の `shiori_request` と `areka_input::user_break` の debug の記録を標準出力から読む。
 //!    ⑴ MCP の `raise_event` は `sender=MCP`・`sender_type=external,sstp`・`security_level=local`
 //!    ⑵ MCP の `sakurascript` の `OnTranslate` は `sender=MCP`・`sender_type=internal`
 //!    ⑶ 起動の道のゴースト自身のイベントは `sender=areka`・`sender_type=internal`
@@ -37,7 +37,7 @@ const BOOT_TALK_ENDED: &str = "status=Some(\"balloon(";
 const SHIORI_REQUEST: &str = "event=\"shiori_request\"";
 /// `raise_event` で送るイベント（記録の行を 1 つに絞るための、ほかで使わない名前）。
 const PROBE_EVENT: &str = "OnScriptSecurityRealRunProbe";
-/// 区間に入った記録（`crates/areka/src/input_events/user_break.rs`）。
+/// 区間に入った記録（`crates/areka-input/src/user_break.rs`）。
 const ENTERED: &str = "event=\"no_user_break_changed\" value=true";
 /// 外部扱いの台本でタグを止めた warn（出てはならない）。
 const REFUSED: &str = "script_tag_refused";
@@ -112,7 +112,7 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
             name: "emo2".into(),
             balloon: Some("emo2-kakukaku".into()),
         })
-        .rust_log("warn,areka::boot_config=info,kanade=trace,areka::input_events::user_break=debug")
+        .rust_log("warn,areka::boot_config=info,kanade=trace,areka_input::user_break=debug")
         // 3 つを 1 回で行うので、初回の起動のトーク（約 17 秒）の後まで保険の自動終了（既定 45 秒）に掛からない幅を取る。
         .safety_exit(Duration::from_secs(120))
         .spawn();

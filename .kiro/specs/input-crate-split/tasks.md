@@ -74,7 +74,7 @@
   - _Requirements: 5.6, 5.7_
 
 - [ ] 5. ログの出所を読む所・見張り・道具を追従させる
-- [ ] 5.1 (P) ログの出所を名前で読むコードと、`get_log` の分け方のテストを直す
+- [x] 5.1 (P) ログの出所を名前で読むコードと、`get_log` の分け方のテストを直す
   - 実機テスト 2 本の `RUST_LOG`（と説明）と、カーソルの答えのテストの出所の文字列を新しい出所の名前へ書き換える（手順書は 6.2 が持つ）
   - `get_log` の分け方の既にあるテスト `unrelated_info_is_not_kept` に 5 行を足す（テストの名前は増やさない）: `areka_input`・`areka_input::char_watch::cursor_answer`・`areka::file_drop`・`areka::menu::shortcut` の info がどれにも当たらない（`None`）、`areka_input::user_break` の warn が `Error`
   - 分け方のテストとカーソルの答えのテストが緑
