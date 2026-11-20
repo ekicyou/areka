@@ -19,7 +19,6 @@ use std::sync::mpsc;
 
 use areka_emo_text::state::TextLayerConfig;
 use dola::cue::{CueCommand, TalkCue};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::Visual;
 use wintf::ecs::layout::Arrangement;
 
@@ -29,7 +28,7 @@ use areka_runtime::assets::build_boot_assets;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
-use super::test_support::{dpi_world, size_of, zero_clock};
+use super::test_support::{dpi_world, gpu_on, size_of, zero_clock};
 use super::*;
 
 // ---------------------------------------------------------------------------
@@ -51,19 +50,9 @@ fn gpu_frame_world() -> (
     World,
     areka_placement::spawn::GhostWindows,
 ) {
-    // SAFETY: WIC デコード／D3D に要る COM の MTA 初期化
-    // （既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
     let (mut world, gw) = dpi_world();
     crate::session::hooks::install(&mut world);
-    let gpu = areka_runtime::spine::GpuPermit::take();
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-    world.insert_resource(core);
-    world.insert_resource(wuc);
+    let gpu = gpu_on(&mut world);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     world.insert_non_send(BalloonHover::default());
     (gpu, world, gw)

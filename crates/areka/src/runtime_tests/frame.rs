@@ -17,9 +17,7 @@ use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 use wintf::ecs::DPI;
 use wintf::ecs::FrameTime;
-use wintf::ecs::GraphicsCore;
 use wintf::ecs::SizeI;
-use wintf::ecs::WucGraphicsResource;
 // 中で記録を出す私有の関数は渡し口から同じ名前で引く（設計 D3 ⑷）。
 use areka_runtime::frame::drain_resnap::test_support::{finalize_chain_once_with, resnap_with};
 // 子の `carry_tests` の本物の親（`areka-runtime` の `frame_attach_tests`）が持っていて子が使う `use` の行。

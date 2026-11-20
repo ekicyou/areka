@@ -24,23 +24,13 @@ pub fn manual_balloon_runtime(
     use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir};
     use bevy_ecs::hierarchy::ChildOf;
     use dola::cue::{CueCommand, TalkCue};
-    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-    use wintf::ecs::{GraphicsCore, Visual, WucGraphicsResource};
+    use wintf::ecs::Visual;
 
-    // SAFETY: このスレッドの COM を MTA で初期化するだけ（既に初期化済みなら失敗を捨てる）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let permit = crate::spine::GpuPermit::take();
-    let core = GraphicsCore::new().expect("GraphicsCore");
-    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
-        .expect("WucGraphicsResource");
     let mut world = World::new();
+    let permit = super::test_support::gpu_on(&mut world);
     let window = world.spawn_empty().id();
     let slot = world.spawn((Visual::default(), ChildOf(window))).id();
     world.flush();
-    world.insert_resource(core);
-    world.insert_resource(wuc);
 
     let image = (120, 40);
     let key = ActorKey::from(actor);

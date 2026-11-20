@@ -11,6 +11,7 @@
 
 use super::test_support::*;
 use super::*;
+use crate::source_text_test_support::code_only;
 
 use areka_placement::zorder_group_ledger::GroupSource;
 
@@ -455,18 +456,6 @@ fn t_zdr09_this_phase_emits_no_records_of_its_own() {
         here.contains("fn run_zorder_drain_phase("),
         "説明文を落とす処理が本文まで落としている"
     );
-}
-
-/// 註釈の行（`//` で始まる行）を落とした本文。説明文に書いてあるだけの綴りを
-/// 「在る」と数えないため（`tick_gate_config_producers_tests.rs` と同じ流儀）。
-///
-/// 削り過ぎの検出は**除去後の側**へ当てる（除去前へ当てると、doc に語があるだけで
-/// 真になり、コード行を全部落としても緑のまま通る＝3.1 の教訓）。
-fn code_only(src: &str) -> String {
-    src.lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 // ---------------------------------------------------------------------------

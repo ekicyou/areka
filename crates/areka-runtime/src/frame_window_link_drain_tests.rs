@@ -13,9 +13,8 @@ use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::TextLayerConfig;
 use bevy_ecs::world::World;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-use windows::Win32::Foundation::HWND;
 use wintf::ecs::window::drain_window_pos_commands;
-use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
+use wintf::ecs::{DPI, Point, WindowPos};
 
 use crate::move_cue::{MoveCueSink, PositionCue};
 use crate::sample_test_support::{emo2_balloon_root, emo2_root};
@@ -26,7 +25,7 @@ use areka_placement::prepare_ghost_windows_with_work_area;
 use areka_placement::resolver::PointPx;
 use areka_placement::spawn::{BalloonKeywordBase, spawn_ghost_windows};
 use areka_placement::sticky_group_ledger::{StickyGroupLedger, seed_sticky_descript};
-use areka_placement::test_support::{WA, with_com_initialized};
+use areka_placement::test_support::{WA, give_fake_handles, with_com_initialized};
 
 use super::test_support::{all_shown, pos_of, resnap_world, synth_assets, zero_clock};
 use super::{RuntimeWiring, run_move_drain_phase, run_move_drain_with};
@@ -167,15 +166,7 @@ fn execute_resetballoonpos_returns_the_balloon() {
             work_areas: vec![WA],
         });
         let gw = spawn_ghost_windows(&mut world, &prepared.placements, &prepared.titles);
-        let mut raw = 0x100;
-        for scope in gw.scopes() {
-            for e in [gw.char_window(scope), gw.balloon_window(scope)] {
-                raw += 1;
-                world.entity_mut(e.unwrap()).insert(WindowHandle {
-                    hwnd: HWND(raw as *mut _),
-                });
-            }
-        }
+        give_fake_handles(&mut world, &gw);
         world.flush();
         for scope in gw.scopes() {
             for e in [gw.char_window(scope), gw.balloon_window(scope)] {

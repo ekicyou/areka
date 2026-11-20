@@ -400,7 +400,7 @@ fn normalizations_text(normalizations: &[Normalization]) -> String {
 
 #[cfg(test)]
 #[path = "zorder_drain_test_support.rs"]
-mod test_support;
+pub(super) mod test_support;
 
 #[cfg(test)]
 #[path = "zorder_drain_tests.rs"]

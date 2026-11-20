@@ -9,6 +9,7 @@ use areka_placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
 use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::spawn_ghost_windows;
+use areka_placement::test_support::give_fake_handles;
 use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use bevy_ecs::prelude::Entity;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
@@ -21,14 +22,14 @@ use std::collections::BTreeMap;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, mpsc};
 use std::time::Instant;
-use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::Foundation::{RECT, S_FALSE, S_OK};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::DPI;
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::window::transition_diag::{self, TickStart};
 use wintf::ecs::window::{SetWindowPosCommand, drain_window_pos_commands};
-use wintf::ecs::{FrameCount, Point, SizeI, WindowHandle, WindowPos};
+use wintf::ecs::{FrameCount, Point, SizeI, WindowPos};
 
 use super::work_area_sync::{SnapshotChange, resnap_for_work_area_change, sync_monitor_snapshot};
 
@@ -154,13 +155,6 @@ pub fn headless_wiring_with(rx: Receiver<PresentCommand>, clock: TalkClock) -> R
     )
 }
 
-/// 偽 HWND の WindowHandle（実窓なし・headless 決定論シーム・follow.rs の fake_handle 相当）。
-fn fake_handle(raw: usize) -> WindowHandle {
-    WindowHandle {
-        hwnd: HWND(raw as *mut _),
-    }
-}
-
 /// resnap 檻の 2 スコープ解決済み配置（both Bottom・初期位置は work_area 下端に整合＝
 /// bottom 不変量を満たす: scope0 y=1444−687=757／scope1 y=1444−357=1087）。
 ///
@@ -243,16 +237,7 @@ pub fn spawn_resnap_windows(world: &mut World) -> GhostWindows {
     );
     // 偽 WindowHandle 付与（enqueue_window_set_pos が WindowPos を書けるように＝
     // resize_window_to の反映口が成立する条件）。
-    let mut raw = 0x100usize;
-    for scope in gw.scopes().collect::<Vec<_>>() {
-        for e in [
-            gw.char_window(scope).unwrap(),
-            gw.balloon_window(scope).unwrap(),
-        ] {
-            world.entity_mut(e).insert(fake_handle(raw));
-            raw += 0x10;
-        }
-    }
+    give_fake_handles(world, &gw);
     gw
 }
 
@@ -939,17 +924,33 @@ pub fn window_move_routes_of(events: &[CapturedEvent], entity: Entity) -> Vec<St
 ///
 /// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
 pub fn gpu_attach_world() -> (crate::spine::GpuPermit, World, GhostWindows) {
-    // SAFETY: WIC デコード／D3D に要る COM の MTA 初期化
-    // （既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
     let (mut world, gw) = resnap_world();
+    let gpu = gpu_on(&mut world);
+    (gpu, world, gw)
+}
+
+/// このスレッドの COM を MTA で初期化し、GPU の装置の許可を取って `GraphicsCore` と
+/// `WucGraphicsResource` を `world` へ入れる。返す許可は呼び手が装置より先に束縛する
+/// （束縛は後ろから捨てられるので、許可は装置より後に返る）。
+///
+/// COM の初期化が `S_OK`／`S_FALSE` 以外を返したら止める（テストのバイナリにプロセスの
+/// MTA が無い糸でも動くよう初期化は残し、捨てると本当の失敗が後の装置の失敗に紛れる）。
+pub fn gpu_on(world: &mut World) -> crate::spine::GpuPermit {
+    // SAFETY: 引数の無い初期化で、このスレッドの COM の状態だけを変える。
+    let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+    assert!(
+        hr == S_OK || hr == S_FALSE,
+        "CoInitializeEx(MTA) が失敗した: {hr:?}"
+    );
     let gpu = crate::spine::GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
     world.insert_resource(core);
     world.insert_resource(wuc);
-    (gpu, world, gw)
+    gpu
 }
+
+#[cfg(test)]
+#[path = "frame_test_support_gpu_on_tests.rs"]
+mod gpu_on_tests;

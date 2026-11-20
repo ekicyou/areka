@@ -14,8 +14,7 @@
 
 use bevy_ecs::change_detection::DetectChangesMut;
 use bevy_ecs::prelude::World;
-use windows::Win32::Foundation::HWND;
-use wintf::ecs::{Point, WindowHandle, WindowPos};
+use wintf::ecs::{Point, WindowPos};
 
 use areka_placement::chain_finalize::{ADJACENT_TOLERANCE_PX, ChainFinalized, ScopeChainState};
 use areka_placement::chain_realign::{
@@ -25,6 +24,7 @@ use areka_placement::follow::OffsetBase;
 use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
+use areka_placement::test_support::give_fake_handles;
 
 use super::shared_test_support::{
     GAP_WITHOUT_REALIGN, HIGH_DPI, HIGH_SIZE_0, HIGH_SIZE_1, LOW_DPI, LOW_SIZE_0, LOW_SIZE_1,
@@ -304,18 +304,7 @@ pub(super) fn chain3_world() -> (World, GhostWindows) {
         &placements,
         &GhostTitles::from_scope_titles((0..3).map(|scope| (scope, format!("s{scope}")))),
     );
-    let mut raw = 0x100usize;
-    for scope in 0..3 {
-        for e in [
-            gw.char_window(scope).expect("キャラ窓"),
-            gw.balloon_window(scope).expect("バルーン窓"),
-        ] {
-            world.entity_mut(e).insert(WindowHandle {
-                hwnd: HWND(raw as *mut _),
-            });
-            raw += 0x10;
-        }
-    }
+    give_fake_handles(&mut world, &gw);
     world.insert_resource(ChainFinalized);
     (world, gw)
 }

@@ -10,8 +10,8 @@
 // =============================================================================
 
 use super::test_support::{
-    PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, placement_basis, pos_of, resnap_world,
-    settled_sizes, size_of,
+    PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, capture_logs, count_level, placement_basis, pos_of,
+    resnap_world, settled_sizes, size_of,
 };
 use super::*;
 
@@ -24,7 +24,6 @@ use areka_placement::resolver::Anchor;
 use areka_placement::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
 
 use areka_emo_compose::ScaleRatio;
-use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::{Point, SizeI};
 
 // `PerTargetSizes`／`SPAWN_SIZE_*`／`settled_sizes` は多フレーム駆動ハーネス（task 3.3）と
@@ -293,22 +292,7 @@ fn finalize_does_not_pull_back_a_scope_followed_by_a_sticky_move() {
 // 定石は `move_cue_move_severity_log_tests.rs` と同じ——硬化機構の唯一の定義元
 // `log-capture-kit` の捕捉窓へ委譲する。判定そのものの回数は純関数檻が固定しており、ここで
 // 確かめるのは**本番経路が実際に 1 行だけ出す／正常起動では 1 行も出さない**こと。
-//
-// 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
-// のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
-// interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの判定が
-// 焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は「不要」ゆえ、
-// 先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。
-// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算 ⑶ 番兵イベントに
-// よる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の crate doc と
-// 同 crate の `src/probe.rs`）。
 // -----------------------------------------------------------------------------
-
-/// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines
-}
 
 /// 捕捉行のうち指定 level の行だけを抜く。
 fn lines_of_level(logs: &[String], level: &str) -> Vec<String> {
@@ -351,10 +335,10 @@ fn never_shown_scope_is_a_ghost_wait_and_is_not_counted() {
     });
     assert_eq!(
         (
-            lines_of_level(&waiting, "WARN").len(),
-            lines_of_level(&waiting, "INFO").len(),
-            lines_of_level(&waiting, "DEBUG").len(),
-            lines_of_level(&waiting, "TRACE").len(),
+            count_level(&waiting, "WARN"),
+            count_level(&waiting, "INFO"),
+            count_level(&waiting, "DEBUG"),
+            count_level(&waiting, "TRACE"),
             world
                 .get_resource::<ChainFinalizeStall>()
                 .map(|s| (s.deferrals, s.reported)),

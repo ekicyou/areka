@@ -1,8 +1,9 @@
 use areka_emo_text::state::TextLayerConfig;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::mpsc;
 use wintf::ecs::Point;
 
 use crate::move_cue::MoveDirective;
+use crate::talk_clock::{controllable_clock, set_now};
 use crate::talk_lifecycle::TalkLifecycleSignal;
 
 use super::test_support::{
@@ -10,21 +11,6 @@ use super::test_support::{
     zero_clock,
 };
 use super::*;
-
-/// テスト用の可制御クロック: 返り値の `Arc<Mutex<f64>>` に「壁時刻」を書けば、`TalkClock` の
-/// クロックがその時刻を返す（決定論・talk_clock.rs のテストと同型の注入クロック）。
-fn controllable_clock() -> (Arc<Mutex<f64>>, TalkClock) {
-    let now = Arc::new(Mutex::new(0.0f64));
-    let now_for_clock = Arc::clone(&now);
-    let clock: Arc<dyn Fn() -> f64 + Send + Sync> =
-        Arc::new(move || *now_for_clock.lock().expect("test clock mutex poisoned"));
-    (now, TalkClock::new(clock))
-}
-
-/// 可制御クロックの「壁時刻」を書き換える。
-fn set_now(now: &Arc<Mutex<f64>>, wall: f64) {
-    *now.lock().expect("test clock mutex poisoned") = wall;
-}
 
 /// R2.2/DD-1 drain: attach 前は drain せず（保留＝取りこぼしなし）、attach 後に FIFO 到着順で
 /// **全件** `presenter.apply` へ適用し切る。

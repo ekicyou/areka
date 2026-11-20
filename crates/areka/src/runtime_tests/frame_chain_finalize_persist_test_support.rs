@@ -24,8 +24,6 @@ use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_sylphya::persist::{FakePersistIo, FsPersistIo, PersistIo};
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaPublisher};
 use areka_sylphya::{load_scope, spawn_sylphya};
-use windows::Win32::Foundation::HWND;
-use wintf::ecs::WindowHandle;
 
 use super::test_support::PerTargetSizes;
 use super::*;
@@ -33,6 +31,7 @@ use areka_placement::follow::{MonitorSnapshot, OffsetBase};
 use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::spawn_ghost_windows;
+use areka_placement::test_support::give_fake_handles;
 
 // ── 記憶の送り口 ────────────────────────────────────────────────────────────
 
@@ -224,19 +223,7 @@ pub(super) fn spawn_shown(
                 .map(|p| (p.scope, format!("s{}", p.scope))),
         ),
     );
-    // 偽の WindowHandle（窓への書き込みが WindowPos に届く条件）。
-    let mut raw = 0x100usize;
-    for scope in gw.scopes().collect::<Vec<_>>() {
-        for e in [
-            gw.char_window(scope).expect("char 窓がある"),
-            gw.balloon_window(scope).expect("balloon 窓がある"),
-        ] {
-            world.entity_mut(e).insert(WindowHandle {
-                hwnd: HWND(raw as *mut _),
-            });
-            raw += 0x10;
-        }
-    }
+    give_fake_handles(world, &gw);
     resnap_with(shown, world);
     gw
 }
