@@ -442,3 +442,300 @@ fn a_pixel_neither_clear_nor_opaque_is_logged_and_unreadable() {
         "{log}"
     );
 }
+
+fn painted(dc: &ID2D1DeviceContext, shapes: &[IdShape]) -> IdTarget {
+    let mut target = IdTarget::with_dc(dc, SIZE).unwrap();
+    target
+        .paint_with(dc, shapes, &mut IdMaskPictures::new())
+        .unwrap();
+    target
+}
+
+fn ellipse(n: u32, center: (f32, f32), radius: (f32, f32)) -> IdShape {
+    IdShape {
+        id: id(n),
+        form: IdForm::Ellipse { center, radius },
+    }
+}
+
+fn polygon(n: u32, points: Vec<(f32, f32)>) -> IdShape {
+    IdShape {
+        id: id(n),
+        form: IdForm::Polygon(points),
+    }
+}
+
+/// `read` で点ごとに答えを比べる。`inside` が真の点だけ `Id(n)`、それ以外は `Empty`。
+fn assert_reads(target: &IdTarget, n: u32, points: &[((u32, u32), bool)]) {
+    for &((x, y), inside) in points {
+        let want = if inside {
+            IdRead::Id(id(n))
+        } else {
+            IdRead::Empty
+        };
+        assert_eq!(target.read(x, y), want, "({x},{y})");
+    }
+}
+
+#[test]
+fn rect_edges_read_exactly() {
+    let dc = warp_dc();
+    let target = painted(&dc, &[rect_shape(3, 100.0, 200.0, 200.0, 260.0)]);
+    assert_reads(
+        &target,
+        3,
+        &[
+            ((99, 200), false),
+            ((100, 200), true),
+            ((100, 199), false),
+            ((199, 259), true),
+            ((200, 259), false),
+            ((199, 260), false),
+            ((150, 230), true),
+        ],
+    );
+}
+
+#[test]
+fn ellipse_and_circle_cover_their_axis_ends() {
+    let dc = warp_dc();
+    let target = painted(&dc, &[ellipse(4, (150.0, 100.0), (50.0, 30.0))]);
+    assert_reads(
+        &target,
+        4,
+        &[
+            ((99, 100), false),
+            ((100, 100), true),
+            ((199, 100), true),
+            ((200, 100), false),
+            ((149, 69), false),
+            ((149, 70), true),
+            ((149, 129), true),
+            ((149, 130), false),
+        ],
+    );
+    let target = painted(&dc, &[ellipse(5, (150.0, 150.0), (40.0, 40.0))]);
+    assert_reads(
+        &target,
+        5,
+        &[
+            ((109, 150), false),
+            ((110, 150), true),
+            ((189, 150), true),
+            ((190, 150), false),
+            ((150, 109), false),
+            ((150, 110), true),
+            ((150, 189), true),
+            ((150, 190), false),
+        ],
+    );
+}
+
+#[test]
+fn square_polygon_covers_20_to_79() {
+    let dc = warp_dc();
+    let square = vec![(20.0, 20.0), (80.0, 20.0), (80.0, 80.0), (20.0, 80.0)];
+    let target = painted(&dc, &[polygon(6, square)]);
+    assert_reads(
+        &target,
+        6,
+        &[
+            ((19, 50), false),
+            ((20, 50), true),
+            ((79, 50), true),
+            ((80, 50), false),
+            ((50, 19), false),
+            ((50, 20), true),
+            ((50, 79), true),
+            ((50, 80), false),
+        ],
+    );
+}
+
+#[test]
+fn pentagram_fills_the_centre_but_not_the_notches() {
+    let dc = warp_dc();
+    let star: Vec<(f32, f32)> = (0..5)
+        .map(|i| {
+            let a = std::f32::consts::PI * (-0.5 + 0.8 * i as f32);
+            (150.0 + 100.0 * a.cos(), 150.0 + 100.0 * a.sin())
+        })
+        .collect();
+    let target = painted(&dc, &[polygon(7, star)]);
+    // 隣り合う頂点の間の方向で、凸包の中・星の外の点（中心から 70）。
+    let notches: Vec<_> = (0..5)
+        .map(|i| {
+            let a = std::f32::consts::PI * (-0.3 + 0.4 * i as f32);
+            (
+                (150.0 + 70.0 * a.cos()).floor() as u32,
+                (150.0 + 70.0 * a.sin()).floor() as u32,
+            )
+        })
+        .collect();
+    let mut points = vec![((150, 150), true), ((149, 70), true)];
+    points.extend(notches.into_iter().map(|p| (p, false)));
+    assert_reads(&target, 7, &points);
+}
+
+#[test]
+fn three_overlapping_shapes_keep_the_later_id_and_never_mix() {
+    let dc = warp_dc();
+    let shapes = [
+        rect_shape(1, 0.0, 0.0, 100.0, 100.0),
+        rect_shape(2, 50.0, 50.0, 150.0, 150.0),
+        rect_shape(3, 80.0, 20.0, 120.0, 120.0),
+    ];
+    let target = painted(&dc, &shapes);
+    let want_at = |x: u32, y: u32| -> u32 {
+        let hit = |l: u32, t: u32, r: u32, b: u32| (l..r).contains(&x) && (t..b).contains(&y);
+        if hit(80, 20, 120, 120) {
+            3
+        } else if hit(50, 50, 150, 150) {
+            2
+        } else if hit(0, 0, 100, 100) {
+            1
+        } else {
+            0
+        }
+    };
+    let got = pixels(&dc, &target);
+    for y in 0..SIZE.1 {
+        for x in 0..SIZE.0 {
+            let want = match want_at(x, y) {
+                0 => CLEAR,
+                n => bgra(n),
+            };
+            assert_eq!(got[(y * SIZE.0 + x) as usize], want, "({x},{y})");
+        }
+    }
+    for (x, y, want) in [
+        (90, 30, 3),
+        (85, 60, 3),
+        (55, 55, 2),
+        (140, 140, 2),
+        (10, 10, 1),
+    ] {
+        assert_eq!(target.read(x, y), IdRead::Id(id(want)), "({x},{y})");
+    }
+    assert_eq!(target.read(160, 160), IdRead::Empty);
+
+    let reversed = [shapes[2].clone(), shapes[1].clone(), shapes[0].clone()];
+    let target = painted(&dc, &reversed);
+    assert_eq!(target.read(90, 30), IdRead::Id(id(1)));
+}
+
+#[test]
+fn curved_and_diagonal_edges_leave_no_mixed_pixels() {
+    let dc = warp_dc();
+    let shapes = [
+        rect_shape(1, 0.0, 0.0, SIZE.0 as f32, SIZE.1 as f32),
+        ellipse(2, (100.3, 100.7), (63.4, 41.9)),
+        polygon(3, vec![(150.0, 20.0), (300.0, 130.0), (190.0, 280.0)]),
+    ];
+    let target = painted(&dc, &shapes);
+    let got = pixels(&dc, &target);
+    let (mut twos, mut threes) = (0, 0);
+    for (i, px) in got.iter().enumerate() {
+        assert!(
+            [bgra(1), bgra(2), bgra(3)].contains(px),
+            "pixel ({},{}) = {px:?}",
+            i as u32 % SIZE.0,
+            i as u32 / SIZE.0
+        );
+        twos += (*px == bgra(2)) as u32;
+        threes += (*px == bgra(3)) as u32;
+    }
+    assert!(twos > 0 && threes > 0);
+}
+
+#[test]
+fn mask_reads_only_set_pixels_overflowing_and_negative() {
+    let dc = warp_dc();
+    let mask = Arc::new(IdMask::new(4, 4, |x, y| (x + y) % 2 == 0).unwrap());
+    let set = |x: i32, y: i32, left: i32, top: i32| {
+        let (mx, my) = (x - left, y - top);
+        (0..4).contains(&mx) && (0..4).contains(&my) && (mx + my) % 2 == 0
+    };
+    for (left, top) in [(10, 10), (-2, -2), (SIZE.0 as i32 - 2, SIZE.1 as i32 - 2)] {
+        let target = painted(&dc, &[mask_shape(8, &mask, left, top)]);
+        for y in (top - 1)..(top + 5) {
+            for x in (left - 1)..(left + 5) {
+                if x < 0 || y < 0 || x >= SIZE.0 as i32 || y >= SIZE.1 as i32 {
+                    continue;
+                }
+                let want = if set(x, y, left, top) {
+                    IdRead::Id(id(8))
+                } else {
+                    IdRead::Empty
+                };
+                assert_eq!(
+                    target.read(x as u32, y as u32),
+                    want,
+                    "at ({left},{top}) ({x},{y})"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_refused_first_list_reads_unreadable_without_the_gpu() {
+    let dc = warp_dc();
+    let mut target = IdTarget::with_dc(&dc, SIZE).unwrap();
+    let refused = target.paint_with(
+        &dc,
+        &[
+            rect_shape(1, 0.0, 0.0, 10.0, 10.0),
+            rect_shape(MAX_ID + 1, 0.0, 0.0, 10.0, 10.0),
+        ],
+        &mut IdMaskPictures::new(),
+    );
+    assert!(refused.is_err());
+    assert_eq!(target.read(5, 5), IdRead::Unreadable);
+    assert_eq!(target.read(SIZE.0, 0), IdRead::Outside);
+    assert_eq!(target.gpu_reads(), 0);
+}
+
+#[test]
+fn ids_round_trip_for_component_edges_and_above_255() {
+    let dc = warp_dc();
+    let mut ids: Vec<u32> = Vec::new();
+    for c in [0u32, 1, 127, 128, 254, 255] {
+        for shift in [0, 8, 16] {
+            ids.push(c << shift);
+        }
+        ids.push(c | 0x01_00_00 | 0x80_00);
+        ids.push(c << 16 | 0x7F << 8 | 0xFE);
+    }
+    ids.extend([
+        256,
+        257,
+        511,
+        512,
+        0x01_00_00,
+        0x01_00_01,
+        MAX_ID - 1,
+        MAX_ID,
+    ]);
+    ids.retain(|&n| n != 0);
+    ids.sort_unstable();
+    ids.dedup();
+    let width = ids.len() as u32 * 2;
+    let mut target = IdTarget::with_dc(&dc, (width, 4)).unwrap();
+    let shapes: Vec<_> = ids
+        .iter()
+        .enumerate()
+        .map(|(i, &n)| rect_shape(n, 2.0 * i as f32, 0.0, 2.0 * i as f32 + 2.0, 4.0))
+        .collect();
+    target
+        .paint_with(&dc, &shapes, &mut IdMaskPictures::new())
+        .unwrap();
+    for (i, &n) in ids.iter().enumerate() {
+        assert_eq!(target.read(2 * i as u32, 1), IdRead::Id(id(n)), "{n:#08X}");
+        assert_eq!(
+            target.read(2 * i as u32 + 1, 3),
+            IdRead::Id(id(n)),
+            "{n:#08X}"
+        );
+    }
+}
