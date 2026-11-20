@@ -1,17 +1,11 @@
-//! 拡大率と表の整合待ち（task 5.4・設計 C5・要件 5.8／4.1／4.6／10.7）の決定論テスト。
-//!
-//! # ここが押さえる是正
+//! 拡大率と表の整合待ち（設計 C5・要件 5.8／4.1／4.6／10.7）の決定論テスト。
 //!
 //! Windows は `WM_DPICHANGED`（窓の拡大率）と `WM_DISPLAYCHANGE`（モニタ表）の順序を保証
-//! しない。実機の 12 遷移はすべて表更新が先だったが（確定台帳 L2）、**拡大率通知が先に
-//! 届く順序**では窓の拡大率だけが新しくなり、作業領域源はまだ旧水準のままになる。この
-//! 順序で拡大率の相をそのまま走らせると、窓は**新しい寸のまま旧作業領域下端へ**接地した
-//! 中間矩形で 1 度書かれ、表が追いついた次のフレームでもう 1 度書き直される——要件 5.8 が
-//! 名指しで禁じる 2 段書込である。
-//!
-//! [`a_scale_notice_ahead_of_the_table_lands_in_one_write_without_the_old_bottom`] がその形
-//! そのものである。是正前は旧下端 1444 の中間矩形が出て赤くなり、整合待ちが入ると待ち
-//! フレームの書込が 0 になって、表が追いついたフレームで新寸・新下端へ 1 回で移る。
+//! しない。拡大率通知が先に届く順序の 2 段書込を是正前の赤で示す対テストと、待ちの上限・
+//! 別モニタへ移した窓は、`frame_transition_branch_wait_tests.rs` と
+//! `frame_transition_branch_tests.rs` が拡大率 120 と 192 で持つ。ここが持つのは、そこに無い
+//! 駆動口の陽性の対・待ち札のあるバルーンへの随伴・`kind=hold` の発行点・シェルの切り替えを
+//! 跨いだ札である。
 //!
 //! # 零件の主張には陽性の対を置く
 //!
@@ -21,233 +15,25 @@
 //! 零件を主張する前に「駆動は生きている」（待ち札が実際に付いた・報告が持ち越された）を
 //! 先に主張する——駆動が死んでいたから 0 だった、という読み方を塞ぐためである。
 
-use bevy_ecs::entity::Entity;
-use wintf::ecs::window::SetWindowPosCommand;
-use wintf::ecs::window::monitor::Monitor;
-use wintf::ecs::{Point, WindowPos};
-
 use areka_placement::diag::WindowKind;
-use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
-use areka_placement::follow::BalloonFollow;
+use areka_placement::dpi_sync::DpiSyncHold;
 use log_capture_kit::{ExpectField, capture};
 
 use super::shared_test_support::{HIGH_DPI, LOW_DPI};
 use super::test_support::{
-    FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, s2_monitors,
-    s2_work_area_for_dpi,
+    FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, s2_work_area_for_dpi,
 };
-use super::transition_test_support::{settle_at, writes_for};
+use super::transition_test_support::{
+    CHAR_ON_NEIGHBOR, neighbor_at, set_position, settle_at, writes_for,
+};
 use super::{balloon_target, shell_target};
 
 /// scope 0 のキャラ窓が [`HIGH_DPI`] で報告する物理寸（等倍寸の 2 倍）。
 const HIGH_SIZE_0: (u32, u32) = (SPAWN_SIZE_0.0 * 2, SPAWN_SIZE_0.1 * 2);
 
-/// 待ちが解けるまで回す定常フレーム数（上限には遠い値）。
-const WAIT_FRAMES: u32 = 3;
-
-/// キャラ窓を隣接モニタへ置くときの位置（随伴バルーンも隣接モニタ内へ収まる値）。
-const CHAR_ON_NEIGHBOR: Point = Point { x: 3200, y: 800 };
-
 /// scope 0 のシェル target 番号（報告源の鍵）。
 fn shell0() -> u32 {
     shell_target(0).0
-}
-
-/// キャラ窓の書込が置いた接地点（下端）の列。
-fn char_write_bottoms(writes: &[SetWindowPosCommand]) -> Vec<i32> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.kind == WindowKind::Char.as_str())
-        .map(|cmd| cmd.y + cmd.height)
-        .collect()
-}
-
-/// 隣接モニタ（ゴーストが決して居ない側）だけを高 DPI にした実行時のモニタ表。
-fn neighbor_at_high_dpi() -> Vec<Monitor> {
-    let mut monitors = s2_monitors(LOW_DPI);
-    monitors[1].dpi = u32::from(HIGH_DPI);
-    monitors
-}
-
-/// 窓の位置を直接置く（ドラッグの結果だけを再現する・書込は経ない）。
-fn set_position(harness: &mut FrameHarness, window: Entity, position: Point) {
-    let mut window_pos = harness
-        .world
-        .get_mut::<WindowPos>(window)
-        .expect("WindowPos がある");
-    window_pos.position = Some(position);
-}
-
-/// 当該スコープの二体をまとめて隣接モニタへ移す（随伴の窓相対を保ったまま）。
-fn move_scope_to_neighbor(harness: &mut FrameHarness, scope: usize) {
-    let char_window = harness.char_window(scope);
-    let balloon = harness.balloon_window(scope);
-    let offset = harness
-        .world
-        .get::<BalloonFollow>(char_window)
-        .expect("char 窓は BalloonFollow を持つ")
-        .offset();
-    set_position(harness, char_window, CHAR_ON_NEIGHBOR);
-    set_position(
-        harness,
-        balloon,
-        Point {
-            x: CHAR_ON_NEIGHBOR.x + offset.x,
-            y: CHAR_ON_NEIGHBOR.y + offset.y,
-        },
-    );
-}
-
-/// 拡大率通知だけが先に届いた状態を作る（モニタ表は旧水準のまま据え置く）。
-fn deliver_the_scale_notice_first(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_window_dpi(HIGH_DPI);
-    source.refresh.insert(shell0(), HIGH_SIZE_0);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-}
-
-// ---------------------------------------------------------------------------
-// 完了条件そのもの（是正前の赤）
-// ---------------------------------------------------------------------------
-
-/// 拡大率通知が表更新より先に届く順序でも、旧下端の中間矩形を出さずに **1 回の書込**で
-/// 新寸・新下端へ移る（要件 5.8・完了条件）。
-#[test]
-fn a_scale_notice_ahead_of_the_table_lands_in_one_write_without_the_old_bottom() {
-    let mut harness = FrameHarness::new();
-    let mut source = FakeReports::default();
-    settle_at(&mut harness, &mut source, LOW_DPI);
-
-    let old_bottom = s2_work_area_for_dpi(LOW_DPI).bottom;
-    let new_bottom = s2_work_area_for_dpi(HIGH_DPI).bottom;
-    assert_ne!(
-        old_bottom, new_bottom,
-        "探針が退化している: 2 つの拡大率水準で作業領域下端が動かない（中間矩形を観測できない）"
-    );
-
-    // 待ちフレーム: 拡大率だけが新しく、表はまだ旧水準。
-    deliver_the_scale_notice_first(&mut harness, &mut source);
-    // 零件を主張する**前に**、このフレームで本当に食い違いが起きていることを固定する
-    // ——条件が成立していなければ「書込 0」は何も意味しない。
-    for scope in harness.scopes().to_vec() {
-        let outcome = evaluate(&harness.world, harness.char_window(scope), harness.frame());
-        assert_eq!(
-            (outcome.window_dpi, outcome.table_dpi),
-            (u32::from(HIGH_DPI), Some(u32::from(LOW_DPI))),
-            "scope={scope}: 拡大率通知が先に届いた状態になっていない（探針が退化している）"
-        );
-    }
-    let waiting = harness.drain_writes();
-    assert!(
-        waiting.is_empty(),
-        "表が追いつく前に窓書込が出ている（旧下端 {old_bottom} の中間矩形）: {waiting:?}"
-    );
-    // ゲートが実際に走った証拠（見送りの札が付いている）。
-    for scope in harness.scopes().to_vec() {
-        assert!(
-            harness
-                .world
-                .get::<DpiSyncHold>(harness.char_window(scope))
-                .is_some(),
-            "scope={scope}: 拡大率と表が食い違うのに待ち札が付いていない（ゲートが走っていない）"
-        );
-    }
-
-    // 表が追いつくフレーム。
-    harness.set_monitor_table_for_dpi(HIGH_DPI);
-    harness.advance_frame();
-    harness.run_placement_phases(&mut source);
-    let released = harness.drain_writes();
-
-    assert_eq!(
-        writes_for(&released, 0, WindowKind::Char).len(),
-        1,
-        "解除フレームで scope 0 のキャラ窓が 1 回で移っていない: {released:?}"
-    );
-    for bottom in char_write_bottoms(&released) {
-        assert_eq!(
-            bottom, new_bottom,
-            "キャラ窓の書込が新しい作業領域下端に載っていない（旧下端 {old_bottom} の中間矩形）: {released:?}"
-        );
-    }
-    assert_eq!(
-        harness.ground_point(0).1,
-        new_bottom,
-        "遷移後の接地点が新しい作業領域下端に載っていない"
-    );
-    assert!(
-        harness
-            .world
-            .get::<DpiSyncHold>(harness.char_window(0))
-            .is_none(),
-        "表が追いついたのに待ち札が外れていない"
-    );
-}
-
-/// 待ちのあいだに表情差替（`ShowSurface` が積む窓寸要求）と再スナップが来ても、当該窓への
-/// 窓書込は 0 のままであり、報告は消費されずに次フレームへ持ち越される（設計 C5 議題 1）。
-#[test]
-fn a_surface_swap_during_the_wait_writes_nothing_and_keeps_the_report() {
-    let mut harness = FrameHarness::new();
-    let mut source = FakeReports::default();
-    settle_at(&mut harness, &mut source, LOW_DPI);
-    deliver_the_scale_notice_first(&mut harness, &mut source);
-    let _waiting = harness.drain_writes();
-
-    // 待ち中の表情差替: drain 相が積んだ未消費の窓寸要求と、実表示寸の食い違い。
-    source.pending.insert(shell0(), HIGH_SIZE_0);
-    harness.run_reconcile(&mut source);
-    harness.run_resnap(&PerTargetSizes::new([
-        (0, Some(HIGH_SIZE_0)),
-        (1, Some(SPAWN_SIZE_1)),
-    ]));
-
-    let writes = harness.drain_writes();
-    assert!(
-        writes.is_empty(),
-        "待ち札のある窓へ報告寸の突合・再スナップから窓書込が届いている: {writes:?}"
-    );
-    assert!(
-        source.pending.contains_key(&shell0()),
-        "報告を消費してしまっている（待ち中は消費せず次フレームへ持ち越す）"
-    );
-}
-
-/// 上限フレームを超えたら、警告の上で**現在の源のまま**進む（設計 C5・要件 4.4）。
-#[test]
-fn the_wait_gives_up_after_the_bounded_number_of_frames_and_proceeds() {
-    let mut harness = FrameHarness::new();
-    let mut source = FakeReports::default();
-    settle_at(&mut harness, &mut source, LOW_DPI);
-    deliver_the_scale_notice_first(&mut harness, &mut source);
-    let _waiting = harness.drain_writes();
-
-    // 表は永遠に追いつかない。上限に達するまでは 1 件も書かない。
-    for _ in 0..DPI_SYNC_HOLD_MAX_FRAMES - 1 {
-        harness.advance_frame();
-        harness.run_placement_phases(&mut source);
-        let writes = harness.drain_writes();
-        assert!(
-            writes.is_empty(),
-            "上限に達する前に書いている（frame={}）: {writes:?}",
-            harness.frame()
-        );
-    }
-
-    harness.advance_frame();
-    harness.run_placement_phases(&mut source);
-    let writes = harness.drain_writes();
-    assert!(
-        !writes.is_empty(),
-        "上限を超えても待ち続けている（有界でない）"
-    );
-    assert!(
-        harness
-            .world
-            .get::<DpiSyncHold>(harness.char_window(0))
-            .is_none(),
-        "上限を超えたのに待ち札が残っている"
-    );
 }
 
 // ---------------------------------------------------------------------------
@@ -257,8 +43,8 @@ fn the_wait_gives_up_after_the_bounded_number_of_frames_and_proceeds() {
 /// 待ち札が 1 つも無ければ、本ファイルが駆動する **3 つの口**（拡大率の相・報告寸の突合・
 /// 実表示寸の再スナップ）はすべて窓を書く。
 ///
-/// 見送り点は task 6.5 で 4 つになった（4 点目＝作業領域変化を契機とする再スナップ）。その点の
-/// 零件と陽性の対は `frame_work_area_resnap_hold_tests.rs` が持つ——ここへ足さないのは、4 点目の
+/// 見送り点は 5 つ（＋シェルの切り替えの見送り）。作業領域変化を契機とする再スナップの点の
+/// 零件と陽性の対は `frame_work_area_resnap_hold_tests.rs` が持つ——ここへ足さないのは、その点の
 /// 駆動には「札が残ったまま作業領域が動く」という別の配置が要るからである。
 #[test]
 fn the_same_drive_ports_write_when_nothing_is_waiting() {
@@ -309,45 +95,6 @@ fn the_same_drive_ports_write_when_nothing_is_waiting() {
     );
 }
 
-/// 別モニタへ移した窓は**待たずに通る**（要件 10.7）。移動先の拡大率は表に既在なので、
-/// 窓の拡大率と表は最初から一致している。
-#[test]
-fn a_window_on_another_monitor_with_a_known_dpi_never_waits() {
-    let mut harness = FrameHarness::new();
-    let mut source = FakeReports::default();
-    settle_at(&mut harness, &mut source, LOW_DPI);
-
-    // 隣接モニタだけが高 DPI の表を作る（実行時のモニタ表 → 同期段が 2 源を作り直す）。
-    harness.set_monitor_table(neighbor_at_high_dpi());
-    harness.advance_frame();
-    harness.run_placement_phases(&mut source);
-    let _sync_writes = harness.drain_writes();
-
-    // scope 0 の**二体とも**隣接モニタ（高 DPI 側）へ移し、窓の拡大率もその値にする
-    // ——ドラッグでゴーストを移せばバルーンも一緒に移る（随伴は窓相対）。
-    move_scope_to_neighbor(&mut harness, 0);
-    harness.set_scope_dpi(0, HIGH_DPI);
-    harness.advance_frame();
-    harness.run_placement_phases(&mut source);
-
-    let char0 = harness.char_window(0);
-    let balloon0 = harness.balloon_window(0);
-    for (window, what) in [(char0, "キャラ窓"), (balloon0, "バルーン窓")] {
-        assert!(
-            harness.world.get::<DpiSyncHold>(window).is_none(),
-            "{what}: 移動先の拡大率が表に既在なのに待ち札が付いた（要件 10.7）"
-        );
-    }
-    for _ in 0..WAIT_FRAMES {
-        harness.advance_frame();
-        harness.run_placement_phases(&mut source);
-        assert!(
-            harness.world.get::<DpiSyncHold>(char0).is_none(),
-            "後続フレームで待ち札が付いた（要件 10.7）"
-        );
-    }
-}
-
 /// 随伴バルーンの追従は、待ち札のあるバルーンへも**届く**（設計 C5 の適用範囲の例外）。
 ///
 /// 2 窓の中心が別々のモニタに乗る配置では、キャラ窓だけが表と揃ってバルーンが食い違う。
@@ -359,7 +106,7 @@ fn a_companion_follow_still_reaches_a_waiting_balloon() {
     let mut source = FakeReports::default();
     settle_at(&mut harness, &mut source, LOW_DPI);
 
-    harness.set_monitor_table(neighbor_at_high_dpi());
+    harness.set_monitor_table(neighbor_at(HIGH_DPI));
     harness.advance_frame();
     harness.run_placement_phases(&mut source);
     let _sync_writes = harness.drain_writes();
@@ -427,7 +174,7 @@ fn transition_lines(drive: impl FnOnce()) -> Vec<String> {
 }
 
 /// 本ファイルが駆動する 3 つの点それぞれが `kind=hold` を出し、**どの点で見送ったか**が
-/// `site=` で判る（4 点目 `site=work-area-resnap` は `frame_work_area_resnap_hold_tests.rs` が持つ）。
+/// `site=` で判る（5 つのうち `site=work-area-resnap` は `frame_work_area_resnap_hold_tests.rs` が持つ）。
 #[test]
 fn each_of_the_three_sites_emits_its_own_hold_record() {
     let mut harness = FrameHarness::new();

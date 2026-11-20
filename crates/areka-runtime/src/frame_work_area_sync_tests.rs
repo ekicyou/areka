@@ -304,38 +304,7 @@ fn the_order_independent_comparison_still_sees_a_real_difference() {
 // 解決できないときは現状維持＋警告（要件 5.5）
 // ---------------------------------------------------------------------------
 
-/// モニタ 0 台（列挙異常）では源を差し替えず、警告を 1 件残す。
-///
-/// 空の源で今の源を潰すと、下端が引けなくなって全キャラ窓の射影が縮退する——架空の矩形を
-/// 発明しないのと同じ理由で、**無い表で在る源を上書きしない**。
-#[test]
-fn an_empty_monitor_table_keeps_the_sources_and_warns() {
-    let mut harness = FrameHarness::new();
-    harness.set_monitor_sources_for_dpi(BOOT_DPI);
-    harness.set_monitor_table(Vec::new());
-    harness.advance_frame();
-
-    let (change, events) = capture(|| harness.run_work_area_sync());
-    assert!(change.is_none(), "空の表で源を差し替えている");
-    assert_eq!(
-        harness.work_area_source(),
-        Some(&s2_sources(BOOT_DPI).snapshot),
-        "空の表で作業領域源が潰れている"
-    );
-    let warnings: Vec<&str> = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .map(|e| e.message())
-        .filter(|m| m.contains(WORK_AREA_SYNC_CONTEXT))
-        .collect();
-    assert_eq!(
-        warnings.len(),
-        1,
-        "モニタ 0 台が無言で素通りしている（ログ無し失敗経路）: {events:?}"
-    );
-}
-
-/// 上の**陽性の対**: 表が 1 台でもあれば警告は出ない（警告が常時鳴っていない）。
+/// モニタ 0 台の警告の**陽性の対**: 表が 1 台でもあれば警告は出ない（警告が常時鳴っていない）。
 #[test]
 fn a_non_empty_monitor_table_does_not_warn() {
     let mut harness = FrameHarness::new();

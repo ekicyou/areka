@@ -172,7 +172,7 @@
   - _Dispatch: standard — 2 つの crate を跨いでテストと支えを移す_
   - _Requirements: 3.1, 3.2, 3.3, 3.7, 4.4, 5.11, 6.6, 6.7_
 
-- [ ] 4.3 整合待ちの重なりを消し、上限越えの分岐のテストを 2 本に分ける（T19・34・35・84・94 番）
+- [x] 4.3 整合待ちの重なりを消し、上限越えの分岐のテストを 2 本に分ける（T19・34・35・84・94 番）
   - 整合待ちのテストの重なる 4 本を消し、向こうに無い 4 本を残し、表と見出しを直す（34 番）
   - 分岐のテストを、待ちの群の `frame_transition_branch_wait_tests.rs`（新）と残りに分け、共通の補助を T16 の支えへ寄せ、宣言を 2 本にし、対テストの持ち主の表を 2 本の名で直す（35 番）
   - 5 本目の綴りの確かめを足す（84 番・件 14）。同じ本体を 3 つの DPI で回す 1 本にし、観測の条件のテストを支えの側に 1 本にする（94 番）
@@ -281,3 +281,4 @@
 - 3.5: `BALLOON_SPAWN_SIZE`・`BASE_OFFSETS`・`SCALE_120` は新しい `cfg(test)` の支えでなく `frame_shared_test_support.rs` に置いた（`feature = "test-support"` でも組まれる `resnap_placements` が読むため・設計からの逸れ）。`BASE_DPI`→`LOW_DPI`・`SCALE_192`→`HIGH_DPI`。強い方の整地の接地の確かめは Bottom の揃えの人格の窓だけ（follow の揃え方の表が整地の前に揃え方を変えるため）。`attach_material` の「素材は整地の後」の理由は消えた（審査の提案・7.1 で見る）。
 - 4.1: 移したテストは 22 本（規則 15・揃え 6・clamp ⑴ 1）。本体 46→24・`areka-runtime` 12→34 で、名は同じ（設計の「規則 13 本」は数え違いで実数は 15）。clamp ⑴⑻ の共通の配置は `persist_test_support::left_edge` に 1 つ置いた（写さない）。`crates/areka-placement/src/chain_rule_tests.rs:5` が古い置き場（本体の `frame_chain_rule_tests.rs`）を指したまま＝C23 で触らないファイルなので 6 で申し送りに書く。`left_edge::placements` の説明に「（要件 5.2）」が残る（7.1 で見る）。
 - 4.2: 移したテストは 4 本（remembered ⑶⑷⑸ 3・窓の状態 1）で本体 −4＝`areka-runtime` +4、消したのは 1 本（110 番 `frame::chain_rule_tests::a_remembered_left_mark_joins_with_the_defaultx_gap`・`every_world_path_keeps_the_defaultx_gap` の remembered の脚が守る）。restart の 2 回目の起動も印を付けるようになった（17 番の直しそのもの）。`doc/COMPAT_ARCHITECTURE.md` §8（L228 付近）が移した窓の状態のテストを本体の古い置き場で名指したまま＝C23 で触らないファイルなので 6 で申し送りに書く（`crates/areka-runtime/src/frame/window_state_tests.rs` へ）。
+- 4.3: 分岐のテストは 766 行と 331 行（待ちの群）。消した重なりの 4 本の札の腕は、待ちの群の `_at_120`／`_at_192` の 6 本と 1.6 のシェルの切り替えのテストが守る（審査で腕を落として 7 本の赤を確かめた）。94 番で 3 つの DPI を回す形にした `steady_frames_write_nothing_at` は、表を戻した後に接地点が見える下端へ戻ることを見なくなった（`a_work_area_only_change_writes_once_at` が同じ仕組みを守る）。`frame_transition_branch_tests.rs` の頭の説明が要件番号 5.5 を足した・`frame_transition_branch_wait_tests.rs:120` に D15 の「4 点すべて」が残る（5.4 の 41 番の物差しで見る）。
