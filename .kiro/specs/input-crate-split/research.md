@@ -240,3 +240,44 @@
 3. 実機の退避（8.7）の手段: `tools/mouse-input.ps1` はダブルクリックも修飾キーも持たない。結線済みの本番の起動では Ctrl+**Shift**+左ダブルクリックが要る（結線前の枝は起動の失敗が要る）。候補は ⑴ `mouse-input.ps1` に修飾キーつきのダブルクリックを足す（`tools/` に触る） ⑵ `window_link_real_run.rs` と同じく試験の中で `SendInput` を組む（`VK_CONTROL`・`VK_SHIFT` と 2 回の押し放し） ⑶ 手で操作して記録だけ取る。どれでも排他テストの机と開発者の許しが要る。
 4. `log_history` の確かめ（8.9）を既にあるテストの表へ足せるか（`log_history_tests.rs` の形）。
 5. 落ちの報告の初期化子を `areka-input` のテストの実行ファイルに置いたとき、`areka-runtime` の `crash_report_test_support` の `#[cfg(test)]` の `static` と二重に据わらないこと（前例 D6 の形なら `areka-runtime` 側は自分のテストでだけ立つ）。
+
+---
+
+# 設計の段の調べ（2026-11-20・kiro-spec-design）
+
+## 要約
+
+- **調べ方**: 既存の仕組みの拡張（Extension）として軽い調べ（design-discovery-light）。外の新しいライブラリは無いので Web の調べはしない。使ったスキルと規則: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、前例 `runtime-crate-split`・`placement-crate-split` の design.md、口の束の前例 `crates/areka-runtime/src/session_hooks.rs`。
+- **主な発見**:
+  1. 移すファイルは 44（`mod.rs` を含む）。上の §3 の「46 ファイルを `git mv`」は数え違い（50 − 置き直す 6 本＝44）。
+  2. 根の `use <crate> as <名>;` の出し直しは、作業の木の外の使い捨ての 2 crate（スクラッチの `alias_probe`）で `cargo check --all-targets` を回して確かめた: 本体の `crate::<名>::…`・子の `use crate::<名>;`・dev-dependency の `test-support` で開く項目がどれも解け、警告 0（`use` の上の `///` も警告しない）。§11 の調べ 1 は閉じた。
+  3. 要件の草案にもギャップ分析にも無かった穴: 本体の見張り 4 本（`readme_tests.rs` の `only_the_os_port_spells_shell_execute`・`session_end_deadline_tests.rs`・`tick_gate_config_producers_tests.rs` の `walk_roots`・`update/worker_tests.rs` の `winhttp_is_spelled_only_in_two_production_files`）が「分ける前に本体の `src` が覆っていた範囲」として本体と `areka-runtime` の 2 つの `src` だけを歩く。入力が本体の `src` から出ると黙って範囲が縮む＝根に `areka-input` を足す（設計 D11・前例 runtime-crate-split 要件 5.4）。
+  4. `hit-id-pass` は 2026-11-20 時点で要件の段（作業の木 `kiro-next-a8a376`）。同 spec の research は候補 A-1 のときだけ `resolve_hit_region` と本体の入力の呼び手の形が変わると書く。この仕様は入口の行（旧 `mod.rs` 37・174〜200・446〜455 行）の中身を変えない。
+  5. 進行役からの知らせ（2026-11-20）: `audit-emo2-boot-frame` が `frame/wiring.rs` の 3 か所（295・319・326 行）を同 spec の要件 5.1 で全部直す（コミット `e73cb0e2e`）。要件 6.9 もそう改められた＝この仕様の仕事から外し、向こうが直さずに着地したときだけ完了の申し送りへ回す。
+  6. `get_log` の分け方の確かめ（要件 8.9）は、`log_history_tests.rs` の既にあるテスト `unrelated_info_is_not_kept`（前例 `install_cue` の行の所）に行を足せる＝テストの名前は増えない。§11 の調べ 4 は閉じた。
+  7. 入力の `#[allow(...)]` は 1 つだけ（`RegionSource::Mock` の `dead_code`）で、理由の文は移した後も事実＝要件 8.1 の「理由が古くなる `#[allow]`」は 0 件。
+
+## 設計の決め（design.md の D1〜D13 の要旨）
+
+| # | 決め | 退けた代案と理由 |
+|---|---|---|
+| D1 | 口の束 `InputHooks { escape: fn(&mut World) }` を `areka-input` に置き、本体の `app_exit::install_input_hooks` を `register_systems` の先頭で呼ぶ（§6 論点 1 の案 A） | 案 B（`SessionHooks` に足す）は runtime の公開面に入力の都合が入り、`NO_BODY` の「何もしない」が要件 4.6 と合わない。案 C は推さない（§6） |
+| D2 | 口が無ければ `error!(input_hooks_missing)`＋`AppExit` が在れば `request_exit()`（§6 論点 10） | 記録だけで終わると唯一の抜け口が効かない。`quit_app` の一部を写すと写しが増える |
+| D3 | 強制退避の 3 本は本体の `app_exit_escape_tests.rs` へ。小道具 5 つは `areka-input` の `pointer_test_support`（`test-support`）へ出す（§6 論点 3 の ⑴ を、写しを作らない形で） | ⑵ は 5.1 の「偽物に替えない」に当たる。小道具の写しは 5.3 の趣旨に反する |
+| D4 | `file_drop.rs` は本体の src 直下（§6 論点 2） | `install/` の下は `get_log` の分け方が変わる |
+| D5〜D10 | `menu/shortcut.rs`・出し直し・`pub(crate)` の字面（§6 論点 9）・カーソルの絵の `include_bytes!("../cursor/…")`・落ちの報告は前例 D6 の形・`spawn_assembly_tests.rs` は `areka-input/src/` 直下 | ― |
+| D11 | 見張り 4 本の根に `areka-input` を足す | 足さないと見張りの範囲が黙って縮む |
+| D12 | 8.9 は既にあるテストに行を足す | 新しいテストは多重集合の差を増やす |
+| D13 | 実機の強制退避は作業の木の `target\` の使い捨ての SendInput の手順を前後で同じく使う（§6 論点 12） | `tools/mouse-input.ps1` に足すと要件の範囲の外の道具に触る |
+
+## 合成（design-synthesis）
+
+- **一般化**: 強制退避の向きを逆にする口は、`SessionHooks` と同じ「使い手の crate が型を持ち、本体が関数のポインタを据える」形の 2 つ目。仕組みは増やさず、型を 1 つ足すだけ。
+- **作るか使うか**: 落ちの報告は `areka-runtime` の `crash_report_test_support` を使う（写さない）。出し直しは Rust の `use … as …` をそのまま使う（別名の仕組みを作らない）。`get_log` の確かめは既にあるテストを使う。
+- **削ったもの**: 口の束の `of()`・`NO_BODY` の定数（欄が 1 つなので関数 1 つで足りる）・`placement_tests/` のフォルダ（`spawn_assembly_tests.rs` 1 本のために `mod.rs` を作らない）・`tools/mouse-input.ps1` の拡張。
+
+## 危うさ
+
+- `hit-id-pass` と旧 `mod.rs` の行が重なりうる（中）— 入口の行の中身を変えず、書き換えを行の単位に留めて rename の検出を効かせる。後に着地する側が新しい置き場で直す。
+- 見張り 4 本に入力の本番の当たりが在る（低）— 段 4 の緑で確かめ、出たら許可表を変えず開発者へ報告する。
+- `test-support` だけで組まれるビルドの警告（低）— `cargo check -p areka-input --lib --features test-support` を段 3 の緑の条件に入れる。
