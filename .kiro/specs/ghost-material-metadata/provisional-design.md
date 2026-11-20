@@ -1,5 +1,7 @@
 # 暫定の設計: ghost-material-metadata
 
+> **作り直し済み（2026-11-20）**: この暫定の設計は、開発者の決め（`doc/ideas/novel-decisions-2026-11-20.md`）の前の物である。決めで作り直した物は `doc/ideas/novel-redesign-2026-11-20/`（骨組みは `00-architecture.md`）。この文書は、確かめた事実（`path:行`）の控えとして残す。
+
 ## 1. 前置き
 
 - **これは暫定の設計である。正式な `design.md` ではない。** 要件定義（`requirements.md`）はまだ無い。brief と、pasta の骨子・取り決めから暫定の要件を起こし、設計の段まで一度降りて、上位の決定へ差し戻しが要る矛盾を探すための記録である。

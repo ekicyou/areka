@@ -1,5 +1,7 @@
 # 暫定の設計: ノベルの進行と入力の残り・バックログと巻き戻し（novel-play-flow・仮の名前）
 
+> **作り直し済み（2026-11-20）**: この暫定の設計は、開発者の決め（`doc/ideas/novel-decisions-2026-11-20.md`）の前の物である。決めで作り直した物は `doc/ideas/novel-redesign-2026-11-20/`（骨組みは `00-architecture.md`）。この文書は、確かめた事実（`path:行`）の控えとして残す。
+
 ## 1. 前置き
 
 - **暫定である。** 2026-11-19 に、main `49b6f3ab5` を読んで書いた。正式な `design.md` ではない。spec も brief もまだ無い（roadmap の「受け口（pasta の `novel-areka-contract` の依頼書を待つもの・brief なし）」の 2 項目＝`.kiro/steering/roadmap.md:1723-1724`）。
