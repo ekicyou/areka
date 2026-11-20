@@ -50,7 +50,7 @@
   - _Dispatch: mechanical — 期待値を設計と SSP の測りが与える_
   - _Requirements: 1.4, 1.5, 3.7, 5.3, 5.4, 5.5, 5.6, 5.8, 5.9, 5.10, 5.11, 5.12, 5.14, 10.2, 10.7, 10.8_
 
-- [ ] 2.5 crate の外から実 GPU で使う確かめと、1 点の読みの待ちの測り
+- [x] 2.5 crate の外から実 GPU で使う確かめと、1 点の読みの待ちの測り
   - wintf の外の使い手と同じ公開の口だけで、実 GPU の装置の上で ID の描き先を作り・塗り・読むテストを `crates/wintf/tests/graphics/id_target_test.rs` に置き、`crates/wintf/tests/graphics.rs` に `mod id_target_test;` を足す
   - 1 ピクセルの読みを 300 回測り、中央値と 95% 点を出す（越えてはならない上限は置かない）
   - 測った数字を、完了 `wintf-d2d-composite-rules` が残した読み戻しの待ちと並べて `research.md` に書く
