@@ -72,6 +72,8 @@ mod blit_rect;
 pub use blit_rect::Recompose;
 pub mod hit;
 pub use hit::{RegionPriority, ScaledHit};
+pub mod hit_mask;
+pub use hit_mask::{RegionMask, RegionMasks, region_mask};
 mod hit_import;
 pub use hit_import::HitRegions;
 pub mod scale;
