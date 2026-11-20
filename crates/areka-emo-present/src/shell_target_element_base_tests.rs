@@ -386,9 +386,8 @@ const CLAUDIA_EXTENT: (u32, u32) = (333, 500);
 /// 要件 4.3・2.6・3.2・4.7: 無改変の `claudia` を DLL なしで実際の画像の復号で読むと、
 /// `element0,base` の土台に顔の部品を重ねる surface6・11・26 の外形が 333×500 になり、
 /// 描けない部品の警告は 0 件（`overlay`・`base` だけで書かれている）。警告以上の行は、
-/// `draw-methods-canon` が持つ surface28 の
-/// pattern 3 行だけで、同じ collision番号の重なりの警告は無い。`draw-methods-canon` が
-/// `base` の pattern を描けるようにするときは、この期待を更新すること。
+/// surface28 の pattern 3 行だけで、同じ collision番号の重なりの警告は無い。`base` の pattern を
+/// 描けるようにするときは、この期待を更新すること。
 ///
 /// 較正: 読み手の判定を `overlay` だけに戻すと土台が値にならず、部品の大きさだけで描かれて
 /// surface26 は 100×56（surface11 は 71×42）になって赤になる。

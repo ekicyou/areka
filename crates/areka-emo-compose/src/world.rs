@@ -70,7 +70,7 @@ struct SharedRegionMasks(std::sync::Arc<crate::hit_mask::RegionMasks>);
 /// `&mut World`／`&World` を排他/共有で受けて処理する。ゴースト unload ＝本型 drop で全 entity
 /// を一掃する（per-ghost lifecycle）。
 ///
-/// **不変条件（要件 10.6）**: 復号した絵の画素を保持しない（当たりのマスクは共有の参照で載せる）。
+/// **不変条件**: 復号した絵の画素を保持しない（当たりのマスクは共有の参照で載せる）。
 /// `SurfaceIndex` と entity 集合は常に一対一。
 pub struct EmoWorld {
     world: World,
