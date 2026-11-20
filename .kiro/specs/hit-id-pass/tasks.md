@@ -284,3 +284,4 @@
 ## Implementation Notes
 
 - 4 の後: `areka-emo-compose` の `hit_import_tests.rs` の 422 行あたり（「まだ働かない形も…」）と 509 行あたり（「働かない形を含む」）に古い文言が残っている。6.4 でこのテストを書き直すときに一緒に直す（6.4 で残ったら 9.2 の検索で拾う）
+- 5.3 の後: `#[path]` で足した兄弟のファイルの中の `warn!`／`error!` は、既定の target が `...::shell_target::regions` のようにずれ、読み込みの記録を完全一致で見張る確かめ（`LOAD_TARGETS`・`SHELL_TARGET`）から漏れる。シェルの読み込みの記録は `target: "areka_emo_present::shell_target"` を明示する
