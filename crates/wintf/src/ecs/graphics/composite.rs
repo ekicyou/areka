@@ -56,7 +56,7 @@ impl std::fmt::Debug for SurfaceComposite {
     }
 }
 
-fn create_bitmap(
+pub(crate) fn create_bitmap(
     dc: &ID2D1DeviceContext,
     (width, height): (u32, u32),
     options: D2D1_BITMAP_OPTIONS,
