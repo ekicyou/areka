@@ -36,7 +36,7 @@
 //!
 //! 置き場所を兄弟ファイルにしたのは、行列側が 1,000 行制限に近いためである。
 
-use wintf::ecs::{DPI, Point, WindowPos};
+use wintf::ecs::{DPI, Point};
 
 use areka_placement::diag::WindowKind;
 use areka_placement::follow::{BalloonFollow, OffsetBase};
@@ -47,7 +47,7 @@ use super::balloon_offset_follow::{OffsetFollowOutcome, rescale_balloon_follow_o
 use super::shared_test_support::{BASE_OFFSETS, HIGH_DPI, LOW_DPI};
 use super::test_support::{FakeReports, FrameHarness, capture_logs};
 use super::transition_test_support::{
-    offset_lines, offset_of, settle_at, transition_to, writes_for,
+    offset_lines, offset_of, settle_at, transition_to, window_pos_of, writes_for,
 };
 use super::*;
 
@@ -203,15 +203,6 @@ fn the_zero_dpi_arm_stays_an_unchanged_no_op() {
 // 2. 相の結合で往復させる（World の上で `Rescaled` の後に `Unchanged` を起こす）
 // ---------------------------------------------------------------------------
 
-/// 窓の位置（`WindowPos.position`）。
-fn pos_of(harness: &FrameHarness, entity: Entity) -> Point {
-    harness
-        .world
-        .get::<WindowPos>(entity)
-        .and_then(|wp| wp.position)
-        .expect("窓に位置がある")
-}
-
 /// **戻りの遷移**（96 → 192 → 96）でオフセットが基準へ bit 同一で戻り、
 /// バルーンが実際に元の位置へ帰る。
 #[test]
@@ -228,7 +219,7 @@ fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
             (
                 scope,
                 offset_of(&harness, scope),
-                pos_of(&harness, harness.balloon_window(scope)),
+                window_pos_of(&harness, harness.balloon_window(scope)),
             )
         })
         .collect();
@@ -249,7 +240,7 @@ fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
     }
     let high_balloons: Vec<Point> = before
         .iter()
-        .map(|(scope, _, _)| pos_of(&harness, harness.balloon_window(*scope)))
+        .map(|(scope, _, _)| window_pos_of(&harness, harness.balloon_window(*scope)))
         .collect();
 
     // 戻り（192 → 96）——恒等比の腕。基準から引き直せば bit 同一で戻る。
@@ -276,7 +267,7 @@ fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
             "scope={scope}: 戻りの遷移でバルーンへの窓書込が 1 件も無い: {back_writes:?}"
         );
         assert_eq!(
-            pos_of(&harness, harness.balloon_window(*scope)),
+            window_pos_of(&harness, harness.balloon_window(*scope)),
             *old_balloon,
             "scope={scope}: 往復したのにバルーン窓が元の位置へ帰っていない"
         );

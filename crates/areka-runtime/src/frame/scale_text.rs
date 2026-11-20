@@ -104,7 +104,7 @@ pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Ve
     for scope in scopes {
         let target = balloon_target(scope);
         // actor 引き当ては attach（`run_attach_phase` の `connect_balloon_text` 呼び）と**同一の写像**。
-        // 別式で組むと存在しない actor を指し、7.1 の未登録 skip で静かに何も起きなくなる。
+        // 別式で組むと存在しない actor を指し、`refresh_actor_scale` の未登録 skip で静かに何も起きなくなる。
         let actor = ActorKey::from(scope.to_string());
         // 箱の同期の材料（差し込み口と絵の番号の組・どちらかが無ければ None）。バルーンの縮退
         // skip より前に集める。
@@ -127,7 +127,7 @@ pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Ve
         };
         // 復帰＝次に落ちたときは再び 1 回鳴らす（エッジの再武装）。
         text_scale_warned.remove(&scope);
-        // 判定（k 変化・未登録）は 7.1 の権威へ委ねる（本フェーズは第 2 のガードを持たない）。
+        // 判定（k 変化・未登録）は `refresh_actor_scale` に任せる（本フェーズは第 2 のガードを持たない）。
         let model = &balloon_models[&scope];
         if let Some(background) = unconnected_text.remove(&scope) {
             super::attach::connect_balloon_text(runtime, Some(view), actor, model, background);

@@ -9,24 +9,14 @@ use bevy_ecs::entity::Entity;
 use wintf::ecs::window::StayOnTop;
 
 use super::*;
-use areka_placement::spawn::GhostWindows;
 use areka_placement::zorder_group_ledger::parse_zorder_tokens;
 use areka_runtime::frame::window_state::run_window_state_phase;
 use areka_runtime::window_state_cue::WindowStateDirective;
 // 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
-use areka_runtime::frame::window_state::test_support::on;
+use areka_runtime::frame::window_state::test_support::{all_windows, on};
 use areka_runtime::frame::wiring::test_support::{
     window_state, window_state_mut, zorder_ledger, zorder_ledger_mut,
 };
-
-/// ゴーストの全部の窓（キャラクターとバルーン）。
-fn all_windows(windows: &GhostWindows) -> Vec<Entity> {
-    windows
-        .scopes()
-        .flat_map(|scope| [windows.char_window(scope), windows.balloon_window(scope)])
-        .flatten()
-        .collect()
-}
 
 /// (常に手前か, 印の付いた窓の数, 台本の組の数)。
 fn observe(rig: &Rig, windows: &[Entity]) -> (bool, usize, usize) {

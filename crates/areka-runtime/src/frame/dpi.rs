@@ -298,7 +298,7 @@ pub(super) type DpiChangedQuery = Query<
 /// 永続 `state` で `Changed<DPI>` を観測し（`anchor_changed_system` 先例と同じ流儀）、変化した
 /// 各ゴースト窓について対応 target の [`ScaleReportSource::refresh_scale_report`] を呼ぶ。
 ///
-/// # 位置の権威と寸の権威の分離（S2 是正）
+/// # 位置の権威と寸の権威の分離
 ///
 /// **窓寸**を合わせるのは報告が `Some(新物理寸)` のときだけ（[`reconcile_window_size`]）だが、
 /// **位置**はその成否に条件付けない——`None` のキャラ窓は
@@ -399,7 +399,7 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
         // 変わったが丸め後の物理寸が同じ**場合も `None` である（`refresh_scale` の doc が明記）。
         // ゆえに文字層 k 追従の判断材料にはこの戻り値を使わない（[`run_text_scale_phase`] を参照）。
         //
-        // **位置**は寸の再導出結果に条件付けない（S2 是正・下の `None` 腕）。
+        // **位置**は寸の再導出結果に条件付けない（下の `None` 腕）。
         let wrote = match source.refresh_scale_report(world, target) {
             // 経路タグ: 本フェーズは `Changed<DPI>` エッジ駆動＝真に DPI 由来。
             Some(new_size) => {
@@ -411,16 +411,12 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
                     new_size,
                     PlacementRoute::DpiReproject,
                 );
-                // 遷移後の連鎖再解決の武装: **キャラ窓が寸変化を
-                // 伴って書込を起こしたとき**だけ武装する。3 条件のいずれを落としても意味が
-                // 変わる——寸が変わらなければ隣接は崩れず（表情差替と同じ）、書込が起きて
-                // いなければ位置は動いておらず、バルーン窓は連鎖の構成要素ではない。
+                // 遷移後の連鎖再解決の武装: **キャラ窓の窓寸が変わったとき**だけ武装する。
+                // 寸が変わらなければ隣接は崩れず（表情差替と同じ）、バルーン窓は連鎖の構成要素
+                // ではない。比べるのは報告寸でなく窓の寸なので、縮退で書かなかったフレームも
+                // ここで落ちる。
                 let after = world.get::<WindowPos>(window).and_then(|wp| wp.size);
-                if wrote
-                    && matches!(kind, GhostWindowKind::Char)
-                    && before.is_some()
-                    && before != after
-                {
+                if matches!(kind, GhostWindowKind::Char) && before.is_some() && before != after {
                     // 控えはキャラ窓の腕で必ず取られている。武装済みなら渡しても使われない。
                     chain_realign::arm_chain_realign(
                         world,
@@ -457,8 +453,7 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
     }
 }
 
-/// 窓寸の再導出結果が得られなかったキャラ窓を、**現在の寸のまま**射影 T へ通す（S2 是正・
-/// 診断レポート §1.2）。
+/// 窓寸の再導出結果が得られなかったキャラ窓を、**現在の寸のまま**射影 T へ通す。
 ///
 /// # なぜ必要か（位置の権威と寸の権威の分離）
 ///

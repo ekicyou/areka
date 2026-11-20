@@ -7,8 +7,8 @@
 //!
 //! # なぜ「構造から明らか」では足りないか
 //!
-//! このハーネスで回したテストは開発中に一度、テスト間の状態汚染を実測で出している（`command.rs`
-//! のプロセス共有カウンタ＝60 回中 11 失敗）。**残留は「隔離されているように見える」形からも出る**ので、
+//! このハーネスで回すテストは、スレッド局所の状態（窓書込指令のキュー・観測の写し）が 1 つ残るだけで、
+//! 同じスレッドで次に走るテストを汚す。**残留は「隔離されているように見える」形からも出る**ので、
 //! 隔離は構成で主張せず実行で示す:
 //!
 //! - [`a_fresh_harness_starts_from_a_known_state_regardless_of_what_ran_before`] は
@@ -416,8 +416,8 @@ fn a_log_capture_verification_names_the_single_threaded_executor() {
 ///
 /// 姉妹の `the_harness_drives_resnap_and_chain_finalize_for_the_adjacent_pair` が持つ
 /// 「同寸なら書かない」は零件の主張なので、`run_resnap` を丸ごと無操作にしても恒真で通る
-/// （レビューで実測——本体を `let _ = source;` に置き換えてもワークスペース全体が
-/// 緑のままだった）。陽性の駆動をここで別に固定する。
+/// （本体を `let _ = source;` に置き換えてもワークスペース全体が
+/// 緑のままになる）。陽性の駆動をここで別に固定する。
 #[test]
 fn resnap_writes_only_the_scope_whose_reported_size_differs() {
     let mut harness = FrameHarness::new();

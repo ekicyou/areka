@@ -94,7 +94,7 @@ fn collect_of_nothing_visible_is_empty() {
     assert!(unknown.is_empty());
 }
 
-/// 口（`SessionHooks`）が据わっていない World は `NO_BODY` が答えるので、何も送らず台帳も動かさない。
+/// 口（`SessionHooks`）が据わっていない World は `NO_BODY` が答えるので、何も送らず、送った組（`last_sent`）も動かさない。
 #[test]
 fn missing_slot_resource_sends_nothing() {
     let world = World::new();

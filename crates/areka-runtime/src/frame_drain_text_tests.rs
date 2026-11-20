@@ -183,11 +183,11 @@ fn frame_system_removes_runs_and_reinserts_wiring() {
     );
 }
 
-// ── task 9.2: run_move_drain_phase（frame 相 move drain→apply）の存在＋ゲート檻 ──────
+// ── run_move_drain_phase（frame 相 move drain→apply）の存在＋ゲート檻 ──────
 //
-// 送出端の到達（`move_cue_move_sink_tests.rs`）と 7.4 の apply 単体
+// 送出端の到達（`move_cue_move_sink_tests.rs`）と apply 単体
 // （`move_cue_apply_move_tests.rs`・`move_cue_place_tests.rs`）を frame 相 drain で接ぐ結線の存在チェック。full spine
-// （cue→CueSheet→dispatch→sink→channel→frame）は task 9.3 が所有する。
+// （cue→CueSheet→dispatch→sink→channel→frame）は本体の `runtime_tests/spine_move_cue_tests.rs` が持つ。
 
 /// fixture `\1\![move,-353,,,0,base,base]` の `MoveDirective`（scope1・base scope0）。
 fn fixture_move_directive() -> MoveDirective {

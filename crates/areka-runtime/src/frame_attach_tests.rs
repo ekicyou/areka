@@ -646,7 +646,7 @@ fn every_production_scan_of_the_actor_map_is_registered() {
             // 綴りの揺れ（改行・字下げ）で取り逃さないよう空白を潰してから見る。
             // ほかの型の `.actors()` と紛れないよう、直前が状態表であることを要求する。
             let src: String = std::fs::read_to_string(&path)
-                .unwrap_or_default()
+                .unwrap_or_else(|e| panic!("{}: {e}", path.display()))
                 .chars()
                 .filter(|c| !c.is_whitespace())
                 .collect();

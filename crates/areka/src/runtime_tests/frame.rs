@@ -49,7 +49,7 @@ mod carry_tests;
 #[cfg(test)]
 #[path = "frame_chain_finalize_restart_tests.rs"]
 mod chain_finalize_restart_tests;
-// 並べ直しから記憶まで。共有の部品と、それを使うテストファイル（1,000 行の上限に合わせて分けた）。
+// 並べ直しから記憶まで。共有の部品と、それを使うテストファイル（1,000 行の上限に合わせて分けてある）。
 #[cfg(test)]
 #[path = "frame_chain_finalize_persist_nowrite_tests.rs"]
 mod chain_finalize_persist_nowrite_tests;
@@ -62,10 +62,6 @@ mod chain_finalize_persist_test_support;
 #[cfg(test)]
 #[path = "frame_chain_finalize_persist_tests.rs"]
 mod chain_finalize_persist_tests;
-// 起動の並べ直しが作業領域へ寄せてから書く檻（window-work-area-clamp タスク 2.1）。
-#[cfg(test)]
-#[path = "frame_chain_finalize_clamp_tests.rs"]
-mod chain_finalize_clamp_tests;
 // 起動・作り直しの並べ直しが記憶から戻した組を覚えた印で隣り合わせる檻
 // （dpi-realign-remembered-chain 要件 6・8.6）。ハーネスに乗るので **x64 のみ**で接続する。
 #[cfg(all(test, target_pointer_width = "64"))]

@@ -1011,6 +1011,7 @@
 ### 12.6 申し送り先の決まっていない件
 
 - `doc/COMPAT_ARCHITECTURE.md` §8 の 228 行目の、上の 4.2 のパス 1 か所。
+- `doc/COMPAT_ARCHITECTURE.md` の 213 行目付近（⑴ の欄）の、消したテストのあるファイルの名 1 か所（13.7）。
   - `doc-compat-architecture-rename` は「中身を変えない・変えてよいのは改名で食い違う自分の名前だけ」で当たらない。`audit-areka-app` 等の見直しの持ち物は §8 の文書ではない。C23 の `hit-id-pass`（§8 の末尾への追記）と `balloon-flip-ssp-review`（別の行の書き換え）は違う行を触るので、渡さない。
   - spec は作っていない。次の棚卸（`/kiro-next`）で持ち主を決めるか、§8 に触る次の spec が 228 行目も直す。
 
@@ -1026,3 +1027,167 @@ C23 のほかの 3 本は `hit-id-pass`・`balloon-flip-ssp-review`・`input-cra
 - 5.1・5.3・5.4: 41 番の「atom を spec の名で書く」は、spec の名を足すのでなく、spec の ID・要件番号・設計の部品の記号（C2・C5・C7・D15）の参照だけの行を消す形で読んだ。ログの文字列の中に残る ID は触らない（ログの文を変えるのは 3・4・113 番だけ）。
 - 5.5: 109 番は `Progress::Unknown` にしても目印の無い待ちのままなので、同じ受け箱へ `KanadeMsg::Close` を送り `join_bounded` で待つ柵にした（打ち切りは［止まった］）。設計の 109 番の行と直し方の欄を実装に合わせて改めた。
 - 5.2 の 56 番（spec の名をコメントに書く）と、`確定台帳` の参照が 17 ファイルの外に残ること、`attach.rs`・`frame.rs`・`left_edge::placements` に要件番号・task 番号が少し残ることは、7.1 のかけ直しの audit で見る。
+
+## 13. かけ直しの結果（2026-11-21・T26・要件 1.1〜1.8・9.1〜9.3・9.6〜9.8）
+
+### 13.1 測り直し（要件 1.2）
+
+- 作業のブランチの HEAD は `b642fc15`。`git fetch` の後の `origin/main`（`aff8f397`）は HEAD の祖先で、main は取り込み済み。
+- 物差しは ponytail 5.3.3（`~/.claude/plugins/installed_plugins.json` の `ponytail@ponytail`・user scope・`lastUpdated` 2026-11-06）。`skills/ponytail-audit/SKILL.md` を読み、上限 20 件と「読まなかった所」を外して当てた（1.3 節と同じ作法・7 つの決まりも同じ）。
+- CLAUDE.md の `## Comments` の決まり（spec の名・要件番号・task 番号・設計の部品の記号・変わった経緯を書かない）は、この spec が足した行か書き換えた行（`origin/main` との差分）だけを指摘に数えた。`origin/main` のまま残る行は、事実と違わない限り数えない（設計の物差し「この spec が触らないコメントは掃除しない」）。
+- 「変わった経緯」の物差し（5 回目で 1 本に決め、1〜5 回目の全部に当てた）。この spec が足した行か書き換えた行では、次の 4 つを指摘に数える。
+  - ⑴ 直す前と後を比べる語（「是正前は赤・是正後は緑」「是正前の赤」「当初…差し替えた」「…していた・抜けていた」）。今の形の文（「待ちが無いと 2 段書込になる」「無いと赤になる」）に直す。
+  - ⑵ 日付（「実測 2026-08-28」「2026-08-28 実装時是正」）。測って分かった事実（何を潰すと何が赤になるか）は理由として残し、日付だけ消す。
+  - ⑶ だれが・どの段で（「レビューで実測」「レビューが名指しした」「開発中に一度」「先行仕様から引き継いだ」「本仕様の新規コード側」）。事実だけを今の形で残す。
+  - ⑷ 日付つきの裁定（「開発者裁定 2026-08-27」）。「開発者の裁定」と日付なしで残す。条件は、同じ段落が理由（なぜ塞がないか・何を避ける判断か）を自分で述べていること。述べていなければ理由そのものを書く。今の 4 か所（`frame/balloon_offset_follow.rs`・`frame_balloon_offset_keyword_gate_tests.rs` の 2 か所・`frame_transition_branch_tests.rs`）はどれも理由を述べているので、日付だけを消した。
+  - 数えないもの: `origin/main` のまま残る行の同じ語（「# ここが押さえる是正」の見出し・「是正前は赤・是正後は緑」ほか）、測りの中身を言う「実測の形」「実測:」、表明の文字列の中の要件番号（`origin/main` のまま）。書き換えた文が受けていて宙に浮く `origin/main` の行（`frame_transition_branch_tests.rs` の表の見出し「是正」）だけは一緒に直した。
+- 範囲は 1.1 節と同じ置き場の決め方で、移したファイルと新しいファイルは移した先で数えた。
+
+| 時点 | ファイル | 行 | 本番の名前のファイル | `areka-runtime` のテストと支え | 本体のテスト |
+|---|---:|---:|---:|---:|---:|
+| 着手のとき（1.1 節） | 103 | 34,968 | 18・6,332 | 49・19,135 | 36・9,501 |
+| かけ直しの前（HEAD `b642fc15`） | 109 | 33,276 | 18・6,186 | 57・19,024 | 34・8,066 |
+| かけ直しの後（4 回目の後） | 108 | 33,222 | 18・6,173 | 57・19,003 | 33・8,046 |
+| かけ直しの後（5 回目の後） | 108 | 33,221 | 18・6,173 | 57・19,002 | 33・8,046 |
+
+- 1,000 行を越えるファイルは 0 本（いちばん長いのは `frame_test_support.rs` 951 行）。
+
+### 13.2 回ごとの件数
+
+| 回 | 読んだ所 | 必ず直す | 直したほうがよい | できれば | 計 |
+|---|---|---:|---:|---:|---:|
+| 1 | 範囲の 109 ファイルを全部、全行（9 の束） | 0 | 12 | 32 | 44 |
+| 2 | 1 回目の直しが触った 37 ファイルを全行（3 の束）と、直しが及ぶ所 | 0 | 4 | 8 | 12 |
+| 3 | 2 回目の直しが触った 12 ファイルを全行と、直しが及ぶ所 | 0 | 0 | 3 | 3 |
+| 4 | 3 回目の直しが触った 2 ファイルを全行と、名指す先 | 0 | 0 | 0 | 0（物差しが 1〜3 回目とそろっていなかった・下） |
+| 5 | `origin/main` との差分の足した行の全部を、13.1 の「変わった経緯」の物差しと番号の類の語で洗い、当たった 9 ファイルを全行 | 0 | 1 | 13 | 14 |
+| 確かめ | 5 回目の直しが触った 9 ファイルを全行 | 0 | 0 | 0 | **0** |
+
+- 4 回目の 0 件は、2 回目（B-3）と 1 回目（G6-5・G7-3）が指摘に数えた「是正前／是正後」と日付つきの注を、触った 2 ファイルの外では数えていなかった。レビューの差し戻しを受けて物差しを 13.1 に 1 本で書き、5 回目で差分の足した行の全部に当て直した。
+- 5 回目の 14 件はどれもコメントだけの直しで、「必ず直す」は 0 件・本番の振る舞いに関わる指摘は 0 件。要件 9.6 のとおり、5 回目で「必ず直す」と本番の振る舞いの指摘が 0 件なので、かけ直しはここで区切ってよい。そのうえで 5 回目の直しが触った 9 ファイルを全行読み直し、同じ物差しで 0 件を確かめた（要件 9.2・9.3）。
+- 同じ所から「必ず直す」が出続けた所は無い（要件 9.7 に当たらない）。
+- 2・3 回目の指摘の多くは前の回の直しが呼んだもの（13.4・要件 9.8）。
+
+### 13.3 1 回目（44 件）と直し
+
+束 G1〜G9 は 1.4 節と同じ分け方を今の置き場に合わせたもの。番号は読み手の番号のまま。
+
+**直したほうがよい（12）**
+
+| 番号 | 場所 | 指摘 | 直し |
+|---|---|---|---|
+| G1-1 | `frame/dpi.rs` | 書き換えた説明に `S2 是正`・`診断レポート §1.2` が残る | 括弧ごと消した |
+| G1-2 | `frame/balloon_offset_follow.rs` | 見出しに「2026-08-28 実装時是正」 | 消した |
+| G1-3 | `frame/move_hold.rs` | 「件 5 の測り（MoveMeasure）」が残る | 理由の文だけにした |
+| G3-1 | `frame/drain_resnap_tests.rs` | 説明に `areka-test-binary-stability` の `load-repro.md` ⑹（件 12・56 番） | 理由「自前の締切は負荷の下で赤になる」だけにした |
+| G5-1 | `frame_chain_realign_arm_tests.rs`・`frame/dpi.rs` | 武装の条件の `wrote &&` が窓の寸の前後比べと重なって何も足さず、檻の ⑴ が落ちなくなっていた（説明は「落ちる」と言う） | `frame/dpi.rs` の条件から `wrote &&` を消し（振る舞いは同じ）、本番と檻の説明を 2 つの条件に直した |
+| G6-1 | `frame_dpi_sync_hold_tests.rs` | 頭の行に「設計 C5・要件 5.8…」 | 消した |
+| G6-2 | `frame_drain_text_tests.rs` | 書き換えた行に「7.4 の」 | 消した。同じ塊の task 番号も持ち主の名に替えた |
+| G7-1 | `frame_transition_atomicity_tests.rs`・`frame_dpi_reproject_tests.rs` | 消したテストのあるファイルを名指す | `frame_transition_branch_tests.rs` の `a_work_area_only_change_writes_once` を指すようにした |
+| G7-2 | `frame_transition_branch_tests.rs` | 「群 A」が指す先が無い | ファイルの名を書いた |
+| G7-3 | `frame_transition_atomicity_tests.rs`・`frame_work_area_resnap_hold_tests.rs` | 書き換えた行に変わった経緯（「主張の書き換え」「当初…差し替えた」） | 今の理由だけにした |
+| G9-1 | `runtime_tests/frame_schedule_tests.rs` | `ghost_quit_system.before(frame_system)` が抜けても落ちるテストが無い（止まったゴーストの毎フレームの相が 1 回余分に走る） | テスト `ghost_quit_system_runs_before_the_frame_system` を足した（曖昧さを誤りにして組み、実行順を見る）。`.before` を消すと赤・`.after` にすると赤・戻すと緑を確かめた |
+| G9-2 | `runtime_tests/frame_chain_finalize_clamp_tests.rs` | 書き換えた頭の行に spec の名・task 番号・要件番号。移したテストの中身も書いたまま | G9-4 でファイルごと移した |
+
+**できれば（32）**
+
+| 番号 | 場所 | 直し |
+|---|---|---|
+| G1-4 | `frame/drain_resnap.rs` | 割れた文「直接呼ぶ／。」をつないだ |
+| G1-5 | `frame.rs` | `mod` の上のモジュールの説明の言い直し 7 行を消し、同じ注 6 回を 1 回に、cfg の言い直しを消した |
+| G2-1 | `frame/scale_text.rs` | 「7.1 の権威」「7.1 の未登録 skip」を `refresh_actor_scale` に替えた |
+| G2-2 | `frame/work_area_sync.rs` | `let _ = watch.params.get(world)` の失敗を `warn!` 1 行で残す（今の引数では起きない道） |
+| G3-2 | `frame/status_report_tests.rs` | 「台帳も動かさない」を「送った組（`last_sent`）も動かさない」に |
+| G3-3 | `runtime_tests/frame/switch_stay_on_top_tests.rs` | 私有の `all_windows` を消し、`window_state::test_support::all_windows` を使う |
+| G4-1 | `frame_transition_test_support.rs` | `attach_material` は `settle_at` の後に呼ぶ理由を足した |
+| G4-2 | `frame_balloon_runtime_test_support.rs` | 途中の panic で GPU の許可が装置より先に捨てられる順を直した |
+| G4-3 | `frame_balloon_offset_follow_tests.rs` | `anchor_enumeration_is_exhaustive` の腕が表の添字 `ANCHORS[n]` を返す形にした（67 番の「網羅の檻を強める」を保つ） |
+| G4-4 | `frame_test_support.rs`・`frame_balloon_runtime_test_support.rs` | 書き換えた行の「診断レポート」「（レビューで確認）」「「4 点すべて」の 2 つ目」「中身を変えずに分けた」を消した |
+| G4-5 | `frame_test_support.rs` | `synth_assets` の説明の無い欄 `model` と、事実と違う 2 行を消した |
+| G4-6 | `frame_test_support.rs` | `FrameHarness` の「3 つの源」を表の 4 つに合わせた |
+| G4-7 | `frame_balloon_offset_{follow,keyword_gate,roundtrip}_tests.rs` | 写しの `pos_of`・`size_of`／`size_px`・`ideal_alignment`／`expected_keyword_offset` を `transition_test_support` の `window_pos_of`・`window_size_of`・`keyword_alignment` 1 組にした |
+| G4-8 | `frame_balloon_offset_converge_tests.rs` | 窓の種類の字面 `"char"`・`"balloon"` を `WindowKind::…as_str()` に |
+| G4-9 | `frame_attach_tests.rs` | 読めないファイルを黙って飛ばす `unwrap_or_default()` を panic に |
+| G5-2 | `frame_chain_realign_arm_tests.rs` | 消えた定数名 `HALVED_*` を `LOW_SIZE_*` に・「（1.7）」を消した |
+| G5-3 | `frame_chain_realign_tests.rs` | 陽性の対の説明をコードどおり（隣に付け直した窓は詰まる）に戻した |
+| G5-4 | `frame_diag_route_tests.rs` | 書き換えた行の「Flow 3 手順 5」の引用を消した |
+| G5-5 | `frame_chain_finalize_remembered_tests.rs` | よそのファイルの番号 ⑶⑷⑸ を消した |
+| G6-3 | `frame_dpi_sync_hold_tests.rs` | 見送り点 5 つのうち `site=pattern-move` の持ち主を書いた（2・3 回目で正した） |
+| G6-4 | `frame_dpi_reproject_tests.rs` | 割れた見出し「⚠ 区分＝」を 1 文にした |
+| G6-5 | `frame_dpi_reproject_tests.rs` | 書き換えた行の変わった経緯（無視属性を外した・拡充・主張の書き換え・さらに 1 段）を今の形に |
+| G6-6 | `frame_resnap_tests.rs` | 新しい零件のテストに、違う寸なら同じ witness が書込を拾う陽性の対を足した |
+| G7-4 | `frame_transition_branch_tests.rs` | 拠り所の消えた「5.5」を「現状維持（源も窓も触らない）」に |
+| G7-5 | `frame_transition_branch_tests.rs` | 兄弟が叩く駆動口を「`FrameHarness` の駆動口（`run_placement_phases` ほか）」に |
+| G7-6 | `frame_work_area_sync_tests.rs` | 写しの `sync_warnings` の数えを `warnings_containing` に |
+| G7-7 | `frame_work_area_sync_tests.rs` | 手書きの絞り込みを `writes_for` に |
+| G8-1 | `runtime_tests/frame/status_report{_stage,}_tests.rs` | 消えた凡例の ⑵⑶⑷ を節の見出しから消した |
+| G8-2 | `runtime_tests/frame/switch_finish_tests.rs` | 前のバルーンの名を `kaku` に（コードどおり） |
+| G9-3 | `runtime_tests/frame_balloon_timeout_notice_e2e_tests.rs` | 番号を付け直した親の節「⑸」を「⑷」に |
+| G9-4 | `runtime_tests/frame_chain_finalize_clamp_tests.rs` | 1 本だけ残ったテスト `save_at_finalize_writes_clamped_partner_position` を `areka-runtime` の `frame_chain_finalize_tests.rs` の双子の隣へ移し、ファイルと `#[path]` の宣言を消した（参照は `.kiro` の完了 spec の記録だけ） |
+| G3-4 | `frame/drain_resnap_tests.rs` の `let _ = done_tx.send(applied)` | **指摘に当たらない**として閉じた。送りが失敗するのは受け手が諦めてテストが既に赤のときだけで、具体の間違いの場合が無い（SKILL.md 3 節「具体の場合が無ければ指摘でない」） |
+
+- 読み手が見て指摘に当たらないとしたもの: `frame_persist_test_support.rs` の `Drop for PersistStore` の `let _ = handle.join()`（`ActorHandle::join` が `warn!` を残してから返す・`origin/main` のまま）、`frame/work_area_sync.rs`・`frame_work_area_sync_tests.rs` の「確定台帳」（`origin/main` のまま・事実と合う）、`left_edge::placements` の「（要件 5.2）」（既に無い）、`attach.rs`・`drain_resnap.rs`・`scale_text.rs` のログの文字列の中の ID（ログの文は外への約束で、変えない）。
+- 5.2 の 56 番（件 12）で設計どおりコメントに書いた spec の名は、CLAUDE.md の決まりに合わせて消した（G3-1）。design.md の 56 番の行は「spec の名を書く」のままなので、完了の棚卸で揃える。
+
+### 13.4 2 回目（12 件）・3 回目（3 件）・5 回目（14 件）と直し
+
+前の回の直しが呼んだもの（連鎖・要件 9.8）に「連鎖」と書いた。どれもコメントと檻の説明・テストの補助の直しで、本番の振る舞いに関わるものは無い。
+
+| 回・番号 | 場所 | 指摘 | 直し |
+|---|---|---|---|
+| 2・A-1（連鎖） | `frame_balloon_offset_follow_tests.rs` | 書き換えた説明が、表の重なりや取りこぼしまで捕まえると言い過ぎる | 説明を正し、表の重なりを見る表明を足した |
+| 2・A-2／B-1（連鎖・同じ指摘） | `frame.rs`・`frame_chain_realign_arm_tests.rs` | 「3 連言」が残る | 「2 連言」にし、節の番号を ⑴ 窓の種類・⑵ 寸の変化に振り直し、縮退の報告の節は番号なしに |
+| 2・B-2（連鎖） | `frame_dpi_sync_hold_tests.rs` | 1 回目に足した `site=pattern-move` の持ち主が言い過ぎで、理由も別の点のもの | 門の在処と振る舞いを見るテストを分けて書き、記録を駆動するテストは無いが同じ `defers_window_write` を通ると書いた |
+| 2・B-3（一部連鎖） | `frame_dpi_reproject_tests.rs`・`frame_dpi_sync_hold_tests.rs` | 書き換えた行に「是正前の構造」「是正後」「変異 M3／M6」 | 今の形の文に直した |
+| 2・B-4（連鎖） | `frame_transition_atomicity_tests.rs`・`frame_dpi_reproject_tests.rs` | 1 回目に消した段落を受ける「変わったのは…」が宙に浮く | 消した・1 文に縮めた |
+| 2・A-3 | `frame/work_area_sync.rs` | 「ほかの 3 点」（見送り点は 5 つ） | 「ほかの見送り点」に |
+| 2・A-4 | `frame_balloon_offset_keyword_gate_tests.rs` | 判定の行が 0 行でも通る | 行の数の表明を 1 つ足した |
+| 2・A-5 | `frame_balloon_offset_converge_tests.rs` | `window_pos_of` の写しが残る | `window_pos_of` を使う |
+| 2・C-1（連鎖） | `runtime_tests/frame/status_report_tests.rs` | 1 回目に触った見出しに spec の名と設計の節の名 | `// 届けの相` に |
+| 2・C-2 | `frame_transition_branch_tests.rs` | 割れた「⚠ 区分＝」と、名の消えた `research.md` の訂正の段落 | 1 文にし、段落を消した |
+| 2・C-3（一部連鎖） | `frame_transition_branch_tests.rs` | 群 A が無いのに群 B・C・D が残る | 「群 X:」を消した |
+| 2・C-4（連鎖） | `frame_transition_test_support.rs` | 1 回目に移した `window_pos_of`・`window_size_of` が既にある `pos_of`・`size_of` の写し | 既にある方へ委ねた |
+| 3・1（連鎖） | `frame_dpi_reproject_tests.rs` | 2 回目に頭の説明を消したので、残る「是正前」「是正の前後」「4 件」が何を指すか分からない | `s2_red_*` の 4 件と名指し、是正の語を消した |
+| 3・2（連鎖） | `frame_dpi_reproject_tests.rs` | 寸の変化の不変を守るテストとして、作業領域の変化のテストを名指した | `frame_balloon_offset_follow_tests.rs` の `a_surface_swap_at_a_constant_scale_does_not_move_the_offset` に |
+| 3・3（連鎖） | `frame_dpi_sync_hold_tests.rs` | 振る舞いの持ち主として、相の写しを試すテストを名指した | 本物の相を試す `frame/move_shift_tests.rs` の `deferred_windows_are_shifted_after_the_hold` に |
+
+**5 回目（14 件・どれもコメントだけ）**
+
+| 番号 | 重さ | 場所 | 指摘 | 直し |
+|---|---|---|---|---|
+| 5-1 | 直したほうがよい | `runtime_tests/frame/switch_finish_tests.rs` | 1 回目（G8-2）で書き換えた説明に「（要件 3.12）」 | 消した |
+| 5-2 | できれば | `frame_transition_branch_tests.rs` の頭 | 「是正そのものの対テスト（是正前は赤・是正後は緑）」と表の見出し「是正」 | 「対テスト（その仕組みが無いと赤になるテスト）」・見出し「仕組み」 |
+| 5-3 | できれば | `frame_transition_branch_tests.rs` | 「（開発者裁定 2026-08-20）」 | 「（開発者の裁定）」（物差し ⑷） |
+| 5-4 | できれば | `frame_transition_branch_tests.rs` の 2 か所 | 「窓が消える件を直したときの」 | 消した（決まりの中身「再導出不能なら現状維持」だけを残す） |
+| 5-5 | できれば | `frame_transition_branch_tests.rs` の本番入口の檻 | 「レビューが名指しした申し送り」「レビューが実演で確定させた」「どこにも掛かっていなかった」 | 消し、「到達可能性はこの 1 本だけが押さえる」に |
+| 5-6 | できれば | `frame_balloon_offset_follow_tests.rs` の頭 | 「（是正前は失敗する側）」「（実測 2026-08-28）」 | 消した（何を潰すと何が赤になるかは残る） |
+| 5-7 | できれば | `frame_balloon_offset_follow_tests.rs` | 「追随の変更が上書きしない側…（拡大率遷移の側だけが反転した）」 | 「拡大率遷移では成り立たず、作業領域の再スナップでは成り立つ。ここが固定するのは後者」に |
+| 5-8 | できれば | `frame_transition_branch_wait_tests.rs` の頭 | 「是正前の赤はここが持つ」 | 「待ちが無いと 2 段書込になることの対テストはここが持つ」 |
+| 5-9 | できれば | `frame_work_area_resnap_tests.rs` の頭 | 「是正前の赤を示す対テスト」 | 「再スナップが無いと赤になる対テスト」 |
+| 5-10 | できれば | `frame/balloon_offset_follow.rs`・`frame_balloon_offset_keyword_gate_tests.rs` の 2 か所 | 「（開発者裁定 2026-08-27）」 | 「（開発者の裁定）」（物差し ⑷） |
+| 5-11 | できれば | 同じ 2 ファイル | 「本仕様の新規コード側」「追随の新規コード側」「1 文字も変えていない／触れていない」 | 「追随の側に置く」「そのまま保つ」 |
+| 5-12 | できれば | `frame/balloon_offset_follow.rs` の 2 か所 | 「（先行仕様から引き継いだ約束／予算）」 | 消した |
+| 5-13 | できれば | `frame_harness_tests.rs` の 2 か所 | 「開発中に一度、…実測で出している」「レビューで実測——…緑のままだった」 | 今の形の事実だけに。「60 回中 11 失敗」の数も残さない: 数の元だった `command.rs` のプロセス共有のカウンタは今は無く（窓書込指令のキューも観測の写しもスレッド局所）、今のコードで確かめられない数になっていた。頭の説明は「スレッド局所の状態（窓書込指令のキュー・観測の写し）が 1 つ残るだけで、同じスレッドで次に走るテストを汚す」に書き換えた |
+| 5-14 | できれば | `frame_work_area_resnap_hold_tests.rs` の頭 | 「ところが列挙していた見送り点は 3 つ…抜けていた」「4 点目を足した後の」（1 回目の G7-3 と同じファイルの残り） | 「見送り点は…にも要る」「この 4 つ目が抜けると」「4 点目のある同じ駆動」に |
+
+- 2・3 回目の連鎖はどれも同じ種類（説明を消す・名指しを替える直しが、残った説明の拠り所を外す）で、コメントの言葉と檻の補助に閉じた。
+- 回をまたいだ食い違いは、4 回目の後には残っていた: 「是正前／是正後」と日付つきの注を 1 回目（G1-2・G6-5・G7-3）と 2 回目（B-3）は指摘に数えたのに、同じ語がこの spec の書いた別の行に残っていた（5-2・5-6・5-8・5-9・5-14）。3 回目の 1 番が `frame_dpi_reproject_tests.rs` から「是正」の語を消したのとも食い違っていた。5 回目で 13.1 の物差し 1 本を差分の足した行の全部に当て、確かめの読み直しで 0 件になったので、今は残っていない。
+- 5 回目は、連鎖した指摘をまとめて直す回（要件 9.8）として Fable で行った。
+
+### 13.5 本番のコードの変わった所
+
+- `frame/dpi.rs`: 連鎖の並べ直しの武装の条件から `wrote &&` を消した。窓の寸の前後比べ（`before != after`）は書込が起きたときだけ真になるので、振る舞いは同じ。`frame::chain_realign_arm_tests` は全部緑。
+- `frame/work_area_sync.rs`: `SystemState::get` の失敗を捨てずに `warn!` 1 行で残す（今の引数では起きない）。この行の字面を読む道具・手順書・テストは無い。この spec が足した新しいログの行（`[work_area_sync]` の文脈の `warn!`「見張りの印を進められない（次のフレームで 1 回作り直す）」）なので、仕上げのログの確かめ（T27）で新しい行として数える。
+- ほかは説明（コメント）とテストだけ。公開の面・SHIORI へ送るもの・ゴーストに見える振る舞いは変わらない。
+
+### 13.6 回すたびの確かめ
+
+- `cargo test -p areka-runtime --lib -- frame::`（351 本緑）・`cargo test -p areka --bins -- runtime_tests::frame session::ghost_quit`（117 本緑）・`cargo test -p areka-runtime --lib -- zorder_wiring`（`frame.rs` の字面を読む檻・緑）・`cargo fmt --all -- --check`・`cargo test -p log-capture-kit --test file_length_guard_test`（緑）。
+- `cargo clippy -p areka-runtime -p areka --all-targets`: 触った行を指す警告は 0 件（範囲の中に残る警告は前からの行）。
+- 5 回目（コメントだけの直し）の後: `cargo fmt --all -- --check`（差分なし）・`cargo test -p areka-runtime --lib -- frame::`（351 本緑）。
+
+### 13.7 範囲の外で見つけたこと（直さない・申し送り）
+
+- `doc/COMPAT_ARCHITECTURE.md` の 213 行目付近（⑴ の欄）が、消したテストのある `frame_work_area_resnap_tests.rs` を「作業領域の再スナップ単独で追従オフセットが変わらない」の持ち主と書いている。今の持ち主は `frame_transition_branch_tests.rs` の `a_work_area_only_change_writes_once`。C23 で触らないファイルなので、12.6 の 228 行目と同じく「申し送り先の決まっていない件」に足す（完了の棚卸で起票する）。
+- `crates/areka-placement/src/chain_rule_tests.rs` の 5 行目の古い置き場は、12.5 で `test-crash-report-merge` へ申し送り済み。
+- `crates/areka-placement/src/chain_realign.rs` の 168〜170 行（`arm_chain_realign` の説明）は「キャラ窓の再射影が寸変化を伴って書込を起こしたときに呼ぶ。判断（寸が変わったか・書込が起きたか）は呼び手が持つ」と書く。この spec が武装の条件から `wrote &&` を消した（13.5）ので、今の呼び手（`frame/dpi.rs`）が見るのは窓の種類と窓の寸の前後比べの 2 つだけで、「書込が起きたか」は見ない（寸が変われば書込は必ず起きているので振る舞いは同じ）。`areka-placement` は C23 で触らないので、12.5 の件と同じ `test-crash-report-merge` の brief へ件として足した。

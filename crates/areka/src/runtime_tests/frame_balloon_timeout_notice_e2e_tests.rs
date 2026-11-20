@@ -145,7 +145,7 @@ impl Cage {
         self.wiring().presenter.target_visible(balloon_target(0))
     }
 
-    /// 置き場のゴーストの kanade に届いた時間切れの知らせの番号。バルーンの組の届け（親の ⑸ の
+    /// 置き場のゴーストの kanade に届いた時間切れの知らせの番号。バルーンの組の届け（親の ⑷ の
     /// 檻が見る）は読み捨て、それ以外が届いたら檻の誤り。
     fn notices(&self) -> Vec<TalkId> {
         self.kanade

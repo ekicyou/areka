@@ -773,8 +773,8 @@ fn shell_finish_replaces_only_the_descript_balloon_lock() {
     );
 }
 
-/// バルーンの切替の後、普通のバルーンの警告の名前の欄は新しいバルーンのフォルダ名になる
-/// （要件 3.12）。前のバルーンの名前（ここでは未設定の `スコープ0のバルーン`）が残らない。
+/// バルーンの切替の後、普通のバルーンの警告の名前の欄は新しいバルーンのフォルダ名になる。
+/// 前のバルーンの名前（ここでは `kaku`）が残らない。
 #[test]
 fn balloon_switch_renames_the_balloon_warning_field() {
     let mut rig = rig(SkinKind::Balloon, false);

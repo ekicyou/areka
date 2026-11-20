@@ -1,7 +1,7 @@
-//! 拡大率と表の整合待ち（設計 C5・要件 5.8／4.1／4.6／10.7）の決定論テスト。
+//! 拡大率と表の整合待ちの決定論テスト。
 //!
 //! Windows は `WM_DPICHANGED`（窓の拡大率）と `WM_DISPLAYCHANGE`（モニタ表）の順序を保証
-//! しない。拡大率通知が先に届く順序の 2 段書込を是正前の赤で示す対テストと、待ちの上限・
+//! しない。拡大率通知が先に届く順序で 2 段書込をしないことの対テストと、待ちの上限・
 //! 別モニタへ移した窓は、`frame_transition_branch_wait_tests.rs` と
 //! `frame_transition_branch_tests.rs` が拡大率 120 と 192 で持つ。ここが持つのは、そこに無い
 //! 駆動口の陽性の対・待ち札のあるバルーンへの随伴・`kind=hold` の発行点・シェルの切り替えを
@@ -45,7 +45,9 @@ fn shell0() -> u32 {
 ///
 /// 見送り点は 5 つ（＋シェルの切り替えの見送り）。作業領域変化を契機とする再スナップの点の
 /// 零件と陽性の対は `frame_work_area_resnap_hold_tests.rs` が持つ——ここへ足さないのは、その点の
-/// 駆動には「札が残ったまま作業領域が動く」という別の配置が要るからである。
+/// 駆動には「札が残ったまま作業領域が動く」という別の配置が要るからである。面の `move` の
+/// ずれの点（`site=pattern-move`）は、門の在処を `frame_transition_branch_wait_tests.rs` が、
+/// 振る舞いを `frame/move_shift_tests.rs` の `deferred_windows_are_shifted_after_the_hold` が見る。
 #[test]
 fn the_same_drive_ports_write_when_nothing_is_waiting() {
     let mut harness = FrameHarness::new();
@@ -174,7 +176,9 @@ fn transition_lines(drive: impl FnOnce()) -> Vec<String> {
 }
 
 /// 本ファイルが駆動する 3 つの点それぞれが `kind=hold` を出し、**どの点で見送ったか**が
-/// `site=` で判る（5 つのうち `site=work-area-resnap` は `frame_work_area_resnap_hold_tests.rs` が持つ）。
+/// `site=` で判る（5 つのうち `site=work-area-resnap` は `frame_work_area_resnap_hold_tests.rs` が
+/// 持つ。`site=pattern-move` の記録を駆動するテストは無いが、ここで見る点と同じ
+/// `defers_window_write` を通る）。
 #[test]
 fn each_of_the_three_sites_emits_its_own_hold_record() {
     let mut harness = FrameHarness::new();

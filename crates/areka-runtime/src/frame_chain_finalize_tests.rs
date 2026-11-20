@@ -519,3 +519,40 @@ fn partner_flips_to_right_of_body_on_left_edge() {
     );
     let _residue = drain_window_pos_commands();
 }
+
+/// 並べ終えた時点の保存に、相方の寄せた後の位置（下端中央の x・上端の y）が書かれる。
+#[test]
+fn save_at_finalize_writes_clamped_partner_position() {
+    use super::persist_test_support::left_edge::{SIZES, placements, shown, world};
+    use super::persist_test_support::{PersistStore, spawn_shown};
+    use areka_sylphya::{Axis, PersistKey};
+    use wintf::ecs::window::drain_window_pos_commands;
+
+    let mut world = world();
+    let store = PersistStore::fake();
+    store.wire(&mut world);
+    let gw = spawn_shown(&mut world, &placements(), &shown());
+
+    finalize_chain_once_with(&shown(), &mut world);
+
+    let partner = pos_of(&world, gw.char_window(1).unwrap()).unwrap();
+    assert_eq!(
+        partner.x, SIZES[0].0 as i32,
+        "前提: 相方は右の隣へ寄せられた"
+    );
+    let saved = store.load();
+    let get = |axis| {
+        saved
+            .get(&PersistKey::WindowPos { scope: 1, axis })
+            .cloned()
+    };
+    assert_eq!(
+        (get(Axis::X), get(Axis::Y)),
+        (
+            Some((partner.x + SIZES[1].0 as i32 / 2).to_string()),
+            Some(partner.y.to_string())
+        ),
+        "寄せた後の位置が書かれる: {saved:?}"
+    );
+    let _residue = drain_window_pos_commands();
+}

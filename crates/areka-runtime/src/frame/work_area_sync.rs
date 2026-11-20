@@ -105,7 +105,12 @@ pub(super) fn sync_monitor_snapshot(world: &mut World) -> Option<SnapshotChange>
         let monitors: Vec<Monitor> = world.query::<&Monitor>().iter(world).cloned().collect();
         let change = sync_monitor_snapshot_with(world, &monitors);
         // ここで入れ直した 2 源を、次の呼び出しが「外から入れ直された」と数えないため。
-        let _ = watch.params.get(world);
+        if let Err(error) = watch.params.get(world) {
+            warn!(
+                %error,
+                "[{WORK_AREA_SYNC_CONTEXT}] 見張りの印を進められない（次のフレームで 1 回作り直す）"
+            );
+        }
         watch.seen = Some(monitors.len());
         change
     })
@@ -231,7 +236,7 @@ mod test_open {
     ///
     /// # 見送った窓は取り残されない（次の機会は**別の点**が持つ）
     ///
-    /// ほかの 3 点は毎フレーム走るが、本関数は作業領域源が差し替わったフレームだけ走る。ゆえに
+    /// ほかの見送り点は毎フレーム走るが、本関数は作業領域源が差し替わったフレームだけ走る。ゆえに
     /// 見送ったフレームの [`SnapshotChange`] は二度と来ない。それでも取り残されないのは、
     /// **札を外すのが拡大率の相だけ**であり、その相が `Changed<DPI>` と札を持つ窓の**和集合**を
     /// 対象に取るからである。解除フレームには当該窓が必ず対象へ入り、

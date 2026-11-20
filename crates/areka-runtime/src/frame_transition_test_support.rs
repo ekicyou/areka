@@ -11,13 +11,13 @@ use areka_placement::config::BalloonXMode;
 use areka_placement::diag::WindowKind;
 use areka_placement::dpi_sync::DpiSyncHold;
 use areka_placement::follow::{Anchored, BalloonFollow, OffsetBase};
-use areka_placement::resolver::{Anchor, PointPx};
+use areka_placement::resolver::{Anchor, PointPx, SizePx, keyword_balloon_pos};
 use areka_placement::spawn::BalloonKeywordBase;
 
 use super::shared_test_support::{BALLOON_SPAWN_SIZE, BASE_OFFSETS, HIGH_DPI, LOW_DPI, SCALE_120};
 use super::test_support::{
-    FakeReports, FrameHarness, SPAWN_SIZE_0, SPAWN_SIZE_1, s2_monitors, s2_monitors_with_work_area,
-    s2_work_area_for_dpi,
+    FakeReports, FrameHarness, SPAWN_SIZE_0, SPAWN_SIZE_1, pos_of, s2_monitors,
+    s2_monitors_with_work_area, s2_work_area_for_dpi, size_of,
 };
 use super::{balloon_target, shell_target};
 use crate::placement_tests::transition_judge::WRITES_PER_WINDOW_MAX;
@@ -154,7 +154,8 @@ pub fn raise_scale_without_moving_the_work_area(harness: &mut FrameHarness) {
 }
 
 /// 全スコープのキャラ窓へキーワード素材を付ける（本番の spawn が `ScopePlacement` から
-/// 付けるのと同じ Component をそのまま置く）。
+/// 付けるのと同じ Component をそのまま置く）。[`settle_at`] の後に呼ぶ: 門は係留の腕より前に
+/// 立つので、整地の間に素材があると基準が係留されないまま残る。
 pub fn attach_material(harness: &mut FrameHarness) {
     for scope in harness.scopes().to_vec() {
         let char_window = harness.char_window(scope);
@@ -276,4 +277,30 @@ fn the_transition_cases_run_against_a_multi_monitor_work_area_table() {
             "dpi={dpi}: モニタ別拡大率表が複数モニタになっていない: {table:?}"
         );
     }
+}
+
+/// 窓の位置（`WindowPos.position`）。
+pub fn window_pos_of(harness: &FrameHarness, entity: Entity) -> Point {
+    pos_of(&harness.world, entity).expect("窓に位置がある")
+}
+
+/// 窓の現寸（`WindowPos.size`）。
+pub fn window_size_of(harness: &FrameHarness, entity: Entity) -> SizePx {
+    let size = size_of(&harness.world, entity).expect("窓に寸がある");
+    SizePx {
+        w: size.width,
+        h: size.height,
+    }
+}
+
+/// 今の実寸に対するキーワード素材の揃えのオフセット（本番と同じ式を同じ口から呼ぶ）。
+pub fn keyword_alignment(harness: &FrameHarness, scope: usize) -> PointPx {
+    keyword_balloon_pos(
+        KEYWORD_MODE,
+        PointPx { x: 0, y: 0 },
+        window_size_of(harness, harness.char_window(scope)),
+        window_size_of(harness, harness.balloon_window(scope)),
+        KEYWORD_ADJUST,
+    )
+    .expect("中央揃えのモードは基本位置を持つ")
 }

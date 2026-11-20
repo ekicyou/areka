@@ -366,7 +366,7 @@ fn a_window_dragged_apart_before_the_change_is_not_moved() {
         );
     }
 
-    // 陽性の対: 離していなければ詰まる（詰め直しは生きている）。
+    // 陽性の対: ドラッグで隣に付け直した窓は詰まる（ドラッグした事実では外さない）。
     let mut fresh = FrameHarness::new();
     let mut fresh_source = FakeReports::default();
     boot_at_high(&mut fresh, &mut fresh_source);

@@ -51,7 +51,7 @@ fn empty_atlas() -> AtlasTable {
 /// 合成 `BootAssets`（shell scope 集合と同一の balloon scope 集合を持つ標準形）。
 ///
 /// `plan_attachments` が実際に読むのは `shells[*].scope`／`shells[*].initial_surface_id`／
-/// `balloons[*].scope` のみ。残りのフィールド（emo_world／atlas／model／resolver／
+/// `balloons[*].scope` のみ。残りのフィールド（emo_world／atlas／resolver／
 /// static_binds）は最小の headless 値で埋める（COM/GPU/fixture 不要の純合成）。
 /// 装着の相にも渡る。空の値で装着は成り立つ。
 pub fn synth_assets(shells: &[(u32, u32)]) -> BootAssets {
@@ -85,9 +85,7 @@ pub fn synth_assets_with_balloons(shells: &[(u32, u32)], balloon_scopes: &[u32])
             .collect(),
         resolver: SurfaceResolver::new(BTreeMap::new()),
         static_binds: areka_seriko::DefaultBinds::uniform(BindSet::default()),
-        // plan_attachments は bind_resolver を読まない（headless 純合成）＝空表で十分。
         bind_resolver: BindResolver::empty(),
-        // plan_attachments は loop_tables を読まない（headless 純合成）＝空表で十分。
         loop_tables: LoopTables {
             shell: AnimationTable::empty(),
             balloon: BTreeMap::new(),
@@ -428,8 +426,7 @@ const S2_TASKBAR_LOGICAL_H: i32 = 48;
 /// 拡大率が上がるとタスクバーの物理高が `dpi/96` 倍に伸び、work area 下端がその分だけ
 /// 上がる——これが「DPI が変われば接地すべき下端が変わる」ことの機構であり、S2 が落として
 /// いるのはまさにこの再導出である。`dpi=96` では `1492−48=1444`＝[`resnap_placements`] の
-/// 初期配置がちょうど満たす下端であり、**96 だけが旧 Y と新 Y の自己整合で通過する**
-/// （診断レポート §1.2「なぜ dpi=96 では隠れるか」）。
+/// 初期配置がちょうど満たす下端であり、**96 だけが旧 Y と新 Y の自己整合で通過する**。
 pub fn s2_work_area_for_dpi(dpi: u16) -> RectPx {
     let taskbar_px = S2_TASKBAR_LOGICAL_H * dpi as i32 / 96;
     RectPx {
@@ -628,7 +625,7 @@ fn harness_monitor(handle: isize, work_area: RectPx, monitor_bottom: i32, dpi: u
 /// 多フレーム駆動ハーネス。
 ///
 /// [`dpi_world`] の檻（2 スコープ・偽 `WindowHandle`・書込 witness・`DPI` 96）を土台に、
-/// **フレームを進めながら 3 つの源を差し替える**口を足したもの:
+/// **フレームを進めながら 4 つの源を差し替える**口を足したもの:
 ///
 /// | 源 | 差替口 | 実体 |
 /// |---|---|---|
@@ -638,7 +635,7 @@ fn harness_monitor(handle: isize, work_area: RectPx, monitor_bottom: i32, dpi: u
 /// | 窓の拡大率 | [`set_window_dpi`](Self::set_window_dpi)／[`set_scope_dpi`](Self::set_scope_dpi) | 各窓の `DPI` |
 ///
 /// 前 2 者は同期段（[`run_work_area_sync`](Self::run_work_area_sync)）が作り直す側であり、
-/// 3 つ目はその入力である。**独立に**差し替えられることが観測（接地点と作業領域
+/// 3 つ目はその入力、4 つ目は拡大率の相の入力である。**独立に**差し替えられることが観測（接地点と作業領域
 /// 下端の差）の前提である——同じ源から両方を引いたら差は定義上つねに 0 になる。
 ///
 /// # テスト間で状態を残さない
@@ -650,7 +647,7 @@ fn harness_monitor(handle: isize, work_area: RectPx, monitor_bottom: i32, dpi: u
 /// `new` の側が要るのは、ハーネスを使わない経路が残した汚れも掬うためである（この向きだけを
 /// 残留の検査が固定している）。`Drop` の側が要るのは、ハーネスを使ったテストの**次に走るのが
 /// ハーネスでない**場合に、キューと写しが汚れたまま渡ってしまうためである——この向きは
-/// areka 側に現在読み手が居ないので**どのテストでも赤にできない**（レビューで確認）。
+/// areka 側に現在読み手が居ないので**どのテストでも赤にできない**。
 /// 検査できない残留を「隔離済み」と言わないために、両側で閉じる。
 /// なお `Drop` はスコープ末尾で走るので、ハーネスを生かしたまま次を組む形（残留の検査そのもの）
 /// は壊れない。
@@ -831,9 +828,9 @@ impl FrameHarness {
 
     /// 報告寸の突合を 1 回回す（本番の drain 相・可視性の相の後段と同一の関数）。
     ///
-    /// 待ち札のある窓へは、この口からも窓書込が出ないことを問う（「4 点すべて」の
-    /// 2 つ目）。会話中の表情差替（`ShowSurface`）が積む窓寸要求は本番ではこの経路で
-    /// landing するので、待ち中の表情差替を組むにはこの駆動口が要る。
+    /// 待ち札のある窓へは、この口からも窓書込が出ないことを問う（見送り点の 1 つ）。会話中の
+    /// 表情差替（`ShowSurface`）が積む窓寸要求は本番ではこの経路で landing するので、待ち中の
+    /// 表情差替を組むにはこの駆動口が要る。
     pub fn run_reconcile<S: ScaleReportSource>(&mut self, source: &mut S) {
         reconcile_reported_sizes(source, &mut self.world);
     }

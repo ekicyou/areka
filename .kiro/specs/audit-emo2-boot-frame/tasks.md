@@ -246,7 +246,7 @@
 
 - [ ] 7. 仕上げの確かめ
 
-- [ ] 7.1 範囲へ audit をかけ直し、新しい指摘を 0 件にする（T26）
+- [x] 7.1 範囲へ audit をかけ直し、新しい指摘を 0 件にする（T26）
   - `main` を取り込み、範囲のファイルの数と行数を測り直す（移したファイルと新しいファイルは移した先で数える）
   - 範囲だけへ ponytail の audit を、上限 20 件を外し全部のファイルを全行読む作法でかけ直す。出た指摘は直しが生んだ物も含めて直し、0 件になるまで繰り返す
   - 5 回目で収まらず「必ず直す」と本番の振る舞いに関わるものが 0 件なら、開発者に一言知らせて打ち切る。同じ所から「必ず直す」が出続ければ Fable で総括して議題にする。前の回の直しが呼んだ連鎖は Fable でまとめて直す
@@ -288,3 +288,4 @@
 - 5.4: `--release` で合否が変わる 1 本は `frame::work_area_resnap_hold_tests::the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites`（`#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]`・前は `--release` で赤、今は ignored）。87 番で検知段の同寸 skip を消しても緑のまま（`resize_window_to` のべき等が吸う）なので、説明は「同じ寸を何度渡しても窓へ書かない」に弱めた。41 番の一掃は ID だけでなく設計の部品の記号（C2・C5・C7・D15）も理由の言葉に置き換えた。`確定台帳` の参照は 17 ファイルの外（placement の `dpi_sync.rs` ほか・`frame/work_area_sync.rs`・`frame_work_area_sync_tests.rs`）に残る（7.1 で見る）。
 - 5.5: 109 番は返事の待ちを `Progress::Unknown` にしても目印の無い待ちのまま（差し戻し）。`ReplyReceiver` の mpsc は外から触れず、kanade は問い合わせにその場で答えるのでテストから見える進みが無い。調べ係の案で、同じ受け箱へ `KanadeMsg::Close` を送り `join_bounded` で待つ柵にした（20 番と同じ形・打ち切りは［止まった］）。design.md の 109 番の行と research.md の直し方の欄を実装に合わせて改めた（audit 系は推奨案で承認してよい・11-04）。98 番の `NO_BODY` は `areka-runtime` の `session_hooks.rs`・`frame/status_report_tests.rs` が守る。
 - 6: `COMPAT_ARCHITECTURE.md` §8 L228（`\v` の行）の古い置き場は持ち主の brief が無いので research 12.6 に「申し送り先の決まっていない件」として残した（完了の棚卸で起票する）。`frame_persist_test_support.rs:154`（`Drop for PersistStore` の `let _ = handle.join()`）は範囲の中なので 7.1 の audit で見る。`input_events/drag_test_support.rs:283` は `audit-areka-input-menu` の持ち分（audit-areka-app の brief に注として書いた）。
+- 7.1: かけ直しは 5 回（44→12→3→0→14→確かめ 0）。4 回目の 0 は 1〜3 回目と同じ物差しで数えておらず、Fable の審査で差し戻した。5 回目（説明の文だけ・必ず直すと本番の振る舞いは 0）は Fable で直し、要件 9.6 で閉じた。本番の変更は `frame/dpi.rs` の余分な `wrote &&` の削除（振る舞いは同じ）と `frame/work_area_sync.rs` の `warn!` 1 行（届かない道・7.2 で新しいログ行として数える）。範囲の外の申し送り: `areka-placement/src/chain_realign.rs:168-170` の説明（`test-crash-report-merge` へ）・`COMPAT_ARCHITECTURE.md` の L213 付近と §8 L228（持ち主なし・research 12.6）。design.md の 56 番の行は spec の名を書くと言うが、コードは CLAUDE.md に合わせて名を消した（完了で設計の行を合わせる）。

@@ -3,13 +3,13 @@
 //! # ここが押さえる是正
 //!
 //! 見送りの決まりは「待ち札のある窓へのすべての窓書込を見送る」であり、
-//! 例外は随伴バルーンの追従ただ 1 つである。ところが列挙していた見送り点は 3 つ——拡大率の
-//! 相・報告寸の突合・再スナップ——しか無く、
-//! [`resnap_for_work_area_change`](super::work_area_sync::resnap_for_work_area_change) が
-//! 抜けていた。**「再スナップ」という日本語が別々の 2 関数を指していた**ためである
-//! （列挙が指していたのは `resnap_shell_targets` の側）。
+//! 例外は随伴バルーンの追従ただ 1 つである。見送り点は拡大率の相・報告寸の突合・再スナップ
+//! （`resnap_shell_targets`）の 3 つのほかに、
+//! [`resnap_for_work_area_change`](super::work_area_sync::resnap_for_work_area_change) にも
+//! 要る。**「再スナップ」という日本語が別々の 2 関数を指す**ので、片方だけを見送り点と
+//! 読み違えやすい。
 //!
-//! 抜けた結果、次の 2 条件が揃うと待ち札の付いた窓へ窓書込が届く:
+//! この 4 つ目が抜けると、次の 2 条件が揃ったときに待ち札の付いた窓へ窓書込が届く:
 //!
 //! 1. 窓の拡大率と帰属モニタの表が食い違ったまま札が残る（「上限 30 フレームまで待つ」
 //!    構成の縁の配置と同じ状態）。
@@ -30,7 +30,7 @@
 //! - **札の無いキャラ窓には従来どおり書く**（scope 1・経路語 `WorkAreaResnap`）。これが
 //!   無いと「4 点目を足したら再スナップが全部止まった」という退行を検出できない。
 //! - **札のあるバルーンへ随伴の追従は届く**（scope 1 のバルーン・経路語 `BalloonFollow`）。
-//!   「不変条件の唯一の例外」が生きていることを、4 点目を足した後の同じ駆動で示す。
+//!   「不変条件の唯一の例外」が生きていることを、4 点目のある同じ駆動で示す。
 //!
 //! # 不変条件の監視は生きたまま・ただし `WorkAreaResnap` では鳴らない
 //!
@@ -367,9 +367,8 @@ fn the_invariant_watch_no_longer_fires_for_work_area_resnap() {
 /// 上の零件と**同じ土台**（同じハーネス・同じ整地・同じ札）で組んであるのが要点である。
 /// 監視を丸ごと削れば本テストが赤くなり、上の零件だけが空虚に緑になることはない。
 ///
-/// 経路語は当初 `move_window_to`（＝`MoveCue`）だったが、「明示操作は見送らない
-/// ことが正しい＝鳴らすのは偽の警報」と裁定したため差し替えた（分類の全体は
-/// `crates/areka-placement/src/follow_window_move_hold_watch_tests.rs`）。
+/// 経路語は `ChainRealign` を使う。明示操作（`MoveCue`）は見送らないのが正しく、鳴らすと偽の
+/// 警報になる（分類の全体は `crates/areka-placement/src/follow_window_move_hold_watch_tests.rs`）。
 #[test]
 #[should_panic(expected = "DpiSyncHold")]
 #[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]

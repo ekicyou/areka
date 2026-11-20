@@ -29,48 +29,36 @@
 //! `plan_attachments`（`GhostWindows::scopes()` を正とする純関数）は装着の計画で、`attach` にある。
 
 mod attach;
-// 拡大率遷移でのバルーン追従オフセットの追随。
-mod balloon_offset_follow;
-// 今の定義の唯一の書き手。
 mod balloon_face;
+mod balloon_offset_follow;
 mod dpi;
-// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま。
+// 下の `test-support` の組は、外へはテストのビルドでだけ開く。crate の中は今の道のまま。
 #[cfg(feature = "test-support")]
 pub mod drain_resnap;
 #[cfg(not(feature = "test-support"))]
 mod drain_resnap;
-// 位置の指令の預かり。
 mod move_hold;
-// 面の `move` のずれの相。
 mod move_shift;
-mod scale_text;
-// 倍率の変わりの相。
-// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま。
 #[cfg(feature = "test-support")]
 pub mod scale_notice;
 #[cfg(not(feature = "test-support"))]
 mod scale_notice;
+mod scale_text;
 pub mod status_report;
-// シェル・バルーンの差し替えの相。
-// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま。
 #[cfg(feature = "test-support")]
 pub mod switch;
 #[cfg(not(feature = "test-support"))]
 mod switch;
-// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま。
-#[cfg(feature = "test-support")]
-pub mod wiring;
-#[cfg(not(feature = "test-support"))]
-mod wiring;
-// 常に手前の状態と取り出しの相。
-// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま。
 #[cfg(feature = "test-support")]
 pub mod window_state;
 #[cfg(not(feature = "test-support"))]
 mod window_state;
+#[cfg(feature = "test-support")]
+pub mod wiring;
+#[cfg(not(feature = "test-support"))]
+mod wiring;
 use self::window_state::run_window_state_phase;
 pub use self::window_state::{DiscardReason, log_stay_on_top_discard};
-// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま。
 #[cfg(feature = "test-support")]
 pub mod work_area_sync;
 #[cfg(not(feature = "test-support"))]
@@ -292,7 +280,7 @@ pub mod transition_test_support;
 #[path = "frame_persist_test_support.rs"]
 pub mod persist_test_support;
 
-// 移動の取り出しの置き場の檻。x64 だけで回すテストは宣言の `cfg(all(test, target_pointer_width = "64"))` で外す。
+// 移動の取り出しの置き場の檻。
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_move_order_tests.rs"]
 mod move_order_tests;
@@ -332,7 +320,7 @@ mod default_pos_track_tests;
 #[path = "frame_chain_realign_tests.rs"]
 mod chain_realign_tests;
 
-// 遷移後の連鎖再解決の武装条件（3 連言の特異性）の檻。
+// 遷移後の連鎖再解決の武装条件（2 連言の特異性）の檻。
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_chain_realign_arm_tests.rs"]
 mod chain_realign_arm_tests;

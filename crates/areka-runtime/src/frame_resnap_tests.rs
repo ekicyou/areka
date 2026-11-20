@@ -1,6 +1,7 @@
 use super::shared_test_support::wiring;
 use super::test_support::{
-    FakeSizes, all_shown, assert_no_write, dpi_world, pos_of, resnap_world, size_of,
+    FakeSizes, WRITER_WITNESS, all_shown, arrangement_offset_of, assert_no_write, dpi_world,
+    pos_of, resnap_world, size_of,
 };
 use super::*;
 
@@ -238,6 +239,21 @@ fn resnap_shell_targets_is_noop_with_unattached_presenter() {
 /// `dpi_world` で、窓状態の不変と単一ライター経路を通った痕跡の無さの両方を見る。
 #[test]
 fn resnap_from_sizes_same_size_repeats_never_write_a_window() {
+    // 陽性の対: 違う寸なら同じ witness が書込を拾う。
+    {
+        let (mut world, gw) = dpi_world();
+        let char0 = gw.char_window(0).unwrap();
+        resnap_from_sizes(
+            &mut world,
+            [(0usize, SizePx { w: 434, h: 700 })].into_iter(),
+        );
+        assert_ne!(
+            arrangement_offset_of(&world, char0),
+            WRITER_WITNESS,
+            "前提が崩れている: 違う寸の書込を witness が拾わない"
+        );
+    }
+
     let (mut world, gw) = dpi_world();
     let char0 = gw.char_window(0).unwrap();
     let balloon0 = gw.balloon_window(0).unwrap();

@@ -9,11 +9,11 @@
 //! **素材があるあいだ追随を見送る**方を採った——再導出は新しい実表示寸から**絶対値として**
 //! 導くので、遷移後の正しい揃えは再導出だけで出せるからである。
 //!
-//! 門は追随の新規コード側（[`rescale_balloon_follow_offset`]）にあり、再導出側
-//! （`rederive_keyword_balloon_offset`）の発火条件と「経路で絞らない」設計判断には
-//! 1 文字も触れていない。
+//! 門は追随の側（[`rescale_balloon_follow_offset`]）にあり、再導出側
+//! （`rederive_keyword_balloon_offset`）の発火条件と「経路で絞らない」設計判断は
+//! そのまま保つ。
 //!
-//! # 受容した残余（開発者裁定 2026-08-27）
+//! # 受容した残余（開発者の裁定）
 //!
 //! 丸めの偶然でキャラ窓の物理寸が変わらない遷移では、再導出は**寸が変わらないので発火せず**
 //! （`keyword_base.rs` の `old_size == Some(new_size)` の腕）、追随は**素材があるので見送る**
@@ -35,19 +35,17 @@
 //! 赤になるのは**判定語の側**であって値の側ではない。帰属をここで取り違えると
 //! 「値が合っているから門は効いている」という誤った根拠に使われる。
 
-use wintf::ecs::WindowPos;
-
 use areka_placement::diag::WindowKind;
 use areka_placement::follow::BalloonFollow;
-use areka_placement::resolver::{PointPx, SizePx, keyword_balloon_pos};
+use areka_placement::resolver::PointPx;
 use areka_placement::spawn::BalloonKeywordBase;
 use areka_placement::transition_diag::OFFSET_VERDICT_KEYWORD_PENDING;
 
 use super::shared_test_support::{HIGH_DPI, LOW_DPI};
 use super::test_support::{FakeReports, FrameHarness, capture_logs, count_level};
 use super::transition_test_support::{
-    KEYWORD_ADJUST, KEYWORD_MODE, attach_material, follow_of, offset_lines, offset_of,
-    raise_scale_without_moving_the_work_area, settle_at, writes_for,
+    attach_material, follow_of, keyword_alignment, offset_lines, offset_of,
+    raise_scale_without_moving_the_work_area, settle_at, window_size_of, writes_for,
 };
 use super::*;
 
@@ -59,23 +57,10 @@ fn has_material(harness: &FrameHarness, scope: usize) -> bool {
         .is_some()
 }
 
-/// 窓の現寸（`WindowPos.size`）。
-fn size_px(harness: &FrameHarness, entity: Entity) -> SizePx {
-    let size = harness
-        .world
-        .get::<WindowPos>(entity)
-        .and_then(|wp| wp.size)
-        .expect("窓に寸がある");
-    SizePx {
-        w: size.width,
-        h: size.height,
-    }
-}
-
 /// 拡大率を上げ、**キャラ窓の実表示寸も倍で報告する**（再導出が発火する通常腕）。
 fn raise_scale_with_a_doubled_size_report(harness: &mut FrameHarness, source: &mut FakeReports) {
     for scope in harness.scopes().to_vec() {
-        let current = size_px(harness, harness.char_window(scope));
+        let current = window_size_of(harness, harness.char_window(scope));
         let target = shell_target(u32::try_from(scope).expect("scope は u32 域")).0;
         source.refresh.insert(
             target,
@@ -87,20 +72,6 @@ fn raise_scale_with_a_doubled_size_report(harness: &mut FrameHarness, source: &m
     }
     harness.set_monitor_table_for_dpi(HIGH_DPI);
     harness.set_window_dpi(HIGH_DPI);
-}
-
-/// 再導出が出すはずの offset（P5 と同一の式を同じ口から呼ぶ＝幾何を書き写さない）。
-fn expected_keyword_offset(harness: &FrameHarness, scope: usize) -> PointPx {
-    let char_size = size_px(harness, harness.char_window(scope));
-    let balloon_size = size_px(harness, harness.balloon_window(scope));
-    keyword_balloon_pos(
-        KEYWORD_MODE,
-        PointPx { x: 0, y: 0 },
-        char_size,
-        balloon_size,
-        KEYWORD_ADJUST,
-    )
-    .expect("中央揃えのモードは基本位置を持つ")
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +130,7 @@ fn the_gate_holds_the_offset_and_the_base_pair_bit_identical() {
         );
         assert_ne!(
             old.offset(),
-            expected_keyword_offset(&harness, scope),
+            keyword_alignment(&harness, scope),
             "scope={scope}: 探針が退化している（旧 offset が偶然いまの中央揃えと一致した・受容した残余の腕）"
         );
     }
@@ -250,6 +221,11 @@ fn only_the_rederivation_writes_the_offset_when_the_size_changes() {
     });
     let writes = harness.drain_writes();
 
+    assert_eq!(
+        offset_lines(&logs).len(),
+        harness.scopes().len(),
+        "追随の判定の行がスコープごとに 1 行ない: {logs:?}"
+    );
     for line in offset_lines(&logs) {
         assert!(
             line.contains(&format!("verdict={OFFSET_VERDICT_KEYWORD_PENDING}")),
@@ -263,7 +239,7 @@ fn only_the_rederivation_writes_the_offset_when_the_size_changes() {
             !has_material(&harness, scope),
             "scope={scope}: 寸が変わったのに再導出が素材を消費していない（探針の退化）"
         );
-        let expected = expected_keyword_offset(&harness, scope);
+        let expected = keyword_alignment(&harness, scope);
         assert_eq!(
             offset_of(&harness, scope),
             expected,
@@ -283,7 +259,7 @@ fn only_the_rederivation_writes_the_offset_when_the_size_changes() {
 }
 
 // ---------------------------------------------------------------------------
-// 受容した残余（開発者裁定 2026-08-27）
+// 受容した残余（開発者の裁定）
 // ---------------------------------------------------------------------------
 
 /// **自己回復**: 取り残された揃えは、次に寸が変わった時点で再導出が直す。
@@ -312,7 +288,7 @@ fn the_left_behind_alignment_heals_on_the_next_size_change() {
         );
         assert_eq!(
             offset_of(&harness, scope),
-            expected_keyword_offset(&harness, scope),
+            keyword_alignment(&harness, scope),
             "scope={scope}: 次の寸法変化で揃えが直っていない"
         );
     }

@@ -74,3 +74,4 @@
 - **オ**: `crates/areka-placement/src/test_support.rs` の `code_only` は `source_text_test_support::code_only` の写し。
 - **カ**: `crates/areka-placement/src/follow_window_move_diag_tests.rs` の `window_move_lines` は、`areka-runtime` の `frame_test_support.rs` と同じ働き（上流の crate の `test_support` へ移せば両方が 1 つを使える）。
 - **移したテストの置き場の古い注**: `crates/areka-placement/src/chain_rule_tests.rs` の 5 行目が、移す前の置き場（本体の `frame_chain_rule_tests.rs`）を指している。今は `crates/areka-runtime/src/frame_chain_rule_tests.rs`。
+- **武装の説明の古い注**: `crates/areka-placement/src/chain_realign.rs` の 168〜170 行（`arm_chain_realign` の説明）の「寸変化を伴って書込を起こしたときに呼ぶ。判断（寸が変わったか・書込が起きたか）は呼び手が持つ」は、今の呼び手（`crates/areka-runtime/src/frame/dpi.rs`）が窓の種類と窓の寸の前後比べだけを見る形と合わない（`audit-emo2-boot-frame` のかけ直しで `wrote &&` を消した・research の 13.5 と 13.7）。

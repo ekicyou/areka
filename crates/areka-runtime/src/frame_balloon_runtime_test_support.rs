@@ -1,6 +1,6 @@
 //! 手動の位置にいる普通のバルーンの文字の層を実 GPU で作る足場。
 //!
-//! `frame_test_support.rs` が 1 ファイル 1,000 行の上限に近いため、中身を変えずに分けた。
+//! `frame_test_support.rs` が 1 ファイル 1,000 行の上限に近いので、兄弟に置く。
 
 use areka_emo_text::state::TextLayerConfig;
 
@@ -25,8 +25,12 @@ pub fn manual_balloon_runtime(
     use dola::cue::{CueCommand, TalkCue};
     use wintf::ecs::Visual;
 
-    let mut world = World::new();
-    let permit = super::test_support::gpu_on(&mut world);
+    // 途中で panic しても許可が装置より後に捨てられるよう、許可を先に束ねる。
+    let (permit, mut world) = {
+        let mut world = World::new();
+        let permit = super::test_support::gpu_on(&mut world);
+        (permit, world)
+    };
     let window = world.spawn_empty().id();
     let slot = world.spawn((Visual::default(), ChildOf(window))).id();
     world.flush();

@@ -87,8 +87,7 @@ fn dpi_phase_and_drain_phase_record_distinct_routes() {
 /// **完了状態**: DPI 変化ゼロの起動で `DpiReproject` レコードが 1 行も出ない。
 ///
 /// 初回表示の k₀ 補正は drain 後段の報告回収（`reconcile_reported_sizes`）で landing する
-/// （`frame/dpi.rs` の `run_dpi_phase` doc「初回表示の k₀ 補正＝Flow 3 手順 5 はこちらの経路で
-/// landing する」）。この走行を `DpiReproject` と名乗らせると、セッション②の受理回数突合が
+/// （`frame/dpi.rs` の `run_dpi_phase` の doc）。この走行を `DpiReproject` と名乗らせると、セッション②の受理回数突合が
 /// 起動ごとに偽陽性を拾う。
 #[test]
 fn boot_without_any_dpi_change_emits_no_dpi_reproject_record() {

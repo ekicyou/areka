@@ -52,8 +52,7 @@ use crate::target_map::window_scope;
 ///
 /// 本フェーズは**指令の適用だけ**を担う。表示成立点の状態照合報告（`take_pending_resize`）を
 /// 窓へ反映する `reconcile_reported_sizes` は、呼び出し順の所有者である
-/// [`frame_system`](super::frame_system) が本フェーズの**後**に直接呼ぶ
-/// 。バルーン可視性の相を
+/// [`frame_system`](super::frame_system) が本フェーズの**後**に直接呼ぶ。バルーン可視性の相を
 /// 「全 `\b` 指令の適用後」かつ「表示が積む窓寸要求の消化前」へ挟むため、順は適用 → 反映である。
 pub fn run_drain_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     // attach 前はチャネルが保留バッファを兼ねる（取りこぼしなし・FIFO）。装着後のみ drain する。

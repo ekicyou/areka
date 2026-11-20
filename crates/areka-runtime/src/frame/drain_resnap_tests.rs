@@ -100,7 +100,7 @@ fn drain_returns_while_the_sender_keeps_sending() {
         })
     };
     let (done_tx, done_rx) = mpsc::channel::<usize>();
-    // 進みの目印は drain が適用した数（負荷の下で 3 秒の自前の締切が赤になった・`areka-test-binary-stability` の `load-repro.md` の ⑹）。
+    // 進みの目印は drain が適用した数（自前の締切は負荷の下で赤になる）。
     let applied_so_far = Arc::new(AtomicU64::new(0));
     thread::spawn({
         let applied_so_far = Arc::clone(&applied_so_far);

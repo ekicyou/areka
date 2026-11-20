@@ -35,7 +35,6 @@
 //! 動いていなければ**書かない」＝ 2 条件のうち `Changed` 側が効いていることを
 //! 固定する（この 1 本が無いと、skip 腕で無条件に追従を呼ぶ実装が緑になる）。
 
-use wintf::ecs::WindowPos;
 use wintf::ecs::window::SetWindowPosCommand;
 
 use areka_placement::diag::{PlacementRoute, WindowKind};
@@ -44,7 +43,7 @@ use areka_placement::resolver::PointPx;
 use super::shared_test_support::{HIGH_DPI, LOW_DPI};
 use super::test_support::{FakeReports, FrameHarness, s2_work_area_for_dpi};
 use super::transition_test_support::{
-    offset_of, raise_scale_without_moving_the_work_area, settle_at, writes_for,
+    offset_of, raise_scale_without_moving_the_work_area, settle_at, window_pos_of, writes_for,
 };
 use super::*;
 
@@ -125,11 +124,7 @@ fn an_idempotent_skip_converges_the_balloon_in_exactly_one_write() {
 
         // 収束先は「確定済みキャラ窓位置 ＋ **新しい** offset」——1 度の書込で最終位置へ
         // 行っている（古い offset で書いてから直す＝中間位置の提示、が起きていない）。
-        let char_pos = harness
-            .world
-            .get::<WindowPos>(harness.char_window(scope))
-            .and_then(|wp| wp.position)
-            .expect("キャラ窓に位置がある");
+        let char_pos = window_pos_of(&harness, harness.char_window(scope));
         let cmd = &balloon_writes[0];
         assert_eq!(
             (cmd.x, cmd.y),
@@ -146,7 +141,10 @@ fn an_idempotent_skip_converges_the_balloon_in_exactly_one_write() {
     // 別経路の書込は 0（予算の 3 つ目）。
     let other: Vec<&SetWindowPosCommand> = writes
         .iter()
-        .filter(|cmd| cmd.tag.kind != "char" && cmd.tag.kind != "balloon")
+        .filter(|cmd| {
+            cmd.tag.kind != WindowKind::Char.as_str()
+                && cmd.tag.kind != WindowKind::Balloon.as_str()
+        })
         .collect();
     assert!(
         other.is_empty(),

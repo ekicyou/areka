@@ -247,7 +247,7 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
             }
         } else if let Some((scope, waiting)) = unshown {
             if just_arrived {
-                // 件 5 の測り（MoveMeasure）の語を残す: 拡大率が取れない（表示の前）ので預かった。
+                // 拡大率が取れない（表示の前）ので預かったことを、測りの語で残す。
                 info!(
                     event = "move_ratio_unset",
                     scope,

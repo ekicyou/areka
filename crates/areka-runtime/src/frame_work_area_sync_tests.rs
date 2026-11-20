@@ -20,6 +20,7 @@
 //! モニタ 0 台・窓書込ゼロの各主張にも、同じ理由でそれぞれ陽性の対がある。
 
 use areka_placement::WORK_AREA_SYNC_CONTEXT;
+use areka_placement::diag::WindowKind;
 use areka_placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
 use log_capture_kit::capture;
 use wintf::ecs::window::monitor::Monitor;
@@ -27,7 +28,7 @@ use wintf::ecs::window::monitor::Monitor;
 use super::test_support::{
     FakeReports, FrameHarness, s2_monitors, s2_snapshot, s2_sources, s2_work_area_for_dpi,
 };
-use super::transition_test_support::settle_at;
+use super::transition_test_support::{settle_at, warnings_containing, writes_for};
 
 /// 起動時の拡大率（実機の採取と同じ向き＝高い側から始める）。
 const BOOT_DPI: u16 = 192;
@@ -81,10 +82,7 @@ fn lowering_the_scale_lands_the_ground_point_on_the_new_work_area_bottom_in_one_
 
     // 一度書き（要件 5.8）: 当該キャラ窓への窓書込は 1 件だけ。
     let writes = harness.drain_writes();
-    let char_writes = writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(0) && cmd.tag.kind == "char")
-        .count();
+    let char_writes = writes_for(&writes, 0, WindowKind::Char).len();
     assert_eq!(
         char_writes, 1,
         "キャラ窓の書込が 1 回ではない（中間矩形を挟んでいる）: {writes:?}"
@@ -157,16 +155,14 @@ fn a_changed_monitor_table_rebuilds_both_sources() {
     );
 }
 
-/// 同期を 1 回回し、作業領域の同期の `warn!` の行数を返す。
+/// 同期を 1 回回し、変化があったかと、作業領域の同期の `warn!` の行数を返す。
 fn sync_warnings(harness: &mut FrameHarness) -> (bool, usize) {
     harness.advance_frame();
     let (change, events) = capture(|| harness.run_work_area_sync());
-    let warnings = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .filter(|e| e.message().contains(WORK_AREA_SYNC_CONTEXT))
-        .count();
-    (change.is_some(), warnings)
+    (
+        change.is_some(),
+        warnings_containing(&events, WORK_AREA_SYNC_CONTEXT),
+    )
 }
 
 /// モニターの表が変わらないフレームでは表を集めない。モニター 0 台の `warn!` は、表が

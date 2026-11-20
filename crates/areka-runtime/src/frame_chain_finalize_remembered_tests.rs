@@ -31,7 +31,7 @@ fn boot(
     (drain_window_pos_commands().len(), logs)
 }
 
-/// ⑶ 印 `none`（覚えたときに離れていた・重なっていた）の組は詰めない。
+/// 印 `none`（覚えたときに離れていた・重なっていた）の組は詰めない。
 #[test]
 fn remembered_separate_pair_is_not_tightened() {
     let mut world = persist_world();
@@ -48,7 +48,7 @@ fn remembered_separate_pair_is_not_tightened() {
     );
 }
 
-/// ⑷ 覚えたときと今の幅が同じなら、印 `left` でも誰も動かない。
+/// 覚えたときと今の幅が同じなら、印 `left` でも誰も動かない。
 #[test]
 fn same_widths_as_remembered_move_nobody() {
     let mut world = persist_world();
@@ -60,7 +60,7 @@ fn same_widths_as_remembered_move_nobody() {
     );
 }
 
-/// ⑸ 印の無い古い記憶は位置のまま立つ。
+/// 印の無い古い記憶は位置のまま立つ。
 #[test]
 fn old_memory_without_mark_stands_at_its_position() {
     let mut world = persist_world();
