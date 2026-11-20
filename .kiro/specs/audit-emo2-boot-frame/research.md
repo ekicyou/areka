@@ -912,3 +912,40 @@
 | 112 | G9b-14 |
 | 113 | G3 の 5 節（この文書で番号を付けた） |
 | 114 | 要件 5.5 の読み手（件 5） |
+
+---
+
+## 11. 設計の段の調べと決め（2026-11-20 `/kiro-spec-design`）
+
+- 発見の型: 軽い調べ（既にある仕組みの延長・新しい技術も新しい依存も無い）。外の調べ（Web）は要らない。
+- 読んだ手引き: `.claude/skills/kiro-spec-design/rules/` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、`.kiro/settings/templates/specs/design.md`、前例 `.kiro/specs/completed/audit-emo2-boot-spine/design.md`。ponytail の「いちばん小さい完全な変更」（同じ大きさなら端の場合に正しい方）を直し方の選び方に使った。
+- 調べは 2 つの読み手（3・14 番／33・99・31 番）と、この段の grep と cargo 1 回で行った。
+
+### 11.1 設計の段で決めること（10 節の分類 B）の調べの結果
+
+| 件 | 調べ | 結果 | 決め（design.md） |
+|---|---|---|---|
+| 3 番 | `EmoPresenter::text_slot_view`（`crates/areka-emo-present/src/presenter/read.rs` L100-L115）は mount・applied・native_size が揃うときだけ `Some`。どれも `apply_show` が通ったときだけ書かれる（`presenter/show.rs` L326-L341）。面 0 の `apply_show` が早く戻るのは、装置が無い（装着の門が見るので届かない）・装置の失敗（装着のあいだに装置を失ったときだけ）・`SurfaceNotFound`（面 0 は必ず在るので届かない）・`EmptyComposition`／`ExtentTooLarge`（`Hide` へ縮退して Ok）。他人のバルーンで現実にありうるのは面 0 の絵が GPU の上限より大きい `ExtentTooLarge`。面 0 の絵が読めないバルーンは資産を組む段（`build_balloon_assets_with_limits`→`resolve_balloon_faces`）で `Err` になり、ゴーストは表示なしの縮退で起きる | 後のフレームで配置先が `Some` になる道はある（面の切り替え `after_drain`・装置の失敗からの戻り）。今は `run_text_scale_phase` が未登録の actor を `refresh_actor_scale` の debug で読み飛ばすだけで、文字は永久に出ない | 案 ⑴（文字の拡大率の相で繋ぎ直す・`RuntimeWiring.unconnected_text` に scope と背景色を控える）。案 ⑵ は小さいが端の場合（装着の時だけの装置の失敗・面 0 だけ組めない）に正しくない。問い 1 |
+| 4 番 | 範囲の中で scope を `u32` に直す所は `frame/{attach,dpi,scale_text,drain_resnap×2,move_shift,switch,zorder_drain}.rs` の 8 か所（研究の 4 番の 7 か所に `scale_text.rs` L169 を足した） | 範囲の外の `balloon_visibility_phase.rs` L464 は `box_scopes`（`u32`）との突き合わせで、表示対象の番号は作らない | `target_map.rs` に `MAX_SCOPE` と `window_scope(usize) -> Option<u32>` を置き、`scope_of` も同じ定数を使う。8 か所で使う。ク・アは渡す。問い 2 |
+| 49 番 | wintf の `apply_monitor_snapshot`（`crates/wintf/src/ecs/layout/systems/monitor_systems.rs` L299-L412）は、値が変わったモニターだけ `get_mut` で書き（`differs_in_value`）、新しいモニターは `spawn`、消えたモニターは `despawn` する。areka は `clear_trackers` を呼ばない（grep）ので、消去は `RemovedComponents` でなく数で見るのが確か | Changed は値の変化と追加で立ち、消去は数で見える | 案 ⑴ を World の資源 `MonitorWatch`（持続の `SystemState` と前の数）で。`sync_monitor_snapshot` の署名は変えない（ハーネスと字面の確かめがそのまま）。問い 3 |
+| 33・99 番 | 移すテストが使うのは `bevy_ecs`・`wintf`・`areka_placement`・`areka_sylphya`・`areka_actor`・`areka_ghost`・`windows`（`areka-runtime` の普通の依存）と `log_capture_kit`（dev）だけ。本体の項目は `crate::insert_persist_wiring`（`PersistWiring` は `areka_placement::persist` の `pub` の型・欄も `pub`）と、remembered ⑵ の `crate::app_exit::close_windows_for_restart` だけ。`MinimalGhost` を `temp-path-kit`（dev）で包むと test-support に置けない | `Cargo.toml` を変えずに組める | `PersistStore` ほかを `frame::persist_test_support`（test-support）へ移し、`wire` は `PersistWiring` を直に置く。本体には `MinimalGhost` だけを残す。99 番は絞り込みをテストの中に書いて移す。問い 6 |
+| 14 番 | 本番の `switch_to` は同じ World のまま `close_windows_for_restart` で窓を畳み、窓を開け直し、新しい `RuntimeWiring` を入れる。同じ窓に新しい presenter を装着し直すと前の presenter の子の entity が残る。前例 `frame_chain_finalize_restart_tests.rs` L90（`close_windows_for_restart` → `spawn_resnap_windows`）。`spawn_resnap_windows` は `dpi_world` の `DPI(96)` と配置の component を付けない | 同じ World で組める（付け足しが要る） | 本番と同じ畳み方で切り替える。GPU の許可は 1 つ |
+| セ | `spine_wait.rs` L683-L687 は「2 つ取るテストは `new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch` の 1 本だけ」。ほかに 2 つ取るのは自分の数え（`GpuSlots::new(2)`）の `spine_wait_tests.rs` だけで、`GPU_SLOTS` からは取らない | 14 番の直しで文が事実でなくなる | 直しに要る変更として 2 行を直す（範囲の外・持ち主は完了済み） |
+| 31 番 | 両方のテストのバイナリにプロセスの寿命の MTA がある（`crash_report_test_support.rs` L126-L153 の `.CRT$XCU` の `CoIncrementMTAUsage`・本体の `runtime_tests/mod.rs` L10-L17） | 各所の `let _ = CoInitializeEx(..)` は要らない | `frame_test_support::gpu_on` を置き、範囲の中の 3 か所から呼ぶ。本体の `runtime_tests/spine.rs` の写しは範囲の外（サ） |
+| 72 番 | 完了した `areka-P0-dpi-transition-atomicity` の要件 7.5 は形を名指さない（要件の討議で確かめ済み） | どちらへ寄せても決めに触れない | 宣言の cfg へ寄せ、支えの `const` の表明と字面の見張りを消す。問い 4 |
+| 件 4 | `cargo rustc -p areka-runtime --lib --features test-support -j 4 -- --force-warn unused_imports` を 1 回回した（成功・16 件・全部 `frame.rs`・`wiring.rs` は 0 件） | 3 つのビルドを突き合わせると、どのビルドでも使わない名は 20、テストでだけ使う名は 8（`Entity`・`SystemState`・`PlacementRoute`・`connect_balloon_text`・`GhostWindowClass`・`classify_ghost_window`・`reproject_char_window_at_current_size`・`resnap_from_sizes`）、テストと test-support で使う名は 16（`RefCell`・`Rc`・`EmoPresenter`・`PresentCommand`・`TargetId`・`TextLayerRuntime`・`present_frame`・`ActorKey`・`GraphicsCore`・`WucGraphicsResource`・`GhostWindows`・`dpi_phase_with`・`PhysicalSizeSource`・`resnap_with`・`finalize_chain_once_with`・`realign_chain_once_with_source`） | 消す・`#[cfg(test)] use`・`#[cfg(any(test, feature = "test-support"))] use` の 3 種に分け、許可を 0 本にする（`wiring.rs` の 2 本も cfg で）。3 節の件 4 の表の「テストでだけ」のうち test-support でも使う名は、`cfg(test)` だけにすると test-support のビルドが壊れるので、この 3 種で扱う |
+| タスクの切り方 | 9 節の案 A・B・C | — | 案 C で 27 本（design.md の「タスクの束と順」）。900 行台の 3 本は、足す前に縮める順（13 番の数行のほかは T14・T16 の後） |
+| ケ | `placement_tests::transition_judge::summarize` と `TransitionSummary.path_a_writes`・`sync_stage_writes` は `pub` | 範囲の中の写し（`frame_transition_atomicity_tests.rs` の `path_a_write_lines`）は、範囲の外を変えずに `summarize` を呼ぶ形にできる | 範囲の中で直す（T16）。渡す件は残らない |
+| 63・64 番 | 消すテストを範囲の外の説明が名指す（`move_cue_apply_move_tests.rs` L248・`assets.rs` L83） | 消すと説明が宙に浮く（直しで壊れる所） | この spec の直しの中で 1 行ずつ直す（要件 3.2・3.3）。キの申し送りから 63 番の分を外す。問い 7 |
+
+### 11.2 合成の 3 つの見方（design-synthesis）
+
+- 一般化: 窓の側の scope の上限（4 番）は台本の側（`scope_of`）と同じ問題なので、定数 1 つと入口の関数 2 つを同じファイルに置いた。写しの寄せ（22〜31 番）は「両方の crate が使う補助は `areka-runtime` の test-support に 1 つ・dev-dependency を引く補助は `cfg(test)`」の 1 つの決まりで置き場を決めた。
+- 作るか使うか: 待ち（`wait_until`・`join_bounded`・`wait_recv`）・一時フォルダ（`TempPath`）・偽の HWND（`give_fake_handles`）・記録の捕捉（`capture_logs`）・本文の走査（`code_only`）・判定器（`summarize`）は既にある部品を使う。新しく作る部品は `window_scope`・`gpu_on`・`MonitorWatch`・`unconnected_text`・結線の補助 1 つ・寄せ先の支え 2 本だけ。
+- 削り: 2 番は上限や捨てる案を取らず集合にするだけ（確定 2）。49 番は `areka-placement` の署名を変えない案 ⑴。113 番は `Receiver` を覗けないので条件を変えず文だけ。9 番はファイルを移さない。
+
+### 11.3 危うさ
+
+- 3 番の縛るテストは、装着の相の中の控えの 1 行を通さない（面 0 を組めないバルーンを決定論で作れない）。控えの後の繋ぎ直しと、`None` で `false` が返ることは別々に縛る。
+- 49 番で、資源 `MonitorSnapshot` を手で置き替えて同期に上書きさせるテストがあれば、モニターの component を書き替える形に改める（本数は実装で記録する）。
+- 33 番の移しは組んで確かめるまで確かでない（調べでは依存の範囲で組める）。組めない所が出たら、`Cargo.toml` に触らずに済む置き方を探し、無ければ要件 6.7 の議題にする。
