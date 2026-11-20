@@ -1,5 +1,5 @@
-//! frame のテストが `areka-runtime` と本体の両方で使う補助（結線・定常のハーネス・拡大率の変化と
-//! 鎖の詰め直しの駆動・3 体の鎖の窓の一式）。`frame_test_support.rs` は 1,000 行の上限に近いので
+//! frame のテストが `areka-runtime` と本体の両方で使う補助（結線・定常のハーネス・拡大率と
+//! 檻の寸の定数・拡大率の変化と鎖の詰め直しの駆動・3 体の鎖の窓の一式）。`frame_test_support.rs` は 1,000 行の上限に近いので
 //! 兄弟のファイルに置く。
 
 use bevy_ecs::change_detection::DetectChangesMut;
@@ -67,11 +67,20 @@ pub fn steady_harness() -> FrameHarness {
     harness
 }
 
-/// 変わる前の拡大率（実機の 200%）。
+/// 等倍の 2 倍の拡大率（実機の 200%）。
 pub const HIGH_DPI: u16 = 192;
 
-/// 変わった後の拡大率（実機の 100%＝幅がちょうど半分）。
+/// 等倍の拡大率（実機の 100%）。
 pub const LOW_DPI: u16 = 96;
+
+/// 96 の倍数でない中間の拡大率（125%）。
+pub const SCALE_120: u16 = 120;
+
+/// 檻の両スコープのバルーンの等倍寸（`resnap_placements` の値）。
+pub const BALLOON_SPAWN_SIZE: (u32, u32) = (223, 158);
+
+/// 檻の追従オフセットの基準（`resnap_placements` の値・scope 昇順）。
+pub const BASE_OFFSETS: [PointPx; 2] = [PointPx { x: -412, y: -25 }, PointPx { x: 285, y: -19 }];
 
 /// scope0 の実表示寸（200%・実機の幅 764）。
 pub const HIGH_SIZE_0: (u32, u32) = (764, 1094);

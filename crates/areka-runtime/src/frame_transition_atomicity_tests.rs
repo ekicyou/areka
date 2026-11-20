@@ -54,8 +54,8 @@
 //! `origin=zorder-pair`）。
 //!
 //! ゆえに**キュー上で `tag.origin` を数える形は、本番のどんな退行でも赤にならない**。
-//! 本ファイルは判定器と**同一の述語**（`transition_judge.rs` の `summarize` の `KIND_WRITE` の腕（`path_a_writes` を数える所）＝`kind=write` 行の
-//! `origin` と `stage` を別々に数え、食い違いが均されずに見える形）を観測行へ当てる。
+//! 本ファイルは観測行を判定器の `summarize` そのものへ通し、`origin` で数える
+//! `path_a_writes` と `stage` で数える `sync_stage_writes` を別々に読む（食い違いが均されない形）。
 //!
 //! そのうえで、この決定論の 0 が言っているのは「遷移フレームの観測窓に経路 A の行が
 //! 1 本も出ていない」までである——本ハーネスは window_proc を駆動しないので、実機で
@@ -67,15 +67,14 @@ use areka_emo_compose::ScaleRatio;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER};
 
-use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::window::transition_diag::{
-    FIELD_ORIGIN, FIELD_SCOPE, FIELD_STAGE, KIND_WRITE, ORIGIN_DPI_SUGGESTED, STAGE_SYNC, Stamp,
-    WriteRecord, WriteStage, WriteTag, emit_line, write_line,
+    FIELD_SCOPE, ORIGIN_DPI_SUGGESTED, STAGE_SYNC, Stamp, WriteRecord, WriteStage, WriteTag,
+    emit_line, write_line,
 };
 
 use crate::placement_tests::transition_judge::{
-    GROUND_DIFF_MAX, PATH_A_WRITES_MAX, TRANSITION_FRAME_BOUND, WRITES_PER_WINDOW_MAX,
-    parse_transition_line,
+    GROUND_DIFF_MAX, PATH_A_WRITES_MAX, TRANSITION_FRAME_BOUND, TransitionRecord,
+    WRITES_PER_WINDOW_MAX, parse_transition_line, summarize,
 };
 use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::chain_realign::ChainRealignPending;
@@ -86,20 +85,13 @@ use areka_placement::resolver::PointPx;
 use areka_placement::transition_diag::{FIELD_DIFF, KIND_GROUND};
 use log_capture_kit::{CapturedEvent, capture};
 
+use super::shared_test_support::{BALLOON_SPAWN_SIZE, HIGH_DPI, LOW_DPI, SCALE_120};
 use super::test_support::{
     FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, pos_of,
     s2_assert_work_area_bottom_moves, s2_work_area_for_dpi, settled_sizes,
 };
+use super::transition_test_support::{scaled, settle_at, writes_for};
 use super::{balloon_target, shell_target};
-
-/// 遷移前の拡大率水準（等倍）。
-const BASE_DPI: u16 = 96;
-
-/// 要件 7.2 が名指しする 2 水準のうち低い側（125% に当たらない中間水準）。
-const SCALE_120: u16 = 120;
-
-/// 同上・高い側（等倍の 2 倍）。
-const SCALE_192: u16 = 192;
 
 /// 起点フレームの後に「もう書かない」を見るために回す定常フレーム数。
 const STEADY_FRAMES: u32 = 4;
@@ -110,15 +102,6 @@ const PATH_A_PROBE_HWND: usize = 0x9_9990;
 // ---------------------------------------------------------------------------
 // 合成寸（拡大率の関数として組む・絶対 px を判定へ直書きしない）
 // ---------------------------------------------------------------------------
-
-/// 当該拡大率水準における物理寸（等倍寸を `dpi/96` 倍する）。
-///
-/// 丸めの権威（`scale-exact-rational`）はここでは主題でない——本ファイルが問うのは回数・
-/// フレーム・接地点であり、寸の値そのものは**報告源が言う値**として与える。
-fn scaled(size: (u32, u32), dpi: u16) -> (u32, u32) {
-    let k = u32::from(dpi);
-    (size.0 * k / 96, size.1 * k / 96)
-}
 
 /// 当該水準の scope0／scope1 のキャラ窓物理寸。
 fn char_sizes(dpi: u16) -> [(u32, u32); 2] {
@@ -135,40 +118,21 @@ fn chain_sizes(dpi: u16) -> PerTargetSizes {
 // 指令の選り分け
 // ---------------------------------------------------------------------------
 
-/// 指定スコープ・指定種別の窓書込だけを取り出す。
-fn writes_for(writes: &[SetWindowPosCommand], scope: u32, kind: &str) -> Vec<SetWindowPosCommand> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind)
-        .cloned()
-        .collect()
-}
-
-/// 捕捉行のうち経路 A（`WM_DPICHANGED` 受理時の同期書込）の書込行を数える。
+/// 捕捉行を判定器の `summarize` へ通し、経路 A（`WM_DPICHANGED` 受理時の同期書込）の
+/// 書込行の件数を読む。
 ///
-/// 戻り値は `(origin=dpi-suggested の件数, stage=sync の件数)`。**2 つを別々に返す**のは
-/// 判定器がそうしているからである（`transition_judge.rs` の `summarize` の `KIND_WRITE` の腕＝`path_a_writes` は
-/// `origin` で数え、`sync_stage_writes` は裏取りとして別に持つ。片方へ均すと両者の
-/// 食い違いが見えなくなる＝task 2.2 の裁定）。
+/// 戻り値は `(path_a_writes, sync_stage_writes)`＝`(origin=dpi-suggested の件数,
+/// stage=sync の件数)`。片方へ均すと両者の食い違いが見えなくなるので、別々に返す。
 ///
 /// キューではなく観測行を見るのは、経路 A が `SetWindowPosCommand` を 1 度も積まないため
 /// である（モジュール doc の「経路 A はキューを通らない」を参照）。
 fn path_a_write_lines(events: &[CapturedEvent]) -> (u32, u32) {
-    let mut by_origin = 0u32;
-    let mut by_stage = 0u32;
-    for record in events
+    let records: Vec<TransitionRecord> = events
         .iter()
         .filter_map(|event| parse_transition_line(event.message()))
-        .filter(|record| record.kind == KIND_WRITE)
-    {
-        if record.raw_field(FIELD_ORIGIN) == Some(ORIGIN_DPI_SUGGESTED) {
-            by_origin += 1;
-        }
-        if record.raw_field(FIELD_STAGE) == Some(STAGE_SYNC) {
-            by_stage += 1;
-        }
-    }
-    (by_origin, by_stage)
+        .collect();
+    let summary = summarize(&records.iter().collect::<Vec<_>>());
+    (summary.path_a_writes, summary.sync_stage_writes)
 }
 
 /// 捕捉行のうち `kind=ground` を判定器の解析器へ通し、`(scope, diff, frame)` を取り出す。
@@ -207,29 +171,15 @@ fn ground_records(events: &[CapturedEvent]) -> Vec<(u32, i32, u32)> {
 // 駆動の型（起動 → 遷移 → 定常）
 // ---------------------------------------------------------------------------
 
-/// 等倍で起動し、起動時の連鎖確定まで済ませる。
-///
-/// 拡大率の相の初回 run は永続 `SystemState` の仕様で全窓へマッチするので、ここで 1 度
-/// 空回しして消費する（報告は空＝現寸のまま射影を通るだけでべき等 skip）。窓書込のキューと
-/// witness は末尾で掃除するので、以後の主張は**遷移が起こした書込だけ**を見る。
+/// 等倍で整地し、起動時の連鎖確定まで済ませる。窓書込のキューと witness は末尾でもう一度
+/// 掃除するので、以後の主張は**遷移が起こした書込だけ**を見る。
 fn boot_at_base(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_sources_for_dpi(BASE_DPI);
-    harness.set_monitor_table_for_dpi(BASE_DPI);
-    harness.set_window_dpi(BASE_DPI);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
+    settle_at(harness, source, LOW_DPI);
     harness.run_chain_finalize(&settled_sizes());
     assert!(
         harness.world.get_resource::<ChainFinalized>().is_some(),
         "前提が崩れている: 起動時の連鎖確定が駆動していない（遷移後の解き直しが武装しない）"
     );
-    for scope in harness.scopes().to_vec() {
-        assert_eq!(
-            harness.ground_point(scope).1,
-            s2_work_area_for_dpi(BASE_DPI).bottom,
-            "前提が崩れている: scope={scope} のキャラ窓が等倍で作業領域下端へ接地していない"
-        );
-    }
     let _priming = harness.drain_writes();
     harness.reset_write_witness();
 }
@@ -256,10 +206,10 @@ fn apply_scale_change(
     source.refresh.insert(shell_target(1).0, size1);
     source
         .refresh
-        .insert(balloon_target(0).0, scaled(balloon_spawn_size(), dpi));
+        .insert(balloon_target(0).0, scaled(BALLOON_SPAWN_SIZE, dpi));
     source
         .refresh
-        .insert(balloon_target(1).0, scaled(balloon_spawn_size(), dpi));
+        .insert(balloon_target(1).0, scaled(BALLOON_SPAWN_SIZE, dpi));
     let sizes = chain_sizes(dpi);
     capture(|| {
         harness.advance_frame();
@@ -267,11 +217,6 @@ fn apply_scale_change(
         harness.run_chain_realign(&sizes);
         change.is_some()
     })
-}
-
-/// 檻の両スコープが持つバルーンの等倍寸（`resnap_placements` と一致）。
-fn balloon_spawn_size() -> (u32, u32) {
-    (223, 158)
 }
 
 // ---------------------------------------------------------------------------
@@ -285,7 +230,7 @@ fn balloon_spawn_size() -> (u32, u32) {
 /// 一方が検査されたかどうかが結果から読めない）。
 fn transition_is_atomic_at(dpi: u16) {
     // 探針の非退化: この 2 水準で作業領域下端が実際に動く（動かなければ接地点の主張は空虚）。
-    s2_assert_work_area_bottom_moves(BASE_DPI, dpi);
+    s2_assert_work_area_bottom_moves(LOW_DPI, dpi);
     let [size0, size1] = char_sizes(dpi);
     assert_ne!(
         (size0, size1),
@@ -353,7 +298,7 @@ fn transition_is_atomic_at(dpi: u16) {
     for &scope in &scopes {
         let scope = scope as u32;
         for kind in [WindowKind::Char, WindowKind::Balloon] {
-            let per_window = writes_for(&writes, scope, kind.as_str());
+            let per_window = writes_for(&writes, scope, kind);
             assert_eq!(
                 per_window.len() as u32,
                 WRITES_PER_WINDOW_MAX,
@@ -373,7 +318,7 @@ fn transition_is_atomic_at(dpi: u16) {
     // ── 4.1: 中間矩形を出さない（1 本の書込が新しい規約値の下端に載る） ──
     for &scope in &scopes {
         let scope = scope as u32;
-        let char_write = writes_for(&writes, scope, WindowKind::Char.as_str())
+        let char_write = writes_for(&writes, scope, WindowKind::Char)
             .pop()
             .expect("キャラ窓の書込がある");
         assert_eq!(
@@ -430,7 +375,7 @@ fn transition_is_atomic_at(dpi: u16) {
     //
     // 変わったのは「相対量が拡大率をまたいで一定か、表示 DPI 比で伸びるか」だけであり、
     // **窓（char 左上）相対という追従の基準そのものは不変**である（要件 9.1）。
-    let follow_ratio = ScaleRatio::new(dpi.into(), BASE_DPI.into()).expect("非ゼロ比");
+    let follow_ratio = ScaleRatio::new(dpi.into(), LOW_DPI.into()).expect("非ゼロ比");
     for (scope, before) in &balloon_offsets_before {
         let char_window = harness.char_window(*scope);
         let balloon = harness.balloon_window(*scope);
@@ -485,7 +430,7 @@ fn transition_is_atomic_at(dpi: u16) {
         "dpi={dpi}: 連鎖の解き直しが同一フレームで解決していない（武装が残っている）"
     );
     let scope0_x = pos_of(&harness.world, char0).expect("char0 位置がある").x;
-    let scope1_write = writes_for(&writes, 1, WindowKind::Char.as_str())
+    let scope1_write = writes_for(&writes, 1, WindowKind::Char)
         .pop()
         .expect("scope1 のキャラ窓の書込がある");
     assert_eq!(
@@ -570,7 +515,7 @@ fn transition_is_atomic_at_120() {
 /// 拡大率 192 での遷移が原子的である（要件 7.2 の「少なくとも 192」）。
 #[test]
 fn transition_is_atomic_at_192() {
-    transition_is_atomic_at(SCALE_192);
+    transition_is_atomic_at(HIGH_DPI);
 }
 
 // ---------------------------------------------------------------------------
@@ -584,7 +529,7 @@ fn transition_is_atomic_at_192() {
 /// 上の 2 本は緑のまま通ってしまうので、条件の側を別に固定する（要件 7.2）。
 #[test]
 fn the_atomicity_cases_run_against_a_multi_monitor_work_area_table() {
-    for dpi in [SCALE_120, SCALE_192] {
+    for dpi in [SCALE_120, HIGH_DPI] {
         let mut harness = FrameHarness::new();
         let mut source = FakeReports::default();
         boot_at_base(&mut harness, &mut source);

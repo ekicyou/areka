@@ -31,6 +31,7 @@ use wintf::ecs::window::transition_diag::{self, TickStart};
 use wintf::ecs::window::{SetWindowPosCommand, drain_window_pos_commands};
 use wintf::ecs::{FrameCount, Point, SizeI, WindowPos};
 
+use super::shared_test_support::{BALLOON_SPAWN_SIZE, BASE_OFFSETS};
 use super::work_area_sync::{SnapshotChange, resnap_for_work_area_change, sync_monitor_snapshot};
 
 use super::*;
@@ -172,15 +173,19 @@ pub fn headless_wiring_with(rx: Receiver<PresentCommand>, clock: TalkClock) -> R
 /// `crates/areka-placement/src/follow_balloon_limit_tests.rs` が所有し、DPI 起因の寸法変更経路
 /// （`resize_window_keep_position`）もそこで補正が掛かることを固定している。
 fn resnap_placements() -> Vec<ScopePlacement> {
+    let balloon_spawn_size = SizePx {
+        w: BALLOON_SPAWN_SIZE.0 as i32,
+        h: BALLOON_SPAWN_SIZE.1 as i32,
+    };
     vec![
         ScopePlacement {
             scope: 0,
             char_pos: PointPx { x: 1483, y: 757 },
             char_size: SizePx { w: 434, h: 687 },
             balloon_pos: PointPx { x: 1071, y: 732 },
-            balloon_size: SizePx { w: 223, h: 158 },
-            balloon_offset: PointPx { x: -412, y: -25 },
-            balloon_offset_base: OffsetBase::unpinned(PointPx { x: -412, y: -25 }),
+            balloon_size: balloon_spawn_size,
+            balloon_offset: BASE_OFFSETS[0],
+            balloon_offset_base: OffsetBase::unpinned(BASE_OFFSETS[0]),
             // windowposition-limit: **無効**（task 3.3 の追随）。理由は下の注記を参照。
             balloon_limit: false,
             anchor: Anchor::Bottom,
@@ -191,9 +196,9 @@ fn resnap_placements() -> Vec<ScopePlacement> {
             char_pos: PointPx { x: 1049, y: 1087 },
             char_size: SizePx { w: 278, h: 357 },
             balloon_pos: PointPx { x: 1334, y: 1068 },
-            balloon_size: SizePx { w: 223, h: 158 },
-            balloon_offset: PointPx { x: 285, y: -19 },
-            balloon_offset_base: OffsetBase::unpinned(PointPx { x: 285, y: -19 }),
+            balloon_size: balloon_spawn_size,
+            balloon_offset: BASE_OFFSETS[1],
+            balloon_offset_base: OffsetBase::unpinned(BASE_OFFSETS[1]),
             // windowposition-limit: **無効**（task 3.3 の追随）。理由は下の注記を参照。
             balloon_limit: false,
             anchor: Anchor::Bottom,

@@ -38,15 +38,19 @@
 //! 置き場所を兄弟ファイルにしたのは、行列側が 948 行で 1,000 行制限（要件 9.6）に
 //! 52 行しか残していないためである。
 
-use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::{DPI, Point, WindowPos};
 
+use areka_placement::diag::WindowKind;
 use areka_placement::follow::{BalloonFollow, OffsetBase};
 use areka_placement::resolver::PointPx;
 use areka_placement::transition_diag::{OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_UNCHANGED};
 
 use super::balloon_offset_follow::{OffsetFollowOutcome, rescale_balloon_follow_offset};
+use super::shared_test_support::{BASE_OFFSETS, HIGH_DPI, LOW_DPI};
 use super::test_support::{FakeReports, FrameHarness, capture_logs};
+use super::transition_test_support::{
+    offset_lines, offset_of, settle_at, transition_to, writes_for,
+};
 use super::*;
 
 // ---------------------------------------------------------------------------
@@ -89,11 +93,6 @@ fn follow_at(world: &World, entity: Entity) -> BalloonFollow {
         .get::<BalloonFollow>(entity)
         .copied()
         .expect("キャラ窓に BalloonFollow がある")
-}
-
-/// `kind=offset` の観測行だけを取り出す。
-fn offset_lines(logs: &[String]) -> Vec<&String> {
-    logs.iter().filter(|l| l.contains("kind=offset")).collect()
 }
 
 /// **是正の本体**: 一度追随した後に元の表示 DPI へ戻ると、恒等比の腕は
@@ -206,24 +205,6 @@ fn the_zero_dpi_arm_stays_an_unchanged_no_op() {
 // 2. 相の結合で往復させる（World の上で `Rescaled` の後に `Unchanged` を起こす）
 // ---------------------------------------------------------------------------
 
-/// 相の結合で使う低い水準（作者基準と等倍）。
-const LOW_DPI: u16 = 96;
-
-/// 相の結合で使う高い水準（比 2）。
-const HIGH_DPI: u16 = 192;
-
-/// 基準オフセット（`frame_test_support::resnap_placements` の fixture 値・scope 昇順）。
-const BASE_OFFSETS: [PointPx; 2] = [PointPx { x: -412, y: -25 }, PointPx { x: 285, y: -19 }];
-
-/// 当該スコープの追従オフセット（現在値）。
-fn offset_of(harness: &FrameHarness, scope: usize) -> PointPx {
-    harness
-        .world
-        .get::<BalloonFollow>(harness.char_window(scope))
-        .expect("キャラ窓に BalloonFollow がある")
-        .offset()
-}
-
 /// 窓の位置（`WindowPos.position`）。
 fn pos_of(harness: &FrameHarness, entity: Entity) -> Point {
     harness
@@ -231,51 +212,6 @@ fn pos_of(harness: &FrameHarness, entity: Entity) -> Point {
         .get::<WindowPos>(entity)
         .and_then(|wp| wp.position)
         .expect("窓に位置がある")
-}
-
-/// 指定スコープ・指定種別の窓書込だけを取り出す。
-fn writes_for(writes: &[SetWindowPosCommand], scope: u32, kind: &str) -> Vec<SetWindowPosCommand> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind)
-        .cloned()
-        .collect()
-}
-
-/// 起動直後の整地——3 つの源と窓の拡大率を `level` へ揃え、初回全窓マッチを空回しで消費する。
-///
-/// この 1 巡で未係留の基準が `level` へ**係留**される（要件 5.2）。係留を自己検査するのは、
-/// 済んでいないと以降の遷移が係留の腕へ落ち、追随が起きないまま緑になるからである。
-fn settle_at(harness: &mut FrameHarness, source: &mut FakeReports, level: u16) {
-    harness.set_monitor_sources_for_dpi(level);
-    harness.set_monitor_table_for_dpi(level);
-    harness.set_window_dpi(level);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    for scope in harness.scopes().to_vec() {
-        assert_eq!(
-            harness
-                .world
-                .get::<BalloonFollow>(harness.char_window(scope))
-                .expect("キャラ窓に BalloonFollow がある")
-                .base(),
-            OffsetBase {
-                offset: BASE_OFFSETS[scope],
-                dpi: Some(dpi(level)),
-            },
-            "scope={scope}: 整地で基準対が「fixture 値 × 係留済み {level}」になっていない"
-        );
-    }
-}
-
-/// 表示 DPI を `level` へ動かして 1 フレーム回す（待ち札の付かない通常の遷移）。
-fn transition_to(harness: &mut FrameHarness, source: &mut FakeReports, level: u16) {
-    harness.set_monitor_table_for_dpi(level);
-    harness.set_window_dpi(level);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
 }
 
 /// **戻りの遷移**（96 → 192 → 96）でオフセットが基準へ bit 同一で戻り、
@@ -338,7 +274,7 @@ fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
         );
         // バルーンが**実際に**元の位置へ帰る（値だけ直って窓が古いまま、を塞ぐ）。
         assert!(
-            !writes_for(&back_writes, scope32, "balloon").is_empty(),
+            !writes_for(&back_writes, scope32, WindowKind::Balloon).is_empty(),
             "scope={scope}: 戻りの遷移でバルーンへの窓書込が 1 件も無い: {back_writes:?}"
         );
         assert_eq!(

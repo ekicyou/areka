@@ -143,7 +143,7 @@
   - _Dispatch: standard — 支えを跨いで寄せる_
   - _Requirements: 3.1, 3.2, 6.1_
 
-- [ ] 3.5 書き込みの補助と整地を新しい支えへ寄せる（T16・29 番・ケ）
+- [x] 3.5 書き込みの補助と整地を新しい支えへ寄せる（T16・29 番・ケ）
   - 新しい `cfg(test)` の支え `frame_transition_test_support.rs` に、書き込みの抜き出し・強い方の整地・拡大・警告の数え・オフセットの読み・バルーンの寸・拡大率の定数を 1 つずつ置き、9 本から写しを消す。再スナップの配置の支えもその定数を使う
   - 原子性のテストの手写しの述語を、placement の判定の要約を読む形にする（ケ・範囲の外の判定のファイルは変えない）
   - 完了: 9 本の写しが消え、その 9 本と原子性のテストが緑
@@ -278,3 +278,4 @@
 - 3.2: `dpi_world` の窓の DPI の着せ付けを `dress_dpi_windows` に抜き出した（切り替えのテストが開け直した窓にも使う）。畳みの段が抜けても台帳の表明では赤にならないので、前の窓が消え新しい窓が別の entity であることを前提の表明で見る。
 - 3.3: 結線を手で組む箇所は範囲の中に 18（research の「16」は数え違いで一覧の和は 17・1.3 の 1 本で 18）。本体の側の手組みは 26 番の外。共有の支えの `wiring_with(assets, runtime, presenter)` が唯一の手組み。
 - 3.4: `frame_default_pos_track_tests.rs` の `HIGH_SIZE_*`・`raise_the_scale` は共有の同名と値が違う（出現の寸の 2 倍）ので私有のまま `DOUBLED_SIZE_*`・`double_the_scale` に改名した。arm の `settled_sizes` は共有の `high_sizes` と値が同じなので別名にせず消した。共有の支えは 309 行。`LOW_DPI`・`HIGH_DPI` の写しは balloon_offset_*・dpi_sync_hold に残る（3.5 の 29 番で見る）。
+- 3.5: `BALLOON_SPAWN_SIZE`・`BASE_OFFSETS`・`SCALE_120` は新しい `cfg(test)` の支えでなく `frame_shared_test_support.rs` に置いた（`feature = "test-support"` でも組まれる `resnap_placements` が読むため・設計からの逸れ）。`BASE_DPI`→`LOW_DPI`・`SCALE_192`→`HIGH_DPI`。強い方の整地の接地の確かめは Bottom の揃えの人格の窓だけ（follow の揃え方の表が整地の前に揃え方を変えるため）。`attach_material` の「素材は整地の後」の理由は消えた（審査の提案・7.1 で見る）。

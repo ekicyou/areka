@@ -27,6 +27,7 @@ use wintf::ecs::window::monitor::Monitor;
 use super::test_support::{
     FakeReports, FrameHarness, s2_monitors, s2_snapshot, s2_sources, s2_work_area_for_dpi,
 };
+use super::transition_test_support::settle_at;
 
 /// 起動時の拡大率（実機の採取と同じ向き＝高い側から始める）。
 const BOOT_DPI: u16 = 192;
@@ -46,27 +47,6 @@ fn ground_y(harness: &FrameHarness, scope: usize) -> i32 {
     harness.ground_point(scope).1
 }
 
-/// 起動直後の整地——2 源と実行時のモニタ表と窓の拡大率をすべて `BOOT_DPI` へ揃え、
-/// キャラ窓を当該水準の作業領域下端へ接地させる。
-///
-/// 拡大率の相の初回 run は永続 `SystemState` の仕様で全窓へマッチするので、ここで 1 度
-/// 空回しして消費する（以後のフレームでは真に変化した窓だけが対象になる）。
-fn settle_at_boot_dpi(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_sources_for_dpi(BOOT_DPI);
-    harness.set_monitor_table_for_dpi(BOOT_DPI);
-    harness.set_window_dpi(BOOT_DPI);
-    harness.advance_frame();
-    harness.run_work_area_sync();
-    harness.run_dpi_phase(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    assert_eq!(
-        ground_y(harness, 0),
-        s2_work_area_for_dpi(BOOT_DPI).bottom,
-        "前提が崩れている: 起動水準でキャラ窓が作業領域下端へ接地していない"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // 是正（要件 5.1・5.8）
 // ---------------------------------------------------------------------------
@@ -80,7 +60,7 @@ fn settle_at_boot_dpi(harness: &mut FrameHarness, source: &mut FakeReports) {
 fn lowering_the_scale_lands_the_ground_point_on_the_new_work_area_bottom_in_one_write() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle_at_boot_dpi(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, BOOT_DPI);
 
     // OS 設定の拡大率変更（経路 (b)＝モニタ表の更新が先・窓の拡大率が続く）。
     // 作業領域源は**触らない**——それを実行時のモニタ表から作り直すのが同期段の仕事である。
@@ -384,7 +364,7 @@ fn a_non_empty_monitor_table_does_not_warn() {
 fn the_sync_alone_writes_no_windows() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle_at_boot_dpi(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, BOOT_DPI);
 
     // 窓の拡大率は据え置き、作業領域（＝モニタ表）だけを動かす。
     harness.set_monitor_table_for_dpi(LOWERED_DPI);
@@ -413,7 +393,7 @@ fn the_sync_alone_writes_no_windows() {
 fn the_same_frame_writes_windows_once_the_scale_moves_too() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle_at_boot_dpi(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, BOOT_DPI);
 
     harness.set_monitor_table_for_dpi(LOWERED_DPI);
     harness.set_window_dpi(LOWERED_DPI);

@@ -340,6 +340,10 @@ pub mod balloon_runtime_test_support;
 #[path = "frame_shared_test_support.rs"]
 pub mod shared_test_support;
 
+#[cfg(test)]
+#[path = "frame_transition_test_support.rs"]
+pub mod transition_test_support;
+
 // move drain の置き場（areka-P0-move-canon task 3.3・design D4）の檻。同じくハーネスに乗るので
 // **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
 #[cfg(all(test, target_pointer_width = "64"))]

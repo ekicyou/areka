@@ -65,34 +65,24 @@ use areka_placement::WORK_AREA_SYNC_CONTEXT;
 use areka_placement::diag::{PlacementRoute, WindowKind};
 use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
 use areka_placement::follow::{BalloonFollow, MonitorDpiTable, MonitorSnapshot};
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 
 use super::frame_system;
+use super::shared_test_support::{BALLOON_SPAWN_SIZE, HIGH_DPI, LOW_DPI, SCALE_120};
 use super::test_support::{
     FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, dpi_world,
     headless_wiring_with, pos_of, s2_assert_work_area_bottom_moves, s2_monitors,
     s2_monitors_with_work_area, s2_sources, s2_taskbar_hidden_work_area, s2_work_area_for_dpi,
     size_of, zero_clock,
 };
+use super::transition_test_support::{scaled, settle_at, warnings_containing, writes_for};
 use super::{balloon_target, shell_target};
-
-/// 遷移前の拡大率水準（等倍）。
-const BASE_DPI: u16 = 96;
-
-/// 要件 7.2 が名指しする 2 水準のうち低い側。
-const SCALE_120: u16 = 120;
-
-/// 同上・高い側（等倍の 2 倍）。
-const SCALE_192: u16 = 192;
 
 /// 定常フレームを何コマ回して「窓書込 0」を主張するか（要件 4.7）。
 const STEADY_FRAMES: u32 = 5;
 
 /// 別モニタ検査で札の不在を確かめ続けるフレーム数。
 const WAIT_FRAMES: u32 = 3;
-
-/// 檻の両スコープが持つバルーンの等倍寸（`resnap_placements` と一致）。
-const BALLOON_SPAWN_SIZE: (u32, u32) = (223, 158);
 
 /// キャラ窓を隣接モニタへ置くときの位置（随伴バルーンも隣接モニタ内へ収まる値）。
 const CHAR_ON_NEIGHBOR: Point = Point { x: 3200, y: 800 };
@@ -108,12 +98,6 @@ const CHAR_OFF_ALL_MONITORS: Point = Point { x: -3000, y: 700 };
 // 合成寸と選り分け
 // ---------------------------------------------------------------------------
 
-/// 当該拡大率水準における物理寸（等倍寸を `dpi/96` 倍する）。
-fn scaled(size: (u32, u32), dpi: u16) -> (u32, u32) {
-    let k = u32::from(dpi);
-    (size.0 * k / 96, size.1 * k / 96)
-}
-
 /// `(u32, u32)` の報告寸を窓寸の通貨（`SizeI`）へ移す。
 fn as_window_size(size: (u32, u32)) -> SizeI {
     SizeI {
@@ -122,31 +106,9 @@ fn as_window_size(size: (u32, u32)) -> SizeI {
     }
 }
 
-/// 指定スコープ・指定種別の窓書込だけを取り出す。
-fn writes_for(
-    writes: &[SetWindowPosCommand],
-    scope: u32,
-    kind: WindowKind,
-) -> Vec<SetWindowPosCommand> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind.as_str())
-        .cloned()
-        .collect()
-}
-
-/// 捕捉行のうち WARN で、`needle` を本文に含むものの件数。
-fn warnings_containing(events: &[CapturedEvent], needle: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .filter(|e| e.message().contains(needle))
-        .count()
-}
-
 /// 隣接モニタ（ゴーストが決して居ない側）だけを当該水準にした実行時のモニタ表。
 fn neighbor_at(dpi: u16) -> Vec<Monitor> {
-    let mut monitors = s2_monitors(BASE_DPI);
+    let mut monitors = s2_monitors(LOW_DPI);
     monitors[1].dpi = u32::from(dpi);
     monitors
 }
@@ -196,28 +158,6 @@ fn report_all_targets(source: &mut FakeReports, dpi: u16) {
         .insert(balloon_target(1).0, scaled(BALLOON_SPAWN_SIZE, dpi));
 }
 
-/// 起動直後の整地——3 つの源と窓の拡大率をすべて当該水準へ揃え、キャラ窓を当該水準の
-/// 作業領域下端へ接地させる。
-///
-/// 拡大率の相の初回 run は永続 `SystemState` の仕様で全窓へマッチするので、ここで 1 度
-/// 空回しして消費する（以後のフレームでは真に変化した窓だけが対象になる）。
-fn settle_at(harness: &mut FrameHarness, source: &mut FakeReports, dpi: u16) {
-    harness.set_monitor_sources_for_dpi(dpi);
-    harness.set_monitor_table_for_dpi(dpi);
-    harness.set_window_dpi(dpi);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    for scope in harness.scopes().to_vec() {
-        assert_eq!(
-            harness.ground_point(scope).1,
-            s2_work_area_for_dpi(dpi).bottom,
-            "前提が崩れている: dpi={dpi} scope={scope} のキャラ窓が作業領域下端へ接地していない"
-        );
-    }
-}
-
 /// 拡大率通知だけが先に届いた状態を作る（実行時のモニタ表は旧水準のまま据え置く）。
 fn deliver_the_scale_notice_first(harness: &mut FrameHarness, source: &mut FakeReports, dpi: u16) {
     harness.set_window_dpi(dpi);
@@ -251,13 +191,13 @@ fn holds_of(harness: &FrameHarness, scope: usize) -> (bool, bool) {
 /// 出ることである。待ちが起きていなければ前半で書かれ、駆動が死んでいれば後半で 0 本になる。
 fn scale_notice_first_lands_in_one_write_at(dpi: u16) {
     // 探針の非退化: この 2 水準で作業領域下端が実際に動く（動かなければ中間矩形は観測できない）。
-    s2_assert_work_area_bottom_moves(BASE_DPI, dpi);
+    s2_assert_work_area_bottom_moves(LOW_DPI, dpi);
 
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle_at(&mut harness, &mut source, BASE_DPI);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
-    let old_bottom = s2_work_area_for_dpi(BASE_DPI).bottom;
+    let old_bottom = s2_work_area_for_dpi(LOW_DPI).bottom;
     let new_bottom = s2_work_area_for_dpi(dpi).bottom;
 
     // ── 待ちフレーム: 拡大率だけが新しく、表はまだ旧水準 ──────────────────
@@ -267,7 +207,7 @@ fn scale_notice_first_lands_in_one_write_at(dpi: u16) {
         let outcome = evaluate(&harness.world, harness.char_window(scope), harness.frame());
         assert_eq!(
             (outcome.window_dpi, outcome.table_dpi),
-            (u32::from(dpi), Some(u32::from(BASE_DPI))),
+            (u32::from(dpi), Some(u32::from(LOW_DPI))),
             "dpi={dpi} scope={scope}: 拡大率通知が先に届いた状態になっていない（探針が退化している）"
         );
         assert_eq!(
@@ -333,7 +273,7 @@ fn scale_notice_first_lands_in_one_write_at_120() {
 /// 要件 7.2 の高い側（192）。
 #[test]
 fn scale_notice_first_lands_in_one_write_at_192() {
-    scale_notice_first_lands_in_one_write_at(SCALE_192);
+    scale_notice_first_lands_in_one_write_at(HIGH_DPI);
 }
 
 /// 待ちのあいだに表情差替（drain 相の `ShowSurface` が積む新 k・寸変化の窓寸要求）が来ても、
@@ -344,7 +284,7 @@ fn scale_notice_first_lands_in_one_write_at_192() {
 fn a_surface_swap_during_the_wait_writes_nothing_at(dpi: u16) {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle_at(&mut harness, &mut source, BASE_DPI);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     deliver_the_scale_notice_first(&mut harness, &mut source, dpi);
     let _waiting = harness.drain_writes();
 
@@ -422,7 +362,7 @@ fn a_surface_swap_during_the_wait_writes_nothing_at_120() {
 /// 要件 7.2 の高い側（192）。
 #[test]
 fn a_surface_swap_during_the_wait_writes_nothing_at_192() {
-    a_surface_swap_during_the_wait_writes_nothing_at(SCALE_192);
+    a_surface_swap_during_the_wait_writes_nothing_at(HIGH_DPI);
 }
 
 /// 上限フレームを超えたら、**警告の上で**現在の源のまま進む（設計 C5・D15・要件 4.4）。
@@ -435,7 +375,7 @@ fn a_surface_swap_during_the_wait_writes_nothing_at_192() {
 fn the_wait_gives_up_after_the_bounded_number_of_frames_at(dpi: u16) {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle_at(&mut harness, &mut source, BASE_DPI);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     deliver_the_scale_notice_first(&mut harness, &mut source, dpi);
     let _waiting = harness.drain_writes();
 
@@ -490,7 +430,7 @@ fn the_wait_gives_up_after_the_bounded_number_of_frames_at_120() {
 /// 要件 7.2 の高い側（192）。
 #[test]
 fn the_wait_gives_up_after_the_bounded_number_of_frames_at_192() {
-    the_wait_gives_up_after_the_bounded_number_of_frames_at(SCALE_192);
+    the_wait_gives_up_after_the_bounded_number_of_frames_at(HIGH_DPI);
 }
 
 /// 待ち札が見送るのは**窓書込の 4 点だけ**であり、描画の相（`run_drain_phase`）は素通しである
@@ -573,7 +513,7 @@ fn the_wait_defers_window_writes_only_and_leaves_the_drawing_phase_untouched() {
 fn a_window_moved_to_another_monitor_never_waits_at(dpi: u16) {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle_at(&mut harness, &mut source, BASE_DPI);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     // 隣接モニタだけが当該水準の表を作る（実行時のモニタ表 → 同期段が 2 源を作り直す）。
     harness.set_monitor_table(neighbor_at(dpi));
@@ -635,7 +575,7 @@ fn a_window_moved_to_another_monitor_never_waits_at_120() {
 /// 要件 7.2 の高い側（192）。
 #[test]
 fn a_window_moved_to_another_monitor_never_waits_at_192() {
-    a_window_moved_to_another_monitor_never_waits_at(SCALE_192);
+    a_window_moved_to_another_monitor_never_waits_at(HIGH_DPI);
 }
 
 // ---------------------------------------------------------------------------
@@ -765,7 +705,7 @@ fn a_work_area_only_change_writes_once_at_120() {
 /// 要件 7.2 の高い側（192）。
 #[test]
 fn a_work_area_only_change_writes_once_at_192() {
-    a_work_area_only_change_writes_once_at(SCALE_192);
+    a_work_area_only_change_writes_once_at(HIGH_DPI);
 }
 
 /// 同一表のフレームでは源を作り直さず（要件 5.4）、遷移を伴わない定常フレームでは窓書込が
@@ -834,7 +774,7 @@ fn steady_frames_write_nothing_at_120() {
 /// 要件 7.2 の高い側（192）。
 #[test]
 fn steady_frames_write_nothing_at_192() {
-    steady_frames_write_nothing_at(SCALE_192);
+    steady_frames_write_nothing_at(HIGH_DPI);
 }
 
 /// モニタ 0 台（列挙異常）では源を差し替えず、窓を 1 枚も動かさず、警告を残す（要件 5.5）。
@@ -910,7 +850,7 @@ fn an_empty_monitor_table_keeps_everything_and_warns_at_120() {
 /// 要件 7.2 の高い側（192）。
 #[test]
 fn an_empty_monitor_table_keeps_everything_and_warns_at_192() {
-    an_empty_monitor_table_keeps_everything_and_warns_at(SCALE_192);
+    an_empty_monitor_table_keeps_everything_and_warns_at(HIGH_DPI);
 }
 
 /// **「帰属不能」は「解決できない」ではない**（開発者裁定 2026-08-20・要件 5.5 の適用範囲）。
@@ -920,7 +860,7 @@ fn an_empty_monitor_table_keeps_everything_and_warns_at_192() {
 /// 現状維持である。両者を**同じ本体**で対にして、混同していないことを実行で示す。
 #[test]
 fn a_window_off_all_monitors_is_resolved_by_the_nearest_fallback_not_left_in_place() {
-    let dpi = SCALE_192;
+    let dpi = HIGH_DPI;
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
     settle_at(&mut harness, &mut source, dpi);
@@ -985,11 +925,11 @@ fn a_window_off_all_monitors_is_resolved_by_the_nearest_fallback_not_left_in_pla
 /// `frame_dpi_reproject_none_tests.rs` が持つので、ここでは遷移の文脈で接地点規約が保たれる
 /// ことだけを問う。
 fn a_window_without_a_re_derivation_result_keeps_its_size_at(dpi: u16) {
-    s2_assert_work_area_bottom_moves(BASE_DPI, dpi);
+    s2_assert_work_area_bottom_moves(LOW_DPI, dpi);
 
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle_at(&mut harness, &mut source, BASE_DPI);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     let kept_char = size_of(&harness.world, harness.char_window(0)).expect("窓寸がある");
     let kept_balloon = size_of(&harness.world, harness.balloon_window(0)).expect("窓寸がある");
@@ -1056,7 +996,7 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at_120() {
 /// 要件 7.2 の高い側（192）。
 #[test]
 fn a_window_without_a_re_derivation_result_keeps_its_size_at_192() {
-    a_window_without_a_re_derivation_result_keeps_its_size_at(SCALE_192);
+    a_window_without_a_re_derivation_result_keeps_its_size_at(HIGH_DPI);
 }
 
 // ---------------------------------------------------------------------------
@@ -1102,11 +1042,11 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at_192() {
 /// **位置だけ**を現寸で射影し直す（設計 D7）ので、窓書込は出る。GPU も実 fixture も要らない。
 #[test]
 fn the_production_frame_system_reaches_all_three_placement_call_sites() {
-    let dpi = SCALE_192;
+    let dpi = HIGH_DPI;
     // 前のテストが残した窓書込指令を捨てる（**実行はしない**・要件 7.7）。
     let _residue = drain_window_pos_commands();
 
-    let stale = s2_sources(BASE_DPI);
+    let stale = s2_sources(LOW_DPI);
     let fresh = s2_sources(dpi);
     assert_ne!(
         stale.snapshot.work_areas, fresh.snapshot.work_areas,
@@ -1245,7 +1185,7 @@ fn s2_ground_of(world: &bevy_ecs::world::World, window: Entity) -> i32 {
 /// 条件の側を別に固定する（要件 7.2）。
 #[test]
 fn the_branch_cases_run_against_a_multi_monitor_work_area_table() {
-    for dpi in [SCALE_120, SCALE_192] {
+    for dpi in [SCALE_120, HIGH_DPI] {
         let mut harness = FrameHarness::new();
         let mut source = FakeReports::default();
         settle_at(&mut harness, &mut source, dpi);

@@ -26,21 +26,18 @@ use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{Point, WindowPos};
 
+use areka_placement::diag::WindowKind;
 use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
 use areka_placement::follow::BalloonFollow;
 use log_capture_kit::{ExpectField, capture};
 
+use super::shared_test_support::{HIGH_DPI, LOW_DPI};
 use super::test_support::{
     FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, s2_monitors,
     s2_work_area_for_dpi,
 };
+use super::transition_test_support::{settle_at, writes_for};
 use super::{balloon_target, shell_target};
-
-/// 遷移前の拡大率水準。
-const LOW_DPI: u16 = 96;
-
-/// 遷移後の拡大率水準（等倍の 2 倍＝寸も下端も動く）。
-const HIGH_DPI: u16 = 192;
 
 /// scope 0 のキャラ窓が [`HIGH_DPI`] で報告する物理寸（等倍寸の 2 倍）。
 const HIGH_SIZE_0: (u32, u32) = (SPAWN_SIZE_0.0 * 2, SPAWN_SIZE_0.1 * 2);
@@ -56,44 +53,13 @@ fn shell0() -> u32 {
     shell_target(0).0
 }
 
-/// 指定スコープ・指定種別の窓書込だけを取り出す。
-fn writes_for(writes: &[SetWindowPosCommand], scope: u32, kind: &str) -> Vec<SetWindowPosCommand> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind)
-        .cloned()
-        .collect()
-}
-
 /// キャラ窓の書込が置いた接地点（下端）の列。
 fn char_write_bottoms(writes: &[SetWindowPosCommand]) -> Vec<i32> {
     writes
         .iter()
-        .filter(|cmd| cmd.tag.kind == "char")
+        .filter(|cmd| cmd.tag.kind == WindowKind::Char.as_str())
         .map(|cmd| cmd.y + cmd.height)
         .collect()
-}
-
-/// 起動直後の整地——3 つの源と窓の拡大率をすべて [`LOW_DPI`] へ揃え、キャラ窓を当該水準の
-/// 作業領域下端へ接地させる。
-///
-/// 拡大率の相の初回 run は永続 `SystemState` の仕様で全窓へマッチするので、ここで 1 度
-/// 空回しして消費する。
-fn settle(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_sources_for_dpi(LOW_DPI);
-    harness.set_monitor_table_for_dpi(LOW_DPI);
-    harness.set_window_dpi(LOW_DPI);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    for scope in harness.scopes().to_vec() {
-        assert_eq!(
-            harness.ground_point(scope).1,
-            s2_work_area_for_dpi(LOW_DPI).bottom,
-            "前提が崩れている: scope={scope} のキャラ窓が定常水準で作業領域下端へ接地していない"
-        );
-    }
 }
 
 /// 隣接モニタ（ゴーストが決して居ない側）だけを高 DPI にした実行時のモニタ表。
@@ -150,7 +116,7 @@ fn deliver_the_scale_notice_first(harness: &mut FrameHarness, source: &mut FakeR
 fn a_scale_notice_ahead_of_the_table_lands_in_one_write_without_the_old_bottom() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     let old_bottom = s2_work_area_for_dpi(LOW_DPI).bottom;
     let new_bottom = s2_work_area_for_dpi(HIGH_DPI).bottom;
@@ -194,7 +160,7 @@ fn a_scale_notice_ahead_of_the_table_lands_in_one_write_without_the_old_bottom()
     let released = harness.drain_writes();
 
     assert_eq!(
-        writes_for(&released, 0, "char").len(),
+        writes_for(&released, 0, WindowKind::Char).len(),
         1,
         "解除フレームで scope 0 のキャラ窓が 1 回で移っていない: {released:?}"
     );
@@ -224,7 +190,7 @@ fn a_scale_notice_ahead_of_the_table_lands_in_one_write_without_the_old_bottom()
 fn a_surface_swap_during_the_wait_writes_nothing_and_keeps_the_report() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     deliver_the_scale_notice_first(&mut harness, &mut source);
     let _waiting = harness.drain_writes();
 
@@ -252,7 +218,7 @@ fn a_surface_swap_during_the_wait_writes_nothing_and_keeps_the_report() {
 fn the_wait_gives_up_after_the_bounded_number_of_frames_and_proceeds() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     deliver_the_scale_notice_first(&mut harness, &mut source);
     let _waiting = harness.drain_writes();
 
@@ -298,7 +264,7 @@ fn the_wait_gives_up_after_the_bounded_number_of_frames_and_proceeds() {
 fn the_same_drive_ports_write_when_nothing_is_waiting() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     assert!(
         harness
             .world
@@ -315,7 +281,7 @@ fn the_same_drive_ports_write_when_nothing_is_waiting() {
     harness.run_placement_phases(&mut source);
     let phase_writes = harness.drain_writes();
     assert_eq!(
-        writes_for(&phase_writes, 0, "char").len(),
+        writes_for(&phase_writes, 0, WindowKind::Char).len(),
         1,
         "経路 (b) で拡大率の相が書いていない（駆動口が死んでいる）: {phase_writes:?}"
     );
@@ -349,7 +315,7 @@ fn the_same_drive_ports_write_when_nothing_is_waiting() {
 fn a_window_on_another_monitor_with_a_known_dpi_never_waits() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     // 隣接モニタだけが高 DPI の表を作る（実行時のモニタ表 → 同期段が 2 源を作り直す）。
     harness.set_monitor_table(neighbor_at_high_dpi());
@@ -391,7 +357,7 @@ fn a_window_on_another_monitor_with_a_known_dpi_never_waits() {
 fn a_companion_follow_still_reaches_a_waiting_balloon() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     harness.set_monitor_table(neighbor_at_high_dpi());
     harness.advance_frame();
@@ -419,12 +385,12 @@ fn a_companion_follow_still_reaches_a_waiting_balloon() {
     // 随伴は届く（キャラ窓の書込と同一フレーム）。
     let writes = harness.drain_writes();
     assert_eq!(
-        writes_for(&writes, 0, "char").len(),
+        writes_for(&writes, 0, WindowKind::Char).len(),
         1,
         "キャラ窓が書かれていない（探針が退化している）: {writes:?}"
     );
     assert_eq!(
-        writes_for(&writes, 0, "balloon").len(),
+        writes_for(&writes, 0, WindowKind::Balloon).len(),
         1,
         "待ち札のあるバルーンへ随伴が届いていない（引き剥がされている）: {writes:?}"
     );
@@ -466,7 +432,7 @@ fn transition_lines(drive: impl FnOnce()) -> Vec<String> {
 fn each_of_the_three_sites_emits_its_own_hold_record() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     // 拡大率の相（`site=dpi`）。
     harness.set_window_dpi(HIGH_DPI);
@@ -529,7 +495,7 @@ fn each_of_the_three_sites_emits_its_own_hold_record() {
 fn a_steady_frame_emits_no_hold_record_while_a_transition_emits_a_proceed() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     // 前半（零件）: 拡大率も表も動かない定常フレーム。
     harness.advance_frame();
@@ -574,7 +540,7 @@ fn a_steady_frame_emits_no_hold_record_while_a_transition_emits_a_proceed() {
 fn a_window_held_through_a_shell_switch_is_written_on_the_frame_its_hold_lifts() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     let top = s2_work_area_for_dpi(HIGH_DPI).top;
     let char0 = harness.char_window(0);
     let char1 = harness.char_window(1);
@@ -623,10 +589,10 @@ fn a_window_held_through_a_shell_switch_is_written_on_the_frame_its_hold_lifts()
     assert_eq!(held, vec!["0"], "見送りの記録が scope 0 の 1 行でない");
     let switched = harness.drain_writes();
     assert!(
-        writes_for(&switched, 0, "char").is_empty(),
+        writes_for(&switched, 0, WindowKind::Char).is_empty(),
         "札のある窓へ切り替えの段で書いている: {switched:?}"
     );
-    let moved = writes_for(&switched, 1, "char");
+    let moved = writes_for(&switched, 1, WindowKind::Char);
     assert_eq!(
         moved
             .iter()
@@ -641,7 +607,7 @@ fn a_window_held_through_a_shell_switch_is_written_on_the_frame_its_hold_lifts()
     harness.run_placement_phases(&mut source);
     let released = harness.drain_writes();
     assert_eq!(
-        writes_for(&released, 0, "char")
+        writes_for(&released, 0, WindowKind::Char)
             .iter()
             .map(|cmd| (cmd.tag.origin, cmd.y))
             .collect::<Vec<_>>(),

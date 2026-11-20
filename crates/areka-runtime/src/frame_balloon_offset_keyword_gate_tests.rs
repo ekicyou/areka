@@ -37,45 +37,20 @@
 //! 「値が合っているから門は効いている」という誤った根拠に使われる。
 
 use wintf::ecs::WindowPos;
-use wintf::ecs::window::SetWindowPosCommand;
 
-use areka_placement::config::BalloonXMode;
+use areka_placement::diag::WindowKind;
 use areka_placement::follow::BalloonFollow;
 use areka_placement::resolver::{PointPx, SizePx, keyword_balloon_pos};
 use areka_placement::spawn::BalloonKeywordBase;
 use areka_placement::transition_diag::OFFSET_VERDICT_KEYWORD_PENDING;
 
-use super::test_support::{
-    FakeReports, FrameHarness, capture_logs, count_level, s2_monitors_with_work_area,
-    s2_work_area_for_dpi,
+use super::shared_test_support::{HIGH_DPI, LOW_DPI};
+use super::test_support::{FakeReports, FrameHarness, capture_logs, count_level};
+use super::transition_test_support::{
+    KEYWORD_ADJUST, KEYWORD_MODE, attach_material, follow_of, offset_lines, offset_of,
+    raise_scale_without_moving_the_work_area, settle_at, writes_for,
 };
 use super::*;
-
-/// 遷移前の拡大率水準（作者基準と等倍）。
-const LOW_DPI: u16 = 96;
-
-/// 遷移後の拡大率水準（2 倍＝素材が無ければオフセットも 2 倍になる）。
-const HIGH_DPI: u16 = 192;
-
-/// キーワード素材の揃え種別（中央上＝バルーン下端がシェル画像上端に接する）。
-const KEYWORD_MODE: BalloonXMode = BalloonXMode::CenterTop;
-
-/// キーワード素材の調整量（作者指定 0＝揃えの式だけを見る）。
-const KEYWORD_ADJUST: PointPx = PointPx { x: 0, y: 0 };
-
-/// 当該スコープの追従オフセット（現在値）。
-fn offset_of(harness: &FrameHarness, scope: usize) -> PointPx {
-    follow_of(harness, scope).offset()
-}
-
-/// 当該スコープの追従 Component（基準対まで読む腕で使う）。
-fn follow_of(harness: &FrameHarness, scope: usize) -> BalloonFollow {
-    harness
-        .world
-        .get::<BalloonFollow>(harness.char_window(scope))
-        .copied()
-        .expect("キャラ窓に BalloonFollow がある")
-}
 
 /// 当該スコープに素材が残っているか。
 fn has_material(harness: &FrameHarness, scope: usize) -> bool {
@@ -96,59 +71,6 @@ fn size_px(harness: &FrameHarness, entity: Entity) -> SizePx {
         w: size.width,
         h: size.height,
     }
-}
-
-/// 指定スコープ・指定種別の窓書込だけを取り出す（`frame_balloon_offset_converge_tests` と同型）。
-fn writes_for(writes: &[SetWindowPosCommand], scope: u32, kind: &str) -> Vec<SetWindowPosCommand> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind)
-        .cloned()
-        .collect()
-}
-
-/// 起動直後の整地（`frame_balloon_offset_converge_tests::settle` と同型・基準を係留する）。
-///
-/// 素材は整地の**後**に付ける——門は係留の腕より前に立つので、整地中に素材があると
-/// 基準が未係留のままになり、以降の遷移が追随の腕へ入らなくなる（探針の退化）。
-fn settle(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_sources_for_dpi(LOW_DPI);
-    harness.set_monitor_table_for_dpi(LOW_DPI);
-    harness.set_window_dpi(LOW_DPI);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    for scope in harness.scopes().to_vec() {
-        assert!(
-            follow_of(harness, scope).base().dpi.is_some(),
-            "scope={scope}: 整地で基準が係留されていない（探針が退化している）"
-        );
-    }
-}
-
-/// 全スコープのキャラ窓へキーワード素材を付ける（本番の spawn が `ScopePlacement` から
-/// 付けるのと同じ Component をそのまま置く）。
-fn attach_material(harness: &mut FrameHarness) {
-    for scope in harness.scopes().to_vec() {
-        let char_window = harness.char_window(scope);
-        harness
-            .world
-            .entity_mut(char_window)
-            .insert(BalloonKeywordBase {
-                mode: KEYWORD_MODE,
-                adjust: KEYWORD_ADJUST,
-            });
-    }
-}
-
-/// **拡大率だけ**を [`HIGH_DPI`] へ上げる（作業領域は [`LOW_DPI`] のまま＝べき等 skip 腕）。
-fn raise_scale_without_moving_the_work_area(harness: &mut FrameHarness) {
-    harness.set_monitor_table(s2_monitors_with_work_area(
-        HIGH_DPI,
-        s2_work_area_for_dpi(LOW_DPI),
-    ));
-    harness.set_window_dpi(HIGH_DPI);
 }
 
 /// 拡大率を上げ、**キャラ窓の実表示寸も倍で報告する**（再導出が発火する通常腕）。
@@ -182,11 +104,6 @@ fn expected_keyword_offset(harness: &FrameHarness, scope: usize) -> PointPx {
     .expect("中央揃えのモードは基本位置を持つ")
 }
 
-/// `kind=offset` の観測行だけを取り出す。
-fn offset_lines(logs: &[String]) -> Vec<&String> {
-    logs.iter().filter(|l| l.contains("kind=offset")).collect()
-}
-
 // ---------------------------------------------------------------------------
 // 門そのもの（要件 4.3・design D7）
 // ---------------------------------------------------------------------------
@@ -199,7 +116,7 @@ fn offset_lines(logs: &[String]) -> Vec<&String> {
 fn the_gate_holds_the_offset_and_the_base_pair_bit_identical() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     attach_material(&mut harness);
 
     let before: Vec<(usize, BalloonFollow)> = harness
@@ -246,7 +163,7 @@ fn the_gate_holds_the_offset_and_the_base_pair_bit_identical() {
 fn without_the_material_the_same_transition_still_rescales() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     let before: Vec<(usize, PointPx)> = harness
         .scopes()
@@ -276,7 +193,7 @@ fn without_the_material_the_same_transition_still_rescales() {
 fn the_gate_records_the_keyword_pending_verdict_without_a_warning() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     attach_material(&mut harness);
 
     raise_scale_without_moving_the_work_area(&mut harness);
@@ -316,7 +233,7 @@ fn the_gate_records_the_keyword_pending_verdict_without_a_warning() {
 fn only_the_rederivation_writes_the_offset_when_the_size_changes() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     attach_material(&mut harness);
 
     raise_scale_with_a_doubled_size_report(&mut harness, &mut source);
@@ -351,7 +268,7 @@ fn only_the_rederivation_writes_the_offset_when_the_size_changes() {
             "scope={scope}: 再導出の確立点が基準へ焼き直されていない"
         );
         assert_eq!(
-            writes_for(&writes, scope_u32, "balloon").len(),
+            writes_for(&writes, scope_u32, WindowKind::Balloon).len(),
             1,
             "scope={scope}: バルーンが 1 度だけ書かれていない（中間位置の禁止・要件 3.4）: {writes:?}"
         );
@@ -372,7 +289,7 @@ fn only_the_rederivation_writes_the_offset_when_the_size_changes() {
 fn the_size_held_transition_leaves_the_alignment_until_the_next_size_change() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     attach_material(&mut harness);
 
     let stale: Vec<(usize, PointPx)> = harness
@@ -410,7 +327,7 @@ fn the_size_held_transition_leaves_the_alignment_until_the_next_size_change() {
 fn the_left_behind_alignment_heals_on_the_next_size_change() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     attach_material(&mut harness);
 
     // 1 度目＝受容した残余の腕（何も起きない）。

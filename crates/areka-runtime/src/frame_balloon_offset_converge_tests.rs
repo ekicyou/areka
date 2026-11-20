@@ -39,74 +39,15 @@
 use wintf::ecs::WindowPos;
 use wintf::ecs::window::SetWindowPosCommand;
 
-use areka_placement::diag::PlacementRoute;
-use areka_placement::follow::BalloonFollow;
+use areka_placement::diag::{PlacementRoute, WindowKind};
 use areka_placement::resolver::PointPx;
 
-use super::test_support::{
-    FakeReports, FrameHarness, s2_monitors_with_work_area, s2_work_area_for_dpi,
+use super::shared_test_support::{HIGH_DPI, LOW_DPI};
+use super::test_support::{FakeReports, FrameHarness, s2_work_area_for_dpi};
+use super::transition_test_support::{
+    offset_of, raise_scale_without_moving_the_work_area, settle_at, writes_for,
 };
 use super::*;
-
-/// 遷移前の拡大率水準（作者基準と等倍）。
-const LOW_DPI: u16 = 96;
-
-/// 遷移後の拡大率水準（2 倍＝オフセットも 2 倍になる）。
-const HIGH_DPI: u16 = 192;
-
-/// 指定スコープ・指定種別の窓書込だけを取り出す（`frame_dpi_sync_hold_tests` と同型）。
-fn writes_for(writes: &[SetWindowPosCommand], scope: u32, kind: &str) -> Vec<SetWindowPosCommand> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind)
-        .cloned()
-        .collect()
-}
-
-/// 当該スコープの追従オフセット（現在値）。
-fn offset_of(harness: &FrameHarness, scope: usize) -> PointPx {
-    harness
-        .world
-        .get::<BalloonFollow>(harness.char_window(scope))
-        .expect("キャラ窓に BalloonFollow がある")
-        .offset()
-}
-
-/// 起動直後の整地——3 つの源と窓の拡大率を [`LOW_DPI`] へ揃え、拡大率の相の初回全窓
-/// マッチ（永続 `SystemState` の仕様）を空回しして消費する。
-///
-/// この 1 巡で未係留の基準（`OffsetBase::unpinned`）が [`LOW_DPI`] へ**係留**される
-/// （要件 5.2）——係留が済んでいないと次の遷移は係留の腕へ落ち、追随が起きない。
-fn settle(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_sources_for_dpi(LOW_DPI);
-    harness.set_monitor_table_for_dpi(LOW_DPI);
-    harness.set_window_dpi(LOW_DPI);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    for scope in harness.scopes().to_vec() {
-        assert!(
-            harness
-                .world
-                .get::<BalloonFollow>(harness.char_window(scope))
-                .expect("キャラ窓に BalloonFollow がある")
-                .base()
-                .dpi
-                .is_some(),
-            "scope={scope}: 整地で基準が係留されていない（探針が退化している）"
-        );
-    }
-}
-
-/// **拡大率だけ**を [`HIGH_DPI`] へ上げる（作業領域は [`LOW_DPI`] のまま据え置く）。
-fn raise_scale_without_moving_the_work_area(harness: &mut FrameHarness) {
-    harness.set_monitor_table(s2_monitors_with_work_area(
-        HIGH_DPI,
-        s2_work_area_for_dpi(LOW_DPI),
-    ));
-    harness.set_window_dpi(HIGH_DPI);
-}
 
 /// **探針の非退化検査**: この構成では反映口が本当にべき等 skip（`false`）で抜ける。
 ///
@@ -116,7 +57,7 @@ fn raise_scale_without_moving_the_work_area(harness: &mut FrameHarness) {
 fn the_transition_really_takes_the_idempotent_skip_path() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     raise_scale_without_moving_the_work_area(&mut harness);
     harness.advance_frame();
@@ -148,7 +89,7 @@ fn the_transition_really_takes_the_idempotent_skip_path() {
 fn an_idempotent_skip_converges_the_balloon_in_exactly_one_write() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     let before: Vec<(usize, PointPx)> = harness
         .scopes()
@@ -170,13 +111,13 @@ fn an_idempotent_skip_converges_the_balloon_in_exactly_one_write() {
             "scope={scope}: 追随が起きていない（探針の退化——収束の主張が空虚になる）"
         );
 
-        let char_writes = writes_for(&writes, scope_u32, "char");
+        let char_writes = writes_for(&writes, scope_u32, WindowKind::Char);
         assert!(
             char_writes.is_empty(),
             "scope={scope}: べき等 skip の腕でキャラ窓が書かれている（予算＝キャラ 0）: {char_writes:?}"
         );
 
-        let balloon_writes = writes_for(&writes, scope_u32, "balloon");
+        let balloon_writes = writes_for(&writes, scope_u32, WindowKind::Balloon);
         assert_eq!(
             balloon_writes.len(),
             1,
@@ -229,7 +170,7 @@ fn an_idempotent_skip_converges_the_balloon_in_exactly_one_write() {
 fn the_normal_arm_still_writes_the_character_once_and_the_balloon_once() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     assert_ne!(
         s2_work_area_for_dpi(LOW_DPI).bottom,
@@ -245,12 +186,12 @@ fn the_normal_arm_still_writes_the_character_once_and_the_balloon_once() {
     for scope in harness.scopes().to_vec() {
         let scope_u32 = u32::try_from(scope).expect("scope は u32 域");
         assert_eq!(
-            writes_for(&writes, scope_u32, "char").len(),
+            writes_for(&writes, scope_u32, WindowKind::Char).len(),
             1,
             "scope={scope}: 通常腕のキャラ窓書込が 1 回でない（予算＝キャラ ≤1）: {writes:?}"
         );
         assert_eq!(
-            writes_for(&writes, scope_u32, "balloon").len(),
+            writes_for(&writes, scope_u32, WindowKind::Balloon).len(),
             1,
             "scope={scope}: 通常腕のバルーン書込が 1 回でない（予算＝バルーン ≤1）: {writes:?}"
         );
@@ -263,7 +204,7 @@ fn the_normal_arm_still_writes_the_character_once_and_the_balloon_once() {
 fn no_offset_change_means_no_convergence_write() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     let before: Vec<PointPx> = harness
         .scopes()

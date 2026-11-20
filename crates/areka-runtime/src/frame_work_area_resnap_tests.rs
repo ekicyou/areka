@@ -24,9 +24,7 @@
 //! 窓ごとの側（自分の作業領域が動いていない窓）も同じ形で対にしてある
 //! （[`a_change_that_moves_only_the_neighbor_monitor_writes_no_windows`]）。
 
-use wintf::ecs::window::SetWindowPosCommand;
-
-use areka_placement::diag::PlacementRoute;
+use areka_placement::diag::{PlacementRoute, WindowKind};
 use areka_placement::follow::{Anchored, BalloonFollow};
 use areka_placement::resolver::{Anchor, RectPx};
 
@@ -35,6 +33,7 @@ use super::test_support::{
     s2_monitors_with_work_area, s2_neighbor_work_area, s2_taskbar_hidden_work_area,
     s2_work_area_for_dpi,
 };
+use super::transition_test_support::{settle_at, writes_for};
 
 /// 本ファイルが回す拡大率。**遷移の間ずっと動かさない**——動かすと拡大率の相が窓を書いて
 /// しまい、「作業領域だけが変わった」という主題が読めなくなる。
@@ -49,37 +48,6 @@ const STEADY_FRAMES: u32 = 5;
 /// 当該スコープのキャラ窓の接地点 Y（下端）。
 fn ground_y(harness: &FrameHarness, scope: usize) -> i32 {
     harness.ground_point(scope).1
-}
-
-/// 指定スコープ・指定種別の窓書込だけを取り出す。
-fn writes_for(writes: &[SetWindowPosCommand], scope: u32, kind: &str) -> Vec<SetWindowPosCommand> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind)
-        .cloned()
-        .collect()
-}
-
-/// 起動直後の整地——3 つの源と窓の拡大率をすべて [`STEADY_DPI`] へ揃え、キャラ窓を当該水準の
-/// 作業領域下端へ接地させる。
-///
-/// 拡大率の相の初回 run は永続 `SystemState` の仕様で全窓へマッチするので、ここで 1 度
-/// 空回しして消費する（以後のフレームでは真に変化した窓だけが対象になる）。
-fn settle(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_sources_for_dpi(STEADY_DPI);
-    harness.set_monitor_table_for_dpi(STEADY_DPI);
-    harness.set_window_dpi(STEADY_DPI);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    for scope in harness.scopes().to_vec() {
-        assert_eq!(
-            ground_y(harness, scope),
-            s2_work_area_for_dpi(STEADY_DPI).bottom,
-            "前提が崩れている: scope={scope} のキャラ窓が定常水準で作業領域下端へ接地していない"
-        );
-    }
 }
 
 /// タスクバーを隠す構成変更を実行時のモニタ表へ流し込む（拡大率は据え置き）。
@@ -103,7 +71,7 @@ fn hide_the_taskbar(harness: &mut FrameHarness) {
 fn a_work_area_only_change_lands_the_ground_point_on_the_new_bottom_in_one_write() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, STEADY_DPI);
 
     hide_the_taskbar(&mut harness);
     harness.advance_frame();
@@ -120,7 +88,7 @@ fn a_work_area_only_change_lands_the_ground_point_on_the_new_bottom_in_one_write
     }
 
     let writes = harness.drain_writes();
-    let char0 = writes_for(&writes, 0, "char");
+    let char0 = writes_for(&writes, 0, WindowKind::Char);
     assert_eq!(
         char0.len(),
         1,
@@ -156,7 +124,7 @@ fn hiding_the_taskbar_really_moves_the_work_area_bottom() {
 fn the_resnap_moves_the_companion_balloon_in_the_same_frame_without_touching_the_offset() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, STEADY_DPI);
 
     let char0 = harness.char_window(0);
     let balloon0 = harness.balloon_window(0);
@@ -174,12 +142,12 @@ fn the_resnap_moves_the_companion_balloon_in_the_same_frame_without_touching_the
     // 同一フレーム: 本フレームで積まれた書込にキャラ窓とバルーン窓の双方が居る。
     let writes = harness.drain_writes();
     assert_eq!(
-        writes_for(&writes, 0, "char").len(),
+        writes_for(&writes, 0, WindowKind::Char).len(),
         1,
         "キャラ窓が本フレームで書かれていない: {writes:?}"
     );
     assert_eq!(
-        writes_for(&writes, 0, "balloon").len(),
+        writes_for(&writes, 0, WindowKind::Balloon).len(),
         1,
         "随伴バルーンが同一フレームで追随していない: {writes:?}"
     );
@@ -222,7 +190,7 @@ fn the_resnap_moves_the_companion_balloon_in_the_same_frame_without_touching_the
 fn an_unchanged_monitor_table_drives_no_resnap_while_a_changed_one_does() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, STEADY_DPI);
 
     // 前半（零件）: 表は据え置き。
     harness.advance_frame();
@@ -260,7 +228,7 @@ fn an_unchanged_monitor_table_drives_no_resnap_while_a_changed_one_does() {
 fn steady_frames_write_nothing_until_the_work_area_moves_again() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, STEADY_DPI);
 
     hide_the_taskbar(&mut harness);
     harness.advance_frame();
@@ -309,7 +277,7 @@ fn steady_frames_write_nothing_until_the_work_area_moves_again() {
 fn a_change_that_moves_only_the_neighbor_monitor_writes_no_windows() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, STEADY_DPI);
 
     // 前半（零件）: 隣接モニタの作業領域だけを動かす。
     let neighbor = s2_neighbor_work_area();
@@ -352,7 +320,7 @@ fn a_change_that_moves_only_the_neighbor_monitor_writes_no_windows() {
 fn a_free_anchored_char_window_is_left_alone_while_a_bottom_anchored_one_moves() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, STEADY_DPI);
 
     let char1 = harness.char_window(1);
     harness
@@ -367,7 +335,7 @@ fn a_free_anchored_char_window_is_left_alone_while_a_bottom_anchored_one_moves()
 
     let writes = harness.drain_writes();
     assert!(
-        writes_for(&writes, 1, "char").is_empty(),
+        writes_for(&writes, 1, WindowKind::Char).is_empty(),
         "位置固定（Free）のキャラ窓を再スナップが動かしている: {writes:?}"
     );
     assert_eq!(
@@ -376,7 +344,7 @@ fn a_free_anchored_char_window_is_left_alone_while_a_bottom_anchored_one_moves()
         "位置固定のキャラ窓の位置が変わっている"
     );
     assert_eq!(
-        writes_for(&writes, 0, "char").len(),
+        writes_for(&writes, 0, WindowKind::Char).len(),
         1,
         "同じフレームの下端吸着窓が書かれていない（駆動が死んでいる）: {writes:?}"
     );
@@ -396,7 +364,7 @@ fn a_free_anchored_char_window_is_left_alone_while_a_bottom_anchored_one_moves()
 fn a_window_already_written_by_the_scale_phase_is_not_written_again_in_the_same_frame() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, STEADY_DPI);
 
     // OS 設定の拡大率変更（作業領域も同時に動く）。作業領域源は触らない——実行時のモニタ表
     // から作り直すのが同期段の仕事である。
@@ -407,7 +375,7 @@ fn a_window_already_written_by_the_scale_phase_is_not_written_again_in_the_same_
 
     let writes = harness.drain_writes();
     assert_eq!(
-        writes_for(&writes, 0, "char").len(),
+        writes_for(&writes, 0, WindowKind::Char).len(),
         1,
         "拡大率と作業領域が同時に動いたフレームでキャラ窓の書込が 1 回になっていない: {writes:?}"
     );
@@ -454,7 +422,7 @@ fn the_resnap_is_called_after_the_scale_phase_in_the_frame_system() {
 fn a_top_anchored_char_window_is_left_alone_while_a_bottom_anchored_one_moves() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, STEADY_DPI);
 
     let char1 = harness.char_window(1);
     harness
@@ -483,7 +451,7 @@ fn a_top_anchored_char_window_is_left_alone_while_a_bottom_anchored_one_moves() 
 
     let writes = harness.drain_writes();
     assert!(
-        writes_for(&writes, 1, "char").is_empty(),
+        writes_for(&writes, 1, WindowKind::Char).is_empty(),
         "上端吸着のキャラ窓を再スナップが動かしている（要件 5.1 は下端吸着だけを対象とする）: {writes:?}"
     );
     assert_eq!(
@@ -492,7 +460,7 @@ fn a_top_anchored_char_window_is_left_alone_while_a_bottom_anchored_one_moves() 
         "上端吸着のキャラ窓の位置が変わっている"
     );
     assert_eq!(
-        writes_for(&writes, 0, "char").len(),
+        writes_for(&writes, 0, WindowKind::Char).len(),
         1,
         "同じフレームの下端吸着窓が書かれていない（駆動が死んでいる）: {writes:?}"
     );

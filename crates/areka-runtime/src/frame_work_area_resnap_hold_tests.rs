@@ -41,54 +41,23 @@
 //! 通らない経路なら今も落ちる」を、**同じ土台**（同じハーネス・同じ整地・同じ札）で対にする。
 
 use bevy_ecs::entity::Entity;
-use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::{DPI, WindowPos};
 
 use areka_placement::diag::{PlacementRoute, WindowKind};
 use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncDecision, DpiSyncHold, evaluate};
 use areka_placement::follow::move_window_with_route;
 use areka_placement::transition_diag::HOLD_SITE_WORK_AREA_RESNAP;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 
+use super::shared_test_support::{HIGH_DPI, LOW_DPI, SCALE_120};
 use super::test_support::{
     FakeReports, FrameHarness, s2_monitors_with_work_area, s2_taskbar_hidden_work_area,
     s2_work_area_for_dpi,
 };
-
-/// 遷移前の拡大率水準（等倍）。実行時のモニタ表は本ファイルを通じてこの水準に据え置く
-/// ——据え置くからこそ札が外れず、到達条件 ⑴ が成立し続ける。
-const BASE_DPI: u16 = 96;
-
-/// 要件 7.2 が名指しする 2 水準のうち低い側。
-const SCALE_120: u16 = 120;
-
-/// 同上・高い側（等倍の 2 倍）。
-const SCALE_192: u16 = 192;
+use super::transition_test_support::{settle_at, warnings_containing, writes_for};
 
 /// 監視が鳴ったことを本文から拾うための語（`window_move.rs` の `warn!` 本文の一部）。
 const INVARIANT_WARNING: &str = "整合待ちの札がある窓へ窓書込が到達した";
-
-/// 指定スコープ・指定種別の窓書込だけを取り出す。
-fn writes_for(
-    writes: &[SetWindowPosCommand],
-    scope: u32,
-    kind: WindowKind,
-) -> Vec<SetWindowPosCommand> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind.as_str())
-        .cloned()
-        .collect()
-}
-
-/// 捕捉行のうち WARN で、`needle` を本文に含むものの件数。
-fn warnings_containing(events: &[CapturedEvent], needle: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .filter(|e| e.message().contains(needle))
-        .count()
-}
 
 /// 窓 1 枚だけの拡大率を差し替える（ハーネスの口はスコープ単位＝2 窓まとめてなので、
 /// 「キャラ窓は表と揃い、バルーンだけ食い違う」形はここでしか作れない）。
@@ -99,41 +68,19 @@ fn set_window_dpi_of(harness: &mut FrameHarness, window: Entity, dpi: u16) {
         .insert(DPI::from_dpi(dpi, dpi));
 }
 
-/// 起動直後の整地——3 つの源と窓の拡大率をすべて [`BASE_DPI`] へ揃え、キャラ窓を当該水準の
-/// 作業領域下端へ接地させる。
-///
-/// 拡大率の相の初回 run は永続 `SystemState` の仕様で全窓へマッチするので、ここで 1 度
-/// 空回しして消費する（以後のフレームでは真に変化した窓だけが対象になる）。
-fn settle(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_sources_for_dpi(BASE_DPI);
-    harness.set_monitor_table_for_dpi(BASE_DPI);
-    harness.set_window_dpi(BASE_DPI);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    for scope in harness.scopes().to_vec() {
-        assert_eq!(
-            harness.ground_point(scope).1,
-            s2_work_area_for_dpi(BASE_DPI).bottom,
-            "前提が崩れている: scope={scope} のキャラ窓が定常水準で作業領域下端へ接地していない"
-        );
-    }
-}
-
 /// タスクバーを隠す構成変更を実行時のモニタ表へ流し込む（**拡大率は据え置く**）。
 ///
 /// 拡大率を据え置くのが要点である——ここで表の拡大率まで動かすと札が外れてしまい、
 /// 到達条件 ⑴（札が残っていること）が壊れる。
 fn hide_the_taskbar(harness: &mut FrameHarness) {
     harness.set_monitor_table(s2_monitors_with_work_area(
-        BASE_DPI,
-        s2_taskbar_hidden_work_area(BASE_DPI),
+        LOW_DPI,
+        s2_taskbar_hidden_work_area(LOW_DPI),
     ));
 }
 
 /// 到達条件 ⑴ を作る——scope 0 の 2 窓と scope 1 の**バルーンだけ**へ新しい拡大率を届け、
-/// 実行時のモニタ表は [`BASE_DPI`] のまま据え置く。
+/// 実行時のモニタ表は [`LOW_DPI`] のまま据え置く。
 ///
 /// scope 1 のキャラ窓を揃えたまま残すのが 2 つの陽性の対の土台である: そのキャラ窓は
 /// 再スナップに書かれ（4 点目が全部を止めていないことの証拠）、その書込の随伴が札の付いた
@@ -176,10 +123,10 @@ fn is_held(harness: &FrameHarness, window: Entity) -> bool {
 fn a_work_area_change_during_the_wait_defers_the_held_window_at(dpi: u16) {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
-    let old_bottom = s2_work_area_for_dpi(BASE_DPI).bottom;
-    let new_bottom = s2_taskbar_hidden_work_area(BASE_DPI).bottom;
+    let old_bottom = s2_work_area_for_dpi(LOW_DPI).bottom;
+    let new_bottom = s2_taskbar_hidden_work_area(LOW_DPI).bottom;
     assert_ne!(
         old_bottom, new_bottom,
         "探針が退化している: 作業領域下端が動かない（到達条件 ⑵ を観測できない）"
@@ -296,7 +243,7 @@ fn a_work_area_change_during_the_wait_defers_the_held_window_at_120() {
 /// 要件 7.2 の高い側（192）。
 #[test]
 fn a_work_area_change_during_the_wait_defers_the_held_window_at_192() {
-    a_work_area_change_during_the_wait_defers_the_held_window_at(SCALE_192);
+    a_work_area_change_during_the_wait_defers_the_held_window_at(HIGH_DPI);
 }
 
 // ---------------------------------------------------------------------------
@@ -311,7 +258,7 @@ fn a_work_area_change_during_the_wait_defers_the_held_window_at_192() {
 fn the_fourth_site_records_its_own_deferral_word() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     // 前半（零件）: 札が 1 つも無いフレームで作業領域が動いても、見送りの行は出ない。
     hide_the_taskbar(&mut harness);
@@ -337,10 +284,10 @@ fn the_fourth_site_records_its_own_deferral_word() {
     );
 
     // 後半（陽性）: 札を残したまま作業領域をもう一度動かすと、4 点目の見送りが記録される。
-    leave_holds_in_place(&mut harness, &mut source, SCALE_192);
+    leave_holds_in_place(&mut harness, &mut source, HIGH_DPI);
     harness.set_monitor_table(s2_monitors_with_work_area(
-        BASE_DPI,
-        s2_work_area_for_dpi(BASE_DPI),
+        LOW_DPI,
+        s2_work_area_for_dpi(LOW_DPI),
     ));
     harness.advance_frame();
     let frame = harness.frame();
@@ -363,8 +310,8 @@ fn the_fourth_site_records_its_own_deferral_word() {
     for token in [
         format!("frame={frame} "),
         "decision=hold".to_string(),
-        format!("window_dpi={}", u32::from(SCALE_192)),
-        format!("table_dpi={}", u32::from(BASE_DPI)),
+        format!("window_dpi={}", u32::from(HIGH_DPI)),
+        format!("table_dpi={}", u32::from(LOW_DPI)),
     ] {
         assert!(
             record.contains(&token),
@@ -388,8 +335,8 @@ fn the_fourth_site_records_its_own_deferral_word() {
 fn the_invariant_watch_no_longer_fires_for_work_area_resnap() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
-    leave_holds_in_place(&mut harness, &mut source, SCALE_192);
+    settle_at(&mut harness, &mut source, LOW_DPI);
+    leave_holds_in_place(&mut harness, &mut source, HIGH_DPI);
 
     assert!(
         is_held(&harness, harness.char_window(0)),
@@ -430,8 +377,8 @@ fn the_invariant_watch_no_longer_fires_for_work_area_resnap() {
 fn the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
-    leave_holds_in_place(&mut harness, &mut source, SCALE_192);
+    settle_at(&mut harness, &mut source, LOW_DPI);
+    leave_holds_in_place(&mut harness, &mut source, HIGH_DPI);
 
     let char0 = harness.char_window(0);
     assert!(
