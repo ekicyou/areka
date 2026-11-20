@@ -14,22 +14,13 @@ use wintf::ecs::Point;
 
 use crate::move_cue::{MoveDirective, PositionCue, parse_move_directive};
 use crate::target_map::shell_target;
-use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::sticky_group_ledger::StickyGroupLedger;
 
-use super::shared_test_support::wiring;
+use super::shared_test_support::{steady_harness, wiring};
 use super::test_support::{
     FrameHarness, PerTargetSizes, SPAWN_SIZE_1, all_shown, capture_logs, pos_of, size_of,
 };
 use super::{run_move_drain_phase, run_move_drain_with};
-
-/// 起動の確定が済んだハーネス（連鎖の確定はこのフレームで何もしない）。
-fn steady_harness() -> FrameHarness {
-    let mut harness = FrameHarness::new();
-    harness.world.insert_resource(ChainFinalized);
-    harness.advance_frame();
-    harness
-}
 
 fn directive(scope: u32, tokens: &[&str]) -> MoveDirective {
     let tokens: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();

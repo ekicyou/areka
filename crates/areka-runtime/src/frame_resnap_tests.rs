@@ -344,17 +344,15 @@ fn resnap_from_sizes_same_size_repeats_never_change_window_state() {
 /// 左上へ）は寄せた後の矩形を基準に scope1 を置く（要件 3.3）。並べ直しはやり直さない＝どちらの窓も書き込みは 1 回ずつ（要件 3.4）。
 #[test]
 fn a_move_in_the_same_frame_as_a_grow_clamp_uses_the_clamped_rect() {
-    use super::test_support::{FrameHarness, PerTargetSizes, SPAWN_SIZE_1};
+    use super::shared_test_support::steady_harness;
+    use super::test_support::{PerTargetSizes, SPAWN_SIZE_1};
     use crate::move_cue::{PositionCue, parse_move_directive};
-    use areka_placement::chain_finalize::ChainFinalized;
     use areka_placement::follow::Anchored;
     use areka_placement::resolver::Anchor;
 
     use wintf::ecs::WindowHandle;
 
-    let mut harness = FrameHarness::new();
-    harness.world.insert_resource(ChainFinalized);
-    harness.advance_frame();
+    let mut harness = steady_harness();
     let (char0, char1) = (harness.char_window(0), harness.char_window(1));
     // 両方 free（scope1 も吸着で縦を戻されないように）。
     for e in [char0, char1] {

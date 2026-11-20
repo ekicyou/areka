@@ -18,38 +18,25 @@
 //! [`a_surface_swap_during_a_conversation_never_arms_the_realign`] は、**同じ駆動口**で
 //! 拡大率が動けば武装することを同じテスト本体の中で続けて主張する。
 
-use bevy_ecs::change_detection::DetectChangesMut;
+use wintf::ecs::WindowHandle;
 use wintf::ecs::window::SetWindowPosCommand;
-use wintf::ecs::{Point, WindowHandle, WindowPos};
 
 use areka_placement::chain_finalize::{CHAIN_FINALIZE_STALL_FRAMES, ChainFinalized};
 use areka_placement::chain_realign::ChainRealignPending;
 use areka_placement::dpi_sync::DpiSyncHold;
-use areka_placement::spawn::GhostWindows;
 
+use super::shared_test_support::{
+    GAP_WITHOUT_REALIGN, HIGH_DPI, HIGH_SIZE_0, HIGH_SIZE_1, LOW_SIZE_1, char_x, default_x,
+    drag_char_window_by, gap, high_sizes, low_sizes, lower_the_scale, raise_the_scale,
+};
 use super::shell_target;
 use super::test_support::{
-    FakeReports, FrameHarness, PerTargetSizes, capture_logs, count_level, pos_of, size_of,
+    FakeReports, FrameHarness, PerTargetSizes, capture_logs, count_level, size_of,
 };
 
 // ---------------------------------------------------------------------------
 // 実機 359px を決定論へ写した探針（design Testing「隙間 359→0 の決定論版」）
 // ---------------------------------------------------------------------------
-
-/// 遷移前の拡大率水準（実機の 200% に対応）。
-const HIGH_DPI: u16 = 192;
-
-/// 遷移後の拡大率水準（実機の 100% に対応＝幅がちょうど半分になる）。
-const LOW_DPI: u16 = 96;
-
-/// scope0 の実表示寸（高水準）。幅は実機の 764（`baseline` の physical 764x1094）。
-const HIGH_SIZE_0: (u32, u32) = (764, 1094);
-/// scope0 の実表示寸（低水準）＝ちょうど半分。
-const LOW_SIZE_0: (u32, u32) = (382, 547);
-/// scope1 の実表示寸（高水準）。幅は実機の 672。
-const HIGH_SIZE_1: (u32, u32) = (672, 596);
-/// scope1 の実表示寸（低水準）＝ちょうど半分。
-const LOW_SIZE_1: (u32, u32) = (336, 298);
 
 /// 高水準で連鎖を確定した直後の scope0 左上 X（連鎖の起点ゆえ以後も動かない）。
 ///
@@ -69,11 +56,6 @@ const SCOPE0_X_LOW: i32 = 1509;
 /// 中央 `646 + 336 = 982`、幅 336 で `982 − 168 = 814`。
 const SCOPE1_X_LOW_BEFORE_REALIGN: i32 = 814;
 
-/// **是正前に残る隙間**（実機 359px の決定論版）。
-///
-/// `1509 − (814 + 336) = 359`＝左端差 `191 + 168` の和そのものである。
-const GAP_WITHOUT_REALIGN: i32 = 359;
-
 /// 解き直しが入ったときに scope1 が収まる左上 X（`SCOPE0_X_LOW − 336`＝隣接）。
 const SCOPE1_X_AFTER_REALIGN: i32 = SCOPE0_X_LOW - LOW_SIZE_1.0 as i32;
 
@@ -88,16 +70,6 @@ const SCOPE1_X_AFTER_DRAG_APART_LOW: i32 = 694;
 
 /// 会話中の表情差替でシェルが取る別寸（高水準・幅だけが変わる）。
 const SWAPPED_SIZE_0: (u32, u32) = (800, 1094);
-
-/// 高水準の実表示寸（連鎖の駆動条件＝窓寸と一致していること）。
-fn high_sizes() -> PerTargetSizes {
-    PerTargetSizes::new([(0, Some(HIGH_SIZE_0)), (1, Some(HIGH_SIZE_1))])
-}
-
-/// 低水準の実表示寸。
-fn low_sizes() -> PerTargetSizes {
-    PerTargetSizes::new([(0, Some(LOW_SIZE_0)), (1, Some(LOW_SIZE_1))])
-}
 
 // ---------------------------------------------------------------------------
 // 駆動の型（起動 → 遷移）
@@ -129,75 +101,6 @@ fn boot_at_high(harness: &mut FrameHarness, source: &mut FakeReports) {
     assert_eq!(gap(harness), 0, "前提が崩れている: 高水準の隙間が 0 でない");
     let _priming = harness.drain_writes();
     harness.reset_write_witness();
-}
-
-/// OS 設定の拡大率変更（高→低）を 1 フレームで流し込む。
-///
-/// 作業領域源は触らない——実行時のモニタ表から作り直すのが同期段の仕事である。
-fn lower_the_scale(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_table_for_dpi(LOW_DPI);
-    harness.set_window_dpi(LOW_DPI);
-    source.refresh.insert(shell_target(0).0, LOW_SIZE_0);
-    source.refresh.insert(shell_target(1).0, LOW_SIZE_1);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-}
-
-/// OS 設定の拡大率変更（低→高）を 1 フレームで流し込む（2 度目の遷移を作る口）。
-fn raise_the_scale(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_table_for_dpi(HIGH_DPI);
-    harness.set_window_dpi(HIGH_DPI);
-    source.refresh.insert(shell_target(0).0, HIGH_SIZE_0);
-    source.refresh.insert(shell_target(1).0, HIGH_SIZE_1);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-}
-
-/// 当該スコープのキャラ窓の現在左上 X。
-fn char_x(harness: &FrameHarness, scope: usize) -> i32 {
-    pos_of(&harness.world, harness.char_window(scope))
-        .expect("position がある")
-        .x
-}
-
-/// 当該スコープの既定位置（台帳）の X。
-fn default_x(harness: &FrameHarness, scope: usize) -> Option<i32> {
-    harness
-        .world
-        .get_resource::<GhostWindows>()
-        .expect("GhostWindows がある")
-        .default_char_pos(scope)
-        .map(|p| p.x)
-}
-
-/// 隣接ペアの**隙間**＝`scope0 の左端 − scope1 の右端`（連鎖規則 `x(n−1) = x(n) + w(n)`）。
-///
-/// 実機サインオフが目視する量そのものである（200% で 0・100% で 359 だった）。
-fn gap(harness: &FrameHarness) -> i32 {
-    let right_of_scope1 = char_x(harness, 1)
-        + size_of(&harness.world, harness.char_window(1))
-            .expect("size がある")
-            .width;
-    char_x(harness, 0) - right_of_scope1
-}
-
-/// 当該スコープのキャラ窓を横へ `dx` だけずらす（利用者のドラッグが landing した後の状態）。
-///
-/// ドラッグ経路そのもの（`on_char_drag`）は `crates/areka-placement/src/follow_drag_tests.rs` が所有するので、
-/// ここでは**結果の位置**だけを置く。既定位置は動かさない——ドラッグは route を持たない書込で
-/// あり、既定位置の追跡（D9）の対象から構造的に外れているからである。
-fn drag_char_window_by(harness: &mut FrameHarness, scope: usize, dx: i32) {
-    let window = harness.char_window(scope);
-    let mut wp = harness
-        .world
-        .get_mut::<WindowPos>(window)
-        .expect("WindowPos がある");
-    let wp = wp.bypass_change_detection();
-    let moved = wp.position.expect("position がある");
-    wp.position = Some(Point {
-        x: moved.x + dx,
-        y: moved.y,
-    });
 }
 
 /// 当該スコープのキャラ窓へ整合待ちの札を置く（拡大率と表が未整合のまま止まっている状態）。

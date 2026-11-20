@@ -12,53 +12,25 @@
 //! 確かめる。3 体の鎖はハーネス（2 スコープ固定）に乗らないので、窓の一式を 3 スコープで組み、
 //! 武装と解決の関数を直に呼ぶ。
 
-use bevy_ecs::change_detection::DetectChangesMut;
-use bevy_ecs::prelude::World;
-use wintf::ecs::{Point, WindowPos};
-
-use areka_placement::chain_finalize::{ADJACENT_TOLERANCE_PX, ChainFinalized, ScopeChainState};
+use areka_placement::chain_finalize::ADJACENT_TOLERANCE_PX;
 use areka_placement::chain_realign::{
     arm_chain_realign, realign_chain_once_with, snapshot_char_rects,
 };
-use areka_placement::follow::OffsetBase;
-use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use areka_placement::source::GhostTitles;
-use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
-use areka_placement::test_support::give_fake_handles;
 
 use super::shared_test_support::{
-    GAP_WITHOUT_REALIGN, HIGH_DPI, HIGH_SIZE_0, HIGH_SIZE_1, LOW_DPI, LOW_SIZE_0, LOW_SIZE_1,
-    boot_remembered_at, boot_remembered_at_high, change_scale, char_pos, char_width, gap,
-    low_sizes, lower_the_scale, sizes,
+    CHAIN3_BOTTOM, GAP_WITHOUT_REALIGN, HIGH_SIZE_0, LOW_DPI, LOW_SIZE_0, LOW_SIZE_1,
+    boot_remembered_at, boot_remembered_at_high, chain3_pos, chain3_scan, chain3_world,
+    change_scale, char_pos, char_width, gap, halve_keeping_bottom_center, high_sizes, low_sizes,
+    lower_the_scale, place_char_window_x, raise_the_scale, sizes,
 };
-use super::test_support::{FakeReports, FrameHarness, PerTargetSizes, capture_logs, pos_of};
+use super::test_support::{FakeReports, FrameHarness, capture_logs};
+
 /// 中間の拡大率（150%）。解決の前に 2 度目の変化を起こすために使う。
 const MID_DPI: u16 = 144;
 /// scope0 の実表示寸（150%）。
 const MID_SIZE_0: (u32, u32) = (573, 820);
 /// scope1 の実表示寸（150%）。
 const MID_SIZE_1: (u32, u32) = (504, 447);
-
-fn high_sizes() -> PerTargetSizes {
-    sizes(HIGH_SIZE_0, HIGH_SIZE_1)
-}
-
-/// 100% → 200% を 1 フレームで流し込む。
-fn raise_the_scale(harness: &mut FrameHarness, source: &mut FakeReports) {
-    change_scale(harness, source, HIGH_DPI, HIGH_SIZE_0, HIGH_SIZE_1);
-}
-
-/// キャラ窓の左上の x だけをその値に置く（ドラッグや台本の結果の位置。既定の位置も印も触らない）。
-pub(super) fn place_char_window_x(harness: &mut FrameHarness, scope: usize, x: i32) {
-    let window = harness.char_window(scope);
-    let mut wp = harness
-        .world
-        .get_mut::<WindowPos>(window)
-        .expect("WindowPos がある");
-    let wp = wp.bypass_change_detection();
-    let y = wp.position.expect("position がある").y;
-    wp.position = Some(Point { x, y });
-}
 
 /// scope1 の左端 − scope0 の右端（scope1 が scope0 の右に隣り合う並び）。
 fn gap_right(harness: &FrameHarness) -> i32 {
@@ -262,100 +234,6 @@ fn a_pair_adjacent_on_the_right_stays_on_the_right() {
 // ---------------------------------------------------------------------------
 // 3 体の鎖（要件 1.5・8.4）
 // ---------------------------------------------------------------------------
-
-/// 3 体の鎖の作業領域の下端（3 体とも下端に接地する）。
-const CHAIN3_BOTTOM: i32 = 1444;
-
-/// 3 体の鎖の 200% の矩形（x, w, h）。scope1 は scope0 の左、scope2 は scope1 の左に隣り合う。
-const CHAIN3_HIGH: [(i32, i32, i32); 3] = [(1000, 400, 600), (700, 300, 400), (500, 200, 300)];
-
-fn chain3_placement(scope: usize, (x, w, h): (i32, i32, i32)) -> ScopePlacement {
-    let boff = PointPx { x: 0, y: 0 };
-    ScopePlacement {
-        scope,
-        char_pos: PointPx {
-            x,
-            y: CHAIN3_BOTTOM - h,
-        },
-        char_size: SizePx { w, h },
-        balloon_pos: PointPx {
-            x,
-            y: CHAIN3_BOTTOM - h,
-        },
-        balloon_size: SizePx { w: 200, h: 150 },
-        balloon_offset: boff,
-        balloon_offset_base: OffsetBase::unpinned(boff),
-        balloon_limit: true,
-        anchor: Anchor::Bottom,
-        balloon_keyword_base: None,
-    }
-}
-
-/// 3 スコープの窓の一式（偽 WindowHandle 付き・起動の並べ直し済み）。
-pub(super) fn chain3_world() -> (World, GhostWindows) {
-    let placements: Vec<ScopePlacement> = CHAIN3_HIGH
-        .iter()
-        .enumerate()
-        .map(|(scope, &rect)| chain3_placement(scope, rect))
-        .collect();
-    let mut world = World::new();
-    let gw = spawn_ghost_windows(
-        &mut world,
-        &placements,
-        &GhostTitles::from_scope_titles((0..3).map(|scope| (scope, format!("s{scope}")))),
-    );
-    give_fake_handles(&mut world, &gw);
-    world.insert_resource(ChainFinalized);
-    (world, gw)
-}
-
-/// 幅と高さを半分にし、下端中央を保って置き直す（拡大率の相の再射影の結果の形）。
-pub(super) fn halve_keeping_bottom_center(world: &mut World, gw: &GhostWindows) {
-    for scope in 0..3 {
-        let mut wp = world
-            .get_mut::<WindowPos>(gw.char_window(scope).expect("キャラ窓"))
-            .expect("WindowPos がある");
-        let wp = wp.bypass_change_detection();
-        let (pos, size) = wp.position.zip(wp.size).expect("位置と大きさがある");
-        let (w, h) = (size.width / 2, size.height / 2);
-        let center = pos.x + size.width / 2;
-        wp.position = Some(Point {
-            x: center - w / 2,
-            y: pos.y + size.height - h,
-        });
-        wp.size = Some(wintf::ecs::SizeI::new(w, h));
-    }
-}
-
-/// 今の窓の位置と幅から解きの入力を作る（本番の走査と同じ形・既定の位置は無い）。
-pub(super) fn chain3_scan(
-    world: &World,
-) -> (
-    Vec<ScopeChainState>,
-    Vec<(usize, bevy_ecs::entity::Entity, PointPx)>,
-) {
-    let gw = world.resource::<GhostWindows>();
-    let mut states = Vec::new();
-    let mut targets = Vec::new();
-    for scope in gw.scopes() {
-        let window = gw.char_window(scope).expect("キャラ窓");
-        let wp = world.get::<WindowPos>(window).expect("WindowPos がある");
-        let (pos, size) = wp.position.zip(wp.size).expect("位置と大きさがある");
-        states.push(ScopeChainState {
-            scope,
-            current_x: pos.x,
-            width: size.width,
-            default_x: None,
-        });
-        targets.push((scope, window, PointPx { x: pos.x, y: pos.y }));
-    }
-    (states, targets)
-}
-
-pub(super) fn chain3_pos(world: &World, gw: &GhostWindows, scope: usize) -> (i32, i32) {
-    let p = pos_of(world, gw.char_window(scope).expect("キャラ窓")).expect("position がある");
-    (p.x, p.y)
-}
 
 /// 3 体の鎖では、前の組を解いた後の x が次の組の基準になる（要件 1.5・8.4）。
 ///

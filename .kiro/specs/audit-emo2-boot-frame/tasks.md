@@ -135,7 +135,7 @@
   - _Dispatch: standard — 16 か所を 1 つの形へ寄せる_
   - _Requirements: 3.1, 3.2_
 
-- [ ] 3.4 鎖と移動のテストの写しを共有の支えへ寄せる（T15・27・28 番）
+- [x] 3.4 鎖と移動のテストの写しを共有の支えへ寄せる（T15・27・28 番）
   - research の直し方どおりに写しを消して共有の支えから引く。arm の私有の補助は別名にし、共有の支えの頭の使い手の説明を直す（27 番）
   - 3 体の鎖の支え 5 つを共有の支えへ移す（28 番）
   - 完了: 共有の支えが 900 行を越えず、`frame_chain_realign*`・`frame_default_pos_track_tests.rs`・`frame_move_hold_tests.rs`・`frame_resnap_tests.rs` が緑
@@ -277,3 +277,4 @@
 - 3.1: `zorder_drain` の支えの 5 つの項目は `pub(in crate::frame)` にした（兄弟の `zorder_descript` のテストから見えるように）。`gpu_on` は COM を呼んだスレッドで初期化し、解かない（前の 3 か所と同じ）。返す許可は呼び手が World より長く持つ。
 - 3.2: `dpi_world` の窓の DPI の着せ付けを `dress_dpi_windows` に抜き出した（切り替えのテストが開け直した窓にも使う）。畳みの段が抜けても台帳の表明では赤にならないので、前の窓が消え新しい窓が別の entity であることを前提の表明で見る。
 - 3.3: 結線を手で組む箇所は範囲の中に 18（research の「16」は数え違いで一覧の和は 17・1.3 の 1 本で 18）。本体の側の手組みは 26 番の外。共有の支えの `wiring_with(assets, runtime, presenter)` が唯一の手組み。
+- 3.4: `frame_default_pos_track_tests.rs` の `HIGH_SIZE_*`・`raise_the_scale` は共有の同名と値が違う（出現の寸の 2 倍）ので私有のまま `DOUBLED_SIZE_*`・`double_the_scale` に改名した。arm の `settled_sizes` は共有の `high_sizes` と値が同じなので別名にせず消した。共有の支えは 309 行。`LOW_DPI`・`HIGH_DPI` の写しは balloon_offset_*・dpi_sync_hold に残る（3.5 の 29 番で見る）。

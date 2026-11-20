@@ -28,33 +28,21 @@ use areka_placement::chain_finalize::{ChainFinalized, ChainRect};
 use areka_placement::chain_realign::ChainRealignPending;
 
 use super::dpi::size_changed;
+use super::shared_test_support::{
+    HIGH_DPI, HIGH_SIZE_0, HIGH_SIZE_1, LOW_SIZE_0, LOW_SIZE_1, high_sizes,
+};
 use super::test_support::{
-    FakeReports, FrameHarness, PerTargetSizes, WRITER_WITNESS, arrangement_offset_of,
-    assert_no_write, pos_of, s2_monitors_with_work_area, s2_taskbar_hidden_work_area, size_of,
+    FakeReports, FrameHarness, WRITER_WITNESS, arrangement_offset_of, assert_no_write, pos_of,
+    s2_monitors_with_work_area, s2_taskbar_hidden_work_area, size_of,
 };
 use super::{balloon_target, shell_target};
 
 /// 本ファイルは拡大率を**動かさない**（動かすと寸変化と作業領域変化が同時に来て、
 /// どちらが武装させたのか判別できなくなる）。
-const DPI_LEVEL: u16 = 192;
-
-/// 起動時に landing させる scope0 の実表示寸。
-const SIZE_0: (u32, u32) = (764, 1094);
-/// 起動時に landing させる scope1 の実表示寸。
-const SIZE_1: (u32, u32) = (672, 596);
-
-/// 遷移後の寸（ちょうど半分＝幅が変わる側）。
-const HALVED_0: (u32, u32) = (382, 547);
-/// 同上（scope1）。
-const HALVED_1: (u32, u32) = (336, 298);
+const DPI_LEVEL: u16 = HIGH_DPI;
 
 /// バルーン窓が取る新しい寸（spawn 時 223x158 の 2 倍）。
 const BALLOON_SIZE: (u32, u32) = (446, 316);
-
-/// 起動時の実表示寸（連鎖確定の駆動条件＝窓寸と一致していること）。
-fn settled_sizes() -> PerTargetSizes {
-    PerTargetSizes::new([(0, Some(SIZE_0)), (1, Some(SIZE_1))])
-}
 
 /// 窓寸を読む補助（未付与は前提崩れとして落とす）。
 fn expect_size(harness: &FrameHarness, window: Entity) -> SizeI {
@@ -74,8 +62,8 @@ fn boot_and_finalize(harness: &mut FrameHarness, source: &mut FakeReports) {
     harness.set_monitor_sources_for_dpi(DPI_LEVEL);
     harness.set_monitor_table_for_dpi(DPI_LEVEL);
     harness.set_window_dpi(DPI_LEVEL);
-    source.refresh.insert(shell_target(0).0, SIZE_0);
-    source.refresh.insert(shell_target(1).0, SIZE_1);
+    source.refresh.insert(shell_target(0).0, HIGH_SIZE_0);
+    source.refresh.insert(shell_target(1).0, HIGH_SIZE_1);
     harness.advance_frame();
     harness.run_placement_phases(source);
     assert!(
@@ -86,7 +74,7 @@ fn boot_and_finalize(harness: &mut FrameHarness, source: &mut FakeReports) {
         "起動時の確定がまだ無いフレームで武装した（解き直す連鎖が存在しない）"
     );
 
-    harness.run_chain_finalize(&settled_sizes());
+    harness.run_chain_finalize(&high_sizes());
     assert!(
         harness.world.get_resource::<ChainFinalized>().is_some(),
         "前提が崩れている: 起動時の連鎖確定が駆動していない"
@@ -140,7 +128,7 @@ fn a_reprojection_without_a_size_change_never_arms_but_one_with_it_does() {
         let mut source = FakeReports::default();
         boot_and_finalize(&mut harness, &mut source);
 
-        drive_reprojection(&mut harness, &mut source, [SIZE_0, SIZE_1]);
+        drive_reprojection(&mut harness, &mut source, [HIGH_SIZE_0, HIGH_SIZE_1]);
 
         // 前提: 書込は実際に起きている（起きていなければ ⑴ が効いただけで主張が空虚になる）。
         assert!(
@@ -149,7 +137,7 @@ fn a_reprojection_without_a_size_change_never_arms_but_one_with_it_does() {
         );
         assert_eq!(
             expect_size(&harness, harness.char_window(0)),
-            as_window_size(SIZE_0),
+            as_window_size(HIGH_SIZE_0),
             "前提が崩れている: 寸が変わってしまっている（この駆動では寸は不変であるべき）"
         );
         assert!(
@@ -166,11 +154,11 @@ fn a_reprojection_without_a_size_change_never_arms_but_one_with_it_does() {
     let mut fresh_source = FakeReports::default();
     boot_and_finalize(&mut fresh, &mut fresh_source);
 
-    drive_reprojection(&mut fresh, &mut fresh_source, [HALVED_0, HALVED_1]);
+    drive_reprojection(&mut fresh, &mut fresh_source, [LOW_SIZE_0, LOW_SIZE_1]);
 
     assert_eq!(
         expect_size(&fresh, fresh.char_window(0)),
-        as_window_size(HALVED_0),
+        as_window_size(LOW_SIZE_0),
         "前提が崩れている: 陽性の対で寸が landing していない"
     );
     assert!(
@@ -208,7 +196,7 @@ fn a_balloon_only_size_change_never_arms_the_realign() {
         // 前提: キャラ窓の寸は動いていない（動いていたら ⑵ ではなく ⑶ を見てしまう）。
         assert_eq!(
             expect_size(&harness, harness.char_window(0)),
-            as_window_size(SIZE_0),
+            as_window_size(HIGH_SIZE_0),
             "前提が崩れている: キャラ窓の寸まで動いている"
         );
         assert!(
@@ -225,7 +213,7 @@ fn a_balloon_only_size_change_never_arms_the_realign() {
     let mut fresh_source = FakeReports::default();
     boot_and_finalize(&mut fresh, &mut fresh_source);
     fresh.set_window_dpi(DPI_LEVEL);
-    fresh_source.refresh.insert(shell_target(0).0, HALVED_0);
+    fresh_source.refresh.insert(shell_target(0).0, LOW_SIZE_0);
     fresh.advance_frame();
     fresh.run_placement_phases(&mut fresh_source);
     assert!(
@@ -253,7 +241,7 @@ fn a_degenerate_report_that_writes_nothing_never_arms_the_realign() {
         boot_and_finalize(&mut harness, &mut source);
 
         harness.set_window_dpi(DPI_LEVEL);
-        source.refresh.insert(shell_target(0).0, (0, SIZE_0.1));
+        source.refresh.insert(shell_target(0).0, (0, HIGH_SIZE_0.1));
         harness.advance_frame();
         harness.run_placement_phases(&mut source);
 
@@ -269,7 +257,7 @@ fn a_degenerate_report_that_writes_nothing_never_arms_the_realign() {
         );
         assert_eq!(
             expect_size(&harness, harness.char_window(0)),
-            as_window_size(SIZE_0),
+            as_window_size(HIGH_SIZE_0),
             "前提が崩れている: 0 軸の報告で窓寸が書き換わった（前寸維持のはず）"
         );
         assert!(
@@ -286,7 +274,7 @@ fn a_degenerate_report_that_writes_nothing_never_arms_the_realign() {
     let mut fresh_source = FakeReports::default();
     boot_and_finalize(&mut fresh, &mut fresh_source);
     fresh.set_window_dpi(DPI_LEVEL);
-    fresh_source.refresh.insert(shell_target(0).0, HALVED_0);
+    fresh_source.refresh.insert(shell_target(0).0, LOW_SIZE_0);
     fresh.advance_frame();
     fresh.run_placement_phases(&mut fresh_source);
     assert_ne!(
@@ -310,38 +298,38 @@ fn a_degenerate_report_that_writes_nothing_never_arms_the_realign() {
 /// `&&` が短絡する）ので、届かない腕を無検査にしないためここで直接呼ぶ。
 #[test]
 fn size_changed_covers_the_missing_size_the_overflow_and_the_comparison() {
-    let before = Some(as_window_size(SIZE_0));
+    let before = Some(as_window_size(HIGH_SIZE_0));
 
     // 比較の腕: 片軸だけの違いも「変わった」。同寸は「変わっていない」。
-    assert!(size_changed(before, HALVED_0), "両軸が変われば変化");
+    assert!(size_changed(before, LOW_SIZE_0), "両軸が変われば変化");
     assert!(
-        size_changed(before, (HALVED_0.0, SIZE_0.1)),
+        size_changed(before, (LOW_SIZE_0.0, HIGH_SIZE_0.1)),
         "幅だけ変わっても変化"
     );
     assert!(
-        size_changed(before, (SIZE_0.0, HALVED_0.1)),
+        size_changed(before, (HIGH_SIZE_0.0, LOW_SIZE_0.1)),
         "高さだけ変わっても変化"
     );
-    assert!(!size_changed(before, SIZE_0), "同寸は変化ではない");
+    assert!(!size_changed(before, HIGH_SIZE_0), "同寸は変化ではない");
     assert!(
-        size_changed(Some(as_window_size(SIZE_1)), HALVED_1),
+        size_changed(Some(as_window_size(HIGH_SIZE_1)), LOW_SIZE_1),
         "scope1 の寸の対でも同じ判定になる"
     );
 
     // 窓寸が引けない腕: 比較の相手が無い状態を変化と数えない（起動直後の初回 landing で
     // 毎回武装しないための腕）。
     assert!(
-        !size_changed(None, HALVED_0),
+        !size_changed(None, LOW_SIZE_0),
         "窓寸が引けないとき（窓生成前）は「変わった」と言わない"
     );
 
     // i32 変換失敗の腕: 超過した報告寸は変化と数えない（値を捏造しない）。
     assert!(
-        !size_changed(before, (u32::MAX, SIZE_0.1)),
+        !size_changed(before, (u32::MAX, HIGH_SIZE_0.1)),
         "幅が i32 域を超える報告は「変わった」と言わない"
     );
     assert!(
-        !size_changed(before, (SIZE_0.0, u32::MAX)),
+        !size_changed(before, (HIGH_SIZE_0.0, u32::MAX)),
         "高さが i32 域を超える報告は「変わった」と言わない"
     );
 }
@@ -363,7 +351,7 @@ fn arming_keeps_the_rects_from_before_the_first_change() {
         .map(|scope| pos_of(&harness.world, harness.char_window(scope)).expect("位置がある"))
         .into();
 
-    drive_reprojection(&mut harness, &mut source, [HALVED_0, HALVED_1]);
+    drive_reprojection(&mut harness, &mut source, [LOW_SIZE_0, LOW_SIZE_1]);
     let pending = harness
         .world
         .get_resource::<ChainRealignPending>()
@@ -377,8 +365,8 @@ fn arming_keeps_the_rects_from_before_the_first_change() {
                 ChainRect {
                     x: before_pos[0].x,
                     y: before_pos[0].y,
-                    w: SIZE_0.0 as i32,
-                    h: SIZE_0.1 as i32,
+                    w: HIGH_SIZE_0.0 as i32,
+                    h: HIGH_SIZE_0.1 as i32,
                 }
             ),
             (
@@ -386,8 +374,8 @@ fn arming_keeps_the_rects_from_before_the_first_change() {
                 ChainRect {
                     x: before_pos[1].x,
                     y: before_pos[1].y,
-                    w: SIZE_1.0 as i32,
-                    h: SIZE_1.1 as i32,
+                    w: HIGH_SIZE_1.0 as i32,
+                    h: HIGH_SIZE_1.1 as i32,
                 }
             ),
         ],
@@ -403,13 +391,13 @@ fn arming_keeps_the_rects_from_before_the_first_change() {
         &mut harness,
         &mut source,
         [
-            (HALVED_0.0 / 2, HALVED_0.1 / 2),
-            (HALVED_1.0 / 2, HALVED_1.1 / 2),
+            (LOW_SIZE_0.0 / 2, LOW_SIZE_0.1 / 2),
+            (LOW_SIZE_1.0 / 2, LOW_SIZE_1.1 / 2),
         ],
     );
     assert_eq!(
         expect_size(&harness, harness.char_window(0)),
-        as_window_size((HALVED_0.0 / 2, HALVED_0.1 / 2)),
+        as_window_size((LOW_SIZE_0.0 / 2, LOW_SIZE_0.1 / 2)),
         "前提が崩れている: 2 度目の変化が landing していない"
     );
     assert_eq!(
