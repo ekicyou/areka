@@ -275,3 +275,40 @@ finally {
   - `crates/areka-runtime/src/frame/wiring.rs` の説明 3 か所（295・319・326 行。同じウェーブの約束で触らない。`audit-emo2-boot-frame` はまだ直していない）
   - `doc/roadmap-overview-2026-10-16.html`（日付つきの写し）
   - 範囲の外: `roadmap-history.md`・`.kiro/specs/completed/`・`roadmap.md`（新旧のパスの対応表を持つ）
+
+## 構造の証跡（7.1）
+
+### テストの名前の多重集合（8.2・8.3）
+
+- 完了のときの一覧 `target/input-crate-split/tests-after.txt`（`cargo test --workspace --no-fail-fast -- --list`）の `: test$` の行は 14392 行。着手のときは 14389 行。
+- 名前の末尾（最後の `::` から後ろ）の多重集合の差は増えた 3 件だけで、減った名前は 0 件:
+
+| 増えた名前 | 置き場 | 理由 |
+|---|---|---|
+| `crash_filter_is_installed_before_the_tests_start` | `crates/areka-input/src/crash_report_tests.rs` | 新しい crate のテストの実行ファイルに落ちの報告を据えた確かめ（同名は本体・runtime ほかにも在る） |
+| `escape_without_hooks_logs_and_still_requests_exit` | `crates/areka-input/src/hooks_tests.rs` | 口が無いときの倒れ方 |
+| `register_systems_installs_the_escape_hook` | `crates/areka/src/app_exit_escape_tests.rs` | システムの組み立てを通す口の据え付けの道 |
+
+- 移したテストは名前を変えていないので差に出ない。
+
+### 警告・触らない約束・依存・履歴
+
+- `cargo check --workspace --all-targets` の警告は `shiori-abi` の `unused dependency windows`（`crates/shiori-abi/Cargo.toml:16`）の 1 件だけ。この差分は `shiori-abi` に触っておらず、main でも同じに出る（範囲の外・完了の棚卸で起票する）。この spec が足した警告は 0 件。
+- 触らない約束のファイル（`crates/areka-runtime/src/frame*`・`crates/areka/src/runtime_tests/`・`session/runtime_boot.rs`・`session/runtime_boot_tests.rs`・`session/ghost_quit*`）の `git diff --stat main...HEAD` は空。
+- `cargo tree -p areka-input -e normal` に `areka` と番人の crate（`log-capture-kit`・`real-run-kit`・`temp-path-kit`）は出ない。
+- `Cargo.lock` の差分は `areka-input` の 1 項目と、本体の依存の 1 行（`"areka-input"`）だけ。
+- `git log --follow` で移したファイルの履歴が追える（例 `crates/areka-input/src/lib.rs` は `areka-P0-input-events` の頃まで、`crates/areka-input/cursor/hand.cur` は `shell-mouse-cursor` まで）。
+
+### テストの置き場（5.1）
+
+| テスト | 置き場 | 理由 |
+|---|---|---|
+| 移したファイルの中のテスト（下の 3 本を除く） | `areka-input` | 本体を引かない（`crate::` の本体の項目 0） |
+| 強制退避の 3 本と据え付けの確かめ 1 本 | 本体 `app_exit_escape_tests.rs` | 本物の `quit_app` を見る |
+| `shortcut_tests.rs` | 本体 `menu/` | `crate::ghost_session`・`crate::menu` を引く |
+| `file_drop_tests.rs`・`file_drop_mime_tests.rs`・`file_drop_wiring_tests.rs` | 本体 src 直下 | `crate::ghost_session`・`crate::install`・`crate::crate_source_test_support` を引く |
+| `spawn_assembly_tests.rs`（旧 `placement_tests/` の下） | `areka-input` | 配置と入力だけを使う |
+| `hooks_tests.rs`・`crash_report_tests.rs` | `areka-input` | 口が無いときの倒れ方・落ちの報告の据え付け |
+| 本体の `ghost_session_*_tests.rs`・`shell_balloon_switch_session_*_tests.rs`・`app_exit_tests.rs`・`menu/*_tests.rs`・`runtime_tests/` の 8 本・`session/runtime_boot_tests.rs` | 本体（変えない） | 出し直しで通る |
+
+- どの行も本体の部品を偽物に替えていない。
