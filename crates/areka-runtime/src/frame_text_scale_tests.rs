@@ -6,7 +6,8 @@ use std::sync::mpsc;
 use wintf::ecs::DPI;
 
 use super::test_support::{
-    assert_no_write, capture_logs, count_level, dpi_world, headless_wiring_with, zero_clock,
+    assert_no_write, capture_logs, count_level, dpi_world, gpu_attach_world, headless_wiring_with,
+    zero_clock,
 };
 use super::*;
 
@@ -106,6 +107,62 @@ fn text_scale_phase_warns_once_per_scope_when_view_unavailable() {
     assert!(
         wiring.runtime.try_borrow_mut().is_ok(),
         "runtime を汚さない"
+    );
+}
+
+/// 装着で文字の配置先が無く繋げなかったスコープは、配置先が取れた最初のフレームの文字の拡大率の相で
+/// 繋がる（遅らせない）。装着の相を配置先の無い状態で通すことは決定論で作れないため、実 GPU の装着の後に
+/// 文字層を新しくして控えを入れ、「装着で繋げなかった後」の状態を組む。
+#[test]
+fn a_balloon_text_left_unconnected_at_attach_connects_on_the_first_frame_its_view_exists() {
+    use crate::assets::build_boot_assets;
+    use crate::sample_test_support::{emo2_balloon_root, emo2_root};
+    use crate::talk_lifecycle::TalkLifecycleSignal;
+    use areka_emo_text::state::TextLayerConfig;
+
+    let (_gpu, mut world, _gw) = gpu_attach_world();
+    let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+        .expect("emo2 fixture の BootAssets 組立は成功する");
+    let background = assets.balloons[1].background_color;
+    let fresh_runtime = || {
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        )))
+    };
+    let mut wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
+        fresh_runtime(),
+        zero_clock(),
+        assets,
+    );
+    run_attach_phase(&mut wiring, &mut world);
+    assert!(wiring.attached, "前提: 装着が走る");
+
+    wiring.runtime = fresh_runtime();
+    wiring.unconnected_text.insert(1, background);
+
+    let logs = capture_logs(|| {
+        run_text_scale_phase(&mut wiring, &mut world);
+    });
+
+    let actor = ActorKey::from("1");
+    assert_eq!(
+        (
+            wiring
+                .runtime
+                .borrow()
+                .state()
+                .actors()
+                .any(|(key, _)| *key == actor),
+            wiring.unconnected_text.is_empty(),
+            count_level_containing(&logs, "INFO", "装着で繋げなかった文字層"),
+        ),
+        (true, true, 1),
+        "(scope 1 の actor が登録された, 控えが空になった, 繋ぎ直しの info の行数): {logs:?}"
     );
 }
 

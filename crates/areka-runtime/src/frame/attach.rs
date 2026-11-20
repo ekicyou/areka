@@ -159,8 +159,9 @@ pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachP
 ///
 /// donor（`examples/emo-present.rs::boot_present_system`）の attach 駆動を、複数 scope × `GhostWindows`
 /// 由来の窓解決へ一般化したもの。`apply` は同期実行のため balloon の `text_slot_view` は同一フレームで
-/// `Some` になるのが正常経路（DD-4）。万一 `None`（上流の遅延化）なら接続せず次フレーム再試行に委ねる
-/// （R4.2・[`connect_balloon_text`]）。
+/// `Some` になるのが正常経路（DD-4）。万一 `None`（上流の遅延化）なら接続せず `unconnected_text` に
+/// 控え、繋ぎ直しは配置先が取れた最初のフレームの
+/// [`run_text_scale_phase`](super::run_text_scale_phase) が行う（R4.2・[`connect_balloon_text`]）。
 pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     // 高々 1 回: 装着済みなら以降 no-op（装着後の remove/insert churn を避ける donor 慣行）。
     if wiring.attached {
@@ -411,7 +412,7 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
             },
         );
         // apply は同期ゆえ同一フレームで text_slot_view が Some になるのが正常経路（DD-4）。
-        // None（上流の遅延化）は接続せず次フレーム再試行へ委ねる（R4.2）。
+        // None（上流の遅延化）は接続せず控え、繋ぎ直しは文字の拡大率の相が行う（R4.2）。
         let view = wiring.presenter.text_slot_view(item.balloon_target);
         // 再追従（[`run_text_scale_phase`]）は**同一の写像**で actor を引く——
         // ここと式が食い違うと、再追従が別 actor を作って文字だけ旧 k のまま残る。
@@ -425,19 +426,21 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
         // 束を入れ、面 0 の定義を今の定義にする（唯一の書き手・矢印の絵と windowposition も届く）。
         // 文字層へ渡すのと再追従が使うのは書き手が入れた**同一の** `balloon_models[scope]`
         // （R4.1/4.2・D11-3）——装着が `text_slot_view` None で次フレームへ委ねられた場合でも
-        // モデル自体は有効ゆえ、接続成否に関わらず入れる（再追従は未登録 actor を静穏 skip する）。
+        // モデル自体は有効ゆえ、接続成否に関わらず入れる（繋ぎ直しもこのモデルを使う）。
         wiring
             .balloon_definitions
             .insert(scope, balloon_definitions);
         select_balloon_face(wiring, world, scope, 0, FaceCause::Attach);
-        connect_balloon_text(
+        if !connect_balloon_text(
             &wiring.runtime,
             view,
             actor,
             &wiring.balloon_models[&scope],
             // 面 0 の原点画素（要件 4.6）——無効表示の文字色の混色の相手。
             background_color,
-        );
+        ) {
+            wiring.unconnected_text.insert(scope, background_color);
+        }
     }
 
     info!(
@@ -467,7 +470,8 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
 ///
 /// `text_slot_view` が `Some` なら [`TextLayerRuntime::register_actor_view`] で actor を登録し
 /// `true` を返す。`None`（初回 `ShowSurface` 未合流＝上流の遅延化・Revalidation Trigger）なら
-/// 登録せず `warn!` して `false` を返し、接続を次フレーム再試行へ委ねる（panic しない・R4.2）。
+/// 登録せず `warn!` して `false` を返す（panic しない・R4.2）。繋ぎ直しは文字の拡大率の相
+/// （[`run_text_scale_phase`](super::run_text_scale_phase)）が配置先の取れた最初のフレームで行う。
 /// 登録判断を純結線として切り出すことで、GPU 不要の headless 単体テストが None 経路を檻に入れられる。
 ///
 /// `background` は当該 scope のバルーン面 0 の原点画素（[`BalloonScopeAssets::background_color`]）。

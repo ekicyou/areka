@@ -1,7 +1,7 @@
 //! 毎フレーム結線の NonSend 状態 [`RuntimeWiring`]（構築・アクセサ・test-support 読み口）。
 
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 use std::sync::{Mutex, Weak};
@@ -149,6 +149,8 @@ pub struct RuntimeWiring {
     /// 再武装する（`areka-emo-text` の `unresolved_warned: BTreeSet<ActorKey>` と同型の先例）。
     /// R8.6 が求めるのは縮退が**観測できる**ことであって毎回鳴ることではない。
     pub(super) text_scale_warned: BTreeSet<u32>,
+    /// 装着で文字層を繋げなかった scope と、その面 0 の背景色（[`run_text_scale_phase`] が繋ぎ直す時に渡す）。
+    pub(super) unconnected_text: BTreeMap<u32, (u8, u8, u8)>,
     /// talk 起点相対秒の時刻源（text フェーズと可視性相が同一の `talk_time` を引く）。
     pub clock: TalkClock,
     /// load-time 構築資産（attach で `take` して高々 1 回消費）。
@@ -230,6 +232,7 @@ impl RuntimeWiring {
             balloon_faces: HashMap::new(),
             // 縮退警告のエッジガード（初期は未警告＝最初の縮退で 1 回鳴る）。
             text_scale_warned: BTreeSet::new(),
+            unconnected_text: BTreeMap::new(),
             clock,
             assets: Some(assets),
             attached: false,

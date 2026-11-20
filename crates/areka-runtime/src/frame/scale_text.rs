@@ -1,7 +1,7 @@
 //! 文字層 k 追従フェーズ＋text フェーズ（[`run_text_scale_phase`]・[`run_text_phase`] ほか）。
 
 use bevy_ecs::world::World;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use areka_emo_text::actor::present_frame;
 use areka_sakura::ActorKey;
@@ -93,6 +93,7 @@ pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Ve
         runtime,
         balloon_models,
         text_scale_warned,
+        unconnected_text,
         ..
     } = wiring;
 
@@ -130,6 +131,15 @@ pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Ve
         text_scale_warned.remove(&scope);
         // 判定（k 変化・未登録）は 7.1 の権威へ委ねる（本フェーズは第 2 のガードを持たない・R8.5）。
         let model = &balloon_models[&scope];
+        if let Some(background) = unconnected_text.remove(&scope) {
+            super::attach::connect_balloon_text(runtime, Some(view), actor, model, background);
+            info!(
+                scope,
+                "text-scale: 装着で繋げなかった文字層を、配置先ができたので繋ぐ"
+            );
+            refreshed.push(scope);
+            continue;
+        }
         if runtime
             .borrow_mut()
             .refresh_actor_scale(&actor, &view, model)
