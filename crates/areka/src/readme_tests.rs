@@ -375,7 +375,7 @@ fn open_from_world_skips_a_missing_file_with_a_warning_and_no_submit() {
 // 見張り（areka-P0-open-external-tags 要件 7.1）
 // -------------------------------------------------------------------------
 
-/// 本体（`crates/areka/src`）と `crates/areka-runtime/src` の 2 つの木の下で OS の「開く」関数
+/// 本体（`crates/areka/src`）・`crates/areka-runtime/src`・`crates/areka-input/src` の 3 つの木の下で OS の「開く」関数
 /// （Shell と Execute を繋いだ名）を綴るのは OS の境界のファイルだけ（分ける前に本体の `src` が
 /// 覆っていた範囲を歩く。runtime-crate-split 要件 5.4）。
 ///
@@ -388,6 +388,10 @@ fn only_the_os_port_spells_shell_execute() {
         (
             "areka-runtime",
             crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+        ),
+        (
+            "areka-input",
+            crate::crate_source_test_support::crate_path("areka-input", "src"),
         ),
     ];
     let mut hits = Vec::new();
