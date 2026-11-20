@@ -20,7 +20,7 @@
 
 この spec はウェーブ C23 で、ほかの 3 本（`hit-id-pass`・`balloon-flip-ssp-review`・`input-crate-split`）と並んで走る。並走の約束（ロードマップの「ウェーブ編成」の C23 の行の約束 ⑴〜⑹）を守る（要件 7）。
 
-起票の段で決め切れず要件の討議へ持ち越す問いは、末尾の「要件の討議へ持ち越す問い」に、草案で置いた仮定と一緒にまとめた（本文の該当の所に「（仮定・問い N）」と書いた）。
+要件の討議（2026-11-20）で決めたことは、末尾の「要件の討議で確定したこと」にまとめた（本文の該当の所に「（確定 N）」と書いた）。指摘の番号はギャップ分析（`research.md`）の 1〜114。
 
 ## Boundary Context
 
@@ -74,7 +74,8 @@
 3. If 指摘が ⑶ に当たるかもしれないとき, then the 要件の討議 shall ukadoc で正典を確かめた結果（出どころの URL と引用）を添えて議題にし、ukadoc で読めない点は SSP の MCP で測った結果を添える（測りは要件 8.2 に従う）
 4. If 指摘の直しが開発者の裁定を覆すとき, then the 本 spec shall その指摘を直さず、議題にする
 5. The 本 spec shall 直さずに残すと裁定された指摘ごとに、当たる種類と開発者の裁定を記録に残す
-6. The 本 spec shall 規模の見立て（棚卸㊵の見込み 20〜24 タスク）が 20 を越えても 1 本のまま進め、分けず・削らず、見立ては事実として記録だけする（仮定・問い 1）
+6. The 本 spec shall 規模の見立て（ギャップ分析の見込み 24〜28 タスク）が 20 を越えても 1 本のまま進め、分けず・削らず、見立ては事実として記録だけする（確定 1）
+7. The 本 spec の直し shall 前の決めに触れて見えた 55・64・67・68・72・80・94 番を、決めの狙いを保つ直し方で直し、直さずに残さない（確定 7）
 
 ### Requirement 3: 確定した指摘を全部直し切る
 
@@ -86,6 +87,9 @@
 2. When 指摘を直して関数や項目の形を変えるとき, the 本 spec の直し shall その直しで壊れる呼び出し元・テスト・テストの支え・examples・fixture・文書を、範囲の外も含めてツリー全体で探し、全部直し切る
 3. When コードやファイルを消すとき, the 本 spec の直し shall 消す前に、ツリー全体（テスト・テストの支え・examples・fixture・設定・スキル・手順書・steering・文字列での参照と `#[path]` を含む）でそれが使われていないことを確かめる
 4. The 本 spec の直し shall 直す対象として確定していない新しい機能を足さない
+5. The 本 spec の直し shall 位置の指令の預かりの列（2 番）を、外から見た振る舞い（預かる・順を追い越さない・取りこぼさない）を変えずに、毎フレームの見直しの手間（O(n²)）だけを直す。列が伸び続ける件は要件 7.8 のとおり `window-resetwindowpos-hold` へ回す（確定 2）
+6. The 本 spec の直し shall 109 番（壁時計の 30 秒の待ち）をこの spec で直し、同じ行を載せている `areka-test-wait-wording` の brief のその件を「`audit-emo2-boot-frame` で済み」に書き換える（確定 8）
+7. The 本 spec の直し shall 33・99 番の本体から `areka-runtime` へのテストの戻し（約 20 本）をこの spec で行い、依存を足さない（確定 9）
 
 ### Requirement 4: 直したバグと危ない所をテストで縛る
 
@@ -113,17 +117,17 @@
 2. The 本 spec の直し shall `crates/areka-runtime/src/frame_transition_atomicity_tests.rs` 47〜53 行と 527 行が他のファイルを行番号で指す所を、関数や項目の名前で指す形に直す（件 2＝`audit-wintf-window` の件 1）
 3. The 本 spec の直し shall `frame/zorder_drain.rs` 52 行・`frame/zorder_descript.rs` 33 行・`frame/zorder_drain_tests.rs` 443 行の「grep 対象が 2 本に割れる」という理由の文を、事実に合う文に直す。事実は、`areka-runtime` の中で記録のマクロを呼ぶと出力先が `areka_runtime::…` になり、サインオフの `RUST_LOG`（`wintf::ecs::window=debug`）の前方一致の絞り込みでは debug の受理の行が点かないこと。だから行の字面と出力先を wintf の 1 か所に保つ（件 3＝`audit-wintf-window` の件 2。同 spec の指摘 34・R2-1 の文「前方一致なので漏れはしない」は wintf の中の 2 つの出力先どうしの話で、`areka-runtime` の側には当てはまらない＝ギャップ分析の 46 番）
 4. The 本 spec の直し shall `frame.rs` 96〜134 行・152〜153 行・`frame/wiring.rs` 12〜13 行の `#[allow(unused_imports)]` と、`frame.rs` 171・178・188 行の許可を、`structure.md` の確かめ方（`cargo rustc -p areka-runtime --lib -- --force-warn unused_imports`）で確かめ、まだ要る許可だけを今の事実に合う理由の文つきで残し、要らない許可は外す（件 4＝`runtime-crate-split` の申し送り ⑵）
-5. The 本 spec の直し shall `runtime-crate-split` が私有から開けた項目のうちこの範囲の分（brief の申し送り ⑶ の 2.5 の 10 件・4.2 ⑴〜⑷ の項目と渡し口・宣言の印の切り替え）ごとに、`areka-runtime` の外に実在の使い手があるかを確かめ、使い手の無いものは元の私有に戻すか消し、使われない `pub(crate)` の項目は消す。本体のテストだけが使う項目は使い手に数える（件 5・仮定・問い 2）
+5. The 本 spec の直し shall `runtime-crate-split` が私有から開けた項目のうちこの範囲の分（brief の申し送り ⑶ の 2.5 の 10 件・4.2 ⑴〜⑷ の項目と渡し口・宣言の印の切り替え）ごとに、`areka-runtime` の外に実在の使い手があるかを確かめ、使い手の無いものは元の私有に戻すか消し、使われない `pub(crate)` の項目は消す。本体のテストだけが使う項目は使い手に数える（件 5・確定 5）
 6. The 本 spec の直し shall `runtime-crate-split` がテストを関数の単位で割った後に、同じ名前のテストが `areka-runtime` と本体の両方にあるファイル（`frame/window_state_tests.rs`・`frame/status_report_tests.rs` ほか）を確かめ、同じ中身の写しが残っていれば 1 つにする（件 5 の続き）
 7. The 本 spec の直し shall `frame/drain_resnap.rs` 554 行と `frame_chain_finalize_tests.rs` 204 行の「唯一の位置ライター」の文を、今の事実（`move_window_to` は位置の書き手の 1 つ）に合う文に直す（件 6＝`runtime-crate-split` の申し送り ⑷ の 1 つ目）
-8. The 本 spec の直し shall `frame_work_area_resnap_hold_tests.rs` 429 行の `#[should_panic(expected = "DpiSyncHold")]` に、見張りが `debug_assertions` だけで鳴る事実に合わせて `#[cfg_attr(not(debug_assertions), ignore = "…")]` を付け、`--release` の合否が変わることを記録に残す（件 7＝同 ⑷ の 2 つ目・仮定・問い 3）
+8. The 本 spec の直し shall `frame_work_area_resnap_hold_tests.rs` 429 行の `#[should_panic(expected = "DpiSyncHold")]` に、見張りが `debug_assertions` だけで鳴る事実に合わせて `#[cfg_attr(not(debug_assertions), ignore = "…")]` を付け、`--release` の合否が変わることを記録に残す（件 7＝同 ⑷ の 2 つ目・確定 4）
 9. The 本 spec の直し shall `frame/move_shift.rs` 75 行の注を、面の `move` のずれのドラッグ中・組の相手への見送りが `debug!` で記録される今の事実に合う文に直す（件 8＝同 ⑷ の 3 つ目）
 10. If 窓の側から来る scope が `frame/dpi.rs` 413〜425 行あたりで `shell_target`／`balloon_target` へ渡る前に、`audit-emo2-boot-spine` が台本の側（`target_map.rs`）に置いた上限（`i32::MAX`）を越えるとき, then the 本 spec の直し shall その番号を台本の側と同じ扱い（あふれさせず、`warn!` を残して捨てる）にそろえ、直す前にあふれで赤になるテストを立てる（件 9＝`audit-emo2-boot-spine` の申し送りア）
 11. The 本 spec の直し shall `crates/areka/src/runtime_tests/frame/window_state_tests.rs` 144 行あたりのテスト関数を、補助を分けて `areka-runtime` の側へ戻す。`areka-runtime` の dev-dependencies は前からあるので依存は足さない（件 10＝同イ）
 12. The 本 spec の直し shall 写し 3 つを共通の置き場の側を使う形に寄せる＝`frame/zorder_drain_tests.rs` 465 行の `code_only` を `source_text_test_support::code_only` へ・`frame_chain_finalize_tests.rs` 304 行あたりの私有の `capture_logs` を `frame_test_support::capture_logs` へ・`frame_drain_text_tests.rs` 16／25 行あたりの `controllable_clock`・`set_now` を `talk_clock.rs` の `#[cfg(test)]` の同名の補助へ（件 11＝同オと完了の時の棚卸）
 13. The 本 spec の直し shall `frame/drain_resnap_tests.rs` 103 行あたりのコメントの「`load-repro.md` の ⑹」に、持ち主の spec（`areka-P0-ghost-session-test-load-flake` か `areka-test-binary-stability` のうち実際にその ⑹ を持つ方）を名乗らせる（件 12＝同完了の時の棚卸）
 14. When ギャップ分析を行うとき, the ギャップ分析 shall 整合待ちの札のある窓を、札が外れるフレームに拡大率の相（`frame/dpi.rs`）の `DpiReproject` が本番の相の並びの中で本当に書くかを確かめ、結果を報告に書く（件 13＝`audit-placement-follow-residue` の申し送り・参照は `.kiro/specs/completed/audit-placement-follow-residue/design.md` の決め 5）
-15. If 要件 5.14 の確かめで本番の相がその窓を書かないと分かったとき, then the 本 spec shall それを「必ず直す」の指摘として扱い、要件 4.2 のとおり赤のテストを立てて直す（書くと分かったときの扱いは仮定・問い 4）
+15. The 本 spec の直し shall 札が外れるフレームに、本番の相の並び（拡大率の相の札の付け外しと書き込み）がシェルの切り替えで見送った窓を `DpiReproject` で新しい揃え方に書くことを、決定論のテスト 1 本で縛る（ギャップ分析の 6 番。5.14 の確かめで本番は書くと分かったが、その流れを通るテストが範囲の中に 0 本だった・確定 3）
 16. The 本 spec の直し shall 棚卸㊵で `audit-areka-app` の brief からこの範囲へ移った件を直す＝`frame*` に残る spec の名の略称 `atom`（`areka-P0-dpi-transition-atomicity`）を正式の名へ・`frame_diag_route_tests.rs` 19 行あたりがもう無い `areka_placement::test_support::capture_logs` を名指す所・`frame_transition_branch_tests.rs` 501 行と 527〜546 行の「4 つの見送り点」（5 つ目の `HoldSite::PatternMove` の呼び出しの綴りを固定していない）と 545 行の名前の無い「task 6.5」・`frame/drain_resnap.rs` 596 行の「ここ 1 か所だけ」（`reset_pos.rs` も呼ぶ）と 478 行の届かない `ChainDeferReason::DpiSyncHeld` の腕（件 14＝`audit-areka-app` の brief の「2026-11-15 `audit-placement-core` の完了の申し送り」の件 2〔`atom` の分〕・件 3・件 4・件 9）
 17. The 本 spec shall 件 1〜14 を片づけたことを、預かった件の出どころ（`runtime-module-untangle`・`audit-wintf-window`・`runtime-crate-split` の申し送り ⑵〜⑷・`audit-emo2-boot-spine` のア・イ・オと完了の時の棚卸・`audit-placement-follow-residue`・`audit-areka-app` の brief の件 2〜4・9）と一緒に記録に残す
 
@@ -150,13 +154,14 @@
 
 1. While 範囲の外のファイルを受け持つ spec のセッションが走っているあいだ, when 直しがそのファイルへ及ぶとき, the 本 spec shall そのセッションと申し合わせてから触る
 2. The 本 spec の直し shall 範囲の外のファイルについて、直しのために要る変更のほかは手を入れない
-3. While C23 のあいだ, the 本 spec の直し shall C23 のほかの 3 本の触るファイル（ロードマップの C23 の行の「触るファイル」の ①②④）に手を入れない。とくに `crates/areka-placement/` の全部・`crates/areka-runtime/src/hit_region.rs`・本体の `input_events/`・`main.rs`・`ghost_session.rs`・`ghost_session_runtime.rs`・`app_exit.rs`・`menu/`・`placement_tests/spawn_assembly_tests.rs`・`Cargo.toml`・`Cargo.lock`・`crates/log-capture-kit/src/event.rs` とその試験・`doc/COMPAT_ARCHITECTURE.md` §8 に手を入れない（仮定・問い 5）
+3. While C23 のあいだ, the 本 spec の直し shall C23 のほかの 3 本の触るファイル（ロードマップの C23 の行の「触るファイル」の ①②④）に手を入れない。とくに `crates/areka-placement/` の全部・`crates/areka-runtime/src/hit_region.rs`・本体の `input_events/`・`main.rs`・`ghost_session.rs`・`ghost_session_runtime.rs`・`app_exit.rs`・`menu/`・`placement_tests/spawn_assembly_tests.rs`・`Cargo.toml`・`Cargo.lock`・`crates/log-capture-kit/src/event.rs` とその試験・`doc/COMPAT_ARCHITECTURE.md` §8 に手を入れない（確定 6）
 4. Where C23 で `crates/log-capture-kit/tests/file_length_guard_test.rs` の上限越えの表に触ってよいのはこの spec だけであるところでは, the 本 spec の直し shall 表と件数の行を、この範囲のファイルが表に入る・出るときに限って直す（C23 の約束 ⑸）
 5. If 確定した指摘が外への約束を変えずには直せないとき, then the 本 spec shall 約束を黙って破って直さず、要件の討議でその指摘を議題にし、扱い（約束を変えない直し方・読み手を同じ変更で全部直す・後の spec へ回す）を開発者の裁定で決める
 6. When 外への約束のうち `areka-runtime` の公開の面かログの行の語を変えると裁定されたとき, the 本 spec の直し shall 同じ変更の中で読み手（本体の呼び手とテスト・実機の確かめ・`tools/perf/`・手順書を grep で探したもの）を全部直す
 7. If 直しが C23 のほかの 3 本の触るファイルに及ぶとき, then the 本 spec shall そのファイルを触らずに、相手のセッションへ申し送り、申し送った件と相手を記録に残す
 8. If 指摘の直しを後の spec へ回すと裁定されたとき, then the 本 spec shall 受け持つ spec が実在する（`completed/` でない）ことを確かめ、その spec の brief に件として書き足し、回した指摘と回し先を記録に残す
 9. The 本 spec の直し shall `vendors/` の下に手を入れない
+10. The 本 spec shall ギャップ分析の 6 節で範囲の外に見つけた件を、次の持ち主の brief に件として書き足し、回した件と回し先を記録に残す（確定 6）＝ア（窓の scope を作る入口の上限）は `extra-character-windows`・イ〜カ（`areka-placement` の写しと古い注）は `test-crash-report-merge`・キ・ク（`move_cue*`・`balloon_visibility_phase.rs`）は `audit-emo2-boot-switch`・オ（本体の分）・コ・サ・シは `audit-areka-app`・スは `areka-test-wait-wording`。2 番の列が伸び続ける件は `window-resetwindowpos-hold`（確定 2）。セ（`spine_wait.rs` の注）は設計で直しに要る変更として触るか回すかを決める
 
 ### Requirement 8: 副作用の大きい操作をウェーブの中で回さない
 
@@ -185,12 +190,24 @@
 7. If かけ直しのたびに同じ所から「必ず直す」が出続けるとき, then the 本 spec shall 打ち切らずに、その所の直しを Fable で総括し直し、その結果を議題として開発者へ出す（2026-11-15 `audit-placement-core` の決め）
 8. If かけ直しの指摘が、前の回の直しが呼んだ連鎖（直しが次の指摘を生んだもの）であるとき, then the 本 spec shall 関連する指摘を Fable でまとめて、回をまたいで矛盾の無い形に直す。前の回と関わらない単なる追加の指摘は普通に直して閉じる（2026-11-17 開発者の決め）
 
-## 要件の討議へ持ち越す問い
+## 要件の討議で確定したこと
 
-起票の段で brief から決め切れなかったもの。草案は各問いの「仮定」で書いた。要件の討議で確定したら、ここを「確定したこと」に書き換える。
+2026-11-20 の要件の討議で、開発者が 9 つの議題を全部推奨案で承認した（「推奨どおり承認」）。番号は本文の「（確定 N）」。
 
-1. **規模が 20 を越えたときの分け方（要件 2.6）**: brief の Constraints とロードマップの C23 の行は「20 を越えたら指摘の組で同じ範囲の 2 本目へ切る」と書く。一方で 2026-11-16 の開発者の決め（「一旦specを切り出した後にあと出して分割を提案されるのは困る」・20 タスクは discovery の分け方の目安で spec の上限ではない）があり、同じ大きさの `audit-emo2-boot-spine` は 23 タスクで 1 本のまま着地した。**仮定**: 後の決めと前例に従い、1 本のまま進めて見立てを記録だけする。
-2. **「使い手」の数え方（要件 5.5）**: `runtime-crate-split` が開けた項目のうち、本体のテストだけが使う項目を使い手に数えるか。**仮定**: `audit-emo2-boot-spine` の議題 4 の確定（本体のテストだけが使う項目は使い手に数えて戻さず、外に使い手の無い項目だけ戻す）と同じにする。
-3. **`--release` で合否が変わる直し（要件 5.8）**: `frame_work_area_resnap_hold_tests.rs` 429 行に `cfg_attr(not(debug_assertions), ignore)` を付けると `--release` のテストの合否が変わる（`runtime-crate-split` はこのため付けなかった）。**仮定**: 付ける（見張りが `debug_assertions` だけで鳴る事実に合わせる・ほかの同じ形のテストと揃える）。ギャップ分析で、`--release` でテストを回す道（全体テスト・CI・道具）があるかを確かめて議題の材料にする。
-4. **札が外れるフレームの書き込みが正しかったときの扱い（要件 5.15）**: 本番の相が札の外れた窓を書くと分かったとき、その前提を範囲の中の本番の相の並びで縛るテストを足すか。**仮定**: 判断の分岐でなく配線の確かめなので新しいテストは足さず、確かめた証跡（どのテスト・どの相が書くか）をギャップ分析の報告に残すだけにする。範囲の中にそのフレームを通る決定論のテストが 1 本も無いと分かったときだけ議題にする。
-5. **C23 のあいだの `crates/areka-placement/` の扱い（要件 7.3）**: brief は「`balloon-flip-ssp-review`・`hit-id-pass` とは、直しが `areka-placement` の `follow.rs` へ及ばない限り 0」と書く。`balloon-flip-ssp-review` は案しだいで `follow.rs`・`follow/other_chars.rs`・`reset_pos.rs`・`chain_realign.rs` ほかにも触る。**仮定**: C23 のあいだは `crates/areka-placement/` の全部に手を入れず、直しが及ぶ指摘は要件 7.7 のとおり申し送るか、要件 7.8 のとおり後へ回す議題にする。
+1. **規模（要件 2.6）**: ギャップ分析の見込みは 24〜28 タスク。1 本のまま進め、見立ては記録だけする（2026-11-16 の決め・前例 `audit-emo2-boot-spine` の 23 タスク）。
+2. **預かりの列（2 番・要件 3.5）**: この spec では振る舞いを変えずに、見直しの手間だけを直す（集合にして O(n²) を消す）。前の指令を捨てる案と上限で落とす案は取らない。理由は 2 つ。`window-work-area-clamp` の決め（2026-10-29「待つ間は順のまま預かり、取りこぼさない」）に反する。また、C23 の兄弟が触る `doc/COMPAT_ARCHITECTURE.md` §8 の行の書き換えと SSP の測りが要る。面を出さない窓への指令で列が伸び続ける件は、同じ `frame/move_hold.rs` を触る `window-resetwindowpos-hold` の brief へ申し送る（要件 7.8・7.10）。
+3. **件 13 のテスト（6 番・要件 5.15）**: ギャップ分析で、本番の相の並びは札の外れるフレームにその窓を書くと分かった。けれども、その流れを通る決定論のテストは範囲の中に 0 本だった。1 本足す。
+4. **`--release` の印（92 番・要件 5.8）**: 付ける。`--release` でテストを回す道（全体テスト・CI・道具）は今は無い（ギャップ分析の 3 節）。
+5. **使い手の数え方（要件 5.5）**: 本体のテストだけが使う項目は使い手に数える（`audit-emo2-boot-spine` の議題 4 と同じ）。この数え方で、私有へ戻すのは `StageObservation` の 1 つ、狭めるのは 7 件（114 番）。
+6. **C23 と範囲の外の件（要件 7.3・7.10）**: C23 のあいだ `crates/areka-placement/` には手を入れない。範囲の外で見つけた件は、要件 7.10 の持ち主の brief へ書き足す。どの持ち主も未着手の spec である（2026-11-20 に `completed/` でないことを確かめた）。
+7. **前の決めに触れて見えた 7 件（要件 2.7）**: 55・64・67・68・72・80・94 番は直す。直し方はどれも決めの狙いを保つ。
+   - 55: assert を足すだけ。
+   - 64: 実 GPU のテストが常に回る。
+   - 67: 網羅の檻を強める。
+   - 68: 受容した残余の名を残して 1 本にする。
+   - 72: `areka-P0-dpi-transition-atomicity` の要件 7.5 は「x64 の決定論テストとして走る」だけで、見張りの形を名指さない。
+   - 80: 陽性の対を 1 本残す。
+   - 94: 3 水準を 1 本で回す。
+   - 直さずに残す指摘は 0 件。
+8. **109 番の持ち主（要件 3.6）**: この spec で直し、`areka-test-wait-wording` の brief の同じ件を「済み」に書き換える。
+9. **33・99 番の戻し（要件 3.7）**: この spec で行う。依存は足さない。`session-module-gather` の手間を減らす方向で、後の spec の先回りには当たらない。
