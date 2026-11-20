@@ -1,14 +1,13 @@
 // =============================================================================
 // zorder drain 相の決定論テスト用の道具立て（実機・実ディスプレイ不要・要件 10.1）
 //
-// 2 本の兄弟テスト（指令の適用／台帳の射影）が同じ World の組み方を使うので、道具は
+// 兄弟テスト（指令の適用・台帳の射影ほか）が同じ World の組み方を使うので、道具は
 // ここへ 1 つだけ置く。二重に持つと、片方だけを直したときに檻の前提が静かにずれる。
 // =============================================================================
 
 use super::*;
 
 use bevy_ecs::world::World;
-use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Sender, channel};
 use wintf::ecs::window::{ChainPlan, ZOrderChainPlan};
 
@@ -44,7 +43,7 @@ pub(super) fn placement(scope: usize) -> ScopePlacement {
 ///
 /// 「まだ現れていないスコープ」はこの一覧から外すことで作る——台帳は書かれたスコープを
 /// そのまま持ち続けるので、窓の有無だけが射影の入力になる（要件 1.4）。
-pub(super) fn world_with_scopes(scopes: &[usize]) -> World {
+pub(in crate::frame) fn world_with_scopes(scopes: &[usize]) -> World {
     let mut world = World::new();
     spawn_scopes(&mut world, scopes);
     world
@@ -74,14 +73,14 @@ pub(super) fn ghost_windows(world: &World) -> GhostWindows {
 }
 
 /// スコープのバルーン窓 entity。
-pub(super) fn balloon_of(world: &World, scope: usize) -> Entity {
+pub(in crate::frame) fn balloon_of(world: &World, scope: usize) -> Entity {
     ghost_windows(world)
         .balloon_window(scope)
         .unwrap_or_else(|| panic!("scope {scope} のバルーン窓が無い"))
 }
 
 /// スコープのキャラ窓 entity。
-pub(super) fn char_of(world: &World, scope: usize) -> Entity {
+pub(in crate::frame) fn char_of(world: &World, scope: usize) -> Entity {
     ghost_windows(world)
         .char_window(scope)
         .unwrap_or_else(|| panic!("scope {scope} のキャラ窓が無い"))
@@ -144,17 +143,10 @@ pub(super) fn clear_dirty(world: &mut World) {
         .dirty = false;
 }
 
-/// クロージャ実行中に**現在のスレッド**で発火した記録を 1 行 1 件で返す。
-///
-/// 硬化機構の唯一の定義元 `log-capture-kit` の捕捉窓へ委譲する
-/// （`zorder_cue_tests.rs` と同じ流儀）。
-pub(super) fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines
-}
+pub(super) use crate::frame::test_support::capture_logs;
 
 /// 捕捉行のうち、指定した字面を含むものだけを返す。
-pub(super) fn lines_with<'a>(logs: &'a [String], needle: &str) -> Vec<&'a str> {
+pub(in crate::frame) fn lines_with<'a>(logs: &'a [String], needle: &str) -> Vec<&'a str> {
     logs.iter()
         .filter(|line| line.contains(needle))
         .map(String::as_str)
@@ -168,7 +160,7 @@ pub(super) fn lines_with<'a>(logs: &'a [String], needle: &str) -> Vec<&'a str> {
 /// 変わっておらず**、変わったのは `tracing` の出力先（module path 既定）だけである。
 /// サインオフの `RUST_LOG` は `wintf::ecs::window::zorder_chain=debug` を含み、
 /// 指定は前方一致なのでこの出力先を点灯させる（判定に影響しない）。
-pub(super) const GROUP_TARGET: &str = "target=wintf::ecs::window::zorder_chain_diag";
+pub(in crate::frame) const GROUP_TARGET: &str = "target=wintf::ecs::window::zorder_chain_diag";
 
 /// 宣言した窓が不在だった記録（`[zorder-chain] absent`）の出力先。
 ///

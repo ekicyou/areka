@@ -117,7 +117,7 @@ impl Cage {
         Look {
             picture: self.picture_id(scope),
             boxes: self
-                .wiring
+                .wiring()
                 .runtime()
                 .borrow()
                 .shown_boxes(&ActorKey::from(scope.to_string()))

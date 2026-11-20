@@ -1,6 +1,7 @@
 // =============================================================================
-// 常に手前の状態と取り出しの相の決定論テスト（stay-on-top-directives task 3.1・
-// 要件 1.1〜1.3／2.1／2.7〜2.9／3.1／3.2／3.4／6.1／6.2／6.7／7.2）
+// 常に手前の状態と取り出しの相の決定論テスト（記録の側）。
+// 正本に居ない窓を飛ばす記録・記録の欄・オンのまま降ろした記録を見る。状態の遷移・窓への
+// 印・積む順・台本の再生は `areka-runtime` の `frame/window_state_tests.rs` が持つ。
 //
 // 帯の指令の列は中身を読む口を持たないので、期待の列を同じ口（`push`）で組み、
 // `Debug` の写しを比べる（列の中身＝指令の順と entity の列）。
@@ -137,20 +138,6 @@ fn log_fields_for_change_unchanged_and_raise() {
     assert_eq!(off.field_str("directive"), Some("!stayontop"));
     assert_eq!(off.field_str("before"), Some("on"));
     assert_eq!(off.field_str("after"), Some("off"));
-}
-
-/// 起動の文脈が無ければゴーストの欄は `-`、オフの `\v` の帯は `normal`。
-#[test]
-fn log_ghost_falls_back_to_dash_and_raise_reports_normal_band() {
-    let (mut state, tx) = state_with_channel();
-    let (mut world, _) = world_with_windows();
-    tx.send(Raise).unwrap();
-    crate::session::hooks::install(&mut world);
-    let ((), events) = capture(|| run_window_state_phase(&mut state, &mut world));
-    let events = window_state_events(&events);
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].field_str("ghost"), Some("-"));
-    assert_eq!(events[0].field_str("band"), Some("normal"));
 }
 
 // ---------------------------------------------------------------------------

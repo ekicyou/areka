@@ -1,18 +1,18 @@
-//! 整合ゲートの **4 つ目**の窓書込口（task 6.5・設計 C5／C6・要件 5.8／7.2）の決定論テスト。
+//! 整合ゲートの **4 つ目**の窓書込口の決定論テスト。
 //!
 //! # ここが押さえる是正
 //!
-//! 設計 D15 と設計討議 議題 1 は「待ち札のある窓へのすべての窓書込を見送る」と定めており、
-//! 例外は随伴バルーンの追従ただ 1 つである。ところが C5 が列挙した見送り点は 3 つ——拡大率の
-//! 相・報告寸の突合・再スナップ——しか無く、task 5.2 が新設した
-//! [`resnap_for_work_area_change`](super::work_area_sync::resnap_for_work_area_change) が
-//! 抜けていた。**「再スナップ」という日本語が別々の 2 関数を指していた**ためである
-//! （C5 が指していたのは `resnap_shell_targets` の側）。
+//! 見送りの決まりは「待ち札のある窓へのすべての窓書込を見送る」であり、
+//! 例外は随伴バルーンの追従ただ 1 つである。見送り点は拡大率の相・報告寸の突合・再スナップ
+//! （`resnap_shell_targets`）の 3 つのほかに、
+//! [`resnap_for_work_area_change`](super::work_area_sync::resnap_for_work_area_change) にも
+//! 要る。**「再スナップ」という日本語が別々の 2 関数を指す**ので、片方だけを見送り点と
+//! 読み違えやすい。
 //!
-//! 抜けた結果、次の 2 条件が揃うと待ち札の付いた窓へ窓書込が届く:
+//! この 4 つ目が抜けると、次の 2 条件が揃ったときに待ち札の付いた窓へ窓書込が届く:
 //!
-//! 1. 窓の拡大率と帰属モニタの表が食い違ったまま札が残る（設計 Residual Risks が「上限
-//!    30 フレームまで待つ」構成として記録している縁の配置と同じ状態）。
+//! 1. 窓の拡大率と帰属モニタの表が食い違ったまま札が残る（「上限 30 フレームまで待つ」
+//!    構成の縁の配置と同じ状態）。
 //! 2. その待ちのあいだに作業領域が動き、同期段が `Some` を返す。
 //!
 //! このとき書込の経路語は `WorkAreaResnap` ゆえ随伴バルーンの例外（`BalloonFollow`）にも
@@ -30,7 +30,7 @@
 //! - **札の無いキャラ窓には従来どおり書く**（scope 1・経路語 `WorkAreaResnap`）。これが
 //!   無いと「4 点目を足したら再スナップが全部止まった」という退行を検出できない。
 //! - **札のあるバルーンへ随伴の追従は届く**（scope 1 のバルーン・経路語 `BalloonFollow`）。
-//!   設計 C5 の「不変条件の唯一の例外」が生きていることを、4 点目を足した後の同じ駆動で示す。
+//!   「不変条件の唯一の例外」が生きていることを、4 点目のある同じ駆動で示す。
 //!
 //! # 不変条件の監視は生きたまま・ただし `WorkAreaResnap` では鳴らない
 //!
@@ -41,54 +41,23 @@
 //! 通らない経路なら今も落ちる」を、**同じ土台**（同じハーネス・同じ整地・同じ札）で対にする。
 
 use bevy_ecs::entity::Entity;
-use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::{DPI, WindowPos};
 
 use areka_placement::diag::{PlacementRoute, WindowKind};
 use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncDecision, DpiSyncHold, evaluate};
 use areka_placement::follow::move_window_with_route;
 use areka_placement::transition_diag::HOLD_SITE_WORK_AREA_RESNAP;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 
+use super::shared_test_support::{HIGH_DPI, LOW_DPI, SCALE_120};
 use super::test_support::{
     FakeReports, FrameHarness, s2_monitors_with_work_area, s2_taskbar_hidden_work_area,
     s2_work_area_for_dpi,
 };
-
-/// 遷移前の拡大率水準（等倍）。実行時のモニタ表は本ファイルを通じてこの水準に据え置く
-/// ——据え置くからこそ札が外れず、到達条件 ⑴ が成立し続ける。
-const BASE_DPI: u16 = 96;
-
-/// 要件 7.2 が名指しする 2 水準のうち低い側。
-const SCALE_120: u16 = 120;
-
-/// 同上・高い側（等倍の 2 倍）。
-const SCALE_192: u16 = 192;
+use super::transition_test_support::{settle_at, warnings_containing, writes_for};
 
 /// 監視が鳴ったことを本文から拾うための語（`window_move.rs` の `warn!` 本文の一部）。
 const INVARIANT_WARNING: &str = "整合待ちの札がある窓へ窓書込が到達した";
-
-/// 指定スコープ・指定種別の窓書込だけを取り出す。
-fn writes_for(
-    writes: &[SetWindowPosCommand],
-    scope: u32,
-    kind: WindowKind,
-) -> Vec<SetWindowPosCommand> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind.as_str())
-        .cloned()
-        .collect()
-}
-
-/// 捕捉行のうち WARN で、`needle` を本文に含むものの件数。
-fn warnings_containing(events: &[CapturedEvent], needle: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .filter(|e| e.message().contains(needle))
-        .count()
-}
 
 /// 窓 1 枚だけの拡大率を差し替える（ハーネスの口はスコープ単位＝2 窓まとめてなので、
 /// 「キャラ窓は表と揃い、バルーンだけ食い違う」形はここでしか作れない）。
@@ -99,41 +68,19 @@ fn set_window_dpi_of(harness: &mut FrameHarness, window: Entity, dpi: u16) {
         .insert(DPI::from_dpi(dpi, dpi));
 }
 
-/// 起動直後の整地——3 つの源と窓の拡大率をすべて [`BASE_DPI`] へ揃え、キャラ窓を当該水準の
-/// 作業領域下端へ接地させる。
-///
-/// 拡大率の相の初回 run は永続 `SystemState` の仕様で全窓へマッチするので、ここで 1 度
-/// 空回しして消費する（以後のフレームでは真に変化した窓だけが対象になる）。
-fn settle(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_sources_for_dpi(BASE_DPI);
-    harness.set_monitor_table_for_dpi(BASE_DPI);
-    harness.set_window_dpi(BASE_DPI);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    for scope in harness.scopes().to_vec() {
-        assert_eq!(
-            harness.ground_point(scope).1,
-            s2_work_area_for_dpi(BASE_DPI).bottom,
-            "前提が崩れている: scope={scope} のキャラ窓が定常水準で作業領域下端へ接地していない"
-        );
-    }
-}
-
 /// タスクバーを隠す構成変更を実行時のモニタ表へ流し込む（**拡大率は据え置く**）。
 ///
 /// 拡大率を据え置くのが要点である——ここで表の拡大率まで動かすと札が外れてしまい、
 /// 到達条件 ⑴（札が残っていること）が壊れる。
 fn hide_the_taskbar(harness: &mut FrameHarness) {
     harness.set_monitor_table(s2_monitors_with_work_area(
-        BASE_DPI,
-        s2_taskbar_hidden_work_area(BASE_DPI),
+        LOW_DPI,
+        s2_taskbar_hidden_work_area(LOW_DPI),
     ));
 }
 
 /// 到達条件 ⑴ を作る——scope 0 の 2 窓と scope 1 の**バルーンだけ**へ新しい拡大率を届け、
-/// 実行時のモニタ表は [`BASE_DPI`] のまま据え置く。
+/// 実行時のモニタ表は [`LOW_DPI`] のまま据え置く。
 ///
 /// scope 1 のキャラ窓を揃えたまま残すのが 2 つの陽性の対の土台である: そのキャラ窓は
 /// 再スナップに書かれ（4 点目が全部を止めていないことの証拠）、その書込の随伴が札の付いた
@@ -169,17 +116,17 @@ fn is_held(harness: &FrameHarness, window: Entity) -> bool {
 // ---------------------------------------------------------------------------
 
 /// 待ち札が残っているあいだに作業領域が動いても、**作業領域変化を契機とする再スナップは
-/// 当該窓へ書かない**（設計 D15「待ち札のある窓へのすべての窓書込を見送る」・要件 5.8）。
+/// 当該窓へ書かない**（待ち札のある窓へのすべての窓書込を見送る）。
 ///
 /// 是正前は当該窓へ `WorkAreaResnap` の書込が届き、`enqueue_window_set_pos` 入口の
 /// `debug_assert!` が panic する。
 fn a_work_area_change_during_the_wait_defers_the_held_window_at(dpi: u16) {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
-    let old_bottom = s2_work_area_for_dpi(BASE_DPI).bottom;
-    let new_bottom = s2_taskbar_hidden_work_area(BASE_DPI).bottom;
+    let old_bottom = s2_work_area_for_dpi(LOW_DPI).bottom;
+    let new_bottom = s2_taskbar_hidden_work_area(LOW_DPI).bottom;
     assert_ne!(
         old_bottom, new_bottom,
         "探針が退化している: 作業領域下端が動かない（到達条件 ⑵ を観測できない）"
@@ -269,7 +216,7 @@ fn a_work_area_change_during_the_wait_defers_the_held_window_at(dpi: u16) {
         "dpi={dpi}: scope 1 の接地点が新しい作業領域下端に載っていない"
     );
 
-    // 陽性の対 ⑵: 札のあるバルーンへ随伴の追従は届く（設計 C5 の唯一の例外）。
+    // 陽性の対 ⑵: 札のあるバルーンへ随伴の追従は届く（唯一の例外）。
     let balloon1_writes = writes_for(&writes, 1, WindowKind::Balloon);
     assert_eq!(
         balloon1_writes.len(),
@@ -287,16 +234,14 @@ fn a_work_area_change_during_the_wait_defers_the_held_window_at(dpi: u16) {
     );
 }
 
-/// 要件 7.2 の低い側（120）。
 #[test]
 fn a_work_area_change_during_the_wait_defers_the_held_window_at_120() {
     a_work_area_change_during_the_wait_defers_the_held_window_at(SCALE_120);
 }
 
-/// 要件 7.2 の高い側（192）。
 #[test]
 fn a_work_area_change_during_the_wait_defers_the_held_window_at_192() {
-    a_work_area_change_during_the_wait_defers_the_held_window_at(SCALE_192);
+    a_work_area_change_during_the_wait_defers_the_held_window_at(HIGH_DPI);
 }
 
 // ---------------------------------------------------------------------------
@@ -311,7 +256,7 @@ fn a_work_area_change_during_the_wait_defers_the_held_window_at_192() {
 fn the_fourth_site_records_its_own_deferral_word() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     // 前半（零件）: 札が 1 つも無いフレームで作業領域が動いても、見送りの行は出ない。
     hide_the_taskbar(&mut harness);
@@ -337,10 +282,10 @@ fn the_fourth_site_records_its_own_deferral_word() {
     );
 
     // 後半（陽性）: 札を残したまま作業領域をもう一度動かすと、4 点目の見送りが記録される。
-    leave_holds_in_place(&mut harness, &mut source, SCALE_192);
+    leave_holds_in_place(&mut harness, &mut source, HIGH_DPI);
     harness.set_monitor_table(s2_monitors_with_work_area(
-        BASE_DPI,
-        s2_work_area_for_dpi(BASE_DPI),
+        LOW_DPI,
+        s2_work_area_for_dpi(LOW_DPI),
     ));
     harness.advance_frame();
     let frame = harness.frame();
@@ -363,8 +308,8 @@ fn the_fourth_site_records_its_own_deferral_word() {
     for token in [
         format!("frame={frame} "),
         "decision=hold".to_string(),
-        format!("window_dpi={}", u32::from(SCALE_192)),
-        format!("table_dpi={}", u32::from(BASE_DPI)),
+        format!("window_dpi={}", u32::from(HIGH_DPI)),
+        format!("table_dpi={}", u32::from(LOW_DPI)),
     ] {
         assert!(
             record.contains(&token),
@@ -378,7 +323,7 @@ fn the_fourth_site_records_its_own_deferral_word() {
 // ---------------------------------------------------------------------------
 
 /// 4 点目を足した後、作業領域変化を契機とする再スナップでは不変条件の監視が**もう鳴らない**
-/// （設計 C5 の監視・偽の警報を出さない）。
+/// （監視は偽の警報を出さない）。
 ///
 /// 零件（「鳴らない」）の陽性の対は
 /// [`the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites`]——**同じハーネスの
@@ -388,8 +333,8 @@ fn the_fourth_site_records_its_own_deferral_word() {
 fn the_invariant_watch_no_longer_fires_for_work_area_resnap() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
-    leave_holds_in_place(&mut harness, &mut source, SCALE_192);
+    settle_at(&mut harness, &mut source, LOW_DPI);
+    leave_holds_in_place(&mut harness, &mut source, HIGH_DPI);
 
     assert!(
         is_held(&harness, harness.char_window(0)),
@@ -422,16 +367,16 @@ fn the_invariant_watch_no_longer_fires_for_work_area_resnap() {
 /// 上の零件と**同じ土台**（同じハーネス・同じ整地・同じ札）で組んであるのが要点である。
 /// 監視を丸ごと削れば本テストが赤くなり、上の零件だけが空虚に緑になることはない。
 ///
-/// 経路語は当初 `move_window_to`（＝`MoveCue`）だったが、task 7.5 で「明示操作は見送らない
-/// ことが正しい＝鳴らすのは偽の警報」と裁定したため差し替えた（分類の全体は
-/// `crates/areka-placement/src/follow_window_move_hold_watch_tests.rs`）。
+/// 経路語は `ChainRealign` を使う。明示操作（`MoveCue`）は見送らないのが正しく、鳴らすと偽の
+/// 警報になる（分類の全体は `crates/areka-placement/src/follow_window_move_hold_watch_tests.rs`）。
 #[test]
 #[should_panic(expected = "DpiSyncHold")]
+#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]
 fn the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
-    leave_holds_in_place(&mut harness, &mut source, SCALE_192);
+    settle_at(&mut harness, &mut source, LOW_DPI);
+    leave_holds_in_place(&mut harness, &mut source, HIGH_DPI);
 
     let char0 = harness.char_window(0);
     assert!(
@@ -443,11 +388,24 @@ fn the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites() {
         .get::<WindowPos>(char0)
         .and_then(|wp| wp.position)
         .expect("WindowPos.position がある");
-    move_window_with_route(
-        &mut harness.world,
-        char0,
-        position.x + 17,
-        position.y,
-        PlacementRoute::ChainRealign,
+    // `debug_assert!` の panic の前に、零件が数える `warn!` と同じ文が出ていることを数える。
+    let (written, events) = capture(|| {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            move_window_with_route(
+                &mut harness.world,
+                char0,
+                position.x + 17,
+                position.y,
+                PlacementRoute::ChainRealign,
+            )
+        }))
+    });
+    assert_eq!(
+        warnings_containing(&events, INVARIANT_WARNING),
+        1,
+        "監視の警告の文が `INVARIANT_WARNING` と食い違っている: {events:?}"
     );
+    if let Err(panic) = written {
+        std::panic::resume_unwind(panic);
+    }
 }

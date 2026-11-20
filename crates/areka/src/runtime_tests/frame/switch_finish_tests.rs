@@ -5,7 +5,7 @@
 //! ゴーストは kanade の送出端の代わりに観測用の線と、偽の置き場（`FakePersistIo`）へ書く本物の
 //! 記憶の書き手を持つ。実行系と窓は無いので、実行系の今のシェルの書き換えと配置の入れ直しは
 //! 縮退の記録（`skin_shell_dir_not_set`・`reseed_skipped`）になる（実物は統合テスト
-//! `shell_balloon_switch_session_tests.rs` が偽の SHIORI で突き合わせる）。判定は集めてから 1 回。
+//! `shell_balloon_switch_session_tests.rs` が偽の SHIORI で突き合わせる）。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -298,7 +298,7 @@ fn memory(rig: Rig) -> Vec<(PersistKey, String)> {
         drop(rig.world);
         parts.publisher.barrier().expect("barrier");
         parts.publisher.close();
-        let _ = parts.handle.join();
+        areka_runtime::spine::join_bounded("sylphya", parts.handle).expect("sylphya が終わる");
     }
     load_scope(
         PersistScope::Ghost,
@@ -773,8 +773,8 @@ fn shell_finish_replaces_only_the_descript_balloon_lock() {
     );
 }
 
-/// バルーンの切替の後、普通のバルーンの警告の名前の欄は新しいバルーンのフォルダ名になる
-/// （要件 3.12）。前のバルーンの名前（ここでは未設定の `スコープ0のバルーン`）が残らない。
+/// バルーンの切替の後、普通のバルーンの警告の名前の欄は新しいバルーンのフォルダ名になる。
+/// 前のバルーンの名前（ここでは `kaku`）が残らない。
 #[test]
 fn balloon_switch_renames_the_balloon_warning_field() {
     let mut rig = rig(SkinKind::Balloon, false);
@@ -816,3 +816,5 @@ mod cursor_tests;
 mod face_tests;
 #[path = "switch_reload_tests.rs"]
 mod reload_tests;
+#[path = "switch_stay_on_top_tests.rs"]
+mod stay_on_top_tests;

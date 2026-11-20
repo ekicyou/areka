@@ -20,26 +20,16 @@
 //! [`a_dragged_scope_stays_out_of_the_chain_across_the_scale_change`] は、**同じ拡大率変更・
 //! 同じ駆動口**でドラッグを行わない側が実際に動くことを同じテスト本体の中で続けて主張する。
 
-use bevy_ecs::change_detection::DetectChangesMut;
-use wintf::ecs::{Point, WindowPos};
-
 use areka_placement::chain_finalize::ChainFinalized;
-use areka_placement::spawn::GhostWindows;
 
-use super::shell_target;
-use super::test_support::{
-    FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, pos_of,
+use super::shared_test_support::{
+    HIGH_DPI, LOW_DPI, change_scale, char_x, default_x, drag_char_window_by, sizes,
 };
+use super::test_support::{FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1};
 
-/// 遷移前の拡大率水準。
-const LOW_DPI: u16 = 96;
-
-/// 遷移後の拡大率水準（等倍の 2 倍＝寸も作業領域下端も動く）。
-const HIGH_DPI: u16 = 192;
-
-/// [`HIGH_DPI`] で各スコープが報告する物理寸（等倍寸の 2 倍）。
-const HIGH_SIZE_0: (u32, u32) = (SPAWN_SIZE_0.0 * 2, SPAWN_SIZE_0.1 * 2);
-const HIGH_SIZE_1: (u32, u32) = (SPAWN_SIZE_1.0 * 2, SPAWN_SIZE_1.1 * 2);
+/// [`HIGH_DPI`] で各スコープが報告する物理寸（等倍寸の 2 倍・共有の `HIGH_SIZE_*` とは別の値）。
+const DOUBLED_SIZE_0: (u32, u32) = (SPAWN_SIZE_0.0 * 2, SPAWN_SIZE_0.1 * 2);
+const DOUBLED_SIZE_1: (u32, u32) = (SPAWN_SIZE_1.0 * 2, SPAWN_SIZE_1.1 * 2);
 
 /// 遷移後に scope1 が置かれる左上 X（下端中央保存の再射影後・連鎖はまだ解いていない）。
 ///
@@ -65,8 +55,8 @@ const SCOPE1_X_AFTER_DRAG_REPROJECT: i32 = 1030;
 const SCOPE1_X_AFTER_CHAIN: i32 = 710;
 
 /// 遷移後の実表示寸（連鎖確定の駆動条件＝窓寸と一致していること）。
-fn high_sizes() -> PerTargetSizes {
-    PerTargetSizes::new([(0, Some(HIGH_SIZE_0)), (1, Some(HIGH_SIZE_1))])
+fn doubled_sizes() -> PerTargetSizes {
+    sizes(DOUBLED_SIZE_0, DOUBLED_SIZE_1)
 }
 
 /// 起動直後の整地——3 つの源と窓の拡大率をすべて [`LOW_DPI`] へ揃える。
@@ -87,52 +77,9 @@ fn settle(harness: &mut FrameHarness, source: &mut FakeReports) {
     );
 }
 
-/// OS 設定の拡大率変更を 1 フレームで流し込む（実行時のモニタ表・窓の拡大率・報告寸）。
-///
-/// 作業領域源は触らない——実行時のモニタ表から作り直すのが同期段の仕事である。
-fn raise_the_scale(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_table_for_dpi(HIGH_DPI);
-    harness.set_window_dpi(HIGH_DPI);
-    source.refresh.insert(shell_target(0).0, HIGH_SIZE_0);
-    source.refresh.insert(shell_target(1).0, HIGH_SIZE_1);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-}
-
-/// 当該スコープの既定位置（台帳）。
-fn default_x(harness: &FrameHarness, scope: usize) -> Option<i32> {
-    harness
-        .world
-        .get_resource::<GhostWindows>()
-        .expect("GhostWindows がある")
-        .default_char_pos(scope)
-        .map(|p| p.x)
-}
-
-/// 当該スコープのキャラ窓の現在左上 X。
-fn char_x(harness: &FrameHarness, scope: usize) -> i32 {
-    pos_of(&harness.world, harness.char_window(scope))
-        .expect("position がある")
-        .x
-}
-
-/// 当該スコープのキャラ窓を右へずらす（利用者のドラッグが landing した後の状態）。
-///
-/// ドラッグ経路そのもの（`on_char_drag`）は `crates/areka-placement/src/follow_drag_tests.rs` が所有するので、
-/// ここでは**結果の位置**だけを置く。既定位置は動かさない——ドラッグは route を持たない書込で
-/// あり、D9 の追跡対象から構造的に外れているからである。
-fn drag_char_window_right(harness: &mut FrameHarness, scope: usize, dx: i32) {
-    let window = harness.char_window(scope);
-    let mut wp = harness
-        .world
-        .get_mut::<WindowPos>(window)
-        .expect("WindowPos がある");
-    let wp = wp.bypass_change_detection();
-    let moved = wp.position.expect("position がある");
-    wp.position = Some(Point {
-        x: moved.x + dx,
-        y: moved.y,
-    });
+/// OS 設定の拡大率変更（等倍 → 2 倍）を 1 フレームで流し込む。
+fn double_the_scale(harness: &mut FrameHarness, source: &mut FakeReports) {
+    change_scale(harness, source, HIGH_DPI, DOUBLED_SIZE_0, DOUBLED_SIZE_1);
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +97,7 @@ fn a_scale_change_leaves_the_scope_eligible_for_the_chain() {
     let mut source = FakeReports::default();
     settle(&mut harness, &mut source);
 
-    raise_the_scale(&mut harness, &mut source);
+    double_the_scale(&mut harness, &mut source);
 
     // 前提: 再射影は実際に窓を動かしている（動いていなければ以下の主張は空虚）。
     assert_eq!(
@@ -165,7 +112,7 @@ fn a_scale_change_leaves_the_scope_eligible_for_the_chain() {
     );
 
     // 判定器を通す: 追随していれば scope1 は対象に残り、連鎖が隣接位置へ収める。
-    harness.run_chain_finalize(&high_sizes());
+    harness.run_chain_finalize(&doubled_sizes());
     assert!(
         harness.world.get_resource::<ChainFinalized>().is_some(),
         "連鎖の確定が駆動していない（窓寸と実表示寸が揃っていない可能性）"
@@ -190,14 +137,14 @@ fn a_dragged_scope_stays_out_of_the_chain_across_the_scale_change() {
         let mut source = FakeReports::default();
         settle(&mut harness, &mut source);
 
-        drag_char_window_right(&mut harness, 1, DRAG_DX);
+        drag_char_window_by(&mut harness, 1, DRAG_DX);
         assert_ne!(
             default_x(&harness, 1),
             Some(char_x(&harness, 1)),
             "前提が崩れている: ドラッグ後も既定位置と現在位置が一致している"
         );
 
-        raise_the_scale(&mut harness, &mut source);
+        double_the_scale(&mut harness, &mut source);
 
         assert_eq!(
             default_x(&harness, 1),
@@ -205,7 +152,7 @@ fn a_dragged_scope_stays_out_of_the_chain_across_the_scale_change() {
             "ドラッグ済みスコープの既定位置が拡大率変更で動いた（D9 の一致条件が効いていない）"
         );
 
-        harness.run_chain_finalize(&high_sizes());
+        harness.run_chain_finalize(&doubled_sizes());
         assert_eq!(
             char_x(&harness, 1),
             SCOPE1_X_AFTER_DRAG_REPROJECT,
@@ -217,8 +164,8 @@ fn a_dragged_scope_stays_out_of_the_chain_across_the_scale_change() {
     let mut fresh = FrameHarness::new();
     let mut fresh_source = FakeReports::default();
     settle(&mut fresh, &mut fresh_source);
-    raise_the_scale(&mut fresh, &mut fresh_source);
-    fresh.run_chain_finalize(&high_sizes());
+    double_the_scale(&mut fresh, &mut fresh_source);
+    fresh.run_chain_finalize(&doubled_sizes());
     assert_eq!(
         char_x(&fresh, 1),
         SCOPE1_X_AFTER_CHAIN,

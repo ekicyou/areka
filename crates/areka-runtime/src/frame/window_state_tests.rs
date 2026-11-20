@@ -1,6 +1,8 @@
 // =============================================================================
-// 常に手前の状態と取り出しの相の決定論テスト（stay-on-top-directives task 3.1・
-// 要件 1.1〜1.3／2.1／2.7〜2.9／3.1／3.2／3.4／6.1／6.2／6.7／7.2）
+// 常に手前の状態と取り出しの相の決定論テスト（状態の遷移・窓への印・積む順・台本の再生・
+// 起動の文脈が無いときの記録の欄の代わりの値）。
+// 正本に居ない窓を飛ばす記録・変化／変化なし／raise の記録の欄・捨てた記録は本体の
+// `runtime_tests/frame/window_state_tests.rs` が持つ。
 //
 // 帯の指令の列は中身を読む口を持たないので、期待の列を同じ口（`push`）で組み、
 // `Debug` の写しを比べる（列の中身＝指令の順と entity の列）。
@@ -9,12 +11,13 @@
 use std::sync::mpsc::Sender;
 
 use bevy_ecs::world::World;
+use log_capture_kit::capture;
 
 use super::super::test_support::spawn_resnap_windows;
 use super::*;
 
 use super::test_support::{
-    OFF, ON, marked, queue_in, queue_text, state_with_channel, world_with_windows,
+    OFF, ON, all_windows, marked, queue_in, queue_text, state_with_channel, world_with_windows,
 };
 use WindowStateDirective::Raise;
 
@@ -87,10 +90,7 @@ fn holds_while_registry_absent_then_applies_in_arrival_order() {
 
     // 送り直さずに窓を生やす＝最初に送った 3 件がチャネルに残っていれば当たる。
     let gw = spawn_resnap_windows(&mut world);
-    let all: Vec<Entity> = gw
-        .scopes()
-        .flat_map(|s| [gw.char_window(s).unwrap(), gw.balloon_window(s).unwrap()])
-        .collect();
+    let all = all_windows(&gw);
     run_window_state_phase(&mut state, &mut world);
 
     assert!(!state.on);
@@ -299,4 +299,20 @@ fn script_stopped_before_the_directive_leaves_the_state() {
         state.on,
         "対照の前提が崩れている（最後まで流してもオンにならない）"
     );
+}
+
+/// 起動の文脈が無ければゴーストの欄は `-`、オフの `\v` の帯は `normal`。
+#[test]
+fn log_ghost_falls_back_to_dash_and_raise_reports_normal_band() {
+    let (mut state, tx) = state_with_channel();
+    let (mut world, _) = world_with_windows();
+    tx.send(Raise).unwrap();
+    let ((), events) = capture(|| run_window_state_phase(&mut state, &mut world));
+    let events: Vec<_> = events
+        .iter()
+        .filter(|e| e.message().starts_with("[window_state]"))
+        .collect();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].field_str("ghost"), Some("-"));
+    assert_eq!(events[0].field_str("band"), Some("normal"));
 }

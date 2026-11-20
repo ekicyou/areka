@@ -1,13 +1,10 @@
-//! 拡大率の違う画面をまたぐドラッグで、掴んだ点を窓の大きさの比で置き直す檻
-//! （`dpi-realign-remembered-chain` 要件 4.1〜4.3・8.5・設計 DragGrab）。
+//! 拡大率の違う画面をまたぐドラッグで、掴んだ点を窓の大きさの比で置き直す檻。
 //!
 //! # ここが押さえるもの
 //!
-//! - 実測の形（件 9: 1108×1368 → 831×1026・掴んだ点 (225,806) → (169,605)）で、落とした点
-//!   (−1500,1000) から出る左上が (−1669,395) になり、落とした点と掴んだ点の差が縦横 1 px 以内
-//!   （要件 4.1・4.2・8.5）。
-//! - ドラッグ中でない窓・同じ大きさの書き込み・前の大きさが 0 以下・バルーン窓では置き直さない
-//!   （要件 4.3）。
+//! - 実測の形（1108×1368 → 831×1026・掴んだ点 (225,806) → (169,605)）で、落とした点
+//!   (−1500,1000) から出る左上が (−1669,395) になり、落とした点と掴んだ点の差が縦横 1 px 以内。
+//! - ドラッグ中でない窓・同じ大きさの書き込み・前の大きさが 0 以下・バルーン窓では置き直さない。
 //!
 //! 窓の位置の式は wndproc と `drag_follow` の「始めの左上（整数）＋（今のカーソル − 始めの
 //! カーソル）」をここで写して計算する。
@@ -19,7 +16,7 @@ use super::dpi::{GhostWindowKind, reconcile_window_size, rescale_drag_grab};
 use super::test_support::{FrameHarness, pos_of};
 use areka_placement::diag::PlacementRoute;
 
-/// 実測の形（件 9）の前の大きさ（拡大率 200% の画面）。
+/// 実測の形の前の大きさ（拡大率 200% の画面）。
 const BEFORE: (u32, u32) = (1108, 1368);
 /// 実測の形の後の大きさ（拡大率 150% の画面・0.75 倍）。
 const AFTER: (u32, u32) = (831, 1026);
@@ -117,7 +114,7 @@ fn rescale_drag_grab_keeps_the_inset_when_the_before_size_is_not_positive() {
 }
 
 /// ドラッグ中のキャラ窓へ縮んだ大きさを書くと掴んだ点が置き直り、落とした点 (−1500,1000) で
-/// 左上が (−1669,395)・落とした点と掴んだ点の差が縦横 1 px 以内（要件 4.1・4.2・8.5）。
+/// 左上が (−1669,395)・落とした点と掴んだ点の差が縦横 1 px 以内。
 #[test]
 fn a_dragging_char_window_rescales_its_grab_point_with_the_measured_shape() {
     let (mut harness, window, before_drag) = dragging_char0();
@@ -154,7 +151,7 @@ fn a_dragging_char_window_rescales_its_grab_point_with_the_measured_shape() {
     assert!(dx <= 1.0 && dy <= 1.0, "差が 1 px を超えた: ({dx}, {dy})");
 }
 
-/// 同じ大きさの書き込みでは置き直さない（要件 4.3）。
+/// 同じ大きさの書き込みでは置き直さない。
 #[test]
 fn a_same_size_write_keeps_the_grab_point() {
     let (mut harness, window, before_drag) = dragging_char0();
@@ -162,7 +159,7 @@ fn a_same_size_write_keeps_the_grab_point() {
     assert_eq!(fields(drag_of(&harness, window)), fields(before_drag));
 }
 
-/// ドラッグ中でない窓の大きさを書いても、ドラッグ中の窓の掴んだ点は変わらない（要件 4.3）。
+/// ドラッグ中でない窓の大きさを書いても、ドラッグ中の窓の掴んだ点は変わらない。
 #[test]
 fn resizing_a_window_that_is_not_dragged_keeps_the_grab_point() {
     let (mut harness, window, before_drag) = dragging_char0();
@@ -178,8 +175,7 @@ fn resizing_a_window_that_is_not_dragged_keeps_the_grab_point() {
     assert_eq!(fields(drag_of(&harness, window)), fields(before_drag));
 }
 
-/// 始めの位置が分からない（`None`）ドラッグ中に大きさが変わっても、`None` のまま置き直さない
-/// （要件 2.1・2.3・2.8・9.6）。
+/// 始めの位置が分からない（`None`）ドラッグ中に大きさが変わっても、`None` のまま置き直さない。
 #[test]
 fn an_unknown_start_position_stays_none_when_the_size_changes() {
     let (mut harness, window, _) = dragging_char0();

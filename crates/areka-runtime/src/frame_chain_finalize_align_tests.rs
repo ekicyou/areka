@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use super::chain_finalize_persist_test_support::spawn_shown;
+use super::persist_test_support::spawn_shown;
 use super::test_support::{PerTargetSizes, placement_basis, pos_of};
 use super::*;
 
@@ -17,6 +17,7 @@ use areka_placement::chain_finalize::AdjacencyMark;
 use areka_placement::config::build_placement_config;
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::{RectPx, ScopeInput, SizePx, resolve_placement};
+use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::DPI;
 
 /// 主の画面の作業領域。
@@ -26,6 +27,8 @@ pub(super) const WA: RectPx = RectPx {
     right: 2880,
     bottom: 1704,
 };
+/// 覚えた印を辺のスコープを飛ばした鎖の前の窓との組として読んだ記録の本文。
+pub(super) const READ_ACROSS: &str = "左右の辺のスコープを飛ばした鎖の前の窓との組として読む";
 /// 準備の幅（resolver が解いた幅）。
 pub(super) const SPAWN: [(u32, u32); 3] = [(434, 687), (278, 357), (300, 400)];
 
@@ -196,13 +199,23 @@ fn boot_finalize_skips_a_side_edge_scope_for_a_remembered_next_scope() {
     }
     let x2_before = x_of(&world, 2);
 
-    finalize_chain_once_with(&shown, &mut world);
+    let logs = capture_lines(LineFormat::LevelTargetFields, || {
+        finalize_chain_once_with(&shown, &mut world)
+    })
+    .1;
 
     assert_eq!(x_of(&world, 1), WA.right - 278, "辺のスコープは辺のまま");
     assert_eq!(
         x_of(&world, 2),
         x_of(&world, 0) - 300,
         "記憶の印 left は本体との組として読み、本体の隣へ付く"
+    );
+    assert_eq!(
+        logs.iter()
+            .filter(|line| line.contains(READ_ACROSS))
+            .count(),
+        1,
+        "辺のスコープを飛ばした組の記録が 1 行: {logs:?}"
     );
     assert_ne!(
         x_of(&world, 2),

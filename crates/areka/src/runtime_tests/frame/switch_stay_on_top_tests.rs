@@ -1,7 +1,6 @@
-//! シェルとバルーンの切り替えで常に手前の状態と印が残ること（stay-on-top-directives task 5.3・
-//! 要件 4.4・4.5・5.1・7.2・7.4・design「常に手前の状態の寿命」）。
+//! シェルとバルーンの切り替えで常に手前の状態と印が残ること。
 //!
-//! 土台は祖父（`switch_finish_tests.rs`・宣言は `switch_reload_tests.rs`）の頼んだ段の組み立てを、窓を組んだ World の上で使う。
+//! 土台は親（`switch_finish_tests.rs`）の頼んだ段の組み立てを、窓を組んだ World の上で使う。
 //! 常に手前は本物の取り出しの相へ指令を流してオンにし（窓に印 `StayOnTop` が付く）、台本の組を
 //! 1 本載せてから、差し替えの相の完了の後始末まで回す。ゴーストの側の寿命は
 //! `frame_stay_on_top_lifecycle_tests.rs` が固定する。
@@ -9,25 +8,15 @@
 use bevy_ecs::entity::Entity;
 use wintf::ecs::window::StayOnTop;
 
-use super::super::*;
-use areka_placement::spawn::GhostWindows;
+use super::*;
 use areka_placement::zorder_group_ledger::parse_zorder_tokens;
 use areka_runtime::frame::window_state::run_window_state_phase;
 use areka_runtime::window_state_cue::WindowStateDirective;
 // 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
-use areka_runtime::frame::window_state::test_support::on;
+use areka_runtime::frame::window_state::test_support::{all_windows, on};
 use areka_runtime::frame::wiring::test_support::{
     window_state, window_state_mut, zorder_ledger, zorder_ledger_mut,
 };
-
-/// ゴーストの全部の窓（キャラクターとバルーン）。
-fn all_windows(windows: &GhostWindows) -> Vec<Entity> {
-    windows
-        .scopes()
-        .flat_map(|scope| [windows.char_window(scope), windows.balloon_window(scope)])
-        .flatten()
-        .collect()
-}
 
 /// (常に手前か, 印の付いた窓の数, 台本の組の数)。
 fn observe(rig: &Rig, windows: &[Entity]) -> (bool, usize, usize) {

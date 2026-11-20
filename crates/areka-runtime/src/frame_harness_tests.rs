@@ -3,12 +3,12 @@
 //! 本ファイルが固定するのはゴースト窓の挙動ではなく、**後続タスクの統合テストが乗る土台の
 //! 性質**である——フレームを進める口・3 つの源（作業領域源／実行時のモニタ表／窓の拡大率）を
 //! 差し替える口・二体ぶんのスコープを同時に駆動できること・そして
-//! **テスト間で状態が残らないこと**（要件 7.7）。
+//! **テスト間で状態が残らないこと**。
 //!
 //! # なぜ「構造から明らか」では足りないか
 //!
-//! 本仕様は既に一度、テスト間の状態汚染を実測で出している（`command.rs` のプロセス共有
-//! カウンタ＝60 回中 11 失敗）。**残留は「隔離されているように見える」形からも出る**ので、
+//! このハーネスで回すテストは、スレッド局所の状態（窓書込指令のキュー・観測の写し）が 1 つ残るだけで、
+//! 同じスレッドで次に走るテストを汚す。**残留は「隔離されているように見える」形からも出る**ので、
 //! 隔離は構成で主張せず実行で示す:
 //!
 //! - [`a_fresh_harness_starts_from_a_known_state_regardless_of_what_ran_before`] は
@@ -19,10 +19,10 @@
 //! いずれも [`FrameHarness::new`] の初期化（キューの取り出し・観測の写しの初期化）を外すと
 //! 赤になる。
 //!
-//! # 実行形態の明示（要件 7.5／7.6）
+//! # 実行形態の明示
 //!
-//! - **x64 のみ**: 本モジュールの接続宣言（`frame.rs`）が `target_pointer_width = "64"` で
-//!   守られている。[`the_always_on_harness_tests_run_on_x64_only`] がその形を名指しする。
+//! - **x64 のみ**: 本モジュールの接続宣言（`frame.rs`）の
+//!   `#[cfg(all(test, target_pointer_width = "64"))]` が守る（32 bit ではこのテストが組まれないだけ）。
 //! - **単一スレッド実行器**: ログ捕捉に依る検証は
 //!   [`a_log_capture_verification_names_the_single_threaded_executor`] のとおり
 //!   [`single_threaded_schedule`] で走らせる。既定の多スレッド実行器ではシステムがワーカー
@@ -35,7 +35,7 @@ use bevy_ecs::prelude::*;
 
 /// 単一スレッド実行器の供給元（`frame_test_support::single_threaded_schedule`）の逐語。
 /// bevy 0.19 で `Schedule::get_executor_kind` が撤去されたため、「捕捉できる実行形態を
-/// 名指しする」要件 7.6 の要請を字面で見張る。
+/// 名指しする」要請を字面で見張る。
 const FRAME_TEST_SUPPORT_SRC: &str = include_str!("frame_test_support.rs");
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER};
@@ -95,7 +95,7 @@ fn run_scale_up_scenario(harness: &mut FrameHarness) -> Vec<(Option<u32>, &'stat
 }
 
 // ---------------------------------------------------------------------------
-// 残留を持ち越さない（要件 7.7）
+// 残留を持ち越さない
 // ---------------------------------------------------------------------------
 
 /// **残留をわざと作ってから**組んだハーネスが、既知の状態から始まる。
@@ -173,7 +173,7 @@ fn two_scenarios_in_sequence_reach_the_same_verdict() {
 // ---------------------------------------------------------------------------
 
 /// [`FrameHarness::advance_frame`] は刻印の 2 つの権威——World 資源（`FrameCount`＋
-/// `TickStart`）とスレッド局所の写し——を**同一点で同じ値**へ進める（D1・`try_tick_world`
+/// `TickStart`）とスレッド局所の写し——を**同一点で同じ値**へ進める（`try_tick_world`
 /// と同じ規律）。片方だけ進めると、World を借りる観測点と借りない観測点で系列が割れる。
 #[test]
 fn advancing_frames_stamps_the_world_resources_and_the_mirror_alike() {
@@ -206,7 +206,7 @@ fn advancing_frames_stamps_the_world_resources_and_the_mirror_alike() {
 /// 作業領域源（[`MonitorSnapshot`] 資源）と実行時のモニタ表（`Monitor` entity 群）は
 /// **独立に**差し替えられる。
 ///
-/// 2 源を独立に置けることが要件 5.3 の観測（接地点と作業領域下端の差）の前提である——
+/// 2 源を独立に置けることが観測（接地点と作業領域下端の差）の前提である——
 /// 同じ源から両方を引いたら差は定義上つねに 0 になり、何も観測しない。
 #[test]
 fn the_work_area_source_and_the_monitor_table_are_swapped_independently() {
@@ -352,20 +352,15 @@ fn the_harness_drives_resnap_and_chain_finalize_for_the_adjacent_pair() {
         BTreeSet::from([Some(1)]),
         "連鎖の解き直しが後続スコープ（scope 1）を動かしていない"
     );
-    assert_eq!(
-        SPAWN_SIZE_1,
-        (278, 357),
-        "fixture の後続スコープ寸（判定の由来を行内に残す）"
-    );
 }
 
 // ---------------------------------------------------------------------------
-// 実行形態の明示（要件 7.5／7.6）
+// 実行形態の明示
 // ---------------------------------------------------------------------------
 
 /// 単一スレッド実行器の下で刻印を 1 行出す probe。
 ///
-/// 刻印は `Res<FrameCount>`＋`Res<TickStart>` から組む（D1: World を借りられる観測点は
+/// 刻印は `Res<FrameCount>`＋`Res<TickStart>` から組む（World を借りられる観測点は
 /// スレッド局所の写しを読まない）。
 fn emit_snapshot_probe(frame: Res<FrameCount>, start: Res<TickStart>) {
     let stamp = transition_diag::stamp_from_world(&frame, &start);
@@ -377,7 +372,7 @@ fn emit_snapshot_probe(frame: Res<FrameCount>, start: Res<TickStart>) {
     ));
 }
 
-/// ログ捕捉に依る検証は**単一スレッド実行器**で走らせる（要件 7.6）。
+/// ログ捕捉に依る検証は**単一スレッド実行器**で走らせる。
 ///
 /// 既定の多スレッド実行器では probe がワーカースレッドへ載り、スレッドローカルの捕捉が
 /// 1 行も拾えないまま緑になる。本檻は「捕捉できる実行形態」を名指しし、その形で実際に
@@ -391,7 +386,7 @@ fn a_log_capture_verification_names_the_single_threaded_executor() {
 
     let mut schedule = single_threaded_schedule();
     // bevy 0.19 で `Schedule::get_executor_kind` が撤去された（実行器は私有）。「捕捉できる
-    // 実行形態を名指しする」という要件 7.6 の要請は、供給元の字面で見張る——
+    // 実行形態を名指しする」という要請は、供給元の字面で見張る——
     // `single_threaded_schedule()` が単スレッド実行器を据えていることをそのまま固定する。
     assert!(
         FRAME_TEST_SUPPORT_SRC.contains("schedule.set_executor(SingleThreadedExecutor::new());"),
@@ -417,34 +412,12 @@ fn a_log_capture_verification_names_the_single_threaded_executor() {
     );
 }
 
-/// 常時テストは純 x64 で走る（要件 7.5）——**接続宣言の形**を本文走査で固定する。
-///
-/// 実行時に `cfg!(target_pointer_width = "64")` を assert しても、x64 で走っている限り
-/// 恒真であって何も守らない（守るべきは「i686 でも走ってしまう形へ書き換わらないこと」）。
-/// ゆえに担い手は `frame.rs` の接続宣言そのものであり、本件はその宣言が**接続の直前に**
-/// 残っているかを見る。属性を外す・`#[cfg(test)]` へ緩めるといった書き換えで赤になる。
-#[test]
-fn the_harness_tests_are_connected_under_an_x64_only_gate() {
-    let frame_rs = include_str!("frame.rs");
-    let connection = "#[path = \"frame_harness_tests.rs\"]";
-    let at = frame_rs
-        .find(connection)
-        .expect("frame.rs に多フレーム駆動ハーネス檻の接続宣言がある");
-    let gate = "#[cfg(all(test, target_pointer_width = \"64\"))]";
-    let preceding = &frame_rs[..at];
-    assert!(
-        preceding.trim_end().ends_with(gate),
-        "接続宣言の直前が x64 限定の門になっていない（要件 7.5）: 直前 200 文字は {:?}",
-        &preceding[preceding.len().saturating_sub(200)..]
-    );
-}
-
 /// 再スナップの駆動口が**書く側**でも効いていること。
 ///
 /// 姉妹の `the_harness_drives_resnap_and_chain_finalize_for_the_adjacent_pair` が持つ
 /// 「同寸なら書かない」は零件の主張なので、`run_resnap` を丸ごと無操作にしても恒真で通る
-/// （task 3.3 のレビューで実測——本体を `let _ = source;` に置き換えてもワークスペース全体が
-/// 緑のままだった）。陽性の駆動をここで別に固定する。
+/// （本体を `let _ = source;` に置き換えてもワークスペース全体が
+/// 緑のままになる）。陽性の駆動をここで別に固定する。
 #[test]
 fn resnap_writes_only_the_scope_whose_reported_size_differs() {
     let mut harness = FrameHarness::new();

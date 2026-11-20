@@ -1,18 +1,16 @@
-//! 拡大率の後の詰め直しで動かさない組（外す理由）の檻
-//! （`dpi-realign-remembered-chain` 要件 2・3・7.2・8.2）。
+//! 拡大率の後の詰め直しで動かさない組（外す理由）の檻。
 //!
 //! # ここが押さえるもの
 //!
 //! - 変わる直前の矩形の控え（[`snapshot_char_rects`]）に、位置か大きさの無いキャラ窓と
-//!   バルーン窓が入らないこと（要件 7.2 の「控えに無い窓」の入口）。
+//!   バルーン窓が入らないこと（「控えに無い窓」の入口）。
 //!
 //! - 組ごとの外す理由（離れていた・重なっていた・組の窓・ドラッグ中・武装の後の台本・
-//!   控えに無い）で組を動かさないこと（要件 2.1〜2.4・3.1・7.2）。それぞれ同じテストの中に
-//!   陽性の対（外す理由が無ければ詰まる）を置く——詰め直しを丸ごと止めても「動かない」だけなら
-//!   恒真で通るからである。
-//! - 解決の後の台本の移動を上書きせず 2 度目を走らせないこと（要件 3.2）、武装の前に台本で
-//!   置かれ隣り合っていた窓は詰まること（要件 3.3）、ぱすたの形（同じ左上の組の窓）を横に
-//!   並べないこと（要件 3.4）。
+//!   控えに無い）で組を動かさないこと。陽性の対（外す理由が
+//!   無ければ詰まる）は 1 本だけ置く——詰め直しを丸ごと止めても「動かない」だけなら恒真で通るからである。
+//! - 解決の後の台本の移動を上書きせず 2 度目を走らせないこと、武装の前に台本で
+//!   置かれ隣り合っていた窓は詰まること、ぱすたの形（同じ左上の組の窓）を横に
+//!   並べないこと。
 //!
 //! 起動は記憶から戻した形（全スコープの既定の位置を外した形）で行うので、決めが既定の位置を
 //! 読まないことも同時に押さえる。3 体が要る「控えに無い窓」は窓の一式を 3 スコープで組む。
@@ -30,11 +28,9 @@ use areka_placement::chain_realign::{
 };
 use areka_placement::sticky_group_ledger::seed_sticky_descript;
 
-use super::chain_realign_adjacency_tests::{
-    chain3_pos, chain3_scan, chain3_world, halve_keeping_bottom_center, place_char_window_x,
-};
 use super::shared_test_support::{
-    GAP_WITHOUT_REALIGN, boot_remembered_at_high, char_pos, gap, low_sizes, lower_the_scale,
+    GAP_WITHOUT_REALIGN, boot_remembered_at_high, chain3_pos, chain3_scan, chain3_world, char_pos,
+    gap, halve_keeping_bottom_center, low_sizes, lower_the_scale, place_char_window_x,
 };
 use super::test_support::{FakeReports, FrameHarness, capture_logs, pos_of, size_of};
 
@@ -79,7 +75,7 @@ fn a_char_window_without_position_or_size_is_left_out_of_the_snapshot() {
     assert_eq!(
         snapshot_char_rects(&harness.world),
         vec![expected[1]],
-        "位置の無いキャラ窓が控えに入った（変わる直前の位置を発明してはならない・要件 7.2）"
+        "位置の無いキャラ窓が控えに入った（変わる直前の位置を発明してはならない）"
     );
 
     // 大きさの無いキャラ窓（scope 1）も控えに入らない。
@@ -91,7 +87,7 @@ fn a_char_window_without_position_or_size_is_left_out_of_the_snapshot() {
         .size = None;
     assert!(
         snapshot_char_rects(&harness.world).is_empty(),
-        "大きさの無いキャラ窓が控えに入った（変わる直前の大きさを発明してはならない・要件 7.2）"
+        "大きさの無いキャラ窓が控えに入った（変わる直前の大きさを発明してはならない）"
     );
 
     // `WindowPos` そのものが無いキャラ窓も控えに入らない（scope 0 を戻して対を作る）。
@@ -132,7 +128,7 @@ fn balloon_windows_are_never_in_the_snapshot() {
 }
 
 // ---------------------------------------------------------------------------
-// 組ごとの外す理由（要件 2・3・7.2）
+// 組ごとの外す理由
 // ---------------------------------------------------------------------------
 
 /// 200% で記憶から戻した形に起動する（scope1 は scope0 の左に隣り合う）。
@@ -148,8 +144,10 @@ fn is_tight(harness: &FrameHarness) -> bool {
     gap(harness).abs() <= ADJACENT_TOLERANCE_PX
 }
 
-/// 外す理由の無い同じ駆動で組が詰まる（各テストの陽性の対）。
-fn assert_positive_pair_tightens(what: &str) {
+/// 外す理由の無い同じ駆動では組が詰まる（ほかの「動かない」テストの陽性の対）。
+/// 詰め直しを丸ごと止めると、ほかの「動かない」は恒真で通ってしまう。
+#[test]
+fn a_pair_without_an_exclusion_reason_is_tightened() {
     let (mut harness, mut source) = booted();
     lower_the_scale(&mut harness, &mut source);
     assert_eq!(
@@ -160,7 +158,7 @@ fn assert_positive_pair_tightens(what: &str) {
     harness.run_chain_realign(&low_sizes());
     assert!(
         is_tight(&harness),
-        "陽性の対が成立していない（{what}・隙間 {}）——詰め直しが死んでいれば「動かない」は空虚である",
+        "詰め直しが死んでいる（隙間 {}）",
         gap(&harness)
     );
 }
@@ -196,11 +194,9 @@ fn apply_move(harness: &mut FrameHarness, scope: u32, tokens: &[&str]) {
     );
 }
 
-/// 変わる直前に離れていた組は動かさない（要件 2.1）。
+/// 変わる直前に離れていた組は動かさない。
 #[test]
 fn a_pair_apart_before_the_change_is_not_moved() {
-    assert_positive_pair_tightens("離れていない組");
-
     let (mut harness, mut source) = booted();
     let x = char_pos(&harness, 1).0;
     place_char_window_x(&mut harness, 1, x - 100);
@@ -210,11 +206,9 @@ fn a_pair_apart_before_the_change_is_not_moved() {
     assert!(!is_tight(&harness), "離れていた組が隣り合った");
 }
 
-/// 変わる直前に重なっていた組は動かさない（要件 2.2）。
+/// 変わる直前に重なっていた組は動かさない。
 #[test]
 fn a_pair_overlapped_before_the_change_is_not_moved() {
-    assert_positive_pair_tightens("重なっていない組");
-
     let (mut harness, mut source) = booted();
     let x = char_pos(&harness, 1).0;
     place_char_window_x(&mut harness, 1, x + 100);
@@ -223,11 +217,9 @@ fn a_pair_overlapped_before_the_change_is_not_moved() {
     assert_scope1_kept(&mut harness, "重なっていた");
 }
 
-/// 窓の組（`StickyGroupLedger`）に入った窓は、隣り合っていても動かさない（要件 2.3）。
+/// 窓の組（`StickyGroupLedger`）に入った窓は、隣り合っていても動かさない。
 #[test]
 fn a_window_in_a_sticky_group_is_not_moved() {
-    assert_positive_pair_tightens("組の無い窓");
-
     let (mut harness, mut source) = booted();
     lower_the_scale(&mut harness, &mut source);
     seed_sticky_descript(&mut harness.world, Some("0,1"));
@@ -235,11 +227,9 @@ fn a_window_in_a_sticky_group_is_not_moved() {
     assert_eq!(gap(&harness), GAP_WITHOUT_REALIGN, "組の窓の隙間が変わった");
 }
 
-/// ドラッグの最中の窓が組のどちら側にあっても、その組は動かさず寄せもしない（要件 2.4）。
+/// ドラッグの最中の窓が組のどちら側にあっても、その組は動かさず寄せもしない。
 #[test]
 fn a_dragging_window_and_its_neighbour_are_not_moved() {
-    assert_positive_pair_tightens("ドラッグしていない組");
-
     for (dragged, what) in [(1, "ドラッグ中の窓"), (0, "ドラッグ中の窓の隣")] {
         let (mut harness, mut source) = booted();
         lower_the_scale(&mut harness, &mut source);
@@ -256,11 +246,9 @@ fn a_dragging_window_and_its_neighbour_are_not_moved() {
     }
 }
 
-/// 武装の後に `\![move]` で置いた窓は動かさない（要件 3.1）。
+/// 武装の後に `\![move]` で置いた窓は動かさない。
 #[test]
 fn a_window_moved_by_script_after_arming_is_not_moved() {
-    assert_positive_pair_tightens("台本の置いていない窓");
-
     let (mut harness, mut source) = booted();
     lower_the_scale(&mut harness, &mut source);
     assert!(
@@ -275,11 +263,9 @@ fn a_window_moved_by_script_after_arming_is_not_moved() {
 }
 
 /// 武装の後に `\![execute,resetwindowpos]` で既定の位置へ戻した窓は動かさない
-/// （要件 3.1・受け口 `note_script_moved`）。
+/// （受け口 `note_script_moved`）。
 #[test]
 fn a_window_reset_by_script_after_arming_is_not_moved() {
-    assert_positive_pair_tightens("既定の位置へ戻していない窓");
-
     let (mut harness, mut source) = booted();
     lower_the_scale(&mut harness, &mut source);
     let char1 = harness.char_window(1);
@@ -287,7 +273,7 @@ fn a_window_reset_by_script_after_arming_is_not_moved() {
     assert_scope1_kept(&mut harness, "武装の後に既定の位置へ戻した");
 }
 
-/// 解決の後の `\![move]` は上書きされず、詰め直しは 2 度目を走らせない（要件 3.2）。
+/// 解決の後の `\![move]` は上書きされず、詰め直しは 2 度目を走らせない。
 #[test]
 fn a_script_move_after_resolution_is_not_overwritten() {
     let (mut harness, mut source) = booted();
@@ -319,7 +305,7 @@ fn a_script_move_after_resolution_is_not_overwritten() {
     );
 }
 
-/// 武装の前に台本で置かれ隣り合っていた窓は、詰め直しの対象に入る（要件 3.3）。
+/// 武装の前に台本で置かれ隣り合っていた窓は、詰め直しの対象に入る。
 #[test]
 fn a_window_placed_by_script_before_arming_still_tightens() {
     let (mut harness, mut source) = booted();
@@ -341,7 +327,7 @@ fn a_window_placed_by_script_before_arming_still_tightens() {
     );
 }
 
-/// 控えに無い窓に触れる組は動かさず理由つきの `warn!` を出し、ほかの組は詰める（要件 7.2）。
+/// 控えに無い窓に触れる組は動かさず理由つきの `warn!` を出し、ほかの組は詰める。
 ///
 /// 3 体の鎖（x: 1000／700／500・幅 400／300／200）で scope2 の大きさを欠いたまま控え、
 /// 控えの後で大きさを戻して半分にする。組 (0, 1) は陽性の対として 950 へ詰まり、
@@ -378,7 +364,7 @@ fn a_window_missing_from_the_snapshot_is_not_moved_and_others_tighten() {
     );
 }
 
-/// ぱすたの形（組の窓が同じ左上で重なる）は、詰め直しで横に並ばない（要件 3.4）。
+/// ぱすたの形（組の窓が同じ左上で重なる）は、詰め直しで横に並ばない。
 ///
 /// 組に入っていても入っていなくても（重なりだけでも）並べない。
 #[test]

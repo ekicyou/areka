@@ -20,13 +20,15 @@
 //! モニタ 0 台・窓書込ゼロの各主張にも、同じ理由でそれぞれ陽性の対がある。
 
 use areka_placement::WORK_AREA_SYNC_CONTEXT;
+use areka_placement::diag::WindowKind;
 use areka_placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
 use log_capture_kit::capture;
 use wintf::ecs::window::monitor::Monitor;
 
 use super::test_support::{
-    FakeReports, FrameHarness, s2_monitors, s2_sources, s2_work_area_for_dpi,
+    FakeReports, FrameHarness, s2_monitors, s2_snapshot, s2_sources, s2_work_area_for_dpi,
 };
+use super::transition_test_support::{settle_at, warnings_containing, writes_for};
 
 /// 起動時の拡大率（実機の採取と同じ向き＝高い側から始める）。
 const BOOT_DPI: u16 = 192;
@@ -46,27 +48,6 @@ fn ground_y(harness: &FrameHarness, scope: usize) -> i32 {
     harness.ground_point(scope).1
 }
 
-/// 起動直後の整地——2 源と実行時のモニタ表と窓の拡大率をすべて `BOOT_DPI` へ揃え、
-/// キャラ窓を当該水準の作業領域下端へ接地させる。
-///
-/// 拡大率の相の初回 run は永続 `SystemState` の仕様で全窓へマッチするので、ここで 1 度
-/// 空回しして消費する（以後のフレームでは真に変化した窓だけが対象になる）。
-fn settle_at_boot_dpi(harness: &mut FrameHarness, source: &mut FakeReports) {
-    harness.set_monitor_sources_for_dpi(BOOT_DPI);
-    harness.set_monitor_table_for_dpi(BOOT_DPI);
-    harness.set_window_dpi(BOOT_DPI);
-    harness.advance_frame();
-    harness.run_work_area_sync();
-    harness.run_dpi_phase(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    assert_eq!(
-        ground_y(harness, 0),
-        s2_work_area_for_dpi(BOOT_DPI).bottom,
-        "前提が崩れている: 起動水準でキャラ窓が作業領域下端へ接地していない"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // 是正（要件 5.1・5.8）
 // ---------------------------------------------------------------------------
@@ -80,7 +61,7 @@ fn settle_at_boot_dpi(harness: &mut FrameHarness, source: &mut FakeReports) {
 fn lowering_the_scale_lands_the_ground_point_on_the_new_work_area_bottom_in_one_write() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle_at_boot_dpi(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, BOOT_DPI);
 
     // OS 設定の拡大率変更（経路 (b)＝モニタ表の更新が先・窓の拡大率が続く）。
     // 作業領域源は**触らない**——それを実行時のモニタ表から作り直すのが同期段の仕事である。
@@ -101,10 +82,7 @@ fn lowering_the_scale_lands_the_ground_point_on_the_new_work_area_bottom_in_one_
 
     // 一度書き（要件 5.8）: 当該キャラ窓への窓書込は 1 件だけ。
     let writes = harness.drain_writes();
-    let char_writes = writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(0) && cmd.tag.kind == "char")
-        .count();
+    let char_writes = writes_for(&writes, 0, WindowKind::Char).len();
     assert_eq!(
         char_writes, 1,
         "キャラ窓の書込が 1 回ではない（中間矩形を挟んでいる）: {writes:?}"
@@ -177,6 +155,85 @@ fn a_changed_monitor_table_rebuilds_both_sources() {
     );
 }
 
+/// 同期を 1 回回し、変化があったかと、作業領域の同期の `warn!` の行数を返す。
+fn sync_warnings(harness: &mut FrameHarness) -> (bool, usize) {
+    harness.advance_frame();
+    let (change, events) = capture(|| harness.run_work_area_sync());
+    (
+        change.is_some(),
+        warnings_containing(&events, WORK_AREA_SYNC_CONTEXT),
+    )
+}
+
+/// モニターの表が変わらないフレームでは表を集めない。モニター 0 台の `warn!` は、表が
+/// 変わったフレームに 1 回だけ出る（毎フレーム出すと 60 行/秒になる）。
+#[test]
+fn an_unchanged_monitor_table_is_not_rebuilt_and_an_empty_one_warns_once() {
+    let mut harness = FrameHarness::new();
+    harness.set_monitor_sources_for_dpi(BOOT_DPI);
+
+    let empty: Vec<(bool, usize)> = (0..3).map(|_| sync_warnings(&mut harness)).collect();
+    assert_eq!(
+        empty,
+        vec![(false, 1), (false, 0), (false, 0)],
+        "モニター 0 台の表が変わらないのに作り直しの道を通っている"
+    );
+
+    let monitor = harness.world.spawn(s2_monitors(LOWERED_DPI).remove(0)).id();
+    assert_eq!(
+        sync_warnings(&mut harness),
+        (true, 0),
+        "モニターが足されたのに作り直していない"
+    );
+
+    harness
+        .world
+        .get_mut::<Monitor>(monitor)
+        .expect("足したモニター")
+        .work_area
+        .bottom -= 1;
+    assert_eq!(
+        sync_warnings(&mut harness),
+        (true, 0),
+        "モニターの作業領域が変わったのに作り直していない"
+    );
+    assert_eq!(sync_warnings(&mut harness), (false, 0));
+
+    // 消えたモニターは `Changed` に出ないので数で見る。
+    harness.world.despawn(monitor);
+    assert_eq!(
+        sync_warnings(&mut harness),
+        (false, 1),
+        "モニターが消えて 0 台になったフレームを見落としている"
+    );
+    assert_eq!(sync_warnings(&mut harness), (false, 0));
+}
+
+/// 本番の `prepare_ghost_windows` はゴーストの切り替えと再起動のたびに 2 源を入れ直す。
+/// モニターが変わらなくても、入れ直された源は次の呼び出しでモニターの表に揃え直す。
+#[test]
+fn a_reinserted_monitor_snapshot_is_resynced_on_the_next_call() {
+    let mut harness = FrameHarness::new();
+    let monitors = vec![s2_monitors(BOOT_DPI).remove(0)];
+    let sources = MonitorSources::from_monitors(&monitors);
+    harness.set_monitor_table(monitors);
+    harness.advance_frame();
+    harness.run_work_area_sync();
+    harness.advance_frame();
+    assert!(
+        harness.run_work_area_sync().is_none(),
+        "前提: 定常に入れていない"
+    );
+
+    harness.set_work_area_source(s2_snapshot(LOWERED_DPI));
+    harness.advance_frame();
+    assert!(
+        harness.run_work_area_sync().is_some(),
+        "入れ直された作業領域源をモニターの表に揃え直していない"
+    );
+    assert_eq!(harness.work_area_source(), Some(&sources.snapshot));
+}
+
 /// 拡大率だけが変わって作業領域が動かない構成変更でも作り直す。
 ///
 /// 比較が作業領域だけを見ていると、この変化を静かに取りこぼして表だけが古いまま残る
@@ -243,38 +300,7 @@ fn the_order_independent_comparison_still_sees_a_real_difference() {
 // 解決できないときは現状維持＋警告（要件 5.5）
 // ---------------------------------------------------------------------------
 
-/// モニタ 0 台（列挙異常）では源を差し替えず、警告を 1 件残す。
-///
-/// 空の源で今の源を潰すと、下端が引けなくなって全キャラ窓の射影が縮退する——架空の矩形を
-/// 発明しないのと同じ理由で、**無い表で在る源を上書きしない**。
-#[test]
-fn an_empty_monitor_table_keeps_the_sources_and_warns() {
-    let mut harness = FrameHarness::new();
-    harness.set_monitor_sources_for_dpi(BOOT_DPI);
-    harness.set_monitor_table(Vec::new());
-    harness.advance_frame();
-
-    let (change, events) = capture(|| harness.run_work_area_sync());
-    assert!(change.is_none(), "空の表で源を差し替えている");
-    assert_eq!(
-        harness.work_area_source(),
-        Some(&s2_sources(BOOT_DPI).snapshot),
-        "空の表で作業領域源が潰れている"
-    );
-    let warnings: Vec<&str> = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .map(|e| e.message())
-        .filter(|m| m.contains(WORK_AREA_SYNC_CONTEXT))
-        .collect();
-    assert_eq!(
-        warnings.len(),
-        1,
-        "モニタ 0 台が無言で素通りしている（ログ無し失敗経路）: {events:?}"
-    );
-}
-
-/// 上の**陽性の対**: 表が 1 台でもあれば警告は出ない（警告が常時鳴っていない）。
+/// モニタ 0 台の警告の**陽性の対**: 表が 1 台でもあれば警告は出ない（警告が常時鳴っていない）。
 #[test]
 fn a_non_empty_monitor_table_does_not_warn() {
     let mut harness = FrameHarness::new();
@@ -303,7 +329,7 @@ fn a_non_empty_monitor_table_does_not_warn() {
 fn the_sync_alone_writes_no_windows() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle_at_boot_dpi(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, BOOT_DPI);
 
     // 窓の拡大率は据え置き、作業領域（＝モニタ表）だけを動かす。
     harness.set_monitor_table_for_dpi(LOWERED_DPI);
@@ -332,7 +358,7 @@ fn the_sync_alone_writes_no_windows() {
 fn the_same_frame_writes_windows_once_the_scale_moves_too() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle_at_boot_dpi(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, BOOT_DPI);
 
     harness.set_monitor_table_for_dpi(LOWERED_DPI);
     harness.set_window_dpi(LOWERED_DPI);

@@ -183,7 +183,7 @@ crates/areka/src/
 - `crates/log-capture-kit/tests/file_length_guard_test.rs`（63・89 行目）・`crates/log-capture-kit/tests/workspace_scan_test.rs`（320 行目）・`crates/wintf/src/test_crash_report.rs`（1 行目）・`tools/load-flake.ps1`（47 行目）。
 - `doc/COMPAT_ARCHITECTURE.md`・`doc/emo2-conformance-scope.md`・`doc/ssp-mcp/`（`log-convention.md` 55・134 行目ほか）・`doc/ukadoc-coverage/` の `briefing-*.md` と `ledger/*.toml`（台帳から作る生成物は作り直す）・`doc/ideas/`。
 - `.kiro/steering/structure.md`・`.kiro/steering/tech.md`・`.kiro/steering/roadmap.md`（新旧のパスの対応表）。
-- `.kiro/specs/audit-emo2-boot-frame/brief.md`・`audit-emo2-boot-spine/brief.md`・`audit-emo2-boot-switch/brief.md`（受け持つファイル）・`.kiro/specs/runtime-crate-split/brief.md`（申し送り）。
+- `.kiro/specs/completed/audit-emo2-boot-frame/brief.md`・`audit-emo2-boot-spine/brief.md`・`audit-emo2-boot-switch/brief.md`（受け持つファイル）・`.kiro/specs/runtime-crate-split/brief.md`（申し送り）。
 - `.kiro/specs/runtime-module-untangle/research.md` — 検証の記録（テストの名前の対応表・式 1〜3 の結果・説明の文の一覧・テストの参照の数・emo2 の残りの一覧・テストの支えの一覧・広げた見える範囲・終わる道の記録の順の比べ・申し送り）。
 
 ## System Flows
