@@ -200,7 +200,7 @@
   - _Dispatch: mechanical — 期待値を SSP の測りが与える_
   - _Requirements: 2.1, 2.2, 2.3, 2.5, 2.6, 2.7, 2.8, 2.11, 10.3, 10.11_
 
-- [ ] 7.4 (P) 表示の拡大率が 1 でないときの当たりを実 GPU で固定する
+- [x] 7.4 (P) 表示の拡大率が 1 でないときの当たりを実 GPU で固定する
   - 拡大率 2（整数）と 5/4・11/10（整数でない）で、サーフェスの 1 画素に当たる画面の画素を全部たどり、名前がどれも同じになること（矩形の端・楕円の周・多角形の辺・`region` の画素）を固定する
   - 矩形の端の答えが拡大率に依らず「左と上を含み右と下を含まない」ままであること、SHIORI へ届けるローカル座標（作者の座標へ戻した点）が今までと同じ値であることを固定する
   - 新しいファイル `presenter_hit_scale_tests.rs`（7.1 が宣言）に置き、`presenter_read_accessor_tests.rs` の `visible_surface_hit_uses_applied_scale_at_k2`（6.2 で足場を替え、6.3 で新しい解決に通したもの）をこのファイルへ移して書き直す。`presenter_dpi_scale_tests.rs`・`presenter_fractional_scale_tests.rs` には触らない
