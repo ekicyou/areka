@@ -212,7 +212,7 @@ fn resnap_shell_targets_is_noop_with_unattached_presenter() {
     let size_before = size_of(&world, char0);
     let pos_before = pos_of(&world, char0);
 
-    // 未装着 presenter＝text_slot_view 全 None → 全 scope skip（窓状態不変・panic しない）。
+    // 未装着 presenter は `PhysicalSizeSource`（本番は `target_physical_size`）が全 None → 全 scope skip（窓状態不変・panic しない）。
     let presenter = EmoPresenter::new();
     resnap_shell_targets(&presenter, &mut world);
     assert_eq!(

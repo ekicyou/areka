@@ -147,8 +147,8 @@ fn run_text_phase_override_reaches_present_frame_without_panic() {
     );
 }
 
-/// 排他 system の疎通（DD-1/DD-4）: `frame_system` は NonSend `RuntimeWiring` を remove→3 フェーズ
-/// →insert で駆動して**必ず戻す**、かつ未挿入 World では安全に no-op（panic しない）。
+/// 排他 system の疎通: `frame_system` は NonSend `RuntimeWiring` を remove→各相→insert で
+/// 駆動して**必ず戻す**、かつ未挿入 World では安全に no-op（panic しない）。
 ///
 /// GPU/GhostWindows を持たない World ではゲート不成立で attach は起きず、drain は attach 前ゆえ
 /// 走らず、text は FrameTime 不在で skip する（＝実質 no-op）。それでも system が wiring を取り出して
@@ -160,7 +160,7 @@ fn frame_system_removes_runs_and_reinserts_wiring() {
     let mut world = World::new();
     world.insert_non_send(wiring);
 
-    // remove→attach/drain/text（いずれもゲート不成立の no-op）→ re-insert。panic しない。
+    // remove→各相（いずれもゲート不成立の no-op）→ re-insert。panic しない。
     frame_system(&mut world);
     assert!(
         world.get_non_send::<RuntimeWiring>().is_some(),

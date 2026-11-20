@@ -1,5 +1,4 @@
-//! 常に手前の状態と、それを動かす取り出しの相（design「WindowStatePhase」・要件 1.1〜1.3／
-//! 2.1／2.7〜2.9／3.1／3.2／3.4／6.1／6.2／6.7／7.2）。
+//! 常に手前の状態と、それを動かす取り出しの相。
 //!
 //! 台本のスレッドの受け口（`WindowStateCueSink`）が送った指令を、画面を持つ側で到着順に
 //! 取り出し、ゴーストごとの状態（既定オフ）へ当てる。状態が変わったときはゴーストの窓の
@@ -14,7 +13,7 @@
 //! # 正本の外の entity には触れない
 //!
 //! 印と列は `GhostWindows` の entity だけを指す（別のゴースト・メニュー・ツールチップに
-//! 触れない・要件 2.7）。
+//! 触れない）。
 
 use std::sync::mpsc::Receiver;
 
@@ -30,7 +29,7 @@ use areka_placement::spawn::GhostWindows;
 /// ゴーストごとの常に手前の状態（`RuntimeWiring` の欄・既定＝受信端なし・オフ）。
 ///
 /// `RuntimeWiring` と一緒に作り直される（ゴーストの切り替え・読み直し・終了）ので、新しい
-/// ゴーストはオフから始まる（要件 3.4）。
+/// ゴーストはオフから始まる。
 #[derive(Default)]
 pub struct StayOnTopState {
     /// 受け口と対の受信端（起動の結線が後から渡す・無ければ相は何もしない）。
@@ -46,9 +45,9 @@ enum Transition {
     TurnOn,
     /// オン→オフ
     TurnOff,
-    /// 状態と同じ指令（窓を動かさない・要件 2.8・3.2）
+    /// 状態と同じ指令（窓を動かさない）
     Unchanged { on: bool },
-    /// `\v`（状態は変えない・要件 2.9）
+    /// `\v`（状態は変えない）
     Raise { on: bool },
 }
 
@@ -162,7 +161,7 @@ fn push_band_op(world: &mut World, op: BandOp, targets: &[Entity]) {
         .push(op, targets.to_vec());
 }
 
-/// オンのまま降ろした理由（design「DiscardLog」）。
+/// オンのまま降ろした理由。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiscardReason {
     /// アプリを終える
@@ -175,7 +174,7 @@ pub enum DiscardReason {
 
 /// オンのまま降ろすときだけ `info!` で残す（オフ・結線が無いなら何も書かない・状態は動かさない）。
 ///
-/// 状態そのものは `RuntimeWiring` と一緒に消える（要件 4.1・4.2・6.4）。
+/// 状態そのものは `RuntimeWiring` と一緒に消える。
 pub fn log_stay_on_top_discard(world: &World, reason: DiscardReason) {
     let on = world
         .get_non_send::<super::RuntimeWiring>()
@@ -211,7 +210,7 @@ fn state_text(on: bool) -> &'static str {
 #[path = "window_state_tests.rs"]
 mod tests;
 
-// areka-runtime のテストと本体のテストの両方が使う補助（spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+// areka-runtime のテストと本体のテストの両方が使う補助。
 #[cfg(any(test, feature = "test-support"))]
 #[path = "window_state_test_support.rs"]
 pub mod test_support;

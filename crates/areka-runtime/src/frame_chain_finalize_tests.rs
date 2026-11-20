@@ -204,7 +204,7 @@ fn finalize_does_not_pull_back_an_explicitly_moved_scope() {
     let (mut world, gw) = resnap_world();
     let char1 = gw.char_window(1).unwrap();
 
-    // 明示的な再配置（唯一の位置ライター経由）。以後 current_x != default_x になる。
+    // 明示的な再配置（台本の移動と同じ口（`move_window_to`）で動かす）。以後 current_x != default_x になる。
     areka_placement::follow::move_window_to(&mut world, char1, 800, 1087);
     assert_eq!(pos_of(&world, char1), Some(Point { x: 800, y: 1087 }));
 

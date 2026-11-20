@@ -184,7 +184,7 @@
 
 - [ ] 5. 残りの指摘をファイルのまとまりで直す
 
-- [ ] 5.1 本番の説明と小さな形を直す（T20・36〜47・51〜53・113 番）
+- [x] 5.1 本番の説明と小さな形を直す（T20・36〜47・51〜53・113 番）
   - 相の並びの説明を 20 の相の並びに合わせ、テストの側は「各相」にする（36 番）。37〜40・42〜47・53 番は設計の表の文のとおりに直す（件 1・件 3・件 6・件 8）。41 番の本番の分は、spec の名や task の番号を指すだけの行を物差しで 1 行ずつ見る（理由を持たなければ消す）
   - 書く前の寸と書いた後の寸を比べて、寸の変化の補助と arm の単体のテストを消す（51 番）。重なりの計画の頭で空の台帳を早く返す（52 番）
   - 取り出しの上限の `warn!` の文を「上限に達した（残りがあれば次のフレームで到着順に適用）」にし、縛るテスト `exactly_the_cap_is_applied_in_one_frame_and_the_next_frame_has_nothing` を立てる（113 番）
@@ -282,3 +282,4 @@
 - 4.1: 移したテストは 22 本（規則 15・揃え 6・clamp ⑴ 1）。本体 46→24・`areka-runtime` 12→34 で、名は同じ（設計の「規則 13 本」は数え違いで実数は 15）。clamp ⑴⑻ の共通の配置は `persist_test_support::left_edge` に 1 つ置いた（写さない）。`crates/areka-placement/src/chain_rule_tests.rs:5` が古い置き場（本体の `frame_chain_rule_tests.rs`）を指したまま＝C23 で触らないファイルなので 6 で申し送りに書く。`left_edge::placements` の説明に「（要件 5.2）」が残る（7.1 で見る）。
 - 4.2: 移したテストは 4 本（remembered ⑶⑷⑸ 3・窓の状態 1）で本体 −4＝`areka-runtime` +4、消したのは 1 本（110 番 `frame::chain_rule_tests::a_remembered_left_mark_joins_with_the_defaultx_gap`・`every_world_path_keeps_the_defaultx_gap` の remembered の脚が守る）。restart の 2 回目の起動も印を付けるようになった（17 番の直しそのもの）。`doc/COMPAT_ARCHITECTURE.md` §8（L228 付近）が移した窓の状態のテストを本体の古い置き場で名指したまま＝C23 で触らないファイルなので 6 で申し送りに書く（`crates/areka-runtime/src/frame/window_state_tests.rs` へ）。
 - 4.3: 分岐のテストは 766 行と 331 行（待ちの群）。消した重なりの 4 本の札の腕は、待ちの群の `_at_120`／`_at_192` の 6 本と 1.6 のシェルの切り替えのテストが守る（審査で腕を落として 7 本の赤を確かめた）。94 番で 3 つの DPI を回す形にした `steady_frames_write_nothing_at` は、表を戻した後に接地点が見える下端へ戻ることを見なくなった（`a_work_area_only_change_writes_once_at` が同じ仕組みを守る）。`frame_transition_branch_tests.rs` の頭の説明が要件番号 5.5 を足した・`frame_transition_branch_wait_tests.rs:120` に D15 の「4 点すべて」が残る（5.4 の 41 番の物差しで見る）。
+- 5.1: 説明に残る spec の ID・要件番号は、ログの文字列の中のもの（`attach.rs` R4.2・`drain_resnap.rs` Req3.4／要件 6.3・7.1／scope-chain-gap・`scale_text.rs` R8.6／R2.3）だけ。ログの文を変えるのは 3・4・113 番だけなので触らない。41 番の「atom を spec の名で書く」は、CLAUDE.md の決まりに合わせて参照だけの行を消す形にした。`frame.rs` の `donor パターン: remove→各フェーズ→insert` は `t_zwi07` が字面で読むので残す。

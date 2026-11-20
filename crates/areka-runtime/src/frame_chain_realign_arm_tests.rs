@@ -14,12 +14,6 @@
 //!
 //! 隣接の是正そのもの（359→0）は `frame_chain_realign_tests.rs` が持つ。本ファイルは
 //! **武装の特異性**だけを主題にする——あちらの檻は 3 連言のどれを外しても緑のままだからである。
-//!
-//! # 純関数の直接呼び（`size_changed`）
-//!
-//! 寸比較の 3 分岐のうち **i32 変換失敗の腕は駆動からは踏めない**（`reconcile_window_size` が
-//! 先に超過を弾いて `false` を返し、武装条件の `&&` が短絡する）。届かない腕を無検査で残さない
-//! ため、`size_changed` を `pub(super)` へ上げて単位で呼ぶ。
 
 use bevy_ecs::entity::Entity;
 use wintf::ecs::SizeI;
@@ -27,7 +21,6 @@ use wintf::ecs::SizeI;
 use areka_placement::chain_finalize::{ChainFinalized, ChainRect};
 use areka_placement::chain_realign::ChainRealignPending;
 
-use super::dpi::size_changed;
 use super::shared_test_support::{
     HIGH_DPI, HIGH_SIZE_0, HIGH_SIZE_1, LOW_SIZE_0, LOW_SIZE_1, high_sizes,
 };
@@ -285,52 +278,6 @@ fn a_degenerate_report_that_writes_nothing_never_arms_the_realign() {
     assert!(
         fresh.world.get_resource::<ChainRealignPending>().is_some(),
         "陽性の対が成立していない（武装が死んでいれば上の 0 件は空虚である）"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 寸比較の純関数（3 分岐すべて）
-// ---------------------------------------------------------------------------
-
-/// [`size_changed`] の 3 分岐を全網羅する。
-///
-/// i32 変換失敗の腕は駆動からは踏めない（`reconcile_window_size` が先に超過を弾き、武装条件の
-/// `&&` が短絡する）ので、届かない腕を無検査にしないためここで直接呼ぶ。
-#[test]
-fn size_changed_covers_the_missing_size_the_overflow_and_the_comparison() {
-    let before = Some(as_window_size(HIGH_SIZE_0));
-
-    // 比較の腕: 片軸だけの違いも「変わった」。同寸は「変わっていない」。
-    assert!(size_changed(before, LOW_SIZE_0), "両軸が変われば変化");
-    assert!(
-        size_changed(before, (LOW_SIZE_0.0, HIGH_SIZE_0.1)),
-        "幅だけ変わっても変化"
-    );
-    assert!(
-        size_changed(before, (HIGH_SIZE_0.0, LOW_SIZE_0.1)),
-        "高さだけ変わっても変化"
-    );
-    assert!(!size_changed(before, HIGH_SIZE_0), "同寸は変化ではない");
-    assert!(
-        size_changed(Some(as_window_size(HIGH_SIZE_1)), LOW_SIZE_1),
-        "scope1 の寸の対でも同じ判定になる"
-    );
-
-    // 窓寸が引けない腕: 比較の相手が無い状態を変化と数えない（起動直後の初回 landing で
-    // 毎回武装しないための腕）。
-    assert!(
-        !size_changed(None, LOW_SIZE_0),
-        "窓寸が引けないとき（窓生成前）は「変わった」と言わない"
-    );
-
-    // i32 変換失敗の腕: 超過した報告寸は変化と数えない（値を捏造しない）。
-    assert!(
-        !size_changed(before, (u32::MAX, HIGH_SIZE_0.1)),
-        "幅が i32 域を超える報告は「変わった」と言わない"
-    );
-    assert!(
-        !size_changed(before, (HIGH_SIZE_0.0, u32::MAX)),
-        "高さが i32 域を超える報告は「変わった」と言わない"
     );
 }
 

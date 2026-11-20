@@ -1,4 +1,4 @@
-//! 面の `move` のずれの相（seriko-pattern-calls design「MoveShiftPlacement」・要件 3.8・7.1・7.3・7.6）。
+//! 面の `move` のずれの相。
 //!
 //! 移動の相（[`run_move_drain_phase`](super::run_move_drain_phase)）の直後に毎フレーム走る。
 //! 各スコープのキャラ窓とバルーン窓について、提示が覚えたずれと当てた拡大率を読み、
@@ -74,7 +74,7 @@ pub(super) fn run_move_shift_with<S: MoveShiftSource + ?Sized>(source: &S, world
         {
             continue;
         }
-        // 当てられなかったとき（材料が無い）は口の中で warn! 済みで、記録が変わらないので次で当て直す。
+        // 材料が無ければ warn!、ドラッグ中の見送りは debug!。どちらも記録を変えない。
         if is_balloon {
             apply_balloon_shift(world, window, want, k);
         } else {

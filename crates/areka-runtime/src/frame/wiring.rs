@@ -31,51 +31,42 @@ use super::{BootAssets, DpiChangedQuery, PositionCue, TalkClock};
 use crate::scope_scale::SharedScopeScaleTable;
 use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
-// ---------------------------------------------------------------------------
-// RuntimeWiring＋attach フェーズ（tasks.md task 4.1・design「UI 毎フレーム結線 / frame」）
-// ---------------------------------------------------------------------------
-
-/// 毎フレーム三相結線の NonSend 状態（design「RuntimeWiring＋frame_system」・State Management）。
+/// 毎フレーム結線の NonSend 状態。
 ///
 /// `EmoPresenter`（`!Send`）・`Receiver`（`!Sync`）・`Rc<RefCell<TextLayerRuntime>>`（`!Send`）を
-/// 内包するため NonSend resource として `wire_runtime`（task 5.1）が挿入する。本 task（4.1）は
-/// 構築（[`RuntimeWiring::new`]）と attach フェーズ（[`run_attach_phase`]）に加え、drain フェーズ
-/// （[`run_drain_phase`]・`rx` を消費）・text フェーズ（[`run_text_phase`]・`clock` を消費）・排他
-/// system [`frame_system`]（3 フェーズを remove→insert で駆動）を所有する（task 4.1／4.2）。
+/// 内包するため NonSend resource として `wire_runtime` が挿入し、排他 system [`frame_system`] が
+/// remove→各相→insert で駆動する。
 ///
 /// # フィールドの可視性が 2 種類ある理由
 ///
-/// 大半のフィールドは `frame` 配下の相（attach／dpi／drain／text）だけが触るため `pub(super)`
-/// ＝`runtime::frame` 内である。ただしバルーン可視性の相は design の File Structure Plan により
-/// **兄弟モジュール** `runtime::balloon_visibility` に置かれる（判断中核と同居させるため）。
-/// その相が消費する 5 つ（`presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／
-/// `clock`）と、届けの相の台帳 `balloon_status` を `pub(crate)` へ広げてある。可視性の相は 5 つを**同時に**可変借用するため
-/// （表示層へ発行しながら状態を更新する）、読み口メソッドを並べる形では組めない。広げた先は
-/// runtime の内側どまりで、公開面は 1 つも増えない。
+/// 大半のフィールドは `frame` 配下の相だけが触るため `pub(super)` である。ただしバルーン可視性の
+/// 相は兄弟モジュール `balloon_visibility` に置かれる（判断中核と同居させるため）。その相が
+/// 消費する `presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／`clock` と、届けの
+/// 相の台帳 `balloon_status` などは `pub` にしてある。可視性の相は複数の欄を**同時に**可変借用する
+/// （表示層へ発行しながら状態を更新する）ため、読み口メソッドを並べる形では組めない。
 pub struct RuntimeWiring {
     /// 表示層の指令適用ハブ（UI スレッド専有・`!Send`）。
     pub presenter: EmoPresenter,
-    /// worker（seriko 経由 `PresentBridge`）からの表示指令受信端（task 4.2 の drain で消費）。
+    /// worker（seriko 経由 `PresentBridge`）からの表示指令受信端（drain の相が消費）。
     pub(super) rx: Receiver<PresentCommand>,
     /// talk スレッド（`MoveCueSink`）からの窓の位置の指令（`\![move]`・`\![execute,resetwindowpos]`）
     /// 受信端（frame 相 drain＝[`run_move_drain_phase`] が消費）。
     ///
-    /// `PresentBridge` の `rx` と同型の配線: `wire_runtime`（task 9.1）が
-    /// `mpsc::channel::<PositionCue>()` の受信端を受け渡し、frame 相の [`frame_system`] が
-    /// [`run_move_drain_phase`] 経由で `try_iter` し `apply_move_directive` へ適用する（task 9.2）。
+    /// `PresentBridge` の `rx` と同型の配線: `wire_runtime` が `mpsc::channel::<PositionCue>()` の
+    /// 受信端を受け渡し、[`run_move_drain_phase`] が `try_iter` して `apply_move_directive` へ適用する。
     pub(super) move_rx: Receiver<PositionCue>,
     /// 対象か基準の窓が最初の面を表示するまで預かった位置の指令（順のまま・`move_hold.rs`）。
     pub(super) move_held: RefCell<VecDeque<PositionCue>>,
     /// talk スレッド（`BalloonLifecycleSink`）からの表示ライフサイクル信号受信端
-    /// （バルーン可視性相が消費・Requirements 4.1／4.5）。
+    /// （バルーン可視性相が消費）。
     ///
     /// `move_rx` と同型の配線: [`super::super::wire_runtime`] が
     /// `mpsc::channel::<TalkLifecycleSignal>()` を作り、送出端を `GhostBootOptions.sinks` の
-    /// 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す（design 決定 D4＝α）。会話の開始
+    /// 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す。会話の開始
     /// （[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端
     /// （[`TalkLifecycleSignal::DisplayEndAt`]）が talk 相対秒で FIFO に届く。
     /// 送り手はもう 1 つある: UI スレッドの押下ハンドラが、送出端の複製から利用者の中断
-    /// （[`TalkLifecycleSignal::UserBreak`]）を同じ線へ流す（areka-P0-balloon-break）。
+    /// （[`TalkLifecycleSignal::UserBreak`]）を同じ線へ流す。
     ///
     /// 取り出しは可視性相の `try_iter` による**全件 drain**。受信前の信号はチャネル
     /// 自身が保留バッファとして預かるため、attach 前に始まった会話の信号も落ちない。
@@ -85,7 +76,7 @@ pub struct RuntimeWiring {
     ///
     /// `move_rx` と同型の配線: [`super::super::wire_runtime`] が
     /// `mpsc::channel::<ZOrderDirective>()` を作り、送出端を `GhostBootOptions.sinks` の
-    /// 5 本目（`ZOrderCueSink`）へ、受信端をここへ渡す（areka-P0-scope-zorder-pinning task 6.2）。
+    /// 5 本目（`ZOrderCueSink`）へ、受信端をここへ渡す。
     /// `\![set,zorder,…]`／`\![reset,zorder]` の**解釈前のトークン列**が到着順に届く。
     ///
     /// 窓の正本（`GhostWindows`）が World に載るまで取り出しの相は `try_iter` を呼ばず、
@@ -96,13 +87,13 @@ pub struct RuntimeWiring {
     /// `balloon_visibility` と同じ理由でここに置く——相関数は排他 system から呼ばれる素の
     /// 関数で `Local` を取れないため、フレームを跨いで生きる器が結線状態の側に要る。
     /// 合成した鎖の写し（wintf の `ZOrderChainPlan`）は World 側に在るが、**正本はこちら**で
-    /// あり二重帳簿にはしない（design「Data Models」）。
+    /// あり二重帳簿にはしない。
     ///
     /// 構築の時点では常に既定（グループ 0 本）から始まる。shell 設定由来の基底は、
     /// 起動の段が [`RuntimeWiring::seed_zorder_descript_base`] で 1 度だけ据える
-    /// （取り出しの相が 1 度も走る前＝タグの実行より前・要件 5.1）。
+    /// （取り出しの相が 1 度も走る前＝タグの実行より前）。
     pub(super) zorder_ledger: ZOrderGroupLedger,
-    /// ゴーストの常に手前の状態（既定＝受信端なし・オフ・stay-on-top-directives 要件 3.4）。
+    /// ゴーストの常に手前の状態（既定＝受信端なし・オフ）。
     ///
     /// 受信端は起動の結線が [`RuntimeWiring::attach_window_state_rx`] で後から渡す。結線状態と
     /// 一緒に作り直される経路（ゴーストの切り替え・読み直し・終了）で消え、残る経路
@@ -114,13 +105,12 @@ pub struct RuntimeWiring {
     /// ため、フレームを跨いで生きる器がここに要る（`dpi_state` と同じ理由——相関数は排他 system
     /// から呼ばれる素の関数で `Local` を取れない）。UI スレッド専有で、可視性相以外は触らない。
     pub balloon_visibility: BalloonVisibilityState,
-    /// 最後に kanade へ届けた「見えているバルーンの組」の台帳（フレームの終わりの届けの相が使う・
-    /// areka-P0-status-execution-states 要件 4.1／4.8）。結線状態はゴーストごとに新しく作られる
+    /// 最後に kanade へ届けた「見えているバルーンの組」の台帳（フレームの終わりの届けの相が使う）。結線状態はゴーストごとに新しく作られる
     /// ので、台帳も新品から始まり前のゴーストの組を持ち越さない。
     pub balloon_status: BalloonStatusLedger,
     /// バルーン文字層ランタイム（`register_actor_view`／`present_frame` の所有・`!Send`）。
     pub(super) runtime: Rc<RefCell<TextLayerRuntime>>,
-    /// scope → attach 相で装着に使った [`BalloonModel`]（文字層 k 再追従の再利用源・D11-3・R8.1）。
+    /// scope → attach 相で装着に使った [`BalloonModel`]（文字層 k 再追従の再利用源）。
     ///
     /// `register_actor_view`（装着）と [`TextLayerRuntime::refresh_actor_scale`]（再追従）はいずれも
     /// `&BalloonModel` を要する。装着で使ったモデルをここへ記憶しておき、文字層スケール相
@@ -131,19 +121,19 @@ pub struct RuntimeWiring {
     /// 起動時資産は [`BalloonScopeAssets`] が scope 別の定義を保持する（旧 `BootAssets.balloon_model`
     /// の共有 1 本は撤去済み）。ゆえにキーは **scope**——再追従は「どの scope の balloon 窓か」から
     /// 引くのが自然である。attach（[`run_attach_phase`]）は当該 scope の資産から取り出した定義を
-    /// **ここと文字層結線（[`connect_balloon_text`]）の双方へ同一値で**挿す（Req 4.1/4.2）。
+    /// **ここと文字層結線（[`connect_balloon_text`]）の双方へ同一値で**挿す。
     pub balloon_models: HashMap<u32, BalloonModel>,
-    /// scope → 面ごとの定義の束（装着・バルーンの切り替えが入れる・balloon-scroll-arrows 要件 1.7）。
+    /// scope → 面ごとの定義の束（装着・バルーンの切り替えが入れる）。
     /// 今の定義（`balloon_models`）はここから書き手 [`super::balloon_face::select_balloon_face`] が引く。
     pub balloon_definitions: HashMap<u32, ScopeBalloonDefinitions>,
     /// scope → 今の定義の面の番号（書き手 [`super::balloon_face::select_balloon_face`] だけが書く）。
     pub balloon_faces: HashMap<u32, u32>,
-    /// 文字層 k 追従で `text_slot_view` が `None` だった scope の警告済み集合（R8.6 のエッジガード）。
+    /// 文字層 k 追従で `text_slot_view` が `None` だった scope の警告済み集合（エッジガード）。
     ///
     /// [`run_text_scale_phase`] は毎フレーム走る。表示未確立の縮退を素朴に `warn!` すると毎フレーム
     /// 鳴って log を溺れさせるため、**scope ごとに一度だけ**鳴らし、view が取れた時点で除去して
     /// 再武装する（`areka-emo-text` の `unresolved_warned: BTreeSet<ActorKey>` と同型の先例）。
-    /// R8.6 が求めるのは縮退が**観測できる**ことであって毎回鳴ることではない。
+    /// 求められるのは縮退が**観測できる**ことであって毎回鳴ることではない。
     pub(super) text_scale_warned: BTreeSet<u32>,
     /// 装着で文字層を繋げなかった scope と、その面 0 の背景色（[`run_text_scale_phase`] が繋ぎ直す時に渡す）。
     pub(super) unconnected_text: BTreeMap<u32, (u8, u8, u8)>,
@@ -153,16 +143,16 @@ pub struct RuntimeWiring {
     pub(super) assets: Option<BootAssets>,
     /// attach 完了フラグ（高々 1 回のゲート・以降 no-op）。
     pub(super) attached: bool,
-    /// `Changed<DPI>` 観測の**永続** [`SystemState`]（[`run_dpi_phase`]・emo-dpi-scaling task 4.2）。
+    /// `Changed<DPI>` 観測の**永続** [`SystemState`]（[`run_dpi_phase`]）。
     ///
     /// `anchor_changed_system` の `Local<Option<SystemState<..>>>` と同じ役割を担う。あちらは bevy の
     /// system 引数として `Local` を受けられるが、本フェーズは排他 system [`frame_system`] から
-    /// 呼ばれる**素の関数**（design の署名 `run_dpi_phase(&mut RuntimeWiring, &mut World)`）ゆえ `Local`
+    /// 呼ばれる**素の関数**（`run_dpi_phase(&mut RuntimeWiring, &mut World)`）ゆえ `Local`
     /// を取れない——run を跨いで `last_run` tick を保つ器がここに要る。毎 run で `SystemState::new`
     /// を作り直すと `last_run` が 0 のままとなり `Changed` が全窓へ誤マッチし続ける（＝毎フレーム
     /// 全窓 refresh の churn）ため、必ず使い回す。
     pub(super) dpi_state: Option<SystemState<DpiChangedQuery>>,
-    /// 差し替えの荷物の置き場（spec: areka-P0-shell-balloon-switch・design「SwitchAssets」）。
+    /// 差し替えの荷物の置き場。
     ///
     /// 起動の結線が 1 つ作り、表示の橋渡し（`PresentBridge::with_swap_slot`）に持たせ、ここには
     /// 弱い参照だけを置く。差し替えの相が引き上げて荷物を置き、橋渡しが合図の世代と突き合わせて
@@ -173,26 +163,25 @@ pub struct RuntimeWiring {
     /// `GhostSession` だけ）。
     pub swap_slot: Weak<Mutex<Option<SwapPayload>>>,
     /// このフレームの drain（表示の指令の適用）に費やした時間（毎フレーム `frame_system` が
-    /// 書く）。差し替えの相が、置き換えの返信のそろったフレームの `swap_ms` へ足す
-    /// （spec: areka-P0-shell-balloon-switch 要件 4.4）。
+    /// 書く）。差し替えの相が、置き換えの返信のそろったフレームの `swap_ms` へ足す。
     pub(super) last_drain: Duration,
-    /// ghost の読み直しの前に控えた表示中の面（装着の相が 1 度だけ使う・areka-P0-mcp-reload 要件 3.8）。
+    /// ghost の読み直しの前に控えた表示中の面（装着の相が 1 度だけ使う）。
     pub shell_carry: Option<ShellCarry>,
     /// 今のシェルの静的な着せ替えの既定（起動の資産から・シェルの差し替えで置き直す）。ghost の読み直しで
-    /// 控える着せ替えを「この既定との差」にするのに使う（areka-P0-mcp-reload 要件 3.8）。
+    /// 控える着せ替えを「この既定との差」にするのに使う。
     pub static_binds: areka_seriko::DefaultBinds,
-    /// スコープの倍率と DPI の表（spec shell-scale-linkage D7・ゴーストの起動ごとに新しい）。
+    /// スコープの倍率と DPI の表（ゴーストの起動ごとに新しい）。
     /// 書き手は毎フレームの相、読み手は実行系の読み口（`rewire_runtime_consumers` が登録する）。
     pub(super) scope_scale: SharedScopeScaleTable,
 }
 
 impl RuntimeWiring {
-    /// 結線資源を構築する（`wire_runtime`＝task 5.1／9.1／4.1 が呼ぶ）。`assets` は `Some` で
+    /// 結線資源を構築する（`wire_runtime` が呼ぶ）。`assets` は `Some` で
     /// 保持し、attach フェーズ（[`run_attach_phase`]）が `take` で高々 1 回消費する。`move_rx` は
-    /// `MoveCueSink`（talk スレッド）と対の受信端で、frame 相 drain（task 9.2）が消費する。
+    /// `MoveCueSink`（talk スレッド）と対の受信端で、移動の取り出しの相が消費する。
     /// `lifecycle_rx` は `BalloonLifecycleSink`（同じく talk スレッド）と対の受信端で、バルーン
     /// 可視性相が消費する。`zorder_rx` は `ZOrderCueSink`（同じく talk スレッド）と対の
-    /// 受信端で、取り出しの相（task 6.2）が消費する。可視性の持ち越し状態と重なりの台帳は
+    /// 受信端で、重なりの取り出しの相が消費する。可視性の持ち越し状態と重なりの台帳は
     /// 外から与えず初期値から始める。
     pub fn new(
         presenter: EmoPresenter,
@@ -222,7 +211,7 @@ impl RuntimeWiring {
             // 届けた組の台帳も新品（何も届けていない）から始める。
             balloon_status: BalloonStatusLedger::default(),
             runtime,
-            // attach 相が装着した scope ごとに埋める（D11-3）。
+            // attach 相が装着した scope ごとに埋める。
             balloon_models: HashMap::new(),
             balloon_definitions: HashMap::new(),
             balloon_faces: HashMap::new(),
@@ -251,13 +240,13 @@ impl RuntimeWiring {
         self.scope_scale.clone()
     }
 
-    /// shell 設定（`seriko.zorder`）由来の基底を台帳へ据える（起動の段の入口・要件 5.1）。
+    /// shell 設定（`seriko.zorder`）由来の基底を台帳へ据える（起動の段の入口）。
     ///
     /// 台帳は `frame` の内側に閉じているので、起動の結線（`wire_runtime`）はこの口から
     /// 触る。呼ぶのは結線状態 1 つにつき **`insert_non_send` より前**（その結線状態で走る最初の
     /// `Update` より前）の 1 回だけで（起こし直しでは `boot_ghost` が新しい結線状態で呼ぶ）、
     /// そのときこの結線状態の取り出しの相はまだ 1 度も走っていない——ゆえに基底はタグの実行を待たずに
-    /// 最初の維持の巡から効く（design「descript 起動時適用」）。
+    /// 最初の維持の巡から効く。
     ///
     /// 解釈・拒否・記録はすべて [`apply_descript_base`] が持つ。ここは台帳への到達だけを
     /// 引き受け、判断を 1 つも持たない。
@@ -272,8 +261,7 @@ impl RuntimeWiring {
         self.window_state.rx = Some(rx);
     }
 
-    /// シェルの差し替えで、基底を新しいシェルの `seriko.zorder` へ置き直す
-    /// （areka-P0-shell-balloon-switch 要件 2.7・差し替えの相の完了の後始末だけが呼ぶ）。
+    /// シェルの差し替えで、基底を新しいシェルの `seriko.zorder` へ置き直す。
     ///
     /// 解釈・拒否・記録は [`apply_descript_rebase`] が持つ（`None`・解釈できない値は基底なし）。
     ///
@@ -282,26 +270,19 @@ impl RuntimeWiring {
         apply_descript_rebase(&mut self.zorder_ledger, zorder_raw);
     }
 
-    /// 当たり判定 resolver への読み口（design DD-IE-9/DD-IE-10・「Modified Files」mod.rs 行）。
+    /// 当たり判定 resolver への読み口。
     ///
-    /// 内包する [`EmoPresenter`] を読み取り専用で貸し出す。`input-events` の region 解決
-    /// （`RegionSource::Presenter`＝task 2.6/2.7）が、この借用を
-    /// [`super::hit_region::resolve_hit_region`]`(presenter, scope, x, y)` の第 1 引数
-    /// （`&EmoPresenter`）へそのまま渡して当たり判定を解決する（Req 1.3・collision-geometry の
-    /// 契約を消費のみ）。所有・可変アクセスは presenter を専有する frame 相（attach/drain/text）に
-    /// 閉じたまま、UI 配線層へは read 口のみを開ける（本番表面を最小に保つ）。
-    ///
-    /// 本番の呼び手は結線済み（実測）——`input_events/mod.rs` の `resolve_hit_owned` が
-    /// `.map(RuntimeWiring::presenter)` の関数パス形で借りて当たり判定へ渡す。到達の起点は
-    /// `ghost_session::prepare_ghost_windows` の `attach_char_pointer_handlers` 呼出（キャラ窓ポインタ
-    /// ハンドラ装着）と `ghost_session::boot_ghost` の `wire_mouse_input` 呼出。呼び出しがメソッド構文でないため
-    /// `.presenter()` の grep では見つからないが、dead_code 判定上は live である。
+    /// 内包する [`EmoPresenter`] を読み取り専用で貸し出す。本体の入力の層の `resolve_hit_owned` が
+    /// この借用を [`crate::hit_region::resolve_hit_region`] の第 1 引数（`&EmoPresenter`）へ
+    /// そのまま渡す。所有・可変アクセスは presenter を専有する frame 相に閉じたまま、UI 配線層へは
+    /// read 口のみを開ける。呼び手は `.map(RuntimeWiring::presenter)` の関数パス形で借りるので、
+    /// `.presenter()` の grep では見つからない。
     pub fn presenter(&self) -> &EmoPresenter {
         &self.presenter
     }
 
     /// 最後に描いた時点でバルーンに出ていた台詞のトークの番号（読み口だけ・利用者の中断が
-    /// 押されたバルーンのトークを kanade へ運ぶ・audit-kanade #6）。
+    /// 押されたバルーンのトークを kanade へ運ぶ）。
     pub fn shown_talk_id(&self) -> Option<areka_sakura::TalkId> {
         self.balloon_visibility.talk_id()
     }
@@ -312,60 +293,40 @@ impl RuntimeWiring {
         self.attached
     }
 
-    /// 文字層 runtime への共有ハンドル読み口（design「アクセサ（`crates/areka-runtime/src/frame.rs`）」・
-    /// `RuntimeWiring::runtime()`・Req 4.1）。
+    /// 文字層 runtime への共有ハンドル読み口。
     ///
-    /// choice-interact のバルーン選択肢対話配線（`super::super::input_events::balloon`）が、この借用を
-    /// 経由して `TextLayerRuntime` を読み取り選択肢ハイライト／確定を橋渡しする。既存 [`presenter()`]
-    /// アクセサと同型の additive な読み口であり、挙動は一切変えない（`runtime` の所有・可変アクセスは
-    /// frame 相の text フェーズに閉じたまま、配線層へは read 口のみを開ける）。上流クレート
-    /// （`areka-emo-text`）には一切手を入れない（R8.5）。
-    ///
-    /// 本番の呼び手は結線済みで 3 箇所ある（実測・いずれも `Rc::clone` して world 側の借用を即座に
-    /// 解く形）——`input_events/balloon.rs` の `on_balloon_pointer_moved`（ポインタ移動での選択肢
-    /// hover 追従）・`on_balloon_pointer_pressed`（クリックによる選択確定）・
-    /// `clear_balloon_hover_on_leave`（バルーン離脱での hover 解除）。到達の起点は
-    /// `ghost_session::boot_ghost` の `wire_balloon_choice`・`ghost_session::prepare_ghost_windows` の
-    /// `attach_balloon_pointer_handlers` 呼出・`ghost_session::register_systems` の
-    /// `register_balloon_leave_system` 呼出。
-    ///
-    /// [`presenter()`]: Self::presenter
+    /// 本体の入力の層（バルーンの入力）の `on_balloon_pointer_moved` などが、`Rc::clone` して
+    /// world 側の借用を即座に解く形で選択肢のハイライト・確定を橋渡しする。`runtime` の所有・
+    /// 可変アクセスは frame 相の text フェーズに閉じたまま、配線層へは read 口のみを開ける。
     pub fn runtime(&self) -> &Rc<RefCell<TextLayerRuntime>> {
         &self.runtime
     }
 
-    /// `\![move]` 指令受信端への test-support アクセサ（task 9.1 の存在檻・9.3 の e2e で消費）。
+    /// `\![move]` 指令受信端への test 専用アクセサ。
     ///
-    /// 本番の frame 相 drain（task 9.2）は `move_rx` を private に閉じて `apply_move_directive` へ
-    /// 適用する。9.1 段階では channel 配線の到達性（`MoveCueSink`→`RuntimeWiring` の受信端が届く）を
-    /// 決定論に固定するための最小 read 口として `#[cfg(test)]` で開ける（本番表面は増やさない）。
+    /// channel 配線の到達性（`MoveCueSink`→`RuntimeWiring` の受信端が届く）を決定論に固定するための
+    /// 最小 read 口で、本番の移動の取り出しの相は `move_rx` を閉じたまま使う。
     #[cfg(test)]
     pub(super) fn drain_move_directives(&self) -> Vec<PositionCue> {
         self.move_rx.try_iter().collect()
     }
 
-    /// 表示ライフサイクル信号受信端への test-support アクセサ（task 4.1 の配線檻で消費）。
+    /// 表示ライフサイクル信号受信端への test-support アクセサ。
     ///
-    /// 本番の可視性相は `lifecycle_rx` を private に閉じたまま同じ全件取り出しを行い、
-    /// 判断中核の観測スナップショットへ載せる。4.1 段階では channel 配線の到達性
-    /// （会話の再生が `BalloonLifecycleSink`→`RuntimeWiring` の受信端へ届く）を決定論に固定する
-    /// ための最小 read 口として `#[cfg(test)]` で開ける（`drain_move_directives` と同型・本番
-    /// 表面は増やさない）。
+    /// channel 配線の到達性（会話の再生が `BalloonLifecycleSink`→`RuntimeWiring` の受信端へ届く）を
+    /// 決定論に固定するための最小 read 口。本番の可視性相は同じ全件取り出しを自前で行う。
     #[cfg(any(test, feature = "test-support"))]
     pub fn drain_lifecycle_signals(&self) -> Vec<TalkLifecycleSignal> {
         self.lifecycle_rx.try_iter().collect()
     }
 
-    // ── spine 観測用 test-support アクセサ（tasks.md task 6.2・spine S1/S3/S4） ──────────
+    // ── spine 観測用 test-support アクセサ ──────────
     //
-    // 本番結線（`wire_runtime`＝task 5.1／`frame_system`）は `presenter`/`rx` を private に
-    // 閉じ、drain/apply/readback は `run_attach_phase`／`run_drain_phase` 内で完結する。決定論 spine
-    // （兄弟モジュール `super::spine`・`#[cfg(test)]`）は「受信 `PresentCommand` 列の形状記録」
-    // （apply 前に値取り出し）と「apply 後の `read_back` 観測」（R8.2・観測境界をアダプタ記録に
-    // 留めない）を行うため、private フィールドへ最小の read/passthrough を要する。以下 3 つは
-    // getter/passthrough のみ（本番ロジックは一切変えない）で `#[cfg(test)]` ゲートし本番表面を増やさない。
+    // 決定論 spine（`crate::spine`）は「受信 `PresentCommand` 列の形状記録」（apply 前に値取り出し）と
+    // 「apply 後の `read_back` 観測」を行うため、private フィールドへの最小の read/passthrough を要する。
+    // 以下の 5 つは getter/passthrough のみで、`cfg(any(test, feature = "test-support"))` に閉じる。
 
-    /// target の表示中画素（BGRA・`stride=width*4`）を読み戻す（`EmoPresenter::read_back` passthrough・S1/S3/S4）。
+    /// target の表示中画素（BGRA・`stride=width*4`）を読み戻す（`EmoPresenter::read_back` passthrough）。
     #[cfg(any(test, feature = "test-support"))]
     pub fn read_back_target(
         &self,
@@ -384,17 +345,17 @@ impl RuntimeWiring {
         self.rx.try_iter().collect()
     }
 
-    /// 1 件の `PresentCommand` を presenter へ適用する（`EmoPresenter::apply` passthrough・S3）。
+    /// 1 件の `PresentCommand` を presenter へ適用する（`EmoPresenter::apply` passthrough）。
     ///
     /// `drain_received` で取り出した指令を、形状記録後に実 presenter へ流して実描画→readback まで
-    /// 通す（R8.2）ための最小口。本番は同じ `apply` を `run_drain_phase` が呼ぶ。
+    /// 通すための最小口。本番は同じ `apply` を `run_drain_phase` が呼ぶ。
     #[cfg(any(test, feature = "test-support"))]
     pub fn apply_present(&mut self, world: &mut World, cmd: PresentCommand) {
         self.presenter.apply(world, cmd);
     }
 
     /// 外部所有（`VisibilityOwnership::External`）な target を可視化する
-    /// （`EmoPresenter::show_target` passthrough・`areka-P0-balloon-visibility` task 4.2）。
+    /// （`EmoPresenter::show_target` passthrough）。
     ///
     /// attach 相はバルーンを**不可視のまま確立**するため、spine が「可視バルーン」を前提とする
     /// ケースはその前提を自分で組む必要がある。本番で可視化を発行するのはバルーン可視性制御
@@ -408,7 +369,7 @@ impl RuntimeWiring {
         self.presenter.show_target(world, target)
     }
 
-    /// 再追従用に記憶している [`BalloonModel`] の scope 集合（昇順・emo-dpi-scaling D11-3 の観測口）。
+    /// 再追従用に記憶している [`BalloonModel`] の scope 集合（昇順）。
     ///
     /// 「attach 相が per-scope の model を実際に保持したか」は本番 attach（GPU 資源＋実資産）を
     /// 通さないと観測できないため、spine（in-crate GPU ハーネス）から見えるだけの read を開ける。
@@ -421,7 +382,7 @@ impl RuntimeWiring {
 }
 
 // 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の欄へそのまま渡す口（`test-support` のときだけ・
-// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+// 本番の可視性は変えない）。
 #[cfg(feature = "test-support")]
 pub mod test_support {
     use std::time::Duration;

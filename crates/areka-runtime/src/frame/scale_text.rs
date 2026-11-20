@@ -19,11 +19,7 @@ use super::{
     reconcile_window_size, shell_target,
 };
 
-// ---------------------------------------------------------------------------
-// 文字層 k 追従フェーズ（areka-P0-emo-dpi-scaling task 7.2・design D11-3/D11-4・Req8.1/8.5/8.6）
-// ---------------------------------------------------------------------------
-
-/// 文字層 k 追従フェーズ（毎フレーム・R8.1/8.5/8.6・design D11-4）: 装着済み balloon scope の
+/// 文字層 k 追従フェーズ（毎フレーム）: 装着済み balloon scope の
 /// 文字層 binding を presenter の**現適用 k** へ合わせ直す。戻り値は実際に binding を再構築した
 /// scope（昇順・観測用。本番＝[`frame_system`] は捨てる）。
 ///
@@ -31,7 +27,7 @@ use super::{
 /// だけを再スケールすると文字だけが旧 k の寸法に取り残される（6.5 一次実走で実測した欠陥）。本
 /// フェーズはその取り残しを構造的に消す。
 ///
-/// # なぜ「イベント駆動」ではなく毎フレーム走査なのか（D11-4 の意図＝binding 変化の検出）
+/// # なぜ「イベント駆動」ではなく毎フレーム走査なのか（binding 変化の検出）
 ///
 /// 素朴には「[`run_dpi_phase`] の `refresh_scale` が `Some` を返した balloon 窓へ伝搬する」と書け
 /// るが、**`Some` と「適用 k が変わった」は同値ではない**——`refresh_scale` の doc が明記するとおり
@@ -51,9 +47,9 @@ use super::{
 ///
 /// あちらの判定キーは **binding 全体（k・物理寸・image 原寸・slot・window）と、その image 原寸で
 /// モデルから解き直した `ResolvedBalloonText`（文字描画領域を含む）の連言**であり、すべて同値なら
-/// **再構築せず `false`** を返す（churn ガード・R4.5/R8.5）。未登録 actor も `false`（装着は
+/// **再構築せず `false`** を返す（churn ガード）。未登録 actor も `false`（装着は
 /// `register_actor_view` の領分）。**k が同値でも面実寸や当該 scope の `validrect` が違えば再構築
-/// する**——k の同値のみを根拠に省略しない（R4.4。scope 別バルーン定義が当事者であり、旧契約
+/// する**——k の同値のみを根拠に省略しない（scope 別バルーン定義が当事者であり、旧契約
 /// 「同値 k なら再構築しない」では相方側の領域変化を取りこぼす）。費用は balloon 1 枚あたり
 /// `ResolvedBalloonText` の再解決 1 回と、binding／解決済み領域の 2 構造体比較。
 ///
@@ -64,7 +60,7 @@ use super::{
 /// （`present_frame`）の**上流**に置く。こうすると、どちらの経路で k が跳ねても同一フレーム内で
 /// binding が組み直され、その直後の描画が新 k の物理寸で走る（1 フレームの旧寸残りが生じない）。
 ///
-/// # 縮退（R8.6・log-first だが log spam にしない）
+/// # 縮退（log-first だが log spam にしない）
 ///
 /// `text_slot_view` が `None`（初回 `ShowSurface` が成立していない＝表示未確立）なら再追従できず
 /// skip する。毎フレーム走査ゆえ素朴に `warn!` すると毎フレーム鳴るため、**scope ごとに一度だけ**
@@ -74,17 +70,17 @@ use super::{
 /// 保持する）ため、**不可視は本縮退経路に落ちない**——不可視の間は判定キーが同値のまま no-op が
 /// 続き、`Show` で `applied` が跳ねた次の走査が再追従する。
 ///
-/// [`BalloonModel`] は attach 時に記憶した per-scope の同一モデルを再利用する（再パースしない・
-/// D11-3）。actor は attach と同一写像 `ActorKey::from(scope.to_string())`。走査するのは
+/// [`BalloonModel`] は attach 時に記憶した per-scope の同一モデルを再利用する（再パースしない）。
+/// actor は attach と同一写像 `ActorKey::from(scope.to_string())`。走査するのは
 /// `balloon_models` の持つ装着済みの scope である。panic しない。
 ///
-/// # 箱の同期（areka-P0-shell-balloon 要件 3.5・6.8・design.md「箱の束の結線」）
+/// # 箱の同期
 ///
 /// 同じ走査で各 scope のシェルの窓の `text_slot_view(shell_target(scope))` と、その窓がいま表示
 /// している絵の番号（`current_surface_id`）を組にして集め、最後に [`TextLayerRuntime::sync_boxes`] を
-/// 1 回呼ぶ（拡大率・絵・シェルの切替に箱の面を合わせる・areka-P0-shell-balloon-frame-align 要件 1.7）。
+/// 1 回呼ぶ（拡大率・絵・シェルの切替に箱の面を合わせる）。
 /// シェルの窓が未確立の scope と、差し込み口はあるが絵が非表示（`Hide`・全透明退化）で番号の無い
-/// scope は `None` を渡す（箱の登録を外す・要件 1.3）。未確立は
+/// scope は `None` を渡す（箱の登録を外す）。未確立は
 /// 起動直後の正常な状態ゆえ記録しない（毎フレーム鳴らさない）。`present_frame` の上流なので、
 /// 合わせた登録は同じフレームの描画に効く。
 pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Vec<u32> {
@@ -131,7 +127,7 @@ pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Ve
         };
         // 復帰＝次に落ちたときは再び 1 回鳴らす（エッジの再武装）。
         text_scale_warned.remove(&scope);
-        // 判定（k 変化・未登録）は 7.1 の権威へ委ねる（本フェーズは第 2 のガードを持たない・R8.5）。
+        // 判定（k 変化・未登録）は 7.1 の権威へ委ねる（本フェーズは第 2 のガードを持たない）。
         let model = &balloon_models[&scope];
         if let Some(background) = unconnected_text.remove(&scope) {
             super::attach::connect_balloon_text(runtime, Some(view), actor, model, background);
@@ -153,7 +149,7 @@ pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Ve
     refreshed
 }
 
-/// 窓寸 reconcile の第 2 経路（状態照合・design Flow 2 キー決定 (d)／Flow 3 手順 5）。
+/// 窓寸 reconcile の第 2 経路（状態照合）。
 ///
 /// [`GhostWindows`] の各 scope について shell／balloon 両 target の
 /// [`ScaleReportSource::take_scale_report`] を引き、`Some(新物理寸)` を
@@ -167,11 +163,11 @@ pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Ve
 /// [`GhostWindows`] 未挿入（窓生成前）は no-op。窓 entity が引けない scope は `warn!`＋skip
 /// （報告は既に取り出し済み＝次フレームへ持ち越さない——窓が無い以上反映先が無い）。panic しない。
 ///
-/// # 破棄済み窓の打ち切り（要件 6.2/6.3・design D8 消費側）
+/// # 破棄済み窓の打ち切り
 ///
 /// 「登録は在るが**指す先の entity が既に despawn 済み**」は終了処理の**正常系**であり、
 /// `debug!`（[`DESPAWNED_SKIP_TAG`]）で当該 target を打ち切って**他 scope の処理を継続**する
-/// （警告以上を出さない＝要件 6.2）。上段の「登録が無い」`warn!` とは別事象である。
+/// （警告以上を出さない）。上段の「登録が無い」`warn!` とは別事象である。
 pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, world: &mut World) {
     // GhostWindows は小さな Entity 写像（Clone）。target/窓の解決へ world の不変借用を跨がせない。
     let Some(ghost_windows) = world.get_resource::<GhostWindows>().cloned() else {
@@ -193,7 +189,7 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
                 GhostWindowKind::Balloon,
             ),
         ] {
-            // 整合ゲート（設計 C5・要件 5.8）: 待ち札のある窓へはこの経路からも書かない。
+            // 整合ゲート: 待ち札のある窓へはこの経路からも書かない。
             // **報告を取り出す前**に見送る——取り出すと消えるので、待ちが解けた後に反映する
             // 材料が失われる（次フレームへ持ち越すには presenter に残しておくほかない）。
             if let Some(window) = window
@@ -214,7 +210,7 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
                 );
                 continue;
             };
-            // 存在確認（要件 6.2/6.3・design D8 消費側）: レジストリが指す窓が既に
+            // 存在確認: レジストリが指す窓が既に
             // despawn 済み（終了処理でゴースト窓が破棄された後のフレーム）なら、**正常終了系**
             // として debug で打ち切り、**他の scope／target の処理は続ける**。報告は上で
             // 取り出し済みのまま持ち越さない（窓が無い以上、次フレームでも反映先は無い）。
@@ -231,7 +227,7 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
             }
             // 経路タグ: 本経路は「表示が成立して物理寸が変わった」状態に紐づき `Changed<DPI>`
             // に**依存しない**（初回表示の k₀ 補正もここで landing する）。DPI 由来と名乗らせ
-            // ないため DpiReproject とは別語を貼る（Req 1.2・D13）。
+            // ないため DpiReproject とは別語を貼る。
             reconcile_window_size(
                 world,
                 window,
@@ -284,7 +280,7 @@ pub(super) fn reveal_pending<'a>(reveals: impl Iterator<Item = &'a [f64]>, talk_
         .any(|&last| last > talk_time)
 }
 
-/// フェーズ③（text・design「フェーズ③（text）」・R2.3）: `talk_time` が定まるフレームでのみ
+/// 文字の相: `talk_time` が定まるフレームでのみ
 /// `present_frame` を駆動する（`Err` は `error!`＋継続＝次フレーム再試行）。
 ///
 /// `talk_time` の解決は [`resolve_talk_time`] に委ねる（`talk_time_override` が `Some` ならそれを、
@@ -292,7 +288,7 @@ pub(super) fn reveal_pending<'a>(reveals: impl Iterator<Item = &'a [f64]>, talk_
 /// [`TalkClock::talk_time`]）。解決が `Some(t)` のときのみ
 /// `present_frame(&mut runtime.borrow_mut(), world, t)` を呼ぶ。`Err(e)` は `error!`（`present_frame`
 /// 側で失敗源を log 済み・first error 返却）＋継続で、他 actor を巻き込まず次フレーム再試行へ委ねる
-/// （R2.3・emo-text 既存契約）。解決が `None`（epoch 未確立／`FrameTime` 不在かつ override なし）なら
+/// （emo-text 既存契約）。解決が `None`（epoch 未確立／`FrameTime` 不在かつ override なし）なら
 /// `present_frame` を呼ばず skip する（描くものがない・hang しない）。
 pub fn run_text_phase(
     wiring: &mut RuntimeWiring,
@@ -306,7 +302,7 @@ pub fn run_text_phase(
         return;
     };
     // present_frame は失敗源で log 済み（first error 返却）。frame は error!＋継続で、他 actor を
-    // 巻き込まず次フレーム再試行へ委ねる（R2.3・emo-text 既存契約）。
+    // 巻き込まず次フレーム再試行へ委ねる（emo-text 既存契約）。
     let mut runtime = wiring.runtime.borrow_mut();
     if let Err(e) = present_frame(&mut runtime, world, talk_time) {
         error!(
@@ -315,8 +311,7 @@ pub fn run_text_phase(
             "runtime text: present_frame が失敗（他 actor 非破壊・次フレーム再試行・R2.3）"
         );
     }
-    // 発話が進行中（まだ現れていない文字が在る）なら次の画面更新を予約する（設計 C16 の
-    // `REARM`・要件 4.6）。タイプライタは 1 コマごとに文字が増えるので、進行中は毎画面更新
+    // 発話が進行中（まだ現れていない文字が在る）なら次の画面更新を予約する（`REARM`）。タイプライタは 1 コマごとに文字が増えるので、進行中は毎画面更新
     // 回す必要がある。現れ切ったら予約を止める——放置中まで回り続けさせないためである。
     if reveal_pending(
         runtime
@@ -327,7 +322,7 @@ pub fn run_text_phase(
     ) {
         tick_wake::mark(tick_wake::REARM);
     }
-    // 実機サインオフ用 hover 注入導線（HoverInjectConduit・8.2/8.4/8.6）: present_frame の**後**に
+    // 実機サインオフ用 hover 注入導線（HoverInjectConduit）: present_frame の**後**に
     // 駆動し、`choice_active`／`choice_hit_rows` が当該フレームの提示を反映した状態で env ゲート
     // （`AREKA_CHOICE_HOVER_INJECT`）駆動の周期巡回注入を行う。env 未設定/無効なら完全 no-op
     // （`inject_choice_hover` を一度も呼ばない・本番既定）。`talk_time` は同じ frame clock 時刻源。

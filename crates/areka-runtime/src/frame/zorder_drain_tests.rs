@@ -441,7 +441,7 @@ fn t_zdr09_this_phase_emits_no_records_of_its_own() {
     for needle in MACRO_NEEDLES {
         assert!(
             !here.contains(needle),
-            "この相に `{needle}` が現れた（サインオフの grep 対象が 2 本へ割れる）"
+            "この相に `{needle}` が現れた（ここで呼ぶと出力先が `areka_runtime::…` になり、`wintf::ecs::window` の前方一致の絞り込みで debug の受理の行が点かない）"
         );
     }
     let found = MACRO_NEEDLES

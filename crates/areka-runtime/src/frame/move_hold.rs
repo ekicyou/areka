@@ -1,4 +1,4 @@
-//! 位置の指令の預かり（window-work-area-clamp design「MoveHold」・要件 6.2／6.3／6.4／7.3／7.8）。
+//! 位置の指令の預かり。
 //!
 //! `\![move]` は、動かす窓と基準の窓（`--base` のスコープ）の**両方が最初の面を表示して拡大率が
 //! 取れる**まで預かる。表示の前の窓は仮の矩形（表示の前の大きさ）のままなので、そこを基準に当てると
@@ -27,7 +27,7 @@ use super::PositionCue;
 /// スコープのシェルが最初の面を表示した後の拡大率を答える読み口（本番は表示層・檻は閉包）。
 ///
 /// `None` は「まだ最初の面を表示していない」（または表示層に登録の無いスコープ）。
-// 要件 2.5: 公開の `run_move_drain_with` が名指すので開ける
+// 公開の `run_move_drain_with` が名指すので開ける
 pub trait ShownRatioSource {
     fn shown_ratio(&self, scope: u32) -> Option<ScaleRatio>;
 }
@@ -247,7 +247,7 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
             }
         } else if let Some((scope, waiting)) = unshown {
             if just_arrived {
-                // 件 5 の測り（MoveMeasure・要件 6.1）の語を残す: 拡大率が取れない（表示の前）ので預かった。
+                // 件 5 の測り（MoveMeasure）の語を残す: 拡大率が取れない（表示の前）ので預かった。
                 info!(
                     event = "move_ratio_unset",
                     scope,
