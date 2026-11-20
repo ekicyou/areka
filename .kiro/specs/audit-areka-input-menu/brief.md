@@ -8,7 +8,7 @@
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/src/` の `input_events*`・`menu*`（フォルダとファイル）。
+- 受け持つファイル: `crates/areka-input/`（`src/`・`cursor/`・`Cargo.toml`）・本体の `menu*`（`menu/shortcut.rs`・`shortcut_tests.rs` を含む）・本体の `file_drop.rs`・`file_drop_*tests.rs`・`app_exit_escape_tests.rs`。`shortcut.rs`・`file_drop.rs` を範囲に残すかは、この spec の要件の段が決める。
 - 大きさ: 60 ファイル・コード 6,072 行・テスト 12,976 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 
@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`input-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 4 本目）。受け持つファイルのうち `input_events/` はその着地で `crates/areka-input/src/` へ移り（`shortcut.rs` は `crates/areka/src/menu/` へ・`file_drop.rs` は本体に残る）、menu は本体に残る。同 spec がこの brief の「受け持つファイル」を書き換える。
+- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`input-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 4 本目）。入力の出来事はその着地で `crates/areka-input/src/` へ移り、`shortcut.rs`（`crates/areka/src/menu/shortcut.rs`）と `file_drop.rs`（`crates/areka/src/file_drop.rs`）は本体に残り、menu も本体に残る。同 spec がこの brief の「受け持つファイル」を移し先に書き換えた。
 - **Downstream**: なし。
 
 ## Existing Spec Touchpoints
