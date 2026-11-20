@@ -26,7 +26,7 @@
   - _Dispatch: mechanical — 置き場と書き換える行を設計が与える_
   - _Requirements: 2.1, 2.2, 2.3, 2.6_
 
-- [ ] 3. 強制退避の口を本体の中で据える（まだ crate を作らない）
+- [x] 3. 強制退避の口を本体の中で据える（まだ crate を作らない）
 - [x] 3.1 強制退避のテストが使う小道具を、本体のテストからも使える支えへ出す
   - 入力のテストにある小道具 5 つ（ポインタの泡立て 2 つ・窓の数え・結線つきの World・進む時計）を、写しを作らずに入力の新しい支えのモジュールへ移す。この段ではまだ本体の bin の中なので、支えと、結線に時計を渡す作り方の関数は `#[cfg(test)]` のまま（`test-support` 機能の条件へは 4.1 で替える。本体のマニフェストには機能の表が無く、今替えると `unexpected_cfgs` の警告になる）
   - 入力のテストが新しい支えから小道具を使い、中身を変えずに前と同じ合否で緑。警告 0
@@ -41,7 +41,7 @@
   - 本体の bin のテストが緑（赤が出たら赤のテストだけ回し直す）で、入力の中に本体の終了を名指すコードが grep で 0 件
   - _Dispatch: standard — 口の型は設計が与えるが、倒れ方の分岐・据え付けの道・テストを書く_
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.6, 3.8, 7.7, 2.4_
-- [ ] 3.3 強制退避のテストを本物の終了で見る本体のテストへ移し、据え付けの道を固定する
+- [x] 3.3 強制退避のテストを本物の終了で見る本体のテストへ移し、据え付けの道を固定する
   - 強制退避のテスト 3 本（`handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sending`・`escape_works_without_mouse_wiring`・`only_escape_terminates_ghost_windows`）を名前を変えずに本体の終了の子のテストへ移し、`use` の行だけを変える（表明は 1 字も変えない）
   - システムの組み立てを通して口が据わり、結線前の Ctrl+左ダブルクリックで窓が消え終わりが指示されることを見るテスト `register_systems_installs_the_escape_hook` を足す
   - 本体の bin のテストが緑で、入力のテストに強制退避の枝へ入るテストが残っていない
@@ -157,3 +157,5 @@
 
 - 1.1: 着手のときの一覧 `target/input-crate-split/tests-before.txt`（基点 80028ea01）の `: test$` の行は 14389 行（名前の末尾の種類は 14271）。
 - 1.2・7.3: areka の tracing は標準出力に出る（`escape-*.stderr.log` は両方をまとめたもの）。`log_stay_on_top_discard` は常に手前がオンのときだけ出るので、台本は強制退避の前に MCP で `\![set,windowstate,stayontop]\e` を送る。手順は `verification.md`。
+- 3.3: `input_events_tests.rs` の「強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。」は 3 本を移したので古い。7.4 で `audit-areka-input-menu` へ申し送る（移すファイルのコメントは変えない）。
+- hit-id-pass（2026-11-20）: `resolve_hit_region`／`hit_region_client` の署名も `HitRegion`／`ClientHit` の形も変えない。`crates/areka-input/src/lib.rs` の追従は要らない。向こうは `tech.md` の Testing 節に 1 文足す（この spec は `tech.md` を書き換えない）。

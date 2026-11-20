@@ -330,3 +330,7 @@ pub(crate) fn attach_os_close_request(
 #[cfg(test)]
 #[path = "app_exit_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "app_exit_escape_tests.rs"]
+mod escape_tests;
