@@ -64,7 +64,7 @@
   - _Dispatch: standard — 手順を設計が与えるが組み立てが長い_
   - _Requirements: 3.1, 4.1, 4.3, 5.15_
 
-- [ ] 1.7 作業領域の源の同期を、モニターの表が変わったフレームだけにする（T7・48・49 番）
+- [x] 1.7 作業領域の源の同期を、モニターの表が変わったフレームだけにする（T7・48・49 番）
   - World の私有の資源でモニターの変化と数と、源の資源の入れ直しを見張り、どれも変わらないフレームでは作り直さない。初回は必ず作り直す。同期の関数の署名は変えない
   - 資源が `Send + Sync` を満たさなければ同じ形を非 Send の資源で置く
   - 源を手で置き替えて同期に上書きさせるテストがあれば、モニターの component を書き替える形に改め、本数を記録に書く
@@ -270,3 +270,4 @@
 - 1.3: `attach.rs` の書き直した 3 行に `（R4.2）` の要件番号が残っている（審査の提案・止めない）。5.1 の 41 番の物差しで見る。
 - 1.5: `--force-warn unused_imports` の警告は lib 23・lib＋test-support 16・test 11 から 3 つとも 0 件（`cargo rustc -p areka-runtime --lib [--features test-support | --profile test] -- --force-warn unused_imports`）。`CharWindowMarker` は設計の「どこでも使わない」でなくテストだけの名だったので `#[cfg(test)]` に置いた。`frame.rs` の `reconcile_reported_sizes` の説明に task 番号が残る（5.1 の 41 番で見る）。
 - 1.6: 札の腕を落とすと新しいテストのほかに `frame_dpi_sync_hold_tests.rs` の既存の 2 本も赤になる（research の「縛るテストが無い」は言い過ぎだった）。新しいシェルの検体に `kero.name` が無いと scope 1 の揃え方が変わらない。
+- 1.7: 源を手で置き替えて同期に上書きさせるテストを直した本数は 0 本（2 源の入れ直しは変化として拾い、本番の `prepare_ghost_windows` と同じ道で作り直す）。作り直しの後にもう一度 `SystemState::get` を呼び、自分の `insert_resource` を次の呼び出しで入れ直しと数えないようにした（設計からの小さな逸れ）。

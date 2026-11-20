@@ -25,7 +25,7 @@ use log_capture_kit::capture;
 use wintf::ecs::window::monitor::Monitor;
 
 use super::test_support::{
-    FakeReports, FrameHarness, s2_monitors, s2_sources, s2_work_area_for_dpi,
+    FakeReports, FrameHarness, s2_monitors, s2_snapshot, s2_sources, s2_work_area_for_dpi,
 };
 
 /// 起動時の拡大率（実機の採取と同じ向き＝高い側から始める）。
@@ -175,6 +175,87 @@ fn a_changed_monitor_table_rebuilds_both_sources() {
         Some(&expected.dpi_table),
         "モニタ別拡大率表が作業領域源と同時に作り直されていない（片方だけ古い運転になる）"
     );
+}
+
+/// 同期を 1 回回し、作業領域の同期の `warn!` の行数を返す。
+fn sync_warnings(harness: &mut FrameHarness) -> (bool, usize) {
+    harness.advance_frame();
+    let (change, events) = capture(|| harness.run_work_area_sync());
+    let warnings = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .filter(|e| e.message().contains(WORK_AREA_SYNC_CONTEXT))
+        .count();
+    (change.is_some(), warnings)
+}
+
+/// モニターの表が変わらないフレームでは表を集めない。モニター 0 台の `warn!` は、表が
+/// 変わったフレームに 1 回だけ出る（毎フレーム出すと 60 行/秒になる）。
+#[test]
+fn an_unchanged_monitor_table_is_not_rebuilt_and_an_empty_one_warns_once() {
+    let mut harness = FrameHarness::new();
+    harness.set_monitor_sources_for_dpi(BOOT_DPI);
+
+    let empty: Vec<(bool, usize)> = (0..3).map(|_| sync_warnings(&mut harness)).collect();
+    assert_eq!(
+        empty,
+        vec![(false, 1), (false, 0), (false, 0)],
+        "モニター 0 台の表が変わらないのに作り直しの道を通っている"
+    );
+
+    let monitor = harness.world.spawn(s2_monitors(LOWERED_DPI).remove(0)).id();
+    assert_eq!(
+        sync_warnings(&mut harness),
+        (true, 0),
+        "モニターが足されたのに作り直していない"
+    );
+
+    harness
+        .world
+        .get_mut::<Monitor>(monitor)
+        .expect("足したモニター")
+        .work_area
+        .bottom -= 1;
+    assert_eq!(
+        sync_warnings(&mut harness),
+        (true, 0),
+        "モニターの作業領域が変わったのに作り直していない"
+    );
+    assert_eq!(sync_warnings(&mut harness), (false, 0));
+
+    // 消えたモニターは `Changed` に出ないので数で見る。
+    harness.world.despawn(monitor);
+    assert_eq!(
+        sync_warnings(&mut harness),
+        (false, 1),
+        "モニターが消えて 0 台になったフレームを見落としている"
+    );
+    assert_eq!(sync_warnings(&mut harness), (false, 0));
+}
+
+/// 本番の `prepare_ghost_windows` はゴーストの切り替えと再起動のたびに 2 源を入れ直す。
+/// モニターが変わらなくても、入れ直された源は次の呼び出しでモニターの表に揃え直す。
+#[test]
+fn a_reinserted_monitor_snapshot_is_resynced_on_the_next_call() {
+    let mut harness = FrameHarness::new();
+    let monitors = vec![s2_monitors(BOOT_DPI).remove(0)];
+    let sources = MonitorSources::from_monitors(&monitors);
+    harness.set_monitor_table(monitors);
+    harness.advance_frame();
+    harness.run_work_area_sync();
+    harness.advance_frame();
+    assert!(
+        harness.run_work_area_sync().is_none(),
+        "前提: 定常に入れていない"
+    );
+
+    harness.set_work_area_source(s2_snapshot(LOWERED_DPI));
+    harness.advance_frame();
+    assert!(
+        harness.run_work_area_sync().is_some(),
+        "入れ直された作業領域源をモニターの表に揃え直していない"
+    );
+    assert_eq!(harness.work_area_source(), Some(&sources.snapshot));
 }
 
 /// 拡大率だけが変わって作業領域が動かない構成変更でも作り直す。

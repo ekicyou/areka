@@ -30,6 +30,7 @@
 //!   あり、拡大率をまたぐ保存位置の追従は行わない（`windowposition-limit` の開発者裁定）。
 
 use bevy_ecs::prelude::*;
+use bevy_ecs::system::SystemState;
 use tracing::warn;
 use wintf::ecs::WindowPos;
 use wintf::ecs::window::monitor::Monitor;
@@ -60,15 +61,54 @@ pub struct SnapshotChange {
     pub(super) current: MonitorSnapshot,
 }
 
+type MonitorWatchParams = (
+    Query<'static, 'static, (), Changed<Monitor>>,
+    Query<'static, 'static, (), With<Monitor>>,
+    Option<Res<'static, MonitorSnapshot>>,
+    Option<Res<'static, MonitorDpiTable>>,
+);
+
+/// フレームを跨いで生きるモニターの変化の見張り（初回の同期で World に据える）。
+#[derive(Resource)]
+struct MonitorWatch {
+    params: SystemState<MonitorWatchParams>,
+    /// 前に表を集めたときのモニターの数（消えたモニターは `Changed` に出ないので数で見る）。
+    /// `None` は一度も集めていない（初回はモニターが 0 台でも必ず集める）。
+    seen: Option<usize>,
+}
+
 /// 実行時のモニタ表から 2 源を作り直す（毎フレーム先頭の同期段・本番の入口）。
 ///
 /// 走査するのは World に居る `Monitor` component の全 entity である。表そのものの更新は
 /// 表示基盤側（`monitor_systems`）が所有し、ここは**読むだけ**——同じ表を 2 箇所で作ると
-/// 二重権威になる。
+/// 二重権威になる。モニターの component が変わらず、2 源も前の同期の後に入れ直されて
+/// いないフレームは表を集めずに `None` を返す。
 pub(super) fn sync_monitor_snapshot(world: &mut World) -> Option<SnapshotChange> {
-    let mut query = world.query::<&Monitor>();
-    let monitors: Vec<Monitor> = query.iter(world).cloned().collect();
-    sync_monitor_snapshot_with(world, &monitors)
+    if !world.contains_resource::<MonitorWatch>() {
+        let params = SystemState::new(world);
+        world.insert_resource(MonitorWatch { params, seen: None });
+    }
+    world.resource_scope(|world, mut watch: Mut<MonitorWatch>| {
+        let seen = watch.seen;
+        let unchanged = watch
+            .params
+            .get(world)
+            .is_ok_and(|(changed, all, snapshot, dpi_table)| {
+                changed.is_empty()
+                    && seen == Some(all.iter().count())
+                    && snapshot.is_some_and(|s| !s.is_changed())
+                    && dpi_table.is_some_and(|d| !d.is_changed())
+            });
+        if unchanged {
+            return None;
+        }
+        let monitors: Vec<Monitor> = world.query::<&Monitor>().iter(world).cloned().collect();
+        let change = sync_monitor_snapshot_with(world, &monitors);
+        // ここで入れ直した 2 源を、次の呼び出しが「外から入れ直された」と数えないため。
+        let _ = watch.params.get(world);
+        watch.seen = Some(monitors.len());
+        change
+    })
 }
 
 /// 与えられたモニタ表で 2 源を作り直す（決定論テストが合成表を直接渡せる形）。
@@ -187,8 +227,8 @@ mod test_open {
     ///
     /// 対象に選ばれても [`DpiSyncHold`](areka_placement::dpi_sync::DpiSyncHold) の付いた窓へは
     /// 書かない。設計 D15 の原則は「待ち札のある窓への**すべての**窓書込を見送る」であり、例外は
-    /// 随伴バルーンの追従 1 つだけである。本関数は設計 C5 が当初列挙した 3 点に入っていなかったが、
-    /// それは列挙の抜けであった——C5 の言う「再スナップ」は
+    /// 明示の操作と随伴である（正本は `areka_placement` の `deferral_covers_route`）。本関数は
+    /// 設計 C5 が当初列挙した 3 点に入っていなかったが、それは列挙の抜けであった——C5 の言う「再スナップ」は
     /// [`resnap_shell_targets`](super::drain_resnap::resnap_shell_targets) を指しており、日本語の
     /// 同じ語が別々の 2 関数を指していたためである。
     ///
