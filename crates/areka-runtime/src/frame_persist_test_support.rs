@@ -2,14 +2,15 @@
 //!
 //! 使い手は `areka-runtime` の鎖のテストと、本体の `chain_finalize_*` のテスト。
 //!
-//! 置くのは 2 つの口:
+//! 置くのは 3 つの口:
 //! - 毎フレームの処理の World に記憶の送り口（`PersistWiring`）を置く口 [`PersistStore`]
 //!   （偽の保存先 `FakePersistIo` と、ゴーストのフォルダの下の実物のファイルの両方）。
 //! - 任意の配置から窓を作り、準備の幅と違う幅の絵を出して置き直す（再スナップ）口 [`spawn_shown`]。
 //!   同じ幅のまま組むと、書くとき（出ている幅の半分を足す）・戻すとき（準備の幅の半分を引く）・
 //!   絵が出て中央を保って付け替えるとき、の 3 つの計算を通らずに緑になる。
+//! - 記憶から戻した窓を本番の起動と同じ順で立てる口 [`boot_remembered`]。
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -21,6 +22,7 @@ use areka_sylphya::{load_scope, spawn_sylphya};
 
 use super::resnap_with;
 use super::test_support::PerTargetSizes;
+use areka_placement::chain_finalize::AdjacencyMark;
 use areka_placement::follow::{MonitorSnapshot, OffsetBase};
 use areka_placement::persist::PersistWiring;
 use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
@@ -107,6 +109,23 @@ impl PersistStore {
         load_scope(PersistScope::Ghost, &self.roots, &SharedIo(self.io.clone()))
             .into_iter()
             .collect()
+    }
+
+    /// 送ったものの書き込みが済むのを待ってから、記憶のファイルの中身をそのまま読む。
+    pub fn file_text(&self) -> String {
+        self.publisher
+            .barrier()
+            .expect("barrier はアクターが生きている間は返る");
+        let path = self
+            .roots
+            .ghost
+            .as_ref()
+            .expect("ゴーストの記憶の根がある")
+            .join("sylphya.toml");
+        self.io
+            .read(&path)
+            .expect("記憶のファイルを読める")
+            .expect("記憶のファイルがある")
     }
 
     /// 次の書き込み（ファイルの確定）を 1 回だけ失敗させる（偽の保存先だけ・`FakePersistIo` の
@@ -221,6 +240,27 @@ pub fn spawn_shown(
         ),
     );
     give_fake_handles(world, &gw);
+    resnap_with(shown, world);
+    gw
+}
+
+/// 本番（`ghost_session.rs` の窓を作る閉包）と同じ順で、窓を作る → `restored` のスコープの既定の
+/// 位置を消して覚えた隣り合いの印を据える → `shown` の絵が出て置き直す。並べ直しは回さない。
+pub fn boot_remembered(
+    world: &mut World,
+    placements: &[ScopePlacement],
+    restored: &BTreeMap<usize, Option<AdjacencyMark>>,
+    shown: &PerTargetSizes,
+) -> GhostWindows {
+    let not_shown = PerTargetSizes::new(placements.iter().map(|p| (p.scope, None)));
+    let gw = spawn_shown(world, placements, &not_shown);
+    {
+        let mut ghost_windows = world.resource_mut::<GhostWindows>();
+        for (&scope, &mark) in restored {
+            assert!(ghost_windows.clear_default_char_pos(scope));
+            ghost_windows.set_remembered_adjacency(scope, mark);
+        }
+    }
     resnap_with(shown, world);
     gw
 }

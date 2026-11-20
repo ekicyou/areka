@@ -5,8 +5,10 @@
 use bevy_ecs::change_detection::DetectChangesMut;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
+use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{Point, SizeI, WindowPos};
 
+use super::persist_test_support::{WORK_AREA, boot_remembered};
 use super::shell_target;
 use super::test_support::{FakeReports, size_of};
 use super::test_support::{FrameHarness, PerTargetSizes, pos_of, synth_assets, zero_clock};
@@ -17,7 +19,7 @@ use crate::zorder_cue::ZOrderDirective;
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::TextLayerConfig;
-use areka_placement::chain_finalize::{ChainFinalized, ScopeChainState};
+use areka_placement::chain_finalize::{AdjacencyMark, ChainFinalized, ScopeChainState};
 use areka_placement::follow::OffsetBase;
 use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
@@ -315,4 +317,64 @@ pub fn chain3_scan(world: &World) -> (Vec<ScopeChainState>, Vec<(usize, Entity, 
 pub fn chain3_pos(world: &World, gw: &GhostWindows, scope: usize) -> (i32, i32) {
     let p = pos_of(world, gw.char_window(scope).expect("キャラ窓")).expect("position がある");
     (p.x, p.y)
+}
+
+// ── 200% で覚えて記憶から戻した組 ──────────────────────────────────────────────
+
+/// 組の判断の行の本文（`finalize_chain_once_with` の info）。
+pub const PAIR_LINE: &str = "記憶から戻した組の判断";
+
+/// 200% で覚えた並び（下端に接地・相方は本体の左に隣り合う）を、200% の大きさの配置にする。
+/// 置き直しで 100% の絵を出すと、下端の中央を保って今の幅で立つ（記憶から戻した形と同じ）。
+pub fn remembered_placements() -> Vec<ScopePlacement> {
+    let high = [HIGH_SIZE_0, HIGH_SIZE_1];
+    let body_x = 1600;
+    [(0usize, body_x), (1, body_x - HIGH_SIZE_1.0 as i32)]
+        .into_iter()
+        .map(|(scope, x)| {
+            let char_size = SizePx {
+                w: high[scope].0 as i32,
+                h: high[scope].1 as i32,
+            };
+            let char_pos = PointPx {
+                x,
+                y: WORK_AREA.bottom - char_size.h,
+            };
+            let balloon_offset = PointPx { x: -230, y: 0 };
+            ScopePlacement {
+                scope,
+                char_pos,
+                char_size,
+                balloon_pos: PointPx {
+                    x: char_pos.x + balloon_offset.x,
+                    y: char_pos.y,
+                },
+                balloon_size: SizePx { w: 223, h: 158 },
+                balloon_offset,
+                balloon_offset_base: OffsetBase::unpinned(balloon_offset),
+                balloon_limit: false,
+                anchor: Anchor::Bottom,
+                balloon_keyword_base: None,
+            }
+        })
+        .collect()
+}
+
+/// 全スコープを記憶から戻した形（相方に `mark`）で窓を立て、置き直しの指令を捨てる。
+/// 並べ直しは回さない（呼び手が記録を捕まえて回す）。
+pub fn seat_remembered_pair(
+    world: &mut World,
+    placements: &[ScopePlacement],
+    mark: Option<AdjacencyMark>,
+    shown: &PerTargetSizes,
+) {
+    boot_remembered(world, placements, &[(0, None), (1, mark)].into(), shown);
+    let _resnap = drain_window_pos_commands();
+}
+
+/// 本体の左端 − 相方の右端。
+pub fn pair_gap(world: &World, width_1: u32) -> i32 {
+    let gw = world.resource::<GhostWindows>();
+    let x = |scope| pos_of(world, gw.char_window(scope).unwrap()).unwrap().x;
+    x(0) - (x(1) + width_1 as i32)
 }

@@ -9,6 +9,7 @@
 use std::sync::mpsc::Sender;
 
 use bevy_ecs::world::World;
+use log_capture_kit::capture;
 
 use super::super::test_support::spawn_resnap_windows;
 use super::*;
@@ -299,4 +300,20 @@ fn script_stopped_before_the_directive_leaves_the_state() {
         state.on,
         "対照の前提が崩れている（最後まで流してもオンにならない）"
     );
+}
+
+/// 起動の文脈が無ければゴーストの欄は `-`、オフの `\v` の帯は `normal`。
+#[test]
+fn log_ghost_falls_back_to_dash_and_raise_reports_normal_band() {
+    let (mut state, tx) = state_with_channel();
+    let (mut world, _) = world_with_windows();
+    tx.send(Raise).unwrap();
+    let ((), events) = capture(|| run_window_state_phase(&mut state, &mut world));
+    let events: Vec<_> = events
+        .iter()
+        .filter(|e| e.message().starts_with("[window_state]"))
+        .collect();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].field_str("ghost"), Some("-"));
+    assert_eq!(events[0].field_str("band"), Some("normal"));
 }

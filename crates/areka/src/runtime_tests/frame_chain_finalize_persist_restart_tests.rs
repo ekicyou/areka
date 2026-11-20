@@ -10,10 +10,11 @@
 //! 組むと、書くとき・戻すとき・中央を保って付け替えるときの計算を通らずに緑になる。
 
 use super::chain_finalize_persist_test_support::MinimalGhost;
-use super::test_support::{PerTargetSizes, pos_of};
+use super::test_support::pos_of;
 use super::*;
 use areka_runtime::frame::persist_test_support::{
-    PersistStore, persist_world, prep_placements, shown_sizes, spawn_shown, work_area_snapshot,
+    PersistStore, boot_remembered, persist_world, prep_placements, shown_sizes, spawn_shown,
+    work_area_snapshot,
 };
 
 use std::time::Instant;
@@ -92,10 +93,9 @@ fn first_run(ghost: &MinimalGhost, drag: bool) -> [Point; 2] {
     ends
 }
 
-/// 2 回目の World: 起動の準備の本番の関数で記憶を読み直し、本番（`ghost_session.rs` の窓を作る
-/// 閉包）と同じ順で、窓を作る → 返った集合のスコープの既定の位置を消す → 絵が出て置き直す →
-/// 並べ直しを回す。窓を作る閉包そのものはテストから呼べないので、同じ `clear_default_char_pos`
-/// を同じ集合に対して呼ぶ。返すのは 2 回目を並べ終えた時点の本体・相方の窓の位置。
+/// 2 回目の World: 起動の準備の本番の関数で記憶を読み直し、[`boot_remembered`]（本番の
+/// `ghost_session.rs` の窓を作る閉包と同じ順）で窓を立ててから並べ直しを回す。返すのは 2 回目を
+/// 並べ終えた時点の本体・相方の窓の位置。
 ///
 /// 並べ直しの移動が 0 件であること（窓への指令が出ない・位置が変わらない）と、並べ直しの前後で
 /// 記憶が同じこと（要件 1.2）もここで確かめる。
@@ -111,17 +111,8 @@ fn second_run(ghost: &MinimalGhost) -> [Point; 2] {
 
     let mut world = persist_world();
     store.wire(&mut world);
-    // 窓を作るだけ（絵はまだ出ていない＝置き直さない）。
-    let not_shown = PerTargetSizes::new([(0, None), (1, None)]);
-    let gw = spawn_shown(&mut world, &placements, &not_shown);
-    {
-        let mut ghost_windows = world.resource_mut::<GhostWindows>();
-        for scope in restored.keys() {
-            assert!(ghost_windows.clear_default_char_pos(*scope));
-        }
-    }
     let shown = shown_sizes();
-    resnap_with(&shown, &mut world);
+    let gw = boot_remembered(&mut world, &placements, &restored, &shown);
 
     let windows = [gw.char_window(0).unwrap(), gw.char_window(1).unwrap()];
     let before = windows.map(|e| pos_of(&world, e).expect("窓の位置"));

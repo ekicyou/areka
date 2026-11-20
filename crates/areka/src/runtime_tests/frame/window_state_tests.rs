@@ -139,20 +139,6 @@ fn log_fields_for_change_unchanged_and_raise() {
     assert_eq!(off.field_str("after"), Some("off"));
 }
 
-/// 起動の文脈が無ければゴーストの欄は `-`、オフの `\v` の帯は `normal`。
-#[test]
-fn log_ghost_falls_back_to_dash_and_raise_reports_normal_band() {
-    let (mut state, tx) = state_with_channel();
-    let (mut world, _) = world_with_windows();
-    tx.send(Raise).unwrap();
-    crate::session::hooks::install(&mut world);
-    let ((), events) = capture(|| run_window_state_phase(&mut state, &mut world));
-    let events = window_state_events(&events);
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].field_str("ghost"), Some("-"));
-    assert_eq!(events[0].field_str("band"), Some("normal"));
-}
-
 // ---------------------------------------------------------------------------
 // オンのまま降ろした記録（task 3.2・要件 4.1／4.2／6.4）
 // ---------------------------------------------------------------------------

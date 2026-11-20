@@ -162,7 +162,7 @@
   - _Dispatch: standard — 2 つの crate を跨いで支えを移す_
   - _Requirements: 3.1, 3.2, 3.7, 4.4, 4.5, 6.2, 6.6, 6.7_
 
-- [ ] 4.2 覚えた位置と窓の状態のテストを移し、保存の支えを直す（T18・17・33 番の その 2・99・106・110 番・件 10）
+- [x] 4.2 覚えた位置と窓の状態のテストを移し、保存の支えを直す（T18・17・33 番の その 2・99・106・110 番・件 10）
   - 覚えた隣り合いからの起動の補助を置き、3 か所で使う（17 番）
   - remembered ⑶⑷⑸ を新しい `areka-runtime` の remembered のテストへ移す。材料と起動の組み立ての半分を共有の支えへ置き、記録の捕捉の数行は両側に残す（33 番）
   - 窓の状態のテスト 1 本を `areka-runtime` へ移し、フックの導入を消し、絞り込みをテストの中に書く（99 番・本体の残り 4 本の補助は本体に残す）
@@ -280,3 +280,4 @@
 - 3.4: `frame_default_pos_track_tests.rs` の `HIGH_SIZE_*`・`raise_the_scale` は共有の同名と値が違う（出現の寸の 2 倍）ので私有のまま `DOUBLED_SIZE_*`・`double_the_scale` に改名した。arm の `settled_sizes` は共有の `high_sizes` と値が同じなので別名にせず消した。共有の支えは 309 行。`LOW_DPI`・`HIGH_DPI` の写しは balloon_offset_*・dpi_sync_hold に残る（3.5 の 29 番で見る）。
 - 3.5: `BALLOON_SPAWN_SIZE`・`BASE_OFFSETS`・`SCALE_120` は新しい `cfg(test)` の支えでなく `frame_shared_test_support.rs` に置いた（`feature = "test-support"` でも組まれる `resnap_placements` が読むため・設計からの逸れ）。`BASE_DPI`→`LOW_DPI`・`SCALE_192`→`HIGH_DPI`。強い方の整地の接地の確かめは Bottom の揃えの人格の窓だけ（follow の揃え方の表が整地の前に揃え方を変えるため）。`attach_material` の「素材は整地の後」の理由は消えた（審査の提案・7.1 で見る）。
 - 4.1: 移したテストは 22 本（規則 15・揃え 6・clamp ⑴ 1）。本体 46→24・`areka-runtime` 12→34 で、名は同じ（設計の「規則 13 本」は数え違いで実数は 15）。clamp ⑴⑻ の共通の配置は `persist_test_support::left_edge` に 1 つ置いた（写さない）。`crates/areka-placement/src/chain_rule_tests.rs:5` が古い置き場（本体の `frame_chain_rule_tests.rs`）を指したまま＝C23 で触らないファイルなので 6 で申し送りに書く。`left_edge::placements` の説明に「（要件 5.2）」が残る（7.1 で見る）。
+- 4.2: 移したテストは 4 本（remembered ⑶⑷⑸ 3・窓の状態 1）で本体 −4＝`areka-runtime` +4、消したのは 1 本（110 番 `frame::chain_rule_tests::a_remembered_left_mark_joins_with_the_defaultx_gap`・`every_world_path_keeps_the_defaultx_gap` の remembered の脚が守る）。restart の 2 回目の起動も印を付けるようになった（17 番の直しそのもの）。`doc/COMPAT_ARCHITECTURE.md` §8（L228 付近）が移した窓の状態のテストを本体の古い置き場で名指したまま＝C23 で触らないファイルなので 6 で申し送りに書く（`crates/areka-runtime/src/frame/window_state_tests.rs` へ）。

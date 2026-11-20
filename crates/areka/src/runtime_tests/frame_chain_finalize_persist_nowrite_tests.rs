@@ -12,11 +12,10 @@ use super::chain_finalize_persist_test_support::MinimalGhost;
 use super::test_support::{PerTargetSizes, pos_of, s2_monitors_with_work_area, size_of};
 use super::*;
 use areka_runtime::frame::persist_test_support::{
-    PREP_SIZES, PersistStore, SHOWN_SIZES, WORK_AREA, persist_world, prep_placements, shown_sizes,
-    spawn_shown, work_area_snapshot,
+    PREP_SIZES, PersistStore, SHOWN_SIZES, WORK_AREA, boot_remembered, persist_world,
+    prep_placements, shown_sizes, spawn_shown, work_area_snapshot,
 };
 
-use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_sylphya::{Axis, PersistKey};
 use wintf::ecs::window::drain_window_pos_commands;
 
@@ -26,13 +25,6 @@ use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::follow::move_window_to;
 use areka_placement::persist::{adjacency_entry, char_pos_entries, persist_entries};
 use areka_placement::resolver::{PointPx, RectPx};
-
-/// 書き手が送られた分を書き終えるのを待ってから、記憶のファイルの中身をそのまま読む。
-fn memory(store: &PersistStore, ghost: &MinimalGhost) -> String {
-    let _ = store.load();
-    let path = profile_areka_root(&ghost.root().join("ghost").join("master")).join("sylphya.toml");
-    std::fs::read_to_string(&path).expect("記憶のファイルがある")
-}
 
 /// 記憶にスコープ 0・1 の位置（x・y）がそろっていること（比べる前の中身の確かめ）。
 fn assert_positions_saved(store: &PersistStore) {
@@ -47,10 +39,9 @@ fn assert_positions_saved(store: &PersistStore) {
     }
 }
 
-/// 起動の準備の本番の関数で記憶を読み直し、本番（`ghost_session.rs` の窓を作る閉包）と同じ順で、
-/// 窓を作る → 返った集合のスコープの既定の位置を消す → 絵が出て置き直す。並べ直しは回さない。
+/// 起動の準備の本番の関数で記憶を読み直し、[`boot_remembered`] で窓を立てる。並べ直しは回さない。
 /// 返すのは窓の一式と、起動の準備の関数が返した配置。
-fn boot_remembered(
+fn boot_from_memory(
     world: &mut World,
     ghost: &MinimalGhost,
 ) -> (GhostWindows, Vec<areka_placement::resolver::ScopePlacement>) {
@@ -61,17 +52,7 @@ fn boot_remembered(
         vec![0, 1],
         "前提: 両方のスコープの位置が記憶にある"
     );
-    let not_shown = PerTargetSizes::new([(0, None), (1, None)]);
-    let gw = spawn_shown(world, &placements, &not_shown);
-    {
-        let mut ghost_windows = world.resource_mut::<GhostWindows>();
-        // 本番の起動（ghost_session）と同じく既定位置を外し覚えた印を据える。
-        for (&scope, &mark) in &restored {
-            assert!(ghost_windows.clear_default_char_pos(scope));
-            ghost_windows.set_remembered_adjacency(scope, mark);
-        }
-    }
-    resnap_with(&shown_sizes(), world);
+    let gw = boot_remembered(world, &placements, &restored, &shown_sizes());
     (gw, placements)
 }
 
@@ -111,7 +92,7 @@ fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
     };
     persist_entries(&world, vec![(offset_key, "12".to_string())]);
     assert_positions_saved(&store);
-    let saved = memory(&store, &ghost);
+    let saved = store.file_text();
     let char0 = gw.char_window(0).unwrap();
     let char1 = gw.char_window(1).unwrap();
 
@@ -124,7 +105,7 @@ fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
         Some(SizeI::new(grown.0 as i32, grown.1 as i32)),
         "前提: 置き直しが窓へ届く"
     );
-    assert_eq!(memory(&store, &ghost), saved, "置き直しは記憶を変えない");
+    assert_eq!(store.file_text(), saved, "置き直しは記憶を変えない");
 
     // (b) SHIORI の移動の指示と同じ口で動かす。
     let start = pos_of(&world, char1).expect("相方の位置");
@@ -133,7 +114,7 @@ fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
         "前提: 移動の指示が窓へ届く"
     );
     assert_ne!(pos_of(&world, char1), Some(start), "前提: 相方が動く");
-    assert_eq!(memory(&store, &ghost), saved, "移動の指示は記憶を変えない");
+    assert_eq!(store.file_text(), saved, "移動の指示は記憶を変えない");
 
     // (c) 作業領域が変わって寄せ直す（本番の毎フレームの処理と同じ、同期 → 寄せ直しの順）。
     let before = pos_of(&world, char0).expect("本体の位置");
@@ -153,7 +134,7 @@ fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
         "前提: 寄せ直しで本体が新しい下端へ移る"
     );
     assert_eq!(
-        memory(&store, &ghost),
+        store.file_text(),
         saved,
         "作業領域の寄せ直しは記憶を変えない"
     );
@@ -161,11 +142,7 @@ fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
     // (d) ゴーストの切り替えの閉じ方で閉じる。
     let closed = close_windows_for_restart(&mut world);
     assert!(closed.closed() > 0, "前提: 窓が閉じる");
-    assert_eq!(
-        memory(&store, &ghost),
-        saved,
-        "切り替えの閉じ方は記憶を変えない"
-    );
+    assert_eq!(store.file_text(), saved, "切り替えの閉じ方は記憶を変えない");
 
     // 本番の切り替えと同じく、記憶から窓を作り直して並べ終える（作業領域は元に戻す。同期段が
     // 作業領域の表と拡大率の表の両方を差し替える）。
@@ -174,14 +151,14 @@ fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
         &s2_monitors_with_work_area(96, WORK_AREA),
     )
     .expect("前提: 作業領域の表が元へ差し替わる");
-    let (gw2, _) = boot_remembered(&mut world, &ghost);
+    let (gw2, _) = boot_from_memory(&mut world, &ghost);
     finalize_chain_once_with(&shown, &mut world);
     assert!(
         world.contains_resource::<ChainFinalized>(),
         "前提: 作り直した窓を並べ終える"
     );
     assert_eq!(
-        memory(&store, &ghost),
+        store.file_text(),
         saved,
         "記憶から作り直した窓は並べ終えた時点でも書かない"
     );
@@ -195,10 +172,10 @@ fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
         "前提: 移動の指示が窓へ届く"
     );
     assert_ne!(pos_of(&world, partner), Some(start), "前提: 相方が動く");
-    assert_eq!(memory(&store, &ghost), saved, "移動の指示は記憶を変えない");
+    assert_eq!(store.file_text(), saved, "移動の指示は記憶を変えない");
     let closed = quit_app(&mut world, ExitOrigin::Smoke);
     assert!(closed > 0, "前提: 終了の手順が窓を閉じる");
-    assert_eq!(memory(&store, &ghost), saved, "終了の手順は記憶を変えない");
+    assert_eq!(store.file_text(), saved, "終了の手順は記憶を変えない");
 
     store.finish();
     let _residue = drain_window_pos_commands();
@@ -230,11 +207,11 @@ fn offscreen_saved_position_survives_finalize_while_shown_pulled_in() {
         persist_entries(&seed, entries);
     }
     assert_positions_saved(&store);
-    let saved = memory(&store, &ghost);
+    let saved = store.file_text();
 
     let mut world = persist_world();
     store.wire(&mut world);
-    let (gw, placements) = boot_remembered(&mut world, &ghost);
+    let (gw, placements) = boot_from_memory(&mut world, &ghost);
     let pulled = placements[0].char_pos;
     assert!(
         pulled.x + PREP_SIZES[0].w <= WORK_AREA.right,
@@ -254,7 +231,7 @@ fn offscreen_saved_position_survives_finalize_while_shown_pulled_in() {
         "前提: 並べ終える"
     );
     assert_eq!(
-        memory(&store, &ghost),
+        store.file_text(),
         saved,
         "寄せ直して表示している記憶は並べ終えた時点でも書き換わらない"
     );
