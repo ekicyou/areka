@@ -254,7 +254,7 @@
   - _Dispatch: mechanical — 書く中身を設計が与える_
   - _Requirements: 9.5_
 
-- [ ] 8.4 (P) steering `tech.md` の WARP の例外の列に 1 文を足す
+- [x] 8.4 (P) steering `tech.md` の WARP の例外の列に 1 文を足す
   - 書く前に `input-crate-split` のセッションへ、`tech.md` の Testing の節の WARP の例外の列に 1 文を足すこと（依存の節には触らないこと）を知らせ、向こうが先に main へ入っていれば取り込んでから書く
   - 設計の移行の節の文案（ID の描き先の答えも WARP を使ってよい・ID は完全一致で比べる・固定する点は矩形とマスクの画素と、曲線や斜めの辺から 0.25 画素より離れた点に限る）を足す
   - 完了の姿: `tech.md` の WARP の例外の列にその 1 文が在り、ほかの行は変わっていない
