@@ -1,3 +1,7 @@
+use areka_placement::dpi_sync::DpiSyncHold;
+use areka_placement::follow::{MonitorDpiEntry, MonitorDpiTable};
+use areka_placement::resolver::RectPx;
+use bevy_ecs::prelude::With;
 use std::sync::mpsc;
 use wintf::ecs::DPI;
 
@@ -147,11 +151,10 @@ fn frame_system_drives_text_scale_phase_every_frame() {
 ///
 /// `dpi_phase_with` へテスト側の state を渡す檻では「本番が wiring のフィールドを使っている」
 /// ことを一切見ないため、ここでは `run_dpi_phase(&mut wiring, ..)` だけを叩き、その**副作用**
-/// （`wiring.dpi_state` の生成と `last_run` の前進）を private フィールド越しに観測する。
+/// （`wiring.dpi_state` の生成と、2 回目の run が拾う窓）を観測する。
 ///
-/// 非空虚性の核: 同一 World で**新規** `SystemState` を作ると全窓（4 窓）へマッチする——
-/// すなわち「毎 run 作り直す実装」は毎フレーム全窓を refresh する churn になる。本番の
-/// 永続観測器が 0 件であることと対にして、永続性が実際に効いていることを弁別する。
+/// 非空虚性の核: 毎 run 作り直す実装は 2 回目も全窓（4 窓）へマッチする churn になる。2 回目の前に
+/// 1 窓だけ DPI を変え、整合待ちの札が付いた窓がその 1 窓だけであることで永続性を弁別する。
 #[test]
 fn run_dpi_phase_persists_system_state_across_frames_in_production_path() {
     let (mut world, gw) = dpi_world();
@@ -169,50 +172,31 @@ fn run_dpi_phase_persists_system_state_across_frames_in_production_path() {
         "run_dpi_phase は観測器を wiring へ保持しなければならない（毎 run 作り直せば churn）"
     );
 
-    // Bevy 0.19ではSystemState::get自体が観測ティックを進めるため、まず直前フェーズ内の
-    // 変更を同期してから次回観測を行う。次フレーム相当のマッチは0件でなければならない。
-    let dpi_state = wiring.dpi_state.as_mut().expect("生成済み");
-    let _ = dpi_state
-        .get(&world)
-        .expect("DPI changed query validation should succeed")
-        .iter()
-        .count();
-    let matched_after_first = dpi_state
-        .get(&world)
-        .expect("DPI changed query validation should succeed")
-        .iter()
-        .count();
-    assert_eq!(
-        matched_after_first, 0,
-        "永続観測器は初回 run で Changed を消費済み＝以降はマッチしない"
-    );
+    // 2 フレーム目（本番経路）: 1 窓だけ DPI を変え、モニタ表を窓の拡大率と食い違う値で置く。
+    // 本番の観測器が拾った窓だけが整合ゲートで待ち札を付けられるので、札の付いた窓が拾われた窓である。
+    let changed = gw.char_window(1).expect("char 窓がある");
+    world.insert_resource(MonitorDpiTable {
+        entries: vec![MonitorDpiEntry {
+            bounds: RectPx {
+                left: -100_000,
+                top: -100_000,
+                right: 100_000,
+                bottom: 100_000,
+            },
+            dpi: 120,
+        }],
+    });
+    world.entity_mut(changed).insert(DPI::from_dpi(144, 144));
+    run_dpi_phase(&mut wiring, &mut world);
 
-    // 非空虚性: 同一 World で新規 SystemState を作ると変更済み窓へマッチする（＝作り直し実装の churn）。
-    let mut fresh: SystemState<DpiChangedQuery> = SystemState::new(&mut world);
-    assert!(
-        fresh
-            .get(&world)
-            .expect("DPI changed query validation should succeed")
-            .iter()
-            .count()
-            > 0,
-        "新規 SystemState は変更済み窓へマッチする（この差が永続性の効果そのもの）"
-    );
-
-    // 永続観測器は「変化しなくなった」のではなく、実変化はきちんと拾う（恒久的な盲目でない）。
-    world
-        .entity_mut(gw.char_window(1).expect("char 窓がある"))
-        .insert(DPI::from_dpi(144, 144));
-    let matched_after_change = wiring
-        .dpi_state
-        .as_mut()
-        .expect("生成済み")
-        .get(&world)
-        .iter()
-        .count();
+    let held: Vec<Entity> = world
+        .query_filtered::<Entity, With<DpiSyncHold>>()
+        .iter(&world)
+        .collect();
     assert_eq!(
-        matched_after_change, 1,
-        "実際に DPI が変わった 1 窓だけを拾う（検知が生きている）"
+        held,
+        vec![changed],
+        "永続観測器は実際に DPI が変わった 1 窓だけを拾う（作り直せば全窓を拾う）"
     );
 }
 
