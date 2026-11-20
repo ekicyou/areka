@@ -42,7 +42,7 @@
   - 足す（テストの支え・`#[cfg(any(test, feature = "test-support"))]`）: `target_map::window_scope`（本番の関数・4 番）・`frame::test_support::gpu_on`（31 番）・`frame::shared_test_support` の結線の補助と、写しから寄せた定数と補助（26・27・28 番）・`frame::persist_test_support`（33 番・本体の `frame_chain_finalize_persist_test_support.rs` の大半を移す）。
   - 消す: `FrameHarness::run_work_area_resnap`（71 番・外の読み手 0）。
 - `RuntimeWiring` の私有の欄 `unconnected_text` を足す（3 番・`pub(super)`）。
-- ログの行: 新しい `info!` 1 行（3 番の繋ぎ直し）・scope の上限の記録（4 番・`frame/dpi.rs` と `frame/scale_text.rs` の `error!` 2 行を消し、`target_map::window_scope` の `warn!` 1 行に寄せる）・取り出しの上限の文（113 番・`frame/drain_resnap.rs` の「…残りは捨てずに次のフレームで…」を「…残りがあれば次のフレームで…」へ）・`frame/work_area_sync.rs` の `[work_area_sync]` の `warn!` 1 行「見張りの印を進められない（次のフレームで 1 回作り直す）」（7.1 のかけ直しで足した・今の引数では届かない道）。どれも字面で読む実機の確かめ・`tools/perf/`・手順書は 0 件（`research.md` の 4 節と、この設計の時点の grep）。
+- ログの行: 新しい `info!` 1 行（3 番の繋ぎ直し）・scope の上限の記録（4 番・`frame/dpi.rs` と `frame/scale_text.rs` の `error!` 2 行を消し、`target_map::window_scope` の `warn!` 1 行に寄せる）・取り出しの上限の文（113 番・`frame/drain_resnap.rs` の「…残りは捨てずに次のフレームで…」を「…残りがあれば次のフレームで…」へ）・`frame/work_area_sync.rs` の `[work_area_sync]` の `warn!` 1 行「見張りの印を進められない（次のフレームで 1 回作り直す）」（7.1 のかけ直しで足した・今の引数では届かない道）・`frame/attach.rs` の balloon 資産が無いときの `warn!` の文から「DD-12 」を外した（5.1 の 41 番）。どれも字面で読む実機の確かめ・`tools/perf/`・手順書は 0 件（`research.md` の 4 節と、この設計の時点の grep）。
 
 ### 範囲の外（持たないもの）
 
@@ -69,7 +69,7 @@
 - `RuntimeWiring` に私有の欄 `unconnected_text` が増える（3 番）。`balloon-text-visual-tree`（同じ `attach.rs`・`scale_text.rs`・`wiring.rs` を触る後の spec）は、装着で繋げなかったスコープを文字の拡大率の相が繋ぎ直す前提で組む。
 - 作業領域の源の同期は、モニターの component（`wintf::ecs::Monitor`）の変化と数で「表が変わったか」を見る（49 番）。`MonitorSnapshot`・`MonitorDpiTable` の資源を手で置き替えても、モニターの component が変わらない限り同期は作り直さない。
 - 公開の狭め（114 番）と `FrameHarness::run_work_area_resnap` の削除（71 番）。外の読み手は 0 件（grep）。
-- テストの置き場: 本体の `runtime_tests/` から `areka-runtime` へ、`frame_chain_rule_tests.rs`（13 本）・`frame_chain_finalize_align_tests.rs`（6 本）・`frame_chain_finalize_clamp_tests.rs` の ⑴・`frame_chain_finalize_remembered_tests.rs` の ⑶⑷⑸・`frame/window_state_tests.rs` の 1 本が移る（33・99 番・確定 9）。本体の `frame_chain_finalize_persist_test_support.rs` の大半（`PersistStore` ほか）は `areka-runtime` の `frame::persist_test_support` へ移り、本体に残るのは `MinimalGhost` だけになる。`session-module-gather` が直すパスはその分だけ減る。
+- テストの置き場: 本体の `runtime_tests/` から `areka-runtime` へ、`frame_chain_rule_tests.rs`（15 本）・`frame_chain_finalize_align_tests.rs`（6 本）・`frame_chain_finalize_clamp_tests.rs` の ⑴・`frame_chain_finalize_remembered_tests.rs` の ⑶⑷⑸・`frame/window_state_tests.rs` の 1 本が移る（33・99 番・確定 9）。本体の `frame_chain_finalize_persist_test_support.rs` の大半（`PersistStore` ほか）は `areka-runtime` の `frame::persist_test_support` へ移り、本体に残るのは `MinimalGhost` だけになる。`session-module-gather` が直すパスはその分だけ減る。
 - `frame_transition_branch_tests.rs` が 2 本に分かれ、上限越えの表から出る（35 番）。
 - ログの行の足し: `frame/work_area_sync.rs` の `[work_area_sync]` の `warn!`「見張りの印を進められない（次のフレームで 1 回作り直す）」（`SystemState::get` の失敗を捨てずに残す・今の引数では届かない道）。字面の読み手は 0 件。
 
@@ -117,6 +117,8 @@ graph TB
 crates/areka-runtime/src/frame/move_hold_tests.rs              # 2 番の縛るテスト（move_hold.rs の子・私有の Blocked を見る）
 crates/areka-runtime/src/frame_transition_test_support.rs      # 29 番の寄せ先（#[cfg(test)]・writes_for・settle_at・scaled・warnings_containing・offset_of・follow_of・offset_lines・拡大率の定数・BALLOON_SPAWN_SIZE）
 crates/areka-runtime/src/frame_transition_branch_wait_tests.rs # 35 番で分けた群 A（待ち）
+crates/areka-runtime/src/frame_test_support_gpu_on_tests.rs    # 31 番の gpu_on が COM の初期化の失敗で止まることのテスト（T13 で足した）
+crates/areka-runtime/src/frame_chain_finalize_remembered_tests.rs # 33 番で本体から移した remembered ⑶⑷⑸ の置き場（T18 で足した）
 ```
 
 ### 移すファイル（`git mv`・中身は直しに合わせて改める）
@@ -131,7 +133,7 @@ crates/areka/src/runtime_tests/frame_chain_finalize_persist_test_support.rs -> c
 
 ### 消すファイル
 
-- 無い（中身を移したファイルは上の `git mv` で動かす）。
+- 本体の `runtime_tests/frame_chain_finalize_clamp_tests.rs`（7.1 のかけ直しで、残っていた 1 本を `areka-runtime` の `frame_chain_finalize_tests.rs` へ移して消した）。ほかは上の `git mv` で動かす。
 
 消すテスト・補助・定数は、消す前にツリー全体（テスト・テストの支え・examples・fixture・設定・スキル・手順書・steering・文字列での参照・`#[path]`・本体の `placement_tests/zorder_group_branch_coverage_tests.rs` の `COVERAGE` のようなテストの名の文字列）で使われていないことを grep で確かめる（要件 3.3・各タスクの完了の条件）。
 

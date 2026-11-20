@@ -377,7 +377,7 @@ mod drain_text_tests;
 #[path = "frame_exit_gate_tests.rs"]
 mod exit_gate_tests;
 
-#[cfg(test)]
+#[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_resnap_tests.rs"]
 mod resnap_tests;
 

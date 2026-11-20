@@ -1217,6 +1217,7 @@ C23 のほかの 3 本は `hit-id-pass`・`balloon-flip-ssp-review`・`input-cra
   - 足した `warn!`（設計の一覧の外だった分）: `frame/work_area_sync.rs`「[work_area_sync] 見張りの印を進められない（次のフレームで 1 回作り直す）」（7.1 のかけ直しで足した・13.5。今の引数では届かない道）: 字面の読み手 0 件。設計の「境界の約束」のログの行と「見直しが要る変化」に足して、設計とコードを揃えた。
   - 字面を変えた `warn!`（113 番）: `frame/drain_resnap.rs`「drain: 1 フレームに取り出す上限に達した（残りは捨てずに次のフレームで到着順に適用する）」→「…（残りがあれば次のフレームで到着順に適用する）」: 範囲の外の字面の読み手 0 件（範囲の中の読み手は同じ変更で足した `frame/drain_resnap_tests.rs` の 1 か所だけ）。
   - 足した `info!`: `frame/scale_text.rs`「text-scale: 装着で繋げなかった文字層を、配置先ができたので繋ぐ」（3 番）: 範囲の外の字面の読み手 0 件（範囲の中の読み手は同じ変更で足した `frame_text_scale_tests.rs` の 1 か所だけ）。
+  - 字面を変えた `warn!`（5.1 の 41 番の一掃・設計の一覧の外だった分）: `frame/attach.rs`「runtime attach: 同 scope の balloon 資産が無い（DD-12 balloon_index None）→ 文字層接続なし」→「…（balloon_index None）…」: 字面の読み手 0 件。最終の確かめで見つけ、設計の「境界の約束」のログの行に足した。
   - 既存の `info!(skin_switch_done)` は字面を変えていない（説明の行だけ）。
   - 読み手の数は、それぞれの文の切れ端（「scope が u32 に収まらず」・「window scope が上限を越え」・「見張りの印を進められない」・「次のフレームで 1 回作り直す」・「取り出す上限」・「残りは捨てずに次のフレーム」・「残りがあれば次のフレーム」・「装着で繋げなかった文字層」）を `crates/`・`tools/`・`doc/`・`.claude/`・`.kiro/steering/` に grep して、出した行の外に当たる所で数えた。
 - 設計との揃え: 設計の「指摘ごとの直し方」の 56 番の行は「`areka-test-binary-stability` の `load-repro.md` の ⑹」と spec の名を書くと言っていたが、コードは CLAUDE.md の `## Comments` に合わせて名を消し、理由「自前の締切は負荷の下で赤になる」だけを残した（G3-1・要件 5.13 は消してよいと書く）。設計の 56 番の行を、したことに書き直した。
