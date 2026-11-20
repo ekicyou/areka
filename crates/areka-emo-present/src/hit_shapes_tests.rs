@@ -104,6 +104,78 @@ fn over_the_limit_keeps_the_front_most_entries() {
 }
 
 #[test]
+fn bound_edges_and_many_entries_get_distinct_ids() {
+    let regions: Vec<Collision> = (0..300)
+        .map(|i| hit(CollisionShape::Rect(bounds(i, 0, i + 1, 1))))
+        .collect();
+    let all = hit_shapes(
+        &regions,
+        None,
+        &mut HitMasks::default(),
+        (400, 10),
+        HIT_SHAPE_LIMIT,
+    );
+    assert_eq!((all.first, all.dropped), (0, 0));
+    assert_eq!(ids(&all), (1..=300).collect::<Vec<u32>>());
+    let lefts: Vec<f32> = all
+        .shapes
+        .iter()
+        .map(|s| match s.form {
+            IdForm::Rect { left, .. } => left,
+            _ => panic!("rect"),
+        })
+        .collect();
+    assert_eq!(lefts, (0..300).map(|i| i as f32).collect::<Vec<_>>());
+
+    let exact = hit_shapes(&regions, None, &mut HitMasks::default(), (400, 10), 300);
+    assert_eq!(
+        (exact.first, exact.dropped, exact.shapes.len()),
+        (0, 0, 300)
+    );
+
+    let last_two = hit_shapes(&regions, None, &mut HitMasks::default(), (400, 10), 2);
+    assert_eq!((last_two.first, last_two.dropped), (298, 298));
+    assert_eq!(ids(&last_two), [1, 2]);
+    assert_eq!(
+        last_two.shapes[1].form,
+        IdForm::Rect {
+            left: 299.0,
+            top: 0.0,
+            right: 300.0,
+            bottom: 1.0
+        }
+    );
+
+    let none = hit_shapes(&regions, None, &mut HitMasks::default(), (400, 10), 0);
+    assert_eq!((none.first, none.dropped, none.shapes.len()), (300, 300, 0));
+}
+
+#[test]
+fn skipped_entries_inside_the_bound_keep_their_seat() {
+    let regions = [
+        hit(CollisionShape::Rect(bounds(0, 0, 1, 1))),
+        hit(CollisionShape::Rect(bounds(50, 50, 60, 60))),
+        hit(CollisionShape::Rect(bounds(2, 0, 3, 1))),
+    ];
+    let plan = hit_shapes(&regions, None, &mut HitMasks::default(), (10, 10), 2);
+    assert_eq!((plan.first, plan.dropped), (1, 1));
+    assert_eq!(ids(&plan), [2]);
+
+    let regions = [
+        hit(CollisionShape::Region(region("r.png", 0, 0))),
+        hit(CollisionShape::Rect(bounds(0, 0, 1, 1))),
+    ];
+    let plan = hit_shapes(
+        &regions,
+        None,
+        &mut HitMasks::default(),
+        (10, 10),
+        HIT_SHAPE_LIMIT,
+    );
+    assert_eq!(ids(&plan), [2]);
+}
+
+#[test]
 fn extreme_coordinates_saturate_without_panic() {
     let regions = [
         hit(CollisionShape::Rect(bounds(
@@ -219,6 +291,56 @@ fn region_is_placed_at_its_position_and_converted_once() {
     };
     assert!(Arc::ptr_eq(a, c), "GPU の絵を捨てても直したマスクは残る");
     assert_eq!(id_masks.pictures().created(), 0);
+}
+
+#[test]
+fn imported_region_is_placed_at_its_shifted_position() {
+    let mut dec = MemoryDecoder::new();
+    dec.insert_unmultiplied(
+        std::path::Path::new("shell").join("r.png"),
+        DecodedImage {
+            width: 2,
+            height: 1,
+            stride: 8,
+            bgra: vec![0, 0, 255, 255, 0, 0, 0, 255],
+            has_alpha: true,
+        },
+    );
+    let r = region("r.png", 0, 0);
+    let masks = RegionMasks::load([&r].into_iter(), std::path::Path::new("shell"), &dec);
+    let shifted = CollisionRegion {
+        x: 3,
+        y: 4,
+        ..r.clone()
+    };
+    let regions = [
+        hit(CollisionShape::Region(r)),
+        hit(CollisionShape::Region(shifted)),
+    ];
+    let plan = hit_shapes(
+        &regions,
+        Some(&masks),
+        &mut HitMasks::default(),
+        (10, 10),
+        HIT_SHAPE_LIMIT,
+    );
+    let (
+        IdForm::Mask {
+            mask: a,
+            left: l0,
+            top: t0,
+        },
+        IdForm::Mask {
+            mask: b,
+            left: l1,
+            top: t1,
+        },
+    ) = (&plan.shapes[0].form, &plan.shapes[1].form)
+    else {
+        panic!("region はマスクの形になる: {plan:?}");
+    };
+    assert_eq!(((*l0, *t0), (*l1, *t1)), ((0, 0), (3, 4)));
+    assert!(Arc::ptr_eq(a, b));
 }
 
 #[test]
