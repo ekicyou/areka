@@ -103,6 +103,7 @@ graph TB
 - `crates/areka-placement/src/reset_pos_tests.rs` — `reset_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target` の名前と注を、押し込みの位置のまま変わらないことの檻に直す（主張の値は変えない）。
 - `crates/areka-placement/src/chain_realign_script_moved_tests.rs` — `realign_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target` を同じ形に直す（主張の値は変えない）。
 - 注だけを直すファイル（主張・値は変えない）: `crates/areka-placement/src/balloon_limit_gate_tests.rs`（71 行・363 行の「並べ替えず」）・`crates/areka-placement/src/follow_balloon_limit_tests.rs`（47 行の「反対の側へ並べ替える」）・`crates/areka/src/main_restore_seam_tests.rs`（216〜217 行の「反対の側へ映した」）・`crates/areka-placement/src/follow_other_chars_tests.rs`（147 行の `balloon_limit_flip_tests.rs` を名指す注）。前提合わせ（キャラクター窓をはみ出させる）は残す。外すと檻の数が変わるだけで主張は同じなので、手を入れない。
+- 注を直すときの決まり（上のどのファイルにも当てる）: `CLAUDE.md` の「Comments」節に従う。並べ替えを書いた古い注は、書き直すより消すのを先に考え、残すのは名前や型や檻で言えない理由（なぜ）だけにする。コードの注に spec 名・要件番号・タスク番号を書かない（ukadoc は書いてよい）。`///`・`//!` の文書の注は正しく短く直す。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の 438 行目を書き直す（CompatDoc）。
 - `.kiro/specs/balloon-flip-ssp-review/research.md` — 檻の扱いの表（要件 7.6）を実装の後に書く節を足す。
 
