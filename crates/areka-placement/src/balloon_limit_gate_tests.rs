@@ -67,10 +67,7 @@ fn placement(
 
 /// キャラ窓を下辺から 20px はみ出させる（縦 600 → 800・上端 300 なら下端 1100 > 1080）。
 ///
-/// 押し込みを主張する檻の前提合わせ（window-work-area-clamp task 5.2）: キャラ窓が
-/// 作業領域からはみ出しているときは並べ替えず今の押し込み（要件 5.6）なので、バルーンの
-/// 位置・相対の位置・期待値は変えずに押し込みの経路を通せる。中心は域内に残るので
-/// 帰属モニタも変わらない。
+/// 中心は域内に残るので帰属モニタは変わらない。
 fn char_overflowing(mut p: ScopePlacement) -> ScopePlacement {
     p.char_size = SizePx { w: CSZ.w, h: 800 };
     p
@@ -360,7 +357,6 @@ fn boot_gate_never_touches_balloon_offset_on_any_edge() {
     ];
 
     for (offset, expected, what) in table {
-        // キャラ窓は下辺からはみ出させ、横の辺でも並べ替えず押し込む（要件 5.6）。
         let before = char_overflowing(placement(0, char_pos, offset, true));
         let out = apply_balloon_limit(vec![before], &snapshot(&[WA]));
 
