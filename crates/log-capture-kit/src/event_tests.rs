@@ -17,8 +17,8 @@
 //! - 宛先を含む形: `crates/areka-seriko/src/lib_test_support.rs` の `capture_logs` と
 //!   `crates/areka-emo-atlas/src/log_capture.rs`・`crates/areka-emo-compose/src/log_capture.rs`
 //!   の同型。
-//! - 宛先を含まない形: `crates/areka/src/input_events/choice_drain.rs` の `capture_logs` と
-//!   `crates/areka/src/input_events/balloon_test_support.rs`・`crates/areka/src/shiori_demo.rs`・
+//! - 宛先を含まない形: `crates/areka-input/src/choice_drain.rs` の `capture_logs` と
+//!   `crates/areka-input/src/balloon_test_support.rs`・`crates/areka/src/shiori_demo.rs`・
 //!   `crates/wintf/src/ecs/window_proc/dpi_helpers_tests.rs` の同型。
 
 use std::collections::BTreeMap;
@@ -120,7 +120,7 @@ impl tracing::Subscriber for LegacyLineFormatting {
                 .push(line);
         }
 
-        // ↓ `areka/src/input_events/choice_drain.rs`（＝他 3 ファイルも同一）逐語
+        // ↓ `areka-input/src/choice_drain.rs`（＝他 3 ファイルも同一）逐語
         {
             use tracing::field::{Field, Visit};
             let meta = ev.metadata();

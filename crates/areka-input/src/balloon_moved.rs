@@ -15,7 +15,7 @@ use areka_runtime::frame::RuntimeWiring;
 use super::{BalloonWiring, HoverAction, hit_choice_row, hover_action};
 
 // ---------------------------------------------------------------------------
-// 配線層（tasks.md task 4.1・design「配線層（input_events/balloon.rs）> balloon ハンドラ」）
+// 配線層（tasks.md task 4.1・design「配線層（crates/areka-input/src/balloon.rs）> balloon ハンドラ」）
 //
 // wintf `PointerEventHandler` 署名の移動ハンドラ。Bubble 相のみ処理し、固定順の借用規律
 // （共有借用→スナップショット→借用解放→可変借用で inject・design §204）に従って hover 追従を

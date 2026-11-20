@@ -1,7 +1,7 @@
 //! 箱の上の滞在（`ShellBoxHover`）と毎フレームの整え（`settle_box_hover`）。
 //!
-//! 可視性の相（`balloon_visibility_phase`）が読み、入力の側（`input_events::shell_box`）が書く。
-//! 入力の側は `pub(crate) use` で出し直す（runtime-module-untangle・中身は `input_events/shell_box.rs` から移したまま）。
+//! 可視性の相（`balloon_visibility_phase`）が読み、入力の側（`areka_input::shell_box`）が書く。
+//! 入力の側は `pub(crate) use` で出し直す（runtime-module-untangle・中身は `crates/areka-input/src/shell_box.rs` から移したまま）。
 
 use std::collections::HashMap;
 
@@ -16,7 +16,7 @@ pub fn settle_box_hover(prev: Option<&BoxName>, shown: &[ShownBox]) -> Option<Bo
 
 /// スコープごとの「今ポインタが居る、文字の出ている箱の名前」（NonSend・UI スレッド所有）。
 ///
-/// 書き込むのは `input_events::shell_box::next_box_hover`（箱へ入る・移る・出る）・シェルの窓からの離脱（`None`）・
+/// 書き込むのは `areka_input::shell_box::next_box_hover`（箱へ入る・移る・出る）・シェルの窓からの離脱（`None`）・
 /// 毎フレームの [`settle_box_hover`] の結果だけ。時間切れの観測の滞在は `get(scope).is_some()`。
 ///
 /// 滞在している箱へ最後に注入した選択肢の強調（ordinal）も並べて持つ（同値の注入を避けるため・

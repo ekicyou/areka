@@ -90,7 +90,7 @@ pub(crate) fn set_path(world: &mut World, path: PathBuf) {
 /// 起こせなければ `error!` を残し、以後は入口（[`opener::submit`]）が要求ごとに `error!` を残す。
 ///
 /// 並びは `dispatch_pointer_events` の後——同じ tick のうちに届いた要求をその tick で
-/// 処理する（`input_events/choice_drain.rs` の `register_choice_drain` と同型）。
+/// 処理する（`crates/areka-input/src/choice_drain.rs` の `register_choice_drain` と同型）。
 ///
 /// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
 pub(crate) fn register_readme_drain(world: &mut World) {

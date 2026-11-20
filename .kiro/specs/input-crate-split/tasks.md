@@ -96,7 +96,7 @@
   - _Requirements: 5.8, 1.11_
 
 - [ ] 6. 入力を名指すパスと受け持ちを書き換える
-- [ ] 6.1 (P) コードの説明に残る入力のパスと名前を書き換える
+- [x] 6.1 (P) コードの説明に残る入力のパスと名前を書き換える
   - `log-capture-kit` の説明・本体の外の crate（配置・runtime・examples・文字の層）の説明・本体の説明（インストールと readme）を、設計のパスの対応表どおりに書き換える（動きは変えない）
   - runtime の当たり判定のファイルは冒頭の説明の 3 行だけに留め、`frame*` には触らない
   - 触った crate の型の確かめが警告 0 で、`log-capture-kit` のテストが緑
@@ -163,3 +163,5 @@
 - 4.1: 公開面は設計の一覧に `user_break::drain_no_user_break_signals` を足したもの（本体の `runtime_tests/frame_shell_box_arrow_tests.rs` が使う）。連れて開けた型は 0。
 - 4.1: `cargo doc -p areka-input` の警告 20 件（移したコメントの「private item へのリンク」19・`MouseWiring::with_clock` の解けないリンク 1）は本体の名を指さない。7.4 で `audit-areka-input-menu` へ申し送る。
 - 範囲の外: `cargo check --workspace --all-targets` に `shiori-abi` の `unused dependency windows`（`crates/shiori-abi/Cargo.toml:16`）が main でも出る。完了の棚卸で起票する。
+- 6.1: 移した `areka-input` のファイルの説明に残る古いパス 6 か所（`balloon.rs` 2・`balloon_hover_flag_tests.rs`・`balloon_moved.rs`・`spawn_assembly_tests.rs` 2）は 6.7 の当たりになるので、パスとモジュールの名だけを書き換えた（意味は変えない）。
+- 6.1: `collision-probe.rs`・`collision-probe/setup.rs` の「`pub(crate)`・内部が `crate::` パス」という理由の文は移した後は古い（結論は依存の向きで成り立つ）。7.4 で `audit-areka-input-menu` へ申し送る。

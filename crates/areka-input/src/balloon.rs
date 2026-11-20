@@ -60,7 +60,7 @@ pub(crate) use pressed::{finished_talking, on_balloon_pointer_pressed};
 /// `ordinal` はワイヤ形に含めない（漏洩防止・design 2.6）。
 ///
 /// 本番到達済み——発行は [`on_balloon_pointer_pressed`]→[`BalloonWiring::send_selection`]、
-/// 全フィールドの消費は `input_events/choice_drain.rs` の `to_choice_input`（`ChoiceInput` へ
+/// 全フィールドの消費は `crates/areka-input/src/choice_drain.rs` の `to_choice_input`（`ChoiceInput` へ
 /// 不透明転写）と、種類がアンカーのときの `to_anchor_input`（`AnchorInput` へ同じく転写）。
 /// `resolve_choice` を本 crate から呼ばない点は現在も変わらない（発行までが本 mod の
 /// 範囲・カスケードは kanade 側）。
@@ -368,7 +368,7 @@ pub(crate) fn click_selection(
 // post-spawn 装着・NonSend 結線・スケジュール登録（tasks.md task 6.1・design
 // 「attach_balloon_pointer_handlers / wire_balloon_choice」＋「clear_balloon_hover_on_leave」Validation）
 //
-// donor `attach_char_pointer_handlers`（input_events/mod.rs）／`wire_mouse_input`（同）／main.rs の
+// donor `attach_char_pointer_handlers`（crates/areka-input/src/lib.rs）／`wire_mouse_input`（同）／main.rs の
 // clickthrough 登録スロットの鏡写し。`spawn.rs` は不改変＝post-spawn 装着のみ（4.4）。上流 input-events
 // 成果（ハンドラ／排他システム／資源型）を消費し結線するだけで判断分岐は増設しない（5.5）。本番呼出は
 // 結線済み——系の登録（`register_balloon_leave_system`）は `ghost_session::register_systems` から

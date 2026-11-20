@@ -33,7 +33,7 @@
 //! ## 終了手段
 //!
 //! - **Ctrl+C**（コンソールから起動した場合）。窓のダブルクリックでは終わらない（ダブルクリックを
-//!   受けるのは本体の `input_events` の結線で、この example は付けない）
+//!   受けるのは本体の `areka_input` の結線で、この example は付けない）
 //! - **`AREKA_APP_SMOKE_EXIT_MS=<ms>`**: 指定 ms 後に全ゴースト窓を自動 despawn して正常終了する
 //!   env ゲート（本体の `crates/areka/src/smoke_exit.rs` のゲートと同名。hands-off のビルド/起動確認用。
 //!   例: `AREKA_APP_SMOKE_EXIT_MS=5000 cargo run -p areka-placement --example window-placement`）

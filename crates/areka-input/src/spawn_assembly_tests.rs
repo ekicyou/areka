@@ -175,10 +175,10 @@ fn t_i1_char_window_has_follow_and_on_drag_balloon_has_on_drag_only() {
 /// T-I1 補: 全窓が `HitTest::none()`（全面ヒットで透過を殺さない）を持つ。
 /// `spawn_ghost_windows` 自体はポインタハンドラを付けない（依存方向
 /// input_events→placement）。
-/// spawn 直後に `input_events::attach_char_pointer_handlers` を呼ぶと、キャラ窓は
+/// spawn 直後に `areka_input::attach_char_pointer_handlers` を呼ぶと、キャラ窓は
 /// 正規ポインタハンドラ（`OnPointerMoved`＋`OnPointerPressed`＝stand-in
 /// `on_ghost_pressed` を退役して差し替え）を持ち、キャラ窓のハンドラ装着はバルーン窓に
-/// 何も付けない（バルーン窓のハンドラは `input_events::balloon::attach_balloon_pointer_handlers`
+/// 何も付けない（バルーン窓のハンドラは `areka_input::balloon::attach_balloon_pointer_handlers`
 /// が別に付ける）。ハンドラ実挙動の檻は input_events の檻が持つので、ここは存在の有無
 /// だけを固定する。装着の関数は areka_input の側にあり
 /// areka_placement からは見えない（依存の向き）ので、本テストは areka_input の側に置く。
