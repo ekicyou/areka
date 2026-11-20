@@ -129,7 +129,7 @@ fn rejudge_runs_once_on_the_chain_finalize_mark() {
     assert_eq!(clamp_lines(&events), 0, "印の後の巡では走らない");
 }
 
-/// (c) どの窓も重ならず収まる形 → 系を回しても全バルーンの位置がビット同一で、`Clamp` の行が増えない。
+/// どの窓も重ならず収まる形 → 系を回しても全バルーンの位置がビット同一で、`Clamp` の行が増えない。
 #[test]
 fn rejudge_without_overlap_keeps_every_balloon_bit_identical() {
     let (mut world, c0, b0, c1) = rejudge_world(pt(1200, 904), pt(1800, 0), true);
@@ -158,7 +158,7 @@ fn rejudge_without_overlap_keeps_every_balloon_bit_identical() {
     assert_eq!(clamp_lines(&events), 0);
 }
 
-/// (d) `windowposition.limit,0` のバルーンは系の対象に入らない（書き込みが 1 つも出ない）。
+/// `windowposition.limit,0` のバルーンは系の対象に入らない（書き込みが 1 つも出ない）。
 #[test]
 fn rejudge_skips_balloons_with_limit_disabled() {
     let (mut world, _, b0, _) = rejudge_world(pt(0, 904), pt(1800, 0), false);

@@ -98,8 +98,8 @@ fn write_gate_pushes_to_the_edge_and_returns_to_the_original_side() {
     );
 }
 
-/// 2 スコープの実 spawn の World（スコープ 1 の相方のキャラ窓は x=1108・本体の映した先の右隣）。
-/// 相方のキャラ窓には、子の描画面を `visible` の列どおりに付ける。
+/// 2 スコープの実 spawn の World（スコープ 1 の相方のキャラ窓は x=1108）。
+/// 相方のキャラ窓には、子の描画面を `partner_children` の列どおりに付ける。
 fn world_with_partner(partner_children: &[bool]) -> (World, Entity, Entity, Entity) {
     let mut world = World::new();
     world.insert_resource(snapshot(&[WA]));
