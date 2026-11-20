@@ -298,7 +298,7 @@ fn memory(rig: Rig) -> Vec<(PersistKey, String)> {
         drop(rig.world);
         parts.publisher.barrier().expect("barrier");
         parts.publisher.close();
-        let _ = parts.handle.join();
+        areka_runtime::spine::join_bounded("sylphya", parts.handle).expect("sylphya が終わる");
     }
     load_scope(
         PersistScope::Ghost,

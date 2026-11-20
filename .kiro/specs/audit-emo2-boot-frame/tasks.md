@@ -99,7 +99,7 @@
   - _Dispatch: standard — 実 GPU のテストの表明を組み直す_
   - _Requirements: 3.1, 4.1, 4.6, 4.7_
 
-- [ ] 2.4 (P) 本体の待ちと join を目印つきの待ちにする（T12・18・19・20 番）
+- [x] 2.4 (P) 本体の待ちと join を目印つきの待ちにする（T12・18・19・20 番）
   - seriko の閉鎖と停止通知の到着を、名前つきの有界の待ちにし、自前の上限の定数を消す（18・19 番）
   - アクターの join を有界の join にして、panic を捨てない（20 番）
   - 完了: 本体の `frame/switch_tests.rs`・`switch_finish_tests.rs`・`ghost_quit_logsink_tests.rs` が緑で、`let _ =` の join が範囲の中に 0 件
@@ -273,3 +273,4 @@
 - 1.7: 源を手で置き替えて同期に上書きさせるテストを直した本数は 0 本（2 源の入れ直しは変化として拾い、本番の `prepare_ghost_windows` と同じ道で作り直す）。作り直しの後にもう一度 `SystemState::get` を呼び、自分の `insert_resource` を次の呼び出しで入れ直しと数えないようにした（設計からの小さな逸れ）。
 - 2.1: 字面の対照（`lib.rs` 側）は `areka-runtime` の `zorder_wiring_tests.rs` の `t_zwi06` の末尾だけが持つ。本体の `zorder_wiring_tests.rs` の見出しも合わせた（範囲の外・要件 3.2）。L15 の「同じ字面を」は少し不正確（審査の提案・7.1 の audit で見る）。
 - 2.3: 本体の箱の中断は左ダブルクリックでしか起きないので、話し中の矢印のテストの `press` に `DoubleClick` を渡す。檻のテストの絞り込みは `shell_box_integration_tests`（`shell_box` だと `input_events` の単体も拾う）。ホイールの `back_to_auto(3)` の 3 は `Cage::wheel` の `WheelLines::Lines(3)` と同じ値（審査の提案・定数にしてもよい）。
+- 2.4: 本体の切り替えのテストのモジュールの道は `frame::switch::`（`switch_tests` で絞ると 1 本しか拾わない）。

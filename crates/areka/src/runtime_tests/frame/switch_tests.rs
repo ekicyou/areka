@@ -11,7 +11,6 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, Weak};
-use std::time::{Duration, Instant};
 
 use areka_actor::{ActorHandle, ReplySender, reply_channel};
 use areka_emo_atlas::AtlasTable;
@@ -36,6 +35,7 @@ use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::frame::test_support::{headless_wiring_with, zero_clock};
 use areka_runtime::session_hooks::NO_BODY;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
+use areka_runtime::spine::Progress;
 use areka_runtime::switch_assets::{SwapBuilt, SwapSlot, SwitchBuildError};
 
 // ---------------------------------------------------------------- 土台
@@ -271,7 +271,7 @@ fn replaces(rig: Rig) -> Vec<(u64, RebaseKind)> {
     } = rig;
     // 置き場のゴーストが持つ送り手を落とすとアクターの受信端が切れて終わる（閉鎖の便りと同じ）。
     drop(world);
-    seriko.join().unwrap();
+    areka_runtime::spine::join_bounded("seriko の join", seriko).expect("seriko が終わる");
     seriko_out
         .lock()
         .unwrap()
@@ -676,14 +676,10 @@ fn seriko_send_failure_empties_the_slot() {
     deliver(&mut rig, Ok(balloon_built()));
     frame(&mut rig);
     // 閉鎖の便りが処理されて受信端が消えるまで待つ（アクターの出口は 1 か所）。
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !rig.seriko.is_finished() {
-        assert!(
-            Instant::now() < deadline,
-            "seriko が閉鎖の便りを 5 秒以内に処理して終わらなかった"
-        );
-        std::thread::yield_now();
-    }
+    areka_runtime::spine::wait_until("seriko の閉鎖", Progress::Unknown, || {
+        rig.seriko.is_finished()
+    })
+    .expect("seriko が閉鎖の便りを処理して終わる");
     reply(&mut rig, TalkGap::Reached { marked: None });
     let events = frame(&mut rig);
     let got = (records(&events), stage(&rig.world), slot(&rig));
