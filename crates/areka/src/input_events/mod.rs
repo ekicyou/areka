@@ -602,6 +602,9 @@ pub(crate) fn on_char_pointer_pressed(
 mod tests;
 
 #[cfg(test)]
+pub(crate) mod pointer_test_support;
+
+#[cfg(test)]
 #[path = "input_events_menu_tests.rs"]
 mod menu_tests;
 
