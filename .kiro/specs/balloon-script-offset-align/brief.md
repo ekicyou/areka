@@ -66,14 +66,13 @@
   1. 押し戻しの関門の画面（バルーン自身が居る画面の作業領域で見る／本体の画面の中に留める）。SSP で測ってから決める。本体の画面に留めるなら段 4 は作れないので、確かめ直しの扱いを決め直す。
   2. 台本の値の寿命（保存する・シェルやバルーンの切り替えで消す・ゴーストの終わりで消す）。ukadoc と SSP で決める。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-
-- **前提の変化**: 前の棚卸の後の着地は、この spec の触るファイルを動かしていない。版は棚卸㉝で v0.2.0（`balloon-flip-side-rules` の後）に決まった＝本文の「版: 要件の段で決める」は古い。
-- **触るファイル**: 受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs`（560 行・2 行）・配置の `placement/resolver.rs`（P5）・`placement/balloon_limit.rs`・`placement/follow/window_move.rs` の関門（1,231 行＝足す分は別のファイル）・値の層の新しいファイル（`placement/` の中の見込み）・網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` の 2 行（3043・3088 行目の項目・別々の行は許す重なり）。今ある型（`\![lock,balloonmove]`・`\![set,alignmenttodesktop]`）に倣うと、位置の指令の受け手 `emo2_boot/move_cue.rs`・預かり `emo2_boot/frame/move_hold.rs`（指令の場合分けは全部の型を数える）・流す相 `emo2_boot/frame/drain_resnap.rs` も触る見込み（設計で決める）。
+## 2026-11-20 棚卸㊵の再測定（main 67e0c70e）
+- **前提の変化**: 見直しの 4 本が着地した＝`consumer_ledger.rs` の `audit-emo2-boot-spine`（11-19・受け手の表を `CANONICAL_ROWS` の 1 表にまとめ、手書きの数を外した＝行を足すのは表の 2 行と `consumer_ledger_agreement_tests.rs` の見本だけ）と、配置の `audit-placement-core`・`audit-placement-follow`・`audit-placement-follow-residue`。`balloon-flip-side-rules` も着地した（`completed/`）。crate 分けで本文のパスは古い（`crates/areka/src/placement/` → `crates/areka-placement/src/`・`emo2_boot/` → `crates/areka-runtime/src/`）。版は v0.2.0（棚卸㉝）＝本文の「版: 要件の段で決める」は古い。
+- **触るファイル**: `crates/areka-runtime/src/consumer_ledger.rs`（412 行・表に 2 行）・`consumer_ledger_agreement_tests.rs`・`crates/areka-placement/src/resolver.rs`（564・P5）・`balloon_limit.rs`（350）・`follow/window_move.rs`（1,234・上限の例外表に載る＝足す分は別のファイル）・値の層の新しいファイル（`areka-placement` の中の見込み）・網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` の 3043・3088 行目の 2 項目（別々の行は許す重なり）。今の型（`\![lock,balloonmove]`・`\![set,alignmenttodesktop]` は `MoveSink`＝`move_cue.rs`）に倣えば `crates/areka-runtime/src/move_cue.rs`（373）・`move_cue_args.rs`・`frame/move_hold.rs`（271）・`frame/drain_resnap.rs`（759）も触る見込み（設計で決める）。値の寿命を切り替えで消すなら `crates/areka/src/session/ghost_switch.rs`・`shell_balloon_switch.rs` にも及ぶ。
 - **規模**: M（8〜12 タスク）のまま。
-- **先に要るもの（見直しと crate 分け）**: 起票が 10-22 の突き合わせより後なので、今回はじめて突き合わせた。配置の 3 ファイルは見直し `audit-placement-core`・`audit-placement-follow`、`consumer_ledger.rs` は `audit-emo2-boot-spine`、見込みの `move_cue.rs` は `audit-emo2-boot-switch`、`frame/` の 2 ファイルは `audit-emo2-boot-frame` の持ち物。crate 分けでは `placement-crate-split` が配置を、`runtime-module-untangle`・`runtime-crate-split` が `emo2_boot` を移す。よって crate 分けの 1〜3 本目と見直し（確かな 3 本＋見込みの 2 本）の着地を待つ。`balloon-flip-side-rules` の後に置くこと（`balloon_limit.rs`・`resolver.rs`・`window_move.rs` を分け合う）は今回も確かめた。`move_hold.rs` を触るなら `window-resetwindowpos-hold` とも同じウェーブに置かない。
-- **ほかの未完了の spec と分け合うファイル**: `balloon-flip-side-rules`（上の 3 ファイル）・`balloon-canon-residue`・`window-snap`（`resolver.rs`）・`consumer_ledger.rs` に行を足すほかの spec（`seriko-script-triggers`・`dressup-change-events`・`script-impact-tiers`・`text-ruby`・`balloon-markers`・`ghost-alias-file` ほか）。
+- **先に要るもの**: 配置と `consumer_ledger.rs` の見直しは済んだ。残るのは `move_cue*` の持ち主 `audit-emo2-boot-switch`（未完了・`session-crate-split` の後＝見込み C26）と、`frame/` の持ち主 `audit-emo2-boot-frame`（見込み C23）＝版の段の「v0.1.0 の後の隙間」の取り方 ⑶。`move_cue*` に触らない設計（受け手を新しいファイルに置く）にできなければ、早くて C27。
+- **同じウェーブに置けない相手**: `window-resetwindowpos-hold`（`frame/move_hold.rs`・`frame/drain_resnap.rs`）＝見込みの C25 で並べているのは誤り。`balloon-text-visual-tree`（`drain_resnap.rs`）・`balloon-flip-ssp-review`（案 ⑵・⑶ で `balloon_limit.rs`・`follow/window_move.rs`）・`audit-emo2-boot-frame`・`audit-emo2-boot-switch`（待つ）・`install-live-target-hazards`（`drain_resnap.rs`）・`consumer_ledger.rs` に行を足すほかの spec（1 本ずつ）・`balloon-canon-residue`・`window-snap`（`resolver.rs`）。
 - **優先度の区分**: C（ukadoc の拾い残し・台帳の 2 行は A2）。
-- **要件定義のモデル**: Opus（受け口と値の層は今ある型どおり）。
-- **分割の案**: なし。
-- **見つけた穴**: roadmap の行は触るファイルに `move_cue.rs`・`frame/move_hold.rs`・`frame/drain_resnap.rs` を挙げていない（上の見込み）。
+- **要件定義のモデル**: Opus（受け口は `MoveSink` の型どおり・値の層は descript の P5 に重ねる 1 層・押し戻しの画面は 1 つの決め）。
+- **分割の案**: 無し。
+- **見つけた穴**: ⑴ 見込みの C25 の並べ方（`window-resetwindowpos-hold` と同じウェーブ・`audit-emo2-boot-switch` より前）。⑵ roadmap の「直列の列」の `consumer_ledger.rs` の鎖の「手書きの数も直す」は、手書きの数が消えて古い。⑶ 本文の Current State・Approach の `crates/areka/src/placement/…`・`placement/` のパスは古い（上の読み替え）。

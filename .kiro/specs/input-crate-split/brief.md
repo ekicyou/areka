@@ -84,20 +84,19 @@
 - **共通の約束**: roadmap の同じ節のとおり。
 - **Fable**: Opus で足りる。
 
-## 2026-11-17 棚卸㊴の再測定（main 7f41b53e）
-- **前提の変化**: 待っていた `runtime-crate-split` は 11-17 に着地した。input の本番は今 `areka_runtime::` を 27 か所・`areka_placement::` を 16 か所、crate の公開面で引いている＝Approach の「runtime と placement の側で、input が使う項目を `pub` にする」は済んだ（残るのは input の側の `pub(crate)` → `pub` と、テストの支えの付け方）。
-- **大きさの引き直し（非空行）**: `crates/areka/src/input_events/` は 50 ファイル・本番 5,018 行・テスト 9,981 行（起票は 42・3,932・9,319＝`balloon_wheel`・`cursor_answer`・`cursor_pick`・`hover_region` ほかが増えた）。本番で本体を引くのは `mod.rs:34`（`app_exit::{ExitOrigin, quit_app}`）・`file_drop.rs:15〜17`（`ghost_session::GhostSlot`・`install`）・`shortcut.rs:10〜11`（menu）の 3 ファイルだけ＝起票の形のまま。外から input を引く本番は `ghost_session.rs` 11・`ghost_session_runtime.rs` 2・`app_exit.rs` 1・`menu/{mod,trigger}.rs`・`session/runtime_boot.rs` 198 行（`user_break::wire_user_break`）、テストは 20 本。
-- **`quit_app` の向き**: Approach の「`runtime-module-untangle` が `frame.rs` に入れた終わりの知らせの仕組み」は古い。終わる相は本体の `session/ghost_quit.rs` へ移った。本体の口を下の crate から呼ぶ前例は `crates/areka-runtime/src/session_hooks.rs` の `SessionHooks`（関数の束を本体の `session/hooks.rs` が据える）。どの形で向きを逆にするかは設計で選ぶ。
-- **触るファイル**: 起票のまま（新しい `crates/areka-input/`・`input_events/` の全部・上の外の呼び手・`placement_tests/spawn_assembly_tests.rs`・`tests/emo2_mcp_real_run.rs` 115 行・`tests/window_link_real_run.rs` 49 行・`Cargo.toml`・`Cargo.lock`）に加えて、`session/runtime_boot.rs`・`runtime_boot_tests.rs`（`audit-emo2-boot-spine` の持ち物）と `runtime_tests/` の 8 本（`frame*`・`balloon_visibility*`＝`audit-emo2-boot-frame`・`audit-emo2-boot-switch` の持ち物）。`main.rs` に `use areka_input as input_events;` の出し直しを置けば、外の呼び手のパスは変えずに済む（設計で選ぶ）。
-- **規模**: 12〜15 タスクのまま（本番は増えたが、runtime の側の公開は済んだ）。
-- **先に要るもの**: `audit-placement-follow-residue`（`input_events/drag_test_support.rs` を先に書き換える＝同じファイルの直列）。
-- **席**: crate を足すので `Cargo.lock` の 1 本だけの席を使う（見込みの C23 のとおり）。
-- **同じウェーブに置けない相手**: `session-module-gather`（`ghost_session.rs`・`ghost_session_runtime.rs`・`app_exit.rs`・`input_events/mod.rs`・`file_drop.rs`・`file_drop_wiring_tests.rs`・`shortcut_tests.rs`・`tests/emo2_mcp_real_run.rs`）＝見込みの C23 で並べているのは誤り。出し直しを置かないなら `audit-emo2-boot-spine`・`audit-emo2-boot-frame` とも重なる。`collisionex-regions`（`input_events/mod.rs`）・`audit-areka-input-menu` とも重なる。
-- `crates/log-capture-kit/src/event.rs` 150 行・`event_tests.rs` 18〜19 行と 121 行・`crates/ukadoc-survey/src/evidence/candidates.rs` 51 行の説明の中の `input_events/` のパスは、見直しの 2 本が先に着地するなら、この spec が直す。
-- **優先度の区分**: A（開発者「この際、areka crateのコードベースが大きすぎる問題をサルベージすべき」）。
-- **要件定義のモデル**: Opus（crate 分けの前例は `runtime-crate-split`・`placement-crate-split`。向きを逆にする口にも前例 `SessionHooks` がある）。
-- **分割の案**: 無し。
-
 ## `audit-ukadoc-survey` からの申し送り（2026-11-19・完了時の棚卸）
 
 - 上の節（棚卸㊴の再測定）の「`crates/ukadoc-survey/src/evidence/candidates.rs` 51 行の説明の中の `input_events/` のパス」は、`audit-ukadoc-survey` のタスク 3.4 で古いパスごと消した。本 spec がこのファイルで直すことはもう無い（`log-capture-kit` の 2 か所は元のまま）。
+
+## 2026-11-20 棚卸㊵の再測定（main 67e0c70e）
+- **前提の変化**: ファイルで待っていた `audit-placement-follow-residue`（11-17・`input_events/drag_test_support.rs`・`drag_tests.rs`・`balloon_choice_settle_tests.rs` を直した）が着地し、先に要るものは無くなった＝先頭。`audit-emo2-boot-spine`（11-19）で `session/runtime_boot.rs`・`runtime_boot_tests.rs` の見直しは済んだ。`audit-test-kits`（11-19）は `crates/log-capture-kit/src/event.rs` 150 行・`event_tests.rs` 20〜21 行と 123 行の説明の `input_events/` のパスを残した＝この spec が直す（`ukadoc-survey` の 1 か所は向こうが消した・下の申し送り）。
+- **大きさ**: `input_events/` は 50 ファイルのまま（直しはテストの数行）。本番で本体を引く 3 ファイル（`mod.rs`・`file_drop.rs`・`shortcut.rs`）も前のまま。`ghost_session.rs` 943 行・`tests/window_link_real_run.rs` 49 行・`tests/emo2_mcp_real_run.rs` 115 行。
+- **古くなった記述（前の節から）**: Approach の「runtime と placement の側で、input が使う項目を `pub` にする」は済んだ（残るのは input の側の `pub(crate)` → `pub` とテストの支え）。`quit_app` の「`frame.rs` に入れた終わりの知らせの仕組み」は古い＝終わる相は本体の `session/ghost_quit.rs`、向きを逆にする口の前例は `crates/areka-runtime/src/session_hooks.rs` の `SessionHooks`（設計で形を選ぶ）。
+- **C23 の約束の確かめ**: 出し直し `use areka_input as input_events;` を `main.rs` に置けば、`runtime_tests/` の 8 本（`balloon_visibility_*` 4・`frame_shell_box_*` 2・`frame_visibility_integration_tests.rs`・`frame/switch_cursor_tests.rs`）と `session/runtime_boot.rs` 200 行・`runtime_boot_tests.rs` 25 行は `crate::input_events::…` のまま通る（引く項目 `MouseWiring`・`RegionSource::Mock`・`char_watch_with`・`drain_no_user_break_signals`・`register_char_cursor`・`BalloonWiring` ほかは `#[cfg(test)]` でない＝`pub` にするだけ）＝約束は守れる。終わる相 `session/ghost_quit*`（`audit-emo2-boot-frame` の範囲）にも触らない約束を足す。`areka-runtime` の説明の中の `input_events` の語は、`balloon_hover.rs`・`hit_region.rs`・`shell_box_hover.rs` なら直してよく、`frame/wiring.rs` 319 行は `audit-emo2-boot-frame` に任せる。
+- **触るファイル**: 前の見立て（新しい `crates/areka-input/`・`input_events/` の全部・`ghost_session.rs`・`ghost_session_runtime.rs`・`app_exit.rs`・`menu/{mod,trigger}.rs`・`main.rs`・`placement_tests/spawn_assembly_tests.rs`・実機テスト 2 本・`Cargo.toml`・`Cargo.lock`）＋上の `log-capture-kit` の 2 ファイル。
+- **規模**: 12〜15 タスクのまま。
+- **席**: crate を足すので `Cargo.lock` の 1 本だけの席を使う。
+- **同じウェーブに置けない相手**: `session-module-gather`（`ghost_session.rs`・`ghost_session_runtime.rs`・`app_exit.rs`・`input_events/mod.rs`・`file_drop.rs` ほか）・`audit-areka-input-menu`（受け持つファイル）。`audit-emo2-boot-frame`・`balloon-flip-ssp-review` とは上の約束で 0。`hit-id-pass` とも 0（入力は `areka_runtime::hit_region` を通して呼ぶだけ）。
+- **優先度の区分**: A（開発者「この際、areka crateのコードベースが大きすぎる問題をサルベージすべき」）。
+- **要件定義のモデル**: Opus（crate 分けの前例 `runtime-crate-split`・`placement-crate-split`、向きを逆にする口の前例 `SessionHooks`）。
+- **分割の案**: 無し。

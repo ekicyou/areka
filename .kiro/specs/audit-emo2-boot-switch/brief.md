@@ -104,3 +104,15 @@
 
 - **ウ（件 6 の 2 本）**: `crates/areka/src/runtime_tests/balloon_visibility_phase_tests.rs:L714`・`L789` のテスト関数 2 本は、補助ごと `areka-runtime` へ戻せる（`world_at` の写しは上の runtime-crate-split の申し送りに既にある）。
 - **オ（`code_only` の写し）**: `crates/areka-runtime/src/balloon_visibility_phase_zorder_chain_tests.rs:L257` の `code_only` は、`source_text_test_support::code_only` と 1 字も違わない。そちらを使う形に寄せる。
+
+## 2026-11-20 棚卸㊵の再測定（main 67e0c70e）
+- **前提の変化**: `audit-emo2-boot-spine`（11-19）が上の申し送り（ウ・オ）を足した。オは同じ PR で直り、`balloon_visibility_phase_zorder_chain_tests.rs:38` は `source_text_test_support::code_only` を使う＝済み。ウ（本体の `runtime_tests/balloon_visibility_phase_tests.rs` の 2 本と、146 行の `world_at` の写し）は残る。同じ spec は範囲の `balloon_hover.rs`・`shell_box_hover.rs`・`move_cue_place.rs`・`change_cue_tests.rs`・`move_cue_{balloon_lock,move_severity_log,move_sink}_tests.rs`・`session/ghost_switch_{talk_clock_tests,test_support}.rs` も直した（記録の捕まえ方の寄せ・振る舞いは同じ）。`runtime-module-untangle` の申し送り（`session/shell_balloon_switch.rs:37〜40` の出し直しが 10 項目）は残る。
+- **ほかの brief から移る件**: `audit-areka-app` の brief の 2026-11-15 の申し送り（`audit-placement-core`）の件 10 のうち、`crates/areka-runtime/src/move_cue_apply_move_tests.rs:52` の `attach_fake_handles`（`areka_placement::test_support::give_fake_handles` の写し）と、`move_cue_apply_move_sticky_tests.rs:201`・`move_cue_place_tests.rs:330` の `SharedFakeIo`（`areka_placement::test_support::SharedFakeIo` の写しか）は、crate 分けでこの spec の範囲になった。着手のときに拾う。
+- **触るファイル**: 範囲は Current State のまま。今の数え＝62 ファイル・本番 6,075 行・テスト 14,512 行（`wc -l`）。上限に近いのは `session/ghost_switch_tests.rs` 990・`balloon_visibility_tests.rs` 968・`session/ghost_switch.rs` 931。
+- **規模**: 指摘の数で決まる（20 を越えたら指摘の組で同じ範囲の 2 本目）。
+- **先に要るもの**: `session-crate-split`（`ghost_switch*`・`shell_balloon_switch*` を `crates/areka-session/src/` へ移し、`ghost_switch.rs` の install・update への知らせ〔C3〕を書き換える）。その前の `input-crate-split`（本体の `runtime_tests/balloon_visibility*` 4 本が input を引く）・`session-module-gather` も。見込み C26。
+- **待たれている**: `balloon-script-offset-align`（`move_cue*` に台本の 2 命令を足す見込み）はこの spec の後。
+- **同じウェーブに置けない相手**: crate 分けの 3 本・`balloon-script-offset-align`・`doc-compat-architecture-rename`（`move_cue_geometry.rs` が文書を名指す）。`audit-areka-app`・`audit-areka-install-update` とは持ち物が分かれていて 0。
+- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- **要件定義のモデル**: Opus（見直しの型どおり）。
+- **分割の案**: 無し。

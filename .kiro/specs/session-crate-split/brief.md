@@ -90,3 +90,15 @@
 - **フレームを遅らせない**: 逆転した知らせや口が、切替・終了・差し込みを 1 フレームでも遅らせない。
 - **共通の約束**: roadmap の同じ節のとおり。
 - **Fable**: Opus で足りる（口は本体と session の間だけの内向きのもの）。
+
+## 2026-11-20 棚卸㊵の再測定（main 67e0c70e）
+- **前提の変化**: この brief は起票（10-28）の後に測り直していなかった。`runtime-crate-split`（11-17）で runtime は `crates/areka-runtime/` へ移り、`reload_args`・`shell_balloon_resolve`・`shell_carry` は session から出た。今の `session/` の本番は `ghost_quit`・`ghost_switch`・`hooks`・`mod`・`reload`・`runtime_boot`・`same_folder_pin`・`shell_balloon_switch`・`switch_copy`（31 ファイル・10,354 行）。`audit-emo2-boot-spine`（11-19）が `session/` の 12 ファイル（`reload.rs`・`runtime_boot.rs`・`hooks.rs` とテスト）を直したが、逆にする 6 つの仕組みの呼び所は全部残っている（C1＝`ghost_session.rs:320〜335`・C2＝`ghost_session_runtime.rs:36〜67`・C3＝`session/ghost_switch.rs:506〜527・678`・C4＝`session/reload.rs:310・313`・`session/shell_balloon_switch.rs:133`・C5＝`session/runtime_boot.rs:89〜90`・C6＝`app_exit.rs:19・283`）。
+- **数え直しの要る所**: Current State の C1・C2・C6 は input が本体に居る前提。`input-crate-split` の後は `areka-session` が `areka-input` に依存する（Desired Outcome）ので、`attach_char_pointer_handlers`・`attach_balloon_pointer_handlers`・`wire_mouse_input`・`wire_choice_drain`・`MouseWiring`（C6）は逆にせずそのまま呼べる。逆にするのは、本体に残る `file_drop`・menu へ移る `shortcut`・menu・install・update・roots の残りだけ＝「約 30 件」は減る見込み（要件の段で数え直す）。C6 の「kanade へ直に送る」案も要らなくなるかもしれない。
+- **触るファイル**: 新しい `crates/areka-session/`・`session-module-gather` で集めた `crates/areka/src/session/` の全部（本番とテスト）・`main.rs`・呼ばれる口の側（`input_events/file_drop.rs:14` の `use crate::ghost_session::GhostSlot`・`menu/`・`install/desk.rs`・`update/desk.rs` の `on_steady`・`run_overwrite_between`・`on_switch_end`・`is_busy`・`raw_sender`・`install/names.rs`）・`Cargo.toml`・`Cargo.lock`・`structure.md`・ログの出所を名前で読む `real-run-kit`（`launch.rs` ほか）・`doc/testing.md`・`log_history.rs`。`app_exit.rs` 323 行・`session_end.rs` 192 行。
+- **規模**: 12〜16 タスク（台帳のまま。逆にする件が減れば下の端）。
+- **先に要るもの**: `session-module-gather`（未完了・その前に `input-crate-split`）。働きの前後でなく、同じファイルを動かす直列。
+- **1 本だけの席**: `Cargo.lock`（クレートを足す）を使う＝見込みの C25 を「席は空き」と書いているのは誤り。
+- **同じウェーブに置けない相手**: `session-module-gather`（待つ）・`audit-areka-input-menu`（範囲に `file_drop.rs` を残すなら、そのファイルの `GhostSlot` のパスをこの spec が直すので重なる）・`audit-areka-app`・`audit-areka-install-update`・`audit-emo2-boot-switch`（待つ側）・`audit-emo2-boot-frame`（`session/ghost_quit*`・C23 で先に着地する見込み）・`multi-ghost-runtime`・`doc-compat-architecture-rename`。`window-resetwindowpos-hold`・`balloon-script-offset-align`（`areka-runtime`・`areka-placement` の側）とは 0（`balloon-script-offset-align` が値の寿命で `session/ghost_switch*`・`shell_balloon_switch*` に触る設計にしなければ）。
+- **優先度の区分**: A（開発者「この際、areka crateのコードベースが大きすぎる問題をサルベージすべき」→ 一括承認）。
+- **要件定義のモデル**: Opus（本体と session の間の口は、前例 `SessionHooks`〔`crates/areka-runtime/src/session_hooks.rs` と本体の `session/hooks.rs`〕に倣う内向きのもの）。
+- **分割の案**: 無し。

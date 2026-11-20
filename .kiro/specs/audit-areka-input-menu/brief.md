@@ -80,3 +80,14 @@
 ## 2026-11-17 棚卸㊴の申し送り（`collisionex-regions` から）
 
 - `crates/areka/src/input_events/mod.rs` 518 行の説明「The Hand／collisionex は実装しない（7.4）」は、`collisionex-regions`（C22）が着地すると古くなる。`collisionex-regions` は areka 本体のファイルに触らない約束で C22 に入ったので、この 1 行はこの spec が直す（`input-crate-split` の後なら新しい crate の側の同じ行）。
+
+## 2026-11-20 棚卸㊵の再測定（main 67e0c70e）
+- **前提の変化**: `collisionex-regions`（11-17・`2a9fa0a0f`）が着地し、上の申し送りの説明は今は誤り＝`crates/areka/src/input_events/mod.rs:518`「The Hand／collisionex は実装しない（7.4）」（直すのはこの spec・`input-crate-split` の後なら新しい crate の同じ行）。`audit-placement-follow-residue`（11-17）は `input_events/drag_test_support.rs`・`drag_tests.rs` を、`audit-emo2-boot-spine`（11-19）は `balloon_choice_settle_tests.rs` を直した（テストの支えの寄せ・振る舞いは同じ）。
+- **触るファイル**（2026-11-01 の決めで menu を外した後）: `crates/areka/src/input_events/` の 50 ファイル（本番 20・5,374 行／テスト 30・10,964 行・`wc -l`）。長いのは `mod.rs` 612・`choice_drain.rs` 550・`balloon.rs` 464。`input-crate-split` の後は `crates/areka-input/src/` へ移り、`shortcut.rs` は本体の `menu/` へ、`file_drop.rs` は本体に残る。
+- **規模**: 指摘の数で決まる（20 を越えたら指摘の組で同じ範囲の 2 本目へ）。
+- **先に要るもの**: `input-crate-split`（未完了・見込み C23・範囲の全部を動かす）。✅ `audit-placement-follow-residue` は済み。
+- **同じウェーブに置けない相手**: `input-crate-split`（待つ）。範囲に `file_drop.rs` を残すなら `session-module-gather`・`session-crate-split` とも重なる（`file_drop.rs:14` の `use crate::ghost_session::GhostSlot` のパスを 2 本とも直す）＝見込みの C25 で `session-crate-split` と並べられるのは、`file_drop.rs` を範囲から外すか、`session-crate-split` が出し直しを置いて `file_drop.rs` に触らないときだけ。外すなら C24（`session-module-gather` の隣）にも上げられる。
+- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- **要件定義のモデル**: Opus（見直しの型どおり）。
+- **分割の案**: 無し（指摘の数しだいで要件の討議で切る）。
+- **見つけた穴**: ⑴ `shortcut.rs`（キーの近道・本番 83 行）が `menu/` へ移ると、menu を外した決めのため、どの見直しの範囲にも入らなくなる＝要件の段で範囲に残すかを決める。⑵ `file_drop.rs` が本体に残るときの範囲（上）。⑶ 本体の `readme.rs:93` の説明が `input_events/choice_drain.rs` のパスを名指す（`input-crate-split` の後に古くなる・その spec の文書のパスの直しに入る）。

@@ -89,18 +89,6 @@
 3. **ID の幅**: 24 ビット（B8G8R8A8 を α なし）で決め打ちにするか。メモリを優先して 8 ビット（`A8`・255 まで）にするか。
 4. **`region` の画像の座標と大きさ**: 画像がサーフェスより小さい・大きいときの扱い（正典に記述が無い）。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-
-- 前提の変化: 起票（10-15）から、当たり判定 `crates/areka-emo-compose/src/hit.rs`、wintf の色分け画像の当たり判定 `ColorMapData`（`crates/wintf/src/ecs/layout/hit_region/mod.rs`・ID は 8 ビットのまま）、クリックの透過の `crates/wintf/src/ecs/widget/bitmap_source/alpha_mask.rs`（閾値 128）、emo-present の `presenter/budget.rs`・`cache.rs` は変更 0。働きの前提の `collisionex-regions`・`wintf-d2d-composite-rules` はどちらもまだ。
-- 古くなった記述: Current State の「`region` の持ち主はまだ居ない」は、10-15 にこの spec が引き取った（`collisionex-regions` の brief の申し送り）。Scope の In と Boundary Candidates の「読み手の型の `region` の欄」は `collisionex-regions` が運ぶ＝この spec は読み手 `shell/{model,decode}.rs` に触らない。
-- 触るファイル: `crates/areka-emo-compose/src/{hit.rs 756 行, hit_import.rs}`、`crates/areka-emo-present/src/presenter/{hit.rs, budget.rs 567 行}`・`cache.rs`、wintf の `layout/hit_region/mod.rs`（513 行・`ColorMapData` の読み方の流用）・`widget/bitmap_source/alpha_mask.rs`、wintf の ID の描き先（新しいファイル・`wintf-d2d-composite-rules` の自前の入れ物の隣の見込み）、台帳の `region` の行、`doc/COMPAT_ARCHITECTURE.md` §8。本体 `crates/areka` には触らない。
-- 規模: 10〜14 タスク（ロードマップのまま）。切らない。
-- 先に要るもの（見直しと crate 分け）: 見直しは `audit-emo-compose`・`audit-emo-present`・`audit-wintf-layout-widget`（ロードマップのとおり）。ID の描き先を wintf の `ecs/graphics/` に置くなら `audit-wintf-graphics-world` も（`wintf-d2d-composite-rules` を通して先に済む見込み）。ロードマップの `audit-parsers-sakura` は、読み手に触らないので直には要らない（`collisionex-regions` を通して先に済む）。本体の crate 分けは要らない。
-- 同じ時に走らせない相手: `hit.rs` を分け合う `collisionex-regions`・`draw-methods-canon`・`element-clipping-option`・`config-parse-diagnostics`・`shell-balloon-scale-setting`・`wintf-d2d-composite-rules`。
-- 優先度の区分: A（開発者 10-15「ヒットテストIDが欲しい」）。
-- 要件定義のモデル: Fable（議題 1「GPU の ID の描き先か、CPU の色分け画像か」は骨組みを決める分かれ目で、決める前例が無い。wintf に窓ごとの 2 枚目の描き先という新しい口を作る）。
-- 分割の案: 無し。
-
 ## `audit-wintf-layout-widget` からの申し送り（2026-11-06）
 
 `audit-wintf-layout-widget` の要件の討議で、wintf の色分け画像の読み込み（`crates/wintf/src/ecs/layout/hit_region/mod.rs` の `ColorMapData::from_image`）の指摘のうち 1 件を、直さずにこの spec へ渡すと決めた（開発者「承認」・あちらの `requirements.md`「指摘の扱い」16 番）。256 色を越えると番号が回る件・パスの文字化け・読み込みのテストが無い件は、あちらで直す。
@@ -114,3 +102,15 @@
 - **型の契約**（`collisionex-regions` の設計が正本）: 当たり判定は 1 本の並び（書いた順・後ろほど手前）に、番号・形・名前で並ぶ。形は `rect`・`ellipse`（囲みの長方形）・`circle`（中心と半径）・`polygon`（書いた順の頂点）・`region`（ファイル名・R・G・B・領域反転と、画像を置く位置）。子のサーフェスから持ち込んだ当たり判定は、形ごとに element定義の X,Y だけずれた座標で親の並びに入る。同じ collision番号は両方が残る（SSP と同じ）。
 - **SSP の測り**（`collisionex-regions` の `research.md` 9 節・SSP 2.9）: 辺が交差する多角形は**巻き数の規則**（五芒星の中心の巻き数 2 の所が当たる・凸包の中で星の外は当たらない）。D2D の `D2D1_FILL_MODE_WINDING` で塗れば同じ規則になる見込み。形の名前は大小文字を区別しない（読み手の側で済み）。
 - **この spec で決めること（`collisionex-regions` は決めずに渡した）**: 楕円・円・多角形の境界（周や辺の上の画素が当たるか・ID は縁のぼかしなしで描くので画素の中心の規則になる）・大きさ 0 の形（幅 0 の楕円・半径 0 の円・頂点の重なった多角形）・反転した囲みの楕円と負の半径の円。正典はどれも沈黙する。
+
+## 2026-11-20 棚卸㊵の再測定（main 67e0c70e）
+- **前提の変化**: 働きの前提が全部着地した＝`wintf-d2d-composite-rules`（11-13・自前の合成の入れ物と 1 ピクセルの読み戻し）・`collisionex-regions`（11-17・5 つの形を型で運び `rect` だけを当てる）と、見直しの `audit-emo-compose`・`audit-emo-present`・`audit-wintf-layout-widget`・`audit-wintf-graphics-world`・`audit-parsers-sakura`。今は v0.2.0 の先頭。議題 2 は決まった（形も ID で塗る・下の申し送りの節）＝楕円・円・多角形の境界・大きさ 0・反転の決めもこの spec に来た。
+- **古くなった記述**: Current State の「`decode_collisions` は `collisionN` だけを読み、`collisionex` は読み飛ばす」「`region` の持ち主はまだ居ない」は古い（読み手は `collisionex` を読み、`region` は `CollisionRegion { file, red, green, blue, invert, x, y }` で運ぶ）。Scope の In と Boundary Candidates の「読み手の型の `region` の欄」は `collisionex-regions` が済ませた＝この spec は読み手 `shell/{model,decode}.rs` に触らない。
+- **触るファイル**: `crates/areka-emo-compose/src/{hit.rs 737（形の `match` は私的な `hits`・102 行）, hit_import.rs 315}`・`crates/areka-emo-present/src/presenter/{hit.rs 150, budget.rs 566}`・`cache.rs` 332（`presenter_test_support.rs` も見込み）・wintf の `layout/hit_region/mod.rs` 508・`widget/bitmap_source/alpha_mask.rs` 438・wintf の ID の描き先（新しいファイル）・台帳 `doc/ukadoc-coverage/ledger/assets.toml` の `region` の行・`doc/COMPAT_ARCHITECTURE.md` §8。当たりの口 `hit_region_client` の形を変えるなら、唯一の呼び手 `crates/areka-runtime/src/hit_region.rs` 100 行も（本体 `crates/areka` には触らない）。
+- **規模**: 12〜16 タスク（前は 10〜14。形も ID で塗ることになり、境界・大きさ 0・交差〔巻き数の規則〕の決めと檻が増えた）。切らない。
+- **先に要るもの**: 無し（先頭）。
+- **同じウェーブに置けない相手**: `hit.rs` を分け合う `draw-methods-canon`・`element-clipping-option`・`config-parse-diagnostics`・`shell-balloon-scale-setting`。§8 の置き場の名前を変える `doc-compat-architecture-rename`。C23〜C25 の見込みの spec（`audit-emo2-boot-frame`・`input-crate-split`・`balloon-flip-ssp-review`・`session-module-gather`・`window-resetwindowpos-hold`）とは 0（§8 は追記だけなら許す重なり）。`balloon-text-visual-tree` とも挙げたファイルでは 0（向こうは emo-present の `mount.rs` と wintf の `com/`）＝並べるなら、両方の設計で emo-present と wintf の `ecs/graphics/` の触り方を突き合わせる。
+- **持ち越し（申し送りの 16 番・まだ開いている）**: `ColorMapData::from_image` は今も乗算済みの `32bppPBGRA`（`layout/hit_region/mod.rs` 181 行）で色を引く＝透明な画素が黒の領域に当たる。`region` に使い回すなら、決める前に SSP の MCP で測る（開発者の許し）。
+- **優先度の区分**: A（開発者 10-15「ヒットテストIDが欲しい」）。版は v0.2.0。
+- **要件定義のモデル**: Fable（議題 1「GPU の ID の描き先か、CPU の色分け画像か」は骨組みを決める分かれ目で、決める前例が無い。GPU なら wintf に窓ごとの 2 枚目の描き先と ID の読み戻しという、前例の無い公開の口を作る。議題 2 の「形は ID で塗る」はこの分かれ目を閉じていない）。
+- **分割の案**: 無し。
