@@ -156,4 +156,4 @@
 ## Implementation Notes
 
 - 1.1: 着手のときの一覧 `target/input-crate-split/tests-before.txt`（基点 80028ea01）の `: test$` の行は 14389 行（名前の末尾の種類は 14271）。
-- 1.2・7.3: areka の tracing は標準出力に出る（`escape-*.stderr.log` は両方をまとめたもの）。`log_stay_on_top_discard` は常に手前がオンのときだけ出るので、台本は強制退避の前に MCP で `\![set,windowstate,stayontop]` を送る。手順は `verification.md`。
+- 1.2・7.3: areka の tracing は標準出力に出る（`escape-*.stderr.log` は両方をまとめたもの）。`log_stay_on_top_discard` は常に手前がオンのときだけ出るので、台本は強制退避の前に MCP で `\![set,windowstate,stayontop]\e` を送る。手順は `verification.md`。
