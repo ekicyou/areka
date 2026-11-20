@@ -61,7 +61,7 @@
 5. The `areka-input` クレート shall `areka-runtime` と `areka-placement` に path 依存で依存し、本体の crate `areka` には依存しない。
 6. The 分割作業 shall ワークスペースの根の `Cargo.toml` を変えない。
 7. The 分割作業 shall ワークスペースの外から新しい依存を足さない（足してよいのは、ワークスペースの中の path 依存と、`Cargo.lock` に既にある crate だけ）。
-8. The `areka-input` クレート shall 本番の依存を、今の input（移す分）が本番で使う crate（brief の測りで tracing・wintf・bevy_ecs・areka-emo-text・areka-kanade・areka-sakura・areka-emo-compose・areka-ghost・areka-emo-present と `areka-runtime`・`areka-placement`。`areka-nar` は `file_drop.rs` だけが使うので移す分には入らない見込み。正確な一覧は設計の段で測る）に収め、ワークスペースのほかの crate と同じ形で受ける（外の crate は `workspace = true`、ワークスペースの中の crate は `{ path = "../…" }`）。
+8. The `areka-input` クレート shall 本番の依存を、今の input（移す分）が本番で使う crate（brief の測りで tracing・wintf・bevy_ecs・areka-emo-text・areka-kanade・areka-sakura・areka-emo-compose・areka-ghost・areka-emo-present と `areka-runtime`・`areka-placement`。加えて `windows`〔`balloon_wheel.rs`・`cursor_answer.rs` の 3 か所。brief の「windows は 0」はギャップ分析の測りで誤りと分かった。ワークスペースの依存の機能の中に収まり、外の依存は増えない〕。`areka-nar` は `file_drop.rs` だけが使うので移す分には入らない〔ギャップ分析の実測 0〕。正確な一覧は設計の段で測り直す）に収め、ワークスペースのほかの crate と同じ形で受ける（外の crate は `workspace = true`、ワークスペースの中の crate は `{ path = "../…" }`）。
 9. The `areka-input` クレート shall テストでだけ使う crate を、機能を付けないビルドで付く依存に入れない。番人の 3 つの crate（log-capture-kit・sample-ghost-kit・temp-path-kit）は optional も含めて本番の依存表に書かない（3.4 の決まりに従う）。
 10. The `areka-input` クレート shall 1 ファイル 1,000 行の上限と、その例外表の決まりを、本体と同じく守る。例外表の項目は増やさない（2026-11-20 の測りで input のパスは表に 0 件・同じウェーブの約束 ⑸）。
 
@@ -84,12 +84,12 @@
 
 #### Acceptance Criteria
 
-1. The 分割作業 shall input の外（本体の本番・テスト・`areka-input` へ移す境をまたぐテスト）から使われている `pub(crate)` の項目（brief の見込みで約 17 項目と 3 メソッド。主な面は `MouseWiring`・`PendingDoubleClick`・`char_scope`・`click::on_char_pointer_released`・`attach_char_pointer_handlers`・`RegionSource`・`char_watch_with`・`drain_no_user_break_signals`・`register_char_cursor`・`BalloonWiring` ほか。正確な一覧は設計の段で測る）だけを `pub` にする。
+1. The 分割作業 shall input の外（本体の本番・テスト・`areka-input` へ移す境をまたぐテスト）から使われている `pub(crate)` の項目（brief の見込みは約 17 項目と 3 メソッドだったが、ギャップ分析の測りでモジュール 9・項目 26・メソッド 7 と、`test-support` で開けるメソッド 2。主な面は `MouseWiring`・`PendingDoubleClick`・`char_scope`・`click::on_char_pointer_released`・`attach_char_pointer_handlers`・`RegionSource`・`char_watch_with`・`drain_no_user_break_signals`・`register_char_cursor`・`BalloonWiring` ほか。正確な一覧は設計の段で測る）だけを `pub` にする。
 2. The 分割作業 shall input の外から一度も使われていない `pub(crate)` の項目を、`pub(crate)` のまま残し、削除しない。
 3. The 分割作業 shall input の中で自分を指すパス（`crate::input_events::…`）を、新しい crate の根を指すパスへ書き換える。
 4. The 本体の crate `areka` shall `main.rs` で `areka-input` を `input_events` の名前で出し直し（`use areka_input as input_events;` の形）、本体の中の `crate::input_events::…` の呼び手がパスを変えずに通るようにする（同じウェーブの約束 ⑴）。
 5. The 分割作業 shall `crates/areka-runtime/src/frame*`・本体の `runtime_tests/`・`session/runtime_boot.rs`・`session/runtime_boot_tests.rs`・`session/ghost_quit*` を変えない（同じウェーブの約束 ⑴）。
-6. If 3.4 の出し直しでは通らない呼び手（`#[cfg(test)]` だけの項目を引くものほか）が 3.5 のファイルの中に見つかった場合, then the 分割作業 shall そのファイルを変えずに通す形（`areka-input` の `test-support` 機能で開けるなど）を設計で選び、それも無理なら roadmap の約束どおりこの仕様を次のウェーブへ回すことを開発者へ報告する。
+6. If 3.4 の出し直しでは通らない呼び手（`#[cfg(test)]` だけの項目を引くものほか）が 3.5 のファイルの中に見つかった場合, then the 分割作業 shall そのファイルを変えずに通す形（`areka-input` の `test-support` 機能で開けるなど）を設計で選び、それも無理なら roadmap の約束どおりこの仕様を次のウェーブへ回すことを開発者へ報告する。（ギャップ分析で、この場面が実際にあると分かった: `session/runtime_boot_tests.rs` が `#[cfg(test)]` だけの `UserBreakWiring::flag_rx` を使う。）
 7. If 外から使われている項目を `pub` にすると公開面の型が非公開の型を名指すことになる場合, then the 分割作業 shall その非公開の型も、外から名指せる最小の範囲で公開し、どの項目をそのために開けたかを記録する。
 8. If input の本番のファイルの説明の中のリンクが本体の項目（`crate::app_exit::…`・`crate::menu::…` ほか）を指している場合, then the 分割作業 shall そのリンクを、新しい crate から解ける形（本体を名指す地の文など）に書き換え、意味を変えない。
 
@@ -130,10 +130,10 @@
 1. The 分割作業 shall `crates/log-capture-kit/src/event.rs`（150 行の説明）と `event_tests.rs`（20〜21 行・123 行の説明）の input のパスを、移した先のパスへ書き換える。
 2. The 分割作業 shall 本体の外の crate の説明に残る input のパスと名前（`areka-placement` の `spawn.rs`・`follow.rs`・`follow/drag_follow.rs`・`follow_drag_end_gate_tests.rs`・`placement_char_clamp_tests.rs`・examples `window-placement.rs`、`areka-runtime` の `balloon_hover.rs`・`hit_region.rs`・`shell_box_hover.rs`・examples `collision-probe.rs`・`collision-probe/setup.rs`、`areka-emo-text` の `choice.rs`）を、移した先のパスと名前へ書き換え、動きを変えない。
 3. The 分割作業 shall 本体の説明に残る input のパス（`install/mod.rs` の `input_events/file_drop.rs`・`readme.rs` の `input_events/choice_drain.rs`）を、移した先のパスへ書き換える。
-4. The 分割作業 shall 文書の中の input のパスを、移した先のパスへ書き換える: `doc/COMPAT_ARCHITECTURE.md`（パスの書き換えだけ・約 20 か所）・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の根拠の場所（`assets.toml`・`sakura-script.toml`・`shiori.toml` の約 33 か所）・`doc/anchor-compat.md`・`doc/pasta-real-run.md`・`doc/ideas/` の下の文書。網羅台帳は別々の行だけを書き換え、`doc/ukadoc-coverage/report/` は手で直さず作り直す。
-5. The 分割作業 shall `.kiro/steering/structure.md` に新しい crate `areka-input` の節を足し、本体の節の `input_events/` の記述と `install/` の節の `input_events/file_drop.rs` を、移した先へ合わせる。
+4. The 分割作業 shall 文書の中の input のパスを、移した先のパスへ書き換える: `doc/COMPAT_ARCHITECTURE.md`（パスの書き換えだけ・約 20 か所）・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の根拠の場所（`assets.toml`・`sakura-script.toml`・`shiori.toml` の約 33 か所）・`doc/anchor-compat.md`・`doc/pasta-real-run.md`・`doc/ideas/` の下の文書（ギャップ分析の実測 6 ファイル）。網羅台帳は別々の行だけを書き換え、`doc/ukadoc-coverage/report/` は手で直さず作り直す。
+5. The 分割作業 shall `.kiro/steering/structure.md` に新しい crate `areka-input` の節を足し、本体の節の `input_events/` の記述と `install/` の節の `input_events/file_drop.rs` を、移した先へ合わせる。`log-capture-kit` の使い手の crate の数（今は「21 crate」）にも `areka-input` を数え入れる。
 6. The 分割作業 shall `audit-areka-input-menu` の brief の「受け持つファイル」を、移した先のパス（`crates/areka-input/src/`・本体の menu の下の `shortcut.rs` とそのテスト・本体の `file_drop.rs` とそのテストの置き場・本体の `menu*`）へ書き換える。`shortcut.rs`・`file_drop.rs` を見直しの範囲に残すかの判断（同 brief の「見つけた穴」⑴⑵）は同 spec の要件の段の持ち物で、この仕様は決めない。
-7. When 書き換えを終えたとき, the 分割作業 shall 古いパス `crates/areka/src/input_events/` と、`src/` を付けない書き方（`input_events/x.rs`）で本体の input を指すものを、`crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep して 0 件であることを示す。除くのは、歴史の文書（`roadmap-history.md`・`.kiro/specs/completed/`）・新旧のパスの対応表を持つ `roadmap.md`・日付つきの写し `doc/roadmap-overview-2026-10-16.html`・同じウェーブの約束で触らない `crates/areka-runtime/src/frame/wiring.rs` の説明（3 か所）だけで、除いた所は一覧で残す。
+7. When 書き換えを終えたとき, the 分割作業 shall 古いパス `crates/areka/src/input_events/` と、`src/` を付けない書き方（`input_events/x.rs`）で本体の input を指すものを、`crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep して 0 件であることを示す。除くのは、歴史の文書（`roadmap-history.md`・`.kiro/specs/completed/`）・新旧のパスの対応表を持つ `roadmap.md`・日付つきの写し `doc/roadmap-overview-2026-10-16.html`・同じウェーブの約束で触らない `crates/areka-runtime/src/frame/wiring.rs` の説明（3 か所）だけで、除いた所は一覧で残す。あわせて、モジュールの形（`input_events::throttle`・`input_events::cursor_answer` ほか）で input を名指すものを、`doc/` と本体の外の crate で grep して 0 件であることを示す（本体の中の `crate::input_events::…` は 6.8 のとおり当たりにしない）。
 8. The 分割作業 shall 本体の中の呼び手のパス `crate::input_events::…`（3.4 の出し直しで通るもの）を 6.7 の当たりにしない。
 9. When この仕様の完了の申し送りを書くとき, the 分割作業 shall `crates/areka-runtime/src/frame/wiring.rs` の説明に残る古い input のパス（295・319・326 行の付近）を、`audit-emo2-boot-frame` への申し送りとして記録する。
 
@@ -145,7 +145,7 @@
 
 1. The `areka-input` クレート shall モジュールのパスから付く本番のログの出所を、新しい crate の名前（`areka_input::…`）で出す。
 2. The 分割作業 shall モジュールのパスを写した直書きの出所（`"areka::input_events::…"` の形のもの）があれば、新しい出所の名前に合わせる。語彙として付けた直書きの出所（`"areka::persist::*"`・`"areka::log::*"`・`"areka::perf"` ほか）は変えない。
-3. The 分割作業 shall ログの出所を名前で読む所を、新しい出所の名前へ書き換える: `crates/areka/tests/emo2_mcp_real_run.rs` の `rust_log`（`areka::input_events::user_break=debug`）と説明・`crates/areka/tests/window_link_real_run.rs` の `RUST_LOG`（`areka::input_events=debug`）・実機の手順書 `doc/pasta-real-run.md` の `RUST_LOG` と説明（127・141・214・217 行）。
+3. The 分割作業 shall ログの出所を名前で読む所を、新しい出所の名前へ書き換える: `crates/areka/tests/emo2_mcp_real_run.rs` の `rust_log`（`areka::input_events::user_break=debug`）と説明・`crates/areka/tests/window_link_real_run.rs` の `RUST_LOG`（`areka::input_events=debug`）・実機の手順書 `doc/pasta-real-run.md` の `RUST_LOG` と説明（127・141・214・217 行）・input のテスト `cursor_answer_tests.rs` の `TARGET`（`"areka::input_events::char_watch::cursor_answer"`・ギャップ分析で見つけた 4 つ目の所）。
 4. When `RUST_LOG` に `areka_input=debug` を与えたとき, the areka shall 入力の診断のログを、移す前に `areka::input_events=debug` で出ていたものと同じだけ出す。
 5. The areka shall MCP の `get_log` の 5 種別への分け方で、移す前に input の出所の行が当たっていた種別（2026-11-20 の測りでは、どの決まりにも当たらない）を、移した後の `areka_input::…` の行でも同じにする（`shortcut.rs`・`file_drop.rs` の行は 2.5 のとおり）。
 6. When 書き換えを終えたとき, the 分割作業 shall 古い出所の名前 `areka::input_events`（`areka::input_events::`・`areka::input_events=`・行末の形）を `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep して 0 件であることを示す（歴史の文書と、新旧のパスの対応表を持つ `roadmap.md` は除く）。
@@ -159,7 +159,7 @@
 
 1. The 分割作業 shall 入力の振る舞い（マウスのイベント・選択肢・ドラッグ・中断・ホイール・カーソルの形・近道・投げ込み・強制退避・ログの中身）を変えない。直したくなった不具合と古い説明は直さず、`audit-areka-input-menu` へ申し送りとして記録する。理由の文が移した後に事実でなくなる `#[allow(...)]`（「areka は lib を持たない bin」ほかを理由にするもの）も、属性と文を変えず、一覧を同じ spec へ申し送る。
 2. When 着手のときと完了のとき, the 分割作業 shall `cargo test --workspace --no-fail-fast -- --list` を取り、`: test$` の行から名前の末尾（最後の `::` から後ろ）の多重集合を作り、前後で一致することを示す。
-3. If 前後の多重集合が一致しない場合, then the 分割作業 shall 名前を改めたテストを対応表で 1 件ずつ説明し、説明できない差を残さない。
+3. If 前後の多重集合が一致しない場合, then the 分割作業 shall 名前を改めたテストと新しく足したテスト（落ちの報告の確かめ・口が据わる確かめ・`get_log` の分け方の確かめほか）を対応表で 1 件ずつ説明し、説明できない差を残さない。
 4. The 分割作業 shall `cargo check --workspace --all-targets` の警告を 0 件のまま保つ。
 5. When 完了の前に, the 分割作業 shall `pwsh -NoProfile -File tools/test-all.ps1` が緑であることを示す。
 6. When 完了の前に, the 分割作業 shall ログの出所を名前で読む実機テスト `crates/areka/tests/emo2_mcp_real_run.rs`・`crates/areka/tests/window_link_real_run.rs` を、新しい出所の名前で 1 回ずつ走らせて緑を示す。
@@ -170,7 +170,7 @@
 
 ## 設計の段への申し送り
 
-1. **数の取り直し**（議題ではなく申し送り）: 公開にする `pub(crate)` の一覧（brief の見込み 約 17 項目と 3 メソッド）・input のテストが使う下の crate の支え（brief の 5 ファイル・12 か所）・本体のテストが使う input の `#[cfg(test)]` の支え・input を名指す文書の中のパス（2026-11-20 の作業の木で `doc/COMPAT_ARCHITECTURE.md` 20 行・網羅台帳 33 行・`doc/anchor-compat.md` 6 行・`doc/ideas/` 7 ファイル）を、設計の段で数え直す。
+1. **数の取り直し**（議題ではなく申し送り）: 公開にする `pub(crate)` の一覧（brief の見込み 約 17 項目と 3 メソッド）・input のテストが使う下の crate の支え（brief の 5 ファイル・12 か所）・本体のテストが使う input の `#[cfg(test)]` の支え・input を名指す文書の中のパス（2026-11-20 の作業の木で `doc/COMPAT_ARCHITECTURE.md` 20 行・網羅台帳 33 行・`doc/anchor-compat.md` 6 行・`doc/ideas/` 6 ファイル）を、設計の段で数え直す。
 2. **brief の古くなった記述**（brief の再測定の節のとおり）: 「runtime と placement の側で input が使う項目を `pub` にする」は済んでいる。`quit_app` の「`frame.rs` に入れた終わりの知らせの仕組み」は古く、終わる相は本体の `session/ghost_quit.rs`、向きを逆にする口の前例は `crates/areka-runtime/src/session_hooks.rs` の `SessionHooks`。
 3. **roadmap の C23 の行の触るファイルの一覧に無かった所**（2026-11-20 の作業の木の測り・同じウェーブの兄弟の触るファイルと重ならないことは設計の段で確かめる）: `doc/pasta-real-run.md`（`RUST_LOG` に `areka::input_events=debug`＝出所を名前で読む 3 つ目の所・実機の手順書）・`crates/areka/src/install/mod.rs`・`readme.rs`（説明だけ）・`areka-placement` の 6 ファイル（説明だけ）・`areka-runtime` の examples 2 ファイル（説明だけ）・`areka-emo-text/src/choice.rs`（説明だけ）・`doc/COMPAT_ARCHITECTURE.md`・網羅台帳・`doc/anchor-compat.md`・`doc/ideas/`・`tools/load-flake.ps1`（下の OPEN QUESTIONS の 4）。
 4. **出し直しで通る呼び手**: 本体の `ghost_session_*_tests.rs`・`shell_balloon_switch_session_*_tests.rs`・`app_exit_tests.rs`・`menu/*_tests.rs` ほかは `crate::input_events::…` のまま通る見込みで、変えない（3.4）。
