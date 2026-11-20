@@ -382,10 +382,10 @@ fn check_clamp_lines(
             ));
         }
     } else {
-        if let Some(tag) = alive_tag {
-            if !events.iter().any(|e| e.message().contains(tag)) {
-                fails.push(format!("{} [capture-alive]: no {tag}", row.name));
-            }
+        if let Some(tag) = alive_tag
+            && !events.iter().any(|e| e.message().contains(tag))
+        {
+            fails.push(format!("{} [capture-alive]: no {tag}", row.name));
         }
         if !clamps.is_empty() {
             fails.push(format!(

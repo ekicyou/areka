@@ -73,8 +73,8 @@
   - _Dispatch: mechanical — 表の行は設計の表と実装の結果から写す_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1, 2.2, 6.1, 6.2, 6.3, 6.4, 6.5, 7.6, 7.7_
 
-- [ ] 6. 全体の確かめ
-- [ ] 6.1 3 つの crate の全部のテストを回し、触らない約束と注の決まりを確かめる
+- [x] 6. 全体の確かめ
+- [x] 6.1 3 つの crate の全部のテストを回し、触らない約束と注の決まりを確かめる
   - `areka-placement`・`areka`・`areka-runtime` の全部のテストを回して緑を確かめる。フレームの檻が赤になったら、`frame/` に触る直しは入れずに止めて報告する
   - `git diff` で、本体の `ghost_session.rs`・`areka-runtime` の `frame/`・`reset_pos.rs`・`chain_realign.rs`・`balloon_drag.rs`・`work_area_clamp.rs`・`move_shift.rs`・`resolver` の本番のコード・`balloon_limit_tests.rs`・`Cargo.toml` に差分が無いことを確かめる
   - 直したコードの差分の注に、spec 名・要件番号・タスク番号・並べ替えを今の決まりとして書く文が無いことを確かめる。ゴーストの名前や初回の起動を見る分岐を足していないことも確かめる
