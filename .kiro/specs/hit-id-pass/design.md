@@ -219,13 +219,14 @@ crates/areka-parsers/src/shell/
 
 - `crates/wintf/src/ecs/layout/hit_region/mod.rs` — `ColorMapData::from_image` を乗算しない読みへ替え、完全に透明な画素を対応の外にする（決め 12）。確かめは `crates/wintf/tests/layout/` の色分け画像のテストへ足す。
 - `crates/wintf/src/ecs/graphics/visual/draw/README.md` — ID の描き先の使い方（作る・塗る・答えの読み分け・装置の作り直しは使い手が作り直す）を書き足す。
-- `crates/areka-runtime/src/hit_region.rs` — 説明のうち矩形の端と「α を参照しない」を書いた所だけを直す。署名とテストは変えない。
 - `crates/areka-emo-present/src/presenter.rs`・`lib.rs` — `mod` の宣言と `use`（`RegionPriority` を外す）。
 - `crates/areka-emo-present/src/presenter/hub.rs`・`presenter/replace.rs` — 対象を作る所で、当たりの欄を空で始める。
 - `crates/areka-emo-compose/src/normalized.rs`・`crates/areka-emo-present/src/presenter_read_accessor_tests.rs` — 消す関数（`hit_region_in`・`hit_region_scaled_in`）を名指しした説明とテストを、新しい解決に合わせて直す。
-- 既存のテストの書き直し: `crates/areka-parsers/src/shell/decode_collisionex_tests.rs`・`crates/areka-emo-present/src/shell_target_element_base_tests.rs`（「まだ働かない形」の行）・`presenter_nesting_hit_tests.rs`・`presenter_refresh_and_log_tests.rs`・表示の拡大率つきの当たりのテスト（`presenter_dpi_scale_tests.rs`・`presenter_fractional_scale_tests.rs` のうち当たりを確かめる所）・`presenter_test_support.rs`（足場）・`crates/areka-emo-compose/src/hit_import_tests.rs` と `fold_merge_tests.rs`（`RegionPriority` と `hit_region_in` を使う所を、並びそのものの確かめへ書き直す）。
+- 既存のテストの書き直し: `crates/areka-parsers/src/shell/decode_collisionex_tests.rs`・`crates/areka-emo-present/src/shell_target_element_base_tests.rs`（「まだ働かない形」の行）・`presenter_nesting_hit_tests.rs`・`presenter_refresh_and_log_tests.rs`・`presenter_film_tests.rs`（テスト専用の `EmoPresenter::hit_region` を使う 2 か所。この口は CPU の判定の上に在るので消し、テストは `hit_region_client` を通す形へ書き直す）・表示の拡大率つきの当たりのテスト（`presenter_dpi_scale_tests.rs`・`presenter_fractional_scale_tests.rs` のうち当たりを確かめる所）・`presenter_test_support.rs`（足場）・`crates/areka-emo-compose/src/hit_import_tests.rs` と `fold_merge_tests.rs`（`RegionPriority` と `hit_region_in` を使う所を、並びそのものの確かめへ書き直す）。
 - 文書: `doc/ukadoc-coverage/ledger/assets.toml`（`collisionex*` の行・`collision*` の行の「hit が当たり判定に使う」の文）・`doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/roadmap-draft.md`（「ID の描き先に塗るのは `hit-id-pass`」の文）・`.kiro/steering/tech.md`（WARP の例外の列）。
-- 触らない: `crates/areka/`・`crates/areka-runtime/src/frame*`・`crates/areka-emo-compose/src/hit_import.rs`・`crates/areka-emo-compose/src/scale.rs`。
+- 触らない: `crates/areka/`・`crates/areka-runtime/src/frame*`・`crates/areka-runtime/src/hit_region.rs`（矩形の端や α を書いた説明は無く、直す所が無い＝`input-crate-split` との重なりも無い）・`crates/areka-emo-compose/src/hit_import.rs`・`crates/areka-emo-compose/src/scale.rs`。
+- `shell_target.rs` は 1,000 行の番に近い（上限越えの表に触れるのは同じウェーブでは `audit-emo2-boot-frame` だけ）。`region` の画像の読みと読めないファイルの記録は新しいファイル `shell_target_regions.rs` に置き、`shell_target.rs` には呼び出しの数行だけを足す。`ShapesInactive` の記録は `shell_target.rs` の汎用の出口（読み手の指摘を順に `warn!` で出す繰り返し）から出ているので、読み手の腕を消せば出なくなり、`shell_target.rs` で消す所は無い。
+- 同じウェーブとの重なり（行は別・ファイルは同じ）: `doc/COMPAT_ARCHITECTURE.md` §8 は、末尾への追記のほかに矩形の端と「まだ当たらない」の行を書き直す（`balloon-flip-ssp-review` が書き換えるのはバルーンの反転の行）。`.kiro/steering/tech.md` は WARP の例外の列に 1 文を足す（依存の節は `input-crate-split` の席）。どちらも実装でこの 2 つに触る前に相手のセッションへ知らせ、後から入る側が main を取り込んでから書く。
 
 コードの説明には spec の名前・要件の番号・タスクの番号を書かない（`CLAUDE.md` の Comments の節）。この表の対応は設計の文書の中だけに置く。
 
@@ -580,6 +581,8 @@ hit_notes: HitNotes, // 記録を 1 度に抑える控え（読めない・上�
 
 `hit_notes` は `&self` の読み（`hit_region_client`）から立てるので `Cell` で持つ（presenter は UI スレッド専用で、ほかのスレッドへ渡らない）。
 
+`shown_mask` は α マスクの輪番（`presenter/budget.rs` の `MaskRotation`・空きのマスクを `Arc::get_mut` で作り直す）に持ち主を 1 人足す。`shown_mask` は `AlphaMaskResource::set_shared` と同じ所で同じ実体へ入れ替えるので、手放す時点は下流（`AlphaMaskResource`）と同じになり、空きを取り出す時点の単独所有は崩れない。これを確かめるため、今ある輪番のテスト（確保の回数を数える `budget_tests.rs`）と同じ形で、表示を繰り返しても確保が増えないことを固定する。
+
 - **描く時点**: 表示の成立点で、α マスクを `AlphaMaskResource` へ渡すのと同じ所。`shown_mask` に同じ参照を写し、続けて「描き先が無い・`surface_id` が違う・大きさが原寸と違う」のどれかなら `hit_shapes` → `IdTarget`（大きさが同じなら使い回す）→ `paint`。
 - **並びが空**のサーフェスでは `hit_picture` を `None` にする（描き先を作らない）。
 - **失敗**: `GraphicsCore` が無い・`IdTarget::new` か `paint` が失敗したら `hit_picture` を `None` にして表示は成立させる。次の表示の成立でまた試す。成功した回に「読めない」の控えを下ろす（立ち直り）。
@@ -733,8 +736,11 @@ GPU を使うテストは実のハードウェア GPU で回し、wintf の ID �
 3. **描く道具と読み戻し**: **仮定**: D2D で塗り、D2D の 1×1 の写し先で読む。D3D11 の整数の描き先は採らない（D2D は整数の形式へ描けず、wintf に 2 つ目の描き手を作ることになる）。D3D11 の口で読む折衷も採らない（待ちの差は 0.1 ms ほど）。**知らせ**: D2D の塗りでは、楕円・円・辺が交差する多角形の周のすぐそばの画素が装置で分かれうる（同じ装置では常に同じ）。これを無くすには D3D11 で形を式で塗る道が要る。
 4. **色の絵の α の出どころ**: **仮定**: クリックの透過と同じ CPU の α マスクを戻した点で引く（持ち主を 1 つにする・`draw-methods-canon` が一緒に付け替える）。**代案**: GPU の読み戻し（`SurfaceReadback`）で物理ピクセルの α を読む（brief の Desired Outcome の形。読みが 1 回増える〔2 枚を 1 度に読めば待ちは増えない〕・World が要るので署名が変わる・描画の段が走るまで前の絵の α が残る・クリックの透過と縁の 1 画素で食い違いうる・presenter のテストに本物の描画面が要る）。
 5. **塗る件数の上限と `region` の重さ**: **仮定**: 上限は 65,536 件で、手前の側から残す。マスクの GPU の絵は描き直しのたびに作る（100 件で約 180 ms）。上限の数と、GPU の絵を覚えておく形を今足すかを決める。
-6. **WIC の乗算しない読みが色を変えないか**: 試していない。**仮定**: 変えない（WIC は色の変換を頼まれない限り行わない）。実装の最初のタスクで、ガンマと色の情報のチャンクを持つ PNG の決定論のテストで確かめる。変わるなら、`region` の読みだけ `image` の PNG の読み（すでに在る依存）へ替える。
-7. **`RegionPriority` と CPU の判定の公開の口を消す**: 完了 `collision-geometry` が `collision-sort` のために置いた型の継ぎ目（腕は画家の順だけ）を、CPU の判定と一緒に消す。**仮定**: 消す（並びの順は列の順の上書きが持つ・`collision-sort` は今も範囲の外）。
+
+設計の討議の前の仕分けで決めたこと（議題にしない）:
+
+- **WIC の乗算しない読みが色を変えないか**: 試していない。変えないと置く（WIC は色の変換を頼まれない限り行わない）。実装の最初のタスクで、ガンマと色の情報のチャンクを持つ PNG の決定論のテストで確かめる。変わるなら、`region` の読みだけ `image` の PNG の読み（すでに在る依存）へ替える。
+- **`RegionPriority` と CPU の判定の公開の口は消す**（決め 9）: 完了 `collision-geometry` が `collision-sort` のために置いた型の継ぎ目（腕は画家の順だけ）を、CPU の判定と一緒に消す。並びの順は列の順の上書きが持つ。呼び手は emo-compose の 6 ファイルと emo-present の 3 ファイルだけで、本体・`areka-runtime`・`areka-placement` には無い（設計の検証で確かめた）。
 
 `resolve_hit_region` と `hit_region_client` の署名は、この下書きでは**変わらない**（本体と `areka-input` の追従は要らない）。議題 2 の代案 B か議題 4 の代案が採られたときだけ変わる。
 
