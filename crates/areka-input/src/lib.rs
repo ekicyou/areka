@@ -615,3 +615,6 @@ mod char_clamp_tests;
 
 #[cfg(test)]
 mod spawn_assembly_tests;
+
+#[cfg(test)]
+mod crash_report_tests;
