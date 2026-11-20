@@ -949,3 +949,80 @@
 - 3 番の縛るテストは、装着の相の中の控えの 1 行を通さない（面 0 を組めないバルーンを決定論で作れない）。控えの後の繋ぎ直しと、`None` で `false` が返ることは別々に縛る。
 - 49 番で、資源 `MonitorSnapshot` を手で置き替えて同期に上書きさせるテストがあれば、モニターの component を書き替える形に改める（本数は実装で記録する）。
 - 33 番の移しは組んで確かめるまで確かでない（調べでは依存の範囲で組める）。組めない所が出たら、`Cargo.toml` に触らずに済む置き方を探し、無ければ要件 6.7 の議題にする。
+
+---
+
+## 12. 預かった件と申し送りの記録（2026-11-21・T25・要件 5.8・5.14・5.17・7.7・7.8・7.10）
+
+### 12.1 件 1〜14 の片づけ
+
+出どころは 3 節の表のとおり。「直した場所」は tasks.md のタスクの番号（実装メモの記録に合わせた）。
+
+| 件 | 要件 | 出どころ | 指摘 | 直した場所 | 片づけ |
+|---|---|---|---|---|---|
+| 1 | 5.1 | `runtime-module-untangle` | 37 | 5.1（T20） | 結線の古い説明を直した |
+| 2 | 5.2 | `audit-wintf-window` 件 1 | 93 | 5.4（T23） | 行番号で指していた所を名前で指す形にした |
+| 3 | 5.3 | `audit-wintf-window` 件 2 | 46 | 5.1（T20） | 「前方一致なので漏れはせず」の文言ごと直した |
+| 4 | 5.4 | `runtime-crate-split` ⑵ | 5 | 1.5（T5） | 使わない import を 0 件にした。`--force-warn unused_imports` の警告は 3 つの組（lib・lib＋test-support・test）とも 0 件 |
+| 5 | 5.5 | `runtime-crate-split` ⑶ | 114 | 1.5（T5） | 公開の面を狭めた（私有に 3・`pub(super)` に 4） |
+| 5 続き | 5.6 | 同 ⑶ 案 C | 57 | 2.1・5.2・5.5 | 同じ名前のテストは両側で 0 件。残った見出しの写しだけ直した |
+| 6 | 5.7 | `runtime-crate-split` ⑷ | 43 | 5.1（T20） | 説明の誤りを直した |
+| 7 | 5.8 | 同 ⑷ | 92 | 5.4（T23） | 下の 12.2 |
+| 8 | 5.9 | 同 ⑷ | 40 | 5.1（T20） | 説明を直した |
+| 9 | 5.10 | `audit-emo2-boot-spine` ア | 4 | 1.4（T4） | scope の上限を 1 つの関数にして範囲の中の 9 か所を通した |
+| 10 | 5.11 | 同 イ | 99 | 4.2（T18） | 本体から `areka-runtime` へ戻した（依存は足していない） |
+| 11 | 5.12 | 同 オと完了の時の棚卸 | 22・23・24 | 3.1（T13） | `capture_logs` の写しを既にある支えへ寄せた |
+| 12 | 5.13 | 同 完了の時の棚卸 | 56 | 5.2（T21） | 設計（要件 5.13）のとおり `areka-test-binary-stability` の名をコメントに書いた。CLAUDE.md のコメントの決まり（spec の名を書かない）とは食い違う。7.1 の audit で見る |
+| 13 | 5.14・5.15 | `audit-placement-follow-residue` | 6 | 1.6（T6） | **確かめは済み（要件 5.14・5.17）**: 本番は札の外れるフレームに、入れ直した揃え方で書く（3 節「件 13 の確かめ」）。範囲の中にそのフレームを通る決定論のテストが無かったので 6 番として新しく立てた（5.15） |
+| 14 | 5.16 | `audit-areka-app` の brief の件 2〜4・9 | 41・44・45・75・84 | 4.3・5.1・5.3・5.4（T19・T20・T22・T23） | `atom` の書き方・古い数・古い名を直した |
+
+### 12.2 `--release` で合否の変わる 1 本（件 7・92 番・要件 5.8）
+
+`frame::work_area_resnap_hold_tests::the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites`
+
+- 見張りは `debug_assert!` なので `--release` では鳴らない。前は `--release` で赤、今は `#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]` を付けて ignored になる（範囲の外の同じ形の 3 本と同じ書き方）。
+- `--release` でテストを回す道は無い（`tools/test-all.ps1` は debug・release の CI はテストを回さない）ので、全体テストの結果は変わらない。
+- 87 番では検知段の同寸 skip を消しても緑のまま（`resize_window_to` のべき等が吸う）なので、説明は「同じ寸を何度渡しても窓へ書かない」に弱めた。
+
+### 12.3 規模と直さずに残す指摘
+
+- 規模の見立ては **27 タスク**（要件 2.6・設計の見立ては 24〜28）。1 本のまま進めた（前例 `audit-emo2-boot-spine` の 23 タスク）。分けない。
+- 討議で決めた**直さずに残す指摘は 0 件**（確定 7）。裁定に近い 8 件（2・46・55・67・68・72・80・94）と先送りの印の 1 件（64）も、裁定の中身には触れない形で直した。
+
+### 12.4 範囲の外の件の回し先（要件 7.8・7.10）
+
+どの持ち主も、書く前に `.kiro/specs/completed/` の下に無いことを確かめた（2026-11-21）。
+
+| 件 | 回し先 | 書いた中身 |
+|---|---|---|
+| 2 番の列が伸び続ける件 | `window-resetwindowpos-hold` | 面を出さない窓への `\![move]` が預かられ続ける |
+| ア | `extra-character-windows` | `detect_scopes` に `i32::MAX` の上限・窓の側は `target_map::window_scope` を使う |
+| イ〜カ | `test-crash-report-merge` | `areka-placement` の古い注と写し（下の 4.1 の注も同じ所へ） |
+| キ・ク・コ（`areka-runtime` の分） | `audit-emo2-boot-switch` | `move_cue*` の偽の HWND の輪の写し・`balloon_visibility_phase.rs` の `marker.scope as u32`・`move_cue_apply_move_sticky_tests.rs:256`・`move_cue_place_tests.rs:395` の `let _ = parts.handle.join()`（6 節コの `move_cue_apply_move_tests.rs:L256` は今はこの道） |
+| オ（本体の分）・コ（本体の 7 か所）・サ・シ | `audit-areka-app` | `code_only` の写し・`let _ = parts.handle.join()`（6 節の「9 か所」は数え直して本体 8・`areka-runtime` 2。本体のうち `input_events/drag_test_support.rs:283` は `audit-areka-input-menu` の持ち物と brief に書いた）・本体の `capture_logs` と GPU の World の写し・`BootContext` の補助 |
+| ス | `areka-test-wait-wording` | 5.5 で書き換え済み（`frame_scale_notice_integration_tests.rs` の古い道は新しい道へ・済みの印あり）。件は足さない |
+| ケ・セ | 回さない | 範囲の中で直した（ケ＝3.5・セ＝3.2） |
+
+### 12.5 実装で見つかった申し送り
+
+- **4.1**: `crates/areka-placement/src/chain_rule_tests.rs` の 5 行目の説明が、移す前の置き場（本体の `frame_chain_rule_tests.rs`）を指したまま。今は `crates/areka-runtime/src/frame_chain_rule_tests.rs`。`areka-placement` は C23 で触らないので、`test-crash-report-merge` の brief へ件として足した（イ〜カと同じ種類の古い注）。
+- **4.2**: `doc/COMPAT_ARCHITECTURE.md` §8（228 行）が `log_ghost_falls_back_to_dash_and_raise_reports_normal_band` を本体の `crates/areka/src/runtime_tests/frame/window_state_tests.rs` と書いている。今は `crates/areka-runtime/src/frame/window_state_tests.rs`。**持ち主を決められなかった**（下の 12.6）。
+
+### 12.6 申し送り先の決まっていない件
+
+- `doc/COMPAT_ARCHITECTURE.md` §8 の 228 行目の、上の 4.2 のパス 1 か所。
+  - `doc-compat-architecture-rename` は「中身を変えない・変えてよいのは改名で食い違う自分の名前だけ」で当たらない。`audit-areka-app` 等の見直しの持ち物は §8 の文書ではない。C23 の `hit-id-pass`（§8 の末尾への追記）と `balloon-flip-ssp-review`（別の行の書き換え）は違う行を触るので、渡さない。
+  - spec は作っていない。次の棚卸（`/kiro-next`）で持ち主を決めるか、§8 に触る次の spec が 228 行目も直す。
+
+### 12.7 C23 のほかの 3 本へ申し送る件（要件 7.7）
+
+C23 のほかの 3 本は `hit-id-pass`・`balloon-flip-ssp-review`・`input-crate-split`。申し送る件は **0 件のまま**。12.5 の 2 つは、どれもこの 3 本の触るファイルではない（`areka-placement/src/chain_rule_tests.rs` は 3 本とも触らず、§8 の 228 行目は `hit-id-pass` の追記・`balloon-flip-ssp-review` の別の行の書き換えと重ならない）。
+
+### 12.8 設計から外れた所（あとの audit で「ずれ」と数えない）
+
+- 1.7: 同期のテストで、作り直しの後にもう一度 `SystemState::get` を呼ぶ（自分の `insert_resource` を次の呼び出しの入れ直しと数えないため）。
+- 3.5: `BALLOON_SPAWN_SIZE`・`BASE_OFFSETS`・`SCALE_120` は新しい `cfg(test)` の支えでなく `frame_shared_test_support.rs` に置いた（`feature = "test-support"` でも組まれる `resnap_placements` が読むため）。
+- 4.1: clamp ⑴⑻ の共通の配置は `persist_test_support::left_edge` に 1 つ置いた。移したテストは 22 本（規則 15・揃え 6・clamp ⑴ 1・設計の「規則 13 本」は数え違い）。
+- 5.1・5.3・5.4: 41 番の「atom を spec の名で書く」は、spec の名を足すのでなく、spec の ID・要件番号・設計の部品の記号（C2・C5・C7・D15）の参照だけの行を消す形で読んだ。ログの文字列の中に残る ID は触らない（ログの文を変えるのは 3・4・113 番だけ）。
+- 5.5: 109 番は `Progress::Unknown` にしても目印の無い待ちのままなので、同じ受け箱へ `KanadeMsg::Close` を送り `join_bounded` で待つ柵にした（打ち切りは［止まった］）。設計の 109 番の行と直し方の欄を実装に合わせて改めた。
+- 5.2 の 56 番（spec の名をコメントに書く）と、`確定台帳` の参照が 17 ファイルの外に残ること、`attach.rs`・`frame.rs`・`left_edge::placements` に要件番号・task 番号が少し残ることは、7.1 のかけ直しの audit で見る。

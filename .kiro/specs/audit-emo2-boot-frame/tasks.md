@@ -232,7 +232,7 @@
   - _Dispatch: mechanical — 直し方を設計の表が与える_
   - _Requirements: 3.1, 3.3, 3.6, 4.1, 5.6_
 
-- [ ] 6. 預かった件と申し送りを記録する（T25）
+- [x] 6. 預かった件と申し送りを記録する（T25）
   - `research.md` に、件 1〜14 の片づけを出どころ（指摘の番号とタスク）と一緒に書く。件 13 の確かめは済みとして記す（要件 5.14・5.17）
   - 規模の見立て（27 タスク）と、討議で決めた直さずに残す指摘 0 件を記録として残す
   - `--release` の合否の変わる 1 本を記録に書く（92 番・件 7）
@@ -287,3 +287,4 @@
 - 5.3: 72 番で支えの x64 の const の表明を消したので、ハーネスに乗るバルーンのオフセットのテスト 4 本の宣言も `cfg(all(test, target_pointer_width = "64"))` に揃えた（ハーネスの使い手は全部 x64 の宣言の下）。`cargo check --target i686-pc-windows-msvc` は `wintf` で落ちるので 32 bit の組み立ては試せていない（前からの問題）。消したテスト: 62・63・64 番（attach 3 本）・68 番（keyword_gate 1 本）・72 番（harness 1 本）。
 - 5.4: `--release` で合否が変わる 1 本は `frame::work_area_resnap_hold_tests::the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites`（`#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]`・前は `--release` で赤、今は ignored）。87 番で検知段の同寸 skip を消しても緑のまま（`resize_window_to` のべき等が吸う）なので、説明は「同じ寸を何度渡しても窓へ書かない」に弱めた。41 番の一掃は ID だけでなく設計の部品の記号（C2・C5・C7・D15）も理由の言葉に置き換えた。`確定台帳` の参照は 17 ファイルの外（placement の `dpi_sync.rs` ほか・`frame/work_area_sync.rs`・`frame_work_area_sync_tests.rs`）に残る（7.1 で見る）。
 - 5.5: 109 番は返事の待ちを `Progress::Unknown` にしても目印の無い待ちのまま（差し戻し）。`ReplyReceiver` の mpsc は外から触れず、kanade は問い合わせにその場で答えるのでテストから見える進みが無い。調べ係の案で、同じ受け箱へ `KanadeMsg::Close` を送り `join_bounded` で待つ柵にした（20 番と同じ形・打ち切りは［止まった］）。design.md の 109 番の行と research.md の直し方の欄を実装に合わせて改めた（audit 系は推奨案で承認してよい・11-04）。98 番の `NO_BODY` は `areka-runtime` の `session_hooks.rs`・`frame/status_report_tests.rs` が守る。
+- 6: `COMPAT_ARCHITECTURE.md` §8 L228（`\v` の行）の古い置き場は持ち主の brief が無いので research 12.6 に「申し送り先の決まっていない件」として残した（完了の棚卸で起票する）。`frame_persist_test_support.rs:154`（`Drop for PersistStore` の `let _ = handle.join()`）は範囲の中なので 7.1 の audit で見る。`input_events/drag_test_support.rs:283` は `audit-areka-input-menu` の持ち分（audit-areka-app の brief に注として書いた）。

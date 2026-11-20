@@ -63,3 +63,14 @@
 - 優先度の区分: A（見直しの指摘の取り残し・開発者「指摘事項は全部直す」）。
 - 要件定義のモデル: Opus（前例＝`log-capture-kit` が leaf として wintf と上位の crate に同じ仕組みを配っている形）。
 - 議題: 置き場（⑴ か ⑵）・許可の持ち手の表の置き方・`carrier_cue` の残りを寄せるか。
+
+## audit-emo2-boot-frame からの申し送り（2026-11-21）
+
+`audit-emo2-boot-frame` の範囲の外（`areka-placement` は C23 のあいだ触れない）で見つけた、古い注と写しの件（`.kiro/specs/audit-emo2-boot-frame/research.md` の 6 節イ〜カと 12.5）。この spec が `areka-placement` に触るときにまとめて直す。
+
+- **イ**: `crates/areka-placement/src/follow/window_move.rs` の 666 行付近の「見送りの 4 点」は今は 5 点。
+- **ウ**: `crates/areka-placement/src/follow_window_move_hold_watch_tests.rs` の 35 行付近の `INVARIANT_WARNING` は手写し。在ることを確かめる側が無い。
+- **エ**: `config.rs`・`follow/work_area.rs`・`follow_visibility_balloon_wiring_tests.rs` の古い道 `runtime::frame::…`・「本体の」は、今は `areka_runtime::frame::…`。
+- **オ**: `crates/areka-placement/src/test_support.rs` の `code_only` は `source_text_test_support::code_only` の写し。
+- **カ**: `crates/areka-placement/src/follow_window_move_diag_tests.rs` の `window_move_lines` は、`areka-runtime` の `frame_test_support.rs` と同じ働き（上流の crate の `test_support` へ移せば両方が 1 つを使える）。
+- **移したテストの置き場の古い注**: `crates/areka-placement/src/chain_rule_tests.rs` の 5 行目が、移す前の置き場（本体の `frame_chain_rule_tests.rs`）を指している。今は `crates/areka-runtime/src/frame_chain_rule_tests.rs`。
