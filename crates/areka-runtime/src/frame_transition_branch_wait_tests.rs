@@ -1,15 +1,14 @@
-//! 拡大率の通知が表の更新より先に届く順序（経路 (a)）の整合待ちを、要件 7.2 が名指しする
+//! 拡大率の通知が表の更新より先に届く順序（経路 (a)）の整合待ちを、
 //! 2 水準（120 と 192）で多フレーム駆動して固定する。
 //!
 //! 是正前の赤はここが持つ: 待ちが無いと、窓は新しい寸のまま旧作業領域下端へ接地した中間矩形で
-//! 1 度書かれ、表が追いついた次のフレームでもう 1 度書き直される（要件 5.8 の 2 段書込）。
+//! 1 度書かれ、表が追いついた次のフレームでもう 1 度書き直される（2 段書込）。
 //!
 //! 零件（「書込 0」「警告 0」）の主張には、同じテスト本体の内側に陽性の対を置く。駆動が
 //! 死んでいれば零件はどれも空虚に緑になるからである。
 
 use log_capture_kit::capture;
 
-use crate::placement_tests::transition_judge::WRITES_PER_WINDOW_MAX;
 use areka_placement::diag::WindowKind;
 use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, evaluate};
 
@@ -19,12 +18,12 @@ use super::test_support::{
     s2_assert_work_area_bottom_moves, s2_work_area_for_dpi, size_of,
 };
 use super::transition_test_support::{
-    deliver_the_scale_notice_first, holds_of, scaled, settle_at, warnings_containing, writes_for,
+    assert_writes_per_window_within_bound, deliver_the_scale_notice_first, holds_of, scaled,
+    settle_at, warnings_containing, writes_for,
 };
 use super::{balloon_target, shell_target};
 
-/// 待ち → 解除 → 当該窓への書込 1 回。旧作業領域下端の中間矩形は 1 度も可視化しない
-/// （要件 5.8・設計 D15）。
+/// 待ち → 解除 → 当該窓への書込 1 回。旧作業領域下端の中間矩形は 1 度も可視化しない。
 ///
 /// 零件（待ちフレームの書込 0）の**陽性の対**は同じ本体の後半——解除フレームで 4 本の指令が
 /// 出ることである。待ちが起きていなければ前半で書かれ、駆動が死んでいれば後半で 0 本になる。
@@ -76,10 +75,11 @@ fn scale_notice_first_lands_in_one_write_at(dpi: u16) {
     for scope in harness.scopes().to_vec() {
         let scope32 = scope as u32;
         for kind in [WindowKind::Char, WindowKind::Balloon] {
-            assert_eq!(
-                writes_for(&released, scope32, kind).len() as u32,
-                WRITES_PER_WINDOW_MAX,
-                "dpi={dpi} scope={scope} {kind}: 窓あたりの書込が {WRITES_PER_WINDOW_MAX} 本ではない: {released:?}"
+            assert_writes_per_window_within_bound(
+                &released,
+                scope32,
+                kind,
+                &format!("dpi={dpi} scope={scope} {kind}"),
             );
         }
         let char_write = writes_for(&released, scope32, WindowKind::Char)
@@ -103,13 +103,11 @@ fn scale_notice_first_lands_in_one_write_at(dpi: u16) {
     }
 }
 
-/// 要件 7.2 の低い側（120）。
 #[test]
 fn scale_notice_first_lands_in_one_write_at_120() {
     scale_notice_first_lands_in_one_write_at(SCALE_120);
 }
 
-/// 要件 7.2 の高い側（192）。
 #[test]
 fn scale_notice_first_lands_in_one_write_at_192() {
     scale_notice_first_lands_in_one_write_at(HIGH_DPI);
@@ -117,7 +115,7 @@ fn scale_notice_first_lands_in_one_write_at_192() {
 
 /// 待ちのあいだに表情差替（drain 相の `ShowSurface` が積む新 k・寸変化の窓寸要求）が来ても、
 /// 報告寸の突合と再スナップの**どちらからも**当該窓への書込は 0 のままである
-/// （設計 C5 議題 1・D15 の「4 点すべて」のうち、この 2 点）。
+/// （見送り点のうち、この 2 点）。
 ///
 /// 陽性の対は同じ本体の後半——待ちが解けた後は、**同じ 2 つの駆動口**が書く。
 fn a_surface_swap_during_the_wait_writes_nothing_at(dpi: u16) {
@@ -192,19 +190,17 @@ fn a_surface_swap_during_the_wait_writes_nothing_at(dpi: u16) {
     );
 }
 
-/// 要件 7.2 の低い側（120）。
 #[test]
 fn a_surface_swap_during_the_wait_writes_nothing_at_120() {
     a_surface_swap_during_the_wait_writes_nothing_at(SCALE_120);
 }
 
-/// 要件 7.2 の高い側（192）。
 #[test]
 fn a_surface_swap_during_the_wait_writes_nothing_at_192() {
     a_surface_swap_during_the_wait_writes_nothing_at(HIGH_DPI);
 }
 
-/// 上限フレームを超えたら、**警告の上で**現在の源のまま進む（設計 C5・D15・要件 4.4）。
+/// 上限フレームを超えたら、**警告の上で**現在の源のまま進む。
 ///
 /// 上限の値は本番の定数（[`DPI_SYNC_HOLD_MAX_FRAMES`]）を引く——回帰テストが自前の数字を
 /// 持つと、片方だけ緩めたときに静かに食い違う。
@@ -260,25 +256,23 @@ fn the_wait_gives_up_after_the_bounded_number_of_frames_at(dpi: u16) {
     }
 }
 
-/// 要件 7.2 の低い側（120）。
 #[test]
 fn the_wait_gives_up_after_the_bounded_number_of_frames_at_120() {
     the_wait_gives_up_after_the_bounded_number_of_frames_at(SCALE_120);
 }
 
-/// 要件 7.2 の高い側（192）。
 #[test]
 fn the_wait_gives_up_after_the_bounded_number_of_frames_at_192() {
     the_wait_gives_up_after_the_bounded_number_of_frames_at(HIGH_DPI);
 }
 
 /// 待ち札が見送るのは**窓書込の 5 つの点（＋シェルの切り替えの見送り）だけ**であり、描画の相
-/// （`run_drain_phase`）は素通しである（設計 D15「描画そのものは止めない」）。
+/// （`run_drain_phase`）は素通しである（描画そのものは止めない）。
 ///
 /// 決定論テストが買える射程はここまでである——本ハーネスは GPU を持たないので `apply_show` が
 /// 実際に画を出したことは検証できない。ゆえに問うのは**構造**——描画の相の本文に整合ゲートの
 /// 参照が 1 つも無く、逆に 5 つの見送り点にはあること（陽性の対）である。発話・アニメが実機で
-/// 遅れていないことの持ち分は実機サインオフ（要件 8.4 の目視所見併記）にある。
+/// 遅れていないことの持ち分は実機サインオフの目視所見にある。
 #[test]
 fn the_wait_defers_window_writes_only_and_leaves_the_drawing_phase_untouched() {
     let drain_resnap = include_str!("frame/drain_resnap.rs");
@@ -299,7 +293,7 @@ fn the_wait_defers_window_writes_only_and_leaves_the_drawing_phase_untouched() {
     for gate in ["dpi_sync", "DpiSyncHold"] {
         assert!(
             !drawing_phase.contains(gate),
-            "描画の相が整合ゲート（`{gate}`）を参照している——待ちが描画を止めている（設計 D15 違反）"
+            "描画の相が整合ゲート（`{gate}`）を参照している——待ちが描画を止めている"
         );
     }
 

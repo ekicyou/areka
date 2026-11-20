@@ -20,6 +20,7 @@ use super::test_support::{
     s2_work_area_for_dpi,
 };
 use super::{balloon_target, shell_target};
+use crate::placement_tests::transition_judge::WRITES_PER_WINDOW_MAX;
 
 /// キーワード素材の揃え種別（中央上＝バルーン下端がシェル画像上端に接する）。
 pub const KEYWORD_MODE: BalloonXMode = BalloonXMode::CenterTop;
@@ -47,6 +48,25 @@ pub fn writes_for(
         .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind.as_str())
         .cloned()
         .collect()
+}
+
+/// 指定スコープ・指定種別の窓書込が判定器の上限（[`WRITES_PER_WINDOW_MAX`]）以下で、かつ 1 本以上
+/// あること。0 本でも「上限以下」は満たされるので、1 本以上を陽性の対として同時に見る。
+pub fn assert_writes_per_window_within_bound(
+    writes: &[SetWindowPosCommand],
+    scope: u32,
+    kind: WindowKind,
+    what: &str,
+) {
+    let count = writes_for(writes, scope, kind).len() as u32;
+    assert!(
+        count <= WRITES_PER_WINDOW_MAX,
+        "{what}: 窓あたりの書込が {WRITES_PER_WINDOW_MAX} 本を超えている（合流が効いていない）: {writes:?}"
+    );
+    assert!(
+        count >= 1,
+        "{what}: 窓が 1 本も書かれていない（駆動が死んでいる）: {writes:?}"
+    );
 }
 
 /// 捕捉行のうち WARN で、`needle` を本文に含むものの件数。

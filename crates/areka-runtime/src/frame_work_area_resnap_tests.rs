@@ -1,4 +1,4 @@
-//! 作業領域の変化を契機とする現寸での再スナップ（設計 C6・要件 5.1／5.2／5.3／5.4／4.7）
+//! 作業領域の変化を契機とする現寸での再スナップ
 //! の決定論テスト。
 //!
 //! 拡大率が変わらず作業領域だけが変わったとき（タスクバーを隠す・位置を変える・多段の表示
@@ -89,7 +89,7 @@ fn an_unchanged_monitor_table_drives_no_resnap_while_a_changed_one_does() {
     let writes = harness.drain_writes();
     assert!(
         writes.is_empty(),
-        "同一表のフレームで窓書込が出ている（要件 5.4・4.7）: {writes:?}"
+        "同一表のフレームで窓書込が出ている: {writes:?}"
     );
 
     // 後半（陽性の対）: 同じ駆動口・同じハーネスで表だけを動かす。
@@ -107,7 +107,7 @@ fn an_unchanged_monitor_table_drives_no_resnap_while_a_changed_one_does() {
 }
 
 /// 窓ごとの側の零件の主張——**自分の作業領域が動いていない窓は再射影そのものを行わない**
-/// （要件 5.2）——と、その陽性の対。
+/// ——と、その陽性の対。
 ///
 /// 前半は隣接モニタ（ゴースト窓が決して居ない側）の作業領域だけを動かす。表そのものは
 /// 変わるので同期段は差し替えを報告する（＝駆動は生きている）が、窓書込は 0 でなければ
@@ -153,7 +153,7 @@ fn a_change_that_moves_only_the_neighbor_monitor_writes_no_windows() {
     );
 }
 
-/// 下端吸着でないキャラ窓は再スナップの対象外（設計 C6 は Bottom アンカーだけを対象とする）。
+/// 下端吸着でないキャラ窓は再スナップの対象外（Bottom アンカーだけが対象である）。
 /// 同じフレームの下端吸着窓が書かれることを対に置き、駆動の生存を同じ本体で示す。
 #[test]
 fn a_free_anchored_char_window_is_left_alone_while_a_bottom_anchored_one_moves() {
@@ -225,11 +225,11 @@ fn a_window_already_written_by_the_scale_phase_is_not_written_again_in_the_same_
     );
 }
 
-/// 再スナップの呼出は本番でも拡大率の相の**後**に置かれている（設計 C6）。
+/// 再スナップの呼出は本番でも拡大率の相の**後**に置かれている。
 ///
 /// 順序そのものは上のテストが挙動で示すが、あちらはハーネスの駆動口が順に呼ぶ形ゆえ、
 /// 本番の相順が入れ替わっても赤にならない。担い手は `frame.rs` の呼出順そのものなので、
-/// その形を本文で名指しする（同期段が相より前であることは task 5.1 の兄弟テストが持つ）。
+/// その形を本文で名指しする（同期段が相より前であることは兄弟のテストが持つ）。
 #[test]
 fn the_resnap_is_called_after_the_scale_phase_in_the_frame_system() {
     let code = include_str!("frame.rs");
@@ -248,11 +248,11 @@ fn the_resnap_is_called_after_the_scale_phase_in_the_frame_system() {
         .expect("報告寸の突合の呼出が frame.rs に無い");
     assert!(
         resnap < reconcile,
-        "再スナップが報告寸の突合より後に置かれている（設計 C6 の置き場と食い違う）"
+        "再スナップが報告寸の突合より後に置かれている（拡大率の相の直後・報告寸の突合の前という置き場と食い違う）"
     );
 }
 
-/// 上端吸着のキャラ窓は再スナップの対象外である（要件 5.1 は**下端吸着**だけを名指しする）。
+/// 上端吸着のキャラ窓は再スナップの対象外である（**下端吸着**だけが対象である）。
 ///
 /// 作業領域の**上端も下端も**動く構成（タスクバーを上辺へ移す）で問う——上端だけが動く形に
 /// すると、下端吸着窓の射影値が変わらず対の陽性側が空振りする。上端吸着窓は射影値が実際に
@@ -271,7 +271,7 @@ fn a_top_anchored_char_window_is_left_alone_while_a_bottom_anchored_one_moves() 
     let top_pos = pos_of(&harness.world, char1).expect("char 位置がある");
 
     // タスクバーを上辺へ移す（上端が下がり、下端はモニタ下端まで伸びる）。値は合成レイアウト
-    // から導く（要件 5.6: 絶対 px を判定に直書きしない）。
+    // から導く（絶対 px を判定に直書きしない）。
     let visible = s2_work_area_for_dpi(STEADY_DPI);
     let hidden = s2_taskbar_hidden_work_area(STEADY_DPI);
     let taskbar_h = hidden.bottom - visible.bottom;
@@ -291,7 +291,7 @@ fn a_top_anchored_char_window_is_left_alone_while_a_bottom_anchored_one_moves() 
     let writes = harness.drain_writes();
     assert!(
         writes_for(&writes, 1, WindowKind::Char).is_empty(),
-        "上端吸着のキャラ窓を再スナップが動かしている（要件 5.1 は下端吸着だけを対象とする）: {writes:?}"
+        "上端吸着のキャラ窓を再スナップが動かしている（下端吸着だけが対象である）: {writes:?}"
     );
     assert_eq!(
         pos_of(&harness.world, char1).expect("char 位置がある"),

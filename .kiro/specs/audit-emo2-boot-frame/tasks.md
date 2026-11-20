@@ -212,7 +212,7 @@
   - _Dispatch: mechanical — 直し方を設計の表が与える_
   - _Requirements: 2.7, 3.1, 3.2, 3.3, 5.16_
 
-- [ ] 5.4 `frame_*` のテストを直す その 2（T23・79〜83・85〜93・95〜97 番・41 番の `frame_chain_realign_*`・`frame_dpi*`・`frame_resnap_tests.rs`・`frame_move_order_tests.rs`・`frame_work_area_resnap*`・`frame_transition_*` の分）
+- [x] 5.4 `frame_*` のテストを直す その 2（T23・79〜83・85〜93・95〜97 番・41 番の `frame_chain_realign_*`・`frame_dpi*`・`frame_resnap_tests.rs`・`frame_move_order_tests.rs`・`frame_work_area_resnap*`・`frame_transition_*` の分）
   - 条件に合う行を数えて 1 と表明する（79 番）。陽性の対の呼び出しを 1 本に残す（80 番）。同寸と異寸を 1 本ずつにし、書かないことを書き込みの無さで見る（87 番）。差と長さを上限以下で見て、窓あたり 1 本以上の陽性の対を足す（97 番）
   - `debug_assert!` に依るテストに `--release` で `ignore` になる印を付け、警告の文の手写しが在ることを陽性の対で数える（92 番・件 7）
   - 見出しを行番号でなく関数名で指し、語の数を 13 に直す（93 番・件 2）
@@ -285,3 +285,4 @@
 - 5.1: 説明に残る spec の ID・要件番号は、ログの文字列の中のもの（`attach.rs` R4.2・`drain_resnap.rs` Req3.4／要件 6.3・7.1／scope-chain-gap・`scale_text.rs` R8.6／R2.3）だけ。ログの文を変えるのは 3・4・113 番だけなので触らない。41 番の「atom を spec の名で書く」は、CLAUDE.md の決まりに合わせて参照だけの行を消す形にした。`frame.rs` の `donor パターン: remove→各フェーズ→insert` は `t_zwi07` が字面で読むので残す。
 - 5.2: 56 番の直しは設計（要件 5.13）のとおり `.kiro` の spec の名（`areka-test-binary-stability` の `load-repro.md` の ⑹）をコメントに書いた。CLAUDE.md の決まりとはぶつかる（7.1 の audit で見る）。
 - 5.3: 72 番で支えの x64 の const の表明を消したので、ハーネスに乗るバルーンのオフセットのテスト 4 本の宣言も `cfg(all(test, target_pointer_width = "64"))` に揃えた（ハーネスの使い手は全部 x64 の宣言の下）。`cargo check --target i686-pc-windows-msvc` は `wintf` で落ちるので 32 bit の組み立ては試せていない（前からの問題）。消したテスト: 62・63・64 番（attach 3 本）・68 番（keyword_gate 1 本）・72 番（harness 1 本）。
+- 5.4: `--release` で合否が変わる 1 本は `frame::work_area_resnap_hold_tests::the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites`（`#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]`・前は `--release` で赤、今は ignored）。87 番で検知段の同寸 skip を消しても緑のまま（`resize_window_to` のべき等が吸う）なので、説明は「同じ寸を何度渡しても窓へ書かない」に弱めた。41 番の一掃は ID だけでなく設計の部品の記号（C2・C5・C7・D15）も理由の言葉に置き換えた。`確定台帳` の参照は 17 ファイルの外（placement の `dpi_sync.rs` ほか・`frame/work_area_sync.rs`・`frame_work_area_sync_tests.rs`）に残る（7.1 で見る）。

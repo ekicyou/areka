@@ -1,5 +1,4 @@
-//! 拡大率の後の詰め直しが、変わる直前の隣り合いで組を詰める檻
-//! （`dpi-realign-remembered-chain` 要件 1.1・1.3・1.4・1.5・1.7・1.8・8.1・8.4）。
+//! 拡大率の後の詰め直しが、変わる直前の隣り合いで組を詰める檻。
 //!
 //! # ここが押さえるもの
 //!
@@ -43,7 +42,7 @@ fn ys(harness: &FrameHarness) -> (i32, i32) {
 }
 
 /// 記憶から戻した（既定の位置の無い）形で 200% → 100% に変えても、隙間が許す幅以内に閉じ、
-/// 縦の位置は変わらない。組の判断・動かした量・直前の隙間が記録に残る（要件 1.1・1.4・1.8・7.1・8.1）。
+/// 縦の位置は変わらない。組の判断・動かした量・直前の隙間が記録に残る。
 #[test]
 fn remembered_windows_close_the_gap_after_200_to_100() {
     let mut harness = FrameHarness::new();
@@ -64,7 +63,7 @@ fn remembered_windows_close_the_gap_after_200_to_100() {
         .iter()
         .filter(|l| l.contains("拡大率の後の詰め直しで組の判断を下した"))
         .collect();
-    assert_eq!(pair_lines.len(), 1, "組ごとに 1 行（要件 7.1）: {logs:?}");
+    assert_eq!(pair_lines.len(), 1, "組ごとに 1 行: {logs:?}");
     let line = pair_lines[0];
     for needle in [
         "decision=\"adjacent-left\"",
@@ -72,22 +71,18 @@ fn remembered_windows_close_the_gap_after_200_to_100() {
         "before_gap=0 ",
         &format!("dx={GAP_WITHOUT_REALIGN}"),
     ] {
-        assert!(line.contains(needle), "{needle} が無い（要件 7.1）: {line}");
+        assert!(line.contains(needle), "{needle} が無い: {line}");
     }
 
     let gap_after = gap(&harness);
     assert!(
         gap_after.abs() <= ADJACENT_TOLERANCE_PX,
-        "記憶から戻した組の隙間が閉じていない（隙間 {gap_after}・要件 1.8）"
+        "記憶から戻した組の隙間が閉じていない（隙間 {gap_after}）"
     );
-    assert_eq!(
-        ys(&harness),
-        y_before,
-        "詰め直しが縦の位置を変えた（要件 1.4）"
-    );
+    assert_eq!(ys(&harness), y_before, "詰め直しが縦の位置を変えた");
 }
 
-/// 100% → 200% で幅が倍になって重なった組も、詰め直しで重なりが閉じる（要件 1.3・8.1）。
+/// 100% → 200% で幅が倍になって重なった組も、詰め直しで重なりが閉じる。
 #[test]
 fn the_overlap_closes_after_100_to_200() {
     let mut harness = FrameHarness::new();
@@ -107,17 +102,13 @@ fn the_overlap_closes_after_100_to_200() {
     let gap_after = gap(&harness);
     assert!(
         gap_after.abs() <= ADJACENT_TOLERANCE_PX,
-        "100% → 200% の重なりが閉じていない（隙間 {gap_after}・要件 1.3）"
+        "100% → 200% の重なりが閉じていない（隙間 {gap_after}）"
     );
-    assert_eq!(
-        ys(&harness),
-        y_before,
-        "詰め直しが縦の位置を変えた（要件 1.4）"
-    );
+    assert_eq!(ys(&harness), y_before, "詰め直しが縦の位置を変えた");
 }
 
 /// 200% → 100% → 200% の往復で、どちらの変化の後も組が隣り合い、本体は元の位置へ戻る
-/// （遷移ごとに武装と解決が 1 往復する・要件 1.3・8.1）。
+/// （遷移ごとに武装と解決が 1 往復する）。
 #[test]
 fn a_round_trip_200_100_200_keeps_the_pair_adjacent() {
     let mut harness = FrameHarness::new();
@@ -153,7 +144,7 @@ fn a_round_trip_200_100_200_keeps_the_pair_adjacent() {
 }
 
 /// 解決の前に 2 度目の変化（100% → 150%）が来ても、武装は最初の控え（200% の隣り合い）を保ち、
-/// その控えで組を詰める（要件 1.7）。2 度目の控え（100% の離れた矩形）で解くと離れたまま残る。
+/// その控えで組を詰める。2 度目の控え（100% の離れた矩形）で解くと離れたまま残る。
 #[test]
 fn a_second_change_before_resolution_resolves_with_the_first_snapshot() {
     let mut harness = FrameHarness::new();
@@ -180,16 +171,12 @@ fn a_second_change_before_resolution_resolves_with_the_first_snapshot() {
     let gap_after = gap(&harness);
     assert!(
         gap_after.abs() <= ADJACENT_TOLERANCE_PX,
-        "最初の控えで解いていない（2 度目の控えで「離れ」と決めた形・隙間 {gap_after}・要件 1.7）"
+        "最初の控えで解いていない（2 度目の控えで「離れ」と決めた形・隙間 {gap_after}）"
     );
-    assert_eq!(
-        ys(&harness),
-        y_before,
-        "詰め直しが縦の位置を変えた（要件 1.4）"
-    );
+    assert_eq!(ys(&harness), y_before, "詰め直しが縦の位置を変えた");
 }
 
-/// 変わる直前に本体の右に隣り合っていた組は、詰め直しで右のまま詰まる（左へ回り込まない・要件 1.3）。
+/// 変わる直前に本体の右に隣り合っていた組は、詰め直しで右のまま詰まる（左へ回り込まない）。
 #[test]
 fn a_pair_adjacent_on_the_right_stays_on_the_right() {
     let mut harness = FrameHarness::new();
@@ -218,24 +205,20 @@ fn a_pair_adjacent_on_the_right_stays_on_the_right() {
     let gap_after = gap_right(&harness);
     assert!(
         gap_after.abs() <= ADJACENT_TOLERANCE_PX,
-        "右に隣り合っていた組が右のまま詰まっていない（右の隙間 {gap_after}・要件 1.3）"
+        "右に隣り合っていた組が右のまま詰まっていない（右の隙間 {gap_after}）"
     );
     assert!(
         char_pos(&harness, 1).0 > char_pos(&harness, 0).0,
         "右に隣り合っていた組が左へ回り込んだ"
     );
-    assert_eq!(
-        ys(&harness),
-        y_before,
-        "詰め直しが縦の位置を変えた（要件 1.4）"
-    );
+    assert_eq!(ys(&harness), y_before, "詰め直しが縦の位置を変えた");
 }
 
 // ---------------------------------------------------------------------------
-// 3 体の鎖（要件 1.5・8.4）
+// 3 体の鎖
 // ---------------------------------------------------------------------------
 
-/// 3 体の鎖では、前の組を解いた後の x が次の組の基準になる（要件 1.5・8.4）。
+/// 3 体の鎖では、前の組を解いた後の x が次の組の基準になる。
 ///
 /// 200% の並び（x: 1000／700／500・幅 400／300／200）を半分にすると、下端中央を保って
 /// x は 1100／775／550 になる。詰め直しは scope1 を 1100 − 150 = 950、scope2 を「scope1 の
@@ -268,19 +251,18 @@ fn a_three_body_chain_uses_the_previous_result_as_the_next_base() {
             .map(|s| chain3_pos(&world, &gw, s).0)
             .collect::<Vec<_>>(),
         vec![1100, 950, 850],
-        "3 体の鎖が前の結果を次の基準にして詰まっていない（要件 1.5）"
+        "3 体の鎖が前の結果を次の基準にして詰まっていない"
     );
     assert_eq!(
         (0..3)
             .map(|s| chain3_pos(&world, &gw, s).1)
             .collect::<Vec<_>>(),
         ys_before,
-        "詰め直しが縦の位置を変えた（要件 1.4）"
+        "詰め直しが縦の位置を変えた"
     );
 }
 
-/// 詰め直した窓が作業領域の外になるときは、反対の側へ並べ替えて作業領域の中に置く
-/// （window-work-area-clamp 要件 2.1・2.3・7.7）。
+/// 詰め直した窓が作業領域の外になるときは、反対の側へ並べ替えて作業領域の中に置く。
 ///
 /// 3 体の鎖を半分にした後（x: 1100／775／550・幅 200／150／100）、作業領域の左端を 1000 に
 /// すると、scope1 を左に詰めた 950 は外へ出る。寄せは scope1 を本体の右の隣 1300 へ並べ替え、
@@ -310,20 +292,16 @@ fn a_realigned_window_outside_the_work_area_flips_to_the_other_side() {
 
     let logs = capture_logs(|| realign_chain_once_with(&mut world, |world| Ok(chain3_scan(world))));
 
-    assert_eq!(
-        chain3_pos(&world, &gw, 0).0,
-        1100,
-        "本体が動いた（要件 2.3）"
-    );
+    assert_eq!(chain3_pos(&world, &gw, 0).0, 1100, "本体が動いた");
     assert_eq!(
         chain3_pos(&world, &gw, 1).0,
         1300,
-        "作業領域の外へ詰めた窓が本体の右の隣へ並べ替えられていない（要件 2.1）"
+        "作業領域の外へ詰めた窓が本体の右の隣へ並べ替えられていない"
     );
     assert_eq!(
         chain3_pos(&world, &gw, 2).0,
         1200,
-        "3 体目が並べ替えた scope1 の左の隣へ詰まっていない（design テスト⑵・要件 1.5。本体と重なるのは許す＝design Risks の 3 体以上の鎖は extra-character-windows の持ち場）"
+        "3 体目が並べ替えた scope1 の左の隣へ詰まっていない（本体と重なるのは許す。3 体以上の鎖の重なりはここでは見ない）"
     );
     assert_eq!(
         (0..3)
@@ -336,11 +314,15 @@ fn a_realigned_window_outside_the_work_area_flips_to_the_other_side() {
         .iter()
         .filter(|l| l.contains(areka_placement::follow::WORK_AREA_CLAMP_TAG))
         .collect();
-    assert!(
-        clamp.iter().any(|l| l.contains("scene=\"dpi-realign\"")
-            && l.contains("scope=1")
-            && l.contains("how=\"flipped\"")),
-        "詰め直しの寄せの記録が無い（要件 7.7）: {logs:?}"
+    assert_eq!(
+        clamp
+            .iter()
+            .filter(|l| l.contains("scene=\"dpi-realign\"")
+                && l.contains("scope=1")
+                && l.contains("how=\"flipped\""))
+            .count(),
+        1,
+        "詰め直しの寄せの記録が scope1 に 1 行でない: {logs:?}"
     );
     assert!(
         !clamp.iter().any(|l| l.contains("scope=2")

@@ -1,34 +1,32 @@
-//! 遷移の原子性と随伴（task 6.1・設計 Testing Strategy「Integration Tests」項目 1・
-//! 要件 4.1／4.3／4.4／4.5／7.2）を多フレーム駆動で固定する。
+//! 遷移の原子性と随伴を多フレーム駆動で固定する。
 //!
 //! # 何を固定するのか
 //!
-//! 駆動は**経路 (b)＝表更新が先**（設計 System Flows の 1 本目）である。実行時のモニタ表と
+//! 駆動は**経路 (b)＝表更新が先**である。実行時のモニタ表と
 //! 窓の拡大率を同じフレームへ流し込み、同期段 → 拡大率の相 → 作業領域再スナップ →
 //! 連鎖の解き直しを本番と同じ順で 1 フレームぶん回す。そのうえで次を主張する:
 //!
-//! | 主張 | 出所 | 判定量 |
-//! |---|---|---|
-//! | 全窓の書込が同一フレーム | 4.4 | 起点フレームより後に書込を持つフレームが無い（[`TRANSITION_FRAME_BOUND`]） |
-//! | キャラ窓 1 回・バルーン窓 1 回 | 4.5・D13 | 窓ごとの指令数（[`WRITES_PER_WINDOW_MAX`]） |
-//! | 同期書込（経路 A）0 回 | 4.5・D13 | `origin=dpi-suggested` の件数（[`PATH_A_WRITES_MAX`]） |
-//! | 随伴バルーンが同一フレームで窓相対へ | 4.3 | 同一 drain にバルーンの指令が居る＋追従 offset が表示 DPI 比で追随（balloon-offset-dpi 要件 3.1／9.7 が atom 4.3 の遷移側を上書き・task 6.1） |
-//! | 遷移中の接地点が規約値から外れない | 4.1 | `kind=ground` の `diff`（[`GROUND_DIFF_MAX`]）＋書込 1 本の下端 |
-//! | 拡大率 120／192・複数モニタの作業領域 | 7.2 | [`transition_is_atomic_at_120`]／[`transition_is_atomic_at_192`] |
+//! | 主張 | 判定量 |
+//! |---|---|
+//! | 全窓の書込が同一フレーム | 起点フレームより後に書込を持つフレームが無い（[`TRANSITION_FRAME_BOUND`]） |
+//! | キャラ窓 1 回・バルーン窓 1 回 | 窓ごとの指令数（`WRITES_PER_WINDOW_MAX`） |
+//! | 同期書込（経路 A）0 回 | `origin=dpi-suggested` の件数（[`PATH_A_WRITES_MAX`]） |
+//! | 随伴バルーンが同一フレームで窓相対へ | 同一 drain にバルーンの指令が居る＋追従 offset が表示 DPI 比で追随 |
+//! | 遷移中の接地点が規約値から外れない | `kind=ground` の `diff`（[`GROUND_DIFF_MAX`]）＋書込 1 本の下端 |
+//! | 拡大率 120／192・複数モニタの作業領域 | [`transition_is_atomic_at_120`]／[`transition_is_atomic_at_192`] |
 //!
-//! # なぜ判定器（C7 `summarize`）をそのまま回さないのか
+//! # なぜ判定器（`summarize`）をそのまま回さないのか
 //!
-//! C7 の `writes_per_window`／`frames_to_last_write` が数える **`kind=write` レコード**は
-//! 一括 flush（実 `SetWindowPos` を呼ぶ経路）が出すもので、決定論テストは D11 の規約で
+//! 判定器の `writes_per_window`／`frames_to_last_write` が数える **`kind=write` レコード**は
+//! 一括 flush（実 `SetWindowPos` を呼ぶ経路）が出すもので、決定論テストは
 //! そこを通さない——キューを**実行せずに取り出す**（[`FrameHarness::drain_writes`]）。
-//! ゆえにこの 2 量の集計は本ファイルがキューの中身で行う（設計 Integration Tests 項目 1 が
-//! 指定する形）。**経路 A の `write` 行は flush 由来ではない**ため別扱いであり、
+//! ゆえにこの 2 量の集計は本ファイルがキューの中身で行う。**経路 A の `write` 行は flush 由来ではない**ため別扱いであり、
 //! 数えるのは観測行の側になる——下記「経路 A はキューを通らない」節を参照。
 //!
-//! ただし**固定する値**は判定器の `pub const` を引く（[`WRITES_PER_WINDOW_MAX`] 等）。
+//! ただし**固定する値**は判定器の `pub const` を引く（`WRITES_PER_WINDOW_MAX` 等）。
 //! 回帰テストと実機サインオフが別々の数字を持つと、片方だけ緩めたときに静かに食い違う。
 //! 接地点の側は判定器の**解析器**（`parse_transition_line`）をそのまま通し、発行された
-//! `kind=ground` 行から `diff` を読む——4.1 の決定論版は「判定器が読む行の上で 0」である。
+//! `kind=ground` 行から `diff` を読む——接地点の決定論版は「判定器が読む行の上で 0」である。
 //!
 //! # 零件の主張には陽性の対を置く（同じテスト本体の内側）
 //!
@@ -44,13 +42,14 @@
 //! # 経路 A はキューを通らない——数えるのは観測行の側である
 //!
 //! 経路 A（`WM_DPICHANGED` 受理時の同期書込）は
-//! `crates/wintf/src/ecs/window_proc/window_pos.rs:464` で `guarded_set_window_pos` を
-//! **直接**呼び、`SetWindowPosCommand` のキューを 1 度も通らない。`origin=dpi-suggested`
-//! が現れるのは同 `:468` が組む観測行（`write_line`）**だけ**であり、指令のタグ
-//! （`SetWindowPosCommand.tag`）にこの語を載せる経路は本番に 1 つも無い
-//! （タグを付ける 3 箇所＝`crates/areka-placement/src/follow/window_move.rs:730` の
-//! `PlacementRoute` 12 語／`crates/wintf/src/ecs/graphics/systems/window_pos.rs:102` の
-//! `origin=window-pos`／`crates/wintf/src/ecs/window/zorder_pair_maintain.rs:212` の
+//! `crates/wintf/src/ecs/window_proc/window_pos.rs` の `WM_DPICHANGED` の処理が
+//! `guarded_set_window_pos` を**直接**呼び、`SetWindowPosCommand` のキューを 1 度も通らない。
+//! `origin=dpi-suggested` が現れるのは同じ処理が組む観測行（`write_line`）**だけ**であり、
+//! 指令のタグ（`SetWindowPosCommand.tag`）にこの語を載せる経路は本番に 1 つも無い
+//! （タグを付ける 3 箇所＝`crates/areka-placement/src/follow/window_move.rs` の
+//! `enqueue_window_set_pos` の `PlacementRoute` 13 語／`crates/wintf/src/ecs/graphics/systems/window_pos.rs`
+//! の `apply_window_pos_changes` の `origin=window-pos`／
+//! `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` の `pair_fix_command` の
 //! `origin=zorder-pair`）。
 //!
 //! ゆえに**キュー上で `tag.origin` を数える形は、本番のどんな退行でも赤にならない**。
@@ -60,7 +59,7 @@
 //! そのうえで、この決定論の 0 が言っているのは「遷移フレームの観測窓に経路 A の行が
 //! 1 本も出ていない」までである——本ハーネスは window_proc を駆動しないので、実機で
 //! 経路 A が 0 回であること自体はここでは証明できない。**実機側の 0 の持ち主**は
-//! 確定台帳 L2（実機 24/24）と実機サインオフ（要件 8.3・C7 ランナーが
+//! 実機の採取の記録（24/24）と実機サインオフ（判定器が
 //! `Bounds::deterministic` の `PATH_A_WRITES_MAX` で判定する）である。
 
 use areka_emo_compose::ScaleRatio;
@@ -74,7 +73,7 @@ use wintf::ecs::window::transition_diag::{
 
 use crate::placement_tests::transition_judge::{
     GROUND_DIFF_MAX, PATH_A_WRITES_MAX, TRANSITION_FRAME_BOUND, TransitionRecord,
-    WRITES_PER_WINDOW_MAX, parse_transition_line, summarize,
+    parse_transition_line, summarize,
 };
 use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::chain_realign::ChainRealignPending;
@@ -90,7 +89,9 @@ use super::test_support::{
     FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, pos_of,
     s2_assert_work_area_bottom_moves, s2_work_area_for_dpi, settled_sizes,
 };
-use super::transition_test_support::{scaled, settle_at, writes_for};
+use super::transition_test_support::{
+    assert_writes_per_window_within_bound, scaled, settle_at, writes_for,
+};
 use super::{balloon_target, shell_target};
 
 /// 起点フレームの後に「もう書かない」を見るために回す定常フレーム数。
@@ -200,7 +201,7 @@ fn apply_scale_change(
     harness.set_monitor_table_for_dpi(dpi);
     harness.set_window_dpi(dpi);
     // 4 窓すべてに再表示の報告を与える——バルーン窓へ**自分の**寸法変更が来る状態でこそ、
-    // 「随伴の追従」と合わせて同一窓へ 2 つの指令が積まれ、合流（C2）が効いているかどうかが
+    // 「随伴の追従」と合わせて同一窓へ 2 つの指令が積まれ、合流（`coalesce_geometry`）が効いているかどうかが
     // 観測できる。
     source.refresh.insert(shell_target(0).0, size0);
     source.refresh.insert(shell_target(1).0, size1);
@@ -220,7 +221,7 @@ fn apply_scale_change(
 }
 
 // ---------------------------------------------------------------------------
-// 本体（要件 4.1／4.3／4.4／4.5・設計 Integration Tests 項目 1）
+// 本体
 // ---------------------------------------------------------------------------
 
 /// 1 水準ぶんの原子性検査。
@@ -288,7 +289,7 @@ fn transition_is_atomic_at(dpi: u16) {
         "作業領域源が新しい水準の下端になっていない（拡大率の相が旧下端を読む）"
     );
 
-    // ── 4.5／D13: 窓ごとの書込回数 ───────────────────────────────────────
+    // ── 窓ごとの書込回数 ───────────────────────────────────────
     let writes = harness.drain_writes();
     assert_eq!(
         writes.len(),
@@ -298,24 +299,25 @@ fn transition_is_atomic_at(dpi: u16) {
     for &scope in &scopes {
         let scope = scope as u32;
         for kind in [WindowKind::Char, WindowKind::Balloon] {
-            let per_window = writes_for(&writes, scope, kind);
-            assert_eq!(
-                per_window.len() as u32,
-                WRITES_PER_WINDOW_MAX,
-                "dpi={dpi} scope={scope} {kind}: 窓あたりの書込が {WRITES_PER_WINDOW_MAX} 本を超えている（合流が効いていない・要件 4.5／D13）: {writes:?}"
+            assert_writes_per_window_within_bound(
+                &writes,
+                scope,
+                kind,
+                &format!("dpi={dpi} scope={scope} {kind}"),
             );
         }
     }
 
-    // ── 4.5／D13: 同期書込（経路 A）0 回 ─────────────────────────────────
+    // ── 同期書込（経路 A）0 回 ─────────────────────────────────
     // 数えるのは**観測行**である（経路 A はキューを通らない）。2 量とも判定器と同じ述語。
-    assert_eq!(
-        path_a_write_lines(&events),
-        (PATH_A_WRITES_MAX, PATH_A_WRITES_MAX),
-        "OS 提案位置の同期書込（origin={ORIGIN_DPI_SUGGESTED}／stage={STAGE_SYNC}）の観測行が遷移フレームに出ている"
+    let (by_origin, by_stage) = path_a_write_lines(&events);
+    // 上限は u32 の 0 なので `<=` は clippy の absurd_extreme_comparisons（deny）に掛かる。
+    assert!(
+        by_origin.cmp(&PATH_A_WRITES_MAX).is_le() && by_stage.cmp(&PATH_A_WRITES_MAX).is_le(),
+        "OS 提案位置の同期書込（origin={ORIGIN_DPI_SUGGESTED}／stage={STAGE_SYNC}）の観測行が遷移フレームに出ている（origin={by_origin}・stage={by_stage}）"
     );
 
-    // ── 4.1: 中間矩形を出さない（1 本の書込が新しい規約値の下端に載る） ──
+    // ── 中間矩形を出さない（1 本の書込が新しい規約値の下端に載る） ──
     for &scope in &scopes {
         let scope = scope as u32;
         let char_write = writes_for(&writes, scope, WindowKind::Char)
@@ -324,7 +326,7 @@ fn transition_is_atomic_at(dpi: u16) {
         assert_eq!(
             char_write.y + char_write.height,
             new_bottom,
-            "dpi={dpi} scope={scope}: キャラ窓の書込が新しい作業領域下端に載っていない（遷移前後のどちらでもない矩形・要件 4.1）"
+            "dpi={dpi} scope={scope}: キャラ窓の書込が新しい作業領域下端に載っていない（遷移前後のどちらでもない矩形）"
         );
         assert_eq!(
             harness.ground_point(scope as usize).1,
@@ -336,10 +338,10 @@ fn transition_is_atomic_at(dpi: u16) {
     assert_eq!(
         harness.ground_point(0).0,
         ground_x_before,
-        "dpi={dpi}: 連鎖の起点スコープの接地点 X が動いた（下端中央が保たれていない・要件 4.1）"
+        "dpi={dpi}: 連鎖の起点スコープの接地点 X が動いた（下端中央が保たれていない）"
     );
 
-    // ── 4.1: 接地点レコードの diff（判定器が読む行の上での 0） ────────────
+    // ── 接地点レコードの diff（判定器が読む行の上での 0） ────────────
     let grounds = ground_records(&events);
     assert_eq!(
         grounds.len(),
@@ -347,9 +349,9 @@ fn transition_is_atomic_at(dpi: u16) {
         "接地点レコードがスコープ数ぶん出ていない（観測が死んでいる／窓が書かれていない）: {grounds:?}"
     );
     for (scope, diff, frame) in &grounds {
-        assert_eq!(
-            *diff, GROUND_DIFF_MAX,
-            "dpi={dpi} scope={scope}: 接地点と作業領域下端の差が {GROUND_DIFF_MAX} でない（diff={diff}）"
+        assert!(
+            diff.abs() <= GROUND_DIFF_MAX,
+            "dpi={dpi} scope={scope}: 接地点と作業領域下端の差が {GROUND_DIFF_MAX} を超えている（diff={diff}）"
         );
         assert_eq!(
             *frame, origin_frame,
@@ -357,24 +359,23 @@ fn transition_is_atomic_at(dpi: u16) {
         );
     }
 
-    // ── 4.3: 随伴バルーンが同一フレームで窓相対へ移る ─────────────────────
+    // ── 随伴バルーンが同一フレームで窓相対へ移る ─────────────────────
     //
-    // **areka-P0-balloon-offset-dpi task 6.1 による主張の書き換え**: 本ブロックは
-    // 2026-08-27 まで「追従オフセットを補正していないこと（atom 要件 4.3）」を固定していた。
-    // その期待は balloon-offset-dpi の要件 3.1 が**拡大率遷移についてだけ**上書きする
-    // ——同仕様の要件 9.7 が「作業領域の再スナップについての不変は残し、拡大率遷移に
-    // ついての期待は要件 3 が上書きする」と 2 つに区別して裁定した当のものである。
+    // **主張の書き換え**: 本ブロックは
+    // 2026-08-27 まで「追従オフセットを補正していないこと」を固定していた。
+    // その期待は**拡大率遷移についてだけ**覆った。作業領域の再スナップについての不変は
+    // 残し、拡大率遷移では追従オフセットが表示 DPI 比で追随する、と 2 つに区別されている。
     // 本テストが起こすのは `Changed<DPI>` を伴う**拡大率遷移**なので、上書きされる側に
     // あたる（作業領域の再スナップ単独での不変は `frame_work_area_resnap_tests.rs` が
-    // 引き続き固定しており、そちらは 1 文字も触っていない）。
+    // 引き続き固定しており、そちらの表明は変えていない）。
     //
-    // なお balloon-offset-dpi の design D13 は本ファイルを「書込後に読んで恒等式のみを
+    // なお本ファイルはかつて「書込後に読んで恒等式のみを
     // 主張する＝追随が入っても緑のまま」の群へ分類していたが、**実測では誤りだった**
     // ——本ブロックは `balloon_offsets_before` として書込の**前**に読んでおり、
-    // 恒真ではないため追随の導入で正しく赤になる。分類の誤りは task 6.1 で是正した。
+    // 恒真ではないため追随の導入で正しく赤になる。分類の誤りは是正した。
     //
     // 変わったのは「相対量が拡大率をまたいで一定か、表示 DPI 比で伸びるか」だけであり、
-    // **窓（char 左上）相対という追従の基準そのものは不変**である（要件 9.1）。
+    // **窓（char 左上）相対という追従の基準そのものは不変**である。
     let follow_ratio = ScaleRatio::new(dpi.into(), LOW_DPI.into()).expect("非ゼロ比");
     for (scope, before) in &balloon_offsets_before {
         let char_window = harness.char_window(*scope);
@@ -407,7 +408,7 @@ fn transition_is_atomic_at(dpi: u16) {
             (after.x, after.y),
             expected,
             "dpi={dpi} scope={scope}: 追従オフセットが表示 DPI 比で追随していない\
-             （balloon-offset-dpi 要件 3.1・要件 9.7 が atom 要件 4.3 の遷移側を上書き）"
+             （拡大率遷移では追従オフセットも表示 DPI 比で伸びる）"
         );
     }
     // 「相対不変」が「何も動かなかった」の言い換えに退化していないこと。
@@ -421,7 +422,7 @@ fn transition_is_atomic_at(dpi: u16) {
         );
     }
 
-    // ── C2 合流の非空虚性: 畳まれた 1 本が最終ジオメトリを持つ ────────────
+    // ── 合流の非空虚性: 畳まれた 1 本が最終ジオメトリを持つ ────────────
     assert!(
         harness
             .world
@@ -439,7 +440,7 @@ fn transition_is_atomic_at(dpi: u16) {
         "dpi={dpi}: 畳まれた 1 本が最終ジオメトリ（解き直し後の位置＋遷移後の寸）を持っていない: {writes:?}"
     );
 
-    // ── 5.8 の側面: この順序では待たない（対は「4 本の書込が出たこと」） ───
+    // ── この順序では待たない（対は「4 本の書込が出たこと」） ───
     for &scope in &scopes {
         for window in [harness.char_window(scope), harness.balloon_window(scope)] {
             assert!(
@@ -449,7 +450,7 @@ fn transition_is_atomic_at(dpi: u16) {
         }
     }
 
-    // ── 4.4: 有界のフレーム数（起点フレームで終わる） ─────────────────────
+    // ── 有界のフレーム数（起点フレームで終わる） ─────────────────────
     let sizes = chain_sizes(dpi);
     let mut frames_to_last_write = 0u32;
     for offset in 1..=STEADY_FRAMES {
@@ -460,16 +461,17 @@ fn transition_is_atomic_at(dpi: u16) {
             frames_to_last_write = offset;
         }
     }
-    assert_eq!(
-        frames_to_last_write, TRANSITION_FRAME_BOUND,
-        "dpi={dpi}: 遷移が起点フレームで終わっていない（最後の書込が {frames_to_last_write} フレーム後・上限 {TRANSITION_FRAME_BOUND}・要件 4.4）"
+    // 上限は u32 の 0 なので `<=` は clippy の absurd_extreme_comparisons（deny）に掛かる。
+    assert!(
+        frames_to_last_write.cmp(&TRANSITION_FRAME_BOUND).is_le(),
+        "dpi={dpi}: 遷移が起点フレームで終わっていない（最後の書込が {frames_to_last_write} フレーム後・上限 {TRANSITION_FRAME_BOUND}）"
     );
 
     // ── 経路 A 0 件の陽性の対（同じ述語・同じ本体） ───────────────────────
     //
     // 行は**本番の組立関数**（`write_line`）へ通す——テストが字面を手で組むと、発行側が
     // 書式を変えても対照だけが生き残って「上の 0 件は空虚」を隠してしまう。
-    // `window_pos.rs:468-489` が組む行と同じ材料（`stage=Sync`・`origin=dpi-suggested`・
+    // `WM_DPICHANGED` の処理が組む行と同じ材料（`stage=Sync`・`origin=dpi-suggested`・
     // scope と win_kind は番兵）である。
     let (_probe, probe_events) = capture(|| {
         emit_line(&write_line(&WriteRecord {
@@ -501,18 +503,18 @@ fn transition_is_atomic_at(dpi: u16) {
 
 /// 陽性の対で使う刻印（起点フレームと同じ番号・経過は 0）。
 ///
-/// 判定器は差分でしか読まない（D14）ので経過の値は判定へ入らない。
+/// 判定器は差分でしか読まないので経過の値は判定へ入らない。
 fn transition_diag_stamp(frame: u32) -> Stamp {
     Stamp { frame, t_us: 0 }
 }
 
-/// 拡大率 120 での遷移が原子的である（要件 7.2 の「少なくとも 120」）。
+/// 拡大率 120 での遷移が原子的である。
 #[test]
 fn transition_is_atomic_at_120() {
     transition_is_atomic_at(SCALE_120);
 }
 
-/// 拡大率 192 での遷移が原子的である（要件 7.2 の「少なくとも 192」）。
+/// 拡大率 192 での遷移が原子的である。
 #[test]
 fn transition_is_atomic_at_192() {
     transition_is_atomic_at(HIGH_DPI);

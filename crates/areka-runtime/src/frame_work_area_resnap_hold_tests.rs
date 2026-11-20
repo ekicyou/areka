@@ -1,18 +1,18 @@
-//! 整合ゲートの **4 つ目**の窓書込口（task 6.5・設計 C5／C6・要件 5.8／7.2）の決定論テスト。
+//! 整合ゲートの **4 つ目**の窓書込口の決定論テスト。
 //!
 //! # ここが押さえる是正
 //!
-//! 設計 D15 と設計討議 議題 1 は「待ち札のある窓へのすべての窓書込を見送る」と定めており、
-//! 例外は随伴バルーンの追従ただ 1 つである。ところが C5 が列挙した見送り点は 3 つ——拡大率の
-//! 相・報告寸の突合・再スナップ——しか無く、task 5.2 が新設した
+//! 見送りの決まりは「待ち札のある窓へのすべての窓書込を見送る」であり、
+//! 例外は随伴バルーンの追従ただ 1 つである。ところが列挙していた見送り点は 3 つ——拡大率の
+//! 相・報告寸の突合・再スナップ——しか無く、
 //! [`resnap_for_work_area_change`](super::work_area_sync::resnap_for_work_area_change) が
 //! 抜けていた。**「再スナップ」という日本語が別々の 2 関数を指していた**ためである
-//! （C5 が指していたのは `resnap_shell_targets` の側）。
+//! （列挙が指していたのは `resnap_shell_targets` の側）。
 //!
 //! 抜けた結果、次の 2 条件が揃うと待ち札の付いた窓へ窓書込が届く:
 //!
-//! 1. 窓の拡大率と帰属モニタの表が食い違ったまま札が残る（設計 Residual Risks が「上限
-//!    30 フレームまで待つ」構成として記録している縁の配置と同じ状態）。
+//! 1. 窓の拡大率と帰属モニタの表が食い違ったまま札が残る（「上限 30 フレームまで待つ」
+//!    構成の縁の配置と同じ状態）。
 //! 2. その待ちのあいだに作業領域が動き、同期段が `Some` を返す。
 //!
 //! このとき書込の経路語は `WorkAreaResnap` ゆえ随伴バルーンの例外（`BalloonFollow`）にも
@@ -30,7 +30,7 @@
 //! - **札の無いキャラ窓には従来どおり書く**（scope 1・経路語 `WorkAreaResnap`）。これが
 //!   無いと「4 点目を足したら再スナップが全部止まった」という退行を検出できない。
 //! - **札のあるバルーンへ随伴の追従は届く**（scope 1 のバルーン・経路語 `BalloonFollow`）。
-//!   設計 C5 の「不変条件の唯一の例外」が生きていることを、4 点目を足した後の同じ駆動で示す。
+//!   「不変条件の唯一の例外」が生きていることを、4 点目を足した後の同じ駆動で示す。
 //!
 //! # 不変条件の監視は生きたまま・ただし `WorkAreaResnap` では鳴らない
 //!
@@ -116,7 +116,7 @@ fn is_held(harness: &FrameHarness, window: Entity) -> bool {
 // ---------------------------------------------------------------------------
 
 /// 待ち札が残っているあいだに作業領域が動いても、**作業領域変化を契機とする再スナップは
-/// 当該窓へ書かない**（設計 D15「待ち札のある窓へのすべての窓書込を見送る」・要件 5.8）。
+/// 当該窓へ書かない**（待ち札のある窓へのすべての窓書込を見送る）。
 ///
 /// 是正前は当該窓へ `WorkAreaResnap` の書込が届き、`enqueue_window_set_pos` 入口の
 /// `debug_assert!` が panic する。
@@ -216,7 +216,7 @@ fn a_work_area_change_during_the_wait_defers_the_held_window_at(dpi: u16) {
         "dpi={dpi}: scope 1 の接地点が新しい作業領域下端に載っていない"
     );
 
-    // 陽性の対 ⑵: 札のあるバルーンへ随伴の追従は届く（設計 C5 の唯一の例外）。
+    // 陽性の対 ⑵: 札のあるバルーンへ随伴の追従は届く（唯一の例外）。
     let balloon1_writes = writes_for(&writes, 1, WindowKind::Balloon);
     assert_eq!(
         balloon1_writes.len(),
@@ -234,13 +234,11 @@ fn a_work_area_change_during_the_wait_defers_the_held_window_at(dpi: u16) {
     );
 }
 
-/// 要件 7.2 の低い側（120）。
 #[test]
 fn a_work_area_change_during_the_wait_defers_the_held_window_at_120() {
     a_work_area_change_during_the_wait_defers_the_held_window_at(SCALE_120);
 }
 
-/// 要件 7.2 の高い側（192）。
 #[test]
 fn a_work_area_change_during_the_wait_defers_the_held_window_at_192() {
     a_work_area_change_during_the_wait_defers_the_held_window_at(HIGH_DPI);
@@ -325,7 +323,7 @@ fn the_fourth_site_records_its_own_deferral_word() {
 // ---------------------------------------------------------------------------
 
 /// 4 点目を足した後、作業領域変化を契機とする再スナップでは不変条件の監視が**もう鳴らない**
-/// （設計 C5 の監視・偽の警報を出さない）。
+/// （監視は偽の警報を出さない）。
 ///
 /// 零件（「鳴らない」）の陽性の対は
 /// [`the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites`]——**同じハーネスの
@@ -369,11 +367,12 @@ fn the_invariant_watch_no_longer_fires_for_work_area_resnap() {
 /// 上の零件と**同じ土台**（同じハーネス・同じ整地・同じ札）で組んであるのが要点である。
 /// 監視を丸ごと削れば本テストが赤くなり、上の零件だけが空虚に緑になることはない。
 ///
-/// 経路語は当初 `move_window_to`（＝`MoveCue`）だったが、task 7.5 で「明示操作は見送らない
+/// 経路語は当初 `move_window_to`（＝`MoveCue`）だったが、「明示操作は見送らない
 /// ことが正しい＝鳴らすのは偽の警報」と裁定したため差し替えた（分類の全体は
 /// `crates/areka-placement/src/follow_window_move_hold_watch_tests.rs`）。
 #[test]
 #[should_panic(expected = "DpiSyncHold")]
+#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]
 fn the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
@@ -390,11 +389,24 @@ fn the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites() {
         .get::<WindowPos>(char0)
         .and_then(|wp| wp.position)
         .expect("WindowPos.position がある");
-    move_window_with_route(
-        &mut harness.world,
-        char0,
-        position.x + 17,
-        position.y,
-        PlacementRoute::ChainRealign,
+    // `debug_assert!` の panic の前に、零件が数える `warn!` と同じ文が出ていることを数える。
+    let (written, events) = capture(|| {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            move_window_with_route(
+                &mut harness.world,
+                char0,
+                position.x + 17,
+                position.y,
+                PlacementRoute::ChainRealign,
+            )
+        }))
+    });
+    assert_eq!(
+        warnings_containing(&events, INVARIANT_WARNING),
+        1,
+        "監視の警告の文が `INVARIANT_WARNING` と食い違っている: {events:?}"
     );
+    if let Err(panic) = written {
+        std::panic::resume_unwind(panic);
+    }
 }

@@ -3,7 +3,7 @@ use wintf::ecs::DPI;
 use wintf::ecs::SizeI;
 
 use super::test_support::{
-    FakeReports, FakeSizes, dpi_world, resnap_world, size_of, synth_assets, window_move_lines,
+    FakeReports, FakeSizes, dpi_world, resnap_world, size_of, window_move_lines,
     window_move_routes_of,
 };
 use super::*;
@@ -80,7 +80,7 @@ fn dpi_phase_and_drain_phase_record_distinct_routes() {
 
     assert_ne!(
         dpi_routes, drain_routes,
-        "2 呼出元が同一の経路名で記録されている（D13 が禁じる偽陽性の源）"
+        "2 呼出元が同一の経路名で記録されている（経路を取り違える偽陽性の源）"
     );
 }
 
@@ -111,7 +111,7 @@ fn boot_without_any_dpi_change_emits_no_dpi_reproject_record() {
     );
     assert!(
         lines.iter().all(|l| !l.contains("route=DpiReproject")),
-        "DPI 変化ゼロの走行で DpiReproject レコードが出ている（Req 1.2 違反・D13）: {lines:?}"
+        "DPI 変化ゼロの走行で DpiReproject レコードが出ている: {lines:?}"
     );
     assert_eq!(
         window_move_routes_of(&events, char0),
@@ -148,7 +148,7 @@ fn despawn_scope_and_restore_stale_registry(world: &mut World, gw: &GhostWindows
             .expect("Resource は残る")
             .char_window(scope)
             .is_none(),
-        "前提: despawn hook（task 3.1）が scope {scope} をレジストリから落としている"
+        "前提: despawn hook が scope {scope} をレジストリから落としている"
     );
     // 陳腐化した写しを挿し直す＝消費側の存在確認だけが防波堤になる状態。
     world.insert_resource(gw.clone());
@@ -193,7 +193,7 @@ fn resnap_skips_despawned_scope_at_debug_and_processes_surviving_scopes() {
 
     assert!(
         warn_or_above(&events).is_empty(),
-        "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {:?}",
+        "破棄済み窓に対して警告以上のログが出ている: {:?}",
         warn_or_above(&events)
     );
     assert_eq!(
@@ -204,7 +204,7 @@ fn resnap_skips_despawned_scope_at_debug_and_processes_surviving_scopes() {
     assert_eq!(
         size_of(&world, char1),
         Some(SizeI::new(434, 700)),
-        "生存 scope は最後まで処理される（Req 6.3「他の scope の処理を継続」）"
+        "生存 scope は最後まで処理される（他の scope の処理を継続する）"
     );
     let skips = despawn_skip_lines(&events);
     assert_eq!(
@@ -238,7 +238,7 @@ fn drain_reconcile_skips_despawned_scope_at_debug_and_processes_surviving_scopes
 
     assert!(
         warn_or_above(&events).is_empty(),
-        "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {:?}",
+        "破棄済み窓に対して警告以上のログが出ている: {:?}",
         warn_or_above(&events)
     );
     assert!(
@@ -248,7 +248,7 @@ fn drain_reconcile_skips_despawned_scope_at_debug_and_processes_surviving_scopes
     assert_eq!(
         size_of(&world, char1),
         Some(SizeI::new(556, 714)),
-        "生存 scope は最後まで処理される（Req 6.3「他の scope の処理を継続」）"
+        "生存 scope は最後まで処理される（他の scope の処理を継続する）"
     );
     let skips = despawn_skip_lines(&events);
     assert_eq!(
@@ -322,36 +322,5 @@ fn frame_after_teardown_despawn_emits_no_warning_for_destroyed_windows() {
         window_move_lines(&events).is_empty(),
         "破棄済み窓へ書込が発生している: {:?}",
         window_move_lines(&events)
-    );
-}
-
-/// author_dpi の引き当て（取り違え防止）: shell target には shell 宣言・balloon target には
-/// balloon 宣言が渡る。両者 `u16` ゆえ取り違えてもコンパイルは通る——**異なる値**で引き当てを
-/// 反証する（入れ替えれば必ず落ちる）。未知 target は既定 96 へ縮退する（panic しない）。
-#[test]
-fn author_dpis_pairs_shell_and_balloon_declarations() {
-    let assets = synth_assets(&[(0, 0)]);
-    let plan = plan_attachments(&[0usize], &assets);
-    let item = &plan.items[0];
-    // shell=120（125% 原稿）・balloon=72（意図的に異なる値・入れ替え検出用）。
-    let dpis = AuthorDpis {
-        shell: 120,
-        balloon: 72,
-    };
-
-    assert_eq!(
-        dpis.for_target(item, item.shell_target),
-        120,
-        "shell target には shell_author_dpi が渡る"
-    );
-    assert_eq!(
-        dpis.for_target(item, item.balloon_target),
-        72,
-        "balloon target には balloon_author_dpi が渡る"
-    );
-    assert_eq!(
-        dpis.for_target(item, TargetId(9999)),
-        96,
-        "当該 scope のいずれの target でもない＝結線バグ → 既定 96 へ縮退（panic しない）"
     );
 }

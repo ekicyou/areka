@@ -1,5 +1,4 @@
-//! 整合待ちと作業領域追随の**判断分岐**（設計 Testing Strategy「Integration Tests」
-//! 項目 3／6・要件 4.6／4.7／5.4／5.5／10.7／7.2）を多フレーム駆動で固定する。
+//! 整合待ちと作業領域追随の**判断分岐**を多フレーム駆動で固定する。
 //!
 //! # このファイルが持つもの／兄弟が持つもの
 //!
@@ -36,13 +35,11 @@
 //! どれも空虚に緑になるので、**同じテスト本体の内側**で同じ駆動口が陽性側でも効くことを
 //! 続けて主張する（同一表 → 変化ある表で書込／0 台 → 台が戻れば書込）。
 //!
-//! # 要件 4.6 の「現状維持」が指すのは**寸**である（本文の字句を狭めて読んでいる）
+//! # 「現状維持」が指すのは**寸**である（本文の字句を狭めて読んでいる）
 //!
-//! **要件 4.6 の本文は「当該窓の位置と寸を変更せずに」と書く**が、本ファイルはそれを**寸だけ**
-//! と読む。括弧書きの束縛「（`dpi-window-vanish` R4.5 の挙動を変えない）」が上位に効くため
-//! である——先行仕様の R4.5 は `completed/areka-P0-dpi-window-vanish/design.md` の D7（位置権威と
-//! 寸権威の分離）と対になっており、同 Traceability が「4.5 再導出不能なら現状維持＝
-//! `refresh_scale` が `None`＝**寸不変**、**位置は D7 で独立に判断**」と明記している。実装も
+//! **約束の本文は「当該窓の位置と寸を変更せずに」と書く**が、本ファイルはそれを**寸だけ**
+//! と読む。窓が消える件を直したときの「再導出不能なら現状維持」は位置の権威と寸の権威の分離と
+//! 対になっており、`refresh_scale` が `None`＝**寸不変**、**位置は独立に判断**、を指すからである。実装も
 //! そのとおりで、`frame/dpi.rs` の `None` 腕は窓寸を 1 bit も触らず
 //! `reproject_char_window_at_current_size` で現寸のまま射影 T を一度通す。
 //!
@@ -59,7 +56,6 @@ use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::window::{SetWindowPosCommand, drain_window_pos_commands};
 use wintf::ecs::{DPI, Point};
 
-use crate::placement_tests::transition_judge::WRITES_PER_WINDOW_MAX;
 use areka_placement::WORK_AREA_SYNC_CONTEXT;
 use areka_placement::diag::{PlacementRoute, WindowKind};
 use areka_placement::follow::{BalloonFollow, MonitorDpiTable, MonitorSnapshot};
@@ -73,12 +69,12 @@ use super::test_support::{
     s2_taskbar_hidden_work_area, s2_work_area_for_dpi, size_of, zero_clock,
 };
 use super::transition_test_support::{
-    CHAR_ON_NEIGHBOR, as_window_size, holds_of, move_scope_to, neighbor_at, scaled, settle_at,
-    warnings_containing, writes_for,
+    CHAR_ON_NEIGHBOR, as_window_size, assert_writes_per_window_within_bound, holds_of,
+    move_scope_to, neighbor_at, scaled, settle_at, warnings_containing, writes_for,
 };
 use super::{balloon_target, shell_target};
 
-/// 定常フレームを何コマ回して「窓書込 0」を主張するか（要件 4.7）。
+/// 定常フレームを何コマ回して「窓書込 0」を主張するか。
 const STEADY_FRAMES: u32 = 5;
 
 /// 別モニタ検査で札の不在を確かめ続けるフレーム数。
@@ -92,22 +88,21 @@ const WAIT_FRAMES: u32 = 3;
 const CHAR_OFF_ALL_MONITORS: Point = Point { x: -3000, y: 700 };
 
 // ---------------------------------------------------------------------------
-// 群 B: 別モニタへ移した窓（要件 10.7）——設計 Integration Tests 項目 6
+// 群 B: 別モニタへ移した窓
 // ---------------------------------------------------------------------------
 
-/// 別モニタへ移した窓（移動先の拡大率が表に既在）は**待たずに通り**、寸法が追従する
-/// （要件 10.7・設計 Integration Tests 項目 6）。
+/// 別モニタへ移した窓（移動先の拡大率が表に既在）は**待たずに通り**、寸法が追従する。
 ///
 /// 「待ち札 0」の陽性の対は同じ本体の内側——待たずに通ったからこそ書込が出て寸が変わる。
 ///
-/// **⚠ 区分（areka-P0-balloon-offset-dpi task 6.4・要件 7.4／7.6・design D13）＝
+/// **⚠ 区分＝
 /// 拡大率遷移での追従オフセットの追随に対して本檻は空振りであり、追随の証拠にならない。**
 /// 本檻は待ち札・書込回数・**寸**の追従を主張するのみで、`BalloonFollow.offset` の値について
 /// は何も主張しない（[`move_scope_to`] が読む `offset` は遷移を起こす**前**に二体を隣接モニタ
 /// へ揃えて置くための配置用であり、主張の対象ではない）。遷移そのものは起きるが、追随が
 /// 入っても出なくても本檻の主張は同じ値を取る。
 ///
-/// 実測（task 6.4）: 追随の適用（`frame::balloon_offset_follow::rescale_balloon_follow_offset`
+/// 実測: 追随の適用（`frame::balloon_offset_follow::rescale_balloon_follow_offset`
 /// の呼出）を外した走行で、本件は 120／192 とも**緑のまま**であった（同走行では追随の檻 13 件
 /// が赤になる）。ゆえに**本件が緑であることを「追随を壊していない」の根拠に使ってはならない**。
 ///
@@ -145,19 +140,20 @@ fn a_window_moved_to_another_monitor_never_waits_at(dpi: u16) {
     assert_eq!(
         holds_of(&harness, 0),
         (false, false),
-        "dpi={dpi}: 移動先の拡大率が表に既在なのに待ち札が付いた（要件 10.7）"
+        "dpi={dpi}: 移動先の拡大率が表に既在なのに待ち札が付いた"
     );
     // 陽性の対: 待たずに通ったので書込が出ており、寸が追従している。
     let writes = harness.drain_writes();
-    assert_eq!(
-        writes_for(&writes, 0, WindowKind::Char).len() as u32,
-        WRITES_PER_WINDOW_MAX,
-        "dpi={dpi}: 別モニタのキャラ窓が 1 回で書かれていない: {writes:?}"
+    assert_writes_per_window_within_bound(
+        &writes,
+        0,
+        WindowKind::Char,
+        &format!("dpi={dpi}: 別モニタのキャラ窓"),
     );
     assert_eq!(
         size_of(&harness.world, harness.char_window(0)),
         Some(as_window_size(followed)),
-        "dpi={dpi}: 別モニタへ移した窓の寸法が追従していない（要件 10.7）"
+        "dpi={dpi}: 別モニタへ移した窓の寸法が追従していない"
     );
 
     for _ in 0..WAIT_FRAMES {
@@ -166,30 +162,27 @@ fn a_window_moved_to_another_monitor_never_waits_at(dpi: u16) {
         assert_eq!(
             holds_of(&harness, 0),
             (false, false),
-            "dpi={dpi}: 後続フレームで待ち札が付いた（要件 10.7）"
+            "dpi={dpi}: 後続フレームで待ち札が付いた"
         );
     }
 }
 
-/// 要件 7.2 の低い側（120）。
 #[test]
 fn a_window_moved_to_another_monitor_never_waits_at_120() {
     a_window_moved_to_another_monitor_never_waits_at(SCALE_120);
 }
 
-/// 要件 7.2 の高い側（192）。
 #[test]
 fn a_window_moved_to_another_monitor_never_waits_at_192() {
     a_window_moved_to_another_monitor_never_waits_at(HIGH_DPI);
 }
 
 // ---------------------------------------------------------------------------
-// 群 C: 作業領域の分岐——設計 Integration Tests 項目 3
+// 群 C: 作業領域の分岐
 // ---------------------------------------------------------------------------
 
 /// 作業領域だけが変わったフレーム（拡大率は据え置き）で、下端吸着のキャラ窓が
-/// `WorkAreaResnap` の 1 書込で新しい下端へ移り、随伴バルーンが**同一フレーム**で追従する
-/// （要件 5.1／5.2・設計 Integration Tests 項目 3）。
+/// `WorkAreaResnap` の 1 書込で新しい下端へ移り、随伴バルーンが**同一フレーム**で追従する。
 fn a_work_area_only_change_writes_once_at(dpi: u16) {
     let visible = s2_work_area_for_dpi(dpi).bottom;
     let hidden = s2_taskbar_hidden_work_area(dpi).bottom;
@@ -246,10 +239,11 @@ fn a_work_area_only_change_writes_once_at(dpi: u16) {
     for scope in harness.scopes().to_vec() {
         let scope32 = scope as u32;
         for kind in [WindowKind::Char, WindowKind::Balloon] {
-            assert_eq!(
-                writes_for(&writes, scope32, kind).len() as u32,
-                WRITES_PER_WINDOW_MAX,
-                "dpi={dpi} scope={scope} {kind}: 窓あたりの書込が {WRITES_PER_WINDOW_MAX} 本ではない: {writes:?}"
+            assert_writes_per_window_within_bound(
+                &writes,
+                scope32,
+                kind,
+                &format!("dpi={dpi} scope={scope} {kind}"),
             );
         }
         let char_write = writes_for(&writes, scope32, WindowKind::Char)
@@ -267,7 +261,7 @@ fn a_work_area_only_change_writes_once_at(dpi: u16) {
         );
     }
 
-    // 随伴は同一フレームで窓相対へ移り、追従 offset は 1 bit も変わらない（要件 5.2／10.1）。
+    // 随伴は同一フレームで窓相対へ移り、追従 offset は 1 bit も変わらない。
     for (scope, offset_x, offset_y) in &offsets_before {
         let char_pos =
             pos_of(&harness.world, harness.char_window(*scope)).expect("char 位置がある");
@@ -286,7 +280,7 @@ fn a_work_area_only_change_writes_once_at(dpi: u16) {
         assert_eq!(
             (after.x, after.y),
             (*offset_x, *offset_y),
-            "dpi={dpi} scope={scope}: 追従オフセットを補正している（要件 10.1: 補正しない）"
+            "dpi={dpi} scope={scope}: 追従オフセットを補正している（補正しない）"
         );
     }
     // 「相対不変」が「何も動かなかった」の言い換えに退化していないこと。
@@ -308,8 +302,8 @@ fn a_work_area_only_change_writes_once() {
     }
 }
 
-/// 同一表のフレームでは源を作り直さず（要件 5.4）、遷移を伴わない定常フレームでは窓書込が
-/// **1 件も**出ない（要件 4.7＝本タスクの観察可能な完了条件）。
+/// 同一表のフレームでは源を作り直さず、遷移を伴わない定常フレームでは窓書込が
+/// **1 件も**出ない。
 ///
 /// 陽性の対は同じ本体の前後にある——先に「動かせば書く」を通してから定常へ入り、最後にもう
 /// 一度動かして書込が戻ることを見る。これが無いと、再スナップを丸ごと無操作にしても緑になる。
@@ -340,13 +334,13 @@ fn steady_frames_write_nothing_at(dpi: u16) {
         let change = harness.run_placement_phases(&mut source);
         assert!(
             change.is_none(),
-            "dpi={dpi}: 同一表のフレームで源を作り直している（frame={}・要件 5.4）",
+            "dpi={dpi}: 同一表のフレームで源を作り直している（frame={}）",
             harness.frame()
         );
         let writes = harness.drain_writes();
         assert!(
             writes.is_empty(),
-            "dpi={dpi}: 定常フレームで窓書込が出ている（frame={}・要件 4.7）: {writes:?}",
+            "dpi={dpi}: 定常フレームで窓書込が出ている（frame={}）: {writes:?}",
             harness.frame()
         );
     }
@@ -372,7 +366,7 @@ fn steady_frames_write_nothing() {
     }
 }
 
-/// モニタ 0 台（列挙異常）では源を差し替えず、窓を 1 枚も動かさず、警告を残す（要件 5.5）。
+/// モニタ 0 台（列挙異常）では源を差し替えず、窓を 1 枚も動かさず、警告を残す。
 ///
 /// 陽性の対は同じ本体の後半——台が戻れば警告は止み、変化に応じて書込が出る。
 fn an_empty_monitor_table_keeps_everything_and_warns_at(dpi: u16) {
@@ -443,7 +437,7 @@ fn an_empty_monitor_table_keeps_everything_and_warns() {
     }
 }
 
-/// **「帰属不能」は「解決できない」ではない**（開発者裁定 2026-08-20・要件 5.5 の適用範囲）。
+/// **「帰属不能」は「解決できない」ではない**（開発者裁定 2026-08-20）。
 ///
 /// どのモニタにも中心が乗らない窓は最近傍で**解決される**——現状維持で画面外に取り残さない。
 /// 判断の軸は「ゴーストが触れなくなる事態を避けること」であり、モニタ 0 台のときだけが 5.5 の
@@ -473,10 +467,11 @@ fn a_window_off_all_monitors_is_resolved_by_the_nearest_fallback_not_left_in_pla
     let writes = harness.drain_writes();
 
     // 帰属不能でも**解決された**——最近傍（ゴーストが居たモニタ）の下端へ引き寄せられる。
-    assert_eq!(
-        writes_for(&writes, 0, WindowKind::Char).len() as u32,
-        WRITES_PER_WINDOW_MAX,
-        "帰属不能な窓が現状維持で放置されている（要件 5.5 の適用対象と取り違えている）: {writes:?}"
+    assert_writes_per_window_within_bound(
+        &writes,
+        0,
+        WindowKind::Char,
+        "帰属不能な窓が現状維持で放置されている（現状維持の適用対象と取り違えている）",
     );
     assert_eq!(
         harness.ground_point(0).1,
@@ -492,26 +487,26 @@ fn a_window_off_all_monitors_is_resolved_by_the_nearest_fallback_not_left_in_pla
     assert!(change.is_none(), "モニタ 0 台で源を差し替えている");
     assert!(
         harness.drain_writes().is_empty(),
-        "モニタ 0 台で窓書込が出ている（要件 5.5 の現状維持でない）"
+        "モニタ 0 台で窓書込が出ている（現状維持でない）"
     );
     assert_eq!(
         harness.ground_point(0),
         held_ground,
-        "モニタ 0 台で接地点が動いた（要件 5.5 の現状維持でない）"
+        "モニタ 0 台で接地点が動いた（現状維持でない）"
     );
 }
 
 // ---------------------------------------------------------------------------
-// 群 D: 遷移時点で再導出結果が得られない窓（要件 4.6）
+// 群 D: 遷移時点で再導出結果が得られない窓
 // ---------------------------------------------------------------------------
 
 /// 遷移時点で再導出結果が得られない窓（不可視・未表示）は**窓寸**を変えず、その隣で
-/// **他窓の遷移は継続する**（要件 4.6・`dpi-window-vanish` R4.5 の挙動不変）。
+/// **他窓の遷移は継続する**（窓が消える件を直したときの挙動を変えない）。
 ///
 /// 「寸が動かない」の陽性の対は同じ本体の内側——報告を与えた scope 1 は寸が動き、接地点が
 /// 新しい下端へ載り、1 回で書かれる。片方の欠落が他方を巻き込まないことがここの主題である。
 ///
-/// 位置の側は現寸のまま射影 T を一度通る（設計 D7）。その単一フレームの形は
+/// 位置の側は現寸のまま射影 T を一度通る。その単一フレームの形は
 /// `frame_dpi_reproject_none_tests.rs` が持つので、ここでは遷移の文脈で接地点規約が保たれる
 /// ことだけを問う。
 fn a_window_without_a_re_derivation_result_keeps_its_size_at(dpi: u16) {
@@ -542,16 +537,16 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at(dpi: u16) {
     harness.run_placement_phases(&mut source);
     let writes = harness.drain_writes();
 
-    // 要件 4.6: 見送られた窓の**寸**は 1 bit も動かない。
+    // 見送られた窓の**寸**は 1 bit も動かない。
     assert_eq!(
         size_of(&harness.world, harness.char_window(0)),
         Some(kept_char),
-        "dpi={dpi}: 再導出結果の無いキャラ窓の寸が動いた（要件 4.6 の現状維持）"
+        "dpi={dpi}: 再導出結果の無いキャラ窓の寸が動いた（現状維持でない）"
     );
     assert_eq!(
         size_of(&harness.world, harness.balloon_window(0)),
         Some(kept_balloon),
-        "dpi={dpi}: 再導出結果の無いバルーン窓の寸が動いた（要件 4.6 の現状維持）"
+        "dpi={dpi}: 再導出結果の無いバルーン窓の寸が動いた（現状維持でない）"
     );
 
     // 陽性の対: 他窓の遷移は継続する。
@@ -560,13 +555,14 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at(dpi: u16) {
         Some(as_window_size(followed)),
         "dpi={dpi}: 報告のある scope 1 の寸が追従していない（見送りが他窓を巻き込んでいる）"
     );
-    assert_eq!(
-        writes_for(&writes, 1, WindowKind::Char).len() as u32,
-        WRITES_PER_WINDOW_MAX,
-        "dpi={dpi}: scope 1 のキャラ窓が 1 回で書かれていない: {writes:?}"
+    assert_writes_per_window_within_bound(
+        &writes,
+        1,
+        WindowKind::Char,
+        &format!("dpi={dpi}: scope 1 のキャラ窓"),
     );
 
-    // 接地点規約（要件 4.1）は両スコープで保たれる——見送られた窓も浮かない。
+    // 接地点規約は両スコープで保たれる——見送られた窓も浮かない。
     let new_bottom = s2_work_area_for_dpi(dpi).bottom;
     for scope in harness.scopes().to_vec() {
         assert_eq!(
@@ -577,20 +573,18 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at(dpi: u16) {
     }
 }
 
-/// 要件 7.2 の低い側（120）。
 #[test]
 fn a_window_without_a_re_derivation_result_keeps_its_size_at_120() {
     a_window_without_a_re_derivation_result_keeps_its_size_at(SCALE_120);
 }
 
-/// 要件 7.2 の高い側（192）。
 #[test]
 fn a_window_without_a_re_derivation_result_keeps_its_size_at_192() {
     a_window_without_a_re_derivation_result_keeps_its_size_at(HIGH_DPI);
 }
 
 // ---------------------------------------------------------------------------
-// 本番入口（`frame_system`）の到達可能性（task 5.2 のレビューが名指しした申し送り）
+// 本番入口（`frame_system`）の到達可能性（レビューが名指しした申し送り）
 // ---------------------------------------------------------------------------
 
 /// 本番の相順所有者 [`frame_system`] をそのまま回し、配置に関わる 3 呼出——同期段
@@ -601,10 +595,10 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at_192() {
 ///
 /// 本ファイルのほかのテストと、兄弟の `frame_transition_branch_wait_tests.rs`／
 /// `frame_work_area_sync_tests.rs`／`frame_work_area_resnap_tests.rs`／
-/// `frame_dpi_sync_hold_tests.rs` はすべて
+/// `frame_dpi_sync_hold_tests.rs` は、本文の走査のテストを除き
 /// [`FrameHarness::run_placement_phases`] を駆動する。あれは本番の相順を**ハーネス側へ写した
 /// 実装**であって [`frame_system`] を通らない。ゆえに本番の呼出を残したまま `if false` で
-/// 包んで**到達不能**にしても、挙動テストは 1 本も赤にならない（task 5.2 のレビューが実演で
+/// 包んで**到達不能**にしても、挙動テストは 1 本も赤にならない（レビューが実演で
 /// 確定させた）。本文走査（`the_resnap_is_called_after_the_scale_phase_in_the_frame_system` ほか）は
 /// 呼出の**存在と前後関係**しか押さえないので、到達可能性はどこにも掛かっていなかった。
 ///
@@ -618,7 +612,7 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at_192() {
 ///
 /// フレームを 2 つに分けるのは、両者が同一フレームでは**合流して 1 本になる**からである
 /// ——拡大率の相が先に新しい下端へ書き終えた窓は、再スナップの導出値が現在値と一致して
-/// べき等 skip で抜ける（設計 C6）。分けると、どちらの経路が書いたのかが経路語で一意に読める。
+/// べき等 skip で抜ける。分けると、どちらの経路が書いたのかが経路語で一意に読める。
 ///
 /// フレーム A は「源だけが古い」状態から始める（実行時のモニタ表と窓の拡大率は当該水準・
 /// 作業領域源だけが等倍水準）。整合ゲートは窓の拡大率と**表**だけを見るので待ちは起きず、
@@ -630,11 +624,11 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at_192() {
 ///
 /// 本檻が問うのは**到達可能性**であって表示ではない。未装着の実 [`EmoPresenter`] は
 /// `refresh_scale_report` が全 target で `None` を返すが、拡大率の相の `None` 腕は
-/// **位置だけ**を現寸で射影し直す（設計 D7）ので、窓書込は出る。GPU も実 fixture も要らない。
+/// **位置だけ**を現寸で射影し直すので、窓書込は出る。GPU も実 fixture も要らない。
 #[test]
 fn the_production_frame_system_reaches_all_three_placement_call_sites() {
     let dpi = HIGH_DPI;
-    // 前のテストが残した窓書込指令を捨てる（**実行はしない**・要件 7.7）。
+    // 前のテストが残した窓書込指令を捨てる（**実行はしない**）。
     let _residue = drain_window_pos_commands();
 
     let stale = s2_sources(LOW_DPI);
@@ -746,7 +740,7 @@ fn the_production_frame_system_reaches_all_three_placement_call_sites() {
         );
     }
 
-    // 次に走るのがハーネスでない場合に備えて末尾でも閉じる（要件 7.7）。
+    // 次に走るのがハーネスでない場合に備えて末尾でも閉じる。
     let _residue = drain_window_pos_commands();
 }
 
