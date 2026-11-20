@@ -28,7 +28,7 @@ use super::EmoWorld;
 pub(super) use log_capture_kit::CapturedEvent;
 
 /// COM を初期化して `f` を走らせる（`WicDecoderArm` の前提）。
-pub(super) fn with_com_initialized<F: FnOnce()>(f: F) {
+pub(crate) fn with_com_initialized<F: FnOnce()>(f: F) {
     unsafe {
         // 既に初期化済みでも `RPC_E_CHANGED_MODE` を許容して続行する。
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -233,7 +233,7 @@ pub(crate) fn konnoyayame_shell_dir() -> PathBuf {
 }
 
 /// `claudia` のシェル（`shell/master/`）のフォルダ。
-pub(super) fn claudia_shell_dir() -> PathBuf {
+pub(crate) fn claudia_shell_dir() -> PathBuf {
     CLAUDIA.folder().join("shell").join("master")
 }
 
