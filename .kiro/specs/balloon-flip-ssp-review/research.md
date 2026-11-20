@@ -324,3 +324,42 @@ SSP 2.9.34 で測ったところ、既定のとき（バルーンに `windowposi
 
 - 開発者が設計の議題 6 件を推奨どおり一括で承認した（「推奨どおり承認」）。中身は `design.md` の「決めごと」D1〜D6。
 - 設計の確かめ（`design-validation.md`・GO）の大きな問題 3 件は、自明な直しとして `design.md` に入れた: ⑴ 新しい檻の直す前の赤を位置と欄に分けた（今は押し込みの行にも `overlap_scope=None` が載る）・檻の `how` は字で比べる ⑵ 判定し直しの檻は位置でなく巡ごとの `Clamp` の行の数で確かめる ⑶ 回すテストに `areka-runtime` を足した。
+
+## 14. 檻の扱いの記録（TestRecord・タスク 5.2・要件 7.6）
+
+実装の後に、`design.md` の「書き換える檻・除く檻」の表と新しい檻の表のとおりに扱ったかを、檻ごとに残す。新しい名前は `git diff main...HEAD -- crates/` から取った。
+
+### 14.1 新しい檻（`crates/areka-placement/src/balloon_limit_push_tests.rs`）
+
+直す前の赤（`cargo test -p areka-placement --lib push_table`・両関門とも同じ出方・タスク 1.1 の記録）: 10-30 と 11-16-after-drag は位置（`(1108,336)`・`(2441,1188)`）・`how`（`"flipped"`）・`overlap_scope`（`Some("None")`）が赤。キャラクター窓がはみ出す・縦にはみ出すは `overlap_scope` だけが赤（位置は緑）。収まる・`limit=0` は緑。今は欄が値 `None` で載るので `field("overlap_scope")` は `Some("None")` になる。檻の絞り込みは `push_table`（`balloon_limit_push` では 0 件）。
+
+### 14.2 扱いの表
+
+| 今の名前 | 扱い | 書き換えた後の主張 | 新しい名前 |
+|---|---|---|---|
+| `left_side_balloon_of_left_edge_window_flips_to_the_right_keeping_y`・`right_side_balloon_of_right_edge_window_flips_to_the_left`・`flipped_position_overflowing_only_vertically_is_clamped_vertically` | 除いた | 新しい表の 10-30・11-16・縦の行が持つ | （なし）→ `push_table_boot_gate`・`push_table_write_gate` |
+| `fallback_cases_return_the_current_push_in`・`fitting_balloon_is_left_alone` | 除いた | 純関数が無くなった。式は `balloon_limit_tests.rs`（変えない）、関門は新しい表の「収まる」の行 | （なし） |
+| 重なりの 7 本（`flip_target_overlapping_partner_window_is_pushed_instead`・`shape_4_3_1_flips_because_partner_is_below`・`partner_at_same_position_as_own_window_is_not_counted`・`partner_only_touching_the_flip_target_is_not_counted`・`first_overlapping_scope_is_reported_across_three_scopes`・`pushed_position_is_kept_even_if_it_still_overlaps`・`empty_char_list_keeps_the_current_flip`） | 除いた | 重なりの判定ごと外した | （なし） |
+| `boot_gate_flips_keeps_offset_and_logs_how`・`boot_gate_pushes_on_overlap_and_logs_the_scope`・`boot_gate_does_not_flip_when_limit_is_disabled` | 除いた | 新しい表の起動の関門 | `push_table_boot_gate` |
+| `write_gate_does_not_flip_when_limit_is_disabled` | 除いた | 新しい表の `limit=0` の行 | `push_table_write_gate` |
+| `write_gate_flips_and_returns_to_the_original_side` | 書き換えた | 左端へ動かすと `(0,904)`・`how="pushed"`・欄 `overlap_scope` なし。中ほどへ戻すと `(328,904)`・記録なし（焼き付けない） | `write_gate_pushes_to_the_edge_and_returns_to_the_original_side` |
+| `write_gate_pushes_on_overlap_with_a_shown_partner`・`write_gate_flips_when_the_partner_is_hidden_or_undetermined` | 1 本に書き換えた | 相方の窓が可視でも不可視でも寸が未確定でも、本体のバルーンは `(0,904)`（重なりを判定に使わない） | `write_gate_ignores_the_partner_window_state` |
+| `balloon_move_locks_do_not_stop_the_flip` | 書き換えた | 動かせない指定があっても押し込む（`(0,904)`） | `balloon_move_locks_do_not_stop_the_push` |
+| `release_correction_never_flips` | 名前だけ変えた | 離したときの補正は今のまま `(0,904)`・`context="release-gate"` | `release_correction_pushes_to_the_edge` |
+| `flip_is_the_same_for_every_scope` | 書き換えた | スコープ 0・1・2 のどれも `(0,904)` | `write_gate_pushes_the_same_for_every_scope` |
+| `right_from_start_equals_left_mirrored_for_descript_part`（件 2） | 書き換えた（映しを使わない） | descript の分 d（30・100）: 右に出した x ＝ キャラクター窓の右端 − d、右の間合いと左の間合いが同じ | `right_side_x_is_char_right_edge_minus_descript_part_with_gap_equal_to_left` |
+| `mirror_of_windowposition_part_keeps_current_formula`（件 2） | 書き換えた（映しを使わない） | `windowposition.x` の分 −237（descript 0）: 左に出した x ＝ 窓の左端 − 幅 − 237、右に出した x ＝ 窓の右端 − 237 | `windowposition_part_offsets_left_and_right_sides_by_the_same_amount` |
+| `follow_other_chars_tests.rs` の `shown_char_rects` の 8 本（`visible_window_is_included`・`window_with_any_visible_child_is_included`・`window_whose_children_are_all_invisible_is_excluded`・`window_without_surface_children_is_excluded`・`text_box_surface_alone_does_not_count_as_shown`・`window_with_undetermined_size_is_excluded`・`three_scopes_come_in_ascending_order`・`no_ghost_windows_gives_empty_list_without_logging`） | 除いた | 関数ごと外した | （なし） |
+| `rejudge_after_chain_finalize_pushes_the_balloon_onto_the_moved_partner_once` | 書き換えた | 本体を左端へ動かすと `(0,904)`。系が走ったかは位置でなく巡ごとの `Clamp` の行の数で見る（印の無い巡 0 行・印の入った巡 1 行 `how="pushed"`・印の後の巡 0 行） | `rejudge_runs_once_on_the_chain_finalize_mark` |
+| `rejudge_without_overlap_keeps_every_balloon_bit_identical`・`rejudge_skips_balloons_with_limit_disabled`・`rejudge_skips_a_scope_whose_char_position_is_undetermined` | 注だけ直した | 今のまま（名前も同じ） | 同じ |
+| `reset_pos_tests.rs` の `reset_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target` | 名前と注を書き換えた（値は変えない） | 並べ直しの後も本体のバルーンは押し込みの位置。判定し直したかはここでは見ない（系の檻が見る） | `reset_keeps_the_balloon_at_the_push_position_after_relayout` |
+| `chain_realign_script_moved_tests.rs` の `realign_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target` | 名前と注を書き換えた（値は変えない） | 詰め直しの後も本体のバルーンは押し込みの位置（同上） | `realign_keeps_the_balloon_at_the_push_position_after_repacking` |
+| `balloon_limit_gate_tests.rs`・`follow_balloon_limit_tests.rs`・`crates/areka/src/main_restore_seam_tests.rs` の前提合わせの注 | 注だけ直した（檻の名前・主張は同じ） | 今のまま緑 | 同じ |
+| （新規）起動の関門の形の表 | 新しい檻 | 6 行の形を `apply_balloon_limit` に通す。収まる行は記録なし、ほかは `how="pushed"`・欄 `overlap_scope` なし・`balloon_offset` は入力のまま | `push_table_boot_gate` |
+| （新規）書き込みの関門の形の表 | 新しい檻 | 同じ 6 行の形を `move_window_to` で動かして通す | `push_table_write_gate` |
+
+数え: 表は 20 行（除いた 6・書き換えた 7・名前だけ変えた 1・名前と注を書き換えた 2・注だけ直した 2・新しい檻 2）。`design.md` の「書き換える檻・除く檻」の表 16 行（`reset_pos` と `chain_realign` の 2 本は 1 行にまとめてある分を 2 行に分けた）と新しい檻 2 本、前提合わせの注だけの檻 1 行を、もれなく写した。
+
+### 14.3 要件の段の記録の確かめ（読んだだけ・測り直していない）
+
+本節の確かめ: 測りは 8 節（8.3・8.4・8.5 を含む）、報告の文案は 9 節、見た目が変わる場面は 10 節、裁定は 11 節にある。画像の置き場は `target\balloon-flip-ssp-review\ssp-left-edge-offset-250.png`（8.3 節・9 節）で、どちらも `target\` の下。
