@@ -638,3 +638,66 @@ A を採るときだけ要るもの:
 | 同上 | 合成の直後に読む | 516 µs | 747 µs | 1.26 ms |
 
 - 中央値と 95% 点は完了 spec の記録（および 本書 §11.6 の 396 µs・605 µs）と同じ帯。最大の 17.2 ms は 1 回だけの外れ値（初回の読みか OS の割り込み）で、数字の読みには使わない。
+
+## 15. 実機の確かめ: クローディアの楕円と多角形の名前（2026-11-21・タスク 9.1）
+
+### 15.1 走行の条件
+
+| 項目 | 値 |
+|---|---|
+| 版 | コミット `f65d277be` から組んだ debug 版 `areka.exe`（x64）と `shiori-host32-helper.exe`（i686） |
+| 根 | `<ワークツリー>\target\hip-signoff\root`（`real-machine-run.ps1 -Prepare` で `nar-sample-path claudia` の展開から写した・検体は無改変） |
+| 検体 | クローディア（`sample-ghost-kit` の `claudia`・`surface0` は 333×500） |
+| `RUST_LOG` | `info,areka=debug,kanade=trace,areka_emo_present::presenter::hit=debug`（`hit_region_client` の `debug!` と `kanade` の `shiori_request` の `trace!`） |
+| 起動と操作 | `.kiro/specs/hit-id-pass/real-machine-run.ps1 -Run R1`（9276 の確かめ・記憶を消す・起動の済みを待つ・pid の名前を確かめる・`real-machine-drive.ps1` で `SendInput` の撫で・自動終了 120 秒）。道具は完了 `collisionex-regions` の写しで、ドラッグを外して Bust の撫でを足した |
+| 点 | `collisionex-regions` の実機の記録の 2 章と同じ点（どれも `surface0.png` の不透明な画素・撫での ±4 の端も同じ形の中）。Head 165,70（rect）・Bust 165,213（rect）・Skirt 160,436（polygon だけ）・Foot 152,483（ellipse だけ）・Fan 262,232（polygon だけ） |
+| 机 | 排他テストの机を進行役が取ってから走らせ、走った後に返した |
+
+### 15.2 走行
+
+- 1 回目（2026-11-21 03:44）: スクリーンセーバー（`Mystify.scr`）が動いていて、道具は何も送らずに止まった（`R1 exit=0`）。入力は 0 件。読み込みの記録は 2 回目と同じ（記録は `run-R1-first.log` に写して残した）。
+- 2 回目（2026-11-21 08:26・開発者が在席）: `R1 pid=31568 start=2026-11-21T08:26:50.8883698+09:00 exit_ms=120000` → `R1 exit=0 end=2026-11-21T08:28:51.4613837+09:00`。候補の窓は 2 つ（`1548,704` と `2214,704`・666x1000・k=2）で、右（hwnd 2492230）を本体とした。道具の出力（逐語・候補の行は略）:
+
+```
+stroke Head surface=165,70 screen=2544,844 k=2 08:26:59.458
+stroke Bust surface=165,213 screen=2544,1130 k=2 08:27:02.742
+stroke Skirt surface=160,436 screen=2534,1576 k=2 08:27:05.902
+stroke Foot surface=152,483 screen=2518,1670 k=2 08:27:09.028
+stroke Fan surface=262,232 screen=2738,1168 k=2 08:27:12.152
+drive done 08:27:15.062
+```
+
+### 15.3 記録の抜き書き（2 回目の `run-R1.log`）
+
+当たり判定の解決（`[hit_region_client]` の `debug!`・名前ごとの最初の 1 行・`target=TargetId(0)`・前置きは略）。`k_ratio` は 2/1 で、窓の大きさから求めた k=2 と合う:
+
+```
+2026-11-20T23:26:59.317327Z k_ratio=ScaleRatio { num: 2, den: 1 } client_x=330 client_y=140 surface_x=165 surface_y=70 region=Some("Head")
+2026-11-20T23:27:02.593399Z k_ratio=ScaleRatio { num: 2, den: 1 } client_x=330 client_y=426 surface_x=165 surface_y=213 region=Some("Bust")
+2026-11-20T23:27:05.747267Z k_ratio=ScaleRatio { num: 2, den: 1 } client_x=320 client_y=872 surface_x=160 surface_y=436 region=Some("Skirt")
+2026-11-20T23:27:08.870479Z k_ratio=ScaleRatio { num: 2, den: 1 } client_x=304 client_y=966 surface_x=152 surface_y=483 region=Some("Foot")
+2026-11-20T23:27:11.992658Z k_ratio=ScaleRatio { num: 2, den: 1 } client_x=524 client_y=464 surface_x=262 surface_y=232 region=Some("Fan")
+```
+
+`[hit_region_client]` は 2,067 行（`Head` 458・`Foot` 437・`Bust` 398・`Skirt` 397・`Fan` 377・`None` 0）。
+
+SHIORI へ送った `OnMouseMove`（`shiori_request` の `references`・名前ごとの最初の 1 行）:
+
+```
+2026-11-20T23:26:59.325953Z ["165", "70", "0", "0", "Head", "0", "mouse"]
+2026-11-20T23:27:02.605436Z ["165", "213", "0", "0", "Bust", "0", "mouse"]
+2026-11-20T23:27:05.755607Z ["160", "436", "0", "0", "Skirt", "0", "mouse"]
+2026-11-20T23:27:08.873754Z ["152", "483", "0", "0", "Foot", "0", "mouse"]
+2026-11-20T23:27:11.995926Z ["262", "232", "0", "0", "Fan", "0", "mouse"]
+```
+
+`OnMouseMove` は 61 件で、Reference4 は `Fan` 13・`Head` 12・`Bust` 12・`Skirt` 12・`Foot` 12（空は 0 件）。
+
+読み込みの記録: 「働かない」の文は 0 行（完了 `collisionex-regions` の走行に出ていた「楕円 32・円 0・多角形 28 … まだ当たり判定として働かない」の行は出ない）。WARN は 10 行で、surface28 の `base` の pattern の警告 3 行（`draw-methods-canon` の持ち分・前と同じ）・Shift_JIS の代替文字 5 行・補助プロセスの起動 1 行・自動終了の `kanade: 強制終了指示——終了系列（Forced）へ直行` 1 行。どれも当たり判定とは関係ない。ERROR は 0 行。
+
+### 15.4 判定
+
+- 楕円（`Foot`）・多角形（`Fan`・`Skirt`）・矩形（`Head`・`Bust`）の名前が、撫での `OnMouseMove` の Reference4 に載る: 合格。完了 `collisionex-regions` では同じ点で `Foot`・`Fan`・`Skirt` が空だった。
+- 拡大率: 記録の `k_ratio` 2/1 と窓から求めた k=2 が一致。窓の点 ÷2 が作者の座標の点になっている（例 `client_x=524 client_y=464` → `262,232`）。
+- 読み込みの記録に「まだ働かない形」が出ない: 合格。
+- areka と補助プロセスは自動終了で残っていない。机は走行の後に返した。
