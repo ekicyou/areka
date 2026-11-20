@@ -145,6 +145,7 @@ mod update;
 
 /// 終了の後始末が、背景で書いている仕事の終わりを上限つきで待つ口（areka-P0-ghost-install 要件 8）。
 mod exit_wait;
+mod file_drop;
 
 /// ベースウェアの根の並びの決め方（areka-P0-baseware-root-list）。
 mod roots;
