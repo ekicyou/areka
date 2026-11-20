@@ -131,7 +131,7 @@ finally {
 }
 ```
 
-#### 手順 `target\input-crate-splitscape\send-escape.ps1`
+#### 手順 `target\input-crate-split\escape\send-escape.ps1`
 
 ```powershell
 <#
@@ -354,3 +354,17 @@ finally {
 - 2026-11-21、排他テストの机を取り、`pwsh -NoProfile -File tools/test-all.ps1 -License` を直さずに 1 回回した（commit `e5673c416`・始めの未コミットの変更 0）。全段が緑（`x64 workspace tests` 364 秒・`cargo deny check`・`cargo about generate` を含む）。赤は 0 件で回し直しはしていない。
 - 1,000 行の番人・番人の決まり・新しい crate のテスト（`crash_report_tests`・`hooks_tests`・`spawn_assembly_tests` ほか）はこの全体テストに含まれる。
 - `THIRD-PARTY-NOTICES.md` は `cargo about generate` が作り直した（手で書いていない）。差は `MIT License (263 crate)` → `(264 crate)` と `areka-input 0.1.0` の 1 行。
+
+## 実機の確かめ（7.3）
+
+2026-11-21、排他テストの机を取り、実機で回したのは次の 3 つだけ（各 1 回・回し直しなし。走らせ方を誤って 0 件のまま終わった 2 回は除く。この 2 回は実機に触れていない）。机は終わってすぐ返した。
+
+- `cargo test -p areka --test emo2_mcp_real_run -- --nocapture` が緑（1 passed・28 秒）。`RUST_LOG` の `areka_input::user_break=debug` で、`event="no_user_break_changed" value=true` を標準出力から拾えた（拾えなければこのテストは赤になる）。
+- `AREKA_WINDOW_LINK_REAL_RUN=1 cargo test -p areka --test window_link_real_run -- --nocapture` が緑（1 passed・40 秒）。`target\wl-signoff\judgments.txt` に FAIL は 0 件。走りの記録には新しい出所の名前の行が入っていた（`areka_input::char_watch::cursor_answer` 11 行・`areka_input::click` 1 行）。古い名前 `areka::input_events` の行は 0 行。
+- 1.2 と同じ手順（`escape.ps1`）で強制退避を 1 回取り、記録を `target/input-crate-split/escape-after.stderr.log` に残した。手順で変えたのは `RUST_LOG` の `areka::input_events=debug` を `areka_input=debug` にした 1 か所だけ。
+  - 系列は前と同じ順に並んだ: `mouse_escape_close`（出所 `areka_input`）→ `[window_state] 常に手前のまま降ろした（状態は捨てる） reason="exit"` → `app_exit origin=Escape closed=4` → `seriko: loop ticker を Close しました` → 終了（exit code=0）。
+  - 常に手前の変化の行から終わりまでを、時刻を外し、出所の名前をそろえて比べた。違いは次の 3 つだけで、どれもこの spec の変更とは関わらない。
+    - 窓の ECS の番号（`30v0`・`31v0`）
+    - MCP の待受のポート
+    - 前の記録にだけ 1 行ある `loop ticker catch-up`（時の巡り合わせで出る行）
+  - 1 行目の出所の名前は `areka::input_events` → `areka_input` に変わった。
