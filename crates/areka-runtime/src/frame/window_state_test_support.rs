@@ -26,11 +26,15 @@ pub fn state_with_channel() -> (StayOnTopState, Sender<WindowStateDirective>) {
 pub fn world_with_windows() -> (World, Vec<Entity>) {
     let mut world = World::new();
     let gw = spawn_resnap_windows(&mut world);
-    let all = gw
-        .scopes()
-        .flat_map(|s| [gw.char_window(s).unwrap(), gw.balloon_window(s).unwrap()])
-        .collect();
+    let all = all_windows(&gw);
     (world, all)
+}
+
+/// ゴーストの窓の全部の entity（スコープ順・キャラ→バルーン）。
+pub fn all_windows(gw: &GhostWindows) -> Vec<Entity> {
+    gw.scopes()
+        .flat_map(|s| [gw.char_window(s).unwrap(), gw.balloon_window(s).unwrap()])
+        .collect()
 }
 
 /// 期待の帯の指令の列（`Debug` の写し）。

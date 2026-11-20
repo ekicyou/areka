@@ -193,7 +193,7 @@
   - _Dispatch: mechanical — 文と形を設計の表が与える_
   - _Requirements: 3.1, 3.3, 4.1, 4.3, 5.1, 5.3, 5.7, 5.9, 5.16_
 
-- [ ] 5.2 `frame/` の下のテストを直す（T21・54〜60 番・57 番の `frame/` の分）
+- [x] 5.2 `frame/` の下のテストを直す（T21・54〜60 番・57 番の `frame/` の分）
   - 字面の見張りの対象を 2 本にする（54 番）。適用の閉包に上限の表明を足す（55 番）。56・58 番は設計の文のとおり（件 12）
   - 両側の見出しを自分の持つテストだけにし、もう一方を 1 行で指す（57 番）
   - 束なしの結線で面の書き手が `error` 1 行を出し表が空のままであることのテストを足す（59 番）。窓を全部集める補助を支えに置き両方から呼ぶ（60 番）
@@ -283,3 +283,4 @@
 - 4.2: 移したテストは 4 本（remembered ⑶⑷⑸ 3・窓の状態 1）で本体 −4＝`areka-runtime` +4、消したのは 1 本（110 番 `frame::chain_rule_tests::a_remembered_left_mark_joins_with_the_defaultx_gap`・`every_world_path_keeps_the_defaultx_gap` の remembered の脚が守る）。restart の 2 回目の起動も印を付けるようになった（17 番の直しそのもの）。`doc/COMPAT_ARCHITECTURE.md` §8（L228 付近）が移した窓の状態のテストを本体の古い置き場で名指したまま＝C23 で触らないファイルなので 6 で申し送りに書く（`crates/areka-runtime/src/frame/window_state_tests.rs` へ）。
 - 4.3: 分岐のテストは 766 行と 331 行（待ちの群）。消した重なりの 4 本の札の腕は、待ちの群の `_at_120`／`_at_192` の 6 本と 1.6 のシェルの切り替えのテストが守る（審査で腕を落として 7 本の赤を確かめた）。94 番で 3 つの DPI を回す形にした `steady_frames_write_nothing_at` は、表を戻した後に接地点が見える下端へ戻ることを見なくなった（`a_work_area_only_change_writes_once_at` が同じ仕組みを守る）。`frame_transition_branch_tests.rs` の頭の説明が要件番号 5.5 を足した・`frame_transition_branch_wait_tests.rs:120` に D15 の「4 点すべて」が残る（5.4 の 41 番の物差しで見る）。
 - 5.1: 説明に残る spec の ID・要件番号は、ログの文字列の中のもの（`attach.rs` R4.2・`drain_resnap.rs` Req3.4／要件 6.3・7.1／scope-chain-gap・`scale_text.rs` R8.6／R2.3）だけ。ログの文を変えるのは 3・4・113 番だけなので触らない。41 番の「atom を spec の名で書く」は、CLAUDE.md の決まりに合わせて参照だけの行を消す形にした。`frame.rs` の `donor パターン: remove→各フェーズ→insert` は `t_zwi07` が字面で読むので残す。
+- 5.2: 56 番の直しは設計（要件 5.13）のとおり `.kiro` の spec の名（`areka-test-binary-stability` の `load-repro.md` の ⑹）をコメントに書いた。CLAUDE.md の決まりとはぶつかる（7.1 の audit で見る）。

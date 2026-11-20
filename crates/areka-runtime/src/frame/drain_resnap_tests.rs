@@ -100,7 +100,7 @@ fn drain_returns_while_the_sender_keeps_sending() {
         })
     };
     let (done_tx, done_rx) = mpsc::channel::<usize>();
-    // 進みの目印は drain が適用した数（負荷の下で 3 秒の自前の締切が赤になった・`load-repro.md` の ⑹）。
+    // 進みの目印は drain が適用した数（負荷の下で 3 秒の自前の締切が赤になった・`areka-test-binary-stability` の `load-repro.md` の ⑹）。
     let applied_so_far = Arc::new(AtomicU64::new(0));
     thread::spawn({
         let applied_so_far = Arc::clone(&applied_so_far);
@@ -109,6 +109,7 @@ fn drain_returns_while_the_sender_keeps_sending() {
             // 適用 1 回を送りの間隔より重くする（デバッグ版の合成と D2D の確保に当たる）。
             drain_present_commands(&rx, |_cmd| {
                 applied += 1;
+                assert!(applied <= MAX_DRAIN_PER_FRAME);
                 applied_so_far.fetch_add(1, Ordering::SeqCst);
                 thread::sleep(Duration::from_millis(10));
             });

@@ -21,7 +21,7 @@ use temp_path_kit::TempPath;
 
 use super::{FaceCause, after_drain, changed_faces, select_balloon_face};
 use crate::frame::balloon_runtime_test_support::{balloon_is_manual, manual_balloon_runtime};
-use crate::frame::test_support::{headless_wiring_with, zero_clock};
+use crate::frame::test_support::{capture_logs, count_level, headless_wiring_with, zero_clock};
 use crate::frame::{RuntimeWiring, balloon_target, shell_target};
 
 /// 書き手が文字の層へ矢印の絵を入れたときに文字の層が残す 1 行（`actor_scroll.rs`）。
@@ -165,6 +165,21 @@ fn same_face_keeps_manual() {
     restart_manual(&wiring);
     select(&mut wiring, &mut world, 2, FaceCause::BalloonSwitch);
     assert!(balloon_is_manual(&wiring.runtime, "0"));
+}
+
+/// 定義の束が無い scope は `error` を 1 行だけ出し、面も今の定義も覚えずに戻る。
+#[test]
+fn a_scope_without_definitions_logs_one_error_and_changes_nothing() {
+    let mut wiring = headless_wiring_with(mpsc::channel().1, zero_clock());
+    let mut world = World::new();
+
+    let logs =
+        capture_logs(|| select_balloon_face(&mut wiring, &mut world, 0, 2, FaceCause::FaceChange));
+
+    assert_eq!(count_level(&logs, "ERROR"), 1, "{logs:?}");
+    assert_eq!(logs.len(), 1, "error 以外の行が出ている: {logs:?}");
+    assert!(wiring.balloon_faces.is_empty());
+    assert!(wiring.balloon_models.is_empty());
 }
 
 /// 手動の位置へ入り直す（`balloon_is_manual` の確かめは手動を自動へ戻すので、次の段の前に戻す）。

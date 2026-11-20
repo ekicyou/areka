@@ -5,7 +5,7 @@
 //! ゴーストは kanade の送出端の代わりに観測用の線と、偽の置き場（`FakePersistIo`）へ書く本物の
 //! 記憶の書き手を持つ。実行系と窓は無いので、実行系の今のシェルの書き換えと配置の入れ直しは
 //! 縮退の記録（`skin_shell_dir_not_set`・`reseed_skipped`）になる（実物は統合テスト
-//! `shell_balloon_switch_session_tests.rs` が偽の SHIORI で突き合わせる）。判定は集めてから 1 回。
+//! `shell_balloon_switch_session_tests.rs` が偽の SHIORI で突き合わせる）。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

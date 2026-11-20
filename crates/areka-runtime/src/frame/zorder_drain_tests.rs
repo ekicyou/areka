@@ -420,7 +420,7 @@ fn t_zdr08_reset_falls_back_to_the_descript_base_and_records_the_result() {
 // 記録の出口は 1 本（要件 9.5・task 2.1 が入口を閉じた理由）
 // ---------------------------------------------------------------------------
 
-/// この相のソースには `tracing` のマクロが 1 つも無い（記録は wintf の入口だけを通る）。
+/// この相のソース（`zorder_drain.rs`・`zorder_descript.rs`）には `tracing` のマクロが 1 つも無い（記録は wintf の入口だけを通る）。
 ///
 /// 対照として、同じ走査が実際にマクロを持つファイル（受け口の `zorder_cue.rs`）では
 /// 必ず何かを見つけることを併置する——走査そのものが空振りしていれば、不在の主張は
@@ -435,12 +435,15 @@ fn t_zdr09_this_phase_emits_no_records_of_its_own() {
         "error!(",
         "tracing::",
     ];
-    let here = code_only(include_str!("zorder_drain.rs"));
+    let phase_sources = [
+        code_only(include_str!("zorder_drain.rs")),
+        code_only(include_str!("zorder_descript.rs")),
+    ];
     let sibling = code_only(include_str!("../zorder_cue.rs"));
 
     for needle in MACRO_NEEDLES {
         assert!(
-            !here.contains(needle),
+            phase_sources.iter().all(|source| !source.contains(needle)),
             "この相に `{needle}` が現れた（ここで呼ぶと出力先が `areka_runtime::…` になり、`wintf::ecs::window` の前方一致の絞り込みで debug の受理の行が点かない）"
         );
     }
@@ -453,7 +456,7 @@ fn t_zdr09_this_phase_emits_no_records_of_its_own() {
         "走査がマクロを持つ兄弟でも何も見つけない（走査そのものが壊れている疑い）"
     );
     assert!(
-        here.contains("fn run_zorder_drain_phase("),
+        phase_sources[0].contains("fn run_zorder_drain_phase("),
         "説明文を落とす処理が本文まで落としている"
     );
 }
