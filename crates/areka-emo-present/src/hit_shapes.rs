@@ -48,6 +48,11 @@ impl HitMasks {
         &mut self.pictures
     }
 
+    #[cfg(test)]
+    pub(crate) fn pictures_created(&self) -> u64 {
+        self.pictures.created()
+    }
+
     /// 装置の作り直しのとき、GPU の絵だけを捨てる（直したマスクは装置に依らないので残す）。
     pub(crate) fn discard_pictures(&mut self) {
         self.pictures = IdMaskPictures::new();

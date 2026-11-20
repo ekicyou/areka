@@ -189,3 +189,19 @@ mod stage_generation_tests;
 #[cfg(test)]
 #[path = "presenter_stage_tests.rs"]
 mod stage_tests;
+
+#[cfg(test)]
+#[path = "presenter_hit_shape_tests.rs"]
+mod hit_shape_tests;
+
+#[cfg(test)]
+#[path = "presenter_hit_region_tests.rs"]
+mod hit_region_tests;
+
+#[cfg(test)]
+#[path = "presenter_hit_scale_tests.rs"]
+mod hit_scale_tests;
+
+#[cfg(test)]
+#[path = "presenter_hit_picture_tests.rs"]
+mod hit_picture_tests;

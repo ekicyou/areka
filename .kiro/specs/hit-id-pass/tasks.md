@@ -174,7 +174,7 @@
   - _Requirements: 9.4, 10.13_
 
 - [ ] 7. 提示の実 GPU のテスト
-- [ ] 7.1 当たり判定の実 GPU のテストの足場
+- [x] 7.1 当たり判定の実 GPU のテストの足場
   - 今ある presenter のテストの足場（実 GPU の装置だけの World）に、`collisionex` の 5 つの形を書いたシェル・テストの読み手に載せた乗算しない `region` の画像・透明な所と不透明な所を持つ絵・表示の拡大率を組む補助と、`hit_region_client` で名前を引く補助を足す
   - 描き先の世代・マスクの GPU の絵を作った回数・`warn!` の件数を数えるテスト専用の読み口を足す
   - 7.2〜7.6 の新しいテストのファイル（`presenter_hit_shape_tests.rs`・`presenter_hit_region_tests.rs`・`presenter_hit_scale_tests.rs`・`presenter_hit_picture_tests.rs`）の接続宣言を、このタスクだけが先に足す
@@ -288,3 +288,4 @@
 - 6.3 の後: `presenter_read_accessor_tests.rs` の `client_entry_matches_native_entry_at_identity_scale` は native の入口と比べなくなったので、6.4 で `hit_region` を消すときに名前を中身に合わせて直す
 - 6.4 の後: `crates/areka/examples/emo-present.rs` 104 行の `//!` に `hit_region`（native px）の文が残る。9.2 は `crates/areka/` の差分を禁じるので直さず、9.2 の検索では既知の残りとして扱う
 - 6.4 の後: 台帳 `doc/ukadoc-coverage/ledger/assets.toml` 7039 行あたりに「まだ働かない形」「ID の描き先に塗るのは `hit-id-pass`」の文が残る。8.1 で書き直す
+- 7.1 の後: 書き込みの道具が文字列の `\n` を生の改行に化かすことがある。テストのシェルの文字列を書いたら、python でバイトを読んで確かめる
