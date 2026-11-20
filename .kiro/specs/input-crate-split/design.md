@@ -527,7 +527,7 @@ static INSTALL: extern "C" fn() = areka_runtime::crash_report_test_support::inst
 fn crash_filter_is_installed_before_the_tests_start(); // areka_runtime::crash_report_test_support::installed() が真
 ```
 
-- 初期化子は `#[cfg(test)]` の下だけ（本体の bin と `test-support` だけのビルドには入らない）。確かめ: 初期化子の `static` が `#[cfg(test)]` の下にしか無いことを grep で示す（`crates/areka-runtime/src/crash_report_test_support.rs`・`crates/areka/src/runtime_tests/mod.rs`・`crates/areka-input/src/crash_report_tests.rs` の 3 か所だけ）。
+- 初期化子は `#[cfg(test)]` の下だけ（本体の bin と `test-support` だけのビルドには入らない）。確かめ: `crash_report_test_support::install` を指す初期化子の `static` を grep し（針は `crash_report_test_support::install`。`.CRT$XCU` で数えると `areka-placement`・`wintf` の自前の `test_crash_report.rs` も当たるので使わない）、当たった所がどれも、宣言の連なりが `#[cfg(test)]` の下にあること（例: `runtime_tests/mod.rs` は `main.rs` の `#[cfg(test)] mod runtime_tests;` の下・`crash_report_tests.rs` は `lib.rs` の `#[cfg(test)] mod` の下）を示す。
 - 5.7: `areka-input` の lib のテストの実行ファイルは `cargo test --workspace -- --list` で拾われ、`tools/test-all.ps1`（crate の名を持たない）は直さずに走る。
 
 ### 本体の側
@@ -568,6 +568,7 @@ fn crash_filter_is_installed_before_the_tests_start(); // areka_runtime::crash_r
 
 - `crates/areka/src/app_exit_escape_tests.rs`（`app_exit.rs` の `#[cfg(test)]` の子・約 170 行）に、`input_events_tests.rs` から次の 3 本を名前を変えずに移す: `handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sending`・`escape_works_without_mouse_wiring`・`only_escape_terminates_ghost_windows`。変えるのは World を組んだ直後の `crate::app_exit::install_input_hooks(&mut world);` 1 行と、`use` の行（`crate::input_events::{on_char_pointer_pressed, on_char_pointer_moved, pointer_test_support::*}` ほか）だけ。表明は 1 字も変えない（4.7）。
 - 新しく 1 本 `register_systems_installs_the_escape_hook`: `World::new()` に `Schedules` と `wintf::AppExit` を入れて `crate::ghost_session::register_systems` を呼び（前例 `ghost_session_reload_tests.rs` と同じ組み方）、`InputHooks` が据わっていることと、結線前の Ctrl+左ダブルクリックで `GhostWindowMarker` の窓が消え `AppExit::is_requested()` が真になることを見る（4.6 の「本番の組み立ての道で口が据わる」）。
+- 入力に残る「強制退避の枝へ落ちない」側のテスト 3 本（`input_events_tests.rs` の `handler_wired_ctrl_left_double_click_…`・`handler_left_double_click_without_ctrl_…`・`input_events_menu_tests.rs` の `wired_ctrl_left_double_click_…_partner_window`）は中身を変えない。入力の crate のテストの World には口が据わらないので、誤って枝へ落ちても窓は消えず、説明の「窓が消えて件数が落ちる」は移した後に事実でなくなる。枝へ落ちたことを捕まえるのは残る `try_recv` の表明で、合否の力は保たれる。古くなる説明は直さず、Handover ⑶ の一覧に載せる（8.1）。
 - `areka-input` 側の `hooks_tests.rs` に 1 本 `escape_without_hooks_logs_and_still_requests_exit`: 口の無い World で `hooks::escape` を呼び、`log_capture_kit::capture` で `input_hooks_missing` の error が 1 行・`AppExit::is_requested()` が真（D2）。
 
 #### TestPlacement
@@ -630,7 +631,7 @@ fn crash_filter_is_installed_before_the_tests_start(); // areka_runtime::crash_r
 
 #### Handover
 
-- 完了の申し送り（`/kiro-complete` のとき）: ⑴ `session-module-gather` の brief へ、本体の呼び手を `areka_input::…` へ書き換えて出し直しを外すのは同 spec の持ち物（6.10） ⑵ `frame/wiring.rs` の 3 か所が直っていなければ、`audit-emo2-boot-frame` の着地の前後に応じた受け手へ（6.9） ⑶ `audit-areka-input-menu` へ、古い説明の一覧（`lib.rs` 冒頭・「The Hand／collisionex」ほか）・3.7 と `test-support` で開けた項目・理由の文が古くなる `#[allow]` は 0 件であること（8.1）。
+- 完了の申し送り（`/kiro-complete` のとき）: ⑴ `session-module-gather` の brief へ、本体の呼び手を `areka_input::…` へ書き換えて出し直しを外すのは同 spec の持ち物（6.10） ⑵ `frame/wiring.rs` の 3 か所が直っていなければ、`audit-emo2-boot-frame` の着地の前後に応じた受け手へ（6.9） ⑶ `audit-areka-input-menu` へ、古い説明の一覧（`lib.rs` 冒頭・「The Hand／collisionex」ほか・入力に残る強制退避の枝へ落ちない側のテスト 3 本の「窓が消えて件数が落ちる」の説明〔EscapeTests〕）・3.7 と `test-support` で開けた項目・理由の文が古くなる `#[allow]` は 0 件であること（8.1）。
 
 #### Verification
 
