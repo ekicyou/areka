@@ -56,13 +56,13 @@
 
 - `areka-input` の公開面か `test-support` の中身が変わる → 本体の使い手（`ghost_session*`・`menu/`・`app_exit*`・`runtime_tests/`・`session/runtime_boot*`）を見直す。
 - `InputHooks` の欄か据え方が変わる → 本体の `app_exit::install_input_hooks` と `ghost_session::register_systems`・本体へ移した強制退避のテストを見直す。
-- `hit-id-pass` が `areka_runtime::hit_region::resolve_hit_region` の形を変える → 呼び手は `crates/areka-input/src/lib.rs`（旧 `input_events/mod.rs`）の 37 行の `use`・`MouseWiring::resolve_region`（174〜200 行）・`resolve_hit_owned`（446〜455 行）。後に着地する側がこの新しい置き場で直す。
+- `hit-id-pass` が `areka_runtime::hit_region::resolve_hit_region` の形を変える → 呼び手は `crates/areka-input/src/lib.rs`（旧 `input_events/mod.rs`）の 37 行の `use`・`MouseWiring::resolve_region`（174〜200 行）・`resolve_hit_owned`（446〜455 行）。設計の討議 6 で `hit-id-pass` に「このウェーブのあいだは入口の形を保つ・変えるならこの仕様の着地の後に `crates/areka-input/src/lib.rs` の呼び手を直す（約束 ⑶ の「本体」に `areka-input` は入らない）」と伝えた。
 - `session-module-gather` が出し直しを外す → 本体の呼び手を `areka_input::…` へ書き換える（同 spec の持ち物）。
 - ログの出所の名前が変わる → `RUST_LOG` の文字列・出所を名前で読むテスト・`log_history` のテストを見直す。
 
 ### 同じウェーブとの重なり
 
-- `hit-id-pass`: この仕様は旧 `input_events/mod.rs` を `git mv` で `crates/areka-input/src/lib.rs` へ移すが、当たり判定の入口の行（37 行の `use areka_runtime::hit_region::{HitRegion, resolve_hit_region};`・174〜200 行の `MouseWiring::resolve_region`・446〜455 行の `resolve_hit_owned`）の中身は 1 字も変えない（変えるのは 34 行の `use` の削除・可視性の付け替え・強制退避の分岐 543〜553 行・説明の 505 行だけ）。`crates/areka-runtime/src/hit_region.rs` で書き換えるのは冒頭の説明の 8・18・20 行だけで、`hit-id-pass` が `hit_region_client` の形を変えるときに触る 14・36 行とは 3 行以上離れ、別の差分の塊になる。向こうは 2026-11-20 時点で要件の段（設計の前）であり、候補 A-1 を選ぶと入口の形が変わる（OPEN QUESTIONS 6）。
+- `hit-id-pass`: この仕様は旧 `input_events/mod.rs` を `git mv` で `crates/areka-input/src/lib.rs` へ移すが、当たり判定の入口の行（37 行の `use areka_runtime::hit_region::{HitRegion, resolve_hit_region};`・174〜200 行の `MouseWiring::resolve_region`・446〜455 行の `resolve_hit_owned`）の中身は 1 字も変えない（変えるのは 34 行の `use` の削除・可視性の付け替え・強制退避の分岐 543〜553 行・説明の 505 行だけ）。`crates/areka-runtime/src/hit_region.rs` で書き換えるのは冒頭の説明の 8・18・20 行だけで、`hit-id-pass` が `hit_region_client` の形を変えるときに触る 14・36 行とは 3 行以上離れ、別の差分の塊になる。向こうは 2026-11-20 時点で要件の段（設計の前）であり、候補 A-1 を選ぶと入口の形が変わる。設計の討議 6（2026-11-20）で、次の扱いを向こうのセッションへ伝えた: このウェーブのあいだは入口の形を保つ。どうしても変えるなら、呼び手の追従はこの仕様の着地の後に `crates/areka-input/src/lib.rs` で行う（約束 ⑶ の「本体に触らない」の「本体」に `areka-input` は入らない読み）。向こうが本体の `input_events/mod.rs` に触ることはない。返事は下の「設計の討議で決めたこと」に記録する。
 - `audit-emo2-boot-frame`: `frame/wiring.rs` の 3 か所は向こうが直す（上）。こちらは `session/ghost_quit*`・`frame*`・`runtime_tests/` に触らない。`doc/pasta-real-run.md` は、向こうがログの語を変える裁定を出したときだけ同じファイルの別の行に触る（今は 0）。
 - `balloon-flip-ssp-review`: `doc/COMPAT_ARCHITECTURE.md` §8 は向こうが 438 行の行を書き直し、こちらは §8 の別の行のパスだけ（153・181・182・370〜375・395・399・415・419〜421・426〜428・431・432・447 行）。`areka-placement/src/follow.rs` は向こうの案 ⑵ が次のウェーブへ回るので 0。
 - roadmap の C23 の行の「触るファイル」に無く、この設計で足したファイル（行では兄弟と重ならない）: `crates/areka/src/app_exit_escape_tests.rs`（新設）・`menu/shortcut.rs`・`file_drop.rs` の置き場・`placement_tests/mod.rs`・`log_history_tests.rs`・見張り 4 本（`readme_tests.rs`・`session_end_deadline_tests.rs`・`tick_gate_config_producers_tests.rs`・`update/worker_tests.rs`）・`tools/cursor-art.ps1`・`tools/load-flake.ps1`・`crates/areka/cursor/`。設計の確定のときに棚卸のセッションへ伝える（OPEN QUESTIONS 7）。
@@ -679,18 +679,20 @@ fn crash_filter_is_installed_before_the_tests_start(); // areka_runtime::crash_r
 
 ## 申し送りと危うさ
 
-- **危うさ 1（中）**: `hit-id-pass` が同じウェーブで入口の形を変えると、旧 `mod.rs` の行がこの仕様の `git mv` と重なる。対策: 入口の行の中身は変えず、書き換えを行の単位に留める（rename の検出が効く）。後に着地する側が新しい置き場で直す（OPEN QUESTIONS 6）。
+- **危うさ 1（中）**: `hit-id-pass` が同じウェーブで入口の形を変えると、旧 `mod.rs` の行がこの仕様の `git mv` と重なる。対策: 入口の行の中身は変えず、書き換えを行の単位に留める（rename の検出が効く）。この仕様が先に着地し、向こうは着地の後に `crates/areka-input/src/lib.rs` で直す（設計の討議 6）。
 - **危うさ 2（低）**: 公開面の取りこぼし。対策: コンパイラが E0603 ほかで出す（段 3）。
 - **危うさ 3（低）**: `test-support` のときだけ組まれるビルドの警告。対策: 段 3 で `cargo check -p areka-input --lib --features test-support` を回す。
 - **危うさ 4（低）**: 見張り 4 本に入力の本番の当たりが在れば許可表が合わない。対策: 段 4 の緑で確かめる。当たりが出たら許可表に足さず、何を見つけたかを開発者へ報告する（見張りの期待値は変えない約束）。
 - 申し送り: Handover のとおり。
 
-## OPEN QUESTIONS（設計の討議へ）
+## 設計の討議で決めたこと（2026-11-20・開発者「設計を承認」）
 
-1. **強制退避の口の形（D1）**: 仮定＝`areka-input` に `InputHooks { escape: fn(&mut World) }` を置き、本体の `app_exit::install_input_hooks` を `register_systems` の先頭で呼ぶ。代案＝`SessionHooks` に欄を足す（runtime の公開面が変わる・`NO_BODY` の「何もしない」が 4.6 と合わない）。
-2. **口が無いときの倒れ方（D2・要件 4.6 の仮定）**: 仮定＝`error!(input_hooks_missing)` を 1 行残し、`wintf::AppExit` が在れば `request_exit()`（窓を先に閉じない・`FirstExit` を書かない）。代案＝記録だけで終わる。
-3. **強制退避のテスト 3 本の置き場（D3）**: 仮定＝本体の `app_exit_escape_tests.rs` へ移し、小道具 5 つを `areka-input` の `pointer_test_support`（`test-support`）へ出す。テストの中身の変化は口を据える 1 行と `use` の行だけ。代案＝入力に残し記録用の口を据える（5.1 に当たる）。
-4. **`file_drop.rs` の置き場（D4）**: 仮定＝本体の src 直下（`get_log` の分け方が手当て無しで同じ）。`session-module-gather` が後で集める対象に入るかは向こうが決める。代案＝`install/` の下＋`UNKEPT_TARGETS` に 1 行。
-5. **実機の強制退避の取り方（D13・要件 8.7）**: 仮定＝作業の木の `target\input-crate-split\escape\` の使い捨ての SendInput の手順を段 0 と段 6 で同じく使い、中身を検証の記録に写す（`tools/` に足さない）。代案＝`tools/mouse-input.ps1` に修飾キーつきのダブルクリックを足す。どちらも排他テストの机と開発者の SendInput の許しが要る。
-6. **`hit-id-pass` との重なり**: 仮定＝この仕様は当たり判定の入口の行（旧 `mod.rs` 37 行・174〜200 行・446〜455 行）の中身を変えず、`hit_region.rs` は説明の 8・18・20 行だけを書く＝計画は変えない。向こうが候補 A-1（`resolve_hit_region` の形を変える）を選んだら、後に着地する側が `crates/areka-input/src/lib.rs` で直す。向こうの設計の段の相談の有無を、設計の討議のときに確かめる。
-7. **C23 の行の触るファイルに無かった所**: この設計で足した `app_exit_escape_tests.rs`・`menu/shortcut*.rs`・`file_drop*.rs` の置き場・`placement_tests/mod.rs`・`log_history_tests.rs`・見張り 4 本（D11）・`tools/cursor-art.ps1`・`tools/load-flake.ps1`・`crates/areka/cursor/` を、兄弟と行で重ならないことを確かめたうえで棚卸のセッションへ伝える（伝え方は前例どおり設計の確定のとき）。見張り 4 本に根を足すこと（D11）そのものを採るかも確かめる。
+設計の議題 6 件を推奨どおり確定した。
+
+1. **強制退避の口の形（D1）**: `areka-input` に `InputHooks { escape: fn(&mut World) }` を置き、本体の `app_exit::install_input_hooks` を `register_systems` の先頭（`session::hooks::install` の直後）で呼ぶ。
+2. **口が無いときの倒れ方（D2）**: `error!(input_hooks_missing)` を 1 行残し、`wintf::AppExit` が在れば `request_exit()`。窓を先に閉じない・`FirstExit` を書かない。
+3. **強制退避のテスト 3 本の置き場（D3）**: 本体の `app_exit_escape_tests.rs` へ名前を変えずに移し、小道具 5 つを `areka-input` の `pointer_test_support`（`test-support`）へ出す。
+4. **`file_drop.rs` の置き場（D4）**: 本体の src 直下。
+5. **実機の強制退避の取り方（D13）**: 作業の木の `target\input-crate-split\escape\` の使い捨ての SendInput の手順を段 0 と段 6 で同じく使う。`tools/` に足さない。走らせるのは排他テストの机を取り、開発者の SendInput の許しを得てから。
+6. **`hit-id-pass` との重なり**: このウェーブのあいだは入口の形を保つよう `hit-id-pass` のセッションへ伝える。変えるなら、この仕様の着地の後に `crates/areka-input/src/lib.rs` の呼び手を直す（約束 ⑶ の「本体」に `areka-input` は入らない読み）。
+7. **棚卸への知らせ**: C23 の「触るファイル」に無く、この設計で足したファイル（「同じウェーブとの重なり」の最後の項）は、完了の報告で棚卸のセッションへ伝える。
