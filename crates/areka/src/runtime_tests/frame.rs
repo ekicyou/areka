@@ -19,7 +19,7 @@ use wintf::ecs::FrameTime;
 use wintf::ecs::SizeI;
 // 中で記録を出す私有の関数は渡し口から同じ名前で引く（設計 D3 ⑷）。
 use areka_runtime::frame::drain_resnap::test_support::{finalize_chain_once_with, resnap_with};
-// 子の `carry_tests` の本物の親（`areka-runtime` の `frame_attach_tests`）が持っていて子が使う `use` の行。
+// 子のテストが使う `use` の行。
 use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 use areka_emo_text::state::TextLayerConfig;
 use areka_runtime::assets::build_boot_assets;
@@ -33,8 +33,7 @@ mod switch;
 // 常に手前の状態と取り出しの相（stay-on-top-directives design「WindowStatePhase」）。
 mod window_state;
 
-// move drain の置き場（areka-P0-move-canon task 3.3・design D4）の檻。同じくハーネスに乗るので
-// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+// move drain の置き場の檻。ハーネスに乗るので **x64 のみ**で接続する（常時テストに x86 を用いない）。
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_move_order_tests.rs"]
 mod move_order_tests;
@@ -50,8 +49,7 @@ mod carry_tests;
 #[cfg(test)]
 #[path = "frame_chain_finalize_restart_tests.rs"]
 mod chain_finalize_restart_tests;
-// 並べ直しから記憶まで（areka-P0-char-position-save-on-exit タスク 3.2〜4.2）。共有の部品と、
-// それを使う 3 つのテストファイル（1,000 行の上限に合わせて分けた）。
+// 並べ直しから記憶まで。共有の部品と、それを使うテストファイル（1,000 行の上限に合わせて分けた）。
 #[cfg(test)]
 #[path = "frame_chain_finalize_persist_nowrite_tests.rs"]
 mod chain_finalize_persist_nowrite_tests;

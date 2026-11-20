@@ -816,3 +816,5 @@ mod cursor_tests;
 mod face_tests;
 #[path = "switch_reload_tests.rs"]
 mod reload_tests;
+#[path = "switch_stay_on_top_tests.rs"]
+mod stay_on_top_tests;

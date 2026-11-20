@@ -17,7 +17,7 @@
 use std::sync::{Arc, Mutex};
 
 use areka_ghost::sink::BootCueSink;
-use areka_kanade::KanadeMsg;
+use areka_kanade::{ExecutionStateUpdate, KanadeMsg};
 use areka_sakura::TalkId;
 use areka_sakura::sysvar::SystemVarSnapshot;
 use dola::cue::{CuePlayer, CueSink};
@@ -152,7 +152,7 @@ impl Cage {
             .try_iter()
             .filter_map(|msg| match msg {
                 KanadeMsg::BalloonTimeout { talk_id } => Some(talk_id),
-                KanadeMsg::ExecutionState(_) => None,
+                KanadeMsg::ExecutionState(ExecutionStateUpdate::Balloons(_)) => None,
                 _ => panic!("時間切れの知らせとバルーンの組の届け以外のメッセージが届いた"),
             })
             .collect()

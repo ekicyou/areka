@@ -478,7 +478,7 @@ struct MonitorWatch {
 | 106 | `PersistStore::file_text()`（`barrier` の後に読む）を置き `memory()` を消す | — | T18 |
 | 107 | 行番号を外し関数名で指す。相の数は書かない。節の番号を詰める | — | T10 |
 | 108 | 表と送り先の文に ⑸ を足す | — | T24 |
-| 109 | `spine_wait` の `wait_recv` 系の目印つきの待ちに。`areka-test-wait-wording` の brief の同じ行（L13・L79）を「`audit-emo2-boot-frame` で済み」に書き換える（確定 8・要件 3.6） | — | T24 |
+| 109 | 返事の待ちをやめ、フレームの後に同じ受け箱へ `KanadeMsg::Close` を送って `join_bounded` で待つ（受け箱は順に処理するので、止まった時点でイベントは処理済み。`ReplyReceiver` は `wait_recv` に渡せない。20 番と同じ形・目印は body の終わり）。`areka-test-wait-wording` の brief の同じ行（L13・L79）を「`audit-emo2-boot-frame` で済み」に書き換える（確定 8・要件 3.6） | — | T24 |
 | 110 | 前者を消し、後者の記録の確かめを align の 1 本へ寄せる | — | T18 |
 | 111 | 3 つ目の表明を消す | — | T24 |
 | 112 | `use areka_runtime::scope_scale::scaling_text;` | — | T24 |

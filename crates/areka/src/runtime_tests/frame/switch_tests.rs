@@ -33,7 +33,6 @@ use areka_placement::source::{DescriptSource, GhostTitles};
 use areka_runtime::assets::{BalloonAssets, BalloonScopeAssets, ScopeAssets, ShellAssets};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::frame::test_support::{headless_wiring_with, zero_clock};
-use areka_runtime::session_hooks::NO_BODY;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::spine::Progress;
 use areka_runtime::switch_assets::{SwapBuilt, SwapSlot, SwitchBuildError};
@@ -128,6 +127,8 @@ fn empty_atlas() -> AtlasTable {
 }
 
 /// scope 0・1 の新しいシェルの資産（作者の DPI は 120）。
+///
+/// 本体の切り替えのテスト 4 本も同じ資産を使うので、純関数を確かめるテストの土台でもここに置く。
 fn shell_built() -> SwapBuilt {
     SwapBuilt::Shell {
         assets: ShellAssets {
@@ -476,42 +477,6 @@ fn nothing_arrived_keeps_waiting_silently() {
     let events = frame(&mut rig);
     let (kanade, _) = kanade_msgs(&rig);
     let after = (records(&events), stage(&rig.world), kanade, slot(&rig));
-    // 口の無い本番の World の答え `NO_BODY` は、置き場のゴーストも予約も在るこの World でも本体を
-    // 読まず「本体の状態が無い」と答える（`None`・偽・空の文字・何もしない）。
-    plant_ghost_switch(&mut rig.world);
-    let w = &mut rig.world;
-    let dir = std::path::Path::new("target/B");
-    let target = w
-        .get_non_send::<SkinSwitchInFlight>()
-        .map(|f| f.target.clone());
-    let no_body = (
-        (NO_BODY.kanade)(w).is_none(),
-        (NO_BODY.seriko_sink)(w).is_none(),
-        (NO_BODY.ghost_ref_name)(w),
-        (NO_BODY.ghost_folder)(w),
-        (NO_BODY.set_shell_dir)(w, dir.to_path_buf()),
-        target.is_some_and(|t| (NO_BODY.set_current_balloon)(w, &t)),
-        (NO_BODY.record_last_skin)(w, SkinKind::Shell, "B"),
-        (NO_BODY.ghost_switch_in_flight)(w),
-        (NO_BODY.reload_skin_applied)(w, SkinKind::Shell, dir),
-    );
-    (NO_BODY.skin_phase_ended)(w, SkinKind::Shell, dir);
-    w.remove_non_send::<SwitchInFlight>();
-    assert_eq!(
-        no_body,
-        (
-            true,
-            true,
-            String::new(),
-            None,
-            false,
-            false,
-            false,
-            false,
-            false
-        ),
-        "NO_BODY の答え (kanade 無し, seriko 無し, 名前, フォルダ, シェル, バルーン, 記憶, ゴースト切替, 読み直し)"
-    );
     assert_eq!(
         (after, replaces(rig)),
         ((Vec::new(), Some("waiting"), Vec::new(), None), Vec::new()),
