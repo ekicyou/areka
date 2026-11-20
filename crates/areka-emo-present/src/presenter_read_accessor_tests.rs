@@ -10,7 +10,7 @@ use super::test_support::{
 // 書き込みは既存 `visible` 更新点と同一の3箇所のみ（表示成立/EmptyComposition 縮退/Hide）＝additive。
 
 /// テスト 10・R3.2 観測完了（未表示→None）: `attach_target` 直後（一度も `ShowSurface` していない）は
-/// `current_surface_id` が `None`。`hit_region` も現サーフェス無しゆえ `None`（純関数へ届かない）。
+/// `current_surface_id` が `None`。`hit_region_client` も現サーフェス無しゆえ `None`。
 ///
 /// `attach_target` は skeleton 登録のみで World に触れないため、GPU 不要の素の `World` で決定論固定する。
 #[test]
@@ -28,9 +28,9 @@ fn current_surface_id_is_none_before_first_show() {
         "attach_target 直後（未表示）は現サーフェス無し（3.2）"
     );
     assert_eq!(
-        presenter.hit_region(TargetId(0), 0, 0),
+        presenter.hit_region_client(TargetId(0), 0, 0).region,
         None,
-        "未表示 target の hit_region は現サーフェス無しゆえ None"
+        "未表示 target の hit_region_client は現サーフェス無しゆえ None"
     );
 }
 
@@ -86,9 +86,9 @@ fn current_surface_id_is_none_after_hide() {
         "Hide 後は現サーフェス無し（3.2/4.4）"
     );
     assert_eq!(
-        presenter.hit_region(TargetId(0), 0, 0),
+        presenter.hit_region_client(TargetId(0), 0, 0).region,
         None,
-        "Hide 後は hit_region も現サーフェス無しゆえ None"
+        "Hide 後は hit_region_client も現サーフェス無しゆえ None"
     );
 }
 
@@ -139,7 +139,7 @@ fn read_back_after_invalidate_cache_is_entry_evicted() {
 }
 
 /// テスト 15・R3.2 観測完了（未登録 target→None）: 一度も `attach_target` していない target に対し
-/// `current_surface_id`／`hit_region` の両アクセサが `None`（未登録＝現サーフェス無し）。
+/// `current_surface_id`／`hit_region_client` の両アクセサが `None`（未登録＝現サーフェス無し）。
 ///
 /// 両アクセサとも `HashMap` 引きのみで GPU/World を要さないため、`EmoPresenter::new()` 単体で固定する。
 #[test]
@@ -151,9 +151,9 @@ fn unregistered_target_returns_none_for_both_accessors() {
         "未登録 target の current_surface_id は None"
     );
     assert_eq!(
-        presenter.hit_region(TargetId(0), 10, 20),
+        presenter.hit_region_client(TargetId(0), 10, 20).region,
         None,
-        "未登録 target の hit_region は None"
+        "未登録 target の hit_region_client は None"
     );
 }
 
@@ -219,7 +219,7 @@ fn unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point() 
 ///
 /// 矩形は左と上を含み右と下を含まないので、右端・下端の隅は当たらない。期待はハードコードの定数。
 #[test]
-fn client_entry_matches_native_entry_at_identity_scale() {
+fn client_entry_passes_point_through_and_resolves_by_pixel_at_identity_scale() {
     let mut world = make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
     attach_and_show_hit_target(&mut presenter, &mut world, TargetId(0), 96);
@@ -256,24 +256,24 @@ fn client_entry_matches_native_entry_at_identity_scale() {
     }
 }
 
-/// 要件 1.1/1.4 観測完了（**正常経路で実適用 k が合成純関数へ渡ること**）: 「表示中サーフェス
+/// 要件 1.1/1.4 観測完了（**正常経路で実適用 k が縮約に使われること**）: 「表示中サーフェス
 /// あり × `applied = Some(k)`・k≠1.0」で [`EmoPresenter::hit_region_client`] を呼ぶと、判定は
 /// **÷k した縮約後サーフェス px** で解決され、`surface_point` も同じ縮約値になる。
 ///
 /// # なぜ既存 3 檻と別に要るのか（継ぎ目の封鎖）
 ///
-/// 既存の 3 檻はいずれも `hit_region_scaled_in(regions, x, y, k, …)` の `k` を固定しない——
+/// 既存の 3 檻はいずれも縮約に使う `k` を固定しない——
 /// `presenter_refresh_and_log_tests.rs` の
 /// `applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent` は warn 述語が
 /// 主語で k は**不在**、`unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point`
 /// は k=2 を与えるが `regions` **不在**側（`hit_region_client` 内で `unscale_coord` を直接呼ぶ分岐）
-/// を通り、`client_entry_matches_native_entry_at_identity_scale` は k=1.0 ゆえ縮約が恒等へ退化する。
-/// ゆえに「面あり × k≠1.0」の合流点は一度も実行されておらず、実適用 k が合成純関数へ本当に
+/// を通り、`client_entry_passes_point_through_and_resolves_by_pixel_at_identity_scale` は k=1.0 ゆえ縮約が恒等へ退化する。
+/// ゆえに「面あり × k≠1.0」の合流点は一度も実行されておらず、実適用 k が縮約へ本当に
 /// 渡っているかは決定論テストで固定されていなかった。本檻の主語はその 1 点のみである。
 ///
 /// # 殺す誤実装（反証可能性）
 ///
-/// `hit_region_scaled_in` へ渡す `k` を [`ScaleRatio::ONE`] へすり替える（＝実適用 k を無視して
+/// 縮約に使う `k` を [`ScaleRatio::ONE`] へすり替える（＝実適用 k を無視して
 /// client 点をそのまま照合する）と、下の 3 点は `surface_point`・`region` の**双方**で割れる。
 /// とくに (210,310) は恒等なら `Some("Arm")`・k=2 なら `None` と**逆向きに**割れるため、
 /// 「両方そろって `None`」の空虚な一致では緑にならない。
@@ -292,7 +292,7 @@ fn visible_surface_hit_uses_applied_scale_at_k2() {
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
         Some(1000),
-        "前提: 表示中サーフェスあり（＝正常経路の合成純関数へ入る）"
+        "前提: 表示中サーフェスあり（＝正常経路の縮約と照合へ入る）"
     );
     assert_eq!(
         presenter.applied_ratio(TargetId(0)),
@@ -335,7 +335,7 @@ fn visible_surface_hit_uses_applied_scale_at_k2() {
         assert_eq!(
             hit.region, want_region,
             "縮約後サーフェス px で解決した領域が期待と違う（恒等 k で照合していれば \
-             {identity_would_be} になる＝実適用 k が合成純関数へ渡っていない）: \
+             {identity_would_be} になる＝実適用 k が縮約に使われていない）: \
              {what} client=({cx},{cy})"
         );
     }

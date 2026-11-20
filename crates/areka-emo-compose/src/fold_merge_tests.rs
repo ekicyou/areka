@@ -10,7 +10,6 @@
 
 use areka_parsers::shell::{CollisionShape, Interval, parse};
 
-use crate::hit::{RegionPriority, hit_region_in};
 use crate::log_capture::capture_logs;
 use crate::world::EmoWorld;
 
@@ -349,11 +348,7 @@ fn append_and_second_brace_match_the_ssp_2_9_29_measurements() {
         assert_eq!(layers(&world, id), vec![(0, "gray.png".into())]);
     }
 
-    // 形 4: 同じ番号の両方が残り、どちらの名前も当たる（SSP の Reference4 と同じ点・同じ名前）。
-    let hit = |x, y| {
-        let list = world.hit_regions(4).expect("面 4 の当たり判定");
-        hit_region_in(list, x, y, RegionPriority::Painter).map(str::to_string)
-    };
+    // 形 4: 同じ番号の両方が残る。
     assert_eq!(
         collisions(&world, 4),
         vec![
@@ -364,14 +359,6 @@ fn append_and_second_brace_match_the_ssp_2_9_29_measurements() {
         ],
         "形 4: 書いた順に両方が残る"
     );
-    for ((x, y), name) in [
-        ((50, 240), "OldRect"),
-        ((150, 240), "NewRect"),
-        ((215, 210), "Old5"),
-        ((215, 260), "New5"),
-    ] {
-        assert_eq!(hit(x, y).as_deref(), Some(name), "形 4 の ({x},{y})");
-    }
     // 形 7: 同じブレスの中・追記の重なりも両方残す（書いた順）。
     assert_eq!(
         collisions(&world, 7),

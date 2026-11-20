@@ -1,12 +1,10 @@
 //! 子の領域の持ち込み（要件 4.1〜4.10・7.1・8.3）。
 //!
-//! 持ち込み済みの列を [`EmoWorld::hit_regions`] で引き、`hit_region_in`（画家則＝後ろが手前）で
-//! 当てて確かめる。並びは［子から持ち込む分（element定義の番号の昇順）］→［親に直接書いた領域］。
+//! 持ち込み済みの列を [`EmoWorld::hit_regions`] で引き、並びそのもの（後ろが手前）を確かめる。並びは［子から持ち込む分（element定義の番号の昇順）］→［親に直接書いた領域］。
 
 use areka_parsers::shell::{CollisionBounds, CollisionShape, parse};
 
 use super::HitRegions;
-use crate::hit::{RegionPriority, hit_region_in};
 use crate::plan_test_support::{coll, component_of};
 use crate::world::EmoWorld;
 
@@ -16,9 +14,9 @@ fn world_of(text: &str) -> EmoWorld {
     EmoWorld::build(&parse(text))
 }
 
-fn hit(world: &EmoWorld, id: u32, x: i64, y: i64) -> Option<String> {
+fn names(world: &EmoWorld, id: u32) -> Vec<&str> {
     let list = world.hit_regions(id).expect("面の表に在る番号");
-    hit_region_in(list, x, y, RegionPriority::Painter).map(str::to_string)
+    list.iter().map(|c| c.name.as_str()).collect()
 }
 
 /// 面の表で `id` に [`HitRegions`] が付いているか。
@@ -37,8 +35,6 @@ fn child_region_hits_at_shifted_position() {
         w.hit_regions(0),
         Some(&[coll(0, 10, 20, 15, 25, "Eye")][..])
     );
-    assert_eq!(hit(&w, 0, 12, 22).as_deref(), Some("Eye"));
-    assert_eq!(hit(&w, 0, 2, 2), None);
     assert!(has_regions(&w, 0));
     // 子そのものの列は転記のまま。
     assert_eq!(w.hit_regions(1), Some(&[coll(0, 0, 0, 5, 5, "Eye")][..]));
@@ -53,11 +49,11 @@ fn higher_numbered_element_child_is_front() {
     let w = world_of(&format!(
         "surface0\n{{\nelement1,overlay,1,0,0\nelement2,overlay,2,0,0\n}}\n{children}"
     ));
-    assert_eq!(hit(&w, 0, 5, 5).as_deref(), Some("Two"));
+    assert_eq!(names(&w, 0), ["One", "Two"]);
     let w = world_of(&format!(
         "surface0\n{{\nelement1,overlay,2,0,0\nelement2,overlay,1,0,0\n}}\n{children}"
     ));
-    assert_eq!(hit(&w, 0, 5, 5).as_deref(), Some("One"));
+    assert_eq!(names(&w, 0), ["Two", "One"]);
 }
 
 /// 1 つの子の中の手前奥は、その子を単独で表示したときと同じ（要件 4.4）。
@@ -68,11 +64,18 @@ fn order_inside_child_matches_standalone() {
          surface1\n{\ncollision0,0,0,10,10,Back\ncollision1,5,5,15,15,Front\n\
          collision2,8,8,9,9,Tiny\n}\n",
     );
-    for (x, y) in [(2, 2), (7, 7), (8, 8), (12, 12), (9, 6)] {
-        let alone = hit(&w, 1, x, y);
-        assert_eq!(hit(&w, 0, x + 100, y), alone, "点 ({x},{y})");
-    }
-    assert_eq!(hit(&w, 0, 107, 7).as_deref(), Some("Front"));
+    assert_eq!(names(&w, 0), names(&w, 1));
+    assert_eq!(names(&w, 0), ["Back", "Front", "Tiny"]);
+    assert_eq!(
+        w.hit_regions(0),
+        Some(
+            &[
+                coll(0, 100, 0, 110, 10, "Back"),
+                coll(1, 105, 5, 115, 15, "Front"),
+                coll(2, 108, 8, 109, 9, "Tiny"),
+            ][..]
+        )
+    );
 }
 
 /// 親に直接書いた領域が、子から持ち込んだ領域より手前（要件 4.5）。
@@ -82,8 +85,6 @@ fn parent_direct_region_is_front() {
         "surface0\n{\nelement1,overlay,1,0,0\ncollision0,0,0,10,10,Face\n}\n\
          surface1\n{\ncollision0,5,5,20,20,Hand\n}\n",
     );
-    assert_eq!(hit(&w, 0, 7, 7).as_deref(), Some("Face"));
-    assert_eq!(hit(&w, 0, 15, 15).as_deref(), Some("Hand"));
     // 並びは［持ち込み］→［直接］。
     assert_eq!(
         w.hit_regions(0),
@@ -98,8 +99,6 @@ fn child_region_with_parent_name_never_hits() {
         "surface0\n{\nelement1,overlay,1,0,0\ncollision0,0,0,10,10,Head\n}\n\
          surface1\n{\ncollision0,50,50,60,60,Head\ncollision1,70,70,80,80,Eye\n}\n",
     );
-    assert_eq!(hit(&w, 0, 55, 55), None);
-    assert_eq!(hit(&w, 0, 75, 75).as_deref(), Some("Eye"));
     assert_eq!(
         w.hit_regions(0),
         Some(
@@ -142,9 +141,6 @@ fn names_are_dropped_level_by_level() {
             ][..]
         )
     );
-    assert_eq!(hit(&w, 0, 112, 22), None, "孫の A は子で落ちる");
-    assert_eq!(hit(&w, 0, 142, 52), None, "孫の B は親で落ちる");
-    assert_eq!(hit(&w, 0, 152, 62).as_deref(), Some("C"));
 }
 
 /// 親に無い同じ名前を 2 つの子が持てば、両方とも持ち込む（要件 4.10）。
@@ -155,9 +151,15 @@ fn same_name_from_two_children_both_hit() {
          surface1\n{\ncollision0,0,0,10,10,Eye\n}\n\
          surface2\n{\ncollision0,0,0,10,10,Eye\n}\n",
     );
-    assert_eq!(hit(&w, 0, 5, 5).as_deref(), Some("Eye"));
-    assert_eq!(hit(&w, 0, 105, 5).as_deref(), Some("Eye"));
-    assert_eq!(w.hit_regions(0).map(<[_]>::len), Some(2));
+    assert_eq!(
+        w.hit_regions(0),
+        Some(
+            &[
+                coll(0, 0, 0, 10, 10, "Eye"),
+                coll(0, 100, 0, 110, 10, "Eye")
+            ][..]
+        )
+    );
 }
 
 /// 無い番号・範囲を超える数・自分自身を指す辺からは持ち込まない（要件 4.6）。持ち込みが無いので何も付かない。
@@ -171,7 +173,7 @@ fn missing_numbers_and_self_cycle_import_nothing() {
     assert!(!has_regions(&w, 0));
     assert!(!has_regions(&w, 1));
     assert_eq!(w.hit_regions(0), Some(&[coll(0, 0, 0, 10, 10, "Head")][..]));
-    assert_eq!(hit(&w, 1, 55, 55), None);
+    assert_eq!(w.hit_regions(1), Some(&[coll(0, 0, 0, 10, 10, "Self")][..]));
 }
 
 /// 相互の循環では、根から見て先祖へ戻る辺だけを持ち込まない（合成が描く範囲と同じ・要件 4.6）。
@@ -201,7 +203,7 @@ fn pattern_targets_import_nothing() {
          surface1\n{\ncollision0,0,0,100,100,Mouth\n}\n",
     );
     assert!(!has_regions(&w, 0));
-    assert_eq!(hit(&w, 0, 50, 50), None);
+    assert_eq!(w.hit_regions(0), Some(&[coll(0, 0, 0, 10, 10, "Head")][..]));
 }
 
 /// 入れ子の無いシェル（emo2）では、どのサーフェスにも [`HitRegions`] が付かず、当たり判定の列は転記の
@@ -235,19 +237,19 @@ fn shell_without_nesting_gets_no_hit_regions() {
 fn fixture_parents_hit_child_names_at_placed_position() {
     let w = world_of(FIXTURE);
     // 親 B: 子を (90,50) → Head (90,50)-(110,60)・Eye (95,50)-(105,60)（Head が先・Eye が後）。
-    let names: Vec<&str> = w
-        .hit_regions(1)
-        .unwrap()
-        .iter()
-        .map(|c| c.name.as_str())
-        .collect();
-    assert_eq!(names, ["Head", "Eye"]);
-    assert_eq!(hit(&w, 1, 100, 55).as_deref(), Some("Eye"));
-    assert_eq!(hit(&w, 1, 92, 55).as_deref(), Some("Head"));
-    assert_eq!(hit(&w, 1, 5, 5), None);
-    assert_eq!(hit(&w, 1, 50, 55), None);
-    assert_eq!(hit(&w, 2, 10, 5).as_deref(), Some("Eye"));
-    assert_eq!(hit(&w, 2, 2, 5).as_deref(), Some("Head"));
+    assert_eq!(
+        w.hit_regions(1),
+        Some(
+            &[
+                coll(0, 90, 50, 110, 60, "Head"),
+                coll(1, 95, 50, 105, 60, "Eye")
+            ][..]
+        )
+    );
+    assert_eq!(
+        w.hit_regions(2),
+        Some(&[coll(0, 0, 0, 20, 10, "Head"), coll(1, 5, 0, 15, 10, "Eye")][..])
+    );
     assert_eq!(
         w.hit_regions(0),
         Some(
@@ -258,7 +260,6 @@ fn fixture_parents_hit_child_names_at_placed_position() {
             ][..]
         )
     );
-    assert_eq!(hit(&w, 0, 30, 35).as_deref(), Some("Head"));
     // 持ち込みが在るのは子 10 を置く 0・1・2 だけ（10 自身・領域の無い入れ子・pattern定義の先には付かない）。
     let with: Vec<u32> = w.surface_ids().filter(|&id| has_regions(&w, id)).collect();
     assert_eq!(with, vec![0, 1, 2]);
@@ -419,7 +420,7 @@ const FIVE_SHAPES: &str = "surface1\n{\ncollisionex0,R,rect,1,2,3,4\ncollisionex
      collisionex4,G,region,m.png,255,0,0\n}\n";
 
 /// 取り込み経由（要件 3.4・8.2）: 5 つの形が element定義の X,Y だけずれて親に並ぶ。円の半径はそのまま・
-/// 多角形は全頂点が順を保ってずれ・`region` は置く位置がずれる。まだ働かない形も並びから除かれない。
+/// 多角形は全頂点が順を保ってずれ・`region` は置く位置がずれる。どの形も並びから除かれない。
 #[test]
 fn import_shifts_all_five_shapes_by_element_offset() {
     use areka_parsers::shell::CollisionRegion;
@@ -456,9 +457,6 @@ fn import_shifts_all_five_shapes_by_element_offset() {
     );
     // 子そのものの列はずれない。
     assert_eq!(shapes(&w, 1).len(), 5);
-    // ずらした子の矩形の中の点では子の名前が返り、元の位置では当たらない（要件 8.2）。
-    assert_eq!(hit(&w, 0, 12, 23).as_deref(), Some("R"));
-    assert_eq!(hit(&w, 0, 2, 3), None);
 }
 
 /// `i64` の端の近くでは飽和し、パニックしない（要件 3.4）。
@@ -506,7 +504,7 @@ fn parent_direct_region_drops_child_same_name() {
         .iter()
         .map(|c| c.name.as_str())
         .collect();
-    // 子の G（region）は落ち、残り 4 つ（働かない形を含む）の後ろに親の G が手前で続く。
+    // 子の G（region）は落ち、残り 4 つの後ろに親の G が手前で続く。
     assert_eq!(names, ["R", "E", "C", "P", "G"]);
     assert!(matches!(
         w.hit_regions(0).unwrap()[4].shape,

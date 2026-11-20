@@ -608,18 +608,6 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
         "k=1.0 相当なら (360,192) は領域外（k=2 で続行していれば Head になり RED）"
     );
     assert_eq!(defensive_miss.surface_point, (360, 192));
-    // 既存の native px 入口（k を一切参照しない）と region が完全一致する＝「k=1.0 と同一結果」。
-    assert_eq!(
-        defensive_hit.region,
-        presenter.hit_region(TargetId(0), 180, 96),
-        "縮退結果は k=1.0（無縮約）の既存入口と一致すること"
-    );
-    assert_eq!(
-        defensive_miss.region,
-        presenter.hit_region(TargetId(0), 360, 192),
-        "縮退結果は k=1.0（無縮約）の既存入口と一致すること"
-    );
-
     // (c) warn 経路を実際に通る（陽性）。防御分岐の呼出 1 回につき warn 1 件ゆえ、
     //     防御呼出 2 回で **ちょうど 2 件**（0 なら防御ログ欠落＝ログ無し失敗経路）。
     assert_eq!(

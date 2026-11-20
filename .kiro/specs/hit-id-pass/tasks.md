@@ -165,7 +165,7 @@
   - _Dispatch: standard — 解決の枝と記録の 1 度化が実のコード_
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.5, 6.4, 7.3, 7.4, 7.5, 8.1, 8.2, 8.3, 8.4, 8.5, 10.13_
 
-- [ ] 6.4 CPU の矩形の判定を消し、使い手と既存のテストを追随させる
+- [x] 6.4 CPU の矩形の判定を消し、使い手と既存のテストを追随させる
   - 合成の層から CPU の矩形の判定（枠の中の判定・拡大率つきの判定・その答えの型・重なりの順の型）と、その単体のテストと重なりの順のテストを消し、公開の一覧から外す。消した口を名指しした説明を新しい解決に合わせて直す
   - 提示の層から、消した型の `use` と、CPU の判定の上に在ったテスト専用の当たりの口（`EmoPresenter::hit_region`）を消し、それだけを使っていたテスト（`presenter_film_tests.rs` の 2 か所・`presenter_read_accessor_tests.rs` の表示前・隠した後・未登録の 3 本）を `hit_region_client` を通す形へ書き直す。`presenter_film_tests.rs` の穴のコマの点は、色の絵が透けるので当たり無しを期待にする
   - 持ち込みと畳み込みのテスト（`hit_import_tests.rs`・`fold_merge_tests.rs`）のうち消した口を使う所を、並びそのものの確かめへ書き直す
@@ -286,3 +286,5 @@
 - 4 の後: `areka-emo-compose` の `hit_import_tests.rs` の 422 行あたり（「まだ働かない形も…」）と 509 行あたり（「働かない形を含む」）に古い文言が残っている。6.4 でこのテストを書き直すときに一緒に直す（6.4 で残ったら 9.2 の検索で拾う）
 - 5.3 の後: `#[path]` で足した兄弟のファイルの中の `warn!`／`error!` は、既定の target が `...::shell_target::regions` のようにずれ、読み込みの記録を完全一致で見張る確かめ（`LOAD_TARGETS`・`SHELL_TARGET`）から漏れる。シェルの読み込みの記録は `target: "areka_emo_present::shell_target"` を明示する
 - 6.3 の後: `presenter_read_accessor_tests.rs` の `client_entry_matches_native_entry_at_identity_scale` は native の入口と比べなくなったので、6.4 で `hit_region` を消すときに名前を中身に合わせて直す
+- 6.4 の後: `crates/areka/examples/emo-present.rs` 104 行の `//!` に `hit_region`（native px）の文が残る。9.2 は `crates/areka/` の差分を禁じるので直さず、9.2 の検索では既知の残りとして扱う
+- 6.4 の後: 台帳 `doc/ukadoc-coverage/ledger/assets.toml` 7039 行あたりに「まだ働かない形」「ID の描き先に塗るのは `hit-id-pass`」の文が残る。8.1 で書き直す

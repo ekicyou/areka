@@ -390,7 +390,7 @@ fn frame_changes_keep_the_slot_and_size_and_follow_the_transparency() {
         .target_physical_size(T)
         .expect("target_physical_size");
     assert!(mask_hit(&presenter, &world, 5, 1), "コマ 0 は不透明");
-    assert_eq!(presenter.hit_region(T, 5, 1), Some("Body"));
+    assert_eq!(presenter.hit_region_client(T, 5, 1).region, Some("Body"));
 
     send(
         &mut presenter,
@@ -403,7 +403,11 @@ fn frame_changes_keep_the_slot_and_size_and_follow_the_transparency() {
     assert_eq!(presenter.target_physical_size(T), Some(size));
     assert!(!mask_hit(&presenter, &world, 5, 1), "コマ 1 の穴が透けない");
     assert!(mask_hit(&presenter, &world, 4, 0), "穴の外は不透明のまま");
-    assert_eq!(presenter.hit_region(T, 5, 1), Some("Body"));
+    assert_eq!(
+        presenter.hit_region_client(T, 5, 1).region,
+        None,
+        "穴は透けるので当たり無し"
+    );
 }
 
 /// 静止画だけのバルーンは、出す・隠す・同じ指令を何度送っても合成は最初の 1 回だけ（要件 6.5）。

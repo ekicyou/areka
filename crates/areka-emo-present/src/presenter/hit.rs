@@ -1,9 +1,7 @@
-//! 当たり判定（`ClientHit`・`EmoPresenter::hit_region`・`EmoPresenter::hit_region_client`）——native
-//! サーフェス px 直接照合と、窓 client 物理 px を実適用 k で縮約し α → ID → 名前で引く正準判定入口。
+//! 当たり判定（`ClientHit`・`EmoPresenter::hit_region_client`）——窓 client 物理 px を実適用 k で縮約し
+//! α → ID → 名前で引く判定入口。
 
 use super::{EmoPresenter, ScaleRatio, TargetId};
-#[cfg(test)]
-use areka_emo_compose::{RegionPriority, hit::hit_region_in};
 use areka_parsers::shell::Collision;
 use wintf::ecs::IdRead;
 
@@ -26,34 +24,10 @@ pub struct ClientHit<'a> {
 }
 
 impl EmoPresenter {
-    /// 現サーフェスの当たり判定領域名を解決する（`current_surface_id` → `EmoWorld::hit_regions` → 純関数・R4.1/4.4）。
-    ///
-    /// 座標は **native サーフェス px**（k 適用前の合成座標系）で解釈される。窓 client 物理 px は k 倍
-    /// された座標系ゆえ、k≠1.0 では呼び手が渡す前に ÷k する必要がある——**その変換は本メソッドの責務
-    /// ではない**。÷k を吸収する**正準の呼び手**は姉妹メソッド [`Self::hit_region_client`] であり、
-    /// `areka-P0-collision-dpi-hittest`（W5）で**実装済み**である。production の判定入口はそちらであって
-    /// 本メソッドではない——本メソッドを窓 client 物理 px で直接呼ぶと k≠1.0 で当たり判定がずれる。
-    /// k=1.0 の窓では両座標系が一致するため、本メソッドの挙動は k 導入の前後で完全に不変である
-    /// （[`Self::hit_region_client`] の `region` とも k=1.0 で完全一致する）。現サーフェス無し（未表示／
-    /// `Hide`／空合成
-    /// 縮退／未登録 target）は `None`（R4.4）。重なりは画家のアルゴリズム（後定義が手前・[`RegionPriority::Painter`]）で
-    /// 解決する。`EmoWorld` を presenter 外へ露出しない（`&SurfaceMaster` を外へ出さない）ため純関数
-    /// [`areka_emo_compose::hit::hit_region_in`] の呼出は本メソッド内で閉じ、戻り値の寿命は `&self` に従う
-    /// （マウス移動ごとの割当を生まない・design §CurrentSurfaceRead Service Interface）。
-    /// 本番の呼び手は無いのでテスト専用（native 座標の照合の檻だけが使う）。
-    #[cfg(test)]
-    pub(crate) fn hit_region(&self, target: TargetId, x: i64, y: i64) -> Option<&str> {
-        let t = self.targets.get(&target)?;
-        // 子から持ち込んだ領域が在ればその列（surface-element-nesting 要件 4.1・4.2）。
-        let regions = t.emo_world.hit_regions(t.current_surface_id?)?;
-        hit_region_in(regions, x, y, RegionPriority::Painter)
-    }
-
     /// 窓 client 物理 px の点を**実適用 k で縮約**して当たり判定を解決する（DPI 追従の正準判定入口・
     /// 要件 1.1/1.4-1.7/4.5）。
     ///
-    /// `Self::hit_region`（テスト専用）が native サーフェス px を受けるのに対し、本メソッドは **k 適用後の窓 client
-    /// 物理 px**（`WM_MOUSEMOVE` 等が運ぶ生座標）をそのまま受ける。÷k は本メソッドが吸収するため、
+    /// 本メソッドは **k 適用後の窓 client 物理 px**（`WM_MOUSEMOVE` 等が運ぶ生座標）をそのまま受ける。÷k は本メソッドが吸収するため、
     /// 呼び手が座標を前処理してはならない（前処理すると二重縮約になる）。戻り値の
     /// [`ClientHit::surface_point`] が SHIORI へ配信する「ローカル座標」の正準値である（要件 1.8）。
     ///
@@ -67,9 +41,8 @@ impl EmoPresenter {
     ///
     /// # 縮退（いずれも panic せず定義された結果を返す）
     ///
-    /// - **現サーフェス無し**（未表示／`Hide`／空合成縮退／未登録 target）: `region` は `None`
-    ///   （`Self::hit_region` の縮退と同一）。`surface_point` は有効 k（`applied` 不在なら
-    ///   [`ScaleRatio::ONE`]）で縮約した値を返す——判定が無くても座標空間の契約は保つ。これは
+    /// - **現サーフェス無し**（未表示／`Hide`／空合成縮退／未登録 target）: `region` は `None`。
+    ///   `surface_point` は有効 k（`applied` 不在なら [`ScaleRatio::ONE`]）で縮約した値を返す——判定が無くても座標空間の契約は保つ。これは
     ///   **正常な縮退**であり `warn!` を出さない（未表示 scope 上のマウス移動ごとに鳴らさない）。
     /// - **面はあるのに `applied` が不在**（k 取得不能）: `warn!` を 1 行記録したうえで
     ///   [`ScaleRatio::ONE`]（＝縮約なし）で照合を続行し、当たり判定そのものを失わせない
