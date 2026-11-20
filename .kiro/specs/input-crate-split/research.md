@@ -186,6 +186,7 @@
 ### 論点 11: `areka-runtime/src/hit_region.rs` の説明の書き換え（要件 6.2・要件の OPEN QUESTIONS 5）
 
 - この spec が直すのは冒頭の説明（8・18・20 行）だけ。`hit-id-pass` が `hit_region_client` の形を変えると 14・36 行に触る。設計で `hit-id-pass` の設計の触る行を確かめ、行が隣り合うなら完了の申し送りへ回す。
+- 2026-11-20 `hit-id-pass` のセッションから知らせ: 当たり判定の ID の絵を GPU の描き先に持つ形に決まり（開発者 2026-11-20）、設計しだいで `resolve_hit_region` と、本体の `input_events/mod.rs` の呼び手（この spec が `areka-input` の `lib.rs` へ移すファイル）の形を変えうる。変えると決まったら向こうが設計の段で相談してくる。この spec の設計では、その相談の有無を確かめてから移す行を決める（「重ならない 0」の前提が崩れうる）。
 
 ### 論点 12: 実機の強制退避の取り方（要件 8.7・要件の OPEN QUESTIONS 8）
 
