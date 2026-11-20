@@ -74,8 +74,11 @@ fn finalize_closes_the_gap_by_moving_the_follower_only() {
         "Y は動かさない（下端吸着は再アンカーが保つ・7.2）"
     );
     // 隣接不変量: scope1 の右端＝scope0 の左端。
+    let origin_x = pos_of(&world, char0).map(|p| p.x).unwrap();
+    let follower_x = pos_of(&world, char1).map(|p| p.x).unwrap();
+    let follower_width = size_of(&world, char1).unwrap().width;
     assert_eq!(
-        1483 - (1205 + 278),
+        origin_x - (follower_x + follower_width),
         0,
         "確定後は隙間 0（areka-P0-scope-chain-gap 7.1）"
     );
@@ -134,8 +137,9 @@ fn finalize_runs_only_once_even_if_sizes_change_again() {
         after_first,
         "確定後のサーフェス切替では後続スコープを動かさない（7.4）"
     );
-    assert!(
-        moved_origin_x.is_some(),
+    assert_ne!(
+        moved_origin_x,
+        Some(1483),
         "前提: 起点スコープ側は resnap で再アンカーされている（観測の退化防止）"
     );
 }

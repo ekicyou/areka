@@ -6,7 +6,8 @@ use dola::cue::{CueCommand, TalkCue};
 use std::sync::{Arc, mpsc};
 
 use super::test_support::{
-    capture_logs, gpu_attach_world, synth_assets, synth_assets_with_balloons, zero_clock,
+    capture_logs, count_level, gpu_attach_world, synth_assets, synth_assets_with_balloons,
+    zero_clock,
 };
 use super::*;
 
@@ -160,17 +161,24 @@ fn connect_balloon_text_skips_when_view_none() {
     let model = areka_parsers::balloon::parse_str("", None);
 
     // None 経路: 文字層を接続せず false（次フレーム再試行へ委ねる）。panic しない。
-    let registered =
-        connect_balloon_text(&runtime, view, ActorKey::from("0"), &model, (255, 255, 255));
+    let mut registered = true;
+    let logs = capture_logs(|| {
+        registered =
+            connect_balloon_text(&runtime, view, ActorKey::from("0"), &model, (255, 255, 255));
+    });
     assert!(
         !registered,
         "text_slot_view None では文字層を接続せず false を返す（R4.2）"
     );
 
-    // register_actor_view 未呼出の担保: runtime は無改変で再借用可能（lingering borrow / poison なし）。
     assert!(
-        runtime.try_borrow_mut().is_ok(),
-        "None 経路は runtime に触れない（借用/poison を残さない）"
+        runtime.borrow().state().actors().next().is_none(),
+        "None 経路は actor を登録しない"
+    );
+    assert_eq!(
+        count_level(&logs, "WARN"),
+        1,
+        "None 経路は WARN を 1 行だけ出す: {logs:?}"
     );
 }
 
