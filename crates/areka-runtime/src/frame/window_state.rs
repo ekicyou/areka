@@ -41,7 +41,7 @@ pub struct StayOnTopState {
 
 /// 遷移の判断の結果。
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum Transition {
+enum Transition {
     /// オフ→オン
     TurnOn,
     /// オン→オフ
@@ -53,7 +53,7 @@ pub(crate) enum Transition {
 }
 
 /// 純関数：今の状態と指令から遷移を決める。
-pub(crate) fn decide_transition(on: bool, directive: WindowStateDirective) -> Transition {
+fn decide_transition(on: bool, directive: WindowStateDirective) -> Transition {
     match directive {
         WindowStateDirective::Raise => Transition::Raise { on },
         WindowStateDirective::StayOnTop { on: want } if want == on => Transition::Unchanged { on },

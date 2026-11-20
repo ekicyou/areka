@@ -19,7 +19,7 @@ use areka_placement::face_windowposition::apply_face_windowposition;
 
 /// 書き手を呼んだ契機（記録の欄）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FaceCause {
+pub(super) enum FaceCause {
     Attach,
     FaceChange,
     BalloonSwitch,
@@ -31,7 +31,7 @@ pub(crate) enum FaceCause {
 /// (2) 面が前と違えば手動の位置を捨て（要件 8.6）、
 /// (3) 面の `windowposition` を配置へ届け（要件 1.7）、(4) `balloon_models[scope]` を面の
 /// モデルにし、(5) 面の番号を覚える。束が無い scope は `error!` で何もしない。
-pub(crate) fn select_balloon_face(
+pub(super) fn select_balloon_face(
     wiring: &mut RuntimeWiring,
     world: &mut World,
     scope: u32,

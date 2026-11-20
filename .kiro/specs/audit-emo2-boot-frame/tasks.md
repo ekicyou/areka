@@ -48,7 +48,7 @@
   - _Dispatch: standard — 9 か所の置き換えと赤から立てるハーネスのテスト_
   - _Requirements: 3.1, 3.2, 3.4, 4.1, 4.2, 4.3, 5.10, 6.2_
 
-- [ ] 1.5 使わない import と公開の面を狭める（T5・5・114 番・件 4・件 5）
+- [x] 1.5 使わない import と公開の面を狭める（T5・5・114 番・件 4・件 5）
   - 3 つのビルド（lib・lib＋test-support・test）の使い方で import を 3 種に分け、どのビルドでも使わない名を消し、テストだけの名と両方の名を設計の `cfg` で包む。`unused_imports` の許可を 0 本にする
   - 設計の挙げる 8 つの項目の公開を、私有または `pub(super)` へ狭める。外の読み手が 0 件であることを grep で確かめる
   - 完了: 3 つのビルドで `--force-warn unused_imports` を 1 回ずつ回し、警告 0 件を記録に残してある
@@ -268,3 +268,4 @@
 
 - 1.1: 1 番の `.get(..).iter()` は 7 番の空撃ちと一緒に消えた（足す `.expect` は無し）。観測器が空を返すと赤になることは審査で確かめた。テストの絞り込みはモジュールの道（`frame::text_scale_tests` なら `text_scale_tests`）で指す。clippy の `-D warnings` は既存の `wintf` の警告で落ちるので、触ったファイルに警告が無いことで見る。
 - 1.3: `attach.rs` の書き直した 3 行に `（R4.2）` の要件番号が残っている（審査の提案・止めない）。5.1 の 41 番の物差しで見る。
+- 1.5: `--force-warn unused_imports` の警告は lib 23・lib＋test-support 16・test 11 から 3 つとも 0 件（`cargo rustc -p areka-runtime --lib [--features test-support | --profile test] -- --force-warn unused_imports`）。`CharWindowMarker` は設計の「どこでも使わない」でなくテストだけの名だったので `#[cfg(test)]` に置いた。`frame.rs` の `reconcile_reported_sizes` の説明に task 番号が残る（5.1 の 41 番で見る）。

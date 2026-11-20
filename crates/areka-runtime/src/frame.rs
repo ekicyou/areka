@@ -89,50 +89,34 @@ mod work_area_sync;
 mod zorder_descript;
 mod zorder_drain;
 
-// 移設前の本モジュール本体が使っていた import 一式をそのまま保持する。本番項目は各サブモジュール
-// へ移り、そちらが同じ経路を直接 import するため、ここに残る束縛の役目は 2 つである——
-// (1) `super::…`（runtime 兄弟）の 4 本はサブモジュールが `super::` で辿る先、
-// (2) それ以外は末尾のテストモジュール群の `use super::*;` が従来どおり拾うための束縛。
-// (2) の消費者は `#[cfg(test)]` だけなので、`areka`（lib target を持たない bin クレート）では
-// 非 test ビルド単位で未使用に見える。実際に未使用と判定された文にのみ抑止を付ける。
-#[allow(unused_imports)]
+// 子のテストモジュールの `use super::*;` が拾う束縛。
+#[cfg(any(test, feature = "test-support"))]
 use std::cell::RefCell;
-#[allow(unused_imports)]
-use std::collections::{BTreeSet, HashMap};
-#[allow(unused_imports)]
+#[cfg(any(test, feature = "test-support"))]
 use std::rc::Rc;
-#[allow(unused_imports)]
-use std::sync::mpsc::Receiver;
 
-#[allow(unused_imports)]
+#[cfg(test)]
 use bevy_ecs::entity::Entity;
-#[allow(unused_imports)]
-use bevy_ecs::prelude::{Changed, Query};
-#[allow(unused_imports)]
+#[cfg(test)]
 use bevy_ecs::system::SystemState;
 use bevy_ecs::world::World;
-#[allow(unused_imports)]
-use tracing::{debug, error, info, warn};
+use tracing::debug;
 
-#[allow(unused_imports)]
-use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, TextSlotView};
-#[allow(unused_imports)]
+#[cfg(any(test, feature = "test-support"))]
+use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
+#[cfg(any(test, feature = "test-support"))]
 use areka_emo_text::actor::{TextLayerRuntime, present_frame};
-#[allow(unused_imports)]
-use areka_parsers::balloon::BalloonModel;
-#[allow(unused_imports)]
+#[cfg(any(test, feature = "test-support"))]
 use areka_sakura::ActorKey;
-#[allow(unused_imports)]
-use wintf::ecs::{DPI, FrameTime, GraphicsCore, SizeI, WindowPos, WucGraphicsResource};
+#[cfg(any(test, feature = "test-support"))]
+use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
-#[allow(unused_imports)]
-use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
-#[allow(unused_imports)]
-use areka_placement::follow::{resize_window_keep_position, resize_window_to};
-#[allow(unused_imports)]
-use areka_placement::resolver::SizePx;
-#[allow(unused_imports)]
-use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
+#[cfg(test)]
+use areka_placement::diag::PlacementRoute;
+#[cfg(test)]
+use areka_placement::spawn::CharWindowMarker;
+#[cfg(any(test, feature = "test-support"))]
+use areka_placement::spawn::GhostWindows;
 
 use super::assets::{BalloonScopeAssets, BootAssets, ScopeAssets};
 // 可視性の相（design 決定 D5）。相順の所有者は本モジュールなので、呼び出しはここから行う。
@@ -144,13 +128,6 @@ use super::move_cue::{PositionCue, apply_move_directive};
 use super::talk_clock::TalkClock;
 use super::target_map::{balloon_target, shell_target};
 
-// 公開面の維持（要件 2.5）だけを担う再輸出。このグループで非 test ビルドの未使用は
-// `AttachPlan`（`plan_attachments` の戻り値型ゆえ公開パスの維持が要件・参照は定義元の
-// サブモジュール内で完結する）と `plan_attachments`（`frame::` 経由で呼ぶのは
-// `#[cfg(test)]` の `attach_tests` だけ）の 2 名。`PlannedAttach` は `dpi` サブモジュールが、
-// `run_attach_phase` は下の `frame_system` が非 test ビルドでも使う。属性は use 文単位で
-// 効くためグループ全体に付く（`areka` は lib target を持たない bin クレート）。
-#[allow(unused_imports)]
 pub use self::attach::{AttachPlan, PlannedAttach, plan_attachments, run_attach_phase};
 pub use self::dpi::run_dpi_phase;
 pub use self::drain_resnap::{run_drain_phase, run_move_drain_phase};
@@ -166,31 +143,23 @@ pub use self::zorder_drain::run_zorder_drain_phase;
 
 // 私有項目のファサード再束縛（クレート内可視性のみ・公開面は増やさない）。サブモジュール間の
 // 相互参照とテストモジュールからの `use super::*;` は、いずれもここを経由する。
-// `connect_balloon_text` の参照は定義元 `attach` 内で完結するため、`frame::` 経由の消費者は
-// `#[cfg(test)]` の `attach_tests` だけである。
-#[allow(unused_imports)]
+#[cfg(test)]
 use self::attach::connect_balloon_text;
-// 同上。ただしこのグループで実際に未使用と判定されるのは `GhostWindowClass`・
-// `classify_ghost_window`・`dpi_phase_with`・`reproject_char_window_at_current_size` の 4 名
-// （いずれも参照が定義元 `dpi` 内で完結する）。残る `AuthorDpis`・`DpiChangedQuery`・
-// `GhostWindowKind`・`ScaleReportSource`・`reconcile_window_size` は非 test ビルドでも
-// `attach`／`wiring`／`scale_text` が消費している。
-#[allow(unused_imports)]
+#[cfg(any(test, feature = "test-support"))]
+use self::dpi::dpi_phase_with;
 use self::dpi::{
-    AuthorDpis, DpiChangedQuery, GhostWindowClass, GhostWindowKind, ScaleReportSource,
-    classify_ghost_window, dpi_phase_with, reconcile_window_size,
-    reproject_char_window_at_current_size,
+    AuthorDpis, DpiChangedQuery, GhostWindowKind, ScaleReportSource, reconcile_window_size,
 };
-// 同上。未使用は `PhysicalSizeSource`・`resnap_from_sizes`・`resnap_with`・
-// `finalize_chain_once_with`・`realign_chain_once_with_source` の 5 名で、
-// `resnap_shell_targets`・`finalize_chain_once`・`realign_chain_once` は
-// 下の `frame_system` が呼ぶ。
-#[allow(unused_imports)]
+#[cfg(test)]
+use self::dpi::{GhostWindowClass, classify_ghost_window, reproject_char_window_at_current_size};
+#[cfg(test)]
+use self::drain_resnap::resnap_from_sizes;
+#[cfg(any(test, feature = "test-support"))]
 use self::drain_resnap::{
-    PhysicalSizeSource, finalize_chain_once, finalize_chain_once_with, realign_chain_once,
-    realign_chain_once_with_source, resnap_from_sizes, resnap_shell_targets, resnap_with,
+    PhysicalSizeSource, finalize_chain_once_with, realign_chain_once_with_source, resnap_with,
 };
-// 同上。`reconcile_reported_sizes` は下の `frame_system` が非 test ビルドでも呼ぶ
+use self::drain_resnap::{finalize_chain_once, realign_chain_once, resnap_shell_targets};
+// `reconcile_reported_sizes` は下の `frame_system` が非 test ビルドでも呼ぶ
 // （呼び出しは task 4.3 で `run_drain_phase` から相順の所有者であるこちらへ移した・design 決定 D5）。
 use self::scale_text::reconcile_reported_sizes;
 // バルーン可視性の相（兄弟モジュール `runtime::balloon_visibility`）が注入時刻の解決に用いる

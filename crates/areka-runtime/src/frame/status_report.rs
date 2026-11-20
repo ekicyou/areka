@@ -49,7 +49,7 @@ type StageTuple = (bool, u32, u64);
 
 /// 1 scope の窓の観測（表示層の照会 3 本・表示層に装着済みの scope だけ）。
 #[derive(Clone)]
-pub struct StageObservation {
+struct StageObservation {
     scope: u32,
     open: bool,
     surface_id: Option<u32>,
@@ -69,7 +69,7 @@ pub struct BalloonObservation {
 ///
 /// 番号は今の `surface_id`。取れないとき、窓が見えていれば 0 で警告の対象、箱だけなら覚えた番号（無ければ 0）で
 /// 警告の対象にしない（areka-P0-shell-balloon-frame-align 要件 3.1・3.2）。
-pub(crate) fn collect_bindings(
+fn collect_bindings(
     observed: &[BalloonObservation],
     last_surface: &BTreeMap<u32, u32>,
 ) -> (Vec<BalloonBinding>, Vec<u32>) {

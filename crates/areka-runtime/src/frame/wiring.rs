@@ -8,17 +8,13 @@ use std::sync::{Mutex, Weak};
 use std::time::Duration;
 
 use bevy_ecs::system::SystemState;
-// `World` を使うのは下の `impl RuntimeWiring` 内の `#[cfg(test)]` メソッド `apply_present` だけ
-// （`areka` は lib target を持たない bin クレートゆえ非 test ビルド単位では未使用に見える）。
-#[allow(unused_imports)]
+#[cfg(any(test, feature = "test-support"))]
 use bevy_ecs::world::World;
 
-// このグループで非 test ビルドの未使用は `TargetId` のみ（`#[cfg(test)]` メソッド
-// `read_back_target` の引数型）。`EmoPresenter`・`PresentCommand` は構造体フィールドが使う。
-// 属性は use 文単位で効くためグループ全体に付く。
+#[cfg(any(test, feature = "test-support"))]
+use areka_emo_present::TargetId;
 use areka_emo_present::balloon_definitions::ScopeBalloonDefinitions;
-#[allow(unused_imports)]
-use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
+use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_parsers::balloon::BalloonModel;
 
@@ -344,7 +340,7 @@ impl RuntimeWiring {
     /// 適用する。9.1 段階では channel 配線の到達性（`MoveCueSink`→`RuntimeWiring` の受信端が届く）を
     /// 決定論に固定するための最小 read 口として `#[cfg(test)]` で開ける（本番表面は増やさない）。
     #[cfg(test)]
-    pub(crate) fn drain_move_directives(&self) -> Vec<PositionCue> {
+    pub(super) fn drain_move_directives(&self) -> Vec<PositionCue> {
         self.move_rx.try_iter().collect()
     }
 

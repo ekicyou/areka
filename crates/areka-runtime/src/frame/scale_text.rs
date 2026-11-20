@@ -278,7 +278,7 @@ pub(crate) fn resolve_talk_time(
 /// 「時刻が引ける＝進行中」ではないことに注意する。`TalkClock` の起点は一度立つとプロセスの
 /// 終わりまで残るため、`talk_time` が `Some` であることは発話が続いている証拠にならない。
 /// 進行中かどうかを決めるのは**まだ現れていない文字が在るか**だけである。
-pub(crate) fn reveal_pending<'a>(reveals: impl Iterator<Item = &'a [f64]>, talk_time: f64) -> bool {
+pub(super) fn reveal_pending<'a>(reveals: impl Iterator<Item = &'a [f64]>, talk_time: f64) -> bool {
     reveals
         .filter_map(|times| times.last())
         .any(|&last| last > talk_time)
