@@ -975,8 +975,8 @@ fn log_window_move(
 /// 発明しないこと（`work_area_for_window` と同方針）と、補正できないことを理由に
 /// 窓の位置更新を落とさないことの両立である。無ログの縮退経路は作らない（6.3）。
 ///
-/// 補正が発火したときだけ [`BALLOON_LIMIT_CLAMP_TAG`] の `info!` を出す。位置を動かさない
-/// （既に内包されている）ときはログも位置の書換も起こさない。
+/// 補正が発火したときだけ [`BALLOON_LIMIT_CLAMP_TAG`] の `info!` を出す。`limit_correction` が
+/// `None` のときはログも位置の書換も起こさない。
 fn apply_balloon_limit_gate(
     world: &World,
     window: Entity,
