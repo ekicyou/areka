@@ -76,8 +76,7 @@ use areka_actor::ReplySender;
 use areka_actor::reply_channel;
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{
-    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, Recompose,
-    RegionPriority, ScaleRatio,
+    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, Recompose, ScaleRatio,
 };
 use wintf::ecs::{AlphaMaskResource, DPI, GraphicsCore};
 // `WucGraphicsResource` の本番消費者は無い（装着が純 ECS になり `Compositor` を要さない）。テストが

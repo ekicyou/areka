@@ -215,17 +215,9 @@ fn unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point() 
     );
 }
 
-/// 要件 1.5 観測完了（**公開面同士の恒等**・タスク 3.1 完了条件の検証本体）: k=1.0 では
-/// [`EmoPresenter::hit_region_client`] の `region` が既存 [`EmoPresenter::hit_region`] と
-/// 完全一致し、`surface_point` は入力素通しになる。
+/// 拡大率 1 では `surface_point` が入力の素通しになり、名前は描き先の画素で決まる。
 ///
-/// 代表点は「領域内」「別領域内」「重なり点（画家則＝後定義 Arm が手前）」「背景」
-/// 「閉区間の端（4 隅・辺）」「境界の内側 1px／外側 1px」「負値」「窓外」を含む。期待 region は
-/// **ハードコード定数**でも同時に固定するため、両入口がそろって壊れる（＝両方 None を返す）
-/// 形の空虚な一致では緑にならない。
-///
-/// なお本檻は k=1.0 の恒等のみを守る——`×k` の誤挿入や素の floor 丸めの持ち込みは k=1.0 では
-/// 恒等へ退化して検出できない（それらは `hit.rs` の任意 k 檻と本ファイルの縮退檻の責務）。
+/// 矩形は左と上を含み右と下を含まないので、右端・下端の隅は当たらない。期待はハードコードの定数。
 #[test]
 fn client_entry_matches_native_entry_at_identity_scale() {
     let mut world = make_world_with_gpu();
@@ -239,24 +231,19 @@ fn client_entry_matches_native_entry_at_identity_scale() {
         (210, 310, Some("Arm"), "重なり点（後定義 Arm が手前）"),
         (0, 0, None, "背景（原点）"),
         (500, 500, None, "背景（窓外相当）"),
-        (93, 62, Some("Head"), "閉区間の左上隅"),
-        (271, 130, Some("Head"), "閉区間の右下隅"),
-        (93, 130, Some("Head"), "閉区間の左下隅"),
-        (271, 62, Some("Head"), "閉区間の右上隅"),
+        (93, 62, Some("Head"), "左上隅"),
+        (271, 130, None, "右下隅（右と下は含まない）"),
+        (93, 130, None, "左下隅（下は含まない）"),
+        (271, 62, None, "右上隅（右は含まない）"),
         (94, 63, Some("Head"), "境界の内側 1px"),
         (92, 62, None, "境界の外側 1px（左）"),
         (93, 61, None, "境界の外側 1px（上）"),
         (272, 130, None, "境界の外側 1px（右）"),
         (271, 131, None, "境界の外側 1px（下）"),
-        (400, 400, Some("Arm"), "後定義矩形の右下隅"),
+        (400, 400, None, "後定義矩形の右下隅（含まない）"),
         (-7, -13, None, "負値（panic なし）"),
     ] {
         let hit = presenter.hit_region_client(TargetId(0), x, y);
-        assert_eq!(
-            hit.region,
-            presenter.hit_region(TargetId(0), x, y),
-            "k=1.0 では新旧の判定入口が一致すること: {what} ({x},{y})"
-        );
         assert_eq!(
             hit.region, want,
             "k=1.0 の解決領域が期待と違う: {what} ({x},{y})"

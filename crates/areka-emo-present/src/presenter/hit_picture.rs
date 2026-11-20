@@ -13,7 +13,6 @@ use crate::hit_shapes::{HIT_SHAPE_LIMIT, hit_shapes};
 pub(super) struct HitPicture {
     pub(super) surface_id: u32,
     /// `HitShapePlan::first`。
-    #[cfg_attr(not(test), expect(dead_code))]
     pub(super) first: usize,
     pub(super) target: IdTarget,
 }

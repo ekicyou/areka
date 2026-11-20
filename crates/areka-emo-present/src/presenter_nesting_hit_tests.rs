@@ -44,7 +44,6 @@ fn presenter_showing_parent_b(dpi: u16) -> EmoPresenter {
 }
 
 /// 拡大率 1: 窓の座標＝サーフェスの座標。子の Eye・Head が子を置いた位置で引ける。
-/// 画像の座標の入口（`hit_region`）も同じ列で判定する。
 #[test]
 fn client_hit_returns_child_region_names_at_scale_1() {
     let presenter = presenter_showing_parent_b(96);
@@ -56,11 +55,6 @@ fn client_hit_returns_child_region_names_at_scale_1() {
         let hit = presenter.hit_region_client(TargetId(0), x, y);
         assert_eq!(hit.region, want, "client=({x},{y})");
         assert_eq!(hit.surface_point, (x, y), "k=1 は素通し");
-        assert_eq!(
-            presenter.hit_region(TargetId(0), x, y),
-            want,
-            "native=({x},{y})"
-        );
     }
 }
 

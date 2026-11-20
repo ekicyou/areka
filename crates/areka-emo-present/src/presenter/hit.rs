@@ -1,23 +1,25 @@
 //! 当たり判定（`ClientHit`・`EmoPresenter::hit_region`・`EmoPresenter::hit_region_client`）——native
-//! サーフェス px 直接照合と、窓 client 物理 px を実適用 k で縮約する正準判定入口。
+//! サーフェス px 直接照合と、窓 client 物理 px を実適用 k で縮約し α → ID → 名前で引く正準判定入口。
 
-use super::{EmoPresenter, RegionPriority, ScaleRatio, TargetId};
+use super::{EmoPresenter, ScaleRatio, TargetId};
 #[cfg(test)]
-use areka_emo_compose::hit::hit_region_in;
-use areka_emo_compose::hit::hit_region_scaled_in;
+use areka_emo_compose::{RegionPriority, hit::hit_region_in};
+use areka_parsers::shell::Collision;
+use wintf::ecs::IdRead;
+
+use super::target::PresentTarget;
 
 /// 窓 client 物理 px の点に対する当たり判定結果（[`EmoPresenter::hit_region_client`] の戻り値）。
 ///
 /// 所有権を持たない借用ビューであり、寿命は presenter の不変借用に従う（マウス移動ごとの割当を
 /// 生まない）。フィールドは 2 つとも「同一の判定 1 回」から生まれた対であり、呼び手は
 /// **両者を分離して再計算してはならない**——[`surface_point`] は縮約の結果そのもの（唯一の生成点は
-/// [`areka_emo_compose::hit::hit_region_scaled_in`]、未表示縮退時のみ `hit_region_client` 内の直接呼出）で
-/// あり、下流は横流しするのみである（二重縮約の構造的排除・design §Data Models 不変条件 (1)）。
+/// `hit_region_client` 内の [`ScaleRatio::unscale_coord`] の呼出）であり、下流は横流しするのみである（二重縮約の構造的排除・design §Data Models 不変条件 (1)）。
 ///
 /// [`surface_point`]: Self::surface_point
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClientHit<'a> {
-    /// 当たった領域名（無ければ `None`）。k=1.0 では `EmoPresenter::hit_region`（テスト専用）と完全一致する。
+    /// 当たった領域名（無ければ `None`）。
     pub region: Option<&'a str>,
     /// 縮約後のサーフェス px 座標（作者定義空間）。SHIORI へ配信する「ローカル座標」の正準値（要件 1.8）。
     pub surface_point: (i64, i64),
@@ -77,28 +79,33 @@ impl EmoPresenter {
     ///   内部不変条件が破れた場合のみであり、その事実こそが `warn!` の伝える情報である。ゆえに警告は
     ///   上の正常縮退とは**明確に別の事象**であり、両者を同じ分岐にまとめてはならない。
     ///
+    /// # 名前の引き方
+    ///
+    /// 縮約した点で表示中の絵の α マスクが立っていない（面の外を含む）・当たり判定の並びが空なら
+    /// `None`。そうでなければ表示の成立点で塗った ID の描き先を 1 点読み、ID を並びの位置へ戻して
+    /// 名前を返す。描き先が読めない・無い・別のサーフェスを塗ったままのときは `None` にして
+    /// `warn!` を 1 件だけ残し、塗り直しが成功するまで繰り返さない。
+    ///
     /// # 観測（要件 4.5）
     ///
     /// k・縮約前座標・縮約後座標・解決 region を `debug!` 1 行の構造化出力で残す。実機サインオフは
     /// `RUST_LOG=areka_emo_present=debug` でこの 1 行を grep して決定論的に判定する。
     ///
-    /// 縮約の丸め権威は [`ScaleRatio::unscale_coord`] ただ 1 本であり、本メソッドはその式を持たない
-    /// （正常経路は [`areka_emo_compose::hit::hit_region_scaled_in`] へ委譲・未表示縮退時のみ座標を得るために
-    /// 直接呼ぶ）。`&self` のみを取り World・GPU に依存しないため、判定はマウス移動ごとに安全に呼べる。
+    /// 縮約の丸め権威は [`ScaleRatio::unscale_coord`] ただ 1 本であり、本メソッドはその式を持たない。
+    /// `&self` のみを取り World に依存しない。GPU を読むのは α が立つ点だけで、同じ点の読み直しは
+    /// 描き先の控えが答える。
     pub fn hit_region_client(&self, target: TargetId, x: i64, y: i64) -> ClientHit<'_> {
         // k の真実源は私有 `applied` の直読ただ 1 つ（f32 非経由・`derive_scale` 再呼出なし）。
         // 判定ごとに読むため k 更新へ自動追従する（スナップショットを持たない＝要件 1.7）。
         // 現サーフェスも同じ不変借用から引く（`region` が引けない縮退でも座標契約は保つ）。
         // 判定の列は子から持ち込んだ領域が在ればその列（surface-element-nesting 要件 4.1・4.2）。
-        let (applied, regions) = match self.targets.get(&target) {
-            Some(t) => (
-                t.applied,
-                t.current_surface_id
-                    .and_then(|id| t.emo_world.hit_regions(id)),
-            ),
-            // 未登録 target は正常縮退（判定対象が存在しない＝異常ではない）。
-            None => (None, None),
-        };
+        let t = self.targets.get(&target);
+        // 未登録 target は正常縮退（判定対象が存在しない＝異常ではない）。
+        let applied = t.and_then(|t| t.applied);
+        let regions = t.and_then(|t| {
+            t.current_surface_id
+                .and_then(|id| t.emo_world.hit_regions(id))
+        });
 
         let k = match (applied, regions.is_some()) {
             (Some(k), _) => k,
@@ -116,15 +123,10 @@ impl EmoPresenter {
             }
         };
 
-        let (region, surface_point) = match regions {
-            // 正常経路: 縮約＋照合を合成純関数へ完全委譲（÷k の式を本層に持たない）。
-            Some(regions) => {
-                let hit = hit_region_scaled_in(regions, x, y, k, RegionPriority::Painter);
-                (hit.region, hit.surface_point)
-            }
-            // 未表示縮退: 照合先が無いので座標だけ丸め権威で縮約する（式は持たず権威を呼ぶ）。
-            None => (None, (k.unscale_coord(x), k.unscale_coord(y))),
-        };
+        let surface_point = (k.unscale_coord(x), k.unscale_coord(y));
+        let region = t
+            .zip(regions)
+            .and_then(|(t, regions)| t.resolve_hit(target, regions, surface_point));
 
         tracing::debug!(
             ?target,
@@ -141,6 +143,55 @@ impl EmoPresenter {
         ClientHit {
             region,
             surface_point,
+        }
+    }
+}
+
+impl PresentTarget {
+    fn resolve_hit<'a>(
+        &self,
+        target: TargetId,
+        regions: &'a [Collision],
+        (sx, sy): (i64, i64),
+    ) -> Option<&'a str> {
+        let (Ok(px), Ok(py)) = (u32::try_from(sx), u32::try_from(sy)) else {
+            return None;
+        };
+        if !self.shown_mask.as_ref().is_some_and(|m| m.is_hit(px, py)) || regions.is_empty() {
+            return None;
+        }
+        let picture = self
+            .hit_picture
+            .as_ref()
+            .filter(|p| Some(p.surface_id) == self.current_surface_id);
+        let read = picture.map_or(IdRead::Unreadable, |p| p.target.read(px, py));
+        match (read, picture) {
+            (IdRead::Id(id), Some(picture)) => {
+                let index = picture.first + id.get() as usize - 1;
+                let name = regions.get(index).map(|c| c.name.as_str());
+                if name.is_none() {
+                    tracing::error!(
+                        ?target,
+                        surface_id = picture.surface_id,
+                        index,
+                        regions = regions.len(),
+                        "[hit_region_client] 描き先の ID が当たり判定の並びの外"
+                    );
+                }
+                name
+            }
+            (IdRead::Empty | IdRead::Outside, _) => None,
+            _ => {
+                if !self.hit_notes.unreadable.replace(true) {
+                    tracing::warn!(
+                        ?target,
+                        surface_id = ?self.current_surface_id,
+                        painted = ?self.hit_picture.as_ref().map(|p| p.surface_id),
+                        "[hit_region_client] 当たり判定の描き先が読めない（塗り直しまで当たり無し）"
+                    );
+                }
+                None
+            }
         }
     }
 }
