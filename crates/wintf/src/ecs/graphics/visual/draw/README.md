@@ -94,3 +94,32 @@
 - emo の部品（シェル・バルーンの文字など）が命令の列から描画の木（`VisualDrawContent`・`VisualTransform`）の描き方へ移っている。
 - 移した後の画素が今の描画面の持ち主の形と一致する（WARP の比べで確かめる）。
 これを受け持つのは後の spec（emo の部品を描画の木へ移す `draw-methods-canon`。関連して `shell-multi-compose`・`balloon-text-visual-tree`）。何も持たない Visual の既定を変える spec は、まだ決まっていない。条件がそろった部品から節へ寄せ、頻繁に変わる部品だけを自動の上げ下げが描画面へ上げる。
+
+## ID の描き先
+画面に出ない ID の描き先（`IdTarget`・`../../id_target.rs`・`wintf::ecs` から公開）。形の列を ID の色で塗り、点の 1 画素から ID を読む。当たり判定の形の答えを GPU の絵で持つための部品で、描画面（`SurfaceReadback`・WUC）には結び付かない。
+
+### 公開の名前
+`MAX_ID`（ID の上限・24 ビット）・`IdForm`（`Rect`・`Ellipse`・`Polygon`・`Mask { mask, left, top }`）・`IdShape`（`id` と `form`）・`IdRead`（`Id`・`Empty`・`Outside`・`Unreadable`）・`IdMask`・`IdMaskPictures`（`len`・`created`）・`IdTarget`（`new`・`paint`・`read`・`generation`）。
+
+### 求め方
+`IdTarget::new(core, (w, h))` に大きさ（一辺 1〜16,384 の物理ピクセル）だけを渡す。どの描画面の大きさにも結ばない。装置（`GraphicsCore`）が無いか大きさが範囲外なら `Err`。形式は `B8G8R8A8_UNORM`・α 掛け済み・96 DPI。
+
+### 塗り方
+`paint(core, shapes, pictures)` は UI スレッドから呼ぶ。透明に消してから、列の順に上書きして塗る（後の形が先の形の上に載る）。
+- 縁のぼかしは掛けない（画素ごとに ID か ID なしのどちらか）。
+- ID は不透明の色（B＝下位 8 ビット・G＝中位・R＝上位・A＝255）で塗る。`MAX_ID` を越える ID を含む列は塗らずに失敗にする。
+- `Polygon` は書いた順の頂点を最後から最初へ閉じ、巻き数が 0 でない所を塗る。
+- `Mask` はマスクの左上を (`left`, `top`) に 1 対 1 で置き、立っている画素にだけ ID を置く（拡大も補間もしない）。座標は描き先の画素の単位で、左上が (0, 0)。
+- マスク（`IdMask::new(width, height, is_set)`・一辺 1〜16,384）の GPU の絵は `IdMaskPictures` が持つ。同じ `Arc<IdMask>` の実体は 1 度だけ GPU へ載せ、以後の `paint` では引くだけ（載せた回数は `created`、覚えている絵の数は `len`）。
+- 塗り終えるごとに `generation` が 1 上がる。塗りが失敗したら 0 に戻る。
+
+### 読み戻しの答え
+`read(x, y)` は最後に塗り終えた絵の 1 画素の答えを返す。
+- `Id(id)`: その画素に ID が塗られている。
+- `Empty`: 塗られていない画素（ID なし）。
+- `Outside`: 座標が描き先の外。GPU は読まない。
+- `Unreadable`: まだ塗っていない・装置が無いか失われた・塗りか読みが失敗した。
+同じ座標は塗り直すまで読み直さない（控えを返す）。読みが失敗したら 1 度だけ記録し、塗り直すまで GPU に触らずに `Unreadable` を返し続ける。読みは GPU が塗りを終えるまで待つ。
+
+### 装置の作り直し
+`IdTarget` と `IdMaskPictures` は装置に結び付く。装置が作り直されたら、使い手が新しい `IdTarget` と新しい `IdMaskPictures` を作って塗り直す。古い `IdMaskPictures` を別の装置へ渡した `paint` は失敗になる。
