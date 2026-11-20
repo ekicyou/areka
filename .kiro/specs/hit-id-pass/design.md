@@ -210,6 +210,7 @@ crates/areka-emo-present/src/
 ├── presenter/hit.rs        # 変更: 解決を「α → ID → 名前」へ替える
 ├── presenter_hit_shape_tests.rs    # 新規: 形ごとの内外・端・重なり（実 GPU）
 ├── presenter_hit_region_tests.rs   # 新規: region の色・反転・置き方（実 GPU）
+├── presenter_hit_scale_tests.rs    # 新規: 表示の拡大率が 1 でないときの当たり（実 GPU）
 └── presenter_hit_picture_tests.rs  # 新規: 描き直さない・読めない・立ち直り・α
 crates/areka-parsers/src/shell/
 └── model.rs, decode.rs, parse.rs, mod.rs   # 変更: ShellIssue::ShapesInactive と ShapeCounts を消す
@@ -217,12 +218,12 @@ crates/areka-parsers/src/shell/
 
 ### Modified Files
 
-- `crates/wintf/src/ecs/layout/hit_region/mod.rs` — `ColorMapData::from_image` を乗算しない読みへ替え、完全に透明な画素を対応の外にする（決め 12）。確かめは `crates/wintf/tests/layout/` の色分け画像のテストへ足す。
+- `crates/wintf/src/ecs/layout/hit_region/mod.rs` — `ColorMapData::from_image` を乗算しない読みへ替え、完全に透明な画素を対応の外にする（決め 12）。確かめは `crates/wintf/src/ecs/layout/hit_region/tests/color_map.rs` の色分け画像のテストへ足す。
 - `crates/wintf/src/ecs/graphics/visual/draw/README.md` — ID の描き先の使い方（作る・塗る・答えの読み分け・装置の作り直しは使い手が作り直す）を書き足す。
 - `crates/areka-emo-present/src/presenter.rs`・`lib.rs` — `mod` の宣言と `use`（`RegionPriority` を外す）。
 - `crates/areka-emo-present/src/presenter/hub.rs`・`presenter/replace.rs` — 対象を作る所で、当たりの欄を空で始める。
 - `crates/areka-emo-compose/src/normalized.rs`・`crates/areka-emo-present/src/presenter_read_accessor_tests.rs` — 消す関数（`hit_region_in`・`hit_region_scaled_in`）を名指しした説明とテストを、新しい解決に合わせて直す。
-- 既存のテストの書き直し: `crates/areka-parsers/src/shell/decode_collisionex_tests.rs`・`crates/areka-emo-present/src/shell_target_element_base_tests.rs`（「まだ働かない形」の行）・`presenter_nesting_hit_tests.rs`・`presenter_refresh_and_log_tests.rs`・`presenter_film_tests.rs`（テスト専用の `EmoPresenter::hit_region` を使う 2 か所。この口は CPU の判定の上に在るので消し、テストは `hit_region_client` を通す形へ書き直す）・表示の拡大率つきの当たりのテスト（`presenter_dpi_scale_tests.rs`・`presenter_fractional_scale_tests.rs` のうち当たりを確かめる所）・`presenter_test_support.rs`（足場）・`crates/areka-emo-compose/src/hit_import_tests.rs` と `fold_merge_tests.rs`（`RegionPriority` と `hit_region_in` を使う所を、並びそのものの確かめへ書き直す）。
+- 既存のテストの書き直し: `crates/areka-parsers/src/shell/decode_collisionex_tests.rs`・`crates/areka-emo-present/src/shell_target_element_base_tests.rs`（「まだ働かない形」の行）・`presenter_nesting_hit_tests.rs`・`presenter_refresh_and_log_tests.rs`・`presenter_film_tests.rs`（テスト専用の `EmoPresenter::hit_region` を使う 2 か所。この口は CPU の判定の上に在るので消し、テストは `hit_region_client` を通す形へ書き直す）・表示の拡大率つきの当たりのテスト（`presenter_read_accessor_tests.rs` の `visible_surface_hit_uses_applied_scale_at_k2`。新しい `presenter_hit_scale_tests.rs` へ移して書き直す）・`presenter_test_support.rs`（足場）・`crates/areka-emo-compose/src/hit_import_tests.rs` と `fold_merge_tests.rs`（`RegionPriority` と `hit_region_in` を使う所を、並びそのものの確かめへ書き直す）。
 - 文書: `doc/ukadoc-coverage/ledger/assets.toml`（`collisionex*` の行・`collision*` の行の「hit が当たり判定に使う」の文）・`doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/roadmap-draft.md`（「ID の描き先に塗るのは `hit-id-pass`」の文）・`.kiro/steering/tech.md`（WARP の例外の列）。
 - 触らない: `crates/areka/`・`crates/areka-runtime/src/frame*`・`crates/areka-runtime/src/hit_region.rs`（矩形の端や α を書いた説明は無く、直す所が無い＝`input-crate-split` との重なりも無い）・`crates/areka-emo-compose/src/hit_import.rs`・`crates/areka-emo-compose/src/scale.rs`。
 - `shell_target.rs` は 1,000 行の番に近い（上限越えの表に触れるのは同じウェーブでは `audit-emo2-boot-frame` だけ）。`region` の画像の読みと読めないファイルの記録は新しいファイル `shell_target_regions.rs` に置き、`shell_target.rs` には呼び出しの数行だけを足す。`ShapesInactive` の記録は `shell_target.rs` の汎用の出口（読み手の指摘を順に `warn!` で出す繰り返し）から出ているので、読み手の腕を消せば出なくなり、`shell_target.rs` で消す所は無い。
@@ -728,7 +729,7 @@ GPU を使うテストは実のハードウェア GPU で回し、wintf の ID �
 - 形ごとの内外と端を、SSP の測りの S8・S9 の点で固定する。多角形の辺の上の点と、楕円・円の周のそばの 3 点は規則の答えを期待値にする（決め 17。(115,108) は周から 0.2 画素なので期待値にしない）（10.1・10.11）。
 - 5 つの形と `collision*` を混ぜた重なり・上が当たらず下の名前が返る並び・子から持ち込んだ並び・300 件の並び（10.4）。
 - `region`: 面より小さい画像・大きい画像・画像の外・持ち込みでずれた画像・読めないファイルが下の矩形を塞がない（S1〜S3・S7）（10.3）。
-- 拡大率 2（整数）と 5/4・11/10（整数でない・11/10 は 2 のべき乗で割り切れない値）: サーフェスの 1 画素に当たる画面の画素を全部たどり、名前がどれも同じ（矩形の端・楕円の周・`region` の画素）。楕円・円・多角形の周はサーフェスの画素の細かさで決まる（10.5）。
+- 拡大率（`presenter_hit_scale_tests.rs`）: 拡大率 2（整数）と 5/4・11/10（整数でない・11/10 は 2 のべき乗で割り切れない値）: サーフェスの 1 画素に当たる画面の画素を全部たどり、名前がどれも同じ（矩形の端・楕円の周・`region` の画素）。楕円・円・多角形の周はサーフェスの画素の細かさで決まる（10.5）。
 - α: 形が覆う透明な画素は当たり無し・不透明な画素は名前・面の外の点は当たり無し（10.6）。
 - 描き直さない: 点の判定を繰り返しても、コマだけが進む適用でも、拡大率だけが変わっても `IdTarget` の世代が変わらない。サーフェスを替えた直後の最初の判定が新しい名前を返す（10.9）。
 - マスクの控え: `region` を持つ 2 つのサーフェスを行き来しても、`IdMaskPictures::created` がマスクの種類の数から増えない。装置の変化の追従の後は作り直す（5.18・6.6）。
