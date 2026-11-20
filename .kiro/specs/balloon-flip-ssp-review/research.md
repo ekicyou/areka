@@ -278,3 +278,45 @@ SSP 2.9.34 で測ったところ、既定のとき（バルーンに `windowposi
 
 - 開発者が裁定の議題 2 件を推奨どおり承認した（「推奨どおり承認」）。**案 ⑵（並べ替えをやめて押し込みだけにする）**・**起動の直後の場面は測らない**。理由と、効かなくなった決めごと（⑶ と ⑴ だけに当たるもの）は `requirements.md` の決めごとの 12・13 に書いた。
 - 設計の段へ渡すもの: 4 節の「案 ⑵」の直す所と赤になるテストの見込み、7 節の議題 2（外し方 (a)／(b)）・3（判定し直しの直の呼び手は残すと決めた）・7（件 2 のテストの確かめ方）。規模の見込みは 4〜8 タスク。
+
+## 12. 設計の段の調べ（2026-11-20・`/kiro-spec-design -y`）
+
+> 軽い調べ（既にある仕組みから外す直し）。外の資料は引いていない（ukadoc の `windowposition.limit` は 2.4 節で引いた分で足りる）。下請けは出していない。読んだ規則は `kiro-spec-design` の `design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。コードは main `9bf6e32e` の上のこのワークツリーで読み直した。SSP と areka は動かしていない。
+
+### 12.1 読み直して分かったこと
+
+- `[balloon-limit] Clamp` の `overlap_scope` は `?place.overlap_scope()` で出しているので、今は押し込みでも並べ替えでも毎行 `overlap_scope=None` が載っている。「出なくなる」（要件 4.3・8.6）は、欄そのものを行から外すことになる。この欄を読む所は `tools/` に 0 件、`crates/` はこの spec が直す檻だけ。
+- 離したときの補正（`follow/balloon_drag.rs` の `release-gate`）の行は今も `how` を持たない。`how` を出すのは起動の関門と書き込みの関門の 2 つだけ。
+- 外し方 (a)（型と引数を残す）は、作られない変種 `Flipped`・`PushedOverlap` に「使われない」の警告が出る。押さえる属性を足すことになり、読み手を迷わせる。
+- `reset_pos_tests.rs` 509 行と `chain_realign_script_moved_tests.rs` 113 行の判定し直しの 2 本は、主張している値（作業領域の端への押し込みの位置）が案 ⑵ でもそのまま出る。直す前も後も緑で、並べ替えの前提（注と名前）だけが古くなる。
+- `follow_other_chars_tests.rs` の判定し直しの 4 本のうち、並べ替えを前提にするのは 1 本（`rejudge_after_chain_finalize_pushes_the_balloon_onto_the_moved_partner_once`）だけ。ほか 3 本はそのまま緑。
+- 件 2 の決まりは `resolver_resolve_balloon_tests.rs` 226〜286 行の 4 本が持つ。`balloon_limit_flip_tests.rs` の件 2 の 2 本は、映しの式を通して同じ値を確かめているだけで、映しを使わない形（左右の間合いが同じ・`windowposition.x` は左右とも右向き）に書き直せる。
+- 同じウェーブ C23: `audit-emo2-boot-frame` の brief は「`follow.rs` へ及ばない限り重なり 0」と書く。外し方 (b) は `follow.rs` の取り込みの 2 行に触る。`hit-id-pass`・`input-crate-split` の brief はこの spec のファイルを挙げていない。`balloon-text-visual-tree` は C28 の見込みで、同じウェーブではない（96 行が `TEXT_BOX_SURFACE_NAME` を挙げている）。
+
+### 12.2 まとめ（Synthesis）
+
+- **一般化**: 3 つの関門（起動・書き込み・離したとき）が同じ 1 本の `limit_correction` を呼ぶ形に戻る。案 ⑵ の決まりは「どのスコープも・どの関門も押し込み」で、分ける軸が無い。
+- **作るか使うか**: 新しい部品は作らない。今の `limit_correction` をそのまま使う。
+- **削る**: `place_balloon_in_work_area` は案 ⑵ では `limit_correction` と同じ答えしか返さないので、関数ごと外す。戻りの型 `BalloonPlace`・`counted_overlap`・引数 `chars`・`shown_char_rects`・`is_shown`・`TEXT_BOX_SURFACE_NAME`・欄 `overlap_scope` も一緒に外す（外し方 (b)）。`how` の値は 1 つになるが、要件 4.1・4.3 が欄を残すことを求めるので残し、語は定数 1 つで持つ。
+
+### 12.3 設計の決め（design.md に書いたもの）
+
+1. 外し方は (b)。両関門は `limit_correction` を直に呼ぶ。`apply_balloon_limit` はキャラクター窓の矩形の列を組まない。
+2. 判定し直しの系と直の呼び手は本番のコードを変えない。檻は、書き換えた 1 本が「印の入った巡で 1 度だけ走り、押し込みの位置が変わらない」ことを示し、`reset_pos`・`chain_realign` の 2 本は名前と注だけを直す。
+3. `balloon_limit_flip_tests.rs` は `balloon_limit_push_tests.rs` に名前を変え、10-30 の形・11-16 の形・変わらない 4 つの形を 1 つの表にして両関門に通す。10-30 と 11-16 の 2 行は直す前に赤になる（並べ替えの位置 `(1108,336)`・`(2441,1188)` が出る）。
+4. 注だけ古くなる前提合わせの檻（`balloon_limit_gate_tests.rs`・`follow_balloon_limit_tests.rs`・`crates/areka/src/main_restore_seam_tests.rs`）は、注だけ直して前提合わせは残す。
+
+### 12.4 設計の話し合いへの議題（推奨つき）
+
+1. **外し方**: 推奨 (b)（型・関数・引数・欄を外し、両関門は `limit_correction` を直に呼ぶ）。仮置き: design.md は (b) で書いた。(a) は警告を押さえる属性が要り、使われない形が残る。
+2. **`how` の語の持ち方**: 推奨は `balloon_limit.rs` に定数 `BALLOON_LIMIT_PUSHED_HOW`（`"pushed"`）を 1 つ置く（語はこのモジュールが持つという今の約束どおり）。別案は 2 つの関門に字で書く。仮置き: 定数。
+3. **判定し直しの檻の書き換え方**: 推奨は、系の檻 1 本を「印の巡で `Clamp` が 1 行・位置は押し込みのまま・次の巡は走らない」に書き換え、`reset_pos`・`chain_realign` の 2 本は値を変えず名前と注だけ直す（判定し直しの書き込みが起きたかは系の檻だけで示す）。別案は 2 本にも書き込みが起きたことの主張を足す（並べ直しの書き込みと見分ける手間が増える）。仮置き: 推奨どおり。
+4. **件 2 の檻の確かめ方**: 推奨は映しを使わず、descript の分は「右の間合い＝左の間合い」、`windowposition.x` の分は「左に出した x ＝窓の左端−幅−237・右に出した x ＝窓の右端−237」で書く。別案は 2 本を除く（resolver の檻 4 本が決まりを持つ）。要件 7.6 が「確かめ方だけを直す」と書くので書き換えを推す。仮置き: 書き換え。
+5. **檻のファイルの名前**: 推奨は `balloon_limit_flip_tests.rs` を `balloon_limit_push_tests.rs` に変える（中身の大半が入れ替わり、並べ替えない決まりの檻が「flip」の名を持つと読み違える）。別案は名前を変えない。仮置き: 変える。
+6. **`follow/other_chars.rs` の名前**: 推奨は変えない（中身は判定し直しだけになるが、名前を変えると `follow.rs` の `mod` の行も変わり、同じウェーブの `audit-emo2-boot-frame` と触る所が増える）。注で中身を言い直す。仮置き: 変えない。
+7. **11-20 の測りの SSP の版**: `system.version` が読めず、`research.md` 8 節は「11-16 と同じ 2.9.34 の見込み」と書く。§8 の行と報告の文案は 2.9.34 と書く。推奨は開発者に版を確かめてもらい、違えば両方を直す。仮置き: 2.9.34。
+8. **`balloon-text-visual-tree` への申し送り**: (b) で `TEXT_BOX_SURFACE_NAME` の写しが配置の側から消える。推奨は完了の棚卸でその brief の 96 行へ申し送る（この spec の中では向こうの brief を直さない）。仮置き: 推奨どおり。
+
+### 12.5 檻の扱いの記録（要件 7.6）
+
+- 実装の後に、design.md「書き換える檻・除く檻」の表のとおり扱ったかを、檻ごとに「除いた／書き換えた／名前だけ変えた／注だけ直した」で書く（実装の段で埋める）。
