@@ -683,8 +683,7 @@ impl GpuSlots {
 /// `GraphicsCore::new()` の直前に [`GpuPermit::take`] で取る（待ちの関数の外・装置を作る前なので、
 /// 許可を待つ時間は待ちの時間に数えない）。装置より後に捨てるよう、足場の構造体では**最後の欄**に、
 /// 組で返すときは**先頭**に置く（構造体の欄は宣言の順に、`let` の組の束縛は後のものから捨てられる）。
-/// 1 つのテストで 2 つ取ると、同じことをするテストが並んだとき互いに待ち合って止まりうる。2 つ取る
-/// テストは `new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch` の 1 本だけにしておくこと。
+/// 1 つのテストで 2 つ取らない（同じことをするテストが並ぶと互いに待ち合って止まりうる）。
 pub struct GpuPermit {
     slots: &'static GpuSlots,
     /// 落ちの報告の許可の持ち手の表の行（`crash_report_test_support::hold`）。

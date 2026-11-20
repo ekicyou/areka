@@ -28,7 +28,9 @@ use areka_runtime::assets::build_boot_assets;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
-use super::test_support::{dpi_world, gpu_on, size_of, zero_clock};
+use super::test_support::{
+    dpi_world, dress_dpi_windows, gpu_on, size_of, spawn_resnap_windows, zero_clock,
+};
 use super::*;
 
 // ---------------------------------------------------------------------------
@@ -120,7 +122,7 @@ fn reveal_text(wiring: &RuntimeWiring, scope: u32, text: &str) {
 /// 窓 entity の `DPI` を現在値と必ず異なる実機水準（96／192）へ差し替え、その新 DPI を返す。
 ///
 /// 固定値を書き込むと「たまたま同値＝拡大率不変」で檻が空虚化するため、現在値を読んでから
-/// 別の値を選ぶ（`spine_test_support.rs:80-83` の `bump_window_dpi` と同流儀）。
+/// 別の値を選ぶ（`spine_test_support.rs` の `bump_window_dpi` と同流儀）。
 fn bump_window_dpi(world: &mut World, window: Entity) -> u16 {
     let current = world.get::<DPI>(window).map(|d| d.dpi_x);
     let next = if current == Some(192) { 96 } else { 192 };
@@ -243,8 +245,8 @@ fn visibility_phase_judges_the_state_left_by_this_frames_display_commands() {
 ///
 /// # 非空虚性の作り方（不可視の間に溜めた拡大率の差）
 ///
-/// 不可視のバルーンは dpi 相で拡大率を拾わない（`refresh_scale` の可視ゲート・
-/// `areka-emo-present/src/presenter/refresh.rs:74-80`）。ゆえに不可視のまま表示倍率を変えると
+/// 不可視のバルーンは dpi 相で拡大率を拾わない（`areka-emo-present/src/presenter/refresh.rs` の
+/// `refresh_scale` の可視ゲート）。ゆえに不可視のまま表示倍率を変えると
 /// 差は保留され、可視化の際に `show_target` が単一漏斗を再通過して**現在の**倍率から拡大率を
 /// 導出し直したときに初めて物理寸が跳ぶ。この跳びが同一フレームで窓へ届くかどうかが、
 /// 相が窓寸の反映より前に居るかどうかそのものである。相を反映の後ろへ移すと、窓寸は当該
@@ -321,7 +323,7 @@ fn show_transition_lands_the_new_window_size_within_the_same_frame() {
 ///
 /// 既存の 2 本（`frame_attach_tests.rs::attach_establishes_balloons_invisible_with_slot_and_surface`
 /// と `spine_display_tests.rs::spine_boot_leaves_all_balloons_invisible_with_established_slot_and_surface`）
-/// はいずれも**装着時点**の 1 点だけを見る。本番は毎フレーム 9 つの相が回るため、装着後の
+/// はいずれも**装着時点**の 1 点だけを見る。本番は毎フレームすべての相が回るため、装着後の
 /// どこかの相が可視化してしまう欠陥は 1 点観測では捕まらない——ここが全フレームの掃引を担う。
 ///
 /// 時刻は最初のフレームから注入しておく（`FrameTime`＋epoch）。時刻が定まらない間だけ不可視、
@@ -379,8 +381,8 @@ fn every_frame_from_boot_to_the_first_visible_content_keeps_balloons_invisible()
 /// 文字の配置先を接続した後も、文字スロットの可視状態は偽のままである。
 ///
 /// 文字層は最初の提示フレームで配置先 entity へ供給面を装着し、`VisualGraphics` と
-/// `Arrangement` を**挿入**する（`areka-emo-text/src/surface.rs:249-262`）。`Visual` の既定は
-/// 可視（`wintf/src/ecs/graphics/visual.rs:26` の構造体・既定値は `is_visible: true`）なので、
+/// `Arrangement` を**挿入**する（`areka-emo-text/src/surface.rs` の `TextSurface::attach`）。`Visual` の既定は
+/// 可視（`wintf/src/ecs/graphics/visual/mod.rs` の `impl Default for Visual`・`is_visible: true`）なので、
 /// この挿入がもし `Visual` まで含めば、装着で不可視に作った文字スロットが可視既定へ戻される。
 /// 枠だけが不可視で文字が画面に残る状態そのものであり、Requirement 1.7 が禁じている形である。
 ///
@@ -442,7 +444,7 @@ fn text_slot_stays_invisible_after_the_text_layer_attaches_its_surface() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑸ 見えているバルーンの組をフレームの終わり（提示の後）に kanade へ届ける
+// ⑷ 見えているバルーンの組をフレームの終わり（提示の後）に kanade へ届ける
 //    （areka-P0-status-execution-states task 5.2・要件 4.1／4.5／4.7／4.8／5.2）
 // ---------------------------------------------------------------------------
 //
@@ -530,19 +532,23 @@ fn visible_balloon_is_reported_once_and_its_disappearance_as_an_empty_set() {
 ///
 /// 持ち越すと、新しいゴーストの最初のフレームで「前の組と違う」として空の組が飛び、
 /// 同じ組が見えたフレームでは「前の組と同じ」として知らせが落ちる——その両方を見る。
+///
+/// 本番の切替と同じく World はそのまま、窓を畳んで開け直す（同じ窓へ装着し直すと前の
+/// presenter の子の entity が残る）。
 #[test]
 fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
+    let (_gpu, mut world, old_gw) = gpu_frame_world();
+
     // 前のゴースト: scope 0 が見えて組が届いた状態で降りる。
-    let (_old_gpu, mut old_world, _old_gw) = gpu_frame_world();
-    let old_reports = seat_ghost(&mut old_world);
+    let old_reports = seat_ghost(&mut world);
     let (_old_present_tx, old_present_rx) = mpsc::channel::<PresentCommand>();
     let (_old_lifecycle_tx, old_lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let mut old_wiring = boot_wiring(old_present_rx, old_lifecycle_rx);
     old_wiring.clock.observe_cue(0.0);
-    old_world.insert_resource(FrameTime(1.0));
-    old_wiring = advance_frame(&mut old_world, old_wiring);
+    world.insert_resource(FrameTime(1.0));
+    old_wiring = advance_frame(&mut world, old_wiring);
     reveal_text(&old_wiring, 0, "あい");
-    old_wiring = advance_frame(&mut old_world, old_wiring);
+    old_wiring = advance_frame(&mut world, old_wiring);
     assert_eq!(
         balloon_reports(&old_reports),
         vec![vec![(0, 0)]],
@@ -550,14 +556,21 @@ fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
     );
     drop(old_wiring);
 
+    let _ = crate::app_exit::close_windows_for_restart(&mut world);
+    let gw = spawn_resnap_windows(&mut world);
+    dress_dpi_windows(&mut world, &gw);
+    let old_balloon = old_gw.balloon_window(0).expect("balloon 窓がある");
+    assert!(
+        world.get_entity(old_balloon).is_err() && gw.balloon_window(0) != Some(old_balloon),
+        "前提: 前の窓は畳まれ、新しいゴーストは開け直した窓へ据わる"
+    );
+
     // 新しいゴースト: 新しい置き場と新しい結線状態（本番の切替と同じく `RuntimeWiring::new`）。
-    let (_gpu, mut world, _gw) = gpu_frame_world();
     let reports = seat_ghost(&mut world);
     let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let mut wiring = boot_wiring(present_rx, lifecycle_rx);
     wiring.clock.observe_cue(0.0);
-    world.insert_resource(FrameTime(1.0));
 
     wiring = advance_frame(&mut world, wiring);
     assert!(

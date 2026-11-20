@@ -348,6 +348,13 @@ pub fn reset_write_witness(world: &mut World, gw: &GhostWindows) {
 /// `Arrangement`（sentinel）と `DPI`（96＝author_dpi 既定と等倍）を全窓へ付与した DPI 相の檻。
 pub fn dpi_world() -> (World, GhostWindows) {
     let (mut world, gw) = resnap_world();
+    dress_dpi_windows(&mut world, &gw);
+    (world, gw)
+}
+
+/// [`dpi_world`] が全窓へ付ける書込 witness の `Arrangement` と `DPI`（96）を、`gw` の窓へ付ける
+/// （[`spawn_resnap_windows`] で開け直した窓を [`dpi_world`] と同じ形にするため）。
+pub fn dress_dpi_windows(world: &mut World, gw: &GhostWindows) {
     for scope in gw.scopes().collect::<Vec<_>>() {
         for e in [
             gw.char_window(scope).expect("char 窓がある"),
@@ -359,7 +366,6 @@ pub fn dpi_world() -> (World, GhostWindows) {
             ));
         }
     }
-    (world, gw)
 }
 
 /// 決定論 fake の再スケール報告源（GPU 不要で**二経路の結線**を檻に入れる）。
