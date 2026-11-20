@@ -348,3 +348,9 @@ finally {
 ### 範囲の外の問題（完了の棚卸で起票）
 
 - `cargo check --workspace --all-targets` の `shiori-abi` の `unused dependency windows`（`crates/shiori-abi/Cargo.toml:16`）。main でも出る。
+
+## 全体テストと第三者の表（7.2）
+
+- 2026-11-21、排他テストの机を取り、`pwsh -NoProfile -File tools/test-all.ps1 -License` を直さずに 1 回回した（commit `e5673c416`・始めの未コミットの変更 0）。全段が緑（`x64 workspace tests` 364 秒・`cargo deny check`・`cargo about generate` を含む）。赤は 0 件で回し直しはしていない。
+- 1,000 行の番人・番人の決まり・新しい crate のテスト（`crash_report_tests`・`hooks_tests`・`spawn_assembly_tests` ほか）はこの全体テストに含まれる。
+- `THIRD-PARTY-NOTICES.md` は `cargo about generate` が作り直した（手で書いていない）。差は `MIT License (263 crate)` → `(264 crate)` と `areka-input 0.1.0` の 1 行。
