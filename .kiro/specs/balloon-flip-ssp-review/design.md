@@ -102,7 +102,7 @@ graph TB
 - `crates/areka-placement/src/follow_other_chars_tests.rs` — `shown_char_rects` の 8 本を除き、判定し直しの 1 本を書き換え、残り 3 本はそのまま（注だけ直す）。
 - `crates/areka-placement/src/reset_pos_tests.rs` — `reset_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target` の名前と注を、押し込みの位置のまま変わらないことの檻に直す（主張の値は変えない）。
 - `crates/areka-placement/src/chain_realign_script_moved_tests.rs` — `realign_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target` を同じ形に直す（主張の値は変えない）。
-- 注だけを直すファイル（主張・値は変えない）: `crates/areka-placement/src/balloon_limit_gate_tests.rs`（71 行・363 行の「並べ替えず」）・`crates/areka-placement/src/follow_balloon_limit_tests.rs`（47 行の「反対の側へ並べ替える」）・`crates/areka/src/main_restore_seam_tests.rs`（216〜217 行の「反対の側へ映した」）。前提合わせ（キャラクター窓をはみ出させる）は残す。外すと檻の数が変わるだけで主張は同じなので、手を入れない。
+- 注だけを直すファイル（主張・値は変えない）: `crates/areka-placement/src/balloon_limit_gate_tests.rs`（71 行・363 行の「並べ替えず」）・`crates/areka-placement/src/follow_balloon_limit_tests.rs`（47 行の「反対の側へ並べ替える」）・`crates/areka/src/main_restore_seam_tests.rs`（216〜217 行の「反対の側へ映した」）・`crates/areka-placement/src/follow_other_chars_tests.rs`（147 行の `balloon_limit_flip_tests.rs` を名指す注）。前提合わせ（キャラクター窓をはみ出させる）は残す。外すと檻の数が変わるだけで主張は同じなので、手を入れない。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の 438 行目を書き直す（CompatDoc）。
 - `.kiro/specs/balloon-flip-ssp-review/research.md` — 檻の扱いの表（要件 7.6）を実装の後に書く節を足す。
 
@@ -288,16 +288,16 @@ fn apply_balloon_limit_one(p: ScopePlacement, snapshot: &MonitorSnapshot) -> Sco
 
 形の表を 1 つ置き、同じ表を起動の関門（`apply_balloon_limit` に `placement_sized` の配置を入れる）と書き込みの関門（キャラクター窓を形の位置と違う作業領域の中ほどに、バルーンが収まる形で spawn し、`move_window_to` で形の位置へ動かす）の両方に通す。作業領域は `0,0,2880,1704`。
 
-| 形 | キャラクター窓（位置・寸） | バルーン（ずらし・寸） | 期待 | 直す前 |
-|---|---|---|---|---|
-| 10-30 の形（配布版のぱすたの相方・scope 1）（7.3） | `0,336`・1108×1368 | `(-872,0)`・872×900（位置 `(-872,336)`） | `(0,336)`・`how="pushed"` | 赤（`(1108,336)` に並べ替わる） |
-| 11-16 のドラッグの後の形（相方・scope 1）（7.4） | `2524,1304`・336×400 | `(131,-116)`・288×203（位置 `(2655,1188)`） | `(2592,1188)`・`how="pushed"` | 赤（`(2441,1188)` に並べ替わる） |
-| 収まる（7.5・8.5） | `1200,904`・1108×800 | `(-872,0)`・872×400 | `(328,904)`・記録なし | 緑 |
-| `limit=0`（7.5・3.8） | `0,904`・1108×800 | `(-872,0)`・872×400 | `(-872,904)`・記録なし | 緑 |
-| キャラクター窓がはみ出す（7.5・3.3） | `-200,904`・1108×800 | `(-872,0)`・872×400 | `(0,904)`・`how="pushed"` | 緑 |
-| 縦にはみ出す（7.5・3.3） | `1200,904`・1108×800 | `(-872,1000)`・872×400 | `(328,1304)`・`how="pushed"` | 緑 |
+| 形 | キャラクター窓（位置・寸） | バルーン（ずらし・寸） | 期待 | 直す前（位置） | 直す前（欄 `overlap_scope` が無い） |
+|---|---|---|---|---|---|
+| 10-30 の形（配布版のぱすたの相方・scope 1）（7.3） | `0,336`・1108×1368 | `(-872,0)`・872×900（位置 `(-872,336)`） | `(0,336)`・`how="pushed"` | 赤（`(1108,336)` に並べ替わる） | 赤（`how="flipped"` の行に欄が載る） |
+| 11-16 のドラッグの後の形（相方・scope 1）（7.4） | `2524,1304`・336×400 | `(131,-116)`・288×203（位置 `(2655,1188)`） | `(2592,1188)`・`how="pushed"` | 赤（`(2441,1188)` に並べ替わる） | 赤（同上） |
+| 収まる（7.5・8.5） | `1200,904`・1108×800 | `(-872,0)`・872×400 | `(328,904)`・記録なし | 緑 | —（記録が無い） |
+| `limit=0`（7.5・3.8） | `0,904`・1108×800 | `(-872,0)`・872×400 | `(-872,904)`・記録なし | 緑 | —（記録が無い） |
+| キャラクター窓がはみ出す（7.5・3.3） | `-200,904`・1108×800 | `(-872,0)`・872×400 | `(0,904)`・`how="pushed"` | 緑 | 赤（今は押し込みの行にも `overlap_scope=None` が載る） |
+| 縦にはみ出す（7.5・3.3） | `1200,904`・1108×800 | `(-872,1000)`・872×400 | `(328,1304)`・`how="pushed"` | 緑 | 赤（同上） |
 
-各行で次も確かめる。起動の関門: `balloon_offset`・`balloon_offset_base` が入力と同じ（3.9）。両関門: 記録のある行は `[balloon-limit] Clamp` がちょうど 1 行で、`how="pushed"`・`context` が関門の語・`field("overlap_scope")` が `None`（3.4・4.1・4.3）。記録の無い行は、捕捉が生きていること（書き込みの関門は `[diag.window_move]` の行）を確かめてから `Clamp` が 0 行（4.4）。
+各行で次も確かめる。起動の関門: `balloon_offset`・`balloon_offset_base` が入力と同じ（3.9）。両関門: 記録のある行は `[balloon-limit] Clamp` がちょうど 1 行で、`how` が字の `"\"pushed\""`（今の檻と同じ比べ方。定数 `BALLOON_LIMIT_PUSHED_HOW` を檻から名指すと、直す前はビルドで落ちて赤の確かめにならないため）・`context` が関門の語・`field("overlap_scope")` が `None`（3.4・4.1・4.3）。記録の無い行は、捕捉が生きていること（書き込みの関門は `[diag.window_move]` の行）を確かめてから `Clamp` が 0 行（4.4）。直す前の赤は、位置の主張と欄の主張を分けて確かめる（上の表の 2 列）。
 
 ### 書き換える檻・除く檻（7.6・扱いは TestRecord に表で残す）
 
@@ -316,14 +316,14 @@ fn apply_balloon_limit_one(p: ScopePlacement, snapshot: &MonitorSnapshot) -> Sco
 | `right_from_start_equals_left_mirrored_for_descript_part` | 書き換え（映しを使わない） | descript の分 d（30・100）: 右に出した x ＝ キャラクター窓の右端 − d、かつ右の間合い（キャラクター窓の右端とバルーンの左端の差）と左の間合い（バルーンの右端とキャラクター窓の左端の差）が同じ（8.4） |
 | `mirror_of_windowposition_part_keeps_current_formula` | 書き換え（映しを使わない） | `windowposition.x` の分 −237（descript 0）: 左に出した x ＝ 窓の左端 − 幅 − 237、右に出した x ＝ 窓の右端 − 237（左右とも右向きが＋・8.4） |
 | `follow_other_chars_tests.rs` の `shown_char_rects` の 8 本（`visible_window_is_included`・`window_with_any_visible_child_is_included`・`window_whose_children_are_all_invisible_is_excluded`・`window_without_surface_children_is_excluded`・`text_box_surface_alone_does_not_count_as_shown`・`window_with_undetermined_size_is_excluded`・`three_scopes_come_in_ascending_order`・`no_ghost_windows_gives_empty_list_without_logging`） | 除く | 関数ごと外す |
-| `rejudge_after_chain_finalize_pushes_the_balloon_onto_the_moved_partner_once` | 書き換え | 本体を左端へ動かすと `(0,904)`。印の無い巡で相方を動かしても動かない。印の入った巡で系が走り、`[balloon-limit] Clamp` が 1 行（`how="pushed"`・欄 `overlap_scope` なし）で位置は `(0,904)` のまま（3.5）。印の後の巡では系が走らず `Clamp` が 0 行 |
+| `rejudge_after_chain_finalize_pushes_the_balloon_onto_the_moved_partner_once` | 書き換え | 本体を左端へ動かすと `(0,904)`。案 ⑵ では系が走っても走らなくても位置は同じなので、系が走ったかは位置でなく巡ごとの `[balloon-limit] Clamp` の行の数で確かめる。印の無い巡: 同じ捕捉の中に `[diag.window_move]` の行があること（捕捉が生きている）を先に確かめ、`Clamp` が 0 行。印の入った巡: `Clamp` がちょうど 1 行（`how="pushed"`・欄 `overlap_scope` なし）で、位置は `(0,904)` のまま（3.5）。印の後の巡: `Clamp` が 0 行 |
 | `rejudge_without_overlap_keeps_every_balloon_bit_identical`・`rejudge_skips_balloons_with_limit_disabled`・`rejudge_skips_a_scope_whose_char_position_is_undetermined` | 残す（注だけ直す） | 今のまま |
-| `reset_pos_tests.rs` `reset_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target`・`chain_realign_script_moved_tests.rs` `realign_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target` | 名前と注を書き換え（値は変えない） | 並べ直し・詰め直しの後も本体のバルーンは押し込みの位置（3.1・3.5）。直す前も後も緑（並べ替えの前提が無くなるだけ） |
+| `reset_pos_tests.rs` `reset_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target`・`chain_realign_script_moved_tests.rs` `realign_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target` | 名前と注を書き換え（値は変えない） | 並べ直し・詰め直しの後も本体のバルーンは押し込みの位置（3.1・3.5）。直す前も後も緑（並べ替えの前提が無くなるだけ）。注に「判定し直しが起きたかはここでは見ない（系の檻が見る）」と書く |
 
 ### 緑のまま残る檻（前提合わせは触らない）
 
 - `balloon_limit_tests.rs`（式）・`balloon_limit_gate_tests.rs`・`follow_balloon_limit_tests.rs`・`follow_drag_end_limit_tests.rs`・`crates/areka/src/main_restore_seam_tests.rs`・`resolver_resolve_balloon_tests.rs` の件 2 の 4 本・キャラクター窓の鎖の寄せの檻（`[work-area-clamp] Clamp` の `how="flipped"`）。
-- 直した後に `areka-placement` と `areka` の全部のテストを回す。フレームの檻（`crates/areka/src/runtime_tests/`・`crates/areka-runtime/src/`）が赤になったら、`frame/` に触る直しは入れずに止めて報告する（同じウェーブの約束）。
+- 直した後に `areka-placement`・`areka`・`areka-runtime` の全部のテストを回す。フレームの檻（`crates/areka/src/runtime_tests/`・`crates/areka-runtime/src/`）が赤になったら、`frame/` に触る直しは入れずに止めて報告する（同じウェーブの約束）。
 
 ## Open Questions / Risks
 
