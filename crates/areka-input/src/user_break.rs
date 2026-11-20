@@ -23,7 +23,7 @@ use areka_runtime::target_map::balloon_target;
 use areka_runtime::user_break_cue::NoUserBreakSignal;
 
 /// 中断の配線の持ち物（NonSend・UI スレッド所有）。
-pub(crate) struct UserBreakWiring {
+pub struct UserBreakWiring {
     /// 旗の線の受信端（talk スレッドの受け口 `NoUserBreakCueSink` と対）。
     flag_rx: Receiver<NoUserBreakSignal>,
     /// 中断を禁じる旗（要件 5）。
@@ -43,7 +43,7 @@ pub(crate) struct UserBreakWiring {
 
 impl UserBreakWiring {
     /// 3 本の線の端から組む（旗は下りた状態・直前の押下の記憶は「確定でない」から始まる）。
-    pub(crate) fn new(
+    pub fn new(
         flag_rx: Receiver<NoUserBreakSignal>,
         lifecycle_tx: Sender<TalkLifecycleSignal>,
         kanade: Sender<KanadeMsg>,
@@ -72,8 +72,8 @@ impl UserBreakWiring {
     }
 
     /// 旗の線の受信端（テスト専用の読み口・起動の通しのテストが届いた合図を 1 件ずつ読む）。
-    #[cfg(test)]
-    pub(crate) fn flag_rx(&self) -> &Receiver<NoUserBreakSignal> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn flag_rx(&self) -> &Receiver<NoUserBreakSignal> {
         &self.flag_rx
     }
 
@@ -82,8 +82,8 @@ impl UserBreakWiring {
     /// 未読の値が残っていても 1 度の `try_recv` では生死が分からないので、`Err` が出るまで
     /// 回して最後の `Err` を見る: `Empty` なら生きている・`Disconnected` なら古い。
     /// 取り出した値は捨てる（読むのはテストだけ）。
-    #[cfg(test)]
-    pub(crate) fn flag_source_connected(&mut self) -> bool {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn flag_source_connected(&mut self) -> bool {
         loop {
             match self.flag_rx.try_recv() {
                 Ok(_) => continue,
@@ -159,7 +159,7 @@ pub(crate) fn fold_no_user_break(flag: bool, signal: NoUserBreakSignal) -> (bool
 /// 送らない・areka-P0-status-execution-states 要件 3.1〜3.4）。比べるのは合図が届いた巡だけで、
 /// 送れなかったときは error を記録し、最後に届けた値を変えない＝次に合図が届いた巡で送り直す
 /// （要件 7.1）。
-pub(crate) fn drain_no_user_break_signals(world: &mut World) {
+pub fn drain_no_user_break_signals(world: &mut World) {
     let Some(mut wiring) = world.get_non_send_mut::<UserBreakWiring>() else {
         return;
     };
@@ -204,7 +204,7 @@ pub(crate) fn drain_no_user_break_signals(world: &mut World) {
 ///
 /// 呼び手は boot 成功後の `wire_runtime`（`ghost_session::boot_ghost` からゴーストごとに n 回＝
 /// 状態の載せ替え。系の登録は `ghost_session::register_systems` からプロセスに 1 回）。
-pub(crate) fn wire_user_break(
+pub fn wire_user_break(
     world: &mut World,
     flag_rx: Receiver<NoUserBreakSignal>,
     lifecycle_tx: Sender<TalkLifecycleSignal>,
@@ -223,7 +223,7 @@ pub(crate) fn wire_user_break(
 /// `fn register_choice_drain`）はどれも「後」で、「前」はここだけである。
 ///
 /// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
-pub(crate) fn register_user_break_drain(world: &mut World) {
+pub fn register_user_break_drain(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
         drain_no_user_break_signals.before(dispatch_pointer_events),
@@ -236,7 +236,7 @@ pub(crate) fn register_user_break_drain(world: &mut World) {
 /// 「バルーンが出ているか」を表示層へ照会し、残りを [`press_with_visibility`] に任せる。
 /// `RuntimeWiring` が無い・表示層に相手が居ないはどちらも「観測できない」で、作らない側へ倒れる
 /// （要件 1.9）。
-pub(crate) fn on_left_press(
+pub fn on_left_press(
     world: &mut World,
     scope: usize,
     double_click: DoubleClick,

@@ -18,13 +18,13 @@ use wintf::ecs::{PhysicalPoint, Window};
 use super::super::super::{MouseWiring, RegionSource};
 use super::super::char_watch;
 use super::{BUNDLED, CharCursors, register_char_cursor};
-use crate::input_events::hover_region::cursor_pick::Spot;
+use crate::hover_region::cursor_pick::Spot;
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 use areka_runtime::hit_region::HitRegion;
 use areka_runtime::shell_cursor_assets::ShellCursorAssets;
 use areka_runtime::shell_cursor_table::{CursorScene, Shape, SystemCursor};
 
-const TARGET: &str = "areka::input_events::char_watch::cursor_answer";
+const TARGET: &str = "areka_input::char_watch::cursor_answer";
 
 /// x < 50 → Bust、50 ≤ x < 100 → Head、それ以外 → 無し。
 fn mock(scope: u32, x: i64, y: i64) -> HitRegion {

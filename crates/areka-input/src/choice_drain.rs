@@ -156,7 +156,7 @@ pub(crate) fn drain_choice_selections(world: &mut World) {
 ///
 /// Precondition: drain の時点で `wire_balloon_choice` 済み（[`ChoiceSelectionInbox`] 存在・挿入どうしは互いを読まない）。
 /// Postcondition: 以降のフレームで受信済み通知は全件送出試行済み・失敗は warn 記録。
-pub(crate) fn wire_choice_drain(world: &mut World, dispatcher: Sender<DispatcherMsg>) {
+pub fn wire_choice_drain(world: &mut World, dispatcher: Sender<DispatcherMsg>) {
     world.insert_non_send(ChoiceForwarder { dispatcher });
 }
 
@@ -167,7 +167,7 @@ pub(crate) fn wire_choice_drain(world: &mut World, dispatcher: Sender<Dispatcher
 /// `register_balloon_leave_system` と同じ ordering 作法）。
 ///
 /// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
-pub(crate) fn register_choice_drain(world: &mut World) {
+pub fn register_choice_drain(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
         drain_choice_selections.after(dispatch_pointer_events),

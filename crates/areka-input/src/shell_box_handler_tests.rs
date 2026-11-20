@@ -28,15 +28,11 @@ use wintf::ecs::pointer::{DoubleClick, Phase, PointerLeave, PointerState};
 use wintf::ecs::{Input, Point, Window};
 
 use super::*;
-use crate::input_events::balloon::test_support::{
-    anchor_cues, anchor_row, headless_runtime_wiring, row,
-};
-use crate::input_events::balloon::{ChoiceSelectionInbox, click_selection, wire_balloon_choice};
-use crate::input_events::shell_box::ShellBoxHover;
-use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};
-use crate::input_events::{
-    MouseWiring, RegionSource, on_char_pointer_moved, on_char_pointer_pressed,
-};
+use crate::balloon::test_support::{anchor_cues, anchor_row, headless_runtime_wiring, row};
+use crate::balloon::{ChoiceSelectionInbox, click_selection, wire_balloon_choice};
+use crate::shell_box::ShellBoxHover;
+use crate::user_break::{UserBreakWiring, drain_no_user_break_signals};
+use crate::{MouseWiring, RegionSource, on_char_pointer_moved, on_char_pointer_pressed};
 use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::hit_region::HitRegion;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
@@ -207,7 +203,7 @@ impl Fixture {
         self.shell_rx.try_iter().collect()
     }
 
-    fn selections(&self) -> Vec<crate::input_events::balloon::ChoiceSelection> {
+    fn selections(&self) -> Vec<crate::balloon::ChoiceSelection> {
         self.world
             .get_non_send::<ChoiceSelectionInbox>()
             .expect("結線済み")
@@ -616,7 +612,7 @@ fn box_hover_change_logs_only_on_change() {
 fn press_row_and_drain(
     point: BoxPoint,
 ) -> (Vec<log_capture_kit::CapturedEvent>, Vec<DispatcherMsg>) {
-    use crate::input_events::choice_drain::{drain_choice_selections, wire_choice_drain};
+    use crate::choice_drain::{drain_choice_selections, wire_choice_drain};
     let mut f = Fixture::new();
     let (kanade_tx, kanade_rx) = mpsc::channel();
     wire_choice_drain(&mut f.world, kanade_tx);

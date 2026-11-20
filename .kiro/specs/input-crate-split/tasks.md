@@ -49,7 +49,7 @@
   - _Requirements: 4.6, 4.7, 5.1_
 
 - [ ] 4. 新しい crate を作って移す
-- [ ] 4.1 crate の骨組みを作り、入力を移して本番を組めるようにする
+- [x] 4.1 crate の骨組みを作り、入力を移して本番を組めるようにする
   - 新しい crate のマニフェストを runtime の crate の型に揃えて作る（lib・`publish = false` と理由を同じ行に・ワークスペースの値の継承・`test-support = []`・本番の依存は設計の 12 個だけ・開発用の依存は設計の一覧だけ・各行に理由の注）
   - 入力の 44 ファイル（根は crate の根へ）と同梱のカーソルの絵の置き場を履歴を残す移動で移し、絵を読む相対パスを 1 段浅くする（絵のバイトは変えない）
   - 自分を指すパスを crate の根へ、`pub(in …)` を `pub(crate)` の字面へ書き換える。書き換えは行の単位に留め、当たり判定の入口の行の中身は変えない
@@ -159,3 +159,7 @@
 - 1.2・7.3: areka の tracing は標準出力に出る（`escape-*.stderr.log` は両方をまとめたもの）。`log_stay_on_top_discard` は常に手前がオンのときだけ出るので、台本は強制退避の前に MCP で `\![set,windowstate,stayontop]\e` を送る。手順は `verification.md`。
 - 3.3: `input_events_tests.rs` の「強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。」は 3 本を移したので古い。7.4 で `audit-areka-input-menu` へ申し送る（移すファイルのコメントは変えない）。
 - hit-id-pass（2026-11-20）: `resolve_hit_region`／`hit_region_client` の署名も `HitRegion`／`ClientHit` の形も変えない。`crates/areka-input/src/lib.rs` の追従は要らない。向こうは `tech.md` の Testing 節に 1 文足す（この spec は `tech.md` を書き換えない）。
+- 4.1: `cursor_answer_tests.rs` の出所の名（`areka_input::char_watch::cursor_answer`）は crate を移すと赤になるので 4.1 で直した。5.1 では済みとして扱う。
+- 4.1: 公開面は設計の一覧に `user_break::drain_no_user_break_signals` を足したもの（本体の `runtime_tests/frame_shell_box_arrow_tests.rs` が使う）。連れて開けた型は 0。
+- 4.1: `cargo doc -p areka-input` の警告 20 件（移したコメントの「private item へのリンク」19・`MouseWiring::with_clock` の解けないリンク 1）は本体の名を指さない。7.4 で `audit-areka-input-menu` へ申し送る。
+- 範囲の外: `cargo check --workspace --all-targets` に `shiori-abi` の `unused dependency windows`（`crates/shiori-abi/Cargo.toml:16`）が main でも出る。完了の棚卸で起票する。

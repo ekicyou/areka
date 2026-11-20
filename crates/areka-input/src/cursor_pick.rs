@@ -11,14 +11,14 @@ use areka_runtime::shell_cursor_table::{
 
 /// その位置の当たり: 当たり判定の上・当たり判定の無い所・絵の透けた所。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate::input_events) enum Spot {
+pub(crate) enum Spot {
     Region(String),
     Plain,
     SeeThrough,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate::input_events) enum Hold {
+pub(crate) enum Hold {
     Free,
     /// scene は Down か RightDown。
     Pressed {
@@ -30,7 +30,7 @@ pub(in crate::input_events) enum Hold {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate::input_events) struct WindowCursor {
+pub(crate) struct WindowCursor {
     /// 当たり判定を引いた位置（窓 client 物理 px・動いたかの比べに使う）。
     pub client: (i32, i32),
     pub spot: Spot,
@@ -38,14 +38,14 @@ pub(in crate::input_events) struct WindowCursor {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate::input_events) enum Shown {
+pub(crate) enum Shown {
     Region { scene: CursorScene, region: String },
     Arrow,
     Pass,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::input_events) enum Origin {
+pub(crate) enum Origin {
     Brace,
     GhostDescript,
     Default,
@@ -80,7 +80,7 @@ fn shown_of(c: &WindowCursor) -> Shown {
 
 /// 前の状態と引き金から、次の状態と出す場面を決める（design の 13 行の表）。resolve は当たり判定を引くとき
 /// （位置が変わった・初めて・押した・放した・ホイール・前の状態が無い）だけ呼ぶ。
-pub(in crate::input_events) fn plan_cursor(
+pub(crate) fn plan_cursor(
     prev: Option<&WindowCursor>,
     trigger: CursorTrigger,
     client: (i32, i32),
@@ -154,7 +154,7 @@ pub(in crate::input_events) fn plan_cursor(
 }
 
 /// 出す場面から形を選ぶ（cursorブレスの行 ＞ ゴーストの差し替え ＞ 既定）。Pass は None。
-pub(in crate::input_events) fn pick_shape<F: Clone>(
+pub(crate) fn pick_shape<F: Clone>(
     scope: u32,
     shown: &Shown,
     rows: &CursorRows<F>,

@@ -2,9 +2,9 @@ use bevy_ecs::prelude::*;
 
 /// 本体が据える強制退避の口（本体の `app_exit::install_input_hooks` が `register_systems` で据える）。
 #[derive(Resource, Clone, Copy)]
-pub(crate) struct InputHooks {
+pub struct InputHooks {
     /// 全窓を閉じて終了を指示する（本体の終了の統合操作・出所 `Escape`）。
-    pub(crate) escape: fn(&mut World),
+    pub escape: fn(&mut World),
 }
 
 /// 据えられた口で強制退避する。口が無ければ `error!(input_hooks_missing)` を残し、

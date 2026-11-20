@@ -65,7 +65,7 @@ mod session;
 /// 捉え、当たり判定名を resolver で解決し、送出間引き（`throttle`）を通して kanade へ配信する
 /// 薄い配線層。現状は `throttle`（送出間引きの純粋判定・task 2.4）のみ。ポインタハンドラ結線と
 /// per-scope 状態保持（`MouseWiring`）は task 2.6／2.7 で増設される。
-mod input_events;
+use areka_input as input_events;
 
 /// 終了の統合操作（areka-P0-app-lifetime-separation）。全窓を閉じてから終了を指示する
 /// `quit_app` と出所の語彙 `ExitOrigin` を持つ。
