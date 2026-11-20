@@ -18,9 +18,9 @@ use windows::Win32::Foundation::GENERIC_READ;
 use windows::Win32::Graphics::Imaging::D2D::IWICImagingFactory2;
 use windows::Win32::Graphics::Imaging::{
     CLSID_WICImagingFactory, GUID_WICPixelFormat1bppIndexed, GUID_WICPixelFormat2bppIndexed,
-    GUID_WICPixelFormat4bppIndexed, GUID_WICPixelFormat8bppIndexed, GUID_WICPixelFormat32bppPBGRA,
-    IWICBitmapSource, IWICPixelFormatInfo2, WICBitmapDitherTypeNone, WICBitmapPaletteTypeMedianCut,
-    WICDecodeMetadataCacheOnDemand,
+    GUID_WICPixelFormat4bppIndexed, GUID_WICPixelFormat8bppIndexed, GUID_WICPixelFormat32bppBGRA,
+    GUID_WICPixelFormat32bppPBGRA, IWICBitmapSource, IWICPixelFormatInfo2, WICBitmapDitherTypeNone,
+    WICBitmapPaletteTypeMedianCut, WICDecodeMetadataCacheOnDemand,
 };
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
 use windows::core::{GUID, HSTRING, Interface};
@@ -51,13 +51,17 @@ impl WicDecoderArm {
         Ok(Self { factory })
     }
 
-    /// WIC 経路で PBGRA への変換器と変換前 α 有無を作る（`windows` エラーをそのまま返す）。
+    /// WIC 経路で `target`（PBGRA か BGRA）への変換器と変換前 α 有無を作る（`windows` エラーをそのまま返す）。
     /// 画素は読まない（寸法の確かめと写しは `copy_checked`）。
     ///
     /// wintf `com/wic.rs::load_bitmap_source` の手順を raw COM で再現する。
     /// `has_alpha` は **変換前**フレームの `GetPixelFormat`（Critical Issue 1）由来と、
     /// 番号つきの形式ならパレット由来の α 有無から取る。
-    fn open_source(&self, path: &Path) -> windows::core::Result<(IWICBitmapSource, bool)> {
+    fn open_source(
+        &self,
+        path: &Path,
+        target: &GUID,
+    ) -> windows::core::Result<(IWICBitmapSource, bool)> {
         // UTF-16 のまま渡す（`to_string_lossy` は対のないサロゲートを U+FFFD に化かし別の名を開く）
         let path_hstring = HSTRING::from(path);
 
@@ -84,12 +88,12 @@ impl WicDecoderArm {
             pixel_format_has_alpha(&self.factory, &pre_format)?
         };
 
-        // PBGRA32 へ変換（α 無し画像も 100% 不透明として埋める）
+        // α 無し画像も 100% 不透明として埋める
         let converter = unsafe { self.factory.CreateFormatConverter()? };
         unsafe {
             converter.Initialize(
                 &frame.cast::<IWICBitmapSource>()?,
-                &GUID_WICPixelFormat32bppPBGRA,
+                target,
                 WICBitmapDitherTypeNone,
                 None,
                 0.0,
@@ -97,6 +101,27 @@ impl WicDecoderArm {
             )?;
         }
         Ok((converter.cast()?, has_alpha))
+    }
+
+    /// `decode` と `decode_unmultiplied` の共通の道（変換先の形式だけが違う）。
+    fn read(&self, path: &Path, target: &GUID) -> Result<DecodedImage, DecodeError> {
+        // 不在は診断可能な NotFound として返す（panic しない）。
+        if !path.exists() {
+            return Err(DecodeError::NotFound {
+                path: path.to_path_buf(),
+            });
+        }
+        // 在るが復号不能（破損等）は Decode として返す（panic しない）。
+        let (source, has_alpha) =
+            self.open_source(path, target)
+                .map_err(|e| DecodeError::Decode {
+                    path: path.to_path_buf(),
+                    source: e.to_string(),
+                })?;
+        copy_checked(&source, has_alpha).map_err(|source| DecodeError::Decode {
+            path: path.to_path_buf(),
+            source,
+        })
     }
 }
 
@@ -123,21 +148,11 @@ fn copy_checked(source: &IWICBitmapSource, has_alpha: bool) -> Result<DecodedIma
 
 impl ElementDecoder for WicDecoderArm {
     fn decode(&self, path: &Path) -> Result<DecodedImage, DecodeError> {
-        // 不在は診断可能な NotFound として返す（2.2・panic しない）。
-        if !path.exists() {
-            return Err(DecodeError::NotFound {
-                path: path.to_path_buf(),
-            });
-        }
-        // 在るが復号不能（破損等）は Decode として返す（2.2・panic しない）。
-        let (source, has_alpha) = self.open_source(path).map_err(|e| DecodeError::Decode {
-            path: path.to_path_buf(),
-            source: e.to_string(),
-        })?;
-        copy_checked(&source, has_alpha).map_err(|source| DecodeError::Decode {
-            path: path.to_path_buf(),
-            source,
-        })
+        self.read(path, &GUID_WICPixelFormat32bppPBGRA)
+    }
+
+    fn decode_unmultiplied(&self, path: &Path) -> Result<DecodedImage, DecodeError> {
+        self.read(path, &GUID_WICPixelFormat32bppBGRA)
     }
 
     fn probe_pna(&self, path: &Path) -> bool {
@@ -291,3 +306,7 @@ mod animation_tests;
 #[cfg(test)]
 #[path = "wic_arm_palette_tests.rs"]
 mod palette_tests;
+
+#[cfg(test)]
+#[path = "wic_arm_unmultiplied_tests.rs"]
+mod unmultiplied_tests;

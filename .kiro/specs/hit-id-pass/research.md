@@ -622,3 +622,7 @@ A を採るときだけ要るもの:
 - 検証の指摘で設計に入れた直し: `crates/areka-runtime/src/hit_region.rs` は触らない（直す所が無い）・書き直すテストに `presenter_film_tests.rs` を足す・`region` の読みは新しいファイル `shell_target_regions.rs` へ置く（`shell_target.rs` は 1,000 行の番に近い）・`shown_mask` を足しても α マスクの輪番の確保が増えないことをテストで固定する。
 - 同じウェーブとの取り決め: 入口の署名は変わらないので `input-crate-split` の追従は要らない（同日に知らせた）。`doc/COMPAT_ARCHITECTURE.md` §8 の既にある行の書き直しと steering `tech.md` の 1 文は、実装で触る前に相手のセッション（`balloon-flip-ssp-review`・`input-crate-split`）へ知らせる。
 - 設計の前提で、コードで追っていないもの: 「マウスの受け手が走るのは、表示の指令の適用と描画の後だけ」。この設計は ID の絵を表示の成立点で塗り、α マスクも同じ所で入れ替えるので、受け手がどの段で走っても答えは変わらない（この前提に依らない）。
+
+## 13. 実装の段の測り: 乗算しない読みの道（2026-11-21・タスク 1）
+
+`region` の画像の乗算しない読みは WIC の道（1 枚目のコマを `GUID_WICPixelFormat32bppBGRA` へ変換）に決め、`image` の PNG の読みへは替えなかった。テスト（`crates/areka-emo-atlas/src/decode/wic_arm_unmultiplied_tests.rs`）でメモリに組んだ 4×1 の RGBA の PNG（RGBA (200,100,50,128)・(10,20,30,255)・(77,88,99,0)・(255,1,128,1)）に、gAMA（ガンマ 1.0＝100000）・cHRM（白色点 (0.3127,0.329)・原色を sRGB から外した値）・sRGB（意図 0）・iCCP（ガンマ 1.0 の灰色の形を装った 132 バイトの ICC）を 1 つずつ、また gAMA＋cHRM＋sRGB を一緒に差し込んで読んだところ、5 枚とも 4 画素の R・G・B・α が書いた値と 1 つも違わなかった（α＝0 の画素の色も残る）。差し込んだチャンクは WIC の metadata の名の列（`/gAMA`・`/cHRM`・`/sRGB`・`/iCCP`）に出ることを同じテストで確かめ、チャンクの無い絵には `/gAMA` が出ないことも確かめた（壊れたチャンクを WIC が黙って読み飛ばした結果ではない）。α の無い RGB の PNG（gAMA つき）は 4 画素とも α＝255・色はそのままで、`has_alpha` は偽。画像でないファイルは理由つきの `Decode`、無いファイルは `NotFound`、一辺 16,385 の絵は寸法と上限（16,384）を書いた `Decode` で断る。
