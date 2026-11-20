@@ -7023,7 +7023,7 @@ priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: warn!（後の `surface*`ブレスが、そのサーフェスに既にある collision番号を書いたときだけ）。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。縮退の理由: 重なりの順が正典（先に書いた方が上位）と逆で、areka は後に書いた方を手前に置く。areka-parsers の shell::decode_collisions が値にするのは番号が数字だけの行に限られ、矩形の 4 点と領域名は転記して areka-emo-compose の hit が当たり判定に使う。同じ collision番号の行は前の行を除かずに両方を残す（collisionex-regions・`collisionex*` と同じ番号の並び）。記録が出るのは areka-emo-compose の fold::add_lines が後のブレスの重なりを見つけたときだけで、同じブレスの中で番号が重なる行と `surface.append*`ブレスが足す行は両方を残したうえで記録を出さない。見出しの `*` は 1 個以上の数字。
+壊れ方: 黙って壊れる。記録: warn!（後の `surface*`ブレスが、そのサーフェスに既にある collision番号を書いたときだけ）。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。縮退の理由: 重なりの順が正典（先に書いた方が上位）と逆で、areka は後に書いた方を手前に置く。areka-parsers の shell::decode_collisions が値にするのは番号が数字だけの行に限られ、矩形の 4 点と領域名は転記して areka-emo-present の presenter が当たり判定に使う（色の絵の α を確かめ、ID の描き先の 1 ピクセルを読み、名前を引く）。同じ collision番号の行は前の行を除かずに両方を残す（collisionex-regions・`collisionex*` と同じ番号の並び）。記録が出るのは areka-emo-compose の fold::add_lines が後のブレスの重なりを見つけたときだけで、同じブレスの中で番号が重なる行と `surface.append*`ブレスが足す行は両方を残したうえで記録を出さない。見出しの `*` は 1 個以上の数字。
 担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として矩形の当たり判定の一覧を名指ししている。
 束: 当たり判定・引き受けたうえで縮めている（記録なし）（先に要る仕組み: 当たり判定の形の拡張）。束の順位: 20——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -7036,7 +7036,7 @@ priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!（まだ働かない形は読み込みごとに 1 件・読めない行は 1 行ずつ・別のブレスで番号が重なれば 1 行）。`rect` は働く・楕円・円・多角形・`region` は型へ運び記録だけ（ID の描き先に塗るのは `hit-id-pass`）。areka-parsers の shell::decode_collisions が `collisionex` の行を `collision*` と同じ番号の並びへ読み、`rect` は矩形として当たり判定に使われる。ほかの 4 つの形は当たらず、shell::ShellIssue::ShapesInactive が形ごとの数を添えた warn! を読み込みごとに 1 件出す。読めない行は shell::ShellIssue::CollisionEx が 1 行ずつ warn! を出して飛ばす。
+壊れ方: 見た目の差。記録: warn!（読めない行は 1 行ずつ・別のブレスで番号が重なれば 1 行）。`rect`・`ellipse`・`circle`・`polygon`・`region` の 5 つの形が働く。areka-parsers の shell::decode_collisions が `collisionex` の行を `collision*` と同じ番号の並びへ読み、areka-emo-present の presenter が 5 つの形を ID の描き先へ塗って当たり判定に使う（色の絵の α を確かめ、ID の描き先の 1 ピクセルを読み、名前を引く）。縮退の理由: 重なりの順が正典（先に書いた方が上位）と逆で、areka は後に書いた方を手前に置く。読めない行は shell::ShellIssue::CollisionEx が 1 行ずつ warn! を出して飛ばす。
 見出しの `*` は 1 個以上の数字。担当 spec は collisionex-regions。
 束: 当たり判定・読む経路が無い（先に要る仕組み: 当たり判定の形の拡張）。束の順位: 36——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """

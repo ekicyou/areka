@@ -228,7 +228,7 @@
   - _Requirements: 3.8, 4.1, 4.5, 5.13, 7.3, 7.4, 10.6_
 
 - [ ] 8. 文書と台帳
-- [ ] 8.1 (P) 網羅台帳と roadmap の下書きを書き直す
+- [x] 8.1 (P) 網羅台帳と roadmap の下書きを書き直す
   - 台帳の `collisionex*` の行の説明を「5 つの形が働く」へ書き直し、状態は `degraded` のまま、理由を「重なりの順が正典（先に書いた方が上位）と逆」にする。`collision*` の行の当たり判定の使われ方の文を新しい解決に合わせる
   - roadmap の下書きの「ID の描き先に塗るのはこの仕様」の文を、着地した形に合わせて書き直す
   - 台帳を直したら `cargo run -p ukadoc-survey -- report` と `cargo run -p ukadoc-survey -- report-summary` で報告を作り直し、台帳と一緒に入れる
