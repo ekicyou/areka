@@ -1,5 +1,4 @@
-//! 止めたバルーンのドラッグの檻（要件 5.6・6.1・6.3・6.4・6.5・6.6・7.4・
-//! design「BalloonLock」入口の見張り）。
+//! 止めたバルーンのドラッグの檻。
 //!
 //! 組み立ては `follow_drag_end_gate_tests.rs` と同じ: wndproc の代わりに
 //! `DragAccumulatorResource` へ種を積み、`dispatch_drag_events` を 1 回の画面更新として呼ぶ。
@@ -200,7 +199,7 @@ impl Rig {
     }
 }
 
-/// 止めたドラッグ（6.1・6.6）: 追従のずれ・位置・記憶・キーワードの素材が変わらず、記録が 1 件。
+/// 止めたドラッグ: 追従のずれ・位置・記憶・キーワードの素材が変わらず、記録が 1 件。
 #[test]
 fn held_balloon_drag_changes_nothing_and_logs_once() {
     let mut rig = Rig::new();
@@ -313,7 +312,7 @@ fn other_window_snapshot_falls_back_to_current_setting() {
     rig.close();
 }
 
-/// 途中の lock（5.6）: そのドラッグは今どおり終わり（記憶が書かれ）、次のドラッグから止まる。
+/// 途中の lock: そのドラッグは今どおり終わり（記憶が書かれ）、次のドラッグから止まる。
 #[test]
 fn mid_drag_lock_takes_effect_from_next_drag() {
     let mut rig = Rig::new();
@@ -347,7 +346,7 @@ fn mid_drag_lock_takes_effect_from_next_drag() {
     rig.close();
 }
 
-/// キャラクターの窓のドラッグ（6.3）: 止めたスコープでもバルーンは付いて動く。
+/// キャラクターの窓のドラッグ: 止めたスコープでもバルーンは付いて動く。
 #[test]
 fn char_drag_moves_held_balloon_along() {
     let mut rig = Rig::new();

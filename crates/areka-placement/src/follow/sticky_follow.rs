@@ -1,15 +1,15 @@
-//! 窓の組の連れ動き（areka-P0-window-link-directives・設計「sticky_follow」）。
+//! 窓の組の連れ動き。
 //!
-//! - [`partner_target`] は組の相手の新しい位置（純・4.2・5.2）
+//! - [`partner_target`] は組の相手の新しい位置（純）
 //! - [`wintf_moves_window`]／[`sync_drag_writer`] はドラッグで窓を書くのが wintf か areka かの
-//!   決め方と、その付け直し（2.4・設計の決め 12）。`DragConfig.move_window` を書くのは
+//!   決め方と、その付け直し。`DragConfig.move_window` を書くのは
 //!   窓を作るとき（`spawn.rs`）を除いて [`sync_drag_writer`] だけ
 //! - [`CharDragSession`] はキャラクターの窓のドラッグの控え。始め（[`begin_char_drag`]）に
 //!   ドラッグした窓と組の相手の始めの位置・始めの向き・書き手を控え、途中
 //!   （[`follow_partners_on_drag`]）と終わり（[`finish_char_drag`]）は「始めからの量」で相手を
-//!   動かす（設計の決め 4）。wintf の `DraggingState` は読まない
+//!   動かす。wintf の `DraggingState` は読まない
 //! - [`follow_sticky_move`]／[`log_sticky_ignored`] は `\![move]` の連れ動きと、
-//!   `ignore-sticky-window` で連れ動かさなかったことの記録（5.1〜5.5・9.3・9.4）
+//!   `ignore-sticky-window` で連れ動かさなかったことの記録
 
 use areka_sylphya::PersistKey;
 use bevy_ecs::prelude::*;
@@ -26,7 +26,7 @@ use super::{
     follow_balloon, move_window_to, origin_position, project_anchor, resize_window_to,
 };
 
-/// 相手の新しい位置（純）: 始めの位置＋量を、相手の向きで射影する（4.2・5.2）。
+/// 相手の新しい位置（純）: 始めの位置＋量を、相手の向きで射影する。
 ///
 /// 吸着した軸の量は捨ててから [`project_anchor`] で辺へ付ける。モニタの写しが無く射影が
 /// 恒等に縮退しても、吸着した軸は始めの位置のまま動かない。
@@ -51,7 +51,7 @@ pub fn partner_target(
 
 /// このキャラクターの窓のドラッグで、wintf に窓を動かさせるか（純）。吸着なしで、しかも
 /// 組に入っていない窓だけが真。組に入った窓は吸着なしでも areka が書く（相手と同じ回に書いて
-/// ずらさないため・設計の決め 12）。
+/// ずらさないため）。
 pub fn wintf_moves_window(anchor: Anchor, grouped: bool) -> bool {
     anchor.is_free() && !grouped
 }
@@ -132,7 +132,7 @@ fn ledger_partners(world: &World, scope: usize) -> Vec<u32> {
     }
 }
 
-/// ドラッグの始めを控える（2.4・3.6・設計の決め 4）。組に無い窓でも向きと書き手は控える。
+/// ドラッグの始めを控える。組に無い窓でも向きと書き手は控える。
 pub fn begin_char_drag(world: &mut World, dragged: Entity) {
     let (Some(anchor), Some(dragged_start)) = (
         world.get::<Anchored>(dragged).map(|a| a.0),
@@ -198,7 +198,7 @@ pub(crate) fn is_char_drag_partner(world: &World, window: Entity) -> bool {
         .is_some_and(|session| session.partners.iter().any(|p| p.window == window))
 }
 
-/// ドラッグ中の窓の縛りの向き（控えがあれば始めの向き・無ければ `Anchored`・2.4）。
+/// ドラッグ中の窓の縛りの向き（控えがあれば始めの向き・無ければ `Anchored`）。
 pub(crate) fn drag_anchor(world: &World, window: Entity) -> Option<Anchor> {
     match world.get_resource::<CharDragSession>() {
         Some(session) if session.dragged == window => Some(session.anchor),
@@ -217,7 +217,7 @@ pub(crate) fn drag_wintf_moves(world: &World, window: Entity) -> bool {
     }
 }
 
-/// `dragged` の控えを返す。無い・別の窓のものなら、組の相手がいるときだけ記録する（4.1）。
+/// `dragged` の控えを返す。無い・別の窓のものなら、組の相手がいるときだけ記録する。
 fn session_for(world: &World, dragged: Entity) -> Option<CharDragSession> {
     let reason = match world.get_resource::<CharDragSession>() {
         Some(session) if session.dragged == dragged => return Some(session.clone()),
@@ -235,7 +235,7 @@ fn session_for(world: &World, dragged: Entity) -> Option<CharDragSession> {
     None
 }
 
-/// 相手を始めの位置＋量へ書き、バルーンを付いて動かす（経路なし＝ドラッグと同じ・4.1〜4.4）。
+/// 相手を始めの位置＋量へ書き、バルーンを付いて動かす（経路なし＝ドラッグと同じ）。
 /// 書けた相手とその位置を返す。
 fn move_partners(
     world: &mut World,
@@ -279,7 +279,7 @@ fn delta_from(start: PointPx, pos: PointPx) -> PointPx {
     }
 }
 
-/// ドラッグの途中: 始めからの量で組の相手を動かす（4.1〜4.4）。1 回ごとは記録しない（9.3）。
+/// ドラッグの途中: 始めからの量で組の相手を動かす。1 回ごとは記録しない。
 pub(crate) fn follow_partners_on_drag(world: &mut World, dragged: Entity, pos: PointPx) {
     let Some(session) = session_for(world, dragged) else {
         return;
@@ -287,8 +287,8 @@ pub(crate) fn follow_partners_on_drag(world: &mut World, dragged: Entity, pos: P
     move_partners(world, &session, delta_from(session.dragged_start, pos));
 }
 
-/// ドラッグの終わり: 最終の量で相手を書き、相手の記憶の束を返し、控えを外す（4.5・9.3）。
-/// ドラッグ中に台本が向きを変えていれば、今の向きで当て直す（2.4）。
+/// ドラッグの終わり: 最終の量で相手を書き、相手の記憶の束を返し、控えを外す。
+/// ドラッグ中に台本が向きを変えていれば、今の向きで当て直す。
 /// 書くのは呼び手（`on_char_drag_end`）で、動かした窓の束と合わせて 1 回にする。
 /// 控えが無い（組でない）ときは空。
 pub(crate) fn finish_char_drag(
@@ -302,7 +302,7 @@ pub(crate) fn finish_char_drag(
     let mut entries = Vec::new();
     let delta = delta_from(session.dragged_start, final_pos);
     for (partner, pos) in move_partners(world, &session, delta) {
-        // 次の起動は descript の向きで読み戻すので、記憶の形もそれにそろえる（4.8）。
+        // 次の起動は descript の向きで読み戻すので、記憶の形もそれにそろえる。
         // `Anchored` の無い相手は move_partners が先に外すので None は来ない（到達不能でも黙らない）。
         let Some(form) = saved_form_anchor(world, partner.window) else {
             warn!(
@@ -311,7 +311,7 @@ pub(crate) fn finish_char_drag(
             );
             continue;
         };
-        // 面の move のずれを引いた元の位置を書く（seriko-pattern-calls task 6.2）。
+        // 面の move のずれを引いた元の位置を書く。
         // 利用者が手で置いたのは動かした窓だけ・相手のずれはまだ相手の面のアニメーションのもの。
         let pos = origin_position(world, partner.window, pos);
         let saved = char_pos_to_origin_x(form, pos, size_px(world, partner.window));
@@ -343,8 +343,8 @@ pub(crate) fn finish_char_drag(
 }
 
 /// `\![move]` の連れ動き: 動かした窓が実際に動いた量 `delta` で、組の相手を今の位置から
-/// 動かす（5.1・5.2・5.4）。経路は `MoveCue`（バルーンは付いて動き、記憶に書かない）。
-/// 時間つきでも即時（5.5）。量が 0・相手なしなら何もしない（5.7）。
+/// 動かす。経路は `MoveCue`（バルーンは付いて動き、記憶に書かない）。
+/// 時間つきでも即時。量が 0・相手なしなら何もしない。
 pub fn follow_sticky_move(world: &mut World, target_scope: u32, delta: PointPx) {
     if delta == (PointPx { x: 0, y: 0 }) {
         return;
@@ -384,7 +384,7 @@ pub fn follow_sticky_move(world: &mut World, target_scope: u32, delta: PointPx) 
             world.get_resource::<MonitorSnapshot>(),
         );
         if move_window_to(world, window, target.x, target.y) {
-            // 連れ動いた相手も台本が置いた窓（起動時の確定が引き戻さない・`areka-P0-scope-chain-gap` 要件 7.3）。
+            // 連れ動いた相手も台本が置いた窓（起動時の確定が引き戻さない）。
             world.entity_mut(window).insert(ScriptPlaced);
             moved.push(want);
         }
@@ -402,7 +402,7 @@ pub fn follow_sticky_move(world: &mut World, target_scope: u32, delta: PointPx) 
     }
 }
 
-/// `ignore-sticky-window` で組の相手を動かさなかったことを、相手がいるときだけ記録する（5.3・9.4）。
+/// `ignore-sticky-window` で組の相手を動かさなかったことを、相手がいるときだけ記録する。
 /// 組は解かない。
 pub fn log_sticky_ignored(world: &World, target_scope: u32) {
     let partners = ledger_partners(world, target_scope as usize);

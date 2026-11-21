@@ -5,15 +5,15 @@ use tracing::debug;
 
 use super::{Anchor, MonitorSnapshot, PointPx, RectPx, SizePx, work_area_for_window};
 
-/// bottom 吸着（4.7・DD15 v2）: X 素通し・Y＝現在モニタ `bottom − h`。`project_anchor` の
+/// bottom 吸着: X 素通し・Y＝現在モニタ `bottom − h`。`project_anchor` の
 /// `Bottom` の腕だけが呼ぶ純粋関数（World に触れない）。
 ///
 /// Y は **`raw` 位置に置いた窓矩形**の中心が属するモニタ（[`work_area_for_window`]）
 /// の work area 下端から live 算出する——イベントごとに引き直すため、モニタを
-/// 跨いだら跨いだ先の下端へ自然に再吸着する（4.7 後段）。
+/// 跨いだら跨いだ先の下端へ自然に再吸着する。
 ///
 /// graceful degradation（identity＝`raw` 素通し・panic しない・架空矩形を発明しない）:
-/// - `snapshot` 不在: 起動窓の生成前・素の `World` の檻では挿入されていない（8.1 note）。
+/// - `snapshot` 不在: 起動窓の生成前・素の `World` の檻では挿入されていない。
 ///   ドラッグ移動イベントごとに発火する経路ゆえ `warn!` は spam——`debug!` に留める
 /// - 空 snapshot: [`work_area_for_window`] が `None`
 /// - 非正寸法: `WindowPos::default()` の size は `CW_USEDEFAULT`（負のセンチネル）で、
@@ -46,56 +46,51 @@ fn bottom_snap(raw: PointPx, size: SizePx, snapshot: Option<&MonitorSnapshot>) -
 }
 
 /// 変換 T: 解決済みアンカー＋生位置＋新寸から、アンカー辺を work area 対応辺へ
-/// 固定した窓左上位置を返す純粋射影（5 アンカー・areka-P0-surface-resize-resnap Req1.1/1.2/2.1-2.5/3.4/5.4）。
+/// 固定した窓左上位置を返す純粋射影（5 アンカー）。
 ///
 /// シェル座標系（アンカー辺基準）→ ウィンドウ座標系（サーフェス寸法基準）の変換 T の
 /// 恒常維持を担う純粋関数（World 不可視・物理 px 単一通貨・`saturating_*` 演算で
 /// panic しない）。ドラッグ（`policy_mapped_position`）とリサイズ
-/// （`resize_window_to`）の**両者が同一 T を呼ぶ**ことで座標系変換の二重化を避ける
-/// （R1.6）。
+/// （`resize_window_to`）の**両者が同一 T を呼ぶ**ことで座標系変換の二重化を避ける。
 ///
 /// # 射影規則（`wa` 取得成功かつ正寸のとき）
 ///
 /// `wa` は「生位置 `raw` に置いた窓矩形の中心が属するモニタの work area」
 /// （[`work_area_for_window`]）。モニタ跨ぎは live 算出＝跨いだ先の対応辺へ再吸着する。
 /// - `Bottom`: 下端吸着の私有の関数へ**委譲**（X 保持・`y = wa.bottom − h`）。
-///   再定義しない（areka-P0-surface-resize-resnap Req1.2・bottom は T の一事例）。
+///   再定義しない（bottom は T の一事例）。
 /// - `Top`: `x = raw.x`（保持）・`y = wa.top`。
 /// - `Left`: `x = wa.left`・`y = raw.y`（保持）。
 /// - `Right`: `x = wa.right − w`・`y = raw.y`（保持）。
-/// - `Free`: `raw` 素通し（identity・position 再計算なし・areka-P0-surface-resize-resnap Req2.5）。
+/// - `Free`: `raw` 素通し（identity・position 再計算なし）。
 ///
 /// # graceful degradation（identity＝`raw` 素通し・panic しない・下端吸着と同じ流儀）
 ///
 /// - `Free` は常に identity（`wa` 不要・寸法・snapshot を問わない）。
 /// - 非正寸（w≤0 or h≤0）は identity＋`debug!`。`wa.right − w`／`wa.bottom − h` が
-///   `i32::MAX` 方向へ暴走する前に弾く（areka-P0-surface-resize-resnap Req3.4・下端吸着の CW_USEDEFAULT
-///   センチネル縮退と整合）。
+///   `i32::MAX` 方向へ暴走する前に弾く（下端吸着の CW_USEDEFAULT センチネル縮退と整合）。
 /// - `snapshot` 不在（`None`）／空 snapshot（[`work_area_for_window`] が `None`）は
 ///   identity＋`debug!`。ドラッグ経路 spam 回避で `warn!` でなく `debug!`（既存流儀）。
 ///
 /// # 不変条件（テストで固定）
 ///
 /// 正寸・snapshot 有効時、適用後の窓のアンカー辺 ≡ work area 対応辺。既にアンカー辺
-/// 一致の位置に対しては同値を返す（べき等の基礎・R3.1）。
+/// 一致の位置に対しては同値を返す（べき等の基礎）。
 pub fn project_anchor(
     anchor: Anchor,
     raw: PointPx,
     size: SizePx,
     snapshot: Option<&MonitorSnapshot>,
 ) -> PointPx {
-    // Free: アンカー辺なし＝常に identity（wa 不要・寸法・snapshot を問わない・areka-P0-surface-resize-resnap Req2.5）
     if let Anchor::Free = anchor {
         return raw;
     }
 
-    // Bottom: 下端吸着の関数へ全面委譲（再定義しない・areka-P0-surface-resize-resnap Req1.2）。縮退規約
-    // （snapshot 不在/空・非正寸）も同じ関数が所有し、T の bottom 事例＝同値になる
+    // 縮退規約（snapshot 不在/空・非正寸）も下端吸着の関数が所有するので、T の bottom 事例と同値になる
     if let Anchor::Bottom = anchor {
         return bottom_snap(raw, size, snapshot);
     }
 
-    // 以下 Top/Left/Right（bottom の一般化）。非正寸は wa.right−w／暴走の前に弾く
     if size.w <= 0 || size.h <= 0 {
         debug!(?size, ?anchor, "窓寸法が不明（非正）のため identity 縮退");
         return raw;
@@ -107,7 +102,6 @@ pub fn project_anchor(
         );
         return raw;
     };
-    // wa＝生位置に置いた窓矩形の中心が属するモニタの work area（live 算出・跨ぎ再吸着）
     let window = RectPx {
         left: raw.x,
         top: raw.y,
@@ -120,34 +114,30 @@ pub fn project_anchor(
     };
 
     match anchor {
-        // 上端固定・X 保持（areka-P0-surface-resize-resnap Req2.2）
         Anchor::Top => PointPx {
             x: raw.x,
             y: wa.top,
         },
-        // 左端固定・Y 保持（areka-P0-surface-resize-resnap Req2.3）
         Anchor::Left => PointPx {
             x: wa.left,
             y: raw.y,
         },
-        // 右端固定（left_X = wa.right − w）・Y 保持（areka-P0-surface-resize-resnap Req2.4）。極端入力でも panic
-        // しない契約で saturating_sub（下端吸着の bottom−h と同型の防波堤）
+        // 極端入力でも panic しない契約で saturating_sub（下端吸着の bottom−h と同型の防波堤）
         Anchor::Right => PointPx {
             x: wa.right.saturating_sub(size.w),
             y: raw.y,
         },
-        // Bottom／Free は冒頭で return 済み（到達不能・網羅性のための恒等既定）
+        // Bottom／Free は冒頭で return 済み（網羅性のための恒等既定）
         Anchor::Bottom | Anchor::Free => raw,
     }
 }
 
-/// キャラ窓が保持する現在の解決済みアンカー（drag／resize が読む単一の真実源・4.2/1.4）。
+/// キャラ窓が保持する現在の解決済みアンカー（drag／resize が読む単一の真実源）。
 ///
-/// 全 char 窓へ 1 つだけ付与される 5 値アンカー表現（`Anchor` は 5 値ゆえ、二値
-/// `BottomSnap` marker を generalize した後継。単一真実源＝二つ目の格納表現を作らない・
-/// areka-P0-surface-resize-resnap Req1.6）。値は spawn 時に `config.alignment` 由来（`ScopePlacement.anchor`＝
+/// 全 char 窓へ 1 つだけ付与される 5 値アンカー表現（二つ目の格納表現を作らない）。
+/// 値は spawn 時に `config.alignment` 由来（`ScopePlacement.anchor`＝
 /// `Anchor::from_alignment` の解決結果）で焼き込まれ（付与は spawn の領分）、
-/// runtime は seriko（本 spec 非所有＝`\![set,alignmenttodesktop]` の routing）が
+/// runtime は seriko（`\![set,alignmenttodesktop]` の routing）が
 /// 書き換える。本番のアンカーの変化は `reseed` が書き換えた後に `resize_window_to` で書く
 /// （`Changed<Anchored>` に反応する `anchor_changed_system` は schedule に登録しない書き方の見本）。
 ///
@@ -157,7 +147,7 @@ pub fn project_anchor(
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Anchored(pub Anchor);
 
-/// キャラ窓の吸着の向きの出どころ（areka-P0-window-link-directives 設計の決め 5・要件 6.1／6.2）。
+/// キャラ窓の吸着の向きの出どころ。
 ///
 /// [`Anchored`] と同じ時（窓を作るとき）に必ず付く。今のシェルの descript の向きと、台本の吸着の
 /// 指令で向きを変えたかの印を持つ。窓と一緒に消えるので、ゴーストの終了・切り替え・読み直しで

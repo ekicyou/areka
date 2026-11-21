@@ -6,7 +6,7 @@ use super::*;
 use crate::sample_test_support::balloon_root;
 use crate::shared_test_support::TempDir;
 
-/// テスト用合成 Monitor（実 HMONITOR 不要・wintf monitor.rs テストと同流儀）。
+/// テスト用合成 Monitor（実 HMONITOR 不要）。
 fn make_monitor(handle: isize, work: (i32, i32, i32, i32), is_primary: bool) -> Monitor {
     let (left, top, right, bottom) = work;
     Monitor {
@@ -43,7 +43,7 @@ fn primary_work_area_empty_is_monitor_err() {
 }
 
 /// `is_primary` のモニタの work area（物理 px）が RectPx へ忠実転写される
-/// （単位変換なし・2.12／U 契約）。
+/// （単位変換なし）。
 #[test]
 fn primary_work_area_picks_is_primary() {
     let monitors = [
@@ -90,11 +90,11 @@ fn primary_work_area_no_primary_substitutes_first() {
 }
 
 // ------------------------------------------------------------------
-// MonitorSnapshot::from_monitors（DD15・実モニタ→snapshot 忠実転写）
+// MonitorSnapshot::from_monitors（実モニタ→snapshot 忠実転写）
 // ------------------------------------------------------------------
 
 /// `MonitorSnapshot::from_monitors` は全モニタの work area（物理 px）を列挙順の
-/// まま**単位変換なしで忠実転写**する（`work_area_px` と同じ U 契約）。
+/// まま**単位変換なしで忠実転写**する。
 #[test]
 fn monitor_snapshot_from_monitors_transcribes_all_work_areas_in_order() {
     let monitors = [
@@ -132,12 +132,12 @@ fn monitor_snapshot_from_monitors_empty_is_empty() {
 }
 
 // ------------------------------------------------------------------
-// 起動時モニタスナップショット（areka-P0-dpi-window-vanish task 1.2・要件 1.1）
+// 起動時モニタスナップショット
 // ------------------------------------------------------------------
 
 /// 混在 DPI マルチモニタ実機相当（96/120/192・非対称 work area・負座標・3200 超）の
 /// 列挙結果が、識別子・bounds・work_area・DPI・primary の**全 5 フィールド**を
-/// 単位変換も丸めもせず（物理 px そのまま）列挙順で転写される（要件 1.1）。
+/// 単位変換も丸めもせず（物理 px そのまま）列挙順で転写される。
 ///
 /// 実モニタを要さない純関数ゆえ、実機で 1 度しか踏めない構成をここで全部踏む。
 #[test]
@@ -236,8 +236,7 @@ fn monitor_records_of_zero_monitors_is_empty() {
     assert!(monitor_records(&[]).is_empty());
 }
 
-/// 呼出点タグは 3 つの出所（起動の構築点・準備の列挙点・作業領域の同期）で**異なる**
-/// （要件 1.1「呼出点タグで区別できる」）。綴りを 1 つずつ固定するので、どれかを別の出所の
+/// 呼出点タグは 3 つの出所（起動の構築点・準備の列挙点・作業領域の同期）で**異なる**。綴りを 1 つずつ固定するので、どれかを別の出所の
 /// 綴りへ collapse する退行はここで赤になる。
 #[test]
 fn monitor_snapshot_call_site_tags_are_distinct() {
@@ -247,7 +246,7 @@ fn monitor_snapshot_call_site_tags_are_distinct() {
 }
 
 /// ゴースト窓配置準備のモニタ列挙点が、共有ヘルパ経由で**自分の呼出点タグ**付きの
-/// スナップショットを出す（要件 1.1）。
+/// スナップショットを出す。
 ///
 /// 出力は列挙の直後＝準備段の失敗より**手前**に置く。不在 root（`Mount` で落ちる
 /// 最短経路）でもモニタ構成が残ることが、起動窓を開けずに終わった運転のログからも

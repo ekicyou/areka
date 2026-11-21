@@ -14,19 +14,18 @@ use crate::resolver::PointPx;
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
-// 解放時補正の檻（`areka-P0-windowposition-limit` task 3.4・design「C8: 解放時補正」・Testing Strategy Integration 2・
-// `areka-P0-windowposition-limit` 要件 2.5／5.4）
+// 解放時補正の檻
 //
 // 何を固定するか:
-//   (1) ドラッグ**中**は 1 bit も介入しない（`areka-P0-windowposition-limit` 要件 2.5 前段）——`on_balloon_drag` は
+//   (1) ドラッグ**中**は 1 bit も介入しない——`on_balloon_drag` は
 //       カーソル追随の結果をそのまま offset へ記憶するだけで、窓を書かない
 //   (2) 解放時は「解放位置の取得 → 生 offset の永続 write-through → 補正書込」の
-//       **順序が固定**であること（`areka-P0-windowposition-limit` 要件 5.4・DD6）。順序が逆転すると補正値が保存値へ
+//       **順序が固定**であること。順序が逆転すると補正値が保存値へ
 //       焼き付くので、保存値・`BalloonFollow.offset` が生値のままであることと、
 //       ログの**出現順**の両方で噛む
 //   (3) 作業領域内で解放したときは補正の書き込みが 1 件も起きないこと
-//   (4) 解放時の新規書込は `BalloonLimitRelease` を名乗ること（DD7）
-//   (5) `BalloonLimit(false)` の scope では解放時補正が起きないこと（`areka-P0-windowposition-limit` 要件 2.7）
+//   (4) 解放時の新規書込は `BalloonLimitRelease` を名乗ること
+//   (5) `BalloonLimit(false)` の scope では解放時補正が起きないこと
 //
 // World は実 spawn（`spawn_ghost_windows`）で組む——`BalloonLimit`・`BalloonFollow`・
 // `Anchored`・`GhostWindows` がすべて本番の構築経路そのものになり、「spawn が付け
@@ -89,7 +88,7 @@ fn set_stale_offset(world: &mut World, char_window: Entity) {
     let follow = *world
         .get::<BalloonFollow>(char_window)
         .expect("spawn が BalloonFollow を付ける");
-    // 欄は私有ゆえ確立点（構築子）から組み直す（design D14）。基準 DPI は本檻の
+    // 欄は私有ゆえ確立点（構築子）から組み直す。基準 DPI は本檻の
     // 関心事ではないので未係留のままにする。
     let follow = BalloonFollow::new(follow.balloon, OffsetBase::unpinned(stale_offset()));
     world.entity_mut(char_window).insert(follow);
@@ -145,7 +144,7 @@ fn probe_self_check_release_positions_are_really_outside_and_inside() {
 }
 
 // -------------------------------------------------------------------------
-// (1) ドラッグ中は一切介入しない（`areka-P0-windowposition-limit` 要件 2.5 前段）
+// (1) ドラッグ中は一切介入しない
 // -------------------------------------------------------------------------
 
 /// ドラッグ**中**は limit 関門が働かない——窓は wndproc が置いた画面外位置のまま動かず、
@@ -190,8 +189,8 @@ fn the_drag_itself_is_never_intercepted_by_the_limit_gate() {
 // (2)(4) 画面外解放——保存は生値・表示だけ補正・順序固定・route は BalloonLimitRelease
 // -------------------------------------------------------------------------
 
-/// 画面外で解放すると、**永続へ書かれるのは生 offset**・表示位置だけが補正される
-/// （`areka-P0-windowposition-limit` 要件 2.5／5.4・DD6）。実 publisher（`SylphyaRig::fake`）で
+/// 画面外で解放すると、**永続へ書かれるのは生 offset**・表示位置だけが補正される。
+/// 実 publisher（`SylphyaRig::fake`）で
 /// barrier→`load_scope` し、保存値が生値であることを実 IO 越しに固定する。
 ///
 /// 順序（永続 write-through → 表示補正）は 3 通りで噛む:
@@ -236,7 +235,7 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
         odd_edge_wa()
     ));
 
-    // --- in-session の相対位置は補正の前の位置から出し直す（DD6・`audit-placement-follow` 指摘 3） ---
+    // --- in-session の相対位置は補正の前の位置から出し直す ---
     assert_eq!(
         world
             .get::<BalloonFollow>(char_window)
@@ -246,11 +245,11 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
         "BalloonFollow.offset が補正の前の生 offset でない（補正の焼き付き・DD6 違反）"
     );
 
-    // --- キャラ窓は動かない（`areka-P0-windowposition-limit` 要件 2.8） ---
+    // --- キャラ窓は動かない ---
     assert_eq!(point_of(&world, char_window), char_pos());
 
-    // --- 補正ログ（`areka-P0-windowposition-limit` 要件 6.1・DD7）。ちょうど 1 件＝単一ライター内の runtime 関門でもう一度
-    // クランプされても冪等で、記録も二重にならない（DD6・`base_world` は `GhostWindows` を持つ） ---
+    // --- 補正ログ。ちょうど 1 件＝単一ライター内の runtime 関門でもう一度
+    // クランプされても冪等で、記録も二重にならない（`base_world` は `GhostWindows` を持つ） ---
     let clamp = expect_one(&events, LIMIT_CLAMP_TAG);
     assert_eq!(clamp.level, tracing::Level::INFO, "補正の記録は info 水準");
     assert_eq!(clamp.expect_field("scope"), "0");
@@ -267,7 +266,7 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
     assert_eq!(clamp.expect_field("from"), format!("{released_at:?}"));
     assert_eq!(clamp.expect_field("to"), format!("{corrected:?}"));
 
-    // --- 窓移動レコードは補正後位置・route は BalloonLimitRelease（DD7） ---
+    // --- 窓移動レコードは補正後位置・route は BalloonLimitRelease ---
     let record = expect_one(&events, WINDOW_MOVE_TAG);
     let line = record.message();
     assert!(
@@ -282,7 +281,7 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
         "解放時の新規書込が BalloonLimitRelease を名乗っていない: {line}"
     );
 
-    // --- 順序固定（`areka-P0-windowposition-limit` 要件 5.4・DD6）: 永続 write-through が補正書込より先 ---
+    // --- 順序固定: 永続 write-through が補正書込より先 ---
     assert!(
         index_of(&events, PERSIST_SAVE_TAG) < index_of(&events, LIMIT_CLAMP_TAG),
         "永続 write-through より先に補正が走っている（順序が逆転すると保存値へ焼き付く）"
@@ -366,7 +365,7 @@ fn releasing_inside_the_work_area_writes_nothing() {
 }
 
 // -------------------------------------------------------------------------
-// (5) limit 無効の scope では解放時補正が起きない（`areka-P0-windowposition-limit` 要件 2.7）
+// (5) limit 無効の scope では解放時補正が起きない
 // -------------------------------------------------------------------------
 
 /// `BalloonLimit(false)` の scope は画面外で解放してもそのまま（現行挙動の維持）。
@@ -397,7 +396,7 @@ fn releasing_outside_does_not_correct_when_balloon_limit_is_disabled() {
 }
 
 // -------------------------------------------------------------------------
-// 縮退（log-first・`areka-P0-windowposition-limit` 要件 6.3）——警告を残して補正を見送る
+// 縮退（log-first）——警告を残して補正を見送る
 // -------------------------------------------------------------------------
 
 /// 基準・判定寸が解決できない各経路で、警告のうえ補正を見送り**保存は通る**こと。
@@ -472,7 +471,7 @@ fn unresolvable_reference_warns_and_skips_the_release_correction() {
 }
 
 // -------------------------------------------------------------------------
-// 基準はキャラ窓の帰属モニタ（`areka-P0-windowposition-limit` 要件 5.5）
+// 基準はキャラ窓の帰属モニタ
 // -------------------------------------------------------------------------
 
 /// 複数モニタで、キャラ窓が属する側の作業領域が基準になること。

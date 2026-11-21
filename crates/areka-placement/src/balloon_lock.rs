@@ -1,12 +1,12 @@
 //! スコープごとの「バルーンの動かせない指定」の帳簿と、バルーンの窓の
-//! `DragConfig.move_window` の書き手（descript-window-keys 要件 4・5・design「BalloonLock」）。
+//! `DragConfig.move_window` の書き手。
 //!
 //! 帳簿は descript の段（ゴースト・シェルの `balloon.dontmove`）と台本の lock
 //! （`\![lock,balloonmove]`）を分けて持つ。unlock は台本の分だけを解くので、descript の段が
-//! 禁止している間は unlock で動かせるようにならない（要件 5.3）。
+//! 禁止している間は unlock で動かせるようにならない。
 //!
 //! 窓を作った後にバルーンの窓の `move_window` を書くのは [`sync_balloon_drag_writer`] だけ。
-//! `enabled` と閾値は触らない（クリック・選択肢・リンク・スクロールは今どおり・要件 6.2）。
+//! `enabled` と閾値は触らない（クリック・選択肢・リンク・スクロールは今どおり）。
 
 use std::collections::BTreeSet;
 
@@ -63,7 +63,7 @@ pub fn seed_balloon_lock(world: &mut World, descript: &BTreeSet<u32>) {
     sync_balloon_drag_writer(world);
 }
 
-/// シェルの切り替えの後始末: descript の段だけを取り替え、台本の lock は保ち、書き手を呼ぶ（要件 4.4・5.4）。
+/// シェルの切り替えの後始末: descript の段だけを取り替え、台本の lock は保ち、書き手を呼ぶ。
 pub fn replace_balloon_lock_descript(world: &mut World, descript: &BTreeSet<u32>) {
     if !world.contains_resource::<BalloonLockLedger>() {
         warn!(
@@ -76,8 +76,8 @@ pub fn replace_balloon_lock_descript(world: &mut World, descript: &BTreeSet<u32>
     sync_balloon_drag_writer(world);
 }
 
-/// 台本の lock（`locked: true`）・unlock（`false`）を `scope` にだけ当て、記録し、書き手を呼ぶ
-/// （要件 5.1〜5.3・5.8）。帳簿が無ければ空の帳簿を据えてから当てる。
+/// 台本の lock（`locked: true`）・unlock（`false`）を `scope` にだけ当て、記録し、書き手を呼ぶ。
+/// 帳簿が無ければ空の帳簿を据えてから当てる。
 pub fn apply_script_balloon_lock(world: &mut World, scope: u32, locked: bool) {
     if !world.contains_resource::<BalloonLockLedger>() {
         warn!(event = "balloon_lock_ledger_missing", scope);
@@ -98,7 +98,7 @@ pub fn apply_script_balloon_lock(world: &mut World, scope: u32, locked: bool) {
 }
 
 /// すべてのバルーンの窓の `DragConfig.move_window` を帳簿から付け直す（書き手は 1 か所）。
-/// 帳簿が無ければ全部動かせる（要件 4.3）。
+/// 帳簿が無ければ全部動かせる。
 pub(crate) fn sync_balloon_drag_writer(world: &mut World) {
     let held: BTreeSet<u32> = world
         .get_resource::<BalloonLockLedger>()
@@ -111,7 +111,7 @@ pub(crate) fn sync_balloon_drag_writer(world: &mut World) {
     }
 }
 
-/// `on_balloon_drag` の入口の見張り: このドラッグを止めているか（要件 5.6・6.1）。
+/// `on_balloon_drag` の入口の見張り: このドラッグを止めているか。
 /// wintf がドラッグの始まりに控えた `WindowDragContextResource` の `hwnd` がこの窓のものなら
 /// 控えの `move_window` で決める。控えが消えた後（`hwnd: None`・`move_window: false`）や
 /// 別の窓のものなら、控えを読まずにこの窓の今の `DragConfig.move_window` で決める
@@ -130,7 +130,7 @@ pub(crate) fn balloon_drag_held(world: &World, entity: Entity) -> bool {
 }
 
 /// `on_balloon_drag_end` の入口の見張り: [`balloon_drag_held`] と同じ見方で止めたドラッグなら、
-/// 終わりのときの帳簿の理由（記録のためだけ）で記録を 1 件残して `true`（要件 6.6）。
+/// 終わりのときの帳簿の理由（記録のためだけ）で記録を 1 件残して `true`。
 pub(crate) fn end_balloon_drag(world: &World, entity: Entity) -> bool {
     if !balloon_drag_held(world, entity) {
         return false;

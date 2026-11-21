@@ -12,8 +12,7 @@ use super::{Anchored, BalloonFollow, MonitorSnapshot};
 use crate::resolver::{Anchor, PointPx, SizePx};
 
 // -------------------------------------------------------------------------
-// resize_window_to（単一ライター反映口・`areka-P0-surface-resize-resnap` task 2.4・
-// `areka-P0-surface-resize-resnap` Req1.1/1.3/1.7/3.1/3.4＋2.6/3.3・design Integration Tests #1・#4 一部）
+// resize_window_to（単一ライター反映口）
 //
 // 新しい表示寸法へアンカー射影 T を再適用し、確定 position＋size を単一ライター
 // 経路で一度だけ書く（bottom は wa.bottom−h' 再計算）。観測境界は headless World
@@ -25,7 +24,7 @@ use crate::resolver::{Anchor, PointPx, SizePx};
 
 use super::{PlacementRoute, resize_window_to};
 
-/// #1 一度書き＋re-snap（`areka-P0-surface-resize-resnap` Req1.1/1.3/1.7/2.1）: `Anchored(Bottom)` の char 窓を
+/// 一度書き＋re-snap: `Anchored(Bottom)` の char 窓を
 /// 新寸へ resize すると、`WindowPos.size` が新寸・`position.y` が `wa.bottom − h'`
 /// へ更新され `true`。**原点＝下端中央**ゆえ x は「中央を保つ」よう付け替わる
 /// （伺かの立ち絵は足元中央が接地点＝寸法が変わっても原点は動かない）。
@@ -61,7 +60,7 @@ fn resize_window_to_bottom_resnaps_size_and_position_once() {
     assert_eq!(size_of(&world, window), SizeI::new(517, 823));
 }
 
-/// #4 べき等 skip（`areka-P0-surface-resize-resnap` Req3.1）: 既に射影済み位置＋同寸の窓へ同寸 resize すると、
+/// べき等 skip: 既に射影済み位置＋同寸の窓へ同寸 resize すると、
 /// 書込なし・`false`・状態不変（冗長な再配置を避ける）。
 #[test]
 fn resize_window_to_is_idempotent_on_same_size_and_position() {
@@ -86,7 +85,7 @@ fn resize_window_to_is_idempotent_on_same_size_and_position() {
     assert_eq!(size_of(&world, window), SizeI::new(434, 687));
 }
 
-/// #4 非正寸縮退（`areka-P0-surface-resize-resnap` Req3.4）: w≤0 or h≤0 は T 再適用せず `false`・位置/寸不変
+/// 非正寸縮退: w≤0 or h≤0 は T 再適用せず `false`・位置/寸不変
 /// （warn・下端吸着の非正寸縮退と整合）。
 #[test]
 fn resize_window_to_nonpositive_size_holds_state() {
@@ -114,7 +113,7 @@ fn resize_window_to_nonpositive_size_holds_state() {
     }
 }
 
-/// #4 不在/未付与（`areka-P0-surface-resize-resnap` Req3.3）: `WindowHandle` 未付与の char 窓は `false`・状態不変
+/// 不在/未付与: `WindowHandle` 未付与の char 窓は `false`・状態不変
 /// （`enqueue_window_set_pos` の warn no-op を継承・随伴バルーンも動かさない）。
 #[test]
 fn resize_window_to_without_handle_returns_false_and_leaves_state() {
@@ -138,7 +137,7 @@ fn resize_window_to_without_handle_returns_false_and_leaves_state() {
     assert_eq!(size_of(&world, window), SizeI::new(434, 687));
 }
 
-/// #4 Anchored 欠落: 単一真実源 `Anchored` 未付与の窓は `false`・状態不変
+/// Anchored 欠落: 単一真実源 `Anchored` 未付与の窓は `false`・状態不変
 /// （char 窓は spawn で必ず付与＝異常系・warn no-op）。
 #[test]
 fn resize_window_to_without_anchored_returns_false_and_leaves_state() {
@@ -162,7 +161,7 @@ fn resize_window_to_without_anchored_returns_false_and_leaves_state() {
     assert_eq!(size_of(&world, window), SizeI::new(434, 687));
 }
 
-/// #1 随伴バルーン維持（`areka-P0-surface-resize-resnap` Req2.6）＝**窓相対 offset 不変**（Bottom）:
+/// 随伴バルーン維持＝**窓相対 offset 不変**（Bottom）:
 /// `BalloonFollow` 付き Bottom char 窓を resize しても `BalloonFollow.offset` は
 /// 書き換わらず、バルーンは `new_char_pos + offset` へ随伴して恒等式
 /// `balloon_pos − char_pos ≡ offset` を保つ。
@@ -170,8 +169,7 @@ fn resize_window_to_without_anchored_returns_false_and_leaves_state() {
 /// キャラ窓自身の原点は下端中央（`char_pos` は中央 x を保って再導出される）が、
 /// **バルーンの追従は原点基準ではなく窓（左上）相対**である——受理オラクルは
 /// 参照実装 SSP の実測で、SSP のバルーンは観測時つねに現在表示中のキャラ窓に対して
-/// 窓相対にある（2026-07-31 実機裁定）。以前の「下端中央基準の offset 補正」は Bottom だけを
-/// 窓相対から外し、実機でバルーンを旧絶対位置に置き去りにしていた（本檻はその反転）。
+/// 窓相対にある。
 /// 実寸オラクルは `resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset`。
 #[test]
 fn resize_window_to_bottom_preserves_balloon_follow_offset() {
@@ -221,16 +219,16 @@ fn resize_window_to_bottom_preserves_balloon_follow_offset() {
     );
 }
 
-/// SSP オラクル檻（2026-07-31 実機裁定・実 DPI 120／k=1.25 のむらさき実寸）:
+/// SSP オラクル檻（実 DPI 120／k=1.25 のむらさき実寸）:
 /// talk 中のサーフェス切替で Bottom キャラ窓が 543×859 → 478×684（下端 2100 固定）へ
 /// 縮んでも、バルーンは**窓相対 offset (−167,−161) を保ったまま**追随する。
 ///
 /// 参照実装 SSP は同時点で char 477×683@(3363,1417)／balloon (3195,1256)＝offset
 /// (−168,−161) を保っており、本檻の (−167,−161) とは x が 1px だけ違う。この 1px は
 /// サーフェス寸の丸め権威（SSP と areka のスケール丸め）由来であって、追従セマンティクス
-/// とは無関係——本変更の受理判定には影響しない。
+/// とは無関係。
 ///
-/// 欠陥（削除した step 6＝Bottom 限定の下端中央基準 offset 補正）が残っていると、
+/// Bottom 限定の下端中央基準 offset 補正があると、
 /// offset は (−167+(478/2−543/2), −161+(684−859)) = (−199,−336) へ書き換わり、
 /// バルーンは旧絶対位置 (3130,1080) に貼り付いたまま新窓上端の 336px 上空へ浮く
 /// ——実機で観測された症状そのもの。本檻はその恒久回帰檻。
@@ -256,7 +254,7 @@ fn resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset() {
         .id();
 
     // サーフェス切替後の実測寸 478×684 へ resize。
-    // route は `dpi-window-vanish` の D11 配管でシグネチャに入った引数。本檻の主題は
+    // route は遷移ガード用の引数。本檻の主題は
     // 追従セマンティクス（窓相対）ゆえ、遷移ガードが発火する配置系 route の代表値
     // （`Resnap`）を渡す——ガードが働く経路でも offset が補正されないことを見る。
     assert!(resize_window_to(
@@ -298,16 +296,13 @@ fn resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset() {
 }
 
 // -------------------------------------------------------------------------
-// resize_window_to 5 アンカー統合網羅（`areka-P0-surface-resize-resnap` task 2.5・テスト固定タスク・
-// `areka-P0-surface-resize-resnap` Req1.1/2.1-2.6/3.1/3.3/3.4・design Integration Tests #2・#3・#4）
+// resize_window_to 5 アンカー統合網羅
 //
-// `areka-P0-surface-resize-resnap` task 2.4 が Bottom で押さえた「一度書き＋re-snap／べき等／随伴バルーン維持」を、
+// Bottom で押さえた「一度書き＋re-snap／べき等／随伴バルーン維持」を、
 // 残る Top/Left/Right/Free へ拡張する（非正寸・不在の縮退はアンカーに依らないので
-// Bottom の側だけに置く）。
-// resize_window_to 本体は `areka-P0-surface-resize-resnap` タスク 2.4 で完成済み＝本群は「既存配線が 5 アンカーで
-// 正しく `Anchored.0` を転送している（非 Bottom を `Anchor::Bottom` へ
-// ハードコードしていない）」ことを固定する回帰檻（非 Bottom 配線バグ＝
-// `areka-P0-surface-resize-resnap` タスク 2.4 エスケープの捕捉）。
+// Bottom の側だけに置く）。本群は「既存配線が 5 アンカーで正しく `Anchored.0` を
+// 転送している（非 Bottom を `Anchor::Bottom` へハードコードしていない）」ことを
+// 固定する回帰檻。
 //
 // 全辺 96 非倍数の odd_edge_snapshot（rect(53,37,1877,1043)）で各アンカー辺の
 // 再計算を dpi/96 再スケール混入の檻とし、各アンカーで「固定辺の座標」と
@@ -315,7 +310,7 @@ fn resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset() {
 // 合わず落ちる取り違え耐性）。
 // -------------------------------------------------------------------------
 
-/// #2 Top resize（`areka-P0-surface-resize-resnap` Req2.2）: `Anchored(Top)` を新寸へ resize すると `WindowPos.size`
+/// Top resize: `Anchored(Top)` を新寸へ resize すると `WindowPos.size`
 /// 新寸・`position.y = wa.top`（上端固定）・`position.x` 保持で `true`。
 /// Bottom と取り違えれば Y が `wa.bottom−h'` になって落ちる（辺取り違え耐性）。
 #[test]
@@ -345,7 +340,7 @@ fn resize_window_to_top_pins_top_edge_and_keeps_x() {
     assert_eq!(size_of(&world, window), SizeI::new(517, 823));
 }
 
-/// #2 Left resize（`areka-P0-surface-resize-resnap` Req2.3）: `Anchored(Left)` を新寸へ resize すると `WindowPos.size`
+/// Left resize: `Anchored(Left)` を新寸へ resize すると `WindowPos.size`
 /// 新寸・`position.x = wa.left`（左端固定）・`position.y` 保持で `true`。
 /// Right と取り違えれば X が `wa.right−w'` になって落ちる（辺取り違え耐性）。
 #[test]
@@ -375,7 +370,7 @@ fn resize_window_to_left_pins_left_edge_and_keeps_y() {
     assert_eq!(size_of(&world, window), SizeI::new(517, 823));
 }
 
-/// #2 Right resize（`areka-P0-surface-resize-resnap` Req2.4）: `Anchored(Right)` を新寸へ resize すると `WindowPos.size`
+/// Right resize: `Anchored(Right)` を新寸へ resize すると `WindowPos.size`
 /// 新寸・`position.x = wa.right − w'`（右端固定）・`position.y` 保持で `true`。
 /// Left と取り違えれば X が `wa.left` になって落ちる（辺取り違え耐性）。
 #[test]
@@ -408,7 +403,7 @@ fn resize_window_to_right_pins_right_edge_and_keeps_y() {
     assert_eq!(size_of(&world, window), SizeI::new(517, 823));
 }
 
-/// #2 Free resize（`areka-P0-surface-resize-resnap` Req2.5）: `Anchored(Free)` はアンカー辺を持たず position を
+/// Free resize: `Anchored(Free)` はアンカー辺を持たず position を
 /// 保持し、`WindowPos.size` のみ新寸へ反映する。size が変わるので冗長でなく
 /// `true`（書込あり）。Bottom へ取り違えれば position.y が動いて落ちる
 /// （射影なし・寸法反映のみの区別）。
@@ -439,13 +434,11 @@ fn resize_window_to_free_keeps_position_and_updates_size_only() {
     assert_eq!(size_of(&world, window), SizeI::new(517, 823));
 }
 
-/// #3 随伴バルーン維持（Left・`areka-P0-surface-resize-resnap` Req2.6）: `Anchored(Left)`＋`BalloonFollow` の
+/// 随伴バルーン維持（Left）: `Anchored(Left)`＋`BalloonFollow` の
 /// char 窓を resize すると、char は左端固定（Y 保持）へ移り、バルーンは
 /// `new_char_pos + offset` へ随伴し `balloon_pos − char_pos ≡ offset` を維持する。
 ///
-/// 本檻はかつて「非 Bottom だけの例外」を主張していたが、2026-07-31 実機裁定で
-/// Bottom の下端中央基準補正が撤去され、窓相対追従が**全アンカー共通の規範**になった
-/// ——Bottom 版は `resize_window_to_bottom_preserves_balloon_follow_offset`。
+/// 窓相対追従は**全アンカー共通の規範**である——Bottom 版は `resize_window_to_bottom_preserves_balloon_follow_offset`。
 /// 本檻はその規範をアンカー辺 x 固定（Left）側で固定する。
 #[test]
 fn resize_window_to_left_preserves_balloon_follow_offset() {
@@ -481,7 +474,7 @@ fn resize_window_to_left_preserves_balloon_follow_offset() {
     );
 }
 
-/// #4 べき等（非 Bottom・`areka-P0-surface-resize-resnap` Req3.1）: 既に左端一致（x=wa.left）の位置＋同寸へ
+/// べき等（非 Bottom）: 既に左端一致（x=wa.left）の位置＋同寸へ
 /// `Anchored(Left)` を resize すると、導出 (position, size) が現在値と同一ゆえ
 /// 書込なし・`false`・状態不変（Bottom 版 idempotent の非 Bottom 対応・
 /// 同一寸法/同一アンカーの再適用が窓状態を変更しない＝冗長書込をしない）。
@@ -509,11 +502,9 @@ fn resize_window_to_left_is_idempotent_on_same_size_and_position() {
 }
 
 // -------------------------------------------------------------------------
-// anchor_changed_system（アンカー変化トリガ・`areka-P0-surface-resize-resnap` task 2.6・Req1.4・
-// design「Anchored（Component）/ anchor_changed_system」「System Flows >
-// アンカー変化トリガ」「File Structure Plan > follow.rs」）
+// anchor_changed_system（アンカー変化トリガ）
 //
-// producer（seriko の `\![set,alignmenttodesktop]` routing）は本 spec 非所有＝
+// producer（seriko の `\![set,alignmenttodesktop]` routing）はここの持ち物でない＝
 // 本群は `Changed<Anchored>` に反応する **consumer** のみを固定し、テストは
 // `Anchored` を直接書き換えて駆動する。change tick を正しく管理するため system は
 // `Schedule` に登録して run し（同一 Schedule インスタンスを使い回すことで
@@ -524,7 +515,7 @@ fn resize_window_to_left_is_idempotent_on_same_size_and_position() {
 
 use super::anchor_changed_system;
 
-/// #1 アンカー変化で再射影（`areka-P0-surface-resize-resnap` Req1.4 の核）: `Anchored(Bottom)` の釘付け済み char 窓を
+/// アンカー変化で再射影: `Anchored(Bottom)` の釘付け済み char 窓を
 /// spawn し、初回 run はべき等 skip（初回 Changed 付与を resize が同寸・同位置で吸収
 /// ＝位置不変）。次に `Anchored` を Top へ**直接書換**→再 run で「現在の表示寸法の
 /// まま」新アンカー辺（y=wa.top）へ再配置され、X 保持・size 不変（新寸を与えない
@@ -576,7 +567,7 @@ fn anchor_changed_system_reprojects_to_new_anchor_edge_at_current_size() {
     );
 }
 
-/// #2 Anchored 未変化では発火しない（変更検知の正しさの檻・最重要）: 初回 run で
+/// Anchored 未変化では発火しない（変更検知の正しさの檻・最重要）: 初回 run で
 /// 初回 Changed を消費した後、`Anchored` を触らずに `WindowPos.position` を故意に
 /// アンカー辺から外して再 run しても**再スナップされない**（system は `Anchored`
 /// 変化にのみ反応し `WindowPos` 変化には反応しない）。毎 run 全マッチ実装
@@ -612,7 +603,7 @@ fn anchor_changed_system_does_not_fire_when_anchor_unchanged() {
     );
 }
 
-/// #3 別遷移（Bottom→Left）: `Anchored` を Left へ直接書換すると、現在の表示寸法の
+/// 別遷移（Bottom→Left）: `Anchored` を Left へ直接書換すると、現在の表示寸法の
 /// まま左端固定（x=wa.left=53）へ再射影され Y 保持（Top 以外の辺でも配線が
 /// `Anchored.0` を正しく転送していることの補強）。
 #[test]
@@ -644,9 +635,7 @@ fn anchor_changed_system_reprojects_bottom_to_left() {
 }
 
 // -------------------------------------------------------------------------
-// resize_window_keep_position（balloon 窓の位置維持リサイズ・
-// areka-P0-emo-dpi-scaling task 2.2・R3.1/R4.2・
-// design「areka / placement > follow.rs（additive・balloon 窓の k 追従）」・D8）
+// resize_window_keep_position（balloon 窓の位置維持リサイズ）
 //
 // 「書込ゼロ」の観測境界について: `flush()` は偽 HWND に対し実 `SetWindowPos` を
 // 撃ってしまうため使えない。書込の列は `drain_window_pos_commands()` で覗けるが、
@@ -671,7 +660,7 @@ fn assert_no_write(world: &World, entity: Entity) {
     );
 }
 
-/// べき等 skip（R4.2・D8「同寸なら書込ゼロで振動しない」）: 現寸と同じ寸を
+/// べき等 skip（同寸なら書込ゼロで振動しない）: 現寸と同じ寸を
 /// 渡すと単一ライター経路を**一度も通らず** `false` を返し、位置・寸法とも不変。
 #[test]
 fn resize_window_keep_position_same_size_writes_nothing() {
@@ -693,7 +682,7 @@ fn resize_window_keep_position_same_size_writes_nothing() {
     assert_no_write(&world, window);
 }
 
-/// 異寸（R3.1/R4.2）: 位置は**現在位置のまま**・寸法だけが新寸へ更新され `true`。
+/// 異寸: 位置は**現在位置のまま**・寸法だけが新寸へ更新され `true`。
 /// `resize_window_to` と違いアンカー射影 T を再適用しない（balloon は char 窓
 /// 追従で位置が決まるため、DPI 追従では寸だけを差し替える）。
 #[test]

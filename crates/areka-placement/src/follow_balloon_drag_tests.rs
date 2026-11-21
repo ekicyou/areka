@@ -15,7 +15,7 @@ use crate::resolver::PointPx;
 use log_capture_kit::{capture, expect_one};
 
 // -------------------------------------------------------------------------
-// on_balloon_drag: バルーン単独ドラッグの相対位置記憶（`areka-P0-window-placement` タスク 8.3・要件 4.8・DD16）
+// on_balloon_drag: バルーン単独ドラッグの相対位置記憶
 // wndproc がバルーン窓を移動済み（WindowPos 更新済み）の状態を模して呼び、
 // offset の記憶更新・キャラ窓不動・以後の consumer 追従を決定論検証する。
 // 座標は 96 の倍数を避け、x/y で符号・値の異なる offset を使う
@@ -49,8 +49,8 @@ fn on_balloon_drag_tunnel_phase_is_ignored() {
     );
 }
 
-/// (a)(c) バルーン単独ドラッグ: 所有キャラ窓の `BalloonFollow.offset` が
-/// `balloon_pos − char_pos` へ更新され（4.8）、キャラ窓は不動。
+/// バルーン単独ドラッグ: 所有キャラ窓の `BalloonFollow.offset` が
+/// `balloon_pos − char_pos` へ更新され、キャラ窓は不動。
 /// x/y の符号が異なる期待値で減算の向き（balloon − char）を固定する檻。
 #[test]
 fn on_balloon_drag_updates_offset_and_char_window_is_unmoved() {
@@ -82,7 +82,7 @@ fn on_balloon_drag_updates_offset_and_char_window_is_unmoved() {
         world.get::<BalloonFollow>(char_w).unwrap().offset(),
         derived
     );
-    // **確立点の檻**（`areka-P0-balloon-offset-dpi` 要件 3.5・design D14）: ドラッグ結果は現在値だけでなく
+    // **確立点の檻**: ドラッグ結果は現在値だけでなく
     // **基準**も焼き直し、その基準はドラッグ時点のキャラ窓の表示 DPI へ係留される。
     // これが無いと、次の拡大率遷移が古い基準から引き直して静かにずれる。
     assert_eq!(
@@ -93,14 +93,14 @@ fn on_balloon_drag_updates_offset_and_char_window_is_unmoved() {
         },
         "ドラッグ確立点が基準対（値・係留 DPI）を更新していない"
     );
-    // (c) キャラ窓は不動（4.8: バルーンのみ移動・bottom 吸着の対象外）
+    // キャラ窓は不動（バルーンのみ移動・bottom 吸着の対象外）
     assert_eq!(position_of(&world, char_w), Point { x: 1207, y: 653 });
     // バルーン自身もハンドラでは動かさない（wndproc の領分）
     assert_eq!(position_of(&world, balloon), Point { x: 1729, y: 401 });
 }
 
 /// (b) バルーン単独ドラッグ後の `move_window_to`: 調整後 offset で追従する
-/// （初期 offset へのスナップバックは仕様退役・4.8）。
+/// （初期 offset へスナップバックしない）。
 #[test]
 fn move_window_to_after_balloon_drag_follows_adjusted_offset() {
     let mut world = World::new();
@@ -132,7 +132,7 @@ fn move_window_to_after_balloon_drag_follows_adjusted_offset() {
         adjusted
     );
 
-    // 次のキャラ窓移動 API は調整後 offset で追従（consumer 無改変・DD16）
+    // 次のキャラ窓移動 API は調整後 offset で追従（consumer 無改変）
     assert!(move_window_to(&mut world, char_w, 1751, 893));
     assert_eq!(
         position_of(&world, balloon),
@@ -143,8 +143,8 @@ fn move_window_to_after_balloon_drag_follows_adjusted_offset() {
     );
 }
 
-/// (b)(c) 8.2＋8.3 の合成: BottomSnap キャラ窓の場合——バルーンドラッグでは
-/// キャラ窓の Y 釘付けは発火せず（不動・4.8「bottom 吸着の対象外」）、
+/// BottomSnap キャラ窓の場合——バルーンドラッグでは
+/// キャラ窓の Y 釘付けは発火せず（不動・bottom 吸着の対象外）、
 /// その後のキャラ窓ドラッグは Y 釘付けの**後**に調整後 offset で追従する。
 #[test]
 fn on_char_drag_after_balloon_drag_pins_y_and_follows_adjusted_offset() {
@@ -169,7 +169,7 @@ fn on_char_drag_after_balloon_drag_pins_y_and_follows_adjusted_offset() {
     let ev = Phase::Bubble(drag_event(balloon));
     assert!(!on_balloon_drag(&mut world, balloon, balloon, &ev));
 
-    // キャラ窓は不動（Y 釘付けも発火しない・4.8）
+    // キャラ窓は不動（Y 釘付けも発火しない）
     assert_eq!(position_of(&world, char_w), Point { x: 1207, y: 356 });
     let adjusted = PointPx {
         x: 831 - 1207,
@@ -180,7 +180,7 @@ fn on_char_drag_after_balloon_drag_pins_y_and_follows_adjusted_offset() {
         adjusted
     );
 
-    // 次のキャラ窓ドラッグ（move_window=false 単一ライター・8.2R）:
+    // 次のキャラ窓ドラッグ（move_window=false 単一ライター）:
     // DraggingState を注入し、カーソルが下端から浮く位置まで動いた DragEvent を配送
     let start = (1300, 700);
     world
@@ -189,9 +189,9 @@ fn on_char_drag_after_balloon_drag_pins_y_and_follows_adjusted_offset() {
     let ev = Phase::Bubble(drag_event_at(char_w, start, (996, 555)));
     assert!(!on_char_drag(&mut world, char_w, char_w, &ev));
 
-    // 8.2R: raw=(903, 211) → 適用後 (903, 356)（Y 釘付け・X 素通し）
+    // raw=(903, 211) → 適用後 (903, 356)（Y 釘付け・X 素通し）
     assert_eq!(position_of(&world, char_w), Point { x: 903, y: 356 });
-    // 8.3: バルーンは釘付け後座標＋**調整後** offset（初期 offset だと不一致）
+    // バルーンは釘付け後座標＋**調整後** offset（初期 offset だと不一致）
     assert_eq!(
         position_of(&world, balloon),
         Point {
@@ -242,7 +242,7 @@ fn on_balloon_drag_updates_only_matching_scope_offset() {
     assert_eq!(position_of(&world, balloon1), Point { x: 1334, y: 1044 });
 }
 
-/// (+) バルーンの `WindowPos.position` 不在は no-op（false・panic なし・
+/// バルーンの `WindowPos.position` 不在は no-op（false・panic なし・
 /// offset 不変）。所有キャラ窓の position 不在も skip で panic しない。
 #[test]
 fn on_balloon_drag_without_positions_is_graceful() {
@@ -295,7 +295,7 @@ fn on_balloon_drag_without_positions_is_graceful() {
 }
 
 // -------------------------------------------------------------------------
-// 表示 DPI を読めないキャラ窓での確立（`areka-P0-balloon-offset-dpi` 要件 5.2／5.4／9.4・design D15）
+// 表示 DPI を読めないキャラ窓での確立
 //
 // # なぜこの檻が要るのか
 //
@@ -353,7 +353,7 @@ fn on_balloon_drag_without_display_dpi_establishes_unpinned_base_and_warns() {
         derived,
         "表示 DPI を読めなくてもドラッグ結果は失われない（確立点で見送らない）"
     );
-    // (b) 基準は**未係留**で確立される（96 を発明しない・`areka-P0-balloon-offset-dpi` 要件 5.2／5.4）。
+    // (b) 基準は**未係留**で確立される（96 を発明しない）。
     assert_eq!(
         follow.base(),
         OffsetBase {
@@ -363,13 +363,13 @@ fn on_balloon_drag_without_display_dpi_establishes_unpinned_base_and_warns() {
         "未係留で確立していない（基準 DPI を発明した／基準を焼き直していない）"
     );
 
-    // (c) 無ログの縮退経路は作らない（`areka-P0-balloon-offset-dpi` 要件 9.4）。
+    // (c) 無ログの縮退経路は作らない。
     let rec = expect_one(&events, BALLOON_DRAG_BASE_UNPINNED_TAG);
     assert_eq!(rec.level, tracing::Level::WARN, "未係留の確立は warn 水準");
 }
 
 // -------------------------------------------------------------------------
-// 離したときの追従の基準の出し直し（`audit-placement-follow` 指摘 3・DD6・要件 3.1／8.1）
+// 離したときの追従の基準の出し直し
 // 最後の OnDrag の知らせと最終確定位置はずれ得る。離した後の追従の基準は、保存した値と
 // 同じ最終確定位置から出し直され、補正の前の位置を指す。
 // -------------------------------------------------------------------------
@@ -457,7 +457,7 @@ fn releasing_at_a_position_past_the_last_drag_reestablishes_the_follow_from_the_
     );
 }
 
-/// 上限の補正が要る形で離すと、出し直した基準は補正の前の位置（DD6: 保存 → 出し直し → 補正）。
+/// 上限の補正が要る形で離すと、出し直した基準は補正の前の位置（保存 → 出し直し → 補正）。
 #[test]
 fn the_reestablished_follow_base_is_the_position_before_the_limit_correction() {
     use super::on_balloon_drag_end;
@@ -512,7 +512,7 @@ fn the_reestablished_follow_base_is_the_position_before_the_limit_correction() {
 
 /// キャラ窓の位置が `CW_USEDEFAULT` の印（窓生成前・位置未確定）なら、バルーンのドラッグ中も離したときも
 /// その印を位置として引かない——追従の基準を変えず、相対位置も保存せず、どちらも `warn!` を 1 行出す
-/// （黙らない・かけ直し 5 回目 A4）。
+/// （黙らない）。
 #[test]
 fn balloon_drag_ignores_a_char_position_sentinel() {
     use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;

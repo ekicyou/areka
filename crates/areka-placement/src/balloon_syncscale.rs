@@ -1,9 +1,9 @@
-//! `balloon.syncscale` の指定を World の資源として持つ（shell-scale-linkage 要件 6.5・6.6）。
+//! `balloon.syncscale` の指定を World の資源として持つ。
 //!
 //! 配置の基準（[`DefaultPlacementBasis`]）が入れ直された巡でだけ、ゴーストとシェルの descript から
 //! 読み直して丸ごと置き換える。起動・シェルの差し替え・ゴーストの切り替えはどれも基準を入れ直すので、
 //! 1 つの印で覆える。面の `windowposition` の差し替えも基準を入れ直すが、descript は同じなので
-//! 読み直しても同じ値になる。値を使う下流はまだ無い（持つだけ・要件 6.6）。
+//! 読み直しても同じ値になる。値を使う下流はまだ無い（持つだけ）。
 
 use bevy_ecs::prelude::*;
 use wintf::ecs::Update;
@@ -15,7 +15,7 @@ use super::reset_pos::DefaultPlacementBasis;
 #[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct BalloonSyncScaleState(pub(crate) BalloonSyncScale);
 
-/// 基準が入れ直された巡でだけ読み直し、前の指定を残さず置き換える（要件 6.5）。
+/// 基準が入れ直された巡でだけ読み直し、前の指定を残さず置き換える。
 fn reload_balloon_syncscale(basis: Option<Res<DefaultPlacementBasis>>, mut commands: Commands) {
     let Some(basis) = basis.filter(|b| b.is_changed()) else {
         return;

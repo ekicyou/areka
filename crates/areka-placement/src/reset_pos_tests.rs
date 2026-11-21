@@ -1,5 +1,4 @@
-//! 並べ直し（[`reset_window_positions`]）の檻（areka-P0-move-canon 要件 8.6・8.8・8.9・9.2・
-//! design Testing Strategy `reset_pos_tests.rs`）。
+//! 並べ直し（[`reset_window_positions`]）の檻。
 //!
 //! 窓の一式は本番と同じ `spawn_ghost_windows` で組み、記憶は `persist_finalize_save_tests.rs` の
 //! [`Store`]（実物のアクターと偽の保存先）に置いて `barrier` の後に読み戻す。主モニタは偽の
@@ -165,7 +164,7 @@ fn reset_events(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
         .collect()
 }
 
-/// 8.6・8.8・8.9・9.2: ずらした 2 スコープの窓が配置の規則の位置へ戻り、既定の位置が記され
+/// ずらした 2 スコープの窓が配置の規則の位置へ戻り、既定の位置が記され
 /// （記憶から戻したスコープ 1 も）、記憶へ両スコープの位置が届き、バルーンが付いて動き、
 /// `Anchored` とバルーンのずらしは変わらない。スコープごとに前後の位置が記録される。
 #[test]
@@ -252,8 +251,8 @@ fn shifted_windows_return_to_default_and_are_persisted() {
     rig.finish();
 }
 
-/// 面の `move` のずれを当てていた窓を並べ直すと、並べた位置が新しい元の位置になる
-/// （seriko-pattern-calls task 6.3・要件 7.5・7.8）。記憶はずれを引かずに並べた位置を書き、
+/// 面の `move` のずれを当てていた窓を並べ直すと、並べた位置が新しい元の位置になる。
+/// 記憶はずれを引かずに並べた位置を書き、
 /// ずれはその上へ当て直り、ずれが 0 に戻れば並べた位置へ戻る（並べた位置 − 前に当てた分へ行かない）。
 #[test]
 fn reset_rebases_the_pattern_shift() {
@@ -380,7 +379,7 @@ fn scope_without_size_is_left_out_and_rest_is_solved() {
     rig.finish();
 }
 
-/// 起動の準備の結果は並べ直しの材料（descript の値）を運ぶ（design ResetPos State Management (1)）:
+/// 起動の準備の結果は並べ直しの材料（descript の値）を運ぶ:
 /// 運んだ値から並べ直しと同じく設定を組み、準備と同じ窓の大きさ・作業領域・DPI で解き直すと、
 /// キャラクターの窓の位置（並べ直しが書くもの）は準備が解いた配置と同じになる。
 #[test]
@@ -419,7 +418,7 @@ fn boot_prepare_carries_the_default_placement_basis() {
     });
 }
 
-/// areka-P0-window-link-directives 要件 4.7・5.6: 組 {0,1} があっても、並べ直しは各窓を
+/// 組 {0,1} があっても、並べ直しは各窓を
 /// それぞれの既定の位置へ置き（相手の動いた量で相手をずらさない）、組は解かない。
 #[test]
 fn grouped_windows_each_return_to_their_own_default_and_the_group_stays() {
@@ -473,7 +472,7 @@ fn reset_clears_script_placed_mark_and_persists() {
 }
 
 /// 拡大率の後の詰め直しの武装中に並べ直すと、戻した窓は「武装の後に台本が置いた窓」として
-/// 記録に積まれる（`dpi-realign-remembered-chain` 要件 3.1・印は今までどおり外れる）。
+/// 記録に積まれる（印は今までどおり外れる）。
 #[test]
 fn reset_while_armed_records_each_returned_window_as_script_moved() {
     use crate::chain_finalize::ScriptPlaced;

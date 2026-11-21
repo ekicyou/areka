@@ -9,7 +9,7 @@ use super::{
     work_area_for_window_with_origin,
 };
 
-/// [`guard_visibility`] の判定（D6・S3/S3′）。
+/// [`guard_visibility`] の判定。
 ///
 /// いずれの腕も**最終位置そのもの**を持つ（呼出側が「clamp されたか」を見て warn
 /// 水準を分岐しつつ、位置は腕を問わず [`VisibilityVerdict::position`] で取れる）。
@@ -30,14 +30,13 @@ impl VisibilityVerdict {
     }
 }
 
-/// 可視性の**遷移**ガード（純関数・非ドラッグ経路専用・D5/D6・areka-P0-dpi-window-vanish Req 3.1/3.2/3.4）。
+/// 可視性の**遷移**ガード（純関数・非ドラッグ経路専用）。
 ///
-/// S3／S3′ が登記する欠陥は「キャラ窓・バルーン窓の水平方向に可視性の不変条件が
-/// 存在しない」ことである。本関数はその不変条件を**遷移**として定義する——静的な
-/// 「常に可視領域内」ではない。ユーザーが自ら画面外へ運んだ窓を引き戻すのは
-/// 明示操作の否定であり本 spec の Out of scope だからである。
+/// キャラ窓・バルーン窓の水平方向に可視性の不変条件が存在しないことが欠陥である。
+/// 本関数はその不変条件を**遷移**として定義する——静的な「常に可視領域内」ではない。
+/// ユーザーが自ら画面外へ運んだ窓を引き戻すのは明示操作の否定だからである。
 ///
-/// # 判定規則（4 分岐・すべて交差の有無で表現＝絶対 px の閾値を持たない・areka-P0-dpi-window-vanish Req 5.6）
+/// # 判定規則（4 分岐・すべて交差の有無で表現＝絶対 px の閾値を持たない）
 ///
 /// | 提案矩形が work area 集合と交差 | 旧矩形 | 判定 |
 /// | --- | --- | --- |
@@ -59,7 +58,7 @@ impl VisibilityVerdict {
 ///
 /// # 事後条件・不変条件
 ///
-/// - **Y は一切変更しない**（Y は射影 T の所有・D6）。`Keep`／`ClampX` のいずれでも
+/// - **Y は一切変更しない**（Y は射影 T の所有）。`Keep`／`ClampX` のいずれでも
 ///   `verdict.position().y == proposed_pos.y`。
 /// - `ClampX` の X は `clamp_wa.left ..= clamp_wa.right − size.w` の範囲へ入る
 ///   （`saturating` 演算・逆転区間でも panic しない `min`/`max` 流儀）。窓幅が
@@ -72,7 +71,7 @@ impl VisibilityVerdict {
 /// - World 非依存・副作用なし・panic しない。ログは出さない——`ClampX`／
 ///   `NearestFallback`／`OffscreenPull` の `warn!` は route（経路タグ）で
 ///   水準が変わる呼出側（[`evaluate_visibility_guard`]）の責務
-///   （areka-P0-dpi-window-vanish Req 3.3・ドラッグ経路 spam 回避の水準分岐は route を持つ層でしか書けない）。
+///   （ドラッグ経路 spam 回避の水準分岐は route を持つ層でしか書けない）。
 ///
 /// # 縮退
 ///
@@ -139,38 +138,37 @@ fn intersects_any_work_area(snapshot: &MonitorSnapshot, window: RectPx) -> bool 
 }
 
 // =============================================================================
-// 遷移ガードの配線（S3 是正・D5/D6/D13・areka-P0-dpi-window-vanish Req 3.1/3.2/3.3）
+// 遷移ガードの配線
 // =============================================================================
 
-/// 遷移ガードが X を引き戻したことを表す判定語（`diagnosis-procedure.md` §3.3）。
+/// 遷移ガードが X を引き戻したことを表す判定語。
 const VISIBILITY_CLAMP_TAG: &str = "[visibility-guard] ClampX";
 
 /// 遷移ガードが X を引き戻したが、寄せた矩形もどの work area とも交差しない（Y が画面の
 /// 外のまま＝バルーンで起こる）ことを表す判定語。`ClampX` の代わりに出す（位置は同じ）。
 const VISIBILITY_HIDDEN_AFTER_CLAMP_TAG: &str = "[visibility-guard] HiddenAfterClampX";
 
-/// work area 解決が最近傍フォールバックへ落ちたことを表す判定語（同上・areka-P0-dpi-window-vanish Req 3.2）。
+/// work area 解決が最近傍フォールバックへ落ちたことを表す判定語。
 const VISIBILITY_NEAREST_FALLBACK_TAG: &str = "[visibility-guard] NearestFallback";
 /// **どの work area とも交差しない位置に居た窓**を最近傍モニタへ引き寄せたことを表す
-/// 判定語（areka-P0-dpi-transition-atomicity 要件 5.5・task 5.1 が新設）。
+/// 判定語。
 ///
 /// [`VISIBILITY_NEAREST_FALLBACK_TAG`] と観測する矩形が違う——あちらは射影が**決めた
 /// 位置**、こちらは射影の**入力**（＝Y を決めるのに使った矩形）である。入力が画面外に
 /// あった窓は、決めた位置がモニタ内へ収まれば あちらの腕に入らない（実測: 全 work area の
 /// 上方に居る窓が最近傍モニタの下端へ引き寄せられても、観測は 1 行も出なかった）。
 /// 副モニタを引き抜いたときにゴーストが主モニタへ引き寄せられるのは**正しい挙動**
-/// （開発者の裁定 2026-08-20・位置は変えない）だが、**勝手に飛んだことは後から追えねば
-/// ならない**——本語はそのための記録である。
+/// （位置は変えない）だが、**勝手に飛んだことは後から追えねばならない**——
+/// 本語はそのための記録である。
 ///
 /// # 交差の有無まで見る理由（帰属だけを見ると偽陽性になる）
 ///
 /// 入力の帰属（`NearestFallback`）だけを条件にすると、**下端吸着の正常な resize** が
 /// 引っ掛かる——旧位置に新しい（背の高い）寸を当てた矩形の中心は work area 下端より下へ
 /// 出ることが珍しくなく、半開区間の帰属では非該当になるからである。これは
-/// [`apply_visibility_guard`] の doc が「`raw` で判定すると射影が正しく接地させた窓まで
-/// 報告する偽陽性になる」と予告していた事象で、実装中に既存の檻
-/// （`frame_diag_route_tests` の破棄済み窓の檻）が実際に捕まえた（中心 `cy=1444` が
-/// `wa.bottom=1444` にちょうど載る形）。ゆえに条件は「帰属しない **かつ** どの work area
+/// [`apply_visibility_guard`] の doc が言う「`raw` で判定すると射影が正しく接地させた窓まで
+/// 報告する偽陽性になる」事象で、既存の檻（`frame_diag_route_tests` の破棄済み窓の檻）が
+/// 実際に捕まえた（中心 `cy=1444` が `wa.bottom=1444` にちょうど載る形）。ゆえに条件は「帰属しない **かつ** どの work area
 /// とも**面積を持って交差しない**」＝真に画面の外に居た窓に限る。接地直前の窓は必ず
 /// モニタと重なっているので、この腕には入らない。
 ///
@@ -178,52 +176,51 @@ const VISIBILITY_NEAREST_FALLBACK_TAG: &str = "[visibility-guard] NearestFallbac
 /// 既存の檻が件数（ちょうど 1 件）で判定しているためである。
 const VISIBILITY_OFFSCREEN_PULL_TAG: &str = "[visibility-guard] OffscreenPull";
 
-/// work area が解決できずガードを評価できなかったことを表す判定語（同上・areka-P0-dpi-window-vanish Req 3.3）。
+/// work area が解決できずガードを評価できなかったことを表す判定語。
 pub(super) const VISIBILITY_UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
 
-/// この `route` の書込が**非ドラッグの自動配置**か（＝遷移ガードの発火対象・D13 帰結⑴）。
+/// この `route` の書込が**非ドラッグの自動配置**か（＝遷移ガードの発火対象）。
 ///
 /// # なぜ route が第一級の入力なのか
 ///
-/// S3 が防ぐのは「**ユーザーが意図せず**窓を見失う」経路だけである（requirements.md
-/// Boundary Context「ユーザーが自らドラッグして運んだ結果の不可視化」は Out of scope）。
+/// 防ぐのは「**ユーザーが意図せず**窓を見失う」経路だけである。
 /// 明示操作（ドラッグ・`\![move]`）とスクリプト／永続化が決めた位置を引き戻すのは
 /// その否定であり、**同じ矩形・同じ幾何でも判定が反転する**。ゆえに発火条件は幾何では
 /// 表現できず、書込の由来＝route を見るしかない。
 ///
-/// # 区分の定義元は [`PlacementRoute::is_system_reanchor`] 1 本である（areka-P0-dpi-transition-atomicity task 5.5）
+/// # 区分の定義元は [`PlacementRoute::is_system_reanchor`] 1 本である
 ///
 /// 「システム由来の再アンカーか、利用者・台本の明示操作か」という区分は、本述語と**既定位置の
-/// 追跡**（design D9／D16・`enqueue_window_set_pos`）の 2 箇所で読まれる。設計が両者を同じ
-/// 集合と明言しているため、列を 2 本持つと片方だけ直したときに静かに食い違う——ゆえに本述語は
-/// [`PlacementRoute::is_system_reanchor`] へ**委譲する**（判断の腕はあちら側の網羅 `match` が
-/// 持ち、語彙が増えればコンパイラがそこで判断を要求する・D14 帰結⑵と同じ流儀）。
+/// 追跡**（`enqueue_window_set_pos`）の 2 箇所で読まれる。両者は同じ集合なので、列を 2 本持つと
+/// 片方だけ直したときに静かに食い違う——ゆえに本述語は [`PlacementRoute::is_system_reanchor`] へ
+/// **委譲する**（判断の腕はあちら側の網羅 `match` が持ち、語彙が増えればコンパイラが
+/// そこで判断を要求する）。
 ///
-/// 2 つの区分を意図的に割る日が来たら、そのときに列を割って理由を設計へ登記すること。
+/// 2 つの区分を意図的に割る日が来たら、そのときに列を割ること。
 ///
 /// # 適用外の内訳
 ///
 /// - [`SpawnInitial`](PlacementRoute::SpawnInitial)／[`Restore`](PlacementRoute::Restore):
-///   復元時の可視化保証は `areka-P0-position-persist` の所有（design Boundary）。
-/// - [`MoveCue`](PlacementRoute::MoveCue): `\![move]` はスクリプトの明示操作（D13 帰結⑵）。
+///   復元時の可視化保証は位置の永続化の側が持つ。
+/// - [`MoveCue`](PlacementRoute::MoveCue): `\![move]` はスクリプトの明示操作。
 /// - [`BalloonLimitRelease`](PlacementRoute::BalloonLimitRelease): バルーン窓側の書込であり、
-///   かつ `windowposition.limit` の関門が既に画面内を保証した後の位置である
-///   （areka-P0-windowposition-limit DD7）。遷移ガードで重ねて引き戻す対象ではない。
+///   かつ `windowposition.limit` の関門が既に画面内を保証した後の位置である。
+///   遷移ガードで重ねて引き戻す対象ではない。
 /// - [`KeepPositionResize`](PlacementRoute::KeepPositionResize)／
 ///   [`BalloonFollow`](PlacementRoute::BalloonFollow): バルーン窓側の書込。
 ///   **本述語をそのままバルーン適用の発火条件に流用しないこと**——
 ///   バルーンの適用可否は「随伴の**引き金**がドラッグだったか配置系だったか」で決まり、
 ///   `follow_balloon` の呼出元が持つ情報である（本述語の入力は書込自身の route）。
-///   areka-P0-dpi-window-vanish タスク 6.2 は [`BalloonFollowTrigger`] を新設して**引き金**を配管し、その
+///   [`BalloonFollowTrigger`] が**引き金**を配管し、その
 ///   [`Placement`](BalloonFollowTrigger::Placement) 腕が**引き金の route** に対して
-///   本述語を引く形にした（本述語へ `BalloonFollow` を渡す形にはしていない）。
+///   本述語を引く（本述語へ `BalloonFollow` を渡す形にはしていない）。
 pub(super) fn route_applies_visibility_guard(route: PlacementRoute) -> bool {
-    // 非ドラッグの自動配置（S3 の保護対象・D13 帰結⑴）＝システム由来の再アンカー 7 経路。
-    // 明示操作・別 spec 所有・バルーン窓側（上記 doc の内訳）はあちらで `false` に落ちる。
+    // 非ドラッグの自動配置＝システム由来の再アンカー 7 経路。
+    // 明示操作・バルーン窓側（上記 doc の内訳）はあちらで `false` に落ちる。
     route.is_system_reanchor()
 }
 
-/// 射影 T の**下流・外側**で可視性の遷移ガードを適用する（D5: `project_anchor` の
+/// 射影 T の**下流・外側**で可視性の遷移ガードを適用する（`project_anchor` の
 /// 内部は変更しない）。
 ///
 /// # 引数
@@ -237,20 +234,19 @@ pub(super) fn route_applies_visibility_guard(route: PlacementRoute) -> bool {
 /// - **clamp 先**（`clamp_wa`）は射影 T が Y に用いたのと同じ矩形（`raw` × `size`）から
 ///   引く。ここを別の矩形で引き直すと Y と X が別モニタを基準にして
 ///   [`guard_visibility`] の事後条件（clamp 後に `clamp_wa` と交差する）が崩れる
-///   （design Risks・[`guard_visibility`] doc の `clamp_wa` 項）。
-/// - **食い違いの観測**（areka-P0-dpi-window-vanish Req 3.2）は**射影 T が決めた位置**（`proposed` × `size`）の帰属で
-///   判定する。要件が言う「窓位置を**決めた**とき」の位置がこれであり、射影の入力 `raw`
-///   は下端吸着より前の一時状態にすぎない——`raw` で判定すると「射影が正しく接地させて
+///   （[`guard_visibility`] doc の `clamp_wa` 項）。
+/// - **食い違いの観測**は**射影 T が決めた位置**（`proposed` × `size`）の帰属で
+///   判定する。射影の入力 `raw` は下端吸着より前の一時状態にすぎない——`raw` で判定すると「射影が正しく接地させて
 ///   可視域へ収めた窓」まで食い違いとして報告する偽陽性になる（下端吸着では
 ///   `raw` の中心が work area 下端より下にあることは珍しくない）。
 ///
-/// # ログ（areka-P0-dpi-window-vanish Req 3.1/3.2/3.3・タスク 2.2 → 6.1 の申し送り）
+/// # ログ
 ///
 /// [`guard_visibility`] は**意図的に無ログ**の純関数で、水準の分岐（非ドラッグ経路は
 /// `warn!`／ドラッグ経路は従来 `debug!` のまま）は route を持つ本層でしか書けない。
-/// ゆえに観測は本関数の責務である——ここで出さなければ areka-P0-dpi-window-vanish Req 3.1/3.2 の観測が丸ごと欠落する。
+/// ゆえに観測は本関数の責務である——ここで出さなければ観測が丸ごと欠落する。
 ///
-/// # 縮退（areka-P0-dpi-window-vanish Req 3.3）
+/// # 縮退
 ///
 /// `MonitorSnapshot` 不在／空 snapshot では work area が 1 つも無く、clamp 先を決められない。
 /// このとき**位置には一切手を入れず** `warn!` を残す（架空の可視領域を発明しない＝
@@ -276,8 +272,7 @@ pub(super) fn apply_visibility_guard(
 /// キャラ窓（[`apply_visibility_guard`]＝書込自身の route で発火判定）とバルーン窓
 /// （[`guard_balloon_position`]＝随伴の**引き金**で発火判定）が共有する。
 /// 発火判定だけを外へ出したのは、両者で判定の**入力が違う**（書込の route ⇔ 引き金の
-/// route）一方、評価規則・clamp 先の引き方・判定語の観測は**完全に同一**だからである
-/// （design「バルーン適用（S3′ 是正）」＝新規機構ゼロ）。
+/// route）一方、評価規則・clamp 先の引き方・判定語の観測は**完全に同一**だからである。
 ///
 /// `route` は**ログに載る経路名**であり、発火判定には用いない——バルーン随伴の書込は
 /// [`PlacementRoute::BalloonFollow`] として記録される（[`enqueue_window_set_pos`] が出す
@@ -300,7 +295,7 @@ pub(super) fn evaluate_visibility_guard(
         );
         return proposed;
     };
-    // 射影が Y に用いたのと同じ矩形（raw × 新寸）から引き直す＝clamp 先の貫通。
+    // clamp 先は射影が Y に用いたのと同じ矩形（raw × 新寸）から引き直す。
     let Some((clamp_wa, input_resolution)) =
         work_area_for_window_with_origin(snapshot, rect_at(raw, size))
     else {
@@ -313,14 +308,14 @@ pub(super) fn evaluate_visibility_guard(
     };
 
     // 射影の**入力**が画面の外（どの work area とも非交差）に居て、最近傍モニタへ引き寄せ
-    // られた（areka-P0-dpi-transition-atomicity 要件 5.5 の記録側）。ここを観測しないと、決めた位置がモニタ内へ収まる
-    // 限り下の観測（`NearestFallback`）にも掛からず、**ゴーストが飛んだ事実が 1 行も残らない**。
+    // られた記録。ここを観測しないと、決めた位置がモニタ内へ収まる限り下の観測
+    // （`NearestFallback`）にも掛からず、**ゴーストが飛んだ事実が 1 行も残らない**。
     // 非ドラッグ経路でしか本関数へ来ないので、この `warn!` はドラッグの spam を生まない。
     //
-    // **位置は変えない**（開発者の裁定 2026-08-20）。最近傍フォールバックは「解決できなかった」
-    // ではなく「最近傍で解決した」であり、現行挙動が正である——副モニタを引き抜いたときに
-    // 現状維持を選ぶと、ゴーストは画面外に取り残されて見えず触れなくなる。areka-P0-dpi-transition-atomicity 要件 5.5 の
-    // 「位置を変更せずに現状を維持」が効くのはモニタ表が空のとき（上の腕）に限る。
+    // **位置は変えない**。最近傍フォールバックは「解決できなかった」ではなく
+    // 「最近傍で解決した」であり、現行挙動が正である——副モニタを引き抜いたときに
+    // 現状維持を選ぶと、ゴーストは画面外に取り残されて見えず触れなくなる。
+    // 現状維持が効くのはモニタ表が空のとき（上の腕）に限る。
     // 交差の有無まで条件に入れる理由は判定語の doc を参照（帰属だけだと下端吸着の正常系を
     // 偽陽性で叩く）。入力と提案が同じ（バルーン・`move` のずれ）なら動かしていない＝
     // 引き寄せていないので記録しない。
@@ -339,9 +334,8 @@ pub(super) fn evaluate_visibility_guard(
     }
 
     // 最近傍フォールバック＝**決めた位置**の窓中心がどのモニタにも属さない＝モニタ構成
-    // 情報と実画面の食い違い、あるいは窓が既に可視領域外という異常の兆候（areka-P0-dpi-window-vanish Req 3.2・
-    // S3 後段「最近傍フォールバックが異常を無観測で吸収する」）。ドラッグ経路は毎イベント
-    // 発火ゆえ従来 `debug!` のまま（本関数を通らない＝水準分岐が route で成立する）。
+    // 情報と実画面の食い違い、あるいは窓が既に可視領域外という異常の兆候。
+    // ドラッグ経路は毎イベント発火ゆえ従来 `debug!` のまま（本関数を通らない）。
     let decided = work_area_for_window_with_origin(snapshot, rect_at(proposed, size));
     if matches!(decided, Some((_, WorkAreaResolution::NearestFallback))) {
         warn!(

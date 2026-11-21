@@ -6,7 +6,7 @@ use super::test_support::{titles, two_scope_placements};
 use crate::test_support::fake_handle;
 
 // -------------------------------------------------------------------------
-// T-I4: clickthrough 登録 system（6.1）
+// clickthrough 登録 system
 //
 // 実 `ClickThroughRegistryHandle` は wintf 内部（`new` は pub(crate)）でしか
 // 構築できないため、headless の「登録呼び出しが発生する」観測は偽装境界
@@ -44,7 +44,7 @@ fn register_schedule() -> Schedule {
     schedule
 }
 
-/// T-I4: `GhostWindowMarker` 窓に `WindowHandle` が付いた瞬間（Added）だけ
+/// `GhostWindowMarker` 窓に `WindowHandle` が付いた瞬間（Added）だけ
 /// 登録呼び出しが発生し、(Entity, HWND) が正値・再実行で重複登録しない・
 /// 後から HWND が付いた窓も追加で 1 回だけ登録される。
 #[test]
@@ -55,7 +55,6 @@ fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
     world.insert_non_send(FakeRegistrar::default());
     let mut schedule = register_schedule();
 
-    // spawn 直後は WindowHandle 不在 → 登録は起きない
     schedule.run(&mut world);
     assert!(registrar_calls(&world).is_empty());
 
@@ -70,11 +69,9 @@ fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
     calls.sort_by_key(|(_, hwnd)| *hwnd);
     assert_eq!(calls, vec![(char0, 0x10), (balloon0, 0x20)]);
 
-    // 再実行しても重複登録しない（Added は厳密 1 回）
     schedule.run(&mut world);
     assert_eq!(registrar_calls(&world).len(), 2);
 
-    // 後から HWND が付いた scope1 キャラ窓も追加で 1 回だけ登録される
     let char1 = gw.char_window(1).unwrap();
     world.entity_mut(char1).insert(fake_handle(0x30));
     schedule.run(&mut world);
@@ -83,8 +80,8 @@ fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
     assert!(calls.contains(&(char1, 0x30)));
 }
 
-/// T-I4 補: `GhostWindowMarker` を持たない窓は `WindowHandle` が付いても
-/// 登録されない（標的は placement 生成窓のみ・6.1）。
+/// `GhostWindowMarker` を持たない窓は `WindowHandle` が付いても
+/// 登録されない（標的は placement 生成窓のみ）。
 #[test]
 fn t_i4_register_system_ignores_non_ghost_windows() {
     let mut world = World::new();

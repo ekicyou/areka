@@ -1,6 +1,5 @@
 //! `resolve_placement` の檻: bottom アンカー・スコープ連鎖・クランプ（T-R1/R2/R3/R5/R6）。
 //!
-//! 元は 1 ファイルに 4 主題が同居して 1,000 行規約を超えていたため主題別に分割した。
 //! 他の 3 主題は `resolver_resolve_{free,balloon,contract}_tests.rs`。
 
 use super::resolve_test_support::{cfg_of, input, offset_work_area, scope_cfg};
@@ -15,7 +14,7 @@ use log_capture_kit::capture;
 // T-R1: bottom 右下基準（P1＋P2 の scope0 項）
 // ------------------------------------------------------------------
 
-/// T-R1: `char_y = bottom − h`・`char_x(0) = right − w0 − defaultx`（2.1/2.2/2.5/2.10）。
+/// T-R1: `char_y = bottom − h`・`char_x(0) = right − w0 − defaultx`。
 /// dpi 全 4 水準で成立する（純物理式・隠れたスケールなし）。
 #[test]
 fn t_r1_bottom_anchors_bottom_right() {
@@ -62,7 +61,7 @@ fn t_r1_bottom_holds_on_offset_work_area() {
     }
 }
 
-/// T-R1 補: `defaultx` 未指定（None）は 0 扱い＝右端密着（2.10）。
+/// T-R1 補: `defaultx` 未指定（None）は 0 扱い＝右端密着。
 /// `cfg.scopes` 未収載スコープも `ScopeConfig::default()`（Bottom・オフセット
 /// なし）で同一に配置される（doc 記載の決定の檻）。
 #[test]
@@ -71,7 +70,6 @@ fn t_r1_missing_scope_config_defaults_to_bottom_flush() {
         let wa = work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
 
-        // scopes マップが完全に空 → scope0 は既定 ScopeConfig で解決
         let out = resolve_placement(&cfg_of(vec![]), wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(out.len(), 1, "dpi={dpi}");
@@ -87,11 +85,11 @@ fn t_r1_missing_scope_config_defaults_to_bottom_flush() {
 }
 
 // ------------------------------------------------------------------
-// T-R2: スコープ連鎖（P2・areka-P0-scope-chain-gap 2.1/2.2・2.10・DD3）
+// T-R2: スコープ連鎖（P2）
 // ------------------------------------------------------------------
 
-/// T-R2: `base_x(n≥1) = char_x(n−1) − w(n)`（隣接・gap 0・areka-P0-scope-chain-gap 2.1/2.2）。
-/// `kero.defaultx=0` は基準密着であって右端に戻らない（DD3 の檻）。
+/// T-R2: `base_x(n≥1) = char_x(n−1) − w(n)`（隣接・gap 0）。
+/// `kero.defaultx=0` は基準密着であって右端に戻らない。
 /// 3 スコープで一般連鎖と、隣接ペアの隙間が 0 であることを固定する。
 #[test]
 fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
@@ -132,17 +130,17 @@ fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
     }
 }
 
-/// T-R2 本丸: 幅が等しいか否かで**結果の形が分岐しない**（隣接・gap 0・areka-P0-scope-chain-gap 2.1/2.2）。
+/// T-R2 本丸: 幅が等しいか否かで**結果の形が分岐しない**（隣接・gap 0）。
 ///
-/// 確定規則（SSP 実測 H1）は `char_x(0) = right − w(0)`・
+/// 確定規則（SSP 実測）は `char_x(0) = right − w(0)`・
 /// `char_x(n≥1) = char_x(n−1) − w(n)`。引くのは**自スコープの幅**ゆえ、隣接ペアの
-/// 隙間は幅の組み合わせによらず常に 0 になる（幅差が隙間へ漏れない・areka-P0-scope-chain-gap 2.2）。
+/// 隙間は幅の組み合わせによらず常に 0 になる（幅差が隙間へ漏れない）。
 ///
 /// 本檻の要点は、不等幅（400/320/200）と等幅（320/320）を**同一のヘルパ**
-/// （同一式・同一 assert 形）で検定することにある（areka-P0-scope-chain-gap 2.5＝等幅を特殊扱いしない）。
+/// （同一式・同一 assert 形）で検定することにある（等幅を特殊扱いしない）。
 /// 期待値は幅列からの畳み込みで生成し、等幅側に手書き定数を置かない
 /// （偶然一致する定数では「同一式で配置されている」ことを主張できない）。
-/// `DPIS`＝100%／125%／150%／200% の全 4 水準で決定論的に実行する（areka-P0-scope-chain-gap 2.4/3.5）。
+/// `DPIS`＝100%／125%／150%／200% の全 4 水準で決定論的に実行する。
 #[test]
 fn t_r2_unequal_widths_leave_no_gap() {
     /// 幅列を確定規則で検定する**唯一の検定路**（不等幅・等幅で分岐しない）。
@@ -167,7 +165,7 @@ fn t_r2_unequal_widths_leave_no_gap() {
             "dpi={dpi} [{label}]: 出力長＝入力長（空虚一致封じ）"
         );
 
-        // 期待 X は確定規則の畳み込みで生成する（等幅・不等幅で同一式・areka-P0-scope-chain-gap 2.5）
+        // 期待 X は確定規則の畳み込みで生成する（等幅・不等幅で同一式）
         let mut expected_x = wa.right;
         for (n, &w) in widths.iter().enumerate() {
             expected_x -= w;
@@ -179,20 +177,20 @@ fn t_r2_unequal_widths_leave_no_gap() {
     }
 
     for dpi in DPIS {
-        // (1) 不等幅 3 スコープ: 幅差（w(n−1)−w(n)）が隙間へ漏れない（areka-P0-scope-chain-gap 2.2/3.1/3.2）。
-        //     前スコープの幅を引く欠陥式は、不等幅でだけ期待値と食い違う（areka-P0-scope-chain-gap 3.2）
+        // (1) 不等幅 3 スコープ: 幅差（w(n−1)−w(n)）が隙間へ漏れない。
+        //     前スコープの幅を引く欠陥式は、不等幅でだけ期待値と食い違う
         let unequal = [px(400, dpi), px(320, dpi), px(200, dpi)];
         assert_chain_is_adjacent(dpi, "不等幅 400/320/200", &unequal);
 
         // (2) 等幅 2 スコープ: (1) と**同一のヘルパ＝同一式・同一 assert 形**で検定する
-        //     （areka-P0-scope-chain-gap 2.5＝等幅を特殊扱いしない）
+        //     （等幅を特殊扱いしない）
         let equal = [px(320, dpi), px(320, dpi)];
         assert_chain_is_adjacent(dpi, "等幅 320/320", &equal);
     }
 }
 
 /// T-R2 補: 後続スコープの `defaultx` は「自スコープの基準位置（前スコープの
-/// 左隣＝`char_x(n−1) − w(n)`）からの左方向オフセット」（DD3・areka-P0-scope-chain-gap 2.1/2.2）。
+/// 左隣＝`char_x(n−1) − w(n)`）からの左方向オフセット」。
 #[test]
 fn t_r2_chain_defaultx_offsets_leftward_from_base() {
     for dpi in DPIS {
@@ -218,10 +216,10 @@ fn t_r2_chain_defaultx_offsets_leftward_from_base() {
 }
 
 // ------------------------------------------------------------------
-// T-R3: defaulttop 無視（P1・2.4）
+// T-R3: defaulttop 無視（P1）
 // ------------------------------------------------------------------
 
-/// T-R3: bottom 時に `default_y` を与えても出力は不変（2.4）。
+/// T-R3: bottom 時に `default_y` を与えても出力は不変。
 #[test]
 fn t_r3_default_y_ignored_under_bottom() {
     for dpi in DPIS {
@@ -246,7 +244,7 @@ fn t_r3_default_y_ignored_under_bottom() {
 }
 
 // ------------------------------------------------------------------
-// T-R5: 上・左・右の辺で最初の位置を解く（4.2）・知らない値は bottom
+// T-R5: 上・左・右の辺で最初の位置を解く・知らない値は bottom
 // ------------------------------------------------------------------
 
 /// T-R5 の 2 スコープ（スコープ 0 だけ `defaultx`・`defaulty` を持つ。左右の辺はどちらも使わず、
@@ -403,7 +401,7 @@ fn t_r5_mixed_edges_chain_per_edge() {
     }
 }
 
-/// T-R5: 知らない値は Bottom と同じ幾何・`anchor` も Bottom（DD9）。
+/// T-R5: 知らない値は Bottom と同じ幾何・`anchor` も Bottom。
 #[test]
 fn t_r5_unknown_seam_value_resolves_like_bottom() {
     for dpi in DPIS {
@@ -465,7 +463,7 @@ fn t_r5_warns_once_per_call_only_for_unknown_value() {
 }
 
 // ------------------------------------------------------------------
-// T-R6: クランプ（P4・DD12）
+// T-R6: クランプ（P4）
 // ------------------------------------------------------------------
 
 /// T-R6: 過大 `defaultx` で `x = work_area.left` に止まる（左端クランプ）。
@@ -505,7 +503,7 @@ fn t_r6_negative_defaultx_clamps_to_right_edge() {
 }
 
 /// T-R6 補: work area より大きい surface 寸では区間が逆転するため
-/// left／top 側を優先し、少なくとも左上は work area 内に収まる（DD12）。
+/// left／top 側を優先し、少なくとも左上は work area 内に収まる。
 #[test]
 fn t_r6_oversized_surface_pins_to_top_left() {
     for dpi in DPIS {
@@ -528,11 +526,11 @@ fn t_r6_oversized_surface_pins_to_top_left() {
 }
 
 /// T-R6 補: クランプはキャラ窓の連鎖にも波及する（後続スコープは
-/// クランプ後の実配置の左隣＝P2 連鎖は実位置基準・2.7）。
+/// クランプ後の実配置の左隣＝P2 連鎖は実位置基準）。
 ///
 /// 左端クランプの区間（前段）は両スコープとも左端へ潰れるため、
 /// 「クランプ前とクランプ後のどちらを連鎖基準にしたか」を判別できない。
-/// 判別には後段の右端クランプ区間が要る（そちらが 2.7 の実効的な檻）。
+/// 判別には後段の右端クランプ区間が要る（そちらが実効的な檻）。
 #[test]
 fn t_r6_chain_uses_clamped_previous_position() {
     for dpi in DPIS {
@@ -548,10 +546,10 @@ fn t_r6_chain_uses_clamped_previous_position() {
         let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)], MEASURE_DPI);
 
         assert_eq!(out[0].char_pos.x, wa.left, "dpi={dpi}");
-        // base_x(1) = char_x(0) − w1 は左外 → scope1 も左端クランプ（areka-P0-scope-chain-gap 2.1/2.2）
+        // base_x(1) = char_x(0) − w1 は左外 → scope1 も左端クランプ
         assert_eq!(out[1].char_pos.x, wa.left, "dpi={dpi}: 連鎖先もクランプ");
 
-        // ここまでは両基準が左端へ潰れて同値になるため 2.7 を判別しない。
+        // ここまでは両基準が左端へ潰れて同値になるため判別しない。
         // 右端クランプ区間を併置して判別力を持たせる: scope0 を free の過大な
         // defaultleft で右端クランプさせると、scope1 はクランプされない位置へ落ち、
         // クランプ前基準なら w0 ぶん右（右端クランプ）へずれて差が出る。

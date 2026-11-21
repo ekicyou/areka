@@ -1,27 +1,23 @@
-//! 明示の記法を**書かれた順のまま**受け取る解釈の檻（`areka-P0-zorder-scope-inversion`
-//! 要件 1.1〜1.4・1.6・2.1〜2.3・3.1〜3.5・4.2・4.7・8.1・design「Ledger」）。
-//!
-//! 完了 spec `areka-P0-scope-zorder-pinning` の要件 2.4（同じスコープの 2 窓を
-//! `[バルーン, キャラ]` の隣り合いへ寄せる）を覆した後の形を押さえる。
+//! 明示の記法を**書かれた順のまま**受け取る解釈のテスト。
 //!
 //! - 並びは書かれた順のまま。片方だけ名指しのスコープにだけ相棒を 1 枚補う
 //!   （`sN` だけならすぐ手前に `bN`、`bN` だけならすぐ奥に `sN`）。
 //! - 2 枚とも書かれたスコープの並びの形を 4 通り（隣り合い・逆転・非隣接・逆転かつ非隣接）に
 //!   分けて記録する。補ったスコープは常に隣り合い。
 //! - 判定の順序（解釈不能 → 記法の混在 → 要素 2 個未満 → 数字だけの記法の展開 → 同じ窓の重複）
-//!   と拒否の 5 種は変わらない。
+//!   と拒否の 5 種は固定されている。
 //!
-//! 純関数の檻なので、単独で回しても一括で回しても結果は同じである（要件 8.3）。
+//! 純関数のテストなので、単独で回しても一括で回しても結果は同じである。
 
 use super::*;
 use crate::zorder_test_support::{b, expect_accept, expect_reject, implied, s, written};
 
 // ---------------------------------------------------------------------------
-// 書かれた順のまま採る（要件 1・2）
+// 書かれた順のまま採る
 // ---------------------------------------------------------------------------
 
 /// ぱすたと同じ指定 `s0,b0,s1`: 並びは書かれた順のまま、`s1` の手前に `b1` が補われる。
-/// スコープ 0 は逆転、スコープ 1 は補った隣り合い（要件 1.2・1.4・3.1・3.3）。
+/// スコープ 0 は逆転、スコープ 1 は補った隣り合い。
 #[test]
 fn t_zwo01_pasta_inversion_keeps_written_order_and_fills_b1_before_s1() {
     let (elements, records) = expect_accept(&["s0", "b0", "s1"]);
@@ -41,7 +37,7 @@ fn t_zwo01_pasta_inversion_keeps_written_order_and_fills_b1_before_s1() {
 }
 
 /// 非隣接 `b1,s0,s1,b0`: 4 枚とも書かれた順のまま。スコープ 1 は非隣接、
-/// スコープ 0 は逆転かつ非隣接（要件 2.1・2.2・2.3）。記録はスコープの初出順。
+/// スコープ 0 は逆転かつ非隣接。記録はスコープの初出順。
 #[test]
 fn t_zwo02_split_order_is_kept_verbatim_and_classified() {
     let (elements, records) = expect_accept(&["b1", "s0", "s1", "b0"]);
@@ -56,7 +52,7 @@ fn t_zwo02_split_order_is_kept_verbatim_and_classified() {
     );
 }
 
-/// 隣り合った逆転 `s1,b1` はそのまま採る（要件 1.1）。
+/// 隣り合った逆転 `s1,b1` はそのまま採る。
 #[test]
 fn t_zwo03_adjacent_inversion_is_kept() {
     let (elements, records) = expect_accept(&["s1", "b1"]);
@@ -65,7 +61,7 @@ fn t_zwo03_adjacent_inversion_is_kept() {
     assert_eq!(records, vec![written(1, WrittenOrder::Inverted)]);
 }
 
-/// バルーンのすぐ奥にキャラクターを書いたスコープは今と同じ隣り合い（要件 1.6）。
+/// バルーンのすぐ奥にキャラクターを書いたスコープは隣り合い。
 #[test]
 fn t_zwo04_balloon_then_char_stays_adjacent() {
     let (elements, records) = expect_accept(&["b0", "s0", "b1", "s1"]);
@@ -80,7 +76,7 @@ fn t_zwo04_balloon_then_char_stays_adjacent() {
     );
 }
 
-/// 記録の語は 4 通り。隣り合いは既存の読み手のために `false` のまま（要件 1.4・2.3・7.4）。
+/// 記録の語は 4 通り。隣り合いは既存の読み手のために `false` のまま。
 #[test]
 fn t_zwo05_written_order_words() {
     assert_eq!(WrittenOrder::Adjacent.as_str(), "false");
@@ -90,11 +86,10 @@ fn t_zwo05_written_order_words() {
 }
 
 // ---------------------------------------------------------------------------
-// 片方だけの名指しの補い（要件 3）
+// 片方だけの名指しの補い
 // ---------------------------------------------------------------------------
 
-/// 補いの 2 つの位置: `bN` だけならすぐ奥に `sN`、`sN` だけならすぐ手前に `bN`
-/// （要件 3.1・3.2）。補いは他の窓の順に触れない。
+/// 補いの 2 つの位置: `bN` だけならすぐ奥に `sN`、`sN` だけならすぐ手前に `bN`。補いは他の窓の順に触れない。
 #[test]
 fn t_zwo06_partner_is_filled_right_behind_a_balloon_and_right_before_a_char() {
     let (elements, records) = expect_accept(&["b1", "s0"]);
@@ -120,7 +115,7 @@ fn t_zwo06_partner_is_filled_right_behind_a_balloon_and_right_before_a_char() {
     );
 }
 
-/// 2 枚とも書けば補わない（要件 3.5）。窓の枚数は書いた数のまま。
+/// 2 枚とも書けば補わない。窓の枚数は書いた数のまま。
 #[test]
 fn t_zwo07_both_windows_written_means_no_fill() {
     for tokens in [
@@ -169,10 +164,10 @@ fn t_zwo09_every_explicit_scope_is_recorded_once_and_fills_are_adjacent() {
 }
 
 // ---------------------------------------------------------------------------
-// 数字だけの記法・拒否（要件 4.2・4.7。完全形と省略形の同義は兄弟の `t_zgp3` が受け持つ）
+// 数字だけの記法・拒否（完全形と省略形の同義は兄弟の `t_zgp3` が受け持つ）
 // ---------------------------------------------------------------------------
 
-/// 数字だけの記法は今のまま `[バルーン, キャラ]` へ展開し、記録は空（要件 4.2）。
+/// 数字だけの記法は `[バルーン, キャラ]` へ展開し、記録は空。
 #[test]
 fn t_zwo10_numeric_mode_expands_as_before_with_no_record() {
     let (elements, records) = expect_accept(&["1", "0"]);
@@ -180,7 +175,7 @@ fn t_zwo10_numeric_mode_expands_as_before_with_no_record() {
     assert!(records.is_empty(), "{records:?}");
 }
 
-/// 拒否 5 種は今と同じ（要件 4.7）。解釈の 4 種に加え、台帳の再指定の拒否も
+/// 拒否 5 種。解釈の 4 種に加え、台帳の再指定の拒否も
 /// 逆転の並びで変わらない。
 #[test]
 fn t_zwo11_the_five_rejections_are_unchanged() {

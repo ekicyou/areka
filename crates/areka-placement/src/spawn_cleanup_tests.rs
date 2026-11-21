@@ -8,7 +8,7 @@ use crate::resolver::{Anchor, PointPx};
 use log_capture_kit::ExpectField;
 
 // -------------------------------------------------------------------------
-// T-V1: despawn 掃除（areka-P0-dpi-window-vanish 要件 6.1/6.4・D8）
+// despawn 掃除
 //
 // 檻は「判断が下される場所」（`spawn.rs` の `remove_entry_of` と on_remove hook）の
 // 兄弟に置く。
@@ -17,7 +17,7 @@ use log_capture_kit::ExpectField;
 /// 生存 scope の「動いていないこと」を判定するための可観測状態の束。
 ///
 /// 位置・寸法（`WindowPos`）と追従関係（`BalloonFollow` の相手 entity と offset）＋
-/// アンカーを 1 個の比較可能な値へまとめる（要件 6.4 の「位置・寸法・追従関係」）。
+/// アンカーを 1 個の比較可能な値へまとめる。
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ScopeState {
     char_pos: Option<Point>,
@@ -47,10 +47,10 @@ fn scope_state(world: &World, gw: &GhostWindows, scope: usize) -> ScopeState {
     }
 }
 
-/// T-V1: キャラ窓を despawn すると当該 scope が `GhostWindows` から消える（6.1）。
+/// キャラ窓を despawn すると当該 scope が `GhostWindows` から消える。
 ///
 /// 呼出点結合なしで拾えること（＝`world.despawn` を素で叩くだけで発火すること）が
-/// 要件の核心ゆえ、掃除関数を明示的に呼ぶ経路は檻に持ち込まない。
+/// 核心ゆえ、掃除関数を明示的に呼ぶ経路は檻に持ち込まない。
 #[test]
 fn t_v1_despawn_char_window_removes_scope_entry() {
     let mut world = World::new();
@@ -63,11 +63,11 @@ fn t_v1_despawn_char_window_removes_scope_entry() {
     let reg = world.resource::<GhostWindows>();
     assert_eq!(reg.scopes().collect::<Vec<_>>(), vec![1]);
     assert_eq!(reg.char_window(0), None);
-    // scope 粒度＝対の相方も同時に引き当て不能になる（D8）
+    // scope 粒度＝対の相方も同時に引き当て不能になる
     assert_eq!(reg.balloon_window(0), None);
 }
 
-/// T-V1: バルーン窓側の despawn でも同じ scope エントリが消える（片割れ対称性・D8）。
+/// バルーン窓側の despawn でも同じ scope エントリが消える（片割れ対称性）。
 #[test]
 fn t_v1_despawn_balloon_window_removes_same_scope_entry() {
     let mut world = World::new();
@@ -83,7 +83,7 @@ fn t_v1_despawn_balloon_window_removes_same_scope_entry() {
     assert_eq!(reg.balloon_window(1), None);
 }
 
-/// T-V1: 未登録 entity の除去は no-op（不一致・二重除去・空レジストリ・6.1）。
+/// 未登録 entity の除去は no-op（不一致・二重除去・空レジストリ）。
 ///
 /// `remove_entry_of` の全域性を直接叩いて固定する（hook はこの関数しか呼ばない）。
 #[test]
@@ -111,7 +111,7 @@ fn t_v1_remove_entry_of_unregistered_entity_is_noop() {
     let expected0 = ScopeWindows {
         char_window: gw.char_window(0).unwrap(),
         balloon_window: gw.balloon_window(0).unwrap(),
-        // spawn が記録した既定キャラ位置（未接触判定の基準・areka-P0-scope-chain-gap 7.3）。台帳の等価比較へ
+        // spawn が記録した既定キャラ位置（未接触判定の基準）。台帳の等価比較へ
         // 含めるため、レジストリの値をそのまま引く。
         default_char_pos: gw.default_char_pos(0),
         remembered_adjacency: gw.remembered_adjacency(0),
@@ -124,7 +124,7 @@ fn t_v1_remove_entry_of_unregistered_entity_is_noop() {
     assert_eq!(reg.remove_entry_of(char1), None);
 }
 
-/// T-V1: 掃除の前後で**生存 scope** の位置・寸法・追従関係が変化しない（6.4）。
+/// 掃除の前後で**生存 scope** の位置・寸法・追従関係が変化しない。
 ///
 /// 空虚性回避:
 /// ①探針は 2 scope で、位置・寸法・offset・追従先がすべて**互いに異なる**ことを
@@ -153,7 +153,7 @@ fn t_v1_surviving_scope_state_unchanged_by_cleanup() {
     world.despawn(gw.char_window(0).unwrap());
     world.despawn(gw.balloon_window(0).unwrap());
 
-    // 生存 scope 1: 位置・寸法・追従関係・アンカーが 1 ビットも動かない（6.4）。
+    // 生存 scope 1: 位置・寸法・追従関係・アンカーが 1 ビットも動かない。
     assert_eq!(scope_state(&world, &gw, 1), before1);
 
     // 除去は scope 粒度で止まる（生存 scope の引き当ては健在）。
@@ -163,8 +163,8 @@ fn t_v1_surviving_scope_state_unchanged_by_cleanup() {
     assert_eq!(reg.balloon_window(1), gw.balloon_window(1));
 }
 
-/// T-V1: `GhostWindows` Resource 未挿入の World で despawn しても no-op（hook が
-/// Resource 不在で panic しない・design「Resource 未挿入は no-op」）。
+/// `GhostWindows` Resource 未挿入の World で despawn しても no-op（hook が
+/// Resource 不在で panic しない）。
 #[test]
 fn t_v1_despawn_without_registry_resource_is_noop() {
     let mut world = World::new();
@@ -175,9 +175,9 @@ fn t_v1_despawn_without_registry_resource_is_noop() {
     assert!(world.get_resource::<GhostWindows>().is_none());
 }
 
-/// T-V1: 掃除は Resource のみを触る＝**生存 entity の component へ一切書かない**
-/// ことをログ側からも固定する（6.4 の構造的保証）。除去成立・no-op のいずれも
-/// `debug!` 止まりで、warn 以上を出さない（要件 6.2 の前提となる静穏性）。
+/// 掃除は Resource のみを触る＝**生存 entity の component へ一切書かない**
+/// ことをログ側からも固定する。除去成立・no-op のいずれも
+/// `debug!` 止まりで、warn 以上を出さない（静穏性）。
 #[test]
 fn t_v1_cleanup_logs_are_debug_only_and_name_the_scope() {
     let (_, events) = log_capture_kit::capture(|| {

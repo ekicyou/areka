@@ -1,5 +1,4 @@
-//! 吸着の指令（[`super`]）の檻（areka-P0-window-link-directives 要件 1.1〜1.3・1.5〜1.9・
-//! 2.4・9.1・design「script_alignment」）。
+//! 吸着の指令（[`super`]）の檻。
 //!
 //! 窓は `spawn_ghost_windows` で本番と同じ部品のまま組み、偽の `WindowHandle` を付けて
 //! 単一の窓書込口が `WindowPos` を書けるようにする（実際の画面は使わない）。作業領域の
@@ -83,7 +82,7 @@ fn apply(world: &mut World, scope: u32, word: AlignmentWord) -> (bool, Vec<Captu
     capture(|| apply_script_alignment(world, scope, &word))
 }
 
-/// バルーンは窓の左上からのずらしを保って付いて動く（1.6）。
+/// バルーンは窓の左上からのずらしを保って付いて動く。
 fn assert_balloon_follows(world: &World) {
     let c = position_of(world, char_window(world));
     assert_eq!(
@@ -100,7 +99,7 @@ fn assert_balloon_follows(world: &World) {
 // 語の読み
 // ---------------------------------------------------------------------------
 
-/// 6 つの語を読み、前後の空白と大文字小文字の揺れを吸収する（1.1〜1.3）。
+/// 6 つの語を読み、前後の空白と大文字小文字の揺れを吸収する。
 #[test]
 fn parse_reads_six_words_ignoring_case_and_spaces() {
     let cases = [
@@ -122,7 +121,7 @@ fn parse_reads_six_words_ignoring_case_and_spaces() {
     }
 }
 
-/// 6 つの語のどれでもない値は受け取った値のまま持つ（1.7）。
+/// 6 つの語のどれでもない値は受け取った値のまま持つ。
 #[test]
 fn parse_keeps_unknown_value_verbatim() {
     assert_eq!(
@@ -135,7 +134,7 @@ fn parse_keeps_unknown_value_verbatim() {
     );
 }
 
-/// 方向が無い・空なら欠けた値（1.9）。
+/// 方向が無い・空なら欠けた値。
 #[test]
 fn parse_missing_or_empty_value_is_missing() {
     assert_eq!(parse_alignment_word(&[]), AlignmentWord::Missing);
@@ -159,7 +158,7 @@ fn parse_extra_args_are_logged_and_ignored() {
 // 窓への適用
 // ---------------------------------------------------------------------------
 
-/// 下から上へ: 上端へ沿い、x は残る。台本の印・記録・`move_window`（2.4）・バルーン（1.6）。
+/// 下から上へ: 上端へ沿い、x は残る。台本の印・記録・`move_window`・バルーン。
 #[test]
 fn bottom_to_top_pins_top_edge_keeps_x_and_logs() {
     let mut world = world();
@@ -189,7 +188,7 @@ fn bottom_to_top_pins_top_edge_keeps_x_and_logs() {
     assert_eq!(e.field_str("source"), Some("script"));
 }
 
-/// 下から左・右へ: その辺へ沿い、y は残る（1.1）。
+/// 下から左・右へ: その辺へ沿い、y は残る。
 #[test]
 fn bottom_to_left_and_right_pin_side_edges_keep_y() {
     let mut world = world();
@@ -212,7 +211,7 @@ fn bottom_to_left_and_right_pin_side_edges_keep_y() {
     assert_balloon_follows(&world);
 }
 
-/// `free` は吸着を外して窓をその場に留め、wintf が窓を動かす側へ戻る（1.2・2.4）。
+/// `free` は吸着を外して窓をその場に留め、wintf が窓を動かす側へ戻る。
 #[test]
 fn free_keeps_position_and_hands_drag_to_wintf() {
     let mut world = world();
@@ -231,7 +230,7 @@ fn free_keeps_position_and_hands_drag_to_wintf() {
     );
 }
 
-/// 読めない語は記録して `free` と同じに外す（1.7）。
+/// 読めない語は記録して `free` と同じに外す。
 #[test]
 fn unknown_word_is_logged_and_treated_as_free() {
     let mut world = world();
@@ -253,7 +252,7 @@ fn unknown_word_is_logged_and_treated_as_free() {
     );
 }
 
-/// `default` は descript の向きへ戻して印を外し、その辺へ沿わせる（1.3・9.1）。
+/// `default` は descript の向きへ戻して印を外し、その辺へ沿わせる。
 #[test]
 fn default_returns_to_descript_anchor_and_clears_mark() {
     let mut world = world();
@@ -291,7 +290,7 @@ fn default_returns_to_descript_anchor_and_clears_mark() {
 }
 
 /// 経路は `MoveCue`（明示の操作）なので既定の位置を連れて行かない＝並べ終えた時点の保存は
-/// この窓を記憶に書かない（1.6・design 議題 2）。
+/// この窓を記憶に書かない。
 #[test]
 fn alignment_move_does_not_carry_default_position() {
     let mut world = world();
@@ -310,7 +309,7 @@ fn alignment_move_does_not_carry_default_position() {
     );
 }
 
-/// 欠けた値は何も変えずに記録する（1.9）。
+/// 欠けた値は何も変えずに記録する。
 #[test]
 fn missing_value_changes_nothing_and_logs() {
     let mut world = world();
@@ -329,7 +328,7 @@ fn missing_value_changes_nothing_and_logs() {
     assert!(events_with(&events, "alignment_changed").is_empty());
 }
 
-/// 窓の無いスコープ・窓の一式が無い・部品が無いは記録して何もしない（1.8）。
+/// 窓の無いスコープ・窓の一式が無い・部品が無いは記録して何もしない。
 #[test]
 fn absent_window_is_logged_and_skipped() {
     let mut world = world();

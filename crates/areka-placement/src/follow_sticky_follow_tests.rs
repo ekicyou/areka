@@ -1,4 +1,4 @@
-//! 窓の組の連れ動きの純関数とドラッグの書き手（areka-P0-window-link-directives 要件 2.4／4.2／5.2・設計の決め 12）。
+//! 窓の組の連れ動きの純関数とドラッグの書き手。
 
 use std::collections::BTreeSet;
 
@@ -28,7 +28,7 @@ fn free_partner_moves_by_whole_delta() {
     );
 }
 
-/// 下・上・左・右の相手は、吸着した軸に量が乗らず辺に付いたまま、もう一方の軸だけ動く（4.2・5.2）。
+/// 下・上・左・右の相手は、吸着した軸に量が乗らず辺に付いたまま、もう一方の軸だけ動く。
 #[test]
 fn anchored_partner_ignores_delta_on_anchored_axis() {
     let snapshot = single_monitor_snapshot(); // wa = (0,0)-(1920,1043)
@@ -78,7 +78,7 @@ fn anchored_axis_stays_without_snapshot() {
     }
 }
 
-/// wintf に窓を動かさせるのは、吸着なしで組に入っていない窓だけ（設計の決め 12）。
+/// wintf に窓を動かさせるのは、吸着なしで組に入っていない窓だけ。
 #[test]
 fn wintf_moves_only_free_ungrouped_window() {
     assert!(wintf_moves_window(Anchor::Free, false));
@@ -104,7 +104,7 @@ fn move_window(world: &World, e: Entity) -> bool {
     world.get::<DragConfig>(e).unwrap().move_window
 }
 
-/// 組を据えると両方の `move_window` が偽になり、組が無ければ向きどおりに戻る（2.4・設計の決め 12）。
+/// 組を据えると両方の `move_window` が偽になり、組が無ければ向きどおりに戻る。
 #[test]
 fn sync_drag_writer_follows_groups_and_anchors() {
     let mut world = World::new();

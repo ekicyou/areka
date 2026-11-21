@@ -1,5 +1,4 @@
-//! 台本からの吸着の向きの変更（`\![set,alignmenttodesktop,...]`・areka-P0-window-link-directives
-//! 要件 1・design「script_alignment」）。
+//! 台本からの吸着の向きの変更（`\![set,alignmenttodesktop,...]`）。
 
 use bevy_ecs::world::World;
 use tracing::{debug, info, warn};
@@ -50,9 +49,9 @@ pub fn parse_alignment_word(args: &[&str]) -> AlignmentWord {
 /// 現スコープのキャラクターの窓へ当てる。当てたら真。
 ///
 /// 窓は今の大きさのまま経路 `MoveCue` で新しい向きへ当て直す（`\![move]` と同じ明示の操作＝
-/// 記憶に書かず、既定の位置も連れて行かない・design 議題 2）。バルーンは `resize_window_to`
-/// の中で付いて動く（要件 1.6）。ドラッグ中の窓は向きだけ変えて当て直さず、ドラッグの終わりに
-/// 今の向きで当て直す（2.4・`finish_char_drag`）。
+/// 記憶に書かず、既定の位置も連れて行かない）。バルーンは `resize_window_to`
+/// の中で付いて動く。ドラッグ中の窓は向きだけ変えて当て直さず、ドラッグの終わりに
+/// 今の向きで当て直す（`finish_char_drag`）。
 pub fn apply_script_alignment(world: &mut World, scope: u32, word: &AlignmentWord) -> bool {
     if *word == AlignmentWord::Missing {
         warn!(
@@ -125,7 +124,7 @@ pub fn apply_script_alignment(world: &mut World, scope: u32, word: &AlignmentWor
         .filter(|s| s.width > 0 && s.height > 0);
     match size {
         // 当てるとその回だけ辺へ飛び、次の `OnDrag` が始めの向きで戻す（1 フレームのちらつき）。
-        // 当て直しはドラッグの終わり（`finish_char_drag`）が今の向きで行う（2.4）。
+        // 当て直しはドラッグの終わり（`finish_char_drag`）が今の向きで行う。
         _ if is_char_dragging(world, char_window) => info!(
             event = "alignment_reanchor_skipped",
             scope,

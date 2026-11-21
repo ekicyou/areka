@@ -14,7 +14,6 @@ use crate::resolver::SizePx;
 
 // -------------------------------------------------------------------------
 // on_balloon_drag_end: バルーン単独ドラッグ確定 offset の永続 write-through
-// （`areka-P0-position-persist` task 2.3・Req2.1・8.1・design C2/C3）
 //
 // バルーン窓は move_window=true ゆえ wndproc が実窓位置を WindowPos.position へ
 // 更新済み——DragEnd 時点の最終確定位置はこの WindowPos.position で読める
@@ -23,10 +22,10 @@ use crate::resolver::SizePx;
 // 使わない）し、その左上基準値を基準変換せずそのまま
 // BalloonOffset entries として Ghost 永続スコープへ即時 write-through する。
 // 実 publisher（`SylphyaRig::fake`）で barrier→load_scope し、保存値が
-// 最終確定位置由来の persist 値に一致することを固定する（Issue 1 対応・`areka-P0-position-persist` 要件 2.1/8.1）。
+// 最終確定位置由来の persist 値に一致することを固定する。
 // -------------------------------------------------------------------------
 
-/// `areka-P0-position-persist` Task 2.3 保存フック（Req2.1/8.1・design C3）: バルーン窓の DragEnd で、最終確定
+/// 保存フック: バルーン窓の DragEnd で、最終確定
 /// 位置から**再導出**した左上基準の相対 offset が（基準変換なしで）scope の
 /// BalloonOffset として Ghost 永続スコープへ write-through される。**in-session の
 /// BalloonFollow.offset は SAVE に使わない**（DragEnd 最終確定位置から再導出）——
@@ -92,7 +91,7 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
     assert!(!on_balloon_drag_end(&mut world, balloon, balloon, &ev));
 
     // キャラ窓は不動・BalloonFollow.offset（in-session 表現）は保存と同じ最終確定位置から
-    // 出し直される（保存は stale な in-session offset を使わない・`audit-placement-follow` 指摘 3）。
+    // 出し直される（保存は stale な in-session offset を使わない）。
     assert_eq!(position_of(&world, char_w), char_pos);
     assert_eq!(
         world.get::<BalloonFollow>(char_w).unwrap().offset(),
@@ -129,8 +128,7 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
     rig.close();
 }
 
-/// `areka-P0-position-persist` Task 8.2 保存→復元 往復値等価の END-TO-END 統合檻（Req8.1・Req7.2・design
-/// Testing Strategy Integration §1）。
+/// 保存→復元 往復値等価の END-TO-END 統合檻。
 ///
 /// 実 `FsPersistIo`＋temp dir に置いた**最小解決可能ゴースト**へ、save 側（DragEnd 観測点
 /// →`PersistWiring`→実アクター→`sylphya.toml`）と restore 側（`load_restored_state`
@@ -140,8 +138,7 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
 ///
 /// これまでの follow.rs 檻は `FakePersistIo`（インメモリ）で「投函→load_scope」の
 /// 送信端 FIFO を証明したが、本檻は**実 FS 書込＋mount 解決経由の実読出**で往復全体
-/// （save→file→resolve→load→merge）を一本の檻に収める（design §1 が実 `FsPersistIo`
-/// を要求する所以）。
+/// （save→file→resolve→load→merge）を一本の檻に収める。
 ///
 /// 檻の噛み方（往復が壊れたら落ちる）:
 /// - char: save 側の bottom 吸着確定位置（1427, 513）が実ファイルへ書かれ、restore 側で
@@ -151,7 +148,7 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
 ///   なしで**そのままファイルへ書かれ（保存基準＝ランタイム基準＝char 左上・2026-07-31
 ///   実機裁定）、restore 側でもそのまま採用され `balloon_pos` が balloon 最終確定位置
 ///   (1015, 470)へ戻る。
-/// - `areka-P0-position-persist` 要件 7.2: 事前に `persist_put` した無関係 key `BootCount="1"` が、char/balloon の DragEnd
+/// - 事前に `persist_put` した無関係 key `BootCount="1"` が、char/balloon の DragEnd
 ///   save 後も `load_restored_state` に不変で残る（read-modify-write の無関係 key 温存）。
 ///
 /// 座標は 96 の非倍数（1427・1015・470…）で隠れた dpi/96 再スケールの檻を兼ね、既定値
@@ -173,7 +170,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
     // --- save 側 sylphya（実 FsPersistIo・実 FS 往復）------------------------------
     let rig = SylphyaRig::over_fs(profile_root);
 
-    // 7.2 の無関係 key を DragEnd save に**先立って**植える（read-modify-write の温存対象）。
+    // 無関係 key を DragEnd save に**先立って**植える（read-modify-write の温存対象）。
     rig.parts.publisher.persist_put(
         PersistScope::Ghost,
         vec![(PersistKey::BootCount, "1".to_string())],
@@ -298,7 +295,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
     // --- restore 側: mount 解決経由で実ファイルを読み、merge へ流す ------------------
     let entries = load_restored_state(&root);
 
-    // 7.2: 無関係 key BootCount が DragEnd save 後も不変で残る（read-modify-write 温存）。
+    // 無関係 key BootCount が DragEnd save 後も不変で残る（read-modify-write 温存）。
     assert!(
         entries.contains(&(PersistKey::BootCount, "1".to_string())),
         "同居する無関係 key BootCount が DragEnd save で破壊された（7.2）: {entries:?}"
@@ -318,7 +315,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
         balloon_size: SizePx { w: 200, h: 300 },
         balloon_offset: default_balloon_offset,
         balloon_offset_base: OffsetBase::unpinned(default_balloon_offset),
-        // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
+        // 正典既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Bottom,
         balloon_keyword_base: None,
@@ -327,7 +324,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
     let out = apply_restored_placements(vec![synthetic], &entries, &snapshot);
 
     assert_eq!(out.len(), 1);
-    // (8.1) 復元 char_pos が DragEnd 確定位置と値等価（既定を上書き）。
+    // 復元 char_pos が DragEnd 確定位置と値等価（既定を上書き）。
     assert_eq!(
         out[0].char_pos, char_final_px,
         "復元 char_pos が DragEnd 確定位置と値等価でない（1.4/8.1）"
@@ -336,17 +333,17 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
         out[0].char_pos, default_char_pos,
         "復元が既定位置を漏らしている"
     );
-    // (8.1) 復元 balloon offset（左上基準）が DragEnd 由来 offset と値等価。
+    // 復元 balloon offset（左上基準）が DragEnd 由来 offset と値等価。
     assert_eq!(
         out[0].balloon_offset, expected_offset_tl,
         "復元 balloon offset が DragEnd 由来 offset と値等価でない（2.2/2.3/8.1）"
     );
-    // (8.1) 復元 balloon_pos が balloon DragEnd 最終確定位置と値等価。
+    // 復元 balloon_pos が balloon DragEnd 最終確定位置と値等価。
     assert_eq!(
         out[0].balloon_pos, balloon_final_px,
         "復元 balloon_pos が balloon DragEnd 最終確定位置と値等価でない（2.3/8.1）"
     );
-    // 事後条件（design C1）: 寸法・anchor は不変。
+    // 事後条件: 寸法・anchor は不変。
     assert_eq!(out[0].char_size, char_size);
     assert_eq!(out[0].anchor, Anchor::Bottom);
 
@@ -355,19 +352,19 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
 }
 
 /// 実機サインオフ再現檻（多窓・2 スコープ・Bottom）: DragEnd 時に `DraggingState` を
-/// 失った char が位置を保存できず、相対追従のバルーンが復元でずれる欠陥を決定論再現する。
+/// 失った char でも位置が保存され、相対追従のバルーンが復元でずれないことを決定論で固定する。
 ///
 /// # 背景（実機 emo2 `sylphya.toml` の観測異常）
 ///
 /// 4 窓（scope0/1 の char+balloon）を各々ドラッグしたにもかかわらず `[window.1]` のみ保存され
 /// `[window.0]` が欠落（一方 `[balloon-offset.0/1]` は両方保存）。復元時 scope0(むらさき) char が
-/// resolver 既定へスナップし、相対追従のバルーン（`areka-P0-position-persist` Req1.6: 位置の単一真実源はキャラ窓）が既定
+/// resolver 既定へスナップし、相対追従のバルーン（位置の単一真実源はキャラ窓）が既定
 /// char へ引きずられて位置がずれた。
 ///
 /// # 再現する根本経路（root cause）
 ///
-/// 直す前の `on_char_drag_end` は保存位置を `policy_mapped_position`（＝`DraggingState` からの
-/// 生座標再導出）だけに依存させ、`DraggingState` 不在なら**保存を skip** していた（今は
+/// `on_char_drag_end` が保存位置を `policy_mapped_position`（＝`DraggingState` からの
+/// 生座標再導出）だけに依存すると、`DraggingState` 不在なら**保存を skip** してしまう（今は
 /// `WindowPos.position` で補う）。非 Free char は連続 `on_char_drag` が既に最終位置へ動かし済みで `WindowPos.position` が
 /// 最終確定位置を保持している。dispatch が DragEnd 前に `DraggingState` を落とすと（多窓時に
 /// observed・実 flow の穴）、char は動いたのに位置が保存されない——一方 `on_balloon_drag_end` は
@@ -377,10 +374,10 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
 /// # 檻の噛み方
 ///
 /// - scope0 char: `DraggingState` **無し**・`WindowPos.position` は連続ドラッグが置いた最終位置。
-///   修正前は `on_char_drag_end` が保存 skip → `[window.0]` 欠落 → 復元で char が既定へ落ち、
-///   balloon が既定 char へ追従してずれる（RED）。修正後は `WindowPos.position` を最終位置として
-///   保存 → 復元で char/balloon とも最終確定位置へ戻る（GREEN）。
-/// - scope1 char: `DraggingState` **有り**（正常経路の対照）。修正前後で常に保存・復元される。
+///   保存 skip なら `[window.0]` 欠落 → 復元で char が既定へ落ち、balloon が既定 char へ
+///   追従してずれる。`WindowPos.position` を最終位置として保存するので、復元で char/balloon とも
+///   最終確定位置へ戻る。
+/// - scope1 char: `DraggingState` **有り**（正常経路の対照）。常に保存・復元される。
 ///
 /// 座標は 96 の非倍数を用い（隠れた dpi/96 再スケールの副次檻）、scope 間・既定値と重ねない。
 #[test]
@@ -392,7 +389,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
     use crate::resolver::ScopePlacement;
     use crate::spawn::{BalloonWindowMarker, CharWindowMarker};
 
-    // --- fixture: 最小解決可能ゴースト（round_trip 8.2 と同型）------------------------
+    // --- fixture: 最小解決可能ゴースト（往復の檻と同型）------------------------
     let (_temp, root, profile_root) = plant_minimal_ghost("follow-dragend-no-dragging-state-repro");
 
     // --- save 側 sylphya（実 FsPersistIo・実 FS 往復）------------------------------
@@ -456,7 +453,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
         .id();
 
     // --- 実機と同じ順序で 4 回ドラッグ確定（char0 → char1 → balloon0 → balloon1）---
-    // char0 DragEnd: DraggingState 不在。修正後は WindowPos.position(1427,513) を最終位置に採る。
+    // char0 DragEnd: DraggingState 不在。WindowPos.position(1427,513) を最終位置に採る。
     assert!(!on_char_drag_end(
         &mut world,
         s0_char,
@@ -500,7 +497,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
     ));
 
     // 実 FS を直接読み、両スコープの WindowPos が保存されていることを中間確認する
-    // （実機で欠落した [window.0] がここで存在すべき＝修正前はここで RED）。
+    // （実機で欠落した [window.0] がここで存在すべき）。
     // 保存 x は**原点＝下端中央**基準（左上 ＋ char_w/2）。
     let loaded = rig.saved();
     for (scope, cf, cw) in [(0u32, s0_char_final, 434), (1u32, s1_char_final, 400)] {
@@ -534,7 +531,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
         balloon_size: SizePx { w: 200, h: 300 },
         balloon_offset: PointPx { x: 7, y: 7 },
         balloon_offset_base: OffsetBase::unpinned(PointPx { x: 7, y: 7 }),
-        // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
+        // 正典既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Bottom,
         balloon_keyword_base: None,
@@ -564,7 +561,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
             "復元 char_pos が既定へ落ちている（scope{} の window 保存欠落）",
             p.scope
         );
-        // balloon 往復健全性（純関数側は persist_restore_tests.rs の 8.5 群で証明済み・ここは結線の確認）。
+        // balloon 往復健全性（純関数側は persist_restore_tests.rs で証明済み・ここは結線の確認）。
         // 保存基準＝ランタイム基準（char 左上）ゆえ、保存値は生 offset そのもの。
         let offset_tl = PointPx {
             x: bf.x - cf.x,
@@ -602,7 +599,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
     rig.close();
 }
 
-/// 記憶の形は descript の向きで選ぶ（指摘 11 ⑵・areka-P0-window-link-directives 要件 4.8）:
+/// 記憶の形は descript の向きで選ぶ:
 /// descript は下吸着で台本が揃えない置き方へ変えた（`by_script`）幅 200 の窓を (100,300) で
 /// 離すと、記憶は下端中央の x=200 になる（今の向き `Free` の形なら左上の 100）。
 #[test]
@@ -647,7 +644,7 @@ fn char_drag_end_persists_in_descript_form_not_current_anchor() {
 }
 
 /// 寸が未確定の印（`CW_USEDEFAULT`）の Bottom の窓を (100,300) で離すと、寸が無いのと同じく
-/// 記憶の x は左上の 100 のまま（`audit-placement-follow` 指摘 20）。直す前は印の幅の半分を足した値を書いていた。
+/// 記憶の x は左上の 100 のまま。
 #[test]
 fn char_drag_end_with_sentinel_size_persists_top_left_x() {
     use areka_sylphya::{Axis, PersistKey};

@@ -1,5 +1,5 @@
 //! 本体のテスト（`placement_tests/measure_bake_*`）が呼ぶ私有の 2 つの関数へそのまま渡す口。
-//! `test-support` のときだけ立ち、本番の可視性は変えない（spec: placement-crate-split 要件 3.8）。
+//! `test-support` のときだけ立ち、本番の可視性は変えない。
 
 use std::path::Path;
 

@@ -1,5 +1,5 @@
 //! シェルの差し替えで、新しいシェルの `descript.txt` の見た目の値を走っている窓の部品へ
-//! 入れ直す（areka-P0-shell-balloon-switch 要件 2.7・design「Reseed」）。
+//! 入れ直す。
 //!
 //! 起動と同じ純関数を同じ順で通す: 配置の設定（[`build_placement_config`]）→ 作者の空間の
 //! バルーンのずらしを物理 px へ換算してバルーンの `windowposition` を合流
@@ -42,7 +42,7 @@ use super::{ScopeWindowPositions, scale_then_merge};
 /// 走っているバルーンの配置の値（背景の資産づくりがバルーンのフォルダから読んでおいたもの）。
 ///
 /// シェルを替えてもバルーンは替わらないが、配置の設定は新しいシェルから組み直すので、
-/// 起動の準備と同じくバルーン側の値をもう一度合流させる必要がある（要件 2.7）。
+/// 起動の準備と同じくバルーン側の値をもう一度合流させる必要がある。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BalloonPlacementInputs {
     /// バルーンの作者の DPI（`dpi`）。`windowposition` の換算の分母。
@@ -83,8 +83,7 @@ pub fn apply_shell_descript(
         replace_anchor(world, running.char_window, scope, p.anchor);
         reinstall_balloon(world, &running, &p);
     }
-    // ドラッグで窓を書くのは誰かを、取り替えた向きと組から付け直す
-    // （areka-P0-window-link-directives 設計の決め 12）。
+    // ドラッグで窓を書くのは誰かを、取り替えた向きと組から付け直す。
     sync_drag_writer(world);
 }
 
@@ -129,8 +128,8 @@ pub(crate) fn reinstall_balloon(
     );
 }
 
-/// 吸着の向きの出どころを新しいシェルの向きにし、台本の印の無い窓だけ `Anchored` を取り替える
-/// （areka-P0-window-link-directives 要件 6.4・9.1）。向きが変われば `alignment_changed` を記録する。
+/// 吸着の向きの出どころを新しいシェルの向きにし、台本の印の無い窓だけ `Anchored` を取り替える。
+/// 向きが変われば `alignment_changed` を記録する。
 fn replace_anchor(world: &mut World, c: Entity, scope: usize, descript: Anchor) {
     let by_script = world.get::<AnchorSource>(c).is_some_and(|s| s.by_script);
     world.entity_mut(c).insert(AnchorSource {
@@ -186,9 +185,8 @@ pub(crate) fn resolve_standard_scopes(
     let snapshot = monitor_snapshot(world);
     let shell_author_dpi = src.shell_author_dpi();
 
-    // 1 周目: 走っているスコープの窓の部品を集め、スコープごとの構成へその窓の DPI で換算と
-    // 合流を 1 度ずつ当てる（拡大率はスコープの窓ごと・軸ごと＝シェル／バルーン。他のスコープへ
-    // 漏らさない）。
+    // 1 周目: 窓の部品を集め、スコープごとの構成へその窓の DPI で換算と合流を 1 度ずつ当てる
+    // （拡大率は窓ごと・軸ごと＝シェル／バルーン。他のスコープへ漏らさない）。
     let mut running_scopes = Vec::new();
     for scope in windows.scopes() {
         let running = match running_scope(world, windows, scope) {
@@ -272,8 +270,8 @@ fn monitor_snapshot(world: &World) -> MonitorSnapshot {
         })
 }
 
-/// 入れ直した揃え方（`Anchored`）でキャラ窓を今の窓寸のまま置き直す（要件 2.7「揃え方は新しい
-/// シェルから読み直す」）。[`apply_shell_descript`] の後に呼ぶ。
+/// 入れ直した揃え方（`Anchored`）でキャラ窓を今の窓寸のまま置き直す。
+/// [`apply_shell_descript`] の後に呼ぶ。
 ///
 /// 後段の再スナップは窓寸が変わらないと置き直さないので、揃え方だけが変わった差し替え
 /// （bottom → top など）はここで直す。揃え方も窓寸も同じなら [`resize_window_to`] がべき等に
@@ -380,7 +378,7 @@ fn running_scope(
     })
 }
 
-/// 本体のテストも使う補助（spec: placement-crate-split 設計 TestSupportFeature）。
+/// 本体のテストも使う補助。
 #[cfg(any(test, feature = "test-support"))]
 #[path = "reseed_test_support.rs"]
 pub mod test_support;

@@ -1,13 +1,12 @@
-//! バルーン位置初期化（`\![execute,resetballoonpos]`・メニュー・近道の 3 つの入口が呼ぶ 1 つの
-//! 関数・areka-P0-window-link-directives 要件 7.1〜7.4・9.5・design「reset_balloon_pos」）。
+//! バルーン位置初期化（`\![execute,resetballoonpos]`・メニュー・近道の 3 つの入口が呼ぶ 1 つの関数）。
 //!
 //! 標準の位置は、シェルの切り替えが部品を入れ直すのと同じ [`resolve_standard_scopes`] で解き
 //! （記憶は重ねない）、同じ [`reinstall_balloon`] で据え直す。材料（[`DefaultPlacementBasis`]）は起動とシェルの切り替えが同じ形で置き、
 //! バルーンの面が変わるとその面の `windowposition` へ入れ替わる（`face_windowposition`）。窓の今の DPI で
-//! 解くので、同じシェル・同じ面・同じ拡大率なら同じ位置になる（7.4）。
+//! 解くので、同じシェル・同じ面・同じ拡大率なら同じ位置になる。
 //! 記憶のずらしの鍵は戻せた全スコープの分を集めて 1 回で消す（次の起動はキーワードから標準を
-//! 導き直す・7.3・audit-placement-core 指摘 17・50）。
-//! キャラクターの窓・`Anchored`・`AnchorSource`・窓の組の帳簿には触らない（7.2）。
+//! 導き直す）。
+//! キャラクターの窓・`Anchored`・`AnchorSource`・窓の組の帳簿には触らない。
 
 use areka_sylphya::{Axis, PersistKey};
 use bevy_ecs::world::World;
@@ -19,7 +18,7 @@ use super::reseed::{StandardScope, reinstall_balloon, resolve_standard_scopes};
 use super::reset_pos::DefaultPlacementBasis;
 use super::spawn::GhostWindows;
 
-/// 初期化のきっかけ（要件 9.5 の記録の欄）。
+/// 初期化のきっかけ（ログの `trigger` 欄）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BalloonResetTrigger {
     Script,
@@ -98,7 +97,7 @@ pub fn reset_balloon_positions(world: &mut World, trigger: BalloonResetTrigger) 
     }
     let reset = !forget.is_empty();
     if reset {
-        // 記憶のずらしの鍵を 1 回で消す（次の起動もキーワードから標準の位置に出る・7.3・areka-P0-window-link-directives の裁定 8）。
+        // 記憶のずらしの鍵を 1 回で消す（次の起動もキーワードから標準の位置に出る）。
         forget_entries(world, forget);
     }
     reset

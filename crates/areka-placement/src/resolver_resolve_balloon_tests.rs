@@ -1,4 +1,4 @@
-//! `resolve_placement` の檻: バルーン暫定 offset（T-R8・P5・4.4・DD7）。
+//! `resolve_placement` の檻: バルーン暫定 offset（T-R8・P5）。
 //!
 //! `resolver_resolve_tests.rs` からの分割（1,000 行規約）。
 
@@ -9,7 +9,7 @@ use crate::config::{Alignment, BalloonSide, ScopeConfig};
 use crate::shared_test_support::MEASURE_DPI;
 
 // ------------------------------------------------------------------
-// T-R8: バルーン暫定 offset（P5・4.4・DD7）
+// T-R8: バルーン暫定 offset（P5）
 // ------------------------------------------------------------------
 
 /// バルーン構成つき ScopeConfig（T-R8 用）。
@@ -29,7 +29,7 @@ fn scope_cfg_balloon(
 }
 
 /// T-R8: `balloon.alignment=left`（既定） → `balloon_x = char_x − balloon_w`・
-/// `balloon_y = char_y`（上端揃え・DD7）。
+/// `balloon_y = char_y`（上端揃え）。
 #[test]
 fn t_r8_balloon_left_places_left_of_char() {
     for dpi in DPIS {
@@ -56,11 +56,10 @@ fn t_r8_balloon_left_places_left_of_char() {
     }
 }
 
-/// T-R8: `balloon.alignment=right` → `balloon_x = char_x + w`（キャラ右隣・DD7）。
+/// T-R8: `balloon.alignment=right` → `balloon_x = char_x + w`（キャラ右隣）。
 /// scope0 右端密着では `balloon_x = work_area.right`＝work area 外だが、
 /// **resolver はバルーンをクランプしない**（P5）＝そのままの幾何値を返す。
-/// `windowposition.limit` による作業領域内への補正は下流の関門の所有であり
-/// （windowposition-limit DD6）、本檻は関門より上流＝配置式の出力だけを見る。
+/// `windowposition.limit` による作業領域内への補正は下流の関門の所有であり、本檻は関門より上流＝配置式の出力だけを見る。
 #[test]
 fn t_r8_balloon_right_places_right_of_char_without_clamp() {
     for dpi in DPIS {
@@ -86,7 +85,7 @@ fn t_r8_balloon_right_places_right_of_char_without_clamp() {
     }
 }
 
-/// T-R8: `balloon.offsetx/offsety` は alignment 由来の幾何値へ加算（DD7）。
+/// T-R8: `balloon.offsetx/offsety` は alignment 由来の幾何値へ加算。
 #[test]
 fn t_r8_balloon_offsetx_offsety_added() {
     for dpi in DPIS {
@@ -117,7 +116,7 @@ fn t_r8_balloon_offsetx_offsety_added() {
 /// T-R8 補: **配置式（P5）はバルーンをクランプしない**＝キャラが左端クランプされた
 /// 状態の left バルーンは work area 左外（負方向）へ素直にはみ出したまま返る。
 ///
-/// # 前提（windowposition-limit 7.3・DD6）
+/// # 前提
 ///
 /// 「バルーンは決してクランプされない」という意味ではない——`windowposition.limit`
 /// が有効なら、この出力は下流の関門が作業領域内へ補正する（起動時＝
@@ -223,7 +222,7 @@ fn t_r8_balloon_none_at_exact_center_goes_left() {
 }
 
 // ------------------------------------------------------------------
-// balloon-flip-side-rules 件 2: 右に出す腕の descript の分は左向きが＋（3.1・3.2・3.5・3.6）
+// 右に出す腕の descript の分は左向きが＋
 // ------------------------------------------------------------------
 
 /// descript の分 `d`・合流後の総量 `total` を持つ構成（右の腕の檻用）。
@@ -246,7 +245,7 @@ fn right_edge_and_balloon_x(cfg: ScopeConfig) -> (i32, i32) {
     (out[0].char_pos.x + out[0].char_size.w, out[0].balloon_pos.x)
 }
 
-/// 右に出す＋descript 30（合流後 30）→ 右端 − 30（直す前は + 30）。
+/// 右に出す＋descript 30（合流後 30）→ 右端 − 30。
 #[test]
 fn right_arm_descript_offset_goes_toward_the_shell() {
     let (edge, bx) = right_edge_and_balloon_x(cfg_descript(BalloonSide::Right, 30, 30));

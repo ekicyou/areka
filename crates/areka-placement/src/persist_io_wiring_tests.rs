@@ -2,11 +2,11 @@ use super::*;
 use crate::source::tests::{unique_temp_dir, write_minimal_ghost_descript};
 
 // ------------------------------------------------------------------
-// load_restored_state（唯一の IO 点・8.1 前哨・6.1/6.3 寛容縮退）
+// load_restored_state（唯一の IO 点・寛容縮退）
 // ------------------------------------------------------------------
 
 /// 起動時先読み: profile_areka_root(shiori.dir) に植えた sylphya.toml が
-/// `(PersistKey, String)` エントリとして読み戻る（load_scope 契約経由・8.1 前哨）。
+/// `(PersistKey, String)` エントリとして読み戻る（load_scope 契約経由）。
 ///
 /// ゴーストは `ghost/master/descript.txt` だけでシェルのフォルダを持たない。永続の置き場は
 /// SHIORI の置き場だけで決まり、シェルの解決に縛られないこと（既定のシェルが無くても読める）も
@@ -55,7 +55,7 @@ fn load_restored_state_reads_planted_sylphya_toml() {
     );
 }
 
-/// 起動時先読み: 永続ファイル不在（profile 未作成）→ 空（load_scope の不在縮退・6.1）。
+/// 起動時先読み: 永続ファイル不在（profile 未作成）→ 空（load_scope の不在縮退）。
 #[test]
 fn load_restored_state_absent_file_is_empty() {
     let temp = unique_temp_dir("load-absent-file");
@@ -65,7 +65,7 @@ fn load_restored_state_absent_file_is_empty() {
     assert!(entries.is_empty(), "永続ファイル不在は空縮退: {entries:?}");
 }
 
-/// 起動時先読み: mount 解決失敗（ghost_root 不在）→ 空 Vec（寛容縮退・panic なし・6.1/6.3）。
+/// 起動時先読み: mount 解決失敗（ghost_root 不在）→ 空 Vec（寛容縮退・panic なし）。
 /// 空は「記憶のファイルが無い」と同じ結果なので、ゴーストを読めなかったことは `warn!` の
 /// 1 行だけが伝える（その行が ghost_root を運ぶ）。
 #[test]
@@ -96,15 +96,14 @@ fn load_restored_state_mount_resolve_failure_is_empty() {
 }
 
 // ------------------------------------------------------------------
-// PersistWiring / persist_entries・forget_entries（送り口・design C1 State Management・
-//   Req1.1/1.9/6.2/7.1・Testing Strategy §1/§6）
+// PersistWiring / persist_entries・forget_entries（送り口）
 //   NonSend リソース存在 → persist_put（Ghost 固定・fire-and-forget）／不在 → debug!＋no-op。
 // ------------------------------------------------------------------
 
 use super::finalize_save_tests::Store;
 use log_capture_kit::capture;
 
-/// 存在檻（7.1/1.1）: headless World に `PersistWiring` を挿入して `persist_entries` を呼ぶと、
+/// 存在檻: headless World に `PersistWiring` を挿入して `persist_entries` を呼ぶと、
 /// Ghost スコープへ write-through され、barrier 後に別ハンドルの `load_scope` で読み戻せる
 /// （＝`persist_put` が実際に投函され実 IO へ確定した証明）。
 #[test]
@@ -113,7 +112,7 @@ fn persist_entries_with_wiring_write_through_to_ghost_scope() {
     let mut world = World::new();
     store.wire(&mut world);
 
-    // char_pos_entries を persist_entries 経由で投函（Ghost 固定はヘルパ内で強制・7.1）。
+    // char_pos_entries を persist_entries 経由で投函（Ghost 固定はヘルパ内で強制）。
     persist_entries(&world, char_pos_entries(0, PointPx { x: 1486, y: 353 }));
 
     let loaded = store.load();
@@ -129,7 +128,7 @@ fn persist_entries_with_wiring_write_through_to_ghost_scope() {
     store.finish();
 }
 
-/// 不在縮退檻（6.2/design「PersistWiring 不在は debug!＋no-op」）: `PersistWiring` 未挿入の
+/// 不在縮退檻: `PersistWiring` 未挿入の
 /// World で `forget_entries` を呼ぶと、panic せず `debug!` を 1 行残して何もしない
 /// （`persist_entries` の同じ行は `follow_keyword_base_tests.rs` の
 /// `a_drag_on_a_side_scope_is_a_no_op_for_the_material` が確かめる）。

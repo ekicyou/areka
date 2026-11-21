@@ -1,5 +1,4 @@
-//! `char2` 以降の鍵を持つゴーストでも、配置の scope は 0・1 だけ
-//! （spec: areka-P0-emily-ghost-verification 要件 4.7・6.7）。
+//! `char2` 以降の鍵を持つゴーストでも、配置の scope は 0・1 だけ。
 //!
 //! 3 人目以降の窓は作らない。作ると debug 版の `debug_assert!(scope <= 1)`
 //! （`areka_input::char_scope`・`menu::captions::visible_resource_for`）で落ちる。

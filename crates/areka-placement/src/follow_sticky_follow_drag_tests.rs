@@ -1,9 +1,8 @@
-//! ドラッグの控えと、組の相手を同じ量だけ動かす手続きの決定論の檻（areka-P0-window-link-directives 要件 2.4／3.6／
-//! `areka-P0-window-link-directives` 要件 4.1〜4.5／9.3・設計「sticky_follow」・設計の決め 4）。
+//! ドラッグの控えと、組の相手を同じ量だけ動かす手続きの決定論の檻。
 //!
 //! 窓は偽の部品（偽 HWND・`WindowPos`・`Anchored`・`CharWindowMarker`・`DragConfig`・
 //! `BalloonFollow`）だけで組み、帳簿は `apply_set_sticky` で据える。関数は受け手を通さず
-//! 直接呼ぶ（受け手へのつなぎは `areka-P0-window-link-directives` タスク 3.2）。
+//! 直接呼ぶ。
 
 use std::collections::HashMap;
 
@@ -64,7 +63,7 @@ fn spawn_char(world: &mut World, scope: usize, anchor: Anchor, pos: (i32, i32)) 
     Win { char, balloon }
 }
 
-/// 帳簿を据え、台本の組 `members` を作る（2.1 の関数）。
+/// 帳簿を据え、台本の組 `members` を作る。
 fn group(world: &mut World, members: &[&str]) {
     seed_sticky_descript(world, None);
     let tokens: Vec<String> = members.iter().map(|m| m.to_string()).collect();
@@ -82,7 +81,7 @@ fn finish(world: World) {
     let _residue = drain_window_pos_commands();
 }
 
-/// 途中の量は「始めからの量」で、回を重ねても積もらない。相手のバルーンも付いて動く（4.1・4.3・4.4）。
+/// 途中の量は「始めからの量」で、回を重ねても積もらない。相手のバルーンも付いて動く。
 #[test]
 fn partner_follows_delta_from_start_without_accumulating() {
     let mut world = world_with_snapshot();
@@ -108,7 +107,7 @@ fn partner_follows_delta_from_start_without_accumulating() {
     finish(world);
 }
 
-/// 相手が下に吸着していれば、量は横にだけ乗り、下端に付いたまま（4.2）。途中は記録しない（9.3）。
+/// 相手が下に吸着していれば、量は横にだけ乗り、下端に付いたまま。途中は記録しない。
 #[test]
 fn bottom_partner_takes_only_horizontal_delta() {
     let mut world = world_with_snapshot();
@@ -136,7 +135,7 @@ fn bottom_partner_takes_only_horizontal_delta() {
 }
 
 /// 終わりは最終の量で相手を書き、相手の位置を記憶の形（下吸着なら下端中央）で束にして返し、
-/// `sticky_follow`（drag）を 1 行記録して控えを外す（4.5・9.3）。
+/// `sticky_follow`（drag）を 1 行記録して控えを外す。
 #[test]
 fn finish_writes_partner_persists_logs_and_clears_session() {
     let mut world = world_with_snapshot();
@@ -185,8 +184,7 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
     finish(world);
 }
 
-/// 組の相手に面の `move` のずれが当たっていれば、記憶にはずれを引いた元の位置を書く
-/// （seriko-pattern-calls task 6.2・要件 7.8）。窓はずれたまま動く。
+/// 組の相手に面の `move` のずれが当たっていれば、記憶にはずれを引いた元の位置を書く。窓はずれたまま動く。
 #[test]
 fn finish_persists_partner_position_without_its_pattern_shift() {
     let mut world = world_with_snapshot();
@@ -218,7 +216,7 @@ fn finish_persists_partner_position_without_its_pattern_shift() {
     finish(world);
 }
 
-/// 組の相手の記憶の形も descript の向きで選ぶ（`audit-placement-follow` 指摘 11 ⑵・`areka-P0-window-link-directives` 要件 4.8）: descript は下吸着で台本が
+/// 組の相手の記憶の形も descript の向きで選ぶ: descript は下吸着で台本が
 /// 揃えない置き方へ変えた相手は、左上でなく下端中央の x で書く。
 #[test]
 fn finish_persists_partner_in_descript_form_not_current_anchor() {
@@ -242,7 +240,7 @@ fn finish_persists_partner_in_descript_form_not_current_anchor() {
     finish(world);
 }
 
-/// 組の相手に `Anchored` が無ければ、動かさず記憶にも書かず `warn!` を 1 行残す（`audit-placement-follow` 指摘 11 ⑵）。
+/// 組の相手に `Anchored` が無ければ、動かさず記憶にも書かず `warn!` を 1 行残す。
 #[test]
 fn partner_without_anchored_is_warned_and_left_unmoved() {
     let mut world = world_with_snapshot();
@@ -266,7 +264,7 @@ fn partner_without_anchored_is_warned_and_left_unmoved() {
     finish(world);
 }
 
-/// 控えが無い・別の窓の控えなら相手を動かさず、組の相手がいるときだけ記録する（4.1）。
+/// 控えが無い・別の窓の控えなら相手を動かさず、組の相手がいるときだけ記録する。
 #[test]
 fn without_session_partner_stays_and_skip_is_logged() {
     let mut world = world_with_snapshot();
@@ -306,7 +304,7 @@ fn without_session_partner_stays_and_skip_is_logged() {
     finish(world);
 }
 
-/// 組の中で窓の無い相手は、始めに `sticky_member_absent`（drag）で外す（3.6）。
+/// 組の中で窓の無い相手は、始めに `sticky_member_absent`（drag）で外す。
 #[test]
 fn absent_member_is_logged_at_begin_and_left_out() {
     let mut world = world_with_snapshot();
@@ -329,7 +327,7 @@ fn absent_member_is_logged_at_begin_and_left_out() {
     finish(world);
 }
 
-/// ドラッグ中に向きと書き手が変わっても、そのドラッグの終わりまで始めの値を返し（2.4）、
+/// ドラッグ中に向きと書き手が変わっても、そのドラッグの終わりまで始めの値を返し、
 /// 終わりに今の向きで当て直す。
 #[test]
 fn anchor_change_during_drag_keeps_start_until_finish_then_reanchors() {
@@ -337,7 +335,7 @@ fn anchor_change_during_drag_keeps_start_until_finish_then_reanchors() {
     let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
     begin_char_drag(&mut world, dragged.char);
 
-    // 台本がドラッグ中に下へ吸着させた（2.2 の適用と 1.3 の書き手の付け直しを模す）。
+    // 台本がドラッグ中に下へ吸着させた（向きの適用と書き手の付け直しを模す）。
     world.get_mut::<Anchored>(dragged.char).unwrap().0 = Anchor::Bottom;
     world
         .get_mut::<DragConfig>(dragged.char)
@@ -384,7 +382,7 @@ fn unreadable_begin_clears_a_stale_session() {
 }
 
 /// キャラ窓のドラッグ中、組の相手へも面の `move` のずれを当てない（相手は `DraggingState` を
-/// 持たないが「始め＋量」で書かれる・audit のかけ直し 2 回目 A4 の差し戻し）。記録を変えず
+/// 持たないが「始め＋量」で書かれる）。記録を変えず
 /// `debug!`（reason=drag_partner）を 1 行、`warn!` 0 行。ドラッグが終われば当たる。
 #[test]
 fn a_drag_partner_is_not_shifted_until_the_drag_ends() {
@@ -416,7 +414,7 @@ fn a_drag_partner_is_not_shifted_until_the_drag_ends() {
 }
 
 /// ドラッグを離したときに位置が読めない・書込が断られたの 2 つの早期 return でも、控えを残さない
-/// （残すと、次のドラッグまでその窓の面の `move` のずれが見送られ続ける・かけ直し 5 回目 A1）。
+/// （残すと、次のドラッグまでその窓の面の `move` のずれが見送られ続ける）。
 #[test]
 fn drag_end_early_returns_do_not_leave_the_session() {
     use wintf::ecs::WindowHandle;
@@ -456,7 +454,7 @@ fn drag_end_early_returns_do_not_leave_the_session() {
 }
 
 /// 相手 2 つの組のドラッグの終わりは、動かした窓と相手 2 つの位置を 1 つの束で記憶へ 1 回だけ
-/// 書く（`audit-placement-follow-residue` 要件 5.1〜5.3・設計の DragEndPersist）。束の中身は今までの N+1 回の和と同じ。
+/// 書く。束の中身は今までの N+1 回の和と同じ。
 /// 隣り合いの印まで見るため、窓の一式はこのファイルの偽の部品でなく本番の `spawn_ghost_windows`
 /// で組む（一式が無いと印は足されない）。組の外のスコープ 3 は鎖の次の窓として印が付く。
 #[test]

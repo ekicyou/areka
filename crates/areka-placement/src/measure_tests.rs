@@ -37,10 +37,8 @@ pub(super) fn surface0_only_shell(surfaces_txt: &[u8]) -> TempDir {
     shell
 }
 
-/// emo2 fixture の shell/balloon に対し
-/// `measure_scope_sizes` が scope0・scope1・balloon の原寸（非ゼロ物理 px）を
-/// 返す。emo2 は決定論 fixture ゆえ厳密寸で固定する（2.9 の幅供給源・3.2 の
-/// 物理 px 単一通貨）。
+/// `measure_scope_sizes` が emo2 fixture の scope0・scope1・balloon の原寸（非ゼロ物理 px）を
+/// 返す。emo2 は決定論 fixture ゆえ厳密寸で固定する。
 #[test]
 fn measure_emo2_fixture_yields_exact_nonzero_sizes() {
     with_com_initialized(|| {
@@ -53,7 +51,6 @@ fn measure_emo2_fixture_yields_exact_nonzero_sizes() {
         .expect("emo2 fixture の採寸は成功する");
 
         assert_eq!(out.scopes.len(), 2, "出力長＝scope_ids 長");
-        // 入力順・scope 番号の転記。
         assert_eq!(out.scopes[0].scope, 0);
         assert_eq!(out.scopes[1].scope, 1);
 
@@ -65,7 +62,7 @@ fn measure_emo2_fixture_yields_exact_nonzero_sizes() {
         assert_eq!(out.scopes[1].char_size.h, SCOPE1_H);
         // バルーン面 0 は **scope ごとに解決した系列**の原寸（scope0=balloons0.png・
         // scope1=balloonk0.png）。本体側と相方側で寸が異なることが判別力の源で、
-        // 1 回の共通採寸では scope1 も 400×224 になって落ちる（要件 3.1）。
+        // 1 回の共通採寸では scope1 も 400×224 になって落ちる。
         assert_eq!(out.scopes[0].balloon_size.w, BALLOON0_W);
         assert_eq!(out.scopes[0].balloon_size.h, BALLOON0_H);
         assert_eq!(out.scopes[1].balloon_size.w, BALLOON1_W);
@@ -73,7 +70,7 @@ fn measure_emo2_fixture_yields_exact_nonzero_sizes() {
     });
 }
 
-/// 要件 3.6/7.2: k≠1 でも scope 別バルーン寸は**各々が自分の原寸から**k 倍される。
+/// k≠1 でも scope 別バルーン寸は**各々が自分の原寸から**k 倍される。
 /// 丸めは既存権威 `ScaleRatio::scaled_extent` のままであり、新たな丸め規約を導入しない。
 #[test]
 fn measure_emo2_fixture_scales_per_scope_balloon_independently() {
@@ -140,8 +137,7 @@ fn scope_n_ge_2_measures_interim_id10() {
 
 /// シェルに面が 1 つも無い（空のフォルダ＝`surfaces.txt` も面の画像も無い・scope0 の採寸自体が
 /// 成立しない）場合は `PlacementError::Measure`（代替根拠なし→呼び手へ返す）。`surfaces.txt` が
-/// 無いだけなら画像だけで組むので、失敗の理由は「面が無い」である
-/// （spec: areka-P0-self-alpha-declaration 要件 6.1・6.5）。
+/// 無いだけなら画像だけで組むので、失敗の理由は「面が無い」である。
 #[test]
 fn shell_without_any_surface_is_measure_error() {
     with_com_initialized(|| {
@@ -206,15 +202,13 @@ fn scope0_compose_failure_is_measure_error_with_one_error_log() {
     });
 }
 
-/// 要件 3.7/5.4（後方互換）: 相方側系列（`balloonk*`）を持たないバルーンでは
-/// **全 scope が同一のバルーン寸**を得る——`areka-P0-kero-balloon` の適用前の採寸結果と一致する。
+/// 相方側系列（`balloonk*`）を持たないバルーンでは**全 scope が同一のバルーン寸**を得る。
 ///
 /// 連鎖の最終受け皿は常に本体側 `balloons` ゆえ、scope1／scope2 も `balloons0.png` へ
 /// 収束する（scope 別化が「相方側資産がある時だけ」効くことの構造的証拠）。
 #[test]
 fn balloonk_absent_yields_identical_size_for_all_scopes() {
     with_com_initialized(|| {
-        // 本体側 1 枚だけのバルーンを組む（実 PNG は emo2 fixture から複写）。
         let balloon = TempDir::new();
         std::fs::copy(
             balloon_root().join("balloons0.png"),
@@ -243,8 +237,7 @@ fn balloonk_absent_yields_identical_size_for_all_scopes() {
 }
 
 /// バルーン面 0 が成立しない（面画像なし）場合も `PlacementError::Measure`
-/// （`ScopeInput.balloon_size` の供給源が無い＝採寸全体の失敗）。面 0 必在の判定は
-/// 系列解決権威の単一施行点にあり、採寸側は失敗をそのまま帰属付きで畳む。
+/// （`ScopeInput.balloon_size` の供給源が無い＝採寸全体の失敗）。
 #[test]
 fn missing_balloon_frame_is_measure_error() {
     with_com_initialized(|| {
@@ -263,7 +256,7 @@ fn missing_balloon_frame_is_measure_error() {
     });
 }
 
-// ── k 適用（第 2 段）の純関数テスト（GPU/WIC/COM 非依存・要件 5.2）──
+// ── k 適用（第 2 段）の純関数テスト（GPU/WIC/COM 非依存）──
 
 /// テスト用 [`ScopeInput`] 組み立て（char/balloon を別値で与えられる）。
 fn scope_input(scope: usize, char_wh: (i32, i32), balloon_wh: (i32, i32)) -> ScopeInput {
@@ -280,8 +273,7 @@ fn scope_input(scope: usize, char_wh: (i32, i32), balloon_wh: (i32, i32)) -> Sco
     }
 }
 
-/// 要件 7.2: `MeasureScaling::IDENTITY` は native 採寸の出力を素通しする
-/// （k=1/1 は既存等倍経路と構造的に同一＝既存期待値の不変性）。
+/// `MeasureScaling::IDENTITY` は native 採寸の出力を素通しする。
 #[test]
 fn apply_scaling_identity_is_passthrough() {
     let natives = vec![
@@ -304,7 +296,7 @@ fn apply_scaling_identity_is_passthrough() {
     assert_eq!(same, natives);
 }
 
-/// 要件 2.5/3.1/3.3: 整数 k・非整数 k とも `scaled_extent` の丸め規約で k 倍される。
+/// 整数 k・非整数 k とも `scaled_extent` の丸め規約で k 倍される。
 #[test]
 fn apply_scaling_scales_via_scaled_extent_rounding() {
     // k=2/1: 厳密 2 倍。
@@ -348,7 +340,7 @@ fn apply_scaling_scales_via_scaled_extent_rounding() {
     );
 }
 
-/// 要件 1.1: shell k と balloon k は独立軸——一方の k が他方へ漏れない
+/// shell k と balloon k は独立軸——一方の k が他方へ漏れない
 /// （両者に同じ k を適用する実装なら落ちる）。
 #[test]
 fn apply_scaling_uses_independent_shell_and_balloon_k() {
@@ -373,12 +365,9 @@ fn apply_scaling_uses_independent_shell_and_balloon_k() {
     );
 }
 
-/// 要件 3.1: k 適用は **scope ごとの写像**であり、scope 別の `balloon_size` が
-/// 各々独立に k 倍される（純関数層での固定——実 fixture 経路の対比は
+/// k 適用は **scope ごとの写像**であり、scope 別の `balloon_size` が
+/// 各々独立に k 倍される（純関数層での固定——実 fixture 経路は
 /// [`measure_emo2_fixture_scales_per_scope_balloon_independently`] が担う）。
-///
-/// バルーン計算をループ外へ畳んだ実装（「全スコープ共通だから 1 回だけ」）は
-/// 本テストで必ず落ちる。
 #[test]
 fn apply_scaling_maps_balloon_per_scope() {
     let natives = vec![
@@ -411,7 +400,7 @@ fn apply_scaling_maps_balloon_per_scope() {
     assert_eq!((out[1].char_size.w, out[1].char_size.h), (336, 400));
 }
 
-/// 要件 2.5: 恒等 k なら i32::MAX ちょうどは物理 px 通貨に収まる。超過したときの
+/// 恒等 k なら i32::MAX ちょうどは物理 px 通貨に収まる。超過したときの
 /// `PlacementError::Measure` の中身と記録は [`scale_size_px_failure_emits_error_log_with_attribution`]
 /// が見る。
 #[test]
@@ -441,8 +430,7 @@ fn apply_scaling_rejects_negative_extent() {
     }
 }
 
-/// 要件 2.5: 0 寸は 0 のまま・非ゼロ寸は最小 1px（`scaled_extent` の規約が
-/// そのまま採寸へ効いている＝自前丸めを持っていない証拠）。
+/// 0 寸は 0 のまま・非ゼロ寸は最小 1px（`scaled_extent` の規約がそのまま採寸へ効く）。
 #[test]
 fn apply_scaling_inherits_scaled_extent_edge_rules() {
     let out = apply_scaling(
@@ -465,23 +453,11 @@ fn apply_scaling_empty_input_is_empty_output() {
     assert!(out.is_empty());
 }
 
-/// 要件 7.8（席保全・char 軸）: char 寸も **scope ごとの写像**である。
+/// char 寸も **scope ごとの写像**である。非恒等 k（5/4）で各スコープが自分の原寸から
+/// 個別に k 倍されることを、GPU 非依存の純関数層で固定する。
 ///
-/// # 変異キルの実態（誇張しない）
-///
-/// 「先頭スコープの char 寸を全スコープへ撒く」変異は、**既存**の
-/// [`apply_scaling_maps_balloon_per_scope`]（`measure_tests.rs` の char 寸アサート
-/// 左 (434,687) / 右 (336,400)）と `apply_scaling_identity_is_passthrough`・
-/// emo2 実採寸テスト群でも落ちる。本テストは**共倒れ**であり、char 軸の席保全は
-/// 既に本物の檻に入っている。
-///
-/// 本テストの役割は排他キルではなく、**非恒等 k（5/4）での char per-scope 写像を
-/// 明文化する冗長な錨**——既存の per-scope 検査はいずれも shell k=1/1 か
-/// GPU/COM を要する実 fixture 経路であり、「k≠1 のとき各スコープが自分の原寸から
-/// 個別に k 倍される」ことを GPU 非依存の純関数層で述べた行は他に無い。
-///
-/// 期待値 543×859／420×500 は実機観測（primary DPI=120）と同一であり、
-/// 434×1.25=542.5→543 が round half away from zero の生証拠でもある。
+/// 期待値 543×859／420×500 は実機観測（primary DPI=120）と同一。
+/// 434×1.25=542.5→543 は round half away from zero。
 #[test]
 fn apply_scaling_maps_char_per_scope() {
     let out = apply_scaling(
@@ -507,14 +483,10 @@ fn apply_scaling_maps_char_per_scope() {
     }
 }
 
-/// 要件 2.5: i32 ガードの**厳密境界**（1px の差で Ok/Err が入れ替わる）。
+/// i32 ガードの**厳密境界**（1px の差で Ok/Err が入れ替わる）。
 ///
-/// 既存の [`apply_scaling_identity_keeps_i32_max`] と記録のテストは「恒等 k で `i32::MAX` が通る」
-/// 「`i32::MAX` の 2〜3 倍が落ちる」しか見ておらず、**k 倍後**の値に対する閾値が
-/// `i32::MAX` ちょうどなのか 1 だけ緩い（＝`i32::MAX + 1` を wrap して受理する）のかを
-/// 弁別しない。ここは 2_147_483_646（通る）と 2_147_483_648（落ちる）の対で
-/// 閾値そのものを固定する——「上限側を 1 だけ緩める」変異は**本テストのみ**が落とす
-/// （排他キル・実測済み）。
+/// **k 倍後**の値の閾値が `i32::MAX` ちょうどであることを、2_147_483_646（通る）と
+/// 2_147_483_648（落ちる）の対で固定する。
 #[test]
 fn apply_scaling_i32_guard_boundary_is_exact() {
     // (i32::MAX - 1) / 2 = 1_073_741_823 → ×2 = 2_147_483_646 ≤ i32::MAX。
@@ -540,8 +512,7 @@ fn apply_scaling_i32_guard_boundary_is_exact() {
     }
 }
 
-/// 負値寸法の balloon 側は `balloon:` 接頭辞つきで**当該スコープ**に帰属する
-/// （既存の負値テストは char 側のみ）。
+/// 負値寸法の balloon 側は `balloon:` 接頭辞つきで**当該スコープ**に帰属する。
 #[test]
 fn apply_scaling_rejects_negative_balloon_extent_with_prefix() {
     match apply_scaling(
@@ -561,19 +532,16 @@ fn apply_scaling_rejects_negative_balloon_extent_with_prefix() {
     }
 }
 
-// ── k 適用失敗ログの発火（steering `logging.md`「ログ無し失敗経路の禁止」）──
-//
-// 既存の i32 ガード／負値テストは `Err` の中身だけを見ており、design
-// 「Error Handling」表の `k 倍寸の i32 超過（採寸）→ error!` 行は無検査だった。
+// ── k 適用失敗ログの発火（ログ無し失敗経路の禁止）──
 //
 // 捕捉は共有機構 `log_capture_kit::capture` を使う。
 // **素朴な `with_default` 捕捉は非決定的に取りこぼす**——`tracing` の callsite interest
 // キャッシュはプロセス大域かつ「最初に踏んだスレッドが勝つ」ため、subscriber を持たない
 // 他テスト（同じ `error!` callsite を踏む `apply_scaling_rejects_negative_extent` 等）が
 // 先に登録すると `Interest::never()` が焼き付き、捕捉窓の内側でもイベントが捨てられる。
-// 機構と対策は共有機構 `log_capture_kit` の crate doc を参照。
+// 機構と対策は `log_capture_kit` の crate doc を参照。
 
-/// design「Error Handling」: k 適用失敗は **`error!`**＋帰属情報
+/// k 適用失敗は **`error!`**＋帰属情報
 /// （`scope`／`kind`／`k`／`reason`）を残す（silent wrap の禁止）。
 ///
 /// char 起因は `kind=Char`、balloon 起因は `kind=Balloon` と当該スコープ番号で
@@ -668,13 +636,10 @@ fn apply_scaling_success_is_silent() {
     assert!(events.is_empty(), "成功経路は無言: {events:?}");
 }
 
-/// 要件 3.1 の帰属: **native 段**の balloon 失敗は**実スコープ番号**で報告される
-/// （k 適用段と規約が一致する——採寸が scope ループ内へ移り、「帰属先が定まらない」
-/// 状況そのものが無くなった）。
+/// **native 段**の balloon 失敗は**実スコープ番号**で報告される（k 適用段と規約が一致する）。
 ///
-/// 要求スコープに 0 を含めない `[1, 2]` で走らせるため、旧来の「scope: 0 固定」実装
-/// との差が出る（既存の [`missing_balloon_frame_is_measure_error`] は `[0]` を渡すため
-/// 両者を弁別できない）。
+/// 要求スコープに 0 を含めない `[1, 2]` で走らせ、「scope: 0 固定」の実装を弁別する
+/// （[`missing_balloon_frame_is_measure_error`] は `[0]` を渡すので弁別できない）。
 #[test]
 fn native_stage_balloon_failure_reports_real_scope() {
     with_com_initialized(|| {
@@ -725,8 +690,8 @@ fn scope_beyond_u32_is_measure_error() {
     });
 }
 
-/// 要件 3.1/3.3: 実 fixture 経路（native 採寸→k 適用）でも k≠1 が窓寸へ届く。
-/// `MeasureScaling::IDENTITY` の既存期待値（434×687 等）と厳密に 2 倍関係になる。
+/// 実 fixture 経路（native 採寸→k 適用）でも k≠1 が窓寸へ届く。
+/// `MeasureScaling::IDENTITY` の期待値（434×687 等）と厳密に 2 倍関係になる。
 #[test]
 fn measure_emo2_fixture_applies_k_end_to_end() {
     with_com_initialized(|| {
@@ -757,13 +722,12 @@ fn measure_emo2_fixture_applies_k_end_to_end() {
     });
 }
 
-/// 要件 6.1: 配置採寸の読取が **そのファイル自身の** `charset` 宣言に従う。
+/// 配置採寸の読取が **そのファイル自身の** `charset` 宣言に従う。
 ///
 /// 合成シェルの surfaces.txt を `charset,Shift_JIS` 宣言つき・値に Shift_JIS の
 /// 「通常」（`92 CA 8F ED`）を含むバイト列で置き、本番関数 `measure_scope_sizes` が
-/// 採寸を成功させることを見る。適用前（`read_to_string`）はこのバイト列が
-/// 「stream did not contain valid UTF-8」で読取失敗になり、`PlacementError::Measure`
-/// を返していた。
+/// 採寸を成功させることを見る。`read_to_string` で読むとこのバイト列は
+/// 「stream did not contain valid UTF-8」で読取失敗になる。
 ///
 /// **この検査がここに居る理由**: 文字コードの読みの檻が固定するのは `charset::decode` と
 /// `shell::parse` を組み合わせた結果の等値——すなわちパーサ層の性質であって、
@@ -789,11 +753,11 @@ fn placement_read_honours_the_files_own_charset_declaration() {
 /// `charset,Shift_JIS` を宣言し、alias の値に Shift_JIS の「通常」を持つ surfaces.txt。
 ///
 /// UTF-8 として不正なバイト並びであることが本質（`92 CA 8F ED` は UTF-8 の
-/// 妥当な並びではない）。適用前の `read_to_string` はここで読取失敗になる。
+/// 妥当な並びではない）。
 const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0,overlay,surface0.png,0,0\n}\nsakura.surface.alias\n{\n\x92\xCA\x8F\xED,[0]\n}\n";
 
 /// パーサ層の UTF-8 陽性対照: `charset,UTF-8` を宣言する emo2 固定物は、復号を挟んでも
-/// 適用前と同一の文字列・同一の解析結果を産む（要件 6.3）。
+/// 固定 UTF-8 読みと同一の文字列・同一の解析結果を産む。
 ///
 /// 測りの経路は通らない——読みと解析を直に呼ぶパーサ層の性質であり、直上の Shift_JIS 検査の
 /// 対照である。本文の `areka_parsers::shell::parse` の呼び出しは、`measure_template_tests.rs`

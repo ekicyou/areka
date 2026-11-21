@@ -1,7 +1,6 @@
-//! 望む鎖の合成の決定論的テスト（要件 1.1／1.2／1.4／2.5／3.6／6.1／6.2／8.4／
-//! 10.1／14.1／14.4／15.1／15.2）。
+//! 望む鎖の合成の決定論的テスト。
 //!
-//! 実機も実ディスプレイも Win32 も要らない（要件 10.1）。`Entity` は生の索引から組んだ
+//! 実機も実ディスプレイも Win32 も要らない。`Entity` は生の索引から組んだ
 //! 値であり World へは 1 度も渡さない。窓の在庫は `Inventory` という表で与える
 //! ——本番で `GhostWindows` が果たす役目（スコープ×種別 → 窓の有無）だけを写した
 //! ものであり、判断の分岐は在庫表の中身だけで決まる。
@@ -78,7 +77,6 @@ impl Inventory {
     }
 }
 
-/// 在庫から合成する（在庫のスコープをそのまま `all_scopes` として渡す形）。
 fn compose(groups: &[ZOrderGroup], inventory: &Inventory) -> Option<ChainPlan> {
     let scopes = inventory.scopes();
     compose_chain(groups, &scopes, &|element| inventory.resolve(element))
@@ -94,7 +92,7 @@ fn raw_group(id: u32, members: &[GroupElement]) -> ZOrderGroup {
 }
 
 // ===========================================================================
-// 不変条件の検査器（要件 14.4）
+// 不変条件の検査器
 // ===========================================================================
 
 /// 鎖の 4 つの不変条件を検査し、破れているものを人が読める形で並べて返す。
@@ -185,7 +183,7 @@ fn composed(groups: &[ZOrderGroup], inventory: &Inventory) -> ChainPlan {
 // ===========================================================================
 
 /// 数値モードは、並びの左のスコープほど手前で、各スコープが 2 枚のかたまりになる
-/// （要件 1.1／1.2）。張る繋ぎはスコープの継ぎ目 1 本だけである。
+/// 。張る繋ぎはスコープの継ぎ目 1 本だけである。
 #[test]
 fn t_zcc01_numeric_mode_puts_left_scope_in_front_as_a_block() {
     let groups = [tag_group(1, &["1", "0"])];
@@ -198,7 +196,7 @@ fn t_zcc01_numeric_mode_puts_left_scope_in_front_as_a_block() {
     assert!(plan.absent.is_empty(), "不在要素は無い: {:?}", plan.absent);
 }
 
-/// 明示モードで 4 枚を書いた指定は、数値モードの同じ並びと同一の鎖になる（要件 2.1）。
+/// 明示モードで 4 枚を書いた指定は、数値モードの同じ並びと同一の鎖になる。
 #[test]
 fn t_zcc02_explicit_mode_matches_the_numeric_shape() {
     let inventory = Inventory::full(&[0, 1]);
@@ -210,7 +208,7 @@ fn t_zcc02_explicit_mode_matches_the_numeric_shape() {
     assert_eq!(explicit.cross_edges, numeric.cross_edges);
 }
 
-/// 片方だけ指名された明示モード（畳み込み・要件 2.6）でも、鎖はスコープ 2 枚の
+/// 片方だけ指名された明示モード（畳み込み）でも、鎖はスコープ 2 枚の
 /// かたまりで並ぶ。相棒窓は台帳が補っているので、合成は特別扱いを持たない。
 #[test]
 fn t_zcc03_folded_partial_specification_yields_full_scope_blocks() {
@@ -224,11 +222,11 @@ fn t_zcc03_folded_partial_specification_yields_full_scope_blocks() {
 }
 
 // ===========================================================================
-// 分岐: 不在要素（要件 1.4／8.4）
+// 分岐: 不在要素
 // ===========================================================================
 
 /// 窓が 1 枚も無いスコープは、グループから取り除かれず「窓が無かった要素」として返る。
-/// 残った窓だけで指定順の相対順が成立する（要件 1.4／8.4）。
+/// 残った窓だけで指定順の相対順が成立する。
 #[test]
 fn t_zcc04_absent_scope_is_reported_and_never_dropped_from_the_group() {
     let groups = [tag_group(1, &["0", "1"])];
@@ -286,11 +284,11 @@ fn t_zcc06_group_with_no_existing_window_still_yields_a_plan_with_absent_element
 }
 
 // ===========================================================================
-// 分岐: 指定ゼロ＝既定状態（要件 6.1／6.2／6.4）
+// 分岐: 指定ゼロ＝既定状態
 // ===========================================================================
 
 /// グループが 1 つも無ければ計画そのものを作らない——窓が何枚在っても、
-/// どのスコープの前後も規定しない（要件 6.1／6.2／6.4）。
+/// どのスコープの前後も規定しない。
 #[test]
 fn t_zcc07_no_group_means_no_plan_at_all() {
     let inventory = Inventory::full(&[0, 1, 2]);
@@ -305,11 +303,11 @@ fn t_zcc07_no_group_means_no_plan_at_all() {
 }
 
 // ===========================================================================
-// 分岐: 複数グループの登記順連結（要件 3.6）
+// 分岐: 複数グループの登記順連結
 // ===========================================================================
 
 /// グループどうしは登記の順で 1 本に連なる。shell 設定由来の基底が最前で、
-/// 以降はタグの登記順（先に登記されたほど手前）である（要件 3.6）。
+/// 以降はタグの登記順（先に登記されたほど手前）である。
 #[test]
 fn t_zcc08_groups_are_concatenated_in_registration_order_with_the_descript_base_in_front() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -369,11 +367,11 @@ fn t_zcc08_groups_are_concatenated_in_registration_order_with_the_descript_base_
 }
 
 // ===========================================================================
-// 分岐: 未指定スコープの後方参加（要件 15.1／15.2）
+// 分岐: 未指定スコープの後方参加
 // ===========================================================================
 
 /// どのグループにも属さないスコープは、全グループの後ろへ、スコープ ID の昇順で、
-/// 2 枚のかたまりとして連なる（要件 15.1／15.2）。渡された在庫の並びには依らない。
+/// 2 枚のかたまりとして連なる。渡された在庫の並びには依らない。
 #[test]
 fn t_zcc09_unassigned_scopes_join_behind_every_group_in_ascending_scope_order() {
     let groups = [tag_group(1, &["b1", "s1"])];
@@ -401,7 +399,7 @@ fn t_zcc09_unassigned_scopes_join_behind_every_group_in_ascending_scope_order() 
 }
 
 /// 後方参加のスコープも、片割れしか実在しなければその 1 枚だけが鎖に入る。
-/// 未指定スコープは宣言要素ではないので、欠けた窓は不在要素に載らない（要件 8.4 の射程）。
+/// 未指定スコープは宣言要素ではないので、欠けた窓は不在要素に載らない。
 #[test]
 fn t_zcc10_partially_present_tail_scope_contributes_only_the_existing_window() {
     let groups = [tag_group(1, &["b0", "s0"])];
@@ -493,7 +491,7 @@ fn t_zcc14_an_empty_group_is_not_the_same_state_as_having_no_group() {
 }
 
 // ===========================================================================
-// 不変条件の全網羅（要件 14.4）
+// 不変条件の全網羅
 // ===========================================================================
 
 /// 分岐表のすべての形について、4 つの不変条件が同時に成り立つ。

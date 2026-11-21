@@ -1,17 +1,17 @@
 //! 写しの相手: crates/wintf/src/test_crash_report.rs・crates/areka-runtime/src/crash_report_test_support.rs（こちらは許可の持ち手の表を持たない）
 //!
-//! テストのプロセスの落ちの報告（areka-test-binary-stability 設計「CrashReport」・要件 1.1・1.10）。
+//! テストのプロセスの落ちの報告。
 //!
 //! プロセスの読み込みの初め（libtest の main より前）に `.CRT$XCU` の初期化子から、最初の受け手（AV）と
 //! 最後の受け手（それ以外）を据える。AV は最初の受け手で書く（途中の枠の受け手がプロセスを終わらせたり、枠を
-//! 巻き戻せずに最後の受け手まで届かなかったりする落ちがあった・2026-11-01 の測り）。それ以外の捕まえられなかった
+//! 巻き戻せずに最後の受け手まで届かなかったりする落ちがあった）。それ以外の捕まえられなかった
 //! 例外は最後の受け手で書く。書く中身は、例外のコード・番地・落ちたスレッドの名前とモジュール・生きている
 //! スレッドの一覧（areka-placement の lib は並ぶテストが少ないので許可の持ち手の表は持たず、一覧で読む）・積み上げを、
 //! 決めた行の形で標準エラーの OS のハンドルへ直に書き（libtest の捕まえも `std` の標準エラーの錠も通らない）、次の受け手へ回す。ふだんの緑の走行では何も書かない。
 //!
-//! 同じ初期化子で、プロセスの寿命の MTA を立てる（`CoIncrementMTAUsage`・件 3 の直し）。テストのスレッドが
-//! 足場ごとに入って出る一時的な MTA が解体され、放された DLL を後から呼んで落ちるのを防ぐ（2026-11-01 の対照の
-//! 走行で候補 B と決めた）。そのため、COM を初期化していないテストのスレッドも暗黙の MTA に居る。
+//! 同じ初期化子で、プロセスの寿命の MTA を立てる（`CoIncrementMTAUsage`）。テストのスレッドが
+//! 足場ごとに入って出る一時的な MTA が解体され、放された DLL を後から呼んで落ちるのを防ぐ。
+//! そのため、COM を初期化していないテストのスレッドも暗黙の MTA に居る。
 //!
 //! 書く順は割り当ての無い行から先に。後ろの段（スレッドの名前の取り出し・積み上げ）で錠やヒープが壊れて
 //! 止まっても、前の行は残る。
@@ -37,8 +37,8 @@ use windows::Win32::System::Threading::{
 use windows::core::PCWSTR;
 
 // ---------------------------------------------------------------------------
-// 今の `windows` の機能（Win32_System_Diagnostics_* が無い）に無い kernel32 の関数と構造体（設計の議題 2・
-// `Cargo.toml` は触らない）。
+// 今の `windows` の機能（Win32_System_Diagnostics_* が無い）に無い kernel32 の関数と構造体
+// （`Cargo.toml` は触らない）。
 // ---------------------------------------------------------------------------
 
 #[repr(C)]
@@ -139,7 +139,7 @@ static WRITING: AtomicBool = AtomicBool::new(false);
 
 /// プロセスの読み込みの初め（libtest の main より前）に 1 度だけ走る。
 extern "C" fn install() {
-    // 一時的な MTA の解体の後に放された DLL を呼ぶ落ち（件 3）を防ぐ: プロセスの寿命の MTA を立てる
+    // 一時的な MTA の解体の後に放された DLL を呼ぶ落ちを防ぐ: プロセスの寿命の MTA を立てる
     // （クッキーは返さない・プロセスの終わりまで持つ）。
     // SAFETY: 引数の無い COM の呼び出し。
     if let Err(e) = unsafe { CoIncrementMTAUsage() } {
@@ -216,7 +216,6 @@ unsafe fn write_report(info: *const EXCEPTION_POINTERS) {
     let out: &mut File = &mut out;
     let mut line = Line::new();
 
-    // ⑴ 1 行目。
     // SAFETY: 呼び手の約束。
     let (code, addr) = unsafe { code_and_address(info) };
     // SAFETY: 引数の無い呼び出し。
@@ -227,7 +226,6 @@ unsafe fn write_report(info: *const EXCEPTION_POINTERS) {
     );
     line.emit(out);
 
-    // ⑵ 落ちた番地のモジュールと、落ちたスレッドの名前。
     let mut path = [0u16; 520];
     let mut module = HMODULE::default();
     // SAFETY: FROM_ADDRESS の形では名前の引数を番地として読む。参照の数は変えない。
@@ -259,10 +257,9 @@ unsafe fn write_report(info: *const EXCEPTION_POINTERS) {
         line.emit(out);
     }
 
-    // ⑶ 生きているスレッドの一覧。
     write_live_threads(out, &mut line);
 
-    // ⑷ 積み上げ（ここから割り当てる）。
+    // 積み上げ（ここから割り当てる）。
     let stack = std::backtrace::Backtrace::force_capture().to_string();
     for frame in stack.lines() {
         let _ = write!(line, "AREKA-CRASH-STACK {frame}");
@@ -430,7 +427,7 @@ fn crash_filter_is_installed_before_the_tests_start() {
     );
 }
 
-/// 初期化子はプロセスの寿命の MTA を立てている（件 3 の直し）: COM を初期化していない新しいスレッドも、
+/// 初期化子はプロセスの寿命の MTA を立てている: COM を初期化していない新しいスレッドも、
 /// 暗黙の MTA に居る。
 #[test]
 fn initializer_keeps_a_process_lifetime_mta() {
@@ -453,7 +450,7 @@ fn initializer_keeps_a_process_lifetime_mta() {
     );
 }
 
-/// 最初の受け手が書くのは AV だけ（ふだんの走行で捕まえられて続く例外は書かない・要件 10.3）。
+/// 最初の受け手が書くのは AV だけ（ふだんの走行で捕まえられて続く例外は書かない）。
 #[test]
 fn first_chance_writes_only_access_violations() {
     assert!(should_write_first_chance(0xC000_0005));
@@ -478,9 +475,8 @@ fn line_cuts_an_overlong_line_at_a_char_boundary_with_a_mark() {
     assert!(!text.contains("tail"), "切った後の書き足しは捨てる");
 }
 
-/// 較正（要件 1.2）: 装置を作らずに、名前の無いスレッドで例外を起こす。出力に落ちたスレッド（名前なし）と
-/// 生きているスレッドの一覧（走っているテストの名前のスレッド）が出ることを `load-flake.ps1` の summary で見る
-/// （タスク 2.4）。
+/// 較正: 装置を作らずに、名前の無いスレッドで例外を起こす。出力に落ちたスレッド（名前なし）と
+/// 生きているスレッドの一覧（走っているテストの名前のスレッド）が出ることを `load-flake.ps1` の summary で見る。
 #[test]
 #[ignore = "較正: わざとプロセスを落とす（要件 1.2）"]
 fn crash_report_names_the_running_test() {

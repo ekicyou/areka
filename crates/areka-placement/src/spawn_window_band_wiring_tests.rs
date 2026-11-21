@@ -1,6 +1,5 @@
 //! 帯の系と帯の指令の列を本番の結線（[`wire_zorder_pair`](super::wire_zorder_pair)）へ
-//! 載せたことを、本番の経路そのもので固定するテスト（stay-on-top-directives task 5.2・
-//! 要件 2.1・3.1・7.3）。
+//! 載せたことを、本番の経路そのもので固定するテスト。
 //!
 //! 並び順の字面は兄弟の `spawn_zorder_chain_wiring_tests.rs` が押さえる。ここは⑴列の資源が
 //! World に入ること、⑵確定段を回すとその巡のうちに帯の系が列を空にすることを測る。
@@ -49,8 +48,8 @@ fn the_wiring_keeps_ops_already_queued() {
     assert_eq!(queue_dump(&world), before, "結線が積まれていた指令を消した");
 }
 
-/// 本番の結線を回すと、帯の系がその巡のうちに列を空にする（要件 3.1・7.3）。
-/// 結線が列を World へ入れること（要件 2.1）も、ここで列を引く所が押さえる（無ければ panic）。
+/// 本番の結線を回すと、帯の系がその巡のうちに列を空にする。
+/// 結線が列を World へ入れることも、ここで列を引く所が押さえる（無ければ panic）。
 #[test]
 fn the_wired_route_drains_the_band_queue_in_the_same_pass() {
     let mut wired = World::new();

@@ -5,13 +5,12 @@ use crate::shared_test_support::placement_sized;
 use log_capture_kit::{ExpectField, capture};
 
 // ------------------------------------------------------------------
-// バルーン相対オフセットの保存基準（2.2/2.5・2026-07-31 実機裁定）
+// バルーン相対オフセットの保存基準
 //
-// 旧: アンカー辺基準（Bottom=(w/2,h)・Right=(w,0)）へ変換してから保存していた。
-// 新: **char 窓左上基準**のまま保存する＝ランタイム BalloonFollow.offset と同一基準。
-//     ランタイムの追従が全アンカーで窓相対（resize で offset を補正しない）へ
-//     統一されたため、保存だけ別基準にすると保存時と復元時でサーフェス寸が違うとき
-//     Δ ぶんの恒久ドリフトが出る（実機のむらさきで Δh=175px）。
+// **char 窓左上基準**のまま保存する＝ランタイム BalloonFollow.offset と同一基準。
+// ランタイムの追従は全アンカーで窓相対（resize で offset を補正しない）なので、
+// 保存だけアンカー辺基準（Bottom=(w/2,h)・Right=(w,0)）にすると保存時と復元時で
+// サーフェス寸が違うとき Δ ぶんの恒久ドリフトが出る（実機のむらさきで Δh=175px）。
 //
 // 以下の檻はこの性質を「保存 entries ⇄ 復元 merge」の実経路
 // （balloon_offset_entries → apply_restored_placements）で固定する。
@@ -75,14 +74,12 @@ fn balloon_offset_round_trip_is_identity_across_anchors_and_size_changes() {
     }
 }
 
-/// 8.5（意味反転・2026-07-31 実機裁定）Bottom のサーフェス寸変動:
-/// 保存時と**同じ寸**が表示された瞬間はバルーン位置が厳密復元され、**異なる寸**でも
-/// offset は窓（左上）相対のまま不変である。
+/// Bottom のサーフェス寸変動: 保存時と**同じ寸**が表示された瞬間はバルーン位置が厳密復元され、
+/// **異なる寸**でも offset は窓（左上）相対のまま不変である。
 ///
-/// 旧檻は「下端からの距離が不変」＝下端基準を主張していたが、ランタイムの
-/// `resize_window_to` が窓相対追従へ統一された以上、保存だけ下端基準にすると
+/// ランタイムの `resize_window_to` は窓相対追従なので、保存だけ下端基準にすると
 /// 「小サーフェス表示中にドラッグ→保存→再起動→切替」で Δh ぶんの恒久ドリフトが出る。
-/// 本檻はその下端基準の復活を明示的に排除する。
+/// 下端基準を採らないことをこの檻で固定する。
 #[test]
 fn balloon_offset_restores_exactly_at_same_size_and_stays_window_relative_bottom() {
     let snap = snapshot_of(vec![]); // 空＝project_restore identity（保存 char_pos 素通し）
@@ -90,7 +87,7 @@ fn balloon_offset_restores_exactly_at_same_size_and_stays_window_relative_bottom
     let h1 = 500;
     let size_h1 = SizePx { w: 300, h: h1 };
     let offset_tl_saved = PointPx { x: 40, y: 70 };
-    // char 位置も保存する（保存 x は原点＝下端中央基準・char_pos_to_origin_x は無改変）。
+    // char 位置も保存する（保存 x は原点＝下端中央基準）。
     let char_pos_saved = PointPx { x: 800, y: 500 };
     let mut entries = char_pos_entries(
         0,
@@ -151,7 +148,7 @@ fn balloon_offset_restores_exactly_at_same_size_and_stays_window_relative_bottom
 }
 
 // ------------------------------------------------------------------
-// project_restore（復元時再射影・5.1/5.2/5.3・design C1・Testing Strategy §2）
+// project_restore（復元時再射影）
 //   project_anchor（アンカー辺再導出）＋補軸 clamp（可視性保証）。
 //   単一モニタ wa=(0,0,1920,1040)・size=(400,600) → bottom 揃え y=1040−600=440。
 // ------------------------------------------------------------------
@@ -169,7 +166,7 @@ fn snapshot_of(rects: Vec<RectPx>) -> MonitorSnapshot {
     MonitorSnapshot { work_areas: rects }
 }
 
-/// 5.3: 域内 Free は恒等（identity 射影＋両軸 clamp が域内で no-op）。
+/// 域内 Free は恒等（identity 射影＋両軸 clamp が域内で no-op）。
 #[test]
 fn project_restore_free_inside_work_area_is_identity() {
     let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
@@ -182,7 +179,7 @@ fn project_restore_free_inside_work_area_is_identity() {
     );
 }
 
-/// 5.3: 既に下端一致＋x 域内の Bottom はべき等＝恒等（不要な再射影をしない）。
+/// 既に下端一致＋x 域内の Bottom はべき等＝恒等（不要な再射影をしない）。
 #[test]
 fn project_restore_bottom_already_anchored_inside_is_identity() {
     let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
@@ -195,7 +192,7 @@ fn project_restore_bottom_already_anchored_inside_is_identity() {
     );
 }
 
-/// 5.1/5.2: 保存 y が現 work area 外（背の高いモニタからの復元）の Bottom は、
+/// 保存 y が現 work area 外（背の高いモニタからの復元）の Bottom は、
 /// 下端吸着で域内へ戻り（下端 = wa.bottom − h）水平位置は保持する。
 #[test]
 fn project_restore_bottom_y_outside_snaps_bottom_and_preserves_x() {
@@ -207,7 +204,7 @@ fn project_restore_bottom_y_outside_snaps_bottom_and_preserves_x() {
     assert_eq!(out.x, 500, "水平位置（X 意図）は保持（5.2）");
 }
 
-/// 5.1: 保存 x が現 work area 右外の Bottom は、x を [wa.left, wa.right−w] へ
+/// 保存 x が現 work area 右外の Bottom は、x を [wa.left, wa.right−w] へ
 /// clamp して域内へ戻す（モニタ喪失シナリオ＝最近傍 wa）。
 #[test]
 fn project_restore_bottom_x_outside_clamps_into_work_area() {
@@ -223,11 +220,11 @@ fn project_restore_bottom_x_outside_clamps_into_work_area() {
 }
 
 /// 端付近に置いた Bottom char（右端を数十 px はみ出す＝**一部可視**）は復元で
-/// クランプされず保存 x をそのまま用いる（Req5.3・実機サインオフ検出の恒久回帰）。
+/// クランプされず保存 x をそのまま用いる（実機で検出した欠陥の恒久回帰）。
 /// 保存側 `project_anchor`／`bottom_snap` は補軸 x を clamp しないため、一部可視の
 /// 位置は復元でも同一でなければ立ち位置がずれ、追従 balloon もずれる（保存↔復元の
 /// クランプ非対称）。実機値: 保存 x=3493・wa.right=3840・w=434（右端 3927 で 87px はみ出し）
-/// → 修正前は 3406 へ clamp していた欠陥を固定する。
+/// → 3406 へ clamp してしまう欠陥を固定する。
 #[test]
 fn project_restore_bottom_partially_visible_keeps_saved_x() {
     let snap = snapshot_of(vec![wa_rect(0, 0, 3840, 2100)]);
@@ -239,7 +236,7 @@ fn project_restore_bottom_partially_visible_keeps_saved_x() {
         "一部でも可視なら保存 x を維持（clamp しない・Req5.3・保存↔復元 idempotent）"
     );
     assert_eq!(out.y, 2100 - 687, "Bottom は下端吸着で y を再導出（5.2）");
-    // 対比: 完全に不可視（rect [4000,4434] が wa と交差なし）はクランプで可視化（Req5.1）。
+    // 対比: 完全に不可視（rect [4000,4434] が wa と交差なし）はクランプで可視化。
     let off = project_restore(Anchor::Bottom, PointPx { x: 4000, y: 1553 }, size, &snap);
     assert_eq!(
         off.x,
@@ -248,7 +245,7 @@ fn project_restore_bottom_partially_visible_keeps_saved_x() {
     );
 }
 
-/// 5.1/5.2: Left アンカーは x を wa.left へ固定し、補軸 y を域内へ clamp する。
+/// Left アンカーは x を wa.left へ固定し、補軸 y を域内へ clamp する。
 #[test]
 fn project_restore_left_pins_left_edge_and_clamps_y() {
     let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
@@ -278,7 +275,7 @@ fn project_restore_free_clamps_both_axes_with_identity_projection() {
     );
 }
 
-/// 空 snapshot は全アンカーで恒等（架空矩形を発明しない・既存縮退流儀・5.1 note）。
+/// 空 snapshot は全アンカーで恒等（架空矩形を発明しない・既存縮退流儀）。
 #[test]
 fn project_restore_empty_snapshot_is_identity() {
     let snap = snapshot_of(vec![]);
@@ -292,8 +289,8 @@ fn project_restore_empty_snapshot_is_identity() {
     }
 }
 
-/// 5.1: どのモニタにも属さない復元位置は最近傍 wa を採り、その中へ吸着＋clamp
-/// する（2 面構成・モニタ喪失シナリオ＝design §2）。
+/// どのモニタにも属さない復元位置は最近傍 wa を採り、その中へ吸着＋clamp
+/// する（2 面構成・モニタ喪失シナリオ）。
 #[test]
 fn project_restore_off_all_monitors_uses_nearest_work_area() {
     // A=左・B=右の 2 面。保存位置は B のさらに右外＝どのモニタにも属さない
@@ -312,7 +309,7 @@ fn project_restore_off_all_monitors_uses_nearest_work_area() {
 }
 
 // ------------------------------------------------------------------
-// apply_restored_placements（復元 merge・1.4/1.5/1.6/2.3/2.4/2.5/6.1・design C1）
+// apply_restored_placements（復元 merge）
 //   純関数・決定論・永続不書込。saved pos 優先→project_restore→balloon 導出。
 // ------------------------------------------------------------------
 
@@ -351,9 +348,9 @@ pub(super) fn bo(scope: u32, axis: Axis, v: &str) -> (PersistKey, String) {
 pub(super) const CSZ: SizePx = SizePx { w: 400, h: 600 };
 pub(super) const BSZ: SizePx = SizePx { w: 200, h: 300 };
 
-/// 1.4: 保存 WindowPos が両軸とも parse できるとき char_pos を保存値へ差し替える
+/// 保存 WindowPos が両軸とも parse できるとき char_pos を保存値へ差し替える
 /// （既定位置解決に優先）。空 snapshot ゆえ project_restore は identity で保存値素通し。
-/// 2.4: BalloonOffset は無いので、resolver 既定 offset を保ったまま最終 char_pos へ追従する。
+/// BalloonOffset は無いので、resolver 既定 offset を保ったまま最終 char_pos へ追従する。
 #[test]
 fn apply_saved_window_pos_takes_priority_over_default() {
     let snap = snapshot_of(vec![]); // 空＝project_restore identity（保存値素通し）
@@ -395,7 +392,7 @@ fn apply_saved_window_pos_takes_priority_over_default() {
     );
 }
 
-/// 1.5/2.4: 空 entries → 出力は入力 placements に完全恒等（identity）。
+/// 空 entries → 出力は入力 placements に完全恒等（identity）。
 #[test]
 fn apply_empty_entries_is_identity() {
     let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
@@ -423,16 +420,11 @@ fn apply_empty_entries_is_identity() {
     assert_eq!(out, placements, "空 entries は入力恒等（1.5/2.4）");
 }
 
-/// windowposition-limit: 復元 merge は `balloon_limit` を**両方向とも**転記する。
+/// 復元 merge は `balloon_limit` を**両方向とも**転記する。
 ///
-/// 既存の復元檻はすべて `balloon_limit: true` の placement を投入するため、
-/// merge が「無効化しない」ことしか固定できていなかった。`merge_scope` の転記を
-/// `true` 固定へ変異させても既存檻は 1 本も落ちない（実測）。それでは
-/// 「`windowposition.limit,0` の scope に保存位置があると limit が黙って復活する」
-/// という退行を検出できない——保存位置を持つ scope はユーザが自分でドラッグした
-/// scope であり、画面外に居る可能性が最も高い当のケースである。
-///
-/// 本檻は `false` を投入して、保存値が効く経路（scope0）と効かない経路（scope1）の
+/// 保存位置を持つ scope はユーザが自分でドラッグした scope で、画面外に居る可能性が最も高い。
+/// 「`windowposition.limit,0` の scope に保存位置があると limit が黙って復活する」退行を
+/// 検出するため、`false` を投入して、保存値が効く経路（scope0）と効かない経路（scope1）の
 /// **両方**で `false` のまま出てくることを固定する。
 #[test]
 fn apply_restored_placements_carries_balloon_limit_false_both_ways() {
@@ -473,7 +465,7 @@ fn apply_restored_placements_carries_balloon_limit_false_both_ways() {
     );
 }
 
-/// 1.6/2.5: scope 別 entries は交差しない。scope0 の WindowPos は scope1 に波及せず、
+/// scope 別 entries は交差しない。scope0 の WindowPos は scope1 に波及せず、
 /// scope1 は既定を保つ。
 #[test]
 fn apply_scopes_do_not_cross() {
@@ -529,7 +521,7 @@ fn apply_scopes_do_not_cross() {
     );
 }
 
-/// 2.2/2.3（意味反転・2026-07-31 実機裁定）: Bottom でも保存 BalloonOffset は
+/// Bottom でも保存 BalloonOffset は
 /// **char 左上基準のまま**採用する（現 char_size を足し戻さない）。
 /// 一方 char 窓位置（`char_pos_to_origin_x` 系）は下端中央原点のまま＝無改変で、
 /// バルーン基準と char 基準が独立であることを同一檻で弁別する。
@@ -545,8 +537,8 @@ fn apply_saved_balloon_offset_is_char_top_left_basis_bottom() {
         PointPx { x: -50, y: 0 },
         BSZ,
     )];
-    // persisted (0, -430) は左上基準ゆえ、そのまま offset になる（旧下端中央基準なら
-    // (0+200, -430+600) = (200,170) へ膨らんでいた）。
+    // persisted (0, -430) は左上基準ゆえ、そのまま offset になる（下端中央基準なら
+    // (0+200, -430+600) = (200,170) へ膨らむ）。
     let entries = vec![
         wp(0, Axis::X, "800"),
         wp(0, Axis::Y, "500"),
@@ -556,8 +548,7 @@ fn apply_saved_balloon_offset_is_char_top_left_basis_bottom() {
 
     let out = apply_restored_placements(placements, &entries, &snap);
 
-    // 保存 x=800 は**原点（下端中央）基準**ゆえ、現寸 w=400 の左上は 800−200=600
-    // （char 窓の原点符号化は本変更でも無改変）。
+    // 保存 x=800 は**原点（下端中央）基準**ゆえ、現寸 w=400 の左上は 800−200=600。
     assert_eq!(out[0].char_pos, PointPx { x: 600, y: 500 });
     assert_eq!(
         out[0].balloon_offset,
@@ -567,7 +558,7 @@ fn apply_saved_balloon_offset_is_char_top_left_basis_bottom() {
     assert_eq!(out[0].balloon_pos, PointPx { x: 600, y: 70 });
 }
 
-/// spec: audit-placement-core 要件 9.2: 在るが読めない鍵（窓の x = "12.5"）と、片方の軸だけの鍵（ずらしの y だけ）は、
+/// 在るが読めない鍵（窓の x = "12.5"）と、片方の軸だけの鍵（ずらしの y だけ）は、
 /// 鍵ごとに `warn!` を 1 行ずつ出して既定へ戻る。読める相方（窓の y）と、そろった記憶は出さない。
 #[test]
 fn apply_warns_once_per_unusable_key_and_keeps_default() {
@@ -620,7 +611,7 @@ fn apply_warns_once_per_unusable_key_and_keeps_default() {
     );
 }
 
-/// 5.1/5.2: 保存位置が現 work area 外でも project_restore で域内へ（Bottom 下端吸着）。
+/// 保存位置が現 work area 外でも project_restore で域内へ（Bottom 下端吸着）。
 /// merge が project_restore を実際に通していることの結合檻。
 #[test]
 fn apply_saved_pos_is_reprojected_into_work_area() {
@@ -646,7 +637,7 @@ fn apply_saved_pos_is_reprojected_into_work_area() {
     );
 }
 
-/// char-position-save-on-exit 2.4/2.6（design テスト 6）: `has_saved_char_pos` は x・y の
+/// `has_saved_char_pos` は x・y の
 /// 両方が数字のときだけ真で、`merge_scope` が記憶の値を採るかどうかと全部の組で一致する。
 #[test]
 fn has_saved_char_pos_agrees_with_merge_scope() {
@@ -708,7 +699,7 @@ fn has_saved_char_pos_agrees_with_merge_scope() {
             "{name}: merge_scope が記憶の値を採るかどうかと判定が食い違う"
         );
     }
-    // 2.6: 記憶の値が既定と同じでも「記憶あり」（値の違いで判定しない）。
+    // 記憶の値が既定と同じでも「記憶あり」（値の違いで判定しない）。
     assert!(
         has_saved_char_pos(&[wp(0, Axis::X, "100"), wp(0, Axis::Y, "100")], 0),
         "既定と同じ値の記憶が「記憶なし」に倒れている（2.6）"
@@ -736,15 +727,15 @@ fn has_saved_char_pos_agrees_with_merge_scope() {
 }
 
 // ------------------------------------------------------------------
-// キーワード再導出の素材と保存値の優先順位（要件 4.7・2026-08-14 実機是正）
+// キーワード再導出の素材と保存値の優先順位
 //
-// 要件 4.7 は「永続値を優先し、キーワード指定の適用は初期既定位置の供給にとどめる」。
+// 永続値を優先し、キーワード指定の適用は初期既定位置の供給にとどめる。
 // 実表示寸確定時の再導出はキーワードの初期既定位置を引き直す仕掛けなので、保存された
 // 相対位置が効いている scope では**素材ごと落として**発火させない——落とさないと、
 // 再導出がユーザーの保存値をキーワード既定へ静かに上書きしてしまう。
 // ------------------------------------------------------------------
 
-/// 保存 offset が両軸そろって効いた scope は再導出の素材を失う（4.7）。
+/// 保存 offset が両軸そろって効いた scope は再導出の素材を失う。
 #[test]
 fn merge_drops_the_keyword_base_when_a_saved_balloon_offset_wins() {
     let snap = snapshot_of(vec![]); // identity 射影（保存値素通し）

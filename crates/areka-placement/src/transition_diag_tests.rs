@@ -6,7 +6,7 @@
 //!   （wintf・areka-emo-present）の語彙と交わらないこと。
 //! - **行の形**——5 種のレコード純関数が逐語で同じ行を組み、欠損は番兵で埋めてフィールドを
 //!   落とさないこと。宣言した欄の表と組んだ行の欄が過不足なく一致すること。
-//! - **World からの転写**——刻印は World 資源（`FrameCount`＋`TickStart`）から組み（D1）、
+//! - **World からの転写**——刻印は World 資源（`FrameCount`＋`TickStart`）から組み、
 //!   書込タグは窓の marker から scope と種別を読むこと。
 //!
 //! 接地点レコードを実際に発行する側（`resize_window_to`）の検証は
@@ -37,7 +37,7 @@ fn ent(raw: u32) -> Entity {
 // 語彙（種別語・段階語・理由語・フィールド名）
 // ---------------------------------------------------------------------------
 
-/// 5 つのレコード種別語の字面が固定されている（design Data Models の `kind` 列）。
+/// 5 つのレコード種別語の字面が固定されている。
 #[test]
 fn placement_record_kinds_are_fixed() {
     assert_eq!(KIND_SNAPSHOT, "snapshot");
@@ -229,7 +229,7 @@ fn snapshot_line_lists_the_count_and_every_monitor() {
 }
 
 /// モニタ 0 台は**レコードの不在**ではなく `monitors=0` として観測できる
-/// （不在は「観測が無効だった」と区別が付かない・`areka-P0-dpi-transition-atomicity` 要件 5.5）。
+/// （不在は「観測が無効だった」と区別が付かない）。
 #[test]
 fn snapshot_line_reports_zero_monitors_as_a_count_not_as_a_missing_record() {
     assert_eq!(
@@ -241,7 +241,6 @@ fn snapshot_line_reports_zero_monitors_as_a_count_not_as_a_missing_record() {
     );
 }
 
-/// 整合待ちのレコード——窓・表・判定・観測点の全フィールド。
 #[test]
 fn hold_line_carries_every_field() {
     let entity = ent(3);
@@ -321,7 +320,6 @@ fn ground_line_uses_sentinels_when_the_work_area_cannot_be_resolved() {
     );
 }
 
-/// 連鎖再解決のレコード——段階・対象スコープ数・動かした数・見送り理由。
 #[test]
 fn chain_line_carries_the_stage_counts_and_reason() {
     assert_eq!(
@@ -427,7 +425,7 @@ fn the_declared_field_lists_match_the_lines_that_are_actually_built() {
 // World からの転写（刻印・書込タグ）
 // ---------------------------------------------------------------------------
 
-/// 刻印は World 資源から組む（D1）。資源の無い World は値を捏造せず 0 を返す。
+/// 刻印は World 資源から組む。資源の無い World は値を捏造せず 0 を返す。
 #[test]
 fn the_stamp_comes_from_the_world_resources_and_degrades_to_zero_without_them() {
     let mut world = World::new();
@@ -442,7 +440,6 @@ fn the_stamp_comes_from_the_world_resources_and_degrades_to_zero_without_them() 
     );
 }
 
-/// 書込タグは経路語・scope・窓種別を運ぶ（`areka-P0-dpi-transition-atomicity` 要件 2.1）。
 #[test]
 fn the_write_tag_carries_the_route_scope_and_window_kind() {
     let mut world = World::new();
@@ -506,7 +503,6 @@ fn the_live_work_area_bottom_is_none_without_any_monitor() {
     );
 }
 
-/// 実行時の表を読んだ接地点レコードが 1 行だけ出る（発行の口）。
 #[test]
 fn log_char_ground_emits_exactly_one_record_from_the_live_table() {
     let mut world = World::new();
@@ -536,7 +532,7 @@ fn log_char_ground_emits_exactly_one_record_from_the_live_table() {
     );
 }
 
-/// 連鎖再解決の記録が 1 段階につき 1 行だけ出る（発行の口・`areka-P0-dpi-transition-atomicity` task 5.6）。
+/// 連鎖再解決の記録が 1 段階につき 1 行だけ出る。
 ///
 /// 見送りの行は理由語を載せ、見送り以外は番兵で埋める——落とすと「記録が出ていない」と
 /// 「その段階にはその値が無い」の区別が事後に付かない。
@@ -574,7 +570,7 @@ fn log_chain_emits_exactly_one_record_per_stage() {
 }
 
 // ---------------------------------------------------------------------------
-// 追随レコード（`kind=offset`・`areka-P0-balloon-offset-dpi` 要件 3.7／8.3・design D10）
+// 追随レコード（`kind=offset`）
 // ---------------------------------------------------------------------------
 
 /// 判定語 6 値が字面で固定されている（種別が全数表に載ることは
@@ -600,7 +596,7 @@ fn the_offset_kind_and_its_six_verdict_words_are_fixed() {
     );
 }
 
-/// 追随レコードは 7 欄すべてを載せ、点は `x,y`（空白なし）で 1 フィールドに畳む。
+/// 点は `x,y`（空白なし）で 1 フィールドに畳む。
 #[test]
 fn offset_line_carries_the_base_pair_the_two_offsets_and_the_verdict() {
     assert_eq!(
@@ -619,7 +615,7 @@ fn offset_line_carries_the_base_pair_the_two_offsets_and_the_verdict() {
     );
 }
 
-/// 未係留の基準（永続値の腕・`areka-P0-balloon-offset-dpi` 要件 5.2）と marker を持たない窓は番兵で埋める
+/// 未係留の基準（永続値の腕）と marker を持たない窓は番兵で埋める
 /// ——欄を落とすと「記録が出ていない」と「その腕にはその値が無い」の区別が事後に付かない。
 #[test]
 fn offset_line_uses_a_sentinel_for_an_unpinned_base_and_an_unmarked_scope() {
@@ -673,7 +669,7 @@ fn log_offset_rescale_emits_exactly_one_record_per_call() {
     );
 }
 
-/// `areka-P0-balloon-offset-dpi` 要件 3.7／8.3・design D10: 発行口は前置ガードを**自分で**持ち、ガードは行の組立より
+/// 発行口は前置ガードを**自分で**持ち、ガードは行の組立より
 /// 前にある。`debug!` は既定運転で濾過されるので、ガードを失っても**出力は変わらない**
 /// ——濾過テストでは検出できない退行であり、固定できるのは本文走査だけである。
 #[test]

@@ -1,4 +1,4 @@
-//! descript の既定の面の読みと戻り先の候補の並び（descript-window-keys 要件 7.1）・バルーンの
+//! descript の既定の面の読みと戻り先の候補の並び・バルーンの
 //! 動かせない指定（`balloon.dontmove`）・バルーンの倍率の連動（`balloon.syncscale`）の読みの決定論のテスト。
 
 use std::collections::BTreeSet;
@@ -7,7 +7,7 @@ use super::*;
 use crate::test_support::kv;
 use log_capture_kit::{ExpectField, capture, expect_one};
 
-/// 書かれていなければ組み込みの既定の面（本体側 0・相方側とスコープ 2 以降 10）で、記録も残さない（要件 1.1・1.2・1.4）。
+/// 書かれていなければ組み込みの既定の面（本体側 0・相方側とスコープ 2 以降 10）で、記録も残さない。
 #[test]
 fn unwritten_scopes_use_builtin_default_surfaces_silently() {
     let (ds, events) = capture(|| read_default_surfaces(&kv(&[("name", "x")])));
@@ -22,7 +22,7 @@ fn unwritten_scopes_use_builtin_default_surfaces_silently() {
     );
 }
 
-/// `sakura.`・`kero.` に書かれた値を読む。前後の空白は除く（要件 1.1・1.2）。
+/// `sakura.`・`kero.` に書かれた値を読む。前後の空白は除く。
 #[test]
 fn written_values_are_read_per_scope() {
     let ds = read_default_surfaces(&kv(&[
@@ -33,7 +33,7 @@ fn written_values_are_read_per_scope() {
     assert_eq!(ds.surface(1), 12);
 }
 
-/// 別名 `char0.`・`char1.` は配置のほかのキーと同じ優先（正典の綴り ＞ 別名）で扱う（要件 1.3）。
+/// 別名 `char0.`・`char1.` は配置のほかのキーと同じ優先（正典の綴り ＞ 別名）で扱う。
 #[test]
 fn aliases_follow_the_same_precedence_as_other_placement_keys() {
     let alias_only = read_default_surfaces(&kv(&[
@@ -53,7 +53,7 @@ fn aliases_follow_the_same_precedence_as_other_placement_keys() {
     assert_eq!(both.surface(1), 12, "kero. が char1. に勝つ");
 }
 
-/// `char2.`・`char7.` だけ書かれていれば、そのスコープだけ読み、ほかは組み込みのまま（要件 1.4）。
+/// `char2.`・`char7.` だけ書かれていれば、そのスコープだけ読み、ほかは組み込みのまま。
 #[test]
 fn scopes_two_and_up_are_read_only_where_written() {
     let ds = read_default_surfaces(&kv(&[
@@ -67,7 +67,7 @@ fn scopes_two_and_up_are_read_only_where_written() {
     assert_eq!(ds.surface(7), 70);
 }
 
-/// 読めない値（負・数でない・空・桁あふれ）はそのスコープを組み込みの面にし、スコープ・キー・値の記録を 1 件残す（要件 1.5）。
+/// 読めない値（負・数でない・空・桁あふれ）はそのスコープを組み込みの面にし、スコープ・キー・値の記録を 1 件残す。
 #[test]
 fn unreadable_values_fall_back_to_builtin_with_one_warning_each() {
     for raw in ["-1", "abc", "", "4294967296"] {
@@ -92,7 +92,7 @@ fn unreadable_values_fall_back_to_builtin_with_one_warning_each() {
     }
 }
 
-/// 候補の並びは descript の面、違えば続けて組み込みの面で、重ならない（要件 2.6）。
+/// 候補の並びは descript の面、違えば続けて組み込みの面で、重ならない。
 #[test]
 fn fallback_candidates_do_not_overlap() {
     assert_eq!(fallback_candidates(0, 0), vec![0]);
@@ -127,7 +127,7 @@ fn initial_surface_is_first_present_candidate_else_builtin() {
     assert_eq!(ds.initial_surface(1, |_| true), 12);
 }
 
-/// シェルのスコープ個別 `0` がゴーストの `true` に勝つ（要件 4.1・4.2）。
+/// シェルのスコープ個別 `0` がゴーストの `true` に勝つ。
 #[test]
 fn shell_scope_value_beats_ghost_balloon_dontmove() {
     let ghost = kv(&[("balloon.dontmove", "true")]);
@@ -141,7 +141,7 @@ fn shell_scope_value_beats_ghost_balloon_dontmove() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// シェルの別名 `char1.` が相方側に効き、`kero.` が `char1.` に勝つ（要件 4.2）。
+/// シェルの別名 `char1.` が相方側に効き、`kero.` が `char1.` に勝つ。
 #[test]
 fn shell_alias_char1_applies_to_partner_scope() {
     let none = kv(&[]);
@@ -165,7 +165,7 @@ fn shell_alias_char1_applies_to_partner_scope() {
     );
 }
 
-/// ゴーストだけが書いていれば全スコープに効く（要件 4.1）。
+/// ゴーストだけが書いていれば全スコープに効く。
 #[test]
 fn ghost_only_locks_every_scope() {
     let ghost = kv(&[("balloon.dontmove", "1")]);
@@ -200,7 +200,7 @@ fn balloon_dontmove_words_ignore_case() {
     }
 }
 
-/// どちらにも指定が無ければ禁止しない（要件 4.3）。
+/// どちらにも指定が無ければ禁止しない。
 #[test]
 fn nothing_written_locks_nothing() {
     let (locked, events) =
@@ -209,7 +209,7 @@ fn nothing_written_locks_nothing() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// シェルの値が読めなければ記録 1 件を残してゴーストの値へ進む（要件 4.5）。
+/// シェルの値が読めなければ記録 1 件を残してゴーストの値へ進む。
 #[test]
 fn unreadable_shell_value_falls_through_to_ghost() {
     let ghost = kv(&[("balloon.dontmove", "true")]);
@@ -224,7 +224,7 @@ fn unreadable_shell_value_falls_through_to_ghost() {
     assert_eq!(ev.expect_field("value"), "yes");
 }
 
-/// ゴーストの値も読めなければ禁止しない。読めない段ごとに記録を 1 件残す（要件 4.3・4.5）。
+/// ゴーストの値も読めなければ禁止しない。読めない段ごとに記録を 1 件残す。
 #[test]
 fn unreadable_ghost_value_locks_nothing() {
     let ghost = kv(&[("balloon.dontmove", "2")]);
@@ -252,7 +252,7 @@ fn unreadable_ghost_value_warns_once_for_all_scopes() {
 }
 
 /// ゴーストの `balloon.syncscale,true` はすべてのスコープを連動させ、鍵ごとに警告より下の段の記録を 1 件残す
-/// （ゴーストの鍵のスコープは「all」・shell-scale-linkage 要件 6.1・6.7）。
+/// （ゴーストの鍵のスコープは「all」）。
 #[test]
 fn ghost_syncscale_true_links_every_scope() {
     let ghost = kv(&[("balloon.syncscale", "true")]);
@@ -268,7 +268,7 @@ fn ghost_syncscale_true_links_every_scope() {
     assert_eq!(ev.expect_field("synced"), "true");
 }
 
-/// シェルの鍵はそのスコープだけを連動させる: `sakura.`・別名 `char0.`・`kero.`・`char2.`（要件 6.2・6.7）。
+/// シェルの鍵はそのスコープだけを連動させる: `sakura.`・別名 `char0.`・`kero.`・`char2.`。
 #[test]
 fn shell_syncscale_links_only_its_scope() {
     for (key, scope) in [
@@ -295,7 +295,7 @@ fn shell_syncscale_links_only_its_scope() {
     }
 }
 
-/// 正典の綴りが別名に勝つ（`sakura.`＞`char0.`・`kero.`＞`char1.`・要件 6.2）。
+/// 正典の綴りが別名に勝つ（`sakura.`＞`char0.`・`kero.`＞`char1.`）。
 #[test]
 fn shell_syncscale_canonical_prefix_beats_alias() {
     let shell = kv(&[
@@ -309,7 +309,7 @@ fn shell_syncscale_canonical_prefix_beats_alias() {
     assert!(sync.is_synced(1));
 }
 
-/// 先頭の 0 のある `char02.` は読まない（記録も残さない・要件 6.2）。
+/// 先頭の 0 のある `char02.` は読まない（記録も残さない）。
 #[test]
 fn shell_syncscale_ignores_leading_zero_scope() {
     let shell = kv(&[("char02.balloon.syncscale", "true")]);
@@ -327,7 +327,7 @@ fn shell_syncscale_ignores_scope_beyond_u32() {
     assert_eq!(sync, BalloonSyncScale::default());
 }
 
-/// ゴーストとシェルの両方が書けば論理和（要件 6.3）。ゴーストが `false` でもシェルの `true` が効く。
+/// ゴーストとシェルの両方が書けば論理和。ゴーストが `false` でもシェルの `true` が効く。
 #[test]
 fn ghost_and_shell_syncscale_combine_by_or() {
     let both = read_balloon_syncscale(
@@ -345,7 +345,7 @@ fn ghost_and_shell_syncscale_combine_by_or() {
 }
 
 /// 前後の空白を除いて大文字小文字を問わず `true` のときだけ有効。ほかは「指定なし」で、警告を出さず
-/// 警告より下の段に `synced = false` を残す（要件 6.4・6.7）。
+/// 警告より下の段に `synced = false` を残す。
 #[test]
 fn syncscale_values_other_than_true_mean_unspecified() {
     for (raw, synced) in [

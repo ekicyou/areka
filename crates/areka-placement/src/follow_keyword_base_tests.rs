@@ -17,8 +17,7 @@ use crate::spawn::{BalloonKeywordBase, spawn_ghost_windows};
 use log_capture_kit::{ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
-// 実表示寸確定時のキーワード基本位置の再導出（`areka-P0-windowposition-limit` 要件 4.2/4.3/4.5/4.7/5.2・
-// design C4／DD7・2026-08-14 の実機サインオフで見つかった欠陥の檻）
+// 実表示寸確定時のキーワード基本位置の再導出（実機サインオフで見つかった欠陥の檻）
 //
 // # 何が抜けていたのか
 //
@@ -31,7 +30,7 @@ use log_capture_kit::{ExpectField, capture, expect_one};
 // ゆえに本ファイルの檻はすべて「**採寸寸 A で組み、実表示寸 B で確定させる**」形を
 // 持つ。A ≠ B であることが檻の生命線であり、探針の自己検査でそれを固定する。
 //
-// # 一度きりであること（`areka-P0-windowposition-limit` 要件 4.7）
+// # 一度きりであること
 //
 // キーワードは「初期既定位置の供給」にとどまる。よって再導出は実表示寸が確定する
 // 一度だけで、素材（`BalloonKeywordBase`）は消費して除去する。以後の寸法変化では
@@ -71,7 +70,7 @@ fn balloon() -> SizePx {
 }
 
 /// キーワード基本位置のキャラ窓左上相対 offset（**檻側の独立実装**——本体の
-/// `keyword_balloon_pos` を呼ばず、`areka-P0-windowposition-limit` 要件 4.2/4.3/4.4 の文言から直接書き下す）。
+/// `keyword_balloon_pos` を呼ばず直接書き下す）。
 fn expected_offset(
     mode: BalloonXMode,
     char_size: SizePx,
@@ -79,9 +78,9 @@ fn expected_offset(
     adjust: PointPx,
 ) -> PointPx {
     let y = match mode {
-        // バルーン下端がシェル画像上端に接する（4.2）
+        // バルーン下端がシェル画像上端に接する
         BalloonXMode::CenterTop => -balloon_size.h,
-        // バルーン上端がシェル画像下端に接する（4.3）
+        // バルーン上端がシェル画像下端に接する
         BalloonXMode::CenterBottom => char_size.h,
         BalloonXMode::Side => unreachable!("Side はキーワード基本位置を持たない"),
     };
@@ -102,7 +101,7 @@ fn placement_measured_at(
 ) -> ScopePlacement {
     let cs = measured_char();
     let bs = balloon();
-    // P1/P2 の右下密着（キーワードでもキャラ窓の配置規則は不変・`areka-P0-windowposition-limit` 要件 5.3）
+    // P1/P2 の右下密着（キーワードでもキャラ窓の配置規則は不変）
     let char_pos = PointPx {
         x: wa().right - cs.w,
         y: wa().bottom - cs.h,
@@ -212,7 +211,7 @@ fn probe_self_check_measured_and_displayed_sizes_really_differ() {
 }
 
 // -------------------------------------------------------------------------
-// (a) 実表示寸での再導出（本欠陥の核）
+// 実表示寸での再導出（本欠陥の核）
 // -------------------------------------------------------------------------
 
 /// 実表示寸が確定した書込で、キーワード由来の offset が**実表示寸から**導出し直される。
@@ -257,7 +256,7 @@ fn reported_size_reconcile_rederives_the_keyword_offset_from_the_displayed_size(
             fresh, stale,
             "mode={mode:?}: 再導出の前後が同値（檻が空虚）"
         );
-        // **確立点の檻**（`areka-P0-balloon-offset-dpi` 要件 3.5・design D14）: 再導出は現在値だけでなく**基準**も
+        // **確立点の檻**: 再導出は現在値だけでなく**基準**も
         // 焼き直し、その基準はキャラ窓の表示 DPI へ係留される。基準が古いままだと
         // 次の拡大率遷移が採寸寸由来の値から引き直して静かにずれる。
         assert_eq!(
@@ -320,7 +319,7 @@ fn reported_size_reconcile_rederives_the_keyword_offset_from_the_displayed_size(
 }
 
 /// 作者指定の調整量（`windowposition.y` の数値・`balloon.offsetx/offsety`）は
-/// 再導出でも保存される（4.4 の加算規則が再導出側で落ちない）。
+/// 再導出でも保存される（加算規則が再導出側で落ちない）。
 #[test]
 fn rederivation_keeps_the_author_adjustment() {
     let adjust = PointPx { x: 24, y: -32 };
@@ -344,12 +343,12 @@ fn rederivation_keeps_the_author_adjustment() {
 }
 
 // -------------------------------------------------------------------------
-// (b) 一度きりの消費（`areka-P0-windowposition-limit` 要件 4.7）
+// 一度きりの消費
 // -------------------------------------------------------------------------
 
 /// 素材は最初の再導出で消費され除去される——**2 度目のリサイズは offset を動かさない**。
 ///
-/// これがキーワード適用を「初期既定位置の供給」にとどめる（4.7）ことの実体である。
+/// これがキーワード適用を「初期既定位置の供給」にとどめることの実体である。
 #[test]
 fn keyword_base_is_consumed_by_the_first_rederivation_and_never_fires_again() {
     let adjust = PointPx { x: 0, y: 0 };
@@ -488,7 +487,7 @@ fn any_route_that_first_brings_a_different_size_triggers_the_rederivation() {
 }
 
 // -------------------------------------------------------------------------
-// (c) `Side` の bit 同一（`areka-P0-windowposition-limit` 要件 4.5／5.2）
+// `Side` の bit 同一
 // -------------------------------------------------------------------------
 
 /// `Side`（数値指定・未指定）の scope は素材を持たず、リサイズで offset が
@@ -523,7 +522,7 @@ fn side_scopes_carry_no_keyword_base_and_resize_leaves_the_offset_bit_identical(
 }
 
 // -------------------------------------------------------------------------
-// (d) 縮退（log-first・`areka-P0-windowposition-limit` 要件 6.3 の流儀）
+// 縮退（log-first）
 // -------------------------------------------------------------------------
 
 /// バルーンの現寸が解決できないときは `warn!` を残し、offset には**一切触れない**。
@@ -580,12 +579,12 @@ fn unresolvable_balloon_size_warns_and_leaves_the_offset_untouched() {
 }
 
 // -------------------------------------------------------------------------
-// (e) ユーザーが動かした相対位置が素材を退役させる（`areka-P0-windowposition-limit` 要件 4.7 の While 節・task 4.6）
+// ユーザーが動かした相対位置が素材を退役させる
 //
 // # なぜ起動時の規則だけでは足りなかったのか
 //
-// `areka-P0-windowposition-limit` task 4.5 は「保存値が効いている scope には素材を付けない」を `persist::merge_scope`
-// ——すなわち**起動時**——にだけ置いた。`areka-P0-windowposition-limit` 要件 4.7 は While 節（状態）であり、保存された
+// 「保存値が効いている scope には素材を付けない」規則を `persist::merge_scope`
+// ——すなわち**起動時**——にだけ置いても足りない。保存された
 // 相対位置は**セッション中にも生まれる**（バルーン単独ドラッグの DragEnd 書込）。その
 // 経路に対応する退役点が無いと、次の寸法変化でキーワード既定が利用者のドラッグを
 // 上書きする。
@@ -738,7 +737,7 @@ fn a_drag_on_a_side_scope_is_a_no_op_for_the_material() {
 }
 
 // -------------------------------------------------------------------------
-// 表示 DPI を読めないキャラ窓での再導出（`areka-P0-balloon-offset-dpi` 要件 5.2／5.4／9.4・design D15）
+// 表示 DPI を読めないキャラ窓での再導出
 //
 // 再導出そのものは**成立している**ので `Unresolved` の語は使わない——実機
 // サインオフの grep 判定語を汚さないためであり、この腕は専用の語を持つ。
@@ -782,7 +781,7 @@ fn rederive_without_display_dpi_establishes_unpinned_base_and_warns() {
         fresh,
         "表示 DPI を読めなくても再導出結果は失われない（確立点で見送らない）"
     );
-    // (b) 基準は**未係留**で確立される（96 を発明しない・`areka-P0-balloon-offset-dpi` 要件 5.2／5.4）。
+    // (b) 基準は**未係留**で確立される（96 を発明しない）。
     assert_eq!(
         world
             .get::<BalloonFollow>(char_window)
@@ -795,19 +794,19 @@ fn rederive_without_display_dpi_establishes_unpinned_base_and_warns() {
         "未係留で確立していない（基準 DPI を発明した／基準を焼き直していない）"
     );
 
-    // (c) 無ログの縮退経路は作らない（`areka-P0-balloon-offset-dpi` 要件 9.4）。専用の語であり、
+    // (c) 無ログの縮退経路は作らない。専用の語であり、
     //     実機サインオフの `Unresolved` 判定語は汚さない。
     let rec = expect_one(&events, KEYWORD_BASE_UNPINNED_TAG);
     assert_eq!(rec.level, tracing::Level::WARN, "未係留の確立は warn 水準");
     assert_no_event(&events, KEYWORD_UNRESOLVED_TAG);
-    // 一度きり（4.7）の消費は縮退の腕でも変わらない。
+    // 一度きりの消費は縮退の腕でも変わらない。
     assert!(
         world.get::<BalloonKeywordBase>(char_window).is_none(),
         "未係留の腕でも素材は消費される"
     );
 }
 
-/// `audit-placement-follow` 指摘 11 ⑺ キャラ窓の部品を 1 つずつ外すと、外した部品を名指す `Unresolved` の `warn!` が
+/// キャラ窓の部品を 1 つずつ外すと、外した部品を名指す `Unresolved` の `warn!` が
 /// 1 件出て、offset にも素材にも触れない（次の機会を潰さない）。対照の行（何も外さない）は
 /// 再導出して素材を消費する。
 #[test]

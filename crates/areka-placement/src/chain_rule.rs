@@ -1,11 +1,10 @@
 //! 鎖の規則——キャラ窓の横の連なり（鎖）を、どの道も同じ 1 つの規則で読む
-//! （audit-placement-core research 18.10「連鎖の決まりの総括」）。
 //!
 //! # 規則
 //!
 //! - ⑴ **鎖に入るスコープと鎖の前の窓**: スコープは、揃え方が左右の辺でなければ鎖に入る
-//!   （[`joins_chain`]）。左右の辺のスコープは辺に置かれ、横には動かさず、鎖の組の基準にもしない
-//!   （resolver の P1'）。鎖の前の窓は、n より下の番号で鎖に入る一番近いスコープ
+//!   （[`joins_chain`]）。左右の辺のスコープは辺に置かれ、横には動かさず、鎖の組の基準にもしない。
+//!   鎖の前の窓は、n より下の番号で鎖に入る一番近いスコープ
 //!   （[`ChainRule::prev`]）。無ければ n は鎖の頭で、組を持たない（動かさない・印を書かない）。
 //!   どの揃え方で見るかは道で決まる（[`ChainView`]）:
 //!   - 既定の並び（resolver）と、次の起動が読む隣り合いの印（保存）は descript の揃え方。台本の
@@ -35,7 +34,7 @@
 //! | 拡大率の後の詰め直し（`chain_realign`） | 今 | 変わる直前に ⑵ で隣り合っていた組を付け直す。⑷ |
 //! | シェルの切り替え（`reseed`） | — | 鎖は解き直さない。descript の値（材料）と窓の揃え方を入れ替えるだけ |
 //!
-//! 残す限り（research 18.10「この仕様で行く」）: 辺のスコープの隣に付けた窓の並びは記憶に残らない
+//! 残す限り: 辺のスコープの隣に付けた窓の並びは記憶に残らない
 //! （印は descript の鎖の前の窓との組だけ）。台本が揃え方を変えた回の保存は、descript の鎖で印を
 //! 決める。台本が揃え方を変えた窓の扱いの限りは [`ChainView::joins`] に書く。辺のスコープの隣へ
 //! 番号の小さい側の窓を付けた組は、詰め直しで付け直さない（番号の小さい側は動かさない）。
@@ -273,7 +272,6 @@ pub fn boot_chain(
     let ledger = world.get_resource::<StickyGroupLedger>();
     let ghost_windows = world.get_resource::<GhostWindows>();
     let mut chain = BootChain::default();
-    // 前のスロットの後に飛ばしたスコープがあるか。
     let mut skipped = false;
     for (s, t) in states.iter().zip(targets) {
         if !rule.joins(ChainView::Boot, s.scope) {

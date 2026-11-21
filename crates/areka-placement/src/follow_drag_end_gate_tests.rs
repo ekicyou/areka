@@ -1,16 +1,16 @@
-//! 知らせの経路から保存まで（areka-P0-drag-click-without-move・design C4・T7-1〜T7-6）。
+//! 知らせの経路から保存までの決定論テスト。
 //!
 //! wndproc の代わりに `DragAccumulatorResource::set_transition` で種を積み、
 //! `dispatch_drag_events` を 1 回の画面更新として呼ぶ。受け手（`on_char_drag_end`・
 //! `on_balloon_drag_end`）は `OnDragEnd` で結線し、保存は偽の記憶の書き手
 //! （`SylphyaRig` の偽の記憶）を `load_scope` で読んで数える。
 //!
-//! - T7-1〜T7-3: 開始の無い終了（動かさないクリック・準備中の取り消し）で保存 0 件・
+//! - 開始の無い終了（動かさないクリック・準備中の取り消し）で保存 0 件・
 //!   窓の位置が変わらない・キーワードで決めたバルーンの位置の素材が残る。
-//! - T7-4・T7-6: 本物のドラッグと閾値を越えた後の取り消しは 1 件。
-//! - T7-5: 速いドラッグ（開始と終了が同じ配り）でキャラ窓が行き先へ置かれ 1 件保存。
+//! - 本物のドラッグと閾値を越えた後の取り消しは 1 件。
+//! - 速いドラッグ（開始と終了が同じ配り）でキャラ窓が行き先へ置かれ 1 件保存。
 //! - 始めの位置が分からないドラッグ（偽の HWND のまま）を離すと、吸着した窓も `Free` の窓も
-//!   今の位置を記憶へ書く（(0,0)＋差を書かない・audit-placement-follow-residue 要件 2.4）。
+//!   今の位置を記憶へ書く（(0,0)＋差を書かない）。
 
 use std::time::Instant;
 
@@ -223,8 +223,8 @@ fn destination_at(end: (i32, i32)) -> Point {
     Point { x: p.x, y: p.y }
 }
 
-/// T7-1（`areka-P0-drag-click-without-move` 要件 1.1・1.3・1.4・5.1）: キャラ窓を動かさずにクリック（開始の無い終了）
-/// → 保存 0 件・窓の位置は押す前のまま。修正前は赤（受け手が今の位置へ縮退して保存する）。
+/// キャラ窓を動かさずにクリック（開始の無い終了）
+/// → 保存 0 件・窓の位置は押す前のまま。受け手が今の位置へ縮退して保存すると落ちる。
 #[test]
 fn click_without_move_on_char_persists_nothing_and_keeps_position() {
     let mut rig = Rig::new();
@@ -242,9 +242,9 @@ fn click_without_move_on_char_persists_nothing_and_keeps_position() {
     rig.close();
 }
 
-/// T7-2（`areka-P0-drag-click-without-move` 要件 1.2・1.4・5.1）: バルーン窓を動かさずにクリック → 相対位置の保存 0 件・
+/// バルーン窓を動かさずにクリック → 相対位置の保存 0 件・
 /// キーワードで決めたバルーンの位置の素材が残る・バルーンの位置は押す前のまま。
-/// 修正前は赤（相対位置が保存され素材が退役する）。
+/// 相対位置が保存され素材が退役すると落ちる。
 #[test]
 fn click_without_move_on_balloon_persists_nothing_and_keeps_keyword_base() {
     let mut rig = Rig::new();
@@ -268,9 +268,8 @@ fn click_without_move_on_balloon_persists_nothing_and_keeps_keyword_base() {
     rig.close();
 }
 
-/// T7-3（`areka-P0-drag-click-without-move` 要件 1.5）: 動かし始める前の取り消し（取り消しの印つきの開始の無い終了）を
+/// 動かし始める前の取り消し（取り消しの印つきの開始の無い終了）を
 /// キャラ窓・バルーン窓へ順に配る → どちらも保存 0 件・素材が残る・位置は押す前のまま。
-/// 修正前は赤。
 #[test]
 fn cancel_before_threshold_persists_nothing() {
     let mut rig = Rig::new();
@@ -300,9 +299,8 @@ fn cancel_before_threshold_persists_nothing() {
     rig.close();
 }
 
-/// T7-4（`areka-P0-drag-click-without-move` 要件 2.1・2.2・5.3）: 本物のドラッグ（開始 → 配る → 終了 → 配る）をキャラ窓、
+/// 本物のドラッグ（開始 → 配る → 終了 → 配る）をキャラ窓、
 /// 続いてバルーン窓で行う → キャラ窓の位置 1 組・バルーンの相対位置 1 組・素材が外れる。
-/// 修正の前後とも緑。
 #[test]
 fn real_drag_persists_once_for_char_and_balloon() {
     let mut rig = Rig::new();
@@ -364,10 +362,10 @@ fn real_drag_persists_once_for_char_and_balloon() {
     rig.close();
 }
 
-/// T7-5（`areka-P0-drag-click-without-move` 要件 2.3・5.4）: 速いドラッグ（開始と終了を積んでから配る 1 回）→ キャラ窓が
+/// 速いドラッグ（開始と終了を積んでから配る 1 回）→ キャラ窓が
 /// 行き先へ置かれ、その位置が 1 組保存される。始めの位置は挿入の場で窓の位置になるので、
-/// 同じ配りの終了もそれを読む。修正前は赤（開始が終了に上書きされて
-/// `DraggingState` が入らず、窓は押す前の位置のまま・保存値も押す前の位置）。
+/// 同じ配りの終了もそれを読む。開始が終了に上書きされて
+/// `DraggingState` が入らないと、窓は押す前の位置のまま・保存値も押す前の位置になり落ちる。
 #[test]
 fn fast_drag_places_window_at_destination_and_persists_once() {
     let mut rig = Rig::new();
@@ -392,8 +390,8 @@ fn fast_drag_places_window_at_destination_and_persists_once() {
     rig.close();
 }
 
-/// T7-6（`areka-P0-drag-click-without-move` 要件 2.5・5.3）: 閾値を越えた後の取り消し（開始 → 配る → 取り消しの印つきの
-/// 終了 → 配る）→ 今どおりその時点の位置（取り消しは開始の位置で離す）を 1 組保存する。修正の前後とも緑。
+/// 閾値を越えた後の取り消し（開始 → 配る → 取り消しの印つきの
+/// 終了 → 配る）→ その時点の位置（取り消しは開始の位置で離す）を 1 組保存する。
 #[test]
 fn cancel_after_threshold_persists_as_today() {
     let mut rig = Rig::new();
@@ -415,7 +413,7 @@ fn cancel_after_threshold_persists_as_today() {
     rig.close();
 }
 
-/// 始めの位置が分からないドラッグを離す（audit-placement-follow-residue 要件 2.4・2.8）:
+/// 始めの位置が分からないドラッグを離す:
 /// 吸着した窓も `Free` の窓も、窓は今の位置のまま・記憶に入るのも今の位置。
 /// (0,0)＋差（`destination` から窓の位置を引いた所）を書く形に戻すと落ちる。
 #[test]
@@ -443,7 +441,7 @@ fn unknown_origin_drag_end_persists_current_position() {
     }
 }
 
-/// 表のテストで外す部品（`audit-placement-follow` 指摘 7）。
+/// 表のテストで外す部品。
 #[derive(Debug, Clone, Copy)]
 enum Missing {
     /// バルーン窓の `BalloonWindowMarker`。
@@ -454,9 +452,9 @@ enum Missing {
     CharAnchored,
 }
 
-/// `audit-placement-follow` 指摘 7（要件 3.1・3.3・5.6・5.7・8.4）: 部品を 1 つずつ外してドラッグを終える。
+/// 部品を 1 つずつ外してドラッグを終える。
 /// 印の無いバルーン・印の無いキャラ窓は「位置を保存しなかった」の `warn!` が 1 行、
-/// `Anchored` の無いキャラ窓ではバルーンの相対位置が保存される（直す前は保存されず赤）。
+/// `Anchored` の無いキャラ窓ではバルーンの相対位置が保存される。
 #[test]
 fn drag_end_without_a_part_warns_or_still_saves() {
     const SKIPPED: &str = "位置を保存しなかった";

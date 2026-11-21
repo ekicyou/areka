@@ -1,20 +1,18 @@
-//! [`ZOrderGroupLedger`] の状態遷移の決定論檻——グループの追加・グループをまたぐ
-//! 再指定の拒否・解除と descript 基底への復帰（要件 1.4／1.5／3.1／3.2／3.3／3.7／
-//! 4.1／4.2／4.3／5.3／5.5・design「Testing Strategy / Unit」3・design「Data Models /
-//! Domain Model」の不変条件⑴⑷）。
+//! [`ZOrderGroupLedger`] の状態遷移の決定論テスト——グループの追加・グループをまたぐ
+//! 再指定の拒否・解除と descript 基底への復帰。
 //!
-//! トークン解釈そのものの檻は兄弟ファイル `zorder_group_ledger_tests.rs`（`t_zgp*`）
+//! トークン解釈そのもののテストは兄弟ファイル `zorder_group_ledger_tests.rs`（`t_zgp*`）
 //! にある。本ファイルは台帳の状態遷移だけを見るので、接頭辞を `t_zgl*` で分ける。
 //!
-//! 実機・実ディスプレイ・World を一切必要としない（要件 10.1）。台帳は各テストが
-//! 自前で作る値であり、テストどうしが状態を共有しない（要件 10.3）。
+//! 実機・実ディスプレイ・World を一切必要としない。台帳は各テストが
+//! 自前で作る値であり、テストどうしが状態を共有しない。
 //!
-//! # 拒否の檻が示すこと
+//! # 拒否のテストが示すこと
 //!
-//! 拒否分岐の檻はすべて [`assert_ledger_unchanged`] を通す。この道具は台帳**全体**
+//! 拒否分岐のテストはすべて [`assert_ledger_unchanged`] を通す。この道具は台帳**全体**
 //! （グループ列・各グループの ID・要素列・出所・次に配る ID・版）を丸ごと比較する
 //! ので、「拒否が返ったケースで台帳の内容が呼び出し前と完全に
-//! 一致する」を欄ごとの抜き取りではなく構造で押さえる（要件 3.2／8.1）。
+//! 一致する」を欄ごとの抜き取りではなく構造で押さえる。
 //!
 //! # 「動かない」主張は両側から挟む
 //!
@@ -27,14 +25,14 @@ use crate::test_support::zorder_pair_deferred::code_only;
 use crate::zorder_test_support::{accept, b, expect_added, s};
 
 // ---------------------------------------------------------------------------
-// 檻の道具
+// 道具
 // ---------------------------------------------------------------------------
 
 /// タグ由来のグループとして追加を試みる。
 ///
-/// 台帳の入口へ渡すのは**必ず解釈を通った要素列**である（呼び出し規約）。檻も同じ
-/// 経路を通すことで、要件 3.3「明示モードの `sN`／`bN` と数値モードの `N` を同一
-/// スコープを指すものとして扱う」が入口から出口まで通しで成立することを見る。
+/// 台帳の入口へ渡すのは**必ず解釈を通った要素列**である（呼び出し規約）。テストも同じ
+/// 経路を通すことで、明示モードの `sN`／`bN` と数値モードの `N` を同一スコープを
+/// 指すものとして扱うことが入口から出口まで通しで成立することを見る。
 fn add_tag(ledger: &mut ZOrderGroupLedger, tokens: &[&str]) -> Result<u32, ZOrderReject> {
     ledger.try_add_tag_group(accept(tokens))
 }
@@ -65,7 +63,7 @@ fn set_base(ledger: &mut ZOrderGroupLedger, tokens: &[&str]) {
 ///
 /// 欄を抜き取らず値そのものを比べる。グループ列・ID・要素列・出所に加えて、外から
 /// は見えない「次に配る ID」と版も含まれるので、「拒否したが ID だけ 1 つ消費した」
-/// 「拒否したが版だけ進んだ」という形の部分適用も赤になる（要件 8.1）。
+/// 「拒否したが版だけ進んだ」という形の部分適用も赤になる。
 fn assert_ledger_unchanged(before: &ZOrderGroupLedger, after: &ZOrderGroupLedger, ctx: &str) {
     assert_eq!(
         before, after,
@@ -86,7 +84,7 @@ fn members_of(ledger: &ZOrderGroupLedger) -> Vec<Vec<GroupElement>> {
 // 初期状態
 // ---------------------------------------------------------------------------
 
-/// 何も指定されていない台帳は空である（要件 6.1 の既定状態＝グループ 0 本の側）。
+/// 何も指定されていない台帳は空である（既定状態＝グループ 0 本）。
 #[test]
 fn t_zgl1_fresh_ledger_is_empty() {
     let ledger = ZOrderGroupLedger::default();
@@ -99,11 +97,11 @@ fn t_zgl1_fresh_ledger_is_empty() {
 }
 
 // ---------------------------------------------------------------------------
-// 追加（要件 3.1）
+// 追加
 // ---------------------------------------------------------------------------
 
 /// 既存のどのグループとも重複しないスコープだけを含むタグは、既存グループを保った
-/// まま新しいグループとして加わる（要件 3.1）。
+/// まま新しいグループとして加わる。
 #[test]
 fn t_zgl2_non_overlapping_tags_accumulate_as_separate_groups() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -129,7 +127,7 @@ fn t_zgl2_non_overlapping_tags_accumulate_as_separate_groups() {
 
 /// 台帳は解釈が返した要素列をそのまま持つ。明示の記法で名前の挙がったスコープは
 /// 2 枚とも並びに居る（補い済み）という不変条件⑶は、解釈の側で既に成立している
-/// ものを台帳が壊さない、という形で保たれる（`areka-P0-zorder-scope-inversion`）。
+/// ものを台帳が壊さない、という形で保たれる。
 #[test]
 fn t_zgl3_the_ledger_stores_the_normalized_element_list_verbatim() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -151,11 +149,11 @@ fn t_zgl3_the_ledger_stores_the_normalized_element_list_verbatim() {
 }
 
 // ---------------------------------------------------------------------------
-// グループをまたぐ再指定の拒否（要件 3.2／3.3）
+// グループをまたぐ再指定の拒否
 // ---------------------------------------------------------------------------
 
 /// 既にいずれかのグループに属しているスコープを含むタグは、タグ全体を採用せず、
-/// 既存グループを一切変更しない（要件 3.2）。
+/// 既存グループを一切変更しない。
 #[test]
 fn t_zgl4_redesignating_a_scope_rejects_the_whole_tag() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -168,7 +166,7 @@ fn t_zgl4_redesignating_a_scope_rejects_the_whole_tag() {
 }
 
 /// 再指定の判定は**スコープ**で行う。明示モードの `sN`／`bN` と数値モードの `N` は
-/// 同じスコープを指すものとして突き合わせる（要件 3.3）。
+/// 同じスコープを指すものとして突き合わせる。
 ///
 /// 解釈（`parse_zorder_tokens`）から台帳まで通しで見る。モードの区別は解釈の時点で
 /// 要素へ畳まれているので、両方向とも同じ結論に落ちなければならない。
@@ -198,7 +196,7 @@ fn t_zgl5_numeric_and_explicit_modes_denote_the_same_scope() {
     );
 
     // 窓の片方だけを書いたタグでも、判定はスコープ単位である（畳み込みで相棒窓も
-    // 台帳へ載るので、スコープ 1 は `b1` と `s1` の両方で塞がっている・要件 2.6）。
+    // 台帳へ載るので、スコープ 1 は `b1` と `s1` の両方で塞がっている）。
     let mut half = ZOrderGroupLedger::default();
     expect_added(&mut half, &["b1", "s0"]);
     assert_eq!(
@@ -208,7 +206,7 @@ fn t_zgl5_numeric_and_explicit_modes_denote_the_same_scope() {
     );
 }
 
-/// 拒否は衝突した**全ての**スコープを、要素列に現れた順で 1 度ずつ伴う（要件 3.2）。
+/// 拒否は衝突した**全ての**スコープを、要素列に現れた順で 1 度ずつ伴う。
 #[test]
 fn t_zgl6_rejection_names_every_colliding_scope_once_in_order() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -226,7 +224,7 @@ fn t_zgl6_rejection_names_every_colliding_scope_once_in_order() {
     );
 }
 
-/// 一部だけが衝突するタグも全体を採用しない（要件 3.2 の「タグ全体」）。
+/// 一部だけが衝突するタグも全体を採用しない。
 /// 衝突していなかった側のスコープは台帳に載らず、**空いたまま**である。
 #[test]
 fn t_zgl7_a_partially_overlapping_tag_is_rejected_in_full() {
@@ -245,10 +243,10 @@ fn t_zgl7_a_partially_overlapping_tag_is_rejected_in_full() {
 }
 
 // ---------------------------------------------------------------------------
-// descript 基底（要件 5.3／5.5）
+// descript 基底
 // ---------------------------------------------------------------------------
 
-/// descript 由来の基底は高々 1 つである（要件 5.3・不変条件⑷）。据え直すと
+/// descript 由来の基底は高々 1 つである（不変条件⑷）。据え直すと
 /// 前の基底は残らない。
 #[test]
 fn t_zgl8_at_most_one_descript_base_is_kept() {
@@ -272,7 +270,7 @@ fn t_zgl8_at_most_one_descript_base_is_kept() {
     );
 }
 
-/// descript 由来のグループも、タグの再指定の拒否判定に参加する（要件 5.5）。
+/// descript 由来のグループも、タグの再指定の拒否判定に参加する。
 #[test]
 fn t_zgl9_the_descript_base_participates_in_the_redesignation_check() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -291,11 +289,11 @@ fn t_zgl9_the_descript_base_participates_in_the_redesignation_check() {
 
 /// 基底を据えることは「基底そのものへ戻す」ことである（正典沈黙箇所の裁量）。
 ///
-/// 要件 5.1 は基底の適用を**起動時・タグ実行より前**と定めており、タグ由来の
-/// グループと衝突する状況は正典の経路では起きない。design の署名は拒否を返す口を
+/// 基底の適用は**起動時・タグ実行より前**なので、タグ由来の
+/// グループと衝突する状況は正典の経路では起きない。署名は拒否を返す口を
 /// 持たない（`-> ()`）ので、衝突しても黙って落とす／不変条件⑴を破る／のどちらも
 /// 採れない。ここでは終状態を [`ZOrderGroupLedger::reset_to_descript`] と一致させる
-/// ——「基底へ戻った状態」は要件 4.1 が既に定義している唯一の形だからである。
+/// ——「基底へ戻った状態」は解除が既に定義している唯一の形だからである。
 #[test]
 fn t_zgl10_setting_the_base_re_establishes_the_ledger_at_that_base() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -317,15 +315,15 @@ fn t_zgl10_setting_the_base_re_establishes_the_ledger_at_that_base() {
         "基底の据え直しの終状態は reset_to_descript の終状態と同じ"
     );
 
-    // 落ちたスコープは空いている（3.1 の受理側へ戻っている）。
+    // 落ちたスコープは空いている。
     expect_added(&mut ledger, &["3", "2"]);
 }
 
 /// 空の要素列は「基底なし」として扱う。
 ///
-/// `parse_zorder_tokens` が受理する要素列は必ず 2 個以上（要件 1.6）なので、
+/// `parse_zorder_tokens` が受理する要素列は必ず 2 個以上なので、
 /// 空列は正典の経路では届かない。届いた場合に 0 要素のグループを台帳へ載せると、
-/// 要件 4.2 の「基底が無ければ既定状態へ戻る」が「0 要素の基底へ戻る」に化けて
+/// 解除の「基底が無ければ既定状態へ戻る」が「0 要素の基底へ戻る」に化けて
 /// 意味が変わる——載せない側へ倒す。
 #[test]
 fn t_zgl11_an_empty_base_means_no_base_at_all() {
@@ -336,17 +334,17 @@ fn t_zgl11_an_empty_base_means_no_base_at_all() {
 
     assert!(ledger.groups().is_empty(), "0 要素のグループは載せない");
 
-    // 基底が無い状態なので、解除は既定状態（空）へ戻る（要件 4.2）。
+    // 基底が無い状態なので、解除は既定状態（空）へ戻る。
     expect_added(&mut ledger, &["1", "0"]);
     ledger.reset_to_descript();
     assert!(ledger.groups().is_empty());
 }
 
 // ---------------------------------------------------------------------------
-// 解除（要件 4.1／4.2／4.3）
+// 解除
 // ---------------------------------------------------------------------------
 
-/// 解除はタグ由来のグループを全て落とし、descript 基底へ戻す（要件 4.1）。
+/// 解除はタグ由来のグループを全て落とし、descript 基底へ戻す。
 /// 基底は ID ごと生き残る＝落とすのはタグ由来だけである。
 #[test]
 fn t_zgl12_reset_drops_tag_groups_and_returns_to_the_descript_base() {
@@ -365,7 +363,7 @@ fn t_zgl12_reset_drops_tag_groups_and_returns_to_the_descript_base() {
     assert_eq!(ledger.groups()[0].source, GroupSource::Descript);
 }
 
-/// descript の指定が無ければ、解除は既定状態（グループ 0 本）へ戻す（要件 4.2）。
+/// descript の指定が無ければ、解除は既定状態（グループ 0 本）へ戻す。
 #[test]
 fn t_zgl13_reset_without_a_base_returns_to_the_default_state() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -378,8 +376,8 @@ fn t_zgl13_reset_without_a_base_returns_to_the_default_state() {
 }
 
 /// 解除の後は、解除前のグループに属していたスコープを再指定の拒否対象とせず、
-/// 新しい組み合わせとして受け付ける（要件 4.3）。基底が押さえたスコープは
-/// 解除で解放されない（要件 5.5 は解除後も効き続ける）——両側から挟む。
+/// 新しい組み合わせとして受け付ける。基底が押さえたスコープは
+/// 解除で解放されない——両側から挟む。
 #[test]
 fn t_zgl14_reset_frees_tag_scopes_but_not_base_scopes() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -452,8 +450,7 @@ fn t_zgl15_version_moves_only_when_the_contents_move() {
     assert!(ledger.version() > after_reset, "基底が載れば版は進む");
 }
 
-/// グループ ID はセッション内で単調増加し、解除で空いても再利用しない
-/// （design「Data Models / Domain Model」）。
+/// グループ ID はセッション内で単調増加し、解除で空いても再利用しない。
 #[test]
 fn t_zgl16_group_ids_increase_and_are_never_reused() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -475,7 +472,7 @@ fn t_zgl16_group_ids_increase_and_are_never_reused() {
 // 上限なし・窓の存在を知らない・保存しない
 // ---------------------------------------------------------------------------
 
-/// グループ数にも要素数にも上限検査を設けない（要件 3.7）。
+/// グループ数にも要素数にも上限検査を設けない。
 #[test]
 fn t_zgl17_no_upper_bound_on_group_or_member_count() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -496,11 +493,11 @@ fn t_zgl17_no_upper_bound_on_group_or_member_count() {
     assert_eq!(wide.groups()[0].members.len(), 256);
 }
 
-/// 台帳は窓が存在するかどうかを知らない（要件 1.4）。窓がまだ現れていない
+/// 台帳は窓が存在するかどうかを知らない。窓がまだ現れていない
 /// スコープもグループに残り続け、取り除かれるのは解除のときだけである。
 ///
 /// 型の形でも押さえる: 本体には `Entity` も `HWND` も現れない——実機・実ディスプレイ
-/// 無しで全分岐を検査できる根拠がこれである（要件 10.1）。
+/// 無しで全分岐を検査できる根拠がこれである。
 #[test]
 fn t_zgl18_the_ledger_never_learns_whether_a_window_exists() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -528,7 +525,7 @@ fn t_zgl18_the_ledger_never_learns_whether_a_window_exists() {
     );
 }
 
-/// 台帳は保存の仕組みに接続しない（要件 1.5）。ゴーストの終了で消えることは
+/// 台帳は保存の仕組みに接続しない。ゴーストの終了で消えることは
 /// 「何もしない」ことで成立するので、**接続していないこと**を本文の走査で守る。
 #[test]
 fn t_zgl19_the_ledger_is_not_connected_to_persistence() {
@@ -551,11 +548,11 @@ fn t_zgl19_the_ledger_is_not_connected_to_persistence() {
 }
 
 // ---------------------------------------------------------------------------
-// 完了状態: 拒否の全経路で台帳が完全に一致する
+// 拒否の全経路で台帳が完全に一致する
 // ---------------------------------------------------------------------------
 
 /// 台帳がどんな状態にあっても、拒否された呼び出しの
-/// 前後で台帳**全体**が完全に一致する（要件 3.2／8.1 の部分適用禁止）。
+/// 前後で台帳**全体**が完全に一致する（部分適用禁止）。
 ///
 /// 前状態を 3 通り（タグ 1 本／基底のみ／基底＋タグ 2 本）用意し、それぞれで
 /// 再指定の拒否を起こす（空の台帳では再指定の拒否が起きないので前状態に入れない）。`assert_ledger_unchanged` はグループ列だけでなく

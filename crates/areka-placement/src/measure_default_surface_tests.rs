@@ -1,5 +1,4 @@
-//! 測りが各スコープの descript の既定の面で合成することの檻（descript-window-keys 要件 2.1・
-//! 2.3・2.4・2.6・7.2）。
+//! 測りが各スコープの descript の既定の面で合成することの檻。
 //!
 //! 3 通り: 検体のシェルに在る別の面を既定にするとその面の大きさ／無い番号なら組み込みの面の
 //! 大きさと記録 1 件／組み込みの面も無ければ「既定の面が無い」を記録せず合成の失敗の扱い（相方側は
@@ -50,7 +49,7 @@ fn measure_chars(
     result.expect("測りを行った")
 }
 
-/// 検体のシェルに在る別の面を descript の既定の面にすると、その面の大きさで測る（要件 2.1）。
+/// 検体のシェルに在る別の面を descript の既定の面にすると、その面の大きさで測る。
 #[test]
 fn descript_default_surface_in_shell_is_measured() {
     let defaults = ghost_kv(&[
@@ -67,8 +66,7 @@ fn descript_default_surface_in_shell_is_measured() {
     );
 }
 
-/// シェルに無い番号なら組み込みの面の大きさで測り、スコープ・無かった面・代わりの面を 1 件記録する
-/// （要件 2.3・2.6）。
+/// シェルに無い番号なら組み込みの面の大きさで測り、スコープ・無かった面・代わりの面を 1 件記録する。
 #[test]
 fn missing_descript_default_surface_falls_back_to_builtin_with_one_log() {
     let defaults = ghost_kv(&[("kero.seriko.defaultsurface", "9999")]);
@@ -82,10 +80,10 @@ fn missing_descript_default_surface_falls_back_to_builtin_with_one_log() {
 }
 
 /// descript の面も組み込みの面もシェルに無いときは「既定の面が無い」を記録しない。相方側は合成の
-/// 失敗の扱い（本体側の大きさで代える・記録 1 件）へ委ねる（要件 2.4）。
+/// 失敗の扱い（本体側の大きさで代える・記録 1 件）へ委ねる。
 #[test]
 fn no_candidate_in_shell_leaves_it_to_the_compose_failure() {
-    // 面 0 だけのシェル（相方側の候補 12・10 はどちらも無い）。
+    // 相方側の候補 12・10 はどちらも無い。
     let shell = surface0_only_shell(b"surface0\n{\nelement0,overlay,surface0.png,0,0\n}\n");
 
     let defaults = ghost_kv(&[("kero.seriko.defaultsurface", "12")]);

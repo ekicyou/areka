@@ -1,29 +1,24 @@
-//! `parse_zorder_tokens` の決定論檻——受理 3 形・拒否 4 分岐・相棒窓の畳み込み
-//! （要件 1.6／2.1〜2.3／2.6／3.4／3.5／6.3／8.1・design
-//! 「Testing Strategy / Unit」1 と 5・design「ZOrderGroupLedger（既存・畳み込みを追加）」）。
+//! `parse_zorder_tokens` の決定論テスト——受理 3 形・拒否 4 分岐・相棒窓の畳み込み。
 //!
-//! 実機・実ディスプレイ・World を一切必要としない純関数の檻である（要件 10.1）。
-//! 可変の共有状態を持たないため、単独実行と一括実行で結果が変わらない（要件 10.3）。
+//! 実機・実ディスプレイ・World を一切必要としない純関数のテストである。
+//! 可変の共有状態を持たないため、単独実行と一括実行で結果が変わらない。
 //!
-//! # 檻の並び
+//! # テストの並び
 //!
 //! - 受理 3 形と拒否 4 分岐＋拒否どうしの優先順・入力の前処理（`t_zgp1`〜`t_zgp14`）
 //! - 相棒窓の補いと、補いがスコープどうしの並びに触れないこと（`t_zgp18`〜`t_zgp20`・
-//!   `t_zgp22`〜`t_zgp25`・`t_zgp27`・`t_zgp28`）——片方の窓だけを指名されたスコープへ相棒を補う
-//!   （`areka-P0-zorder-scope-inversion` 要件 3）。補う向き・記録の欄・要素数の判定との順序・
+//!   `t_zgp22`〜`t_zgp25`・`t_zgp27`・`t_zgp28`）——片方の窓だけを指名されたスコープへ相棒を補う。補う向き・記録の欄・要素数の判定との順序・
 //!   数値モードの不関与・既存の拒否分岐の不動を押さえる。
 //!
-//! 同じスコープの 2 窓を隣り合いへ寄せる調停（`areka-P0-scope-zorder-pinning` の要件 2.4）は
-//! `areka-P0-zorder-scope-inversion` が覆した。書かれた順のまま採る解釈と並びの形の記録は
+//! 書かれた順のまま採る解釈と並びの形の記録は
 //! `zorder_group_ledger_written_order_tests.rs` が押さえる。
 //!
-//! # 拒否の檻が示すこと
+//! # 拒否のテストが示すこと
 //!
-//! 拒否分岐の檻はすべて [`expect_reject`] を通す。この道具は `Ok` を受け取ったら
-//! 要素列を添えて落ちるので、「拒否時に要素列を一切返さない」（要件 8.1 の部分適用
-//! 禁止）が檻の構造そのもので示される。
+//! 拒否分岐のテストはすべて [`expect_reject`] を通す。この道具は `Ok` を受け取ったら
+//! 要素列を添えて落ちるので、「拒否時に要素列を一切返さない」（部分適用禁止）がテストの構造そのもので示される。
 //!
-//! # 補いの檻が示すこと
+//! # 補いのテストが示すこと
 //!
 //! 補いが**動かしてはならないもの**——スコープどうしの相対順（書かれた位置）
 //! ——を `t_zgp20`（補うブロックが離して書かれたスコープの 2 枚の間）・`t_zgp22`（補う
@@ -38,7 +33,7 @@ use crate::zorder_test_support::{b, expect_accept, expect_reject, implied, s, wr
 // ---------------------------------------------------------------------------
 
 /// 受理形①: 数値モード。要素 1 個が「バルーン窓・キャラ窓の 2 枚」へ展開され、
-/// バルーンが自スコープのキャラ窓より手前に来る（要件 1.1／1.2）。
+/// バルーンが自スコープのキャラ窓より手前に来る。
 #[test]
 fn t_zgp1_numeric_mode_expands_each_scope_into_balloon_then_char() {
     let (elements, normalizations) = expect_accept(&["1", "0"]);
@@ -55,7 +50,7 @@ fn t_zgp1_numeric_mode_expands_each_scope_into_balloon_then_char() {
 }
 
 /// 受理形②: 明示モード（完全形 `balloonN`／`surfaceN`）。要素は窓 1 枚単位で、
-/// 書かれた順にそのまま並ぶ（要件 2.1）。
+/// 書かれた順にそのまま並ぶ。
 #[test]
 fn t_zgp2_explicit_long_form_keeps_one_window_per_element() {
     let (elements, _) = expect_accept(&["balloon1", "surface1", "balloon0", "surface0"]);
@@ -64,7 +59,7 @@ fn t_zgp2_explicit_long_form_keeps_one_window_per_element() {
 }
 
 /// 受理形③: 明示モードの省略形（`bN`／`sN`）。完全形と同じ意味に解釈される
-/// （要件 2.2）。あわせて数値モードが明示モードの特例であること——3 形が同じ
+/// 。あわせて数値モードが明示モードの特例であること——3 形が同じ
 /// 要素列へ落ちること——を 1 か所で固定する。
 #[test]
 fn t_zgp3_explicit_short_form_equals_long_form_and_numeric_expansion() {
@@ -82,7 +77,7 @@ fn t_zgp3_explicit_short_form_equals_long_form_and_numeric_expansion() {
     );
 }
 
-/// 1 つのタグの中で `bN` と `sN` が並ぶことは重複ではない（要件 3.5）。
+/// 1 つのタグの中で `bN` と `sN` が並ぶことは重複ではない。
 /// 重複判定が「スコープ」ではなく「窓」を数えていることを示す。
 #[test]
 fn t_zgp4_balloon_and_char_of_same_scope_are_distinct_windows() {
@@ -91,24 +86,24 @@ fn t_zgp4_balloon_and_char_of_same_scope_are_distinct_windows() {
     assert_eq!(elements, vec![b(1), s(1)]);
 }
 
-/// 受理は要素 2 個ちょうどで成立する（要件 1.6 の境界の受理側）。
+/// 受理は要素 2 個ちょうどで成立する（境界の受理側）。
 #[test]
 fn t_zgp5_exactly_two_elements_is_accepted() {
     let (numeric, _) = expect_accept(&["0", "1"]);
     assert_eq!(numeric, vec![b(0), s(0), b(1), s(1)]);
 
     // 明示モードの要素 2 個。どちらも片方だけの指名なので、正規化の段で相棒窓が
-    // 補われて窓 4 枚になる（要件 2.6）——**受理の可否は補う前の要素数で決まる**。
+    // 補われて窓 4 枚になる——**受理の可否は補う前の要素数で決まる**。
     let (explicit, _) = expect_accept(&["b1", "s0"]);
     assert_eq!(explicit, vec![b(1), s(1), b(0), s(0)]);
 }
 
 // ---------------------------------------------------------------------------
-// 拒否①: モード混在（要件 2.3）
+// 拒否①: モード混在
 // ---------------------------------------------------------------------------
 
 /// 数値のみの要素と `b`／`s` を伴う要素が 1 つのタグに混在したら、そのタグによる
-/// 変更を一切行わない（要件 2.3）。並び順を入れ替えても同じ判定になる。
+/// 変更を一切行わない。並び順を入れ替えても同じ判定になる。
 #[test]
 fn t_zgp6_reject_mode_mixed() {
     for tokens in [
@@ -125,10 +120,10 @@ fn t_zgp6_reject_mode_mixed() {
 }
 
 // ---------------------------------------------------------------------------
-// 拒否②: タグ内重複（要件 3.4）
+// 拒否②: タグ内重複
 // ---------------------------------------------------------------------------
 
-/// 同じ窓を指す要素が 2 回以上現れたらタグ全体を採用しない（要件 3.4）。
+/// 同じ窓を指す要素が 2 回以上現れたらタグ全体を採用しない。
 /// 拒否理由は最初に重複した**窓**を伴う。
 #[test]
 fn t_zgp7_reject_duplicate_window_element() {
@@ -150,13 +145,13 @@ fn t_zgp7_reject_duplicate_window_element() {
 }
 
 // ---------------------------------------------------------------------------
-// 拒否③: 要素 2 個未満（要件 1.6）
+// 拒否③: 要素 2 個未満
 // ---------------------------------------------------------------------------
 
-/// 要素が 2 個に満たないグループはそのタグによる変更を行わない（要件 1.6）。
+/// 要素が 2 個に満たないグループはそのタグによる変更を行わない。
 ///
 /// 数えるのは**展開前の要素**である。`["0"]` は展開すれば窓 2 枚になるが、
-/// スコープ ID が 1 個しか無いので受理しない（要件 1.1 の「2 個以上のスコープ ID」）。
+/// スコープ ID が 1 個しか無いので受理しない（「2 個以上のスコープ ID」が必要）。
 #[test]
 fn t_zgp8_reject_too_few_elements_counted_before_expansion() {
     assert_eq!(
@@ -177,11 +172,11 @@ fn t_zgp8_reject_too_few_elements_counted_before_expansion() {
 }
 
 // ---------------------------------------------------------------------------
-// 拒否④: 解釈できないトークン（要件 8.1）
+// 拒否④: 解釈できないトークン
 // ---------------------------------------------------------------------------
 
 /// 解釈できないトークンが 1 つでもあれば、そのタグによる変更を一切行わない
-/// （要件 8.1）。拒否理由は受け取ったトークンをそのまま（大文字小文字も）伴う。
+/// 。拒否理由は受け取ったトークンをそのまま（大文字小文字も）伴う。
 #[test]
 fn t_zgp9_reject_unparsable_token_carries_the_received_token() {
     for (tokens, expected) in [
@@ -211,7 +206,7 @@ fn t_zgp9_reject_unparsable_token_carries_the_received_token() {
 
 /// 解釈できないトークンは他のどの拒否よりも先に立つ。トークンを 1 つずつ読む段で
 /// 落ちる以上、モード混在も要素数も重複も判定するまでに至らないからである
-/// （どの分岐で落ちても「変更を一切行わない」ことは同じ・要件 8.1）。
+/// （どの分岐で落ちても「変更を一切行わない」ことは同じ）。
 #[test]
 fn t_zgp11_unparsable_token_takes_precedence_over_other_rejects() {
     assert_eq!(
@@ -259,8 +254,7 @@ fn t_zgp13_spaces_around_tokens_are_ignored() {
     );
 }
 
-/// 語彙は大文字小文字を問わない（`windowposition` の語彙分類と同じ決まり・`audit-placement-core` の
-/// 裁定 2026-11-15）。大文字混じりも小文字と同じ窓になる。
+/// 語彙は大文字小文字を問わない（`windowposition` の語彙分類と同じ決まり）。大文字混じりも小文字と同じ窓になる。
 #[test]
 fn t_zgp10_vocabulary_ignores_case() {
     for (token, lower) in [
@@ -277,7 +271,7 @@ fn t_zgp10_vocabulary_ignores_case() {
     }
 }
 
-/// スコープ ID の個数に上限を設けない（要件 3.7）。
+/// スコープ ID の個数に上限を設けない。
 #[test]
 fn t_zgp14_no_upper_bound_on_element_count() {
     let tokens: Vec<String> = (0..64u32).map(|n| n.to_string()).collect();
@@ -291,12 +285,12 @@ fn t_zgp14_no_upper_bound_on_element_count() {
 }
 
 // ---------------------------------------------------------------------------
-// 相棒窓の補い（`areka-P0-zorder-scope-inversion` 要件 3）
+// 相棒窓の補い
 // ---------------------------------------------------------------------------
 
 /// 数値モードでは正規化が何もしない。展開（⑷）が必ず `[Balloon, Char]` の隣接
 /// ブロックを作るうえ、その並びは作者が書いた指定順ではないので、補うものも
-/// 記録するものも無い（要件 2.6 は明示モードを名指しする）。
+/// 記録するものも無い。
 #[test]
 fn t_zgp18_numeric_mode_normalization_is_a_no_op() {
     for tokens in [["1", "0"].as_slice(), ["2", "0", "1"].as_slice()] {
@@ -317,8 +311,7 @@ fn t_zgp18_numeric_mode_normalization_is_a_no_op() {
 }
 
 /// 2 窓そろったスコープと 1 枚だけのスコープが同居する場合。並びの形の記録と
-/// 補いの記録が同じ列に並び、どちらが起きたかを欄で弁別できる（要件 2.6・
-/// `areka-P0-zorder-scope-inversion` 要件 3.1・3.2）。片方だけの補いの 2 つの位置は
+/// 補いの記録が同じ列に並び、どちらが起きたかを欄で弁別できる。片方だけの補いの 2 つの位置は
 /// 兄弟の `t_zwo06` が押さえる。
 #[test]
 fn t_zgp19_single_window_scope_is_completed_with_its_implied_partner() {
@@ -338,7 +331,7 @@ fn t_zgp19_single_window_scope_is_completed_with_its_implied_partner() {
 }
 
 /// 補いが足すのは相棒 1 枚だけであり、書かれた窓どうしの相対順は書かれたまま保たれる
-/// （要件 2.5 の「属さない窓を動かさない」をグループの内側にも効かせる）。
+/// （グループに属さない窓を動かさないことを、グループの内側にも効かせる）。
 #[test]
 fn t_zgp20_other_scopes_keep_their_relative_order() {
     let (elements, normalizations) = expect_accept(&["b0", "b2", "s3", "s0"]);
@@ -363,8 +356,7 @@ fn t_zgp20_other_scopes_keep_their_relative_order() {
 ///
 /// [`t_zgp20_other_scopes_keep_their_relative_order`] は片方だけの指名を、離して書かれた
 /// スコープ 0 の 2 枚の**間**に置く。ここでは片方だけの指名を先頭に置き、補ったブロックを
-/// 後ろへ動かす実装を赤にする。差は「どちらの窓が手前か」そのものであり、Z 順の指定
-/// （`areka-P0-scope-zorder-pinning`）が存在する理由に直結する。
+/// 後ろへ動かす実装を赤にする。差は「どちらの窓が手前か」そのものであり、Z 順の指定が存在する理由に直結する。
 #[test]
 fn t_zgp22_single_window_scope_written_before_a_block_stays_before_it() {
     // s3 はペアを組むスコープ 0 のどの要素よりも前に書かれている。
@@ -399,10 +391,10 @@ fn t_zgp22_single_window_scope_written_before_a_block_stays_before_it() {
 }
 
 // ---------------------------------------------------------------------------
-// 相棒窓の畳み込み（要件 2.6）
+// 相棒窓の畳み込み
 // ---------------------------------------------------------------------------
 
-/// `bN` だけが書かれたら、相棒のキャラ窓 `sN` を**直後**へ補う（要件 2.6）。
+/// `bN` だけが書かれたら、相棒のキャラ窓 `sN` を**直後**へ補う。
 ///
 /// 補うのは相棒 1 枚だけであり、他スコープの窓は 1 つも増えも減りもしない。
 #[test]
@@ -424,9 +416,9 @@ fn t_zgp23_balloon_only_scope_gains_its_char_window_right_below() {
     );
 }
 
-/// `sN` だけが書かれたら、相棒のバルーン窓 `bN` を**直前**へ補う（要件 2.6）。
+/// `sN` だけが書かれたら、相棒のバルーン窓 `bN` を**直前**へ補う。
 ///
-/// 補いは「バルーンがキャラ窓の直上」という既存の不変条件（要件 6.3）に従うので、
+/// 補いは「バルーンがキャラ窓の直上」という既存の不変条件に従うので、
 /// 指名された窓の**前**に入る。ブロックが立つ位置は `sN` が書かれた位置である。
 #[test]
 fn t_zgp24_char_only_scope_gains_its_balloon_window_right_above() {
@@ -456,7 +448,7 @@ fn t_zgp24_char_only_scope_gains_its_balloon_window_right_above() {
 }
 
 /// 畳み込みは**要素数の判定より後**に置く。要素 1 個のタグが畳み込みで 2 個に
-/// 化けて受理されてはならない（要件 1.6 と要件 2.6 の順序関係）。
+/// 化けて受理されてはならない。
 #[test]
 fn t_zgp25_folding_never_rescues_a_one_element_tag() {
     for tokens in [

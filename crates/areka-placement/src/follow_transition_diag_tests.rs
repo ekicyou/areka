@@ -6,23 +6,18 @@
 //! [`ground_record_shows_the_48px_float_when_the_source_is_stale`] は、**作業領域源が
 //! 実行時の作業領域より古いとき、その差が実測値として行に出る**ことを固定する。拡大率を
 //! 下げるとタスクバーが低くなって実際の作業領域下端は**下がる**のに、源が古ければ接地点は
-//! 古い下端に留まる——実機で 6/6 再現した −48px の浮きである
-//! （`reobservation-2026-08-15.md` §6・確定台帳 L3）。
+//! 古い下端に留まる——実機で 6/6 再現した −48px の浮きである。
 //!
-//! # `areka-P0-dpi-transition-atomicity` タスク 5.1 が入っても本ファイルは赤にならない（当初の見込みの訂正）
+//! # 作業領域源の是正の前後で本ファイルは赤にならない
 //!
-//! `areka-P0-dpi-transition-atomicity` タスク 2.4 の時点では「是正が入れば本テストは赤へ倒れるので期待値を 0 へ書き換える」と
-//! 書いてあった。**実際にはそうならなかった**——作業領域源の是正は毎フレーム先頭の同期段
-//! （本体の `runtime::frame::work_area_sync`）が源を作り直すことであって、`resize_window_to` の
-//! 振る舞いは 1 bit も変わらない。本ファイルの檻は源が古い World を**手で組んで**単一の
-//! 書込口を直接呼ぶので、同期段を通らず古い源のままである。
+//! 作業領域源の是正は毎フレーム先頭の同期段（本体の `runtime::frame::work_area_sync`）が
+//! 源を作り直すことであって、`resize_window_to` の振る舞いは変わらない。本ファイルの檻は
+//! 源が古い World を**手で組んで**単一の書込口を直接呼ぶので、同期段を通らず古い源のままである。
 //!
-//! ゆえに本テストは是正後も緑のまま、**観測そのものの契約**（源が古ければ差が出る・
-//! 一致すれば 0・表が引けなければ番兵）を固定し続ける。`areka-P0-dpi-transition-atomicity` 要件 7.3 が求める「是正前に失敗し
-//! 是正後に通過する」対テストは、フレームを進めて同期段を通す
+//! ゆえに本テストは**観測そのものの契約**（源が古ければ差が出る・一致すれば 0・表が引けなければ番兵）を
+//! 固定し続ける。「是正前に失敗し是正後に通過する」対テストは、フレームを進めて同期段を通す
 //! `areka-runtime` の `frame_work_area_sync_tests.rs` の
-//! `lowering_the_scale_lands_the_ground_point_on_the_new_work_area_bottom_in_one_write`
-//! が持つ（是正前 −48px で赤・是正後 0 で緑を実行で記録済み）。
+//! `lowering_the_scale_lands_the_ground_point_on_the_new_work_area_bottom_in_one_write` が持つ。
 
 use std::sync::{Arc, Mutex};
 
@@ -40,9 +35,9 @@ use crate::resolver::{Anchor, SizePx};
 use crate::spawn::CharWindowMarker;
 use log_capture_kit::{capture, ensure_interest_probes};
 
-/// 実機の 200% 側のキャラ窓寸（`reobservation-2026-08-15.md` §3.1）。
+/// 実機の 200% 側のキャラ窓寸。
 const WIDE: SizePx = SizePx { w: 764, h: 1094 };
-/// 実機の 100% 側のキャラ窓寸（同上）。
+/// 実機の 100% 側のキャラ窓寸。
 const NARROW: SizePx = SizePx { w: 382, h: 547 };
 
 /// 起動時（200%）に採った作業領域下端。
@@ -82,7 +77,7 @@ fn ground_line_of(events: &[log_capture_kit::CapturedEvent]) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// 接地点レコード（`areka-P0-dpi-transition-atomicity` 要件 5.3）
+// 接地点レコード
 // ---------------------------------------------------------------------------
 
 /// **源が古いときの差が行に出る**（モジュールの説明のとおり是正後も緑）: 源が古いまま
@@ -146,7 +141,7 @@ fn ground_record_reports_zero_difference_when_the_snapshot_matches_the_live_work
     let _drained = drain_window_pos_commands();
 }
 
-/// 実行時のモニタ表が空なら、下端も差も番兵——架空の作業領域を発明しない（`areka-P0-dpi-transition-atomicity` 要件 5.5 と同方針）。
+/// 実行時のモニタ表が空なら、下端も差も番兵——架空の作業領域を発明しない。
 #[test]
 fn ground_record_uses_sentinels_when_the_running_monitor_table_is_empty() {
     let _residue = drain_window_pos_commands();
@@ -207,7 +202,7 @@ fn no_ground_record_is_emitted_for_non_bottom_anchors() {
 }
 
 // ---------------------------------------------------------------------------
-// 書込指令の要求語彙タグ（`areka-P0-dpi-transition-atomicity` 要件 2.1）
+// 書込指令の要求語彙タグ
 // ---------------------------------------------------------------------------
 
 /// 単一の窓書込口が積む指令に、経路語・scope・窓種別の 3 フィールドが載る。
@@ -270,7 +265,7 @@ fn an_unmarked_window_is_enqueued_with_sentinel_tag_fields() {
 /// `info` 水準・観測 target で出すので、既定 directive（`info`）でもサインオフ directive
 /// （`info,wintf::transition=debug`）でも**必ず**通る——「観測行が出ていないこと」を主張する
 /// テストが、実は捕捉そのものが死んでいて緑になっている、という空振りを塞ぐ唯一の手段である
-/// （tasks.md Implementation Notes・`areka-P0-dpi-transition-atomicity` タスク 1.2 が wintf 側で確立した形）。
+/// 。
 const CONTROL_LINE: &str = "[transition-probe] alive";
 
 /// 番兵の宛先（`diag_tests.rs` と同じ番兵。共有の `capture_under_filter` は `env-filter` の
@@ -340,11 +335,10 @@ fn resize_under_filter(directives: &str) -> String {
     rest.concat()
 }
 
-/// 既定水準（`RUST_LOG=info`）では接地点レコードが 1 行も出ない（`areka-P0-dpi-transition-atomicity` 要件 2.5）。
+/// 既定水準（`RUST_LOG=info`）では接地点レコードが 1 行も出ない。
 ///
 /// **対照を先に主張する**——空の出力に対して `!out.contains(..)` は恒真であり、捕捉が
-/// 死んでいるだけの緑と、本当に無音である緑を区別できない（`areka-P0-dpi-transition-atomicity` 要件 8.5 の「消灯の観測点を
-/// 0 回の根拠にしない」を、テスト自身に対して適用した形）。
+/// 死んでいるだけの緑と、本当に無音である緑を区別できない。
 #[test]
 fn the_ground_record_is_silent_under_the_default_directives() {
     let out = resize_under_filter("info");
@@ -376,7 +370,7 @@ fn the_ground_record_lights_up_under_the_signoff_directive() {
 // 本文走査（ログ濾過テストでは原理的に見えない退行）
 // ---------------------------------------------------------------------------
 
-/// `areka-P0-dpi-transition-atomicity` 要件 10.6／10.4: 接地点レコードは「下端吸着のとき」かつ「観測が有効なとき」に**限って**
+/// 接地点レコードは「下端吸着のとき」かつ「観測が有効なとき」に**限って**
 /// 組む。前置ガードを外すと、既定運転でも毎回モニタ表を舐めて `String` を確保する形になる
 /// ——`debug!` は濾過されるので**出力は変わらず**、濾過テストは緑のまま通ってしまう。
 #[test]

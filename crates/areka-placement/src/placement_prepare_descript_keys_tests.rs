@@ -1,5 +1,4 @@
-//! 配置の準備が descript の既定の面と動かせない指定を 1 度読み、準備の結果に載せることの檻
-//! （descript-window-keys 要件 2.1・2.2・2.5・4.1）。
+//! 配置の準備が descript の既定の面と動かせない指定を 1 度読み、準備の結果に載せることの檻。
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -44,7 +43,7 @@ fn prepare_carries_default_surfaces_used_by_measure_and_balloon_dontmove() {
     });
 }
 
-/// 何も書かれていなければ組み込みの既定の面と空の動かせない指定が載る（要件 2.4・4.1）。
+/// 何も書かれていなければ組み込みの既定の面と空の動かせない指定が載る。
 #[test]
 fn prepare_carries_builtin_values_when_descript_is_silent() {
     with_com_initialized(|| {

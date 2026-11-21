@@ -12,13 +12,13 @@ use crate::sample_test_support::{SCOPE0_H, SCOPE0_W};
 use crate::test_support::give_fake_handles;
 
 // -------------------------------------------------------------------------
-// T-I4: follow 幾何（design Testing Strategy 4・要件 4.2）
+// follow 幾何
 //
 // 実パイプライン統合: `build_placement_config`（KV 実経路）→
 // `resolve_placement`（非 96 倍数の合成 work_area・原点非 (0,0)）→
 // `spawn_ghost_windows` → 偽 WindowHandle 付与 → `move_window_to`。
 // 期待値は resolver 出力（`ScopePlacement.balloon_offset`）から導出し、
-// 手書き offset のコピー照合にしない（T-I1 との差分＝実パイプライン消費）。
+// 手書き offset のコピー照合にしない。
 //
 // 置き場の判断: spawn は resolver 出力と follow API の両方を消費する合成根で
 // あり、兄弟モジュールのテストは自ファイル内という repo 慣行に従いここに置く。
@@ -86,8 +86,8 @@ fn window_position(world: &World, e: Entity) -> Point {
         .expect("position")
 }
 
-/// T-I4: `spawn_ghost_windows` の `BalloonFollow.offset` が `resolve_placement`
-/// の `balloon_offset` と一致する（実パイプライン・左右両変種・4.2）。
+/// `spawn_ghost_windows` の `BalloonFollow.offset` が `resolve_placement`
+/// の `balloon_offset` と一致する（実パイプライン・左右両変種）。
 #[test]
 fn t_i4_follow_offset_matches_resolver_output_through_real_pipeline() {
     let (world, gw, placements) = real_pipeline_world();
@@ -125,10 +125,9 @@ fn t_i4_follow_offset_matches_resolver_output_through_real_pipeline() {
             "scope{}: BalloonFollow.offset は resolver 出力の転写",
             p.scope
         );
-        // **確立点の檻**（要件 3.5・5.2・design D14）: 配置解決の既定は現在値だけで
-        // なく**基準対**（値と、その値が属する表示 DPI）も `ScopePlacement` から
-        // そのまま確立する。ここが転写されていないと、以後の拡大率遷移が
-        // 「どの空間の値か分からない」基準から引き直して静かにずれる。
+        // **確立点の檻**: 配置解決の既定は現在値だけでなく**基準対**（値と、その値が属する
+        // 表示 DPI）も `ScopePlacement` からそのまま確立する。ここが転写されていないと、以後の
+        // 拡大率遷移が「どの空間の値か分からない」基準から引き直して静かにずれる。
         assert_eq!(
             follow.base(),
             p.balloon_offset_base,
@@ -148,7 +147,7 @@ fn t_i4_follow_offset_matches_resolver_output_through_real_pipeline() {
             p.scope
         );
 
-        // 恒等式 balloon_offset ≡ balloon_pos − char_pos（design Postconditions）が
+        // 恒等式 balloon_offset ≡ balloon_pos − char_pos が
         // spawn 転記後の WindowPos 上でも観測できる
         let char_pos = window_position(&world, char_e);
         let balloon_pos = window_position(&world, follow.balloon);
@@ -164,8 +163,8 @@ fn t_i4_follow_offset_matches_resolver_output_through_real_pipeline() {
     }
 }
 
-/// T-I4: spawn 済み entity への `move_window_to` で、バルーンが resolver 由来
-/// offset を保って追従する（複数回移動でも offset 静的・他スコープ不干渉・4.2）。
+/// spawn 済み entity への `move_window_to` で、バルーンが resolver 由来
+/// offset を保って追従する（複数回移動でも offset 静的・他スコープ不干渉）。
 #[test]
 fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
     let (mut world, gw, placements) = real_pipeline_world();
@@ -182,7 +181,7 @@ fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
     for p in &placements {
         let char_e = gw.char_window(p.scope).unwrap();
         let balloon_e = gw.balloon_window(p.scope).unwrap();
-        // 96 の倍数を避けた移動先を複数回（offset は配置時確定で静的・4.4）
+        // 96 の倍数を避けた移動先を複数回（offset は配置時確定で静的）
         let targets = [(1237 + p.scope as i32, 941), (533, 1189 + p.scope as i32)];
         for (x, y) in targets {
             assert!(move_window_to(&mut world, char_e, x, y));
@@ -219,7 +218,7 @@ fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
     }
 }
 
-/// T-I4 補: バルーン単独ドラッグの相対位置記憶（4.8・DD16）。
+/// バルーン単独ドラッグの相対位置記憶。
 ///
 /// 実パイプライン（KV → config → resolver → spawn）で組んだ World 上で、
 /// spawn が付けた**実際の** `OnDrag` ハンドラ（バルーン窓の
@@ -239,7 +238,7 @@ fn t_i4_char_move_follows_adjusted_offset_after_balloon_solo_drag() {
     let ev = Phase::Bubble(drag_event(balloon_e));
     assert!(!handler(&mut world, balloon_e, balloon_e, &ev));
 
-    // キャラ窓は不動（4.8: バルーンのみ移動）
+    // キャラ窓は不動（バルーンのみ移動）
     assert_eq!(
         window_position(&world, char_e),
         Point {

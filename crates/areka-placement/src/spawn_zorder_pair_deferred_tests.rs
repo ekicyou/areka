@@ -1,14 +1,13 @@
 //! 先送りした正典語彙が areka 側の本番コードに入り込んでいないこと、および窓の既定が
 //! 「常時最前面ではない・最小化もタスクバー露出も足していない」ままであることを
-//! 固定するテスト（要件 8.1／8.3／8.4／8.5、および重なり順のグループ機構の要件 10.4／11.4）。
+//! 固定するテスト。
 //!
 //! # 兄弟ファイルとの分担
 //!
 //! wintf 側の本番ファイル 8 本に対する同じ形の走査は
 //! `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` が持つ。
 //! areka 側の 7 本——ペア機構の 2 本（ペア宣言を付ける組立＝`spawn.rs`、その記録＝`diag.rs`）と、
-//! グループ機構が新設した 5 本——は crate ごとに 2 つの片割れで受け持つ（spec:
-//! placement-crate-split 要件 5.2・5.3）。本ファイルは配置の crate の片割れで、配置の 4 本と
+//! グループ機構が新設した 5 本——は crate ごとに 2 つの片割れで受け持つ。本ファイルは配置の crate の片割れで、配置の 4 本と
 //! 配置の `src` の木を見る。`areka-runtime` の 3 本・帯のファイル・`areka-runtime` の `src` の木は
 //! `crates/areka-runtime/src/placement_tests/spawn_zorder_pair_deferred_tests.rs` が見る。
 //! 語の表と走査器は 2 つの片割れが共に使う [`crate::test_support::zorder_pair_deferred`] に
@@ -18,15 +17,14 @@
 //! `spawn_assembly_tests::t_i2_no_window_has_ws_ex_topmost` である（`ex_style` と `style` の
 //! 両方を等値で固定しているので、常時最前面・最小化・タスクバー露出のどのビットも
 //! 紛れ込む余地が無い）。本ファイルの窓側テストはそれを置き換えるものではなく、
-//! **要件 8.1／8.5 が名指しするビットを名前で読めるようにする**ためのものである
+//! **禁じたビットを名前で読めるようにする**ためのものである
 //! ——完全一致は「何が禁じられているか」を書き残さないので、後から来た人が
 //! `WS_EX_APPWINDOW` を足してよいかを判断できない。
 //!
 //! # 走査の範囲
 //!
-//! 要件 8.3〜8.5（ペア機構＝`areka-P0-ghost-window-zorder`）と要件 11.4（グループ機構＝
-//! `areka-P0-scope-zorder-pinning`）は、いずれも「**本フィーチャーにおいて**足さない」ことを
-//! 言う（要件の文の引用）。よって走査は、2 つの機構が全部を書いた areka 側の本番
+//! ペア機構とグループ機構は、いずれも先送りした語彙を足さないと決めている。
+//! よって走査は、2 つの機構が全部を書いた areka 側の本番
 //! ファイルに限る。`ghost_session.rs`（`register_systems`）の結線 1 行や、`balloon_visibility_phase.rs`・`frame.rs` の
 //! ような他フィーチャーと共有の巨大ファイルは、全文走査に入れると他所の追記で赤くなって
 //! 2 つの機構への誤った告発になるため入れない（結線が呼ぶ `wire_zorder_pair` の本体は
@@ -34,12 +32,12 @@
 //!
 //! グループ機構が新設した本番ファイルが走査から漏れないことは、
 //! `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
-//! 実在するファイルと名簿の両方向で見張る（要件 10.4）。
+//! 実在するファイルと名簿の両方向で見張る。
 //!
-//! # 先送りの語と帯の語（`stay-on-top-directives` で分けた）
+//! # 先送りの語と帯の語
 //!
 //! wintf 側と同じく語の表は 2 つに分かれる。最小化・タスクバーの語（`DEFERRED_NEEDLES`）は今も
-//! 先送りのまま。常に手前の帯の語（`BAND_NEEDLES`）は `stay-on-top-directives` が実装したが、
+//! 先送りのまま。常に手前の帯の語（`BAND_NEEDLES`）は実装済みだが、
 //! areka 側でそれを持つのは`areka-runtime` の受け口（`crates/areka-runtime/src/window_state_cue.rs`）と取り出しの相
 //! （`crates/areka-runtime/src/frame/window_state.rs`）だけと決めてある。よってどちらの表の語も重なり順の機構の
 //! 本番ファイルには無いことを主張し続ける（帯の語の持ち主に語が在る対照は本体の片割れが持つ）。
@@ -47,7 +45,7 @@
 //! # 行コメントを除いてから探す理由
 //!
 //! `spawn.rs` の doc コメントには「`WS_EX_TOPMOST` を含めない」という**否定の説明**が
-//! 書いてある（要件 8.1 の設計意図の記録そのもの）。素の全文を探すとこの説明で赤くなるので、
+//! 書いてある（設計意図の記録そのもの）。素の全文を探すとこの説明で赤くなるので、
 //! 行頭が `//` の行を落としてから探す。落とし過ぎ・落とし漏れが無いことは、素の全文には
 //! 語があり、コードだけの本文には無い、という対照で示す。
 
@@ -69,8 +67,8 @@ use crate::test_support::zorder_pair_deferred::{
 
 /// 重なり順の 2 機構が全部を書いた、配置の crate の本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
 ///
-/// 前半 2 本はペア機構（`ghost-window-zorder`）——ペア宣言を付ける組立（`spawn.rs`）と
-/// その記録（`diag.rs`）。後半 2 本はグループ機構（`areka-P0-scope-zorder-pinning`）が
+/// 前半 2 本はペア機構——ペア宣言を付ける組立（`spawn.rs`）と
+/// その記録（`diag.rs`）。後半 2 本はグループ機構が
 /// 新設したもの（うち `zorder_chain_compose.rs` は鎖方式の合成層。グループ機構の残りの 3 本は
 /// 本体にあり、本体の片割れの名簿に載る）。下の
 /// `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
@@ -132,7 +130,7 @@ fn the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
 }
 
 // -------------------------------------------------------------------------
-// 要件 8.1／8.5: 窓の既定は「常時最前面ではない・最小化もタスクバー露出も足さない」
+// 窓の既定は「常時最前面ではない・最小化もタスクバー露出も足さない」
 // -------------------------------------------------------------------------
 
 /// 常時最前面の印。
@@ -140,7 +138,7 @@ fn has_always_on_top(style: &WindowStyle) -> bool {
     style.ex_style.contains(WS_EX_TOPMOST)
 }
 
-/// 最小化・タスクバー露出に関わる印（要件 8.5 が「変更しない」と言っている側）。
+/// 最小化・タスクバー露出に関わる印（変更しない側）。
 fn has_minimize_or_taskbar_exposure(style: &WindowStyle) -> bool {
     style.ex_style.contains(WS_EX_APPWINDOW)
         || style.style.contains(WS_MINIMIZE)
@@ -153,7 +151,7 @@ fn has_minimize_or_taskbar_exposure(style: &WindowStyle) -> bool {
 ///
 /// `t_i2_no_window_has_ws_ex_topmost` が `style`／`ex_style` を等値で固定しているので
 /// 値そのものは既に動かせない。本テストはその等値が**何を禁じているか**を名前で書き残す
-/// ——`WS_EX_APPWINDOW`（タスクバー露出）と最小化系のビットは、足せば要件 8.5 違反である。
+/// ——`WS_EX_APPWINDOW`（タスクバー露出）と最小化系のビットは、足せば違反である。
 ///
 /// 空虚に緑にならないよう、探針が実際に反応することを先に確かめる（合成した窓スタイルで
 /// 両方の判定が真になること）。
@@ -173,7 +171,6 @@ fn ghost_windows_carry_no_always_on_top_minimize_or_taskbar_bits() {
         "探針が最小化・タスクバー露出を見落としている"
     );
 
-    // ② 本番の組立を実際に通す。
     let mut world = World::new();
     let placements = two_scope_placements();
     spawn_ghost_windows(&mut world, &placements, &titles());

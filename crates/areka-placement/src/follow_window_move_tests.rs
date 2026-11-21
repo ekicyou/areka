@@ -12,14 +12,13 @@ use super::{Anchored, BalloonFollow, move_window_to, on_char_drag};
 use crate::resolver::{Anchor, PointPx, SizePx};
 
 // -------------------------------------------------------------------------
-// move_window_to（R7 公開 API・7.1/7.2/7.3・U4）
+// move_window_to
 // -------------------------------------------------------------------------
 
-/// 観測可能な完了状態: headless World 上で move_window_to を呼ぶと
-/// 対象窓の WindowPos が期待座標へ更新される（物理 px 素通し・U4）。
-/// 座標は 96 の倍数を避けた値を使い、隠れた dpi/96 再スケールがあれば
-/// 完全一致が崩れる檻とする（07-05 欠陥の再発防止・3.2/3.3）。
-/// `Arrangement.offset` も同じ位置へ同期される（下の「Arrangement.offset 同期」の節）。
+/// headless World 上で move_window_to を呼ぶと対象窓の WindowPos が期待座標へ更新される
+/// （物理 px 素通し）。
+/// 座標は 96 の倍数を避けた値を使い、隠れた dpi/96 再スケールがあれば完全一致が崩れる檻とする。
+/// `Arrangement.offset` も同じ位置へ同期される。
 #[test]
 fn move_window_to_updates_window_pos_physical_px() {
     let mut world = World::new();
@@ -52,7 +51,7 @@ fn move_window_to_without_handle_returns_false() {
     assert_eq!(position_of(&world, window), Point { x: 10, y: 20 });
 }
 
-/// despawn 済み（対象不在）の entity も false（silent no-op にしない・panic しない）。
+/// despawn 済み（対象不在）の entity も false（panic しない）。
 #[test]
 fn move_window_to_on_despawned_entity_returns_false() {
     let mut world = World::new();
@@ -63,7 +62,7 @@ fn move_window_to_on_despawned_entity_returns_false() {
 }
 
 /// BalloonFollow を持つ対象の移動はバルーンも offset 維持で随伴移動する
-/// （T-I4: 移動後も balloon_pos − char_pos ≡ offset が保存される）。両窓の
+/// （移動後も balloon_pos − char_pos ≡ offset が保存される）。両窓の
 /// `Arrangement.offset` も移動後の位置へ同期される。
 #[test]
 fn move_window_to_moves_balloon_with_offset_preserved() {
@@ -97,7 +96,6 @@ fn move_window_to_moves_balloon_with_offset_preserved() {
             y: 1201 + offset.y
         }
     );
-    // offset 保存則（balloon_pos − char_pos ≡ offset）
     assert_eq!(balloon_pos.x - char_pos.x, offset.x);
     assert_eq!(balloon_pos.y - char_pos.y, offset.y);
     for (entity, pos) in [(window, char_pos), (balloon, balloon_pos)] {
@@ -131,7 +129,7 @@ fn move_window_to_target_without_handle_does_not_move_balloon() {
 }
 
 /// バルーン側に WindowHandle が無い場合: 対象の移動自体は成功（true）し、
-/// バルーンは動かない（warn ログ・silent failure ではない）。
+/// バルーンは動かず warn ログを出す。
 #[test]
 fn move_window_to_balloon_without_handle_still_moves_target() {
     let mut world = World::new();
@@ -153,13 +151,13 @@ fn move_window_to_balloon_without_handle_still_moves_target() {
 }
 
 // -------------------------------------------------------------------------
-// Arrangement.offset 同期（`areka-P0-window-placement` 要件 4.8 の実機ブロッカ）
+// Arrangement.offset 同期
 //
 // enqueue_window_set_pos は WindowPos を bypass_change_detection() で書くため
 // Changed<WindowPos> が発火せず、wintf の
 // sync_window_arrangement_from_window_pos は走らない。同期を怠ると
 // GlobalArrangement（αマスクヒットテストの境界）が spawn 位置に取り残され、
-// 移動後のバルーンがクリック死する（実機で確認された `areka-P0-window-placement` 要件 4.8 のブロッカ）。
+// 移動後のバルーンがクリック死する。
 // 実 pipeline では window entity に Arrangement が付く（Visual::on_add）が、
 // bare World には無いので spawn 時 offset 付きで手動挿入して檻にする。
 // 期待値は wintf DragEnd 直接同期と同じ `as f32` 転写の完全一致。
@@ -167,9 +165,9 @@ fn move_window_to_balloon_without_handle_still_moves_target() {
 
 use wintf::ecs::layout::Offset;
 
-/// 実 on_char_drag（Bubble DragEvent＋DraggingState・8.2R 単一ライター）:
+/// 実 on_char_drag（Bubble DragEvent＋DraggingState・単一ライター）:
 /// 移動後、キャラ窓・随伴バルーンとも Arrangement.offset が
-/// WindowPos.position と一致する（GA ヒットテスト境界の追従・4.8）。`move_window_to` の
+/// WindowPos.position と一致する（GA ヒットテスト境界の追従）。`move_window_to` の
 /// 同期は上の節の 2 本（単独の窓・随伴の組）が見る。
 #[test]
 fn on_char_drag_syncs_arrangement_offset_of_char_and_balloon() {
@@ -198,7 +196,7 @@ fn on_char_drag_syncs_arrangement_offset_of_char_and_balloon() {
     let ev = Phase::Bubble(drag_event_at(window, start, (1450, 350)));
     assert!(!on_char_drag(&mut world, window, window, &ev));
 
-    // 適用後キャラ窓 (1257, 356)・バルーン (1257−412, 356−25)
+    // キャラ窓 (1257, 356)・バルーン (1257−412, 356−25)
     let char_pos = position_of(&world, window);
     assert_eq!(char_pos, Point { x: 1257, y: 356 });
     assert_eq!(
@@ -222,14 +220,12 @@ fn on_char_drag_syncs_arrangement_offset_of_char_and_balloon() {
 }
 
 // -------------------------------------------------------------------------
-// enqueue_window_set_pos（size 対応一般化・`areka-P0-surface-resize-resnap` 要件 1.5/3.3・
-// design Testing Strategy > Integration Tests #5）
+// enqueue_window_set_pos
 //
-// 既存 move 専用発行口の一般化。`None` は移動専用の後方互換（position のみ
-// ミラー・size 不変・SWP_NOSIZE 継続）、`Some` は位置＋寸を一度に反映
-// （WindowPos.size も bypass ミラー）。観測は `WindowPos.position`／`WindowPos.size`
+// `None` は移動専用（position のみミラー・size 不変・SWP_NOSIZE）、`Some` は位置＋寸を
+// 一度に反映（WindowPos.size も bypass ミラー）。観測は `WindowPos.position`／`WindowPos.size`
 // のミラーと、書込の列を `drain_window_pos_commands()` で取り出した指令の
-// `flags`・`width`・`height`（`SWP_NOSIZE` の付け外し・`audit-placement-follow` 指摘 11 ⑴）。
+// `flags`・`width`・`height`（`SWP_NOSIZE` の付け外し）。
 // 座標・寸法は 96 の非倍数を使い、隠れた dpi/96 再スケールの檻とする。
 // -------------------------------------------------------------------------
 
@@ -237,8 +233,7 @@ use super::enqueue_window_set_pos;
 use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER};
 use wintf::ecs::window::drain_window_pos_commands;
 
-/// `None`（後方互換・移動専用）: position のみ更新し size は触らない
-/// （既存移動専用挙動＝SWP_NOSIZE 継続の観測境界）。
+/// `None`（移動専用）: position のみ更新し size は触らない（SWP_NOSIZE）。
 #[test]
 fn enqueue_window_set_pos_none_updates_position_leaves_size() {
     let mut world = World::new();
@@ -251,9 +246,8 @@ fn enqueue_window_set_pos_none_updates_position_leaves_size() {
         &mut world, window, 1531, 883, None, None
     ));
     assert_eq!(position_of(&world, window), Point { x: 1531, y: 883 });
-    // size は不変（移動専用＝寸法を書かない）
     assert_eq!(size_of(&world, window), SizeI::new(434, 687));
-    // 書込の列: 1 件・`SWP_NOSIZE` 付き・寸は 0（`audit-placement-follow` 指摘 11 ⑴）。
+    // 書込の列: 1 件・`SWP_NOSIZE` 付き・寸は 0。
     let cmds = drain_window_pos_commands();
     assert_eq!(cmds.len(), 1, "移動だけの書込は 1 件");
     let cmd = &cmds[0];
@@ -262,7 +256,7 @@ fn enqueue_window_set_pos_none_updates_position_leaves_size() {
     assert_eq!((cmd.width, cmd.height), (0, 0));
 }
 
-/// `Some`: 位置と寸法の**双方**が更新される（WindowPos.size = SizeI::new(w,h)）。
+/// `Some`: 位置と寸法の双方が更新される（WindowPos.size = SizeI::new(w,h)）。
 #[test]
 fn enqueue_window_set_pos_some_updates_position_and_size() {
     let mut world = World::new();
@@ -281,7 +275,7 @@ fn enqueue_window_set_pos_some_updates_position_and_size() {
     ));
     assert_eq!(position_of(&world, window), Point { x: 907, y: 1201 });
     assert_eq!(size_of(&world, window), SizeI::new(517, 823));
-    // 書込の列: 1 件・`SWP_NOSIZE` を外し・寸を載せる（`audit-placement-follow` 指摘 11 ⑴）。
+    // 書込の列: 1 件・`SWP_NOSIZE` を外し・寸を載せる。
     let cmds = drain_window_pos_commands();
     assert_eq!(cmds.len(), 1, "寸つきの書込は 1 件");
     let cmd = &cmds[0];
@@ -290,8 +284,7 @@ fn enqueue_window_set_pos_some_updates_position_and_size() {
     assert_eq!((cmd.width, cmd.height), (517, 823));
 }
 
-/// 不在/未付与（`areka-P0-surface-resize-resnap` 要件 3.3）: `WindowHandle` 無し entity は `false`＋位置/寸法不変
-/// （warn no-op・`Some` 経路でも既存 warn 経路を継承）。
+/// `WindowHandle` 無し entity は `false`＋位置/寸法不変（warn no-op・`Some` 経路でも同じ）。
 #[test]
 fn enqueue_window_set_pos_without_handle_returns_false_and_leaves_state() {
     let mut world = World::new();
@@ -310,7 +303,7 @@ fn enqueue_window_set_pos_without_handle_returns_false_and_leaves_state() {
 }
 
 // -------------------------------------------------------------------------
-// 経路つきの移動の随伴バルーンは追随の書き手（`follow_balloon`）1 本を通る（`audit-placement-follow` 指摘 2）
+// 経路つきの移動の随伴バルーンは追随の書き手（`follow_balloon`）1 本を通る
 // -------------------------------------------------------------------------
 
 use super::super::diag::PlacementRoute;
@@ -338,7 +331,6 @@ fn char_with_offscreen_balloon_world() -> (World, Entity, Entity) {
 
 /// 配置の経路（`ChainRealign`・`PatternMove`）では、画面の外へ丸ごと出る随伴バルーンが
 /// 可視性の守りで引き戻され、`ClampX` の行が `route=BalloonFollow` で 1 行出る。
-/// 直す前は自前の式で書いていたので x=−400 のまま・行は 0。
 #[test]
 fn placement_route_move_pulls_offscreen_balloon_back() {
     for route in [PlacementRoute::ChainRealign, PlacementRoute::PatternMove] {
@@ -379,11 +371,11 @@ fn move_cue_move_leaves_offscreen_balloon_in_place() {
 }
 
 // -------------------------------------------------------------------------
-// 位置が未確定の印（`CW_USEDEFAULT`）の窓へ寸だけを書かない（`audit-placement-follow` 指摘 20）
+// 位置が未確定の印（`CW_USEDEFAULT`）の窓へ寸だけを書かない
 // -------------------------------------------------------------------------
 
 /// 位置が `CW_USEDEFAULT`（窓生成前の印）のバルーンへ位置を保った寸を書くと、
-/// 「位置が無い」と同じく偽で書込の列が空。直す前は印の位置のまま書いていた。
+/// 「位置が無い」と同じく偽で書込の列が空。
 #[test]
 fn resize_keep_position_on_sentinel_position_writes_nothing() {
     use super::resize_window_keep_position;

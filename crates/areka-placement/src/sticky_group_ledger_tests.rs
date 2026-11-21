@@ -1,4 +1,4 @@
-//! 窓の組の帳簿の決定論の檻（要件 3.1〜3.5・3.7〜3.9・6.5・design「StickyGroupLedger」）。
+//! 窓の組の帳簿の決定論の檻。
 //!
 //! World も実機も使わない純関数の檻である。
 
@@ -27,7 +27,7 @@ fn ledger_with_script(groups: &[&[u32]]) -> StickyGroupLedger {
     ledger
 }
 
-// ── 読み（要件 3.5） ──
+// ── 読み ──
 
 #[test]
 fn parse_accepts_two_or_more_distinct_ids() {
@@ -95,7 +95,7 @@ fn parse_rejects_overflow_but_accepts_u32_max() {
     );
 }
 
-// ── 台本の組（要件 3.1〜3.4） ──
+// ── 台本の組 ──
 
 #[test]
 fn script_groups_can_be_many() {
@@ -140,7 +140,7 @@ fn overlap_with_descript_group_is_rejected() {
     assert_eq!(ledger, before);
 }
 
-// ── 解除（要件 3.7） ──
+// ── 解除 ──
 
 #[test]
 fn reset_removes_only_script_groups() {
@@ -153,7 +153,7 @@ fn reset_removes_only_script_groups() {
     assert_eq!(ledger.reset_to_descript(), 0);
 }
 
-// ── descript の組（要件 3.8・3.9・6.5） ──
+// ── descript の組 ──
 
 #[test]
 fn descript_none_or_empty_means_no_group() {

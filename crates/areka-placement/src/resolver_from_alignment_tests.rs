@@ -7,12 +7,12 @@ use crate::test_support::kv;
 use log_capture_kit::capture;
 
 // ------------------------------------------------------------------
-// Anchor::from_alignment（4.2・design Testing Strategy Unit #4）
+// Anchor::from_alignment
 // ------------------------------------------------------------------
 
-/// 4.2: cascade 解決済み `Alignment` の 5 値アンカーへの解釈写像を全分岐固定する。
+/// cascade 解決済み `Alignment` の 5 値アンカーへの解釈写像を全分岐固定する。
 /// `Bottom`→`Bottom`・`Free`→`Free`・`Seam("top"/"left"/"right")`→対応値・
-/// 未知 `Seam` →`Bottom`（フォールバック・DD9「未知は bottom 相当」を継承）。
+/// 未知 `Seam` →`Bottom`（フォールバック・未知は bottom 相当）。
 #[test]
 fn from_alignment_maps_all_branches() {
     assert_eq!(
@@ -47,7 +47,7 @@ fn from_alignment_maps_all_branches() {
     );
 }
 
-/// 4.2 補: `Seam` 値は `trim().to_ascii_lowercase()` で正規化してから解釈する
+/// `Seam` 値は `trim().to_ascii_lowercase()` で正規化してから解釈する
 /// （`Seam` は descript に書かれたままの値を持つので、大文字小文字はここでそろえる）。
 #[test]
 fn from_alignment_normalizes_case_and_whitespace() {

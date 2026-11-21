@@ -1,5 +1,4 @@
-//! 帳簿の World の側の薄い関数の決定論の檻（要件 3.1・3.4〜3.9・6.5・9.2・
-//! design「StickyGroupLedger」）。
+//! 帳簿の World の側の薄い関数の決定論の檻。
 //!
 //! 窓は偽の部品（`CharWindowMarker`＋`Anchored`＋`DragConfig`）だけで組み、記録は
 //! `log-capture-kit`（`log_capture_kit::capture`）で取る。
@@ -49,7 +48,7 @@ fn groups(world: &World) -> Vec<StickyGroup> {
     world.resource::<StickyGroupLedger>().groups().to_vec()
 }
 
-/// 台本の組を作ると帳簿に入り、組の一覧が記録され、両方の `move_window` が偽になる（3.1・9.2）。
+/// 台本の組を作ると帳簿に入り、組の一覧が記録され、両方の `move_window` が偽になる。
 #[test]
 fn set_sticky_adds_group_logs_and_resyncs_writer() {
     let (mut world, e) = world_with_free_windows();
@@ -77,8 +76,8 @@ fn set_sticky_adds_group_logs_and_resyncs_writer() {
     assert!(move_window(&world, e[2]));
 }
 
-/// 重なり・2 未満・重複・数でない引数は帳簿を変えず、出どころ・引数・理由を `warn!` に出す
-/// （3.4・3.5・9.2）。拒否のときも組の一覧を記録する。
+/// 重なり・2 未満・重複・数でない引数は帳簿を変えず、出どころ・引数・理由を `warn!` に出す。
+/// 拒否のときも組の一覧を記録する。
 #[test]
 fn set_sticky_rejects_without_change_and_logs_reason() {
     let (mut world, e) = world_with_free_windows();
@@ -113,7 +112,7 @@ fn set_sticky_rejects_without_change_and_logs_reason() {
     assert!(move_window(&world, e[2]));
 }
 
-/// 窓の無いスコープを含む組は受け付け、そのスコープを `warn!` に出す（3.6）。
+/// 窓の無いスコープを含む組は受け付け、そのスコープを `warn!` に出す。
 #[test]
 fn set_sticky_accepts_absent_scope_with_warning() {
     let (mut world, e) = world_with_free_windows();
@@ -129,7 +128,7 @@ fn set_sticky_accepts_absent_scope_with_warning() {
     assert!(!move_window(&world, e[2]));
 }
 
-/// 解除は台本の組だけを消し、descript の組を残して記録し、書き手を付け直す（3.7・9.2）。
+/// 解除は台本の組だけを消し、descript の組を残して記録し、書き手を付け直す。
 #[test]
 fn reset_sticky_removes_script_groups_only() {
     let mut world = World::new();
@@ -157,7 +156,7 @@ fn reset_sticky_removes_script_groups_only() {
     assert!(move_window(&world, e[3]));
 }
 
-/// 起動では帳簿を据え、descript の値を `,` で区切って同じ規則で読む（3.8・9.2）。
+/// 起動では帳簿を据え、descript の値を `,` で区切って同じ規則で読む。
 #[test]
 fn seed_installs_ledger_from_descript_value() {
     let (mut world, e) = world_with_free_windows();
@@ -178,7 +177,7 @@ fn seed_installs_ledger_from_descript_value() {
     assert!(move_window(&world, e[2]));
 }
 
-/// 値が無い・空なら組なしの帳簿を据える。読めない値は拒否を記録し、組なしの帳簿を据える（3.8）。
+/// 値が無い・空なら組なしの帳簿を据える。読めない値は拒否を記録し、組なしの帳簿を据える。
 #[test]
 fn seed_without_value_or_with_bad_value_installs_empty_ledger() {
     for raw in [None, Some(""), Some("  ")] {
@@ -200,7 +199,7 @@ fn seed_without_value_or_with_bad_value_installs_empty_ledger() {
     assert!(rejected.field("reason").unwrap().contains("TooFewScopes"));
 }
 
-/// descript の組の窓の無いスコープも受け付けて `warn!` に出す（3.6）。
+/// descript の組の窓の無いスコープも受け付けて `warn!` に出す。
 #[test]
 fn seed_accepts_absent_scope_with_warning() {
     let (mut world, _) = world_with_free_windows();
@@ -212,7 +211,7 @@ fn seed_accepts_absent_scope_with_warning() {
 }
 
 /// シェルの切り替えは台本の組を保ち descript の組だけを取り替える。台本の組と重なる
-/// descript の組は作らずに拒否を記録する（3.9・6.5・9.2）。
+/// descript の組は作らずに拒否を記録する。
 #[test]
 fn replace_keeps_script_groups_and_rejects_overlap() {
     let mut world = World::new();

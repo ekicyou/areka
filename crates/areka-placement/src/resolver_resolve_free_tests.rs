@@ -1,4 +1,4 @@
-//! `resolve_placement` の檻: free 配置（T-R4・P3・2.6・DD10）。
+//! `resolve_placement` の檻: free 配置（T-R4・P3）。
 //!
 //! `resolver_resolve_tests.rs` からの分割（1,000 行規約）。
 
@@ -9,11 +9,11 @@ use crate::config::Alignment;
 use crate::shared_test_support::MEASURE_DPI;
 
 // ------------------------------------------------------------------
-// T-R4: free 配置（P3・2.6・DD10）
+// T-R4: free 配置（P3）
 // ------------------------------------------------------------------
 
 /// T-R4: free で `defaultleft`/`defaulttop` 両指定 → work area **左上**原点で
-/// `char_x = left + dx`・`char_y = top + dy`（DD10）。原点非 (0,0) の work area
+/// `char_x = left + dx`・`char_y = top + dy`。原点非 (0,0) の work area
 /// で left/top 依存を固定する（bottom の right 基準と混同しない檻）。
 #[test]
 fn t_r4_free_applies_default_left_top_from_work_area_origin() {
@@ -36,8 +36,8 @@ fn t_r4_free_applies_default_left_top_from_work_area_origin() {
     }
 }
 
-/// T-R4: free で Y 未指定 → Y のみ bottom 相当（`bottom − h`）へフォールバック
-/// （2.6）。X は左上原点適用のまま。
+/// T-R4: free で Y 未指定 → Y のみ bottom 相当（`bottom − h`）へフォールバック。
+/// X は左上原点適用のまま。
 #[test]
 fn t_r4_free_unspecified_y_falls_back_to_bottom() {
     for dpi in DPIS {
@@ -60,7 +60,7 @@ fn t_r4_free_unspecified_y_falls_back_to_bottom() {
 }
 
 /// T-R4: free で X 未指定 → X のみ bottom 相当（P2 連鎖値＝scope0 は右端密着）へ
-/// フォールバック（2.6）。Y は左上原点適用のまま。
+/// フォールバック。Y は左上原点適用のまま。
 #[test]
 fn t_r4_free_unspecified_x_falls_back_to_bottom_chain() {
     for dpi in DPIS {
@@ -83,9 +83,9 @@ fn t_r4_free_unspecified_x_falls_back_to_bottom_chain() {
 }
 
 /// T-R4 補: free で両成分未指定 → **幾何**（位置・寸法・バルーン）は Bottom と
-/// 完全同一（2.6 の極限）。ただし `anchor` だけは alignment 由来で相違する
-/// （free は幾何が bottom へフォールバックしても全方向移動可＝非吸着＝`Anchor::Free`・
-/// 4.2。構造体全体の一致でなく、幾何の一致＋anchor の相違で確かめる）。
+/// 完全同一。ただし `anchor` だけは alignment 由来で相違する
+/// （free は幾何が bottom へフォールバックしても全方向移動可＝非吸着＝`Anchor::Free`。
+/// 構造体全体の一致でなく、幾何の一致＋anchor の相違で確かめる）。
 #[test]
 fn t_r4_free_both_unspecified_equals_bottom() {
     for dpi in DPIS {
@@ -116,7 +116,7 @@ fn t_r4_free_both_unspecified_equals_bottom() {
             assert_eq!(f.balloon_pos, b.balloon_pos, "dpi={dpi}");
             assert_eq!(f.balloon_size, b.balloon_size, "dpi={dpi}");
             assert_eq!(f.balloon_offset, b.balloon_offset, "dpi={dpi}");
-            // アンカー情報だけは alignment 由来で相違（free＝非吸着・4.2）
+            // アンカー情報だけは alignment 由来で相違（free＝非吸着）
             assert_eq!(
                 f.anchor,
                 Anchor::Free,
@@ -131,7 +131,7 @@ fn t_r4_free_both_unspecified_equals_bottom() {
     }
 }
 
-/// T-R4 補: free もキャラ窓クランプ（P4・DD12）の対象（過大 offset は
+/// T-R4 補: free もキャラ窓クランプ（P4）の対象（過大 offset は
 /// work area 右下で停止＝画面内出現の安全弁は alignment を選ばない）。
 #[test]
 fn t_r4_free_is_clamped_into_work_area() {

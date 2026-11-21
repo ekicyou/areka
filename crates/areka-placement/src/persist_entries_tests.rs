@@ -1,7 +1,7 @@
 use super::*;
 
 // ------------------------------------------------------------------
-// parse_px（寛容 parse・6.1）: 数値→Some(i32)・非数値/空→None・決定論
+// parse_px（寛容 parse）: 数値→Some(i32)・非数値/空→None・決定論
 // ------------------------------------------------------------------
 
 #[test]
@@ -9,7 +9,7 @@ fn parse_px_numeric_string_yields_some() {
     assert_eq!(parse_px("123"), Some(123));
     assert_eq!(parse_px("0"), Some(0));
     assert_eq!(parse_px("-5"), Some(-5));
-    // 仮想スクリーン絶対座標は大きな値・負値もある（1.7）。
+    // 仮想スクリーン絶対座標は大きな値・負値もある。
     assert_eq!(parse_px("1920"), Some(1920));
     assert_eq!(parse_px("-1080"), Some(-1080));
 }
@@ -29,12 +29,12 @@ fn parse_px_tolerates_surrounding_whitespace() {
 }
 
 // ------------------------------------------------------------------
-// char_pos_entries（保存 entries・1.6）: WindowPos X/Y の key/値等価
+// char_pos_entries（保存 entries）: WindowPos X/Y の key/値等価
 // ------------------------------------------------------------------
 
 #[test]
 fn char_pos_entries_carries_scope_and_negative_values() {
-    // スコープ別（1.6）＋負値（仮想デスクトップ左／上のモニタ・1.7）。
+    // スコープ別＋負値（仮想デスクトップ左／上のモニタ）。
     let entries = char_pos_entries(1, PointPx { x: -400, y: -20 });
     assert_eq!(
         entries,
@@ -58,7 +58,7 @@ fn char_pos_entries_carries_scope_and_negative_values() {
 }
 
 // ------------------------------------------------------------------
-// balloon_offset_entries（保存 entries・2.5）: BalloonOffset X/Y の key/値等価
+// balloon_offset_entries（保存 entries）: BalloonOffset X/Y の key/値等価
 // ------------------------------------------------------------------
 
 #[test]

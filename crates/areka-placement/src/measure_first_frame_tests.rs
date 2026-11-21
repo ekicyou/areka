@@ -1,5 +1,4 @@
-//! 採寸の読み手 `FirstFrameDecoder` の檻（spec: placement-measure-bake-once 要件 1.1・1.4・2.2・
-//! 3.7、design「FirstFrameDecoder」。D4 の全透明の例外は emo-bake-log-overlap 要件 1.5 で解けた）。
+//! 採寸の読み手 `FirstFrameDecoder` の檻。
 //!
 //! 偽の読み手 `MemoryDecoder` を数える包みで覆い、包んだ相手の全コマ読みが 1 度も呼ばれない
 //! ことまで確かめる。ファイルにも COM にも依存しない。
@@ -34,8 +33,7 @@ fn insert(dec: &mut MemoryDecoder, rel: &str, px: Px) {
     dec.insert(path(rel), 2, 2, 8, img.bgra, img.has_alpha);
 }
 
-/// 読む口のうち 3 つ（`decode`・`decode_first_frame`・`decode_frames`）の呼ばれた回数を数える包み
-/// （このファイルの中だけで使う）。
+/// 読む口のうち 3 つ（`decode`・`decode_first_frame`・`decode_frames`）の呼ばれた回数を数える包み。
 #[derive(Default)]
 struct Counting {
     inner: MemoryDecoder,
@@ -86,7 +84,7 @@ fn animated_and_still() -> Counting {
     }
 }
 
-/// 要件 1.1・2.2: 動く絵の `decode` は 1 枚目の絵を返し、全コマ読みは 0 回。
+/// 動く絵の `decode` は 1 枚目の絵を返し、全コマ読みは 0 回。
 #[test]
 fn animated_decode_returns_the_first_frame() {
     let dec = animated_and_still();
@@ -121,7 +119,7 @@ fn first_frame_error_falls_back_to_decode() {
     assert_eq!(dec.frames.get(), 0, "全コマ読みは呼ばない");
 }
 
-/// 要件 1.4: 静止画は包んだ読み手の 1 枚読みをそのまま通す（壊れた絵の失敗も同じ）。
+/// 静止画は包んだ読み手の 1 枚読みをそのまま通す（壊れた絵の失敗も同じ）。
 #[test]
 fn still_image_passes_through() {
     let mut dec = animated_and_still();
@@ -196,7 +194,7 @@ fn bake_fade_in_warns(way: Way) -> (BakeResult, usize) {
         Way::WrappedQuiet => {
             bake_quiet(&sets, &FirstFrameDecoder::new(&dec), PackConfig::default())
         }
-        // 上限は既定を焼く（環境変数に左右されない・audit-placement-core 要件 2.7）。
+        // 上限は既定を焼く（環境変数に左右されない）。
         Way::RawBake => bake_with_limits(
             &sets,
             &dec,
@@ -214,10 +212,10 @@ fn bake_fade_in_warns(way: Way) -> (BakeResult, usize) {
     (result, warns)
 }
 
-/// emo-bake-log-overlap 要件 1.5・6.2（例外 D4 の書き直し）: 採寸が使う焼き（包んだ読み手＋
-/// `bake_quiet`）でも、包まない読み手の焼きでも「全透明」の `warn!` は 0 行。対照として包んだ
-/// 読み手＋出す焼きで 1 行出ることを確かめ、検体が本当に 1 枚目だけ全透明であることを示す
-/// （`bake_quiet` は絵によらず出さないので、対照が無いと 0 行の主張が何も確かめない）。
+/// 採寸が使う焼き（包んだ読み手＋`bake_quiet`）でも、包まない読み手の焼きでも「全透明」の
+/// `warn!` は 0 行。対照として包んだ読み手＋出す焼きで 1 行出ることを確かめ、検体が本当に
+/// 1 枚目だけ全透明であることを示す（`bake_quiet` は絵によらず出さないので、対照が無いと
+/// 0 行の主張が何も確かめない）。
 #[test]
 fn fade_in_animation_all_transparent_warns_zero_lines_on_measure_bake_and_raw_bake() {
     let (control, control_warns) = bake_fade_in_warns(Way::WrappedBake);

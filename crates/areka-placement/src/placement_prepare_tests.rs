@@ -11,7 +11,7 @@ use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
 
 // emo2 fixture の native 採寸値（共有の 1 組）。k₀ 適用後の期待値はこれらの `scaled_extent` 倍
-// として書く。バルーン面 0 は **scope ごとに解決した系列**の実寸である（要件 3.1）。
+// として書く。バルーン面 0 は **scope ごとに解決した系列**の実寸である。
 use crate::sample_test_support::{
     BALLOON0_H, BALLOON0_W, BALLOON1_H, BALLOON1_W, SCOPE0_H, SCOPE0_W, SCOPE1_H, SCOPE1_W,
 };
@@ -31,14 +31,13 @@ use crate::sample_test_support::{
 /// - scope1: char=(1486−336, 1040−400)=(1150,640)・基本位置＝右隣=(1150+336)=(1486,640)
 ///
 /// scope1 の X は `base_x(n≥1) = char_x(n−1) − w(n)`——引くのは**自スコープの幅**
-/// （336）であり、前スコープの幅（434）ではない（隣接・隙間 0・areka-P0-scope-chain-gap 2.1/2.2）。
+/// （336）であり、前スコープの幅（434）ではない（隣接・隙間 0）。
 /// これにより scope1 の右端 1150+336=1486 が scope0 の左端 1486 と一致する。
 ///
 /// バルーン寸が scope 別になっても**基本位置**が動かないのは、右置き（scope1）の基準 x が
 /// キャラ窓の右端＝バルーン幅に依存しないためである（resolver P5 は無改変）。
 ///
-/// **要件 3.2/7.2 ＋実機確定（R7.6）**: 基本位置へ当該 scope の
-/// `windowposition` 由来の調整量が合流する。x は**左右で反転しない素の画面座標オフセット**
+/// 基本位置へ当該 scope の `windowposition` 由来の調整量が合流する。x は**左右で反転しない素の画面座標オフセット**
 /// （SSP 実測で確定・`windowposition.rs` の `to_screen_adjust`「符号規約」節）ゆえ、
 /// k₀=1/1 の本検体では wp 生値がそのまま加算される:
 /// - scope0（`balloons0s.txt` の `266,-129`・side=Left）→ 調整量 (+266,−129)
@@ -48,13 +47,13 @@ use crate::sample_test_support::{
 ///
 /// 恒等式 `balloon_offset ≡ balloon_pos − char_pos` は両 scope で保たれている
 /// （P5 の加算入力が増えただけ）——これは配置式の出力時点の事後条件であり、
-/// `windowposition.limit` の補正は下流の関門が持つ（windowposition-limit DD6）。
+/// `windowposition.limit` の補正は下流の関門が持つ。
 /// SSP 実測との数値突合は
 /// [`prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120`]（実機と同じ k=5/4）が担う。
 #[test]
 fn prepare_emo2_returns_two_scope_placements() {
     with_com_initialized(|| {
-        // primary DPI 96＝emo2 の作者基準 DPI（無宣言＝96）ゆえ k₀=1/1（要件 7.2 の錨）。
+        // primary DPI 96＝emo2 の作者基準 DPI（無宣言＝96）ゆえ k₀=1/1。
         let p = prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
             .expect("emo2 fixture の配置準備は成功する");
 
@@ -109,15 +108,15 @@ fn prepare_emo2_returns_two_scope_placements() {
         );
         assert_eq!(s1.balloon_offset, PointPx { x: 146, y: -75 });
 
-        // titles は MountModel.names 由来（source T-I5 と同値）
+        // titles は MountModel.names 由来
         assert_eq!(p.titles.title(0), "むらさき");
         assert_eq!(p.titles.title(1), "エモ");
     });
 }
 
-/// **要件 2.3 の決定論形**（design C3 の新設檻）: 実機実測と同条件——DPI 120（k=5/4）・
+/// 決定論形: 実機実測と同条件——DPI 120（k=5/4）・
 /// scope0 543×859・scope1 420×500——で既定配置したとき、相方（scope1）の右端が
-/// 本体（scope0）の左端と一致する（隣接・gap 0・areka-P0-scope-chain-gap 2.1/2.2）。
+/// 本体（scope0）の左端と一致する（隣接・gap 0）。
 ///
 /// **前提錨**: 先に両 scope の実表示寸が実機観測値（543×859／420×500）であることを
 /// 確認する。寸が変われば以下の隣接 assert は別の幾何を検定することになるため、
@@ -125,7 +124,7 @@ fn prepare_emo2_returns_two_scope_placements() {
 ///
 /// **許容差は置かない（厳密等式）**。丸めは `ScaleRatio` 経由の**寸法算出**にのみ現れ、
 /// 位置の算出（`char_x(1) = char_x(0) − w(1)`・クランプ）は整数演算のみゆえ成分誤差が
-/// 生じ得ない。要件 2.3 の許容差 1px は実機ログ側の判定に適用される別チャネルである。
+/// 生じ得ない。実機ログ側の判定に許容差 1px があるのは別チャネルである。
 #[test]
 fn prepare_emo2_at_dpi_120_places_scopes_adjacent() {
     with_com_initialized(|| {
@@ -207,10 +206,10 @@ fn prepare_ghost_windows_uses_primary_monitor() {
 }
 
 // ------------------------------------------------------------------
-// Send 契約・失敗経路・永続化なし（2.11）
+// Send 契約・失敗経路・永続化なし
 // ------------------------------------------------------------------
 
-/// `PreparedPlacement` は Send（design「main.rs seam」: Send な結果のみ返す）。
+/// `PreparedPlacement` は Send（Send な結果のみ返す）。
 #[test]
 fn prepared_placement_is_send() {
     fn assert_send<T: Send>() {}
@@ -233,7 +232,7 @@ fn prepare_missing_root_returns_mount_err_to_caller() {
     );
 }
 
-/// `prepare_ghost_windows` は位置の記憶を一切読み書きしない（2.11・A1）:
+/// `prepare_ghost_windows` は位置の記憶を一切読み書きしない:
 /// (a) 実行後、記憶の置き場（`profile/areka`）を作らない（書き込みなし）
 /// (b) 偽の保存位置を持つ `sylphya.toml` を置いても出力が変わらず、ファイルも変わらない
 ///     （読み込みなし）
@@ -286,7 +285,7 @@ fn prepare_never_reads_or_writes_the_saved_state() {
 }
 
 // ------------------------------------------------------------------
-// 起動時 k₀ の導出（design D7／Flow 3 手順2・要件 1.4/3.3）
+// 起動時 k₀ の導出
 // ------------------------------------------------------------------
 
 /// 表示 DPI を両軸へ写すとき、`u16` に収まらない値は切り詰めず `u16::MAX` へ飽和する。
@@ -297,10 +296,10 @@ fn square_dpi_saturates_instead_of_truncating() {
     assert_eq!(square_dpi(70_000), DPI::from_dpi(u16::MAX, u16::MAX));
 }
 
-/// k₀ = primary モニタ DPI ÷ 作者基準 DPI（既約有理・連続 k・D2/D7）。
+/// k₀ = primary モニタ DPI ÷ 作者基準 DPI（既約有理・連続 k）。
 ///
 /// 整数倍（192/96=2/1）だけでなく **非整数倍**（120/96=5/4・112/96=7/6）も
-/// 既約有理数として正しく導出されることを固定する（整数段階へ丸めない・要件 2.2）。
+/// 既約有理数として正しく導出されることを固定する（整数段階へ丸めない）。
 #[test]
 fn build_measure_scaling_derives_k0_from_primary_and_author_dpi() {
     let author = AuthorDpi::DEFAULT; // 96/96（emo2 fixture と同じ無宣言ケース）
@@ -324,7 +323,7 @@ fn build_measure_scaling_derives_k0_from_primary_and_author_dpi() {
     assert_eq!(identity.balloon, ScaleRatio::ONE);
 }
 
-/// shell と balloon は**それぞれ自分の**作者基準 DPI で k₀ を得る（2 軸独立・要件 1.1）。
+/// shell と balloon は**それぞれ自分の**作者基準 DPI で k₀ を得る（2 軸独立）。
 ///
 /// 取り違え（shell の k をバルーンへ適用する／2 値を入れ替える）は
 /// コンパイルを通ってしまう静かな誤表示ゆえ、両軸に**異なる**宣言値を与えて檻に入れる。
@@ -364,8 +363,7 @@ fn build_measure_scaling_uses_each_axis_own_author_dpi() {
     );
 }
 
-/// primary モニタ DPI 取得不能（`None`／0）は **96 相当**へ縮退する
-/// （design「Error Handling」の boot 行・要件 1.4）。恒等を一律に返すのではなく、
+/// primary モニタ DPI 取得不能（`None`／0）は **96 相当**へ縮退する。恒等を一律に返すのではなく、
 /// 96 を分子として作者基準 DPI との比を取る（作者が 96 以外を宣言していれば k₀≠1）。
 /// 縮退は値を返すだけなので、`error!` の 1 行が唯一の手がかりになる（その行も確かめる）。
 #[test]
@@ -403,10 +401,10 @@ fn build_measure_scaling_degrades_to_96_equivalent_when_primary_dpi_unobtainable
     }
 }
 
-/// 要件 3.3／7.2 の錨（実 fixture・偽装境界の end-to-end）: 注入した primary DPI から
+/// 実 fixture・偽装境界の end-to-end: 注入した primary DPI から
 /// 導かれた k₀ 倍後の**物理窓寸**で `ScopePlacement` が組み上がる。
 ///
-/// - primary 96（＝emo2 の作者基準 DPI）の native 寸（要件 7.2）は
+/// - primary 96（＝emo2 の作者基準 DPI）の native 寸は
 ///   [`prepare_emo2_returns_two_scope_placements`] が確かめる
 /// - primary 192: 全寸がちょうど 2 倍
 /// - primary 112（k=7/6・非整数）: 丸めは単一権威 `scaled_extent` に一致する。
@@ -436,7 +434,7 @@ fn prepare_emo2_scales_window_sizes_by_k0() {
             }
         );
         // バルーン窓も自軸の k₀ で追従する。寸は **scope ごとに解決した系列**の
-        // 原寸の 2 倍であり、全 placement で同一ではない（要件 3.1）。
+        // 原寸の 2 倍であり、全 placement で同一ではない。
         assert_eq!(
             doubled.placements[0].balloon_size,
             SizePx {
@@ -465,8 +463,7 @@ fn prepare_emo2_scales_window_sizes_by_k0() {
     });
 }
 
-/// **宣言された**作者基準 DPI が (a) 採寸 k₀ と (b) attach 搬送値の双方へ効くこと
-/// （design Flow 3 手順1〜3・要件 1.1/3.3）。
+/// **宣言された**作者基準 DPI が (a) 採寸 k₀ と (b) attach 搬送値の双方へ効くこと。
 ///
 /// emo2 fixture は shell/balloon とも DPI 無宣言＝96 で、これは正典既定と**同値**ゆえ
 /// 「宣言を読んだ」のか「既定を返した」のかを区別できない。ここでは
@@ -513,7 +510,7 @@ fn prepare_declared_author_dpi_drives_each_axis_k0_and_attach_value() {
             "char は shell 宣言 120 由来の k=2/1（balloon の 5/3 ではない）"
         );
         // 本補助の合成バルーンは本体側 `balloons0.png` しか持たないため、全 scope が
-        // 本体側系列へ収束する（要件 3.7 の後方互換——`balloonk*` 不在なら全 scope 同一寸）。
+        // 本体側系列へ収束する（後方互換——`balloonk*` 不在なら全 scope 同一寸）。
         for placement in &p.placements {
             assert_eq!(
                 placement.balloon_size,
@@ -525,7 +522,7 @@ fn prepare_declared_author_dpi_drives_each_axis_k0_and_attach_value() {
     });
 }
 
-/// f32 近道の混入検出（D4・寸法の丸めは `scaled_extent` だけが行う）:`scaled_extent` の整数演算と
+/// f32 近道の混入検出（寸法の丸めは `scaled_extent` だけが行う）:`scaled_extent` の整数演算と
 /// `as_f32` 乗算が **1px 食い違う**検体を実経路へ通す。
 ///
 /// 検体: 作者基準 DPI 168・primary DPI 186 → k₀=31/28。emo2 の scope0 幅 434 に対し
@@ -563,7 +560,7 @@ fn prepare_k0_rounding_matches_integer_authority_not_f32() {
 }
 
 // ------------------------------------------------------------------
-// shell `seriko.zorder` の搬送（areka-P0-scope-zorder-pinning 要件 5.1／5.2）
+// shell `seriko.zorder` の搬送
 // ------------------------------------------------------------------
 
 /// 準備の中間結果を、`seriko.zorder` の有無だけ変えて組む（他の入力は最小の空）。
@@ -615,8 +612,7 @@ fn prepare_carries_the_shell_zorder_value_verbatim() {
     );
 }
 
-/// shell の `seriko.sticky-window` も Z の順と同じ形で、生の値のまま準備の結果に載る
-/// （areka-P0-window-link-directives 要件 3.8・3.9）。宣言が無ければ `None`。
+/// shell の `seriko.sticky-window` も Z の順と同じ形で、生の値のまま準備の結果に載る。宣言が無ければ `None`。
 #[test]
 fn prepare_carries_the_shell_sticky_window_value_verbatim() {
     let declared = stages_with_shell(
@@ -659,16 +655,15 @@ fn prepare_carries_no_zorder_value_when_the_shell_declares_none() {
 
 // ------------------------------------------------------------------
 // 採寸 DPI の単一決定点と基準対への搬送
-// （areka-P0-balloon-offset-dpi task 2.1・要件 1.1/1.5/3.1・design D15）
 // ------------------------------------------------------------------
 
 /// `build_measure_scaling` が返す**採寸 DPI**は、同じ呼出が k₀ の**分子**へ採った値と
-/// 常に一致する（単一の決定点・要件 1.1）。
+/// 常に一致する（単一の決定点）。
 ///
 /// 分子を内部で決めて捨て、呼び手が同じ判断（`primary_dpi` の有無と 0 の弾き）を
 /// もう一度書く形だと、片方だけ直したときに採寸 k₀ と基準 DPI が静かに食い違う。
 /// 食い違いは**表示 DPI が変わるまで観測されない**ゆえ、ここで構造として封じる。
-/// 縮退の腕（`None`／`Some(0)`＝[`FALLBACK_PRIMARY_DPI`]）も同じ規則で固定する（要件 1.5）。
+/// 縮退の腕（`None`／`Some(0)`＝[`FALLBACK_PRIMARY_DPI`]）も同じ規則で固定する。
 #[test]
 fn build_measure_scaling_returns_the_dpi_it_took_as_numerator() {
     let declared = AuthorDpi {
@@ -680,7 +675,7 @@ fn build_measure_scaling_returns_the_dpi_it_took_as_numerator() {
         (Some(120), AuthorDpi::DEFAULT, 120),
         (Some(112), declared, 112),
         (Some(96), AuthorDpi::DEFAULT, 96),
-        // 縮退の 2 腕（要件 1.5）: 恒等へ丸めず 96 相当を分子に採る。
+        // 縮退の 2 腕: 恒等へ丸めず 96 相当を分子に採る。
         (None, AuthorDpi::DEFAULT, FALLBACK_PRIMARY_DPI),
         (Some(0), declared, FALLBACK_PRIMARY_DPI),
     ];
@@ -704,14 +699,13 @@ fn build_measure_scaling_returns_the_dpi_it_took_as_numerator() {
 }
 
 /// 配置解決の出力が**基準対**を載せる: 値は配置式が出した既定のオフセットそのもの、
-/// 基準 DPI は採寸に使った表示 DPI（要件 3.1・design D15「配置式が出した既定は
-/// `Some(採寸 DPI)` を持つ」）。
+/// 基準 DPI は採寸に使った表示 DPI。
 ///
 /// 採寸 DPI は**起動時の主モニタ DPI**であって、窓がいま載っているモニタの DPI では
-/// ない（design D15・意図された挙動）。縮退の腕でも基準対は未係留にならず、96 相当が
-/// 刻まれることを併せて固定する（要件 1.5 の縮退が基準対の腕を変えないこと）。
+/// ない（意図された挙動）。縮退の腕でも基準対は未係留にならず、96 相当が
+/// 刻まれることを併せて固定する。
 /// 縮退の腕は、primary モニタ DPI が取れなくても準備が成功して 2 スコープの窓寸が得られる
-/// こと（要件 1.4）の end-to-end の確かめも兼ねる（縮退の k₀ そのものは
+/// ことの end-to-end の確かめも兼ねる（縮退の k₀ そのものは
 /// [`build_measure_scaling_degrades_to_96_equivalent_when_primary_dpi_unobtainable`] が持つ）。
 #[test]
 fn prepare_stamps_measure_dpi_onto_balloon_offset_base() {

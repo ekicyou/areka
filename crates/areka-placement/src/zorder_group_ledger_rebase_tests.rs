@@ -1,7 +1,7 @@
 //! シェルの切り替え専用の口 [`ZOrderGroupLedger::rebase_descript`] と、据え損ねた基底の
-//! 寿命の檻（`stay-on-top-directives` 要件 5.1／5.2／5.5／7.4・task 4.1）。
+//! 寿命のテスト。
 //!
-//! 台帳の状態遷移の檻（`t_zgl*`）と分けて接頭辞を `t_zrb*` にする。実機・World を
+//! 台帳の状態遷移のテスト（`t_zgl*`）と分けて接頭辞を `t_zrb*` にする。実機・World を
 //! 一切必要とせず、台帳は各テストが自前で作る値である。
 
 use super::*;
@@ -20,7 +20,7 @@ fn sources(ledger: &ZOrderGroupLedger) -> Vec<GroupSource> {
     ledger.groups().iter().map(|group| group.source).collect()
 }
 
-/// 台本の組を保ち、古い基底を外し、新しい基底を先頭に新しい ID で据える（要件 5.1）。
+/// 台本の組を保ち、古い基底を外し、新しい基底を先頭に新しい ID で据える。
 #[test]
 fn t_zrb1_rebase_keeps_tag_groups_and_seats_the_new_base_first() {
     let (mut ledger, old_base, tag_id) = ledger_with_base_and_tag();
@@ -70,7 +70,7 @@ fn t_zrb2_rebase_without_an_old_base_inserts_the_base_ahead_of_tags() {
     );
 }
 
-/// 台本の組とスコープが重なる基底は据えず、重なったスコープを返し、据え損ねた基底として持つ（要件 5.2）。
+/// 台本の組とスコープが重なる基底は据えず、重なったスコープを返し、据え損ねた基底として持つ。
 #[test]
 fn t_zrb3_a_base_overlapping_a_tag_group_is_not_seated() {
     let (mut ledger, old_base, tag_id) = ledger_with_base_and_tag();
@@ -121,7 +121,7 @@ fn t_zrb5_an_empty_list_means_no_base() {
     assert_eq!(ledger.pending_base, None);
 }
 
-/// 切り替えの後の `\![reset,zorder]` は台本の組を落とし、据え損ねた基底を先頭に据える（要件 5.5）。
+/// 切り替えの後の `\![reset,zorder]` は台本の組を落とし、据え損ねた基底を先頭に据える。
 #[test]
 fn t_zrb6_reset_seats_the_pending_base() {
     let (mut ledger, _, tag_id) = ledger_with_base_and_tag();

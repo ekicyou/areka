@@ -10,19 +10,19 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use tracing::warn;
 
-/// `seriko.alignmenttodesktop` の解釈（2.8: 未使用値はシーム受理）。語は大文字小文字を区別しない。
+/// `seriko.alignmenttodesktop` の解釈（未使用値はシーム受理）。語は大文字小文字を区別しない。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Alignment {
-    /// 既定（emo2 実使用）。Y は work area 下端固定・`defaulttop` 無視（2.2/2.4）。
+    /// 既定（emo2 実使用）。Y は work area 下端固定・`defaulttop` 無視。
     Bottom,
-    /// `defaultleft`/`defaulttop` が有効な X/Y 初期座標になる（2.6）。
+    /// `defaultleft`/`defaulttop` が有効な X/Y 初期座標になる。
     Free,
     /// `top`/`left`/`right`/未知値: 書かれたままの値を転記保持。resolver が `Anchor::from_alignment` で解釈し、
-    /// `top`/`left`/`right` はその辺で最初の位置を解き、未知値は `Bottom` と同じ＋警告（DD9）。
+    /// `top`/`left`/`right` はその辺で最初の位置を解き、未知値は `Bottom` と同じ＋警告。
     Seam(String),
 }
 
-/// バルーンの左右位置（暫定 offset の向きにのみ使用・DD7）。既定 `Left`。
+/// バルーンの左右位置（暫定 offset の向きにのみ使用）。既定 `Left`。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BalloonSide {
     /// バルーンをキャラ窓の左側へ（既定・emo2 scope0）。
@@ -36,11 +36,11 @@ pub enum BalloonSide {
     Auto,
 }
 
-/// バルーン水平配置モード（P5 の基本位置分岐・既定 `Side`＝現行挙動）。
+/// バルーン水平配置モード（基本位置分岐・既定 `Side`＝現行挙動）。
 ///
 /// `windowposition.x` のキーワード語彙（`center`/`top`/`bottom`）を保持する枠。
 /// 語彙の分類は `windowposition.rs` の `classify_x_vocab`、警告は取得経路（`lib.rs`）、実際の
-/// 幾何は resolver の P5 が持ち、本 enum はその解決結果を scope 別に持ち回るためだけに存在する。
+/// 幾何は resolver が持ち、本 enum はその解決結果を scope 別に持ち回るためだけに存在する。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BalloonXMode {
     /// 数値指定・未指定（現行の [`BalloonSide`] 分岐へ委譲・bit 同一）。
@@ -55,13 +55,13 @@ pub enum BalloonXMode {
 /// スコープ 1 つぶんのカスケード解決済み配置構成。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeConfig {
-    /// 4 層カスケード解決済み（既定 `Bottom`・2.2/2.3）。
+    /// 4 層カスケード解決済み（既定 `Bottom`）。
     pub alignment: Alignment,
-    /// X 初期座標指定。同層内 `defaultx` ＞ `defaultleft`・層間 shell ＞ ghost（2.5/2.7・DD3）。
+    /// X 初期座標指定。同層内 `defaultx` ＞ `defaultleft`・層間 shell ＞ ghost。
     pub default_x: Option<i32>,
-    /// Y 初期座標指定。同層内 `defaulty` ＞ `defaulttop`・層間 shell ＞ ghost（2.6/2.7）。
+    /// Y 初期座標指定。同層内 `defaulty` ＞ `defaulttop`・層間 shell ＞ ghost。
     pub default_y: Option<i32>,
-    /// `balloon.alignment`（`left` 既定／`right`／`none`＝自動）。暫定 offset の向き決定にのみ使用（1.2・DD7）。
+    /// `balloon.alignment`（`left` 既定／`right`／`none`＝自動）。暫定 offset の向き決定にのみ使用。
     pub balloon_alignment: BalloonSide,
     /// `balloon.offsetx`/`balloon.offsety`。軸ごとに決まり、書かれない軸は 0。どちらも無ければ
     /// None（emo2 は未使用＝None）。
@@ -69,10 +69,10 @@ pub struct ScopeConfig {
     /// `balloon_offset.x` のうち descript の `balloon.offsetx` から来た分（既定 0）。
     /// 解く時点では生値、作者の拡大率の換算の後は換算値。`windowposition.x` の分は入らない。
     pub balloon_offset_descript_x: i32,
-    /// `windowposition.limit` の解決値（正典既定 `true`＝画面内へ維持する・1.2）。
+    /// `windowposition.limit` の解決値（正典既定 `true`＝画面内へ維持する）。
     /// 供給元はバルーン定義側の取得経路であり descript KV ではない。
     /// 未収載 scope が [`ScopeConfig::default()`] で配置される既存契約により、
-    /// バルーン定義が読めなかった scope でも limit は有効になる（1.2）。
+    /// バルーン定義が読めなかった scope でも limit は有効になる。
     pub balloon_limit: bool,
     /// `windowposition.x` のキーワード語彙の解決値（既定 [`BalloonXMode::Side`]＝
     /// 現行の左右分岐と同一挙動）。供給元は `balloon_limit` と同じ取得経路。
@@ -88,7 +88,7 @@ impl Default for ScopeConfig {
             balloon_alignment: BalloonSide::Left,
             balloon_offset: None,
             balloon_offset_descript_x: 0,
-            // 正典既定 1（有効・1.2）。未指定・未収載・定義読み取り失敗のいずれも
+            // 正典既定 1（有効）。未指定・未収載・定義読み取り失敗のいずれも
             // この既定へ落ちる。
             balloon_limit: true,
             balloon_x_mode: BalloonXMode::Side,
@@ -99,7 +99,7 @@ impl Default for ScopeConfig {
 /// ghost/shell descript KV から解決した配置構成の全体（スコープ別＋シーム転記）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlacementConfig {
-    /// 検出済みスコープ（0 起点・`BTreeMap` で昇順）。emo2 → {0, 1}（DD6）。
+    /// 検出済みスコープ（0 起点・`BTreeMap` で昇順）。emo2 → {0, 1}。
     pub scopes: BTreeMap<usize, ScopeConfig>,
     /// shell `seriko.zorder` の生転記。
     ///
@@ -108,20 +108,20 @@ pub struct PlacementConfig {
     /// シェルの切り替えでは `crates/areka-runtime/src/frame/switch.rs` が据え直す
     /// （解釈器はタグ入口と共通・`runtime::frame::zorder_descript`）。
     pub zorder_raw: Option<String>,
-    /// shell `seriko.sticky-window` の生転記（起動で窓の組の帳簿へ据える・
-    /// areka-P0-window-link-directives 要件 3.8）。シェルの切り替えでは `crates/areka-runtime/src/frame/switch.rs` が
+    /// shell `seriko.sticky-window` の生転記（起動で窓の組の帳簿へ据える）。
+    /// シェルの切り替えでは `crates/areka-runtime/src/frame/switch.rs` が
     /// `sticky_group_ledger::replace_sticky_descript` で descript の分を新しいシェルの値へ取り替える。
     pub sticky_window_raw: Option<String>,
 }
 
 /// KV → 構成（純粋・パニックしない・数値化不能は None＋`warn!`）。
 ///
-/// カスケード（正典表準拠・2.3）: `alignment` は「ghost 全体 → ghost スコープ →
+/// カスケード（正典表準拠）: `alignment` は「ghost 全体 → ghost スコープ →
 /// shell 全体 → shell スコープ」の後勝ち 4 層。`default_x/y`・`balloon.*` は
 /// スコープ別キーのみの 2 層（shell が ghost に勝つ）。
 ///
 /// 同層内の優先順位: 正典プレフィックス（`sakura.`/`kero.`）＞ 別名（`char0.`/`char1.`）、
-/// 同一プレフィックス内では `defaultx` ＞ `defaultleft`・`defaulty` ＞ `defaulttop`（DD3）・
+/// 同一プレフィックス内では `defaultx` ＞ `defaultleft`・`defaulty` ＞ `defaulttop`・
 /// `alignmenttodesktop` ＞ 別綴 `alignmentondesktop`。
 pub fn build_placement_config(
     ghost_kv: &BTreeMap<String, String>,
@@ -134,7 +134,7 @@ pub fn build_placement_config(
 
     PlacementConfig {
         scopes,
-        // シーム転記の所在は shell descript（正典表・5.2/DD11）。ghost 側同名キーは対象外。
+        // シーム転記の所在は shell descript（正典表）。ghost 側同名キーは対象外。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1
         zorder_raw: shell_kv.get("seriko.zorder").cloned(),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#seriko.sticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1
@@ -142,12 +142,11 @@ pub fn build_placement_config(
     }
 }
 
-/// スコープ検出（DD6）: scope0 常設・scope1 は「ghost `kero.name` **or** shell の
+/// スコープ検出: scope0 常設・scope1 は「ghost `kero.name` **or** shell の
 /// `kero.` 接頭キー存在」。`char0.`/`char1.` は別名（値の受理のみ）でありスコープ検出
 /// シグナルではない。
 ///
-/// `char{n}.`（n≥2）接頭キーからは scope を足さない（spec: areka-P0-emily-ghost-verification
-/// 要件 4.7・6.7）。3 人目以降の窓はまだ作らない——作ると入力とメニューの
+/// `char{n}.`（n≥2）接頭キーからは scope を足さない。3 人目以降の窓はまだ作らない——作ると入力とメニューの
 /// `debug_assert!(scope <= 1)` に当たる。絞りを外すのは `extra-character-windows`。
 fn detect_scopes(
     ghost_kv: &BTreeMap<String, String>,
@@ -208,7 +207,7 @@ fn resolve_scope(
     ghost_kv: &BTreeMap<String, String>,
     shell_kv: &BTreeMap<String, String>,
 ) -> ScopeConfig {
-    // alignmenttodesktop の綴り（正典 ＞ 別綴 alignmentondesktop・正典表 row 1 注記）
+    // alignmenttodesktop の綴り（正典 ＞ 別綴 alignmentondesktop）
     const ALIGN_SUFFIXES: [&str; 2] = ["seriko.alignmenttodesktop", "seriko.alignmentondesktop"];
     fn global_align(kv: &BTreeMap<String, String>) -> Option<&String> {
         ALIGN_SUFFIXES.iter().find_map(|k| kv.get(*k))
@@ -228,7 +227,7 @@ fn resolve_scope(
         Some((raw, _)) => Alignment::Seam(raw.to_owned()),
     };
 
-    // 両表記寛容（2.7）: X は defaultx ＞ defaultleft・Y は defaulty ＞ defaulttop（DD3）
+    // 両表記寛容: X は defaultx ＞ defaultleft・Y は defaulty ＞ defaulttop
     let default_x = parse_i32(
         cascade2(ghost_kv, shell_kv, scope, &["defaultx", "defaultleft"]),
         "defaultx/defaultleft",
@@ -275,14 +274,11 @@ fn resolve_scope(
     let balloon_offset = (offset_x.is_some() || offset_y.is_some())
         .then(|| (offset_x.unwrap_or(0), offset_y.unwrap_or(0)));
 
-    // `windowposition` 族は descript KV ではなくバルーン定義側の語彙である。本関数は KV の
-    // 純粋転記に徹し、正典既定をそのまま置く（実供給は `lib.rs` の
-    // `load_scope_windowpositions` → `scale_then_merge` が持つ取得経路）。
+    // `windowposition` 族は descript KV ではなくバルーン定義側の語彙で、実供給は `lib.rs` の
+    // `load_scope_windowpositions` → `scale_then_merge` が持つ。ここは正典既定を置くだけ。
     //
-    // 既定値の**単一権威は [`ScopeConfig::default`]** ゆえ literal を再掲せず既定から読む。
-    // 同時に `..` 省略記法を使わず全フィールドを列挙することで、今後 `ScopeConfig` へ欄が
-    // 増えたとき**ここが必ずコンパイルエラーになる**（黙って既定が入り、供給元の追随漏れが
-    // 隠れることを防ぐ）。
+    // 既定値は [`ScopeConfig::default`] から読み、`..` 省略記法を使わず全フィールドを列挙する
+    // （欄が増えたときここがコンパイルエラーになり、供給元の追随漏れが隠れない）。
     let canonical = ScopeConfig::default();
     ScopeConfig {
         alignment,
@@ -330,12 +326,12 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // T-C1: 4 層カスケード（ghost 全体＜ghost scope＜shell 全体＜shell scope）
+    // 4 層カスケード（ghost 全体＜ghost scope＜shell 全体＜shell scope）
     // ------------------------------------------------------------------
 
-    /// T-C1: `alignment` の 4 層カスケードを、各層の存在有無 2^4=16 全パターンで固定する。
+    /// `alignment` の 4 層カスケードを、各層の存在有無 2^4=16 全パターンで固定する。
     /// 層マーカーには未知値（→ `Alignment::Seam`）を使い、勝者の層をそのまま観測する。
-    /// 全層欠落時は既定 `Bottom`（2.2）。
+    /// 全層欠落時は既定 `Bottom`。
     #[test]
     fn t_c1_alignment_four_layer_cascade_all_patterns() {
         for mask in 0u32..16 {
@@ -377,7 +373,7 @@ mod tests {
         }
     }
 
-    /// T-C1: 実値（`bottom`/`free`）でも後勝ちが成立する（shell スコープ別が最強）。
+    /// 実値（`bottom`/`free`）でも後勝ちが成立する（shell スコープ別が最強）。
     #[test]
     fn t_c1_alignment_real_values_later_layer_wins() {
         // ghost 全体 free ＜ shell スコープ別 bottom → Bottom
@@ -393,7 +389,7 @@ mod tests {
         assert_eq!(cfg.scopes[&0].alignment, Alignment::Free);
     }
 
-    /// T-C1: `default_x` はスコープ別キーのみの 2 層カスケード（ghost ＜ shell）。
+    /// `default_x` はスコープ別キーのみの 2 層カスケード（ghost ＜ shell）。
     /// 存在有無 2^2=4 全パターン。
     #[test]
     fn t_c1_default_x_two_layer_cascade_all_patterns() {
@@ -418,7 +414,7 @@ mod tests {
         }
     }
 
-    /// T-C1: `balloon.alignment` も 2 層カスケード（shell が ghost に勝つ）。
+    /// `balloon.alignment` も 2 層カスケード（shell が ghost に勝つ）。
     #[test]
     fn t_c1_balloon_alignment_two_layer_cascade() {
         let ghost = kv(&[("sakura.balloon.alignment", "left")]);
@@ -440,7 +436,7 @@ mod tests {
         assert_eq!(cfg.scopes[&1].balloon_alignment, BalloonSide::Auto);
     }
 
-    /// T-C1: `balloon.alignment` の値は大文字小文字を区別しない（`Right`・`NONE`・`LEFT`）。
+    /// `balloon.alignment` の値は大文字小文字を区別しない（`Right`・`NONE`・`LEFT`）。
     /// 知らない値の警告は書かれたままの値を載せる。
     #[test]
     fn t_c1_balloon_alignment_ignores_case() {
@@ -462,10 +458,10 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // T-C2: 両表記寛容（defaultx⇔defaultleft／defaulty⇔defaulttop）と優先順位
+    // 両表記寛容（defaultx⇔defaultleft／defaulty⇔defaulttop）と優先順位
     // ------------------------------------------------------------------
 
-    /// T-C2: `defaultleft` 単独は X スロットへ、`defaulttop` 単独は Y スロットへ受理する。
+    /// `defaultleft` 単独は X スロットへ、`defaulttop` 単独は Y スロットへ受理する。
     #[test]
     fn t_c2_variant_notation_alone_is_accepted() {
         let shell = kv(&[("sakura.defaultleft", "42"), ("sakura.defaulttop", "24")]);
@@ -474,7 +470,7 @@ mod tests {
         assert_eq!(cfg.scopes[&0].default_y, Some(24));
     }
 
-    /// T-C2: 同層競合時は `defaultx` が `defaultleft` に勝つ（DD3）。
+    /// 同層競合時は `defaultx` が `defaultleft` に勝つ。
     #[test]
     fn t_c2_defaultx_wins_over_defaultleft_same_layer() {
         let shell = kv(&[("sakura.defaultx", "1"), ("sakura.defaultleft", "2")]);
@@ -482,7 +478,7 @@ mod tests {
         assert_eq!(cfg.scopes[&0].default_x, Some(1));
     }
 
-    /// T-C2: 同層競合時は `defaulty` が `defaulttop` に勝つ（DD3 と同方向）。
+    /// 同層競合時は `defaulty` が `defaulttop` に勝つ。
     #[test]
     fn t_c2_defaulty_wins_over_defaulttop_same_layer() {
         let shell = kv(&[("sakura.defaulty", "3"), ("sakura.defaulttop", "4")]);
@@ -490,7 +486,7 @@ mod tests {
         assert_eq!(cfg.scopes[&0].default_y, Some(3));
     }
 
-    /// T-C2: 層が違えば表記より層が勝つ（shell の `defaultleft` ＞ ghost の `defaultx`）。
+    /// 層が違えば表記より層が勝つ（shell の `defaultleft` ＞ ghost の `defaultx`）。
     #[test]
     fn t_c2_layer_beats_notation() {
         let ghost = kv(&[("sakura.defaultx", "5")]);
@@ -499,7 +495,7 @@ mod tests {
         assert_eq!(cfg.scopes[&0].default_x, Some(7));
     }
 
-    /// T-C2: 別綴 `alignmentondesktop` を寛容受理し、同層に正典綴があれば正典側が勝つ。
+    /// 別綴 `alignmentondesktop` を寛容受理し、同層に正典綴があれば正典側が勝つ。
     #[test]
     fn t_c2_alignmentondesktop_spelling_variant() {
         let shell = kv(&[("seriko.alignmentondesktop", "free")]);
@@ -514,7 +510,7 @@ mod tests {
         assert_eq!(cfg.scopes[&0].alignment, Alignment::Bottom);
     }
 
-    /// T-C2: `char0.`/`char1.` は `sakura.`/`kero.` の de-facto 別名として同スロットへ
+    /// `char0.`/`char1.` は `sakura.`/`kero.` の de-facto 別名として同スロットへ
     /// 寛容受理し、正典キーと衝突時は正典側が優先される。
     #[test]
     fn t_c2_char0_char1_prefix_aliases() {
@@ -543,7 +539,7 @@ mod tests {
         assert_eq!(cfg.scopes[&1].default_y, Some(2));
     }
 
-    /// T-C2: 読めない値（未知の `balloon.alignment`・数値でない `defaultx`／`defaulty`）は
+    /// 読めない値（未知の `balloon.alignment`・数値でない `defaultx`／`defaulty`）は
     /// パニックせず、1 つにつき `warn!` を 1 件ずつ出し、値は既定（Left・None）になる。
     #[test]
     fn t_c2_unreadable_values_warn_once_each_and_fall_back() {
@@ -567,17 +563,17 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // T-C3: スコープ検出シグナル（DD6）
+    // スコープ検出シグナル
     // ------------------------------------------------------------------
 
-    /// T-C3: 信号なしでは scope0 のみ常設。
+    /// 信号なしでは scope0 のみ常設。
     #[test]
     fn t_c3_no_signal_yields_scope0_only() {
         let cfg = build_placement_config(&empty(), &empty());
         assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0]);
     }
 
-    /// T-C3: ghost `kero.name` で scope1 が生える。
+    /// ghost `kero.name` で scope1 が生える。
     #[test]
     fn t_c3_ghost_kero_name_adds_scope1() {
         let ghost = kv(&[("kero.name", "エモ")]);
@@ -585,7 +581,7 @@ mod tests {
         assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0, 1]);
     }
 
-    /// T-C3: shell の `kero.` 接頭キー存在でも scope1 が生える。
+    /// shell の `kero.` 接頭キー存在でも scope1 が生える。
     #[test]
     fn t_c3_shell_kero_prefix_adds_scope1() {
         let shell = kv(&[("kero.balloon.alignment", "right")]);
@@ -593,8 +589,8 @@ mod tests {
         assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0, 1]);
     }
 
-    /// T-C3: `char{n}.`（n≥2）キーは ghost/shell どちら側でも scope を足さない
-    /// （spec: areka-P0-emily-ghost-verification 要件 4.7・6.7）。scope 3 の設定は無い。
+    /// `char{n}.`（n≥2）キーは ghost/shell どちら側でも scope を足さない。
+    /// scope 3 の設定は無い。
     #[test]
     fn t_c3_char_n_prefix_does_not_add_scope_n() {
         let ghost = kv(&[("kero.name", "エモ"), ("char2.name", "三人目")]);
@@ -603,8 +599,8 @@ mod tests {
         assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0, 1]);
     }
 
-    /// T-C3: `charset` キーは `char{n}.` 検出に誤マッチしない。
-    /// `char0.`/`char1.`（別名）はスコープ検出シグナルではない（DD6 は kero 信号のみ）。
+    /// `charset` キーは `char{n}.` 検出に誤マッチしない。
+    /// `char0.`/`char1.`（別名）はスコープ検出シグナルではない（kero 信号のみ）。
     #[test]
     fn t_c3_detection_rejects_non_signals() {
         let shell = kv(&[("charset", "UTF-8"), ("char1.defaultx", "0")]);
@@ -613,13 +609,13 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // T-C4: emo2 実測 KV 固定（正典表検証行の檻）
+    // emo2 実測 KV 固定（正典表検証行の檻）
     // ------------------------------------------------------------------
 
-    /// T-C4: emo2 実測 descript 相当の入力（`parse_kv` 実出力形）から
+    /// emo2 実測 descript 相当の入力（`parse_kv` 実出力形）から
     /// `{0: bottom/defaultx 0/balloon left, 1: bottom/defaultx 0/balloon right}` を得る。
     /// あわせてデモ由来の固定座標定数（(400,200)/(335,0) 等）が構成のどの数値
-    /// スロットにも現れないことを固定する（1.5——本モジュールは KV の純粋転記であり、
+    /// スロットにも現れないことを固定する（本モジュールは KV の純粋転記であり、
     /// 入力に無い数値は出力に出現し得ない）。
     #[test]
     fn t_c4_emo2_actual_kv_pins_canonical_result() {
@@ -667,10 +663,10 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // T-C5: zorder/sticky の raw 転記シーム（5.2・DD11）
+    // zorder/sticky の raw 転記シーム
     // ------------------------------------------------------------------
 
-    /// T-C5: shell の `seriko.zorder`／`seriko.sticky-window` を
+    /// shell の `seriko.zorder`／`seriko.sticky-window` を
     /// 生文字列のまま転記する（解釈は転記の先が行う）。値中のカンマも保持。
     #[test]
     fn t_c5_seam_fields_raw_transcription() {
@@ -683,7 +679,7 @@ mod tests {
         assert_eq!(cfg.sticky_window_raw.as_deref(), Some("0,1"));
     }
 
-    /// T-C5: 未指定なら None。ghost 側の同名キーは転記対象でない（所在は shell descript）。
+    /// 未指定なら None。ghost 側の同名キーは転記対象でない（所在は shell descript）。
     #[test]
     fn t_c5_seam_fields_absent_and_shell_only() {
         let ghost = kv(&[("seriko.zorder", "1"), ("seriko.sticky-window", "0,1")]);

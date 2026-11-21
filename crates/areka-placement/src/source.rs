@@ -3,13 +3,13 @@
 //! `areka_parsers::package::resolve_with_shell` → ghost/shell descript.txt 読込
 //! （`charset::decode` 既定 Ansi → `kv::parse_kv`）→ (ghost_kv, shell_kv, shell_dir, titles)。
 //!
-//! 依存規約（lib.rs・design「placement::source」）: areka-parsers＋std
+//! 依存規約（lib.rs）: areka-parsers＋std
 //! （＋tracing）と失敗の型（`error`）のみを import する。wintf/bevy_ecs/emo 系・ほかの兄弟
 //! モジュール（config/resolver/…）へは依存しない。
 //!
 //! エンコーディング既定は `DefaultEncoding::Ansi`（charset の無い descript は SSP の既定の
 //! Ansi で読む。emo2 は `charset,UTF-8` 宣言を持つため prescan の
-//! 宣言優先で UTF-8 デコードされる＝既定 Ansi でも実測どおり読める・DD4）。
+//! 宣言優先で UTF-8 デコードされる＝既定 Ansi でも実測どおり読める）。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -24,14 +24,14 @@ use crate::error::PlacementError;
 /// descript 定義ファイル名（ghost/master と shell/<dir> の双方で同名）。
 const DESCRIPT_FILE: &str = "descript.txt";
 
-/// 窓タイトルの既定値（欠落スコープ・design「placement::source」）。
+/// 窓タイトルの既定値（欠落スコープ）。
 const DEFAULT_TITLE: &str = "areka";
 
 /// scope n≥2 のタイトルキー接頭辞／接尾辞（ghost descript `char{n}.name`）。
 const CHAR_PREFIX: &str = "char";
 const NAME_SUFFIX: &str = ".name";
 
-/// 作者基準 DPI の既定値（ukadoc 正典・areka-P0-emo-dpi-scaling design D1）。
+/// 作者基準 DPI の既定値（ukadoc 正典）。
 ///
 /// ukadoc「seriko.dpi,推奨DPI」／「dpi,推奨DPI」がともに「何も指定しなければ Windows 標準の
 /// 96 固定」と定める（SSP 2.7.21+）。無宣言・不正・0 はすべてこの値へ縮退する。
@@ -51,11 +51,10 @@ const BALLOON_DPI_KEY: &str = "dpi";
 
 /// 窓タイトルの正本（Win32 識別／デバッグ観測用）。
 ///
-/// scope0 = `sakura.name`・scope1 = `kero.name`（`MountModel.names` 由来・design
-/// 記載どおり）・scope n≥2 = ghost descript KV の `char{n}.name`（あれば）。
-/// `GhostNames` は `sakura_name`/`kero_name` のみを運ぶため、design の
-/// 「`char{n}.name`（あれば）」は同じ起点 descript を decode した `ghost_kv` から
-/// 補完する（正本は同一ファイル＝意味は等価・選択理由を本コメントに記録）。
+/// scope0 = `sakura.name`・scope1 = `kero.name`（`MountModel.names` 由来）・
+/// scope n≥2 = ghost descript KV の `char{n}.name`（あれば）。
+/// `GhostNames` は `sakura_name`/`kero_name` のみを運ぶため、`char{n}.name` は
+/// 同じ起点 descript を decode した `ghost_kv` から補完する（正本は同一ファイル＝意味は等価）。
 /// 欠落スコープは既定 [`DEFAULT_TITLE`]（パニックしない・常に文字列を返す）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GhostTitles {
@@ -106,10 +105,10 @@ pub struct DescriptSource {
 }
 
 impl DescriptSource {
-    /// shell descript の作者基準 DPI（ukadoc `seriko.dpi`・SSP 2.7.21+・design D1）。
+    /// shell descript の作者基準 DPI（ukadoc `seriko.dpi`・SSP 2.7.21+）。
     ///
     /// 既に読み込み済みの生 KV（[`DescriptSource::shell_kv`]）から読むだけで、
-    /// パーサ改造も再 I/O も行わない（D1「既存生 KV から読む」）。
+    /// パーサ改造も再 I/O も行わない。
     /// 無宣言＝96（`debug!`）・不正／0＝96（`warn!`）——[`parse_author_dpi`] の縮退梯子に従う。
     /// panic しない（常に有効な非ゼロ DPI を返す）。
     pub fn shell_author_dpi(&self) -> u16 {
@@ -128,15 +127,14 @@ pub fn load_descript_source(ghost_root: &Path) -> Result<DescriptSource, Placeme
 }
 
 /// `ghost_root` から shell dir を解決し、ghost/shell descript.txt を charset
-/// 対応（既定 Ansi）で読み `DescriptSource` を返す（design「placement::source」・DD4・
-/// areka-P0-shell-balloon-switch 要件 6.4）。
+/// 対応（既定 Ansi）で読み `DescriptSource` を返す。
 ///
 /// `shell` が `Some(名)` なら `ghost_root/shell/<名>` の `descript.txt` を読む。`None` は
 /// 今日の規則（`areka_parsers::package::resolve_with_shell` の名前なし）。名前の先が無ければ
 /// 既定のシェルへ黙って戻らず、`error!`＋`Err(PlacementError::Mount)` を返す。
 /// 名前の検査はしない（渡す側が目録に在る名前だけを渡す）。
 ///
-/// 失敗契約（design「Error Handling」・log-first）:
+/// 失敗契約（log-first）:
 /// - resolve 失敗 → `error!`＋`Err(PlacementError::Mount)`
 /// - shell descript 読取失敗 → `error!`＋`Err(PlacementError::DescriptRead)`
 /// - ghost descript 読取失敗 → `warn!`＋空 KV で継続（shell 側だけで emo2 は成立。
@@ -145,17 +143,16 @@ pub fn load_descript_source_for_shell(
     ghost_root: &Path,
     shell: Option<&str>,
 ) -> Result<DescriptSource, PlacementError> {
-    // マウント解決（shell dir・ghost/master dir・names の正本）。
     let model = resolve_with_shell(ghost_root, DefaultEncoding::Ansi, shell).map_err(|e| {
         error!(ghost_root = %ghost_root.display(), shell = ?shell, error = ?e, "ゴーストのマウント解決に失敗");
         PlacementError::Mount(e)
     })?;
 
-    // ghost descript: 読取失敗は警告＋空 KV で継続（寛容経路は read_kv_lenient に局在）。
+    // ghost 側の読取失敗は警告＋空 KV で継続（寛容経路は read_kv_lenient に局在）。
     let ghost_descript = model.shiori.dir.join(DESCRIPT_FILE);
     let ghost_kv = read_kv_lenient(&ghost_descript);
 
-    // shell descript: 読取失敗は `Err` で呼び手へ返す（ghost 側のように空 KV で続けない）。
+    // shell 側の読取失敗は `Err` で呼び手へ返す（ghost 側のように空 KV で続けない）。
     let shell_descript = model.shell.dir.join(DESCRIPT_FILE);
     let shell_kv = match std::fs::read(&shell_descript) {
         Ok(bytes) => read_kv(&bytes),
@@ -189,7 +186,7 @@ fn read_kv(bytes: &[u8]) -> BTreeMap<String, String> {
 /// 本ヘルパは ghost 専用ではなく [`load_balloon_author_dpi`] も通る**共有の読取器**ゆえ、
 /// 失敗ログの文言は**帰属中立**にする（実帰属は `path` フィールドが運ぶ）。
 /// ghost 固定文言にすると、バルーン descript 不在時の warn が ghost 起因に見え、
-/// R6.3 の `RUST_LOG` grep 判定を誤らせる。
+/// `RUST_LOG` の grep 判定を誤らせる。
 pub fn read_kv_lenient(path: &Path) -> BTreeMap<String, String> {
     match std::fs::read(path) {
         Ok(bytes) => read_kv(&bytes),
@@ -201,14 +198,14 @@ pub fn read_kv_lenient(path: &Path) -> BTreeMap<String, String> {
 }
 
 /// balloon descript.txt（`balloon_root/descript.txt`）の作者基準 DPI
-/// （ukadoc `dpi`・SSP 2.7.21+・design D1）。
+/// （ukadoc `dpi`・SSP 2.7.21+）。
 ///
 /// balloon 側は shell と別パッケージ（`DescriptSource` の対象外）ゆえ、ここで
 /// 寛容読取（[`read_kv_lenient`]・失敗は `warn!`＋空 KV）してから同じ縮退梯子
 /// [`parse_author_dpi`] を通す。**読取器は 1 本のまま**（第 2 のリーダを発明しない）で、
 /// balloon か shell かの帰属はログの `source` フィールドで区別できる。
 ///
-/// 縮退（design「Error Handling」・すべて観測可能・panic しない）:
+/// 縮退（すべて観測可能・panic しない）:
 /// - ファイル不在・読取失敗 → `warn!`（[`read_kv_lenient`]・パス付き）＋無宣言扱い＝96
 /// - 無宣言 → `debug!`＋96 ／ 不正・0 → `warn!`＋96
 pub fn load_balloon_author_dpi(balloon_root: &Path) -> u16 {
@@ -217,8 +214,7 @@ pub fn load_balloon_author_dpi(balloon_root: &Path) -> u16 {
     parse_author_dpi(kv.get(BALLOON_DPI_KEY).map(String::as_str), BALLOON_DPI_KEY)
 }
 
-/// 作者基準 DPI の生値を解釈する単一権威（design D1・「Error Handling」の
-/// 「author_dpi 不正・0・無宣言」行）。`source` は帰属識別用のキー名（ログ専用）。
+/// 作者基準 DPI の生値を解釈する単一権威。`source` は帰属識別用のキー名（ログ専用）。
 ///
 /// 縮退梯子（無言経路なし・log-first）:
 /// - `None`（無宣言） → `debug!`＋[`DEFAULT_AUTHOR_DPI`]（正典の既定＝異常ではない）

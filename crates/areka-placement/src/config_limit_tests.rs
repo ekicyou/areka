@@ -1,4 +1,4 @@
-//! `ScopeConfig` の limit / 水平配置モード保持枠の檻（要件 1.2・1.4／設計 C3）。
+//! `ScopeConfig` の limit / 水平配置モード保持枠の檻。
 //!
 //! ここで固定するのは**保持枠の既定値と縮退経路**のみである。
 //! `windowposition.limit` の語彙分類・警告・幾何・runtime 関門は、取得経路（`lib.rs` の
@@ -8,11 +8,11 @@ use super::{BalloonSide, BalloonXMode, ScopeConfig, build_placement_config};
 use crate::test_support::kv;
 
 // ------------------------------------------------------------------
-// T-L1: 保持枠の既定値（1.2）
+// 保持枠の既定値
 // ------------------------------------------------------------------
 
-/// T-L1: `ScopeConfig::default()` の limit は正典既定＝有効（1.2）。
-/// 水平配置モードの既定は `Side`＝現行の左右分岐と同一挙動（設計 C3）。
+/// `ScopeConfig::default()` の limit は正典既定＝有効。
+/// 水平配置モードの既定は `Side`＝現行の左右分岐と同一挙動。
 #[test]
 fn t_l1_scope_config_default_enables_limit_and_side_mode() {
     let d = ScopeConfig::default();
@@ -33,16 +33,16 @@ fn t_l1_scope_config_default_enables_limit_and_side_mode() {
 }
 
 // ------------------------------------------------------------------
-// T-L2: descript KV 経路では保持枠が既定のまま（1.2）
+// descript KV 経路では保持枠が既定のまま
 // ------------------------------------------------------------------
 
-/// T-L2: descript KV（ghost/shell）には `windowposition` 系キーが存在しないため、
+/// descript KV（ghost/shell）には `windowposition` 系キーが存在しないため、
 /// `build_placement_config` が返す全 scope の limit は既定＝有効・モードは `Side`。
 /// バルーン定義側からの反映は `build_placement_config` の外、`lib.rs` の `scale_then_merge` が呼ぶ
 /// 取得経路（`merge_scope_windowpositions`）が行う。
 #[test]
 fn t_l2_build_placement_config_keeps_canonical_defaults_for_all_scopes() {
-    // emo2 実測相当（scope0/1）＋ char2（scope は足さない・areka-P0-emily-ghost-verification）
+    // emo2 実測相当（scope0/1）＋ char2（scope は足さない）
     let ghost = kv(&[("kero.name", "エモ"), ("char2.name", "三人目")]);
     let shell = kv(&[
         ("seriko.alignmenttodesktop", "bottom"),

@@ -9,9 +9,8 @@ use wintf::ecs::{Point, WindowHandle, WindowPos};
 
 use super::{MonitorSnapshot, project_anchor};
 use crate::resolver::RectPx;
-use crate::test_support::SharedFakeIo;
-// 写しを消して共有の部品を使う（使い手は従来どおりこの経路から引ける）。
 pub(super) use crate::shared_test_support::assert_no_event;
+use crate::test_support::SharedFakeIo;
 pub(crate) use crate::test_support::zorder_pair_deferred::code_only;
 pub(super) use crate::test_support::{contained, point};
 use log_capture_kit::CapturedEvent;
@@ -19,8 +18,7 @@ use log_capture_kit::CapturedEvent;
 // -------------------------------------------------------------------------
 // テストヘルパ（偽装境界: 実 HWND なしの headless World で決定論検証する。
 // SetWindowPosCommand は TLS キューへの enqueue のみで flush しないため、
-// 偽 HWND に対する実 SetWindowPos は一切呼ばれない——wintf 自身の
-// window_pos_systems_test と同じ流儀）
+// 偽 HWND に対する実 SetWindowPos は一切呼ばれない）
 // -------------------------------------------------------------------------
 
 /// 偽 HWND の WindowHandle（実窓なし・headless 決定論シーム）。
@@ -81,7 +79,7 @@ pub(super) fn odd_edge_snapshot() -> MonitorSnapshot {
 }
 
 // -------------------------------------------------------------------------
-// bottom 吸着ドラッグ（areka-P0-window-placement 要件 4.7・DD15 v2: 単一ライター）
+// bottom 吸着ドラッグ（単一ライター）
 //
 // BottomSnap キャラ窓は DragConfig{move_window:false}＝wndproc は窓を動かさず、
 // on_char_drag が DraggingState（dispatch_drag_events が挿入）＋DragEvent の
@@ -146,20 +144,19 @@ pub(crate) fn window_pos_sized(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 
 // -------------------------------------------------------------------------
 // work_area_for_window_with_origin ／ guard_visibility
-// （areka-P0-dpi-window-vanish 要件 3.1/3.2/5.1/5.3/5.6・D6/S3・S3′）
 //
-// 共通規約: 判定は絶対 px の固定値ではなく**交差・不変条件**で書く（areka-P0-dpi-window-vanish 要件 5.6）。
+// 共通規約: 判定は絶対 px の固定値ではなく**交差・不変条件**で書く。
 // 座標は 96/120/192 の各水準へスケールした合成レイアウト上で構築し、96 の
-// 自己整合（k=1 で恒等写像に退化して欠陥を隠す性質・areka-P0-dpi-window-vanish 要件 5.1）に依存しない。
+// 自己整合（k=1 で恒等写像に退化して欠陥を隠す性質）に依存しない。
 // -------------------------------------------------------------------------
 
 use crate::resolver::{Anchor, PointPx, SizePx};
 
-/// DPI 水準（areka-P0-dpi-window-vanish 要件 5.1: 96 のほかに 120・192 を必ず含む）。
+/// DPI 水準（96 のほかに 120・192 を必ず含む）。
 pub(super) const DPIS: [i32; 3] = [96, 120, 192];
 
 /// 論理基準値 → 各 DPI の物理 px（整数演算のみ・厳密整除を強制。
-/// `resolver_test_support.rs` の `px()` が donor・areka-P0-dpi-window-vanish 要件 5.6）。
+/// `resolver_test_support.rs` の `px()` が donor）。
 pub(super) fn px(logical: i32, dpi: i32) -> i32 {
     assert_eq!(
         (logical * dpi) % 96,
@@ -169,7 +166,7 @@ pub(super) fn px(logical: i32, dpi: i32) -> i32 {
     logical * dpi / 96
 }
 
-/// 混在 DPI マルチモニタの合成レイアウト（areka-P0-dpi-window-vanish 要件 5.1/5.3）。
+/// 混在 DPI マルチモニタの合成レイアウト。
 ///
 /// - index 0: 96 水準の左モニタ。**負座標**（`-1920..0`）・上端 40px の
 ///   非対称 work area（`top = -40`）
@@ -250,14 +247,13 @@ pub(super) fn size_of(world: &World, entity: Entity) -> SizeI {
         .expect("size があるはず")
 }
 
-/// 手順書 §3.3 の grep 判定語（**本体の定数とは独立にここへ literal で置く**）。
+/// サインオフ手順書の grep 判定語（**本体の定数とは独立にここへ literal で置く**）。
 pub(super) const CLAMP_TAG: &str = "[visibility-guard] ClampX";
-/// 同上（最近傍フォールバックの非ドラッグ経路 warn 昇格・areka-P0-dpi-window-vanish 要件 3.2）。
+/// 同上（最近傍フォールバックの非ドラッグ経路 warn 昇格）。
 pub(super) const NEAREST_TAG: &str = "[visibility-guard] NearestFallback";
-/// 同上（work area を解決できず判定不能・areka-P0-dpi-window-vanish 要件 3.3）。
+/// 同上（work area を解決できず判定不能）。
 pub(super) const UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
-/// **どの work area とも交差しない位置に居た窓**を最近傍モニタへ引き寄せたことを表す
-/// 判定語（areka-P0-dpi-transition-atomicity 要件 5.5・task 5.1 が新設）。
+/// **どの work area とも交差しない位置に居た窓**を最近傍モニタへ引き寄せたことを表す判定語。
 ///
 /// [`NEAREST_TAG`] とは観測する矩形が違う——あちらは射影が**決めた位置**、こちらは射影の
 /// **入力**である。画面外に居た窓は、決めた位置がモニタ内へ収まってしまえばあちらの腕には
@@ -292,7 +288,7 @@ pub(super) fn gap_center_x(dpi: i32) -> i32 {
     px(40, dpi)
 }
 
-/// ガードを通さない**素の**射影結果（＝本タスク以前の挙動）。手順 3b と
+/// ガードを通さない**素の**射影結果。手順 3b と
 /// [`project_anchor`] を檻側で独立に再現し、本体の実装を呼び直さない。
 pub(super) fn unguarded_projection(dpi: i32, old_pos: PointPx, new: SizePx) -> PointPx {
     let old = wide_char_size(dpi);
@@ -329,7 +325,7 @@ pub(super) fn guard_events<'a>(
 }
 
 // -------------------------------------------------------------------------
-// 範囲の中のテストに写してあった組み立て（audit-placement-follow・指摘 16）
+// 実 spawn の World・永続化まわりの組み立て
 // -------------------------------------------------------------------------
 
 use std::path::PathBuf;
@@ -437,7 +433,7 @@ pub(super) fn k_axis(display_dpi: u32, author_dpi: u32) -> ScaleRatio {
 ///
 /// 旧寸 [`wide_char_size`] の窓を、下端中央付替え（`resize_window_to` 手順 3b）後の
 /// 中心が帯へ落ちる位置に置く。新寸 [`narrow_char_size`] は帯より狭いので、射影 T が
-/// 出す提案矩形は帯へ収まり **どの work area とも交差しない**——S3 が言う
+/// 出す提案矩形は帯へ収まり **どの work area とも交差しない**——
 /// 「非ドラッグ要因で不可視へ遷移する」状態そのものを合成する。
 pub(super) fn gap_bound_char_world(dpi: i32) -> (World, Entity, PointPx) {
     let old = wide_char_size(dpi);
@@ -588,7 +584,7 @@ pub(super) fn plant_minimal_ghost(label: &str) -> (TempPath, PathBuf, PathBuf) {
     (temp, root, profile_root)
 }
 
-/// 手順書 §3.3 の grep 判定語（`ClampX` で寄せた後も全 work area と非交差・本体とは独立の literal）。
+/// サインオフ手順書の grep 判定語（`ClampX` で寄せた後も全 work area と非交差・本体とは独立の literal）。
 pub(super) const HIDDEN_AFTER_CLAMP_TAG: &str = "[visibility-guard] HiddenAfterClampX";
 
 /// 見送りの `debug!` がちょうど 1 行で理由が `reason`、`warn!` は出ない（見送りは失敗でない）。

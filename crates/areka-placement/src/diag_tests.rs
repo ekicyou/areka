@@ -23,11 +23,11 @@ fn ent(raw: u32) -> Entity {
 }
 
 // ------------------------------------------------------------------
-// 語彙の固定（Req 1.2/2.4・診断手順書の grep 判定語と 1:1）
+// 語彙の固定（診断手順書の grep 判定語と 1:1）
 // ------------------------------------------------------------------
 
 /// 経路ごとの、[`PlacementRoute::ALL`] での番号・表示語・[`PlacementRoute::is_system_reanchor`]
-/// の答え（Req 2.4 の結論語彙・D9／D13／D16）。
+/// の答え（結論語彙）。
 ///
 /// 網羅の `match` ゆえ、経路を 1 つ足すとここが組めなくなる。番号を振る人は `ALL` へも同じ
 /// 位置に足す（番号が列の位置と合わなければ下のテストが赤になる）。
@@ -82,7 +82,7 @@ fn placement_route_answers_match_the_table() {
     );
 }
 
-/// 経路語は**行の値として**成立していなければならない（要件 2.7・判定側の辞書化規則）。
+/// 経路語は**行の値として**成立していなければならない（判定側の辞書化規則）。
 ///
 /// 手順書の grep は `route=<語>` を 1 語として当てるので、値に空白が混じると当たらなくなる。番兵（`-`）と同じ字面も
 /// 「経路が判らなかった書込」と衝突するので禁じる。
@@ -133,7 +133,7 @@ fn monitor_snapshot_header_line_is_fixed() {
 }
 
 /// モニタレコード行が識別子・bounds・work_area・DPI・primary の**全フィールド**を持つ
-/// （1 つでも欠けたらテストが落ちる・Req 1.1）。
+/// （1 つでも欠けたらテストが落ちる）。
 #[test]
 fn monitor_record_line_carries_every_field() {
     let line = monitor_record_line(&rec(65537, true), 0);
@@ -161,8 +161,7 @@ fn monitor_record_line_transcribes_negative_and_wide_coordinates() {
     );
 }
 
-/// 窓移動レコードが route・entity・種別・scope・位置・寸・DPI の**全フィールド**を持つ
-/// （Req 1.2・design「窓移動レコード」）。
+/// 窓移動レコードが route・entity・種別・scope・位置・寸・DPI の**全フィールド**を持つ。
 #[test]
 fn window_move_record_line_carries_every_field() {
     let entity = ent(12);
@@ -211,11 +210,10 @@ fn window_move_record_line_uses_sentinel_for_unknown_size_and_dpi() {
 }
 
 // ------------------------------------------------------------------
-// ペア宣言レコード（areka-P0-ghost-window-zorder 要件 6.1）
+// ペア宣言レコード
 // ------------------------------------------------------------------
 
-/// ペア宣言レコードが scope・キャラ窓・バルーン窓の**全フィールド**を持つ
-/// （design「診断ログ語彙（要件 6）」表の `declared` 行）。
+/// ペア宣言レコードが scope・キャラ窓・バルーン窓の**全フィールド**を持つ。
 #[test]
 fn zorder_pair_declared_line_carries_every_field() {
     let char_entity = ent(3);
@@ -231,10 +229,10 @@ fn zorder_pair_declared_line_carries_every_field() {
 }
 
 // ------------------------------------------------------------------
-// 実行時ストラテジ選択レコード（要件 5.6・ゲート判定表の結論を起動時ログへ残す）
+// 実行時ストラテジ選択レコード（起動時ログへ残す）
 // ------------------------------------------------------------------
 
-/// 3 通りのストラテジがそれぞれ**別の・読んで分かる**行になる（要件 5.6）。
+/// 3 通りのストラテジがそれぞれ**別の・読んで分かる**行になる。
 ///
 /// 将来どれかへ切り替わっても記録が嘘をつかないためには、選ばれ得る全ての値が
 /// 今この場で読める字面に固定されていなければならない。
@@ -339,7 +337,7 @@ fn log_window_move_emits_the_assembled_record_at_debug() {
 }
 
 // ------------------------------------------------------------------
-// Req 1.7: 既定では 1 行も出ない・手順書の RUST_LOG でのみ点灯
+// 既定では 1 行も出ない・手順書の RUST_LOG でのみ点灯
 // ------------------------------------------------------------------
 
 /// 番兵の宛先。窓の内側で 1 行出し、捕捉の窓が本当に生きていることを同じ窓の内側で示す。
@@ -415,7 +413,7 @@ fn emit_all_under_filter(directives: &str) -> String {
     rest.concat()
 }
 
-/// 既定水準（`RUST_LOG=info`＝`main.rs` のフォールバック）では **1 行も出ない**（Req 1.7）。
+/// 既定水準（`RUST_LOG=info`＝`main.rs` のフォールバック）では **1 行も出ない**。
 #[test]
 fn diag_records_are_silent_under_default_info_filter() {
     assert_eq!(
@@ -436,7 +434,7 @@ fn diag_records_are_silent_when_target_opened_only_to_info() {
 }
 
 /// 手順書の directive（`areka_placement::diag=debug`）で点灯する
-/// ＝target のリテラルが手順書と 1:1 で結ばれていることの機械的証明（Req 1.5/1.7）。
+/// ＝target のリテラルが手順書と 1:1 で結ばれていることの機械的証明。
 #[test]
 fn diag_records_light_up_under_the_procedure_directive() {
     let out = emit_all_under_filter("info,areka_placement::diag=debug");
