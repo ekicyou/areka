@@ -387,6 +387,15 @@ pub fn code_only(source: &str) -> String {
         .join("\n")
 }
 
+/// ログの本文の並びから窓移動レコードの行だけを抜く（他のログは無視）。
+pub fn window_move_lines<'a>(messages: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    messages
+        .into_iter()
+        .map(str::to_string)
+        .filter(|m| m.starts_with(crate::diag::WINDOW_MOVE_RECORD_TAG))
+        .collect()
+}
+
 /// 割った `spawn_zorder_pair_deferred_tests` の 2 つの片割れ（配置の crate と本体）が共に使う
 /// 語の表と走査器。写しを作らず、ここに 1 つだけ置く。
 /// 名簿の走査（[`assert_vocabulary_absent`]・[`assert_roster_covers`]）と探針の自己検査

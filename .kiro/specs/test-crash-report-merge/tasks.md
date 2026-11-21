@@ -64,7 +64,7 @@
   - _Dispatch: mechanical — 設計が置き場と再公開の形を示している_
   - _Requirements: 6.3_
 
-- [ ] 3.2 `window_move_lines` を placement のテストの支えへ移す
+- [x] 3.2 `window_move_lines` を placement のテストの支えへ移す
   - 3.1 と同じ `test_support.rs` を触るので、3.1 の後に続けて行う
   - 引数を記録の文（`&str`）の並びに替えた `window_move_lines` を placement の `test_support` に足す。`log-capture-kit` を引かない
   - `follow_window_move_diag_tests.rs` の私有の写しを消し、呼び手 7 か所を記録の文の並びを渡す形に替える（`follow::test_support` と取り違えない）
