@@ -39,7 +39,7 @@
   - _Dispatch: mechanical — areka-input の既存のファイルと同じ形に替える_
   - _Requirements: 2.1, 3.2, 4.1, 4.5, 5.1_
 
-- [ ] 2.2 (P) areka-placement の据え付けを小さなファイルに替える
+- [x] 2.2 (P) areka-placement の据え付けを小さなファイルに替える
   - `crates/areka-placement/src/test_crash_report.rs` を 2.1 と同じ形に替える。`lib.rs` の `mod test_crash_report;` の行とその説明は変えない
   - 終わった姿: `cargo test -p areka-placement --lib test_crash_report` で据え付けの確かめが緑
   - _Boundary: CrateInstaller（areka-placement の test_crash_report.rs だけ）_
