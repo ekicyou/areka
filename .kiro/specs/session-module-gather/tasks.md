@@ -124,7 +124,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 設計が所と行き先を与える説明のパスの書き換え_
   - _Requirements: 6.3, 6.4, 9.1_
 
-- [ ] 8.2 (P) `doc/` と網羅台帳のパスを直し、報告を作り直す
+- [x] 8.2 (P) `doc/` と網羅台帳のパスを直し、報告を作り直す
   - `doc/COMPAT_ARCHITECTURE.md` §8 の既にある行のパスだけを書き換え、行を足さない・消さない。`:189` の `restore_merged_placements` は `session/boot_seam.rs` へ、`:318`・`:319` の `session_mark_verdict` は `session/session_mark.rs` へ、項目の名で引いて直し、同じ行の `main.rs` に残る項目は直さない
   - `doc/ukadoc-coverage/ledger/*.toml` の根拠の場所を別々の行だけ書き換え、`cargo run -p ukadoc-survey -- report` と `report-summary` で `report/` を作り直す（手で直さない）
   - `doc/ukadoc-coverage/briefing-assets.md:174`・`:213` を `crates/areka/src/session/log_history.rs` の `init`（行番号は書かない）へ。`doc/testing.md:47`・`doc/ssp-mcp/log-convention.md` の `:3`・`:39`・`:135`・`:143`（`crate::log_history::last_id()` を `crate::session::log_history::last_id()` へ）・`doc/pasta-real-run.md:127`・`:141`・`doc/ideas/novel-redesign-2026-11-20/` の 5 ファイルのパスと `RUST_LOG` を新しい名前へ。`doc/README.md:33` と `doc/click-through.md:3`・`:136` は直さない
@@ -186,3 +186,4 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
 - 5.2: 移した宣言の doc が「本ファイル」のように元の置き場を指す語を持つときは、行き先で誤りになるのでファイル名を名指しへ直す。
 - 7.1: 触らない crate `areka-placement` に `main.rs` の `restore_merged_placements`／`boot_monitor_snapshot` を名指す古い説明が 4 か所（`src/diag.rs:46`・`src/persist.rs:330`・`src/resolver.rs:97`・`src/resolver_resolve_balloon_tests.rs:123`）。9.2 の申し送りに載せる。
 - 7.2: 本体の説明 5 か所（`menu/mod.rs:223`・`:254`・`install/mod.rs:132`・`update/mod.rs:224`・`mcp/mod.rs:48`）が呼び手を `ghost_session::register_systems` と書く（関数ポインタ経由で今も正しい）。9.2 の申し送りに「名目上の渡し手は `main.rs` の `BODY_SYSTEMS`」と載せる。
+- 8.2: `doc/COMPAT_ARCHITECTURE.md` が HEAD の時点から無い `runtime_tests/shell_balloon_resolve_tests.rs` を 5 か所名指す（移動と関係ない古い参照）。9.2 の申し送りに載せる。

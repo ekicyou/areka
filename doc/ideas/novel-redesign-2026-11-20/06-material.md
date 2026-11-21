@@ -49,7 +49,7 @@
 **今回、自分で読んだ物。**
 
 - 目録の素性 `Identity` は 7 項目。コメント「7 項目以外は足さない（要件 2.9）」（`crates/areka-ghost/src/catalog.rs:113-139`）。シェルの列挙 `scan_shells` は `menu,hidden` を除く（同 `:194-207`）。口は `list_shells`・`list_all_shells`（同 `:183-191`）。
-- **遊ぶ人の選びを覚える仕組みは、もう在る。** 今のシェルは、ゴーストごとの保存（`PersistScope::Ghost`）の `PersistKey::LastShell` に覚える（`crates/areka-sylphya/src/persist/mod.rs:57-66`・`:151-153`）。ファイルは `sylphya.toml` の `[last]` の表（`crates/areka-sylphya/src/persist/format.rs:27-31`）。書くのは `record_last_shell`（`crates/areka/src/boot_resolve.rs:694-703`）、起動の時に読むのは `decide_boot_shell`（同 `:411-428`。記憶の名のフォルダが無ければ、既定へ戻して記録する）。
+- **遊ぶ人の選びを覚える仕組みは、もう在る。** 今のシェルは、ゴーストごとの保存（`PersistScope::Ghost`）の `PersistKey::LastShell` に覚える（`crates/areka-sylphya/src/persist/mod.rs:57-66`・`:151-153`）。ファイルは `sylphya.toml` の `[last]` の表（`crates/areka-sylphya/src/persist/format.rs:27-31`）。書くのは `record_last_shell`（`crates/areka/src/session/boot_resolve.rs:694-703`）、起動の時に読むのは `decide_boot_shell`（同 `:411-428`。記憶の名のフォルダが無ければ、既定へ戻して記録する）。
 - `PersistKey` の鍵は、スコープの番号（`u32`）つきか、鍵なしだけである。文字列を鍵にする族は無い（`persist/mod.rs:126-166`）。
 - シェルの切り替えのメニューは、`list_shells` の並びを子項目にし、選ぶと `request_skin_switch`（要求の型 `SkinRequest`・出どころ `SkinOrigin::Menu`）を呼ぶ（`crates/areka/src/menu/shell_frame.rs:39`・`:71-78`）。
 - シェルの切り替えのイベントは、正典の `OnShellChanging`・`OnShellChanged`（`crates/areka-kanade/src/schedule/events.rs:62-63`・`:220-224`）。
@@ -350,7 +350,7 @@ areka が、判断・状態・既定の動作の変更を持つ所。
 
 ## 12. 骨組みを直したほうがよい所
 
-1. **1 章 3「areka が持ってよい状態は、台本の命令が入れた物だけ」に、遊ぶ人の操作が入れる設定を足す。** 今も、遊ぶ人が選んだシェルを覚えている（`crates/areka/src/boot_resolve.rs:694-703`・`crates/areka-sylphya/src/persist/mod.rs:151-153`）。差し替えの選びは、同じ種類である。
+1. **1 章 3「areka が持ってよい状態は、台本の命令が入れた物だけ」に、遊ぶ人の操作が入れる設定を足す。** 今も、遊ぶ人が選んだシェルを覚えている（`crates/areka/src/session/boot_resolve.rs:694-703`・`crates/areka-sylphya/src/persist/mod.rs:151-153`）。差し替えの選びは、同じ種類である。
 2. **8 章に、席の宣言（名前 → 素材）の置き場が無い。** 見立ての「シェルの側の役の宣言は要らない」は、役と座標の話で、名前から素材を決める表は別に要る（差し替えの入口が、台本が走る前に席を一覧するため）。「どの側」の置き場も、ここで 1 つに決めたい。
 3. **10 章の「素材」の行の種類（「—」）を、「宣言＋遊ぶ人の操作＋イベント」にする。** 3 章の表は受け口だけを書くが、この単位は、受け口を持たずに、イベントを 1 つ足す。
 4. 骨組みの外: 正典の `uuid`（SSP 2.9.35）は、brief と roadmap が知らない。10 章の「正典の拾い残し」に足すかを、棚卸で決めたい。

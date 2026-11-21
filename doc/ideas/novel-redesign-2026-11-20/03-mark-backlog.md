@@ -60,7 +60,7 @@
 - 出どころ `ScriptOrigin` は、`SenderType` の語・SSTP の種類・実効のレベルの組。レベルは下げるだけ（`crates/areka-talk/src/origin.rs:119-125`・`:170-181`）。
 - 台本のスレッドの受け口から UI へ知らせる前例: `BalloonLifecycleSink`（`crates/areka-runtime/src/talk_lifecycle.rs:154-168`・複製で状態を戻す `:238-247`・落ちる時に送る `:253-267`）。受け口の並びは `crates/areka/src/session/runtime_boot.rs:61-104` で組む（「名前で自分宛だけを拾う物は、末尾に足して構わない」同 `:53-59`）。
 - 台本のスレッドの受け口から kanade へ頼む前例: `PropGetCueSink`（`crates/areka-ghost/src/prop_get_sink.rs:118-124`）。
-- プロセスに 1 つの、上限つきで鍵（`Mutex`）つきの記録の置き場の前例: ログの履歴（`crates/areka/src/log_history.rs:6-7`・`:13`）。これは MCP の `get_log` の物で、バックログではない（再生した台本の原文を `script` の種別に残す・同 `:81-82`）。
+- プロセスに 1 つの、上限つきで鍵（`Mutex`）つきの記録の置き場の前例: ログの履歴（`crates/areka/src/session/log_history.rs:6-7`・`:13`）。これは MCP の `get_log` の物で、バックログではない（再生した台本の原文を `script` の種別に残す・同 `:81-82`）。
 
 ### 4.2 イベントを投げる道
 
@@ -332,7 +332,7 @@ areka が持つ状態と、それを入れる物:
 
 ### 置いた仮定
 
-1. バックログの寿命は、ゴーストの実行系の寿命。切り替え・終了・読み直しで、実行系を作り直す時に空になる（作り直しの道は `crates/areka/src/ghost_session_runtime.rs:96`・`crates/areka/src/session/reload.rs:327` に在る。中は読んでいない）。
+1. バックログの寿命は、ゴーストの実行系の寿命。切り替え・終了・読み直しで、実行系を作り直す時に空になる（作り直しの道は `crates/areka/src/session/ghost_session_runtime.rs:95`・`crates/areka/src/session/reload.rs:327` に在る。中は読んでいない）。
 2. 上限は 1000 項目。メモリだけ。ファイルに残さない。
 3. 貯めるのは、配られた字。途中で置き換えられた 1 本は、配られた分まで。
 4. 選択肢は、表示の文を貯め、選んだ答えは貯めない。

@@ -44,7 +44,7 @@ assert_eq!(ended.by, EndedBy::UserClose, "{}", run.output());
 - `.env(名, 値)`（任意の環境変数。窓口の既定より後に置くので何でも上書きできる。`AREKA_MCP_PORT` を積んだときは最後の値が子の待ち受ける番号で、窓口もその番号へ話しかけ `run.mcp_port()` もそれを返す。番号として読めなければ `spawn` が panic する＝番号は `.mcp_port(n)` で渡すのが本筋）・`.arg(引数)`（位置の引数の後ろに足す）
 - `.before_spawn(|staged| ..)`（起こす直前に 1 度だけ呼ぶ。写しの書き換えや、`staged.ensure_i686(..)` で試験用の 32bit の DLL を揃える）
 
-`.rust_log(..)` で窓口が頼る行の出所（`areka_mcp::server`・`areka::app_exit`）が info より絞られるときは、窓口が `,<出所>=info` を足す。名指しの判定は `EnvFilter` と同じ素の前方一致なので、`areka=debug` はそのまま、`areka_mcp=debug` には `,areka::app_exit=info` が足される。
+`.rust_log(..)` で窓口が頼る行の出所（`areka_mcp::server`・`areka::session::app_exit`）が info より絞られるときは、窓口が `,<出所>=info` を足す。名指しの判定は `EnvFilter` と同じ素の前方一致なので、`areka=debug` はそのまま、`areka_mcp=debug` には `,areka::session::app_exit=info` が足される。
 
 ### ツールの呼び方と失敗の見分け
 

@@ -68,7 +68,7 @@
 | seriko は、サーフェスの名前を解く表・着せ替えの名前を解く表・シェルの動きの表を 1 つずつ持つ。バルーンの動きの表は、もうスコープごと | `crates/areka-seriko/src/actor.rs:349-356`・`crates/areka-runtime/src/assets.rs:99-115` | ✔ |
 | 文字の層は、箱の表・箱の種類の表が 1 つずつ。字の場所の鍵は「スコープと場所」 | `crates/areka-emo-text/src/state.rs:455-458`・`place.rs:22-25` | ✔ |
 | 置き場のまだ無い字は、貯めて次のフレームで試し直す | `crates/areka-emo-text/src/actor_present.rs:115-130` | ✔ |
-| ゴーストの窓の閉じる要求は、メニューの「終了」と同じ終了要求になる。別れの台詞の待ちの上限は 30 秒 | `crates/areka/src/app_exit.rs:270-301`・`crates/areka-kanade/src/msg.rs:594` | ✔ |
+| ゴーストの窓の閉じる要求は、メニューの「終了」と同じ終了要求になる。別れの台詞の待ちの上限は 30 秒 | `crates/areka/src/session/app_exit.rs:270-301`・`crates/areka-kanade/src/msg.rs:594` | ✔ |
 | 値を時間で変える土台は dola に在る（始める・終わりの値にする・捨てる） | `crates/dola/src/runtime/facade.rs:31`・`229`・`crates/wintf/src/ecs/dola/mod.rs:75` | ✔ |
 | 絵の Entity の offset は 0 でなければならない。拡大率は「アプリの倍率」の席から導く | `crates/areka-emo-present/src/mount.rs:64-69`・`presenter/hub.rs:57-97` | 引 |
 | seriko のアクターを 1 人足す・外す口は無い（差し替えは全スコープ一度に） | `crates/areka-seriko/src/actor.rs:96-106`・`362-380` | 引 |

@@ -1972,8 +1972,8 @@ note = """
 ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、引数が無い・空で
 warn! 1 行〔open_external_rejected〕、OS が断ったときに error! 1 行〔open_external_failed の reason=os〕、
 ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
-の execute（開く処理の 1 か所）。受け口は crates/areka/src/readme/readme_cue.rs で、正準台帳
+根拠の場所: crates/areka/src/session/readme/destination.rs の classify（行き先の規則）と crates/areka/src/session/readme/opener.rs
+の execute（開く処理の 1 か所）。受け口は crates/areka/src/session/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","browser") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2172,8 +2172,8 @@ ghost/master から探す）。表示行は常に無視する（ukadoc の「エ
 無い・空で warn! 1 行〔open_external_rejected〕、ファイルが無い・OS が断ったときに error! 1 行
 〔open_external_failed の reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行
 〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
-の execute（開く処理の 1 か所）。受け口は crates/areka/src/readme/readme_cue.rs で、正準台帳
+根拠の場所: crates/areka/src/session/readme/destination.rs の classify（行き先の規則）と crates/areka/src/session/readme/opener.rs
+の execute（開く処理の 1 か所）。受け口は crates/areka/src/session/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","editor") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2216,8 +2216,8 @@ ghost・balloon・shell は、descript.txt の name かフォルダ名で名指�
 headline・plugin・知らない種類で warn! 1 行〔open_external_rejected〕、行き先が無い・名前に当たらない・目録を引く
 根が無い・OS が断ったときに error! 1 行〔open_external_failed の reason=not_found／no_match／no_baseware_root／os〕、
 ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
-の execute と named_folder（開く処理の 1 か所）。受け口は crates/areka/src/readme/readme_cue.rs で、正準台帳
+根拠の場所: crates/areka/src/session/readme/destination.rs の classify（行き先の規則）と crates/areka/src/session/readme/opener.rs
+の execute と named_folder（開く処理の 1 か所）。受け口は crates/areka/src/session/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","explorer") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2242,9 +2242,9 @@ note = """
 ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、引数が無い・空で
 warn! 1 行〔open_external_rejected〕、ファイルが無い・OS が断ったときに error! 1 行〔open_external_failed の
 reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
-の execute（開く処理の 1 か所）、関連付けの確認は crates/areka/src/readme/os_port.rs。受け口は
-crates/areka/src/readme/readme_cue.rs で、正準台帳
+根拠の場所: crates/areka/src/session/readme/destination.rs の classify（行き先の規則）と crates/areka/src/session/readme/opener.rs
+の execute（開く処理の 1 か所）、関連付けの確認は crates/areka/src/session/readme/os_port.rs。受け口は
+crates/areka/src/session/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","file") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2345,8 +2345,8 @@ note = """
 ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、引数が無い・空で
 warn! 1 行〔open_external_rejected〕、OS が断ったときに error! 1 行〔open_external_failed の reason=os〕、
 ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
-の execute（開く処理の 1 か所）。受け口は crates/areka/src/readme/readme_cue.rs で、正準台帳
+根拠の場所: crates/areka/src/session/readme/destination.rs の classify（行き先の規則）と crates/areka/src/session/readme/opener.rs
+の execute（開く処理の 1 か所）。受け口は crates/areka/src/session/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","mailer") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2475,7 +2475,7 @@ readme が指すファイルを既定の関連付けで開く。
 ログ: 出る（引数付きを受けたときの警告 1 行、送り先が閉じているときの警告 1 行、開けなかったときの
 エラー 1 行）。
 根拠の場所: crates/areka-runtime/src/consumer_ledger.rs の CommandConsumer::ReadmeSink
-（正準台帳が ("open","readme") の 1 組で登記する）と crates/areka/src/readme/readme_cue.rs。
+（正準台帳が ("open","readme") の 1 組で登記する）と crates/areka/src/session/readme/readme_cue.rs。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: SSP の管理窓とビューア]
 [頻度: 里々 18 / YAYA 6（wiki の作例の文書数＝弱い代理。数えた綴りは \\![open。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
@@ -5287,9 +5287,9 @@ note = """
 ID・残りが空の file:/// で warn! 1 行〔open_external_rejected〕、ファイルが無い・OS が断ったときに error! 1 行
 〔open_external_failed の reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行
 〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/readme/destination.rs の classify_jump（行き先の規則）と crates/areka/src/readme/opener.rs
+根拠の場所: crates/areka/src/session/readme/destination.rs の classify_jump（行き先の規則）と crates/areka/src/session/readme/opener.rs
 の execute（開く処理の 1 か所）。タグは汎用の運び手（JUMP_TAG_CARRIER）に載り、受け口は
-crates/areka/src/readme/readme_cue.rs で、正準台帳（consumer_ledger.rs）が運び手の名前の 1 組を
+crates/areka/src/session/readme/readme_cue.rs で、正準台帳（consumer_ledger.rs）が運び手の名前の 1 組を
 CommandConsumer::ReadmeSink で登記する。
 [群: 外部を開く・別窓]
 [頻度: 里々 3 / YAYA 2（wiki の作例の文書数＝弱い代理。数えた綴りは \\j。綴りが短く別の語の一部にも当たるぶん過大に出る）]
