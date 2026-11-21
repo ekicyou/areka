@@ -33,6 +33,7 @@ use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx}
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::spawn_ghost_windows;
 use areka_runtime::hit_region::HitRegion;
+use areka_runtime::spine::{SPIN_WAIT, join_bounded};
 
 /// 相方（scope 1）。0 以外にして既定値との取り違えを避ける。
 pub(super) const SCOPE: usize = 1;
@@ -258,8 +259,8 @@ impl Rig {
     pub(super) fn saved(&self) -> Vec<(PersistKey, String)> {
         self.parts
             .publisher
-            .barrier()
-            .expect("アクターが生きている間は barrier が返るはず");
+            .barrier_within(SPIN_WAIT)
+            .expect("アクターが生きている間は期限内に barrier が返るはず");
         load_scope(
             PersistScope::Ghost,
             &self.roots,
@@ -280,7 +281,8 @@ impl Rig {
 
     pub(super) fn close(self) {
         self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        join_bounded("drag rig の sylphya", self.parts.handle)
+            .expect("sylphya は panic せず期限内に終わるはず");
     }
 }
 
