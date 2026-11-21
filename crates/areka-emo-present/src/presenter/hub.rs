@@ -82,6 +82,8 @@ impl EmoPresenter {
                 // アプリ管理拡大率は ONE 固定の縮退シーム。
                 policy: ScalePolicy::new(author_dpi, ScaleRatio::ONE),
                 applied: None,
+                never_shown: None,
+                surface_requested: false,
                 // 起点は装着ごと（差し替えもここを通るので空から始まる）。
                 scale_baseline: None,
                 native_size: None,
