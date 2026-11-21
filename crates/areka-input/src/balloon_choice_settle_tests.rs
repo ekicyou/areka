@@ -7,11 +7,10 @@
 // （`spawn_emo_text` の UI ドレイン）へ選択待ちの始まりを積んで、このスレッドの待ち行列を汲んでから押す。
 // =============================================================================
 
-use areka_runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
+use areka_emo_text::actor::{TextLayerRuntime, present_frame, spawn_emo_text};
 use areka_emo_text::place::PlaceKey;
 use areka_emo_text::sink::EmoTextSink;
 use areka_emo_text::state::{SpanKind, TextLayerConfig};
@@ -117,48 +116,16 @@ fn settle_after_selection_borrow_failure_logs_one_error_and_does_nothing() {
 // 押下のハンドラから済みまでの通し（実 GPU）
 //
 // 実 GPU で提示して当たり行を作り、本番の押下のハンドラ（`on_balloon_pointer_pressed`）で選択肢の行を
-// 押す。1 回目は選択を送ってその場所の選択肢が済み、同じ座標の 2 回目は選択を作らず WARN を出さない。
+// 押す。1 回目は選択を送って INFO `choice_selected` を 1 行残し、その場所の選択肢が済む。同じ座標の
+// 2 回目は選択を作らず WARN を出さない。
 // 箱の押下のハンドラ（`shell_box_handler.rs`）は同じ `settle_after_selection` を呼び、箱の場所の
 // 済んだ行は文字の層の実 GPU の檻（`areka-emo-text` の `actor_choice_settle_tests.rs`）が固定する。
 // =============================================================================
 
-use std::sync::mpsc;
-
-use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding, present_frame};
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
-use bevy_ecs::hierarchy::ChildOf;
-use bevy_ecs::world::World;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use wintf::ecs::pointer::{Phase, PointerState};
-use wintf::ecs::{GraphicsCore, Point, Visual, WucGraphicsResource};
 
-use super::test_support::headless_runtime_wiring;
-use super::{BalloonWiring, ChoiceSelection, on_balloon_pointer_pressed};
-use areka_placement::spawn::BalloonWindowMarker;
-
-/// 左シングルクリック（窓の client 物理 px）。
-fn left_press(x: i32, y: i32) -> Phase<PointerState> {
-    Phase::Bubble(PointerState {
-        client_point: Point { x, y },
-        left_down: true,
-        ..Default::default()
-    })
-}
-
-/// 幾何だけのバルーン定義（既定の書体・描画範囲は画像の全域）。
-fn plain_model() -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(None, None, None, None),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    )
-}
+use super::on_balloon_pointer_pressed;
+use super::test_support::{gpu_balloon_world, headless_runtime_wiring, insert_wiring, left_press};
 
 #[test]
 fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_warn() {
@@ -170,23 +137,7 @@ fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_wa
     let (rt, _sink, _join) = runtime_in_choice_wait();
     let actor = ActorKey::from(ACTOR);
 
-    // 普通のバルーンの窓（押下の宛先）と文字の層の差し込み口。
-    let mut world = World::new();
-    let window = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    let slot = world.spawn((Visual::default(), ChildOf(window))).id();
-    world.flush();
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
-        .expect("WucGraphicsResource::new 失敗");
-    world.insert_resource(core);
-    world.insert_resource(wuc);
-    let image = (120u32, 60u32);
-    rt.borrow_mut().register_actor(
-        actor.clone(),
-        TextSlotBinding::new(slot, window, 1.0, image, image),
-        ResolvedBalloonText::resolve(&plain_model(), image),
-    );
-    present_frame(&mut rt.borrow_mut(), &mut world, 10.0).expect("提示");
+    let (mut world, window) = gpu_balloon_world(&rt, 1.0, (120, 60), (0, 0));
     let row = rt
         .borrow()
         .choice_hit_rows(&actor)
@@ -198,17 +149,22 @@ fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_wa
     let y = ((row.rect.top + row.rect.bottom) / 2.0) as i32;
 
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
-    let (tx, rx) = mpsc::channel::<ChoiceSelection>();
-    world.insert_non_send(BalloonWiring::new(tx));
-    world.insert_non_send(BalloonHover::default());
+    let rx = insert_wiring(&mut world);
 
     // 1 回目: 選択を送り、その場所の選択肢が済む（アンカーは押せるまま）。
-    assert!(on_balloon_pointer_pressed(
-        &mut world,
-        window,
-        window,
-        &left_press(x, y)
-    ));
+    let logs = capture_logs(|| {
+        assert!(on_balloon_pointer_pressed(
+            &mut world,
+            window,
+            window,
+            &left_press(x, y)
+        ));
+    });
+    let selected: Vec<&String> = logs
+        .iter()
+        .filter(|l| l.contains("level=INFO") && l.contains("choice_selected"))
+        .collect();
+    assert_eq!(selected.len(), 1, "INFO choice_selected が 1 行: {logs:?}");
     let sent = rx.try_recv().expect("1 回目は選択を送る");
     assert_eq!((sent.kind, sent.id.as_str()), (SpanKind::Choice, "OnYes"));
     assert!(!rt.borrow().choice_active(&actor), "押した選択肢は済む");

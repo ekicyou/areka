@@ -275,8 +275,6 @@ pub(crate) struct ChoiceSelectionInbox(pub(crate) Receiver<ChoiceSelection>);
 ///
 /// **警告**: 本経路へ ÷k を追加すると **二重縮約**（矩形 ×k と点 ÷k の両掛け）になり、正常動作を
 /// 破壊する。シェル側で k=1.0 限定契約が解除されたことを本経路へ一般化してはならない。
-/// k=2.0 で持ち上げた行矩形×無変換点がヒットし、同点を ÷k すると外れることを、下段の in-source
-/// 檻が固定する。
 ///
 /// 判定対象は上流が供給する当たりの行（`rows`）のみ。行は選択肢（`\q`）とアンカー（`\_a`）が
 /// 通し番号の順に混ざった列で、種類は各行の `kind` が持つ。
@@ -475,14 +473,14 @@ pub fn register_balloon_leave_system(world: &mut World) {
 #[path = "balloon_choice_settle_tests.rs"]
 mod choice_settle_tests;
 #[cfg(test)]
+#[path = "balloon_gpu_hit_tests.rs"]
+mod gpu_hit_tests;
+#[cfg(test)]
 #[path = "balloon_hover_flag_tests.rs"]
 mod hover_flag_tests;
 #[cfg(test)]
 #[path = "balloon_leave_tests.rs"]
 mod leave_tests;
-#[cfg(test)]
-#[path = "balloon_pass_through_tests.rs"]
-mod pass_through_tests;
 #[cfg(test)]
 #[path = "balloon_pointer_handler_tests.rs"]
 mod pointer_handler_tests;
