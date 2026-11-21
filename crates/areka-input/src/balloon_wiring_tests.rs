@@ -284,6 +284,16 @@ fn wire_inserts_both_non_sends() {
         "wire 後は ChoiceSelectionInbox が NonSend 挿入されている（発行 seam・5.3）"
     );
     assert!(
+        world.get_non_send::<BalloonHover>().is_some(),
+        "wire 後は BalloonHover が NonSend 挿入されている"
+    );
+    assert!(
+        world
+            .get_non_send::<crate::shell_box::ShellBoxHover>()
+            .is_some(),
+        "wire 後は ShellBoxHover が NonSend 挿入されている"
+    );
+    assert!(
         !world.resource::<Schedules>().contains(Input),
         "wire は系を登録しない（登録は ghost_session::register_systems・要件 2.1）"
     );

@@ -183,6 +183,10 @@ fn finished_up_arrow_press_scrolls_older_and_is_consumed() {
     // 自動の 1 行上から 2 行古い側へ＝自動の 3 行上。新しい側へ 2 回戻しても手動のまま。
     assert_eq!(rig.newer_by_one(), ScrollChange::Moved);
     assert_eq!(rig.newer_by_one(), ScrollChange::Moved);
+    assert!(
+        matches!(rig.newer_by_one(), ScrollChange::Stopped(_)),
+        "送ったのはちょうど 2 行"
+    );
 }
 
 /// 話し終えた後の下の矢印の押下は新しい側へ送る（自動の 1 行上から自動へ戻る）。

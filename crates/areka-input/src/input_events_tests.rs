@@ -389,14 +389,14 @@ fn handler_middle_xbutton_and_single_click_do_not_send() {
 }
 
 /// 隠しの終了操作が無いことの檻: **結線済み**で Shift を
-/// 伴わない Ctrl+左ダブルクリックは終了指示を 1 件も送らず、窓も閉じず、Ctrl の無い左
+/// 伴わない Ctrl+左ダブルクリックは終了指示を 1 件も送らず、終了の指示も立てず、Ctrl の無い左
 /// ダブルクリックと同じ `DoubleClick{Left}` をちょうど 1 件送る。
 ///
 /// 利用者起因の終了指示を送る本番の呼び手はメニューの「終了」（`menu::request_close`）だけである。
 /// 強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。
 ///
 /// # 非空虚性
-/// 強制退避の腕へ落ちれば窓が消えて件数の表明が落ち、終了指示を送れば届いた種別の表明が
+/// 強制退避の腕へ落ちれば終了の指示が立って表明が落ち、終了指示を送れば届いた種別の表明が
 /// 落ち、左ダブルクリックとして扱わなければ `try_recv` が空で落ちる。
 #[test]
 fn handler_wired_ctrl_left_double_click_sends_no_close_request_and_delivers_the_double_click() {
@@ -408,13 +408,10 @@ fn handler_wired_ctrl_left_double_click_sends_no_close_request_and_delivers_the_
         },
         stepping_clock(1000, 1000),
     );
-    world.spawn(GhostWindowMarker);
-    world.spawn(GhostWindowMarker);
     let w0 = world
         .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
         .id();
     let other = world.spawn_empty().id();
-    assert_eq!(ghost_count(&mut world), 3);
 
     let ev = bubble_pointer(10, 20, DoubleClick::Left, true);
     assert!(on_char_pointer_pressed(&mut world, w0, w0, &ev));
@@ -439,15 +436,14 @@ fn handler_wired_ctrl_left_double_click_sends_no_close_request_and_delivers_the_
         rx.try_recv().is_err(),
         "届くのは左ダブルクリック 1 件だけ（終了指示は 0 件）"
     );
-    assert_eq!(
-        ghost_count(&mut world),
-        3,
-        "結線済みの Ctrl+左は強制退避ではない——窓は 1 枚も閉じない（要件 5.3／5.5）"
+    assert!(
+        !exit_requested(&world),
+        "結線済みの Ctrl+左は強制退避ではない——終了の指示は立たない（要件 5.3／5.5）"
     );
     assert!(world.get_entity(other).is_ok(), "無関係 entity は残る");
 }
 
-/// 暫定退避檻: Ctrl なしの左ダブルクリックは窓を despawn せず、
+/// 暫定退避檻: Ctrl なしの左ダブルクリックは強制退避せず、
 /// 代わりに `DoubleClick` を送出する（退避と送出の分岐が排他であること）。
 #[test]
 fn handler_left_double_click_without_ctrl_does_not_despawn_and_sends() {
@@ -465,7 +461,7 @@ fn handler_left_double_click_without_ctrl_does_not_despawn_and_sends() {
 
     let ev = bubble_pointer(3, 4, DoubleClick::Left, false);
     assert!(on_char_pointer_pressed(&mut world, w, w, &ev));
-    assert_eq!(ghost_count(&mut world), 1, "Ctrl なしは despawn しない");
+    assert!(!exit_requested(&world), "Ctrl なしは強制退避しない");
     assert!(
         matches!(
             rx.try_recv().expect("送出される"),
@@ -728,6 +724,6 @@ fn handlers_ignore_tunnel_phase() {
         w,
         &tunnel_ctrl_left
     ));
-    assert_eq!(ghost_count(&mut world), 1, "Tunnel 相では退避しない");
+    assert!(!exit_requested(&world), "Tunnel 相では退避しない");
     assert!(rx.try_recv().is_err(), "Tunnel 相は何も送出しない");
 }

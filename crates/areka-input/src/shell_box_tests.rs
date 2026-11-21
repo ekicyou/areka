@@ -484,7 +484,7 @@ fn settle_drops_vanished_box() {
 }
 
 /// 印が残らないことの通し: 箱へ入る → 箱の文字が消える → 整える の後、観測の滞在は偽。
-/// シェルの窓から出たときも偽。他のスコープの記録には触れない。
+/// 他のスコープの記録には触れない。
 #[test]
 fn hover_mark_does_not_survive_vanished_text_or_window_leave() {
     let mut hover = ShellBoxHover::default();
@@ -503,9 +503,6 @@ fn hover_mark_does_not_survive_vanished_text_or_window_leave() {
     hover.set(0, settled);
     assert!(hover.get(0).is_none(), "時間切れの観測の hover は偽");
     assert_eq!(hover.get(1), Some(&name("b")), "他のスコープはそのまま");
-
-    hover.set(1, None);
-    assert!(hover.get(1).is_none());
 }
 
 // ---------------------------------------------------------------------------

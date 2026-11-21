@@ -93,6 +93,10 @@ fn wheel_up_scrolls_to_older_lines() {
         ScrollChange::Moved,
         "古い側へ 1 行送られ、自動の 2 行上にいる"
     );
+    assert!(
+        matches!(newer_by_one(&runtime), ScrollChange::Stopped(_)),
+        "送ったのはちょうど 1 行（2 行送りなら手動のまま）"
+    );
 }
 
 /// 下へ（手前・負の回転）回すと新しい側へ送る。自動の 1 行上から 1 行で自動へ戻る。
@@ -126,6 +130,10 @@ fn partial_rotations_carry_over() {
     run(&mut world);
     run(&mut world);
     assert_eq!(newer_by_one(&runtime), ScrollChange::Moved);
+    assert!(
+        matches!(newer_by_one(&runtime), ScrollChange::Stopped(_)),
+        "送ったのはちょうど 1 行（2 行送りなら手動のまま）"
+    );
 }
 
 /// キャラ窓の見張りと同じ段で回しても、バルーンの窓の回転は `OnMouseWheel` にならない。
@@ -163,6 +171,10 @@ fn balloon_wheel_does_not_queue_on_mouse_wheel() {
         newer_by_one(&runtime),
         ScrollChange::Moved,
         "送りは効いている"
+    );
+    assert!(
+        matches!(newer_by_one(&runtime), ScrollChange::Stopped(_)),
+        "送ったのはちょうど 1 行（2 行送りなら手動のまま）"
     );
 }
 

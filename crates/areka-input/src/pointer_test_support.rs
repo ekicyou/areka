@@ -47,6 +47,15 @@ pub fn ghost_count(world: &mut World) -> usize {
         .count()
 }
 
+/// 強制退避が終了を指示したか（`world_with_wiring` が挿す `AppExit` を見る）。
+#[cfg(test)]
+pub(crate) fn exit_requested(world: &World) -> bool {
+    world
+        .get_non_send::<wintf::AppExit>()
+        .expect("AppExit は挿入済み")
+        .is_requested()
+}
+
 /// Mock resolver＋注入 clock の `MouseWiring` を NonSend 挿入した World を組む。
 pub fn world_with_wiring(
     region: fn(u32, i64, i64) -> HitRegion,

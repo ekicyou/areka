@@ -8,8 +8,8 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 use windows::Win32::UI::WindowsAndMessaging::{HCURSOR, IDC_ARROW, IDC_HAND, IDC_HELP};
 use wintf::ecs::cursor::{
-    CursorAsk, CursorQuery, CursorReply, CursorTrigger, OwnedCursor, read_cur_directory,
-    stock_cursor,
+    CursorAsk, CursorQuery, CursorReply, CursorTrigger, OwnedCursor, cursor_size_for_dpi,
+    read_cur_directory, stock_cursor,
 };
 use wintf::ecs::pointer::PointerState;
 use wintf::ecs::{PhysicalPoint, Window};
@@ -105,7 +105,11 @@ fn char_window_gets_the_expected_stock_shapes() {
     assert_eq!(show(&world, w0, 200), stock_cursor(IDC_ARROW).unwrap());
     // 当たり判定から当たり判定へ直に移ったその場で替わる。
     let hand = show(&world, w0, 10);
-    assert_ne!(hand, finger, "Bust は同梱の手を開いた形");
+    let bundled_hand = world
+        .get_non_send::<CharCursors>()
+        .expect("結線済み")
+        .bundled(0, BUNDLED[0].1, cursor_size_for_dpi(96));
+    assert_eq!(Some(hand), bundled_hand, "Bust は同梱の手を開いた形");
     assert_eq!(show(&world, w0, 60), finger);
     assert_eq!(show(&world, w1, 60), stock_cursor(IDC_HELP).unwrap());
     assert_eq!(show(&world, w0, 61), finger, "別の窓の形に引きずられない");

@@ -28,6 +28,7 @@ fn world_with_wiring() -> (World, mpsc::Receiver<KanadeMsg>) {
         RegionSource::Mock(half_scale_bust),
         Box::new(|| 1000),
     ));
+    world.insert_non_send(wintf::AppExit::new());
     (world, rx)
 }
 
@@ -53,13 +54,6 @@ fn take_pending(world: &mut World) -> Option<PendingDoubleClick> {
         .get_non_send_mut::<MouseWiring>()
         .expect("MouseWiring は挿入済み")
         .take_pending_right_double_click()
-}
-
-fn ghost_count(world: &mut World) -> usize {
-    world
-        .query_filtered::<Entity, With<GhostWindowMarker>>()
-        .iter(world)
-        .count()
 }
 
 /// 右ダブルクリックは SHIORI へ何も届けず、スコープ・面座標・領域を預かる。
@@ -156,10 +150,10 @@ fn sending_the_pending_one_delivers_the_same_message_as_the_old_immediate_path()
 }
 
 /// 結線済みで Shift を伴わない Ctrl＋左ダブルクリックは終了指示を送らず、相方側の窓でも
-/// 左ダブルクリックとして届く。窓は閉じない。
+/// 左ダブルクリックとして届く。終了の指示は立たない。
 ///
 /// 相方側（スコープ 1）で見る——Ctrl を見て早期に戻れば `rx` が空で落ち、強制退避の腕へ
-/// 落ちれば窓の件数が合わない。
+/// 落ちれば終了の指示が立って表明が落ちる。
 ///
 /// 「終了指示に操作した窓のスコープが載る」性質はメニュー側の檻が持つ
 /// （`menu::mod_wiring_tests::the_close_action_sends_exactly_one_close_request_with_the_window_scope`
@@ -195,7 +189,10 @@ fn wired_ctrl_left_double_click_sends_no_close_request_on_the_partner_window() {
         rx.try_recv().is_err(),
         "届くのは左ダブルクリック 1 件だけ（終了指示は 0 件）"
     );
-    assert_eq!(ghost_count(&mut world), 2, "窓は 1 枚も閉じない");
+    assert!(
+        !super::pointer_test_support::exit_requested(&world),
+        "強制退避へ落ちない——終了の指示は立たない"
+    );
     assert!(
         take_pending(&mut world).is_none(),
         "左ダブルクリックは預からない"

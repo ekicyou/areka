@@ -128,13 +128,14 @@ impl Fixture {
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
         let (flag_tx, flag_rx) = mpsc::channel();
         let mut world = World::new();
-        world.insert_non_send(MouseWiring::new(
+        world.insert_non_send(MouseWiring::with_clock(
             shell_tx,
             RegionSource::Mock(|scope, x, y| HitRegion {
                 scope,
                 region: Some("Head".to_owned()),
                 surface_point: (x, y),
             }),
+            Box::new(|| 1000),
         ));
         world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, break_tx));
         let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
@@ -380,7 +381,10 @@ fn move_over_box_body_records_hover_and_reaches_the_shell() {
         .into_iter()
         .filter(|m| matches!(m, KanadeMsg::Mouse(m) if m.kind == MouseEventKind::Move))
         .count();
-    assert!(moves >= 1, "行の上でない移動はシェルへ届く");
+    assert_eq!(
+        moves, 1,
+        "行の上でない移動は 1 件だけシェルへ届く（2 打目は同じ当たりの間引き）"
+    );
 }
 
 /// 別の箱へ移ると前の箱の強調を外し、箱の外へ出ると滞在を無しにする。

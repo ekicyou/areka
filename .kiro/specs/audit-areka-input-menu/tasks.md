@@ -66,7 +66,7 @@
   - _Dispatch: standard — 実 GPU の組み立てと字の大きさに依る前提の表明をコードで解く_
   - _Requirements: 3.3, 3.4, 4.1, 4.2, 4.3, 4.6, 6.1_
 
-- [ ] 2.2 弱い表明を落ちる力のある表明に替える（G6・指摘 2・6・7・11・12・13・件 3）
+- [x] 2.2 弱い表明を落ちる力のある表明に替える（G6・指摘 2・6・7・11・12・13・件 3）
   - 強制退避の枝へ落ちない側のテストの件数の表明を「終わりの指示が立たない」の表明に替え、説明を今の事実に直す（指摘 2・件 3）。
   - 結線のテストに 2 つの持ち物の在の表明を足し（指摘 6）、ホイールのテストの最後に持ち越しの止まりの表明を足し（指摘 7）、箱のハンドラのテストの組み立てを注入の時計に替えて 2 打目を `== 1` で見る（指摘 11）、同梱の手の形を `assert_eq` で比べる（指摘 12）、箱のテストの重なる表明を消す（指摘 13）。
   - 各テストが design.md「Testing Strategy」の「強めた表明」の行の本番の箇所を壊すと赤になることを一度確かめてあり、直した後に緑。
@@ -162,3 +162,5 @@
 - 1.2 で足した `box_name(shell, name)`（`balloon_test_support.rs`）と `emo_text_debugs`（`balloon_pure_core_tests.rs`）は、3.2 で箱の名前の写しと `events_named` へ寄せる相手。
 - `lib.rs` の `send_mouse` の doc（「新しい知らせ（解放・ホイール・出入り）の送出」）は 1.3 の後は全部のマウスの送出なので古い。4.1 で直す。
 - 範囲の外（完了の棚卸へ）: `cargo clippy -p areka-runtime --all-targets --no-deps -- -D warnings` は、この spec が触らない areka-runtime のファイル（frame/wiring.rs・frame/zorder_drain.rs・frame_test_support.rs・hover_inject.rs・skin_switch.rs・switch_assets.rs・lib.rs・balloon_visibility_tests.rs・frame_dpi_reproject_tests.rs）の clippy 1.100 の指摘 11〜12 件で止まる。areka-parsers・dola にも同じ種類がある。
+- `pointer_test_support.rs` は本体が `*` で読む。足す項目は必ず `#[cfg(test)] pub(crate)`（2.2 で一度 `pub` で足して差し戻し）。テスト名は本体の名指しがあるので、タスクが言わない名の変更をしない。
+- `shell_box_tests.rs` の `…_or_window_leave` は 2.2 で離脱の表明を消したので名と中身が食い違う。移す 3.3 で直す。
