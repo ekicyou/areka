@@ -25,8 +25,8 @@ use areka_runtime::shell_cursor_table::{CursorRows, GhostCursorKeys, Shape, Syst
 
 /// 同梱の手の形（要件 6.2）。番号は控えの鍵。
 const BUNDLED: [(SystemCursor, &[u8]); 2] = [
-    (SystemCursor::Hand, include_bytes!("../../cursor/hand.cur")),
-    (SystemCursor::Grip, include_bytes!("../../cursor/grip.cur")),
+    (SystemCursor::Hand, include_bytes!("../cursor/hand.cur")),
+    (SystemCursor::Grip, include_bytes!("../cursor/grip.cur")),
 ];
 
 /// OS の標準の形（要件 6.1）。
@@ -54,7 +54,7 @@ pub(crate) struct CharCursors {
 }
 
 /// 答えの関数と窓ごとの状態を入れ、標準の形を 1 度だけ読む（`register_char_watch` から 1 回）。
-pub(crate) fn register_char_cursor(world: &mut World) {
+pub fn register_char_cursor(world: &mut World) {
     let stock = STOCK
         .iter()
         .map(|&s| {

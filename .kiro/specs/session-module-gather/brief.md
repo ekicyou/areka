@@ -116,3 +116,11 @@
 - **要件定義のモデル**: Opus（crate を作らない本体の中の移動。前例は `runtime-module-untangle`）。
 - **分割の案**: 無し。
 - **古くなった記述（前の節から）**: Current State の `main.rs` の 531〜910 行（今は 541〜923）・`register_systems` の 72〜84 行・`main.rs:253`・「系を 10 本」（今は 11 本）・切替の 9 ファイルの名前（今の `session/` の本番は `ghost_quit`・`ghost_switch`・`hooks`・`mod`・`reload`・`runtime_boot`・`same_folder_pin`・`shell_balloon_switch`・`switch_copy`）・`doc/testing.md:48`。`tests/smoke_boot_loop_exit.rs` は出所の名前でなく文言で照合している。
+
+## `input-crate-split` からの申し送り（2026-11-21 着地）
+
+- 入力の出来事は新しい crate `crates/areka-input`（lib・ログの出所は `areka_input`）へ移った。本体は `crates/areka/src/main.rs` の出し直し `use areka_input as input_events;` で、今の呼び手（`crate::input_events::…`）をそのまま通している。
+- 本体の呼び手を `areka_input::…` へ書き換え、出し直しを外すのはこの spec の持ち物（`input-crate-split` は外していない）。呼び手は `ghost_session.rs`・`ghost_session_runtime.rs`・`app_exit.rs` と、`*_tests.rs` の数本（`git grep -n "crate::input_events" -- crates/areka` で拾える）。
+- 出し直しの上の `///`（`main.rs` の 63〜67 行。「現状は `throttle` のみ…task 2.6／2.7 で増設」）は、元の `mod input_events;` の説明のまま古くなっている。出し直しを外すときに一緒に消す。
+- 強制退避は口 `areka_input::hooks::InputHooks` を通る。口を据えるのは `ghost_session.rs` の `register_systems` の `crate::app_exit::install_input_hooks(world)`（`session::hooks::install` のすぐ後）。系を集め直すときはこの順を保つ（固定のテスト `app_exit_escape_tests.rs` の `register_systems_installs_the_escape_hook`）。
+- 参照: `.kiro/specs/completed/input-crate-split/design.md`・`verification.md` の「完了の申し送り」⑴。

@@ -39,7 +39,7 @@ const UNCAPTURED_BUTTONS: [ClickButton; 4] = [
 
 /// 見張りの系を `Input` の段の `dispatch_pointer_events` の前へ 1 回だけ登録する
 /// （呼び手は `ghost_session::register_systems`・プロセスに 1 回）。
-pub(crate) fn register_char_watch(world: &mut World) {
+pub fn register_char_watch(world: &mut World) {
     world
         .resource_mut::<Schedules>()
         .add_systems(Input, char_watch.before(dispatch_pointer_events));
@@ -79,7 +79,7 @@ pub(crate) fn char_watch(world: &mut World) {
 }
 
 /// 本体。`read_lines` は箱の送りへ回すホイールを受けた時だけ呼ぶ（テストは差し替える）。
-pub(crate) fn char_watch_with(world: &mut World, mut read_lines: impl FnMut() -> WheelLines) {
+pub fn char_watch_with(world: &mut World, mut read_lines: impl FnMut() -> WheelLines) {
     // 1. 結線の前は何もしない。
     let Some(wiring) = world.get_non_send::<MouseWiring>() else {
         return;
@@ -295,7 +295,7 @@ fn wheel_box(
 }
 
 #[path = "cursor_answer.rs"]
-pub(crate) mod cursor_answer;
+pub mod cursor_answer;
 
 #[cfg(test)]
 #[path = "char_watch_tests.rs"]

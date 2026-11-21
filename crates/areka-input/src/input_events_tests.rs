@@ -1,3 +1,4 @@
+use super::pointer_test_support::*;
 use super::*;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
 use areka_placement::spawn::{CharWindowMarker, GhostWindowMarker};
@@ -5,63 +6,6 @@ use areka_runtime::hit_region::HitRegion;
 use std::sync::mpsc;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};
-
-/// Bubble 相の合成 `PointerState`（client 物理 px・DoubleClick・Ctrl 押下）を組む。
-fn bubble_pointer(
-    x: i32,
-    y: i32,
-    double_click: DoubleClick,
-    ctrl_down: bool,
-) -> Phase<PointerState> {
-    Phase::Bubble(PointerState {
-        client_point: Point { x, y },
-        double_click,
-        ctrl_down,
-        ..Default::default()
-    })
-}
-
-/// Bubble 相の合成 `PointerState`（Ctrl／Shift を別々に指定する版・R15.1／15.2）。
-///
-/// [`bubble_pointer`] は Ctrl だけを取る（既存の呼び手 20 箇所以上がそのまま動く）。結線済みでは
-/// 強制退避と通常の左ダブルクリックが Shift の有無で分かれるため、両方を指定できる口をここへ足す。
-fn bubble_pointer_mods(
-    x: i32,
-    y: i32,
-    double_click: DoubleClick,
-    ctrl_down: bool,
-    shift_down: bool,
-) -> Phase<PointerState> {
-    Phase::Bubble(PointerState {
-        client_point: Point { x, y },
-        double_click,
-        ctrl_down,
-        shift_down,
-        ..Default::default()
-    })
-}
-
-/// `GhostWindowMarker` 窓の現数を数える。
-fn ghost_count(world: &mut World) -> usize {
-    world
-        .query_filtered::<Entity, With<GhostWindowMarker>>()
-        .iter(world)
-        .count()
-}
-
-/// Mock resolver＋注入 clock の `MouseWiring` を NonSend 挿入した World を組む。
-fn world_with_wiring(
-    region: fn(u32, i64, i64) -> HitRegion,
-    clock: Box<dyn FnMut() -> u64>,
-) -> (World, mpsc::Receiver<KanadeMsg>) {
-    let (tx, rx) = mpsc::channel::<KanadeMsg>();
-    let wiring = MouseWiring::with_clock(tx, RegionSource::Mock(region), clock);
-    let mut world = World::new();
-    world.insert_non_send(wiring);
-    // 終了の受け口（本番では `WinApp` が必ず挿す）。強制退避は統合操作で終了を指示する。
-    world.insert_non_send(wintf::AppExit::new());
-    (world, rx)
-}
 
 /// 預かっている右ダブルクリックを取り出して送る（メニュー側が「送る」と決めたときの操作）。
 ///
@@ -75,16 +19,6 @@ fn send_pending_right_double_click(world: &mut World) {
         .take_pending_right_double_click()
         .expect("右ダブルクリックは預かりとして残る");
     wiring.send_pending_right_double_click(pending);
-}
-
-/// 単調増加する注入 clock を作る（毎呼出で +step ms）。
-fn stepping_clock(start: u64, step: u64) -> Box<dyn FnMut() -> u64> {
-    let mut t = start;
-    Box::new(move || {
-        let now = t;
-        t += step;
-        now
-    })
 }
 
 /// RED（mock-seam send・1.5）: Mock resolver＋注入 clock で単体から配信し、受信側で内容を観測する。
@@ -482,44 +416,6 @@ fn handler_wired_ctrl_left_double_click_sends_no_close_request_and_delivers_the_
     assert!(world.get_entity(other).is_ok(), "無関係 entity は残る");
 }
 
-/// 強制退避の檻（R15.2）: **Ctrl+Shift**+左ダブルクリックは従来どおり全窓を despawn し、
-/// kanade へは何も送らない（起動後でも効く脱出口）。
-///
-/// # 非空虚性
-/// Shift の判定を落とせば終了指示が送られて `try_recv` の表明が落ち、窓も残って件数が合わない。
-#[test]
-fn handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sending() {
-    let (mut world, rx) = world_with_wiring(
-        |_, x, y| HitRegion {
-            scope: 0,
-            region: Some("Head".to_string()),
-            surface_point: (x, y),
-        },
-        stepping_clock(1000, 1000),
-    );
-    world.spawn(GhostWindowMarker);
-    let w0 = world.spawn(GhostWindowMarker).id();
-    let other = world.spawn_empty().id();
-    assert_eq!(ghost_count(&mut world), 2);
-
-    let ev = bubble_pointer_mods(10, 20, DoubleClick::Left, true, true);
-    assert!(on_char_pointer_pressed(&mut world, w0, w0, &ev));
-    assert_eq!(
-        ghost_count(&mut world),
-        0,
-        "Ctrl+Shift は強制退避＝全ゴースト窓が despawn される（R15.2）"
-    );
-    assert!(
-        world
-            .get_non_send::<wintf::AppExit>()
-            .expect("world_with_wiring が受け口を挿している")
-            .is_requested(),
-        "強制退避は窓を閉じた上で終了を指示する（要件 3.3）"
-    );
-    assert!(world.get_entity(other).is_ok(), "無関係 entity は残る");
-    assert!(rx.try_recv().is_err(), "強制退避は kanade へ何も送らない");
-}
-
 /// 暫定退避檻（6.1）: Ctrl なしの左ダブルクリックは窓を despawn せず、
 /// 代わりに `DoubleClick` を送出する（退避と送出の分岐が排他であること）。
 #[test]
@@ -560,27 +456,6 @@ fn handlers_self_gate_when_mouse_wiring_absent() {
     assert!(!on_char_pointer_pressed(&mut world, e, e, &dbl));
     let mid = bubble_pointer(10, 20, DoubleClick::Middle, false);
     assert!(!on_char_pointer_pressed(&mut world, e, e, &mid));
-}
-
-/// 起動失敗時の脱出（R15.2・旧 DD-IE-7）: `MouseWiring` 不在なら Ctrl+左で全窓 despawn。
-///
-/// 結線前（ghost boot 失敗・boot 前）は終了指示の送り先が無いため、従来どおりの強制退避で
-/// 窓を閉じて抜ける。この経路が残っていることが、終了指示を正規の握手へ配線しても
-/// 「起動に失敗したゴーストを閉じられる」ことの担保である。
-#[test]
-fn escape_works_without_mouse_wiring() {
-    let mut world = World::new();
-    world.insert_non_send(wintf::AppExit::new());
-    world.spawn(GhostWindowMarker);
-    let w = world.spawn(GhostWindowMarker).id();
-    assert_eq!(ghost_count(&mut world), 2);
-
-    let ev = bubble_pointer(10, 20, DoubleClick::Left, true);
-    assert!(
-        on_char_pointer_pressed(&mut world, w, w, &ev),
-        "wiring 不在でも暫定退避は機能する"
-    );
-    assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓 despawn");
 }
 
 /// 配線層 per-scope 独立檻（5.x・DD-IE-5／DD-IE-9・task 4.4 NEW）: 1 つの `MouseWiring`
@@ -634,69 +509,6 @@ fn wiring_throttles_scopes_independently_via_hashmap() {
         _ => panic!("Mouse(Move) を期待"),
     }
     assert!(rx.try_recv().is_err(), "他に送出はない");
-}
-
-/// 「強制退避操作でのみ全窓終了が起きる」統合檻（6.1/6.2/6.3・DD-IE-7・task 4.4 NEW）:
-/// 移動・中ボタンダブルクリック・単発クリック・Ctrl なし左ダブルクリック・結線済みの
-/// Ctrl+左ダブルクリックの**いずれも** `GhostWindowMarker` 窓を despawn しない（非退避操作）。
-/// Ctrl+Shift+左ダブルクリック**のみ**が全窓を despawn する。「でのみ」の排他性を単一
-/// pass/fail で固定する（plain-left 単独の
-/// `handler_left_double_click_without_ctrl_does_not_despawn_and_sends` に対し、非退避操作
-/// 全集合の否定＋退避の肯定を 1 檻へ集約する）。
-#[test]
-fn only_escape_terminates_ghost_windows() {
-    let (mut world, _rx) = world_with_wiring(
-        |_, x, y| HitRegion {
-            scope: 0,
-            region: Some("Head".to_string()),
-            surface_point: (x, y),
-        },
-        stepping_clock(1000, 1000),
-    );
-    // 実キャラ窓は GhostWindowMarker かつ CharWindowMarker（ハンドラが scope を読める）。
-    let w = world
-        .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
-        .id();
-    world.spawn(GhostWindowMarker);
-    world.spawn(GhostWindowMarker);
-    assert_eq!(ghost_count(&mut world), 3);
-
-    // 非退避操作はいずれも despawn しない。
-    let non_escape = [
-        bubble_pointer(10, 20, DoubleClick::None, false), // 移動（None）
-        bubble_pointer(10, 21, DoubleClick::Middle, false), // 中ボタン dblclick
-        bubble_pointer(10, 22, DoubleClick::XButton1, false), // 拡張ボタン dblclick
-        bubble_pointer(10, 23, DoubleClick::None, false), // 単発クリック
-        bubble_pointer(10, 24, DoubleClick::Left, false), // Ctrl なし左 dblclick
-    ];
-    // 移動は on_char_pointer_moved、他は on_char_pointer_pressed。
-    assert!(on_char_pointer_moved(&mut world, w, w, &non_escape[0]));
-    for ev in &non_escape[1..] {
-        on_char_pointer_pressed(&mut world, w, w, ev);
-    }
-    assert_eq!(
-        ghost_count(&mut world),
-        3,
-        "非退避操作（移動/中/拡張/単発/Ctrl なし左）は 1 つも despawn しない"
-    );
-
-    // 結線済みの Ctrl+左は退避ではない——Ctrl は無視され、窓は 1 枚も減らない（要件 5.3）。
-    let wired_ctrl_left = bubble_pointer(10, 20, DoubleClick::Left, true);
-    assert!(on_char_pointer_pressed(&mut world, w, w, &wired_ctrl_left));
-    assert_eq!(
-        ghost_count(&mut world),
-        3,
-        "結線済みの Ctrl+左は左ダブルクリックとして扱われ、窓を閉じない（要件 5.3）"
-    );
-
-    // 強制退避操作（Ctrl+Shift+左）のみが全窓を despawn する（R15.2）。
-    let escape = bubble_pointer_mods(10, 20, DoubleClick::Left, true, true);
-    assert!(on_char_pointer_pressed(&mut world, w, w, &escape));
-    assert_eq!(
-        ghost_count(&mut world),
-        0,
-        "強制退避操作でのみ全ゴースト窓が despawn される"
-    );
 }
 
 // -------------------------------------------------------------------------

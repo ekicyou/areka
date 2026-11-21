@@ -25,7 +25,7 @@ use wintf::ecs::{Point, Window};
 use super::super::test_support::{capture_logs, headless_runtime_wiring};
 use super::super::{BalloonWiring, ChoiceSelection};
 use super::on_balloon_pointer_pressed;
-use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};
+use crate::user_break::{UserBreakWiring, drain_no_user_break_signals};
 use areka_placement::spawn::BalloonWindowMarker;
 use areka_runtime::frame::balloon_runtime_test_support::manual_balloon_runtime;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;

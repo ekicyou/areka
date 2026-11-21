@@ -60,12 +60,12 @@ pub(crate) use pressed::{finished_talking, on_balloon_pointer_pressed};
 /// `ordinal` はワイヤ形に含めない（漏洩防止・design 2.6）。
 ///
 /// 本番到達済み——発行は [`on_balloon_pointer_pressed`]→[`BalloonWiring::send_selection`]、
-/// 全フィールドの消費は `input_events/choice_drain.rs` の `to_choice_input`（`ChoiceInput` へ
+/// 全フィールドの消費は `crates/areka-input/src/choice_drain.rs` の `to_choice_input`（`ChoiceInput` へ
 /// 不透明転写）と、種類がアンカーのときの `to_anchor_input`（`AnchorInput` へ同じく転写）。
 /// `resolve_choice` を本 crate から呼ばない点は現在も変わらない（発行までが本 mod の
 /// 範囲・カスケードは kanade 側）。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ChoiceSelection {
+pub struct ChoiceSelection {
     /// 当たった範囲の種類（選択肢かアンカー・当たりの行から写す）。型の名前は選択肢だけだった
     /// 頃のままで、アンカーの知らせも同じ形で運ぶ（その場合 `id`・`label`・`references` は
     /// `\_a` の ID・範囲の文字・2 番目以降の引数）。
@@ -137,7 +137,7 @@ pub(super) fn settle_after_selection(
 /// `ghost_session::prepare_ghost_windows` の
 /// [`attach_balloon_pointer_handlers`] で装着）と離脱システム [`clear_balloon_hover_on_leave`]。
 /// 2 フィールドはいずれもそれらの経路で読み書きされる（バルーンの上の滞在の集合は `BalloonHover` へ分けた）。
-pub(crate) struct BalloonWiring {
+pub struct BalloonWiring {
     /// [`ChoiceSelection`] 発行シンク（C-1・mpsc）。
     selection_tx: Sender<ChoiceSelection>,
     /// scope → 最後に注入した hover ordinal（getter 不在の自前追跡・B-2）。
@@ -146,7 +146,7 @@ pub(crate) struct BalloonWiring {
 
 impl BalloonWiring {
     /// 発行シンク [`Sender`] から構築する（`hover` は空 map で初期化・donor `MouseWiring::new` 同型）。
-    pub(crate) fn new(selection_tx: Sender<ChoiceSelection>) -> Self {
+    pub fn new(selection_tx: Sender<ChoiceSelection>) -> Self {
         Self {
             selection_tx,
             hover: HashMap::new(),
@@ -368,7 +368,7 @@ pub(crate) fn click_selection(
 // post-spawn 装着・NonSend 結線・スケジュール登録（tasks.md task 6.1・design
 // 「attach_balloon_pointer_handlers / wire_balloon_choice」＋「clear_balloon_hover_on_leave」Validation）
 //
-// donor `attach_char_pointer_handlers`（input_events/mod.rs）／`wire_mouse_input`（同）／main.rs の
+// donor `attach_char_pointer_handlers`（crates/areka-input/src/lib.rs）／`wire_mouse_input`（同）／main.rs の
 // clickthrough 登録スロットの鏡写し。`spawn.rs` は不改変＝post-spawn 装着のみ（4.4）。上流 input-events
 // 成果（ハンドラ／排他システム／資源型）を消費し結線するだけで判断分岐は増設しない（5.5）。本番呼出は
 // 結線済み——系の登録（`register_balloon_leave_system`）は `ghost_session::register_systems` から
@@ -390,7 +390,7 @@ pub(crate) fn click_selection(
 ///
 /// 本番到達済み——`ghost_session::prepare_ghost_windows`（`attach_char_pointer_handlers` の直後・
 /// `spawn_ghost_windows` と同一 `&mut World` クロージャ内）から呼ばれる。
-pub(crate) fn attach_balloon_pointer_handlers(world: &mut World) {
+pub fn attach_balloon_pointer_handlers(world: &mut World) {
     let balloon_windows: Vec<Entity> = world
         .query_filtered::<Entity, With<BalloonWindowMarker>>()
         .iter(world)
@@ -412,7 +412,7 @@ pub(crate) fn attach_balloon_pointer_handlers(world: &mut World) {
 /// 発行シンク `ChoiceSelectionInbox` の受信は W6 `choice-select-events` が着地済みで、送り口は
 /// `ghost_session_runtime::rewire_runtime_consumers` の `wire_choice_drain` が置き、毎フレームの drain の系は
 /// `register_choice_drain`（`register_systems` から 1 回）が載せる（5.3 の seam は消費済み）。
-pub(crate) fn wire_balloon_choice(world: &mut World) {
+pub fn wire_balloon_choice(world: &mut World) {
     let (tx, rx) = channel::<ChoiceSelection>();
     world.insert_non_send(BalloonWiring::new(tx));
     // バルーンの上の滞在の集合は runtime の型（可視性の相が読む）。`BalloonWiring` と同じ時に入れ直す。
@@ -431,7 +431,7 @@ pub(crate) fn wire_balloon_choice(world: &mut World) {
 /// 除去より前は Input スケジュール内であることで成立）。
 ///
 /// 本番到達済み——呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
-pub(crate) fn register_balloon_leave_system(world: &mut World) {
+pub fn register_balloon_leave_system(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
         clear_balloon_hover_on_leave.after(dispatch_pointer_events),

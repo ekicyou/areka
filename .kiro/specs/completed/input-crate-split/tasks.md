@@ -1,0 +1,169 @@
+# 実装の計画
+
+- 段の順（設計の「移す段」の 0〜6）がそのままタスクの順。各段の終わりに設計の表の「緑であるもの」を確かめてからコミットする。PR は 1 本。
+- どのタスクも、同じウェーブの約束で触らないファイル（`crates/areka-runtime/src/frame*`・本体の `runtime_tests/`・`session/runtime_boot.rs`・`session/runtime_boot_tests.rs`・`session/ghost_quit*`）を変えない。
+- 足す・変えるコードのコメントは `CLAUDE.md` の Comments 節に従う（spec・要件・タスクの番号を書かない）。移すファイルの既にあるコメントの中身は変えない。
+- 実機を使うタスク（1.2・7.3）は排他テストの机を取り、終わったらすぐ返す。SendInput を使う 1.2・7.3 の強制退避は、開発者の許しを得てから走らせる。
+
+- [x] 1. 着手の証跡を取る
+- [x] 1.1 着手のときのテストの名前の一覧を残す
+  - 枝の先頭（コードを変える前）で、ワークスペース全体のテストの一覧を取り、作業の木の `target/input-crate-split/tests-before.txt` に残す
+  - `: test$` の行から名前の末尾の多重集合を作れる形であることを確かめる
+  - 一覧のファイルが在り、テストの行の数が記録されている
+  - _Dispatch: mechanical — 決まった 1 本のコマンドの出力を残すだけ_
+  - _Requirements: 8.2_
+- [x] 1.2 着手のときの実機の強制退避の記録を取る
+  - 作業の木の `target\input-crate-split\escape\` に、Ctrl と Shift を押したまま左ボタンを 2 回押し放し、`finally` で全部放す使い捨ての SendInput の手順を置く（`tools/` には足さない）
+  - emo2 を絶対パスで起こした areka のキャラ窓に Ctrl+Shift+左ダブルクリックを 1 回入れ、標準エラーの記録を `target/input-crate-split/escape-before.stderr.log` に残す
+  - 記録に `mouse_escape_close` → `log_stay_on_top_discard` の記録 → `app_exit origin=Escape` → `run()` の復帰 → 終了の系列が順に残っている。手順の中身は検証の記録に写す
+  - _Dispatch: standard — 実機の窓の位置を見て手順を組む_
+  - _Requirements: 8.7, 4.5_
+
+- [x] 2. 本体を引く 2 本を本体の中に置き直す
+  - 位置初期化の近道のファイルとそのテストを履歴を残す移動で本体の menu の下へ、窓への投げ込みのファイルとそのテスト 3 本を本体の src 直下へ移す（中身は変えない）
+  - 入力の根から 2 つの宣言を外し、menu と本体の根に宣言を足し（本体の根の宣言は説明なし）、受け手を付ける本体の呼び手の 2 行を置き直した先へ向ける（同じ閉包・同じ順のまま）
+  - 本体の bin の全部の対象の型の確かめが通り、近道と投げ込みのテストが前と同じ合否で緑
+  - _Dispatch: mechanical — 置き場と書き換える行を設計が与える_
+  - _Requirements: 2.1, 2.2, 2.3, 2.6_
+
+- [x] 3. 強制退避の口を本体の中で据える（まだ crate を作らない）
+- [x] 3.1 強制退避のテストが使う小道具を、本体のテストからも使える支えへ出す
+  - 入力のテストにある小道具 5 つ（ポインタの泡立て 2 つ・窓の数え・結線つきの World・進む時計）を、写しを作らずに入力の新しい支えのモジュールへ移す。この段ではまだ本体の bin の中なので、支えと、結線に時計を渡す作り方の関数は `#[cfg(test)]` のまま（`test-support` 機能の条件へは 4.1 で替える。本体のマニフェストには機能の表が無く、今替えると `unexpected_cfgs` の警告になる）
+  - 入力のテストが新しい支えから小道具を使い、中身を変えずに前と同じ合否で緑。警告 0
+  - _Dispatch: mechanical — 移す小道具を設計が名指す_
+  - _Requirements: 5.5_
+- [x] 3.2 口の束と倒れ方を作り、本体が口を据えて強制退避の分岐を口へ通す
+  - 入力の中に口の束（強制退避の関数を 1 つ持つ Resource）と、据えられた口を呼ぶ関数を新設する。口が無ければ `input_hooks_missing` の `error!` を 1 行残し、終わりの印が World に在れば終わりを指示する
+  - 本体の終了の側に、口の中身（出所 `Escape` の終了の統合操作）を据える関数を足し、システムの組み立ての先頭（セッションの口の据え付けの直後）で 1 回呼ぶ
+  - 強制退避の分岐の、本体の終了の統合操作を直に呼ぶ 1 行だけを口の呼び出しへ替え、受け付ける条件・`info!` の記録・`true` を返すことは 1 字も変えない。本体の終了を名指す `use` を外し、本体の終了を指す説明のリンクを本体を名指す地の文へ書き換える（意味は同じ）
+  - 今の置き場にある強制退避のテスト 3 本に、World を組んだ直後に口を据える 1 行を足して緑のまま保つ（表明は変えない・移すのは 3.3）
+  - 口が無い World で倒れ方を見るテスト `escape_without_hooks_logs_and_still_requests_exit` を足し、error が 1 行・終わりの指示が立つことを示す
+  - 本体の bin のテストが緑（赤が出たら赤のテストだけ回し直す）で、入力の中に本体の終了を名指すコードが grep で 0 件
+  - _Dispatch: standard — 口の型は設計が与えるが、倒れ方の分岐・据え付けの道・テストを書く_
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.6, 3.8, 7.7, 2.4_
+- [x] 3.3 強制退避のテストを本物の終了で見る本体のテストへ移し、据え付けの道を固定する
+  - 強制退避のテスト 3 本（`handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sending`・`escape_works_without_mouse_wiring`・`only_escape_terminates_ghost_windows`）を名前を変えずに本体の終了の子のテストへ移し、`use` の行だけを変える（表明は 1 字も変えない）
+  - システムの組み立てを通して口が据わり、結線前の Ctrl+左ダブルクリックで窓が消え終わりが指示されることを見るテスト `register_systems_installs_the_escape_hook` を足す
+  - 本体の bin のテストが緑で、入力のテストに強制退避の枝へ入るテストが残っていない
+  - _Dispatch: standard — 境をまたぐテストの組み立てを書く_
+  - _Requirements: 4.6, 4.7, 5.1_
+
+- [x] 4. 新しい crate を作って移す
+- [x] 4.1 crate の骨組みを作り、入力を移して本番を組めるようにする
+  - 新しい crate のマニフェストを runtime の crate の型に揃えて作る（lib・`publish = false` と理由を同じ行に・ワークスペースの値の継承・`test-support = []`・本番の依存は設計の 12 個だけ・開発用の依存は設計の一覧だけ・各行に理由の注）
+  - 入力の 44 ファイル（根は crate の根へ）と同梱のカーソルの絵の置き場を履歴を残す移動で移し、絵を読む相対パスを 1 段浅くする（絵のバイトは変えない）
+  - 自分を指すパスを crate の根へ、`pub(in …)` を `pub(crate)` の字面へ書き換える。書き換えは行の単位に留め、当たり判定の入口の行の中身は変えない
+  - 本体の根の入力の宣言を出し直しの 1 行（`use areka_input as input_events;`）に替え、本体のマニフェストに本番と開発用（`test-support` つき）の依存の 2 行を足す
+  - テストのための支えの立つ条件を `cfg(any(test, feature = "test-support"))` へ替える（中断の結線の 2 つのメソッド・3.1 の支えのモジュールと時計を渡す作り方の関数）。触らない約束のファイルは変えずに通る
+  - コンパイラのエラーを 1 件ずつ見て、外から使われている項目だけを `pub` にする（使われない `pub(crate)` は消さずに残す）。署名のために連れて開けた型があれば一覧に記録する
+  - ワークスペース全体の全部の対象の型の確かめが警告 0 で通り、入力の本番のコードに本体の項目を名指す所が grep で 0 件、新しい crate の文書の生成で本体の名を指す解けないリンクの警告が 0 件
+  - _Depends: 3.3_
+  - _Dispatch: standard — 公開面をコンパイラの指摘から 1 件ずつ決める_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.10, 1.11, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 5.5, 7.1, 7.2_
+- [x] 4.2 境をまたぐテストを移し、機能だけのビルドと番人の決まりを確かめる
+  - 配置と入力を使う組み立てのテストを、履歴を残す移動で新しい crate のテストへ移し、中の自分を指すパスを書き換え、本体の配置のテストの束から宣言を外して説明の部品の名を直す
+  - 番人に頼る支えは `#[cfg(test)]` のまま、番人の 3 つの crate を本番の依存表に書かない
+  - 機能だけを立てた lib のビルドが警告 0、新しい crate のテストと本体の bin のテストが緑（赤のテストだけ回し直す）
+  - _Dispatch: mechanical — 移すファイルと書き換える行を設計が与える_
+  - _Requirements: 1.9, 5.1, 5.2, 5.3, 5.4_
+- [x] 4.3 新しい crate のテストの実行ファイルに落ちの報告を据える
+  - 新しい crate の `#[cfg(test)]` の子に、runtime の落ちの報告の据え付けを指す初期化子（`.CRT$XCU`）を置き（中身の写しは作らない）、据わっていることを確かめるテスト `crash_filter_is_installed_before_the_tests_start` を 1 本足す
+  - 据え付けを指す初期化子を grep し、当たった所がどれも `#[cfg(test)]` の下にあることを確かめる
+  - 新しい crate のテストが緑で、そのテストの実行ファイルがワークスペースのテストの一覧に出る
+  - _Dispatch: mechanical — 前例の形をそのまま写す_
+  - _Requirements: 5.6, 5.7_
+
+- [x] 5. ログの出所を読む所・見張り・道具を追従させる
+- [x] 5.1 (P) ログの出所を名前で読むコードと、`get_log` の分け方のテストを直す
+  - 実機テスト 2 本の `RUST_LOG`（と説明）と、カーソルの答えのテストの出所の文字列を新しい出所の名前へ書き換える（手順書は 6.2 が持つ）
+  - `get_log` の分け方の既にあるテスト `unrelated_info_is_not_kept` に 5 行を足す（テストの名前は増やさない）: `areka_input`・`areka_input::char_watch::cursor_answer`・`areka::file_drop`・`areka::menu::shortcut` の info がどれにも当たらない（`None`）、`areka_input::user_break` の warn が `Error`
+  - 分け方のテストとカーソルの答えのテストが緑
+  - _Boundary: LogTargets_
+  - _Dispatch: mechanical — 書き換える文字列と足す行を設計が与える_
+  - _Requirements: 2.5, 7.3, 7.5, 8.9_
+- [x] 5.2 (P) ソースの木を歩く本体の見張り 4 本の根に新しい crate を足す
+  - 見張り 4 本の歩く根の並びに新しい crate の `src` を足し（2 つ → 3 つ）、説明の数を合わせる。テストの名前・許可表・期待値は変えない
+  - 4 本が緑。当たりが出たら許可表に足さず、見つけたものを開発者へ報告する
+  - _Boundary: WalkGuards_
+  - _Dispatch: mechanical — 足す根の形を設計が与える_
+  - _Requirements: 5.1, 8.2_
+- [x] 5.3 (P) 揺れの繰り返しの道具とカーソルの絵の道具を追従させる
+  - 揺れの繰り返しの道具の `-Binary` に `areka-input-lib`（`-p areka-input --lib`）を、選べる値・切り替え・自分の検査の表の 3 か所と説明に足す
+  - カーソルの絵の道具が名指す置き場を新しい置き場へ書き換える
+  - どちらの道具も今の呼び方の自分の検査が緑
+  - _Boundary: ToolUpdate_
+  - _Dispatch: mechanical — 足す値と書き換える行を設計が与える_
+  - _Requirements: 5.8, 1.11_
+
+- [x] 6. 入力を名指すパスと受け持ちを書き換える
+- [x] 6.1 (P) コードの説明に残る入力のパスと名前を書き換える
+  - `log-capture-kit` の説明・本体の外の crate（配置・runtime・examples・文字の層）の説明・本体の説明（インストールと readme）を、設計のパスの対応表どおりに書き換える（動きは変えない）
+  - runtime の当たり判定のファイルは冒頭の説明の 3 行だけに留め、`frame*` には触らない
+  - 触った crate の型の確かめが警告 0 で、`log-capture-kit` のテストが緑
+  - _Boundary: PathRewrite（コード）_
+  - _Depends: 4.1_
+  - _Dispatch: mechanical — 書き換えを対応表が与える_
+  - _Requirements: 6.1, 6.2, 6.3_
+- [x] 6.2 (P) 文書と網羅台帳と実機の手順書のパスと出所の名前を書き換える
+  - 互換の設計の文書（§8 の割り当てられた行だけ）・網羅台帳 3 本の別々の行・アンカーの文書・`doc/ideas/` の 6 ファイルのパスと、カーソルの絵の置き場を新しいパスへ書き換える
+  - 実機の手順書の `RUST_LOG` と説明の出所の名前と、パスを書き換える
+  - 網羅の報告は手で直さず道具で作り直し、網羅の確かめの道具が緑
+  - _Boundary: PathRewrite（文書）_
+  - _Depends: 4.1_
+  - _Dispatch: mechanical — 書き換えを対応表が与え、報告は道具が作る_
+  - _Requirements: 6.4, 1.11, 7.3_
+- [x] 6.3 (P) steering の構成の文書と、見直しの spec の受け持つファイルを書き換える
+  - 構成の文書に新しい crate の節（役・依存の向き・`test-support`・カーソルの絵・テストの置き場）を runtime の節の後に足し、本体の節の入力と投げ込みの行と、ログの支えの使い手の数（22 crate）を合わせる
+  - `audit-areka-input-menu` の brief の受け持つファイルと Upstream の文を移した先へ書き換え、近道と投げ込みを範囲に残すかは向こうの要件の段が決める旨を 1 行足す
+  - 2 つの文書が新しいパスだけを指している
+  - _Boundary: PathRewrite（steering・brief）_
+  - _Dispatch: mechanical — 書く中身を設計が与える_
+  - _Requirements: 6.5, 6.6_
+- [x] 6.4 古いパスと古い出所の名前が 0 件であることを数える
+  - 決めた範囲（`crates/`・`tools/`・`doc/`・構成と技術の steering）で、古いパス・`src/` を付けない書き方・モジュールの形（文書と本体の外の crate）・古い出所の名前を grep し 0 件を示す。本体の中の出し直しで通る呼び手は当たりにしない
+  - 除いた所（歴史の文書・対応表を持つ roadmap・日付つきの写し・向こうがまだ直していなければ `frame/wiring.rs` の 3 か所）を一覧で検証の記録に残す
+  - _Depends: 5.1, 6.1, 6.2, 6.3_
+  - _Dispatch: mechanical — 数える範囲と除外を要件が与える_
+  - _Requirements: 6.7, 6.8, 7.6_
+
+- [x] 7. 振る舞いが変わらないことを確かめる
+- [x] 7.1 構造の証跡を取る
+  - 完了のときのテストの一覧を取り、1.1 の多重集合と比べ、差（見込み +3: 落ちの報告の確かめ・口の据え付けの確かめ・口が無いときの倒れ方）を対応表で 1 件ずつ説明する
+  - ワークスペース全体の型の確かめの警告が 0、触らない約束のファイルの差分が空、新しい crate の本番の依存の木に本体と番人の 3 crate が出ない、`Cargo.lock` の差分が新しい crate の 1 項目と本体の依存の 1 行だけ、移したファイルの履歴が追える
+  - テストの置き場の表（どのテストをどこへ置いたか）を検証の記録に写す
+  - _Dispatch: mechanical — 決まった手順で証跡を並べる_
+  - _Requirements: 8.2, 8.3, 8.4, 3.5, 1.5, 1.7, 1.9, 1.2, 5.1_
+- [x] 7.2 全体テストを回し、第三者の表を作り直す
+  - 全体テストの道具を直さずに 1 回回して緑を示す（1,000 行の番人・番人の決まり・新しい crate のテストを含む）。赤のテストだけ回し直す
+  - 第三者の表を道具で作り直す（手で書かない）
+  - 全体テストが緑で、第三者の表に新しい crate の行が増えている
+  - _Dispatch: mechanical — 決まった道具を回すだけ_
+  - _Requirements: 8.5, 8.10, 1.10, 5.4, 5.7_
+- [x] 7.3 実機テスト 2 本と実機の強制退避を回して前と比べる
+  - 出所を名前で読む実機テスト 2 本を今の手順で 1 回ずつ回し、新しい出所の名前で行を拾って緑を示す（`areka_input=debug` で前と同じだけの入力の診断が出る）
+  - 1.2 と同じ手順で実機の強制退避を 1 回取り、記録の順と中身が 1 行目の出所の名前を除いて前と同じことを示す
+  - 実機で回したのはこの 3 つだけであることを記録に残す
+  - _Depends: 1.2_
+  - _Dispatch: standard — 実機の記録を読み比べて判定する_
+  - _Requirements: 8.6, 8.7, 8.8, 4.5, 7.4_
+- [x] 7.4 完了の申し送りの一覧をまとめる
+  - `session-module-gather` へ（出し直しを外すのは同 spec の持ち物）、`frame/wiring.rs` の 3 か所の状況（向こうが直していなければ受け手）、`audit-areka-input-menu` へ（古い説明の一覧・残る強制退避の枝へ落ちない側のテスト 3 本の古くなる説明・連れて開けた型と `test-support` で開けた項目・理由の文が古くなる `#[allow]` は 0 件）を、spec の中の検証の記録にまとめる
+  - 棚卸のセッションへ伝える、C23 の触るファイルに無かった所の一覧を同じ記録に載せる
+  - 申し送りの一覧が記録にあり、`/kiro-complete` がそのまま brief へ写せる
+  - _Dispatch: mechanical — 載せる項目を設計が与える_
+  - _Requirements: 6.9, 6.10, 8.1, 3.7_
+
+## Implementation Notes
+
+- 1.1: 着手のときの一覧 `target/input-crate-split/tests-before.txt`（基点 80028ea01）の `: test$` の行は 14389 行（名前の末尾の種類は 14271）。
+- 1.2・7.3: areka の tracing は標準出力に出る（`escape-*.stderr.log` は両方をまとめたもの）。`log_stay_on_top_discard` は常に手前がオンのときだけ出るので、台本は強制退避の前に MCP で `\![set,windowstate,stayontop]\e` を送る。手順は `verification.md`。
+- 3.3: `input_events_tests.rs` の「強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。」は 3 本を移したので古い。7.4 で `audit-areka-input-menu` へ申し送る（移すファイルのコメントは変えない）。
+- hit-id-pass（2026-11-20）: `resolve_hit_region`／`hit_region_client` の署名も `HitRegion`／`ClientHit` の形も変えない。`crates/areka-input/src/lib.rs` の追従は要らない。向こうは `tech.md` の Testing 節に 1 文足す（この spec は `tech.md` を書き換えない）。
+- 4.1: `cursor_answer_tests.rs` の出所の名（`areka_input::char_watch::cursor_answer`）は crate を移すと赤になるので 4.1 で直した。5.1 では済みとして扱う。
+- 4.1: 公開面は設計の一覧に `user_break::drain_no_user_break_signals` を足したもの（本体の `runtime_tests/frame_shell_box_arrow_tests.rs` が使う）。連れて開けた型は 0。
+- 4.1: `cargo doc -p areka-input` の警告 20 件（移したコメントの「private item へのリンク」19・`MouseWiring::with_clock` の解けないリンク 1）は本体の名を指さない。7.4 で `audit-areka-input-menu` へ申し送る。
+- 範囲の外: `cargo check --workspace --all-targets` に `shiori-abi` の `unused dependency windows`（`crates/shiori-abi/Cargo.toml:16`）が main でも出る。完了の棚卸で起票する。
+- 6.1: 移した `areka-input` のファイルの説明に残る古いパス 6 か所（`balloon.rs` 2・`balloon_hover_flag_tests.rs`・`balloon_moved.rs`・`spawn_assembly_tests.rs` 2）は 6.7 の当たりになるので、パスとモジュールの名だけを書き換えた（意味は変えない）。
+- 6.1: `collision-probe.rs`・`collision-probe/setup.rs` の「`pub(crate)`・内部が `crate::` パス」という理由の文は移した後は古い（結論は依存の向きで成り立つ）。7.4 で `audit-areka-input-menu` へ申し送る。
+- 6.2: 設計のパスの対応表の機械的な形（`input_events::<子>` → `areka_input::<子>`）は、子の子のモジュールでは実物と合わない。実物は `areka_input::char_watch::cursor_answer`・`areka_input::hover_region::cursor_pick`。
+- 完了時にその場で解決: `shiori-abi` の使っていない依存 `windows` を外した（main でも出ていた警告・`625e8eec8`）。

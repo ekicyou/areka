@@ -419,7 +419,7 @@ pub(crate) fn clear_box_hover_on_leave(world: &mut World) {
 
 /// [`clear_box_hover_on_leave`] を入力の段（`dispatch_pointer_events` の後）へ登録する。
 /// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
-pub(crate) fn register_box_leave_system(world: &mut World) {
+pub fn register_box_leave_system(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
         clear_box_hover_on_leave.after(dispatch_pointer_events),

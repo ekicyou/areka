@@ -773,7 +773,7 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
 /// 左ダブルクリックの検出の記録が出ることで、この 1 行の呼び出しを固定する。
 #[test]
 fn pressed_left_double_click_reaches_the_user_break_entry() {
-    use crate::input_events::user_break::UserBreakWiring;
+    use crate::user_break::UserBreakWiring;
     use wintf::ecs::pointer::DoubleClick;
 
     let mut world = World::new();

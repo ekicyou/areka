@@ -418,7 +418,7 @@ fn previous_press_memory_is_read_then_overwritten() {
 /// いる）でも、範囲の外（答えの台詞に替わった）でも同じ。
 #[test]
 fn second_click_after_selecting_an_anchor_is_not_a_break() {
-    use crate::input_events::balloon::{click_selection, test_support::anchor_row};
+    use crate::balloon::{click_selection, test_support::anchor_row};
     let rows = [anchor_row(0, 0.0, 0.0, 40.0, 10.0)];
     let on_anchor = |x: f32| {
         click_selection(true, &rows, x, 5.0, 0)

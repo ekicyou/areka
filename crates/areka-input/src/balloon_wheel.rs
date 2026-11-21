@@ -27,7 +27,7 @@ const DEFAULT_WHEEL_LINES: u32 = 3;
 
 /// バルーンの窓のホイールの系を `Input` の段の `dispatch_pointer_events` の前へ 1 回だけ登録する
 /// （呼び手は `ghost_session::register_systems`・プロセスに 1 回）。
-pub(crate) fn register_balloon_wheel(world: &mut World) {
+pub fn register_balloon_wheel(world: &mut World) {
     world
         .resource_mut::<Schedules>()
         .add_systems(Input, balloon_wheel.before(dispatch_pointer_events));

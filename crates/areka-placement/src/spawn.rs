@@ -30,13 +30,13 @@
 //!   DD15 v2 (3)・1.1）。
 //!   なおキャラ窓へのポインタハンドラ（`OnPointerMoved`／`OnPointerPressed`）は
 //!   **本モジュールでは付けない**——マウス移動／ダブルクリックを kanade へ配信する結線は
-//!   `input_events::attach_char_pointer_handlers` が spawn 直後に装着する（依存方向
-//!   input_events→placement。areka-P0-input-events）。
+//!   `areka_input::attach_char_pointer_handlers` が spawn 直後に装着する（依存方向
+//!   areka_input→placement。areka-P0-input-events）。
 //!   **終了指示**（kanade の正規の握手へ入る・窓は握手の完了後に閉じる・R15.1）は右クリック
 //!   メニューの「終了」が送る（結線済みの Ctrl+左ダブルクリックの入口は areka-P0-popup-menu-minimal
 //!   で除去）。Ctrl+Shift+左ダブルクリックと結線前の Ctrl+左ダブルクリックだけが強制退避
 //!   （終了の統合操作＝全窓を閉じてから終了を指示する→`run()` 正常復帰）である。いずれも
-//!   input_events 側ハンドラ／`ghost_session` の結線が担う（stand-in 即終了 `on_ghost_pressed` は退役）。
+//!   areka_input 側ハンドラ／`ghost_session` の結線が担う（stand-in 即終了 `on_ghost_pressed` は退役）。
 //!   全窓を閉じる操作は本モジュールには置かず、終了の指示と 1 つにした `app_exit::quit_app`
 //!   に限る（全窓を閉じるだけの `app_exit::close_windows_for_restart` は起こし直し専用で、
 //!   終了経路からは呼ばない）
@@ -51,7 +51,7 @@
 //!   バルーン・面・シェルの切り替えとバルーン位置初期化は、そのとき解いた値で入れ直す
 //!   （`reseed::reinstall_balloon`・`face_windowposition::apply_face_windowposition`）。
 //!   ポインタハンドラは本モジュールでは付けない——入力の層
-//!   （`input_events::balloon::attach_balloon_pointer_handlers`）が spawn の直後に付ける。
+//!   （`areka_input::balloon::attach_balloon_pointer_handlers`）が spawn の直後に付ける。
 //!   さらに同一スコープのキャラ窓を指す `KeepDirectlyAbove { peer }`＝「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」の
 //!   永続宣言を**バルーン窓側にだけ**後付けする（areka-P0-ghost-window-zorder 1.1・
 //!   キャラ窓 entity を要するため後付け＝生成順は不変。同時に scope とペア両窓を結ぶ
@@ -462,7 +462,7 @@ pub fn spawn_ghost_windows(
         // （4.5）・OnDrag(on_balloon_drag) で単独ドラッグの相対位置記憶
         // （4.8・DD16）・BalloonFollow なし。
         // ポインタハンドラはここでは付けない（入力の層の
-        // `input_events::balloon::attach_balloon_pointer_handlers` が spawn の直後に付ける。
+        // `areka_input::balloon::attach_balloon_pointer_handlers` が spawn の直後に付ける。
         // stand-in の `on_ghost_pressed` 登録は撤去済み）。
         let balloon_window = world
             .spawn((
@@ -540,8 +540,8 @@ pub fn spawn_ghost_windows(
                 BalloonFollow::new(balloon_window, p.balloon_offset_base),
                 // マウス入力配線（areka-P0-input-events）: キャラ窓のポインタ移動／押下を
                 // kanade へ配信する `OnPointerMoved`／`OnPointerPressed` は**ここでは付けない**。
-                // 依存方向は input_events→placement ゆえ、ハンドラ装着は spawn
-                // 直後に `input_events::attach_char_pointer_handlers` が行う（stand-in 即終了
+                // 依存方向は areka_input→placement ゆえ、ハンドラ装着は spawn
+                // 直後に `areka_input::attach_char_pointer_handlers` が行う（stand-in 即終了
                 // `on_ghost_pressed` は退役。Ctrl+左ダブルクリック暫定退避もそのハンドラ側の
                 // 責務・DD-IE-7）。
             ))

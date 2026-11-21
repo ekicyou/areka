@@ -1,6 +1,6 @@
 // -------------------------------------------------------------------------
 // バルーン滞在フラグ檻（areka-P0-balloon-visibility task 2.2・design「hover 観測フラグ
-// （input_events/balloon.rs）」・Requirements 5.2/5.5）
+// （crates/areka-input/src/balloon.rs）」・Requirements 5.2/5.5）
 //
 // 「ポインタがバルーン窓の上に居る」を選択肢行の追跡（`BalloonWiring.hover`）とは**独立の軸**として
 // 記録することを檻へ入れる。観測点は 3 つ——(a) 記録（`on_balloon_pointer_moved` が選択肢の有無に

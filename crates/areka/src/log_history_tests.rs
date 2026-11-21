@@ -139,6 +139,17 @@ fn unrelated_info_is_not_kept() {
         classify(Level::WARN, "areka::install::install_cue"),
         Some(Kind::Error)
     );
+    assert_eq!(classify(Level::INFO, "areka_input"), None);
+    assert_eq!(
+        classify(Level::INFO, "areka_input::char_watch::cursor_answer"),
+        None
+    );
+    assert_eq!(classify(Level::INFO, "areka::file_drop"), None);
+    assert_eq!(classify(Level::INFO, "areka::menu::shortcut"), None);
+    assert_eq!(
+        classify(Level::WARN, "areka_input::user_break"),
+        Some(Kind::Error)
+    );
 }
 
 #[test]

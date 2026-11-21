@@ -72,16 +72,16 @@
 //! ハンドラは `pointer::on_probe_pointer_moved`（`OnPointerMoved`）**だけ**であり、`OnPointerPressed` は
 //! 一切付いていない——`spawn_ghost_windows` が付けていた stand-in `on_ghost_pressed` は
 //! `areka-P0-input-events` で**退役**し（`crates/areka-placement/src/spawn.rs` の当該コメント参照）、
-//! キャラ窓のポインタハンドラは本体の `input_events::attach_char_pointer_handlers`（`pub(crate)`・
+//! キャラ窓のポインタハンドラは本体の `areka_input::attach_char_pointer_handlers`（`pub(crate)`・
 //! 内部が `crate::` パスを使うため runtime の example からは使えない）が装着するようになったためである。
 //! 本番で利用者が終了を指示する道は右クリックメニューの「終了」（本体の `menu::request_close`）
 //! だけである。結線済みの Ctrl+左ダブルクリックは終了指示を送らず、ふつうの左ダブルクリック
 //! （`KanadeMsg::Mouse(DoubleClick)` の送出契機）として配る
-//! （`crates/areka/src/input_events/input_events_tests.rs` の
+//! （`crates/areka-input/src/input_events_tests.rs` の
 //! `handler_wired_ctrl_left_double_click_sends_no_close_request_and_delivers_the_double_click`）。
 //! 強制退避は結線前の Ctrl+左ダブルクリックと Ctrl+Shift+左ダブルクリックで、これも
 //! `attach_char_pointer_handlers` が装着するハンドラが担う。probe への結線はこの probe の射程外
-//! （本体の `input_events` を runtime の example から使えるようにする仕事が要る）。
+//! （本体の `areka_input` を runtime の example から使えるようにする仕事が要る）。
 //!
 //! # 起動時のパス（絶対パスの要否・areka-P0-collision-dpi-hittest 要件 4.6）
 //!

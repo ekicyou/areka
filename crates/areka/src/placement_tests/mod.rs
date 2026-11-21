@@ -3,12 +3,11 @@
 //! runtime-crate-split）。
 //!
 //! 配置の crate（`areka-placement`）は本体（`areka`）に依存できないので、本体の部品
-//! （`input_events` ほか）や `areka-runtime` も使うテストは上の crate であるここに置く。
+//! （`sample_test_support`・`crate_source_test_support`）や `areka-runtime` も使うテストは上の crate であるここに置く。
 //! `main.rs` が `#[cfg(test)]` の下で宣言するので、本番のビルドには入らない。
 
 mod measure_bake_count_tests;
 mod measure_template_tests;
-mod spawn_assembly_tests;
 mod zorder_branch_coverage_test_support;
 mod zorder_group_branch_coverage_tests;
 mod zorder_inversion_branch_coverage_tests;

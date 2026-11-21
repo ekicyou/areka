@@ -1,0 +1,46 @@
+[package]
+name = "areka-input"
+workspace = "../.."
+description = "areka input: routes pointer, wheel and click events on character and balloon windows to kanade"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false # areka 本体の部品・areka の中でしか意味を持たない
+repository.workspace = true
+
+[features]
+# 本体のテストだけが使う支えを開ける・本体は dev-dependency でだけ付ける。
+test-support = []
+
+[dependencies]
+wintf = { path = "../wintf" }
+# 入力は実行系の上に乗り、本体（areka）には依存しない。
+areka-runtime = { path = "../areka-runtime" }
+# キャラ窓の印と追従（本体・runtime と同じ下の層）。
+areka-placement = { path = "../areka-placement" }
+# 文字層・合成・表示・ゴースト・kanade・さくらスクリプトの型を入力の結線が名指す（どれもワークスペースの中）。
+areka-emo-compose = { path = "../areka-emo-compose" }
+areka-emo-present = { path = "../areka-emo-present" }
+areka-emo-text = { path = "../areka-emo-text" }
+areka-ghost = { path = "../areka-ghost" }
+areka-kanade = { path = "../areka-kanade" }
+areka-sakura = { path = "../areka-sakura" }
+bevy_ecs = { workspace = true }
+tracing = { workspace = true }
+windows = { workspace = true }
+
+[dev-dependencies]
+# ログ捕捉テストの硬化機構の唯一の定義元。
+# ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
+# 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
+# 依存方向の規律により [dependencies] へは決して置かない。
+log-capture-kit = { path = "../log-capture-kit" }
+# テストの World に置く定義と台帳を組む（本番の表には要らない・ワークスペースの中）。
+areka-parsers = { path = "../areka-parsers" }
+areka-sylphya = { path = "../areka-sylphya" }
+areka-seriko = { path = "../areka-seriko" }
+areka-emo-atlas = { path = "../areka-emo-atlas" }
+# runtime と配置のテストの支えを入力のテストにだけ開ける。本番の表の同じ依存に機能を足すだけ。
+areka-runtime = { path = "../areka-runtime", features = ["test-support"] }
+areka-placement = { path = "../areka-placement", features = ["test-support"] }

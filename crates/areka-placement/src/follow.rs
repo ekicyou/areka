@@ -160,7 +160,7 @@ pub use self::sticky_follow::sync_drag_writer;
 #[cfg(not(feature = "test-support"))]
 pub(crate) use self::sticky_follow::sync_drag_writer;
 pub(crate) use self::sticky_follow::{is_char_drag_partner, is_char_dragging};
-// ドラッグの始めの控え。呼び手は areka の `input_events::drag`。
+// ドラッグの始めの控え。呼び手は areka の `areka_input::drag`。
 pub use self::sticky_follow::{CharDragSession, begin_char_drag};
 // `\![move]` の連れ動き。呼び手は `runtime::…` の `move_cue_place`。
 pub use self::sticky_follow::{follow_sticky_move, log_sticky_ignored};

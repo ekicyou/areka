@@ -26,6 +26,7 @@ pub(crate) mod reset_balloon_pos_frame;
 pub(crate) mod reset_pos_frame;
 pub(crate) mod roots_frame;
 pub(crate) mod shell_frame;
+pub(crate) mod shortcut;
 pub(crate) mod trigger;
 pub(crate) mod update_frame;
 pub(crate) mod win32;

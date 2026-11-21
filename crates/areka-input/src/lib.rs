@@ -7,19 +7,18 @@
 //! per-scope 間引き状態を `HashMap` で保持する `MouseWiring` とポインタハンドラ結線は
 //! task 2.6／2.7 で本 mod へ増設される。
 
-pub(crate) mod balloon;
-pub(crate) mod balloon_wheel;
-pub(crate) mod char_watch;
-pub(crate) mod choice_drain;
-pub(crate) mod click;
+pub mod balloon;
+pub mod balloon_wheel;
+pub mod char_watch;
+pub mod choice_drain;
+pub mod click;
 mod drag;
-pub(crate) mod file_drop;
+pub mod hooks;
 mod hover_region;
-pub(crate) mod shell_box;
-pub(crate) mod shell_box_handler;
-pub(crate) mod shortcut;
+pub mod shell_box;
+pub mod shell_box_handler;
 pub(crate) mod throttle;
-pub(crate) mod user_break;
+pub mod user_break;
 mod wheel;
 
 use std::collections::HashMap;
@@ -31,7 +30,6 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::drag::{OnDragEnd, OnDragStart};
 use wintf::ecs::pointer::{DoubleClick, OnPointerMoved, OnPointerPressed, Phase, PointerState};
 
-use crate::app_exit::{ExitOrigin, quit_app};
 use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::hit_region::{HitRegion, resolve_hit_region};
@@ -55,7 +53,7 @@ use throttle::{MouseMoveThrottle, plan_mouse_move};
 /// 例外はメニュー側（`menu`）から呼ばれる 3 つである: 右ダブルクリックの預かりの取り出しと送出
 /// （`take_pending_right_double_click`／`send_pending_right_double_click`・[`PendingDoubleClick`] の
 /// 不変条件）と、メニューの「終了」が呼ぶ `send_close_request`。
-pub(crate) struct MouseWiring {
+pub struct MouseWiring {
     /// `GhostRuntime::kanade()` クローン（1.4・std mpsc）。
     sender: Sender<KanadeMsg>,
     /// per-scope 間引き状態（scope→状態）。
@@ -85,7 +83,7 @@ pub(crate) struct MouseWiring {
 /// 預かるだけで自分からは送らず、`menu` を参照もしない（依存は `menu` → 本モジュールの向き）。
 /// したがってメニュー側が取り出さない限り、預かった右ダブルクリックは SHIORI へ届かない。
 #[derive(Debug)]
-pub(crate) struct PendingDoubleClick {
+pub struct PendingDoubleClick {
     /// 操作した窓のスコープ番号（本体側 0・相方側 1）。
     pub scope: u32,
     /// 配信空間の座標（縮約後サーフェス px）。[`HitRegion::surface_point`] の値そのまま。
@@ -97,7 +95,7 @@ pub(crate) struct PendingDoubleClick {
 /// 当たり判定名の供給源シーム（実／mock）。
 ///
 /// `Presenter` は `wire_mouse_input`（task 3.1）が本番構築する。`Mock` は決定論檻専用。
-pub(crate) enum RegionSource {
+pub enum RegionSource {
     /// 実運用: presenter で `resolve_hit_region` を呼ぶ（1.3）。
     Presenter,
     /// 決定論檻: 固定写像で `HitRegion` を返す（1.5）。
@@ -115,7 +113,7 @@ impl MouseWiring {
     ///
     /// [`Instant`]: std::time::Instant
     /// [`with_clock`]: MouseWiring::with_clock
-    pub(crate) fn new(sender: Sender<KanadeMsg>, region_source: RegionSource) -> Self {
+    pub fn new(sender: Sender<KanadeMsg>, region_source: RegionSource) -> Self {
         let start = std::time::Instant::now();
         Self {
             sender,
@@ -130,7 +128,7 @@ impl MouseWiring {
     }
 
     /// テスト用の構築子（決定的 clock を注入する・純粋檻用）。
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn with_clock(
         sender: Sender<KanadeMsg>,
         region_source: RegionSource,
@@ -266,7 +264,7 @@ impl MouseWiring {
     /// （areka-P0-popup-menu-minimal 要件 5.1）。利用者起因の終了指示を送る本番の呼び手は
     /// それだけである（要件 5.3・隠しの Ctrl+左ダブルクリックの入口は 2026-09-19 に取り除いた）。
     /// 操作した窓のスコープは呼び手が `reason` に載せる。
-    pub(crate) fn send_close_request(&mut self, reason: CloseReason) {
+    pub fn send_close_request(&mut self, reason: CloseReason) {
         if self
             .sender
             .send(KanadeMsg::CloseRequest { reason })
@@ -328,12 +326,12 @@ impl MouseWiring {
     }
 
     /// 右ダブルクリックを預かる。前の預かりがあれば捨てて上書きする（残すのは最新の 1 件だけ）。
-    pub(crate) fn defer_right_double_click(&mut self, pending: PendingDoubleClick) {
+    pub fn defer_right_double_click(&mut self, pending: PendingDoubleClick) {
         self.pending_right_double_click = Some(pending);
     }
 
     /// 預かりを取り出す。取り出した後は空になる。
-    pub(crate) fn take_pending_right_double_click(&mut self) -> Option<PendingDoubleClick> {
+    pub fn take_pending_right_double_click(&mut self) -> Option<PendingDoubleClick> {
         self.pending_right_double_click.take()
     }
 
@@ -343,7 +341,7 @@ impl MouseWiring {
     /// いたときと同じメッセージになる。
     ///
     /// [`send_double_click`]: MouseWiring::send_double_click
-    pub(crate) fn send_pending_right_double_click(&mut self, pending: PendingDoubleClick) {
+    pub fn send_pending_right_double_click(&mut self, pending: PendingDoubleClick) {
         self.send_double_click(
             pending.scope,
             pending.surface_pos,
@@ -363,7 +361,7 @@ impl MouseWiring {
 /// `wire_runtime` 成功時（`wired=true`）に呼ばれる前提で `Presenter` を選ぶ。boot 成功時は
 /// `RuntimeWiring` 挿入済みゆえ presenter 経由の region 解決が成立する（万一 presenter 不在でも
 /// `resolve_region` が region None へ正常縮退する・DD-IE-9）。
-pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
+pub fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
     world.insert_non_send(MouseWiring::new(sender, RegionSource::Presenter));
 }
 
@@ -394,7 +392,7 @@ pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
 /// 包みが同じ `on_char_drag_end` を先に呼ぶので位置の保存は続く。順を入れ替えない
 /// （`spawn_ghost_windows` の直後に呼ぶ。逆にすると spawn が包みを上書きし、知らせが止まる）。
 /// バルーン窓（`OnDragEnd(on_balloon_drag_end)`）には何も付けない（要件 3.3）。
-pub(crate) fn attach_char_pointer_handlers(world: &mut World) {
+pub fn attach_char_pointer_handlers(world: &mut World) {
     // `&mut World` を借用中にクエリで別の可変借用を取れないため、まず対象 entity を
     // 収集してから 1 件ずつ挿入する。
     let char_windows: Vec<Entity> = world
@@ -427,7 +425,7 @@ pub(crate) fn attach_char_pointer_handlers(world: &mut World) {
 ///
 /// モジュール外から呼べるのは、メニュー側も「右クリックされた窓のスコープ」を同じ規則で
 /// 引くためである（areka-P0-popup-menu-minimal 要件 5.2）。
-pub(crate) fn char_scope(world: &World, entity: Entity) -> Option<u32> {
+pub fn char_scope(world: &World, entity: Entity) -> Option<u32> {
     let scope = world.get::<CharWindowMarker>(entity)?.scope;
     debug_assert!(scope <= 1, "M1 の scope は {{0,1}} を想定: {scope}");
     Some(scope as u32)
@@ -463,7 +461,7 @@ fn resolve_hit_owned(world: &World, scope: u32, x: i64, y: i64) -> HitRegion {
 ///
 /// 座標（DD-IE-10 改訂）: 間引きの位置比較は受領した client px のまま（6.8）、配信する
 /// `MouseInput{x,y}` は resolver が返した `surface_point`（縮約後サーフェス px・1.8）。
-pub(crate) fn on_char_pointer_moved(
+pub fn on_char_pointer_moved(
     world: &mut World,
     _sender: Entity,
     entity: Entity,
@@ -502,7 +500,8 @@ pub(crate) fn on_char_pointer_moved(
 /// キャラ窓のポインタ押下ハンドラ（Bubble のみ処理・1.2/3.3・6.2/6.3・7.1/7.3/7.4）。
 ///
 /// - **Ctrl+左ダブルクリック（結線前）／Ctrl+Shift+左ダブルクリック → 強制退避**（要件 5.5）:
-///   統合操作 [`quit_app`]（出所 `Escape`）で全窓を閉じて終了を指示し、`run()` 復帰→main
+///   本体の終了の統合操作 `app_exit::quit_app`（出所 `Escape`）を [`InputHooks`](hooks::InputHooks)
+///   経由で呼び、全窓を閉じて終了を指示し、`run()` 復帰→main
 ///   shutdown→`ForceQuit` 系列へ委ねる。起動に失敗した・固まったゴーストから抜ける口として残す。true。
 /// - **Ctrl+左ダブルクリック（結線済み・Shift 非押下）→ Ctrl は無視する**（要件 5.3・開発者裁定
 ///   2026-09-19）: 終了指示は送らない。下の「左ダブルクリック（Ctrl なし）」とまったく同じに扱う。
@@ -520,7 +519,7 @@ pub(crate) fn on_char_pointer_moved(
 ///
 /// Tunnel 相は伝播続行のため常に false。送出・預かりは `MouseWiring` 不在時 self-gating no-op（強制退避は
 /// 上流で処理済みゆえ wiring 非依存）。
-pub(crate) fn on_char_pointer_pressed(
+pub fn on_char_pointer_pressed(
     world: &mut World,
     _sender: Entity,
     entity: Entity,
@@ -548,7 +547,7 @@ pub(crate) fn on_char_pointer_pressed(
             shift = state.shift_down,
             "Ctrl+左ダブルクリック（強制退避）: 全ゴースト窓を閉じる"
         );
-        quit_app(world, ExitOrigin::Escape);
+        hooks::escape(world);
         return true;
     }
 
@@ -603,6 +602,9 @@ pub(crate) fn on_char_pointer_pressed(
 #[path = "input_events_tests.rs"]
 mod tests;
 
+#[cfg(any(test, feature = "test-support"))]
+pub mod pointer_test_support;
+
 #[cfg(test)]
 #[path = "input_events_menu_tests.rs"]
 mod menu_tests;
@@ -610,3 +612,9 @@ mod menu_tests;
 #[cfg(test)]
 #[path = "input_events_char_clamp_tests.rs"]
 mod char_clamp_tests;
+
+#[cfg(test)]
+mod spawn_assembly_tests;
+
+#[cfg(test)]
+mod crash_report_tests;

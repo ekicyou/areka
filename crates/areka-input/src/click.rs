@@ -116,7 +116,7 @@ fn button_name(button: ClickButton) -> &'static str {
 
 /// 解放の受け手（Bubble だけ・常に false＝伝播は止めない）。`released` の 5 つの旗を
 /// 左・右・中・拡張 1・拡張 2 の順に見て、控えを必ず取り出し、1 つずつ判定して投函する。
-pub(crate) fn on_char_pointer_released(
+pub fn on_char_pointer_released(
     world: &mut World,
     _sender: Entity,
     entity: Entity,

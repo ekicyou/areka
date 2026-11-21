@@ -875,10 +875,10 @@ fn ghost_inner_balloon_target_is_written_in_place() {
 
 // ---------------------------------------------------------------- 字面の検査
 
-/// 本体と `areka-runtime` の本番ファイル（`*_tests.rs`・`*_test_support.rs` を除く）で `WinHttp`
+/// 本体・`areka-runtime`・`areka-input` の本番ファイル（`*_tests.rs`・`*_test_support.rs` を除く）で `WinHttp`
 /// で始まる識別子は `WinHttpFetch` だけで、綴るのは本体の `install/fetch_url.rs` と
 /// `update/worker.rs` の 2 つだけ（裁定 3）。分ける前に本体の `src` が覆っていた範囲を歩くため、
-/// 2 つの `src` を歩き、見出しに crate の名前を付ける（runtime-crate-split 要件 5.4）。
+/// 3 つの `src` を歩き、見出しに crate の名前を付ける（runtime-crate-split 要件 5.4）。
 #[test]
 fn winhttp_is_spelled_only_in_two_production_files() {
     let mut spelled: Vec<(String, String)> = Vec::new();
@@ -890,6 +890,10 @@ fn winhttp_is_spelled_only_in_two_production_files() {
         (
             "areka-runtime",
             crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+        ),
+        (
+            "areka-input",
+            crate::crate_source_test_support::crate_path("areka-input", "src"),
         ),
     ] {
         let mut stack = vec![src.clone()];

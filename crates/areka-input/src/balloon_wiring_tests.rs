@@ -150,7 +150,7 @@ use bevy_ecs::schedule::Schedules;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed};
 
-use crate::input_events::attach_char_pointer_handlers;
+use crate::attach_char_pointer_handlers;
 use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::{CharWindowMarker, spawn_ghost_windows};
