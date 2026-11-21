@@ -153,7 +153,7 @@ fn started(entity: Entity) -> DragTransition {
     }
 }
 
-/// 取り消しの終わりは開始の位置を載せる（本番の形・`input_events/drag_tests.rs` が固定する）。
+/// 取り消しの終わりは開始の位置を載せる（本番の形・`crates/areka-input/src/drag_tests.rs` が固定する）。
 fn ended(entity: Entity, cancelled: bool) -> DragTransition {
     let end = if cancelled { DRAG_START } else { CURSOR };
     DragTransition::Ended {

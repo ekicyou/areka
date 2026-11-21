@@ -82,7 +82,7 @@ fn build_and_spawn(world: &mut World) {
     // かつて終了を担っていた stand-in `spawn_ghost_windows` の `OnPointerPressed(on_ghost_pressed)` は
     // `areka-P0-input-events` で退役し（`crates/areka-placement/src/spawn.rs` の当該コメント）、
     // キャラ窓のポインタハンドラ（強制退避＝結線前の Ctrl+左ダブルクリックと Ctrl+Shift+左ダブルクリックを含む）は
-    // 本体の `input_events::attach_char_pointer_handlers` が装着するようになった。本番で利用者が終了を
+    // 本体の `areka_input::attach_char_pointer_handlers` が装着するようになった。本番で利用者が終了を
     // 指示する道はメニューの「終了」（本体の `menu::request_close`）だけである。
     // `attach_char_pointer_handlers` は `pub(crate)` かつ内部が `crate::` パスを使うため example から
     // `#[path]` include できず、本 probe の終了は `AREKA_APP_SMOKE_EXIT_MS` の有界 auto-exit のみである。

@@ -1,4 +1,4 @@
-//! 面の `move` のずれの相（seriko-pattern-calls design「MoveShiftPlacement」・要件 3.8・7.1・7.3・7.6）。
+//! 面の `move` のずれの相。
 //!
 //! 移動の相（[`run_move_drain_phase`](super::run_move_drain_phase)）の直後に毎フレーム走る。
 //! 各スコープのキャラ窓とバルーン窓について、提示が覚えたずれと当てた拡大率を読み、
@@ -19,7 +19,7 @@ use areka_placement::dpi_sync::{self, HoldSite};
 use areka_placement::follow::{apply_balloon_shift, apply_char_shift, shift_is_current};
 use areka_placement::spawn::GhostWindows;
 
-use super::super::target_map::{balloon_target, shell_target};
+use super::super::target_map::{balloon_target, shell_target, window_scope};
 
 /// 提示のずれと当てた拡大率の読み口（本番は表示層・檻は偽物）。
 pub(super) trait MoveShiftSource {
@@ -50,7 +50,9 @@ pub(super) fn run_move_shift_with<S: MoveShiftSource + ?Sized>(source: &S, world
     };
     let mut windows: Vec<(Entity, TargetId, bool)> = Vec::new();
     for scope in gw.scopes() {
-        let s = scope as u32;
+        let Some(s) = window_scope(scope) else {
+            continue;
+        };
         if let Some(w) = gw.char_window(scope) {
             windows.push((w, shell_target(s), false));
         }
@@ -72,7 +74,7 @@ pub(super) fn run_move_shift_with<S: MoveShiftSource + ?Sized>(source: &S, world
         {
             continue;
         }
-        // 当てられなかったとき（材料が無い）は口の中で warn! 済みで、記録が変わらないので次で当て直す。
+        // 材料が無ければ warn!、ドラッグ中の見送りは debug!。どちらも記録を変えない。
         if is_balloon {
             apply_balloon_shift(world, window, want, k);
         } else {

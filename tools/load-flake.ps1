@@ -52,7 +52,7 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
 
 spec areka-test-binary-stability（design「LoadFlake」）で足した口:
   -Filter は複数可（libtest の位置引数として 1 つずつ渡す）。
-  -Binary areka-bin（既定・-p areka --bin areka）／wintf-lib（-p wintf --lib）／areka-placement-lib（-p areka-placement --lib）／areka-runtime-lib（-p areka-runtime --lib）。
+  -Binary areka-bin（既定・-p areka --bin areka）／wintf-lib（-p wintf --lib）／areka-placement-lib（-p areka-placement --lib）／areka-runtime-lib（-p areka-runtime --lib）／areka-input-lib（-p areka-input --lib）。
   -SetEnv NAME=VALUE の並びは子の cargo の環境にだけ置く（このプロセスの環境は変えない）。conditions.txt に書く。
   -Ignored は libtest に --ignored --exact を渡す（較正のため）。
   summary.txt の回ごとの欄に AREKA-CRASH を含む行を全部写す（行の途中も探す）。全回のまとめに落ちの報告のあった回の数を足す。
@@ -68,8 +68,8 @@ param(
     [Parameter(ParameterSetName = 'Run')][ValidateRange(0, 4096)][int]$Burners = -1,
     # テストの名前の絞り込み（空なら実行ファイルの全部）
     [Parameter(ParameterSetName = 'Run')][string[]]$Filter = @(),
-    # 回す実行ファイル（areka-bin＝-p areka --bin areka・wintf-lib＝-p wintf --lib・areka-placement-lib＝-p areka-placement --lib・areka-runtime-lib＝-p areka-runtime --lib）
-    [Parameter(ParameterSetName = 'Run')][ValidateSet('areka-bin', 'wintf-lib', 'areka-placement-lib', 'areka-runtime-lib')][string]$Binary = 'areka-bin',
+    # 回す実行ファイル（areka-bin＝-p areka --bin areka・wintf-lib＝-p wintf --lib・areka-placement-lib＝-p areka-placement --lib・areka-runtime-lib＝-p areka-runtime --lib・areka-input-lib＝-p areka-input --lib）
+    [Parameter(ParameterSetName = 'Run')][ValidateSet('areka-bin', 'wintf-lib', 'areka-placement-lib', 'areka-runtime-lib', 'areka-input-lib')][string]$Binary = 'areka-bin',
     # 子の cargo にだけ渡す環境変数（NAME=VALUE の並び）
     [Parameter(ParameterSetName = 'Run')][string[]]$SetEnv = @(),
     # --ignored --exact を渡す（較正のため）
@@ -207,6 +207,7 @@ function Get-CargoTestTarget([Parameter(Mandatory)][string]$Binary) {
         'wintf-lib' { return '-p wintf --lib' }
         'areka-placement-lib' { return '-p areka-placement --lib' }
         'areka-runtime-lib' { return '-p areka-runtime --lib' }
+        'areka-input-lib' { return '-p areka-input --lib' }
         default { return '-p areka --bin areka' }
     }
 }
@@ -272,7 +273,7 @@ if ($PSCmdlet.ParameterSetName -eq 'SelfTest') {
             Assert ((Get-Median @(4, 1, 3, 2)) -eq 2.5) "even $(Get-Median @(4, 1, 3, 2))"
         }
         'cargo args'                  = {
-            $want = [ordered]@{ 'areka-bin' = '-p areka --bin areka'; 'wintf-lib' = '-p wintf --lib'; 'areka-placement-lib' = '-p areka-placement --lib'; 'areka-runtime-lib' = '-p areka-runtime --lib' }
+            $want = [ordered]@{ 'areka-bin' = '-p areka --bin areka'; 'wintf-lib' = '-p wintf --lib'; 'areka-placement-lib' = '-p areka-placement --lib'; 'areka-runtime-lib' = '-p areka-runtime --lib'; 'areka-input-lib' = '-p areka-input --lib' }
             foreach ($k in $want.Keys) { Assert ((Get-CargoTestTarget $k) -ceq $want[$k]) "target $k = $(Get-CargoTestTarget $k)" }
             $a = Get-CargoTestArgs -Target '-p wintf --lib' -Filter @('x::y', 'z') -Ignored $true -TestThreads 2 -NoCapture $true
             Assert ($a -ceq '-p wintf --lib -- "x::y" "z" --ignored --exact --test-threads 2 --nocapture') "all: $a"

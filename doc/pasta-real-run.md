@@ -124,7 +124,7 @@ Remove-Item Env:AREKA_NO_ALERT, Env:AREKA_USER_ROOT -ErrorAction SilentlyContinu
 Remove-Item Env:PASTA_DEBUG -ErrorAction SilentlyContinue   # ぱすたのデバッグの待受を開かせない（2 節）
 $env:AREKA_ROOT = "$v\root"
 $env:AREKA_PROFILE_DIR = "$v\profile"
-$env:RUST_LOG = 'info,areka::boot_resolve=debug,areka::install=debug,areka_nar=debug,areka::input_events=debug'
+$env:RUST_LOG = 'info,areka::boot_resolve=debug,areka::install=debug,areka_nar=debug,areka_input=debug'
 $env:AREKA_APP_SMOKE_EXIT_MS = '3600000'
 $env:NO_COLOR = '1'
 $p = Start-Process -FilePath "$w\target\debug\areka.exe" -ArgumentList @('--ghost', "`"$v\root\ghost\pasta-in-windows`"") -WorkingDirectory $v -WindowStyle Hidden -RedirectStandardOutput "$v\logs\$run.stdout.log" -RedirectStandardError "$v\logs\$run.stderr.log" -PassThru
@@ -138,7 +138,7 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 |---|---|---|
 | `AREKA_ROOT` | `<w>\target\pasta-verify\root` | 根 |
 | `AREKA_PROFILE_DIR` | `<w>\target\pasta-verify\profile`（準備で毎回空にする） | 記憶の置き場。空なので、起動のイベントは `OnFirstBoot` になる |
-| `RUST_LOG` | `info,areka::boot_resolve=debug,areka::install=debug,areka_nar=debug,areka::input_events=debug` | バルーンの決め方の分岐と、マウスの形が替わったこと（段 3）が記録に出る水準。段の判定に別の分岐が要るときは、その対象を足し、足した値を記録に書く |
+| `RUST_LOG` | `info,areka::boot_resolve=debug,areka::install=debug,areka_nar=debug,areka_input=debug` | バルーンの決め方の分岐と、マウスの形が替わったこと（段 3）が記録に出る水準。段の判定に別の分岐が要るときは、その対象を足し、足した値を記録に書く |
 | `AREKA_APP_SMOKE_EXIT_MS` | `3600000`（60 分） | 安全弁。7 段の所要（30〜45 分の見込み）より長く |
 | `NO_COLOR` | `1` | 記録を色の制御文字の無い平文にする |
 | `AREKA_NO_ALERT`・`AREKA_USER_ROOT` | 消す | 本物の利用者の置き場（`%LOCALAPPDATA%\areka`）に触らない |
@@ -211,10 +211,10 @@ pwsh -NoProfile -File "$w\tools\mouse-input.ps1" -Action cursor -X <身体の点
 
 - 1 行目（`pressed=1`）が `shape=HAND`（指差しの形）で、`handle` が手を開いた形の値と違うこと。2 行目が `shape=custom`（手を開いた形）で、`handle` が押す前に同じ点で読んだ値と同じであること。
 - 2 行目は放した直後に、動かさずに読んだ形。手を開いた形に戻っていること。
-- 記録の `areka::input_events` の行でも、押したときと放したときに形が替わったことを見て、2 つ目の証跡にする。
+- 記録の `areka_input` の行でも、押したときと放したときに形が替わったことを見て、2 つ目の証跡にする。
 - ぱすたのシェルには止まったときとホイールのときの行が無いので、止めてもホイールを回しても形は替わらない（SSP と同じ）。
 
-記録: 起動の命令の `RUST_LOG` に `areka::input_events=debug` を入れてあるので、形が替わったときの行が `<回>.stderr.log` に出る。読んだ `ok cursor` の行と一緒に段 3 の結果へ写す。
+記録: 起動の命令の `RUST_LOG` に `areka_input=debug` を入れてあるので、形が替わったときの行が `<回>.stderr.log` に出る。読んだ `ok cursor` の行と一緒に段 3 の結果へ写す。
 
 ### 最後の確かめで決める項目（案 B）
 

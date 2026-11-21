@@ -80,7 +80,7 @@ pub struct BalloonScopeAssets {
     ///
     /// 消費点は `frame/attach.rs` の `connect_balloon_text`——装着（`register_actor_view`）の
     /// **前**に `TextLayerRuntime::set_balloon_background` へ渡す（順序は `frame_attach_tests.rs` の
-    /// `connect_balloon_text_hands_the_background_over_before_attaching` が見張る）。
+    /// `connect_balloon_text_resolves_text_with_the_background_at_attach_time`（実 GPU）が見張る）。
     /// 導出そのものは `assets_tests.rs` の emo2 fixture テストが固定している。
     pub background_color: (u8, u8, u8),
     /// 普通のバルーンの名前（バルーンのフォルダ名・警告の名前の欄に出す・areka-P0-shell-balloon 要件 3.12）。

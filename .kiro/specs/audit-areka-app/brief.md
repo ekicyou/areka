@@ -123,3 +123,15 @@
 - **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
 - **要件定義のモデル**: Opus（見直しの型どおり）。
 - **分割の案**: 起票のままでは無し。指摘が 20 を越えたら要件の討議で指摘の組で 2 本目。
+
+## audit-emo2-boot-frame からの申し送り（2026-11-21）
+
+`audit-emo2-boot-frame` の範囲の外で見つけた、本体の側の件（`.kiro/specs/completed/audit-emo2-boot-frame/research.md` の 6 節オ・コ・サ・シ）。
+
+- **オ（本体の分）**: `crates/areka/src/tick_gate_config_producers_tests.rs` の `code_only` は `source_text_test_support::code_only` の写し。
+- **コ**: `let _ = ….handle.join();` が本体に 8 か所ある（2026-11-21 に grep で数え直した）。記憶の書き手の panic を捨てている。`audit-emo2-boot-frame` の 20 番と同じ型で、`areka_runtime::spine::join_bounded` で待って panic を捨てない形に直す。
+  - この spec の分は 7 か所: `crates/areka/src/boot_resolve_tests.rs` の 483・576・757・805 行、`install/names_tests.rs` の 28 行、`main_persist_wiring_seam_tests.rs` の 85・128 行。
+  - 残りの 1 か所 `input_events/drag_test_support.rs` の 283 行は `audit-areka-input-menu` の持ち物（上の 2026-11-15 の申し送りの読み替えで `drag_test_support.rs` は向こうへ移った）。C23 の `input-crate-split` が `input_events/` を別の crate へ移すので、行の場所はその後で読み替える。
+  - `areka-runtime` の 2 か所（`move_cue_*`）は `audit-emo2-boot-switch` の brief へ回した。
+- **サ**: 本体の `capture_logs` の写し（`runtime_tests/spine.rs`・`input_events/choice_drain.rs`・`readme/readme_cue_tests.rs`）と、GPU の World の写し（`runtime_tests/spine.rs`。`areka-runtime` の `frame_test_support::gpu_on` を使える）。
+- **シ**: 起動の文脈 `BootContext` を組む補助の写しが 5 か所（`install/desk_tests.rs`・`menu/ghost_frame_tests.rs`・`readme/opener_submit_tests.rs`・`session/ghost_switch_tests.rs`・`session/reload_tests.rs`）。

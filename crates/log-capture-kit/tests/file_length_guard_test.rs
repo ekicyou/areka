@@ -65,10 +65,6 @@ use workspace_scan::{
 /// 圧力になる。表が表すのは「上限を超えている」という事実だけで、超過の程度ではない。
 const OVER_LIMIT_ALLOWED: &[(&str, &str)] = &[
     (
-        "crates/areka-runtime/src/frame_transition_branch_tests.rs",
-        "着手前から超過している本番の隣の兄弟テストファイル。分割は本仕様の範囲外（要件 10.4）",
-    ),
-    (
         "crates/areka-placement/src/follow/window_move.rs",
         "着手前から超過している本番ソース。分割は本仕様の範囲外（要件 10.4）",
     ),
@@ -79,7 +75,7 @@ const OVER_LIMIT_ALLOWED: &[(&str, &str)] = &[
 ];
 
 /// [`OVER_LIMIT_ALLOWED`] の件数（逐語）。表を増やすときはここも編集する（要件 10.2）。
-const OVER_LIMIT_ALLOWED_COUNT: usize = 3;
+const OVER_LIMIT_ALLOWED_COUNT: usize = 2;
 
 /// 列挙と計測が空振りしていないことの目安（純関数）。いちばん長いファイルが上限の半分を越えるか。
 ///

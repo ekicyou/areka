@@ -179,7 +179,7 @@ pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch:
 /// ## 隣接行と重ならない（`areka-P0-emo2-conformance-e2e` R13.4）
 ///
 /// 28 では `offset + 帯 = 34` が行送り 30 を超えるが、次の行の帯も `30 + 4 = 34` から始まるので
-/// **接するだけで重ならない**。ヒット判定は半開区間（`crates/areka/src/input_events/balloon.rs`
+/// **接するだけで重ならない**。ヒット判定は半開区間（`crates/areka-input/src/balloon.rs`
 /// の `y >= top && y < bottom`）ゆえ、共有する辺の上の 1 点はたかだか 1 行にしか当たらない。
 ///
 /// ## 字の箱の中央（spec `emo-text-line-gap` 要件 2.1）

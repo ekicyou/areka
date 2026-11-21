@@ -2140,7 +2140,7 @@ Reference0 の要約）を残す。送り口が無いときは warn のログ（
 止まっていれば warn のログ（file_drop_send_failed）を 1 行残して送らない。
 根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
 送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は
-crates/areka/src/input_events/file_drop.rs の定数 ON_DIRECTORY_DROP、Reference の組み立ては同じ
+crates/areka/src/file_drop.rs の定数 ON_DIRECTORY_DROP、Reference の組み立ては同じ
 ファイルの directory_drop_references、振り分けは sort_drops、受け手は on_ghost_files_dropped。
 無いと失うもの: フォルダを渡しても受け取ったそぶりが無い。
 """
@@ -2721,7 +2721,7 @@ Reference0 の要約）を残す。フォルダかどうかを問えなかった
 送らない。
 根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
 送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は
-crates/areka/src/input_events/file_drop.rs の定数 ON_FILE_DROP2、Reference の組み立ては同じ
+crates/areka/src/file_drop.rs の定数 ON_FILE_DROP2、Reference の組み立ては同じ
 ファイルの file_drop2_references、MIME の表は MIME_TABLE、振り分けは sort_drops、受け手は
 on_ghost_files_dropped。
 無いと失うもの: ファイルを渡しても受け取ったそぶりが無く、渡す遊びが成立しない。
@@ -3398,7 +3398,7 @@ note = """
 依頼では送らない。
 条件: 手続きへの依頼は書庫を 1 本以上並べられる。メニューの「インストール…」と台本
 \\![execute,install,path,…] はどちらも 1 本だけを渡し、2 本以上を並べる本番の呼び手は窓への投げ込み
-（areka-P0-file-drop の crates/areka/src/input_events/file_drop.rs の on_ghost_files_dropped）で、
+（areka-P0-file-drop の crates/areka/src/file_drop.rs の on_ghost_files_dropped）で、
 1 回の投げ込みのインストール対象を全部 1 つの依頼にまとめて渡す。振る舞いは決定論テスト
 （crates/areka/src/install/procedure_branch_tests.rs）でも確かめる。
 ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ
@@ -3677,7 +3677,7 @@ mouse_click_shiori_failed_as_204）が出て、204 と同じ扱いで次の段�
 おり、段の決め方と受理は crates/areka-kanade/src/schedule/mouse_events.rs（plan_click・on_click_reply）。送出は
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
-入力の在りか: crates/areka/src/input_events/click.rs の note_press（押下の控え）と
+入力の在りか: crates/areka-input/src/click.rs の note_press（押下の控え）と
 on_char_pointer_released（解放の判定）。解放の受け手は crates/areka/src/menu/mod.rs の
 on_char_release で、クリックの判定をメニューの引き金より先に通す。
 無いと失うもの: 触られたことが届かず、撫でてもつついても何も返らない。
@@ -3706,7 +3706,7 @@ mouse_click_shiori_failed_as_204）が出て、204 と同じ扱いで次の段�
 おり、段の決め方と受理は crates/areka-kanade/src/schedule/mouse_events.rs（plan_click・on_click_reply）。送出は
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
-入力の在りか: crates/areka/src/input_events/click.rs の note_press（押下の控え）と
+入力の在りか: crates/areka-input/src/click.rs の note_press（押下の控え）と
 on_char_pointer_released（解放の判定）。解放の受け手は crates/areka/src/menu/mod.rs の
 on_char_release で、クリックの判定をメニューの引き金より先に通す。
 無いと失うもの: 左右以外のボタンで触られたことが届かず、その触り方には何も返らない。
@@ -3866,9 +3866,9 @@ SHIORI へ送っている。当たり判定から別の当たり判定へ移っ�
 おり、受理は crates/areka-kanade/src/schedule/mouse_events.rs の on_mouse_extended。送出は
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
-入力の在りか: crates/areka/src/input_events/char_watch.rs の char_watch（毎 tick の窓の見張り・
+入力の在りか: crates/areka-input/src/char_watch.rs の char_watch（毎 tick の窓の見張り・
 register_char_watch でポインタの配りの前に登録）。出入りの決め方は
-crates/areka/src/input_events/hover_region.rs の plan_hover。移動の間引きは通さない。
+crates/areka-input/src/hover_region.rs の plan_hover。移動の間引きは通さない。
 無いと失うもの: 頭や胸といった当たり判定に触れ始めたことが届かず、どこを触られたかに応えられない。
 """
 
@@ -3891,7 +3891,7 @@ note = """
 おり、受理は crates/areka-kanade/src/schedule/mouse_events.rs の on_mouse_extended。送出は
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
-入力の在りか: crates/areka/src/input_events/char_watch.rs の char_watch（毎 tick の窓の見張り・
+入力の在りか: crates/areka-input/src/char_watch.rs の char_watch（毎 tick の窓の見張り・
 register_char_watch でポインタの配りの前に登録）。移動の間引きは
 通さない。
 無いと失うもの: カーソルがゴーストの窓に入ってきたことに気づけず、近寄られたことに反応できない。
@@ -3967,9 +3967,9 @@ note = """
 おり、受理は crates/areka-kanade/src/schedule/mouse_events.rs の on_mouse_extended。送出は
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
-入力の在りか: crates/areka/src/input_events/char_watch.rs の char_watch（毎 tick の窓の見張り・
+入力の在りか: crates/areka-input/src/char_watch.rs の char_watch（毎 tick の窓の見張り・
 register_char_watch でポインタの配りの前に登録）。出入りの決め方は
-crates/areka/src/input_events/hover_region.rs の plan_hover。移動の間引きは通さない。
+crates/areka-input/src/hover_region.rs の plan_hover。移動の間引きは通さない。
 無いと失うもの: 当たり判定から手が離れたことが届かず、触り終わりに応えられない。
 """
 
@@ -3993,7 +3993,7 @@ note = """
 おり、受理は crates/areka-kanade/src/schedule/mouse_events.rs の on_mouse_extended。送出は
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
-入力の在りか: crates/areka/src/input_events/char_watch.rs の char_watch（毎 tick の窓の見張り・
+入力の在りか: crates/areka-input/src/char_watch.rs の char_watch（毎 tick の窓の見張り・
 register_char_watch でポインタの配りの前に登録）。出る窓は入る窓より
 先に捌く。移動の間引きは通さない。
 無いと失うもの: カーソルがゴーストの窓から離れたことに気づけず、離れられたことに反応できない。
@@ -4086,7 +4086,7 @@ mouse_click_shiori_failed_as_204）が出て、204 と同じ扱いで次の段�
 おり、段の決め方と受理は crates/areka-kanade/src/schedule/mouse_events.rs（plan_click・on_mouse_extended・on_click_reply）。送出は
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
-入力の在りか: crates/areka/src/input_events/click.rs の note_press（押下の控え）と
+入力の在りか: crates/areka-input/src/click.rs の note_press（押下の控え）と
 on_char_pointer_released（解放の判定）。解放の受け手は crates/areka/src/menu/mod.rs の
 on_char_release で、クリックの判定をメニューの引き金より先に通す。
 無いと失うもの: 触っていた手を離した瞬間が届かず、触り終わりに合わせた反応ができない。
@@ -4115,7 +4115,7 @@ mouse_click_shiori_failed_as_204）が出て、204 と同じ扱いで次の段�
 おり、段の決め方と受理は crates/areka-kanade/src/schedule/mouse_events.rs（plan_click・on_mouse_extended・on_click_reply）。送出は
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
-入力の在りか: crates/areka/src/input_events/click.rs の note_press（押下の控え）と
+入力の在りか: crates/areka-input/src/click.rs の note_press（押下の控え）と
 on_char_pointer_released（解放の判定）。解放の受け手は crates/areka/src/menu/mod.rs の
 on_char_release で、クリックの判定をメニューの引き金より先に通す。
 無いと失うもの: 左右以外のボタンを離した瞬間が届かない。
@@ -4143,9 +4143,9 @@ SHIORI へ送っている（Ref2＝回転量の和・1 目盛り 120・上が正
 おり、受理は crates/areka-kanade/src/schedule/mouse_events.rs の on_mouse_extended。送出は
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の mouse_get。
-入力の在りか: crates/areka/src/input_events/char_watch.rs の char_watch（毎 tick の窓の見張り・
+入力の在りか: crates/areka-input/src/char_watch.rs の char_watch（毎 tick の窓の見張り・
 register_char_watch でポインタの配りの前に登録）。間引きは
-crates/areka/src/input_events/wheel.rs の plan_wheel。
+crates/areka-input/src/wheel.rs の plan_wheel。
 無いと失うもの: ホイールを回されたことが届かず、その操作には何も返らない。
 
 版番号: 本文に出てくる版番号は 2.3.53 の 1 つだけで、これは挙動の変わり目である。タッチパネルの環

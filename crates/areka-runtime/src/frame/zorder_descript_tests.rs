@@ -19,44 +19,19 @@ use super::*;
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
-use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::channel;
 
 use wintf::ecs::window::ZOrderChainPlan;
 
 use crate::frame::run_zorder_drain_phase;
-use crate::frame::test_support::{headless_wiring_with, zero_clock};
+use crate::frame::test_support::{capture_logs, headless_wiring_with, zero_clock};
+use crate::frame::zorder_drain::test_support::{
+    GROUP_TARGET, balloon_of, char_of, lines_with, world_with_scopes,
+};
 use crate::zorder_cue::ZOrderDirective;
-use areka_placement::follow::OffsetBase;
-use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use areka_placement::source::GhostTitles;
-use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 use areka_placement::zorder_group_ledger::{GroupElement, GroupWindowKind, ZOrderGroup};
 
 // ---------------------------------------------------------------- 道具立て
-
-/// 受理・拒否の記録の出力先（実機サインオフの grep 対象と同じ 1 本）。
-///
-/// 要件 9.5 の保全対象である `[zorder-group] applied`／`rejected` は、退役する
-/// `zorder_group` 系から `zorder_chain_diag` へ移設された。**タグの字面は 1 字も
-/// 変わっておらず**、変わったのは `tracing` の出力先（module path 既定）だけである。
-/// サインオフの `RUST_LOG` は `wintf::ecs::window::zorder_chain=debug` を含み、
-/// 指定は前方一致なのでこの出力先を点灯させる（判定に影響しない）。
-const GROUP_TARGET: &str = "target=wintf::ecs::window::zorder_chain_diag";
-
-/// クロージャ実行中に**現在のスレッド**で発火した記録を 1 行 1 件で返す。
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines
-}
-
-/// 捕捉行のうち、指定した字面を含むものだけを返す。
-fn lines_with<'a>(logs: &'a [String], needle: &str) -> Vec<&'a str> {
-    logs.iter()
-        .filter(|line| line.contains(needle))
-        .map(String::as_str)
-        .collect()
-}
 
 /// 要素列を省略記法（`bN`／`sN`）の並びへ（記録の `members` 欄と同じ字面）。
 fn members_text(members: &[GroupElement]) -> String {
@@ -81,50 +56,12 @@ fn base_of(ledger: &ZOrderGroupLedger) -> Option<&ZOrderGroup> {
         .find(|group| group.source == GroupSource::Descript)
 }
 
-/// 1 スコープぶんの合成配置（値は散らしただけで意味を持たない。この層は窓を動かさない）。
-fn placement(scope: usize) -> ScopePlacement {
-    let base = 100 * (scope as i32 + 1);
-    ScopePlacement {
-        scope,
-        char_pos: PointPx { x: base, y: base },
-        char_size: SizePx { w: 200, h: 300 },
-        balloon_pos: PointPx {
-            x: base + 220,
-            y: base,
-        },
-        balloon_size: SizePx { w: 180, h: 120 },
-        balloon_offset: PointPx { x: 220, y: 0 },
-        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 220, y: 0 }),
-        balloon_limit: false,
-        anchor: Anchor::Bottom,
-        balloon_keyword_base: None,
-    }
-}
-
-/// 指定したスコープの窓だけを持つ World を組む（`GhostWindows` は Resource として載る）。
-fn world_with_scopes(scopes: &[usize]) -> World {
-    let mut world = World::new();
-    let placements: Vec<ScopePlacement> = scopes.iter().map(|s| placement(*s)).collect();
-    let titles = GhostTitles::from_scope_titles(
-        scopes
-            .iter()
-            .map(|s| (*s, format!("scope-{s}")))
-            .collect::<Vec<_>>(),
-    );
-    spawn_ghost_windows(&mut world, &placements, &titles);
-    world
-}
-
 /// スコープのバルーン窓／キャラ窓 entity。
 fn window_of(world: &World, scope: usize, kind: GroupWindowKind) -> Entity {
-    let gw = world
-        .get_resource::<GhostWindows>()
-        .expect("GhostWindows が載っていない World で窓を引こうとした");
     match kind {
-        GroupWindowKind::Balloon => gw.balloon_window(scope),
-        GroupWindowKind::Char => gw.char_window(scope),
+        GroupWindowKind::Balloon => balloon_of(world, scope),
+        GroupWindowKind::Char => char_of(world, scope),
     }
-    .unwrap_or_else(|| panic!("scope {scope} の窓（{kind:?}）が無い"))
 }
 
 // ---------------------------------------------------------------------------

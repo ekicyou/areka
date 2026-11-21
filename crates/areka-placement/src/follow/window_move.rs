@@ -10,12 +10,12 @@ use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::{DPI, Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
 
 use super::{
-    Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RUNTIME_CONTEXT,
-    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollowTrigger, BalloonLimit, BalloonPlace,
-    BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, DpiSyncHold, GhostWindows,
-    MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord,
-    apply_visibility_guard, diag, follow_balloon, place_balloon_in_work_area, project_anchor,
-    rect_at, rederive_keyword_balloon_offset, shown_char_rects, transition_diag,
+    Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_PUSHED_HOW,
+    BALLOON_LIMIT_RUNTIME_CONTEXT, BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollowTrigger,
+    BalloonLimit, BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, DpiSyncHold,
+    GhostWindows, MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WindowKind,
+    WindowMoveRecord, apply_visibility_guard, diag, follow_balloon, limit_correction,
+    project_anchor, rect_at, rederive_keyword_balloon_offset, transition_diag,
     work_area_for_window,
 };
 
@@ -975,12 +975,8 @@ fn log_window_move(
 /// 発明しないこと（`work_area_for_window` と同方針）と、補正できないことを理由に
 /// 窓の位置更新を落とさないことの両立である。無ログの縮退経路は作らない（6.3）。
 ///
-/// 補正が発火したときだけ [`BALLOON_LIMIT_CLAMP_TAG`] の `info!` を出す。
-/// [`place_balloon_in_work_area`] の [`BalloonPlace::Fits`] は「並べ替えも押し込みも
-/// 位置を動かさない」の意であって「内包されている」ではない（逆転区間で既に左上に
-/// 居るときははみ出したままでも `Fits`）——毎フレーム偽の補正ログを出さないための
-/// 設計であり、`Fits` ではログも位置の書換も起こさない（6.1 は「実際に動かしたとき」
-/// の記録を求める）。
+/// 補正が発火したときだけ [`BALLOON_LIMIT_CLAMP_TAG`] の `info!` を出す。`limit_correction` が
+/// `None` のときはログも位置の書換も起こさない。
 fn apply_balloon_limit_gate(
     world: &World,
     window: Entity,
@@ -1075,20 +1071,14 @@ fn apply_balloon_limit_gate(
         return proposed;
     };
 
-    let others = shown_char_rects(world);
-    let place = place_balloon_in_work_area(proposed, target_size, char_rect, area, &others);
-    let (BalloonPlace::Flipped(corrected)
-    | BalloonPlace::Pushed(corrected)
-    | BalloonPlace::PushedOverlap { to: corrected, .. }) = place
-    else {
+    let Some(corrected) = limit_correction(proposed, target_size, area) else {
         return proposed;
     };
 
     info!(
         scope,
         context = BALLOON_LIMIT_RUNTIME_CONTEXT,
-        how = place.how(),
-        overlap_scope = ?place.overlap_scope(),
+        how = BALLOON_LIMIT_PUSHED_HOW,
         entity = ?window,
         route = ?route,
         from = ?proposed,

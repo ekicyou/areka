@@ -54,7 +54,7 @@
 | wintf の当たりは、根の下を「手前から」たどる。モードは `None`・`Bounds`・`AlphaMask`・`NamedRegions` | `crates/wintf/src/ecs/layout/hit_test/mod.rs:68-79`・`hit_test` の説明 | ✔ |
 | 領域の名前を引く関数は、α も DPI も見ない。後に定義した矩形が手前。座標は ÷k した後のサーフェスの値 | `crates/areka-emo-compose/src/hit.rs:50-97`・`157-172` | ✔ |
 | 窓の物理の点 → ÷k → 領域の名前、を 1 か所で行う口。SHIORI へ送る座標は、その ÷k した値 | `crates/areka-emo-present/src/presenter/hit.rs:88-145` | ✔ |
-| シェルの窓の押下は、先に「字の出ている箱」を見て、箱の外だけをシェルへの操作にする | `crates/areka/src/input_events/shell_box.rs:21-30`・`shell_box_handler.rs:1-16` | ✔ |
+| シェルの窓の押下は、先に「字の出ている箱」を見て、箱の外だけをシェルへの操作にする | `crates/areka-input/src/shell_box.rs:21-30`・`shell_box_handler.rs:1-16` | ✔ |
 | マウスの GET は `[x, y, ref2, スコープ番号, 領域の名前, ref5, "mouse"]` | `crates/areka-kanade/src/schedule/events.rs:639-665` | ✔ |
 | スコープの番号は、台本を合図の列に直す時に、待ち・`\![名前,…]` を含む全部の合図へ写る。1 本の頭の全消去は番号 0 | `crates/areka-sakura/src/compile.rs:142`・`178`・`182-184`・`283-288`・`464-465`・`487-494` | ✔ |
 | `\![set,zorder,…]` は、番号を引数に持ち、合図の欄を読まない | `crates/areka-runtime/src/zorder_cue.rs:14-22` | ✔ |
@@ -72,7 +72,7 @@
 | 値を時間で変える土台は dola に在る（始める・終わりの値にする・捨てる） | `crates/dola/src/runtime/facade.rs:31`・`229`・`crates/wintf/src/ecs/dola/mod.rs:75` | ✔ |
 | 絵の Entity の offset は 0 でなければならない。拡大率は「アプリの倍率」の席から導く | `crates/areka-emo-present/src/mount.rs:64-69`・`presenter/hub.rs:57-97` | 引 |
 | seriko のアクターを 1 人足す・外す口は無い（差し替えは全スコープ一度に） | `crates/areka-seriko/src/actor.rs:96-106`・`362-380` | 引 |
-| 「スコープは 0 と 1 だけ」の検査が 2 か所（デスクトップの窓の印から引く所） | `crates/areka/src/input_events/mod.rs:432`（✔）・`crates/areka/src/menu/captions.rs:130`（引） | — |
+| 「スコープは 0 と 1 だけ」の検査が 2 か所（デスクトップの窓の印から引く所） | `crates/areka-input/src/lib.rs:432`（✔）・`crates/areka/src/menu/captions.rs:130`（引） | — |
 | 枠つきの窓の注記（ドラッグのたびに縮んだ）が wintf に残る | `crates/wintf/src/ecs/window/components.rs:201-208` | 引 |
 
 探して無かった物: タスクトレイのコード（`crates` を `Shell_NotifyIcon|NOTIFYICON` で引いて、本番は 0 件）。窓を隠す口・全画面の窓は、前の設計の探し方のまま 0 件（引）。
@@ -90,7 +90,7 @@
 | `areka-runtime` | 舞台の受け口 `StageCueSink` | 舞台の命令を名前で拾い、UI スレッドへ送る。受け口の並びの先頭に置く |
 | 純粋な層（`areka-placement` の中） | `StageState`・`stage_fit`・`stage_hit` | 舞台の値・窓の大きさから拡大率と余白を出す計算・当たりの決まり。時計も窓も見ない |
 | `areka-placement` | 舞台の窓・デスクトップの窓を隠す／戻す | 今の `spawn.rs` とは別のファイル。別の印（`StageWindowMarker`）を持つ |
-| `areka`（本体） | 舞台の上のマウスの入口・閉じる要求 | デスクトップの入口（`input_events/mod.rs`）とは別の入口。今の入口は触らない |
+| `areka`（本体） | 舞台の上のマウスの入口・閉じる要求 | デスクトップの入口（`crates/areka-input/src/lib.rs`）とは別の入口。今の入口は触らない |
 | `areka-emo-present`・`areka-seriko`・`areka-emo-text` | 動いている途中にアクターを足す・外す口／組の始まりと終わりの知らせ | 5.2・5.4 |
 | `wintf` | 枠つきの窓の確かめと直し・窓を隠す口・全画面 | 持ち主の spec が無い（11 章） |
 

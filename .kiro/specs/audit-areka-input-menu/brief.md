@@ -8,7 +8,7 @@
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/src/` の `input_events*`・`menu*`（フォルダとファイル）。
+- 受け持つファイル: `crates/areka-input/`（`src/`・`cursor/`・`Cargo.toml`）・本体の `menu*`（`menu/shortcut.rs`・`shortcut_tests.rs` を含む）・本体の `file_drop.rs`・`file_drop_*tests.rs`・`app_exit_escape_tests.rs`。`shortcut.rs`・`file_drop.rs` を範囲に残すかは、この spec の要件の段が決める。
 - 大きさ: 60 ファイル・コード 6,072 行・テスト 12,976 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 
@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`input-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 4 本目）。受け持つファイルのうち `input_events/` はその着地で `crates/areka-input/src/` へ移り（`shortcut.rs` は `crates/areka/src/menu/` へ・`file_drop.rs` は本体に残る）、menu は本体に残る。同 spec がこの brief の「受け持つファイル」を書き換える。
+- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`input-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 4 本目）。入力の出来事はその着地で `crates/areka-input/src/` へ移り、`shortcut.rs`（`crates/areka/src/menu/shortcut.rs`）と `file_drop.rs`（`crates/areka/src/file_drop.rs`）は本体に残り、menu も本体に残る。同 spec がこの brief の「受け持つファイル」を移し先に書き換えた。
 - **Downstream**: なし。
 
 ## Existing Spec Touchpoints
@@ -91,3 +91,16 @@
 - **要件定義のモデル**: Opus（見直しの型どおり）。
 - **分割の案**: 無し（指摘の数しだいで要件の討議で切る）。
 - **見つけた穴**: ⑴ `shortcut.rs`（キーの近道・本番 83 行）が `menu/` へ移ると、menu を外した決めのため、どの見直しの範囲にも入らなくなる＝要件の段で範囲に残すかを決める。⑵ `file_drop.rs` が本体に残るときの範囲（上）。⑶ 本体の `readme.rs:93` の説明が `input_events/choice_drain.rs` のパスを名指す（`input-crate-split` の後に古くなる・その spec の文書のパスの直しに入る）。
+
+## `input-crate-split` からの申し送り（2026-11-21 着地）
+
+- 受け持つファイルは `crates/areka-input/src/` へ移った（中身は変えていない・パスとモジュールの名だけ書き換えた）。上の「見つけた穴」⑶ の `readme.rs:93` は `crates/areka-input/src/choice_drain.rs` へ書き換え済み。
+- 古い説明（移したファイルのコメントの中身は変えていないので、見直しで拾う）:
+  - `crates/areka-input/src/lib.rs` の冒頭の説明ほか、本体の中にあった頃の書き方の説明（「The Hand／collisionex」ほか）。
+  - 「強制退避の枝へ落ちない」側のテスト 3 本（`input_events_tests.rs` の `handler_wired_ctrl_left_double_click_…`・`handler_left_double_click_without_ctrl_…`、`input_events_menu_tests.rs` の `wired_ctrl_left_double_click_…_partner_window`）の「窓が消えて件数が落ちる」という説明。入力の crate のテストの World には口が据わらないので、今は事実でない（合否の力は `try_recv` の表明が保つ）。
+  - `input_events_tests.rs` の「強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。」は、その 3 本を本体の `app_exit_escape_tests.rs` へ移したので何も指していない。
+  - `spawn_assembly_tests.rs` の 176〜181 行の「入力の側」の言い方は本体の中にあった頃のまま。
+  - `crates/areka-runtime/examples/collision-probe.rs`・`collision-probe/setup.rs` の「`pub(crate)`・内部が `crate::` パスを使う」という理由の文は古い（`attach_char_pointer_handlers` は `pub` になった）。
+  - `cargo doc -p areka-input --no-deps` の警告 20 件（移したコメントの「private item へのリンク」19 件・`MouseWiring::with_clock` の解けないリンク 1 件）。
+- 開けた項目（狭められるかの見直しの的）: 9 モジュールと `pub mod hooks`、根の 8 項目・子の 18 項目・メソッド 7 つ、それに本体の `runtime_tests/frame_shell_box_arrow_tests.rs` が使う `user_break::drain_no_user_break_signals`。`test-support` の機能で開けたのは `pointer_test_support`・`MouseWiring::with_clock`・`user_break` の `flag_rx`・`flag_source_connected`。
+- 参照: `.kiro/specs/completed/input-crate-split/design.md`・`verification.md` の「完了の申し送り」⑶。

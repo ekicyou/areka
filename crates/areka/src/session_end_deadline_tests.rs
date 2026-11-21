@@ -416,7 +416,7 @@ const ALLOWED_DEADLINE_CALLS: [(&str, &str); 3] = [
     ),
 ];
 
-/// 本体（`crates/areka/src/`）と `crates/areka-runtime/src/` の本番 `.rs`（テストとテストの土台＝
+/// 本体（`crates/areka/src/`）・`crates/areka-runtime/src/`・`crates/areka-input/src/` の本番 `.rs`（テストとテストの土台＝
 /// `_tests.rs`・`_support.rs` を除く）を `(<crate>/<src の中のパス>, 本文)` で集める。分ける前に本体の
 /// `src` が覆っていた範囲を歩く（runtime-crate-split 要件 5.4）。
 fn production_sources() -> Vec<(String, String)> {
@@ -452,6 +452,10 @@ fn production_sources() -> Vec<(String, String)> {
         (
             "areka-runtime",
             crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+        ),
+        (
+            "areka-input",
+            crate::crate_source_test_support::crate_path("areka-input", "src"),
         ),
     ] {
         let before = out.len();

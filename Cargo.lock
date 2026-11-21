@@ -95,6 +95,7 @@ dependencies = [
  "areka-emo-present",
  "areka-emo-text",
  "areka-ghost",
+ "areka-input",
  "areka-kanade",
  "areka-mcp",
  "areka-nar",
@@ -242,6 +243,29 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "areka-input"
+version = "0.1.0"
+dependencies = [
+ "areka-emo-atlas",
+ "areka-emo-compose",
+ "areka-emo-present",
+ "areka-emo-text",
+ "areka-ghost",
+ "areka-kanade",
+ "areka-parsers",
+ "areka-placement",
+ "areka-runtime",
+ "areka-sakura",
+ "areka-seriko",
+ "areka-sylphya",
+ "bevy_ecs",
+ "log-capture-kit",
+ "tracing",
+ "windows",
+ "wintf",
 ]
 
 [[package]]
@@ -2020,7 +2044,6 @@ name = "shiori-abi"
 version = "0.1.0"
 dependencies = [
  "thiserror",
- "windows",
  "windows-core",
 ]
 

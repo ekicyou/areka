@@ -1046,7 +1046,7 @@ note = """
 根拠の場所: crates/areka-runtime/src/consumer_ledger.rs の CommandConsumer::UserBreakSink
 （正準台帳が ("enter","nouserbreakmode") の 1 組で登記する）・
 crates/areka-runtime/src/user_break_cue.rs の NoUserBreakCueSink（受け口の自己選別）・
-crates/areka/src/input_events/user_break.rs の fold_no_user_break（区間の出入りの判断）。
+crates/areka-input/src/user_break.rs の fold_no_user_break（区間の出入りの判断）。
 出どころの制限（areka-P0-script-security-level）: ukadoc はこの指令を外部扱いの台本（SSTP など外から
 送られた台本・応答の SecurityLevel が external の台本。Owned SSTP は可）では実行しないと定める。
 外部扱いの台本では合図を送らず（区間に入らず）、warn のログ script_tag_refused（タグ・トークの番号・
@@ -1655,7 +1655,7 @@ note = """
 根拠の場所: crates/areka-runtime/src/consumer_ledger.rs の CommandConsumer::UserBreakSink
 （正準台帳が ("leave","nouserbreakmode") の 1 組で登記する）・
 crates/areka-runtime/src/user_break_cue.rs の NoUserBreakCueSink（受け口の自己選別）・
-crates/areka/src/input_events/user_break.rs の fold_no_user_break（区間の出入りの判断）。
+crates/areka-input/src/user_break.rs の fold_no_user_break（区間の出入りの判断）。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 動作モードの出入り]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![leave。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]

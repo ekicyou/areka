@@ -100,7 +100,7 @@ fn drain_returns_while_the_sender_keeps_sending() {
         })
     };
     let (done_tx, done_rx) = mpsc::channel::<usize>();
-    // 進みの目印は drain が適用した数（負荷の下で 3 秒の自前の締切が赤になった・`load-repro.md` の ⑹）。
+    // 進みの目印は drain が適用した数（自前の締切は負荷の下で赤になる）。
     let applied_so_far = Arc::new(AtomicU64::new(0));
     thread::spawn({
         let applied_so_far = Arc::clone(&applied_so_far);
@@ -109,6 +109,7 @@ fn drain_returns_while_the_sender_keeps_sending() {
             // 適用 1 回を送りの間隔より重くする（デバッグ版の合成と D2D の確保に当たる）。
             drain_present_commands(&rx, |_cmd| {
                 applied += 1;
+                assert!(applied <= MAX_DRAIN_PER_FRAME);
                 applied_so_far.fetch_add(1, Ordering::SeqCst);
                 thread::sleep(Duration::from_millis(10));
             });
@@ -217,4 +218,31 @@ fn drain_takes_at_most_the_cap_and_leaves_the_rest_in_order_with_a_warning() {
         .map(|target| Applied::Hide { target })
         .collect();
     assert_eq!(second, expected, "残りは次のフレームで到着順に適用する");
+}
+
+/// ③ 届いた数がちょうど上限なら 1 フレームに全部当たり、次のフレームは 0 件になる。
+/// 上限ちょうどでも `warn!` は 1 行出る（`Receiver` は覗けないので残りの有無は分からない）。
+#[test]
+fn exactly_the_cap_is_applied_in_one_frame_and_the_next_frame_has_nothing() {
+    let (tx, rx) = mpsc::channel::<PresentCommand>();
+    for t in 0..MAX_DRAIN_PER_FRAME as u32 {
+        tx.send(hide(t)).expect("受信端は生きている");
+    }
+    let mut first = Vec::new();
+    let logs = capture_logs(|| drain_present_commands(&rx, |cmd| first.push(record(&cmd))));
+    assert_eq!(
+        first.len(),
+        MAX_DRAIN_PER_FRAME,
+        "上限ちょうどは 1 フレームで全部当たる"
+    );
+    assert_eq!(count_level(&logs, "WARN"), 1, "{logs:?}");
+    assert!(
+        logs.iter()
+            .any(|l| l.contains("残りがあれば次のフレームで到着順に適用する")),
+        "{logs:?}"
+    );
+    let mut second = Vec::new();
+    let logs = capture_logs(|| drain_present_commands(&rx, |cmd| second.push(record(&cmd))));
+    assert!(second.is_empty(), "次のフレームは 0 件");
+    assert_eq!(count_level(&logs, "WARN"), 0, "{logs:?}");
 }

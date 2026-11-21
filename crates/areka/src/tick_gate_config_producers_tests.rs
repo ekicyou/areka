@@ -16,8 +16,8 @@ use crate::crate_source_test_support::crate_source;
 /// 旗を立てる側（areka-runtime 内）の一覧（見出し・中身・期待する旗の名前）。並びは見出しの辞書順。
 ///
 /// 見出しは `crates/` からの相対（crate の名前＋その `src/` の中のパス）である（読み先は読み口
-/// `crate_source!` で引く）。木の走査は本体と `areka-runtime` の 2 つの `src` を歩くので、見出しに
-/// crate の名前を付けて 2 つの木の間で取り違えないようにする。
+/// `crate_source!` で引く）。木の走査は本体・`areka-runtime`・`areka-input` の 3 つの `src` を歩くので、見出しに
+/// crate の名前を付けて 3 つの木の間で取り違えないようにする。
 ///
 /// 1 つのファイルが 2 種類の旗を立てることがあるので、その場合は**旗ごとに 1 行**を
 /// 置く——旗の欄は 1 つしか持てず、片方だけ載せると残りの旗が名簿から落ちて静かにずれる。
@@ -183,14 +183,18 @@ mark(ZORDER);",
     );
 }
 
-/// 本体と `areka-runtime` の 2 つの `src` を歩く（分ける前に本体の `src` が覆っていた範囲。
+/// 本体・`areka-runtime`・`areka-input` の 3 つの `src` を歩く（分ける前に本体の `src` が覆っていた範囲。
 /// runtime-crate-split 要件 5.4）。
-fn walk_roots() -> [(&'static str, PathBuf); 2] {
+fn walk_roots() -> [(&'static str, PathBuf); 3] {
     [
         ("areka", Path::new(env!("CARGO_MANIFEST_DIR")).join("src")),
         (
             "areka-runtime",
             crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+        ),
+        (
+            "areka-input",
+            crate::crate_source_test_support::crate_path("areka-input", "src"),
         ),
     ]
 }

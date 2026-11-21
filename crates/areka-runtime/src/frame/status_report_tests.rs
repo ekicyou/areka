@@ -1,12 +1,9 @@
 // =============================================================================
-// バルーンの表示の届けの決定論テスト（areka-P0-status-execution-states task 5.1）
+// バルーンの表示の届けの決定論テスト（観測列から組を作る純関数の分岐）。
 //
-// ⑴ 観測列から組を作る純関数の分岐（不可視・未装着・番号あり・番号なし）
-// ⑵ 差分のときだけ送る・同じ組は送らない・置き場が空なら送らず台帳を保つ・受け手が落ちて
-//    いれば error が 1 件（台帳は更新して毎フレーム鳴らさない）・警告は scope ごとに 1 回
-// ⑶ 箱だけ・番号なしのスコープは最後に取れた番号（無ければ 0）で載せ、警告の対象にしない
-//    （areka-P0-shell-balloon-frame-align 要件 3.1・3.2）
-// 表示層の照会は headless の実 `EmoPresenter` を 1 件だけ踏ませ、残りは観測を直接与える。
+// 不可視・未装着・番号あり・番号なし・箱だけ・番号の覚え直しの分岐と、口が据わっていない
+// World では何も送らないことを見る。送る・見送る・警告の側は本体の
+// `runtime_tests/frame/status_report_tests.rs` が持つ。
 // =============================================================================
 
 use super::test_support::{binding, obs, obs_box};
@@ -97,7 +94,7 @@ fn collect_of_nothing_visible_is_empty() {
     assert!(unknown.is_empty());
 }
 
-/// 置き場そのものが World に無くても送らない（結線なしの起動）。
+/// 口（`SessionHooks`）が据わっていない World は `NO_BODY` が答えるので、何も送らず、送った組（`last_sent`）も動かさない。
 #[test]
 fn missing_slot_resource_sends_nothing() {
     let world = World::new();
