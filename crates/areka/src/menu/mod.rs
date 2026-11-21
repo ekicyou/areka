@@ -42,8 +42,8 @@ use windows::Win32::Foundation::HWND;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::{OnPointerReleased, dispatch_pointer_events};
 
-use crate::input_events::MouseWiring;
 use crate::readme;
+use areka_input::MouseWiring;
 use areka_placement::spawn::CharWindowMarker;
 use trigger::PendingQuery;
 
@@ -179,7 +179,7 @@ impl MenuRegistry {
 /// 窓のクライアント座標を画面座標へ写す関数の型。写せなければ `None`。
 ///
 /// 本番は [`win32::client_to_screen`] で、実在する窓ハンドルが要る。テストは実窓を作らずに
-/// 解放ハンドラを通すため、ここへ純粋な関数を差し込む（`input_events` の
+/// 解放ハンドラを通すため、ここへ純粋な関数を差し込む（`areka_input` の
 /// `RegionSource::Mock` と同じ考え方の差し替え口）。
 pub(crate) type ToScreen = fn(HWND, i32, i32) -> Option<(i32, i32)>;
 
@@ -271,7 +271,7 @@ fn on_char_release(
     entity: Entity,
     ev: &wintf::ecs::pointer::Phase<wintf::ecs::pointer::PointerState>,
 ) -> bool {
-    crate::input_events::click::on_char_pointer_released(world, sender, entity, ev);
+    areka_input::click::on_char_pointer_released(world, sender, entity, ev);
     trigger::on_char_pointer_released(world, sender, entity, ev)
 }
 
@@ -281,7 +281,7 @@ fn on_char_release(
 ///
 /// キャラクター窓を作った**直後**に、同じ `&mut World` クロージャの中で呼ぶこと
 /// （`ghost_session::prepare_ghost_windows` の窓を作るクロージャが
-/// `input_events::attach_char_pointer_handlers` の隣で呼ぶ）。付くのは呼ばれた時点に在る窓
+/// `areka_input::attach_char_pointer_handlers` の隣で呼ぶ）。付くのは呼ばれた時点に在る窓
 /// だけだが、窓を作り直す `ghost_session::reopen_ghost_windows` も同じ `prepare_ghost_windows` を
 /// 通るので、作り直した窓へもこのクロージャが付け直す。既に付いて
 /// いる窓へ呼んでも、同じハンドラで置き換わるだけで害は無い。

@@ -17,7 +17,6 @@ use wintf::ecs::widget::bitmap_source::{BoxedCommand, CommandSender, WintfTaskPo
 
 use crate::app_exit::{self, WindowsClosed};
 use crate::boot_resolve::{BalloonDecision, GhostDecision};
-use crate::input_events;
 use crate::menu;
 use crate::readme;
 use crate::session::runtime_boot::CueSinkSources;
@@ -53,13 +52,13 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     crate::session::ghost_switch::register_change_drain(world);
     crate::session::shell_balloon_switch::register_switch_drain(world);
     crate::session::reload::register(world);
-    input_events::user_break::register_user_break_drain(world);
+    areka_input::user_break::register_user_break_drain(world);
     menu::register_menu_poll(world);
-    input_events::balloon::register_balloon_leave_system(world);
-    input_events::shell_box_handler::register_box_leave_system(world);
-    input_events::choice_drain::register_choice_drain(world);
-    input_events::char_watch::register_char_watch(world);
-    input_events::balloon_wheel::register_balloon_wheel(world);
+    areka_input::balloon::register_balloon_leave_system(world);
+    areka_input::shell_box_handler::register_box_leave_system(world);
+    areka_input::choice_drain::register_choice_drain(world);
+    areka_input::char_watch::register_char_watch(world);
+    areka_input::balloon_wheel::register_balloon_wheel(world);
     crate::install::register(world);
     crate::update::register(world);
     crate::mcp::register(world);
@@ -273,16 +272,16 @@ pub(crate) fn prepare_ghost_windows(
                 gw.set_remembered_adjacency(scope, mark);
             }
         }
-        // キャラ窓へのポインタハンドラ結線は input_events 側が担う（placement は `crate::` パスを持てない・
+        // キャラ窓へのポインタハンドラ結線は areka_input 側が担う（placement は `crate::` パスを持てない・
         // example の `#[path]` include で成立させるため）。spawn 直後の同一クロージャ内で同期実行する
         // ので、キャラ窓は既に在り async race はない。
-        input_events::attach_char_pointer_handlers(world);
+        areka_input::attach_char_pointer_handlers(world);
         // 右クリックメニューの解放ハンドラも同じ場所で付ける。このクロージャが動くのは
         // `app.run()` の中＝`menu::wire_menu` より後で、結線の無い起動では解放を無視するだけ。
         menu::attach_release_handlers(world);
         // バルーン窓へもポインタハンドラを装着する（標的は `BalloonWindowMarker` 窓のみ・キャラ窓配線は
         // 不変）。タイミング契約はキャラ窓ハンドラ装着と同じ。
-        input_events::balloon::attach_balloon_pointer_handlers(world);
+        areka_input::balloon::attach_balloon_pointer_handlers(world);
         // 投げ込みの受け手をゴースト窓（キャラ窓・バルーン窓）へ差す。起こし直しもこの閉包を通るので、
         // 回数によらず新しい窓に差さる。
         crate::file_drop::attach_file_drop_receivers(world);
@@ -821,7 +820,7 @@ fn boot_wired(
     // （NonSend）挿入。離脱の系の登録は [`register_systems`]、ハンドラ装着は [`open_ghost_windows`] の
     // spawn 直後（`attach_balloon_pointer_handlers`）が担う。balloon ハンドラは `RuntimeWiring` を self-gate
     // するため wired 経路でのみ意味を持つ（`wire_mouse_input` と同じ gating）。
-    input_events::balloon::wire_balloon_choice(world);
+    areka_input::balloon::wire_balloon_choice(world);
     Ok(GhostSession {
         kanade: outcome.ghost.as_ref().map(|r| r.kanade().clone()),
         ghost: outcome.ghost,

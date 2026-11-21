@@ -15,9 +15,9 @@ use log_capture_kit::{LineFormat, capture_lines};
 use windows::Win32::Foundation::E_ACCESSDENIED;
 
 use super::*;
-use crate::input_events::RegionSource;
 use crate::menu::ItemBody;
 use crate::menu::captions::CaptionMap;
+use areka_input::RegionSource;
 use areka_runtime::hit_region::HitRegion;
 
 /// 動作が呼ばれた記録: どの項目が・どのスコープで・表示中の印が立ったまま呼ばれたか。

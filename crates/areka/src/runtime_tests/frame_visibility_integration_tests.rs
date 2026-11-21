@@ -22,8 +22,8 @@ use dola::cue::{CueCommand, TalkCue};
 use wintf::ecs::Visual;
 use wintf::ecs::layout::Arrangement;
 
-use crate::input_events::balloon::BalloonWiring;
 use crate::sample_test_support::{emo2_balloon_root, emo2_root};
+use areka_input::balloon::BalloonWiring;
 use areka_runtime::assets::build_boot_assets;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};

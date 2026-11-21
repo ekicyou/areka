@@ -11,7 +11,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 決めた式で数えて記録するだけ_
   - _Requirements: 7.5, 10.2, 10.4_
 
-- [ ] 2. 入力の出し直しを外す（段 1・移動と関係なく今の場所で済む）
+- [x] 2. 入力の出し直しを外す（段 1・移動と関係なく今の場所で済む）
   - `main.rs` の `use areka_input as input_events;` とその上の説明 2 行を外し、`crates/areka/Cargo.toml:44` の説明から出し直しの括弧書きを外す（依存の行は変えない）
   - 本体の 26 ファイルの `crate::input_events::` を `areka_input::` に、`use crate::input_events;` を外して `input_events::` を `areka_input::` にする。呼ぶ項目は変えない。`runtime_tests/mod.rs` は書き換えない
   - 説明の中で入力のモジュールを `input_events` の語で指す `ghost_session.rs:276`・`menu/mod.rs:182` を `areka_input` へ直す（`app_exit_tests.rs:182` は直さない）

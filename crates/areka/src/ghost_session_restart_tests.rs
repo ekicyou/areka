@@ -13,12 +13,12 @@ use wintf::ecs::{Input, Update};
 
 use super::*;
 use crate::boot_resolve::{BalloonRoute, GhostRoute};
-use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
 use crate::readme::ReadmeWiring;
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::acquire_emo2;
 use crate::session::ghost_quit::KanadeNoticeRx;
+use areka_input::user_break::UserBreakWiring;
 use areka_placement::spawn::GhostWindowMarker;
 use areka_runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching, wait_until};
 use log_capture_kit::capture;

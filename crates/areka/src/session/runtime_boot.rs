@@ -195,7 +195,7 @@ fn install_lines(
     ghost_switch::wire_change_rx(world, change_rx);
     shell_balloon_switch::wire_switch_rx(world, switch_rx);
     // 「最後に届けた旗」は新しい実行系の初期値から始まる。
-    crate::input_events::user_break::wire_user_break(
+    areka_input::user_break::wire_user_break(
         world,
         no_user_break_rx,
         user_break_lifecycle_tx,

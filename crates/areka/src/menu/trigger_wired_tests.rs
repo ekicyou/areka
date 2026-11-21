@@ -17,8 +17,8 @@ use wintf::ecs::Point;
 use wintf::ecs::pointer::{ButtonReleased, OnPointerReleased};
 
 use super::*;
-use crate::input_events::RegionSource;
 use crate::menu::plan::PlanEntry;
+use areka_input::RegionSource;
 use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::hit_region::HitRegion;
 
@@ -193,7 +193,7 @@ fn a_right_click_on_every_emily_shaped_window_builds_a_menu_without_panic() {
             double_click: wintf::ecs::pointer::DoubleClick::Right,
             ..Default::default()
         });
-        assert!(crate::input_events::on_char_pointer_pressed(
+        assert!(areka_input::on_char_pointer_pressed(
             &mut world, e, e, &press
         ));
         let release = PointerState {

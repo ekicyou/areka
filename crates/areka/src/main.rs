@@ -56,10 +56,6 @@ mod tick_gate_config;
 /// 本体に頼る切替・読み直し・起動・終わる相の層。
 mod session;
 
-/// UI→kanade のマウス入力配信配線。キャラ窓のポインタイベントを捉え、当たり判定名を resolver で
-/// 解決し、送出間引き（`throttle`）を通して kanade へ配信する薄い配線層。
-use areka_input as input_events;
-
 /// 終了の統合操作。全窓を閉じてから終了を指示する `quit_app` と出所の語彙 `ExitOrigin` を持つ。
 mod app_exit;
 mod log_history;

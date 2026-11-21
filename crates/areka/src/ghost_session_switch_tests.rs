@@ -16,7 +16,6 @@ use wintf::ecs::{FrameFinalize, Input, Update};
 
 use super::GhostBootInputsSource;
 use crate::app_exit::{ExitOrigin, FirstExit};
-use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, MenuWiring};
 use crate::readme::ReadmeWiring;
 use crate::session::ghost_quit::KanadeNoticeRx;
@@ -24,6 +23,7 @@ use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{
     CONNECT_ERR, FakeShiori, SwitchRig, standard_script,
 };
+use areka_input::user_break::UserBreakWiring;
 use areka_runtime::spine::RecordedCall;
 
 /// 呼出列を「種類 名前」の列へ写す（Reference は見ない）。

@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_emo_compose::{BindSet, EmoWorld, PatternState, fold_boxes};
 use areka_parsers::shell::{parse, parse_boxes};
 
-use crate::input_events::shell_box::ShellBoxHover;
+use areka_input::shell_box::ShellBoxHover;
 use areka_runtime::balloon_visibility::configured_timeout_secs;
 use areka_runtime::shell_box_assets::ShellBoxAssets;
 use areka_runtime::target_map::shell_target;

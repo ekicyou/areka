@@ -1,5 +1,5 @@
-use crate::input_events::pointer_test_support::*;
-use crate::input_events::{on_char_pointer_moved, on_char_pointer_pressed};
+use areka_input::pointer_test_support::*;
+use areka_input::{on_char_pointer_moved, on_char_pointer_pressed};
 use areka_placement::spawn::{CharWindowMarker, GhostWindowMarker};
 use areka_runtime::hit_region::HitRegion;
 use bevy_ecs::prelude::*;
@@ -136,7 +136,7 @@ fn register_systems_installs_the_escape_hook() {
     let (_kanade_stop, kanade_stop_rx) = std::sync::mpsc::channel::<areka_kanade::KanadeNotice>();
     crate::ghost_session::register_systems(&mut world, kanade_stop_rx);
     assert!(
-        world.contains_resource::<crate::input_events::hooks::InputHooks>(),
+        world.contains_resource::<areka_input::hooks::InputHooks>(),
         "register_systems が強制退避の口を据える"
     );
 

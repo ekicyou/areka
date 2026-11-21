@@ -15,7 +15,7 @@ use wintf::AppExit;
 use wintf::ecs::WindowHandle;
 use wintf::ecs::window::{OnCloseRequest, OnSessionEnd, ZOrderChainPlan};
 
-use crate::input_events::MouseWiring;
+use areka_input::MouseWiring;
 use areka_placement::balloon_lock::BalloonLockLedger;
 use areka_placement::chain_finalize::{ChainFinalizeStall, ChainFinalized};
 use areka_placement::chain_realign::ChainRealignPending;
@@ -137,7 +137,7 @@ pub(crate) fn quit_app(world: &mut World, origin: ExitOrigin) -> usize {
 
 /// 入力の強制退避の口を据える（`register_systems` から窓を開く前に 1 回）。
 pub(crate) fn install_input_hooks(world: &mut World) {
-    world.insert_resource(crate::input_events::hooks::InputHooks {
+    world.insert_resource(areka_input::hooks::InputHooks {
         escape: |w| {
             quit_app(w, ExitOrigin::Escape);
         },

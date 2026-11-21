@@ -41,7 +41,7 @@ areka-user-data = { path = "../areka-user-data" }
 areka-placement = { path = "../areka-placement" }
 # 実行系（spec: runtime-crate-split 要件 1.4）。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
 areka-runtime = { path = "../areka-runtime" }
-# 入力（本体は `use areka_input as input_events;` で今の呼び手のパスを通す）。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
+# 入力。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
 areka-input = { path = "../areka-input" }
 windows-core = { workspace = true }
 human-panic = { workspace = true }

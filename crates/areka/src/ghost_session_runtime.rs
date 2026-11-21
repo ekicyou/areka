@@ -15,7 +15,6 @@ use bevy_ecs::world::World;
 use super::{GhostBootInputsSource, GhostSlot};
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, GhostDecision, write_switch_drop};
-use crate::input_events;
 use crate::menu;
 use crate::session::runtime_boot;
 use areka_runtime::frame::RuntimeWiring;
@@ -30,7 +29,7 @@ pub(crate) fn rewire_runtime_consumers(
     // kanade Sender クローンで MouseWiring（NonSend・Presenter）を挿入する。挿入は wire_runtime 成功後＝
     // RuntimeWiring 挿入済みなので、presenter 経由の region 解決が成立する。
     let sender = runtime.kanade().clone();
-    input_events::wire_mouse_input(world, sender);
+    areka_input::wire_mouse_input(world, sender);
     // 右クリックメニューの結線: 終了の項目が上の入力の結線を使う。
     menu::wire_menu(world, runtime.kanade().clone());
     // 「ゴースト」枠の登記: `wire_menu` が登記の口を新品にするので、起こすたびにやり直す。
@@ -56,7 +55,7 @@ pub(crate) fn rewire_runtime_consumers(
     // 選択確定通知の受信結線: 呼び手が続けて `wire_balloon_choice` で挿入する `ChoiceSelectionInbox` を毎フレーム
     // drain し、dispatcher の inbox 経由で kanade へ全件転送する系（登録は `register_systems`）の送り口を置く。
     // 送り先が dispatcher なのは、押下の選択を再生の `ChoiceWaiting` と同じ inbox に並べて追い越させないため。
-    input_events::choice_drain::wire_choice_drain(world, runtime.dispatcher().clone());
+    areka_input::choice_drain::wire_choice_drain(world, runtime.dispatcher().clone());
     // 窓の矩形の読み手を新しい実行系へ登録する。
     super::ghost_session_scope_rect::wire(world, runtime);
     // 倍率と DPI の読み手を毎フレームの配線の表で登録する。配線が無い（LogSink の起動）ときは空の表で登録する。
