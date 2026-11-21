@@ -1,6 +1,7 @@
 //! 押下の控えと新しい知らせの送出の口の檻。
 
-use super::super::{MouseWiring, RegionSource, on_char_pointer_pressed};
+use super::super::pointer_test_support::{drain_mouse, fake_hit, world_with_wiring};
+use super::super::{MouseWiring, on_char_pointer_pressed};
 use super::{
     LeftDrag, NotClickReason, PressNote, ReleaseVerdict, judge_release, note_press,
     on_char_pointer_released,
@@ -25,9 +26,7 @@ fn mock(scope: u32, x: i64, y: i64) -> HitRegion {
 
 /// 結線済みの World・キャラ窓 1 つ・受信端。
 fn wired() -> (World, Entity, mpsc::Receiver<KanadeMsg>) {
-    let (tx, rx) = mpsc::channel();
-    let mut world = World::new();
-    world.insert_non_send(MouseWiring::new(tx, RegionSource::Mock(mock)));
+    let (mut world, rx) = world_with_wiring(mock, Box::new(|| 0));
     let entity = world.spawn(CharWindowMarker { scope: 0 }).id();
     (world, entity, rx)
 }
@@ -123,19 +122,6 @@ fn box_press_is_marked_by_box() {
             }
         )]
     );
-}
-
-/// 結線の前は控えを書かない（落ちもしない）。
-#[test]
-fn note_press_before_wiring_is_a_no_op() {
-    let mut world = World::new();
-    let entity = world.spawn(CharWindowMarker { scope: 0 }).id();
-    let state = PointerState {
-        left_down: true,
-        ..Default::default()
-    };
-    note_press(&mut world, entity, &state, false);
-    assert!(world.get_non_send::<MouseWiring>().is_none());
 }
 
 /// 押下の受け手が控えを書く。戻り値は今のまま（単発は false・右ダブルクリックは true）。
@@ -242,20 +228,9 @@ fn judge_release_follows_the_table_in_order() {
     }
 }
 
-/// 窓の中の点を区別できるサーフェスの点へ写す偽の当たり判定（受信端の座標が surface_point だと読める）。
-fn scaled(scope: u32, x: i64, y: i64) -> HitRegion {
-    HitRegion {
-        scope,
-        region: (x < 100).then(|| "Head".to_owned()),
-        surface_point: (x * 2, y * 3),
-    }
-}
-
 /// 結線済みの World・大きさ 200×300 のキャラ窓（scope 1）・受信端。
 fn sized() -> (World, Entity, mpsc::Receiver<KanadeMsg>) {
-    let (tx, rx) = mpsc::channel();
-    let mut world = World::new();
-    world.insert_non_send(MouseWiring::new(tx, RegionSource::Mock(scaled)));
+    let (mut world, rx) = world_with_wiring(fake_hit, Box::new(|| 0));
     let entity = world
         .spawn((
             CharWindowMarker { scope: 1 },
@@ -294,15 +269,6 @@ fn release(world: &mut World, entity: Entity, x: i32, y: i32, released: ButtonRe
     on_char_pointer_released(world, entity, entity, &Phase::Bubble(state))
 }
 
-fn drain(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput> {
-    rx.try_iter()
-        .map(|m| match m {
-            KanadeMsg::Mouse(input) => input,
-            _ => panic!("マウスの知らせ以外"),
-        })
-        .collect()
-}
-
 fn up(x: i64, y: i64, region: Option<&str>, button: ClickButton, second: bool) -> MouseInput {
     MouseInput {
         scope: 1,
@@ -336,7 +302,7 @@ fn release_of_five_buttons_sends_five_button_ups_at_the_surface_point() {
     assert!(!release(&mut world, entity, 40, 50, all_released()));
     let head = Some("Head");
     assert_eq!(
-        drain(&rx),
+        drain_mouse(&rx),
         vec![
             up(80, 150, head, ClickButton::Left, false),
             up(80, 150, head, ClickButton::Right, false),
@@ -353,7 +319,7 @@ fn release_of_five_buttons_sends_five_button_ups_at_the_surface_point() {
 fn release_without_note_or_outside_the_window_sends_nothing() {
     let (mut world, entity, rx) = sized();
     assert!(!release(&mut world, entity, 40, 50, all_released()));
-    assert!(drain(&rx).is_empty());
+    assert!(drain_mouse(&rx).is_empty());
 
     press(
         &mut world,
@@ -366,7 +332,7 @@ fn release_without_note_or_outside_the_window_sends_nothing() {
     );
     // 幅 200 の右の端は外（0 ≤ x < 幅）。
     assert!(!release(&mut world, entity, 200, 50, all_released()));
-    assert!(drain(&rx).is_empty());
+    assert!(drain_mouse(&rx).is_empty());
     assert!(notes(&world, entity).is_empty());
 }
 
@@ -395,7 +361,7 @@ fn left_release_after_a_drag_is_not_a_click_but_right_is() {
     };
     assert!(!release(&mut world, entity, 150, 50, released));
     assert_eq!(
-        drain(&rx),
+        drain_mouse(&rx),
         vec![up(300, 150, None, ClickButton::Right, false)]
     );
     assert!(notes(&world, entity).is_empty());
@@ -419,7 +385,7 @@ fn release_of_a_box_press_is_not_a_click() {
         ..Default::default()
     };
     assert!(!release(&mut world, entity, 10, 10, released));
-    assert!(drain(&rx).is_empty());
+    assert!(drain_mouse(&rx).is_empty());
 }
 
 /// 左の押下 → 解放 → ダブルクリックの押下 → 解放の順に、受信端へ
@@ -452,7 +418,7 @@ fn left_double_click_delivers_up_double_click_up_in_order() {
     );
     release(&mut world, entity, 10, 20, left);
     assert_eq!(
-        drain(&rx),
+        drain_mouse(&rx),
         vec![
             up(20, 60, Some("Head"), ClickButton::Left, false),
             MouseInput {
@@ -495,7 +461,7 @@ fn release_before_wiring_or_in_tunnel_is_a_no_op() {
         entity,
         &Phase::Tunnel(state)
     ));
-    assert!(drain(&rx).is_empty());
+    assert!(drain_mouse(&rx).is_empty());
     assert_eq!(
         notes(&world, entity).len(),
         1,
@@ -506,13 +472,7 @@ fn release_before_wiring_or_in_tunnel_is_a_no_op() {
 /// 大きさの無い窓は中とみなす: 押して放すと解放の知らせが 1 件届く。
 #[test]
 fn release_on_a_window_without_size_sends_one_button_up() {
-    let (tx, rx) = mpsc::channel();
-    let mut world = World::new();
-    world.insert_non_send(MouseWiring::with_clock(
-        tx,
-        RegionSource::Mock(scaled),
-        Box::new(|| 0),
-    ));
+    let (mut world, rx) = world_with_wiring(fake_hit, Box::new(|| 0));
     let entity = world.spawn(CharWindowMarker { scope: 1 }).id();
     press(
         &mut world,
@@ -529,7 +489,7 @@ fn release_on_a_window_without_size_sends_one_button_up() {
     };
     assert!(!release(&mut world, entity, 40, 50, released));
     assert_eq!(
-        drain(&rx),
+        drain_mouse(&rx),
         vec![up(80, 150, Some("Head"), ClickButton::Right, false)]
     );
 }

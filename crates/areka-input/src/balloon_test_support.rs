@@ -206,14 +206,26 @@ pub(crate) fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
     lines
 }
 
+/// `event` フィールドが `name` の記録だけを取り出す。
+pub(crate) fn events_named<'a>(
+    events: &'a [log_capture_kit::CapturedEvent],
+    name: &str,
+) -> Vec<&'a log_capture_kit::CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some(name))
+        .collect()
+}
+
 /// シェル `shell` を畳んだ箱のうち、名前が `name` のもの（`BoxName` は畳み込みからしか作れない）。
 pub(crate) fn box_name(shell: &str, name: &str) -> areka_emo_compose::BoxName {
     let world = EmoWorld::build(&areka_parsers::shell::parse(shell));
-    let (layout, _) = areka_emo_compose::fold_boxes(
+    let (layout, report) = areka_emo_compose::fold_boxes(
         &areka_parsers::shell::parse_boxes(shell),
         &BTreeMap::new(),
         &world,
     );
+    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
     layout
         .placements(0)
         .iter()

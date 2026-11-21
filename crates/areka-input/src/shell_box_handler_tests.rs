@@ -15,12 +15,11 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
-use areka_emo_compose::{BoxName, EmoWorld, fold_boxes};
+use areka_emo_compose::BoxName;
 use areka_emo_text::actor::{HitRectPx, ShownBox, TextLayerRuntime};
 use areka_emo_text::state::{SpanKind, TextLayerConfig};
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
-use areka_parsers::shell::{parse, parse_boxes};
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
@@ -28,7 +27,9 @@ use wintf::ecs::pointer::{DoubleClick, Phase, PointerLeave, PointerState};
 use wintf::ecs::{Input, Point, Window};
 
 use super::*;
-use crate::balloon::test_support::{anchor_cues, anchor_row, headless_runtime_wiring, row};
+use crate::balloon::test_support::{
+    anchor_cues, anchor_row, box_name, events_named, headless_runtime_wiring, row,
+};
 use crate::balloon::{ChoiceSelectionInbox, click_selection, wire_balloon_choice};
 use crate::shell_box::ShellBoxHover;
 use crate::user_break::{UserBreakWiring, drain_no_user_break_signals};
@@ -55,24 +56,11 @@ element2,balloon,b,200,0
 }
 ";
 
-/// 検体の箱の名前（`BoxName` は畳み込みからしか作れない）。
-fn name(s: &str) -> BoxName {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, _) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    layout
-        .placements(0)
-        .iter()
-        .find(|p| p.name.as_str() == s)
-        .expect("検体に在る箱")
-        .name
-        .clone()
-}
-
 /// 箱 a（0,0〜100,50）に当たった写し。選択肢の行は (10,10)〜(90,20) の 1 本。
 fn on_a(active: bool) -> BoxPoint {
     BoxPoint {
         hit: Some(ShownBox {
-            name: name("a"),
+            name: box_name(SHELL, "a"),
             element: 1,
             rect: HitRectPx {
                 left: 0.0,
@@ -90,7 +78,7 @@ fn on_a(active: bool) -> BoxPoint {
 fn on_b() -> BoxPoint {
     BoxPoint {
         hit: Some(ShownBox {
-            name: name("b"),
+            name: box_name(SHELL, "b"),
             element: 2,
             rect: HitRectPx {
                 left: 200.0,
@@ -232,10 +220,7 @@ fn pointer(at: (i32, i32), double_click: DoubleClick) -> PointerState {
 }
 
 fn hover_injections(events: &[log_capture_kit::CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("box_choice_hover_inject"))
-        .count()
+    events_named(events, "box_choice_hover_inject").len()
 }
 
 // ---------------------------------------------------------------- 結線
@@ -359,7 +344,7 @@ fn move_over_box_choice_highlights_once_without_sending_to_the_shell() {
         first && second
     });
     assert!(handled, "処理した");
-    assert_eq!(f.hover(), (Some(name("a")), Some(0)));
+    assert_eq!(f.hover(), (Some(box_name(SHELL, "a")), Some(0)));
     assert_eq!(hover_injections(&events), 1, "同値は注入しない: {events:?}");
     assert!(f.shell().is_empty(), "シェルへの移動は 0 件");
 }
@@ -374,7 +359,7 @@ fn move_over_box_body_records_hover_and_reaches_the_shell() {
         f.moved(BODY, on_a(true));
         f.moved((52, 41), on_a(true));
     });
-    assert_eq!(f.hover(), (Some(name("a")), None));
+    assert_eq!(f.hover(), (Some(box_name(SHELL, "a")), None));
     assert_eq!(hover_injections(&events), 1, "外すのは 1 度: {events:?}");
     let moves = f
         .shell()
@@ -393,7 +378,7 @@ fn move_to_another_box_and_outside() {
     let mut f = Fixture::new();
     f.moved(ROW, on_a(true));
     let (_, events) = capture(|| f.moved((250, 10), on_b()));
-    assert_eq!(f.hover(), (Some(name("b")), None));
+    assert_eq!(f.hover(), (Some(box_name(SHELL, "b")), None));
     assert_eq!(hover_injections(&events), 1, "前の箱の強調を外す");
     assert!(!f.moved((500, 400), BoxPoint::default()));
     assert_eq!(f.hover(), (None, None));
@@ -509,7 +494,7 @@ fn read_point_is_active_with_only_an_anchor() {
 fn leaving_the_shell_window_clears_an_anchor_highlight() {
     let mut f = Fixture::new();
     assert!(f.moved(ROW, anchor_on_a()), "アンカーの上の移動は強調する");
-    assert_eq!(f.hover(), (Some(name("a")), Some(0)));
+    assert_eq!(f.hover(), (Some(box_name(SHELL, "a")), Some(0)));
     let mut f = with_anchor_only(f.with_runtime());
     let win = f
         .world
@@ -526,12 +511,9 @@ fn leaving_the_shell_window_clears_an_anchor_highlight() {
 
 /// 写しの借用の失敗の記録（前段が走ったことの印）を数える。
 fn snapshot_borrow_failures(events: &[log_capture_kit::CapturedEvent]) -> usize {
-    events
+    events_named(events, "balloon_runtime_borrow_failed")
         .iter()
-        .filter(|e| {
-            e.field_str("event") == Some("balloon_runtime_borrow_failed")
-                && e.message().contains("箱の写し")
-        })
+        .filter(|e| e.message().contains("箱の写し"))
         .count()
 }
 
@@ -565,16 +547,6 @@ fn real_handlers_call_the_prelude_before_the_existing_path() {
 
 // ---------------------------------------------------------------- 実機の判定の記録
 
-fn lines_of<'a>(
-    events: &'a [log_capture_kit::CapturedEvent],
-    event: &str,
-) -> Vec<&'a log_capture_kit::CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
-
 /// 箱の中の押下は結論を 1 行だけ残す（箱の中の単押しを箱の外の押下とログで見分ける）。
 /// 箱の外の押下は残さない。
 #[test]
@@ -585,7 +557,7 @@ fn box_press_logs_the_verdict_once() {
         f.pressed(BODY, DoubleClick::None, on_a(false));
         f.pressed(BODY, DoubleClick::None, BoxPoint::default());
     });
-    let lines = lines_of(&events, "box_press");
+    let lines = events_named(&events, "box_press");
     assert_eq!(lines.len(), 1, "箱の中の押下 1 回で 1 行: {events:?}");
     assert_eq!(lines[0].expect_field("verdict"), "ShellOp");
     assert_eq!(lines[0].field_str("box"), Some("a"));
@@ -603,7 +575,7 @@ fn box_hover_change_logs_only_on_change() {
         f.moved((500, 400), BoxPoint::default());
     });
     assert_eq!(
-        lines_of(&events, "box_hover_changed").len(),
+        events_named(&events, "box_hover_changed").len(),
         3,
         "a へ・b へ・外へ: {events:?}"
     );
@@ -654,12 +626,12 @@ fn fields_of(event: &log_capture_kit::CapturedEvent) -> BTreeMap<&str, String> {
 #[test]
 fn box_anchor_press_records_anchor_selected_and_reaches_kanade_as_an_anchor() {
     let (events, msgs) = press_row_and_drain(anchor_on_a());
-    let lines = lines_of(&events, "anchor_selected");
+    let lines = events_named(&events, "anchor_selected");
     assert_eq!(lines.len(), 1, "発行 1 回で 1 行: {events:?}");
     assert_eq!(lines[0].level, tracing::Level::INFO);
     assert_eq!(fields_of(lines[0]), selected_fields("anchor_selected"));
     assert!(
-        lines_of(&events, "choice_selected").is_empty(),
+        events_named(&events, "choice_selected").is_empty(),
         "選択肢の記録は残さない: {events:?}"
     );
     let expected = areka_kanade::AnchorInput {
@@ -678,11 +650,11 @@ fn box_anchor_press_records_anchor_selected_and_reaches_kanade_as_an_anchor() {
 #[test]
 fn box_choice_press_still_records_choice_selected_and_reaches_kanade_as_a_choice() {
     let (events, msgs) = press_row_and_drain(on_a(true));
-    let lines = lines_of(&events, "choice_selected");
+    let lines = events_named(&events, "choice_selected");
     assert_eq!(lines.len(), 1, "発行 1 回で 1 行: {events:?}");
     assert_eq!(lines[0].level, tracing::Level::INFO);
     assert_eq!(fields_of(lines[0]), selected_fields("choice_selected"));
-    assert!(lines_of(&events, "anchor_selected").is_empty());
+    assert!(events_named(&events, "anchor_selected").is_empty());
     assert!(
         matches!(&msgs[..], [DispatcherMsg::Choice(c)] if c.id == "q0" && c.label == "label0"),
         "選択肢の伝言が 1 件"
@@ -708,15 +680,18 @@ fn box_selection_send_failure_is_recorded_under_the_kind() {
         let mut f = Fixture::new();
         f.world.remove_non_send::<ChoiceSelectionInbox>();
         let (_, events) = capture(|| f.pressed(ROW, DoubleClick::None, point));
-        let errors = lines_of(&events, failed)
+        let errors = events_named(&events, failed)
             .into_iter()
             .filter(|e| e.level == tracing::Level::ERROR)
             .count();
         assert_eq!(errors, 1, "{failed} の error が 1 行: {events:?}");
-        assert!(lines_of(&events, other).is_empty(), "{other}: {events:?}");
         assert!(
-            lines_of(&events, "choice_selected").is_empty()
-                && lines_of(&events, "anchor_selected").is_empty(),
+            events_named(&events, other).is_empty(),
+            "{other}: {events:?}"
+        );
+        assert!(
+            events_named(&events, "choice_selected").is_empty()
+                && events_named(&events, "anchor_selected").is_empty(),
             "送れなかった押下は選択の記録を残さない: {events:?}"
         );
     }
@@ -733,7 +708,7 @@ fn move_without_box_hover_is_recorded_once_inside_a_box() {
         f.moved(BODY, on_a(true));
         f.moved((500, 400), BoxPoint::default());
     });
-    let missing = lines_of(&events, "shell_box_hover_missing");
+    let missing = events_named(&events, "shell_box_hover_missing");
     assert_eq!(missing.len(), 1, "箱の中の 1 回だけ: {events:?}");
     assert_eq!(missing[0].level, tracing::Level::ERROR);
 }
@@ -744,7 +719,7 @@ fn box_selection_without_balloon_wiring_is_recorded_and_not_sent() {
     let mut f = Fixture::new();
     f.world.remove_non_send::<BalloonWiring>();
     let (_, events) = capture(|| f.pressed(ROW, DoubleClick::None, on_a(true)));
-    let missing = lines_of(&events, "balloon_wiring_missing");
+    let missing = events_named(&events, "balloon_wiring_missing");
     assert_eq!(missing.len(), 1, "{events:?}");
     assert_eq!(missing[0].level, tracing::Level::ERROR);
     assert!(f.selections().is_empty());
@@ -756,11 +731,11 @@ fn box_press_without_user_break_wiring_is_recorded_as_not_talking() {
     let mut f = Fixture::new();
     f.world.remove_non_send::<UserBreakWiring>();
     let (_, events) = capture(|| f.pressed(BODY, DoubleClick::Left, on_a(false)));
-    let no_wiring = lines_of(&events, "box_break_no_wiring");
+    let no_wiring = events_named(&events, "box_break_no_wiring");
     assert_eq!(no_wiring.len(), 1, "{events:?}");
     assert_eq!(no_wiring[0].level, tracing::Level::TRACE);
     assert_eq!(
-        lines_of(&events, "box_press")[0].field("verdict"),
+        events_named(&events, "box_press")[0].field("verdict"),
         Some("ShellOp")
     );
 }

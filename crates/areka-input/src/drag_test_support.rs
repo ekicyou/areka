@@ -26,35 +26,36 @@ use wintf::ecs::drag::{
 };
 use wintf::ecs::{PhysicalPoint, Point, WindowHandle, WindowPos};
 
+use super::super::pointer_test_support::{drain_mouse, fake_hit};
 use super::super::{MouseWiring, RegionSource, attach_char_pointer_handlers};
 use areka_placement::follow::{MonitorSnapshot, OffsetBase};
 use areka_placement::persist::PersistWiring;
 use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::spawn_ghost_windows;
-use areka_runtime::hit_region::HitRegion;
 use areka_runtime::spine::{SPIN_WAIT, join_bounded};
 
 /// 相方（scope 1）。0 以外にして既定値との取り違えを避ける。
 pub(super) const SCOPE: usize = 1;
 /// work area（物理 px）。キャラ窓は下端 1200 へ接地する。
-const WORK_AREA: RectPx = RectPx {
+pub(super) const WORK_AREA: RectPx = RectPx {
     left: 0,
     top: 0,
     right: 1920,
     bottom: 1200,
 };
-/// 偽の当たり判定が `Head` を返す窓の中の x の上限（これ未満が当たり判定のある位置）。
-const HEAD_X_LIMIT: i64 = 100;
 
-/// 当たり判定の偽物: 渡された窓の中の位置 `(x, y)` から区別できる座標 `(2x, 3y)` を返し、
-/// `x < HEAD_X_LIMIT` なら `Head`・それ以外は当たり判定なし。受け口の値から、渡した位置が
-/// 正しいことを読み戻せる。
-pub(super) fn fake_hit(scope: u32, x: i64, y: i64) -> HitRegion {
-    HitRegion {
-        scope,
-        region: (x < HEAD_X_LIMIT).then(|| "Head".to_string()),
-        surface_point: (x * 2, y * 3),
+pub(super) fn add(p: Point, by: Point) -> Point {
+    Point {
+        x: p.x + by.x,
+        y: p.y + by.y,
+    }
+}
+
+pub(super) fn sub(a: Point, b: Point) -> Point {
+    Point {
+        x: a.x - b.x,
+        y: a.y - b.y,
     }
 }
 
@@ -270,13 +271,18 @@ impl Rig {
 
     /// 受け口に溜まったマウスの知らせを全部取り出す（マウス以外が来たら落とす）。
     pub(super) fn drain(&self) -> Vec<MouseInput> {
-        self.rx
-            .try_iter()
-            .map(|msg| match msg {
-                KanadeMsg::Mouse(m) => m,
-                _ => panic!("マウス以外の知らせが届いた"),
-            })
-            .collect()
+        drain_mouse(&self.rx)
+    }
+
+    /// 相方の窓の中の点 `press_local` を押してドラッグを始め、`initial_window_pos` を開始時の
+    /// 窓の位置にする。開始時の窓の位置と押した位置を返す。
+    pub(super) fn begin_drag(&mut self, press_local: Point) -> (Point, Point) {
+        let start_win = self.position_of(self.char_w);
+        let press = add(start_win, press_local);
+        self.put(started(self.char_w, press));
+        self.tick();
+        self.set_initial_window_pos(self.char_w, start_win);
+        (start_win, press)
     }
 
     pub(super) fn close(self) {

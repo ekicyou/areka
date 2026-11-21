@@ -2,6 +2,7 @@
 //!
 //! 偽の窓（`Window`＋`CharWindowMarker`）の子に `PointerState` を載せ、注入の時計で系を回す。
 
+use super::super::pointer_test_support::drain_mouse;
 use super::super::{MouseWiring, RegionSource, on_char_pointer_moved};
 use super::char_watch;
 use areka_kanade::{ClickButton, HoverEdge, KanadeMsg, MouseEventKind, MouseInput};
@@ -116,13 +117,7 @@ impl Rig {
     }
 
     fn drain(&mut self) -> Vec<MouseInput> {
-        self.rx
-            .try_iter()
-            .map(|m| match m {
-                KanadeMsg::Mouse(i) => i,
-                _ => panic!("マウス以外の知らせ"),
-            })
-            .collect()
+        drain_mouse(&self.rx)
     }
 
     fn wiring(&self) -> &MouseWiring {

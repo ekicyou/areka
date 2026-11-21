@@ -18,9 +18,10 @@ use wintf::ecs::drag::{DragStartEvent, DraggingState, OnDragStart};
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};
 use wintf::ecs::{PhysicalPoint, Point, WindowPos};
 
+use super::super::pointer_test_support::fake_hit;
 use super::super::{MouseWiring, on_char_pointer_moved, on_char_pointer_pressed};
 use super::on_char_drag_start;
-use super::test_support::{Rig, SCOPE, ended, fake_hit, started};
+use super::test_support::{Rig, SCOPE, add, ended, started};
 use log_capture_kit::{CapturedEvent, capture};
 
 /// 押した位置の窓の中の点（当たり判定のある位置）。
@@ -45,13 +46,6 @@ fn expected(kind: MouseEventKind, screen: Point, window: Point) -> MouseInput {
     }
 }
 
-fn offset(p: Point, by: Point) -> Point {
-    Point {
-        x: p.x + by.x,
-        y: p.y + by.y,
-    }
-}
-
 /// A1: 開始 → 配る → 離す終了 → 配る。
 /// 受け口に `DragStart` 1 件 → `DragEnd` 1 件がこの順で届き、スコープ・座標・当たり判定
 /// （開始はある位置・終了は無い位置）が期待どおり。
@@ -59,8 +53,8 @@ fn offset(p: Point, by: Point) -> Point {
 fn drag_start_then_end_each_arrive_once_in_order() {
     let mut rig = Rig::new();
     let start_win = rig.position_of(rig.char_w);
-    let press = offset(start_win, PRESS_LOCAL);
-    let release = offset(press, MOVE_BY);
+    let press = add(start_win, PRESS_LOCAL);
+    let release = add(press, MOVE_BY);
 
     rig.put(started(rig.char_w, press));
     rig.tick();
@@ -86,8 +80,8 @@ fn drag_start_then_end_each_arrive_once_in_order() {
 fn fast_drag_in_one_dispatch_sends_start_then_end_once() {
     let mut rig = Rig::new();
     let start_win = rig.position_of(rig.char_w);
-    let press = offset(start_win, PRESS_LOCAL);
-    let release = offset(press, MOVE_BY);
+    let press = add(start_win, PRESS_LOCAL);
+    let release = add(press, MOVE_BY);
 
     rig.put(started(rig.char_w, press));
     rig.put(ended(rig.char_w, release, false));
@@ -111,7 +105,7 @@ fn fast_drag_in_one_dispatch_sends_start_then_end_once() {
 fn click_without_move_and_double_click_send_no_drag() {
     let mut rig = Rig::new();
     let win = rig.position_of(rig.char_w);
-    let press = offset(win, PRESS_LOCAL);
+    let press = add(win, PRESS_LOCAL);
 
     rig.put(ended(rig.char_w, press, false));
     rig.tick();
@@ -147,13 +141,13 @@ fn click_without_move_and_double_click_send_no_drag() {
 #[test]
 fn balloon_drag_sends_nothing() {
     let mut rig = Rig::new();
-    let press = offset(rig.position_of(rig.balloon), PRESS_LOCAL);
+    let press = add(rig.position_of(rig.balloon), PRESS_LOCAL);
 
     rig.put(started(rig.balloon, press));
     rig.tick();
     // 前提: 開始はバルーン窓まで配られている（wintf が DraggingState を入れた）。
     assert!(rig.world.get::<DraggingState>(rig.balloon).is_some());
-    rig.put(ended(rig.balloon, offset(press, MOVE_BY), false));
+    rig.put(ended(rig.balloon, add(press, MOVE_BY), false));
     rig.tick();
 
     assert_eq!(rig.drain(), vec![]);
@@ -171,8 +165,8 @@ fn drag_bypasses_closed_move_throttle_and_leaves_it_untouched() {
     let mut rig = Rig::new();
     let char_w = rig.char_w;
     let start_win = rig.position_of(char_w);
-    let press = offset(start_win, PRESS_LOCAL);
-    let release = offset(press, MOVE_BY);
+    let press = add(start_win, PRESS_LOCAL);
+    let release = add(press, MOVE_BY);
     let moved = Phase::Bubble(PointerState {
         client_point: PRESS_LOCAL,
         ..Default::default()
@@ -214,12 +208,8 @@ const RELEASE_BY: Point = Point { x: 150, y: 40 };
 /// 開始時の窓位置・押した位置・開始の配りで届いた知らせを返す。
 fn begin_drag(rig: &mut Rig) -> (Point, Point, Vec<MouseInput>) {
     let char_w = rig.char_w;
-    let start_win = rig.position_of(char_w);
-    let press = offset(start_win, PRESS_LOCAL);
-    rig.put(started(char_w, press));
-    rig.tick();
-    rig.set_initial_window_pos(char_w, start_win);
-    rig.move_window(char_w, offset(start_win, WINDOW_SHIFT));
+    let (start_win, press) = rig.begin_drag(PRESS_LOCAL);
+    rig.move_window(char_w, add(start_win, WINDOW_SHIFT));
     (start_win, press, rig.drain())
 }
 
@@ -265,7 +255,7 @@ fn drag_end_coordinates_use_the_window_position_after_the_save() {
     let mut rig = Rig::new();
     let (start_win, press, _) = begin_drag(&mut rig);
     let before_save = rig.position_of(rig.char_w);
-    let release = offset(press, RELEASE_BY);
+    let release = add(press, RELEASE_BY);
 
     rig.put(ended(rig.char_w, release, false));
     rig.tick();
@@ -321,7 +311,7 @@ fn perform(mut rig: Rig, gesture: Gesture) -> (Point, Vec<(PersistKey, String)>,
     let mut sent = 0;
     match gesture {
         Gesture::Click => {
-            let press = offset(rig.position_of(char_w), PRESS_LOCAL);
+            let press = add(rig.position_of(char_w), PRESS_LOCAL);
             rig.put(ended(char_w, press, false));
         }
         Gesture::Release | Gesture::Cancel => {
@@ -331,7 +321,7 @@ fn perform(mut rig: Rig, gesture: Gesture) -> (Point, Vec<(PersistKey, String)>,
             let end = if cancelled {
                 press
             } else {
-                offset(press, RELEASE_BY)
+                add(press, RELEASE_BY)
             };
             rig.put(ended(char_w, end, cancelled));
         }
@@ -420,7 +410,7 @@ fn assert_one_record(
 
 /// 本番の配りで開始を 1 回配り、その間の記録を返す。
 fn dispatch_start_capturing(rig: &mut Rig) -> Vec<CapturedEvent> {
-    let press = offset(rig.position_of(rig.char_w), PRESS_LOCAL);
+    let press = add(rig.position_of(rig.char_w), PRESS_LOCAL);
     rig.put(started(rig.char_w, press));
     capture(|| rig.tick()).1
 }
@@ -497,7 +487,7 @@ fn no_scope_records_one_drop() {
 #[test]
 fn no_window_pos_records_one_drop() {
     let mut rig = Rig::new();
-    let press = offset(rig.position_of(rig.char_w), PRESS_LOCAL);
+    let press = add(rig.position_of(rig.char_w), PRESS_LOCAL);
     rig.world
         .get_mut::<WindowPos>(rig.char_w)
         .expect("前提: WindowPos がある")

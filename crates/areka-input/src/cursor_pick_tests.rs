@@ -341,44 +341,35 @@ fn ghost_all() -> GhostCursorKeys<String> {
     }
 }
 
-fn pick(
-    scope: u32,
-    s: &Shown,
-    r: &CursorRows<String>,
-    g: &GhostCursorKeys<String>,
-) -> Option<(Shape<String>, Origin)> {
-    pick_shape(scope, s, r, g)
-}
-
 #[test]
 fn defaults_by_scene_and_bust_case_insensitive() {
     let r = rows(&[]);
     let g = no_ghost();
     for bust in ["bust", "Bust", "BUST"] {
         assert_eq!(
-            pick(0, &shown(Up, bust), &r, &g),
+            pick_shape(0, &shown(Up, bust), &r, &g),
             Some((sys(SystemCursor::Hand), Origin::Default))
         );
         assert_eq!(
-            pick(0, &shown(Down, bust), &r, &g),
+            pick_shape(0, &shown(Down, bust), &r, &g),
             Some((sys(SystemCursor::Grip), Origin::Default))
         );
         assert_eq!(
-            pick(0, &shown(RightDown, bust), &r, &g),
+            pick_shape(0, &shown(RightDown, bust), &r, &g),
             Some((sys(SystemCursor::Finger), Origin::Default))
         );
     }
     for scene in [Up, Down, RightDown] {
         assert_eq!(
-            pick(0, &shown(scene, "head"), &r, &g),
+            pick_shape(0, &shown(scene, "head"), &r, &g),
             Some((sys(SystemCursor::Finger), Origin::Default))
         );
     }
     assert_eq!(
-        pick(0, &Shown::Arrow, &r, &g),
+        pick_shape(0, &Shown::Arrow, &r, &g),
         Some((sys(SystemCursor::Arrow), Origin::Default))
     );
-    assert_eq!(pick(0, &Shown::Pass, &r, &g), None);
+    assert_eq!(pick_shape(0, &Shown::Pass, &r, &g), None);
 }
 
 #[test]
@@ -386,13 +377,19 @@ fn ghost_descript_replaces_defaults() {
     let r = rows(&[]);
     let g = ghost_all();
     let gd = |n: &str| Some((file(n), Origin::GhostDescript));
-    assert_eq!(pick(0, &shown(Up, "Bust"), &r, &g), gd("hand.cur"));
-    assert_eq!(pick(0, &shown(Down, "bust"), &r, &g), gd("grip.cur"));
-    assert_eq!(pick(0, &shown(RightDown, "bust"), &r, &g), gd("finger.cur"));
-    assert_eq!(pick(0, &shown(Up, "head"), &r, &g), gd("finger.cur"));
-    assert_eq!(pick(0, &shown(Down, "head"), &r, &g), gd("finger.cur"));
-    assert_eq!(pick(0, &Shown::Arrow, &r, &g), gd("arrow.cur"));
-    assert_eq!(pick(0, &Shown::Pass, &r, &g), None);
+    assert_eq!(pick_shape(0, &shown(Up, "Bust"), &r, &g), gd("hand.cur"));
+    assert_eq!(pick_shape(0, &shown(Down, "bust"), &r, &g), gd("grip.cur"));
+    assert_eq!(
+        pick_shape(0, &shown(RightDown, "bust"), &r, &g),
+        gd("finger.cur")
+    );
+    assert_eq!(pick_shape(0, &shown(Up, "head"), &r, &g), gd("finger.cur"));
+    assert_eq!(
+        pick_shape(0, &shown(Down, "head"), &r, &g),
+        gd("finger.cur")
+    );
+    assert_eq!(pick_shape(0, &Shown::Arrow, &r, &g), gd("arrow.cur"));
+    assert_eq!(pick_shape(0, &Shown::Pass, &r, &g), None);
 }
 
 #[test]
@@ -405,21 +402,21 @@ fn brace_row_beats_ghost_and_default() {
     ]);
     for g in [no_ghost(), ghost_all()] {
         assert_eq!(
-            pick(0, &shown(Up, "bust"), &r, &g),
+            pick_shape(0, &shown(Up, "bust"), &r, &g),
             Some((sys(SystemCursor::Help), Origin::Brace))
         );
         assert_eq!(
-            pick(0, &shown(Down, "bust"), &r, &g),
+            pick_shape(0, &shown(Down, "bust"), &r, &g),
             Some((file("d.cur"), Origin::Brace))
         );
         assert_eq!(
-            pick(0, &shown(RightDown, "head"), &r, &g),
+            pick_shape(0, &shown(RightDown, "head"), &r, &g),
             Some((sys(SystemCursor::No), Origin::Brace))
         );
     }
     // 行は綴りどおり（Bust の行は無い）なので既定へ落ちる。
     assert_eq!(
-        pick(0, &shown(Up, "Bust"), &r, &no_ghost()),
+        pick_shape(0, &shown(Up, "Bust"), &r, &no_ghost()),
         Some((sys(SystemCursor::Hand), Origin::Default))
     );
 }
@@ -433,28 +430,28 @@ fn hover_and_wheel_use_their_row_or_stay_on_the_up_shape() {
     ]);
     let g = no_ghost();
     assert_eq!(
-        pick(0, &shown(Hover, "head"), &r, &g),
+        pick_shape(0, &shown(Hover, "head"), &r, &g),
         Some((sys(SystemCursor::Help), Origin::Brace))
     );
     assert_eq!(
-        pick(0, &shown(Wheel, "head"), &r, &g),
+        pick_shape(0, &shown(Wheel, "head"), &r, &g),
         Some((sys(SystemCursor::Move), Origin::Brace))
     );
     for scene in [Hover, Wheel] {
         assert_eq!(
-            pick(0, &shown(scene, "face"), &r, &g),
+            pick_shape(0, &shown(scene, "face"), &r, &g),
             Some((sys(SystemCursor::Cross), Origin::Brace))
         );
         assert_eq!(
-            pick(0, &shown(scene, "bust"), &r, &g),
+            pick_shape(0, &shown(scene, "bust"), &r, &g),
             Some((sys(SystemCursor::Hand), Origin::Default))
         );
         assert_eq!(
-            pick(0, &shown(scene, "bust"), &r, &ghost_all()),
+            pick_shape(0, &shown(scene, "bust"), &r, &ghost_all()),
             Some((file("hand.cur"), Origin::GhostDescript))
         );
         assert_eq!(
-            pick(0, &shown(scene, "arm"), &r, &g),
+            pick_shape(0, &shown(scene, "arm"), &r, &g),
             Some((sys(SystemCursor::Finger), Origin::Default))
         );
     }
@@ -466,11 +463,11 @@ fn scopes_are_separate() {
     let r = rows(&[(0, "head", Up, sys(SystemCursor::Help))]);
     let g = no_ghost();
     assert_eq!(
-        pick(0, &shown(Up, "head"), &r, &g),
+        pick_shape(0, &shown(Up, "head"), &r, &g),
         Some((sys(SystemCursor::Help), Origin::Brace))
     );
     assert_eq!(
-        pick(1, &shown(Up, "head"), &r, &g),
+        pick_shape(1, &shown(Up, "head"), &r, &g),
         Some((sys(SystemCursor::Finger), Origin::Default))
     );
 }

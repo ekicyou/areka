@@ -1,3 +1,4 @@
+use super::balloon::test_support::events_named;
 use super::pointer_test_support::*;
 use super::*;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
@@ -84,10 +85,7 @@ fn move_and_double_click_send_failures_record_one_line_each() {
         log_capture_kit::capture(|| wiring.send_double_click(0, (1, 2), None, MouseButton::Left));
 
     for (events, kind) in [(moved, "move"), (clicked, "double_click")] {
-        let failed: Vec<_> = events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("mouse_send_failed"))
-            .collect();
+        let failed = events_named(&events, "mouse_send_failed");
         assert_eq!(failed.len(), 1, "{kind}: {events:?}");
         assert_eq!(failed[0].field_str("kind"), Some(kind), "{events:?}");
         assert_eq!(failed[0].target, "areka_input", "{events:?}");
@@ -183,39 +181,6 @@ fn double_click_left_sends_unconditionally() {
     // クリックは throttle を通さない: 同一座標で連続送出しても届く。
     wiring.send_double_click(0, (5, 6), Some("Head".to_string()), MouseButton::Left);
     assert!(rx.try_recv().is_ok(), "クリックは間引かれず 2 回目も届く");
-}
-
-/// 送出ヘルパは右ボタンでも同じ形で送り、button=Right が観測できる。
-/// 押下ハンドラが右ダブルクリックを即送出しないことは `input_events_menu_tests.rs` が見る。
-#[test]
-fn double_click_right_sends_with_right_button() {
-    let (tx, rx) = mpsc::channel::<KanadeMsg>();
-    let mut wiring = MouseWiring::with_clock(
-        tx,
-        RegionSource::Mock(|_, x, y| HitRegion {
-            scope: 0,
-            region: None,
-            surface_point: (x, y),
-        }),
-        stepping_clock(1000, 1000),
-    );
-
-    wiring.send_double_click(1, (7, 8), None, MouseButton::Right);
-    match rx.try_recv().expect("dblclick が届くべき") {
-        KanadeMsg::Mouse(m) => {
-            assert_eq!(m.scope, 1);
-            assert_eq!(m.x, 7);
-            assert_eq!(m.y, 8);
-            assert_eq!(m.region, None);
-            assert_eq!(
-                m.kind,
-                MouseEventKind::DoubleClick {
-                    button: MouseButton::Right
-                }
-            );
-        }
-        _ => panic!("Mouse(DoubleClick) を期待"),
-    }
 }
 
 /// 配線挿入檻: `wire_mouse_input` は fresh World へ `MouseWiring`
@@ -386,89 +351,6 @@ fn handler_middle_xbutton_and_single_click_do_not_send() {
         );
     }
     assert!(rx.try_recv().is_err(), "中/拡張/単発は何も送出しない");
-}
-
-/// 隠しの終了操作が無いことの檻: **結線済み**で Shift を
-/// 伴わない Ctrl+左ダブルクリックは終了指示を 1 件も送らず、終了の指示も立てず、Ctrl の無い左
-/// ダブルクリックと同じ `DoubleClick{Left}` をちょうど 1 件送る。
-///
-/// 利用者起因の終了指示を送る本番の呼び手はメニューの「終了」（`menu::request_close`）だけである。
-/// 強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。
-///
-/// # 非空虚性
-/// 強制退避の腕へ落ちれば終了の指示が立って表明が落ち、終了指示を送れば届いた種別の表明が
-/// 落ち、左ダブルクリックとして扱わなければ `try_recv` が空で落ちる。
-#[test]
-fn handler_wired_ctrl_left_double_click_sends_no_close_request_and_delivers_the_double_click() {
-    let (mut world, rx) = world_with_wiring(
-        |_, x, y| HitRegion {
-            scope: 0,
-            region: Some("Head".to_string()),
-            surface_point: (x, y),
-        },
-        stepping_clock(1000, 1000),
-    );
-    let w0 = world
-        .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
-        .id();
-    let other = world.spawn_empty().id();
-
-    let ev = bubble_pointer(10, 20, DoubleClick::Left, true);
-    assert!(on_char_pointer_pressed(&mut world, w0, w0, &ev));
-
-    match rx.try_recv().expect("左ダブルクリックが届く") {
-        KanadeMsg::Mouse(m) => assert_eq!(
-            m,
-            MouseInput {
-                scope: 0,
-                x: 10,
-                y: 20,
-                region: Some("Head".to_string()),
-                kind: MouseEventKind::DoubleClick {
-                    button: MouseButton::Left
-                },
-            },
-            "Ctrl は無視され、Ctrl なしの左ダブルクリックと同じものが届く（要件 5.3）"
-        ),
-        _ => panic!("終了指示ではなく左ダブルクリック（Mouse）を期待"),
-    }
-    assert!(
-        rx.try_recv().is_err(),
-        "届くのは左ダブルクリック 1 件だけ（終了指示は 0 件）"
-    );
-    assert!(
-        !exit_requested(&world),
-        "結線済みの Ctrl+左は強制退避ではない——終了の指示は立たない（要件 5.3／5.5）"
-    );
-    assert!(world.get_entity(other).is_ok(), "無関係 entity は残る");
-}
-
-/// 暫定退避檻: Ctrl なしの左ダブルクリックは強制退避せず、
-/// 代わりに `DoubleClick` を送出する（退避と送出の分岐が排他であること）。
-#[test]
-fn handler_left_double_click_without_ctrl_does_not_despawn_and_sends() {
-    let (mut world, rx) = world_with_wiring(
-        |_, x, y| HitRegion {
-            scope: 0,
-            region: None,
-            surface_point: (x, y),
-        },
-        stepping_clock(1000, 1000),
-    );
-    let w = world
-        .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
-        .id();
-
-    let ev = bubble_pointer(3, 4, DoubleClick::Left, false);
-    assert!(on_char_pointer_pressed(&mut world, w, w, &ev));
-    assert!(!exit_requested(&world), "Ctrl なしは強制退避しない");
-    assert!(
-        matches!(
-            rx.try_recv().expect("送出される"),
-            KanadeMsg::Mouse(m) if m.kind == MouseEventKind::DoubleClick { button: MouseButton::Left }
-        ),
-        "Ctrl なし左ダブルクリックは DoubleClick を送出"
-    );
 }
 
 /// self-gating: `MouseWiring` 不在なら送出系ハンドラは no-op false。
