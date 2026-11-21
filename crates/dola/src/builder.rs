@@ -114,7 +114,7 @@ impl StoryboardBuilder {
     /// NOTE: StoryboardBuilder はバリデーションを行わない（任意の Storyboard を
     /// 構築できる）が、compile_storyboard は冒頭で必ず doc.validate() を実行するため、
     /// 本ビルダー経由でもバリデーションを迂回して不正文書をコンパイルさせることは
-    /// できない（tests/compile/boundary_test.rs で特性化済み）。
+    /// できない。
     pub fn build(self) -> Storyboard {
         Storyboard {
             time_scale: self.time_scale,
@@ -136,9 +136,6 @@ impl Default for StoryboardBuilder {
 mod tests {
     use super::*;
     use crate::storyboard::LoopOffset;
-
-    // tests/general/builder_test.rs が見ていない Builder API のテスト
-    // （loop_offset 設定・Default 実装・同名上書き・スキーマ検証連動）
 
     #[test]
     fn storyboard_builder_loop_offset_set() {
@@ -163,7 +160,7 @@ mod tests {
 
     #[test]
     fn document_builder_duplicate_name_last_wins() {
-        // BTreeMap::insert に基づく上書き挙動の固定（同名 variable は後勝ち）
+        // 同名 variable は後勝ち（BTreeMap::insert の上書き）
         let doc = DolaDocumentBuilder::new("1.0")
             .variable(
                 "x",
@@ -192,7 +189,6 @@ mod tests {
 
     #[test]
     fn document_builder_schema_mismatch_fails_validation() {
-        // build() はバリデーションを内包する: 不正スキーマバージョンで Err
         let errs = DolaDocumentBuilder::new("0.5").build().unwrap_err();
         assert!(
             errs.iter()

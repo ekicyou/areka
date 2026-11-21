@@ -1,7 +1,7 @@
-//! 走りの取っ手（Run）・既定の時間・出力の読み口・破棄の順（要件 1.8・3.2〜3.6・4.2・4.9・5.1〜5.5）。
+//! 走りの取っ手（Run）・既定の時間・出力の読み口・破棄の順。
 //!
 //! 待ち・呼び出し・閉じ方は下の段（output・mcp・close）に任せ、既定の時間の各欄を引数として渡す。
-//! 破棄では、子が生きていれば閉じてから（5.5・閉じずに止めたら panic＝audit-test-kits 指摘 9）、欄の破棄として回の置き場が
+//! 破棄では、子が生きていれば閉じてから（閉じずに止めたら panic）、欄の破棄として回の置き場が
 //! 残すか消すかを決める。
 
 use std::path::{Path, PathBuf};
@@ -13,7 +13,7 @@ use crate::evidence::RunDirs;
 use crate::mcp::{McpChannel, McpError, ToolReply};
 use crate::output::{self, ChildExited, WaitEnd};
 
-/// 既定の時間（D-13）。`safety_exit < deadline` を兄弟のテストが固定する（1.8）。
+/// 既定の時間。`safety_exit < deadline` を兄弟のテストが固定する。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Limits {
     /// 各待ちの始まりから数える締切。
@@ -104,7 +104,7 @@ impl Run {
         &self.stderr
     }
 
-    /// 標準出力の全文。走りの途中でも終わった後でも読める（3.6）。読めない字は U+FFFD。
+    /// 標準出力の全文。走りの途中でも終わった後でも読める。読めない字は U+FFFD。
     ///
     /// # Panics
     ///
@@ -123,11 +123,11 @@ impl Run {
         format!("{}\n{}", self.stdout(), self.stderr())
     }
 
-    /// 出力（両方）に `needle` が現れるまで待つ（3.2）。子が先に終われば `Err`（3.5）。
+    /// 出力（両方）に `needle` が現れるまで待つ。子が先に終われば `Err`。
     ///
     /// # Panics
     ///
-    /// 締切までに現れないとき（待っていた文字列・待った時間・ファイルの場所と末尾＝3.4）。
+    /// 締切までに現れないとき（待っていた文字列・待った時間・ファイルの場所と末尾）。
     pub fn wait_for(&mut self, needle: &str) -> Result<(), ChildExited> {
         let files = [self.stdout.as_path(), self.stderr.as_path()];
         let deadline = Instant::now() + self.limits.deadline;
@@ -147,14 +147,14 @@ impl Run {
         }
     }
 
-    /// ツールを 1 回呼ぶ（4.2〜4.8）。`args_json` は JSON の object の文（`"{}"` 可・読めなければ panic）。
+    /// ツールを 1 回呼ぶ。`args_json` は JSON の object の文（`"{}"` 可・読めなければ panic）。
     pub fn call(&mut self, tool: &str, args_json: &str) -> Result<ToolReply, McpError> {
         let files = [self.stdout.as_path(), self.stderr.as_path()];
         self.mcp
             .call(&mut self.child, files, tool, args_json, &self.limits)
     }
 
-    /// 答えの文に `needle` が現れるまで呼び直す（4.9）。
+    /// 答えの文に `needle` が現れるまで呼び直す。
     ///
     /// # Panics
     ///
@@ -176,11 +176,11 @@ impl Run {
         )
     }
 
-    /// 利用者と同じ閉じ方で閉じる（5.1・5.3）。2 度目からは同じ終わりを返す。
+    /// 利用者と同じ閉じ方で閉じる。2 度目からは同じ終わりを返す。
     ///
     /// # Panics
     ///
-    /// 締切までに終わらないとき（子を止めて回収してから＝5.4）。
+    /// 締切までに終わらないとき（子を止めて回収してから）。
     pub fn close(&mut self) -> Ended {
         if let Some(ended) = &self.ended {
             return ended.clone();
@@ -191,11 +191,11 @@ impl Run {
         self.ended.insert(ended).clone()
     }
 
-    /// 閉じる知らせを送らず、子が自分で終わるのを待つ（5.2）。2 度目からは同じ終わりを返す。
+    /// 閉じる知らせを送らず、子が自分で終わるのを待つ。2 度目からは同じ終わりを返す。
     ///
     /// # Panics
     ///
-    /// 締切までに終わらないとき（子を止めて回収してから＝5.4）。
+    /// 締切までに終わらないとき（子を止めて回収してから）。
     pub fn wait_exit(&mut self) -> Ended {
         if let Some(ended) = &self.ended {
             return ended.clone();
@@ -208,7 +208,7 @@ impl Run {
 }
 
 impl Drop for Run {
-    /// ⑴ 子が生きていれば閉じる知らせで閉じる（締切で止めたら、panic の途中でなければ panic＝audit-test-kits 指摘 9）。
+    /// ⑴ 子が生きていれば閉じる知らせで閉じる（締切で止めたら、panic の途中でなければ panic）。
     /// ⑵ この本体の後に（本体の panic の unwind の中でも）欄が破棄され、`RunDirs` が残すか消すかを
     /// 決める（子がファイルを掴んだまま複写・削除しない）。
     fn drop(&mut self) {

@@ -1,34 +1,31 @@
-//! 会話の**表示終了時刻**（待機を含む占有区間の終端）を UI スレッドへ届ける観測
-//! （areka-P0-balloon-visibility design.md「BalloonLifecycleSink（`crates/areka-runtime/src/talk_lifecycle.rs`）」・決定 D4＝α・
-//! Requirements 4.1 / 4.5 / 4.8 / 7.2 / 7.8）。
+//! 会話の**表示終了時刻**（待機を含む占有区間の終端）を UI スレッドへ届ける観測。
 //!
 //! # 何を観測するか
 //!
-//! バルーンのタイムアウト計測は「スクリプトの表示が終わってから」を起点とする（areka-P0-balloon-visibility 要件 4.1）。
+//! バルーンのタイムアウト計測は「スクリプトの表示が終わってから」を起点とする。
 //! ここでいう表示終了は**待機（`\w` 等）を含む台本の占有区間の終端**であって、最後の文字が
 //! 現れた時刻ではない。dola の占有 horizon は `max(sum_on_ms_grid(cue.at, cue.duration))` で定義されるため、
 //! [`BalloonLifecycleSink`] は broadcast される全 cue を観測して同じ式で最大値を集約し、
 //! その**既知最大が更新されたときだけ** UI へ送る。
 //!
-//! # なぜ sink を 1 本足すのか（areka-P0-balloon-visibility 設計 D4＝α の裁定）
+//! # なぜ sink を 1 本足すのか
 //!
-//! `TalkDone` を配線する案（β）は `spawn_dispatcher` のすべての呼び出し箇所へ波及し、「会話進行の管理層の
-//! 既存の通知先は変えない」という制約に反する。α は `GhostBootOptions.sinks` へ 1 本足すだけで
+//! `TalkDone` を配線する案は `spawn_dispatcher` のすべての呼び出し箇所へ波及し、「会話進行の管理層の
+//! 既存の通知先は変えない」という制約に反する。sink 案は `GhostBootOptions.sinks` へ 1 本足すだけで
 //! 上流（ghost / kanade / dola）の署名を一切変えない。
 //!
-//! α の既知の弱点は別の合図が吸収する——sink は `Barrier` を受け取らないため
+//! sink 案の弱点は別の合図が吸収する——sink は `Barrier` を受け取らないため
 //! 選択肢バリア中の horizon は過小になりうる。そこで選択肢の合図（`CueCommand::Choice`）を
 //! 初めて見たときに [`TalkLifecycleSignal::ChoiceShown`] を 1 回送り、判断の側がそのトークを
-//! 選択肢つきと覚えられるようにする（areka-P0-balloon-text-bugs 要件 1.2〜1.4）。バリア中は
-//! トークの終わりが届かないので計測は立たない。中断（areka-P0-balloon-visibility 要件 4.6）では起点を占有終端と
-//! 止まった時刻の早い方にするため（`balloon_visibility.rs` の表）、受け口は落ちる瞬間の
-//! talk 相対秒を [`TalkLifecycleSignal::TalkEnded`] で送る（areka-P0-balloon-lifecycle-events
-//! 要件 5.2・判断の側の採り方は `balloon_visibility_wait.rs`）。
+//! 選択肢つきと覚えられるようにする。バリア中はトークの終わりが届かないので計測は立たない。
+//! 中断では起点を占有終端と止まった時刻の早い方にするため（`balloon_visibility.rs` の表）、
+//! 受け口は落ちる瞬間の talk 相対秒を [`TalkLifecycleSignal::TalkEnded`] で送る
+//! （判断の側の採り方は `balloon_visibility_wait.rs`）。
 //!
 //! # 会話境界の自己検出
 //!
 //! dispatcher は talk 起動ごとに登録 sink を 1 回だけ複製し、直後に
-//! [`BootCueSink::begin_talk`] でそのトークの番号を渡す（`crates/areka-ghost/src/dispatcher.rs`）。
+//! [`BootCueSink::begin_talk`] でそのトークの番号を渡す。
 //! 本 sink はこの複製を会話境界そのものとして使い、複製後の初回 `emit` で番号つきの
 //! [`TalkLifecycleSignal::TalkStarted`] を、落ちるときに [`TalkLifecycleSignal::TalkEnded`] を
 //! 送る——上流へ「talk が始まった・終わった」を問い合わせる口を新設しない。
@@ -36,9 +33,9 @@
 //! # 待ち時間の指定
 //!
 //! `\![set,balloontimeout,時間]` の cue だけを拾い、時間の欄を `parse_balloon_timeout` で読んで
-//! [`TalkLifecycleSignal::BalloonTimeout`] を送る（areka-P0-balloon-lifecycle-events 要件 9.1〜9.4・7.5）。他の `\![set,…]` は
+//! [`TalkLifecycleSignal::BalloonTimeout`] を送る。他の `\![set,…]` は
 //! 読み飛ばす。台本の順に配られた cue だけが届くので、指定に達する前に止まったトークでは
-//! 効かない（areka-P0-balloon-lifecycle-events 要件 9.8）。
+//! 効かない。
 
 use std::sync::mpsc::Sender;
 
@@ -51,7 +48,7 @@ use wintf::ecs::world::tick_wake;
 
 use super::talk_clock::TalkClock;
 
-/// UI スレッドの可視性コントローラへ流れる表示ライフサイクル信号（areka-P0-balloon-visibility design「Event Contract」）。
+/// UI スレッドの可視性コントローラへ流れる表示ライフサイクル信号。
 ///
 /// 送り手は 2 つある——talk スレッドの受け口 [`BalloonLifecycleSink`]（会話の開始・占有終端・
 /// 待ち時間の指定・会話の終わり）と、UI スレッドの押下ハンドラ（利用者の中断）。どちらも同じ
@@ -63,30 +60,24 @@ use super::talk_clock::TalkClock;
 ///
 /// 受信側は [`TalkStarted`](Self::TalkStarted) で計測をリセットし、以降の
 /// [`DisplayEndAt`](Self::DisplayEndAt) を max 集約する（重複・順不同の値に対して単調）。
-// 判断側は `balloon_visibility.rs` の観測スナップショットで本型を運び、計測の破棄と占有終端の
-// 更新に使う。`wire_runtime`（`crates/areka-runtime/src/lib.rs`）が channel を作り、送出端を
-// `runtime_sinks`（`crates/areka/src/session/runtime_boot.rs`）が `GhostBootOptions.sinks` に載せる
-// [`BalloonLifecycleSink`] へ、受信端を
-// `RuntimeWiring::lifecycle_rx` へ渡す。受信端は `balloon_visibility_phase.rs` の可視性の相が毎フレーム取り出す。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TalkLifecycleSignal {
     /// この talk の観測が始まった（複製後の初回 `emit` で 1 回だけ・全 `DisplayEndAt` に先行）。
     ///
-    /// 受信側はこれを進行中のタイムアウト計測の破棄契機として使う（areka-P0-balloon-visibility 要件 4.5）。
+    /// 受信側はこれを進行中のタイムアウト計測の破棄契機として使う。
     /// `talk_id` は配送から受け取った番号（受け取っていなければ `None`）。
     TalkStarted { talk_id: Option<TalkId> },
-    /// 待機を含む占有区間の終端（talk 相対秒）。既知最大が更新されたときだけ届く
-    /// （areka-P0-balloon-visibility 要件 4.1）。
+    /// 待機を含む占有区間の終端（talk 相対秒）。既知最大が更新されたときだけ届く。
     DisplayEndAt(f64),
     /// `\![set,balloontimeout,時間]` が配られた（このトークの待ち時間の指定）。
     BalloonTimeout(TalkTimeout),
     /// このトークで選択肢を出した（選択肢の合図を初めて見たときに 1 回だけ・アンカーは数えない・
-    /// 場所とスコープを問わない。areka-P0-balloon-text-bugs 要件 1.2〜1.4・1.8・1.13）。
+    /// 場所とスコープを問わない）。
     ChoiceShown,
     /// このトークの受け口が落ちた（最後まで・中断・置き換えのどれでも）。`at` は落ちた瞬間の
     /// talk 相対秒で、時刻源が起点を持たないときは `None`。合図を 1 つでも送った複製だけが送る。
     TalkEnded { at: Option<f64> },
-    /// 利用者がバルーンを左ダブルクリックして再生を中断した（areka-P0-balloon-break 要件 4.1）。
+    /// 利用者がバルーンを左ダブルクリックして再生を中断した。
     ///
     /// 送り手は UI スレッドの押下ハンドラで、この信号は `BalloonLifecycleSink` を経由しない。
     /// 受信側は現に出ているバルーンをすべて隠し、次の会話が始まるまで内容では出し直さない。
@@ -94,7 +85,6 @@ pub enum TalkLifecycleSignal {
 }
 
 /// そのトークの時間切れまでの待ち時間（`\![set,balloontimeout,時間]` の読み）。
-// runtime-crate-split 要件 2.5: 公開の `TalkLifecycleSignal` が名指すので開ける
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum TalkTimeout {
     /// 既定の待ち時間（30 秒か環境変数。決め方は判断の側が持つ）。
@@ -113,7 +103,7 @@ pub(crate) struct ParsedTimeout {
     pub(crate) unreadable: bool,
 }
 
-/// 時間の欄を読む（areka-P0-balloon-lifecycle-events 要件 9.1〜9.4）。省略・空は既定、正の整数はそのミリ秒、0 と負の整数は
+/// 時間の欄を読む。省略・空は既定、正の整数はそのミリ秒、0 と負の整数は
 /// 時間切れなし、整数として読めない値（文字・小数・桁あふれ）は既定で `unreadable`。
 /// 前後の空白は落として読む。
 pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
@@ -133,8 +123,7 @@ pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
     }
 }
 
-/// 会話の表示終了時刻を UI へ届ける broadcast sink（`runtime_sinks`（`crates/areka/src/session/runtime_boot.rs`）が
-/// `GhostBootOptions.sinks` に載せる受け口の 1 本・areka-P0-balloon-visibility 設計 D4＝α）。
+/// 会話の表示終了時刻を UI へ届ける broadcast sink（`runtime_sinks` が `GhostBootOptions.sinks` に載せる受け口の 1 本）。
 ///
 /// broadcast 下では担当外の cue も全て届くが、占有終端の集約は**コマンド名で選別しない**——占有区間の
 /// 終端は台本上の全 cue（`Text` / `Wait` / `ClearAll` / キャリア……）の `sum_on_ms_grid(at, duration)` の最大値
@@ -142,7 +131,7 @@ pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
 /// `\![set,balloontimeout,…]` の待ち時間の指定だけ）。cue を**観測するのみ**で
 /// `duration` にも会話進行にも触れないため、duration honor 契約へ影響しない。
 ///
-/// # 送出契約（areka-P0-balloon-visibility design「Event Contract」）
+/// # 送出契約
 ///
 /// - Ordering: 単一 `emit` 内で [`TalkLifecycleSignal::TalkStarted`] を先に送るため、FIFO の
 ///   `mpsc` 上でこの talk の全 `DisplayEndAt` に必ず先行する。
@@ -217,8 +206,8 @@ impl BalloonLifecycleSink {
                 "BalloonLifecycleSink: 表示ライフサイクル信号の送出に失敗（受信端切断）——talk は継続する"
             );
         }
-        // 表示ライフサイクルの信号が UI へ届いた＝次の画面更新に仕事がある（areka-P0-draw-load-parity 設計 C16 の
-        // `PRESENT`）。送出の後に立てる理由は `PresentBridge::send` と同じ。
+        // 表示ライフサイクルの信号が UI へ届いた＝次の画面更新に仕事がある。送出の後に立てる理由は
+        // `PresentBridge::send` と同じ。
         tick_wake::mark(tick_wake::PRESENT);
     }
 }
@@ -240,7 +229,7 @@ impl BootCueSink for BalloonLifecycleSink {
         Box::new(Self::new(self.tx.clone(), self.clock.clone()))
     }
 
-    // 出どころは使わない（`BootCueSink::begin_talk` の引数の形に合わせただけ）。
+    // 出どころは使わない。
     fn begin_talk(&mut self, talk_id: TalkId, _origin: ScriptOrigin) {
         self.talk_id = Some(talk_id);
     }
@@ -249,7 +238,7 @@ impl BootCueSink for BalloonLifecycleSink {
 /// 落ちる＝このトークが終わった（最後まで・中断・置き換えのどれでも）。合図を 1 つでも送った
 /// 複製だけが、落ちた瞬間の talk 相対秒つきで `TalkEnded` を 1 回送る（登録の原本と cue の
 /// 来なかった複製は何も送らない・`NoUserBreakCueSink` の `Drop` と同じ型）。時刻はフレームに
-/// 丸めない（areka-P0-balloon-lifecycle-events 要件 5.2）。時刻源に起点が無ければ時刻無しで送り、記録を残す（areka-P0-balloon-lifecycle-events 要件 5.6）。
+/// 丸めない。時刻源に起点が無ければ時刻無しで送り、記録を残す。
 impl Drop for BalloonLifecycleSink {
     fn drop(&mut self) {
         if !self.started {
@@ -268,9 +257,8 @@ impl Drop for BalloonLifecycleSink {
 
 impl dola::cue::CueSink for BalloonLifecycleSink {
     fn emit(&mut self, cue: TalkCue) {
-        // ⑴ 会話開始（Ordering 契約）: 複製後の初回 emit で 1 回だけ。送出の成否に依らず
-        //    `started` を立てる——「talk につき 1 回」は受信側の都合ではなく本 sink の契約であり、
-        //    切断時に毎 cue 再送するのは無意味なノイズになる（失敗自体は send 内で warn 済み）。
+        // 送出の成否に依らず `started` を立てる——「talk につき 1 回」は受信側の都合ではなく
+        // 本 sink の契約であり、切断時に毎 cue 再送するのは無意味なノイズになる。
         if !self.started {
             self.started = true;
             self.send(TalkLifecycleSignal::TalkStarted {
@@ -278,25 +266,20 @@ impl dola::cue::CueSink for BalloonLifecycleSink {
             });
         }
 
-        // 待ち時間の指定（`\![set,balloontimeout,…]` だけ・台本の順に届く）。
         self.pick_balloon_timeout(&cue);
 
-        // 選択肢を出した（初めての選択肢の合図で 1 回だけ・台本の順の位置）。送出の成否に依らず
-        // 印を立てる理由は ⑴ と同じ。
+        // 選択肢の印も同じ理由で送出の成否に依らず立てる。
         if !self.choice_sent && matches!(cue.command, CueCommand::Choice { .. }) {
             self.choice_sent = true;
             self.send(TalkLifecycleSignal::ChoiceShown);
         }
 
-        // ⑵ 占有終端 = dola の和の関数 `sum_on_ms_grid(at, duration)`（`to_talk_schedule` と同じ足し方）。
-        //    待機 cue も duration を運ぶ第一級 cue ゆえ、この式のまま horizon へ算入される（areka-P0-balloon-visibility 要件 4.1）。
+        // 待機 cue も duration を運ぶ第一級 cue ゆえ、この式のまま horizon へ算入される。
         let end = dola::cue::sum_on_ms_grid(cue.at, cue.duration);
 
-        // 非有限（NaN / ±inf）は horizon に採らない。NaN は `>` 比較で自然に落ちるが、`+inf` は
-        // 「既知最大を超える」判定を通ってしまい、受信側の `deadline = display_end + timeout` を
-        // 到達不能にして**タイムアウトが永久に成立しない**状態を作る。信号が届かない側の縮退
-        // （areka-P0-balloon-visibility 要件 4.8＝表示を保持）と同じ向きだが、無音で起こすと原因が追えないため
-        // 記録付きスキップにする（log-first）。
+        // 非有限（NaN / ±inf）は horizon に採らない。`+inf` は「既知最大を超える」判定を通ってしまい、
+        // 受信側の `deadline = display_end + timeout` を到達不能にして**タイムアウトが永久に成立しない**。
+        // 無音で起こすと原因が追えないため記録付きスキップにする。
         if !end.is_finite() {
             warn!(
                 at = cue.at,
@@ -306,7 +289,6 @@ impl dola::cue::CueSink for BalloonLifecycleSink {
             return;
         }
 
-        // ⑶ 既知最大を狭義に超えたときだけ送る（Idempotency 契約＝受信列は狭義単調増加）。
         if end > self.horizon {
             self.horizon = end;
             self.send(TalkLifecycleSignal::DisplayEndAt(end));

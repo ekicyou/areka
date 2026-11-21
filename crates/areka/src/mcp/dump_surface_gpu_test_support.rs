@@ -1,5 +1,5 @@
-//! 実際の描画を通るテストの土台（spec: areka-P0-mcp-dump-images・design「Integration Tests」・
-//! `dump_surface_gpu_tests.rs` と `dump_balloon_gpu_tests.rs` で共用・x64 だけ接続）。
+//! 実際の描画を通るテストの土台（`dump_surface_gpu_tests.rs` と
+//! `dump_balloon_gpu_tests.rs` で共用・x64 だけ接続）。
 //!
 //! 偽の SHIORI の土台（[`SwitchRig`]・emo2 の複製のゴースト A）に、GPU 資源（実 GPU）と、本物の
 //! 配置の準備（作業領域だけ合成）で組んだ窓の一式（偽 HWND・`DPI` は呼び手が選ぶ）を据え、本番の
@@ -113,8 +113,7 @@ impl GpuRig {
     /// （0 なら台詞の時計は止まったまま）、本番の巡と同じく `FrameTime` を置き、メッセージを配る。
     ///
     /// 打ち切りは足場の進みの目印（`SwitchRig::progress_probe`・SHIORI の呼び出しの数）で決め、打ち切ったら
-    /// 呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`（lap の `LapRig::frames_until` と同じ形・
-    /// areka-P0-ghost-session-test-load-flake 要件 2.1）。台詞の再生（dispatcher が Tick を消化する進み）は
+    /// 呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`（lap の `LapRig::frames_until` と同じ形）。台詞の再生（dispatcher が Tick を消化する進み）は
     /// テストの側から読めないので、SHIORI を呼ばずに台詞だけが進む間は目印が動かない（30 秒で［止まった］）。
     /// 合成の時刻は 1 巡に高々 `step_ms` しか進まない（時刻が観測を追い越さない）ので、台本の待ちを
     /// `step_ms` 1 で進めると待ちの ms と同じ数の巡が要り、巡が遅い机では届かない。`step_ms` 1（実時間
@@ -370,7 +369,7 @@ fn pump_messages() {
     }
 }
 
-/// 乗算済み BGRA → 乗算していない RGBA（要件 5.2 の式・検査の側で別に組む）。
+/// 乗算済み BGRA → 乗算していない RGBA（検査の側で別に組む）。
 pub(in crate::mcp) fn unpremultiply(premultiplied_bgra: &[u8]) -> Vec<u8> {
     premultiplied_bgra
         .as_chunks::<4>()

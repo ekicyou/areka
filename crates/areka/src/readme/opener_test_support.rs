@@ -1,4 +1,4 @@
-//! 開く処理のテストの部品（areka-P0-open-external-tags task 1.2・要件 10.1・10.6）。
+//! 開く処理のテストの部品。
 //!
 //! 偽の [`OsPort`]（呼ばれた [`OsCall`] を順に記録し、指定した符号を返す・環境変数は表で返す）と、
 //! 一時フォルダに最小のゴーストを組む部品を置く。実際のアプリは 1 つも起こさない。
@@ -55,7 +55,7 @@ impl OsPort for FakeOs {
 /// 断る口が受けた呼び出しの `lpFile`（プロセス共有・テストのビルドの開く専用のスレッドが積む）。
 static REFUSED: std::sync::Mutex<Vec<std::ffi::OsString>> = std::sync::Mutex::new(Vec::new());
 
-/// テストのビルドの開く専用のスレッドが持つ口: OS を呼ばずに記録して断る（要件 10.1）。
+/// テストのビルドの開く専用のスレッドが持つ口: OS を呼ばずに記録して断る。
 pub(crate) struct RefusingOs;
 
 /// 断る口が返す符号（ERROR_ACCESS_DENIED）。

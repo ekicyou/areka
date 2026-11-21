@@ -1,23 +1,11 @@
-// =============================================================================
-// MoveCueSink severity 宛名規律 ログ捕捉檻（D8④・R2.4/R8.5）
+// MoveCueSink の severity 宛名規律のログ捕捉テスト。
 //
-// `MoveCueSink::emit` の「非正準 Custom params（as_command_carrier()==None）」枝が、
-// 宛名（`Custom{command}` フィールド）で severity を分岐する D8④ 宛名規律
-// （自分宛 move＝WARN／他人宛・未知＝DEBUG）を、決定論的なログ捕捉で回帰檻に入れる
-// （目視でなく実行テストで網羅する必達方針）。入力依存の判断分岐ゆえ檻が要る。
+// 非正準 Custom params の枝は、宛名（`Custom{command}`）で severity を分岐する
+// （自分宛 move＝WARN／他人宛・未知＝DEBUG）。
 //
-// 定石: 硬化機構の唯一の定義元 `log-capture-kit` の捕捉窓へ委譲する（行の形も呼出側の判定内容も
-// 移行前と 1 バイト変わらない）。
-//
-// 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
-// のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
-// interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの判定が
-// 焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は「不要」ゆえ、
-// 先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。
-// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算 ⑶ 番兵イベントに
-// よる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の crate doc と
-// 同 crate の `src/probe.rs`）。
-// =============================================================================
+// 捕捉は `log-capture-kit` の捕捉窓へ委譲する。`with_default` はスレッドローカルだが、
+// callsite の interest キャッシュはプロセス全体で 1 つなので、捕捉窓なしで先に踏まれると
+// 取りこぼす（機序は `log_capture_kit` の crate doc）。
 
 use super::*;
 use crate::consumer_ledger::test_support::broken_custom_cue;
@@ -48,7 +36,7 @@ fn broken_move_addressed_custom_warns_once() {
     );
 }
 
-/// D8④ アーム②: 宛名が他人/未知で params 非正準（担当外）→ **WARN=0 かつ DEBUG 良性 skip**・送出なし。
+/// 宛名が他人/未知で params 非正準（担当外）→ WARN=0 かつ DEBUG 良性 skip・送出なし。
 #[test]
 fn broken_other_addressed_custom_debug_not_warn() {
     for command in ["noexist", "bind", "raise"] {
@@ -74,9 +62,8 @@ fn broken_other_addressed_custom_debug_not_warn() {
     }
 }
 
-/// D8④ の非空虚化（WARN が blanket でない証）: **同一の非正準 params 形**で宛名だけを
-/// `move`↔`noexist` に振り替えると、severity が WARN↔DEBUG に**分岐**する（level だけが変わる）。
-/// 「壊れ Custom は一律 warn」という退行を 1 テスト内の対比で捕捉する。
+/// WARN が blanket でないことの確認: 同一の非正準 params 形で宛名だけを
+/// `move`↔`noexist` に振り替えると、severity が WARN↔DEBUG に分岐する（level だけが変わる）。
 #[test]
 fn addressee_discriminates_warn_vs_debug_for_same_broken_shape() {
     // 自分宛（move）: WARN=1・DEBUG=0。
@@ -116,7 +103,7 @@ fn addressee_discriminates_warn_vs_debug_for_same_broken_shape() {
     );
 }
 
-/// 名前ゲート: 正準キャリアだが `name != "move"`（担当外）→ **DEBUG 良性 skip**・送出なし。
+/// 名前ゲート: 正準キャリアだが `name != "move"`（担当外）→ DEBUG 良性 skip・送出なし。
 /// （params は正準ゆえ `as_command_carrier()` は Some で開封成功——分岐は名前ゲート側。）
 #[test]
 fn canonical_non_move_carrier_debug_skips() {
@@ -149,8 +136,8 @@ fn canonical_non_move_carrier_debug_skips() {
     }
 }
 
-/// 読みの置き換えの記録は `move_arg_substituted` の WARN として 1 件ずつ出て、指令は送られる
-/// （要件 4.7・5.1・areka-P0-move-canon 1.1）。台本どおりの読みは WARN を出さない。
+/// 読みの置き換えの記録は `move_arg_substituted` の WARN として 1 件ずつ出て、指令は送られる。
+/// 台本どおりの読みは WARN を出さない。
 #[test]
 fn parse_notes_warn_once_each_and_directive_is_sent() {
     let (tx, rx) = channel::<PositionCue>();
@@ -180,7 +167,7 @@ fn parse_notes_warn_once_each_and_directive_is_sent() {
 }
 
 /// 宛名が `execute` の開けない荷物は `warn!` にしない（`warn!` は install の受け口が持つ・同じ荷物に
-/// 2 行出さない）。DEBUG で読み飛ばし、何も送らない（areka-P0-move-canon 3.2）。
+/// 2 行出さない）。DEBUG で読み飛ばし、何も送らない。
 #[test]
 fn broken_execute_addressed_custom_is_debug_not_warn() {
     let (tx, rx) = channel::<PositionCue>();

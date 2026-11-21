@@ -17,7 +17,7 @@ use super::types::{MIN_LOOP_DURATION, RuntimeError, StartResult, TriggerResult, 
 
 /// dola ランタイムエンジンの唯一の公開 API。
 ///
-/// 全外部操作のエントリーポイント。内部コンポーネントへの委譲とフロー制御を行う。
+/// 全外部操作のエントリーポイント。
 ///
 /// # Usage
 /// ```ignore
@@ -37,7 +37,6 @@ pub struct DolaRuntime {
     next_group_id: u64,
     /// group_id → CompiledTrigger リスト（start() 時に格納、conclude/cancel/競合の終わりで削除）
     trigger_store: HashMap<u64, Vec<CompiledTrigger>>,
-    /// 直前の tick() 結果を保持するフィールド
     last_update_result: UpdateResult,
 }
 
@@ -66,8 +65,7 @@ impl DolaRuntime {
     ///
     /// 検証の後に全ストーリーボードをコンパイルにかけ、全部通ったときだけ差し替える。
     /// 失敗時は既存定義を維持する（読み込みで通った文書は start で落ちない）。
-    /// 新定義への差し替え時、同名変数は SubscriptionManager の `last_values` で
-    /// 自動的に値が引き継がれる。
+    /// 同名変数は SubscriptionManager の `last_values` で値が引き継がれる。
     pub fn load_document(&mut self, doc: DolaDocument) -> Result<(), RuntimeError> {
         compile_all(&doc).map_err(RuntimeError::CompileError)?;
         // 周回の長さの規則も読み込みで確かめ、読み込めた文書が start で落ちないようにする
@@ -84,10 +82,7 @@ impl DolaRuntime {
     /// ストーリーボード開始。
     ///
     /// 同じ変数に生きた項目を持つ古いインスタンスは、`start_time` が未来でも呼んだ時点で
-    /// 競合として扱う（「生きた項目があれば競合」・2026-11-13 開発者の裁定）。
-    ///
-    /// 指示書からストーリーボード定義を取得し、コンパイル → インスタンス作成 →
-    /// タイムテーブル挿入 → Playing 遷移の一連のフローを実行する。
+    /// 競合として扱う。
     pub fn start(&mut self, name: &str, start_time: f64) -> Result<StartResult, RuntimeError> {
         self.start_internal(name, start_time, &BTreeSet::new())
     }
@@ -102,19 +97,15 @@ impl DolaRuntime {
         start_time: f64,
         skip_conflict_gids: &BTreeSet<u64>,
     ) -> Result<StartResult, RuntimeError> {
-        // 1. ドキュメント取得 → コンパイル → バリデーション
-        //    （セグメントは常に相対時間 0.0 起点で構築。
-        //    壁時計時刻への変換は loop_start_time で行う）
+        // セグメントは常に相対時間 0.0 起点で構築する。壁時計時刻への変換は loop_start_time で行う
         let (mut compiled, loop_duration) = self.compile_and_validate(name, 0.0)?;
 
-        // 2. end_time 算出（無限ループでも1周分の end_time を設定）
+        // 無限ループでも1周分の end_time を設定する
         let end_time = start_time + loop_duration;
 
-        // 3. group_id 採番
         let group_id = self.next_group_id;
         self.next_group_id += 1;
 
-        // 3.5 loop_offset 展開
         let (lo_min, lo_max, lo_easing) = match &compiled.loop_offset {
             Some(LoopOffset::Scalar(v)) => {
                 (Some(0.0), *v, EasingFunction::Named(EasingName::Linear))
@@ -123,7 +114,7 @@ impl DolaRuntime {
             None => (None, 0.0, EasingFunction::Named(EasingName::Linear)),
         };
 
-        // 4. インスタンス作成（Created 状態）。group_id は単調増加の採番で既存の鍵と衝突しない
+        // group_id は単調増加の採番で既存の鍵と衝突しない
         let trigger_states = (0..compiled.triggers.len())
             .map(|trigger_index| TriggerState {
                 trigger_index,
@@ -152,7 +143,6 @@ impl DolaRuntime {
             },
         );
 
-        // 5. [Tier 3 Hook] 競合解決（skip_conflict_gids 内のインスタンスは除外）
         let affected = conflict_resolver::resolve_conflicts_excluding(
             group_id,
             &compiled,
@@ -161,21 +151,18 @@ impl DolaRuntime {
             &mut self.instance_manager,
             &mut self.subscription_manager,
             skip_conflict_gids,
-        )?; // Never 競合時はここで Err(RuntimeError::Conflict) を返す
+        )?;
         for gid in &affected {
             self.trigger_store.remove(gid);
         }
 
-        // 6. タイムテーブル挿入
         self.timeline_manager.insert_entries(group_id, &compiled);
 
-        // 6.5 トリガー格納
         if !compiled.triggers.is_empty() {
             self.trigger_store
                 .insert(group_id, std::mem::take(&mut compiled.triggers));
         }
 
-        // 7. 状態遷移 Created → Playing
         self.instance_manager
             .transition(group_id, InstanceState::Playing)?;
 
@@ -186,8 +173,6 @@ impl DolaRuntime {
         })
     }
 
-    /// ドキュメント取得 → ストーリーボード存在確認 → コンパイル → ループ系バリデーション。
-    ///
     /// 成功時は（コンパイル結果, 1周分の実時間 loop_duration）を返す。
     fn compile_and_validate(
         &self,
@@ -199,12 +184,10 @@ impl DolaRuntime {
             .as_ref()
             .ok_or_else(|| RuntimeError::StoryboardNotFound(name.to_string()))?;
 
-        // ストーリーボード存在確認
         if !doc.storyboard.contains_key(name) {
             return Err(RuntimeError::StoryboardNotFound(name.to_string()));
         }
 
-        // 文書は load_document で検証済み
         let compiled =
             compile_validated(doc, name, base_time).map_err(RuntimeError::CompileError)?;
 
@@ -224,12 +207,8 @@ impl DolaRuntime {
     }
 
     /// 最終値ジャンプ終了（Conclude）。
-    ///
-    /// 操作順序: 値取得 → last_values 更新 → 状態遷移 → エントリ削除
     pub fn conclude(&mut self, group_id: u64) -> Result<(), RuntimeError> {
-        // group_id の存在確認
         self.instance_manager.get(group_id)?;
-
         self.conclude_internal(group_id);
         Ok(())
     }
@@ -238,18 +217,14 @@ impl DolaRuntime {
     ///
     /// エントリ削除のみ（last_values は前回 tick の値が自然に残る）。
     pub fn cancel(&mut self, group_id: u64) -> Result<(), RuntimeError> {
-        // group_id の存在確認 + terminal check
         let instance = self.instance_manager.get(group_id)?;
         if instance.state.is_terminal() {
             return Err(RuntimeError::InvalidGroupId(group_id));
         }
 
-        // 状態遷移 → Cancelled（is_terminal → 自動削除）
         self.instance_manager
             .transition(group_id, InstanceState::Cancelled)?;
-        // エントリ削除
         self.timeline_manager.remove_entries(group_id);
-        // トリガーストア削除
         self.trigger_store.remove(&group_id);
         Ok(())
     }
@@ -285,7 +260,7 @@ impl DolaRuntime {
     }
 
     // =========================================================================
-    // 2 フェーズ API（新規）
+    // 2 フェーズ API
     // =========================================================================
 
     /// Phase 1: 内部状態を current_time まで進行し、結果を内部フィールドに格納。
@@ -312,17 +287,15 @@ impl DolaRuntime {
 
     /// 差分更新の内部実装。
     ///
-    /// 内部フロー:
     /// 0〜2 を、current_time までの出来事の時刻（`next_event_time`）の順に 1 つずつ回す。
     /// 同じ時刻では 0 → 1 → 1.5 → 2 の順（トリガーどうしは親の group_id の順）
     /// 0. トリガーなしの無限のループを、その時刻より前に終わる周回まで進める
-    /// 1. finish deadline チェック → deadline 到達インスタンスは Conclude 相当
+    /// 1. finish deadline 到達インスタンスは Conclude 相当
     ///    1.5 トリガー収集・実行（Playing インスタンスのトリガーを先に処理）
     /// 2. 自然終了検知（その時刻 >= end_time の Playing インスタンス）
     ///
-    /// 最後に、出来事に入れない無限のループ（トリガーなし）を current_time まで進める
-    /// 3. 購読変数の evaluate ループ
-    /// 4. diff_and_update
+    /// 最後に、出来事に入れない無限のループ（トリガーなし）を current_time まで進めてから、
+    /// 購読変数の評価と差分検出を行う。
     fn update_internal(&mut self, current_time: f64) -> UpdateResult {
         // 時刻の順に回すのは、子を起こす順がぶつかる子の勝ち負けを決めるから。
         // 1 コマずつ回したときと同じ順になる
@@ -332,19 +305,16 @@ impl DolaRuntime {
             // Step 0: トリガーなしの無限のループを t より前に終わる周回まで進める（60fps の前のコマと同じ周回にする）。
             // ほかの Playing の end_time は出来事なので t 以上で、ここでは動かない。t ちょうどの周回は Step 2 で
             self.process_loop_ends(t.next_down(), &mut rng);
-            // Step 1: Finish Deadline チェック
             for gid in self.instance_manager.check_finish_deadlines(t) {
                 self.conclude_internal(gid);
             }
-            // Step 1.5: トリガー収集・実行（Conclude 前に発火させる）
+            // Conclude 前に発火させる
             trigger_results.extend(self.process_triggers(t));
-            // Step 2: ループ処理 + 自然終了検知
             self.process_loop_ends(t, &mut rng);
         }
         self.process_loop_ends(current_time, &mut rng);
 
-        // Step 3: 購読変数の評価（残存インスタンス対象）
-        // Step 4: 差分検出（評価と同じ周回で行う）
+        // 評価と差分検出は同じ周回で行う
         let timeline_manager = &mut self.timeline_manager;
         let instances = self.instance_manager.instances();
         let changes = self
@@ -391,7 +361,7 @@ impl DolaRuntime {
         next.filter(|t| !t.is_nan())
     }
 
-    /// Step 2: `time` までに周回の終わった Playing のインスタンスを進め、終わったものを Conclude する
+    /// `time` までに周回の終わった Playing のインスタンスを進め、終わったものを Conclude する
     fn process_loop_ends(&mut self, time: f64, rng: &mut impl rand::Rng) {
         let loop_results: Vec<(u64, LoopAction)> = self
             .instance_manager
@@ -411,7 +381,7 @@ impl DolaRuntime {
     ///
     /// 起こした子のトリガーも、子が自然の終わり（Step 2）で消える前に同じ tick で発火させる。
     /// 1 回の発火で印が立ち、印を戻すのは Step 2 の周回だけなので、2 回目からは新しく起きた子の
-    /// トリガーしか集まらない。トリガーの循環は検証が拒む（V15t）ので、繰り返しは
+    /// トリガーしか集まらない。トリガーの循環は検証が拒むので、繰り返しは
     /// ストーリーボードの数 + 1 回で止まる。
     fn process_triggers(&mut self, current_time: f64) -> Vec<TriggerResult> {
         let mut results = Vec::new();
@@ -428,7 +398,7 @@ impl DolaRuntime {
     /// 発火条件（current_time >= 発火時刻 かつ 未発火）を満たすものを
     /// fire-and-forget で子ストーリーボードとして開始する（1 回分）。
     fn fire_due_triggers(&mut self, current_time: f64) -> Vec<TriggerResult> {
-        // Step 1: 発火対象を収集（借用を分離するため先に Vec へ集約）
+        // 借用を分離するため、発火対象を先に Vec へ集約する
         struct PendingTrigger {
             parent_group_id: u64,
             trigger_index: usize,
@@ -448,11 +418,9 @@ impl DolaRuntime {
                     if ts.fired {
                         continue;
                     }
-                    // SAFETY(panic 経路): trigger_states は start_internal のステップ 4 で
-                    // 0..compiled.triggers.len() の添字から構築され、trigger_store には
-                    // 同一の compiled.triggers が同じ group_id で格納される
-                    // （start_internal ステップ 4 / 6.5）。trigger_store は自然終了・cancel・
-                    // 競合の終わり（ステップ 5 の直後）で消え、group_id は再利用されないため、
+                    // SAFETY(panic 経路): trigger_states は 0..compiled.triggers.len() の添字から構築され、
+                    // trigger_store には同一の compiled.triggers が同じ group_id で格納される。
+                    // trigger_store は自然終了・cancel・競合の終わりで消え、group_id は再利用されないため、
                     // ts.trigger_index < triggers.len() が常に成立し添字 panic は発火しない。
                     debug_assert!(
                         ts.trigger_index < triggers.len(),
@@ -477,18 +445,15 @@ impl DolaRuntime {
             }
         }
 
-        // Step 2: fired フラグを立てる
-        // （p.trigger_index は Step 1 で同一インスタンスの trigger_states を
-        //   enumerate した添字。Step 1〜2 間に trigger_states への変更はないため
-        //   範囲外 panic は発火しない）
+        // p.trigger_index は収集時に同一インスタンスの trigger_states を enumerate した添字で、
+        // 収集からここまで trigger_states は変わらないため範囲外 panic は発火しない
         for p in &pending {
             if let Ok(inst) = self.instance_manager.get_mut(p.parent_group_id) {
                 inst.trigger_states[p.trigger_index].fired = true;
             }
         }
 
-        // Step 3: 子ストーリーボードを start（fire-and-forget）
-        //         親インスタンスを競合検出から除外する
+        // 親インスタンスは競合検出から除外する
         let mut results: Vec<TriggerResult> = Vec::new();
         for p in pending {
             let skip = BTreeSet::from([p.parent_group_id]);
@@ -514,13 +479,9 @@ impl DolaRuntime {
     }
 
     /// Conclude 相当の内部処理。
-    ///
-    /// 操作順序: 値取得 → name→id変換 → last_values 更新 → 状態遷移(Concluded) → エントリ削除
     fn conclude_internal(&mut self, group_id: u64) {
-        // 1. 最終値取得（変数名ベース）
         let final_values = self.timeline_manager.collect_final_values(group_id);
 
-        // 2. name→id 変換 + last_values 強制更新
         if !final_values.is_empty() {
             let id_values = self
                 .subscription_manager
@@ -529,20 +490,15 @@ impl DolaRuntime {
                 .force_update_last_values(&id_values);
         }
 
-        // 3. 状態遷移 → Concluded（自動削除）
         let _ = self
             .instance_manager
             .transition(group_id, InstanceState::Concluded);
-
-        // 4. タイムテーブルエントリ削除
         self.timeline_manager.remove_entries(group_id);
-
-        // 5. トリガーストア削除
         self.trigger_store.remove(&group_id);
     }
 }
 
-/// トリガーの壁時計の発火時刻。周回の長さより後ろのトリガーは None（親の周回が先に終わる・要件 11.3）。
+/// トリガーの壁時計の発火時刻。周回の長さより後ろのトリガーは None（親の周回が先に終わる）。
 ///
 /// fire_time は 0.0 起点で compile した周回内の相対時刻で、壁時計の時刻は評価の式
 /// calculate_effective_time の逆: loop_start_time + pause_accumulated + fire_time / time_scale。

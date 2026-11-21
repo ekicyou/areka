@@ -98,8 +98,7 @@ use areka_placement::spawn::GhostWindows;
 use super::assets::{BalloonScopeAssets, BootAssets, ScopeAssets};
 // 可視性の相。相順の所有者は本モジュールなので、呼び出しはここから行う。
 use super::balloon_visibility::run_balloon_visibility_phase;
-// `scale_text::run_text_phase` が `super::hover_inject::drive` で辿る先（移設前は本ファイルから
-// `super::hover_inject` が runtime を指していた）。呼び出し本文を書き換えないための束縛。
+// `scale_text::run_text_phase` が `super::hover_inject::drive` で辿る先。呼び出し本文を書き換えないための束縛。
 use super::hover_inject;
 use super::move_cue::{PositionCue, apply_move_directive};
 use super::talk_clock::TalkClock;
@@ -177,8 +176,7 @@ pub fn frame_system(world: &mut World) {
     let Some(mut wiring) = world.remove_non_send::<RuntimeWiring>() else {
         return;
     };
-    // 各相より前に置く。拡大率の相が読む作業領域源を同じフレームの先頭で新しくしておくと、相は
-    // 新しい下端へ 1 回で書ける（相の後に同期すると旧下端へ書いてから源が変わり 2 段書込になる）。
+    // 各相より前に置く。相の後に同期すると旧下端へ書いてから源が変わり 2 段書込になる。
     // 戻り値は、変化を契機とする再スナップ（拡大率の相の後）が受ける。
     let work_area_change = work_area_sync::sync_monitor_snapshot(world);
     run_attach_phase(&mut wiring, world);
@@ -187,14 +185,12 @@ pub fn frame_system(world: &mut World) {
     wiring.presenter.refresh_after_device_change(world);
     // 装着の後に置く。装着前は再スケール対象の target が無く、装着と同じフレームで窓が生えた直後の
     // `Changed<DPI>`（生成時の `GetDpiForWindow` 実値補正）を同じフレームで拾えるようにするため。
-    // 取り出しの前なのは責任分界であって順序依存ではない。エッジ駆動の再表示を先に済ませ、残った
-    // 未消費要求（初回表示の k₀ 補正）を後段の状態照合が拾う（presenter の消費規約により二重にも
+    // 取り出しの前は責任分界であって順序依存ではない（未消費要求は後段の状態照合が拾い、二重にも
     // 取りこぼしにもならない）。
     run_dpi_phase(&mut wiring, world);
-    // 拡大率の相の直後に置く。拡大率が変わらず作業領域だけが変わった窓は `Changed<DPI>` が立たず
-    // 相を素通りするので、ここで現寸のまま新しい下端へ射影し直す。相の前に置くと旧寸のまま先に動かして
-    // から相が書き直す 2 段書込になり、後に置けば相が書き終えた窓は導出値が現在値と一致して
-    // べき等 skip で抜ける。作業領域が動かなかったフレームは `None` で、呼び出しごと起きない。
+    // 拡大率の相の直後に置く。作業領域だけが変わった窓は `Changed<DPI>` が立たず相を素通りするので、
+    // ここで現寸のまま新しい下端へ射影し直す。相の前に置くと 2 段書込になる。
+    // 作業領域が動かなかったフレームは `None` で、呼び出しごと起きない。
     if let Some(work_area_change) = &work_area_change {
         work_area_sync::resnap_for_work_area_change(world, work_area_change);
     }
@@ -205,19 +201,18 @@ pub fn frame_system(world: &mut World) {
     // 取り出しの直後に置く。置き換えを適用した同じフレームで後始末し、続く可視性・窓寸・再スナップ・
     // 文字の層の相がその結果を拾う。
     switch::run_switch_phase(&mut wiring, world);
-    // 本フレームの表示指令をすべて適用し終えた後に置く。判断の根拠は指令適用後の実状態でなければ
-    // ならず、取り出しの前だと 1 フレーム古い可視状態を見る。窓寸の突き合わせの前でもある必要がある。
-    // ここで発行した表示が積む窓寸要求を同じフレームのうちに消化するため。
+    // 本フレームの表示指令をすべて適用し終えた後に置く。取り出しの前だと 1 フレーム古い可視状態を見る。
+    // 窓寸の突き合わせの前でもあるのは、ここで発行した表示が積む窓寸要求を同じフレームのうちに
+    // 消化するため。
     run_balloon_visibility_phase(&mut wiring, world);
     // 全 apply が済んだ後に、表示成立点の状態照合が積んだ未消費の窓寸要求を窓 client へ反映する。
     // 装着の初回 `ShowSurface` が積む k₀ 補正もここで着地する。装着前は presenter に target が無く
     // 報告の取り出しが全 target で `None` を返すので、窓書込もログも出ない。
     reconcile_reported_sizes(&mut wiring.presenter, world);
     // 窓寸の突き合わせの直後に置く。鎖の適用系（確定段の末尾）より前である必要がある。後ろだと、
-    // ここで公開した望む鎖を適用系が読むのが 1 心拍ぶん遅れ、組み替えがそのイベントの巡で完了しない。
-    // その順序は段そのものの並びが担う。本 system は `Update` に載り、適用系が載る確定段
-    // （`FrameFinalize`）は 1 巡の並びでそれより後ろにある（段をまたぐ順序指定は書けないので
-    // `.before` は使わない）。窓の正本が無い間は相の側が早期に戻り、チャネルが保留バッファを兼ねる。
+    // 望む鎖を適用系が読むのが 1 心拍ぶん遅れ、組み替えがそのイベントの巡で完了しない。
+    // 順序は段の並びが担う（適用系が載る確定段 `FrameFinalize` は 1 巡の並びでこれより後ろ・
+    // 段をまたぐ `.before` は書けない）。窓の正本が無い間は相の側が早期に戻り、チャネルが保留バッファを兼ねる。
     run_zorder_drain_phase(&wiring.zorder_rx, &mut wiring.zorder_ledger, world);
     // 重なりの取り出しの直後に置く。印と帯の指令の列を同じ巡の確定段（帯の系）が読む。
     run_window_state_phase(&mut wiring.window_state, world);
@@ -225,11 +220,9 @@ pub fn frame_system(world: &mut World) {
     resnap_shell_targets(&wiring.presenter, world);
     // `\![move]` の末端。talk スレッドから届いた `PositionCue` を取り出し、`Move` は実窓へ即時反映し、
     // `ResetWindowPos` は並べ直しの手続きへ渡す。表示の指令とは独立で、GPU の装着は待たない。
-    // 再スナップの後に置く。同じフレームで表示の面の大きさが変わったとき、移動は再スナップが書いた
-    // 新しい大きさで位置を決める。前に置くと古い大きさで右下などをそろえ、続く再スナップが下端中央を
-    // 保って大きさだけ変えるので位置がずれる。連鎖の確定の前でもある（確定は一度きりで、定常の
-    // フレームでは何もしない）。面の指令と `\![move]` は別の線で届くので、別のフレームに割れて
-    // 届いた場合の隙間はここでは扱わない。
+    // 再スナップの後に置く。前に置くと古い大きさで右下などをそろえ、続く再スナップが大きさだけ変えて
+    // 位置がずれる。連鎖の確定の前でもある。面の指令と `\![move]` は別の線で届くので、別のフレームに
+    // 割れて届いた場合の隙間はここでは扱わない。
     run_move_drain_phase(&wiring, world);
     // 移動の相の直後に置く。表示の指令（ずれは `Show` と同じ線で届く）・再スナップ・`\![move]` が
     // 窓を置いた後に、その位置を元にずれを当てる。連鎖の確定・解き直しより前に置き、それらが

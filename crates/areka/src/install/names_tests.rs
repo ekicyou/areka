@@ -1,4 +1,4 @@
-//! 置換語 2 つの値の決定論テスト（design「areka / install / names」・要件 6.8・6.9・12.11）。
+//! 置換語 2 つの値の決定論テスト。
 //!
 //! 確かめること: 入れる前は置き換えない・入れた後は台詞の `%lastghostname`／`%lastobjectname` が
 //! 置き換わる・バルーンだけなら `%lastghostname` は前の値のまま・複数なら最後のゴースト・
@@ -51,7 +51,7 @@ fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a Captured
         .collect()
 }
 
-/// 入れる前: 値は World に無く、載せる語も無い＝台詞の 2 語はそのまま通る（要件 6.9）。
+/// 入れる前: 値は World に無く、載せる語も無い＝台詞の 2 語はそのまま通る。
 #[test]
 fn before_any_install_nothing_is_replaced() {
     let world = World::new();
@@ -62,7 +62,7 @@ fn before_any_install_nothing_is_replaced() {
     );
 }
 
-/// ゴーストを入れた後: 2 語が置き換わり、`info!(install_names_updated)` が 1 件（要件 6.8）。
+/// ゴーストを入れた後: 2 語が置き換わり、`info!(install_names_updated)` が 1 件。
 #[test]
 fn after_a_ghost_install_both_words_are_replaced() {
     let mut world = World::new();
@@ -92,7 +92,7 @@ fn after_a_ghost_install_both_words_are_replaced() {
     assert_eq!(updated[0].field_str("object"), Some("あたらしいゴースト"));
 }
 
-/// バルーンだけを入れた: `%lastobjectname` はバルーン、`%lastghostname` は前の値のまま（要件 6.8）。
+/// バルーンだけを入れた: `%lastobjectname` はバルーン、`%lastghostname` は前の値のまま。
 /// まだゴーストの値が無ければ `%lastghostname` は置き換えない。
 #[test]
 fn a_balloon_only_install_keeps_the_previous_ghost_name() {
@@ -108,7 +108,7 @@ fn a_balloon_only_install_keeps_the_previous_ghost_name() {
     assert_eq!(resolved(&names), (text("甲"), text("もこもこ")));
 }
 
-/// 続けて入れたら最後のもの。シェル・追加ファイルは宛先のゴーストの名前で置き換わる（要件 6.4・6.8）。
+/// 続けて入れたら最後のもの。シェル・追加ファイルは宛先のゴーストの名前で置き換わる。
 #[test]
 fn several_installs_leave_the_last() {
     let mut world = World::new();
@@ -127,7 +127,7 @@ fn several_installs_leave_the_last() {
 }
 
 /// 起こし直し: 入れる前に起こしたゴーストへは載せない。入れた後は、起こし直したゴーストの記憶の
-/// 書き手（そのゴーストの問い合わせ元）へ値を載せ直す（`boot_wired` の 1 行・設計で決めたこと 10）。
+/// 書き手（そのゴーストの問い合わせ元）へ値を載せ直す（`boot_wired` の 1 行）。
 #[test]
 fn reboot_reseeds_the_values_into_the_new_ghost() {
     let mut rig = SwitchRig::new(vec![

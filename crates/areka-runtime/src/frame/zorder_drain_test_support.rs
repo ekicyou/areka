@@ -1,5 +1,5 @@
 // =============================================================================
-// zorder drain 相の決定論テスト用の道具立て（実機・実ディスプレイ不要・要件 10.1）
+// zorder drain 相の決定論テスト用の道具立て（実機・実ディスプレイ不要）
 //
 // 兄弟テスト（指令の適用・台帳の射影ほか）が同じ World の組み方を使うので、道具は
 // ここへ 1 つだけ置く。二重に持つと、片方だけを直したときに檻の前提が静かにずれる。
@@ -18,8 +18,7 @@ use areka_placement::spawn::spawn_ghost_windows;
 
 /// 1 スコープぶんの合成配置（値は互いに重ならない程度に散らしただけで、意味を持たない）。
 ///
-/// この相は窓を 1 mm も動かさないので、位置も寸法も判定に一切関与しない
-/// （要件 11.1——本機能は窓の位置と寸法を変更しない）。
+/// この相は窓を動かさないので、位置も寸法も判定に一切関与しない。
 pub(super) fn placement(scope: usize) -> ScopePlacement {
     let base = 100 * (scope as i32 + 1);
     ScopePlacement {
@@ -42,7 +41,7 @@ pub(super) fn placement(scope: usize) -> ScopePlacement {
 /// 指定したスコープの窓だけを持つ World を組む（`GhostWindows` は Resource として載る）。
 ///
 /// 「まだ現れていないスコープ」はこの一覧から外すことで作る——台帳は書かれたスコープを
-/// そのまま持ち続けるので、窓の有無だけが射影の入力になる（要件 1.4）。
+/// そのまま持ち続けるので、窓の有無だけが射影の入力になる。
 pub(in crate::frame) fn world_with_scopes(scopes: &[usize]) -> World {
     let mut world = World::new();
     spawn_scopes(&mut world, scopes);
@@ -100,7 +99,7 @@ pub(super) fn directive_channel() -> (Sender<ZOrderDirective>, Receiver<ZOrderDi
 
 /// 受け口（`ZOrderChainPlan`）そのものが World に在るか。
 ///
-/// 「空の受け口が在る」と「受け口が無い」は要件 6.1／6.4 の判定で意味が違うので、
+/// 「空の受け口が在る」と「受け口が無い」は判定で意味が違うので、
 /// 中身とは別の読み口として潰さずに区別する。既定状態（グループ 0 本）では受け口を
 /// 作らないことが「1 命令も出さない」の構造的な根拠である。
 pub(super) fn receiver_exists(world: &World) -> bool {
@@ -155,11 +154,10 @@ pub(in crate::frame) fn lines_with<'a>(logs: &'a [String], needle: &str) -> Vec<
 
 /// 受理・拒否の記録の出力先（実機サインオフの grep 対象と同じ 1 本）。
 ///
-/// 要件 9.5 の保全対象である `[zorder-group] applied`／`rejected` は、退役する
-/// `zorder_group` 系から `zorder_chain_diag` へ移設された。**タグの字面は 1 字も
-/// 変わっておらず**、変わったのは `tracing` の出力先（module path 既定）だけである。
-/// サインオフの `RUST_LOG` は `wintf::ecs::window::zorder_chain=debug` を含み、
-/// 指定は前方一致なのでこの出力先を点灯させる（判定に影響しない）。
+/// `[zorder-group] applied`／`rejected` は `zorder_chain_diag` から出る。タグの字面は変わらず、
+/// `tracing` の出力先（module path 既定）だけが違う。サインオフの `RUST_LOG` は
+/// `wintf::ecs::window::zorder_chain=debug` を含み、指定は前方一致なのでこの出力先を点灯させる
+/// （判定に影響しない）。
 pub(in crate::frame) const GROUP_TARGET: &str = "target=wintf::ecs::window::zorder_chain_diag";
 
 /// 宣言した窓が不在だった記録（`[zorder-chain] absent`）の出力先。

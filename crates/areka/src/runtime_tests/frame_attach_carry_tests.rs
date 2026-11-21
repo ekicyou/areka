@@ -4,7 +4,7 @@
 //! だけ）へ届いた `Show` を見る。
 //!
 //! ⑴ 控えあり: 在る面はそのまま、無くなった面は既定の面（scope 1 は 10）で出す
-//! ⑵ 控えなし（ふつうの起動・切替）: 装着の相はシェルの面を 1 つも出さない（defect #5 のまま）
+//! ⑵ 控えなし（ふつうの起動・切替）: 装着の相はシェルの面を 1 つも出さない
 //! ⑶ 控えた着せ替えを着せ直し、名前の無いものは落とす
 
 use std::collections::BTreeMap;
@@ -156,7 +156,7 @@ fn attach_replays_the_carried_binds_and_drops_an_undefined_one() {
     assert_eq!(first, Some(("0".to_owned(), 0, expected)), "{shown:?}");
 }
 
-/// ⑵ 控えが無ければ装着の相はシェルの面を出さない（最初の `\s` まで非表示のまま・defect #5）。
+/// ⑵ 控えが無ければ装着の相はシェルの面を出さない（最初の `\s` まで非表示のまま）。
 #[test]
 fn attach_without_a_carry_shows_no_shell_surface() {
     let shown = shows_after_attach(|_| None);

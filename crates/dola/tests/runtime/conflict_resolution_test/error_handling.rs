@@ -1,7 +1,7 @@
-//! エラーパスと境界条件（research.md §R3: error_handling シーム）
+//! エラーパスと境界条件
 
 // =========================================================================
-// 6.3 エラーパスと境界条件のテスト
+// エラーパスと境界条件のテスト
 // =========================================================================
 mod never_strategy {
     use super::super::*;
@@ -13,11 +13,9 @@ mod never_strategy {
         let _x_id = rt.subscribe("x");
         rt.load_document(doc).unwrap();
 
-        // Start Never SB
         let r1 = rt.start("sb_never", 0.0).unwrap();
         assert!(r1.affected_group_ids.is_empty());
 
-        // Start conflicting SB → Err(Conflict)
         let result = rt.start("sb_new", 0.5);
         match result {
             Err(RuntimeError::Conflict {
@@ -40,7 +38,6 @@ mod never_strategy {
         let _z_id = rt.subscribe("z");
         rt.load_document(doc).unwrap();
 
-        // Start Never SB (only x)
         rt.start("sb_never", 0.0).unwrap();
 
         // Start sb_multi (x, y, z) → conflict on x → entire start fails
@@ -58,10 +55,8 @@ mod never_strategy {
         let x_id = rt.subscribe("x");
         rt.load_document(doc).unwrap();
 
-        // Start Never SB
         rt.start("sb_never", 0.0).unwrap();
 
-        // Attempt conflicting start → fails
         let result = rt.start("sb_new", 0.5);
         assert!(result.is_err());
 

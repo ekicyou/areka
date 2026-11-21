@@ -1,11 +1,9 @@
-//! OS のセッションの終了の受け手 [`on_os_session_end`] のテスト（areka-P0-ghost-shell-balloon-switch
-//! task 11.4・要件 12.9〜12.11・12.12 ⑹）。
+//! OS のセッションの終了の受け手 [`on_os_session_end`] のテスト。
 //!
 //! 受け手は窓の手続きの中で同期に後始末まで済ませるので、偽の SHIORI の土台（`SwitchRig`）で
 //! 起こした A に直接呼んで、呼出列（`OnClose` の Ref0＝`system`）・最初の出所・終了の指示・置き場・
 //! 起動中の印を見る。実行系の要らない場面（予約・先に届いた失敗）は置き場に実行系の無い単位を
-//! 入れた素の World で見る。`run()` の後の後始末（`after_run`）が済みの印を見て告知の場面を組まず、
-//! 終了コードを最初の出所から決めることもここで見る。
+//! 入れた素の World で見る。
 
 use std::sync::mpsc;
 use std::time::Duration;

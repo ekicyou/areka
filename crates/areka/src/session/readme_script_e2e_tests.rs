@@ -1,5 +1,5 @@
 //! 台本の `\![open,readme]` を入れてから偽の OS に開く要求が届くまでを本物の部品で通す
-//! テスト（popup-menu-residue 要件 3.1〜3.3・design「説明書の通しのテスト」）。
+//! テスト。
 //!
 //! 親（`runtime_boot_tests.rs`）と同じ組み方で emo2 検体を偽の SHIORI で起こし、`Leave` まで
 //! 待ってから文脈（ゴーストの枠と開く口）を据え、本番の取り出しを 1 回呼び、送信端を落として
@@ -69,7 +69,7 @@ fn run(remove_readme: bool) -> Run {
     }
 }
 
-/// 台本の説明書の要求が偽の OS へちょうど 1 件、根の `readme.txt` を開く形で届く（popup-menu-residue 要件 3.1・3.3）。
+/// 台本の説明書の要求が偽の OS へちょうど 1 件、根の `readme.txt` を開く形で届く。
 #[test]
 fn script_open_readme_reaches_the_fake_os_exactly_once() {
     let run = run(false);
@@ -78,7 +78,7 @@ fn script_open_readme_reaches_the_fake_os_exactly_once() {
     assert_eq!(run.calls[0].verb, Verb::Open);
 }
 
-/// ファイルが無ければ取り出しが `[readme]` の WARN を 1 行だけ残し、偽の OS へは何も届かない（popup-menu-residue 要件 3.2・3.3）。
+/// ファイルが無ければ取り出しが `[readme]` の WARN を 1 行だけ残し、偽の OS へは何も届かない。
 #[test]
 fn script_open_readme_without_the_file_warns_once_and_opens_nothing() {
     let run = run(true);

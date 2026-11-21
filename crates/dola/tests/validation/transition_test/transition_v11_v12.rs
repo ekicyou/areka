@@ -12,7 +12,7 @@ mod v11_tests {
             "x",
             TransitionDef {
                 to: Some(TransitionValue::Scalar(1.0)),
-                relative_to: Some(50.0), // both specified!
+                relative_to: Some(50.0),
                 duration: Some(1.0),
                 ..Default::default()
             },
@@ -47,7 +47,7 @@ mod v12_tests {
         doc
     }
 
-    /// 初期値の違反は変数だけ、遷移の違反は台本 "sb1" の entry 0 の場所つき（#70）
+    /// 初期値の違反は変数だけ、遷移の違反は台本 "sb1" の entry 0 の場所つき
     fn out_of_range(doc: &DolaDocument, var: &str, fld: &str) -> bool {
         doc.validate().unwrap_err().iter().any(|e| match e {
             DolaError::ValueOutOfRange {
@@ -82,7 +82,7 @@ mod v12_tests {
             doc_with_float_var("x", 0.5, Some(0.0), Some(100.0)),
             "x",
             TransitionDef {
-                to: Some(TransitionValue::Scalar(200.0)), // out of range!
+                to: Some(TransitionValue::Scalar(200.0)),
                 duration: Some(1.0),
                 ..Default::default()
             },
@@ -106,7 +106,7 @@ mod v12_tests {
             doc_with_float_var("x", 0.5, Some(0.0), Some(10.0)),
             "x",
             TransitionDef {
-                from: Some(TransitionValue::Scalar(-5.0)), // min 未満
+                from: Some(TransitionValue::Scalar(-5.0)),
                 to: Some(TransitionValue::Scalar(5.0)),
                 duration: Some(1.0),
                 ..Default::default()
@@ -119,11 +119,11 @@ mod v12_tests {
     fn values_exactly_at_min_max_are_valid() {
         // 値域検証は排他的比較（< min / > max）— 境界値ちょうどはエラーにならない
         let doc = with_transition(
-            doc_with_float_var("x", 1.0, Some(0.0), Some(1.0)), // initial == max
+            doc_with_float_var("x", 1.0, Some(0.0), Some(1.0)),
             "x",
             TransitionDef {
-                from: Some(TransitionValue::Scalar(0.0)), // == min
-                to: Some(TransitionValue::Scalar(1.0)),   // == max
+                from: Some(TransitionValue::Scalar(0.0)),
+                to: Some(TransitionValue::Scalar(1.0)),
                 duration: Some(1.0),
                 ..Default::default()
             },
@@ -144,7 +144,7 @@ mod v12_tests {
             doc_with_int_var("x", 0, 0, 10),
             "x",
             TransitionDef {
-                to: Some(TransitionValue::Scalar(11.0)), // max 超過
+                to: Some(TransitionValue::Scalar(11.0)),
                 duration: Some(1.0),
                 ..Default::default()
             },

@@ -1,8 +1,8 @@
-//! 利用条件の本文のテスト（design「Testing Strategy / 判断（find_terms）」・要件 4.1〜4.3・4.9〜4.11・12.15）。
+//! 利用条件の本文のテスト。
 //!
 //! 書庫は `sample_ghost_kit` の `nar_writer` で組み、ワークツリーの `target\` の下の
 //! 作業フォルダ（`WorkDir`）に置いて本物の `NarArchive::open` で開く。OS の一時フォルダは
-//! 使わない（`areka-P0-install-companion-reading` 要件 8.5）。
+//! 使わない。
 
 use sample_ghost_kit::{NarBuilder, WorkDir, install_txt};
 
@@ -201,8 +201,7 @@ fn top_level_terms_are_shown_and_nested_ones_are_listed() {
 
 #[test]
 fn terms_directly_under_a_nested_source_are_listed_but_not_its_parent() {
-    // `\` で書いた階層付きの取り出し元は `/` 区切りで読まれ、その直下だけを見る
-    // （`areka-P0-install-companion-reading` 要件 2.7・8.4）。
+    // `\` で書いた階層付きの取り出し元は `/` 区切りで読まれ、その直下だけを見る。
     let archive = open(
         NarBuilder::new()
             .file(

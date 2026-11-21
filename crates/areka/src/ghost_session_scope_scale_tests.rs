@@ -1,4 +1,4 @@
-//! 倍率と DPI の読み手の決定論テスト（偽の読み口と手で書いた表・要件 3・4・7.2）。
+//! 倍率と DPI の読み手の決定論テスト（偽の読み口と手で書いた表）。
 
 use super::*;
 use areka_sylphya::{
@@ -76,7 +76,7 @@ fn scaling_text_joins_the_same_percent_twice() {
     assert_eq!(scaling_text(ratio(1, 3)), "33.33,33.33");
 }
 
-/// 150% の画面の例で 4 つの形が `150,150` と `144` を返す（要件 3.1・3.2・3.5・3.8・3.11）。
+/// 150% の画面の例で 4 つの形が `150,150` と `144` を返す。
 #[test]
 fn four_shapes_answer_from_the_table() {
     let r = wired(table_150());
@@ -107,7 +107,7 @@ fn shell_and_balloon_read_their_own_row() {
     }
 }
 
-/// 窓の無い番号・負の番号・書式の誤りは値なし（要件 3.9）。
+/// 窓の無い番号・負の番号・書式の誤りは値なし。
 #[test]
 fn scope_without_window_or_malformed_selector_has_no_value() {
     let table = table_150();
@@ -169,7 +169,7 @@ fn row_without_dpi_has_no_dpi_value() {
     assert_eq!(resolve(&r, &name(SHAPES[3], "0")), None);
 }
 
-/// 表を書き換えた後の読みは新しい値（要件 4.1）。
+/// 表を書き換えた後の読みは新しい値。
 #[test]
 fn reading_after_rewriting_the_table_returns_the_new_value() {
     let table = table_150();
@@ -190,7 +190,7 @@ fn reading_after_rewriting_the_table_returns_the_new_value() {
     );
 }
 
-/// 毒された鍵でも中身で答える（要件 4.3）。
+/// 毒された鍵でも中身で答える。
 #[test]
 fn poisoned_lock_still_answers() {
     let table = table_150();

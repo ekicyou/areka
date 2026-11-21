@@ -145,16 +145,13 @@ fn run_s2_probe(from_dpi: u16, to_dpi: u16) -> S2Probe {
     let (mut world, gw) = dpi_world();
     let scopes: Vec<usize> = gw.scopes().collect();
 
-    // --- 1. 変化前: from_dpi の work area と、そこへ接地した char 窓 ---
     ground_all_at(&mut world, &gw, &scopes, from_dpi);
 
-    // --- 2. 「再導出結果なし」固定の報告源で初回 run を消費する ---
     let mut source = FakeReports::default();
     let mut state = None;
     dpi_phase_with(&mut source, &mut state, &mut world);
     let before = s2_rows(&world, &gw, &scopes);
 
-    // --- 3. 変化: OS 側の拡大率変更（work area 下端が動く）＋窓 DPI の更新 ---
     world.insert_resource(s2_snapshot(to_dpi));
     for &scope in &scopes {
         for e in [
@@ -167,7 +164,6 @@ fn run_s2_probe(from_dpi: u16, to_dpi: u16) -> S2Probe {
     reset_write_witness(&mut world, &gw);
     source.calls.clear();
 
-    // --- 4. DPI 相をもう 1 回 ---
     dpi_phase_with(&mut source, &mut state, &mut world);
     let after = s2_rows(&world, &gw, &scopes);
 
@@ -334,36 +330,17 @@ fn s2_control_some_report_path_reprojects_and_keeps_balloon_offset() {
     );
 }
 
-// ── 再導出結果が得られた経路の非退行を混在 DPI 全水準で固定する ──
+// ── 再導出結果が得られた経路（`Some`）の非退行を混在 DPI 全水準で固定する ──
 //
-// 上の `s2_control_*` は `Some` 経路の非退行を **96→120・scope 0** の 1 点でしか
-// 見ておらず、しかも随伴の主張が「**書込後**に world から読んだ `offset`」に対する
-// `balloon − char ≡ offset` である。この式は [`follow_balloon`] が
-// 「バルーン位置 ← キャラ位置 ＋ offset」と書いていることの**恒真の言い換え**であり、
-// `offset` が書込の途中で付け替えられても成立し続ける——「不動点」型、
-// および「恒等式を、それを作った当人に問う」型の空虚さである。
-//
-// 本檻は同じ恒等式を**空虚でない形**へ書き直す。すなわち `offset` を書込の**前**に
-// 読み、書込の**後**に
+// 上の `s2_control_*` の随伴恒等式（書込後に読んだ `offset` に対する `balloon − char ≡ offset`）は
+// [`follow_balloon`] の定義の恒真の言い換えで、`offset` が書込の途中で付け替えられても成立する。
+// 本檻は `offset` を書込の**前**に読み、書込の**後**に次を主張する。
 //   (a) `BalloonFollow.offset` が**前読み値を表示 DPI 比で引き直した値**であること
 //   (b) `balloon − char` が**その前読み値から導いた期待値**と一致すること
-// を主張する。比較相手を「前読み値から独立に導いた期待値」に置くことで、
-// [`follow_balloon`] へ恒等式を問い返す恒真形にならない。
-//
-// (a) が「表示 DPI 比で追随する」なのは、遷移後の相対位置が遷移前と同じ**作者空間の
-// 距離**を表さなければならないからである。追従オフセットを物理 px のまま据え置く実装は
-// ここで落ちる。
-//
-// 追従の基準は窓（char 左上）相対である。下端中央基準へ付け替える実装は (a)(b) の両方で
-// 落ちる（引き直しは char 左上相対の量に対して掛かるため）。
-//
-// **拡大率が変わらない寸法変化では 1 bit も動かない**。
-// その不変を固定するのは `follow_resize_tests.rs` と `frame_balloon_offset_follow_tests.rs` の
-// `a_surface_swap_at_a_constant_scale_does_not_move_the_offset` であり、本檻とは重ならない——追随の発火条件が
-// `Changed<DPI>` に限られているからである。
-//
-// 併せて 96/120/192 の 3 遷移 × 全 scope へ拡充する。判定は絶対 px ではなく
-// 「変化の前後で保存される差分ベクトル」＝不変条件である。
+// (a) は、遷移後の相対位置が遷移前と同じ作者空間の距離を表さなければならないため。
+// 追従の基準は char 左上相対で、下端中央基準へ付け替える実装は (a)(b) の両方で落ちる。
+// 拡大率が変わらない寸法変化で offset が動かないことは `frame_balloon_offset_follow_tests.rs` の
+// `a_surface_swap_at_a_constant_scale_does_not_move_the_offset` が固定する。
 //
 // 非空虚性の自己検査を 4 段で持つ:
 //   (1) work area 下端が実際に動く（[`s2_assert_work_area_bottom_moves`]）
@@ -421,7 +398,6 @@ fn s2_some_report_path_rescales_the_balloon_follow_offset_by_the_display_dpi_rat
             "探針の退化: 複数 scope でなければ「全 scope で保存」は主張になっていない"
         );
 
-        // --- 変化前: from_dpi の work area へ全 char 窓を接地させる ---
         ground_all_at(&mut world, &gw, &scopes, from_dpi);
 
         // `SystemState::new` の初回全窓マッチを「報告なし」で消費する（既に接地済み
@@ -430,7 +406,6 @@ fn s2_some_report_path_rescales_the_balloon_follow_offset_by_the_display_dpi_rat
         let mut state = None;
         dpi_phase_with(&mut source, &mut state, &mut world);
 
-        // --- 変化前の観測 ---
         let before: Vec<((i32, i32), (i32, i32), (i32, i32), SizeI)> = scopes
             .iter()
             .map(|&scope| {
@@ -454,7 +429,6 @@ fn s2_some_report_path_rescales_the_balloon_follow_offset_by_the_display_dpi_rat
             );
         }
 
-        // --- 変化: work area・DPI・報告寸をまとめて to_dpi 相当へ ---
         world.insert_resource(s2_snapshot(to_dpi));
         let ratio = ScaleRatio::new(to_dpi.into(), from_dpi.into()).expect("非ゼロ比");
         let mut source = FakeReports::default();
@@ -479,7 +453,6 @@ fn s2_some_report_path_rescales_the_balloon_follow_offset_by_the_display_dpi_rat
 
         let (_, events) = capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
 
-        // --- 判定 ---
         let to_bottom = s2_work_area_for_dpi(to_dpi).bottom;
         for (i, &scope) in scopes.iter().enumerate() {
             let char_e = gw.char_window(scope).expect("char 窓がある");
@@ -561,8 +534,7 @@ fn s2_some_report_path_rescales_the_balloon_follow_offset_by_the_display_dpi_rat
 /// 走り「再導出結果が得られないなら現状維持」が壊れる——本件はそれを赤で捕まえる。
 ///
 /// 「書込ゼロ」の主張が空虚にならないよう、**同一ハーネスが書込を検出できること**を先に
-/// positive witness で示す（記憶〈3.2 の空虚性・2 例目〉＝witness が壊れていても通って
-/// しまう檻にしない）。
+/// positive witness で示す（witness が壊れていても通ってしまう檻にしない）。
 #[test]
 fn s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds() {
     // --- positive witness: 同一ハーネスは書込を実際に検出できる ---
@@ -588,7 +560,6 @@ fn s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds() {
         );
     }
 
-    // --- 本題: work area が動かず既に接地している走行では書込ゼロ（現状維持）---
     let (mut world, gw) = dpi_world();
     world.insert_resource(s2_snapshot(96));
     let char0 = gw.char_window(0).expect("char 窓がある");
@@ -601,7 +572,7 @@ fn s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds() {
 
     let mut source = FakeReports::default(); // 「再導出結果なし」固定
     let mut state = None;
-    dpi_phase_with(&mut source, &mut state, &mut world); // 初回 run（全窓マッチ）を消費
+    dpi_phase_with(&mut source, &mut state, &mut world);
     reset_write_witness(&mut world, &gw);
     source.calls.clear();
 

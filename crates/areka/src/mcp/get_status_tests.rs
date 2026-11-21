@@ -1,4 +1,4 @@
-//! `get_status` の決定論テスト（design Testing Strategy M1〜M6）。
+//! `get_status` の決定論テスト。
 //!
 //! 置き場に偽の kanade の送り口（`mpsc` の送出端）を置き、受信端で問い合わせを受け取って
 //! 返信端へ値を送る（または落とす）。答えは後から答える置き場（`later`）を `drain` で覗いて取る。
@@ -89,7 +89,7 @@ fn answer_with(status: ExecutionStatus) -> (ToolOutcome, usize) {
     )
 }
 
-/// M1: 値なし（どの状態も立っていない）→ 空の本文・isError: false（要件 1.3）。
+/// M1: 値なし（どの状態も立っていない）→ 空の本文・isError: false。
 #[test]
 fn m1_no_state_is_an_empty_body() {
     let (outcome, warns) = answer_with(ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE));
@@ -98,7 +98,7 @@ fn m1_no_state_is_an_empty_body() {
     assert_eq!(warns, 0);
 }
 
-/// M2: 再生中＋バルーン 2 つ → `render()` の値と一字違わず同じ本文 1 つ（要件 1.1・1.6・5.3）。
+/// M2: 再生中＋バルーン 2 つ → `render()` の値と一字違わず同じ本文 1 つ。
 #[test]
 fn m2_states_are_the_rendered_value_verbatim() {
     let status = ExecutionStatus::derive(&ExecutionSnapshot {
@@ -125,7 +125,7 @@ fn m2_states_are_the_rendered_value_verbatim() {
 }
 
 /// M3: 答える前に降りた（`ghost_name` の有無 × 返信端を落とす／送れない）→ 宛先の解決の失敗と
-/// 同じ文言・isError: true・warn 以上は 0 件（要件 3.2・3.5）。
+/// 同じ文言・isError: true・warn 以上は 0 件。
 #[test]
 fn m3_gone_before_answering_reads_as_the_resolve_failure() {
     for (ghost_name, expected) in [(Some("Emily/Phase4.5"), CANNOT_FIND), (None, NOT_ACTIVE)] {
@@ -171,7 +171,7 @@ fn m3_gone_before_answering_reads_as_the_resolve_failure() {
 }
 
 /// M4: 呼んだ直後は答えが無く、預けた組が 1 つ・届いたのは問い合わせ 1 通だけ。返信端へ送る前に
-/// 回しても答えは出ず預けたまま。成功の枝で warn 以上は 0 件（要件 4.1・4.3・4.4）。
+/// 回しても答えは出ず預けたまま。成功の枝で warn 以上は 0 件。
 #[test]
 fn m4_does_not_wait_and_sends_exactly_one_query() {
     let (mut world, rx) = rig();
@@ -200,7 +200,7 @@ fn m4_does_not_wait_and_sends_exactly_one_query() {
 }
 
 /// M5: 置き場に問い合わせ先が無い（空の World）→ `NG:Status is not available`・isError: true・
-/// warn がちょうど 1 件・error は 0 件（要件 3.6）。
+/// warn がちょうど 1 件・error は 0 件。
 #[test]
 fn m5_answers_not_available_without_a_kanade_in_the_slot() {
     let args = Args {
@@ -236,8 +236,7 @@ fn body(outcome: &ToolOutcome) -> String {
 
 /// M6: 本物の単位で端から端まで。起動の挨拶つきのゴーストを起こし、受け口へ `get_status` を送る。
 /// 台詞の時計を進めない間は本文が `talking` で始まり、進めながら問い直すと期限の内に `talking` を
-/// 含まない答えが返る。どの答えも `isError: false` で `not implemented yet` を含まない
-/// （要件 1.1・2.1・3.4・4.2・4.3）。
+/// 含まない答えが返る。どの答えも `isError: false` で `not implemented yet` を含まない。
 #[test]
 fn m6_real_unit_answers_talking_then_not_after_the_talk_ends() {
     use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};

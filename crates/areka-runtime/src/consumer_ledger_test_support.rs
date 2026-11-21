@@ -1,4 +1,4 @@
-//! `consumer_ledger_agreement_tests.rs` の檻が `areka-runtime` と本体の両方で使う見本の表と台帳の鍵（写しを作らない・spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+//! `consumer_ledger_agreement_tests.rs` の檻が `areka-runtime` と本体の両方で使う見本の表と台帳の鍵。
 //!
 //! 受け口のテストが使う cue の作り手（汎用キャリアの `carrier_cue`・演者つきの `actor_carrier_cue`・
 //! 開けない荷物の `broken_custom_cue`）もここに置く。受け口ごとに写しを持たない。
@@ -31,7 +31,7 @@ pub fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)>
         // readme_cue_tests.rs の bare_open_readme_sends_exactly_one_request
         ("open", Some("readme"), vec!["readme"]),
         // readme_cue_tests.rs の open_forms_and_jump_send_classified_destination
-        // （areka-P0-open-external-tags の 5 組と `\j`）
+        // （`open` の 5 組と `\j`）
         ("open", Some("file"), vec!["file", "notepad.exe"]),
         (
             "open",
@@ -57,7 +57,7 @@ pub fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)>
             Some("install"),
             vec!["install", "path", ABSOLUTE],
         ),
-        // move_cue_move_sink_tests.rs の execute_resetwindowpos_sends_reset（areka-P0-move-canon）
+        // move_cue_move_sink_tests.rs の execute_resetwindowpos_sends_reset
         ("execute", Some("resetwindowpos"), vec!["resetwindowpos"]),
         // update_cue_tests.rs の four_entry_forms_become_the_expected_request
         ("updatebymyself", None, vec![]),
@@ -67,20 +67,20 @@ pub fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)>
         ("set", Some("choicetimeout"), vec!["choicetimeout", "5000"]),
         // areka-ghost の prop_sink.rs の boot_count_carrier_is_persisted
         (PROP_SET_CUE_NAME, None, vec!["areka.boot.count", "1"]),
-        // talk_lifecycle_signals_tests.rs の待ち時間の指定（areka-P0-balloon-lifecycle-events）
+        // talk_lifecycle_signals_tests.rs の待ち時間の指定
         (
             "set",
             Some("balloontimeout"),
             vec!["balloontimeout", "3000"],
         ),
-        // reload_cue_tests.rs の picked_spellings_send_one_request_each（areka-P0-mcp-reload）
+        // reload_cue_tests.rs の picked_spellings_send_one_request_each
         ("reload", Some("ghost"), vec!["ghost"]),
         ("reload", Some("shiori"), vec!["shiori"]),
         ("reload", Some("shell"), vec!["shell"]),
         ("reload", Some("balloon"), vec!["balloon"]),
         ("reload", Some("descript"), vec!["descript", "ghost shell"]),
         ("reloadsurface", None, vec![]),
-        // move_cue_move_sink_tests.rs の窓の組・吸着・バルーン位置初期化（areka-P0-window-link-directives）
+        // move_cue_move_sink_tests.rs の窓の組・吸着・バルーン位置初期化
         (
             "set",
             Some("alignmenttodesktop"),
@@ -98,17 +98,17 @@ pub fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)>
         ),
         ("reset", Some("sticky-window"), vec!["sticky-window"]),
         ("execute", Some("resetballoonpos"), vec!["resetballoonpos"]),
-        // move_cue_balloon_lock_tests.rs（descript-window-keys 要件 5.1・5.7）
+        // move_cue_balloon_lock_tests.rs
         ("lock", Some("balloonmove"), vec!["balloonmove"]),
         ("unlock", Some("balloonmove"), vec!["balloonmove"]),
-        // window_state_cue_tests.rs の常に手前の指令と `\v`（stay-on-top-directives 要件 1.8）
+        // window_state_cue_tests.rs の常に手前の指令と `\v`
         ("set", Some("windowstate"), vec!["windowstate", "stayontop"]),
         (RAISE_TAG_CARRIER, None, vec![]),
-        // areka-seriko の着せ替えの別名（script-small-tags 要件 3.1・3.7）
+        // areka-seriko の着せ替えの別名
         ("bind-noevent", None, vec!["腕", "伸び", "1"]),
-        // 文字の層の印の合図（script-small-tags 要件 4.1・4.2）
+        // 文字の層の印の合図
         (MARKER_COMMAND, None, vec![]),
-        // areka-ghost の prop_get_sink.rs のプロパティの読み（shell-scale-linkage 要件 1.8）
+        // areka-ghost の prop_get_sink.rs のプロパティの読み
         (
             "get",
             Some("property"),

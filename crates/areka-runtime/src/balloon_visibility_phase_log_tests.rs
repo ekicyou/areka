@@ -1,9 +1,8 @@
 // =============================================================================
-// トークの終わりから計る時間切れの記録の水準と欄（areka-P0-balloon-lifecycle-events task 4.3）
+// トークの終わりから計る時間切れの記録の水準と欄
 //
 // 判断中核が返した起点の採り方（3 つの値）と、番号の無い時間切れの知らせを、配線層が
-// どの水準・どの欄で 1 行に写すかを固定する（要件 5.6・7.3・design の Error Strategy の
-// `balloon_timeout_notice_failed`）。既定の起点（占有区間の終端）の行の水準と欄は
+// どの水準・どの欄で 1 行に写すかを固定する（`balloon_timeout_notice_failed`）。既定の起点（占有区間の終端）の行の水準と欄は
 // `balloon_visibility_phase_tests.rs` の
 // `decision_events_are_written_with_the_agreed_level_and_fields` が持つ。
 // =============================================================================
@@ -22,7 +21,7 @@ fn visibility_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 }
 
 /// 起点の採り方 3 つは同じ欄の語で分かれ、止まった時刻を採ったときだけ起点の時刻の欄が載る。
-/// 止まった時刻が届かなかったことは警告で残す（要件 5.6・7.3）。
+/// 止まった時刻が届かなかったことは警告で残す。
 #[test]
 fn measurement_origin_is_written_with_its_level_and_fields() {
     let logs = vec![
@@ -76,7 +75,7 @@ fn measurement_origin_is_written_with_its_level_and_fields() {
     assert_eq!(missing.field("stopped_at"), None);
 }
 
-/// 選択肢つきのトークの起点 2 つ（areka-P0-balloon-text-bugs 要件 1.2〜1.4・1.8）。止まった時刻を
+/// 選択肢つきのトークの起点 2 つ。止まった時刻を
 /// 採ったら `origin=choice_wait_ended_at` と起点の時刻、時刻が届かなかったら警告で
 /// `origin=choice_wait_end_time_missing`（起点はそのフレームの現在時刻＝満了予定から読める）。
 #[test]
@@ -121,8 +120,7 @@ fn choice_talk_origins_are_written_with_their_level_and_fields() {
     assert_eq!(missing.field("stopped_at"), None);
 }
 
-/// 時間切れで隠したのにトークの番号が無ければ、知らせを送れなかった理由を警告で 1 行残す
-/// （design の Error Strategy「知らせを送れない」）。
+/// 時間切れで隠したのにトークの番号が無ければ、知らせを送れなかった理由を警告で 1 行残す。
 #[test]
 fn timeout_notice_without_talk_id_is_written_as_a_warning() {
     let logs = vec![VisibilityLogEvent::TimeoutNoticeWithoutTalkId];

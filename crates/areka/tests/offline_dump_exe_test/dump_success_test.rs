@@ -1,5 +1,5 @@
 //! 誤りの無い検体の書き出し: 終了コード 0・CSV を作らない・在った CSV を残す・PNG の名前と
-//! 大きさ・同じ指定で 2 度回して同じバイト列（要件 2.1・3.1・4.3・4.9・6.1・6.3・7.6・8.1）。
+//! 大きさ・同じ指定で 2 度回して同じバイト列。
 
 use temp_path_kit::TempPath;
 
@@ -83,7 +83,7 @@ fn clean_dump_exits_zero_writes_pngs_and_leaves_csv_alone() {
     );
 }
 
-/// 同じ指定で 2 度回すと PNG のバイト列が同じ（4.9）。
+/// 同じ指定で 2 度回すと PNG のバイト列が同じ。
 #[test]
 fn the_same_dump_twice_writes_the_same_png_bytes() {
     let root = clean_ghost();

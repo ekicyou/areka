@@ -1,7 +1,4 @@
-// =============================================================================
-// `\![move]` の移動先の計算の決定論檻（design.md Testing Strategy「move_cue_geometry_tests.rs」・
-// 要件 1.3・1.5・2.1〜2.4・2.6・3.4・4.1〜4.3・6.1・6.2）
-// =============================================================================
+// `\![move]` の移動先の計算の決定論テスト。
 
 use super::*;
 use crate::move_cue::{
@@ -65,9 +62,7 @@ const WORDS: [(RefX, RefY); 4] = [
     (RefX::Base, RefY::Base),
 ];
 
-// -------------------------------------------------------------------------
-// 参照点 4×4 の全組（要件 2.1・2.2・2.3・4.3）
-// -------------------------------------------------------------------------
+// 参照点 4×4 の全組
 
 /// 窓の枠: 枠の上の点 4 語 × 動かす窓の中の点 4 語の全組。奇数の幅・高さ（半分は切り捨て）。
 ///
@@ -112,7 +107,7 @@ fn window_frame_all_ref_point_pairs() {
     }
 }
 
-/// 作業領域の枠: `base` は軸ごとに `center` へ（要件 4.1）。動かす窓の `base` は置き換えない（4.3）。
+/// 作業領域の枠: `base` は軸ごとに `center` へ。動かす窓の `base` は置き換えない。
 ///
 /// 作業領域 (0,0)-(2880,1704): 横 left 0・right 2880・center 1440・base→1440／
 /// 縦 top 0・bottom 1704・center 852・base→852。
@@ -166,7 +161,7 @@ fn area_frame_all_ref_point_pairs() {
     }
 }
 
-/// `base` が `CanonDefaultBasepos` の値（幅÷2・下端）になる（要件 2.3）。
+/// `base` が `CanonDefaultBasepos` の値（幅÷2・下端）になる。
 #[test]
 fn base_word_reads_canon_default_basepos() {
     let frame_rect = rect(726, 610, 1490, 1704);
@@ -187,9 +182,7 @@ fn base_word_reads_canon_default_basepos() {
     assert_eq!(got.position, pt(1108 - 336, 1704 - 800));
 }
 
-// -------------------------------------------------------------------------
-// k 倍・Fix（要件 2.4・1.5）
-// -------------------------------------------------------------------------
+// k 倍・Fix
 
 /// k=2 で台本の X・Y だけが 2 倍になる（枠と窓の点は物理 px のまま）。
 #[test]
@@ -215,7 +208,7 @@ fn k2_scales_script_offsets_only() {
     assert_eq!(got.position, pt(501 + 14 - 150, 901 - 6 - 250));
 }
 
-/// `Fix` の軸は今の左端（上端）のまま。他方の軸は計算される（要件 1.5）。
+/// `Fix` の軸は今の左端（上端）のまま。他方の軸は計算される。
 #[test]
 fn fix_axis_keeps_current_edge() {
     let frame = BaseFrame::Area(rect(0, 0, 2880, 1704));
@@ -242,11 +235,9 @@ fn fix_axis_keeps_current_edge() {
     );
 }
 
-// -------------------------------------------------------------------------
-// 置き換えの記録（要件 4.1・4.2・4.3）
-// -------------------------------------------------------------------------
+// 置き換えの記録
 
-/// 作業領域の `left.base` は縦だけ `center` へ置き換え、記録も縦の 1 件だけ（要件 4.1）。
+/// 作業領域の `left.base` は縦だけ `center` へ置き換え、記録も縦の 1 件だけ。
 #[test]
 fn area_base_substitution_is_per_axis() {
     let frame = BaseFrame::Area(rect(0, 0, 2880, 1704));
@@ -274,8 +265,8 @@ fn area_base_substitution_is_per_axis() {
     );
 }
 
-/// 原点の基準の参照点が `left.top` 以外なら原点そのもの・記録 1 件（要件 4.2・3.4）。
-/// `left.top` なら記録しない。動かす窓の参照点は効く（要件 4.3）。
+/// 原点の基準の参照点が `left.top` 以外なら原点そのもの・記録 1 件。
+/// `left.top` なら記録しない。動かす窓の参照点は効く。
 #[test]
 fn origin_ignores_non_left_top_offset() {
     let target = rect(1000, 500, 1672, 1300);
@@ -302,9 +293,7 @@ fn origin_ignores_non_left_top_offset() {
     }
 }
 
-// -------------------------------------------------------------------------
-// SSP 2.9.18 の実測表（research.md §8.3・k=1 で比べる）
-// -------------------------------------------------------------------------
+// SSP 2.9.18 の実測表（k=1 で比べる）
 
 /// 測る前の机: `\0` (726,610)-(1490,1704)・主モニタの作業領域 (0,0)-(2880,1704)。
 const SCOPE0: RectPx = RectPx {
@@ -341,7 +330,7 @@ fn ssp_frame(base: &MoveBase, before: RectPx) -> BaseFrame {
     }
 }
 
-/// (番号, 台本の引数, 前の `` の左上, 後の左上)。
+/// (番号, 台本の引数, 前の `\1` の左上, 後の左上)。
 type SspRow = (
     &'static str,
     &'static [&'static str],
@@ -488,9 +477,7 @@ fn ssp_measurement_table_positions_match() {
     }
 }
 
-// -------------------------------------------------------------------------
-// emo2（要件 6.1・6.2・2.6）
-// -------------------------------------------------------------------------
+// emo2
 
 /// emo2 の位置調整は k=1・2 で「エモの右下＝むらさきの左下」（k に依らない）。
 #[test]
@@ -517,9 +504,8 @@ fn emo2_adjust_aligns_bottom_right_to_bottom_left() {
     }
 }
 
-/// 旧い emo2（`-353,,,0,base,base`）の着地は本機能の前（基準位置どうしの式
-/// `x' = x0 + w0/2 + k·(−353) − w1/2`・Y は `fix` で今のまま）と同じ値（要件 2.6・2.4）。
-/// 本機能の前の計算（`resolve_move_target_position`）の檻から移した値で固定する。
+/// 旧い emo2（`-353,,,0,base,base`）の着地は、基準位置どうしの式
+/// `x' = x0 + w0/2 + k·(−353) − w1/2`・Y は `fix` で今のまま、と同じ値。
 #[test]
 fn legacy_emo2_lands_where_it_did_before() {
     let d = parse(&["-353", "", "", "0", "base", "base"]);
@@ -566,7 +552,7 @@ fn legacy_emo2_lands_where_it_did_before() {
 }
 
 /// 基準位置どうしで Y も書くと、両軸とも符号を保って k 倍される（Y が `fix` に固定されて
-/// いないことの檻・本機能の前の檻から移した値）。
+/// いないことの確認）。
 #[test]
 fn legacy_base_base_scales_both_axes_with_sign() {
     let d = parse(&["100", "50", "", "0", "base", "base"]);
@@ -583,7 +569,7 @@ fn legacy_base_base_scales_both_axes_with_sign() {
     );
 }
 
-/// 今の既定の基準位置は（幅÷2・下端）。奇数の幅は切り捨て（要件 2.3）。
+/// 既定の基準位置は（幅÷2・下端）。奇数の幅は切り捨て。
 #[test]
 fn canon_default_basepos_is_half_width_and_bottom() {
     assert_eq!(

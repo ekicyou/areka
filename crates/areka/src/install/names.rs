@@ -1,10 +1,10 @@
-//! 置換語 `%lastghostname`・`%lastobjectname` の値（design「areka / install / names」・設計で決めたこと 10）。
+//! 置換語 `%lastghostname`・`%lastobjectname` の値。
 //!
 //! 値はプロセスで 1 つ（[`LastInstallNames`]・入れるまでは World に無い）。書庫を 1 本入れ終えたら
 //! [`update`] が値を更新して今のゴーストの記憶の書き手へ載せ、ゴーストを起こすたびに [`reseed`] が
 //! 起こしたゴーストの記憶の書き手へ載せ直す（記憶の置き場は起こすたびに新しくなる）。台詞の開始で
 //! 凍結する表は語彙表を見ないので、載せた値はそのまま置き換えに使われる。値の無い語は載せない
-//! （まだ入れていなければ今日どおり置き換えない＝要件 6.9）。
+//! （まだ入れていなければ置き換えない）。
 
 use areka_ghost::GhostRuntime;
 use areka_ghost::sylphya_wiring::ghost_asker_id;
@@ -23,7 +23,7 @@ pub(crate) struct LastInstallNames {
     pub object: Option<String>,
 }
 
-/// 書庫を 1 本入れ終えた（要件 6.8・12.11）: `%lastobjectname` を `object` に、`%lastghostname` を
+/// 書庫を 1 本入れ終えた: `%lastobjectname` を `object` に、`%lastghostname` を
 /// `ghost`（`ghost` なら入れたゴースト・`shell`／`supplement` なら宛先のゴーストの名前）にして、今の
 /// ゴーストの記憶の書き手へ載せる。`ghost` が None（バルーンだけ）なら `%lastghostname` は前の値のまま。
 /// 反映は待たない（呼び手が書き手の柵を掛ける）。

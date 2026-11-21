@@ -1,5 +1,4 @@
-//! 乗算済み BGRA の絵を、乗算を戻した 8 ビット RGBA の透過 PNG にする唯一の場所（spec:
-//! areka-P0-mcp-dump-images・要件 5.2〜5.3／areka-P0-offline-surface-dump・要件 4.4・4.6）。
+//! 乗算済み BGRA の絵を、乗算を戻した 8 ビット RGBA の透過 PNG にする唯一の場所。
 //! MCP の書き出しとオフラインの書き出しが共有する。窓も GPU も要らない純粋な関数だけを置く。
 
 /// 乗算済み BGRA（1 行＝幅×4・長さ＝幅×高さ×4）を、乗算を戻した RGBA の PNG のバイト列にする。
@@ -9,7 +8,7 @@ pub(crate) fn encode_png(premultiplied_bgra: &[u8], width: u32, height: u32) -> 
 }
 
 /// 乗算済み BGRA → 乗算していない RGBA。アルファ 0 は `(0,0,0,0)`。
-/// それ以外は各色 `min(255, round(色×255÷アルファ))`（要件 5.2）。
+/// それ以外は各色 `min(255, round(色×255÷アルファ))`。
 fn unpremultiply(premultiplied_bgra: &[u8]) -> Vec<u8> {
     let mut rgba = Vec::with_capacity(premultiplied_bgra.len());
     for &[b, g, r, a] in premultiplied_bgra.as_chunks::<4>().0 {

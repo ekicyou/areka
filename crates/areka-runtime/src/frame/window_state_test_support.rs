@@ -1,4 +1,4 @@
-//! `window_state_tests.rs` の檻が `areka-runtime` と本体の両方で使う状態と窓と帯の指令の列の組み立て（写しを作らない・spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+//! `window_state_tests.rs` の檻が `areka-runtime` と本体の両方で使う状態と窓と帯の指令の列の組み立て（写しを作らない）。
 
 use bevy_ecs::world::World;
 use std::sync::mpsc::{Sender, channel};
@@ -58,7 +58,7 @@ pub fn marked(world: &World, entity: Entity) -> bool {
 }
 
 // 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の欄へそのまま渡す口（`test-support` のときだけ・
-// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+// 本番の可視性は変えない）。
 /// [`StayOnTopState`] の常に手前のオンとオフ（`on`）を読む。
 #[cfg(feature = "test-support")]
 pub fn on(state: &StayOnTopState) -> bool {

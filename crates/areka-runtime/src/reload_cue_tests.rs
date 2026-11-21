@@ -1,4 +1,4 @@
-//! `ReloadCueSink` の自己選別と送り出しの決定論テスト（areka-P0-mcp-reload 要件 1.4・1.5・10.3）。
+//! `ReloadCueSink` の自己選別と送り出しの決定論テスト。
 //!
 //! 確かめること: 拾う 7 綴り（`\![reload,ghost|shiori|shell|balloon|descript(,パラメータ)]`・
 //! `\![reloadsurface]`）が `parse_script` の写しのまま 1 件送られること・`\![reload,makoto]`／
@@ -44,7 +44,7 @@ fn plain(target: ReloadTarget) -> ScriptReload {
 
 // ---------------------------------------------------------------- 受理
 
-/// 拾う綴りはそれぞれ 1 件、`parse_script` の写しのまま送られる（areka-P0-mcp-reload 要件 1.4）。
+/// 拾う綴りはそれぞれ 1 件、`parse_script` の写しのまま送られる。
 #[test]
 fn picked_spellings_send_one_request_each() {
     let cases: [(&str, &[&str], ScriptReload); 6] = [
@@ -88,7 +88,7 @@ fn descript_with_param_carries_parts_and_notes() {
 
 // ---------------------------------------------------------------- 担当外
 
-/// makoto・aigraph・引数なしの reload・他の名前は 0 件で警告も出さない（areka-P0-mcp-reload 要件 1.5・10.3）。
+/// makoto・aigraph・引数なしの reload・他の名前は 0 件で警告も出さない。
 #[test]
 fn not_ours_is_benign_skip_without_warning() {
     let cases: [(&str, &[&str]); 5] = [

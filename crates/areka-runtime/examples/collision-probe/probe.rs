@@ -11,11 +11,11 @@ use super::{
 // ---------------------------------------------------------------------------
 
 /// GPU 資源到達フレームで surface1000 を表示し、期待 k ゲート・④ 描画一致 anchor・③ 物理寸整合 assert を
-/// 駆動する probe 起動 system（`&mut World` 排他・donor `boot_present_system` と同作法: remove→駆動→insert）。
+/// 駆動する probe 起動 system（`&mut World` 排他）。
 ///
 /// フェーズ機械（`ProbePhase`）で「表示＋本番 resize」と「（次フレーム以降の）`GetClientRect` 検証」を
-/// 分離する——`SetWindowPosCommand` は発行 tick の World 借用解放後に flush されるため（wintf `tick_bridge.rs` の `tick_one_frame`）、
-/// 同 tick 内の `GetClientRect` は旧寸を返す。ゆえに resize と検証は別フレームに分ける。
+/// 分離する——`SetWindowPosCommand` は発行 tick の World 借用解放後に flush されるため、
+/// 同 tick 内の `GetClientRect` は旧寸を返す。
 pub(super) fn boot_probe_system(world: &mut World) {
     let phase = match world.get_non_send::<ProbeBoot>() {
         Some(b) => b.phase,
@@ -28,11 +28,9 @@ pub(super) fn boot_probe_system(world: &mut World) {
     }
 }
 
-/// WaitingAttach: GPU 資源到達を待ち、attach→`apply(ShowSurface{1000, 実 bind})`→常設 k ログ→期待 k
-/// ゲート→④ read_back 描画一致 anchor→**物理寸**への本番 `resize_window_to`（戻り値 true を assert）を
-/// 駆動して WaitingVerify へ進める。
+/// WaitingAttach: GPU 資源到達を待ち、表示→k ログ→期待 k ゲート→④ anchor→**物理寸**への本番
+/// `resize_window_to`（戻り値 true を assert）を行って WaitingVerify へ進める。
 fn attach_show_and_resize(world: &mut World) {
-    // GPU 資源の準備待ち（未準備なら ProbeBoot を保持したまま次 tick へ）。
     let ready = world.get_resource::<GraphicsCore>().is_some()
         && world
             .get_resource::<WucGraphicsResource>()
@@ -48,7 +46,6 @@ fn attach_show_and_resize(world: &mut World) {
 
     let target = target_map::shell_target(0);
     let Some((emo_world, atlas)) = boot.assets.take() else {
-        // 装着アセットが無い（想定外）。前値保持で Done へ倒す。
         tracing::error!("collision-probe: 装着アセットが空（想定外）— 中止");
         boot.phase = ProbePhase::Done;
         world.insert_non_send(boot);
@@ -61,12 +58,9 @@ fn attach_show_and_resize(world: &mut World) {
         emo_world,
         atlas,
         // 作者基準 DPI は配置の準備が shell descript（`seriko.dpi`）から読んだ値（窓寸の k₀ と同じ出所）。
-        // **実適用 k は実行機の表示スケールが決める**（窓生成時に wintf が実モニタ DPI を `DPI`
-        // component へ初期化するため初回表示で確定する・DPI 追従駆動は不要）。
         boot.author_dpi,
     );
 
-    // donor 必須逸脱 #1/#2: surface1000 を有効 bind 実値付きで表示する。
     boot.presenter.apply(
         world,
         PresentCommand::ShowSurface {
@@ -78,7 +72,6 @@ fn attach_show_and_resize(world: &mut World) {
         },
     );
 
-    // 現表示の native 原寸を読む。表示成立後は Some のはず（None は表示失敗＝中止）。
     let Some(view) = boot.presenter.text_slot_view(target) else {
         tracing::error!(
             "collision-probe: 表示成立後に text_slot_view が None（surface1000 の表示に失敗）— 中止"
@@ -90,14 +83,13 @@ fn attach_show_and_resize(world: &mut World) {
     let native = view.surface_size();
     let scale_f32 = view.scale();
 
-    // **窓 resize 先の権威＝`target_physical_size`**（k 適用後の物理寸・丸め単一権威 `scaled_extent`
-    // 経由）。native 原寸（`surface_size`）へ resize すると k≠1.0 で窓が原寸へ引き戻される（本 probe が
-    // 捕捉すべき欠陥クラスそのもの）ため、寸の出所を照会 1 本へ寄せて取り違えの余地を消す。
+    // 窓 resize 先の権威は `target_physical_size`（k 適用後の物理寸）。native 原寸（`surface_size`）へ
+    // resize すると k≠1.0 で窓が原寸へ引き戻される。
     let physical = boot
         .presenter
         .target_physical_size(target)
         .expect("text_slot_view が Some ＝ applied/native_size 確定済みゆえ物理寸も確定している");
-    // 実適用 k の厳密値（f32 照会 `scale()` は寸法・画素演算に使わない出口ビュー）。
+    // 実適用 k の厳密値（f32 の `scale()` は寸法・画素演算に使わない出口ビュー）。
     let applied = boot
         .presenter
         .applied_ratio(target)
@@ -106,8 +98,7 @@ fn attach_show_and_resize(world: &mut World) {
     boot.native_size = native;
     boot.physical_size = physical;
 
-    // 常設 greppable ログ（areka-P0-collision-dpi-hittest 要件 4.1/4.5・design CollisionProbe 節）。実機サインオフはこの 1 行を grep して
-    // 「その水準で適用された k と実表示物理寸」を採取し、2 実行の physical が互いに異なることを照合する。
+    // 実機サインオフはこの 1 行を grep して、その水準で適用された k と実表示物理寸を採取する。
     let k_text = format_ratio(applied);
     tracing::info!(
         k = %k_text,
@@ -123,14 +114,11 @@ fn attach_show_and_resize(world: &mut World) {
         physical.1
     );
 
-    // 期待 k ゲート（env 指定時のみ hard assert・未指定なら上の実測ログのみで通過）。
     assert_expected_ratio(applied);
 
-    // ④ 描画一致の anchor（マウス非依存・read_back）: Head/Bust 中心の画素が不透明であることを
-    // hard assert する。**描画証跡であって判定証跡ではない**（areka-P0-collision-dpi-hittest 要件 4.4）。
+    // ④ は描画証跡であって判定証跡ではない。
     assert_drawn_anchor(&boot.presenter, target, applied, native);
 
-    // donor 必須逸脱 #3: 本番の反映関数で placeholder 誤寸 → **物理寸**へ resize（戻り値 true を assert）。
     let ok = areka_placement::follow::resize_window_to(
         world,
         boot.char_window,
@@ -156,11 +144,10 @@ fn attach_show_and_resize(world: &mut World) {
 
 /// WaitingVerify（本番 resize の次フレーム以降）: 実窓 `GetClientRect` が
 /// [`EmoPresenter::target_physical_size`]（k 適用後の物理寸権威）と一致することを hard assert する
-/// （③ 物理寸整合 assert）。**`WindowPos.size` ではなく実窓に対して行う**（`WindowPos` は enqueue 時
-/// bypass ミラー済みで偽緑になるため）。
+/// （③）。`WindowPos.size` ではなく実窓に対して行う（`WindowPos` は enqueue 時に bypass ミラー済みで偽緑になる）。
 ///
-/// 期待側は **native 原寸ではなく物理寸**である——k≠1.0 で `surface_size()` と比較すると、窓が原寸へ
-/// 引き戻される欠陥をむしろ「正常」と誤判定する（旧実装の陳腐化点）。
+/// 期待側は native 原寸ではなく物理寸である——k≠1.0 で `surface_size()` と比べると、窓が原寸へ
+/// 引き戻される欠陥を「正常」と誤判定する。
 fn verify_physical_size_match(world: &mut World) {
     let mut boot = world
         .remove_non_send::<ProbeBoot>()
@@ -168,7 +155,6 @@ fn verify_physical_size_match(world: &mut World) {
 
     let target = target_map::shell_target(0);
 
-    // 物理寸権威・native 原寸・実適用 k を再読（値の源＝emo 合成パイプライン）。
     let Some(physical) = boot.presenter.target_physical_size(target) else {
         tracing::error!(
             "collision-probe: WaitingVerify で target_physical_size が None（想定外）— 中止"
@@ -187,7 +173,6 @@ fn verify_physical_size_match(world: &mut World) {
         .applied_ratio(target)
         .unwrap_or(ScaleRatio::ONE);
 
-    // 実窓 client 矩形（GetClientRect・areka＋OS 窓パイプラインの出力）。WindowPos ミラーは読まない。
     let Some(handle) = world.get::<WindowHandle>(boot.char_window).copied() else {
         tracing::error!(
             "collision-probe: char 窓に WindowHandle 未付与（GetClientRect 不能）— 中止"
@@ -207,7 +192,7 @@ fn verify_physical_size_match(world: &mut World) {
     let client_w = (rect.right - rect.left) as u32;
     let client_h = (rect.bottom - rect.top) as u32;
 
-    // ③ 物理寸整合 assert: 経路独立な単位保存性検査（emo 合成パイプライン ↔ areka＋OS 窓パイプライン）。
+    // emo 合成パイプラインと OS 窓パイプラインを経路独立に突き合わせる単位保存性検査。
     assert_eq!(
         (client_w, client_h),
         physical,
@@ -237,20 +222,17 @@ fn verify_physical_size_match(world: &mut World) {
     );
 }
 
-/// ④ 描画一致の anchor: `read_back` した表示画素の Head/Bust 各矩形中心が **不透明**であることを
-/// hard assert。
+/// ④ 描画一致の anchor: `read_back` した表示画素の Head/Bust 各矩形中心が不透明であることを hard assert する。
 ///
-/// collision 値（サーフェス px）の位置に実際に絵が描かれていることを機械的に固定する（マウス非依存）。
-/// 合成ビットマップ原点 ≡ サーフェス画像原点は構造的に保証される（`compute_extent` は原点 (0,0) 固定）で
-/// あり、`read_back` が返すのは **native 原寸の合成バイト列**（拡大は GPU 変換の領分・
-/// `areka-P0-present-gpu-transform-scale` 要件 6.2）であるため、collision 座標を**そのまま**画素 index へ
-/// 写す（×k の写像は不要になった）。
+/// 当たり判定値（サーフェス px）の位置に実際に絵が描かれていることをマウス非依存で固定する。
+/// 合成ビットマップ原点とサーフェス画像原点は一致し（`compute_extent` は原点 (0,0) 固定）、`read_back` が
+/// 返すのは native 原寸の合成バイト列（拡大は GPU 変換の領分）なので、当たり判定値をそのまま画素 index へ写す。
 ///
-/// # 証跡としての位置づけ（areka-P0-collision-dpi-hittest 要件 4.4）
+/// # 証跡としての位置づけ
 ///
-/// 本検査は「その位置に絵が描かれている」ことしか語らない**描画証跡**であり、**当たり判定の証跡ではない**。
-/// 判定の証跡は ⑤ の目視由来経路（`GetCursorPos`→`ScreenToClient`→`resolve_hit_region`）だけであり、
-/// 記録様式でも両者を別欄に分けて混ぜない（描画由来の点を判定へ注入すると自己整合の罠になる）。
+/// 「その位置に絵が描かれている」ことしか語らない描画証跡であり、当たり判定の証跡ではない。判定の証跡は
+/// ⑤ の目視由来経路（`GetCursorPos`→`ScreenToClient`→`resolve_hit_region`）だけで、記録様式でも両者を
+/// 別欄に分けて混ぜない（描画由来の点を判定へ注入すると自己整合の罠になる）。
 fn assert_drawn_anchor(
     presenter: &EmoPresenter,
     target: TargetId,
@@ -261,7 +243,7 @@ fn assert_drawn_anchor(
         Ok(b) => b,
         Err(e) => panic!("collision-probe: read_back に失敗（④ 描画一致 anchor が取れない）: {e}"),
     };
-    // 読み戻しは native 原寸ゆえ、長さは k に依らず `w*h*4` である（伸びていたら拡大が漏れている）。
+    // 読み戻しは native 原寸なので長さは k に依らず `w*h*4`（伸びていたら拡大が漏れている）。
     let native_len = (native.0 as usize) * (native.1 as usize) * 4;
     assert_eq!(
         bytes.len(),
@@ -282,12 +264,11 @@ fn assert_drawn_anchor(
     );
 }
 
-/// 当たり判定矩形（サーフェス px）の中心を、そのまま anchor 画素として返す。
+/// 当たり判定矩形（サーフェス px）の中心を、そのまま anchor 画素として返す（当たり判定値と `read_back` は
+/// 同じ native 座標系）。
 ///
-/// collision 値と `read_back` は**同じ native 座標系**（`areka-P0-present-gpu-transform-scale` 要件 6.2）
-/// ゆえ写像は要らない。anchor が矩形の内側に [`ANCHOR_MARGIN_PX`] 以上の余裕を持つことは引き続き hard
-/// assert する——退化した（幅・高さが数 px の）矩形を fixture が持ち込んだとき、中心画素の不透明が
-/// 「たまたま縁に当たった」だけになるのを防ぐ構図の担保である。
+/// anchor が矩形の内側に [`ANCHOR_MARGIN_PX`] 以上の余裕を持つことは hard assert する——退化した
+/// （幅・高さが数 px の）矩形で、中心画素の不透明が縁にたまたま当たっただけになるのを防ぐ。
 fn native_anchor((left, top, right, bottom): (i64, i64, i64, i64), label: &str) -> (u32, u32) {
     let anchor = (((left + right) / 2) as u32, ((top + bottom) / 2) as u32);
     let (l, t, r, b) = (left as u32, top as u32, right as u32, bottom as u32);
@@ -304,13 +285,13 @@ fn native_anchor((left, top, right, bottom): (i64, i64, i64, i64), label: &str) 
 }
 
 /// `read_back`（`stride = width*4`・BGRA・上端起点の密配列）の画素 `(px, py)` が不透明（α=0xFF）であることを
-/// hard assert する。範囲外も loud に落とす（④ の観測失敗を silent にしない・バイト長は呼び手が確かめ済み）。
+/// hard assert する。範囲外も落とす（バイト長は呼び手が確かめ済み）。
 fn assert_pixel_opaque(bytes: &[u8], (w, h): (u32, u32), (px, py): (u32, u32), label: &str) {
     assert!(
         px < w && py < h,
         "collision-probe: {label} 中心 ({px},{py}) が合成外形 {w}×{h} の外（構図破綻＝collision 値と表示寸の乖離）"
     );
-    // BGRA 密配列: 画素 (px,py) の α は offset (py*w+px)*4 + 3。
+    // 画素 (px,py) の α は offset (py*w+px)*4 + 3。
     let idx = ((py * w + px) * 4 + 3) as usize;
     let alpha = bytes[idx];
     assert_eq!(

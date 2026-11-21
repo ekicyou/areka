@@ -116,7 +116,6 @@ fn insert_and_evaluate_float() {
     let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(0.0));
 
-    // t=0.5 → progress 0.5 → value 50.0
     let val = mgr.evaluate("x", 0.5, &instances);
     assert_eq!(val, Some(EvaluatedValue::Float(50.0)));
 }
@@ -137,7 +136,7 @@ fn expired_entry_auto_removal() {
     let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(0.0));
 
-    // t=2.0 → 全セグメント終了でもインスタンスが生きている間は最後の値・項目は残る
+    // 全セグメント終了でもインスタンスが生きている間は最後の値・項目は残る
     assert_eq!(
         mgr.evaluate("x", 2.0, &instances),
         Some(EvaluatedValue::Float(100.0))
@@ -162,9 +161,9 @@ fn latest_group_id_priority() {
     instances.insert(1, make_instance(0.0));
     instances.insert(2, make_instance(0.0));
 
-    // group_id=2 が最新 → 100.0 系列が採用
+    // group_id=2 が最新なので 0→100 の系列が採用される
     let val = mgr.evaluate("x", 1.0, &instances);
-    assert_eq!(val, Some(EvaluatedValue::Float(50.0))); // progress=0.5 of 0→100
+    assert_eq!(val, Some(EvaluatedValue::Float(50.0)));
 }
 
 #[test]
@@ -177,12 +176,12 @@ fn pause_freezes_value() {
     let mut inst = make_instance(0.0);
     inst.end_time = 2.0;
     inst.state = InstanceState::Paused;
-    inst.pause_start = Some(0.5); // t=0.5 で Pause
+    inst.pause_start = Some(0.5);
     instances.insert(1, inst);
 
-    // t=10.0 でも Pause 中は t=0.5 の値を返す
+    // Pause 中は current_time に依らず pause_start 時点の値（effective=0.5, progress=0.25）
     let val = mgr.evaluate("x", 10.0, &instances);
-    assert_eq!(val, Some(EvaluatedValue::Float(25.0))); // effective=0.5, progress=0.25
+    assert_eq!(val, Some(EvaluatedValue::Float(25.0)));
 }
 
 #[test]
@@ -214,10 +213,10 @@ fn effective_time_with_time_scale() {
 
     let mut instances = BTreeMap::new();
     let mut inst = make_instance(0.0);
-    inst.time_scale = 2.0; // 2倍速
+    inst.time_scale = 2.0;
     instances.insert(1, inst);
 
-    // t=0.5, time_scale=2.0 → effective_time=1.0, progress=0.5
+    // effective_time=1.0, progress=0.5
     let val = mgr.evaluate("x", 0.5, &instances);
     assert_eq!(val, Some(EvaluatedValue::Float(50.0)));
 }
@@ -228,12 +227,12 @@ fn effective_time_with_time_scale() {
 
 #[test]
 fn evaluate_removes_entry_when_instance_missing() {
-    // Concluded 等でインスタンスが削除済みのエントリは expired として破棄される
+    // インスタンスが削除済みのエントリは破棄される
     let mut mgr = TimelineManager::new();
     let compiled = make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0);
     mgr.insert_entries(1, &compiled);
 
-    let instances = BTreeMap::new(); // インスタンスなし
+    let instances = BTreeMap::new();
     let val = mgr.evaluate("x", 0.5, &instances);
     assert!(val.is_none());
     assert!(!mgr.has_entries(1), "entry should be removed");
@@ -241,7 +240,7 @@ fn evaluate_removes_entry_when_instance_missing() {
 
 #[test]
 fn evaluate_before_first_segment_returns_from_value() {
-    // delay 付きセグメント（1.0 開始）に未到達 → from_value を返す
+    // delay 付きセグメント（1.0 開始）に未到達なら from_value
     let mut mgr = TimelineManager::new();
     let compiled = make_compiled_with_segments("x", vec![float_segment(1.0, 2.0, 10.0, 20.0)]);
     mgr.insert_entries(1, &compiled);
@@ -255,7 +254,7 @@ fn evaluate_before_first_segment_returns_from_value() {
 
 #[test]
 fn evaluate_zero_duration_segment_returns_to_value() {
-    // 即時遷移（duration=0）セグメントは start_time 以降 to_value を返し、期限切れにならない
+    // duration=0 のセグメントは start_time 以降 to_value を返し、項目は残る
     let mut mgr = TimelineManager::new();
     let compiled = make_compiled_with_segments("x", vec![float_segment(1.0, 1.0, 0.0, 100.0)]);
     mgr.insert_entries(1, &compiled);
@@ -263,12 +262,10 @@ fn evaluate_zero_duration_segment_returns_to_value() {
     let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(0.0));
 
-    // 到達前: from_value
     assert_eq!(
         mgr.evaluate("x", 0.5, &instances),
         Some(EvaluatedValue::Float(0.0))
     );
-    // 到達後: to_value（end_time == start_time のため expired 判定されない）
     assert_eq!(
         mgr.evaluate("x", 1.0, &instances),
         Some(EvaluatedValue::Float(100.0))
@@ -296,17 +293,15 @@ fn evaluate_multi_segment_progression() {
     let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(0.0));
 
-    // セグメント1内 (t=0.5): progress=0.5 → 5.0
     assert_eq!(
         mgr.evaluate("x", 0.5, &instances),
         Some(EvaluatedValue::Float(5.0))
     );
-    // セグメント2内 (t=1.5): progress=0.5 → 30.0
     assert_eq!(
         mgr.evaluate("x", 1.5, &instances),
         Some(EvaluatedValue::Float(30.0))
     );
-    // 全セグメント終了 (t=2.5): 最後の値を保ち、項目は残る
+    // 全セグメント終了後は最後の値を保ち、項目は残る
     assert_eq!(
         mgr.evaluate("x", 2.5, &instances),
         Some(EvaluatedValue::Float(50.0))
@@ -424,7 +419,7 @@ fn looped_instance_in_leading_delay_counts_as_started() {
 }
 
 // =====================================================================
-// calculate_effective_time（純粋関数の直接検証）
+// calculate_effective_time
 // =====================================================================
 
 #[test]
@@ -433,7 +428,6 @@ fn effective_time_playing_basic() {
     inst.loop_start_time = 2.0;
     inst.pause_accumulated = 1.0;
     inst.time_scale = 2.0;
-    // (10.0 - 2.0 - 1.0) * 2.0 = 14.0
     assert_eq!(calculate_effective_time(10.0, &inst), 14.0);
 }
 
@@ -442,7 +436,7 @@ fn effective_time_paused_frozen_at_pause_start() {
     let mut inst = make_instance(0.0);
     inst.state = InstanceState::Paused;
     inst.pause_start = Some(3.0);
-    // current_time に依らず pause_start 基準: (3.0 - 0.0 - 0.0) * 1.0 = 3.0
+    // current_time に依らず pause_start 基準
     assert_eq!(calculate_effective_time(100.0, &inst), 3.0);
 }
 
@@ -464,7 +458,6 @@ fn collect_final_values_unknown_group_returns_empty() {
 #[test]
 fn evaluate_all_for_group_returns_all_variables() {
     let mut mgr = TimelineManager::new();
-    // 同一 group_id に 2 変数を登録
     mgr.insert_entries(
         1,
         &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0),
@@ -513,7 +506,7 @@ fn evaluate_all_for_group_ignores_other_groups() {
 
 #[test]
 fn collect_current_segment_final_values_returns_active_segment_final() {
-    // 2 セグメント中、アクティブな 1 番目のセグメントの to_value を返す
+    // アクティブなセグメントの to_value を返す
     let mut mgr = TimelineManager::new();
     let compiled = make_compiled_with_segments(
         "x",
@@ -527,18 +520,17 @@ fn collect_current_segment_final_values_returns_active_segment_final() {
     let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(0.0));
 
-    // t=0.5: セグメント1がアクティブ → to_value=10.0（50.0 ではない）
+    // セグメント1がアクティブ: 10.0（50.0 ではない）
     let vals = mgr.collect_current_segment_final_values(1, 0.5, &instances);
     assert_eq!(vals.get("x"), Some(&EvaluatedValue::Float(10.0)));
 
-    // t=1.5: セグメント2がアクティブ → to_value=50.0
     let vals = mgr.collect_current_segment_final_values(1, 1.5, &instances);
     assert_eq!(vals.get("x"), Some(&EvaluatedValue::Float(50.0)));
 }
 
 #[test]
 fn collect_current_segment_final_values_before_first_segment_is_empty() {
-    // 未開始セグメントのみ（delay 中）→ アクティブなし → 空
+    // 未開始セグメントのみ（delay 中）ならアクティブなしで空
     let mut mgr = TimelineManager::new();
     let compiled = make_compiled_with_segments("x", vec![float_segment(1.0, 2.0, 10.0, 20.0)]);
     mgr.insert_entries(1, &compiled);
@@ -565,7 +557,7 @@ fn collect_current_segment_final_values_missing_instance_returns_empty() {
 
 #[test]
 fn collect_current_segment_final_values_after_all_segments_uses_last() {
-    // 全セグメント終了後はラスト・セグメントがアクティブ扱い → 最終値
+    // 全セグメント終了後は最後のセグメントがアクティブ扱い
     let mut mgr = TimelineManager::new();
     let compiled = make_compiled_with_segments("x", vec![float_segment(0.0, 1.0, 0.0, 10.0)]);
     mgr.insert_entries(1, &compiled);
@@ -590,7 +582,7 @@ fn get_timeline_returns_some_for_known_variable() {
     assert!(mgr.get_timeline("nonexistent").is_none());
 }
 
-/// イージングの行き過ぎは変数の値域へ収める（#33・要件 11.11）
+/// イージングの行き過ぎは変数の値域へ収める
 #[test]
 fn easing_overshoot_is_clamped_to_variable_range() {
     let mut instances = BTreeMap::new();

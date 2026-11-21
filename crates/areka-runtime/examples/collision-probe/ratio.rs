@@ -11,8 +11,8 @@ pub(super) fn format_ratio(k: ScaleRatio) -> String {
     format!("{num}/{den}")
 }
 
-/// 期待 k ゲート（areka-P0-collision-dpi-hittest 要件 4.1）: env [`EXPECT_K_ENV`] が指定されているときだけ、実適用 k との厳密一致を
-/// hard assert する（design Error Handling「probe 期待 k 不一致 → hard assert で loud fail」）。
+/// 期待 k ゲート: env [`EXPECT_K_ENV`] が指定されているときだけ、実適用 k との厳密一致を
+/// hard assert する。
 ///
 /// 未指定なら**何も assert しない**（実測ログのみ）——開発機の k がいくつであっても probe をそのまま
 /// 実行できるようにするためであり、水準を偽って通す余地は生まない（指定した水準は必ず検査される）。

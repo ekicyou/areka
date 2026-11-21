@@ -6,8 +6,8 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// **broadcast**: 登録された全 sink が**同一の cue 列を同一順序で**受信する（中央振り分け廃止・
-/// 演者側 relevance が action 選別・D4/R2.1）。`\s[10]hello\_w[100]world\e` を 2 つの記録 sink で
+/// **broadcast**: 登録された全 sink が**同一の cue 列を同一順序で**受信する（演者側 relevance が
+/// action を選別する）。`\s[10]hello\_w[100]world\e` を 2 つの記録 sink で
 /// 駆動し、両者が ClearAll/Emote/hello/Wait/world を過不足なく受けることを固定する。
 #[test]
 fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
@@ -25,7 +25,7 @@ fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
         SystemVarSnapshot::default(),
         None,
     );
-    // 初回 Tick(0.0) でアンカー刻印（0.0）、占有 horizon（world 再生完了＝0.35+0.25=0.60）を跨ぐ 1.0。
+    // 初回 Tick でアンカー刻印、占有 horizon（world 再生完了＝0.35+0.25=0.60）を跨ぐ 1.0。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
     recv_done(&done_rx, Duration::from_secs(5)).expect("自然終端で TalkDone");
@@ -51,11 +51,11 @@ fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
     );
 }
 
-/// **観測可能な完了条件（task 7.1）**: 同一台本を 2 回**異なる時刻で再生開始**すると、同一 cue が
-/// **異なる絶対発火時刻**で配送される（絶対開始時刻が dispatch 刻印され honor される・R9.1/D6）。
+/// **観測可能な完了条件**: 同一台本を 2 回**異なる時刻で再生開始**すると、同一 cue が
+/// **異なる絶対発火時刻**で配送される（絶対開始時刻が dispatch 刻印される）。
 ///
 /// `\s[0]hi\_w[500]bye\e` の "bye" は相対 `at=0.6`（hi の D=0.1 ＋ `\_w[500]`=0.5）。初回 Tick を
-/// アンカー `A` として、"bye" の絶対発火時刻は `A + 0.6`。2 つの anchor（10.0 / 20.0）で
+/// アンカー `A` として、"bye" の絶対発火時刻は `A + 0.6`。2 つの anchorで
 /// 再生開始すると "bye" の発火時刻は 10.6 / 20.6 と**異なる**。
 ///
 /// 弁別（アンカー未刻印なら FAIL）: 初回 Tick(A) の時点では offset=0 ゆえ "bye"（at=0.6）は
@@ -85,7 +85,7 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
             }
         };
 
-        // 初回 Tick(A): offset 0 → ClearAll/Emote/hi が due。Wait(0.1) と bye(0.6) は保留。
+        // 初回 Tick(A): offset 0 → ClearAll/Emote/hi が due。Wait と bye は保留。
         handle.inbox.send(SakuraMsg::Tick(anchor)).unwrap();
         recv_until(&CueCommand::Text("hi".into()), "初回群の hi");
         // アンカー未刻印（0.0 のまま）なら offset=A>0.6 で残りが即着し、この受け取りが成功して落ちる。
@@ -95,7 +95,7 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
             "anchor {anchor}: 初回 Tick の直後は何も届かない（アンカー刻印の弁別）"
         );
 
-        // Tick(A+0.5): Wait(at=0.1) が due。bye(0.6) は保留。
+        // Tick(A+0.5): Wait(at=0.1) が due。bye は保留。
         handle.inbox.send(SakuraMsg::Tick(anchor + 0.5)).unwrap();
         recv_until(&CueCommand::Wait, "Wait(at=0.1)");
         assert_eq!(
@@ -151,7 +151,7 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
         None,
     );
 
-    // 開始時刻は整数 ms の格子（hello 250 ms・probe 300 ms・\_w[100]）を秒にしたもの（指摘 8）。
+    // 開始時刻は整数 ms の格子（hello 250 ms・probe 300 ms・\_w[100]）を秒にしたもの。
     let at_a = 350.0 / 1000.0; // probeA: 0.35
     let at_b = 750.0 / 1000.0; // probeB: 0.75
     let at_w = 1150.0 / 1000.0; // world:  1.15
@@ -170,11 +170,11 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
         }
     };
 
-    // 初回 Tick(0.0) でアンカー刻印（0）。ClearAll/Emote/hello が due（probe は未 due）。
+    // 初回 Tick でアンカー刻印（0）。ClearAll/Emote/hello が due（probe は未 due）。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     let hello = recv_text(&rx, "hello");
     assert_eq!(hello.at, 0.0, "hello の発火時刻は 0.0");
-    // 初回群 drain 後、probeA(0.35) は未着（保留の決定的証明）。
+    // 初回群 drain 後、probeA は未着（保留の決定的証明）。
     assert_eq!(
         rx.recv_timeout(NEG_WINDOW).unwrap_err(),
         RecvTimeoutError::Timeout,
@@ -233,7 +233,7 @@ fn same_at_cues_preserve_script_order_fifo() {
         SystemVarSnapshot::default(),
         None,
     );
-    // 初回 Tick(0.0) 刻印＋単一 Tick(0.5) で全 due（world 再生完了 horizon=0.50 到達）→自然終端。
+    // 初回 Tick 刻印＋単一 Tick で全 due（world 再生完了 horizon=0.50 到達）→自然終端。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
     let done = recv_done(&done_rx, Duration::from_secs(5)).expect("単一 Tick で自然終端");
@@ -267,11 +267,11 @@ fn same_at_cues_preserve_script_order_fifo() {
     assert_eq!(recs[4].at, d_hello);
 }
 
-/// fixture 駆動の統合テスト（主 observable・R9.3）。`\s[10]hello\_w[100]world\e` を注入 Tick 列で
+/// fixture 駆動の統合テスト（主 observable）。`\s[10]hello\_w[100]world\e` を注入 Tick 列で
 /// 駆動し、broadcast の単一記録 sink が ClearAll/Emote/hello/Wait/world を **at 昇順・FIFO** で
-/// 受け、最後に `TalkDone{Ended}`（talk_id エコー・R6.6）が返ることを確認する。
+/// 受け、最後に `TalkDone{Ended}`（talk_id エコー）が返ることを確認する。
 ///
-/// **task 9.5（再生時間搬送 e2e・R1.1/7.1）**: 併せて、各 delivered cue の **envelope
+/// 併せて（再生時間搬送 e2e）、各 delivered cue の **envelope
 /// `duration`** が、コンパイル時に焼き込んだ再生時間と**同一算術**（テキストは
 /// `text_playback_duration`・`\_w[100]` は絶対 100ms の `Duration` 算術）で一致することを固定する。
 /// これは実際の `compile → drive → CuePlayer broadcast → sink` 経路上で観測した delivered
@@ -296,7 +296,7 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
     // 開始時刻は compile と同じく整数 ms で積んでから秒にする。
     let at_world = crate::duration::ms_to_secs(crate::duration::text_playback_ms("hello") + 100);
 
-    // 初回 Tick(0.0) 刻印＋占有 horizon（world 再生完了＝at_world+0.25=0.60）を跨ぐ Tick(1.0)。
+    // 初回 Tick 刻印＋占有 horizon（world 再生完了＝at_world+0.25=0.60）を跨ぐ Tick。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
@@ -334,7 +334,7 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
         assert!(pair[0].at <= pair[1].at, "broadcast は at 昇順");
     }
 
-    // ── task 9.5: delivered envelope duration の無変形搬送檻（R1.1/7.1） ──
+    // ── delivered envelope duration の無変形搬送檻 ──
     // 期待値は production 経路と**同一算術**で導く（10 進リテラル直書きは IEEE-754 表現誤差ゆえ
     // 使わない）: テキストは compile が呼ぶのと同じ `text_playback_duration`、`\_w[100]` は compile が
     // 待ちの長さに使うのと同じ `ms_to_secs(100)`。この delivered duration が
@@ -369,7 +369,7 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
     );
 }
 
-/// 冪等/逆行 `Tick` で二重発火しない（設計クリティカルな二重発火ガードの固定・R11.x）。
+/// 冪等/逆行 `Tick` で二重発火しない（二重発火ガードの固定）。
 #[test]
 fn duplicate_and_backward_tick_do_not_double_fire() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
@@ -385,7 +385,7 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
         None,
     );
 
-    // 初回 Tick(0.0) 刻印。同値・逆行 Tick を織り交ぜて at=0.0 群を発火させる。
+    // 初回 Tick 刻印。同値・逆行 Tick を織り交ぜて at=0.0 群を発火させる。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap(); // 同値 → no-op
     handle.inbox.send(SakuraMsg::Tick(-1.0)).unwrap(); // 逆行 → no-op
@@ -411,7 +411,7 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
     );
 }
 
-/// 非有限 `Tick`（`NaN`/`inf`）は無視され再生が破綻しない（R11.1/11.2）。刻印前（`Armed`）でも
+/// 非有限 `Tick`（`NaN`/`inf`）は無視され再生が破綻しない。刻印前（`Armed`）でも
 /// 非有限 Tick でアンカーを刻印せず（NaN アンカー防止）、その後の正常 Tick で通常どおり終端する。
 /// 捨てた Tick は 1 件ごとに `error!` で値（`tick`）を名指して残る（ログの無い失敗の道を作らない）。
 /// 同期の driver で回し、記録の捕捉にスレッドの競りを持ち込まない。
@@ -457,7 +457,7 @@ fn non_finite_tick_is_ignored_and_playback_survives() {
 }
 
 /// 同一 fixture script＋同一注入 Tick 列を N 回実行し、毎回**同一の観測結果**（cue 列・at・
-/// actor・順序・終端理由）が得られることを確認する（R9.4・決定的再現）。
+/// actor・順序・終端理由）が得られることを確認する（決定的再現）。
 #[test]
 fn same_fixture_and_tick_sequence_produces_identical_observation_each_run() {
     type CueKey = (u64, String, CueCommand);
@@ -514,26 +514,25 @@ fn same_fixture_and_tick_sequence_produces_identical_observation_each_run() {
     }
 }
 
-// ── task 10.1: 配送列統合檻（R9.7/R1.8/R8.6・責務二分） ──
+// ── 配送列統合檻（責務二分） ──
 
-/// **配送列統合檻（R9.7/R1.8/R8.6）**: 実 `parse`→`compile` の menu 台本を `CuePlayer` ＋記録
+/// **配送列統合檻**: 実 `parse`→`compile` の menu 台本を `CuePlayer` ＋記録
 /// sink×**複数**で駆動し、broadcast 観測順が **compile 順**に一致すること（Choice が NewLine/
-/// Cursor と**交互のまま**配送列に現れること・R1.8）と、同一 Choice が同時に**バッグ**
+/// Cursor と**交互のまま**配送列に現れること）と、同一 Choice が同時に**バッグ**
 /// （`pending_choices`）へも積まれること（責務二分＝配送列は表示の単一真実源／バッグは解決照合の
-/// 単一真実源・R8.6/R9.7）を、実 `compile → CuePlayer broadcast → sink` 経路上で固定する。
+/// 単一真実源）を、実 `compile → CuePlayer broadcast → sink` 経路上で固定する。
 ///
-/// **task 2.2 との差**: 2.2 は dola `runtime_test.rs` で**手組みの CueSheet** を使う runtime 檻。
-/// 本檻は **areka-sakura の実 `parse`＋実 `compile`** から得た CueSheet を出発点とし、
-/// **複数**記録 sink へ broadcast させて配送列とバッグの並存を end-to-end で固定する統合檻である
-/// （案C の「Choice 除外」廃止・配送列合流を実 compile 出力に対して立証する）。
+/// 手組みの CueSheet を使う dola `runtime_test.rs` の runtime 檻と違い、本檻は **areka-sakura の
+/// 実 `parse`＋実 `compile`** から得た CueSheet を出発点とし、**複数**記録 sink へ broadcast させて
+/// 配送列とバッグの並存を end-to-end で固定する統合檻である。
 ///
-/// 弁別: もし Choice が配送列から隠される（旧・先積み一択）なら配送列の等価 assert が FAIL し、
+/// 弁別: もし Choice が配送列から隠されるなら配送列の等価 assert が FAIL し、
 /// もしバッグへ積まれなければ `pending_choices` の assert が FAIL する（配送列とバッグの乖離を捕捉）。
 #[test]
 fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
     use dola::cue::{CuePlayer, PendingChoice};
 
-    // menu.pasta:15 の raw さくらスクリプト断片（`\q \n \q \_l[5em,2lh] \q`・task 4.4 cage と同一）。
+    // menu.pasta:15 の raw さくらスクリプト断片（`\q \n \q \_l[5em,2lh] \q`）。
     // 実 parse → 実 compile を通す（手組み Instruction でなく、パーサ〜コンパイラの実経路を出発点にする）。
     let script = MENU3_SCRIPT;
     let instructions = areka_parsers::sakura::parse(script);
@@ -549,7 +548,7 @@ fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
     player.register_sink(Box::new(sink_a));
     player.register_sink(Box::new(sink_b));
 
-    // 全内容は瞬時（at=0）＋末尾に選択待ち barrier@0。単一 tick(0.0) で offset 0 群（内容 6 cue）を
+    // 全内容は瞬時（at=0）＋末尾に選択待ち barrier@0。単一 tick で offset 0 群（内容 6 cue）を
     // 配送し barrier@0 到達 → WaitingForChoice（barrier 手前の cue は配送済み）。
     player.tick(0.0);
     assert_eq!(
@@ -583,7 +582,7 @@ fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
             references: vec![],
         },
     ];
-    // 複数 sink が **同一の配送列を同一順序**で受ける（broadcast・Choice を隠さず交互のまま合流・R1.8）。
+    // 複数 sink が **同一の配送列を同一順序**で受ける（broadcast・Choice を隠さず交互のまま合流）。
     assert_eq!(
         commands(&records_a),
         expected_stream,
@@ -607,7 +606,7 @@ fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
         "Choice/NewLine/Choice/Cursor/Choice が交互のまま配送列に並ぶ（R1.8）"
     );
 
-    // 責務二分（R8.6/R9.7）: **同一 3 Choice** がバッグ（解決照合の単一真実源）へも**同時に**積まれる。
+    // 責務二分: **同一 3 Choice** がバッグ（解決照合の単一真実源）へも**同時に**積まれる。
     // バッグ内容は id で配送列の 3 Choice と一致する（配送列とバッグが乖離しない）。
     let expected_bag = vec![
         PendingChoice {
@@ -646,20 +645,20 @@ fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
     );
 }
 
-// ── task 10.3: 未知コマンド名の第一級縮退（統合檻・R8.2/R8.5/R9.3b） ──
+// ── 未知コマンド名の第一級縮退（統合檻） ──
 
-/// **未知コマンド名の第一級縮退（統合檻・R8.2/R8.5/R9.3b）**: `\!` 名前空間の**未知・M1 未対応
+/// **未知コマンド名の第一級縮退（統合檻）**: `\!` 名前空間の**未知・未対応
 /// コマンド名**（`\![raise,OnBoot]`／単独形 `\![vanish]`）を含む生 script を `spawn_talk` の actor
 /// 境界（内部で parse→compile→CuePlayer broadcast を通す）へ投入し、次の 3 点を end-to-end で固定する:
 ///
-///  - **R8.2（compile 卒業）**: 未知名 `\!` は compile の無音落ちでなく汎用コマンド cue（`Custom`
+///  - **compile**: 未知名 `\!` は compile の無音落ちでなく汎用コマンド cue（`Custom`
 ///    キャリア）として**台本に第一級で載る**。ゆえに broadcast された各記録 sink の配送列に
 ///    キャリア cue が現れる（2 名とも `raise`／`vanish` を受ける＝配送で消えない）。
-///  - **R8.5/R5（良性スキップ）**: どの消費者も未知名キャリアに action しない——消費者は
+///  - **良性スキップ**: どの消費者も未知名キャリアに action しない——消費者は
 ///    自らのコマンド名リテラルで**名前自己選別**するため、未知名はどの消費者の名前にも一致しない。
 ///    記録 sink は全 cue を**記録**する（無音破棄でも異常終了でもない・honor は不変）。**複数** sink が
 ///    同一列を受けて talk が完走することがその証跡。
-///  - **R9.3b/R2.6（第一級縮退＋語彙フリー）**: dola はコマンド名の語彙も名前写像 API も持たず、
+///  - **第一級縮退＋語彙フリー**: dola はコマンド名の語彙も名前写像 API も持たず、
 ///    キャリアの型レベル分類は `cue_target_of(Custom)=None` に一様に落ちる＝
 ///    「型レベルでは担当未定＝消費側が名前で自己選別する」。「1 名前=高々 1 消費者」の一意性は
 ///    結線層（areka）の消費者台帳が保証する（dola の名前権威表ではない）。本檻は統合経路上で
@@ -674,7 +673,7 @@ fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
     let talk_id = TalkId(103);
     // 未知名 2 種（引数付き `raise` と単独形 `vanish`）＋テキストを挟み `\e` で終端。
     // parse: `\![raise,OnBoot]`→GenericCommand{"raise",["OnBoot"]}／`\![vanish]`→GenericCommand{"vanish",[]}。
-    // compile: いずれも command_carrier(name, args)（Custom キャリア）へ卒業・無音落ちしない（R8.2）。
+    // compile: いずれも command_carrier(name, args)（Custom キャリア）へ写像され、無音落ちしない。
     let start = StartTalk::new(
         talk_id,
         r"\![raise,OnBoot]hello\![vanish]world\e".to_string(),
@@ -693,12 +692,12 @@ fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
         None,
     );
 
-    // 初回 Tick(0.0) でアンカー刻印。全内容は at=0 群（raise/hello）と at=0.25 群（vanish/world）。
-    // 占有 horizon（world 再生完了＝0.25+0.25=0.50）を跨ぐ Tick(1.0) で自然終端する。
+    // 初回 Tick でアンカー刻印。全内容は at=0 群（raise/hello）と at=0.25 群（vanish/world）。
+    // 占有 horizon（world 再生完了＝0.25+0.25=0.50）を跨ぐ Tick で自然終端する。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
-    // R8.2 の帰結: 未知名キャリアが無音落ちせず talk が完走し TalkDone{Ended} を返す。
+    // 未知名キャリアが無音落ちせず talk が完走し TalkDone{Ended} を返す。
     let done = recv_done(&done_rx, Duration::from_secs(5))
         .expect("未知名キャリアを含む talk も良性スキップして完了すべき（無音落ち／panic しない）");
     assert_eq!(done.talk_id, talk_id, "talk_id エコー（R1.3）");
@@ -713,7 +712,7 @@ fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
         .expect("未知名キャリアでも body は panic せず正常終了する（良性スキップ）");
 
     // 期待 broadcast 列（compile 順・冒頭 ClearAll 前置）: ClearAll / raise / hello / vanish / world。
-    // 未知名キャリアが**配送列に第一級で現れる**（compile が卒業させた証・R8.2）。
+    // 未知名キャリアが**配送列に第一級で現れる**（compile が無音落ちさせない証）。
     let expected = vec![
         CueCommand::ClearAll,
         CueCommand::command_carrier("raise", vec!["OnBoot".into()]),
@@ -726,16 +725,16 @@ fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
         expected,
         "sink A: 未知名キャリア（raise/vanish）が配送列に第一級で現れる（無音落ちしない・R8.2）"
     );
-    // broadcast の第一級性: 2 つ目の sink も同一列を受ける（未知名も両者へ届く＝配送で消えない・R5）。
+    // broadcast の第一級性: 2 つ目の sink も同一列を受ける（未知名も両者へ届く＝配送で消えない）。
     assert_eq!(
         commands(&records_b),
         expected,
         "sink B: broadcast ゆえ両 sink が同一配送列を受ける（未知名キャリアも欠落しない）"
     );
 
-    // R8.5/R9.3b（良性スキップ＋自己選別への委譲）: 配送列中の各未知名キャリアについて、
+    // 良性スキップ＋自己選別への委譲: 配送列中の各未知名キャリアについて、
     // 型レベル分類 `cue_target_of(Custom)=None`＝「型レベルでは担当未定＝消費側が名前で自己選別
-    // する」へ一様に落ちる（dola はコマンド名の語彙を持たない・R2.6）。未知名はどの消費者の
+    // する」へ一様に落ちる（dola はコマンド名の語彙を持たない）。未知名はどの消費者の
     // 名前リテラルにも一致しないため、どの消費者も action しない良性スキップとなる。
     // キャリア variant からのコマンド名抽出（`as_command_carrier`）を通し、抽出できた名前で確認する。
     let carrier_names: Vec<String> = commands(&records_a)

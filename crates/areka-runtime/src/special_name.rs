@@ -1,14 +1,12 @@
-//! 台本の特別な名前（`random`・`sequential`・`lastinstalled`）の解決（areka-P0-ghost-change-name-resolution）。
-//!
-//! ゴーストの切替の入口（本体の `session::ghost_switch`）から純移動した（areka-P0-mcp-reload・行数の確保）。
+//! 台本の特別な名前（`random`・`sequential`・`lastinstalled`）の解決。
 
 use areka_ghost::{GhostEntry, same_folder_name};
 use bevy_ecs::resource::Resource;
 
-/// 特別な名前の解決の結果（areka-P0-ghost-change-name-resolution）。
+/// 特別な名前の解決の結果。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NameResolution {
-    /// 特別な名前ではない（今日どおり名指しとして目録と突き合わせる）。
+    /// 特別な名前ではない（名指しとして目録と突き合わせる）。
     Plain,
     /// 解けた。`position` は `sequential` のときの今のゴーストの位置（記録用・他は `None`）。
     Resolved {
@@ -20,7 +18,6 @@ pub enum NameResolution {
 }
 
 /// 解けない理由（`ghost_switch_unknown` の `reason` 欄の語彙）。
-// runtime-crate-split 要件 2.5: 公開の `NameResolution` が名指すので開ける
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnresolvedReason {
     RandomEmpty,
@@ -55,7 +52,7 @@ impl UnresolvedReason {
     }
 }
 
-/// 純粋: 特別な名前を目録のフォルダ名へ解く（areka-P0-ghost-change-name-resolution 要件 2〜5・9・design「SpecialNameResolver」）。
+/// 純粋: 特別な名前を目録のフォルダ名へ解く。
 ///
 /// 特別な名前は `random`・`sequential`・`lastinstalled` の完全一致だけ（大文字小文字を区別）で、
 /// 目録に同じ名前のゴーストがいても特別な名前として解く。`entries` は `list_ghosts` の並び

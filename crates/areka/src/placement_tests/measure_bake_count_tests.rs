@@ -1,5 +1,4 @@
-//! 採寸と資産の組み立てで動く絵を焼く回数の檻（spec: placement-measure-bake-once 要件 1.1・1.2・
-//! 1.4・4.1・4.2・4.3・4.6、design「Integration Tests」1・2・D5・System Flows の数の表）。
+//! 採寸と資産の組み立てで動く絵を焼く回数の檻。
 //!
 //! 本物の読み手 `WicDecoderArm` を数える読み手 [`CountingDecoder`] で包み、本番と同じ順
 //! （採寸 `measure_with_reader` → 資産 `build_shell_assets`・`build_balloon_assets`）に
@@ -102,7 +101,7 @@ impl ElementDecoder for CountingDecoder {
     }
 }
 
-/// 採寸と資産に渡す scope（資産と同じ `[0, 1]` に揃える・design「バルーンの数え方」）。
+/// 採寸と資産に渡す scope（資産と同じ `[0, 1]` に揃える）。
 const SCOPES: [usize; 2] = [0, 1];
 
 /// 本番と同じ順（採寸 → 資産）で、別々の数える読み手を通す。戻りは（採寸, 資産）。
@@ -214,7 +213,7 @@ fn times(c: Calls, n: u32) -> Calls {
     }
 }
 
-/// 要件 1.1・1.2・4.1・4.2・4.6: 動く絵の検体で、採寸は動く絵 1 つの 1 回の焼きにつき 1 枚目読み
+/// 動く絵の検体で、採寸は動く絵 1 つの 1 回の焼きにつき 1 枚目読み
 /// 1 回・全コマ読み 0 回、資産はシェルの動く絵 1 つにつき全コマ読み 1 回。シェルの絵 1 枚ごとの
 /// 焼きは採寸 1・資産 1、バルーンの面の絵はファイルごとに「採寸＝面 0 に使う scope の数・
 /// 資産＝使う scope の数」。
@@ -277,7 +276,7 @@ fn animated_fixture_bakes_once_per_stage_and_reads_full_frames_once() {
     });
 }
 
-/// 要件 1.4・4.3: emo2（動かない絵だけ）で、動く絵の口は 0 回、絵 1 枚ごとの焼きは採寸 1・資産 1、
+/// emo2（動かない絵だけ）で、動く絵の口は 0 回、絵 1 枚ごとの焼きは採寸 1・資産 1、
 /// バルーンの面の絵はファイルごとに「採寸＝面 0 に使う scope の数・資産＝使う scope の数」。
 #[test]
 fn emo2_bakes_each_still_image_once_per_stage() {
@@ -344,7 +343,7 @@ fn emo2_bakes_each_still_image_once_per_stage() {
     });
 }
 
-/// 要件 2.1・2.2: 採寸の読み手を通した測りは、包まない読み手の測り（全コマを焼く
+/// 採寸の読み手を通した測りは、包まない読み手の測り（全コマを焼く
 /// `measure_baked`）と scope ごとの寸法が等しい（動く絵の検体と emo2）。
 #[test]
 fn first_frame_measure_matches_full_frame_measure() {
@@ -395,7 +394,7 @@ fn records_of(events: &[CapturedEvent], targets: &[&str]) -> Vec<(tracing::Level
         .collect()
 }
 
-/// 要件 3.6・4.5: 動く絵の検体で公開の口 `measure_scope_sizes` を通すと、シェルとバルーンの
+/// 動く絵の検体で公開の口 `measure_scope_sizes` を通すと、シェルとバルーンの
 /// 読み込みの記録は 0 行。採寸自身の記録は包まない読み手の測り（`measure_baked`）と同じで、
 /// この検体では 0 行（scope 0 と 1 の既定の面 0・10 がどちらもシェルに在り、合成も通る）。
 #[test]
@@ -445,7 +444,7 @@ fn error_counts(events: &[CapturedEvent]) -> (usize, usize) {
     (errors(&LOAD_TARGETS), errors(&[MEASURE_TARGET]))
 }
 
-/// 要件 2.5・3.6: 読めないときは記録を出さない道でも失敗の `error!` が出て `Err`。
+/// 読めないときは記録を出さない道でも失敗の `error!` が出て `Err`。
 /// - シェルのフォルダが無い: 権威の一覧の失敗 `error!` 1 行・採寸は出し直さない（0 行・
 ///   `build_shell_assets` の説明「真因のログは権威が出す」）。`Err` は scope 0。
 /// - バルーンの面 0 が無い: 権威の面 0 の `error!` 1 行・採寸の面 0 の失敗 `error!` 1 行

@@ -1,5 +1,4 @@
-//! 入口の受理の判定・待ちの開始・取り出しの系・終了の片付けの決定論テスト（spec:
-//! areka-P0-shell-balloon-switch 要件 1.1・1.5・1.12・1.13・1.14・1.16・2.1・5.7）。
+//! 入口の受理の判定・待ちの開始・取り出しの系・終了の片付けの決定論テスト。
 //!
 //! 置き場のゴーストは kanade の送出端だけを持つテスト用の組み立てに、テスト用の seriko の送り手を
 //! 持たせたもの。実行系が無いので今のシェルは無く、`OnShellChanging` の Ref1 は空文字列になる
@@ -281,8 +280,7 @@ fn refuse(rig: &mut Rig, request: SkinRequest, event: &str) -> (SkinVerdict, usi
 }
 
 /// 判定は 進行中 → ゴースト切替中 → 更新中 → 文脈なし → 該当なし の順。断りの全部を立ててから
-/// 1 つずつ外し、各段で名指しの `warn!` が 1 件・kanade への便りが 0 件、最後に受理へ至る
-/// （要件 1.7・1.12・1.13・1.16）。
+/// 1 つずつ外し、各段で名指しの `warn!` が 1 件・kanade への便りが 0 件、最後に受理へ至る。
 #[test]
 fn refusals_in_order_leave_one_warning_each_and_send_nothing() {
     let mut rig = rig("areka-skin-entry-refusals");
@@ -377,8 +375,7 @@ fn missing_context_refuses_with_one_warning() {
 
 /// 受理は `info!(skin_switch_requested)` 1 件と待ちの依頼 1 件で、印つき（`OnShellChanging`）は
 /// メニューのシェルと `raise-event` 付きの台本のシェルだけ。印の Ref0＝切替先の `name`・Ref1＝今の
-/// シェルの名前（実行系の無い置き場では空）・Ref2＝切替先の絶対パス。進行中の印は切替先を指す
-/// （要件 1.1・1.5・1.16・2.1）。
+/// シェルの名前（実行系の無い置き場では空）・Ref2＝切替先の絶対パス。進行中の印は切替先を指す。
 #[test]
 fn acceptance_starts_one_wait_marked_only_for_menu_and_raise_event_shells() {
     // (要求, 印つきか, 切替先のフォルダ)
@@ -430,8 +427,7 @@ fn acceptance_starts_one_wait_marked_only_for_menu_and_raise_event_shells() {
 }
 
 /// バルーンの切替の候補は今のゴーストの中も引く。同じ `name` はゴーストの中が当たり、印の切替先は
-/// ゴーストの中の場所とそのフォルダ名（完了の相が記憶へ書く値）になる
-/// （areka-P0-ghost-inner-balloon 要件 2.1・3.3・5.1）。
+/// ゴーストの中の場所とそのフォルダ名（完了の相が記憶へ書く値）になる。
 #[test]
 fn balloon_switch_targets_the_ghost_inner_balloon() {
     let cases = [
@@ -534,7 +530,7 @@ fn drain_hands_every_script_request_to_the_entry() {
 }
 
 /// 終了が始まったら登記した片付けが `info!(skin_switch_dropped, reason=exit)` 1 件で印を消す。
-/// 印が無ければ何も残さない（要件 5.7）。
+/// 印が無ければ何も残さない。
 #[test]
 fn exit_cleanup_drops_the_marker_with_one_info() {
     let mut rig = rig("areka-skin-entry-exit");
@@ -572,7 +568,7 @@ fn exit_cleanup_drops_the_marker_with_one_info() {
     );
 }
 
-/// Reference の名前は `descript.txt` の `name`、無ければフォルダ名。パスは絶対パス（要件 2.1・2.4・3.2）。
+/// Reference の名前は `descript.txt` の `name`、無ければフォルダ名。パスは絶対パス。
 #[test]
 fn reference_name_falls_back_to_folder_and_path_is_absolute() {
     let named = SkinCandidate {

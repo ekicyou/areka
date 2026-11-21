@@ -1,26 +1,25 @@
 //! 再生駆動層（drive）— per-talk transient アクターの起動・自己投函・cue 再生ランタイム glue。
 //!
 //! [`spawn_talk`] は talk ごとに名前付きスレッド（`sakura-talk-{talk_id}`）を起動し、
-//! spawn 直後に [`SakuraMsg::Start`] を自身の inbox へ**自己投函**する（投函経路は inbox
-//! 一貫・validation Issue 1 の解決）。以降の `Tick`/`Close` 投函端と join ハンドルを
-//! [`TalkHandle`] として呼び出し元へ返す。
+//! spawn 直後に [`SakuraMsg::Start`] を自身の inbox へ**自己投函**する。以降の `Tick`/`Close`
+//! 投函端と join ハンドルを [`TalkHandle`] として呼び出し元へ返す。
 //!
-//! # cue 再生ランタイムへの委譲（task 7.1）
+//! # cue 再生ランタイムへの委譲
 //!
 //! 本層は配送・状態機械・完了判定を**自前実装しない**。talk アクターは dola の受動ランタイム
-//! [`dola::cue::CuePlayer`] を包み、注入時刻（`Tick`）を渡すだけの薄い glue に縮小する（D7・R11.4）:
+//! [`dola::cue::CuePlayer`] を包み、注入時刻（`Tick`）を渡すだけの薄い glue に縮小する:
 //!
 //! - `Start` 受領時に上流 [`areka_parsers::sakura::parse`] → [`crate::compile::compile`] で
 //!   コンパイル済み台本 [`CueSheet`] を得る（アンカー未刻印）。空 sheet は時間軸駆動せず
-//!   即 [`TalkDone`] を返す（R1.4/R6.2・裸 `\-` は空 sheet＋Quit）。
-//! - **初回 `Tick(t)` で絶対開始時刻を刻印する**（dispatch 刻印・R9.1/D6）: talk の再生開始時刻
-//!   （＝初回注入時刻 `t`）を [`CueSheet::with_absolute_start_time`] でアンカーとして焼き込み、
-//!   刻印済み台本から [`CuePlayer`] を構築して両演者 sink を **broadcast** 登録する。各 cue の
-//!   絶対発火時刻は `アンカー + 相対 start_time`＝異なる時刻に再生開始した同一台本は異なる絶対
-//!   発火時刻で配送される（配送時導出は禁忌・desync 防止）。
-//! - 以降の `Tick(t)` は [`CuePlayer::tick`] へ委譲する（broadcast fan-out は CuePlayer が担う・
-//!   中央振り分けは廃止）。完了は [`CuePlayer::is_completed`]（占有 horizon gated）で検知し
-//!   [`TalkDone`] を返す（entry 枯渇でなく horizon 到達で完了・早期終了しない・R2.5/D6）。
+//!   即 [`TalkDone`] を返す（裸 `\-` は空 sheet＋Quit）。
+//! - **初回 `Tick(t)` で絶対開始時刻を刻印する**: talk の再生開始時刻（＝初回注入時刻 `t`）を
+//!   [`CueSheet::with_absolute_start_time`] でアンカーとして焼き込み、刻印済み台本から
+//!   [`CuePlayer`] を構築して両演者 sink を **broadcast** 登録する。各 cue の絶対発火時刻は
+//!   `アンカー + 相対 start_time`＝異なる時刻に再生開始した同一台本は異なる絶対発火時刻で
+//!   配送される（配送時導出は desync を招くので禁忌）。
+//! - 以降の `Tick(t)` は [`CuePlayer::tick`] へ委譲する（broadcast fan-out は CuePlayer が担う）。
+//!   完了は [`CuePlayer::is_completed`]（占有 horizon gated）で検知し [`TalkDone`] を返す
+//!   （entry 枯渇でなく horizon 到達で完了するので早期終了しない）。
 //!
 //! # 高々 1 回の唯一機構
 //!
@@ -46,29 +45,29 @@ use dola::cue::{BarrierKind, CuePlayer, CuePlayerState, CueSink};
 /// per-talk transient を起動し、`Tick`/`Close` の投函端と join ハンドルを返す。
 ///
 /// [`spawn_actor`]`("sakura-talk-{talk_id}", body)` で talk ごとに名前付きスレッドを
-/// 起動し（R10.1）、spawn 直後に [`SakuraMsg::Start`]`(start)` を返された `Sender` へ
+/// 起動し、spawn 直後に [`SakuraMsg::Start`]`(start)` を返された `Sender` へ
 /// **自己投函**する（投函経路は inbox 一貫・単一 inbox の全順序で `Start` 先行を保証）。
 /// 呼び出し元へは [`TalkHandle`]`{inbox, actor}` を返し、以降 kanade/テストは inbox へ
 /// `Tick`/`Close` のみ送る。
 ///
-/// `sinks` は演者非依存の単一出力契約 [`CueSink`] の可変長列（S-3）で、初回 `Tick` 時に
+/// `sinks` は演者非依存の単一出力契約 [`CueSink`] の可変長列で、初回 `Tick` 時に
 /// [`CuePlayer`] へ**登録順のまま**登録され、以降 broadcast で全 cue を受ける（どの action を
-/// 演じるかは演者側 relevance の責務・中央振り分けなし・D4）。順序が broadcast 順を決めるため
+/// 演じるかは演者側 relevance の責務）。順序が broadcast 順を決めるため
 /// 呼び出し側（ghost の boot 結線）が決定論的な登録順を与える。
 ///
-/// `system_vars` は **talk 起動時に ⓪ghost から手渡される名前→値の凍結スナップショット**
-/// （プロパティシステム読み口の凍結像・R7.3）で、`Start` 受領時のコンパイルへそのまま渡す。
+/// `system_vars` は **talk 起動時に ghost から手渡される名前→値の凍結スナップショット**
+/// （プロパティシステム読み口の凍結像）で、`Start` 受領時のコンパイルへそのまま渡す。
 /// sakura は値源を所有せず（永続化層・SHIORI・OS 環境を直接読まない）このスナップショットを
-/// 参照するだけである（D8: スナップショットは `StartTalk` でなく talk 起動境界で手渡す）。
+/// 参照するだけである（スナップショットは `StartTalk` でなく talk 起動境界で手渡す）。
 ///
 /// `done` は talk からの**完了通知ポート**（呼び出し側 inbox への変換投函）。境界は
 /// `D: From<TalkDone> + From<ChoiceWaiting>` で、[`TalkDone`]（通算高々 1 回）と
-/// [`ChoiceWaiting`]（選択待ち成立・DD-6）が**同一ポート**を流れる——同一 talk についての
+/// [`ChoiceWaiting`]（選択待ち成立）が**同一ポート**を流れる——同一 talk についての
 /// 「選択待ち成立」と「再生完了」の因果順が単一 FIFO で保存される（別チャンネルへ分離しない）。
 ///
-/// `strict` はゴースト名と判定の束（mcp-strict-errors）。`start.strict` が真でこれが在るときだけ、
+/// `strict` はゴースト名と判定の束。`start.strict` が真でこれが在るときだけ、
 /// 印付きの読み → 控え付きの走査をし、実の sink を全部 [`StrictTap`] で覆って合図の順に記録する。
-/// それ以外は今の道を 1 つも変えない（要件 3.5）。
+/// それ以外は今の道を 1 つも変えない。
 ///
 /// # Preconditions
 ///
@@ -94,12 +93,12 @@ where
 
     let (inbox, actor) = spawn_actor::<SakuraMsg, _>(&name, move |rx| {
         // 演者 sink（Send 境界付き＝thread へ move 可）を register 順のまま保持する。
-        // 初回 Tick で刻印済み台本の CuePlayer へ broadcast 登録する（4.3 register_sink）。
+        // 初回 Tick で刻印済み台本の CuePlayer へ broadcast 登録する。
         let mut handle = talk_handler(sinks, system_vars, done, strict);
         run_inbox::<SakuraMsg, std::convert::Infallible>(rx, move |msg| Ok(handle(msg)));
     });
 
-    // 投函経路の一貫: spawn 直後に Start を自己投函する（外部からは送らない）。
+    // spawn 直後に Start を自己投函する。
     // 送信失敗はアクタースレッドが既に消えている場合のみ（通常不到達）。ログして継続。
     if inbox.send(SakuraMsg::Start(start)).is_err() {
         tracing::error!(actor = %name, "failed to self-post Start; actor thread gone");
@@ -111,7 +110,7 @@ where
 /// [`spawn_talk`] の talk スレッドが inbox の 1 通ずつを捌く口（同じ駆動）を、呼んだスレッドの上に作る。
 ///
 /// 戻りが `Break` なら talk は終わった。strict の記録は捌いたスレッドで書かれるので、記録を
-/// そのスレッドで捕える試験が talk スレッドを起こさずに同じ駆動を回すために使う（mcp-strict-errors 9.2）。
+/// そのスレッドで捕える試験が talk スレッドを起こさずに同じ駆動を回すために使う。
 pub fn talk_handler<D>(
     sinks: Vec<Box<dyn CueSink + Send>>,
     system_vars: SystemVarSnapshot,
@@ -125,7 +124,7 @@ where
     move |msg| driver.handle(msg)
 }
 
-/// 1 talk の駆動状態機械（body ローカル・他 talk と共有しない・R10.3）。
+/// 1 talk の駆動状態機械（body ローカル・他 talk と共有しない）。
 ///
 /// `Start` 受領で `Armed`（コンパイル済み台本を保持・アンカー未刻印）へ、初回 `Tick` で
 /// アンカーを刻印して `Driving`（[`CuePlayer`] を保持）へ遷移する。全終端経路は phase を
@@ -135,7 +134,7 @@ enum TalkPhase {
     Idle,
     /// `Start` 受領・初回 `Tick` 前。アンカー刻印待ちのコンパイル済み台本を保持する。
     Armed {
-        /// talk 相関 ID（全出力へ対応付け・R1.3/R6.6）。
+        /// talk 相関 ID（全出力へ対応付け）。
         talk_id: TalkId,
         /// コンパイル済み台本（アンカー未刻印＝0.0・初回 Tick で刻印する）。
         sheet: CueSheet,
@@ -156,25 +155,25 @@ enum TalkPhase {
 }
 
 /// per-talk 駆動アクター本体。[`TalkPhase`] スロットと未登録の演者 sink を保持し、cue 再生の
-/// 制御（配送・状態機械・完了）は [`CuePlayer`] へ委譲する（自前実装しない・D7）。
+/// 制御（配送・状態機械・完了）は [`CuePlayer`] へ委譲する（自前実装しない）。
 struct TalkDriver<D> {
     /// 駆動状態機械。
     phase: TalkPhase,
     /// 初回 `Tick` で [`CuePlayer`] へ登録する演者 sink（register 順＝呼び出し側が与える broadcast 順）。
     /// 初回 `Tick` で drain して CuePlayer へ move する（それ以降は空）。
     sinks: Vec<Box<dyn CueSink + Send>>,
-    /// talk 起動時に ⓪ghost から手渡された名前→値の凍結スナップショット（R7.3・値源非所有）。
-    /// `Start` 受領時のコンパイルへ参照渡しする（sakura は値源を所有しない・D8）。
+    /// talk 起動時に ghost から手渡された名前→値の凍結スナップショット。
+    /// `Start` 受領時のコンパイルへ参照渡しする（sakura は値源を所有しない）。
     system_vars: SystemVarSnapshot,
     /// `TalkDone` の届け先（呼び出し側 inbox への変換投函）。
     done: Sender<D>,
-    /// 現在の選択待ちバリアについて [`ChoiceWaiting`] を送出済みか（一度きり検出・DD-6）。
+    /// 現在の選択待ちバリアについて [`ChoiceWaiting`] を送出済みか（一度きり検出）。
     ///
     /// `WaitingForChoice` へ遷移した tick で `true` にし、以降の tick では再送しない
     /// （`CuePlayer` は待機中 tick を早期 return するため状態は待機のまま維持される）。
     /// 解決の後も戻さない——compile は talk あたり高々 1 個の選択待ちバリアしか発行しない。
     choice_notified: bool,
-    /// ゴースト名と判定の束（strict の台本でなければ使わない・mcp-strict-errors）。
+    /// ゴースト名と判定の束（strict の台本でなければ使わない）。
     strict_hooks: Option<StrictHooks>,
     /// strict の talk の `Start` 受領から初回 `Tick` まで: 合図ごとの位置と台本（覆いを作る材料・ゴースト名は控えの台帳が持つ）。
     strict_arm: Option<(Vec<Option<Range<usize>>>, String)>,
@@ -227,16 +226,16 @@ where
             script,
             talk_id,
             epilogue,
-            // 出どころは運ぶだけで再生の層は解釈しない（areka-P0-script-security-level 1.4）。
+            // 出どころは運ぶだけで再生の層は解釈しない。
             origin: _,
-            // strict の印は再生の振る舞いを変えない（mcp-strict-errors 3.1）。記録するかだけを決める。
+            // strict の印は再生の振る舞いを変えない。記録するかだけを決める。
             strict,
         } = start;
 
-        // talk 起動時に手渡された凍結スナップショット（R7.3・D8）を参照してコンパイルする。
+        // talk 起動時に手渡された凍結スナップショットを参照してコンパイルする。
         // sakura は値源を所有せず、この凍結像だけを見る（provider 差替で本層は無改変＝差替シーム）。
         let compiled = match self.strict_hooks.as_ref().filter(|_| strict) {
-            // strict: 印付きの読み → 控え付きの走査（合図の列は `compile` と同じ・mcp-strict-errors 3.9）。
+            // strict: 印付きの読み → 控え付きの走査（合図の列は `compile` と同じ）。
             Some(hooks) => {
                 let reads = areka_parsers::sakura::parse_noted(&script);
                 let (compiled, trace) =
@@ -246,16 +245,16 @@ where
                 self.strict_arm = Some((trace.cue_spans, script));
                 compiled
             }
-            // 上流パーサで Instruction 列へ変換（再パースしない・R1.2）→ 純粋コンパイル。
+            // 上流パーサで Instruction 列へ変換（再パースしない）→ 純粋コンパイル。
             None => compile(&areka_parsers::sakura::parse(&script), &self.system_vars),
         };
 
-        // epilogue を compile 後・空判定**前**に末尾 carrier cue として付加する（design C12・R3.4）。
+        // epilogue を compile 後・空判定**前**に末尾 carrier cue として付加する。
         // `epilogue.is_empty()` なら恒等（既存経路完全不変）。epilogue-only talk（空 script＋epilogue）は
         // ここで 1 cue 以上の非空 sheet になり、通常再生して即時完走する（空判定を通過する）。
         let sheet = crate::compile::append_epilogue(compiled.sheet, &epilogue);
 
-        // 空 sheet: 時間軸駆動せず即終端（R1.4/R6.2）。end は Ended 固定でなく compiled.end
+        // 空 sheet: 時間軸駆動せず即終端。end は Ended 固定でなく compiled.end
         // （裸の `\-` は空 sheet＋Quit）。epilogue 付加後も空なら epilogue も空（恒等）ゆえ従来挙動。
         if sheet.is_empty() {
             // 合図の無い strict の台本: 控えは全部「最後の合図より後ろ」なので終わりの前に記録する。
@@ -275,26 +274,26 @@ where
 
     /// `Tick(t)` 受領: 有限・単調ガードの後、cue 再生ランタイムへ委譲する。
     ///
-    /// - **初回 `Tick`（`Armed`）**: `t` を絶対開始時刻としてアンカー刻印し（dispatch 刻印・
-    ///   R9.1/D6）、刻印済み台本から [`CuePlayer`] を構築、両演者 sink を broadcast 登録して
-    ///   `player.tick(t)`。以降の cue 絶対発火時刻は `t + 相対 start_time`。
+    /// - **初回 `Tick`（`Armed`）**: `t` を絶対開始時刻としてアンカー刻印し、刻印済み台本から
+    ///   [`CuePlayer`] を構築、両演者 sink を broadcast 登録して `player.tick(t)`。以降の cue
+    ///   絶対発火時刻は `t + 相対 start_time`。
     /// - **以降の `Tick`（`Driving`）**: 単調ガード後 `player.tick(t)`（broadcast は CuePlayer 内）。
     ///
     /// いずれも [`CuePlayer::is_completed`]（占有 horizon gated）が真なら `TalkDone{end}` を
-    /// 送出し `Break`（自然終端・entry 枯渇でなく horizon 到達で完了・R2.5/D6）。
+    /// 送出し `Break`（自然終端・entry 枯渇でなく horizon 到達で完了）。
     ///
-    /// # ガード（R11.1/11.2/11.3・受信ループは殺さない）
+    /// # ガード（受信ループは殺さない）
     ///
     /// - **非有限**（`NaN`/`±inf`）: dola の NaN 全量配信ハザードを遮断し、かつ NaN による
     ///   アンカー刻印を防ぐため、値（`tick`）を `tracing::error!` で記録し
     ///   `schedule` を一切進めず `Continue`（phase 不変・talk は終端させない）。
     /// - **逆行/同値**（`Driving` の `last_tick` に対し `t <= last_tick`）: `tracing::debug!` の
     ///   no-op で `Continue`。初回 `Tick`（`Armed`）は比較対象が無く必ず通過する（先頭 `at=0`
-    ///   発火を殺さないため 0.0 で初期化しない・設計 Issue 2）。
+    ///   発火を殺さないため 0.0 で初期化しない）。
     ///
     /// 状態未確定（`Idle`＝`Start` 未受領・投函経路上は非到達の防御枝）なら no-op で `Continue`。
     fn on_tick(&mut self, t: f64) -> ControlFlow<()> {
-        // 非有限ガード（R11.1/11.2）: schedule を進めず記録＋error ログ、ループは継続。
+        // 非有限ガード: schedule を進めず記録＋error ログ、ループは継続。
         // NaN/±inf アンカー刻印もここで塞ぐ（刻印前の初回 Tick も本ガードを通す）。
         if !t.is_finite() {
             tracing::error!(tick = t, "non-finite Tick ignored; schedule not advanced");
@@ -313,11 +312,11 @@ where
                 sheet,
                 end,
             } => {
-                // 初回 Tick: dispatch 刻印（アンカー＝初回注入時刻 t・R9.1/D6）。相対 start_time は
+                // 初回 Tick: dispatch 刻印（アンカー＝初回注入時刻 t）。相対 start_time は
                 // 書き換えず、その上にアンカーが載る。刻印済み台本から CuePlayer を構築する。
                 let sheet = sheet.with_absolute_start_time(t);
                 let mut player = CuePlayer::from_sheet(&sheet);
-                // 演者 sink を broadcast 登録（register 順: surface, text・4.3）。strict の talk は
+                // 演者 sink を broadcast 登録（register 順: surface, text）。strict の talk は
                 // 実の sink を全部覆いへ入れ、覆い 1 つを登録する（覆いが登録順のまま配る）。
                 match (self.strict_arm.take(), &self.strict_ledger) {
                     (Some((cue_spans, script)), Some(ledger)) => {
@@ -366,10 +365,10 @@ where
 
     /// `player.tick` の後始末: 占有 horizon 到達（[`CuePlayer::is_completed`]）なら
     /// `TalkDone{end}` を送出し `Break`（phase は既に Idle）、未完了なら `Driving` を書き戻して
-    /// `Continue`。完了検知は entry 枯渇でなく horizon 到達で真になる（早期終了しない・R2.5/D6）。
+    /// `Continue`。完了検知は entry 枯渇でなく horizon 到達で真になる（早期終了しない）。
     ///
     /// 未完了側では書き戻しの直前に**選択待ち成立の検出**（[`notify_choice_waiting_if_newly_waiting`]
-    /// (Self::notify_choice_waiting_if_newly_waiting)）を挟む（DD-6・R7.1/7.2）。完了側で検出しないのは
+    /// (Self::notify_choice_waiting_if_newly_waiting)）を挟む。完了側で検出しないのは
     /// [`CuePlayerState`] が排他ゆえ——`WaitingForChoice` なら `is_completed()` は必ず偽である。
     fn settle_after_tick(
         &mut self,
@@ -382,8 +381,8 @@ where
             // 自然終端: player を drop（残り無し）。phase は Idle のまま。高々 1 回機構。
             // 受け口は終わりを知らせる**前**に落とす——受け口が落ちる時に送る最後の合図（中断の旗の
             // TalkEnded）を TalkDone より前に並べるため。配送は自然終端で合流を待たずに次のトークを
-            // 起こすので、後に回すと次のトークの合図に追い越される（areka-P0-status-execution-states 要件 3.4）。
-            // strict の残りの控え（最後の合図より後ろの命令の誤り）も終わりの前に記録する（mcp-strict-errors 3.7）。
+            // 起こすので、後に回すと次のトークの合図に追い越される。
+            // strict の残りの控え（最後の合図より後ろの命令の誤り）も終わりの前に記録する。
             self.finish_strict();
             drop(player);
             self.send_done(talk_id, end, false);
@@ -403,24 +402,23 @@ where
     }
 
     /// 選択待ちバリアの成立（[`CuePlayerState::WaitingForChoice`] 遷移）を**一度きり**検出し、
-    /// [`ChoiceWaiting`] を done ポートへ送出する（DD-6・R7.1/7.2）。
+    /// [`ChoiceWaiting`] を done ポートへ送出する。
     ///
     /// 通知の真実源は**再生層**（[`CuePlayer`]）であり、本メソッドは検出時点の player から
     /// 3 つの事実をその場で写し取って送る:
     ///
-    /// - **候補選択肢 ID 列**: [`CuePlayer::pending_choices`] の表示順（照合は下流・DD-7。talk 側
+    /// - **候補選択肢 ID 列**: [`CuePlayer::pending_choices`] の表示順（照合は下流。talk 側
     ///   [`CuePlayer::resolve_choice`] の id 照合は二重防御として温存する）。
     /// - **表示完了時刻**: [`CuePlayer::occupancy_horizon`]（アンカー込みの絶対値＝duration 権威）。
-    ///   注入 Tick の現在時刻ではない——タイムアウト計測の起点に再生層以外の時間基準を持ち込まない
-    ///   （R7.2）。
+    ///   注入 Tick の現在時刻ではない——タイムアウト計測の起点に再生層以外の時間基準を持ち込まない。
     /// - **タイムアウト指令**: [`BarrierKind::WaitForChoice`] の `timeout` をそのまま搬送する
-    ///   （写像も既定値の適用も本層では行わない・DD-8）。
+    ///   （写像も既定値の適用も本層では行わない）。
     ///
     /// 二重送出は [`choice_notified`](Self::choice_notified) が塞ぐ。送信失敗は `error!` を記録して
     /// 黙殺せず、talk は終端させない（`TalkDone` 送出と同規律・受信端不在は致命ではない）。
     ///
     /// 送った**後**に、登録された受け口へ選択待ちの始まり（[`CuePlayer::announce_choice_wait`]）を
-    /// 1 回配る（areka-P0-balloon-text-bugs 要件 1.10/1.11）。押下の選択は始まりを受けた UI から
+    /// 1 回配る。押下の選択は始まりを受けた UI から
     /// `ChoiceWaiting` と同じ dispatcher の inbox へ送られるので、この順なら選択は必ず待ちの後に
     /// kanade へ着く。再生器の状態の移りの中では配らない（`ChoiceWaiting` より先に文字の層へ着く）。
     fn notify_choice_waiting_if_newly_waiting(&mut self, talk_id: TalkId, player: &mut CuePlayer) {
@@ -437,7 +435,7 @@ where
             Some(BarrierKind::WaitForChoice { timeout }) => *timeout,
             other => {
                 // 非到達（`WaitingForChoice` は `WaitForChoice` バリアでのみ成立する）。黙って
-                // 既定へ倒さず記録したうえで「未指定」として搬送する（防御枝・DD-8）。
+                // 既定へ倒さず記録したうえで「未指定」として搬送する（防御枝）。
                 tracing::warn!(
                     talk_id = talk_id.0,
                     barrier = ?other,
@@ -468,18 +466,18 @@ where
         self.choice_notified = true;
     }
 
-    /// `Close` 受領: 進行中の再生を即時停止し、中断 ACK を返す（R7.1/7.2/7.3/7.4）。
+    /// `Close` 受領: 進行中の再生を即時停止し、中断 ACK を返す。
     ///
-    /// `Driving` なら [`CuePlayer`] を落として残 entry を捨ててから（未発火 cue は sink へ届かない・
-    /// R7.2）、`Armed`（初回 Tick 前）なら直接、`TalkDone{Interrupted}` を送出し
-    /// `Break` する。phase は取り出しで Idle へ差し替わるため二度目の ACK は不能（通算高々 1 回・
-    /// R6.4/R7.5）。`Idle`（`Start` 前の防御枝・自然終端後は既にスレッド消滅で Close 未達）は
+    /// `Driving` なら [`CuePlayer`] を落として残 entry を捨ててから（未発火 cue は sink へ届かない）、
+    /// `Armed`（初回 Tick 前）なら直接、`TalkDone{Interrupted}` を送出し
+    /// `Break` する。phase は取り出しで Idle へ差し替わるため二度目の ACK は不能（通算高々 1 回）。
+    /// `Idle`（`Start` 前の防御枝・自然終端後は既にスレッド消滅で Close 未達）は
     /// 二度目の TalkDone を送らずログのみ。
     ///
     /// いずれの場面でも、止めた時点の状態が持ち回っている終わり方（[`TalkEndReason::Quit`]＝
-    /// 台本が `\-` で終了を予約している）を読み、`quit_reserved` として完了通知に載せる
-    /// （本仕様 areka-P0-balloon-break 要件 3.3/3.8）。終わり方そのものは `Interrupted` のままで
-    /// 種類は増やさず、予約を終了へ結び付けるかどうかは運行の側（areka-kanade）が判断する。
+    /// 台本が `\-` で終了を予約している）を読み、`quit_reserved` として完了通知に載せる。
+    /// 終わり方そのものは `Interrupted` のままで種類は増やさず、予約を終了へ結び付けるかどうかは
+    /// 運行の側（areka-kanade）が判断する。
     fn on_close(&mut self) -> ControlFlow<()> {
         match std::mem::replace(&mut self.phase, TalkPhase::Idle) {
             TalkPhase::Driving {
@@ -488,7 +486,7 @@ where
                 end,
                 ..
             } => {
-                // 落として残 entry を捨てる（以降配送しない・R7.2）。受け口は中断の知らせの**前**に
+                // 落として残 entry を捨てる（以降配送しない）。受け口は中断の知らせの**前**に
                 // 落とす（最後の合図を知らせより前に並べる・自然終端と同じ理由）。
                 drop(player);
                 self.send_done(
@@ -509,26 +507,26 @@ where
             }
             TalkPhase::Idle => {
                 // 状態未確定での Close（Start 前の防御枝・投函経路上は通常非到達）。
-                // 二度目の TalkDone を送らずログのみ（通算高々 1 回・R6.4/R7.5）。
+                // 二度目の TalkDone を送らずログのみ（通算高々 1 回）。
                 tracing::debug!("Close received without active playback state; no ACK sent");
                 ControlFlow::Break(())
             }
         }
     }
 
-    /// `ResolveChoice{id}` 受領: 選択待ち（barrier）で止まった talk へ選択 id を投入する型付き口
-    /// （R2.7）。W5（`areka-P0-choice-select-events`）の解決入力の唯一の到達点であり、
+    /// `ResolveChoice{id}` 受領: 選択待ち（barrier）で止まった talk へ選択 id を投入する型付き口。
+    /// 解決入力の唯一の到達点であり、
     /// [`CuePlayer::resolve_choice`] を外部から直接呼ぶ経路は存在しない（アクター内に閉じる）。
     ///
     /// - **`Driving`**（駆動中＝唯一 `resolve_choice` を呼ぶ状態）: `player.resolve_choice(&id)` へ
     ///   委譲する（id 照合＋一致時の先積みクリアは [`CuePlayer`] の責務）。
     ///   - `Some`: 選択が解決され `Playing` へ戻った。**その場で**最後に受けた時刻 `last_tick` のまま
     ///     `player.tick` を 1 回呼び、区切りの後ろに既に来ている項目（初回起動の後始末など）を配ってから
-    ///     [`settle_after_tick`] で完了を見る。時刻はずらさず、次 Tick を待たない（R-5 の一 tick 遅延を
-    ///     残さない・R2.4/9.8）。未完了なら `Driving` を書き戻して継続。
-    ///   - `None`（id 不一致・非待機）: 状態を変えず `warn!` で記録して継続する（barrier は解けない・R2.3 継続）。
+    ///     [`settle_after_tick`] で完了を見る。時刻はずらさず、次 Tick を待たない（一 tick 遅延を
+    ///     残さない）。未完了なら `Driving` を書き戻して継続。
+    ///   - `None`（id 不一致・非待機）: 状態を変えず `warn!` で記録して継続する（barrier は解けない）。
     /// - **`Armed`/`Idle`**（初回 Tick 前・Start 前 or 終端後＝CuePlayer 未構築 or talk 不在）:
-    ///   投函経路上は非到達の**誤投函**（W5 の mis-post）。`warn!` して継続する（防御枝・talk を
+    ///   投函経路上は非到達の**誤投函**。`warn!` して継続する（防御枝・talk を
     ///   終端させない）。
     fn on_resolve_choice(&mut self, id: String) -> ControlFlow<()> {
         match std::mem::replace(&mut self.phase, TalkPhase::Idle) {
@@ -545,7 +543,7 @@ where
                     self.settle_after_tick(talk_id, player, end, last_tick)
                 }
                 None => {
-                    // id 不一致・非待機: 状態不変で記録して継続（barrier は解けない・R2.3 継続）。
+                    // id 不一致・非待機: 状態不変で記録して継続（barrier は解けない）。
                     tracing::warn!(
                         choice_id = %id,
                         "ResolveChoice: no matching pending choice (id mismatch or not waiting); continuing"
@@ -564,7 +562,7 @@ where
                 sheet,
                 end,
             } => {
-                // 誤投函（初回 Tick 前・CuePlayer 未構築）: warn して継続（防御枝・W5 mis-post 検出）。
+                // 誤投函（初回 Tick 前・CuePlayer 未構築）: warn して継続（防御枝）。
                 tracing::warn!(
                     choice_id = %id,
                     "ResolveChoice received before playback started (Armed); ignoring"
@@ -587,18 +585,18 @@ where
         }
     }
 
-    /// strict の talk の残りの控えを全部記録する（自然な終わりだけ。打ち切りは呼ばずに捨てる・
-    /// mcp-strict-errors 3.6・3.7）。strict でなければ何もしない。
+    /// strict の talk の残りの控えを全部記録する（自然な終わりだけ。打ち切りは呼ばずに捨てる）。
+    /// strict でなければ何もしない。
     fn finish_strict(&mut self) {
         if let Some(ledger) = self.strict_ledger.take() {
             ledger.borrow_mut().finish();
         }
     }
 
-    /// `TalkDone{reason, quit_reserved}` を送出する（受信端 drop は error ログ・黙殺しない・R11.1/11.4）。
+    /// `TalkDone{reason, quit_reserved}` を送出する（受信端 drop は error ログ・黙殺しない）。
     ///
     /// `quit_reserved` は中断のとき、止めた時点で台本が終了を予約していたか（呼び出し側が phase の
-    /// 終わり方から判定する・要件 3.8）。自然終端では `false`。
+    /// 終わり方から判定する）。自然終端では `false`。
     fn send_done(&self, talk_id: TalkId, reason: TalkEndReason, quit_reserved: bool) {
         let done = TalkDone {
             talk_id,

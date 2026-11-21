@@ -9,7 +9,7 @@
 //! （`include_str!` ＋註釈行の除去＋期待する旗の名前）で揃えてある。
 //!
 //! 「立っていないはず」は**主張しない**。旗はプロセスで 1 組しか無く、本番経路が同じ
-//! 旗を立てるため、そちらの主張は他の検査の巻き添えで揺れる（tasks.md「(3.4)」）。
+//! 旗を立てるため、そちらの主張は他の検査の巻き添えで揺れる。
 
 use crate::crate_source_test_support::crate_source;
 
@@ -21,8 +21,6 @@ use crate::crate_source_test_support::crate_source;
 ///
 /// 1 つのファイルが 2 種類の旗を立てることがあるので、その場合は**旗ごとに 1 行**を
 /// 置く——旗の欄は 1 つしか持てず、片方だけ載せると残りの旗が名簿から落ちて静かにずれる。
-/// （現在は 1 ファイル 1 旗である。`balloon_visibility_phase.rs` が `REARM` と `ZORDER` の
-/// 2 行を持っていたのは、退役したバルーン再表示の追随トリガのぶんである。）
 const AREKA_PRODUCERS: [(&str, &str, &str); 8] = [
     (
         "areka-runtime/adapter.rs",
@@ -89,7 +87,7 @@ fn every_areka_producer_marks_the_tick_wake() {
     }
 }
 
-/// バルーンの待ち時間は旗ではなく**期限**で預ける（設計 C16）。
+/// バルーンの待ち時間は旗ではなく**期限**で預ける。
 ///
 /// 期限の枠は最も早い 1 つしか持てず到来で倒れるので、待っている限り相が走るたびに
 /// 預け直す必要がある。ここでは預ける呼出が在ることだけを見る（預け直しの回数は
@@ -115,8 +113,8 @@ fn balloon_visibility_phase_arms_the_deadline() {
 //
 // 見るのは 2 つの書き方である——`tick_wake::mark` とパスで書いた参照と、
 // `tick_wake::` を含む `use` 行が `mark` を名指している形（`use …tick_wake::{ZORDER, mark};`）である。
-// 呼出の字面 `tick_wake::mark(` だけを見ていたときは、**表に載せていない新設の生産者が
-// `use` 形だと両向とも緑で抜けた**（表の側の検査は表に在る行しか見ないので助けに
+// 呼出の字面 `tick_wake::mark(` だけでは、**表に載せていない新設の生産者が
+// `use` 形だと両向とも緑で抜ける**（表の側の検査は表に在る行しか見ないので助けに
 // ならない）。なおモジュールごと別名にする形（`use …tick_wake as tw;`）までは見ていない
 // ——その形が要るときは [`uses_tick_wake_name`] を広げること。
 
@@ -183,8 +181,7 @@ mark(ZORDER);",
     );
 }
 
-/// 本体・`areka-runtime`・`areka-input` の 3 つの `src` を歩く（分ける前に本体の `src` が覆っていた範囲。
-/// runtime-crate-split 要件 5.4）。
+/// 本体・`areka-runtime`・`areka-input` の 3 つの `src` を歩く（分ける前に本体の `src` が覆っていた範囲）。
 fn walk_roots() -> [(&'static str, PathBuf); 3] {
     [
         ("areka", Path::new(env!("CARGO_MANIFEST_DIR")).join("src")),
@@ -266,8 +263,7 @@ fn the_areka_table_lists_every_file_that_marks_the_wake() {
 /// wintf の `tick_wake.rs` 冒頭の散文名簿は、areka 側の `ZORDER` 生産者も名指ししている。
 ///
 /// あの名簿は**クロスクレートの生産者も対象**である（`PRESENT` の行が areka 側を名指し
-/// している）。そして実際にずれた——areka の `zorder_cue.rs` が落ちたまま緑で通っていた。
-/// 見つけたのは人の目であってテストではない。以後は機械が見る。
+/// している）。
 ///
 /// wintf からは areka のファイルが読めないので、この向きの照合は areka 側にしか置けない。
 /// 名簿の現物はワークスペース相対で読む（読めなければその場で落ちる＝静かには壊れない）。

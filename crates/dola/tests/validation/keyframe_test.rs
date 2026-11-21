@@ -1,5 +1,4 @@
 //! Validation tests for V6, V8, V9 (keyframe reference, at/between exclusivity, pure KF entries)
-//! Tasks 7.6, 8.6
 
 use dola::*;
 use std::collections::BTreeMap;
@@ -380,7 +379,6 @@ mod v8_tests {
                 interruption_policy: InterruptionPolicy::Conclude,
                 loop_offset: None,
                 entry: vec![
-                    // Need a KF first
                     StoryboardEntry {
                         variable: Some("x".to_string()),
                         transition: Some(TransitionRef::Inline(TransitionDef {

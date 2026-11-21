@@ -1,11 +1,11 @@
-//! 手続きを走らせる背景のスレッドと、窓口へ頼んで返事を待つ本物の口（design「areka / install / worker」）。
+//! 手続きを走らせる背景のスレッドと、窓口へ頼んで返事を待つ本物の口。
 //!
 //! スレッド `install` は依頼を 1 件ずつ受けて [`run_order`] を走らせ、終わったら窓口へ知らせる。
 //! 本物の口 [`DeskPorts`] は、World に触る仕事を窓口（`desk`）への頼み [`DeskAsk`] と返信端で
 //! 頼んで返事を待つ。イベントの結果は kanade から直接受ける。利用条件の画面と、起動中の
-//! ゴースト以外の宛先への展開は、このスレッドで行う（UI を塞がない＝要件 1.11）。
+//! ゴースト以外の宛先への展開は、このスレッドで行う（UI を塞がない）。
 //!
-//! 頼みの型はこのモジュールが定義し、窓口が読む（design「Allowed Dependencies」）。
+//! 頼みの型はこのモジュールが定義し、窓口が読む。
 
 use std::convert::Infallible;
 use std::ops::ControlFlow;
@@ -40,7 +40,7 @@ pub(crate) enum DeskAsk {
     Facts {
         reply: ReplySender<Option<GhostFacts>>,
     },
-    /// 起動中のゴーストを降ろしてから入れ、起こし直す（8.1）。
+    /// 起動中のゴーストを降ろしてから入れ、起こし直す。
     Overwrite {
         archive: NarArchive,
         target_ghost: Option<String>,
@@ -53,7 +53,7 @@ pub(crate) enum DeskAsk {
     },
     /// 依頼 1 件が終わった（次の依頼を受け取れる）。終わった依頼と、書庫の順の終わり方
     /// （途中でやめたら依頼の書庫より短い）を運ぶ。
-    // 窓口は今は終わりの合図だけを使う（起動の依頼の読み手はタスク 4.1 で外した・形は変えない）。
+    // 窓口は終わりの合図だけを使うので、中身を読むのは試験だけ。
     OrderDone {
         #[cfg_attr(not(test), allow(dead_code))]
         order: InstallOrder,
@@ -92,7 +92,7 @@ pub(crate) struct DeskPorts {
     gate: Arc<WorkGate>,
     /// ベースウェアの根の並びの写し（素性を最後に尋ねたときの値）。
     roots: Option<BasewareRoots>,
-    /// 起動中のゴーストの場所（素性を最後に尋ねたときの値・要件 8.7）。
+    /// 起動中のゴーストの場所（素性を最後に尋ねたときの値）。
     running: Option<PathBuf>,
     /// 今扱っている書庫のパス（`begin_archive` で覚える）。
     archive: PathBuf,
@@ -126,7 +126,7 @@ impl DeskPorts {
 impl InstallPorts for DeskPorts {
     fn begin_archive(&mut self, path: &Path) {
         self.archive = path.to_path_buf();
-        // 書庫を扱い始めた（書く前の段で終了が始まれば、途中でやめた書庫として記録される）。
+        // 書く前の段で終了が始まれば、途中でやめた書庫として記録される。
         if !self.gate.begin(path.display().to_string()) {
             // 終了が始まっている。以後の頼みは窓口が落とすので、手続きは閉じた扱いで止まる。
             tracing::debug!(
@@ -201,7 +201,7 @@ impl InstallPorts for DeskPorts {
             Some(roots) => roots,
             None => self.ghost_facts()?.roots,
         };
-        // 門: 名前を宛先つきへ差し替える（要件 8.3）。終了が始まっていれば書く段へ入らない（要件 8.4）。
+        // 門: 名前を宛先つきへ差し替える。終了が始まっていれば書く段へ入らない。
         if !self
             .gate
             .begin(gate_label(&self.archive, &roots, archive, target_ghost))
@@ -249,7 +249,7 @@ impl InstallPorts for DeskPorts {
     }
 }
 
-/// 門に置く記録用の名前（書庫のパスと宛先＝要件 8.3）。宛先の根は並びの全部を `; ` でつなぐ。
+/// 門に置く記録用の名前（書庫のパスと宛先）。宛先の根は並びの全部を `; ` でつなぐ。
 fn gate_label(
     path: &Path,
     roots: &BasewareRoots,

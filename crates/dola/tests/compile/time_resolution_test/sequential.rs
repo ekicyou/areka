@@ -1,10 +1,9 @@
-//! Sequential timing and start-time offset resolution.
+//! sequential の時刻と start_time オフセットの解決
 
 use super::*;
 
 #[test]
 fn simple_sequential_single_variable() {
-    // 1 variable, 2 sequential entries
     let doc = make_doc_with_storyboard(
         vec![("x", float_var())],
         vec![],
@@ -39,7 +38,6 @@ fn simple_sequential_single_variable() {
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(tl.segments.len(), 2);
 
-    // First segment: 0.0 -> 1.0
     assert_eq!(tl.segments[0].start_time, 0.0);
     assert_eq!(tl.segments[0].end_time, 1.0);
     assert_eq!(tl.segments[0].from_value, TransitionValue::Scalar(0.0));
@@ -175,7 +173,7 @@ fn kf_at_start_plus(name: &str, offset: f64) -> StoryboardEntry {
     }
 }
 
-/// 前方参照があっても、連結の遷移は同じ変数の配列上の直前のエントリに続く（要件 11.7・#5）
+/// 前方参照があっても、連結の遷移は同じ変数の配列上の直前のエントリに続く
 #[test]
 fn sequential_follows_previous_entry_in_array_despite_forward_ref() {
     let doc = make_doc_with_storyboard(
@@ -200,7 +198,7 @@ fn sequential_follows_previous_entry_in_array_despite_forward_ref() {
     assert_eq!(segs[1].to_value, TransitionValue::Scalar(2.0));
 }
 
-/// at の無いキーフレームは配列の 1 つ前のエントリに続く。前方参照を挟んでも正しい文書が通る（要件 11.7・#5）
+/// at の無いキーフレームは配列の 1 つ前のエントリに続く。前方参照を挟んでも正しい文書が通る
 #[test]
 fn pure_keyframe_without_at_follows_previous_entry_despite_forward_ref() {
     let doc = make_doc_with_storyboard(
@@ -226,7 +224,7 @@ fn pure_keyframe_without_at_follows_previous_entry_despite_forward_ref() {
     assert_eq!((segs[1].start_time, segs[1].end_time), (6.0, 7.0));
 }
 
-/// 連結の遷移は処理の順で最後に解いた同じ変数のエントリでなく、配列上の直前のエントリに続く（要件 11.7）
+/// 連結の遷移は処理の順で最後に解いた同じ変数のエントリでなく、配列上の直前のエントリに続く
 #[test]
 fn sequential_follows_array_predecessor_not_last_processed() {
     // entry 1 が [0,1] で k=1。entry 0 は k に置かれ [1,2]。entry 2 は配列上の直前＝entry 1 に続き [1,2]
@@ -255,7 +253,7 @@ fn sequential_follows_array_predecessor_not_last_processed() {
 }
 
 /// from を省いた連結の遷移は、時刻の上で間に挟まった at のセグメントでなく、
-/// 配列上の直前のエントリの to から始まる（要件 11.7・注 7.1）
+/// 配列上の直前のエントリの to から始まる
 #[test]
 fn sequential_from_follows_array_predecessor_not_previous_in_time() {
     let x_entry = |from: Option<f64>, to: f64, delay: f64, duration: f64| StoryboardEntry {

@@ -1,5 +1,4 @@
-//! 手続きの分かれ道のテスト（design「Testing Strategy / 手続き」「Error Categories and Responses」・
-//! 要件 2.8・2.9・3.2・3.6・3.7・4.5〜4.8・4.11・5.1・5.4・5.6・5.7・9.2・11.3・11.5・12.2・12.12）。
+//! 手続きの分かれ道のテスト。
 //!
 //! 宛先違い・利用条件・失敗・複数の書庫・途中でやめる の各場合で、送られるイベント・書庫の
 //! 終わり方・記録・宛先に書かれたものを判定する。偽の口の上で本物の `areka-nar` を走らせる。
@@ -109,7 +108,7 @@ fn with_terms(builder: NarBuilder) -> NarBuilder {
         .done()
 }
 
-// ---- 宛先違い（要件 3.2・3.6・3.7）----
+// ---- 宛先違い ----
 
 #[test]
 fn refused_accept_sends_only_refuse_writes_nothing_and_logs_no_error() {
@@ -188,7 +187,7 @@ fn shell_or_supplement_without_accept_fails_as_invalid_type() {
     }
 }
 
-// ---- 利用条件（要件 4.5〜4.8・4.11・11.3）----
+// ---- 利用条件 ----
 
 #[test]
 fn no_terms_file_asks_nothing_and_sends_no_terms_event() {
@@ -266,7 +265,7 @@ fn declined_suppressed_or_unavailable_terms_send_only_decline_and_write_nothing(
     }
 }
 
-// ---- 失敗（要件 5.1・5.4・5.6・12.2）----
+// ---- 失敗 ----
 
 #[test]
 fn read_failures_send_failure_with_the_single_table_word_and_ask_nothing() {
@@ -278,7 +277,6 @@ fn read_failures_send_failure_with_the_single_table_word_and_ask_nothing() {
             FailureWord::Extraction,
             "open",
         ),
-        // 無いファイル。
         (None, FailureWord::Extraction, "read"),
         (
             Some(with_terms(nar_with(&[
@@ -345,7 +343,7 @@ fn install_failure_sends_fileio_and_logs_each_survivor_with_seven_days() {
         ports.elsewhere_error = Some(trees.clone());
         let (ends, events) = run_one(&mut ports, ghost_nar("newbie", &[]));
 
-        // 確定の段（`Commit`）の失敗は書けない側＝`fileio`（write-failure-notice 要件 5.1）。
+        // 確定の段（`Commit`）の失敗は書けない側＝`fileio`。
         assert_eq!(ends, vec![ArchiveEnd::Failed(FailureWord::FileIo)]);
         assert_eq!(
             ports.raised(),
@@ -391,7 +389,7 @@ fn install_failure_sends_fileio_and_logs_each_survivor_with_seven_days() {
     }
 }
 
-// ---- 複数の書庫（要件 2.8・2.9・9.2・11.5・12.12）----
+// ---- 複数の書庫 ----
 
 #[test]
 fn two_archives_all_installed_end_with_one_complete_all_listing_both() {
@@ -483,7 +481,7 @@ fn complete_all_is_not_sent_unless_two_or_more_all_installed() {
     }
 }
 
-// ---- 途中でやめる（要件 2.3・8.6 の 0 件）----
+// ---- 途中でやめる ----
 
 #[test]
 fn install_port_closing_sends_no_closing_notice_and_abandons() {
@@ -590,7 +588,7 @@ fn missing_ghost_facts_abandons_before_anything_is_written() {
     assert_eq!(entries_under(ports.root.path()), before);
 }
 
-/// 口が「送らなかった」と答えたら「送りました」を残さず、旧仕様の完了へも続けない（要件 3.1・6.2・9.4）。
+/// 口が「送らなかった」と答えたら「送りました」を残さず、旧仕様の完了へも続けない。
 #[test]
 fn unsent_logs_unsent_and_does_not_fall_back_to_legacy_complete() {
     let mut ports = FakePorts::new();

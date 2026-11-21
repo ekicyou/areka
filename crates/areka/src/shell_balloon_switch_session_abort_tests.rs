@@ -1,7 +1,6 @@
-//! シェルの切替の中止・失敗・終了・ゴースト切替の統合テスト（spec: areka-P0-shell-balloon-switch
-//! task 11.2・要件 5.1〜5.3・5.5〜5.7・8.5・11.4〜11.6・design「Integration Tests」・Flow 4）。
+//! シェルの切替の中止・失敗・終了・ゴースト切替の統合テスト。
 //!
-//! 土台は 11.1 の [`lap_rig_of`]（偽の SHIORI のゴースト A〔B も置ける〕・A の 2 つ目のシェル・窓の
+//! 土台は [`lap_rig_of`]（偽の SHIORI のゴースト A〔B も置ける〕・A の 2 つ目のシェル・窓の
 //! 一式・GPU 資源・本番の `Input`・`Update` の段）。判定は集めてから 1 回。
 //!
 //! 「記憶 0」は、切替の経路の `LastShell` の投函（`last_shell_recorded`）が 0 件で、実 fs の
@@ -102,7 +101,7 @@ fn current_shell(rig: &SwitchRig) -> Option<String> {
 /// `\-` 入りの `OnShellChanging` の台詞（待ちの間に中断する）。
 const CHANGING_WITH_QUIT: &str = r"\0着替えます\_w[5000]\-\e";
 
-/// `OnShellChanging` の台詞の中断（要件 5.1〜5.3・11.4）: `\-` 入りの印の台詞をバルーンの左
+/// `OnShellChanging` の台詞の中断: `\-` 入りの印の台詞をバルーンの左
 /// ダブルクリックで止めると、切替は中止（`skin_switch_cancelled` 1 件）で、差し替え・
 /// `OnShellChanged`・記憶は 0、終了へ結ばれず（`OnClose` も終了の指示も無い）、バルーンは今日の
 /// 規則で隠れる。直後の新しい切替要求は受け付けられ（kanade は定常のまま）、最後まで通る。
@@ -116,8 +115,7 @@ fn marked_talk_break_cancels_the_shell_switch_without_quitting() {
     let mut lap = rig_a(|| {
         standard_script(BOOT_TO_SECOND)
             .get("OnShellChanging", Ok(Some(CHANGING_WITH_QUIT.to_owned())))
-            // 印の台詞の中断で定常へ戻ると `OnBalloonBreak` が 1 本出る
-            // （areka-P0-balloon-lifecycle-events 表 B の B3）。応答は 204。
+            // 印の台詞の中断で定常へ戻ると `OnBalloonBreak` が 1 本出る。応答は 204。
             .get("OnBalloonBreak", Ok(None))
             .get("OnShellChanging", Ok(None))
             .get("OnShellChanged", Ok(None))
@@ -126,7 +124,7 @@ fn marked_talk_break_cancels_the_shell_switch_without_quitting() {
     let mut log = LookLog::default();
     let windows = lap.windows.clone();
 
-    // 印の台詞の文字が全部出て `\_w[5000]` に入るまで 1 ms ずつ進める（中断がその台詞に当たる）。
+    // 中断がその台詞に当たるよう、`\_w[5000]` に入るまで 1 ms ずつ進める。
     let playing = lap.frames_until(CREEP, |rig| {
         log.record(look_of(rig, &windows));
         got(rig, "OnShellChanging", 1) && scope0_text(rig).contains("着替えます")
@@ -146,7 +144,6 @@ fn marked_talk_break_cancels_the_shell_switch_without_quitting() {
         current_shell(&lap.rig),
     );
 
-    // 直後の新しい切替要求（メニュー相当）は受理され、最後まで通る。
     let verdict = request_skin_switch(
         &mut lap.rig.world,
         SkinRequest {
@@ -201,10 +198,9 @@ fn marked_talk_break_cancels_the_shell_switch_without_quitting() {
 /// 復号できない面を持つシェル（2 つ目のシェルの写しの `surface0000.png` を壊したもの）。
 const BROKEN: &str = "broken";
 
-/// 復号できない画像のシェル（要件 5.5・5.6・11.6）: `OnShellChanging` は送られる（切り替え前の
+/// 復号できない画像のシェル: `OnShellChanging` は送られる（切り替え前の
 /// イベントだけが届く）が、資産づくりの失敗で UI スレッドの `error!` は `skin_switch_failed`
-/// （stage＝build）の 1 件だけ（背景のスレッドの `switch_assets_failed` は捕捉の窓の外＝
-/// 6.3 の単体が数える）。元の装着のまま（キャラ窓の見え方は 1 通り・今のシェルは `master`）、
+/// （stage＝build）の 1 件だけ（背景のスレッドの `switch_assets_failed` は捕捉の窓の外）。元の装着のまま（キャラ窓の見え方は 1 通り・今のシェルは `master`）、
 /// `OnShellChanged` と記憶の投函は 0（実 fs の `LastShell` は起動の成功が書いた `master` のまま）。
 ///
 /// # 非空虚性
@@ -279,7 +275,7 @@ fn undecodable_shell_keeps_the_old_mount_and_records_one_error() {
 
 // ---------------------------------------------------------------- 終了
 
-/// 待ちの間の閉鎖要求（要件 5.7・11.6）: `raise-event` 無しの切替を受理し、命令を運んだ台本の
+/// 待ちの間の閉鎖要求: `raise-event` 無しの切替を受理し、命令を運んだ台本の
 /// 終わりを待つ間に、キャラ窓への OS の閉鎖要求（メニューの「終了」と同じ終了要求）が届くと、
 /// 切替は取りやめ（`closing`）で差し替え・イベント・記憶は 0。台本が終わると今日の終了経路
 /// （`GET OnClose` → kanade の停止 → 全窓を閉じて終了の指示）で終わる。
@@ -305,7 +301,7 @@ fn close_request_while_waiting_drops_the_switch_and_exits_as_today() {
     let char0 = windows.char_window(0).expect("キャラ窓 0");
     let ((dropped, exited), events) = capture(|| {
         on_ghost_os_close(&mut lap.rig.world, char0);
-        // 台詞の時計を止めたまま、取りやめを見る（台本はまだ終わっていない）。
+        // 台本はまだ終わっていない。
         let dropped = lap.frames_until(NO_TICKS, |rig| {
             log.record(look_of(rig, &windows));
             idle(rig)
@@ -383,7 +379,7 @@ fn welcomed_b(rig: &SwitchRig) -> bool {
     !rig.calls("B").is_empty() && rig.world.get_non_send::<SwitchInFlight>().is_none()
 }
 
-/// シェル切替の待ちの間に来たゴースト切替（要件 1.12・11.5・8.5）: `raise-event` 無しのシェル切替を
+/// シェル切替の待ちの間に来たゴースト切替: `raise-event` 無しのシェル切替を
 /// 受理し、台本の終わりを待つ間にメニュー相当のゴースト切替（B へ・`OnGhostChanging` なし）を
 /// 入口へ渡すと、ゴースト切替が通って B が起き、シェル切替は差し替えの前に取りやめ（`info!` 1 件）・
 /// 差し替え・イベント・記憶は 0。A のセッションを降ろす処理は戻り、シェル切替の印は残らない。
@@ -465,7 +461,7 @@ fn ghost_switch_while_waiting_wins_and_leaves_no_shell_switch_behind() {
     );
 }
 
-/// シェルを 1 度差し替えた後のゴースト切替（要件 8.5）: A で `second` へ差し替え（`OnShellChanged`・
+/// シェルを 1 度差し替えた後のゴースト切替: A で `second` へ差し替え（`OnShellChanged`・
 /// `LastShell`＝`second`）、その応答の台本の `\![change,ghost,B]` で B へ切り替える。差し替えで
 /// seriko へ定義を送った後でも、A のセッションを降ろす処理は戻り（seriko の join が止まらない）、
 /// B が迎え入れられる。B を降ろす処理も戻る。
@@ -486,7 +482,7 @@ fn ghost_switch_after_a_shell_swap_unloads_the_session() {
         .insert_resource(WintfTaskPool::with_threads(1));
     let steady = lap.rig.wait_steady();
 
-    // 差し替えまでは 1 ms ずつ（応答の台本の `\_w[3000]` の間に差し替えの完了を見る）。
+    // 応答の台本の `\_w[3000]` の間に差し替えの完了を見る。
     let (swapped, events) =
         capture(|| lap.frames_until(CREEP, |rig| got(rig, "OnShellChanged", 1) && idle(rig)));
     let shell_after_swap = current_shell(&lap.rig);

@@ -3,18 +3,12 @@
 //! kanade（③）・seriko（⑤）・emo（⑥）・ghost-setup が消費するメッセージ／出力／
 //! 終端型を宣言し、cue ドメインの正本型（dola）を re-export する。
 //!
-//! - 出力の意味論は cue ドメイン（dola 正本の型）で表現する。relevance 分類器
-//!   [`cue_target_of`]（cue→演者担当）は **dola**（`dola::cue::sink`）が単一権威として
-//!   所有し、本層は re-export のみを行う（全演者が共有する relevance の唯一の場所・
-//!   下流の import パス `areka_sakura::contract::cue_target_of` は不変に保つ）。
-//! - 配送エンベロープ [`TalkCue`] の物理定義は **dola**（`dola::cue::TalkCue`）にあり、
-//!   本層は re-export のみを行う（cue 再生の"制御"＝配送は dola の責務・二重定義しない）。
-//!   下流の import パス（`areka_sakura::contract::TalkCue`）は不変に保つ。
+//! - relevance 分類器 [`cue_target_of`]（cue→演者担当）と配送エンベロープ [`TalkCue`] は
+//!   dola（`dola::cue`）が単一権威として所有し、本層は re-export のみ（二重定義しない）。
+//!   下流は `areka_sakura::contract::*` のパスで参照する。
 //! - [`TalkId`]/[`StartTalk`]/[`TalkDone`]/[`TalkEndReason`]／[`TalkCommand`]/[`ChoiceWaiting`]
-//!   は正本 `areka-talk` からの re-export（DD-1 解消・kanade↔sakura 授受契約の唯一の物理定義は
-//!   `areka-talk`）。下流の import パス（`areka_sakura::contract::*`）は不変に保つ。
-//! - `SakuraMsg`/`TalkHandle` は sakura 固有（kanade↔sakura 契約の外）ゆえ本層に物理定義
-//!   のまま残す。
+//!   は正本 `areka-talk` からの re-export（kanade↔sakura 授受契約の唯一の物理定義は `areka-talk`）。
+//! - `SakuraMsg`/`TalkHandle` は sakura 固有（kanade↔sakura 契約の外）ゆえ本層に物理定義を置く。
 //! - dola cue 型・parsers 値型は re-export し二重定義しない。
 
 // ── sakura 固有（kanade↔sakura 契約の外・本層に物理定義） ──
@@ -29,16 +23,16 @@ pub enum SakuraMsg {
     /// 本番は areka-ghost の dispatcher（`dispatcher.rs` の `on_tick`）が、ticker の送る
     /// 単調なミリ秒（既定は `GetTickCount64`）から talk 起点の elapsed を算出して送る（スコープ外シーム）。
     Tick(f64),
-    /// kanade からの中断（単一 Close funnel・R7）。areka-actor 停止規約の Close 相当。
+    /// kanade からの中断（単一 Close funnel）。areka-actor 停止規約の Close 相当。
     Close,
-    /// 選択解決（additive・R2.7）。選択待ち（barrier）で止まった talk へ、選ばれた選択肢 id を
+    /// 選択解決。選択待ち（barrier）で止まった talk へ、選ばれた選択肢 id を
     /// **talk アクター境界の型付き入力**として投入する唯一の口。`CuePlayer::resolve_choice` を
-    /// 外部から直接呼ぶ経路は構造的に存在せず（アクター内に閉じている）、投函は W5
-    /// （`areka-P0-choice-select-events`）の領分（本 spec は口の定義と檻のみ）。
+    /// 外部から直接呼ぶ経路は構造的に存在せず（アクター内に閉じている）、投函はこの層の外の
+    /// 領分（ここは口の定義のみ）。
     ResolveChoice { id: String },
 }
 
-/// spawn_talk の返り値: 中断/時刻注入の投函端＋join ハンドル（validation Issue 1 の解決）。
+/// spawn_talk の返り値: 中断/時刻注入の投函端＋join ハンドル。
 pub struct TalkHandle {
     /// Tick / Close の投函端（Start は spawn_talk が投函済み）。
     pub inbox: std::sync::mpsc::Sender<SakuraMsg>,
@@ -55,7 +49,7 @@ pub use areka_talk::{ScriptOrigin, SecurityLevel, SstpKind};
 
 // ── 再輸出（二重定義しない） ──
 //
-// システム変数展開の消費側契約型（R7・正本は `crate::sysvar`）を re-export し、下流は安定パス
+// システム変数展開の消費側契約型（正本は `crate::sysvar`）を re-export し、下流は安定パス
 // `areka_sakura::contract::*`（＝lib.rs で glob 再輸出）から参照できる（値源非所有・凍結像消費）。
 pub use crate::sysvar::SystemVarSnapshot;
 
@@ -67,11 +61,11 @@ pub use dola::cue::{
     cue_target_of,
 };
 
-// ── `\f` 文字装飾の運搬名（text-decoration-canon 要件 2.3/2.4） ──
+// ── `\f` 文字装飾の運搬名 ──
 
 /// `\f` 装飾を運ぶ `CueCommand::Custom` のコマンド名（消費側はこの名前で自己選別する）。
 ///
 /// キーごとに typed な cue を新設せず、`\!` コマンドと同じ 1 本の汎用キャリア
-/// （[`CueCommand::command_carrier`]）へ載せる（要件 2.4）。名前が合わない消費者
+/// （[`CueCommand::command_carrier`]）へ載せる。名前が合わない消費者
 /// （ghost・seriko）は既存の `\!` の規約どおり無視する。
 pub const FONT_TAG_CARRIER: &str = "\\f";

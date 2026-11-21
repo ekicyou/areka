@@ -1,10 +1,9 @@
-//! 新しいシェル・バルーンの資産を背景のスレッドで作る部品と、荷物の置き場
-//! （spec: areka-P0-shell-balloon-switch 要件 4.4・5.5・5.6・design「SwitchAssets」）。
+//! 新しいシェル・バルーンの資産を背景のスレッドで作る部品と、荷物の置き場。
 //!
 //! 受理ごとに [`spawn_switch_build`] が `std::thread` を 1 本起こし、COM（MTA）の上で WIC を使って
 //! 資産を作り、結果を線で UI へ返す。読み込みと復号はすべてこのスレッドで済ませ、UI は結果を
-//! 受け取るだけにする（画面を進める処理の外・要件 4.4）。失敗は差し替えの前に決まり、元の表示は
-//! そのまま残る（要件 5.5・5.6）。
+//! 受け取るだけにする（画面を進める処理の外）。失敗は差し替えの前に決まり、元の表示は
+//! そのまま残る。
 //!
 //! - 失敗はスレッドの中でも `error!`（`event = "switch_assets_failed"`）を 1 件残し、
 //!   [`SwitchBuildError`] を線で返す。
@@ -73,7 +72,6 @@ impl SwitchBuildRequest {
 }
 
 /// 背景の資産づくりの結果（線で UI へ返す）。
-// 要件 2.5: 公開の `SkinSwitchStage`・`spawn_switch_build` が名指すので開ける
 pub enum SwapBuilt {
     /// シェル: scope ごとの `EmoWorld`・アトラス・作者の DPI（新しいシェルの `seriko.dpi`）と
     /// 別名表・静的な着せ替え・着せ替えの名前表・アニメ表（[`ShellAssets`]）、配置の値
@@ -90,7 +88,6 @@ pub enum SwapBuilt {
 }
 
 /// 背景の資産づくりの失敗（`BootWiringError`／`PlacementError` の写し）。
-// 要件 2.5: 公開の `SkinSwitchStage`・`spawn_switch_build` が名指すので開ける
 #[derive(Debug, thiserror::Error)]
 pub enum SwitchBuildError {
     /// 資産づくり（読めない・解釈できない・復号できない）の失敗。
@@ -100,7 +97,7 @@ pub enum SwitchBuildError {
     #[error(transparent)]
     Placement(#[from] PlacementError),
     /// 新しいシェルの絵が復号できない（起動は読み飛ばして続けるが、切替では元の表示のまま
-    /// 失敗として返す・要件 5.5・5.6。`BootWiringError` には足さない）。
+    /// 失敗として返す。`BootWiringError` には足さない）。
     #[error("シェルの絵が復号できない: {shell_dir} {failures:?}")]
     ShellUndecodable {
         /// 新しいシェルのフォルダ。
@@ -215,7 +212,7 @@ fn build_shell(
 ) -> Result<SwapBuilt, SwitchBuildError> {
     let source = load_descript_source_for_shell(ghost_root, Some(folder))?;
     let decoder = WicDecoderArm::new().map_err(BootWiringError::Decoder)?;
-    // 既定の面はゴーストの descript から起動と同じ関数で読み直す（同じファイルなので値も同じ・要件 1.7）。
+    // 既定の面はゴーストの descript から起動と同じ関数で読み直す（同じファイルなので値も同じ）。
     let default_surfaces = read_default_surfaces(&source.ghost_kv);
     let assets = build_shell_assets(
         ghost_root,

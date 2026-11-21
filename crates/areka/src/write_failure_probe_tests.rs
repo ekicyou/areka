@@ -1,4 +1,4 @@
-//! 起動の前の書けるかの確かめ（areka-P0-write-failure-notice task 5.4・要件 2.1・2.9・7.2）。
+//! 起動の前の書けるかの確かめ。
 //!
 //! 書けない置き場は、フォルダの在るべき所に普通のファイルを置いて作る。
 //! 根はワークツリーの `target\` の下だけ（`TempPath::under_target`）。
@@ -34,7 +34,7 @@ fn ghost_profile(root: &Path) -> PathBuf {
         .join("areka")
 }
 
-/// 在るフォルダも、在らない下のフォルダ（親を確かめる）も通り、前後で中身が増えない（要件 2.9）。
+/// 在るフォルダも、在らない下のフォルダ（親を確かめる）も通り、前後で中身が増えない。
 #[test]
 fn probe_leaves_nothing_behind() {
     let tmp = TempPath::under_target("write-failure-probe-nothing");
@@ -105,7 +105,7 @@ fn ghost_place_unwritable_is_scope_ghost() {
 }
 
 /// 写す前の元の置き場を書けなくしても、渡した置き場（写した先）が書ければ通る
-/// ＝渡された `ConfigInputs` の置き場しか見ない（要件 2.1・7.2）。
+/// ＝渡された `ConfigInputs` の置き場しか見ない。
 #[test]
 fn only_the_passed_place_is_looked_at() {
     let tmp = TempPath::under_target("write-failure-probe-passed");

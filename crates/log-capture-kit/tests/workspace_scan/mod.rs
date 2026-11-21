@@ -1,8 +1,6 @@
-//! ワークスペース走査の部品（要件 8.3・8.4・10.3）。
+//! ワークスペース走査の部品。
 //!
-//! 要件の番号は、spec の名を添えていないものは spec `areka-P0-test-cage-determinism` のもの。
-//!
-//! 見張りテスト（要件 8 の迂回検知・要件 10 の 1,000 行番人）が共通で使う道具箱で、
+//! 見張りテスト（迂回検知・1,000 行番人）が共通で使う道具箱で、
 //! 判定そのものは持たない。判定に使う語や例外表は消費側の見張りが `const` で持つ。
 //!
 //! # 部品の分け方
@@ -30,16 +28,14 @@
 //! `scan_tokens_anchors_only_tokens_that_start_with_an_identifier_char` が縛る。
 //!
 //! **本ファイルは走査語を、開き括弧の有無を問わず 1 度も逐語で書かない。** 走査の対象そのものなので、
-//! 逐語で置くと ⑴ 迂回検知の見張り（要件 8）が自分自身を拾い ⑵ 着手前インベントリの
+//! 逐語で置くと ⑴ 迂回検知の見張りが自分自身を拾い ⑵
 //! `rg -l` による捕捉サイト計数の母数が動く。以下の doc も同じ約束で書く。
 //! 約束は見張りの置き場のファイル全部のもので、走査語を持つ見張りがそれぞれ自分の語で縛る
 //!（[`files_that_must_not_spell_the_tokens`]）。
 //!
 //! # 行数の定義
 //!
-//! [`line_count`] は**改行の個数**を返す。着手前インベントリ
-//!（`.kiro/specs/completed/areka-P0-test-cage-determinism/verification/remeasure.md` §6）が
-//! 同じ定義で上限越えを採っているので、番人の例外表と数え方が一致する。
+//! [`line_count`] は**改行の個数**を返す。番人の例外表に載せる上限越えの行数も同じ定義で採る。
 
 // 本 module は見張りの試験対象のどれからも共有され、どの試験対象も道具箱の一部しか
 // 使わない。未使用の警告は共有の副作用なので黙らせる。
@@ -104,7 +100,7 @@ pub fn walk_workspace_sources() -> Vec<String> {
 
 /// 列挙した全ソースの `(相対パス, 本文)`（相対パスの昇順）。
 ///
-/// 見張りはどれも木全体を読むので、テストの実行体ごとに 1 度だけ読んで置いておく（audit-test-kits 決め D7）。
+/// 見張りはどれも木全体を読むので、テストの実行体ごとに 1 度だけ読んで置いておく。
 fn sources() -> &'static [(String, String)] {
     static SOURCES: OnceLock<Vec<(String, String)>> = OnceLock::new();
     SOURCES.get_or_init(|| {
@@ -189,14 +185,14 @@ pub fn measure_workspace_sources() -> Vec<FileLines> {
         .collect()
 }
 
-/// 行数＝改行の個数。末尾に改行が無い最後の行は数えない（着手前インベントリと同じ定義）。
+/// 行数＝改行の個数。末尾に改行が無い最後の行は数えない。
 pub fn line_count(src: &str) -> usize {
     src.bytes().filter(|b| *b == b'\n').count()
 }
 
 /// 上限を超え、かつ例外表に載っていないファイルを返す。
 ///
-/// 上限**ちょうど**は超過ではない（着手前インベントリの境界と同じ）。
+/// 上限**ちょうど**は超過ではない。
 pub fn over_limit(files: &[FileLines], allow: &[&str]) -> Vec<FileLines> {
     files
         .iter()
@@ -399,8 +395,8 @@ pub fn scan_tokens<T: AsRef<str>>(src: &str, tokens: &[T]) -> Vec<(usize, String
 fn scan_stripped<T: AsRef<str>>(stripped: &str, tokens: &[T]) -> Vec<(usize, String)> {
     let mut order: Vec<&str> = tokens.iter().map(AsRef::as_ref).collect();
     order.sort_by_key(|t| std::cmp::Reverse(t.len()));
-    // 語を頭の文字ごとの組に 1 度だけ分け（組の中は長い順のまま）、文字ごとに二分探索で引く
-    // （audit-test-kits 決め D7）。どの語の頭でもない文字では語の輪を回さない。
+    // 語を頭の文字ごとの組に 1 度だけ分け（組の中は長い順のまま）、文字ごとに二分探索で引く。
+    // どの語の頭でもない文字では語の輪を回さない。
     let mut groups: Vec<(char, Vec<&str>)> = Vec::new();
     for token in order {
         let Some(first) = token.chars().next() else {
@@ -441,12 +437,11 @@ fn scan_stripped<T: AsRef<str>>(stripped: &str, tokens: &[T]) -> Vec<(usize, Str
 }
 
 // ---------------------------------------------------------------------------
-// `Cargo.toml` の行分解と本番依存表の抽出（areka-P0-nar-install 要件 10.3）
+// `Cargo.toml` の行分解と本番依存表の抽出
 // ---------------------------------------------------------------------------
 //
-// `with_default_guard_test.rs` が私有で持っていた部品を、クレート名を引数に取る形へ移した
-// もの。共有 crate の見張り（要件 1.3・11.5）と検体 crate の見張り（areka-P0-nar-install 要件 1.7）が同じ部品を
-// 呼ぶ。判定と例外表は消費側の見張りが持つ。
+// 共有 crate の見張りと検体 crate の見張りが、クレート名を引数に取って同じ部品を呼ぶ。
+// 判定と例外表は消費側の見張りが持つ。
 
 /// `Cargo.toml` の 1 行（コメント除去済み・所属セクションつき）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -525,7 +520,7 @@ pub fn mentions_crate(text: &str, package: &str) -> bool {
     text.contains(package) || text.contains(&package.replace('-', "_"))
 }
 
-/// 製品側依存に `package` の crate が現れている行を返す（純関数・要件 1.3／11.5・areka-P0-nar-install 要件 10.3）。
+/// 製品側依存に `package` の crate が現れている行を返す（純関数）。
 ///
 /// `[dependencies]` の中の 1 行という形と、`[dependencies.<package>]` という
 /// 下位表の形の両方を拾う。下位表は**見出し 1 件**として報告する（見出しが名前を持つ表では
@@ -553,7 +548,7 @@ pub fn needs_left_anchor(token: &str) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// `crates/**/Cargo.toml` の列挙（areka-P0-nar-install 要件 10.3）
+// `crates/**/Cargo.toml` の列挙
 // ---------------------------------------------------------------------------
 
 /// `crates/**/Cargo.toml` を列挙して `(crate ディレクトリ名, 中身)` を返す。
@@ -761,7 +756,7 @@ pub fn render<T: Display>(items: &[T]) -> String {
 
 /// コメントを**除かずに**生テキストから走査語を探す（純関数）。
 ///
-/// 着手前の実測に使った `rg`／`grep` と同じ見方（アンカーもコメント除去もしない素の
+/// 実測に使った `rg`／`grep` と同じ見方（アンカーもコメント除去もしない素の
 /// 部分一致）にそろえてある。修飾つきの綴りと重なる裸の綴りも別に数える。
 /// **母数が動く条件をそのまま写すのが目的なので、ここを賢くしてはいけない。**
 pub fn raw_occurrences<T: AsRef<str>>(src: &str, tokens: &[T]) -> Vec<(usize, String)> {

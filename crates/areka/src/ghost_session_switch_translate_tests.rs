@@ -1,4 +1,4 @@
-//! 切替の間の `OnTranslate` の送り先（spec `areka-P0-translate-pipeline` 要件 3.5）。
+//! 切替の間の `OnTranslate` の送り先。
 //!
 //! 2 体の実行系を実際に作るのはこの crate の切替の土台（`ghost_switch_test_support`）なので、
 //! ここで確かめる（kanade と SHIORI はゴーストごとに 1 組＝送り出しの台詞は前のゴーストの、
@@ -34,7 +34,7 @@ fn translations(rig: &SwitchRig, folder: &str) -> Vec<(String, String)> {
 }
 
 /// 台本の切替命令で A から B へ切り替えると、A の送り出しの台詞の `OnTranslate` は A の
-/// SHIORI にだけ、B の挨拶の `OnTranslate` は B の SHIORI にだけ届く（要件 3.5）。
+/// SHIORI にだけ、B の挨拶の `OnTranslate` は B の SHIORI にだけ届く。
 ///
 /// # 非空虚性
 /// 送り出しと挨拶は別々の台詞なので、どちらかが相手の SHIORI へ届くと列の比較が赤になる。

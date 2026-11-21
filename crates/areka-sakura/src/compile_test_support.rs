@@ -2,11 +2,10 @@ use super::*;
 use crate::sysvar::SystemVarSnapshot;
 use std::borrow::Borrow;
 
-/// task 4.1 で `compile` 署名が `(instructions, vars)` へ変わった。既存檻は sysvar を
-/// 観測しない（値源展開＝SystemVar アームは task 4.2 の領分）ため、空スナップショットを
-/// 渡すテスト用の薄いブリッジで機械的に追随する。`use super::*` の glob import を
-/// 明示定義が shadow するため、既存の `compile(&[...])` 呼び出しは無改変のまま本 1 引数
-/// ヘルパへ解決される。実スナップショットを渡す新檻は `super::compile(.., &snap)` を直呼びする。
+/// `compile` は `(instructions, vars)` を取る。sysvar を観測しない檻のために、空スナップショットを
+/// 渡す薄いブリッジ。`use super::*` の glob import を明示定義が shadow するため、
+/// `compile(&[...])` の呼び出しはこの 1 引数ヘルパへ解決される。実スナップショットを渡す檻は
+/// `super::compile(.., &snap)` を直呼びする。
 pub(super) fn compile(instructions: &[Instruction]) -> CompiledTalk {
     super::compile(instructions, &SystemVarSnapshot::default())
 }
@@ -30,7 +29,7 @@ pub(super) fn barrier_of(cue: &Cue) -> &BarrierKind {
 
 /// `Cue` 単位のフィールド等価（`Cue` は PartialEq 非導出のためフィールド比較）。
 /// `start_time`・`duration` は決定性の観測ゆえビット同一（`==`）を要求する（compile が
-/// テキスト cue へ焼き込む再生時間 D の回帰を素通しさせない・task 5.1 申し送り）。
+/// テキスト cue へ焼き込む再生時間 D の回帰を素通しさせない）。
 /// `actor`（PartialEq）と `payload`（CuePayload/CueCommand は PartialEq）は等価比較。
 pub(super) fn cue_eq(a: &Cue, b: &Cue) -> bool {
     a.actor == b.actor
@@ -39,7 +38,7 @@ pub(super) fn cue_eq(a: &Cue, b: &Cue) -> bool {
         && a.duration == b.duration
 }
 
-/// 2 つの合図の列が同じ数で、1 つずつ [`cue_eq`] で等しいことを確かめる（内容と時刻・指摘 89）。
+/// 2 つの合図の列が同じ数で、1 つずつ [`cue_eq`] で等しいことを確かめる（内容と時刻）。
 /// `&[Cue]` も `&[&Cue]`（絞り込んだ列）も受ける。
 pub(super) fn assert_cues_eq<A: Borrow<Cue>, B: Borrow<Cue>>(a: &[A], b: &[B], what: &str) {
     assert_eq!(a.len(), b.len(), "{what}: cue の数");
@@ -50,8 +49,8 @@ pub(super) fn assert_cues_eq<A: Borrow<Cue>, B: Borrow<Cue>>(a: &[A], b: &[B], w
 }
 
 /// 内容 cue を持つ台本は先頭へ単一 `ClearAll`（`start_time=0.0`・`duration=0.0`）を前置する
-/// （#6・R6.1/6.2）。その前置を検証しつつ、後続の**内容 cue**のスライスを返すヘルパ
-/// （各テストの ClearAll 前置検証を集約し、内容側の index を従来どおり保つ）。
+/// その前置を検証しつつ、後続の**内容 cue**のスライスを返すヘルパ
+/// （各テストの ClearAll 前置検証を集約し、内容側の index を保つ）。
 pub(super) fn assert_clear_all_prefix_and_rest(cues: &[Cue]) -> &[Cue] {
     assert!(
         !cues.is_empty(),

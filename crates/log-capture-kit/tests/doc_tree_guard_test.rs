@@ -1,15 +1,14 @@
-//! 文書の置き場の照合テスト（spec: doc-tree-tidy・設計 C4）。
+//! 文書の置き場の照合テスト。
 //!
 //! 案内 `doc/README.md` の表と、`doc/` の実物と、名前の決まりの食い違いを見つける。
 //!
 //! # 部品の分け方
 //!
 //! 案内の表の読み方（[`table_first_cells`]）と、表の行と名前の照らし方（[`row_matches`]）は、
-//! 文字列だけを受ける純粋な関数で、ファイルシステムにも git にもネットにも時刻にも触らない
-//! （要件 4.10）。純粋な側は見本の文字列で確かめられるので、「食い違い 0 件だから緑」の形の
-//! 主検査が読み方の故障で緑になっていないことを別立てで示せる。
+//! 文字列だけを受ける純粋な関数で、ファイルシステムにも git にもネットにも時刻にも触らない。
+//! 純粋な側は見本の文字列で確かめられるので、「食い違い 0 件だから緑」の形の主検査が読み方の故障で緑になっていないことを別立てで示せる。
 //!
-//! # 案内の表の書式（設計「案内の表（照合テストが読む書式）」）
+//! # 案内の表の書式
 //!
 //! - 表は見出しの文字（完全一致）で見分ける。見出しの下、次の見出しの手前までにある最初の
 //!   `|` の行の塊を表とする。
@@ -17,8 +16,8 @@
 //!   囲んだ名前 1 つ。フォルダは名前の末尾に `/` を付ける。
 //! - 直下の表の 1 列目には置き字 [`DATE_PLACEHOLDER`] を使ってよい。
 //!
-//! 依存は標準ライブラリだけ（要件 6.3）。置き場は見直しの受け持つクレートの外の
-//! `crates/log-capture-kit/tests/`（要件 6.4）。
+//! 依存は標準ライブラリだけ。置き場は見直しの受け持つクレートの外の
+//! `crates/log-capture-kit/tests/`。
 
 // ---------------------------------------------------------------------------
 // 読む見出しと置き字
@@ -52,20 +51,20 @@ const DATE_PLACEHOLDER: &str = "{YYYY-MM-DD}";
 /// 食い違い 1 件。
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum Finding {
-    /// 直下の実物が表のどの行にも当たらない（4.2）。「表に行を足すか、置き場を直す」
+    /// 直下の実物が表のどの行にも当たらない。「表に行を足すか、置き場を直す」
     Unlisted(String),
-    /// 表の行（置き字の無い行）が名指すものが無い（4.3）。「行を消すか直す」
+    /// 表の行（置き字の無い行）が名指すものが無い。「行を消すか直す」
     MissingRow(String),
-    /// 根に docs フォルダがある（4.5）。「doc/ へまとめる」
+    /// 根に docs フォルダがある。「doc/ へまとめる」
     DocsDirExists,
-    /// 名前の決まりに合わず、例外の表にも無い（4.6）。「名前を直すか、例外の表に理由と行方つきで足す」
+    /// 名前の決まりに合わず、例外の表にも無い。「名前を直すか、例外の表に理由と行方つきで足す」
     BadName(String),
-    /// 例外の行が覆う破れが 1 つも無い（4.7）。「行を消す」
+    /// 例外の行が覆う破れが 1 つも無い。「行を消す」
     StaleException(String),
     /// 表の行の 1 列目がバッククォートの名前 1 つの形でない。「表の書き方に合わせる」
     /// `line` は案内の 1 始まりの行番号。
     MalformedRow { heading: &'static str, line: usize },
-    /// 読み取りが 1 件も拾わない（4.8）。「見出しの文字が変わったか、読み方が壊れた」
+    /// 読み取りが 1 件も拾わない。「見出しの文字が変わったか、読み方が壊れた」
     EmptyReading(&'static str),
 }
 
@@ -212,7 +211,7 @@ fn is_conforming(path: &str) -> bool {
                 .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.')))
 }
 
-/// 直下の実物と直下の表を突き合わせる。置き字の行は当たりが 0 でも何も出さない（4.4）。
+/// 直下の実物と直下の表を突き合わせる。置き字の行は当たりが 0 でも何も出さない。
 fn check_direct(direct: &BTreeSet<String>, rows: &[String]) -> Vec<Finding> {
     let unlisted = direct
         .iter()
@@ -242,7 +241,7 @@ fn check_names(all: &BTreeSet<String>, exceptions: &[String]) -> Vec<Finding> {
 }
 
 /// 食い違いを全部集める。読み取りが 0 件の突き合わせは、見当違いの行を並べないよう
-/// [`Finding::EmptyReading`] だけにする（4.8）。
+/// [`Finding::EmptyReading`] だけにする。
 fn check_all(tree: &DocTree, guide: &str, docs_exists: bool) -> BTreeSet<Finding> {
     let (rows, mut found) = table_first_cells(guide, DIRECT_HEADING);
     let (exceptions, malformed) = table_first_cells(guide, EXCEPTION_HEADING);
@@ -380,7 +379,7 @@ fn date_placeholder_reads_only_the_date_shape() {
     assert!(!row_matches("README.md/", "README.md"));
     assert!(row_matches("README.md", "README.md"));
 
-    // 置き字の行は、当たる実物が 0 でも表の書き方の破れにならない（当たり 0 で赤にしない・4.4）。
+    // 置き字の行は、当たる実物が 0 でも表の書き方の破れにならない（当たり 0 で赤にしない）。
     let (rows, findings) = table_first_cells(SAMPLE_GUIDE, DIRECT_HEADING);
     assert!(
         findings.is_empty(),

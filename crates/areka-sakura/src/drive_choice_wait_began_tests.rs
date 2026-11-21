@@ -4,11 +4,11 @@ use crate::contract::{CueCommand, TalkCue, TalkId};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::Duration;
 
-// ── areka-P0-balloon-text-bugs task 4.2: 選択待ちの始まりの配り（要件 1.10/1.11/4.1） ──
+// ── 選択待ちの始まりの配り ──
 //
 // 再生（talk スレッド）は `ChoiceWaiting` を done の口へ送った**後**に、登録された受け口へ
-// `choice_wait_began` を 1 回配る。順が逆だと、押下が kanade の待ちより先に着く窓が開く
-// （design.md「順の保証」案 (b)）。檻は done の口と受け口の両方を**同じチャンネル**へ流し、
+// `choice_wait_began` を 1 回配る。順が逆だと、押下が kanade の待ちより先に着く窓が開く。
+// 檻は done の口と受け口の両方を**同じチャンネル**へ流し、
 // talk スレッドの上で起きた順をそのまま観測する（同一スレッドの送信順＝受信順）。
 
 /// done の口と受け口の出来事を 1 本の列に並べる観測用の型。
@@ -127,7 +127,7 @@ fn choice_wait_began_follows_choice_waiting_once_per_talk() {
 fn choice_wait_began_waits_for_trailing_wait_to_elapse() {
     let (handle, rx) = spawn(r"\s[10]\q[選択A,targetA]\_w[1000]", 841);
 
-    // 選択肢は at=0 で届くが、後ろの 1 秒の待ちの途中（0.5）ではまだ選択待ちでない。
+    // 選択肢は at=0 で届くが、後ろの 1 秒の待ちの途中ではまだ選択待ちでない。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
     let before = drain(&rx, NEG_WINDOW);

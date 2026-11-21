@@ -94,7 +94,7 @@ fn ng(reason: &str) -> Option<String> {
     Some(format!("NG:{reason}"))
 }
 
-// ---- 振り分け（3.1・3.4・3.5・3.7） ----
+// ---- 振り分け ----
 
 #[test]
 fn eight_with_no_active_ghost_are_not_active() {
@@ -120,7 +120,7 @@ fn eight_with_a_wrong_name_cannot_find() {
     }
 }
 
-/// 空文字・空白だけは省略ではなく何にも当たらない名前（1 体でも 0 体でも外れ・2.4・5.3）。
+/// 空文字・空白だけは省略ではなく何にも当たらない名前（1 体でも 0 体でも外れ）。
 #[test]
 fn eight_with_empty_or_blank_cannot_find() {
     let g = ghost();
@@ -154,7 +154,7 @@ fn get_log_and_seven_omitted_do_not_answer_with_a_resolve_failure() {
     }
 }
 
-// ---- 後から答える（6.4・6.6） ----
+// ---- 後から答える ----
 
 fn installed() -> (World, mpsc::Sender<ToolRequest>) {
     let mut world = World::new();
@@ -257,7 +257,7 @@ fn later_called_while_polling_is_kept() {
     assert_eq!(text_of(&inner_pending).as_deref(), Some("inner"));
 }
 
-// ---- 汲む系・準備の前・終了の途中（6.1・6.4・6.5） ----
+// ---- 汲む系・準備の前・終了の途中 ----
 
 #[test]
 fn request_sent_before_install_is_answered_after_it() {
@@ -311,7 +311,7 @@ fn drain_without_inbox_is_a_no_op() {
     assert!(world.get_non_send::<McpLater>().is_none());
 }
 
-// ---- 本物の単位で通す（3.8・4.1・6.1） ----
+// ---- 本物の単位で通す ----
 
 /// 偽の SHIORI で実行系つきの単位を起こし（`register_systems` で汲む系も登録済み）、受け口を置いて
 /// `get_active_ghost_list` を送り、`Input` の段を 1 回回すと descript の `name` で答える。
@@ -371,7 +371,7 @@ fn logsink_fallen_unit_is_active() {
     );
 }
 
-/// 本物の単位の読み口は本体側名を読み、相方の名前と `sakura.name2` を読まない（1.2・1.4・3.1・3.2・5.1）。
+/// 本物の単位の読み口は本体側名を読み、相方の名前と `sakura.name2` を読まない。
 /// 純粋なテストでは見えない配線の唯一の檻。
 #[test]
 fn real_unit_resolves_by_sakura_name_and_ascii_case() {
@@ -446,7 +446,7 @@ fn real_unit_resolves_by_sakura_name_and_ascii_case() {
     );
 }
 
-/// (要件 5.3) `crates/areka/src/mcp/` の本番のファイル（`_tests.rs` で終わらないもの）は
+/// `crates/areka/src/mcp/` の本番のファイル（`_tests.rs` で終わらないもの）は
 /// `not implemented yet` の文字列を持たない（どのツールもその答えを返さない状態を保つ）。
 #[test]
 fn production_files_have_no_not_implemented_yet() {

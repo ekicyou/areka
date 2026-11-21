@@ -1,7 +1,7 @@
 //! 面の画像の欠け（Error）と無い単独の番号（Warning）を持つ検体の CSV の中身: 終了コード 2・BOM・
 //! CRLF・4 列と `""`・行の数・レベル・同じ本文の行が無い・起動オプションの名前の記録（`[cli]`）が
-//! 入らない（要件 7.1〜7.5・8.1）。写しの層（`CaptureLayer`）は exe の中にだけ在るので、ここが
-//! CSV の中身の確かめの場所になる（tasks.md 6.2 の申し送り）。
+//! 入らない。写しの層（`CaptureLayer`）は exe の中にだけ在るので、ここが
+//! CSV の中身の確かめの場所になる。
 
 use crate::common::{BASE, RED, Row, build_ghost, parse_row, run_areka};
 
@@ -52,7 +52,7 @@ fn warning_and_error_dump_writes_one_csv_line_per_record_and_exits_two() {
             &root.child("out").display().to_string(),
             "--dump-error-log",
             &csv.display().to_string(),
-            // 起動オプションの名前の読み取りの記録は CSV に入らない（7.3）。
+            // 起動オプションの名前の読み取りの記録は CSV に入らない。
             "--no-such-option",
             "--dump-animation",
             "x",

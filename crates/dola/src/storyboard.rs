@@ -4,14 +4,13 @@ use serde::{Deserialize, Serialize};
 use crate::easing::{EasingFunction, EasingName};
 use crate::transition::TransitionRef;
 
-/// デフォルトのイージング関数（Linear）を返すヘルパー
 fn default_easing_linear() -> EasingFunction {
     EasingFunction::Named(EasingName::Linear)
 }
 
-/// ループオフセット定義（短縮形 / オブジェクト形式）
+/// ループオフセット定義（短縮形 / オブジェクト形式）。
 ///
-/// ストーリーボードの各ループ周回間にランダムな待機時間を挿入するためのパラメータ。
+/// 各ループ周回間にランダムな待機時間を挿入する。
 /// - 短縮形: 数値 → `max` として解釈（`min=0.0`, `easing=linear`）
 /// - オブジェクト形式: `{ min, max, easing }` で詳細指定
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -42,7 +41,6 @@ pub struct LoopOffsetRange {
 /// 「自分が中断されたらどう振る舞うか」を宣言的に自己申告する。
 /// オーケストレーション側の解決ロジックはこの情報を参照して適切な終了処理を実行する。
 /// priority（競争的優先度）は採用せず、協調的な自己申告のみとする。
-/// (research.md Decision 10 参照)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InterruptionPolicy {
@@ -112,7 +110,7 @@ pub struct StoryboardEntry {
     /// キーフレーム間配置
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub between: Option<BetweenKeyframes>,
-    /// このエントリ終了時点のキーフレーム名（省略時は暗黙的KFが生成される: Req 3.6）
+    /// このエントリ終了時点のキーフレーム名（省略時は暗黙的KFが生成される）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keyframe: Option<String>,
     /// トリガー対象ストーリーボード名

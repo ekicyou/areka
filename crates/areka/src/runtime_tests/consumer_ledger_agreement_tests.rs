@@ -1,5 +1,4 @@
-//! 正準台帳と `runtime` の 11 の受け口の自己選別の一致の檻（areka-P0-mcp-author-tools
-//! 要件 3.2・3.11・design「`\!` の表の仕上げ」の「一致のテスト」）。
+//! 正準台帳と `runtime` の 11 の受け口の自己選別の一致の檻。
 //!
 //! 11 の受け口をそれぞれ本物の送信端つきで組み、1 つの `\!` の cue を全員へ配って、どの送信端に
 //! 指令が届いたかを見る（配送は全員へ同じ cue を配る broadcast なので、本番と同じ形）。
@@ -61,10 +60,9 @@ fn runtime_sink_of(consumer: CommandConsumer) -> Option<CommandConsumer> {
 
 /// 11 の受け口を本物の送信端つきで組み、1 つの cue を全員へ配って、指令が届いた受け口を返す。
 ///
-/// 中断の無効化の受け口は、どの cue でも最初に話の始まり・落とすと話の終わりを送るので、
-/// 出入り（`Enter`／`Leave`）だけを「届いた」と数える。書庫の受け口は取得の口を差し替え、
-/// 取得を起こしたことも「届いた」と数える（ネットへは出ない）。バルーンの寿命の受け口は、どの cue でも
-/// 最初に話の始まり・落とすと話の終わりを送るので、待ち時間の指定（`BalloonTimeout`）だけを数える。
+/// 中断の無効化の受け口とバルーンの寿命の受け口は、どの cue でも最初に話の始まり・落とすと話の終わりを
+/// 送るので、前者は出入り（`Enter`／`Leave`）、後者は待ち時間の指定（`BalloonTimeout`）だけを「届いた」と数える。
+/// 書庫の受け口は取得の口を差し替え、取得を起こしたことも「届いた」と数える（ネットへは出ない）。
 fn reached(name: &str, args: &[&str]) -> Vec<CommandConsumer> {
     let (move_tx, move_rx) = channel();
     let (zorder_tx, zorder_rx) = channel();
@@ -238,7 +236,7 @@ fn pairs_without_a_ledger_row_reach_no_sink() {
 }
 
 /// 位置の指定・解除（`\![set,position,…]`・`\![reset,position]`）は SSP 2.9.18 も受けないので、
-/// 表に行が無く、11 のどれにも届かない（areka-P0-move-canon 要件 7.1）。
+/// 表に行が無く、11 のどれにも届かない。
 #[test]
 fn set_and_reset_position_reach_no_sink() {
     let ledger = ConsumerLedger::canonical();
@@ -256,8 +254,8 @@ fn set_and_reset_position_reach_no_sink() {
     }
 }
 
-/// areka-P0-mcp-reload が拾わない `\![reload,makoto]`・`\![reload,aigraph]` は表に行が無く、11 の受け口の
-/// どれにも届かない（areka-P0-mcp-reload 要件 10.3・11.1・11.3）。
+/// reload の受け口が拾わない `\![reload,makoto]`・`\![reload,aigraph]` は表に行が無く、11 の受け口の
+/// どれにも届かない。
 #[test]
 fn reload_makoto_and_aigraph_reach_no_sink() {
     let ledger = ConsumerLedger::canonical();

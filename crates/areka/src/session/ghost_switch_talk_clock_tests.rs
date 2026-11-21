@@ -1,4 +1,4 @@
-//! 時計の先行の檻（areka-P0-ghost-session-test-load-flake タスク 3.3・檻 8・要件 2.6）。
+//! 時計の先行の檻。
 //!
 //! 足場の時刻の注入（[`SwitchRig::inject_talk_tick`]）の送り先が dispatcher の `Tick` だけであることを、
 //! 相手が進めない間に時計だけが先へ行く場面で固定する。A の台本で B への切替を始め、切替の握手の
@@ -18,7 +18,7 @@
 //! 呼び手のスレッドで出る error（切替の失敗など）は捕捉窓で数える。
 //!
 //! # 非空虚性
-//! タスク 3.3 で変異を入れて確かめた。時刻の注入が kanade へも `KanadeMsg::Tick` を送るようにすると、
+//! 変異を入れて確かめてある。時刻の注入が kanade へも `KanadeMsg::Tick` を送るようにすると、
 //! 定常の A が `OnSecondChange` を送って（台本に無い）落ち、止めない回から赤になる。止まっている間の
 //! 時刻だけが kanade へ届く変異では、呼び出しの並びも捕捉窓の error も止めない回と同じまま、
 //! 「解いた直後に UNLOAD していた」だけが赤になる（締切が切れたことを見ているのはこの観測だけ）。
@@ -164,7 +164,7 @@ fn drained_then_unloaded(rig: &SwitchRig) -> bool {
         .is_some_and(|calls| calls.contains(&RecordedCall::Unload))
 }
 
-/// 檻 8: 握手の GET を止めている間に足場の時計を締切の 3 倍以上進めても、解いた後の 1 周は止めない回と
+/// 握手の GET を止めている間に足場の時計を締切の 3 倍以上進めても、解いた後の 1 周は止めない回と
 /// 同じに終わる（B が定常に着く・呼び出しの並びが同じ・締切が切れない・error 0 件）。
 #[test]
 fn a_rig_clock_far_ahead_of_a_stalled_handshake_leaves_the_switch_unchanged() {

@@ -1,11 +1,8 @@
 // =============================================================================
 // 配線の段（相関数）のテストで共有する道具
-//
-// design.md「File Structure Plan」の `balloon_visibility_phase_test_support.rs`。
 // 親（`balloon_visibility`）の `test_support` は判断中核の観測表を組む道具であり、
 // こちらは表示層への headless 装着と、箱の配線の檻（`balloon_visibility_phase_box_tests.rs`）が
-// `areka-runtime` と本体の両方で使う World と文字の層の組み立てだけを持つ（写しを各テストに残さない・
-// spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+// `areka-runtime` と本体の両方で使う World と文字の層の組み立てだけを持つ（写しを各テストに残さない）。
 // =============================================================================
 
 use areka_emo_atlas::AtlasTable;
@@ -52,7 +49,7 @@ pub fn runtime() -> Rc<RefCell<TextLayerRuntime>> {
 }
 
 // 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の関数（中で記録を出す相の部品）へそのまま渡す口（`test-support` のときだけ・
-// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+// 本番の可視性は変えない）。
 #[cfg(feature = "test-support")]
 use crate::balloon_visibility::{
     BalloonVisibilityState, VisibilityLogEvent, VisibilityObservations,

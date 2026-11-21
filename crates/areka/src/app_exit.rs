@@ -1,13 +1,12 @@
-//! areka の終了の統合操作（areka-P0-app-lifetime-separation・design「quit_app と ExitOrigin」）。
+//! areka の終了の統合操作。
 //!
 //! 「終了のために全窓を閉じる」と「終了を指示する」を [`quit_app`] 1 つの操作にまとめ、
-//! 片方だけを呼べない形にする（裁定 2）。全窓を閉じる部品 [`despawn_app_windows`] は私有で、
-//! クレート内のどこからも単独では呼べない（要件 3.6 を構造で守る）。起こし直しのために閉じるだけの
+//! 片方だけを呼べない形にする。全窓を閉じる部品 [`despawn_app_windows`] は私有で、
+//! クレート内のどこからも単独では呼べない。起こし直しのために閉じるだけの
 //! [`close_windows_for_restart`] は同じ部品を使うが、証 [`WindowsClosed`] の消費先が
-//! `ghost_session::reopen_ghost_windows` だけなので、終了の代わりには使えない
-//! （areka-P0-ghost-restart-unit 要件 4）。
+//! `ghost_session::reopen_ghost_windows` だけなので、終了の代わりには使えない。
 //!
-//! 出所 [`ExitOrigin`] は記録の語彙であり、受け手は出所で分岐しない（要件 3.7）。
+//! 出所 [`ExitOrigin`] は記録の語彙であり、受け手は出所で分岐しない。
 
 use areka_kanade::{CloseReason, KanadeStopCause, ShioriFault};
 use areka_sylphya::PersistFailure;
@@ -49,7 +48,7 @@ pub(crate) enum ExitOrigin {
     /// OS のセッションの終了（シャットダウン・再起動・ログオフ＝`WM_ENDSESSION` の wParam が真）。
     /// 窓の手続きの中で後始末まで済ませる（`session_end::on_os_session_end`）。失敗の中身は無い。
     SessionEnd,
-    /// 記憶を書けなかった（最初の失敗の中身つき・areka-P0-write-failure-notice 要件 2.2）。
+    /// 記憶を書けなかった（最初の失敗の中身つき）。
     /// 降ろす手順は正規の道を通るので、印の判定では「きれいな終わり」の群に入る。
     MemoryWriteFailed(PersistFailure),
 }
@@ -85,7 +84,7 @@ pub(crate) fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
     }
 }
 
-/// 出所が記憶の書き込みの失敗なら中身（網羅の match・areka-P0-write-failure-notice 要件 2.2）。
+/// 出所が記憶の書き込みの失敗なら中身（網羅の match）。
 /// `main` は [`fault_of`] が無くこれが在れば「記憶を書けない」の告知を組み、終了コードを 1 にする。
 pub(crate) fn write_failure_of(origin: &ExitOrigin) -> Option<&PersistFailure> {
     match origin {
@@ -101,7 +100,7 @@ pub(crate) fn write_failure_of(origin: &ExitOrigin) -> Option<&PersistFailure> {
 
 /// 全窓（ゴースト窓）を閉じ、終了を指示する。戻り値は標的として拾った窓の数。
 ///
-/// 閉じた数が 0 でも指示する（要件 3.2・分岐を置かない）。出所と閉じた数は `info` で残す。
+/// 閉じた数が 0 でも指示する（分岐を置かない）。出所と閉じた数は `info` で残す。
 /// 最初の出所は受け口の有無に依らず [`FirstExit`] に残す（2 度目は `debug` で流すだけ）。
 /// 受け口 [`AppExit`] が World に無いとき（本番では `WinApp` が必ず挿すので配線の誤り）は
 /// `error!` を残して戻る——窓は閉じたが終了は指示できない。
@@ -145,8 +144,7 @@ pub(crate) fn install_input_hooks(world: &mut World) {
     });
 }
 
-/// 起こし直しのために全窓を閉じた証（areka-P0-ghost-restart-unit・design「close_windows_for_restart
-/// + WindowsClosed」）。
+/// 起こし直しのために全窓を閉じた証。
 ///
 /// 作れるのは [`close_windows_for_restart`] だけ（欄は私有）。消費先は
 /// `ghost_session::reopen_ghost_windows` の 1 つに限る（値渡し・`Clone` なし＝1 回しか消費できない）。
@@ -163,15 +161,14 @@ impl WindowsClosed {
     }
 }
 
-/// 全窓（ゴースト窓）を閉じるが、終了は指示しない（要件 4.1・4.2）。
+/// 全窓（ゴースト窓）を閉じるが、終了は指示しない。
 ///
-/// 窓を消す手順は [`quit_app`] と同じ私有部品 [`despawn_app_windows`]（要件 4.5）。
+/// 窓を消す手順は [`quit_app`] と同じ私有部品 [`despawn_app_windows`]。
 /// [`AppExit`] には触れない（呼ぶ前後で `is_requested()` は変わらない）。記録は終了の
-/// `app_exit` とは別の語彙 `windows_closed_for_restart`（要件 4.3）。
-/// 終了経路（`quit_app`・停止通知からの終了・OS の閉鎖要求・強制退避・smoke）からは呼ばない
-/// （要件 4.4・4.6・完了 `app-lifetime-separation` 要件 3.6 の意図）。
+/// `app_exit` とは別の語彙 `windows_closed_for_restart`。
+/// 終了経路（`quit_app`・停止通知からの終了・OS の閉鎖要求・強制退避・smoke）からは呼ばない。
 ///
-/// # 窓の一式に属する資源を外す（areka-P0-ghost-shell-balloon-switch 要件 3.1・4.10）
+/// # 窓の一式に属する資源を外す
 ///
 /// 次の窓の一式が初回の起動と同じ手順で整うよう、窓の一式ごとに立つ World の資源を窓と一緒に
 /// 外す。`crates/areka/src` の資源の挿入を洗い出した結果は次のとおり。
@@ -179,7 +176,7 @@ impl WindowsClosed {
 /// 外すもの（窓の一式に属する）:
 /// - [`GhostWindows`]: 窓の束。消した窓の `Entity` を装着の相のゲートに見せない。
 /// - `ChainFinalized`（初期配置の確定の印）: 残すと次の一式で確定（連鎖の解き直し）が一度も
-///   走らず、2 人目のキャラが初回の位置へ寄らない（実機の欠陥・タスク 11.9）。
+///   走らず、2 人目のキャラが初回の位置へ寄らない（実機の欠陥）。
 /// - `ChainFinalizeStall`（確定の見送りの回数）: 残すと前の一式の見送りを引き継ぎ、次の一式の
 ///   待ちの途中で上限の警告が出る。
 /// - `ChainRealignPending`（拡大率の遷移後の解き直しの待ち）: 消した窓の遷移の待ちであり、
@@ -189,10 +186,9 @@ impl WindowsClosed {
 /// - `ZOrderAbsentReports`（窓の無かった宣言要素の報告の控え）: 残すと次の一式で同じ不在が
 ///   報告されない。
 /// - `StickyGroupLedger`（窓の組の帳簿）・`CharDragSession`（ドラッグの控え）: 台本の組と消した窓の
-///   `Entity` を次の一式へ持ち越さない（areka-P0-window-link-directives 要件 6.2）。SHIORI だけの
-///   読み直しはここを通らないので残る（要件 6.3）。
+///   `Entity` を次の一式へ持ち越さない。SHIORI だけの読み直しはここを通らないので残る。
 /// - `BalloonLockLedger`（バルーンの動かせない指定の帳簿）: descript の段も台本の lock も次の一式へ
-///   持ち越さない（descript-window-keys 要件 5.5）。SHIORI だけの読み直しはここを通らないので残る。
+///   持ち越さない。SHIORI だけの読み直しはここを通らないので残る。
 ///
 /// 外さないもの（プロセスに属する・または起こすたびに差し替わる）:
 /// - [`WindowsEpoch`]: 閉じた回数。投函済みの古い窓を作らない照合に使うので、進めて残す。
@@ -213,7 +209,7 @@ pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
     world.remove_resource::<ZOrderAbsentReports>();
     world.remove_resource::<StickyGroupLedger>();
     world.remove_resource::<CharDragSession>();
-    // 動かせない指定の帳簿も外す（ドラッグの控えは wintf のものなので areka が外す物は無い・要件 5.5）。
+    // ドラッグの控えは wintf のものなので areka が外す物は無い。
     world.remove_resource::<BalloonLockLedger>();
     tracing::info!(
         event = "windows_closed_for_restart",
@@ -263,19 +259,18 @@ fn despawn_app_windows(world: &mut World) -> usize {
 ///
 /// 窓を作る閉包（`ghost_session::prepare_ghost_windows`）は組んだ時点の値を控え、`Input` 段で
 /// 着いたときに値が進んでいれば窓を作らない——投函した後・着く前に全窓を閉じた（切替先の非同期の
-/// 失敗で既定へ戻した・終了した）とき、閉じた後に古い窓が孤児として生えないため
-/// （areka-P0-ghost-shell-balloon-switch 要件 6.1・4.10）。
+/// 失敗で既定へ戻した・終了した）とき、閉じた後に古い窓が孤児として生えないため。
 #[derive(Resource, Default)]
 pub(crate) struct WindowsEpoch(pub(crate) u64);
 
-/// ゴースト窓への OS の閉鎖要求（Alt＋F4・`taskkill`・「タスクの終了」）の受け手（裁定 3）。
+/// ゴースト窓への OS の閉鎖要求（Alt＋F4・`taskkill`・「タスクの終了」）の受け手。
 ///
 /// 窓のキャラ／バルーンの印からスコープを読み、メニューの「終了」（`menu::request_close`）と
 /// 同じ `CloseReason::User { scope }` の終了要求を kanade へ 1 件送る——終了系列は増やさない。
 /// **窓は消さない**: 閉じるのは終了の握手の完了を受けた終了系列の完了通知 → [`quit_app`]。
 /// 送り口（[`MouseWiring`]）が無い（窓は出たが kanade との結線に失敗した起動）なら、
-/// 別れの台詞を流す相手がいないので `warn!` を残して [`quit_app`] で直ちに閉じる（要件 3.10・
-/// 裁定 3「標準の道具で閉じられないアプリにしない」）。
+/// 別れの台詞を流す相手がいないので `warn!` を残して [`quit_app`] で直ちに閉じる
+/// （標準の道具で閉じられないアプリにしない）。
 pub(crate) fn on_ghost_os_close(world: &mut World, entity: Entity) {
     let scope = if let Some(m) = world.get::<CharWindowMarker>(entity) {
         m.scope
@@ -310,7 +305,7 @@ pub(crate) fn on_ghost_os_close(world: &mut World, entity: Entity) {
 }
 
 /// HWND が付いた瞬間のゴースト窓へ [`on_ghost_os_close`] と、OS のセッションの終了の受け手
-/// `session_end::on_os_session_end`（areka-P0-ghost-shell-balloon-switch 要件 12.9）を差す system。
+/// `session_end::on_os_session_end` を差す system。
 ///
 /// `register_ghost_windows_click_through` と同じ `Added<WindowHandle>` の捉え方で、同じ
 /// `FrameFinalize` 段に登録する。`placement` は `crate::` パスを持てない（example の `#[path]`

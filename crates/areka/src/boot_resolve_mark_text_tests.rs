@@ -1,4 +1,4 @@
-//! 記録の文の両面（areka-P0-write-failure-notice task 6.3・要件 4.1〜4.3・7.3・7.6）。
+//! 記録の文の両面。
 //!
 //! - 投函の 4 行（`last_used_recorded`・`last_shell_recorded`・`last_balloon_recorded`・
 //!   `install_balloon_remembered`）は、書けたときも書けないときも「書きました」「書き換えました」を含まない。
@@ -73,7 +73,7 @@ fn post_and_drain(
 }
 
 /// 投函の 4 行は書けた・書けないの両面で「書きました」「書き換えました」を含まず、書けないときだけ
-/// `memory_write_failed` が出る（要件 4.1・7.3）。
+/// `memory_write_failed` が出る。
 #[test]
 fn post_lines_never_claim_written_and_failure_is_logged_only_when_unwritable() {
     let mut rig = SwitchRig::new(vec![(
@@ -171,7 +171,7 @@ fn mark_file(app_dir: &Path) -> std::path::PathBuf {
     files[0].clone()
 }
 
-/// 印を消せない文は、記憶に印が残るときだけ「前回落ちたとして」を含む（要件 4.2・7.3）。
+/// 印を消せない文は、記憶に印が残るときだけ「前回落ちたとして」を含む。
 #[test]
 fn clear_degraded_foretells_crash_only_when_mark_remains() {
     let tmp = TempPath::under_target("mark-text-clear");
@@ -207,7 +207,7 @@ fn clear_degraded_foretells_crash_only_when_mark_remains() {
     );
 }
 
-/// 印を残す文は、記憶に印が在るときだけ「Ref6/7 付き」を含む（要件 4.3・7.3）。
+/// 印を残す文は、記憶に印が在るときだけ「Ref6/7 付き」を含む。
 #[test]
 fn keep_mark_foretells_ref6_7_only_when_mark_exists() {
     let tmp = TempPath::under_target("mark-text-keep");

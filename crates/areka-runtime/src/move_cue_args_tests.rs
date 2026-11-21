@@ -1,7 +1,4 @@
-// =============================================================================
-// `\![move]` の引数の読みの決定論檻（design.md Testing Strategy「move_cue_args_tests.rs」・
-// 要件 1.1〜1.13・3.8・4.4〜4.6・5.1）
-// =============================================================================
+// `\![move]` の引数の読みの決定論テスト。
 
 use super::*;
 use crate::move_cue::{Axis, AxisSpec, MoveBase, MoveDirective, RefPoint, RefX, RefY};
@@ -14,7 +11,7 @@ fn parse(scope: u32, items: &[&str]) -> ParsedMove {
     parse_move_directive(scope, &toks(items))
 }
 
-/// 既定（要件 1.3）: X・Y は今の座標・time 0・基準 screen・両参照点 left.top・option なし。
+/// 既定: X・Y は今の座標・time 0・基準 screen・両参照点 left.top・option なし。
 fn defaults(scope: u32) -> MoveDirective {
     MoveDirective {
         scope,
@@ -32,7 +29,7 @@ const fn rp(x: RefX, y: RefY) -> RefPoint {
     RefPoint { x, y }
 }
 
-/// 要件 1.1・1.4: 名前付きの形と旧い位置の形で同じ値を書くと同じ指令になり、記録は 0 件。
+/// 名前付きの形と旧い位置の形で同じ値を書くと同じ指令になり、記録は 0 件。
 #[test]
 fn named_and_positional_read_to_same_directive() {
     let named = parse(
@@ -63,7 +60,7 @@ fn named_and_positional_read_to_same_directive() {
     );
 }
 
-/// 要件 1.2: キーの大小・並び順を問わない。
+/// キーの大小・並び順を問わない。
 #[test]
 fn named_keys_are_case_and_order_insensitive() {
     let a = parse(
@@ -91,7 +88,7 @@ fn named_keys_are_case_and_order_insensitive() {
     assert_eq!(a.directive.base_offset, rp(RefX::Left, RefY::Bottom));
 }
 
-/// 要件 1.3・1.4: どのキー・欄も省略でき、空の値は省略と同じ既定へ落ちる（両方の形）。
+/// どのキー・欄も省略でき、空の値は省略と同じ既定へ落ちる（両方の形）。
 #[test]
 fn omitted_and_empty_fields_take_the_same_defaults() {
     for items in [
@@ -113,7 +110,7 @@ fn omitted_and_empty_fields_take_the_same_defaults() {
     }
 }
 
-/// 要件 1.5・1.6: `fix`（大小を問わない）は今の座標を保ち、負の整数を受ける（両方の形）。
+/// `fix`（大小を問わない）は今の座標を保ち、負の整数を受ける（両方の形）。
 #[test]
 fn fix_and_negative_numbers_in_both_forms() {
     let positional = parse(0, &["-353", "FIX"]);
@@ -125,7 +122,7 @@ fn fix_and_negative_numbers_in_both_forms() {
     }
 }
 
-/// 要件 1.7: 点の無い 1 語は横と縦の両方へ当たる（両方の形・`base` は `base.base`）。
+/// 点の無い 1 語は横と縦の両方へ当たる（両方の形・`base` は `base.base`）。
 #[test]
 fn bare_word_applies_to_both_axes() {
     let positional = parse(0, &["", "", "", "0", "base", "center"]);
@@ -140,7 +137,7 @@ fn bare_word_applies_to_both_axes() {
     }
 }
 
-/// 要件 1.8・1.9・1.10・1.11: `--option` の繰り返しは全部受け、`ignore-sticky-window` は印を立て、
+/// `--option` の繰り返しは全部受け、`ignore-sticky-window` は印を立て、
 /// 知らない値は記録し、重複とは数えない。
 #[test]
 fn option_repeats_are_all_read() {
@@ -164,11 +161,10 @@ fn option_repeats_are_all_read() {
             },
         ]
     );
-    // 印の無い指令は false のまま。
     assert!(!parse(0, &["--option=foo"]).directive.ignore_sticky_window);
 }
 
-/// 要件 1.10: 知らないキー・`=` の無い引数・`--` で始まらない引数はその部分だけ無視して記録し、
+/// 知らないキー・`=` の無い引数・`--` で始まらない引数はその部分だけ無視して記録し、
 /// 残りで指令を作る。
 #[test]
 fn ignored_parts_are_recorded_and_the_rest_is_read() {
@@ -200,7 +196,7 @@ fn ignored_parts_are_recorded_and_the_rest_is_read() {
     );
 }
 
-/// 要件 1.11: `option` 以外の同じキーは後勝ちで、重複を記録する（SSP 実測 M4-j と同じ値）。
+/// `option` 以外の同じキーは後勝ちで、重複を記録する（SSP 実測と同じ値）。
 #[test]
 fn duplicate_key_last_wins_and_is_recorded() {
     let p = parse(1, &["--X=10", "--x=20", "--Y=fix", "--base=me"]);
@@ -215,7 +211,7 @@ fn duplicate_key_last_wins_and_is_recorded() {
     );
 }
 
-/// 要件 1.12: 旧い形の欄の並びは今のままで、7 欄目以降は読まない（記録もしない）。
+/// 旧い形の欄の並びは今のままで、7 欄目以降は読まない（記録もしない）。
 #[test]
 fn positional_reads_six_fields_and_ignores_the_rest() {
     let p = parse(
@@ -249,7 +245,7 @@ fn positional_reads_six_fields_and_ignores_the_rest() {
     );
 }
 
-/// 要件 1.13: `--` で始まる引数が 1 つでもあれば名前付きの形、`-353` だけなら旧い形。
+/// `--` で始まる引数が 1 つでもあれば名前付きの形、`-353` だけなら旧い形。
 #[test]
 fn form_is_named_iff_some_arg_starts_with_double_dash() {
     let positional = parse(0, &["-353", "", "", "screen"]);
@@ -267,7 +263,7 @@ fn form_is_named_iff_some_arg_starts_with_double_dash() {
     );
 }
 
-/// 要件 4.5: 読めない X・Y は `fix` へ置き換えて記録する（両方の形）。
+/// 読めない X・Y は `fix` へ置き換えて記録する（両方の形）。
 #[test]
 fn unparsable_axis_falls_back_to_fix() {
     let positional = parse(0, &["abc", "1.5"]);
@@ -291,7 +287,7 @@ fn unparsable_axis_falls_back_to_fix() {
     }
 }
 
-/// 要件 4.6・5.1: 読めない time は 0 へ置き換えて記録し、time>0 は値を保って記録する。
+/// 読めない time は 0 へ置き換えて記録し、time>0 は値を保って記録する。
 #[test]
 fn duration_unparsable_is_zero_and_positive_is_recorded() {
     for p in [parse(0, &["", "", "-5"]), parse(0, &["--time=soon"])] {
@@ -311,7 +307,7 @@ fn duration_unparsable_is_zero_and_positive_is_recorded() {
     }
 }
 
-/// 基準の語（大小を問わない）と数のスコープ。要件 3.8: 他の語（他のゴーストの名前）はスコープ 0
+/// 基準の語（大小を問わない）と数のスコープ。他の語（他のゴーストの名前）はスコープ 0
 /// へ置き換えて記録する。
 #[test]
 fn base_vocabulary_and_other_ghost_name() {
@@ -345,7 +341,7 @@ fn base_vocabulary_and_other_ghost_name() {
     }
 }
 
-/// 要件 4.4: 知らない参照点の語は軸ごとに横 `left`・縦 `top` へ置き換えて記録する。
+/// 知らない参照点の語は軸ごとに横 `left`・縦 `top` へ置き換えて記録する。
 #[test]
 fn unknown_ref_words_fall_back_per_axis() {
     let p = parse(0, &["--base-offset=foo.bottom", "--move-offset=right.bar"]);

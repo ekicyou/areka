@@ -1,5 +1,4 @@
-//! 終了指示の有無による毎フレームの処理の分岐（areka-P0-frame-phases-after-exit タスク 2.1・
-//! 要件 1.6／1.7／3.1／3.2／3.4）。
+//! 終了指示の有無による毎フレームの処理の分岐。
 //!
 //! 3 つの組み立てとも同じ: 既存の補助で結線を組んで装着済みにし、未登録の対象への `Hide` を
 //! 1 件送り、素の World に挿す。差は終了の受け口（`wintf::AppExit`）の有無と、指示済みかだけ。
@@ -8,7 +7,7 @@
 //! - 指示済み: 相を 1 つも回さない＝ERROR 0 件・WARN 0 件・読み飛ばしの記録 1 件（DEBUG）・
 //!   結線は World に残り・受信端に指令が 1 件残る。
 //! - 未指示と受け口なし: 今日どおり全相を回す＝`apply(Hide)` の ERROR 1 件・読み飛ばしの記録 0 件・
-//!   受信端は空・結線は World に残る。WARN の件数と ERROR の総数は確かめない（design D6: 素の
+//!   受信端は空・結線は World に残る。WARN の件数と ERROR の総数は確かめない（素の
 //!   World では作業領域の同期が WARN を出すなど、本件の対象でない記録が混ざる）。
 
 use std::sync::mpsc;
@@ -73,7 +72,7 @@ fn remaining_commands(world: &mut World) -> usize {
         .len()
 }
 
-/// 要件 3.1（1.1〜1.4）: 終了が指示済みなら、相を 1 つも回さずに読み飛ばしの記録を 1 行残して戻る。
+/// 終了が指示済みなら、相を 1 つも回さずに読み飛ばしの記録を 1 行残して戻る。
 #[test]
 fn frame_phases_are_skipped_once_exit_is_requested() {
     let (mut world, logs) = run_one_frame(ExitState::Requested);
@@ -106,7 +105,7 @@ fn frame_phases_are_skipped_once_exit_is_requested() {
     );
 }
 
-/// 要件 3.2（1.6）と 1.7: 未指示のときと受け口が無いときは、今日どおり全相を回す。
+/// 未指示のときと受け口が無いときは、今日どおり全相を回す。
 #[test]
 fn frame_phases_run_as_today_when_exit_is_not_requested_or_absent() {
     for (label, exit) in [

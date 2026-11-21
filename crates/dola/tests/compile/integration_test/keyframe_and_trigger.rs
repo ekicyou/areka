@@ -1,4 +1,4 @@
-//! Keyframe-reference resolution and trigger-entry time-resolution integration tests.
+//! キーフレーム参照の解決と、トリガーエントリの時刻解決の統合テスト
 
 use super::*;
 

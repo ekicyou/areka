@@ -1,4 +1,4 @@
-//! Shared helpers for compile tests
+//! compile テストが共有する補助
 
 use dola::*;
 use std::collections::BTreeMap;

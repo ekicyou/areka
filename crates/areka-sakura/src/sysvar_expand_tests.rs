@@ -1,4 +1,4 @@
-//! `expand_system_vars` の檻（翻訳の前の展開・要件 2.2〜2.5）。
+//! `expand_system_vars` の檻（翻訳の前の展開）。
 //!
 //! 値の決め方は再生時の展開（`resolve_system_var`）と同じであること、読みが変わる並びでは
 //! 元の文字列のまま返して警告を 1 件残すこと、展開の前後で再生の文字の並びが同じであることを
@@ -55,7 +55,7 @@ fn played(script: &str, vars: &SystemVarSnapshot) -> Vec<String> {
     out
 }
 
-/// 写しに値がある `username` はその値になる（要件 2.2・2.3）。
+/// 写しに値がある `username` はその値になる。
 #[test]
 fn username_with_value_is_expanded() {
     let vars = snapshot(&[("username", "太郎")]);
@@ -64,14 +64,14 @@ fn username_with_value_is_expanded() {
     assert_eq!(warned, 0, "読みが変わらないので警告は出ない");
 }
 
-/// `username` に値が無ければ既定値「ユーザーさん」になる（要件 2.3）。
+/// `username` に値が無ければ既定値「ユーザーさん」になる。
 #[test]
 fn username_without_value_uses_default() {
     let out = expand_system_vars("%usernameさん", &SystemVarSnapshot::default());
     assert_eq!(out, format!("{DEFAULT_USERNAME}さん"));
 }
 
-/// `username` 以外でも写しに値がある名前はその値になる（要件 2.3）。
+/// `username` 以外でも写しに値がある名前はその値になる。
 #[test]
 fn other_names_with_value_are_expanded() {
     let vars = snapshot(&[
@@ -83,7 +83,7 @@ fn other_names_with_value_are_expanded() {
     assert_eq!(out, "さくら・春野さくら・うにゅう");
 }
 
-/// 値が無く既定値も無い名前は綴りのまま残る（要件 2.4）。
+/// 値が無く既定値も無い名前は綴りのまま残る。
 #[test]
 fn names_without_value_stay_as_spelled() {
     let vars = snapshot(&[("username", "太郎")]);
@@ -92,7 +92,7 @@ fn names_without_value_stay_as_spelled() {
     assert_eq!(out, script);
 }
 
-/// 置き換える名前と綴りのまま残す名前が混ざっても、照合は通って展開される（要件 2.3・2.4）。
+/// 置き換える名前と綴りのまま残す名前が混ざっても、照合は通って展開される。
 #[test]
 fn mixed_expanded_and_pass_through_names_expand_without_fallback() {
     let vars = snapshot(&[("username", "太郎")]);
@@ -101,7 +101,7 @@ fn mixed_expanded_and_pass_through_names_expand_without_fallback() {
     assert_eq!(warned, 0, "読みが変わらないので警告は出ない");
 }
 
-/// 値が空文字の名前は空に展開され、照合で誤って元へ戻らない（要件 2.3・2.5）。
+/// 値が空文字の名前は空に展開され、照合で誤って元へ戻らない。
 #[test]
 fn empty_value_expands_to_nothing_without_fallback() {
     let vars = snapshot(&[("username", "")]);
@@ -110,8 +110,7 @@ fn empty_value_expands_to_nothing_without_fallback() {
     assert_eq!(warned, 0, "空の値で読みは変わらないので警告は出ない");
 }
 
-/// 読みが変わる 3 つの並びでは展開せずに元の文字列を返し、警告を 1 件ずつ残す
-/// （要件 2.2・2.5）。
+/// 読みが変わる 3 つの並びでは展開せずに元の文字列を返し、警告を 1 件ずつ残す。
 #[test]
 fn reading_changing_sequences_fall_back_to_original() {
     let cases = [
@@ -130,7 +129,7 @@ fn reading_changing_sequences_fall_back_to_original() {
     }
 }
 
-/// 展開の前後で、再生したときの文字の並びが同じ（要件 2.5）。値の中の `\`・`%`、
+/// 展開の前後で、再生したときの文字の並びが同じ。値の中の `\`・`%`、
 /// タグの引数の中の `%`、エスケープされた `%` を含む台詞でも同じ。
 #[test]
 fn playback_is_identical_before_and_after_expansion() {

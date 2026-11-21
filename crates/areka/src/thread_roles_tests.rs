@@ -67,7 +67,7 @@ fn every_mapped_role_is_in_the_fixed_vocabulary() {
 // ── 実際のスレッド生成点との結線 ────────────────────────────────
 
 /// 導入したフックが、**本物の**ティッカー 2 系統と素のアクターを、宣言どおりの役割名で
-/// 名簿へ載せる（要件 2.3）。
+/// 名簿へ載せる。
 ///
 /// ティッカーの名前（`ticker`／`loop-ticker`）を実物から取るので、`areka-ghost` 側で名前が
 /// 変わればこのテストが落ちる（`actor:` へ黙って落ちない）。3 本とも**生かしたまま**観測して
@@ -97,7 +97,7 @@ fn installed_hook_registers_the_real_ticker_threads_with_their_declared_roles() 
     );
     let probe_role = role_actor("thread-roles-probe");
     let (probe_tx, probe_handle) = areka_actor::spawn_actor::<(), _>("thread-roles-probe", |rx| {
-        // 全 Sender drop（切断）まで居座る＝観測中はスレッドが生きている。
+        // 全 Sender drop（切断）まで居座り、観測中はスレッドを生かす。
         while rx.recv().is_ok() {}
     });
 
@@ -106,7 +106,6 @@ fn installed_hook_registers_the_real_ticker_threads_with_their_declared_roles() 
     let loop_seen = wait_for_role(ROLE_TICKER_LOOP, limit);
     let probe_seen = wait_for_role(&probe_role, limit);
 
-    // 観測を終えてから停止（Close 送信 → join）。
     ticker_tx
         .send(TickerMsg::Close)
         .expect("ticker へ Close を送れるはず");

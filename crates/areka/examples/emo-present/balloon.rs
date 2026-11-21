@@ -1,10 +1,10 @@
 use super::emo2;
 
 // ---------------------------------------------------------------------------
-// Balloon anchor offset（R5.4・design「バルーン正典整理」）
+// Balloon anchor offset
 // ---------------------------------------------------------------------------
 
-/// バルーン窓の左上（物理 px・スクリーン座標）を算出する（R5.4）。
+/// バルーン窓の左上（物理 px・スクリーン座標）を算出する。
 ///
 /// 基準は shell descript の正典整列: X「バルーンの右端がサーフェス左端に揃う位置」＋ Y「バルーン
 /// 上端＝サーフェス上端」。`sakura.balloon.offsetx/offsety` があればこの基準からの調整として加算し、
@@ -14,7 +14,6 @@ use super::emo2;
 /// - `shell_x`/`shell_y`: シェル窓左上（物理 px）。
 /// - `balloon_w`: バルーン surface 原寸幅（物理 px）。
 pub(super) fn compute_balloon_pos(shell_x: i32, shell_y: i32, balloon_w: u32) -> (i32, i32) {
-    // 既定基準: バルーン右端 = シェル左端 → 左上 x = シェル左端 − バルーン幅。上端揃え → y = シェル上端。
     let base_x = shell_x - balloon_w as i32;
     let base_y = shell_y;
 
@@ -40,9 +39,9 @@ pub(super) fn compute_balloon_pos(shell_x: i32, shell_y: i32, balloon_w: u32) ->
 
 /// shell descript（`shell/master/descript.txt`）から `sakura.balloon.offsetx/offsety` を読む。
 ///
-/// 読取失敗・両キー欠如・整数化不能はいずれも `None`（既定整列へフォールバック）で返す（log-first・
-/// panic しない）。emo2 fixture は両キーとも持たないため通常は `None` が返る（既定整列が走る）。
-/// 部分指定（片方のみ）は仕様外ゆえ安全側で `None` とする。
+/// 読取失敗・両キー欠如・整数化不能はいずれも `None`（既定整列へフォールバック）で返す。
+/// emo2 fixture は両キーとも持たないため通常は `None` が返る。
+/// 部分指定（片方のみ）は安全側で `None` とする。
 fn read_balloon_offset() -> Option<(i32, i32)> {
     let path = emo2("shell/master/descript.txt");
     let text = match std::fs::read_to_string(&path) {

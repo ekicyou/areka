@@ -5,59 +5,52 @@ use super::{
 };
 
 // ---------------------------------------------------------------------------
-// 窓寸 reconcile（areka-P0-emo-dpi-scaling task 5.2・R7.1/R7.2）
+// 窓寸 reconcile
 // ---------------------------------------------------------------------------
 
 /// 窓寸 reconcile 時の**位置の決め方**の別（本番 `runtime::frame::GhostWindowKind` の同型）。
 ///
 /// 本番は char 窓＝`resize_window_to`（`Anchored` 射影で接地点＝下端中央を保つ）／balloon 窓＝
 /// `resize_window_keep_position`（位置は `follow_balloon` が決める従属量ゆえ据え置き）に振り分ける。
-/// 本 example の窓は placement 層を通さず生成されるため `Anchored` を持たず（`areka-runtime` の
-/// `examples/collision-probe.rs` 冒頭の注の「`Anchored` 欠落」の既知記述）、`resize_window_to` は
+/// 本 example の窓は placement 層を通さず生成されるため `Anchored` を持たず、`resize_window_to` は
 /// 不発である——ゆえに位置の扱いだけ本 example の構図へ合わせる。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ReconcileKind {
     /// シェル窓: 現在位置（[`SHELL_INITIAL_X`]/[`SHELL_INITIAL_Y`] の左上）を据え置く。
     ///
-    /// **「キャラ窓の原点は下端中央」規約（寸法変動で足元が動かない）を本 example では再現しない**:
-    /// あの規約は placement 層の `Anchored`＋`project_anchor` が担う不変条件であり、本 example の窓は
-    /// アンカーを持たず初期位置も定数リテラルゆえ「保つべき接地点」が存在しない。ここで手作りの
-    /// 下端中央射影を書けば**アンカー規約の第 2 の流儀**を観測エイドの中に生やすことになる（本番と
-    /// 別流儀を発明しない）。窓配置の観測は
-    /// `areka-placement` の `examples/window-placement.rs`／`areka-runtime` の `examples/collision-probe.rs`
-    /// の領分である。
+    /// 「キャラ窓の原点は下端中央」規約は本 example では再現しない: あの規約は placement 層の
+    /// `Anchored`＋`project_anchor` が担う不変条件で、本 example の窓はアンカーを持たず「保つべき
+    /// 接地点」が存在しない。手作りの射影を書けばアンカー規約の第 2 の流儀を生やすことになる。
+    /// 窓配置の観測は `areka-placement` の `examples/window-placement.rs`／`areka-runtime` の
+    /// `examples/collision-probe.rs` の領分である。
     Shell,
     /// バルーン窓: 位置はシェル＋自幅から決まる従属量ゆえ [`compute_balloon_pos`] で再算出する。
     ///
     /// 本番の `resize_window_keep_position`（位置据え置き）に対応するが、本 example には
-    /// `follow_balloon` に当たる追従 system が無く、位置は生成時に [`compute_balloon_pos`] が一度
-    /// 決めたきりである。k≠1.0 でバルーン幅が伸びた分だけ据え置きでは既定整列（バルーン右端＝
-    /// シェル左端）が崩れてシェルへ食い込むため、**同じ関数**へ新幅を与えて再算出する（追従の
-    /// 代役はこの 1 箇所に閉じる）。
+    /// `follow_balloon` に当たる追従 system が無い。k≠1.0 でバルーン幅が伸びると据え置きでは既定整列
+    /// （バルーン右端＝シェル左端）が崩れてシェルへ食い込むため、同じ関数へ新幅を与えて再算出する。
     Balloon,
 }
 
-/// 表示成立点の窓寸 reconcile 要求を消費し、窓 client を k 適用後の物理寸へ合わせる
-/// （emo-dpi-scaling task 5.2・R7.1/R7.2）。
+/// 表示成立点の窓寸 reconcile 要求を消費し、窓 client を k 適用後の物理寸へ合わせる。
 ///
 /// 各 target について [`EmoPresenter::take_pending_resize`] を引き、`Some(新物理寸)` のときだけ
 /// [`reconcile_window_size`] で反映する。本番 `runtime` の `reconcile_reported_sizes` と同じ流儀:
 ///
-/// - **消費者は表示を引き起こした者**（消費規約）。本 example は presenter を直接所有し `apply` を
-///   自ら呼ぶ唯一の主体であり、`refresh_scale`（もう一方の消費者）は呼ばない——ゆえに要求を取り
+/// - **消費者は表示を引き起こした者**。本 example は presenter を直接所有し `apply` を
+///   自ら呼ぶ唯一の主体で、`refresh_scale`（もう一方の消費者）は呼ばない——ゆえに要求を取り
 ///   逃す第三者が存在しない。
 /// - **報告は「状態」であって「エッジ」ではない**。要求は取り出されるまで消えず、取り出した後は
-///   同寸表示を何度繰り返しても `None`（＝窓への無用な書込＝churn を生まない）。
+///   同寸表示を何度繰り返しても `None`（＝窓への無用な書込を生まない）。
 /// - **k=1.0 でも初回表示は必ず報告される**（presenter 側の契約）。ただし窓は当該 surface の native
-///   原寸で生成済みゆえ、反映は同寸のべき等 skip となり書込は 1 バイトも起きない（従来と挙動同一）。
+///   原寸で生成済みゆえ、反映は同寸のべき等 skip となり書込は起きない。
 ///
 /// # 報告は「DPI 変化」ではなく「表示物理寸の変化」に紐づく
 ///
 /// presenter が要求を積む条件は *k* の変化ではなく**物理寸（＝native 原寸 × k）の変化**である。ゆえに
-/// k=1.0 でも、巡回で表示 surface が変わって native 原寸が変われば窓はそれに追従する——これは本番
-/// （`reconcile_reported_sizes`／resnap）と同一の意味論であり、「窓は surface0 の寸のまま surface1000 を
-/// 表示して端が欠ける」という従前の（k とは無関係な）取りこぼしも同じ経路で解消される。同寸の切替
-/// （emo2 のまばたきは合成外形が変わらない）では要求が積まれず、窓は一切書かれない（churn なし）。
+/// k=1.0 でも、巡回で表示 surface が変わって native 原寸が変われば窓はそれに追従する（本番の
+/// `reconcile_reported_sizes`／resnap と同一の意味論）。同寸の切替（emo2 のまばたきは合成外形が
+/// 変わらない）では要求が積まれず、窓は一切書かれない。
 ///
 /// 窓 entity が [`Entity::PLACEHOLDER`]（構築失敗で窓を作らなかった）のに要求が出るのは、装着済み
 /// target と窓生成の食い違い＝結線バグゆえ `error!` で loud に観測する（silent skip にしない）。
@@ -66,7 +59,6 @@ pub(super) fn reconcile_present_sizes(boot: &mut EmoBoot, world: &mut World) {
         (TargetId(0), boot.shell_window, ReconcileKind::Shell),
         (TargetId(1), boot.balloon_window, ReconcileKind::Balloon),
     ] {
-        // 要求なし＝物理寸が前回適用寸から変わっていない／未表示／既に消費済み → 窓を触らない。
         let Some(new_size) = boot.presenter.take_pending_resize(target) else {
             continue;
         };
@@ -91,15 +83,13 @@ pub(super) fn reconcile_present_sizes(boot: &mut EmoBoot, world: &mut World) {
 /// 反映先を欠く異常（`WindowPos` 未付与）は `warn!`・値が窓寸として成立しない場合は `warn!`/`error!`。
 ///
 /// 物理寸は `u32`（表示バッファ外形）で報告されるが窓寸は `i32` 通貨ゆえ、ここで変換し超過・0 を
-/// 弾く（log-first・panic しない・本番と同じ二重防波堤）。**f32 を寸法演算に用いない**——値は
-/// presenter の丸め単一権威（`ScaleRatio::scaled_extent` 経由の
-/// [`EmoPresenter::target_physical_size`] と同一の計算）から来ており、ここでは整数のまま運ぶだけである。
+/// 弾く（log-first・panic しない）。**f32 を寸法演算に用いない**——値は presenter の丸め単一権威
+/// （`ScaleRatio::scaled_extent` 経由の [`EmoPresenter::target_physical_size`] と同一の計算）から来て
+/// おり、ここでは整数のまま運ぶだけである。
 ///
-/// 反映は `WindowPos` への通常書込（変更検知あり）で行う。wintf の `apply_window_pos_changes`
-/// （`Changed<WindowPos>`・`UISetup`）が次フレームに `SetWindowPos` を発行し、`WindowPos.position` の
-/// 変更は `sync_window_arrangement_from_window_pos` が `Arrangement.offset` へ同期する——単一ライター
-/// 規律を持つ本番 placement 層（`enqueue_window_set_pos`）を example から迂回して呼ばず、wintf 標準の
-/// 反映経路をそのまま使う。
+/// 反映は `WindowPos` への通常書込（変更検知あり）で行い、wintf の `apply_window_pos_changes` が
+/// 次フレームに `SetWindowPos` を発行する。本番 placement 層（`enqueue_window_set_pos`）は
+/// example から迂回して呼ばない。
 fn reconcile_window_size(
     world: &mut World,
     window: Entity,
@@ -129,7 +119,6 @@ fn reconcile_window_size(
         height: h,
     };
 
-    // 位置: シェルは据え置き（アンカー不在）・バルーンは新幅で既定整列を再算出する（[`ReconcileKind`]）。
     let recomputed_pos = match kind {
         ReconcileKind::Shell => None,
         ReconcileKind::Balloon => {
@@ -147,11 +136,9 @@ fn reconcile_window_size(
         );
         return false;
     };
-    // 据え置き（Shell）は現在位置をそのまま目標値とする＝位置は書き換わらない。
     let position = recomputed_pos.or(wp.position);
 
-    // べき等 skip（振動・churn 防止）: 同寸・同位置なら書込を一切行わない。k=1.0 の初回報告は
-    // ここで吸収され、窓は生成時の native 原寸のまま 1 バイトも書かれない（従来と挙動同一）。
+    // べき等 skip（振動・churn 防止）: 同寸・同位置なら書込まない。
     if wp.size == Some(size) && wp.position == position {
         tracing::debug!(
             ?window,
@@ -176,20 +163,16 @@ fn reconcile_window_size(
     true
 }
 
-/// 起動時 golden バイト一致 assert（task 5.1／5.1 追補・R6.2/R6.7/R7.1/R7.2/R8.2/R8.3）。
+/// 起動時 golden バイト一致 assert。
 ///
-/// 初回表示直後に target の表示画素を `EmoPresenter::read_back`（表示に渡した**原寸の合成バイト列**・
-/// R8.3／`areka-P0-present-gpu-transform-scale` 要件 6.2）で取得し、`Composer::compose` が返す golden
-/// [`ComposedSurface`] のバイト列（[`ComposedSurface::bytes`]）と **完全一致**（full byte equality）する
-/// ことを検証する。これが「表示に渡した合成面と合成結果の一致」（R8.2）を決定論的に確かめる検証シーム
-/// （R6.7）である。
+/// 初回表示直後に target の表示画素を `EmoPresenter::read_back`（表示に渡した**原寸の合成バイト列**）
+/// で取得し、`Composer::compose` が返す golden [`ComposedSurface`] のバイト列
+/// （[`ComposedSurface::bytes`]）と **完全一致**（full byte equality）することを検証する。
+/// # golden に k を掛けない
 ///
-/// # golden に k を掛けない（`present-gpu-transform-scale` 要件 6.1/6.2）
-///
-/// 拡大は GPU の Visual 変換が担うようになり、CPU 側の再標本化は表示経路から消えた。
-/// `read_back` が返すのは表示中エントリの **native 原寸バイト列**であり、k の値に依らず同一バイト・
-/// 同一長（`native_w * native_h * 4`）である。ゆえに golden も native 原寸のまま突き合わせる——
-/// k=1.0 の比較対象は k 導入前と 1 バイトも変わらず（要件 6.1）、k≠1.0 でも同じ 1 本の assert が成立する。
+/// 拡大は GPU の Visual 変換が担い、CPU 側の再標本化は表示経路に無い。`read_back` が返すのは
+/// 表示中エントリの **native 原寸バイト列**で、k の値に依らず同一バイト・同一長
+/// （`native_w * native_h * 4`）である。ゆえに golden も native 原寸のまま突き合わせる。
 ///
 /// # k の導出と、その一致検査
 ///
@@ -203,11 +186,9 @@ fn reconcile_window_size(
 ///
 /// を **assert で検査**する（食い違えば loud に落ちる＝黙って別の k で比較しない）。
 ///
-/// # 失敗を silent にしない（R6.2）
+/// # 失敗を silent にしない
 ///
-/// 寸法・バイト長・内容のいずれかが食い違えば即 `panic!`／`assert_eq!` で loud に落とす（target id・
-/// 適用 k・golden の native 原寸と変換後寸法・期待/実測長・先頭相違 index を添える）。観測失敗を warn
-/// ログで握り潰さない。
+/// 寸法・バイト長・内容のいずれかが食い違えば即 `panic!`／`assert_eq!` で loud に落とす。
 ///
 /// # 正当な非表示のスキップ
 ///
@@ -250,19 +231,17 @@ pub(super) fn assert_startup_golden(
         }
     };
 
-    // presenter と同一経路・同一入力で k を導出する（`DPI` component 不在は `None` のまま渡し、
-    // [`derive_scale`] 側の縮退（error! ＋ k=1.0）へ落とす＝96 を捏造しない）。
+    // presenter と同一経路・同一入力で k を導出する。`DPI` component 不在は `None` のまま渡し、
+    // [`derive_scale`] 側の縮退へ落とす（96 を捏造しない）。
     let window_dpi = world.get::<DPI>(window).map(|d| (d.dpi_x, d.dpi_y));
     let scale = derive_scale(ScalePolicy::new(AUTHOR_DPI, ScaleRatio::ONE), window_dpi);
 
-    // golden は native 原寸のまま（拡大は GPU 変換の領分・CPU 再標本化は表示経路に無い）。
     let (native_w, native_h) = (golden.width(), golden.height());
-    // 窓寸の照合に使う物理寸は**丸め単一権威**だけで導く（`as_f32` の掛け算で復元しない＝D4）。
+    // 窓寸の照合に使う物理寸は丸め単一権威だけで導く（`as_f32` の掛け算で復元しない）。
     let (scaled_w, scaled_h) = scale.scaled_extent(native_w, native_h);
 
-    // 推定 k が **実適用 k** と一致することを、丸め単一権威を通した物理寸で検査する
-    // （`as_f32` の掛け算で復元しない＝D4）。合成面が在るのに照会が `None` なら表示成立点へ
-    // 届いていない＝観測失敗ゆえ loud に落とす。
+    // 推定 k が実適用 k と一致することを、丸め単一権威を通した物理寸で検査する。合成面が在るのに
+    // 照会が `None` なら表示成立点へ届いていない＝観測失敗ゆえ loud に落とす。
     let applied_physical = presenter.target_physical_size(target).unwrap_or_else(|| {
         panic!(
             "起動時 golden 検証不能 [{label} / {target:?}]: 合成面は在る（read_back 成功）のに \
@@ -279,7 +258,7 @@ pub(super) fn assert_startup_golden(
         window_dpi,
         applied_physical,
     );
-    // 照会契約側の k（出口ビュー f32）とも突き合わせる（寸法演算には使わない・診断と一致検査のみ）。
+    // 照会契約側の k（出口ビュー f32）とも突き合わせる（診断と一致検査のみ・寸法演算には使わない）。
     assert_eq!(
         presenter.applied_scale(target),
         Some(scale.as_f32()),
@@ -289,8 +268,7 @@ pub(super) fn assert_startup_golden(
 
     let expected = golden.bytes();
 
-    // まず長さで loud に落とす（相違の一次要因を明示）。長さは **native 原寸**（`w*h*4`）であり、
-    // k の値に依らず一定である（要件 6.1/6.2）——k で伸びたら「拡大が読み戻しへ漏れている」。
+    // まず長さで loud に落とす。長さは native 原寸（`w*h*4`）で k に依らない。k で伸びたら拡大が読み戻しへ漏れている。
     let native_len = (native_w as usize) * (native_h as usize) * 4;
     assert_eq!(
         actual.len(),
@@ -309,7 +287,6 @@ pub(super) fn assert_startup_golden(
         expected.len(),
     );
 
-    // full byte equality: 先頭相違 index を添えて loud に panic する。
     if let Some(idx) = actual.iter().zip(expected.iter()).position(|(a, b)| a != b) {
         panic!(
             "起動時 golden 不一致 [{label} / {target:?}]: 先頭相違 index={idx} (read_back=0x{:02X}, golden=0x{:02X}, len={}) \
@@ -336,21 +313,19 @@ pub(super) fn assert_startup_golden(
     );
 }
 
-/// フレームクロック駆動でシェル target を数秒周期で巡回させる system（R3.2/R6.4）。
+/// フレームクロック駆動でシェル target を数秒周期で巡回させる system。
 ///
-/// wintf の `FrameTime`（f64 秒・毎フレーム更新）を基準に経過を測り、[`CYCLE_INTERVAL_SECS`] を跨いだ
-/// フレームで [`CycleState::next`] へ進めて対応する [`PresentCommand`] を `EmoPresenter::apply`（指令 API）で
-/// 発行する（bypass しない）。装着（`boot_present_system`）が済み、かつシェルが巡回対象（`shell_cycling`）の
-/// ときのみ動く。`apply`/presenter は `&mut World` と NonSend を要するため排他 system とし、切替が起きる
-/// フレームだけ `EmoBoot` を remove→駆動→insert する（未到達フレームは peek のみで churn を避ける）。
+/// wintf の `FrameTime`（f64 秒）を基準に、[`CYCLE_INTERVAL_SECS`] を跨いだフレームで
+/// [`CycleState::next`] へ進めて対応する [`PresentCommand`] を `EmoPresenter::apply` で発行する。
+/// 装着（`boot_present_system`）が済み、かつシェルが巡回対象（`shell_cycling`）のときのみ動く。
+/// `apply`/presenter は `&mut World` と NonSend を要するため排他 system とし、切替が起きる
+/// フレームだけ `EmoBoot` を remove→駆動→insert する。
 pub(super) fn cycle_present_system(world: &mut World) {
-    // 現在時刻（フレームクロック）。未挿入時は 0.0（切替は起きない）。
     let now = world
         .get_resource::<FrameTime>()
         .map(|ft| ft.0)
         .unwrap_or(0.0);
 
-    // 装着済み・巡回対象・切替時刻到達を peek で確認（未到達なら remove/insert しない）。
     let due = match world.get_non_send::<EmoBoot>() {
         Some(b) if b.attached && b.shell_cycling => now >= b.next_switch_at,
         _ => return,
@@ -365,14 +340,11 @@ pub(super) fn cycle_present_system(world: &mut World) {
 
     boot.cycle_state = boot.cycle_state.next();
     boot.next_switch_at = now + CYCLE_INTERVAL_SECS;
-    // ComposeCache は合成入力（surface id＋bind 集合）をキーにするため、同一 surface1000 でも
-    // binds が異なる目開き/目閉じは自然にミス＝再合成される（InvalidateCache の手動発行は不要）。
+    // ComposeCache は surface id＋bind 集合をキーにするため、binds が異なる目開き/目閉じは自然に再合成される。
     let cmd = boot.cycle_state.command();
     boot.presenter.apply(world, cmd);
     tracing::info!(state = ?boot.cycle_state, "emo-present: シェル surface を切替");
-    // 切替後の窓寸 reconcile（emo-dpi-scaling task 5.2）: 巡回で surface／bind が変われば native 原寸も
-    // 変わりうる（＝k 適用後の物理寸も変わる）。本番 drain と同じく apply 直後に要求を消費する。
-    // 物理寸が変わらない切替（emo2 のまばたきは同寸）では要求が積まれず no-op＝窓を触らない。
+    // 巡回で surface／bind が変われば native 原寸も変わりうるため、apply 直後に要求を消費する。
     reconcile_present_sizes(&mut boot, world);
 
     world.insert_non_send(boot);

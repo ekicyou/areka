@@ -1,13 +1,12 @@
-//! 行き先の規則（純粋・areka-P0-open-external-tags task 2.1・2.2・要件 1.1・1.4・1.7・2.6・
-//! 3.2・4.7・5.2・6.3・8.1〜8.5）。
+//! 行き先の規則（純粋）。
 //!
 //! 開く系のタグ（`\j[ID]` と `\![open,file|browser|explorer|editor|mailer,…]`）から、
 //! 行き先・種類・断りを決める唯一の規則 [`classify`] を置く。台本の受け口（実行時）と
-//! 台本からの取り出しの両方がこの関数だけを呼ぶ（要件 8.6 を構造で保つ）。
+//! 台本からの取り出しの両方がこの関数だけを呼ぶ。
 //!
-//! World・fs・OS・環境変数・記録のどれにも触れない（要件 8.4）。相対パスの解決・
+//! World・fs・OS・環境変数・記録のどれにも触れない。相対パスの解決・
 //! 環境変数の展開・`mailto:` の付け足しは行わず、書かれた綴りのまま持つ（解決は opener）。
-//! `\![open,readme]` は対象外（`None`）で、説明書は受け口が先に拾う（要件 8.3）。
+//! `\![open,readme]` は対象外（`None`）で、説明書は受け口が先に拾う。
 
 use areka_parsers::sakura::{Instruction, JUMP_TAG_CARRIER};
 
@@ -78,7 +77,7 @@ impl Target {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Destination {
     pub target: Target,
-    /// 要件 8.1 の X（書かれた綴りのまま）。
+    /// X（書かれた綴りのまま）。
     pub written: String,
     /// 元のタグの組み直した綴り（記録の欄 `tag`）。
     pub tag: String,
@@ -87,11 +86,11 @@ pub(crate) struct Destination {
 /// 断りの理由。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Rejection {
-    /// 引数が無い・空（要件 2.6・3.2・6.3）。
+    /// 引数が無い・空。
     MissingArgument,
-    /// `\j[ID]` の ID が `http(s)://`・`file:///`・`mailto:` のどれでもない（要件 1.7）。
+    /// `\j[ID]` の ID が `http(s)://`・`file:///`・`mailto:` のどれでもない。
     UnknownJumpId,
-    /// `\![open,explorer,種類,名前]` の種類が扱えない（要件 4.7）。
+    /// `\![open,explorer,種類,名前]` の種類が扱えない。
     UnsupportedStore(String),
 }
 
@@ -157,7 +156,7 @@ pub(crate) fn classify<S: AsRef<str>>(
                 "ghost" => Store::Ghost,
                 "balloon" => Store::Balloon,
                 "shell" => Store::Shell,
-                // headline・plugin・知らない種類（要件 4.7）
+                // headline・plugin・知らない種類
                 other => {
                     return Some(Err(Rejected {
                         tag,
@@ -176,20 +175,20 @@ pub(crate) fn classify<S: AsRef<str>>(
             }
         }
         "explorer" if !x.is_empty() => accept(Target::Folder(x.to_owned()), x),
-        // 表示行（第 3 引数以降）は読まない（要件 5.2）。
+        // 表示行（第 3 引数以降）は読まない。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bopen_2ceditor_2c_30d5_30a1_30a4_30eb_2c_8868_793a_884c_5d:1
         "editor" if !x.is_empty() => accept(Target::Edit(x.to_owned()), x),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bopen_2cmailer_2c_30d1_30e9_30e1_30fc_30bf_5d:1
         "mailer" if !x.is_empty() => accept(Target::Mail(x.to_owned()), x),
-        // X が無い・空（要件 2.6・3.2・6.3）
+        // X が無い・空
         "file" | "browser" | "explorer" | "editor" | "mailer" => missing(),
-        // readme（受け口が先に拾う）・help・他の名前は対象外（要件 8.3）
+        // readme（受け口が先に拾う）・help・他の名前は対象外
         _ => return None,
     };
     Some(result)
 }
 
-/// `\j[ID]` の分類（要件 1.1・1.4・1.7）。前置きは大文字小文字を区別しない。
+/// `\j[ID]` の分類。前置きは大文字小文字を区別しない。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cj_5bID_5d:1
 fn classify_jump(id: &str, tag: String) -> Result<Destination, Rejected> {
     let target =
@@ -218,9 +217,9 @@ fn classify_jump(id: &str, tag: String) -> Result<Destination, Rejected> {
     })
 }
 
-/// 台本の文字列から、開く系の行き先を現れた順に返す（断られるものは含めない・task 2.2・
-/// 要件 8.1〜8.5）。汎用コマンドを順に [`classify`] へ通すだけの 1 回の線形走査。
-// 本番の呼び手は後続（`link-context-copy`・`balloon-link-hover`）が足す＝それまでテストだけが呼ぶ。
+/// 台本の文字列から、開く系の行き先を現れた順に返す（断られるものは含めない）。
+/// 汎用コマンドを順に [`classify`] へ通すだけの 1 回の線形走査。
+// 本番の呼び手はまだ無い（後続の機能が足す）＝それまでテストだけが呼ぶ。
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn link_destinations(script: &str) -> Vec<Destination> {
     areka_parsers::sakura::parse(script)

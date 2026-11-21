@@ -1,7 +1,7 @@
-//! MCP の呼び口（待受の観測・ツールの呼び出し・答えの文の取り出し＝要件 4.2〜4.9・9.2・10.5）。
+//! MCP の呼び口（待受の観測・ツールの呼び出し・答えの文の取り出し）。
 //!
-//! 走りごとに 1 つの tokio `current_thread` の器を持ち、呼び手には同期の関数だけを見せる（10.5）。
-//! つなぐのは中継の `scan` で名乗りを確かめた `Link`（rmcp のクライアント）で、使い回す（D-10）。
+//! 走りごとに 1 つの tokio `current_thread` の器を持ち、呼び手には同期の関数だけを見せる。
+//! つなぐのは中継の `scan` で名乗りを確かめた `Link`（rmcp のクライアント）で、使い回す。
 //! 子の取っ手と出力の 2 つのファイルは呼び出しごとに借りる（持ち主は run）。時間はすべて引数で受ける。
 
 use std::fmt;
@@ -19,28 +19,28 @@ use crate::run::Limits;
 
 /// 待受を始めた行（窓口は子へ番号を 1 つだけ渡すので候補は移らない・行は後ろに `url=` が続くので前方一致で拾う）。
 const LISTEN_STARTED: &str = "MCP: 待受を始めた";
-/// どの候補も束ねられなかった行（選んだ番号が先に取られていた＝9.2）。
+/// どの候補も束ねられなかった行（選んだ番号が先に取られていた）。
 const LISTEN_FAILED: &str = "MCP: どの候補のポートも束ねられなかった（待ち受けない）";
 /// 待ち受けない設定の行。
 const LISTEN_OFF: &str = "MCP: 待ち受けない（AREKA_MCP_PORT が 0）";
 
-/// ツールの答え（4.6）。
+/// ツールの答え。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolReply {
     /// 文の片を順に "\n" で繋いだもの（絵などの文でない片は飛ばす）。
     pub text: String,
-    /// ツールが失敗を答えた（isError）。成功の答えと見分ける（4.6）。
+    /// ツールが失敗を答えた（isError）。成功の答えと見分ける。
     pub is_error: bool,
 }
 
-/// MCP の呼び出しの失敗（4.5・4.7・4.8・9.2）。`call_until` はどれもその場で返す。
+/// MCP の呼び出しの失敗。`call_until` はどれもその場で返す。
 #[derive(Debug)]
 pub enum McpError {
-    /// 子の記録が待受を始められなかったことを示した（4.5・9.2）。`line` はその行の全文。
+    /// 子の記録が待受を始められなかったことを示した。`line` はその行の全文。
     ListenFailed { port: u16, line: String },
-    /// つながらない・答えが読めない・締切を過ぎた（4.7）。`target` は "127.0.0.1:<番号>"。
+    /// つながらない・答えが読めない・締切を過ぎた。`target` は "127.0.0.1:<番号>"。
     Unreachable { target: String, reason: String },
-    /// 呼び出しの前か途中で子が終わった（4.8）。
+    /// 呼び出しの前か途中で子が終わった。
     ChildExited(ChildExited),
     /// 相手が JSON-RPC の誤りを答えた（引数が道具の形に合わない・知らない道具など）。つなぎは使い回す。
     Refused { code: i32, message: String },
@@ -92,7 +92,7 @@ impl McpChannel {
         }
     }
 
-    /// ツールを 1 回呼ぶ（4.2・4.6〜4.8）。`args` は JSON の object の文（読めなければ panic）。
+    /// ツールを 1 回呼ぶ。`args` は JSON の object の文（読めなければ panic）。
     pub(crate) fn call(
         &mut self,
         child: &mut Child,
@@ -113,9 +113,9 @@ impl McpChannel {
             })
     }
 
-    /// 答えの文に `needle` が現れるまで呼び直す（4.9）。失敗の答えと含まない答えは `call_retry` だけ
+    /// 答えの文に `needle` が現れるまで呼び直す。失敗の答えと含まない答えは `call_retry` だけ
     /// 待って呼び直す。`McpError` はそのまま返す。締切（呼び出しの途中で来たものも）は
-    /// 3.4 と同じ形の文に最後の答え（無ければ「答え無し」）を添えて panic。
+    /// 締切切れの文と同じ形の文に最後の答え（無ければ「答え無し」）を添えて panic。
     pub(crate) fn call_until(
         &mut self,
         child: &mut Child,
@@ -199,7 +199,7 @@ impl McpChannel {
             Outcome::Exited(e) => Err(McpError::ChildExited(e).into()),
             Outcome::Deadline => Err(Stop::Deadline(format!("`{name}` の答えを締切まで待った"))),
             Outcome::Transport(reason) => {
-                // 子が受け口を閉じてから終わるまでの間の失敗を、子の終わりと見分ける（4.8）。
+                // 子が受け口を閉じてから終わるまでの間の失敗を、子の終わりと見分ける。
                 // 猶予は締切を越えない。
                 let grace = (Instant::now() + limits.exit_grace).min(end);
                 loop {
@@ -219,7 +219,7 @@ impl McpChannel {
         }
     }
 
-    /// まだなら待受の 3 行のどれかが出るのを待つ（4.3〜4.5）。
+    /// まだなら待受の 3 行のどれかが出るのを待つ。
     fn ensure_listening(
         &mut self,
         child: &mut Child,
@@ -248,7 +248,7 @@ impl McpChannel {
         }
     }
 
-    /// 中継の `scan` で名乗りを確かめてつなぐ（4.2・4.7）。答えの上限などは中継の既定。
+    /// 中継の `scan` で名乗りを確かめてつなぐ。答えの上限などは中継の既定。
     fn connect(&mut self, child: &mut Child, end: Instant) -> Result<Link, Stop> {
         let port = self.port;
         let found = self.rt.block_on(async {
@@ -265,7 +265,7 @@ impl McpChannel {
             Ok(Scan::NotFound { others }) => unreachable(not_found_reason(&others)),
             Err(_) => Stop::Deadline("名乗りの確かめが締切まで終わらなかった".to_string()),
         };
-        // 確かめの間に子が終わっていれば、そちらが本当の訳（4.8）。
+        // 確かめの間に子が終わっていれば、そちらが本当の訳。
         if let Ok(Some(status)) = child.try_wait() {
             return Err(McpError::ChildExited(ChildExited { status }).into());
         }
@@ -325,7 +325,7 @@ fn line_with(files: [&Path; 2], needle: &str) -> String {
         .unwrap_or_else(|| needle.to_string())
 }
 
-/// 答えの写し（4.6）: 文の片を "\n" で繋ぎ、文でない片は飛ばし、失敗の印が無ければ成功。
+/// 答えの写し: 文の片を "\n" で繋ぎ、文でない片は飛ばし、失敗の印が無ければ成功。
 fn reply_of(result: CallToolResult) -> ToolReply {
     let text = result
         .content
@@ -340,7 +340,7 @@ fn reply_of(result: CallToolResult) -> ToolReply {
     }
 }
 
-/// 引数の文を JSON の object として読む。読めない文は呼び手の誤りなので panic（D-12）。
+/// 引数の文を JSON の object として読む。読めない文は呼び手の誤りなので panic。
 fn parse_args(args: &str) -> JsonObject {
     match serde_json::from_str(args) {
         Ok(serde_json::Value::Object(map)) => map,

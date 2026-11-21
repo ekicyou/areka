@@ -1,5 +1,4 @@
-//! `\![move]` の UI スレッドでの適用（design.md「MovePlace」・要件 1.9・2.5・2.7〜2.12・
-//! 3.1〜3.3・3.5〜3.7・4.7・9.1）。
+//! `\![move]` の UI スレッドでの適用。
 //!
 //! 基準を World から解いて [`BaseFrame`] にし、純粋な計算（[`compute_move_target`]）で吸い付きの
 //! 前の位置を求め、対象の窓の [`Anchored`] で吸い付きの射影（[`project_anchor`]）に通してから
@@ -40,7 +39,7 @@ fn window_rect(world: &World, scope: u32) -> Option<RectPx> {
     })
 }
 
-/// 窓の矩形の基準位置（今の既定＝幅÷2・下端）を左上からのずれで返す。
+/// 窓の矩形の基準位置（既定＝幅÷2・下端）を左上からのずれで返す。
 fn canon_basepos(rect: RectPx) -> PointPx {
     CanonDefaultBasepos.basepos(wintf::ecs::SizeI::new(
         rect.right - rect.left,
@@ -55,7 +54,7 @@ fn window_frame(rect: RectPx) -> BaseFrame {
     }
 }
 
-/// `screen`: 動かす窓の中心のモニタ（外れたら最近傍）の作業領域（要件 3.1・3.2）。
+/// `screen`: 動かす窓の中心のモニタ（外れたら最近傍）の作業領域。
 fn screen_frame(world: &World, target: RectPx) -> Result<BaseFrame, &'static str> {
     world
         .get_resource::<MonitorSnapshot>()
@@ -75,7 +74,7 @@ fn resolve_frame(
         MoveBase::Scope(n) => match window_rect(world, n) {
             Some(rect) => Ok(window_frame(rect)),
             None => {
-                // 基準の窓が無い → screen へ倒す（要件 3.7）。
+                // 基準の窓が無い → screen へ倒す。
                 notes.push(FrameNote::MissingBaseScope { scope: n });
                 screen_frame(world, target)
             }
@@ -95,8 +94,8 @@ fn resolve_frame(
 ///
 /// 動かせなかったときは `warn!` のうえ `false`（トークは止めない）。`k` は対象のスコープの
 /// シェルに今かかっている拡大率で、台本の X・Y（作者基準）を物理 px へ写すのにだけ使う。
-/// 書けたら、組の相手を実際に動いた量だけ連れ動かす（`ignore_sticky_window` が真なら連れ動かさず
-/// 記録だけ・areka-P0-window-link-directives 要件 5.1・5.3）。書けなければ連れ動かさない。
+/// 書いたら、組の相手を実際に動いた量だけ連れ動かす（`ignore_sticky_window` が真なら連れ動かさず
+/// 記録だけ）。書けなければ連れ動かさない。
 /// `Anchored` は読むだけで書かない。
 pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: ScaleRatio) -> bool {
     let scope = directive.scope;
@@ -141,7 +140,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
         );
     }
 
-    // 吸い付きの当て直し（要件 2.10・2.11）。`Anchored` が無ければ当て直さない（Free と同じ）。
+    // 吸い付きの当て直し。`Anchored` が無ければ当て直さない（Free と同じ）。
     let script = computed.position;
     let anchor = world.get::<Anchored>(target).map(|a| a.0);
     let to = match anchor {
@@ -167,7 +166,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
         // 窓の書込口が受けなかった（窓ハンドルがまだ無い等）。
         return skipped("write_refused");
     }
-    // 起動時の確定が台本の置いた窓を引き戻さないための印（x が既定のままでも・areka-P0-scope-chain-gap 7.3）。
+    // 起動時の確定が台本の置いた窓を引き戻さないための印（x が既定のままでも付ける）。
     world.entity_mut(target).insert(ScriptPlaced);
     let base_rect = match frame {
         BaseFrame::Window { rect, .. } | BaseFrame::Area(rect) => rect,
@@ -185,7 +184,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
         base_offset = ?computed.base_offset_used,
         move_offset = ?directive.move_offset,
         ?anchor,
-        // 件 5 の測り（MoveMeasure）: 当てた拡大率と動かす窓の今の大きさ。
+        // MoveMeasure の測り: 当てた拡大率と動かす窓の今の大きさ。
         k = ?k,
         target_w = target_rect.right - target_rect.left,
         target_h = target_rect.bottom - target_rect.top,
@@ -201,7 +200,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
         to_y = to.y,
         "\\![move] で窓を動かした"
     );
-    // 組の相手は、動かした窓が実際に動いた量だけ連れ動かす（要件 5.1）。
+    // 組の相手は、動かした窓が実際に動いた量だけ連れ動かす。
     let delta = PointPx {
         x: to.x.saturating_sub(target_rect.left),
         y: to.y.saturating_sub(target_rect.top),
@@ -211,7 +210,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
     } else {
         follow_sticky_move(world, scope, delta);
     }
-    // 絶対の位置へ書いた軸は、書いた位置が面の `move` のずれの新しい元の位置（開発者裁定 2026-10-31・案 A）。
+    // 絶対の位置へ書いた軸は、書いた位置が面の `move` のずれの新しい元の位置。
     let relative =
         matches!(directive.base, MoveBase::Me) || directive.base == MoveBase::Scope(scope);
     let absolute = |axis: AxisSpec| !relative && matches!(axis, AxisSpec::Px(_));

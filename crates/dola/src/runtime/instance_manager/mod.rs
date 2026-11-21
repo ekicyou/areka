@@ -36,7 +36,7 @@ pub(crate) struct StoryboardInstance {
     pub end_time: f64,
     /// 現在の周回の開始時刻（wall clock ベース）。
     /// 初期値は `start()` に渡した開始時刻。周回終了ごとに「前の end_time＋待ち−pause_accumulated」で更新。
-    /// Pause/Resume では変更されない（独立性: Req 4.3）。
+    /// Pause/Resume では変更されない。
     pub loop_start_time: f64,
     /// 1周分の再生時間（wall clock ベース）。
     /// `total_base_duration / time_scale` で算出。インスタンス生存中は定数。
@@ -63,41 +63,36 @@ impl InstanceManager {
         }
     }
 
-    /// 参照取得（InvalidGroupId エラー対応）。
+    /// 参照取得。
     pub fn get(&self, group_id: u64) -> Result<&StoryboardInstance, RuntimeError> {
         self.instances
             .get(&group_id)
             .ok_or(RuntimeError::InvalidGroupId(group_id))
     }
 
-    /// 可変参照取得（InvalidGroupId エラー対応）。
+    /// 可変参照取得。
     pub fn get_mut(&mut self, group_id: u64) -> Result<&mut StoryboardInstance, RuntimeError> {
         self.instances
             .get_mut(&group_id)
             .ok_or(RuntimeError::InvalidGroupId(group_id))
     }
 
-    /// 状態遷移（try_transition 経由）。
+    /// 状態遷移。
     ///
-    /// 不変条件: 終了状態への遷移は同時にインスタンスを自動削除するため、
-    /// `instances` マップに終了状態のインスタンスは存在しない
-    /// （`set_finish_deadline` / `check_finish_deadlines` の is_terminal チェックの前提）。
+    /// 終了状態への遷移は同時にインスタンスを自動削除するため、
+    /// `instances` マップに終了状態のインスタンスは存在しない。
     pub fn transition(&mut self, group_id: u64, to: InstanceState) -> Result<(), RuntimeError> {
         let instance = self.get_mut(group_id)?;
 
         match instance.state.try_transition(to) {
             Ok(new_state) => {
                 instance.state = new_state;
-                // 終了状態に遷移した場合、インスタンスを自動削除
                 if new_state.is_terminal() {
                     self.instances.remove(&group_id);
                 }
                 Ok(())
             }
-            // NOTE(エラー表現): 不正な状態遷移も InvalidGroupId として報告される
-            // （遷移エラー専用バリアントが存在しない現行仕様。
-            // tests.rs::invalid_transition_on_existing_instance_reports_invalid_group_id で
-            // 特性化済み）。
+            // 遷移エラー専用のバリアントが無いので、不正な状態遷移も InvalidGroupId として報告される
             Err(_current) => Err(RuntimeError::InvalidGroupId(group_id)),
         }
     }
@@ -115,15 +110,13 @@ impl InstanceManager {
 
         match instance.state.try_transition(InstanceState::Playing) {
             Ok(new_state) => {
-                // pause_accumulated 加算（Paused からの遷移なので pause_start は pause が入れてある）
-                // NOTE(数値境界): current_time < pause_start（非単調な時刻入力）の場合、
-                // pause_duration が負となり pause_accumulated / end_time が過去方向へ
-                // 補正される（早期終了の誘発）。現行 API は呼び出し側の時刻単調性を
-                // 検証しない（tests.rs::resume_with_time_before_pause_start_shrinks_end_time で特性化済み）。
+                // Paused からの遷移なので pause_start は pause が入れてある。
+                // current_time < pause_start（非単調な時刻入力）だと pause_duration が負になり、
+                // pause_accumulated / end_time が過去方向へ補正される（早期終了の誘発）。
+                // 呼び出し側の時刻の単調性は検証しない。
                 let pause_start = instance.pause_start.take().unwrap_or(current_time);
                 let pause_duration = current_time - pause_start;
                 instance.pause_accumulated += pause_duration;
-                // end_time 再計算
                 instance.end_time += pause_duration;
                 instance.state = new_state;
                 Ok(instance.end_time)
@@ -140,8 +133,7 @@ impl InstanceManager {
     ) -> Result<(), RuntimeError> {
         let instance = self.get_mut(group_id)?;
 
-        // NOTE(防御): transition() の不変条件（終了遷移＝自動削除）により、マップ内に
-        // 終了状態のインスタンスは存在せず、この分岐は現行不変条件の下では到達しない。
+        // transition() が終了状態のインスタンスを削除するので、この分岐は現状では到達しない防御。
         if instance.state.is_terminal() {
             return Err(RuntimeError::InvalidGroupId(group_id));
         }
@@ -152,10 +144,10 @@ impl InstanceManager {
 
     /// Finish deadline が到達した group_id のリストを返却。
     ///
-    /// NOTE(数値境界): deadline が NaN の場合 `current_time >= deadline` は常に false と
-    /// なり、当該 deadline は黙って発火しない（指示書の数値は validate が有限に限るので、
-    /// NaN が入るのは呼び手の渡す時刻が NaN のときだけ）。is_terminal チェックは transition() の
-    /// 不変条件（終了遷移＝自動削除）により現行では常に false の防御チェック。
+    /// deadline が NaN の場合 `current_time >= deadline` は常に false となり、当該 deadline は
+    /// 黙って発火しない（指示書の数値は validate が有限に限るので、NaN が入るのは呼び手の渡す
+    /// 時刻が NaN のときだけ）。is_terminal チェックは transition() が終了状態を削除するので
+    /// 現状では常に false の防御。
     pub fn check_finish_deadlines(&self, current_time: f64) -> Vec<u64> {
         self.instances
             .iter()

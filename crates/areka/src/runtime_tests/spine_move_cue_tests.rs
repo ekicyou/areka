@@ -28,8 +28,7 @@ fn window_position(world: &World, e: Entity) -> Point {
 /// spine move e2e: fixture 形の move script を含む OnBoot talk を実 sink 経路
 /// （ghost→sakura compile→CueSheet→dispatch→broadcast→**実 MoveCueSink**→move channel）で流し、frame 相
 /// drain（`run_move_drain_phase`）が `MoveDirective` を drain して対象キャラ窓を検算位置へ即時
-/// 移動させることを固定する。throwaway 送出端を実 MoveCueSink（sinks 第 3 要素）へ
-/// 差し替えた配線が spine で end-to-end に生きていることの自動檻（headless・時刻は注入 Tick で決まる）。
+/// 移動させることを固定する。
 /// 窓が実際に動く＝`MoveDirective` が channel へ届き drain→apply された唯一の経路ゆえ、
 /// 移動観測が「channel 到達＋frame 相 drain の live」を同時に証跡する。
 ///
@@ -37,7 +36,7 @@ fn window_position(world: &World, e: Entity) -> Point {
 ///
 /// fixture は `\1\![move,-353,,,0,base,base]`（kero=scope1 を sakura=scope0 基準で動かす意図）で、
 /// **bare `\1` は正典どおり sakura compile で `SpeakerScope{1}` へ写像される**（
-/// `decode.rs`／lexer が `\0`/`\1` を SpeakerScope へ正規化・以前の `Raw` passthrough 縮退は解消済み）。
+/// `decode.rs`／lexer が `\0`/`\1` を SpeakerScope へ正規化）。
 /// ゆえに move cue の scope は切替後の 1 として発火し（`cue.actor == "1"` → `MoveDirective.scope == 1`）、
 /// base は `0`＝**scope0（むらさき＝話者）を基準にした scope1 の移動**として反映される（対象＝scope1 char 窓・
 /// 基準＝scope0 char 窓）。実 channel 到達 directive は
@@ -53,11 +52,11 @@ fn window_position(world: &World, e: Entity) -> Point {
 /// y は Fix ゆえ対象窓（scope1）の現状維持 1063。移動先 (1208,1063) は move cue が channel→drain→apply を
 /// 通ったことの非空虚な証跡（RED では窓不動）。
 ///
-/// # RED（実 MoveCueSink 未配線時）
+/// # 実 MoveCueSink が要る理由
 ///
 /// throwaway の `(_move_tx, move_rx)`（送出端即 drop・sinks に MoveCueSink なし）では move cue は
-/// seriko/text sink へのみ broadcast され両者が良性スキップ→move channel は空のまま→窓は不動（moved=false
-/// で FAIL・実測済み）。実 MoveCueSink を 3rd sink へ配線して初めて窓が動く（GREEN）。
+/// seriko/text sink へのみ broadcast され両者が良性スキップ→move channel は空のまま→窓は不動。
+/// 実 MoveCueSink を 3rd sink へ配線して初めて窓が動く。
 #[test]
 fn spine_move_cue_drives_window_move_end_to_end() {
     // fixture 形の move script（`\1` は正典どおり scope1 へ切替・doc 参照）。bare `\1` は
@@ -89,7 +88,7 @@ fn spine_move_cue_drives_window_move_end_to_end() {
     // 目印（SHIORI の呼び出しの数。move の汲みは数を返さないので足さない）。Tick を入れる輪なので休みは
     // [`wait_until_paced`] が持つ（`areka-runtime` の `spine_wait.rs`）。観測「初期位置からの変位」は
     // move cue が 1 発のみ＝以降動かない＝ラッチであり、台本は `\w`／`\c` なし（全 cue `at=0.0`）ゆえ
-    // 注入時刻の前進が観測を壊すクラス（areka-P0-kero-balloon 要件 7.8）ではない。
+    // 注入時刻の前進が観測を壊すクラスではない。
     let what = "move cue による対象窓の移動";
     let shiori = harness.shiori_handle.clone();
     let probe = || shiori.call_count();

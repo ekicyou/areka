@@ -1,4 +1,4 @@
-//! UI 側の窓口（design「areka / install / desk」）。
+//! UI 側の窓口。
 //!
 //! World に触る仕事を 1 か所に集める。窓口 [`InstallDesk`] は World の NonSend・プロセスに 1 つで、
 //! ゴーストを起こし直しても作り直さない。取り出しの系 [`drain`] が毎 tick ⑴ 入口（台本の受け口・
@@ -12,7 +12,7 @@
 //! イベントを送るのは、切替の予約が無い・終了が始まっていない・置き場のゴーストに kanade への
 //! 送出端がある tick で、送り先は送る時点の置き場のゴースト。定常かどうかの正本は kanade で、
 //! 窓口は旗を持たず定常到達の回数だけを数える: 送り直しの頼みは、前に送った後に定常到達が
-//! 届いているときだけ送る（設計で決めたこと 5）。起床の旗は立てない（設計で決めたこと 16）。
+//! 届いているときだけ送る。起床の旗は立てない。
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -147,7 +147,7 @@ pub(crate) fn raw_sender(world: &World) -> Sender<RawInstallRequest> {
 }
 
 /// インストールの窓口が忙しいか（背景のスレッドが依頼を扱っている・待っている依頼が在る・起動中の
-/// ゴーストへ入れる書庫を預かっている）。読み直しの入口が断るのに使う（mcp-reload 要件 2.1）。
+/// ゴーストへ入れる書庫を預かっている）。読み直しの入口が断るのに使う。
 pub(crate) fn is_busy(world: &World) -> bool {
     world
         .get_non_send::<InstallDesk>()
@@ -169,7 +169,7 @@ pub(crate) fn can_pick(world: &World) -> bool {
         .is_some_and(|desk| !desk.gate.is_closing() && !desk.picking.load(Ordering::Acquire))
 }
 
-/// メニューの動作: 選ぶ画面のスレッド `install-pick` を起こす（設計で決めたこと 11）。出ている最中なら
+/// メニューの動作: 選ぶ画面のスレッド `install-pick` を起こす。出ている最中なら
 /// `debug!` で無視し、`AREKA_NO_ALERT` で抑止されていればスレッドを起こさず取り消しと同じに扱う。
 pub(crate) fn pick_and_submit(world: &mut World) {
     start_pick(world, crate::alert::suppressed(), pick::pick_archive);
@@ -235,7 +235,7 @@ impl Drop for PickingFlag {
 }
 
 /// 選ぶ画面の結果を窓口へ流す（選ぶ画面のスレッド）。選ばれたら出どころ「メニュー」の生の要求 1 件、
-/// 取り消しは `info!`、出せなければ `error!` でどちらも 0 件（要件 1.3・1.4）。
+/// 取り消しは `info!`、出せなければ `error!` でどちらも 0 件。
 fn send_pick(result: Result<Option<PathBuf>, PickError>, tx: &Sender<RawInstallRequest>) {
     match result {
         Ok(Some(path)) => {
@@ -265,7 +265,7 @@ fn send_pick(result: Result<Option<PathBuf>, PickError>, tx: &Sender<RawInstallR
 
 /// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 待っている依頼・手元のイベントの頼み・預かった
 /// 書庫を捨てて記録に残す（頼みの返信端を落とすので、背景のスレッドは閉じた扱いで止まる）。件数は
-/// 捨てた書庫の数（要件 8.5「待っている依頼（まだ始めていない書庫）」）。
+/// まだ始めていない捨てた書庫の数。
 pub(crate) fn discard_for_exit(world: &mut World) {
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;
@@ -349,11 +349,10 @@ fn answer(world: &mut World, ask: DeskAsk) {
     }
 }
 
-/// 入れた後の記録（要件 6.1・6.6・6.7・6.8・設計で決めたこと 14）: `ghost` は受け皿へ、`balloon`
-/// だけなら今のゴーストの「最後に使ったバルーン」の記憶へフォルダ名を書き、シェル・追加ファイルは
-/// 置換語だけ（表示は替えない）。シェルとバルーンは `lastinstalled` の控えも置く（shell-balloon-switch
-/// 要件 1.10・1.11）。フォルダ名と名前は入れた後の和の目録の綴り（`areka-nar` の綴りとフォルダ名の
-/// 1 つの規則で突き合わせる・目録に無ければ `areka-nar` の綴りと `install.txt` の `name`）。
+/// 入れた後の記録: `ghost` は受け皿へ、`balloon` だけなら今のゴーストの「最後に使ったバルーン」の
+/// 記憶へフォルダ名を書き、シェル・追加ファイルは置換語だけ（表示は替えない）。シェルとバルーンは
+/// `lastinstalled` の控えも置く。フォルダ名と名前は入れた後の和の目録の綴り（`areka-nar` の綴りと
+/// フォルダ名の 1 つの規則で突き合わせる・目録に無ければ `areka-nar` の綴りと `install.txt` の `name`）。
 /// 最後に今のゴーストの記憶の書き手の反映を待つ（背景のスレッドへ答えるのはその後）。
 pub(super) fn record_installed(world: &mut World, record: InstalledRecord) {
     let roots = world
@@ -427,7 +426,7 @@ pub(super) fn catalog_spelling(
 }
 
 /// バルーンだけの書庫を根へ入れた後、今のゴーストの中の同じフォルダ名に隠れるなら info
-/// `installed_balloon_hidden_by_ghost` を 1 件残す（areka-P0-ghost-inner-balloon 要件 3.5）。
+/// `installed_balloon_hidden_by_ghost` を 1 件残す。
 /// 起動の文脈が無いときは何もしない。
 fn note_hidden_by_ghost(world: &World, folder: &str) {
     let Some(ctx) = world.get_resource::<BootContext>() else {
@@ -445,7 +444,7 @@ fn note_hidden_by_ghost(world: &World, folder: &str) {
     }
 }
 
-/// 今のゴーストの「最後に使ったバルーン」の記憶を書き換える（次に起こしたときから使われる＝要件 6.6）。
+/// 今のゴーストの「最後に使ったバルーン」の記憶を書き換える（次に起こしたときから使われる）。
 pub(crate) fn remember_balloon(world: &World, folder: String) {
     let Some(runtime) = names::current_runtime(world) else {
         tracing::warn!(

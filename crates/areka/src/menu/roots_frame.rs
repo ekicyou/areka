@@ -1,8 +1,7 @@
-//! 右クリックメニューの「置き場を追加…」「置き場を先頭へ ▸」「置き場を外す ▸」枠（areka-P0-baseware-root-list・design「RootsFrame」／
-//! areka-P0-user-data-root・design「RootsMenu」）。
+//! 右クリックメニューの「置き場を追加…」「置き場を先頭へ ▸」「置き場を外す ▸」枠。
 //!
 //! どれもメニューを出すたびに起動の文脈の並びと出どころを読むので、並びの変更は再起動なしで
-//! 次のメニューから効く（要件 8.2）。`AREKA_ROOT` で渡しているときは 3 項目とも選べない（要件 8.6）。
+//! 次のメニューから効く。`AREKA_ROOT` で渡しているときは 3 項目とも選べない。
 //! SSP に当たる SHIORI のリソース名は無い（`caption_resource: None`）。登記はゴーストを起こすたびに
 //! `ghost_session::boot_wired` が「インストール」枠の隣でやり直す。
 
@@ -40,7 +39,7 @@ fn editable(world: &World) -> bool {
     context(world, Frame::RootAdd).is_some_and(|ctx| ctx.roots_origin != RootsOrigin::EnvVar)
 }
 
-/// 「置き場を追加…」: 葉 1 つ。選ぶとフォルダを選ぶ画面を出す（要件 6.1・6.2）。
+/// 「置き場を追加…」: 葉 1 つ。選ぶとフォルダを選ぶ画面を出す。
 fn add_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::RootAdd).to_string(),
@@ -54,9 +53,8 @@ fn add_item(world: &World, _ctx: &MenuContext) -> MenuItem {
 }
 
 /// 「置き場を外す ▸」: 子は並びの全部の根（見つからない根も）を並びの順に絶対パスで並べる。
-/// 根が 1 つなら子は選べない（要件 7.1・7.3）。書ける根（印の付いた項目）の子は選べない
-/// （areka-P0-user-data-root 要件 3.3）。一時の置き場の子は選べず、「1 つ」は覚える置き場で数える
-/// （areka-P0-startup-options-core 要件 3.6）。
+/// 根が 1 つなら子は選べない。書ける根（印の付いた項目）の子は選べない。
+/// 一時の置き場の子は選べず、「1 つ」は覚える置き場で数える。
 fn remove_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     let roots: Vec<_> = context(world, Frame::RootRemove)
         .map(|ctx| ctx.roots.roots().to_vec())
@@ -90,8 +88,8 @@ fn remove_item(world: &World, _ctx: &MenuContext) -> MenuItem {
 
 /// 「置き場を先頭へ ▸」: 子は並びの全部の根を並びの順に絶対パスで並べる。今の先頭の子は選べず、
 /// 印の付いた項目が在るときは実行ファイルの隣の子も選べない。見出しは `AREKA_ROOT` でなく根が
-/// 2 つ以上のときだけ選べる（areka-P0-user-data-root 要件 3.8）。子の動作は [`roots::move_to_front`]。
-/// 一時の置き場の子は選べず、先頭と根の数は覚える置き場で数える（areka-P0-startup-options-core 要件 3.6）。
+/// 2 つ以上のときだけ選べる。子の動作は [`roots::move_to_front`]。
+/// 一時の置き場の子は選べず、先頭と根の数は覚える置き場で数える。
 fn front_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     let ctx = context(world, Frame::RootFront);
     let roots: Vec<_> = ctx

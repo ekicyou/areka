@@ -1,4 +1,4 @@
-//! 「ゴースト」枠の決定論テスト（areka-P0-ghost-shell-balloon-switch task 7.3・要件 1.4・1.11・1.12・10.9）。
+//! 「ゴースト」枠の決定論テスト。
 //!
 //! 確かめること: 目録の並びのまま子が並び、ラベルは `name`（無ければフォルダ名）で `sakura.name`
 //! ではないこと・今のゴーストだけに印が付くこと・メニューを出すたびに目録を読み直すこと・
@@ -135,7 +135,7 @@ fn child_action(item: &MenuItem, label: &str) -> MenuAction {
 // ---------------------------------------------------------------- 列挙
 
 /// 2 体の目録で子 2 つ・目録の並び・ラベルは `name`（無ければフォルダ名・`sakura.name` ではない）・
-/// 今のゴースト（`B`＝先頭でない方）だけに印（要件 1.11）。
+/// 今のゴースト（`B`＝先頭でない方）だけに印。
 #[test]
 fn two_ghosts_listed_in_catalog_order_with_current_mark() {
     let tmp = TempPath::new("ghost-frame-two");
@@ -218,7 +218,7 @@ fn without_boot_context_only_a_disabled_frame_is_shown() {
 // ---------------------------------------------------------------- 選択
 
 /// 子を選ぶと、フォルダ名で指し `OnGhostChanging` を送る「手動」の要求が入口を通って kanade へ
-/// 届き、切替の予約が立つ（要件 1.4）。
+/// 届き、切替の予約が立つ。
 #[test]
 fn selecting_a_child_sends_a_manual_request_through_the_entrance() {
     let tmp = TempPath::new("ghost-frame-select");
@@ -251,7 +251,7 @@ fn selecting_a_child_sends_a_manual_request_through_the_entrance() {
 // ---------------------------------------------------------------- 登記のやり直し
 
 /// 結線をやり直すと登記は新品: 1 周目の余分な登記は消え、「ゴースト」枠は置き換えの記録なしに
-/// 登記し直される（要件 1.12）。
+/// 登記し直される。
 #[test]
 fn rewiring_gives_a_fresh_registration_with_the_ghost_frame() {
     let tmp = TempPath::new("ghost-frame-rewire");
@@ -290,11 +290,11 @@ fn rewiring_gives_a_fresh_registration_with_the_ghost_frame() {
     );
 }
 
-// ---------------------------------------------------------------- 根の和（areka-P0-baseware-root-list 4.3）
+// ---------------------------------------------------------------- 根の和
 
 /// 2 つの根の和: 両方の根のゴーストが隠れ（先の根と同じフォルダ名の後ろの根の 1 体）を除いて
 /// フォルダ名のバイト順に並び、今のゴースト（後ろの根の `a`）と同じフォルダ名として先の根の `A` に
-/// 印が付く（要件 2.8・3.5・8.7）。
+/// 印が付く。
 #[test]
 fn union_of_two_roots_lists_both_and_marks_same_folder_name() {
     let first = TempPath::under_target("ghost-frame-union-first");

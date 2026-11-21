@@ -84,7 +84,6 @@ fn reconcile_window_size_routes_char_to_anchor_resize_and_balloon_to_keep_positi
         "balloon: 位置は維持される（resize_window_keep_position＝アンカー再射影しない）"
     );
 
-    // --- char: アンカー保存リサイズ（Bottom 再射影で y と中央 x が動く）---
     assert_eq!(
         pos_of(&world, char0),
         Some(Point { x: 1483, y: 757 }),
@@ -191,7 +190,6 @@ fn dpi_phase_reconciles_changed_window_to_scaled_extent() {
         "前提: 窓 client は k=1 相当の native 寸"
     );
 
-    // 窓 DPI 192（k = 192/96 = 2/1）へ差し替え → Changed<DPI> 発火。
     world.entity_mut(char0).insert(DPI::from_dpi(192, 192));
     let k = ScaleRatio::new(192, 96).expect("非ゼロ比");
     let scaled = k.scaled_extent(native.0, native.1);
@@ -305,7 +303,6 @@ fn dpi_phase_first_run_matches_all_windows_without_churn() {
         refreshed, want,
         "初回 run は全ゴースト窓へマッチする（SystemState::new 仕様）"
     );
-    // 報告が無ければ窓へは一切書かない（べき等 skip と合わせて churn ゼロ）。
     for scope in [0usize, 1] {
         assert_no_write(&world, gw.char_window(scope).unwrap(), "初回 run churn");
         assert_no_write(&world, gw.balloon_window(scope).unwrap(), "初回 run churn");
@@ -320,7 +317,6 @@ fn dpi_phase_without_dpi_change_does_no_work() {
     let mut source = FakeReports::default();
     let mut state = None;
 
-    // 1 回目（初回 run の全マッチを消費）。
     dpi_phase_with(&mut source, &mut state, &mut world);
     assert!(
         !source.calls_of("refresh").is_empty(),

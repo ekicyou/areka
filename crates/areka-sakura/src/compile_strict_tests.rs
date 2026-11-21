@@ -1,4 +1,4 @@
-//! strict の走査の檻（spec: mcp-strict-errors 要件 2.5・2.7・3.6・3.9）。
+//! strict の走査の檻。
 //!
 //! 1. 同じ命令の列から、strict かどうかに関わらず同じ合図の列ができる（見本の台本の集まり）。
 //! 2. 台本の解釈で分かる誤りを、命令ごとに `check_script` の順（読みの印 → 命令の腕 → アンカー）で控える。
@@ -14,7 +14,7 @@ use areka_parsers::sakura::{MARKER_COMMAND, parse, parse_noted};
 use dola::cue::CuePlayer;
 
 /// 拾う `\!` は `open`・`set`・`move`（`move` の第 1 引数 `nosuch` だけは拾わない）と、
-/// 受け手の表で文字の層が拾う印 `*`（script-small-tags 要件 6.5）。
+/// 受け手の表で文字の層が拾う印 `*`。
 /// `\f` は `sub` を受け取るだけ、`colour` を知らないキーとする。
 struct FakeJudges;
 
@@ -102,7 +102,7 @@ const SAMPLES: &[&str] = &[
     "あ\\-\\x",
 ];
 
-/// 同じ命令の列から、strict かどうかに関わらず同じ合図の列と終わりの理由ができる（要件 3.9）。
+/// 同じ命令の列から、strict かどうかに関わらず同じ合図の列と終わりの理由ができる。
 #[test]
 fn strict_scan_builds_the_same_cues() {
     for script in SAMPLES {
@@ -144,7 +144,7 @@ fn red_scripts_record_their_point() {
         ("\\_a[x]あ\\_a[y]い\\_a", &[(3, AnchorReopened, "\\_a[y]")]),
         ("\\_a[x]", &[(1, AnchorUnclosed, "\\_a[x]")]),
         ("\\_a", &[(0, AnchorStrayClose, "\\_a")]),
-        // 捨てた文字の番号（script-small-tags 要件 6.3）。合図を作らないので次に作られる合図の順番。
+        // 捨てた文字の番号。合図を作らないので次に作られる合図の順番。
         ("\\_u[0]", &[(0, CharCodeDropped, "\\_u[0]")]),
         ("あ\\_m[abc]い", &[(2, CharCodeDropped, "\\_m[abc]")]),
     ];
@@ -161,7 +161,7 @@ fn green_scripts_record_nothing() {
         "\\s[0]",
         "\\_w[500]",
         "\\q[題,ID]",
-        // 印は「無視した」とも「知らない命令」とも言わない（script-small-tags 要件 4.4・6.5）。
+        // 印は「無視した」とも「知らない命令」とも言わない。
         "\\![*]",
         "%*",
         "\\![*]\\q[題,ID]",
@@ -181,7 +181,7 @@ fn green_scripts_record_nothing() {
     }
 }
 
-/// 書いた印（`\![*]`・`%*`）の数だけ、名前 `*` の汎用の合図が出る（script-small-tags 要件 4.1〜4.3・4.5）。
+/// 書いた印（`\![*]`・`%*`）の数だけ、名前 `*` の汎用の合図が出る。
 #[test]
 fn markers_compile_to_one_carrier_each() {
     let compiled = compile(
@@ -216,7 +216,7 @@ fn findings_follow_the_check_script_order() {
     );
 }
 
-/// `\e`・`\-` の後ろは控えない（要件 3.6）。
+/// `\e`・`\-` の後ろは控えない。
 #[test]
 fn nothing_after_end_or_quit() {
     assert_eq!(pending("\\e\\![nosuch]\\x"), []);
@@ -261,7 +261,7 @@ fn s(shape: &str, text: Option<&'static str>) -> (String, Option<&'static str>) 
 }
 
 /// 先頭に全消しを持ち選択肢で終わる台本: 全消しは位置なしの順番 0、区切りは配られず数えない、
-/// 補った閉じは位置なし。控えの順番は配られた列のその合図を指す（要件 2.5）。
+/// 補った閉じは位置なし。控えの順番は配られた列のその合図を指す。
 #[test]
 fn ordinals_match_delivery_with_clear_all_and_choice() {
     let script = "あ\\![nosuch]\\_a[x]い\\q[題,ID]";

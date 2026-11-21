@@ -12,7 +12,7 @@ use super::*;
 use areka_placement::zorder_group_ledger::parse_zorder_tokens;
 use areka_runtime::frame::window_state::run_window_state_phase;
 use areka_runtime::window_state_cue::WindowStateDirective;
-// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+// 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::window_state::test_support::{all_windows, on};
 use areka_runtime::frame::wiring::test_support::{
     window_state, window_state_mut, zorder_ledger, zorder_ledger_mut,
@@ -62,11 +62,10 @@ fn finish(mut rig: Rig, windows: &[Entity]) -> ((bool, usize, usize), Option<&'s
     (observe(&rig, windows), stage(&rig.world))
 }
 
-/// シェルの切り替え（要件 4.4・5.1）: 後始末を終えても常に手前のオン・全窓の印・台本の組が残る。
+/// シェルの切り替え: 後始末を終えても常に手前のオン・全窓の印・台本の組が残る。
 ///
 /// # 非空虚性
-/// シェルの後始末が状態を捨てる・印を外す・台本の組を落とす（申し送りの件 1 の旧い形
-/// `set_descript_base`）と、いずれかの欄が変わって赤。
+/// シェルの後始末が状態を捨てる・印を外す・台本の組を落とすと、いずれかの欄が変わって赤。
 #[test]
 fn shell_switch_keeps_stay_on_top_the_marks_and_the_script_group() {
     let (rig, windows) = rig_on_top(SkinKind::Shell, shell_finish());
@@ -77,7 +76,7 @@ fn shell_switch_keeps_stay_on_top_the_marks_and_the_script_group() {
     );
 }
 
-/// バルーンの切り替え（要件 4.5）: 後始末を終えても常に手前のオン・全窓の印・台本の組が残る。
+/// バルーンの切り替え: 後始末を終えても常に手前のオン・全窓の印・台本の組が残る。
 ///
 /// # 非空虚性
 /// バルーンの後始末が状態を捨てる・印を外すと、いずれかの欄が変わって赤。

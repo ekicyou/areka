@@ -1,23 +1,21 @@
-//! 適合一周走行の台本と期待列（areka-P0-emo2-conformance-e2e・design D2）。
+//! 適合一周走行の台本と期待列。
 //!
 //! 本ファイルは**逐語のデータだけ**を置く。段の駆動（注入と有界待ち）は
-//! `spine_conformance_support.rs`（areka-P0-emo2-conformance-e2e の design D6）が持ち、
-//! 突き合わせの判定は `spine_conformance_lap_tests.rs`（areka-P0-emo2-conformance-e2e の design D1）が持つ。ゆえに本ファイルには
-//! **駆動も判定も 1 行も無い**（`#[test]` も `assert` も置かない）。期待値を 1 か所へ集めることで、
-//! 上流の裁定が変わったときの追随点が 1 つになる（areka-P0-emo2-conformance-e2e の design「File Structure Plan」）。
+//! `spine_conformance_support.rs` が、突き合わせの判定は `spine_conformance_lap_tests.rs` が持つ。
+//! ゆえに本ファイルには**駆動も判定も 1 行も無い**（`#[test]` も `assert` も置かない）。
+//! 期待値を 1 か所へ集めることで、上流の裁定が変わったときの追随点が 1 つになる。
 //!
-//! # 期待値の出所は正典ではなく**実装**である（areka-P0-emo2-conformance-e2e の design D2 の表題）
+//! # 期待値の出所は正典ではなく**実装**である
 //!
 //! 参照列の中身は ukadoc の記述ではなく、実際に組み立てている純関数の逐語から採る。各定数・
 //! 各期待要素の直上に、読み取ったファイルと項目名を注記してある。正典と実装が食い違う箇所
-//! （Ref1/Ref2 の省略など）は**実装側**を写す——areka-P0-emo2-conformance-e2e は確かめる側であって裁定を覆さない。
+//! （Ref1/Ref2 の省略など）は**実装側**を写す——ここは確かめる側であって裁定を覆さない。
 //!
-//! # 送らないことの期待（areka-P0-emo2-conformance-e2e の design D2「送らないことの期待」）
+//! # 送らないことの期待
 //!
 //! 次の 3 群は「送らない」ことが期待である。本ファイルはそれらを[`expected_calls`]へ**書かない**
-//! ——それだけで期待になる。判定は列の**等値**照合であり部分一致・包含判定を用いないため
-//! （areka-P0-emo2-conformance-e2e の R2.5・design D3）、期待列に無い呼出が 1 件でも現れれば走行は赤になる。検査そのものは
-//! `spine_conformance_lap_tests.rs` の領分であり、本ファイルは 1 行も検査しない。
+//! ——それだけで期待になる。判定は列の**等値**照合であり部分一致・包含判定を用いないため、
+//! 期待列に無い呼出が 1 件でも現れれば走行は赤になる。
 //!
 //! 1. 会話の発火と時報（`OnTalk`／`OnHour`）——適合対象が毎秒の変化通知の内部で自発生成するため、
 //!    ベースウェア側が送ると二重になる（`crates/areka-kanade/src/schedule/events.rs` が
@@ -35,16 +33,16 @@ use super::conformance_support::{DisplayProjection, RecordedStatus};
 use super::{ExitKind, RecordedCall, ScriptedShioriBackend, ScriptedShioriHandle, shell_target};
 
 // ===========================================================================
-// 段の注入時刻の区間（areka-P0-emo2-conformance-e2e の design D1 の段表・D3「段の区間はテストが先に宣言する定数」）
+// 段の注入時刻の区間
 // ===========================================================================
 
 /// 段 1 つぶんの注入時刻の区間（逐語宣言・走行のたびに変わらない）。
 ///
-/// `begin_ms` は前段の `limit_ms` 以上から始まり、注入時刻は `limit_ms` を超えない
-/// （areka-P0-emo2-conformance-e2e の design D6 の不変条件）。`limit_ms` に達したら以後は注入せず観測だけを待つ——注入時刻が
+/// `begin_ms` は前段の `limit_ms` 以上から始まり、注入時刻は `limit_ms` を超えない。
+/// `limit_ms` に達したら以後は注入せず観測だけを待つ——注入時刻が
 /// 観測を追い越すと待っている条件そのものが壊れるためである（`spine.rs` の実測）。
 pub(super) struct LapStage {
-    /// 段名（表示指令の台帳の第 1 要素にもなる・areka-P0-emo2-conformance-e2e の design D3）。
+    /// 段名（表示指令の台帳の第 1 要素にもなる）。
     pub(super) name: &'static str,
     /// 注入時刻の下限（この段が最初に注入しうる時刻）。
     pub(super) begin_ms: u64,
@@ -58,9 +56,9 @@ pub(super) struct LapStage {
 /// （`crates/areka-kanade/src/msg.rs`）。
 pub(super) const TICK_STEP_MS: u64 = 1_000;
 
-/// 一周の全段（areka-P0-emo2-conformance-e2e の design D1「段・注入・完了条件」の表と同順・同名）。
+/// 一周の全段。
 ///
-/// # 区間の採寸（実測・レビュー指摘を受けた改訂）
+/// # 区間の採寸
 ///
 /// 区間の幅は「注入時刻をどこまで進めてよいか」であると同時に、刻み [`TICK_STEP_MS`] で割った
 /// **注入の予算**でもある。段の待ちには 2 つの相が混ざっており、予算を食うのは片方だけである。
@@ -73,9 +71,9 @@ pub(super) const TICK_STEP_MS: u64 = 1_000;
 /// - **⑶ 余韻**——完了条件が成立した後、実 async の着地を待つ観測だけの相。
 ///   `WaitInjection::DispatcherTickThenObserve` が注入をやめるので、ここも**予算を食わない**。
 ///
-/// ゆえに再生を伴う段の幅は **20 秒＝20 本**で足りる（必要 2〜4 本に対し 5〜10 倍）。初版は
-/// この 3 相を分けずに幅だけを広げ（100 秒）、⑶ が予算を食い尽くして次段の状態を壊し、改訂 1 は
-/// ⑶ を止めたものの ⑴ が予算を食い尽くして再生が凍った。幅ではなく**相の切り分け**が効く。
+/// ゆえに再生を伴う段の幅は **20 秒＝20 本**で足りる（必要 2〜4 本に対し 5〜10 倍）。
+/// 幅だけを広げても、⑶ が予算を食い尽くして次段の状態を壊したり、⑴ が予算を食い尽くして
+/// 再生が凍ったりする。効くのは幅ではなく**相の切り分け**である。
 ///
 /// - **自発会話・会話中の抑止だけ幅 1 秒＝1 本**。この 2 段は kanade へ毎秒の変化通知を 1 本
 ///   投函するだけで、待ちには**何も注入しない**（`WaitInjection::Idle`）。再生を 1 ミリ秒も
@@ -161,7 +159,7 @@ pub(super) const LAP_INJECT_LIMIT_MS: u64 = LAP_STAGES[LAP_STAGES.len() - 1].lim
 ///
 /// # 導き方（この 3 行だけで閉じる）
 ///
-/// 1. 注入時刻は単調増加し、[`LAP_INJECT_LIMIT_MS`] を超えない（areka-P0-emo2-conformance-e2e の design D6 の不変条件）。
+/// 1. 注入時刻は単調増加し、[`LAP_INJECT_LIMIT_MS`] を超えない。
 /// 2. 1 回の注入で注入時刻は [`TICK_STEP_MS`] 進み、上限に達したら以後は注入しない。
 /// 3. ゆえに投函回数は多くとも `上限 / 刻み` 回＋起点の 1 回である。
 ///
@@ -174,8 +172,7 @@ pub(super) const MAX_SECOND_CHANGE_CALLS: usize = (LAP_INJECT_LIMIT_MS / TICK_ST
 /// 行列が尽きると台本受け口はその場で落ちる（`areka-runtime` の `spine.rs` の `panic!`）。余裕が 0 だと
 /// 段の境目で 1 本余分に投函されただけで受け口が落ち、「何が違ったか」が読めない失敗になる。
 /// 逆に余った応答は 1 件も記録に残らない（記録は呼出の側だけを積む＝`areka-runtime` の `spine.rs`）ので
-/// 害が無く、余分な**呼出**の方は記録に残って列の等値照合が読みやすい失敗として拾う
-/// （areka-P0-emo2-conformance-e2e の design D2「余裕を足しても余計な呼出は記録に残る」）。
+/// 害が無く、余分な**呼出**の方は記録に残って列の等値照合が読みやすい失敗として拾う。
 pub(super) const SECOND_CHANGE_SLACK: usize = 8;
 
 /// 毎秒の変化通知に積む応答の本数（照会側・片道側で各々この本数）。
@@ -309,7 +306,7 @@ pub(super) const STROKE_SAKURA: MouseProbe = MouseProbe {
 /// 出所: 同 `surfaces.txt`（`surface.append10,2100-2110,2200-2210` の
 /// `collision1,82,163,140,186,Bust`＝相方 `\1` 側）。中心は (111, 174)。
 /// 本体側と当たり領域名を変えてあるのは、2 件の記録が話者だけでなく領域でも区別できることを
-/// 期待列の側で見えるようにするためである（areka-P0-emo2-conformance-e2e の design 適合検証項目表 項目 6 の 4 か所のうち 2 か所）。
+/// 期待列の側で見えるようにするためである。
 pub(super) const STROKE_KERO: MouseProbe = MouseProbe {
     x: 111,
     y: 174,
@@ -356,7 +353,7 @@ pub(super) const LABEL_MOVE_APPLY: &str = "調整";
 // 台本（応答表）
 // ===========================================================================
 
-/// 利用者名の照会に返す値。展開されたこの値が表示に載り、生の記法は漏れない（areka-P0-emo2-conformance-e2e の R3.10）。
+/// 利用者名の照会に返す値。展開されたこの値が表示に載り、生の記法は漏れない。
 ///
 /// 起動系列の利用者名の先取り照会（`crates/areka-kanade/src/schedule/boot.rs`）の応答が
 /// プロパティ機構へ着地し、台本中の `%username` がこの値へ展開される
@@ -364,7 +361,7 @@ pub(super) const LABEL_MOVE_APPLY: &str = "調整";
 /// （同じモジュールの `DEFAULT_USERNAME`）へは落ちない。
 pub(super) const USERNAME: &str = "アヒル";
 
-/// 起動挨拶（`OnBoot` の応答）。**生の `%username` を含む**のが要点である（areka-P0-emo2-conformance-e2e の R3.10）。
+/// 起動挨拶（`OnBoot` の応答）。**生の `%username` を含む**のが要点である。
 ///
 /// 展開されたあとの `OnTranslate` の Ref0 は逐語の [`BOOT_TALK_EXPANDED`] で固定する。
 pub(super) const BOOT_TALK: &str = r"\0\s[0]%username、おはよう。\e";
@@ -384,7 +381,7 @@ pub(super) const STROKE_SAKURA_TALK: &str = r"\0\s[0]くすぐったいって。
 pub(super) const STROKE_KERO_TALK: &str = r"\1\s[10]……なに。\e";
 
 // ---------------------------------------------------------------------------
-// メニュー 3 本の話者スコープ（areka-P0-emo2-conformance-e2e の R3.1／R3.3・2026-09-05 改訂）
+// メニュー 3 本の話者スコープ
 // ---------------------------------------------------------------------------
 //
 // # 選択肢は**相方側**（`\1`）に載る
@@ -405,17 +402,12 @@ pub(super) const STROKE_KERO_TALK: &str = r"\1\s[10]……なに。\e";
 // `allow_break and last_spot ~= spot` のとき `\n[%d]`＝`spot_newlines` 既定 1.5 の百分率
 // ＝`\n[150]` を put し、続けて `spot_to_tag`（`\p[ID]`）を put する）。
 // `allow_break` は「前回の改行以降に非空の地の文が 1 文字でも出たか」（`text_since_break`）で、メニュー 3 本はいずれも直前に地の文の talk があるので**真**である。
-// さくらスクリプトの意味論上この改行は**切替前の scope**（＝本体側）のバルーン宛てであり、
-// この裁定は既に確定している（`.kiro/specs/completed/areka-P0-newline-defer/brief.md`・
-// `.kiro/steering/roadmap-history.md` の「話者交替＝`\n[150]`→`\p[N]`」）。ゆえに相方側の
+// さくらスクリプトの意味論上この改行は**切替前の scope**（＝本体側）のバルーン宛てである。
+// ゆえに相方側の
 // バルーンは選択肢**だけ**を 3 行で受け取る（1 行目が `\q`、次が `\n\q`、最後が
-// `\_l[5em,2lh]\q`）。改行の比率は実物どおり `\n[150]`（比率 1.5）を用いる——改訂前の台本は
-// 素の `\n`（比率 1.0）を選択肢の直前に置いていたので、位置だけでなく比率も実物へ寄せた。
+// `\_l[5em,2lh]\q`）。改行の比率は実物どおり `\n[150]`（比率 1.5）を用いる。
 //
-// 2026-09-04 まで本台本は選択肢を `\0` に置いており、一周は「相方側のバルーンにメニューが
-// 出る」経路を 1 度も踏んでいなかった。
-//
-// # まだ実物に合っていない 3 点（2026-09-11 正本更新で裁定: 現状維持）
+// # まだ実物に合っていない 3 点（現状維持）
 //
 // 1. **切替直後の面指定が無い**。実物は `\p[1]` の直後に `\s[通常]` を出す
 //    （`menu.lua` の `act.エモ:talk(act.エモ:word("通常"))` が
@@ -428,34 +420,26 @@ pub(super) const STROKE_KERO_TALK: &str = r"\1\s[10]……なに。\e";
 //    同ファイルの `\p[n]` はどちらも `Instruction::SpeakerScope` へ落ちる）、3 列にも段 6 の
 //    自己検査にも差は出ないが、逐語の忠実さとしては未達である。
 //
-// 裁定の理由: 3 点とも同じ指令へ落ちるため 3 列に差が出ない（areka-P0-emo2-conformance-e2e の R12.2 期待列不動）。逐語への
+// 裁定の理由: 3 点とも同じ指令へ落ちるため 3 列に差が出ない。逐語への
 // 引き直しは次に台本を更新する採り直しで行う。
 //
-// # 期待列は引き直したうえで 1 行も動かない（areka-P0-emo2-conformance-e2e の R12.2・緩めていない）
+// # 期待列は台本の話者スコープに依らない
 //
 // [`expected_calls`] は SHIORI の呼出の別・id・参照列だけを台帳にし、応答の中身を読まない。
 // [`expected_statuses`] も同じ呼出に載る進行状態だけを読む。[`expected_display`] が動かない
 // 理由は同関数の doc に導出を書いた（scope の切替は cue を 1 つも生まず、改行が生む cue は
 // `CueCommand::NewLine`＝バルーン宛てで面の表示指令ではない）。よって 3 列は等値照合のままで、
-// 緩めた期待は 1 つも無い——増えたのは檻の側（段 6 の自己検査）だけである。
+// スコープの写し違いを捕まえる檻は段 6 の自己検査だけである。
 //
-// # 走行 A（2026-09-05）の症状 #1 は履歴になった（この層では当時も今も観測できない）
+// # 字の配置は 3 列に映らない
 //
-// 実機の症状「相方側バルーンでメニューの先頭の選択肢が描かれない」は、**当時の**行送り
-// `ceil(font.height × 1.25)`＝35px と相方側 validrect の高さ 93px の関係で 3 行が収まらない
-// という**字の配置**の欠陥だった（`crates/areka-emo-text/src/layout.rs` の
-// `visible_window` が 1 行スクロールし、`draw.rs` が先頭行を skip する）。
-// 引受先の別仕様（`areka-P0-emo-text-line-height-canon`）は 2026-09-06 に完了し（PR #142）、
-// 行送りは正典の `font.height + 行間`（行間の既定は 2）になった——実物 `emo2-kakukaku` の
-// `font.height,28` なら **30** である（`crates/areka-emo-text/src/state.rs` の
-// `line_pitch`・既定は同ファイル）。症状そのものの檻も同仕様が持つ
-// （`crates/areka-emo-text/tests/kero_menu_capacity_test.rs`——実物のバルーン記述と
-// `menu.pasta` の選択肢 3 台本で先頭可視行 0 を固定し、旧式 35px を再現する対照テストを備える）。
+// 相方側バルーンでメニューの先頭の選択肢が描かれない症状は、行送り（正典の `font.height + 行間`・
+// 行間の既定は 2。実物 `emo2-kakukaku` の `font.height,28` なら 30）と相方側 validrect の高さの
+// 関係で決まる**字の配置**の問題で、その檻は
+// `crates/areka-emo-text/tests/kero_menu_capacity_test.rs` が持つ。
 // 決定論一周が突き合わせる 3 つの列は交信・面の表示指令・進行状態だけを台帳にするので、
-// 字がどこへ置かれたかは 1 ビットも運ばない。この独立は実測でも裏づいた——上流を取り込んだ
-// 後、期待列の定数を 1 バイトも動かさずに一周テストが全部緑である（areka-P0-emo2-conformance-e2e の R12.2）。ゆえに
-// 選択肢を相方側へ移した改訂は**台本を実物へ忠実に戻すこと**であって、症状 #1 の檻ではない。
-// 台本が相方側へ載ったことだけは一周テストが 1 か所で押さえる
+// 字がどこへ置かれたかは 1 ビットも運ばない。選択肢を相方側へ載せているのは**台本を実物へ
+// 忠実に写すため**である。台本が相方側へ載ったことだけは一周テストが 1 か所で押さえる
 // （`spine_conformance_lap_tests.rs` の段 6 の自己検査・文字層の選択状態を読む）。
 
 /// メインメニュー（二重クリックの応答）。実物 `menu.pasta`（地の文）と選択肢を写す
@@ -508,23 +492,23 @@ pub(super) const CLOSE_TALK: &str = r"\0\s[0]またね。\-";
 
 /// 一周走行の台本受け口を組む（応答の待ち行列を id ごとに積む）。
 ///
-/// 既存のビルダー（`areka-runtime` の `spine.rs` の照会・片道・解放）だけを使う
-/// ——新しい仕組みを発明しない（areka-P0-emo2-conformance-e2e の R2.6）。応答は id ごとの待ち行列で、呼出のたびに先頭から
+/// 既存のビルダー（`areka-runtime` の `spine.rs` の照会・片道・解放）だけを使う。
+/// 応答は id ごとの待ち行列で、呼出のたびに先頭から
 /// 1 件消費される。**行列が尽きるとその場で受け口が落ちる**（`areka-runtime` の `spine.rs`）
 /// ため、本数の決まらない毎秒の変化通知には [`SECOND_CHANGE_RESPONSES`] 本を積む。
 ///
 /// 利用者名の照会は明示的に台本化する。明示しなければビルダーの既定（`areka-runtime` の `spine.rs` の
-/// 値なし応答）が補われ、`%username` が既定名へ落ちて areka-P0-emo2-conformance-e2e の R3.10 の展開を確かめられなくなる。
+/// 値なし応答）が補われ、`%username` が既定名へ落ちて展開を確かめられなくなる。
 pub(super) fn lap_backend() -> (ScriptedShioriBackend, ScriptedShioriHandle) {
     let mut builder = ScriptedShioriBackend::builder()
-        // ── 起動系列（areka-P0-emo2-conformance-e2e の design D2 の起動 1〜5・順序は R3.1） ──
+        // ── 起動系列（起動 1〜5・順序固定） ──
         .notify("OnInitialize", Ok(()))
         .get("username", Ok(Some(USERNAME.to_string())))
         // 初回起動の照会は応答なし（204）で通常起動へ落とす——既存 spine の標準台本と同形。
         .get("OnFirstBoot", Ok(None))
         .get("OnBoot", Ok(Some(BOOT_TALK.to_string())))
         .notify("basewareversion", Ok(()))
-        // ── 撫で（本体・相方の 2 件・areka-P0-emo2-conformance-e2e の design D1 の撫で段） ──
+        // ── 撫で（本体・相方の 2 件） ──
         .get("OnMouseMove", Ok(Some(STROKE_SAKURA_TALK.to_string())))
         .get("OnMouseMove", Ok(Some(STROKE_KERO_TALK.to_string())))
         // ── メニュー（二重クリック 1 件） ──
@@ -558,7 +542,7 @@ pub(super) fn lap_backend() -> (ScriptedShioriBackend, ScriptedShioriHandle) {
 }
 
 // ===========================================================================
-// 送出の期待列（呼出の別・id・参照列の 3 要素・areka-P0-emo2-conformance-e2e の design D2 の表の逐語）
+// 送出の期待列（呼出の別・id・参照列の 3 要素）
 // ===========================================================================
 
 /// 照会（GET）1 件ぶんの期待。
@@ -728,18 +712,18 @@ pub(super) fn expected_calls() -> Vec<RecordedCall> {
             "OnClose",
             vec![CLOSE_REASON.into(), "0".into(), "0".into()],
         ),
-        // ── 解放: ちょうど 1 度だけ（areka-P0-emo2-conformance-e2e の R3.9）。列の等値照合が件数もそのまま固定する。
+        // ── 解放: ちょうど 1 度だけ。列の等値照合が件数もそのまま固定する。
         RecordedCall::Unload,
     ]
 }
 
 // ===========================================================================
-// 〈段名・表示指令〉の期待列（areka-P0-emo2-conformance-e2e の design D3「判定の本体」）
+// 〈段名・表示指令〉の期待列
 // ===========================================================================
 
 /// 一周で届く表示指令の期待列（段名つき・`spine_conformance_judge.rs` が等値で突き合わせる）。
 ///
-/// # なぜ 2 行しかないのか（実測・areka-P0-emo2-conformance-e2e の R12.5 の記録）
+/// # なぜ 2 行しかないのか
 ///
 /// 一周で表示指令を生む段は **2 つだけ**である。台本が指定する面は `STROKE_KERO_TALK`
 /// （＝相方の `\1\s[10]`）を除いてすべて `\0\s[0]` であり、その面は起動挨拶が既に表示している
@@ -757,8 +741,7 @@ pub(super) fn expected_calls() -> Vec<RecordedCall> {
 /// 確かめることはできない**——確かめる場所は一周テストの段 6 の自己検査（文字層の選択状態）
 /// である。
 ///
-/// areka-P0-emo2-conformance-e2e の design D3 はこの列の完全一致を「判定の本体」と書くが、**2 行では R2.4 の判定は設計が想定する
-/// より実質的に弱い**。段の順序と内容を機械で証明したと言えるのは、交信の列と進行状態の
+/// **2 行では判定は実質的に弱い**。段の順序と内容を機械で証明したと言えるのは、交信の列と進行状態の
 /// 列を合わせた 3 列の等値であって、この列だけではない。表示経路の被覆は既存の兄弟テスト
 /// （`spine_display_tests.rs`・`spine_seriko_loop_tests.rs`・`spine_talk_close_tests.rs`）が正本
 /// として持つ。**この弱さを埋めるために架空の表示指令を足すことはしない**——期待列は実装が実際に
@@ -787,7 +770,7 @@ pub(super) fn expected_display() -> Vec<(&'static str, DisplayProjection)> {
 }
 
 // ===========================================================================
-// 進行状態の期待列（areka-P0-emo2-conformance-e2e の design D3「進行状態の台帳」・R3.8）
+// 進行状態の期待列
 // ===========================================================================
 
 /// 進行状態の wire 値（会話中のみ）。
@@ -818,7 +801,7 @@ fn status(id: &str, status: Option<&str>) -> RecordedStatus {
 /// 交信の列から**解放を除いた**並びと 1 対 1 に対応する（解放は進行状態を運ばない型である
 /// ＝`areka-runtime` の `spine.rs` の `unload` は記録の第 2 系統へ書かない）。
 ///
-/// # この列だけが選択待ちを見せる（areka-P0-emo2-conformance-e2e の R3.8）
+/// # この列だけが選択待ちを見せる
 ///
 /// 会話中は毎秒の変化通知の別（照会か片道か）と Ref3 でも読める。**しかし選択待ちは Ref3 では
 /// 会話中と区別できない**——Ref3 の源は `talk_active` だけだからである
@@ -852,8 +835,8 @@ pub(super) fn expected_statuses() -> Vec<RecordedStatus> {
         status(TRANSLATE, Some(STATUS_TALKING)),
         // ── メニュー: 撫での応答（相方側）がまだ再生中のうちに二重クリックが届く。
         //    撫で段は会話の**起動**までで完了し、以後は注入を止めて観測だけを続けるので、
-        //    再生時刻は 1 ミリ秒も進まないまま次段へ渡る（会話中にメニューが開くこと自体が
-        //    areka-P0-emo2-conformance-e2e の R1.5 の「結合と一周でしか現れない事象」である）。
+        //        再生時刻は 1 ミリ秒も進まないまま次段へ渡る（会話中にメニューが開くこと自体が
+        //        結合と一周でしか現れない事象である）。
         status("OnMouseDoubleClick", Some(STATUS_TALKING)),
         status(TRANSLATE, Some(STATUS_TALKING)),
         // ── 選択起源の 4 呼出: 選択待ちは会話の枠を占有したまま成立する（複合値）。

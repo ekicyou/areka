@@ -1,8 +1,6 @@
 //! `CueSink`（演者非依存の単一出力契約）と `cue_target_of`（relevance 単一権威）の檻。
 //!
-//! Task 4.1: 旧 `SurfaceSink`/`TextSink` の 2 トレイト分割を統合した単一 `CueSink` を
-//! dola へ定義し、relevance 分類器 `cue_target_of` も dola が単一権威として所有することを
-//! 公開 API 越しに固定する（R2.4・R11.3・D4/D7）。
+//! 演者に依らない単一の出力契約 `CueSink` と、配送先の分類を担う単一権威 `cue_target_of` を、公開 API 越しに固定する。
 
 use dola::DynamicValue;
 use dola::cue::{
@@ -11,7 +9,7 @@ use dola::cue::{
 use std::sync::{Arc, Mutex};
 
 /// 全 `CueCommand` variant を単一権威 `cue_target_of` に通し、写像表どおりの配送先へ
-/// 分類されることを固定する（R11.3・sakura contract.rs から dola へ移設した網羅檻）。
+/// 分類されることを固定する。
 ///
 /// `cue_target_of` の match は catch-all を置かないため、dola が将来 variant を追加すると
 /// コンパイラが本関数の網羅性を強制的に再検討させる（分類漏れを型で塞ぐ）。
@@ -89,7 +87,7 @@ fn cue_target_of_classifies_every_variant() {
     assert_eq!(cue_target_of(&CueCommand::Wait), None);
 }
 
-/// 知らせの口の檻（mcp-strict-errors 1.1・要件 2.1／3.9／4.2）。
+/// 知らせの口の檻。
 const FINDING: CueFinding = CueFinding {
     point: "seriko.surface",
     kind: "missing_surface",
@@ -106,7 +104,7 @@ impl CueSink for Recorder {
 }
 
 /// `emit_with` を上書きしない受け手は、知らせの口を添えて渡されても `emit` をちょうど
-/// 1 回だけ同じ合図で呼ぶ（今の送り出しと同じ・知らせは来ない・要件 3.9）。
+/// 1 回だけ同じ合図で呼ぶ（今の送り出しと同じ・知らせは来ない）。
 #[test]
 fn default_emit_with_emits_once_and_reports_nothing() {
     let reported = Arc::new(Mutex::new(Vec::<CueFinding>::new()));
@@ -127,7 +125,7 @@ fn default_emit_with_emits_once_and_reports_nothing() {
 }
 
 /// 口は知らせを登録した関数へそのまま渡し、複製しても同じ口として等しい。別に作った口は
-/// 同じ関数でも等しくない。複製はスレッドをまたいで知らせられる（要件 2.1／4.2）。
+/// 同じ関数でも等しくない。複製はスレッドをまたいで知らせられる。
 #[test]
 fn probe_reports_and_equality_is_identity() {
     let reported = Arc::new(Mutex::new(Vec::<CueFinding>::new()));

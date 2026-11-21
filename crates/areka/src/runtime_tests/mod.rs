@@ -1,4 +1,4 @@
-//! `areka-runtime` のテストのうち、本体の部品も使うものの置き場（spec: runtime-crate-split 設計 BodyRuntimeTests）。
+//! `areka-runtime` のテストのうち、本体の部品も使うものの置き場。
 //!
 //! `areka-runtime` は本体を使えないので、本体の部品も使う runtime のテストはここに置く。木は runtime を写す:
 //! 各ファイルは本物の親の代わりの親で、`use areka_runtime::<道>::*;`・本物の親が持っていて子が使う `use` の行・
@@ -6,12 +6,12 @@
 
 use areka_runtime::*;
 
-// 落ちの報告をこのテストの実行ファイルに据える（runtime-crate-split 設計 D6）。中身は `areka-runtime` の 1 つだけを指す。
+// 落ちの報告をこのテストの実行ファイルに据える。中身は `areka-runtime` の 1 つだけを指す。
 #[used]
 #[unsafe(link_section = ".CRT$XCU")]
 static INSTALL: extern "C" fn() = areka_runtime::crash_report_test_support::install;
 
-/// 落ちの報告（とプロセスの寿命の MTA）がテストより先に据わっている（runtime-crate-split 要件 3.8・設計 D6）。
+/// 落ちの報告（とプロセスの寿命の MTA）がテストより先に据わっている。
 #[test]
 fn crash_filter_is_installed_before_the_tests_start() {
     assert!(areka_runtime::crash_report_test_support::installed());
@@ -22,7 +22,7 @@ mod balloon_visibility;
 mod consumer_ledger;
 mod frame;
 mod shell_carry;
-// 本体の `ghost_session_{reload,restart}_tests` も背骨の足場（`SpineHarness`）を使う（runtime-crate-split 設計 BodyRuntimeTests）。
+// 本体の `ghost_session_{reload,restart}_tests` も背骨の足場（`SpineHarness`）を使う。
 pub(crate) mod spine;
 mod strict_judges;
 

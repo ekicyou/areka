@@ -1,9 +1,7 @@
-//! 切替の写し（spec: areka-P0-user-data-root 要件 4.3・4.7・design「SwitchHook」）。
+//! 切替の写し。
 //!
-//! 切替の受理の直後に [`start`] が、写す要が在れば背景のスレッドで `copy_for_write` を走らせ、
-//! 予約に見込み [`SwitchCopy`] を持たせる。前のゴーストが止まった時点（`switch_to`）で
-//! [`boot_dir`] が起こすフォルダを答え、写し中なら段を「写し待ち」にして握手の中身を預かる。
-//! [`poll`] は今の取り出しの系の先頭で毎回呼ばれ、写しの答えを受け取り、写し待ちなら続きを走らせる。
+//! 切替の受理の直後に [`start`] が、写す要が在れば背景のスレッドで `copy_for_write` を走らせる。
+//! [`boot_dir`] は前のゴーストが止まった時点で起こすフォルダを答え、写し中なら段を「写し待ち」にする。
 //! UI スレッドは写しを待って止まらない。
 
 use std::path::{Path, PathBuf};
@@ -32,7 +30,7 @@ struct CopyWaitHandoff(ChangeHandoff);
 
 /// 受理の直後に呼ぶ。`plan_copy` が `Copy` なら `std::thread` で `copy_for_write` を走らせる。
 /// 読み取りだけの走りでは写さず、スレッドも起こさず `Done(dir)`（写すはずだったときだけ
-/// `user_data_copy_withheld` を 1 件・readonly-mode 要件 4.1・4.4・10.2）。
+/// `user_data_copy_withheld` を 1 件）。
 pub(crate) fn start(
     readonly: bool,
     roots: &BasewareRoots,

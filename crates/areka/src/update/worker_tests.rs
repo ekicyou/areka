@@ -1,5 +1,4 @@
-//! 背景スレッドと本物の口の決定論テスト（design「Testing Strategy / 背景スレッドの口」・要件 1.11・
-//! 1.18・4.4・7.1・7.3・7.4・9.7・9.12）。
+//! 背景スレッドと本物の口の決定論テスト。
 //!
 //! kanade の代わりに素の受信端で送出を受けて答える。確かめること: `RaiseOutcome` の 5 値と切断の写し・
 //! 照会は `homeurl` と `useorigin1` を 1 回で・終了が始まった後の送出が 0 件・門が閉じていれば取得口
@@ -7,7 +6,7 @@
 //! 取得口を作れなければ記録せずに門を手放す・スレッドが仕事を 1 件走らせて窓口へ頼む・本番の
 //! 取得口の型を綴る本番ファイルは 2 つだけ（字面の検査）・通信中の数は標準の手続きの間だけ立ち、
 //! 手続きを抜けると成功・失敗・門が閉じている、のどの経路でも窓口へ「終わった」を頼む前に戻る
-//! （要件 2.1・2.3・2.4・数はテストごとの関数内の `static`）。
+//! （数はテストごとの関数内の `static`）。
 //!
 //! 実時間の待ちに依らない: 答える側は受信端の受け取りで、口は返信端の受け取りで揃える。
 
@@ -146,7 +145,7 @@ fn queried_resource_ids_are_allowed_by_kanade() {
 
 // ---------------------------------------------------------------- イベントの写し
 
-/// `RaiseOutcome` の 5 値と返事の切断を「台本あり・返事なし・閉じた」へ写す（design の worker の節）。
+/// `RaiseOutcome` の 5 値と返事の切断を「台本あり・返事なし・閉じた」へ写す。
 #[test]
 fn raise_maps_five_outcomes_and_dropped_reply() {
     // (返す値, 写し, 記録の語, 水準)
@@ -277,7 +276,7 @@ fn resources_without_kanade_is_none() {
 
 // ---------------------------------------------------------------- 終了の後
 
-/// 終了が始まった後はイベントも照会も送らない（受信端に 0 件・要件 7.4）。
+/// 終了が始まった後はイベントも照会も送らない（受信端に 0 件）。
 ///
 /// 受信端は別スレッドが受けた端から数えて落とす（返信端も落ちる）ので、送ってしまっても口は
 /// 返事待ちで止まらず、数が 1 以上になって赤になる。
@@ -298,7 +297,7 @@ fn nothing_is_sent_after_exit_began() {
 
 // ---------------------------------------------------------------- エンジンの一周と門
 
-/// 門が閉じていれば、取得口も `run`（観測）も呼ばずに「閉じた」（要件 7.1・7.3）。
+/// 門が閉じていれば、取得口も `run`（観測）も呼ばずに「閉じた」。
 #[test]
 fn closed_gate_enters_neither_fetch_nor_run() {
     let (kanade, _rx) = mpsc::channel();
@@ -577,8 +576,8 @@ fn worker_runs_a_job_and_asks_order_done() {
         .expect("仕事の送出端が落ちたらスレッドは終わる");
 }
 
-/// メニューの依頼: `OnUpdateProcessExec` の答え待ちの間は数を立てず（要件 2.1）、標準の手続きが
-/// 始まると立ち、照会が失敗して手続きを抜けると「終わった」の前に戻る（失敗の経路・要件 2.3）。
+/// メニューの依頼: `OnUpdateProcessExec` の答え待ちの間は数を立てず、標準の手続きが
+/// 始まると立ち、照会が失敗して手続きを抜けると「終わった」の前に戻る（失敗の経路）。
 #[test]
 fn online_is_not_raised_while_awaiting_exec_and_drops_on_failure() {
     static ONLINE: OnlineCounter = OnlineCounter::new();
@@ -714,7 +713,7 @@ fn balloon_dir_begin_dir(roots: BasewareRoots, exe: &Path, dir: PathBuf) -> Stri
     dir
 }
 
-/// 印の付いた並びでは、バルーンの対象は取り込みの前に書ける根の写しへ替わる（要件 4.4・10.4）。
+/// 印の付いた並びでは、バルーンの対象は取り込みの前に書ける根の写しへ替わる。
 #[test]
 fn balloon_target_is_replaced_by_the_copy_before_import() {
     let (_tmp, user, exe) = bundled_balloon("update-worker-balloon-copy");
@@ -739,7 +738,7 @@ fn balloon_target_is_replaced_by_the_copy_before_import() {
 }
 
 /// 更新先（descript の homeurl）の無いバルーンは表示だけの物なので、印の付いた並びでも写さずに
-/// 飛ばす（要件 4.4・10.4）。
+/// 飛ばす。
 #[test]
 fn balloon_without_homeurl_is_skipped_and_not_copied() {
     let (_tmp, user, exe) = bundled_balloon("update-worker-balloon-no-homeurl");
@@ -782,7 +781,7 @@ fn balloon_without_homeurl_is_skipped_and_not_copied() {
 }
 
 /// 照会で依頼をやめたとき（`update_abandoned at=resources`）は、印の付いた並びで更新先の在る
-/// バルーンでも写さない（写すのは照会が通った後だけ・要件 4.4）。
+/// バルーンでも写さない（写すのは照会が通った後だけ）。
 #[test]
 fn abandoned_at_resources_does_not_copy_the_balloon_target() {
     let (_tmp, user, exe) = bundled_balloon("update-worker-balloon-abandoned");
@@ -817,7 +816,7 @@ fn abandoned_at_resources_does_not_copy_the_balloon_target() {
     handle.join().expect("スレッドは終わる");
 }
 
-/// 印の無い並びでは写さず、同梱のフォルダのまま（要件 3.4・1.4／設計「写す判断」）。
+/// 印の無い並びでは写さず、同梱のフォルダのまま。
 #[test]
 fn unmarked_list_does_not_copy_the_balloon_target() {
     let (_tmp, user, exe) = bundled_balloon("update-worker-balloon-unmarked");
@@ -838,8 +837,8 @@ fn unmarked_list_does_not_copy_the_balloon_target() {
     assert!(!user.join("balloon").exists(), "写さない");
 }
 
-/// ゴーストの中のバルーンは、印の付いた並びでも写さずに今のフォルダのまま書く（spec:
-/// areka-P0-ghost-inner-balloon 要件 8.1・8.3）。起動のときのゴーストが実行ファイルの隣の根に在れば
+/// ゴーストの中のバルーンは、印の付いた並びでも写さずに今のフォルダのまま書く。
+/// 起動のときのゴーストが実行ファイルの隣の根に在れば
 /// 起動が書ける根へ写してから動かす（`boot_config_copy_tests`）ので、対象のフォルダは写しの中で、
 /// 更新は写しの中を書く。写されずに隣の根のまま動いたゴースト（写しの失敗など）では、ゴーストそのもの
 /// （`prepare_targets` が通さない）と同じく隣の根のゴーストの中を書く。どちらも書く先は
@@ -877,8 +876,8 @@ fn ghost_inner_balloon_target_is_written_in_place() {
 
 /// 本体・`areka-runtime`・`areka-input` の本番ファイル（`*_tests.rs`・`*_test_support.rs` を除く）で `WinHttp`
 /// で始まる識別子は `WinHttpFetch` だけで、綴るのは本体の `install/fetch_url.rs` と
-/// `update/worker.rs` の 2 つだけ（裁定 3）。分ける前に本体の `src` が覆っていた範囲を歩くため、
-/// 3 つの `src` を歩き、見出しに crate の名前を付ける（runtime-crate-split 要件 5.4）。
+/// `update/worker.rs` の 2 つだけ。分ける前に本体の `src` が覆っていた範囲を歩くため、
+/// 3 つの `src` を歩き、見出しに crate の名前を付ける。
 #[test]
 fn winhttp_is_spelled_only_in_two_production_files() {
     let mut spelled: Vec<(String, String)> = Vec::new();

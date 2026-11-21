@@ -1,8 +1,8 @@
-//! 実機ログのサインオフランナー（`areka-P0-dpi-transition-atomicity` 要件 8.3・design C7 の Integration）。
+//! 実機ログのサインオフランナー。
 //!
 //! 決定論テストと**同一の純関数**（[`super::judge_transition_log`]）を実機ログへ当てる入口で
 //! ある。判定の実装をここに 1 行も持たないのが要点で、持った瞬間に「決定論テストが緑でも
-//! サインオフだけ別の判定を通る」形が生まれる。Python 版は作らない（C7）。
+//! サインオフだけ別の判定を通る」形が生まれる。Python 版は作らない。
 //!
 //! # 走らせ方
 //!
@@ -11,7 +11,7 @@
 //! ```
 //!
 //! 既定の `cargo test` では `#[ignore]` により 1 度も走らない——実機ログが無い環境で
-//! 「違反 0 件」を出すと、それが充足の根拠に化けるためである（`areka-P0-dpi-transition-atomicity` 要件 8.5）。
+//! 「違反 0 件」を出すと、それが充足の根拠に化けるためである。
 //!
 //! # 静かに成功しない
 //!
@@ -101,7 +101,7 @@ fn an_unreadable_path_is_an_error_not_an_empty_pass() {
 #[test]
 fn a_log_without_any_observation_line_is_an_error_not_an_empty_pass() {
     // 空のファイルと、観測行を 1 行も含まないファイルの両方。どちらも「違反 0 件」を
-    // 作れてしまう入力なので、合格ではなく失敗として落ちなければならない（`areka-P0-dpi-transition-atomicity` 要件 8.5）。
+    // 作れてしまう入力なので、合格ではなく失敗として落ちなければならない。
     let temp = TempPath::new("transition-signoff-empty");
     let path = temp.child("empty.log");
     for body in ["", "何も観測していないログ\n"] {

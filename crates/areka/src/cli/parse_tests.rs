@@ -1,6 +1,6 @@
-//! 引数の列 → 起動オプションの中身と記録の材料（要件 1・2.1・2.3・2.4・4.5〜4.7・6.1・6.4〜6.7・8.4・9.4・11.1）。
+//! 引数の列 → 起動オプションの中身と記録の材料。
 //!
-//! 最後のまとめ（`Summary`）の中身は `summary_table` で見る（1.12）。
+//! 最後のまとめ（`Summary`）の中身は `summary_table` で見る。
 
 use super::*;
 use crate::cli::listen::ListenNote;
@@ -60,7 +60,7 @@ fn boot(
 #[test]
 fn boot_request_and_notes_table() {
     let rows: Vec<(Vec<&str>, BootRequest, Vec<ParseNote>)> = vec![
-        // 1.1・1.2: `--名前 値` と `--名前=値`
+        // `--名前 値` と `--名前=値`
         (
             vec!["--ghost", "a"],
             boot(None, None, Some("a"), false),
@@ -71,13 +71,13 @@ fn boot_request_and_notes_table() {
             boot(None, None, Some("a"), false),
             vec![],
         ),
-        // 1.2: 最初の `=` で割る
+        // 最初の `=` で割る
         (
             vec!["--ghost=a=b"],
             boot(None, None, Some("a=b"), false),
             vec![],
         ),
-        // 1.3・1.5: 短い形と大文字小文字
+        // 短い形と大文字小文字
         (vec!["/g", "a"], boot(None, None, Some("a"), false), vec![]),
         (vec!["-g", "a"], boot(None, None, Some("a"), false), vec![]),
         (vec!["/G", "a"], boot(None, None, Some("a"), false), vec![]),
@@ -89,7 +89,7 @@ fn boot_request_and_notes_table() {
         (vec!["/r"], boot(None, None, None, true), vec![]),
         (vec!["-R"], boot(None, None, None, true), vec![]),
         (vec!["--Random"], boot(None, None, None, true), vec![]),
-        // 1.4: 短い形の `=` は知らない名前（値は飲まない＝`a` は位置の引数）
+        // 短い形の `=` は知らない名前（値は飲まない＝`a` は位置の引数）
         (
             vec!["/g=a"],
             boot(None, None, None, false),
@@ -106,7 +106,7 @@ fn boot_request_and_notes_table() {
             boot(Some("a"), None, None, false),
             vec![unknown("-ghost")],
         ),
-        // 1.6: 扱わない名前は値の取り方どおりに値も飲む
+        // 扱わない名前は値の取り方どおりに値も飲む
         (
             vec!["--ukagaka-link", "x", "--random"],
             boot(None, None, None, true),
@@ -149,7 +149,7 @@ fn boot_request_and_notes_table() {
             boot(None, None, None, false),
             vec![unsupported("guifont")],
         ),
-        // 1.7: 知らない名前は値を飲まない
+        // 知らない名前は値を飲まない
         (
             vec!["--foo", "bar"],
             boot(Some("bar"), None, None, false),
@@ -161,13 +161,13 @@ fn boot_request_and_notes_table() {
             vec![unknown("--")],
         ),
         (vec!["-"], boot(None, None, None, false), vec![unknown("-")]),
-        // 1.10: `--ghost` は書いた順に足す（最初の 1 つを起こし、残りは 4.5）
+        // `--ghost` は書いた順に足す（最初の 1 つを起こし、残りは無視）
         (
             vec!["--ghost", "a", "--ghost", "b"],
             boot(None, None, Some("a"), false),
             vec![ParseNote::ExtraGhosts { rest: vec![s("b")] }],
         ),
-        // 1.11: ほかは後勝ち＋warn
+        // ほかは後勝ち＋warn
         (
             vec!["--random", "/r"],
             boot(None, None, None, true),
@@ -179,13 +179,13 @@ fn boot_request_and_notes_table() {
             boot(None, None, None, true),
             vec![ParseNote::ValueIgnored { name: s("random") }],
         ),
-        // 2.1: 位置の引数の 1 つ目＝ゴースト・2 つ目＝バルーン
+        // 位置の引数の 1 つ目＝ゴースト・2 つ目＝バルーン
         (
             vec!["C:\\g\\emily"],
             boot(Some("C:\\g\\emily"), None, None, false),
             vec![],
         ),
-        // 2.3: 3 つ目以降は warn
+        // 3 つ目以降は warn
         (
             vec!["a", "b", "c", "d"],
             boot(Some("a"), Some("b"), None, false),
@@ -193,7 +193,7 @@ fn boot_request_and_notes_table() {
                 args: vec![s("c"), s("d")],
             }],
         ),
-        // 2.4: `--ghost` があれば位置のゴーストを捨てる（バルーンは使う＝2.5）
+        // `--ghost` があれば位置のゴーストを捨てる（バルーンは使う）
         (
             vec!["C:\\g\\emily", "C:\\b\\x", "--ghost", "emo2"],
             boot(None, Some("C:\\b\\x"), Some("emo2"), false),
@@ -201,7 +201,7 @@ fn boot_request_and_notes_table() {
                 arg: s("C:\\g\\emily"),
             }],
         ),
-        // `--ghost` が値なしでも位置のゴーストは使わない（2.4・4.7）
+        // `--ghost` が値なしでも位置のゴーストは使わない
         (
             vec!["C:\\g\\emily", "--ghost"],
             boot(None, None, None, false),
@@ -212,7 +212,7 @@ fn boot_request_and_notes_table() {
                 ParseNote::GhostEmpty,
             ],
         ),
-        // 4.5・4.6: 次の起動オプションの前までが全部 `--ghost` の値
+        // 次の起動オプションの前までが全部 `--ghost` の値
         (
             vec!["--ghost", "A", "B", "--random"],
             boot(None, None, Some("A"), true),
@@ -230,7 +230,7 @@ fn boot_request_and_notes_table() {
             boot(None, None, Some("A"), false),
             vec![],
         ),
-        // 1.2: 1 つ・省略できる 1 つの名前の `=` は値を同じ引数に持つ。
+        // 1 つ・省略できる 1 つの名前の `=` は値を同じ引数に持つ。
         // `=` の後ろが空でも次の引数は飲まない（次は位置の引数のまま）
         (
             vec!["--sstp-listen=", "C:\\g\\emily"],
@@ -247,7 +247,7 @@ fn boot_request_and_notes_table() {
             boot(Some("x"), None, None, false),
             vec![],
         ),
-        // 4.7: 値なし
+        // 値なし
         (
             vec!["--ghost", "--random"],
             boot(None, None, None, true),
@@ -258,19 +258,19 @@ fn boot_request_and_notes_table() {
             boot(None, None, None, false),
             vec![ParseNote::GhostEmpty],
         ),
-        // 1.2: 空白の形でも空の値は値なし（`--ghost=` と同じ）
+        // 空白の形でも空の値は値なし（`--ghost=` と同じ）
         (
             vec!["--ghost", ""],
             boot(None, None, None, false),
             vec![ParseNote::GhostEmpty],
         ),
-        // 9.4: `--help` の値は使わない
+        // `--help` の値は使わない
         (
             vec!["--help", "x"],
             boot(None, None, None, false),
             vec![ParseNote::HelpValueIgnored { value: s("x") }],
         ),
-        // 8.4・設計の「値なし」: 省略できる値は次の引数が名前でなければ飲む。
+        // 省略できる値は次の引数が名前でなければ飲む。
         // 説明書の「位置の引数はすべての起動オプションより前に」の根拠になるふるまい。
         (
             vec!["--sstp-listen", "C:\\g\\emily", "C:\\b\\x"],
@@ -280,7 +280,7 @@ fn boot_request_and_notes_table() {
                 reason: "format",
             })],
         ),
-        // 1.13: 書式の誤りが並んでも読み続ける
+        // 書式の誤りが並んでも読み続ける
         (
             vec!["/g=x", "--foo", "--fmo-name", "--random", "a"],
             boot(Some("a"), None, None, true),
@@ -303,7 +303,7 @@ fn boot_request_and_notes_table() {
     }
 }
 
-/// `--sstp-listen` の値は 2.1 の計画へ渡る（8.4・1.11）。
+/// `--sstp-listen` の値は待ち受けの計画へ渡る。
 #[test]
 fn sstp_listen_table() {
     use ListenPlan::*;
@@ -316,21 +316,21 @@ fn sstp_listen_table() {
             vec![],
         ),
         (vec!["--SSTP-LISTEN", "none"], Off, vec![]),
-        // 8.4: 値なし（最後・次が名前・`=` の後ろが空）は待ち受けない。
-        // `=` の後ろが空なら次の引数を値に取らない（1.2）
+        // 値なし（最後・次が名前・`=` の後ろが空）は待ち受けない。
+        // `=` の後ろが空なら次の引数を値に取らない
         (vec!["--sstp-listen"], Off, vec![]),
         (vec!["--sstp-listen", "--random"], Off, vec![]),
         (vec!["--sstp-listen="], Off, vec![]),
         (vec!["--sstp-listen=", "C:\\g\\emily"], Off, vec![]),
-        // 1.2: 空白の形でも空の値は値なし（`--sstp-listen=` と同じ）
+        // 空白の形でも空の値は値なし（`--sstp-listen=` と同じ）
         (vec!["--sstp-listen", ""], Off, vec![]),
-        // 1.11: 後勝ち＋warn
+        // 後勝ち＋warn
         (
             vec!["--sstp-listen", "1", "--sstp-listen", "2"],
             Ports(vec![2]),
             vec![repeated("sstp-listen")],
         ),
-        // 2.1 の注記は記録の材料へ流れる
+        // 待ち受けの注記は記録の材料へ流れる
         (
             vec!["--sstp-listen", "0.0.0.0:9900,9901"],
             Ports(vec![9901]),
@@ -358,7 +358,7 @@ fn sstp_listen_table() {
     }
 }
 
-/// `--help` の有無（9.1・9.4・1.3）。
+/// `--help` の有無。
 #[test]
 fn help_table() {
     let rows: Vec<(Vec<&str>, bool, Vec<ParseNote>)> = vec![
@@ -367,9 +367,9 @@ fn help_table() {
         (vec!["/?"], true, vec![]),
         (vec!["-?"], true, vec![]),
         (vec!["--help="], true, vec![]),
-        // `=` の後ろが空なら次の引数を値に取らない（1.2）
+        // `=` の後ろが空なら次の引数を値に取らない
         (vec!["--help=", "x"], true, vec![]),
-        // 1.2: 空白の形でも空の値は値なし（`--help=` と同じ・空の引数は位置の引数にしない）
+        // 空白の形でも空の値は値なし（`--help=` と同じ・空の引数は位置の引数にしない）
         (vec!["--help", ""], true, vec![]),
         (
             vec!["--help=x"],
@@ -402,13 +402,13 @@ fn word_unknown(w: &str) -> ParseNote {
     ParseNote::WordUnknown { word: s(w) }
 }
 
-/// `--option` の語（1.5・1.8・1.9・6.1・6.2・6.4〜6.7・7.1 の読み方側）。
+/// `--option` の語。
 #[test]
 fn option_words_table() {
     use ModulePolicy::*;
     let rows: Vec<(Vec<&str>, bool, ModulePolicy, Vec<ParseNote>)> = vec![
         (vec![], false, Load, vec![]),
-        // 6.1・6.4〜6.7: 語ごとに 1 件（空の語も 1 つずつ）
+        // 語ごとに 1 件（空の語も 1 つずつ）
         (
             vec!["--option", "nobootcheck,bootunlock,kiosk,xyz,,"],
             true,
@@ -421,7 +421,7 @@ fn option_words_table() {
                 ParseNote::WordEmpty,
             ],
         ),
-        // 7.1・1.5: 大文字小文字を問わない
+        // 大文字小文字を問わない
         (vec!["--option", "DontLoadModule"], false, Skip, vec![]),
         (
             vec!["--option=standalone,layered,region,dpiaware"],
@@ -438,7 +438,7 @@ fn option_words_table() {
             vec!["/o", "kiosk,callghost,deletesource"],
             false,
             Load,
-            // `callghost`・`deletesource` は扱う語（`--install` が無いので効かない＝startup-install-option 1.4・1.5）
+            // `callghost`・`deletesource` は扱う語（`--install` が無いので効かない）
             vec![
                 pending("kiosk"),
                 ParseNote::InstallWordWithoutInstall {
@@ -449,22 +449,22 @@ fn option_words_table() {
                 },
             ],
         ),
-        // 1.9: 重ねは語を合わせ、後勝ちの warn は出ない
+        // 重ねは語を合わせ、後勝ちの warn は出ない
         (
             vec!["--option", "nobootcheck", "-O", "dontloadmodule"],
             true,
             Skip,
             vec![],
         ),
-        // 1.4: 短い形の `=` は知らない名前
+        // 短い形の `=` は知らない名前
         (
             vec!["/o", "x", "-O=c"],
             false,
             Load,
             vec![word_unknown("x"), unknown("-O=c")],
         ),
-        // 1.8・6.7: 値なしは空の語 1 つ（1.8 の warn は出さない）。
-        // `=` の後ろが空なら次の引数を語に取らない（1.2・次は位置の引数）
+        // 値なしは空の語 1 つ（値なしの warn は出さない）。
+        // `=` の後ろが空なら次の引数を語に取らない（次は位置の引数）
         (vec!["--option"], false, Load, vec![ParseNote::WordEmpty]),
         (
             vec!["--option", "--random"],
@@ -473,7 +473,7 @@ fn option_words_table() {
             vec![ParseNote::WordEmpty],
         ),
         (vec!["--option="], false, Load, vec![ParseNote::WordEmpty]),
-        // 1.2: 空白の形でも空の値は値なし（`--option=` と同じ）
+        // 空白の形でも空の値は値なし（`--option=` と同じ）
         (
             vec!["--option", ""],
             false,
@@ -499,7 +499,7 @@ fn option_words_table() {
     }
 }
 
-/// 1.12: まとめは最後に 1 件で、効かせるもの・受けて何もしないもの・無視したものを並べる。
+/// まとめは最後に 1 件で、効かせるもの・受けて何もしないもの・無視したものを並べる。
 #[test]
 fn summary_table() {
     let rows: Vec<(Vec<&str>, Vec<&str>, Vec<&str>, Vec<&str>)> = vec![
@@ -547,7 +547,7 @@ fn summary_table() {
     }
 }
 
-/// 1.14: 読めない文字を置き換えた引数ごとに 1 件。読める引数はそのまま。
+/// 読めない文字を置き換えた引数ごとに 1 件。読める引数はそのまま。
 #[cfg(windows)]
 #[test]
 fn from_os_replaces_non_utf8_per_arg() {
@@ -574,7 +574,7 @@ fn from_os_replaces_non_utf8_per_arg() {
     assert!(notes.is_empty());
 }
 
-/// 記録の形: 材料ごとに 1 件、設計の `event` の名前と重さ、前置き `[cli]`。
+/// 記録の形: 材料ごとに 1 件、`event` の名前と重さ、前置き `[cli]`。
 #[test]
 fn notes_log_one_event_each_with_cli_prefix() {
     use tracing::Level;
@@ -652,7 +652,7 @@ fn notes_log_one_event_each_with_cli_prefix() {
     }
 }
 
-/// 実走の 3 本と同じ形（絶対パス 2 つ）は位置の引数だけになり、記録の材料はまとめ 1 件だけ（2.6・2.1）。
+/// 実走の 3 本と同じ形（絶対パス 2 つ）は位置の引数だけになり、記録の材料はまとめ 1 件だけ。
 #[test]
 fn real_run_shape_is_positional_only() {
     let ghost = r"C:\home\maz\git\areka\target\emo2_real_run\ghost\emo2";
@@ -669,7 +669,7 @@ fn real_run_shape_is_positional_only() {
     assert!(matches!(parsed.notes[0], ParseNote::Summary { .. }));
 }
 
-/// 1.13: 引数が空でも、exe だけでも読める。まとめは必ず最後に 1 件。
+/// 引数が空でも、exe だけでも読める。まとめは必ず最後に 1 件。
 #[test]
 fn empty_args_still_end_with_summary() {
     for all in [vec![], vec![s("areka")]] {

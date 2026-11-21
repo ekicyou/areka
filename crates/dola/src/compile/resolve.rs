@@ -25,7 +25,6 @@ pub(super) fn entry_keyframe_name(entry: &StoryboardEntry, idx: usize) -> String
 }
 
 /// キーフレーム依存グラフ
-/// adjacency[i] = set of entry indices that entry i depends on
 pub(super) struct DependencyGraph {
     /// entry_index → set of dependency entry indices
     pub(super) deps: HashMap<usize, HashSet<usize>>,
@@ -35,11 +34,10 @@ pub(super) struct DependencyGraph {
     pub(super) prev_same_var: HashMap<usize, usize>,
 }
 
-/// Build dependency graph from storyboard entries (Task 4.1)
+/// ストーリーボードのエントリからキーフレーム依存グラフを作る
 pub(super) fn build_dependency_graph(sb: &crate::storyboard::Storyboard) -> DependencyGraph {
     let mut kf_to_entry: HashMap<String, usize> = HashMap::new();
 
-    // First pass: map keyframe names to entry indices
     for (idx, entry) in sb.entry.iter().enumerate() {
         kf_to_entry.insert(entry_keyframe_name(entry, idx), idx);
     }
@@ -47,12 +45,10 @@ pub(super) fn build_dependency_graph(sb: &crate::storyboard::Storyboard) -> Depe
     let mut deps: HashMap<usize, HashSet<usize>> = HashMap::new();
     let mut prev_same_var: HashMap<usize, usize> = HashMap::new();
 
-    // Second pass: build dependency edges
     for (idx, entry) in sb.entry.iter().enumerate() {
         let entry_deps = deps.entry(idx).or_default();
 
         if let Some(ref kf_ref) = entry.at {
-            // at-based: depends on referenced keyframes
             let names = collect_keyframe_names_from_ref(kf_ref);
             for name in names {
                 if name == "start" {
@@ -63,7 +59,6 @@ pub(super) fn build_dependency_graph(sb: &crate::storyboard::Storyboard) -> Depe
                 }
             }
         } else if let Some(ref between) = entry.between {
-            // between: depends on from and to keyframes
             for name in [&between.from, &between.to] {
                 if name == "start" {
                     continue; // pseudo-keyframe, always available
@@ -73,7 +68,7 @@ pub(super) fn build_dependency_graph(sb: &crate::storyboard::Storyboard) -> Depe
                 }
             }
         } else if let Some(ref var) = entry.variable {
-            // 連結の遷移: 同じ変数の配列上の直前のエントリに続く（要件 11.7）
+            // 連結の遷移: 同じ変数の配列上の直前のエントリに続く
             if let Some(prev) = (0..idx)
                 .rev()
                 .find(|&i| sb.entry[i].variable.as_ref() == Some(var))
@@ -82,7 +77,7 @@ pub(super) fn build_dependency_graph(sb: &crate::storyboard::Storyboard) -> Depe
                 prev_same_var.insert(idx, prev);
             }
         } else if let Some(prev) = idx.checked_sub(1) {
-            // at の無い純粋なキーフレーム・トリガー: 配列の 1 つ前のエントリに続く（要件 11.7）
+            // at の無い純粋なキーフレーム・トリガー: 配列の 1 つ前のエントリに続く
             entry_deps.insert(prev);
         }
     }
@@ -94,8 +89,7 @@ pub(super) fn build_dependency_graph(sb: &crate::storyboard::Storyboard) -> Depe
     }
 }
 
-/// Topological sort using Kahn's algorithm (Task 4.2, 4.3)
-/// Returns sorted entry indices or a cycle (Vec of keyframe names)
+/// Kahn 法のトポロジカルソート。ソート済みの entry index か、閉路のキーフレーム名（Vec）を返す
 pub(super) fn topological_sort(
     graph: &DependencyGraph,
     entry_count: usize,
@@ -118,7 +112,7 @@ pub(super) fn topological_sort(
         }
     }
 
-    // Min-heap so pop() gives smallest index first (deterministic order)
+    // 最小の index から取り出す（順序を決定的にする）
     let mut queue: BinaryHeap<Reverse<usize>> = (0..entry_count)
         .filter(|&idx| in_degree[idx] == 0)
         .map(Reverse)
@@ -161,7 +155,6 @@ pub(super) fn topological_sort(
         let cycle_members: Vec<String> = path
             .into_iter()
             .map(|idx| {
-                // Try to find keyframe name for this entry
                 graph
                     .kf_to_entry
                     .iter()
@@ -176,7 +169,7 @@ pub(super) fn topological_sort(
     }
 }
 
-/// Resolve a pure keyframe entry's time (Task 5.4)
+/// 純粋なキーフレーム・トリガーのエントリの時刻を解く
 pub(super) fn resolve_pure_keyframe_time(
     storyboard_name: &str,
     entry_idx: usize,
@@ -187,7 +180,6 @@ pub(super) fn resolve_pure_keyframe_time(
     errors: &mut Vec<DolaError>,
 ) -> Option<f64> {
     if let Some(ref kf_ref) = entry.at {
-        // at ベースの純粋KF
         let time = resolve_keyframe_ref_time(kf_ref, keyframe_times);
         match time {
             Some(t) => Some(t),
@@ -201,7 +193,7 @@ pub(super) fn resolve_pure_keyframe_time(
             }
         }
     } else if let Some(ref between) = entry.between {
-        // between の純粋KF・トリガーは between の始まりの時刻に置く（要件 11.10）
+        // between の純粋KF・トリガーは between の始まりの時刻に置く
         let time = keyframe_times.get(&between.from).copied();
         if time.is_none() {
             errors.push(DolaError::CompileError {
@@ -230,8 +222,7 @@ pub(super) fn resolve_pure_keyframe_time(
     }
 }
 
-/// All KFs must be resolved; take the latest
-/// （1つでも未解決、または names が空なら None）
+/// 全キーフレームを解いて最も遅い時刻を取る（1つでも未解決、または names が空なら None）
 fn latest_keyframe_time(names: &[String], keyframe_times: &HashMap<String, f64>) -> Option<f64> {
     let mut max_time: Option<f64> = None;
     for name in names {
@@ -241,7 +232,7 @@ fn latest_keyframe_time(names: &[String], keyframe_times: &HashMap<String, f64>)
     max_time
 }
 
-/// Resolve a KeyframeRef to a time value (Task 5.5)
+/// KeyframeRef を時刻に解く
 pub(super) fn resolve_keyframe_ref_time(
     kf_ref: &KeyframeRef,
     keyframe_times: &HashMap<String, f64>,
@@ -259,7 +250,7 @@ pub(super) fn resolve_keyframe_ref_time(
     }
 }
 
-/// エントリの遷移の定義を借りる（Task 5.6）。遷移の有無は V7、名前の参照は V5 が先に確かめている
+/// エントリの遷移の定義を借りる。遷移の有無は V7、名前の参照は V5 が先に確かめている
 pub(super) fn resolve_transition<'a>(
     entry: &'a StoryboardEntry,
     doc: &'a DolaDocument,
@@ -270,8 +261,7 @@ pub(super) fn resolve_transition<'a>(
     }
 }
 
-/// Resolve entry timing (Tasks 5.1-5.3)
-/// Returns (segment_start, segment_end, keyframe_time)
+/// エントリの時刻を解く。(segment_start, segment_end, keyframe_time) を返す
 ///
 /// delay / duration / offset の有限・符号は validate() の数値の規則が先に見ている。
 #[expect(
@@ -292,7 +282,6 @@ pub(super) fn resolve_entry_timing(
     let duration = trans_def.duration.unwrap_or(0.0);
 
     if let Some(ref between) = entry.between {
-        // Between placement (Task 5.3)
         let from_time = keyframe_times.get(&between.from).copied();
         let to_time = keyframe_times.get(&between.to).copied();
 
@@ -326,7 +315,6 @@ pub(super) fn resolve_entry_timing(
             }
         }
     } else if let Some(ref kf_ref) = entry.at {
-        // At placement (Task 5.2)
         match resolve_keyframe_ref_time(kf_ref, keyframe_times) {
             Some(base_time) => {
                 let segment_start = base_time + delay;
@@ -344,7 +332,6 @@ pub(super) fn resolve_entry_timing(
             }
         }
     } else {
-        // Sequential placement (Task 5.1)
         let base_time = prev_end_time.unwrap_or(start_time);
         let segment_start = base_time + delay;
         let segment_end = segment_start + duration;
@@ -353,7 +340,7 @@ pub(super) fn resolve_entry_timing(
     }
 }
 
-/// Resolve from value (Task 5.7)
+/// from の値を解く（書かれた from、直前の終わりの値、変数の初期値の順）
 pub(super) fn resolve_from_value(
     trans_def: &TransitionDef,
     last_value: Option<&TransitionValue>,
@@ -363,12 +350,10 @@ pub(super) fn resolve_from_value(
         return from.clone();
     }
 
-    // Infer from last segment end value or variable initial
     if let Some(last_val) = last_value {
         return last_val.clone();
     }
 
-    // Use variable initial value
     match var_def {
         AnimationVariableDef::Float { initial, .. } => TransitionValue::Scalar(*initial),
         AnimationVariableDef::Integer { initial, .. } => TransitionValue::Scalar(*initial as f64),
@@ -376,13 +361,12 @@ pub(super) fn resolve_from_value(
     }
 }
 
-/// Resolve to value (Task 5.8)
+/// to の値を解く
 pub(super) fn resolve_to_value(
     trans_def: &TransitionDef,
     from_value: &TransitionValue,
 ) -> TransitionValue {
     if let Some(ref relative_to) = trans_def.relative_to {
-        // relative_to: from + offset
         if let TransitionValue::Scalar(from_val) = from_value {
             return TransitionValue::Scalar(from_val + relative_to);
         }
@@ -392,11 +376,11 @@ pub(super) fn resolve_to_value(
         return to.clone();
     }
 
-    // If neither to nor relative_to specified, from value is kept (instant)
+    // to も relative_to も無ければ from のまま（即時）
     from_value.clone()
 }
 
-/// Build VariableTypeHint from variable definition (Task 6.3)
+/// 変数定義から VariableTypeHint を作る
 pub(super) fn build_variable_type_hint(var_def: &AnimationVariableDef) -> VariableTypeHint {
     match var_def {
         AnimationVariableDef::Float { .. } => VariableTypeHint::Float,
@@ -405,7 +389,7 @@ pub(super) fn build_variable_type_hint(var_def: &AnimationVariableDef) -> Variab
     }
 }
 
-/// Extract min/max from variable definition (Task 6.3)
+/// 変数定義から値域の下限・上限を取る
 pub(super) fn extract_min_max(var_def: &AnimationVariableDef) -> (Option<f64>, Option<f64>) {
     match var_def {
         AnimationVariableDef::Float { min, max, .. } => (*min, *max),

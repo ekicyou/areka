@@ -1,4 +1,4 @@
-//! `\![move]` の移動先の計算（design.md「MoveGeometry」・要件 1.3・1.5・2.1〜2.4・2.6・3.4・4.1〜4.3・6.1・6.2）。
+//! `\![move]` の移動先の計算。
 //!
 //! 基準の枠（[`BaseFrame`]）・動かす窓の矩形と基準位置・指令・拡大率 k から、動かす窓の
 //! 左上（吸い付きの前・物理 px）を求める。基準を解く（窓・作業領域・原点を World から選ぶ）
@@ -15,12 +15,9 @@
 //!
 //! # 置き換え（[`FrameNote`]）
 //!
-//! - 作業領域（`screen`・`primaryscreen`）の基準の参照点 `base` は軸ごとに `center` へ（要件 4.1）。
-//! - 原点（`global`）の基準の参照点が `left.top` 以外なら使わずに原点そのもの（要件 4.2）。
-//! - 動かす窓の参照点には置き換えを当てない（要件 4.3）。
-//!
-//! 基準位置の解き手（[`BaseposResolver`]／[`CanonDefaultBasepos`]）も、`move_cue.rs` から
-//! 中身を変えずにここへ移した。
+//! - 作業領域（`screen`・`primaryscreen`）の基準の参照点 `base` は軸ごとに `center` へ。
+//! - 原点（`global`）の基準の参照点が `left.top` 以外なら使わずに原点そのもの。
+//! - 動かす窓の参照点には置き換えを当てない。
 
 use wintf::ecs::SizeI;
 
@@ -30,27 +27,24 @@ use super::{Axis, AxisSpec, MoveDirective, RefPoint, RefX, RefY};
 use areka_placement::resolver::{PointPx, RectPx};
 use areka_placement::scale_signed;
 
-// =============================================================================
-// basepos 型シーム（task 7.2・R5.2・全て物理 px・R-6 対策）
-// =============================================================================
+// basepos 型シーム（全て物理 px）
 
-/// basepos（基準位置）解決の**型シーム**（R5.2・design「BaseposResolver」）。
+/// basepos（基準位置）解決の型シーム。
 ///
-/// M1 実導出は [`CanonDefaultBasepos`]（正典既定＝x=サーフェス幅÷2・y=下端）のみ。宣言
-/// `point.basepos` の実導出は本 spec の範囲外であり、このトレイトは追跡 spec
-/// `surfaces-basepos` が別実装（宣言値を差す resolver）を差し込むための**差替点**
-/// として型のみを予約する（doc/COMPAT_ARCHITECTURE.md §8 対応表に登記）。
+/// 実導出は [`CanonDefaultBasepos`]（正典既定＝x=サーフェス幅÷2・y=下端）のみ。宣言
+/// `point.basepos` を差す別実装を差し込むための差替点として型だけを用意してある
+/// （doc/COMPAT_ARCHITECTURE.md の対応表に登記）。
 ///
-/// 入力は窓寸法（物理 px・`WindowPos.size` 由来）のみ——論理 px 系（BoxStyle）を経由しない
-/// ことで 2026-07-05 の二重スケール欠陥（R-6）を型で構造遮断する。
+/// 入力は窓寸法（物理 px・`WindowPos.size` 由来）のみ。論理 px 系（BoxStyle）を経由しないことで
+/// 二重スケールを型で構造的に防ぐ。
 pub trait BaseposResolver {
     /// 窓寸法（物理 px）に対する basepos（窓左上原点相対・物理 px）を返す。
     fn basepos(&self, window_size: SizeI) -> PointPx;
 }
 
-/// 正典既定の basepos（x=サーフェス幅÷2・y=下端＝height・R5.2・A-1 裁定）。
+/// 正典既定の basepos（x=サーフェス幅÷2・y=下端＝height）。
 ///
-/// emo2 は `point.basepos` を宣言せず、この正典既定がそのまま適用される正規経路。y の「下端」は
+/// emo2 は `point.basepos` を宣言せず、この既定がそのまま適用される。y の「下端」は
 /// 窓左上原点からの相対＝サーフェス高さ（`height`）そのもの。奇数幅は整数除算で切り捨てる。
 pub struct CanonDefaultBasepos;
 
@@ -67,29 +61,29 @@ impl BaseposResolver for CanonDefaultBasepos {
 // 基準の枠と移動先の計算
 // =============================================================================
 
-/// 基準の枠の 3 形（design.md「MoveGeometry」）。
+/// 基準の枠の 3 形。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BaseFrame {
     /// 窓（スコープ・`me`）。4 語すべてが使える。`basepos` は窓の左上からの基準位置（物理 px）。
     Window { rect: RectPx, basepos: PointPx },
-    /// 作業領域（`screen`・`primaryscreen`）。`base` は軸ごとに `center` へ置き換える（要件 4.1）。
+    /// 作業領域（`screen`・`primaryscreen`）。`base` は軸ごとに `center` へ置き換える。
     Area(RectPx),
-    /// 原点（`global`・主モニタの左上 (0,0)・要件 3.4）。参照点は使わない（要件 4.2）。
+    /// 原点（`global`・主モニタの左上 (0,0)）。参照点は使わない。
     Origin,
 }
 
 /// 基準を解いた後の置き換えの記録（適用の側が `move_frame_substituted` の `warn!` で出す）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FrameNote {
-    /// 基準のスコープの窓が無く `screen` として解き直した（適用の側が作る・要件 3.7）。
+    /// 基準のスコープの窓が無く `screen` として解き直した（適用の側が作る）。
     MissingBaseScope { scope: u32 },
-    /// 作業領域の基準の参照点 `base` を `center` として扱った（要件 4.1）。
+    /// 作業領域の基準の参照点 `base` を `center` として扱った。
     AreaBaseToCenter { axis: Axis },
-    /// 原点の基準の参照点（`left.top` 以外）を使わずに原点とした（要件 4.2）。
+    /// 原点の基準の参照点（`left.top` 以外）を使わずに原点とした。
     GlobalOffsetIgnored { offset: RefPoint },
 }
 
-/// 計算の結果（design.md Service Interface）。
+/// 計算の結果。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MoveTarget {
     /// 吸い付きの前の左上（物理 px）。
@@ -103,7 +97,7 @@ pub struct MoveTarget {
 /// 基準の枠・動かす窓の矩形と基準位置・指令・k から、動かす窓の左上（吸い付きの前）を求める。
 ///
 /// `target_rect` は正の大きさであること（呼び手が確かめる）。両軸 `Fix` なら `target_rect` の
-/// 左上を返す。`k` は台本の X・Y（作者基準）を物理 px へ写すのにだけ使う（要件 2.4）。
+/// 左上を返す。`k` は台本の X・Y（作者基準）を物理 px へ写すのにだけ使う。
 pub fn compute_move_target(
     frame: &BaseFrame,
     target_rect: RectPx,
@@ -114,7 +108,6 @@ pub fn compute_move_target(
     let mut notes = Vec::new();
     let offset = directive.base_offset;
 
-    // 枠の上の点（軸ごと）と、置き換えの後に実際に使った参照点。
     let (frame_x, frame_y, used) = match *frame {
         BaseFrame::Window { rect, basepos } => (
             point_x(rect, basepos.x, offset.x),
@@ -134,7 +127,7 @@ pub fn compute_move_target(
             } else {
                 offset.y
             };
-            // 置き換えの後に `base` は残らないので basepos は読まれない（0 を渡す）。
+            // 置き換えの後に `base` は残らないので basepos は読まれない。
             (point_x(rect, 0, x), point_y(rect, 0, y), RefPoint { x, y })
         }
         BaseFrame::Origin => {
@@ -145,7 +138,7 @@ pub fn compute_move_target(
         }
     };
 
-    // 動かす窓の中の点（左上からのずれ）。置き換えは当てない（要件 4.3）。
+    // 動かす窓の中の点（左上からのずれ）。置き換えは当てない。
     let mv = directive.move_offset;
     let inner_x = point_x(target_rect, target_basepos.x, mv.x).saturating_sub(target_rect.left);
     let inner_y = point_y(target_rect, target_basepos.y, mv.y).saturating_sub(target_rect.top);

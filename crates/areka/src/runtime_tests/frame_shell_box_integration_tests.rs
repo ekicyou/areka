@@ -1,5 +1,5 @@
 // =============================================================================
-// 箱の結線の通し（areka-P0-shell-balloon task 12.3）
+// 箱の結線の通し
 //
 // 親（`frame_visibility_integration_tests.rs`）と同じ檻——実 emo2 fixture ＋ 実 GPU（MTA）で
 // 本番の `frame_system` を回す——に、箱の束（サーフェス 0 にだけ箱 `talk`）を渡して、
@@ -9,7 +9,7 @@
 // 写し（`shown_boxes`）は提示（GPU）でしか埋まらないので、相の単体の檻（`balloon_visibility_phase_box_tests.rs`）
 // は写しを作って渡していた。ここではそれを本物の提示で埋め、次のフレームの可視性の相が読む。
 //
-// 場面（要件 5.1・5.2・5.3・5.5・6.4・6.9・6.10）:
+// 場面:
 //   ⑴ 箱のあるサーフェスでは普通のバルーンの窓を出す発行が 0 件、箱の無いサーフェスへ移ると出る。
 //      窓に書いていた文字は箱のあるサーフェスのあいだ保持され、箱の無いサーフェスへ戻ると窓が出直す。
 //   ⑵ `\0` と `\1` を別々に判定する。
@@ -222,8 +222,8 @@ fn show_transitions(events: &[CapturedEvent], scope: u32) -> usize {
 }
 
 /// ⑴＋⑷: 箱のあるサーフェスでは窓を出す発行が 0 件で、箱の文字のスコープが `Status` に載る。
-/// 箱の無いサーフェスへ移ると窓が出る（要件 5.1・5.2・5.5・6.4）。窓に書いた文字は箱のある
-/// サーフェスのあいだ保持され、箱の無いサーフェスへ戻ると窓が出直す（要件 6.9）。
+/// 箱の無いサーフェスへ移ると窓が出る。窓に書いた文字は箱のある
+/// サーフェスのあいだ保持され、箱の無いサーフェスへ戻ると窓が出直す。
 #[test]
 fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
     let mut cage = Cage::boot(SHELL, &[0]);
@@ -252,7 +252,7 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
         "箱に文字が出ているスコープは窓が見えているときと同じ形で載る（要件 5.5）"
     );
 
-    // 箱の無いサーフェスへ移って話す: 以後の文字は窓へ書かれ、窓が出る（要件 5.2・6.4）。
+    // 箱の無いサーフェスへ移って話す: 以後の文字は窓へ書かれ、窓が出る。
     cage.picture(0, PLAIN_SURFACE_ID);
     cage.surface(0, PLAIN_SURFACE);
     cage.text(0, "う");
@@ -277,7 +277,7 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
         "箱から窓へ移っても見えている組は同じ（送り直さない）"
     );
 
-    // 窓に文字が在るまま箱のあるサーフェスへ: 窓は消え、箱の文字が出直す（要件 6.9・6.3）。
+    // 窓に文字が在るまま箱のあるサーフェスへ: 窓は消え、箱の文字が出直す。
     cage.picture(0, BOX_SURFACE_ID);
     cage.surface(0, BOX_SURFACE);
     let mut events = cage.frame();
@@ -292,7 +292,7 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
         "文字が窓から外れたことによる非表示は箱を隠さない: {events:?}"
     );
 
-    // 同じ台詞のまま箱の無いサーフェスへ戻ると、保持していた文字で窓が出直す（要件 6.9 の逆向き）。
+    // 同じ台詞のまま箱の無いサーフェスへ戻ると、保持していた文字で窓が出直す。
     cage.picture(0, PLAIN_SURFACE_ID);
     cage.surface(0, PLAIN_SURFACE);
     let events = cage.frame();
@@ -316,7 +316,7 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
 }
 
 /// ⑵＋⑷: `\0` が箱のあるサーフェス・`\1` が箱の無いサーフェスなら、`\1` の窓だけが出て、
-/// `\0` は箱の文字で、両方が `Status` の組に載る（要件 5.3・5.5）。
+/// `\0` は箱の文字で、両方が `Status` の組に載る。
 #[test]
 fn scopes_are_judged_separately() {
     let mut cage = Cage::boot(SHELL, &[0, 1]);
@@ -344,14 +344,14 @@ fn scopes_are_judged_separately() {
 }
 
 /// ⑶＋⑷: 台詞が終わって待ち時間が過ぎると、箱だけに文字が出ているスコープにも箱を隠す印が
-/// 立ち、箱の文字が消え、`Status` の組から外れる（要件 6.10・5.6）。
+/// 立ち、箱の文字が消え、`Status` の組から外れる。
 #[test]
 fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
     // 待ち時間の確定はプロセスで一度きりの記録なので、捕捉窓の外で先に確定させる。
     let timeout_secs = configured_timeout_secs();
     let mut cage = Cage::boot(SHELL, &[0]);
     let display_end = 5.0;
-    // 時間切れの計測はトークの終わりが届いてから始まる（areka-P0-balloon-lifecycle-events 決定 D6）。
+    // 時間切れの計測はトークの終わりが届いてから始まる。
     for signal in [
         TalkLifecycleSignal::DisplayEndAt(display_end),
         TalkLifecycleSignal::TalkEnded {
@@ -407,12 +407,10 @@ fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
     );
 }
 
-// 絵と箱の置き場所の揃え（areka-P0-shell-balloon-frame-align）。本ファイルの `Cage` をそのまま
-// 使うため子に置く。
+// 絵と箱の置き場所の揃え。本ファイルの `Cage` をそのまま使うため子に置く。
 #[path = "frame_shell_box_align_tests.rs"]
 mod align_tests;
 
-// 箱の矢印の押下と箱の上のホイール（balloon-scroll-arrows task 6.3）。本ファイルの `Cage` をそのまま
-// 使うため子に置く。
+// 箱の矢印の押下と箱の上のホイール。本ファイルの `Cage` をそのまま使うため子に置く。
 #[path = "frame_shell_box_arrow_tests.rs"]
 mod arrow_tests;

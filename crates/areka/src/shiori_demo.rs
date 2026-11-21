@@ -1,8 +1,8 @@
-//! 実走デモドライバ（要件 12.1）。
+//! 実走デモドライバ。
 //!
 //! `reference_brain::shiori_factory` で factory を取得し、`ShioriSession` で activate → 即時 get →
 //! 遅延 get+complete → raise → notify → drop teardown までを駆動し、各経路を `tracing::info!` で
-//! 観測する。フラグ／環境変数ゲートで起動を制御する（design.md §ConsumerFollowup・要件 12.1）。
+//! 観測する。環境変数ゲートで起動を制御する。
 //!
 //! ## 駆動モデル（session 越し＋脳ハンドル併用）
 //! [`ShioriSession`] は `IShiori` を factory 経由で生成・保持するが脳アクセサを公開しない。遅延武装
@@ -49,12 +49,11 @@ const RAISE_SCRIPT: &str = "\\h\\s[0]active-notification\\e";
 const NOTIFY_CONTENT: &str = "NOTIFY SHIORI/3.0 OnFirstBoot";
 
 /// factory を取得し、即時→遅延+complete→raise→notify→drop teardown の各経路を駆動して
-/// `tracing::info!` で観測可能にする（design.md §ConsumerFollowup）。
+/// `tracing::info!` で観測可能にする。
 ///
 /// `app_profile_dir` は sylphya の App の置き場（本番は `default_app_profile_dir()`・テストは `None`＝
-/// 本物の環境で置き場を決めない・user-data-root 要件 10.6）。
+/// 本物の環境で置き場を決めない）。
 pub fn run_demo(app_profile_dir: Option<std::path::PathBuf>) -> Result<(), DemoError> {
-    // 1. 生成入口: `shiori_factory` で refcount 1 の IShioriFactory を取得・所有する。
     let mut out: *mut core::ffi::c_void = ptr::null_mut();
     // Safety: `out` は有効な書込先スタックスロット。成功時 refcount 1 の IShioriFactory が書き込まれる。
     let hr = unsafe { shiori_factory(&mut out) };
@@ -72,12 +71,9 @@ pub fn run_demo(app_profile_dir: Option<std::path::PathBuf>) -> Result<(), DemoE
         "[shiori-demo] shiori_factory succeeded, IShioriFactory adopted"
     );
 
-    // 2. host（sink）を生成し、その host を共有する脳を factory 経由で create する。
-    //    脳（IShiori）で session を、脳実体（ReferenceBrain）で脳駆動を行う（同一インスタンス）。
-    //    プロパティ応答は App スコープのみの sylphya アクターへ委譲する（第 2 ストア撤去・R7.2/R7.3・
-    //    design.md §bin（ShioriHostSink 統合））。session 固有の `AskerId` は demo の load_dir 相当文字列
-    //    から構築する。`_sylphya_handle` は非 RAII（detach）で、アクターは sink 内包 publisher が生存
-    //    する限り生き続けるため run_demo の生存期間だけ保持すれば足りる（join は要さない）。
+    // プロパティ応答は App スコープのみの sylphya アクターへ委譲する。`AskerId` は demo の load_dir
+    // 相当文字列から作る。`_sylphya_handle` は非 RAII（detach）で、アクターは sink 内包 publisher が
+    // 生存する限り生き続けるため run_demo の生存期間だけ保持すれば足りる（join は要さない）。
     let asker = areka_sylphya::AskerId::new("C:/ghost/master");
     let (sink, _sylphya_handle) =
         crate::shiori_host::spawn_app_sylphya_sink(asker, app_profile_dir);
@@ -93,27 +89,25 @@ pub fn run_demo(app_profile_dir: Option<std::path::PathBuf>) -> Result<(), DemoE
             return Err(DemoError::Session(SessionError::Shiori(e)));
         }
     };
-    // 脳駆動用ハンドル（session が brain を move するため、駆動用に AddRef した参照を確保）。
+    // session が brain を move するため、駆動用に AddRef した参照を確保する。
     let brain_handle = brain.clone();
     // Safety: `brain_handle` は `factory.create`（= ReferenceBrain）から得た IShiori。
     let ref_brain = unsafe { AsImpl::<ReferenceBrain>::as_impl(&brain_handle) };
 
-    // 3. session を「同じ脳＋同じ host」で確立する。session は脳を move で保持する。
-    //    ここでは activate ではなく、既に create 済みの brain/host で session を組み立てるため、
-    //    session の内部生成をバイパスして同一インスタンスを共有する専用コンストラクタを用いる。
+    // activate ではなく、create 済みの brain/host で組み立てる専用コンストラクタを使い、同一インスタンスを共有する。
     let mut session = ShioriSession::from_parts(brain, host.clone());
     tracing::info!(
         path = "activate",
         "[shiori-demo] session established (shared brain + sink)"
     );
 
-    // 4. 駆動本体（即時→遅延+complete→raise→notify）。失敗しても drop teardown へ進む。
+    // 失敗しても drop teardown へ進む。
     let result = drive_paths(&mut session, ref_brain);
     if let Err(ref e) = result {
         tracing::error!(error = %e, "[shiori-demo] demo driving failed; will drop for teardown");
     }
 
-    // 5. drop teardown: session を drop（保留取消→brain drop）し、駆動ハンドル・host も drop する。
+    // session の drop で保留取消→brain drop。
     drop(session);
     drop(brain_handle);
     drop(host);
@@ -128,7 +122,6 @@ pub fn run_demo(app_profile_dir: Option<std::path::PathBuf>) -> Result<(), DemoE
 fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Result<(), DemoError> {
     let onboot = HSTRING::from(ONBOOT_CONTENT);
 
-    // 即時応答経路: session 越しの get が S_OK＋応答 HSTRING（エコー）を返す。
     let immediate = session.get(&onboot).map_err(DemoError::Session)?;
     let SessionRequest::Immediate(immediate_response) = immediate else {
         return Err(DemoError::Session(SessionError::RequestInFlight));
@@ -143,7 +136,6 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
         "[shiori-demo] immediate response received"
     );
 
-    // 遅延応答＋complete 経路: 脳を遅延武装 → session get で Deferred(token) を受ける（単一 in-flight）。
     ref_brain.arm_defer_next();
     let deferred = session.get(&onboot).map_err(DemoError::Session)?;
     let SessionRequest::Deferred(token) = deferred else {
@@ -155,12 +147,11 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
         "[shiori-demo] deferred pending issued (single in-flight)"
     );
 
-    // 脳→host complete を safe メソッドで発火（突合枠は session が get 時にセット済み）。
+    // 突合枠は session が get 時にセット済み。
     let deferred_response = HSTRING::from(DEFERRED_RESPONSE);
     ref_brain
         .complete_pending(&deferred_response)
         .map_err(DemoError::Shiori)?;
-    // 同一ループで poll_completions を drain して遅延完了を待ち合わせる。
     let drained = session.poll_completions();
     let completed = drained.iter().find_map(|m| match m {
         HostMessage::Completed { token: t, response } if *t == token => Some(response.clone()),
@@ -178,7 +169,6 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
         "[shiori-demo] deferred completion drained"
     );
 
-    // 能動通知（raise）経路: 脳→host raise を safe メソッドで発火し、メールボックスから drain する。
     let raise_script = HSTRING::from(RAISE_SCRIPT);
     ref_brain
         .fire_raise(&raise_script)
@@ -195,7 +185,6 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
         "[shiori-demo] active notification drained"
     );
 
-    // 片道通知（notify）経路: session 越しに notify を発行する（応答なし・受領ログへ記録される）。
     session
         .notify(&HSTRING::from(NOTIFY_CONTENT))
         .map_err(DemoError::Session)?;
@@ -204,7 +193,7 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
     Ok(())
 }
 
-/// デモ駆動を有効化する環境変数名（design.md §ConsumerFollowup Implementation Notes）。
+/// デモ駆動を有効化する環境変数名。
 const DEMO_ENV: &str = "AREKA_SHIORI_DEMO";
 
 /// 与えられた値からデモ有効化を判定する純粋ヘルパ（env アクセスなし・単体テスト可能）。
@@ -239,7 +228,6 @@ fn run_demo_if_enabled_with(
 
 /// 環境変数ゲートを評価し、明示有効化時のみデモを駆動する。
 pub fn run_demo_if_enabled() -> Result<(), DemoError> {
-    // 置き場は起動の解決（`resolve_boot`）で決まった形のもの（`layout()` は既に据わっている）。
     run_demo_if_enabled_with(demo_enabled(), Some(crate::default_app_profile_dir()))
 }
 
@@ -247,9 +235,7 @@ pub fn run_demo_if_enabled() -> Result<(), DemoError> {
 mod tests {
     use log_capture_kit::{LineFormat, capture_lines};
 
-    // 捕捉層そのものはここに持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。
-    // 行の形（1 イベント 1 行・`level=…` に続けてフィールドを訪問順で ` name=value`）も
-    // 呼出側の判定内容も、移行前と 1 バイト変わらない。
+    // 行の形は 1 イベント 1 行・`level=…` に続けてフィールドを訪問順で ` name=value`。
     //
     // 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
     // のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の

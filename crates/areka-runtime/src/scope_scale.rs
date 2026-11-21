@@ -1,7 +1,6 @@
-//! スコープの倍率の表と倍率の文字（spec shell-scale-linkage 要件 3・4）。
+//! スコープの倍率の表と倍率の文字。
 //!
 //! 毎フレームの相が書き、読み手（`ghost_session_scope_scale`）と倍率の通知（`frame::scale_notice`）が引く。
-//! `ghost_session_scope_scale.rs` から中身を変えずに下ろした（runtime-module-untangle）。
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
@@ -21,7 +20,7 @@ pub(crate) struct ScopeScales {
 }
 
 /// スコープ → 窓ごとの倍率の表。
-// runtime-crate-split 要件 2.5: 公開の `RuntimeWiring::scope_scale_table`・`SharedScopeScaleTable` が名指すので開ける
+// 公開の `RuntimeWiring::scope_scale_table`・`SharedScopeScaleTable` が名指すので開ける
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ScopeScaleTable(BTreeMap<u32, ScopeScales>);
 
@@ -45,10 +44,10 @@ impl ScopeScaleTable {
     }
 }
 
-/// 倍率の百分率の文字（shell-scale-linkage 設計 D6・整数だけで計算する）。
+/// 倍率の百分率の文字（整数だけで計算する）。
 ///
 /// 割り切れれば整数、割り切れなければ小数第 2 位まで（第 3 位で四捨五入）で、
-/// 末尾の `0` は落とすが小数点の後に 1 桁は残す。符号・空白・前ゼロは付けない（shell-scale-linkage 要件 3.6・3.7）。
+/// 末尾の `0` は落とすが小数点の後に 1 桁は残す。符号・空白・前ゼロは付けない。
 pub fn percent_text(ratio: ScaleRatio) -> String {
     let (num, den) = ratio.parts();
     let (num, den) = (u128::from(num), u128::from(den));

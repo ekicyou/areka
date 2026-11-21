@@ -1,12 +1,11 @@
-//! 起動中のゴーストへ入れる一周の決定論テスト（design「System Flows／起動中のゴーストへ入れる一周」・
-//! 「Testing Strategy / 窓口と入口」・要件 6.5・7.1・7.2・7.3・11.7）。
+//! 起動中のゴーストへ入れる一周の決定論テスト。
 //!
 //! 切替の土台（[`SwitchRig`]）の上で、本物の窓口・kanade・背景のスレッド・口（`DeskPorts`）・切替の
 //! 道筋を通し、偽の SHIORI に届いた呼び出しの列と UI スレッドの記録の順を突き合わせる。確かめること:
 //! `OnGhostChanging` も `OnClose` も 0 件・降ろした後（全窓を閉じた後・起こす前）に宛先の中身が
 //! 替わる・同じゴーストが起き直す・定常到達の後に締めの知らせが出る。
 //!
-//! 切替の入口の判定と失敗の場合（要件 7.4〜7.7・7.9・11.7）: 別の切替の最中（`Busy`）は預かったまま
+//! 切替の入口の判定と失敗の場合: 別の切替の最中（`Busy`）は預かったまま
 //! その予約が下りた tick に頼み直して一周する・別のゴーストへの切替では展開せず書庫を返す・目録に無い
 //! （`NotFound`）ときはよそへの展開で続いて締めの知らせが 1 つ出る・確定が失敗すれば同じゴーストが元の
 //! 中身で起き直って `OnInstallFailure` が出る・起こせなければ今日の切替の道（既定へ戻す・既定なら致命）に
@@ -150,7 +149,7 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
     assert_eq!(boots.len(), 2, "A を 1 回起こし直す: {clue}");
     assert_eq!(current.as_deref(), Some("A"));
     assert!(!reserved, "予約は残らない");
-    // 知らせを送らない切替（要件 7.2）。
+    // 知らせを送らない切替。
     for name in ["OnGhostChanging", "OnClose"] {
         assert!(
             boots.iter().flatten().all(|id| id != name),
@@ -178,7 +177,7 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
         ["OnInstallCompleteEx", "OnInstallComplete"],
         "{clue}"
     );
-    // 降ろした後に宛先の中身が替わる（全窓を閉じた後・起こす前に展開する＝要件 7.3）。
+    // 降ろした後に宛先の中身が替わる（全窓を閉じた後・起こす前に展開する）。
     assert_eq!(body.as_deref(), Some(MARKER_BODY));
     let order_of = |name| first(&events, name).unwrap_or_else(|| panic!("{name}: {events:?}"));
     let down = order_of("ghost_switch_down_ms");
@@ -198,7 +197,7 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
         })
         .expect("締めの知らせを送った");
     assert!(steady < sent_ex, "{events:?}");
-    // 起動中のゴースト自身を入れても、追加の切替はしない（要件 6.5）。受け皿へは書く。
+    // 起動中のゴースト自身を入れても、追加の切替はしない。受け皿へは書く。
     assert_eq!(
         events
             .iter()
@@ -344,7 +343,7 @@ fn hold(path: &Path) -> std::fs::File {
 
 /// 別の切替の最中に預かった書庫は「預かった」のまま置き（切替を重ねない）、その予約が下りた tick に
 /// 頼み直して一周する（判定 `Busy`）。頼み直しは同じフォルダの名指し・知らせなし・出どころ「自動」。
-/// 一周の途中に届いた切替要求は無視される（要件 7.7）。別の切替の予約は UI の側だけに置く（kanade へは
+/// 一周の途中に届いた切替要求は無視される。別の切替の予約は UI の側だけに置く（kanade へは
 /// 届かず、定常到達を伴わずに下りる＝中止された切替と同じ形）。
 #[test]
 fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through() {
@@ -534,7 +533,7 @@ fn a_running_ghost_missing_from_the_catalog_is_installed_elsewhere_and_closed_on
 
 /// 宛先の中のファイルを開いたまま入れると確定が失敗して巻き戻り、同じゴーストが元の中身で起き直って、
 /// 定常に入ってから `OnInstallFailure`（Reference0＝`fileio`）が出る。`areka-nar` の失敗の記録の
-/// 作業フォルダの欄は空でなく、根の `.nar-work` の配下を指す（要件 7.4・11.7）。
+/// 作業フォルダの欄は空でなく、根の `.nar-work` の配下を指す。
 #[test]
 fn a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failure() {
     let mut rig = running("A", &[]);
@@ -607,7 +606,7 @@ fn a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failur
 
 /// 入れた後に同じゴーストを起こせなければ（ここでは `refresh,1` で `descript.txt` が消える）、今日の
 /// 切替の道のまま既定ゴーストへ戻し（`OnBoot` の Reference6＝`halt`・Reference7＝そのゴーストの名前）、
-/// 戻した既定ゴーストが定常に入ってから締めの知らせを送る（要件 7.5）。
+/// 戻した既定ゴーストが定常に入ってから締めの知らせを送る。
 #[test]
 fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
     let mut rig = running("A", &[DEFAULT_GHOST_FOLDER]);
@@ -648,7 +647,7 @@ fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
 }
 
 /// 起こせないのが既定ゴースト自身なら、今日の致命の経路で終わる（終了の指示・最初の出所は「既定
-/// ゴーストへ戻せなかった」）。印の判定は今日の引数のまま、理由の語も今日の `switch_fatal`（要件 7.6・7.9）。
+/// ゴーストへ戻せなかった」）。印の判定は今日の引数のまま、理由の語も今日の `switch_fatal`。
 #[test]
 fn an_overwritten_default_ghost_that_cannot_boot_is_fatal() {
     let mut rig = running(DEFAULT_GHOST_FOLDER, &[]);

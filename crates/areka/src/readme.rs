@@ -1,11 +1,11 @@
-//! ゴーストの説明書（areka-P0-popup-menu-minimal）。
+//! ゴーストの説明書。
 //!
 //! 説明書を開く要求、開くファイルの決め方（ゴースト descript の `readme` キー）、
-//! World への結線と要求の取り出しを置く。開く系の要求（areka-P0-open-external-tags）も
+//! World への結線と要求の取り出しを置く。開く系の要求も
 //! 同じ取り出しを通り、説明書も含めて開く処理の 1 か所（[`opener::submit`]）へ渡す。
 //! メニューにも入力配線にも依存しない葉の module である。
 //!
-//! 開くファイルは決めて渡すだけで、中身も `readme.charset` も読まない（要件 4.7）。
+//! 開くファイルは決めて渡すだけで、中身も `readme.charset` も読まない。
 
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
@@ -16,12 +16,12 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-/// 台本の受け口から届く要求（areka-P0-open-external-tags 要件 7.1）。
+/// 台本の受け口から届く要求。
 pub(crate) enum ReadmeRequest {
-    /// 引数なしの `\![open,readme]`（要件 4.5）。
+    /// 引数なしの `\![open,readme]`。
     ///
     /// 中身を持たないのは、開くファイルが要求ごとではなく起動時に決まるからである
-    /// （引数付きの `\![open,readme,種類,名前]` は送出側が警告して捨てる・要件 4.6）。
+    /// （引数付きの `\![open,readme,種類,名前]` は送出側が警告して捨てる）。
     Readme,
     /// 開く系の行き先（受け口が規則で分類済み）。
     Open(destination::Destination),
@@ -32,12 +32,12 @@ const SCRIPT_README_TAG: &str = "\\![open,readme]";
 /// メニューの「説明書」の印（記録の `tag`）。
 pub(crate) const MENU_TAG: &str = "menu:readme";
 
-/// `readme` キーが無いときの正典の既定名（要件 4.1 ⑵）。
+/// `readme` キーが無いときの正典の既定名。
 ///
 /// 正典の URL は `readme` キーの定義箇所（`areka_parsers` の `MountModel.readme` の欄）に置いてある。
 pub(crate) const DEFAULT_README: &str = "readme.txt";
 
-/// 説明書のファイルを決める（要件 4.1）。
+/// 説明書のファイルを決める。
 ///
 /// ゴースト定義の `readme` キーの値、無ければ正典の既定名を、ゴーストのフォルダの根
 /// （起動引数で渡した根）の直下で解決する。実在するかはここでは見ない（[`is_available`]）。
@@ -54,13 +54,13 @@ pub(crate) struct ReadmeWiring {
     path: PathBuf,
     /// 台本からの要求の受信端（送出端は `ReadmeCueSink` が持つ）。
     rx: Receiver<ReadmeRequest>,
-    /// 「ファイルが無い」を 1 度でも記録したか（要件 4.3 の初回だけ）。
+    /// 「ファイルが無い」を 1 度でも記録したか（初回だけ記録するため）。
     missing_logged: Cell<bool>,
 }
 
 /// 説明書の持ち物を World へ入れる（取り出しの登録は [`register_readme_drain`]）。
 ///
-/// 呼び手は boot 成功後の `wire_runtime`（ゴーストの根と `readme` キーを読める場所・task 4.3）。
+/// 呼び手は boot 成功後の `wire_runtime`（ゴーストの根と `readme` キーを読める場所）。
 pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeRequest>) {
     world.insert_non_send(ReadmeWiring {
         path,
@@ -69,7 +69,7 @@ pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeR
     });
 }
 
-/// 説明書の置き場だけを動作中に差し替える（areka-P0-mcp-reload 要件 7.3・descript の読み直し）。
+/// 説明書の置き場だけを動作中に差し替える（descript の読み直し）。
 ///
 /// 持ち物を作り直さないのは、受信端の送出端が走っている dispatcher の中にあり作り直せないため。
 pub(crate) fn set_path(world: &mut World, path: PathBuf) {
@@ -118,7 +118,7 @@ impl ReadmeWiring {
     }
 }
 
-/// 説明書のファイルがあるか（要件 4.3・11.4）。
+/// 説明書のファイルがあるか。
 ///
 /// 無いときは「説明書」を灰色で出すための `false` を返し、**初めて無いと分かったときだけ**
 /// `debug!` で記録する（毎 tick の照会で記録が溢れない）。持ち物が無いときも `false`。
@@ -144,14 +144,14 @@ pub(crate) fn is_available(world: &World) -> bool {
     false
 }
 
-/// 決めたファイルを開く処理の 1 か所へ渡す（要件 4.2・areka-P0-open-external-tags 要件 7.1）。
+/// 決めたファイルを開く処理の 1 か所へ渡す。
 ///
 /// メニューの「説明書」（`tag`＝[`MENU_TAG`]）と台本の `\![open,readme]`（台本の綴り）の両方が
 /// ここへ届く。OS は直接呼ばず、絶対パスにした行き先を [`opener::submit`] へ渡す。開けなかった
-/// 失敗は開く専用のスレッドが記録するので、ゴーストの動作はそのまま続ける（要件 4.4）。
+/// 失敗は開く専用のスレッドが記録するので、ゴーストの動作はそのまま続ける。
 ///
-/// 説明書のファイルが無ければ渡さず、要求 1 件につき 1 行を `warn!` で記録して戻る
-/// （要件 5.1）。[`is_available`] は呼ばない——メニュー側の初回だけの `debug!` を奪うため（要件 5.4）。
+/// 説明書のファイルが無ければ渡さず、要求 1 件につき 1 行を `warn!` で記録して戻る。
+/// [`is_available`] は呼ばない——メニュー側の初回だけの `debug!` を奪うため。
 pub(crate) fn open_from_world(world: &World, tag: &str) {
     let Some(wiring) = world.get_non_send::<ReadmeWiring>() else {
         tracing::warn!(
@@ -208,16 +208,16 @@ pub(crate) fn drain_readme_requests(world: &mut World) {
     }
 }
 
-// OS の境界（areka-P0-open-external-tags task 1.2）。
+// OS の境界。
 pub(crate) mod os_port;
 
-// 行き先の規則（task 2.1）。台本の受け口と台本からの取り出しが同じ関数を呼ぶ。
+// 行き先の規則。台本の受け口と台本からの取り出しが同じ関数を呼ぶ。
 pub(crate) mod destination;
 
-// 開く処理の 1 か所（task 3.1〜3.4）。
+// 開く処理の 1 か所。
 mod opener;
 
-/// `\![open,…]` の受け口（runtime-module-untangle 2.2 で持ち主へ移した）。
+/// `\![open,…]` の受け口。
 pub(crate) mod readme_cue;
 
 #[cfg(test)]

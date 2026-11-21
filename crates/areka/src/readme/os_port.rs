@@ -1,8 +1,8 @@
-//! OS の境界（areka-P0-open-external-tags task 1.2・要件 2.3・7.1・7.7・10.1）。
+//! OS の境界。
 //!
 //! OS へ渡す呼び出し（`ShellExecuteExW`）と環境変数の読み取りを 1 つの trait に閉じる。
 //! 本物は [`WindowsShell`]、テストの偽物は `opener_test_support.rs` の `FakeOs`。
-//! `crates/areka/src` で `ShellExecute` を綴るのは、このファイルだけにする（要件 7.1）。
+//! `crates/areka/src` で `ShellExecute` を綴るのは、このファイルだけにする。
 
 use std::ffi::{OsStr, OsString};
 use std::os::windows::ffi::OsStrExt;
@@ -18,7 +18,7 @@ use windows::Win32::UI::Shell::{
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 use windows::core::{PCWSTR, w};
 
-/// OS の既定の動詞（areka 独自の設定値は持たない・要件 7.7）。
+/// OS の既定の動詞（areka 独自の設定値は持たない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Verb {
     /// 「開く」（既定の関連付け）。
@@ -50,7 +50,7 @@ pub(crate) trait OsPort {
 /// 本物（`ShellExecuteExW`（`SEE_MASK_FLAG_NO_UI`）・`std::env::var`）。
 /// 実在するファイルは先に `AssocQueryStringW` で動詞の関連付けを引き、無ければ 1155 を返す。
 ///
-/// テストのビルドは本物の OS を呼ばない（`Opener::spawn` が断る口を持つ・要件 10.1）ので、
+/// テストのビルドは本物の OS を呼ばない（`Opener::spawn` が断る口を持つ）ので、
 /// 本物の口と COM の初期化はテストのビルドに呼び手が無い（関連付けの判定はテストが直に呼ぶ）。
 #[cfg_attr(test, allow(dead_code))]
 pub(crate) struct WindowsShell;
@@ -65,7 +65,7 @@ fn wide(s: &std::ffi::OsStr) -> Vec<u16> {
 #[cfg_attr(test, allow(dead_code))]
 const ERROR_NO_ASSOCIATION: u32 = 1155;
 
-/// OS を呼ぶ前に関連付けを確かめるか（実機 6.2: `HKCR\Unknown\shell\Open` があると
+/// OS を呼ぶ前に関連付けを確かめるか（`HKCR\Unknown\shell\Open` があると
 /// 関連付けの無い拡張子でも ShellExecuteExW が成功して「アプリの選択」の窓が出る）。
 #[derive(Debug, PartialEq, Eq)]
 enum AssocCheck {
@@ -143,7 +143,7 @@ impl OsPort for WindowsShell {
         let ptr = |v: &Option<Vec<u16>>| v.as_ref().map_or(PCWSTR::null(), |v| PCWSTR(v.as_ptr()));
         let mut info = SHELLEXECUTEINFOW {
             cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
-            // OS のエラーの窓も「開く方法を選ぶ」窓も出さない（設計ディスカッション議題 1）。
+            // OS のエラーの窓も「開く方法を選ぶ」窓も出さない。
             fMask: SEE_MASK_FLAG_NO_UI,
             lpVerb: verb_w(call.verb),
             lpFile: PCWSTR(file.as_ptr()),

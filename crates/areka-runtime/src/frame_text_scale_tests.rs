@@ -12,11 +12,10 @@ use super::test_support::{
 };
 use super::*;
 
-// ── task 7.2: 文字層 k 追従フェーズ（run_text_scale_phase・D11-3/D11-4・R8.1/8.5/8.6） ──
+// ── 文字層 k 追従フェーズ（run_text_scale_phase） ──
 //
-// 本番関数をそのまま駆動する（シームを噛ませない）。`Some(view)` の適用そのもの（binding
-// 再構築・供給面破棄・churn ガード）は GPU 装着を要するため spine（in-crate GPU ハーネス）が
-// 実経路で檻に入れる。ここでは GPU 不要で観測できる 2 点——(a) 走査対象が balloon 装着 scope に
+// 本番関数をそのまま駆動する。`Some(view)` の適用は GPU 装着を要するため spine（in-crate GPU
+// ハーネス）が受け持ち、ここでは GPU 不要で見える 2 点——(a) 走査対象が balloon 装着 scope に
 // 限られること、(b) 表示未確立の縮退が **scope ごとに一度だけ** 鳴ること——を固定する。
 
 /// 素の結線資源（GPU/資産不要・`run_text_scale_phase` の headless 駆動用）。
@@ -59,16 +58,11 @@ fn text_scale_phase_without_balloon_models_is_silent_noop() {
     );
 }
 
-/// R8.6 縮退（log-first だが log spam にしない）: `text_slot_view` が `None`（表示未確立）の
-/// scope は再追従せず skip し、**警告は scope ごとに一度だけ**鳴る（毎フレーム走査ゆえ素朴な
-/// `warn!` は毎フレーム鳴ってしまう）。
-///
-/// 実源（何も装着していない `EmoPresenter`＝`text_slot_view` が常に `None`）へ、attach 相と同じ
-/// 形で per-scope の [`BalloonModel`] を記憶させた状態を作り、3 フレーム相当を走らせる。
+/// 表示未確立の縮退: `text_slot_view` が `None` の scope は再追従せず skip し、**警告は scope
+/// ごとに一度だけ**鳴る（毎フレーム走査ゆえ素朴な `warn!` は毎フレーム鳴ってしまう）。
 #[test]
 fn text_scale_phase_warns_once_per_scope_when_view_unavailable() {
     let mut wiring = headless_wiring();
-    // attach 相が記憶するのと同じ形（scope→model）。presenter は未装着ゆえ view は常に None。
     wiring
         .balloon_models
         .insert(0, areka_parsers::balloon::parse_str("", None));
@@ -161,16 +155,15 @@ fn a_balloon_text_left_unconnected_at_attach_connects_on_the_first_frame_its_vie
 /// **排他 system への組み込み**（call-site の檻）: [`frame_system`] は毎フレーム
 /// [`run_text_scale_phase`] を駆動する。
 ///
-/// 関数が正しくても system から呼ばれていなければ本番では何も起きない——その 1 行の欠落を
-/// 検出する。未装着 presenter（`text_slot_view` が常に `None`）＋ attach 相と同形の記憶済み
-/// [`BalloonModel`] を持つ World で 1 フレーム回すと R8.6 の縮退警告がちょうど 1 回鳴り、
-/// 2 フレーム目は鳴らない（＝呼ばれている、かつエッジガードが system 越しに効いている）。
+/// 関数が正しくても system から呼ばれていなければ本番では何も起きない。未装着 presenter ＋
+/// attach 相と同形の記憶済み [`BalloonModel`] を持つ World で 1 フレーム回すと縮退警告が
+/// ちょうど 1 回鳴り、2 フレーム目は鳴らない（＝呼ばれている、かつエッジガードが system 越しに
+/// 効いている）。
 #[test]
 fn frame_system_drives_text_scale_phase_every_frame() {
     let (mut world, _gw) = dpi_world();
     let (_tx, rx) = mpsc::channel::<PresentCommand>();
     let mut wiring = headless_wiring_with(rx, zero_clock());
-    // attach 相が記憶するのと同じ形（scope→model）。GPU 資源が無いため attach 相自体は空回りする。
     wiring
         .balloon_models
         .insert(0, areka_parsers::balloon::parse_str("", None));
@@ -195,7 +188,7 @@ fn frame_system_drives_text_scale_phase_every_frame() {
     );
 }
 
-/// **本番経路**での `SystemState` 永続性（Flow 2 キー決定 (b)・churn 禁止）: `run_dpi_phase` は
+/// **本番経路**での `SystemState` 永続性: `run_dpi_phase` は
 /// 観測器を `RuntimeWiring.dpi_state` へ**保持**し、run を跨いで `last_run` を進める。
 ///
 /// `dpi_phase_with` へテスト側の state を渡す檻では「本番が wiring のフィールドを使っている」
@@ -214,7 +207,6 @@ fn run_dpi_phase_persists_system_state_across_frames_in_production_path() {
         "前提: 観測器は初回 run まで未生成（SystemState::new は &mut World を要する）"
     );
 
-    // 1 フレーム目（本番経路）: 初回 run の全窓マッチをここで消費する。
     run_dpi_phase(&mut wiring, &mut world);
     assert!(
         wiring.dpi_state.is_some(),
@@ -258,7 +250,6 @@ fn frame_system_runs_dpi_phase_without_writes_when_unattached() {
     let (_tx, rx) = mpsc::channel::<PresentCommand>();
     world.insert_non_send(headless_wiring_with(rx, zero_clock()));
 
-    // DPI 差替（Changed 発火）→ 排他 system を 2 フレーム回す。
     world
         .entity_mut(gw.char_window(0).unwrap())
         .insert(DPI::from_dpi(192, 192));
@@ -279,7 +270,7 @@ fn frame_system_runs_dpi_phase_without_writes_when_unattached() {
     }
 }
 
-// ── task 3.5: 発話が進行中かの純判断（reveal_pending・設計 C16 の `REARM`・要件 4.6） ──
+// ── 発話が進行中かの純判断（reveal_pending） ──
 //
 // 「次の画面更新でも文字が増えるか」だけを決める引き算である。時計にも表示層にも触れない。
 // どこで呼ぶか（text 相の末尾）は字面検査が受け持つ。

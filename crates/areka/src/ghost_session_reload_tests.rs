@@ -1,4 +1,4 @@
-//! 実行系だけを外して付け直す口の決定論テスト（areka-P0-mcp-reload task 4.2・要件 4.2・7.3）。
+//! 実行系だけを外して付け直す口の決定論テスト。
 
 use std::time::Duration;
 
@@ -52,7 +52,7 @@ fn bounded(what: &str, shiori: &ScriptedShioriHandle, f: impl FnOnce() + Send + 
     run_bounded_watching(what, Progress::Count(&calls), f);
 }
 
-/// 外して付け直す（要件 4.2・design Flow 3）: 結線ありで起こした単位から実行系だけを外すと、
+/// 外して付け直す: 結線ありで起こした単位から実行系だけを外すと、
 /// seriko・loop ticker・seriko の送り手・束は単位に残り、kanade の送出端は外れる（2 度目は `None`）。
 /// 外した実行系を降ろし、束から起こした新しい実行系を付けると、単位の送出端の先に生きた kanade
 /// が居る（古い送出端の先は死んでいる＝写ったのは新しい方）。最後に単位を降ろすと seriko の join
@@ -158,7 +158,7 @@ fn split_keeps_window_side_and_attach_copies_new_kanade() {
     );
 }
 
-/// 名前の差し替え（要件 7.3）: 実行系があれば委ねて真を返し、`names()` が新しい名前を読む。
+/// 名前の差し替え: 実行系があれば委ねて真を返し、`names()` が新しい名前を読む。
 /// 実行系が無ければ偽。束は結線ありの腕だけが持つ（テスト用の組み立ては `None`）。
 #[test]
 fn set_names_delegates_to_runtime_or_returns_false() {

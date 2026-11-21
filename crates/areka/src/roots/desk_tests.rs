@@ -1,4 +1,4 @@
-//! フォルダを選ぶ画面の受け口の決定論テスト（要件 6.3・6.5・6.9・design「RootsDesk」）。
+//! フォルダを選ぶ画面の受け口の決定論テスト。
 //!
 //! 本物の画面は出さない: 選ぶ口の代わり（閉包）を差し込み、選ぶスレッドの終わりを `join` で待って
 //! から UI スレッドの系 [`drain`] を 1 回回す。記録は選ぶスレッドの外で [`send_pick`] を直に呼んで見る。
@@ -84,7 +84,7 @@ fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a Captured
         .collect()
 }
 
-/// 決めたフォルダは `roots-pick` のスレッドから受け口へ届き、UI スレッドで並びの末尾に入る（要件 6.3）。
+/// 決めたフォルダは `roots-pick` のスレッドから受け口へ届き、UI スレッドで並びの末尾に入る。
 #[test]
 fn chosen_folder_is_appended_at_end() {
     let (_tmp, mut world, a, b) = rig("roots-desk-chosen");
@@ -94,7 +94,7 @@ fn chosen_folder_is_appended_at_end() {
     assert!(can_pick(&world), "スレッドが終わると旗が降りる");
 }
 
-/// 取り消しと失敗は何も送らず、並びは変わらない（要件 6.5・6.9）。
+/// 取り消しと失敗は何も送らず、並びは変わらない。
 #[test]
 fn cancel_and_failure_leave_roots_unchanged() {
     for result in [Ok(None), Err(PickError::Com(E_FAIL))] {

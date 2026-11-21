@@ -10,7 +10,7 @@ use super::test_support::{
 };
 use super::*;
 
-/// R2.2/DD-1 drain: attach 前は drain せず（保留＝取りこぼしなし）、attach 後に FIFO 到着順で
+/// drain: attach 前は drain せず（保留＝取りこぼしなし）、attach 後に FIFO 到着順で
 /// **全件** `presenter.apply` へ適用し切る。
 ///
 /// 未装着 target への `Hide`（reply: None）は `EmoPresenter::apply_hide` が
@@ -34,7 +34,6 @@ fn run_drain_phase_gates_on_attach_then_drains_all_in_fifo_order() {
         .expect("送信は成功する（受信端 rx は wiring が保持）");
     }
 
-    // (a) attach 前（gate 閉）: drain しない → apply 未呼出 → ERROR ログ 0 件。
     assert!(!wiring.attached, "前提: 未装着（run_attach_phase 未実行）");
     let logs_gated = capture_logs(|| run_drain_phase(&mut wiring, &mut world));
     assert_eq!(
@@ -43,11 +42,8 @@ fn run_drain_phase_gates_on_attach_then_drains_all_in_fifo_order() {
         "attach 前は drain せず apply も呼ばない（チャネルが保留バッファ・取りこぼしなし・DD-1）: {logs_gated:?}"
     );
 
-    // attach 完了フラグを立てる（本番は run_attach_phase が立てる・test では直接）。
     wiring.attached = true;
 
-    // (b) gate 開: 現時点キュー済みを FIFO で全件 apply → 未装着 target ゆえ ERROR がちょうど 3 件、
-    //     かつ target_id が送信順（0,1,2）で並ぶ（apply が到着順に呼ばれた実証）。
     let logs_drained = capture_logs(|| run_drain_phase(&mut wiring, &mut world));
     let errs: Vec<&String> = logs_drained
         .iter()
@@ -66,7 +62,6 @@ fn run_drain_phase_gates_on_attach_then_drains_all_in_fifo_order() {
         );
     }
 
-    // (c) 二度目の drain: チャネルは空 → 何も再適用しない（ERROR 0・二重適用なし）。
     let logs_empty = capture_logs(|| run_drain_phase(&mut wiring, &mut world));
     assert_eq!(
         count_level(&logs_empty, "ERROR"),
@@ -75,16 +70,14 @@ fn run_drain_phase_gates_on_attach_then_drains_all_in_fifo_order() {
     );
 }
 
-/// R2.2/R2.3 text 判断: `resolve_talk_time` は override 優先→`clock.talk_time`→`None` を返す。
+/// text 判断: `resolve_talk_time` は override 優先→`clock.talk_time`→`None` を返す。
 ///
 /// GPU/時刻 I/O 抜きの純関数として 4 経路を決定論檻へ入れる: override 勝ち（frame_now 無視）・
 /// override 無し×epoch 確立×frame_now 有り＝差分・frame_now 不在＝None・epoch 未確立＝None。
 #[test]
 fn resolve_talk_time_override_wins_else_clock_else_none() {
-    // epoch 未確立の固定クロック。
     let clock_unset = zero_clock();
 
-    // override=Some → そのまま（テスト注入経路が最優先・frame_now/clock は無視）。
     assert_eq!(
         resolve_talk_time(Some(5.0), Some(999.0), &clock_unset),
         Some(5.0),
@@ -96,7 +89,6 @@ fn resolve_talk_time_override_wins_else_clock_else_none() {
         "override は frame_now 不在でも採用"
     );
 
-    // override=None, frame_now=Some, epoch 確立 → clock.talk_time(frame_now)。
     let (now, clock) = controllable_clock();
     set_now(&now, 100.0);
     clock.observe_cue(0.0); // epoch = 100.0 - 0.0 = 100.0
@@ -106,14 +98,12 @@ fn resolve_talk_time_override_wins_else_clock_else_none() {
         "override 無しは clock.talk_time(frame_now)（105-100=5）"
     );
 
-    // override=None, frame_now=None → None（FrameTime 資源不在＝headless）。
     assert_eq!(
         resolve_talk_time(None, None, &clock),
         None,
         "frame_now 不在は None（present_frame を呼ばない）"
     );
 
-    // override=None, epoch 未確立 → None（talk 未到達＝描くものがない）。
     assert_eq!(
         resolve_talk_time(None, Some(105.0), &clock_unset),
         None,
@@ -121,7 +111,7 @@ fn resolve_talk_time_override_wins_else_clock_else_none() {
     );
 }
 
-/// R2.3 text smoke（no panic）: `run_text_phase` は override で `present_frame` へ到達し、
+/// text smoke（no panic）: `run_text_phase` は override で `present_frame` へ到達し、
 /// override 無し×`FrameTime` 不在では skip する（いずれも panic しない）。
 ///
 /// 登録 actor の無い空 `TextLayerRuntime` に対し `present_frame` は `Ok(())` で即復帰する
@@ -134,10 +124,8 @@ fn run_text_phase_override_reaches_present_frame_without_panic() {
     // FrameTime 資源を持たない素の World（override 経路と skip 経路の双方を踏む）。
     let mut world = World::new();
 
-    // override=Some(2.0)・空 runtime（登録 actor 無し）→ present_frame は Ok(()) で即復帰・panic しない。
     run_text_phase(&mut wiring, &mut world, Some(2.0));
 
-    // override=None・FrameTime 資源なし → talk_time 解決不能で present_frame を呼ばず skip・panic しない。
     run_text_phase(&mut wiring, &mut world, None);
 
     // present_frame は borrow を残さない（RefCell を再借用できる＝lingering borrow / poison なし）。
@@ -160,14 +148,12 @@ fn frame_system_removes_runs_and_reinserts_wiring() {
     let mut world = World::new();
     world.insert_non_send(wiring);
 
-    // remove→各相（いずれもゲート不成立の no-op）→ re-insert。panic しない。
     frame_system(&mut world);
     assert!(
         world.get_non_send::<RuntimeWiring>().is_some(),
         "frame_system は wiring を取り出して駆動後に必ず戻す（配線の疎通）"
     );
 
-    // 冪等: もう一度呼んでも remove→insert で wiring を保つ（panic しない）。
     frame_system(&mut world);
     assert!(
         world.get_non_send::<RuntimeWiring>().is_some(),
@@ -201,7 +187,7 @@ fn fixture_move_directive() -> MoveDirective {
     .directive
 }
 
-/// 9.2 ゲート檻: `GhostWindows` 未挿入の間は `move_rx` を drain せず保留する（取りこぼしなし）。
+/// ゲート檻: `GhostWindows` 未挿入の間は `move_rx` を drain せず保留する（取りこぼしなし）。
 ///
 /// 素の `World`（`GhostWindows` なし）で `run_move_drain_phase` を呼んでも、送出済みの
 /// `MoveDirective` はチャネルに残る（後から test-support `drain_move_directives` で取り出せる＝
@@ -212,11 +198,9 @@ fn run_move_drain_phase_buffers_until_ghost_windows_present() {
     tx.send(PositionCue::Move(fixture_move_directive()))
         .expect("送出は成功する（受信端は wiring 保持）");
 
-    // GhostWindows 未挿入の素の World → drain せず保留（try_iter を呼ばない）。
     let mut world = World::new();
     run_move_drain_phase(&wiring, &mut world);
 
-    // gate 閉ゆえ未消費: 送出した 1 件がチャネルに残る（保留＝取りこぼしなし）。
     let remaining = wiring.drain_move_directives();
     assert_eq!(
         remaining.len(),
@@ -230,7 +214,7 @@ fn run_move_drain_phase_buffers_until_ghost_windows_present() {
     );
 }
 
-/// 9.2 apply 檻: `GhostWindows` 存在下で `move_rx` を drain すると `apply_move_directive` が
+/// apply 檻: `GhostWindows` 存在下で `move_rx` を drain すると `apply_move_directive` が
 /// 対象窓を fixture 検算位置へ即時移動する（channel→frame 相 drain→apply→窓移動の結線存在）。
 ///
 /// base scope0 (1483,757,434,687)・target scope1 (1049,1087,278,357)・x=Px(-353)・y=Fix:
@@ -252,13 +236,11 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
     // 前提: 対象と基準の窓は最初の面を表示済み（位置の指令を預からない）。
     run_move_drain_with(&wiring, &all_shown, &mut world);
 
-    // channel→drain→apply→move_window_to で対象窓が fixture 検算位置へ即時移動する。
     assert_eq!(
         pos_of(&world, target),
         Some(Point { x: 1208, y: 1087 }),
         "x'=1483+217−353−139=1208・y=Fix は現状維持（channel→frame drain→apply）"
     );
-    // drain 済みチャネルは空（二重適用なし・FIFO 全件消費）。
     assert_eq!(
         wiring.drain_move_directives().len(),
         0,
@@ -266,8 +248,8 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
     );
 }
 
-/// 並べ直しの指令は 2.1 の手続きへ渡り（`OnResetWindowPos` は送らない）、その失敗は後ろの
-/// 移動を止めない（areka-P0-move-canon 3.2・要件 8.7・design MoveDrain）。
+/// 並べ直しの指令は並べ直しの手続きへ渡り（`OnResetWindowPos` は送らない）、その失敗は後ろの
+/// 移動を止めない。
 ///
 /// `resnap_world` は並べ直しの材料（`DefaultPlacementBasis`）を置かないので、並べ直しは
 /// `reset_window_pos_skipped` の WARN で何もしない。その後ろの移動は fixture の検算位置へ届く。
@@ -299,7 +281,7 @@ fn run_move_drain_phase_routes_reset_and_continues_after_its_failure() {
     assert!(wiring.drain_move_directives().is_empty(), "全件消費");
 }
 
-/// 件 5 の測り（window-work-area-clamp 3.1・要件 6.1）と預かり（3.3・design MoveHold）: 表示の前
+/// 表示の前
 /// （`applied_ratio` が無い）の指令は当てずに預かり、`move_ratio_unset` をスコープつきで 1 行だけ残す。
 /// 窓が表示した後の巡で当たり、当てた記録には拡大率と動かす窓の大きさが載る。
 ///
@@ -338,7 +320,6 @@ fn run_move_drain_phase_logs_ratio_unset_and_applied_scale_and_size() {
     );
     assert_eq!(pos_of(&world, target), Some(Point { x: 1049, y: 1087 }));
 
-    // 窓が表示した巡で当たる。
     let logs = capture_logs(|| run_move_drain_with(&wiring, &all_shown, &mut world));
     let applied: Vec<&String> = logs.iter().filter(|l| l.contains("move_applied")).collect();
     assert_eq!(applied.len(), 1, "{logs:?}");

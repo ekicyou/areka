@@ -1,5 +1,4 @@
-//! 差し替えの相の待ちの段の決定論テスト（spec: areka-P0-shell-balloon-switch task 9.3・
-//! 要件 1.12・1.14・1.16・5.1・5.4・5.5・5.7・5.8・12.2・12.7・12.9・design「SwitchPhase」）。
+//! 差し替えの相の待ちの段の決定論テスト。
 //!
 //! 切れ目の返事と資産づくりの結果は、テストが持つ送り手から偽の値を流す（kanade も背景の
 //! スレッドも起こさない）。置き場のゴーストは kanade の送出端の代わりに観測用の線を持ち、
@@ -326,7 +325,7 @@ fn rec(
 // ---------------------------------------------------------------- 待ちの段の着地
 
 /// 差し替えまで進まない結果: 記録 1 件・印が消える・差し替え（置き場と seriko）・イベント
-/// （kanade への便り）・記憶の記録はどれも 0（要件 1.12・1.14・1.16・5.1・5.4・5.5・5.7・12.7）。
+/// （kanade への便り）・記憶の記録はどれも 0。
 #[test]
 fn each_non_reached_outcome_drops_with_one_record_and_nothing_else() {
     type Poke = fn(&mut Rig);
@@ -488,7 +487,7 @@ fn nothing_arrived_keeps_waiting_silently() {
 
 /// 資産がそろった後に `Reached` を受けると、世代を進めて荷物を置き場へ置き、返信の受け手を
 /// 控え、seriko へ差し替えを 1 件頼む。荷物は scope ごとに作者の DPI を運び、イベント（kanade
-/// への便り）・警告と失敗の記録は 0（要件 12.2・12.7）。
+/// への便り）・警告と失敗の記録は 0。
 #[test]
 fn reached_after_assets_requests_one_replace_per_kind() {
     let mut got = Vec::new();
@@ -566,7 +565,7 @@ fn assets_and_reached_in_one_frame_commit_without_recheck() {
 }
 
 /// 資産がそろって `Reached` を受けても、ゴースト切替が進んでいれば頼まずに取りやめる
-/// （ゴースト切替が勝つ・要件 1.12・12.9）。
+/// （ゴースト切替が勝つ）。
 #[test]
 fn ghost_switch_in_flight_wins_before_the_replace() {
     let mut rig = rig(SkinKind::Shell);
@@ -666,7 +665,7 @@ fn seriko_send_failure_empties_the_slot() {
 
 /// `Reached` が資産より先に届くと、資産がそろったフレームで印なしの待ちを 1 件送り直し
 /// （`debug!` 1 件）、その返事が届くまで差し替えは 0 件。返事が終了なら取りやめ、`Reached` なら
-/// 差し替えを 1 件頼む（印の台詞の終わり方は 1 度目の返事のもの・design Flow 1 ⑵）。
+/// 差し替えを 1 件頼む（印の台詞の終わり方は 1 度目の返事のもの）。
 #[test]
 fn reached_before_assets_rechecks_once_and_follows_the_second_reply() {
     let mut got = Vec::new();
@@ -752,7 +751,7 @@ fn recheck_send_failure_drops_with_one_error() {
 }
 
 /// シェルの差し替えを seriko へ頼んだら、結線の静的な着せ替えの写しも新しいシェルの既定へ置き直す
-/// （ghost の読み直しで控える着せ替えの基準・areka-P0-mcp-reload 要件 3.8）。バルーンの差し替えは変えない。
+/// （ghost の読み直しで控える着せ替えの基準）。バルーンの差し替えは変えない。
 ///
 /// # 非空虚性
 /// 置き直さないと、シェルの側が前の既定 {7} のままで赤。バルーンでも置き直すと（取り違え）バルーンの側が
@@ -805,7 +804,7 @@ fn a_shell_replace_moves_the_wiring_static_binds_but_a_balloon_replace_does_not(
 }
 
 /// 差し替えの命令を組む所は、seriko の戻り先を後始末へ動かす箱の束と同じ値（面の番号の集合と
-/// 候補の並び）で組む（spec: descript-window-keys 要件 1.7・3.2）。文字の層は同じ束を `hand_to` で
+/// 候補の並び）で組む。文字の層は同じ束を `hand_to` で
 /// 受け取るので、seriko と文字の層は同じ材料で戻り先を決める。
 ///
 /// # 非空虚性

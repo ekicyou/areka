@@ -1,5 +1,4 @@
-//! 開く処理の記録・失敗・順序のテスト（areka-P0-open-external-tags task 3.3・要件 2.5・3.3・4.8・
-//! 5.4・6.4・7.2・7.3・7.4・7.6・7.8・10.5）。
+//! 開く処理の記録・失敗・順序のテスト。
 //!
 //! `execute`・`serve` はテストのスレッドで呼ぶ（`log_capture_kit` は呼んだスレッドの記録しか拾わない）。
 //! 記録の種別は本物の `log_history::draft` で判定する。OS は偽物だけ。
@@ -101,12 +100,12 @@ fn assert_one_failure(events: &[CapturedEvent], reason: &str) -> CapturedEvent {
 fn resolve_failures_log_one_error_and_never_call_os() {
     let f = Fixture::new();
     let cases: &[(&str, &[&str], &str)] = &[
-        // 行き先が無い（要件 2.5・5.4・4.8）。
+        // 行き先が無い。
         ("open", &["file", "nope.exe\\x"], "not_found"),
         ("open", &["editor", "nope.txt"], "not_found"),
         ("open", &["explorer", "nope"], "not_found"),
         (JUMP_TAG_CARRIER, &["file:///nope.txt"], "not_found"),
-        // 名前に当たらない（要件 4.8）。
+        // 名前に当たらない。
         ("open", &["explorer", "shell", "無い"], "no_match"),
     ];
     for (name, args, reason) in cases {
@@ -123,7 +122,7 @@ fn resolve_failures_log_one_error_and_never_call_os() {
         );
     }
 
-    // 根が無い（要件 4.8）。
+    // 根が無い。
     let mut job = f.job("open", &["explorer", "ghost", "G"]);
     job.context.baseware = None;
     let (events, os) = run(job, FakeOs::default());

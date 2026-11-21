@@ -108,7 +108,7 @@ fn cue_sheet_new_with_nan_start_time_does_not_panic() {
 }
 
 // ============================================================================
-// 自己完結した絶対時刻台本（absolute_start_time）テスト — R1.7
+// 自己完結した絶対時刻台本（absolute_start_time）テスト
 // ============================================================================
 
 /// 絶対開始時刻を刻印していない台本のアンカーは 0.0（既定）。
@@ -119,7 +119,7 @@ fn cue_sheet_absolute_start_time_defaults_to_zero() {
     assert_eq!(sheet.absolute_start_time(), 0.0);
 }
 
-/// R1.7: 各 cue の絶対発火時刻は台本のみから `absolute_start_time + start_time` で導ける。
+/// 各 cue の絶対発火時刻は台本のみから `absolute_start_time + start_time` で導ける。
 #[test]
 fn absolute_fire_time_of_every_cue_derives_from_sheet_alone() {
     let sheet = CueSheet::new(vec![
@@ -149,7 +149,7 @@ fn absolute_fire_time_of_every_cue_derives_from_sheet_alone() {
     assert_eq!(fired, vec![100.0, 100.5, 102.25]);
 }
 
-/// R1.7: talk の絶対終了時刻は `absolute_start_time + max(start_time + duration)`。
+/// talk の絶対終了時刻は `absolute_start_time + max(start_time + duration)`。
 ///
 /// 「最後に発火する cue」でも「最大 start_time」でもなく**占有区間の最大端**であることを
 /// 固定する（最長 duration を持つ cue が末尾でない配置で検証）。
@@ -166,7 +166,7 @@ fn absolute_end_time_is_max_of_start_plus_duration_not_last_cue_start() {
     assert_eq!(sheet.absolute_end_time(), 16.0);
 }
 
-/// R1.7: 末尾の純粋 Wait cue の duration は絶対終了時刻へ算入される（早期終了しない・R2.5 の土台）。
+/// 末尾の純粋 Wait cue の duration は絶対終了時刻へ算入される（早期終了しない）。
 #[test]
 fn absolute_end_time_includes_trailing_wait_duration() {
     let sheet =
@@ -218,7 +218,7 @@ fn stamping_absolute_start_time_leaves_relative_times_untouched() {
 // serde テスト
 // ============================================================================
 
-/// R9.3: `absolute_start_time` は `#[serde(default)]`＝アンカーを持たない JSON は 0.0。
+/// `absolute_start_time` は `#[serde(default)]`＝アンカーを持たない JSON は 0.0。
 #[test]
 fn cue_sheet_deserializes_without_absolute_start_time_as_zero() {
     let json = r#"{"cues":[
@@ -275,16 +275,15 @@ fn cue_sheet_serde_roundtrip() {
 }
 
 // ============================================================================
-// canonical 変換 to_talk_schedule — R11.1 / R1.3 / R1.6 / R1.8 / R2.5
+// canonical 変換 to_talk_schedule
 //
-// 台本→時刻スケジュールへの**唯一の変換**。旧 2 実装（min 正規化で先頭待ちを食う版と
-// sakura 独自版・task 8.2 で撤去）を廃した dola ingress の単一権威。
+// 台本→時刻スケジュールへの**唯一の変換**で、dola ingress の単一権威。
 // 絶対アンカー（absolute_start_time）＋相対 start_time を保存し、同一 at は記述順（FIFO）、
 // duration を有限・非負へ clamp（envelope と horizon の両方に適用）、占有 horizon を保持して
 // is_completed を占有終了で判定する。
 // ============================================================================
 
-/// R11.1: 先頭に待ちを持つ台本を変換しても待ちが消えない（相対 start_time を保存）。
+/// 先頭に待ちを持つ台本を変換しても待ちが消えない（相対 start_time を保存）。
 ///
 /// canonical 変換は相対時刻をそのまま保つため、先頭 Wait(at=0.5) は 0.5 で due になる
 /// （min 正規化で 0 へ食う旧実装と異なり、食われない）。
@@ -292,7 +291,6 @@ fn cue_sheet_serde_roundtrip() {
 fn to_talk_schedule_preserves_leading_wait() {
     let sheet = CueSheet::new(vec![wait(0.5, 0.5), text(1.0, "hi", 0.0)]);
 
-    // canonical 変換は相対 start_time を保存する（先頭待ちを食わない）。
     let mut schedule = to_talk_schedule(&sheet);
     schedule.tick(0.4);
     assert!(
@@ -305,7 +303,7 @@ fn to_talk_schedule_preserves_leading_wait() {
     assert!(matches!(schedule.ready()[0].command, CueCommand::Wait));
 }
 
-/// R1.8: 非有限（NaN/±inf）・負の duration は 0 へ clamp され、envelope と horizon の
+/// 非有限（NaN/±inf）・負の duration は 0 へ clamp され、envelope と horizon の
 /// **両方**へ clamp 後の値が反映される（dola ingress の単一権威）。
 #[test]
 fn to_talk_schedule_clamps_non_finite_and_negative_duration_into_envelope_and_horizon() {
@@ -337,11 +335,8 @@ fn to_talk_schedule_clamps_non_finite_and_negative_duration_into_envelope_and_ho
     );
 }
 
-/// R1.3: 有限・非負の duration は clamp 恒等ゆえ envelope へ**ビット等価**で運ばれる
+/// 有限・非負の duration は clamp 恒等ゆえ envelope へ**ビット等価**で運ばれる
 /// （無変形）。同一 at は記述順（FIFO）で `ready()` に並ぶ。
-///
-/// これは旧 command.rs の自己充足檻（テスト本体で TalkCue を組んで自身に主張）を、
-/// 実 canonical 変換を通す load-bearing な形へ移設したもの（3.2 申し送り）。
 #[test]
 fn to_talk_schedule_carries_finite_duration_untransformed() {
     let durations = [
@@ -380,8 +375,8 @@ fn to_talk_schedule_carries_finite_duration_untransformed() {
     }
 }
 
-/// R1.1/R1.2: 搬送体の duration は**コマンド種別を問わない一律フィールド**。全 13 variant が
-/// 瞬時（明示的 0）・時間占有の双方を canonical 変換で運べる（旧 command.rs 檻の移設）。
+/// 搬送体の duration は**コマンド種別を問わない一律フィールド**。全 13 variant が
+/// 瞬時（明示的 0）・時間占有の双方を canonical 変換で運べる。
 #[test]
 fn to_talk_schedule_duration_uniform_across_every_command_variant() {
     use dola::DynamicValue;
@@ -438,7 +433,7 @@ fn to_talk_schedule_duration_uniform_across_every_command_variant() {
     }
 }
 
-/// R5.4: 純粋な待ち（`CueCommand::Wait`）の時間も搬送体の duration が運ぶ（action は空）。
+/// 純粋な待ち（`CueCommand::Wait`）の時間も搬送体の duration が運ぶ（action は空）。
 #[test]
 fn to_talk_schedule_carries_wait_duration_without_action() {
     let sheet = CueSheet::new(vec![wait(0.0, 0.5)]);
@@ -454,8 +449,8 @@ fn to_talk_schedule_carries_wait_duration_without_action() {
     );
 }
 
-/// R1.6: Barrier ペイロードは skip されず Entry::Barrier へ
-/// **経路づけ**られる（旧 sakura to_schedule は skip していた・canonical は routing する）。
+/// Barrier ペイロードは skip されず Entry::Barrier へ
+/// **経路づけ**られる。
 #[test]
 fn to_talk_schedule_routes_barrier_not_skipping() {
     let sheet = CueSheet::new(vec![
@@ -467,7 +462,6 @@ fn to_talk_schedule_routes_barrier_not_skipping() {
     let mut schedule = to_talk_schedule(&sheet);
     schedule.tick(1.0);
 
-    // Barrier 手前の Command のみ配信・Barrier で停止。
     let ready = schedule.ready();
     assert_eq!(ready.len(), 1, "Barrier 手前の Command のみ配信");
     assert_eq!(ready[0].command, CueCommand::Text("keep".into()));
@@ -491,7 +485,6 @@ fn to_talk_schedule_anchors_schedule_at_absolute_start_time() {
     // アンカー到達直後（offset 0）でも cue は at=0.5 ゆえ未 due。
     schedule.tick(100.0);
     assert!(schedule.ready().is_empty());
-    // 絶対 100.5（offset 0.5）で due。
     schedule.tick(100.5);
     assert_eq!(schedule.ready().len(), 1);
     assert_eq!(
@@ -501,7 +494,7 @@ fn to_talk_schedule_anchors_schedule_at_absolute_start_time() {
     );
 }
 
-/// R2.5: 末尾に待ちを持つ台本を注入時刻で駆動したとき、全 cue の**配送完了時点**では
+/// 末尾に待ちを持つ台本を注入時刻で駆動したとき、全 cue の**配送完了時点**では
 /// まだ未完了と判定され、**占有終了 horizon** 到達で初めて完了と判定される（早期終了しない）。
 #[test]
 fn to_talk_schedule_not_completed_until_occupancy_horizon_reached() {
@@ -511,7 +504,6 @@ fn to_talk_schedule_not_completed_until_occupancy_horizon_reached() {
     let sheet = CueSheet::new(vec![text(0.0, "bye", d), wait(d, wait_dur)]);
 
     let mut schedule = to_talk_schedule(&sheet);
-    // 全 entry を配り終える時刻（末尾 Wait の発火時刻＝D）まで進める。
     schedule.tick(d);
     assert_eq!(schedule.remaining(), 0, "全 entry を配り終えた");
     assert!(
@@ -521,13 +513,12 @@ fn to_talk_schedule_not_completed_until_occupancy_horizon_reached() {
     // horizon 直前でもまだ未完了。horizon は ms の格子で数えた 0.95（素の和 0.9500000000000001 では tick しない）。
     schedule.tick(0.94);
     assert!(!schedule.is_completed(), "占有 horizon 直前は未完了");
-    // horizon 到達で初めて完了。
     schedule.tick(0.95);
     assert!(schedule.is_completed(), "占有 horizon 到達で完了");
 }
 
 /// 変換したスケジュールの完了時刻は、台本のみから導ける `absolute_end_time()` に一致する
-/// （相対 horizon ＝ `absolute_end_time - absolute_start_time`・3.1 と 3.2 の相互検証）。
+/// （相対 horizon ＝ `absolute_end_time - absolute_start_time`）。
 #[test]
 fn to_talk_schedule_completes_exactly_at_sheet_absolute_end_time() {
     let sheet =
@@ -538,10 +529,8 @@ fn to_talk_schedule_completes_exactly_at_sheet_absolute_end_time() {
     assert_eq!(end, 10.75);
 
     let mut schedule = to_talk_schedule(&sheet);
-    // 絶対終了時刻の直前は未完了（entry は配り終えていても占有中）。
     schedule.tick(end - 0.001);
     assert!(!schedule.is_completed());
-    // 絶対終了時刻到達で完了（horizon = absolute_end_time - absolute_start_time）。
     schedule.tick(end);
     assert!(schedule.is_completed());
 }
@@ -557,15 +546,15 @@ fn to_talk_schedule_of_empty_sheet_is_immediately_completed() {
 }
 
 // ============================================================================
-// 件 1: 時刻の和を ms の格子に載せる（要件 7.1〜7.7）・#9 の終わりの 1 本化
+// 時刻の和を ms の格子に載せる・台本の終わりと予定の占有の終わりの 1 本化
 // ============================================================================
 
-/// 150 ms に始まる 800 ms の合図 1 つの台本（件 1 の檻の共通の形）。
+/// 150 ms に始まる 800 ms の合図 1 つの台本。
 fn ms_grid_sheet() -> CueSheet {
     CueSheet::new(vec![wait(150.0 / 1000.0, 800.0 / 1000.0)])
 }
 
-/// 7.1: 格子に載る始まりと長さの終わりは 950 ms を秒にした値そのもの（0.9500000000000001 でない）。
+/// 格子に載る始まりと長さの終わりは 950 ms を秒にした値そのもの（0.9500000000000001 でない）。
 #[test]
 fn end_time_of_ms_grid_cues_is_exact() {
     assert_eq!(
@@ -574,14 +563,14 @@ fn end_time_of_ms_grid_cues_is_exact() {
     );
 }
 
-/// 7.2: 予定へ焼き込む占有の終わりも同じ値。
+/// 予定へ焼き込む占有の終わりも同じ値。
 #[test]
 fn occupancy_horizon_matches_ms_grid_end() {
     let horizon = to_talk_schedule(&ms_grid_sheet()).occupancy_horizon();
     assert_eq!(horizon.to_bits(), (950.0_f64 / 1000.0).to_bits());
 }
 
-/// 7.3・7.7: アンカー 1.0 の台本は、Tick の式の値（n / 1000）でちょうど届き、ちょうど完了する。
+/// アンカー 1.0 の台本は、Tick の式の値（n / 1000）でちょうど届き、ちょうど完了する。
 #[test]
 fn completes_exactly_at_ms_grid_end() {
     let sheet = ms_grid_sheet().with_absolute_start_time(1.0);
@@ -601,7 +590,7 @@ fn completes_exactly_at_ms_grid_end() {
     );
 }
 
-/// 7.4: 格子に載らない値は丸めず、f64 の和そのもの。
+/// 格子に載らない値は丸めず、f64 の和そのもの。
 #[test]
 fn off_grid_values_keep_plain_sum() {
     let sheet = CueSheet::new(vec![wait(0.1234567, 0.3)]);
@@ -611,7 +600,7 @@ fn off_grid_values_keep_plain_sum() {
     );
 }
 
-/// #9: 非有限や負の長さでも、台本の終わりと予定の占有の終わりは同じ clamp を通って等しい。
+/// 非有限や負の長さでも、台本の終わりと予定の占有の終わりは同じ clamp を通って等しい。
 #[test]
 fn end_time_equals_occupancy_horizon_for_non_finite_durations() {
     for duration in [f64::NAN, f64::INFINITY, -3.0] {

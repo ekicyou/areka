@@ -1,9 +1,9 @@
-//! 偽の SHIORI を持つゴーストを同じ World で起こす統合テスト（areka-P0-ghost-shell-balloon-switch）。
+//! 偽の SHIORI を持つゴーストを同じ World で起こす統合テスト。
 //!
 //! 土台は `session::ghost_switch_test_support`。前半は土台そのものが使えることを確かめる:
 //! 作り口がフォルダ名で偽の SHIORI を選ぶこと・先に書いた起動記録が効くこと・接続に失敗する
 //! 版が kanade を `Fault` で止めること。後半は台本の `\![change,ghost,…]` から切替先の定常到達
-//! までを 1 周させる（要件 10.1・10.6・10.13）。判定は集めてから 1 回・降ろすのは必ず有界に行う。
+//! までを 1 周させる。判定は集めてから 1 回・降ろすのは必ず有界に行う。
 
 use std::sync::mpsc::TryRecvError;
 
@@ -160,7 +160,7 @@ fn rig_connect_fail_stops_kanade_with_fault() {
     );
 }
 
-// ── 台本の切替命令から切替先の定常到達までの 1 周（要件 1.8・3.3・4.1・4.2・4.4・4.8・10.1・10.6・10.13） ──
+// ── 台本の切替命令から切替先の定常到達までの 1 周 ──
 
 /// A の `OnBoot` の台本: 台詞の途中で B への切替（`OnGhostChanging` を送らせる）を命じる。
 const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";
@@ -255,7 +255,7 @@ fn pump_to_welcomed(rig: &mut SwitchRig, folder: &str, boots: usize) -> bool {
     })
 }
 
-/// 台本の `\![change,ghost,B,--option=raise-event]` から B の定常到達までの 1 周（要件 10.1）。
+/// 台本の `\![change,ghost,B,--option=raise-event]` から B の定常到達までの 1 周。
 ///
 /// A を起こし、定常に入ってから台詞の時計を回す——台本の cue が本番の受け口（`ChangeCueSink`）に
 /// 届き、`wire_change_rx` が据えた受信端を `register_systems` が登録した取り出しの系が `Input` の段で
@@ -301,7 +301,7 @@ fn script_change_tag_switches_a_to_b_and_reaches_steady() {
         .is_some_and(|mut w| w.flag_source_connected());
     let notice_live = notice_rx_live(&mut rig.world);
     let reserved = rig.world.get_non_send::<SwitchInFlight>().is_some();
-    // 切替先の新しい単位は LogSink へ倒れた旗を持たない（倒れた理由を引き継がない・要件 8.3）。
+    // 切替先の新しい単位は LogSink へ倒れた旗を持たない（倒れた理由を引き継がない）。
     let fallback = rig
         .world
         .get_non_send::<super::GhostSlot>()
@@ -399,7 +399,7 @@ fn script_change_tag_switches_a_to_b_and_reaches_steady() {
 }
 
 /// 起動記録の無い B へ切り替えると、起動の根は `OnFirstBoot`（204 → `OnBoot`）で
-/// `OnGhostChanged` は 0 件（要件 4.4・10.13・起動の根は常に 1 つ）。
+/// `OnGhostChanged` は 0 件（起動の根は常に 1 つ）。
 ///
 /// # 非空虚性
 /// 起動の根が由来を先に見て `OnGhostChanged` を選ぶと、B の呼出列が `OnFirstBoot` を欠いて赤。
@@ -445,8 +445,8 @@ fn switch_to_b_without_boot_record_sends_first_boot_not_ghost_changed() {
     );
 }
 
-/// 自分自身（A → A）への切替は無視されず、A を降ろして起こし直す（要件 1.8・10.6）。
-/// 2 度目の A は `OnGhostChanged`（Ref2＝A）で起き、その台本があるので `OnBoot` は送らない（要件 4.3）
+/// 自分自身（A → A）への切替は無視されず、A を降ろして起こし直す。
+/// 2 度目の A は `OnGhostChanged`（Ref2＝A）で起き、その台本があるので `OnBoot` は送らない
 /// ——2 度目の A が再び切替を命じて回り続けないための台本でもある。
 ///
 /// # 非空虚性

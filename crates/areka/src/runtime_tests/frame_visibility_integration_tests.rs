@@ -1,7 +1,7 @@
 // =============================================================================
-// フレーム統合の検証（task 6.6）
+// フレーム統合の検証
 //
-// ここが押さえるのは**相順そのもの**——本番の `frame_system` が design 決定 D5 の順で
+// ここが押さえるのは**相順そのもの**——本番の `frame_system` が決まった順で
 // 各相を回したときにだけ成り立つ性質である。判断中核の分岐表・配線層の縮退・表示層の
 // 可視性能力は、それぞれ `balloon_visibility_tests.rs` 群・`balloon_visibility_phase_tests.rs`・
 // `areka-emo-present` の in-crate テストが所有しており、ここでは重ねない。
@@ -11,7 +11,7 @@
 // 成立する実 attach を通さない限り、以下の性質はどれも観測できない。
 //
 // 時刻はすべて注入（`FrameTime` 資源＋`TalkClock` の epoch）で、実時間の待機・スリープ・
-// 反復回数のみによる有界化は 1 つも用いない（Requirements 9.2 / 9.3）。
+// 反復回数のみによる有界化は 1 つも用いない。
 // =============================================================================
 
 use areka_runtime::balloon_hover::BalloonHover;
@@ -160,11 +160,11 @@ fn assert_established_but_invisible(world: &World, wiring: &RuntimeWiring, scope
 }
 
 // ---------------------------------------------------------------------------
-// ⑴ 判断は「本フレームの表示指令を適用し終えた実状態」で行われる（Requirement 3.5）
+// ⑴ 判断は「本フレームの表示指令を適用し終えた実状態」で行われる
 // ---------------------------------------------------------------------------
 
 /// 可視性の相は drain の**後**に置かれている——本フレームに届いた `\b[-1]` 相当の非表示を
-/// 適用し終えた実状態を見て判断する（design 決定 D5・Requirement 3.5）。
+/// 適用し終えた実状態を見て判断する。
 ///
 /// # 観測の仕組み
 ///
@@ -237,11 +237,11 @@ fn visibility_phase_judges_the_state_left_by_this_frames_display_commands() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑵ 表示へ遷移したフレームで窓寸が同一フレームに届く（Requirement 6.6）
+// ⑵ 表示へ遷移したフレームで窓寸が同一フレームに届く
 // ---------------------------------------------------------------------------
 
 /// 可視性の相は窓寸の反映より**前**に置かれている——表示へ遷移したフレームで、その表示が
-/// 積んだ窓寸要求が同一フレームのうちに窓へ届く（design 決定 D5・Requirement 6.6）。
+/// 積んだ窓寸要求が同一フレームのうちに窓へ届く。
 ///
 /// # 非空虚性の作り方（不可視の間に溜めた拡大率の差）
 ///
@@ -316,7 +316,7 @@ fn show_transition_lands_the_new_window_size_within_the_same_frame() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑶ 起動から最初の可視コンテンツまで全フレームで不可視（Requirements 1.1 / 1.2 / 1.6）
+// ⑶ 起動から最初の可視コンテンツまで全フレームで不可視
 // ---------------------------------------------------------------------------
 
 /// 起動から最初の可視コンテンツまで、**全フレーム**でバルーンが可視にならない。
@@ -384,7 +384,7 @@ fn every_frame_from_boot_to_the_first_visible_content_keeps_balloons_invisible()
 /// `Arrangement` を**挿入**する（`areka-emo-text/src/surface.rs` の `TextSurface::attach`）。`Visual` の既定は
 /// 可視（`wintf/src/ecs/graphics/visual/mod.rs` の `impl Default for Visual`・`is_visible: true`）なので、
 /// この挿入がもし `Visual` まで含めば、装着で不可視に作った文字スロットが可視既定へ戻される。
-/// 枠だけが不可視で文字が画面に残る状態そのものであり、Requirement 1.7 が禁じている形である。
+/// 枠だけが不可視で文字が画面に残る状態そのものであり、避けるべき形である。
 ///
 /// # 可視コンテンツを生まない cue で観測する
 ///
@@ -445,7 +445,6 @@ fn text_slot_stays_invisible_after_the_text_layer_attaches_its_surface() {
 
 // ---------------------------------------------------------------------------
 // ⑷ 見えているバルーンの組をフレームの終わり（提示の後）に kanade へ届ける
-//    （areka-P0-status-execution-states task 5.2・要件 4.1／4.5／4.7／4.8／5.2）
 // ---------------------------------------------------------------------------
 //
 // headless の表示層は可視にできないので、照会が「見えている」を読む経路はここ（実 GPU・
@@ -528,7 +527,7 @@ fn visible_balloon_is_reported_once_and_its_disappearance_as_an_empty_set() {
     assert_eq!(balloon_reports(&reports), vec![Vec::new()]);
 }
 
-/// 切替で据わる新しい結線状態の台帳は新品で、前のゴーストの組を持ち越さない（要件 4.8）。
+/// 切替で据わる新しい結線状態の台帳は新品で、前のゴーストの組を持ち越さない。
 ///
 /// 持ち越すと、新しいゴーストの最初のフレームで「前の組と違う」として空の組が飛び、
 /// 同じ組が見えたフレームでは「前の組と同じ」として知らせが落ちる——その両方を見る。
@@ -591,17 +590,17 @@ fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
     );
 }
 
-// 箱の結線の通し（areka-P0-shell-balloon task 12.3）。本ファイルの檻（GPU の World・runtime の結線・
-// 置き場のゴースト）をそのまま使うため子に置く。
+// 箱の結線の通し。本ファイルの檻（GPU の World・runtime の結線・置き場のゴースト）を
+// そのまま使うため子に置く。
 #[path = "frame_shell_box_integration_tests.rs"]
 mod shell_box_integration_tests;
 
-// 受け口から可視性の相までの通し（areka-P0-balloon-lifecycle-events task 5.2）。時間切れの知らせが
-// 置き場のゴーストの kanade へ届くまでを、本ファイルの檻をそのまま使って見るため子に置く。
+// 受け口から可視性の相までの通し。時間切れの知らせが置き場のゴーストの kanade へ届くまでを、
+// 本ファイルの檻をそのまま使って見るため子に置く。
 #[path = "frame_balloon_timeout_notice_e2e_tests.rs"]
 mod balloon_timeout_notice_e2e_tests;
 
-// 倍率の変わりの相の同じフレームの檻（shell-scale-linkage task 6.2）。本ファイルの檻（GPU の World・
-// runtime の結線・置き場のゴースト）をそのまま使うため子に置く。
+// 倍率の変わりの相の同じフレームの檻。本ファイルの檻（GPU の World・runtime の結線・
+// 置き場のゴースト）をそのまま使うため子に置く。
 #[path = "frame_scale_notice_integration_tests.rs"]
 mod scale_notice_integration_tests;

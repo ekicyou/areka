@@ -3,8 +3,7 @@ use areka_sakura::contract::FONT_TAG_CARRIER;
 
 use super::*;
 
-/// 未登記のコマンド名は選別子の有無によらず `None`（自己選別モデルでは未知名は良性未処理・
-/// areka-P0-scope-zorder-pinning 要件 11.2）。
+/// 未登記のコマンド名は選別子の有無によらず `None`（自己選別モデルでは未知名は良性未処理）。
 #[test]
 fn unregistered_name_is_none() {
     let ledger = ConsumerLedger::canonical();
@@ -39,7 +38,7 @@ fn selectorless_registration_owns_every_first_parameter() {
 }
 
 /// 選別子つきの登記は、その選別子ちょうどの出現だけを担当する。名簿に無い第 1 引数と、
-/// 第 1 引数の無い出現は、どちらも担当なし＝良性未処理（areka-P0-scope-zorder-pinning 要件 11.2）。
+/// 第 1 引数の無い出現は、どちらも担当なし＝良性未処理。
 /// **両側から挟む**: 名簿にある `zorder` は引けて、名簿に無い `nosuch` と裸の `set` は
 /// 引けない。
 #[test]
@@ -68,7 +67,7 @@ fn selector_bearing_registration_owns_only_listed_selectors() {
 }
 
 /// 一意性檻: 同じ名前と同じ選別子の組を二重登録しようとすると [`LedgerError::Duplicate`]
-/// で検出できる（1 出現＝高々 1 担当・areka-P0-scope-zorder-pinning 要件 11.3）。選別子なしの組でも同じ。
+/// で検出できる（1 出現＝高々 1 担当）。選別子なしの組でも同じ。
 #[test]
 fn duplicate_registration_is_detected() {
     let mut ledger = ConsumerLedger::new();
@@ -86,14 +85,14 @@ fn duplicate_registration_is_detected() {
         },
         "重複は Duplicate{{name, selector}} として観測可能"
     );
-    // 二重登録は最初の登記を上書きしない（担当は据え置き）。
+    // 二重登録は最初の登記を上書きしない。
     assert_eq!(
         ledger.consumer_of("move", None),
         Some(CommandConsumer::MoveSink)
     );
 }
 
-/// **完了条件の中核（areka-P0-scope-zorder-pinning 要件 11.3）**: 同じコマンド名の**別の第 1 引数**は、後から**別の担当**として
+/// **完了条件の中核**: 同じコマンド名の**別の第 1 引数**は、後から**別の担当**として
 /// 登記できる。重なり指定を本機能が持ったまま、将来 `set` の別のサブコマンドに別の担当が
 /// 付けられる余地が型で残っていること。
 #[test]
@@ -103,7 +102,6 @@ fn different_selector_under_same_name_registers_as_another_consumer() {
         .try_register("set", Some("nosuch"), CommandConsumer::Seriko)
         .expect("同名・別選別子は重複でない（将来の担当の余地）");
 
-    // 2 つの選別子が別々の担当を引く（相互に混ざらない）。
     assert_eq!(
         ledger.consumer_of("set", Some("zorder")),
         Some(CommandConsumer::ZOrderSink),
@@ -141,7 +139,7 @@ fn same_selector_under_same_name_is_rejected() {
 
 /// 相互排他（選別子つき → 選別子なしの順）: `("set","zorder")` が居るところへ
 /// 名前まるごとの `("set", なし)` は足せない。足せてしまうと重なり指定の 1 出現に
-/// 2 つの担当が作用し「1 出現＝高々 1 担当」（areka-P0-scope-zorder-pinning 要件 11.3）が破れる。
+/// 2 つの担当が作用し「1 出現＝高々 1 担当」が破れる。
 #[test]
 fn selectorless_after_selector_bearing_conflicts() {
     let mut ledger = ConsumerLedger::new();
@@ -160,7 +158,6 @@ fn selectorless_after_selector_bearing_conflicts() {
         },
         "排他違反は SelectorConflict として、名前と両側の選別子を名指しで観測できる"
     );
-    // 拒否された登記は表に載らない（既存の担当だけが残る）。
     assert_eq!(
         ledger.consumer_of("set", Some("zorder")),
         Some(CommandConsumer::ZOrderSink)
@@ -188,8 +185,7 @@ fn selector_bearing_after_selectorless_conflicts() {
         },
         "逆順でも排他違反は SelectorConflict として観測できる"
     );
-    // 拒否された登記は表に載らない。名前まるごとの担当だけが残り、その担当は
-    // 第 1 引数によらず引ける。
+    // 名前まるごとの担当だけが残り、第 1 引数によらず引ける。
     assert_eq!(
         ledger.consumer_of("set", None),
         Some(CommandConsumer::Seriko)
@@ -202,7 +198,7 @@ fn selector_bearing_after_selectorless_conflicts() {
 }
 
 /// 排他違反の記録は、どの名前のどの選別子どうしが衝突したかを本文で名指しする
-/// （黙って諦めない・areka-P0-scope-zorder-pinning 要件 8.3 の規律）。
+/// （黙って諦めない）。
 #[test]
 fn selector_conflict_message_names_the_offending_pair() {
     let err = LedgerError::SelectorConflict {
@@ -250,12 +246,11 @@ fn exclusion_applies_only_within_the_same_name() {
 /// 正準台帳の構築は重複・排他違反なしで成功する（内部整合＝一意性の検査が緑）。行の増減は
 /// `samples_cover_exactly_the_ledger_rows` が見本の組との集合の比べで判定するので、ここでは件数を
 /// 数えない。既に登記された組の再登記は [`LedgerError::Duplicate`] で検出され、別名の追加は独立に
-/// 成功する（areka-P0-scope-zorder-pinning 要件 11.3）。
+/// 成功する。
 #[test]
 fn canonical_builds_without_duplicate() {
-    // canonical() は内部 try_register が Ok（重複なら panic する）。
     let ledger = ConsumerLedger::canonical();
-    // 待ち時間の指定は受け口 LifecycleSink に結び付く（areka-P0-balloon-lifecycle-events 要件 9.10）。
+    // 待ち時間の指定は受け口 LifecycleSink に結び付く。
     assert_eq!(
         ledger.consumer_of("set", Some("balloontimeout")),
         Some(CommandConsumer::LifecycleSink)
@@ -268,7 +263,7 @@ fn canonical_builds_without_duplicate() {
         ledger.consumer_of("bind", None),
         Some(CommandConsumer::Seriko)
     );
-    // 着せ替えの別名と印の合図は、それぞれ 1 つの担当だけに届く（script-small-tags 要件 3.7・6.4・6.5）。
+    // 着せ替えの別名と印の合図は、それぞれ 1 つの担当だけに届く。
     assert_eq!(
         ledger.consumer_of("bind-noevent", None),
         Some(CommandConsumer::Seriko)
@@ -286,7 +281,7 @@ fn canonical_builds_without_duplicate() {
         Some(CommandConsumer::ZOrderSink)
     );
 
-    // プロパティの読みは areka_ghost の PropGetCueSink に結び付く（shell-scale-linkage 要件 1.8）。
+    // プロパティの読みは areka_ghost の PropGetCueSink に結び付く。
     assert_eq!(
         ledger.consumer_of("get", Some("property")),
         Some(CommandConsumer::PropertyRead)
@@ -306,10 +301,8 @@ fn canonical_builds_without_duplicate() {
         },
         "正準台帳の全行が共存する下でも重複は Duplicate{{name, selector}} として観測可能"
     );
-    // 既登記の担当は据え置き（上書きしない）。
     assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));
 
-    // 相異なる名前は独立に登記できる（別名は重複でない）。
     ext.try_register("resize", None, CommandConsumer::Seriko)
         .expect("別名 resize の追加は重複でない");
     assert_eq!(
@@ -318,7 +311,7 @@ fn canonical_builds_without_duplicate() {
     );
 }
 
-/// areka-P0-text-decoration-canon 要件 2.4: 正準台帳は文字装飾（`\f`）を文字レンダリング層の担当として登記する。
+/// 正準台帳は文字装飾（`\f`）を文字レンダリング層の担当として登記する。
 ///
 /// 登記のキーは運搬名そのもの（[`FONT_TAG_CARRIER`]）——`\f` は第 1 引数（`bold`／
 /// `color` …）で担当が分かれないので選別子なしの 1 行である。実行時の選別は
@@ -338,7 +331,7 @@ fn canonical_registers_the_font_tag_for_the_text_layer() {
     );
 }
 
-/// areka-P0-open-external-tags 要件 1.5・9.2・9.3: 正準台帳は
+/// 正準台帳は
 /// `open` の 6 組（`readme`・`file`・`browser`・`explorer`・`editor`・`mailer`）と運搬名 `\j`
 /// （選別子なし）を、開く系の受け口（説明書を含む）の担当として登記する。
 ///
@@ -375,7 +368,7 @@ fn canonical_registers_the_open_family_for_the_readme_sink() {
     );
 }
 
-/// areka-P0-balloon-break 要件 8.4: 正準台帳は中断の無効化の 2 組を旗の受け口の担当として
+/// 正準台帳は中断の無効化の 2 組を旗の受け口の担当として
 /// 登記する。
 ///
 /// 登記のキーは名前＋第 1 引数——`enter`／`leave` は第 1 引数で担当が分かれる名前であり、
@@ -406,7 +399,6 @@ fn canonical_registers_both_no_user_break_pairs() {
     );
 }
 
-/// areka-P0-ghost-shell-balloon-switch 要件 1.10 と areka-P0-shell-balloon-switch 要件 1.15:
 /// 正準台帳は `change` を第 1 引数で 3 組に分けて登記する——`(change, ghost)` はゴーストの切替の
 /// 受け口、`(change, shell)`・`(change, balloon)` はシェル・バルーンの切替の受け口。裸の `change`
 /// （名前まるごとの登記）は無く、名簿に無い第 1 引数は担当なし。
@@ -432,10 +424,9 @@ fn canonical_registers_change_ghost_shell_balloon_and_no_bare_change() {
     );
 }
 
-/// areka-P0-ghost-install 要件 1.5〜1.7: install の受け口は `(execute, install)` の 1 組だけを
+/// install の受け口は `(execute, install)` の 1 組だけを
 /// 担当する。`execute` の第 1 引数のうち表に載るのは `install` と、窓の位置の受け口の
-/// `resetwindowpos`（areka-P0-move-canon 要件 8.7）・`resetballoonpos`（areka-P0-window-link-directives
-/// 要件 7.1）の 3 つだけで、他の第 1 引数・裸の
+/// `resetwindowpos`・`resetballoonpos` の 3 つだけで、他の第 1 引数・裸の
 /// `execute` は登記しない。
 #[test]
 fn canonical_install_sink_owns_only_execute_install() {
@@ -460,7 +451,7 @@ fn canonical_install_sink_owns_only_execute_install() {
     );
 }
 
-/// areka-P0-network-update 要件 1.5〜1.8: 正準台帳は `updatebymyself`・`update`・`updateother` の
+/// 正準台帳は `updatebymyself`・`update`・`updateother` の
 /// 3 つを選別子なしで更新の受け口の担当として登記する（第 1 引数は更新対象で担当を分けない）。
 #[test]
 fn canonical_registers_the_three_update_names_for_the_update_sink() {
@@ -483,10 +474,10 @@ fn canonical_registers_the_three_update_names_for_the_update_sink() {
     );
 }
 
-/// areka-P0-mcp-reload 要件 11.1・11.2: 正準台帳は `reload` を第 1 引数で 5 組
+/// 正準台帳は `reload` を第 1 引数で 5 組
 /// （`ghost`・`shiori`・`shell`・`balloon`・`descript`）に分け、旧い `reloadsurface` を選別子なしで、
 /// どれも読み直しの受け口の担当として登記する。`makoto`・`aigraph`・裸の `reload`・大小違いは
-/// 担当なしで、`(reload, makoto)` は後から別の担当として足せる（areka-P0-mcp-reload の登記が塞がない）。
+/// 担当なしで、`(reload, makoto)` は後から別の担当として足せる。
 #[test]
 fn canonical_registers_reload_rows_and_leaves_makoto_open() {
     let ledger = ConsumerLedger::canonical();
@@ -514,7 +505,7 @@ fn canonical_registers_reload_rows_and_leaves_makoto_open() {
         .expect("(reload,makoto) は後から足せる");
 }
 
-/// areka-P0-mcp-reload 要件 13.5: `bind` の行の名前は拾う側（seriko）と共有する定数そのもの。
+/// `bind` の行の名前は拾う側（seriko）と共有する定数そのもの。
 #[test]
 fn canonical_bind_row_uses_the_seriko_constant() {
     assert_eq!(
@@ -523,7 +514,7 @@ fn canonical_bind_row_uses_the_seriko_constant() {
     );
 }
 
-/// areka-P0-window-link-directives 要件 1.4・3.1・3.5・7.1: 吸着・窓の組・バルーン位置初期化の 5 組は
+/// 吸着・窓の組・バルーン位置初期化の 5 組は
 /// 窓の位置の受け口の担当で、名前と第 1 引数の掛け合わせ（`reset,alignmenttodesktop` など）は担当なし。
 #[test]
 fn canonical_registers_the_five_window_link_pairs_for_the_move_sink() {
@@ -555,7 +546,7 @@ fn canonical_registers_the_five_window_link_pairs_for_the_move_sink() {
     }
 }
 
-/// 常に手前の指令の 2 行（stay-on-top-directives 要件 1.8）: `\![set,windowstate,…]` は第 2 引数に
+/// 常に手前の指令の 2 行: `\![set,windowstate,…]` は第 2 引数に
 /// 関わらず、運搬名の `\v` は引数に関わらず [`CommandConsumer::WindowStateSink`] の担当。
 #[test]
 fn window_state_rows_belong_to_window_state_sink() {

@@ -1,5 +1,4 @@
-//! `fn main` の据え付けと後始末・起動中の印（areka-P0-ghost-shell-balloon-switch task 8.5・11.1・
-//! 要件 8.1・8.2・12.1〜12.5・12.12 ⑴〜⑶）のテスト。
+//! `fn main` の据え付けと後始末・起動中の印のテスト。
 //!
 //! `main` は生きた `WinApp` を要するので、据え付け（[`install_boot_context`]・[`boot_first_ghost`]）と
 //! `run()` の後に置き場と文脈から組むもの（[`after_run`]）と、降ろした後の印の始末
@@ -7,9 +6,6 @@
 //! 実際に起こして落とした一周と、判定の表の両方で見る。降ろすのは必ず有界に行う。
 //! 強制終了は「後始末（印の始末）を通さずに降ろす」で見立てる（印が残ることは消す経路を
 //! 通らないことと同じ・実物の強制終了は実機サインオフ）。
-//!
-//! 2026-09-27 に `main_halt_record_tests.rs`（置き換え前の「単独起動の失敗の書き換え」）を改名して
-//! 新しい振る舞いへ書き換えた。
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -379,7 +375,7 @@ fn first_boot_origin_follows_session_mark() {
 }
 
 // ---------------------------------------------------------------------------
-// きれいな終わりの判定の表（要件 12.2・12.3・12.5・12.12 ⑴）
+// きれいな終わりの判定の表
 // ---------------------------------------------------------------------------
 
 /// 降ろした結果の組（メッセージループの成否・降ろす処理の成否・上限の打ち切りの有無）。
@@ -393,7 +389,7 @@ fn end(run_ok: bool, down_ok: bool, shiori_cut: bool) -> Teardown {
 
 /// 時系列で最初の理由を採る。上から順に: argv のセッションは触らない → LogSink へ倒れた →
 /// 出所なし → 失敗の出所 → `run()` の失敗 → 上限の打ち切り → 降ろす処理の失敗 → それ以外は消す。
-/// 判定は名前を見ないので、倒れたのが既定ゴースト自身でも同じ行で印が残る（要件 4.5）。
+/// 判定は名前を見ないので、倒れたのが既定ゴースト自身でも同じ行で印が残る。
 #[test]
 fn session_mark_verdict_table() {
     use KanadeStopCause::{CloseSilent, DeadlineExceeded, Forced, Quit};
@@ -407,7 +403,7 @@ fn session_mark_verdict_table() {
         ExitOrigin::Smoke,
         ExitOrigin::OsClose,
         ExitOrigin::SessionEnd,
-        // 記憶を書けなかった終わりも降ろす手順は正規の道を通る＝消す側（write-failure-notice 要件 3.6）。
+        // 記憶を書けなかった終わりも降ろす手順は正規の道を通る＝消す側。
         ExitOrigin::MemoryWriteFailed(areka_sylphya::PersistFailure {
             scope: PersistScope::App,
             dir: None,
@@ -420,7 +416,7 @@ fn session_mark_verdict_table() {
     let ok = end(true, true, false);
     let v = session_mark_verdict;
 
-    // 既存の行（倒れていない・打ち切りなし）: 結論は今日のまま。
+    // 倒れていない・打ち切りなし。
     let mut got: Vec<MarkVerdict> = clean.iter().map(|o| v(Some(o), false, false, ok)).collect();
     let mut want = vec![MarkVerdict::Clear; clean.len()];
     let existing = [
@@ -463,7 +459,7 @@ fn session_mark_verdict_table() {
         ),
     ];
 
-    // LogSink へ倒れた × きれいな出所 × 成否（打ち切りの有無も）: 常に倒れた語で残す（要件 4.1・4.2）。
+    // LogSink へ倒れた × きれいな出所 × 成否（打ち切りの有無も）: 常に倒れた語で残す。
     let outcomes: Vec<Teardown> = [false, true]
         .into_iter()
         .flat_map(|r| [false, true].into_iter().map(move |d| (r, d)))
@@ -504,7 +500,7 @@ fn session_mark_verdict_table() {
             v(Some(&session_end), false, true, end(true, true, true)),
             MarkVerdict::Keep("logsink_fallback"),
         ),
-        // LogSink へ倒れた × argv: argv の上書きが先に効き、触らない（要件 4.6）。
+        // LogSink へ倒れた × argv: argv の上書きが先に効き、触らない。
         (v(Some(&quit), true, true, ok), MarkVerdict::Untouched),
         (
             v(Some(&kanade_fault()), true, true, ok),
@@ -515,7 +511,7 @@ fn session_mark_verdict_table() {
             MarkVerdict::Untouched,
         ),
     ];
-    // 上限の打ち切り × 各組み合わせ（要件 2.3・2.6・3.4）。
+    // 上限の打ち切り × 各組み合わせ。
     let cut = [
         (
             v(Some(&session_end), false, false, end(true, true, true)),
@@ -548,7 +544,7 @@ fn session_mark_verdict_table() {
             v(Some(&session_end), true, false, end(true, true, true)),
             MarkVerdict::Untouched,
         ),
-        // 打ち切りが無ければ OS のセッションの終了は今日どおり消す／降ろす処理の失敗で残す（要件 2.6）。
+        // 打ち切りが無ければ OS のセッションの終了は消す／降ろす処理の失敗で残す。
         (v(Some(&session_end), false, false, ok), MarkVerdict::Clear),
         (
             v(Some(&session_end), false, false, end(true, false, false)),
@@ -629,12 +625,12 @@ fn settle_session_mark_applies_the_verdict() {
 }
 
 // ---------------------------------------------------------------------------
-// 印の一周（偽の SHIORI の土台で実際に起こして落とす・要件 12.1〜12.4・12.12 ⑵）
+// 印の一周（偽の SHIORI の土台で実際に起こして落とす）
 // ---------------------------------------------------------------------------
 
 /// 起動系列の途中で A が落ちる（接続に失敗）→ 印＝A が残る（最後のゴーストは A のままでも読まれない）
 /// → 同じ根の次の起動で既定が選ばれ、落ちた名前が A、起こすと印が既定の名前になり、
-/// 既定の `OnBoot` に Ref6＝halt・Ref7＝A が載る。告知と終了コード 1 は今日どおり。
+/// 既定の `OnBoot` に Ref6＝halt・Ref7＝A が載る。告知と終了コード 1 も出る。
 #[test]
 fn boot_fault_keeps_mark_and_next_boot_is_default_with_halt() {
     let mut rig = rig_with(FakeShiori::ConnectFail);
@@ -694,7 +690,7 @@ fn fault_after_steady_keeps_mark() {
     let mut rig = rig_with(scripted_a());
     first_boot_memory(&mut rig, "A");
     let reached = rig.pump_until(|rig| booted(rig, "A"));
-    // 定常のあとに SHIORI の失敗で止まった（予約の無い停止通知が今日どおり終了を指示する形）。
+    // 定常のあとに SHIORI の失敗で止まった（予約の無い停止通知が終了を指示する形）。
     quit_app(
         &mut rig.world,
         ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault(ShioriFaultKind::Disconnected))),
@@ -798,7 +794,7 @@ fn clean_exit_clears_mark_and_next_boot_follows_memory() {
     );
 }
 
-/// argv で始まったプロセス（要件 12.5）: 印を読まず書かず消さない（前から在った印がそのまま残る）。
+/// argv で始まったプロセス: 印を読まず書かず消さない（前から在った印がそのまま残る）。
 #[test]
 fn argv_session_neither_reads_writes_nor_clears_mark() {
     let mut rig = rig_with(FakeShiori::ConnectFail);

@@ -3,7 +3,7 @@
 use dola::runtime::{EvaluatedValue, RuntimeError};
 
 // =============================================================================
-// Task 1.2: EvaluatedValue, RuntimeError テスト
+// EvaluatedValue, RuntimeError テスト
 // =============================================================================
 
 mod evaluated_value_tests {
@@ -153,7 +153,7 @@ mod runtime_error_tests {
         assert!(err.to_string().contains("1"));
     }
 
-    /// Req 4.4: `From<Vec<DolaError>>` による `?` 演算子自動変換
+    /// `From<Vec<DolaError>>` による `?` 演算子自動変換
     #[test]
     fn from_vec_dola_error_conversion() {
         use dola::DolaError;
@@ -164,7 +164,6 @@ mod runtime_error_tests {
                 entry_index: 0,
                 name: "test".to_string(),
             }];
-            // `?` 演算子で Vec<DolaError> → RuntimeError::CompileError に自動変換
             Err(errors)?
         }
 

@@ -15,23 +15,18 @@
 //! | 遷移中の接地点が規約値から外れない | `kind=ground` の `diff`（[`GROUND_DIFF_MAX`]）＋書込 1 本の下端 |
 //! | 拡大率 120／192・複数モニタの作業領域 | [`transition_is_atomic_at_120`]／[`transition_is_atomic_at_192`] |
 //!
-//! # なぜ判定器（`summarize`）をそのまま回さないのか
+//! # 判定器（`summarize`）をそのまま回さない理由
 //!
-//! 判定器の `writes_per_window`／`frames_to_last_write` が数える **`kind=write` レコード**は
-//! 一括 flush（実 `SetWindowPos` を呼ぶ経路）が出すもので、決定論テストは
-//! そこを通さない——キューを**実行せずに取り出す**（[`FrameHarness::drain_writes`]）。
-//! ゆえにこの 2 量の集計は本ファイルがキューの中身で行う。**経路 A の `write` 行は flush 由来ではない**ため別扱いであり、
-//! 数えるのは観測行の側になる——下記「経路 A はキューを通らない」節を参照。
-//!
-//! ただし**固定する値**は判定器の `pub const` を引く（`WRITES_PER_WINDOW_MAX` 等）。
-//! 回帰テストと実機サインオフが別々の数字を持つと、片方だけ緩めたときに静かに食い違う。
-//! 接地点の側は判定器の**解析器**（`parse_transition_line`）をそのまま通し、発行された
-//! `kind=ground` 行から `diff` を読む——接地点の決定論版は「判定器が読む行の上で 0」である。
+//! 判定器の `writes_per_window`／`frames_to_last_write` が数える `kind=write` レコードは
+//! 一括 flush（実 `SetWindowPos` を呼ぶ経路）が出すもので、決定論テストはそこを通さずキューを
+//! 実行せずに取り出す（[`FrameHarness::drain_writes`]）。この 2 量の集計は本ファイルがキューの
+//! 中身で行う。ただし固定する値は判定器の `pub const` を引く（回帰テストと実機サインオフが
+//! 別々の数字を持つと、片方だけ緩めたときに静かに食い違う）。接地点は判定器の解析器
+//! （`parse_transition_line`）を通し、`kind=ground` 行から `diff` を読む。
 //!
 //! # 零件の主張には陽性の対を置く（同じテスト本体の内側）
 //!
-//! 本ファイルの主張のうち 3 つは零件である。どれも駆動が死んでいれば空虚に緑になるので、
-//! 対を同じ本体へ置く:
+//! 零件の主張は駆動が死んでいれば空虚に緑になるので、対を同じ本体へ置く:
 //!
 //! - 「経路 A の書込 0」→ 末尾で**本番の行組立**（`write_line`）を通した `stage=sync`／
 //!   `origin=dpi-suggested` の観測行を 1 本流し、**同じ述語**がそれを拾うことを見る。
@@ -42,25 +37,17 @@
 //! # 経路 A はキューを通らない——数えるのは観測行の側である
 //!
 //! 経路 A（`WM_DPICHANGED` 受理時の同期書込）は
-//! `crates/wintf/src/ecs/window_proc/window_pos.rs` の `WM_DPICHANGED` の処理が
-//! `guarded_set_window_pos` を**直接**呼び、`SetWindowPosCommand` のキューを 1 度も通らない。
-//! `origin=dpi-suggested` が現れるのは同じ処理が組む観測行（`write_line`）**だけ**であり、
-//! 指令のタグ（`SetWindowPosCommand.tag`）にこの語を載せる経路は本番に 1 つも無い
-//! （タグを付ける 3 箇所＝`crates/areka-placement/src/follow/window_move.rs` の
-//! `enqueue_window_set_pos` の `PlacementRoute` 13 語／`crates/wintf/src/ecs/graphics/systems/window_pos.rs`
-//! の `apply_window_pos_changes` の `origin=window-pos`／
-//! `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` の `pair_fix_command` の
-//! `origin=zorder-pair`）。
+//! `crates/wintf/src/ecs/window_proc/window_pos.rs` が `guarded_set_window_pos` を**直接**呼び、
+//! `SetWindowPosCommand` のキューを通らない。`origin=dpi-suggested` が現れるのは同じ処理が組む
+//! 観測行（`write_line`）**だけ**で、指令のタグにこの語を載せる経路は本番に無い。ゆえに
+//! **キュー上で `tag.origin` を数える形は、本番のどんな退行でも赤にならない**。本ファイルは
+//! 観測行を判定器の `summarize` へ通し、`origin` で数える `path_a_writes` と `stage` で数える
+//! `sync_stage_writes` を別々に読む。
 //!
-//! ゆえに**キュー上で `tag.origin` を数える形は、本番のどんな退行でも赤にならない**。
-//! 本ファイルは観測行を判定器の `summarize` そのものへ通し、`origin` で数える
-//! `path_a_writes` と `stage` で数える `sync_stage_writes` を別々に読む（食い違いが均されない形）。
-//!
-//! そのうえで、この決定論の 0 が言っているのは「遷移フレームの観測窓に経路 A の行が
-//! 1 本も出ていない」までである——本ハーネスは window_proc を駆動しないので、実機で
-//! 経路 A が 0 回であること自体はここでは証明できない。**実機側の 0 の持ち主**は
-//! 実機の採取の記録（24/24）と実機サインオフ（判定器が
-//! `Bounds::deterministic` の `PATH_A_WRITES_MAX` で判定する）である。
+//! この 0 が言っているのは「遷移フレームの観測窓に経路 A の行が 1 本も出ていない」までである。
+//! 本ハーネスは window_proc を駆動しないので、実機で経路 A が 0 回であること自体は証明できない。
+//! 実機側の 0 の持ち主は実機サインオフ（判定器が `Bounds::deterministic` の
+//! `PATH_A_WRITES_MAX` で判定する）である。
 
 use areka_emo_compose::ScaleRatio;
 use windows::Win32::Foundation::HWND;
@@ -119,14 +106,10 @@ fn chain_sizes(dpi: u16) -> PerTargetSizes {
 // 指令の選り分け
 // ---------------------------------------------------------------------------
 
-/// 捕捉行を判定器の `summarize` へ通し、経路 A（`WM_DPICHANGED` 受理時の同期書込）の
-/// 書込行の件数を読む。
-///
-/// 戻り値は `(path_a_writes, sync_stage_writes)`＝`(origin=dpi-suggested の件数,
-/// stage=sync の件数)`。片方へ均すと両者の食い違いが見えなくなるので、別々に返す。
-///
-/// キューではなく観測行を見るのは、経路 A が `SetWindowPosCommand` を 1 度も積まないため
-/// である（モジュール doc の「経路 A はキューを通らない」を参照）。
+/// 捕捉行を判定器の `summarize` へ通し、経路 A（`WM_DPICHANGED` 受理時の同期書込）の書込行の件数を
+/// `(path_a_writes, sync_stage_writes)`＝`(origin=dpi-suggested の件数, stage=sync の件数)` で返す。
+/// 片方へ均すと食い違いが見えなくなるので、別々に返す。キューではなく観測行を見る理由は
+/// モジュール doc の「経路 A はキューを通らない」を参照。
 fn path_a_write_lines(events: &[CapturedEvent]) -> (u32, u32) {
     let records: Vec<TransitionRecord> = events
         .iter()
@@ -188,10 +171,8 @@ fn boot_at_base(harness: &mut FrameHarness, source: &mut FakeReports) {
 /// OS 設定の拡大率変更を**表更新が先**の順序で 1 フレームぶん流し込む（経路 (b)）。
 ///
 /// 実行時のモニタ表（`Monitor` entity 群）と窓の拡大率を置いてからフレームを進める。作業
-/// 領域源には触らない——**同期段が表から作り直す**のが本番の順序であり、それを飛ばすと
-/// 「表更新が先」を検証したことにならない。
-///
-/// 戻り値は（同期段が作業領域源を差し替えたか, 捕捉した観測行）。
+/// 領域源には触らない——**同期段が表から作り直す**のが本番の順序で、それを飛ばすと「表更新が先」を
+/// 検証したことにならない。戻り値は（同期段が作業領域源を差し替えたか, 捕捉した観測行）。
 fn apply_scale_change(
     harness: &mut FrameHarness,
     source: &mut FakeReports,
@@ -201,8 +182,7 @@ fn apply_scale_change(
     harness.set_monitor_table_for_dpi(dpi);
     harness.set_window_dpi(dpi);
     // 4 窓すべてに再表示の報告を与える——バルーン窓へ**自分の**寸法変更が来る状態でこそ、
-    // 「随伴の追従」と合わせて同一窓へ 2 つの指令が積まれ、合流（`coalesce_geometry`）が効いているかどうかが
-    // 観測できる。
+    // 同一窓へ 2 つの指令が積まれ、合流（`coalesce_geometry`）が効いているかが観測できる。
     source.refresh.insert(shell_target(0).0, size0);
     source.refresh.insert(shell_target(1).0, size1);
     source
@@ -274,7 +254,6 @@ fn transition_is_atomic_at(dpi: u16) {
     let origin_frame = harness.frame();
     let new_bottom = s2_work_area_for_dpi(dpi).bottom;
 
-    // 順序の主張: 同期段が先に走って作業領域源を新水準へ作り直している。
     assert!(
         sync_rebuilt,
         "同期段が作業領域源を作り直していない（表更新が先の順序になっていない）"
@@ -334,7 +313,6 @@ fn transition_is_atomic_at(dpi: u16) {
             "dpi={dpi} scope={scope}: 遷移後の接地点が規約値（作業領域下端）から外れている"
         );
     }
-    // 連鎖の起点スコープは横に動かない——接地点（下端中央）の X が遷移前の値のまま。
     assert_eq!(
         harness.ground_point(0).0,
         ground_x_before,
@@ -363,10 +341,8 @@ fn transition_is_atomic_at(dpi: u16) {
     //
     // 拡大率遷移では追従オフセットが表示 DPI 比で追随する。作業領域の再スナップ単独では
     // 追従オフセットは変わらず、それは `frame_transition_branch_tests.rs` の
-    // `a_work_area_only_change_writes_once` が固定する。
-    //
-    // 本ブロックは `balloon_offsets_before` として書込の**前**に読むので恒真ではなく、
-    // 追随が抜ければ赤になる。追従の基準は窓（char 左上）相対である。
+    // `a_work_area_only_change_writes_once` が固定する。追従の基準は窓（char 左上）相対である。
+    // `balloon_offsets_before` は書込の**前**に読むので恒真ではなく、追随が抜ければ赤になる。
     let follow_ratio = ScaleRatio::new(dpi.into(), LOW_DPI.into()).expect("非ゼロ比");
     for (scope, before) in &balloon_offsets_before {
         let char_window = harness.char_window(*scope);
@@ -462,8 +438,7 @@ fn transition_is_atomic_at(dpi: u16) {
     //
     // 行は**本番の組立関数**（`write_line`）へ通す——テストが字面を手で組むと、発行側が
     // 書式を変えても対照だけが生き残って「上の 0 件は空虚」を隠してしまう。
-    // `WM_DPICHANGED` の処理が組む行と同じ材料（`stage=Sync`・`origin=dpi-suggested`・
-    // scope と win_kind は番兵）である。
+    // scope と win_kind は番兵である。
     let (_probe, probe_events) = capture(|| {
         emit_line(&write_line(&WriteRecord {
             stamp: transition_diag_stamp(origin_frame),

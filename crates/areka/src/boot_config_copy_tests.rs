@@ -1,5 +1,4 @@
-//! 最初の起動のゴーストを写しから起こす口（`resolve_boot_from` の `prepare_ghost`・
-//! areka-P0-user-data-root タスク 4.1・要件 4.3・4.5・7.3・7.4・10.3・10.4）。
+//! 最初の起動のゴーストを写しから起こす口（`resolve_boot_from` の `prepare_ghost`）。
 //!
 //! 写す判断と写す中身は `roots/user_root_tests.rs` が固定する。ここで見るのは「起動の引数では口を
 //! 呼ばない」「引数でなければ口の答えでバルーンと構成の入力が決まる」「前回きれいに終わらなかった
@@ -80,7 +79,7 @@ fn boot(
     .expect("決まる")
 }
 
-/// 起動の引数でゴーストを渡したときは写しの口を呼ばない（要件 4.3・10.3）。
+/// 起動の引数でゴーストを渡したときは写しの口を呼ばない。
 #[test]
 fn argv_ghost_is_not_passed_to_the_copy() {
     let tmp = TempPath::under_target("cfg-copy-argv");
@@ -95,8 +94,8 @@ fn argv_ghost_is_not_passed_to_the_copy() {
     assert_eq!(cfg.ghost_root, argv);
 }
 
-/// 引数なしなら口の答えがゴーストのフォルダになり、バルーンも写しの descript で決まる
-/// （要件 4.3・7.4）。口を通るのはゴーストの 1 回だけ（表示するだけのバルーンは写さない・要件 4.5）。
+/// 引数なしなら口の答えがゴーストのフォルダになり、バルーンも写しの descript で決まる。
+/// 口を通るのはゴーストの 1 回だけ（表示するだけのバルーンは写さない）。
 #[test]
 fn without_argv_balloon_and_config_come_from_the_copy() {
     let tmp = TempPath::under_target("cfg-copy-noargv");
@@ -119,7 +118,7 @@ fn without_argv_balloon_and_config_come_from_the_copy() {
     );
 }
 
-/// 前回きれいに終わらなかったときの既定ゴーストも同じ口を通る（要件 4.3）。
+/// 前回きれいに終わらなかったときの既定ゴーストも同じ口を通る。
 #[test]
 fn default_ghost_after_unclean_exit_goes_through_the_copy() {
     let tmp = TempPath::under_target("cfg-copy-mark");

@@ -1,4 +1,4 @@
-//! 走りの状態の口の決定論テスト（readonly-mode 要件 1.1・1.2・1.6・8.1・8.3）。
+//! 走りの状態の口の決定論テスト。
 //!
 //! 試験のプロセスでは `engage` を呼ばない（旗はプロセスに 1 つで、戻す口が無い）。
 //! そのことは本番の源の走査（構造の試験）で固める。
@@ -99,7 +99,7 @@ fn engage_is_called_only_from_main() {
     );
 }
 
-/// `main.rs` が入れの口を 1 度だけ、起動の値を解く段（`resolve_boot`）より前で呼ぶ（要件 1.1・1.5）。
+/// `main.rs` が入れの口を 1 度だけ、起動の値を解く段（`resolve_boot`）より前で呼ぶ。
 #[test]
 fn main_calls_engage_exactly_once_before_resolve_boot() {
     let src = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/main.rs"))
@@ -201,7 +201,7 @@ fn unwritable_places(
     (cfg, app)
 }
 
-/// 書けない置き場でも、読み取りだけなら通り、記録が 1 件出て、木が変わらない（要件 5.1・5.2）。
+/// 書けない置き場でも、読み取りだけなら通り、記録が 1 件出て、木が変わらない。
 #[test]
 fn boot_check_passes_readonly_without_touching_the_tree() {
     let tmp = temp_path_kit::TempPath::under_target("readonly-boot-check-skip");
@@ -220,7 +220,7 @@ fn boot_check_passes_readonly_without_touching_the_tree() {
     assert_eq!(tree(tmp.path()), before, "確かめが木を変えた");
 }
 
-/// 読み取りだけでなければ、今の確かめと同じ失敗を返し、飛ばした記録は出ない（要件 6.4）。
+/// 読み取りだけでなければ、今の確かめと同じ失敗を返し、飛ばした記録は出ない。
 #[test]
 fn boot_check_without_readonly_is_the_current_check() {
     let tmp = temp_path_kit::TempPath::under_target("readonly-boot-check-normal");
@@ -239,7 +239,7 @@ fn boot_check_without_readonly_is_the_current_check() {
     );
 }
 
-/// 写すはずの並びでも、読み取りだけなら元を返し、記録が 1 件出て、写し先が作られない（要件 4.4・4.5）。
+/// 写すはずの並びでも、読み取りだけなら元を返し、記録が 1 件出て、写し先が作られない。
 #[test]
 fn copy_is_withheld_and_the_original_is_used() {
     use crate::roots::user_root::{CopyPlan, copy_unless_readonly, plan_copy};

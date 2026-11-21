@@ -1,4 +1,4 @@
-//! 計画の檻（純粋・shell-scale-linkage 要件 5.1〜5.4・5.6〜5.9・7.3）。
+//! 計画の檻（純粋）。
 
 use super::*;
 use areka_emo_present::{ScaleRatio, TargetId};

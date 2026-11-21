@@ -1,21 +1,21 @@
-//! 右クリックメニュー（areka-P0-popup-menu-minimal）。
+//! 右クリックメニュー。
 //!
 //! このファイルは登記の口を持つ: 枠 12 種とその並び（[`Frame::ORDER`]）、登記の単位
 //! （[`MenuItem`]）、枠ごとに 1 つだけ持つ供給関数（[`Supplier`]）、登記・取り消し・写しの
-//! 取得（[`MenuRegistry`]）。列挙・切替・インストール・更新の各 spec はメニュー本体を
-//! 触らず、自分の枠へ供給関数を登記して項目を足している（要件 6.1・登記者は `*_frame.rs`）。
+//! 取得（[`MenuRegistry`]）。列挙・切替・インストール・更新の各枠はメニュー本体を
+//! 触らず、自分の枠へ供給関数を登記して項目を足している（登記者は `*_frame.rs`）。
 //! 登記の口と、表示 1 枚の旗・照会の返事待ちは [`MenuWiring`] が 1 つの資源として束ねる。
 //! 起動時の結線（[`wire_menu`]）と、本体が自分で登記する 2 項目（説明書・終了）もここに置く。
 //!
 //! 配下の module は役割ごとに分かれる: [`plan`]（構造の計算）・[`captions`]（項目名と
 //! 表示可否の照会）・[`trigger`]（引き金と表示の段取り）・[`win32`]（OS 表示）・
-//! [`ghost_frame`]（「ゴースト」枠の供給関数・areka-P0-ghost-shell-balloon-switch）・
-//! [`shell_frame`]・[`balloon_frame`]（「シェル」「バルーン」枠の供給関数・areka-P0-shell-balloon-switch）・
-//! [`install_frame`]（「インストール」枠の供給関数・areka-P0-ghost-install）・
-//! [`update_frame`]（「ネットワーク更新」枠の供給関数・areka-P0-network-update）・
-//! [`roots_frame`]（「置き場を追加…」「置き場を外す」枠の供給関数・areka-P0-baseware-root-list）・
-//! [`reset_pos_frame`]（「シェル位置初期化」枠の供給関数・areka-P0-move-canon）・
-//! [`reset_balloon_pos_frame`]（「バルーン位置初期化」枠の供給関数・areka-P0-window-link-directives）。
+//! [`ghost_frame`]（「ゴースト」枠の供給関数）・
+//! [`shell_frame`]・[`balloon_frame`]（「シェル」「バルーン」枠の供給関数）・
+//! [`install_frame`]（「インストール」枠の供給関数）・
+//! [`update_frame`]（「ネットワーク更新」枠の供給関数）・
+//! [`roots_frame`]（「置き場を追加…」「置き場を外す」枠の供給関数）・
+//! [`reset_pos_frame`]（「シェル位置初期化」枠の供給関数）・
+//! [`reset_balloon_pos_frame`]（「バルーン位置初期化」枠の供給関数）。
 
 pub(crate) mod balloon_frame;
 pub(crate) mod captions;
@@ -47,7 +47,7 @@ use crate::readme;
 use areka_placement::spawn::CharWindowMarker;
 use trigger::PendingQuery;
 
-/// メニューの枠。宣言順がそのまま並び順（①〜⑫・要件 2.1）で、判別値を登記の添字に使う。
+/// メニューの枠。宣言順がそのまま並び順（①〜⑫）で、判別値を登記の添字に使う。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Frame {
     /// ① ゴースト
@@ -56,19 +56,19 @@ pub(crate) enum Frame {
     Shell,
     /// ③ バルーン
     Balloon,
-    /// ④ シェル位置初期化（areka-P0-move-canon 要件 8.1）
+    /// ④ シェル位置初期化
     ResetPosition,
-    /// ⑤ バルーン位置初期化（areka-P0-window-link-directives 要件 7.5）
+    /// ⑤ バルーン位置初期化
     ResetBalloonPosition,
     /// ⑥ ネットワーク更新
     Update,
     /// ⑦ インストール
     Install,
-    /// ⑧ 置き場を追加（areka-P0-baseware-root-list 要件 6.1）
+    /// ⑧ 置き場を追加
     RootAdd,
-    /// ⑨ 置き場を先頭へ（areka-P0-user-data-root 要件 3.8）
+    /// ⑨ 置き場を先頭へ
     RootFront,
-    /// ⑩ 置き場を外す（areka-P0-baseware-root-list 要件 7.1）
+    /// ⑩ 置き場を外す
     RootRemove,
     /// ⑪ 説明書
     Readme,
@@ -100,21 +100,21 @@ pub(crate) struct MenuContext {
     pub scope: u32,
 }
 
-/// 枠の項目をその場で作る供給関数。メニューを出すたびに呼ばれる（要件 6.2）。
+/// 枠の項目をその場で作る供給関数。メニューを出すたびに呼ばれる。
 pub(crate) type Supplier = Rc<dyn Fn(&World, &MenuContext) -> MenuItem>;
 
 /// 項目が選ばれたときの動作。メニューを閉じた後に 1 回だけ呼ばれる。
 pub(crate) type MenuAction = Rc<dyn Fn(&mut World, &MenuContext)>;
 
-/// 登記の単位（要件 6.1）。
+/// 登記の単位。
 pub(crate) struct MenuItem {
     /// 既定名（リソースが空のとき使う）。
     pub label: String,
-    /// 文言に使う SHIORI リソース名（任意・要件 3.9）。
+    /// 文言に使う SHIORI リソース名（任意）。
     pub caption_resource: Option<&'static str>,
-    /// `false` は選べない状態（灰色）で出す（要件 2.5）。
+    /// `false` は選べない状態（灰色）で出す。
     pub enabled: bool,
-    /// `Some(true)` でチェックを付ける（要件 2.4）。
+    /// `Some(true)` でチェックを付ける。
     pub checked: Option<bool>,
     /// 選ばれたときの動作か、子項目の列のどちらか一方。
     pub body: ItemBody,
@@ -130,14 +130,14 @@ pub(crate) enum ItemBody {
 
 /// 登記の口。枠ごとに供給関数を高々 1 つ持つ。
 ///
-/// ゴーストを起こすたびに `MenuWiring` は新品になるので、登記は起こすたびにやり直す（`ghost-shell-balloon-switch` の契約）。
+/// ゴーストを起こすたびに `MenuWiring` は新品になるので、登記は起こすたびにやり直す。
 #[derive(Default)]
 pub(crate) struct MenuRegistry {
     slots: [Option<Supplier>; Frame::ORDER.len()],
 }
 
 impl MenuRegistry {
-    /// 枠へ供給関数を登記する。既に登記のある枠は後から来たものへ置き換え、`warn!` で記録する（要件 6.3）。
+    /// 枠へ供給関数を登記する。既に登記のある枠は後から来たものへ置き換え、`warn!` で記録する。
     pub(crate) fn register(&mut self, frame: Frame, supplier: Supplier) {
         if self.slots[frame as usize].replace(supplier).is_some() {
             tracing::warn!(
@@ -148,14 +148,14 @@ impl MenuRegistry {
         }
     }
 
-    /// 枠の登記を取り消す（要件 6.4）。登記の無い枠に対しては何もしない。
-    // 呼び手なし（枠の取り消しは今日の spec に無い）。
+    /// 枠の登記を取り消す。登記の無い枠に対しては何もしない。
+    // 呼び手なし。
     #[allow(dead_code)]
     pub(crate) fn unregister(&mut self, frame: Frame) {
         self.slots[frame as usize] = None;
     }
 
-    /// 登記のある枠だけを [`Frame::ORDER`] の順に、供給関数をその場で呼んで返す（要件 6.2）。
+    /// 登記のある枠だけを [`Frame::ORDER`] の順に、供給関数をその場で呼んで返す。
     pub(crate) fn snapshot(&self, world: &World, ctx: &MenuContext) -> Vec<(Frame, MenuItem)> {
         Frame::ORDER
             .iter()
@@ -188,7 +188,7 @@ pub(crate) type ToScreen = fn(HWND, i32, i32) -> Option<(i32, i32)>;
 /// 登記の口・運行（kanade）への送り口・表示 1 枚の旗・照会の返事待ちを 1 つに束ねる。
 /// 旗と返事待ちを動かすのは [`trigger`] だけである。
 pub(crate) struct MenuWiring {
-    /// 登記の口。各枠の spec はここへ供給関数を登記する。
+    /// 登記の口。各枠はここへ供給関数を登記する。
     pub registry: MenuRegistry,
     /// 照会（`KanadeMsg::ResourceQuery`）の送り口。
     kanade: Sender<KanadeMsg>,
@@ -263,8 +263,8 @@ pub(crate) fn register_menu_poll(world: &mut World) {
 }
 
 /// キャラ窓の `OnPointerReleased`（部品は 1 窓に 1 つ）。クリックの判定 → メニューの解放の順に呼ぶ。
-/// 送出の端はどちらも同じ kanade の受け箱なので、クリックの段はメニューの照会より先に届く
-/// （mouse-click-wheel-events 要件 5.1・5.2）。返り値はメニューの側のもの。
+/// 送出の端はどちらも同じ kanade の受け箱なので、クリックの段はメニューの照会より先に届く。
+/// 返り値はメニューの側のもの。
 fn on_char_release(
     world: &mut World,
     sender: Entity,
@@ -335,8 +335,8 @@ pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier) {
     wiring.registry.register(frame, supplier);
 }
 
-/// ⑪「説明書」の供給関数。有効／無効は写しを取るたびにファイルの在否で決まる
-/// （要件 4.3・6.2・11.4）。項目名とリソース名は [`captions::FRAME_CAPTIONS`] から引く。
+/// ⑪「説明書」の供給関数。有効／無効は写しを取るたびにファイルの在否で決まる。
+/// 項目名とリソース名は [`captions::FRAME_CAPTIONS`] から引く。
 fn readme_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Readme).to_string(),
@@ -347,12 +347,12 @@ fn readme_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     }
 }
 
-/// 「説明書」の動作。台本の `\![open,readme]` と同じ関数で開く（要件 4.2）。
+/// 「説明書」の動作。台本の `\![open,readme]` と同じ関数で開く。
 fn open_readme(world: &mut World, _ctx: &MenuContext) {
     readme::open_from_world(world, readme::MENU_TAG);
 }
 
-/// ⑫「終了」の供給関数。常に選べる（要件 2.2）。
+/// ⑫「終了」の供給関数。常に選べる。
 fn close_item(_world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Close).to_string(),
@@ -364,7 +364,7 @@ fn close_item(_world: &World, _ctx: &MenuContext) -> MenuItem {
 }
 
 /// 「終了」の動作。既存の終了指示の経路（`MouseWiring::send_close_request`）へ、メニューを
-/// 出した窓のスコープを載せた終了指示を 1 件送る（要件 5.1・6.6）。メニューだけの終了の道は
+/// 出した窓のスコープを載せた終了指示を 1 件送る。メニューだけの終了の道は
 /// 作らない——窓を閉じるのは、終了の握手が終わったことを受けた側である。
 fn request_close(world: &mut World, ctx: &MenuContext) {
     let Some(mut wiring) = world.get_non_send_mut::<MouseWiring>() else {

@@ -1,4 +1,4 @@
-//! 計画から `HMENU` への写し（[`build`]）の読み戻しテスト（要件 1.2・2.4・2.5）。
+//! 計画から `HMENU` への写し（[`build`]）の読み戻しテスト。
 //!
 //! 組み立てた `HMENU` を OS の読み出し API（項目数・識別子・状態・子メニュー・文字列）で
 //! 読み戻す。窓もメッセージループも要らず、画面には何も出ない。表示（[`show`]）は
@@ -79,7 +79,7 @@ fn build_copies_order_ids_flags_and_labels_into_the_hmenu() {
     assert_eq!(id_at(*menu, 2), 3);
     assert_eq!(id_at(*menu, 4), u32::MAX);
 
-    // 有効・無効・チェックの写し（要件 2.4・2.5）。
+    // 有効・無効・チェックの写し。
     let plain = state(*menu, 0);
     assert!(!has(plain, MF_GRAYED) && !has(plain, MF_CHECKED) && !has(plain, MF_SEPARATOR));
     let disabled = state(*menu, 1);

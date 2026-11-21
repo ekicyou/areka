@@ -1,11 +1,10 @@
-//! 「バルーン」枠の決定論テスト（areka-P0-shell-balloon-switch task 10・要件 7.2・7.4）。
+//! 「バルーン」枠の決定論テスト。
 //!
 //! 確かめること: 根の目録の並びのまま子が並び、ラベルは `name`（無ければフォルダ名）で、今の
 //! バルーン（起動の文脈の `current.balloon.folder`）だけに印が付くこと・1 つだけでも枠が出ること・
 //! 起動の文脈が無ければ無効の枠だけが出ること。選ぶと入口が要求を受けることは、実行系を起こす
 //! `shell_balloon_switch_session_tests.rs` が確かめる。
-//! ゴーストの中のバルーンが根より先に並び、使っているときにそこへ印が付くことも確かめる
-//! （areka-P0-ghost-inner-balloon 要件 2.1・2.4・2.5）。
+//! ゴーストの中のバルーンが根より先に並び、使っているときにそこへ印が付くことも確かめる。
 
 use areka_ghost::BasewareRoot;
 use bevy_ecs::world::World;
@@ -43,7 +42,7 @@ fn balloon_shape(world: &World) -> Option<FrameShape> {
 }
 
 /// 目録の並び（フォルダ名の昇順）のまま子が並び、ラベルは `name`（無ければフォルダ名）、今の
-/// バルーン（先頭でない方）だけに印（要件 7.2・7.4）。
+/// バルーン（先頭でない方）だけに印。
 #[test]
 fn balloons_listed_in_catalog_order_with_current_mark() {
     let tmp = TempPath::under_target("balloon-frame-list");
@@ -66,7 +65,7 @@ fn balloons_listed_in_catalog_order_with_current_mark() {
     );
 }
 
-/// バルーンが 1 つ（今のもの）だけでも枠は出る（要件 7.2）。
+/// バルーンが 1 つ（今のもの）だけでも枠は出る。
 #[test]
 fn a_single_balloon_still_shows_the_frame() {
     let tmp = TempPath::under_target("balloon-frame-single");
@@ -105,8 +104,7 @@ fn without_boot_context_only_a_disabled_balloon_frame_is_shown() {
 }
 
 /// 2 つの根の和: 両方の根のバルーンが隠れを除いてフォルダ名のバイト順に並び、今のバルーン
-/// （後ろの根の `StayseeBalloon`）と同じフォルダ名として先の根の `stayseeballoon` に印が付く
-/// （areka-P0-baseware-root-list 4.3・要件 2.8・3.5）。
+/// （後ろの根の `StayseeBalloon`）と同じフォルダ名として先の根の `stayseeballoon` に印が付く。
 #[test]
 fn union_of_two_roots_marks_same_folder_name_balloon() {
     let first = TempPath::under_target("balloon-frame-union-first");
@@ -139,7 +137,7 @@ fn put_ghost_balloon(root: &BasewareRoot, ghost: &str, folder: &str, body: &str)
     std::fs::write(dir.join("descript.txt"), format!("charset,UTF-8\n{body}")).expect("descript");
 }
 
-/// ゴーストの中のバルーンが先・根のバルーンが後に 1 つの一覧で並ぶ（要件 2.1・2.4・2.5）。
+/// ゴーストの中のバルーンが先・根のバルーンが後に 1 つの一覧で並ぶ。
 #[test]
 fn ghost_inner_balloons_listed_before_root_balloons() {
     let tmp = TempPath::under_target("balloon-frame-ghost-inner-first");
@@ -159,7 +157,7 @@ fn ghost_inner_balloons_listed_before_root_balloons() {
     );
 }
 
-/// ゴーストの中のバルーンを使っているとき、そこへ今と同じ印が付く（要件 2.4）。
+/// ゴーストの中のバルーンを使っているとき、そこへ今と同じ印が付く。
 #[test]
 fn current_ghost_inner_balloon_gets_the_mark() {
     let tmp = TempPath::under_target("balloon-frame-ghost-inner-mark");

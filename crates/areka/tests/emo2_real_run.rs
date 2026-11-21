@@ -1,17 +1,17 @@
-//! 実 pasta 実走テスト（件 1 の試験・areka-P0-emo2-real-run-stability 要件 1.1・1.8・1.9・2.1）＋人間サインオフ手順。
+//! 実 pasta 実走テスト＋人間サインオフ手順。
 //!
 //! 「emo2 が起動して喋る」最終統合（M-boot）を、**実 pasta.dll・実表示・実 DPI**で
 //! 任意に追験するための env-gate opt-in ハーネス。観測の二段（決定論 spine ＋ 本 env-gate 実走）の
 //! うち後者に相当し、決定論 spine（`crates/areka-runtime/src/spine.rs`）が headless GPU で
 //! 押さえ切れない「実表示・実 helper・実 DPI」の最終確認を人間判断に委ねる。
 //!
-//! ## 既定 OFF（DoD 非前提・要件 1.8）
+//! ## 既定 OFF（DoD 非前提）
 //! 環境変数 [`REAL_RUN_ENV`]（`AREKA_EMO2_REAL_RUN`）が **未設定／空／空白のみ／非 UTF-8** のときは
 //! 子を起こさず即座に `return`（skip）する。ゆえに常設スイート（`cargo test --workspace`・外部 CI なし・
 //! ローカル DoD ゲート）では**実 helper／実表示に一切依存せず自明に緑**を保つ。この skip 経路こそが
 //! 常設スイートでの観測可能な完了条件であり、実走そのものは DoD の前提にしない（人間 opt-in の追験）。
 //!
-//! ## 実走（env セット時・要件 1.1）
+//! ## 実走（env セット時）
 //! 1 回の走りは共通の手続き（`emo2_real_run/common.rs` の `spawn_emo2`＋`boot_and_close`）に任せる。
 //! 実機の試験の窓口 `real-run-kit` で、`CARGO_BIN_EXE_areka`（Cargo が統合テスト用に先ビルドして渡す
 //! **実バイナリ**のパス）を emo2 の検体（`Launch::Sample { emo2, emo2-kakukaku }`）の新しい写しで立て、
@@ -24,7 +24,7 @@
 //! 終わることを見る。保険の自動終了（共通の手続きの `SAFETY_EXIT`＝45 秒）は、閉じ方が働かなかったときに
 //! 子を残さないためだけにある。保険の自動終了で終わった回・印の前に子が終わった回・終了コードが 0 でない回は
 //! 赤とし、子の出力を添えて報告する。子は開発者の `AREKA_ROOT`・`AREKA_PROFILE_DIR` を受け継がず、
-//! 回の空の根・回の記憶の置き場（`target\` の下）・空いた MCP の番号で立つ（D-14）。
+//! 回の空の根・回の記憶の置き場（`target\` の下）・空いた MCP の番号で立つ。
 //!
 //! 折返しモードの実機証跡について: balloon descript 基層 fixture
 //! `検体 emo2 の同梱バルーン emo2-kakukaku の descript.txt` に
@@ -32,7 +32,7 @@
 //! 実 balloon model を解決してテキスト供給面を装着した時点で、装着 info! が
 //! `wrap=BudouxWordWrap` を残す（＝折返し ON として解決された証跡）。
 //!
-//! ## 時間の 1 行（要件 2.1）
+//! ## 時間の 1 行
 //! 走りが緑なら、標準エラーへ ASCII の 1 行を出す（`-- --nocapture` を付けると見える）。例:
 //!
 //!     emo2_real_run: wire_ms=812 attach_ms=1540 wrap_ms=6260 close_ms=22104 talk_to_wrap_ms=310 attach_to_talk_ms=4410 primary_dpi=192
@@ -69,7 +69,7 @@
 #[path = "emo2_real_run/common.rs"]
 mod common;
 
-/// 実走を有効化する opt-in 環境変数（未設定／空なら即 skip・要件 1.8・DoD 非前提）。
+/// 実走を有効化する opt-in 環境変数（未設定／空なら即 skip・DoD 非前提）。
 const REAL_RUN_ENV: &str = "AREKA_EMO2_REAL_RUN";
 
 // ===========================================================================
@@ -120,7 +120,7 @@ const REAL_RUN_ENV: &str = "AREKA_EMO2_REAL_RUN";
 //   `wrap=BudouxWordWrap`）を見てから利用者と同じ閉じ方で閉じ、終了コード 0 で終わること**の機械可読部を
 //   押さえる。両者（自動部＋人間目視部）が揃ってサインオフ成立とする。
 
-/// 実 pasta 実走の自動観測（要件 1.1・2.1）。既定 OFF（要件 1.8）で、env セット時のみ共通の手続きで
+/// 実 pasta 実走の自動観測。既定 OFF で、env セット時のみ共通の手続きで
 /// 1 回走り、印 3 つを待って利用者と同じ閉じ方で閉じ、時間の 1 行を標準エラーへ出す。
 ///
 /// env 未設定／空のときは即 skip（`return`）するため、常設 `cargo test --workspace` では実 helper／
@@ -128,8 +128,7 @@ const REAL_RUN_ENV: &str = "AREKA_EMO2_REAL_RUN";
 /// 実ドラッグの目視サインオフは本ファイル上部の「実 DPI 人間サインオフ手順」に従い人間が行う。
 #[test]
 fn emo2_real_run_boots_talks_and_exits_zero() {
-    // 既定 OFF ゲート（要件 1.8・DoD 非前提）: 未設定／空／空白のみ／非 UTF-8 は全て skip 扱いで即 return。
-    // これにより実 helper／実表示のない常設スイートでも本テストは自明に緑（＝観測可能な完了条件）。
+    // 既定 OFF ゲート（DoD 非前提）: 未設定／空／空白のみ／非 UTF-8 は全て skip 扱いで即 return。
     match std::env::var(REAL_RUN_ENV) {
         Ok(v) if !v.trim().is_empty() => { /* env セット済み → 実走へ進む */ }
         _ => {
@@ -140,9 +139,8 @@ fn emo2_real_run_boots_talks_and_exits_zero() {
         }
     }
 
-    // --- 実走（要件 1.1）: 印を待ち、利用者と同じ閉じ方で閉じる。失敗は共通の手続きが出力を添えて panic する ---
+    // --- 実走: 印を待ち、利用者と同じ閉じ方で閉じる。失敗は共通の手続きが出力を添えて panic する ---
     let (run, started) = common::spawn_emo2(None);
     let times = common::boot_and_close(run, started, false);
-    // 時間の 1 行（要件 2.1）。
     eprintln!("{}", times.line("emo2_real_run"));
 }

@@ -1,4 +1,4 @@
-//! 写す判断と写す口の決定論テスト（要件 3.4・4.3・4.4・4.7〜4.9・7.1・10.3・10.4）。
+//! 写す判断と写す口の決定論テスト。
 //!
 //! 並びは印を自分で付けて組み、プロセスの形（`layout()`）に頼らない。実在の根は
 //! `TempPath::under_target`（ワークツリーの `target\` の下）に掘る。
@@ -118,7 +118,7 @@ fn items_of_other_roots_and_shell_folders_are_as_is() {
 }
 
 /// ゴーストの中のバルーン（親が `<実行ファイルの隣>\balloon` でない）は、隣の根のゴーストの中でも
-/// 書ける根の写しの中でも写さない（spec: areka-P0-ghost-inner-balloon 要件 8.3）。
+/// 書ける根の写しの中でも写さない。
 #[test]
 fn ghost_inner_balloon_is_as_is() {
     let f = fixture("ur-plan-ghost-inner-balloon");
@@ -165,7 +165,7 @@ fn exe_root_not_listed_or_unknown_is_as_is() {
 }
 
 /// `--ghost <exe>\<フォルダ>` で実行ファイルのフォルダと同じ綴りの一時の置き場が先頭に足されても、
-/// 実行ファイルの隣の根は一時の置き場でない項目で探す（要件 3.9: ほかの決まりは変えない）。
+/// 実行ファイルの隣の根は一時の置き場でない項目で探す。
 #[test]
 fn temporary_root_at_exe_dir_does_not_hide_exe_root() {
     let f = fixture("ur-plan-temp-exe");

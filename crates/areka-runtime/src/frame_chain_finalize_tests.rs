@@ -1,5 +1,5 @@
 // =============================================================================
-// 初期配置の確定（finalize_chain_once）の結線檻（areka-P0-scope-chain-gap 要件 7.1/7.3/7.4・design C6）
+// 初期配置の確定（finalize_chain_once）の結線檻
 //
 // 判定そのものは areka_placement::chain_finalize の純関数檻が全網羅する。ここで固定するのは
 // **結線の振る舞い**——いつ駆動し、いつ見送り、二度目に駆動しないこと。
@@ -25,10 +25,6 @@ use areka_placement::sticky_group_ledger::{apply_set_sticky, seed_sticky_descrip
 
 use areka_emo_compose::ScaleRatio;
 use wintf::ecs::{Point, SizeI};
-
-// `PerTargetSizes`／`SPAWN_SIZE_*`／`settled_sizes` は多フレーム駆動ハーネス（task 3.3）と
-// 共有するため `frame_test_support.rs` へ集約した（テーマ間で共有するヘルパは
-// `<stem>_test_support.rs` へ・複製すると本文の同一性が壊れる）。
 
 // -----------------------------------------------------------------------------
 // 駆動して隣接を回復する
@@ -103,7 +99,7 @@ fn finalize_does_not_touch_window_sizes() {
 }
 
 // -----------------------------------------------------------------------------
-// 一度きり（7.4）
+// 一度きり
 // -----------------------------------------------------------------------------
 
 /// 二度目以降は駆動しない。確定後にサーフェス寸が変わっても位置は動かない
@@ -121,7 +117,7 @@ fn finalize_runs_only_once_even_if_sizes_change_again() {
     finalize_chain_once_with(&settled_sizes(), &mut world);
     assert_eq!(pos_of(&world, char1), after_first, "二度目は駆動しない");
 
-    // 確定後に scope0 の窓を別寸へ変えても連鎖は解き直されない（7.4）。
+    // 確定後に scope0 の窓を別寸へ変えても連鎖は解き直されない。
     resnap_from_sizes(
         &mut world,
         [(0usize, areka_placement::resolver::SizePx { w: 500, h: 687 })].into_iter(),
@@ -195,7 +191,7 @@ fn finalize_defers_until_resnap_has_landed() {
 }
 
 // -----------------------------------------------------------------------------
-// 明示的な再配置の尊重（7.3）
+// 明示的な再配置の尊重
 // -----------------------------------------------------------------------------
 
 /// 台本の移動指令などで既定位置から動かされたスコープは引き戻さない。
@@ -231,7 +227,7 @@ fn apply_move(world: &mut World, scope: u32, tokens: &[&str]) {
 }
 
 /// `\![move]` がちょうど既定の x・y へ置いたスコープも、台本が置いた窓なので引き戻さない
-/// （位置を比べるだけでは見分けられない・7.3）。
+/// （位置を比べるだけでは見分けられない）。
 #[test]
 fn finalize_does_not_pull_back_a_scope_moved_onto_its_default_position() {
     let (mut world, gw) = resnap_world();
@@ -251,7 +247,7 @@ fn finalize_does_not_pull_back_a_scope_moved_onto_its_default_position() {
 }
 
 /// 組の相手の `\![move]` に x を動かさずに連れ動かされたスコープも、台本が置いた窓なので
-/// 引き戻さない（7.3・window-link-directives 要件 5.1）。
+/// 引き戻さない。
 #[test]
 fn finalize_does_not_pull_back_a_scope_followed_by_a_sticky_move() {
     let (mut world, gw) = resnap_world();
@@ -287,7 +283,7 @@ fn finalize_does_not_pull_back_a_scope_followed_by_a_sticky_move() {
 }
 
 // -----------------------------------------------------------------------------
-// 確定が見送られ続けたときの一発診断（areka-P0-scope-chain-gap 6.5・design C6）
+// 確定が見送られ続けたときの一発診断
 //
 // 定石は `move_cue_move_severity_log_tests.rs` と同じ——硬化機構の唯一の定義元
 // `log-capture-kit` の捕捉窓へ委譲する。判定そのものの回数は純関数檻が固定しており、ここで
@@ -316,8 +312,8 @@ fn digest(lines: &[String]) -> String {
 ///
 /// ゴーストが scope 1 へ最初の `\s` を出すまでの時間はゴースト側の都合で、areka の停滞では
 /// ない。何巡待っても WARN は出ず、見送りの数の記録も作らない。巡ごとの記録は trace の 1 行
-/// だけで、既定の level（info）では 1 行も増えない（要件 1.2・1.6・3.2）。表示が揃えば確定は
-/// 初回の起動と同じく 1 回だけ行われ、相方は初回と同じ位置へ並ぶ（要件 1.5・3.6）。
+/// だけで、既定の level（info）では 1 行も増えない。表示が揃えば確定は
+/// 初回の起動と同じく 1 回だけ行われ、相方は初回と同じ位置へ並ぶ。
 ///
 /// TRACE の件数は、この経路にゴースト待ちの記録以外の記録が無いことに依る。別の `trace!` が
 /// 足されて件数で赤になったら、判定を緩めずに増えた記録を確かめる。
@@ -371,7 +367,7 @@ fn never_shown_scope_is_a_ghost_wait_and_is_not_counted() {
 }
 
 /// areka 自身の理由（再アンカーが未 landing）で確定が見送られ続けると、しきい値を超えた時点で
-/// 診断が**ちょうど 1 回**出る（要件 2.1〜2.3・3.4）。
+/// 診断が**ちょうど 1 回**出る。
 ///
 /// しきい値の手前は 1 行も出ない（毎フレームの見送りは無音）ことも同じテストで押さえる——ここが
 /// 緩むと「起動中の正常な待ち」で毎フレーム警告が出る形へ後退する。相方が表示されない形は
@@ -439,7 +435,7 @@ fn finalize_within_the_bounded_wait_emits_no_diagnostic() {
             finalize_chain_once_with(&stuck, &mut world);
         }
         finalize_chain_once_with(&settled_sizes(), &mut world);
-        // 確定後は何フレーム回しても駆動しない（7.4）。停滞の診断へ転じないことの確認。
+        // 確定後は何フレーム回しても駆動しない。停滞の診断へ転じないことの確認。
         for _ in 0..(CHAIN_FINALIZE_STALL_FRAMES * 2) {
             finalize_chain_once_with(&settled_sizes(), &mut world);
         }
@@ -462,7 +458,7 @@ fn finalize_within_the_bounded_wait_emits_no_diagnostic() {
     );
 }
 
-/// ⑴⑼ 相方は本体の右の隣へ並べ替えられ、本体は動かない。相方のバルーンはずらしどおりに立ち、
+/// 相方は本体の右の隣へ並べ替えられ、本体は動かない。相方のバルーンはずらしどおりに立ち、
 /// `[balloon-limit] Clamp` は出ない。寄せの行（場面・並べ替え）が 1 つ出る。
 #[test]
 fn partner_flips_to_right_of_body_on_left_edge() {

@@ -1,6 +1,4 @@
-//! 先送りした正典語彙が areka 側の本番コードに入り込んでいないことを固定するテストの、`areka-runtime` の片割れ
-//! （areka-P0-ghost-window-zorder 要件 8.1／8.3／8.4／8.5、areka-P0-scope-zorder-pinning 要件 10.4／11.4、spec: placement-crate-split
-//! 要件 5.2・5.3）。
+//! 先送りした正典語彙が areka 側の本番コードに入り込んでいないことを固定するテストの、`areka-runtime` の片割れ。
 //!
 //! # 片割れの分担
 //!
@@ -13,9 +11,8 @@
 //!
 //! # 走査の範囲・語の表・行コメントを除いてから探す理由
 //!
-//! 配置の片割れの頭の説明のとおり。重なり順の 2 機構（ペア機構＝`areka-P0-ghost-window-zorder`・
-//! グループ機構＝`areka-P0-scope-zorder-pinning`）の要件は「**本フィーチャーにおいて**足さない」
-//! ことを言う（要件の文の引用）ので、走査は 2 つの機構が全部を書いた本番ファイルに限る。常に手前の帯の語（`BAND_NEEDLES`）を
+//! 配置の片割れの頭の説明のとおり。重なり順の 2 機構（ペア機構・グループ機構）は先送り語彙を足さない
+//! 前提なので、走査は 2 つの機構が全部を書いた本番ファイルに限る。常に手前の帯の語（`BAND_NEEDLES`）を
 //! areka 側で持つのは受け口（`src/window_state_cue.rs`）と取り出しの相
 //! （`src/frame/window_state.rs`）だけと決めてあるので、その 2 本に語が在ることを対照として主張する。
 
@@ -26,7 +23,7 @@ use areka_placement::test_support::zorder_pair_deferred::{
     code_only, deferred_hits, read_source, rust_sources_under, zorder_production_sources,
 };
 
-/// 重なり順のグループ機構（`areka-P0-scope-zorder-pinning`）が `areka-runtime` に新設した本番ファイル
+/// 重なり順のグループ機構が `areka-runtime` に新設した本番ファイル
 /// （`CARGO_MANIFEST_DIR` からの相対）。下の
 /// `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
 /// 「`areka-runtime` に実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
@@ -36,7 +33,7 @@ const PRODUCTION_FILES: [&str; 3] = [
     "src/frame/zorder_descript.rs",
 ];
 
-/// 帯の語を持つ `areka-runtime` の本番ファイル（`stay-on-top-directives` の受け口と取り出しの相）。
+/// 帯の語を持つ `areka-runtime` の本番ファイル（受け口と取り出しの相）。
 const BAND_FILES: [&str; 2] = ["src/window_state_cue.rs", "src/frame/window_state.rs"];
 
 /// 先送り語彙は、重なり順の 2 機構が書いた `areka-runtime` の本番ファイルのコードに 1 つも無い。

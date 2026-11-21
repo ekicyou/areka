@@ -1,16 +1,15 @@
-//! シェル・バルーンの切替の入口（spec: areka-P0-shell-balloon-switch 要件 1.1〜1.16・
-//! design「ShellBalloonSwitch」）。
+//! シェル・バルーンの切替の入口。
 //!
 //! 切替要求は台本（受け口 `switch_cue.rs` の `SwitchCueSink` → 受信端 [`SwitchRx`] → 入力の段の
 //! 取り出しの系 [`drain_switch_requests`]）とメニューの「シェル」「バルーン」枠の 2 つの出どころから、
-//! ここの [`request_skin_switch`] 1 本だけを通る（要件 1.1）。入口は kanade へ何か送る前に
+//! ここの [`request_skin_switch`] 1 本だけを通る。入口は kanade へ何か送る前に
 //! 進行中・ゴースト切替中・更新中・文脈・切替先を判定し、受理したら背景の資産づくりを起こして
 //! kanade へ台詞の切れ目の待ちを頼み、進行中の印 [`SkinSwitchInFlight`] を置く。
 //! 名前の解決とインストールの控えは隣の `shell_balloon_resolve.rs`。印の見極めと差し替えは
 //! 差し替えの相（`frame/switch.rs`）が受け持つ。
 //!
 //! Reference の組み立ての規則（名前は `descript.txt` の `name`、無ければフォルダ名・パスは
-//! 絶対パス）は [`skin_ref_name`]・[`skin_ref_path`] の 1 か所（型と共に `skin_switch.rs` へ下ろした）に置き、差し替えの相の
+//! 絶対パス）は [`skin_ref_name`]・[`skin_ref_path`] の 1 か所に置き、差し替えの相の
 //! `OnShellChanged`／`OnBalloonChange` も同じものを使う。
 
 use std::sync::Arc;
@@ -94,7 +93,7 @@ pub(crate) fn drain_switch_requests(world: &mut World) {
     }
 }
 
-/// 切替要求の唯一の入口（要件 1.1）。乱数は本番の `pick_index`。
+/// 切替要求の唯一の入口。乱数は本番の `pick_index`。
 pub(crate) fn request_skin_switch(world: &mut World, req: SkinRequest) -> SkinVerdict {
     request_skin_switch_with(world, req, pick_index)
 }
@@ -102,11 +101,10 @@ pub(crate) fn request_skin_switch(world: &mut World, req: SkinRequest) -> SkinVe
 /// 入口の中身。乱数を外から受ける（決定論テスト用・本番は [`request_skin_switch`]）。
 ///
 /// 判定は 進行中 → ゴースト切替中 → 更新中 → 文脈なし（置き場・根・結線・kanade の送出端・
-/// seriko の送り手）→ 該当なし の順で、断りはどれも `warn!` を 1 件残し kanade へ何も送らない
-/// （要件 1.7・1.12・1.13）。受理したら `info!(skin_switch_requested)` → 背景の資産づくり →
+/// seriko の送り手）→ 該当なし の順で、断りはどれも `warn!` を 1 件残し kanade へ何も送らない。受理したら `info!(skin_switch_requested)` → 背景の資産づくり →
 /// 待ちの依頼（メニューのシェルと `raise-event` 付きの台本のシェルだけ `OnShellChanging` の印つき）→
 /// 進行中の印、の順。送れなければ `error!(skin_switch_send_failed)` で印を置かない。
-/// 定常でない kanade での無視（要件 1.14）は、待ちの返事で差し替えの相が判定する。
+/// 定常でない kanade での無視は、待ちの返事で差し替えの相が判定する。
 pub(crate) fn request_skin_switch_with(
     world: &mut World,
     req: SkinRequest,
@@ -311,7 +309,7 @@ impl SwitchContext {
 }
 
 /// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 進行中の印があれば
-/// `info!(skin_switch_dropped, reason=exit)` を残して消す（要件 5.7）。背景の資産づくりは
+/// `info!(skin_switch_dropped, reason=exit)` を残して消す。背景の資産づくりは
 /// 受け手が落ちたことで結果を捨てる。
 pub(crate) fn discard_for_exit(world: &mut World) {
     if let Some(dropped) = world.remove_non_send::<SkinSwitchInFlight>() {

@@ -4,7 +4,7 @@ use super::*;
 use tracing::Level;
 
 // ---------------------------------------------------------------------------
-// 振り分け（要件 2.1〜2.5・2.8・2.9・2.11）
+// 振り分け
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -106,7 +106,7 @@ fn status_rows_and_areka_is_exact_only() {
         "areka::session::ghost_switch",
         "ghost-boot",
         "ghost-shutdown",
-        // 外のものを開いた記録（areka-P0-open-external-tags 要件 7.3）。
+        // 外のものを開いた記録。
         "areka::readme",
         "areka::readme::opener",
     ] {
@@ -133,7 +133,7 @@ fn unrelated_info_is_not_kept() {
     assert_eq!(classify(Level::INFO, "areka_mcp"), None);
     assert_eq!(classify(Level::INFO, "log"), None);
     assert_eq!(classify(Level::INFO, ""), None);
-    // 移した install の台本の受け口は残さない出所（`areka::install` の決まりより先）。warn は誤り。
+    // install の台本の受け口は残さない出所（`areka::install` の決まりより先）。warn は誤り。
     assert_eq!(classify(Level::INFO, "areka::install::install_cue"), None);
     assert_eq!(
         classify(Level::WARN, "areka::install::install_cue"),
@@ -198,7 +198,7 @@ fn rule_matches_self_or_double_colon_child() {
 }
 
 // ---------------------------------------------------------------------------
-// 種別の語と既定（要件 3.2・2.6・2.7 の表）
+// 種別の語と既定
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -251,7 +251,7 @@ fn kind_words_and_defaults_follow_the_ssp_table() {
 }
 
 // ---------------------------------------------------------------------------
-// 下書き（要件 1.5・2.6・2.7・2.10・4.3）
+// 下書き
 // ---------------------------------------------------------------------------
 
 /// 文字列で渡された欄（生の値と `{:?}` の両方を持つ）。
@@ -334,7 +334,6 @@ fn unclassified_event_has_no_draft() {
 fn convention_rows_read_ghost_and_label_four_ways() {
     for target in [TARGET_SCRIPT, TARGET_ERROR] {
         let kind = classify(Level::INFO, target).unwrap();
-        // 両方無し → 既定。
         assert_eq!(
             parts(draft(Level::INFO, target, [msg("m")]).unwrap()),
             (
@@ -345,7 +344,6 @@ fn convention_rows_read_ghost_and_label_four_ways() {
             ),
             "{target}"
         );
-        // ghost だけ。
         assert_eq!(
             parts(
                 draft(
@@ -363,7 +361,6 @@ fn convention_rows_read_ghost_and_label_four_ways() {
             ),
             "{target}"
         );
-        // label だけ。
         assert_eq!(
             parts(
                 draft(
@@ -515,7 +512,7 @@ fn body_is_cut_after_4096_chars_counting_characters() {
 }
 
 // ---------------------------------------------------------------------------
-// 入れ物（要件 1.2・1.3・1.4・1.6・1.11）
+// 入れ物
 // ---------------------------------------------------------------------------
 
 const AT: Stamp = Stamp {
@@ -612,7 +609,6 @@ fn over_cap_drops_only_the_oldest_of_that_kind_and_ids_continue() {
     assert_eq!(err.last(), Some(&1003));
     assert!(err.windows(2).all(|w| w[0] + 1 == w[1]));
     assert_eq!(h.rows(Kind::Error).next().unwrap().body, "e1");
-    // 他の種別は減らない。
     assert_eq!(ids(&h, Kind::Status), [1]);
     assert_eq!(ids(&h, Kind::Network), [2]);
 
@@ -628,7 +624,6 @@ fn over_cap_drops_only_the_oldest_of_that_kind_and_ids_continue() {
 #[test]
 fn unclassified_event_does_not_advance_the_id() {
     let mut h = History::new();
-    // 置き場へ積む側の形: 下書きが当たったときだけ積む。
     let mut feed = |level, target: &str| {
         if let Some(d) = draft(level, target, [msg("m")]) {
             h.push(AT, d);

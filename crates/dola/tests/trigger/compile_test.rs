@@ -1,4 +1,4 @@
-//! トリガー機能のテスト — 5.3: CompiledTrigger の fire_time 計算テスト
+//! トリガー機能のテスト — CompiledTrigger の fire_time 計算テスト
 
 use super::common::{minimal_trigger_doc, timed_trigger_doc};
 use dola::{
@@ -7,7 +7,7 @@ use dola::{
 };
 
 // ============================================================
-// 5.3: CompiledTrigger の fire_time 計算テスト
+// CompiledTrigger の fire_time 計算テスト
 // ============================================================
 
 use dola::compile_storyboard;
@@ -116,7 +116,7 @@ fn doc_with_children(parent_sb: dola::Storyboard) -> dola::DolaDocument {
         .expect("doc should be valid")
 }
 
-/// 遅く発火するトリガーが配列の前（＝処理の順でも前）にあっても fire_time の順に並ぶ（#48）
+/// 遅く発火するトリガーが配列の前（＝処理の順でも前）にあっても fire_time の順に並ぶ
 #[test]
 fn late_trigger_earlier_in_array_sorted_by_fire_time() {
     let parent_sb = StoryboardBuilder::new()
@@ -152,7 +152,7 @@ fn late_trigger_earlier_in_array_sorted_by_fire_time() {
     assert_eq!(compiled.triggers[1].fire_time, 2.0);
 }
 
-/// 同時刻のトリガーは処理の順でなく元のエントリの番号の順に並ぶ（#48）
+/// 同時刻のトリガーは処理の順でなく元のエントリの番号の順に並ぶ
 #[test]
 fn same_fire_time_triggers_sorted_by_source_entry_index() {
     let parent_sb = StoryboardBuilder::new()
@@ -183,7 +183,7 @@ fn same_fire_time_triggers_sorted_by_source_entry_index() {
     assert_eq!(compiled.triggers[1].fire_time, 1.0);
 }
 
-/// between のトリガーは between の始まり（from）の時刻で発火する（#31・要件 11.10）
+/// between のトリガーは between の始まり（from）の時刻で発火する
 #[test]
 fn trigger_between_fires_at_from_keyframe() {
     let kf = |name: &str, offset: f64| StoryboardEntry {

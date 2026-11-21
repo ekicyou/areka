@@ -1,4 +1,4 @@
-//! 位置初期化の近道の檻（areka-P0-window-link-directives 要件 8.1〜8.4・9.5・design「shortcut」）。
+//! 位置初期化の近道の檻。
 //!
 //! 受け手は本物の `on_ghost_key_down` を World へ直に呼ぶ（wintf の窓の手続きから受け手までは
 //! wintf の `keyboard_tests.rs` が固定済み）。「シェル位置初期化」はゴーストへの往復の送りと答えの
@@ -110,7 +110,7 @@ fn balloon_reset_triggers(events: &[CapturedEvent]) -> Vec<Option<String>> {
         .collect()
 }
 
-/// 組み合わせの判定（8.1・8.2）: Ctrl＋Shift の F12／F10 だけを拾う。
+/// 組み合わせの判定: Ctrl＋Shift の F12／F10 だけを拾う。
 #[test]
 fn only_ctrl_shift_f12_and_f10_without_alt_or_repeat_are_picked() {
     assert_eq!(
@@ -165,7 +165,7 @@ fn other_keys_are_not_consumed() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// F12（8.1）: メニューと同じ往復 —— `OnResetWindowPos` を送り、答えの受け手を置き、消費する。
+/// F12: メニューと同じ往復 —— `OnResetWindowPos` を送り、答えの受け手を置き、消費する。
 #[test]
 fn ctrl_shift_f12_raises_the_reset_round_trip() {
     let (mut world, rx) = world_with_ghost();
@@ -182,7 +182,7 @@ fn ctrl_shift_f12_raises_the_reset_round_trip() {
     assert!(world.contains_non_send::<PendingResetRaise>());
 }
 
-/// F10（8.2・9.5）: バルーン位置初期化をきっかけ「近道」で呼び、ゴーストへは送らず、消費する。
+/// F10: バルーン位置初期化をきっかけ「近道」で呼び、ゴーストへは送らず、消費する。
 #[test]
 fn ctrl_shift_f10_resets_balloons_with_shortcut_trigger() {
     let (mut world, rx) = world_with_ghost();
@@ -201,7 +201,7 @@ fn ctrl_shift_f10_resets_balloons_with_shortcut_trigger() {
     assert!(rx.try_recv().is_err(), "ゴーストへ何も送らない");
 }
 
-/// 選べない場面（8.3）: 何もせず `position_shortcut_ignored` を 1 行記録し、押下は消費する。
+/// 選べない場面: 何もせず `position_shortcut_ignored` を 1 行記録し、押下は消費する。
 #[test]
 fn not_selectable_only_logs_and_consumes() {
     for (vk, name) in [
@@ -235,7 +235,7 @@ fn not_selectable_only_logs_and_consumes() {
     assert!(rx.try_recv().is_err(), "2 度目は送らない");
 }
 
-/// すべてのゴーストの窓（キャラクターの窓とバルーンの窓）に受け手が付き、印なしの窓には付かない（8.4）。
+/// すべてのゴーストの窓（キャラクターの窓とバルーンの窓）に受け手が付き、印なしの窓には付かない。
 #[test]
 fn receivers_go_on_every_ghost_window_only() {
     type Receiver = fn(&mut World, Entity, KeyDown) -> bool;

@@ -1,10 +1,9 @@
-//! メニューの結線（[`wire_menu`]）と組込 2 項目の決定論テスト
-//! （要件 2.2・4.3・5.1・6.2・6.6・9.6・11.4）。
+//! メニューの結線（[`wire_menu`]）と組込 2 項目の決定論テスト。
 //!
 //! 確かめること: 結線の後に「説明書」「終了」が写しへ現れること・「説明書」の有効／無効が
 //! 写しを取った時点のファイルの在否で決まること・「終了」の動作が終了指示をちょうど 1 件送る
 //! こと（受信側で数える）・解放ハンドラがキャラクター窓にだけ付き枚数が記録されること・結線
-//! そのものは窓に触れないこと・毎 tick の取り出しが登録関数で入力の段へ載ること・後続 spec 向けの
+//! そのものは窓に触れないこと・毎 tick の取り出しが登録関数で入力の段へ載ること・
 //! 登記の口が結線の有無で振る舞いを変えること。
 //!
 //! 本番では結線（`wire_menu`）が先で、窓はその後に作られて解放ハンドラが付く。窓を使うテストは
@@ -119,7 +118,7 @@ fn lines_of<'a>(lines: &'a [String], event: &str) -> Vec<&'a String> {
     lines.iter().filter(|l| l.contains(event)).collect()
 }
 
-/// 結線の後、写しには「説明書」と「終了」がこの順で現れる（要件 2.2）。
+/// 結線の後、写しには「説明書」と「終了」がこの順で現れる。
 #[test]
 fn wiring_registers_the_readme_and_close_items() {
     let (world, _rx) = wired_world();
@@ -150,7 +149,7 @@ fn wiring_registers_the_readme_and_close_items() {
     assert_eq!(item_of(&world, Frame::Readme).checked, None);
 }
 
-/// 「説明書」の有効／無効は、写しを取った時点のファイルの在否で決まる（要件 4.3・6.2・11.4）。
+/// 「説明書」の有効／無効は、写しを取った時点のファイルの在否で決まる。
 /// 結線し直さなくても、ファイルを置けば次の写しから有効になる。
 #[test]
 fn the_readme_item_follows_the_file_at_snapshot_time() {
@@ -176,8 +175,7 @@ fn the_readme_item_follows_the_file_at_snapshot_time() {
     );
 }
 
-/// 「終了」の動作は、メニューを出した窓のスコープを載せた終了指示をちょうど 1 件送る
-/// （要件 5.1・6.6・9.6）。
+/// 「終了」の動作は、メニューを出した窓のスコープを載せた終了指示をちょうど 1 件送る。
 #[test]
 fn the_close_action_sends_exactly_one_close_request_with_the_window_scope() {
     for scope in [1, 0] {
@@ -368,7 +366,7 @@ fn the_registered_system_polls_the_pending_query() {
     );
 }
 
-/// サブメニューの見出しを返す供給関数（後続 spec が登記する形）。
+/// サブメニューの見出しを返す供給関数。
 fn shell_supplier() -> Supplier {
     Rc::new(|_, _| MenuItem {
         label: "シェル".to_string(),
@@ -379,7 +377,7 @@ fn shell_supplier() -> Supplier {
     })
 }
 
-/// 後続 spec 向けの登記の口は、結線の前なら記録して何もしない。
+/// 登記の口は、結線の前なら記録して何もしない。
 #[test]
 fn registering_before_the_wiring_warns_and_does_nothing() {
     let mut world = World::new();
@@ -405,7 +403,7 @@ fn registering_after_the_wiring_places_the_frame_in_order() {
     assert_eq!(frames, [Frame::Shell, Frame::Readme, Frame::Close]);
 }
 
-// ---------------------------------------------------------------- 登録と登記の一覧（areka-P0-ghost-restart-unit 要件 2.1・2.3）
+// ---------------------------------------------------------------- 登録と登記の一覧
 
 /// 登録専用の関数は単独で呼べ、入力の段へ返事の取り出しと答えの見張りの 2 つを足し、持ち物は置かない。
 #[test]
@@ -453,7 +451,7 @@ fn registered_frames_after_wiring_are_the_two_builtin_items() {
     );
 }
 
-// ---- クリック → メニューの順の包み（mouse-click-wheel-events 要件 5.1・5.2・5.3・8.4・11.1） ----
+// ---- クリック → メニューの順の包み ----
 
 /// 入力とメニューの結線に同じ受信端を渡し、窓を作って解放ハンドラ（包み）を付けた World。
 /// 順序は本番と同じ: 結線と登録 → 窓 → 装着。
@@ -495,7 +493,7 @@ fn take_query(rx: &Receiver<KanadeMsg>) -> areka_actor::ReplySender<captions::Qu
     }
 }
 
-/// 右の押下 → 解放で、右の解放の知らせ（放した点・2 回目でない）がメニューの照会より先に届く（要件 5.1・5.2）。
+/// 右の押下 → 解放で、右の解放の知らせ（放した点・2 回目でない）がメニューの照会より先に届く。
 #[test]
 fn a_right_click_sends_the_button_up_before_the_menu_query() {
     let (mut world, window, rx) = shared_fixture();
@@ -527,7 +525,7 @@ fn a_right_click_sends_the_button_up_before_the_menu_query() {
     assert!(rx.try_recv().is_err(), "ちょうど 2 件");
 }
 
-/// 押下の無い解放ではクリックを送らず、照会は今のとおり 1 件（要件 4.3・8.4）。
+/// 押下の無い解放ではクリックを送らず、照会は今のとおり 1 件。
 #[test]
 fn a_release_without_a_press_sends_no_click_and_one_query() {
     let (mut world, window, rx) = shared_fixture();
@@ -569,7 +567,7 @@ fn answer_visible(visible: &str) -> (World, Receiver<KanadeMsg>, Vec<String>) {
 }
 
 /// `1` ならメニューを出す側へ進み（この World には外側の参照が無いので表示の手前で 1 行残る）、
-/// 預かりの右ダブルクリックは送らない＝今の引き金の檻と同じ（要件 5.3・11.1）。
+/// 預かりの右ダブルクリックは送らない＝今の引き金の檻と同じ。
 #[test]
 fn a_showing_reply_through_the_wrapper_opens_the_menu_like_the_trigger() {
     let (world, rx, lines) = answer_visible("1");
@@ -589,7 +587,7 @@ fn a_showing_reply_through_the_wrapper_opens_the_menu_like_the_trigger() {
     );
 }
 
-/// `0` なら抑えて預かりの右ダブルクリックをちょうど 1 件送る＝今の引き金の檻と同じ（要件 5.3・11.1）。
+/// `0` なら抑えて預かりの右ダブルクリックをちょうど 1 件送る＝今の引き金の檻と同じ。
 #[test]
 fn a_suppressing_reply_through_the_wrapper_sends_the_deferred_double_click() {
     let (world, rx, lines) = answer_visible("0");

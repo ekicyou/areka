@@ -1,11 +1,10 @@
-//! 起動オプションの段（指し先・`--random`）の純粋な判断の決定論テスト
-//! （areka-P0-startup-options-core 要件 3.1・3.9・3.11・4.3・5.1・5.2・5.4・11.2）。
+//! 起動オプションの段（指し先・`--random`）の純粋な判断の決定論テスト。
 //!
 //! 確かめること: 指し先は記憶・列挙・既定より先で経路 `Pointed`・フォルダ名つき。
 //! `--random` は記憶・唯一・既定を飛ばし、0 体＝ゴーストなし・1 体＝その 1 体・2 体以上＝注入した
 //! 添字で選び、選んだものと候補の数を info `ghost_random_requested` で 1 件残す。
 //! 一時の置き場が消えた次の起動（記憶が列挙に無い）は今の `last_ghost_not_found` で次の段へ。
-//! callghost の相手（install-before-boot 要件 4.2・4.3・4.7・4.10・9.5）は記憶より先で経路 `CallGhost`、
+//! callghost の相手は記憶より先で経路 `CallGhost`、
 //! 目録に無ければ warn `callghost_target_not_found` で記憶へ、位置引数・指し先・`--random` が先。
 //! プロセス・fs・乱数には触れない。
 
@@ -93,7 +92,7 @@ fn assert_random_info(events: &[CapturedEvent], folder: &str, candidates: &str) 
     assert_eq!(hits[0].field("candidates"), Some(candidates));
 }
 
-// ---------------------------------------------------------------- 指し先（要件 3.1・3.9・4.3）
+// ---------------------------------------------------------------- 指し先
 
 /// 指し先は記憶・既定・`--random` より先。場所とフォルダ名をそのまま返し、記憶も列挙も見ない。
 #[test]
@@ -130,7 +129,7 @@ fn pointed_needs_no_listing() {
     assert_eq!(got.map(|g| g.route), Ok(GhostRoute::Pointed));
 }
 
-/// 次の起動で一時の置き場が無い: 記憶は列挙に無く、今の warn で次の段（既定）へ（要件 3.11）。
+/// 次の起動で一時の置き場が無い: 記憶は列挙に無く、今の warn で次の段（既定）へ。
 #[test]
 fn next_boot_memory_of_temporary_ghost_falls_through() {
     let root = root();
@@ -150,7 +149,7 @@ fn next_boot_memory_of_temporary_ghost_falls_through() {
     assert_eq!(warns, 1, "{events:?}");
 }
 
-// ---------------------------------------------------------------- `--random`（要件 5.1・5.2・5.4）
+// ---------------------------------------------------------------- `--random`
 
 /// 2 体以上: 記憶・既定に関わらず注入した添字で選び、選んだものと候補の数を info に残す。
 #[test]
@@ -190,7 +189,7 @@ fn random_zero_is_no_ghost() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-// ---------------------------------------------------------------- callghost（install-before-boot 要件 4.2・4.3・4.7・4.10・9.5）
+// ---------------------------------------------------------------- callghost
 
 /// 相手は記憶（列挙に在る）・既定より先に立つ。経路は `CallGhost`・記録は出さない。
 #[test]
@@ -210,7 +209,7 @@ fn call_ghost_wins_over_memory_and_default() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// 前回がきれいに終わらなかった（記憶を読まない＝None）ときも相手が立つ（要件 4.7）。
+/// 前回がきれいに終わらなかった（記憶を読まない＝None）ときも相手が立つ。
 #[test]
 fn call_ghost_stands_without_memory() {
     let root = root();

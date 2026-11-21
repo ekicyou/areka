@@ -1,4 +1,4 @@
-//! ファイルを選ぶ画面（design「areka / install / pick」・要件 1.3・1.4・設計で決めたこと 11）。
+//! ファイルを選ぶ画面。
 //!
 //! `GetOpenFileNameW` を持ち主の窓なしで出し、選ばれたファイル 1 つのパスを返す。呼んだスレッドを
 //! 塞ぐので、呼び手は短命のスレッド `install-pick`（`desk::pick_and_submit` が起こす）に限る。

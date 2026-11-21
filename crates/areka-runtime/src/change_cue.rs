@@ -1,5 +1,4 @@
-//! `\![change,ghost,名(,--option=raise-event)]` の受け口（design「ChangeCueSink」・要件 1.2／1.3／
-//! 1.10／8.5）。
+//! `\![change,ghost,名(,--option=raise-event)]` の受け口。
 //!
 //! 台本の演出は全員へ配られるので、本受け口にも文字も演技も他人宛のコマンドも届く。ここで行うのは
 //! 次の 2 つに限る（骨格は `readme_cue.rs` の受け口と同型）。
@@ -7,7 +6,7 @@
 //! 1. **自己選別**——コマンド名と第 1 引数の組が `("change", "ghost")` のものだけを受理する。
 //!    `\![change,shell,…]`／`\![change,balloon,…]`・第 1 引数の無い裸の `\![change]` は担当外
 //!    として `debug!` で読み飛ばす（シェル・バルーンの切替は `switch_cue.rs` の `SwitchCueSink` の
-//!    持ち場・要件 8.5・areka-P0-shell-balloon-switch 要件 10.3）。
+//!    持ち場）。
 //! 2. **送り出し**——第 2 引数の名前を**無変形**で、`--option=raise-event` の有無とともに
 //!    切替要求 1 件として UI へ送る。名前の突き合わせは UI 側の入口（`ghost_switch`）の仕事である。
 //!
@@ -38,7 +37,7 @@ const SELECTOR_GHOST: &str = "ghost";
 /// `OnGhostChanging` を送らせる option。
 const OPTION_RAISE_EVENT: &str = "--option=raise-event";
 
-/// `\![change,ghost,…]` の受け口（design「ChangeCueSink」）。
+/// `\![change,ghost,…]` の受け口。
 ///
 /// 配送は台本ごとに受け口を複製するため [`Clone`] が要る（どの複製も単一の受信端へ届く）。
 #[derive(Clone)]
@@ -56,7 +55,7 @@ impl ChangeCueSink {
 
 impl dola::cue::CueSink for ChangeCueSink {
     fn emit(&mut self, cue: TalkCue) {
-        // 1) 開封。開封できない荷物は宛名で水準を分ける（自分宛の壊れ物は警告・他人宛は良性）。
+        // 開けない荷物は宛名で水準を分ける（自分宛の壊れ物は警告・他人宛は良性）。
         let Some((name, params)) = cue.command.as_command_carrier() else {
             match &cue.command {
                 CueCommand::Custom { command, .. } if command == NAME_CHANGE => warn!(
@@ -73,8 +72,6 @@ impl dola::cue::CueSink for ChangeCueSink {
             return;
         };
 
-        // 2) 自己選別。担当は `("change", "ghost")` の 1 組だけ（shell／balloon は `SwitchCueSink`・
-        //    裸の change は担当外）。
         let selector = params.first().copied().unwrap_or_default();
         if (name, selector) != (NAME_CHANGE, SELECTOR_GHOST) {
             debug!(
@@ -84,7 +81,7 @@ impl dola::cue::CueSink for ChangeCueSink {
             return;
         }
 
-        // 3) 名前なし（空も含む）は切替先が無いので捨てる。
+        // 名前なし（空も含む）は切替先が無いので捨てる。
         let Some(ghost) = params.get(1).copied().filter(|n| !n.is_empty()) else {
             warn!(
                 event = "change_ghost_no_name",
@@ -93,7 +90,7 @@ impl dola::cue::CueSink for ChangeCueSink {
             return;
         };
 
-        // 4) option。知らないものは警告して無視する（切替は続ける）。
+        // 知らない option は警告して無視する（切替は続ける）。
         let mut raise_event = false;
         for option in &params[2..] {
             if *option == OPTION_RAISE_EVENT {
@@ -106,7 +103,7 @@ impl dola::cue::CueSink for ChangeCueSink {
             }
         }
 
-        // 5) 送り出し。名前は無変形。受信端が閉じていても台本は殺さない。
+        // 名前は無変形。受信端が閉じていても台本は殺さない。
         let request = ChangeRequestRaw {
             name: ghost.to_owned(),
             raise_event,

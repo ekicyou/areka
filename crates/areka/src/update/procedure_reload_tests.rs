@@ -1,5 +1,4 @@
-//! 後送りの列と読み直しの頼みの時機、途中で閉じたときの捨て方の兄弟テスト（design「Testing Strategy /
-//! 手続き」の後送りの列と読み直し・決めたこと 21・要件 2.16・3.1・3.4・5.2・5.4・5.7・7.4・9.9）。
+//! 後送りの列と読み直しの頼みの時機、途中で閉じたときの捨て方の兄弟テスト。
 //!
 //! 偽の口の `raise` に「閉じた」を返させ、送ったイベント・読み直しの頼みに添えた列・記録を判定する。
 
@@ -58,7 +57,7 @@ fn ids(events: &[(&'static str, Vec<String>)]) -> Vec<&'static str> {
 
 /// `changed` が 1 つでもあれば、全対象の後に読み直しを後送りの列つきで 1 回だけ頼み（最後の呼び出し）、
 /// 列は `raise` しない。列はゴーストの成功の締め（`none` でも）→ 総括。`changed` はバルーン（2 つ目）
-/// でも同じ＝対象の種別を問わない。`debug!(update_tail_deferred)` に列の件数（要件 2.16・3.1・5.2・9.9）。
+/// でも同じ＝対象の種別を問わない。`debug!(update_tail_deferred)` に列の件数。
 #[test]
 fn reload_is_requested_once_after_all_targets_with_the_tail() {
     for summary in [SummaryKind::Result, SummaryKind::ResultEx] {
@@ -97,7 +96,7 @@ fn reload_is_requested_once_after_all_targets_with_the_tail() {
     }
 }
 
-/// ゴーストが失敗した・対象でないときは、列の先頭は総括（要件 5.5 の「ゴーストが成功していないとき」）。
+/// ゴーストが失敗した・対象でないときは、列の先頭は総括。
 #[test]
 fn tail_head_is_the_summary_when_the_ghost_did_not_succeed() {
     let g = ghost();
@@ -122,7 +121,7 @@ fn tail_head_is_the_summary_when_the_ghost_did_not_succeed() {
 }
 
 /// 全部 `none`・失敗・その混ざりなら読み直しは 0 回で、列を最後に `raise` で順に送る
-/// （`info!(update_tail_sent when=at_end)`・要件 3.1・5.2・5.4・9.9）。
+/// （`info!(update_tail_sent when=at_end)`）。
 #[test]
 fn no_reload_sends_the_tail_at_the_end_when_nothing_changed() {
     let g = ghost();
@@ -186,7 +185,7 @@ fn no_reload_sends_the_tail_at_the_end_when_nothing_changed() {
 }
 
 /// 進捗の途中で「閉じた」が返れば、エンジンの一周は最後まで回し（観測は全部流れる）、以後の進捗は
-/// 送らず 1 件ごとに `warn!`、その対象の締め・残りの対象・総括・読み直しは 0 件（要件 5.7・7.4・9.9・裁定 16）。
+/// 送らず 1 件ごとに `warn!`、その対象の締め・残りの対象・総括・読み直しは 0 件。
 #[test]
 fn closed_mid_progress_drops_the_rest_but_runs_the_engine_to_the_end() {
     let mut ports = FakePorts::new([script_changed(), script_none()]);
@@ -243,7 +242,7 @@ fn closed_mid_progress_drops_the_rest_but_runs_the_engine_to_the_end() {
 }
 
 /// 始まり・締め（その場で送るシェル・バルーンの締め）で「閉じた」が返っても、残りの対象・列・読み直しは
-/// 0 件（要件 5.7・7.4）。始まりで閉じればエンジンは回さない。
+/// 0 件。始まりで閉じればエンジンは回さない。
 #[test]
 fn closed_at_begin_or_closing_sends_nothing_further() {
     let cases: [(&str, &[&str], usize); 2] = [
@@ -287,7 +286,7 @@ fn closed_at_begin_or_closing_sends_nothing_further() {
 }
 
 /// 最後に送る列の途中で「閉じた」が返れば残りを捨てる（総括 0・読み直し 0・`warn!(update_abandoned
-/// at=tail)` 1 件・`update_tail_sent` 0 件・要件 5.7・7.4）。
+/// at=tail)` 1 件・`update_tail_sent` 0 件）。
 #[test]
 fn closed_in_the_tail_drops_the_rest() {
     let mut ports = FakePorts::new([script_none()]);
@@ -308,7 +307,7 @@ fn closed_in_the_tail_drops_the_rest() {
 }
 
 /// メニューで `OnUpdateProcessExec` が「閉じた」なら、標準が始まった知らせ・照会・イベント・読み直しは
-/// 0 件で、`warn!(update_abandoned at=process_exec)` を 1 件（要件 7.4）。
+/// 0 件で、`warn!(update_abandoned at=process_exec)` を 1 件。
 #[test]
 fn process_exec_closed_abandons_before_the_standard_procedure() {
     let mut ports = FakePorts::new([]);

@@ -1,5 +1,4 @@
-//! 本体と `areka-runtime` のテストが別の crate のファイルを読むときの読み口は `areka-runtime` の `crate_path` 1 つ
-//! （spec: placement-crate-split 要件 5.4・5.5）。
+//! 本体と `areka-runtime` のテストが別の crate のファイルを読むときの読み口は `areka-runtime` の `crate_path` 1 つ。
 //!
 //! 読んでよいのは、本体が依存する crate（依存の向きに下の crate）だけ。`krate` は `crates/` の下の
 //! フォルダ名（`wintf`・`areka-placement` など）で書く。本体自身のファイルはここを通さず、相対の

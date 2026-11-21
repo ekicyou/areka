@@ -1,4 +1,4 @@
-//! 置き場の並びを記憶へ直に書けないときの決定論テスト（areka-P0-write-failure-notice task 5.3・要件 1.1・1.5）。
+//! 置き場の並びを記憶へ直に書けないときの決定論テスト。
 //!
 //! 確かめること: ゴーストが居ない World でアプリの記憶の置き場に普通のファイルが在ると、
 //! `roots_memory_write_failed`（error・欄 dir・reason）と `memory_write_failed` を 1 件ずつ残し、

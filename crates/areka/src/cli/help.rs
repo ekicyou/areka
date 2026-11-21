@@ -1,10 +1,10 @@
-//! `--help`: 配布物の説明書を OS で開いて終わる（要件 9）。
+//! `--help`: 配布物の説明書を OS で開いて終わる。
 
 use std::path::{Path, PathBuf};
 
 use crate::readme::os_port::{OsCall, OsPort, Verb};
 
-/// 説明書を開けなかったわけ（要件 9.3）。
+/// 説明書を開けなかったわけ。
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum HelpError {
     /// exe の場所が分からない。
@@ -18,7 +18,7 @@ pub(crate) enum HelpError {
 /// 配布物の説明書の名前（exe の隣）。
 const README: &str = "README.txt";
 
-/// `exe_dir\README.txt` が在れば `os` で 1 回だけ開く（`Verb::Open`・要件 9.1・9.3）。
+/// `exe_dir\README.txt` が在れば `os` で 1 回だけ開く（`Verb::Open`）。
 ///
 /// OS が受け付けたかまでを見て、表示されたかは見ない。
 pub(crate) fn open_readme(
@@ -44,7 +44,7 @@ pub(crate) fn open_readme(
 /// 本物の口: COM を整えてから、exe の本当の場所の隣の説明書を開く。
 ///
 /// 開けたら info（`help_opened`）で `Ok(())`、だめなら error（`help_open_failed`）で
-/// `Err(E_FAIL)`（0 でない終了・要件 9.3）。
+/// `Err(E_FAIL)`（0 でない終了）。
 pub(crate) fn run() -> windows::core::Result<()> {
     crate::readme::os_port::init_com_for_shell();
     let exe_dir = crate::boot_config::exe_location().and_then(Path::parent);

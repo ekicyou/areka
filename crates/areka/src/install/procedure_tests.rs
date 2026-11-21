@@ -1,4 +1,4 @@
-//! 手続きの成功の列のテスト（design「Testing Strategy / 手続き」・要件 2.1〜2.7・6.2・11.1・11.5・12.8）。
+//! 手続きの成功の列のテスト。
 //!
 //! 偽の口の上で、本物の `areka-nar` を一時の根へ走らせ、書庫 5 種（ゴースト・バルーン同梱の
 //! ゴースト・バルーン・`accept` 付きのシェル・`accept` 付きの追加ファイル）のイベントの名前・
@@ -113,14 +113,14 @@ fn ghost_with_balloon_lists_body_first_then_the_companion() {
                 "OnInstallCompleteEx",
                 vec![
                     joined(&["ghost", "balloon"]),
-                    // 同梱バルーンの名前は入れた後の目録の `name`（設計で決めたこと 14）。
+                    // 同梱バルーンの名前は入れた後の目録の `name`。
                     joined(&["あたらしい", "Kaku"]),
                     joined(&[&ghost_at, &balloon_at]),
                 ],
             ),
         ];
         if legacy == 1 {
-            // 旧仕様の Reference0 は同梱でも `ghost`・Reference2 は同梱バルーンの名前（12.7）。
+            // 旧仕様の Reference0 は同梱でも `ghost`・Reference2 は同梱バルーンの名前。
             expected.push(("OnInstallComplete", refs(&["ghost", "あたらしい", "Kaku"])));
         }
         assert_eq!(ports.raised(), expected, "応え {reply:?}");
@@ -161,7 +161,7 @@ fn companion_balloon_without_a_name_falls_back_to_its_folder_name() {
 }
 
 /// 同梱の表示名は入れたゴーストの中のバルーンの `name` で、根の置き場の同じフォルダ名の
-/// 別の `name` を取らない（areka-P0-ghost-inner-balloon 要件 7.6）。
+/// 別の `name` を取らない。
 #[test]
 fn companion_name_comes_from_inside_the_ghost_not_the_root_of_the_same_folder() {
     let mut ports = FakePorts::new();
@@ -229,7 +229,7 @@ fn shell_named_by_sakura_name_goes_into_the_running_ghost_shell_folder() {
         vec![
             Call::Raise("OnInstallBegin", Vec::new()),
             Call::Facts,
-            // シェルは起動中のゴーストを降ろさずに入れる（7.8）。
+            // シェルは起動中のゴーストを降ろさずに入れる。
             Call::Elsewhere(Some(RUNNING.to_owned())),
             Call::Record(InstalledRecord {
                 kind: InstallKind::Shell,
@@ -253,7 +253,6 @@ fn shell_named_by_sakura_name_goes_into_the_running_ghost_shell_folder() {
 
 #[test]
 fn supplement_returned_as_not_running_is_installed_elsewhere_by_the_procedure() {
-    // 起動中のゴーストへ入れる一周（8.1）が着くまでは、窓口が書庫を必ず返す。
     let mut ports = FakePorts::new();
     ports.overwrite = OverwriteScript::NotRunning;
     let ends = run_one(&mut ports, supplement_nar(RUNNING_ALIAS));
@@ -341,7 +340,7 @@ fn supplement_named_by_install_accept_overwrites_the_running_ghost() {
         vec![
             Call::Raise("OnInstallBegin", Vec::new()),
             Call::Facts,
-            // 宛先は起動中のゴーストのフォルダそのもの＝降ろして入れる口へ（7.1）。
+            // 宛先は起動中のゴーストのフォルダそのもの＝降ろして入れる口へ。
             Call::Overwrite(Some(RUNNING.to_owned())),
             Call::Record(InstalledRecord {
                 kind: InstallKind::Supplement,
@@ -403,7 +402,7 @@ fn accepted_terms_come_after_begin_and_before_the_install() {
 
 #[test]
 fn every_kind_sends_only_install_events_and_exactly_one_closing_notice() {
-    // 口に切替を頼む関数は無い（型の上で起きない＝6.2）。送るのは正典のインストール系の語だけ。
+    // 口に切替を頼む関数は無い（型の上で起きない）。送るのは正典のインストール系の語だけ。
     const INSTALL_EVENTS: [&str; 8] = [
         "OnInstallBegin",
         "OnInstallComplete",

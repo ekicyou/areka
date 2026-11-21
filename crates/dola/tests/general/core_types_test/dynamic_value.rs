@@ -1,5 +1,4 @@
 //! core_types: DynamicValue serde round-trip / hash / ordering
-//! Task 2.5
 
 use super::*;
 
@@ -108,7 +107,7 @@ mod dynamic_value_tests {
         assert_eq!(hash_of(&a), hash_of(&b), "equal values must hash equally");
     }
 
-    /// 等しい値は同じハッシュ（#28）。0.0 と -0.0、どの NaN どうしも等しく、ハッシュも同じ
+    /// 等しい値は同じハッシュ。0.0 と -0.0、どの NaN どうしも等しく、ハッシュも同じ
     /// （runtime の ObjectInternPool は HashMap を等しさで引く）。
     #[test]
     fn float_equal_values_hash_equally() {

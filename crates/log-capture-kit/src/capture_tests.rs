@@ -1,7 +1,5 @@
 //! 捕捉窓そのものの決定性を固定する自己テスト。
 //!
-//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
-//!
 //! 「他スレッドが先に同じ発行点を踏む」場面は待ち時間ではなく [`std::thread::JoinHandle::join`]
 //! で順序を確定させる（時間に色が依存するテストを作らない、という本ワークスペースの規律）。
 //! 各テストは**自分専用の発行点**（専用の宛先を持つ module 直下の関数）を使う。発行点の
@@ -51,7 +49,7 @@ fn count_target(events: &[CapturedEvent], target: &str) -> usize {
 
 // ---- (a) 他スレッドの先着で取りこぼさない --------------------------------
 
-/// 要件 3.2／3.4-a: **窓の外で**別スレッドが先に同じ発行点を登録しても捕捉できる。
+/// **窓の外で**別スレッドが先に同じ発行点を登録しても捕捉できる。
 ///
 /// `join()` で「別スレッドの登録 → 窓を開く」の順序を確定させるので、色は時間に依存しない。
 #[test]
@@ -69,10 +67,9 @@ fn captures_event_whose_callsite_another_thread_registered_before_the_window() {
     );
 }
 
-/// 要件 3.1／3.2／3.4-a: **窓の内側で**別スレッドが先に同じ発行点を登録しても捕捉できる。
+/// **窓の内側で**別スレッドが先に同じ発行点を登録しても捕捉できる。
 ///
-/// これが Flow 1 の図がそのまま描いている場面（`O->>C: 同じ発行点を初回登録`）。
-/// 別スレッドの発火自体は窓へ混入しない（スレッド局所＝要件 3.6）ので、期待件数は 1。
+/// 別スレッドの発火自体は窓へ混入しない（スレッド局所）ので、期待件数は 1。
 #[test]
 fn captures_event_whose_callsite_another_thread_registers_inside_the_window() {
     let ((), events) = capture(|| {
@@ -121,7 +118,7 @@ impl tracing::Subscriber for SentinelDroppingSubscriber {
     fn exit(&self, _span: &tracing::span::Id) {}
 }
 
-/// 要件 3.3／6.3 の較正: 対照イベントが捕まらない捕捉先を差すと**失敗が宣告**される
+/// 較正: 対照イベントが捕まらない捕捉先を差すと**失敗が宣告**される
 /// （空の結果を静かに返して縮退しない）。この検査が赤にできることが、番兵検査が
 /// 何かを証明していることの根拠になる。
 #[test]
@@ -136,7 +133,7 @@ fn declares_failure_when_the_sentinel_is_not_captured() {
 
 // ---- (c) 最下位レベル --------------------------------------------------
 
-/// 要件 3.5: TRACE を含む全レベルが捕捉対象。
+/// TRACE を含む全レベルが捕捉対象。
 #[test]
 fn captures_trace_level_events() {
     let ((), events) = capture(emit_trace_level);
@@ -150,7 +147,7 @@ fn captures_trace_level_events() {
 
 // ---- (d) 窓の外・他スレッドの混入なし ------------------------------------
 
-/// 要件 3.6: 窓の外で発火したイベントも、窓の内側で**他スレッド**が発火したイベントも
+/// 窓の外で発火したイベントも、窓の内側で**他スレッド**が発火したイベントも
 /// 混入しない（既定 API はスレッド局所の捕捉意味論）。
 ///
 /// 不在の主張なので、同じ窓・同一スレッドで「入る側」を 1 件見る対照を隣に置く。番兵が
@@ -182,7 +179,7 @@ fn does_not_capture_events_from_outside_the_window_or_other_threads() {
 
 // ---- 対照イベントは返却前に取り除かれる ----------------------------------
 
-/// 要件 3.3／6.3: 戻り値と捕捉結果は対照イベントの分だけ増えない。
+/// 戻り値と捕捉結果は対照イベントの分だけ増えない。
 #[test]
 fn sentinel_is_removed_before_returning() {
     let (value, events) = capture(|| 42u32);
@@ -196,7 +193,7 @@ fn sentinel_is_removed_before_returning() {
 
 // ---- 捕捉結果の取り出しは共有参照の解放に依存しない ----------------------
 
-/// 設計の Invariants: 捕捉結果は `with_default` を抜けた**後**に取り出し、共有参照が
+/// 捕捉結果は `with_default` を抜けた**後**に取り出し、共有参照が
 /// 1 本だけになること（`Arc::try_unwrap` の成否）に依存しない。呼出側が共有参照を
 /// 握ったままでもイベントが返ることで示す。
 #[test]
@@ -216,7 +213,7 @@ fn extracts_events_even_while_the_shared_sink_is_still_held() {
 
 // ---- 常駐の仕掛けは多スレッドから同時に呼べる ----------------------------
 
-/// 設計の Invariants: `ensure_interest_probes` を多スレッドから同時に呼んでも panic せず、
+/// `ensure_interest_probes` を多スレッドから同時に呼んでも panic せず、
 /// その後に窓が開ける（番兵検査が通る）。1 度だけ確立されることは
 /// `probe::tests::the_environment_is_read_exactly_once_for_the_whole_process` が数えて確かめる。
 #[test]

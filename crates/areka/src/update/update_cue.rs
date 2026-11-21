@@ -1,5 +1,4 @@
-//! 台本 `\![updatebymyself]`・`\![update,…]`・`\![updateother,…]` の受け口と引数の解析
-//! （design「areka / 入口 / 台本の受け口」・要件 1.5〜1.8・10.8）。
+//! 台本 `\![updatebymyself]`・`\![update,…]`・`\![updateother,…]` の受け口と引数の解析。
 //!
 //! 骨格は `install_cue.rs` の受け口と同型。台本の演出は全員へ配られるので、ここで行うのは次の 2 つに
 //! 限る。
@@ -28,13 +27,13 @@ const NAME_UPDATE: &str = "update";
 /// 名前で引くシェル・バルーンを更新する。
 const NAME_UPDATE_OTHER: &str = "updateother";
 
-/// 更新オプション（α では受けない・要件 1.8・10.8）。`--option=…` は接頭辞で判定する。
+/// 更新オプション（α では受けない）。`--option=…` は接頭辞で判定する。
 const UPDATE_OPTIONS: [&str; 3] = ["checkonly", "testonly", "recovery"];
 const OPTION_PREFIX: &str = "--option=";
 const SHELL_PREFIX: &str = "--shell=";
 const BALLOON_PREFIX: &str = "--balloon=";
 
-/// 今の 3 つ（要件 1.4 と同じ並び）。
+/// 今の 3 つ。
 const CURRENT_ALL: [TargetKind; 3] = [TargetKind::Ghost, TargetKind::Shell, TargetKind::Balloon];
 
 fn is_own(name: &str) -> bool {
@@ -45,7 +44,7 @@ fn is_update_option(param: &str) -> bool {
     UPDATE_OPTIONS.contains(&param) || param.starts_with(OPTION_PREFIX)
 }
 
-/// 台本の更新の受け口（design「台本の受け口」）。
+/// 台本の更新の受け口。
 ///
 /// 配送は台本ごとに受け口を複製するため [`Clone`] が要る（どの複製も窓口の単一の受信端へ届く）。
 #[derive(Clone)]
@@ -62,7 +61,7 @@ impl UpdateCueSink {
 
 impl dola::cue::CueSink for UpdateCueSink {
     fn emit(&mut self, cue: TalkCue) {
-        // 1) 開封。開封できない荷物は宛名で水準を分ける（自分宛の壊れ物は警告・他人宛は良性）。
+        // 開封できない荷物は宛名で水準を分ける（自分宛の壊れ物は警告・他人宛は良性）。
         let Some((name, params)) = cue.command.as_command_carrier() else {
             match &cue.command {
                 CueCommand::Custom { command, .. } if is_own(command) => warn!(
@@ -79,7 +78,6 @@ impl dola::cue::CueSink for UpdateCueSink {
             return;
         };
 
-        // 2) 自己選別。担当は 3 つのコマンド名だけ（選別子なし）。
         if !is_own(name) {
             debug!(
                 event = "update_cue_skip",
@@ -88,7 +86,6 @@ impl dola::cue::CueSink for UpdateCueSink {
             return;
         }
 
-        // 3) 解析。断りは要求 0。
         let parsed = match parse_update_command(name, &params) {
             Ok(parsed) => parsed,
             Err(refusal) => {
@@ -110,7 +107,6 @@ impl dola::cue::CueSink for UpdateCueSink {
             );
         }
 
-        // 4) 送り出し。受信端が閉じていても台本は殺さない。
         if let Err(err) = self.tx.send(parsed.request) {
             warn!(
                 event = "update_cue_send_failed",
@@ -121,7 +117,7 @@ impl dola::cue::CueSink for UpdateCueSink {
     }
 }
 
-/// 解析の断り（要件 1.8・10.8）。
+/// 解析の断り。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Refusal {
     /// 更新オプション（`checkonly`・`testonly`・`recovery`・`--option=…`）か、読めない引数。
@@ -139,7 +135,7 @@ pub(crate) struct Parsed {
     pub ignored: Vec<String>,
 }
 
-/// 純粋: コマンド名と引数から要求を組む（要件 1.5〜1.8）。`name` は 3 つのどれかである前提
+/// 純粋: コマンド名と引数から要求を組む。`name` は 3 つのどれかである前提
 /// （呼び手が自己選別する）で、それ以外は `update` と同じに読む。
 pub(crate) fn parse_update_command(name: &str, params: &[&str]) -> Result<Parsed, Refusal> {
     let current = |kinds: Vec<TargetKind>| Parsed {
@@ -183,7 +179,7 @@ pub(crate) fn parse_update_command(name: &str, params: &[&str]) -> Result<Parsed
 /// `updateother` の引数: `--shell=名前`／`--balloon=名前` を並んだ順に。更新オプションか `--` で
 /// 始まらない語が 1 つでもあれば要求ごと断り、知らない `--名前=` は読み飛ばす。
 fn parse_other(params: &[&str]) -> Result<Parsed, Refusal> {
-    // 更新オプションは位置に依らず要求ごと断る（読み替えて普通の更新をしない・裁定 8）。
+    // 更新オプションは位置に依らず要求ごと断る（読み替えて普通の更新をしない）。
     if let Some(found) = params
         .iter()
         .find(|p| is_update_option(p) || !p.starts_with("--"))

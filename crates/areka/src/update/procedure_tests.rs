@@ -1,4 +1,4 @@
-//! 手続きの兄弟テスト（design「Testing Strategy / 手続き」・要件 9.1・9.5・9.6）。
+//! 手続きの兄弟テスト。
 //!
 //! 偽の口と `Progress` の台本で回す（エンジンは呼ばない・ネットへ出ない）。イベント名は写しの
 //! 定数を借りずに綴りで書く（写しの取り違えもここで赤になる）。
@@ -85,7 +85,7 @@ fn run(order: &UpdateOrder, ports: &FakePorts) -> (OrderEnd, Vec<CapturedEvent>)
     capture(|| run_order(order, ports))
 }
 
-/// 4 経路 × ゴースト／シェルの名で、送るイベントの名前・順・Reference と締めが 1 件だけのこと（要件 9.1・2.12）。
+/// 4 経路 × ゴースト／シェルの名で、送るイベントの名前・順・Reference と締めが 1 件だけのこと。
 #[test]
 fn four_paths_send_canonical_events_for_ghost_and_shell() {
     for kind in [TargetKind::Ghost, TargetKind::Shell] {
@@ -185,7 +185,7 @@ fn four_paths_send_canonical_events_for_ghost_and_shell() {
             );
             let (order_end, events) = run(&order, &ports);
 
-            // 後送りの列（決めたこと 21・要件 2.16）: ゴーストの成功の締めは列の先頭へ移り、総括が最後。
+            // 後送りの列: ゴーストの成功の締めは列の先頭へ移り、総括が最後。
             // シェルの締めと失敗の締めはその場で送る。`changed` なら列は読み直しの頼みに添えて送らない。
             let mut tail = Vec::new();
             if kind == TargetKind::Ghost && expected.last().is_some_and(|(id, _)| *id == n.complete)
@@ -237,7 +237,7 @@ fn four_paths_send_canonical_events_for_ghost_and_shell() {
     }
 }
 
-/// `OnUpdateBegin` の Reference1 は対象のフォルダの絶対パス（要件 2.4）。
+/// `OnUpdateBegin` の Reference1 は対象のフォルダの絶対パス。
 #[test]
 fn begin_reference1_is_absolute_folder() {
     let target = spec(TargetKind::Balloon, "kaku", Some(SHELL_URL));
@@ -257,7 +257,7 @@ fn begin_reference1_is_absolute_folder() {
     assert_eq!(&refs[3..], &s(&["balloon", "manual"])[..]);
 }
 
-/// メニューで `OnUpdateProcessExec` に台本が返れば、標準の手続き 0 件・総括 0・`info!` 1 件（要件 1.12）。
+/// メニューで `OnUpdateProcessExec` に台本が返れば、標準の手続き 0 件・総括 0・`info!` 1 件。
 #[test]
 fn process_exec_answered_by_script_stops_the_order() {
     let mut ports = FakePorts::new([]);
@@ -280,7 +280,7 @@ fn process_exec_answered_by_script_stops_the_order() {
     assert_eq!(answered[0].field("answered"), Some("true"));
 }
 
-/// メニューで返事が無ければ標準へ進み、標準が始まった知らせは照会より前に 1 回（要件 1.12・9.6）。
+/// メニューで返事が無ければ標準へ進み、標準が始まった知らせは照会より前に 1 回。
 #[test]
 fn process_exec_without_reply_goes_standard_and_notifies_before_query() {
     let ports = FakePorts::new([script_none()]);
@@ -307,7 +307,7 @@ fn process_exec_without_reply_goes_standard_and_notifies_before_query() {
     );
 }
 
-/// 台本の入口では `OnUpdateProcessExec` を送らず、標準が始まった知らせは照会より前に 1 回（要件 1.13）。
+/// 台本の入口では `OnUpdateProcessExec` を送らず、標準が始まった知らせは照会より前に 1 回。
 #[test]
 fn script_entry_never_sends_process_exec() {
     let ports = FakePorts::new([script_none()]);
@@ -325,7 +325,7 @@ fn script_entry_never_sends_process_exec() {
     assert!(!ports.raised_ids().contains(&"OnUpdateProcessExec"));
 }
 
-/// 更新先の 3 通り: ゴーストは照会の値が勝ち、無ければ `descript.txt`。シェルは照会を見ない（要件 1.9）。
+/// 更新先の 3 通り: ゴーストは照会の値が勝ち、無ければ `descript.txt`。シェルは照会を見ない。
 #[test]
 fn homeurl_resource_wins_for_ghost_then_descript_and_shell_uses_descript() {
     let cases: [(TargetKind, Option<&str>, &str); 3] = [
@@ -370,7 +370,7 @@ fn homeurl_resource_wins_for_ghost_then_descript_and_shell_uses_descript() {
     }
 }
 
-/// 更新先の無い対象は飛ばし（イベント 0・総括に載せない・`warn!` 1 件）、全部飛ばせば総括 0（要件 1.10・3.5）。
+/// 更新先の無い対象は飛ばし（イベント 0・総括に載せない・`warn!` 1 件）、全部飛ばせば総括 0。
 #[test]
 fn targets_without_homeurl_are_skipped_and_all_skipped_sends_no_summary() {
     // 一部だけ飛ばす: シェルに更新先が無い。
@@ -418,7 +418,7 @@ fn targets_without_homeurl_are_skipped_and_all_skipped_sends_no_summary() {
     assert_eq!(with_event(&events, "update_target_skipped").len(), 2);
 }
 
-/// 取得口を作れなければ `OnUpdateBegin` → `OnUpdateFailure(connect)` と `error!` 1 件（要件 4.4）。
+/// 取得口を作れなければ `OnUpdateBegin` → `OnUpdateFailure(connect)` と `error!` 1 件。
 #[test]
 fn unavailable_fetch_reports_connect_with_one_error() {
     let ports = FakePorts::new([EngineScript {
@@ -462,7 +462,7 @@ fn unavailable_fetch_reports_connect_with_one_error() {
     );
 }
 
-/// 対象が複数なら 1 つ終えてから次・照会は 1 回・`useorigin1` の読みは全対象で同じ・総括は最後（要件 2.1・2.14・3.4）。
+/// 対象が複数なら 1 つ終えてから次・照会は 1 回・`useorigin1` の読みは全対象で同じ・総括は最後。
 #[test]
 fn multiple_targets_run_one_by_one_with_one_query_and_summary_last() {
     let mut ports = FakePorts::new([script_changed(), script_none()]);
@@ -554,7 +554,7 @@ fn missing_resources_abandons_before_any_target() {
     assert_eq!(abandoned[0].field_str("at"), Some("resources"));
 }
 
-/// 成功したが消せなかった物・作業場所が残れば、成功として扱い `warn!` に場所を残す（要件 4.8）。
+/// 成功したが消せなかった物・作業場所が残れば、成功として扱い `warn!` に場所を残す。
 #[test]
 fn leftovers_after_success_are_warned_and_still_changed() {
     let target = spec(TargetKind::Ghost, "emo2", Some(GHOST_URL));
@@ -601,7 +601,7 @@ fn leftovers_after_success_are_warned_and_still_changed() {
     assert_eq!(events.iter().filter(|e| e.level == Level::ERROR).count(), 0);
 }
 
-/// 戻せなかった失敗は `fileio`・`error!` 1 件に戻れなかったことと作業場所を載せる（要件 4.5・4.6）。
+/// 戻せなかった失敗は `fileio`・`error!` 1 件に戻れなかったことと作業場所を載せる。
 #[test]
 fn rollback_failure_reports_fileio_and_logs_work_area() {
     let target = spec(TargetKind::Ghost, "emo2", Some(GHOST_URL));

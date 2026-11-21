@@ -1,8 +1,8 @@
-//! 並びでインストールの宛先の根に答える部品（design.md「InstallDestination」・要件 5.1〜5.3・5.6）。
+//! 並びでインストールの宛先の根に答える部品。
 //!
 //! 答えは `catalog_roots::install_root` から取る（新しいものは見つかるいちばん上の根・すでにあるものは
 //! 見えている根）。どの答えも並びの写しの綴りのまま返す（`areka-nar` は作業フォルダを根の綴りの
-//! 完全一致でまとめるため・tasks.md Implementation Notes 1.5）。行き先を尋ねる画面は出さない（5.6）。
+//! 完全一致でまとめるため）。行き先を尋ねる画面は出さない。
 
 use std::path::{Path, PathBuf};
 
@@ -14,7 +14,7 @@ use areka_nar::{InstallOutcome, InstallRequest, IoPhase, NarArchive, NarError};
 
 /// 並びの写しで `InstallRoots` に答える。見つかる根が 1 つも無ければ作れない。
 pub(crate) struct CatalogDestinations {
-    /// 並びの写しから一時の置き場を除いたもの（一時の置き場は入れ先にしない・要件 3.5）。
+    /// 並びの写しから一時の置き場を除いたもの（一時の置き場は入れ先にしない）。
     roots: BasewareRoots,
     /// 除いた一時の置き場（起動中のゴーストがそこにいるかを見る）。
     temporary: Vec<PathBuf>,
@@ -28,7 +28,7 @@ pub(crate) struct CatalogDestinations {
 
 impl CatalogDestinations {
     /// 見つかる根が無ければ `None`（呼び手が error `install_no_root` を残して今の失敗の経路へ倒す）。
-    /// 一時の置き場は並びから除く（同じフォルダ名の相手・控えの根・記録の根に使わない・要件 3.5・3.9）。
+    /// 一時の置き場は並びから除く（同じフォルダ名の相手・控えの根・記録の根に使わない）。
     pub(crate) fn new(roots: BasewareRoots) -> Option<Self> {
         let (temporary, kept): (Vec<_>, Vec<_>) = roots
             .roots()
@@ -52,9 +52,9 @@ impl CatalogDestinations {
         self
     }
 
-    /// 起動中のゴーストの場所を渡す（要件 8.7: 起動中のゴーストへの上書きはその根へ書く）。
+    /// 起動中のゴーストの場所を渡す（起動中のゴーストへの上書きはその根へ書く）。
     /// 一時の置き場にいるゴーストは渡さなかったことにする（`<一時の置き場>\<フォルダ>` の 2 つ上は
-    /// 置き場の外なので、入れ先は並びの答え＝覚える置き場に任せる・要件 3.5）。
+    /// 置き場の外なので、入れ先は並びの答え＝覚える置き場に任せる）。
     pub(crate) fn with_running(mut self, running: Option<PathBuf>) -> Self {
         self.running = running.filter(|dir| {
             !dir.parent()
@@ -89,8 +89,8 @@ impl CatalogDestinations {
         Some(root)
     }
 
-    /// 見えている物が実行ファイルの隣の根に在れば写し、写しになったら書ける根の綴り（要件 4.4・4.8）。
-    /// 並びに印の付いた項目が無ければ何も見ない（要件 7.1）。1 配置につき 1 回尋ねられるので写すのも 1 回。
+    /// 見えている物が実行ファイルの隣の根に在れば写し、写しになったら書ける根の綴り。
+    /// 並びに印の付いた項目が無ければ何も見ない。1 配置につき 1 回尋ねられるので写すのも 1 回。
     fn copied_root(&self, kind: StoreKind, folder: &str) -> Option<PathBuf> {
         let user = self.roots.user_root()?.dir();
         let dir = match kind {
@@ -136,7 +136,7 @@ impl areka_nar::InstallRoots for CatalogDestinations {
 /// 並びの写しを宛先にして書庫を入れる（背景のスレッドと起動中のゴーストへ入れる一周の共通の口）。
 /// `running` は起動中のゴーストの場所（根の下のゴーストのときだけ・[`CatalogDestinations::with_running`]）。
 /// 見つかる根が無ければ入れずに error `install_no_root` を残し、書く前の I/O の失敗として返す
-/// （手続きの今の失敗の経路へ倒す）。入れ終えたら要素ごとに info `install_placed`（要件 5.7）。
+/// （手続きの今の失敗の経路へ倒す）。入れ終えたら要素ごとに info `install_placed`。
 pub(crate) fn install_into(
     roots: &BasewareRoots,
     archive: &NarArchive,

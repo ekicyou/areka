@@ -1,4 +1,3 @@
-// tests/validation.rs — dola validation domain test entry point
 #[path = "validation/common/mod.rs"]
 mod common;
 #[path = "validation/keyframe_test.rs"]

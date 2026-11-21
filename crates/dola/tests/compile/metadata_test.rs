@@ -1,5 +1,4 @@
-//! Compile module metadata and hints tests
-//! Task 9.4
+//! compile のメタデータとヒントのテスト
 
 use dola::*;
 
@@ -124,5 +123,5 @@ fn base_duration_and_total_base_duration() {
     let result = compile_storyboard(&doc, "test", 0.0).unwrap();
     assert_eq!(result.timelines.get("x").unwrap().base_duration, 1.0);
     assert_eq!(result.timelines.get("y").unwrap().base_duration, 3.0);
-    assert_eq!(result.total_base_duration, 3.0); // max of all
+    assert_eq!(result.total_base_duration, 3.0);
 }

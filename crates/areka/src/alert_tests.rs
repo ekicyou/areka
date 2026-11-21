@@ -1,12 +1,12 @@
-//! 無いときの告知の決定論テスト（要件 6.1・6.2・6.5・6.7）。
+//! 無いときの告知の決定論テスト。
 //!
 //! 確かめること: 4 場面（根なし／ゴーストなし／バルーンなし／起動窓を開けない）のそれぞれが
 //! 抑止ありで `error!` をちょうど 1 件残すこと・根なし／ゴーストなし／バルーンなしの本文を
-//! 複数の置き場を並べた形で丸ごと固定すること（baseware-root-list 要件 9.4〜9.8・12.6）・
+//! 複数の置き場を並べた形で丸ごと固定すること・
 //! 抑止の環境変数の値の読み方。
 //!
-//! 抑止なしの呼び出し（タスクダイアログ）はモーダルで止まるので決定論テストに入れず、
-//! 実機確認 ③ へ回す。ここでは `raise` を必ず `suppressed = true` で呼ぶ。
+//! 抑止なしの呼び出し（タスクダイアログ）はモーダルで止まるので決定論テストに入れず、実機確認に回す。
+//! ここでは `raise` を必ず `suppressed = true` で呼ぶ。
 
 use std::path::PathBuf;
 
@@ -56,14 +56,14 @@ fn exe_unavailable() -> RootError {
     }
 }
 
-// ---------------------------------------------------------------- 置き場・ゴースト・バルーンの文面（要件 9.4〜9.8・12.6）
+// ---------------------------------------------------------------- 置き場・ゴースト・バルーンの文面
 
 /// 2 つの置き場（上から A・B）。
 fn two_roots() -> [PathBuf; 2] {
     [abs("root-a"), abs("root-b")]
 }
 
-/// 抑止ありで告げ、記録の本文が `alert_text` の本文と同じで、それが `expected` であることを確かめる（要件 9.8）。
+/// 抑止ありで告げ、記録の本文が `alert_text` の本文と同じで、それが `expected` であることを確かめる。
 fn assert_alert_body(scene: &AlertScene, expected: &str) {
     let (title, body) = alert_text(scene);
     assert_eq!(title, "areka を起動できません");
@@ -71,7 +71,7 @@ fn assert_alert_body(scene: &AlertScene, expected: &str) {
     assert_eq!(only_alert_body(&raise_suppressed(scene)), expected);
 }
 
-/// 根が決まらない（どの置き場も見つからない）: 試した場所を出どころつきで 1 行ずつ・最後に `;` の案内（要件 9.4・9.5）。
+/// 根が決まらない（どの置き場も見つからない）: 試した場所を出どころつきで 1 行ずつ・最後に `;` の案内。
 #[test]
 fn root_missing_lists_every_tried_root_with_origin() {
     let [a, b] = two_roots();
@@ -99,7 +99,7 @@ fn root_missing_lists_every_tried_root_with_origin() {
     }
 }
 
-/// 空の `AREKA_ROOT` は 1 行目を理由にし、空のパスを綴らない（要件 9.4・9.5）。
+/// 空の `AREKA_ROOT` は 1 行目を理由にし、空のパスを綴らない。
 #[test]
 fn root_missing_with_empty_env_says_it_is_empty() {
     let scene = AlertScene::RootMissing(RootError::EnvAllEmpty {
@@ -114,7 +114,7 @@ fn root_missing_with_empty_env_says_it_is_empty() {
     );
 }
 
-/// 実行ファイルの場所が取れないときは 1 行目を理由にし、`AREKA_ROOT` で渡す道を示す（要件 9.4・9.5）。
+/// 実行ファイルの場所が取れないときは 1 行目を理由にし、`AREKA_ROOT` で渡す道を示す。
 #[test]
 fn root_missing_without_exe_location_says_why() {
     assert_alert_body(
@@ -125,7 +125,7 @@ fn root_missing_without_exe_location_says_why() {
     );
 }
 
-/// ゴーストが無い: 各置き場の `ghost\` を 1 行ずつ絶対パスで（要件 9.6）。
+/// ゴーストが無い: 各置き場の `ghost\` を 1 行ずつ絶対パスで。
 #[test]
 fn ghost_missing_lists_every_ghost_store() {
     let [a, b] = two_roots().map(|r| r.join("ghost"));
@@ -144,7 +144,7 @@ fn ghost_missing_lists_every_ghost_store() {
     assert_alert_body(&scene, &expected);
 }
 
-/// argv 起動のゴーストなしは、1 行目に渡されたパスを入れ、探した場所は同じ形（要件 9.6）。
+/// argv 起動のゴーストなしは、1 行目に渡されたパスを入れ、探した場所は同じ形。
 #[test]
 fn ghost_missing_from_argv_names_the_given_path() {
     let given = abs("not-a-ghost");
@@ -165,7 +165,7 @@ fn ghost_missing_from_argv_names_the_given_path() {
     assert_alert_body(&scene, &expected);
 }
 
-/// バルーンが無い: 各置き場の `balloon\` を 1 行ずつ絶対パスで（要件 9.7）。
+/// バルーンが無い: 各置き場の `balloon\` を 1 行ずつ絶対パスで。
 #[test]
 fn balloon_missing_lists_every_balloon_store() {
     let [a, b] = two_roots().map(|r| r.join("balloon"));
@@ -183,7 +183,7 @@ fn balloon_missing_lists_every_balloon_store() {
     assert_alert_body(&scene, &expected);
 }
 
-/// 起動窓を開けない: 本文に失敗の内容が入る（要件 6.4）。
+/// 起動窓を開けない: 本文に失敗の内容が入る。
 #[test]
 fn startup_window_logs_one_error_with_reason() {
     let scene = AlertScene::StartupWindow {
@@ -196,7 +196,7 @@ fn startup_window_logs_one_error_with_reason() {
 
 // ---------------------------------------------------------------- 抑止
 
-/// 未設定・空・空白だけ・"0" は出す（抑えない）、それ以外は抑える（要件 6.5）。
+/// 未設定・空・空白だけ・"0" は出す（抑えない）、それ以外は抑える。
 #[test]
 fn suppressed_from_reads_the_value() {
     assert!(!suppressed_from(None), "未設定は出す");
@@ -210,7 +210,7 @@ fn suppressed_from_reads_the_value() {
 
 // ---------------------------------------------------------------- SHIORI が動かなくなった
 
-/// 題名が起動失敗と別であることを、既存 4 場面の側からも確かめる（要件 1.3・5.2）。
+/// 題名が起動失敗と別であることを、既存 4 場面の側からも確かめる。
 #[test]
 fn startup_scenes_keep_the_startup_title() {
     let scenes = [
@@ -232,7 +232,7 @@ fn startup_scenes_keep_the_startup_title() {
 }
 
 /// SHIORI の失敗の告知を組み、文面と記録を確かめる。`phrase` は種類の 5 語をそのまま書く
-/// （`fault_kind_text` を通さない＝写しの取り違えが赤になる）（要件 1.3・1.4・1.5・1.9・3.5・7.1）。
+/// （`fault_kind_text` を通さない＝写しの取り違えが赤になる）。
 fn assert_shiori_fault(kind: ShioriFaultKind, phrase: &str, name: Option<&str>) {
     let root = abs("root").join("ghost").join("emily");
     let reason = "shiori handshake failure: 接続が拒否されました";
@@ -341,7 +341,7 @@ fn shiori_fault_unknown_without_name() {
     assert_shiori_fault(ShioriFaultKind::Unknown, "原因不明", None);
 }
 
-// ---------------------------------------------------------------- はい／いいえ（ghost-install 要件 4.4・4.7）
+// ---------------------------------------------------------------- はい／いいえ
 
 /// 抑止ありなら画面を出さずに `Suppressed` を返し、`info!(event = "ask")` をちょうど 1 件残す。
 /// 抑止なしの呼び出しはモーダルで止まるので決定論テストに入れない。
@@ -357,7 +357,7 @@ fn ask_yes_no_suppressed_returns_suppressed_and_logs_one_info() {
     assert_eq!(ev.field("suppressed"), Some("true"));
 }
 
-// ---------------------------------------------------------------- OK だけの警告（emily-ghost-verification 要件 1.12）
+// ---------------------------------------------------------------- OK だけの警告
 
 /// 抑止ありなら画面を出さず、`warn!(event = "install_warning_dialog")` をちょうど 1 件残す
 /// （欄は題名・本文・抑えたか）。抑止なしの呼び出しはモーダルで止まるので決定論テストに入れない。

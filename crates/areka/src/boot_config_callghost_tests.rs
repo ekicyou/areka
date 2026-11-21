@@ -1,4 +1,4 @@
-//! callghost の相手を受けた起動の解決（install-before-boot タスク 2.2・要件 4.1・4.3・4.7・4.11・10.5）。
+//! callghost の相手を受けた起動の解決。
 //!
 //! 起動の解決の中身 `resolve_boot_with` に callghost の相手（入れたゴーストのフォルダ名）を渡し、
 //! 経路・場所・起動中の印の値を見る。根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
@@ -75,7 +75,7 @@ fn answer(got: Result<BootResolved, AlertScene>) -> (GhostRoute, PathBuf, Option
     (got.1.route, got.1.dir, got.3)
 }
 
-/// 相手は記憶の前回のゴーストより先に選ばれる（4.1・4.3）。
+/// 相手は記憶の前回のゴーストより先に選ばれる。
 #[test]
 fn call_ghost_comes_before_the_remembered_ghost() {
     let tmp = installed("cfg-callghost-memory");
@@ -90,7 +90,7 @@ fn call_ghost_comes_before_the_remembered_ghost() {
     );
 }
 
-/// 前回がきれいに終わらなかった（起動中の印がある）起動でも相手が選ばれ、印の値は今のとおり返る（4.7）。
+/// 前回がきれいに終わらなかった（起動中の印がある）起動でも相手が選ばれ、印の値は今のとおり返る。
 #[test]
 fn call_ghost_is_chosen_even_with_the_session_mark() {
     let tmp = installed("cfg-callghost-mark");
@@ -105,7 +105,7 @@ fn call_ghost_is_chosen_even_with_the_session_mark() {
     );
 }
 
-/// 指定（位置引数・`--ghost`）があれば指定が勝つ（4.5 の守り・10.5）。
+/// 指定（位置引数・`--ghost`）があれば指定が勝つ。
 #[test]
 fn explicit_ghost_wins_over_call_ghost() {
     let tmp = installed("cfg-callghost-explicit");
@@ -123,7 +123,7 @@ fn explicit_ghost_wins_over_call_ghost() {
     );
 }
 
-/// 入れた後もゴーストが 0 体なら、今と同じ「ゴーストなし」の告知の場面で止まる（4.11）。
+/// 入れた後もゴーストが 0 体なら、今と同じ「ゴーストなし」の告知の場面で止まる。
 #[test]
 fn no_ghost_after_install_stops_with_ghost_missing() {
     let tmp = fixture("cfg-callghost-none", &[]);

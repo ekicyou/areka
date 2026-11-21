@@ -1,4 +1,4 @@
-//! 起動の依頼の持ち物（`--install` と exe の隣の `initial_install.nar`・spec: startup-install-option・install-before-boot）。
+//! 起動の依頼の持ち物（`--install` と exe の隣の `initial_install.nar`）。
 //!
 //! このファイルの純粋な判断（消す書庫・`callghost` の相手）は World にもファイルにも触らない。
 
@@ -12,7 +12,7 @@ use super::procedure::{ArchiveEnd, run_order};
 use super::{InstallOrder, InstallOrigin};
 use crate::cli::{BootRequest, InstallArgs};
 
-/// exe の隣に置くと起動のたびに 1 回だけ入れる書庫の名前（大小を問わない＝要件 4.1）。
+/// exe の隣に置くと起動のたびに 1 回だけ入れる書庫の名前（大小を問わない）。
 pub(crate) const INITIAL_INSTALL_FILE: &str = "initial_install.nar";
 
 /// 起動の依頼の持ち物（`main` が起動の解決の前に作って持ち、[`install`] で控えを World へ移して落とす）。
@@ -43,7 +43,7 @@ impl Pending {
             .filter(|path| path.is_file())
     }
 
-    /// 出さずに終わる記録（入れる物が在るときだけ warn 1 件＝要件 2.7・7.1・7.2）。
+    /// 出さずに終わる記録（入れる物が在るときだけ warn 1 件）。
     fn record_not_submitted(&self, reason: &'static str) {
         let initial_install = self.initial_install();
         if self.archives.is_empty() && initial_install.is_none() {
@@ -80,7 +80,7 @@ impl StartupInstall {
     }
 
     /// `new` の中身（テストは exe の隣の代わりに `target\` の下のフォルダを渡す）。areka はどこでも
-    /// 今のフォルダを変えないので、ここで直すのは「起動したときの今のフォルダ」から読むのと同じ（要件 1.2）。
+    /// 今のフォルダを変えないので、ここで直すのは「起動したときの今のフォルダ」から読むのと同じ。
     pub(crate) fn new_with(args: InstallArgs, exe_dir: Option<PathBuf>) -> StartupInstall {
         let archives = args
             .archives
@@ -113,7 +113,7 @@ impl StartupInstall {
     /// `--install` の並びを後に、別々の依頼として起動の前の口で手続きへ渡し、入った書庫を消し
     /// （`initial_install.nar` はいつも・`--install` は `deletesource` のときだけ）、控えを self に残す。
     /// 読み取りだけなら出どころごとに断り、何も入れず何も消さない。答えは `callghost` で起こす
-    /// ゴーストのフォルダ名（使うときだけ・要件 1.1〜1.3・1.5・4.9・5.1〜5.7・6.1・6.2・7.1〜7.4）。
+    /// ゴーストのフォルダ名（使うときだけ）。
     pub(crate) fn run_before_boot(
         &mut self,
         roots: &BasewareRoots,
@@ -162,7 +162,7 @@ impl StartupInstall {
     }
 
     /// 依頼を順に手続きへ渡し、記録して入った書庫を消す。答えは `--install` の依頼の終わり方
-    /// （`initial_install.nar` の分は `callghost` の判断へ渡さない＝要件 4.9）。
+    /// （`initial_install.nar` の分は `callghost` の判断へ渡さない）。
     fn install_orders(
         &mut self,
         roots: &BasewareRoots,
@@ -247,7 +247,7 @@ pub(crate) fn resolve_boot(
 
 /// 中身（テストは根の結果・旗・選び方を差し込む）。根が決まれば起動の前の道を通し、決まらなければ
 /// 入れる物を取り出して warn `root_missing` を 1 件残す。どちらの後も、`callghost` の相手を添えて
-/// 起動の解決へ渡す（根の記録と告知の場面は `resolve_boot_with` が出す＝要件 1.1・1.7・4.1・6.3）。
+/// 起動の解決へ渡す（根の記録と告知の場面は `resolve_boot_with` が出す）。
 pub(crate) fn resolve_boot_with_env(
     resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
     request: &BootRequest,
@@ -285,8 +285,7 @@ impl Drop for StartupInstall {
 }
 
 /// `main` から 1 度だけ（系の登録の後）。控えを入れた順に、窓口の記録と同じ受け皿と置換語へ置き
-/// （最後の 1 本が「最後に入れた物」）、持ち物を落とす。記憶へは書かず、ゴーストへイベントは送らない
-/// （要件 3.2・3.4）。
+/// （最後の 1 本が「最後に入れた物」）、持ち物を落とす。記憶へは書かず、ゴーストへイベントは送らない。
 pub(crate) fn install(world: &mut World, mut startup: StartupInstall) {
     let carried = std::mem::take(&mut startup.carried);
     if !carried.is_empty() {
@@ -313,7 +312,7 @@ fn end_word(end: Option<&ArchiveEnd>) -> &'static str {
     }
 }
 
-/// 1 本ずつ `remove_file`（フォルダは消えない・1 本の失敗でほかをやめない＝要件 3.3・3.4・3.6・4.5）。
+/// 1 本ずつ `remove_file`（フォルダは消えない・1 本の失敗でほかをやめない）。
 fn delete_sources(origin: InstallOrigin, archives: &[PathBuf]) {
     for archive in archives {
         match std::fs::remove_file(archive) {
@@ -334,7 +333,7 @@ fn delete_sources(origin: InstallOrigin, archives: &[PathBuf]) {
     }
 }
 
-/// 純粋: 消す書庫（`Installed` のパスだけ・重ねは最初の 1 つ・書いた順＝要件 3.1・3.2・4.3・4.4）。
+/// 純粋: 消す書庫（`Installed` のパスだけ・重ねは最初の 1 つ・書いた順）。
 ///
 /// `ends` が短い（途中でやめた）とき、終わり方の無い書庫は「まだ扱っていない」＝消さない。
 pub(crate) fn sources_to_delete(archives: &[PathBuf], ends: &[ArchiveEnd]) -> Vec<PathBuf> {
@@ -358,14 +357,14 @@ pub(crate) fn sources_to_delete(archives: &[PathBuf], ends: &[ArchiveEnd]) -> Ve
     out
 }
 
-/// `callghost` の判断に要る事実（design「CallGhostDecision」）。
+/// `callghost` の判断に要る事実。
 pub(crate) struct CallGhostFacts<'a> {
     /// `--option callghost` が `--install` と一緒に渡された（cli が下ろした後の値）。
     pub requested: bool,
     pub readonly: bool,
     /// 起動するゴーストの指定（位置引数・`--ghost` の値・`--random` のどれか）。在れば使わない。
     pub boot_target: Option<BootTarget>,
-    /// `--install` の依頼の終わり方（`initial_install.nar` の分は渡さない＝要件 4.9）。
+    /// `--install` の依頼の終わり方（`initial_install.nar` の分は渡さない）。
     pub ends: &'a [ArchiveEnd],
 }
 
@@ -378,7 +377,7 @@ pub(crate) enum BootTarget {
 }
 
 impl BootTarget {
-    /// 起動の求めに値が在るか（`--ghost` が置き場に当たらなくても指定あり＝要件 4.5）。
+    /// 起動の求めに値が在るか（`--ghost` が置き場に当たらなくても指定あり）。
     pub(crate) fn of(request: &BootRequest) -> Option<BootTarget> {
         if request.positional_ghost.is_some() {
             Some(BootTarget::Positional)
@@ -430,8 +429,7 @@ impl CallGhostSkip {
     }
 }
 
-/// `callghost` を使うか（順＝渡されていない → 読み取りだけ → 指定あり → ゴーストが無い → 選ぶ・
-/// 要件 4.3〜4.6・7.4）。判断は事実だけから決まり、答えを info で 1 件残す（`NotRequested` は残さない）。
+/// `callghost` を使うか（順＝渡されていない → 読み取りだけ → 指定あり → ゴーストが無い → 選ぶ）。判断は事実だけから決まり、答えを info で 1 件残す（`NotRequested` は残さない）。
 pub(crate) fn decide_call_ghost(facts: &CallGhostFacts<'_>) -> CallGhost {
     let answer = if !facts.requested {
         CallGhost::NotRequested

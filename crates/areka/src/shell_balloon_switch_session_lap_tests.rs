@@ -1,5 +1,4 @@
-//! シェルの往復の統合テスト（spec: areka-P0-shell-balloon-switch task 11.1・要件 1.8・2.1〜2.6・2.8・
-//! 4.2・4.3・11.1・11.3・design「Integration Tests」）。
+//! シェルの往復の統合テスト。
 //!
 //! 偽の SHIORI の土台（[`SwitchRig`]・emo2 の複製のゴースト A）に、`R_POST_and_KOMAINU` のシェルを
 //! [`SampleRoot::add_shell_copy`] で `second` と名付けて写したものを A の 2 つ目のシェルとして足す。
@@ -150,7 +149,7 @@ pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> La
     }
 }
 
-/// UI の側の進みの要約（areka-test-binary-stability 要件 3.1）。どの欄も増えるだけの数にする
+/// UI の側の進みの要約。どの欄も増えるだけの数にする
 /// （行ったり来たりする見た目の状態を入れると、止まっていても進みに数えてしまう）。
 #[derive(Debug, Default, Clone, PartialEq)]
 struct UiMarks {
@@ -282,14 +281,12 @@ impl LapRig {
     /// `FrameTime` を置き、スレッドのメッセージを配る（文字の層の cue の適用とバルーンの表示が進む）。
     ///
     /// 条件の中で足場を書き換えるので、World を借りない進みの目印（`progress_probe`）を先に取ってから
-    /// 芯の待ちへ渡す（areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。打ち切りは目印で決め、
-    /// 打ち切ったら呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`。時刻の送り先は
-    /// dispatcher の `DispatcherMsg::Tick` だけ（足場の時刻の注入と同じ決まり・要件 2.6）。
+    /// 芯の待ちへ渡す。打ち切りは目印で決め、打ち切ったら呼び出しの場所を添えた文言を標準エラーへ
+    /// 1 行出して `false`。時刻の送り先は dispatcher の `DispatcherMsg::Tick` だけ。
     ///
     /// 目印は SHIORI の側の数（`SwitchRig::progress_probe`）＋UI の側の要約が変わった回数
     /// （`ui_moves`・巡を回した後に読む）。台詞の起動・表示・取りやめ・定常の知らせのように SHIORI を
-    /// 呼ばずに進む仕事も進みに数え、負荷で遅いだけでは `［止まった］` で打ち切らない
-    /// （areka-test-binary-stability 要件 3.1）。
+    /// 呼ばずに進む仕事も進みに数え、負荷で遅いだけでは `［止まった］` で打ち切らない。
     #[track_caller]
     pub(super) fn frames_until(
         &mut self,
@@ -327,8 +324,7 @@ impl LapRig {
                         });
                     }
                 }
-                // 本番の巡と同じく、巡ごとに `FrameTime` を dola の時計で置く（台詞の文字の現れと
-                // バルーンの表示を UI が決める時刻・`TalkClock` と同じ時計）。
+                // 台詞の文字の現れとバルーンの表示を UI が決める時刻（`TalkClock` と同じ dola の時計）。
                 rig.world
                     .insert_resource(FrameTime(dola::runtime::clock::now()));
                 pump_messages();
@@ -543,7 +539,7 @@ const CHANGED_1: &str = "\\0\\![change,shell,master,--option=raise-event]\\e";
 /// 2 度目の `OnShellChanging` の台詞。
 const CHANGING_2: &str = "\\0戻ります\\e";
 
-/// 往復（要件 11.1）: A（`master`）→ 台本の `\![change,shell,second,--option=raise-event]` →
+/// 往復: A（`master`）→ 台本の `\![change,shell,second,--option=raise-event]` →
 /// `OnShellChanging`（Ref0＝`second`・Ref1＝`master` の名前・Ref2＝`second` の絶対パス・台本あり）→
 /// その台詞の再生の後に差し替え → `OnShellChanged`（Ref0＝`second`・Ref1＝ゴースト名 `A`・Ref2）→
 /// `LastShell`＝`second` → その台詞の `master` への切替で同じ手順を逆向きに 1 周。集めて 1 回で判定:
@@ -571,7 +567,7 @@ fn script_shell_switch_round_trips_with_raise_event() {
     let mut log = LookLog::default();
     let windows = lap.windows.clone();
     // 1 度目の `OnShellChanged` の台詞はすぐ次の切替を命じるので、「1 度目が届いて印が無い」瞬間は
-    // フレームの境目に来るとは限らない。往復を 1 本の待ちで回し、途中の記憶は投函の記録の並びで見る。
+    // フレームの境目に来るとは限らない。途中の記憶は投函の記録の並びで見る。
     let ((round_trip, last), events) = capture(|| {
         let round_trip = lap.frames_until(UNBOUNDED, |rig| {
             log.record(look_of(rig, &windows));
@@ -695,7 +691,7 @@ fn stage(rig: &SwitchRig) -> Option<&'static str> {
 pub(super) const BOOT_TO_SECOND_PLAIN: &str =
     r"\0\s[0]\1\s[10]\0A\![change,shell,second]\_w[5000]\e";
 
-/// `raise-event` 無しの台本の切替（要件 1.2・2.3・11.3）: `OnShellChanging` は 0 件。命令の後も台本が
+/// `raise-event` 無しの台本の切替: `OnShellChanging` は 0 件。命令の後も台本が
 /// 続いている間（台詞の時計を止め、資産がそろった後もフレームを回す）は差し替わらず、台詞の時計を
 /// 進めて台本が終わると差し替わり、`OnShellChanged`（Ref0〜2）と `LastShell`＝`second`。
 ///
@@ -710,8 +706,7 @@ fn plain_script_shell_switch_skips_changing_and_waits_for_the_script_end() {
     let mut log = LookLog::default();
     let windows = lap.windows.clone();
 
-    // 台詞の始まり（両スコープの面が出た）を 1 ms ずつの Tick で見てから、受理までの台詞の時計を
-    // ACCEPT の上限までしか進めない（Tick が溜まっても命令の後の待ちを食い切らない）。
+    // Tick が溜まっても命令の後の待ちを食い切らないよう、受理までは ACCEPT の上限までしか進めない。
     let started = lap.frames_until(CREEP, |rig| {
         log.record(look_of(rig, &windows));
         !log.distinct.is_empty()
@@ -720,7 +715,6 @@ fn plain_script_shell_switch_skips_changing_and_waits_for_the_script_end() {
         log.record(look_of(rig, &windows));
         !idle(rig)
     });
-    // 台詞の時計を止めたまま、資産がそろうまで回し、そろった後もさらに 20 フレーム回す。
     let built = lap.frames_until(NO_TICKS, |rig| matches!(stage(rig), Some("built") | None));
     let mut frames = 0;
     lap.frames_until(NO_TICKS, |_| {
@@ -783,8 +777,7 @@ fn plain_script_shell_switch_skips_changing_and_waits_for_the_script_end() {
     );
 }
 
-/// メニュー相当の要求（出どころ＝メニュー・フォルダ名で指す）で今のシェル自身を選ぶ（要件 1.5・1.8・
-/// 11.3）: `OnShellChanging` が 1 件（Ref0・Ref1 とも今のシェルの名前・`204`＝台詞なし）届き、無視せず
+/// メニュー相当の要求（出どころ＝メニュー・フォルダ名で指す）で今のシェル自身を選ぶ: `OnShellChanging` が 1 件（Ref0・Ref1 とも今のシェルの名前・`204`＝台詞なし）届き、無視せず
 /// 資産を作り直して差し替え（装着の子が新しくなり窓寸は同じ）、`OnShellChanged` と `LastShell`＝`master`。
 ///
 /// # 非空虚性
@@ -873,7 +866,7 @@ fn menu_switch_to_the_current_shell_rebuilds_and_raises_both_events() {
 
 // ---------------------------------------------------------------- 進みの目印の檻
 
-/// UI の側の要約の畳み（areka-test-binary-stability 要件 3.1）: 文字の層の要約が前の巡と違えば、
+/// UI の側の要約の畳み: 文字の層の要約が前の巡と違えば、
 /// または切り替えの予約が下りれば（取りやめ・定常の知らせ）1 増える。前の巡と同じ・予約が立った
 /// だけ・在り続ける・無いままでは増えない。
 ///

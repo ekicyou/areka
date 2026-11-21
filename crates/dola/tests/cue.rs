@@ -1,4 +1,4 @@
-// tests/cue.rs — dola cue domain test entry point
+// dola の cue 領域のテストの入口
 #[path = "cue/runtime_test.rs"]
 mod runtime_test;
 #[path = "cue/schedule_test.rs"]

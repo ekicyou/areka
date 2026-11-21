@@ -1,4 +1,4 @@
-//! 判断と成功の本文の決定論テスト（要件 7.2・7.3）。事実は手書きの表で与える。
+//! 判断と成功の本文の決定論テスト。事実は手書きの表で与える。
 
 use super::*;
 
@@ -55,7 +55,7 @@ fn surface(scope: Option<i64>, id: Option<i64>) -> Result<SurfacePlan, Refusal> 
     judge_surface(Some(&GHOST), scope, id)
 }
 
-// ---- dump_surface の判断（要件 7.2） ----
+// ---- dump_surface の判断 ----
 
 #[test]
 fn omitted_scope_is_scope_zero() {
@@ -231,7 +231,7 @@ fn balloon_succeeds_with_the_scope_number() {
     assert_eq!(judge_balloon(Some(&GHOST), Some(1)), Ok(1));
 }
 
-// ---- 成功の本文（要件 7.3） ----
+// ---- 成功の本文 ----
 
 #[test]
 fn shown_text_is_verbatim() {

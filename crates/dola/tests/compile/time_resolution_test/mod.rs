@@ -1,5 +1,4 @@
-//! Compile module time resolution tests
-//! Task 9.2
+//! compile の時刻解決のテスト
 
 use dola::*;
 

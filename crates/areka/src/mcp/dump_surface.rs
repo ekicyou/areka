@@ -1,10 +1,10 @@
-//! `dump_surface` の処理（spec: areka-P0-mcp-dump-images）——事実を集めて判断し、絵を PNG で返す。
+//! `dump_surface` の処理——事実を集めて判断し、絵を PNG で返す。
 //!
 //! 結線状態が無い → 窓が無い答え。装着の相がまだ → 答えずに [`super::later`] へ覗く関数（[`Wait`]）を
 //! 預けて毎フレーム 1 段ずつ進める。それ以外 → 判断して、今の見た目は最後に表示した絵を、指定は
 //! 単体の合成の絵を返す。判断と絵の写しは UI スレッドで、乗算の戻し・PNG・base64 は別のスレッドで行う
 //! （その場で答えられたときはそのスレッドから [`reply_elsewhere`]、預けたときは覗く関数が受け取って
-//! 答える）。読むだけで、ゴーストへイベントを送らず、台本を再生せず、ファイルを書かない（要件 6.1・6.2）。
+//! 答える）。読むだけで、ゴーストへイベントを送らず、台本を再生せず、ファイルを書かない。
 
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -50,7 +50,7 @@ pub(in crate::mcp) enum Step {
     Read(u32, Reader),
 }
 
-/// 今答えられればその場で（成功は別のスレッドから）、装着の相がまだなら `later` に預けて答える（要件 6.1）。
+/// 今答えられればその場で（成功は別のスレッドから）、装着の相がまだなら `later` に預けて答える。
 pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: ReplyTo) {
     start(world, TOOL, ghost, reply, move |w| answer(w, &args));
 }
@@ -81,16 +81,16 @@ pub(in crate::mcp) fn start(
     super::later(world, reply, move |w| wait.poll(w));
 }
 
-/// 覗く関数の状態（1 フレームで済まない仕事を、待たずに毎フレーム 1 段ずつ進める・要件 1.4・3.1）。
+/// 覗く関数の状態（1 フレームで済まない仕事を、待たずに毎フレーム 1 段ずつ進める）。
 struct Wait<A> {
     tool: &'static str,
-    /// 呼び出しを解決したゴースト（名前とルートフォルダ・要件 4.2）。
+    /// 呼び出しを解決したゴースト（名前とルートフォルダ）。
     ghost: ActiveGhost,
     stage: Stage,
     answer: A,
     /// 預けた直後の覗きに足す、入口で使った時間。
     carry: Duration,
-    /// これまでの 1 フレームの UI スレッドの時間の最大（要件 5.3）。
+    /// これまでの 1 フレームの UI スレッドの時間の最大。
     ui_max: Duration,
 }
 
@@ -121,7 +121,7 @@ impl<A: FnMut(&World) -> Option<Step>> Wait<A> {
         answered
     }
 
-    /// 装着待ちの 1 段。写す前にゴーストが替わっていたら断る（要件 4.1・4.2）。答えの種は同じ覗きの
+    /// 装着待ちの 1 段。写す前にゴーストが替わっていたら断る。答えの種は同じ覗きの
     /// 中で進める限り進める。
     fn attach(&mut self, world: &World, ui: impl FnOnce() -> Duration) -> Option<ToolOutcome> {
         if resolve::active(world).as_ref() != Some(&self.ghost) {
@@ -136,7 +136,7 @@ impl<A: FnMut(&World) -> Option<Step>> Wait<A> {
         self.take(step, ui)
     }
 
-    /// 答えの種を 1 段進める。`Read` は読み出しの口を 1 度呼び（要件 1.2・1.5）、まだなら読み出し待ちに
+    /// 答えの種を 1 段進める。`Read` は読み出しの口を 1 度呼び、まだなら読み出し待ちに
     /// 置く。写しまで済んだら符号化を起こし、同じ覗きの中で受け取り口を 1 度覗く。
     fn take(&mut self, step: Step, ui: impl FnOnce() -> Duration) -> Option<ToolOutcome> {
         let (scope, job) = match step {
@@ -164,7 +164,7 @@ impl<A: FnMut(&World) -> Option<Step>> Wait<A> {
     }
 }
 
-/// 符号化待ちの 1 段（要件 3.2）。届いていれば答え、まだなら `None`。届けずにスレッドが消えたら
+/// 符号化待ちの 1 段。届いていれば答え、まだなら `None`。届けずにスレッドが消えたら
 /// 想定外の失敗（`finish` が必ず届けるので届かない枝）。
 fn receive(
     tool: &'static str,
@@ -206,7 +206,7 @@ pub(in crate::mcp) fn reply_elsewhere(
 /// 符号化のスレッド（名前 `mcp-encode`）を起こし、起こし終えた後に `ui()` で UI スレッドの側の
 /// 時間を測って、(仕事, 届け先, 時間) を手渡す。起こせなければ `deliver(to, fail(tool, scope, 理由))`。
 /// 手渡しの前にスレッドが消えていたら `deliver(to, fail(tool, scope, "the encoding thread is gone"))`。
-/// 必ず 1 度だけ届ける（要件 3.4）。
+/// 必ず 1 度だけ届ける。
 fn encode_elsewhere<T: Send + 'static>(
     tool: &'static str,
     scope: u32,
@@ -235,7 +235,7 @@ fn encode_elsewhere<T: Send + 'static>(
 }
 
 /// 符号化のスレッドの体。仕事を panic を受けて走らせ、panic なら
-/// `fail(tool, scope, "the encoding thread panicked")`（要件 3.3）。
+/// `fail(tool, scope, "the encoding thread panicked")`。
 pub(in crate::mcp) fn finish(
     tool: &'static str,
     scope: u32,
@@ -247,7 +247,7 @@ pub(in crate::mcp) fn finish(
         .unwrap_or_else(|_| fail(tool, scope, "the encoding thread panicked"))
 }
 
-/// 覗く関数の受け取り口へ送る。待つ側が去って受け取り口が無ければ黙って捨てる（要件 3.5）。
+/// 覗く関数の受け取り口へ送る。待つ側が去って受け取り口が無ければ黙って捨てる。
 pub(in crate::mcp) fn send_back(tx: mpsc::Sender<ToolOutcome>, outcome: ToolOutcome) {
     let _ = tx.send(outcome);
 }
@@ -292,7 +292,7 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
     })
 }
 
-/// 単体の合成の結果から答えの種を作る（要件 2.1）。合成の結果が無い（表示の層にスコープのシェルが
+/// 単体の合成の結果から答えの種を作る。合成の結果が無い（表示の層にスコープのシェルが
 /// 無い）のは、判断が同じ表示の層で登録を確かめた後なので届かない枝。届いたら専用の文言で想定外の失敗。
 fn alone(
     scope: u32,
@@ -313,7 +313,7 @@ fn alone(
     }
 }
 
-/// 絵を写して、本文＋画像 1 枚の成功を別のスレッドで仕上げる（要件 1.4・2.4・5.4）。大きさが合わなければ
+/// 絵を写して、本文＋画像 1 枚の成功を別のスレッドで仕上げる。大きさが合わなければ
 /// その場で想定外の失敗。
 fn picture(
     scope: u32,
@@ -366,7 +366,7 @@ pub(in crate::mcp) fn check_size(
     Ok(())
 }
 
-/// 判断で返す失敗（窓・スコープ・surface ID・未表示）。記録は `debug!` だけ（要件 4.6）。
+/// 判断で返す失敗（窓・スコープ・surface ID・未表示）。記録は `debug!` だけ。
 pub(in crate::mcp) fn refuse(
     tool: &str,
     scope: Option<i64>,
@@ -377,7 +377,7 @@ pub(in crate::mcp) fn refuse(
     outcome::ng(reason)
 }
 
-/// 想定外の失敗。`error!` 1 件にツール名・スコープ・理由を載せ、画像なしの `NG:` を返す（要件 4.7・4.8）。
+/// 想定外の失敗。`error!` 1 件にツール名・スコープ・理由を載せ、画像なしの `NG:` を返す。
 pub(in crate::mcp) fn fail(tool: &str, scope: u32, reason: &str) -> ToolOutcome {
     error!(tool, scope, reason, "[mcp] 答えを返せなかった");
     outcome::ng(reason)
@@ -405,7 +405,7 @@ impl judge::ShellFacts for PresenterFacts<'_> {
 #[cfg(test)]
 pub(in crate::mcp) trait WaitAnswer {
     /// 届いた答え。打ち切り・答えずに手放したら `None`。打ち切りは呼び手が渡す足場の進みの目印
-    /// `progress` で決め（areka-test-binary-stability 要件 7.2）、打ち切ったら呼び出しの場所を添えた
+    /// `progress` で決め、打ち切ったら呼び出しの場所を添えた
     /// 文言を標準エラーへ 1 行出す。
     #[track_caller]
     fn wait_answer(

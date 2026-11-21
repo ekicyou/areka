@@ -1,8 +1,8 @@
 //! `get_log` の決定論テスト。
 //!
 //! 履歴は手元で作り（種別の混ざった 10 件・時刻は与えた値）、その種別の列を写す口を
-//! `answer` へ渡す（置き場を共有しない）。`log_type` の検査（要件 3.1〜3.3・3.6）・
-//! 書式（要件 4.1〜4.7）・絞り込みと `ghost_name` の解決（要件 5.1〜5.10）・入口（要件 3.4・3.5）を固定する。
+//! `answer` へ渡す（置き場を共有しない）。`log_type` の検査・
+//! 書式・絞り込みと `ghost_name` の解決・入口を固定する。
 
 use std::cell::Cell;
 use std::path::PathBuf;
@@ -243,7 +243,7 @@ fn real_newlines_become_continuation_lines_and_crlf_counts_once() {
     );
 }
 
-// ---- 絞り込み（要件 5.5〜5.10） ----
+// ---- 絞り込み ----
 
 /// 引数を全部与える形。
 fn full(
@@ -292,7 +292,7 @@ fn since_id_boundaries() {
     assert_eq!(error_ids(Some(-1), None), [1, 5, 8, 10]);
     assert_eq!(error_ids(None, None), [1, 5, 8, 10]);
     assert_eq!(error_ids(Some(0), None), [1, 5, 8, 10]);
-    // 最後に振った番号以上・最大より大きいは 0 件（要件 5.8）。
+    // 最後に振った番号以上・最大より大きいは 0 件。
     assert_eq!(error_ids(Some(10), None), Vec::<u64>::new());
     assert_eq!(error_ids(Some(11), None), Vec::<u64>::new());
 }
@@ -316,7 +316,7 @@ fn since_id_and_max_count_together() {
     assert_eq!(error_ids(Some(5), Some(5)), [8, 10]);
 }
 
-// ---- ghost_name（要件 5.1〜5.4・3.4） ----
+// ---- ghost_name ----
 
 fn emily() -> ActiveGhost {
     ActiveGhost {
@@ -341,7 +341,7 @@ fn ghost_name_keeps_only_records_of_that_name() {
     let g = emily();
     assert_eq!(ghost_ids(Some(&g), "error", "Emily/Phase4.5"), [10]);
     assert_eq!(ghost_ids(Some(&g), "script", "Emily/Phase4.5"), [2]);
-    // 英字の大小違いでも名前そのもので指したときと同じ記録（要件 1.5）。
+    // 英字の大小違いでも名前そのもので指したときと同じ記録。
     assert_eq!(ghost_ids(Some(&g), "error", "emily/phase4.5"), [10]);
 }
 
@@ -464,7 +464,7 @@ fn filters_apply_in_order_kind_ghost_since_max() {
     assert_eq!(ids(&body), [10]);
 }
 
-// ---- 入口（要件 3.4・3.5） ----
+// ---- 入口 ----
 
 /// 空の World で入口を呼び、その場で届いた答え（まだなら None）。
 fn handle_now(ghost_name: Option<&str>) -> Option<ToolOutcome> {

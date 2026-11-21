@@ -23,7 +23,7 @@ use super::test_support::{
     OFF, ON, marked, queue_in, queue_text, state_with_channel, world_with_windows,
 };
 use WindowStateDirective::Raise;
-// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+// 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::window_state::test_support::{on, on_mut};
 use areka_runtime::frame::wiring::test_support::{window_state, window_state_mut};
 
@@ -95,7 +95,7 @@ fn despawned_registry_window_is_skipped_with_a_debug_record() {
 }
 
 // ---------------------------------------------------------------------------
-// 記録の欄（要件 6.1・6.2・6.7）
+// 記録の欄
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -141,7 +141,7 @@ fn log_fields_for_change_unchanged_and_raise() {
 }
 
 // ---------------------------------------------------------------------------
-// オンのまま降ろした記録（task 3.2・要件 4.1／4.2／6.4）
+// オンのまま降ろした記録
 // ---------------------------------------------------------------------------
 
 /// 結線（状態 `on`）と起動の文脈を持つ World。

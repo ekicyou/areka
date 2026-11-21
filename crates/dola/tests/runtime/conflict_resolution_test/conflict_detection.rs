@@ -1,7 +1,7 @@
-//! 競合検出ロジック（research.md §R3: conflict_detection シーム）
+//! 競合検出ロジック + 境界条件
 
 // =========================================================================
-// 6.1 競合検出ロジックのテスト
+// 競合検出ロジックのテスト
 // =========================================================================
 use super::*;
 
@@ -57,7 +57,6 @@ fn conflict_detected_on_same_variable() {
     let _opacity_id = rt.subscribe("opacity");
     rt.load_document(doc).unwrap();
 
-    // 1st start
     let r1 = rt.start("fade", 0.0).unwrap();
     assert!(r1.affected_group_ids.is_empty());
 
@@ -110,7 +109,7 @@ mod conflict_detection_boundaries {
         ));
     }
 
-    /// 競合は「同じ変数に生きた項目がある」で決まり、時刻の重なりは見ない（要件 11.8）。
+    /// 競合は「同じ変数に生きた項目がある」で決まり、時刻の重なりは見ない。
     /// 壁時計で隣り合う [0,2] と [2,4] でも、前のインスタンスが生きていれば競合する。
     #[test]
     fn time_shifted_start_on_same_variable_still_conflicts() {

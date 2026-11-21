@@ -1,8 +1,6 @@
 //! 競合解決（ConflictResolver）統合テスト
 //!
-//! Task 6.1〜6.3: detect_overlaps, 各終了戦略, エラーパスと境界条件
-//!
-//! このモジュールは挙動を変えずに研究シーム（research.md §R3）ごとに分割されている:
+//! このモジュールは次の観点ごとに分割されている:
 //! - `conflict_detection` … 競合検出ロジック + 境界条件
 //! - `termination_strategy` … 各終了戦略（Cancel/Conclude/Trim/Compress）+ 混在ケース
 //! - `error_handling` … Never 戦略のエラーパスと終了経路の特性化

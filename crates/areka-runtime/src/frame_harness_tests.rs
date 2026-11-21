@@ -1,6 +1,6 @@
 //! 多フレーム駆動ハーネス（[`FrameHarness`]）**そのもの**の檻。
 //!
-//! 本ファイルが固定するのはゴースト窓の挙動ではなく、**後続タスクの統合テストが乗る土台の
+//! 本ファイルが固定するのはゴースト窓の挙動ではなく、**後続の統合テストが乗る土台の
 //! 性質**である——フレームを進める口・3 つの源（作業領域源／実行時のモニタ表／窓の拡大率）を
 //! 差し替える口・二体ぶんのスコープを同時に駆動できること・そして
 //! **テスト間で状態が残らないこと**。
@@ -127,7 +127,7 @@ fn a_fresh_harness_starts_from_a_known_state_regardless_of_what_ran_before() {
 }
 
 /// 同一プロセス・同一スレッドで 2 つのシナリオを続けて走らせても、**後のシナリオの判定が
-/// 前の残留で変わらない**（本タスクの観察可能な完了条件）。
+/// 前の残留で変わらない**。
 ///
 /// 1 つ目のハーネスは**生かしたまま**（`Drop` に頼らない）2 つ目を組む。後始末が
 /// [`FrameHarness::new`] 側にあることを、この形が要求している。
@@ -266,7 +266,6 @@ fn the_harness_drives_both_scopes_and_each_scope_alone() {
     harness.run_dpi_phase(&mut source);
     let _priming = harness.drain_writes();
 
-    // 二体同時（OS 設定の拡大率変更＝全窓の拡大率が動く）。
     harness.set_work_area_source_for_dpi(192);
     harness.set_window_dpi(192);
     harness.advance_frame();
@@ -385,9 +384,6 @@ fn a_log_capture_verification_names_the_single_threaded_executor() {
     harness.advance_frame();
 
     let mut schedule = single_threaded_schedule();
-    // bevy 0.19 で `Schedule::get_executor_kind` が撤去された（実行器は私有）。「捕捉できる
-    // 実行形態を名指しする」という要請は、供給元の字面で見張る——
-    // `single_threaded_schedule()` が単スレッド実行器を据えていることをそのまま固定する。
     assert!(
         FRAME_TEST_SUPPORT_SRC.contains("schedule.set_executor(SingleThreadedExecutor::new());"),
         "捕捉できる実行形態の明示が供給元から消えている（要件 7.6）"

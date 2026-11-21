@@ -1,4 +1,4 @@
-//! 起動時の並びの決め方と記憶の値の形の決定論テスト（要件 1.3〜1.14・6.8・9.2・9.4・12.1・12.7）。
+//! 起動時の並びの決め方と記憶の値の形の決定論テスト。
 //!
 //! 入力はすべて値で注入する（プロセスの環境変数は触らない）。実在する根は
 //! `TempPath::under_target`（ワークツリーの `target\` の下）に掘る。
@@ -172,7 +172,7 @@ fn relative_env_item_is_absolutized_against_cwd() {
     let expected = std::path::absolute(rel).unwrap();
     assert!(expected.is_absolute());
     assert_eq!(dirs(&r), vec![a.clone(), expected.clone()]);
-    // 見つからない根も並びに残る（要件 9.2）。
+    // 見つからない根も並びに残る。
     assert_eq!(
         r.status,
         vec![
@@ -329,7 +329,7 @@ fn encode_and_decode_round_trip() {
     let b = real_dir(&tmp, "b");
     let roots = BasewareRoots::new(vec![
         BasewareRoot::new(b.clone()),
-        // 実行ファイルのフォルダは末尾の区切りがあっても同じ根として `<exe>` で書く（要件 6.8）。
+        // 実行ファイルのフォルダは末尾の区切りがあっても同じ根として `<exe>` で書く。
         BasewareRoot::new(PathBuf::from(format!("{}\\", s(&exe)))),
     ]);
     let value = encode_memory(&roots, Some(&exe));
@@ -344,7 +344,7 @@ fn encode_and_decode_round_trip() {
     );
 }
 
-// ---- 書ける根の差し込み（areka-P0-user-data-root 要件 2.5・3.1・3.2・3.4・3.5・7.2・10.3） ----
+// ---- 書ける根の差し込み ----
 
 use areka_ghost::RootMark;
 use areka_user_data::{UserRoot, UserRootOrigin};

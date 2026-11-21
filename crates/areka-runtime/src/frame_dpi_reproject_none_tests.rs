@@ -48,7 +48,6 @@ fn s2_none_report_path_reprojects_position_without_touching_size() {
         "前提: 変化前は 96 の work area 下端へ接地している"
     );
 
-    // 初回 run（`SystemState::new` の全窓マッチ）を「再導出結果なし」固定の報告源で消費する。
     let mut source = FakeReports::default();
     let mut state = None;
     dpi_phase_with(&mut source, &mut state, &mut world);
@@ -121,7 +120,7 @@ fn s2_none_report_path_reprojects_position_without_touching_size() {
 /// 「動かない」の主張が不動点に落ちないよう、⑴同一ハーネスがバルーンの書込を検出できること
 /// を positive witness で先に示し、⑵**警告以上のログが 1 行も出ないこと**も併せて主張する
 /// （`resize_window_to` へ流す誤実装はバルーンに `Anchored` が無いため `warn!` を出す＝
-/// 書込ゼロだけを見ていると素通ししてしまう・記憶〈2.2 の空虚性の教訓〉）。
+/// 書込ゼロだけを見ていると素通ししてしまう）。
 #[test]
 fn s2_none_report_path_leaves_the_balloon_in_place() {
     // --- positive witness: 同一ハーネスはバルーンの書込を実際に検出できる ---
@@ -147,7 +146,6 @@ fn s2_none_report_path_leaves_the_balloon_in_place() {
         );
     }
 
-    // --- 本題: work area が動いてもバルーン単独の None 経路では書かない ---
     let (mut world, gw) = dpi_world();
     world.insert_resource(s2_snapshot(96));
     let char0 = gw.char_window(0).expect("char 窓がある");
@@ -156,7 +154,7 @@ fn s2_none_report_path_leaves_the_balloon_in_place() {
 
     let mut source = FakeReports::default(); // 「再導出結果なし」固定
     let mut state = None;
-    dpi_phase_with(&mut source, &mut state, &mut world); // 初回 run（全窓マッチ）を消費
+    dpi_phase_with(&mut source, &mut state, &mut world);
     reset_write_witness(&mut world, &gw);
     source.calls.clear();
 
@@ -185,8 +183,7 @@ fn s2_none_report_path_leaves_the_balloon_in_place() {
     );
 }
 
-/// **窓寸が未確定（窓生成前）なら現状維持のまま打ち切り、その事実をログに残す**
-/// （tasks 5.2 の明示制約・記憶〈ログ無し失敗経路の禁止〉）。
+/// **窓寸が未確定（窓生成前）なら現状維持のまま打ち切り、その事実をログに残す**。
 ///
 /// 現寸が読めなければ「現寸のまま射影する」という是正そのものが成立しないため、位置を
 /// 一切触らずに `warn!` で打ち切る（実在 entity ゆえ真の異常＝debug で黙らせない）。
@@ -229,7 +226,6 @@ fn s2_none_report_path_holds_state_and_warns_when_the_window_size_is_undetermine
         );
     }
 
-    // --- 本題: WindowPos.size が未確定なら現状維持＋warn ---
     let (mut world, gw) = dpi_world();
     world.insert_resource(s2_snapshot(96));
     let char0 = gw.char_window(0).expect("char 窓がある");

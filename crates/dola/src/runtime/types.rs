@@ -8,7 +8,7 @@ use crate::value::DynamicValue;
 /// 無限ループ許可の最小周期（秒）。
 /// 時刻が飛んだ tick で進める周回の数に上限を作る（トリガーを持つループの重さは
 /// `loop_controller::process_loops` の注）。
-pub(crate) const MIN_LOOP_DURATION: f64 = 0.1; // 100ms
+pub(crate) const MIN_LOOP_DURATION: f64 = 0.1;
 
 /// 評価済み変数値（補間計算の出力）。
 ///
@@ -27,11 +27,9 @@ pub enum EvaluatedValue {
 impl PartialEq for EvaluatedValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            // NOTE(数値境界): Float(NaN) は IEEE 754 により自分自身と不等。NaN が
-            // 補間結果に混入した場合、差分検出は当該変数を毎フレーム「変化あり」と
-            // 判定し続ける（変更通知のスパム化）。文書の数値は validate が有限に
-            // 限るが、極端に大きい値の補間はまだ NaN を出しうる（現行挙動は
-            // tests/runtime/core_types_test.rs::float_nan_is_never_equal_to_itself で固定）。
+            // Float(NaN) は IEEE 754 により自分自身と不等。NaN が補間結果に混入すると、
+            // 差分検出は当該変数を毎フレーム「変化あり」と判定し続ける。文書の数値は validate が
+            // 有限に限るが、極端に大きい値の補間はまだ NaN を出しうる。
             (Self::Float(a), Self::Float(b)) => a == b,
             (Self::Integer(a), Self::Integer(b)) => a == b,
             (Self::Object(a), Self::Object(b)) => Rc::ptr_eq(a, b),
@@ -49,7 +47,7 @@ pub enum RuntimeError {
     /// 指定 group_id が存在しない（終了済みインスタンスへの操作を含む）
     #[error("invalid group_id: {0}")]
     InvalidGroupId(u64),
-    /// duration=0 かつ loop_count 設定 (Req 2.9)
+    /// duration=0 かつ loop_count 設定
     #[error("storyboard '{storyboard}' has zero duration with loop_count")]
     ZeroDurationWithLoop { storyboard: String },
     /// 無限ループ時の周期が短すぎる（MIN_LOOP_DURATION 未満）
@@ -57,7 +55,7 @@ pub enum RuntimeError {
         "storyboard '{storyboard}' has too short duration ({duration:.3}s) for infinite loop (min: {MIN_LOOP_DURATION}s)"
     )]
     TooShortDurationWithInfiniteLoop { storyboard: String, duration: f64 },
-    /// コンパイルエラー（既存 DolaError のラップ）
+    /// コンパイルエラー
     #[error("compile error: {0:?}")]
     CompileError(Vec<DolaError>),
     /// Never 戦略を持つインスタンスとの競合により start() が拒否された

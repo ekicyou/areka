@@ -1,10 +1,9 @@
 //! core_types: Storyboard serde round-trip
-//! Task 5.7
 
 use super::*;
 
 // =============================================================
-// Task 5.7: Storyboard/StoryboardEntry/KeyframeRef serde round-trip
+// Storyboard/StoryboardEntry/KeyframeRef serde round-trip
 // =============================================================
 
 mod storyboard_tests {

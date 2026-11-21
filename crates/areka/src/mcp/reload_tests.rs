@@ -1,5 +1,4 @@
-//! `reload` の決定論テスト（areka-P0-mcp-reload 要件 1.1〜1.3・2.2・2.3・8.1・8.2・8.5・10.1・10.2・
-//! 12.1 ⑴⑷⑹・12.6）。
+//! `reload` の決定論テスト。
 //!
 //! 返事はどれもその場で届く（`try_answer` が待たずに答えを持つ）。終了の途中だけは返事を落とす。
 //! 受理の文の `since_id` は [`answer`] へ偽の窓口と偽の番号を渡して固定する（実行系の無い World では
@@ -53,7 +52,7 @@ fn named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent>
 }
 
 /// 6 語以外（空・前後の空白・別の語）は `NG:Unknown target (…)` をその場で返し、窓口へ渡さない
-/// （`reload_refused` も `reload_started` も残らない・要件 1.2・1.3）。
+/// （`reload_refused` も `reload_started` も残らない）。
 #[test]
 fn unknown_targets_answer_unknown_target_without_asking_the_desk() {
     for target in ["", " shell", "shell ", "aigraph", "reloadsurface"] {
@@ -79,7 +78,7 @@ fn unknown_targets_answer_unknown_target_without_asking_the_desk() {
 }
 
 /// makoto（大小を区別しない）は `NG:Reloading makoto is not supported yet` をその場で返し、
-/// `TARGET_ERROR` の `warn!(reload_makoto_unsupported)` を 1 件残す。窓口へは渡さない（要件 10.1・10.2）。
+/// `TARGET_ERROR` の `warn!(reload_makoto_unsupported)` を 1 件残す。窓口へは渡さない。
 #[test]
 fn makoto_answers_not_supported_yet_with_one_warn() {
     for target in ["makoto", "MaKoTo"] {
@@ -115,7 +114,7 @@ fn makoto_answers_not_supported_yet_with_one_warn() {
 }
 
 /// 5 語（大小違いも）は窓口へ「MCP」の出どころで渡る。実行系の無い World では窓口が断り
-/// （`reload_refused`・reason=no_context）、`NG:Cannot reload now (…)` をその場で返す（要件 1.1・2.3）。
+/// （`reload_refused`・reason=no_context）、`NG:Cannot reload now (…)` をその場で返す。
 #[test]
 fn desk_refusal_answers_cannot_reload_now() {
     for target in ["ghost", "Shiori", "SHELL", "balloon", "descript"] {
@@ -144,7 +143,7 @@ fn desk_refusal_answers_cannot_reload_now() {
     }
 }
 
-/// 終了の途中は返事を送らずに落とす（橋が既存の "shutting down" で答える・要件 2.2）。
+/// 終了の途中は返事を送らずに落とす（橋が既存の "shutting down" で答える）。
 #[test]
 fn closing_drops_the_reply() {
     let mut world = World::new();
@@ -159,7 +158,7 @@ fn closing_drops_the_reply() {
 }
 
 /// 受理は窓口の判定の直後に読んだ番号を `since_id` に載せた SSP の文（isError: false）で答え、断りは
-/// `NG:Cannot reload now (…)`、終了の途中は答えを持たない（要件 8.1・8.2・12.1 ⑹）。番号は窓口を
+/// `NG:Cannot reload now (…)`、終了の途中は答えを持たない。番号は窓口を
 /// 呼ぶ前でなく後に読む（窓口が積んだ `reload_started` より後ろだけを `get_log` で読ませる）。
 #[test]
 fn accepted_answers_ssp_text_with_last_id_read_after_the_desk() {

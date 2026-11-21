@@ -1,37 +1,22 @@
-//! shell 設定（`seriko.zorder`）由来の**基底**グループを起動の段で据える層。
+//! shell 設定（`seriko.zorder`）由来の基底グループを起動の段で据える層。
 //!
-//! 台本のタグ（`\![set,zorder,…]`）は会話の途中でいつでも届くが、shell の設定は
-//! ゴーストが起こされた瞬間に一度だけ読まれる。届く時刻が違うだけで**意味は同じ**なので、
-//! ここは解釈器を持たない——タグと同一の純関数 [`parse_zorder_tokens`] を通し、受理した
-//! 要素列を [`ZOrderGroupLedger::set_descript_base`] へ渡すだけである。
-//! 別の解釈器を新設すると、同じ字面が入口によって違う意味を持つ日が来る。
+//! 台本のタグ（`\![set,zorder,…]`）は会話の途中でいつでも届くが、shell の設定はゴーストが起こされた瞬間に一度だけ読まれる。届く時刻が違うだけで意味は同じなので、ここは解釈器を持たず、タグと同一の純関数 [`parse_zorder_tokens`] を通して、受理した要素列を [`ZOrderGroupLedger::set_descript_base`] へ渡すだけにする（別の解釈器があると、同じ字面が入口によって違う意味を持つ日が来る）。
 //!
 //! # 1 つの設定は 1 つのグループ
 //!
-//! 値はカンマで区切って要素へ落とす。`seriko.zorder,1,0` の kv 解析は既に
-//! 「キー＝`seriko.zorder`・値＝`1,0`」まで済ませているので、ここが受け取るのは
-//! 要素だけを並べた文字列である。区切りの結果が何個であっても載るグループは高々 1 本で、
-//! 基底が高々 1 つであることは台帳の側が保つ。
+//! 値はカンマで区切って要素へ落とす。`seriko.zorder,1,0` の kv 解析は「キー＝`seriko.zorder`・値＝`1,0`」まで済ませているので、ここが受け取るのは要素だけを並べた文字列である。区切りの結果が何個でも載るグループは高々 1 本で、基底が高々 1 つであることは台帳の側が保つ。
 //!
 //! # 解釈できないときは 1 本も載せず、値と理由を残して起動を続ける
 //!
-//! 拒否は [`log_group_rejected`]（warn 水準＝`logging.md` の「無効なパラメーター」区分）
-//! で残す。載せるのは**受け取った値そのもの**と拒否理由の両方である——どちらか一方では、
-//! 作者は何を書き間違えたのかを記録から復元できない。台帳は 1 バイトも動かさず、呼び手は
-//! そのまま起動を続ける（この関数は失敗を返す口を持たない＝起動を止める手段が無い）。
+//! 拒否は [`log_group_rejected`]（warn 水準＝`logging.md` の「無効なパラメーター」区分）で残す。載せるのは受け取った値そのものと拒否理由の両方である——どちらか一方では、作者は何を書き間違えたのかを記録から復元できない。台帳は 1 バイトも動かさず、呼び手はそのまま起動を続ける（この関数は失敗を返す口を持たない）。
 //!
 //! # 設定が無い運転では 1 行も出さない
 //!
-//! `seriko.zorder` を書いていないゴーストは既定状態（グループ 0 本）で動く。これは失敗でも
-//! 見送りでもなく「そもそも指定が無い」なので、記録も残さない（既定＝
-//! 非強制は、判断ではなくこの**不在**で成り立つ）。
+//! `seriko.zorder` を書いていないゴーストは既定状態（グループ 0 本）で動く。これは失敗でも見送りでもなく「そもそも指定が無い」ので、記録も残さない。
 //!
 //! # 記録の出力先は wintf の唯一の入口
 //!
-//! 受理も拒否も [`log_group_applied`]／[`log_group_rejected`] を通す。こちらでマクロを呼ぶと
-//! 出力先が `areka_runtime::…` になり、`wintf::ecs::window` の前方一致の絞り込みでは debug の
-//! 受理の行が点かない。行の字面と出力先を wintf の 1 か所に保つ（兄弟の
-//! [`zorder_drain`](super::zorder_drain) と同じ規律）。
+//! 受理も拒否も [`log_group_applied`]／[`log_group_rejected`] を通す。こちらでマクロを呼ぶと出力先が `areka_runtime::…` になり、`wintf::ecs::window` の前方一致の絞り込みでは debug の受理の行が点かない。行の字面と出力先を wintf の 1 か所に保つ（兄弟の [`zorder_drain`](super::zorder_drain) と同じ規律）。
 
 use wintf::ecs::window::{log_group_applied, log_group_rejected};
 
@@ -46,23 +31,15 @@ const SEPARATOR: char = ',';
 
 /// shell 設定由来の基底を台帳へ据える。
 ///
-/// `raw` は `seriko.zorder` の値そのもの（`areka_placement::config` の `zorder_raw`）。`None` は
-/// 「設定が無い」であり、台帳にも記録にも一切触れない。
+/// `raw` は `seriko.zorder` の値そのもの（`areka_placement::config` の `zorder_raw`）。`None` は「設定が無い」で、台帳にも記録にも一切触れない。
 ///
-/// 呼ぶのは起動の段でちょうど 1 回である（`wire_runtime` →
-/// [`RuntimeWiring::seed_zorder_descript_base`](super::RuntimeWiring::seed_zorder_descript_base)）。
-/// タグの取り出しの相はまだ 1 度も走っていないので、ここで据えた基底は**最初の維持の巡**から
-/// 効く（タグの実行を待たない）。
+/// 呼ぶのは起動の段でちょうど 1 回（`wire_runtime` → [`RuntimeWiring::seed_zorder_descript_base`](super::RuntimeWiring::seed_zorder_descript_base)）。タグの取り出しの相はまだ 1 度も走っていないので、据えた基底は最初の維持の巡から効く。
 ///
 /// # 受理の記録が `action=set` を名乗る理由
 ///
-/// 本文は兄弟の [`set_applied_detail`] をそのまま使う。行の欄を二重に持つと、片方だけを
-/// 直した日に記録の書式が静かに割れるからである。起動由来かタグ由来かは `source` 欄が
-/// 一意に弁別する——タグ経由の追加は必ず [`GroupSource::Tag`] を付けるので、
-/// `action=set source=Descript` はこの関数からしか出ない。
+/// 本文は兄弟の [`set_applied_detail`] をそのまま使う。行の欄を二重に持つと、片方だけを直した日に記録の書式が静かに割れる。起動由来かタグ由来かは `source` 欄が弁別する——タグ経由の追加は必ず [`GroupSource::Tag`] を付けるので、`action=set source=Descript` はこの関数からしか出ない。
 pub(super) fn apply_descript_base(ledger: &mut ZOrderGroupLedger, raw: Option<&str>) {
     let Some(raw) = raw else {
-        // 設定が無い＝既定状態。失敗でも見送りでもないので記録も残さない。
         return;
     };
 
@@ -70,15 +47,13 @@ pub(super) fn apply_descript_base(ledger: &mut ZOrderGroupLedger, raw: Option<&s
     let (members, normalizations) = match parse_zorder_tokens(&tokens) {
         Ok(parsed) => parsed,
         Err(reject) => {
-            // 受け取った値と理由の両方を残し、グループは 1 本も載せずに起動を続ける。
             log_group_rejected(&reject_reason_text(&reject), raw);
             return;
         }
     };
 
     ledger.set_descript_base(members);
-    // 受理の記録は**台帳に載った後の内容**から組む（兄弟の相と同じ流儀）。基底は高々 1 つ
-    // なので、出所で引けば一意に定まる。
+    // 受理の記録は台帳に載った後の内容から組む（兄弟の相と同じ流儀）。基底は高々 1 つなので出所で引けば一意に定まる。
     let detail = ledger
         .groups()
         .iter()

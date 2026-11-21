@@ -1,8 +1,8 @@
-//! 2 つの根の和の上での切替先の決め方の決定論テスト（areka-P0-baseware-root-list task 4.1）。
+//! 2 つの根の和の上での切替先の決め方の決定論テスト。
 //!
 //! 確かめること: `\![change,ghost,…]` の照合（`name`・フォルダ名）が両方の根のゴーストに届き、
 //! フォルダ名は 1 つの規則（大文字小文字を区別しない）で比べ、`name` は今のまま区別すること。
-//! `sequential` と `lastinstalled` も和の並びで引けること（要件 2.8・3.5・4.2・12.3）。
+//! `sequential` と `lastinstalled` も和の並びで引けること。
 
 use areka_ghost::catalog_roots::list_ghosts;
 use areka_ghost::{BasewareRoot, BasewareRoots};

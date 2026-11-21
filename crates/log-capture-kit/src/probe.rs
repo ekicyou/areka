@@ -1,8 +1,6 @@
 //! 常駐 probe。発行点の interest を `sometimes` に合成し、他スレッドの先着で `never` が
 //! 焼き付く経路を閉じる（プロセス寿命で冪等に確立する）。
 //!
-//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
-//!
 //! # なぜ「素朴な `with_default` 捕捉」では非決定的に取りこぼすのか
 //!
 //! `tracing::subscriber::with_default` が差し替えるのは**スレッドローカルの既定 dispatcher**
@@ -54,18 +52,18 @@
 //! （interest が `always` から `sometimes` へ下がることで `enabled()` が毎回訊かれるように
 //! なるが、これは各 subscriber 本来のフィルタ判定が働く方向の変化である）。
 //!
-//! # 測定のための切替（要件 13.1・設計 C9）
+//! # 測定のための切替
 //!
 //! 硬化の代償として支払っている実行時間を測るため、**常駐の確立だけ**を環境変数
 //! `AREKA_LOG_CAPTURE_PROBES` で無効にできる（測定専用の口）。判定は
 //! [`std::sync::OnceLock`] の初期化の中でプロセス寿命に 1 度だけ行うので、測定対象の
-//! 実行時間へ上乗せしない。変数が無いときの挙動は本切替の導入前と 1 ビットも変わらない。
+//! 実行時間へ上乗せしない。変数が無いときは常に常駐する。
 //!
 //! 無効側では `tracing::Dispatch::new` を**1 度も呼ばない**。`Dispatch::new` 自身が
 //! 登録（`callsite::register_dispatch`）だからで、作って**保持し続ける**形にすると
 //! 「無効にしたつもりで実は常駐している」＝測定が無意味になる。
 //!
-//! 「保持し続ける」の限定は実測に基づく（タスク 11.1 のレビューが変異で確かめた）。無効側で
+//! 「保持し続ける」の限定は実測に基づく。無効側で
 //! 2 個作って**即座に捨てる**変異では硬化は残らなかった——捕捉窓が次の `register_dispatch` を
 //! 起こし、死んだ弱参照が掃かれて `has_just_one` が真へ戻るためである。硬化が生き残るのは
 //! `std::mem::forget` などで**生かしたまま**にした場合だった。**そもそも作らない**本実装は
@@ -101,7 +99,7 @@ impl tracing::Subscriber for InterestProbe {
     fn exit(&self, _span: &tracing::span::Id) {}
 }
 
-/// 常駐の確立を無効にする環境変数（測定専用・要件 13.1／設計 C9）。
+/// 常駐の確立を無効にする環境変数（測定専用）。
 ///
 /// 本ワークスペースの実行時環境変数は `AREKA_` 名前空間であり、既存の較正用変数
 /// `AREKA_LOG_CAPTURE_CALIBRATION`（`tests/capture_calibration_test.rs`）と同じ流儀
@@ -116,15 +114,15 @@ const PROBES_OFF: &str = "off";
 
 /// probe を常駐させるかどうかの指定を読む。**プロセス寿命で 1 度だけ**呼ばれる。
 ///
-/// 未設定なら真（＝本切替の導入前と同一の挙動）。値が `on`／`off` のどちらでもないとき、
+/// 未設定なら真。値が `on`／`off` のどちらでもないとき、
 /// および値が Unicode でないときは panic する——「立てたつもりで綴りを誤り、既定側を
-/// 測っていた」を静かに通さないためである。要件 13.1 の A/B は、どちらの側を走らせたかが
+/// 測っていた」を静かに通さないためである。測定の A/B は、どちらの側を走らせたかが
 /// 確定していなければ数字として意味を持たない。
 fn probes_requested() -> bool {
     #[cfg(test)]
     PROBES_ENV_READS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let Some(raw) = std::env::var_os(PROBES_ENV) else {
-        return true; // 未設定＝既定。
+        return true;
     };
     let text = raw.to_str().unwrap_or_else(|| {
         panic!("{PROBES_ENV} の値が Unicode ではない: {raw:?}");
@@ -148,9 +146,8 @@ fn probes_choice(text: &str) -> bool {
 /// [`probes_requested`] を呼んだ回数（テスト専用の計器）。
 ///
 /// 「プロセス寿命で 1 度だけ読む」は、**回数を数えなければ判別できない**。毎回読む形へ変えても
-/// 同一プロセス内では答えが動かないので、判定の一致だけを見る檻は恒真になる——タスク 11.1 の
-/// レビューが、`probes_requested()` を毎回呼ぶ変異を当てても檻が緑のままであることを
-/// 実測した。ここで実際に数えることで、その変異が赤になる。
+/// 同一プロセス内では答えが動かないので、判定の一致だけを見る檻は恒真になる（`probes_requested()` を
+/// 毎回呼ぶ変異を当てても緑のままだった）。ここで実際に数えることで、その変異が赤になる。
 #[cfg(test)]
 static PROBES_ENV_READS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
@@ -189,7 +186,7 @@ fn probes() -> &'static Option<(tracing::Dispatch, tracing::Dispatch)> {
 /// 何度呼んでも、また複数スレッドから同時に呼んでも安全（[`OnceLock`] が 1 回に畳む）。
 ///
 /// 環境変数 `AREKA_LOG_CAPTURE_PROBES=off` が立っているときだけ、登録せずに戻る
-/// （測定専用の切替・要件 13.1）。
+/// （測定専用の切替）。
 pub fn ensure_interest_probes() {
     let _ = probes();
 }

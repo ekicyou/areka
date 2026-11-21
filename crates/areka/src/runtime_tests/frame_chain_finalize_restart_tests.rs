@@ -1,6 +1,5 @@
 // =============================================================================
 // 窓を全部閉じたあとの次の窓の一式でも、初期配置の確定が初回と同じく走る
-// （areka-P0-ghost-shell-balloon-switch 要件 4.10・3.1・タスク 11.9）
 //
 // 実機の欠陥: 確定の印（`ChainFinalized`）・見送りの回数（`ChainFinalizeStall`）・遷移後の
 // 解き直しの待ち（`ChainRealignPending`）が World 全体に 1 つずつ残り、切替や既定への戻しで
@@ -91,7 +90,7 @@ fn next_window_set_finalizes_once_like_first_boot() {
     let char1 = gw2.char_window(1).unwrap();
     let spawned_x = pos_of(&world, char1).map(|p| p.x);
     let second = capture_lines(LineFormat::LevelTargetFields, || {
-        // 2 回呼ぶ: 1 回目で確定し、2 回目は一度きり（areka-P0-scope-chain-gap 7.4）で駆動しない。
+        // 2 回呼ぶ: 1 回目で確定し、2 回目は一度きりで駆動しない。
         finalize_chain_once_with(&settled_sizes(), &mut world);
         finalize_chain_once_with(&settled_sizes(), &mut world);
     })
@@ -117,7 +116,7 @@ fn next_window_set_finalizes_once_like_first_boot() {
 }
 
 // -----------------------------------------------------------------------------
-// ゴースト待ちは見送りに数えない（areka-P0-restart-chain-finalize-stall 要件 1・2・3）
+// ゴースト待ちは見送りに数えない
 //
 // 窓の一式が無い巡（閉じた後）と、窓は在るが相方のシェルがまだ一度も表示されていない巡は、
 // ゴーストの台本しだいで長さの決まる正常な待ちなので数えない。全スコープが表示された後に
@@ -133,7 +132,7 @@ fn first_warn(logs: &[String]) -> &str {
 }
 
 /// 窓を全部閉じた後の窓なしの巡は数えない。何巡回しても WARN は出ず、外した見送りの数の記録も
-/// 作り直さない（要件 1.1・1.3・3.1）。
+/// 作り直さない。
 #[test]
 fn no_window_frames_after_close_are_not_counted() {
     let (mut world, _gw) = resnap_world();
@@ -163,7 +162,7 @@ fn no_window_frames_after_close_are_not_counted() {
 
 /// 閉じる → 窓なし → 新しい一式で相方が未表示 → 全スコープ表示済みで areka 自身の理由の見送り、
 /// を 1 本で歩く。数え始めは表示が揃ってからで、そこから 600 回目でちょうど 1 件の WARN が出て、
-/// それより前と後には出ない（要件 1.4・2.1〜2.3・3.5）。
+/// それより前と後には出ない。
 #[test]
 fn next_window_set_counts_only_areka_deferrals_after_all_shown() {
     let (mut world, _gw) = resnap_world();

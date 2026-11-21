@@ -1,6 +1,4 @@
-//! 宛先のゴーストの解決（spec: areka-P0-mcp-tool-entrances・areka-P0-mcp-ghost-name-match）。
-//!
-//! World から起きているゴーストを読む薄い配線と、`ghost_name` を解く純粋な判断を置く。
+//! 宛先のゴーストの解決。World から起きているゴーストを読む薄い配線と、`ghost_name` を解く純粋な判断を置く。
 
 use std::path::PathBuf;
 
@@ -22,7 +20,6 @@ pub(crate) struct ActiveGhost {
 /// `ghost_name` が無いときの扱い（空文字は含まない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Omitted {
-    /// 起動中の 1 体へ解決する。
     UseActive,
     /// `NG:Specified ghost is not active`。
     Reject,
@@ -31,7 +28,7 @@ pub(crate) enum Omitted {
 pub(crate) const NOT_ACTIVE: &str = "Specified ghost is not active";
 pub(crate) const CANNOT_FIND: &str = "Cannot find active ghost from specified name";
 
-/// World から起動中のゴーストを読む（置き場が空・実行系が無ければ None・要件 3.8）。
+/// World から起動中のゴーストを読む（置き場が空・実行系が無ければ None）。
 /// LogSink へ倒れた単位も実行系があれば数える。切替の途中は置き場が空。
 pub(crate) fn active(world: &World) -> Option<ActiveGhost> {
     let session = world.get_non_send::<GhostSlot>()?.0.as_ref()?;
@@ -50,7 +47,7 @@ pub(crate) fn active(world: &World) -> Option<ActiveGhost> {
     })
 }
 
-/// 解決の判断（純粋・mcp-tool-entrances の要件 3.2〜3.6 を mcp-ghost-name-match の要件 1・2・4 が上書き）。失敗は `NG:` の後ろに付ける理由。
+/// 解決の判断（純粋）。失敗は `NG:` の後ろに付ける理由。
 /// 名前と本体側名は、渡された文字列の前後の空白を除き半角の英字の大小を同じとみなして比べる。
 /// フルパスは渡された文字列のまま比べ、絶対化しない（相対パス・フォルダ名だけは一致しない）。
 /// 相方の名前・`sakura.name2` は見ない。空文字・空白だけは何にも当たらず `CANNOT_FIND`。
@@ -76,13 +73,13 @@ pub(crate) fn resolve<'a>(
         .ok_or(CANNOT_FIND)
 }
 
-/// 一覧に出す値（`name`、無ければルートフォルダのフルパス・末尾の区切りなし・要件 4.2）。
+/// 一覧に出す値（`name`、無ければルートフォルダのフルパス・末尾の区切りなし）。
 /// script の記録の名と同じ作り（`areka_ghost::config::listed_name`）。
 pub(crate) fn listed_value(ghost: &ActiveGhost) -> String {
     areka_ghost::config::listed_name(ghost.name.as_deref(), &ghost.root)
 }
 
-/// フルパスの照合（大文字小文字・区切り・末尾の区切りの差を同じとみなす・要件 3.3）。
+/// フルパスの照合（大文字小文字・区切り・末尾の区切りの差を同じとみなす）。
 fn same_path(given: &str, root: &std::path::Path) -> bool {
     fn norm(s: &str) -> String {
         s.to_lowercase()

@@ -1,4 +1,4 @@
-//! 対象の解決の兄弟テスト（design「窓口と入口」の対象の解決・要件 1.4・1.7）。
+//! 対象の解決の兄弟テスト。
 //!
 //! 一時の根に emo2 風のフォルダ（`ghost/<名>/ghost/master`・`ghost/<名>/shell/<名>`・
 //! `balloon/<名>`）を置き、今の 3 つの `dir`・名前・倒れ先の `homeurl` と、`updateother` の

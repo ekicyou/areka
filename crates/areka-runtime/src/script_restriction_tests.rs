@@ -1,9 +1,9 @@
-//! 判定の表の固定（areka-P0-script-security-level 要件 4.8）と許すかの真理表（要件 4.1）。
+//! 判定の表の固定と許すかの真理表。
 
 use super::*;
 use areka_sakura::contract::{SecurityLevel, SstpKind};
 
-/// areka-P0-script-security-level 要件 4.1 の 5 つの綴り（並びも表と同じ）。
+/// 5 つの綴り（並びも表と同じ）。
 const EXPECTED: [&str; 5] = [
     r"\![execute,filewatch,…]",
     r"\![execute,schedule-add,…]",
@@ -102,7 +102,7 @@ fn permits_truth_table() {
     }
 }
 
-// ---------------------------------------------------------------- 実装との照合（areka-P0-script-security-level 要件 4.6・4.7）
+// ---------------------------------------------------------------- 実装との照合
 //
 // 名簿（`consumer_ledger.rs`）は読むだけ（先例 `consumer_ledger_agreement_tests.rs`）。
 

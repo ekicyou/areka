@@ -1,4 +1,4 @@
-//! 「インストール」枠の決定論テスト（areka-P0-ghost-install・要件 1.3・1.8・1.12）。
+//! 「インストール」枠の決定論テスト。
 //!
 //! 確かめること: 枠の項目は既定名「インストール…」と `ghostinstallbutton.caption` を持つ葉で、
 //! 窓口が在り終了が始まっていなければ選べること・窓口が無い／終了が始まった後は選べないこと・
@@ -51,8 +51,7 @@ fn shape(item: &MenuItem) -> (String, Option<&'static str>, bool, Option<bool>, 
     )
 }
 
-/// 窓口が在れば、既定名「インストール…」・`ghostinstallbutton.caption`・選べる・印なしの葉
-/// （要件 1.3・1.8）。
+/// 窓口が在れば、既定名「インストール…」・`ghostinstallbutton.caption`・選べる・印なしの葉。
 #[test]
 fn item_is_a_selectable_leaf_with_the_default_label_and_caption() {
     let world = wired_world(true);
@@ -83,8 +82,7 @@ fn item_is_disabled_without_a_desk_or_after_closing_began() {
     );
 }
 
-/// 結線をやり直すと登記は新品で、「インストール」枠は置き換えの記録なしに登記し直される
-/// （要件 1.8）。
+/// 結線をやり直すと登記は新品で、「インストール」枠は置き換えの記録なしに登記し直される。
 #[test]
 fn rewiring_gives_a_fresh_registration_with_the_install_frame() {
     let mut world = wired_world(true);
@@ -112,7 +110,7 @@ fn rewiring_gives_a_fresh_registration_with_the_install_frame() {
 }
 
 /// 読み取りだけの走り（World に [`crate::readonly::ReadOnlyRun`]）では、窓口が在っても灰色。
-/// 対照: 印が無ければ今どおり選べる（readonly-mode 要件 8.7）。
+/// 対照: 印が無ければ今どおり選べる。
 #[test]
 fn item_is_greyed_in_a_readonly_run() {
     let plain = wired_world(true);

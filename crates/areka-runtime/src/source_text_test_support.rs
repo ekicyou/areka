@@ -1,4 +1,4 @@
-//! `areka-runtime` と本体のテストが使う本文の下拵えとファイルの読み口（写しを作らない・spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+//! `areka-runtime` と本体のテストが使う本文の下拵えとファイルの読み口。
 
 /// 説明文（`//` で始まる行）を落とし、コードだけの本文を返す。
 pub fn code_only(source: &str) -> String {

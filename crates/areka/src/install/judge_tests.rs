@@ -1,4 +1,4 @@
-//! 判断の分かれ目のテスト（design「Testing Strategy / 判断」・要件 11.2・11.4・11.6）。
+//! 判断の分かれ目のテスト。
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -40,7 +40,7 @@ fn emo2() -> GhostFacts {
     }
 }
 
-// ---- judge_accept（要件 3.1・3.4・3.5・3.6・11.2・12.9） ----
+// ---- judge_accept ----
 
 #[test]
 fn accept_matching_sakura_name_is_accepted_with_running_ghost_folder() {
@@ -115,7 +115,7 @@ fn shell_and_supplement_without_accept_are_accept_missing() {
     }
 }
 
-// ---- destination_of（要件 3.5・7.1・7.8） ----
+// ---- destination_of ----
 
 #[test]
 fn destination_kinds() {
@@ -163,7 +163,7 @@ fn destination_is_elsewhere_for_every_kind_when_ghost_has_no_folder() {
     }
 }
 
-// ---- failure_word（要件 5.2・5.3・11.4・12.10） ----
+// ---- failure_word ----
 
 fn refused(reason: RefuseReason) -> NarError {
     NarError::Refused {
@@ -172,7 +172,7 @@ fn refused(reason: RefuseReason) -> NarError {
     }
 }
 
-/// 13 種を 1 つずつ組み、要件 5.2 の表の語と突き合わせる。`UnsupportedType` は `found` の有無で 2 通り。
+/// 13 種を 1 つずつ組み、期待の語と突き合わせる。`UnsupportedType` は `found` の有無で 2 通り。
 #[test]
 fn every_refuse_kind_maps_to_its_canonical_word() {
     use FailureWord as W;
@@ -278,7 +278,7 @@ fn every_refuse_kind_maps_to_its_canonical_word() {
 }
 
 /// 読み書きの失敗は段で振り分ける: `.nar` そのものを読めない `Read` だけ `extraction`、作業フォルダ・
-/// 入れる先・確定・巻き戻しの段は `fileio`（write-failure-notice 要件 5.1・7.4・9.2）。
+/// 入れる先・確定・巻き戻しの段は `fileio`。
 #[test]
 fn io_failures_route_by_phase_only_read_is_extraction() {
     for (phase, expected) in [
@@ -308,7 +308,7 @@ fn failure_words_are_the_four_canonical_spellings() {
     assert_eq!(FailureWord::FileIo.as_ref_str(), "fileio");
 }
 
-// ---- kind_word・Reference（要件 2.4・2.5・2.6・3.2・12.7・11.1） ----
+// ---- kind_word・Reference ----
 
 #[test]
 fn kind_words_are_the_four_canonical_identifiers() {
@@ -461,7 +461,7 @@ fn ghost_with_balloon_never_appears() {
     }
 }
 
-// ---- script_request（要件 1.5・1.6・1.7・6.1〜6.3・11.6） ----
+// ---- script_request ----
 
 #[test]
 fn script_request_six_cases() {
@@ -478,7 +478,7 @@ fn script_request_six_cases() {
     );
     assert_eq!(script_request(&["path", ""]), Err(ScriptRefusal::Empty));
     assert_eq!(script_request(&["path"]), Err(ScriptRefusal::Empty));
-    // `url` は `NotPath` でなく URL の腕で判定される（4.2・要件 6.1）。
+    // `url` は `NotPath` でなく URL の腕で判定される。
     assert_eq!(
         script_request(&["url", "https://example.com/hana.nar"]),
         Ok(ScriptRequest::Url(
@@ -508,7 +508,7 @@ fn script_request_ignores_arguments_after_the_path() {
     );
 }
 
-/// `url` の腕が通るのは種別が `nar` か省略のときだけ（要件 6.1）。
+/// `url` の腕が通るのは種別が `nar` か省略のときだけ。
 #[test]
 fn script_request_url_passes_with_nar_or_no_kind() {
     for url in [
@@ -521,7 +521,7 @@ fn script_request_url_passes_with_nar_or_no_kind() {
     }
 }
 
-/// `nar` 以外の種別は URL の良し悪しに関わらず `UnsupportedKind`（要件 6.2）。
+/// `nar` 以外の種別は URL の良し悪しに関わらず `UnsupportedKind`。
 #[test]
 fn script_request_url_refuses_other_kinds() {
     for kind in ["feed", "homeurl", "ical", "ssf", "zip"] {
@@ -535,7 +535,7 @@ fn script_request_url_refuses_other_kinds() {
     }
 }
 
-/// 空・`http://`／`https://` で始まらない URL は `BadUrl`（要件 6.3）。
+/// 空・`http://`／`https://` で始まらない URL は `BadUrl`。
 #[test]
 fn script_request_url_refuses_empty_or_non_http() {
     let cases: [(&[&str], &str); 4] = [

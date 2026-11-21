@@ -33,7 +33,6 @@ fn tick_collects_all_past_payloads_on_jump() {
     sched.insert(Entry::Payload(0.2, "b".into()));
     sched.insert(Entry::Payload(0.3, "c".into()));
 
-    // 一気に 0.3 まで飛ぶ → 全部収集
     sched.tick(0.3);
     assert_eq!(sched.ready().len(), 3);
 }
@@ -46,7 +45,6 @@ fn tick_idempotent_same_time() {
     sched.tick(1.0);
     assert_eq!(sched.ready(), &["x".to_string()]);
 
-    // 同一時刻で再呼び出し → バッファ変更なし
     sched.tick(1.0);
     assert_eq!(sched.ready(), &["x".to_string()]);
 }
@@ -91,7 +89,7 @@ fn remaining_and_is_completed() {
 }
 
 // ============================================================================
-// 占有 horizon と is_completed（占有終了判定・D6 / R2.5）
+// 占有 horizon と is_completed（占有終了判定）
 // is_completed は「entries 枯渇かつ barrier なしかつ current_time >= start_time + horizon」。
 // ============================================================================
 
@@ -144,17 +142,14 @@ fn barrier_stops_progress() {
     sched.insert(Entry::Barrier(1.0, BarrierKind::WaitForInput));
     sched.insert(Entry::Payload(1.5, "after".into()));
 
-    // 0.5 到達 → Payload 収集
     sched.tick(0.5);
     assert_eq!(sched.ready(), &["before".to_string()]);
     assert!(sched.current_barrier().is_none());
 
-    // 1.0 到達 → バリアで停止、"after" は未配信
     sched.tick(1.0);
     assert!(sched.current_barrier().is_some());
     assert_eq!(sched.remaining(), 1); // "after" が残っている
 
-    // バリア中に tick しても進行しない
     sched.tick(2.0);
     assert!(sched.current_barrier().is_some());
     assert_eq!(sched.remaining(), 1);
@@ -169,11 +164,9 @@ fn barrier_resolved_resumes_progress() {
     sched.tick(0.5);
     assert!(sched.current_barrier().is_some());
 
-    // バリア解除
     sched.notify_barrier_resolved();
     assert!(sched.current_barrier().is_none());
 
-    // 次の tick で進行再開
     sched.tick(1.0);
     assert_eq!(sched.ready(), &["after_barrier".to_string()]);
 }
@@ -238,7 +231,7 @@ fn resolve_then_same_time_tick_collects_after() {
 }
 
 // ============================================================================
-// 選択待ちの区切りの値は再生層が解かない（areka-P0-choice-timeout-directive 要件 5.1〜5.3）
+// 選択待ちの区切りの値は再生層が解かない
 // ============================================================================
 
 /// 値 `timeout` の選択待ちの区切りを 1.0 に置き、`tick(1.0)` で区切りに着いたとき
@@ -258,19 +251,19 @@ fn assert_choice_barrier_stops_on_arrival(timeout: Option<f64>) {
 
 #[test]
 fn choice_barrier_with_zero_timeout_stops_on_arrival() {
-    // 値 0（時間切れなしの指令）でも区切りを飛ばさない（要件 5.1）
+    // 値 0（時間切れなしの指令）でも区切りを飛ばさない
     assert_choice_barrier_stops_on_arrival(Some(0.0));
 }
 
 #[test]
 fn choice_barrier_with_negative_timeout_stops_on_arrival() {
-    // 負の値（時間切れなしの指令）でも区切りを飛ばさない（要件 5.1）
+    // 負の値（時間切れなしの指令）でも区切りを飛ばさない
     assert_choice_barrier_stops_on_arrival(Some(-0.001));
 }
 
 #[test]
 fn choice_barrier_with_timeout_not_skipped_when_jumped_past() {
-    // 区切り＋値（1.0 + 0.5 = 1.5）を一度に越えてから着いても止まる（要件 5.2）
+    // 区切り＋値（1.0 + 0.5 = 1.5）を一度に越えてから着いても止まる
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Barrier(
         1.0,
@@ -288,7 +281,7 @@ fn choice_barrier_with_timeout_not_skipped_when_jumped_past() {
 
 #[test]
 fn choice_barrier_with_timeout_never_self_releases_only_external_resolve() {
-    // 止まった後に時計を大きく進めても自分では解かない（要件 5.3）。
+    // 止まった後に時計を大きく進めても自分では解かない。
     // 解けるのは外からの解決（notify_barrier_resolved）だけ
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Barrier(
@@ -430,11 +423,11 @@ fn timed_schedule_with_cue_command() {
 }
 
 // ============================================================================
-// 占有 horizon の絶対時刻照会（Task 3.1・R7.2）
+// 占有 horizon の絶対時刻照会
 // ============================================================================
 
 /// `occupancy_horizon()` はアンカー（`start_time`）＋相対 horizon の**和**を返す。
-/// タイムアウト計測の起点はこの duration 権威から取得され、独自の時間基準を作らない（R7.2）。
+/// タイムアウト計測の起点はこの duration 権威から取得され、独自の時間基準を作らない。
 #[test]
 fn occupancy_horizon_returns_anchor_plus_relative_horizon() {
     let sched = TimedSchedule::<String>::with_horizon(10.0, 2.5);
@@ -551,7 +544,7 @@ fn mixed_entries() -> Vec<Entry<String>> {
 }
 
 /// まとめて入れた並びは 1 件ずつ `insert` した並びと同じ（同じ時刻は記述順に配る）。
-/// 空のスケジュールへも、既に入っているスケジュールへも同じ（mcp-strict-errors 9.4・長い台本）。
+/// 空のスケジュールへも、既に入っているスケジュールへも同じ（長い台本）。
 #[test]
 fn insert_each_matches_per_entry_insert_including_equal_time_fifo() {
     for prefilled in [vec![], mixed_entries()] {

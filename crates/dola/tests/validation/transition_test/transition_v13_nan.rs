@@ -52,7 +52,7 @@ mod v13_tests {
             doc_with_object_var(),
             "bg",
             TransitionDef {
-                to: Some(TransitionValue::Scalar(1.0)), // Object + Scalar = error
+                to: Some(TransitionValue::Scalar(1.0)),
                 ..Default::default()
             },
         );
@@ -61,7 +61,7 @@ mod v13_tests {
 }
 
 // =============================================================
-// #29: NaN は V12 の値域の比べを素通りするので、数値の規則が InvalidNumber で拒む
+// NaN は V12 の値域の比べを素通りするので、数値の規則が InvalidNumber で拒む
 // =============================================================
 
 mod v12_nan_tests {

@@ -1,4 +1,4 @@
-//! `\![move]` の引数の読み（design.md「MoveArgs」・要件 1.1〜1.13・3.8・4.4〜4.6・5.1）。
+//! `\![move]` の引数の読み。
 //!
 //! 名前付きの形（`--キー=値`）と旧い位置の形の両方を、同じ既定・同じ欄の読みで 1 つの
 //! [`MoveDirective`] へ読む。読めない値・知らない語は SSP 2.9.18 の実測と同じ値へ置き換え、
@@ -6,11 +6,11 @@
 //!
 //! 純粋（`World`・`tracing`・wintf の窓を綴らない）・決定論・panic しない。
 //!
-//! # 形の判定（要件 1.13）
+//! # 形の判定
 //!
 //! 引数のどれかが `--` で始まれば名前付きの形、それ以外は旧い位置の形（`-353` は旧い形）。
 //!
-//! # 旧い位置の形（要件 1.12・今のまま）
+//! # 旧い位置の形
 //!
 //! | idx | 欄 | 省略時 |
 //! |----:|----|--------|
@@ -23,7 +23,7 @@
 //!
 //! 7 欄目以降は読まない（記録もしない）。
 //!
-//! # 名前付きの形（要件 1.1・1.2・1.8・1.10・1.11）
+//! # 名前付きの形
 //!
 //! 最初の `=` でキーと値に分け、キーは小文字にそろえて引く。正典のキーは `x`・`y`・`time`・
 //! `base`・`base-offset`・`move-offset`・`option`。値が空のキーは省略と同じ（重複とも数えない）。
@@ -31,7 +31,7 @@
 
 use super::{Axis, AxisSpec, MoveBase, MoveDirective, RefPoint, RefX, RefY};
 
-/// 読みの結果（design.md Service Interface）。
+/// 読みの結果。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedMove {
     pub directive: MoveDirective,
@@ -51,27 +51,27 @@ pub enum OffsetSide {
 /// 読みの置き換えの記録（受け口が `move_arg_substituted` の `warn!` で 1 件ずつ出す）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MoveNote {
-    /// `--` で始まらない・`=` の無い引数を無視した（名前付きの形・要件 1.10）。
+    /// `--` で始まらない・`=` の無い引数を無視した（名前付きの形）。
     MalformedArg { arg: String },
-    /// 正典に無いキーを無視した（要件 1.10）。`key` は書かれたままの綴り。
+    /// 正典に無いキーを無視した。`key` は書かれたままの綴り。
     UnknownKey { key: String },
-    /// `--option` の知らない値を無視した（要件 1.10）。
+    /// `--option` の知らない値を無視した。
     UnknownOption { value: String },
-    /// `option` 以外の同じキーが重なり後の値を使った（要件 1.11）。`key` は小文字。
+    /// `option` 以外の同じキーが重なり後の値を使った。`key` は小文字。
     DuplicateKey { key: String },
-    /// X・Y が整数として読めず `fix` にした（要件 4.5）。
+    /// X・Y が整数として読めず `fix` にした。
     UnparsableAxis { axis: Axis, token: String },
-    /// time が整数として読めず 0 にした（要件 4.6）。
+    /// time が整数として読めず 0 にした。
     UnparsableDuration { token: String },
-    /// 参照点の知らない語を横 `left`・縦 `top` にした（要件 4.4）。
+    /// 参照点の知らない語を横 `left`・縦 `top` にした。
     UnknownRefWord {
         side: OffsetSide,
         axis: Axis,
         word: String,
     },
-    /// 正典の語でも数でもない基準（他のゴーストの名前など）をスコープ 0 にした（要件 3.8）。
+    /// 正典の語でも数でもない基準（他のゴーストの名前など）をスコープ 0 にした。
     OtherGhostBase { name: String },
-    /// time>0 を補間せず最終の位置へ即時に置く（要件 5.1）。
+    /// time>0 を補間せず最終の位置へ即時に置く。
     TimedMoveImmediate { duration_ms: u32 },
 }
 
@@ -171,7 +171,7 @@ fn named_fields<'a>(tokens: &'a [String], notes: &mut Vec<MoveNote>) -> Fields<'
     f
 }
 
-/// X・Y: 空か `fix` → `Fix`・`i32` → `Px`・他 → `Fix`＋記録（要件 1.5・1.6・4.5）。
+/// X・Y: 空か `fix` → `Fix`・`i32` → `Px`・他 → `Fix`＋記録。
 fn read_axis(token: &str, axis: Axis, notes: &mut Vec<MoveNote>) -> AxisSpec {
     if token.is_empty() || token.eq_ignore_ascii_case("fix") {
         return AxisSpec::Fix;
@@ -185,7 +185,7 @@ fn read_axis(token: &str, axis: Axis, notes: &mut Vec<MoveNote>) -> AxisSpec {
     })
 }
 
-/// time: 空 → 0・`u32` → その値（>0 は記録）・他 → 0＋記録（要件 4.6・5.1）。
+/// time: 空 → 0・`u32` → その値（>0 は記録）・他 → 0＋記録。
 fn read_duration(token: &str, notes: &mut Vec<MoveNote>) -> u32 {
     if token.is_empty() {
         return 0;
@@ -205,7 +205,7 @@ fn read_duration(token: &str, notes: &mut Vec<MoveNote>) -> u32 {
     }
 }
 
-/// base: 空 → `Screen`・正典の語（大小を問わない）・`u32` → `Scope`・他 → `Scope(0)`＋記録（要件 3.8）。
+/// base: 空 → `Screen`・正典の語（大小を問わない）・`u32` → `Scope`・他 → `Scope(0)`＋記録。
 fn read_base(token: &str, notes: &mut Vec<MoveNote>) -> MoveBase {
     if token.is_empty() {
         return MoveBase::Screen;
@@ -227,8 +227,7 @@ fn read_base(token: &str, notes: &mut Vec<MoveNote>) -> MoveBase {
     }
 }
 
-/// 参照点: 空 → `left.top`・`横.縦`・点の無い 1 語は両軸へ（要件 1.3・1.7）。知らない語は軸ごとに
-/// 横 `left`・縦 `top`＋記録（要件 4.4）。
+/// 参照点: 空 → `left.top`・`横.縦`・点の無い 1 語は両軸へ。知らない語は軸ごとに横 `left`・縦 `top`＋記録。
 fn read_ref_point(token: &str, side: OffsetSide, notes: &mut Vec<MoveNote>) -> RefPoint {
     if token.is_empty() {
         return RefPoint::LEFT_TOP;

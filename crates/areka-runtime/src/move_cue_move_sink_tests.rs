@@ -1,6 +1,4 @@
-// =============================================================================
-// MoveCueSink 名前選別 sink 檻（task 7.3・R4.5・R8.5）
-// =============================================================================
+// MoveCueSink の名前選別のテスト。
 
 use super::*;
 use crate::consumer_ledger::test_support::actor_carrier_cue;
@@ -15,7 +13,7 @@ fn as_move(cue: PositionCue) -> MoveDirective {
     }
 }
 
-/// 名前選別: `"move"` キャリアのみ解釈して MoveDirective を送出する（R4.5・最初の実消費者）。
+/// 名前選別: `"move"` キャリアのみ解釈して MoveDirective を送出する。
 #[test]
 fn move_carrier_sends_directive() {
     let (tx, rx) = channel::<PositionCue>();
@@ -36,7 +34,7 @@ fn move_carrier_sends_directive() {
 }
 
 /// 担当外キャリア（`bind`/`raise`/未知名）は良性スキップ＝何も送出しない
-/// （高々 1 消費者・自らの名前リテラル `"move"` で自己選別・一意性は areka 消費者台帳が保証・R4.5）。
+/// （自らの名前リテラル `"move"` で自己選別する。一意性は areka 消費者台帳が保証）。
 #[test]
 fn non_move_carrier_is_benign_skip() {
     for name in ["bind", "raise", "unknownfoo"] {
@@ -51,7 +49,7 @@ fn non_move_carrier_is_benign_skip() {
     }
 }
 
-/// 非キャリア cue（`Text` 等の担当外 broadcast）は良性スキップ＝何も送出しない（R8.5）。
+/// 非キャリア cue（`Text` 等の担当外 broadcast）は良性スキップ＝何も送出しない。
 #[test]
 fn non_carrier_cue_is_benign_skip() {
     let (tx, rx) = channel::<PositionCue>();
@@ -79,7 +77,7 @@ fn scope_reflects_actor() {
     assert_eq!(d.scope, 1, "scope は cue.actor（\\1）由来");
 }
 
-/// 非数値 actor（`sakura` 等）は warn＋スキップ＝非 panic・何も送出しない（design 破損・異常）。
+/// 非数値 actor（`sakura` 等）は warn＋スキップ＝非 panic・何も送出しない。
 #[test]
 fn non_numeric_actor_is_skipped() {
     let (tx, rx) = channel::<PositionCue>();
@@ -92,7 +90,7 @@ fn non_numeric_actor_is_skipped() {
     );
 }
 
-/// 名前付きの形も旧い形と同じく読んで送る（要件 1.1・areka-P0-move-canon）。
+/// 名前付きの形も旧い形と同じく読んで送る。
 #[test]
 fn named_form_is_sent() {
     let (tx, rx) = channel::<PositionCue>();
@@ -139,7 +137,7 @@ fn satisfies_boot_sink_bounds() {
     require::<MoveCueSink>();
 }
 
-/// `\![execute,resetwindowpos]` は「並べ直し」として送る。残りの引数は読まない（要件 8.7・7.1）。
+/// `\![execute,resetwindowpos]` は「並べ直し」として送る。残りの引数は読まない。
 #[test]
 fn execute_resetwindowpos_sends_reset() {
     for tokens in [
@@ -155,7 +153,7 @@ fn execute_resetwindowpos_sends_reset() {
 }
 
 /// `\![execute,install,…]`・引数の無い `execute`・`\![set,position,…]`・`\![reset,position]` は
-/// どれも送らない（install は別の受け口・位置の set／reset は SSP 2.9.18 も受けない＝要件 7.1）。
+/// どれも送らない（install は別の受け口・位置の set／reset は SSP 2.9.18 も受けない）。
 #[test]
 fn other_execute_and_position_tags_are_not_sent() {
     let cases: [(&str, &[&str]); 4] = [
@@ -176,8 +174,8 @@ fn other_execute_and_position_tags_are_not_sent() {
     }
 }
 
-/// 窓の組・吸着・バルーン位置初期化の 5 組は、それぞれの種類で 1 件だけ送る（areka-P0-window-link-directives
-/// 要件 1.4・1.7・3.1・3.5・7.1）。吸着は実行者のスコープを持ち、組の ID は読まずにそのまま運ぶ。
+/// 窓の組・吸着・バルーン位置初期化の 5 組は、それぞれの種類で 1 件だけ送る。
+/// 吸着は実行者のスコープを持ち、組の ID は読まずにそのまま運ぶ。
 #[test]
 fn window_link_pairs_send_their_cues() {
     use areka_placement::resolver::Anchor;
@@ -240,7 +238,7 @@ fn window_link_pairs_send_their_cues() {
     }
 }
 
-/// 吸着の実行者が数でなければ `warn!` で捨てる（`move` と同じ読み・design「MoveCueSink と PositionCue」）。
+/// 吸着の実行者が数でなければ `warn!` で捨てる（`move` と同じ読み）。
 #[test]
 fn alignment_with_non_numeric_actor_is_dropped_with_warn() {
     // 記録の `tag` は実際に届いた第 1 引数の綴り（`alignmentondesktop` も取り違えない）。

@@ -1,14 +1,6 @@
 // =============================================================================
-// ReadmeCueSink の自己選別と送り出しの決定論テスト（要件 9.5・4.5・4.6・8.4・
-// areka-P0-open-external-tags 要件 1.5・1.7・2.6・3.2・4.7・6.3・8.6・10.3）
+// ReadmeCueSink の自己選別と送り出しの決定論テスト
 // =============================================================================
-//
-// 確かめること: 引数なしの `\![open,readme]` が要求を 1 件だけ送ること・引数付きが
-// 何も送らず警告を 1 行残すこと・5 つの `open` の形と `\j` が行き先を 1 件ずつ送ること・
-// 断る入力が何も送らず `open_external_rejected` を 1 行残すこと・他のコマンド名と
-// `\![open,help]`・裸の `\![open]`・キャリアでない cue が何も送らず警告も出さないこと・
-// 開封できない荷物は宛名（`open`・`\j`）で水準を分けること・受信端が落ちていても落ちずに
-// 記録すること・送った行き先の列が台本からの取り出し（`link_destinations`）と一致すること。
 
 use super::*;
 use crate::readme::destination::{Destination, OpenKind, classify, link_destinations};
@@ -36,7 +28,7 @@ fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
 
 // ---------------------------------------------------------------- 受理
 
-/// 引数なしの `\![open,readme]` は説明書の要求をちょうど 1 件送る（要件 4.5）。
+/// 引数なしの `\![open,readme]` は説明書の要求をちょうど 1 件送る。
 #[test]
 fn bare_open_readme_sends_exactly_one_request() {
     let (mut sink, rx) = sink();
@@ -55,7 +47,7 @@ fn bare_open_readme_sends_exactly_one_request() {
 
 // ---------------------------------------------------------------- 縮退
 
-/// 引数付きの `\![open,readme,種類,名前]` は何も送らず、警告を 1 行だけ残す（要件 4.6）。
+/// 引数付きの `\![open,readme,種類,名前]` は何も送らず、警告を 1 行だけ残す。
 #[test]
 fn open_readme_with_arguments_warns_and_sends_nothing() {
     let (mut sink, rx) = sink();
@@ -83,7 +75,7 @@ fn other_command_name_is_benign_skip() {
 }
 
 /// `\![open,help]`（SSP 自身の窓）は担当外——何も送らず、警告も出さない
-/// （報せる責任はその担当者にあるため・要件 9.3）。
+/// （報せる責任はその担当者にあるため）。
 #[test]
 fn open_help_is_benign_skip_without_warning() {
     let (mut sink, rx) = sink();
@@ -156,7 +148,7 @@ fn unopenable_custom_addressed_to_open_warns_and_sends_nothing() {
 
 // ---------------------------------------------------------------- 送出の失敗
 
-/// 受信端が落ちていても落ちず、送れなかったことを記録する（黙って諦めない・要件 8.4）。
+/// 受信端が落ちていても落ちず、送れなかったことを記録する（黙って諦めない）。
 #[test]
 fn dropped_receiver_is_logged_and_does_not_panic() {
     let (mut sink, rx) = sink();
@@ -190,8 +182,7 @@ fn sent_destinations(rx: &Receiver<ReadmeRequest>) -> Vec<Destination> {
         .collect()
 }
 
-/// 5 つの `open` の形と `\j` は、規則で分類した行き先をちょうど 1 件送り、警告を出さない
-/// （要件 1.5・8.6）。
+/// 5 つの `open` の形と `\j` は、規則で分類した行き先をちょうど 1 件送り、警告を出さない。
 #[test]
 fn open_forms_and_jump_send_classified_destination() {
     let cases: &[(&str, &[&str], OpenKind)] = &[
@@ -216,8 +207,7 @@ fn open_forms_and_jump_send_classified_destination() {
     }
 }
 
-/// 断る入力は何も送らず、`open_external_rejected` の警告を綴りと理由つきで 1 行だけ残す
-/// （要件 1.7・2.6・3.2・4.7・6.3）。
+/// 断る入力は何も送らず、`open_external_rejected` の警告を綴りと理由つきで 1 行だけ残す。
 #[test]
 fn rejected_inputs_warn_once_and_send_nothing() {
     let cases: &[(&str, &[&str], &str)] = &[
@@ -294,7 +284,7 @@ fn unopenable_custom_addressed_to_others_does_not_warn() {
 }
 
 /// 同じ台本を読み込んで得た汎用コマンドを運び手の cue にして受け口へ通すと、送られた
-/// 行き先の列は台本からの取り出しと一致する（同じ規則・要件 8.6・10.3）。
+/// 行き先の列は台本からの取り出しと一致する（同じ規則）。
 #[test]
 fn sink_agrees_with_link_destinations() {
     let script = concat!(
@@ -329,10 +319,10 @@ fn sink_agrees_with_link_destinations() {
     assert_eq!(sent, extracted, "受け口と取り出しは同じ列を返す");
 }
 
-// ---------------------------------------------------------------- 記録の型（popup-menu-residue）
+// ---------------------------------------------------------------- 記録の型
 
 /// 7 つの場面の記録はどれもちょうど 1 行で、`[readme]` の接頭辞・表の `event=`・表の水準を
-/// 持つ（popup-menu-residue 要件 5.1・5.2・5.5）。
+/// 持つ。
 #[test]
 fn every_readme_cue_line_carries_the_prefix_and_an_event() {
     let unopenable = |command: &str| TalkCue {

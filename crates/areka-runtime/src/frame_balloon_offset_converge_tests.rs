@@ -3,8 +3,8 @@
 //! # ここが押さえる欠陥
 //!
 //! 拡大率遷移で追従オフセットが新しい値へ追随しても、続く窓書込が
-//! [`resize_window_to`](areka_placement::follow::resize_window_to) の**手順 4 のべき等
-//! skip**（位置と寸がともに同一）で抜けると、手順 6 の随伴追従に到達しない。すると
+//! [`resize_window_to`](areka_placement::follow::resize_window_to) の**べき等 skip**
+//! （位置と寸がともに同一）で抜けると、随伴追従に到達しない。すると
 //! 「オフセットは直ったのにバルーンは次に何かが動くまで古い位置に居る」——この檻が
 //! 押さえる欠陥そのものが残る。`dpi_phase_with` は追随の戻り値と反映の戻り値を
 //! 突き合わせ、その腕でだけ随伴追従を 1 度呼ぶ。
@@ -138,7 +138,6 @@ fn an_idempotent_skip_converges_the_balloon_in_exactly_one_write() {
         );
     }
 
-    // 別経路の書込は 0（予算の 3 つ目）。
     let other: Vec<&SetWindowPosCommand> = writes
         .iter()
         .filter(|cmd| {

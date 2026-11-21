@@ -1,10 +1,8 @@
-//! 入力を集める口（`resolve_balloon_for_ghost`）と起動の入口（`resolve_boot_from`）を実ファイルで踏む
-//! （`areka-P0-ghost-standard-balloon` タスク 3・要件 2.5・3.2・4.1・5.1・7.4・7.7）。
+//! 入力を集める口（`resolve_balloon_for_ghost`）と起動の入口（`resolve_boot_from`）を実ファイルで踏む。
 //!
 //! 段の並びと突き合わせの判断は I/O なしの `boot_resolve_balloon_tests.rs` が固定する。ここで見るのは
-//! 「読んだ 2 鍵が鎖へ届くこと」「ゴーストの中の `balloon\` が根より先に候補へ入ること
-//! （areka-P0-ghost-inner-balloon 要件 1.4・3.2・4.1〜4.5・4.7）」「引数の腕は読まないこと」と
-//! 記録の件数だけ。根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下・要件 7.7）。
+//! 「読んだ 2 鍵が鎖へ届くこと」「ゴーストの中の `balloon\` が根より先に候補へ入ること」
+//! 「引数の腕は読まないこと」と記録の件数だけ。根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
 use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
 use crate::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER};
@@ -129,7 +127,7 @@ fn descript_balloon_wins_over_unnumbered_companion() {
 }
 
 /// `default.balloon.path` と同じ名前のフォルダがゴーストの中の `balloon\` にだけ在る → descript の段で
-/// ゴーストの中に当たり、警告は 0 件（要件 4.2）。
+/// ゴーストの中に当たり、警告は 0 件。
 #[test]
 fn default_balloon_path_hits_ghost_inner_balloon() {
     let tmp = TempPath::under_target("cfg-balloon-inner");
@@ -145,7 +143,7 @@ fn default_balloon_path_hits_ghost_inner_balloon() {
 
 /// `balloon/plain` は `<ゴースト>\balloon\plain` が在っても当たらない（フォルダ名の突き合わせ）。
 /// 名前は検体と無関係にしてある（検体の在処を綴るのは窓口 `sample_ghost_kit::SampleRoot` だけ）。
-/// `descript_balloon_not_found` が今の欄（`balloon_store` は根の置き場だけ）で 1 件（要件 4.3・4.7）。
+/// `descript_balloon_not_found` が今の欄（`balloon_store` は根の置き場だけ）で 1 件。
 #[test]
 fn balloon_prefixed_path_misses_even_with_ghost_inner_folder() {
     let tmp = TempPath::under_target("cfg-balloon-inner-prefixed");
@@ -182,7 +180,7 @@ fn balloon_prefixed_path_misses_even_with_ghost_inner_folder() {
     );
 }
 
-/// 同梱の段（`install.txt` の `balloon.directory`）がゴーストの中に当たる（要件 4.4）。
+/// 同梱の段（`install.txt` の `balloon.directory`）がゴーストの中に当たる。
 #[test]
 fn companion_hits_ghost_inner_balloon() {
     let tmp = TempPath::under_target("cfg-balloon-inner-companion");
@@ -200,7 +198,7 @@ fn companion_hits_ghost_inner_balloon() {
     assert!(warnings(&events).is_empty(), "{events:?}");
 }
 
-/// 根の置き場にバルーンが 1 つも無くても、ゴーストの中に在ればそれで決まり `NoBalloon` にならない（要件 4.5）。
+/// 根の置き場にバルーンが 1 つも無くても、ゴーストの中に在ればそれで決まり `NoBalloon` にならない。
 #[test]
 fn empty_root_store_resolves_from_ghost_inner_balloon() {
     let tmp = TempPath::under_target("cfg-balloon-inner-only");
@@ -216,7 +214,7 @@ fn empty_root_store_resolves_from_ghost_inner_balloon() {
 }
 
 /// 根の同じフォルダ名を隠した 1 件ごとに info `ghost_balloon_hides_root` が 1 件（欄は
-/// `folder`・`hidden`＝根の場所・`by`＝ゴーストの中の場所）。根に無いゴーストの中のバルーンは数えない（要件 3.2）。
+/// `folder`・`hidden`＝根の場所・`by`＝ゴーストの中の場所）。根に無いゴーストの中のバルーンは数えない。
 #[test]
 fn ghost_balloon_hides_root_once_per_hidden_entry() {
     let tmp = TempPath::under_target("cfg-balloon-inner-hides");
@@ -275,7 +273,7 @@ fn boot(tmp: &TempPath, rest: &[&Path]) -> (BalloonRoute, PathBuf, Vec<CapturedE
     (balloon.route, balloon.dir, events)
 }
 
-/// 引数なしで descript の指定が当たる起動 → 「バルーンを決めました」がちょうど 1 件で段が descript（要件 5.1）。
+/// 引数なしで descript の指定が当たる起動 → 「バルーンを決めました」がちょうど 1 件で段が descript。
 #[test]
 fn boot_without_argv_records_descript_route_once() {
     let tmp = TempPath::under_target("cfg-balloon-boot-descript");
@@ -304,7 +302,7 @@ fn hold_exclusive(path: &Path) -> std::fs::File {
         .expect("共有なしで開く")
 }
 
-/// 引数でバルーンを渡した起動は、当たらない descript・同梱・記憶を置いても読まない（要件 3.2）:
+/// 引数でバルーンを渡した起動は、当たらない descript・同梱・記憶を置いても読まない:
 /// 引数の段・「当たらなかった」の記録 0 件・「バルーンを決めました」1 件。読みの有無は、
 /// ゴーストの descript.txt・install.txt・記憶を共有なしで握ったまま起動し、warn が 0 件である
 /// ことで判定する（読めば `catalog_descript_unreadable` などが出る。ゴーストかの検査は
@@ -344,7 +342,7 @@ fn boot_with_argv_balloon_reads_no_ghost_balloon_keys() {
     assert_eq!(named(&events, "balloon_resolved").len(), 1, "{events:?}");
 }
 
-/// 引数で渡したゴースト（位置の引数・`--ghost`）でも、そのゴーストのフォルダの中のバルーンを数える（要件 1.4）。
+/// 引数で渡したゴースト（位置の引数・`--ghost`）でも、そのゴーストのフォルダの中のバルーンを数える。
 #[test]
 fn argv_ghost_counts_its_inner_balloons() {
     for (case, flag) in [("pos", None), ("opt", Some(Path::new("--ghost")))] {

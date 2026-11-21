@@ -1,4 +1,4 @@
-//! 項目名の照会と表示可否（[`super`]）の決定論テスト（要件 9.2 の写し側・9.3・3.8）。
+//! 項目名の照会と表示可否（[`super`]）の決定論テスト。
 //!
 //! 確かめること: 枠とリソース名と既定名の対応表・表示可否の名前をスコープで選ぶこと・
 //! 問い合わせる名前の並びと重複の潰し方・返り値から項目名への 4 通りの写し・失敗の記録が
@@ -41,7 +41,7 @@ fn submenu(label: &str, resource: Option<&'static str>, children: Vec<MenuItem>)
     }
 }
 
-/// 第 1 スライスの写し（⑧説明書・⑨終了だけが登記されている）。
+/// 説明書・終了だけが登記された写し。
 fn readme_and_close_snapshot() -> Vec<(Frame, MenuItem)> {
     vec![
         (Frame::Readme, leaf("説明書", Some("readmebutton.caption"))),
@@ -78,8 +78,8 @@ fn visibility_of(outcome: ResourceOutcome) -> (Visibility, Vec<String>) {
     (interpreted.visibility, lines)
 }
 
-/// 対応表は枠の数と同じ長さで、[`Frame::ORDER`] の順に要件 3.1 の組と、置き場の 3 枠
-/// （SHIORI のリソース名を持たない・areka-P0-baseware-root-list 要件 6.1・7.1）を並べる。
+/// 対応表は枠の数と同じ長さで、[`Frame::ORDER`] の順に各枠の組と、置き場の 3 枠
+/// （SHIORI のリソース名を持たない）を並べる。
 #[test]
 fn frame_captions_table_is_the_twelve_rows() {
     assert_eq!(
@@ -160,7 +160,7 @@ fn resource_for_and_default_label_read_the_table() {
     assert_eq!(default_label(Frame::RootRemove), "置き場を外す");
 }
 
-/// 表示可否の問い合わせ先はスコープで選ぶ（要件 3.6）。
+/// 表示可否の問い合わせ先はスコープで選ぶ。
 #[test]
 fn visible_resource_is_chosen_by_scope() {
     assert_eq!(SAKURA_POPUPMENU_VISIBLE, "sakura.popupmenu.visible");
@@ -169,7 +169,7 @@ fn visible_resource_is_chosen_by_scope() {
     assert_eq!(visible_resource_for(1), "kero.popupmenu.visible");
 }
 
-/// 問い合わせない 4 名は運行の許可表に 1 つも無く、引く 10 名はすべて許可表にある（要件 3.8・3.1・3.6）。
+/// 問い合わせない 4 名は運行の許可表に 1 つも無く、引く 10 名はすべて許可表にある。
 #[test]
 fn unqueried_resources_are_absent_from_the_real_allow_table() {
     assert_eq!(
@@ -203,7 +203,7 @@ fn unqueried_resources_are_absent_from_the_real_allow_table() {
     }
 }
 
-/// 問い合わせる名前は「表示可否が先頭・続いて写しに現れた順」。第 1 スライスは 3 件。
+/// 問い合わせる名前は「表示可否が先頭・続いて写しに現れた順」。この写しでは 3 件。
 #[test]
 fn query_ids_puts_the_visible_name_first_then_the_snapshot_order() {
     let snapshot = readme_and_close_snapshot();
@@ -260,7 +260,7 @@ fn query_ids_collects_submenu_children_and_collapses_duplicates() {
 }
 
 /// 「ネットワーク更新」の項目があれば、古い名前を新しい名前の直前に 1 回だけ問う。
-/// 項目を 2 つ置いても重ならない（popup-menu-extra-resources 要件 1.1・5.2）。
+/// 項目を 2 つ置いても重ならない。
 #[test]
 fn query_ids_puts_the_legacy_name_just_before_the_new_name_once() {
     let snapshot = vec![
@@ -287,14 +287,14 @@ fn query_ids_puts_the_legacy_name_just_before_the_new_name_once() {
     );
 }
 
-/// 「ネットワーク更新」の項目が無い写しでは古い名前を問わない（popup-menu-extra-resources 要件 1.7）。
+/// 「ネットワーク更新」の項目が無い写しでは古い名前を問わない。
 #[test]
 fn query_ids_omits_the_legacy_name_without_the_update_item() {
     let ids = query_ids(&readme_and_close_snapshot(), 0);
     assert!(!ids.contains(&"updatebuttoncaption"), "{ids:?}");
 }
 
-/// 値が非空ならその文言をそのまま使う（`&` もそのまま・要件 3.2）。
+/// 値が非空ならその文言をそのまま使う（`&` もそのまま）。
 #[test]
 fn non_empty_value_becomes_the_caption_verbatim() {
     let (interpreted, lines) = interpret_capturing(Ok(vec![
@@ -309,7 +309,7 @@ fn non_empty_value_becomes_the_caption_verbatim() {
     assert!(lines_at(&lines, "DEBUG").is_empty(), "{lines:?}");
 }
 
-/// 空文字列と値なしは既定名（表に入らない）＋ `debug!` で記録する（要件 3.3）。
+/// 空文字列と値なしは既定名（表に入らない）＋ `debug!` で記録する。
 #[test]
 fn empty_value_and_no_content_fall_back_to_the_default_label_with_debug() {
     for outcome in [
@@ -334,7 +334,7 @@ fn empty_value_and_no_content_fall_back_to_the_default_label_with_debug() {
     }
 }
 
-/// 失敗した項目は既定名に落ちる（要件 3.4）。
+/// 失敗した項目は既定名に落ちる。
 #[test]
 fn failed_resource_falls_back_to_the_default_label() {
     let (interpreted, _) =
@@ -342,7 +342,7 @@ fn failed_resource_falls_back_to_the_default_label() {
     assert_eq!(interpreted.captions.get("readmebutton.caption"), None);
 }
 
-/// 2 件失敗しても記録は 1 回の表示につき 1 行で、両方の名前を載せる（要件 3.4 の「1 回」）。
+/// 2 件失敗しても記録は 1 回の表示につき 1 行で、両方の名前を載せる。
 #[test]
 fn two_failed_ids_are_reported_in_a_single_warn_line() {
     let (interpreted, lines) = interpret_capturing(Ok(vec![
@@ -365,7 +365,7 @@ fn two_failed_ids_are_reported_in_a_single_warn_line() {
     );
 }
 
-/// 上限超過は全件既定名で、警告は 1 行・理由に `timeout` を載せる（要件 3.4）。
+/// 上限超過は全件既定名で、警告は 1 行・理由に `timeout` を載せる。
 #[test]
 fn timeout_defaults_every_id_with_one_warn_carrying_the_reason() {
     let (interpreted, lines) = interpret_capturing(Err(QueryFailure::Timeout));
@@ -397,7 +397,7 @@ fn dropped_and_send_failed_carry_their_own_reason() {
     }
 }
 
-/// 表示可否が `0` のときだけ抑止し、`info!` を 1 回残す（要件 3.7）。
+/// 表示可否が `0` のときだけ抑止し、`info!` を 1 回残す。
 #[test]
 fn visible_zero_suppresses_the_menu_and_records_once() {
     let (visibility, lines) = visibility_of(ResourceOutcome::Value("0".to_string()));
@@ -416,7 +416,7 @@ fn visible_zero_suppresses_the_menu_and_records_once() {
     );
 }
 
-/// `0` 以外・値なし・失敗・返事なしはすべて「出す」（要件 3.7）。
+/// `0` 以外・値なし・失敗・返事なしはすべて「出す」。
 #[test]
 fn everything_other_than_zero_shows_the_menu() {
     for outcome in [
@@ -448,7 +448,7 @@ fn the_visible_name_never_becomes_a_caption() {
     assert_eq!(interpreted.captions.get(SAKURA_POPUPMENU_VISIBLE), None);
 }
 
-/// 照会は 1 通だけ送り、待たずに受信端を返す。返事は受信端から覗ける（要件 3.2）。
+/// 照会は 1 通だけ送り、待たずに受信端を返す。返事は受信端から覗ける。
 #[test]
 fn send_query_posts_exactly_one_message_and_returns_a_receiver() {
     let (tx, kanade) = channel::<KanadeMsg>();
@@ -487,11 +487,11 @@ fn send_query_reports_send_failed_when_kanade_is_gone() {
     ));
 }
 
-/// 新しい名前と古い名前（popup-menu-extra-resources）。
+/// 新しい名前と古い名前。
 const NEW_UPDATE: &str = "updatebutton.caption";
 const OLD_UPDATE: &str = "updatebuttoncaption";
 
-/// 新しい名前だけが引ければ、その値を使う（要件 1.2・3.1）。
+/// 新しい名前だけが引ければ、その値を使う。
 #[test]
 fn update_caption_uses_the_new_name_when_only_it_answers() {
     let (interpreted, _) = interpret_capturing(Ok(vec![
@@ -501,7 +501,7 @@ fn update_caption_uses_the_new_name_when_only_it_answers() {
     assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("新しい名前"));
 }
 
-/// 新しい名前が値なしで古い名前が引ければ、古い名前の値をそのまま使う（`&` も前後の空白も・要件 1.3・1.5）。
+/// 新しい名前が値なしで古い名前が引ければ、古い名前の値をそのまま使う（`&` も前後の空白も）。
 #[test]
 fn update_caption_falls_back_to_the_old_name_verbatim() {
     let (interpreted, _) = interpret_capturing(Ok(vec![
@@ -511,7 +511,7 @@ fn update_caption_falls_back_to_the_old_name_verbatim() {
     assert_eq!(interpreted.captions.get(NEW_UPDATE), Some(" 更新(&U) "));
 }
 
-/// 両方引ければ新しい名前の値を使う（要件 1.2・3.1）。
+/// 両方引ければ新しい名前の値を使う。
 #[test]
 fn update_caption_prefers_the_new_name_when_both_answer() {
     let (interpreted, _) = interpret_capturing(Ok(vec![
@@ -521,7 +521,7 @@ fn update_caption_prefers_the_new_name_when_both_answer() {
     assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("新しい"));
 }
 
-/// どちらも値なしなら既定名（鍵なし）で、空の記録は 1 行に両方の名前を載せる（要件 1.4・2.1・2.3）。
+/// どちらも値なしなら既定名（鍵なし）で、空の記録は 1 行に両方の名前を載せる。
 #[test]
 fn update_caption_without_either_value_defaults_with_one_debug_line() {
     let (interpreted, lines) = interpret_capturing(Ok(vec![
@@ -545,7 +545,7 @@ fn update_caption_without_either_value_defaults_with_one_debug_line() {
     assert!(matches!(interpreted.visibility, Visibility::Show));
 }
 
-/// 新しい名前が空の値でも、古い名前が引ければその値を使う（要件 1.3）。
+/// 新しい名前が空の値でも、古い名前が引ければその値を使う。
 #[test]
 fn update_caption_falls_back_when_the_new_name_is_empty() {
     let (interpreted, _) =
@@ -553,7 +553,7 @@ fn update_caption_falls_back_when_the_new_name_is_empty() {
     assert_eq!(interpreted.captions.get(NEW_UPDATE), Some("古い"));
 }
 
-/// 新しい名前が失敗しても古い名前が引ければその値を使い、警告 1 行に新しい名前を載せる（要件 1.3・2.2）。
+/// 新しい名前が失敗しても古い名前が引ければその値を使い、警告 1 行に新しい名前を載せる。
 #[test]
 fn update_caption_falls_back_when_the_new_name_fails() {
     let (interpreted, lines) = interpret_capturing(Ok(vec![
@@ -570,7 +570,7 @@ fn update_caption_falls_back_when_the_new_name_fails() {
     );
 }
 
-/// 古い名前が失敗しても新しい名前が引ければその値を使い、警告 1 行に古い名前を載せる（要件 1.2・2.2）。
+/// 古い名前が失敗しても新しい名前が引ければその値を使い、警告 1 行に古い名前を載せる。
 #[test]
 fn update_caption_keeps_the_new_name_when_the_old_name_fails() {
     let (interpreted, lines) = interpret_capturing(Ok(vec![

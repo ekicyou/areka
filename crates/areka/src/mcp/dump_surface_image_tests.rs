@@ -1,4 +1,4 @@
-//! PNG を base64 にする決定論テスト（要件 5.1・5.5）。乗算を戻す・PNG の検査は `png_image_tests.rs`。
+//! PNG を base64 にする決定論テスト。乗算を戻す・PNG の検査は `png_image_tests.rs`。
 
 use super::*;
 

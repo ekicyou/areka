@@ -13,7 +13,7 @@ fn config_inputs_holds_resolved_roots() {
 }
 
 // ---------------------------------------------------------------------------
-// 起動前の解決の判断（task 5.1・要件 4.1・4.7・4.8・5.1）
+// 起動前の解決の判断
 // ---------------------------------------------------------------------------
 // `resolve_boot_from` へ根と argv を注入して、argv の有無で分かれる判断だけを踏む
 // （ゴースト・バルーンの 13 分岐は `boot_resolve_tests.rs`、実プロセスの配線は smoke）。
@@ -37,7 +37,7 @@ mod boot {
             .collect()
     }
 
-    /// argv のフォルダに `ghost/master/descript.txt` が無ければ、argv 付きの「ゴーストなし」（要件 4.8）。
+    /// argv のフォルダに `ghost/master/descript.txt` が無ければ、argv 付きの「ゴーストなし」。
     #[test]
     fn argv_ghost_without_master_descript_is_ghost_missing_with_argv() {
         let root = TempPath::new("boot-argv-not-ghost");
@@ -59,7 +59,7 @@ mod boot {
         );
     }
 
-    /// argv が両方あれば argv のとおりに決まり、列挙も記憶も読まない（要件 4.1・5.1・7.1）。
+    /// argv が両方あれば argv のとおりに決まり、列挙も記憶も読まない。
     /// 根には読めば warn になる罠（指す先の無い記憶・`type,plugin` のバルーン）を置く。
     #[test]
     fn argv_both_resolves_without_listing_or_reading_memory() {
@@ -97,7 +97,7 @@ mod boot {
         assert!(warned.is_empty(), "列挙・記憶を読んだ痕跡: {warned:?}");
     }
 
-    /// argv が無く根にゴーストが 0 体なら、argv 無しの「ゴーストなし」（要件 4.7）。
+    /// argv が無く根にゴーストが 0 体なら、argv 無しの「ゴーストなし」。
     #[test]
     fn no_argv_and_empty_root_is_ghost_missing_without_argv() {
         let root = TempPath::new("boot-empty-root");
@@ -118,7 +118,7 @@ mod boot {
     }
 
     /// 起動の記録: 並びの 1 根ごとの `root_listed` は argv の有無によらず残し、隠れの件数
-    /// （目録を読む）は argv でゴーストを渡した起動では残さない（要件 1.15・2.5・11.2）。
+    /// （目録を読む）は argv でゴーストを渡した起動では残さない。
     #[test]
     fn boot_lists_roots_and_counts_hidden_only_without_argv() {
         let has = |events: &[log_capture_kit::CapturedEvent], name: &str| {
@@ -154,7 +154,7 @@ mod boot {
 }
 
 // ---------------------------------------------------------------------------
-// 1 ゴースト分のバルーンの解決と、起動中の印（task 5.3・11.1・要件 4.7・12.4・12.5）
+// 1 ゴースト分のバルーンの解決と、起動中の印
 // ---------------------------------------------------------------------------
 // `resolve_balloon_for_ghost` は切替先のバルーンを argv 無しの分岐で解く。起動前の解決は
 // それを呼び、戻りの 4 つ目に「起動中の印の値（前回落ちたゴーストの名前・読むだけで消さない）」を載せる。
@@ -260,7 +260,7 @@ mod switch_balloon {
         );
     }
 
-    /// 初回起動の argv の第 2 引数は、1 ゴースト分の解決には効かない（要件 4.7）:
+    /// 初回起動の argv の第 2 引数は、1 ゴースト分の解決には効かない:
     /// 同じ根・同じゴーストでも起動前の解決は argv のバルーン、括り出した関数は既定になる。
     #[test]
     fn argv_second_argument_has_no_effect() {
@@ -337,7 +337,7 @@ mod switch_balloon {
         );
     }
 
-    /// 印が在れば（要件 12.4）: `info!(session_mark_found)` の上で最後のゴーストの記憶を読まずに
+    /// 印が在れば: `info!(session_mark_found)` の上で最後のゴーストの記憶を読まずに
     /// 既定の段で決まり、印の値が 4 つ目に載る。読むだけで消さない（2 度目も同じ）。
     /// 印が無ければ今日どおり記憶の経路。
     #[test]
@@ -392,7 +392,7 @@ mod switch_balloon {
         );
     }
 
-    /// argv でゴーストを指定した起動（開発者の上書き・要件 12.5）は印を読まず消さない。
+    /// argv でゴーストを指定した起動（開発者の上書き）は印を読まず消さない。
     #[test]
     fn argv_ghost_neither_reads_nor_clears_session_mark() {
         let tmp = TempPath::new("switch-balloon-mark-argv");

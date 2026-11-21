@@ -1,4 +1,4 @@
-//! 手続きのテストの支え（design「Testing Strategy / 手続き」）。
+//! 手続きのテストの支え。
 //!
 //! 偽の口 [`FakePorts`] は、口への呼び出しを順に記録し、台本どおりに応える。展開は本物の
 //! `areka-nar` を一時の根へ走らせる（`install_elsewhere`／`overwrite_running` の中で

@@ -1,4 +1,4 @@
-//! アンカー `\_a` の台本写像の檻（anchor-tag-canon 要件 1.7〜1.10・2.5・2.10）。
+//! アンカー `\_a` の台本写像の檻。
 //!
 //! 台本の文字列だけから、次を確かめる:
 //!
@@ -78,7 +78,7 @@ fn horizon(compiled: &CompiledTalk) -> f64 {
 }
 
 /// 4 つの形（ID だけ・引数付き・`On` 始まり・閉じ）と空の ID が、記述順のまま開きと閉じの
-/// 合図になる。引数は空のトークンも潰さない（要件 1.7）。
+/// 合図になる。引数は空のトークンも潰さない。
 #[test]
 fn four_forms_become_anchor_cues_in_script_order() {
     let (compiled, warnings) =
@@ -136,8 +136,7 @@ fn anchor_cues_take_no_time_and_do_not_shift_the_others() {
     );
 }
 
-/// あいだの文字・改行・装飾の合図は今までどおり流れ、合図は書いたスコープの宛先になる
-/// （要件 1.7）。
+/// あいだの文字・改行・装飾の合図は今までどおり流れ、合図は書いたスコープの宛先になる。
 #[test]
 fn text_newline_and_decoration_flow_between_open_and_close() {
     let (compiled, warnings) = compile_script(r"\1\_a[x]あ\n\f[bold,1]い\_a");
@@ -158,7 +157,7 @@ fn text_newline_and_decoration_flow_between_open_and_close() {
     assert_eq!(warnings, []);
 }
 
-/// 開いている間の新たな開き: 新しい開きの前に閉じを足し、警告を 1 件残す（要件 1.9）。
+/// 開いている間の新たな開き: 新しい開きの前に閉じを足し、警告を 1 件残す。
 #[test]
 fn reopened_anchor_is_closed_before_the_new_open() {
     // 0: 開き x / 1: あ / 2: 開き y（重なり）/ 3: い / 4: 閉じ
@@ -176,8 +175,8 @@ fn reopened_anchor_is_closed_before_the_new_open() {
     assert_eq!(warnings, [warned("anchor_reopened", 2, Some("y"))]);
 }
 
-/// 閉じの無い開き: 走査の終わり（末尾・`\e`・`\-`）に閉じを足し、警告を 1 件残す
-/// （要件 1.8）。`\e`・`\-` の後ろは読まない（後ろの閉じでは閉じない）。
+/// 閉じの無い開き: 走査の終わり（末尾・`\e`・`\-`）に閉じを足し、警告を 1 件残す。
+/// `\e`・`\-` の後ろは読まない（後ろの閉じでは閉じない）。
 #[test]
 fn unclosed_anchor_is_closed_at_the_end_of_the_scan() {
     for (script, end) in [
@@ -226,7 +225,7 @@ fn reopened_and_never_closed_gets_both_supplied_closes_and_two_warnings() {
     );
 }
 
-/// 開いていないのに閉じ: 合図を出さずに表示を続け、警告を 1 件残す（要件 1.10）。
+/// 開いていないのに閉じ: 合図を出さずに表示を続け、警告を 1 件残す。
 #[test]
 fn stray_close_emits_nothing() {
     // 0: あ / 1: 閉じ（迷子）/ 2: い
@@ -286,7 +285,7 @@ fn well_formed_scripts_have_no_warning() {
     }
 }
 
-/// アンカーだけの台本は選択肢の答えを待つ柵を出さない（要件 2.5）。選択肢がある台本の柵は
+/// アンカーだけの台本は選択肢の答えを待つ柵を出さない。選択肢がある台本の柵は
 /// 今までどおり 1 つで、足した閉じより後ろ（列の最後）に並ぶ。
 #[test]
 fn anchors_alone_do_not_raise_the_choice_fence() {

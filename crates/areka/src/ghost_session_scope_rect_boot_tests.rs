@@ -1,5 +1,4 @@
-//! 本物の起動（切替の試験台・`boot_ghost` → `rewire_runtime_consumers` → `wire`）を通す結合テスト
-//! （spec mcp-scope-rect-property 要件 6.1・6.2・6.5・8.1）。
+//! 本物の起動（切替の試験台・`boot_ghost` → `rewire_runtime_consumers` → `wire`）を通す結合テスト。
 //!
 //! 起動の前に偽の OS の読み取り（`ScopeRectReadSeam`）と、窓なしで組んだ窓の一式と偽の窓の印を
 //! World に入れておき、MCP の `get_property` を受け口から汲んで答えを見る。実の窓・実の画面は使わない。
@@ -103,8 +102,8 @@ fn not_found() -> ToolOutcome {
     outcome::ng("Cannot find such property name.")
 }
 
-/// 起こした時点で偽の矩形を答え（3.1 の完了の状態）、B へ替えた後は前のゴーストの窓の印の
-/// 矩形を答えない（要件 6.1・6.2）。
+/// 起こした時点で偽の矩形を答え、B へ替えた後は前のゴーストの窓の印の
+/// 矩形を答えない。
 ///
 /// # 非空虚性
 /// `rewire_runtime_consumers` の `wire` を外すと起動の直後の答えが「無い名前」で赤。
@@ -141,7 +140,7 @@ fn switching_to_another_ghost_drops_the_previous_window_rects() {
     );
 }
 
-/// 新しい World と新しい実行系で起こし直すと、前の表を持ち越さない（要件 6.5）。
+/// 新しい World と新しい実行系で起こし直すと、前の表を持ち越さない。
 /// 2 度目の World にも同じ偽の OS を入れる（前の印が残っていれば矩形を答えてしまう形）。
 ///
 /// # 非空虚性

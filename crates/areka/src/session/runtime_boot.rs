@@ -1,4 +1,4 @@
-//! 実行系の側の起動（areka-P0-mcp-reload の design「RuntimeBoot と CueSinkSources」・要件 4.2・13.4）。
+//! 実行系の側の起動。
 //!
 //! 起動の結線は「窓の側」（資産・presenter・文字の層・seriko・loop ticker・`RuntimeWiring`）と
 //! 「実行系の側」（`GhostRuntime`）の 2 段に分かれる。窓の側が受け口の送出端の束
@@ -43,7 +43,7 @@ pub(crate) use areka_runtime::CueSinkSources;
 struct RuntimeLines {
     readme_rx: Receiver<crate::readme::ReadmeRequest>,
     no_user_break_rx: Receiver<NoUserBreakSignal>,
-    /// 中断を受け入れた UI が同じ線へ「中断された」を送る送出端の複製（areka-P0-balloon-break）。
+    /// 中断を受け入れた UI が同じ線へ「中断された」を送る送出端の複製。
     user_break_lifecycle_tx: Sender<TalkLifecycleSignal>,
     change_rx: Receiver<ChangeRequestRaw>,
     switch_rx: Receiver<SkinRequestRaw>,
@@ -53,9 +53,9 @@ struct RuntimeLines {
 /// 束の複製から sink の列を組む（並びは旗の順序の保証を担うので変えない）。
 ///
 /// 1. surface（seriko）2. 時刻付きの文字 3. `\![move]` 4. 表示ライフサイクル（文字より**後**——
-/// 起床旗 PRESENT が文字 cue より先に倒れないため・areka-P0-draw-load-parity）5. 重なり
+/// 起床旗 PRESENT が文字 cue より先に倒れないため）5. 重なり
 /// 6. 開く系（readme）7. 中断を禁じる旗 8. ゴーストの切替 9. インストール 10. 更新
-/// 11. シェル／バルーンの切替 12. 読み直し（areka-P0-mcp-reload）13. 常に手前。重なりから後ろはどれも
+/// 11. シェル／バルーンの切替 12. 読み直し 13. 常に手前。重なりから後ろはどれも
 /// 「名前＋第 1 引数」で自分宛だけを拾い、文字 cue に依存しないため末尾に足して構わない。
 /// インストールと更新の送出端はプロセスに 1 つの窓口から借りる（窓口が無ければ受信端の無い送出端）。
 fn runtime_sinks(
@@ -135,7 +135,6 @@ pub(crate) fn boot_runtime(
     ) {
         Ok(runtime) => runtime,
         Err(err) => {
-            // 分類は `is_benign_boot_error`（起点が無い＝良性 warn・ほか＝error）。
             if crate::is_benign_boot_error(&err) {
                 warn!(
                     error = %err,
@@ -155,7 +154,7 @@ pub(crate) fn boot_runtime(
 }
 
 /// 窓の在るゴーストの起動の選択肢（本番の [`boot_runtime`] と spine が同じ物を使う）。strict の判定は
-/// 必ず入れる（無いと strict の記録が無言で 0 件になる・spec mcp-strict-errors）。
+/// 必ず入れる（無いと strict の記録が無言で 0 件になる）。
 pub(crate) fn runtime_boot_options(
     ghost_root: std::path::PathBuf,
     shiori: ShioriWiring,
@@ -191,12 +190,11 @@ fn install_lines(
         switch_rx,
         reload_rx,
     } = lines;
-    // 説明書の置き場はゴーストの根と定義の `readme` キーから起動時に 1 度だけ決まる。
     let readme_path = crate::readme::resolve_path(ghost_root, runtime.mount().readme.as_deref());
     crate::readme::wire_readme(world, readme_path, readme_rx);
     ghost_switch::wire_change_rx(world, change_rx);
     shell_balloon_switch::wire_switch_rx(world, switch_rx);
-    // 中断の持ち物は運行（kanade）への送出端を新しい実行系から複製する（「最後に届けた旗」は初期値から）。
+    // 「最後に届けた旗」は新しい実行系の初期値から始まる。
     crate::input_events::user_break::wire_user_break(
         world,
         no_user_break_rx,

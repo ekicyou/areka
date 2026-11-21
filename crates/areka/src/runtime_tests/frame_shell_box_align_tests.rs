@@ -1,5 +1,5 @@
 // =============================================================================
-// 絵と箱の置き場所の揃え（areka-P0-shell-balloon-frame-align・要件 4.1〜4.4）
+// 絵と箱の置き場所の揃え
 //
 // 親（`frame_shell_box_integration_tests.rs`）の `Cage`——実 emo2 fixture ＋ 実 GPU で本番の
 // `frame_system` を回す檻——に、シェルの文面と絵の差し替え（`present_tx` への
@@ -85,10 +85,10 @@ fn both_cage_surfaces_compose_on_the_emo2_sample() {
 }
 
 // ---------------------------------------------------------------------------
-// 本 spec の枠の檻（design.md「枠の檻」の 1〜5）
+// 枠の檻
 //
 // 毎フレームの終わりに、絵の番号・箱の四角・窓の可視（[`Look`]）と、届いた組
-// （`balloon_reports`）を判定する。箱だけの番号の檻（5）はログも判定する。
+// （`balloon_reports`）を判定する。箱だけの番号の檻はログも判定する。
 // どれも直した後の正しい振る舞いを主張する（直す前のコードでは、ずれの場面で落ちる）。
 // ---------------------------------------------------------------------------
 
@@ -204,7 +204,7 @@ fn speak_in_both(cage: &mut Cage) {
     );
 }
 
-/// 1: 置き場所が違う面へ・絵が先（要件 1.1・2.1・4.1・4.2）。絵だけ届いたフレームで箱は
+/// 置き場所が違う面へ・絵が先: 絵だけ届いたフレームで箱は
 /// 新しい置き場所に出て、組は欠けない。
 #[test]
 fn box_moves_with_the_picture_when_the_picture_arrives_first() {
@@ -238,7 +238,7 @@ fn box_moves_with_the_picture_when_the_picture_arrives_first() {
     );
 }
 
-/// 2: 置き場所が違う面へ・`\s` が先（要件 1.1・2.1・4.1・4.2）。`\s` だけ届いたフレームでは
+/// 置き場所が違う面へ・`\s` が先: `\s` だけ届いたフレームでは
 /// 絵も箱も前の置き場所のまま、空の組は届かない。絵が届いたフレームで両方が替わる。
 #[test]
 fn box_stays_with_the_picture_when_the_script_surface_arrives_first() {
@@ -272,7 +272,7 @@ fn box_stays_with_the_picture_when_the_script_surface_arrives_first() {
     );
 }
 
-/// 3（絵が先）: 窓 ↔ 箱の入れ替わり（要件 1.2・1.4・1.8・2.2・4.1・4.2）。絵が替わったフレームで
+/// 窓 ↔ 箱の入れ替わり（絵が先）: 絵が替わったフレームで
 /// ちょうど片方だけが出て入れ替わり、組からスコープが外れない。
 #[test]
 fn window_and_box_swap_with_the_picture_when_the_picture_arrives_first() {
@@ -324,7 +324,7 @@ fn window_and_box_swap_with_the_picture_when_the_picture_arrives_first() {
     assert_eq!(cage.reports(), NO_REPORT);
 }
 
-/// 3（`\s` が先）: 窓 ↔ 箱の入れ替わり（要件 1.2・1.4・1.8・2.2・4.1・4.2）。`\s` だけ届いた
+/// 窓 ↔ 箱の入れ替わり（`\s` が先）: `\s` だけ届いた
 /// フレームでは前の送り先を出し続け、絵が替わったフレームで入れ替わる。
 #[test]
 fn window_and_box_swap_with_the_picture_when_the_script_surface_arrives_first() {
@@ -368,7 +368,7 @@ fn window_and_box_swap_with_the_picture_when_the_script_surface_arrives_first() 
     assert_eq!(cage.reports(), NO_REPORT);
 }
 
-/// 3（移る先が空）: 箱にだけ文字を持たせて箱の無い面へ切り替える（要件 1.2・1.8・2.3）。
+/// 窓 ↔ 箱の入れ替わり（移る先が空）: 箱にだけ文字を持たせて箱の無い面へ切り替える。
 /// 絵が替わったフレームで箱が消えて組からスコープが外れ、窓は出ない。1 字目のフレームで
 /// 窓が出て組に戻る。
 #[test]
@@ -408,7 +408,7 @@ fn moving_into_an_empty_window_drops_the_scope_until_the_first_glyph() {
     assert_eq!(cage.reports(), vec![vec![(0, 0)]], "そのフレームで組に戻る");
 }
 
-/// 4: `\s` の後・絵の前に書いた文字（要件 1.9）。絵が替わる前のフレームは前の表示のまま、
+/// `\s` の後・絵の前に書いた文字: 絵が替わる前のフレームは前の表示のまま、
 /// 絵が替わったフレームで行き先（箱 → 窓なら窓・窓 → 箱なら箱）に出る。
 #[test]
 fn text_written_before_the_picture_arrives_appears_with_the_picture() {
@@ -454,7 +454,7 @@ fn text_written_before_the_picture_arrives_appears_with_the_picture() {
     assert_eq!(cage.reports(), NO_REPORT);
 }
 
-/// 5: 出して隠した後に箱だけ（要件 3.1・3.2・4.3）。普通のバルーンの窓を一度出して隠した後に
+/// 出して隠した後に箱だけ: 普通のバルーンの窓を一度出して隠した後に
 /// 箱にだけ文字が出ても、警告の段の行は出ず、組は `(スコープ, 0)` で 1 度だけ届く。
 #[test]
 fn box_only_after_hiding_the_window_reports_without_a_warning() {

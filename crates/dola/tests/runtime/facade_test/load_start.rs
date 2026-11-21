@@ -1,10 +1,10 @@
-//! load / start（research.md §R3: load_start シーム）
+//! load / start
 //!
 //! フル再生サイクル・start のエラーパス・time_scale 境界の
 //! 特性化テストを束ねる。
 
 // =========================================================================
-// 8.1 フル再生サイクルテスト
+// フル再生サイクルテスト
 // =========================================================================
 mod full_playback_cycle {
     use super::super::*;
@@ -109,7 +109,7 @@ mod full_playback_cycle {
         }
     }
 
-    /// 検証は通ってもコンパイルで落ちる文書は読み込みで拒み、前の文書で start が通る（#32）
+    /// 検証は通ってもコンパイルで落ちる文書は読み込みで拒み、前の文書で start が通る
     #[test]
     fn load_rejects_compile_failing_document_and_keeps_previous() {
         use dola::KeyframeRef;
@@ -219,7 +219,7 @@ mod start_error_paths {
 
     #[test]
     fn load_with_zero_loop_count_is_rejected() {
-        // 0 と −2 以下の loop_count は、start を待たず読み込みの検証で拒まれる（#29）
+        // 0 と −2 以下の loop_count は、start を待たず読み込みの検証で拒まれる
         let mut rt = DolaRuntime::new();
         let rejected = rejected_number(&mut rt, loop_count_doc("fade", 0, 1.0));
         assert_eq!(rejected, ("loop_count".to_string(), 0.0));
@@ -239,7 +239,7 @@ mod start_error_paths {
 
     #[test]
     fn load_zero_duration_infinite_loop_is_rejected() {
-        // entry 空 → total_base_duration=0、loop_count=-1 → start を待たず読み込みで拒む（裁定 (d)）
+        // entry 空 → total_base_duration=0、loop_count=-1 → start を待たず読み込みで拒む
         let mut rt = DolaRuntime::new();
         let err = rt
             .load_document(empty_entry_doc("empty_sb", -1))
@@ -279,7 +279,7 @@ mod start_error_paths {
 }
 
 // =========================================================================
-// time_scale の境界（#29）: 0・負・NaN は読み込みの検証で拒まれる
+// time_scale の境界: 0・負・NaN は読み込みの検証で拒まれる
 // （拒まないと end_time が +inf／NaN になり終わらない、負なら即 Conclude する）
 // =========================================================================
 mod time_scale_boundary {

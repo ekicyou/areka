@@ -33,65 +33,38 @@ use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
 /// 毎フレーム結線の NonSend 状態。
 ///
-/// `EmoPresenter`（`!Send`）・`Receiver`（`!Sync`）・`Rc<RefCell<TextLayerRuntime>>`（`!Send`）を
-/// 内包するため NonSend resource として `wire_runtime` が挿入し、排他 system [`frame_system`] が
-/// remove→各相→insert で駆動する。
+/// `EmoPresenter`（`!Send`）・`Receiver`（`!Sync`）・`Rc<RefCell<TextLayerRuntime>>`（`!Send`）を内包するため NonSend resource として `wire_runtime` が挿入し、排他 system [`frame_system`] が remove→各相→insert で駆動する。
 ///
 /// # フィールドの可視性が 2 種類ある理由
 ///
-/// 大半のフィールドは `frame` 配下の相だけが触るため `pub(super)` である。ただしバルーン可視性の
-/// 相は兄弟モジュール `balloon_visibility` に置かれる（判断中核と同居させるため）。その相が
-/// 消費する `presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／`clock` と、届けの
-/// 相の台帳 `balloon_status` などは `pub` にしてある。可視性の相は複数の欄を**同時に**可変借用する
-/// （表示層へ発行しながら状態を更新する）ため、読み口メソッドを並べる形では組めない。
+/// 大半のフィールドは `frame` 配下の相だけが触るため `pub(super)`。バルーン可視性の相は兄弟モジュール `balloon_visibility` に置かれ、複数の欄を同時に可変借用する（表示層へ発行しながら状態を更新する）ので読み口メソッドでは組めない。そのため、その相が消費する `presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／`clock` と、届けの相の台帳 `balloon_status` などは `pub` にしてある。
 pub struct RuntimeWiring {
     /// 表示層の指令適用ハブ（UI スレッド専有・`!Send`）。
     pub presenter: EmoPresenter,
     /// worker（seriko 経由 `PresentBridge`）からの表示指令受信端（drain の相が消費）。
     pub(super) rx: Receiver<PresentCommand>,
     /// talk スレッド（`MoveCueSink`）からの窓の位置の指令（`\![move]`・`\![execute,resetwindowpos]`）
-    /// 受信端（frame 相 drain＝[`run_move_drain_phase`] が消費）。
-    ///
-    /// `PresentBridge` の `rx` と同型の配線: `wire_runtime` が `mpsc::channel::<PositionCue>()` の
-    /// 受信端を受け渡し、[`run_move_drain_phase`] が `try_iter` して `apply_move_directive` へ適用する。
+    /// 受信端（[`run_move_drain_phase`] が消費）。
     pub(super) move_rx: Receiver<PositionCue>,
     /// 対象か基準の窓が最初の面を表示するまで預かった位置の指令（順のまま・`move_hold.rs`）。
     pub(super) move_held: RefCell<VecDeque<PositionCue>>,
-    /// talk スレッド（`BalloonLifecycleSink`）からの表示ライフサイクル信号受信端
-    /// （バルーン可視性相が消費）。
+    /// talk スレッド（`BalloonLifecycleSink`）からの表示ライフサイクル信号受信端（バルーン可視性相が消費）。
     ///
-    /// `move_rx` と同型の配線: [`super::super::wire_runtime`] が
-    /// `mpsc::channel::<TalkLifecycleSignal>()` を作り、送出端を `GhostBootOptions.sinks` の
-    /// 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す。会話の開始
-    /// （[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端
-    /// （[`TalkLifecycleSignal::DisplayEndAt`]）が talk 相対秒で FIFO に届く。
-    /// 送り手はもう 1 つある: UI スレッドの押下ハンドラが、送出端の複製から利用者の中断
-    /// （[`TalkLifecycleSignal::UserBreak`]）を同じ線へ流す。
+    /// [`super::super::wire_runtime`] が `mpsc::channel::<TalkLifecycleSignal>()` を作り、送出端を `GhostBootOptions.sinks` の 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す。会話の開始（[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端（[`TalkLifecycleSignal::DisplayEndAt`]）が talk 相対秒で FIFO に届く。送り手はもう 1 つあり、UI スレッドの押下ハンドラが送出端の複製から利用者の中断（[`TalkLifecycleSignal::UserBreak`]）を同じ線へ流す。
     ///
-    /// 取り出しは可視性相の `try_iter` による**全件 drain**。受信前の信号はチャネル
-    /// 自身が保留バッファとして預かるため、attach 前に始まった会話の信号も落ちない。
+    /// 取り出しは可視性相の `try_iter` による全件 drain。受信前の信号はチャネル自身が預かるので、attach 前に始まった会話の信号も落ちない。
     pub lifecycle_rx: Receiver<TalkLifecycleSignal>,
-    /// talk スレッド（`ZOrderCueSink`）からの重なりの指令受信端（frame 相の取り出し
-    /// ＝[`run_zorder_drain_phase`](super::zorder_drain::run_zorder_drain_phase) が消費）。
+    /// talk スレッド（`ZOrderCueSink`）からの重なりの指令受信端（[`run_zorder_drain_phase`](super::zorder_drain::run_zorder_drain_phase) が消費）。
     ///
-    /// `move_rx` と同型の配線: [`super::super::wire_runtime`] が
-    /// `mpsc::channel::<ZOrderDirective>()` を作り、送出端を `GhostBootOptions.sinks` の
-    /// 5 本目（`ZOrderCueSink`）へ、受信端をここへ渡す。
-    /// `\![set,zorder,…]`／`\![reset,zorder]` の**解釈前のトークン列**が到着順に届く。
+    /// [`super::super::wire_runtime`] が `mpsc::channel::<ZOrderDirective>()` を作り、送出端を `GhostBootOptions.sinks` の 5 本目（`ZOrderCueSink`）へ、受信端をここへ渡す。`\![set,zorder,…]`／`\![reset,zorder]` の解釈前のトークン列が到着順に届く。
     ///
-    /// 窓の正本（`GhostWindows`）が World に載るまで取り出しの相は `try_iter` を呼ばず、
-    /// チャネル自身が保留バッファを兼ねる——起動直後のタグも落ちない。
+    /// 窓の正本（`GhostWindows`）が World に載るまで取り出しの相は `try_iter` を呼ばず、チャネル自身が保留バッファを兼ねる（起動直後のタグも落ちない）。
     pub(super) zorder_rx: Receiver<ZOrderDirective>,
     /// 重なりのグループ台帳（正本）。取り出しの相が指令を適用し、鎖の合成の入力になる。
     ///
-    /// `balloon_visibility` と同じ理由でここに置く——相関数は排他 system から呼ばれる素の
-    /// 関数で `Local` を取れないため、フレームを跨いで生きる器が結線状態の側に要る。
-    /// 合成した鎖の写し（wintf の `ZOrderChainPlan`）は World 側に在るが、**正本はこちら**で
-    /// あり二重帳簿にはしない。
+    /// 相関数は排他 system から呼ばれる素の関数で `Local` を取れないため、フレームを跨いで生きる器が結線状態の側に要る（`balloon_visibility` と同じ理由）。合成した鎖の写し（wintf の `ZOrderChainPlan`）は World 側に在るが、正本はこちらで二重帳簿にしない。
     ///
-    /// 構築の時点では常に既定（グループ 0 本）から始まる。shell 設定由来の基底は、
-    /// 起動の段が [`RuntimeWiring::seed_zorder_descript_base`] で 1 度だけ据える
-    /// （取り出しの相が 1 度も走る前＝タグの実行より前）。
+    /// 構築時は常に既定（グループ 0 本）。shell 設定由来の基底は起動の段が [`RuntimeWiring::seed_zorder_descript_base`] で 1 度だけ据える（取り出しの相が 1 度も走る前）。
     pub(super) zorder_ledger: ZOrderGroupLedger,
     /// ゴーストの常に手前の状態（既定＝受信端なし・オフ）。
     ///
@@ -101,27 +74,17 @@ pub struct RuntimeWiring {
     pub(super) window_state: StayOnTopState,
     /// バルーン可視性コントローラが持ち越す状態（エッジ検出・計測・抑止の記憶）。
     ///
-    /// 判断中核（[`super::super::balloon_visibility::decide`]）は状態を `&mut` で受けて更新する
-    /// ため、フレームを跨いで生きる器がここに要る（`dpi_state` と同じ理由——相関数は排他 system
-    /// から呼ばれる素の関数で `Local` を取れない）。UI スレッド専有で、可視性相以外は触らない。
+    /// 判断中核（[`super::super::balloon_visibility::decide`]）が状態を `&mut` で受けて更新するので、フレームを跨ぐ器がここに要る（`dpi_state` と同じ理由）。UI スレッド専有で、可視性相以外は触らない。
     pub balloon_visibility: BalloonVisibilityState,
-    /// 最後に kanade へ届けた「見えているバルーンの組」の台帳（フレームの終わりの届けの相が使う）。結線状態はゴーストごとに新しく作られる
-    /// ので、台帳も新品から始まり前のゴーストの組を持ち越さない。
+    /// 最後に kanade へ届けた「見えているバルーンの組」の台帳（フレームの終わりの届けの相が使う）。ゴーストごとに新品で、前のゴーストの組を持ち越さない。
     pub balloon_status: BalloonStatusLedger,
     /// バルーン文字層ランタイム（`register_actor_view`／`present_frame` の所有・`!Send`）。
     pub(super) runtime: Rc<RefCell<TextLayerRuntime>>,
     /// scope → attach 相で装着に使った [`BalloonModel`]（文字層 k 再追従の再利用源）。
     ///
-    /// `register_actor_view`（装着）と [`TextLayerRuntime::refresh_actor_scale`]（再追従）はいずれも
-    /// `&BalloonModel` を要する。装着で使ったモデルをここへ記憶しておき、文字層スケール相
-    /// （[`run_text_scale_phase`]）の再追従が
-    /// **再パースせず同一モデル**で binding を組み直せるようにする（再パースすれば「装着時と再追従時で
-    /// 別モデル」という静かな食い違いの余地が生まれる）。
+    /// 装着（`register_actor_view`）と再追従（[`TextLayerRuntime::refresh_actor_scale`]）はどちらも `&BalloonModel` を要する。ここへ記憶して、文字層スケール相（[`run_text_scale_phase`]）が再パースせず同一モデルで binding を組み直せるようにする（再パースすれば装着時と再追従時で別モデルという静かな食い違いが生まれる）。
     ///
-    /// 起動時資産は [`BalloonScopeAssets`] が scope 別の定義を保持する（旧 `BootAssets.balloon_model`
-    /// の共有 1 本は撤去済み）。ゆえにキーは **scope**——再追従は「どの scope の balloon 窓か」から
-    /// 引くのが自然である。attach（[`run_attach_phase`]）は当該 scope の資産から取り出した定義を
-    /// **ここと文字層結線（[`connect_balloon_text`]）の双方へ同一値で**挿す。
+    /// キーは scope（再追従は「どの scope の balloon 窓か」から引く）。起動時資産は [`BalloonScopeAssets`] が scope 別の定義を保持し、attach（[`run_attach_phase`]）は当該 scope の定義を、ここと文字層結線（[`connect_balloon_text`]）の双方へ同一値で挿す。
     pub balloon_models: HashMap<u32, BalloonModel>,
     /// scope → 面ごとの定義の束（装着・バルーンの切り替えが入れる）。
     /// 今の定義（`balloon_models`）はここから書き手 [`super::balloon_face::select_balloon_face`] が引く。
@@ -130,10 +93,7 @@ pub struct RuntimeWiring {
     pub balloon_faces: HashMap<u32, u32>,
     /// 文字層 k 追従で `text_slot_view` が `None` だった scope の警告済み集合（エッジガード）。
     ///
-    /// [`run_text_scale_phase`] は毎フレーム走る。表示未確立の縮退を素朴に `warn!` すると毎フレーム
-    /// 鳴って log を溺れさせるため、**scope ごとに一度だけ**鳴らし、view が取れた時点で除去して
-    /// 再武装する（`areka-emo-text` の `unresolved_warned: BTreeSet<ActorKey>` と同型の先例）。
-    /// 求められるのは縮退が**観測できる**ことであって毎回鳴ることではない。
+    /// [`run_text_scale_phase`] は毎フレーム走るので、表示未確立の縮退は scope ごとに一度だけ警告し、view が取れた時点で除去して再武装する（`areka-emo-text` の `unresolved_warned: BTreeSet<ActorKey>` と同型）。
     pub(super) text_scale_warned: BTreeSet<u32>,
     /// 装着で文字層を繋げなかった scope と、その面 0 の背景色（[`run_text_scale_phase`] が繋ぎ直す時に渡す）。
     pub(super) unconnected_text: BTreeMap<u32, (u8, u8, u8)>,
@@ -143,14 +103,9 @@ pub struct RuntimeWiring {
     pub(super) assets: Option<BootAssets>,
     /// attach 完了フラグ（高々 1 回のゲート・以降 no-op）。
     pub(super) attached: bool,
-    /// `Changed<DPI>` 観測の**永続** [`SystemState`]（[`run_dpi_phase`]）。
+    /// `Changed<DPI>` 観測の永続 [`SystemState`]（[`run_dpi_phase`]）。
     ///
-    /// `anchor_changed_system` の `Local<Option<SystemState<..>>>` と同じ役割を担う。あちらは bevy の
-    /// system 引数として `Local` を受けられるが、本フェーズは排他 system [`frame_system`] から
-    /// 呼ばれる**素の関数**（`run_dpi_phase(&mut RuntimeWiring, &mut World)`）ゆえ `Local`
-    /// を取れない——run を跨いで `last_run` tick を保つ器がここに要る。毎 run で `SystemState::new`
-    /// を作り直すと `last_run` が 0 のままとなり `Changed` が全窓へ誤マッチし続ける（＝毎フレーム
-    /// 全窓 refresh の churn）ため、必ず使い回す。
+    /// 本フェーズは排他 system [`frame_system`] から呼ばれる素の関数で `Local` を取れないため、run を跨いで `last_run` tick を保つ器がここに要る。毎 run で `SystemState::new` を作り直すと `last_run` が 0 のままで `Changed` が全窓へ誤マッチし続ける（毎フレーム全窓 refresh の churn）ので、必ず使い回す。
     pub(super) dpi_state: Option<SystemState<DpiChangedQuery>>,
     /// 差し替えの荷物の置き場。
     ///
@@ -176,13 +131,7 @@ pub struct RuntimeWiring {
 }
 
 impl RuntimeWiring {
-    /// 結線資源を構築する（`wire_runtime` が呼ぶ）。`assets` は `Some` で
-    /// 保持し、attach フェーズ（[`run_attach_phase`]）が `take` で高々 1 回消費する。`move_rx` は
-    /// `MoveCueSink`（talk スレッド）と対の受信端で、移動の取り出しの相が消費する。
-    /// `lifecycle_rx` は `BalloonLifecycleSink`（同じく talk スレッド）と対の受信端で、バルーン
-    /// 可視性相が消費する。`zorder_rx` は `ZOrderCueSink`（同じく talk スレッド）と対の
-    /// 受信端で、重なりの取り出しの相が消費する。可視性の持ち越し状態と重なりの台帳は
-    /// 外から与えず初期値から始める。
+    /// 結線資源を構築する（`wire_runtime` が呼ぶ）。`assets` は `Some` で保持し、attach フェーズ（[`run_attach_phase`]）が `take` で高々 1 回消費する。`move_rx`／`lifecycle_rx`／`zorder_rx` は各 sink（talk スレッド）と対の受信端。可視性の持ち越し状態と重なりの台帳は外から与えず初期値から始める。
     pub fn new(
         presenter: EmoPresenter,
         rx: Receiver<PresentCommand>,
@@ -201,21 +150,14 @@ impl RuntimeWiring {
             move_held: RefCell::default(),
             lifecycle_rx,
             zorder_rx,
-            // 台帳は既定（グループ 0 本）から始める。shell 設定由来の基底を据えるのは
-            // 起動の段の担当であり、結線はその器を用意するところまでを負う。
             zorder_ledger: ZOrderGroupLedger::default(),
-            // 常に手前はオフ・受信端なしから始める（受信端は起動の結線が後から渡す）。
             window_state: StayOnTopState::default(),
-            // 可視性の持ち越し状態は初期値（未観測・計測なし）から始める。
             balloon_visibility: BalloonVisibilityState::default(),
-            // 届けた組の台帳も新品（何も届けていない）から始める。
             balloon_status: BalloonStatusLedger::default(),
             runtime,
-            // attach 相が装着した scope ごとに埋める。
             balloon_models: HashMap::new(),
             balloon_definitions: HashMap::new(),
             balloon_faces: HashMap::new(),
-            // 縮退警告のエッジガード（初期は未警告＝最初の縮退で 1 回鳴る）。
             text_scale_warned: BTreeSet::new(),
             unconnected_text: BTreeMap::new(),
             clock,
@@ -230,7 +172,6 @@ impl RuntimeWiring {
             // 控えは読み直しの起こし直しだけが渡す（ふつうの起動・切替は無し）。
             shell_carry: None,
             static_binds,
-            // 表は空から始める（表示が成立したスコープから相が書く）。
             scope_scale: SharedScopeScaleTable::default(),
         }
     }
@@ -242,21 +183,16 @@ impl RuntimeWiring {
 
     /// shell 設定（`seriko.zorder`）由来の基底を台帳へ据える（起動の段の入口）。
     ///
-    /// 台帳は `frame` の内側に閉じているので、起動の結線（`wire_runtime`）はこの口から
-    /// 触る。呼ぶのは結線状態 1 つにつき **`insert_non_send` より前**（その結線状態で走る最初の
-    /// `Update` より前）の 1 回だけで（起こし直しでは `boot_ghost` が新しい結線状態で呼ぶ）、
-    /// そのときこの結線状態の取り出しの相はまだ 1 度も走っていない——ゆえに基底はタグの実行を待たずに
-    /// 最初の維持の巡から効く。
+    /// 台帳は `frame` の内側に閉じているので、起動の結線（`wire_runtime`）はこの口から触る。呼ぶのは結線状態 1 つにつき `insert_non_send` より前（その結線状態で走る最初の `Update` より前）の 1 回だけで（起こし直しでは `boot_ghost` が新しい結線状態で呼ぶ）、基底はタグの実行を待たずに最初の維持の巡から効く。
     ///
-    /// 解釈・拒否・記録はすべて [`apply_descript_base`] が持つ。ここは台帳への到達だけを
-    /// 引き受け、判断を 1 つも持たない。
+    /// 解釈・拒否・記録はすべて [`apply_descript_base`] が持ち、ここは台帳への到達だけを引き受ける。
     ///
     /// [`apply_descript_base`]: super::zorder_descript::apply_descript_base
     pub(crate) fn seed_zorder_descript_base(&mut self, zorder_raw: Option<&str>) {
         apply_descript_base(&mut self.zorder_ledger, zorder_raw);
     }
 
-    /// 常に手前の指令の受信端を渡す（起動の結線の口・`RuntimeWiring::new` の引数は変えない）。
+    /// 常に手前の指令の受信端を渡す（起動の結線の口）。
     pub fn attach_window_state_rx(&mut self, rx: Receiver<WindowStateDirective>) {
         self.window_state.rx = Some(rx);
     }
@@ -272,11 +208,7 @@ impl RuntimeWiring {
 
     /// 当たり判定 resolver への読み口。
     ///
-    /// 内包する [`EmoPresenter`] を読み取り専用で貸し出す。本体の入力の層の `resolve_hit_owned` が
-    /// この借用を [`crate::hit_region::resolve_hit_region`] の第 1 引数（`&EmoPresenter`）へ
-    /// そのまま渡す。所有・可変アクセスは presenter を専有する frame 相に閉じたまま、UI 配線層へは
-    /// read 口のみを開ける。呼び手は `.map(RuntimeWiring::presenter)` の関数パス形で借りるので、
-    /// `.presenter()` の grep では見つからない。
+    /// 内包する [`EmoPresenter`] を読み取り専用で貸し出す。本体の入力の層の `resolve_hit_owned` が [`crate::hit_region::resolve_hit_region`] の第 1 引数（`&EmoPresenter`）へそのまま渡す。所有・可変アクセスは frame 相に閉じたまま。呼び手は `.map(RuntimeWiring::presenter)` の関数パス形で借りるので、`.presenter()` の grep では見つからない。
     pub fn presenter(&self) -> &EmoPresenter {
         &self.presenter
     }
@@ -322,9 +254,7 @@ impl RuntimeWiring {
 
     // ── spine 観測用 test-support アクセサ ──────────
     //
-    // 決定論 spine（`crate::spine`）は「受信 `PresentCommand` 列の形状記録」（apply 前に値取り出し）と
-    // 「apply 後の `read_back` 観測」を行うため、private フィールドへの最小の read/passthrough を要する。
-    // 以下の 5 つは getter/passthrough のみで、`cfg(any(test, feature = "test-support"))` に閉じる。
+    // 決定論 spine（`crate::spine`）が private フィールドを読む・通すための最小口（5 つ・getter/passthrough のみ・`cfg(any(test, feature = "test-support"))` に閉じる）。
 
     /// target の表示中画素（BGRA・`stride=width*4`）を読み戻す（`EmoPresenter::read_back` passthrough）。
     #[cfg(any(test, feature = "test-support"))]

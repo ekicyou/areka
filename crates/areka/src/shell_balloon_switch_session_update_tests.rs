@@ -1,11 +1,10 @@
-//! 切替の後の更新の対象と読み直しの統合テスト（spec: areka-P0-shell-balloon-switch task 11.3・
-//! 要件 6.5・11.8・design「Integration Tests」・Flow 5）。
+//! 切替の後の更新の対象と読み直しの統合テスト。
 //!
-//! 完了 `network-update` の対象の解決（`desk_resolve_tests.rs` の
+//! 更新の対象の解決（`desk_resolve_tests.rs` の
 //! `resolve_targets_reads_the_slot_and_the_boot_context`）と読み直し（`desk_reload_tests.rs` の
 //! `a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_after_the_switch`）の兄弟。
-//! 土台は 11.1 の [`lap_rig`]（偽の SHIORI のゴースト A・2 つ目のシェル `second`・窓の一式・GPU 資源・
-//! 本番の `Input`・`Update` の段）に、11.2 と同じ 2 つ目のバルーン `StayseeBalloon` を足したもの。
+//! 土台は [`lap_rig`]（偽の SHIORI のゴースト A・2 つ目のシェル `second`・窓の一式・GPU 資源・
+//! 本番の `Input`・`Update` の段）に、2 つ目のバルーン `StayseeBalloon` を足したもの。
 //! 差し替えは本番の台本の命令（`\![change,shell,…]` → `OnShellChanged` の台詞の
 //! `\![change,balloon,…]`）で起こし、差し替えの後の状態は本番の後始末が作る。
 
@@ -49,7 +48,7 @@ fn add_staysee(rig: &SwitchRig) {
     copy_tree(staysee.folder(), &rig.root.balloon_dir(STAYSEE));
 }
 
-/// 土台を組み、A が定常に着くのを待つ（台詞の時計はまだ回さない＝差し替えは始まっていない）。
+/// 土台を組み、A が定常に着くのを待つ（差し替えはまだ始まっていない）。
 fn steady_rig() -> (LapRig, bool) {
     let lap = lap_rig(script);
     add_staysee(&lap.rig);
@@ -109,7 +108,7 @@ fn count(events: &[CapturedEvent], event: &str) -> usize {
         .count()
 }
 
-/// 差し替えの後の対象の解決（要件 6.5・11.8・`resolve_targets_reads_the_slot_and_the_boot_context` の
+/// 差し替えの後の対象の解決（`resolve_targets_reads_the_slot_and_the_boot_context` の
 /// 兄弟）: 差し替えの前はシェル `master`・バルーン `emo2-kakukaku` を指し、台本の命令でシェルを
 /// `second`、続けてバルーンを `StayseeBalloon` へ差し替えた後は、同じ解決が新しいシェル（実行系の
 /// マウントの書き換え）と新しいバルーン（起動の文脈の書き換え）を指す（警告 0 件）。
@@ -172,7 +171,7 @@ fn reloaded(rig: &SwitchRig) -> bool {
         .is_some_and(|calls| kinds(calls).iter().any(|c| c == "GET OnUpdateResult"))
 }
 
-/// 差し替えの後の読み直し（要件 6.5・11.8・`a_reload_of_the_running_ghost_boots_with_the_tail_head_and_
+/// 差し替えの後の読み直し（`a_reload_of_the_running_ghost_boots_with_the_tail_head_and_
 /// sends_the_rest_after_the_switch` の兄弟）: シェルを `second`・バルーンを `StayseeBalloon` へ差し替えた
 /// 後、更新の窓口の読み直し（同じフォルダ・知らせなしのゴースト切替）で A を起こし直すと、記憶
 /// （`LastShell`・`LastBalloon`）から同じシェル・バルーンで起きる: 実行系のマウントが `second`・

@@ -43,8 +43,8 @@ fn collect_includes_visible_scope_without_number_as_zero_and_returns_it_as_warni
 }
 
 /// 箱だけに文字が出ているスコープも、普通のバルーンが見えているときと同じ形で載る
-/// （番号は普通のバルーンの今の面）。どちらにも出ていなければ載らない（areka-P0-shell-balloon 要件 5.5・5.6）。
-/// 箱だけ・番号なし・覚えた番号なしは 0 で載り、警告の対象にしない（areka-P0-shell-balloon-frame-align 要件 3.1・3.2）。
+/// （番号は普通のバルーンの今の面）。どちらにも出ていなければ載らない。
+/// 箱だけ・番号なし・覚えた番号なしは 0 で載り、警告の対象にしない。
 #[test]
 fn collect_lists_box_only_scopes_in_the_same_shape_as_visible_balloons() {
     let (bindings, unknown) = collect_bindings(
@@ -68,7 +68,7 @@ fn collect_lists_box_only_scopes_in_the_same_shape_as_visible_balloons() {
 }
 
 /// 箱だけ・番号なしは覚えた番号で載り、警告の対象にしない。窓が見えていて番号なしは、覚えた番号が
-/// あっても今までどおり 0 で警告の対象（areka-P0-shell-balloon-frame-align 要件 3.1・3.2）。
+/// あっても今までどおり 0 で警告の対象。
 #[test]
 fn collect_uses_the_remembered_number_for_box_only_scopes_without_a_number() {
     let remembered = BTreeMap::from([(0, 3), (1, 9), (2, 4)]);

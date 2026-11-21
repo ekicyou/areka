@@ -1,10 +1,10 @@
-//! インストールの手続き（design「areka / install / procedure」）。
+//! インストールの手続き。
 //!
 //! 書庫 1 本の一周（`OnInstallBegin` → 読み取りと検査 → `accept` の照合 → 利用条件 → 展開 →
 //! 入れた後の記録 → 締めの知らせ）と、依頼 1 件の一周を正典の順で進める。World も
 //! スレッドも門も知らず、外とのやり取りは口 [`InstallPorts`] の 8 つだけ（本番は背景の
 //! スレッドの口・テストは偽物）。口に切替を頼む関数は無い＝手続きが切替を要求することは
-//! 型の上で起きない（要件 6.2）。
+//! 型の上で起きない。
 
 use std::path::{Path, PathBuf};
 
@@ -114,7 +114,7 @@ pub(crate) enum ArchiveEnd {
 /// 口が「閉じた」を返した（終了が始まった・ゴーストが居ない）。以後は送らない。
 struct Closed;
 
-/// 依頼 1 件を並んだ順に扱い、書庫ごとの終わり方を返す（要件 2.8・2.9・9.2）。
+/// 依頼 1 件を並んだ順に扱い、書庫ごとの終わり方を返す。
 ///
 /// 途中でやめた書庫があれば、そこで抜ける（以後の書庫は扱わず、イベントも送らない）。
 /// 書庫が 2 本以上で全部が入ったときだけ、最後に `OnInstallCompleteAll` を送る。
@@ -190,7 +190,7 @@ fn archive_steps(
     let manifest = archive.manifest();
     let kind = manifest.kind;
 
-    // `accept` の照合（`install.txt` の内容だけで・展開の前に＝要件 3.3）。
+    // `accept` の照合（`install.txt` の内容だけで・展開の前に）。
     let facts = ports.ghost_facts().ok_or(Closed)?;
     let target_ghost = match judge_accept(manifest, &facts) {
         AcceptVerdict::Accepted { target_ghost } => {
@@ -205,7 +205,7 @@ fn archive_steps(
             target_ghost
         }
         AcceptVerdict::Refused { accept } => {
-            // 宛先違いは失敗ではない（要件 3.7）。
+            // 宛先違いは失敗ではない。
             tracing::warn!(
                 event = "install_refused",
                 archive = %path.display(),
@@ -231,12 +231,11 @@ fn archive_steps(
         }
     };
 
-    // 利用条件（`OnInstallBegin` と照合の後・展開の前＝要件 12.8）。
+    // 利用条件（`OnInstallBegin` と照合の後・展開の前）。
     if let Some(end) = terms_step(ports, path, &archive)? {
         return Ok(end);
     }
 
-    // 展開。
     let result = match destination_of(manifest, &facts) {
         Destination::RunningGhost => match ports.overwrite_running(archive, target_ghost.clone()) {
             Overwritten::Ran(result) => result,
@@ -255,7 +254,7 @@ fn archive_steps(
         Err(error) => return fail_nar(ports, path, "install", &error),
     };
 
-    // 入れた物（識別子・名前・場所・並びは本体が先・同梱バルーンが後＝要件 2.4）。
+    // 入れた物（識別子・名前・場所・並びは本体が先・同梱バルーンが後）。
     let items = installed_items(&outcome, &facts);
     tracing::info!(
         event = "install_done",
@@ -266,8 +265,8 @@ fn archive_steps(
     );
     ports.record(installed_record(kind, &outcome));
 
-    // 締めの知らせ（応えが無いときだけ旧仕様へ続ける＝要件 2.6・2.7）。結果は一度受けておき、
-    // 飛ばした同梱があれば「閉じた」でも警告を求めてから返す（emily-ghost-verification 要件 1.12）。
+    // 締めの知らせ（応えが無いときだけ旧仕様へ続ける）。結果は一度受けておき、
+    // 飛ばした同梱があれば「閉じた」でも警告を求めてから返す。
     let closing =
         send(ports, ON_INSTALL_COMPLETE_EX, complete_ex_refs(&items)).and_then(|raised| {
             if raised == Raised::NoReply {
@@ -287,7 +286,7 @@ fn archive_steps(
     Ok(ArchiveEnd::Installed(items))
 }
 
-/// 利用条件を出し、拒否なら `OnGhostTermsDecline` だけを送って `Declined` を返す（要件 4・12.8）。
+/// 利用条件を出し、拒否なら `OnGhostTermsDecline` だけを送って `Declined` を返す。
 /// 利用条件が無いか受諾なら None（展開へ進む）。
 fn terms_step(
     ports: &mut dyn InstallPorts,
@@ -398,7 +397,7 @@ fn fail_nar(
     fail(ports, path, failure)
 }
 
-/// 失敗を記録し、`OnInstallFailure`（Reference0 は正典の語 1 つだけ）を送る（要件 5.1・5.5・5.6）。
+/// 失敗を記録し、`OnInstallFailure`（Reference0 は正典の語 1 つだけ）を送る。
 fn fail(
     ports: &mut dyn InstallPorts,
     path: &Path,
@@ -428,8 +427,8 @@ fn fail(
 }
 
 /// 入れた物（識別子・名前・場所）。同梱バルーン（先頭より後のバルーン）の名前は、入れた
-/// ゴーストの中が先の目録（`<ゴースト>\balloon\<名>` の 2 段上がゴースト＝要件 7.6）の `name`
-/// （設計で決めたこと 14）。目録に無い・名前が無ければ `areka-nar` の名前（フォルダ名）。
+/// ゴーストの中が先の目録（`<ゴースト>\balloon\<名>` の 2 段上がゴースト）の `name`。
+/// 目録に無い・名前が無ければ `areka-nar` の名前（フォルダ名）。
 fn installed_items(outcome: &InstallOutcome, facts: &GhostFacts) -> Vec<InstalledItem> {
     outcome
         .installed
@@ -456,7 +455,7 @@ fn installed_items(outcome: &InstallOutcome, facts: &GhostFacts) -> Vec<Installe
         .collect()
 }
 
-/// 警告のダイアログの題名と本文（純粋・design「手続きの警告」）。`skipped` は空でない。
+/// 警告のダイアログの題名と本文（純粋）。`skipped` は空でない。
 fn skipped_notice(
     archive: &Path,
     manifest_name: &str,

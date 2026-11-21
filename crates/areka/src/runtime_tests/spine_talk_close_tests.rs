@@ -35,7 +35,7 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// テキスト＋`\c`（Clear）を含む scripted OnBoot 台本を実 sink 経路で流し、
 /// (1) 受信 `PresentCommand` 列に `ShowSurface{shell_target(0), surface_id:2100}` が現れ、apply 後の
 /// shell readback が**非表示から surface2100 の実描画へ遷移**すること（初回面表示の実描画・
-/// defect #5 ゆえ attach 時の初期 surface0 baseline は無い＝シェルは初回 `\s` まで非表示）、
+/// シェルは初回 `\s` まで非表示ゆえ attach 時の初期 surface0 baseline は無い）、
 /// (2) テキスト cue の typewriter リビールを注入 `talk_time` の階段値で駆動し、text 供給面の
 /// `opaque_count` が**単一 talk 内で単調非減少**・pre-reveal（t=0.0）全透明・`Clear`（at=1.40）後の
 /// 全域透明を檻に入れる。
@@ -43,8 +43,8 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// # 二段配送で単一 talk 内のリビール→Clear を分離（talk_clock 既知制約に整合）
 ///
 /// emo-text の cue は**到着即時適用**（state.rs `apply_cue`）: `Text` は追記＋per-glyph リビール時刻
-/// `r_i=max(r_{i-1}+interval, at)`（`interval = cue.duration / N`・配送 duration 由来＝
-/// areka-P0-cue-playback-duration で `char_wait` を撤去）確定、`Clear` は**配送即時にバッファ全消去**（時刻ゲートではない）。
+/// `r_i=max(r_{i-1}+interval, at)`（`interval = cue.duration / N`・配送 duration 由来）確定、
+/// `Clear` は**配送即時にバッファ全消去**（時刻ゲートではない）。
 /// リビールの時刻ゲートは `visible(t)=|{i:r_i≤t}|` のみ。よって単調非減少の階段は「Text 配送済み・
 /// Clear 未配送」のバッファに注入 `talk_time`（clock 非経由）を振って観測し（Phase 1）、その後
 /// dispatcher の elapsed を Clear（`\_w[1000]`＝at=0.05+D+1.00=1.40・D=0.35）超へ進めて Clear を
@@ -54,13 +54,13 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// 各 t で全域再描画（残渣なし・決定論）ゆえ、注入 t に対し `opaque_count` は `visible(t)` の
 /// 単調性をそのまま反映する。
 ///
-/// # validrect 外非透明なし（best-effort・CONCERNS 相当）
+/// # validrect 外非透明なし（best-effort）
 ///
 /// text 供給面は validrect 寸ちょうどのクリップ面（draw_readback_test が「readback は validrect 寸の
 /// BGRA 密配列＝validrect 外の画素は供給面に存在しない」を単体で固定済み）であり、非透明画素は構造上
 /// validrect 内に閉じる。本 spine は実 balloon fixture 由来の validrect 寸を再導出せず、単調非減少＋
 /// Clear 後全透明を主檻とし、validrect 外非透明なしは供給面クリップの構造的帰結として
-/// draw_readback_test の単体檻に委ねる（parent 指示の best-effort）。
+/// draw_readback_test の単体檻に委ねる。
 #[test]
 fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     // \s[2100]（シェル面切替・actor "0"）→ \_w[50] 後にテキスト（typewriter・at=0.05・再生時間
@@ -73,7 +73,7 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     // ── attach（shell/balloon 装着・text actor 登録）: S1 と同じ planned==attached==2 前提 ──
     harness.attach_all();
 
-    // ── シェルは初回 `\s` cue まで非表示（defect #5・2026-07-13 実機#5）: `\s[2100]` 適用前の shell
+    // ── シェルは初回 `\s` cue まで非表示: `\s[2100]` 適用前の shell
     //    scope0 は未表示＝`read_back` Err（合成面なし＝透過）。attach で surface0 を焼き付けない。 ──
     assert!(
         harness.wiring.read_back_target(shell_target(0)).is_err(),
@@ -91,7 +91,7 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     //    はならない。よって注入模擬時刻は Clear 境界の手前で**頭打ち**にし、頭打ち後は時刻を据え置いた
     //    まま実 async をポンプし続ける（ループ上限は「何回ポンプするか」の意味しか持たない）。壁時計
     //    deadline の延長や反復上限の拡大では直らない——時刻が進む限り Clear が先に解放されて観測条件
-    //    そのものが壊れるため（areka-P0-kero-balloon 要件 7.8）。 ──
+    //    そのものが壊れるため。 ──
     // base 起点の固定: base は「active talk がある状態で処理した最初の Tick の now」なので、talk 起動を
     // 観測する（＝cue 由来の指令が rx に現れる）まで now を据え置く。これで base は TICK_BASE_MS 近傍に
     // 焼かれ、頭打ち後の elapsed が Text@0.05 に十分届くことも同時に保証される。
@@ -100,11 +100,11 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     // 観測窓の手前）。**警告**: 台本のテキスト長を変えると Clear 時刻が 0.05+文字数×0.05+1.00 で動くので、
     // 頭打ち値を再計算すること。
     const TICK_MAX_MS: u64 = 1_040;
-    // ポンプ回数の上限は待ちの芯の打ち切り（下）で与える。観測を壊す Clear の解放は上記 TICK_MAX_MS の頭打ちが防いでおり
-    // （areka-P0-kero-balloon 要件 7.8 の是正は適用済み）、待機時間の延長は観測に有利にしか働かない。
+    // ポンプ回数の上限は待ちの芯の打ち切り（下）で与える。観測を壊す Clear の解放は上記 TICK_MAX_MS の頭打ちが防いでおり、
+    // 待機時間の延長は観測に有利にしか働かない。
     let mut show_cmds: Vec<PresentCommand> = Vec::new();
     let mut now = TICK_BASE_MS;
-    // ── 是正は 2 段（PR #96 の `talk_started` ゲート ＋ areka-P0-kero-balloon 要件 7.8 の頭打ち） ─────────────
+    // ── 注入時刻の扱いは 2 段（talk 起動を観測するまで据え置く ＋ 頭打ち） ─────────────
     //
     //  (1) **talk 起動を観測するまで `now` を進めない**。dispatcher の `base_now` は「talk が active に
     //      なった後の初回 Tick」で確定する（areka-ghost `dispatcher.rs::on_tick`）ため、観測前に進めた
@@ -114,16 +114,14 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     //      解放され、**Clear（at=1.40・上のタイムライン導出を参照）**へは構造的に到達しないので、
     //      リビール観測がどれだけ遅れても条件が不成立へ倒れない＝レースが消える。
     //
-    // **時刻の訂正（2026-08-01・マージ時）**: PR #96 は Clear を `at=1.05` と記していたが、これは
-    // `compile.rs` が Text cue に対しても `offset += D` を進める分（D＝文字数×50ms＝0.35s）を落として
-    // いる。実測は**掃引で確定**（頭打ち 1.395s＝緑／1.405s＝赤）＝**Clear@1.40**。#96 の頭打ち 500ms も
-    // areka-P0-kero-balloon の 1_040ms も、いずれも真の境界 1.40s の手前ゆえ**両者とも是正として正しく機能する**
-    // （#96 の判定が変わるわけではない）。ここでは根拠が実測で裏取りされている areka-P0-kero-balloon の定数へ統一する。
+    // **Clear 時刻の導出**: Clear は `at=1.05` ではなく、`compile.rs` が Text cue に対しても
+    // `offset += D` を進める分（D＝文字数×50ms＝0.35s）を足した **1.40s**。実測は掃引で確定
+    // （頭打ち 1.395s＝緑／1.405s＝赤）。頭打ち値は真の境界 1.40s の手前に置く。
     //
     // 打ち切りは待ちの芯（[`wait_until_paced`]）が決める（頭打ち後は反復が仕事量を表さないため回数では
     // 区切らない）。進みの目印は SHIORI の呼び出しの数（受け口は死活の問い合わせを記録しない）と
-    // 受けた表示指令の数の和で、相手が 30 秒進まなければ `［止まった］`（areka-P0-ghost-session-test-load-flake 要件 2.1・2.2・
-    // `load-repro.md` の 4.3 で自前の締切が赤だった）。Tick を入れる輪なので休みは [`wait_until_paced`] が
+    // 受けた表示指令の数の和で、相手が 30 秒進まなければ `［止まった］`（`load-repro.md` の 4.3 で
+    // 自前の締切が赤だった）。Tick を入れる輪なので休みは [`wait_until_paced`] が
     // 持つ（`areka-runtime` の `spine_wait.rs`）。
     let mut talk_started = false;
     let shiori = harness.shiori_handle.clone();
@@ -191,7 +189,7 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     }
 
     // apply 後、shell が非表示から surface2100 の実描画へ遷移する（初回面表示の実描画まで観測）。
-    // defect #5 ゆえ attach 時の初期 surface0 baseline は存在せず、hidden（read_back Err）→shown
+    // シェルは初回 `\s` まで非表示ゆえ attach 時の初期 surface0 baseline は存在せず、hidden（read_back Err）→shown
     // （opaque_count>0）が `\s[2100]` の実描画の証跡になる。
     harness.wiring.apply_present(&mut harness.world, show);
     let after_switch = harness
@@ -275,7 +273,7 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     // 起動の系列（OnInitialize/username/OnFirstBoot/OnBoot/OnTranslate/basewareversion・最後は
     // basewareversion）が終わるまで待つ（OnClose を起動の呼び出しと分ける）。
     // 打ち切りは待ちの芯（[`wait_until`]）が決める。進みの目印は SHIORI の呼び出しの数（受け口は
-    // 死活の問い合わせを記録しない）で、相手が 30 秒進まなければ `［止まった］`（areka-P0-ghost-session-test-load-flake の `load-repro.md` の 4.3 で目印なしの待ちが赤だった）。
+    // 死活の問い合わせを記録しない）で、相手が 30 秒進まなければ `［止まった］`（`load-repro.md` の 4.3 で目印なしの待ちが赤だった）。
     let calls = || harness.shiori_handle.call_count();
     let mut boot_calls = Vec::new();
     let waited = wait_until(

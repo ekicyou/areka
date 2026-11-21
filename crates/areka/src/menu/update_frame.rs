@@ -1,9 +1,9 @@
-//! 右クリックメニューの「ネットワーク更新」枠（areka-P0-network-update・design「メニュー」）。
+//! 右クリックメニューの「ネットワーク更新」枠。
 //!
-//! 項目は既定名「ネットワーク更新」と `updatebutton.caption` を持つ葉 1 つ（要件 1.2）。選べるのは
+//! 項目は既定名「ネットワーク更新」と `updatebutton.caption` を持つ葉 1 つ。選べるのは
 //! 今のゴースト・シェル・バルーンのどれかに更新先があり、更新が走っておらず、終了が始まっていない
-//! ときで（[`desk::can_update`]・要件 1.3）、選ぶと今の 3 つを理由 `manual` で受付へ掛ける
-//! （[`desk::update_current`]・要件 1.4）。登記はゴーストを起こすたびに `ghost_session::boot_wired` が
+//! ときで（[`desk::can_update`]）、選ぶと今の 3 つを理由 `manual` で受付へ掛ける
+//! （[`desk::update_current`]）。登記はゴーストを起こすたびに `ghost_session::boot_wired` が
 //! `wire_menu` の後でやり直す（窓の無い起動では登記されない）。
 
 use std::rc::Rc;
@@ -23,7 +23,7 @@ fn update_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Update).to_string(),
         caption_resource: captions::resource_for(Frame::Update),
-        // 読み取りだけの走りでは更新を始めない（readonly-mode 要件 8.7）。
+        // 読み取りだけの走りでは更新を始めない。
         enabled: desk::can_update(world) && !crate::readonly::of(world),
         checked: None,
         body: ItemBody::Action(Rc::new(|world: &mut World, _: &MenuContext| {

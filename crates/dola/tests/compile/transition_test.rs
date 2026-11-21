@@ -1,5 +1,4 @@
-//! Compile module transition resolution tests
-//! Task 9.3
+//! compile の遷移解決のテスト
 
 use dola::*;
 

@@ -1,7 +1,6 @@
 //! バリア状態機械の檻——バリアに到達すると再生が停止し、各解決経路で再開する。
 //!
 //! WaitForInput・WaitForChoice の停止と外部解決、非待機での no-op を収める。
-//! `logged_has_text` は本テーマからしか参照されないのでここに残した。
 
 use super::{BarrierKind, CueCommand, CuePlayer, CuePlayerState, CueSheet, TalkCue};
 use crate::test_support::{barrier, choice, logged_commands, recording_sink, text};
@@ -17,7 +16,7 @@ fn logged_has_text(log: &Rc<RefCell<Vec<TalkCue>>>, s: &str) -> bool {
 // 主 observable: WaitForInput バリアで停止し、外部解決（resolve_click）で再開する
 // ============================================================================
 
-/// **観測可能な完了条件（Task 4.2）**: WaitForInput バリアに到達すると再生が停止し、
+/// **観測可能な完了条件**: WaitForInput バリアに到達すると再生が停止し、
 /// バリア以降の cue は配送されない。外部からの解決通知（`resolve_click`）で再開し、以降の
 /// cue が配送される。占有 horizon 到達で `Completed` へ遷移する。
 #[test]
@@ -79,9 +78,7 @@ fn wait_for_input_barrier_stops_and_resolve_click_resumes() {
         "待機中の tick でも配られたのは before だけ（after は依然残置）"
     );
 
-    // 外部解決（クリック）で再開する。
     player.resolve_click();
-    // 解決直後、次の tick で after が配送され、占有 horizon 到達で完了する。
     player.tick(20.0);
     assert!(
         logged_has_text(&log, "after"),
@@ -98,14 +95,10 @@ fn wait_for_input_barrier_stops_and_resolve_click_resumes() {
 // WaitForChoice バリア: 選択肢先積み ＋ resolve_choice で再開
 // ============================================================================
 
-/// **選択肢の配送列合流 ＋ 解決照合バッグ並存 ＋ 再開（案C・R1.8/R8.6）**: WaitForChoice バリアの
+/// **選択肢の配送列合流 ＋ 解決照合バッグ並存 ＋ 再開**: WaitForChoice バリアの
 /// 手前で連続投入された Choice cue は配送列へ**順序を保って合流**し（配送列＝表示の
 /// 単一真実源）、同時に `pending_choices()` へも積まれる（バッグ＝解決照合の単一真実源）。バリア
 /// 到達で WaitingForChoice へ停止し、`resolve_choice` で再開する。
-///
-/// 注: 配送列合流の交互配置（`\q`/`\n`/`\_l` の順序保存）と冪等再 tick の bag 不変を厚く固定する
-/// 檻は Task 2.2 の対置換（配送列檻＋バッグ並存檻）に委ねる。ここでは旧「先積み一択」檻を新挙動へ
-/// 最小追従させる（Choice が配送列に現れることの確認へ反転）。
 #[test]
 fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
     // Choice(a)@0.0, Choice(b)@0.0 → Barrier(WaitForChoice)@0.1 → picked@0.2。
@@ -126,7 +119,7 @@ fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
         "WaitForChoice バリアで WaitingForChoice へ停止する"
     );
 
-    // 案C（R1.8/R8.6）: Choice は配送列へ順序を保って合流し、かつ pending_choices へも積まれる。
+    // Choice は配送列へ順序を保って合流し、かつ pending_choices へも積まれる。
     assert!(
         logged_commands(&log)
             .iter()
@@ -156,7 +149,6 @@ fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
         "未知 id 解決後も WaitingForChoice のまま"
     );
 
-    // 該当 id で再開。
     assert_eq!(
         player.resolve_choice("b"),
         Some("b".to_string()),

@@ -1,13 +1,13 @@
-//! 決定論 spine テストハーネス（areka-P0-emo2-boot 要件 8）の背骨の足場（⑶）。
+//! 決定論 spine テストハーネスの背骨の足場（⑶）。
 //!
 //! 待ちの部品（回収の `settle_bounded` を含む）と `GpuPermit`（⑴）・台本の SHIORI と `hold_support`（⑵）は `areka-runtime` の `spine` にあり、
 //! ここは本体の部品も使う足場（`SpineHarness`・`make_world_with_gpu` ほか）とそれを使う
-//! spine のテストを持つ（spec: runtime-crate-split 設計 D4。`areka-runtime` の `spine.rs` の頭から移した説明）。
+//! spine のテストを持つ。
 //!
 //! `cargo test --workspace`（外部 CI 無し・ローカル DoD ゲート）で常設観測する、起動〜発話〜
 //! 終了の全経路を **sleep 不使用**・**注入 Tick のみ**・**実 GPU（MTA）** で通す。
 //!
-//! **「sleep 不使用」の射程（areka-P0-kero-balloon 要件 7.9・2026-07-31 に明確化）**: spine で言う sleep 不使用とは
+//! **「sleep 不使用」の射程**: spine で言う sleep 不使用とは
 //! **時刻を進めるために sleep しない**ことであり（時刻前進は注入 Tick のみ＝決定論の源）、
 //! 待ちの反復の間の短い休みはこれに当たらない。待ちは反復回数でなく壁時計で有界にしてある
 //! （反復回数のみの上限は CPU 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出す）。
@@ -19,7 +19,7 @@
 //! - **Tick を入れながらの待ち**（毎反復 Tick を注入して系を進めつつ別スレッドの結果も待つ）→
 //!   [`wait_until_paced`]（進みの目印は SHIORI の呼び出しの数・汲みが数を返す呼出点はそれと汲んだ数の和）。
 //!   条件の中で Tick を入れて汲む。休みは [`wait_until_paced`] が持つので、条件の中では眠らない。
-//!   加えて注入時刻が観測を追い越さないこと（areka-P0-kero-balloon 要件 7.8 の頭打ち）が別途必要。
+//!   加えて注入時刻が観測を追い越さないこと（頭打ち）が別途必要。
 //!   時計を差し替える段の駆動器（`spine_conformance_support.rs` の `run_stage_with`）だけは芯
 //!   [`wait_until_with`] を直に使い、同じ [`INJECT_PACE`] で休む。
 //! - **回収（settle）**（「尽きるのが正常」の残余回収＝負検証）→ [`settle_bounded`]。時刻前進は
@@ -28,16 +28,15 @@
 //! 本ファイルは本体の部品も使う足場（`SpineHarness`＝実 sink 結線＋GPU World＋frame フェーズ直接駆動）だけを持ち、
 //! `#[test]` は兄弟のテストファイルに置く。
 //!
-//! # 構造上の逸脱（areka-P0-emo2-boot の設計 File Structure との差分・CONCERNS 相当）
+//! # なぜ in-crate テストか
 //!
-//! 完了した spec `areka-P0-emo2-boot` の design.md の File Structure は spine を外部結合テストに置くが、
-//! `areka` は `[[bin]]` のみ（`[lib]` 無し）で外部 `tests/` から bin 内部項目
+//! `areka` は `[[bin]]` のみ（`[lib]` 無し）で、外部 `tests/` から bin 内部項目
 //! （`crate::session::{hooks, runtime_boot, ghost_quit}`）へ到達できない。
 //! spine は Tick 注入＋GPU readback＋frame フェーズ直接駆動を **in-process** で行う必要があり
 //! （bin を起動する外部テストでは不能）、既存 repo 慣行（`areka_runtime::wire_tests`・
 //! `areka_placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
 
-// `spine` の代わりの親を兼ねる（⑴ ⑵ を子へ渡す）。下の `use` は旧 `spine.rs` の頭の行で、⑶ と子のテストが使う。
+// `spine` の代わりの親を兼ねる（⑴ ⑵ を子へ渡す）。下の `use` は ⑶ と子のテストが使う。
 use areka_runtime::spine::*;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -112,8 +111,8 @@ pub(super) use areka_runtime::spine::pump_until_idle;
 // ログ捕捉（硬化機構の唯一の定義元 `log-capture-kit` への委譲）
 //
 // `run_attach_phase` の `info!(planned, attached, ...)`（縮退がバグを隠さない檻の
-// 観測点）をこのスレッド上で捕捉して件数一致を assert する。行の形（1 イベント 1 行・
-// `level=… target=…` に続けてフィールドを訪問順で ` name=value`）は移行前と 1 バイト変わらない。
+// 観測点）をこのスレッド上で捕捉して件数一致を assert する。行の形は 1 イベント 1 行、
+// `level=… target=…` に続けてフィールドを訪問順で ` name=value`。
 //
 // 捕捉窓の機序（callsite の interest キャッシュがプロセス全体で 1 つであることと、その塞ぎ方）は
 // `areka_runtime` の `frame_test_support.rs` の解説と同じで、正本は `log_capture_kit` の crate doc。
@@ -130,7 +129,7 @@ fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
 // SpineHarness（再利用可能な結線ハーネス・兄弟のテストがこの上に構築する）
 // ===========================================================================
 
-/// spine ハーネスの SERIKO ループ駆動モード（areka-P0-seriko-loop の design「結線・資産・実機経路（spine.rs）」）。
+/// spine ハーネスの SERIKO ループ駆動モード。
 ///
 /// spine は loop ticker を**起動しない**。ループ駆動は `SerikoLoopConfig`（表＋乱数）を seriko へ値渡しで
 /// 仕込み、tick は `SerikoSink::send_tick` を直接注入して制御する（決定論・時刻は注入だけで進める）。
@@ -140,7 +139,7 @@ enum LoopDriver {
     /// 表示中 slot の評価対象アニメが常にゼロ＝何も発行しない（従来観測どおり）。
     Inert,
     /// 実 emo2 表（`BootAssets.loop_tables`）＋固定注入乱数列で駆動（まばたき e2e）。
-    /// 乱数は抽選と選び（`alternative*`・spec: seriko-pattern-calls 要件 3.6・3.7）の 2 つ。
+    /// 乱数は抽選と選び（`alternative*`）の 2 つ。
     Live(LoopRng, LoopRng),
 }
 
@@ -353,12 +352,10 @@ impl SpineHarness {
             boxes,
             cursors,
         } = assets;
-        // SERIKO ループ構成（areka-P0-seriko-loop の design「結線・資産・実機経路（spine.rs）」）: 実 emo2 表
-        // （`BootAssets.loop_tables`＝`EmoWorld` スナップショットから `from_world` で構築）＋
-        // 固定注入乱数列（`driver`）で `loop_config` を組む。既存 spine テストは Inert（`disabled()` 相当＝
-        // 空表・ダミー乱数）でループ完全不活性＝従来観測どおり非退行。
-        // SERIKO ループの檻（`boot_live`）だけが実表＋固定 rng で駆動する（本番の `wire_runtime`
-        //（`areka-runtime` の lib.rs）は実 entropy・spine は固定注入列で決定論）。
+        // SERIKO ループ構成: 実 emo2 表（`BootAssets.loop_tables`＝`EmoWorld` スナップショットから
+        // `from_world` で構築）＋固定注入乱数列（`driver`）で `loop_config` を組む。既存 spine テストは
+        // Inert（空表・ダミー乱数）でループ完全不活性。実表＋固定 rng で駆動するのは `boot_live` の
+        // 檻だけ（本番の `wire_runtime` は実 entropy）。
         let LoopTables {
             shell: shell_table,
             balloon: balloon_scope_tables,
@@ -387,10 +384,7 @@ impl SpineHarness {
                 gate,
             },
         );
-        // loop tick 直接注入端: SerikoSink を 1 本 clone してハーネスへ保持する。surface_sink 本体は
-        // 下の boot_options が sinks 第 1 要素として値消費するため、この clone を `inject_seriko_tick`
-        // （send_tick 直接注入・loop ticker 不起動）に使う。全 clone は単一 seriko inbox への送信端で
-        // 配送意味は同一。shutdown 時に drop して inbox 切断→worker 自然終了させる（下記 shutdown_bounded）。
+        // loop tick 直接注入端: SerikoSink を 1 本 clone してハーネスへ保持する（欄 `tick_sink` の説明を参照）。
         let tick_sink = surface_sink.clone();
         let wiring_assets = BootAssets {
             shells,
@@ -575,7 +569,7 @@ impl SpineHarness {
     }
 }
 
-// テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming 要件 1.7 / 3.1 / 3.2）。
+// テーマ単位のテストモジュール接続宣言。
 // 本ファイルは足場（標準の台本・GPU World・SpineHarness・ログ捕捉）を保持し、
 // 観測ケースはテーマごとの兄弟ファイル `spine_<テーマ>_tests.rs` に置く。
 #[path = "spine_boot_smoke_tests.rs"]

@@ -95,7 +95,6 @@ fn closed_window_keeps_nothing_and_reopening_clears() {
     let got = capture_finish();
     assert_eq!(got.len(), 1);
     assert_eq!(got[0].body, "新しい");
-    // 閉じた後は積まない。
     capture_push(AT, Level::ERROR, "後".into());
     assert_eq!(capture_finish(), vec![]);
 }

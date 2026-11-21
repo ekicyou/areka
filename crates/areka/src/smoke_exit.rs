@@ -1,16 +1,16 @@
-//! 自動 close の仕掛け（env ゲート付き・CI smoke・task 2.3・R4.1）。
+//! 自動 close の仕掛け（env ゲート付き・CI smoke）。
 //!
-//! `main.rs` の 1,000 行の上限のため外へ出した（areka-P0-startup-options-core 要件 2.6・中身は変えない）。
+//! `main.rs` の 1,000 行の上限のため外へ出した。
 
 use crate::app_exit;
 use wintf::WinApp;
 
-/// env ゲート付き自動 close 機構（CI smoke・task 2.3・R4.1）。
+/// env ゲート付き自動 close 機構（CI smoke）。
 ///
 /// `AREKA_APP_SMOKE_EXIT_MS` が有効なミリ秒値のときだけ、VSync relay と同じ
 /// `wintf::executor::spawn_local`＋world `Weak` 作法で **一発の** async タスクを投入する
-/// （ECS システムではない）。投入は 1 度目の窓の準備が通ったとき（呼び口は `main`）だけ
-/// （areka-P0-ghost-restart-unit 要件 3.5）。env 未設定・不正なら
+/// （ECS システムではない）。投入は 1 度目の窓の準備が通ったとき（呼び口は `main`）だけ。
+/// env 未設定・不正なら
 /// 発火せず、ゴースト窓はメニューの「終了」か OS の閉鎖要求を待ち続ける。
 pub(crate) fn arm(app: &WinApp) {
     if let Some(ms) = smoke_exit_ms() {
@@ -22,14 +22,13 @@ pub(crate) fn arm(app: &WinApp) {
             "smoke 自動 close ゲート有効 — ゴースト窓を指定 ms 後に despawn します"
         );
         wintf::executor::spawn_local(async move {
-            // 指定 ms を async スリープ（async-io は既存依存・tokio 不要）。
             async_io::Timer::after(std::time::Duration::from_millis(ms)).await;
             // shutdown 済みなら strong 所有者は消えており upgrade は None ＝ no-op。
             let Some(world) = world_weak.upgrade() else {
                 tracing::debug!("smoke 自動 close: world 既に drop 済み（shutdown）— no-op");
                 return;
             };
-            // await を跨いで borrow を保持しない TIGHT スコープで全窓を閉じ、終了を指示する。
+            // await を跨いで borrow を保持しない。
             {
                 let mut ecs = world.borrow_mut();
                 let w = ecs.world_mut();
@@ -40,7 +39,7 @@ pub(crate) fn arm(app: &WinApp) {
     }
 }
 
-/// 自動 close ゲートを有効化する環境変数名（`AREKA_` 冠規約・記憶 areka-runtime-env-naming）。
+/// 自動 close ゲートを有効化する環境変数名（`AREKA_` 冠規約）。
 const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 
 /// 与えられた値から自動 close の遅延ミリ秒を解釈する純粋ヘルパ（env アクセスなし・単体テスト可能）。
@@ -64,7 +63,7 @@ pub(crate) fn smoke_exit_ms() -> Option<u64> {
     smoke_exit_ms_from(std::env::var(SMOKE_EXIT_ENV).ok().as_deref())
 }
 
-/// smoke の自動終了ゲート（task 2.3）の headless 単体テスト。
+/// smoke の自動終了ゲートの headless 単体テスト。
 ///
 /// ランタイム結線（`fn main` の自動終了の仕掛け）は生きた `WinApp` を要し headless では駆動できないため、
 /// 判断を持つ `smoke_exit_ms_from` だけを純粋・env 非依存で検証する（結線は実プロセス smoke が担う）。

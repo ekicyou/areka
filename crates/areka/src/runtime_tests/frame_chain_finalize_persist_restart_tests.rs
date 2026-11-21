@@ -1,6 +1,4 @@
-//! 再起動して前回の並びに立つことを決定論のテストで固定する（areka-P0-char-position-save-on-exit
-//! タスク 4.1・要件 1.2・2.1・2.2・2.3・5.1・5.2・design Testing Strategy「並べ直しから記憶まで」
-//! 13・14）。
+//! 再起動して前回の並びに立つことを決定論のテストで固定する。
 //!
 //! 窓の一式と記憶の送り口は `areka_runtime::frame::persist_test_support`、最小のゴーストは
 //! `frame_chain_finalize_persist_test_support.rs` から取る。
@@ -34,7 +32,7 @@ const DRAG_DX: i32 = 300;
 /// 返すのは 1 回目を終えた時点の本体・相方の窓の位置。
 ///
 /// 終わりに閉じる処理（`close_windows_for_restart`・終了の手順）は何も呼ばずに World を捨てる
-/// （きれいに終わらなかった回・要件 2.2）。記憶の書き手（sylphya のアクター）は UI と別の
+/// （きれいに終わらなかった回）。記憶の書き手（sylphya のアクター）は UI と別の
 /// スレッドで、送った書き込みは待たずに流れる（fire-and-forget）。強制終了の時点より前に
 /// 送った書き込みは、その間に書き手が確定している。`barrier` はその「書き手が追いつくだけの
 /// 時間が経った」ことを決定論で置き換えるもので、UI の側の閉じる処理の代わりではない。
@@ -98,7 +96,7 @@ fn first_run(ghost: &MinimalGhost, drag: bool) -> [Point; 2] {
 /// 並べ終えた時点の本体・相方の窓の位置。
 ///
 /// 並べ直しの移動が 0 件であること（窓への指令が出ない・位置が変わらない）と、並べ直しの前後で
-/// 記憶が同じこと（要件 1.2）もここで確かめる。
+/// 記憶が同じことももここで確かめる。
 fn second_run(ghost: &MinimalGhost) -> [Point; 2] {
     let store = PersistStore::real(&ghost.ghost_master());
     let (placements, restored, _) =
@@ -142,7 +140,7 @@ fn second_run(ghost: &MinimalGhost) -> [Point; 2] {
     after
 }
 
-/// テスト 13（要件 2.1・2.2・1.2・5.1）: 1 回目を並べ終える → 本体だけドラッグ → 閉じずに捨てる
+/// 1 回目を並べ終える → 本体だけドラッグ → 閉じずに捨てる
 /// → 2 回目は本体が動かした位置、相方が 1 回目の位置に立ち、並べ直しの移動は 0 件。
 #[test]
 fn restart_after_body_drag_keeps_partner_at_previous_position() {
@@ -156,7 +154,7 @@ fn restart_after_body_drag_keeps_partner_at_previous_position() {
     );
 }
 
-/// テスト 14（要件 2.3・5.2）: ドラッグせずに同じことをすると、両方が 1 回目の位置に立つ。
+/// ドラッグせずに同じことをすると、両方が 1 回目の位置に立つ。
 #[test]
 fn restart_without_drag_keeps_both_at_previous_positions() {
     let ghost = MinimalGhost::plant("restart-nodrag");

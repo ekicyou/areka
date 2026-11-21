@@ -148,7 +148,7 @@
 //! # そのほかの窓口
 //!
 //! - [`capture_lines`] — 捕捉結果をその場で 1 行 1 イベントへ整形する。形は [`LineFormat`]
-//!   の 2 種（宛先を載せる／載せない）で、移行前の自前整形の出力を 1 バイトも違わずに再現する。
+//!   の 2 種（宛先を載せる／載せない）で、各 crate が従来出していた行を 1 バイトも違わずに再現する。
 //! - [`format_line`] — 既に手元にある [`CapturedEvent`] を同じ規則で 1 行にする。
 //! - [`count_levels`] — レベル別の件数（[`LevelCounts`]）だけを見る。警告 0 件の主張などに使う。
 //! - [`CapturedEvent::field_names_sorted`]／[`CapturedEvent::fields_map`] — フィールド集合を

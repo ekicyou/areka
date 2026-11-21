@@ -1,4 +1,3 @@
-// tests/trigger.rs — dola trigger domain test entry point
 #[path = "trigger/common/mod.rs"]
 mod common;
 #[path = "trigger/compile_test.rs"]

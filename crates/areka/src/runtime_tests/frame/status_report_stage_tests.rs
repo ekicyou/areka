@@ -17,7 +17,7 @@ use areka_seriko::{
 
 use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
-// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+// 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::status_report::test_support::last_stage;
 
 /// seriko の送り手だけを持つ置き場のゴースト（出力は捕まえるだけ）。

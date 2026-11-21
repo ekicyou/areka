@@ -1,4 +1,4 @@
-//! シェル・バルーンの切替とゴーストのセッション（spec: areka-P0-shell-balloon-switch）。
+//! シェル・バルーンの切替とゴーストのセッション。
 //!
 //! 偽の SHIORI を持つゴースト A（`ghost_switch_test_support` の土台）を本番と同じ入口
 //! （[`super::boot_ghost`]）で起こし、同じ World の上でセッションの持ち物と降ろし方を判定する。
@@ -14,7 +14,7 @@ use crate::session::shell_balloon_switch::{
 use areka_runtime::spine::RecordedCall;
 
 /// seriko の送り手の複製は結線ありのセッションだけが持ち（テスト用の組み立ては持たない）、
-/// 持ったセッションを降ろしても seriko の join が止まらずに戻る（要件 8.5）。複製を降ろす最初の
+/// 持ったセッションを降ろしても seriko の join が止まらずに戻る。複製を降ろす最初の
 /// 段で落とさないと、③ の join が残った送り手を待ち続けて期限（20 秒）で赤になる。
 #[test]
 fn session_holding_seriko_sink_shuts_down_within_bound() {
@@ -44,7 +44,7 @@ fn session_holding_seriko_sink_shuts_down_within_bound() {
 
 /// メニューのシェルの受理で、走っているゴーストの SHIORI に `OnShellChanging` が GET で 1 件届き、
 /// Ref0＝切替先の `name`・Ref1＝今のシェル（実行系のマウントのシェル）の `name`・Ref2＝切替先の
-/// 絶対パスが載る（要件 1.5・2.1）。切替先は `descript.txt` だけの 2 つ目のシェルで足りる
+/// 絶対パスが載る。切替先は `descript.txt` だけの 2 つ目のシェルで足りる
 /// （印のイベントは資産づくりを待たずに送られる）。
 #[test]
 fn menu_shell_request_raises_on_shell_changing_with_the_current_shell_as_ref1() {
@@ -137,7 +137,7 @@ fn menu_children(
 
 /// 起こしたゴーストのメニューの「シェル」枠は、今のシェル（実行系のマウントの末尾＝`master`）に
 /// 印を付ける。2 つ目を選ぶと、フォルダ名で指した出どころ＝メニューの要求 1 件を入口が受理し
-/// （`OnShellChanging` が届く）、切替の印が 2 つ目を指す（要件 1.5・7.1・7.3・7.4）。
+/// （`OnShellChanging` が届く）、切替の印が 2 つ目を指す。
 #[test]
 fn menu_shell_frame_marks_the_mounted_shell_and_selecting_requests_a_switch() {
     let mut rig = SwitchRig::new(vec![(
@@ -214,7 +214,7 @@ fn menu_shell_frame_marks_the_mounted_shell_and_selecting_requests_a_switch() {
 
 /// 起こしたゴーストのメニューの「バルーン」枠は、今のバルーン（起動の文脈）に印を付ける。
 /// 2 つ目を選ぶと、フォルダ名で指した出どころ＝メニューの要求 1 件を入口が受理し、切替の印が
-/// 2 つ目を指す（要件 1.5・7.2・7.3・7.4）。
+/// 2 つ目を指す。
 #[test]
 fn menu_balloon_frame_marks_the_current_balloon_and_selecting_requests_a_switch() {
     let mut rig = SwitchRig::new(vec![(

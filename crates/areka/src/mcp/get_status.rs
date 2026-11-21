@@ -1,4 +1,4 @@
-//! `get_status` の処理（spec: areka-P0-mcp-get-status）。
+//! `get_status` の処理。
 //!
 //! 置き場のゴーストの kanade へ今の実行の状態を問い、返事を後から答える口（`super::later`）で
 //! 毎フレーム覗く。届いた値は `Status` の語のカンマ連結をそのまま本文にする（無ければ空の本文）。
@@ -16,7 +16,7 @@ use crate::ghost_session::GhostSlot;
 /// 置き場に問い合わせ先（kanade の送り口）が無いときの本文（areka 独自・本番では起きない）。
 const UNAVAILABLE: &str = "Status is not available";
 
-/// 問い合わせを 1 通送り、返事は待たずに `later` へ預ける（要件 1.1・1.3・1.6・3.2〜3.6・4.3・4.4）。
+/// 問い合わせを 1 通送り、返事は待たずに `later` へ預ける。
 ///
 /// `ghost` は問い合わせ先が無いときの `warn!` の欄にだけ使う（問い合わせ先は置き場の 1 体から引く）。
 /// 成功の枝では記録を出さない（橋が `debug!` を 1 行残す）。

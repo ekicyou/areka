@@ -58,7 +58,6 @@ fn transition_to_concluded_removes_instance() {
     create_test_instance(&mut mgr, 1);
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.transition(1, InstanceState::Concluded).unwrap();
-    // Concluded 遷移後はインスタンス削除
     assert!(mgr.get(1).is_err());
 }
 
@@ -82,17 +81,16 @@ fn pause_and_resume() {
     create_test_instance(&mut mgr, 1);
     mgr.transition(1, InstanceState::Playing).unwrap();
 
-    // Pause at t=1.0
     mgr.pause(1, 1.0).unwrap();
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Paused);
     assert_eq!(mgr.get(1).unwrap().pause_start, Some(1.0));
 
-    // Resume at t=3.0 (2秒間 pause)
+    // 2秒間 pause
     let new_end = mgr.resume(1, 3.0).unwrap();
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
     assert_eq!(mgr.get(1).unwrap().pause_accumulated, 2.0);
     assert!(mgr.get(1).unwrap().pause_start.is_none());
-    // end_time = 2.0 + 2.0(pause) = 4.0
+    // end_time = 2.0 + 2.0(pause)
     assert_eq!(new_end, 4.0);
 }
 
@@ -103,10 +101,9 @@ fn finish_deadline_check() {
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.set_finish_deadline(1, 5.0).unwrap();
 
-    // t=4.0: まだ deadline に達していない
+    // まだ deadline に達していない
     assert!(mgr.check_finish_deadlines(4.0).is_empty());
 
-    // t=5.0: deadline に達した
     let expired = mgr.check_finish_deadlines(5.0);
     assert_eq!(expired, vec![1]);
 }
@@ -119,13 +116,12 @@ fn multiple_independent_instances() {
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.transition(2, InstanceState::Playing).unwrap();
     mgr.pause(1, 0.0).unwrap();
-    // Instance 1 is Paused, Instance 2 is still Playing
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Paused);
     assert_eq!(mgr.get(2).unwrap().state, InstanceState::Playing);
 }
 
 // =========================================================================
-// 無効 group_id への各操作（InvalidGroupId エラーパス）
+// 無効 group_id への各操作
 // =========================================================================
 
 #[test]
@@ -154,13 +150,12 @@ fn operations_on_nonexistent_group_id_return_invalid_group_id() {
 }
 
 // =========================================================================
-// 不正状態遷移の特性化（既存 ID でも InvalidGroupId を返す現行仕様）
+// 不正状態遷移（既存 ID でも InvalidGroupId を返す）
 // =========================================================================
 
 #[test]
 fn invalid_transition_on_existing_instance_reports_invalid_group_id() {
-    // 特性化: transition は「不正遷移」も InvalidGroupId(gid) として報告する
-    // （エラー型が ID 不在と遷移不正を区別しない現行挙動を固定）
+    // エラー型が ID 不在と遷移不正を区別しないので、不正遷移も InvalidGroupId(gid) になる
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1);
     let err = mgr.transition(1, InstanceState::Paused).unwrap_err();
@@ -173,7 +168,7 @@ fn invalid_transition_on_existing_instance_reports_invalid_group_id() {
 fn pause_on_created_rejected_keeps_state() {
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1);
-    // Created → Paused は不正（pause() 経由でも拒否）
+    // pause() 経由でも Created → Paused は拒否される
     assert!(mgr.pause(1, 0.0).is_err());
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Created);
 }
@@ -183,7 +178,7 @@ fn resume_on_playing_rejected() {
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1);
     mgr.transition(1, InstanceState::Playing).unwrap();
-    // Playing → Playing は不正遷移（Paused からのみ Resume 可能）
+    // Resume は Paused からのみ
     assert!(mgr.resume(1, 1.0).is_err());
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
 }
@@ -222,16 +217,16 @@ fn check_finish_deadlines_ignores_instances_without_deadline() {
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.transition(2, InstanceState::Playing).unwrap();
     mgr.set_finish_deadline(1, 5.0).unwrap();
-    // gid=2 は deadline 未設定 → 対象外
+    // gid=2 は deadline 未設定なので対象外
     let expired = mgr.check_finish_deadlines(10.0);
     assert_eq!(expired, vec![1]);
 }
 
 // =========================================================================
-// 数値境界の特性化（非単調時刻入力・NaN deadline）
+// 数値境界（非単調時刻入力・NaN deadline）
 // =========================================================================
 
-/// 特性化: current_time < pause_start の resume は pause_duration が負となり
+/// current_time < pause_start の resume は pause_duration が負となり
 /// pause_accumulated / end_time が過去方向へ補正される（時刻の単調性は検証しない）
 #[test]
 fn resume_with_time_before_pause_start_shrinks_end_time() {
@@ -240,14 +235,14 @@ fn resume_with_time_before_pause_start_shrinks_end_time() {
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.pause(1, 5.0).unwrap();
 
-    // pause_start=5.0 より過去の時刻で resume → pause_duration = -2.0
+    // pause_start より過去の時刻で resume すると pause_duration = -2.0
     let new_end = mgr.resume(1, 3.0).unwrap();
     assert_eq!(mgr.get(1).unwrap().pause_accumulated, -2.0);
     assert_eq!(new_end, 0.0); // 2.0 + (-2.0)
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
 }
 
-/// 特性化: NaN deadline は `current_time >= deadline` が常に false となり発火しない
+/// NaN deadline は `current_time >= deadline` が常に false となり発火しない
 /// （deadline の有限性は検証しない）
 #[test]
 fn nan_finish_deadline_never_fires() {
@@ -259,7 +254,7 @@ fn nan_finish_deadline_never_fires() {
     assert!(mgr.check_finish_deadlines(f64::INFINITY).is_empty());
 }
 
-/// 特性化: +inf deadline は有限の current_time では発火せず、inf 同士の比較でのみ発火する
+/// +inf deadline は有限の current_time では発火せず、inf 同士の比較でのみ発火する
 #[test]
 fn infinite_finish_deadline_fires_only_at_infinity() {
     let mut mgr = InstanceManager::new();

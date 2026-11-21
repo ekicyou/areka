@@ -1,16 +1,14 @@
 //! `get_property` の決定論テスト（4 本）。
 //!
 //! - 実行系が無い（空の World）: `NG:Property system is not available`（isError: true）で答え、
-//!   `event = "mcp_get_property_unavailable"` の `warn!` をちょうど 1 件残す（要件 3.1・3.3）。
+//!   `event = "mcp_get_property_unavailable"` の `warn!` をちょうど 1 件残す。
 //! - 本物の実行系を 1 回だけ起こし、ゴースト自身の問い手・全体・別の問い手・空の値を載せてから
-//!   8 つの名前を聞く（値・空の値・無い名前・問い手の選び方・名前を手直ししない・要件 1.1〜1.4・2.1〜2.3）。
+//!   8 つの名前を聞く（値・空の値・無い名前・問い手の選び方・名前を手直ししない）。
 //! - `mod scope_rect` の 2 本: 窓の矩形を MCP とゴーストの道が同じに答えること・`reload` の後も
-//!   新しい読み口で答えること（`mcp-scope-rect-property` の要件 3.4・6.3・6.6）。
+//!   新しい読み口で答えること。
 //!
-//! どちらも `handle` を直に呼び、答えは返った直後に `try_answer` で取り出す（その場で答える・
-//! 要件 4.2）。`ghost_name` はすべて省略（要件 4.8）。英字の大小違いの名前は
-//! `areka-P0-property-name-case-fold` が足した `BASEWARE.NAME` の 1 つだけ（大小を畳んで `areka`・
-//! 同 spec の要件 2.1）。前に空白のある ` baseware.name` は空白を削らず「無い名前」のまま。
+//! どちらも `handle` を直に呼び、答えは返った直後に `try_answer` で取り出す（その場で答える）。
+//! `ghost_name` はすべて省略。英字の大小違いの名前は `BASEWARE.NAME` の 1 つだけ（大小を畳んで `areka`）。前に空白のある ` baseware.name` は空白を削らず「無い名前」のまま。
 
 use std::path::PathBuf;
 
@@ -140,7 +138,7 @@ fn reads_values_through_the_ghost_own_asker_on_a_real_runtime() {
     );
 }
 
-// ---- 窓の矩形（spec mcp-scope-rect-property 要件 3.4・6.3・6.6・7.4・8.3）----
+// ---- 窓の矩形 ----
 
 mod scope_rect {
     use std::sync::Arc;
@@ -234,7 +232,7 @@ mod scope_rect {
     ];
 
     /// 同じ時点に MCP の `handle` と、同じ実行系の読み口から作ったゴーストの道（`ShioriHostSink` の
-    /// `GetProperty`）が同じ値・同じ値なしを返す（要件 3.4・6.6・7.4・8.3）。
+    /// `GetProperty`）が同じ値・同じ値なしを返す。
     ///
     /// # 非空虚性
     /// 結線（`wire`）を外すと両方の道が全部「無い名前」で赤。ゴーストの道だけが読み手に届かないと
@@ -294,7 +292,7 @@ mod scope_rect {
     }
 
     /// `reload`（実行系をその場で作り直す道）の後、MCP の `handle` が新しい sylphya の読み口で同じ窓の
-    /// 矩形を答える（要件 6.3）。前の実行系にだけ載せた `test.marker` が後で無い名前になることで、
+    /// 矩形を答える。前の実行系にだけ載せた `test.marker` が後で無い名前になることで、
     /// 答えが新しい読み口から来たと分かる。
     ///
     /// # 非空虚性

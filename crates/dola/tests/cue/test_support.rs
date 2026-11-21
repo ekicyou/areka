@@ -41,9 +41,7 @@ pub(crate) fn choice(start_time: f64, id: &str, s: &str) -> Cue {
 
 /// broadcast の記録用テストダブル sink。受け取った全 `TalkCue` を共有ログへ push する。
 ///
-/// 演者側 relevance（担当 action の選別）は 4.3 の範囲外（演者タスク 6.x）ゆえ、ここでは
-/// 「登録された全 sink が全 cue を無変形で受け取る」ことのみを観測する（broadcast＝全員が
-/// 全 cue を受ける・R2.1）。
+/// 登録された全 sink が全 cue を無変形で受け取ることのみを観測する（演者側 relevance の選別は見ない）。
 struct RecordingSink {
     log: Rc<RefCell<Vec<TalkCue>>>,
 }

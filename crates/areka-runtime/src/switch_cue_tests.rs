@@ -1,4 +1,4 @@
-//! `SwitchCueSink` の自己選別と送り出しの決定論テスト（areka-P0-shell-balloon-switch 要件 1.2・1.3・1.4・1.15）。
+//! `SwitchCueSink` の自己選別と送り出しの決定論テスト。
 //!
 //! 確かめること: `\![change,shell,名]` が名前を無変形で要求 1 件（`raise_event` 偽）にすること・
 //! `--option=raise-event` で真になること・バルーンの `raise-event` は `warn!` 1 件で要求は偽で出す
@@ -43,7 +43,7 @@ fn raw(kind: SkinKind, name: &str, raise_event: bool) -> SkinRequestRaw {
 
 // ---------------------------------------------------------------- シェル
 
-/// `\![change,shell,名]` は名前を無変形で運ぶ要求 1 件（`OnShellChanging` は送らない・areka-P0-shell-balloon-switch 要件 1.2）。
+/// `\![change,shell,名]` は名前を無変形で運ぶ要求 1 件（`OnShellChanging` は送らない）。
 #[test]
 fn change_shell_with_name_sends_one_request_without_raise_event() {
     let (sent, events) = emit_one("change", &["shell", "Shell B/2"]);
@@ -55,7 +55,7 @@ fn change_shell_with_name_sends_one_request_without_raise_event() {
     assert_eq!(warns(&events), Vec::<Option<&str>>::new(), "警告なし");
 }
 
-/// シェルの `--option=raise-event` 付きは `raise_event` 真（areka-P0-shell-balloon-switch 要件 1.3）。
+/// シェルの `--option=raise-event` 付きは `raise_event` 真。
 #[test]
 fn shell_raise_event_option_sets_raise_event() {
     let (sent, events) = emit_one("change", &["shell", "B", "--option=raise-event"]);
@@ -73,7 +73,7 @@ fn shell_unknown_option_warns_and_still_sends() {
 
 // ---------------------------------------------------------------- バルーン
 
-/// `\![change,balloon,名]` はバルーンの要求 1 件（警告なし・areka-P0-shell-balloon-switch 要件 1.4）。
+/// `\![change,balloon,名]` はバルーンの要求 1 件（警告なし）。
 #[test]
 fn change_balloon_with_name_sends_one_request() {
     let (sent, events) = emit_one("change", &["balloon", "Balloon Y"]);
@@ -81,7 +81,7 @@ fn change_balloon_with_name_sends_one_request() {
     assert_eq!(warns(&events), Vec::<Option<&str>>::new(), "警告なし");
 }
 
-/// バルーンの `raise-event` は効かない——`warn!` 1 件を残し、要求は偽で出す（areka-P0-shell-balloon-switch 要件 1.4）。
+/// バルーンの `raise-event` は効かない——`warn!` 1 件を残し、要求は偽で出す。
 #[test]
 fn balloon_raise_event_warns_and_sends_without_raise_event() {
     let (sent, events) = emit_one("change", &["balloon", "Y", "--option=raise-event"]);
@@ -113,7 +113,7 @@ fn missing_name_warns_and_sends_nothing() {
 // ---------------------------------------------------------------- 担当外
 
 /// `ghost`・裸の `change`・他の名前は 0 件で警告も出さない（`(change,ghost)` は `ChangeCueSink` の
-/// 持ち場・areka-P0-shell-balloon-switch 要件 1.15）。
+/// 持ち場）。
 #[test]
 fn not_ours_is_benign_skip_without_warning() {
     let cases: [(&str, &[&str]); 4] = [

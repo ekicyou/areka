@@ -1,4 +1,4 @@
-//! `status_report_tests.rs` の檻が `areka-runtime` と本体の両方で使う観測の組み立て（写しを作らない・spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+//! `status_report_tests.rs` の檻が `areka-runtime` と本体の両方で使う観測の組み立て（写しを作らない）。
 
 use super::*;
 
@@ -11,7 +11,7 @@ pub fn obs(scope: u32, visible: Option<bool>, surface_id: Option<u32>) -> Balloo
     }
 }
 
-/// 箱に文字が出ている観測（areka-P0-shell-balloon 要件 5.5・5.6）。
+/// 箱に文字が出ている観測。
 pub fn obs_box(scope: u32, visible: Option<bool>, surface_id: Option<u32>) -> BalloonObservation {
     BalloonObservation {
         box_showing: true,
@@ -27,7 +27,7 @@ pub fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
 }
 
 // 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の関数（中で記録を出す相の部品）と欄へそのまま渡す口（`test-support` のときだけ・
-// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+// 本番の可視性は変えない）。
 #[cfg(feature = "test-support")]
 use bevy_ecs::world::World;
 #[cfg(feature = "test-support")]

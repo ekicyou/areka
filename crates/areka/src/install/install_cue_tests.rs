@@ -1,12 +1,4 @@
-//! `InstallCueSink` の自己選別と送り出しの決定論テスト（要件 1.5・1.6・1.7・6.1〜6.3・9.11・11.6）。
-//!
-//! 確かめること: 台本の文字列 `\![execute,install,path,絶対パス]` が受け口から出どころ「台本」の
-//! 生の要求 1 件になり、窓口の取り出しで受付を通って依頼 1 件（出どころ「台本」・書庫 1 本）として
-//! 待ち行列に入ること・相対パスと空が `install_cue_bad_path`、`path`／`url` 以外が
-//! `install_cue_unsupported` の `warn!` 1 件で 0 件になること・パスの後ろの引数は `warn!` 1 件を
-//! 残して読まないこと・担当外は 0 件で警告しないこと・受信端が落ちていても落ちずに記録すること。
-//! `url` の腕は偽の取得口を差した取得のスレッドを起こして依頼 1 件が届くこと、形の悪い URL と
-//! `nar` 以外の種別は取得 0・依頼 0・`warn!` 1 件であること。
+//! `InstallCueSink` の自己選別と送り出しの決定論テスト。
 
 use super::*;
 use std::path::PathBuf;
@@ -92,7 +84,7 @@ fn script_raw(path: &str) -> RawInstallRequest {
 // ---------------------------------------------------------------- 受理
 
 /// 台本の文字列の `\![execute,install,path,絶対パス]` は、パスを無変形で運ぶ出どころ「台本」の
-/// 生の要求 1 件になる（要件 1.5）。
+/// 生の要求 1 件になる。
 #[test]
 fn script_string_becomes_one_script_request_with_the_path() {
     let (sink, rx) = sink();
@@ -106,7 +98,7 @@ fn script_string_becomes_one_script_request_with_the_path() {
 }
 
 /// 台本の文字列から受け口 → 窓口の取り出し → 受付まで通すと、窓口の待ち行列に出どころ「台本」・
-/// 書庫 1 本の依頼がちょうど 1 件入る（要件 1.5・11.6）。
+/// 書庫 1 本の依頼がちょうど 1 件入る。
 ///
 /// 待ち行列の中身は `install` の外から読めないので、受付が積んだときに残す
 /// `info!(install_order_queued)`（出どころと書庫の本数）で判定する。依頼の中身が生の要求の
@@ -137,7 +129,7 @@ fn script_string_reaches_the_desk_queue_as_one_script_order() {
     );
 }
 
-/// パスより後ろの引数は読まず `warn!` を 1 件残す（要求は出す・design judge の箇条）。
+/// パスより後ろの引数は読まず `warn!` を 1 件残す（要求は出す）。
 #[test]
 fn arguments_after_the_path_are_ignored_with_one_warning() {
     let (sent, events) = emit_one("execute", &["install", "path", ABSOLUTE, "--extra"]);
@@ -147,7 +139,7 @@ fn arguments_after_the_path_are_ignored_with_one_warning() {
 
 // ---------------------------------------------------------------- 断る
 
-/// 相対パス・空・パスの欠けは `install_cue_bad_path` の `warn!` 1 件で送らない（要件 1.6）。
+/// 相対パス・空・パスの欠けは `install_cue_bad_path` の `warn!` 1 件で送らない。
 #[test]
 fn relative_or_empty_path_warns_once_and_sends_nothing() {
     let cases: [&[&str]; 3] = [
@@ -166,7 +158,7 @@ fn relative_or_empty_path_warns_once_and_sends_nothing() {
     }
 }
 
-/// 台本の文字列の相対パスも、窓口まで通して依頼 0 件・`warn!` 1 件（要件 1.6）。
+/// 台本の文字列の相対パスも、窓口まで通して依頼 0 件・`warn!` 1 件。
 #[test]
 fn relative_path_in_a_script_string_reaches_no_order() {
     let mut world = World::new();
@@ -189,7 +181,7 @@ fn relative_path_in_a_script_string_reaches_no_order() {
 }
 
 /// 2 番目の引数が `path`／`url` 以外（大文字の `URL`・知らない語・無し）は `install_cue_unsupported`
-/// の `warn!` 1 件で送らない（要件 1.7）。`url` は URL の腕へ移った（下の節）。
+/// の `warn!` 1 件で送らない。`url` は URL の腕へ移った（下の節）。
 #[test]
 fn not_path_warns_once_and_sends_nothing() {
     let cases: [&[&str]; 3] = [
@@ -226,8 +218,8 @@ fn fetching_start(
 }
 
 /// 台本の文字列の `\![execute,install,url,URL,nar]` は、偽の取得口を差した取得のスレッドを 1 本
-/// 起こし、落とし終えたら出どころ「台本」の生の要求がちょうど 1 件届く（要件 6.1・9.11）。
-/// 取得を抜けた後は通信中の数が 0 に戻っている（要件 2.3）。
+/// 起こし、落とし終えたら出どころ「台本」の生の要求がちょうど 1 件届く。
+/// 取得を抜けた後は通信中の数が 0 に戻っている。
 #[test]
 fn url_arm_starts_one_fetch_and_one_script_request_arrives() {
     static ONLINE: OnlineCounter = OnlineCounter::new();
@@ -272,7 +264,7 @@ fn url_arm_starts_one_fetch_and_one_script_request_arrives() {
     assert_eq!(warns(&events), Vec::<Option<&str>>::new(), "警告なし");
 }
 
-/// `url` の腕で取得が失敗しても、依頼 0 件で通信中の数は 0 に戻る（要件 2.3・6.4）。
+/// `url` の腕で取得が失敗しても、依頼 0 件で通信中の数は 0 に戻る。
 #[test]
 fn url_arm_fetch_failure_sends_nothing_and_restores_online() {
     static ONLINE: OnlineCounter = OnlineCounter::new();
@@ -301,8 +293,7 @@ fn url_arm_fetch_failure_sends_nothing_and_restores_online() {
     assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected), "依頼 0");
 }
 
-/// 種別の省略は `nar` と同じく取得を起こす。種別より後ろの引数は `warn!` 1 件を残して読まない
-/// （要件 6.1・design の箇条 `install_cue_extra_ignored`）。
+/// 種別の省略は `nar` と同じく取得を起こす。種別より後ろの引数は `warn!` 1 件を残して読まない。
 #[test]
 fn url_arm_with_no_kind_or_trailing_arguments_starts_the_fetch() {
     let cases: [(&[&str], Vec<Option<&str>>); 2] = [
@@ -326,7 +317,7 @@ fn url_arm_with_no_kind_or_trailing_arguments_starts_the_fetch() {
 }
 
 /// 空・`http://`／`https://` で始まらない URL は `install_cue_bad_url`、`nar` 以外の種別は
-/// `install_cue_unsupported_kind` の `warn!` 1 件で、取得 0・依頼 0（要件 6.2・6.3）。
+/// `install_cue_unsupported_kind` の `warn!` 1 件で、取得 0・依頼 0。
 #[test]
 fn url_refusals_warn_once_and_start_nothing() {
     let cases: [(&[&str], &str); 7] = [
@@ -370,7 +361,7 @@ fn url_refusals_warn_once_and_start_nothing() {
 }
 
 /// 読み取りだけの取得の口を差した `url` の腕は、要求を送らず、`readonly_refused`（`what =
-/// install_url`）の info を 1 件残す（要件 7.1・7.2・7.4）。記録が捕捉の窓（このスレッド）に入る＝
+/// install_url`）の info を 1 件残す。記録が捕捉の窓（このスレッド）に入る＝
 /// スレッドを起こしていない。送出端を持ち続けないので、受け口を落とすと受信端は閉じる＝送り物 0。
 #[test]
 fn readonly_fetch_refuses_the_url_without_sending_or_warning() {

@@ -194,7 +194,7 @@ fn dest_64bit_is_replaced_by_a_32bit_source() {
     no_tmp_left(&bed.dest_dir);
 }
 
-// --- ensure: 環境変数（2.2・2.3） ---
+// --- ensure: 環境変数 ---
 
 #[test]
 fn env_pointing_to_32bit_wins_over_debug_and_release() {
@@ -235,7 +235,7 @@ fn env_pointing_to_nothing_fails_with_the_value_and_does_not_fall_back() {
     assert!(!bed.dest().exists(), "黙って release へ移った");
 }
 
-// --- ensure: debug → release（2.2） ---
+// --- ensure: debug → release ---
 
 #[test]
 fn debug_only_is_used() {
@@ -259,7 +259,7 @@ fn debug_that_is_not_32bit_is_skipped_for_release() {
     assert_eq!(tag_of(&bed.ensure(None)), "release");
 }
 
-// --- ensure: どこにも無い（2.4） ---
+// --- ensure: どこにも無い ---
 
 #[test]
 fn nowhere_fails_with_the_searched_places_and_the_build_command() {
@@ -282,7 +282,7 @@ fn nowhere_fails_with_the_searched_places_and_the_build_command() {
     );
 }
 
-// --- place: 一時名＋改名と、改名の競り合いの見直し（2.6） ---
+// --- place: 一時名＋改名と、改名の競り合いの見直し ---
 
 /// 削除の共有を許さずに開く＝改名で置き換えられない（動いている子が使っている状態）。
 fn hold(path: &Path) -> std::fs::File {

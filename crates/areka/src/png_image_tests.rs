@@ -1,4 +1,4 @@
-//! 乗算を戻す・PNG の決定論テスト（spec: areka-P0-mcp-dump-images・要件 7.1・5.2〜5.3）。
+//! 乗算を戻す・PNG の決定論テスト。
 //! PNG は自分で読むだけでなく、別の実装（WIC の復号）でも読み戻して確かめる。
 
 use std::path::{Path, PathBuf};
@@ -54,7 +54,7 @@ fn unpremultiply_transparent_translucent_opaque() {
     .concat();
     let actual = unpremultiply(&input);
     assert_within_one(&actual, &expected, "乗算を戻した RGBA");
-    // 完全に透明は「1 段階以内」でなく厳密に 0（要件 5.2）。
+    // 完全に透明は「1 段階以内」でなく厳密に 0。
     assert_eq!(&actual[..8], &[0; 8], "アルファ 0 は全部 0");
     // 不透明は丸めが起きないので厳密に一致する。
     assert_eq!(&actual[16..20], &[30, 20, 10, 255], "不透明はそのまま");

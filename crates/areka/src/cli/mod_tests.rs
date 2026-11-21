@@ -1,4 +1,4 @@
-//! 起動オプションの中身の既定値（要件 1.13・7.1）。
+//! 起動オプションの中身の既定値。
 
 use super::*;
 
@@ -14,7 +14,7 @@ fn defaults_load_modules_listen_not_given_no_help() {
     assert!(!opts.boot.random && !opts.boot.no_boot_check);
 }
 
-/// 本物の読み口: 置き換えの warn が先、まとめの info が最後。記録はすべて `[cli]` で始まる（1.12・1.14・7.1）。
+/// 本物の読み口: 置き換えの warn が先、まとめの info が最後。記録はすべて `[cli]` で始まる。
 #[cfg(windows)]
 #[test]
 fn read_from_logs_notes_and_returns_options() {

@@ -1,5 +1,4 @@
-//! 背景のスレッドの口の決定論テスト（design「Testing Strategy / 背景スレッドの口」・要件 1.11・8.4・
-//! 本番の道筋は要件 2.6・2.7・6.2・11.5）。
+//! 背景のスレッドの口の決定論テスト。
 //!
 //! 窓口の代わりに素の受信端で頼みを受けて答える。確かめること: kanade の結果 5 値と返信端の
 //! 切断の写し（「定常でない」は送り直しの印つきで 2 回目の頼みが来る）・窓口が居ないときの
@@ -237,7 +236,7 @@ fn every_port_reads_a_missing_desk_as_closed() {
 
 // ---------------------------------------------------------------- 門
 
-/// 門が閉じていれば、宛先に 1 バイトも書かずに None。窓口へも頼まない（要件 8.4）。
+/// 門が閉じていれば、宛先に 1 バイトも書かずに None。窓口へも頼まない。
 #[test]
 fn closed_gate_installs_nothing() {
     let root = TempPath::new("install-worker-root");
@@ -281,7 +280,7 @@ fn open_gate_installs_and_releases_the_gate() {
 }
 
 /// 書庫を始めた後・展開の前（利用条件の画面・読み取りと検査の段）に終了が始まったら、
-/// 途中でやめた書庫として書庫のパスが 1 件記録される（要件 8.4）。
+/// 途中でやめた書庫として書庫のパスが 1 件記録される。
 #[test]
 fn exit_before_writing_records_the_archive() {
     let dir = TempPath::new("install-worker-archive");
@@ -300,7 +299,7 @@ fn exit_before_writing_records_the_archive() {
     );
 }
 
-/// 門の記録の名前には、書庫のパスと宛先の両方が載る（要件 8.3）。
+/// 門の記録の名前には、書庫のパスと宛先の両方が載る。
 #[test]
 fn gate_label_names_archive_and_destination() {
     let root = TempPath::new("install-worker-root");
@@ -513,7 +512,7 @@ fn install_through_production_path(
 }
 
 /// `OnInstallCompleteEx` に返事が無ければ、続けて `OnInstallComplete` を 1 件送る。受け皿へは
-/// 書くが、切替は要求しない（要件 2.6・2.7・6.2・11.5）。
+/// 書くが、切替は要求しない。
 #[test]
 fn production_path_follows_a_silent_complete_ex_with_the_legacy_complete() {
     let (calls, switched, last) = install_through_production_path(None);

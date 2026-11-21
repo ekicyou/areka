@@ -1,6 +1,6 @@
-//! `perf_thread_report` の決定論テスト（task 2.4・要件 2.3/2.6/2.12/3.8/6.5/6.8）。
+//! `perf_thread_report` の決定論テスト。
 //!
-//! 実時間の閾値も `sleep` も 1 つも使わない（要件 6.5）——行の組み立て・差分の計算・
+//! 実時間の閾値も `sleep` も 1 つも使わない——行の組み立て・差分の計算・
 //! 名簿外の残りの算出・周期の読み取りはいずれも純関数であり、スレッドも Win32 も
 //! 通さずに固定できる。点灯していない場（テスト既定）で報告スレッドが起きないことも
 //! ここで押さえる。
@@ -51,10 +51,10 @@ fn sample_process() -> ProcessSample {
 }
 
 // ---------------------------------------------------------------------------
-// 役割語彙の全件（要件 2.3）
+// 役割語彙の全件
 // ---------------------------------------------------------------------------
 
-/// (要件 2.3) 固定語彙は 8 件・綴りと並びまで動かさない。
+/// 固定語彙は 8 件・綴りと並びまで動かさない。
 #[test]
 fn all_roles_is_the_fixed_eight_vocabulary() {
     assert_eq!(
@@ -73,7 +73,7 @@ fn all_roles_is_the_fixed_eight_vocabulary() {
     );
 }
 
-/// (要件 2.3) 語彙の判定はアクターだけ接尾辞つきを認め、接尾辞なしは認めない。
+/// 語彙の判定はアクターだけ接尾辞つきを認め、接尾辞なしは認めない。
 #[test]
 fn actor_role_needs_a_suffix_and_every_other_role_is_literal() {
     for role in ALL_ROLES {
@@ -88,10 +88,10 @@ fn actor_role_needs_a_suffix_and_every_other_role_is_literal() {
 }
 
 // ---------------------------------------------------------------------------
-// 行の語彙（要件 2.12・2.6）
+// 行の語彙
 // ---------------------------------------------------------------------------
 
-/// (要件 2.12) `perf(thread)` の 1 行に同じフィールド名が 2 度出ない。
+/// `perf(thread)` の 1 行に同じフィールド名が 2 度出ない。
 #[test]
 fn format_thread_line_has_no_duplicate_field_names() {
     let line = format_thread_line(3, 180, &sample_thread());
@@ -106,7 +106,7 @@ fn format_thread_line_has_no_duplicate_field_names() {
     assert_eq!(names.len(), 8, "フィールドの本数が変わった: {line}");
 }
 
-/// (要件 2.12) `perf(process)` の 1 行に同じフィールド名が 2 度出ない。
+/// `perf(process)` の 1 行に同じフィールド名が 2 度出ない。
 #[test]
 fn format_process_line_has_no_duplicate_field_names() {
     let line = format_process_line(3, 180, &sample_process());
@@ -121,7 +121,7 @@ fn format_process_line_has_no_duplicate_field_names() {
     assert_eq!(names.len(), 7, "フィールドの本数が変わった: {line}");
 }
 
-/// (要件 2.12) 固定文言とフィールドの並びを字面で固定する（`perf(thread)`）。
+/// 固定文言とフィールドの並びを字面で固定する（`perf(thread)`）。
 #[test]
 fn format_thread_line_is_fixed_in_wording_and_order() {
     let line = format_thread_line(3, 180, &sample_thread());
@@ -149,7 +149,7 @@ fn format_thread_line_is_fixed_in_wording_and_order() {
     );
 }
 
-/// (要件 2.12) 固定文言とフィールドの並びを字面で固定する（`perf(process)`）。
+/// 固定文言とフィールドの並びを字面で固定する（`perf(process)`）。
 #[test]
 fn format_process_line_is_fixed_in_wording_and_order() {
     let line = format_process_line(3, 180, &sample_process());
@@ -176,7 +176,7 @@ fn format_process_line_is_fixed_in_wording_and_order() {
     );
 }
 
-/// (要件 2.12) `cpu_us` はカーネルとユーザーの合計である（両行とも）。
+/// `cpu_us` はカーネルとユーザーの合計である（両行とも）。
 #[test]
 fn cpu_us_is_the_sum_of_kernel_and_user() {
     let t = sample_thread();
@@ -194,7 +194,7 @@ fn cpu_us_is_the_sum_of_kernel_and_user() {
     );
 }
 
-/// (要件 2.6) 壁時計と CPU 時間は別のフィールド名で出る（混ぜて読めない）。
+/// 壁時計と CPU 時間は別のフィールド名で出る（混ぜて読めない）。
 #[test]
 fn wall_clock_and_cpu_time_use_distinct_field_names() {
     let line = format_process_line(1, 60, &sample_process());
@@ -205,7 +205,7 @@ fn wall_clock_and_cpu_time_use_distinct_field_names() {
     assert!(field_value(&line, "wall_ms").is_none());
 }
 
-/// (要件 2.12) 名前・役割名の空白は `_` へ潰す——潰さないと値の途中が
+/// 名前・役割名の空白は `_` へ潰す——潰さないと値の途中が
 /// 判定スクリプトに新しい `名前=` として読まれる。
 #[test]
 fn whitespace_inside_a_name_is_replaced_so_it_cannot_look_like_a_field() {
@@ -224,7 +224,7 @@ fn whitespace_inside_a_name_is_replaced_so_it_cannot_look_like_a_field() {
     assert!(!field_names(&line).contains(&"b"));
 }
 
-/// (要件 2.12) 空の名前は `-` になる（`name=` が値なしで終わらない）。
+/// 空の名前は `-` になる（`name=` が値なしで終わらない）。
 #[test]
 fn an_empty_name_becomes_a_hyphen() {
     let sample = ThreadSample {
@@ -240,7 +240,7 @@ fn an_empty_name_becomes_a_hyphen() {
 }
 
 // ---------------------------------------------------------------------------
-// スナップショット差分（要件 2.1・行は累積値・差は読み手が取る）
+// スナップショット差分（行は累積値・差は読み手が取る）
 // ---------------------------------------------------------------------------
 
 fn sample(tid: u32, kernel_us: u64, user_us: u64) -> ThreadSample {
@@ -253,7 +253,7 @@ fn sample(tid: u32, kernel_us: u64, user_us: u64) -> ThreadSample {
     }
 }
 
-/// (要件 2.1) 差分は TID で突き合わせ、前回に無い TID は値をそのまま持つ。
+/// 差分は TID で突き合わせ、前回に無い TID は値をそのまま持つ。
 #[test]
 fn delta_matches_by_tid_and_keeps_new_tids_whole() {
     let prev = vec![sample(1, 100, 200), sample(2, 10, 20)];
@@ -265,7 +265,7 @@ fn delta_matches_by_tid_and_keeps_new_tids_whole() {
     assert_eq!((d[2].tid, d[2].kernel_us, d[2].user_us), (3, 7, 8));
 }
 
-/// (要件 2.1) 累積値が巻き戻って見えても（TID 再利用など）負へ回らず 0 で止まる。
+/// 累積値が巻き戻って見えても（TID 再利用など）負へ回らず 0 で止まる。
 #[test]
 fn delta_saturates_when_a_counter_goes_backwards() {
     let prev = vec![sample(1, 100, 200)];
@@ -274,7 +274,7 @@ fn delta_saturates_when_a_counter_goes_backwards() {
     assert_eq!((d[0].kernel_us, d[0].user_us), (0, 0));
 }
 
-/// (要件 2.1) 前回に在って今回に無い TID は差分に現れない（名簿は消えないが、
+/// 前回に在って今回に無い TID は差分に現れない（名簿は消えないが、
 /// 消えた場合に幽霊の行を作らないことを固定する）。
 #[test]
 fn delta_drops_tids_absent_from_the_current_snapshot() {
@@ -286,10 +286,10 @@ fn delta_drops_tids_absent_from_the_current_snapshot() {
 }
 
 // ---------------------------------------------------------------------------
-// 名簿外の残り（要件 2.3）
+// 名簿外の残り
 // ---------------------------------------------------------------------------
 
-/// (要件 2.3) 名簿外の残り＝プロセス CPU − 名簿の合計。
+/// 名簿外の残り＝プロセス CPU − 名簿の合計。
 #[test]
 fn compute_unregistered_rest_is_process_minus_registered() {
     let process = ProcessSample {
@@ -305,7 +305,7 @@ fn compute_unregistered_rest_is_process_minus_registered() {
     assert_eq!(rest.kernel_us + rest.user_us, 300_000);
 }
 
-/// (要件 2.3) 名簿の合計がプロセスを超えても（読み取り時刻のずれ）負へ回らない。
+/// 名簿の合計がプロセスを超えても（読み取り時刻のずれ）負へ回らない。
 #[test]
 fn compute_unregistered_rest_saturates_at_zero() {
     let process = ProcessSample {
@@ -319,7 +319,7 @@ fn compute_unregistered_rest_saturates_at_zero() {
     assert_eq!((rest.kernel_us, rest.user_us), (0, 0));
 }
 
-/// (要件 2.3) 残りの行は固定の役割名と、スレッドを指さない身元で出る。
+/// 残りの行は固定の役割名と、スレッドを指さない身元で出る。
 #[test]
 fn compute_unregistered_rest_uses_the_fixed_role_and_placeholder_identity() {
     let process = sample_process();
@@ -336,10 +336,10 @@ fn compute_unregistered_rest_uses_the_fixed_role_and_placeholder_identity() {
 }
 
 // ---------------------------------------------------------------------------
-// 周期の読み取り（要件 2.3）
+// 周期の読み取り
 // ---------------------------------------------------------------------------
 
-/// (要件 2.3) 未設定は既定 60 秒・正の整数はその秒数・読めない値は既定へ倒す。
+/// 未設定は既定 60 秒・正の整数はその秒数・読めない値は既定へ倒す。
 #[test]
 fn period_from_env_value_defaults_and_parses() {
     let default = Duration::from_secs(DEFAULT_PERIOD_SEC);
@@ -356,7 +356,7 @@ fn period_from_env_value_defaults_and_parses() {
     assert_eq!(period_from_env_value(Some("-1")), default);
 }
 
-/// (要件 2.3) 環境変数の名前と点灯の的を固定する（本番 env は `AREKA_` 冠）。
+/// 環境変数の名前と点灯の的を固定する（本番 env は `AREKA_` 冠）。
 #[test]
 fn the_period_env_name_and_target_are_fixed() {
     assert_eq!(PERIOD_ENV, "AREKA_PERF_THREAD_REPORT_SEC");
@@ -366,10 +366,10 @@ fn the_period_env_name_and_target_are_fixed() {
 }
 
 // ---------------------------------------------------------------------------
-// 既定 OFF（要件 3.8）
+// 既定 OFF
 // ---------------------------------------------------------------------------
 
-/// (要件 3.8) 点灯していなければ報告スレッドを起こさない（費用 0）。
+/// 点灯していなければ報告スレッドを起こさない（費用 0）。
 /// テストは subscriber を張らないので `areka::perf` は消灯している。
 #[test]
 fn start_spawns_nothing_while_the_target_is_off() {

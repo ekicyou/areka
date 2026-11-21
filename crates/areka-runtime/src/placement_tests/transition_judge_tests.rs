@@ -500,7 +500,7 @@ fn summarize_reports_the_visualize_to_write_gap_in_frames_and_in_microseconds() 
 
 #[test]
 fn summarize_excludes_windows_whose_redisplay_was_skipped() {
-    // `areka-P0-dpi-transition-atomicity` 要件 4.6: 寸の再導出結果が得られない窓は現状維持であり、合否から除外する。
+    // 寸の再導出結果が得られない窓は現状維持であり、合否から除外する。
     let summary = summarize_lines(&[
         monitor(10, 192, 96, 1704, 1752),
         surface(
@@ -537,11 +537,11 @@ fn summarize_excludes_windows_whose_redisplay_was_skipped() {
         // 見送られた窓が後のフレームで表示され、そこで初めて新寸になる形。可視化も書込も
         // **在る**ので、除外していなければ食い違いの表へ載ってしまう。
         //
-        // ここで遅れているのは**随伴の位置（`BalloonFollow`）そのもの**である＝`areka-P0-dpi-transition-atomicity` 要件 4.3 の
-        // 欠陥形。再観測 §3.2 の遷移 2 とは**別物**なので混同しないこと——あちらは位置が
-        // 定刻に届き寸（`KeepPositionResize`）だけが +660ms に届いた形で、レポートが
-        // 「Requirement 4.6 の現状維持挙動＝欠陥ではない」と明記している（`areka-P0-dpi-transition-atomicity` の再観測レポート）。両者を分けるのは
-        // 遅れた書込の**経路語**だけであり、§3.2 の形は
+        // ここで遅れているのは**随伴の位置（`BalloonFollow`）そのもの**である＝随伴の
+        // 同一フレーム性を破る欠陥形。再観測レポートの遷移 2 とは**別物**なので混同しないこと
+        // ——あちらは位置が定刻に届き寸（`KeepPositionResize`）だけが +660ms に届いた形で、
+        // レポートが「現状維持の挙動＝欠陥ではない」と明記している。両者を分けるのは
+        // 遅れた書込の**経路語**だけであり、その形は
         // `transition_judge_verdict_tests::a_deferred_resize_after_a_punctual_follow_is_not_a_companion_defect`
         // が持つ。
         surface(
@@ -594,7 +594,7 @@ fn summarize_excludes_windows_whose_redisplay_was_skipped() {
     // 随伴の同一フレーム性だけは**バルーン側の見送りでは降りない**（レビューで
     // 是正）。見送りは「サーフェスの再表示をしなかった」という事実であって、随伴の窓書込は
     // 不可視のバルーンにも出る——ここで降りると、実機サインオフの定常の形（発話させないので
-    // バルーンは常に `stage=skipped reason=invisible`）で `areka-P0-dpi-transition-atomicity` 要件 4.3 が 1 度も検査されない。
+    // バルーンは常に `stage=skipped reason=invisible`）で随伴の同一フレーム性が 1 度も検査されない。
     // 本例はまさにその欠陥形（キャラは frame 10・随伴は frame 20）であり、検査される。
     assert_eq!(
         summary.balloon_pairs_checked, 1,
@@ -853,7 +853,7 @@ fn summarize_ignores_records_that_are_not_part_of_the_judged_quantities() {
 }
 
 // ---------------------------------------------------------------------------
-// 見送りの理由による選り分け（`areka-P0-dpi-transition-atomicity` タスク 4.2 の実機採取で判明した判定器の欠陥）
+// 見送りの理由による選り分け
 // ---------------------------------------------------------------------------
 
 /// 遷移の後続フレームに全窓の「拡大率が前回と同じ」見送りが続く系列（実機ログの形）。
@@ -932,7 +932,7 @@ fn steady_state_k_unchanged_lines() -> Vec<String> {
 #[test]
 fn summarize_does_not_exclude_windows_whose_redisplay_was_skipped_as_k_unchanged() {
     // `reason=k-unchanged` は「拡大率が前回と同じだから再表示しない」という**定常状態の
-    // 空振り**であり、`areka-P0-dpi-transition-atomicity` 要件 4.6 が言う「再導出結果が得られない窓」ではない。除外に使うと
+    // 空振り**であり、「再導出結果が得られない窓」ではない。除外に使うと
     // 遷移の判定量が丸ごと消える。
     let summary = summarize_lines(&steady_state_k_unchanged_lines());
     // 是正前はここが順に `None`・空・空になる（3 つの判定量が静かに消える）。
@@ -967,8 +967,8 @@ fn summarize_does_not_exclude_windows_whose_redisplay_was_skipped_as_k_unchanged
 fn summarize_still_excludes_windows_that_were_skipped_because_they_are_invisible() {
     // 上の陽性の対（零件の主張には必ず対を置く）。同じ駆動口（`stage=skipped` の行）で
     // 理由だけを `invisible` へ替えれば、除外は従来どおり効かなければならない
-    // ——再観測 §3.2 の遷移 2（バルーン 1 が不可視ゆえ見送られ +660ms に届いた形。
-    // レポートが「Requirement 4.6 の現状維持挙動＝欠陥ではない」と明記した形）が
+    // ——再観測レポートの遷移 2（バルーン 1 が不可視ゆえ見送られ +660ms に届いた形。
+    // レポートが「現状維持の挙動＝欠陥ではない」と明記した形）が
     // ここで守られる。
     let lines: Vec<String> = steady_state_k_unchanged_lines()
         .iter()

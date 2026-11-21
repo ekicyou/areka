@@ -55,13 +55,9 @@ use crate::target_map::window_scope;
 /// [`frame_system`](super::frame_system) が本フェーズの**後**に直接呼ぶ。バルーン可視性の相を
 /// 「全 `\b` 指令の適用後」かつ「表示が積む窓寸要求の消化前」へ挟むため、順は適用 → 反映である。
 pub fn run_drain_phase(wiring: &mut RuntimeWiring, world: &mut World) {
-    // attach 前はチャネルが保留バッファを兼ねる（取りこぼしなし・FIFO）。装着後のみ drain する。
     if !wiring.attached {
         return;
     }
-    // wiring.rx（受信端＝shared 借用）と wiring.presenter（mut 借用）は互いに素なフィールドゆえ両立する。
-    // apply は () を返し、失敗は cmd.reply（本経路は常に None）経由。未装着等の異常は presenter 内部で
-    // error! 済み。撃ちっぱなしの非ブロック配送契約ゆえ本フェーズは panic しない。
     // このフレームで ShowSurface を適用した target を控え、適用の後に今の定義の書き手へ渡す
     // （drain → 書き手 → 文字層スケール相 → 文字の相）。
     let mut shown: Vec<TargetId> = Vec::new();
@@ -141,7 +137,7 @@ pub(super) fn drain_present_commands(
 /// **指令ごとの預かり**である。
 /// `\![move]` は動かす窓と基準の窓（`--base`）の両方が最初の面を表示して拡大率が取れるまで預かる
 /// （判定は兄弟の [`release_ready`]）。GPU の装着だけを待つ形は取らない——装着の後でも最初の `\s` の
-/// 前の窓は表示の前の仮の矩形のままで、そこを基準に当てると表示の後の照合で隙間が残る（research 12 節）。
+/// 前の窓は表示の前の仮の矩形のままで、そこを基準に当てると表示の後の照合で隙間が残る。
 /// 預かった指令に関わる窓への後の指令は追い越さず、関わりの無い窓の指令は先に当てる。窓が表示した巡では
 /// 同じ巡の表示の指令・窓寸の照合・再スナップの後に当たる（本相の置き場がそれらの後ろ）。
 /// `GhostWindows` 未挿入の間はチャネルが保留バッファを兼ねる（[`Receiver::try_iter`] を呼ばず取りこぼさない）。
@@ -160,7 +156,6 @@ pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
     shown: &S,
     world: &mut World,
 ) {
-    // GhostWindows 未挿入の間はチャネルが保留バッファを兼ねる（try_iter を呼ばず取りこぼさない）。
     let Some(windows) = world.get_resource::<GhostWindows>() else {
         return;
     };
@@ -176,14 +171,12 @@ pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
     for cue in ready {
         let directive = match cue {
             PositionCue::Move(directive) => directive,
-            // 並べ直しは拡大率の値を読まない（今の窓の大きさがすでに今の拡大率で描いた大きさ・
-            // research §13 議題 1）。失敗は関数内で warn! 済みゆえ戻り値を捨てて次へ進む。
+            // 並べ直しは拡大率の値を読まない（今の窓の大きさがすでに今の拡大率で描いた大きさ）。
             PositionCue::ResetWindowPos => {
                 reset_window_positions(world);
                 continue;
             }
-            // 吸着・組・バルーン位置初期化。記録は各関数の中ゆえ
-            // 戻り値を捨てる。台本の並び（組を作ってから `\![move]`）はこの 1 本の線の順で保たれる。
+            // 吸着・組・バルーン位置初期化。台本の並び（組を作ってから `\![move]`）はこの 1 本の線の順で保たれる。
             PositionCue::SetAlignment { scope, word } => {
                 apply_script_alignment(world, scope, &word);
                 continue;
@@ -210,15 +203,13 @@ pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
         // 換算する（`move_cue_geometry.rs` の `compute_move_target`・`windowposition.x/y` と同じ写像）。
         // 真実源は表示層の `applied_ratio`＝「いま画面に載っている絵に実際に掛かった k」であり、
         // 導出しただけで適用に失敗した k は漏れてこない。k はこの 1 か所からだけ取り、モニタの DPI から
-        // 計算し直さない（将来の利用者の倍率もこの値に含めれば追従する・research §13 議題 1）。
+        // 計算し直さない。
         //
         // 預かりを抜けた移動は拡大率が取れている。取れないのは窓の無いスコープだけで（待っても表示されない）、
         // そのとき当てる側が窓の不在を warn! で残すので、ここは恒等で渡す。
         let k = shown
             .shown_ratio(directive.scope)
             .unwrap_or(ScaleRatio::ONE);
-        // 適用の全縮退（窓・作業領域・主モニタの不在）は apply_move_directive 内で warn!＋false 済み。
-        // 戻り値は捨てて次 directive へ進む（1 件の縮退で talk を殺さない・非 panic）。
         apply_move_directive(world, &directive, k);
     }
 }
@@ -236,7 +227,6 @@ pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
 /// **balloon 窓には一切触れない**（scope→`char_window` 写像のみ）。判定・反映は
 /// World 操作に閉じ GPU を要しない（GPU 結合は薄い [`resnap_shell_targets`] が担う）。
 pub(super) fn resnap_from_sizes(world: &mut World, sizes: impl Iterator<Item = (usize, SizePx)>) {
-    // GhostWindows（scope→窓 entity の正本）。未挿入は no-op（Preconditions）。
     let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
         return;
     };
@@ -245,7 +235,6 @@ pub(super) fn resnap_from_sizes(world: &mut World, sizes: impl Iterator<Item = (
     let mut targets: Vec<(Entity, SizePx)> = Vec::new();
     for (scope, shown_size) in sizes {
         let Some(char_window) = ghost_windows.char_window(scope) else {
-            // 未知 scope（GhostWindows に無い）→ skip（char 窓が無ければ再適用対象なし）。
             continue;
         };
         if shown_size.w <= 0 || shown_size.h <= 0 {
@@ -258,11 +247,9 @@ pub(super) fn resnap_from_sizes(world: &mut World, sizes: impl Iterator<Item = (
         }
         targets.push((char_window, shown_size));
     }
-    // 反映: char 窓 WindowPos.size と異なるときのみ resize_window_to を駆動（同寸は非発火）。
     for (char_window, shown_size) in targets {
         let current = world.get::<WindowPos>(char_window).and_then(|wp| wp.size);
         if current == Some(SizeI::new(shown_size.w, shown_size.h)) {
-            // 同寸＝冗長駆動を避ける（正常系ゆえ静穏に skip）。
             continue;
         }
         // 異寸のみ: `resize_window_to` が T の再適用と随伴を 1 呼出で書く。
@@ -293,8 +280,7 @@ pub(super) fn resnap_shell_targets(presenter: &EmoPresenter, world: &mut World) 
 /// `EmoPresenter` から `Some` を得るには実 GPU で `ShowSurface` を完了させた装着済み target が
 /// 要る。ゆえに「resnap が **どの `TargetId` を読むか**」（shell か balloon か）は、素の
 /// `EmoPresenter::new()` を渡す存在チェックでは**全 target が `None` に潰れて観測できない**——
-/// `shell_target`→`balloon_target` の 1 トークン変異が檻をすり抜けていた実際の穴である
-/// （2026-07-30 是正。それ以前は「コードレビューで足りる」と散文で断っていた）。
+/// `shell_target`→`balloon_target` の 1 トークン変異が檻をすり抜ける。
 ///
 /// 本トレイトは兄弟の [`ScaleReportSource`] と同型の意図を持つ: **frame 側の結線**を GPU 無しの
 /// 決定論檻へ入れるためのシーム（判断分岐は in-crate 純テスト）。
@@ -330,10 +316,8 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
     // presenter 借用を解いてから resnap_from_sizes（&mut World）を呼ぶため、先に collect する。
     let mut sizes: Vec<(usize, SizePx)> = Vec::new();
     for scope in ghost_windows.scopes() {
-        // 存在確認: レジストリが指す char 窓が既に
-        // despawn 済みなら **正常終了系**として debug で打ち切り、**他 scope は処理し切る**。
-        // 寸の問い合わせより手前に置く——破棄済みの窓のために表示側へ問い合わせる意味が
-        // 無いうえ、素通りさせると下流 `resize_window_to` が破棄済み窓ぶん呼ばれる。
+        // 破棄済みの窓は debug で打ち切り、**他 scope は処理し切る**。寸の問い合わせより手前に置く——
+        // 素通りさせると下流 `resize_window_to` が破棄済み窓ぶん呼ばれる。
         if let Some(char_window) = ghost_windows.char_window(scope)
             && world.get_entity(char_window).is_err()
         {
@@ -353,22 +337,19 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
         {
             continue;
         }
-        // shell target（偶数=2*scope）のみを読む（balloon_target は読まない＝shell 限定）。
-        // 窓 client に合わせるべき寸は **物理寸**（k 倍後）であって native 原寸ではない。両者を
-        // 選べる `text_slot_view()`（`surface_size()`／`physical_size()` が隣り合う）ではなく、
-        // **物理寸だけを返す** `target_physical_size` を引く——消費点に取り違えの選択肢を残さない
-        // （native で駆動すると k≠1 で DPI 相 reconcile と同一フレーム内で綱引きになり窓が原寸へ
-        // 引き戻される）。丸めは presenter 側が権威 `scaled_extent` で確定済みゆえ通貨変換のみ行う。
-        // 未表示（初回 ShowSurface 前）・未装着は `None` → skip（遅延化への防御）。
+        // shell target のみを読む。窓 client に合わせるべき寸は **物理寸**（k 倍後）であって native
+        // 原寸ではない。`text_slot_view()` のように両者を選べる口ではなく、**物理寸だけを返す**
+        // `target_physical_size` を引く（native で駆動すると k≠1 で DPI 相 reconcile と同一フレーム内で
+        // 綱引きになり窓が原寸へ引き戻される）。丸めは presenter 側が確定済みゆえ通貨変換のみ行う。
+        // 未表示（初回 ShowSurface 前）・未装着は `None` → skip。
         // shell/balloon の取り違えは `resnap_reads_shell_targets_only_and_ignores_balloon_geometry`
-        // と `resnap_queries_shell_targets_only` が排他的に殺す（2026-07-30 実測）。
+        // と `resnap_queries_shell_targets_only` が排他的に殺す。
         let Some(s) = window_scope(scope) else {
             continue;
         };
         let Some((w, h)) = source.physical_size(shell_target(s)) else {
             continue;
         };
-        // (u32,u32)→i32 変換失敗は skip。
         let (Ok(w), Ok(h)) = (i32::try_from(w), i32::try_from(h)) else {
             debug!(
                 scope,
@@ -386,7 +367,6 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
         }
         sizes.push((scope, SizePx { w, h }));
     }
-    // ここで presenter／ghost_windows 借用は終わり、world を mut 借用して判定・反映へ渡す。
     resnap_from_sizes(world, sizes.into_iter());
 }
 
@@ -488,7 +468,6 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
         targets,
     } = boot_chain(world, &states, &targets);
 
-    // ここで world の shared 借用は終わり、mut 借用して反映へ渡す。
     mark_non_positive_widths(&mut slots);
     // 解いた鎖を基準の窓のモニタの作業領域の中に置く。
     // 場面は記録の語だけ: 既定の位置が有れば起動の並べ直し、無ければ記憶からの隣り合わせ。

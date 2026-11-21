@@ -1,16 +1,15 @@
-//! 終了の相が運行の通知を切替の段で振り分けること（areka-P0-ghost-shell-balloon-switch task 8.4・
-//! 要件 2.9・3.3・3.5・8.4・10.7）。
+//! 終了の相が運行の通知を切替の段で振り分けること。
 //!
 //! 確かめること:
 //!
 //! 1. 切替の予約が在る間に届いた停止（中身あり）は切替として捌かれ、終了は指示されない。偽の
 //!    SHIORI 2 体で A → B を 1 周させ、委譲先（切替の経路）の記録「降ろした所要 ms」が 1 件だけ残る。
-//! 2. 予約が無ければ同じ通知は今日どおり終了を指示する。
+//! 2. 予約が無ければ同じ通知は終了を指示する。
 //! 3. 送り出しの段で中身の無い停止（kanade が切替の要求を受理しないまま止まった）は、
-//!    `warn!(ghost_switch_not_accepted)` 1 件の上で予約を下ろし今日どおり終了する。
+//!    `warn!(ghost_switch_not_accepted)` 1 件の上で予約を下ろして終了する。
 //! 4. 保留の切替が台本の終了（`\-`）で捨てられたときは、kanade が停止より先に切替の中止
-//!    （終了要求）を知らせる＝予約は `info!(ghost_switch_cancelled)` で下り、後の停止は今日の
-//!    終了になる（警告は出ない・要件 5.5・8.11）。
+//!    （終了要求）を知らせる＝予約は `info!(ghost_switch_cancelled)` で下り、後の停止は
+//!    終了になる（警告は出ない）。
 
 use std::sync::mpsc;
 
@@ -57,9 +56,8 @@ fn silent_script() -> FakeShiori {
 }
 
 /// 受け口から定常到達を 1 件待って読み捨てる（切替の要求を定常で受けさせるため）。先に届いた別の通知は
-/// 読み飛ばす。受け口を World から外して眠って待ち（`wait_recv`）、打ち切りは足場の進みの目印で決める
-/// （areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。届かなければ打ち切りの文言を標準エラーへ
-/// 1 行出して `false`。
+/// 読み飛ばす。受け口を World から外して眠って待ち（`wait_recv`）、打ち切りは足場の進みの目印で決める。
+/// 届かなければ打ち切りの文言を標準エラーへ 1 行出して `false`。
 fn wait_steady(rig: &mut SwitchRig) -> bool {
     let probe = rig.progress_probe();
     let rx = rig
@@ -100,14 +98,14 @@ fn reservation(stage: SwitchStage) -> SwitchInFlight {
 }
 
 /// 予約（送り出し）の下で A が中身つきの停止を出す → 終了の相は切替へ委譲し、B を起こして
-/// 定常到達で予約が消える。終了は指示されず、委譲先の「降ろした所要 ms」は 1 件（要件 3.3・10.7）。
+/// 定常到達で予約が消える。終了は指示されず、委譲先の「降ろした所要 ms」は 1 件。
 ///
 /// # 非空虚性
-/// 終了の相が予約を見ずに今日どおり終了すれば終了が指示され、降ろした記録は 0 件になる。
+/// 終了の相が予約を見ずに終了すれば終了が指示され、降ろした記録は 0 件になる。
 #[test]
 fn stop_with_handoff_under_reservation_switches_without_exit() {
     let mut rig = SwitchRig::new(vec![("A", silent_script()), ("B", silent_script())]);
-    // 窓を作る閉包の投函先（切替先の窓の準備に要る・閉包は走らせない）。
+    // 切替先の窓の準備が要る窓を作る閉包の投函先（閉包は走らせない）。
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("B");
     rig.boot("A");
@@ -176,7 +174,7 @@ fn stop_with_handoff_under_reservation_switches_without_exit() {
     );
 }
 
-/// 予約が無ければ中身つきの停止でも今日どおり終了を指示する（要件 3.5・8.4）。
+/// 予約が無ければ中身つきの停止でも終了を指示する。
 #[test]
 fn stop_with_handoff_without_reservation_quits() {
     let (tx, rx) = mpsc::channel::<KanadeNotice>();
@@ -203,7 +201,7 @@ fn stop_with_handoff_without_reservation_quits() {
 }
 
 /// 送り出しの段で中身の無い停止 → `warn!(ghost_switch_not_accepted)` 1 件・予約が消え・
-/// 今日どおり終了（終了要求が切替に勝つ・要件 2.9）。
+/// 終了（終了要求が切替に勝つ）。
 #[test]
 fn send_off_stop_without_handoff_quits_and_clears_reservation() {
     let (tx, rx) = mpsc::channel::<KanadeNotice>();
@@ -239,8 +237,7 @@ fn send_off_stop_without_handoff_quits_and_clears_reservation() {
 }
 
 /// 保留の切替を捨てた終了: kanade は停止より先に切替の中止（終了要求）を送る → 予約は
-/// `info!(ghost_switch_cancelled)` で下り、停止は今日どおりの終了（受理されなかった警告は 0 件・
-/// 要件 5.5・8.11）。
+/// `info!(ghost_switch_cancelled)` で下り、停止は終了（受理されなかった警告は 0 件）。
 ///
 /// # 非空虚性
 /// 中止の通知が無ければ停止が予約の下で届き、`warn!(ghost_switch_not_accepted)` が 1 件出る

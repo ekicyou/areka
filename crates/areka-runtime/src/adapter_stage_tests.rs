@@ -1,5 +1,4 @@
-//! 合図 `StageAck` をバルーンの対象へ写す橋渡しの兄弟テスト
-//! （spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
+//! 合図 `StageAck` をバルーンの対象へ写す橋渡しの兄弟テスト。
 
 use areka_emo_present::PresentCommand;
 use areka_sakura::ActorKey;
@@ -24,7 +23,7 @@ fn stage_ack_maps_to_the_balloon_target_with_the_same_generation() {
     }
 }
 
-/// 数値でないスコープは写せず `None`（呼び手が `warn!` で捨てる・今の写し方と同じ）。
+/// 数値でないスコープは写せず `None`（呼び手が `warn!` で捨てる）。
 #[test]
 fn stage_ack_with_non_numeric_scope_is_not_mapped() {
     assert!(

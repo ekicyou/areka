@@ -1,14 +1,14 @@
-//! `Instruction::Font`（`\f[...]`）の台本写像の檻（要件 2.3/2.4/14.4・15.2）。
+//! `Instruction::Font`（`\f[...]`）の台本写像の檻。
 //!
 //! 固定するのは 4 点:
 //!
 //! 1. 装飾の cue は**再生時間 0**（`duration == 0.0`）。
 //! 2. 前後の文字と**時刻が整合**する（書き出し位置 `offset` の転写ゆえ、直前の Text の
 //!    再生完了時刻＝直後の Text の開始時刻と同一）。
-//! 3. `\f` の**有無で他の cue の時刻と長さが変わらない**（要件 14.4）。
+//! 3. `\f` の**有無で他の cue の時刻と長さが変わらない**。
 //! 4. 台本の先頭の **`ClearAll` 前置は従来どおり**。
 //!
-//! 較正（要件 15.2）: `duration` を非 0 にする誤りは (1)、腕を catch-all より後ろに置いて
+//! 較正: `duration` を非 0 にする誤りは (1)、腕を欠いて
 //! cue が生成されなくなる誤りは (1)(2)(4) の cue 本数と種別の断言が、それぞれ赤にする。
 
 use super::test_support::{assert_clear_all_prefix_and_rest, assert_cues_eq, compile};
@@ -30,8 +30,8 @@ fn font_tokens(cue: &Cue) -> Option<Vec<String>> {
     }
 }
 
-/// `\f` は再生時間 0 の汎用キャリア cue として、前後の文字の間の書き出し位置へ載る
-/// （要件 2.3/2.4/14.4）。catch-all（M-boot 外タグの無視）へ落ちて捨てられないことの固定。
+/// `\f` は再生時間 0 の汎用キャリア cue として、前後の文字の間の書き出し位置へ載る。
+/// 無視されて捨てられないことの固定。
 #[test]
 fn font_is_zero_duration_carrier_between_neighbours() {
     let compiled = compile(&[
@@ -64,7 +64,7 @@ fn font_is_zero_duration_carrier_between_neighbours() {
     // (1) 再生時間 0（非 0 を与える誤りはここで赤になる）。
     assert_eq!(cues[1].duration, 0.0, "装飾の命令の再生時間は 0");
 
-    // (2') 運搬形は typed variant でなく 1 本の汎用キャリア（要件 2.4）。
+    // (2') 運搬形は typed variant でなく 1 本の汎用キャリア。
     assert_eq!(
         font_tokens(&cues[1]).as_deref(),
         Some(["bold".to_string(), "1".to_string()].as_slice()),
@@ -74,7 +74,7 @@ fn font_is_zero_duration_carrier_between_neighbours() {
     assert_eq!(cues[1].actor, ActorKey::from("0".to_string()));
 }
 
-/// 引数の 4 つの形（要件 2.2 の受理形）が台本まで無変形で届く（空トークンを潰さない）。
+/// 引数の 4 つの形が台本まで無変形で届く（空トークンを潰さない）。
 #[test]
 fn font_arg_shapes_are_carried_verbatim() {
     let shapes: [Vec<String>; 4] = [
@@ -96,8 +96,8 @@ fn font_arg_shapes_are_carried_verbatim() {
     }
 }
 
-/// `\f` の有無で、装飾以外の cue の時刻・長さ・内容が 1 ビットも変わらない（要件 14.4）。
-/// 先頭の `ClearAll` 前置も従来どおり（要件 2.3 の「先頭の全消去」）。
+/// `\f` の有無で、装飾以外の cue の時刻・長さ・内容が 1 ビットも変わらない。
+/// 先頭の `ClearAll` 前置も従来どおり（先頭の全消去）。
 #[test]
 fn font_does_not_change_other_cue_timings() {
     let without = compile(&[

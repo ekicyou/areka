@@ -1,18 +1,17 @@
-//! 適合一周走行の本体（areka-P0-emo2-conformance-e2e・design D1「一周テスト」）。
+//! 適合一周走行の本体。
 //!
 //! 起動 → 装着 → 自発会話 → 会話中の抑止 → 撫で → メニュー → 選択確定 → サブメニューと戻り →
-//! 位置調整 → 終了、の全段を **1 本の走行**で辿る（areka-P0-emo2-conformance-e2e の R1.1・R2.2）。実 SHIORI にも実時計にも依存せず、
-//! 注入した時刻と注入した入力だけで進む（areka-P0-emo2-conformance-e2e の R2.1）。明示実行の門（`#[ignore]`・環境変数）は持たない
-//! （areka-P0-emo2-conformance-e2e の R2.8）。注入口は既存の公開送信端だけで、製品コードへ口を新設しない（areka-P0-emo2-conformance-e2e の R2.9）。
+//! 位置調整 → 終了、の全段を **1 本の走行**で辿る。実 SHIORI にも実時計にも依存せず、
+//! 注入した時刻と注入した入力だけで進む。明示実行の門（`#[ignore]`・環境変数）は持たず、
+//! 注入口は既存の公開送信端だけで、製品コードへ口を新設しない。
 //!
-//! 台本と期待列は `spine_conformance_script.rs`（areka-P0-emo2-conformance-e2e の design D2）、段の駆動器は
-//! `spine_conformance_support.rs`（areka-P0-emo2-conformance-e2e の design D6）にあり、本ファイルが持つ逐語の期待値は位置調整の着地座標
-//! （[`MOVE_LANDING`]）だけである。
+//! 台本と期待列は `spine_conformance_script.rs`、段の駆動器は `spine_conformance_support.rs` にあり、
+//! 本ファイルが持つ逐語の期待値は位置調整の着地座標（[`MOVE_LANDING`]）だけである。
 //!
-//! # 段の完了条件（areka-P0-emo2-conformance-e2e の design D1 の段表に対する本走行の実現形）
+//! # 段の完了条件
 //!
 //! 各段は自分の完了条件を持ち、成立しなければその時点で走行を不合格とする（後段の結果で
-//! 埋め合わせない＝areka-P0-emo2-conformance-e2e の R1.6）。段表どおりに書けなかった 4 点は、実測で裏を取ったうえで次のように置いた。
+//! 埋め合わせない）。次の 4 点は、実測で裏を取ったうえで置いた。
 //!
 //! 1. **自発会話段の「表示指令が届く」は成立しない**。自発会話の応答 `\0\s[0]…` が指す面は起動挨拶が
 //!    既に表示した面と同一であり、面切替が起きないため表示指令が 1 件も出ない（実測: 40 反復・
@@ -35,14 +34,13 @@
 //!    「もどる」と「エモの位置調整」を連続反復で投函すると 2 つ目が必ず棄却される。段名は同じまま、
 //!    区間だけを 2 つに割って各々を再生し切らせる。
 //!
-//! # 決定論一周が「閉じる」を選ばない理由（areka-P0-emo2-conformance-e2e の design D1 段表・適合検証項目表 項目 8 との辻褄）
+//! # 決定論一周が「閉じる」を選ばない理由
 //!
-//! 段表の「サブメニューと戻り」は「もどる・閉じる」と書くが、**閉じるを選ぶとメニューが消えて
-//! 次段（位置調整）が到達不能になる**。よって決定論層は「もどる → エモの位置調整」の鎖を辿り、
-//! 「閉じる」は**実機層の項目として残る**（areka-P0-emo2-conformance-e2e の適合検証項目表 項目 8）。この置き換えは台本
-//! （`spine_conformance_script.rs`）の連鎖と一致している。
+//! 「サブメニューと戻り」で「閉じる」まで選ぶと、**メニューが消えて次段（位置調整）が
+//! 到達不能になる**。よって決定論層は「もどる → エモの位置調整」の鎖を辿り、「閉じる」は
+//! **実機層の項目として残る**。この選び方は台本（`spine_conformance_script.rs`）の連鎖と一致している。
 //!
-//! # 後片付け（areka-P0-emo2-conformance-e2e の design D1「後片付け」・設計討議 #1 裁定・2026-09-02）
+//! # 後片付け
 //!
 //! 終了段の完了条件が **kanade の自己終了の観測**（送信端への投函が `Err`）を含むため、
 //! [`SpineHarness::shutdown_bounded`] が踏む強制終了経路の届く先は既に無い。解放を出せる主体は
@@ -51,9 +49,9 @@
 //!
 //! # 判定
 //!
-//! 判定は段の駆動をすべて終えた**後にまとめて**行う（段の途中で部分照合しない・areka-P0-emo2-conformance-e2e の design D1）。
+//! 判定は段の駆動をすべて終えた**後にまとめて**行う（段の途中で部分照合しない）。
 //! 本ファイルは駆動と段ごとの完了条件までを持ち、3 つの列（[`LapLedgers`]）の**等値照合**は
-//! 兄弟ファイル `spine_conformance_judge.rs` が持つ（areka-P0-emo2-conformance-e2e の R2.11 の主題単位の分割・末尾から接続する）。
+//! 兄弟ファイル `spine_conformance_judge.rs` が持つ（末尾から接続する）。
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -86,10 +84,9 @@ const PLAYOUT_MARGIN_TICKS: u64 = 1;
 /// 完了条件が成立してから、**注入をやめて観測だけを続ける**反復の回数。
 ///
 /// 待っているのは「再生完了 → kanade の運行状態が次へ進む」という実スレッド 2〜3 段の連鎖で、
-/// これは**実時間**でしか進まない。当初これを注入時刻の余白で表したところ高負荷で待ち切れた
-/// ——注入時刻は走行ごとに 1 ビットも変わらないので、**注入時刻で測る限り負荷が上がっても余白は
-/// 1 ミリ秒も増えない**。反復回数なら 1 反復ごとに駆動器が 200µs 眠るので、負荷が上がるほど
-/// 実時間の余白も自然に伸びる。実測の必要量は反復 2 回以内で、300 反復は 2 桁の余裕である。
+/// これは**実時間**でしか進まない。注入時刻で測る限り、負荷が上がっても余白は 1 ミリ秒も増えない。
+/// 反復回数なら 1 反復ごとに駆動器が 200µs 眠るので、負荷が上がるほど実時間の余白も自然に伸びる。
+/// 実測の必要量は反復 2 回以内で、300 反復は 2 桁の余裕である。
 const SETTLE_ROUNDS: usize = 300;
 
 /// 着地が揃った後、再生を進めるために注入時刻を動かす本数（**実測の標本ではなく式**で決める）。
@@ -103,27 +100,19 @@ const PLAYOUT_TICKS: u64 = 2;
 
 /// 再生を伴う段が注入時刻を進めてよい本数の上限（[`assert_budget_not_exhausted`] の判定値）。
 ///
-/// # なぜ実測からではなく式から決めるのか（レビュー指摘・2 度目の差し戻し）
-///
-/// 以前この値は「実測 1〜2 本の 3 倍」として 6 本に置いていた。ところが高負荷での健全な走行が
-/// 撫で段で **9 本**を記録し、余韻を呼び手の側で数えていた頃の壊れた形は 19 本——隔たりは 2 倍しかなく**健全側の裾が
-/// 境界を越えていた**。原因は当時の据え置きが会話境界だけを見ており、表示指令や窓の移動といった
-/// **残りの着地を待つあいだ時計が走っていた**ことで、その本数は機械の速さで変わるから、定数を
-/// いくら上げても崖が動くだけで消えない。
-///
-/// 現在は [`AdvanceGate`] が**時刻に依らない着地をすべて**待ってから時計を開け、開いた後も
-/// [`PLAYOUT_TICKS`] 本ぶんで再び閉じるので、前進量は機械の速さに依らず定まる。上限に 2 倍を
+/// 実測は **0〜1 本**（着地だけで完了する撫で・位置調整は 0）で、余韻を呼び手の側で数える壊れた形は 19 本。
+/// [`AdvanceGate`] が**時刻に依らない着地をすべて**待ってから時計を開け、開いた後も
+/// [`PLAYOUT_TICKS`] 本ぶんで再び閉じるので、前進量は機械の速さに依らない。上限に 2 倍を
 /// 採るのは、前段から遅れて届いた会話境界が占有の起点を引き直すと再生の相が**1 度だけ**やり直しに
 /// なるためで、2 度目が無いのは各段が余韻で自分の信号を出し切ってから次段へ渡すからである。
-/// 実測は **0〜1 本**（着地だけで完了する撫で・位置調整は 0）、余韻を呼び手の側で数えていた頃の壊れた形は 19 本。
 const MAX_CLOCK_ADVANCE_TICKS: u64 = 2 * PLAYOUT_TICKS;
 
 /// 再生を伴う段の待ち方——完了条件が成立するまでは再生側 Tick を注入し、成立後は
 /// [`SETTLE_ROUNDS`] 回、**注入をやめて観測だけ**を続ける（`WaitInjection::DispatcherTickThenObserve`）。
 ///
-/// 余韻を呼び手の側で数えていた頃は、完了条件が偽であるあいだ駆動器が注入を続けるため、余韻の
-/// あいだに注入時刻が段の上限まで走った。選択待ちのまま止まっているはずの台本へ再生が流し込まれ、
-/// 次の段の選択確定が棄却される——[`assert_budget_not_exhausted`] がこの形の再発を檻に入れる。
+/// 完了条件が偽のあいだ注入を続けると余韻のあいだに注入時刻が段の上限まで走り、選択待ちのまま
+/// 止まっているはずの台本へ再生が流し込まれて次の段の選択確定が棄却される。
+/// [`assert_budget_not_exhausted`] がこの形の再発を檻に入れる。
 const OBSERVE_AFTER_READY: WaitInjection = WaitInjection::DispatcherTickThenObserve {
     settle_rounds: SETTLE_ROUNDS,
 };
@@ -156,12 +145,12 @@ struct LapObserved {
 }
 
 impl LapObserved {
-    /// **この段が起こすはずの** talk がすべて起動し、最後の 1 本を再生し切ったか。
+    /// この段が起こすはずの talk がすべて起動し、最後の 1 本を再生し切ったか。
     ///
     /// `target_talks` は「この段を終えた時点で観測されているべき talk 起動の累計」である。段に入る前の
     /// 累計を上回るだけでは足りない——**前段の会話境界が遅れて届くと、それだけで次段の門が開く**。
-    /// 実測（高負荷）で撫での相方側の会話境界がメニュー段まで遅れて届き、台本が選択待ちへ達する前に
-    /// メニュー段が完了して次段の選択確定が棄却された（内訳: `照会 0 件・talk 起動 累計 3 件`）。
+    /// 高負荷では撫での相方側の会話境界がメニュー段まで遅れて届き、台本が選択待ちへ達する前に
+    /// メニュー段が完了して次段の選択確定が棄却された。
     fn played_out_since(&self, target_talks: usize, now_ms: u64) -> bool {
         self.talks_started >= target_talks
             && match self.talk_base_ms {
@@ -175,14 +164,11 @@ impl LapObserved {
 
 /// 注入時刻を進めてよい条件（段ごとに差し替える）。
 ///
-/// # なぜ「会話境界だけ」では足りないのか（レビュー指摘・2 度目の差し戻し）
-///
 /// 段の待ちには 2 種類の観測が混ざる——**時刻に依らない着地**（照会が記録された・会話が起動した・
-/// 表示指令が届いた・窓が動いた）と、**時刻を要する再生**（占有終端の先まで運ぶ）である。据え置きが
-/// 会話境界だけを見ていたときは、残りの着地（相方の面切替・窓の移動）を待つあいだ時計が走り続け、
-/// 前進量が機械の速さで変わった（高負荷の健全な走行で 9 本＝当時の上限 6 本を越えて赤）。ゆえに門は
-/// **その段の完了条件のうち時刻に依らない部分をそのまま写す**。写した部分が揃うまで時計は 1 ミリ秒も
-/// 動かず、揃ってからちょうど [`PLAYOUT_TICKS`] 本だけ動いてまた閉じる。
+/// 表示指令が届いた・窓が動いた）と、**時刻を要する再生**（占有終端の先まで運ぶ）である。
+/// 会話境界だけを見る据え置きでは、残りの着地を待つあいだ時計が走り続け、前進量が機械の速さで
+/// 変わる。ゆえに門は**その段の完了条件のうち時刻に依らない部分をそのまま写す**。写した部分が
+/// 揃うまで時計は 1 ミリ秒も動かず、揃ってからちょうど [`PLAYOUT_TICKS`] 本だけ動いてまた閉じる。
 enum AdvanceGate {
     /// 常に進めてよい（待ちに何も注入しない段で使う）。
     Always,
@@ -193,7 +179,7 @@ enum AdvanceGate {
     },
 }
 
-/// 段の駆動器へ渡す投函先。注入は [`SpineHarness`] の既存の公開送信端へそのまま委ね（areka-P0-emo2-conformance-e2e の R2.9）、
+/// 段の駆動器へ渡す投函先。注入は [`SpineHarness`] の既存の公開送信端へそのまま委ね、
 /// 採取のたびに表示側の観測（会話境界・占有終端・移動の反映）を [`LapObserved`] へ写す。
 struct LapSink<'a> {
     /// 起動済みのハーネス（注入も採取もこの既存の口だけを使う）。
@@ -221,8 +207,7 @@ impl StageSink for LapSink<'_> {
             AdvanceGate::Always => true,
             AdvanceGate::AfterLanding { landed } => {
                 let observed = self.observed.borrow();
-                // 着地が揃い、かつ現在の会話をまだ [`PLAYOUT_TICKS`] 本ぶん進めていないあいだだけ
-                // 開く。開いた後の前進量が機械の速さに依らずこの本数へ定まるのが要点である。
+                // 着地が揃い、かつ現在の会話をまだ [`PLAYOUT_TICKS`] 本ぶん進めていないあいだだけ開く。
                 landed(&observed, &self.handle)
                     && observed.talk_base_ms.is_some_and(|base| {
                         self.last_inject_ms < base + PLAYOUT_TICKS * TICK_STEP_MS
@@ -256,7 +241,7 @@ impl StageSink for LapSink<'_> {
                     | TalkLifecycleSignal::TalkEnded { .. } => {}
                 }
             }
-            // 移動指令の受信端を実 frame 相で drain し、対象窓の位置を読み直す（areka-P0-emo2-conformance-e2e の design D1 位置調整段）。
+            // 移動指令の受信端を実 frame 相で drain し、対象窓の位置を読み直す。
             // 前提: 表示指令は採取するだけで表示層へ当てないので、窓はどれも最初の面を表示済み
             // （拡大率 1）とする読み口で流す（位置の指令を預からない・`frame/move_hold.rs`）。
             run_move_drain_with(&self.harness.wiring, &all_shown, &mut self.harness.world);
@@ -290,7 +275,7 @@ fn horizon_ms(seconds: f64) -> u64 {
 // 採取した 3 つの列（等値照合は `spine_conformance_judge.rs`）
 // ===========================================================================
 
-/// 同一の走行から採った 3 つの列（areka-P0-emo2-conformance-e2e の design D3「3 つの列」）。
+/// 同一の走行から採った 3 つの列。
 struct LapLedgers {
     /// 交信の列（呼出の別・id・参照列）。
     calls: Vec<RecordedCall>,
@@ -361,8 +346,6 @@ fn expect_stage(outcome: Result<StageObservation, StageFailure>) -> StageObserva
 
 /// [`expect_stage`] に、その段が読んでいた観測の**内訳**を添える。
 ///
-/// # なぜ内訳が要るか（areka-P0-emo2-conformance-e2e の R12.5・レビュー指摘）
-///
 /// 駆動器が返す待ち切れは「注入の時刻列・採取件数」までしか運ばない。ところが選択を投函する段は、
 /// 表示指令を 1 件も出さないのが正常なので `採取 0 件` が何も語らず、**選択が棄却された**のか
 /// **後続の観測がまだ届かない**のかを区別できない。区別できないと、移動経路の本物の退行
@@ -410,12 +393,12 @@ fn choice_breakdown(
     )
 }
 
-/// 余韻を持つ段が、**注入時刻を上限まで走らせずに**完了したことを確かめる（レビュー指摘の再発防止）。
+/// 余韻を持つ段が、**注入時刻を上限まで走らせずに**完了したことを確かめる。
 ///
 /// 測るのは投函の**回数**ではない。着地待ちのあいだ据え置きで投函される再生側 Tick は注入時刻を
-/// 1 ミリ秒も動かさないので、回数は高負荷で数百回にもなる（実測 1,353 回）——正常な姿である。
+/// 1 ミリ秒も動かさないので、回数は高負荷で数百回にもなる——正常な姿である。
 /// 壊れるのは**注入時刻が走った**ときで、そのとき段は「再生を進めきってしまった」状態で完了し、
-/// 次の段が読む選択待ちが失われる。実測の前進は 0〜1 本、余韻を呼び手の側で数えていた頃の壊れた形は 19 本。
+/// 次の段が読む選択待ちが失われる。実測の前進は 0〜1 本、余韻を呼び手の側で数える壊れた形は 19 本。
 fn assert_budget_not_exhausted(observed: &StageObservation, stage: &LapStage) {
     let reached = observed
         .injected_at_ms
@@ -493,7 +476,7 @@ impl LapStages {
 }
 
 // ===========================================================================
-// 一周の走行（areka-P0-emo2-conformance-e2e の design D1・R1.1／1.5／1.6・R2.1／2.2／2.6／2.7／2.8／2.9）
+// 一周の走行
 // ===========================================================================
 
 /// 一周の全段を 1 本の走行で辿り、各段を設計の完了条件まで進めて全実行主体を有界時間で畳む。
@@ -574,7 +557,7 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
     let talks_target = observed.borrow().talks_started + 1;
     let attach_stage = stages.take("装着");
     // 起動挨拶が起動し、**その表示指令が届く**まで注入時刻を据え置く。会話境界だけで開けると、
-    // 表示指令を待つあいだ時計が走って前進量が機械の速さに依存する（レビュー指摘）。
+    // 表示指令を待つあいだ時計が走って前進量が機械の速さに依存する。
     let displays_target = observed.borrow().displays_seen + 1;
     sink.advance_gate = AdvanceGate::AfterLanding {
         landed: Box::new(move |observed, _| {
@@ -601,7 +584,7 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
     // ── 段 3: 自発会話（kanade へ毎秒の変化通知を 1 本だけ投函する） ──
     //
     //     1 本につき `OnSecondChange` がちょうど 1 件発行される（`schedule/steady.rs`）ため、
-    //     等値照合（areka-P0-emo2-conformance-e2e の R2.3）が成り立つのは 1 本のときだけである。**待ちには何も注入しない**
+    //     等値照合が成り立つのは 1 本のときだけである。**待ちには何も注入しない**
     //     （`WaitInjection::Idle`）——次段が読む「会話中」を守るためである（モジュール doc の 2）。
     let probe = handle.clone();
     let idle_talk = expect_stage(driver.run_stage(
@@ -648,14 +631,14 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
     let watch = Rc::clone(&observed);
     // 本体・相方の 2 件を続けて投函するので、本体側の会話は再生側へ届く前に相方側へ差し替わる
     // ——再生側へ着地する会話は**1 本**（相方側）である。この段が余韻（観測だけの反復）を持つのが
-    // 要点で、余韻が無かったときは会話境界が次段（メニュー）まで遅れて届き、その 1 件だけで
-    // メニュー段の門が開いて台本が選択待ちへ達しないまま完了していた（実測・高負荷）。
+    // 要点で、余韻が無いと会話境界が次段（メニュー）まで遅れて届き、その 1 件だけで
+    // メニュー段の門が開いて台本が選択待ちへ達しないまま完了する。
     let talks_target = observed.borrow().talks_started + 1;
     let displays_target = observed.borrow().displays_seen + 1;
     let stroke_stage = stages.take("撫で");
     // この段の完了条件は**丸ごと時刻に依らない**（照会 2 件・会話の起動・相方の面切替の表示指令）。
     // ゆえに門へそのまま写すと、時計は 1 ミリ秒も動かずに段が終わる（前進 0 本）。写し漏らすと、
-    // 漏らした観測を待つあいだ時計が走る——高負荷で 9 本まで走って赤くなったのがその形である。
+    // 漏らした観測を待つあいだ時計が走る。
     sink.advance_gate = AdvanceGate::AfterLanding {
         landed: Box::new(move |observed, handle| {
             get_calls(&handle.non_status_calls(), "OnMouseMove") >= 2
@@ -857,7 +840,7 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
     collect_display(&mut display, closing);
     stages.assert_exhausted();
 
-    // ── 判定は段の駆動をすべて終えた後にまとめて行う（段の途中で部分照合しない・areka-P0-emo2-conformance-e2e の design D1） ──
+    // ── 判定は段の駆動をすべて終えた後にまとめて行う（段の途中で部分照合しない） ──
     let ledgers = LapLedgers {
         calls: handle.non_status_calls(),
         statuses: handle.status_calls(),
@@ -866,14 +849,14 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
 
     // 再生を運ぶ本数（[`PLAYOUT_TICKS`]）が製品の報告した占有終端を覆っていたこと（自己検査）。
     assert_playout_covers_horizon(&observed.borrow());
-    // 3 つの列を期待と等値で突き合わせる（areka-P0-emo2-conformance-e2e の design D3・R2.3／2.4／2.5・R3.6／3.7）。
+    // 3 つの列を期待と等値で突き合わせる。
     conformance_judge::judge_lap(&ledgers);
 
     // 後片付け（既存の有界な畳み方）。上の終了段が kanade の自己終了まで観測済みゆえ、強制終了の
-    // 届く先はもう無い（areka-P0-emo2-conformance-e2e の設計討議 #1 裁定）。
+    // 届く先はもう無い。
     harness.shutdown_bounded();
 }
 
-// 主題単位の分割（areka-P0-emo2-conformance-e2e の R2.11）: 3 つの列の等値照合（判定）は兄弟ファイルへ分け、本ファイルの末尾から接続する。
+// 3 つの列の等値照合（判定）は兄弟ファイルへ分け、本ファイルの末尾から接続する。
 #[path = "spine_conformance_judge.rs"]
 mod conformance_judge;

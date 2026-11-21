@@ -1,5 +1,4 @@
-//! トリガー機能のテスト — 5.4: tick() トリガー実行統合テスト,
-//! 5.5: ループ内トリガー統合テスト, 5.6: E2E テスト
+//! トリガー機能のテスト — tick() トリガー実行統合テスト・ループ内トリガー・E2E テスト
 
 use super::common::timed_trigger_doc;
 use dola::runtime::{DolaRuntime, EvaluatedValue, RuntimeError, TriggerResult};
@@ -9,7 +8,7 @@ use dola::{
 };
 
 // ============================================================
-// 5.4: tick() トリガー実行統合テスト
+// tick() トリガー実行統合テスト
 // ============================================================
 
 /// 基本トリガー: 発火で子SBが自動開始される
@@ -271,7 +270,7 @@ fn trigger_error_on_never_conflict() {
 }
 
 // ============================================================
-// 5.5: ループ内トリガー統合テスト
+// ループ内トリガー統合テスト
 // ============================================================
 
 /// loop_count=2 のSBでトリガーが各周回で再発火する
@@ -407,7 +406,7 @@ fn infinite_loop_trigger_fires_each_cycle() {
 }
 
 // ============================================================
-// 5.6: E2E テスト
+// E2E テスト
 // ============================================================
 
 /// A（トリガーだけ）→ B（0.5 秒・終わりで C）→ C（0.5 秒）の文書
@@ -690,7 +689,7 @@ fn parent_cancel_does_not_affect_child() {
     );
 }
 
-/// 同じ tick で 2 つの親が同じ x を触る子を起こしても、処理は親の group_id の順（#36）。
+/// 同じ tick で 2 つの親が同じ x を触る子を起こしても、処理は親の group_id の順。
 /// 走るたびに新しい DolaRuntime（＝新しい表）で組み直し、20 回とも同じ結果になる
 #[test]
 fn simultaneous_triggers_resolve_in_group_order() {
@@ -843,7 +842,7 @@ fn skipped_loops_fire_their_triggers() {
     assert!(!rt.has_instances(), "parent and children should all end");
 }
 
-/// 周回の長さより後ろのトリガーは、飛ばした周回でも起きない（親の周回が先に終わる・要件 11.3）
+/// 周回の長さより後ろのトリガーは、飛ばした周回でも起きない（親の周回が先に終わる）
 #[test]
 fn trigger_after_loop_end_does_not_fire_in_skipped_loops() {
     let mut rt = DolaRuntime::new();

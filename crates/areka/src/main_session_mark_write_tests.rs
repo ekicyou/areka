@@ -1,4 +1,4 @@
-//! 記憶を書けないときの起動中の印と終わり方（areka-P0-write-failure-notice 要件 2.2・3.4・7.2・D12）の
+//! 記憶を書けないときの起動中の印と終わり方の
 //! テスト。`main` は生きた `WinApp` を要するので、`run()` の後に組むもの（[`after_run`]）と
 //! 終了コードの判断（[`finish_after_run`]）を踏む。
 
@@ -49,7 +49,7 @@ fn world_with(tmp: &TempPath, first: ExitOrigin) -> World {
     world
 }
 
-/// 記憶を書けなかった終わり（出所 `MemoryWriteFailed`・要件 2.2・D12）: 途中の「記憶を書けない」
+/// 記憶を書けなかった終わり（出所 `MemoryWriteFailed`）: 途中の「記憶を書けない」
 /// 告知を組み、終了コードは 1、印は消す（降ろす手順は正規の道を通り、ゴーストは落ちていない）。
 #[test]
 fn memory_write_failed_exit_alerts_running_and_exits_nonzero() {
@@ -87,7 +87,7 @@ fn memory_write_failed_exit_alerts_running_and_exits_nonzero() {
 }
 
 // ---------------------------------------------------------------------------
-// task 6.2: 印の 4 つの形（要件 3.1〜3.4・7.2・7.6）。置き場は普通のファイルにして書けなくする。
+// 印の 4 つの形。置き場は普通のファイルにして書けなくする。
 
 /// 置き場の位置に普通のファイルを置く（書けない）。
 fn unwritable(dir: &std::path::Path) {
@@ -143,7 +143,7 @@ fn reservation(
 }
 
 /// ⑴ 起動の時点（由来 `Plain`）・⑵ 前回の印が残る起動（由来 `Halted`）で印を書けない
-/// → `boot_first_ghost` が App・起動中の印の失敗を返し、ゴーストを起こさない（置き場が空・要件 3.1・3.2）。
+/// → `boot_first_ghost` が App・起動中の印の失敗を返し、ゴーストを起こさない（置き場が空）。
 /// 作り口は据えていないので、起こしに進めば panic で赤になる。
 #[test]
 fn boot_mark_unwritable_does_not_boot_for_plain_and_halted() {
@@ -188,7 +188,7 @@ fn boot_mark_unwritable_does_not_boot_for_plain_and_halted() {
 }
 
 /// ⑶ 定常の印の投函が失敗 → 汲み出しで最初の出所が `MemoryWriteFailed`・予約が無い／
-/// 切替の降ろした直後に書けない → 切替先を起こさず同じ（要件 3.3）。
+/// 切替の降ろした直後に書けない → 切替先を起こさず同じ。
 #[test]
 fn switch_marks_unwritable_end_with_write_failed_and_no_reservation() {
     use crate::session::ghost_switch::{
@@ -252,7 +252,7 @@ fn switch_marks_unwritable_end_with_write_failed_and_no_reservation() {
     );
 }
 
-/// ⑷ 終わるときに印を消せない → 後始末の 2 つ目が失敗・途中の告知が 1 件で `Err`（要件 3.4）。
+/// ⑷ 終わるときに印を消せない → 後始末の 2 つ目が失敗・途中の告知が 1 件で `Err`。
 #[test]
 fn clear_mark_unwritable_tells_running_once() {
     let tmp = TempPath::under_target("mark-write-clear");

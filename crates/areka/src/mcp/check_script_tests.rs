@@ -1,7 +1,7 @@
-//! 写し取りの値の決定論テスト（4.2）。写し取りの値が判断の事実の trait を満たし、手で組んだ事実と
+//! 写し取りの値の決定論テスト。写し取りの値が判断の事実の trait を満たし、手で組んだ事実と
 //! 同じ答えを返すこと（同じ台本 → 同じ診断）を確かめる。
 //!
-//! 後半は解決の失敗と「何もさせない」の檻（5.4）。`ghost_name` を 10 本と同じ規則で解き、
+//! 後半は解決の失敗と「何もさせない」の檻。`ghost_name` を 10 本と同じ規則で解き、
 //! 偽の SHIORI で起こした本物の単位へ台本を 2 件渡しても、SHIORI への呼出・再生・終了・
 //! 切替のどれも起きないことを確かめる。
 
@@ -93,7 +93,7 @@ fn snapshot_without_a_scope_does_not_judge_it() {
     assert_eq!(snap.shell_has(1, 3), Some(false));
 }
 
-// ---- 解決と振り分け（5.4・要件 2.2・2.3） ----
+// ---- 解決と振り分け ----
 
 use areka_mcp::tools::{ToolCall, ToolRequest, outcome};
 
@@ -134,7 +134,7 @@ fn dispatch_and_wait(
     let at_once = pending.try_answer().ok().flatten().map(|a| a.outcome);
     let waited = match &at_once {
         Some(_) => None,
-        // 例外（要件 7.3・`load-repro.md` の ⑵）: 空の World には数える足場が無く、答えの仕事は製品の
+        // 例外: 空の World には数える足場が無く、答えの仕事は製品の
         // 中の閉包で符号化のスレッドに渡るのでテストの側から走り始めを数える口も足せない。目印なしで待つ。
         None => pending
             .wait_answer(Progress::Unknown)
@@ -187,7 +187,7 @@ fn omitted_or_matching_name_answers_with_the_running_ghost() {
     }
 }
 
-// ---- 何もさせない（5.4・要件 2.4・5.2・偽の SHIORI で起こした本物の単位） ----
+// ---- 何もさせない（偽の SHIORI で起こした本物の単位） ----
 
 use crate::ghost_session::GhostSlot;
 use crate::session::ghost_switch::SwitchInFlight;
@@ -242,7 +242,7 @@ fn real_unit_answers_two_scripts_without_running_them() {
     ]);
     rig.boot("A");
     // 窓を作らない土台では装着が起きず、預けた答えが届かない。表示の結線を外して窓の無いゴーストとして
-    // 答えさせる（`shell_balloon_switch_tests.rs` と同じ外し方・判断の事実は 4.2 のテストが固定する）。
+    // 答えさせる（`shell_balloon_switch_tests.rs` と同じ外し方・判断の事実は前半のテストが固定する）。
     let unwired = rig.world.remove_non_send::<RuntimeWiring>().is_some();
     let (tx, rx) = mpsc::channel();
     crate::mcp::install(&mut rig.world, rx);

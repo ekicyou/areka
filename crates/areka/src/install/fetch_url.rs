@@ -1,10 +1,8 @@
-//! `\![execute,install,url]` の取得（design「`\![execute,install,url]`」）。
+//! `\![execute,install,url]` の取得。
 //!
 //! URL の本文を areka 専用の一時フォルダ（`%TEMP%\areka\download\`）へ落とし、落とし終えたら
 //! 出どころ「台本」の生のインストールの要求を窓口へ送る。取得は短命のスレッド `install-fetch`
-//! で行い、門は持たない（終了で待たない＝要件 7.5・落としかけの物は次の取得の 7 日の掃除に任せる）。
-//! 使うのは `areka_update::{Fetch, WinHttpFetch, FetchError}` と `install::{RawInstallRequest,
-//! InstallOrigin}` だけ。
+//! で行い、門は持たない（終了で待たない・落としかけの物は次の取得の 7 日の掃除に任せる）。
 
 use std::fmt::Display;
 use std::fs;
@@ -22,7 +20,7 @@ use crate::install::{InstallOrigin, RawInstallRequest};
 /// 取得口の作り方（本番は `WinHttpFetch::new`・テストは偽の取得口）。取得口はスレッドの中で作る。
 pub(crate) type MakeFetch = Box<dyn FnOnce() -> Result<Box<dyn Fetch>, FetchError> + Send>;
 
-/// これより古いファイルを次の取得のときに消す（要件 6.6）。
+/// これより古いファイルを次の取得のときに消す。
 const KEEP: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// 区切りの後ろが空だったときの名前。
@@ -142,10 +140,10 @@ fn sweep_old(dir: &Path, now: SystemTime) -> usize {
 }
 
 /// 短命のスレッド `install-fetch` を起こし、落とし終えたら `RawInstallRequest { origin: Script }` を送る。
-/// スレッドは待たない（終了でも待たない）。取得の間はプロセスの通信中の数を立てる（要件 2.2）。
+/// スレッドは待たない（終了でも待たない）。取得の間はプロセスの通信中の数を立てる。
 pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>) {
     let make: MakeFetch = Box::new(|| Ok(Box::new(WinHttpFetch::new()?) as Box<dyn Fetch>));
-    // 手放す＝待たない（要件 7.5）。
+    // 手放す＝待たない。
     drop(spawn_download_with(
         url,
         tx,
@@ -180,7 +178,7 @@ pub(crate) fn spawn_download_with(
 }
 
 /// スレッドの中身（取得口を作る → 落とす → 送る）。失敗は `error!` 1 件で依頼 0。
-/// 関数の間は `online` を立て、どの経路で抜けても戻す（要件 2.2・2.3）。
+/// 関数の間は `online` を立て、どの経路で抜けても戻す。
 pub(crate) fn fetch_and_send(
     url: &str,
     make: MakeFetch,
@@ -224,7 +222,7 @@ pub(crate) fn fetch_and_send(
     }
 }
 
-/// 取得の失敗 1 件（URL と理由・要件 6.4・10.15）。
+/// 取得の失敗 1 件（URL と理由）。
 fn log_failed(url: &str, reason: &dyn Display) {
     tracing::error!(
         event = "install_fetch_failed",

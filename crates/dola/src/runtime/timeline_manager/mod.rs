@@ -57,7 +57,6 @@ impl TimelineEntry {
     }
 }
 
-/// 購読変数ごとのタイムテーブル管理と時刻ベース評価を行う内部コンポーネント。
 pub(crate) struct TimelineManager {
     timelines: HashMap<String, VariableTimeline>,
     intern_pool: ObjectInternPool,
@@ -153,7 +152,6 @@ impl TimelineManager {
                 if entry.group_id == group_id
                     && let Some(last_seg) = entry.segments.last()
                 {
-                    // 最終セグメントの to_value を最終値とする
                     let val = entry.value_at(last_seg, 1.0, &mut self.intern_pool);
                     result.insert(var_name.clone(), val);
                 }
@@ -179,13 +177,11 @@ impl TimelineManager {
     }
 
     /// 指定変数のタイムラインを取得（読み取り専用）。
-    /// 競合検出（detect_overlaps）で使用。
     pub(crate) fn get_timeline(&self, variable_name: &str) -> Option<&VariableTimeline> {
         self.timelines.get(variable_name)
     }
 
-    /// group_id に属する全変数の値を start_time 時点で評価する。
-    /// Cancel/Trim 戦略で使用。
+    /// group_id に属する全変数の値を start_time 時点で評価する（Cancel/Trim 戦略用）。
     pub(crate) fn evaluate_all_for_group(
         &mut self,
         group_id: u64,
@@ -214,9 +210,7 @@ impl TimelineManager {
         result
     }
 
-    /// 現在再生中セグメントの最終値を group_id 単位で取得する。
-    /// Conclude 戦略専用。各変数について、start_time 時点でアクティブな
-    /// セグメントの to_value (progress_t=1.0) を返す。
+    /// 現在再生中セグメントの最終値（to_value）を group_id 単位で取得する（Conclude 戦略専用）。
     /// 未開始のセグメントはスキップする。
     pub(crate) fn collect_current_segment_final_values(
         &mut self,
@@ -235,9 +229,7 @@ impl TimelineManager {
         for (var_name, timeline) in &self.timelines {
             for entry in &timeline.entries {
                 if entry.group_id == group_id {
-                    // アクティブなセグメントを特定
                     if let Some(active_seg) = find_active_segment(&entry.segments, effective_time) {
-                        // アクティブセグメントの最終値 (progress_t=1.0) を取得
                         let val = entry.value_at(active_seg, 1.0, &mut self.intern_pool);
                         result.insert(var_name.clone(), val);
                     }
@@ -253,13 +245,11 @@ impl TimelineManager {
 ///
 /// `effective_time = (current_time - loop_start_time - pause_accumulated) * time_scale`
 /// Pause 中は pause 開始時点で固定。
-/// `loop_start_time` の初期値は `start_time` と同一のため、ループなし時は既存動作と互換。
 pub(crate) fn calculate_effective_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
     // pause_start は Paused の間だけある（pause が遷移と同時に入れ、resume が取る）。あればそこで時計を止める
     let now = instance.pause_start.unwrap_or(current_time);
     let raw_time = now - instance.loop_start_time - instance.pause_accumulated;
-    // time_scale は再生速度倍率（1.0 倍速が標準、2.0 で 2 倍速）
-    // time_scale が大きいほどタイムラインが速く進む
+    // time_scale は再生速度倍率（2.0 で 2 倍速）
     raw_time * instance.time_scale
 }
 
@@ -284,11 +274,10 @@ fn evaluate_segments(
     let segments = &entry.segments;
     let last_seg = segments.last()?;
 
-    // アクティブなセグメントを探す
     let mut prev: Option<&CompiledSegment> = None;
     for seg in segments {
         if effective_time < seg.start_time {
-            // まだこのセグメントに到達していない。隙間なら直前の終わりの値を保ち（dola-compiled-transition 要件 1.2）、最初の前なら from
+            // まだこのセグメントに到達していない。隙間なら直前の終わりの値を保ち、最初の前なら from
             return Some(match prev {
                 Some(p) => entry.value_at(p, 1.0, intern_pool),
                 None => entry.value_at(seg, 0.0, intern_pool),
@@ -298,20 +287,15 @@ fn evaluate_segments(
 
         let duration = seg.end_time - seg.start_time;
         if duration > 0.0 && effective_time < seg.end_time {
-            // このセグメント内
             let progress_t = (effective_time - seg.start_time) / duration;
             return Some(entry.value_at(seg, progress_t, intern_pool));
         }
-        // 終わったセグメント（即時のセグメントを含む）→ 次へ。後ろが無ければ下で最後の値を保つ
     }
 
-    // 最後のセグメントを過ぎた → 最後の値を保つ
     Some(entry.value_at(last_seg, 1.0, intern_pool))
 }
 
-/// effective_time 時点でアクティブなセグメントを検索する。
-/// Conclude 戦略の collect_current_segment_final_values で使用。
-/// 未開始セグメントはスキップし、アクティブなセグメントを返す。
+/// effective_time 時点でアクティブなセグメントを検索する。未開始セグメントはスキップする。
 fn find_active_segment(
     segments: &[CompiledSegment],
     effective_time: f64,
@@ -324,21 +308,17 @@ fn find_active_segment(
 
     for seg in segments {
         if effective_time < seg.start_time {
-            // まだこのセグメントに到達していない
             break;
         }
 
         let duration = seg.end_time - seg.start_time;
         if duration <= 0.0 {
-            // 即時遷移
             if effective_time >= seg.start_time {
                 active = Some(seg);
             }
         } else if effective_time < seg.end_time {
-            // このセグメント内
             return Some(seg);
         } else {
-            // このセグメントは終了済み → 次へ
             active = Some(seg);
         }
     }

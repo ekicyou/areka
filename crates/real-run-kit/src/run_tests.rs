@@ -1,4 +1,4 @@
-//! 既定の時間の大小（要件 1.8・D-13）。
+//! 既定の時間の大小。
 
 use super::Limits;
 use areka_mcp_bridge::config::Timeouts;

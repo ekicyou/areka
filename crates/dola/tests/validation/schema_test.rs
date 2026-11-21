@@ -1,5 +1,4 @@
 //! Validation tests for V1-V5 (schema version, keyframe names, variable/transition references)
-//! Tasks 7.6, 8.6
 
 use dola::*;
 use std::collections::BTreeMap;
@@ -86,7 +85,7 @@ mod error_accumulation_tests {
 }
 
 // =============================================================
-// 数値の規則（#29）: 有限・符号・範囲を外れた値は InvalidNumber で拒む
+// 数値の規則: 有限・符号・範囲を外れた値は InvalidNumber で拒む
 // =============================================================
 
 mod numeric_rule_tests {
@@ -220,7 +219,7 @@ mod numeric_rule_tests {
                 f64::NAN,
             ),
             (
-                // 有限でも大きすぎる制御点は補間を inf／NaN にあふれさせる（裁定 (a)）
+                // 有限でも大きすぎる制御点は補間を inf／NaN にあふれさせる
                 |d| {
                     trans(d).easing =
                         Some(EasingFunction::Parametric(ParametricEasing::CubicBezier {
@@ -385,7 +384,7 @@ mod v2_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        keyframe: Some("visible".to_string()), // duplicate!
+                        keyframe: Some("visible".to_string()),
                         ..Default::default()
                     },
                 ],
@@ -441,7 +440,7 @@ mod v3_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    keyframe: Some("start".to_string()), // reserved!
+                    keyframe: Some("start".to_string()),
                     ..Default::default()
                 }],
             },
@@ -454,7 +453,7 @@ mod v3_tests {
             DolaError::ReservedKeyframeName { storyboard, entry_index: 0, name }
                 if storyboard == "sb1" && name == "start"
         )));
-        // 場所がエラーの文に載る（#70）
+        // 場所がエラーの文に載る
         assert!(
             errors
                 .iter()
@@ -463,7 +462,7 @@ mod v3_tests {
         );
     }
 
-    /// Scalar の周回の待ちは min が 0 なので、負なら V15 の 1 件だけ（V16 の逆転は重ねない・#70）
+    /// Scalar の周回の待ちは min が 0 なので、負なら V15 の 1 件だけ（V16 の逆転は重ねない）
     #[test]
     fn negative_scalar_loop_offset_reports_one_error() {
         let mut doc = minimal_valid_doc();

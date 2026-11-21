@@ -1,8 +1,7 @@
-//! 右クリックメニューの「バルーン位置初期化」の葉（areka-P0-window-link-directives 要件 7.5〜7.7・
-//! design「reset_balloon_pos_frame」）。
+//! 右クリックメニューの「バルーン位置初期化」の葉。
 //!
 //! 選ぶと [`reset_balloon_positions`] をきっかけ「メニュー」で呼ぶ。対のイベントが無いので
-//! ゴーストへ知らせは送らず、答えも待たない（7.7）。
+//! ゴーストへ知らせは送らず、答えも待たない。
 
 use std::rc::Rc;
 
@@ -22,12 +21,12 @@ pub(crate) fn register(world: &mut World) {
     );
 }
 
-/// 選べる場面: 窓の組と材料（[`DefaultPlacementBasis`]）が在るとき（7.5）。答え待ちの灰色は無い。
+/// 選べる場面: 窓の組と材料（[`DefaultPlacementBasis`]）が在るとき。答え待ちの灰色は無い。
 pub(crate) fn reset_balloon_enabled(world: &World) -> bool {
     world.contains_resource::<GhostWindows>() && world.contains_resource::<DefaultPlacementBasis>()
 }
 
-/// 「バルーン位置初期化」の葉（要件 7.5〜7.7）。
+/// 「バルーン位置初期化」の葉。
 fn reset_balloon_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::ResetBalloonPosition).to_string(),

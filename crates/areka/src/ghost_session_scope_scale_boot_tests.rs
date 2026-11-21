@@ -1,5 +1,4 @@
-//! 本物の起動（切替の試験台・`boot_ghost` → `rewire_runtime_consumers` → `wire`）を通す結合テスト
-//! （spec shell-scale-linkage 要件 3.10・4.5・7.2）。
+//! 本物の起動（切替の試験台・`boot_ghost` → `rewire_runtime_consumers` → `wire`）を通す結合テスト。
 //!
 //! 起動の後に毎フレームの配線（`RuntimeWiring`）の表へ手で書き、MCP の `get_property`（受け口から汲む）と
 //! ゴーストの道（`ShioriHostSink` の `GetProperty`）の答えを見る。実の窓・実の画面は使わない。
@@ -144,7 +143,7 @@ fn answers(ghost: &str, values: [Option<&str>; 5]) -> Vec<Option<(String, ToolOu
         .collect()
 }
 
-/// 同じ時点に MCP とゴーストの道が同じ名前に同じ文字・同じ値なしを返す（要件 3.10・7.2）。
+/// 同じ時点に MCP とゴーストの道が同じ名前に同じ文字・同じ値なしを返す。
 ///
 /// # 非空虚性
 /// `rewire_runtime_consumers` の `wire` を外すと両方の道が全部「無い名前」で赤。
@@ -168,7 +167,7 @@ fn mcp_and_ghost_paths_answer_the_same_scale() {
     );
 }
 
-/// SHIORI だけの読み直し（配線し直しの 2 回目）の後も、新しい読み口が同じ表を読む（要件 4.5）。
+/// SHIORI だけの読み直し（配線し直しの 2 回目）の後も、新しい読み口が同じ表を読む。
 /// 読み直しの後に表を書き換えると、新しい読み口がその値を答える＝写しでなく同じ表。
 ///
 /// # 非空虚性
@@ -204,7 +203,7 @@ fn shiori_reload_reads_the_same_table() {
     );
 }
 
-/// B へ替えた（新しい毎フレームの配線）後は、A の表に書いた値を答えない（要件 4.5）。
+/// B へ替えた（新しい毎フレームの配線）後は、A の表に書いた値を答えない。
 ///
 /// # 非空虚性
 /// 表をプロセスで 1 つ持つか、切替で前の配線の表を使い回すと、替えた後も `150,150` を答えて赤。

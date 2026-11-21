@@ -1,4 +1,4 @@
-//! 起動オプションの読み方（areka-P0-startup-options-core）。
+//! 起動オプションの読み方。
 //!
 //! 引数の列を読む口と、読んだ中身の型。読んだ値は `main` が起動の解決・MCP の待受・
 //! SHIORI の結線へ渡す。
@@ -21,9 +21,9 @@ pub(crate) struct StartupOptions {
     pub help: bool,
     /// `--offline-dump` が（値の有無に関わらず）渡されたら Some。
     pub offline: Option<OfflineDumpRequest>,
-    /// `--option readonly` が渡された（readonly-mode 要件 1.1）。既定は偽。
+    /// `--option readonly` が渡された。既定は偽。
     pub readonly: bool,
-    /// `--install` の値と語（startup-install-option 要件 1）。
+    /// `--install` の値と語。
     pub install: InstallArgs,
 }
 
@@ -54,11 +54,11 @@ pub(crate) struct OfflineDumpRequest {
 /// 起動の求め（起動の解決へ渡す）。
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct BootRequest {
-    /// 位置の引数の 1 つ目（`--ghost` が渡されたら None＝2.4）。
+    /// 位置の引数の 1 つ目（`--ghost` が渡されたら None）。
     pub positional_ghost: Option<PathBuf>,
-    /// 位置の引数の 2 つ目（2.5）。
+    /// 位置の引数の 2 つ目。
     pub positional_balloon: Option<PathBuf>,
-    /// `--ghost` の最初の値（値なしは None・残りは記録だけ＝4.5・4.7）。
+    /// `--ghost` の最初の値（値なしは None・残りは記録だけ）。
     pub ghost: Option<String>,
     pub random: bool,
     pub no_boot_check: bool,
@@ -72,7 +72,7 @@ pub(crate) enum ModulePolicy {
     Skip,
 }
 
-/// 本物の口: OS の引数を読み（1.14）、読み方を通し、記録を出して中身を返す。
+/// 本物の口: OS の引数を読み、読み方を通し、記録を出して中身を返す。
 /// 記録の初期化の後に呼ぶ。
 pub(crate) fn read() -> StartupOptions {
     read_from(&std::env::args_os().collect::<Vec<_>>())

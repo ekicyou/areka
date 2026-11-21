@@ -1,4 +1,4 @@
-//! `at` placement and pure-keyframe time resolution.
+//! `at` 配置と純粋キーフレームの時刻解決
 
 use super::*;
 
@@ -273,7 +273,7 @@ fn at_with_negative_offset() {
 }
 
 /// from を省いた at の遷移は、処理の順でなく時刻の上で直前のセグメントの to から始まる。
-/// キーフレームの並べ方を入れ替えても from は同じ（完了 dola-compiled-transition 要件 4.2）
+/// キーフレームの並べ方を入れ替えても from は同じ
 #[test]
 fn at_from_follows_previous_segment_in_time_regardless_of_keyframe_order() {
     let at_entry = |kf: &str, to: f64| StoryboardEntry {

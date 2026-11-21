@@ -1,4 +1,4 @@
-//! `ChangeCueSink` の自己選別と送り出しの決定論テスト（areka-P0-ghost-shell-balloon-switch 要件 1.2・1.3・1.10・8.5）。
+//! `ChangeCueSink` の自己選別と送り出しの決定論テスト。
 //!
 //! 確かめること: `\![change,ghost,名]` が名前を無変形で要求 1 件（`raise_event` 偽）にすること・
 //! `--option=raise-event` で真になること・`shell`／`balloon`／裸の `change`／他の名前が 0 件で
@@ -42,7 +42,7 @@ fn raw(name: &str, raise_event: bool) -> ChangeRequestRaw {
 
 // ---------------------------------------------------------------- 受理
 
-/// `\![change,ghost,名]` は名前を無変形で運ぶ要求 1 件（`OnGhostChanging` は送らない・areka-P0-ghost-shell-balloon-switch 要件 1.2）。
+/// `\![change,ghost,名]` は名前を無変形で運ぶ要求 1 件（`OnGhostChanging` は送らない）。
 #[test]
 fn change_ghost_with_name_sends_one_request_without_raise_event() {
     let (sent, events) = emit_one("change", &["ghost", "Emily/Phase 4.5"]);
@@ -50,7 +50,7 @@ fn change_ghost_with_name_sends_one_request_without_raise_event() {
     assert_eq!(warns(&events), Vec::<Option<&str>>::new(), "警告なし");
 }
 
-/// `--option=raise-event` 付きは `raise_event` 真（areka-P0-ghost-shell-balloon-switch 要件 1.3）。
+/// `--option=raise-event` 付きは `raise_event` 真。
 #[test]
 fn raise_event_option_sets_raise_event() {
     let (sent, events) = emit_one("change", &["ghost", "B", "--option=raise-event"]);
@@ -88,7 +88,7 @@ fn missing_name_warns_and_sends_nothing() {
 
 // ---------------------------------------------------------------- 担当外
 
-/// `shell`／`balloon`・裸の `change`・他の名前は 0 件で警告も出さない（areka-P0-ghost-shell-balloon-switch 要件 1.10・8.5）。
+/// `shell`／`balloon`・裸の `change`・他の名前は 0 件で警告も出さない。
 #[test]
 fn not_ours_is_benign_skip_without_warning() {
     let cases: [(&str, &[&str]); 4] = [

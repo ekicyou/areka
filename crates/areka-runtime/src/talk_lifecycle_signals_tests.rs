@@ -1,6 +1,5 @@
 // =============================================================================
-// BalloonLifecycleSink の知らせの檻（areka-P0-balloon-lifecycle-events
-// 要件 5.2 / 5.6 / 7.5 / 9.1〜9.4 / 9.8）
+// BalloonLifecycleSink の知らせの檻
 //
 //   ⑴ 配送から受け取った番号が開始の合図に載る（受け取っていなければ無し）
 //   ⑵ 落ちるときの終わりの合図が、注入した時計の talk 相対秒で 1 回だけ出る
@@ -8,7 +7,7 @@
 //   ⑶ `\![set,balloontimeout,時間]` の時間の欄の読み（正・0・負・省略・空・読めない値）と、
 //      他の `\![set,…]` を拾わないこと・拾うたびの 1 行の記録
 //
-// 時刻はすべて注入した時計で進める（実時間の待機なし・areka-P0-balloon-lifecycle-events 要件 8.2）。
+// 時刻はすべて注入した時計で進める（実時間の待機なし）。
 // =============================================================================
 
 use super::*;
@@ -106,7 +105,7 @@ fn talk_started_without_begin_talk_has_no_number() {
 // -----------------------------------------------------------------------------
 
 /// 落ちた瞬間の talk 相対秒（注入した時計の値そのもの・丸めない）で、終わりの合図が 1 回だけ出て、
-/// そのトークの合図の最後に並ぶ（areka-P0-balloon-lifecycle-events 要件 5.2）。
+/// そのトークの合図の最後に並ぶ。
 #[test]
 fn talk_ended_carries_the_injected_clock_once_when_dropped() {
     let (tx, rx) = channel();
@@ -119,7 +118,6 @@ fn talk_ended_carries_the_injected_clock_once_when_dropped() {
 
     let mut sink = talk_sink(&registered, Some(TalkId(3)));
     sink.emit(text_cue(0.0, 2.0));
-    // 台本の途中で止まった: 壁 101.234 で受け口が落ちる。
     set_now(&now, 101.234);
     drop(sink);
 
@@ -157,8 +155,7 @@ fn sink_that_sent_nothing_sends_no_talk_ended() {
     );
 }
 
-/// 時計に起点が無ければ、終わりの合図は時刻無しで出て、時刻が取れなかったことが記録される
-/// （areka-P0-balloon-lifecycle-events 要件 5.6）。
+/// 時計に起点が無ければ、終わりの合図は時刻無しで出て、時刻が取れなかったことが記録される。
 #[test]
 fn talk_ended_without_epoch_has_no_time_and_is_logged() {
     let (tx, rx) = channel();
@@ -197,7 +194,7 @@ fn talk_clock_now_talk_time_reads_the_injected_clock() {
 // ⑶ 待ち時間の指定
 // -----------------------------------------------------------------------------
 
-/// 時間の欄の読み（areka-P0-balloon-lifecycle-events 要件 9.1〜9.4）。
+/// 時間の欄の読み。
 #[test]
 fn parse_balloon_timeout_reads_every_shape_of_the_value() {
     let cases: &[(Option<&str>, TalkTimeout, bool)] = &[
@@ -253,7 +250,7 @@ fn sink_picks_only_set_balloontimeout() {
     );
 }
 
-/// 拾うたびに 1 行記録する。読めた値は INFO、読めなかった値は WARN でその値を載せる（areka-P0-balloon-lifecycle-events 要件 7.5）。
+/// 拾うたびに 1 行記録する。読めた値は INFO、読めなかった値は WARN でその値を載せる。
 #[test]
 fn each_pick_is_logged_in_one_line_with_the_unreadable_value() {
     let (tx, _rx) = channel();

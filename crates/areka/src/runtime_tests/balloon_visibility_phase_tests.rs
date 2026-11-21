@@ -1,15 +1,15 @@
 // =============================================================================
-// バルーン可視性の配線層（相関数）の決定論テスト（task 4.4）
+// バルーン可視性の配線層（相関数）の決定論テスト
 //
 // 判断そのものの網羅表は親の `balloon_visibility_tests.rs`（判断中核 `decide`）が所有する。
 // ここが押さえるのは**配線**だけである:
 //   ⑴ 観測の収集（可視状態・可視グリフ数・ポインタ滞在・ドラッグ中・信号）
 //   ⑵ 判断が返した行動の発行（表示は専用入口・非表示は既存漏斗）と失敗時の縮退
-//   ⑶ 判断が返した事象のログへの写し（design 決定 D10 の水準・フィールド）
+//   ⑶ 判断が返した事象のログへの写し（水準・フィールド）
 //   ⑷ 自分が発行していない可視性変化の検出（`trigger=explicit`）と滞在記録の掃除
 //
-// GPU も実時間の待機も用いない。時刻は `FrameTime` 資源と `TalkClock` の epoch で注入する
-// （Requirement 9.2 / 9.3）。表示層は実 `EmoPresenter` を headless に用いる——`attach_target`
+// GPU も実時間の待機も用いない。時刻は `FrameTime` 資源と `TalkClock` の epoch で注入する。
+// 表示層は実 `EmoPresenter` を headless に用いる——`attach_target`
 // は GPU 資源を要さず、可視状態の照会（`target_visible`）と非表示の適用（`apply(Hide)`）は
 // そのまま通る。
 // =============================================================================
@@ -42,7 +42,7 @@ use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use areka_runtime::target_map::balloon_target;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 use wintf::ecs::FrameTime;
-// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+// 私有の欄は渡し口から読み書きする。
 use areka_runtime::balloon_visibility::test_support::{
     display_end, observation_failure_logged_runtime, per_scope,
 };
@@ -179,7 +179,7 @@ fn calibrate() {
 // ⑴ 観測が得られない場合は理由を記録して当該 scope のみ見送る
 // ---------------------------------------------------------------------------
 
-/// 装着済みバルーンが 1 つも無いフレームは完全に無音である（Requirement 8.6）。
+/// 装着済みバルーンが 1 つも無いフレームは完全に無音である。
 ///
 /// 起動直後の全フレームがこの形になるため、ここで 1 行でも出ると実機ログが埋まる。
 #[test]
@@ -200,8 +200,7 @@ fn frame_without_attached_balloon_is_silent() {
     );
 }
 
-/// 表示層に target が無い scope は、理由を誤りレベルで 1 回記録して**当該 scope だけ**見送る
-/// （Requirement 8.4・タスクの「当該 scope のみ見送る」）。
+/// 表示層に target が無い scope は、理由を誤りレベルで 1 回記録して**当該 scope だけ**見送る。
 ///
 /// 見送りが scope 単位であることを示すため、観測できない scope 0 と健全な scope 1 を同じ
 /// フレームへ並べる。両者に「前フレームは可視だった」記憶を置いておくと、健全な側だけが外因
@@ -268,11 +267,11 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑵ 表示の発行が失敗したときの縮退（Requirement 4.4・8.4）
+// ⑵ 表示の発行が失敗したときの縮退
 // ---------------------------------------------------------------------------
 
 /// 表示の発行が失敗した scope は、誤りレベルで記録したうえで**次フレームに偽の外因遷移を
-/// 生まない**（tasks.md「タスク 4.4 の義務」＝発行前の値への巻き戻し）。
+/// 生まない**。
 ///
 /// headless の表示層は「表示が一度も確立していない」ため `show_target` が必ず失敗する。判断中核は
 /// `Show` を積む時点で `prev_visible` を真にするので、巻き戻しが無ければ次フレームの差分検出が
@@ -326,7 +325,7 @@ fn failed_show_is_logged_and_rolled_back() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑶ 自分が発行していない可視性の変化（Requirement 8.1 の「明示指令」）
+// ⑶ 自分が発行していない可視性の変化
 // ---------------------------------------------------------------------------
 
 /// 前フレームとの差分で外因の非表示を検出し、`trigger=explicit` で記録して滞在記録を掃除する。
@@ -384,7 +383,7 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
 // ⑷ 表示ライフサイクル信号の取り出し
 // ---------------------------------------------------------------------------
 
-/// 信号は毎フレーム**全件**取り出し、占有終端の畳み込みへ渡す（Requirements 4.1 / 4.5）。
+/// 信号は毎フレーム**全件**取り出し、占有終端の畳み込みへ渡す。
 #[test]
 fn lifecycle_signals_are_drained_in_full() {
     let mut harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
@@ -411,7 +410,7 @@ fn lifecycle_signals_are_drained_in_full() {
     );
 }
 
-/// 観測が取れない軸は `None` のまま運ぶ（既定値へ潰さない・Requirement 5.5）。
+/// 観測が取れない軸は `None` のまま運ぶ（既定値へ潰さない）。
 ///
 /// 文字層ランタイムを外から借りたままにして借用失敗を作り、可視グリフ数が観測なしになること・
 /// 記録が 1 回であること・借用が戻れば武装し直すことを見る。
@@ -521,7 +520,7 @@ fn glyphs_are_not_observed_without_injected_time() {
     assert_eq!(observations.scopes[&0].visible_glyphs, None);
 }
 
-/// ポインタ配線が world に無ければ滞在は観測なし＝抑止なしへ倒し、記録は 1 回（Requirement 5.5）。
+/// ポインタ配線が world に無ければ滞在は観測なし＝抑止なしへ倒し、記録は 1 回。
 #[test]
 fn missing_pointer_wiring_is_logged_once_and_suppresses_nothing() {
     let harness = Harness::new().with_balloon_scope(0);
@@ -564,7 +563,7 @@ fn missing_pointer_wiring_is_logged_once_and_suppresses_nothing() {
     );
 }
 
-/// ポインタ配線が在れば scope ごとの滞在をそのまま観測する（Requirement 5.2）。
+/// ポインタ配線が在れば scope ごとの滞在をそのまま観測する。
 #[test]
 fn pointer_residency_is_observed_per_scope() {
     let harness = Harness::new().with_balloon_scope(0).with_balloon_scope(1);
@@ -597,11 +596,10 @@ fn pointer_residency_is_observed_per_scope() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑸ 非表示の発行（既存漏斗・Requirements 4.4 / 6.7）
+// ⑸ 非表示の発行（既存漏斗）
 // ---------------------------------------------------------------------------
 
-/// 非表示はバルーン target の可視性だけを変え、キャラクター窓の target には触れない
-/// （Requirements 6.7・4.4）。
+/// 非表示はバルーン target の可視性だけを変え、キャラクター窓の target には触れない。
 #[test]
 fn hide_touches_only_the_balloon_target() {
     let mut world = world_at(0.0);
@@ -621,12 +619,12 @@ fn hide_touches_only_the_balloon_target() {
     let mut state = BalloonVisibilityState::default();
     let observations = VisibilityObservations::default();
 
-    // 発行の観測は表示層が非表示の適用点で出す 1 行（`presenter/hub.rs:125`）で行う。可視状態の
+    // 発行の観測は表示層が非表示の適用点で出す 1 行（`presenter/hub.rs`）で行う。可視状態の
     // 照会は使えない——装着直後の target は既に不可視であり、発行を丸ごと取り除いても同じ値を
     // 返す（＝どんな実装でも通る空虚な主張になる）。
     //
     // 同じ捕捉窓へ**未装着 scope への非表示**を 1 件混ぜる。表示層は未装着 target に対しても
-    // 非表示の適用点で 1 行出す（同 `:117`）ため、「キャラクター窓の target が現れない」という
+    // 非表示の適用点で 1 行出すため、「キャラクター窓の target が現れない」という
     // 否定側の主張が、窓が何も捕まえていないことによって恒真になっていないことを同時に示せる。
     let (outcome, events) = capture(|| {
         issue_actions(
@@ -706,10 +704,10 @@ fn hover_residency_is_cleared_for_hidden_scopes_only() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑹ ログの水準とフィールド（design 決定 D10・Requirements 8.1〜8.5）
+// ⑹ ログの水準とフィールド
 // ---------------------------------------------------------------------------
 
-/// 判断が返した事象は D10 の水準と語彙で 1 行ずつ出る。
+/// 判断が返した事象は 水準と語彙で 1 行ずつ出る。
 #[test]
 fn decision_events_are_written_with_the_agreed_level_and_fields() {
     let logs = vec![
@@ -818,7 +816,7 @@ fn transition_of_a_show_that_did_not_take_is_not_written() {
     );
 }
 
-/// 信号の受信端が切断されたら誤りレベルで 1 回だけ記録する（design「観測の収集（配線層）」）。
+/// 信号の受信端が切断されたら誤りレベルで 1 回だけ記録する。
 #[test]
 fn disconnected_lifecycle_channel_is_logged_once() {
     let mut harness = Harness::new().with_balloon_scope(0).with_talk_epoch();

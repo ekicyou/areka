@@ -1,4 +1,4 @@
-//! 読み取りだけの走りの更新の断り（readonly-mode・design「UpdateRefusal」）。
+//! 読み取りだけの走りの更新の断り。
 //!
 //! 段・預かり・背景のスレッドには触れず、ネットワークへも行かない。readonly の SSP の測り
 //! （2026-10-23）どおり、成否の欄が空の `OnUpdateResultEx` → `OnUpdateResult` だけを送る。
@@ -11,7 +11,7 @@ use super::{RawUpdateRequest, SummaryKind, UpdateReason, desk};
 use crate::ghost_session::GhostSlot;
 
 /// 対象を解き、置き場のゴーストへ Ex → Result を返事なしで 1 件ずつ送り（対象が 0 なら送らない）、
-/// `info!(readonly_refused)` を 1 件残す（送れたかを添える・要件 7.3〜7.5・11.3）。
+/// `info!(readonly_refused)` を 1 件残す（送れたかを添える）。
 pub(super) fn refuse(world: &World, raw: &RawUpdateRequest, reason: UpdateReason) {
     let targets = desk::resolve_targets(world, raw);
     let kanade = world

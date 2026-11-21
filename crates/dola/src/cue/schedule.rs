@@ -12,7 +12,7 @@ use super::command::BarrierKind;
 ///
 /// 格子に載る値どうしの結果は Tick の式 `n as f64 / 1000.0` と同じ値になる（例 0.15＋0.8＝0.95。
 /// 素の和は 0.9500000000000001 で、ちょうどの刻みで届かない）。
-// shortcut: f64 の秒のあいだだけの継ぎ。dola-interrupt-ticks で時刻が整数になったら消す
+// shortcut: f64 の秒のあいだだけの継ぎ。時刻が整数になったら消す
 pub fn sum_on_ms_grid(a: f64, b: f64) -> f64 {
     let on_grid = |x: f64| x.is_finite() && (x * 1000.0).round() / 1000.0 == x;
     if on_grid(a) && on_grid(b) {
@@ -75,7 +75,7 @@ pub struct TimedSchedule<T> {
     /// tick が届かないことがあるため、引き算は使わない。
     current_time: f64,
     /// 占有終了 horizon（相対オフセット・0 ベース）。台本の全 cue の
-    /// `max(start_time + duration)` を canonical 変換が焼き込む（D6）。
+    /// `max(start_time + duration)` を canonical 変換が焼き込む。
     ///
     /// cue は点でなく区間 `[start, start+duration)` ゆえ、**entries を配り終えた**（＝
     /// 最後の cue の**配送時刻**に達した）だけでは talk は完了でなく、**現在時刻が
@@ -114,8 +114,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// エントリを時刻順ソート維持で挿入（0 ベース相対オフセット）。
     /// 降順ソートを維持する。テストの手組み用（本番は `insert_each`）。
     ///
-    /// NaN オフセットは `offset >= 0.0` が false となり debug_assert が発火する
-    /// （schedule/tests.rs で特性化済み）。
+    /// NaN オフセットは `offset >= 0.0` が false となり debug_assert が発火する。
     #[cfg(test)]
     pub(crate) fn insert(&mut self, entry: Entry<T>) {
         debug_assert!(
@@ -162,9 +161,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// NOTE: `current_time`（または start_time）が NaN の場合、下の全ガード
     /// （手前チェック・冪等性チェック）と本体の「届いていない」の比べ
     /// （`sum_on_ms_grid(start_time, entry_offset) > current_time`）がすべて false になるため、
-    /// 最初のバリアまでの全エントリが即時配信される（時刻入力の有限性は検証されない。
-    /// schedule/tests.rs の `tick_with_nan_time_delivers_all_pending_payloads`
-    /// で特性化済み）。
+    /// 最初のバリアまでの全エントリが即時配信される（時刻入力の有限性は検証されない）。
     // 到達の比べは NaN を「届いた」に倒すため、わざと `>` の否定で書く
     #[allow(clippy::neg_cmp_op_on_partial_ord)]
     pub fn tick(&mut self, current_time: f64) {
@@ -172,12 +169,10 @@ impl<T: Clone + Debug> TimedSchedule<T> {
             return;
         }
 
-        // 冪等性: 同一時刻で再呼び出し → バッファを変更しない
         if current_time <= self.current_time && !self.ready_buffer.is_empty() {
             return;
         }
 
-        // バリア中は外部解除待ち
         if self.current_barrier.is_some() {
             return;
         }
@@ -196,11 +191,10 @@ impl<T: Clone + Debug> TimedSchedule<T> {
                     self.ready_buffer.push(payload);
                 }
                 // 選択待ちの `timeout` は上位層（kanade の期限の判定）へ運ぶ指令で、再生層はこれで
-                // 区切りを飛ばしも解きもしない。解けるのは外からの `notify_barrier_resolved` だけ
-                // （areka-P0-choice-timeout-directive 要件 5.1〜5.3）。
+                // 区切りを飛ばしも解きもしない。解けるのは外からの `notify_barrier_resolved` だけ。
                 Entry::Barrier(_, kind) => {
                     self.current_barrier = Some(kind);
-                    return; // バリア到達で停止
+                    return;
                 }
             }
         }
@@ -252,7 +246,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     ///
     /// entries 枯渇（＝最後の cue の**配送時刻**到達）だけでは完了とせず、cue を区間
     /// `[start, start+duration)` と見て**占有終了 horizon**（`max(start+duration)`）到達まで
-    /// 完了扱いしない（末尾 Wait・最終 Text の duration を終端で落とさない・D6/R2.5）。
+    /// 完了扱いしない（末尾 Wait・最終 Text の duration を終端で落とさない）。
     ///
     /// 閾値は [`occupancy_horizon`](Self::occupancy_horizon) と同じ `start_time` と `horizon` の和。
     ///
@@ -270,7 +264,7 @@ impl<T> TimedSchedule<T> {
     /// 占有終了 horizon の**絶対時刻** = アンカー `start_time` と相対 horizon の和（`sum_on_ms_grid`）。
     ///
     /// [`is_completed`](Self::is_completed) が閾値として見ている占有区間の終端を、
-    /// 上位層が絶対時刻として照会するための口（R7.2）。値は [`tick`](Self::tick) の
+    /// 上位層が絶対時刻として照会するための口。値は [`tick`](Self::tick) の
     /// 進行では変化しない。[`crate::cue::to_talk_schedule`] で組んだ予定では、台本の
     /// [`CueSheet::absolute_end_time`](crate::cue::CueSheet::absolute_end_time) と同じ値になる
     /// （両方が同じ相対の終わりの関数と同じ和を使う。非有限・負の長さも同じ clamp を通る）。

@@ -1,4 +1,4 @@
-//! 画面を出す間だけスレッドを v2 に囲む部品のテスト（alert-dialog-per-monitor-dpi）。
+//! 画面を出す間だけスレッドを v2 に囲む部品のテスト。
 //!
 //! 決定論のテスト D1〜D5（画面は出さない・`TaskDialogIndirect` は呼ばない）: 偽の切り替えで
 //! 囲んで戻す順と替えられなかったときの記録（D1〜D3）、本物の切り替えでの前と後（D4・新しいスレッド）、
@@ -64,7 +64,7 @@ fn wrap_with_fake<T>(
     (out, steps.into_inner(), events)
 }
 
-/// D1（要件 3.1）: 前の扱いが有効なら「v2」「処理」「前の扱い」の順で、処理の戻り値がそのまま返り、記録は 0 件。
+/// D1: 前の扱いが有効なら「v2」「処理」「前の扱い」の順で、処理の戻り値がそのまま返り、記録は 0 件。
 #[test]
 fn d1_wraps_and_restores_previous_context_in_order() {
     let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, || 42);
@@ -80,7 +80,7 @@ fn d1_wraps_and_restores_previous_context_in_order() {
     assert!(events.is_empty(), "記録は 0 件: {events:?}");
 }
 
-/// D2（要件 1.5）: 替えられなかったら戻さずに今の扱いのまま 1 回出し、warn を欄 `dialog` 付きで 1 件残す。
+/// D2: 替えられなかったら戻さずに今の扱いのまま 1 回出し、warn を欄 `dialog` 付きで 1 件残す。
 #[test]
 fn d2_unchanged_context_shows_once_without_restore_and_warns() {
     let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT::default(), || 7);
@@ -99,7 +99,7 @@ fn d2_unchanged_context_shows_once_without_restore_and_warns() {
     assert_eq!(ev.field_str("dialog"), Some("ask"));
 }
 
-/// D3（要件 3.2）: 処理が失敗を返しても前の扱いへ戻し、失敗をそのまま返す。
+/// D3: 処理が失敗を返しても前の扱いへ戻し、失敗をそのまま返す。
 #[test]
 fn d3_restores_context_even_when_show_fails() {
     let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, || {
@@ -145,19 +145,19 @@ fn real_switch_wraps_and_restores(start: DPI_AWARENESS_CONTEXT) {
     .expect("D4 のスレッドが panic した");
 }
 
-/// D4（要件 1.3・3.1）: 非対応のスレッドから本物の切り替えで囲む。
+/// D4: 非対応のスレッドから本物の切り替えで囲む。
 #[test]
 fn d4_real_switch_from_unaware_thread() {
     real_switch_wraps_and_restores(DPI_AWARENESS_CONTEXT_UNAWARE);
 }
 
-/// D4（要件 1.3・3.1）: v2 のスレッドから本物の切り替えで囲む。
+/// D4: v2 のスレッドから本物の切り替えで囲む。
 #[test]
 fn d4_real_switch_from_v2_thread() {
     real_switch_wraps_and_restores(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 }
 
-/// D5（要件 2.1）: 「はい」と読むのは `IDYES` だけで、閉じたと失敗は「出せなかった」。
+/// D5: 「はい」と読むのは `IDYES` だけで、閉じたと失敗は「出せなかった」。
 #[test]
 fn d5_yes_no_answer_mapping() {
     use super::{YesNo, yes_no_answer};
@@ -169,7 +169,7 @@ fn d5_yes_no_answer_mapping() {
 
 // ---------------------------------------------------------------- 実機の測り（#[ignore]）
 
-/// 測りの画面の題名（案 B の測りの窓を探す鍵）。
+/// 測りの画面の題名（測りの窓を探す鍵）。
 const PROBE_TITLE: &str = "areka-alert-dpi-probe";
 /// 測りの画面の本文。
 const PROBE_BODY: &str = "areka alert DPI probe (closes by itself)";
@@ -406,7 +406,7 @@ fn task_dialog_wrapped() -> i32 {
     super::with_thread_per_monitor("alert", super::set_thread_dpi_context, task_dialog)
 }
 
-/// 案 B の測り: タスクダイアログ（comctl32 v6）の窓の扱い。測るだけで v2 は判定しない（進行役が読む）。
+/// 測り: タスクダイアログ（comctl32 v6）の窓の扱い。測るだけで v2 は判定しない（進行役が読む）。
 #[test]
 #[ignore = "real dialog: shows a task dialog on the desktop"]
 fn probe_alert_task_dialog_window_dpi() {
@@ -464,7 +464,7 @@ fn production_warning() {
 }
 
 /// 本番の 3 つの口を 1 つずつ、非対応のスレッドから抑止なしで出し、窓が v2 で、最前面が
-/// はい／いいえと警告だけに立ち、はい／いいえの答えが「はい」であることを確かめる（要件 1.4・2.1・4.7）。
+/// はい／いいえと警告だけに立ち、はい／いいえの答えが「はい」であることを確かめる。
 /// 画面ごとにおよそ 8 秒残すので、その間に撮る。前面は行に載せるだけで assert しない。
 ///
 /// 走らせる前の注意: `AREKA_APP_SMOKE_EXIT_MS`（`raise` が自分で読んで抑える）や `AREKA_NO_ALERT`

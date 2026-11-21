@@ -19,15 +19,13 @@
 //!
 //! # 本番入口（`frame_system`）を通す檻を 1 本持つ
 //!
-//! ほかのテストはいずれも [`FrameHarness::run_placement_phases`] を駆動する。これは本番の相順を
-//! **ハーネス側へ写した実装**であって `frame_system` を通らないので、本番の呼出が残った
-//! まま**到達不能**になっても（`if false` で包む等）1 本も赤にならない。
-//! `frame_work_area_resnap_tests.rs` の本文走査は呼出の**存在と前後関係**しか押さえない。
-//!
-//! [`the_production_frame_system_reaches_all_three_placement_call_sites`] がその引受先である。
-//! 本番の相順所有者 `frame_system` をそのまま 2 フレーム回し、同期段・拡大率の相・作業
-//! 領域再スナップの 3 呼出が**到達可能**であることを、それぞれ固有の観測（源の作り直し／
-//! `origin=DpiReproject` の書込／`origin=WorkAreaResnap` の書込）で示す。
+//! ほかのテストは [`FrameHarness::run_placement_phases`]（本番の相順をハーネス側へ写した実装）を
+//! 駆動して `frame_system` を通らないので、本番の呼出が残ったまま到達不能になっても（`if false`
+//! で包む等）赤にならない。`frame_work_area_resnap_tests.rs` の本文走査は呼出の存在と前後関係しか
+//! 押さえない。[`the_production_frame_system_reaches_all_three_placement_call_sites`] が引受先で、
+//! `frame_system` を 2 フレーム回し、同期段・拡大率の相・作業領域再スナップの 3 呼出が到達可能で
+//! あることを、固有の観測（源の作り直し／`origin=DpiReproject` の書込／`origin=WorkAreaResnap`
+//! の書込）で示す。
 //!
 //! # 零件の主張には陽性の対を同じ本体へ置く
 //!
@@ -35,17 +33,12 @@
 //! どれも空虚に緑になるので、**同じテスト本体の内側**で同じ駆動口が陽性側でも効くことを
 //! 続けて主張する（同一表 → 変化ある表で書込／0 台 → 台が戻れば書込）。
 //!
-//! # 「現状維持」が指すのは**寸**である（本文の字句を狭めて読んでいる）
+//! # 「現状維持」が指すのは**寸**である
 //!
-//! **約束の本文は「当該窓の位置と寸を変更せずに」と書く**が、本ファイルはそれを**寸だけ**
-//! と読む。「再導出不能なら現状維持」は位置の権威と寸の権威の分離と
-//! 対になっており、`refresh_scale` が `None`＝**寸不変**、**位置は独立に判断**、を指すからである。実装も
-//! そのとおりで、`frame/dpi.rs` の `None` 腕は窓寸を 1 bit も触らず
-//! `reproject_char_window_at_current_size` で現寸のまま射影 T を一度通す。
-//!
-//! ゆえに本ファイルは「寸が動かないこと」と「他窓の遷移が続くこと」を問い、位置の側は
-//! 接地点規約が保たれることとして問う。**本文の字句だけを読むと位置も不動に見える**ので、
-//! この段落を根拠として残す（黙って狭めない）。
+//! 再導出不能な窓の「現状維持」は寸だけを指す。`refresh_scale` が `None` ＝寸不変で、位置は独立に
+//! 判断される（`frame/dpi.rs` の `None` 腕は窓寸を触らず `reproject_char_window_at_current_size`
+//! で現寸のまま射影 T を一度通す）。ゆえに本ファイルは「寸が動かないこと」と「他窓の遷移が続く
+//! こと」を問い、位置は接地点規約が保たれることとして問う。
 
 use std::sync::mpsc;
 
@@ -82,9 +75,8 @@ const WAIT_FRAMES: u32 = 3;
 
 /// どのモニタにも属さない位置（両モニタの**左**の外・y は両モニタの域内）。
 ///
-/// 帰属は**中心**で決まる（`monitor_containing`／`work_area_for_window_with_origin`）。最近傍は
-/// clamp 点との自乗距離で決まるので、ゴーストが居たモニタ（index 0）が最近傍になる側へ置く
-/// ——隣接モニタ（右側・x が 2574 以上）より確実に近い左外へ出す。
+/// 帰属は**中心**で決まる（`monitor_containing`／`work_area_for_window_with_origin`）。ゴーストが
+/// 居たモニタ（index 0）が最近傍になる左外へ置く。
 const CHAR_OFF_ALL_MONITORS: Point = Point { x: -3000, y: 700 };
 
 // ---------------------------------------------------------------------------
@@ -96,14 +88,11 @@ const CHAR_OFF_ALL_MONITORS: Point = Point { x: -3000, y: 700 };
 /// 「待ち札 0」の陽性の対は同じ本体の内側——待たずに通ったからこそ書込が出て寸が変わる。
 ///
 /// **⚠ 拡大率遷移での追従オフセットの追随に対して本檻は空振りであり、追随の証拠にならない。**
-/// 本檻は待ち札・書込回数・**寸**の追従を主張するのみで、`BalloonFollow.offset` の値について
-/// は何も主張しない（[`move_scope_to`] が読む `offset` は遷移を起こす**前**に二体を隣接モニタ
-/// へ揃えて置くための配置用であり、主張の対象ではない）。遷移そのものは起きるが、追随が
-/// 入っても出なくても本檻の主張は同じ値を取る。
-///
-/// 実測: 追随の適用（`frame::balloon_offset_follow::rescale_balloon_follow_offset`
-/// の呼出）を外した走行で、本件は 120／192 とも**緑のまま**であった（同走行では追随の檻 13 件
-/// が赤になる）。ゆえに**本件が緑であることを「追随を壊していない」の根拠に使ってはならない**。
+/// 本檻は待ち札・書込回数・**寸**の追従を主張するのみで、`BalloonFollow.offset` の値は主張しない
+/// （[`move_scope_to`] が読む `offset` は遷移の**前**に二体を隣接モニタへ揃えて置くための配置用）。
+/// 追随の適用（`frame::balloon_offset_follow::rescale_balloon_follow_offset` の呼出）を外した走行
+/// でも本件は 120／192 とも**緑のまま**である。本件が緑であることを「追随を壊していない」の根拠に
+/// 使ってはならない。
 fn a_window_moved_to_another_monitor_never_waits_at(dpi: u16) {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
@@ -431,7 +420,7 @@ fn an_empty_monitor_table_keeps_everything_and_warns() {
     }
 }
 
-/// **「帰属不能」は「解決できない」ではない**（開発者の裁定）。
+/// **「帰属不能」は「解決できない」ではない**。
 ///
 /// どのモニタにも中心が乗らない窓は最近傍で**解決される**——現状維持で画面外に取り残さない。
 /// 判断の軸は「ゴーストが触れなくなる事態を避けること」であり、モニタ 0 台のときだけが
@@ -587,14 +576,11 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at_192() {
 ///
 /// # なぜこの 1 本が要るのか
 ///
-/// 本ファイルのほかのテストと、兄弟の `frame_transition_branch_wait_tests.rs`／
-/// `frame_work_area_sync_tests.rs`／`frame_work_area_resnap_tests.rs`／
-/// `frame_dpi_sync_hold_tests.rs` は、本文の走査のテストを除き
-/// [`FrameHarness`] の駆動口（[`FrameHarness::run_placement_phases`] ほか）を叩く。あれは本番の相順を**ハーネス側へ写した
-/// 実装**であって [`frame_system`] を通らない。ゆえに本番の呼出を残したまま `if false` で
-/// 包んで**到達不能**にしても、挙動テストは 1 本も赤にならない。本文走査（`the_resnap_is_called_after_the_scale_phase_in_the_frame_system` ほか）は
-/// 呼出の**存在と前後関係**しか押さえないので、到達可能性はこの 1 本だけが押さえる。
+/// 兄弟のテストは本文走査を除き [`FrameHarness`] の駆動口を叩く。あれは本番の相順をハーネス側へ写した
+/// 実装で [`frame_system`] を通らないので、本番の呼出を `if false` で包んで**到達不能**にしても赤に
+/// ならない。本文走査は呼出の**存在と前後関係**しか押さえないので、到達可能性はこの 1 本だけが押さえる。
 ///
+/// # 観測の組み立て——3 呼出を別々の観測へ分離する
 /// # 観測の組み立て——3 呼出を別々の観測へ分離する
 ///
 /// | 呼出 | 固有の観測 | どのフレームで |
@@ -603,21 +589,19 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at_192() {
 /// | 拡大率の相 | `origin=DpiReproject` の窓書込 | フレーム A（`WorkAreaResnap` は 0 件） |
 /// | 作業領域再スナップ | `origin=WorkAreaResnap` の窓書込 | フレーム B（`DpiReproject` は 0 件） |
 ///
-/// フレームを 2 つに分けるのは、両者が同一フレームでは**合流して 1 本になる**からである
-/// ——拡大率の相が先に新しい下端へ書き終えた窓は、再スナップの導出値が現在値と一致して
-/// べき等 skip で抜ける。分けると、どちらの経路が書いたのかが経路語で一意に読める。
+/// フレームを 2 つに分けるのは、同一フレームでは両者が**合流して 1 本になる**からである
+/// ——拡大率の相が先に新しい下端へ書いた窓は、再スナップの導出値が現在値と一致してべき等 skip で
+/// 抜ける。分けると、どちらの経路が書いたのかが経路語で一意に読める。
 ///
-/// フレーム A は「源だけが古い」状態から始める（実行時のモニタ表と窓の拡大率は当該水準・
-/// 作業領域源だけが等倍水準）。整合ゲートは窓の拡大率と**表**だけを見るので待ちは起きず、
-/// 拡大率の相の初回 run が全窓へマッチして現寸のまま新しい下端へ射影する。フレーム B は
-/// 拡大率を 1 つも動かさずタスクバーを隠す——`Changed<DPI>` が 1 件も立たないので拡大率の相は
-/// 何もせず、書込が出るなら再スナップ以外にあり得ない。
+/// フレーム A は「源だけが古い」状態（作業領域源だけが等倍水準）から始める。整合ゲートは窓の
+/// 拡大率と**表**だけを見るので待ちは起きず、拡大率の相の初回 run が全窓へマッチして現寸のまま
+/// 新しい下端へ射影する。フレーム B は拡大率を動かさずタスクバーを隠す——`Changed<DPI>` が 1 件も
+/// 立たないので、書込が出るなら再スナップ以外にあり得ない。
 ///
 /// # presenter は未装着でよい
 ///
-/// 本檻が問うのは**到達可能性**であって表示ではない。未装着の実 [`EmoPresenter`] は
-/// `refresh_scale_report` が全 target で `None` を返すが、拡大率の相の `None` 腕は
-/// **位置だけ**を現寸で射影し直すので、窓書込は出る。GPU も実 fixture も要らない。
+/// 問うのは**到達可能性**であって表示ではない。未装着の実 [`EmoPresenter`] は `refresh_scale_report`
+/// が `None` を返すが、拡大率の相の `None` 腕は**位置だけ**を現寸で射影し直すので、窓書込は出る。
 #[test]
 fn the_production_frame_system_reaches_all_three_placement_call_sites() {
     let dpi = HIGH_DPI;
@@ -633,8 +617,8 @@ fn the_production_frame_system_reaches_all_three_placement_call_sites() {
 
     // 2 スコープのゴースト窓・偽 `WindowHandle`・書込 witness を持つ World。
     let (mut world, gw) = dpi_world();
-    // 窓の拡大率は当該水準へ揃える——整合待ちを起こさないため（待ちは `frame_transition_branch_wait_tests.rs` の主題であり、
-    // ここで混ざると「書込 0」が到達不能と区別できなくなる）。
+    // 窓の拡大率は当該水準へ揃える——整合待ちを起こさないため（待ちは `frame_transition_branch_wait_tests.rs`
+    // の主題で、混ざると「書込 0」が到達不能と区別できなくなる）。
     for scope in [0usize, 1] {
         for window in [
             gw.char_window(scope).expect("char 窓がある"),

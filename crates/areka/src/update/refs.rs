@@ -1,4 +1,4 @@
-//! 更新のイベント名・Reference・番号・失敗理由・総括の写し（design「写し（`update/refs.rs`）」）。
+//! 更新のイベント名・Reference・番号・失敗理由・総括の写し。
 //!
 //! fs・記録・スレッドに触れない。渡された値だけから組む（記録を出すのは呼び手の手続き）。
 
@@ -9,7 +9,7 @@ use areka_update::{FailReason, FetchError, Progress, UpdateOutcome};
 use super::{SummaryKind, TargetKind, TargetSpec, UpdateReason};
 use crate::install::judge::SEPARATOR;
 
-// 送る 19 語（正典に在る語だけ・要件 2.15）。
+// 送る 19 語（正典に在る語だけ）。
 
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateProcessExec:1
 pub(crate) const ON_UPDATE_PROCESS_EXEC: &str = "OnUpdateProcessExec";
@@ -171,7 +171,7 @@ pub(crate) fn begin_refs(name: &str, dir: &Path, tail: Tail) -> Vec<String> {
     )
 }
 
-/// 進捗 1 件を送るイベントの列へ写す（design「`Progress` からイベントへの写し」）。
+/// 進捗 1 件を送るイベントの列へ写す。
 pub(crate) fn progress_events(
     p: &Progress,
     names: &EventNames,
@@ -193,7 +193,7 @@ pub(crate) fn progress_events(
             actual,
             matched,
         } => {
-            // 照合は結果だけが届く＝始まりと結果を続けて 2 件（要件 2.9）。
+            // 照合は結果だけが届く＝始まりと結果を続けて 2 件。
             let refs = five(file.clone(), expected.clone(), actual.clone(), tail);
             let end = if *matched {
                 names.md5_complete
@@ -234,7 +234,7 @@ pub(crate) fn executing_refs(kind: TargetKind, reason: UpdateReason) -> Vec<Stri
     failure_refs("executing", None, Tail::new(kind, reason))
 }
 
-/// 失敗理由の表（要件 4.2）。網羅の分岐＝種類が増えればビルドが止まる。
+/// 失敗理由の表。網羅の分岐＝種類が増えればビルドが止まる。
 pub(crate) fn failure_word(reason: &FailReason) -> String {
     match reason {
         FailReason::InvalidHomeurl { .. } => "paramerror".to_owned(),
@@ -252,7 +252,7 @@ pub(crate) fn failure_word(reason: &FailReason) -> String {
     }
 }
 
-/// 取得の失敗の語。正典に語の無い輸送の失敗は areka の語（裁定 10）。
+/// 取得の失敗の語。正典に語の無い輸送の失敗は areka の語。
 pub(crate) fn fetch_word(error: &FetchError) -> String {
     match error {
         FetchError::NotFound => "404".to_owned(),

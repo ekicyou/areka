@@ -1,4 +1,4 @@
-//! 致命の机の決定論テスト（areka-P0-write-failure-notice task 4.1・要件 1.1〜1.3・1.5・2.5）。
+//! 致命の机の決定論テスト。
 
 use std::path::PathBuf;
 
@@ -75,7 +75,7 @@ fn drain_one_failure_quits_with_the_new_origin_and_logs_once() {
     assert_eq!(log.field_str("moment"), Some("running"));
 }
 
-/// 失敗 2 件の汲み出し: 最初の出所は 1 件目のまま（要件 2.5）・記録は 1 件ずつ。
+/// 失敗 2 件の汲み出し: 最初の出所は 1 件目のまま・記録は 1 件ずつ。
 #[test]
 fn drain_two_failures_keeps_the_first_origin() {
     let mut world = installed_world();
@@ -104,7 +104,7 @@ fn drain_without_install_does_nothing() {
 }
 
 // ---------------------------------------------------------------------------
-// task 4.2: 起動を止める口・後始末の口（要件 2.2・2.3・2.5・2.6・6.1・7.5）
+// 起動を止める口・後始末の口
 
 fn alerts(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
@@ -114,7 +114,7 @@ fn alerts(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 }
 
 /// 抑止でも失敗が返り、`alert` の記録が 1 件（`suppressed=true`・題名「areka を起動できません」）・
-/// `memory_write_failed` が 1 件（moment=boot）（要件 2.6）。
+/// `memory_write_failed` が 1 件（moment=boot）。
 #[test]
 fn stop_boot_with_suppressed_still_returns_the_error() {
     let f = failure(PersistKey::LastRunning, "denied");
@@ -142,7 +142,7 @@ fn take_receiver_is_none_after_os_session_end() {
     assert!(take_receiver(&mut world).is_none(), "取り出しは 1 回だけ");
 }
 
-/// 記録だけの口: 印を消せない＋受け手の残り 1 件 → 記録 2 件・告知 0 件（要件 2.3 の例外）。
+/// 記録だけの口: 印を消せない＋受け手の残り 1 件 → 記録 2 件・告知 0 件。
 #[test]
 fn log_only_logs_both_and_tells_nothing() {
     let mut world = installed_world();
@@ -191,7 +191,7 @@ fn tell_at_close_prefers_the_origin_scene() {
     assert_eq!(memory_write_failed(&events).len(), 2, "{events:?}");
 }
 
-/// 場面なし＋印を消せない → `Running` の告知 1 件で `Err`（抑止でも変わらない・要件 2.6）。
+/// 場面なし＋印を消せない → `Running` の告知 1 件で `Err`（抑止でも変わらない）。
 #[test]
 fn tell_at_close_tells_the_clear_failure_as_running() {
     let (result, events) = capture(|| {
@@ -238,7 +238,7 @@ fn tell_at_close_tells_the_first_late_failure() {
     assert_eq!(memory_write_failed(&events).len(), 2, "{events:?}");
 }
 
-/// 何も無い → 告知 0 件で `Ok`（要件 6.1・7.5）。
+/// 何も無い → 告知 0 件で `Ok`。
 #[test]
 fn tell_at_close_with_nothing_tells_nothing() {
     let (result, events) = capture(|| tell_at_close(None, None, late_with(vec![]), true));

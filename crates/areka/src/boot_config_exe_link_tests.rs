@@ -1,4 +1,4 @@
-//! 起動した exe のリンクを辿る判断（`follow_exe_links`）の決定論テスト（要件 6.1〜6.3・6.5〜6.7）。
+//! 起動した exe のリンクを辿る判断（`follow_exe_links`）の決定論テスト。
 //!
 //! 実物のシンボリックリンクは作らない（管理者でないと作れない）。偽の `probe`（パス → 結果の表）を
 //! 注入して判断の分岐を全部踏み、`probe` が読んだパスの列も見る。
@@ -30,7 +30,7 @@ fn run(exe: &str, table: &[(&str, Fake)]) -> ((PathBuf, Option<ExeLinkWarning>),
     (out, calls)
 }
 
-/// 分岐 1: リンクでない → 入力の綴りそのまま・警告なし・読むのは 1 回（要件 6.3）。
+/// 分岐 1: リンクでない → 入力の綴りそのまま・警告なし・読むのは 1 回。
 /// 普通の綴りと、`subst` を模した別のドライブ文字の綴りのどちらも書き換えない。
 #[test]
 fn not_a_link_keeps_the_spelling() {
@@ -41,7 +41,7 @@ fn not_a_link_keeps_the_spelling() {
     }
 }
 
-/// 分岐 2: 絶対の先を 1 段 → 先のパス・警告なし（要件 6.1）。
+/// 分岐 2: 絶対の先を 1 段 → 先のパス・警告なし。
 #[test]
 fn absolute_target_one_hop() {
     let (out, calls) = run(
@@ -52,7 +52,7 @@ fn absolute_target_one_hop() {
     assert_eq!(calls.len(), 2);
 }
 
-/// 分岐 3: 相対の先 → リンクの親と結合し `..` を畳んだ絶対パス（要件 6.2）。
+/// 分岐 3: 相対の先 → リンクの親と結合し `..` を畳んだ絶対パス。
 #[test]
 fn relative_target_is_joined_to_the_link_parent_and_folded() {
     let (out, calls) = run(
@@ -63,7 +63,7 @@ fn relative_target_is_joined_to_the_link_parent_and_folded() {
     assert_eq!(calls[1], PathBuf::from(r"C:\links\pkg\areka.exe"));
 }
 
-/// 分岐 4: リンクのリンク（2 段・2 段目は相対）→ 最後のパス（要件 6.2）。
+/// 分岐 4: リンクのリンク（2 段・2 段目は相対）→ 最後のパス。
 #[test]
 fn two_hop_chain_reaches_the_last_target() {
     let (out, calls) = run(
@@ -77,7 +77,7 @@ fn two_hop_chain_reaches_the_last_target() {
     assert_eq!(calls.len(), 3);
 }
 
-/// 分岐 5: 輪になったリンク → `TooManyHops { limit: 32 }`・戻りは入力（要件 6.6）。
+/// 分岐 5: 輪になったリンク → `TooManyHops { limit: 32 }`・戻りは入力。
 /// 上限に達したら次を読まない＝`probe` はちょうど 32 回。
 #[test]
 fn cycle_stops_at_the_hop_limit_without_reading_further() {
@@ -102,7 +102,7 @@ fn cycle_stops_at_the_hop_limit_without_reading_further() {
     assert_eq!(calls.len(), 32);
 }
 
-/// 分岐 6: 途中で読めない → `Unreadable { link, reason }`・戻りは途中の先でなく入力（要件 6.6）。
+/// 分岐 6: 途中で読めない → `Unreadable { link, reason }`・戻りは途中の先でなく入力。
 #[test]
 fn unreadable_link_falls_back_to_the_input() {
     let (out, _) = run(
@@ -124,7 +124,7 @@ fn unreadable_link_falls_back_to_the_input() {
     );
 }
 
-/// 分岐 7: 先が `\\?\C:\…` の綴り → `VerbatimPrefix`・戻りは入力（要件 6.5）。
+/// 分岐 7: 先が `\\?\C:\…` の綴り → `VerbatimPrefix`・戻りは入力。
 #[test]
 fn verbatim_prefixed_target_falls_back_to_the_input() {
     let (out, _) = run(

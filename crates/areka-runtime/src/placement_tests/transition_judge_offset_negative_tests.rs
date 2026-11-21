@@ -1,4 +1,4 @@
-//! 追随レコードの判定器の負のテスト（`audit-placement-follow` の指摘 12・13・14・27）。
+//! 追随レコードの判定器の負のテスト。
 //!
 //! 壊れた行・読めない欄が**合格に化けない**ことを固定する。どれも既知の合格ログ
 //! [`pass_lines`] を 1 箇所ずつ壊して作る。
@@ -66,7 +66,7 @@ fn malformed_in_t0(lines: &[String], field: &str) -> bool {
 
 #[test]
 fn a_malformed_row_before_the_first_origin_is_red() {
-    // 12 ⑴ 最初の起点より前の門の行が壊れている。どの遷移にも属さないが、捨てずに違反にする。
+    // 最初の起点より前の門の行が壊れている。どの遷移にも属さないが、捨てずに違反にする。
     let mut lines = pass_lines();
     let gate = without_base_offset(&lines[T0_SCOPE1]);
     lines.insert(0, gate);
@@ -83,7 +83,7 @@ fn a_malformed_row_before_the_first_origin_is_red() {
 
 #[test]
 fn a_log_whose_every_row_is_malformed_carries_the_violations_in_the_error() {
-    // 12 ⑵ 追随レコードが全部壊れたログ。走り手の `Err` の文に違反の一覧が載る。
+    // 追随レコードが全部壊れたログ。走り手の `Err` の文に違反の一覧が載る。
     let kind_offset = format!("{FIELD_KIND}={KIND_OFFSET}");
     let mut lines: Vec<String> = pass_lines()
         .into_iter()
@@ -117,7 +117,7 @@ fn a_log_whose_every_row_is_malformed_carries_the_violations_in_the_error() {
 
 #[test]
 fn an_unreadable_base_dpi_is_a_malformed_record() {
-    // 27 `base_dpi=19x` は無い（`-`）とも数とも読めない＝形の壊れた行。
+    // `base_dpi=19x` は無い（`-`）とも数とも読めない＝形の壊れた行。
     let lines = t0_scope0_with(
         &format!(" {FIELD_BASE_DPI}=96 "),
         &format!(" {FIELD_BASE_DPI}=19x "),
@@ -127,7 +127,7 @@ fn an_unreadable_base_dpi_is_a_malformed_record() {
 
 #[test]
 fn an_unreadable_scope_is_a_malformed_record() {
-    // 27 `scope=x` は番兵の `-` でも数でもない＝形の壊れた行。
+    // `scope=x` は番兵の `-` でも数でもない＝形の壊れた行。
     let lines = t0_scope0_with(&format!(" {FIELD_SCOPE}=0 "), &format!(" {FIELD_SCOPE}=x "));
     assert!(malformed_in_t0(&lines, FIELD_SCOPE));
 }
@@ -148,7 +148,7 @@ fn gate(frame: u32, scope: u32) -> String {
 
 #[test]
 fn a_keyword_scope_left_unmeasured_is_red_even_when_another_is_measured() {
-    // 13 ⑴ scope 1 は T3 で測れているが、起点の前に門の行だけを出した scope 3 は測れていない。
+    // scope 1 は T3 で測れているが、起点の前に門の行だけを出した scope 3 は測れていない。
     let mut lines = pass_lines();
     lines.insert(0, gate(1, 3));
     let report = judge_offset_log(&log_of(&lines));
@@ -161,7 +161,7 @@ fn a_keyword_scope_left_unmeasured_is_red_even_when_another_is_measured() {
 
 #[test]
 fn a_doubled_row_in_one_transition_is_not_a_round_trip() {
-    // 13 ⑵ T0・T1 だけ（往復なし）のログで、T1 の scope 0 の行を同じ遷移の中で 2 度出す。
+    // T0・T1 だけ（往復なし）のログで、T1 の scope 0 の行を同じ遷移の中で 2 度出す。
     let mut lines = pass_lines()[..=T1_SCOPE2].to_vec();
     let doubled = lines[T1_SCOPE0].clone();
     lines.insert(T1_SCOPE0 + 1, doubled);
@@ -176,7 +176,7 @@ fn a_doubled_row_in_one_transition_is_not_a_round_trip() {
 
 #[test]
 fn a_keyword_scope_measured_only_at_an_identity_ratio_is_red() {
-    // 13 ⑶ scope 1 の `rescaled` は戻りの T2（192 → 192・恒等比）だけ。作りから残差 0 の行は
+    // scope 1 の `rescaled` は戻りの T2（192 → 192・恒等比）だけ。作りから残差 0 の行は
     // 測った数に入れないので、T3 を門の行にすると scope 1 は 1 度も測れていない。
     let mut lines = pass_lines();
     lines[T2_SCOPE1] = offset(
@@ -199,7 +199,7 @@ fn a_keyword_scope_measured_only_at_an_identity_ratio_is_red() {
 }
 
 // ---------------------------------------------------------------------------
-// 判定器の分岐（`audit-placement-follow` の指摘 14 ⑵⑶⑷）
+// 判定器の分岐
 // ---------------------------------------------------------------------------
 
 /// 合格ログの scope 0 の T2・T3（往復の戻り）を、基準を据え直した行へ替える。
@@ -212,7 +212,7 @@ fn scope0_rebased(t2: String, t3: String) -> Vec<String> {
 
 #[test]
 fn a_rebased_base_offset_splits_the_round_trip_key() {
-    // 14 ⑵ T2 の前にドラッグで基準が (12,20)@96 へ据え直された。T0 の (20,40) と T2 の
+    // T2 の前にドラッグで基準が (12,20)@96 へ据え直された。T0 の (20,40) と T2 の
     // (24,40) は別の基準の値なので、往復の破れに数えない。
     let lines = scope0_rebased(
         offset(
@@ -242,7 +242,7 @@ fn a_rebased_base_offset_splits_the_round_trip_key() {
 
 #[test]
 fn a_rebased_base_dpi_splits_the_round_trip_key() {
-    // 14 ⑵ 基準の値は (10,20) のまま、属する DPI だけが 192 へ据え直された。T0 の (20,40) と
+    // 基準の値は (10,20) のまま、属する DPI だけが 192 へ据え直された。T0 の (20,40) と
     // T2 の (10,20) は別の基準の値なので、往復の破れに数えない。
     let lines = scope0_rebased(
         offset(
@@ -272,7 +272,7 @@ fn a_rebased_base_dpi_splits_the_round_trip_key() {
 
 #[test]
 fn a_residual_of_exactly_the_allowance_is_green() {
-    // 14 ⑶ 基準 (24,-12)@192 を 96 へ引き直した厳密値は (12,-6)。x の 15 は残差ちょうど 3.0px
+    // 基準 (24,-12)@192 を 96 へ引き直した厳密値は (12,-6)。x の 15 は残差ちょうど 3.0px
     // ＝許容量「以内」なので緑。
     let mut lines = pass_lines();
     lines[T3_SCOPE1] = offset(
@@ -291,7 +291,7 @@ fn a_residual_of_exactly_the_allowance_is_green() {
 
 #[test]
 fn every_stable_verdict_that_moved_the_value_is_red() {
-    // 14 ⑷ 値を動かさない 4 語のどれで値が動いても `ValueMoved` が立つ（T3 の scope 2 に置く）。
+    // 値を動かさない 4 語のどれで値が動いても `ValueMoved` が立つ（T3 の scope 2 に置く）。
     for (base_dpi, new_dpi, verdict) in [
         (None, 96, OFFSET_VERDICT_ANCHORED),
         (Some(96), 96, OFFSET_VERDICT_UNCHANGED),
@@ -314,7 +314,7 @@ fn every_stable_verdict_that_moved_the_value_is_red() {
 
 #[test]
 fn a_non_identity_ratio_expects_rescaled_or_saturated() {
-    // 14 ⑷ 比が恒等でない腕（T0 の scope 0・96 → 192）。飽和は許し、据え置きの語は赤。
+    // 比が恒等でない腕（T0 の scope 0・96 → 192）。飽和は許し、据え置きの語は赤。
     let mut lines = pass_lines();
     lines[T0_SCOPE0] = offset(
         10,
@@ -354,7 +354,7 @@ fn a_non_identity_ratio_expects_rescaled_or_saturated() {
 
 #[test]
 fn an_identity_ratio_with_the_current_value_on_the_base_expects_unchanged() {
-    // 14 ⑷ 恒等比の腕で現在値が基準と同じ（T2 の scope 1・192 → 192）なら、期待は据え置きの語。
+    // 恒等比の腕で現在値が基準と同じ（T2 の scope 1・192 → 192）なら、期待は据え置きの語。
     let mut lines = pass_lines();
     lines[T2_SCOPE1] = offset(
         30,
@@ -381,7 +381,7 @@ fn an_identity_ratio_with_the_current_value_on_the_base_expects_unchanged() {
 
 #[test]
 fn an_unreadable_point_field_is_a_malformed_record() {
-    // 14 ⑷ `new_offset=abc` は `x,y` の形でない＝形の壊れた行。
+    // `new_offset=abc` は `x,y` の形でない＝形の壊れた行。
     let lines = t0_scope0_with(
         &format!(" {FIELD_NEW_OFFSET}=20,40 "),
         &format!(" {FIELD_NEW_OFFSET}=abc "),
@@ -391,7 +391,7 @@ fn an_unreadable_point_field_is_a_malformed_record() {
 
 #[test]
 fn a_zero_base_dpi_is_not_divided_by() {
-    // 14 ⑷ `base_dpi=0` の `rescaled` は残差を測らない（0 割りしない）。scope 1 の測れる行は
+    // `base_dpi=0` の `rescaled` は残差を測らない（0 割りしない）。scope 1 の測れる行は
     // これだけなので、測れていないとして立つ。
     let mut lines = pass_lines();
     lines[T3_SCOPE1] = offset(

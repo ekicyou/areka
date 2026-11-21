@@ -4,13 +4,13 @@ use super::{BarrierKind, CuePlayer, CuePlayerState, CueSheet};
 use crate::test_support::{barrier, choice, text};
 
 // ============================================================================
-// 占有 horizon の絶対時刻照会（Task 3.1・R7.2）
+// 占有 horizon の絶対時刻照会
 // ============================================================================
 
 /// `CuePlayer::occupancy_horizon()` は内部 `TimedSchedule` へ委譲し、アンカー
 /// （`CueSheet::absolute_start_time`）＋相対 horizon（`max(start_time + duration)`）を返す。
 /// 選択待ちタイムアウトの計測起点はこの **duration 権威**から取得され、再生層の外で
-/// 独自の時間基準を作らない（R7.2）。
+/// 独自の時間基準を作らない。
 #[test]
 fn occupancy_horizon_returns_anchor_plus_relative_horizon() {
     // 相対 horizon = max(0.0+1.5, 2.0+0.5) = 2.5、アンカー = 100.0 → 102.5。
@@ -31,7 +31,7 @@ fn occupancy_horizon_returns_anchor_plus_relative_horizon() {
 }
 
 /// 選択肢バリアで停止中（`WaitingForChoice`）でも占有 horizon は照会でき、値は不変。
-/// これがタイムアウト計測の起点（トークの絶対終了時刻）になる（R7.1/R7.2）。
+/// これがタイムアウト計測の起点（トークの絶対終了時刻）になる。
 #[test]
 fn occupancy_horizon_is_observable_while_waiting_for_choice() {
     let sheet = CueSheet::new(vec![

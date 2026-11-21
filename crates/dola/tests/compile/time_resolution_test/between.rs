@@ -1,4 +1,4 @@
-//! `between` keyframe interval time resolution.
+//! `between` のキーフレーム区間の時刻解決
 
 use super::*;
 
@@ -52,8 +52,8 @@ fn between_placement() {
 
     let result = compile_storyboard(&doc, "test", 0.0).unwrap();
     let tl_y = result.timelines.get("y").unwrap();
-    assert_eq!(tl_y.segments[0].start_time, 2.0); // from_kf time
-    assert_eq!(tl_y.segments[0].end_time, 5.0); // to_kf time
+    assert_eq!(tl_y.segments[0].start_time, 2.0);
+    assert_eq!(tl_y.segments[0].end_time, 5.0);
 }
 
 #[test]

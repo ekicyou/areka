@@ -1,8 +1,8 @@
-//! 走りの状態（readonly-mode・design「ReadonlyState」）。
+//! 走りの状態（`--option readonly`）。
 //!
 //! 1 回の走りが読み取りだけかを起動の前に 1 度だけ決め、プロセスの旗・World の印
 //! [`ReadOnlyRun`]・保存の口の控える範囲を同じ値から立てる唯一の口。
-//! 旗を下ろす口と印を外す口は作らない（要件 1.6）。入口のモジュールは `use` しない
+//! 旗を下ろす口と印を外す口は作らない。入口のモジュールは `use` しない
 //! （入口の側がこのモジュールを見る）。
 
 use std::sync::atomic::{AtomicBool, Ordering};

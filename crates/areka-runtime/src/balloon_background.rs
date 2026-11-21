@@ -1,4 +1,4 @@
-//! バルーン面 0 の原点画素から「バルーンの背景色」を導く（areka-P0-text-decoration-canon 要件 4.6）。
+//! バルーン面 0 の原点画素から「バルーンの背景色」を導く。
 //!
 //! 無効表示（`\f[disable]`）の文字色は「既定の文字色をバルーンの背景色の側へ寄せた色」として
 //! 導く（混色の式は `areka_emo_text::color::mix_disabled` が唯一の実装点）。その「背景色」の
@@ -7,8 +7,7 @@
 //!
 //! 原点画素が背景色として使えないとき（面が引けない・全透明ゆえ焼かれていない・トリムで原点が
 //! bbox の外・α が 255 でない）は白（[`DEFAULT_BALLOON_BACKGROUND`]）へ落とし、理由を `debug!`
-//! で残す（log-first・記録なしの失敗経路を作らない）。配置が頁や画素を指し損ねる契約違反だけは
-//! 焼く段の故障なので `warn!` で残す。
+//! で残す。配置が頁や画素を指し損ねる契約違反だけは焼く段の故障なので `warn!` で残す。
 
 use areka_emo_atlas::{AtlasTable, SetId};
 use areka_emo_text::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -64,7 +63,7 @@ pub(super) fn face_origin_color(atlas: &AtlasTable, file_name: &str) -> (u8, u8,
     (pixel[2], pixel[1], pixel[0])
 }
 
-/// 白へ落として理由を残す（記録なしの失敗経路を作らない・log-first）。
+/// 白へ落として理由を残す。
 fn fall_back(file_name: &str, reason: &'static str) -> (u8, u8, u8) {
     match reason {
         REASON_PAGE_MISSING | REASON_PIXEL_OUT_OF_RANGE => warn!(

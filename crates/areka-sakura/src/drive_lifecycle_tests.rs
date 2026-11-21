@@ -6,19 +6,17 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 /// 空発火列（空 script）の talk は時間軸駆動せず、Tick を一切送らなくても
-/// コンパイル結果の終端理由（空 script＝`Ended`）を伴う `TalkDone` を**即座に**返す
-/// （observable・R1.4）。`talk_id` は起動要求のものがエコーされる（R1.3）。
+/// コンパイル結果の終端理由（空 script＝`Ended`）を伴う `TalkDone` を**即座に**返す。
+/// `talk_id` は起動要求のものがエコーされる。
 #[test]
 fn empty_script_talk_returns_talkdone_immediately_without_tick() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(7);
-    // 空 script → 空 Instruction 列 → 空 sheet。
     let start = StartTalk::new(talk_id, String::new());
 
     let sink = RecordingSink::new();
     let records = sink.records();
 
-    // Tick を一切送らずに spawn_talk を呼ぶ（時間軸駆動を要求しない）。
     let handle = spawn_talk(
         start,
         done_tx,
@@ -27,7 +25,6 @@ fn empty_script_talk_returns_talkdone_immediately_without_tick() {
         None,
     );
 
-    // TalkDone が即座に到達すること（Tick 不要・時間軸駆動なし）。
     let done = recv_done(&done_rx, Duration::from_secs(5))
         .expect("空 script の talk は即座に TalkDone を返すべき");
 
@@ -77,7 +74,6 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
     assert_eq!(done.reason, TalkEndReason::Ended);
     handle.actor.join().expect("body は正常終了する");
 
-    // A の内容のみ（B の Emote{77}/DIFFERENT は現れない）: ClearAll/Emote{10}/hello/Wait/world。
     assert_eq!(
         commands(&records),
         vec![
@@ -91,7 +87,7 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
     );
 }
 
-/// **終端時に done 受信端が drop 済みでも body が panic せず clean exit する**（R11.1/11.4）。
+/// **終端時に done 受信端が drop 済みでも body が panic せず clean exit する**。
 /// 駆動前に `done_rx` を drop → 自然終端で `done.send` が `Err` になるが `error!` の上で `Break`。
 /// 発火自体は正常（done drop は終端信号にのみ影響し broadcast には影響しない）。
 #[test]
@@ -117,7 +113,6 @@ fn dropped_done_receiver_at_terminal_exits_cleanly_without_panic() {
         .join()
         .expect("done 受信端 drop でも body は panic せず正常終了する");
 
-    // broadcast は正常に行われた（ClearAll/Emote/hello/Wait/world の 5 件）。
     assert_eq!(
         records.lock().unwrap().len(),
         5,
@@ -126,16 +121,15 @@ fn dropped_done_receiver_at_terminal_exits_cleanly_without_panic() {
 }
 
 /// M-boot 外タグのみで発火列が空になる script は空 sheet へコンパイルされ、Tick を要さずに
-/// 末尾到達の `Ended`（R1.4）を伴う `TalkDone` を即座に返す（リテラル空 script とは別経路）。
+/// 末尾到達の `Ended` を伴う `TalkDone` を即座に返す（リテラル空 script とは別経路）。
 #[test]
 fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(55);
-    // task 4.2 で SystemVar/GenericCommand は cue を発行するようになったため、無 cue フィラーには
-    // `\0` を用いる。parser は `\0` を正典スコープタグ `SpeakerScope{n:0}` へ写像するが（task 12.1・
-    // R1.5/R4.4）、compile は `SpeakerScope{n}` を「scope 状態更新のみ・cue 非発行」で扱う
+    // 無 cue フィラーには `\0` を用いる。parser は `\0` を正典スコープタグ `SpeakerScope{n:0}` へ
+    // 写像し、compile は `SpeakerScope{n}` を「scope 状態更新のみ・cue 非発行」で扱う
     // （`compile.rs` の SpeakerScope アーム）。ゆえに内容 cue は皆無で empty-sheet 即時 TalkDone
-    // 経路を保つ（`\0` の写像先が Raw から SpeakerScope へ変わっても本檻の観測は不変）。
+    // 経路になる。
     let start = StartTalk::new(talk_id, r"\0".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -164,15 +158,14 @@ fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
 }
 
 /// 先行 cue のない `\-`（quit 相当のみ）の script は空 sheet＋`end=Quit` へコンパイルされ、Tick を
-/// 要さずに **`Quit`（`Ended` ではない）** を伴う `TalkDone` を即座に返す（空 sheet 経路の弁別・R6.2）。
+/// 要さずに **`Quit`（`Ended` ではない）** を伴う `TalkDone` を即座に返す（空 sheet 経路の弁別）。
 #[test]
 fn quit_only_script_ends_immediately_with_quit_not_ended() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(56);
-    // task 4.2 で SystemVar は cue を発行するようになったため、`\-` の先行フィラーには `\0` を用いる。
-    // parser は `\0` を `SpeakerScope{n:0}` へ写像し（task 12.1・R1.5/R4.4）、compile はそれを
-    // scope 状態更新のみ（cue 非発行）で扱う。先行内容 cue のない `\-` の empty-sheet＋Quit 経路を
-    // 保つ（SpeakerScope は cue を生まず `\-` が Quit で切詰め＝空 sheet＋end=Quit）。
+    // `\-` の先行フィラーには `\0` を用いる。parser は `\0` を `SpeakerScope{n:0}` へ写像し、
+    // compile はそれを scope 状態更新のみ（cue 非発行）で扱う。ゆえに先行内容 cue のない `\-` の
+    // empty-sheet＋Quit 経路になる（`\-` が Quit で切詰め＝空 sheet＋end=Quit）。
     let start = StartTalk::new(talk_id, r"\0\-".to_string());
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -206,7 +199,7 @@ fn quit_only_script_ends_immediately_with_quit_not_ended() {
 }
 
 /// 再生途中の中断（Close）で `TalkDone{Interrupted}` がちょうど 1 回返り、未発火分が sink に
-/// 届かないこと（R7.1/7.2/7.3/7.4・R6.4）。`\s[10]hello\_w[500]world\e`（world は \_w[500] 後）を
+/// 届かないこと。`\s[10]hello\_w[500]world\e`（world は \_w[500] 後）を
 /// 先頭群だけ発火させたところで Close。world（at=0.75）は未発火＝以降届いてはならない。
 #[test]
 fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
@@ -229,7 +222,6 @@ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
         .inbox
         .send(SakuraMsg::Tick(0.0))
         .expect("Tick(0.0) 投函");
-    // 中断（Close）を送る。進行中の再生を即時停止し Interrupted ACK を返すべき。
     handle.inbox.send(SakuraMsg::Close).expect("Close 投函");
 
     let done = recv_done(&done_rx, Duration::from_secs(5))
@@ -242,7 +234,7 @@ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
     );
     handle.actor.join().expect("body は Break 後に正常終了する");
 
-    // at=0.0 群のみ届き（ClearAll/Emote/hello）、未発火分（world@0.75）は届いていない（R7.2）。
+    // at=0.0 群のみ届き（ClearAll/Emote/hello）、未発火分（world@0.75）は届いていない。
     assert_eq!(
         commands(&records),
         vec![
@@ -254,11 +246,11 @@ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
     );
 }
 
-/// **中断の完了通知が「終了の予約」を運ぶ**（判断分岐 ⑺ の再生側・要件 3.3/3.8）。
+/// **中断の完了通知が「終了の予約」を運ぶ**。
 ///
 /// `fn on_close` は再生中の状態（`Armed`／`Driving`）が持ち回っている終わり方を読み、
 /// それが `TalkEndReason::Quit`（台本に `\-` が在る）かどうかを `TalkDone.quit_reserved`
-/// に載せる。終わり方そのものは `Interrupted` のままで、種類は増やさない（要件 3.3）。
+/// に載せる。終わり方そのものは `Interrupted` のままで、種類は増やさない。
 /// 予約を終了へ結び付けるかどうかは運行の側の判断であり、本層は報告するだけである。
 #[test]
 fn close_reports_quit_reservation_from_script_while_reason_stays_interrupted() {
@@ -319,7 +311,7 @@ fn close_reports_quit_reservation_from_script_while_reason_stays_interrupted() {
     );
 }
 
-/// 自然終端後に中断（Close）を受けても追加の `TalkDone` が発生しないこと（R6.4/R7.5）。
+/// 自然終端後に中断（Close）を受けても追加の `TalkDone` が発生しないこと。
 /// 自然終端後はアクタースレッドが消えており `inbox.send(Close)` が `Err`＝二重終端不能の構造的証。
 #[test]
 fn close_after_natural_end_produces_no_extra_talkdone() {
@@ -362,7 +354,7 @@ fn close_after_natural_end_produces_no_extra_talkdone() {
 }
 
 /// 複数 talk を異なる相関 ID・独立 sink で同時駆動し、各 `TalkDone` に起動時と同一の `talk_id`
-/// が対応付けられ、出力が talk 間で混線しないことを確認する（R1.3/R6.6）。
+/// が対応付けられ、出力が talk 間で混線しないことを確認する。
 #[test]
 fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
     // talk A: TalkId(7)・Ended 経路。
@@ -425,7 +417,6 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
     handle_a.actor.join().expect("A body 正常終了");
     handle_b.actor.join().expect("B body 正常終了");
 
-    // 各 talk の cue は自分の sink にのみ届く（混線しない）。
     assert_eq!(
         commands(&records_a),
         vec![
@@ -451,7 +442,7 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
 }
 
 /// **末尾に明示的な待ちを持つ talk**: 完了通知は cue 配送完了（entry 枯渇）でなく、末尾 Wait の
-/// 再生時間を含む占有 horizon 到達で初めて発火する（R2.5/D6・#3 の実機構）。
+/// 再生時間を含む占有 horizon 到達で初めて発火する。
 ///
 /// `\s[10]hello\_w[800]\e` の台本（アンカー 0）:
 ///   ClearAll@0 / Emote{10}@0 / hello@0(dur=D) / Wait@D(dur=0.8)。
@@ -516,7 +507,7 @@ fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
 }
 
 /// **待ちを持たない末尾テキストのみの talk**: 完了通知は最終テキストの **配送時刻**（発火 start）でなく、
-/// その再生時間 D を含む絶対終了時刻（start + D）到達で発火する（R2.5/D6）。
+/// その再生時間 D を含む絶対終了時刻（start + D）到達で発火する。
 ///
 /// `\s[10]hello\_w[500]world\e` の台本（アンカー 0）:
 ///   ClearAll@0 / Emote{10}@0 / hello@0(dur=D_h) / Wait@D_h(dur=0.5) / world@(D_h+0.5)(dur=D_w)。
@@ -580,8 +571,8 @@ fn trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery() {
 }
 
 /// **tick 源の liveness 契約**: horizon 未満で tick が止まると `TalkDone` は発火せず、horizon まで
-/// tick を送り続けると発火する（task 7.2 申し送り＝「tick 源は entries 枯渇後も horizon 到達まで
-/// tick を送り続ける」）。本 spec は本番 tick 源を変えず、drive は `is_completed()` 成立で発火する。
+/// tick を送り続けると発火する（tick 源は entries 枯渇後も horizon 到達まで tick を送り続ける）。
+/// drive は `is_completed()` 成立で発火する。
 ///
 /// `\s[10]ab\_w[600]\e`（ab=2char→D=0.1・Wait 0.6・horizon=0.7）で、entry 枯渇（0.1）でも、その先の
 /// horizon 手前（0.5）でも、tick を止めれば完了通知は保留され、horizon（0.7）到達で初めて発火する。
@@ -629,7 +620,7 @@ fn talkdone_withheld_while_ticks_stop_below_horizon_then_fires_on_resume() {
     handle.actor.join().expect("body は正常終了する");
 }
 
-/// **終端理由と絶対終了時刻の型的別概念（D6・R2.5）**: `TalkDone.reason` は compile 時に確定する
+/// **終端理由と絶対終了時刻の型的別概念**: `TalkDone.reason` は compile 時に確定する
 /// 終端理由 `TalkEndReason`（`Ended`/`Quit`＝時間量でない）に等しく、一方 **発火の時刻** は台本由来の
 /// 占有 horizon（`absolute_end_time`）で決まる——この 2 つは互いに独立した事実である。
 ///
@@ -693,7 +684,7 @@ fn talkdone_reason_is_compiled_end_while_firing_time_is_horizon_derived() {
     handle.actor.join().expect("body は正常終了する");
 }
 
-// ── 受け口を落としてから終わりを知らせる（areka-P0-status-execution-states 要件 3.4） ──
+// ── 受け口を落としてから終わりを知らせる ──
 
 /// 落ちるときに印を 1 つ送る受け口（受け口の最後の合図＝落ちる時の送出を模す）。
 ///

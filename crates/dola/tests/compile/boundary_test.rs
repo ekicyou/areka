@@ -1,7 +1,7 @@
 //! デシリアライズ境界・数値境界・panic 経路のテスト
 //!
 //! 外部入力（JSON・機能 `toml` の TOML）由来の DolaDocument が compile へ渡される境界で、
-//! 数値の規則（#29）を外れた文書が panic でなくエラーで拒まれることと、
+//! 数値の規則を外れた文書が panic でなくエラーで拒まれることと、
 //! 検証を通った文書が panic しないことを縛る。
 
 use dola::*;
@@ -34,7 +34,7 @@ fn single_transition_doc(delay: f64, duration: Option<f64>) -> DolaDocument {
 #[test]
 fn invalid_delay_and_duration_are_rejected_before_compile() {
     // 拒まないと、負の duration は逆向きのセグメント、負の delay は start より前の
-    // セグメント、NaN／inf は NaN／inf 時刻のセグメントになっていた（#29）
+    // セグメント、NaN／inf は NaN／inf 時刻のセグメントになっていた
     for (delay, duration, field) in [
         (0.0, Some(-3.0), "duration"),
         (0.0, Some(f64::NAN), "duration"),
@@ -222,9 +222,9 @@ fn overflowing_sums_of_finite_numbers_are_rejected() {
 
 #[test]
 fn segment_sort_with_many_nan_follows_total_order() {
-    // 並べ替えは −0.0 を +0.0 にそろえた全順序（#10）。delay は 48…2 の降順に並べてあるので、
+    // 並べ替えは −0.0 を +0.0 にそろえた全順序。delay は 48…2 の降順に並べてあるので、
     // 有限の start_time では並べ替えを外すと昇順の確かめが落ちる。
-    // #29 の後、公開の口からは NaN と有限の値が混ざった並びを作れない（文書の NaN は検証が拒み、
+    // 公開の口からは NaN と有限の値が混ざった並びを作れない（文書の NaN は検証が拒み、
     // start_time の NaN は全部の終わりの時刻を NaN にし、有限でない時刻としてコンパイルが拒む）ので、
     // 全順序と partial_cmp の違いはここでは観測できない。NaN の回は panic せずに拒むことだけを見る。
     let mut builder = StoryboardBuilder::new();
@@ -351,7 +351,7 @@ fn long_dependency_chain_compiles_without_stack_exhaustion() {
         .unwrap()
         .join()
         .expect("compile must not exhaust a 64 KiB stack");
-    assert_eq!(result.timelines.len(), 0); // 純粋KFのみ → タイムラインなし
+    assert_eq!(result.timelines.len(), 0);
     assert_eq!(result.total_base_duration, 0.0);
 }
 

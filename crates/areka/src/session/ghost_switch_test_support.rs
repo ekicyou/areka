@@ -1,5 +1,4 @@
-//! 偽の SHIORI を持つゴーストを同じ World で起こす統合テストの土台
-//! （areka-P0-ghost-shell-balloon-switch・design「Integration Tests」）。
+//! 偽の SHIORI を持つゴーストを同じ World で起こす統合テストの土台。
 //!
 //! 一時の根（emo2 検体の複製を根にして `ghost/A`・`ghost/B` を足したもの）に
 //! `ghost/A`・`ghost/B`・`ghost/emo2` と既定のバルーン `balloon/emo2-kakukaku` を並べ、
@@ -10,7 +9,7 @@
 //! `\![change,ghost,…]` から切替を通すときは [`SwitchRig::pump_talking_until`] が、置き場の
 //! ゴーストの dispatcher へ合成の Tick を注入して台詞を進め、`Input` の段（登録済みの取り出しの系）を回す。
 //! 足場の待ちはどれも進みの目印（[`SwitchRig::progress_probe`]）を待ちの芯へ渡し、打ち切りを「相手が
-//! 進まなかった時間」で決める（areka-P0-ghost-session-test-load-flake）。
+//! 進まなかった時間」で決める。
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -212,9 +211,9 @@ impl SwitchRig {
         }
         let sample = acquire_emo2();
         let root = BasewareRoot::new(sample.root().to_path_buf());
-        // 既定のバルーンは根の `balloon\` に置く（同梱はゴーストの中へ入る・areka-P0-ghost-inner-balloon
-        // 要件 7.1）。根へは写し、A／B の複製へは持ち込まない。移す（rename）・消す（remove_dir）は
-        // 写した直後の木を他のプロセスが握っていると拒まれるので使わない（件 4・load-repro.md ⑼）。
+        // 既定のバルーンは根の `balloon\` に置く（同梱はゴーストの中へ入る）。根へは写し、A／B の複製へは
+        // 持ち込まない。移す（rename）・消す（remove_dir）は
+        // 写した直後の木を他のプロセスが握っていると拒まれるので使わない。
         // 元の `ghost\emo2\balloon\` は残るが、emo2 は今のゴーストにならないので誰も読まない。
         copy_tree(
             sample.balloon(BALLOON).expect("emo2 の同梱バルーン"),
@@ -477,7 +476,7 @@ impl SwitchRig {
     /// 進みの目印を数える関数: 作り口が呼ばれた回数＋起こした全部の偽の SHIORI が受けた呼び出しの数
     /// （状態の問い合わせは除く＝SHIORI のアクターは手が空くと 500 ms ごとに問い合わせるので、数えると
     /// 止まっていても増え続ける）。数えと台帳の写しだけを掴み World を借りないので、条件の関数が足場を
-    /// 可変で借りている間も読める（areka-P0-ghost-session-test-load-flake 要件 2.1・3.2）。
+    /// 可変で借りている間も読める。
     pub(crate) fn progress_probe(&self) -> impl Fn() -> u64 + 'static {
         let (factory_calls, boots) = (Rc::clone(&self.factory_calls), Rc::clone(&self.boots));
         move || {
@@ -505,7 +504,7 @@ impl SwitchRig {
         )
     }
 
-    /// [`SwitchRig::pump_until`] の中身（時計と休みを差し替えられる・檻 9 が短い上限で呼ぶ）。
+    /// [`SwitchRig::pump_until`] の中身（時計と休みを差し替えられる・足場の待ちの檻が短い上限で呼ぶ）。
     #[track_caller]
     fn pump_until_with(
         &mut self,
@@ -534,7 +533,7 @@ impl SwitchRig {
     ///
     /// `done` には後戻りしない観測（呼び出しの記録が増えた・切替の予約が下りた、など）だけを渡す。
     /// 台詞の途中の状態を待たない: 台詞の時計は相手の処理を待たずに進むので（[`SwitchRig::inject_talk_tick`]）、
-    /// 途中の状態は観測する前に過ぎ去りうる（areka-P0-ghost-session-test-load-flake 要件 2.6）。
+    /// 途中の状態は観測する前に過ぎ去りうる。
     #[track_caller]
     pub(crate) fn pump_talking_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
         let mut last_tick: Option<Instant> = None;
@@ -550,16 +549,15 @@ impl SwitchRig {
     }
 
     /// 足場の時刻の注入の唯一の口: 台詞の時計を [`TICK_STEP_MS`] 進め、置き場のゴーストの dispatcher へ
-    /// `DispatcherMsg::Tick` を 1 つ送る。送り先は dispatcher の `Tick` だけで、kanade へは送らない
-    /// （足場は `TickerMode::Disabled` で起こすので、足場の kanade は Tick を 1 つも受け取らない）。
+    /// `DispatcherMsg::Tick` を 1 つ送る。kanade へは送らない（足場は `TickerMode::Disabled` で
+    /// 起こすので、足場の kanade は Tick を 1 つも受け取らない）。
     ///
     /// dispatcher は Tick を届いた順に消化し、再生中の台詞へ「その台詞が最初に見た Tick からの経過」と
     /// して渡すだけで、合成の締切も後戻りする状態も持たない。だから足場の時計が相手の処理より先へ
-    /// 進んでも（相手が飢えていても）、増えるのは順番待ちの列だけで、相手が見る時刻の並びは変わらず、
-    /// 合成の締切（kanade の `close_talk_deadline_ms` ＝ 30,000 ms）だけが切れる赤は作らない。これが
-    /// 「追い越しうる時刻には頭打ちを置く」（`spine_wait.rs`）の例外である理由で、時計の先行の檻
-    /// （`ghost_switch_talk_clock_tests.rs`）が固定する（areka-P0-ghost-session-test-load-flake 要件 2.6）。
-    /// kanade へ時刻を届ける送り先を足すと、この理由が崩れる。
+    /// 進んでも、増えるのは順番待ちの列だけで、合成の締切（kanade の `close_talk_deadline_ms` ＝
+    /// 30,000 ms）だけが切れる赤は作らない。これが「追い越しうる時刻には頭打ちを置く」
+    /// （`spine_wait.rs`）の例外である理由で、時計の先行の檻（`ghost_switch_talk_clock_tests.rs`）が
+    /// 固定する。kanade へ時刻を届ける送り先を足すと、この理由が崩れる。
     fn inject_talk_tick(&mut self) {
         self.talk_clock_ms += TICK_STEP_MS;
         let now = MonotonicMs(self.talk_clock_ms);
@@ -586,8 +584,7 @@ impl SwitchRig {
         }))
     }
 
-    /// 段を回さずに `cond` だけを待つ（別スレッドの到着を読むだけの待ち・目印の無い古い待ちを直に呼んで
-    /// いた所の移し先）。打ち切りは進みの目印で決め、届かなければ文言を標準エラーへ 1 行出して `false`。
+    /// 段を回さずに `cond` だけを待つ（別スレッドの到着を読むだけの待ち）。打ち切りは進みの目印で決め、届かなければ文言を標準エラーへ 1 行出して `false`。
     #[track_caller]
     pub(crate) fn wait_for(&self, cond: impl FnMut() -> bool) -> bool {
         let probe = self.progress_probe();
@@ -660,12 +657,10 @@ fn reported(result: Result<(), WaitFailure>) -> bool {
     }
 }
 
-/// 根の下の App スコープの置き場。
 fn app_dir_of(root: &Path) -> PathBuf {
     root.join("profile")
 }
 
-/// ゴーストの根のフォルダ名。
 fn folder_of(ghost_root: &Path) -> String {
     ghost_root
         .file_name()
@@ -717,10 +712,10 @@ fn rewrite_lines(path: &Path, map: impl Fn(&str) -> String) {
     std::fs::write(path, rewritten.join("\r\n")).expect("テキストを書き換える");
 }
 
-// 足場の待ちの檻（areka-P0-ghost-session-test-load-flake タスク 3.2・檻 9・10）。
+// 足場の待ちの檻。
 #[path = "ghost_switch_rig_wait_tests.rs"]
 mod rig_wait_tests;
 
-// 時計の先行の檻（areka-P0-ghost-session-test-load-flake タスク 3.3・檻 8・要件 2.6）。
+// 時計の先行の檻。
 #[path = "ghost_switch_talk_clock_tests.rs"]
 mod talk_clock_tests;

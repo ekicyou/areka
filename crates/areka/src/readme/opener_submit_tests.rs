@@ -1,4 +1,4 @@
-//! 開く専用のスレッドと唯一の入口のテスト（areka-P0-open-external-tags task 3.4・要件 7.1・7.5・10.1）。
+//! 開く専用のスレッドと唯一の入口のテスト。
 //!
 //! 入口 `submit` は差し込んだ送り先（`Opener::from_sender`）で判定する。`Opener::spawn` で起こした
 //! スレッドはテストのビルドでは OS を呼ばずに断る口を持つので、その記録に行き先が積まれるかを
@@ -167,7 +167,7 @@ fn submit_to_a_closed_thread_logs_one_error() {
     assert_one_drop(&events, "disconnected");
 }
 
-/// テストのビルドで起こしたスレッドは OS を呼ばず、断る口の記録に積む（要件 10.1）。
+/// テストのビルドで起こしたスレッドは OS を呼ばず、断る口の記録に積む。
 #[test]
 fn spawned_thread_in_test_build_records_and_refuses() {
     let tmp = TempPath::new("open-ext-spawn");

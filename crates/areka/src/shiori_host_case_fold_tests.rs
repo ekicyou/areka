@@ -1,11 +1,10 @@
-//! SHIORI の `GetProperty` に英字の大小違いの名前を渡す檻（`areka-P0-property-name-case-fold`
-//! 要件 2.2・2.3・2.4・5.4）。
+//! SHIORI の `GetProperty` に英字の大小違いの名前を渡す檻。
 //!
 //! テスト用の sylphya（[`super::spawn_test_sylphya_sink`]・偽 IO）に `baseware.name = areka`（静的構成の
 //! 点付き＝大域区画）と自由な名前 `path.to.key = some-value`（問い手の区画）を載せ、`barrier` の後に
 //! COM ポインタ経由の `get_property` で聞く。受け口は名前を手直しせず読み手へ渡すので、大小の畳みは
 //! sylphya の鍵の綴り（`parse_dotted`）だけが担う。前に空白のある ` baseware.name` は空白を削らず
-//! 「無い名前」のまま（要件 2.3）。
+//! 「無い名前」のまま。
 
 use super::*;
 use shiori_abi::error::ShioriError;

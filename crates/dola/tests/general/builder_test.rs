@@ -1,16 +1,15 @@
-//! Builder API tests
-//! Tasks 9.2, 10.2
+//! Builder API のテスト
 
 use dola::*;
 
 // =============================================================
-// Task 9.2: DolaDocumentBuilder tests
+// DolaDocumentBuilder tests
 // =============================================================
 
 mod document_builder_tests {
     use super::*;
 
-    /// 検証は通ってもコンパイルで落ちる文書（キーフレームの循環）は build で拒む（#32）
+    /// 検証は通ってもコンパイルで落ちる文書（キーフレームの循環）は build で拒む
     #[test]
     fn build_rejects_compile_failing_document() {
         let kf = |name: &str, at: &str| StoryboardEntry {
@@ -80,7 +79,6 @@ mod document_builder_tests {
             .build()
             .unwrap();
 
-        // Serialize → deserialize → compare
         let json = serde_json::to_string_pretty(&doc).unwrap();
         let deserialized: DolaDocument = serde_json::from_str(&json).unwrap();
         assert_eq!(doc, deserialized);
@@ -119,7 +117,7 @@ mod document_builder_tests {
 }
 
 // =============================================================
-// Task 10.2: StoryboardBuilder tests
+// StoryboardBuilder tests
 // =============================================================
 
 mod storyboard_builder_tests {

@@ -1,39 +1,28 @@
-//! 消費者台帳（コマンド名→担当消費者の宣言表＋一意性檻・areka-P0-mayuna-compose design.md「dola — 名前写像 API の
-//! 退役（＋areka 消費者台帳）」・要件 2.2/2.6・D10）。
+//! 消費者台帳（コマンド名→担当消費者の宣言表＋一意性檻）。
 //!
-//! dola（配送層）はコマンド名の語彙も名前写像 API も持たず（`command_target_of` 退役・areka-P0-mayuna-compose 設計 D10）、
-//! 汎用コマンド cue を完全に不透明な荷物として broadcast する。各消費者は自らのコマンド名
-//! リテラル（`MoveCueSink`＝`"move"`・seriko＝`"bind"`）で cue を**名前自己選別**する
-//! （`move_cue.rs` の `MoveCueSink::emit`）。
+//! dola（配送層）はコマンド名の語彙を持たず、汎用コマンド cue を不透明な荷物として broadcast する。
+//! 各消費者は自らのコマンド名リテラル（`MoveCueSink`＝`"move"`・seriko＝`"bind"`）で cue を
+//! **名前自己選別**する（`move_cue.rs` の `MoveCueSink::emit`）。本台帳はその一意性不変条件を、
+//! 結線層（areka app 層）で宣言・検証する単一権威表である（dola の権威表ではない）。
+//! コマンドの追加は「消費者＋本表 1 行」のみで dola 無改変。
 //!
-//! 本台帳はその自己選別モデルの一意性不変条件を、結線層（areka app 層）で宣言・検証する単一
-//! 権威表である。dola の権威表ではない（配送層は語彙フリー）。以後のコマンド追加は
-//! 「消費者＋本表 1 行」のみで **dola 無改変**（areka-P0-mayuna-compose 要件 2.6 の構造的保証）。
+//! # 登記の粒度＝「名前＋選別子」
 //!
-//! # 登記の粒度＝「名前＋選別子」（areka-P0-scope-zorder-pinning 要件 11.2/11.3）
-//!
-//! 消費の粒度はコマンド名だけとは限らない。`\![move]` は名前だけで担当が決まる（`MoveCueSink`
-//! は第 1 引数を見ずに `name != "move"` で選別する）が、`\![set,zorder,…]` は**第 1 引数まで
-//! 見て**初めて担当が決まる（`ZOrderCueSink` は `("set","zorder")`／`("reset","zorder")` の組
-//! だけを受理し、`\![set,他]` は担当外として読み飛ばす）。
-//!
-//! そこで登記のキーを **(コマンド名, 選別子)** の組とし、選別子＝**第 1 引数**を
-//! `Option<String>` で持つ。2 つの形の意味は次のとおり。
+//! `\![move]` は名前だけで担当が決まる（`MoveCueSink` は第 1 引数を見ずに `name != "move"` で選別する）が、
+//! `\![set,zorder,…]` は**第 1 引数まで見て**初めて担当が決まる（`ZOrderCueSink` は
+//! `("set","zorder")`／`("reset","zorder")` の組だけを受理し、`\![set,他]` は読み飛ばす）。
+//! そこで登記のキーを **(コマンド名, 選別子)** の組とし、選別子＝**第 1 引数**を `Option<String>` で持つ。
 //!
 //! - **選別子なし**（`(name, None)`）＝「この名前の出現は、第 1 引数が何であれ全てこの担当」。
 //!   `("move", None)`・`("bind", None)` がこれ。
 //! - **選別子つき**（`(name, Some(sel))`）＝「この名前の出現のうち、第 1 引数がちょうど `sel`
 //!   のものだけがこの担当」。`("set", Some("zorder"))`・`("reset", Some("zorder"))` がこれ。
-//!   名簿に無い第 1 引数（例: `\![set,nosuch]`）は**担当なし**であり、将来 別の担当を
-//!   足せる余地として空いている（areka-P0-scope-zorder-pinning 要件 11.3）。
+//!   名簿に無い第 1 引数（例: `\![set,nosuch]`）は**担当なし**であり、将来 別の担当を足せる余地として空いている。
 //!
-//! # 一意性檻＝「1 コマンド出現に高々 1 担当」（areka-P0-scope-zorder-pinning 要件 11.3）
-//!
-//! 不変条件は名前ではなく**実際の消費の粒度**（名前＋第 1 引数）で述べる。台帳はこれを 2 つの
-//! 規則で保つ。
+//! # 一意性檻＝「1 コマンド出現に高々 1 担当」
 //!
 //! 1. **同じ組の二重登録を拒む**——[`ConsumerLedger::try_register`] は既登記の組へ再登記すると
-//!    [`LedgerError::Duplicate`] を返す（多重結線の検出を観測可能化する）。
+//!    [`LedgerError::Duplicate`] を返す。
 //! 2. **同一名で選別子の有無を共存させない**——`("set", None)` と `("set", Some("zorder"))` が
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
@@ -46,12 +35,10 @@
 //! 受け口（各 `*CueSink`）は自らの名前と選別子で自己選別し、ここを引かない。本表を実行中に引くのは
 //! strict の記録の判定（[`ArekaStrictJudges`](crate::strict_judges::ArekaStrictJudges)）と MCP の `check_script` で、
 //! 本表の行がそのまま「その `\!` を拾う担当がいるか」の答えになる。受け口と本表は一致していなければならないが、
-//! 依存はしない——`ZOrderCueSink` が受理する組と、正準台帳に載る zorder の行
-//! （`("set", Some("zorder"))`・`("reset", Some("zorder"))`）が同じであることは、本モジュールの
-//! テストがその組を名指しで固定する。`runtime` の受け口については、表の全行と、表に
-//! 無い組の掛け合わせを実際に配って一致を固定する（`areka` の `runtime_tests/consumer_ledger_agreement_tests.rs`・
-//! areka-P0-mcp-author-tools 要件 3.11）。見本の組が表の行と一致することの判定は、この crate の
-//! `consumer_ledger_agreement_tests.rs` にある。
+//! 依存はしない。`ZOrderCueSink` が受理する組と正準台帳の zorder の行が同じであることは、本モジュールの
+//! テストが名指しで固定する。`runtime` の受け口については、表の全行と表に無い組の掛け合わせを実際に配って
+//! 一致を固定する（`areka` の `runtime_tests/consumer_ledger_agreement_tests.rs`）。見本の組が表の行と
+//! 一致することの判定は、この crate の `consumer_ledger_agreement_tests.rs` にある。
 
 use std::collections::BTreeMap;
 
@@ -80,25 +67,24 @@ pub enum CommandConsumer {
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breset_2csticky-window_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cresetballoonpos_5d:1
     MoveSink,
-    /// `\![bind]`・`\![bind-noevent]`（着せ替え）の担当消費者（表示系 seriko）。正準台帳が登記する
-    /// （script-small-tags 要件 3.7・6.4）。
+    /// `\![bind]`・`\![bind-noevent]`（着せ替え）の担当消費者（表示系 seriko）。
     Seriko,
     /// 重なり指定・重なり解除の担当消費者
     /// （[`ZOrderCueSink`](super::zorder_cue::ZOrderCueSink)）。名前だけでは決まらず、
-    /// 第 1 引数が `zorder` の出現だけを担当する（areka-P0-scope-zorder-pinning 要件 11.2）。
+    /// 第 1 引数が `zorder` の出現だけを担当する。
     ZOrderSink,
     /// 開く系の受け口（説明書を含む）の担当消費者
     /// （本体の `readme::readme_cue::ReadmeCueSink`）。`open` は名前だけでは決まらず、
     /// 第 1 引数が `readme`・`file`・`browser`・`explorer`・`editor`・`mailer` の出現だけを担当する
     /// （作り付けの窓の `help` などは将来の担当の余地）。運搬名 `\j` は選別子なしで
-    /// 担当する（areka-P0-open-external-tags 要件 1.5・9.2）。
+    /// 担当する。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bopen_2creadme_5d:1
     ReadmeSink,
     /// 中断の無効化の区間の出入りの担当消費者
     /// （[`NoUserBreakCueSink`](super::user_break_cue::NoUserBreakCueSink)）。名前だけでは
     /// 決まらず、第 1 引数が `nouserbreakmode` の出現だけを担当する（`enter`／`leave` の
-    /// 別の第 1 引数——`onlinemode` など——は将来の担当の余地・areka-P0-balloon-break 要件 8.2）。
+    /// 別の第 1 引数——`onlinemode` など——は将来の担当の余地）。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5benter_2cnouserbreakmode_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bleave_2cnouserbreakmode_5d:1
@@ -106,35 +92,34 @@ pub enum CommandConsumer {
     /// 文字装飾 `\f[...]` の担当消費者（文字レンダリング層——`areka_emo_text` の
     /// `state_decoration.rs` が運搬名で自己選別して適用する）。キーは第 1 引数
     /// （`bold`／`color`／`height` …）で分かれないので、登記は選別子なしの 1 行である
-    /// （areka-P0-text-decoration-canon 要件 2.4）。印の合図 `*`（`\![*]`・`%*`）も選別子なしの
-    /// 1 行で担当する（script-small-tags 要件 4.1・6.5）。
+    /// （`bold`／`color`／`height` …）で分かれないので、登記は選別子なしの 1 行である。
+    /// 印の合図 `*`（`\![*]`・`%*`）も選別子なしの 1 行で担当する。
     TextLayer,
     /// ゴーストの切替のタグの担当消費者
     /// （[`ChangeCueSink`](super::change_cue::ChangeCueSink)）。名前だけでは決まらず、
     /// 第 1 引数が `ghost` の出現だけを担当する（`shell`／`balloon` は
-    /// [`SwitchSink`](Self::SwitchSink) の持ち場・areka-P0-ghost-shell-balloon-switch 要件 1.10）。
+    /// [`SwitchSink`](Self::SwitchSink) の持ち場）。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1
     ChangeSink,
     /// シェル・バルーンの切替のタグの担当消費者
     /// （[`SwitchCueSink`](super::switch_cue::SwitchCueSink)）。名前だけでは決まらず、
     /// 第 1 引数が `shell`／`balloon` の出現だけを担当する（`ghost` は
-    /// [`ChangeSink`](Self::ChangeSink) の持ち場・areka-P0-shell-balloon-switch 要件 1.15）。
+    /// [`ChangeSink`](Self::ChangeSink) の持ち場）。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1
     SwitchSink,
     /// 書庫を入れるタグの担当消費者
     /// （本体の `install::install_cue::InstallCueSink`）。名前だけでは決まらず、
-    /// 第 1 引数が `install` の出現だけを担当する（`execute` の別の第 1 引数は担当外・
-    /// areka-P0-ghost-install 要件 1.5〜1.7）。
+    /// 第 1 引数が `install` の出現だけを担当する（`execute` の別の第 1 引数は担当外）。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1
     InstallSink,
     /// ネットワーク更新のタグの担当消費者
     /// （本体の `update::update_cue::UpdateCueSink`）。`updatebymyself`・`update`・
     /// `updateother` の 3 つの名前を選別子なしで担当する（第 1 引数は更新対象・指定であって担当を
-    /// 分けない・areka-P0-network-update 要件 1.5〜1.8）。
+    /// 分けない）。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bupdatebymyself_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bupdate_2c_66f4_65b0_5bfe_8c61_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1
@@ -151,22 +136,21 @@ pub enum CommandConsumer {
     /// 第 1 引数は書き込む key であって担当を分けないので、登記は選別子なしの 1 行である。
     PropertyWrite,
     /// プロパティの読み `\![get,property,イベント名,名前…]` の担当（`areka_ghost` の
-    /// `PropGetCueSink` が名前 `get` と第 1 引数 `property` で自己選別する）。runtime の外の担当である
-    /// （shell-scale-linkage 要件 1.8）。
+    /// `PropGetCueSink` が名前 `get` と第 1 引数 `property` で自己選別する）。runtime の外の担当である。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1
     PropertyRead,
     /// バルーンの寿命の受け口の担当消費者
     /// （[`BalloonLifecycleSink`](super::talk_lifecycle::BalloonLifecycleSink)）。名前だけでは
     /// 決まらず、第 1 引数が `balloontimeout` の `set` の出現だけを担当する（時間切れまでの待ち時間の
-    /// 差し替え・areka-P0-balloon-lifecycle-events 要件 8.1・9.10）。
+    /// 差し替え）。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1
     LifecycleSink,
     /// 読み直しのタグの担当消費者（[`ReloadCueSink`](super::reload_cue::ReloadCueSink)）。`reload` は
     /// 名前だけでは決まらず、第 1 引数が `ghost`・`shiori`・`shell`・`balloon`・`descript` の出現だけを
-    /// 担当する（`makoto` は makoto-reload-directives が後から足す余地・`aigraph` は担当なし・
-    /// areka-P0-mcp-reload 要件 11.2）。旧い `reloadsurface` は選別子なしで担当する。
+    /// 担当する（`makoto` は makoto-reload-directives が後から足す余地・`aigraph` は担当なし）。
+    /// 旧い `reloadsurface` は選別子なしで担当する。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cghost_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cshiori_5d:1
@@ -176,16 +160,14 @@ pub enum CommandConsumer {
     ReloadSink,
     /// 常に手前の指令の担当消費者（[`WindowStateCueSink`](super::window_state_cue::WindowStateCueSink)）。
     /// `set` は第 1 引数が `windowstate` の出現だけを、第 2 引数（`stayontop`・`!stayontop`・
-    /// `minimize` …）に関わらず担当する。運搬名の `\v` は選別子なしで担当する（stay-on-top-directives
-    /// 要件 1.8）。
-    ///
+    /// `minimize` …）に関わらず担当する。運搬名の `\v` は選別子なしで担当する。
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cwindowstate_2cstayontop_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1
     WindowStateSink,
 }
 
 /// 選別子を記録本文へ書くときの見え方（「無い」側も読める形にする——片側だけの本文では
-/// 衝突が読めないため・areka-P0-scope-zorder-pinning 要件 8.3 の規律）。
+/// 衝突が読めないため）。
 fn selector_label(selector: &Option<String>) -> String {
     match selector {
         Some(selector) => format!("'{selector}'"),
@@ -193,10 +175,10 @@ fn selector_label(selector: &Option<String>) -> String {
     }
 }
 
-/// 消費者台帳の構築時失敗（一意性違反の観測可能化・log-first ではなく Result で呼び手へ返す）。
+/// 消費者台帳の構築時失敗（一意性違反を Result で呼び手へ返す）。
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum LedgerError {
-    /// 同じ（コマンド名, 選別子）の組が二重登録された（多重結線＝areka-P0-scope-zorder-pinning 要件 11.3 の禁止事項）。
+    /// 同じ（コマンド名, 選別子）の組が二重登録された（多重結線）。
     #[error(
         "コマンド名 '{name}'（選別子: {}）が消費者台帳へ二重登録されました（1 出現=高々 1 担当）",
         selector_label(.selector)
@@ -210,7 +192,7 @@ pub enum LedgerError {
     /// 同一コマンド名について、選別子を伴う登記と伴わない登記を同居させようとした。
     ///
     /// 同居すると、選別子つきの組に当たる 1 出現へ 2 つの担当が作用してしまい
-    /// 「1 コマンド出現に高々 1 担当」（areka-P0-scope-zorder-pinning 要件 11.3）が破れる。順序はどちらでも拒む。
+    /// 「1 コマンド出現に高々 1 担当」が破れる。順序はどちらでも拒む。
     #[error(
         "コマンド名 '{name}' は選別子 {} で登記済みのため、選別子 {} を追加できません\
          （同一名で選別子の有無は共存できない・1 出現=高々 1 担当）",
@@ -227,7 +209,7 @@ pub enum LedgerError {
     },
 }
 
-/// （コマンド名, 選別子）→ 担当消費者の宣言台帳（結線層の単一権威表・areka-P0-scope-zorder-pinning 要件 11.2/11.3）。
+/// （コマンド名, 選別子）→ 担当消費者の宣言台帳（結線層の単一権威表）。
 ///
 /// 登記は [`try_register`](Self::try_register)（重複と選別子の排他違反を拒否）で行い、
 /// 照会は [`consumer_of`](Self::consumer_of)（未登記＝`None`＝自己選別モデルの良性未処理）で行う。
@@ -269,7 +251,7 @@ impl ConsumerLedger {
             });
         }
         // 同一名の既存登記だけを走る（`(name, None)` は同名キーの最小値なので、そこから
-        // 名前が変わるまでが同一名の範囲）。選別子の有無が食い違うものが 1 つでもあれば排他違反。
+        // 名前が変わるまでが同一名の範囲）。
         let same_name_from: LedgerKey = (name.to_string(), None);
         let conflict = self
             .table
@@ -297,8 +279,8 @@ impl ConsumerLedger {
     ///    第 1 引数の無い出現はどちらも `None`＝担当なしになる。
     ///
     /// 相互排他（[`LedgerError::SelectorConflict`]）により 1 と 2 は同時に成り立たないので、
-    /// 1 出現が引く担当は高々 1 つである（areka-P0-scope-zorder-pinning 要件 11.3）。未登記名は `None`——自己選別モデルでは
-    /// 担当のいないコマンドは良性の未処理であって、異常ではない（areka-P0-scope-zorder-pinning 要件 11.2）。
+    /// 1 出現が引く担当は高々 1 つである。未登記名は `None`——自己選別モデルでは
+    /// 担当のいないコマンドは良性の未処理であって、異常ではない。
     pub fn consumer_of(&self, name: &str, selector: Option<&str>) -> Option<CommandConsumer> {
         if let Some(consumer) = self.table.get(&(name.to_string(), None)) {
             return Some(*consumer);
@@ -316,9 +298,8 @@ impl ConsumerLedger {
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。中断の無効化の 2 行と
     /// `NoUserBreakCueSink` の関係も同じである。
     ///
-    /// 以後のコマンド追加は「消費者＋本表 1 行」のみで **dola 無改変**（areka-P0-mayuna-compose 要件 2.6）。正準表は一意ゆえ
-    /// 登記は Ok を返す——万一将来の編集で重複や選別子の排他違反を作れば、名前と選別子を添えて
-    /// 構築時に panic して回帰を止める（一意性の内部整合檻）。
+    /// 正準表は一意ゆえ登記は Ok を返す——万一将来の編集で重複や選別子の排他違反を作れば、名前と選別子を
+    /// 添えて構築時に panic して回帰を止める。
     pub fn canonical() -> Self {
         let mut ledger = Self::new();
         for &(name, selector, consumer) in CANONICAL_ROWS {
@@ -336,7 +317,7 @@ impl ConsumerLedger {
 /// `consumer_ledger_test_support.rs` の `samples` は、組の一致を `samples_cover_exactly_the_ledger_rows`
 /// が判定する）。
 ///
-/// `(reload, makoto)` は makoto-reload-directives が後から足す（areka-P0-mcp-reload 要件 11.2）。
+/// `(reload, makoto)` は makoto-reload-directives が後から足す。
 const CANONICAL_ROWS: &[(&str, Option<&str>, CommandConsumer)] = {
     use CommandConsumer::*;
     &[
@@ -375,16 +356,16 @@ const CANONICAL_ROWS: &[(&str, Option<&str>, CommandConsumer)] = {
         ("reload", Some("balloon"), ReloadSink),
         ("reload", Some("descript"), ReloadSink),
         ("reloadsurface", None, ReloadSink),
-        // 吸着・窓の組・バルーン位置初期化（areka-P0-window-link-directives 要件 1・3・7）。
+        // 吸着・窓の組・バルーン位置初期化。
         ("set", Some("alignmenttodesktop"), MoveSink),
         ("set", Some("alignmentondesktop"), MoveSink),
         ("set", Some("sticky-window"), MoveSink),
         ("reset", Some("sticky-window"), MoveSink),
         ("execute", Some("resetballoonpos"), MoveSink),
-        // バルーンの動かせない指定（descript-window-keys 要件 5.7）。
+        // バルーンの動かせない指定。
         ("lock", Some("balloonmove"), MoveSink),
         ("unlock", Some("balloonmove"), MoveSink),
-        // 常に手前の指令（stay-on-top-directives 要件 1.8）。第 2 引数の読み分けは受け口が持つ。
+        // 常に手前の指令。第 2 引数の読み分けは受け口が持つ。
         ("set", Some("windowstate"), WindowStateSink),
         (
             areka_parsers::sakura::RAISE_TAG_CARRIER,
@@ -393,7 +374,7 @@ const CANONICAL_ROWS: &[(&str, Option<&str>, CommandConsumer)] = {
         ),
         (areka_seriko::BIND_NOEVENT_COMMAND, None, Seriko),
         (areka_parsers::sakura::MARKER_COMMAND, None, TextLayer),
-        // プロパティの読み（shell-scale-linkage 要件 1.8）。受け口は runtime の外（areka_ghost）。
+        // プロパティの読み。受け口は runtime の外（areka_ghost）。
         ("get", Some("property"), PropertyRead),
     ]
 };
@@ -406,7 +387,7 @@ mod tests;
 #[path = "consumer_ledger_agreement_tests.rs"]
 mod agreement_tests;
 
-// areka-runtime のテストと本体のテストの両方が使う補助（spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+// areka-runtime のテストと本体のテストの両方が使う補助。
 #[cfg(any(test, feature = "test-support"))]
 #[path = "consumer_ledger_test_support.rs"]
 pub mod test_support;

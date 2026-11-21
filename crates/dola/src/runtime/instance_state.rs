@@ -38,19 +38,11 @@ impl InstanceState {
     /// 遷移が不正な場合は `Err(current_state)` を返す。
     pub fn try_transition(&self, target: InstanceState) -> Result<InstanceState, InstanceState> {
         match (self, &target) {
-            // Created → Playing（コンパイル完了）
             (Self::Created, InstanceState::Playing) => Ok(target),
-
-            // Playing → Paused
             (Self::Playing, InstanceState::Paused) => Ok(target),
-
-            // Paused → Playing（Resume）
+            // Resume
             (Self::Paused, InstanceState::Playing) => Ok(target),
-
-            // Playing / Paused → 任意の終了状態
             (Self::Playing | Self::Paused, t) if t.is_terminal() => Ok(target),
-
-            // それ以外は不正遷移
             _ => Err(*self),
         }
     }
@@ -59,9 +51,8 @@ impl InstanceState {
     ///
     /// `Never` ポリシーは終了状態に直接対応しないため `None` を返す。
     ///
-    /// 不変条件: 返却される `Some(state)` は常に `is_terminal() == true`
-    /// （`conflict_resolver` の expect / debug_assert はこの不変条件に依存する。
-    /// このファイルの tests::instance_state_properties::from_policy_results_are_terminal で検証済み）。
+    /// 返却される `Some(state)` は常に `is_terminal() == true`
+    /// （`conflict_resolver` の debug_assert がこれに依存する）。
     pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
         match policy {
             InterruptionPolicy::Cancel => Some(Self::Cancelled),
@@ -78,9 +69,7 @@ impl InstanceState {
 mod tests {
     use super::*;
 
-    // =============================================================================
-    // Task 1.1: InstanceState 状態遷移テスト
-    // =============================================================================
+    // InstanceState 状態遷移テスト
 
     mod instance_state_transitions {
         use super::*;
@@ -153,7 +142,7 @@ mod tests {
         }
 
         /// from_policy が返す Some(state) は全て終了状態である
-        /// （conflict_resolver の expect / debug_assert が依存する不変条件）
+        /// （conflict_resolver の debug_assert が依存する）
         #[test]
         fn from_policy_results_are_terminal() {
             let policies = [

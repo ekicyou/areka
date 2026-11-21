@@ -1,5 +1,5 @@
 //! `transition_judge` の**負例**——判定語を壊した入力・フィールドの欠落・フレーム番号の
-//! 周回境界（`areka-P0-dpi-transition-atomicity` 要件 7.4／8.5・D14）。
+//! 周回境界。
 //!
 //! ここが押さえるのは 1 点に尽きる: **壊れた入力が合格に化けない**こと。負例を集めるのは、
 //! 壊れ方によって「静かに消える場所」が 3 通りに分かれるからである:
@@ -276,7 +276,7 @@ fn a_transition_without_any_window_write_is_not_a_pass() {
 }
 
 // ---------------------------------------------------------------------------
-// フレーム番号の周回境界（D14）
+// フレーム番号の周回境界
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -306,8 +306,7 @@ fn the_wraparound_boundary_itself_still_passes_when_everything_lands_in_one_fram
 
 #[test]
 fn an_all_zero_frame_series_is_indeterminate_and_never_a_pass() {
-    // `frame=0` は tick 前の World が返す縮退値であり、「1 フレームで完了」の根拠にしない
-    // （`areka-P0-dpi-transition-atomicity` 要件 8.5）。判定量としては `frames_to_last_write = Some(0)` が立つので、
+    // `frame=0` は tick 前の World が返す縮退値であり、「1 フレームで完了」の根拠にしない。判定量としては `frames_to_last_write = Some(0)` が立つので、
     // `frames_indeterminate` を別の違反として返さないとそのまま合格になる。
     let all_zero = compliant_transition_lines_at(0, 0);
     let summary = summarize_lines(&all_zero);

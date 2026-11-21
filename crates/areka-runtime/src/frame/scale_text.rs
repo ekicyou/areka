@@ -19,73 +19,35 @@ use super::{
     reconcile_window_size, shell_target,
 };
 
-/// 文字層 k 追従フェーズ（毎フレーム）: 装着済み balloon scope の
-/// 文字層 binding を presenter の**現適用 k** へ合わせ直す。戻り値は実際に binding を再構築した
-/// scope（昇順・観測用。本番＝[`frame_system`] は捨てる）。
+/// 文字層 k 追従フェーズ（毎フレーム）: 装着済み balloon scope の文字層 binding を presenter の現適用 k へ合わせ直す。戻り値は実際に binding を再構築した scope（昇順・観測用。本番の [`frame_system`] は捨てる）。
 ///
-/// バルーンの**文字**は emo-text の binding（装着時の k を焼き付ける）に載るため、窓とバルーン画像
-/// だけを再スケールすると文字だけが旧 k の寸法に取り残される（6.5 一次実走で実測した欠陥）。本
-/// フェーズはその取り残しを構造的に消す。
+/// バルーンの文字は emo-text の binding（装着時の k を焼き付ける）に載るため、窓とバルーン画像だけを再スケールすると文字だけが旧 k の寸法に取り残される。
 ///
-/// # なぜ「イベント駆動」ではなく毎フレーム走査なのか（binding 変化の検出）
+/// # なぜイベント駆動でなく毎フレーム走査か
 ///
-/// 素朴には「[`run_dpi_phase`] の `refresh_scale` が `Some` を返した balloon 窓へ伝搬する」と書け
-/// るが、**`Some` と「適用 k が変わった」は同値ではない**——`refresh_scale` の doc が明記するとおり
-/// 次の 2 つで乖離する:
+/// [`run_dpi_phase`] の `refresh_scale` が `Some` を返すことと「適用 k が変わった」ことは同値でない。
 ///
-/// - **不可視のとき**: `refresh_scale` は再表示せず `applied` も更新せずに `None` を返す。適用 k は
-///   その後の `Show`（`apply_show`＝drain 相）で新 k へ跳ぶ——エッジは既に消費済みで二度と来ない
-///   （`\b[-1]`→`\b[0]` は本番の通常列であり、バルーンは大半の時間が不可視である）。
-/// - **k は変わったが丸め後の物理寸が同じとき**: `refresh_scale` は再表示に成功しても
-///   `take_pending_resize` が `None` ゆえ `None` を返す。文字層の供給面は
-///   `ceil(validrect 寸 × k)`（AC 8.2）と別の丸めで決まるため、こちらは寸が変わり得る。
+/// - 不可視のとき: `refresh_scale` は再表示も `applied` 更新もせず `None` を返す。適用 k は後の `Show`（`apply_show`＝drain 相）で跳び、エッジは消費済みで二度と来ない（バルーンは大半の時間が不可視）。
+/// - k は変わったが丸め後の物理寸が同じとき: `take_pending_resize` が `None` ゆえ `None` を返す。文字層の供給面は `ceil(validrect 寸 × k)` と別の丸めで決まり、寸は変わり得る。
 ///
-/// ゆえに検出点は「**presenter の現状態から組み直した文字層 binding が、当該 actor の現 binding と
-/// 食い違っているか**」であり、それを判定できる唯一の権威は
-/// [`TextLayerRuntime::refresh_actor_binding`] である。本フェーズは判定を自前で複製せず（第 2 の
-/// ガードは本家と乖離し得る）、毎フレーム [`TextLayerRuntime::refresh_actor_scale`] へ委ねる。
+/// ゆえに検出点は「presenter の現状態から組み直した文字層 binding が当該 actor の現 binding と食い違うか」で、判定の権威は [`TextLayerRuntime::refresh_actor_binding`] だけである。判定を複製せず（第 2 のガードは本家と乖離し得る）、毎フレーム [`TextLayerRuntime::refresh_actor_scale`] へ委ねる。
 ///
-/// あちらの判定キーは **binding 全体（k・物理寸・image 原寸・slot・window）と、その image 原寸で
-/// モデルから解き直した `ResolvedBalloonText`（文字描画領域を含む）の連言**であり、すべて同値なら
-/// **再構築せず `false`** を返す（churn ガード）。未登録 actor も `false`（装着は
-/// `register_actor_view` の領分）。**k が同値でも面実寸や当該 scope の `validrect` が違えば再構築
-/// する**——k の同値のみを根拠に省略しない（scope 別バルーン定義が当事者であり、旧契約
-/// 「同値 k なら再構築しない」では相方側の領域変化を取りこぼす）。費用は balloon 1 枚あたり
-/// `ResolvedBalloonText` の再解決 1 回と、binding／解決済み領域の 2 構造体比較。
+/// 判定キーは binding 全体（k・物理寸・image 原寸・slot・window）と、その image 原寸でモデルから解き直した `ResolvedBalloonText` の連言で、すべて同値なら再構築せず `false`（churn ガード）。未登録 actor も `false`（装着は `register_actor_view` の領分）。k が同値でも面実寸や当該 scope の `validrect` が違えば再構築する。
 ///
 /// # 呼ぶ位置（[`frame_system`] 内）
 ///
-/// 適用 k の更新点は 1 フレームに 2 つ——[`run_dpi_phase`] の `refresh_scale` と
-/// [`run_drain_phase`] の `apply_show`。本フェーズは**両者の下流**かつ [`run_text_phase`]
-/// （`present_frame`）の**上流**に置く。こうすると、どちらの経路で k が跳ねても同一フレーム内で
-/// binding が組み直され、その直後の描画が新 k の物理寸で走る（1 フレームの旧寸残りが生じない）。
+/// 適用 k の更新点は [`run_dpi_phase`] の `refresh_scale` と [`run_drain_phase`] の `apply_show` の 2 つ。本フェーズは両者の下流かつ [`run_text_phase`]（`present_frame`）の上流に置き、どちらの経路で k が跳ねても同一フレーム内で binding を組み直して、直後の描画を新 k の物理寸で走らせる。
 ///
-/// # 縮退（log-first だが log spam にしない）
+/// # 縮退
 ///
-/// `text_slot_view` が `None`（初回 `ShowSurface` が成立していない＝表示未確立）なら再追従できず
-/// skip する。毎フレーム走査ゆえ素朴に `warn!` すると毎フレーム鳴るため、**scope ごとに一度だけ**
-/// 警告し（`text_scale_warned`・emo-text の `unresolved_warned` と同型のエッジガード）、view が
-/// 取れるようになった時点で再武装する（再度落ちれば再び 1 回鳴る）。なお `Hide` は
-/// `text_slot_view` を `None` にしない（`apply_hide` は mount／chain／`applied`／`native_size` を
-/// 保持する）ため、**不可視は本縮退経路に落ちない**——不可視の間は判定キーが同値のまま no-op が
-/// 続き、`Show` で `applied` が跳ねた次の走査が再追従する。
+/// `text_slot_view` が `None`（初回 `ShowSurface` が未成立）なら再追従できず skip する。毎フレーム走査ゆえ `warn!` は scope ごとに一度だけ（`text_scale_warned`・emo-text の `unresolved_warned` と同型のエッジガード）で、view が取れた時点で再武装する。`Hide` は `text_slot_view` を `None` にしない（`apply_hide` は mount／chain／`applied`／`native_size` を保持する）ので、不可視はこの経路に落ちない。
 ///
-/// [`BalloonModel`] は attach 時に記憶した per-scope の同一モデルを再利用する（再パースしない）。
-/// actor は attach と同一写像 `ActorKey::from(scope.to_string())`。走査するのは
-/// `balloon_models` の持つ装着済みの scope である。panic しない。
+/// [`BalloonModel`] は attach 時に記憶した per-scope の同一モデルを再利用する（再パースしない）。actor は attach と同一写像 `ActorKey::from(scope.to_string())`。走査するのは `balloon_models` の持つ装着済みの scope。panic しない。
 ///
 /// # 箱の同期
 ///
-/// 同じ走査で各 scope のシェルの窓の `text_slot_view(shell_target(scope))` と、その窓がいま表示
-/// している絵の番号（`current_surface_id`）を組にして集め、最後に [`TextLayerRuntime::sync_boxes`] を
-/// 1 回呼ぶ（拡大率・絵・シェルの切替に箱の面を合わせる）。
-/// シェルの窓が未確立の scope と、差し込み口はあるが絵が非表示（`Hide`・全透明退化）で番号の無い
-/// scope は `None` を渡す（箱の登録を外す）。未確立は
-/// 起動直後の正常な状態ゆえ記録しない（毎フレーム鳴らさない）。`present_frame` の上流なので、
-/// 合わせた登録は同じフレームの描画に効く。
+/// 同じ走査で各 scope のシェルの窓の `text_slot_view(shell_target(scope))` とその窓が表示している絵の番号（`current_surface_id`）を組にして集め、最後に [`TextLayerRuntime::sync_boxes`] を 1 回呼ぶ（拡大率・絵・シェルの切替に箱の面を合わせる）。シェルの窓が未確立の scope と、絵が非表示（`Hide`・全透明退化）で番号の無い scope は `None` を渡す（箱の登録を外す）。未確立は起動直後の正常な状態なので記録しない。`present_frame` の上流なので、合わせた登録は同じフレームの描画に効く。
 pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Vec<u32> {
-    // presenter（view 供給）／runtime（適用先）／balloon_models（再利用モデル）／warn ガードは
-    // 互いに素なフィールドゆえ同時に借りられる。
     let RuntimeWiring {
         presenter,
         runtime,
@@ -103,11 +65,9 @@ pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Ve
     let mut shell_views = Vec::with_capacity(scopes.len());
     for scope in scopes {
         let target = balloon_target(scope);
-        // actor 引き当ては attach（`run_attach_phase` の `connect_balloon_text` 呼び）と**同一の写像**。
-        // 別式で組むと存在しない actor を指し、`refresh_actor_scale` の未登録 skip で静かに何も起きなくなる。
+        // attach と同一の写像で組む。別式だと存在しない actor を指し、未登録 skip で静かに何も起きなくなる。
         let actor = ActorKey::from(scope.to_string());
-        // 箱の同期の材料（差し込み口と絵の番号の組・どちらかが無ければ None）。バルーンの縮退
-        // skip より前に集める。
+        // 箱の同期の材料。バルーンの縮退 skip より前に集める。
         let shell = shell_target(scope);
         let shown = presenter
             .text_slot_view(shell)
@@ -127,7 +87,6 @@ pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Ve
         };
         // 復帰＝次に落ちたときは再び 1 回鳴らす（エッジの再武装）。
         text_scale_warned.remove(&scope);
-        // 判定（k 変化・未登録）は `refresh_actor_scale` に任せる（本フェーズは第 2 のガードを持たない）。
         let model = &balloon_models[&scope];
         if let Some(background) = unconnected_text.remove(&scope) {
             super::attach::connect_balloon_text(runtime, Some(view), actor, model, background);
@@ -151,23 +110,15 @@ pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Ve
 
 /// 窓寸 reconcile の第 2 経路（状態照合）。
 ///
-/// [`GhostWindows`] の各 scope について shell／balloon 両 target の
-/// [`ScaleReportSource::take_scale_report`] を引き、`Some(新物理寸)` を
-/// [`reconcile_window_size`] で窓 client へ反映する（char＝アンカー保存／balloon＝位置維持）。
+/// [`GhostWindows`] の各 scope の shell／balloon 両 target について [`ScaleReportSource::take_scale_report`] を引き、`Some(新物理寸)` を [`reconcile_window_size`] で窓 client へ反映する（char＝アンカー保存／balloon＝位置維持）。
 ///
-/// 報告は「表示が成立して物理寸が前回適用寸から変わった（**初回表示を含む**）」ことを表す状態で
-/// あり、`Changed<DPI>` エッジの消費順序に依存しない。ゆえに (a) エッジが初回表示より前に消費
-/// されても k₀ と実窓 DPI の差分は残置されず、(b) 既に [`run_dpi_phase`] が再表示して報告を消費
-/// 済みなら取り出しは `None` となり二重に窓を書かない。
+/// 報告は「表示が成立して物理寸が前回適用寸から変わった（初回表示を含む）」状態で、`Changed<DPI>` エッジの消費順序に依存しない。エッジが初回表示より前に消費されても k₀ と実窓 DPI の差分は残らず、[`run_dpi_phase`] が既に報告を消費していれば `None` で二重に書かない。
 ///
-/// [`GhostWindows`] 未挿入（窓生成前）は no-op。窓 entity が引けない scope は `warn!`＋skip
-/// （報告は既に取り出し済み＝次フレームへ持ち越さない——窓が無い以上反映先が無い）。panic しない。
+/// [`GhostWindows`] 未挿入（窓生成前）は no-op。窓 entity が引けない scope は `warn!`＋skip（報告は取り出し済みで持ち越さない）。panic しない。
 ///
 /// # 破棄済み窓の打ち切り
 ///
-/// 「登録は在るが**指す先の entity が既に despawn 済み**」は終了処理の**正常系**であり、
-/// `debug!`（[`DESPAWNED_SKIP_TAG`]）で当該 target を打ち切って**他 scope の処理を継続**する
-/// （警告以上を出さない）。上段の「登録が無い」`warn!` とは別事象である。
+/// 登録は在るが指す entity が despawn 済みは終了処理の正常系なので、`debug!`（[`DESPAWNED_SKIP_TAG`]）でその target を打ち切り、他 scope は継続する。「登録が無い」`warn!` とは別事象。
 pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, world: &mut World) {
     // GhostWindows は小さな Entity 写像（Clone）。target/窓の解決へ world の不変借用を跨がせない。
     let Some(ghost_windows) = world.get_resource::<GhostWindows>().cloned() else {
@@ -189,15 +140,12 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
                 GhostWindowKind::Balloon,
             ),
         ] {
-            // 整合ゲート: 待ち札のある窓へはこの経路からも書かない。
-            // **報告を取り出す前**に見送る——取り出すと消えるので、待ちが解けた後に反映する
-            // 材料が失われる（次フレームへ持ち越すには presenter に残しておくほかない）。
+            // 整合ゲート: 待ち札のある窓へはこの経路からも書かない。報告を取り出す前に見送る（取り出すと消え、待ちが解けた後に反映する材料が失われる）。
             if let Some(window) = window
                 && dpi_sync::defers_window_write(world, window, HoldSite::Reconcile)
             {
                 continue;
             }
-            // 報告が無い（＝物理寸が変わっていない／未表示／既に消費済み）なら何もしない。
             let Some(new_size) = source.take_scale_report(target) else {
                 continue;
             };
@@ -210,12 +158,7 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
                 );
                 continue;
             };
-            // 存在確認: レジストリが指す窓が既に
-            // despawn 済み（終了処理でゴースト窓が破棄された後のフレーム）なら、**正常終了系**
-            // として debug で打ち切り、**他の scope／target の処理は続ける**。報告は上で
-            // 取り出し済みのまま持ち越さない（窓が無い以上、次フレームでも反映先は無い）。
-            // 上の `None` 腕（レジストリ不整合＝warn）とは別物である——あちらは「登録が無い」、
-            // こちらは「登録はあるが指す先が消えた」で、後者だけが終了処理の正常系。
+            // 登録は在るが窓が despawn 済み（終了処理後のフレーム）は正常系。debug で打ち切り他の target は続ける。上の `None` 腕（登録が無い＝warn）とは別事象。
             if world.get_entity(window).is_err() {
                 debug!(
                     scope,
@@ -225,9 +168,7 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
                 );
                 continue;
             }
-            // 経路タグ: 本経路は「表示が成立して物理寸が変わった」状態に紐づき `Changed<DPI>`
-            // に**依存しない**（初回表示の k₀ 補正もここで landing する）。DPI 由来と名乗らせ
-            // ないため DpiReproject とは別語を貼る。
+            // DPI 由来と名乗らせないため DpiReproject とは別語を貼る（初回表示の k₀ 補正もこの経路で landing する）。
             reconcile_window_size(
                 world,
                 window,
@@ -249,18 +190,14 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
 ///
 /// 戻り値 `None` は「今フレームは描くものがない（`present_frame` を呼ばない）」を意味する。
 ///
-/// 可視性の相（`runtime::balloon_visibility`）も同じ関数で `now_talk_time` を解決する
-/// （`frame.rs` の再輸出経由）。ゆえに可視性が観測するグリフ数と text 相が描く文字は必ず同一の
-/// 注入時刻に立つ。
+/// 可視性の相（`runtime::balloon_visibility`）も同じ関数で `now_talk_time` を解決するので、可視性が観測するグリフ数と text 相が描く文字は同じ注入時刻に立つ。
 pub(crate) fn resolve_talk_time(
     override_: Option<f64>,
     frame_now: Option<f64>,
     clock: &TalkClock,
 ) -> Option<f64> {
     match override_ {
-        // テスト注入経路: override が最優先（frame_now／clock は無視）。
         Some(t) => Some(t),
-        // 本番経路: FrameTime（frame_now）→ TalkClock。frame_now 不在／epoch 未確立は None。
         None => frame_now.and_then(|now| clock.talk_time(now)),
     }
 }
@@ -280,16 +217,9 @@ pub(super) fn reveal_pending<'a>(reveals: impl Iterator<Item = &'a [f64]>, talk_
         .any(|&last| last > talk_time)
 }
 
-/// 文字の相: `talk_time` が定まるフレームでのみ
-/// `present_frame` を駆動する（`Err` は `error!`＋継続＝次フレーム再試行）。
+/// 文字の相: `talk_time` が定まるフレームでのみ `present_frame` を駆動する（`Err` は `error!`＋継続＝次フレーム再試行）。
 ///
-/// `talk_time` の解決は [`resolve_talk_time`] に委ねる（`talk_time_override` が `Some` ならそれを、
-/// なければ `FrameTime` 資源（`wintf::ecs::FrameTime`・`.0: f64`）を読んで
-/// [`TalkClock::talk_time`]）。解決が `Some(t)` のときのみ
-/// `present_frame(&mut runtime.borrow_mut(), world, t)` を呼ぶ。`Err(e)` は `error!`（`present_frame`
-/// 側で失敗源を log 済み・first error 返却）＋継続で、他 actor を巻き込まず次フレーム再試行へ委ねる
-/// （emo-text 既存契約）。解決が `None`（epoch 未確立／`FrameTime` 不在かつ override なし）なら
-/// `present_frame` を呼ばず skip する（描くものがない・hang しない）。
+/// `talk_time` は [`resolve_talk_time`] で解決する。`None`（epoch 未確立、または `FrameTime` 不在かつ override なし）なら描くものがないので `present_frame` を呼ばず skip する。`present_frame` の `Err` は失敗源で log 済みなので、他 actor を巻き込まず次フレームの再試行に委ねる。
 pub fn run_text_phase(
     wiring: &mut RuntimeWiring,
     world: &mut World,
@@ -298,11 +228,8 @@ pub fn run_text_phase(
     // 本番の frame 時刻源（headless では不在）。override が Some なら resolve_talk_time が優先採用する。
     let frame_now = world.get_resource::<FrameTime>().map(|ft| ft.0);
     let Some(talk_time) = resolve_talk_time(talk_time_override, frame_now, &wiring.clock) else {
-        // epoch 未確立（talk 未到達）または FrameTime 不在かつ override なし → 描くものがない・skip。
         return;
     };
-    // present_frame は失敗源で log 済み（first error 返却）。frame は error!＋継続で、他 actor を
-    // 巻き込まず次フレーム再試行へ委ねる（emo-text 既存契約）。
     let mut runtime = wiring.runtime.borrow_mut();
     if let Err(e) = present_frame(&mut runtime, world, talk_time) {
         error!(
@@ -311,8 +238,7 @@ pub fn run_text_phase(
             "runtime text: present_frame が失敗（他 actor 非破壊・次フレーム再試行・R2.3）"
         );
     }
-    // 発話が進行中（まだ現れていない文字が在る）なら次の画面更新を予約する（`REARM`）。タイプライタは 1 コマごとに文字が増えるので、進行中は毎画面更新
-    // 回す必要がある。現れ切ったら予約を止める——放置中まで回り続けさせないためである。
+    // 発話が進行中なら次の画面更新を予約する（`REARM`）。現れ切ったら止める——放置中まで回り続けさせないため。
     if reveal_pending(
         runtime
             .state()
@@ -322,9 +248,6 @@ pub fn run_text_phase(
     ) {
         tick_wake::mark(tick_wake::REARM);
     }
-    // 実機サインオフ用 hover 注入導線（HoverInjectConduit）: present_frame の**後**に
-    // 駆動し、`choice_active`／`choice_hit_rows` が当該フレームの提示を反映した状態で env ゲート
-    // （`AREKA_CHOICE_HOVER_INJECT`）駆動の周期巡回注入を行う。env 未設定/無効なら完全 no-op
-    // （`inject_choice_hover` を一度も呼ばない・本番既定）。`talk_time` は同じ frame clock 時刻源。
+    // 実機サインオフ用の hover 注入。present_frame の後に駆動し、choice_active／choice_hit_rows が当該フレームの提示を反映した状態で巡回注入する。env（`AREKA_CHOICE_HOVER_INJECT`）未設定なら no-op。
     super::hover_inject::drive(&mut runtime, talk_time);
 }

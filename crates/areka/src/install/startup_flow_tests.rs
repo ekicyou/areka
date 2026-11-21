@@ -1,5 +1,4 @@
-//! 根を解いてから入れ、入れた後の置き場で起動の解決を続ける口（install-before-boot タスク 4.5・
-//! 要件 1.1・1.7・4.2・4.3・4.9・4.11・6.3・9.1・9.5・9.7）。
+//! 根を解いてから入れ、入れた後の置き場で起動の解決を続ける口。
 //!
 //! 中身の口 `resolve_boot_with_env` に根の結果・旗・選び方を差し込む（env は触らない）。
 //! 根と書庫は `TempPath::under_target`（ワークツリーの `target\` の下）。
@@ -135,7 +134,7 @@ fn route(got: Result<BootResolved, AlertScene>) -> (GhostRoute, PathBuf) {
     (got.1.route, got.1.dir)
 }
 
-/// 空の根（バルーンだけ）に起動の前に入れたゴーストが、唯一のゴーストとして選ばれる（要件 1.1・4.2・9.1）。
+/// 空の根（バルーンだけ）に起動の前に入れたゴーストが、唯一のゴーストとして選ばれる。
 #[test]
 fn ghost_installed_into_an_empty_root_is_chosen_as_the_only_one() {
     let root = root_with("startup-flow-empty", &[], None);
@@ -159,7 +158,7 @@ fn ghost_installed_into_an_empty_root_is_chosen_as_the_only_one() {
     assert!(started < resolved && started.is_some(), "入れてから選ぶ");
 }
 
-/// callghost で、記憶の前回のゴーストより先に入れたゴーストが選ばれる（要件 4.3・9.5）。
+/// callghost で、記憶の前回のゴーストより先に入れたゴーストが選ばれる。
 #[test]
 fn callghost_wins_over_the_remembered_ghost() {
     let root = root_with("startup-flow-callghost", &["g1"], Some("g1"));
@@ -177,8 +176,7 @@ fn callghost_wins_over_the_remembered_ghost() {
     assert_eq!(named(&events, "startup_callghost_chosen").len(), 1);
 }
 
-/// ゴーストが `initial_install.nar` だけから入ったら `no_ghost_installed` で今の選び方（記憶）になる
-/// （要件 4.9・9.5）。
+/// ゴーストが `initial_install.nar` だけから入ったら `no_ghost_installed` で今の選び方（記憶）になる。
 #[test]
 fn ghost_only_from_initial_install_falls_back_to_the_usual_choice() {
     let root = root_with("startup-flow-initial", &["g1"], Some("g1"));
@@ -204,7 +202,7 @@ fn ghost_only_from_initial_install_falls_back_to_the_usual_choice() {
 }
 
 /// 根が決まらなければ warn `root_missing` を 1 件残して何も入れず、根なしの場面で止まる。
-/// 取り出した後なので落としても `boot_stopped` は出ない（要件 1.7・6.3・9.7）。
+/// 取り出した後なので落としても `boot_stopped` は出ない。
 #[test]
 fn root_missing_warns_once_and_installs_nothing() {
     let profile = TempPath::under_target("startup-flow-noroot");
@@ -236,8 +234,7 @@ fn root_missing_warns_once_and_installs_nothing() {
     assert!(named(&dropped, "startup_install_not_submitted").is_empty());
 }
 
-/// 入れた後も 0 体（バルーンだけ入れた）なら「ゴーストなし」の場面で止まり、`boot_stopped` は出ない
-/// （要件 4.11・6.3・9.7）。
+/// 入れた後も 0 体（バルーンだけ入れた）なら「ゴーストなし」の場面で止まり、`boot_stopped` は出ない。
 #[test]
 fn no_ghost_after_install_stops_with_ghost_missing_and_no_boot_stopped() {
     let root = root_with("startup-flow-balloon-only", &[], None);
@@ -261,8 +258,7 @@ fn no_ghost_after_install_stops_with_ghost_missing_and_no_boot_stopped() {
     assert!(named(&dropped, "startup_install_not_submitted").is_empty());
 }
 
-/// 告知の抑止は `AREKA_NO_ALERT` の抑止と `AREKA_APP_SMOKE_EXIT_MS` の有無のどちらが立っても立つ
-/// （要件 2.4・設計の討議 議題 1）。
+/// 告知の抑止は `AREKA_NO_ALERT` の抑止と `AREKA_APP_SMOKE_EXIT_MS` の有無のどちらが立っても立つ。
 #[test]
 fn either_value_suppresses_the_alert_before_boot() {
     assert!(!before_boot_alert_suppressed(false, None));
@@ -287,8 +283,7 @@ fn carried(
 }
 
 /// 控えは入れた順に窓口の記録と同じ受け皿と置換語へ置かれ（最後の値が残る）、info
-/// `startup_install_carried` が 1 件。続けて窓口の記録の口で入れた物がそれを置き換える
-/// （要件 3.2・3.4・9.12・10.6）。
+/// `startup_install_carried` が 1 件。続けて窓口の記録の口で入れた物がそれを置き換える。
 #[test]
 fn carried_installs_reach_the_desk_receivers_and_the_desk_replaces_them() {
     use crate::install::names::LastInstallNames;

@@ -1,9 +1,9 @@
-//! 右クリックメニューの「インストール」枠（areka-P0-ghost-install・design「install_frame」）。
+//! 右クリックメニューの「インストール」枠。
 //!
-//! 項目は既定名「インストール…」と `ghostinstallbutton.caption` を持つ葉 1 つ（要件 1.8）。選べるのは
+//! 項目は既定名「インストール…」と `ghostinstallbutton.caption` を持つ葉 1 つ。選べるのは
 //! 窓口が在り、終了が始まっておらず、ファイルを選ぶ画面が出ていないときで、選ぶと選ぶ画面を出す
-//! （[`desk::pick_and_submit`]・要件 1.3）。登記はゴーストを起こすたびに `ghost_session::boot_wired` が
-//! `wire_menu` の後でやり直す（窓の無い起動では登記されない＝要件 1.12）。
+//! （[`desk::pick_and_submit`]）。登記はゴーストを起こすたびに `ghost_session::boot_wired` が
+//! `wire_menu` の後でやり直す（窓の無い起動では登記されない）。
 
 use std::rc::Rc;
 
@@ -22,7 +22,7 @@ fn install_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Install).to_string(),
         caption_resource: captions::resource_for(Frame::Install),
-        // 読み取りだけの走りでは書庫選びを開かない（readonly-mode 要件 8.7）。
+        // 読み取りだけの走りでは書庫選びを開かない。
         enabled: desk::can_pick(world) && !crate::readonly::of(world),
         checked: None,
         body: ItemBody::Action(Rc::new(|world: &mut World, _: &MenuContext| {

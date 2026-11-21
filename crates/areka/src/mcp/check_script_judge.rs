@@ -1,4 +1,4 @@
-//! `check_script` の判断（読み取りの列と事実 → 診断の列）と診断の文言（spec: areka-P0-mcp-author-tools）。
+//! `check_script` の判断（読み取りの列と事実 → 診断の列）と診断の文言。
 //!
 //! 窓も World も要らない純粋な関数だけを置く。判定は自分で持たず、再生が実際に使う関数
 //! （`parse_noted` の印・`ConsumerLedger::consumer_of`・`choice_timeout_of`・strict と同じ見分けの点
@@ -42,7 +42,7 @@ pub(crate) fn diagnose(
     };
     // スコープは `compile` と同じく `SpeakerScope` だけが替える（`\0`・`\1`・`\h`・`\u`・`\p[n]` はどれもこれになる）。
     let mut scope: u32 = 0;
-    // 切替の `\!` を見た後は、どの絵・バルーンになるか字面で決まらないので診ない（要件 3.8）。
+    // 切替の `\!` を見た後は、どの絵・バルーンになるか字面で決まらないので診ない。
     let mut shell_switched = false;
     let mut balloon_switched = false;
     // アンカーの対応の崩れ。命令の添字の昇順で来るので、前から順に取り出す。

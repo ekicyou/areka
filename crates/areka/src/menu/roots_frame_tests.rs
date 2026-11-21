@@ -1,4 +1,4 @@
-//! 「置き場を追加…」「置き場を先頭へ ▸」「置き場を外す ▸」枠の決定論テスト（要件 6.1・7.1・7.3・8.2・8.6・12.5／areka-P0-user-data-root 要件 3.3・3.8・10.3）。
+//! 「置き場を追加…」「置き場を先頭へ ▸」「置き場を外す ▸」枠の決定論テスト。
 //! 「置き場を先頭へ ▸」の子の選べる・選べないの各分岐（先頭・印の付いた並びの実行ファイルの隣・見出しの根の数と `AREKA_ROOT`）も確かめる。
 //!
 //! 確かめること: 3 項目が出ること・外すの子が並びの順の絶対パスで見つからない根も含むこと・
@@ -88,7 +88,7 @@ pub(super) fn label(dir: &Path) -> String {
 }
 
 /// 2 項目が既定名で出て、追加は選べる葉・外すは選べる見出しで、子は並びの順の絶対パス
-/// （見つからない根も含む）で選べる（要件 6.1・7.1・8.2）。
+/// （見つからない根も含む）で選べる。
 #[test]
 fn both_items_appear_and_children_list_every_root_in_order() {
     let tmp = TempPath::under_target("roots_frame_two_items");
@@ -132,7 +132,7 @@ fn both_items_appear_and_children_list_every_root_in_order() {
     );
 }
 
-/// 根が 1 つなら外すの子は選べない（見出しは選べる・要件 7.3）。
+/// 根が 1 つなら外すの子は選べない（見出しは選べる）。
 #[test]
 fn single_root_child_is_disabled() {
     let tmp = TempPath::under_target("roots_frame_single");
@@ -145,7 +145,7 @@ fn single_root_child_is_disabled() {
     );
 }
 
-/// `AREKA_ROOT` で渡しているときは 2 項目とも選べない（要件 8.6）。
+/// `AREKA_ROOT` で渡しているときは 2 項目とも選べない。
 #[test]
 fn env_var_disables_both_items() {
     let tmp = TempPath::under_target("roots_frame_env");
@@ -160,8 +160,7 @@ fn env_var_disables_both_items() {
     );
 }
 
-/// 書ける根（印の付いた項目）の子は選べず、ほかの子は今どおり選べる
-/// （areka-P0-user-data-root 要件 3.3・10.3）。
+/// 書ける根（印の付いた項目）の子は選べず、ほかの子は今どおり選べる。
 #[test]
 fn user_root_child_is_disabled_others_unchanged() {
     let tmp = TempPath::under_target("roots_frame_user_root");
@@ -196,8 +195,7 @@ fn exe_dir() -> PathBuf {
 }
 
 /// 書ける根を使わない形: 「置き場を先頭へ ▸」は既定名で SHIORI のリソース名なしに出て、見出しは選べ、
-/// 子は並びの順の絶対パスで、今の先頭だけ選べない（印が無いので実行ファイルの隣の子も選べる）
-/// （areka-P0-user-data-root 要件 3.8・7.1・10.3）。
+/// 子は並びの順の絶対パスで、今の先頭だけ選べない（印が無いので実行ファイルの隣の子も選べる）。
 #[test]
 fn front_lists_every_root_and_disables_only_the_head_without_mark() {
     let tmp = TempPath::under_target("roots_frame_front_plain");
@@ -223,7 +221,7 @@ fn front_lists_every_root_and_disables_only_the_head_without_mark() {
 }
 
 /// 書ける根を使う形（印の付いた項目が先頭）: 先頭（書ける根）と実行ファイルの隣の子は選べず、
-/// ほかの子は選べる（要件 3.8）。
+/// ほかの子は選べる。
 #[test]
 fn front_with_user_root_head_disables_head_and_exe_child() {
     let tmp = TempPath::under_target("roots_frame_front_user_head");
@@ -253,7 +251,7 @@ fn front_with_user_root_head_disables_head_and_exe_child() {
 }
 
 /// 印の付いた項目が先頭でないとき: 先頭（足した置き場）と実行ファイルの隣の子は選べず、
-/// 書ける根の子は選べる（要件 3.8）。
+/// 書ける根の子は選べる。
 #[test]
 fn front_with_user_root_not_head_keeps_user_root_selectable() {
     let tmp = TempPath::under_target("roots_frame_front_user_mid");
@@ -282,7 +280,7 @@ fn front_with_user_root_not_head_keeps_user_root_selectable() {
     );
 }
 
-/// 根が 1 つなら見出しは選べない（子は先頭なので選べない・要件 3.8）。
+/// 根が 1 つなら見出しは選べない（子は先頭なので選べない）。
 #[test]
 fn front_header_disabled_with_single_root() {
     let tmp = TempPath::under_target("roots_frame_front_single");
@@ -295,7 +293,7 @@ fn front_header_disabled_with_single_root() {
     );
 }
 
-/// `AREKA_ROOT` で渡しているときは根が 2 つ以上でも見出しは選べない（要件 3.8）。
+/// `AREKA_ROOT` で渡しているときは根が 2 つ以上でも見出しは選べない。
 #[test]
 fn front_header_disabled_with_env_var() {
     let tmp = TempPath::under_target("roots_frame_front_env");

@@ -1,4 +1,4 @@
-//! 右クリックメニューの「シェル位置初期化」の葉（areka-P0-move-canon 要件 8.3〜8.5・design ResetPosFrame）。
+//! 右クリックメニューの「シェル位置初期化」の葉。
 //!
 //! 選ぶと `OnResetWindowPos` を答えの受け手つきで kanade へ送り、受け手を [`PendingResetRaise`]
 //! （高々 1 つ）に置く。毎 tick の [`poll_reset_raise`] が答えを覗き、[`decide_reset`] の分類で
@@ -29,7 +29,7 @@ pub(crate) fn reset_position_enabled(world: &World) -> bool {
     world.contains_resource::<GhostWindows>() && !world.contains_non_send::<PendingResetRaise>()
 }
 
-/// 「シェル位置初期化」の葉（要件 8.1・8.2）。
+/// 「シェル位置初期化」の葉。
 fn reset_pos_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::ResetPosition).to_string(),
@@ -57,7 +57,7 @@ pub enum ResetDecision {
 }
 
 /// 答えの分類（純粋）。まだ → 待つ、台本 → 並べ直さない、受け手が切れた → 並べ直さない、
-/// それ以外（返事なし・`NotSteady`・`NotAllowed`・`Failed`）→ 並べ直す（要件 8.4・8.5・D8）。
+/// それ以外（返事なし・`NotSteady`・`NotAllowed`・`Failed`）→ 並べ直す。
 pub(crate) fn decide_reset(outcome: Result<Option<RaiseOutcome>, ReplyError>) -> ResetDecision {
     match outcome {
         Ok(None) => ResetDecision::Wait,
@@ -71,8 +71,8 @@ pub(crate) fn decide_reset(outcome: Result<Option<RaiseOutcome>, ReplyError>) ->
     }
 }
 
-/// 項目の動作: `OnResetWindowPos` を GET・答えの受け手つきで送り、受け手を置く（要件 8.3）。
-/// 送り口が無い・送れないときは答えが無いのと同じく `warn!` のうえ並べ直す（要件 8.5）。
+/// 項目の動作: `OnResetWindowPos` を GET・答えの受け手つきで送り、受け手を置く。
+/// 送り口が無い・送れないときは答えが無いのと同じく `warn!` のうえ並べ直す。
 pub(crate) fn raise_reset_window_pos(world: &mut World) {
     let (tx, rx) = reply_channel();
     let sent = world

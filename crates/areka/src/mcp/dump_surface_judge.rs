@@ -1,7 +1,7 @@
-//! `dump_surface`／`dump_balloon` の判断（どの文言を返すか・何を撮るか）と成功の本文
-//! （spec: areka-P0-mcp-dump-images）。窓も GPU も要らない純粋な関数だけを置く。
+//! `dump_surface`／`dump_balloon` の判断（どの文言を返すか・何を撮るか）と成功の本文。
+//! 窓も GPU も要らない純粋な関数だけを置く。
 
-/// 判断で返す断りの文言（spec: areka-P0-mcp-dump-images-residue 要件 2.2）。中身は非公開で、このモジュールの外では作れない
+/// 判断で返す断りの文言。中身は非公開で、このモジュールの外では作れない
 /// （想定外の失敗の `fail` へ渡す書き方は組み立てで落ちる）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::mcp) struct Refusal(&'static str);
@@ -38,7 +38,7 @@ pub(in crate::mcp) enum SurfacePlan {
 }
 
 /// `facts` が None＝窓の無いゴースト。Err は `NG:` の後ろに付ける理由。
-/// 順は 窓 → スコープ → surface ID → 一度も表示していない（要件 4.9）。
+/// 順は 窓 → スコープ → surface ID → 一度も表示していない。
 pub(in crate::mcp) fn judge_surface(
     facts: Option<&dyn ShellFacts>,
     scope: Option<i64>,
@@ -82,21 +82,21 @@ fn facts_and_scope(
     Ok((facts, scope))
 }
 
-/// 要件 1.4 の `OK:` の後ろ。
+/// 今の見た目の `OK:` の後ろ。
 pub(in crate::mcp) fn shown_text(scope: u32, surface_id: u32) -> String {
     format!(
         "scope {scope}, surface {surface_id} as currently shown (with running animations and dressups, before scaling and transparency)"
     )
 }
 
-/// 要件 2.4 の `OK:` の後ろ。
+/// 指定した surface 単体の `OK:` の後ろ。
 pub(in crate::mcp) fn alone_text(scope: u32, surface_id: u32) -> String {
     format!(
         "scope {scope}, surface {surface_id} rendered alone in its initial state (not what is on the screen now)"
     )
 }
 
-/// 要件 3.7 の `OK:` の後ろ。
+/// `dump_balloon` の `OK:` の後ろ。
 pub(in crate::mcp) fn balloon_text(scope: u32) -> String {
     format!(
         "balloon of scope {scope} as last drawn (before scaling and transparency; kept even if the balloon is hidden now)"

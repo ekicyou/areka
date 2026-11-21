@@ -1,4 +1,4 @@
-//! strict の語彙の檻（spec: mcp-strict-errors 要件 2.1・2.3・2.4・2.6・2.8）。
+//! strict の語彙の檻。
 //!
 //! 16 の検出点の名前・種類・文面の組、位置の数え方（前から 1 度だけ数え、戻ったら数え直す）、
 //! 記録 1 件の宛先と欄と本文の形を固定する。
@@ -193,7 +193,6 @@ fn char_cursor_counts_chars_forward_and_recounts_backward() {
     assert_eq!((p.start, p.end, p.text.as_str()), (2, 8, "\\s[99]"));
     let p = cursor.place(15..17);
     assert_eq!((p.start, p.end, p.text.as_str()), (9, 11, "\\x"));
-    // 戻った（台本の順でない）ときも正しい数になる。
     let p = cursor.place(0..3);
     assert_eq!((p.start, p.end, p.text.as_str()), (0, 1, "あ"));
     let p = cursor.place(12..15);

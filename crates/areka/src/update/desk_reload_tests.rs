@@ -1,5 +1,4 @@
-//! 読み直しの頼みの兄弟テスト（design「窓口と入口」の読み直しの条件と終了・決めたこと 24・要件 3.6・
-//! 5.2・5.3・5.5・5.6・5.8・7.4・9.9・9.12）。
+//! 読み直しの頼みの兄弟テスト。
 //!
 //! 切替の土台（[`SwitchRig`]）の上で、本物の窓口の取り出しの系（`Input` の段）・切替の入口・kanade・
 //! 偽の SHIORI を通す。背景スレッドは起こさず、読み直しの頼み（後送りの列つき）は窓口の頼みの送出端へ
@@ -8,7 +7,7 @@
 //! 切替の終わりで列の残りが新しいゴーストへ届き、読み直しの途中の切替の頼みは今日どおり無視される／
 //! 読み直せないとき、切替の予約が在る・引数の起動・入口が受け付けないなら列を今のゴーストへ送り、
 //! 終了の後・別のゴーストなら捨てる／切替が既定へ戻ると列は捨てる。読み直しの切替が終わると成功した
-//! 走行の残り（印つき）が消え、読み直しでない切替・失敗した切替では消さない（要件 5.9・9.9・9.10）。
+//! 走行の残り（印つき）が消え、読み直しでない切替・失敗した切替では消さない。
 
 use std::path::{Path, PathBuf};
 
@@ -137,8 +136,8 @@ fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 /// 条件を満たした読み直しは、同じフォルダ・知らせなし・出どころ「自動」の切替として 1 回受け付けられ
 /// （`info!`）、A が `OnGhostChanging`・`OnClose` 無しに起き直る。起動の知らせは列の先頭（渡した
 /// Reference の `OnUpdateComplete`）で `OnGhostChanged`・`OnBoot` 0 件、切替の終わりで列の残り
-/// （`OnUpdateResult`）が続けて届く（`info!(update_tail_sent when=after_switch count=1)`・要件 5.3・5.5）。
-/// 読み直しの途中の切替の頼みは `Busy` で無視され、B は起こされない（要件 5.8）。
+/// （`OnUpdateResult`）が続けて届く（`info!(update_tail_sent when=after_switch count=1)`）。
+/// 読み直しの途中の切替の頼みは `Busy` で無視され、B は起こされない。
 ///
 /// # 非空虚性
 /// 列の先頭を切替の欄へ入れないと起動の知らせが `OnGhostChanged` になって赤。切替の終わりで残りを
@@ -248,7 +247,7 @@ fn a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_aft
     assert!(named(&events, "update_tail_dropped").is_empty());
 }
 
-/// 読み直せないときの列の行き先（決めたこと 24）。
+/// 読み直せないときの列の行き先。
 enum Fate {
     /// 今のゴーストへ順に送る（`info!(update_tail_sent when=no_reload)`）。
     Sent,
@@ -327,7 +326,7 @@ fn assert_not_reloaded(
 
 /// 読み直しを頼めないときの列の行き先: 別のゴースト・終了の後は捨て（`warn!` 1 件）、切替の予約が在る・
 /// 引数の起動・入口が受け付けない（`NotFound`）は今のゴーストへ順に送る（`info!` 1 件）。どの場合も
-/// 切替の要求 0 件で A は起こし直されず、切替の予約は残らない（要件 5.2・5.7・7.4）。
+/// 切替の要求 0 件で A は起こし直されず、切替の予約は残らない。
 #[test]
 fn a_reload_that_cannot_run_sends_or_drops_the_tail_by_reason() {
     let mut rig = running_a();
@@ -363,7 +362,7 @@ fn a_reload_that_cannot_run_sends_or_drops_the_tail_by_reason() {
     assert_not_reloaded(&mut rig, a_dir.clone(), skipped("switching"), Fate::Sent);
     rig.world.remove_non_send::<SwitchInFlight>();
 
-    // 引数の起動（根の目録の外＝フォルダ名が無い・裁定 17）→ 今のゴーストへ送る。
+    // 引数の起動（根の目録の外＝フォルダ名が無い）→ 今のゴーストへ送る。
     let ghost = rig.world.resource::<BootContext>().current.ghost.clone();
     {
         let mut ctx = rig.world.resource_mut::<BootContext>();
@@ -388,7 +387,7 @@ fn a_reload_that_cannot_run_sends_or_drops_the_tail_by_reason() {
     );
     rig.world.resource_mut::<BootContext>().current.ghost.folder = Some("A".to_owned());
 
-    // 終了が始まった後に届いた頼みは落とし、列も捨てる（要件 7.4）。
+    // 終了が始まった後に届いた頼みは落とし、列も捨てる。
     let _ = begin_close(&mut rig.world);
     assert_not_reloaded(
         &mut rig,
@@ -506,7 +505,7 @@ fn a_switch_without_a_reload_leaves_the_marked_leftover() {
 /// 読み直しの切替が失敗する（起き直った A の SHIORI が接続に失敗し既定ゴーストへ戻る）と、覚えた
 /// フォルダと列の残りを捨てる: 残りは消さず（`update_purge_done`・`update_purge_held` 0 件＝次の走行の
 /// 始めに消える）、既定ゴーストは `OnBoot` で起きて列の語を 1 件も受けず、`warn!(update_tail_dropped
-/// reason=switch_failed)` が 1 件（要件 3.6・5.6）。
+/// reason=switch_failed)` が 1 件。
 ///
 /// # 非空虚性
 /// 既定へ戻った定常到達でも消す・送ると、A の残りが消える・既定へ `OnUpdateResult` が届いて赤。

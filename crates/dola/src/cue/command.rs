@@ -11,7 +11,7 @@ use crate::value::DynamicValue;
 // ドメイン型
 // ============================================================================
 
-/// 演者識別子。NewType パターンにより型安全性を確保。
+/// 演者識別子。
 ///
 /// さくらスクリプトの `\0` (さくら) / `\1` (うにゅう) に相当するが、
 /// 文字列ベースで任意の名前を許容する。
@@ -106,9 +106,9 @@ pub enum CueCommand {
     /// 選択肢データ。WaitForChoice の前に連続投入する先積みプロトコル。
     ///
     /// `references` は `\q` の第 3 引数以降（参照列）を**記述順を保った不透明文字列列**として
-    /// 保持する（ID 解釈なし・1.3/1.4）。`#[serde(default, skip_serializing_if = "Vec::is_empty")]`
+    /// 保持する（ID 解釈なし）。`#[serde(default, skip_serializing_if = "Vec::is_empty")]`
     /// により、空のときは `references` キーを出力せず既存ワイヤ形とバイト同一を保ち、
-    /// `references` を持たない旧資産も `default` で空 vec として読める（8.1・後方互換）。
+    /// `references` を持たない旧資産も `default` で空 vec として読める（後方互換）。
     Choice {
         id: String,
         text: String,
@@ -121,7 +121,7 @@ pub enum CueCommand {
     /// 乗り（正準形は [`CueCommand::command_carrier`] が単一箇所で構築する）、消費は
     /// **消費者の名前自己選別**へ委譲される（dola はコマンド名の語彙を持たない）。ゆえに
     /// 本 variant の型レベル分類 `cue_target_of(Custom)=None` は「誰も action しない」ではなく
-    /// 「消費側が名前で自己選別する」ことを意味する（R8.7）。
+    /// 「消費側が名前で自己選別する」ことを意味する。
     ///
     /// `params` は JSON 互換辞書型。汎用キャリアとしての正準形は
     /// `DynamicValue::Array([String…])`（トークン列）だが、それ以外の消費者固有形も
@@ -140,9 +140,9 @@ pub enum CueCommand {
     /// カーソル位置指定（さくらスクリプト `\_l` の不透明転写）。
     ///
     /// x・y は**記述通りの不透明な文字列**であり、単位付き（`5em`/`2lh`/`50%`）・
-    /// 裸数値・相対（`@` 前置）・空（省略）の区別を失わない（R3.2）。dola は
-    /// 単位換算・座標解決・原点解釈を**行わない**——これらは消費（表示）側の責務（R3.3）。
-    /// 双方が空でも発行され得る（記述の存在を台本から失わせない・R3.5）。
+    /// 裸数値・相対（`@` 前置）・空（省略）の区別を失わない。dola は
+    /// 単位換算・座標解決・原点解釈を**行わない**——これらは消費（表示）側の責務。
+    /// 双方が空でも発行され得る（記述の存在を台本から失わせない）。
     Cursor { x: String, y: String },
     /// 純粋な待ち（**action を持たない**第一級コマンド）。
     ///
@@ -179,7 +179,7 @@ impl CueCommand {
     ///
     /// `Custom { command: name, params: DynamicValue::Array([String…]) }` を組む。
     /// トークンは記述順のまま無変形で載せ、空トークン（省略スロット）・`--key=value`
-    /// トークンも素通しで保持する（R4.2）。往復同一は [`Self::as_command_carrier`] が保証する。
+    /// トークンも素通しで保持する。往復同一は [`Self::as_command_carrier`] が保証する。
     pub fn command_carrier(name: impl Into<String>, tokens: Vec<String>) -> CueCommand {
         CueCommand::Custom {
             command: name.into(),
@@ -191,7 +191,7 @@ impl CueCommand {
     ///
     /// `Custom` かつ `params` が全要素 String の `Array`（＝正準形）のときのみ
     /// `Some((name, tokens))` を返す。`Custom` 以外・非 `Array`・非 String 要素混入の
-    /// いずれも `None`＝消費側は記録付き良性スキップへ縮退する（R4.5）。空トークンは保持される。
+    /// いずれも `None`＝消費側は記録付き良性スキップへ縮退する。空トークンは保持される。
     pub fn as_command_carrier(&self) -> Option<(&str, Vec<&str>)> {
         let CueCommand::Custom { command, params } = self else {
             return None;
@@ -258,9 +258,9 @@ pub struct Cue {
     /// 表現者はこの値から新たなローカル遅延を生じさせてはならない（二重待ち禁止）。
     ///
     /// 全 presentation cue が本フィールドを保持し、時間を占有しない瞬時コマンドは
-    /// **明示的な 0** を持つ（「duration フィールドを持たない cue」という概念を作らない）。
+    /// **明示的な 0** を持つ。
     /// `#[serde(default)]` により、本フィールドを持たない旧シリアライズ資産は 0 として
-    /// 従来どおり解釈される（後方互換・既存 variant のワイヤ形は不変）。
+    /// 従来どおり解釈される（既存 variant のワイヤ形は不変）。
     ///
     /// 値は**不透明な秒数**であり、dola は SakuraScript 固有の意味論
     /// （1 文字あたりのウェイト値等）を内包しない——算出は上流（sakura）の責務。
@@ -283,9 +283,7 @@ pub struct Cue {
 /// 登録された全出力先へ broadcast される。
 ///
 /// 演者は受け取った任意の搬送体について、[`Self::command`] の action を処理するか否かに
-/// 関わらず [`Self::duration`] を honor する（duration honor 契約）。duration が
-/// コマンド種別を問わない一律フィールドであることが、「コマンドを解釈せずに時間を読める」
-/// ＝honor 契約が例外なく回る前提を担保する。
+/// 関わらず [`Self::duration`] を honor する（duration honor 契約）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct TalkCue {
     /// 発火時刻（f64 秒＝dola ドメイン）。上流が確定した値をそのまま運ぶ（導出しない）。
@@ -298,8 +296,7 @@ pub struct TalkCue {
     ///
     /// 全演者が action 可否に関わらず honor する。後続 cue の発火時刻は上流で既に
     /// この分だけ焼き込まれているため、演者はこの値から**新たなローカル遅延を
-    /// 生じさせてはならない**（二重待ち禁止）。瞬時コマンドは明示的な 0 を持つ
-    /// （「duration を持たない搬送体」という概念は作らない）。
+    /// 生じさせてはならない**（二重待ち禁止）。瞬時コマンドは明示的な 0 を持つ。
     pub duration: f64,
 }
 

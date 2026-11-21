@@ -1,4 +1,4 @@
-//! 本体の口の束の中身と据え付け（runtime-module-untangle design「SessionHooksImpl」）。
+//! 本体の口の束の中身と据え付け。
 //!
 //! 各関数は `areka-runtime` が口（`SessionHooks`）から引く本体の読み書き。記録は持たない（記録は
 //! `areka-runtime` の呼び手に残る）。
@@ -19,7 +19,6 @@ use areka_runtime::session_hooks::SessionHooks;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::skin_switch::SkinKind;
 
-/// 口の中身。
 const HOOKS: SessionHooks = SessionHooks {
     kanade: kanade_of,
     seriko_sink: seriko_sink_of,

@@ -1,7 +1,7 @@
-//! 回の置き場と検体の写し・落ちた回に証拠を残す・成功で消す（要件 1.2・1.4・6.1〜6.4・9.1・10.6）。
+//! 回の置き場と検体の写し・落ちた回に証拠を残す・成功で消す。
 //!
 //! 回の置き場は `TempPath::under_target("rr")`（`target\test-roots\` の下）。落ちたかは破棄の時の
-//! `std::thread::panicking()` で決め、落ちた回だけ検体の写しを `<回>\sample\` へ複写して残す（D-6・D-7）。
+//! `std::thread::panicking()` で決め、落ちた回だけ検体の写しを `<回>\sample\` へ複写して残す。
 
 use sample_ghost_kit::{SampleRoot, ascii};
 use std::path::{Path, PathBuf};
@@ -18,7 +18,7 @@ pub(crate) struct RunDirs {
 }
 
 impl RunDirs {
-    /// 回の置き場を新しく作り、検体の名前があれば新しい写しを取る（1.2・1.4）。
+    /// 回の置き場を新しく作り、検体の名前があれば新しい写しを取る。
     ///
     /// # Panics
     ///
@@ -78,14 +78,14 @@ impl RunDirs {
 
     /// 残すか消すかを決める。panic しない（破棄の中で二重の失敗を起こさない）。
     ///
-    /// 落ちた回（6.1・6.2・6.4）は写しを `<回>\sample\` へ複写し、置き場を残して場所を
-    /// 標準エラーへ 1 行書く。成功（6.3）は何もしない＝置き場と写しの破棄が消す。
+    /// 落ちた回は写しを `<回>\sample\` へ複写し、置き場を残して場所を
+    /// 標準エラーへ 1 行書く。成功は何もしない＝置き場と写しの破棄が消す。
     fn finish(&mut self, failed: bool) {
         if !failed {
             return;
         }
         let Some(dir) = self.dir.take() else {
-            return; // 既に残した
+            return;
         };
         if let Some(sample) = &self.sample {
             let to = self.run.join("sample");

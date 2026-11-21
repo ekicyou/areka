@@ -1,5 +1,4 @@
-//! `shell_cursor_table.rs` の兄弟テスト（shell-mouse-cursor 要件 1.1〜1.4・1.6・5.1〜5.4・
-//! 5.6〜5.8・6.4・6.6・7.2）。
+//! `shell_cursor_table.rs` の兄弟テスト。
 //!
 //! cursorブレスはテストの中の surfaces.txt の文面を `parse_cursor_braces` で転記して使う（検体は読まない）。
 

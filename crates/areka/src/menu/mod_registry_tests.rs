@@ -1,4 +1,4 @@
-//! 登記の口（[`MenuRegistry`]）の決定論テスト（要件 6.2・6.3・6.4）。
+//! 登記の口（[`MenuRegistry`]）の決定論テスト。
 //!
 //! 確かめること: 置き換えが記録されること・取り消した枠が写しから消えること・写しが登記順
 //! ではなく枠の並び順になること・供給関数が写しを取るたびに呼ばれること。
@@ -99,7 +99,7 @@ fn snapshot_follows_frame_order_not_registration_order() {
     );
 }
 
-/// 供給関数は登記のときには呼ばれず、写しを取るたびに呼ばれる（値を使い回さない・要件 6.2）。
+/// 供給関数は登記のときには呼ばれず、写しを取るたびに呼ばれる（値を使い回さない）。
 /// 文脈（スコープ番号）もそのまま渡る。
 #[test]
 fn snapshot_invokes_supplier_every_time_with_the_given_context() {
@@ -126,7 +126,7 @@ fn snapshot_invokes_supplier_every_time_with_the_given_context() {
     assert_eq!(second[0].1.label, "呼出2・scope1");
 }
 
-/// 同じ枠への 2 度目の登記は後勝ちで置き換わり、`warn!` で 1 回記録される（要件 6.3）。
+/// 同じ枠への 2 度目の登記は後勝ちで置き換わり、`warn!` で 1 回記録される。
 /// 最初の登記と、別の枠への登記は記録されない。
 #[test]
 fn second_registration_replaces_and_warns_once() {
@@ -161,7 +161,7 @@ fn second_registration_replaces_and_warns_once() {
     );
 }
 
-/// 取り消した枠は写しに現れない（要件 6.4）。取り消した後の登記は置き換えではない。
+/// 取り消した枠は写しに現れない。取り消した後の登記は置き換えではない。
 #[test]
 fn unregister_removes_the_frame_and_frees_the_slot() {
     let mut registry = MenuRegistry::default();

@@ -1,9 +1,8 @@
-//! 切替の要求の起動の知らせ（`SwitchRequest.boot_event`）の兄弟テスト
-//! （areka-P0-network-update タスク 12.2・design「`SwitchRequest.boot_event`」・決めたこと 23・要件 5.5・5.6）。
+//! 切替の要求の起動の知らせ（`SwitchRequest.boot_event`）の兄弟テスト。
 //!
 //! 切替の土台（[`SwitchRig`]）の上で、切替の入口・kanade・偽の SHIORI を本物の経路で通す。
 //! 確かめること: 欄付きの自分自身への切替で起き直したゴーストの最初の知らせが渡したイベントと
-//! Reference で、`OnGhostChanged`・`OnBoot` は 0 件（204 でも）／欄が空なら今日どおり `OnGhostChanged`／
+//! Reference で、`OnGhostChanged`・`OnBoot` は 0 件（204 でも）／欄が空なら `OnGhostChanged`／
 //! 切替先が起動に失敗して既定へ戻ると、既定は `OnBoot`（Reference6＝`halt`）で起き知らせは届かない。
 
 use areka_kanade::ChangeOrigin;
@@ -136,7 +135,7 @@ fn a_switch_with_a_boot_event_boots_the_target_with_that_event_instead_of_change
     assert_eq!(requested, Some("Some(\"OnUpdateComplete\")"), "{events:?}");
 }
 
-/// 欄が空の切替は今日どおり: 起き直した A の根は `OnGhostChanged`（台本で応える＝`OnBoot` へ続かない）で、
+/// 欄が空の切替: 起き直した A の根は `OnGhostChanged`（台本で応える＝`OnBoot` へ続かない）で、
 /// 知らせのイベントは届かない。
 #[test]
 fn a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today() {
@@ -165,7 +164,7 @@ fn a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today
 }
 
 /// 欄付きの切替で切替先（A）が起動に失敗すると既定ゴーストへ戻り、既定は `OnBoot`（Reference6＝`halt`・
-/// Reference7＝A の名前）で起きる。起動の知らせは既定へ届かない（要件 5.6）。
+/// Reference7＝A の名前）で起きる。起動の知らせは既定へ届かない。
 ///
 /// # 非空虚性
 /// 既定へ戻す由来まで欄から作ると、既定の根が `OnUpdateComplete` になって赤。

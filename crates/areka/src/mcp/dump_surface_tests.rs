@@ -1,7 +1,7 @@
 //! `dump_surface` の決定論テスト（窓の無い World）。
 //!
 //! 結線状態の無い空の World で呼ぶと、その場で `NG:This ghost has no window`（isError: true・
-//! content は本文 1 つ＝画像なし）を返す（要件 4.5・4.8・7.5）。描画を通る場合は GPU のテストが固定する。
+//! content は本文 1 つ＝画像なし）を返す。描画を通る場合は GPU のテストが固定する。
 //! 後半は窓の無い切り替えの道具（`SwitchRig`・GPU 不要）で、装着の前に預けた呼び出しを通す。
 
 use std::path::PathBuf;
@@ -40,8 +40,8 @@ fn answers_no_window_at_once_with_an_empty_world() {
     assert!(answer.outcome.is_error);
 }
 
-/// 写しまで済んだ成功は、呼んだスレッドでなく符号化のスレッドで仕上がり、そのスレッドから答える
-/// （要件 6.1・タスク 4.3）。仕事は自分の走ったスレッドの名前を答えに書く。
+/// 写しまで済んだ成功は、呼んだスレッドでなく符号化のスレッドで仕上がり、そのスレッドから答える。
+/// 仕事は自分の走ったスレッドの名前を答えに書く。
 ///
 /// # 非空虚性
 /// 呼んだスレッド（テストのスレッド）で仕上げると、答えの名前がテストの名前になって赤。
@@ -54,7 +54,7 @@ fn success_is_finished_on_the_encoding_thread_and_answered_from_there() {
         ghost_name: None,
     };
     let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(args));
-    // 目印は仕事が符号化のスレッドで走り始めた数（テストの側の口・要件 7.3）。
+    // 目印は仕事が符号化のスレッドで走り始めた数（テストの側の口）。
     let entered = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
     let job: Job = Box::new({
         let entered = std::sync::Arc::clone(&entered);
@@ -111,7 +111,7 @@ fn read_handed_to_reply_elsewhere_answers_wrong_path_with_one_error() {
 }
 
 /// 単体の合成の結果が「無い」（スコープのシェルが表示の層に無い）ときは、判断の断りの文言でなく
-/// 専用の文言で想定外の失敗を答え、`error!` を 1 件だけ出す（要件 2.1・7.1）。
+/// 専用の文言で想定外の失敗を答え、`error!` を 1 件だけ出す。
 ///
 /// # 非空虚性
 /// 判断の断りの文言（`NO_SUCH_SCOPE`）のままだと本文が違って赤。`refuse` へ回すと ERROR が 0 件で赤。
@@ -132,14 +132,14 @@ fn alone_without_composed_result_answers_shell_not_ready_with_one_error() {
     assert_eq!(levels.error, 1);
 }
 
-/// 符号化のスレッドの体で出た `error!` の件数（答えと一緒に返す）。5.1 の判定の本体で、
+/// 符号化のスレッドの体で出た `error!` の件数（答えと一緒に返す）。判定の本体で、
 /// 下の較正で「わざと失敗させれば 1・成功なら 0」を確かめる。
 fn errors_in_finish(job: Job) -> (ToolOutcome, usize) {
     let (answered, levels) = log_capture_kit::count_levels(|| finish(TOOL, 0, job, Duration::ZERO));
     (answered, levels.error)
 }
 
-/// `finish` の較正（要件 3.3・5.2）: panic する仕事は `NG:the encoding thread panicked` と ERROR 1 件、
+/// `finish` の較正: panic する仕事は `NG:the encoding thread panicked` と ERROR 1 件、
 /// `fail` を呼ぶ仕事は ERROR 1 件、成功する仕事は ERROR 0 件。同じ判定の関数で数える。
 ///
 /// # 非空虚性
@@ -166,7 +166,7 @@ fn finish_calibration_counts_errors_of_failing_jobs_only() {
     assert_eq!(errors, 0);
 }
 
-/// 受け取り口の無い送りは黙って捨てる（要件 3.5・7.1 ⑸）: panic せず ERROR 0 件。
+/// 受け取り口の無い送りは黙って捨てる: panic せず ERROR 0 件。
 ///
 /// # 非空虚性
 /// 送りの失敗を `expect` すると panic で赤、`fail` へ回すと ERROR 1 件で赤。
@@ -185,7 +185,7 @@ fn send_back_without_receiver_drops_silently() {
     assert_eq!(levels.error, 0);
 }
 
-/// 成功の記録の欄（要件 5.3・7.1 ⑺）: `picture` の 1×1 の仕事を UI 時間 1,234 µs で `finish` に通すと、
+/// 成功の記録の欄: `picture` の 1×1 の仕事を UI 時間 1,234 µs で `finish` に通すと、
 /// `[mcp] 絵を返す` が 1 件で、`ui_us` が 1234、`encode_us` が数として読める。
 ///
 /// # 非空虚性
@@ -215,11 +215,11 @@ fn success_record_carries_ui_us_and_encode_us() {
     );
 }
 
-// ── 窓の無い切り替えの道具で、預けた呼び出しを通す（要件 3.1・3.2・3.3・3.5・4.1・4.2・4.4・7.1） ──
+// ── 窓の無い切り替えの道具で、預けた呼び出しを通す ──
 
 /// 画像つきの成功か（`isError` でなく、画像が 1 つ以上ある）。答えで判定するテストの判定の関数
 /// （符号化のスレッドの `error!` は必ず `fail` を通って `NG:` の答えになるので、これが真なら
-/// 符号化のスレッドの ERROR は 0 件・要件 5.1・5.2）。GPU を通るテストからも使う。
+/// 符号化のスレッドの ERROR は 0 件）。GPU を通るテストからも使う。
 pub(in crate::mcp) fn is_picture(answered: &ToolOutcome) -> bool {
     !answered.is_error
         && answered
@@ -296,8 +296,8 @@ fn deposit_and_answer(
     (at_deposit, later)
 }
 
-/// 装着の前に預けた呼び出しの符号化は `mcp-encode` のスレッドで行われ、預けた時点では答えない
-/// （要件 3.1・3.2・7.1 ⑶）。仕事は自分の走ったスレッドの名前を答えに書く。
+/// 装着の前に預けた呼び出しの符号化は `mcp-encode` のスレッドで行われ、預けた時点では答えない。
+/// 仕事は自分の走ったスレッドの名前を答えに書く。
 ///
 /// # 非空虚性
 /// 覗く関数が UI スレッド（テストのスレッド）で仕事を仕上げると名前が違って赤。入口で答えてしまうと
@@ -322,7 +322,7 @@ fn deposited_call_is_encoded_on_the_encoding_thread() {
 }
 
 /// 預けた呼び出しの仕事が `mcp-encode` で panic すると `NG:the encoding thread panicked` で答え、
-/// その答えを `is_picture` に通すと偽（要件 3.3・5.2・7.1 ⑷）。比べに 1×1 の絵の仕事を同じ形で
+/// その答えを `is_picture` に通すと偽。比べに 1×1 の絵の仕事を同じ形で
 /// 預けると `is_picture` が真（判定の関数の較正）。
 ///
 /// # 非空虚性
@@ -356,7 +356,7 @@ fn deposited_panic_answers_encoding_thread_panicked_and_is_not_a_picture() {
 }
 
 /// 符号化待ちのまま待つ側が去ると、次の巡で置き場の組が 0 件になり（覗く関数ごと落ちる）、
-/// その後に仕事を放して巡を回しても UI スレッドの ERROR は 0 件で panic しない（要件 3.5・7.1 ⑸）。
+/// その後に仕事を放して巡を回しても UI スレッドの ERROR は 0 件で panic しない。
 ///
 /// # 非空虚性
 /// 待つ側の居ない組を残すと組の数が 1 で赤。受け取り口が切れたのを `fail` へ回すと ERROR 1 件で赤。
@@ -429,8 +429,8 @@ fn abandoned_while_encoding_drops_the_pair_without_ui_errors() {
 }
 
 /// 預けている間に台本の `\![change,ghost,B]` で本物の切り替えが通ると、預けた呼び出しは
-/// `NG:Specified ghost is not active`・`isError: true` で答え、`[mcp]` の記録に ERROR が無い
-/// （要件 4.1・4.2・4.4・7.1 ⑹）。切り替えの手順そのものの記録は判定に入れない。
+/// `NG:Specified ghost is not active`・`isError: true` で答え、`[mcp]` の記録に ERROR が無い。
+/// 切り替えの手順そのものの記録は判定に入れない。
 ///
 /// # 非空虚性
 /// 覗く関数がゴーストを確かめないと、B は装着しないので答えが届かず `None` で赤。断りを `fail` で
@@ -489,7 +489,7 @@ fn switch_to_another_ghost_answers_not_active_without_mcp_errors() {
 }
 
 /// 写した後（読み出し待ち・符号化待ち）に台本の `\![change,ghost,B]` で本物の切り替えが通っても、
-/// ゴーストを確かめ直さず、放すと写した時点の答えを返す（要件 4.5）。
+/// ゴーストを確かめ直さず、放すと写した時点の答えを返す。
 ///
 /// # 非空虚性
 /// 写した後の段でもゴーストを確かめると、どちらも `NG:Specified ghost is not active` で赤。
@@ -581,7 +581,7 @@ fn switch_after_the_copy_still_answers_the_copied_picture() {
 }
 
 /// 台本の `\![change,ghost,A]` で同じゴーストを起こし直しても、同じゴーストと見なして断らず、
-/// 起こし直した A が定常に達しても答えは届かない（まだ装着待ち・要件 4.2）。
+/// 起こし直した A が定常に達しても答えは届かない（まだ装着待ち）。
 ///
 /// # 非空虚性
 /// ゴーストの見分けを起こし直しで変わるもの（実行系そのもの等）で行うと断りが届いて赤。
@@ -590,7 +590,7 @@ fn switch_after_the_copy_still_answers_the_copied_picture() {
 ///
 /// 起こし直した A の `OnGhostChanged` は切替を求めない台詞で答える。204 だと `OnBoot` へ落ちて
 /// 同じ `\![change,ghost,A]` をもう一度流し、定常で切替の印が外れた直後の同じ巡でその合図を
-/// 汲むと 3 回目の起動が起きる（待ちの条件が戻りうる観測になり、回数が揺れる・要件 2.6）。
+/// 汲むと 3 回目の起動が起きる（待ちの条件が戻りうる観測になり、回数が揺れる）。
 /// 切替を求めるのは最初の A の台本だけなので、起動の回数は 2 で決まる。
 #[test]
 fn switch_to_the_same_ghost_keeps_waiting_for_attachment() {
@@ -649,7 +649,7 @@ fn counted_reader(
 }
 
 /// 入口の `answer` が文字の面の写しを積んだ（`Read`）なら、その場で答えず預け、後の巡で読み出しの口を
-/// 覗くたびに 1 度呼び、「まだ」の間は待ち、読めたら仕事を `mcp-encode` で仕上げて答える（要件 1.1・1.2）。
+/// 覗くたびに 1 度呼び、「まだ」の間は待ち、読めたら仕事を `mcp-encode` で仕上げて答える。
 /// 読み出し待ちの間は `answer` をやり直さない。
 ///
 /// # 非空虚性
@@ -697,7 +697,7 @@ fn read_at_entry_is_deposited_and_read_on_later_frames() {
 }
 
 /// 装着待ちの覗きで `answer` が `Read` を返したら、同じ覗きの中で読み出しの口を 1 度呼び、口の失敗の
-/// 答えをそのまま返す。記録は口が出した 1 件だけ（要件 1.5）。
+/// 答えをそのまま返す。記録は口が出した 1 件だけ。
 ///
 /// # 非空虚性
 /// 失敗の答えを捨てる・別の文言にすると答えが違って赤。覗く関数の側でも記録すると ERROR 2 件で赤。

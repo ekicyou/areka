@@ -1,4 +1,4 @@
-//! `ArekaStrictJudges` の答えが `check_script` と同じ物差しの写しであること（spec: mcp-strict-errors 要件 2.7）。
+//! `ArekaStrictJudges` の答えが `check_script` と同じ物差しの写しであること。
 
 use areka_sakura::strict::{DetectionPoint, StrictJudges};
 
@@ -10,7 +10,7 @@ fn command_handled_follows_the_canonical_ledger() {
     let judges = ArekaStrictJudges::canonical();
     let rows: [(&str, Option<&str>, bool); 6] = [
         ("move", None, true),
-        // 印 `\![*]`・`%*` は文字の層が拾う（script-small-tags 要件 6.5）。
+        // 印 `\![*]`・`%*` は文字の層が拾う。
         (areka_parsers::sakura::MARKER_COMMAND, None, true),
         ("set", Some("zorder"), true),
         ("open", Some("readme"), true),
@@ -49,7 +49,7 @@ fn production_judges_are_present() {
     assert!(!judges.command_handled("nosuchcommand", None));
 }
 
-// ---- 長い台本の strict の重さ（spec: mcp-strict-errors 要件 3.11） ----
+// ---- 長い台本の strict の重さ ----
 //
 // 4 MiB の台本を strict 真と偽で、本物の駆動（`talk_handler`）を別スレッド（talk スレッドの役）で回す。
 // 文字の層の受け手（`EmoTextSink`）の知らせはテストのスレッド（UI スレッドの役）で数える。
@@ -196,7 +196,7 @@ mod long_script {
     }
 
     /// 4 MiB の台本で、文字の層へ届く知らせの数は名前の形の `\b` が口付きになる分のほかは strict 真と偽で
-    /// 同じで、判定と記録は talk スレッドだけで行われる（UI スレッドの仕事は増えない・mcp-strict-errors 要件 3.11）。
+    /// 同じで、判定と記録は talk スレッドだけで行われる（UI スレッドの仕事は増えない）。
     #[test]
     fn four_mib_strict_script_keeps_text_messages_and_judges_on_talk_thread() {
         let units = LEN.div_ceil(UNIT.len());

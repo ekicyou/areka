@@ -1,8 +1,8 @@
-//! 位置初期化の 2 つの近道（areka-P0-window-link-directives 要件 8.1〜8.4・design「shortcut」）。
+//! 位置初期化の 2 つの近道。
 //!
 //! Ctrl＋Shift＋F12 は「シェル位置初期化」、Ctrl＋Shift＋F10 は「バルーン位置初期化」と同じ働きをする。
 //! 受け手はゴーストの窓に wintf の `OnKeyDown` として差すので、ゴーストの窓がキーの入力先のときだけ
-//! 効き、ほかのアプリでの同じキーは横取りしない（8.4・裁定 9）。全体の近道（`RegisterHotKey`）は使わない。
+//! 効き、ほかのアプリでの同じキーは横取りしない。全体の近道（`RegisterHotKey`）は使わない。
 
 use bevy_ecs::prelude::*;
 use wintf::ecs::window::{KeyDown, OnKeyDown};
@@ -66,7 +66,7 @@ pub(crate) fn on_ghost_key_down(world: &mut World, _entity: Entity, key: KeyDown
         return true;
     }
     match shortcut {
-        // メニューと同じ往復（`OnResetWindowPos` の答えで並べ直すかを決める）（8.1）。
+        // メニューと同じ往復（`OnResetWindowPos` の答えで並べ直すかを決める）。
         PositionShortcut::ResetShellPosition => raise_reset_window_pos(world),
         PositionShortcut::ResetBalloonPosition => {
             reset_balloon_positions(world, BalloonResetTrigger::Shortcut);

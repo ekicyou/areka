@@ -1,6 +1,5 @@
 //! 窓もバルーンも無い scope を名指す台本（`\p[2]`）の会話が止まらずに最後まで進み、`\-` で終わる
-//! 終了の台本の後に「終了」で終わる（spec: areka-P0-emily-ghost-verification 要件 4.1・4.2・4.5・
-//! 6.7・設計「会話が止まらないテスト」）。
+//! 終了の台本の後に「終了」で終わる。
 //!
 //! 足場（`SpineHarness`）はえみりの形を使わず、emo2 の 2 scope（0・1）で窓と資産を組む。えみりの形の
 //! 固定入力（`char2.name`・`char2.*`〜`char4.*` を持つ）から配置の設定が返す scope も 0・1 だけに
@@ -122,7 +121,7 @@ fn drive_talk(
     let probe = || shiori.call_count() + received.get();
     let reached = wait_until_paced(what, Progress::Count(&probe), || {
         // 会話が始まるまでは時刻を据え置く。着地より先に頭打ちへ届くと、dispatcher が最初の Tick で
-        // 会話の起点を頭打ちに付け、その後の時刻が動かず再生が凍る（areka-test-binary-stability/load-repro.md ⑽）。
+        // 会話の起点を頭打ちに付け、その後の時刻が動かず再生が凍る（`load-repro.md` ⑽）。
         if seen.borrow().first_talk().is_some() {
             *now = (*now + TICK_STEP_MS).min(cap);
         }

@@ -1,10 +1,8 @@
 //! OS のセッションの終了の後始末が降ろす処理を待つ（join）間に、別スレッドから UI スレッドの窓へ
-//! 同期の送信が重なっても止まらないことの再現（areka-P0-session-mark-residue task 6.1・要件 5.2・
-//! 5.4・5.5・7.5）。
+//! 同期の送信が重なっても止まらないことの再現。
 //!
-//! `research.md` §6 の洗い出しでは、areka の中で join と重なって UI スレッドを待つ箇所は 0 件
-//! だった。要件 5.2 に従い、代表の形（待ちの最中に別スレッドから UI の窓へ同期の送信を 1 通）を
-//! 起こす。登場するスレッドは 4 本:
+//! areka の中で join と重なって UI スレッドを待つ箇所は 0 件なので、代表の形（待ちの最中に
+//! 別スレッドから UI の窓へ同期の送信を 1 通）を起こす。登場するスレッドは 4 本:
 //! - UI 役（[`run_bounded`] が起こすスレッド）: message-only 窓を作り、`OnClose` で固まる偽の
 //!   SHIORI で A を起こし、送信が自分のキューに届いたのを見てから、大きな上限で
 //!   [`end_session_within`] を呼ぶ（見張りは発火しない）。後始末が戻ったら連番を取り、
@@ -22,14 +20,13 @@
 //!
 //! 送信に期限を付けない理由: 送信の期限は「輪になった」の見分けの代わりにならない。負荷の下で解き手の
 //! スレッドの始まりが遅れると後始末が送信の期限より長くかかり、輪でないのに送信が期限で切れて後始末
-//! より先に返った（`load-repro.md` の 4.3・areka-P0-ghost-session-test-load-flake）。固まりを切るのは
-//! 外側の [`run_bounded`] の 1 つだけにする。
+//! より先に返った。固まりを切るのは外側の [`run_bounded`] の 1 つだけにする。
 //!
 //! 順序は sleep で作らない: 送信が UI 役のキューに届いたことは `GetQueueStatus`（配らずに読む）で、
 //! 偽の SHIORI の固まりは `holding()` で見る。
 //!
 //! 後半はワークスペースの本番ソースの同期の送信を許可表（[`ALLOWED_SYNC_SENDS`]）と突き合わせる
-//! 検査と、その較正（task 6.2・要件 5.4・7.5）。
+//! 検査と、その較正。
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -153,8 +150,7 @@ fn reproduce() -> Observed {
     let releaser = {
         let (sending, handle) = (Arc::clone(&sending), handle.clone());
         thread::spawn(move || {
-            // 足場を持ち込めない別のスレッドなので、偽の SHIORI が受けた呼び出しの数を進みの目印にする
-            // （areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。
+            // 足場を持ち込めない別のスレッドなので、偽の SHIORI が受けた呼び出しの数を進みの目印にする。
             let waited = wait_until(
                 "解き手: 送信の旗と偽の SHIORI の固まり",
                 Progress::Count(&|| handle.call_count()),
@@ -197,8 +193,8 @@ fn reproduce() -> Observed {
 }
 
 /// join の最中に別スレッドから UI の窓へ同期の送信が重なっても、後始末は送信に依らず戻り、
-/// 送信は後始末の後に UI 役が 1 回覗いた時点で返る（要件 5.2・5.4・7.5）。輪になったら全体の上限で赤。
-/// `OnClose` は Ref0＝`system` で 1 件のまま（要件 5.5）。
+/// 送信は後始末の後に UI 役が 1 回覗いた時点で返る。輪になったら全体の上限で赤。
+/// `OnClose` は Ref0＝`system` で 1 件のまま。
 #[test]
 fn teardown_join_does_not_wait_for_a_sync_send_to_the_ui_window() {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -222,10 +218,10 @@ fn teardown_join_does_not_wait_for_a_sync_send_to_the_ui_window() {
     );
 }
 
-// ============================ 本番ソースの同期の送信と許可表（要件 5.4・7.5）
+// ============================ 本番ソースの同期の送信と許可表
 
-/// 走査の字面（左端は区切り＝識別子の途中では当てない）。design「要件 5 の検査」の語に、
-/// 同じ族の A/W の片割れを足した。`SendNotifyMessage*`（別スレッドの窓へは非同期・同じスレッドの
+/// 走査の字面（左端は区切り＝識別子の途中では当てない）。同じ族の A/W は両形を入れる。
+/// `SendNotifyMessage*`（別スレッドの窓へは非同期・同じスレッドの
 /// 窓へは同期）と `SendMessageCallback*`（非同期）も、宛先のスレッドと重なり方を人が確かめる
 /// べき送信として同じ表で扱う（今日の本番の当たりは 0 件なので、足すなら表へ理由つきで載せる）。
 /// `BroadcastSystemMessage` は開き括弧を付けず、`A`/`W`/`Ex` の全形に当てる。
@@ -248,17 +244,17 @@ const SYNC_SEND_TOKENS: [&str; 9] = [
 /// 当たりの鍵: (ワークスペース根からの相対パス, 字面, 行がファイル直下の `#[cfg(test)] mod` の中か)。
 type SendKey = (String, &'static str, bool);
 
-/// 本番ソースで同期の送信を呼んでよい所と回数（`research.md` §6 の洗い出し）。
+/// 本番ソースで同期の送信を呼んでよい所と回数。
 /// - IPC の送信: shiori のスレッド → 32bit の補助プロセスの message-only 窓（別プロセス）と、
 ///   補助プロセス → shiori のスレッドの親窓の応答の両方が、この 1 か所を通る。
 /// - 試験用の SHIORI DLL（`shiori-host32-testdll`・`OnTestReenter`）: 32bit の補助プロセスの
 ///   テストだけが読む DLL が、`request` の中から補助プロセス自身の窓（同じスレッド）へ
-///   `WM_COPYDATA` を送り返す（audit-shiori-host32 指摘 8 の再入の場）。areka は読まない。
-///   親窓のテストの送信は `parent_window_tests.rs` へ移った（同タスク 7.4）ので走査に入らない。
-/// - 標準のツールチップ（areka-P0-wintf-tooltip）: UI スレッドが自分で作ったツールチップの窓へ
+///   `WM_COPYDATA` を送り返す。areka は読まない。
+///   親窓のテストの送信は `parent_window_tests.rs` へ移ったので走査に入らない。
+/// - 標準のツールチップ: UI スレッドが自分で作ったツールチップの窓へ
 ///   `TTM_*` などを送る。宛先が同じスレッドの窓なので送信は窓の手続きの直接の呼び出しになり、
 ///   キューを通らない＝join と輪にならない。
-/// - UI スレッドの土台（wintf-winmsg-executor-import で木の中へ写した `wintf-winmsg-executor`）:
+/// - UI スレッドの土台:
 ///   `util::Window` の窓の手続きが `WM_NCCREATE` を、差し替えたばかりの同じ窓の手続きへ送り直す
 ///   （同じスレッドの窓なので直接の呼び出し）。`lib.rs` の 2 か所はクレートの中の
 ///   `#[cfg(test)] mod` で、テストが自分のスレッドのモーダルの窓へ `WM_CLOSE` を送る。
@@ -297,8 +293,7 @@ const ALLOWED_SYNC_SENDS: [(&str, &str, bool, usize); 5] = [
 
 /// ワークスペースの `crates/*/src/**/*.rs` の本番ソースを `(根からの相対パス, 本文)` で集める。
 /// 除くのはテストとテストの土台（`_tests.rs`・`_test_support.rs`）と、`tests`・`examples` の
-/// ディレクトリの下（design「要件 5 の検査」の範囲。結合テストと examples は `src` の外なので
-/// そもそも歩かない）。
+/// ディレクトリの下（結合テストと examples は `src` の外なのでそもそも歩かない）。
 fn workspace_production_sources() -> Vec<(String, String)> {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
         let entries = std::fs::read_dir(dir).unwrap_or_else(|e| {
@@ -404,7 +399,7 @@ fn sync_send_mismatch(
     (extra, missing)
 }
 
-/// 本番ソースの同期の送信は許可表と一致する（要件 5.4・7.5）。表に無い当たりも、当たりの無い
+/// 本番ソースの同期の送信は許可表と一致する。表に無い当たりも、当たりの無い
 /// 表の行も赤。新しい送信を足すなら、宛先のスレッドと OS のセッションの終了の join と輪に
 /// ならないことを確かめ、`session_end.rs` の受け手の説明と表を一緒に直す。
 #[test]

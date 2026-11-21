@@ -15,9 +15,6 @@ use super::*;
 // `Changed<DPI>` 非依存の報告回収（初回表示の k₀ 補正を含む）まで「DPI 由来」と
 // 名乗ってしまい、2 段 grep 突合（セッション②＝ドラッグ禁止・OS 側 DPI 変更のみ）
 // に**偽陽性**が混じる。ゆえに route は呼出元ごとに別語でなければならない。
-//
-// 観測の境界は `log_capture_kit::capture` が捕まえる tracing のイベント本体で、
-// レコード書式の権威は `areka_placement::diag` の純関数が持つ。
 
 use areka_placement::diag::DESPAWNED_SKIP_TAG;
 
@@ -53,7 +50,6 @@ fn dpi_phase_and_drain_phase_record_distinct_routes() {
     let (mut world, gw) = dpi_world();
     let char0 = gw.char_window(0).expect("char 窓がある");
 
-    // --- DPI 相: 窓 DPI を 96→192 へ差し替え（Changed<DPI> エッジ）---
     world.entity_mut(char0).insert(DPI::from_dpi(192, 192));
     let mut source = FakeReports::default();
     source.refresh.insert(shell_target(0).0, (868, 1374));

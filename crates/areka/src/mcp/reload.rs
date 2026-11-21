@@ -1,7 +1,4 @@
-//! `reload` の処理（spec: areka-P0-mcp-tool-entrances・areka-P0-mcp-reload・design「McpReload」）。
-//!
-//! 照合（[`McpTarget::parse`]）→ 読み直しの窓口（[`request_reload`]・出どころ MCP）→ 返事。
-//! 読み直しの終わりは待たず、その場で答える（要件 8.1・8.2）。
+//! `reload` の処理。読み直しの終わりは待たず、その場で答える。
 
 use areka_mcp::ToolOutcome;
 use areka_mcp::tools::reload::Args;
@@ -13,16 +10,14 @@ use crate::log_history::{self, TARGET_ERROR};
 use crate::session::reload::{ReloadOrigin, ReloadRequest, ReloadVerdict, request_reload};
 use areka_runtime::reload_args::{DescriptNotes, McpTarget, ReloadTarget};
 
-/// 知らない `target` の理由（SSP の実測の文・要件 1.3）。
+/// 知らない `target` の理由（SSP の実測の文）。
 const UNKNOWN_TARGET: &str =
     "Unknown target (ghost / shiori / shell / balloon / makoto / descript)";
-/// makoto の縮退の理由（要件 10.1）。
 const MAKOTO_UNSUPPORTED: &str = "Reloading makoto is not supported yet";
-/// 窓口が断ったときの理由（要件 2.3）。
 const CANNOT_RELOAD: &str = "Cannot reload now (another switch, reload or update is in progress)";
 
 /// 入口。答えがあればその場で送り、終了の途中（`None`）は送らずに落とす（橋が既存の
-/// "shutting down" で答える・要件 2.2）。
+/// "shutting down" で答える）。
 pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: ReplyTo) {
     let request = |target| {
         request_reload(
@@ -40,7 +35,7 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
 }
 
 /// 答え。`request` は窓口へ渡す口（5 語のときだけ 1 度呼ぶ）、`last_id` は受理の直後に 1 度だけ読む
-/// 記録の最後の番号（要件 8.1 の `since_id`）。
+/// 記録の最後の番号（`since_id`）。
 fn answer(
     target: &str,
     ghost: &ActiveGhost,

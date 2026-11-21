@@ -152,9 +152,8 @@ pub(super) fn reconcile_window_size(
     }
     let new_size = SizePx { w, h };
     match kind {
-        // キャラ窓: アンカー射影 T を再適用して接地点（下端中央）を保つ。
-        // 経路タグは呼出元が渡した route を透過させる（本関数は共通末端であって経路ではない
-        // ＝DPI 相と drain 後段の報告回収を 1 語で名乗らせない）。
+        // キャラ窓: アンカー射影 T を再適用して接地点（下端中央）を保つ。経路タグは呼出元が渡した route を
+        // 透過させる。
         //
         // ドラッグ中なら、書く前の大きさと比べて掴んだ点を置き直す。書込は `WindowPos` をその場で更新するので、
         // 後で読むと新しい大きさしか見えず置き直しが起きない。
@@ -304,11 +303,11 @@ pub(super) type DpiChangedQuery = Query<
 /// **位置**はその成否に条件付けない——`None` のキャラ窓は
 /// [`reproject_char_window_at_current_size`] で**現寸のまま**射影 T を一度通す。位置の再射影が
 /// [`resize_window_to`] の内部にしかない以上、`Some` ゲートの下流に置くと「再導出結果が得られ
-/// ない経路で位置の再射影ごと欠落する」（診断レポート §1.2 の S2）。正常系は同寸・同 work area
+/// ない経路で位置の再射影ごと欠落する」。正常系は同寸・同 work area
 /// ゆえべき等 skip で書込ゼロになる。バルーン窓の `None` は位置据置き
 /// （位置は従属量ゆえキャラ窓確定後の追従が随伴させる）。
 ///
-/// # べき等・churn なし（Flow 2 キー決定 (b)）
+/// # べき等・churn なし
 ///
 /// 初回 run は `SystemState::new` の仕様で全窓へマッチするが、k 差分が無ければ報告は `None`
 /// （presenter のゲート）であり、仮に報告があっても同寸なら反映口がべき等 skip する。ゆえに
@@ -383,22 +382,17 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
             GhostWindowKind::Char => shell_target(scope),
             GhostWindowKind::Balloon => balloon_target(scope),
         };
-        // 拡大率遷移でのバルーン追従オフセットの追随。**寸の再取得より前**に済ませるので、`resize_window_to` 手順 6 の随伴追従は
-        // 必ず新しいオフセットで書かれる。相順・待ち札の関門・[`reconcile_window_size`] の署名は
-        // いずれも変えない。対象はキャラ窓だけ——追従 Component はキャラ窓が持つ。
-        //
-        // 収束の保証: 戻り値は「オフセットが実際に動いたか」であり、
-        // 下の反映で**窓書込が起きなかった**とき（べき等 skip 等）だけ随伴追従を 1 度呼んで
-        // バルーンを収束させる（`converge_balloon_after_skipped_write` の doc を参照）。
+        // 拡大率遷移でのバルーン追従オフセットの追随。**寸の再取得より前**に済ませるので、
+        // `resize_window_to` 手順 6 の随伴追従は必ず新しいオフセットで書かれる。対象はキャラ窓だけ
+        // ——追従 Component はキャラ窓が持つ。
         let offset_outcome = match kind {
             GhostWindowKind::Char => rescale_balloon_follow_offset(world, window, scope),
             GhostWindowKind::Balloon => OffsetFollowOutcome::Unchanged,
         };
-        // 再導出→（差分があれば）再表示。`None` は「**窓寸**を触らない」が正しい（前表示・前寸の
-        // 維持）。なお `None` は k 不変とは同義でない——不可視・未表示・失敗に加え、**k は
-        // 変わったが丸め後の物理寸が同じ**場合も `None` である（`refresh_scale` の doc が明記）。
-        // ゆえに文字層 k 追従の判断材料にはこの戻り値を使わない（[`run_text_scale_phase`] を参照）。
-        //
+        // 再導出→（差分があれば）再表示。`None` は「**窓寸**を触らない」が正しい（前表示・前寸の維持）。
+        // `None` は k 不変とは同義でない（不可視・未表示・失敗に加え、k は変わったが丸め後の物理寸が同じ
+        // 場合も `None`・`refresh_scale` の doc）ゆえ、文字層 k 追従の判断材料にはこの戻り値を使わない
+        // （[`run_text_scale_phase`] を参照）。
         // **位置**は寸の再導出結果に条件付けない（下の `None` 腕）。
         let wrote = match source.refresh_scale_report(world, target) {
             // 経路タグ: 本フェーズは `Changed<DPI>` エッジ駆動＝真に DPI 由来。
@@ -497,8 +491,7 @@ pub(super) fn reproject_char_window_at_current_size(
     route: PlacementRoute,
 ) -> bool {
     let Some(current) = world.get::<WindowPos>(window).and_then(|wp| wp.size) else {
-        // 経路語を載せる（呼び手が 2 つある）——載せないと、拡大率の相と
-        // 作業領域再スナップのどちらが打ち切ったのかがログから判らない。
+        // 経路語を載せる（呼び手が 2 つある）。載せないと、どちらの相が打ち切ったのかがログから判らない。
         if world.get_entity(window).is_err() {
             debug!(
                 entity = ?window,
@@ -540,8 +533,8 @@ pub(super) fn reproject_char_window_at_current_size(
 ///
 /// エッジ（`Changed<DPI>`）観測は「再表示のトリガ」に徹する。窓寸の整合そのものは**表示が成立
 /// したという状態**に紐づき、[`frame_system`](super::frame_system) が drain の後段で
-/// 直接呼ぶ [`reconcile_reported_sizes`] が同一フレーム内で拾う（初回表示の k₀ 補正＝Flow 3
-/// 手順 5 はこちらの経路で landing する）。両者は
+/// 直接呼ぶ [`reconcile_reported_sizes`] が同一フレーム内で拾う（初回表示の k₀ 補正はこちらの経路で
+/// 着地する）。両者は
 /// presenter の消費規約により二重にも取りこぼしにもならない。
 ///
 /// # 文字層の k 追従は本フェーズが担わない

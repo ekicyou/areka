@@ -666,7 +666,7 @@ fn finish_balloon(
 }
 
 /// 実行系の記憶の書き手で書く。書き手が無ければ `warn!(skin_memory_not_recorded)` で、切替は
-/// 成功として扱う（記憶の縮退は今日と同じ）。
+/// 成功として扱う（記憶は縮退する）。
 fn record_memory(world: &World, hooks: SessionHooks, kind: SkinKind, folder: &str) {
     if !(hooks.record_last_skin)(world, kind, folder) {
         warn!(

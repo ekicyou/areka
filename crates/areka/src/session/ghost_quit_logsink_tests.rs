@@ -1,5 +1,4 @@
-//! LogSink 側の起動でも停止通知が終了の指示まで届くことの確認（areka-P0-shiori-fault-notice
-//! タスク 3.3・要件 6.4・7.6・8.5）。
+//! LogSink 側の起動でも停止通知が終了の指示まで届くことの確認。
 //!
 //! 実 sink 結線（`RuntimeWiring`）の無い World に受け口 `KanadeNoticeRx` だけを挿し、接続に失敗する
 //! SHIORI（`ShioriWiring::Custom` が `Err`）を停止通知の送出端つきで起動する。kanade が自分で
@@ -18,7 +17,6 @@ use temp_path_kit::TempPath;
 use super::*;
 use crate::app_exit::{ExitOrigin, FirstExit, fault_of};
 
-/// 注入する接続失敗の理由。
 const CONNECT_ERR: &str = "logsink-side simulated connect failure";
 
 /// 最小の解決可能なゴーストの木（`ghost/master/descript.txt`＋`shell/master/descript.txt`）。
@@ -40,7 +38,7 @@ fn write_ghost_fixture(root: &Path) {
     .expect("write shell descript.txt");
 }
 
-/// 実 sink 結線なしの World＋受け口で、接続失敗の停止通知が `quit_app` まで届く（要件 6.4・7.6）。
+/// 実 sink 結線なしの World＋受け口で、接続失敗の停止通知が `quit_app` まで届く。
 ///
 /// # 空振りしないこと
 /// 受け口を挿さなければ終了相は何もせず、期限切れで落ちる。停止通知の送出端を渡さなければ
@@ -50,7 +48,6 @@ fn connect_failure_reaches_quit_app_without_real_sink_wiring() {
     let temp = TempPath::new("areka-ghost-quit-logsink");
     write_ghost_fixture(temp.path());
 
-    // 実 sink 結線（`RuntimeWiring`）は挿さない。終了の受け口と停止通知の受け口だけ。
     let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
     let mut world = World::new();
     world.insert_non_send(wintf::AppExit::new());
@@ -70,7 +67,6 @@ fn connect_failure_reaches_quit_app_without_real_sink_wiring() {
     let ghost = areka_ghost::boot_with_kanade_stop(options, Some(stop_tx))
         .expect("接続の失敗はアクターの中で起こるので起動そのものは成功する");
 
-    // 終了相を有界に回す（本番は毎フレーム 1 回）。
     let reached = areka_runtime::spine::wait_until(
         "停止通知が終了相へ届く",
         areka_runtime::spine::Progress::Unknown,

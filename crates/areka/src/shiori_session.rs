@@ -1,22 +1,21 @@
 //! in-proc アクティベーション経路とリクエスト利用規律（単一 in-flight・遅延完了タイムアウト）。
 //!
 //! 本モジュールは、`IShioriFactory` 経由で脳（`IShiori` 実装）を生成する最小経路
-//! （アクティベーション）と、areka 側のリクエスト利用規律を所有する
-//! （design.md §ShioriSession, requirements.md 2.1/12.3）。
+//! （アクティベーション）と、areka 側のリクエスト利用規律を所有する。
 //!
-//! ## アクティベーション最小経路（factory 経由生成・design.md §ShioriSession・要件 2.1）
+//! ## アクティベーション最小経路（factory 経由生成）
 //! [`ShioriSession::activate`] は [`ShioriHostSink`] を生成して `IShioriHost` 化し、
 //! [`IShioriFactory::create`](shiori_abi::interface::IShioriFactory::create)`(load_dir, shiori_name,
-//! &host)` で **load 完了済み** の `IShiori` を受領・保持する（旧 `ShioriExt::load` 経路の置換）。
-//! 「未ロード状態」は存在しない（create 融合＋Drop teardown・要件 9.1/9.2）。実装種別差
+//! &host)` で **load 完了済み** の `IShiori` を受領・保持する。
+//! 「未ロード状態」は存在しない。実装種別差
 //! （native / 過去互換）は factory 実装に局所化し、確立済みの `IShiori` 利用面へ波及させない。
 //!
-//! ## teardown は Drop(RAII)（design.md §ShioriSession・要件 2.1/12.3・D7）
+//! ## teardown は Drop(RAII)
 //! 明示 `unload()` メソッドは存在しない。[`ShioriSession`] の [`Drop`] が
-//! **保留 request の取消 → brain 参照の drop** の順序で teardown する。Drop は失敗を返せない
-//! ——D7「teardown は best-effort・戻り値で扱わない」が正当化する。
+//! **保留 request の取消 → brain 参照の drop** の順序で teardown する。Drop は失敗を返せないため
+//! teardown は best-effort で、戻り値で扱わない。
 //!
-//! ## 利用規律: 単一 in-flight（議題3・design.md §ShioriSession・要件 2.1）
+//! ## 利用規律: 単一 in-flight
 //! areka は同時に高々 1 リクエストのみ発行する。[`ShioriSession::get`] が
 //! [`SessionRequest::Deferred`] を返した間は **保留状態**であり、host の突合枠へトークンをセットする
 //! （[`ShioriHostSink::set_pending_token`]）。保留中に次の `get` を呼ぼうとすると
@@ -28,12 +27,12 @@
 //!   超過した保留枠を放棄し次 get を許可する。タイムアウト超過後に遅れて来た `Complete` は host が
 //!   [`SHIORI_E_UNKNOWN_TOKEN`](shiori_abi::error::SHIORI_E_UNKNOWN_TOKEN) で弾く。
 //!
-//! ## タイムアウトの決定性（議題3 e1・テスト容易性）
+//! ## タイムアウトの決定性
 //! タイムアウト判定は実時間 `sleep` に依存しない。設定値 [`ShioriSession::timeout`] は
 //! [`Duration`] で保持し、保留開始時刻からの経過時間 [`Duration`] を**注入可能な**
 //! [`expire_if_elapsed`](ShioriSession::expire_if_elapsed) へ渡して判定する。
 //!
-//! ## 非ブロッキング前提（議題3 e2・要件 12.3）
+//! ## 非ブロッキング前提
 //! `get`/`notify` は in-proc 直呼びで areka の呼び出しスレッド上で実行され、脳が即時に
 //! `S_OK` / [`SHIORI_S_PENDING`](shiori_abi::error::SHIORI_S_PENDING) / error HRESULT を返す契約である
 //! （非ブロッキング）。重い処理は脳側で `SHIORI_S_PENDING` ＋後続 `Complete` へ後送りされる。
@@ -49,10 +48,10 @@ use crate::shiori_host::{HostMessage, ShioriHostSink};
 /// in-proc セッション/アクティベーションの利用規律エラー（areka 側の状態に由来）。
 ///
 /// `IShiori`/`IShioriFactory` の HRESULT 由来エラー（[`shiori_abi::error::ShioriError`]）とは別に、
-/// areka 側の **利用規律**（単一 in-flight 等）違反を型化する（design.md §ShioriSession・議題3）。
+/// areka 側の **利用規律**（単一 in-flight 等）違反を型化する。
 #[derive(thiserror::Error, Debug)]
 pub enum SessionError {
-    /// 保留 request が in-flight の間に次 request を発行しようとした（単一 in-flight・議題3）。
+    /// 保留 request が in-flight の間に次 request を発行しようとした（単一 in-flight）。
     #[error("a deferred request is still in flight (single in-flight discipline)")]
     RequestInFlight,
     /// `IShiori`/`IShioriFactory` 操作が失敗した（HRESULT 由来）。元の [`shiori_abi::error::ShioriError`] を内包する。
@@ -71,7 +70,7 @@ pub enum SessionRequest {
     Deferred(CorrelationToken),
 }
 
-/// in-proc アクティベーション経路と利用規律を所有するセッション（design.md §ShioriSession・議題3）。
+/// in-proc アクティベーション経路と利用規律を所有するセッション。
 ///
 /// 脳（`IShiori`）への in-proc 参照と areka 実装の sink（`IShioriHost`）を保持し、単一 in-flight・
 /// 遅延完了タイムアウト・Drop teardown（保留取消）の利用規律を担う。本セッションは脳へ COM 強参照
@@ -80,12 +79,11 @@ pub enum SessionRequest {
 pub struct ShioriSession {
     /// in-proc 脳への参照（COM ポインタ）。`activate` の factory 経由生成で受領し `get`/`notify` に用いる。
     ///
-    /// Drop 順序（D7）: `brain` を最後に drop するため、フィールド宣言順で `host` より後に置かない
-    /// （Rust はフィールド宣言順に drop する）。ここでは Drop impl 内で明示順序を制御する。
+    /// Drop 順序は Drop impl 内で明示的に制御する（フィールド宣言順には依存しない）。
     brain: IShiori,
     /// areka 実装の sink（単一 in-flight 突合枠＋メールボックス＋プロパティストアを所有）。
     host: IShioriHost,
-    /// 設定可能な遅延完了タイムアウト（議題3 e1）。経過時間との比較は注入された経過時間で行う。
+    /// 設定可能な遅延完了タイムアウト。経過時間との比較は注入された経過時間で行う。
     // デモ駆動経路は遅延を Complete で即解消するためタイムアウトを参照しない。本フィールドは
     // タイムアウト経路を検証する結合テスト（`expire_if_elapsed`/`with_timeout`）からのみ読まれる。
     #[allow(dead_code)]
@@ -96,19 +94,19 @@ pub struct ShioriSession {
 }
 
 impl ShioriSession {
-    /// 既定タイムアウト（議題3 e1: SSP 同様の無応答ガード相当の保守的既定値）。
+    /// 既定タイムアウト（SSP 同様の無応答ガード相当の保守的既定値）。
     ///
     /// 設定可能であり、[`ShioriSession::with_timeout`] で上書きできる。
     pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
-    /// factory 経由で脳を生成しアクティベーションする（要件 2.1）。
+    /// factory 経由で脳を生成しアクティベーションする。
     ///
     /// 既定タイムアウト（[`DEFAULT_TIMEOUT`](Self::DEFAULT_TIMEOUT)）でセッションを確立する。
     /// 内部で [`ShioriHostSink`] を生成→`IShioriHost` 化し、
     /// [`IShioriFactory::create`]`(load_dir, shiori_name, &host)` で load 完了済み `IShiori` を受領する。
     ///
     /// # Errors
-    /// `create` が失敗した場合 [`SessionError::Shiori`]（`CreateFailed`）を返す（要件 8.6）。
+    /// `create` が失敗した場合 [`SessionError::Shiori`]（`CreateFailed`）を返す。
     // production の session 構築は from_parts 経由（demo/main）ゆえ bin ターゲットでは未使用。
     // 本メソッドは test（unit/lifecycle e2e）専用の公開 API（兄弟の test 専用メソッドと同規約）。
     #[allow(dead_code)]
@@ -120,7 +118,7 @@ impl ShioriSession {
         Self::activate_with_timeout(factory, load_dir, shiori_name, Self::DEFAULT_TIMEOUT)
     }
 
-    /// 遅延完了タイムアウトを指定して factory 経由でアクティベーションする（議題3 e1・設定可能）。
+    /// 遅延完了タイムアウトを指定して factory 経由でアクティベーションする。
     ///
     /// 新規 [`ShioriHostSink`] を生成し、`factory.create` で脳を生成・保持する。
     // production は from_parts 経由ゆえ bin ターゲットでは未使用（test 専用の公開 API）。
@@ -131,18 +129,15 @@ impl ShioriSession {
         shiori_name: &HSTRING,
         timeout: Duration,
     ) -> Result<Self, SessionError> {
-        // areka 実装の sink を生成（単一 in-flight 突合枠＋メールボックス＋sylphya 委譲プロパティ応答）。
-        // プロパティ応答は App スコープのみの sylphya アクターへ委譲する（第 2 ストア撤去・R7.2/R7.3・
-        // design.md §bin（ShioriHostSink 統合））。セッション固有の `AskerId` は load_dir の正準文字列
-        // から構築する（ghost 側 `ghost_asker_id` が `MountModel.shiori.dir` から構築する規約に倣う）。
+        // プロパティ応答は App スコープのみの sylphya アクターへ委譲する。セッション固有の `AskerId` は
+        // load_dir の正準文字列から作る（ghost 側 `ghost_asker_id` が `MountModel.shiori.dir` から作る規約に倣う）。
         // `handle` は非 RAII（detach）で、アクターは sink 内包 publisher が生存する限り生き続けるため
-        // 破棄してよい（in-proc serving surface は join 不要・spawn_app_sylphya_sink の doc 参照）。
+        // 破棄してよい（spawn_app_sylphya_sink の doc 参照）。
         let asker = areka_sylphya::AskerId::new(load_dir.to_string());
-        // テスト専用の入口ゆえ App の置き場は付けない（本物の環境で置き場を決めない・user-data-root 要件 10.6）。
+        // テスト専用の入口ゆえ App の置き場は付けない（本物の環境で置き場を決めない）。
         let (sink, _handle) = crate::shiori_host::spawn_app_sylphya_sink(asker, None);
         let host: IShioriHost = sink.into();
-        // factory 経由生成: load 完了済みの IShiori を受領する（旧 ShioriExt::load 経路の置換・要件 2.1）。
-        // 失敗は ShioriError（CreateFailed）へ写る（半構築非露出・要件 8.6）。
+        // 失敗は ShioriError（CreateFailed）へ写り、半構築のセッションは露出しない。
         let brain = factory.create(load_dir, shiori_name, &host)?;
         Ok(Self {
             brain,
@@ -166,7 +161,7 @@ impl ShioriSession {
         }
     }
 
-    /// 遅延完了タイムアウトを上書きする（議題3 e1・設定可能）。
+    /// 遅延完了タイムアウトを上書きする。
     // デモ駆動経路では使わない。タイムアウト経路を検証する結合テストからのみ利用する。
     #[allow(dead_code)]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
@@ -174,7 +169,7 @@ impl ShioriSession {
         self
     }
 
-    /// 現在の遅延完了タイムアウト設定（議題3 e1）。
+    /// 現在の遅延完了タイムアウト設定。
     // デモ駆動経路では使わない。タイムアウト設定を観測する結合テストからのみ利用する。
     #[allow(dead_code)]
     pub fn timeout(&self) -> Duration {
@@ -200,7 +195,7 @@ impl ShioriSession {
         &self.host
     }
 
-    /// 同期 request（GET SHIORI/3.0 後継）を発行する。単一 in-flight 規律を適用する（議題3・要件 2.1）。
+    /// 同期 request（GET SHIORI/3.0 後継）を発行する。単一 in-flight 規律を適用する。
     ///
     /// 保留中（[`is_pending`](Self::is_pending)）に呼ぶと [`SessionError::RequestInFlight`] で拒否する。
     /// 脳が [`GetOutcome::Deferred`] を返した場合は host の突合枠へトークンをセットし
@@ -211,13 +206,12 @@ impl ShioriSession {
     /// - `IShiori::get` 失敗 → [`SessionError::Shiori`]（`GetFailed`）。
     pub fn get(&mut self, content: &HSTRING) -> Result<SessionRequest, SessionError> {
         if self.pending.is_some() {
-            // 単一 in-flight: 保留解除（Complete/Drop/タイムアウト）まで次 get を発行しない（議題3）。
+            // 保留解除（Complete/Drop/タイムアウト）まで次 get を発行しない。
             return Err(SessionError::RequestInFlight);
         }
         match self.brain.get(content)? {
             GetOutcome::Immediate(response) => Ok(SessionRequest::Immediate(response)),
             GetOutcome::Deferred(token) => {
-                // 突合枠（host 側）へトークンをセットし、後続 Complete の突合を可能にする。
                 self.host_sink().set_pending_token(token);
                 self.pending = Some(token);
                 Ok(SessionRequest::Deferred(token))
@@ -244,7 +238,6 @@ impl ShioriSession {
             if let HostMessage::Completed { token, .. } = &msg
                 && self.pending == Some(*token)
             {
-                // 対応する Complete を受領: 保留解除→次 get 許可（議題3）。
                 self.pending = None;
             }
             drained.push(msg);
@@ -252,7 +245,7 @@ impl ShioriSession {
         drained
     }
 
-    /// 設定タイムアウトを超過した保留枠を放棄し次 get を許可する（議題3 e1・決定的判定）。
+    /// 設定タイムアウトを超過した保留枠を放棄し次 get を許可する（決定的判定）。
     ///
     /// `elapsed` は保留開始からの経過時間（呼び出し側が注入する・実時間 `sleep` に非依存）。
     /// `elapsed >= timeout` のとき保留枠を放棄する（host 側突合枠もクリアして、遅れて来る
@@ -264,7 +257,7 @@ impl ShioriSession {
     #[allow(dead_code)]
     pub fn expire_if_elapsed(&mut self, elapsed: Duration) -> bool {
         if self.pending.is_some() && elapsed >= self.timeout {
-            // 保留枠を放棄: areka 側保留解除＋host 側突合枠クリア（stale Complete を弾く）。
+            // host 側突合枠もクリアして stale Complete を弾く。
             self.pending = None;
             self.host_sink().clear_pending_token();
             true
@@ -284,31 +277,28 @@ impl ShioriSession {
     }
 }
 
-/// teardown は Drop(RAII)（要件 2.1/12.3・D7）。
+/// teardown は Drop(RAII)。
 ///
 /// 保留 request を取消（areka 側・host 側双方の保留枠をクリア）してから brain 参照を drop する。
 /// この順序を固定することで、放棄後に遅れて来る `Complete` を host が突合不能で弾ける状態を作って
-/// から脳を手放す。Drop は失敗を返せないため best-effort（D7）。
+/// から脳を手放す。Drop は失敗を返せないため best-effort。
 impl Drop for ShioriSession {
     fn drop(&mut self) {
-        // 保留取消（議題3）: areka 側・host 側双方の保留枠をクリアする。
         self.pending = None;
         self.host_sink().clear_pending_token();
-        // brain 参照（`self.brain`）と host 参照（`self.host`）はこの後 Rust が自動 drop する
-        // （Release）。取消→drop の順序をここで固定した（D7・best-effort）。
     }
 }
 
 #[cfg(test)]
 mod tests {
-    //! factory 経由アクティベーション経路＋利用規律の結合テスト（要件 2.1/12.3・design.md §System Flows）。
+    //! factory 経由アクティベーション経路＋利用規律の結合テスト。
     //!
     //! `#[implement(IShioriFactory)]`/`#[implement(IShiori)]` のモック（即時/遅延を切替可能）を
     //! in-proc で立て、以下を検証する:
     //! - (a) アクティベーションが factory 経由で脳を生成し host を受け渡す（脳が host を保持し host->raise が呼べる）。
-    //! - (b) 遅延 get 後に次 get が拒否される（単一 in-flight・議題3）。
-    //! - (c) タイムアウト判定ヘルパで保留枠が放棄され次 get が許可される（議題3 e1）。
-    //! - (d) drop 後は参照が存在しない（Drop teardown・要件 2.1/12.3）。
+    //! - (b) 遅延 get 後に次 get が拒否される（単一 in-flight）。
+    //! - (c) タイムアウト判定ヘルパで保留枠が放棄され次 get が許可される。
+    //! - (d) drop 後は参照が存在しない（Drop teardown）。
     //! - (e) `Complete` 受領で保留解除→次 get 許可。
 
     use super::*;
@@ -399,18 +389,15 @@ mod tests {
     }
 
     /// (a) アクティベーションが factory 経由で脳を生成し host を渡すこと。
-    /// 脳が host を保持し、脳→host の `raise` が areka sink のメールボックスへ届く（要件 2.1）。
+    /// 脳が host を保持し、脳→host の `raise` が areka sink のメールボックスへ届く。
     #[test]
     fn activation_creates_brain_and_loads_sink() {
         let mut session = activate_mock(false);
 
-        // 脳が保持する host（= areka sink）へ Raise が届くことを、脳の held_host 経由で確認する。
-        // MockBrain の held_host は areka が渡した sink と同一（メールボックス共有）。
         let sink = host_sink_of(&session);
         assert_eq!(sink.mailbox_len(), 0, "初期メールボックスは空");
 
-        // brain の held_host へ raise を発火する経路は brain を直接触れないため、host 経由で raise して
-        // 同一 sink がメールボックスへ投函することを確認する（sink 共有の実証）。
+        // brain を直接触れないため、host 経由で raise して同一 sink への投函を確認する。
         session
             .host()
             .raise(&HSTRING::from("\\h\\s[0]from-host"))
@@ -440,7 +427,7 @@ mod tests {
         assert!(session.get(&content).is_ok(), "即時後は次 get 可能");
     }
 
-    /// (b) 遅延 get 後、保留中は次 get が `RequestInFlight` で拒否されること（単一 in-flight・議題3）。
+    /// (b) 遅延 get 後、保留中は次 get が `RequestInFlight` で拒否されること（単一 in-flight）。
     #[test]
     fn deferred_get_blocks_next_get() {
         let mut session = activate_mock(true);
@@ -468,7 +455,7 @@ mod tests {
         );
     }
 
-    /// (c) タイムアウト判定ヘルパで保留枠が放棄され、次 get が許可されること（議題3 e1・決定的）。
+    /// (c) タイムアウト判定ヘルパで保留枠が放棄され、次 get が許可されること（決定的）。
     #[test]
     fn timeout_expires_pending_and_allows_next_get() {
         let timeout = Duration::from_millis(500);
@@ -504,7 +491,7 @@ mod tests {
         );
     }
 
-    /// タイムアウト放棄後に遅れて来た `complete` は host が `UnknownToken` で弾くこと（議題3）。
+    /// タイムアウト放棄後に遅れて来た `complete` は host が `UnknownToken` で弾くこと。
     #[test]
     fn stale_complete_after_timeout_is_rejected() {
         let timeout = Duration::from_millis(100);
@@ -521,7 +508,6 @@ mod tests {
         session.get(&content).expect("遅延 get");
         assert!(session.expire_if_elapsed(timeout), "タイムアウトで放棄");
 
-        // 放棄後に遅れて来た complete は突合枠が空のため UnknownToken。
         let response = HSTRING::from("late");
         let err = session
             .host()
@@ -542,7 +528,6 @@ mod tests {
         session.get(&content).expect("遅延 get");
         assert!(session.is_pending());
 
-        // 脳→host->complete（突合枠と一致）でメールボックスへ Completed を投函する。
         let response = HSTRING::from("deferred-body");
         session
             .host()
@@ -563,10 +548,9 @@ mod tests {
         assert!(session.get(&content).is_ok(), "Complete 後は次 get 可能");
     }
 
-    /// (d) drop で保留が取消され、drop 後は参照が存在しないこと（Drop teardown・要件 2.1/12.3）。
+    /// (d) drop で保留が取消され、drop 後は参照が存在しないこと（Drop teardown）。
     ///
-    /// 「unload 後の拒否」系（旧）は「drop 後は参照不在」へ書き換え——型システムが検証を肩代わりする。
-    /// ここでは drop 前に host sink（clone で別途保持）を観測し、drop が host 側突合枠をクリアする
+    /// drop 前に host sink（clone で別途保持）を観測し、drop が host 側突合枠をクリアする
     /// （保留取消）ことを確認する。
     #[test]
     fn drop_cancels_pending_and_no_reference_survives() {
@@ -575,13 +559,11 @@ mod tests {
             ShioriSession::activate(&factory, &HSTRING::from("dir"), &HSTRING::from("name"))
                 .expect("activate");
 
-        // sink を clone で別途保持し、session drop 後に突合枠が取消されていることを観測できるようにする。
         let sink_handle: IShioriHost = session.host().clone();
 
         let content = HSTRING::from("ping");
         session.get(&content).expect("遅延 get");
         assert!(session.is_pending(), "遅延後は保留状態");
-        // host 側突合枠にトークンがある。
         let sink_impl = unsafe { windows_core::AsImpl::<ShioriHostSink>::as_impl(&sink_handle) };
         assert_eq!(
             sink_impl.pending_token(),
@@ -589,16 +571,13 @@ mod tests {
             "drop 前は host 側突合枠にトークンがあること"
         );
 
-        // session を drop する（Drop teardown: 保留取消→brain drop）。
         drop(session);
 
-        // drop 後は host 側突合枠が取消されている（保留取消・stale Complete を弾ける状態）。
         assert_eq!(
             sink_impl.pending_token(),
             None,
             "drop で host 側突合枠が取消されること（保留取消・Drop teardown）"
         );
-        // 以降に遅れて来る complete は突合不能で弾かれる（保留取消の帰結）。
         let err = sink_handle
             .complete(CorrelationToken(PENDING_TOKEN), &HSTRING::from("late"))
             .expect_err("drop 後の stale complete は Err");
@@ -608,7 +587,7 @@ mod tests {
         );
     }
 
-    /// `notify`（片道通知）がセッション越しに脳へ届き、応答を返さないこと（要件 9.3 の areka 追随）。
+    /// `notify`（片道通知）がセッション越しに脳へ届き、応答を返さないこと。
     #[test]
     fn notify_reaches_brain_without_response() {
         let session = activate_mock(false);
