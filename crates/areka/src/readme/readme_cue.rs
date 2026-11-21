@@ -95,7 +95,7 @@ impl dola::cue::CueSink for ReadmeCueSink {
         let selector = params.first().copied().unwrap_or_default();
         let request = if (name, selector) == (NAME_OPEN, SELECTOR_README) {
             // 引数付き（`\![open,readme,種類,名前]`）は列挙が要るため α では語彙だけを持ち、
-            // 警告して何もしない。
+            // 警告して何もしない。ukadoc の URL は `CommandConsumer::ReadmeSink` の doc にある。
             if params.len() > 1 {
                 warn!(
                     event = "readme_cue_unsupported",

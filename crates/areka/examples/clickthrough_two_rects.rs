@@ -182,6 +182,7 @@ fn create_test_window(world: &mut World) -> Entity {
 
     // `BitmapSource` の on_add が `HitTest::alpha_mask()` を入れるので省いてもよいが、αピクセル判定を
     // 使うことを示すため明示している。`HitTest::bounds()` を付けると全面矩形判定になりαは効かない。
+    // αマスクを作るのは wintf の `generate_alpha_mask_system`（`HitTestMode::AlphaMask` のときだけ）。
     // 期待: キャラの不透明ピクセル上だけ十字カーソル ON・透明な周辺はクリック透過（背面へ）。
     world.spawn((
         Name::new("Image-alpha"),

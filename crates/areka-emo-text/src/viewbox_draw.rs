@@ -317,6 +317,7 @@ impl ViewboxExecutor {
     /// 呼出点）。本関数は、装飾の表を持たない決定論テスト（`viewbox_draw_*_tests.rs`）が呼ぶ委譲の
     /// 入口で、空の [`StyleTable`] を添えて `render_styled` へ流すだけなので、装飾なしの呼出列の
     /// 照合面にもなっている。本番の入口ではないことを構造で示すため `#[cfg(test)]` で塞いである。
+    /// `draw_oracle_tests.rs` の `.render(...)` は同名のオラクル `draw.rs::DrawExecutor` のもので、本関数ではない。
     #[cfg(test)]
     pub fn render(
         &mut self,

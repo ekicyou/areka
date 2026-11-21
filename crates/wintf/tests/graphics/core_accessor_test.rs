@@ -1,4 +1,4 @@
-//! GraphicsCore アクセサのテスト
+//! GraphicsCore アクセサのテスト（対象は `src/ecs/graphics/core.rs`）
 //! WUC 版の状態遷移は src の wuc_resource.rs 単体テストが担う。
 
 use wintf::ecs::GraphicsCore;

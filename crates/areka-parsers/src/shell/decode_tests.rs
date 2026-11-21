@@ -1,6 +1,6 @@
 //! decode の単体テストの親（`decode(lex(..))` を主題ごとの兄弟ファイルで確かめる）。
 //!
-//! 本ファイルは共通の import と子の宣言だけを持つ。振り分けと寛容スキップは `skeleton_tests`、
+//! 本ファイルは共通の import と子の宣言だけを持ち、子は `use super::{…}` でその import を引く。振り分けと寛容スキップは `skeleton_tests`、
 //! element・collision・animation・append・alias の値化はそれぞれの子が確かめる。
 //! 期待値はリテラル直書き。
 

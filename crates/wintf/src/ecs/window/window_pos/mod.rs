@@ -230,6 +230,8 @@ impl WindowPos {
     }
 
     /// bool の欄から `SetWindowPos` のフラグを組む
+    ///
+    /// 呼び手は `apply_window_pos_changes`・`nudge_command`・`pair_fix_command`。
     pub fn build_flags_for_system(&self) -> SET_WINDOW_POS_FLAGS {
         let mut flags = SET_WINDOW_POS_FLAGS(0);
 
@@ -280,6 +282,8 @@ impl WindowPos {
     }
 
     /// ZOrder から `SetWindowPos` の hwnd_insert_after を得る
+    ///
+    /// 呼び手は `apply_window_pos_changes`・`nudge_command`・`pair_fix_command`。
     pub fn get_hwnd_insert_after(&self) -> Option<HWND> {
         match self.zorder {
             ZOrder::NoChange => None,

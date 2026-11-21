@@ -60,6 +60,7 @@ use super::talk_clock::TalkClock;
 ///
 /// 受信側は [`TalkStarted`](Self::TalkStarted) で計測をリセットし、以降の
 /// [`DisplayEndAt`](Self::DisplayEndAt) を max 集約する（重複・順不同の値に対して単調）。
+// channel は `wire_runtime` が作り、送出端は `runtime_sinks` が載せる `BalloonLifecycleSink`、受信端は `RuntimeWiring::lifecycle_rx` を経て `balloon_visibility_phase` が毎フレーム取り出す。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TalkLifecycleSignal {
     /// この talk の観測が始まった（複製後の初回 `emit` で 1 回だけ・全 `DisplayEndAt` に先行）。

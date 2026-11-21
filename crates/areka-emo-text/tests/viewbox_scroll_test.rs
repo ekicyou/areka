@@ -1,7 +1,8 @@
 //! 再描画レス・ダーティ限定描画の決定論カウント檻（実 pump 通し）。
 //!
 //! `register_actor` → `present_frame` → `draw_stats` の実配線で、フレーム間の [`DrawStats`] の増分を
-//! 検査する。時刻は常に注入（`talk_time`）で実時間 sleep は使わない。
+//! 検査する。時刻は常に注入（`talk_time`）で実時間 sleep は使わない。`ViewboxExecutor` 単体の
+//! 露出帯限定描画の檻は `viewbox_draw` の子の `viewbox_draw_*_tests.rs` が持つ。
 //!
 //! 1. 内容・可視窓とも不変のフレームは全統計の増分が 0。
 //! 2. あふれてスクロールするフレームは `draw_text_layout_calls` の増分が可視行数より小さく、露出帯交差行の

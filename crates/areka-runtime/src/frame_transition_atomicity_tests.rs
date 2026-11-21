@@ -39,7 +39,8 @@
 //! 経路 A（`WM_DPICHANGED` 受理時の同期書込）は
 //! `crates/wintf/src/ecs/window_proc/window_pos.rs` が `guarded_set_window_pos` を**直接**呼び、
 //! `SetWindowPosCommand` のキューを通らない。`origin=dpi-suggested` が現れるのは同じ処理が組む
-//! 観測行（`write_line`）**だけ**で、指令のタグにこの語を載せる経路は本番に無い。ゆえに
+//! 観測行（`write_line`）**だけ**で、指令のタグにこの語を載せる経路は本番に無い
+//! （タグを付けるのは `follow/window_move.rs` の `enqueue_window_set_pos`・wintf の `apply_window_pos_changes`・`pair_fix_command`）。ゆえに
 //! **キュー上で `tag.origin` を数える形は、本番のどんな退行でも赤にならない**。本ファイルは
 //! 観測行を判定器の `summarize` へ通し、`origin` で数える `path_a_writes` と `stage` で数える
 //! `sync_stage_writes` を別々に読む。

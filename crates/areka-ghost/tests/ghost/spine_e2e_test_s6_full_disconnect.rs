@@ -38,7 +38,7 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
 
     // 起動系列（kanade スレッドで非同期に走る）が panic しない最小限の台本のみ用意する——焦点は解体の「構造」であり、
     // boot talk の再生完了までは駆動しない（active slot に乗ったまま未進行でも、後続①の `DispatcherMsg::Close` が既存の
-    // Close funnel で安全に中断させる）。OnClose／Unload は台本化しない——kanade へ `CloseRequest`／`ForceQuit` を送らず、
+    // Close funnel で安全に中断させる・`dispatcher.rs` の単体テストが確かめる）。OnClose／Unload は台本化しない——kanade へ `CloseRequest`／`ForceQuit` を送らず、
     // raw `KanadeMsg::Close` のみで停止させるため、shiori backend の `unload()` は呼ばれない。
     let (backend, _handle) = boot_script().build();
 

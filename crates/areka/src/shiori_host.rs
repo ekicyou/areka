@@ -202,7 +202,8 @@ pub(crate) fn spawn_app_sylphya_sink(
     (sink, parts.handle)
 }
 
-// `[in]` HSTRING（`&HSTRING`）は呼び出し中のみ有効な借用なので、投函/保持する内容は clone して所有する。
+// `[in]` HSTRING（`&HSTRING`）は呼び出し中のみ有効な借用なので、投函/保持する内容は clone して所有する
+// （`shiori_abi::interface` の HSTRING 所有権規約）。
 //
 // 再入規約: `GetProperty` は reader の逐次同期解決（鏡像スナップショットの read
 // lock 内 `Arc` clone のみ・他スレッド/他アクターへの pull 照会なし）で完結し、`SetProperty` は

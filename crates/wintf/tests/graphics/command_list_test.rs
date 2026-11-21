@@ -1,4 +1,4 @@
-//! GraphicsCommandList コンポーネントのテスト
+//! GraphicsCommandList コンポーネントのテスト（対象は `src/ecs/graphics/command_list.rs`）
 
 use wintf::ecs::{GraphicsCommandList, GraphicsCore};
 

@@ -230,6 +230,7 @@ fn apply_non_scope_base_moves() {
 }
 
 // MoveCueSink→channel→apply_move_directive→move_window_to の一続きを通すテスト。
+// 隣の段は `move_cue_move_sink_tests.rs`（sink→drain）・`run_move_drain_phase_applies_directive_when_ghost_windows_present`（channel→apply）・`spine_move_cue_drives_window_move_end_to_end`（全経路・座標だけ）が見る。
 
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use std::sync::mpsc::channel;

@@ -103,7 +103,7 @@ pub(crate) fn initial_charset(shiori: &ShioriMount, default: DefaultEncoding) ->
 
 /// 本番 connect クロージャを構成する（実行は shiori アクタースレッド上・一度だけ）。
 ///
-/// 接続手順:
+/// 接続手順（`areka-kanade` の `real_helper_test.rs::connect_real_helper` と同じ手順）:
 /// 1. `shiori.file` が `None` なら DLL ファイル名が未解決＝即座に接続失敗（`Err`）。
 ///    ウィンドウ生成・プロセス起動のいずれも試みない（推測しない）。
 /// 2. `ParentMessageWindow::create()` で親 message-only 窓を生成する（`!Send`・
@@ -197,7 +197,7 @@ pub fn real_connect(
             //
             // 宣言を持たない UTF-8 のゴースト（emo2 の pasta）では初期値が既定の Shift_JIS になり、
             // 採用が起きるまでに `Charset: Shift_JIS` を名乗る要求が 3 本ある（片道イベントの応答は
-            // 採用の根拠に用いないため）:
+            // 採用の根拠に用いないため）。並びは `areka-kanade` の `schedule/boot.rs` の発行点で決まる:
             // 0. この閉包の中の版の確かめ（`GET Version`）。応答は採用に回さない。
             // 1. `boot_start` が発行する `OnInitialize`＝片道の NOTIFY。応答は `client.rs` の `notify` が
             //    破棄するだけで、応答ヘッダを採用へ回す手続きを呼ばない。

@@ -22,9 +22,11 @@ use resources::ResourceOutcome;
 /// 中断しない（握手開始は steady/close 層の責務）。
 pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match input {
+        // 非 Idle は `mod.rs` 側で warn! して捨て済み。
         Input::Boot => boot_start(state, config),
         Input::ShioriReply { outcome, .. } => on_reply(state, outcome, config),
         Input::CloseRequest { reason } => record_pending_close(state, reason),
+        // 突合と非 quit の判定は `mod.rs` で済んでいる。
         Input::TalkDone(done) if matches!(state.phase, Phase::BootVersion { talk: Some(_) }) => {
             on_talk_done(state, done)
         }

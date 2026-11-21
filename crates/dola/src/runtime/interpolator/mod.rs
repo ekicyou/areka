@@ -77,7 +77,8 @@ impl Interpolator {
         // progress_t = NaN はクランプされず NaN のまま通る。
         // Object は `t >= 1.0` が false で from_value 側、Float は NaN が結果へ伝播、
         // Integer は `NaN.round() as i64` の飽和キャストで 0。
-        // +inf / -inf は 1.0 / 0.0 にクランプされる。いずれも panic しない。
+        // +inf / -inf は 1.0 / 0.0 にクランプされる。いずれも panic しない
+        // （`tests.rs` の数値境界のテストが確かめる）。
         let t = progress_t.clamp(0.0, 1.0);
 
         match variable_type {
@@ -203,7 +204,8 @@ fn scalar_value(value: &TransitionValue) -> f64 {
             DynamicValue::Float(f) => *f,
             DynamicValue::Integer(i) => *i as f64,
             // f64/i64 変数の from/to は validate で数値に限られるので、非数値 Dynamic は
-            // 通常到達しない。到達時も panic せず 0.0 に縮退する。
+            // 通常到達しない。到達時も panic せず 0.0 に縮退する
+            // （`tests.rs` の `float_interpolation_non_numeric_dynamic_falls_back_to_zero`）。
             _ => 0.0,
         },
     }

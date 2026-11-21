@@ -50,7 +50,7 @@ fn resize_window_to_on_despawned_entity_is_debug_only_normal_termination() {
 
     assert!(!ok, "破棄済み窓へは書けない（false・panic しない）");
     // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE なので、
-    // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現になる。
+    // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現になる（`spawn_cleanup_tests.rs` と同じ形）。
     assert!(
         events.iter().all(|e| e.level > tracing::Level::INFO),
         "破棄済み窓に対して警告以上のログが出ている（areka-P0-dpi-window-vanish 要件 6.2 違反）: {events:?}"
@@ -465,7 +465,7 @@ fn no_window_move_record_when_nothing_is_written() {
 ///
 /// `info` 水準・記録の target で出すので、既定 directive（`info`）でも手順書の directive
 /// （`info,areka_placement::diag=debug`）でも必ず通る。捕捉が死んでいるだけで「出ない」の
-/// テストが緑になる空振りを塞ぐ。
+/// テストが緑になる空振りを塞ぐ（`follow_transition_diag_tests.rs` の `CONTROL_LINE` と同じ置き方）。
 const CONTROL_LINE: &str = "[window-move-probe] alive";
 
 /// 番兵の宛先（`diag_tests.rs` と同じ番兵。`env-filter` の機能は wintf 以外は有効にできない）。

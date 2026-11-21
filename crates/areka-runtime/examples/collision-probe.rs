@@ -38,7 +38,7 @@
 //!
 //! 1. **表示対象は `surface1000`**: emo2 で当たり判定を持つのは `surface1000` だけ。`surface0`（donor の
 //!    既定）は当たり判定を 1 つも持たず空集合しか観測できない。
-//! 2. **`BindSet` は有効 bind の実値集合** `[1101, 1206, 1302, 1502, 1800]`: `surface1000` は静的 element を
+//! 2. **`BindSet` は有効 bind の実値集合** `[1101, 1206, 1302, 1502, 1800]`（`emo-present/state.rs` の `CycleState::command` と同じ）: `surface1000` は静的 element を
 //!    持たず全パーツが bind 制御なので、`BindSet::default()` では全透明の窓が「成功」として出て狙える絵が無い。
 //! 3. **窓 client 寸は本番の窓寸規則で与える**: `spawn_ghost_windows` を意図的に誤った placeholder 寸
 //!    （100×100）で呼んで窓を作り、`apply(ShowSurface{1000, binds})` 成立後に
@@ -58,11 +58,12 @@
 //! 終了は `AREKA_APP_SMOKE_EXIT_MS`（有界 auto-exit）だけ。目視プロトコル ⑤ の所要時間を見込んで
 //! 寛大な値（例 `180000`＝3 分）を必ず与えること。
 //!
-//! ダブルクリックでは終了しない。この probe が装着するポインタハンドラは `OnPointerMoved` だけで、
+//! ダブルクリックでは終了しない。この probe が装着するポインタハンドラは `OnPointerMoved`（`pointer::on_probe_pointer_moved`）だけで、
 //! `OnPointerPressed` は付いていない（キャラ窓のポインタハンドラは本体の
 //! `areka_input::attach_char_pointer_handlers` が装着するが、`pub(crate)` で内部が `crate::` パスを使うため
 //! runtime の example からは使えない）。本番で利用者が終了を指示する道は右クリックメニューの「終了」
 //! （`menu::request_close`）だけで、結線済みの Ctrl+左ダブルクリックはふつうの左ダブルクリックとして配る。
+//! この配り方は `areka-input` の `input_events_tests.rs` が確かめる。
 //!
 //! # 起動時のパス（絶対パスの要否）
 //!
@@ -74,7 +75,7 @@
 //! 2. `pasta.dll` を一切ロードしない（SHIORI も host-32 helper も起動しない）ので、`0x8007007E` の経路が
 //!    存在しない。読むのはデータファイルだけで、ghost・shell・バルーンの `descript.txt`、shell の
 //!    `surfaces.txt` と面画像、バルーンパッケージの面定義・面画像、`windowposition` 定義である
-//!    （`areka-placement` の `prepare_stages_for_shell` が全体像）。
+//!    （`areka-placement` の `prepare_stages_for_shell` が全体像・shell の面画像は probe 自身の `setup::load_shell_assets` も読む）。
 //!
 //! ゆえに中断ログ「collision-probe: 配置準備に失敗」（`build_and_spawn` の early return）は
 //! `PlacementError::Mount`／`DescriptRead`／`Measure` 経由であり、shell だけでなく ghost/balloon の
@@ -97,10 +98,10 @@
 //!    `attach_target`→`apply(ShowSurface)`）を合成し、上の必須逸脱 3 点は必ず逸脱させる。
 //!
 //! ③ **物理寸整合の assert（自動）**: 本番 resize 適用の次フレーム以降に assert する（`SetWindowPosCommand` は
-//!    発行 tick の World 借用解放後に flush されるため、同 tick 内の `GetClientRect` は旧寸を返す）。
+//!    発行 tick の World 借用解放後に flush される（wintf `tick_bridge.rs` の `tick_one_frame`）ため、同 tick 内の `GetClientRect` は旧寸を返す）。
 //!    Win32 `GetClientRect(hwnd)` の client 矩形寸法が [`EmoPresenter::target_physical_size`]
 //!    （丸め単一権威 `ScaleRatio::scaled_extent` を通した値）と一致すること。assert は必ず実窓
-//!    （`GetClientRect`）に対して行う——`WindowPos.size` は enqueue 時点で bypass ミラー済みなので、読むと
+//!    （`GetClientRect`）に対して行う——`WindowPos.size` は enqueue 時点で bypass ミラー済み（`follow/window_move.rs` の `enqueue_window_set_pos`）なので、読むと
 //!    SetWindowPos が一度も走らなくても緑になる。捕捉する欠陥は、本番 resize 経路への dpi/96 再スケール・
 //!    論理 px 解釈の混入・native 原寸と物理寸の取り違え。
 //!

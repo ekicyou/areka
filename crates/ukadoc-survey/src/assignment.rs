@@ -67,7 +67,7 @@ const PROPERTY_PAGES: [&str; 1] = ["list_propertysystem"];
 /// ドメインごとの担当ページ（転記した順のまま）。
 ///
 /// 既定の腕を置かない。ドメインを増やすと、担当ページを書き足すまでコンパイルが
-/// 通らなくなる。名前順にするのは [`PageAssignment::pages_of`] の仕事で、写し違えを
+/// 通らなくなる（`model.rs` の語彙と同じ守り方）。名前順にするのは [`PageAssignment::pages_of`] の仕事で、写し違えを
 /// 見つけやすいよう、ここでは転記した順を保つ。
 fn canonical_pages(domain: Domain) -> &'static [&'static str] {
     match domain {

@@ -119,6 +119,7 @@ pub fn block_axis_vector(mode: WritingMode, v: i32) -> (i32, i32) {
 /// 真位置／確定位置の量子化、ダーティ導出、`plan`/`commit` の二相を担う。`plan` は状態不変
 /// （`&self`）で、確定は `commit`（`&mut self`）でのみ反映する（失敗フレーム再試行安全）。
 /// 初期状態は committed=0・pos=0・prev_lines は「分からない」・clear_requested=false。
+/// `windows` 非依存は `lib.rs` の `pure_layer_modules_have_no_windows_imports` が見張る。
 #[derive(Clone, Debug, Default)]
 pub struct ScrollPlanner {
     /// 面に反映済みの whole-pixel 位置（`commit` で更新・初期 0）。
@@ -177,7 +178,7 @@ impl ScrollPlanner {
     }
 
     /// [`Self::plan_with_overhangs`] に実測はみ出し無し（空スライス）を渡す、テスト用の薄いラッパ。
-    /// 本番の呼び手は実測を渡すので `#[cfg(test)]` で塞いである。
+    /// 本番の呼び手（`ViewboxExecutor::render_styled`）は実測を渡すので `#[cfg(test)]` で塞いである。
     #[cfg(test)]
     pub fn plan(
         &self,
@@ -321,7 +322,8 @@ impl ScrollPlanner {
 /// ダーティ矩形へ加えるガード余白（**image px**）。
 ///
 /// 透明背景への premultiplied 描画では AA こぼれは blit の位相で変わらないので 0 でも足りる見込みだが、
-/// 保守既定として 1 image px を全辺に加え、フォント差による AA こぼれを吸収する。物理 px 換算は
+/// 保守既定として 1 image px を全辺に加え、フォント差による AA こぼれを吸収する（byte 等価は
+/// `viewbox_draw_live_diff_tests.rs` が確かめる）。物理 px 換算は
 /// `ceil(DIRTY_GUARD_IMG_PX × k)`（[`ScaleContract::scale`] 適用）。
 pub const DIRTY_GUARD_IMG_PX: f32 = 1.0;
 
@@ -334,7 +336,8 @@ pub const DIRTY_GUARD_IMG_PX: f32 = 1.0;
 ///
 /// 値は各行の `IDWriteTextLayout` を [`GetOverhangMetrics`] で実測したもの（COM 層
 /// `LineLayoutStore` が測定・キャッシュして数値で渡す）。行ボックスのブロック軸寸は行の丈
-/// （既定だけの行は `font_height`・装飾のある行は行内最大の em）に設定済みなので、その軸の
+/// （既定だけの行は `font_height`・装飾のある行は行内最大の em。`viewbox_draw_decoration.rs` の
+/// `block_extent`）に設定済みなので、その軸の
 /// overhang（横書き＝`top`/`bottom`・縦書き＝`left`/`right`）がそのまま箱からのはみ出しになる
 /// （行内軸は巨大な `PROBE_MAX_EXTENT` 箱ゆえ 0 に丸める）。
 ///
@@ -357,7 +360,8 @@ pub struct LineOverhang {
 /// 物理 px 整数矩形（ダーティ矩形・露出帯・クリップの共通型）。
 ///
 /// 原点＝左上・単位＝物理 px。全成分 `u32`（負や面外はクランプ済みが前提）。ブロック軸
-/// （行送り軸）の区間は [`block_span`](Self::block_span) が返す。
+/// （行送り軸）の区間は [`block_span`](Self::block_span) が返し、`viewbox_diff.rs` の `merge_and_assign` が
+/// この区間で描画対象行の重なりを判定する。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PhysicalRect {
     /// 左辺（物理 px）。

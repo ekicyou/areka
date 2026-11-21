@@ -1,4 +1,4 @@
-//! D2D Ext トレイト群のテスト。
+//! `src/com/d2d/mod.rs` の D2D Ext トレイト群のテスト。
 //!
 //! 描画コマンドは ID2D1CommandList に記録して閉じる。
 

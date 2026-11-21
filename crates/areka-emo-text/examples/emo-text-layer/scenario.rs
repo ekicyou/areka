@@ -73,6 +73,7 @@ pub(super) const T_CHECK: [f64; 7] = [0.12, 0.35, 1.1, 1.8, 3.4, 3.6, 3.8];
 /// DPI 非対応にしないと k=2.0 になり前提が崩れる）。
 ///
 /// talk 全体の行数（あふれで横 16 行・縦 20 列）に伸びない小定数であることが要点。
+/// `増分 < 可視行数` の厳密な檻は `tests/viewbox_scroll_test.rs`（可視 8 行の別の検体）が持つ。
 pub(super) const EXPOSURE_BAND_DRAW_BOUND: u64 = 5;
 
 /// ステージ gate（cue が UI ドレインを経て状態機械へ適用済みであることの決定論条件）。
@@ -124,7 +125,7 @@ pub(super) const GATE_KERO: [Gate; 7] = [
 /// cue 生成ヘルパ。
 ///
 /// `duration` は cue を喋り終えるのにかかる時間で、リビール間隔は状態機械側で
-/// `duration / グリフ数` と導かれる。`duration = 0` は「全グリフが `at` で同時に可視」なので、
+/// `duration / グリフ数` と導かれる（`state.rs` の `RevealSchedule`）。`duration = 0` は「全グリフが `at` で同時に可視」なので、
 /// typewriter の進行を観測するここでは本番と同じ `text_playback_duration`（1 文字あたり
 /// `CHAR_NOMINAL_MS` = 50ms）を使う。テキスト以外の cue（改行・Clear）は瞬時ゆえ 0。
 fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {

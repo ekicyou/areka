@@ -1,4 +1,4 @@
-//! DirectWrite ラッパーのヘッドレステスト。
+//! `src/com/dwrite.rs` の DirectWrite ラッパーのヘッドレステスト。
 //!
 //! DirectWrite はフォントシステムのみで GPU デバイスを要しないため
 //! ヘッドレスで全経路を検証できる。`create_text_layout` の手書き

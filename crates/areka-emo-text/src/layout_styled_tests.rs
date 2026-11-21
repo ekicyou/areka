@@ -737,7 +737,7 @@ fn the_line_pitch_formula_is_reached_through_a_single_call_site() {
 /// （5 文字は 45 に収まるので自動折返しは起きない）。
 ///
 /// 先頭の 1 字だけ大きさ 20 の番号を渡すと 1 行目の丈が 20 になる——番号列を丸ごと
-/// 無視する入口はここで赤になる。
+/// 無視する入口はここで赤になる。`\_l` の縮退警告の配線は `layout_cursor_*_tests.rs` が持つ。
 #[test]
 fn layout_styled_is_the_public_entry_for_decorated_scripts() {
     let region = region_h(45);

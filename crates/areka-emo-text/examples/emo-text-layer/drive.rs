@@ -574,6 +574,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
 
 /// あふれ→スクロール区間の再描画レス（可視窓のみ移動＝ダーティ限定描画）と、
 /// 内容・可視窓とも不変フレームの全増分 0 を、`draw_stats` のフレーム間増分で檻化する。
+/// `tests/viewbox_scroll_test.rs` の実 pump の檻をこの example へ写したもの。
 ///
 /// 注入時刻を本関数が固定制御し、可視窓は純粋 layout（[`reveal_probe`]）から導出するので、
 /// フレームレートに依らず同一結果になる。観測用の追加提示のみで、cue 列や C1–C7 は変えない。

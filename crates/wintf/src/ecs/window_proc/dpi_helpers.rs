@@ -25,6 +25,8 @@ use crate::ecs::{Point, SizeI};
 ///
 /// サイズは ECS レイアウトパイプラインの所管（`SWP_NOSIZE`）のため使わず、
 /// 参照するのは矩形の左上のみである。
+///
+/// 呼び手は `window_pos.rs` の `WM_DPICHANGED`。
 pub(super) fn dpi_suggested_position_decision(
     policy: Option<&DpiSuggestedRectPolicy>,
     suggested: &RECT,

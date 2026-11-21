@@ -1,5 +1,6 @@
 //! `shell_target` の檻が共有する受け口（検体・COM 初期化・復号器と記録の手伝い）。
 //!
+//! 檻は `shell_target_*_tests.rs` と `presenter_keycolor_clickthrough_tests.rs` に分かれる。
 //! 検体の複製と COM の初期化は**テストバイナリに 1 つ**で足りる。各ファイルが自前で持つと、その数だけ
 //! 検体の木が複製される。`presenter` の配下の檻と `balloon` の檻からも引くので、クレート内公開にしている。
 //!

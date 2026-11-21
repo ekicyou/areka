@@ -44,7 +44,7 @@ fn build_and_spawn(world: &mut World) {
         }
     };
 
-    // bottom 吸着 resize が work area を引くために要る。
+    // bottom 吸着 resize が work area を引くために要る（`crates/areka-placement/examples/window-placement.rs` の `build_and_spawn` と同じ）。
     world.insert_resource(areka_placement::follow::MonitorSnapshot::from_monitors(
         &wintf::ecs::window::monitor::enumerate_monitors(),
     ));

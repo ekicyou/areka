@@ -48,6 +48,9 @@ use super::{BalloonWiring, HoverAction, hover_action};
 ///
 /// `PointerLeave` の除去は行わない（除去は既存 FrameFinalize `clear_transient_pointer_state` の責務——
 /// 機構不変）。マーカー不在フレーム・バルーン所有 leave 皆無フレームは**完全 no-op**。
+///
+/// 登録は `register_balloon_leave_system`（`ghost_session::register_systems` からプロセスに 1 回）が
+/// Input スケジュールの `dispatch_pointer_events` の後へ行う。
 pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
     let leaving: Vec<Entity> = world
         .query_filtered::<Entity, With<PointerLeave>>()

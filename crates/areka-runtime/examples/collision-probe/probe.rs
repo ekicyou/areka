@@ -14,7 +14,7 @@ use super::{
 /// 駆動する probe 起動 system（`&mut World` 排他）。
 ///
 /// フェーズ機械（`ProbePhase`）で「表示＋本番 resize」と「（次フレーム以降の）`GetClientRect` 検証」を
-/// 分離する——`SetWindowPosCommand` は発行 tick の World 借用解放後に flush されるため、
+/// 分離する——`SetWindowPosCommand` は発行 tick の World 借用解放後に flush されるため（wintf `tick_bridge.rs` の `tick_one_frame`）、
 /// 同 tick 内の `GetClientRect` は旧寸を返す。
 pub(super) fn boot_probe_system(world: &mut World) {
     let phase = match world.get_non_send::<ProbeBoot>() {

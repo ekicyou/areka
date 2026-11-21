@@ -18,7 +18,7 @@ use super::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 
 impl LayoutEngine {
     /// 装飾（グリフ序数 → 見た目）つきの配置。装飾を持つ台本の唯一の入口で、
-    /// 番号列が既定だけなら出力は [`LayoutEngine::layout`] と一致する。
+    /// 番号列が既定だけなら出力は [`LayoutEngine::layout`] と一致する（`layout_styled_tests.rs` が見張る）。
     #[allow(clippy::too_many_arguments)]
     pub fn layout_styled(
         items: &[TextItem],
@@ -46,7 +46,8 @@ impl LayoutEngine {
     }
 }
 
-/// 1 文字ぶんの `(装飾番号, 送り幅, em の大きさ)`。配置ループと塊の送り幅合計がこの関数だけを通る。
+/// 1 文字ぶんの `(装飾番号, 送り幅, em の大きさ)`。配置ループと塊の送り幅合計
+/// （`layout::line_ops::segment_advance_sum`）がこの関数だけを通る。
 ///
 /// 番号列が無い経路と既定の番号の文字は `advance(text, font_height)` で測り、高さも
 /// `font_height` を返す。既定の見た目の高さが `font_height` と食い違う登録前の一瞬でも、
@@ -113,7 +114,8 @@ impl LineHeights {
     }
 
     /// いま閉じたとしたら返る丈を、閉じずに覗く（`\_l` の実効位置の先読み用）。
-    /// `close` と別の規則を持つと、`\_l` を挟んだ行だけ行送りが食い違う。
+    /// `close` と別の規則を持つと、`\_l` を挟んだ行だけ行送りが食い違う（`layout_styled_tests.rs` の
+    /// `the_cursor_preview_of_a_pending_newline_uses_the_closing_lines_pitch` が見張る）。
     pub(super) fn peek(&self, next: Option<f32>) -> f32 {
         self.line_max.or(next).unwrap_or(self.fallback)
     }

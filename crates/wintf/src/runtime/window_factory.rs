@@ -352,7 +352,8 @@ mod tests {
         drop(shared);
     }
 
-    /// 宣言的ウィンドウ生成の end-to-end。ECS 排他システム `create_windows` を実際に駆動し、
+    /// 宣言的ウィンドウ生成の end-to-end。ECS 排他システム `create_windows`
+    /// （`ecs/window/window_system.rs`）を実際に駆動し、
     /// spawn → ライブラリ生成 → `WindowRegistry` 保持 → `WindowHandle` 反映までを確かめる。
     ///
     /// HWND が有効であることで、ライブラリ共有クラスでの生成がクラス未登録で失敗しないことも見る。

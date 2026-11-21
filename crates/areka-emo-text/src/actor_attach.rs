@@ -68,7 +68,7 @@ impl ResolveInputs {
 /// - 領域の値が変わる再追従は 1 件（新しい値で）。
 ///
 /// 箱の登録（`actor_box.rs` の `register_box`）は前の配置の入力を持たないので `None` を渡し、
-/// 箱の名前ごとに 1 度だけ呼ぶ。
+/// 箱の名前ごとに 1 度だけ呼ぶ。檻は `actor_region_warn_tests.rs`。
 pub(super) fn warn_coarse_wrap_threshold(
     balloon: &str,
     resolved: &ResolvedBalloonText,

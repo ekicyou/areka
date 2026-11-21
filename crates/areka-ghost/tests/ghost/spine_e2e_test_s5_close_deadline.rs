@@ -12,7 +12,8 @@
 //
 // # deadline の起点計算（`close.rs::deadline_from`・close.rs モジュール doc 参照）
 // S1/S4 と同じ boot-settling 技法（dispatcher への Tick 注入のみ）を使う。dispatcher への Tick は kanade 自身の
-// `last_now` を更新しない（`KanadeMsg::Tick` を受けたときのみ更新される）。ゆえに `CloseRequest` 送出時点で `last_now` は
+// `last_now` を更新しない（`KanadeMsg::Tick` を受けたときのみ更新される・
+// 更新箇所は `schedule/steady.rs` と `schedule/close.rs`）。ゆえに `CloseRequest` 送出時点で `last_now` は
 // `None` で、`ClosePending`→`CloseTalkWait` 遷移時の `deadline_from(None, ..)` は `None`（未確定）で `CloseTalkWait` に入る
 // （最初の Tick 受領時点を起点に上限を設定する）。
 //

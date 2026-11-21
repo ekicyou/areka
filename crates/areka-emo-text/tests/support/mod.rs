@@ -460,7 +460,7 @@ pub fn assert_hover_band(
     );
 }
 
-// ══ PNG の書き出し（依存追加なし） ══════
+// ══ PNG の書き出し（依存追加なし・`src/viewbox_draw_png_dump_tests.rs` の診断ダンプと同じ手順） ══════
 
 /// read_back（premultiplied BGRA）を白背景へ合成した PNG を `AREKA_DIAG_OUT`（無指定は
 /// `CARGO_TARGET_TMPDIR`＝crate 専用 tmp）の `name` へ保存し、そのパスを返す。

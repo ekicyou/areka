@@ -2,7 +2,8 @@
 //!
 //! 計画を組み替える 2 つの純粋関数——エラー縮退規律（[`degrade_if_needed`]・縮退先は計画者の
 //! 全域の道 [`ScrollPlanner::full_domain_plan`]）・想定外不整合の検知（[`plan_inconsistency`]）。
-//! どちらも `pub(super)`。
+//! どちらも `pub(super)` で、描画の子（`render`）と `viewbox_draw_frame_render_tests.rs` が
+//! `super::plan::..` で引く。
 
 use crate::canvas::ContentCanvas;
 use crate::layout::VisibleWindow;

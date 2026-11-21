@@ -416,6 +416,7 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
         "boot 挨拶を Steady{{talk: Some(id=1)}} で正規追跡しているはず（DD-IT-12）"
     );
 
+    // 相関の判定は `mod.rs` の横断の腕にある。
     let mut phase_is_none = false;
     let mut actions_empty = false;
     let events = capture(|| {

@@ -253,7 +253,7 @@ pub fn apply_zorder_chain(
     let acted = detached.acted || attached.acted;
     let handle_missing = detached.handle_missing || attached.handle_missing;
     // 窓ハンドル待ちの付与が 1 本でも残る巡は印を戻す（書けた本数には依らない）。窓ハンドルは
-    // entity より遅れて付く（areka-placement の `Added<WindowHandle>`）ので、計画は HWND 生成より
+    // entity より遅れて付く（`areka_placement::spawn` の `Added<WindowHandle>`）ので、計画は HWND 生成より
     // 前に公開されうる。ここで印を落とすと、あとからハンドルが現れても計画の内容は変わらず
     // 再公開されないので、印は二度と立たず残りの繋ぎが永久に張られない。
     //

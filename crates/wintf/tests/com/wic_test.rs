@@ -1,4 +1,4 @@
-//! WIC ラッパーのヘッドレステスト。
+//! `src/com/wic.rs` の WIC ラッパーのヘッドレステスト。
 //!
 //! WIC は CPU のみで動作するため GPU デバイス不要。widget のテストは上位 API
 //! （load_bitmap_source）経由なので、ここでは com::wic の各 Ext トレイトを直接検証する。

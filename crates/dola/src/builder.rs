@@ -114,7 +114,7 @@ impl StoryboardBuilder {
     /// NOTE: StoryboardBuilder はバリデーションを行わない（任意の Storyboard を
     /// 構築できる）が、compile_storyboard は冒頭で必ず doc.validate() を実行するため、
     /// 本ビルダー経由でもバリデーションを迂回して不正文書をコンパイルさせることは
-    /// できない。
+    /// できない（`tests/compile/boundary_test.rs` が確かめる）。
     pub fn build(self) -> Storyboard {
         Storyboard {
             time_scale: self.time_scale,
@@ -136,6 +136,8 @@ impl Default for StoryboardBuilder {
 mod tests {
     use super::*;
     use crate::storyboard::LoopOffset;
+
+    // Builder API の他のテストは `tests/general/builder_test.rs` にある。
 
     #[test]
     fn storyboard_builder_loop_offset_set() {

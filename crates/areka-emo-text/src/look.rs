@@ -35,7 +35,7 @@
 //! 口は [`LookLayers::from_balloon`] の `font_overrides`／`disable_overrides` の 2 引数で、
 //! 1 件は `\f` と**同じ形のトークン列**——`font.bold,1` なら `["bold", "1"]`、
 //! `disable.font.color,255,0,0` なら `["color", "255", "0", "0"]`。キーごとに引数を増やさない。
-//! バルーン定義に宣言が無い項目は正典の既定（すべて無効）のまま。
+//! バルーン定義に宣言が無い項目は正典の既定（すべて無効）のままで、`look_tests.rs` がこれを固定する。
 
 use std::collections::{HashMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};

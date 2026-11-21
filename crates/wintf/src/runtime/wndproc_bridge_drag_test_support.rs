@@ -11,6 +11,9 @@
 //!
 //! 座標と捕捉を確かめるテストは [`Rig::with_real_window`] で、隠れた実物の窓を決まった
 //! 位置に作る（窓の手続きは本番の入口そのもの）。
+//!
+//! 使う側のテストは `wndproc_bridge_drag_cancel_tests.rs`（取り消し）と
+//! `wndproc_bridge_drag_release_tests.rs`（離し）。
 
 use std::cell::RefCell;
 use std::pin::Pin;

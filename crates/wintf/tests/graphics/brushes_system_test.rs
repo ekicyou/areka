@@ -1,4 +1,5 @@
 //! resolve_inherited_brushes システム（Brush 継承解決）のテスト
+//! （対象は `src/ecs/graphics/systems/brushes.rs`）
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;

@@ -103,7 +103,7 @@ fn newline_and_clear_map_to_commands() {
 /// `Raw` だけが cue を作らず、`Choice`・`Cursor`・`Anchor`・`GenericCommand`（`move` も含む）・
 /// `SystemVar` は各々 cue を作る。無視される側が `Raw` だけであることを、cue を作る側と対にして
 /// 固定する。`Raw` は自分の腕で `raw_ignored` の警告を 1 行残して捨てる
-/// （`raw_is_dropped_with_one_warning`）。各語彙の写像の細目は個別の檻が担う。
+/// （`raw_is_dropped_with_one_warning`）。各語彙の写像の細目は個別の檻が担う（`Anchor` の閉じは `compile_anchor_tests.rs`）。
 #[test]
 fn catch_all_ignored_set_is_raw_only() {
     use areka_parsers::sakura::{Anchor, Choice};

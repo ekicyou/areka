@@ -3,7 +3,7 @@
 //! UI は kanade が終了系列へ入ったことも、台詞が置き換わったことも知らないので、切れ目の判定は
 //! 推し量らずに kanade へ任せる。
 //!
-//! 判断は純粋で、返信の送り手は殻が持つ。`RaiseEvent` と [`super::change::on_raise_event`] には
+//! 判断は純粋で、返信の送り手は殻（`actor.rs`）が持ち、各依頼の処理の後に [`take_outcome`] を呼ぶ。`RaiseEvent` と [`super::change::on_raise_event`] には
 //! 触れない（印の無い依頼の振る舞いは 1 行も変えない）。
 //!
 //! 印の付いた依頼（`OnShellChanging`）は、印のイベントを送ってその応答の台詞を追う

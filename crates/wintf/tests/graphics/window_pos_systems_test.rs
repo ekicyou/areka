@@ -1,4 +1,4 @@
-//! window_pos.rs 系システムのテスト
+//! `src/ecs/graphics/systems/window_pos.rs` 系システムのテスト
 //!
 //! - invalidate_dependent_components: 装置が無効なとき窓・見た目・描画面・画像・WUC を
 //!   全部倒し、命令の列を外すこと。装置の資源が無いときの no-op 経路。

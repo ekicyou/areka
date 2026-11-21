@@ -440,6 +440,7 @@ pub fn wire_runtime(
     // 作者基準 DPI は placement の準備が **1 度だけ**読んだ値を
     // `main` から `ghost_session::boot_ghost` 経由で受け取る（採寸 k₀ と attach が同じ宣言を見る）。
     // 隣接 u16 2 引数への落とし込みは [`build_boot_assets_for`] 1 箇所に閉じる。
+    // `shell` は配置の準備が決めた起動のシェル（本体の `ghost_session::BootShellChoice`）で、実行系の起動にも同じ値を渡す。
     let assets = match build_boot_assets_for(
         &inputs.ghost_root,
         &inputs.balloon_root,

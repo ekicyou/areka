@@ -7,6 +7,7 @@
 //! ハードコードしない（fixture・assert・実装の三点一正本）。
 //!
 //! 群は任意名形／正典形／選択起因の失敗／実行状態表示／タイムアウト／一回性と棄却の 6 つで、ほかに時間の指令の檻と期限の知らせの檻がある（いずれも兄弟の `choice_test_*_tests.rs`）。
+//! 時間の指令は `choice_test_timeout_directive_tests.rs`、期限の知らせは `choice_test_wake_tests.rs`。
 //!
 //! # 決定性と同期イディオム
 //! steady_test.rs／mouse_test.rs と同じ枠組み: 挨拶なし boot（`without_boot_greeting`）で

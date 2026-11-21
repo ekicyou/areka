@@ -114,7 +114,8 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// エントリを時刻順ソート維持で挿入（0 ベース相対オフセット）。
     /// 降順ソートを維持する。テストの手組み用（本番は `insert_each`）。
     ///
-    /// NaN オフセットは `offset >= 0.0` が false となり debug_assert が発火する。
+    /// NaN オフセットは `offset >= 0.0` が false となり debug_assert が発火する
+    /// （`schedule/tests.rs` が確かめる）。
     #[cfg(test)]
     pub(crate) fn insert(&mut self, entry: Entry<T>) {
         debug_assert!(
@@ -161,7 +162,8 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// NOTE: `current_time`（または start_time）が NaN の場合、下の全ガード
     /// （手前チェック・冪等性チェック）と本体の「届いていない」の比べ
     /// （`sum_on_ms_grid(start_time, entry_offset) > current_time`）がすべて false になるため、
-    /// 最初のバリアまでの全エントリが即時配信される（時刻入力の有限性は検証されない）。
+    /// 最初のバリアまでの全エントリが即時配信される（時刻入力の有限性は検証されない。
+    /// `schedule/tests.rs` の `tick_with_nan_time_delivers_all_pending_payloads` が確かめる）。
     // 到達の比べは NaN を「届いた」に倒すため、わざと `>` の否定で書く
     #[allow(clippy::neg_cmp_op_on_partial_ord)]
     pub fn tick(&mut self, current_time: f64) {

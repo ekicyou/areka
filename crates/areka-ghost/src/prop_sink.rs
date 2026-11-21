@@ -2,6 +2,8 @@
 //!
 //! broadcast された全 cue のうち [`PROP_SET_CUE_NAME`] のキャリアだけを選び、カウンタ key 族に
 //! 限った書込 key 統制を通して `SylphyaPublisher::persist_put`（待たない）へ落とす。
+//! `areka-runtime` の `MoveCueSink`（名前で自分の分を選ぶ）と `sylphya_wiring.rs` の
+//! `make_username_resource_sink`（publisher を捕まえる sink）を合わせた形。
 
 use areka_sakura::contract::{CueCommand, CueSink, TalkCue};
 use areka_sylphya::{PersistKey, PersistScope, SylphyaPublisher};

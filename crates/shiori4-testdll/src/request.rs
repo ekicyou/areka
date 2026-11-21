@@ -11,6 +11,8 @@
 //!
 //! いずれも panic しない総和的な純関数であり、malformed 入力は panic でなく
 //! [`Selection::BadRequest`]（400 相当）として fail-visible に扱う。
+//!
+//! 呼び手は `lib.rs` の `ReplayBrain` の `Get`。
 
 /// SHIORI/3.0 request line の種別。
 ///

@@ -147,6 +147,7 @@ fn priority_line(body: &str, id: &EntryId, file: &str) -> Result<Range<usize>, S
             }
             found = Some(offset..offset + line.len());
         }
+        // 割った改行 1 バイトを足し戻す（`blocks::scan_heads` と同じ数え方）。
         offset += line.len() + 1;
     }
     found.ok_or_else(|| undecidable(id, file, "priority の行が無い"))

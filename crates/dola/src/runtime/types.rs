@@ -29,7 +29,8 @@ impl PartialEq for EvaluatedValue {
         match (self, other) {
             // Float(NaN) は IEEE 754 により自分自身と不等。NaN が補間結果に混入すると、
             // 差分検出は当該変数を毎フレーム「変化あり」と判定し続ける。文書の数値は validate が
-            // 有限に限るが、極端に大きい値の補間はまだ NaN を出しうる。
+            // 有限に限るが、極端に大きい値の補間はまだ NaN を出しうる
+            // （`tests/runtime/core_types_test.rs` の `float_nan_is_never_equal_to_itself`）。
             (Self::Float(a), Self::Float(b)) => a == b,
             (Self::Integer(a), Self::Integer(b)) => a == b,
             (Self::Object(a), Self::Object(b)) => Rc::ptr_eq(a, b),

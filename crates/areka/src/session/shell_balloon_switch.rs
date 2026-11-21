@@ -9,7 +9,7 @@
 //! 差し替えの相（`frame/switch.rs`）が受け持つ。
 //!
 //! Reference の組み立ての規則（名前は `descript.txt` の `name`、無ければフォルダ名・パスは
-//! 絶対パス）は [`skin_ref_name`]・[`skin_ref_path`] の 1 か所に置き、差し替えの相の
+//! 絶対パス）は [`skin_ref_name`]・[`skin_ref_path`]（`areka_runtime::skin_switch`）の 1 か所に置き、差し替えの相の
 //! `OnShellChanged`／`OnBalloonChange` も同じものを使う。
 
 use std::sync::Arc;

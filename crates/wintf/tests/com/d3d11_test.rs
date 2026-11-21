@@ -1,4 +1,4 @@
-//! D3D11 ラッパーのテスト。
+//! `src/com/d3d11.rs` の D3D11 ラッパーのテスト。
 //!
 //! 生成パラメータは src/ecs/graphics/core.rs::create_device_3d を踏襲する。
 

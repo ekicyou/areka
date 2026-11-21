@@ -104,7 +104,7 @@ fn terminate_instance(
     instance_manager: &mut InstanceManager,
     subscription_manager: &mut SubscriptionManager,
 ) {
-    // 呼び出し元は from_policy 由来の終了状態のみを渡す（Some は全て is_terminal）。
+    // 呼び出し元は from_policy 由来の終了状態のみを渡す（`InstanceState::from_policy` の Some は全て is_terminal）。
     debug_assert!(
         terminal_state.is_terminal(),
         "terminate_instance requires a terminal state, got {terminal_state:?}"

@@ -14,6 +14,7 @@
 //! 差していても捨てられる。
 //!
 //! 対策（probe dispatcher の常駐・捕捉窓の内側での interest 再計算・番兵イベントによる空振り検出）
-//! は `log-capture-kit` が持つ。機序の詳細は `log_capture_kit` の crate doc にある。
+//! は `log-capture-kit` が持つ。機序の詳細は `log_capture_kit` の crate doc と
+//! 同 crate の `src/probe.rs`・`src/filter.rs` にある。
 
 pub(crate) use log_capture_kit::capture_under_filter;
