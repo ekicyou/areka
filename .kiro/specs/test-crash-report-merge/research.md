@@ -208,3 +208,49 @@
 7. **要件 6.4 の「`areka-runtime` からも引ける」は今の署名のままでは組めない**（`CapturedEvent` は placement の dev-dependency の型・2.8 節カ）。しかも要件 7.1 で runtime の写しを付け替えないので、この spec では引けることを確かめる使い手が無い。
 8. **要件 6.2 の書き換え先「`areka_runtime::frame::…`」は 1 か所で在る項目を指さない**: `config.rs:107` の `seed_zorder_descript_base` は `RuntimeWiring` のメソッド（`areka-runtime/src/frame/wiring.rs:133・191`）。同じ段落の 106 行（`ghost_session.rs`・`runtime::wire_runtime`）も古い道で、要件の「106〜109 行」に入っているが本文は `runtime::frame::…` と「本体の」しか挙げていない。
 9. 細かい点: 要件 5.1 の 5 つの実行ファイルに、まとめた本体の crate 自身のテストの実行ファイル（要件 5.2〜5.4 の檻が走る所）が入っていない。そこにも静的変数と確かめが要る。
+
+> 7 節の 1〜9 は 2026-11-21 の要件の討議で要件の側を直して閉じた（`requirements.md` の決定 1〜8・要件 1.3・1.4・3.3・5.1・6.2・6.4・7.3）。
+
+## 8. 設計の段の調べ（2026-11-21・`kiro-spec-design`）
+
+- 種別: 既存の仕組みの寄せ直し（Extension）＝軽い調べ（`design-discovery-light.md`）。外の資料は引いていない（新しい外の crate は 0・`windows` 0.62.2 はワークスペースに在る版）。下請けの調べ係は立てず、Grep／Read で測った。
+- 使った手引き: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、`.kiro/settings/templates/specs/design.md`。ponytail（最小の変更）の流儀で「移すだけ・書き直さない」に寄せた。
+
+### 8.1 測って分かったこと
+
+| 項目 | 測り | 設計への効き |
+|---|---|---|
+| 本文の差 | wintf と runtime の写しをコメント行を除いて `diff`＝runtime は wintf の上位集合（足すのは持ち手の表・`pub`・`installed`・`#[cfg(test)]` の 2 か所だけ） | runtime の写しを本体の元にし、`#[cfg(test)]` の 2 か所を外せば 3 本の働きを 1 本で持てる |
+| ワークスペースの members | `Cargo.toml:2-4` が `"crates/*"` | 根の `Cargo.toml` は変えない（新しい crate は置けば members に入る） |
+| `windows` の機能 | 本文が使う `Win32_Foundation`（`Win32` の既定）・`Win32_System_Com`・`Win32_System_LibraryLoader`・`Win32_System_Threading` はワークスペースの表（`Cargo.toml:49-78`）に在る | 新しい crate は `windows = { workspace = true }` の 1 行で組める・`Cargo.lock` の `windows` の項は増えない |
+| 入口の名の使い手 | `areka-input/src/crash_report_tests.rs:5・10`・`areka/src/runtime_tests/mod.rs:12・17`・`spine_wait.rs:24・683・692・704`・説明の名 4 か所（`wire_tests.rs:22`・`assets*_tests.rs`） | runtime の `crash_report_test_support` を `pub use` の薄い入口にすれば、これらはどれも差分 0（説明の名も今の入口を正しく指したまま） |
+| `lib.rs` の宣言 | wintf `lib.rs:6-7`・placement `lib.rs:85-86`・runtime `lib.rs:67-70` | ファイルの名を保てば 3 つの `lib.rs` は差分 0 |
+| 数えの道具の判定 | `q9-api-count/src/count.rs` の `is_test_path`（`test_*`・`*_test_support`・`*_tests`）と `is_test_tool`（`-kit` で終わる） | `crash-report-kit` も、残す `test_crash_report.rs`・`crash_report_test_support.rs` もテストの道具に数えられる＝本番の数は変わらない |
+| `structure.md` | kit の節は 446〜478 行に並ぶ（log-capture-kit・temp-path-kit・sample-ghost-kit・real-run-kit）。runtime の節 312 行は `shiori-host32-host` を「`test-support` のときだけ付く optional の依存」と書く | temp-path-kit の節の後に新しい節を足し、runtime の節の Dependencies に 1 句足す |
+| 見張り | `log-capture-kit/tests/` の見張りに、ワークスペースの crate の一覧や `.CRT$XCU` を数えるものは無い（grep） | 新しい crate を足しても既存の見張りは変わらない |
+| `THIRD-PARTY-NOTICES.md` | `tools/test-all.ps1:91-93`（`-License` で `cargo about generate --workspace`）・106〜108 行が差分を黄色で知らせる。今の MIT の対象 crate の並び（3065 行 `log-capture-kit 0.1.0`・3077 行 `temp-path-kit 0.1.0`） | `-License` の 1 回で `crash-report-kit 0.1.0` の 1 行が足され、それをコミットに含める |
+| `window_move_lines` | placement の定義（`follow_window_move_diag_tests.rs:170`）は呼び手 7 か所・`WINDOW_MOVE_RECORD_TAG` は `pub`（`diag.rs:76`）・`CapturedEvent::message` は `&str` を返す（`log-capture-kit/src/event.rs:82`）・`test_support.rs` は 552 行 | 署名を `&str` の並びにすれば `test_support` に置ける・行数の余裕がある |
+| `code_only` | runtime の `source_text_test_support.rs:3-10` と placement の `test_support.rs:422-429` は同じ本文。runtime の呼び手は 6 ファイル（`use crate::source_text_test_support::code_only` ほか） | runtime の定義を `pub use areka_placement::test_support::zorder_pair_deferred::code_only;` に替えれば呼び手は差分 0 |
+| 申し送りウの前例 | placement の `a_system_write_that_bypasses_its_deferral_still_trips_the_watch`（148〜153 行）は鳴る側の `#[should_panic]` で、警告の文を数えていない。runtime の前例 `frame_work_area_resnap_hold_tests.rs:385-410` は `capture` の中で `catch_unwind` し、数えてから `resume_unwind` する | placement の鳴る側の 1 本を前例の形に替える（新しいテストは足さない） |
+| 古い道 44 行 | 2.8 節の一覧のとおり。今の置き場は `areka-runtime/src/` の下に在る（`frame/dpi.rs:546` の `run_dpi_phase`・`frame/drain_resnap.rs:419・617・720`・`frame/work_area_sync.rs:207`・`frame/balloon_offset_follow.rs:123`・`frame/scale_text.rs:122`・`assets.rs:314`・`lib.rs:416` の `wire_runtime`・`frame/wiring.rs:191` の `seed_zorder_descript_base`）。`runtime::move_cue_place` は今その名の関数が無い（`areka-runtime/src/move_cue.rs` の中を実装の段で確かめる） | 書き換えの決まり（設計の表）と、行ごとに今の定義を grep で確かめる手順にする |
+
+### 8.2 まとめ（synthesis）
+
+- **一般化**: 3 本の差は「持ち手の表を使うか」だけで、表を使わない実行ファイルでは表が空＝行が出ない（要件 3.2）。差し込む口（案 H1）は要らない＝決定 2 のとおり、表ごと本体に置く。据え付けの静的変数だけは各テストの実行ファイルの根に要る（2.6 節）ので、「本体 1 つ＋各根に 3 行の据え付け」の形に揃える（`areka-input` と本体が既に取っている形）。
+- **作るか借りるか**: 落ちの報告に使える既製の crate（`minidumper`・`crash-handler` など）は、外の crate を増やさない（要件 1.4）・報告の行の形を変えない（要件 2.5）と合わないので取らない。今の本文をそのまま移す。
+- **削り**:
+  - wintf と placement の装置なしの較正 2 本は、本体の crate の 1 本にまとめる（本文が 1 つになったので、較正が見るもの＝報告の行の形も 1 つ）。
+  - `RaiseException` の宣言を runtime に残さないため、本体に較正の口 `crash_on_an_unnamed_thread` を 1 つ出し、本体の較正と runtime の装置ありの較正が共に使う。
+  - runtime の説明の名（4 か所）・`spine_wait.rs`・3 つの `lib.rs`・`areka-input`・本体の `runtime_tests/mod.rs` は、入口の名を保つことで差分 0 にする。
+  - 写しが戻ることの見張りは足さない（決定 7）。新しい crate が本番の依存に現れないことの見張りも足さない（要件に無い・`real-run-kit` の見張りのような常設は決定 7 と同じ理由で見送る）。
+
+### 8.3 研究の残り（R1〜R3）の決着
+
+- R1（`log-capture-kit` の機能の付け方）: 案 B に決まったので要らない。`crash-report-kit` は機能を持たず、`cargo test -p crash-report-kit` で檻が必ず組まれる。
+- R2（差し込む口）: H2 に決まったので要らない。
+- R3（本体の crate のテストの実行ファイルの MTA）: 本体の crate のテストは落ちの報告の檻だけ（据え付けの確かめ・MTA・最初の受け手・1 行の溜め・較正）で、ほかのテストが無い＝MTA の影響を受ける相手が無い。MTA の檻は据え付けの後でないと緑にならないので、本体の crate のテストの実行ファイルにも据え付けの静的変数を置く。
+
+### 8.4 危うさ
+
+- 静的変数の置き場を誤ると受け手が黙って据わらない → 各実行ファイルの据え付けの確かめ（要件 5.1）が赤で知らせる。
+- 装置ありの較正は GPU を使い、プロセスを落とす → 走らせるのは仕上げの確かめ（要件 8.3）の 1 回ずつだけ・排他の机の決まりに従う。
