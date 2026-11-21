@@ -1,13 +1,7 @@
 //! `areka-runtime` と本体のテストが使う本文の下拵えとファイルの読み口。
 
-/// 説明文（`//` で始まる行）を落とし、コードだけの本文を返す。
-pub fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
+/// 説明文（`//` で始まる行）を落とし、コードだけの本文を返す（配置の定義の再公開）。
+pub use areka_placement::test_support::code_only;
 
 /// 字面の現れる位置（無ければその場で落として、檻の前提が崩れたことを名指しで告げる）。
 ///

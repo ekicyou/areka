@@ -28,14 +28,14 @@
 //!   確定はその窓を動かさない。除外したスコープの**実位置**は以後の連鎖の基準
 //!   として使う（「クランプ後の実配置を連鎖基準とする」現行原則と同型）。
 //! - 解きの核は組ごとの決め（[`PairDecision`]）を受け取る [`resolve_chain`] で、起動時の確定
-//!   （`runtime::frame` の `finalize_chain_once_with`）は記憶に位置の無いスコープを既定位置との
+//!   （`areka_runtime::frame::drain_resnap` の `finalize_chain_once_with`）は記憶に位置の無いスコープを既定位置との
 //!   一致から、記憶から戻したスコープを覚えた印（[`remembered_decision`]）から決めて渡す
 //!   （`chain_rule::boot_chain`）。拡大率の後の詰め直しは
 //!   変わる直前の隣り合い（[`judge_chain_adjacency`]）から決めを作る（`chain_realign`）。
 //!   組の作り方は 3 か所（起動・詰め直し・隣り合いの印の保存）で同じ「鎖の規則」
 //!   （[`super::chain_rule`] の説明）。
 //! - 確定は**一度きり**で、以後のサーフェス切替では駆動しない。その制御は呼び手
-//!   （`runtime::frame`）が持ち、本モジュールは純粋な判定だけを担う。
+//!   （`areka_runtime::frame`）が持ち、本モジュールは純粋な判定だけを担う。
 //!
 //! # 確定が起きなかったとき
 //!
@@ -66,7 +66,7 @@ pub struct ChainFinalized;
 
 /// 台本の `\![move]` が置いたキャラクターの窓の印（組の相手として連れ動いた窓を含む）。
 ///
-/// 読むのは起動時の確定（`runtime::frame` の `finalize_chain_once_with`）・並べ終えた時点の保存
+/// 読むのは起動時の確定（`areka_runtime::frame::drain_resnap` の `finalize_chain_once_with`）・並べ終えた時点の保存
 /// （`persist::persist_unremembered_char_positions`）・面が大きくなったときの寄せ
 /// （`follow::work_area_clamp::clamp_grown_free_default`）で、印の付いた窓は引き戻さず、記憶にも書かない。
 /// 窓と一緒に消える（窓の一式ごと）ほか、並べ直し（`reset_pos::reset_window_positions`）が既定へ
@@ -508,7 +508,7 @@ pub fn remembered_decision(mark: Option<AdjacencyMark>) -> PairDecision {
 
 /// 診断を出すまでに待つフレーム数（有界の待ち）。
 ///
-/// 呼び手（`runtime::frame::frame_system`）は 60Hz の tick ループから毎フレーム確定を
+/// 呼び手（`areka_runtime::frame::frame_system`）は 60Hz の tick ループから毎フレーム確定を
 /// 試みるため、**約 10 秒**ぶんに相当する。起動時の確定（`finalize_chain_once_with`）が数えるのは
 /// areka 自身の待ち（表示された後に窓寸の置き直しが着地しない等）だけで、ゴースト待ち（窓が無い・
 /// スコープが無い・初回 `ShowSurface` の前）は呼び手が数えない。ゆえに正常起動が閾値に届く

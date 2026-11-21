@@ -7,7 +7,7 @@ areka はバイナリ配布時に、以下の第三者パッケージのライ�
 areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
 
 使用ライセンス一覧:
-- MIT License (264 crate)
+- MIT License (265 crate)
 - Apache License 2.0 (4 crate)
 - BSD 3-Clause "New" or "Revised" License (2 crate)
 - zlib License (2 crate)
@@ -3061,6 +3061,7 @@ SOFTWARE.
 - areka-talk 0.1.0
 - areka-update 0.1.0
 - areka-user-data 0.1.0
+- crash-report-kit 0.1.0
 - dola 0.1.0
 - log-capture-kit 0.1.0
 - pilot 0.1.0

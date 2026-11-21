@@ -376,11 +376,30 @@ pub mod measure_template {
     }
 }
 
+/// 行頭が `//` の行（通常のコメント・doc コメント）を落とした本文。
+///
+/// [`measure_template`] の `code_only` とは中身が違う（こちらは `//` の行を落とすだけ）のでまとめない。
+pub fn code_only(source: &str) -> String {
+    source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// ログの本文の並びから窓移動レコードの行だけを抜く（他のログは無視）。
+pub fn window_move_lines<'a>(messages: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    messages
+        .into_iter()
+        .map(str::to_string)
+        .filter(|m| m.starts_with(crate::diag::WINDOW_MOVE_RECORD_TAG))
+        .collect()
+}
+
 /// 割った `spawn_zorder_pair_deferred_tests` の 2 つの片割れ（配置の crate と本体）が共に使う
 /// 語の表と走査器。写しを作らず、ここに 1 つだけ置く。
 /// 名簿の走査（[`assert_vocabulary_absent`]・[`assert_roster_covers`]）と探針の自己検査
 /// （[`assert_needles_are_detected`]）もここにあり、片割れは名簿と実物での較正だけを持つ。
-/// [`measure_template`] の `code_only` とは中身が違う（こちらは `//` の行を落とすだけ）のでまとめない。
 pub mod zorder_pair_deferred {
     /// 先送り語彙（小文字）と、それが何の入口かの説明。
     ///
@@ -419,14 +438,7 @@ pub mod zorder_pair_deferred {
         ("windowstate", "`\\![set,windowstate,...]`"),
     ];
 
-    /// 行頭が `//` の行（通常のコメント・doc コメント）を落とした本文。
-    pub fn code_only(source: &str) -> String {
-        source
-            .lines()
-            .filter(|line| !line.trim_start().starts_with("//"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
+    pub use super::code_only;
 
     /// `manifest/src` 配下の `.rs` を再帰で集め、`manifest` からの相対パス（`/` 区切り）で返す。
     /// 各片割れは自分の crate の `CARGO_MANIFEST_DIR` を渡す（自分の木だけを歩く）。
