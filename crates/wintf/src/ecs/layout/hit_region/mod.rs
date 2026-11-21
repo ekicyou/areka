@@ -174,11 +174,11 @@ impl ColorMapData {
         )?;
         let frame = decoder.frame(0)?;
 
-        // PBGRA32 に変換
+        // α を掛けない BGRA32 に変換（半透明の指定色も元の R,G,B で引くため）
         let converter = factory.create_format_converter()?;
         converter.init(
             &frame.cast::<IWICBitmapSource>()?,
-            &GUID_WICPixelFormat32bppPBGRA,
+            &GUID_WICPixelFormat32bppBGRA,
             WICBitmapDitherTypeNone,
             None,
             0.0,
@@ -208,11 +208,13 @@ impl ColorMapData {
 
         for i in 0..pixel_count {
             let offset = i * 4;
-            // PBGRA32: B, G, R, A の順
+            // BGRA32: B, G, R, A の順
             let b = buffer[offset];
             let g = buffer[offset + 1];
             let r = buffer[offset + 2];
-            // アルファは無視
+            if buffer[offset + 3] == 0 {
+                continue;
+            }
 
             if let Some(&id) = color_to_id.get(&(r, g, b)) {
                 index_map[i] = id;

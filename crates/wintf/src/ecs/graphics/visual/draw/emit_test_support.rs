@@ -61,6 +61,31 @@ pub(crate) fn warp_device() -> &'static ID2D1Device {
     &warp().device
 }
 
+/// `warp_device` とは別の D2D の装置の DC（同じ工場・96 DPI）。装置をまたぐ資源の確かめに使う。
+pub(crate) fn other_device_dc() -> ID2D1DeviceContext {
+    let d3d = d3d11_create_device(
+        None,
+        D3D_DRIVER_TYPE_WARP,
+        HMODULE::default(),
+        D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+        None,
+        D3D11_SDK_VERSION,
+        None,
+        None,
+    )
+    .expect("WARP の D3D11 装置");
+    let dxgi: IDXGIDevice = d3d.cast().expect("IDXGIDevice");
+    // SAFETY: Windows API 境界。工場は MULTI_THREADED。
+    unsafe {
+        let device = warp().factory.CreateDevice(&dxgi).expect("D2D の装置");
+        let dc = device
+            .CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
+            .expect("DC");
+        dc.SetDpi(96.0, 96.0);
+        dc
+    }
+}
+
 /// WARP の装置の新しい DC（96 DPI）。
 pub(crate) fn warp_dc() -> ID2D1DeviceContext {
     let dc =

@@ -160,3 +160,8 @@
 ## 申し送り（collisionex-regions より・2026-11-17）
 
 - **クローディアの読み込みの記録の檻が surface28 の `base` の pattern の警告 3 行を期待値に含む**: `crates/areka-emo-present/src/shell_target_element_base_tests.rs` の `claudia_base_surfaces_are_full_size_and_records_are_fixed` は、実のクローディアを読んだときの warn 以上を全部固定している。その中に「areka が描けない描画メソッドの pattern を描かない」（surface28・animation100・`method="base"`・pattern 0〜2）の 3 行がある。この spec で pattern の `base` を描けるようにしたら、この 3 行が消えて檻が赤になるので、期待値から外す（まだ働かない形の記録 1 行は collisionex-regions の持ち分なので残す）。
+
+## 申し送り（hit-id-pass より・2026-11-21）
+
+- **色の合成を D2D へ移して α マスクの出どころを替えるときは、クリックの透過と当たり判定の名前の解決が一緒に移る**: 当たり判定の名前の解決（`crates/areka-emo-present/src/presenter/hit.rs`）は「色の絵の α が 0.5 未満の点は当たり無し」を、クリックの透過と同じ α マスク（`shown_mask`・wintf の 1 画素 1 ビットの表・閾値 128）で確かめてから ID の描き先を読む。マスクの出どころを CPU の合成の画素から GPU の読み戻しなどへ替えるなら、クリックの透過（マウスが窓に届くか）と名前の解決（名前が返るか）の両方を同じ新しい出どころへ付け替える。片方だけ替えると、2 つの表が食い違い、マウスを掴んだまま透明な所へ動かしたときの名前が変わる。
+- 付け替えたら、台帳の `collisionex*` の行と `doc/COMPAT_ARCHITECTURE.md` の「色の絵の α と当たりの関係」の行を、新しい出どころの書き方へ直す。檻は `crates/areka-emo-present/src/presenter_hit_picture_tests.rs` の α の確かめ（実 GPU）。

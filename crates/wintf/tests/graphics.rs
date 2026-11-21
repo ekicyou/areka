@@ -23,6 +23,8 @@ mod dcomp_integration_test;
 mod device_lost_recovery_test;
 #[path = "graphics/draw_tree_systems_test.rs"]
 mod draw_tree_systems_test;
+#[path = "graphics/id_target_test.rs"]
+mod id_target_test;
 #[path = "graphics/init_window_graphics_test.rs"]
 mod init_window_graphics_test;
 #[path = "graphics/readback_test.rs"]

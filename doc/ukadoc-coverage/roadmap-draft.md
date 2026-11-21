@@ -586,7 +586,7 @@ interval の `never` を呼ばれる相手として表に載せたので、台�
 
 **2026-11-17 の追加（`collisionex-regions`）**: `collisionex-regions` の行を 1 行足した。この spec がシェルの
 `collisionex*` の行を `collision*` と同じ番号の並びへ読んで型へ運び、`rect` を当たり判定として働かせた（楕円・円・
-多角形・`region` は型へ運んで記録を出すだけで、ID の描き先に塗るのは `hit-id-pass`）ので、台帳 `ledger/assets.toml` の
+多角形・`region` は型へ運んで記録を出すだけだったが、のちに `hit-id-pass` が 5 つの形すべてを ID の描き先に塗って当たり判定として働かせた）ので、台帳 `ledger/assets.toml` の
 1 項目（`collisionex*`）を未対応から縮退へ移し、宛先をこの spec にした（それまで宛先が空だった）。同じ台帳の `collision*` の
 項目は宛先を `areka-P0-shell-parse` のまま残し、説明だけを書き直した。`collisionex*` は `linkage.md` の束「撫で」に属するので、
 束の欄には「撫で」を書き（`none = true` の行にはしない）、段階 A の表の「撫で」の行にこの spec（1 件）を足した。「撫で」の束の

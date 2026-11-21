@@ -290,7 +290,8 @@ fn test_color_map_nan_rel_does_not_panic() {
 // ColorMapData::from_image の読み込み（design の Testing Strategy 15・17・18 番）
 //
 // PNG はワークツリーの target/hit_region_color_map_test/ に image で書く。
-// 透明な画素は使わない（16 番の透明の扱いは hit-id-pass で決める・ここで固定しない）。
+// 透明の扱い: α=0 の画素はどの領域にも属さない。α が 1 以上の画素は、
+// α を掛けない元の R,G,B で領域を引く。
 // ========================================================================
 
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
@@ -337,6 +338,27 @@ fn from_image_reads_each_pixel_name_and_size() {
     assert_eq!(data.hit_test(1, 0), Some("green"));
     assert_eq!(data.hit_test(0, 1), Some("blue"));
     assert_eq!(data.hit_test(1, 1), None);
+}
+
+/// 透明な黒は黒の領域に入らず、半透明・不透明の指定色はどちらも元の色で引かれる。
+#[test]
+fn from_image_maps_transparent_pixel_to_no_region_and_alpha_pixels_by_unmultiplied_rgb() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/hit_region_color_map_test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("alpha3.png");
+    let mut img = image::RgbaImage::new(3, 1);
+    img.put_pixel(0, 0, image::Rgba([0, 0, 0, 0]));
+    img.put_pixel(1, 0, image::Rgba([255, 0, 0, 128]));
+    img.put_pixel(2, 0, image::Rgba([0, 0, 255, 255]));
+    img.save_with_format(&path, image::ImageFormat::Png)
+        .unwrap();
+    let mut mapping = rgb_mapping();
+    mapping.insert((0, 0, 0), "black".to_string());
+    let data = with_sta(|| ColorMapData::from_image(&path, &mapping)).unwrap();
+    assert_eq!(data.hit_test(0, 0), None);
+    assert_eq!(data.hit_test(1, 0), Some("red"));
+    assert_eq!(data.hit_test(2, 0), Some("blue"));
 }
 
 /// 15 番: 対応が 255 個を越えると番号が 1 バイトに収まらないので失敗を返す。

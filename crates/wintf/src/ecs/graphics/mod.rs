@@ -4,6 +4,7 @@ mod components;
 mod composite;
 mod core;
 mod damage;
+mod id_target;
 mod readback;
 mod systems;
 pub mod visual;
@@ -14,6 +15,7 @@ pub use clip::*;
 pub use command_list::*;
 pub use components::*;
 pub use core::*;
+pub use id_target::*;
 pub use readback::*;
 pub use systems::*;
 pub use visual::*;
@@ -28,6 +30,8 @@ mod composite_scroll_tests;
 mod composite_tests;
 #[cfg(test)]
 mod damage_tests;
+#[cfg(test)]
+mod id_target_tests;
 #[cfg(test)]
 mod readback_tests;
 #[cfg(test)]

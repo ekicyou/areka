@@ -7,41 +7,46 @@
 //! で判定していれば、親 B ではどの点も `None` になる。
 //!
 //! 親 A（surface0）は Eye が親の Head の下に隠れるので点の確かめには使わない（tasks.md 5.2 の覚え書き）。
-//! GPU に触れない（`attach_target` は登録だけ・表示中の面と実適用 k は私有状態を直に書く）。
+//! 実 GPU の World で親 B を実際に表示して判定する。
 
-use super::super::test_support::{force_applied, force_current_surface, spawn_window_with_dpi};
-use super::super::{AtlasTable, EmoPresenter, EmoWorld, ScaleRatio, TargetId, World};
+use super::super::test_support::{
+    bake_world, gradient, make_world_with_gpu, show_ok, spawn_window_with_dpi,
+};
+use super::super::{EmoPresenter, ScaleRatio, TargetId};
 
-use areka_emo_atlas::{MemoryDecoder, PackConfig, bake};
 use areka_parsers::shell::parse;
 
 const FIXTURE: &str =
     include_str!("../../areka-emo-compose/tests/fixtures/surface-nesting/surfaces.txt");
 
-/// 検体の親 B（surface1）を表示中にし、実適用 k を与えた presenter。
-fn presenter_showing_parent_b(k: ScaleRatio) -> EmoPresenter {
-    let mut world = World::new();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    // 判定は画素を見ないので atlas は空でよい（画像の読み込みも GPU も要らない）。
-    let atlas: AtlasTable = bake(&[], &MemoryDecoder::new(), PackConfig::default()).table;
+/// 検体の親 B（surface1）を実 GPU の World で表示し、窓の DPI から実適用 k を得た presenter。
+fn presenter_showing_parent_b(dpi: u16) -> EmoPresenter {
+    let mut world = make_world_with_gpu();
+    let window = spawn_window_with_dpi(&mut world, dpi);
+    let images = [
+        ("body.png", 100, 200),
+        ("eye.png", 20, 10),
+        ("eye_closed.png", 20, 10),
+        ("part.png", 10, 10),
+        ("mouth.png", 16, 8),
+        ("mouth_open.png", 16, 8),
+        ("surface2.png", 100, 200),
+        ("surface11.png", 12, 12),
+    ]
+    .into_iter()
+    .map(|(name, w, h)| (name, w, h, gradient(w, h, 0x33)))
+    .collect();
+    let (emo_world, atlas) = bake_world(parse(FIXTURE), images);
     let mut presenter = EmoPresenter::new();
-    presenter.attach_target(
-        TargetId(0),
-        window,
-        EmoWorld::build(&parse(FIXTURE)),
-        atlas,
-        96,
-    );
-    force_current_surface(&mut presenter, TargetId(0), 1);
-    force_applied(&mut presenter, TargetId(0), Some(k));
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
+    show_ok(&mut presenter, &mut world, TargetId(0), 1);
     presenter
 }
 
 /// 拡大率 1: 窓の座標＝サーフェスの座標。子の Eye・Head が子を置いた位置で引ける。
-/// 画像の座標の入口（`hit_region`）も同じ列で判定する。
 #[test]
 fn client_hit_returns_child_region_names_at_scale_1() {
-    let presenter = presenter_showing_parent_b(ScaleRatio::ONE);
+    let presenter = presenter_showing_parent_b(96);
     for (x, y, want) in [
         (100, 55, Some("Eye")), // Eye と Head の重なり（Eye が後ろ＝手前）
         (92, 55, Some("Head")), // Head だけ
@@ -50,11 +55,6 @@ fn client_hit_returns_child_region_names_at_scale_1() {
         let hit = presenter.hit_region_client(TargetId(0), x, y);
         assert_eq!(hit.region, want, "client=({x},{y})");
         assert_eq!(hit.surface_point, (x, y), "k=1 は素通し");
-        assert_eq!(
-            presenter.hit_region(TargetId(0), x, y),
-            want,
-            "native=({x},{y})"
-        );
     }
 }
 
@@ -63,7 +63,8 @@ fn client_hit_returns_child_region_names_at_scale_1() {
 #[test]
 fn client_hit_returns_child_region_names_at_scale_2() {
     let k2 = ScaleRatio::new(2, 1).expect("2/1 は構築可能");
-    let presenter = presenter_showing_parent_b(k2);
+    let presenter = presenter_showing_parent_b(192);
+    assert_eq!(presenter.applied_ratio(TargetId(0)), Some(k2));
     for (cx, cy, want, point) in [
         (200, 110, Some("Eye"), (100, 55)),
         (184, 110, Some("Head"), (92, 55)),

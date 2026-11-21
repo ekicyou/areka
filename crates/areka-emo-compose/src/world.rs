@@ -60,6 +60,9 @@ pub struct ShellSettings {
 #[derive(Debug, Default, Resource)]
 pub(crate) struct SurfaceExtents(pub(crate) BTreeMap<u32, crate::plan::Extent>);
 
+#[derive(Debug, Resource)]
+struct SharedRegionMasks(std::sync::Arc<crate::hit_mask::RegionMasks>);
+
 /// emo 専用 per-ghost `bevy_ecs` World（wintf 本体 World とは分離・要件 1.8/10.4）。
 ///
 /// surface 1件＝entity 1件で正規化 Surface 定義を常駐させ、公開クエリを提供する受動データ
@@ -67,7 +70,7 @@ pub(crate) struct SurfaceExtents(pub(crate) BTreeMap<u32, crate::plan::Extent>);
 /// `&mut World`／`&World` を排他/共有で受けて処理する。ゴースト unload ＝本型 drop で全 entity
 /// を一掃する（per-ghost lifecycle）。
 ///
-/// **不変条件（要件 10.6）**: 画素バッファを保持する component/Resource を持たない。
+/// **不変条件**: 復号した絵の画素を保持しない（当たりのマスクは共有の参照で載せる）。
 /// `SurfaceIndex` と entity 集合は常に一対一。
 pub struct EmoWorld {
     world: World,
@@ -354,6 +357,16 @@ impl EmoWorld {
             .resource::<ShellSettings>()
             .collision_sort
             .clone()
+    }
+
+    /// `region` のマスクの集まりを共有の参照で載せる（同じ実体を複数の面の表で分け合う）。
+    pub fn set_region_masks(&mut self, masks: std::sync::Arc<crate::hit_mask::RegionMasks>) {
+        self.world.insert_resource(SharedRegionMasks(masks));
+    }
+
+    /// 載せた `region` のマスクの集まり（載せていなければ `None`）。
+    pub fn region_masks(&self) -> Option<&std::sync::Arc<crate::hit_mask::RegionMasks>> {
+        self.world.get_resource::<SharedRegionMasks>().map(|m| &m.0)
     }
 
     /// 中の `World` を読む口（`atlas_bind.rs`・`plan.rs` が面の component を引く・design 決定3）。

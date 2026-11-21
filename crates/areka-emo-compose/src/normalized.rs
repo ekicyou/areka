@@ -78,10 +78,8 @@ pub struct SurfaceMaster {
     ///
     /// 順序不変条件: **登場順**。追記と 2 つ目の波括弧の行は末尾へ足す（波括弧だけは同じ collision番号の
     /// 前の行を除いてから・畳み込みの `add_lines`）。
-    /// 画家則（後定義が手前）はこの順序に意味論を載せる（HitCore [`hit_region_in`] が逆順走査で
-    /// 最前面を決める・collision-geometry 要件 2.1）ため、この順序は挙動上の意味を持つ。
-    ///
-    /// [`hit_region_in`]: crate::hit::hit_region_in
+    /// 画家則（後定義が手前）はこの順序に意味論を載せる（提示の層が ID の描き先を後ろから塗って
+    /// 最前面を決める）ため、この順序は挙動上の意味を持つ。
     pub collisions: Vec<areka_parsers::shell::Collision>,
     /// SERIKO animation 群（interval/pattern を転記のまま保持）。
     pub animations: Vec<areka_parsers::shell::Animation>,

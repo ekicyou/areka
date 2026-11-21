@@ -101,8 +101,8 @@
 //!      1 度だけ掛ける（要件 4.2）。ゆえにクリック透過の境界は実 DPI でも見た目の絵柄と一致する。
 //!      窓 client も k 適用後の物理寸へ揃う（上記 (a)）ため、捕捉域が窓 client の外側で切り詰められて
 //!      「透明域だ」と誤認する経路は無い（emo-dpi-scaling task 5.2 以前はこれが起きていた）。
-//!      なお `hit_region`（領域名解決）の座標系は native px であり、k≠1.0 での点÷k は下流
-//!      `areka-P0-collision-dpi-hittest` の領分（本 example は領域名を引かない）。
+//!      なお領域名は `EmoPresenter::hit_region_client` が窓 client 物理 px から引く（本 example は
+//!      領域名を引かない）。
 //! 4. **記録する**: 上記 (a)(b)(c) の結果と使用した実 DPI 値（例 dpi=144/192）を記録する。
 //!    **再掲**: dpi=96 のみは不十分 — dpi≠96 の実走記録をもって task 5.3 完了とする。
 //!

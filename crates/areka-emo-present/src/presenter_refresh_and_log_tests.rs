@@ -4,8 +4,8 @@ use areka_emo_compose::BindSet;
 use wintf::ecs::{GraphicsCommandList, GraphicsCore};
 
 use super::test_support::{
-    CapturedEvent, INFO_LINE_MESSAGE, applies, arrangement_of, attach_hit_target,
-    build_target_assets, build_two_face_assets, capture, force_current_surface, hide_ok,
+    CapturedEvent, INFO_LINE_MESSAGE, applies, arrangement_of, attach_and_show_hit_target,
+    attach_hit_target, build_target_assets, build_two_face_assets, capture, force_applied, hide_ok,
     make_world_with_gpu, mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
     tamper_face_1000_slot,
 };
@@ -559,12 +559,12 @@ fn is_applied_absent_warn(e: &CapturedEvent) -> bool {
 /// - `applied` 不在で panic／早期 return する → 判定そのものが取れず RED
 #[test]
 fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent() {
-    let mut world = World::new();
+    let mut world = make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
 
     // T0: 面あり・applied なし（R1.6 の防御分岐・現行公開 API では作れない状態）。
-    attach_hit_target(&mut presenter, &mut world, TargetId(0));
-    force_current_surface(&mut presenter, TargetId(0), 1000);
+    attach_and_show_hit_target(&mut presenter, &mut world, TargetId(0), 96);
+    force_applied(&mut presenter, TargetId(0), None);
     // T1: attach のみ（未表示 scope）＝正常縮退。TargetId(9) は未登録＝正常縮退。
     attach_hit_target(&mut presenter, &mut world, TargetId(1));
 
@@ -608,18 +608,6 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
         "k=1.0 相当なら (360,192) は領域外（k=2 で続行していれば Head になり RED）"
     );
     assert_eq!(defensive_miss.surface_point, (360, 192));
-    // 既存の native px 入口（k を一切参照しない）と region が完全一致する＝「k=1.0 と同一結果」。
-    assert_eq!(
-        defensive_hit.region,
-        presenter.hit_region(TargetId(0), 180, 96),
-        "縮退結果は k=1.0（無縮約）の既存入口と一致すること"
-    );
-    assert_eq!(
-        defensive_miss.region,
-        presenter.hit_region(TargetId(0), 360, 192),
-        "縮退結果は k=1.0（無縮約）の既存入口と一致すること"
-    );
-
     // (c) warn 経路を実際に通る（陽性）。防御分岐の呼出 1 回につき warn 1 件ゆえ、
     //     防御呼出 2 回で **ちょうど 2 件**（0 なら防御ログ欠落＝ログ無し失敗経路）。
     assert_eq!(

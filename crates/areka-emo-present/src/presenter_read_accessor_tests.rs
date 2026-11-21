@@ -1,9 +1,8 @@
 use super::*;
 
 use super::test_support::{
-    attach_hit_target, build_target_assets, build_two_face_assets, force_applied,
-    force_current_surface, hide_ok, invalidate_ok, make_world_with_gpu, show_ok,
-    spawn_window_with_dpi,
+    attach_and_show_hit_target, attach_hit_target, build_target_assets, build_two_face_assets,
+    force_applied, hide_ok, invalidate_ok, make_world_with_gpu, show_ok, spawn_window_with_dpi,
 };
 
 // ── CurrentSurfaceRead: 現サーフェス id 状態のライフサイクル固定（Task 2・R3.1-3.4）───────────
@@ -11,7 +10,7 @@ use super::test_support::{
 // 書き込みは既存 `visible` 更新点と同一の3箇所のみ（表示成立/EmptyComposition 縮退/Hide）＝additive。
 
 /// テスト 10・R3.2 観測完了（未表示→None）: `attach_target` 直後（一度も `ShowSurface` していない）は
-/// `current_surface_id` が `None`。`hit_region` も現サーフェス無しゆえ `None`（純関数へ届かない）。
+/// `current_surface_id` が `None`。`hit_region_client` も現サーフェス無しゆえ `None`。
 ///
 /// `attach_target` は skeleton 登録のみで World に触れないため、GPU 不要の素の `World` で決定論固定する。
 #[test]
@@ -29,9 +28,9 @@ fn current_surface_id_is_none_before_first_show() {
         "attach_target 直後（未表示）は現サーフェス無し（3.2）"
     );
     assert_eq!(
-        presenter.hit_region(TargetId(0), 0, 0),
+        presenter.hit_region_client(TargetId(0), 0, 0).region,
         None,
-        "未表示 target の hit_region は現サーフェス無しゆえ None"
+        "未表示 target の hit_region_client は現サーフェス無しゆえ None"
     );
 }
 
@@ -87,9 +86,9 @@ fn current_surface_id_is_none_after_hide() {
         "Hide 後は現サーフェス無し（3.2/4.4）"
     );
     assert_eq!(
-        presenter.hit_region(TargetId(0), 0, 0),
+        presenter.hit_region_client(TargetId(0), 0, 0).region,
         None,
-        "Hide 後は hit_region も現サーフェス無しゆえ None"
+        "Hide 後は hit_region_client も現サーフェス無しゆえ None"
     );
 }
 
@@ -140,7 +139,7 @@ fn read_back_after_invalidate_cache_is_entry_evicted() {
 }
 
 /// テスト 15・R3.2 観測完了（未登録 target→None）: 一度も `attach_target` していない target に対し
-/// `current_surface_id`／`hit_region` の両アクセサが `None`（未登録＝現サーフェス無し）。
+/// `current_surface_id`／`hit_region_client` の両アクセサが `None`（未登録＝現サーフェス無し）。
 ///
 /// 両アクセサとも `HashMap` 引きのみで GPU/World を要さないため、`EmoPresenter::new()` 単体で固定する。
 #[test]
@@ -152,9 +151,9 @@ fn unregistered_target_returns_none_for_both_accessors() {
         "未登録 target の current_surface_id は None"
     );
     assert_eq!(
-        presenter.hit_region(TargetId(0), 10, 20),
+        presenter.hit_region_client(TargetId(0), 10, 20).region,
         None,
-        "未登録 target の hit_region は None"
+        "未登録 target の hit_region_client は None"
     );
 }
 
@@ -216,24 +215,15 @@ fn unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point() 
     );
 }
 
-/// 要件 1.5 観測完了（**公開面同士の恒等**・タスク 3.1 完了条件の検証本体）: k=1.0 では
-/// [`EmoPresenter::hit_region_client`] の `region` が既存 [`EmoPresenter::hit_region`] と
-/// 完全一致し、`surface_point` は入力素通しになる。
+/// 拡大率 1 では `surface_point` が入力の素通しになり、名前は描き先の画素で決まる。
 ///
-/// 代表点は「領域内」「別領域内」「重なり点（画家則＝後定義 Arm が手前）」「背景」
-/// 「閉区間の端（4 隅・辺）」「境界の内側 1px／外側 1px」「負値」「窓外」を含む。期待 region は
-/// **ハードコード定数**でも同時に固定するため、両入口がそろって壊れる（＝両方 None を返す）
-/// 形の空虚な一致では緑にならない。
-///
-/// なお本檻は k=1.0 の恒等のみを守る——`×k` の誤挿入や素の floor 丸めの持ち込みは k=1.0 では
-/// 恒等へ退化して検出できない（それらは `hit.rs` の任意 k 檻と本ファイルの縮退檻の責務）。
+/// 矩形は左と上を含み右と下を含まないので、右端・下端の隅は当たらない。期待はハードコードの定数。
 #[test]
-fn client_entry_matches_native_entry_at_identity_scale() {
-    let mut world = World::new();
+fn client_entry_passes_point_through_and_resolves_by_pixel_at_identity_scale() {
+    let mut world = make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
-    attach_hit_target(&mut presenter, &mut world, TargetId(0));
-    force_current_surface(&mut presenter, TargetId(0), 1000);
-    force_applied(&mut presenter, TargetId(0), Some(ScaleRatio::ONE));
+    attach_and_show_hit_target(&mut presenter, &mut world, TargetId(0), 96);
+    assert_eq!(presenter.applied_ratio(TargetId(0)), Some(ScaleRatio::ONE));
 
     for (x, y, want, what) in [
         (180, 96, Some("Head"), "領域内（Head）"),
@@ -241,24 +231,19 @@ fn client_entry_matches_native_entry_at_identity_scale() {
         (210, 310, Some("Arm"), "重なり点（後定義 Arm が手前）"),
         (0, 0, None, "背景（原点）"),
         (500, 500, None, "背景（窓外相当）"),
-        (93, 62, Some("Head"), "閉区間の左上隅"),
-        (271, 130, Some("Head"), "閉区間の右下隅"),
-        (93, 130, Some("Head"), "閉区間の左下隅"),
-        (271, 62, Some("Head"), "閉区間の右上隅"),
+        (93, 62, Some("Head"), "左上隅"),
+        (271, 130, None, "右下隅（右と下は含まない）"),
+        (93, 130, None, "左下隅（下は含まない）"),
+        (271, 62, None, "右上隅（右は含まない）"),
         (94, 63, Some("Head"), "境界の内側 1px"),
         (92, 62, None, "境界の外側 1px（左）"),
         (93, 61, None, "境界の外側 1px（上）"),
         (272, 130, None, "境界の外側 1px（右）"),
         (271, 131, None, "境界の外側 1px（下）"),
-        (400, 400, Some("Arm"), "後定義矩形の右下隅"),
+        (400, 400, None, "後定義矩形の右下隅（含まない）"),
         (-7, -13, None, "負値（panic なし）"),
     ] {
         let hit = presenter.hit_region_client(TargetId(0), x, y);
-        assert_eq!(
-            hit.region,
-            presenter.hit_region(TargetId(0), x, y),
-            "k=1.0 では新旧の判定入口が一致すること: {what} ({x},{y})"
-        );
         assert_eq!(
             hit.region, want,
             "k=1.0 の解決領域が期待と違う: {what} ({x},{y})"
@@ -267,93 +252,6 @@ fn client_entry_matches_native_entry_at_identity_scale() {
             hit.surface_point,
             (x, y),
             "k=1.0 の surface_point は入力素通しであること: {what} ({x},{y})"
-        );
-    }
-}
-
-/// 要件 1.1/1.4 観測完了（**正常経路で実適用 k が合成純関数へ渡ること**）: 「表示中サーフェス
-/// あり × `applied = Some(k)`・k≠1.0」で [`EmoPresenter::hit_region_client`] を呼ぶと、判定は
-/// **÷k した縮約後サーフェス px** で解決され、`surface_point` も同じ縮約値になる。
-///
-/// # なぜ既存 3 檻と別に要るのか（継ぎ目の封鎖）
-///
-/// 既存の 3 檻はいずれも `hit_region_scaled_in(regions, x, y, k, …)` の `k` を固定しない——
-/// `presenter_refresh_and_log_tests.rs` の
-/// `applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent` は warn 述語が
-/// 主語で k は**不在**、`unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point`
-/// は k=2 を与えるが `regions` **不在**側（`hit_region_client` 内で `unscale_coord` を直接呼ぶ分岐）
-/// を通り、`client_entry_matches_native_entry_at_identity_scale` は k=1.0 ゆえ縮約が恒等へ退化する。
-/// ゆえに「面あり × k≠1.0」の合流点は一度も実行されておらず、実適用 k が合成純関数へ本当に
-/// 渡っているかは決定論テストで固定されていなかった。本檻の主語はその 1 点のみである。
-///
-/// # 殺す誤実装（反証可能性）
-///
-/// `hit_region_scaled_in` へ渡す `k` を [`ScaleRatio::ONE`] へすり替える（＝実適用 k を無視して
-/// client 点をそのまま照合する）と、下の 3 点は `surface_point`・`region` の**双方**で割れる。
-/// とくに (210,310) は恒等なら `Some("Arm")`・k=2 なら `None` と**逆向きに**割れるため、
-/// 「両方そろって `None`」の空虚な一致では緑にならない。
-///
-/// 期待値は**ハードコード定数**であり、`unscale_coord` を期待値側で呼び直さない（実装式の
-/// 再実行はトートロジー）。k=2 の縮約は画素中心逆写像 `floor((2v+1)/4)`:
-/// 360→180・192→96・420→210・620→310・210→105・310→155。
-#[test]
-fn visible_surface_hit_uses_applied_scale_at_k2() {
-    let mut world = World::new();
-    let mut presenter = EmoPresenter::new();
-    attach_hit_target(&mut presenter, &mut world, TargetId(0));
-    force_current_surface(&mut presenter, TargetId(0), 1000);
-    let k2 = ScaleRatio::new(2, 1).expect("2/1 は構築可能");
-    force_applied(&mut presenter, TargetId(0), Some(k2));
-
-    // 前提の明示（檻が空虚でないこと＝「面あり × k≠1.0」が本当に組めていること）。
-    assert_eq!(
-        presenter.current_surface_id(TargetId(0)),
-        Some(1000),
-        "前提: 表示中サーフェスあり（＝正常経路の合成純関数へ入る）"
-    );
-    assert_eq!(
-        presenter.applied_ratio(TargetId(0)),
-        Some(k2),
-        "前提: 実適用 k は 2/1（恒等ではない）"
-    );
-
-    for (cx, cy, want_region, want_point, identity_would_be, what) in [
-        (
-            360,
-            192,
-            Some("Head"),
-            (180, 96),
-            "None",
-            "縮約後は Head（client 点のままなら領域外）",
-        ),
-        (
-            420,
-            620,
-            Some("Arm"),
-            (210, 310),
-            "None",
-            "縮約後は Bust/Arm の重なり点で画家則の Arm（後定義が手前）",
-        ),
-        (
-            210,
-            310,
-            None,
-            (105, 155),
-            "Some(\"Arm\")",
-            "縮約後は背景（client 点のままなら Arm＝逆向きに割れる点）",
-        ),
-    ] {
-        let hit = presenter.hit_region_client(TargetId(0), cx, cy);
-        assert_eq!(
-            hit.surface_point, want_point,
-            "実適用 k=2 で縮約した座標が期待と違う（恒等 k なら ({cx},{cy}) のまま）: \
-             {what} client=({cx},{cy})"
-        );
-        assert_eq!(
-            hit.region, want_region,
-            "縮約後サーフェス px で解決した領域が期待と違う（恒等 k で照合していれば \
-             {identity_would_be} になる＝実適用 k が合成純関数へ渡っていない）: \
-             {what} client=({cx},{cy})"
         );
     }
 }

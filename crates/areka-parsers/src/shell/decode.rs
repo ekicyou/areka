@@ -20,8 +20,7 @@
 //!   シェル全体の合計に上限 `RANGE_WIDTH_CAP` をかける（指摘 6）。崩れの知らせ
 //!   （`Token::Unclosed`／`Token::Reopened`）は `parse_all` が写すので、ここでは読まない。
 //! - `collisionex*` は `collision*` と同じ並びへ書いた順に積み、読めない行は理由つきの崩れを積む。
-//!   楕円・円・多角形・region は値にしたうえで数え、`finish` が読み込みごとに 1 件の崩れにまとめる
-//!   （collisionex-regions 要件 1・4・5）。
+//!   楕円・円・多角形・region も値にして並びへ入れる（崩れの記録は出さない）。
 //! - それ以外のメソッド・interval の語・未知のブレスや行は、値にしないか原文のまま
 //!   運び、走査を中断しない（要件 2.3/4.5/5.7/9.2/10.4）。
 
@@ -31,19 +30,15 @@ use super::lexer::{Token, heading_text};
 use super::model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionExFault, CollisionName,
     CollisionRegion, CollisionShape, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern,
-    RANGE_WIDTH_CAP, ShapeCounts, Shell, ShellIssue, SortOrder, Surface, SurfaceAlias,
-    SurfaceAppend,
+    RANGE_WIDTH_CAP, Shell, ShellIssue, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
 };
 
-/// 1 つのシェルを読む途中の状態: シェル全体の範囲の幅の合計（指摘 6）・今のブレスの見出し・積んだ崩れ・
-/// まだ働かない形の数と最初の行（見出し・行）。
+/// 1 つのシェルを読む途中の状態: シェル全体の範囲の幅の合計（指摘 6）・今のブレスの見出し・積んだ崩れ。
 #[derive(Default)]
 pub(crate) struct Reading {
     range_width: u64,
     heading: String,
     pub(crate) issues: Vec<ShellIssue>,
-    inactive: ShapeCounts,
-    first_inactive: Option<(String, String)>,
 }
 
 impl Reading {
@@ -79,34 +74,6 @@ impl Reading {
             text,
             fault,
         });
-    }
-
-    /// 並びへ入れた rect 以外の形を数え、最初の行を控える（collisionex-regions 要件 4.7）。
-    fn inactive(&mut self, shape: &CollisionShape, fields: &[String]) {
-        let n = &mut self.inactive;
-        let count = match shape {
-            CollisionShape::Rect(_) => return,
-            CollisionShape::Ellipse(_) => &mut n.ellipse,
-            CollisionShape::Circle { .. } => &mut n.circle,
-            CollisionShape::Polygon(_) => &mut n.polygon,
-            CollisionShape::Region(_) => &mut n.region,
-        };
-        *count = count.saturating_add(1);
-        if self.first_inactive.is_none() {
-            self.first_inactive = Some((self.heading.clone(), fields.join(",")));
-        }
-    }
-
-    /// まだ働かない形を 1 件でも数えたら、その記録を 1 件積む（`parse_all` が最後に呼ぶ）。
-    pub(crate) fn finish(&mut self) {
-        if let Some((heading, text)) = self.first_inactive.take() {
-            let counts = self.inactive;
-            self.issues.push(ShellIssue::ShapesInactive {
-                heading,
-                text,
-                counts,
-            });
-        }
     }
 }
 
@@ -307,7 +274,6 @@ fn decode_collisions(body: &[Vec<String>], reading: &mut Reading) -> Vec<Collisi
                     if let Some(fault) = fault {
                         reading.collision_ex(fields, fault);
                     }
-                    reading.inactive(&collision.shape, fields);
                     collisions.push(collision);
                 }
                 Err(fault) => reading.collision_ex(fields, fault),

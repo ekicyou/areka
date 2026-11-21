@@ -397,16 +397,6 @@ pub(crate) fn coll(
     }
 }
 
-/// 当たり判定の領域の列だけを持つ面 1000。
-pub(crate) fn master_with(collisions: Vec<Collision>) -> SurfaceMaster {
-    SurfaceMaster {
-        id: 1000,
-        elements: Vec::new(),
-        collisions,
-        animations: Vec::new(),
-    }
-}
-
 /// premultiplied BGRA 1 画素頁を組む（stride = width*4・tightly packed）。
 pub(crate) fn page_1px(b: u8, g: u8, r: u8, a: u8) -> AtlasPage {
     AtlasPage {

@@ -395,6 +395,7 @@ impl EmoPresenter {
         // （`HitTest::none()` 中はマスクが判定に使われない）、ここで揃えておくことが「不可視期間中に
         // 生じた変化を取りこぼさない」（Requirement 6.6）の土台になる。
         mount.set_layout(world, native, scale);
+        target.shown_mask = Some(entry.mask.clone());
         if let Some(mut mask_res) = world.get_mut::<AlphaMaskResource>(mount.surface_entity()) {
             // 表示記録と同一の原寸 bytes 由来のマスクを hit-test へ供給する（R2.2/R2.5・要件 4.4）。
             // 供給は**共有参照の受け渡し**（`set_shared`）＝`Arc` の参照カウント増のみで、実体の
@@ -428,6 +429,12 @@ impl EmoPresenter {
         }
         // 表示確立＝この id が現サーフェス（全透明でも成立・α 非依存の単一真実源・R3.1/3.3・Key decisions）。
         target.current_surface_id = Some(surface_id);
+        target.paint_hit(
+            world.get_resource::<GraphicsCore>(),
+            target_id,
+            surface_id,
+            native,
+        );
         // ここが**表示成立点**＝ k・native 原寸・再表示入力の唯一の更新点（design Flow 1 キー決定）。
         // 手前の失敗経路はすべて early return 済みゆえ、失敗時は前 k・前表示が保たれる（要件 4.4）。
 

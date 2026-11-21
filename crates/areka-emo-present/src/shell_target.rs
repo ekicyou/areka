@@ -223,6 +223,8 @@ pub struct ShellTarget {
     use_self_alpha: UseSelfAlpha,
     /// 読み込みで組んだ面の表（atlas は未装着・[`ShellTarget::take_world`] が 1 度だけ渡す）。
     world: Option<EmoWorld>,
+    /// `region` の画像のマスクの集まり（組む面の表すべてが同じ実体を分け合う）。
+    region_masks: std::sync::Arc<areka_emo_compose::RegionMasks>,
 }
 
 // `EmoWorld` は `Debug` を持たないので手で書く（面の表は有無だけを出す）。
@@ -243,6 +245,7 @@ impl std::fmt::Debug for ShellTarget {
             .field("cursor_braces", &self.cursor_braces)
             .field("use_self_alpha", &self.use_self_alpha)
             .field("world", &self.world.as_ref().map(|_| "EmoWorld"))
+            .field("region_masks", &self.region_masks.unreadable())
             .finish()
     }
 }
@@ -282,6 +285,7 @@ impl ShellTarget {
     pub fn build_world(&self) -> EmoWorld {
         let mut world = EmoWorld::build_with_images_quiet(&self.shell, &self.images);
         world.bind_atlas(&self.atlas, SetId(0));
+        world.set_region_masks(self.region_masks.clone());
         world
     }
 
@@ -609,7 +613,7 @@ fn build_core(
     // どの画像を土台に使うかは面の表を組んで初めて決まる（`element0` が在る面では使わない）。
     // ここで組む面の表で「使う画像と、相手の無いコマ」を聞き、捨てずに持つ（`take_world` が 1 度渡す）。
     // 入口が記録に使う事実もここで採る（記録のために組み直さないため）。
-    let probe = if records.emits() {
+    let mut probe = if records.emits() {
         EmoWorld::build_with_images(&shell, &images)
     } else {
         EmoWorld::build_with_images_quiet(&shell, &images)
@@ -622,6 +626,8 @@ fn build_core(
         .filter(|&id| !box_layout.placements(id).is_empty())
         .count();
     let nest_report = probe.nest_report();
+    let region_masks = regions::load_region_masks(&probe, shell_dir, decoder, records);
+    probe.set_region_masks(region_masks.clone());
 
     // 数字だけの element定義はサーフェスを置くもので画像ではない。焼く一覧に入れると、その名前の
     // 絵を読みに行き（在れば使い・無ければ脱落の error!）になるので、複製から外して渡す（要件 1.5・3.5）。
@@ -665,6 +671,7 @@ fn build_core(
         cursor_braces: Vec::new(),
         use_self_alpha,
         world: Some(probe),
+        region_masks,
     }
 }
 
@@ -931,6 +938,9 @@ fn base_image_surface(id: u32, file: &str) -> Surface {
         animations: Vec::new(),
     }
 }
+
+#[path = "shell_target_regions.rs"]
+mod regions;
 
 #[cfg(test)]
 #[path = "shell_target_test_support.rs"]

@@ -46,6 +46,7 @@
 // （公開項目は下の `pub use` で従来と同一のパス `presenter::<Name>` に再輸出する）。
 mod budget;
 mod hit;
+mod hit_picture;
 mod hub;
 mod read;
 mod refresh;
@@ -75,8 +76,7 @@ use areka_actor::ReplySender;
 use areka_actor::reply_channel;
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{
-    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, Recompose,
-    RegionPriority, ScaleRatio,
+    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, Recompose, ScaleRatio,
 };
 use wintf::ecs::{AlphaMaskResource, DPI, GraphicsCore};
 // `WucGraphicsResource` の本番消費者は無い（装着が純 ECS になり `Compositor` を要さない）。テストが
@@ -136,6 +136,9 @@ mod frame_log_tests;
 #[path = "presenter_hide_contract_tests.rs"]
 mod hide_contract_tests;
 #[cfg(test)]
+#[path = "presenter_hit_test_support.rs"]
+mod hit_test_support;
+#[cfg(test)]
 #[path = "presenter_partial_recompose_gpu_tests.rs"]
 mod partial_recompose_gpu_tests;
 #[cfg(test)]
@@ -189,3 +192,19 @@ mod stage_generation_tests;
 #[cfg(test)]
 #[path = "presenter_stage_tests.rs"]
 mod stage_tests;
+
+#[cfg(test)]
+#[path = "presenter_hit_shape_tests.rs"]
+mod hit_shape_tests;
+
+#[cfg(test)]
+#[path = "presenter_hit_region_tests.rs"]
+mod hit_region_tests;
+
+#[cfg(test)]
+#[path = "presenter_hit_scale_tests.rs"]
+mod hit_scale_tests;
+
+#[cfg(test)]
+#[path = "presenter_hit_picture_tests.rs"]
+mod hit_picture_tests;

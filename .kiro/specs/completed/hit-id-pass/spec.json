@@ -1,0 +1,26 @@
+{
+  "feature_name": "hit-id-pass",
+  "created_at": "2026-11-20T12:55:12Z",
+  "updated_at": "2026-11-21T02:16:31Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-11-21T02:16:31Z"
+    }
+  },
+  "ready_for_implementation": true
+}

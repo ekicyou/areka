@@ -66,8 +66,6 @@ pub fn parse_all(input: &str) -> ShellText {
             Token::Stray { line } => reading.issues.push(ShellIssue::StrayBrace { line: *line }),
         }
     }
-    // まだ働かない形の記録は列の最後に 1 件（箱の側の読みでは呼ばない・collisionex-regions 要件 4.7）。
-    reading.finish();
     ShellText {
         shell,
         boxes,

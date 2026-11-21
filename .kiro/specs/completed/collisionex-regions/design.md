@@ -135,7 +135,7 @@ crates/areka-emo-compose/src/
 - `crates/areka-emo-present/src/presenter_test_support.rs` — `hit_coll` の中身を `CollisionShape::Rect` へ。658 行の直書きは `hit_coll(..)` の呼び出しへ替える（890 行のまま・行は増やさない）。
 - `doc/ukadoc-coverage/ledger/assets.toml`・`doc/ukadoc-coverage/report/assets.md`・`doc/ukadoc-coverage/report/summary.md` — 2 行の書き直しと報告の作り直し（報告は機械で作る）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 に行を足し、【上書き】の行の collision の決めを書き直す。
-- `.kiro/specs/hit-id-pass/brief.md` — 申し送りの節（7.6）は設計の討議で書いた。実装の段では触らない。
+- `.kiro/specs/completed/hit-id-pass/brief.md` — 申し送りの節（7.6）は設計の討議で書いた。実装の段では触らない。
 
 ウェーブ C22 の表の「触るファイル」との違い: 表にある「形の検査の新しいファイル」は作らない（決め 7）。表に無いのは parsers の `parse.rs`・`mod.rs`（記録のまとめ 1 行と `pub use`）と emo-compose の `fold.rs` とその檻（同じ collision番号の扱い）。同じウェーブのほかの 5 本は parsers と emo-compose に触らない（要件の Boundary Context の注記）。
 
@@ -221,7 +221,7 @@ flowchart TD
 | 7.3 | §8 に沈黙の決めを足す | LedgerAndDocs | `COMPAT_ARCHITECTURE.md` | — |
 | 7.4 | §8 の【上書き】の行を書き直す | LedgerAndDocs | `COMPAT_ARCHITECTURE.md` | — |
 | 7.5 | areka 本体を書き換えない | 境界 | — | — |
-| 7.6 | `hit-id-pass` の brief へ申し送る | LedgerAndDocs | `.kiro/specs/hit-id-pass/brief.md` の最後の節（済み） | — |
+| 7.6 | `hit-id-pass` の brief へ申し送る | LedgerAndDocs | `.kiro/specs/completed/hit-id-pass/brief.md` の最後の節（済み） | — |
 | 8.1 | `rect` の中・外・辺・反転と、ほかの形の素通りの檻 | 檻 | `hit_order_tests.rs` | — |
 | 8.2 | 混ぜた並び・追記・同じ番号・持ち込みの檻と既存の檻の書き直し | 檻 | `hit_order_tests.rs`・`hit_import_tests.rs`・`fold_merge_tests.rs`・`row_budget_tests.rs` | — |
 | 8.3 | 読めない行とまだ働かない形の記録の檻 | 檻 | `decode_collisionex_tests.rs` | — |
@@ -241,7 +241,7 @@ flowchart TD
 | HitResolve | emo-compose / hit.rs | 並びの逆順で最初に当たった名前（`rect` だけが当たる） | 2.1〜2.5・3.1・3.6・5.3・6.1 | ShellModel (P0) | Service |
 | HitImport | emo-compose / hit_import.rs | 子の形を形ごとにずらして持ち込む | 3.4・3.5・5.3 | ShellModel (P0) | Service |
 | FoldCollisions | emo-compose / fold.rs | 同じ番号を両方残して警告 | 3.2・3.3・3.7・6.4 | tracing (P1) | Service |
-| LedgerAndDocs | `doc/ukadoc-coverage/`・`doc/COMPAT_ARCHITECTURE.md`・`.kiro/specs/hit-id-pass/brief.md` | 台帳・報告・§8・申し送り | 7.1〜7.6 | ukadoc-survey (P1) | — |
+| LedgerAndDocs | `doc/ukadoc-coverage/`・`doc/COMPAT_ARCHITECTURE.md`・`.kiro/specs/completed/hit-id-pass/brief.md` | 台帳・報告・§8・申し送り | 7.1〜7.6 | ukadoc-survey (P1) | — |
 | RealMachineCheck | `.kiro/specs/completed/collisionex-regions/verification/real-machine.md` | クローディアの実機の確かめ | 8.5〜8.7 | impl-watch の机 (P0)・real-run-kit (P1) | — |
 
 ### parsers / model
@@ -535,4 +535,4 @@ fn shifted(shape: CollisionShape, dx: i64, dy: i64) -> CollisionShape;
 - ukadoc [descript_shell_surfaces の collisionex*](https://ukatech.shillest.net/ukadoc-spec/descript_shell_surfaces.html#collisionex-star)・[caption_z-axis](https://ukatech.shillest.net/ukadoc-spec/descript_shell_surfaces.html#caption_z-axis)。
 - SSP の測り: `research.md` 9 節・`evidence/ssp-probe-surfaces.txt`。
 - 設計の決めの経緯と退けた案: `research.md` 10 節（初版）・11 節（決め 7 の後の改め）。
-- `hit-id-pass` への申し送り: `.kiro/specs/hit-id-pass/brief.md` の最後の節。
+- `hit-id-pass` への申し送り: `.kiro/specs/completed/hit-id-pass/brief.md` の最後の節。

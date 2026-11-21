@@ -130,6 +130,14 @@ fn not_animated(path: &Path) -> DecodeError {
     }
 }
 
+/// 乗算しない読みを持たない読み手の既定の答え（`Decode`・パス付き）。
+fn no_unmultiplied(path: &Path) -> DecodeError {
+    DecodeError::Decode {
+        path: path.to_path_buf(),
+        source: "this decoder has no non-premultiplied read".into(),
+    }
+}
+
 /// 差替可能デコードポート。既定手段（WIC）を上位へ露出しない（2.3・D4）。
 ///
 /// trait 面は「パス→デコード済み BGRA 画像」の最小面のみで、WIC/COM 型を一切公開しない。
@@ -170,6 +178,13 @@ pub trait ElementDecoder {
     ) -> Result<DecodedImage, DecodeError> {
         Err(not_animated(path))
     }
+
+    /// 1 枚目のコマを、色に α を掛けない BGRA8 で読む。抜き色・`seriko.use_self_alpha`・
+    /// `.pna` は当てない。α の無い絵は全部の画素が α＝255。一辺の上限は `decode` と同じ。
+    /// 既定は `Err`（この読み手は乗算しない読みを持たない）。
+    fn decode_unmultiplied(&self, path: &Path) -> Result<DecodedImage, DecodeError> {
+        Err(no_unmultiplied(path))
+    }
 }
 
 /// `MemoryDecoder::insert_animated` の登録 1 件。
@@ -191,6 +206,7 @@ pub struct MemoryDecoder {
     corrupt: HashMap<PathBuf, String>,
     pnas: HashSet<PathBuf>,
     animated: HashMap<PathBuf, AnimatedEntry>,
+    unmultiplied: HashMap<PathBuf, DecodedImage>,
 }
 
 impl MemoryDecoder {
@@ -253,6 +269,12 @@ impl MemoryDecoder {
         );
     }
 
+    /// パスに対する乗算しない絵を登録する。以降 `decode_unmultiplied(path)` はこの絵を返す。
+    /// `decode` の答え（`insert`）とは別に持つ。
+    pub fn insert_unmultiplied(&mut self, path: impl Into<PathBuf>, image: DecodedImage) {
+        self.unmultiplied.insert(path.into(), image);
+    }
+
     /// 登録の答えを、パス付きの `Decode` の失敗へ包んで返す。未登録は既定と同じ失敗。
     fn animated_answer<T: Clone>(
         &self,
@@ -307,6 +329,17 @@ impl ElementDecoder for MemoryDecoder {
         _info: AnimationInfo,
     ) -> Result<DecodedImage, DecodeError> {
         self.animated_answer(path, |e| &e.first)
+    }
+
+    /// 乗算しない絵 → その絵・破損 → `Decode`・`insert` だけ → 既定と同じ失敗・未登録 → `NotFound`。
+    fn decode_unmultiplied(&self, path: &Path) -> Result<DecodedImage, DecodeError> {
+        if let Some(img) = self.unmultiplied.get(path) {
+            return Ok(img.clone());
+        }
+        if self.images.contains_key(path) {
+            return Err(no_unmultiplied(path));
+        }
+        self.decode(path)
     }
 }
 
@@ -390,6 +423,68 @@ mod tests {
         assert!(!dec.probe_pna(&without));
         // 未登録パスも既定 false。
         assert!(!dec.probe_pna(Path::new("shell/nowhere.png")));
+    }
+
+    /// 乗算しない読み: 登録した絵を返し、`decode` の登録とは混ぜない。登録が無ければ
+    /// 理由つきの失敗（既定の答え・破損・不在）で、空の絵を返さない。
+    #[test]
+    fn unmultiplied_registration_and_failures() {
+        let (w, h, stride, _, _) = small_image(true);
+        let straight = DecodedImage {
+            width: w,
+            height: h,
+            stride,
+            bgra: [50, 100, 200, 128].repeat(4),
+            has_alpha: true,
+        };
+        let mut dec = MemoryDecoder::new();
+        dec.insert_unmultiplied(known_path(), straight.clone());
+        let only_premul = PathBuf::from("shell/premul_only.png");
+        dec.insert(only_premul.clone(), w, h, stride, vec![0; 16], true);
+        let corrupt = PathBuf::from("shell/corrupt.png");
+        dec.insert_corrupt(corrupt.clone(), "broken PNG header");
+
+        let img = dec.decode_unmultiplied(&known_path()).expect("registered");
+        assert_eq!(img.bgra, straight.bgra);
+        assert!(matches!(
+            dec.decode(&known_path()),
+            Err(DecodeError::NotFound { .. })
+        ));
+        match dec.decode_unmultiplied(&only_premul) {
+            Err(DecodeError::Decode { path, source }) => {
+                assert_eq!(path, only_premul);
+                assert_eq!(source, "this decoder has no non-premultiplied read");
+            }
+            other => panic!("expected Decode, got {other:?}"),
+        }
+        match dec.decode_unmultiplied(&corrupt) {
+            Err(DecodeError::Decode { source, .. }) => assert_eq!(source, "broken PNG header"),
+            other => panic!("expected Decode, got {other:?}"),
+        }
+        assert!(matches!(
+            dec.decode_unmultiplied(Path::new("shell/nowhere.png")),
+            Err(DecodeError::NotFound { .. })
+        ));
+    }
+
+    /// 既定の実装は理由つきの失敗を返す（ほかの読み手は書き換えない）。
+    #[test]
+    fn unmultiplied_default_is_error() {
+        struct Plain;
+        impl ElementDecoder for Plain {
+            fn decode(&self, path: &Path) -> Result<DecodedImage, DecodeError> {
+                Err(DecodeError::NotFound {
+                    path: path.to_path_buf(),
+                })
+            }
+        }
+        match Plain.decode_unmultiplied(&known_path()) {
+            Err(DecodeError::Decode { path, source }) => {
+                assert_eq!(path, known_path());
+                assert_eq!(source, "this decoder has no non-premultiplied read");
+            }
+            other => panic!("expected Decode, got {other:?}"),
+        }
     }
 
     /// 抽象境界（2.3）: trait object 経由でのみ decode/probe_pna を呼べる。

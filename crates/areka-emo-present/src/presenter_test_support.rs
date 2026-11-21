@@ -16,7 +16,9 @@ use areka_emo_atlas::{
     AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, DecodedImage,
     LoopCount, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake, bake_with_limits,
 };
-use areka_emo_compose::{BindSet, ComposeMethod, FilmSheet, PatternFrame};
+use areka_emo_compose::{
+    BindSet, ComposeMethod, ElementKind, FilmSheet, PatternFrame, element_kind,
+};
 use areka_parsers::shell::{
     Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
     DrawMethod, Element, ElementPath, Interval, Pattern, Shell, Surface,
@@ -346,8 +348,14 @@ pub(crate) fn bake_world(
     for (name, w, h, bgra) in images {
         dec.insert(base.join(name), w, h, w * 4, bgra, true);
     }
+    let mut surfaces = shell.surfaces.clone();
+    for surface in &mut surfaces {
+        surface
+            .elements
+            .retain(|e| element_kind(&e.path) == ElementKind::Image);
+    }
     let set = SurfaceSet {
-        surfaces: &shell.surfaces,
+        surfaces: &surfaces,
         base_dir: base,
         alpha_params: AlphaParams {
             use_self_alpha: UseSelfAlpha::On,
@@ -513,12 +521,8 @@ pub(super) fn bind_overlay_surface(x: i64, y: i64) -> Surface {
 
 // ── hit_region_client の配線と縮退の檻（要件 1.4-1.7・DD-5）─────────────────
 //
-// 本節はすべて **GPU 非依存**である。`attach_target` は skeleton 登録のみで World にも GPU にも
-// 触れないため素の `World::new()` で足り、判定に必要な状態（表示中サーフェス・実適用 k）は
-// in-source テストの特権である**私有フィールドの直接構築**で作る。実表示（`ShowSurface`）で
-// 作ろうとすると GPU/WUC 資源が要り、かつ「面はあるのに applied が無い」状態は表示成立点が
-// 両者を同時に確定させるため**原理的に作れない**（DD-5 が「現行の公開 API 経由では到達不能な
-// 防御分岐」と述べるとおり）。私有状態の直接構築だけがこの分岐を実行テストへ入れる手段である。
+// 未表示・未登録の縮退は `attach_target` だけで足りる（World にも GPU にも触れない）。
+// 表示中の判定は、実 GPU の World で不透明な絵を持つ面を実際に表示して作る。
 
 /// 当たり判定矩形 1 件（`areka-emo-compose/src/hit.rs` の檻と同一の作り方）。
 fn hit_coll(index: u32, left: i64, top: i64, right: i64, bottom: i64, name: &str) -> Collision {
@@ -534,16 +538,15 @@ fn hit_coll(index: u32, left: i64, top: i64, right: i64, bottom: i64, name: &str
     }
 }
 
-/// collision のみを持つ surface 1000 の `(EmoWorld, AtlasTable)`。
+/// 420×420 の不透明な絵に collision を持つ surface 1000 の `(EmoWorld, AtlasTable)`。
 ///
-/// element を 1 つも持たないため atlas 焼きは空で、画像デコード・GPU・実描画のいずれも要さない
-/// （本節は判定だけを見るので画素は不要）。矩形は `areka-emo-compose/src/hit.rs` の檻と同一の Head/Bust に、
+/// 矩形は `areka-emo-compose/src/hit.rs` の檻と同一の Head/Bust に、
 /// **Bust と重なる Arm**（後定義＝画家則で手前）を足した 3 件で、重なり点の檻を成立させる。
 fn build_collision_only_assets() -> (EmoWorld, AtlasTable) {
     bake_world(
         shell_of(vec![Surface {
             targets: vec![AppendTarget::Single(1000)],
-            elements: Vec::new(),
+            elements: vec![elem("a.png", 0, 0)],
             collisions: vec![
                 hit_coll(0, 93, 62, 271, 130, "Head"),
                 hit_coll(1, 133, 270, 229, 326, "Bust"),
@@ -551,7 +554,7 @@ fn build_collision_only_assets() -> (EmoWorld, AtlasTable) {
             ],
             animations: Vec::new(),
         }]),
-        Vec::new(),
+        vec![("a.png", 420, 420, gradient(420, 420, 0x21))],
     )
 }
 
@@ -562,20 +565,38 @@ pub(super) fn attach_hit_target(presenter: &mut EmoPresenter, world: &mut World,
     presenter.attach_target(target, window, emo_world, atlas, 96);
 }
 
-/// 私有状態を直接書いて「表示中サーフェスあり」を作る（GPU なしで R1.6 分岐へ到達する唯一の手段）。
-pub(super) fn force_current_surface(
+/// 窓の DPI を `dpi` にした target を登録し、`surface_id` を実際に表示する（実 GPU の World が要る）。
+pub(super) fn attach_and_show(
     presenter: &mut EmoPresenter,
+    world: &mut World,
     target: TargetId,
+    (emo_world, atlas): (EmoWorld, AtlasTable),
     surface_id: u32,
+    dpi: u16,
 ) {
-    presenter
-        .targets
-        .get_mut(&target)
-        .expect("attach 済み target")
-        .current_surface_id = Some(surface_id);
+    let window = spawn_window_with_dpi(world, dpi);
+    presenter.attach_target(target, window, emo_world, atlas, 96);
+    show_ok(presenter, world, target, surface_id);
 }
 
-/// 私有状態を直接書いて実適用 k を与える（表示成立点を GPU なしで代替する）。
+/// 窓の DPI を `dpi` にした target を登録し、面 1000 を実際に表示する（実 GPU の World が要る）。
+pub(super) fn attach_and_show_hit_target(
+    presenter: &mut EmoPresenter,
+    world: &mut World,
+    target: TargetId,
+    dpi: u16,
+) {
+    attach_and_show(
+        presenter,
+        world,
+        target,
+        build_collision_only_assets(),
+        1000,
+        dpi,
+    );
+}
+
+/// 私有状態を直接書いて実適用 k を与える（実適用 k が無い状態は表示成立点では作れない）。
 pub(super) fn force_applied(presenter: &mut EmoPresenter, target: TargetId, k: Option<ScaleRatio>) {
     presenter
         .targets
@@ -851,6 +872,11 @@ pub(super) fn hide(presenter: &mut EmoPresenter, world: &mut World) {
         },
     );
 }
+
+pub(super) use super::hit_test_support::{
+    FIVE_SHAPES, FIVE_SHAPES_MASK, five_shapes_assets, hit_generation, load_hit_shell,
+    mask_pictures_created, name_at, straight_image, warn_count,
+};
 
 // ── ログ捕捉ハーネス（presenter 系テストモジュール共有）────────────────────────────────
 //
