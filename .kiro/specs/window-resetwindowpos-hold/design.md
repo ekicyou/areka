@@ -18,7 +18,7 @@
 - 並べ直しの並べ方（既定の位置の式・記憶へ書く振る舞い）の変更（1.6）。
 - メニューの「シェル位置初期化」・`OnResetWindowPos` の往復・バルーン位置初期化（6.4）。
 - 起動のイベントを流す時機（6.3・kanade の持ち物）。
-- 面の指令が一度も来ない窓を「表示しない」と決める仕組み（時間の上限・イベントで決める形は取らない。OPEN QUESTION 1）。
+- 面の指令が来ない窓を、時間の上限・ゴーストの名前・SHIORI のイベントで「表示しない」と決める形（取らない。決めはトークの終わりまで遅らせる・設計の議題 1）。
 - 拡大率の後の詰め直しの武装中の並べ直し（`research.md` §7 R4・範囲外）。
 
 ## Boundary Commitments
@@ -127,7 +127,9 @@ crates/
 - `crates/areka/src/runtime_tests/frame_move_order_tests.rs` — `a_script_reset_sends_nothing_to_kanade` の呼び出しを `run_move_drain_with(&wiring, &all_shown, …)` に改める（呼び出し 1 行と `use` 1 行・7.3）。同じウェーブの `session-module-gather` がこのファイルのパスを直すので、順を合わせる（Implementation Notes）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の件 5 の行（452 行）の第 2 列・第 3 列・第 4 列（7.6）。
 
-- `crates/areka-runtime/src/frame/drain_resnap.rs` — `run_move_drain_with` の本体だけ（窓寸の着地を見る内側の読み口で包む・議題 2）。公開の形は変えない。
+- `crates/areka-runtime/src/frame/drain_resnap.rs` — `run_move_drain_with` の本体だけ（窓寸の着地を見る内側の読み口で包む・議題 2／トークの終わりの通し番号を読んで判定へ渡す・議題 1）。公開の形は変えない。
+- `crates/areka-runtime/src/balloon_visibility_phase.rs` — `TalkEnded` を数えた通し番号を `RuntimeWiring` に置く（数行・設計の議題 1）。
+- `crates/areka-runtime/src/frame/wiring.rs` — `RuntimeWiring` にトークの終わりの通し番号の欄を 1 つ足す（設計の議題 1）。
 
 `reset_pos.rs`・`chain_finalize.rs`・`frame_test_support.rs`・`frame_shared_test_support.rs` は触らない。
 
@@ -169,7 +171,11 @@ stateDiagram-v2
 ```
 
 - `Shown` は `applied_ratio` が `Some`（今の `shown_ratio`）で、**かつ窓の大きさが着地した**（窓寸 `WindowPos.size` が表示層の実表示寸 `target_physical_size` と一致する）こと。着地の材料は起動の確定が `ResnapNotLanded` で待つものと同じで、DPI の整合待ちの札（`DpiSyncHold`）で窓寸の照合が見送られた巡は、表示が成り立っていても `Pending` に数える（設計の議題 2・2026-11-21 承認）。判定の関数は 1 つなので、`\![move]` の待ちにも同じく効く（「表示の後の大きさで当てる」という `\![move]` の決まりの意図を満たす直し）。一度表示して着地した窓は、後で隠しても `Shown` のまま（今の `move` の待ちと同じ）。
-- `Pending` は窓があり、表示層の target がまだ無いか、面の指令がまだ来ていないか、来たが結果がまだ出ていない状態。時間でもイベントでも `Pending` から外さない（6.1・議題 2）。
+- `Pending` は窓があり、面の指令を受けて結果がまだ出ていないか（表示の保留・大きさの未着地）、面の指令をまだ受けておらず、その位置の指令を運んだトークもまだ終わっていない状態。
+- **面の指令を受けないままの決まり（設計の議題 1・2026-11-21 承認）**: 面の指令をまだ一度も受けていない窓（表示層の target が無い窓を含む）は、預かった位置の指令を運んだトークが終わった時点で `NeverShown(NotRequested)`＝「surface -1 のまま決まった（隠れたまま）」に数え、待たない。トークの途中で面の指令が来れば、その窓は普通に `Shown` へ進み、その巡のうちに当たる（決めを遅らせるだけで、当てる巡は遅らせない・6.2）。材料は areka 自身のトークの生き死にの合図（`TalkLifecycleSignal::TalkEnded`）だけで、時間の上限・ゴーストの名前・SHIORI のイベントは見ない（6.1）。
+  - 表示層の側: `PresentTarget` に「面の指令を一度でも受けた」の印を持つ（`ShowSurface`・表示を伴う置き換えが届いた時点で立てる。保留・失敗でも立つ）。`never_shown` の照会は、印が立っていない target と未登録の target に `Some(NotRequested)` を答える。ただし `NotRequested` を「決まった」と読むのは位置の相がトークの終わりを見た後だけである（下）。
+  - 位置の相の側: 預かりの列の各指令に、届いたときの「トークの終わりの通し番号」を添える。`run_move_drain_with` の本体がトークの終わりの通し番号を読み、番号が進んだ（運んだトークが終わった）指令についてだけ、`NotRequested` の窓を待たない。`Pending` との分かれは `settle` の 1 か所で決める。
+  - トークの終わりの通し番号の持ち主: 今 `TalkEnded` を受けるのはバルーンの可視性の相だけ（`RuntimeWiring::lifecycle_rx` を `try_iter` で全件取り出す）。可視性の相が `TalkEnded` を数えた通し番号を `RuntimeWiring` に置き、位置の相がそれを読む（プル・一次情報源は線の受け手 1 つ）。フレームの順は `frame.rs` で可視性の相（`run_balloon_visibility_phase`）が位置の指令の相（`run_move_drain_phase`）より前に走るので、その巡に届いた `TalkEnded` は同じ巡の位置の相に見える（1 フレーム遅れない・2026-11-21 確かめた）。位置の相の側で同じ線を読み直す形は取らない（受け手を 2 つにしない）。
 - 窓の無いスコープは判定に入れない（1.4）。
 
 ## Requirements Traceability
@@ -253,14 +259,16 @@ pub enum NeverShown {
     Hidden,
     /// 最初の面を出せなかった（合成の失敗・外形の上限越え以外の合成の失敗・描く装置の失敗）。
     Failed,
+    /// 面の指令を一度も受けていない（未登録の target を含む）。位置の相はトークの終わりを見た後だけ「決まった」と読む。
+    NotRequested,
 }
 
 impl EmoPresenter {
-    /// target が最初の面を表示しないまま決まった理由。未登録・表示が一度成り立った・まだ決まっていない target は `None`。
+    /// target が最初の面を表示しないまま決まった理由。表示が一度成り立った・面の指令を受けて結果がまだの target は `None`。未登録と面の指令を受けていない target は `Some(NotRequested)`。
     pub fn never_shown(&self, target: TargetId) -> Option<NeverShown>;
 }
 ```
-- Preconditions: なし（未登録は `None`）。
+- Preconditions: なし（未登録は `Some(NotRequested)`）。
 - Postconditions: `applied_ratio(target).is_some()` なら `None`。
 - Invariants: 欄を書くのは `apply` の 3 腕だけ（下の State Management）。
 
@@ -370,7 +378,7 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
 **Implementation Notes**
 - Integration: `run_move_drain_with` は変えない。並べ直しの腕（`drain_resnap.rs` 175 行）はそのまま `reset_window_positions(world)` を呼ぶ。
 - Validation: 下の Testing Strategy。
-- Risks: 窓はあるのに面の指令が一度も来ないスコープは `Pending` のままで、並べ直しとそれに続く位置の指令は預かられ続ける（起動の確定の「ゴースト待ち」と同じ形・OPEN QUESTION 1）。列の長さはゴーストの台本が送った指令の数で決まる。
+- Risks: 相方に面の指令を出さないトークでは、並べ直しとそれに続く位置の指令がトークの終わりまで預かられ、終わった巡に当たる（本体はそこで動く）。トークをまたいで列が伸び続けることは無い。
 
 ### 檻
 
@@ -394,7 +402,7 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
 | 語 | 水準 | 出る時 | 欄 |
 |---|---|---|---|
 | `reset_window_pos_held` | info | 並べ直しを表示待ちで預かった、届いた巡に 1 度 | `waiting`（待っているスコープの並び） |
-| `reset_window_pos_unshown` | info | 表示しないと分かった窓を待たずに並べ直したとき、スコープごとに 1 件 | `scope`・`reason`（`hidden`／`failed`） |
+| `reset_window_pos_unshown` | info | 表示しないと分かった窓を待たずに並べ直したとき、スコープごとに 1 件 | `scope`・`reason`（`hidden`／`failed`／`not_requested`） |
 | `move_hold_unshown` | info | 表示しないと分かった窓への移動を扱ったとき、移動ごとに 1 件 | `scope`・`waiting`・`reason`・`handling`（`placed`） |
 | `move_ratio_unset`・`move_hold_behind`・`move_hold_superseded`・`reset_window_pos`・`reset_window_pos_skipped` | 今のまま | 今のまま | 今のまま |
 
@@ -412,8 +420,9 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
 3. **追い越さない・届いた順（2.3〜2.5）**: 並べ直しを預かっている間に届いた本体への移動は預かられ（`move_hold_behind`）、表示の巡に並べ直しの後で当たる（最後の位置は移動の位置）。
 4. **表示しないと分かった窓で詰まらない（3.1〜3.4・5.4）**: 相方を `NeverShown(Hidden)` にした `SettledSource` で並べ直しを送る → その巡に当たり、`reset_window_pos_unshown scope=1 reason=hidden` が 1 行、後の本体への指令も同じ巡に当たる。`Pending` → `Hidden` に変わった巡に、預かっていた並べ直しが当たる形も見る。
 5. **表示しないと分かった窓への移動（4.1・4.2）**: `Pending` の間は預かる（`move_ratio_unset`）。`Hidden` に決まった巡に預かりの列から出て、移動ごとに `move_hold_unshown` が 1 行で、今の大きさで置かれる。
-6. **大きさの着地を待つ（議題 2）**: 表示は成り立ったが窓寸の照合が見送られた（窓寸が実表示寸と違う）スコープがある巡は、並べ直しも `\![move]` も預かり、窓寸が着地した巡のその相で当たる（足場で窓寸の着地を 1 巡遅らせる形を作る）。
-7. **定常（6.5・1.3）**: 全部 `Shown` では並べ直しが届いた巡に当たり、`reset_window_pos_held`・`reset_window_pos_unshown` は出ない。
+6. **トークの終わりまで決めを遅らせる（設計の議題 1）**: 相方に面の指令が来ないまま並べ直しを送る → トークの途中は預かる（`reset_window_pos_held`）→ 途中で相方の面が出ればその巡に当たる／出ないままトークが終われば、その巡に `reset_window_pos_unshown scope=1 reason=not_requested` を 1 行残して当たる。`\![move]` も同じ形で、トークの先頭の移動が相方の面の後に当たる（前の spec の 52px の形が戻らない）。
+7. **大きさの着地を待つ（議題 2）**: 表示は成り立ったが窓寸の照合が見送られた（窓寸が実表示寸と違う）スコープがある巡は、並べ直しも `\![move]` も預かり、窓寸が着地した巡のその相で当たる（足場で窓寸の着地を 1 巡遅らせる形を作る）。
+8. **定常（6.5・1.3）**: 全部 `Shown` では並べ直しが届いた巡に当たり、`reset_window_pos_held`・`reset_window_pos_unshown` は出ない。
 
 ### 今の檻の改め（7.3）
 - `frame_move_hold_tests.rs` の `a_reset_after_a_move_to_a_never_shown_window_supersedes_it`: 読み口を `shown_only(&[0])` から「相方が `NeverShown(Hidden)`」の `SettledSource` に替える。見る中身（捨てた記録・並べ直しがその巡に当たる・後の本体の指令が当たる・捨てた移動が後で当たらない）は変えない。名前は相方の状態に合わせて改めてよい。
@@ -432,6 +441,6 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
 
 ## Open Questions / Risks
 
-1. **面の指令が一度も来ない窓**（3.4 の読み）: 窓があるのに `\s` が一度も届かないスコープは「表示しないと分かった窓」の定義（隠した・出せなかった）に入らないので `Pending` のままで、並べ直しと後の位置の指令を預かり続ける。仮置き: 3.4 の「表示しない窓」を用語の「表示しないと分かった窓」と読み、この形は起動の確定のゴースト待ちと同じく待つ（議題 2 の決め「時間の上限・イベントでは決めない」に従う）。
+1. ~~面の指令が一度も来ない窓~~: **決まった**＝その位置の指令を運んだトークが終わるまで待ち、終わっても面の指令が無ければ `NotRequested`（隠れたまま）として待たない（設計の議題 1・「スコープの表示の決まり」）。
 2. ~~表示しないと分かった窓への移動の扱い~~（4.1）: **決まった**＝位置だけ置く（`research.md` §10.7 の SSP 2.9.34 の測り）。
-3. **表示層の装着が来ないスコープ**（GPU が使えないまま・装着の失敗でそのスコープを飛ばした）: target が無いので `Pending` のまま待つ。仮置き: 表示がそもそも成り立たない形で、起動の確定も同じく待つので揃える。
+3. ~~表示層の装着が来ないスコープ~~: **決まった**＝target が無い窓は面の指令を受けられないので、1 と同じくトークの終わりで `NotRequested` に数える。
