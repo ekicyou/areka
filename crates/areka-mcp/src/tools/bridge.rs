@@ -58,10 +58,8 @@ impl ReplyTo {
     pub fn send(mut self, outcome: ToolOutcome) {
         if let Some(sender) = self.sender.take() {
             let ghost = std::mem::take(&mut self.ghost);
-            // 受け手が居ない（上限を過ぎた）なら捨てる＝応答は 1 度だけ。
             let _ = sender.send(Answer { ghost, outcome });
         }
-        // 合図はこの後の `Drop` が立てる。
     }
 
     /// 待つ側がもう居ない（上限を過ぎて `Pending` が落ちた）なら true。
@@ -132,7 +130,6 @@ pub(crate) async fn call(tx: Sender<ToolRequest>, call: ToolCall, limit: Duratio
         (String::new(), shutting_down(tool))
     } else {
         let answered = pending.answered();
-        // 上限を過ぎたかどうかは下の `try_answer` が見分ける。
         let _ = tokio::time::timeout(limit, answered.cancelled()).await;
         match pending.try_answer() {
             Ok(Some(answer)) => (answer.ghost, answer.outcome),

@@ -112,7 +112,7 @@ fn resolve_receives_lexed_names_in_order() {
     assert_eq!(seen, ["a1_b", "username", "y", ""]);
 }
 
-/// `%*` は名前 `*` で引かれ、答えが無いので台本は 1 バイトも変わらない（script-small-tags 要件 4.3）。
+/// `%*` は名前 `*` で引かれ、答えが無いので台本は 1 バイトも変わらない。
 #[test]
 fn percent_star_is_looked_up_as_star_and_left_unchanged() {
     let mut seen = Vec::new();

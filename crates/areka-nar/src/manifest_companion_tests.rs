@@ -1,5 +1,5 @@
 //! `manifest` の兄弟テストの続き——同時インストールのバルーンと再インストールの
-//! 規則、そして読み飛ばしの記録（要件 3.12〜3.16）。
+//! 規則、そして読み飛ばしの記録。
 //!
 //! 助手と固定入力は [`super`]（`manifest_tests.rs`）から借りる。分けたのは
 //! 1 ファイル 1,000 行の上限に収めるためで、固定入力は 1 つも削っていない。
@@ -9,9 +9,9 @@
 
 use super::*;
 
-// ---- 同時インストールのバルーン（要件 3.12） ----
+// ---- 同時インストールのバルーン ----
 
-/// `balloon.directory` と `balloon.source.directory` を読む（要件 3.12・検体 emo2 の形）。
+/// `balloon.directory` と `balloon.source.directory` を読む（検体 emo2 の形）。
 #[test]
 fn reads_the_balloon_companion_with_its_own_source_directory() {
     let manifest = parsed_ghost(&[
@@ -31,7 +31,7 @@ fn reads_the_balloon_companion_with_its_own_source_directory() {
     assert_eq!(manifest.warnings, vec![]);
 }
 
-/// `shell` でも同時インストールを読む（要件 3.12 は ghost と shell の両方）。
+/// `shell` でも同時インストールを読む（ghost と shell の両方で読む）。
 #[test]
 fn reads_companions_for_a_shell_too() {
     let manifest = parsed(&[
@@ -44,10 +44,10 @@ fn reads_companions_for_a_shell_too() {
     assert_eq!(manifest.warnings, vec![]);
 }
 
-/// `balloonN` は無印 → 0 → 1… の探索の順に読み、欠番で打ち切る（要件 1.1・1.3）。
+/// `balloonN` は無印 → 0 → 1… の探索の順に読み、欠番で打ち切る。
 ///
 /// `balloon1` が無いので `balloon2` と `balloon10` は読まれず、鍵の名前順に
-/// 「探索で読まなかった」として記録される（要件 6.3）。
+/// 「探索で読まなかった」として記録される。
 #[test]
 fn reads_numbered_balloon_companions_in_search_order() {
     let manifest = parsed_ghost(&[
@@ -75,7 +75,7 @@ fn reads_numbered_balloon_companions_in_search_order() {
     );
 }
 
-/// `balloon` の直後が数字でなければ同時インストールではない（要件 3.12 の境界）。
+/// `balloon` の直後が数字でなければ同時インストールではない。
 ///
 /// 片側だけ（`balloon0` が通ること）を測っても境界は決まらない。通らない側も並べる。
 #[test]
@@ -101,7 +101,7 @@ fn balloon_followed_by_a_non_digit_is_not_a_companion() {
 ///
 /// 単独で書いて読まれるのは、探索が最初に引く `balloon` と `balloon0` だけ。
 /// `balloon9`・`balloon10`・`balloon007` は読まれないが、知らない鍵ではなく
-/// 「探索で読まなかった」として記録する（同梱の形としては認めている・要件 1.3・1.6・6.3）。
+/// 「探索で読まなかった」として記録する（同梱の形としては認めている）。
 #[test]
 fn balloon_followed_by_digits_is_a_companion() {
     for key in ["balloon", "balloon0"] {
@@ -125,7 +125,7 @@ fn balloon_followed_by_digits_is_a_companion() {
 
 /// 宛先（`*.directory`）の無い同時インストールの断片は知らないキーとして記録する。
 ///
-/// `balloon.source.directory` だけでは、どこへ入れるのか決まらない（要件 3.12・3.16）。
+/// `balloon.source.directory` だけでは、どこへ入れるのか決まらない。
 #[test]
 fn a_companion_key_without_its_directory_is_recorded_as_an_ignored_key() {
     let manifest = parsed_ghost(&[
@@ -164,9 +164,9 @@ fn a_long_ignored_key_is_bounded_in_its_warning() {
     assert!(!manifest.warnings[0].to_string().contains(&key));
 }
 
-// ---- 扱わない同時インストールの種別（要件 3.13） ----
+// ---- 扱わない同時インストールの種別 ----
 
-/// `balloon` 以外の同時インストールは警告して読み飛ばし、本体の展開は続ける（要件 3.13）。
+/// `balloon` 以外の同時インストールは警告して読み飛ばし、本体の展開は続ける。
 #[test]
 fn warns_and_skips_the_companion_kinds_areka_does_not_handle() {
     for prefix in [
@@ -192,7 +192,7 @@ fn warns_and_skips_the_companion_kinds_areka_does_not_handle() {
     }
 }
 
-/// 扱わない種別の付属キーも 1 件ずつ記録する。黙って落とさない（要件 3.13）。
+/// 扱わない種別の付属キーも 1 件ずつ記録する。黙って落とさない。
 #[test]
 fn records_every_key_of_an_unhandled_companion_kind() {
     let manifest = parsed_ghost(&[
@@ -216,9 +216,9 @@ fn records_every_key_of_an_unhandled_companion_kind() {
     );
 }
 
-// ---- ゴースト以外の同時インストール（要件 3.14） ----
+// ---- ゴースト以外の同時インストール ----
 
-/// `balloon`／`supplement` に同時インストールが書かれていれば警告して読み飛ばす（要件 3.14）。
+/// `balloon`／`supplement` に同時インストールが書かれていれば警告して読み飛ばす。
 ///
 /// 種別の判定が先に効くので、扱わない種別（`headline`）もここでは
 /// 「ゴースト以外に書かれている」として記録する。理由を 2 つ並べても
@@ -249,7 +249,7 @@ fn warns_and_skips_companions_written_on_a_balloon_or_a_supplement() {
     }
 }
 
-/// ゴースト以外の同時インストールは、フォルダ名が壊れていても拒否にはしない（要件 3.14）。
+/// ゴースト以外の同時インストールは、フォルダ名が壊れていても拒否にはしない。
 ///
 /// 読まない値を検査すると、本体は正しいのに展開が止まる。
 #[test]
@@ -269,9 +269,9 @@ fn a_broken_companion_directory_on_a_balloon_is_skipped_not_refused() {
     );
 }
 
-// ---- 再インストール（要件 3.15） ----
+// ---- 再インストール ----
 
-/// `refresh` が `1` のときだけ全消去。それ以外は重ね置き（要件 3.15）。
+/// `refresh` が `1` のときだけ全消去。それ以外は重ね置き。
 #[test]
 fn only_refresh_1_replaces_everything_else_overlays() {
     assert_eq!(
@@ -288,7 +288,7 @@ fn only_refresh_1_replaces_everything_else_overlays() {
     assert_eq!(parsed_ghost(&[]).existing, ExistingPolicy::Overlay);
 }
 
-/// 除外マスクはコロンで分け、前後の空白を落とし、空の要素は捨てる（要件 3.15）。
+/// 除外マスクはコロンで分け、前後の空白を落とし、空の要素は捨てる。
 #[test]
 fn splits_the_mask_on_colons_trimming_and_dropping_empty_elements() {
     let manifest = parsed_ghost(&[
@@ -308,7 +308,7 @@ fn splits_the_mask_on_colons_trimming_and_dropping_empty_elements() {
     assert_eq!(manifest.warnings, vec![]);
 }
 
-/// マスクの要素は 1 階層のファイル名。パス指定は警告して読み飛ばす（要件 3.15）。
+/// マスクの要素は 1 階層のファイル名。パス指定は警告して読み飛ばす。
 #[test]
 fn warns_and_drops_a_mask_element_that_is_not_a_one_level_file_name() {
     let manifest = parsed_ghost(&[
@@ -340,7 +340,7 @@ fn warns_and_drops_a_mask_element_that_is_not_a_one_level_file_name() {
     );
 }
 
-/// `refresh` が `1` でなければマスクは読まない。使わない値で警告を出さない（要件 3.15）。
+/// `refresh` が `1` でなければマスクは読まない。使わない値で警告を出さない。
 #[test]
 fn does_not_read_the_mask_when_refresh_is_not_1() {
     let manifest = parsed_ghost(&["refresh,0", "refreshundeletemask,sub/deep.txt"]);
@@ -352,7 +352,7 @@ fn does_not_read_the_mask_when_refresh_is_not_1() {
     );
 }
 
-/// 同時インストールのバルーンにも同じ規則が効く（要件 3.15）。
+/// 同時インストールのバルーンにも同じ規則が効く。
 #[test]
 fn reads_the_refresh_and_mask_of_each_companion() {
     let manifest = parsed_ghost(&[
@@ -378,7 +378,7 @@ fn reads_the_refresh_and_mask_of_each_companion() {
     );
 }
 
-/// **本設計の決定**——`supplement` では `refresh` を読まない（要件 3.15・設計の裁定）。
+/// `supplement` では `refresh` を読まない。
 ///
 /// サプリメントの重ね置き先はゴースト本体なので、全消去は本体ごと消しかねない。
 /// 正典はこの組み合わせに沈黙しており、安全側（重ね置き）へ倒す。正典に反する
@@ -405,7 +405,7 @@ fn ignores_refresh_for_a_supplement_by_design_decision_not_by_canon() {
     );
 }
 
-/// マスクだけが書かれていても同じく記録する。黙って落とさない（要件 3.15）。
+/// マスクだけが書かれていても同じく記録する。黙って落とさない。
 #[test]
 fn records_the_ignored_refresh_for_a_supplement_that_only_writes_the_mask() {
     let manifest = parsed(&[
@@ -428,9 +428,9 @@ fn a_supplement_without_refresh_gets_no_warning() {
     assert_eq!(manifest.warnings, vec![]);
 }
 
-// ---- 知らないキー（要件 3.16） ----
+// ---- 知らないキー ----
 
-/// 知らないキーは読み飛ばし、キー名を記録する。`bootghost` もここに入る（要件 3.16）。
+/// 知らないキーは読み飛ばし、キー名を記録する。`bootghost` もここに入る。
 #[test]
 fn records_every_unknown_key_including_bootghost() {
     let manifest = parsed_ghost(&[
@@ -475,7 +475,7 @@ fn never_records_a_key_it_actually_reads() {
 }
 
 /// 警告は順序つきの列で、この入力では同じ警告が 2 度出ない（1 件のキーからは 1 件・
-/// `refreshundeletemask` は使えない要素ごとに 1 件）（要件 3.13・3.15・3.16）。
+/// `refreshundeletemask` は使えない要素ごとに 1 件）。
 ///
 /// 本体の再インストール → キーの名前順 → 同時インストールごと（探索の順）、の 3 段で並ぶ。
 /// 「含む」で測ると、この順序も重複の有無も測れない。
@@ -516,7 +516,7 @@ fn warnings_come_back_as_an_ordered_sequence_with_no_duplicates() {
 }
 
 /// 2 つの同梱が大小だけ違う同じ宛先を指す書庫は、2 つ目の宛先の名前の拒みとして
-/// 書庫ごと断る（#7・要件 9.9）。黙って片方で上書きすると、もう片方の中身が消える。
+/// 書庫ごと断る。黙って片方で上書きすると、もう片方の中身が消える。
 #[test]
 fn two_companions_naming_the_same_folder_refuse_the_archive() {
     assert_eq!(
@@ -528,7 +528,7 @@ fn two_companions_naming_the_same_folder_refuse_the_archive() {
     );
 }
 
-// ---- 探す同梱の数の上限（要件 9.15 ⑶） ----
+// ---- 探す同梱の数の上限 ----
 
 /// `balloon0` から `balloon{count-1}` までの宛先の行を作る。
 fn numbered_balloons(count: usize) -> Vec<String> {

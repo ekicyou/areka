@@ -1,8 +1,8 @@
-//! `DefaultEncoding` の固定写像テスト（D6）。
+//! `DefaultEncoding` の固定写像テスト。
 
 use super::model::DefaultEncoding;
 
-/// `Ansi` は CP932（Shift_JIS）へ固定写像される（D6・環境非依存）。
+/// `Ansi` は CP932（Shift_JIS）へ固定写像される（環境非依存）。
 #[test]
 fn ansi_maps_to_shift_jis() {
     let enc = DefaultEncoding::Ansi.to_encoding();
@@ -12,7 +12,7 @@ fn ansi_maps_to_shift_jis() {
     assert!(std::ptr::eq(enc, encoding_rs::SHIFT_JIS));
 }
 
-/// `Utf8` は UTF-8 へ固定写像される（D6・環境非依存）。
+/// `Utf8` は UTF-8 へ固定写像される（環境非依存）。
 #[test]
 fn utf8_maps_to_utf_8() {
     let enc = DefaultEncoding::Utf8.to_encoding();

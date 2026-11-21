@@ -1,8 +1,8 @@
-//! 8 語の見分けと綴りの比べ方の檻（seriko-pattern-calls 要件 1.2・1.5）。
+//! 8 語の見分けと綴りの比べ方の檻。
 
 use super::pattern_word::{PatternWord, canonical_method_name, pattern_word, same_canonical};
 
-/// 8 語を大文字・`-`・`_`・前後の空白を問わずに見分ける（要件 1.2）。
+/// 8 語を大文字・`-`・`_`・前後の空白を問わずに見分ける。
 #[test]
 fn words_are_compared_like_compose_methods() {
     let cases = [
@@ -20,7 +20,7 @@ fn words_are_compared_like_compose_methods() {
     }
 }
 
-/// 8 語以外（重ね方の語・未知の語・空）は Draw（要件 1.5）。
+/// 8 語以外（重ね方の語・未知の語・空）は Draw。
 #[test]
 fn other_words_are_draw() {
     for method in [

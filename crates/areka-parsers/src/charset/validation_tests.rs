@@ -1,20 +1,19 @@
 //! 公開パス契約テスト（charset デコード起点・`decode → parse_kv` 通し）。
 //!
-//! 本ファイルは spec の**統合／公開パス契約層**として、公開エントリ
-//! `crate::charset::decode`（`pub fn decode(&[u8], DefaultEncoding) -> String`）を
+//! 公開エントリ `crate::charset::decode`（`pub fn decode(&[u8], DefaultEncoding) -> String`）を
 //! 起点に、`crate::kv::parse_kv` へ通した end-to-end アサーションで以下を固定する:
-//! - emo2 `descript.txt`（UTF-8）由来リテラル入力の既定 `Utf8` 通し（R7.1/R7.4）。
+//! - emo2 `descript.txt`（UTF-8）由来リテラル入力の既定 `Utf8` 通し。
 //! - `SHIFT_JIS.encode` ラウンドトリップ合成入力での宣言優先デコード
-//!   （宣言 Shift_JIS が既定 `Utf8` に勝ち文字化けしない・R7.2/R7.3/R2.2/D3）。
+//!   （宣言 Shift_JIS が既定 `Utf8` に勝ち文字化けしない）。
 //!
-//! 期待値はすべてリテラル直書き（クレート跨ぎ `include_str!` 不使用・R7.3）。
+//! 期待値はすべてリテラル直書き（クレート跨ぎ `include_str!` 不使用）。
 //! fixture 由来値には採取元の正本ファイル名・行をコメントで明示する。
 
 use crate::charset::{DefaultEncoding, decode};
 use crate::kv::parse_kv;
 
 // ───────────────────────────────────────────────────────────────────
-// 1. emo2 UTF-8 通し（R7.1, R7.4）
+// 1. emo2 UTF-8 通し
 // ───────────────────────────────────────────────────────────────────
 
 /// emo2 `descript.txt`（UTF-8）冒頭のリテラルバイト列を既定 `Utf8` で
@@ -22,8 +21,8 @@ use crate::kv::parse_kv;
 ///
 /// 採取元: `検体 emo2 の同梱バルーン emo2-kakukaku の descript.txt`
 /// L1 `charset,UTF-8` / L2 `type,balloon` / L3 `name,kakukaku for emo-gs`（実測 verbatim）。
-/// charset 宣言 `UTF-8` は既定 `Utf8` と一致し、UTF-8 として素直に読める（R7.1）。
-/// 公開 API パス（`decode`→`parse_kv`）を経由する契約固定（R7.4）。
+/// charset 宣言 `UTF-8` は既定 `Utf8` と一致し、UTF-8 として素直に読める。
+/// 公開 API パス（`decode`→`parse_kv`）を経由する契約固定。
 #[test]
 fn emo2_descript_utf8_roundtrip_pins_type_and_name() {
     // descript.txt L1–L3 由来のリテラル入力（UTF-8）。
@@ -40,22 +39,22 @@ fn emo2_descript_utf8_roundtrip_pins_type_and_name() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// 2. Shift_JIS 合成通し（R7.2, R7.3, R2.2, D3）
+// 2. Shift_JIS 合成通し
 // ───────────────────────────────────────────────────────────────────
 
 /// 宣言 `charset,Shift_JIS` を持つ入力は、既定 `Utf8` を渡しても宣言優先で
 /// Shift_JIS デコードされ、日本語値が文字化けなく復元されることを固定する。
 ///
 /// - 入力は `encoding_rs::SHIFT_JIS.encode(...)` のラウンドトリップで生成した
-///   **合成入力**であり、fixture に SJIS 実ファイルは無い（R7.2）。
+///   **合成入力**であり、fixture に SJIS 実ファイルは無い。
 /// - このテストは `encoding_rs::Encoding::for_label(b"Shift_JIS")` 解決の
 ///   **生き証人**である: ukadoc 表記 `Shift_JIS` のラベル正規化がラベル解決
-///   経路を通り、宣言エンコードが採用されること（既定 `Utf8` に勝つ＝R2.2）を
-///   このケースが担保する（D3）。
-/// - 期待文字列 `かくかく` はリテラル直書きで契約を固定する（R7.3）。
+///   経路を通り、宣言エンコードが採用されること（既定 `Utf8` に勝つ）を
+///   このケースが担保する。
+/// - 期待文字列 `かくかく` はリテラル直書きで契約を固定する。
 #[test]
 fn synthesized_shift_jis_declaration_wins_over_utf8_default() {
-    // SHIFT_JIS ラウンドトリップで合成（fixture に SJIS 実ファイル無し・R7.2）。
+    // SHIFT_JIS ラウンドトリップで合成（fixture に SJIS 実ファイル無し）。
     let (bytes, _enc, had_errors) =
         encoding_rs::SHIFT_JIS.encode("charset,Shift_JIS\r\nname,かくかく\r\n");
     assert!(!had_errors, "合成入力は Shift_JIS へ無損失変換できる前提");

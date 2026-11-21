@@ -1,4 +1,4 @@
-//! pattern定義の欄 2 の原文の檻（seriko-pattern-calls タスク 1.1・要件 2.2・2.3・2.6・2.7・9.2）。
+//! pattern定義の欄 2 の原文の檻。
 //!
 //! 見るのは `decode_animations` の pattern定義の枝の判断の分岐だけ: 欄 2 が `(` で始まり
 //! `)` を含まないときだけ、`)` を含む欄（無ければ行の終わり）までを `,` で継ぎ直して
@@ -30,7 +30,7 @@ fn expected(method: &str, surface_id: i64, target: &str, wait: u32, x: i64, y: i
     }
 }
 
-/// `(0,1)` は 1 つの原文に継ぎ直し、待ち・X・Y はその次から読む（要件 2.2）。
+/// `(0,1)` は 1 つの原文に継ぎ直し、待ち・X・Y はその次から読む。
 #[test]
 fn paren_list_is_rejoined_and_tail_shifts() {
     assert_eq!(
@@ -39,7 +39,7 @@ fn paren_list_is_rejoined_and_tail_shifts() {
     );
 }
 
-/// 欄の前後の空白は字句の段で落ちる。継ぎ直しは `,` だけで繋ぐ（要件 2.2）。
+/// 欄の前後の空白は字句の段で落ちる。継ぎ直しは `,` だけで繋ぐ。
 #[test]
 fn spaced_paren_list_is_rejoined_with_trimmed_fields() {
     assert_eq!(
@@ -48,7 +48,7 @@ fn spaced_paren_list_is_rejoined_with_trimmed_fields() {
     );
 }
 
-/// `(0.1)` は欄の中に `)` があるので継ぎ直さない（要件 2.2）。
+/// `(0.1)` は欄の中に `)` があるので継ぎ直さない。
 #[test]
 fn dotted_paren_list_stays_one_field() {
     assert_eq!(
@@ -57,7 +57,7 @@ fn dotted_paren_list_stays_one_field() {
     );
 }
 
-/// `[ ]` の中のカンマは字句の段で守られ、`[0,1]`・`[0.1]` はそのまま 1 欄（要件 2.2）。
+/// `[ ]` の中のカンマは字句の段で守られ、`[0,1]`・`[0.1]` はそのまま 1 欄。
 #[test]
 fn bracket_lists_stay_one_field() {
     assert_eq!(
@@ -70,7 +70,7 @@ fn bracket_lists_stay_one_field() {
     );
 }
 
-/// 閉じない `(0` は行の終わりまでを継ぎ直し、待ち・X・Y は欠けて 0（要件 2.3・9.2）。
+/// 閉じない `(0` は行の終わりまでを継ぎ直し、待ち・X・Y は欠けて 0。
 #[test]
 fn unclosed_paren_takes_rest_of_line() {
     assert_eq!(
@@ -79,7 +79,7 @@ fn unclosed_paren_takes_rest_of_line() {
     );
 }
 
-/// 欄が欠けた行でも失敗せず、欠けた待ち・X・Y は 0（要件 2.3・9.2）。
+/// 欄が欠けた行でも失敗せず、欠けた待ち・X・Y は 0。
 #[test]
 fn missing_tail_fields_default_to_zero() {
     assert_eq!(
@@ -88,7 +88,7 @@ fn missing_tail_fields_default_to_zero() {
     );
 }
 
-/// 並びでない語の行は今の読みのまま。欄 2 の原文を `target` にも写す（要件 2.6・2.7）。
+/// 並びでない語の行は今の読みのまま。欄 2 の原文を `target` にも写す。
 #[test]
 fn plain_overlay_row_is_unchanged() {
     assert_eq!(

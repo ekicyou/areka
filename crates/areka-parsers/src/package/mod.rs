@@ -1,12 +1,10 @@
 //! package — 展開済みゴーストパッケージの 2 点マウント（SHIORI / shell）解決。
 //!
 //! 本 module は parser ファミリ内で唯一 I/O（`std::fs` 読取のみ）と `Result`
-//! を持つ。理由＝マウントは物理不在という現実の失敗を持つため（Req 5.1・
-//! `sakura` の寛容パースと意図的に非対称）。I/O は `resolve_shell`／`resolve_bind`
+//! を持つ。理由＝マウントは物理不在という現実の失敗を持つため（`sakura` の寛容パースと意図的に非対称）。I/O は `resolve_shell`／`resolve_bind`
 //! サブモジュール内に閉じ込め、`model` は純粋な型定義に留める。この逸脱は局所的・意図的であり、
-//! 後続 `shell-parse` / `balloon-parse` 実装者が兄弟パーサ規約
-//! （`pub fn parse(&str) -> Vec<Model>`・`Result` 無しの寛容パース）を
-//! 誤読しないよう、ここに固定する。
+//! 兄弟パーサ規約（`pub fn parse(&str) -> Vec<Model>`・`Result` 無しの寛容パース）と
+//! 取り違えないよう、ここに書いておく。
 //!
 //! 公開面の集約。中身は次のとおり:
 //! - `model`         : マウントモデル・失敗型の正本（`MountModel` / 付随値型 / `MountError`・

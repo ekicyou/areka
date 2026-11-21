@@ -15,8 +15,8 @@ const LOOPBACK_HOSTS: [&str; 3] = ["localhost", "127.0.0.1", "[::1]"];
 
 /// `origin`・`host` はヘッダの値そのもの（無ければ None）。
 ///
-/// `Origin` は無しか、`http`／`https` の scheme でループバックの host を持つ値だけ通す
-/// （要件 4.1〜4.3）。`Host` はループバックの host だけ通し、無しも拒む（要件 4.4）。
+/// `Origin` は無しか、`http`／`https` の scheme でループバックの host を持つ値だけ通す。
+/// `Host` はループバックの host だけ通し、無しも拒む。
 /// 両方悪いときは `Origin` を名指す。
 pub fn check(origin: Option<&str>, host: Option<&str>) -> Result<(), Reject> {
     if let Some(o) = origin

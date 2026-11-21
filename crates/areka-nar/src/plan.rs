@@ -1,11 +1,11 @@
-//! マニフェストとエントリ列と要求から配置計画を組む（要件 4.8・5.1〜5.8・6.3）。
+//! マニフェストとエントリ列と要求から配置計画を組む。
 //!
 //! 1 本の `.nar` は 1 つ以上の**配置**（[`Placement`]）になる。配置 1 つが
 //! 「インストール済みフォルダ 1 つ」で、どのエントリをどの相対パスへ置くか・
-//! 既存の宛先をどう扱うかまで決まっている。ここから先（タスク 4.2・4.3）は
+//! 既存の宛先をどう扱うかまで決まっている。ここから先は
 //! 判断をせず、この計画のとおりに組み上げて入れ替えるだけになる。
 //!
-//! # 宛先は継ぎ足しでしか組まない（要件 4.8）
+//! # 宛先は継ぎ足しでしか組まない
 //!
 //! 宛先は必ず `root.join("ghost"|"balloon").join(<1 階層の名前>)`、またはそのゴーストの
 //! 宛先の下の `shell\<1 階層の名前>`・`balloon\<1 階層の名前>`（同梱）の形で組む。
@@ -24,7 +24,7 @@
 //!
 //! # ここで触るファイルシステムは 1 つだけ
 //!
-//! 宛先ゴーストが実在するかの**読み取り**だけを行う（要件 5.7 が実在を問うため）。
+//! 宛先ゴーストが実在するかの**読み取り**だけを行う。
 //! 書き込みは 1 バイトもしない。兄弟テストが、全ての固定入力を通した前後で根の
 //! 木が 1 つも変わらないことを突き合わせる。
 
@@ -52,13 +52,13 @@ pub(crate) struct Placement {
     pub kind: ElementKind,
     /// ghost／shell／supplement／balloon 本体は `manifest.name`・同梱バルーンは `directory`。
     pub name: String,
-    /// 宛先の根。計画を組むとき呼び手に 1 回だけ尋ねた答え（要件 5.4・5.5）。同梱は本体の根の写し。
+    /// 宛先の根。計画を組むとき呼び手に 1 回だけ尋ねた答え。同梱は本体の根の写し。
     pub root: PathBuf,
     /// 置き先の絶対パス。
     pub destination: PathBuf,
     pub target_ghost: Option<String>,
     pub existing: ExistingPolicy,
-    /// 最上位の `install.txt` を置かない（`supplement` だけ真＝要件 5.8）。
+    /// 最上位の `install.txt` を置かない（`supplement` だけ真）。
     ///
     /// [`files`](Placement::files) からは既に除いてあるので、組み上げ側が改めて
     /// 判断する必要はない。決めたのが計画の側であることを結果に残すための欄。
@@ -70,7 +70,7 @@ pub(crate) struct Placement {
     /// (エントリ番号, 宛先からの相対パス `/` 区切り)。アーカイブの順。
     pub files: Vec<(usize, String)>,
     /// 作るフォルダの相対パス。名前順で、親は必ず子より前に並ぶ（親は子の接頭辞
-    /// なので名前順がそのまま作れる順になる）。ファイルの親も全段そろう（要件 4.9）。
+    /// なので名前順がそのまま作れる順になる）。ファイルの親も全段そろう。
     pub dirs: Vec<String>,
     /// 本体の下敷きから外す相対のフォルダ（`\` 区切り・例 `balloon\kaku`）。
     /// 宛先の下に入れ子で置く同梱の場所で、本体の確定がそこへ古い木を持ち込まない。
@@ -84,8 +84,8 @@ pub(crate) struct Placement {
 /// 返すのは「置く配置」と「飛ばした同梱」の 2 つの列。置く配置の先頭は必ず本体の
 /// 配置で、その後ろに同梱バルーンが探索の順（無印 → `balloon0` → `balloon1` …）で
 /// 並ぶ。取り出し元の配下にエントリが 1 件も無い同梱は置く配置に入れず、飛ばした同梱の
-/// 列へ探索の順で積む（要件 1.1〜1.3）。2 つの列を足すと、本体 1 つと同梱の全部になる。
-/// 組み上げも確定もこの順で行い、巻き戻しは逆順になる（タスク 4.3）。
+/// 列へ探索の順で積む。2 つの列を足すと、本体 1 つと同梱の全部になる。
+/// 組み上げも確定もこの順で行い、巻き戻しは逆順になる。
 ///
 /// 3 つ目の列は、書庫の `balloon/<directory>/` の項目（取り出し元の外）を本体から除いた
 /// 同梱の名前（記録は公開面が出す）。
@@ -93,7 +93,7 @@ pub(crate) struct Placement {
 /// # Errors
 ///
 /// 宛先ゴーストが渡されない・1 階層の名前でない・根に実在しないとき
-/// [`RefuseReason::TargetGhostMissing`]（要件 5.7）。同梱のせいで断ることは無い（要件 1.7）。
+/// [`RefuseReason::TargetGhostMissing`]。同梱のせいで断ることは無い。
 pub(crate) fn build_plan(
     manifest: &InstallManifest,
     names: &[EntryName],
@@ -144,7 +144,7 @@ pub(crate) fn build_plan(
             continue;
         };
         if nested {
-            // 名指しされた同梱が書庫の同じ名前のフォルダより先（同じ宛先を取り合わない＝要件 7.5）。
+            // 名指しされた同梱が書庫の同じ名前のフォルダより先（同じ宛先を取り合わない）。
             // ここで除くのは取り出し元の外の項目だけ（取り出し元の中は本体が既に除いている）。
             // `balloon/<directory>` そのもの、またはその配下（大小は [`fold`] で無視）。
             let home = [fold(BALLOON_STORE), fold(&companion.directory)];
@@ -169,7 +169,7 @@ pub(crate) fn build_plan(
     Ok((placements, skipped, overridden))
 }
 
-/// 飛ばした同梱 1 件の値を組む（要件 1.4）。`*.source.directory` が書かれていれば
+/// 飛ばした同梱 1 件の値を組む。`*.source.directory` が書かれていれば
 /// その鍵と書かれていた値、無ければ `*.directory` の鍵と置き場の名前。
 fn skipped_companion(companion: &Companion) -> SkippedCompanion {
     let (key, source) = match &companion.source_written {
@@ -189,7 +189,7 @@ fn skipped_companion(companion: &Companion) -> SkippedCompanion {
     }
 }
 
-/// 本体（ゴースト／バルーン／シェル／サプリメント）の配置を組む（要件 5.2・5.5・5.6・5.8）。
+/// 本体（ゴースト／バルーン／シェル／サプリメント）の配置を組む。
 fn body_placement(
     manifest: &InstallManifest,
     names: &[EntryName],
@@ -197,7 +197,7 @@ fn body_placement(
     sources: &[Vec<String>],
     request: &InstallRequest<'_>,
 ) -> Result<Placement, RefuseReason> {
-    // 宛先の根は配置ごとに 1 回だけ尋ねる（要件 5.5）。
+    // 宛先の根は配置ごとに 1 回だけ尋ねる。
     let (kind, root, destination, target_ghost) = match manifest.kind {
         InstallKind::Ghost => {
             let root = request.roots.ghost_root(&manifest.directory);
@@ -218,7 +218,7 @@ fn body_placement(
                 .join(&manifest.directory);
             (ElementKind::Shell, root, destination, Some(target))
         }
-        // サプリメントの宛先はゴースト本体そのもの。`directory` は使わない（要件 5.8）。
+        // サプリメントの宛先はゴースト本体そのもの。`directory` は使わない。
         InstallKind::Supplement => {
             let (target, root) = existing_target_ghost(request)?;
             let destination = root.join(GHOST_STORE).join(&target);
@@ -226,9 +226,9 @@ fn body_placement(
         }
     };
 
-    // 同梱バルーンの取り出し元は本体の側に複製しない（要件 5.3）。フォルダの
+    // 同梱バルーンの取り出し元は本体の側に複製しない。フォルダの
     // エントリそのものも除く——残すと中身の無い抜け殻が本体側に生える。
-    // 取り出し元へ降りる途中のフォルダのエントリも同じ理由で除く（要件 2.4）。
+    // 取り出し元へ降りる途中のフォルダのエントリも同じ理由で除く。
     // その配下に本体のものが在れば、親として同じフォルダが作られる。
     // ゴーストだけでなくシェルにも同じ規則を当てる。同梱を持てるのはこの 2 種で、
     // どちらも「取り出し元は本体の置き場ではない」ことに違いが無い。
@@ -255,13 +255,13 @@ fn body_placement(
     })
 }
 
-/// 同梱バルーン 1 件の配置を組む（要件 5.3・6.3・7.1・7.8）。取り出し元が書庫に無ければ `None`。
+/// 同梱バルーン 1 件の配置を組む。取り出し元が書庫に無ければ `None`。
 ///
 /// 宛先は `ghost_dir`（同梱の入るゴースト）の下の `balloon\<directory>`、根は本体の根。
-/// バルーンの根は尋ねない——根の置き場の同じフォルダ名に触れない（要件 7.3・8.2）。
+/// バルーンの根は尋ねない——根の置き場の同じフォルダ名に触れない。
 /// 入れ子にするか（`within_body`）は呼び手が決める。
 ///
-/// 取り出し元の全ての段を剥がしてバルーン格納先へ写す（要件 2.2）。宛先のパスには
+/// 取り出し元の全ての段を剥がしてバルーン格納先へ写す。宛先のパスには
 /// 取り出し元の値を継ぎ足さない——置く相対パスは検証済みのエントリ名の尾だけになる。
 /// 中の `install.txt` は解釈せず、普通のファイルとして置く（正典 `manual_install`
 /// 「同梱される側には install.txt 不要。あっても無視される」）。
@@ -280,7 +280,7 @@ fn companion_placement(
         |_, components| in_folder(components, source),
         source.len(),
     );
-    // フォルダのエントリだけがあって配下が空の書庫も「取り出せない」に含める（要件 1.2）。
+    // フォルダのエントリだけがあって配下が空の書庫も「取り出せない」に含める。
     // 空のバルーンを作っても利用者には何も届かないので、置かずに飛ばす。根も尋ねない。
     if files.is_empty() && dirs.is_empty() {
         return None;
@@ -301,7 +301,7 @@ fn companion_placement(
 }
 
 /// 呼び出し側が渡した宛先ゴーストの名前を検証し、その根を尋ね、答えの根に実在することを
-/// 確かめる（要件 5.4・5.7）。返すのは名前と答えの根。
+/// 確かめる。返すのは名前と答えの根。
 ///
 /// 渡されない・1 階層の名前でない・実在しないの 3 つを同じ理由で返す。利用者から
 /// 見ればどれも「その名前のゴーストが入っていない」で、`ghost-install` が採る手も
@@ -324,7 +324,7 @@ fn existing_target_ghost(request: &InstallRequest<'_>) -> Result<(String, PathBu
 
 /// エントリが `folder`（`/` 区切りの取り出し元）そのもの、またはその配下か。
 ///
-/// 本体から除く側（要件 5.3）と同梱バルーンへ取り込む側（要件 5.4）が**同じ一言**を
+/// 本体から除く側と同梱バルーンへ取り込む側が**同じ一言**を
 /// 使う。二重に書くと、片方だけを直したときに同じエントリが両方へ入る（複製が残る）か
 /// どちらにも入らない（消える）。取り出し元のフォルダのエントリそのものは、剥がすと
 /// 何も残らないので [`collect_tree`] が落とす。
@@ -341,7 +341,7 @@ fn in_folder(components: &[String], folder: &[String]) -> bool {
 ///
 /// 本体の側はこれをエントリとしては置かない。途中のフォルダの配下に本体のものが
 /// 在れば、[`collect_tree`] が親として同じフォルダを作る。無ければ作られない。
-/// 書庫がフォルダのエントリを持つかどうかで結果が変わらない（要件 2.4）。
+/// 書庫がフォルダのエントリを持つかどうかで結果が変わらない。
 fn leads_to_folder(is_dir: bool, components: &[String], folder: &[String]) -> bool {
     is_dir && components.len() < folder.len() && leading_segments_match(components, folder)
 }
@@ -357,7 +357,7 @@ fn leading_segments_match(components: &[String], folder: &[String]) -> bool {
 
 /// 最上位の `install.txt`（マニフェストそのもの）か。
 ///
-/// 下の階層の `install.txt` は普通のファイル。除くのは最上位の 1 件だけ（要件 5.8）。
+/// 下の階層の `install.txt` は普通のファイル。除くのは最上位の 1 件だけ。
 /// [`EntryName::path`] は区切りを正規化してあるので、**丸ごと `install.txt` に等しい**
 /// という一言が「最上位にある」と「名前が `install.txt` である」の両方を言っている
 /// （`sub/install.txt` は等しくならない）。階層の数を別に数えても同じ判定にしか
@@ -375,7 +375,7 @@ fn is_top_level_install_txt(entry: &EntryName) -> bool {
 ///
 /// フォルダの一覧には⑴フォルダのエントリそのものと⑵全てのファイルの親を全段入れる。
 /// これで「フォルダのエントリを空フォルダとして作る」と「フォルダのエントリが無い
-/// 書庫でもファイルの親を作る」（要件 4.9）が、組み上げ側から見て 1 つの手順になる。
+/// 書庫でもファイルの親を作る」が、組み上げ側から見て 1 つの手順になる。
 ///
 /// `folded` は `names` と同じ順の、[`fold`] で畳んだ段（`accept` に添えて渡す）。
 fn collect_tree(
@@ -392,9 +392,7 @@ fn collect_tree(
         .filter(|(entry, components)| accept(entry, components))
     {
         let tail = &entry.components[strip..];
-        // 取り出し元のフォルダのエントリそのもの。剥がすと何も残らない。`split_last`
-        // で受けるので、最後の要素（＝ファイル名かフォルダ名）が必ず在ることと、
-        // その親の段数が同時に決まる（`tail.len() - 1` の引き算を書かずに済む）。
+        // 取り出し元のフォルダのエントリそのもの。剥がすと何も残らない。
         let Some((_, parents)) = tail.split_last() else {
             continue;
         };

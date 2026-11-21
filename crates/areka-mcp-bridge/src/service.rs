@@ -1,6 +1,6 @@
 //! 届いた要求への答えを決める判断と、中継を回す入口。
 //!
-//! Desktop の側は rmcp のサービスを直接実装し、最初の問い合わせを飛ばして回す（設計 D-2）。
+//! Desktop の側は rmcp のサービスを直接実装し、最初の問い合わせを飛ばして回す。
 //! `initialize`・`server/discover`・`ping` もここへ届き、どの要求が失敗しても次の行を読み続ける。
 
 use std::borrow::Cow;
@@ -30,14 +30,14 @@ use crate::http::HttpError;
 use crate::scan::{Link, Scan, scan};
 use crate::stdio::LineTransport;
 
-/// `AREKA_MCP_PORT=0`（待ち受けない設定）のときのエラーの理由（設計 D-9）。
+/// `AREKA_MCP_PORT=0`（待ち受けない設定）のときのエラーの理由。
 const DISABLED: &str = "AREKA_MCP_PORT=0 (areka does not listen)";
 /// 「居ない」エラーの文に載せる、areka でない相手の名乗りの長さの上限（字の数）。
 const PEER_NAME_MAX: usize = 64;
 /// 届けた要求に本文の無い応答が返った・応答の途中で接続が閉じた、ときのエラーの理由。
 const UNANSWERED: &str = "empty body or connection closed";
 
-/// areka の側へ立てる rmcp のクライアントの持ち主（設計 D-3）。名乗りは `areka-mcp-bridge` と
+/// areka の側へ立てる rmcp のクライアントの持ち主。名乗りは `areka-mcp-bridge` と
 /// 中継の版。areka から届く要求・通知には rmcp の既定で応える（areka は送ってこない）。
 pub struct BridgeClient;
 
@@ -58,7 +58,7 @@ pub struct Linked {
     version: Mutex<Option<ProtocolVersion>>,
 }
 
-/// areka へ届ける途中の失敗の読み分け（設計 D-6）。
+/// areka へ届ける途中の失敗の読み分け。
 enum Failure {
     /// 書く前: 本当の本文を 1 バイトも書いていない（要求は誰にも届いていない）。中身は理由。
     BeforeWrite(String),
@@ -72,7 +72,7 @@ pub struct Bridge {
     config: Config,
     cache: Cache,
     /// つないだ先。`None` は、まだ探していないか、探して居なかった。要求は `Arc` を写して使い、
-    /// 鍵は届ける前に放す（長いツールの間も、ほかの要求は待たない＝設計 D-13）。
+    /// 鍵は届ける前に放す（長いツールの間も、ほかの要求は待たない）。
     link: Mutex<Option<Arc<Linked>>>,
 }
 
@@ -86,8 +86,8 @@ impl Bridge {
         }
     }
 
-    /// つないだ先。無ければ候補を探し、見つかれば覚えて、areka のサーバーの情報を控えに書く
-    /// （要件 3.1）。探す間は鍵を持つので、同時に届いた要求が探索を 2 度走らせない。
+    /// つないだ先。無ければ候補を探し、見つかれば覚えて、areka のサーバーの情報を控えに書く。
+    /// 探す間は鍵を持つので、同時に届いた要求が探索を 2 度走らせない。
     /// 居なければ、areka でない名乗りが応えた番号と名乗りを返す。
     async fn ensure_link(&self) -> Result<Arc<Linked>, Vec<(u16, String)>> {
         let mut slot = self.link.lock().await;
@@ -115,8 +115,8 @@ impl Bridge {
     }
 
     /// つながっているときの答え。`initialize`・`server/discover` は areka へ送らず、つないだときに
-    /// 得た areka の情報で答える（設計 D-8。Desktop の `initialize` を areka へ流さないことは、
-    /// 送り手の確かめの前提でもある＝設計 D-4）。ほかは areka へ届ける。
+    /// 得た areka の情報で答える（Desktop の `initialize` を areka へ流さないことは、
+    /// 送り手の確かめの前提でもある）。ほかは areka へ届ける。
     async fn answer(
         &self,
         linked: &Arc<Linked>,
@@ -141,10 +141,10 @@ impl Bridge {
         Ok(answer)
     }
 
-    /// areka が居ないときの答え（設計「areka が居ないときの答え」の表）。最初の問い合わせと
-    /// `tools/list` は、当たる控えがあれば控えで（要件 3.4）、無ければ（読めない控え・名乗りの無い
-    /// 控えを含む）中継が自分で持っている組み込みの答えで答える（要件 3.5・設計 D-18）。`ping` は
-    /// 自分で空の結果（要件 3.7）。ほかの要求には「居ない」エラー（要件 3.6）。
+    /// areka が居ないときの答え。最初の問い合わせと
+    /// `tools/list` は、当たる控えがあれば控えで、無ければ（読めない控え・名乗りの無い
+    /// 控えを含む）中継が自分で持っている組み込みの答えで答える。`ping` は
+    /// 自分で空の結果。ほかの要求には「居ない」エラー。
     fn absent(
         &self,
         request: &ClientRequest,
@@ -190,10 +190,10 @@ impl Bridge {
         Err(errors::server_not_available(&reason))
     }
 
-    /// 要求を areka へ届けて、結果をそのまま返す。届いたかもしれない要求は、どの失敗の後も送り直さない
-    /// （要件 4.5）。書く前の失敗（覚えた番号に接続できない・名乗りが違う）は、要求が誰にも届いて
-    /// いないので、探し直して、見つかれば同じ要求（`_meta` も同じ）を初めて 1 回だけ送る（要件 2.10・
-    /// 2.11・設計 D-6）。見つからなければ、居ないときの答え。
+    /// 要求を areka へ届けて、結果をそのまま返す。届いたかもしれない要求は、どの失敗の後も送り直さない。
+    /// 書く前の失敗（覚えた番号に接続できない・名乗りが違う）は、要求が誰にも届いて
+    /// いないので、探し直して、見つかれば同じ要求（`_meta` も同じ）を初めて 1 回だけ送る。
+    /// 見つからなければ、居ないときの答え。
     async fn forward(
         &self,
         linked: &Arc<Linked>,
@@ -220,8 +220,8 @@ impl Bridge {
 
     /// 要求をこのつなぎ先へ 1 回送り、応答の上限つきで待つ。要求の `_meta` は rmcp が外して渡して
     /// くるので、付け直して届ける（`2026-07-28` で話す Desktop の要求は、rmcp のクライアントがその版の
-    /// 札を付けて、areka にもその版の要求として届く＝要件 1.10）。`tools/list` のエラーでない結果は、
-    /// 返す前に控えに書く（要件 3.2）。書く前の失敗は、覚えを捨ててから返す。
+    /// 札を付けて、areka にもその版の要求として届く）。`tools/list` のエラーでない結果は、
+    /// 返す前に控えに書く。書く前の失敗は、覚えを捨ててから返す。
     async fn deliver(
         &self,
         linked: &Arc<Linked>,
@@ -245,7 +245,7 @@ impl Bridge {
                 }
                 Ok(result)
             }
-            // areka の JSON-RPC のエラーは、番号・文・データを変えずに返す（要件 4.3）。
+            // areka の JSON-RPC のエラーは、番号・文・データを変えずに返す。
             Err(ServiceError::McpError(error)) => {
                 debug!(
                     port = linked.port,
@@ -262,7 +262,7 @@ impl Bridge {
                         info!(port = linked.port, %reason, "[bridge] the request did not reach areka");
                         self.forget(linked).await;
                     }
-                    // 働き手が終わったつなぎ先は二度と届けられない。次の要求が探し直す（要件 4.6）。
+                    // 働き手が終わったつなぎ先は二度と届けられない。次の要求が探し直す。
                     Failure::AfterWrite(_) if matches!(error, ServiceError::TransportClosed) => {
                         self.forget(linked).await;
                     }
@@ -275,7 +275,7 @@ impl Bridge {
 
     /// 要求の `_meta` の版が rmcp のクライアントの今の版と違えば、先に同じ `_meta` の `server/discover` を
     /// 1 つ送り、答えを捨てる。rmcp は版の変わる要求の答えが返るまでほかの要求を送らないので、その要求を
-    /// 短いものにする（設計 D-13 の例外＝版の違う最初の要求が止める間を、短い `server/discover` へ移す）。
+    /// 短いものにする（版の違う最初の要求が止める間を、短い `server/discover` へ移す）。
     /// 届いたかは問わない（失敗は、続けて送る本当の要求が読み分ける）。
     async fn align(&self, linked: &Linked, meta: &RequestMetaObject) {
         let Some(wanted) = meta.protocol_version() else {
@@ -334,20 +334,18 @@ impl Service<RoleServer> for Bridge {
         request: ClientRequest,
         context: RequestContext<RoleServer>,
     ) -> Result<ServerResult, ErrorData> {
-        // ⑴ 待ち受けない設定（候補が空）: 探さず、控えも使わず、`ping` にもエラー（要件 2.6）。
+        // 待ち受けない設定（候補が空）: 探さず、控えも使わず、`ping` にもエラー。
         if self.config.candidates.is_empty() {
             return Err(errors::server_not_available(DISABLED));
         }
-        // ⑵ つなぐ先を決める（無ければ探す。居ないと答えた後も、要求のたびに探す＝要件 3.9）。
+        // つなぐ先を決める（無ければ探す。居ないと答えた後も、要求のたびに探す）。
         match self.ensure_link().await {
-            // ⑶ つながっている。
             Ok(linked) => self.answer(&linked, request, context.meta).await,
-            // ⑷ 居ない。
             Err(others) => self.absent(&request, &context.meta, &others),
         }
     }
 
-    /// つながっていれば、`notifications/initialized` と取り消しの通知のほかを届ける（設計 D-10）。
+    /// つながっていれば、`notifications/initialized` と取り消しの通知のほかを届ける。
     /// 失敗は記録だけ。つなぐ先が無ければ何もしない（通知のためには探さない）。標準出力には
     /// 何も出ない。
     async fn handle_notification(
@@ -385,9 +383,9 @@ impl Service<RoleServer> for Bridge {
     }
 }
 
-/// 届ける途中の失敗を読み分ける（設計 D-6）。書く前は、送り手の失敗に戻せて、本当の本文を書く前と
+/// 届ける途中の失敗を読み分ける。書く前は、送り手の失敗に戻せて、本当の本文を書く前と
 /// 分かるものだけ。送り手の書いた後の失敗・応答の上限・送り手の失敗に戻せない形（rmcp 自身の失敗）は
-/// 書いた後（安全側＝送り直さない）で、要件 4.1・4.2・4.4 のエラーにして、理由を標準エラーに残す。
+/// 書いた後（安全側＝送り直さない）として扱い、エラーにして、理由を標準エラーに残す。
 fn classify(port: u16, error: &ServiceError) -> Failure {
     let sent = match error {
         ServiceError::TransportSend(sent) => sent.error.downcast_ref(),
@@ -417,7 +415,7 @@ fn classify(port: u16, error: &ServiceError) -> Failure {
 }
 
 /// 最初の問い合わせ（`initialize`・`server/discover`）の答えを、areka のサーバーの情報から組む。
-/// つながっているときは areka の今の情報から、居ないときは控えの情報から、同じに組む（設計 D-8）。
+/// つながっているときは areka の今の情報から、居ないときは控えの情報から、同じに組む。
 /// 名乗りの無い情報・最初の問い合わせでない要求からは組まない。組んだら、相手が話した版
 /// （`initialize` は要求の版、`server/discover` は `_meta` の版）と返した版を 1 行残す。
 fn first_answer(
@@ -451,7 +449,7 @@ fn first_answer(
     }
 }
 
-/// 組み込みのサーバーの情報（控えの `server-info.json` と同じ型・設計 D-18）: 名乗り・版・説明の文は
+/// 組み込みのサーバーの情報（控えの `server-info.json` と同じ型）: 名乗り・版・説明の文は
 /// `areka_mcp` の値で、できることは受け口と同じ「ツールだけ」。版の欄は読まれない（答えの版は
 /// [`first_answer`] が要求から決める）。
 fn builtin_info() -> ServerPeerInfo {
@@ -461,7 +459,7 @@ fn builtin_info() -> ServerPeerInfo {
         .with_instructions(INSTRUCTIONS)
 }
 
-/// 組み込みのツールの一覧（控えの `tools.json` と同じ型・設計 D-18）: `areka_mcp` のツールの定義の列を、
+/// 組み込みのツールの一覧（控えの `tools.json` と同じ型）: `areka_mcp` のツールの定義の列を、
 /// 受け口が登録表から組むのと同じ形で rmcp の型に写す。呼ばれるたびに組む（覚えない）。
 fn builtin_tools() -> ListToolsResult {
     let tool = |spec: ToolSpec| {
@@ -487,8 +485,8 @@ fn in_dialect_of(mut tools: ListToolsResult, meta: &RequestMetaObject) -> ListTo
     tools
 }
 
-/// 「居ない」エラーの理由の文（設計 D-9）: 候補の番号を候補の順に並べ、areka でない名乗りが応えた番号と
-/// 名乗りを続ける（要件 3.6）。
+/// 「居ない」エラーの理由の文: 候補の番号を候補の順に並べ、areka でない名乗りが応えた番号と
+/// 名乗りを続ける。
 fn not_found(candidates: &[u16], others: &[(u16, String)]) -> String {
     let ports: Vec<String> = candidates.iter().map(u16::to_string).collect();
     let mut reason = format!(
@@ -509,7 +507,7 @@ fn not_found(candidates: &[u16], others: &[(u16, String)]) -> String {
     reason
 }
 
-/// `initialize` に返す版（設計 D-2・areka の受け口と同じ決まり）: 要求の版が `initialize` を持つ
+/// `initialize` に返す版（areka の受け口と同じ決まり）: 要求の版が `initialize` を持つ
 /// 既知の版ならその版、ほか（`2026-07-28`・知らない版）は `2025-11-25`。
 fn negotiated(requested: ProtocolVersion) -> ProtocolVersion {
     if requested.has_initialize() && ProtocolVersion::KNOWN_VERSIONS.contains(&requested) {

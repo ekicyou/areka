@@ -1,6 +1,6 @@
-//! 実ソケットのテスト: 待受・候補の飛ばし・束ねの失敗・終了（要件 1・2.4・2.9・9.3・9.4）。
+//! 実ソケットのテスト: 待受・候補の飛ばし・束ねの失敗・終了。
 //!
-//! ポートは毎回 OS に割り当てさせる（固定の番号は使わない＝要件 9.1）。
+//! ポートは毎回 OS に割り当てさせる（固定の番号は使わない）。
 //! 記録は `capture` で数える（`start` と `Drop` の記録は呼び出し側のスレッドで出る）。
 
 use std::net::{TcpListener, TcpStream};
@@ -29,7 +29,7 @@ fn assert_ping(addr: std::net::SocketAddr) {
     assert_eq!(response.json()["result"], serde_json::json!({}));
 }
 
-/// (要件 1.1, 1.2) 待受を始めると info が 1 件・URL は `127.0.0.1` の実番号の `/api/mcp/v1`。
+/// 待受を始めると info が 1 件・URL は `127.0.0.1` の実番号の `/api/mcp/v1`。
 /// 先頭の候補で束ねたので移った旨（`skipped`）は無く、debug も 0 件。
 #[test]
 fn listen_logs_info_with_url() {
@@ -49,7 +49,7 @@ fn listen_logs_info_with_url() {
     assert!(of_level(&events, Level::WARN).is_empty(), "{events:?}");
 }
 
-/// (要件 1.3, 1.4, 1.10, 9.3) 候補が使用中の 1 つだけ（`AREKA_MCP_PORT` の指定と同じ形）では、
+/// 候補が使用中の 1 つだけ（`AREKA_MCP_PORT` の指定と同じ形）では、
 /// 飛ばした debug 1 件と error 1 件（試した候補と理由）・待ち受けない取っ手・処理は続く。
 #[test]
 fn bind_failure_logs_error_and_returns_off() {
@@ -81,7 +81,7 @@ fn bind_failure_logs_error_and_returns_off() {
     drop(occupied);
 }
 
-/// (要件 1.2, 1.10, 2.1, 2.9, 9.3) 使用中の候補を飛ばして次の候補（OS に任せる）で待ち受ける:
+/// 使用中の候補を飛ばして次の候補（OS に任せる）で待ち受ける:
 /// 飛ばした debug 1 件（番号と理由）・info 1 件（実番号の URL と移った旨）・error 0 件。
 #[test]
 fn default_candidates_skip_taken_port() {
@@ -122,7 +122,7 @@ fn default_candidates_skip_taken_port() {
     drop(occupied);
 }
 
-/// (要件 1.3, 1.10, 2.9, 9.3) 候補がすべて使用中なら debug 2 件・error 1 件（試した候補と最後の理由）・待ち受けない。
+/// 候補がすべて使用中なら debug 2 件・error 1 件（試した候補と最後の理由）・待ち受けない。
 #[test]
 fn all_candidates_taken_logs_one_error() {
     let first = TcpListener::bind("127.0.0.1:0").expect("空きポートを占める（1 つ目）");
@@ -158,13 +158,13 @@ fn all_candidates_taken_logs_one_error() {
     drop((first, second));
 }
 
-/// (要件 2.4) 候補が空（`AREKA_MCP_PORT` が `0`）では info 1 件・待ち受けない（落としても閉じる記録は出ない）。
+/// 候補が空（`AREKA_MCP_PORT` が `0`）では info 1 件・待ち受けない（落としても閉じる記録は出ない）。
 #[test]
 fn disabled_port_logs_info_and_no_thread() {
     let (server, events) = capture(|| start(&[], ToolRegistry::default(), None));
     assert_eq!(of_level(&events, Level::INFO).len(), 1, "{events:?}");
     assert_eq!(events.len(), 1, "{events:?}");
-    // 理由（環境変数の名前）も載せる（要件 2.4）。
+    // 理由（環境変数の名前）も載せる。
     assert!(events[0].message().contains(crate::PORT_ENV), "{events:?}");
     assert!(server.local_addr().is_none());
     // スレッドも待受も無いので、畳む記録（info「閉じた」）も出ない。
@@ -172,7 +172,7 @@ fn disabled_port_logs_info_and_no_thread() {
     assert!(drop_events.is_empty(), "{drop_events:?}");
 }
 
-/// (要件 1.5) 接続 A を開いたまま（何も送らない）でも、接続 B の `ping` が答えを得る。
+/// 接続 A を開いたまま（何も送らない）でも、接続 B の `ping` が答えを得る。
 #[test]
 fn two_connections_interleave() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -182,7 +182,7 @@ fn two_connections_interleave() {
     drop(idle);
 }
 
-/// (要件 1.7, 1.8, 1.9, 9.4) 接続を開いたまま畳んでも `SHUTDOWN_WAIT` 以内に戻り、info 1 件（warn 0 件）。
+/// 接続を開いたまま畳んでも `SHUTDOWN_WAIT` 以内に戻り、info 1 件（warn 0 件）。
 /// info は受付の口を落とした後の合図を受けて出るので、待受が閉じたこともこの 1 件で見る。
 #[test]
 fn drop_with_open_connection_returns_within_bound() {
@@ -202,7 +202,7 @@ fn drop_with_open_connection_returns_within_bound() {
     drop(idle);
 }
 
-/// (要件 1.8) 終わりの合図が来ない取っ手を落とすと、`SHUTDOWN_WAIT` まで待って切り離し、
+/// 終わりの合図が来ない取っ手を落とすと、`SHUTDOWN_WAIT` まで待って切り離し、
 /// warn 1 件・info 0 件。落とすのは別のスレッドで、テストは期限つきで待つ（待ちが期限なしなら赤）。
 #[test]
 fn drop_detaches_when_the_thread_does_not_finish_in_time() {
@@ -240,7 +240,7 @@ fn drop_detaches_when_the_thread_does_not_finish_in_time() {
     assert!(of_level(&events, Level::INFO).is_empty(), "{events:?}");
 }
 
-/// (要件 1.10) `accept` が失敗したら warn 1 件を残し、`ACCEPT_RETRY_WAIT` だけ待ってから戻る。
+/// `accept` が失敗したら warn 1 件を残し、`ACCEPT_RETRY_WAIT` だけ待ってから戻る。
 #[test]
 fn an_accept_error_waits_before_the_next_try() {
     let rt = tokio::runtime::Builder::new_current_thread()

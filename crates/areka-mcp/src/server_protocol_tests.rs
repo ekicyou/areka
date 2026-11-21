@@ -1,5 +1,5 @@
-//! 実ソケットのテスト: `initialize`〜`server/discover`・`Accept`・本文の上限（要件 3・5）、
-//! `params` の欠かせないメソッドの答え（spec: areka-P0-mcp-receiver-bugs）。
+//! 実ソケットのテスト: `initialize`〜`server/discover`・`Accept`・本文の上限、
+//! `params` の欠かせないメソッドの答え。
 //!
 //! 差の一覧（`doc/ssp-mcp/transport-diff-areka.md`）に写す値は、各テストの assert に
 //! 具体の値で固定する（別の記録は作らない）。測った版は rmcp 3.9.0。
@@ -13,7 +13,7 @@ use crate::testkit::{
     rpc, serve, stateless_meta,
 };
 
-/// `initialize` を持つ旧式の 4 版（要件 3.1）。
+/// `initialize` を持つ旧式の 4 版。
 const LEGACY_VERSIONS: [&str; 4] = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 /// rmcp が対応する 5 版（`server/discover` の `supportedVersions` に古い順で並ぶ）。
 pub(super) const SUPPORTED_VERSIONS: [&str; 5] = [
@@ -29,7 +29,7 @@ fn initialize(version: &str) -> String {
     rpc("initialize", Some(1), Some(initialize_params(version)))
 }
 
-/// (要件 3.1) 旧式の 4 版は要求どおりの版・`tools` だけの能力・serverInfo・instructions。
+/// 旧式の 4 版は要求どおりの版・`tools` だけの能力・serverInfo・instructions。
 #[test]
 fn initialize_returns_requested_version_for_each_of_four() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -54,7 +54,7 @@ fn initialize_returns_requested_version_for_each_of_four() {
     }
 }
 
-/// (要件 3.1・設計 B-11) `initialize` を持たない `2026-07-28` は `2025-11-25` へ倒れる（成功・200）。
+/// `initialize` を持たない `2026-07-28` は `2025-11-25` へ倒れる（成功・200）。
 /// 無状態版の形（`_meta`＋ヘッダ）で送っても同じ（差の一覧へ。SSP は 400）。
 #[test]
 fn initialize_with_no_initialize_version_falls_back_to_2025_11_25() {
@@ -73,7 +73,7 @@ fn initialize_with_no_initialize_version_falls_back_to_2025_11_25() {
     assert_eq!(result["protocolVersion"], "2025-11-25", "{result}");
 }
 
-/// (要件 3.2) 未知の版 `1999-01-01` も失敗にせず、測った値は `2025-11-25`（差の一覧へ）。
+/// 未知の版 `1999-01-01` も失敗にせず、測った値は `2025-11-25`（差の一覧へ）。
 #[test]
 fn initialize_unknown_version_falls_back() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -81,7 +81,7 @@ fn initialize_unknown_version_falls_back() {
     assert_eq!(result["protocolVersion"], "2025-11-25", "{result}");
 }
 
-/// (要件 3.3) `id` の無い通知は 202・本文 0 バイト。
+/// `id` の無い通知は 202・本文 0 バイト。
 #[test]
 fn initialized_notification_is_202_without_body() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -90,7 +90,7 @@ fn initialized_notification_is_202_without_body() {
     assert!(response.body.is_empty(), "{response:?}");
 }
 
-/// (要件 3.8・5.1) バッチ（JSON の配列）は rmcp のまま 415・平文（1 件の形として読めない。
+/// バッチ（JSON の配列）は rmcp のまま 415・平文（1 件の形として読めない。
 /// JSON-RPC のエラーではない＝差の一覧へ。SSP は 400・`-32600`）。
 #[test]
 fn batch_array_body_is_415() {
@@ -107,7 +107,7 @@ fn batch_array_body_is_415() {
     );
 }
 
-/// (要件 3.8) `Content-Type` が JSON でない本文は 415。
+/// `Content-Type` が JSON でない本文は 415。
 #[test]
 fn non_json_content_type_is_415() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -121,7 +121,7 @@ fn non_json_content_type_is_415() {
     assert_eq!(response.status, 415, "{response:?}");
 }
 
-/// (要件 3.9) `initialize` を経ない `ping`／`tools/list` も 200・応答に `Mcp-Session-Id` が無い。
+/// `initialize` を経ない `ping`／`tools/list` も 200・応答に `Mcp-Session-Id` が無い。
 #[test]
 fn ping_without_initialize_and_without_session_id() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -132,7 +132,7 @@ fn ping_without_initialize_and_without_session_id() {
     }
 }
 
-/// (要件 3.10) 応答は `application/json` の単発（JSON 1 件）で、SSE ではない。
+/// 応答は `application/json` の単発（JSON 1 件）で、SSE ではない。
 #[test]
 fn response_is_single_application_json() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -146,7 +146,7 @@ fn response_is_single_application_json() {
     );
 }
 
-/// (要件 3.11) `GET /api/mcp/v1` は 405・`Allow: POST`・フォーム無し（差の一覧へ）。
+/// `GET /api/mcp/v1` は 405・`Allow: POST`・フォーム無し（差の一覧へ）。
 #[test]
 fn get_v1_has_no_form() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -159,7 +159,7 @@ fn get_v1_has_no_form() {
     );
 }
 
-/// (要件 3.12) 無状態版の `server/discover`（本文の `_meta` と `MCP-Protocol-Version: 2026-07-28`）。
+/// 無状態版の `server/discover`（本文の `_meta` と `MCP-Protocol-Version: 2026-07-28`）。
 /// 測った欄（差の一覧へ）: `supportedVersions` は 5 版・`capabilities` は `tools` だけ・
 /// `instructions`・`ttlMs: 0`・`cacheScope: "private"`・`resultType: "complete"`・
 /// serverInfo は `_meta.io.modelcontextprotocol/serverInfo`。本文と食い違う `Mcp-Method` は 400・`-32020`。
@@ -207,7 +207,7 @@ fn server_discover_stateless() {
     );
 }
 
-/// (要件 3.15・設計 B-12) 無状態版の `tools/list` は `ttlMs: 0`・`cacheScope: "private"`・
+/// 無状態版の `tools/list` は `ttlMs: 0`・`cacheScope: "private"`・
 /// `resultType: "complete"` を付ける（2026-07-28 の必須欄。無いと Claude Code 2.1.283 が拒む）。
 /// 旧式（ヘッダも `_meta` も無い）の `tools/list` にはどちらの欄も無い（差の一覧へ）。
 #[test]
@@ -225,7 +225,7 @@ fn tools_list_stateless_has_cache_hints() {
     assert_eq!(legacy["tools"], json!([]), "{legacy}");
 }
 
-/// (要件 3.13) `MCP-Protocol-Version` が無い・旧式の 4 版のどれでも、`ping`・`tools/list` は同じ答え。
+/// `MCP-Protocol-Version` が無い・旧式の 4 版のどれでも、`ping`・`tools/list` は同じ答え。
 #[test]
 fn protocol_version_header_old_or_missing_is_passthrough() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -244,7 +244,7 @@ fn protocol_version_header_old_or_missing_is_passthrough() {
     }
 }
 
-/// (要件 3.13) 5 版のどれでもないヘッダ値は rmcp のまま 400・平文（差の一覧へ）。
+/// 5 版のどれでもないヘッダ値は rmcp のまま 400・平文（差の一覧へ）。
 /// `2026-07-28` で `_meta` の無い `ping` は 400・`-32020`（`Mcp-Method` 欠落）、
 /// `Mcp-Method` を付けると 400・`-32602`（`_meta` 欠落）。
 #[test]
@@ -289,7 +289,7 @@ fn unknown_protocol_version_header_is_rejected() {
     );
 }
 
-/// (要件 5.1・設計 B-8) `Accept` の無い `ping` は rmcp が 406 で拒む（差の一覧へ）。
+/// `Accept` の無い `ping` は rmcp が 406 で拒む（差の一覧へ）。
 /// 片方だけ（`application/json`／`text/event-stream`）でも 406・同じ平文。
 #[test]
 fn accept_header_missing_is_406() {
@@ -331,7 +331,7 @@ fn post_blank_body(len: usize) -> Response {
     )
 }
 
-/// (要件 5.1・設計 B-7) 上限（4 MiB）を 1 バイト超えた本文は自前の 413（差の一覧へ）。
+/// 上限（4 MiB）を 1 バイト超えた本文は自前の 413（差の一覧へ）。
 /// rmcp 3.9.0 の 413 は本文 `Payload Too Large: request body exceeds 4194304 bytes`・`Content-Type` なし
 /// なので、本文と `Content-Type` で rmcp へ渡す前に断ったことを見分ける。
 #[test]
@@ -346,7 +346,7 @@ fn body_over_limit_is_413() {
     assert_eq!(String::from_utf8_lossy(&response.body), "Payload Too Large");
 }
 
-/// (要件 5.1・設計 B-7) 上限ちょうどの本文は 413 にならない（上限は「超えたら」）。
+/// 上限ちょうどの本文は 413 にならない（上限は「超えたら」）。
 #[test]
 fn a_body_of_exactly_the_limit_is_not_413() {
     let response = post_blank_body(MAX_BODY_BYTES);
@@ -374,7 +374,7 @@ pub(super) fn speak(
     post_rpc(addr, headers, &rpc(method, Some(id), params))
 }
 
-/// (spec: areka-P0-mcp-receiver-bugs 要件 1.1・1.2・1.4・2.1・2.3) `params` の欠かせない 3 つのメソッドに形の合わない `params` を送ると、
+/// `params` の欠かせない 3 つのメソッドに形の合わない `params` を送ると、
 /// 5 つの版のどれでも `{"code":-32602,"message":"invalid params for <m>"}`（`data`・`result` なし）。
 /// HTTP の状態は未登録の名前の `tools/call` と同じ（どの版も 200。rmcp 3.9.0 は `_meta` の揃った `-32602` を 200 で返す）。
 /// `params` なしは旧式の 4 版だけ（`2026-07-28` は `_meta` を `params` に入れるので送れない）。
@@ -425,7 +425,7 @@ fn malformed_params_of_params_required_methods_are_invalid_params_in_every_versi
     }
 }
 
-/// (spec: areka-P0-mcp-receiver-bugs 要件 1.3・1.6・2.1・2.3) 受け付けないメソッドは 5 つの版のどれでも今のまま `-32601`（文は名前）。
+/// 受け付けないメソッドは 5 つの版のどれでも今のまま `-32601`（文は名前）。
 /// `2026-07-28` の `ping` も `-32601`・404。`tools/list` の形の違う `cursor` は受け流して成功のまま。
 #[test]
 fn methods_not_accepted_keep_method_not_found_and_list_methods_keep_passing_in_every_version() {

@@ -1,12 +1,11 @@
-//! 入れ子の同梱（ゴーストの中のバルーン）の組み上げと確定の兄弟テスト
-//! （本仕様 要件 7.7・8.1・10.3）。
+//! 入れ子の同梱（ゴーストの中のバルーン）の組み上げと確定の兄弟テスト。
 //!
 //! 助手と固定入力は [`super`]（`install_commit_tests.rs`）から借りる。分けたのは
 //! 1 ファイル 1,000 行の上限に収めるため。
 
 use super::*;
 
-// ---- 入れ子の同梱（ゴーストの中のバルーン＝要件 7.7・8.1・10.3） ----
+// ---- 入れ子の同梱（ゴーストの中のバルーン） ----
 
 /// 同梱を `<ゴースト>\balloon\test-balloon` へ入れ子に置く形へ組み替え、その宛先を返す。
 ///
@@ -46,7 +45,7 @@ fn companion_tree(old: bool) -> BTreeMap<String, Vec<u8>> {
     expect_tree(&entries)
 }
 
-/// 本体 `refresh,1`＋古い同梱在りでも、同梱は巻き戻らずに入る（要件 7.7・8.1）。
+/// 本体 `refresh,1`＋古い同梱在りでも、同梱は巻き戻らずに入る。
 ///
 /// 本体の確定で古い同梱は退避ごと宛先から消え、同梱の宛先は空く。組み上げのときの
 /// 別（`Overlaid`）のまま退避の 2 手を踏むと、無い宛先の退避で失敗して全体が戻る。
@@ -102,7 +101,7 @@ fn a_nested_companion_survives_a_refreshing_body() {
     );
 }
 
-/// 本体 `Overlay`＋同梱 `balloon.refresh,1` なら、同梱だけ作り直される（要件 8.1）。
+/// 本体 `Overlay`＋同梱 `balloon.refresh,1` なら、同梱だけ作り直される。
 #[test]
 fn a_refreshing_companion_inside_an_overlaid_body_is_rebuilt_alone() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
@@ -128,7 +127,7 @@ fn a_refreshing_companion_inside_an_overlaid_body_is_rebuilt_alone() {
     );
 }
 
-/// 同梱に `balloon.refresh` が無ければ、古いファイルが残り新しいものが重なる（要件 8.1）。
+/// 同梱に `balloon.refresh` が無ければ、古いファイルが残り新しいものが重なる。
 #[test]
 fn a_companion_without_its_own_refresh_overlays_the_old_files() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
@@ -156,7 +155,7 @@ fn a_companion_without_its_own_refresh_overlays_the_old_files() {
     );
 }
 
-/// 初めてのゴーストでも、同梱はゴーストの中に入る（要件 7.7）。
+/// 初めてのゴーストでも、同梱はゴーストの中に入る。
 #[test]
 fn a_first_time_ghost_gets_its_nested_companion() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
@@ -197,13 +196,13 @@ fn a_first_time_ghost_gets_its_nested_companion() {
     );
 }
 
-/// 同梱の確定が失敗したら全体が戻り、古い同梱は元のまま（要件 7.7・10.3）。
+/// 同梱の確定が失敗したら全体が戻り、古い同梱は元のまま。
 ///
 /// 組み上げた同梱の木を掴んでおき、同梱の `rename` だけを失敗させる。戻しは今の
 /// 逆順（同梱 → 本体）で、本体の退避ごと古い同梱がバイト列まで元へ戻る。
 #[test]
 fn a_failing_nested_companion_rolls_the_whole_ghost_back() {
-    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る。
     crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let ghost = work.path().join("ghost").join("test-ghost");
@@ -254,14 +253,14 @@ fn a_failing_nested_companion_rolls_the_whole_ghost_back() {
     drop(handle);
 }
 
-/// 置いた後の同梱より後で失敗したら、置いた同梱を消してから本体を戻す（要件 7.7・10.3）。
+/// 置いた後の同梱より後で失敗したら、置いた同梱を消してから本体を戻す。
 ///
 /// 同梱を 2 つ入れ子にし、2 つ目の `rename` だけを失敗させる。1 つ目の同梱は本体の
 /// 宛先の下に置かれているので、戻しが本体を先に戻すと、その後の同梱の消しが戻した
 /// 古い同梱を消してしまう。逆順なら古い同梱がバイト列まで元へ戻る。
 #[test]
 fn a_later_failure_removes_the_nested_companion_before_restoring_the_body() {
-    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る。
     crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let ghost = work.path().join("ghost").join("test-ghost");

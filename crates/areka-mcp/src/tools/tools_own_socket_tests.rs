@@ -1,6 +1,5 @@
 //! 本番の 11 本の登録（[`all_entrances`]）の実ソケットのテスト（一覧・引数の検査・指示文・型つきの
-//! 呼び出しの往復・待ちの間の `ping`）。spec: areka-P0-mcp-author-tools（要件 1.1〜1.5・1.7・2.1・4.1・
-//! 5.1〜5.3）・areka-P0-mcp-tool-entrances（要件 5.1・5.3・5.4・6.3・6.8）。
+//! 呼び出しの往復・待ちの間の `ping`）。
 //!
 //! `127.0.0.1` の空きポートだけを使い、ネットへは出ない。受け手はテストのスレッドの偽物。旧式（ヘッダも
 //! `_meta` も無い）と無状態版（`2026-07-28`）の両方の経路で確かめる。
@@ -18,7 +17,7 @@ use crate::testkit::{
     initialize_params, post_both, post_legacy, post_stateless, saved_list, serve,
 };
 
-/// (要件 1.1・1.3・1.4・1.5・5.1・5.3) `tools/list` は 11 本。先頭 10 本は保存した SSP の定義と配列ごと一致
+/// `tools/list` は 11 本。先頭 10 本は保存した SSP の定義と配列ごと一致
 /// （並び・欄の過不足を 1 度に見る）、11 本目は `check_script` の定義そのもので、欄は 4 つだけ。
 #[test]
 fn tools_list_is_ssp_ten_then_check_script() {
@@ -49,7 +48,7 @@ fn tools_list_is_ssp_ten_then_check_script() {
     }
 }
 
-/// (要件 2.1・5.2) 引数が全部ある `check_script` は、両方の経路で型の付いた `ToolCall::CheckScript` として
+/// 引数が全部ある `check_script` は、両方の経路で型の付いた `ToolCall::CheckScript` として
 /// 受け手へ届き、受け手の答えがそのまま応答になる。1 回の呼び出しで届く要求は 1 件だけ。
 #[test]
 fn check_script_reaches_the_receiver_with_typed_args() {
@@ -60,7 +59,6 @@ fn check_script_reaches_the_receiver_with_typed_args() {
     });
     let (registry, rx) = all_entrances(LONG_WAIT);
     let (_server, addr) = serve(registry);
-    // 偽の受け手: 受けた `ToolCall` をテストへ渡し、診断 0 件の結果で答える。
     let (seen_tx, seen_rx) = std::sync::mpsc::channel();
     let receiver = thread::spawn(move || {
         for request in rx.iter().take(2) {
@@ -90,7 +88,7 @@ fn check_script_reaches_the_receiver_with_typed_args() {
     assert_no_request(&rx);
 }
 
-/// (要件 2.1・5.2) `script` が無い `check_script` は `-32602`・受け手へ届かない。
+/// `script` が無い `check_script` は `-32602`・受け手へ届かない。
 #[test]
 fn check_script_missing_script_is_invalid_params() {
     assert_invalid_params(
@@ -101,7 +99,7 @@ fn check_script_missing_script_is_invalid_params() {
     );
 }
 
-/// (要件 2.1・5.2) `script` が数の `check_script` は `-32602`・受け手へ届かない。
+/// `script` が数の `check_script` は `-32602`・受け手へ届かない。
 #[test]
 fn check_script_numeric_script_is_invalid_params() {
     assert_invalid_params(
@@ -130,7 +128,7 @@ fn sakurascript_missing_script_and_string_strict_are_invalid_params() {
     );
 }
 
-/// (要件 1.7) 11 本のどれでもない名前は `-32602`・受け手へ届かない。
+/// 11 本のどれでもない名前は `-32602`・受け手へ届かない。
 #[test]
 fn name_outside_eleven_is_invalid_params() {
     assert_invalid_params(
@@ -144,7 +142,7 @@ fn name_outside_eleven_is_invalid_params() {
 /// 消した後の指示文（定数を写さず、前の 3 文を字のまま書く）。
 const THREE_SENTENCES: &str = "This server controls areka, a desktop mascot (Ukagaka-compatible baseware) running on this machine. It exposes the same tools as the MCP server of SSP; call get_active_ghost_list first to get the ghost name for the ghost_name parameter. check_script is an areka-only tool that SSP does not have: it checks SakuraScript without playing it (the ghost does nothing), so use it before sakurascript.";
 
-/// (要件 4.1・spec: mcp-strict-errors 要件 5.1) 指示文（旧式は `initialize`・無状態版は
+/// 指示文（旧式は `initialize`・無状態版は
 /// `server/discover`）は、`check_script` の案内と先に `get_active_ghost_list` の案内を含む 3 文と字のまま
 /// 一致する（「まだのツール」の 1 文は無い）。
 #[test]
@@ -159,7 +157,7 @@ fn instructions_name_check_script_and_keep_existing_guidance() {
     }
 }
 
-/// (spec: areka-P0-mcp-tool-entrances 要件 5.1・5.3・5.4) SSP と同じ 9 本それぞれが、本番の登録表を通って
+/// SSP と同じ 9 本それぞれが、本番の登録表を通って
 /// 型の付いた引数のまま受け手へ届き、
 /// 受け手が返した `NG:not implemented yet` がそのまま応答になる。
 #[test]
@@ -242,7 +240,6 @@ fn each_of_nine_reaches_the_receiver_with_typed_args() {
 
     let (registry, rx) = all_entrances(LONG_WAIT);
     let (_server, addr) = serve(registry);
-    // 偽の受け手: 受けた `ToolCall` をテストへ渡し、`NG:not implemented yet` で答える。
     let (seen_tx, seen_rx) = std::sync::mpsc::channel();
     let receiver = thread::spawn(move || {
         for request in rx.iter().take(9) {
@@ -270,12 +267,11 @@ fn each_of_nine_reaches_the_receiver_with_typed_args() {
             "{name}"
         );
     }
-    // 1 回の呼び出しで届く要求は 1 件だけ（9 件を答えた後に余りが無い）。
     let rx = receiver.join().expect("偽の受け手が panic しなかった");
     assert_no_request(&rx);
 }
 
-/// (spec: areka-P0-mcp-tool-entrances 要件 6.3・6.8) 返事を止めた `tools/call` の待ちの間に、`ping` と `tools/list` が答える。
+/// 返事を止めた `tools/call` の待ちの間に、`ping` と `tools/list` が答える。
 /// 受け手が要求を受け取ったことを合図に問い、答えを確かめてから返事を放す。
 #[test]
 fn ping_answers_while_a_call_waits() {
@@ -289,7 +285,6 @@ fn ping_answers_while_a_call_waits() {
             Some(call_params("get_status", json!({}))),
         )
     });
-    // 受け手が要求を受け取った＝呼び出しは返事を待っている。
     let request = rx.recv_timeout(RECV_WAIT).expect("要求が受け手へ届いた");
     assert_eq!(
         request.call,

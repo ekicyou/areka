@@ -26,36 +26,35 @@ fn check(args: Value) -> Result<(), String> {
     check_arguments(&schema(), &obj(args))
 }
 
-/// (要件 2.2〜2.5) 規則の表。`Ok` か、`Err` の理由の文そのもの。
+/// 規則の表。`Ok` か、`Err` の理由の文そのもの。
 #[test]
 fn rules_table() {
     let missing_name = Err("missing required argument: name".to_owned());
     let cases: Vec<(&str, Value, Result<(), String>)> = vec![
-        // 欄が全部ある
         (
             "全部ある",
             json!({"ghost_name": "a", "name": "b", "flag": true, "count": -3, "refs": ["x", "y"], "loose": [1, "z"]}),
             Ok(()),
         ),
-        // 必須（2.2）
+        // 必須
         ("必須の欠落", json!({}), missing_name.clone()),
         ("null の必須", json!({"name": null}), missing_name.clone()),
-        // ghost_name の欠落・null は通る（2.3）
+        // ghost_name の欠落・null は通る
         ("ghost_name の欠落", json!({"name": "b"}), Ok(())),
         (
             "ghost_name が null",
             json!({"name": "b", "ghost_name": null}),
             Ok(()),
         ),
-        // 余計な欄は見ない（2.5）
+        // 余計な欄は見ない
         ("余計な欄", json!({"name": "b", "extra": {"x": 1}}), Ok(())),
-        // null の任意の欄は省略と同じ（2.4）
+        // null の任意の欄は省略と同じ
         (
             "null の任意の欄",
             json!({"name": "b", "flag": null, "count": null, "refs": null}),
             Ok(()),
         ),
-        // 型（2.4）
+        // 型
         (
             "string に数",
             json!({"name": 1}),
@@ -108,7 +107,7 @@ fn rules_table() {
         ),
         // 未知の type は見ない
         ("未知の type", json!({"name": "b", "other": "x"}), Ok(())),
-        // 必須 → 型 の順（2.7）
+        // 必須 → 型 の順
         (
             "必須が型より先",
             json!({"count": "x"}),
@@ -120,7 +119,7 @@ fn rules_table() {
     }
 }
 
-/// (要件 2.2) 必須の欄は `required` の並び順で最初の欠落を返す。
+/// 必須の欄は `required` の並び順で最初の欠落を返す。
 #[test]
 fn first_missing_follows_required_order() {
     let s = obj(json!({
@@ -142,7 +141,7 @@ fn empty_schema_accepts_anything() {
     );
 }
 
-/// (要件 2.4) `as_integer` の読み方。
+/// `as_integer` の読み方。
 #[test]
 fn as_integer_table() {
     let two53 = 9_007_199_254_740_992_i64; // 2^53
@@ -171,7 +170,7 @@ fn as_integer_table() {
     }
 }
 
-// ---- 10 本の定義に対する検査（要件 2.2〜2.5・2.8）。定義は `tools::TABLE` から読む（保存した JSON は読まない）。
+// ---- 10 本の定義に対する検査。定義は `tools::TABLE` から読む（保存した JSON は読まない）。
 
 /// 1 本の定義の (ツール名, inputSchema)。
 fn table_schemas() -> Vec<(String, Map<String, Value>)> {
@@ -227,7 +226,7 @@ fn names(list: Option<&Value>) -> Vec<String> {
         .collect()
 }
 
-/// (要件 2.2〜2.5・2.8) 10 本それぞれの定義を読み、欄が全部ある・必須の欄が無い・`null` の必須の欄・
+/// 10 本それぞれの定義を読み、欄が全部ある・必須の欄が無い・`null` の必須の欄・
 /// 欄ごとの型違い・`null` の任意の欄・余計な欄・`1.0` を検査に通す。理由の文は逐語で比べる。
 #[test]
 fn ten_definitions_table() {
@@ -286,7 +285,7 @@ fn ten_definitions_table() {
     }
 }
 
-/// (要件 2.2・2.4・2.8) 表のどの欄を調べたかの釘。必須の欄（`ghost_name` を除く）は要件 2.2 の 4 本だけ、
+/// 表のどの欄を調べたかの釘。必須の欄（`ghost_name` を除く）は 4 本だけ、
 /// `array` の欄は `raise_event` の `references` だけ、欄の無いツールは `get_active_ghost_list` だけ。
 #[test]
 fn ten_definitions_cover_the_named_fields() {
@@ -322,7 +321,7 @@ fn ten_definitions_cover_the_named_fields() {
     assert_eq!(no_props, ["get_active_ghost_list"]);
 }
 
-/// (要件 2.3) `get_expression_table` の `ghost_name` は `required` に載っているが、無くても `null` でも通る。
+/// `get_expression_table` の `ghost_name` は `required` に載っているが、無くても `null` でも通る。
 #[test]
 fn get_expression_table_without_ghost_name_passes() {
     let (_, schema) = table_schemas()

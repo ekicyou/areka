@@ -81,9 +81,9 @@ async fn raw_reply(stream: &mut TcpStream) -> (String, Value) {
         .expect("応答が上限のうちに届く")
 }
 
-/// 設計 D-4 の根拠の固定: 本物の受け口は、1 本の接続で「確かめの `initialize`（札なし）」と
+/// 送り手の前提の固定: 本物の受け口は、1 本の接続で「確かめの `initialize`（札なし）」と
 /// 「本当の要求」の 2 つに順に答え、`Connection: close` の要求に答えた後に接続を閉じる。
-/// これが崩れたら、送り手を別々の接続に分けずに止めて設計へ戻す。
+/// これが崩れたら、確かめと本文を同じ接続で送る送り手の作りが成り立たない。
 #[tokio::test]
 async fn real_receiver_answers_two_requests_on_one_connection_then_closes() {
     let (_server, port) = real_receiver();
@@ -91,7 +91,6 @@ async fn real_receiver_answers_two_requests_on_one_connection_then_closes() {
         .await
         .expect("本物の受け口へ接続できる");
 
-    // 1 つ目: 確かめの旧式の `initialize`。版の札なし・接続は持ち越す。
     let initialize = json!({
         "jsonrpc": "2.0", "id": 0, "method": "initialize",
         "params": {
@@ -109,7 +108,6 @@ async fn real_receiver_answers_two_requests_on_one_connection_then_closes() {
     assert_eq!(body["result"]["serverInfo"]["name"], SERVER_NAME, "{body}");
     assert_eq!(body["id"], 0, "{body}");
 
-    // 2 つ目: 同じ接続で本当の要求。`Connection: close` を付ける。
     let ping = json!({"jsonrpc": "2.0", "id": "real-1", "method": "ping"});
     stream
         .write_all(&raw_post(port, &ping, true))
@@ -122,7 +120,6 @@ async fn real_receiver_answers_two_requests_on_one_connection_then_closes() {
         json!({"jsonrpc": "2.0", "id": "real-1", "result": {}})
     );
 
-    // 受け口の側から閉じる（読みが 0 バイトで戻る）。
     let mut rest = [0u8; 16];
     let n = tokio::time::timeout(WAIT, stream.read(&mut rest))
         .await
@@ -140,7 +137,7 @@ fn no_headers() -> HashMap<HeaderName, HeaderValue> {
 }
 
 /// rmcp が呼ぶのと同じ口で 1 件送る。`uri` には別の機械を、セッションと認証には値を渡す:
-/// 送り手はどれも使わず、自分の番号の `127.0.0.1` へつなぐ（要件 2.7）。
+/// 送り手はどれも使わず、自分の番号の `127.0.0.1` へつなぐ。
 async fn post(port: u16, message: &Value, headers: HashMap<HeaderName, HeaderValue>) -> Posted {
     post_within(port, message, headers, patient()).await
 }
@@ -237,7 +234,7 @@ async fn own_http_reaches_the_real_receiver() {
 }
 
 /// 名乗りが合えば、確かめの `initialize` と本当の要求の 2 つが同じ接続で届き、応答が返る。
-/// 本当の本文は意味を変えずに届く（要件 1.1）。
+/// 本当の本文は意味を変えずに届く。
 #[tokio::test]
 async fn a_request_follows_the_identity_check_on_the_same_connection() {
     let fake = FakeServer::start(Script::areka());
@@ -285,7 +282,7 @@ async fn an_initialize_message_is_its_own_identity_check() {
 }
 
 /// 本文の長さの決まり方の 3 通り（`Content-Length`・chunked・閉じるまで）のどれでも、
-/// 数 MiB の応答を欠けずに読む（要件 1.8）。
+/// 数 MiB の応答を欠けずに読む。
 #[tokio::test]
 async fn a_large_body_is_read_whole_by_each_of_the_three_framings() {
     let text = "areka の応答 ".repeat(3 * 1024 * 1024 / 16);
@@ -304,7 +301,7 @@ async fn a_large_body_is_read_whole_by_each_of_the_three_framings() {
     }
 }
 
-/// HTTP の状態が 400 でも、本文が JSON なら中身（areka の JSON-RPC のエラー）が返る（要件 4.3）。
+/// HTTP の状態が 400 でも、本文が JSON なら中身（areka の JSON-RPC のエラー）が返る。
 #[tokio::test]
 async fn a_json_body_comes_back_whatever_the_http_status() {
     let error = json!({"code": -32602, "message": "bad params", "data": {"why": "test"}});
@@ -456,7 +453,7 @@ async fn replies_that_are_not_http_are_invalid_data() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
-// ---- ここから下は失敗の読み分け: 「書く前」か「書いた後」か（設計 D-6） ----
+// ---- ここから下は失敗の読み分け: 「書く前」か「書いた後」か ----
 
 /// 1 件送って、送り手の失敗を取り出す（成功や、送り手の外の失敗なら赤）。送り手が戻らなければ、
 /// テストを止めずに赤にする。
@@ -497,7 +494,7 @@ pub(crate) async fn only_the_check_arrived(fake: &FakeServer) {
     );
 }
 
-/// 名乗りが違う相手には本当の本文が届かない（要件 2.3・2.11）。失敗は番号と名乗りを持つ「書く前」。
+/// 名乗りが違う相手には本当の本文が届かない。失敗は番号と名乗りを持つ「書く前」。
 #[tokio::test]
 async fn a_peer_with_another_name_never_gets_the_real_request() {
     let fake = FakeServer::start(Script::named("ssp-mcp-server"));
@@ -533,7 +530,7 @@ async fn an_initialize_answered_with_another_name_is_a_failure_before_writing() 
 }
 
 /// 確かめの答えから名乗りを読めない相手（平文・202・SSE・本文なし・途中で閉じる・壊れた JSON・
-/// JSON-RPC のエラー）は、空の名乗りの `NotAreka`。「書く前」で、本当の本文は届かない（要件 2.3）。
+/// JSON-RPC のエラー）は、空の名乗りの `NotAreka`。「書く前」で、本当の本文は届かない。
 #[tokio::test]
 async fn a_peer_whose_name_cannot_be_read_never_gets_the_real_request() {
     let answers = [
@@ -585,7 +582,7 @@ async fn given_up_by_a_silent_peer(message: &Value) -> FakeServer {
     fake
 }
 
-/// 接続は受けるが返事をしない相手は、確かめの上限で見切る（要件 2.9）。「書く前」。
+/// 接続は受けるが返事をしない相手は、確かめの上限で見切る。「書く前」。
 #[tokio::test]
 async fn a_silent_peer_is_given_up_after_the_verify_wait() {
     // 見切った後に書いたバイトも、偽の受け口は数える（黙っている間も読んでいる）。
@@ -617,8 +614,8 @@ async fn nobody_listening_is_a_connect_failure() {
     assert!(!error.written(), "{error:?}");
 }
 
-/// 本当の要求に本文なしで答える・答えの途中で閉じる（要件 4.1）: `NoResponse`。「書いた後」で、
-/// 本当の要求は 1 回だけ届いている（届いたかもしれないので、呼び手は送り直さない＝要件 4.5）。
+/// 本当の要求に本文なしで答える・答えの途中で閉じる: `NoResponse`。「書いた後」で、
+/// 本当の要求は 1 回だけ届いている（届いたかもしれないので、呼び手は送り直さない）。
 /// 本文なしは、JSON と名乗っていなくても（状態 500 の `text/plain`）`NoResponse` が先。
 #[tokio::test]
 async fn an_empty_or_cut_answer_is_no_response_after_writing() {
@@ -637,7 +634,7 @@ async fn an_empty_or_cut_answer_is_no_response_after_writing() {
     }
 }
 
-/// 本当の要求への答えの本文が JSON でない（要件 4.2）: HTTP の状態と本文の頭 256 バイトを持つ
+/// 本当の要求への答えの本文が JSON でない: HTTP の状態と本文の頭 256 バイトを持つ
 /// `NotJson`。「書いた後」。
 #[tokio::test]
 async fn a_body_that_is_not_json_keeps_the_status_and_the_first_256_bytes() {
@@ -666,7 +663,7 @@ async fn a_body_that_is_not_json_keeps_the_status_and_the_first_256_bytes() {
     }
 }
 
-/// `text/event-stream` の答えは、頭だけで JSON でないと決める（設計 D-16）。偽の受け口は 1 件
+/// `text/event-stream` の答えは、頭だけで JSON でないと決める。偽の受け口は 1 件
 /// 書いた後も接続を閉じないので、本文の終わりを待つ送り手は戻らない（`failure` の上限で赤）。
 #[tokio::test]
 async fn an_event_stream_answer_is_refused_on_its_header_without_reading_the_body() {
@@ -692,7 +689,6 @@ async fn a_body_with_japanese_text_arrives_whole() {
         "jsonrpc": "2.0", "id": "日本語-1", "method": "tools/call",
         "params": {"name": "sakurascript", "arguments": {"script": script}},
     });
-    // 送り手が書くバイト列（rmcp の型を JSON にしたもの）。
     let typed: ClientJsonRpcMessage = serde_json::from_value(sent.clone()).expect("要求の形");
     let bytes = serde_json::to_vec(&typed).expect("JSON にできる");
     let chars = String::from_utf8_lossy(&bytes).chars().count();

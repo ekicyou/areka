@@ -1,5 +1,5 @@
 //! `plan` の兄弟テストの続き——同梱バルーンの取り出し元が `extra\bal1` のような
-//! 階層付きの相対パスのときの配置（要件 2.2〜2.5・2.8・5.6）。
+//! 階層付きの相対パスのときの配置。
 //!
 //! 助手は [`super`]（`plan_tests.rs`）から借りる。どの場面も `install.txt` の読み
 //! （`parse_manifest`）から配置（`build_plan`）まで通す。取り出し元の値は読み手が
@@ -96,9 +96,9 @@ fn overlapping_sources_archive() -> NarBuilder {
         .done()
 }
 
-// ---- 階層付きの取り出し元（要件 2.2・2.4） ----
+// ---- 階層付きの取り出し元 ----
 
-/// 取り出し元の全ての段が剥がれ、配下が宛先の配下へそのままの相対の位置で入る（要件 2.2）。
+/// 取り出し元の全ての段が剥がれ、配下が宛先の配下へそのままの相対の位置で入る。
 #[test]
 fn a_nested_source_is_stripped_of_every_segment() {
     let root = root_with_ghost("other");
@@ -133,7 +133,7 @@ fn a_nested_source_is_stripped_of_every_segment() {
     assert_eq!(companion.dirs, vec!["sub"]);
 }
 
-/// 取り出し元の兄弟のファイルは本体に残り、取り出し元の中身は本体に 1 件も無い（要件 2.4）。
+/// 取り出し元の兄弟のファイルは本体に残り、取り出し元の中身は本体に 1 件も無い。
 ///
 /// 途中のフォルダ `extra/` のエントリは本体から除かれるが、兄弟のファイルの親として
 /// 同じフォルダが作られる。
@@ -167,7 +167,7 @@ fn a_sibling_of_the_nested_source_stays_with_the_body() {
 }
 
 /// 途中のフォルダの配下に本体のものが無ければ、本体に途中のフォルダは作られない。
-/// 書庫がフォルダのエントリを持つかどうかで結果が変わらない（要件 2.4）。
+/// 書庫がフォルダのエントリを持つかどうかで結果が変わらない。
 #[test]
 fn a_folder_on_the_way_to_the_source_is_not_made_on_the_body_side() {
     let root = root_with_ghost("other");
@@ -201,7 +201,7 @@ fn a_folder_on_the_way_to_the_source_is_not_made_on_the_body_side() {
     }
 }
 
-// ---- 突き合わせ（要件 2.3） ----
+// ---- 突き合わせ ----
 
 /// `install.txt` の `Extra\BAL1` が書庫の `extra/bal1/` に当たる（各段を大小を無視して比べる）。
 #[test]
@@ -232,7 +232,7 @@ fn every_segment_of_the_source_matches_ignoring_case() {
     );
 }
 
-/// 段ごとに比べるので、`extra/bal10/x.png` は `extra/bal1` の配下ではなく本体に残る（要件 2.3・2.4）。
+/// 段ごとに比べるので、`extra/bal10/x.png` は `extra/bal1` の配下ではなく本体に残る。
 #[test]
 fn a_segment_with_a_longer_name_is_not_under_the_source() {
     let root = root_with_ghost("other");
@@ -253,13 +253,13 @@ fn a_segment_with_a_longer_name_is_not_under_the_source() {
     assert!(plan[1].dirs.is_empty());
 }
 
-// ---- 配下が空（要件 2.5） ----
+// ---- 配下が空 ----
 
-/// 階層付きの取り出し元の配下が書庫に無ければ、その同梱を飛ばして本体だけを置く
-/// （要件 1.1・1.2）。飛ばした列には鍵と書かれていた値（`\` 区切りのまま）と置き場の名前が載る。
+/// 階層付きの取り出し元の配下が書庫に無ければ、その同梱を飛ばして本体だけを置く。
+/// 飛ばした列には鍵と書かれていた値（`\` 区切りのまま）と置き場の名前が載る。
 ///
 /// 書庫に無い形・フォルダのエントリだけが在る形・綴りが前方一致する兄弟だけが在る形の 3 つ。
-/// 本体の木は今と同じ（取り出し元の外のものは本体に残る）。
+/// 取り出し元の外のものは本体に残る。
 #[test]
 fn skips_a_nested_source_with_nothing_under_it() {
     let root = root_with_ghost("other");
@@ -317,7 +317,7 @@ fn skips_a_nested_source_with_nothing_under_it() {
     }
 }
 
-// ---- 重なる取り出し元（要件 2.8・1.7） ----
+// ---- 重なる取り出し元 ----
 
 /// `extra` と `extra/bal1` の 2 つの同梱は、それぞれ自分の配下の全てを受け取る。
 /// 本体には何も残らず、同梱は探索の順（無印 → `balloon0`）で並ぶ。
@@ -349,7 +349,7 @@ fn overlapping_sources_each_receive_everything_under_them() {
     assert!(plan[2].dirs.is_empty());
 }
 
-// ---- 根の外へ出ない（要件 5.6・8.2） ----
+// ---- 根の外へ出ない ----
 
 /// 上の受理される全ての計画の全ての宛先・ファイル・フォルダが根の配下に収まる。
 ///

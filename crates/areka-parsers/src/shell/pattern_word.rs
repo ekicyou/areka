@@ -1,5 +1,4 @@
-//! pattern定義の描画メソッドの 8 語の見分けと、描画メソッドの語の綴りの比べ方（seriko-pattern-calls
-//! 要件 1.1・1.2）。
+//! pattern定義の描画メソッドの 8 語の見分けと、描画メソッドの語の綴りの比べ方。
 //!
 //! 8 語（`start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・
 //! `parallelstop`・`insert`・`move`）の表と綴りの規則はツリーでここだけが持つ唯一の正本である。

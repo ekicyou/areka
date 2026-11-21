@@ -1,18 +1,18 @@
 //! `install`（組み上げ）の兄弟テスト——既存なし・上書き・全消去＋マスク残しの 3 通りと、
-//! バイト列の無変換・残骸の片付け（要件 4.9・5.9・6.1・6.2）。
+//! バイト列の無変換・残骸の片付け。
 //!
 //! 主張の置き方は 3 つ。
 //!
 //! ⑴ 作業フォルダの中身は `tree`（公開面のテストと共有）で**丸ごと**突き合わせる。写し取るのは相対パスと
 //!    **バイト列そのもの**で、長さや個数では代えない。同じ長さの書き換え（改行の変換は
-//!    まさにこれ）が見えなくなる道を残さないため（要件 5.9）。空フォルダも末尾 `/` の
-//!    鍵として拾うので、要件 4.9 の「空フォルダを作る」が消えても赤になる。
+//!    まさにこれ）が見えなくなる道を残さないため。空フォルダも末尾 `/` の
+//!    鍵として拾うので、「空フォルダを作る」が消えても赤になる。
 //! ⑵ 宛先はどのテストでも**呼ぶ前と後で同じ**であることを突き合わせる。組み上げは
-//!    宛先を読むだけで、入れ替えはタスク 4.3 の仕事（完了条件「宛先はまだ触らない」）。
+//!    宛先を読むだけで、入れ替えは確定の仕事。
 //! ⑶ 既存の扱いは `install.txt` の綴りから通す。`refresh` や除外マスクの解釈を
 //!    テストが手で組むと、マニフェスト側と食い違ったまま両方緑になる。
 //!
-//! 根は OS の一時フォルダではなく [`WorkDir`] が配る（要件 7.10）。フォルダ名は
+//! 根は OS の一時フォルダではなく [`WorkDir`] が配る。フォルダ名は
 //! 登記表の検体とわざと違う綴りにする（検体パスの綴りを見張る常設検査に当たらないため）。
 
 use super::*;
@@ -27,7 +27,7 @@ use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-/// 確定（要件 5.10・5.11・6.4・6.6）の兄弟テスト。1 ファイル 1,000 行の上限に
+/// 確定の兄弟テスト。1 ファイル 1,000 行の上限に
 /// 収めるために分けただけで、助手も固定入力もここから借りる。
 #[path = "install_commit_tests.rs"]
 mod commit;
@@ -36,10 +36,10 @@ mod commit;
 
 /// 読取 → 名前の検証 → マニフェスト → 計画 → 全エントリの伸長まで通した固定入力。
 ///
-/// 公開面（タスク 4.4）が `open` で行うことと同じ順で通す。手で [`Placement`] を
+/// 公開面の `open` が行うことと同じ順で通す。手で [`Placement`] を
 /// 組まないので、計画側の取り違えが組み上げのテストで緑のまま残らない。
 struct Prepared {
-    /// 結果の列（要件 5.10）が `name`・`accept`・警告を写す元。
+    /// 結果の列が `name`・`accept`・警告を写す元。
     manifest: InstallManifest,
     plan: Vec<Placement>,
     /// エントリ番号で引ける伸長済みの中身（`open` が保持するもの）。
@@ -120,8 +120,8 @@ const RAW_BYTES: &[u8] = b"a\r\nb\rc\nd\x00e\x82\xa0f\xff\xfe";
 /// 同梱バルーンつきのゴースト（検体 emo2 と同じ形）。
 ///
 /// `ghost/`・`ghost/master/` はフォルダのエントリを持ち、`shell/master/` は持たない。
-/// 同梱バルーン側も `test-balloon/balloon/` のエントリを持たない。要件 4.9 の 2 つの形が
-/// 1 つの書庫に同居する。
+/// 同梱バルーン側も `test-balloon/balloon/` のエントリを持たない。フォルダのエントリが在る形と
+/// 無い形が 1 つの書庫に同居する。
 fn ghost_manifest(extra: &[&str]) -> Vec<u8> {
     let mut lines = vec![
         "charset,UTF-8",
@@ -180,11 +180,11 @@ fn balloon_archive(extra: &[&str]) -> NarBuilder {
 
 // ---- 既存なし ----
 
-/// 宛先が無ければ、書庫の木がそのまま作業フォルダに立ち上がる（要件 4.9）。
+/// 宛先が無ければ、書庫の木がそのまま作業フォルダに立ち上がる。
 ///
 /// フォルダのエントリは空フォルダとして作られ（`ghost/`）、フォルダのエントリが
 /// 無い枝でも親が全段作られる（`shell/`・`shell/master/`）。同梱バルーンの取り出し元は
-/// 本体側に残らず、剥がした形でバルーン側に立つ（要件 5.3）。
+/// 本体側に残らず、剥がした形でバルーン側に立つ。
 #[test]
 fn stages_the_archive_tree_verbatim_when_the_destination_is_absent() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
@@ -228,8 +228,7 @@ fn stages_the_archive_tree_verbatim_when_the_destination_is_absent() {
 
 // ---- 上書き（`refresh` 無効） ----
 
-/// `refresh` が `1` でなければ既存を丸ごと取り込み、同名だけが書庫の内容で上書きされる
-/// （要件 6.1）。
+/// `refresh` が `1` でなければ既存を丸ごと取り込み、同名だけが書庫の内容で上書きされる。
 #[test]
 fn takes_in_the_whole_existing_tree_and_overwrites_only_same_named_files_when_refresh_is_off() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
@@ -269,8 +268,7 @@ fn takes_in_the_whole_existing_tree_and_overwrites_only_same_named_files_when_re
 
 // ---- 全消去＋マスク残し（`refresh,1`） ----
 
-/// `refresh,1` では除外マスクに挙がったファイル名だけが残る（全階層・大小を無視（`same_name`））
-/// （要件 6.2）。
+/// `refresh,1` では除外マスクに挙がったファイル名だけが残る（全階層・大小を無視（`same_name`））。
 ///
 /// 3 つの形を同時に見る。⑴ 何段も深いところの同名は残る。⑵ 綴りが大小だけ違う名前も
 /// 残る。⑶ マスクに無いファイルと、残す物を 1 つも含まないフォルダは消える。
@@ -314,7 +312,7 @@ fn refresh_one_keeps_only_the_undelete_mask_names_at_every_level() {
     );
 }
 
-/// 除外マスクの名前は全角の大小も無視して当たる（#64）。
+/// 除外マスクの名前は全角の大小も無視して当たる。
 #[test]
 fn refresh_keep_matches_non_ascii_names_case_insensitively() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
@@ -343,7 +341,7 @@ fn refresh_keep_matches_non_ascii_names_case_insensitively() {
     );
 }
 
-/// 同梱バルーン側の宛先には `*.refresh`・`*.refreshundeletemask` が当たる（要件 6.3）。
+/// 同梱バルーン側の宛先には `*.refresh`・`*.refreshundeletemask` が当たる。
 ///
 /// 本体（ゴースト）は `refresh` を書いていないので重ね置きのまま。1 本の書庫の中で
 /// 2 つの配置が別々の扱いになることを、同じ 1 回の組み上げで見る。
@@ -400,7 +398,7 @@ fn a_companion_balloon_follows_its_own_prefixed_refresh_keys() {
 
 // ---- サプリメント ----
 
-/// サプリメントは `refresh,1` が書かれていても重ね置きになる（要件 6.2・5.8）。
+/// サプリメントは `refresh,1` が書かれていても重ね置きになる。
 ///
 /// 宛先はゴースト本体なので、全消去はゴーストごと消しかねない。既存が丸ごと残ること
 /// に加えて、最上位の `install.txt` が**既存のまま**（サプリメントの物に置き換わって
@@ -455,9 +453,9 @@ fn a_supplement_overlays_even_when_it_declares_refresh_one() {
 
 /// 置く物が 1 つも無い配置でも、作業フォルダそのものは立つ。
 ///
-/// `install.txt` だけのサプリメントは、その `install.txt` を重ねない（要件 5.8）ので
+/// `install.txt` だけのサプリメントは、その `install.txt` を重ねないので
 /// 置くファイルもフォルダも 0 件になる。宛先が空なら下敷きも敷かれない。それでも
-/// 入れ替え（タスク 4.3）が `rename` する元は要るので、空のまま作っておく必要がある。
+/// 入れ替えが `rename` する元は要るので、空のまま作っておく必要がある。
 #[test]
 fn the_work_folder_is_created_even_for_a_placement_with_nothing_to_place() {
     let work = root_with_ghost("test-ghost");
@@ -491,7 +489,7 @@ fn the_work_folder_is_created_even_for_a_placement_with_nothing_to_place() {
 
 // ---- バイト列の無変換 ----
 
-/// 書き出す内容は読取層のバイト列そのもので、改行も文字コードも変換しない（要件 5.9）。
+/// 書き出す内容は読取層のバイト列そのもので、改行も文字コードも変換しない。
 ///
 /// 無圧縮と deflate の両方で同じバイト列を通す。既存から取り込む側も同じバイト列で
 /// 確かめる（複写の経路で変換が入っても赤になる）。
@@ -570,7 +568,7 @@ fn a_read_only_existing_file_does_not_block_the_archive_from_replacing_it() {
 }
 
 /// 既に在る宛先の中のリンク（ジャンクション）はたどらず、そのパスを添えて組み上げの段で
-/// 失敗する（#8・要件 9.6）。写しの決まりは `areka-user-data` の写しとそろえる。
+/// 失敗する。写しの決まりは `areka-user-data` の写しとそろえる。
 /// リンクの先は 1 バイトも触られない。
 #[test]
 fn a_link_inside_an_existing_destination_fails_the_stage_with_its_path() {
@@ -598,7 +596,7 @@ fn a_link_inside_an_existing_destination_fails_the_stage_with_its_path() {
 }
 
 /// 宛先そのものがリンク（ジャンクション）でもたどらず、宛先のパスを添えて組み上げの段で
-/// 失敗する（#8 と同じ決まり）。たどると、リンクの先を写した木で入れ替え、リンクを消す。
+/// 失敗する（上と同じ決まり）。たどると、リンクの先を写した木で入れ替え、リンクを消す。
 #[test]
 fn a_destination_that_is_itself_a_link_fails_the_stage_with_its_path() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
@@ -695,7 +693,7 @@ fn set_read_only(path: &Path, on: bool) {
 
 /// 作業フォルダは `<根>/.nar-work/<プロセス識別子>-<連番>/<配置番号>/` に立つ。
 ///
-/// 入れ替えが `rename` で済むのは根と同じボリュームに在るからで、この形はタスク 4.3 の
+/// 入れ替えが `rename` で済むのは根と同じボリュームに在るからで、この形が入れ替えの
 /// 前提になる。
 #[test]
 fn the_work_folder_sits_on_the_shelf_directly_under_the_root() {
@@ -792,7 +790,7 @@ fn a_stale_work_folder_is_swept_even_when_the_name_is_this_runs_own() {
 }
 
 /// 巻き戻せなかった元の木（`old-` の退避先）を持つ作業フォルダは、期限の内側なら
-/// 片付けで消さず、残り物として報告する（要件 2.7）。
+/// 片付けで消さず、残り物として報告する。
 #[test]
 fn a_work_folder_holding_a_surviving_tree_is_kept_within_the_retention() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
@@ -814,7 +812,7 @@ fn a_work_folder_holding_a_surviving_tree_is_kept_within_the_retention() {
     assert_ne!(area.path(), kept.as_path(), "自分の番地とは別");
 }
 
-/// 期限を 1 秒でも過ぎたら、元の木を含んでいても今までどおり消す（要件 2.8・2.10）。
+/// 期限を 1 秒でも過ぎたら、元の木を含んでいても消す。
 ///
 /// 期限の起点は作業フォルダの更新時刻なので、それを読んで「期限＋1 秒」の時刻を渡す。
 /// 実際の日数は待たない。
@@ -938,7 +936,7 @@ fn fails_when_the_shelf_is_not_a_folder() {
     assert!(shelf.is_file(), "邪魔者を勝手に消さない");
 }
 
-/// 根が無ければ、根を勝手に作らずに失敗を返す（設計の事前条件）。
+/// 根が無ければ、根を勝手に作らずに失敗を返す。
 #[test]
 fn fails_without_creating_the_root_when_the_root_is_absent() {
     let work = WorkDir::new().expect("作業フォルダを取れる");

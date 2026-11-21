@@ -1,4 +1,4 @@
-//! `lexer` の単体テスト（一般構文分割・タスク 3.1 範囲）。
+//! `lexer` の単体テスト（一般構文分割）。
 //!
 //! 検証対象は構文トークン分割のみ:
 //! - 正準タグ（`\` ＋ word ＋ `[args]`）
@@ -8,12 +8,11 @@
 //! - タグ間テキスト
 //! - 角括弧内のカンマ区切り複数引数
 //!
-//! エスケープ／クォート／寛容境界（未閉じ `[`/`"`）はタスク 3.2 の節で、裸形 `\bN` の
-//! 短縮はタスク 1.1 の節で確かめる。
+//! エスケープ／クォート／寛容境界（未閉じ `[`/`"`）と裸形 `\bN` の短縮も確かめる。
 
 use super::lexer::{ShorthandWord, Token, lex};
 
-/// タスク 3.1 の観測基準（tasks.md L23）:
+/// 観測基準:
 /// `\s[1000]` `\p[0]` `%username` `\w2` `\![a,b,c]` `こんにちは` が
 /// 期待トークン列へ分割されること。
 #[test]
@@ -126,7 +125,6 @@ fn empty_input_yields_no_tokens() {
 
 #[test]
 fn text_between_tags_preserves_order_and_chars() {
-    // タグ間テキストが順序・文字順を保って分割される（要件 9.1/9.2）。
     let tokens = lex(r"あ\eいう\cえ");
     assert_eq!(
         tokens,
@@ -182,16 +180,16 @@ fn speaker_scope_then_surface() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// タスク 3.2: エスケープ・引数クォート・寛容な境界処理
+// エスケープ・引数クォート・寛容な境界処理
 // ───────────────────────────────────────────────────────────────────
 
-/// 要件 13.5: `\\` はタグ開始でなくリテラルの `\` 1 文字としてテキストへ。
+/// `\\` はタグ開始でなくリテラルの `\` 1 文字としてテキストへ。
 #[test]
 fn escape_backslash_to_literal_backslash() {
     assert_eq!(lex(r"a\\b"), vec![Token::Text(r"a\b".to_string())]);
 }
 
-/// 要件 13.5: `\\` の直後の `\e` は通常 bare タグとして区切られる
+/// `\\` の直後の `\e` は通常 bare タグとして区切られる
 /// （`\\` がエスケープを消費し、次の `\e` は独立）。
 #[test]
 fn escape_backslash_then_real_tag() {
@@ -201,7 +199,7 @@ fn escape_backslash_then_real_tag() {
     );
 }
 
-/// 要件 13.6: `\%` はシステム変数開始でなくリテラルの `%` としてテキストへ。
+/// `\%` はシステム変数開始でなくリテラルの `%` としてテキストへ。
 #[test]
 fn escape_percent_to_literal_percent() {
     assert_eq!(
@@ -210,7 +208,7 @@ fn escape_percent_to_literal_percent() {
     );
 }
 
-/// 要件 13.6: `\%` 単独もリテラル `%`。後続の本物の `%username` は sysvar。
+/// `\%` 単独もリテラル `%`。後続の本物の `%username` は sysvar。
 #[test]
 fn escape_percent_then_real_sysvar() {
     assert_eq!(
@@ -222,7 +220,7 @@ fn escape_percent_then_real_sysvar() {
     );
 }
 
-/// 要件 13.7: 角括弧内の `\]` を含んでも後続の本物の `]` が終端として働く。
+/// 角括弧内の `\]` を含んでも後続の本物の `]` が終端として働く。
 #[test]
 fn escape_bracket_close_then_real_terminator() {
     assert_eq!(
@@ -237,7 +235,7 @@ fn escape_bracket_close_then_real_terminator() {
     );
 }
 
-/// 要件 13.4: 二重化 `""` は引数内のリテラル `"` として解釈。
+/// 二重化 `""` は引数内のリテラル `"` として解釈。
 #[test]
 fn quoted_arg_doubled_quote_is_literal() {
     assert_eq!(
@@ -249,7 +247,7 @@ fn quoted_arg_doubled_quote_is_literal() {
     );
 }
 
-/// 要件 13.4: クォート引数と非クォート引数の混在（`,` での分割は維持）。
+/// クォート引数と非クォート引数の混在（`,` での分割は維持）。
 #[test]
 fn quoted_and_unquoted_args_mixed() {
     assert_eq!(
@@ -261,7 +259,7 @@ fn quoted_and_unquoted_args_mixed() {
     );
 }
 
-/// 要件 10.3/13.8: 未閉じ `[` は入力末尾までを Raw へ吸収し、走査を中断しない。
+/// 未閉じ `[` は入力末尾までを Raw へ吸収し、走査を中断しない。
 /// 直前の正常トークンは欠落しない。
 #[test]
 fn unclosed_bracket_absorbed_as_raw_preserving_prior() {
@@ -274,7 +272,7 @@ fn unclosed_bracket_absorbed_as_raw_preserving_prior() {
     );
 }
 
-/// 要件 10.3/13.8: 未閉じ `"`（クォート閉じ忘れ）も Raw へ吸収。
+/// 未閉じ `"`（クォート閉じ忘れ）も Raw へ吸収。
 #[test]
 fn unclosed_quote_absorbed_as_raw() {
     assert_eq!(
@@ -283,7 +281,7 @@ fn unclosed_quote_absorbed_as_raw() {
     );
 }
 
-/// 要件 10.3/13.8: 未閉じ `[` の Raw 吸収後、前のテキストトークンも保持される。
+/// 未閉じ `[` の Raw 吸収後、前のテキストトークンも保持される。
 #[test]
 fn unclosed_bracket_preserves_preceding_text() {
     assert_eq!(
@@ -295,7 +293,7 @@ fn unclosed_bracket_preserves_preceding_text() {
     );
 }
 
-/// 要件 13.8: 未知タグ（emo2 subset 外）も構文として 1 単位に区切り、
+/// 未知タグ（emo2 subset 外）も構文として 1 単位に区切り、
 /// 前後の正常トークンを破壊しない（正準形なら Tag として区切れる）。
 #[test]
 fn unknown_tag_split_as_tag_preserving_neighbors() {
@@ -313,14 +311,14 @@ fn unknown_tag_split_as_tag_preserving_neighbors() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// タスク 1.1（areka-P0-balloon-face-cue）: 裸形 `\bN` 短縮の構文檻。
+// 裸形 `\bN` 短縮の構文檻。
 //
-// 一桁の面数字 `N` を短縮形として取り込み本文へ漏らさない（要件 1.3）。
-// `\w` と同一の shorthand 規律を語（`'b'`）に依らず共通適用する（要件 1.2）。
-// 既存タグ（とりわけ `\w` 系）のパース結果は不変（要件 1.6）。
+// 一桁の面数字 `N` を短縮形として取り込み本文へ漏らさない。
+// `\w` と同一の shorthand 規律を語（`'b'`）に依らず共通適用する。
+// 既存タグ（とりわけ `\w` 系）のパース結果は不変。
 // ───────────────────────────────────────────────────────────────────
 
-/// 要件 1.2/1.3: 裸形 `\b1` は 1 桁面数字を取り込み、単一の shorthand トークンへ。
+/// 裸形 `\b1` は 1 桁面数字を取り込み、単一の shorthand トークンへ。
 /// `\w1` と同型（`word` のみ `'b'`）＝語に依らず共通規律。
 #[test]
 fn balloon_bare_shorthand_single_digit() {
@@ -333,14 +331,14 @@ fn balloon_bare_shorthand_single_digit() {
     );
 }
 
-/// 要件 1.6: 数字を伴わない裸形 `\b`（単独）は既存の非短縮規則のまま
+/// 数字を伴わない裸形 `\b`（単独）は既存の非短縮規則のまま
 /// bare タグとして処理される（passthrough 維持）。
 #[test]
 fn balloon_bare_without_digit_is_bare_tag() {
     assert_eq!(lex(r"\b"), vec![Token::Bare("b".to_string())]);
 }
 
-/// 要件 1.6: `\b` 短縮の追加が前後の正常トークンを壊さない（本文・bare タグと共存）。
+/// `\b` 短縮の追加が前後の正常トークンを壊さない（本文・bare タグと共存）。
 #[test]
 fn balloon_bare_shorthand_preserves_neighbors() {
     assert_eq!(
@@ -357,7 +355,7 @@ fn balloon_bare_shorthand_preserves_neighbors() {
     );
 }
 
-/// `%*` は名前 `*` の環境変数 1 つ（範囲は `%` と `*` の 2 字・script-small-tags 要件 4.3）。
+/// `%*` は名前 `*` の環境変数 1 つ（範囲は `%` と `*` の 2 字）。
 /// `*` を名前に取るのは英数字の名前が空のときだけで、`%a*` の `*` は本文に残る。
 #[test]
 fn percent_star_is_sysvar_named_star() {
@@ -390,7 +388,7 @@ fn percent_star_is_sysvar_named_star() {
     assert_eq!(lex(r"\%*"), vec![Token::Text("%*".to_string())]);
 }
 
-/// 指摘 24: クォートの始まりは引数の先頭の `"` だけ。引数の途中の `"` はただの字として
+/// クォートの始まりは引数の先頭の `"` だけ。引数の途中の `"` はただの字として
 /// 残り、閉じの無いクォートとして後ろの台本を飲み込まない。
 #[test]
 fn mid_argument_quote_is_literal() {

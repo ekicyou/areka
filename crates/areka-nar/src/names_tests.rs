@@ -1,4 +1,4 @@
-//! `names` の兄弟テスト（要件 2.2・2.3・2.4・2.7・4.1〜4.7）。
+//! `names` の兄弟テスト。
 //!
 //! 固定入力は `sample_ghost_kit::NarBuilder` が組み、`container` の読み手を通して
 //! `RawEntry` にしてから渡す。生バイトの名前も「名前は UTF-8」の印も外部属性も、
@@ -118,7 +118,7 @@ fn the_undecodable_fixtures_really_are_undecodable() {
     );
 }
 
-// ---- 復号（要件 2.2・2.3） ----
+// ---- 復号 ----
 
 /// 印ありの名前は UTF-8 として復号される。日本語のフォルダ名とファイル名が
 /// そのまま戻る。
@@ -167,7 +167,7 @@ fn the_same_bytes_are_refused_when_the_flag_claims_utf8() {
     );
 }
 
-// ---- 復号できない名前（要件 2.4） ----
+// ---- 復号できない名前 ----
 
 /// 印なしで Shift_JIS として読めない列は、エントリ番号と生バイトの 16 進つきで
 /// 拒否する（置換文字で黙って通さない）。
@@ -205,7 +205,7 @@ fn an_undecodable_utf8_name_is_refused_with_its_raw_bytes() {
     );
 }
 
-/// 拒否の表示にも 16 進が載る（診断はこの 1 行しか手掛かりが無い＝要件 9.1）。
+/// 拒否の表示にも 16 進が載る（診断はこの 1 行しか手掛かりが無い）。
 #[test]
 fn the_refusal_message_carries_the_raw_hex() {
     let shown = refusal_of(UTF8_BROKEN_NAME.to_vec()).to_string();
@@ -233,7 +233,7 @@ fn the_refusal_names_the_offending_entry_number() {
     );
 }
 
-// ---- 危険な名前（要件 4.2〜4.6） ----
+// ---- 危険な名前 ----
 
 /// 書き込みの前に撥ねるべき名前と、それぞれに対応する理由。
 ///
@@ -241,23 +241,23 @@ fn the_refusal_names_the_offending_entry_number() {
 #[test]
 fn dangerous_names_are_refused_each_with_its_own_reason() {
     let cases: &[(&str, UnsafeWhy)] = &[
-        // NUL（4.4）
+        // NUL
         ("ghost/\u{0}.txt", UnsafeWhy::Nul),
-        // 区切りの `\`（4.5）
+        // 区切りの `\`
         ("ghost\\master.txt", UnsafeWhy::Backslash),
-        // UNC（4.2）。`\` を含むので区切りの検査が先に当たる。
+        // UNC。`\` を含むので区切りの検査が先に当たる。
         ("\\\\server\\share\\a.txt", UnsafeWhy::Backslash),
-        // 絶対パス（4.2）
+        // 絶対パス
         ("/etc/passwd", UnsafeWhy::Absolute),
         ("//server/share/a.txt", UnsafeWhy::Absolute),
         ("C:/windows/a.txt", UnsafeWhy::Absolute),
         ("c:a.txt", UnsafeWhy::Absolute),
         // 空の要素（絶対と同じ拒否）
         ("ghost//master.txt", UnsafeWhy::Absolute),
-        // 親へ遡る（4.3）
+        // 親へ遡る
         ("../outside.txt", UnsafeWhy::DotDot),
         ("ghost/../../outside.txt", UnsafeWhy::DotDot),
-        // Windows の予約名（4.6）
+        // Windows の予約名
         (
             "ghost/CON.txt",
             UnsafeWhy::InvalidWindowsName("CON.txt".to_owned()),
@@ -275,7 +275,7 @@ fn dangerous_names_are_refused_each_with_its_own_reason() {
             "ghost/nul.dat",
             UnsafeWhy::InvalidWindowsName("nul.dat".to_owned()),
         ),
-        // 末尾のドット・空白（4.6）
+        // 末尾のドット・空白
         (
             "ghost/master.",
             UnsafeWhy::InvalidWindowsName("master.".to_owned()),
@@ -284,7 +284,7 @@ fn dangerous_names_are_refused_each_with_its_own_reason() {
             "ghost/master ",
             UnsafeWhy::InvalidWindowsName("master ".to_owned()),
         ),
-        // 禁止文字（4.6）
+        // 禁止文字
         (
             "ghost/a<b>.txt",
             UnsafeWhy::InvalidWindowsName("a<b>.txt".to_owned()),
@@ -297,12 +297,12 @@ fn dangerous_names_are_refused_each_with_its_own_reason() {
             "ghost/a|b\"c.txt",
             UnsafeWhy::InvalidWindowsName("a|b\"c.txt".to_owned()),
         ),
-        // ドライブレターの形ではないコロン（4.6）
+        // ドライブレターの形ではないコロン
         (
             "ghost/a:b.txt",
             UnsafeWhy::InvalidWindowsName("a:b.txt".to_owned()),
         ),
-        // 制御文字（4.6）
+        // 制御文字
         (
             "ghost/a\u{1}b.txt",
             UnsafeWhy::InvalidWindowsName("a\u{1}b.txt".to_owned()),
@@ -320,7 +320,7 @@ fn dangerous_names_are_refused_each_with_its_own_reason() {
 }
 
 /// 危険な名前が 1 件でもあれば、無害なエントリが先に並んでいても書庫全体を拒否する
-/// （要件 4.1。ここは判定だけを行う層なので、書き込みが起きないことは構造で担保する）。
+/// （ここは判定だけを行う層なので、書き込みが起きないことは構造で担保する）。
 #[test]
 fn one_dangerous_name_refuses_the_whole_archive() {
     let reason = refusal(
@@ -389,7 +389,7 @@ fn decoding_runs_before_the_safety_checks() {
     );
 }
 
-// ---- 長さの上限（要件 1.1〜1.7） ----
+// ---- 長さの上限 ----
 
 /// 長さは復号の直後・NUL より先。NUL・`\`・`..`・予約名を同時に持つ 200 単位超の
 /// 名前でも「長すぎる」が勝ち、理由は先頭 32 単位と測った長さだけを持つ。
@@ -446,7 +446,7 @@ fn the_head_never_splits_a_surrogate_pair_and_bounded_values_hide_the_whole() {
     );
 }
 
-// ---- シンボリックリンク（要件 2.7） ----
+// ---- シンボリックリンク ----
 
 /// 外部属性の上位 16 bit が `S_IFLNK` のエントリは拒否する。
 #[test]
@@ -479,7 +479,7 @@ fn a_symlink_with_a_harmless_name_is_still_refused() {
 }
 
 /// リンクの判定は種別欄だけを見る。実行ビットや所有者が立っていても普通の
-/// ファイルとして受理する（要件 4.9「それ以外の外部属性は無視する」）。
+/// ファイルとして受理する（それ以外の外部属性は無視する）。
 #[test]
 fn executable_bits_are_not_mistaken_for_a_symlink() {
     // `S_IFREG | 0755` を上位 16 bit に置いた値。
@@ -505,7 +505,7 @@ fn an_unsafe_name_wins_over_the_symlink_check() {
     );
 }
 
-// ---- 大文字小文字の衝突（要件 4.7） ----
+// ---- 大文字小文字の衝突 ----
 
 /// 大小だけが違う 2 つの名前は、Windows では同じファイルに書かれるので拒否する。
 #[test]
@@ -603,7 +603,7 @@ fn the_case_fold_maps_every_sigma_to_one_name() {
 }
 
 /// ファイルと、別のエントリが暗に作るフォルダは同じ宛先を取り合うので衝突する。
-/// 順を逆にしても、大小だけ違っても同じ（#6）。
+/// 順を逆にしても、大小だけ違っても同じ。
 #[test]
 fn a_file_collides_with_a_folder_another_entry_implies() {
     let cases = [
@@ -628,7 +628,7 @@ fn a_file_collides_with_a_folder_another_entry_implies() {
     }
 }
 
-/// 明示のフォルダのエントリとその子は、どちらの順でも衝突しない（#6）。
+/// 明示のフォルダのエントリとその子は、どちらの順でも衝突しない。
 #[test]
 fn an_explicit_folder_entry_and_its_children_do_not_collide() {
     let names = accepted(
@@ -694,7 +694,7 @@ fn only_the_listed_reserved_words_are_refused() {
     }
 }
 
-/// 上付き数字の `COM¹`〜`LPT³` も Windows の予約名（#3）。
+/// 上付き数字の `COM¹`〜`LPT³` も Windows の予約名。
 #[test]
 fn superscript_com_and_lpt_names_are_reserved() {
     for name in [
@@ -771,7 +771,7 @@ fn the_index_follows_the_central_directory_order() {
     );
 }
 
-// ---- 「1 バイトも書かない」（要件 4.1） ----
+// ---- 「1 バイトも書かない」 ----
 
 /// `names` の本体が、ファイルシステムにも別プロセスにも触る綴りを 1 つも持たない。
 ///

@@ -53,7 +53,7 @@ async fn received(transport: &mut LineTransport<DuplexStream, DuplexStream>) -> 
     serde_json::to_value(&message).expect("要求は JSON にできる")
 }
 
-/// 標準出力の次の 1 行。行末が LF 1 つで、JSON として読めることも見る（要件 1.1・1.4）。
+/// 標準出力の次の 1 行。行末が LF 1 つで、JSON として読めることも見る。
 async fn next_line(output: &mut BufReader<DuplexStream>) -> Value {
     let mut line = String::new();
     output.read_line(&mut line).await.expect("1 行読める");
@@ -62,8 +62,8 @@ async fn next_line(output: &mut BufReader<DuplexStream>) -> Value {
     serde_json::from_str(&line).expect("標準出力の 1 行は JSON")
 }
 
-/// 輸送を閉じてから、標準出力に残った全部の行。どの行も LF 1 つで終わり、JSON として読める
-/// （要件 1.4・5.1）。行が足りないときに待ち続けないよう、閉じてから終わりまで読む。
+/// 輸送を閉じてから、標準出力に残った全部の行。どの行も LF 1 つで終わり、JSON として読める。
+/// 行が足りないときに待ち続けないよう、閉じてから終わりまで読む。
 async fn rest_of_lines(
     mut transport: LineTransport<DuplexStream, DuplexStream>,
     output: &mut BufReader<DuplexStream>,
@@ -92,7 +92,7 @@ fn invalid_request_line() -> Value {
     json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32600, "message": "Invalid Request"}})
 }
 
-/// 数の `id` と文字列の `id` が、要求でも応答でもそのまま通る（要件 1.1）。
+/// 数の `id` と文字列の `id` が、要求でも応答でもそのまま通る。
 /// 行末の CRLF と前後の空白は落ちる。
 #[tokio::test]
 async fn number_and_string_ids_round_trip() {
@@ -115,7 +115,7 @@ async fn number_and_string_ids_round_trip() {
     }
 }
 
-/// 中身に改行を含む応答も 1 行で書く（要件 1.4）: 標準出力の LF は行末の 1 つだけ。
+/// 中身に改行を含む応答も 1 行で書く: 標準出力の LF は行末の 1 つだけ。
 #[tokio::test]
 async fn response_with_newlines_is_written_as_one_line() {
     let (mut transport, _input, mut output) = pipes();
@@ -130,7 +130,7 @@ async fn response_with_newlines_is_written_as_one_line() {
     assert_eq!(lines[0]["result"]["content"][0]["text"], text);
 }
 
-/// 空の行・空白だけの行は飛ばし、標準出力へ何も書かない（要件 1.5・5.1）。
+/// 空の行・空白だけの行は飛ばし、標準出力へ何も書かない。
 #[tokio::test]
 async fn blank_lines_are_skipped_without_output() {
     let (mut transport, mut input, mut output) = pipes();
@@ -146,7 +146,7 @@ async fn blank_lines_are_skipped_without_output() {
     );
 }
 
-/// JSON として読めない行には `-32700`・`id` は `null` を 1 行返し、次の行はそのまま通る（要件 1.6）。
+/// JSON として読めない行には `-32700`・`id` は `null` を 1 行返し、次の行はそのまま通る。
 #[tokio::test]
 async fn non_json_lines_get_parse_error_and_the_next_line_passes() {
     let (mut transport, mut input, mut output) = pipes();
@@ -175,7 +175,7 @@ async fn non_json_lines_get_parse_error_and_the_next_line_passes() {
 }
 
 /// JSON として読めるが要求の形でない行（配列・数・文字列・欄の形違い）には `-32600`・`id` は `null`
-/// を 1 行返し、次の行はそのまま通る（要件 1.7）。
+/// を 1 行返し、次の行はそのまま通る。
 #[tokio::test]
 async fn non_object_lines_get_invalid_request_and_the_next_line_passes() {
     let (mut transport, mut input, mut output) = pipes();
@@ -204,7 +204,7 @@ async fn non_object_lines_get_invalid_request_and_the_next_line_passes() {
     );
 }
 
-/// 入力の終わりで輸送が終わる（要件 1.9）。行末の無い最後の行も 1 行として届く。
+/// 入力の終わりで輸送が終わる。行末の無い最後の行も 1 行として届く。
 #[tokio::test]
 async fn end_of_input_ends_the_transport() {
     let (mut transport, mut input, _output) = pipes();
@@ -218,7 +218,7 @@ async fn end_of_input_ends_the_transport() {
     assert!(transport.receive().await.is_none());
 }
 
-/// 数 MiB の行が欠けずに通る（要件 1.8）: 要求の行も応答の行も。
+/// 数 MiB の行が欠けずに通る: 要求の行も応答の行も。
 #[tokio::test]
 async fn multi_mebibyte_lines_are_not_truncated() {
     let (mut transport, mut input, mut output) = pipes();
@@ -263,7 +263,7 @@ async fn bom_is_dropped_only_on_the_first_line() {
     );
 }
 
-/// 同時の書き込みが 1 行の途中で混ざらない（要件 1.4）: rmcp は `send` の未来を並べて走らせる。
+/// 同時の書き込みが 1 行の途中で混ざらない: rmcp は `send` の未来を並べて走らせる。
 /// 1 件が管より大きいので、鍵が無ければ書いている途中で次の 1 件が割り込む。
 #[tokio::test]
 async fn concurrent_sends_do_not_interleave_within_a_line() {

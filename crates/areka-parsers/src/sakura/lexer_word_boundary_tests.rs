@@ -2,13 +2,13 @@
 //!
 //! 対象は `lex` の出力トークン列のみ（意味付けは `decode` の領分ゆえここでは見ない）。
 //! 固定するのは、タグ名が綴りによらず固定長規律（`\` ＋ 1 文字・`\_` ＋ 1 文字・
-//! `\__` ＋ 1 文字）で終端し、その後ろの本文に半角 `[` があっても角括弧経路へ入らないこと
-//! （要件 1.5〜1.8・3.2・5.1〜5.6・5.8）。あわせて、タグの直後に `[` が来る形・短縮形・
-//! 旧仕様の選択肢 `\q*[…]` など、本仕様で変わってはならない形を固定する（要件 4.4・4.9〜4.11）。
+//! `\__` ＋ 1 文字）で終端し、その後ろの本文に半角 `[` があっても角括弧経路へ入らないこと。
+//! あわせて、タグの直後に `[` が来る形・短縮形・
+//! 旧仕様の選択肢 `\q*[…]` など、変わってはならない形を固定する。
 //!
 //! エスケープ・クォート・引数分割・`\_` の固定長規律は `lexer_bare_tag_tests.rs` と
 //! `lexer_tests.rs` が既に固定しているため、ここでは重複させない。
-//! すべて決定論（`#[test]`・時計／GPU／実機に依存しない・要件 5.10）。
+//! すべて決定論（`#[test]`・時計／GPU／実機に依存しない）。
 
 use super::{ShorthandWord, Token, lex};
 
@@ -44,7 +44,7 @@ fn shorthand(word: ShorthandWord, n: u8) -> Token {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// L1〜L3: 3 形のタグ名の全件 × 本文中の閉じた `[…]`（要件 1.5・5.1〜5.3）。
+// L1〜L3: 3 形のタグ名の全件 × 本文中の閉じた `[…]`。
 // ───────────────────────────────────────────────────────────────────
 
 /// 正典の 1 文字タグ名のうち `\_` を除く 30 綴り。`\_` の直後に本文が続く形は
@@ -60,7 +60,7 @@ const UNDERSCORE_WORDS: [&str; 19] = [
     "__q", "__t", "__v", "__w",
 ];
 
-/// L1（要件 5.1）: 1 文字タグ名 30 綴りのすべてで、タグ名は 1 文字で終端し、
+/// L1: 1 文字タグ名 30 綴りのすべてで、タグ名は 1 文字で終端し、
 /// 本文中の `[注]` は本文のまま残る。
 #[test]
 fn one_char_tag_ends_before_body_containing_brackets() {
@@ -74,7 +74,7 @@ fn one_char_tag_ends_before_body_containing_brackets() {
     }
 }
 
-/// L2（要件 1.3・5.2）: 短縮形の対象語 3 個も、直後が数字でなければ 1 文字で終端する。
+/// L2: 短縮形の対象語 3 個も、直後が数字でなければ 1 文字で終端する。
 #[test]
 fn shorthand_words_without_digit_end_before_body_containing_brackets() {
     assert_eq!(
@@ -91,7 +91,7 @@ fn shorthand_words_without_digit_end_before_body_containing_brackets() {
     );
 }
 
-/// L3（要件 1.5・5.3）: `\_` 始まりの 19 綴りのすべてで、タグ名は固定長で終端し、
+/// L3: `\_` 始まりの 19 綴りのすべてで、タグ名は固定長で終端し、
 /// 本文中の `[注]` は本文のまま残る。
 #[test]
 fn underscore_tag_ends_before_body_containing_brackets() {
@@ -106,10 +106,10 @@ fn underscore_tag_ends_before_body_containing_brackets() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// L4〜L7: 本文側の `[` のさまざまな形（要件 1.6〜1.8・5.4・5.8）。
+// L4〜L7: 本文側の `[` のさまざまな形。
 // ───────────────────────────────────────────────────────────────────
 
-/// L4（要件 5.4）: 本文中の未閉じ `[` は残りを吸収せず、3 形とも本文のまま残る。
+/// L4: 本文中の未閉じ `[` は残りを吸収せず、3 形とも本文のまま残る。
 #[test]
 fn unclosed_bracket_in_body_stays_text_for_all_three_forms() {
     assert_eq!(
@@ -126,13 +126,13 @@ fn unclosed_bracket_in_body_stays_text_for_all_three_forms() {
     );
 }
 
-/// L5（要件 1.6・5.8）: 本文が半角英数だけでも、タグ名は 1 文字で終端する。
+/// L5: 本文が半角英数だけでも、タグ名は 1 文字で終端する。
 #[test]
 fn ascii_only_body_does_not_extend_tag_name() {
     assert_eq!(lex(r"\0file[1].txt"), vec![bare("0"), text("file[1].txt")]);
 }
 
-/// L6（要件 1.7・5.8）: 本文中の `[` が複数あっても、`]` が単独で現れても本文のまま。
+/// L6: 本文中の `[` が複数あっても、`]` が単独で現れても本文のまま。
 #[test]
 fn multiple_or_stray_brackets_in_body_stay_text() {
     assert_eq!(
@@ -142,7 +142,7 @@ fn multiple_or_stray_brackets_in_body_stay_text() {
     assert_eq!(lex(r"\eあ]い"), vec![bare("e"), text("あ]い")]);
 }
 
-/// L7（要件 1.8・5.8）: 本文中の `[` の後に別のタグやシステム変数が続いても、
+/// L7: 本文中の `[` の後に別のタグやシステム変数が続いても、
 /// それぞれが独立した単位として読まれる。
 #[test]
 fn tags_and_sysvars_after_body_bracket_are_separate_units() {
@@ -159,10 +159,10 @@ fn tags_and_sysvars_after_body_bracket_are_separate_units() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// L8〜L11: 変わってはならない形（要件 3.2・4.4・4.9・4.10・5.5・5.6）。
+// L8〜L11: 変わってはならない形。
 // ───────────────────────────────────────────────────────────────────
 
-/// L8（要件 4.10・5.5）: 引数を取りうるタグの直後に `[` が来る形は角括弧形として読まれる
+/// L8: 引数を取りうるタグの直後に `[` が来る形は角括弧形として読まれる
 /// （引数を取らないタグの後の `[` は字のまま＝`bracket_after_no_arg_tag_is_text`）。
 #[test]
 fn bracket_immediately_after_tag_name_is_still_bracket_form() {
@@ -186,14 +186,14 @@ fn bracket_immediately_after_tag_name_is_still_bracket_form() {
     );
 }
 
-/// L9（要件 3.2・5.5）: タグの直後の未閉じ `[` は従来どおり残り全部を `Raw` として吸収する。
+/// L9: タグの直後の未閉じ `[` は残り全部を `Raw` として吸収する。
 #[test]
 fn unclosed_bracket_immediately_after_tag_name_is_still_absorbed_as_raw() {
     assert_eq!(lex(r"\s[注です"), vec![raw(r"\s[注です")]);
 }
 
-/// 指摘 27（SSP で測った `\1`・`\e` と同じ規則）: 引数を取らないタグの後の `[` は角括弧の道に
-/// 入らず、閉じていても閉じていなくても字のまま。`+` と `v` は一覧の外（設計の討議の議題 2）。
+/// SSP で測った `\1`・`\e` と同じ規則: 引数を取らないタグの後の `[` は角括弧の道に
+/// 入らず、閉じていても閉じていなくても字のまま。`+` と `v` は一覧の外。
 #[test]
 fn bracket_after_no_arg_tag_is_text() {
     let no_arg = [
@@ -210,9 +210,8 @@ fn bracket_after_no_arg_tag_is_text() {
     assert_eq!(lex(r"\v[1]"), vec![tag("v", &["1"])]);
 }
 
-/// L10（要件 4.10・5.5）: 短縮形の 1 桁規律と、旧仕様の選択肢 `\q*[ID][タイトル]` は不変。
-/// 短縮形の数字の後の `[` は字（閉じていても閉じていなくても・かけ直しの R18 で要件 4.3 の
-/// 「角括弧付きタグを優先」を改めた）。
+/// L10: 短縮形の 1 桁規律と、旧仕様の選択肢 `\q*[ID][タイトル]` は不変。
+/// 短縮形の数字の後の `[` は字（閉じていても閉じていなくても）。
 #[test]
 fn shorthand_digit_rule_and_legacy_q_star_are_unchanged() {
     assert_eq!(
@@ -244,8 +243,8 @@ fn shorthand_digit_rule_and_legacy_q_star_are_unchanged() {
     assert_eq!(lex(r"\q*[ID"), vec![raw(r"\q*[ID")]);
 }
 
-/// L10 の補足（要件 1.9・4.10）: `\q*` の直後が `[` でなければ選択肢の例外に入らず、
-/// 1 文字タグ `\q` ＋ 本文になる（是正前は `q*テキスト` までをタグ名として読んでいた）。
+/// L10 の補足: `\q*` の直後が `[` でなければ選択肢の例外に入らず、
+/// 1 文字タグ `\q` ＋ 本文になる。
 #[test]
 fn q_star_without_immediate_bracket_is_one_char_tag_and_text() {
     assert_eq!(
@@ -254,7 +253,7 @@ fn q_star_without_immediate_bracket_is_one_char_tag_and_text() {
     );
 }
 
-/// L11（要件 4.4・4.9・5.6）: 語境界の是正が影響しない 4 形（角括弧形の後ろの本文・
+/// L11: 語境界の規律が影響しない 4 形（角括弧形の後ろの本文・
 /// 短縮形の後ろの本文・全角括弧・タグを含まない台詞）。
 #[test]
 fn forms_unaffected_by_word_boundary_rule() {
@@ -277,11 +276,11 @@ fn forms_unaffected_by_word_boundary_rule() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// L12: 正典に無い多文字綴り（意図的な非互換・要件 4.11・5.6）。
+// L12: 正典に無い多文字綴り（意図的な非互換）。
 // ───────────────────────────────────────────────────────────────────
 
-/// L12（要件 4.11・5.6）: 正典に無い多文字綴りの直後の角括弧は、1 文字（または
-/// `\_` の固定長）のタグ ＋ 本文に分かれる。従来は丸ごと 1 単位として捨てていた。
+/// L12: 正典に無い多文字綴りの直後の角括弧は、1 文字（または
+/// `\_` の固定長）のタグ ＋ 本文に分かれる。
 #[test]
 fn unknown_multi_char_spelling_splits_into_tag_and_text() {
     assert_eq!(

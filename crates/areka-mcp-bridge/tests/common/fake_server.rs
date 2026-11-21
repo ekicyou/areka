@@ -218,10 +218,8 @@ impl FakeServer {
                     let listener = socket.listen(1024).expect("fake server: listen");
                     let _ = ready.send(());
                     tokio::spawn(accept_loop(listener, shared));
-                    // 止める合図（送り手が落ちても同じ）まで回す。
                     let _ = stopped.await;
                 });
-                // ここで runtime が落ち、待受と開いている接続の全部が閉じる。
             }
         });
         // 送り手が落ちた（待ち受けられずに panic した）なら、その panic を `stop` で返す。
@@ -449,7 +447,6 @@ async fn respond(
     connection: usize,
     shared: &Shared,
 ) -> std::io::Result<bool> {
-    // 遅れと門をほどいてから答える。
     loop {
         reply = match reply {
             Reply::Delayed(delay, inner) => {

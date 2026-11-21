@@ -1,5 +1,5 @@
 //! `error` の兄弟テスト。拒否語彙が 13 で閉じていること、詳細を持つ変種の表示が
-//! その詳細を落とさないことを判定する（要件 9.2）。
+//! その詳細を落とさないことを判定する。
 //!
 //! 短い語の重複の無さと `kind()` が変種名であることは、`kind()` と `ALL_KINDS` が
 //! 同じ宣言から展開されるので落ちようがなく、ここでは測らない。実物のアーカイブから
@@ -76,7 +76,7 @@ fn name_undecodable_display_carries_raw_bytes_and_encoding() {
 }
 
 /// 長すぎる名前の表示は、番号・測った長さ・上限・先頭の一部を全て持ち、
-/// 名前の全体は持たない（先頭は 32 単位まで＝要件 1.4・1.8）。
+/// 名前の全体は持たない（先頭は 32 単位まで）。
 #[test]
 fn path_too_long_display_carries_index_length_limit_and_a_bounded_head() {
     let head = "g/".to_string() + &"a".repeat(30);
@@ -133,7 +133,7 @@ fn unsupported_type_display_carries_what_was_found() {
     assert!(shown.contains("plugin"), "{shown}");
 }
 
-/// `type` が無い場合（要件 3.6）の表示に Rust の綴り（`None`）を出さない。
+/// `type` が無い場合の表示に Rust の綴り（`None`）を出さない。
 #[test]
 fn absent_values_are_shown_in_words_not_in_rust_syntax() {
     let no_type = RefuseReason::UnsupportedType { found: None }.to_string();
@@ -169,7 +169,7 @@ fn refused_display_carries_the_archive_path_and_the_reason() {
         reason: RefuseReason::MissingRequiredKey { key: "directory" },
     }
     .to_string();
-    // 書式は設計の逐語どおり。`PathBuf` は thiserror が `.display()` を通すので、
+    // `PathBuf` は thiserror が `.display()` を通すので、
     // Debug の引用符は付かない（付いたらここが赤くなる）。
     assert_eq!(
         shown,
@@ -189,7 +189,7 @@ fn io_display_carries_phase_path_and_source() {
         survivors: Box::default(),
     }
     .to_string();
-    // ここも設計の逐語の書式。2 つの `PathBuf` が引用符無しで出る。
+    // 2 つの `PathBuf` が引用符無しで出る。
     assert!(
         shown.starts_with(r"C:\samples\emo2.nar: Commit で I/O に失敗: C:\root\ghost\emo2: "),
         "書式が崩れている: {shown}"
@@ -288,7 +288,7 @@ fn manifest_warnings_are_seven_and_carry_their_key() {
         mask.contains("refreshundeletemask") && mask.contains(".."),
         "{mask}"
     );
-    // 鍵・書かれていた値・取り除いた後の値の 3 つを落とさない（要件 6.1）。
+    // 鍵・書かれていた値・取り除いた後の値の 3 つを落とさない。
     let cleaned = warnings[5].to_string();
     assert!(
         cleaned.contains("balloon0.source.directory")
@@ -296,7 +296,7 @@ fn manifest_warnings_are_seven_and_carry_their_key() {
             && cleaned.contains("extra/bal1"),
         "{cleaned}"
     );
-    // 知らない鍵の読み飛ばしと区別できる表示で、鍵を落とさない（要件 6.3）。
+    // 知らない鍵の読み飛ばしと区別できる表示で、鍵を落とさない。
     let not_searched = warnings[6].to_string();
     assert!(
         not_searched.contains("balloon2.directory"),

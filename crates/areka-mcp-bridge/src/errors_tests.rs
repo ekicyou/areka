@@ -13,7 +13,7 @@ fn assert_line(line: Value, expected: Value) {
     assert!(!text.contains('\n'), "{text}");
 }
 
-/// JSON でない行への答え（要件 1.6）: 番号 `-32700`・`id` は `null`。
+/// JSON でない行への答え: 番号 `-32700`・`id` は `null`。
 #[test]
 fn parse_error_line_shape() {
     assert_line(
@@ -22,7 +22,7 @@ fn parse_error_line_shape() {
     );
 }
 
-/// オブジェクトでない行・欄の形が違う行への答え（要件 1.7）: 番号 `-32600`・`id` は `null`。
+/// オブジェクトでない行・欄の形が違う行への答え: 番号 `-32600`・`id` は `null`。
 #[test]
 fn invalid_request_line_shape() {
     assert_line(
@@ -31,7 +31,7 @@ fn invalid_request_line_shape() {
     );
 }
 
-/// 番号 `-1` の 3 つ: SSP と同じ書き出しに理由が続く（要件の細部 6）。`data` は付けない。
+/// 番号 `-1` の 3 つ: SSP と同じ書き出しに理由が続く。`data` は付けない。
 #[test]
 fn bridge_errors_are_code_minus_one_with_the_ssp_prefixes() {
     let cases = [

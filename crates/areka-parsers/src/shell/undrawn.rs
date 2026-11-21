@@ -1,5 +1,5 @@
 //! 描けない行の転記（parse_undrawn_elements）— surfaces.txt から、areka が描けない描画メソッドの
-//! element定義の行だけを原文のまま並べる（areka-P0-element-base-method 要件 2.1・2.2・2.6）。
+//! element定義の行だけを原文のまま並べる。
 //!
 //! element定義の行は第 2 欄の語で 3 つの転記のちょうど 1 つに入る: `overlay`・`base` は画像の
 //! 読み手（`Element`）、`balloon` は箱の転記（`boxes.rs`）、それ以外（空の欄・大文字の綴り・

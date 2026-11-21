@@ -1,5 +1,4 @@
-//! 実ソケットのテスト: `params` がオブジェクトでない要求への受け口の答え
-//! （spec: mcp-strict-errors 要件 6.1〜6.4・6.6・6.7・7.7）。
+//! 実ソケットのテスト: `params` がオブジェクトでない要求への受け口の答え。
 //!
 //! 5 つの版の話し方で送る。旧式の 4 版は `MCP-Protocol-Version` を付け、`2026-07-28` は
 //! `Mcp-Method` も付ける（`params` がオブジェクトでないので `_meta` は入れられない）。
@@ -32,7 +31,7 @@ fn request(id: &Value, method: &str, params: &Value) -> String {
     json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }).to_string()
 }
 
-/// (要件 6.1・6.2・6.4・6.6) 数・文字列・真偽値は `-32600`、配列は `-32602` の、要求の `id`
+/// 数・文字列・真偽値は `-32600`、配列は `-32602` の、要求の `id`
 /// （数・文字列）を付けた 1 件（`application/json`）。知らない名前のメソッドでも同じ。
 /// HTTP の状態は旧式の 4 版が 200、`2026-07-28` は `-32600` が 200・`-32602` が 400。
 /// 答えた後に同じサーバへ送る `tools/list` はいつもどおり通る。
@@ -84,7 +83,7 @@ fn non_object_params_answer_with_the_id_in_every_version() {
     }
 }
 
-/// (要件 6.1・6.4) `Content-Type` に `charset` が付いても同じ表の答え（rmcp の 415 の平文にしない）。
+/// `Content-Type` に `charset` が付いても同じ表の答え（rmcp の 415 の平文にしない）。
 #[test]
 fn a_charset_in_the_content_type_keeps_the_shape_answer() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -105,7 +104,7 @@ fn a_charset_in_the_content_type_keeps_the_shape_answer() {
     );
 }
 
-/// (要件 6.7) 当たらないものは今のまま: 通知・`id` が `null` の要求・JSON でない本文は rmcp の
+/// 当たらないものは今のまま: 通知・`id` が `null` の要求・JSON でない本文は rmcp の
 /// 415 の平文、`params` が `null` の要求は rmcp の答え（旧式は成功・`2026-07-28` は `_meta` の欠落の
 /// 400・`-32602`）。
 #[test]
@@ -161,7 +160,7 @@ fn requests_outside_the_shape_keep_current_answers_in_every_version() {
     }
 }
 
-/// (要件 6.3・6.7) rmcp が読める要求は rmcp の答えのまま（`tools/list` は成功、知らない名前は `-32601`）。
+/// rmcp が読める要求は rmcp の答えのまま（`tools/list` は成功、知らない名前は `-32601`）。
 #[test]
 fn rmcp_readable_requests_keep_rmcp_answers_in_every_version() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -180,7 +179,7 @@ fn rmcp_readable_requests_keep_rmcp_answers_in_every_version() {
     }
 }
 
-/// (要件 6.4) 状態の写し（`shape_error_status`）が rmcp とずれていない: 同じ版・同じメソッドで
+/// 状態の写し（`shape_error_status`）が rmcp とずれていない: 同じ版・同じメソッドで
 /// rmcp 自身が返す `-32602`（`2026-07-28` は `params: null` の `_meta` の欠落、旧式は未登録の名前の
 /// `tools/call`）と、areka の配列の `params` への `-32602` が同じ HTTP の状態。
 /// rmcp の版を上げて対応が変わればここが赤になる。

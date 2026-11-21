@@ -2,8 +2,8 @@
 //!
 //! rmcp の HTTP のクライアントの口（`StreamableHttpClient`）を、tokio の `TcpStream` と `httparse` で
 //! 満たす。要求ごとに `127.0.0.1` の番号へ接続を開き、その接続の最初の要求として旧式の
-//! `initialize` を送って名乗りを読み、areka と名乗った相手にだけ、同じ接続で本当の本文を送る
-//! （設計 D-4）。接続は持ち越さない（本当の要求は `Connection: close`）。
+//! `initialize` を送って名乗りを読み、areka と名乗った相手にだけ、同じ接続で本当の本文を送る。
+//! 接続は持ち越さない（本当の要求は `Connection: close`）。
 //!
 //! 失敗は「書く前」（本当の本文を 1 バイトも書いていない）と「書いた後」（届いたかもしれない）に
 //! 分かれる（[`HttpError::written`]）。応答の上限の時間は持たない（呼び手の rmcp が要求ごとに持つ）。
@@ -69,7 +69,7 @@ impl HttpError {
 impl StreamableHttpClient for OwnHttp {
     type Error = HttpError;
 
-    /// `uri`・`session_id`・`auth_header` は使わない: 宛先は自分の `port` から組み（要件 2.7）、
+    /// `uri`・`session_id`・`auth_header` は使わない: 宛先は自分の `port` から組み、
     /// areka は無状態で認証も無い。`custom_headers`（rmcp が組んだ版などの札）はそのまま付ける。
     async fn post_message(
         &self,
@@ -100,7 +100,7 @@ impl StreamableHttpClient for OwnHttp {
         Ok(())
     }
 
-    /// セッションが無ければ、rmcp はこれを呼ばない（SSE は読まない＝設計 D-16）。
+    /// セッションが無ければ、rmcp はこれを呼ばない（SSE は読まない）。
     async fn get_stream(
         &self,
         _uri: Arc<str>,
@@ -270,7 +270,7 @@ struct Reply {
     body: Vec<u8>,
 }
 
-/// 応答を rmcp の口の答えにする。HTTP の状態は、202（受け取った）のほかは見ない（要件 4.3）。
+/// 応答を rmcp の口の答えにする。HTTP の状態は、202（受け取った）のほかは見ない。
 fn classify(reply: Reply) -> Result<StreamableHttpPostResponse, HttpError> {
     let Reply {
         status,
@@ -324,7 +324,7 @@ struct Head {
 }
 
 /// 応答 1 件を読む。本文は `Content-Length`・chunked・閉じるまで、の 3 通りで欠けずに読む
-/// （大きさの上限なし＝要件 1.8）。202 と `text/event-stream` は本文を読まない（SSE の本文は
+/// （大きさの上限なし）。202 と `text/event-stream` は本文を読まない（SSE の本文は
 /// 終わらないことがある）。途中で閉じたら `UnexpectedEof`、HTTP として読めなければ `InvalidData`。
 async fn read_reply<R: AsyncRead + Unpin>(stream: &mut R, buf: &mut Vec<u8>) -> io::Result<Reply> {
     let head = loop {

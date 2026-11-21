@@ -1,8 +1,8 @@
 //! 待受の束ね・`mcp` スレッドの起こし・`Drop` で畳む取っ手。
 //!
-//! 束ねは呼び出し側のスレッドで同期に行う（起動の記録が呼び出し側で出る＝要件 9.3）。
+//! 束ねは呼び出し側のスレッドで同期に行う（起動の記録が呼び出し側で出る）。
 //! tokio の `current_thread` ランタイムは `mcp` スレッドの中だけで作って回し、
-//! 取っ手 [`McpServer`] の `Drop` で取り消して畳む（設計 B-3）。
+//! 取っ手 [`McpServer`] の `Drop` で取り消して畳む。
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -28,10 +28,9 @@ pub(crate) const ACCEPT_RETRY_WAIT: Duration = Duration::from_millis(100);
 
 /// 待受を立てる。失敗しない（候補が全部だめなら `error!` と「待ち受けない取っ手」で表す）。
 ///
-/// `candidates`: 試す番号の列（先頭から順・最初に束ねた 1 つで待ち受ける＝設計判断 B-13）。
+/// `candidates`: 試す番号の列（先頭から順・最初に束ねた 1 つで待ち受ける）。
 /// 空＝待ち受けない（`AREKA_MCP_PORT=0`）。要素の `0`＝OS に空きポートを割り当てさせる（テスト用）。
-/// `bridge_exe`: help の Claude Desktop の設定例に載せる中継の置き場（None＝場所が取れなかった・
-/// spec: areka-P0-mcp-stdio-bridge）。
+/// `bridge_exe`: help の Claude Desktop の設定例に載せる中継の置き場（None＝場所が取れなかった）。
 pub fn start(candidates: &[u16], registry: ToolRegistry, bridge_exe: Option<PathBuf>) -> McpServer {
     if candidates.is_empty() {
         info!("MCP: 待ち受けない（AREKA_MCP_PORT が 0）");
@@ -115,7 +114,6 @@ impl McpServer {
 
 impl Drop for McpServer {
     fn drop(&mut self) {
-        // 待ち受けていない取っ手は何もしない。
         let Some(listening) = self.listening.take() else {
             return;
         };
@@ -125,7 +123,7 @@ impl Drop for McpServer {
             Ok(()) | Err(RecvTimeoutError::Disconnected) => {
                 info!(addr = %listening.addr, "MCP: 待受を閉じた")
             }
-            // 待ちきれなければ切り離す（終了の手順を止めない＝要件 1.8）。
+            // 待ちきれなければ切り離す（終了の手順を止めない）。
             Err(RecvTimeoutError::Timeout) => warn!(
                 addr = %listening.addr,
                 wait_ms = SHUTDOWN_WAIT.as_millis() as u64,
@@ -155,7 +153,7 @@ fn run(
     };
     // 取り消されると受付のフューチャごと listener が落ちる＝受付の口を OS へ返す。
     runtime.block_on(token.run_until_cancelled(accept_loop(listener, state)));
-    // 開いた接続のタスクは待たずに捨てる（要件 1.8）。
+    // 開いた接続のタスクは待たずに捨てる。
     runtime.shutdown_background();
     let _ = done.send(());
 }
@@ -185,7 +183,6 @@ async fn accept_loop(listener: std::net::TcpListener, state: Arc<State>) {
                     }
                 });
             }
-            // ループは殺さない。間を置いて続ける。
             Err(err) => wait_after_accept_error(&err).await,
         }
     }

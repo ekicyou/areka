@@ -1,7 +1,7 @@
 //! 控え（`cache.rs`）のテスト。
 //!
 //! 置き場はどれもテストごとの一時フォルダ（ワークツリーの `target` の下）。利用者の本物の控えと
-//! SSP の控えには触らない（要件 8.1）。
+//! SSP の控えには触らない。
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -45,7 +45,7 @@ fn names_in(dir: &Path) -> Vec<String> {
     names
 }
 
-/// 書いた控えは、起動し直した中継（別の `Cache`）が読める（要件 3.3）。2 度目の書きは前のを置き換える。
+/// 書いた控えは、起動し直した中継（別の `Cache`）が読める。2 度目の書きは前のを置き換える。
 #[test]
 fn saved_caches_are_read_back_by_another_cache() {
     let root = TempPath::under_target("bridge-cache-roundtrip");
@@ -66,7 +66,7 @@ fn saved_caches_are_read_back_by_another_cache() {
     assert_eq!(names_in(&dir), [SERVER_INFO_FILE, TOOLS_FILE]);
 }
 
-/// 壊れた・途中までの控えは無いものとして扱い、次の書きで作り直せる（要件 3.10）。
+/// 壊れた・途中までの控えは無いものとして扱い、次の書きで作り直せる。
 #[test]
 fn unreadable_content_is_treated_as_absent() {
     let root = TempPath::under_target("bridge-cache-corrupt");
@@ -98,7 +98,7 @@ fn unreadable_content_is_treated_as_absent() {
     assert_eq!(cache.load_tools(), Some(tools(3)));
 }
 
-/// 書けない置き場でも中継は続く（要件 3.10）: 置き場の名前がファイル・控えの名前がフォルダ。
+/// 書けない置き場でも中継は続く: 置き場の名前がファイル・控えの名前がフォルダ。
 #[test]
 fn unwritable_place_keeps_going() {
     let root = TempPath::under_target("bridge-cache-unwritable");
@@ -141,7 +141,7 @@ fn no_place_reads_and_writes_nothing() {
     assert!(!Path::new(TOOLS_FILE).exists());
 }
 
-/// 2 つの中継が同じ控えを同時に書いても、置き場にあるのはいつもどちらか 1 つの全体（要件 3.11）。
+/// 2 つの中継が同じ控えを同時に書いても、置き場にあるのはいつもどちらか 1 つの全体。
 ///
 /// 2 つの中継は別のプロセスなので一時の名前（プロセス番号入り）が違う。テストは 1 つのプロセスの
 /// 2 つのスレッドで、置き換えの関数に別々の番号を渡して同じ形を作る。書いている間じゅう別の

@@ -1,11 +1,8 @@
-//! decode スケルトンの骨格挙動とブロックディスパッチ優先順位（元 decode_tests.rs タスク 4.1 区画）。
-//!
-//! 本ファイルは `decode_tests.rs` のテーマ分割（areka-P0-file-slimming タスク 8.5・要件 1.7）で
-//! 切り出したものであり、テスト本文は分割前と同一である。
+//! decode スケルトンの骨格挙動とブロックディスパッチ優先順位。
 
 use super::{AppendTarget, Element, ElementPath, Shell, Surface, decode, lex};
 
-/// 空入力 → 空 `Shell`・非パニック（要件 3.3）。
+/// 空入力 → 空 `Shell`・非パニック。
 #[test]
 fn empty_input_yields_empty_shell() {
     let shell = decode(lex(""));
@@ -22,7 +19,7 @@ fn empty_input_yields_empty_shell() {
     );
 }
 
-/// ヘッダのみ（charset 行 ＋ descript ブロック）→ 何も保持しない空 `Shell`（要件 3.1/3.2）。
+/// ヘッダのみ（charset 行 ＋ descript ブロック）→ 何も保持しない空 `Shell`。
 #[test]
 fn header_only_is_not_retained() {
     let input = "charset,UTF-8\ndescript\n{\nversion,1\n}\n";
@@ -61,7 +58,6 @@ fn surface_zero_block_extracts_id_zero() {
             animations: vec![],
         }
     );
-    // surface のブレスから append/alias は生じない。
     assert!(shell.appends.is_empty());
     assert!(shell.aliases.is_empty());
 }
@@ -76,7 +72,7 @@ fn surface_large_id_is_extracted() {
 }
 
 /// 非数値 ID（`surface` の後ろに数字がない崩れヘッダ）→ 0 にせず記述子を飛ばし、記述子が
-/// 残らないブレスは積まない（パニックしない・指摘 36）。
+/// 残らないブレスは積まない（パニックしない）。
 #[test]
 fn malformed_surface_id_is_skipped_not_zero() {
     let input = "surface\n{\nelement0,overlay,x.png,0,0\n}\n";
@@ -91,7 +87,7 @@ fn malformed_surface_id_is_skipped_not_zero() {
     );
 }
 
-/// ヘッダ欠落（surface 定義がいきなり本体行のみ・崩れ入力）→ 失敗せず継続（要件 3.3）。
+/// ヘッダ欠落（surface 定義がいきなり本体行のみ・崩れ入力）→ 失敗せず継続。
 #[test]
 fn missing_header_does_not_fail() {
     // ブロック開始のない孤立行群。lexer は TopLevel に落とし、decode は吸収する。
@@ -110,7 +106,7 @@ fn missing_header_does_not_fail() {
     );
 }
 
-/// 同一入力を 2 度 decode → 同一結果（決定性・要件 2.4 系）。
+/// 同一入力を 2 度 decode → 同一結果（決定性）。
 #[test]
 fn decode_is_deterministic() {
     let input =
@@ -141,7 +137,6 @@ kero.surface.alias
 }
 ";
     let shell = decode(lex(input));
-    // surfaces に入るのは実 surface2100 のみ（alias/append を surface と誤読しない）。
     assert_eq!(shell.surfaces.len(), 1);
     assert_eq!(shell.surfaces[0].targets, [AppendTarget::Single(2100)]);
 }

@@ -1,4 +1,4 @@
-//! 引数の検査（spec: areka-P0-mcp-tool-entrances）。
+//! 引数の検査。
 //!
 //! 登録した `inputSchema` に照らして `tools/call` の `arguments` を確かめる純粋な関数を置く。
 
@@ -10,10 +10,10 @@ const MAX_EXACT_FLOAT_INTEGER: f64 = 9_007_199_254_740_992.0;
 /// 必須の欄 → 型 の順に調べ、最初に見つけた誤りの理由（英文）を返す。
 ///
 /// - 必須: `schema["required"]` の並び順に、`args` に無い・`null` の欄を `missing required argument: <名前>` で拒む。
-///   `ghost_name` は調べない（要件 2.3。欠落は名前の解決へ回す）。
+///   `ghost_name` は調べない（欠落は名前の解決へ回す）。
 /// - 型: `schema["properties"]` の各欄のうち `null` でない値だけを調べ、違えば `argument <名前> must be <型>`。
 ///   `array` の `items.type` に要素が合わないときは `argument <名前> must be array of <型>`。
-///   未知の `type` と `properties` に無い欄は見ない（要件 2.5）。
+///   未知の `type` と `properties` に無い欄は見ない。
 /// - 理由の文は `failed to deserialize parameters:` で始めない（始めると rmcp が `isError` の結果へ変える）。
 pub(crate) fn check_arguments(
     schema: &Map<String, Value>,

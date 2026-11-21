@@ -1,9 +1,9 @@
 //! 標準入出力の輸送（1 行 1 要求）。
 //!
 //! rmcp の stdio の輸送（`AsyncRwTransport`）は JSON として読めない行を黙って捨てるので、
-//! 行の形のエラー 2 つ（`-32700`・`-32600`）を自分で 1 行書く輸送を持つ（要件 1.6・1.7）。
-//! `params` の形だけが誤る要求には、受け口と同じ `id` 付きの答えを書く（spec: mcp-strict-errors 要件 6.5）。
-//! 標準出力へ書くのは、応答の行とこれらのエラーの行だけ（要件 5.1）。
+//! 行の形のエラー 2 つ（`-32700`・`-32600`）を自分で 1 行書く輸送を持つ。
+//! `params` の形だけが誤る要求には、受け口と同じ `id` 付きの答えを書く。
+//! 標準出力へ書くのは、応答の行とこれらのエラーの行だけ。
 
 use std::future::Future;
 use std::io;
@@ -29,7 +29,7 @@ pub struct LineTransport<R, W> {
     /// rmcp は `send` の未来を並べて走らせるので、1 行を書く間は鍵を持つ。
     writer: Arc<Mutex<W>>,
     /// 読みかけの行。rmcp は `receive` を `select!` の中で回し、途中で捨てて呼び直すので、
-    /// 行が揃うまで持ち越す。上限は設けない（要件 1.8）。
+    /// 行が揃うまで持ち越す。上限は設けない。
     line: Vec<u8>,
     /// 次に揃う行が最初の行か（BOM を落とすのは最初の行だけ）。
     first: bool,
@@ -73,7 +73,7 @@ where
         &mut self,
         item: ServerJsonRpcMessage,
     ) -> impl Future<Output = io::Result<()>> + Send + 'static {
-        // `serde_json::to_vec` は改行を含まない 1 行にする（要件 1.4）。
+        // `serde_json::to_vec` は改行を含まない 1 行にする。
         let line = serde_json::to_vec(&item);
         let writer = self.writer.clone();
         async move { write_line(&writer, line?).await }
@@ -115,7 +115,7 @@ where
     }
 }
 
-/// 1 行を要求として読む。`None` は空の行（空白だけの行を含む＝要件 1.5）、`Err` は読めない行へ書く答え。
+/// 1 行を要求として読む。`None` は空の行（空白だけの行を含む）、`Err` は読めない行へ書く答え。
 /// 行末の CR・LF と前後の空白を落とし、最初の行だけ頭の BOM も落とす。
 fn parse(line: &[u8], first: bool) -> Option<Result<ClientJsonRpcMessage, Value>> {
     let line = match line.strip_prefix(UTF8_BOM) {

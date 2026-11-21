@@ -1,4 +1,4 @@
-//! 書き込みが箱へ回されているかの見立て（spec: bridge-store-user-root 要件 3.5〜3.9）。
+//! 書き込みが箱へ回されているかの見立て。
 //!
 //! Store 版のアプリから起こされた中継は、`%LOCALAPPDATA%` の下への書き込みを
 //! アプリの箱（`…\Packages\<名>\LocalCache\Local\`）へ回されることがある。控えのフォルダの
@@ -80,7 +80,7 @@ pub(crate) fn classify(
         .as_os_str()
         .eq_ignore_ascii_case(local.join(rel).as_os_str())
     {
-        // shortcut: 箱の外で作られた控えのフォルダを、箱の中の中継は控えを箱の中へ初めて書けた起動までは「外」と見立てる（areka が居なくて書けない間は何回でも続く）。困る場面が出たら名乗りの読み（D1）を重ねる
+        // shortcut: 箱の外で作られた控えのフォルダを、箱の中の中継は控えを箱の中へ初めて書けた起動までは「外」と見立てる（areka が居なくて書けない間は何回でも続く）。困る場面が出たら名乗りの読みを重ねる
         return BoxSight::Outside;
     }
     BoxSight::Inside {

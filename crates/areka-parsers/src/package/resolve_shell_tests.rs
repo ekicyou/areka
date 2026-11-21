@@ -321,7 +321,7 @@ readme,
 }
 
 /// SHIORI の置き場は `ghost` と `master` をネイティブの区切りで組む（`ghost/master` の
-/// 1 成分で継がない）。バイト列で比べる（`Path` の `==` は区切りの違いを見逃す・指摘 10）。
+/// 1 成分で継がない）。バイト列で比べる（`Path` の `==` は区切りの違いを見逃す）。
 #[test]
 fn shiori_dir_uses_native_separators() {
     let root = Path::new("root");
@@ -363,7 +363,7 @@ fn resolve_descript_capturing(
     (root, model.expect("resolve ok"), warns)
 }
 
-/// R2: ゴーストのフォルダの外を指す `readme`（`..`・絶対パス・ドライブ）は値が無いのと同じに
+/// ゴーストのフォルダの外を指す `readme`（`..`・絶対パス・ドライブ）は値が無いのと同じに
 /// 扱い（説明書は既定の `readme.txt` へ落ちる）、値を `warn!` に残す。
 #[test]
 fn readme_pointing_outside_ghost_is_dropped_with_warn() {
@@ -383,7 +383,7 @@ fn readme_pointing_outside_ghost_is_dropped_with_warn() {
     }
 }
 
-/// R2: ゴーストのフォルダの中のサブフォルダを指す `readme` はそのまま使い、記録しない。
+/// ゴーストのフォルダの中のサブフォルダを指す `readme` はそのまま使い、記録しない。
 #[test]
 fn readme_inside_ghost_subfolder_is_kept() {
     let (_root, model, warns) =
@@ -393,7 +393,7 @@ fn readme_inside_ghost_subfolder_is_kept() {
     assert!(warns.is_empty(), "{warns:?}");
 }
 
-/// R2: ghost/master の外を指す `shiori` は記録だけ——値はそのまま使う（共有の DLL を持つ
+/// ghost/master の外を指す `shiori` は記録だけ——値はそのまま使う（共有の DLL を持つ
 /// ゴーストを起動できなくしない）。
 #[test]
 fn shiori_pointing_outside_is_kept_with_warn() {
@@ -406,7 +406,7 @@ fn shiori_pointing_outside_is_kept_with_warn() {
     assert_eq!(warns[0].field("value"), Some(value), "{warns:?}");
 }
 
-/// R2: ghost/master の中の `shiori` は記録しない。
+/// ghost/master の中の `shiori` は記録しない。
 #[test]
 fn shiori_inside_is_not_warned() {
     let (_root, model, warns) =

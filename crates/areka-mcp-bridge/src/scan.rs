@@ -1,8 +1,8 @@
 //! 候補の列から areka を 1 つ選ぶ探索。
 //!
 //! 候補の全部へ TCP の接続を並べて開き、開いた接続を候補の順に確かめ（`http::verify`）にかけて、
-//! 最初に areka と名乗った 1 つで決める。あとの候補の接続は 1 バイトも書かずに閉じる（設計 D-5）。
-//! 決めた番号には、自前の送り手（`OwnHttp`）の上に rmcp のクライアントを立てる（設計 D-3）。
+//! 最初に areka と名乗った 1 つで決める。あとの候補の接続は 1 バイトも書かずに閉じる。
+//! 決めた番号には、自前の送り手（`OwnHttp`）の上に rmcp のクライアントを立てる。
 
 use areka_mcp::{MCP_PATH, SERVER_NAME};
 use futures::future::join_all;
@@ -92,7 +92,7 @@ async fn pick(
 }
 
 /// 番号に rmcp のクライアントを立てる（旧式の `initialize` → `notifications/initialized`）。
-/// 手順の `initialize` も送り手を通るので、ここでも名乗りが確かめられる（設計 D-4）。
+/// 手順の `initialize` も送り手を通るので、ここでも名乗りが確かめられる。
 /// 失敗は、中身を標準エラーに残して `None`。
 async fn stand(port: u16, timeouts: &Timeouts) -> Option<Link> {
     let http = OwnHttp {

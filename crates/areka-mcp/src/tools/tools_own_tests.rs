@@ -1,4 +1,4 @@
-//! 独自のツールの表と 11 本の登録の決定論テスト（実ソケットなし・spec: areka-P0-mcp-author-tools）。
+//! 独自のツールの表と 11 本の登録の決定論テスト（実ソケットなし）。
 
 use std::collections::BTreeSet;
 
@@ -8,7 +8,7 @@ fn specs(registry: &ToolRegistry) -> Vec<ToolSpec> {
     registry.entries().iter().map(|(s, _)| s.clone()).collect()
 }
 
-/// (要件 1.1・1.3・1.4) 11 本・先頭 10 本は SSP の表（`TABLE`）と同じ並びと定義・11 本目は `check_script`。
+/// 11 本・先頭 10 本は SSP の表（`TABLE`）と同じ並びと定義・11 本目は `check_script`。
 #[test]
 fn all_entrances_is_ssp_ten_then_own_rows() {
     let (all, _rx) = all_entrances(REPLY_WAIT);
@@ -19,7 +19,7 @@ fn all_entrances_is_ssp_ten_then_own_rows() {
     assert_eq!(all[10].name, "check_script");
 }
 
-/// (要件 1.1・4.3) 名前の重複 0（登録口は後勝ちで畳むので、表の全行の名前で見る）・独自の表の各行が登録表に在る。
+/// 名前の重複 0（登録口は後勝ちで畳むので、表の全行の名前で見る）・独自の表の各行が登録表に在る。
 #[test]
 fn own_rows_are_registered_without_duplicate_names() {
     let names: Vec<String> = rows()
@@ -36,7 +36,7 @@ fn own_rows_are_registered_without_duplicate_names() {
     }
 }
 
-/// (spec: areka-P0-mcp-stdio-bridge・要件 8.6) `all_specs` の列は、本番の登録表（`all_entrances`）の
+/// `all_specs` の列は、本番の登録表（`all_entrances`）の
 /// 定義の列と同じ名前・同じ順・同じ中身（中継の組み込みの一覧はこの列から組む）。
 #[test]
 fn all_specs_equals_the_specs_of_the_production_registry() {

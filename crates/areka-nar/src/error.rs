@@ -1,7 +1,7 @@
-//! 拒否の閉じた語彙・マニフェストの警告・I/O 失敗の形と表示（要件 9.1・9.2）。
+//! 拒否の閉じた語彙・マニフェストの警告・I/O 失敗の形と表示。
 //!
 //! ここではログを出さない。記録は `lib.rs` の `open`／`install` が `Err` を返す
-//! 直前に 1 回だけ出す（二重記録を避ける＝設計「Monitoring」）。そのため
+//! 直前に 1 回だけ出す（二重記録を避ける）。そのため
 //! 各変種の表示は、その 1 行だけで診断できる情報（どのエントリか・期待と実際）を
 //! 落とさずに持つ。
 
@@ -18,7 +18,7 @@ macro_rules! refuse_reasons {
         $(#[$variant_attr:meta])*
         $variant:ident { $( $(#[$field_attr:meta])* $field:ident : $ty:ty ),* $(,)? }
     ),* $(,)?) => {
-        /// 拒否の理由。13 変種で閉じる（要件 9.2。取り出し元の無い同梱は断らずに飛ばす）。
+        /// 拒否の理由。13 変種で閉じる（取り出し元の無い同梱は断らずに飛ばす）。
         ///
         /// `kind()` が返す短い語をそのまま `OnInstallFailure` の理由に写せる。
         #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -48,54 +48,54 @@ refuse_reasons! {
     #[error("アーカイブが壊れている: {detail}")]
     CorruptArchive { detail: String },
 
-    /// 伸長の結果が宣言と合わない（要件 2.6）。
+    /// 伸長の結果が宣言と合わない。
     #[error("エントリ {index}（{name}）の内容が壊れている: {what}")]
     IntegrityMismatch { index: usize, name: String, what: Integrity },
 
-    /// 読めることになっていない形式のエントリ（要件 2.5）。
+    /// 読めることになっていない形式のエントリ。
     #[error("エントリ {index}（{name}）は対応していない: {what}")]
     UnsupportedEntry { index: usize, name: String, what: Unsupported },
 
-    /// エントリ名を復号できない（置換文字が出た＝要件 2.4）。
+    /// エントリ名を復号できない（置換文字が出た）。
     #[error("エントリ {index} の名前を {encoding} として復号できない（生バイト {raw_hex}）")]
     NameUndecodable { index: usize, raw_hex: String, encoding: &'static str },
 
-    /// エントリ名が長すぎる（要件 1.1〜1.4）。名前の全体は持たず、先頭の有界の一部だけを持つ。
+    /// エントリ名が長すぎる。名前の全体は持たず、先頭の有界の一部だけを持つ。
     #[error("エントリ {index} の名前が長すぎる（{length} 単位・上限 {limit}・先頭 {head}…）")]
     PathTooLong { index: usize, length: usize, limit: usize, head: String },
 
-    /// シンボリックリンクのエントリ（要件 2.7）。
+    /// シンボリックリンクのエントリ。
     #[error("エントリ {index}（{name}）はシンボリックリンク")]
     SymlinkEntry { index: usize, name: String },
 
-    /// 根の外へ出得る、または Windows で扱えないパス（要件 4.2〜4.6）。
+    /// 根の外へ出得る、または Windows で扱えないパス。
     #[error("エントリ {index}（{name}）のパスが安全でない: {why}")]
     UnsafePath { index: usize, name: String, why: UnsafeWhy },
 
-    /// 大文字小文字だけが違う名前が同じ宛先で重なる（要件 4.7）。
+    /// 大文字小文字だけが違う名前が同じ宛先で重なる。
     #[error("大文字小文字だけが違う名前が重なっている: {a} と {b}")]
     CaseCollision { a: String, b: String },
 
-    /// 最上位に `install.txt` が無い（包みフォルダ 1 段を含む＝要件 3.2）。
+    /// 最上位に `install.txt` が無い（包みフォルダ 1 段を含む）。
     ///
     /// `top_level` は名前順の先頭最大 8 件。越えたときだけ末尾に名前ではない要約の
     /// 1 要素 `…（全 N 件）` が付く。
     #[error("最上位に install.txt が無い（最上位 {top_level:?}）")]
     MissingInstallTxt { top_level: Vec<String> },
 
-    /// `type` が無い、または対応していない値（要件 3.6）。
+    /// `type` が無い、または対応していない値。
     #[error("対応していない種別: {}", found.as_deref().unwrap_or("（指定なし）"))]
     UnsupportedType { found: Option<String> },
 
-    /// `name`／`directory` のどちらかが無い、または空（要件 3.7）。
+    /// `name`／`directory` のどちらかが無い、または空。
     #[error("必須キー {key} が無い")]
     MissingRequiredKey { key: &'static str },
 
-    /// `directory` の値が 1 階層のフォルダ名として使えない（要件 3.8）。
+    /// `directory` の値が 1 階層のフォルダ名として使えない。
     #[error("{key} のフォルダ名が使えない: {value}")]
     InvalidDirectoryName { key: String, value: String },
 
-    /// `shell`／`supplement` の宛先ゴーストが無い（要件 5.7）。
+    /// `shell`／`supplement` の宛先ゴーストが無い。
     #[error("宛先のゴーストが無い: {}", target.as_deref().unwrap_or("（指定なし）"))]
     TargetGhostMissing { target: Option<String> },
 }
@@ -169,7 +169,7 @@ pub enum IoPhase {
 
 /// インストールした要素の種別。
 ///
-/// 設計は `plan` の節に置いているが、`NarError::Io.committed` が持つので
+/// `NarError::Io.committed` が持つので
 /// 語彙と同じ場所に宣言する。`plan`／`install` はここから使う（公開面は同じ）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ElementKind {
@@ -192,8 +192,8 @@ pub enum ExistingState {
 
 /// 配置の確定結果。1 つのインストール済みフォルダにつき 1 つ。
 ///
-/// 設計は `install` の節に置いているが、`NarError::Io.committed` が持つので
-/// 語彙と同じ場所に宣言する。中身を作るのはタスク 4.3。
+/// `NarError::Io.committed` が持つので
+/// 語彙と同じ場所に宣言する。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstalledElement {
     pub kind: ElementKind,
@@ -205,7 +205,7 @@ pub struct InstalledElement {
     pub existing: ExistingState,
 }
 
-/// 巻き戻せなかった宛先 1 つぶんの、元の中身が生き残っている場所（要件 2.1）。
+/// 巻き戻せなかった宛先 1 つぶんの、元の中身が生き残っている場所。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SurvivingTree {
     /// 元へ戻せなかった宛先（利用者から見えるインストール済みフォルダ）。
@@ -226,7 +226,7 @@ pub enum NarError {
         archive: PathBuf,
         reason: RefuseReason,
     },
-    /// 読み書きに失敗した。どこまで確定したかと巻き戻せたかを持つ（要件 6.4）。
+    /// 読み書きに失敗した。どこまで確定したかと巻き戻せたかを持つ。
     #[error("{archive}: {phase:?} で I/O に失敗: {path}: {source}")]
     Io {
         archive: PathBuf,
@@ -246,7 +246,7 @@ pub enum NarError {
     },
 }
 
-/// マニフェストを読んで読み飛ばしたもの。拒否ではないが黙って通さない（要件 3.9）。
+/// マニフェストを読んで読み飛ばしたもの。拒否ではないが黙って通さない。
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ManifestWarning {
     /// 対応していない同梱の種別（`headline*` など）。
@@ -278,8 +278,8 @@ pub enum ManifestWarning {
 }
 
 /// 書庫の 1 要素の相対パスと `install.txt` のフォルダ名に共通の、パスの長さの
-/// 上限（UTF-16 の単位・要件 1.1・1.2・1.5・1.6）。要素ごとの上限は持たない
-/// （全体 ≤ 200 < 255 なので NTFS の要素の上限は自動で満たす＝要件 1.7）。
+/// 上限（UTF-16 の単位）。要素ごとの上限は持たない
+/// （全体 ≤ 200 < 255 なので NTFS の要素の上限は自動で満たす）。
 pub(crate) const MAX_ENTRY_PATH_UTF16: usize = 200;
 
 /// 理由と警告に載せる名前の先頭の長さ（UTF-16 の単位）。表示のための長さで、上限ではない。
@@ -306,7 +306,7 @@ pub(crate) fn head_utf16(name: &str) -> String {
         .collect()
 }
 
-/// 理由と警告に載せる値（要件 1.4・1.5）。上限の内側なら全体、超えていれば
+/// 理由と警告に載せる値。上限の内側なら全体、超えていれば
 /// 先頭と測った長さと上限だけを綴り、全体は載せない。
 pub(crate) fn bounded_value(name: &str) -> String {
     let length = utf16_len(name);
@@ -320,7 +320,7 @@ pub(crate) fn bounded_value(name: &str) -> String {
     }
 }
 
-/// 理由に載せる生バイトの 16 進（要件 1.4 と同じ規則）。上限の内側なら全体、超えていれば
+/// 理由に載せる生バイトの 16 進。上限の内側なら全体、超えていれば
 /// 先頭 [`HEAD_UTF16`] バイトと測った長さだけを綴る（長さの検査は復号の後なので、ここで縛る）。
 pub(crate) fn bounded_hex(bytes: &[u8]) -> String {
     if bytes.len() <= MAX_ENTRY_PATH_UTF16 {

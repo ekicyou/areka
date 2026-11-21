@@ -1,4 +1,4 @@
-//! SSP 2.9.05 と同じ 10 本のツールの入口（spec: areka-P0-mcp-tool-entrances）。
+//! SSP 2.9.05 と同じ 10 本のツールの入口。
 //!
 //! 10 本の表（SSP の並び）・areka 独自のツールの表（`OWN_TABLE`・今は `check_script`）・
 //! 検査を通った呼び出し・登録表を組む受け口・中継へ渡す定義の列（[`all_specs`]）を置く。
@@ -47,7 +47,7 @@ pub enum ToolCall {
     Reload(reload::Args),
     DumpSurface(dump_surface::Args),
     DumpBalloon(dump_balloon::Args),
-    /// areka 独自のツール（spec: areka-P0-mcp-author-tools）。
+    /// areka 独自のツール。
     CheckScript(check_script::Args),
 }
 
@@ -94,7 +94,7 @@ pub(crate) const TABLE: [(&str, Parse); 10] = [
 ];
 
 /// areka 独自のツールの表（定義, 詰め替え, help に載せる日本語の 1 行）。SSP の 10 本の後に登録する
-/// （spec: areka-P0-mcp-author-tools）。後続のツールはここへ 1 行足す。
+/// 後続のツールはここへ 1 行足す。
 pub(crate) const OWN_TABLE: [(&str, Parse, &str); 1] = [(
     check_script::DEFINITION,
     check_script::parse,
@@ -117,9 +117,9 @@ pub(crate) fn spec_from_definition(definition: &str) -> Result<ToolSpec, String>
     })
 }
 
-/// SSP と同じ 10 本に続けて独自のツールを登録し、アプリ本体が汲む受け口を返す（本番の入口・
-/// spec: areka-P0-mcp-author-tools）。受け口は 1 本で、10 本と独自のツールが同じ受け口へ届く。
-/// 受け口は呼び出し側が持つ。アプリ本体へ置くまでに届いた要求は受け口に溜まる（spec: areka-P0-mcp-tool-entrances 要件 6.5）。
+/// SSP と同じ 10 本に続けて独自のツールを登録し、アプリ本体が汲む受け口を返す（本番の入口）。
+/// 受け口は 1 本で、10 本と独自のツールが同じ受け口へ届く。
+/// 受け口は呼び出し側が持つ。アプリ本体へ置くまでに届いた要求は受け口に溜まる。
 pub fn all_entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolRequest>) {
     register_rows(rows(), reply_wait)
 }

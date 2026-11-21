@@ -68,7 +68,7 @@ impl Config {
             .map(|dir| areka_user_data::probe(Some(dir)));
         let profile_env = std::env::var_os(PROFILE_DIR_ENV);
         // UTF-8 でない値を「未設定」に丸めない: 読めない字を U+FFFD に替えた文は数として読めないので、
-        // 共有の関数が `warn!` を 1 件残して既定の 20 個にする（要件 2.5）。
+        // 共有の関数が `warn!` を 1 件残して既定の 20 個にする。
         let port_value =
             std::env::var_os(areka_mcp::PORT_ENV).map(|v| v.to_string_lossy().into_owned());
         let local_app_data = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
@@ -78,7 +78,7 @@ impl Config {
             areka_dir.as_deref().zip(signals.as_ref()),
             local_app_data.clone(),
         );
-        // 箱の見立ては、控えを決めた後に 1 回（読んだのと同じ `LOCALAPPDATA` で・要件 3.5〜3.9）。
+        // 箱の見立ては、読んだのと同じ `LOCALAPPDATA` で 1 回。
         crate::redirect::report(&crate::redirect::observe(
             local_app_data.as_deref(),
             config.cache_dir.as_deref(),
@@ -89,8 +89,7 @@ impl Config {
     /// [`Config::from_env`] の内側（本物の環境を読まない）。`areka` は隣に areka.exe が在るときの
     /// （実行ファイルのフォルダ, `probe` の答え）。
     ///
-    /// 「決めるだけ」の口（`locate_app_profile`）→ 値の判断（[`Config::from_values`]）→
-    /// 控えを持たない理由の記録、の順。どれも作らない・写さない。
+    /// どれも作らない・写さない。
     pub(crate) fn from_inputs(
         port_value: Option<&str>,
         profile_env: Option<&OsStr>,
@@ -162,7 +161,7 @@ fn log_without_cache(beside: Option<&AppProfile>, config: &Config) {
         return;
     }
     match beside {
-        // 次に起こされたとき、areka が置き場を作っていれば控えを持つ（要件 2.11）。
+        // 次に起こされたとき、areka が置き場を作っていれば控えを持つ。
         Some(AppProfile::RootMissing { root }) => info!(
             reason = "user_root_missing",
             user_root = %root.display(),
@@ -173,7 +172,7 @@ fn log_without_cache(beside: Option<&AppProfile>, config: &Config) {
             user_root = %root.display(),
             "[bridge] running without the cache until areka prepares its user root; it is used from the next start"
         ),
-        // 決められない理由は `areka-user-data` の error が先に残している（要件 3.3）。
+        // 決められない理由は `areka-user-data` の error が先に残している。
         Some(AppProfile::Unlocatable) => {
             warn!("[bridge] the user root of areka could not be located; running without the cache")
         }

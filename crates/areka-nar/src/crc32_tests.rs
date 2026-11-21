@@ -1,4 +1,4 @@
-//! `crc32` の兄弟テスト。較正値はすべて**外部の出どころ**を持つ（要件 2.6）。
+//! `crc32` の兄弟テスト。較正値はすべて**外部の出どころ**を持つ。
 //!
 //! 自前の実装で作った値を期待値に書くと、実装が間違っていても緑になる。
 //! そこで期待値は ⑴ CRC の公表目録の検査値、⑵ 広く公表されている固定文、
@@ -42,7 +42,7 @@ fn published_pangram_vector() {
 ///
 /// `crates/areka/shell/org/2.zip` は areka のシェル素材で、無圧縮（方式 0）の
 /// エントリを 8 つ持つ。無圧縮なら局所ヘッダの直後のバイト列がそのまま中身なので、
-/// zip の読み手（タスク 3.1）を待たずに数行で取り出せる。期待値は我々が作った
+/// zip の読み手を待たずに数行で取り出せる。期待値は我々が作った
 /// ものではなく、配布物に刻まれている値である点がこのテストの値打ち。
 #[test]
 fn matches_the_crc_stamped_by_a_third_party_encoder_in_a_real_archive() {
@@ -69,7 +69,7 @@ fn matches_the_crc_stamped_by_a_third_party_encoder_in_a_real_archive() {
         let head = 30 + u16_at(26) + u16_at(28);
         // ビット 3（データ記述子）が立っていると局所ヘッダの長さと CRC は 0 なので見ない。
         assert_eq!(flags & 0x0008, 0, "この検体はデータ記述子を使わない");
-        // 方式 8（deflate）のエントリは伸長の担当（タスク 3.1）に任せ、ここでは飛ばす。
+        // 方式 8（deflate）のエントリは伸長の担当に任せ、ここでは飛ばす。
         if method == 0 {
             let body = &bytes[at + head..at + head + compressed as usize];
             checked.push((crc32(body), declared));

@@ -5,37 +5,32 @@
 //! これがクロスエンジン I/O 契約の正本であり、本パーサ（`balloon::parse`）が生成者、
 //! 下流 `emo-text-layer`（バルーンテキスト）/`emo`（render）が消費者となる。
 //!
-//! 設計規律（design.md「Data Models」）:
+//! 設計規律:
 //! - 各モデル化スカラを `Option<T>` 直持ちとし「未指定（`None`）」を型で表す。
 //!   座標成分（x/y・t/b/l/r）と色成分（r/g/b）を**個別に** `Option` 化し、
-//!   部分欠落を欠落なく表現する（要件 2.6/3.4）。`None` は `Some(0)` と判別される。
-//! - 内部数値型は座標＝`i32`（符号付き・負値＝反対辺オフセットを保持・要件 4.1/4.2/4.3/4.5）、
+//!   部分欠落を欠落なく表現する。`None` は `Some(0)` と判別される。
+//! - 内部数値型は座標＝`i32`（符号付き・負値＝反対辺オフセットを保持）、
 //!   `font.height`＝`u32`（非負）、色成分＝`u8`（0–255）。
-//! - フィールドは非公開とし read-only accessor のみ公開する（NewType/opaque 流儀・要件 2.8）。
-//! - 全公開 struct に `#[non_exhaustive]` を付し、将来のキー追加を後方互換にする（要件 2.8）。
+//! - フィールドは非公開とし read-only accessor のみ公開する（NewType/opaque 流儀）。
+//! - 全公開 struct に `#[non_exhaustive]` を付し、将来のキー追加を後方互換にする。
 //! - 派生は最小: 整数のみの型は `Clone, Copy, Debug, PartialEq, Eq`。
 //!   `Font` は `Option<String>` を含むため `Copy` 不可（`Clone, Debug, PartialEq, Eq` のみ）。
 //! - モデル化 subset は emo2 が使う幾何＋フォントから始め、後から選択肢の `cursor.*`・
-//!   スクロールの `arrow*`・`marker*` を足した。ほかの choice/link 系キーはモデル化しない
-//!   （要件 2.7・過剰実装抑止 要件 5.5）。
-//! - 例外として `writing_mode`／`budoux_newline`（areka 拡張キー）を additive な生文字列転記
-//!   フィールドとして持つ（値の解釈は下流 emo テキスト層・emo-text-layer 要件 5.6／
-//!   budoux-newline 要件 1.1）。
-//! - 同じく `windowposition_raw`（[`WindowPositionRaw`]）を additive な生文字列転記フィールドとして
-//!   持つ。数値化済みの [`WindowPosition`] とは別枠であり、数値化できないキーワードや
-//!   `windowposition.limit` の生値を解釈せず保持する（windowposition-limit 要件 1.1/4.1。
-//!   `WindowPosition` と既存アクセサは無改変＝同要件 5.1）。
-//! - 同じく `vertical_raw` を additive な生文字列転記フィールドとして持つ。これは上 2 者と異なり
+//!   スクロールの `arrow*`・`marker*` を足した。ほかの choice/link 系キーはモデル化しない。
+//! - `writing_mode`／`budoux_newline`（areka 拡張キー）は additive な生文字列転記フィールドとして
+//!   持つ（値の解釈は下流 emo テキスト層）。
+//! - `windowposition_raw`（[`WindowPositionRaw`]）も additive な生文字列転記フィールド。
+//!   数値化済みの [`WindowPosition`] とは別枠であり、数値化できないキーワードや
+//!   `windowposition.limit` の生値を解釈せず保持する。
+//! - `vertical_raw` も additive な生文字列転記フィールド。上 2 者と異なり
 //!   **areka 拡張キーではなく SSP 正典キー**（`vertical,0`/`1`）であるが、additive にする理由は
-//!   同じ——`new` の署名を伸ばさずに追加でき、既存の解析結果を 1 つも変えないためである
-//!   （balloon-vertical-canon 要件 1.4/1.8・設計 DD3）。値の解釈（`0`/`1` の判定・語彙外値の
-//!   縮退・警告）は下流の書字方向の解決層（`areka-emo-text::writing`）の責務である。
+//!   同じ——`new` の署名を伸ばさずに追加でき、既存の解析結果を 1 つも変えないためである。
+//!   値の解釈（`0`/`1` の判定・語彙外値の縮退・警告）は下流の書字方向の解決層
+//!   （`areka-emo-text::writing`）の責務である。
 //! - 同じく SSP 正典キーの書体 5 本（`font.bold` ほか・[`FontDecorationRaw`]）・影 4 本
 //!   （`font.shadowcolor.*`／`font.shadowstyle`・[`FontShadowRaw`]）・無効表示層 14 本
-//!   （`disable.font.*`・[`DisableFont`]）を additive に持つ（balloon-font-descript-keys 要件
-//!   2.1〜2.4/2.8・設計 DD2/DD3/DD9）。書体 5 本・影 4 本は生文字列転記であり、`0`/`1`・`none`
-//!   の判定・語彙外値の縮退・警告は下流の責務である。既存の [`Font`] と `new` の署名は無改変
-//!   （要件 5.1）。
+//!   （`disable.font.*`・[`DisableFont`]）を additive に持つ。書体 5 本・影 4 本は生文字列転記で
+//!   あり、`0`/`1`・`none` の判定・語彙外値の縮退・警告は下流の責務である。
 //!
 //! 構築は同クレートの `balloon::parse`（写像）とテストが公開/クレートパスで行う。
 //! `new` コンストラクタ＋read-only accessor という不変値オブジェクト流儀（`sakura::SurfaceArg` 流儀）。
@@ -45,7 +40,7 @@ use super::marker::{ArrowKeys, KeyIssue};
 /// バルーンの幾何＋フォント subset モデル（クロスエンジン I/O 契約の正本）。
 ///
 /// 「1 バルーンの幾何＋フォント設定」を表す不変値オブジェクト（集約ルート）。
-/// 各 sub-struct は独立に「未指定（`None`）」を取り得る（要件 2.6/3.4）。
+/// 各 sub-struct は独立に「未指定（`None`）」を取り得る。
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BalloonModel {
@@ -105,7 +100,7 @@ impl BalloonModel {
     /// cursor.* スタイルモデルを差し替えた値を返す additive ビルダ（不変値オブジェクト流儀）。
     ///
     /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が cursor.* キー群を束ねた
-    /// [`BalloonCursor`] を相乗りさせるために消費する（既存呼び出し側は `new` のまま不変・要件 4.2）。
+    /// [`BalloonCursor`] を相乗りさせるために消費する（既存呼び出し側は `new` のまま不変）。
     pub fn with_cursor(mut self, cursor: BalloonCursor) -> Self {
         self.cursor = cursor;
         self
@@ -114,7 +109,7 @@ impl BalloonModel {
     /// `windowposition.*` の生文字列を差し替えた値を返す additive ビルダ（`with_cursor` 流儀）。
     ///
     /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が `windowposition.x`/`.limit` の
-    /// マージ済み生値を相乗りさせるために消費する（既存呼び出し側は `new` のまま不変・要件 5.1）。
+    /// マージ済み生値を相乗りさせるために消費する（既存呼び出し側は `new` のまま不変）。
     pub(crate) fn with_windowposition_raw(mut self, windowposition_raw: WindowPositionRaw) -> Self {
         self.windowposition_raw = windowposition_raw;
         self
@@ -124,8 +119,7 @@ impl BalloonModel {
     /// （`with_cursor`／`with_windowposition_raw` 流儀）。
     ///
     /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が 2 層マージ済みの `vertical` 生値を
-    /// 相乗りさせるために消費する（既存呼び出し側は `new` のまま不変・balloon-vertical-canon
-    /// 要件 1.4/1.8）。未宣言は `None` を渡す。
+    /// 相乗りさせるために消費する（既存呼び出し側は `new` のまま不変）。未宣言は `None` を渡す。
     pub fn with_vertical_raw(mut self, vertical_raw: Option<String>) -> Self {
         self.vertical_raw = vertical_raw;
         self
@@ -135,7 +129,7 @@ impl BalloonModel {
     /// 差し替えた値を返す additive ビルダ（`with_cursor` 流儀）。
     ///
     /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が 2 層マージ済みの生値を相乗りさせる
-    /// ために消費する（既存呼び出し側は `new` のまま不変・balloon-font-descript-keys 要件 5.1）。
+    /// ために消費する（既存呼び出し側は `new` のまま不変）。
     pub(crate) fn with_font_decoration_raw(
         mut self,
         font_decoration_raw: FontDecorationRaw,
@@ -148,7 +142,7 @@ impl BalloonModel {
     /// 返す additive ビルダ（`with_cursor` 流儀）。
     ///
     /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が 2 層マージ済みの生値を相乗りさせる
-    /// ために消費する（既存呼び出し側は `new` のまま不変・balloon-font-descript-keys 要件 5.1）。
+    /// ために消費する（既存呼び出し側は `new` のまま不変）。
     pub(crate) fn with_font_shadow_raw(mut self, font_shadow_raw: FontShadowRaw) -> Self {
         self.font_shadow_raw = font_shadow_raw;
         self
@@ -158,21 +152,21 @@ impl BalloonModel {
     /// （`with_cursor` 流儀）。
     ///
     /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が 2 層マージ済みの値を相乗りさせる
-    /// ために消費する（既存呼び出し側は `new` のまま不変・balloon-font-descript-keys 要件 2.8/5.1）。
+    /// ために消費する（既存呼び出し側は `new` のまま不変）。
     pub(crate) fn with_disable_font(mut self, disable_font: DisableFont) -> Self {
         self.disable_font = disable_font;
         self
     }
 
-    /// 矢印の鍵 [`ArrowKeys`] を差し替えた値を返す additive ビルダ（`with_cursor` 流儀・
-    /// balloon-scroll-arrows 要件 1.1〜1.6）。`new` では `ArrowKeys::default()`（全部無し）。
+    /// 矢印の鍵 [`ArrowKeys`] を差し替えた値を返す additive ビルダ（`with_cursor` 流儀）。
+    /// `new` では `ArrowKeys::default()`（全部無し）。
     pub fn with_arrow_keys(mut self, arrow_keys: ArrowKeys) -> Self {
         self.arrow_keys = arrow_keys;
         self
     }
 
-    /// 印の絵の名前 `marker.filename` を差し替えた値を返す additive ビルダ（`with_arrow_keys` 流儀・
-    /// script-small-tags 要件 5.2）。`new` では `None`（書いていない）。
+    /// 印の絵の名前 `marker.filename` を差し替えた値を返す additive ビルダ（`with_arrow_keys` 流儀）。
+    /// `new` では `None`（書いていない）。
     pub(crate) fn with_marker_filename(mut self, marker_filename: Option<String>) -> Self {
         self.marker_filename = marker_filename;
         self
@@ -184,40 +178,40 @@ impl BalloonModel {
         self
     }
 
-    /// バルーン配置調整値 `windowposition`（x, y）を読み取る（要件 2.1）。
+    /// バルーン配置調整値 `windowposition`（x, y）を読み取る。
     pub fn windowposition(&self) -> WindowPosition {
         self.windowposition
     }
 
-    /// 文字描画原点 `origin`（x, y）を読み取る（要件 2.2）。
+    /// 文字描画原点 `origin`（x, y）を読み取る。
     pub fn origin(&self) -> Origin {
         self.origin
     }
 
-    /// 自動折返し点 `wordwrappoint`（x, 存在すれば y）を読み取る（要件 2.3）。
+    /// 自動折返し点 `wordwrappoint`（x, 存在すれば y）を読み取る。
     pub fn wordwrappoint(&self) -> WordWrapPoint {
         self.wordwrappoint
     }
 
-    /// テキスト描画有効矩形 `validrect`（top/bottom/left/right）を読み取る（要件 2.4）。
+    /// テキスト描画有効矩形 `validrect`（top/bottom/left/right）を読み取る。
     pub fn validrect(&self) -> ValidRect {
         self.validrect
     }
 
-    /// フォント設定 `font`（name/height/color）を参照で読み取る（`String` を含むため参照返し・要件 2.5）。
+    /// フォント設定 `font`（name/height/color）を参照で読み取る（`String` を含むため参照返し）。
     pub fn font(&self) -> &Font {
         &self.font
     }
 
-    /// 縦書き/横書き宣言 `writing_mode` の生文字列を読み取る（emo-text-layer 要件 5.6）。
+    /// 縦書き/横書き宣言 `writing_mode` の生文字列を読み取る。
     ///
     /// 2 層マージ済みの生値をそのまま転記したもの（値の解釈・語彙判定・fallback は
-    /// 下流 emo テキスト層の責務・parser は転記に徹する）。未指定は `None`。
+    /// 下流 emo テキスト層の責務）。未指定は `None`。
     pub fn writing_mode(&self) -> Option<&str> {
         self.writing_mode.as_deref()
     }
 
-    /// 分かち書きワードラップ opt-in 宣言 `budoux_newline` の生文字列を読み取る（budoux-newline 要件 1.1）。
+    /// 分かち書きワードラップ opt-in 宣言 `budoux_newline` の生文字列を読み取る。
     ///
     /// 2 層マージ済みの生値をそのまま転記したもの（値の解釈・語彙判定・fallback は
     /// 下流 emo テキスト層の責務・parser は転記に徹する）。未指定は `None`。
@@ -225,27 +219,26 @@ impl BalloonModel {
         self.budoux_newline.as_deref()
     }
 
-    /// cursor.* 選択肢マーカースタイルモデル `cursor` を参照で読み取る（要件 4.2/6.2）。
+    /// cursor.* 選択肢マーカースタイルモデル `cursor` を参照で読み取る。
     ///
     /// `Option<String>` を含むため参照返し（`font()` 流儀）。cursor.* 未記載バルーンでは
     /// 全フィールドが未指定（`BalloonCursor::default()`）となり、下流 `ResolvedChoiceStyle::resolve`
-    /// が「未指定バルーン＝反転縮退」判定に用いる（要件 4.3/6.1）。
+    /// が「未指定バルーン＝反転縮退」判定に用いる。
     pub fn cursor(&self) -> &BalloonCursor {
         &self.cursor
     }
 
-    /// `windowposition.x`/`.limit` の生文字列 [`WindowPositionRaw`] を参照で読み取る
-    /// （windowposition-limit 要件 1.1/4.1）。
+    /// `windowposition.x`/`.limit` の生文字列 [`WindowPositionRaw`] を参照で読み取る。
     ///
     /// `Option<String>` を含むため参照返し（`font()`/`cursor()` 流儀）。2 層マージ済みの生値を
     /// そのまま転記したものであり、0/1 検証・キーワード判別・警告縮退は下流（配置層の分類）の
     /// 責務（parser は転記に徹する）。既存の数値アクセサ [`BalloonModel::windowposition`] は
-    /// 本フィールドの追加で一切変化しない（要件 5.1）。
+    /// 本フィールドの追加で一切変化しない。
     pub fn windowposition_raw(&self) -> &WindowPositionRaw {
         &self.windowposition_raw
     }
 
-    /// SSP 正典キー `vertical` の生文字列を読み取る（balloon-vertical-canon 要件 1.4）。
+    /// SSP 正典キー `vertical` の生文字列を読み取る。
     ///
     /// 2 層マージ済みの生値をそのまま転記したもの（`writing_mode`／`budoux_newline` 流儀）。
     /// `0`/`1` の検証・語彙外値の縮退・警告は下流の書字方向の解決層の責務であり、ここでは
@@ -255,37 +248,35 @@ impl BalloonModel {
         self.vertical_raw.as_deref()
     }
 
-    /// 書体 5 本の生文字列 [`FontDecorationRaw`] を参照で読み取る
-    /// （balloon-font-descript-keys 要件 2.1/2.4）。
+    /// 書体 5 本の生文字列 [`FontDecorationRaw`] を参照で読み取る。
     ///
     /// `Option<String>` を含むため参照返し（`cursor()` 流儀）。既存の [`BalloonModel::font`] は
-    /// 本フィールドの追加で一切変化しない（要件 5.1）。
+    /// 本フィールドの追加で一切変化しない。
     pub fn font_decoration_raw(&self) -> &FontDecorationRaw {
         &self.font_decoration_raw
     }
 
-    /// 影 4 本の生文字列 [`FontShadowRaw`] を参照で読み取る（balloon-font-descript-keys 要件 2.2/2.4）。
+    /// 影 4 本の生文字列 [`FontShadowRaw`] を参照で読み取る。
     ///
     /// `Option<String>` を含むため参照返し（`cursor()` 流儀）。
     pub fn font_shadow_raw(&self) -> &FontShadowRaw {
         &self.font_shadow_raw
     }
 
-    /// 無効表示層 `disable.font.*` の束 [`DisableFont`] を参照で読み取る
-    /// （balloon-font-descript-keys 要件 2.8）。
+    /// 無効表示層 `disable.font.*` の束 [`DisableFont`] を参照で読み取る。
     ///
     /// `disable.font.*` が 1 本も無いバルーンでは `DisableFont::default()`（全キー未指定）となる。
     pub fn disable_font(&self) -> &DisableFont {
         &self.disable_font
     }
 
-    /// 矢印の鍵 [`ArrowKeys`] を参照で読み取る（balloon-scroll-arrows 要件 1.1〜1.6）。
+    /// 矢印の鍵 [`ArrowKeys`] を参照で読み取る。
     pub fn arrow_keys(&self) -> &ArrowKeys {
         &self.arrow_keys
     }
 
-    /// 印の絵の名前 `marker.filename`（拡張子なし・生の値のまま・空は `None`）を読み取る
-    /// （script-small-tags 要件 5.2）。面ごとの書き換えは 2 層の後勝ちで効いた後の値。
+    /// 印の絵の名前 `marker.filename`（拡張子なし・生の値のまま・空は `None`）を読み取る。
+    /// 面ごとの書き換えは 2 層の後勝ちで効いた後の値。
     pub fn marker_filename(&self) -> Option<&str> {
         self.marker_filename.as_deref()
     }
@@ -297,7 +288,7 @@ impl BalloonModel {
     }
 }
 
-/// `windowposition`（x: シェル側+/離れる側-、y: 下+/上-）。未指定は `None`（要件 2.1/2.6/4.2/4.3）。
+/// `windowposition`（x: シェル側+/離れる側-、y: 下+/上-）。未指定は `None`。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WindowPosition {
@@ -306,17 +297,17 @@ pub struct WindowPosition {
 }
 
 impl WindowPosition {
-    /// x/y を個別に `Option` で保持して構築する（部分欠落を欠落なく表現・要件 2.6）。
+    /// x/y を個別に `Option` で保持して構築する（部分欠落を欠落なく表現）。
     pub fn new(x: Option<i32>, y: Option<i32>) -> Self {
         WindowPosition { x, y }
     }
 
-    /// x 成分（未指定は `None`・`Some(0)` と判別・要件 2.6/4.2）。
+    /// x 成分（未指定は `None`・`Some(0)` と判別）。
     pub fn x(&self) -> Option<i32> {
         self.x
     }
 
-    /// y 成分（未指定は `None`・`Some(0)` と判別・要件 2.6/4.3）。
+    /// y 成分（未指定は `None`・`Some(0)` と判別）。
     pub fn y(&self) -> Option<i32> {
         self.y
     }
@@ -326,12 +317,11 @@ impl WindowPosition {
 ///
 /// [`WindowPosition`]（数値化済み x/y）の sibling であり、数値化できない語彙
 /// （`windowposition.x` の `center`/`top`/`bottom`）と数値化の対象外である
-/// `windowposition.limit`（0/1）を、**解釈せず・警告せず**そのまま保持するための転記面
-/// （windowposition-limit 要件 1.1/4.1）。
+/// `windowposition.limit`（0/1）を、**解釈せず・警告せず**そのまま保持するための転記面。
 ///
 /// 転記層契約: trim は上流 `kv::parse_kv` で済んでおり、本型は追加の整形を行わない。
 /// 0/1 検証・キーワード判別・語彙外値の警告付き縮退は下流（配置層の分類純関数）の責務であり、
-/// ここでは語彙外の値も素通しで保持する（steering「parser は転記層・ツリー構築は下流」）。
+/// ここでは語彙外の値も素通しで保持する。
 ///
 /// `#[derive(Default)]` は「両項未指定」の素直な表現であり、additive フィールドとして
 /// 既存コンストラクタ互換を保つために [`BalloonModel::new`] が用いる（`BalloonCursor` 流儀）。
@@ -349,14 +339,14 @@ impl WindowPositionRaw {
         WindowPositionRaw { x_raw, limit_raw }
     }
 
-    /// `windowposition.x` の生文字列（未指定は `None`・借用で読む・要件 4.1）。
+    /// `windowposition.x` の生文字列（未指定は `None`・借用で読む）。
     ///
     /// 数値・キーワード・語彙外値のいずれも区別せずそのまま返す（判別は下流）。
     pub fn x_raw(&self) -> Option<&str> {
         self.x_raw.as_deref()
     }
 
-    /// `windowposition.limit` の生文字列（未指定は `None`・借用で読む・要件 1.1）。
+    /// `windowposition.limit` の生文字列（未指定は `None`・借用で読む）。
     ///
     /// `0`/`1` の検証と既定値 1 への縮退は下流の責務であり、ここでは判定しない。
     pub fn limit_raw(&self) -> Option<&str> {
@@ -364,7 +354,7 @@ impl WindowPositionRaw {
     }
 }
 
-/// `origin`（文字描画原点）。未指定は `None`（要件 2.2/2.6）。
+/// `origin`（文字描画原点）。未指定は `None`。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Origin {
@@ -373,23 +363,23 @@ pub struct Origin {
 }
 
 impl Origin {
-    /// x/y を個別に `Option` で保持して構築する（要件 2.6）。
+    /// x/y を個別に `Option` で保持して構築する。
     pub fn new(x: Option<i32>, y: Option<i32>) -> Self {
         Origin { x, y }
     }
 
-    /// x 成分（未指定は `None`・要件 2.2/2.6）。
+    /// x 成分（未指定は `None`）。
     pub fn x(&self) -> Option<i32> {
         self.x
     }
 
-    /// y 成分（未指定は `None`・要件 2.2/2.6）。
+    /// y 成分（未指定は `None`）。
     pub fn y(&self) -> Option<i32> {
         self.y
     }
 }
 
-/// `wordwrappoint`（x、y は存在すれば）。負値＝反対辺基準（要件 2.3/4.1/2.6）。
+/// `wordwrappoint`（x、y は存在すれば）。負値＝反対辺基準。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WordWrapPoint {
@@ -398,23 +388,23 @@ pub struct WordWrapPoint {
 }
 
 impl WordWrapPoint {
-    /// x/y を個別に `Option` で保持して構築する（y 不在は `None`・要件 2.3/2.6）。
+    /// x/y を個別に `Option` で保持して構築する（y 不在は `None`）。
     pub fn new(x: Option<i32>, y: Option<i32>) -> Self {
         WordWrapPoint { x, y }
     }
 
-    /// x 成分（負値＝反対辺基準を符号付きで保持・要件 4.1）。
+    /// x 成分（負値＝反対辺基準を符号付きで保持）。
     pub fn x(&self) -> Option<i32> {
         self.x
     }
 
-    /// y 成分（存在しなければ `None`・`Some(0)` と判別・要件 2.3/2.6）。
+    /// y 成分（存在しなければ `None`・`Some(0)` と判別）。
     pub fn y(&self) -> Option<i32> {
         self.y
     }
 }
 
-/// `validrect`（top/bottom/left/right）。負値＝反対辺基準（要件 4.1）。各成分独立 `None`（要件 2.4/2.6）。
+/// `validrect`（top/bottom/left/right）。負値＝反対辺基準。各成分独立 `None`。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ValidRect {
@@ -425,7 +415,7 @@ pub struct ValidRect {
 }
 
 impl ValidRect {
-    /// 4 辺を個別に `Option` で保持して構築する（部分欠落を欠落なく表現・要件 2.4/2.6/3.4）。
+    /// 4 辺を個別に `Option` で保持して構築する（部分欠落を欠落なく表現）。
     pub fn new(
         top: Option<i32>,
         bottom: Option<i32>,
@@ -440,28 +430,28 @@ impl ValidRect {
         }
     }
 
-    /// top 辺（未指定は `None`・負値＝反対辺基準・要件 2.4/4.1）。
+    /// top 辺（未指定は `None`・負値＝反対辺基準）。
     pub fn top(&self) -> Option<i32> {
         self.top
     }
 
-    /// bottom 辺（未指定は `None`・負値＝反対辺基準・要件 2.4/4.1）。
+    /// bottom 辺（未指定は `None`・負値＝反対辺基準）。
     pub fn bottom(&self) -> Option<i32> {
         self.bottom
     }
 
-    /// left 辺（未指定は `None`・負値＝反対辺基準・要件 2.4/4.1）。
+    /// left 辺（未指定は `None`・負値＝反対辺基準）。
     pub fn left(&self) -> Option<i32> {
         self.left
     }
 
-    /// right 辺（未指定は `None`・負値＝反対辺基準・要件 2.4/4.1）。
+    /// right 辺（未指定は `None`・負値＝反対辺基準）。
     pub fn right(&self) -> Option<i32> {
         self.right
     }
 }
 
-/// `font`（name/height/color）。各成分独立 `None`（要件 2.5/2.6）。`String` を含むため `Copy` 不可。
+/// `font`（name/height/color）。各成分独立 `None`。`String` を含むため `Copy` 不可。
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Font {
@@ -471,7 +461,7 @@ pub struct Font {
 }
 
 impl Font {
-    /// name/height/color を保持して構築する（name/height は未指定なら `None`・要件 2.5/2.6）。
+    /// name/height/color を保持して構築する（name/height は未指定なら `None`）。
     pub fn new(name: Option<String>, height: Option<u32>, color: FontColor) -> Self {
         Font {
             name,
@@ -480,23 +470,23 @@ impl Font {
         }
     }
 
-    /// フォント名（未指定は `None`・借用で読む・要件 2.5/2.6）。
+    /// フォント名（未指定は `None`・借用で読む）。
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }
 
-    /// フォント高さ（非負・未指定は `None`・`Some(0)` と判別・要件 2.5/2.6）。
+    /// フォント高さ（非負・未指定は `None`・`Some(0)` と判別）。
     pub fn height(&self) -> Option<u32> {
         self.height
     }
 
-    /// フォント色（r/g/b・値返し・要件 2.5）。
+    /// フォント色（r/g/b・値返し）。
     pub fn color(&self) -> FontColor {
         self.color
     }
 }
 
-/// `font.color`（r/g/b それぞれ 0–255）。各成分独立 `None`（要件 2.5/2.6・部分欠落を欠落なく表現）。
+/// `font.color`（r/g/b それぞれ 0–255）。各成分独立 `None`（部分欠落を欠落なく表現）。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FontColor {
@@ -506,34 +496,34 @@ pub struct FontColor {
 }
 
 impl FontColor {
-    /// r/g/b を個別に `Option` で保持して構築する（部分欠落を欠落なく表現・要件 2.5/2.6）。
+    /// r/g/b を個別に `Option` で保持して構築する（部分欠落を欠落なく表現）。
     pub fn new(r: Option<u8>, g: Option<u8>, b: Option<u8>) -> Self {
         FontColor { r, g, b }
     }
 
-    /// 赤成分（0–255・未指定は `None`・`Some(0)` と判別・要件 2.5/2.6）。
+    /// 赤成分（0–255・未指定は `None`・`Some(0)` と判別）。
     pub fn r(&self) -> Option<u8> {
         self.r
     }
 
-    /// 緑成分（0–255・未指定は `None`・`Some(0)` と判別・要件 2.5/2.6）。
+    /// 緑成分（0–255・未指定は `None`・`Some(0)` と判別）。
     pub fn g(&self) -> Option<u8> {
         self.g
     }
 
-    /// 青成分（0–255・未指定は `None`・`Some(0)` と判別・要件 2.5/2.6）。
+    /// 青成分（0–255・未指定は `None`・`Some(0)` と判別）。
     pub fn b(&self) -> Option<u8> {
         self.b
     }
 }
 
 /// `font.bold`／`font.italic`／`font.outline`／`font.strike`／`font.underline` の生文字列。
-/// 未指定は `None`（balloon-font-descript-keys 要件 2.1/2.6・設計 DD3）。
+/// 未指定は `None`。
 ///
 /// 転記層契約: 2 層マージ済みの値を**解釈せず・警告せず**そのまま保持する（[`WindowPositionRaw`]
 /// 流儀）。`0`/`1` の判定・語彙外値の縮退・警告は下流の責務であり、ここでは語彙外の値も素通しで
-/// 保持する。担当下流は `areka-emo-text` の `balloon_overrides` 経由で `look.rs` の受け口
-/// （`\f` と同じ判定）であり、本仕様が配線する。
+/// 保持する。判定は `areka-emo-text` の `balloon_overrides` 経由で `look.rs` の受け口
+/// （`\f` と同じ判定）が担う。
 ///
 /// `#[derive(Default)]` は「全キー未指定」の素直な表現であり、[`BalloonModel::new`] が用いる。
 /// `Option<String>` を含むため `Copy` 不可。
@@ -592,12 +582,11 @@ impl FontDecorationRaw {
 }
 
 /// `font.shadowcolor.r`／`.g`／`.b`／`font.shadowstyle` の生文字列。
-/// 未指定は `None`（balloon-font-descript-keys 要件 2.2/2.6・設計 DD3）。
+/// 未指定は `None`。
 ///
 /// 転記層契約: 2 層マージ済みの値を**解釈せず・警告せず**そのまま保持する。`none`／数値／未指定は
 /// `Some("none")`／`Some("64")`／`None` として区別される。`none` の判定・色成分の数値化・
-/// 語彙外値の縮退・警告は下流の責務であり、担当下流は `text-align-shadow-canon`
-/// （本仕様は影を描画へ配線しない）。
+/// 語彙外値の縮退・警告は下流の責務である。
 ///
 /// `#[derive(Default)]` は「全キー未指定」の素直な表現であり、[`BalloonModel::new`] が用いる。
 #[non_exhaustive]
@@ -646,13 +635,11 @@ impl FontShadowRaw {
     }
 }
 
-/// `disable.font.*`——無効表示の書体設定 14 本。基底の `font.*` とは別の層
-/// （balloon-font-descript-keys 要件 2.8・設計 DD9）。
+/// `disable.font.*`——無効表示の書体設定 14 本。基底の `font.*` とは別の層。
 ///
 /// 書体名・大きさ・色は既存 [`Font`] を値で再利用し（数値化の縮退規則は基底と同じ）、書体 5 本・
 /// 影 4 本は基底と同じ [`FontDecorationRaw`]／[`FontShadowRaw`] で持つ。束であって生文字列では
-/// ないため `Raw` を付けない。値の解釈は下流の責務であり、書体は `look.rs` の受け口へ本仕様が
-/// 配線し、影は `text-align-shadow-canon` が引き受ける。
+/// ないため `Raw` を付けない。値の解釈は下流の責務であり、書体は `look.rs` の受け口が受ける。
 ///
 /// `Font` が `Default` を持たないため `Default` は手書き（全キー未指定）。
 #[non_exhaustive]
@@ -700,12 +687,12 @@ impl Default for DisableFont {
     }
 }
 
-/// balloon descript の `cursor.*` スタイルキー群（選択肢マーカー・忠実転写・要件 4.2/6.2）。
+/// balloon descript の `cursor.*` スタイルキー群（選択肢マーカー・忠実転写）。
 ///
 /// 「`cursor,ファイル名`」（マウスカーソル画像キー）は別キーであり本モデルの対象外。
 /// 各成分は `Option`（`None` と `Some(0)` を判別・既存パーサ規約）で保持し、値の解釈・
 /// スタイル解決は下流（`ResolvedChoiceStyle::resolve`）に委ねる（parser は転記に徹する）。
-/// 全キー未指定（`Default`）＝「未指定バルーン」判定の素材となる（要件 4.3/6.1）。
+/// 全キー未指定（`Default`）＝「未指定バルーン」判定の素材となる。
 ///
 /// `#[derive(Default)]` は「全キー未指定」の素直な表現であり、additive フィールドとして
 /// 既存コンストラクタ互換を保つために [`BalloonModel::new`] が用いる。`Eq` は集約ルート
@@ -742,30 +729,30 @@ impl BalloonCursor {
     }
 
     /// 選択肢マーカースタイル `cursor.style`（square / underline / square+underline / none・
-    /// 未指定は `None`・生文字列転記・要件 4.2/6.5）。
+    /// 未指定は `None`・生文字列転記）。
     pub fn style(&self) -> Option<&str> {
         self.style.as_deref()
     }
 
-    /// 矩形内塗り色 `cursor.brush.color.{r,g,b}`（hover 塗り色・要件 4.2）。
+    /// 矩形内塗り色 `cursor.brush.color.{r,g,b}`（hover 塗り色）。
     pub fn brush_color(&self) -> CursorColor {
         self.brush_color
     }
 
-    /// 枠/下線色 `cursor.pen.color.{r,g,b}`（語彙保持・M1 非参照・要件 6.2）。
+    /// 枠/下線色 `cursor.pen.color.{r,g,b}`（語彙保持のみ・描画は参照しない）。
     pub fn pen_color(&self) -> CursorColor {
         self.pen_color
     }
 
-    /// hover 文字色 `cursor.font.color.{r,g,b}`（要件 4.2）。
+    /// hover 文字色 `cursor.font.color.{r,g,b}`。
     ///
     /// 既存 `font.color.*`（非 hover 文字色）とは別キー系であり、完全一致引きゆえ相互に
-    /// 汚染しない（「cursor キーを font へ巻き込まない」既存不変条件の分離側・要件 6.2）。
+    /// 汚染しない（「cursor キーを font へ巻き込まない」既存不変条件の分離側）。
     pub fn font_color(&self) -> CursorColor {
         self.font_color
     }
 
-    /// ブレンド方式 `cursor.blendmethod`（none / notmaskpen / …・不透明転写・未指定は `None`・要件 6.5）。
+    /// ブレンド方式 `cursor.blendmethod`（none / notmaskpen / …・不透明転写・未指定は `None`）。
     pub fn blendmethod(&self) -> Option<&str> {
         self.blendmethod.as_deref()
     }
@@ -774,8 +761,8 @@ impl BalloonCursor {
 /// `cursor.*.color`（`brush`/`pen`/`font` の r/g/b それぞれ 0–255）。各成分独立 `None`。
 ///
 /// `FontColor` と同一表現を意図的にミラーする（r/g/b を個別に `Option<u8>` 化し、部分欠落を
-/// 欠落なく表現・`None` と `Some(0)` を判別・要件 4.2/2.6）。`FontColor` を再利用せず別 NewType
-/// とするのは、設計（BalloonCursorModel）が `CursorColor` を命名した意味論分離に従うため。
+/// 欠落なく表現・`None` と `Some(0)` を判別）。`FontColor` を再利用せず別 NewType
+/// とするのは、`cursor.*` と `font.*` の意味論を分けるため。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CursorColor {
@@ -785,22 +772,22 @@ pub struct CursorColor {
 }
 
 impl CursorColor {
-    /// r/g/b を個別に `Option` で保持して構築する（部分欠落を欠落なく表現・要件 4.2/2.6）。
+    /// r/g/b を個別に `Option` で保持して構築する（部分欠落を欠落なく表現）。
     pub fn new(r: Option<u8>, g: Option<u8>, b: Option<u8>) -> Self {
         CursorColor { r, g, b }
     }
 
-    /// 赤成分（0–255・未指定は `None`・`Some(0)` と判別・要件 4.2/2.6）。
+    /// 赤成分（0–255・未指定は `None`・`Some(0)` と判別）。
     pub fn r(&self) -> Option<u8> {
         self.r
     }
 
-    /// 緑成分（0–255・未指定は `None`・`Some(0)` と判別・要件 4.2/2.6）。
+    /// 緑成分（0–255・未指定は `None`・`Some(0)` と判別）。
     pub fn g(&self) -> Option<u8> {
         self.g
     }
 
-    /// 青成分（0–255・未指定は `None`・`Some(0)` と判別・要件 4.2/2.6）。
+    /// 青成分（0–255・未指定は `None`・`Some(0)` と判別）。
     pub fn b(&self) -> Option<u8> {
         self.b
     }

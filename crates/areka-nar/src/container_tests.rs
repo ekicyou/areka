@@ -1,4 +1,4 @@
-//! `container` の兄弟テスト（要件 2.1・2.5・2.6・5.9）。
+//! `container` の兄弟テスト。
 //!
 //! 固定入力はすべて `sample_ghost_kit::NarBuilder` が組む。無傷の書庫と、印を
 //! 1 つだけ立てた／1 点だけ壊した同じ書庫との対を作れるので、どの検査が働いて
@@ -75,9 +75,8 @@ fn deflate_entry_is_accepted_and_round_trips() {
     );
 }
 
-/// 書き手が組んだ無圧縮と deflate が、読取層で**同じバイト列に戻る**（要件 5.9）。
+/// 書き手が組んだ無圧縮と deflate が、読取層で**同じバイト列に戻る**。
 ///
-/// タスク 2.4 の完了条件がここで初めて確かめられる（書いた時点では読み手が無かった）。
 /// 同じ原文を方式だけ変えて 2 度入れ、どちらも 1 バイトの違いも無く戻ることを見る。
 /// 改行（`\r\n` と `\n`）・NUL・Shift_JIS のバイト・0xFF を含むので、改行変換や
 /// 文字コード変換が挟まれば必ず食い違う。
@@ -147,7 +146,7 @@ fn central_directory_fields_are_carried_verbatim() {
     );
 }
 
-/// 拡張子が `.nar` でも `.zip` でも同じ手順で読む（要件 2.1）。
+/// 拡張子が `.nar` でも `.zip` でも同じ手順で読む。
 ///
 /// 読み手はバイト列しか受け取らないので拡張子を見る余地が無い——それを、同じ
 /// バイト列を両方の名前で**実際にファイルへ置いて読み直し**、結果が完全に一致する
@@ -173,7 +172,7 @@ fn nar_and_zip_extensions_read_identically() {
     assert_eq!(from_nar.len(), 2);
 }
 
-// ---- 整合性の拒否（要件 2.6） ----
+// ---- 整合性の拒否 ----
 
 /// 刻まれた CRC だけを壊すと CRC 不一致で拒否する。
 #[test]
@@ -363,7 +362,7 @@ fn multi_disk_archive_is_refused() {
     assert_eq!(*what, Unsupported::MultiDisk);
 }
 
-// ---- エントリの形式の拒否（要件 2.5） ----
+// ---- エントリの形式の拒否 ----
 
 /// 暗号化の印（汎用目的ビット 0）が立っていれば拒否し、理由にエントリ名を含める。
 #[test]
@@ -404,7 +403,7 @@ fn method_99_is_refused_as_encrypted() {
     assert_eq!(*what, Unsupported::Encrypted);
 }
 
-/// 対応外の圧縮方式は、方式の番号とエントリ名を添えて拒否する（要件 2.5）。
+/// 対応外の圧縮方式は、方式の番号とエントリ名を添えて拒否する。
 #[test]
 fn unsupported_compression_method_is_refused_with_the_method_number() {
     let nar = NarBuilder::new()
@@ -457,7 +456,7 @@ fn inflate_entry_refuses_an_unsupported_method_on_its_own() {
 
 /// 伸長の上限は宣言サイズそのもの——宣言より大きく膨らむ流れは途中で打ち切られる。
 ///
-/// 伸長爆弾の歯止め（設計「Security Considerations」）。上限を外すと、宣言 1 バイトの
+/// 伸長爆弾の歯止め。上限を外すと、宣言 1 バイトの
 /// エントリが 10 KiB を吐いても素通りしてしまう。
 #[test]
 fn inflate_stops_at_the_declared_size_so_a_bomb_cannot_expand() {
@@ -525,7 +524,7 @@ fn declared_size_at_the_cap_still_parses() {
     assert_eq!(entries[0].uncompressed_size, MAX_TOTAL_DECLARED_SIZE);
 }
 
-// ---- 「1 バイトも書かない」（要件 2.6・5.9） ----
+// ---- 「1 バイトも書かない」 ----
 
 /// `container` の本体が、ファイルシステムにも別プロセスにも触る綴りを 1 つも持たない。
 ///

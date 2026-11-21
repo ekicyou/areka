@@ -1,12 +1,12 @@
-//! `decode` の単体テスト（emo2 subset 値正規化・タスク 4.1 範囲）。
+//! `decode` の単体テスト（emo2 subset 値正規化）。
 //!
 //! 検証対象は構文トークン（`lexer::Token`）→ 値正規化済み `Instruction` の写像:
 //! - 待ち時間（`\wN` = n×50ms、`\_w[ms]` = 絶対 ms）の境界値。
 //! - 改行比率（素の `\n` = 1.0、`\n[percent]` = percent/100、`\n[half]` = 0.5、負値）。
 //! - 選択肢 `\q[disp,target,refs...]` の disp/target 分離 ＋ references 順序保持。
 //! - `\![move,...]` の汎用コマンド化、`\p[n]`/`\s[...]`/`\_l[x,y]`/`\e`/`\c`/`\-`、`%keyword`、テキスト。
-//! - `move` 以外の `\!`・subset 外タグ・`\q` 旧 2 連形・`\![*]` の素通し（タスク 4.2 の節）、
-//!   バルーン面 `\b`（タスク 1.2 の節）、非有限の `\n[…]`。
+//! - `move` 以外の `\!`・subset 外タグ・`\q` 旧 2 連形・`\![*]` の素通し、
+//!   バルーン面 `\b`、非有限の `\n[…]`。
 //!
 //! decode は lexer を消費するため、入力は実スクリプト文字列を `lex` した結果を渡す
 //! （構文区切りと意味デコードの結線が正しいことも同時に固定する）。
@@ -21,9 +21,9 @@ fn dec(input: &str) -> Vec<Instruction> {
     decode(lex(input))
 }
 
-// ── 待ち時間（要件 3）─────────────────────────────────────────────
+// ── 待ち時間─────────────────────────────────────────────
 
-/// `\wN` 短縮の境界: `\w1` → 50ms、`\w9` → 450ms（n × 50ms・要件 3.2）。
+/// `\wN` 短縮の境界: `\w1` → 50ms、`\w9` → 450ms（n × 50ms）。
 #[test]
 fn wait_shorthand_boundary_values() {
     assert_eq!(
@@ -41,7 +41,7 @@ fn wait_shorthand_boundary_values() {
 /// と `\_w[時間]`＝絶対 ms
 /// https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_w_5b_6642_9593_5d:1
 /// の 2 形だけ）。よって待ちとして解釈せず、`\w` は知らない素の綴りの `Raw`、`[2]` は字に
-/// する（かけ直しの R18 で `sakura-parse` 要件 18.1 の「全体を `Raw`」を改めた＝字を消さない）。
+/// する（字を消さない）。
 /// 正典 2 形が不変であることを同じ檻で対照する。
 #[test]
 fn wait_bracket_form_is_raw_tag_and_text_not_wait() {
@@ -52,7 +52,7 @@ fn wait_bracket_form_is_raw_tag_and_text_not_wait() {
             Instruction::Text("[2]".to_string())
         ]
     );
-    // 対照: 正典の短縮形と絶対ミリ秒形は従来どおり `Wait`。
+    // 対照: 正典の短縮形と絶対ミリ秒形は `Wait`。
     assert_eq!(
         dec(r"\w2"),
         vec![Instruction::Wait(Duration::from_millis(100))]
@@ -63,7 +63,7 @@ fn wait_bracket_form_is_raw_tag_and_text_not_wait() {
     );
 }
 
-/// `\_w[ms]` 絶対ミリ秒: `\_w[450]` → 450ms、`\_w[950]` → 950ms（要件 3.3）。
+/// `\_w[ms]` 絶対ミリ秒: `\_w[450]` → 450ms、`\_w[950]` → 950ms。
 #[test]
 fn wait_underscore_absolute_ms() {
     assert_eq!(
@@ -76,16 +76,16 @@ fn wait_underscore_absolute_ms() {
     );
 }
 
-/// `\w`系/`\_w`系のいずれも同一 `Wait` variant（正規化済み Duration）で表現（要件 3.4）。
+/// `\w`系/`\_w`系のいずれも同一 `Wait` variant（正規化済み Duration）で表現。
 #[test]
 fn wait_variants_unified_to_same_duration() {
     // \w9 = 450ms と \_w[450] = 450ms は同一 Instruction。
     assert_eq!(dec(r"\w9"), dec(r"\_w[450]"));
 }
 
-// ── 改行と割合改行（要件 4）─────────────────────────────────────
+// ── 改行と割合改行─────────────────────────────────────
 
-/// 素の `\n`（bare）→ 既定比率 1.0（要件 4.2）。
+/// 素の `\n`（bare）→ 既定比率 1.0。
 #[test]
 fn newline_bare_default_ratio_one() {
     assert_eq!(
@@ -94,7 +94,7 @@ fn newline_bare_default_ratio_one() {
     );
 }
 
-/// `\n[percent]` → percent/100（`\n[150]` → 1.5・要件 4.1）。
+/// `\n[percent]` → percent/100（`\n[150]` → 1.5）。
 #[test]
 fn newline_percent_ratio() {
     assert_eq!(
@@ -107,7 +107,7 @@ fn newline_percent_ratio() {
     );
 }
 
-/// `\n[half]` → 0.5（design 値定数）。
+/// `\n[half]` → 0.5。
 #[test]
 fn newline_half_ratio() {
     assert_eq!(
@@ -116,7 +116,7 @@ fn newline_half_ratio() {
     );
 }
 
-/// 負値の `\n[-100]` → -1.0（戻り・符号付き保持・design 値定数）。
+/// 負値の `\n[-100]` → -1.0（戻り・符号付き保持）。
 #[test]
 fn newline_negative_ratio_back() {
     assert_eq!(
@@ -125,17 +125,17 @@ fn newline_negative_ratio_back() {
     );
 }
 
-// ── 話者スコープとサーフェス（要件 2）──────────────────────────
+// ── 話者スコープとサーフェス──────────────────────────
 
-/// `\p[0]` / `\p[1]` → 話者スコープ番号（要件 2.1）。
+/// `\p[0]` / `\p[1]` → 話者スコープ番号。
 #[test]
 fn speaker_scope_number() {
     assert_eq!(dec(r"\p[0]"), vec![Instruction::SpeakerScope { n: 0 }]);
     assert_eq!(dec(r"\p[1]"), vec![Instruction::SpeakerScope { n: 1 }]);
 }
 
-/// ブラケット `\p[n]` は**任意番号 u32**を保持し 0/1 へ clamp しない（開発者裁定#3・
-/// ukadoc `\p[ID番号]`＝任意番号・R1.5/R4.4）。`speaker_scope_n` の u32 parse が
+/// ブラケット `\p[n]` は**任意番号 u32**を保持し 0/1 へ clamp しない（
+/// ukadoc `\p[ID番号]`＝任意番号）。`speaker_scope_n` の u32 parse が
 /// 生値を通すことを固定する（非退行）。
 #[test]
 fn speaker_scope_bracket_arbitrary_n_not_clamped() {
@@ -145,7 +145,7 @@ fn speaker_scope_bracket_arbitrary_n_not_clamped() {
 }
 
 /// 括弧なし短縮 `\pN`（ukadoc `\pID`＝任意番号・0〜9 のみ）→ `SpeakerScope{n}`
-/// （lexer shorthand・R1.5/R4.4）。`\p2` → scope 2。ブラケット形 `\p[2]` と等価。
+/// （lexer shorthand）。`\p2` → scope 2。ブラケット形 `\p[2]` と等価。
 #[test]
 fn speaker_scope_shorthand_single_digit() {
     assert_eq!(dec(r"\p2"), vec![Instruction::SpeakerScope { n: 2 }]);
@@ -165,14 +165,14 @@ fn speaker_scope_shorthand_consumes_one_digit_only() {
 }
 
 /// 数字を伴わない裸 `\p` は shorthand でも正典スコープ bare でもない＝既存 passthrough の
-/// まま `Raw("\p")`（`decode_bare` の match に `'p'` アームは無い・要件 11.2）。
+/// まま `Raw("\p")`（`decode_bare` の match に `'p'` アームは無い）。
 /// `\p2`（shorthand）・`\p[2]`（Tag）との弁別を固定する。
 #[test]
 fn bare_p_without_digit_absorbed_as_raw() {
     assert_eq!(dec(r"\p"), vec![Instruction::Raw(r"\p".to_string())]);
 }
 
-/// `\s[...]` の中身は不透明文字列のまま無加工保持（要件 2.2/2.3）。
+/// `\s[...]` の中身は不透明文字列のまま無加工保持。
 #[test]
 fn surface_opaque_content_preserved() {
     // 数値も日本語エイリアスも改変しない。
@@ -186,9 +186,9 @@ fn surface_opaque_content_preserved() {
     );
 }
 
-// ── 選択肢（要件 5）────────────────────────────────────────────
+// ── 選択肢────────────────────────────────────────────
 
-/// `\q[タイトル,ID]` → disp/target 分離（references 空・要件 5.1）。
+/// `\q[タイトル,ID]` → disp/target 分離（references 空）。
 #[test]
 fn choice_disp_target_split() {
     assert_eq!(
@@ -201,7 +201,7 @@ fn choice_disp_target_split() {
     );
 }
 
-/// `\q[タイトル,ID,r0,r1]` → 第 3 引数以降を references に順序保持（要件 5.2）。
+/// `\q[タイトル,ID,r0,r1]` → 第 3 引数以降を references に順序保持。
 #[test]
 fn choice_extra_references_order_preserved() {
     assert_eq!(
@@ -245,9 +245,9 @@ fn choice_nested_script_example_reads_as_canon() {
     );
 }
 
-// ── カーソル位置と制御命令（要件 6）───────────────────────────
+// ── カーソル位置と制御命令───────────────────────────
 
-/// `\_l[x,y]` → カーソル絶対位置（x/y は文字列のまま・要件 6.1）。
+/// `\_l[x,y]` → カーソル絶対位置（x/y は文字列のまま）。
 #[test]
 fn cursor_absolute_position() {
     assert_eq!(
@@ -259,7 +259,7 @@ fn cursor_absolute_position() {
     );
 }
 
-/// `\e` → End、`\c` → Clear、`\-` → Quit（要件 6.2-6.4）。
+/// `\e` → End、`\c` → Clear、`\-` → Quit。
 #[test]
 fn control_tags_end_clear_quit() {
     assert_eq!(dec(r"\e"), vec![Instruction::End]);
@@ -267,9 +267,9 @@ fn control_tags_end_clear_quit() {
     assert_eq!(dec(r"\-"), vec![Instruction::Quit]);
 }
 
-// ── キャラ移動（要件 7.1 — 汎用の道・指摘 28）─────────────
+// ── キャラ移動（汎用の道）─────────────
 
-/// `\![move,dx,dy]` → 名前 `move` の GenericCommand（move を除いた生引数列を保持・要件 7.1）。
+/// `\![move,dx,dy]` → 名前 `move` の GenericCommand（move を除いた生引数列を保持）。
 #[test]
 fn move_command_decoded_with_args() {
     assert_eq!(
@@ -281,9 +281,9 @@ fn move_command_decoded_with_args() {
     );
 }
 
-// ── システム変数（要件 8）─────────────────────────────────────
+// ── システム変数─────────────────────────────────────
 
-/// `%username` → 展開なし SystemVar トークン（要件 8.1/8.2）。
+/// `%username` → 展開なし SystemVar トークン。
 #[test]
 fn system_var_token_unexpanded() {
     assert_eq!(
@@ -292,9 +292,9 @@ fn system_var_token_unexpanded() {
     );
 }
 
-// ── テキストラン（要件 9）─────────────────────────────────────
+// ── テキストラン─────────────────────────────────────
 
-/// タグ間プレーンテキスト → Text run（UTF-8 日本語・要件 9.1）。
+/// タグ間プレーンテキスト → Text run（UTF-8 日本語）。
 #[test]
 fn text_run_preserved() {
     assert_eq!(
@@ -303,10 +303,10 @@ fn text_run_preserved() {
     );
 }
 
-// ── 順序保持 ＋ 未デコード断片を残さない（要件 1.2/1.3）──────
+// ── 順序保持 ＋ 未デコード断片を残さない──────
 
 /// 複数 subset タグ＋テキスト混在が入力順を保持し、全トークンが
-/// いずれかの `Instruction` へ写像される（未デコード文字列断片を残さない・要件 1.2/1.3）。
+/// いずれかの `Instruction` へ写像される（未デコード文字列断片を残さない）。
 #[test]
 fn mixed_subset_tags_order_preserved_no_undecoded_fragment() {
     let out = dec(r"\p[0]\s[1000]こんにちは\_w[450]\n[150]\e");
@@ -324,13 +324,13 @@ fn mixed_subset_tags_order_preserved_no_undecoded_fragment() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// タスク 4.2: 寛容パススルー・GenericCommand・旧 `\q` 吸収
+// 寛容パススルー・GenericCommand・旧 `\q` 吸収
 // ════════════════════════════════════════════════════════════════════
 
-// ── move 以外の `\!` → GenericCommand（要件 7.2/7.3）─────────────────
+// ── move 以外の `\!` → GenericCommand─────────────────
 
 /// `\![open,sliderinput]` → `GenericCommand { name:"open", raw_args:["sliderinput"] }`
-/// （第 1 引数=種別、残り=生引数・design L517・要件 7.2/7.3）。
+/// （第 1 引数=種別、残り=生引数）。
 #[test]
 fn non_move_bang_to_generic_command() {
     assert_eq!(
@@ -342,7 +342,7 @@ fn non_move_bang_to_generic_command() {
     );
 }
 
-/// `\![raise,arm]` も同様（種別 raise・残り arm・要件 7.2/7.3）。
+/// `\![raise,arm]` も同様（種別 raise・残り arm）。
 #[test]
 fn non_move_bang_raise_to_generic_command() {
     assert_eq!(
@@ -366,7 +366,7 @@ fn non_move_bang_single_arg_generic_command() {
     );
 }
 
-/// 引数空の `\![]` も種別空の GenericCommand（情報を捨てず・エラーにしない・要件 10.2）。
+/// 引数空の `\![]` も種別空の GenericCommand（情報を捨てず・エラーにしない）。
 #[test]
 fn empty_bang_to_generic_command_empty_name() {
     assert_eq!(
@@ -378,7 +378,7 @@ fn empty_bang_to_generic_command_empty_name() {
     );
 }
 
-// ── 印 `\![*]`・`%*`（script-small-tags 要件 4）────────────────────────
+// ── 印 `\![*]`・`%*`────────────────────────
 
 /// 印の命令（名前 `MARKER_COMMAND` の汎用の `\!`・引数なし）。
 fn marker() -> Instruction {
@@ -388,7 +388,7 @@ fn marker() -> Instruction {
     }
 }
 
-/// `\![*]` の直後の `\q[...]` は畳まず、印の命令と選択肢の 2 つにする（要件 4.1）。
+/// `\![*]` の直後の `\q[...]` は畳まず、印の命令と選択肢の 2 つにする。
 #[test]
 fn marker_before_choice_stays_separate() {
     assert_eq!(
@@ -404,7 +404,7 @@ fn marker_before_choice_stays_separate() {
     );
 }
 
-/// 単独の `\![*]`・`%*`・`\![*]%*` はどれも印の命令になる（要件 4.2・4.3・4.5）。
+/// 単独の `\![*]`・`%*`・`\![*]%*` はどれも印の命令になる。
 #[test]
 fn lone_marker_and_percent_star_are_marker_commands() {
     assert_eq!(dec(r"\![*]"), vec![marker()]);
@@ -412,7 +412,7 @@ fn lone_marker_and_percent_star_are_marker_commands() {
     assert_eq!(dec(r"\![*]%*"), vec![marker(), marker()]);
 }
 
-/// 旧 2 連形 `\q*[ID][タイトル]`（`*` 付き）も丸ごと `Raw`（要件 5.3）。
+/// 旧 2 連形 `\q*[ID][タイトル]`（`*` 付き）も丸ごと `Raw`。
 #[test]
 fn legacy_double_bracket_q_star_to_raw() {
     assert_eq!(
@@ -421,9 +421,9 @@ fn legacy_double_bracket_q_star_to_raw() {
     );
 }
 
-// ── subset 外タグ・不正トークン → Raw（要件 10.1/11.2）───────────────
+// ── subset 外タグ・不正トークン → Raw───────────────
 
-/// emo2 subset 外の正準タグ `\i[a,b]` → `Raw`（構文区切り＋raw 保持・要件 11.2/13.8）。
+/// emo2 subset 外の正準タグ `\i[a,b]` → `Raw`（構文区切り＋raw 保持）。
 #[test]
 fn unknown_tag_absorbed_as_raw() {
     assert_eq!(
@@ -432,22 +432,20 @@ fn unknown_tag_absorbed_as_raw() {
     );
 }
 
-/// 正典スコープタグ bare `\0` → `SpeakerScope{n:0}`（本体側・R1.5/R4.4・ukadoc `\0`=本体側）。
-/// これは完了 spec `areka-P0-sakura-parse` req 11.2 の passthrough 分類の意図的スーパーセット
-/// 更新（emo2 は `\p[n]` を発行するため無影響）。
+/// 正典スコープタグ bare `\0` → `SpeakerScope{n:0}`（本体側・ukadoc `\0`=本体側）。
 #[test]
 fn scope_bare_zero_maps_to_speaker_scope() {
     assert_eq!(dec(r"\0"), vec![Instruction::SpeakerScope { n: 0 }]);
 }
 
-/// 正典スコープタグ bare `\1` → `SpeakerScope{n:1}`（相方側・R1.5/R4.4・ukadoc `\1`=相方側）。
+/// 正典スコープタグ bare `\1` → `SpeakerScope{n:1}`（相方側・ukadoc `\1`=相方側）。
 /// `boot.pasta:79` の `\1\![move,...]`（初回起動のエモ位置調整）が正しく scope 1 帰属する経路。
 #[test]
 fn scope_bare_one_maps_to_speaker_scope() {
     assert_eq!(dec(r"\1"), vec![Instruction::SpeakerScope { n: 1 }]);
 }
 
-/// bare スコープ**別名** `\h`（本体側=0）・`\u`（相方側=1）→ `SpeakerScope`（R1.5/R4.4・
+/// bare スコープ**別名** `\h`（本体側=0）・`\u`（相方側=1）→ `SpeakerScope`（
 /// ukadoc: `\0`/`\h`=本体側、`\1`/`\u`=相方側）。数字形 `\0`/`\1` と同一 scope へ写像する。
 #[test]
 fn scope_bare_h_u_aliases_map_to_speaker_scope() {
@@ -455,7 +453,7 @@ fn scope_bare_h_u_aliases_map_to_speaker_scope() {
     assert_eq!(dec(r"\u"), vec![Instruction::SpeakerScope { n: 1 }]);
 }
 
-/// 真に未知の bare タグ（`\i` 等・スコープタグでない）は引き続き `Raw`（要件 11.2）。
+/// 真に未知の bare タグ（`\i` 等・スコープタグでない）は引き続き `Raw`。
 #[test]
 fn unknown_bare_tag_absorbed_as_raw() {
     assert_eq!(dec(r"\i"), vec![Instruction::Raw(r"\i".to_string())]);
@@ -470,7 +468,7 @@ fn change_ghost(name: &str) -> Instruction {
 }
 
 /// 裸の `\+`／`\_+` は角括弧付き `\![change,ghost,random]`／`\![change,ghost,sequential]`
-/// と同じ値へ写る別名の転記（ghost-change-name-resolution 要件 1.1〜1.3・6.4）。
+/// と同じ値へ写る別名の転記。
 /// 値の綴りがずれると切替の受け口の自己選別に届かなくなるので、角括弧付き形と `==` で固定する。
 #[test]
 fn bare_plus_and_underscore_plus_alias_change_ghost() {
@@ -480,7 +478,7 @@ fn bare_plus_and_underscore_plus_alias_change_ghost() {
     assert_eq!(dec(r"\_+"), vec![change_ghost("sequential")]);
 }
 
-/// `\+`／`\_+` の直後の本文は本文として残る（字句の切れ目は変えない・要件 1.4）。
+/// `\+`／`\_+` の直後の本文は本文として残る（字句の切れ目は変えない）。
 #[test]
 fn bare_plus_aliases_keep_following_text() {
     assert_eq!(
@@ -499,14 +497,14 @@ fn bare_plus_aliases_keep_following_text() {
     );
 }
 
-/// 角括弧付きの `\+[…]` は正典に無いので別名にせず、今日どおり生の綴り 1 つ（要件 1.5）。
+/// 角括弧付きの `\+[…]` は正典に無いので別名にせず、今日どおり生の綴り 1 つ。
 #[test]
 fn bracketed_plus_stays_raw() {
     assert_eq!(dec(r"\+[x]"), vec![Instruction::Raw(r"\+[x]".to_string())]);
 }
 
-/// lexer が区切れず Raw 吸収した不正断片（未閉じ `[`）は decode でも Raw のまま
-/// （要件 10.1/13.8）。前後の正常命令は欠落しない（要件 10.3）。
+/// lexer が区切れず Raw 吸収した不正断片（未閉じ `[`）は decode でも Raw のまま。
+/// 前後の正常命令は欠落しない。
 #[test]
 fn unclosed_bracket_raw_preserves_neighbors() {
     assert_eq!(
@@ -516,7 +514,7 @@ fn unclosed_bracket_raw_preserves_neighbors() {
 }
 
 /// 未知タグ・旧 `\q`・不正トークンが混在しても解析を中断せず、
-/// 周囲の正常命令を保持する（要件 10.1/10.2/10.3 の総合固定）。
+/// 周囲の正常命令を保持する。
 #[test]
 fn lenient_passthrough_never_aborts_keeps_valid_neighbors() {
     let out = dec(r"\p[0]\i[x]こんにちは\![open,a]\q[ID][タイトル]\e");
@@ -537,14 +535,13 @@ fn lenient_passthrough_never_aborts_keeps_valid_neighbors() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// タスク 1.2: バルーン面切替 `\b` の意味 decode（両形・不透明転写）
+// バルーン面切替 `\b` の意味 decode（両形・不透明転写）
 //
-// State Management 表（design.md）の全行を檻に入れる。ブラケット形（数値形／
-// 名前形）と裸形短縮の双方が、`\s` の `Surface` と完全対称の `BalloonSurface`
-// へ忠実転写される（数値化・範囲展開・alias 解決を一切行わない・R1.1/1.4/1.5）。
+// ブラケット形（数値形／名前形）と裸形短縮の双方が、`\s` の `Surface` と完全対称の
+// `BalloonSurface` へ忠実転写される（数値化・範囲展開・alias 解決を一切行わない）。
 // ════════════════════════════════════════════════════════════════════
 
-/// ブラケット数値形 `\b[10]` → `[BalloonSurface("10")]`（第 1 引数を不透明保持・R1.1）。
+/// ブラケット数値形 `\b[10]` → `[BalloonSurface("10")]`（第 1 引数を不透明保持）。
 #[test]
 fn balloon_surface_bracket_numeric() {
     assert_eq!(
@@ -556,7 +553,7 @@ fn balloon_surface_bracket_numeric() {
 }
 
 /// ブラケット名前形 `\b[バルーン１]` → `[BalloonSurface("バルーン１")]`（無加工・整数へ
-/// 限定変換しない・R1.1/R1.5）。
+/// 限定変換しない）。
 #[test]
 fn balloon_surface_bracket_name_form_opaque() {
     assert_eq!(
@@ -568,7 +565,7 @@ fn balloon_surface_bracket_name_form_opaque() {
 }
 
 /// ブラケット非表示指定 `\b[-1]` → `[BalloonSurface("-1")]`（センチネルを文字列のまま
-/// 保持し数値化・解決しない・R1.4）。
+/// 保持し数値化・解決しない）。
 #[test]
 fn balloon_surface_hide_sentinel_opaque() {
     assert_eq!(
@@ -580,7 +577,7 @@ fn balloon_surface_hide_sentinel_opaque() {
 }
 
 /// 裸形短縮 `\b1` → `[BalloonSurface("1")]`（1 桁の面数字を文字列で保持・本文へ
-/// 漏らさない・R1.2/R1.3 の decode 面）。
+/// 漏らさない）。
 #[test]
 fn balloon_surface_shorthand_single_digit() {
     assert_eq!(
@@ -592,7 +589,7 @@ fn balloon_surface_shorthand_single_digit() {
 }
 
 /// 裸形 `\b12` → `[BalloonSurface("1"), Text("2")]`（面数字は 1 桁のみ消費し、続く
-/// `2` は正当なバルーン本文として残す・R1.3）。
+/// `2` は正当なバルーン本文として残す）。
 #[test]
 fn balloon_surface_shorthand_digit_then_body_text() {
     assert_eq!(
@@ -605,7 +602,7 @@ fn balloon_surface_shorthand_digit_then_body_text() {
 }
 
 /// ukadoc fallback 形 `\b[2,--fallback=4]` は第 1 引数 `"2"` に落ちる（`\s` arm と
-/// 完全対称の graceful 動作・Non-Goals 登記）。
+/// 完全対称の graceful 動作）。
 #[test]
 fn balloon_surface_fallback_form_takes_first_arg() {
     assert_eq!(
@@ -628,8 +625,7 @@ fn balloon_surface_inner_readable_via_as_str() {
 }
 
 /// `\b2[x]`・`\w9[x]`・`\p1[x]`（数字の直後が `[`）は短縮形＋字の `[x]`（ukadoc に数字の後の
-/// 角括弧の形は無い・指摘 27 と同じ「タグ＋字」・かけ直しの R18 で `sakura-tag-word-boundary`
-/// 要件 4.3 の「角括弧付きタグを優先」を改めた）。
+/// 角括弧の形は無い）。
 #[test]
 fn bracket_after_shorthand_digit_is_shorthand_and_text() {
     let text = || Instruction::Text("[x]".to_string());
@@ -651,13 +647,13 @@ fn bracket_after_shorthand_digit_is_shorthand_and_text() {
 }
 
 /// 数字を伴わない裸 `\b` は bare タグ＝既存 passthrough のまま `Raw("\b")`（"b" arm は
-/// ブラケット形／短縮形のみを取り込み、数字なし裸形の挙動は変えない・R1.6）。
+/// ブラケット形／短縮形のみを取り込み、数字なし裸形の挙動は変えない）。
 #[test]
 fn balloon_bare_no_digit_stays_raw() {
     assert_eq!(dec(r"\b"), vec![Instruction::Raw(r"\b".to_string())]);
 }
 
-/// 非退行（R1.6）: `\b` 追加後も `\s[...]` は引き続き `Surface`（別 variant）へ写像され、
+/// 非退行: `\b` 追加後も `\s[...]` は引き続き `Surface`（別 variant）へ写像され、
 /// バルーン面切替に奪われない。`\b`/`\s` が同一引数で異なる第一級命令になることを固定。
 #[test]
 fn shell_surface_unchanged_and_distinct_from_balloon() {
@@ -668,7 +664,7 @@ fn shell_surface_unchanged_and_distinct_from_balloon() {
     assert_ne!(dec(r"\b[10]"), dec(r"\s[10]"));
 }
 
-/// 非退行（R1.6）: 既存 subset タグ（`\w9`/`\s[0]`/`\n`/`\e`）＋バルーン面切替の混在で、
+/// 非退行: 既存 subset タグ（`\w9`/`\s[0]`/`\n`/`\e`）＋バルーン面切替の混在で、
 /// 既存タグの写像が完全不変のまま `\b` だけが `BalloonSurface` として割り込む。
 #[test]
 fn existing_tags_unchanged_with_balloon_interleaved() {
@@ -686,7 +682,7 @@ fn existing_tags_unchanged_with_balloon_interleaved() {
     );
 }
 
-/// 指摘 3（要件 7.1）: 非有限の割合（`NaN`・`inf`・桁あふれで inf になる `1e40`）は
+/// 非有限の割合（`NaN`・`inf`・桁あふれで inf になる `1e40`）は
 /// 既定 1.0 へ倒す（レイアウトに非有限の位置を渡さない）。
 #[test]
 fn newline_non_finite_percent_falls_back_to_default() {

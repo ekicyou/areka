@@ -1,10 +1,10 @@
-//! エントリ名の復号と安全性の判定（要件 2.2・2.3・2.4・2.7・4.1〜4.7）。
+//! エントリ名の復号と安全性の判定。
 //!
 //! 生バイトの名前を「名前は UTF-8」の印（汎用目的ビット 11）に従って復号し、
 //! 展開先の外へ出ない・Windows で作れる名前だけを通す。通った名前は
 //! [`EntryName`] になり、以降の層は生バイトも印も見ない。
 //!
-//! # 置換文字で黙って通さない（要件 2.4）
+//! # 置換文字で黙って通さない
 //!
 //! 復号に損失があれば（UTF-8 として読めない／Shift_JIS の復号器が誤りを報せた）
 //! その場で拒否し、理由にエントリ番号と**生バイトの 16 進**を入れる。復号後の
@@ -19,7 +19,7 @@
 //! 兄弟テストが複数違反の検体で測っている。
 //!
 //! 全エントリを検査し終えてから拒否をまとめる形は採らず、**最初の拒否で全体を
-//! 拒否**する。どちらでも書き込みの前に止まり（要件 4.1）、製品側は 1 つの理由を
+//! 拒否**する。どちらでも書き込みの前に止まり、製品側は 1 つの理由を
 //! `OnInstallFailure` に写すので 1 件で足りる。
 //!
 //! 本モジュールは宛先を受け取らず、ファイルシステムを変える呼び出しを 1 つも
@@ -122,7 +122,7 @@ fn unsafe_path(index: usize, name: &str, why: UnsafeWhy) -> RefuseReason {
     }
 }
 
-/// エントリ名を印に従って復号する。損失があれば拒否する（要件 2.2・2.3・2.4）。
+/// エントリ名を印に従って復号する。損失があれば拒否する。
 pub(crate) fn decode_entry_name(entry: &RawEntry) -> Result<String, RefuseReason> {
     let undecodable = |encoding| RefuseReason::NameUndecodable {
         index: entry.index,
@@ -145,7 +145,7 @@ pub(crate) fn decode_entry_name(entry: &RawEntry) -> Result<String, RefuseReason
     }
 }
 
-/// `component` が Windows のファイルシステムで作れる名前か（要件 4.6）。
+/// `component` が Windows のファイルシステムで作れる名前か。
 ///
 /// 空の要素はここへ来る前に撥ねてある。
 fn is_usable_windows_name(component: &str) -> bool {
@@ -165,12 +165,12 @@ fn is_usable_windows_name(component: &str) -> bool {
         .any(|reserved| stem.eq_ignore_ascii_case(reserved))
 }
 
-/// `name` が「木を掘らない 1 つの名前」として使えるか（要件 3.9・3.15）。
+/// `name` が「木を掘らない 1 つの名前」として使えるか。
 ///
 /// `install.txt` の `directory`・`*.directory` と、`*.source.directory` の各段と、
 /// `refreshundeletemask` の各要素が満たすべき規則。エントリ名と同じ
 /// [`is_usable_windows_name`] を土台にして、そこに含まれない 3 つ——空・`/`・`\`
-/// ——と長さの上限（[`MAX_ENTRY_PATH_UTF16`]・要件 1.5）だけを足す。`..` は末尾が
+/// ——と長さの上限（[`MAX_ENTRY_PATH_UTF16`]）だけを足す。`..` は末尾が
 /// ドット、`C:` は禁止文字の `:`、NUL は制御文字として、いずれも土台の側で撥ねられる
 /// （二重に書くと片方だけ直る）。
 pub(crate) fn is_valid_one_level_name(name: &str) -> bool {
@@ -187,7 +187,7 @@ fn starts_with_drive_letter(name: &str) -> bool {
     matches!((chars.next(), chars.next()), (Some(first), Some(':')) if first.is_ascii_alphabetic())
 }
 
-/// 外部属性の上位 16 bit の種別がシンボリックリンクか（要件 2.7）。
+/// 外部属性の上位 16 bit の種別がシンボリックリンクか。
 ///
 /// 作成側 OS の種別（`version made by`）は見ない。Unix 以外を名乗る書庫が
 /// `S_IFLNK` を持っていたら、それは受け入れてよい理由にならず安全側へ倒す。
@@ -202,7 +202,7 @@ fn validate_one(entry: &RawEntry) -> Result<EntryName, RefuseReason> {
 
     // フォルダのエントリの末尾の `/` だけを落とす。`a//` は空の要素として残る。
     let trimmed = name.strip_suffix('/').unwrap_or(&name);
-    // 長さは復号の直後。名前の全体は理由に載せない（要件 1.3・1.4）。
+    // 長さは復号の直後。名前の全体は理由に載せない。
     let length = utf16_len(trimmed);
     if length > MAX_ENTRY_PATH_UTF16 {
         return Err(RefuseReason::PathTooLong {
@@ -254,7 +254,7 @@ fn validate_one(entry: &RawEntry) -> Result<EntryName, RefuseReason> {
     })
 }
 
-/// 全エントリの名前を復号し、安全性と大小の衝突を判定する（要件 4.1）。
+/// 全エントリの名前を復号し、安全性と大小の衝突を判定する。
 ///
 /// 衝突の判定は復号後の**完全なパス**を [`fold`] で畳んで比べる。
 /// 同じパスの重複も同じ変種で拒否する（Windows では後勝ちで一方が消えるので、

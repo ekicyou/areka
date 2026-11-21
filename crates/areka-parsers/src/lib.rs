@@ -16,6 +16,6 @@ pub mod package;
 pub mod sakura;
 pub mod shell;
 
-// 検体を窓口から取得しプロセス寿命で保持する共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
+// 検体を窓口から取得しプロセス寿命で保持する共有の受け口。
 #[cfg(test)]
 mod sample_test_support;

@@ -1,25 +1,13 @@
-//! element overlay ＋ collision 矩形の正規化（元 decode_tests.rs タスク 4.2 区画）。
-//!
-//! 本ファイルは `decode_tests.rs` のテーマ分割（areka-P0-file-slimming タスク 8.5・要件 1.7）で
-//! 切り出したものであり、テスト本文は分割前と同一である。
+//! element overlay ＋ collision 矩形の正規化。
 
 use super::{
     Animation, Collision, CollisionBounds, CollisionName, CollisionShape, DrawMethod, Element,
     ElementPath, Interval, Pattern, decode, lex,
 };
 
-// --- タスク 4.2: element overlay ＋ collision 矩形の正規化 ---
-//
-// 検証範囲（要件 4.2/4.3/4.4/6.1/6.2）:
-// - element overlay 行を レイヤ/メソッド/画像パス/座標として正規化する（要件 4.2）。
-// - 画像パスは無加工保持（区切り `/`・`\` を正規化しない・読込/検証しない・要件 4.3）。
-// - element はレイヤインデックス昇順で保持する（安定・要件 4.4）。
-// - collision 矩形を 始点X/始点Y/終点X/終点Y ＝ left/top/right/bottom ＋不透明領域名として
-//   正規化する（要件 6.1/6.2）。collision は出現順で保持する。
-// animation 行・非 overlay メソッドはここでは扱わない（タスク 4.3 / 4.6）。collisionex の読みの檻は
-// `decode_collisionex_tests.rs` にある（collisionex-regions）。
+// collisionex の読みの檻は `decode_collisionex_tests.rs` にある。
 
-/// 単一 element overlay → レイヤ/パス/座標に正規化（要件 4.2）。
+/// 単一 element overlay → レイヤ/パス/座標に正規化。
 #[test]
 fn single_element_overlay_is_normalized() {
     let input = "surface0\n{\nelement0,overlay,surface0.png,0,0\n}\n";
@@ -36,7 +24,7 @@ fn single_element_overlay_is_normalized() {
     );
 }
 
-/// 複数 element は出現順に依らずレイヤ昇順で保持する（要件 4.4）。
+/// 複数 element は出現順に依らずレイヤ昇順で保持する。
 /// 入力は element1 が element0 より先に現れるが、出力は element0（layer 0）が先頭。
 #[test]
 fn multiple_elements_are_sorted_by_layer_ascending() {
@@ -62,7 +50,7 @@ fn multiple_elements_are_sorted_by_layer_ascending() {
     );
 }
 
-/// 画像パスはバックスラッシュ区切りを無加工で保持する（正規化しない・要件 4.3）。
+/// 画像パスはバックスラッシュ区切りを無加工で保持する（正規化しない）。
 #[test]
 fn element_path_with_backslash_is_verbatim() {
     let input = "surface0\n{\nelement0,overlay,CityPop\\surface0010.png,0,0\n}\n";
@@ -74,7 +62,7 @@ fn element_path_with_backslash_is_verbatim() {
     );
 }
 
-/// 画像パスはスラッシュ区切りも無加工で保持する（正規化しない・要件 4.3）。
+/// 画像パスはスラッシュ区切りも無加工で保持する（正規化しない）。
 #[test]
 fn element_path_with_slash_is_verbatim() {
     let input = "surface0\n{\nelement0,overlay,purple/2/a.png,0,0\n}\n";
@@ -86,7 +74,7 @@ fn element_path_with_slash_is_verbatim() {
     );
 }
 
-/// 非ゼロ・負値座標を i64 として保持する（要件 4.2）。
+/// 非ゼロ・負値座標を i64 として保持する。
 #[test]
 fn element_nonzero_coordinates_are_preserved() {
     let input = "surface0\n{\nelement0,overlay,x.png,12,-3\n}\n";
@@ -96,7 +84,7 @@ fn element_nonzero_coordinates_are_preserved() {
     assert_eq!(shell.surfaces[0].elements[0].y, -3);
 }
 
-/// collision 矩形＋不透明領域名を正規化する（要件 6.1/6.2）。
+/// collision 矩形＋不透明領域名を正規化する。
 /// ukadoc 順序 始点X/始点Y/終点X/終点Y ＝ left/top/right/bottom。
 #[test]
 fn collision_rect_with_opaque_name_is_normalized() {
@@ -119,7 +107,7 @@ fn collision_rect_with_opaque_name_is_normalized() {
     assert_eq!(shell.surfaces[0].collisions[0].name.as_str(), "Head");
 }
 
-/// 複数 collision は出現順で保持する（要件 6.1）。
+/// 複数 collision は出現順で保持する。
 #[test]
 fn multiple_collisions_keep_appearance_order() {
     let input =
@@ -133,7 +121,7 @@ fn multiple_collisions_keep_appearance_order() {
 }
 
 /// element ＋ collision ＋ animation 行が混在 → 各々が独立に充填され互いを壊さない・非パニック。
-/// animation 行はタスク 4.3 で `decode_animations` が集約する（elements/collisions と共存する）。
+/// animation 行は `decode_animations` が集約する（elements/collisions と共存する）。
 #[test]
 fn surface_mixing_elements_collisions_and_animation() {
     let input = "\
@@ -148,7 +136,6 @@ animation0.pattern0,overlay,100,0,0,0
 ";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
-    // element はレイヤ昇順（element0 が先）。
     assert_eq!(
         shell.surfaces[0].elements,
         vec![
@@ -166,7 +153,6 @@ animation0.pattern0,overlay,100,0,0,0
             },
         ]
     );
-    // collision は 1 個。
     assert_eq!(
         shell.surfaces[0].collisions,
         vec![Collision {
@@ -180,7 +166,7 @@ animation0.pattern0,overlay,100,0,0,0
             name: CollisionName::new("Head".to_string()),
         }]
     );
-    // animation はタスク 4.3 で集約される（interval Bind ＋ pattern0）。
+    // animation も集約される（interval Bind ＋ pattern0）。
     assert_eq!(
         shell.surfaces[0].animations,
         vec![Animation {

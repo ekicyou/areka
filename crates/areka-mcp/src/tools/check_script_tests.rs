@@ -119,7 +119,7 @@ fn kind_names_are_spelled_as_documented() {
     }
 }
 
-/// (要件 1.7・2.1) 詰め替え: `script`・`ghost_name` を写す。`ghost_name` の省略と `null` は無し。
+/// 詰め替え: `script`・`ghost_name` を写す。`ghost_name` の省略と `null` は無し。
 #[test]
 fn parse_copies_script_and_ghost_name() {
     let want = |ghost: Option<&str>| {

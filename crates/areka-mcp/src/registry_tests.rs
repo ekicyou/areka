@@ -42,7 +42,7 @@ fn spec(name: &str, description: &str) -> ToolSpec {
     }
 }
 
-/// (要件 7.1) 同じ名前を 2 度登録すると後勝ち（定義も実装も 2 度目）・件数は 1・`warn!` 1 件。
+/// 同じ名前を 2 度登録すると後勝ち（定義も実装も 2 度目）・件数は 1・`warn!` 1 件。
 #[test]
 fn same_name_registered_twice_last_wins_with_one_warn() {
     let mut registry = ToolRegistry::default();
@@ -85,7 +85,7 @@ fn different_names_are_kept_side_by_side() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// (要件 7.4) name・title・description・inputSchema を逐語で詰め、そのまま取り出せる。
+/// name・title・description・inputSchema を逐語で詰め、そのまま取り出せる。
 #[test]
 fn registered_spec_comes_back_verbatim() {
     let schema = json!({

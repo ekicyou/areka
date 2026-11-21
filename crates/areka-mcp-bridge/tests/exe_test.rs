@@ -161,7 +161,7 @@ fn called() -> Reply {
 }
 
 /// 標準出力を応答の行に分ける。応答の行（LF で終わる、`id` と結果かエラーを持つ JSON-RPC の
-/// 1 行）のほかに 1 バイトでもあれば panic（要件 5.1: 記録・空の行・BOM・CR が無い）。
+/// 1 行）のほかに 1 バイトでもあれば panic（記録・空の行・BOM・CR が無い）。
 fn answer_lines(done: &Finished) -> Vec<Value> {
     let Finished { stdout, stderr, .. } = done;
     let lines = stdout
@@ -186,7 +186,7 @@ fn answer_lines(done: &Finished) -> Vec<Value> {
     lines.split('\n').map(answer).collect()
 }
 
-/// この `id` への応答。ちょうど 1 行でなければ panic（応答の順は決まっていない＝設計 D-13）。
+/// この `id` への応答。ちょうど 1 行でなければ panic（応答の順は決まっていない）。
 fn answer_to(answers: &[Value], id: impl Into<Value>) -> &Value {
     let id = id.into();
     let mut found = answers.iter().filter(|answer| answer["id"] == id);
@@ -204,7 +204,7 @@ fn record<'a>(stderr: &'a str, words: &str) -> &'a str {
         .unwrap_or_else(|| panic!("stderr lacks {words:?}: {stderr}"))
 }
 
-/// 要件 1.9・2.8・5.1・5.2: 引数なしで起こした exe に `initialize` の 1 行を流して閉じると、
+/// 引数なしで起こした exe に `initialize` の 1 行を流して閉じると、
 /// 標準出力は応答の 1 行だけ・記録は標準エラー・終了コード 0。応答は標準入力が閉じた後に
 /// 書かれる（探索と握手は行を読んだ後に走る）。
 #[test]
@@ -221,7 +221,6 @@ fn one_initialize_line_then_eof_gives_one_answer_line_and_exit_code_0() {
     let Finished { stdout, stderr, .. } = &done;
 
     assert_eq!(done.code, Some(0), "stdout: {stdout}\nstderr: {stderr}");
-    // 標準出力は、areka の名乗りを持つ応答の 1 行だけ（要件 5.1）。
     let line = stdout
         .strip_suffix('\n')
         .unwrap_or_else(|| panic!("stdout does not end with LF: {stdout:?}\nstderr: {stderr}"));
@@ -230,7 +229,7 @@ fn one_initialize_line_then_eof_gives_one_answer_line_and_exit_code_0() {
     assert_eq!(answer["id"], 7);
     assert_eq!(answer["result"]["protocolVersion"], "2025-06-18");
     assert_eq!(answer["result"]["serverInfo"]["name"], SERVER_NAME);
-    // 記録は標準エラー（要件 5.2）: 起動時の 3 行（候補の列・控えの置き場・3 つの時間）と、つないだこと、
+    // 記録は標準エラー: 起動時の 3 行（候補の列・控えの置き場・3 つの時間）と、つないだこと、
     // 最初の問い合わせに答えたこと（相手が話した版と返した版）。
     let cache_dir = profile.child("mcp-bridge");
     let expected = [
@@ -258,7 +257,7 @@ fn one_initialize_line_then_eof_gives_one_answer_line_and_exit_code_0() {
     );
     // 控えは `AREKA_PROFILE_DIR` の下に書かれた（環境を読む口から控えまでの通し）。
     assert!(cache_dir.join("server-info.json").is_file());
-    // 要件 3.9: 控えのフォルダは `target` の下で `LOCALAPPDATA` の下ではないので、箱かどうかは見分けられない（`why="not_under_local_app_data"`）。
+    // 控えのフォルダは `target` の下で `LOCALAPPDATA` の下ではないので、箱かどうかは見分けられない（`why="not_under_local_app_data"`）。
     // その 1 件は環境を読む口が 1 回だけ出し、`main.rs` の候補の行より前に並ぶ。
     const B2: &str = "[bridge] cannot tell whether writes under LOCALAPPDATA are redirected";
     assert_eq!(stderr.matches(B2).count(), 1, "stderr: {stderr}");
@@ -272,7 +271,7 @@ fn one_initialize_line_then_eof_gives_one_answer_line_and_exit_code_0() {
     );
 }
 
-/// 要件 5.1・5.2: 要求・通知・空の行・空白だけの行を混ぜて流しても、標準出力は `id` を持つ要求の
+/// 要求・通知・空の行・空白だけの行を混ぜて流しても、標準出力は `id` を持つ要求の
 /// 数だけの応答の行だけ（順は決まっていない）。記録は標準エラーに出て、応答の行は混ざらない。
 #[test]
 fn several_lines_give_only_answer_lines_on_stdout_and_records_on_stderr() {
@@ -316,7 +315,7 @@ fn several_lines_give_only_answer_lines_on_stdout_and_records_on_stderr() {
     );
 }
 
-/// 要件 2.6: `AREKA_MCP_PORT=0` では、`id` を持つ要求の全部（`ping` も）に同じエラーで答える。
+/// `AREKA_MCP_PORT=0` では、`id` を持つ要求の全部（`ping` も）に同じエラーで答える。
 /// 使える控えがあっても使わない。エラーの中身を rmcp の記録が写さない（既定の絞りの `rmcp=error`）。
 #[test]
 fn port_0_answers_every_request_with_the_error_and_ignores_a_valid_cache() {
@@ -360,9 +359,9 @@ fn port_0_answers_every_request_with_the_error_and_ignores_a_valid_cache() {
     );
 }
 
-/// 要件 2.4: 番号を指定すると、候補はその番号だけ。areka ならつなぎ、areka でない相手なら「居ない」
+/// 番号を指定すると、候補はその番号だけ。areka ならつなぎ、areka でない相手なら「居ない」
 /// エラー（文に載る候補はその 1 つ）で、要求はその相手へ届けない。
-/// 要件 2.3・5.2: 飛ばした番号と名乗り、控えで答えたことが標準エラーに残る。
+/// 飛ばした番号と名乗り、控えで答えたことが標準エラーに残る。
 #[test]
 fn a_given_port_is_the_only_one_tried() {
     let areka = FakeServer::start(Script::areka());
@@ -414,7 +413,7 @@ fn a_given_port_is_the_only_one_tried() {
     assert!(cached.contains("method=\"initialize\""), "{cached}");
 }
 
-/// 要件 5.4・3.11: 同じ受け口と同じ控えの置き場に exe を 2 つ同時に起こしても、それぞれの標準出力は
+/// 同じ受け口と同じ控えの置き場に exe を 2 つ同時に起こしても、それぞれの標準出力は
 /// 自分の要求への応答だけで、控えは 2 つとも読める答えの全体のまま（書きかけの一時ファイルも残らない）。
 #[test]
 fn two_bridges_at_once_keep_their_answers_apart_and_the_cache_readable() {
@@ -463,7 +462,7 @@ fn two_bridges_at_once_keep_their_answers_apart_and_the_cache_readable() {
     assert!(left.is_empty(), "temporary files are left: {left:?}");
 }
 
-/// 要件 1.9: 相手が標準入力だけ閉じて標準出力を読まないと、詰まった応答の書きは終わらない。
+/// 相手が標準入力だけ閉じて標準出力を読まないと、詰まった応答の書きは終わらない。
 /// 中継は rmcp の 5 秒を待ってから 6 秒で見切り、理由を標準エラーに残して終了コード 0 で終わる
 /// （このテストは約 6 秒かかる。待つだけで、計算はしない）。
 #[test]
@@ -496,7 +495,7 @@ fn finished_by_itself(stderr: &str) {
     );
 }
 
-/// 要件 5.1・5.3・5.4・8.1: 受け口へ届けた要求の応答が、標準入力が閉じてから 5 秒を越えて来るなら、
+/// 受け口へ届けた要求の応答が、標準入力が閉じてから 5 秒を越えて来るなら、
 /// 中継は rmcp の 5 秒だけ待ち、応答を書かずに終了コード 0 で終わる（応答も 30 秒の上限も待たない）。
 /// このテストは約 5 秒かかる（待つだけで、計算はしない）。
 #[test]
@@ -519,7 +518,7 @@ fn a_reply_coming_more_than_5s_after_stdin_closed_is_dropped_and_the_exit_code_i
     finished_by_itself(stderr);
 }
 
-/// 要件 5.2・5.3・5.4・8.1: 受け口へ届けた要求の応答が、標準入力が閉じてから 5 秒以内に来るなら、
+/// 受け口へ届けた要求の応答が、標準入力が閉じてから 5 秒以内に来るなら、
 /// 中継はその応答を書いてから終了コード 0 で終わる。標準入力は要求が受け口へ届いてから閉じる
 /// （exe の起動・探索の時間が 5 秒の見込みに入らない）。
 #[test]
@@ -551,7 +550,7 @@ fn a_reply_coming_within_5s_after_stdin_closed_is_written_before_exit_code_0() {
     finished_by_itself(stderr);
 }
 
-/// 要件 3.5・3.12・設計 D-18: areka も控えも無い（誰も待ち受けていない番号・空の控えの置き場）とき、
+/// areka も控えも無い（誰も待ち受けていない番号・空の控えの置き場）とき、
 /// `initialize` と `tools/list` に、中継が自分で持っている答えで答え、方法ごとに記録を残す。
 /// 組み込みの答えは控えに書かない（置き場にファイルができない）。終了コード 0。
 #[test]
@@ -596,13 +595,12 @@ fn built_in_record(stderr: &str, method: &str) {
     );
 }
 
-/// 要件 5.2・3.10・4.2: 失敗の理由は標準エラーに残る。読めない控えは無いものとして扱い（最初の
-/// 問い合わせには組み込みの答えで答える＝要件 3.5）、そのファイルと理由を残す。areka の JSON でない
+/// 失敗の理由は標準エラーに残る。読めない控えは無いものとして扱い（最初の
+/// 問い合わせには組み込みの答えで答える）、そのファイルと理由を残す。areka の JSON でない
 /// 応答は、状態と本文の頭を残す（要求は送り直さない）。
 #[test]
 fn a_broken_cache_and_a_broken_answer_leave_their_reason_on_stderr() {
     let profile = TempPath::under_target("bridge-exe");
-    // 壊れた控えと、areka でない相手だけ。
     let other = FakeServer::start(Script::named("ssp-mcp-server"));
     let broken = profile.child("mcp-bridge").join("server-info.json");
     std::fs::create_dir_all(broken.parent().expect("the cache dir")).expect("make the cache dir");
@@ -628,7 +626,6 @@ fn a_broken_cache_and_a_broken_answer_leave_their_reason_on_stderr() {
     let kept = std::fs::read(&broken).expect("read the broken cache");
     assert_eq!(kept, b"\xff\xfe not json", "the broken cache was rewritten");
 
-    // areka が `tools/call` に 500 の平文で答える。
     let areka = FakeServer::start(Script::areka().on("tools/call", Reply::Text(500, "boom")));
     let input = [initialize(1), call(2)];
 

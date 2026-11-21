@@ -1,4 +1,4 @@
-//! `AREKA_MCP_PORT` の読み解き（純粋な判断）と環境変数の読み口（設計判断 B-13）。
+//! `AREKA_MCP_PORT` の読み解き（純粋な判断）と環境変数の読み口。
 //!
 //! 値を「試す候補の列」へ写す。判断は環境変数を読まない [`candidates_from_env_value`] が持ち
 //! （前例 `areka::perf_thread_report::period_from_env_value`）、環境変数を読むのは
@@ -9,13 +9,13 @@ use std::env::VarError;
 
 use tracing::warn;
 
-/// ポートを変える環境変数の名前（要件 2.7・`AREKA_` の冠）。
+/// ポートを変える環境変数の名前。
 pub const PORT_ENV: &str = "AREKA_MCP_PORT";
 
-/// 既定の候補の先頭 2 つ（早い者勝ち・SSP と同じ番号＝要件 2.1）。
+/// 既定の候補の先頭 2 つ（早い者勝ち・SSP と同じ番号）。
 pub const DEFAULT_PORTS: [u16; 2] = [9801, 9821];
 
-/// 両方とも使用中のとき隣へ逃げる幅（+1〜+9＝要件 2.1）。
+/// 両方とも使用中のとき隣へ逃げる幅（+1〜+9）。
 pub const FALLBACK_STEPS: u16 = 9;
 
 /// 既定の候補の列: `base + k` を `k` を外側・[`DEFAULT_PORTS`] を内側にして並べた 20 個

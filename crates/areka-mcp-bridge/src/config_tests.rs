@@ -13,7 +13,7 @@ fn candidates_of(port_value: Option<&str>) -> Vec<u16> {
     Config::from_values(port_value, None, None, None).candidates
 }
 
-/// `AREKA_MCP_PORT` の 4 通り（要件 2.1・2.4・2.5・2.6）。並びは areka 本体と同じ関数の結果（8.2）。
+/// `AREKA_MCP_PORT` の 4 通り。並びは areka 本体と同じ関数の結果。
 #[test]
 fn port_value_maps_to_candidates_in_four_ways() {
     let defaults = areka_mcp::candidates_from_env_value(None);
@@ -58,20 +58,20 @@ fn under_target(rel: &str) -> PathBuf {
         .join(rel)
 }
 
-/// 控えの置き場の表の 5 行（bridge-store-user-root 要件 2.4〜2.10・6.4・設計「`from_values` の控えの置き場」）。
+/// 控えの置き場の表の 5 行。
 #[test]
 fn cache_dir_follows_the_table() {
     let local = under_target("Local");
     let ready = under_target(r"Local\areka\profile\areka");
     let root = under_target(r"Local\areka");
 
-    // ⑴ `AREKA_PROFILE_DIR` があればその下（2.9）。隣に areka が居るときは `from_inputs` が渡さない
+    // ⑴ `AREKA_PROFILE_DIR` があればその下。隣に areka が居るときは `from_inputs` が渡さない
     // （使える値は隣の答えが既に含む）ので、隣の答えは無い形だけ。
     assert_eq!(
         cache_dir_of(Some(under_target("prof")), None, Some(local.clone())),
         Some(under_target(r"prof\mcp-bridge"))
     );
-    // ⑵ 使える形なら、その下の `mcp-bridge`（2.6・2.8）。
+    // ⑵ 使える形なら、その下の `mcp-bridge`。
     assert_eq!(
         cache_dir_of(
             None,
@@ -80,7 +80,7 @@ fn cache_dir_follows_the_table() {
         ),
         Some(ready.join("mcp-bridge"))
     );
-    // ⑶ 使える形以外の 3 つは、`LOCALAPPDATA` が在っても控え無し（そこへ落ちない・2.4・2.5・2.7）。
+    // ⑶ 使える形以外の 3 つは、`LOCALAPPDATA` が在っても控え無し（そこへ落ちない）。
     for beside in [
         AppProfile::RootMissing { root: root.clone() },
         AppProfile::MigrationPending { root: root.clone() },
@@ -92,7 +92,7 @@ fn cache_dir_follows_the_table() {
             "{beside:?}"
         );
     }
-    // ⑷ 隣に areka が居ないなら `LOCALAPPDATA\areka\mcp-bridge`（今どおり・2.10）。
+    // ⑷ 隣に areka が居ないなら `LOCALAPPDATA\areka\mcp-bridge`。
     assert_eq!(
         cache_dir_of(None, None, Some(local.clone())),
         Some(local.join(r"areka\mcp-bridge"))
@@ -103,7 +103,7 @@ fn cache_dir_follows_the_table() {
     assert_eq!(cache_dir_of(None, None, Some(PathBuf::from("local"))), None);
 }
 
-/// 待つ時間の既定は 3 つの定数（設計 D-11）。
+/// 待つ時間の既定は 3 つの定数。
 #[test]
 fn default_timeouts_are_the_three_constants() {
     let timeouts = Config::from_values(None, None, None, None).timeouts;
@@ -112,7 +112,7 @@ fn default_timeouts_are_the_three_constants() {
     assert_eq!(timeouts.reply, REPLY_WAIT);
 }
 
-/// 応答の上限は areka のツールが答えるまでの上限より長い（要件 4.4 の見張り）。
+/// 応答の上限は areka のツールが答えるまでの上限より長い。
 #[test]
 fn reply_wait_is_longer_than_the_areka_tool_limit() {
     assert!(REPLY_WAIT > areka_mcp::tools::REPLY_WAIT);

@@ -1,4 +1,4 @@
-//! 箱の見立て（`redirect`）の決定論テスト（spec: bridge-store-user-root 要件 3.5〜3.9・6.6・6.7）。
+//! 箱の見立て（`redirect`）の決定論テスト。
 //!
 //! `classify` は注入の値だけで全部の腕を固める（本物の箱はテストで作れない）。
 //! `observe` は `target\` の下に組んだ偽の `LOCALAPPDATA` で 4 つの場面を確かめる。
@@ -37,7 +37,7 @@ fn err(kind: io::ErrorKind) -> io::Result<PathBuf> {
     Err(io::Error::from(kind))
 }
 
-/// 記録を捕まえ、文と決まった語の欄が ASCII であることを確かめて返す（パスの欄は見ない・要件 3.8）。
+/// 記録を捕まえ、文と決まった語の欄が ASCII であることを確かめて返す（パスの欄は見ない）。
 fn reported(sight: &BoxSight) -> Vec<CapturedEvent> {
     let ((), events) = capture(|| report(sight));
     for event in &events {
@@ -56,7 +56,7 @@ fn unknown(why: &'static str) -> BoxSight {
     }
 }
 
-/// B2 が info で 1 件・`why` の欄が `why`・B1 は 0 件（要件 3.9）。
+/// B2 が info で 1 件・`why` の欄が `why`・B1 は 0 件。
 fn assert_b2(sight: &BoxSight, why: &str, asked: bool) {
     let events = reported(sight);
     assert_eq!(events.len(), 1, "{events:?}");

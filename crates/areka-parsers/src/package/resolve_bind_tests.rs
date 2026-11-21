@@ -1,6 +1,4 @@
 //! resolve_bind_tests — `resolve_bind::read_bindgroup_defaults` の兄弟テスト。
-//!
-//! もと `resolve.rs`（今は無い）の中の試験 2 つ（`.name` の転記・bindoption の分解）を中身を変えずに移した。
 
 use super::model::{BindGroupDefaults, ScopeBinds};
 use super::resolve_bind::read_bindgroup_defaults;
@@ -30,11 +28,11 @@ fn ids_of(d: &BindGroupDefaults, n: u32, category: &str, part: &str) -> Vec<u32>
 
 #[cfg(test)]
 mod bindgroup_name_transcription_tests {
-    //! `read_bindgroup_defaults` の `.name` 転記（task 1.2）の in-source 檻。
+    //! `read_bindgroup_defaults` の `.name` 転記の in-source 檻。
     //!
     //! shell descript.txt を合成 tempdir に書き出し、`read_bindgroup_defaults` を
     //! 直接呼んで `.name` サフィックスの忠実転記（2/3 フィールド・trim・sakura/kero
-    //! 区別・重複後勝ち・パーツ欠落 skip）と、既存 `.default` 経路の無改変（R1.6）を
+    //! 区別・重複後勝ち・パーツ欠落 skip）と、既存 `.default` 経路が変わらないことを
     //! 決定論で固定する。一時パスは共通窓口 `temp-path-kit` 経由で組む（プロセス間でも一意）。
 
     use std::fs;
@@ -93,7 +91,7 @@ mod bindgroup_name_transcription_tests {
         assert_eq!(ids_of(&defaults, 0, "口", "笑い"), vec![1200]);
     }
 
-    /// kero 側は本体側と区別して表の 1（kero）の `names` へ入る（R1.2）。
+    /// kero 側は本体側と区別して表の 1（kero）の `names` へ入る。
     #[test]
     fn kero_name_distinguished_from_sakura() {
         let temp = shell_with_descript(
@@ -113,7 +111,7 @@ mod bindgroup_name_transcription_tests {
         assert_eq!(ids_of(&defaults, 0, "腕", "伸び"), Vec::<u32>::new());
     }
 
-    /// パーツ欠落（第 2 フィールド無し）の宣言は転記対象外（捏造しない・R1.5）。
+    /// パーツ欠落（第 2 フィールド無し）の宣言は転記対象外（捏造しない）。
     #[test]
     fn name_missing_part_not_transcribed() {
         let temp = shell_with_descript(
@@ -161,7 +159,7 @@ mod bindgroup_name_transcription_tests {
     }
 
     /// 重複 (カテゴリ, パーツ) は書いた行の順で並ぶ（後の行が勝つ）。鍵の字の順（`bindgroup10` <
-    /// `bindgroup9`）では並べない（かけ直しの R19・完了 spec の D2「キー昇順で後勝ち」を改めた）。
+    /// `bindgroup9`）では並べない。
     #[test]
     fn duplicate_category_part_follows_line_order() {
         let temp = shell_with_descript(
@@ -175,7 +173,7 @@ mod bindgroup_name_transcription_tests {
         assert_eq!(ids_of(&defaults, 0, "服", "制服"), vec![9, 10]);
     }
 
-    /// R1.6: `.default` 経路は `.name` 増設後も無改変（value=="1" のみ・番号集合）。
+    /// `.default` 経路は `.name` と併存しても変わらない（value=="1" のみ・番号集合）。
     #[test]
     fn default_path_unchanged_alongside_names() {
         let temp = shell_with_descript(
@@ -195,7 +193,7 @@ mod bindgroup_name_transcription_tests {
         assert_eq!(ids_of(&defaults, 0, "腕", "伸び"), vec![1100]);
     }
 
-    /// R1.6（純粋非退行）: `.default` on/off **のみ**（`.name` 皆無）の shell descript は、
+    /// `.default` on/off **のみ**（`.name` 皆無）の shell descript は、
     /// 従来どおり default 集合を転記しつつ名前表を一切生成しない（名前解決の追加が
     /// 既定 on/off マウント結果を変えない・捏造しない）。`default_path_unchanged_alongside_names`
     /// が `.name` 併存を扱うのに対し、本テストは名前宣言が皆無の既定 on/off 専用ケースを固定する。
@@ -216,7 +214,7 @@ mod bindgroup_name_transcription_tests {
         assert_eq!(scope(&defaults, 0).default_on, vec![1100]);
         assert_eq!(scope(&defaults, 1).default_on, vec![2100]);
 
-        // 名前宣言が皆無 → 名前表は空（default,1 が名前を捏造しない・R1.5/R1.6）。
+        // 名前宣言が皆無 → 名前表は空（default,1 が名前を捏造しない）。
         assert!(
             scope(&defaults, 0).names.is_empty(),
             "名前宣言皆無なら sakura の names は空"
@@ -265,7 +263,7 @@ mod bindgroup_name_transcription_tests {
 
 #[cfg(test)]
 mod bindoption_options_tests {
-    //! `read_bindgroup_defaults` の `bindoption*.group` 取り込みの in-source 檻（bindopt 4.2）。
+    //! `read_bindgroup_defaults` の `bindoption*.group` 取り込みの in-source 檻。
     //!
     //! shell descript.txt を合成 tempdir に書き出し、`read_bindgroup_defaults` を直接呼んで
     //! `sakura/kero.bindoption*.group,カテゴリ,オプション[+オプション...]` の取り込みを
@@ -302,7 +300,7 @@ mod bindoption_options_tests {
         dir
     }
 
-    /// `mustselect` 単独宣言はスコープ別に収録され、multiple 側へは漏れない（bindopt 1.2）。
+    /// `mustselect` 単独宣言はスコープ別に収録され、multiple 側へは漏れない。
     ///
     /// 既存挙動不変の錨。非宣言カテゴリ・別スコープはどちらの集合にも入らない＝既定。
     #[test]
@@ -328,11 +326,10 @@ mod bindoption_options_tests {
         assert!(!scope(&defaults, 1).mustselect.iter().any(|c| c == "腕"));
     }
 
-    /// `multiple` 単独宣言は multiple としてスコープ別に**収録**される（bindopt 1.1）。
+    /// `multiple` 単独宣言は multiple としてスコープ別に**収録**される。
     ///
-    /// 旧実装は `multiple` を破棄しており、下流に「複数可の明示宣言」と「非宣言（既定＝
-    /// 高々 1 個・解除可）」を区別する情報が存在しなかった——情報欠落の根。本檻は収録
-    /// されること（＝区別が成立すること）を固定する。
+    /// 収録されることで、下流は「複数可の明示宣言」と「非宣言（既定＝
+    /// 高々 1 個・解除可）」を区別できる。
     #[test]
     fn multiple_option_ingested() {
         let temp = shell_with_descript(
@@ -352,7 +349,7 @@ mod bindoption_options_tests {
         assert!(scope(&defaults, 1).multiple.is_empty());
     }
 
-    /// kero 側の `multiple` は本体側と区別して収録する（bindopt 1.1・スコープ隔離）。
+    /// kero 側の `multiple` は本体側と区別して収録する（スコープ隔離）。
     #[test]
     fn kero_multiple_distinguished_from_sakura() {
         let temp = shell_with_descript(
@@ -368,7 +365,7 @@ mod bindoption_options_tests {
         assert!(scope(&defaults, 0).multiple.is_empty());
     }
 
-    /// kero 側は本体側と区別して取り込む（bindopt 1.2・スコープ隔離）。
+    /// kero 側は本体側と区別して取り込む（スコープ隔離）。
     #[test]
     fn kero_mustselect_distinguished_from_sakura() {
         let temp = shell_with_descript(
@@ -384,11 +381,9 @@ mod bindoption_options_tests {
     }
 
     /// `+` 区切り併記（`mustselect+multiple`）は両方の集合へ収録し情報を落とさない
-    /// （ukadoc 正典「オプションは `+` 区切りで複数指定可」・bindopt 1.3）。
+    /// （ukadoc 正典「オプションは `+` 区切りで複数指定可」）。
     ///
-    /// 旧実装は値全体と `mustselect` の完全一致で判定していたため、`+` 結合値は
-    /// mustselect 側も含めて全部落ちていた。どちらを優先するか（bindopt D4）は
-    /// 下流 seriko の解釈であり、転写層は両方を写す。
+    /// どちらを優先するかは下流 seriko の解釈であり、転写層は両方を写す。
     #[test]
     fn plus_separated_both_options_ingested_into_both_sets() {
         let temp = shell_with_descript(
@@ -404,7 +399,7 @@ mod bindoption_options_tests {
         assert!(scope(&defaults, 0).multiple.iter().any(|c| c == "腕"));
     }
 
-    /// `+` 区切りの語順は結果に影響しない（`multiple+mustselect`・bindopt 1.3）。
+    /// `+` 区切りの語順は結果に影響しない（`multiple+mustselect`）。
     #[test]
     fn plus_separated_option_order_is_insensitive() {
         let temp = shell_with_descript(
@@ -419,7 +414,7 @@ mod bindoption_options_tests {
     }
 
     /// `+` 区切りに未知語が混ざっても、認識できる語のみ収録して未知語は読み流す
-    /// （寛容パース・bindopt 1.3/1.4）。空白入りの語も trim して認識する。
+    /// （寛容パース）。空白入りの語も trim して認識する。
     #[test]
     fn plus_separated_unknown_word_is_skipped() {
         let temp = shell_with_descript(
@@ -440,7 +435,7 @@ mod bindoption_options_tests {
     }
 
     /// 未知語のみ・オプション欄空・カテゴリ空・`,` なしはいずれも収録対象外
-    /// （捏造しない・寛容パース維持・bindopt 1.4/1.5）。
+    /// （捏造しない・寛容パース維持）。
     ///
     /// 収録対象外＝どちらの集合にも入らない＝当該カテゴリは既定（高々 1 個・解除可）。
     #[test]
@@ -478,7 +473,7 @@ mod bindoption_options_tests {
     }
 
     /// bindoption 宣言が 1 件も無い shell も読み取りは成立し、全カテゴリ既定になる
-    /// （読み取り失敗にしない・bindopt 1.6）。
+    /// （読み取り失敗にしない）。
     #[test]
     fn no_bindoption_declarations_yields_all_default() {
         let temp = shell_with_descript(
@@ -502,7 +497,7 @@ mod bindoption_options_tests {
         assert_eq!(ids_of(&defaults, 1, "腕", "伸び"), vec![2100]);
     }
 
-    /// 同一 descript を再読すると同一の収録結果を返す（決定論・走査順維持・bindopt 1.7）。
+    /// 同一 descript を再読すると同一の収録結果を返す（決定論・走査順維持）。
     #[test]
     fn same_descript_reread_yields_same_result() {
         let temp = shell_with_descript(
@@ -534,11 +529,10 @@ mod bindoption_options_tests {
 
     /// Observable（emo2 実 fixture）: 腕・口・眉・目 が `mustselect` 宣言と判別でき、
     /// 宣言のないカテゴリ（紅・髪飾り・まばたき）はどちらの集合にも属さない＝既定
-    /// （高々 1 個・解除可）と判別できる（bindopt 1.1/1.2）。
+    /// （高々 1 個・解除可）と判別できる。
     ///
-    /// emo2 は `multiple` を 1 件も宣言していない——本件の表情固着はまさに「非宣言の
-    /// まばたきカテゴリ（1400-1403）」で起きており、非宣言が `multiple` と同一視されて
-    /// いたことが根であった。
+    /// emo2 は `multiple` を 1 件も宣言していない。非宣言（まばたきカテゴリ 1400-1403 など）を
+    /// `multiple` と同一視してはならない。
     #[test]
     fn emo2_bindoption_categories_discriminated() {
         let shell_dir = crate::sample_test_support::emo2_root()
@@ -570,7 +564,7 @@ mod bindoption_options_tests {
 
 #[cfg(test)]
 mod char_scope_and_line_tests {
-    //! `char{N}.*`（N は 2 以上）の読みと、名前を決めた行の番号（offline-surface-dump 1.2）。
+    //! `char{N}.*`（N は 2 以上）の読みと、名前を決めた行の番号。
 
     use std::fs;
 
@@ -660,7 +654,7 @@ mod char_scope_and_line_tests {
 
 #[cfg(test)]
 mod bindgroup_warning_tests {
-    //! 読みの崩れの記録（指摘 9・14・49）と数の形・空のカテゴリ（指摘 47・48）。
+    //! 読みの崩れの記録と数の形・空のカテゴリ。
     //!
     //! 記録は `log_capture_kit::capture` で確かめ、一時の根は `temp-path-kit`。
 

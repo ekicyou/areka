@@ -1,12 +1,12 @@
 //! プリスキャン単体テスト（検出/未検出/寛容/上限/非ASCII打ち切り/BOM）。
 //!
-//! `prescan_charset` の観測可能振る舞い（タスク 2.2・D1/D2・BOM note）を固定する:
+//! `prescan_charset` の観測可能振る舞いを固定する:
 //! - `charset,<name>` 検出（emo2 descript.txt L1 由来）。
 //! - 大小差・前後空白・CRLF 寛容。
 //! - UTF-8 BOM 前置でも走査開始前に BOM を読み飛ばして検出。
 //! - 宣言なし（balloons0s.txt 由来）は `None`。
-//! - 非 ASCII の行より後の宣言も見つける（位置を問わない・7.11(b)）。
-//! - 4,096 バイトを越えた所の宣言も見つける（窓を置かない・7.11(b)）。
+//! - 非 ASCII の行より後の宣言も見つける（位置を問わない）。
+//! - 4,096 バイトを越えた所の宣言も見つける（窓を置かない）。
 //! - `charset:`（コロン・カンマなし異体）は不一致 → `None`。
 
 use super::prescan::prescan_charset;
@@ -40,7 +40,7 @@ fn no_declaration_returns_none() {
     assert_eq!(prescan_charset(bytes), None);
 }
 
-/// charset 行より前に非 ASCII の行があっても、宣言を見つける（位置を問わない・7.11(b)）。
+/// charset 行より前に非 ASCII の行があっても、宣言を見つける（位置を問わない）。
 #[test]
 fn non_ascii_before_declaration_is_still_found() {
     // 先頭行に非 ASCII バイト（0x82 = SJIS リード）を含む。
@@ -49,7 +49,7 @@ fn non_ascii_before_declaration_is_still_found() {
     assert_eq!(prescan_charset(&bytes), Some("UTF-8".to_string()));
 }
 
-/// 4,096 バイトを越えた所に置いた宣言も見つける（窓を置かない・7.11(b)）。
+/// 4,096 バイトを越えた所に置いた宣言も見つける（窓を置かない）。
 #[test]
 fn declaration_beyond_4096_bytes_is_found() {
     let mut bytes = Vec::new();
@@ -72,7 +72,7 @@ fn declaration_before_long_padding_is_detected() {
     assert_eq!(prescan_charset(&bytes), Some("UTF-8".to_string()));
 }
 
-/// `charset:UTF-8`（コロン・カンマなし）は異体ゆえ不一致 → `None`（D2）。
+/// `charset:UTF-8`（コロン・カンマなし）は異体ゆえ不一致 → `None`。
 #[test]
 fn colon_variant_is_rejected() {
     let bytes = b"charset:UTF-8\ntype,balloon\n";

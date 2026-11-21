@@ -1,4 +1,4 @@
-//! 判断（`service.rs`）のテストのうち、areka へ届ける途中の失敗（要件 4）。
+//! 判断（`service.rs`）のテストのうち、areka へ届ける途中の失敗。
 //!
 //! 道具は `service_tests.rs` と `crate::desk` のもの。ここも `current_thread` の `#[tokio::test]` だけで書く。
 
@@ -26,10 +26,10 @@ fn failed(id: Value, message: &str) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "error": {"code": -1, "message": message}})
 }
 
-/// 書いた後の失敗は中継のエラーで答え、送り直さない（要件 4.5）: 壊れた本文・状態付きの平文・SSE は
-/// `Invalid JSON response from server` に HTTP の状態と本文の頭（要件 4.2）、本文なし・途中で閉じる接続は
-/// `No response from server`（要件 4.1）。エラーは控えに取らず、エラーの後も同じつなぎ先で次の行に答える
-/// （要件 4.6）。SSE の本文は終わらないが、頭だけで決めるので待たない。
+/// 書いた後の失敗は中継のエラーで答え、送り直さない: 壊れた本文・状態付きの平文・SSE は
+/// `Invalid JSON response from server` に HTTP の状態と本文の頭、本文なし・途中で閉じる接続は
+/// `No response from server`。エラーは控えに取らず、エラーの後も同じつなぎ先で次の行に答える。
+/// SSE の本文は終わらないが、頭だけで決めるので待たない。
 #[tokio::test]
 async fn a_failure_after_writing_is_answered_with_an_error_and_never_sent_again() {
     let unanswered = "No response from server: empty body or connection closed";
@@ -79,7 +79,7 @@ async fn a_failure_after_writing_is_answered_with_an_error_and_never_sent_again(
     }
 }
 
-/// areka が応答の上限まで応えない（要件 4.4）: `No response from server: timed out after <上限>` で答え、
+/// areka が応答の上限まで応えない: `No response from server: timed out after <上限>` で答え、
 /// 送り直さず、同じつなぎ先で次の行に答える。
 #[tokio::test]
 async fn a_request_not_answered_within_the_bound_gets_the_timeout_error_once() {
@@ -106,7 +106,7 @@ async fn a_request_not_answered_within_the_bound_gets_the_timeout_error_once() {
     assert_eq!(handshakes(&fake), 1, "{sent:?}");
 }
 
-/// areka が `id` を持つ要求に 202 で応える（要件 4.1〜4.3）: rmcp はその `id` を待ちのまま残すので、
+/// areka が `id` を持つ要求に 202 で応える: rmcp はその `id` を待ちのまま残すので、
 /// 応答の上限まで待って `timed out after <上限>` で 1 回だけ答え、同じつなぎ先で次の行に答える。
 /// 上限の後に rmcp が送る `notifications/cancelled` は方法の名前が違うので数に入らない。
 #[tokio::test]
@@ -135,7 +135,7 @@ async fn a_request_answered_with_202_waits_for_the_bound_and_gets_the_timeout_er
 }
 
 /// つなぎ先の働き手が終わっていた（rmcp の `TransportClosed`）: 送り直さずエラーで答え、覚えを捨てるので、
-/// 次の要求は探し直して届く（要件 4.6）。捨てるのは、覚えが自分の使ったつなぎ先のままのときだけ。
+/// 次の要求は探し直して届く。捨てるのは、覚えが自分の使ったつなぎ先のままのときだけ。
 #[tokio::test]
 async fn a_dead_link_is_forgotten_so_the_next_request_scans_again() {
     let fake = FakeServer::start(Script::areka());
@@ -210,7 +210,7 @@ fn a_notification_areka_refuses_is_warned() {
     assert_eq!(warned.level, tracing::Level::WARN, "{events:?}");
 }
 
-/// 失敗の読み分け（設計 D-6）: 書く前と読むのは、送り手の「書く前」の失敗だけ。送り手の「書いた後」の
+/// 失敗の読み分け: 書く前と読むのは、送り手の「書く前」の失敗だけ。送り手の「書いた後」の
 /// 失敗・応答の上限・送り手の失敗に戻せない形（rmcp 自身の失敗）は書いた後（送り直さない側）で、番号 `-1` の
 /// エラーになる。本番の上限（30 秒）の文は `timed out after 30s`。
 #[test]

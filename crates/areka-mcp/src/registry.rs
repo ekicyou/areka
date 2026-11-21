@@ -1,6 +1,6 @@
 //! ツールの登録口（rmcp の型を含まない）。
 //!
-//! 後続 spec はツールの定義（MCP のツール定義を逐語）と非同期の実装の対を
+//! 呼び出し側はツールの定義（MCP のツール定義を逐語）と非同期の実装の対を
 //! [`ToolRegistry::register`] で積み、`start` へ渡す。rmcp の `ToolRouter` への写しは
 //! `handler` が 1 度だけ行う。
 
@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use tracing::warn;
 
-/// MCP のツール定義（要件 7.4: name・title・description・inputSchema を逐語で持つ）。
+/// MCP のツール定義（name・title・description・inputSchema を逐語で持つ）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolSpec {
     pub name: String,
@@ -39,10 +39,10 @@ pub struct ToolOutcome {
 }
 
 pub type ToolFuture = Pin<Box<dyn Future<Output = ToolOutcome> + Send>>;
-/// 実装（設計 B-4: 非同期）。引数は `arguments` の JSON（無ければ `{}`）。
+/// 実装（非同期）。引数は `arguments` の JSON（無ければ `{}`）。
 pub type ToolHandler = Arc<dyn Fn(serde_json::Value) -> ToolFuture + Send + Sync>;
 
-/// 定義と実装の対の列（要件 7.1）。
+/// 定義と実装の対の列。
 #[derive(Default)]
 pub struct ToolRegistry {
     entries: Vec<(ToolSpec, ToolHandler)>,
