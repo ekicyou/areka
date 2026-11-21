@@ -41,7 +41,7 @@
 - 参照の向きを逆にすること（`session/` の本番が `menu`・`install`・`update`・`mcp`・`file_drop`・`smoke_exit` を引く 28 行はそのまま残す・8.3）。
 - 移したファイルの中身（パスと `mod` の宣言のほか）・ログの本文・登録の順・起動の段取りの順。
 - `crates/areka-runtime/`（`src/placement_tests/transition_judge_offset_signoff_tests.rs:57` の 1 か所のほか）・`crates/areka-placement/`・`crates/areka-input/`・`crates/log-capture-kit/`・本体の `runtime_tests/mod.rs`・`Cargo.lock`・ルートの `Cargo.toml`・`THIRD-PARTY-NOTICES.md`（9）。
-- ディレクトリを付けない素のファイル名とモジュールの名前だけの説明（6.8・6.9）。触れない crate の説明が `ghost_session::register_systems` を名指す 25 か所は、入口の名前を変えないので古くならない。
+- ディレクトリを付けない素のファイル名とモジュールの名前だけの説明（6.8・6.9）。触れない crate の説明が `ghost_session::register_systems` を名指す 26 か所は、入口の名前を変えないので古くならない。
 - ほかの brief（約 70 本）・`roadmap.md`（新旧のパスの対応表を含む）・歴史の文書・日付つきの 1 枚の写し。
 - `session-crate-split` の brief の書き換え（要件 8 の一覧は `research.md` に置き、次の spec がそれを読む）。
 
@@ -302,7 +302,7 @@ sequenceDiagram
 **Responsibilities & Constraints**
 - `session::ghost_session::register_systems` は今の 25 の呼び出しを同じ順で行い、11 番目と 17〜19 番目を引数の関数で呼ぶ。
 - `main.rs` は `BODY_SYSTEMS` を持ち、`fn main` の 1 か所で `register_systems` に渡す。
-- 触れない crate の説明が名指す `ghost_session::register_systems`（`areka-input` 15・`areka-placement` 8・`areka-runtime` 2）は、名前と中身（入力・配置・フレームの系の登録）が今のままなので古くならない。
+- 触れない crate の説明が名指す `ghost_session::register_systems`（`areka-input` 16・`areka-placement` 8・`areka-runtime` 2）は、名前と中身（入力・配置・フレームの系の登録）が今のままなので古くならない。
 
 **Contracts**: Service [x]
 
@@ -339,9 +339,9 @@ fn register_body_after_input(world: &mut World);
 - Invariants: `hooks::install` → `install_input_hooks` が最初の 2 つ。`install` の後に `update`（終了の門の登記の順）。
 
 **Implementation Notes**
-- Integration: テスト 5 か所は `crate::BODY_SYSTEMS` を渡す（テストから根を引く参照として 8.2 に載せる）。
+- Integration: テスト 5 か所は `crate::BODY_SYSTEMS` を渡す（テストから根を引く参照として 8.2 に載せる。`session/ghost_switch_test_support.rs:237` の `SwitchRig::new` を通る 46 ファイルもこの 1 か所に頼る）。`session-crate-split` で `session/` が crate になると、これらのテストは本体の `BODY_SYSTEMS` を引けなくなる＝次の spec のいちばん大きい直しになる見込みとして `research.md` の申し送りに書く。
 - Validation: 固定のテスト `register_systems_installs_the_escape_hook`・`ghost_session_restart_tests.rs:455` の口の据え付け・`SwitchRig::new` を使う 46 ファイルが前と同じ合否。
-- Risks: 引数を取り違えると順が変わる。欄の名前（`menu_poll`・`after_input`）で呼ぶ位置を固定し、関数を入れ替えると `ghost_session_restart_tests` ほかの登録の前提で赤になる。
+- Risks: 2 つの欄は同じ型 `fn(&mut World)` なので、取り違えてもコンパイルは通り、登録の順だけが変わる。`Input` の段の系は互いの並びの指定を持たないので、赤になるテストがあるとは限らない。欄の名前（`menu_poll`・`after_input`）で呼ぶ位置を固定したうえで、実装の段で一度だけ `BODY_SYSTEMS` の 2 つの欄を入れ替えて回し、赤になるテストを `research.md` に記録する（入れ替えは戻してコミットしない）。0 件なら、取り違えを止める守りは字面の見直しだけであることをこの文と `research.md` に書く。
 
 #### MainItemMove
 
@@ -521,6 +521,7 @@ pub(crate) fn boot_monitor_snapshot(monitors: &[Monitor]) -> MonitorSources;
 
 - `log_history_tests.rs` に 1 本足す（例 `moved_modules_keep_their_kinds_by_real_module_path`）。
 - 行ごとに、移したモジュールの本番の項目 1 つ（型か、総称でない関数）の `std::any::type_name`／`std::any::type_name_of_val` を取り、最後の `::<項目名>` を落とした文字列＝その項目を定義したモジュールの `module_path!()` の値で `classify(Level::INFO, …)` を引き、移す前の種別と比べる。
+- 種別を引く前に、導いたモジュールのパスが期待の字面（`areka::session::alert` ほか）と等しいことを `assert_eq!` で確かめる（同じ 1 本の中で）。`type_name` の文字列の形は標準ライブラリが約束しておらず、項目を選び違えると、残さない（None）を期待する行がどの決まりにも当たらないまま緑になるため。
 - 期待（移す前の種別・7.4）: `boot_config`・`boot_resolve`・`ghost_session`・`ghost_session::ghost_session_runtime`・`readme`・`readme::opener` は status。`alert`・`app_exit`・`session_end`・`exit_wait`・`write_failure`・`readonly`・`roots::report`・`roots::user_root` は残さない（None）。
 - ファイルを平らに置き直す・名前を変える・`RULES` の文字列を書き違える、のどれでも赤になる。足した 1 本は 10.3 の対応表で「新しく足したテスト」として説明する。
 
@@ -535,7 +536,7 @@ pub(crate) fn boot_monitor_snapshot(monitors: &[Monitor]) -> MonitorSources;
 
 - 書き換えるのはパスだけ。`tools/package.ps1` の目印の本文（`'本物のゴースト窓を開きました'` ほか）は変えない。
 - `doc/COMPAT_ARCHITECTURE.md` §8 は既にある行のパスだけを書き換え、行を足さない・消さない（9.4）。`:189`・`:318`・`:319` は項目の名（`restore_merged_placements`・`session_mark_verdict`）で引いて `session/boot_seam.rs`・`session/session_mark.rs` へ直し、同じ行の `after_run` ほか `main.rs` に残る項目は直さない。
-- `doc/ukadoc-coverage/briefing-assets.md:174`・`:213` の `crates/areka/src/main.rs:141` は、記録の水準の既定（`log_history::init()` の落ち先）を指すので、項目の名で引いて `crates/areka/src/session/log_history.rs`（`init`）へ直す（仮定・OPEN QUESTION 6）。
+- `doc/ukadoc-coverage/briefing-assets.md:174`・`:213` の `crates/areka/src/main.rs:141` は、記録の水準の既定（`RUST_LOG` が無いときの落ち先＝`log_history.rs` の `init`）を指すので、`crates/areka/src/session/log_history.rs` の `init` へ直す（行番号はもとからずれているので書かず、関数の名で指す）。
 - 網羅台帳は別々の行だけを書き換え、`doc/ukadoc-coverage/report/` は作り直す（手で直さない）。
 - `doc/README.md:33` の `crates/areka/src/main.rs` は、`main.rs` に残る結線を指すので直さない。`doc/click-through.md:3`・`:136` はもとから古いので直さず申し送る（10.1）。
 - audit 2 本の brief は「受け持つファイル」のパスだけを書き換え、持ち主は変えない（roots の芯と readme は `audit-areka-install-update` のまま・6.7）。
@@ -565,6 +566,7 @@ grep の式（どれも `git grep -n -E`・結果と除いた所を `research.md
 3. 古いパス（6.8）: `'(crates/areka/src/|areka/src/|src/|areka/)(ghost_session|boot_resolve|boot_config|app_exit|session_end|exit_wait|write_failure|readonly|alert|log_history|shell_balloon_switch_session|boot_shell_tests|readme)|src/roots/(resolve|report|user_root)|main_(config_input|ghost_wiring|module_policy|restore_seam|persist_wiring_seam|monitor_snapshot_seam)_tests'` を `crates/`・`tools/`・`doc/`・`.kiro/steering/{structure,tech,logging}.md` で 0 件。除くのは `roadmap-history.md`・`.kiro/specs/completed/`・`roadmap.md`・`doc/roadmap-overview-2026-10-16.html`・`crates/areka-input/src/user_break.rs:201` だけ。素のファイル名（`ghost_session.rs` だけの書き方）とモジュールの名前だけの説明は当たりにしない（6.9）。`roots/mod.rs` を名指す行は、残る `roots.rs` との取り違えが無いかを 1 件ずつ見る。当たりが本体の集めたファイルでない（ほかの crate の同じ名前の）ときは、除いた所の一覧に理由つきで載せる。`cli::(BootRequest|ModulePolicy)` も同じ範囲で 0 件。
 4. 古い出所（7.8）: `'areka::(ghost_session|boot_config|boot_resolve|app_exit|alert|readme|session_end|exit_wait|write_failure|readonly|log_history|roots::(resolve|report|user_root))\b|areka::roots\b(?!::(edit|desk|pick))'`（先読みを使うので `git grep -P`、使えなければ `rg -P`）を `crates/`・`tools/`・`doc/`・`.kiro/steering/{structure,tech}.md` で 0 件。
 5. 外への参照（8.1）: OutboundRefRecord の式。
+6. `main.rs` の最上位の出し直しが無い（2.3・5.3）: `main.rs` の最上位（`fn` の外）の `use` の行が、外の crate（`bevy_ecs`・`windows`・`wintf` ほか、着手のときの行と同じもの）だけで、`use session`・`use crate::`・`use areka_input`・`pub(crate) use` が 0 件。最上位に私有の `use session::…` を 1 行足すだけで、`crate::ConfigInputs` ほかの古い道が黙って通り、コンパイルの守りが効かなくなるため。
 
 - テストの名前（10.2・10.3）: 着手のときと完了のときに `cargo test --workspace --no-fail-fast -- --list` を取り、`: test$` の行の名前の末尾の多重集合を比べる。差は KindCalibration の 1 本だけで、対応表で説明する。
 - 警告（10.4）: `cargo check --workspace --all-targets` が 0 件。各段の終わりにも回す。
@@ -644,13 +646,13 @@ flowchart TB
 
 入力からは決めきれない選び方を、仮定を置いて上のとおり書いた。設計の討議で決める。
 
-1. **本体だけの系の登録の形**（4.1・4.2）。仮定: `register_systems` が `BodySystems`（関数のポインタ 2 つ）を受け、`main.rs` の `BODY_SYSTEMS` が `menu::register_menu_poll` と `install`→`update`→`mcp` を渡す。理由: 名前 `ghost_session::register_systems` と 25 の呼び出しの順がそのまま残り、触れない crate の説明 25 か所（`areka-input` 15 を含む・討議 2 の理由）が古くならない。次点: `register_systems` を 3 つ（前・入力・後）に分け、`main.rs` に全部を順に呼ぶ `register_systems` を置く（「`main.rs` から呼ぶ」の字面には一番近いが、`ghost_session::register_systems` が無くなり、25 か所の説明が古くなる）。
-2. **新しいファイルの名前**（2.1・3.3）。仮定: `session/session_mark.rs`（印の判定）・`session/boot_seam.rs`（起動窓と起動の直後の結線のシーム・`main.rs` の説明の語「シーム」）・`session/boot_request.rs`（cli の型 2 つ）・移すテストは `boot_config_{input,ghost_wiring,module_policy}_tests.rs`・`boot_seam_{restore,persist_wiring,monitor_snapshot}_tests.rs`。次点: `main.rs` の項目を 1 本（約 270 行）にまとめる・cli の型を `boot_config.rs` に足す（移すファイルの中身を書き換えるので推さない）。
-3. **残る roots の宣言の置き場**（3.1・1.1）。仮定: `src/roots.rs`（`readme.rs` ＋ `readme/` と同じ形）にし、`roots/mod.rs` を移動として追える形にする。次点: 研究の記録の案どおり新しい `src/roots/mod.rs`（`structure.md` の「`{module}/mod.rs` の形」にそろうが、squash の後に `roots/mod.rs` の履歴が `session/roots/mod.rs` へ続かない）。
-4. **`main.rs` の書き方**（2.3・5）。仮定: 最上位に `use session::…` を置かず、`fn` の本文は先頭の `use session::{…};` で字面を保ち、署名と構造体の欄は `session::…` で書く。次点: 全部を `session::…` の道で書き、`zorder_wiring_tests.rs` の字面を直す（`main.rs` の差分が大きくなる）。
-5. **較正のテストの取り方**（10.8）。仮定: 本番の項目の `std::any::type_name`／`type_name_of_val` から最後の名前を落とした文字列（定義したモジュールの `module_path!()` と同じ値）を使う。移したファイルの中身に触れずに済む。次点: 各モジュールに `#[cfg(test)]` の定数 `module_path!()` を足す（移したファイルの中身が変わる）・本番の関数を呼んで出た記録の出所を捕まえる（呼ぶための支えが大きい）。
-6. **`doc/ukadoc-coverage/briefing-assets.md:174`・`:213` の `crates/areka/src/main.rs:141`**（6.5）。仮定: 記録の水準の既定の落ち先（`log_history::init()`）を指すとみて、`crates/areka/src/session/log_history.rs`（`init`）へ直す。次点: 行番号がもとからずれているので、もとから古い説明として直さず申し送る（10.1）。
-7. **`roadmap.md` の新旧のパスの対応表**。仮定: この spec のタスクでは触らない（要件の範囲に無く、6.8 の除外に入る）。新しいファイルの名前と roots の分け方は Supporting References の表と `research.md` に置き、`/kiro-complete` の roadmap の更新で写す。
+1. **本体だけの系の登録の形**（4.1・4.2）。仮定: `register_systems` が `BodySystems`（関数のポインタ 2 つ）を受け、`main.rs` の `BODY_SYSTEMS` が `menu::register_menu_poll` と `install`→`update`→`mcp` を渡す。次点: `register_systems` を 3 つ（前・入力・後）に分け、`main.rs` に全部を順に呼ぶ関数を置く。
+2. **新しいファイルの名前**（2.1・3.3）。仮定: `session/session_mark.rs`・`session/boot_seam.rs`・`session/boot_request.rs`・移すテストは `boot_config_{input,ghost_wiring,module_policy}_tests.rs`・`boot_seam_{restore,persist_wiring,monitor_snapshot}_tests.rs`。
+3. **残る roots の宣言の置き場**（3.1・1.1）。仮定: `src/roots.rs`。次点: 新しい `src/roots/mod.rs`。
+4. **`main.rs` の書き方**（2.3・5）。仮定: 最上位に `use session::…` を置かず、`fn` の本文の先頭の `use session::{…};` で字面を保つ。
+5. **較正のテストの取り方**（10.8）。仮定: `std::any::type_name`／`type_name_of_val` から導いたパスを `assert_eq!` で確かめてから種別を引く。
+
+- 設計の生成のときの持ち越し 6（`briefing-assets.md` の `main.rs:141`）と 7（`roadmap.md` の新旧のパスの対応表はこの spec のタスクで触らず、`/kiro-complete` の roadmap の更新で Supporting References の表を写す）は、要件の範囲どおりなので討議の議題にせず上の本文で決めた。
 
 ## Supporting References
 
