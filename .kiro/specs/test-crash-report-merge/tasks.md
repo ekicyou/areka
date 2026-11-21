@@ -106,7 +106,7 @@
   - _Dispatch: mechanical — 設計が確かめのコマンドと期待を示している_
   - _Requirements: 5.6, 6.7, 6.8, 7.1, 7.2, 7.3, 7.4, 7.5, 8.2_
 
-- [ ] 5.2 較正の 2 つの形を走らせて記録する
+- [x] 5.2 較正の 2 つの形を走らせて記録する
   - 装置なし（`crash-report-kit` の較正）と装置あり（`areka-runtime` の較正）を 1 度ずつ走らせる。装置ありは本物の GPU を使うので、排他のテストの机（`areka-impl-watch`）を取ってから走らせ、終わったらすぐ返す
   - 終わった姿: どちらもプロセスが落ち、装置なしは `AREKA-CRASH code=0xC0000005`・`AREKA-CRASH-THREAD`・`AREKA-CRASH-STACK` が出て `AREKA-CRASH-HOLDER` が出ず、装置ありは加えて `AREKA-CRASH-HOLDER tid=… name="…crash_report_names_the_running_test"` が出る。出た行を Implementation Notes に写す
   - _Dispatch: mechanical — 設計が走らせ方と期待の行を示している_
@@ -132,3 +132,5 @@
 - 5.1（6.8・完了の未解決の棚卸の件 ア）: `crates/areka-runtime/src/frame_test_support.rs:886` の `pub fn window_move_lines` の写しは、C24 の約束（このファイルの差分 0）により付け替えていない。寄せ先は placement の `test_support::window_move_lines`。`/kiro-complete` の未解決の棚卸で持ち主を決める。
 - 5.1（棚卸の件 イ・決定 5）: `carrier_cue` の残りの写し。`crates/areka-ghost/src/prop_sink.rs:118`（引数 `actor, name, tokens`）と `crates/areka-seriko/src/actor_test_support.rs:124`（引数 `scope, name, tokens`）が残り、`crates/areka-runtime/src/consumer_ledger_test_support.rs:126` の `carrier_cue(name, args)` とは形が違う。このスペックでは足さない。完了の未解決の棚卸で「`dola` にテスト用の組み立て（`TalkCue`・`CueCommand` の組み立て）を置く」件として起票する。
 - 5.1（棚卸の件 ウ・決定 6）: `areka-runtime` の `INVARIANT_WARNING` の手写し。`crates/areka-runtime/src/frame_work_area_resnap_hold_tests.rs:60` の `const INVARIANT_WARNING` が placement の `follow_window_move_hold_watch_tests.rs:31` と同じ文字列の手写しのまま残る。完了の未解決の棚卸で、同じファイルの 372〜410 行にこの警告を数える檻が既に在るかを確かめる。
+- 5.2（装置なし・2.5・3.1・5.5・8.3）: `cargo test -p crash-report-kit -- --ignored --exact lib_tests::crash_report_names_the_running_test` を 1 度走らせた。プロセスは落ち、終了コードは 139。出た行は stderr で、`AREKA-CRASH code=0xC0000005 addr=0x7ff809ec56ca tid=18792`・`AREKA-CRASH module=C:\WINDOWS\System32\KERNELBASE.dll+0xC56CA thread=""`・`AREKA-CRASH-THREAD`（`tid=30408 name="main"`・`tid=21188 name="lib_tests::crash_report_names_the_running_test"`・落ちたスレッド `tid=18792 name=""` を含む 6 行）・`AREKA-CRASH-STACK`（0〜22 段・`write_report` lib.rs:348 → `first_chance` lib.rs:249 → … → `crash_on_an_unnamed_thread::closure$0` lib.rs:507）。`AREKA-CRASH-HOLDER` の行は出ていない（期待どおり）。
+- 5.2（装置あり・3.2・5.5・8.3）: `cargo test -p areka-runtime --lib -- --ignored --exact crash_report_test_support::crash_report_names_the_running_test` を本物の GPU で 1 度走らせた。プロセスは落ち、終了コードは 139。`AREKA-CRASH code=0xC0000005 addr=0x7ff809ec56ca tid=21632`・`AREKA-CRASH module=C:\WINDOWS\System32\KERNELBASE.dll+0xC56CA thread=""` に続いて `AREKA-CRASH-HOLDER tid=27420 name="crash_report_test_support::crash_report_names_the_running_test"` が出た。`AREKA-CRASH-THREAD` は 9 行（`tid=26200 name="main"`・`tid=27420 name="crash_report_test_support::crash_report_names_the_running_test"`・落ちたスレッド `tid=21632 name=""` を含む）、`AREKA-CRASH-STACK` は 0〜22 段で装置なしと同じ形。持ち手の行にそのテストの名前が出ており期待どおり。
