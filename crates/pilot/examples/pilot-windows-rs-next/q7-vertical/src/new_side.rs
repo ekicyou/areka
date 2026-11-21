@@ -1,6 +1,6 @@
 //! 新しい側: 上流 `windows-text`（`windows-core` 0.101）で縦書きの 1 列を配置し、`bind-next` の
 //! 束縛（同じ 0.101）の `IDWriteTextLayout` として借りて、ハードウェアの D3D11＋D2D の画面の外の
-//! 絵へ描き、premultiplied BGRA を読み戻す（問い 7・要件 8.2・8.3・15.1）。
+//! 絵へ描き、premultiplied BGRA を読み戻す（問い 7）。
 //!
 //! 条件は今の側（`old_side`）の表（README 問い 7）に揃える。値の出どころは各行の注に書く。
 //! 新旧の COM の型はつながない: 借りた側（0.62）の型はここに 1 つも出ず、`windows-text` と
@@ -130,7 +130,7 @@ unsafe fn gdi_face(gdi: &IDWriteGdiInterop, name: &str) -> Option<Face> {
 }
 
 /// 今の側の `create_text_format`＋`create_line_layout`（縦書き）と同じ配置を `windows-text` で組む。
-/// 8.4 は返った配置を借りて範囲の色を付けてから [`render`] へ渡す。
+/// 返った配置は、借りて範囲の色を付けてから [`render`] へ渡せる。
 pub fn layout(text: &str, features: Features) -> std::result::Result<TextLayout, String> {
     let em = FONT_HEIGHT as f32;
     let face = face()?;
@@ -162,7 +162,7 @@ pub fn render(layout: &TextLayout) -> std::result::Result<Shot, String> {
     render_with(layout, |_, _| Ok(()))
 }
 
-/// [`render`] に、描く直前の手を 1 つ挟む（8.4 の範囲の色: 筆は描く文脈と同じ装置で作る要がある）。
+/// [`render`] に、描く直前の手を 1 つ挟む（範囲の色の筆は描く文脈と同じ装置で作る要がある）。
 /// 手は描く文脈と借りた配置を受け取る。
 pub fn render_with(
     layout: &TextLayout,

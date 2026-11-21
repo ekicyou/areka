@@ -1,24 +1,23 @@
 //! `read.rs` の在中テスト。
 //!
-//! 守るのは 4 つ。⑴ 手で書いた本文を読んで書き戻すと 1 バイトも違わないこと
-//! （設計 catalog の事後条件 `write(read(t)) == t`・丸めが無いこと）。⑵ 欄の値が
-//! 逐語で読めること（逃がした逆斜線が 1 つに戻る・全件数と正典の件数が別々に読める）。
-//! ⑶ 形が違う本文を**繕わずに落とす**こと。落ちる場所を本文が名指しすること。
+//! 守るのは 4 つ。⑴ 手で書いた本文を読んで書き戻すと 1 バイトも違わないこと。
+//! ⑵ 欄の値が逐語で読めること（逃がした逆斜線が 1 つに戻る・全件数と正典の件数が別々に
+//! 読める）。⑶ 形が違う本文を**繕わずに落とす**こと。落ちる場所を本文が名指しすること。
 //! ⑷ 3 つの読み出し（[`Catalog::by_url`]・[`Catalog::page_urls`]・
 //! [`Catalog::titles_of_page`]）が具体の値で決まること。
 //!
-//! 読み戻し一致だけに頼らない。往復は「単射であること」しか
-//! 言えず、欄を並べ替えても余計に逃がしても素通りする。逐語の主張は `write_tests.rs`
-//! が持ち、ここでは値そのものを 1 つずつ釘付けする。
+//! 読み戻し一致だけに頼らない。往復は「単射であること」しか言えず、欄を並べ替えても
+//! 余計に逃がしても素通りする。逐語の主張は `write_tests.rs` が持ち、ここでは値そのものを
+//! 1 つずつ釘付けする。
 //!
-//! **ファイルも一時ディレクトリも作らない。環境変数も読まない**（要件 6.2）。
+//! **ファイルも一時ディレクトリも作らない。環境変数も読まない**。
 
 use super::*;
 use crate::catalog::write::write;
 
 /// 手で書いた見本の本文。
 ///
-/// 逆斜線を含む見出し（設計 D-10 の形）・単引用符・日本語・版番号 2 つ・
+/// 逆斜線を含む見出し・単引用符・日本語・版番号 2 つ・
 /// 版番号 0 個・アンカー無しの id・アンカー付きの id をすべて 1 つの本文に入れてある。
 const SAMPLE: &str = r##"# 機械生成。手で編集しない。再生成: cargo run -p ukadoc-survey -- catalog
 # 形式の正本: .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/design.md
@@ -73,7 +72,7 @@ fn entry_of<'a>(catalog: &'a Catalog, id: &str) -> &'a CatalogEntry {
 
 // ---- 往復 ----
 
-/// 読んで書き戻すと 1 バイトも違わない（設計 catalog の事後条件・要件 1.5）。
+/// 読んで書き戻すと 1 バイトも違わない。
 #[test]
 fn round_trip_of_a_hand_written_body_is_byte_identical() {
     assert_eq!(write(&sample()), SAMPLE);
@@ -220,7 +219,7 @@ fn negative_count_is_rejected() {
     assert!(message.contains("欄 ukadoc_entries が負"), "{message}");
 }
 
-/// 項目 id が 2 形のどちらでもなければ、どのファイルかを添えて落ちる（要件 1.9）。
+/// 項目 id が 2 形のどちらでもなければ、どのファイルかを添えて落ちる。
 /// 3 文書・台帳の読み手と同じく、綴りしか持たない素の id の失敗は外へ出さない。
 #[test]
 fn malformed_entry_id_is_rejected() {
@@ -330,7 +329,7 @@ fn two_pages_on_one_page_url_are_rejected() {
 
 // ---- 3 つの読み出し ----
 
-/// URL から項目 id を引く逆引き（設計 D-4 の 1 段目）。
+/// URL から項目 id を引く逆引き。
 #[test]
 fn by_url_resolves_each_entry_exactly() {
     let catalog = sample();
@@ -430,7 +429,7 @@ fn titles_of_page_lists_in_id_order() {
     );
 }
 
-/// アンカーを持たないページも同じ形で引ける（要件 1.9）。
+/// アンカーを持たないページも同じ形で引ける。
 #[test]
 fn titles_of_page_covers_a_page_without_anchors() {
     let catalog = sample();

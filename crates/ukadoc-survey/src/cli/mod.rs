@@ -1,8 +1,8 @@
-//! 副手続きの振り分けと使い方の表示（設計「入口 / cli」・要件 6.12）。
+//! 副手続きの振り分けと使い方の表示。
 //!
 //! 引数の解析は自前で行う。副手続きは `catalog`・`ledger-init`・`report`・
 //! `report-summary`・`check`・`evidence`・`candidates`・`diff`・`priority-apply` の
-//! 9 つで固定なので、引数解析の外部ライブラリは入れない（設計 Technology Stack）。
+//! 9 つで固定なので、引数解析の外部ライブラリは入れない。
 //!
 //! # 振り分けは表 1 本
 //!
@@ -13,7 +13,7 @@
 //!
 //! - 標準出力に出るのは**結果だけ**。使い方も、断りの本文も、失敗の本文も標準エラーへ
 //!   出す（結果を別のファイルへ流し込んでも断りが混ざらないようにするため）。
-//! - 終了コードは 0 = 成功・1 = 失敗・2 = 使い方の誤り（設計「Error Handling / 見張り」）。
+//! - 終了コードは 0 = 成功・1 = 失敗・2 = 使い方の誤り。
 //!   実際に終了コードを返すのは実行ファイル側（`main.rs`）で、ここは [`Outcome`] と
 //!   `Err` のどちらを返すかだけを決める。
 //! - 標準出力へ書けなかったとき（出力の先のパイプが閉じたときなど）も panic させず、
@@ -21,7 +21,7 @@
 //!
 //! 知らない名前と余計な引数は、断りの 1 行を標準エラーへ出してから [`Outcome::Usage`] を
 //! 返す。呼び手（`main.rs`）が続けて使い方を出すので、利用者は「何が違ったか」と
-//! 「どう打てばよいか」を続けて読める（要件 6.12）。
+//! 「どう打てばよいか」を続けて読める。
 
 use std::io::Write;
 use std::path::Path;
@@ -37,7 +37,7 @@ use crate::model::Domain;
 pub mod generate;
 pub mod inspect;
 
-/// 副手続きの中身。引数は取らない（設計「入口 / cli」の表）。
+/// 副手続きの中身。引数は取らない。
 type Handler = fn() -> Result<(), SurveyError>;
 
 /// 名前と中身の組。
@@ -48,7 +48,7 @@ pub(crate) struct Subcommand {
     pub(crate) handler: Handler,
 }
 
-/// 振り分け表（設計「入口 / cli」の表と同じ 9 つ・同じ並び）。
+/// 振り分け表。
 pub(crate) const SUBCOMMANDS: [Subcommand; 9] = [
     Subcommand {
         name: "catalog",

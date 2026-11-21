@@ -5,9 +5,9 @@ use crate::charset::Charset;
 
 use crate::error::HandshakeError;
 
-// --- map_send_error（THE core observable・要件 5.1〜5.4）-------------------
+// --- map_send_error -------------------
 
-/// CRITICAL（要件 5.1/5.4）: `IpcError::Timeout` は `RequestError::Timeout` へ写り、
+/// CRITICAL: `IpcError::Timeout` は `RequestError::Timeout` へ写り、
 /// **`RequestError::Ipc` には含まれない**（timeout を単一不透明失敗へ潰さない）。
 #[test]
 fn map_send_error_timeout_routes_to_timeout_not_ipc() {
@@ -16,14 +16,13 @@ fn map_send_error_timeout_routes_to_timeout_not_ipc() {
         matches!(mapped, RequestError::Timeout),
         "IpcError::Timeout は RequestError::Timeout へ（要件 5.1）: got {mapped:?}"
     );
-    // Ipc へ流れていないことを明示（区別保持・要件 5.4）。
     assert!(
         !matches!(mapped, RequestError::Ipc(_)),
         "Timeout を Ipc へ潰してはならない（要件 5.4）: got {mapped:?}"
     );
 }
 
-/// `IpcError::SendFailed`（送出失敗＝helper 応答不能の一態様）は `RequestError::Ipc` へ（要件 5.3）。
+/// `IpcError::SendFailed`（送出失敗＝helper 応答不能の一態様）は `RequestError::Ipc` へ。
 #[test]
 fn map_send_error_send_failed_routes_to_ipc() {
     let mapped = map_send_error(SendError::Ipc(IpcError::SendFailed));
@@ -33,7 +32,7 @@ fn map_send_error_send_failed_routes_to_ipc() {
     );
 }
 
-/// `IpcError::CorruptFrame`（framing 破損）も transport 失敗として `RequestError::Ipc` へ（要件 5.3）。
+/// `IpcError::CorruptFrame`（framing 破損）も transport 失敗として `RequestError::Ipc` へ。
 #[test]
 fn map_send_error_corrupt_frame_routes_to_ipc() {
     let mapped = map_send_error(SendError::Ipc(IpcError::CorruptFrame(
@@ -48,7 +47,7 @@ fn map_send_error_corrupt_frame_routes_to_ipc() {
     );
 }
 
-/// `SendError::Handshake(Incomplete)` は `RequestError::Handshake` へ（要件 3.3・区別保持）。
+/// `SendError::Handshake(Incomplete)` は `RequestError::Handshake` へ（区別保持）。
 #[test]
 fn map_send_error_handshake_incomplete_routes_to_handshake() {
     let mapped = map_send_error(SendError::Handshake(HandshakeError::Incomplete));
@@ -61,7 +60,7 @@ fn map_send_error_handshake_incomplete_routes_to_handshake() {
 /// `SendError::Handshake(Timeout)`（ハンドシェイク timeout）も `RequestError::Handshake` へ。
 ///
 /// 注意: これは **ハンドシェイク** timeout（HandshakeError::Timeout）であり、**wire** timeout
-/// （IpcError::Timeout→RequestError::Timeout）とは別語彙である（要件 5.4 の区別保持）。
+/// （IpcError::Timeout→RequestError::Timeout）とは別語彙である（区別保持）。
 #[test]
 fn map_send_error_handshake_timeout_routes_to_handshake_not_wire_timeout() {
     let mapped = map_send_error(SendError::Handshake(HandshakeError::Timeout));
@@ -69,14 +68,13 @@ fn map_send_error_handshake_timeout_routes_to_handshake_not_wire_timeout() {
         matches!(mapped, RequestError::Handshake(HandshakeError::Timeout)),
         "Handshake(Timeout) は RequestError::Handshake へ: got {mapped:?}"
     );
-    // wire timeout（RequestError::Timeout）へ混同していないこと。
     assert!(
         !matches!(mapped, RequestError::Timeout),
         "ハンドシェイク timeout を wire timeout へ混同しない（要件 5.4）: got {mapped:?}"
     );
 }
 
-// --- map_get_reply（areka-P0-script-security-level 要件 3.5）---------------
+// --- map_get_reply---------------
 
 /// 200 ＋ Value は値と応答の `SecurityLevel` の生の値をそのまま運ぶ。
 #[test]
@@ -99,7 +97,7 @@ fn map_get_reply_carries_the_raw_security_level() {
     );
 }
 
-/// 判定の順は今のまま: `SecurityLevel` があっても 400 は誤り・204 は無し（要件 3.5）。
+/// 判定の順は今のまま: `SecurityLevel` があっても 400 は誤り・204 は無し。
 #[test]
 fn map_get_reply_keeps_the_judgment_order() {
     let with = |status: u16| ParsedResponse {
@@ -121,9 +119,9 @@ fn map_get_reply_keeps_the_judgment_order() {
     assert_eq!(map_get_reply(with(204)).expect("204 は Ok"), None);
 }
 
-// --- map_get_result（要件 4.1/2.1/2.2/2.7/5.2）---------------------------
+// --- map_get_result---------------------------
 
-/// 200 ＋ Value → `Ok(Some(v))`（要件 2.1）。
+/// 200 ＋ Value → `Ok(Some(v))`。
 #[test]
 fn map_get_result_200_with_value_is_some() {
     let parsed = ParsedResponse {
@@ -135,12 +133,12 @@ fn map_get_result_200_with_value_is_some() {
         decode_had_errors: false,
         security_level: None,
     };
-    // RequestError は PartialEq を持たない（error.rs は本タスクで不変）ため、Ok 側を取り出して比較する。
+    // RequestError は PartialEq を持たないため、Ok 側を取り出して比較する。
     let ok = map_get_result(parsed).expect("200+value は Ok");
     assert_eq!(ok, Some(r"\s[0]hi\e".to_string()));
 }
 
-/// 200 で Value 欠落 → `Ok(None)`（要件 2.1・Value は 200 でも欠落し得る）。
+/// 200 で Value 欠落 → `Ok(None)`（Value は 200 でも欠落し得る）。
 #[test]
 fn map_get_result_200_without_value_is_none() {
     let parsed = ParsedResponse {
@@ -156,7 +154,7 @@ fn map_get_result_200_without_value_is_none() {
     assert_eq!(ok, None);
 }
 
-/// 204 → `Ok(None)`（成功・スクリプト無し・要件 2.2）。
+/// 204 → `Ok(None)`（成功・スクリプト無し）。
 #[test]
 fn map_get_result_204_is_none() {
     let parsed = ParsedResponse {
@@ -172,7 +170,7 @@ fn map_get_result_204_is_none() {
     assert_eq!(ok, None);
 }
 
-/// 400 → `Err(RequestError::Shiori(ShioriError::Status{status:400,..}))`（要件 5.2）。
+/// 400 → `Err(RequestError::Shiori(ShioriError::Status{status:400,..}))`。
 #[test]
 fn map_get_result_400_is_shiori_status_error() {
     let parsed = ParsedResponse {
@@ -194,7 +192,7 @@ fn map_get_result_400_is_shiori_status_error() {
     );
 }
 
-/// 500 → `Err(RequestError::Shiori(ShioriError::Status{status:500,..}))`（要件 5.2）。
+/// 500 → `Err(RequestError::Shiori(ShioriError::Status{status:500,..}))`。
 #[test]
 fn map_get_result_500_is_shiori_status_error() {
     let parsed = ParsedResponse {
@@ -220,7 +218,7 @@ fn map_get_result_500_is_shiori_status_error() {
     );
 }
 
-/// 200 だが `ErrorLevel` 付き → エラー扱い（要件 5.2・error_level 先読み）。
+/// 200 だが `ErrorLevel` 付き → エラー扱い（error_level 先読み）。
 #[test]
 fn map_get_result_200_with_error_level_is_error() {
     let parsed = ParsedResponse {
@@ -246,7 +244,7 @@ fn map_get_result_200_with_error_level_is_error() {
     );
 }
 
-/// 311 → `Ok(value)`（OnTeach 系・drop せず区別可能・要件 2.7）。
+/// 311 → `Ok(value)`（OnTeach 系・drop せず区別可能）。
 #[test]
 fn map_get_result_311_tolerated_returns_value() {
     let parsed = ParsedResponse {
@@ -262,7 +260,7 @@ fn map_get_result_311_tolerated_returns_value() {
     assert_eq!(ok, Some("teach".to_string()));
 }
 
-/// 312 → `Ok(value)`（OnTeach 系・要件 2.7）。
+/// 312 → `Ok(value)`（OnTeach 系）。
 #[test]
 fn map_get_result_312_tolerated_returns_value() {
     let parsed = ParsedResponse {
@@ -280,17 +278,17 @@ fn map_get_result_312_tolerated_returns_value() {
 
 // --- 構築（既定 sender・単一差替点）--------------------------------------
 
-/// 既定 sender が `"areka"` であることを固定する（design.md §送出ヘッダ最小集合）。
+/// 既定 sender が `"areka"` であることを固定する。
 #[test]
 fn default_sender_is_areka() {
     assert_eq!(DEFAULT_SENDER, "areka");
 }
 
-// --- 交渉状態の結線（タスク 3.3・要件 5.1/5.3）----------------------------
+// --- 交渉状態の結線----------------------------
 //
 // 1 往復の前半（`encode_for`）と後半（`parse_for`）は `get`／`notify` が
 // 実際に呼ぶ本番関数そのものである。窓も 32bit 成果物も要さずに結線を検査できるのは、
-// 交渉に関わる判断がこの 2 つに閉じているため（要件 9.8）。
+// 交渉に関わる判断がこの 2 つに閉じているため。
 
 /// 「あ」の EUC-JP バイト列（符号化器から導かない定数）。
 const A_EUC_JP: &[u8] = &[0xA4, 0xA2];
@@ -325,7 +323,7 @@ fn a_request(method: Method, id: &str, charset: Charset) -> ShioriRequest<'_> {
 }
 
 /// 応答の `Charset` ヘッダから採用が起きるのは **後半を通ったときだけ**であり、
-/// 片道イベントが通る前半だけでは採用が起きない（要件 5.3 の零）。
+/// 片道イベントが通る前半だけでは採用が起きない。
 #[test]
 fn only_the_response_half_of_the_chain_adopts_a_charset() {
     let euc_jp = Charset::for_label("euc-jp").expect("EUC-JP は解決できる");
@@ -363,7 +361,7 @@ fn only_the_response_half_of_the_chain_adopts_a_charset() {
 }
 
 /// 片道イベントの本体が採用の経路を一切踏まないことを、本ファイルの本文で機械的に
-/// 確かめる（要件 5.3 の零＝「NOTIFY 応答からの採用 0」を件数で数え直す）。
+/// 確かめる（「NOTIFY 応答からの採用 0」を件数で数え直す）。
 ///
 /// 呼ばれていないことは実行では観測できない（呼び出しが無い＝出来事が無い）ため、
 /// 本文そのものを判定材料にする。採用の経路を後から片道側へ繋ぐと赤になる。関数の本文は
@@ -395,7 +393,7 @@ fn the_one_way_event_body_contains_no_adoption_path() {
 }
 
 /// 交渉状態は結線より長生きし、応答待ちのイベントで採用した文字コードが**次の片道
-/// イベント**の要求バイト列に現れる（要件 5.1＝双方のイベントが同じ文字コードを使う）。
+/// イベント**の要求バイト列に現れる（双方のイベントが同じ文字コードを使う）。
 #[test]
 fn adoption_in_an_answered_event_reaches_the_next_one_way_request() {
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
@@ -420,12 +418,11 @@ fn adoption_in_an_answered_event_reaches_the_next_one_way_request() {
     );
 }
 
-/// **200 以外の応答でも** `Charset` ヘッダは採用対象である（要件 4.2）。
+/// **200 以外の応答でも** `Charset` ヘッダは採用対象である。
 ///
-/// design.md §System Flows「交渉の一周（GET）」の流れの決め事 1 つめ——「`note_response` は
-/// `map_get_result` より前。応答の status が 204・400・500 であっても `Charset` ヘッダは
-/// 採用対象（4.2）。emo2 の最初の応答待ちイベント `username` 照会が 204 でも UTF-8 を
-/// 採用する」——が本タスクの結線の契約そのものであり、その順序をここで押さえる。
+/// `note_response` は `map_get_result` より前に呼ぶ。応答の status が 204・400・500 でも
+/// `Charset` ヘッダは採用対象で、emo2 の最初の応答待ちイベント `username` 照会が 204 でも
+/// UTF-8 を採用する。その順序をここで押さえる。
 ///
 /// `note_response` が status を引数に取らないのは構造上の備えであって検査ではない。後半を
 /// 「200 のときだけ採用する」へ退化させると本テストが赤になる（204・400 の 2 系統）。
@@ -466,7 +463,7 @@ fn a_non_200_response_still_adopts_its_charset_header() {
         euc_jp,
         "400 応答の Charset ヘッダが採用されていない（要件 4.2・design §交渉の一周）"
     );
-    // 結果の写しは 400 をエラーにする（採用が起きたことと両立する・要件 5.2）。
+    // 結果の写しは 400 をエラーにする（採用が起きたことと両立する）。
     assert!(
         map_get_result(parsed).is_err(),
         "400 は SHIORI エラーとして写るべき（採用の有無とは別の主張）"
@@ -474,7 +471,7 @@ fn a_non_200_response_still_adopts_its_charset_header() {
 }
 
 /// 復号で代替文字への置換が起きたという事実が、後半の結線を通って記録まで届く
-/// （要件 4.7・7.1＝記録なしに握り潰さない）。
+/// （記録なしに握り潰さない）。
 ///
 /// 解析側（置換の検出）と交渉状態側（記録の発火）はそれぞれ別の決定論テストが押さえて
 /// いるが、その 2 つを繋ぐ 1 語——後半が `parse_response` の返した置換の有無をそのまま
@@ -507,7 +504,7 @@ fn the_decode_replacement_fact_reaches_the_record() {
     );
 }
 
-// --- 版で分ける 2 か所（指摘 15・5）----------------------------------------
+// --- 版で分ける 2 か所----------------------------------------
 
 /// 3.0 の前半（`encode_for` の 3.0 の腕）。3.0 は送らない要求を持たない。
 fn encode3(negotiator: &mut CharsetNegotiator, req: &ShioriRequest<'_>) -> Vec<u8> {

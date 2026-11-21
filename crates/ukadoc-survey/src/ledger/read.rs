@@ -1,29 +1,28 @@
 //! 台帳の本文 → 台帳（欄と語彙の検証つき）。
 //!
-//! 読み取りは `toml` に任せる（設計「境界の要点」1 つ目。書き出しだけが自前）。
+//! 読み取りは `toml` に任せる（書き出しだけが自前）。
 //! ここは純粋層で、**ファイルには触らない**——本文の文字列と、どのドメインの台帳を
-//! 読んでいるかだけを受け取る（要件 6.2）。
+//! 読んでいるかだけを受け取る。
 //!
 //! # 繕わない
 //!
-//! 台帳は人が手で書く文書なので、形が違えば**黙って直さずに落とす**（設計 Error
-//! Handling の「契約違反（データ）」）。落とすのは次の場合で、いずれもどのファイルの
-//! どの項目かを本文に載せる（要件 6.10）。
+//! 台帳は人が手で書く文書なので、形が違えば**黙って直さずに落とす**。落とすのは次の
+//! 場合で、いずれもどのファイルのどの項目かを本文に載せる。
 //!
-//! - 状態の綴りが 7 語彙のいずれでもない（要件 2.2）
-//! - テーマ名の綴りが 8 テーマのいずれでもない（要件 4.4）
-//! - 関連の種別が 6 種のいずれでもない（要件 4.3）
-//! - `alias_of` が `alias` 以外の行にある／`alias` の行に無い（要件 2.4・付録 A.2）
-//! - 付録 A.2 が必須とする欄が無い・型が違う
+//! - 状態の綴りが 7 語彙のいずれでもない
+//! - テーマ名の綴りが 8 テーマのいずれでもない
+//! - 関連の種別が 6 種のいずれでもない
+//! - `alias_of` が `alias` 以外の行にある／`alias` の行に無い
+//! - 必須の欄が無い・型が違う
 //! - **知らない欄がある**
-//! - 項目 id が 2 形のどちらでもない（要件 1.9）
+//! - 項目 id が 2 形のどちらでもない
 //! - 1 つの項目の `values` に同じテーマが 2 度ある（黙って受けるとテーマ別の表で 2 件に数えられる）
 //! - 1 つの項目の `supersedes` に同じ id が、`links` に同じ（種別, 相手）が 2 度ある
 //! - 前置きのドメイン名が読んでいるファイルのドメインと食い違う
 //! - 根に `[ledger]`・`[entry]` のほかの鍵がある
 //!
-//! 「知らない欄」を落とすのは要件 2.3 と 6.9 がここに載っているからである。台帳に
-//! 証拠の欄は無く、未分類件数を宣言する欄も無い。黙って読み飛ばすと、手で書いた
+//! 「知らない欄」を落とすのは、台帳に証拠の欄も未分類件数を宣言する欄も無いからである。
+//! 黙って読み飛ばすと、手で書いた
 //! `evidence = […]` や `unclassified_count = 42` が**書いたつもりのまま**検査を
 //! 素通りし、持ち主は数が合わない理由に永久に気づけない。
 //!
@@ -31,7 +30,7 @@
 //!
 //! `entries` は `BTreeMap` なので id の byte 昇順に並び替わり、**本文の順は失われる**。
 //! それを知っているのは行を見て切り分ける [`blocks::split`] だけなので、読み取りは
-//! 必ずそこを通し、返った塊の並びを `file_order` にする（設計 D-12）。ついでに
+//! 必ずそこを通し、返った塊の並びを `file_order` にする。ついでに
 //! 「切り分けた id の集合が `toml` の鍵の集合と一致する」較正も相続する。本文を `toml`
 //! で読むのは 1 度だけで、読んだ表を切り分けに渡す。
 //!
@@ -40,7 +39,7 @@
 //! ドメインが分かるので、置き場は `<ドメイン>` を伏せずに綴れる（[`ledger_file`]）。
 //! 切り分けの失敗も、伏せた置き場を差し替えてから上げる（[`at_ledger_file`]）。
 //! `io::paths::ledger_path` は呼ばない——あれはワークスペース根から組み立てた絶対
-//! パスを返すので、失敗の本文が計算機ごとに変わってしまう（要件 6.1 の決定性）。
+//! パスを返すので、失敗の本文が計算機ごとに変わってしまう。
 
 use std::collections::BTreeMap;
 
@@ -56,16 +55,16 @@ use crate::model::{Domain, EntryId, Link, LinkKind, PageName, Status, parse_them
 /// 前置きの表の名前。
 const LEDGER_TABLE: &str = "ledger";
 
-/// 前置きに置いてよい欄のすべて（要件付録 A.1）。
+/// 前置きに置いてよい欄のすべて。
 ///
 /// ここに `unclassified_count` のような件数の欄は**無い**。未分類の件数は報告側の
-/// 分布を正とし、台帳に宣言値を持たせない（要件 6.9）。
+/// 分布を正とし、台帳に宣言値を持たせない。
 const LEDGER_FIELDS: [&str; 2] = ["domain", "pages"];
 
-/// 項目に置いてよい欄のすべて（要件付録 A.2 の表）。
+/// 項目に置いてよい欄のすべて。
 ///
 /// ここに `evidence` は**無い**。実装済みの根拠はソース側の doc コメントにあり、
-/// 台帳は人手だけが書く文書に保つ（要件 2.3）。
+/// 台帳は人手だけが書く文書に保つ。
 const ENTRY_COLUMNS: [&str; 9] = [
     "status",
     "introduced",
@@ -78,13 +77,13 @@ const ENTRY_COLUMNS: [&str; 9] = [
     "note",
 ];
 
-/// 関連の 1 要素に置いてよい欄のすべて（要件付録 A.2）。
+/// 関連の 1 要素に置いてよい欄のすべて。
 const LINK_FIELDS: [&str; 2] = ["kind", "to"];
 
 /// 前置きの失敗に添える場所。項目 id が無いので、代わりに表の名前を書く。
 const PROLOGUE_PLACE: &str = "[ledger]";
 
-/// 台帳の本文を読む（要件 2.1〜2.4・6.9）。
+/// 台帳の本文を読む。
 ///
 /// `domain` は読んでいるファイルのドメイン（＝ファイル名）である。前置きの
 /// `domain` がこれと食い違えば、どちらの綴りも添えて落とす。
@@ -99,7 +98,7 @@ pub fn read(text: &str, domain: Domain) -> Result<Ledger, SurveyError> {
     reject_unknown_keys(&root, &[LEDGER_TABLE, ENTRY_TABLE], "根", &file)?;
 
     // 本文に現れた順は `toml` の表からは取れない（鍵で並び替えられている）。それを
-    // 知っているのは切り分けだけなので、必ずここを通す（設計 D-12）。
+    // 知っているのは切り分けだけなので、必ずここを通す。
     let (_, blocks) =
         blocks::split_parsed(text, &root).map_err(|err| at_ledger_file(err, &file))?;
     let file_order: Vec<EntryId> = blocks.into_iter().map(|block| block.id).collect();
@@ -124,13 +123,13 @@ pub fn read(text: &str, domain: Domain) -> Result<Ledger, SurveyError> {
     })
 }
 
-/// 前置きを読む（要件付録 A.1）。
+/// 前置きを読む。
 fn read_prologue(root: &toml::Table, file: &str) -> Result<(Domain, Vec<PageName>), SurveyError> {
     let table = required_table(root, LEDGER_TABLE, PROLOGUE_PLACE, file)?;
     reject_unknown_keys(table, &LEDGER_FIELDS, PROLOGUE_PLACE, file)?;
 
     let raw = string_field(table, PROLOGUE_PLACE, "domain", file)?;
-    // 語彙の失敗には必ず場所を添える（要件 6.10。包み忘れるとどの台帳かが消える）。
+    // 語彙の失敗には必ず場所を添える（包み忘れるとどの台帳かが消える）。
     let domain = Domain::parse(&raw).map_err(|err| err.at(file, PROLOGUE_PLACE))?;
 
     let pages = string_array_field(table, PROLOGUE_PLACE, "pages", file)?
@@ -167,7 +166,7 @@ fn read_entries(
     Ok(entries)
 }
 
-/// 項目 1 つ分を読む（要件付録 A.2 の表）。
+/// 項目 1 つ分を読む。
 fn read_entry(
     id: EntryId,
     item: &toml::Table,
@@ -208,10 +207,9 @@ fn read_alias_of(
     Ok(Some(reference_id(&raw, place, "alias_of", file)?))
 }
 
-/// 別名の写像と状態の食い違いを落とす（要件 2.4・付録 A.2）。
+/// 別名の写像と状態の食い違いを落とす。
 ///
-/// 付録 A.2 は `alias_of` を「`status = "alias"` のとき必須・それ以外は書かない」と
-/// 定める。どちらの向きも落とす——片側だけを守ると、別名でない行に書かれた写像先が
+/// `alias_of` は「`status = "alias"` のとき必須・それ以外は書かない」。どちらの向きも落とす——片側だけを守ると、別名でない行に書かれた写像先が
 /// 黙って無視されるか、別名の行の写像先が黙って空になる。
 fn reject_alias_mismatch(
     status: Status,
@@ -259,7 +257,7 @@ fn read_supersedes(
     Ok(ids)
 }
 
-/// 伺からしさのテーマ（要件 4.4 の 8 つ）。
+/// 伺からしさのテーマ（8 つ）。
 ///
 /// 持つのは凍結された側の綴りである。前後の空白を落としたり近い綴りへ寄せたりは
 /// しない——「気配」と「気配り」は片方が他方の接頭辞なので、緩めると取り違える。
@@ -284,7 +282,7 @@ fn read_values(
     Ok(themes)
 }
 
-/// 関連（要件 4.3 の 6 種と相手 id の対）。
+/// 関連（6 種と相手 id の対）。
 fn read_links(
     item: &toml::Table,
     place: &str,
@@ -325,10 +323,10 @@ fn read_links(
     Ok(links)
 }
 
-/// 欄に書かれた相手 id を読む（要件 1.9）。
+/// 欄に書かれた相手 id を読む。
 ///
 /// 素の [`SurveyError::BadEntryId`] は綴りしか持たないので、**どの項目のどの欄**で
-/// 見つけたかを添え直す（要件 6.10）。手書きの台帳では、綴りだけ告げられても
+/// 見つけたかを添え直す。手書きの台帳では、綴りだけ告げられても
 /// どの行を直せばよいか分からない。
 fn reference_id(raw: &str, place: &str, key: &str, file: &str) -> Result<EntryId, SurveyError> {
     EntryId::parse(raw).map_err(|err| {
@@ -339,7 +337,7 @@ fn reference_id(raw: &str, place: &str, key: &str, file: &str) -> Result<EntryId
     })
 }
 
-/// 項目の失敗に添える場所。項目 id を必ず含む（要件 6.10）。
+/// 項目の失敗に添える場所。項目 id を必ず含む。
 fn place_of(raw_id: &str) -> String {
     format!("[{ENTRY_TABLE}.\"{raw_id}\"]")
 }

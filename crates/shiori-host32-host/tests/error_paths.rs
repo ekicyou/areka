@@ -1,19 +1,19 @@
-//! エラー経路の統合テスト（task 5.2・design.md Testing Strategy / Integration Tests 2・3・4・5）。
+//! エラー経路の統合テスト。
 //!
 //! 3 経路それぞれが**観測可能な形で失敗を報告**し、**親が無限待機しない**（すべて bounded）
 //! ことを、公開 API のみで検証する（`#[cfg(test)]` 限定の内部観測子には依存しない）:
 //!
-//! 1. **ハンドシェイク timeout（要件 3.4）**: helper を spawn せず HELLO も送らない親窓で
+//! 1. **ハンドシェイク timeout**: helper を spawn せず HELLO も送らない親窓で
 //!    `pump_until_hello_or(短 timeout)` が `None` を返し、上限時間で bounded に抜ける。
-//! 2. **応答なしの写し（要件 5.2）**: ハンドシェイクを（loopback で）成立させた後、
+//! 2. **応答なしの写し**: ハンドシェイクを（loopback で）成立させた後、
 //!    **応答しない相手**（親自身の HWND＝REQUEST に RESPONSE を返さない）へ `send_request` すると
 //!    `SendError::Ipc(IpcError::Timeout)` を返す。宛先は同じスレッドが作った窓ゆえ
 //!    `SendMessageTimeoutW` は WndProc を直に呼び、上限時間も `SMTO_ABORTIFHUNG` も効かない。
 //!    ここで確かめるのは「応答なし → slot が空 → `Timeout` に写る」だけで、上限時間そのものは
 //!    crate `shiori-host32-ipc` の `send_timeout_tests` が別スレッドの窓で確かめる。
-//! 3. （消した: helper の強制終了の見つけ方は `lifecycle_kill_e2e` が本物の握手で確かめ、helper が
+//! 3. （欠番: helper の強制終了の見つけ方は `lifecycle_kill_e2e` が本物の握手で確かめ、helper が
 //!    自分で終わる道の記録は `process_host_stderr_tests::real_helper_stderr_reaches_the_sink` が受ける）
-//! 4. **不正フレーム隔離（要件 2.5）**: 親窓へ**実 WM_COPYDATA** で「未知タグ」フレームを
+//! 4. **不正フレーム隔離**: 親窓へ**実 WM_COPYDATA** で「未知タグ」フレームを
 //!    **ハンドシェイク成立前**（helper_hwnd 未確定）に送り、破損フレームが HELLO と誤認されて
 //!    helper_hwnd を確定させることが無い＝上位（ハンドシェイク／`ResponseSlot`）へ渡らないことを、
 //!    公開 API のみで**非盲目**に観測する: 不正フレーム送出**後**でも `pump_until_hello_or(短 timeout)`
@@ -22,9 +22,7 @@
 //!    （窓が生きている＝crash していない）ことまで確認し、隔離と生存の両面を示す。
 //!    framing 関数の単体テストでは覆えない **WndProc 受信経路の隔離**を実配送で確かめる。
 //!
-//! ### 撤回した検証（cbData 不整合の実配送注入）と単体被覆への委譲
-//! 前ラウンドは「`cbData` と実長 不整合」フレームを `SendMessageW` で注入して WndProc 隔離を
-//! 検証しようとしたが、これは 2 つの理由で**撤回**した:
+//! ### cbData 不整合の実配送注入をしない理由
 //! 1. **UB**: `cbData`(宣言長) を実バッファ長より大きく詐称すると、受信側 `read_copydata`
 //!    （crate `shiori-host32-ipc` の `src/lib.rs`）が `from_raw_parts(lpData, cbData)` で**境界外読み取り（未定義動作）**を
 //!    起こす。テストに UB を残さない。
@@ -41,11 +39,9 @@
 //! - host 単体 `shiori-host32-host::parent_window::tests::classify_tests::length_mismatch_is_ignored_as_bad`
 //!   （WndProc 判定ロジック `classify_inbound` が長さ不整合を `IgnoreBad` にすることを検証）。
 //!
-//! 本統合テストは**到達可能な不正フレーム＝未知タグ**の WndProc 隔離を実配送検証し、長さ不整合は
-//! 上記単体被覆に委ねる。
+//! 本統合テストは**到達可能な不正フレーム＝未知タグ**の WndProc 隔離を実配送で検証する。
 //!
 //! 窓が要る経路（1・2・4）は 1 つのテスト関数で 1 つの親窓を使い、順に検証する。
-//!
 //! ## 実行（PowerShell・Git Bash 不可）
 //! ```powershell
 //! cargo test -p shiori-host32-host --test error_paths
@@ -64,7 +60,7 @@ mod common;
 use common::HANDSHAKE_TIMEOUT;
 
 /// 任意 `dw_data`（種別タグ生値）の実 WM_COPYDATA フレームを `SendMessageW` で `target` へ
-/// **同期配送**する（**未知タグ**の不正フレームを実配送するために使う・要件 2.5 の WndProc 隔離検証）。
+/// **同期配送**する（**未知タグ**の不正フレームを実配送するために使う）。
 ///
 /// proto の `send_copydata` は既知 `MsgTag` しか載せられないため、未知タグ（例 `0xDEAD`）の
 /// フレームを注入するにはこの生ヘルパが要る。
@@ -73,7 +69,7 @@ use common::HANDSHAKE_TIMEOUT;
 /// これにより受信側 `read_copydata`（crate `shiori-host32-ipc` の `src/lib.rs`）が `from_raw_parts(lpData, cbData)` を
 /// 呼んでも境界外読み取りが起きない。`cbData` を実長より大きく詐称する（＝長さ不整合注入）ことは
 /// **意図的に行わない**（UB を招き、かつ実受信経路で `LengthMismatch` に届くのは `lpData` が空の特殊な形だけのため。
-/// ファイル冒頭「撤回した検証」参照）。長さ不整合の検出は proto/host の単体テストに委譲する。
+/// ファイル冒頭「cbData 不整合の実配送注入をしない理由」参照）。長さ不整合の検出は proto/host の単体テストに委譲する。
 ///
 /// `SendMessageW` は同期ゆえ、復帰時点で対象 WndProc の処理は完了している（観測が決定的）。
 ///
@@ -85,7 +81,6 @@ unsafe fn send_raw_frame_with_tag(target_hwnd: u32, dw_data: usize, data: &[u8])
     let target = hwnd_from_u32(target_hwnd);
     let cds = COPYDATASTRUCT {
         dwData: dw_data,
-        // UB 回避: cbData は実バッファ長ちょうど（受信側 from_raw_parts が境界内）。
         cbData: data.len() as u32,
         lpData: data.as_ptr() as *mut core::ffi::c_void,
     };
@@ -106,7 +101,7 @@ unsafe fn send_raw_frame_with_tag(target_hwnd: u32, dw_data: usize, data: &[u8])
 // ---------------------------------------------------------------------------
 
 /// 窓を要する 3 経路（ハンドシェイク timeout / 不正フレーム隔離 / 応答なしの写し）を
-/// **単一の親窓**で順に検証する（design.md Integration Tests 2・3・5・要件 3.4 / 5.2 / 2.5）。
+/// **単一の親窓**で順に検証する。
 ///
 /// pump は上限時間で bounded に復帰する。send_request は同じスレッドの窓へ送るため WndProc が
 /// 直に呼ばれて返る（上限時間の検証は shiori-host32-ipc の send_timeout_tests）。
@@ -122,7 +117,7 @@ fn window_error_paths_handshake_timeout_no_response_and_corrupt_frame_isolation(
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
-    // === 経路 1: ハンドシェイク timeout（要件 3.4） ===================================
+    // === 経路 1: ハンドシェイク timeout ===============================================
     // helper を spawn せず HELLO も来ない状態で pump は上限時間で None を返す。
     let none = parent.pump_until_hello_or(Duration::from_millis(150));
     assert_eq!(
@@ -130,13 +125,13 @@ fn window_error_paths_handshake_timeout_no_response_and_corrupt_frame_isolation(
         "HELLO 未受領なら pump_until_hello_or は None を返す（ハンドシェイク timeout・要件 3.4）"
     );
 
-    // === 経路 4: 不正フレーム隔離（要件 2.5・ハンドシェイク成立前に非盲目観測） =========
+    // === 経路 4: 不正フレーム隔離（ハンドシェイク成立前に非盲目観測） ===============
     // ハンドシェイク前（helper_hwnd 未確定）に、実 WM_COPYDATA で **未知タグ**（既知 MsgTag に無い
     // dwData = 0xDEAD）フレームを親窓へ送る。cbData は実バッファ長ちょうど（UB 回避）。
     //
     // 隔離の観測（公開 API・非盲目）: 不正フレーム送出**後**でも `pump_until_hello_or(短 timeout)` は
     // 依然 None を返す。＝不正フレームは WndProc で `IgnoreBad` に分類され、HELLO と誤認されて
-    // helper_hwnd を確定させることが無い（上位/ハンドシェイクへ漏れない・要件 2.5）。この観測は
+    // helper_hwnd を確定させることが無い（上位/ハンドシェイクへ漏れない）。この観測は
     // ハンドシェイク自体が成立しないゆえ `send_request` の `slot.clear()` に盲目化されない。
     //
     // RED 実証: この未知タグ注入が誤って RecordHello 扱いされる（隔離が壊れる）と、直後の pump は
@@ -182,7 +177,7 @@ fn window_error_paths_handshake_timeout_no_response_and_corrupt_frame_isolation(
          （窓が生存＝crash していない）"
     );
 
-    // === 経路 2: 応答なしの写し（要件 5.2） ==========================================
+    // === 経路 2: 応答なしの写し ======================================================
     // 応答しない相手（親自身）へ REQUEST を送る。親 WndProc は REQUEST を記録のみで RESPONSE を
     // store しない → slot 空 → Timeout。同じスレッドの窓ゆえ WndProc は直に呼ばれ、上限時間は
     // 効かない（上限時間は shiori-host32-ipc の send_timeout_tests が確かめる）。

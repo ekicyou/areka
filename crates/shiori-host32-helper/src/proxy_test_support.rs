@@ -1,4 +1,4 @@
-//! helper のテストの共通の道具（audit-shiori-host32 U1・指摘 3・21）。
+//! helper のテストの共通の道具。
 //!
 //! - 成果物の探し方: [`resolve_testdll`]・[`i686_target_base`]。env の指定を先に見て、無ければ
 //!   ワークスペースの `target\i686-pc-windows-msvc\{debug,release}` を探す。見つからなければ明確な
@@ -16,8 +16,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 fn workspace_root() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     manifest_dir
-        .parent() // crates/
-        .and_then(|p| p.parent()) // ワークスペースルート
+        .parent()
+        .and_then(|p| p.parent())
         .map(Path::to_path_buf)
         .unwrap_or(manifest_dir)
 }
@@ -29,7 +29,7 @@ pub(crate) fn i686_target_base() -> PathBuf {
 
 /// testdll の `shiori.dll` を解決する。
 /// 優先順: env `HOST32_TESTDLL_DLL` → ワークスペースの i686 の debug／release 成果物。
-/// **silent skip 禁止**: 見つからなければ明確に panic（設計判断 (d)）。
+/// 見つからなければ明確に panic する（黙って飛ばして緑を装わない）。
 pub(crate) fn resolve_testdll() -> PathBuf {
     if let Ok(p) = std::env::var("HOST32_TESTDLL_DLL") {
         let path = PathBuf::from(p);

@@ -1,17 +1,16 @@
-//! 構造の検査（要件 3.1・3.2・3.5・6.3・6.4）。
+//! 構造の検査。
 //!
-//! 台帳とカタログの対応・ページの割り当て・台帳の並び順を判定する。設計 check 節の
-//! 「判定の内訳」から、この段が受け持つのは次の 7 種である。
+//! 台帳とカタログの対応・ページの割り当て・台帳の並び順を判定する。この段が受け持つのは
+//! 次の 7 種である。
 //!
-//! - `LedgerIdNotInCatalog`（6.3）——台帳の id がカタログに無い
-//! - `CatalogIdMissingFromLedgers` / `CatalogIdInMultipleLedgers`（6.4・3.2）
-//! - `LedgerIdPageMismatch` / `LedgerPagesMismatch`（3.1・3.2）
-//! - `LedgerOutOfOrder`（3.3a・付録 A・設計 D-12）
-//! - `PageNotAssigned`（3.5）
+//! - `LedgerIdNotInCatalog`——台帳の id がカタログに無い
+//! - `CatalogIdMissingFromLedgers` / `CatalogIdInMultipleLedgers`
+//! - `LedgerIdPageMismatch` / `LedgerPagesMismatch`
+//! - `LedgerOutOfOrder`
+//! - `PageNotAssigned`
 //!
-//! ここは純粋層で、ファイルにもスナップショットにも触らない（要件 6.2）。失敗も
-//! しない——食い違いは [`Finding`] として全部集めて返し、1 件目で止めない（設計
-//! Error Handling）。
+//! 純粋層で、ファイルにもスナップショットにも触らない。失敗もしない。食い違いは
+//! [`Finding`] として全部集めて返し、1 件目で止めない。
 //!
 //! # 担当の正本は割り当て表であって、台帳の前置きではない
 //!
@@ -19,16 +18,15 @@
 //! 台帳の `[ledger].pages` を正本にすると、前置きが誤っている台帳では項目の側が
 //! 「正しい」ことになってしまい、誤りが誤りを隠す。前置きそのものの誤りは
 //! `LedgerPagesMismatch` が**集合として**別に拾い、同じページの重複も「余分」に出す
-//! （要件 3.3a により前置きは以後バイト列のまま写されるので、ここで守らないと永久に
-//! 残る）。
+//! （前置きは以後バイト列のまま写されるので、ここで守らないと永久に残る）。
 //!
 //! # 並び順は本文の順を見る
 //!
 //! [`Ledger::entries`] は id を鍵にした表なので作りからして昇順であり、そこを見ても
 //! 何も判らない。見るのは [`Ledger::file_order`]（本文に現れた順）である。判定は
-//! **厳密な**昇順で、同じ id が 2 回現れても落ちる（設計 D-12）。備考の複数行文字列の
-//! 中に既存 id と同じ綴りの見出し行が隠れた場合、塊の切り分けの較正（鍵の集合との
-//! 一致）では見抜けず、この厳密さだけが穴を閉じる。
+//! **厳密な**昇順で、同じ id が 2 回現れても落ちる。備考の複数行文字列の中に既存 id と
+//! 同じ綴りの見出し行が隠れた場合、塊の切り分けの較正（鍵の集合との一致）では見抜けず、
+//! この厳密さだけが穴を閉じる。
 //!
 //! # `[ledger].domain` の食い違いはここでは見ない
 //!
@@ -56,7 +54,7 @@ fn list_pages(pages: &[&str]) -> String {
 ///
 /// 並びは決まっている——台帳を渡された順に見て、1 本ごとに「前置き → 項目（id の
 /// byte 昇順）→ 本文の順」を見る。最後にカタログの側を id の byte 昇順で見る。
-/// 同じ入力なら同じ並びで返る（要件 7.3 の決まり方を検査の出力にも通す）。
+/// 同じ入力なら同じ並びで返る。
 pub fn check(input: &CheckInput) -> Vec<Finding> {
     let mut findings = Vec::new();
     for ledger in input.ledgers {
@@ -68,9 +66,9 @@ pub fn check(input: &CheckInput) -> Vec<Finding> {
     findings
 }
 
-/// 前置きの担当ページが割り当て表と**集合として**一致するか（要件 3.1）。
+/// 前置きの担当ページが割り当て表と**集合として**一致するか。
 ///
-/// 集合で比べるのは、並びの正しさが初期台帳の生成の担当だからである（要件 3.3a）。
+/// 集合で比べるのは、並びの正しさが初期台帳の生成の担当だからである。
 /// ただし集合にすると重複が消えるので、2 度目に現れたページは「余分」に数える。
 fn check_preamble_pages(input: &CheckInput, ledger: &Ledger, findings: &mut Vec<Finding>) {
     let mut declared: BTreeSet<&PageName> = BTreeSet::new();
@@ -109,8 +107,7 @@ fn check_preamble_pages(input: &CheckInput, ledger: &Ledger, findings: &mut Vec<
     ));
 }
 
-/// 台帳の項目 1 つずつを、カタログの実在（要件 6.3）と担当ページ（要件 3.1・3.2）で
-/// 見る。
+/// 台帳の項目 1 つずつを、カタログの実在と担当ページで見る。
 fn check_entries(input: &CheckInput, ledger: &Ledger, findings: &mut Vec<Finding>) {
     for id in ledger.entries.keys() {
         if !input.catalog.entries.contains_key(id) {
@@ -149,7 +146,7 @@ fn check_entries(input: &CheckInput, ledger: &Ledger, findings: &mut Vec<Finding
     }
 }
 
-/// 本文に現れた順が id の byte **厳密**昇順か（要件 3.3a・設計 D-12）。
+/// 本文に現れた順が id の byte **厳密**昇順か。
 ///
 /// 破っている側（後ろに置かれた id）を挙げる。等しい隣り合わせも落とす。
 fn check_file_order(ledger: &Ledger, findings: &mut Vec<Finding>) {
@@ -166,8 +163,7 @@ fn check_file_order(ledger: &Ledger, findings: &mut Vec<Finding>) {
     }
 }
 
-/// カタログの側から見る——id がちょうど 1 つの台帳に現れるか（要件 6.4・3.2）と、
-/// ページに割り当てがあるか（要件 3.5）。
+/// カタログの側から見る——id がちょうど 1 つの台帳に現れるかと、ページに割り当てがあるか。
 fn check_catalog_side(input: &CheckInput, findings: &mut Vec<Finding>) {
     for id in input.catalog.entries.keys() {
         let owners = owning_domains(input, id);
@@ -209,13 +205,13 @@ fn check_catalog_side(input: &CheckInput, findings: &mut Vec<Finding>) {
 /// その id を持っている台帳のドメイン（重複を畳まない）。
 ///
 /// 並びは `Domain` の導出された `Ord`＝宣言順に並べ直したもので、これは
-/// [`Domain::ALL`] の並びと同じである。渡された台帳の並びは結果に出ない（要件 7.3。
-/// 見本の台帳は最初から [`Domain::ALL`] の順なので、この並べ直しが効いていることは
-/// 逆順で通す在中テストだけが確かめられる）。
+/// [`Domain::ALL`] の並びと同じである。渡された台帳の並びは結果に出ない（見本の台帳は
+/// 最初から [`Domain::ALL`] の順なので、この並べ直しが効いていることは逆順で通す
+/// 在中テストだけが確かめられる）。
 ///
 /// 畳まないのは、同じドメインの台帳が 2 本渡された場合も「2 つ以上の台帳にある」と
 /// 言うためである。1 本の台帳の中で同じ id が 2 度現れる形は [`Ledger::entries`] が
-/// 表である以上作れず、本文の側の重複は `LedgerOutOfOrder` が拾う（設計 D-12）。
+/// 表である以上作れず、本文の側の重複は `LedgerOutOfOrder` が拾う。
 fn owning_domains(input: &CheckInput, id: &EntryId) -> Vec<Domain> {
     let mut owners: Vec<Domain> = input
         .ledgers
@@ -223,7 +219,7 @@ fn owning_domains(input: &CheckInput, id: &EntryId) -> Vec<Domain> {
         .filter(|ledger| ledger.entries.contains_key(id))
         .map(|ledger| ledger.domain)
         .collect();
-    // 渡された台帳の並びに結果を左右させない（要件 7.3）。
+    // 渡された台帳の並びに結果を左右させない。
     owners.sort();
     owners
 }

@@ -1,31 +1,31 @@
-//! host-32 先進坑: **ShioriByteProxy**（design.md §445–495）。
+//! host-32 先進坑: **ShioriByteProxy**。
 //!
 //! `pasta.dll`（PE 0x014C / i686・cdecl flat-C）を `LoadLibraryW`＋`GetProcAddress` で動的
 //! ロードし、`load`/`unload`/`request` を解決して駆動する**バイト proxy**。SHIORI3 ロジック
 //! （OnBoot 組立・`Value:` parse）は一切持たず、所有権・charset 規約を守ってバイト列を FFI
-//! 境界の向こうへ運ぶだけに徹する（requirements 3.1–3.4, 4.2 / design §445–495）。
+//! 境界の向こうへ運ぶだけに徹する。
 //!
 //! ## 確定 ABI（pasta 実ソース `vendors/pasta/crates/pasta_shiori/src/windows.rs` で確認）
-//! - `load(hdir: HGLOBAL, len: usize) -> bool`（windows.rs:50・`#[unsafe(no_mangle)] pub extern "C"`）
-//! - `unload() -> bool`（windows.rs:63・同上）
-//! - `request(req: HGLOBAL, len: *mut usize) -> HGLOBAL`（windows.rs:76・`len: &mut usize`＝ABI 同一）
-//! - 返り値は Rust `bool`(1 byte) で Win32 BOOL(i32) ではない（design §468）。
+//! - `load(hdir: HGLOBAL, len: usize) -> bool`（`#[unsafe(no_mangle)] pub extern "C"`）
+//! - `unload() -> bool`（同上）
+//! - `request(req: HGLOBAL, len: *mut usize) -> HGLOBAL`（`len: &mut usize`＝ABI 同一）
+//! - 返り値は Rust `bool`(1 byte) で Win32 BOOL(i32) ではない。
 //!
 //! ## HGLOBAL 規約（hglobal/mod.rs で確認）
 //! - 確保は `GlobalAlloc(GMEM_FIXED=0, len)`。ハンドルは生ポインタとして直接使える
-//!   （`h as *mut u8`・mod.rs:53–54。GlobalLock 不要）。
+//!   （`h as *mut u8`。GlobalLock 不要）。
 //! - **入力 HGLOBAL は DLL(callee) が解放**: `load`/`request` は受領ハンドルを
-//!   `ShioriString::capture(..)` し Drop で `GlobalFree` する（mod.rs:31–47, windows.rs:145/157）。
+//!   `ShioriString::capture(..)` し Drop で `GlobalFree` する。
 //!   ゆえにホストは入力 HGLOBAL を**二重解放してはならない**。
 //! - **`request` 応答 HGLOBAL はホスト(caller) が解放**: DLL は `clone_from_str_nofree`
-//!   （has_free=false・mod.rs:81）で返すため解放しない。ホストが `GlobalFree` する。
+//!   （has_free=false）で返すため解放しない。ホストが `GlobalFree` する。
 //!
-//! ## charset 非対称（design §492–493・hglobal/mod.rs:122/133 で確認）
+//! ## charset 非対称（hglobal/mod.rs で確認）
 //! - `load` の ghostdir は **ANSI(Shift_JIS / CP_ACP)**（pasta `to_ansi_str()`＝`CP_ACP`）。
 //! - `request` は **UTF-8**（pasta `to_utf8_str()`）。ゆえに本 proxy も load 引数を CP_ACP へ
 //!   エンコードして渡す（pasta の `WideCharToMultiByte(CP_ACP, ..)` と対称）。
 //!
-//! `unsafe` 境界は本コンポーネントに集約する（design §489）。
+//! `unsafe` 境界は本コンポーネントに集約する。
 
 use std::path::Path;
 
@@ -35,16 +35,16 @@ use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows::Win32::System::Memory::{GLOBAL_ALLOC_FLAGS, GlobalAlloc};
 use windows::core::{HSTRING, PCSTR};
 
-/// `GlobalAlloc` の `GMEM_FIXED`（=0）。pasta も同値で確保する（hglobal/mod.rs:13/53）。
+/// `GlobalAlloc` の `GMEM_FIXED`（=0）。pasta も同値で確保する。
 /// `GMEM_FIXED` ではハンドル＝先頭ポインタゆえ `h as *mut u8` で直接読み書きできる。
 const GMEM_FIXED: GLOBAL_ALLOC_FLAGS = GLOBAL_ALLOC_FLAGS(0);
 
-// flat-C cdecl シグネチャ（design §469–471・pasta windows.rs:50/63/76 で確定）。
+// flat-C cdecl シグネチャ（pasta windows.rs で確定）。
 type LoadFn = unsafe extern "C" fn(hdir: HGLOBAL, len: usize) -> bool;
 type UnloadFn = unsafe extern "C" fn() -> bool;
 type RequestFn = unsafe extern "C" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
 
-/// ロード/解決の失敗種別（design §485・requirements 3.4）。観測可能な形で返す（panic しない）。
+/// ロード/解決の失敗種別。観測可能な形で返す（panic しない）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProxyError {
     /// `LoadLibraryW` 失敗（dll 不在・ビットネス不一致など）。
@@ -73,7 +73,7 @@ pub struct ShioriByteProxy;
 
 impl ShioriByteProxy {
     /// `pasta.dll` を `LoadLibraryW` でロードし、3 エントリを `GetProcAddress` で解決して
-    /// flat-C fn ポインタへ `transmute` する（design §476）。失敗は `ProxyError` で返す。
+    /// flat-C fn ポインタへ `transmute` する。失敗は `ProxyError` で返す。
     /// エントリが引けなかったら、読んだ DLL を `FreeLibrary` してから返す。
     pub fn load_dll(dll_path: &Path) -> Result<ShioriEntries, ProxyError> {
         let wide = HSTRING::from(dll_path.as_os_str());
@@ -81,7 +81,7 @@ impl ShioriByteProxy {
         let module = unsafe { LoadLibraryW(&wide) }.map_err(|_| ProxyError::LoadLibraryFailed)?;
 
         // SAFETY: `module` は直前にロードした有効ハンドル。各シンボルは pasta が
-        // `#[unsafe(no_mangle)] pub extern "C"` で公開（windows.rs:50/63/76）＝装飾なし C 名。
+        // `#[unsafe(no_mangle)] pub extern "C"` で公開＝装飾なし C 名。
         let entry = |name: &'static str, cname: &[u8]| {
             unsafe { GetProcAddress(module, PCSTR(cname.as_ptr())) }.ok_or_else(|| {
                 // SAFETY: `module` は上で読んだ有効ハンドルで、まだ誰にも渡していない。
@@ -95,7 +95,7 @@ impl ShioriByteProxy {
         let unload = entry("unload", b"unload\0")?;
         let request = entry("request", b"request\0")?;
 
-        // SAFETY: pasta 実ソースで確定した flat-C cdecl 署名へ transmute する（design §469–471）。
+        // SAFETY: pasta 実ソースで確定した flat-C cdecl 署名へ transmute する。
         let entries = ShioriEntries {
             module,
             load: unsafe { std::mem::transmute::<_, LoadFn>(load) },
@@ -105,17 +105,14 @@ impl ShioriByteProxy {
         Ok(entries)
     }
 
-    /// `ghostdir` を **ANSI(Shift_JIS / CP_ACP)** で HGLOBAL 化し `load(hdir, len)` を呼ぶ
-    /// （design §477・charset 非対称）。入力 HGLOBAL は **DLL(callee) が解放**するため
-    /// ホストは解放しない（二重解放ガード＝確保したハンドルは callee へ move する）。
+    /// `ghostdir` を **ANSI(Shift_JIS / CP_ACP)** で HGLOBAL 化し `load(hdir, len)` を呼ぶ。
+    /// 入力 HGLOBAL は **DLL(callee) が解放**するので、ホストは解放しない。
     pub fn shiori_load(e: &ShioriEntries, ghostdir: &Path) -> Result<(), ProxyError> {
         let ansi = ansi_encode(ghostdir)?;
-        // 入力 HGLOBAL を確保し ANSI バイトを書き込む。所有権は load() の callee へ渡す。
         let h = global_alloc_copy(&ansi)?;
         let len = ansi.len();
         // SAFETY: `h` は `len` バイトの有効 HGLOBAL（GMEM_FIXED ゆえポインタ＝ハンドル）。
-        // pasta は `ShioriString::capture(h, len)` で受領し Drop で `GlobalFree` する
-        // （windows.rs:145・hglobal mod.rs:31–47）＝ホストは解放しない。
+        // pasta は `ShioriString::capture(h, len)` で受領し Drop で `GlobalFree` する＝ホストは解放しない。
         let ok = unsafe { (e.load)(h, len) };
         if ok {
             Ok(())
@@ -124,24 +121,21 @@ impl ShioriByteProxy {
         }
     }
 
-    /// `req`（**UTF-8** SHIORI3 ワイヤ）を HGLOBAL 化し `request(req, &mut len)` を呼ぶ
-    /// （design §479–481）。`len` は in/out: 呼び出し前に要求長を入れ、応答長で上書きされる
-    /// （pasta `request_impl` が `*len` を入力長として読む・windows.rs:118）。入力 HGLOBAL は
-    /// DLL が解放。**応答 HGLOBAL はホストが `GlobalFree`** する（mod.rs:81 nofree）。
+    /// `req`（**UTF-8** SHIORI3 ワイヤ）を HGLOBAL 化し `request(req, &mut len)` を呼ぶ。
+    /// `len` は in/out: 呼び出し前に要求長を入れ、応答長で上書きされる（pasta `request_impl` が
+    /// `*len` を入力長として読む）。入力 HGLOBAL は DLL が解放。**応答 HGLOBAL はホストが
+    /// `GlobalFree`** する。
     pub fn shiori_request(e: &ShioriEntries, req: &[u8]) -> Result<Vec<u8>, ProxyError> {
         let hreq = global_alloc_copy(req)?;
-        // in/out: 入力長を渡し、応答長で上書きされる。
         let mut len: usize = req.len();
         // SAFETY: `hreq` は `req.len()` バイトの有効 HGLOBAL。pasta は capture して Drop で解放
-        // （windows.rs:157）＝ホストは入力を解放しない。応答 HGLOBAL の所有権はホストへ移る。
+        // ＝ホストは入力を解放しない。応答 HGLOBAL の所有権はホストへ移る。
         let hres = unsafe { (e.request)(hreq, &mut len as *mut usize) };
         if hres.is_invalid() {
             return Err(ProxyError::RequestFailed);
         }
-        // 応答 HGLOBAL（GMEM_FIXED ゆえポインタ＝ハンドル）から len バイトを Vec へコピーし、
-        // 直ちに `GlobalFree` する（応答はホスト所有・mod.rs:81 nofree）。
-        // SAFETY: `hres` は pasta が `clone_from_slice_impl`(GMEM_FIXED) で確保した有効領域、
-        // `len` はその実バイト長（windows.rs:119 で書き戻される）。
+        // SAFETY: `hres` は pasta が `clone_from_slice_impl`(GMEM_FIXED) で確保した有効領域
+        // （ポインタ＝ハンドル）、`len` はその実バイト長（pasta が書き戻す）。
         let out = unsafe {
             let p = hres.0 as *const u8;
             std::slice::from_raw_parts(p, len).to_vec()
@@ -156,7 +150,7 @@ impl ShioriByteProxy {
     /// `unload()` を呼ぶ。DLL の解放は `ShioriEntries` が捨てられるときにする。
     pub fn shiori_unload(e: &ShioriEntries) {
         // SAFETY: `unload` は解決済み flat-C エントリ。
-        // pasta の unload は内部エラーでも true を返す設計（windows.rs:96–105）ゆえ戻り値は見ない。
+        // pasta の unload は内部エラーでも true を返す設計ゆえ戻り値は見ない。
         let _ = unsafe { (e.unload)() };
     }
 }
@@ -170,8 +164,7 @@ impl Drop for ShioriEntries {
     }
 }
 
-/// `bytes` を `GlobalAlloc(GMEM_FIXED)` で確保した HGLOBAL へコピーして返す（pasta と同方式・
-/// mod.rs:50–58）。`GMEM_FIXED` ゆえハンドル＝先頭ポインタで直接書き込める。
+/// `bytes` を `GlobalAlloc(GMEM_FIXED)` で確保した HGLOBAL へコピーして返す（pasta と同方式）。
 fn global_alloc_copy(bytes: &[u8]) -> Result<HGLOBAL, ProxyError> {
     // SAFETY: GlobalAlloc は失敗時 null（HGLOBAL(null)）を返す＝下で検査する。
     let h = unsafe { GlobalAlloc(GMEM_FIXED, bytes.len()) }
@@ -188,16 +181,14 @@ fn global_alloc_copy(bytes: &[u8]) -> Result<HGLOBAL, ProxyError> {
 }
 
 /// `path` を **ANSI(Shift_JIS / CP_ACP)** バイト列へエンコードする（pasta `to_ansi_str` の逆＝
-/// `WideCharToMultiByte(CP_ACP, ..)`・hglobal/windows_api.rs:133 と対称）。先進坑の ghostdir は
-/// ASCII パスゆえ ANSI≡UTF-8 バイト等価だが、正準は ANSI ゆえ CP_ACP で確実に往復させる
-/// （design §493・本坑/非 ASCII 対応の足場）。
+/// `WideCharToMultiByte(CP_ACP, ..)`）。先進坑の ghostdir は ASCII パスで ANSI と UTF-8 が
+/// 同じバイトになるが、正準は ANSI なので CP_ACP で往復させる（非 ASCII 対応の足場）。
 fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
     use std::os::windows::ffi::OsStrExt;
     let wide: Vec<u16> = path.as_os_str().encode_wide().collect();
     if wide.is_empty() {
         return Ok(Vec::new());
     }
-    // 必要バイト数を問い合わせる。
     // SAFETY: `wide` は有効な UTF-16 スライス。出力 null＝長さ問い合わせ。
     let needed =
         unsafe { WideCharToMultiByte(CP_ACP, WC_COMPOSITECHECK, &wide, None, PCSTR::null(), None) };
@@ -223,10 +214,8 @@ fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
     Ok(buf)
 }
 
-/// helper の `main()` から呼べる i686 セルフテスト観測（go 基準(1) precursor・requirements 3.3）。
-///
-/// helper バイナリの実行時に `load(ghostdir)` が無 crash で完了することを観測する。
-/// 戻り値: 成否メッセージ（親が標準出力で観測）。
+/// helper の `main()` から呼ぶ i686 セルフテスト。`load(ghostdir)` がクラッシュせず完了するかを見て、
+/// 成否メッセージを返す。
 pub fn selftest_load(ghostdir: &Path) -> Result<String, ProxyError> {
     let dll = ghostdir.join("pasta.dll");
     let entries = ShioriByteProxy::load_dll(&dll)?;
@@ -243,9 +232,8 @@ pub fn selftest_load(ghostdir: &Path) -> Result<String, ProxyError> {
 mod tests {
     use super::*;
 
-    /// go 基準(1) precursor（requirements 3.1–3.3）: i686 helper 内で pasta.dll をロードし
-    /// 3 エントリを解決、`load(ghostdir)` がクラッシュせず完了することを観測する。
-    /// 完了後に `unload` を呼ぶ（ライブラリは `entries` を捨てるときに解放）。
+    /// i686 helper 内で pasta.dll をロードし 3 エントリを解決、`load(ghostdir)` がクラッシュせず
+    /// 完了することを確かめる。
     ///
     /// 本物の 32bit `pasta.dll` を読むので x64 では走れない（i686 の組み立てだけで走る）。
     #[cfg(target_arch = "x86")]
@@ -258,7 +246,7 @@ mod tests {
         ShioriByteProxy::shiori_unload(&entries);
     }
 
-    /// エントリが引けない DLL を読んだら、`load_dll` は解放してから `EntryNotFound("load")` を返す（指摘 18）。
+    /// エントリが引けない DLL を読んだら、`load_dll` は解放してから `EntryNotFound("load")` を返す。
     /// `msimg32.dll` は System32（i686 では SysWOW64）にあり `load`／`unload`／`request` を出さず、
     /// テストの exe は読まない。前後で `GetModuleHandleW` が無いことで解放を確かめる。
     #[test]
@@ -276,7 +264,7 @@ mod tests {
         );
     }
 
-    /// ANSI(CP_ACP) エンコードが ASCII パスで UTF-8 バイト等価になること（design §493）。
+    /// ANSI(CP_ACP) エンコードが ASCII パスで UTF-8 バイト等価になること。
     #[test]
     fn ansi_encode_ascii_is_byte_equivalent() {
         let p = Path::new("C:/ghost/master/");

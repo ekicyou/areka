@@ -1,11 +1,12 @@
-//! Task 5.2: プロキシの i686 単体テスト（design §387 Validation・Testing Strategy Unit #6・
-//! 確定設計判断 (d)）。4 節立て:
+//! プロキシの単体テスト。
 //! 1. 純関数部（コードページ符号化）の決定的検証。
-//! 2. `kernel32.dll` への load で `EntryNotFound` を決定的に証明（エクスポート欠落態様・R6.2）。
+//! 2. `kernel32.dll` への load で `EntryNotFound` を決定的に証明（エクスポート欠落）。相対パスを断る。
 //! 3. testdll を直接 `load`→`drop` し、courtesy unload の実呼出（観測マーカー）と無 panic を確認
-//!    （R2.2・E2E では Drop 経路が実行されない補完）。あわせて、別のフォルダから読んだ写しの
+//!    （E2E では Drop の道が走らないので補う）。あわせて、別のフォルダから読んだ写しの
 //!    unload がその印を書かないことを確認する。
 //! 4. testdll 越しの `request` の往復（GET・NOTIFY）。
+//! 5. 後始末の失敗を種類で返す。
+//! 6. 応答の長さと空の応答。
 //!
 //! 偽の DLL を load するテストを足すときの決まりは、錠 `TESTDLL_SERIAL` の説明にある。
 
@@ -42,7 +43,7 @@ unsafe extern "C" fn dummy_load(_hdir: HGLOBAL, _len: usize) -> u8 {
     1
 }
 
-/// `load` の枝は日本語の道を既定コードページ（CP_ACP）のバイト列で渡す（指摘 19）。UTF-8 で渡すと、
+/// `load` の枝は日本語の道を既定コードページ（CP_ACP）のバイト列で渡す。UTF-8 で渡すと、
 /// CP932 の PC で YAYA や華和梨が日本語のフォルダの道を化かして読む。CP_ACP で表せない PC でも
 /// 両方が同じ結果になる（それでも UTF-8 に替えれば食い違う）。
 #[test]
@@ -71,13 +72,12 @@ fn mixed_japanese_encodes_to_shift_jis_multibyte() {
 }
 
 // ---------------------------------------------------------------------
-// 2. kernel32.dll で EntryNotFound（R6.2・設計判断 (d)）
+// 2. kernel32.dll で EntryNotFound
 // ---------------------------------------------------------------------
 
-/// `kernel32.dll` は必ず存在し LoadLibraryExW は成功するが、`load`/`unload`/`request` の
-/// SHIORI エクスポートを持たない。ゆえに `ShioriByteProxy::load` は解決段で
-/// `ProxyError::EntryNotFound` を**決定的**に返す（エクスポート欠落態様の証明・R6.2）。
-/// 半構築を残さないため内部で FreeLibrary 済み（Err = 状態残さず）。
+/// `kernel32.dll` は必ず在って LoadLibraryExW は成功するが、`load`/`unload`/`request` の
+/// SHIORI エクスポートを持たないので、`ShioriByteProxy::load` は解決段で
+/// `ProxyError::EntryNotFound` を**決定的**に返す。
 #[test]
 fn kernel32_yields_entry_not_found() {
     let dll = Path::new(r"C:\Windows\System32\kernel32.dll");
@@ -85,11 +85,9 @@ fn kernel32_yields_entry_not_found() {
     let result = ShioriByteProxy::load(dll, root.path());
     match result {
         Err(ProxyError::EntryNotFound(sym)) => {
-            // 初期化の入口 `loadu`・`load` が両方無いときの名札は "load"。
             assert_eq!(sym, "load", "kernel32 は SHIORI load を持たない");
         }
-        // Ok は kernel32 が SHIORI エクスポートを持たない以上あり得ない。他 ProxyError も不可。
-        // ShioriByteProxy は Debug 非実装ゆえ Result 全体は整形せず、Err 変種のみ整形する。
+        // ShioriByteProxy は Debug 非実装なので Result 全体は整形せず、Err 変種のみ整形する。
         Err(e) => panic!("expected EntryNotFound(\"load\"), got other error {e:?}"),
         Ok(_) => panic!("expected EntryNotFound(\"load\"), but load unexpectedly succeeded"),
     }
@@ -113,7 +111,7 @@ fn relative_from_cwd(path: &Path) -> std::path::PathBuf {
     relative
 }
 
-/// 件 1（指摘 1・要件 7.1・7.4）: 依存の探し先を読む DLL のフォルダとシステムの既定に絞る旗は
+/// 依存の探し先を読む DLL のフォルダとシステムの既定に絞る旗は
 /// 絶対パスを要るので、作業フォルダからの相対パスは `LoadLibraryFailed` になり、同じ DLL の絶対パスは
 /// 読める。素の `LoadLibraryW` に戻すと相対パスで読めて赤になる。
 /// 偽の DLL を自分だけのフォルダへ写して読み、印の環境変数は差さないので錠は取らない。
@@ -141,12 +139,12 @@ fn a_relative_dll_path_is_refused() {
 }
 
 // ---------------------------------------------------------------------
-// 3. testdll 直接 load→drop で courtesy unload 実証（R2.2・E2E 補完）
+// 3. testdll 直接 load→drop で courtesy unload を実証
 // ---------------------------------------------------------------------
 
 /// testdll を直接 `load`→`drop` し、Drop の courtesy `unload` が実呼出されること
-/// （unload 観測マーカーのファイル作成）と、Drop 全体が無 panic で完了することを確認する
-/// （R2.2 の受入証拠・E2E は helper をプロセスごと落とすため Drop が走らない、その補完）。
+/// （unload 観測マーカーのファイル作成）と、Drop 全体が無 panic で完了することを確かめる
+/// （E2E は helper をプロセスごと落とすため Drop が走らない、その補完）。
 ///
 /// 印の環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` を差すので錠 `TESTDLL_SERIAL` を取る。他のテストの
 /// unload は、偽の DLL の置き場の判定（印の親フォルダが自分の置き場と同じときだけ書く）によって、
@@ -157,14 +155,11 @@ fn a_relative_dll_path_is_refused() {
     ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
 )]
 fn testdll_drop_invokes_courtesy_unload() {
-    // 印の環境変数を差すテスト同士を直列化。汚染ロックは無視して継続。
     let _serial = TESTDLL_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-    // テストの根を load_dir とし、そこへ shiori.dll を写す（絶対 dll_path＝load_dir\shiori.dll・
-    // cwd=load_dir 慣習の縮図）。根は proxy より先に作るので、proxy の後に消える。
+    // 根は proxy より先に作るので、proxy の後に消える。
     let (root, dll_path) = copy_testdll_into_unique_target_dir("drop");
     let load_dir = root.path();
 
-    // unload 観測マーカーの一時パス（load 前に未作成であること）。
     let marker = load_dir.join("unload.marker");
     assert!(!marker.exists(), "marker は load 前に未作成");
 
@@ -175,13 +170,10 @@ fn testdll_drop_invokes_courtesy_unload() {
         std::env::set_var("HOST32_TESTDLL_UNLOAD_MARKER", &marker);
     }
 
-    // load 成功（testdll の load は入力 HGLOBAL を GlobalFree し true 返し）。
     let proxy = ShioriByteProxy::load(&dll_path, load_dir).expect("testdll load must succeed");
 
-    // まだ Drop していないのでマーカーは未作成。
     assert!(!marker.exists(), "unload はまだ呼ばれていない");
 
-    // Drop → courtesy unload 実呼出 → testdll が marker ファイルを作成。無 panic で完了。
     drop(proxy);
 
     assert!(
@@ -191,7 +183,6 @@ fn testdll_drop_invokes_courtesy_unload() {
     let content = std::fs::read(&marker).expect("read marker");
     assert_eq!(content, b"unloaded", "testdll unload が書くマーカー内容");
 
-    // 後始末: env を外す（根は Drop で消える）。
     // SAFETY: set_var と同じく unsafe。環境変数を差すテストは錠で直列になっており（錠の中で外す）、
     // ほかのテストは、この環境変数を偽の DLL の unload の中で読むだけである。
     unsafe {
@@ -201,7 +192,7 @@ fn testdll_drop_invokes_courtesy_unload() {
 
 /// 同じプロセスに読まれた別の写し（フォルダ Y）の unload が、フォルダ X 宛ての印を書かないこと。
 /// 印のテストと往復のテストの間の順番に頼らず、競合の芯「別の写しの unload が印を書く」を
-/// 1 本の中で切り出す（要件 3.2）。時間待ちは無く、1 つのスレッドで順に進む。
+/// 1 本の中で切り出す。時間待ちは無く、1 つのスレッドで順に進む。
 /// 印の環境変数を差すので錠 `TESTDLL_SERIAL` を取る。印のパスは X の DLL と同じフォルダに置く。
 #[test]
 #[cfg_attr(
@@ -243,11 +234,11 @@ fn testdll_unload_from_another_folder_leaves_marker_untouched() {
 }
 
 // ---------------------------------------------------------------------
-// 4. testdll 越し request loopback（R3.2/3.3/3.4/3.6・Task 4.1）
+// 4. testdll 越しの request の往復
 // ---------------------------------------------------------------------
 
-/// testdll を直接 `load` した proxy に対し `request` を実呼出し、固定 SHIORI/3.0 応答が
-/// 往復することを確認する（design §435 の HGLOBAL 非対称契約）。
+/// testdll を直接 `load` した proxy に `request` を呼び、固定の SHIORI/3.0 応答が
+/// 往復することを確かめる（HGLOBAL の非対称契約）。
 ///
 /// - GET(`OnTestValue`) → 200 OK＋固定 `Value`。
 /// - NOTIFY(`OnTestNotify`) → 204 No Content。
@@ -261,13 +252,10 @@ fn testdll_unload_from_another_folder_leaves_marker_untouched() {
     ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
 )]
 fn testdll_request_roundtrip_get_and_notify() {
-    // 一意なテストの根へ shiori.dll を写す（絶対 dll_path＝load_dir\shiori.dll）。
     let (root, dll_path) = copy_testdll_into_unique_target_dir("req");
 
-    // load 成功（testdll の load は入力 HGLOBAL を callee-free し true 返し）。
     let proxy = ShioriByteProxy::load(&dll_path, root.path()).expect("testdll load must succeed");
 
-    // GET(OnTestValue) → 200 OK＋固定 Value。
     let get_req = b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestValue\r\n\r\n";
     let get_resp = proxy
         .request(get_req)
@@ -282,7 +270,6 @@ fn testdll_request_roundtrip_get_and_notify() {
         "expected fixed Value line, got: {get_text:?}"
     );
 
-    // NOTIFY(OnTestNotify) → 204 No Content。
     let notify_req =
         b"NOTIFY SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestNotify\r\n\r\n";
     let notify_resp = proxy
@@ -294,12 +281,12 @@ fn testdll_request_roundtrip_get_and_notify() {
         "expected 204 No Content, got: {notify_text:?}"
     );
 
-    // Drop で courtesy unload→FreeLibrary。往復も Drop も無 panic＝二重解放なし（R3.3/3.4）。
+    // 往復も Drop も無 panic＝二重解放なし。
     drop(proxy);
 }
 
 // ---------------------------------------------------------------------
-// 5. 後始末の失敗を種類で返す（指摘 9・要件 10.11）
+// 5. 後始末の失敗を種類で返す
 // ---------------------------------------------------------------------
 
 /// `OnTestUnloadFalse` の後の `unload` は偽を返すので、`close` は `UnloadReturnedFalse` を返す。
@@ -324,10 +311,10 @@ fn close_reports_unload_returning_false() {
 }
 
 // ---------------------------------------------------------------------
-// 6. 応答の長さと空の応答（指摘 7・20）
+// 6. 応答の長さと空の応答
 // ---------------------------------------------------------------------
 
-/// 指摘 7: `OnTestLenOverflow` は確保より大きい `*len` を書く。`request` は確保の外を読まずに
+/// `OnTestLenOverflow` は確保より大きい `*len` を書く。`request` は確保の外を読まずに
 /// `ResponseLengthMismatch` を返し、`[helper]` の行に残す。印の環境変数は差さないので錠は取らない。
 #[test]
 #[cfg(target_arch = "x86")]
@@ -357,7 +344,7 @@ fn a_response_longer_than_its_allocation_is_refused() {
     drop(proxy);
 }
 
-/// 指摘 20: `OnTestNull` は null の HGLOBAL を返す。`request` は `RequestFailed` を返す。
+/// `OnTestNull` は null の HGLOBAL を返す。`request` は `RequestFailed` を返す。
 #[test]
 #[cfg(target_arch = "x86")]
 fn a_null_response_is_request_failed() {

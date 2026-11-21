@@ -1,13 +1,13 @@
-//! `Charset`／`LabelError` の決定論テスト（タスク 1.1・要件 1.1/1.2/1.4/1.5/3.2/3.4/7.3/10.1〜10.3）。
+//! `Charset`／`LabelError` の決定論テスト。
 //!
 //! 窓も I/O も持たない純関数の入出力だけで成立する（x64 のみ・32bit 成果物不要）。
-//! 参照値のバイト列は符号化器から導かず定数として持つ（design.md §Supporting References）。
+//! 参照値のバイト列は符号化器から導かず定数として持つ。
 
 use std::borrow::Cow;
 
 use super::{Charset, LabelError};
 
-/// 別名 5 綴りが同じ `Charset` へ解決し、正規名が `Shift_JIS` で一致する（要件 1.2）。
+/// 別名 5 綴りが同じ `Charset` へ解決し、正規名が `Shift_JIS` で一致する。
 #[test]
 fn shift_jis_aliases_resolve_to_the_same_charset() {
     let labels = [
@@ -34,10 +34,10 @@ fn shift_jis_aliases_resolve_to_the_same_charset() {
 }
 
 /// 既定の 2 つ以外の文字コードも同じ経路で解決でき、実際にその文字コードで符号化される
-/// （要件 1.4「既定は対応範囲ではない」＝Shift_JIS／UTF-8 だけを特別扱いしない）。
+/// （Shift_JIS／UTF-8 だけを特別扱いしない）。
 #[test]
 fn charsets_beyond_the_two_constants_resolve_and_encode() {
-    // 「あ」の参照値（design.md §Supporting References の定数）。
+    // 「あ」の参照値。
     let euc_jp = Charset::for_label("euc-jp").expect("EUC-JP は解決できる");
     assert_eq!(euc_jp.name(), "EUC-JP");
     assert_eq!(euc_jp.encode("あ").0.as_ref(), &[0xA4, 0xA2]);
@@ -51,8 +51,7 @@ fn charsets_beyond_the_two_constants_resolve_and_encode() {
 }
 
 /// 符号化の出力が要求と一致しないラベル（UTF-16 系・replacement 系）は
-/// `NotEncodable`、Encoding Standard に無いラベルは `Unknown` で、理由が区別できる
-/// （要件 1.5・10.3）。
+/// `NotEncodable`、Encoding Standard に無いラベルは `Unknown` で、理由が区別できる。
 #[test]
 fn unusable_labels_are_rejected_with_distinguishable_reasons() {
     for label in ["UTF-16", "UTF-16LE", "replacement", "hz-gb-2312"] {
@@ -66,7 +65,7 @@ fn unusable_labels_are_rejected_with_distinguishable_reasons() {
     assert_eq!(Charset::for_label("x-nope"), Err(LabelError::Unknown));
 }
 
-/// UTF-8 の符号化は入力の UTF-8 バイト列と同一で、複製も置換も起きない（要件 3.4）。
+/// UTF-8 の符号化は入力の UTF-8 バイト列と同一で、複製も置換も起きない。
 #[test]
 fn utf8_encode_is_byte_identical_to_the_input() {
     let text = "ID: OnBoot\r\nReference0: あ\r\n";
@@ -80,7 +79,7 @@ fn utf8_encode_is_byte_identical_to_the_input() {
     );
 }
 
-/// 表せない文字は 10 進の数値文字参照へ置換され、置換した文字数が返る（要件 10.1・3.2）。
+/// 表せない文字は 10 進の数値文字参照へ置換され、置換した文字数が返る。
 #[test]
 fn unmappable_char_becomes_a_decimal_numeric_character_reference() {
     let (bytes, replaced) = Charset::SHIFT_JIS.encode("\u{1F600}");
@@ -90,7 +89,7 @@ fn unmappable_char_becomes_a_decimal_numeric_character_reference() {
 }
 
 /// ISO-2022-JP は ASCII の制御字 ESC を表せない＝置き換えた数に入る（ASCII を飛ばすのは
-/// ASCII をそのまま通す文字コードだけ・指摘 42）。
+/// ASCII をそのまま通す文字コードだけ）。
 #[test]
 fn iso_2022_jp_counts_a_replaced_ascii_escape() {
     let cs = Charset::for_label("ISO-2022-JP").expect("ISO-2022-JP は解決できる");
@@ -98,7 +97,7 @@ fn iso_2022_jp_counts_a_replaced_ascii_escape() {
     assert_eq!(replaced, 1);
 }
 
-/// 宣言された文字コードとして不正な並びは代替文字へ吸収され、置換の有無が返る（要件 10.2）。
+/// 宣言された文字コードとして不正な並びは代替文字へ吸収され、置換の有無が返る。
 #[test]
 fn invalid_byte_sequence_decodes_to_the_replacement_char() {
     // 0x82 は Shift_JIS の 2 バイト文字の先行バイト。単独で終わるので不正な並び。
@@ -117,7 +116,7 @@ fn invalid_byte_sequence_decodes_to_the_replacement_char() {
 }
 
 /// 復号は宣言された文字コードだけで行い、先頭の BOM で文字コードを切り替えない
-/// （BOM は 1 文字として残る・要件 10.2 の経路と同じ寛容さ）。
+/// （BOM は 1 文字として残る）。
 #[test]
 fn decode_does_not_let_a_bom_override_the_declared_charset() {
     let (text, had_errors) = Charset::UTF_8.decode(b"\xEF\xBB\xBFA");
@@ -130,7 +129,7 @@ fn decode_does_not_let_a_bom_override_the_declared_charset() {
     assert_ne!(text, "\u{FEFF}あ", "UTF-8 として読み直してはならない");
 }
 
-/// 正規名は `Charset` ヘッダに書く綴りで、定数と解決結果で一致する（要件 3.2）。
+/// 正規名は `Charset` ヘッダに書く綴りで、定数と解決結果で一致する。
 #[test]
 fn canonical_names_match_the_header_spelling() {
     assert_eq!(Charset::UTF_8.name(), "UTF-8");
@@ -144,7 +143,6 @@ fn canonical_names_match_the_header_spelling() {
 
 // ---------------------------------------------------------------------------
 // `CharsetNegotiator`／`CharsetPolicy` の決定論テスト
-// （タスク 1.2・要件 2.2/2.3/4.2/4.4〜4.7/5.1/7.1/7.2/7.4/9.3/10.3）。
 //
 // ログは `log_capture_kit::capture` で観測する（呼出スレッドで同期発火するため捕捉できる。
 // 捕捉窓は番兵イベントで自己較正されるので、件数 0 の主張が「捕捉できていないだけ」には
@@ -171,7 +169,7 @@ fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> 
         .collect()
 }
 
-/// 規則表 1 行目: 非強制・ヘッダ省略 → 継承のみ（状態不変・ログ 0・要件 4.3）。
+/// 規則表 1 行目: 非強制・ヘッダ省略 → 継承のみ（状態不変・ログ 0）。
 #[test]
 fn negotiate_without_header_inherits_and_logs_nothing() {
     let mut neg = CharsetNegotiator::new(Charset::SHIFT_JIS, false);
@@ -182,8 +180,8 @@ fn negotiate_without_header_inherits_and_logs_nothing() {
     assert_eq!(charset_events(&events).len(), 0, "{events:?}");
 }
 
-/// 規則表 2 行目: 非強制・同じ文字コードのヘッダ → 状態不変・ログ 0（要件 4.6「変わらない
-/// 応答ではログを出さない」）。別名の綴りで来ても「同じ」と判定する。
+/// 規則表 2 行目: 非強制・同じ文字コードのヘッダ → 状態不変・ログ 0
+/// （変わらない応答ではログを出さない）。別名の綴りで来ても「同じ」と判定する。
 #[test]
 fn negotiate_with_the_same_charset_changes_nothing_and_logs_nothing() {
     let mut neg = CharsetNegotiator::new(Charset::SHIFT_JIS, false);
@@ -195,7 +193,7 @@ fn negotiate_with_the_same_charset_changes_nothing_and_logs_nothing() {
 }
 
 /// 規則表 3 行目: 非強制・解決できる別の文字コード → 採用し、切替の詳細ログ 1 行
-/// （要件 4.2・4.6・9.3 前半「採用後の `current()` が変わる」）。
+/// （採用後の `current()` が変わる）。
 #[test]
 fn negotiate_with_a_different_charset_switches_and_logs_once() {
     let mut neg = CharsetNegotiator::new(Charset::SHIFT_JIS, false);
@@ -218,7 +216,7 @@ fn negotiate_with_a_different_charset_switches_and_logs_once() {
 }
 
 /// 規則表 4 行目: 非強制・解決できないヘッダ → 採用せず現在の文字コードを継続し、
-/// 初回は警告 1 行（ラベル・理由・継続する文字コード・要件 4.4・10.3）。
+/// 初回は警告 1 行（ラベル・理由・継続する文字コード）。
 #[test]
 fn negotiate_with_an_unresolvable_label_keeps_current_and_warns() {
     let mut neg = CharsetNegotiator::new(Charset::SHIFT_JIS, false);
@@ -234,7 +232,7 @@ fn negotiate_with_an_unresolvable_label_keeps_current_and_warns() {
     assert_eq!(unresolved[0].field_str("reason"), Some("unknown"));
     assert_eq!(unresolved[0].field_str("kept"), Some("Shift_JIS"));
 
-    // UTF-16 系は「通信で使えない既知の限界」として理由で区別される（要件 10.3）。
+    // UTF-16 系は「通信で使えない既知の限界」として理由で区別される。
     let mut neg = CharsetNegotiator::new(Charset::SHIFT_JIS, false);
     let ((), events) = log_capture_kit::capture(|| neg.note_response(Some("UTF-16"), false));
     let unresolved = named(&events, "charset_label_unresolved");
@@ -243,7 +241,7 @@ fn negotiate_with_an_unresolvable_label_keeps_current_and_warns() {
     assert_eq!(neg.current(), Charset::SHIFT_JIS);
 }
 
-/// 規則表 5 行目: 強制・ヘッダ省略 → 状態不変・ログ 0（要件 2.2）。
+/// 規則表 5 行目: 強制・ヘッダ省略 → 状態不変・ログ 0。
 #[test]
 fn forced_without_header_changes_nothing_and_logs_nothing() {
     let mut neg = CharsetNegotiator::new(Charset::UTF_8, true);
@@ -268,7 +266,7 @@ fn forced_with_the_same_charset_changes_nothing_and_logs_nothing() {
 }
 
 /// 規則表 7 行目: 強制・それ以外のヘッダ（別の文字コード／解決できないラベルの双方）→
-/// 復号にも採用にも用いず、初回のみ詳細ログ 1 行（要件 2.2・4.5）。
+/// 復号にも採用にも用いず、初回のみ詳細ログ 1 行。
 #[test]
 fn forced_ignores_a_mismatching_header_and_logs_only_the_first_time() {
     let mut neg = CharsetNegotiator::new(Charset::UTF_8, true);
@@ -292,7 +290,7 @@ fn forced_ignores_a_mismatching_header_and_logs_only_the_first_time() {
     assert_eq!(charset_events(&events).len(), 0, "{events:?}");
 }
 
-/// 同じ解決できないラベルを 3 回受けると警告 1・詳細 2（要件 4.4・7.4——毎秒のイベントで
+/// 同じ解決できないラベルを 3 回受けると警告 1・詳細 2（毎秒のイベントでも
 /// 警告が氾濫しない）。
 #[test]
 fn the_same_unresolvable_label_warns_once_then_falls_to_debug() {
@@ -348,9 +346,8 @@ fn label_keys_are_normalized_so_case_variants_warn_only_once() {
     assert_eq!(warns, 1, "{events:?}");
 }
 
-/// 応答の不正な並びは採用規則と独立に記録され、文字コード名につき初回 warn・以後 debug
-/// （要件 4.7・10.2・7.4）。記録される文字コード名は実際に復号に使った文字コード
-/// ＝採用後の現在値。
+/// 応答の不正な並びは採用規則と独立に記録され、文字コード名につき初回 warn・以後 debug。
+/// 記録される文字コード名は実際に復号に使った文字コード＝採用後の現在値。
 #[test]
 fn invalid_bytes_are_recorded_independently_of_adoption() {
     let mut neg = CharsetNegotiator::new(Charset::SHIFT_JIS, false);
@@ -380,8 +377,8 @@ fn invalid_bytes_are_recorded_independently_of_adoption() {
     assert_eq!(charset_events(&events).len(), 0, "{events:?}");
 }
 
-/// 要求で表せない文字を置換したことはイベント名につき初回 warn・以後 debug
-/// （要件 3.5・7.2・7.4）。置換 0 のときは記録しない。
+/// 要求で表せない文字を置換したことはイベント名につき初回 warn・以後 debug。
+/// 置換 0 のときは記録しない。
 #[test]
 fn unmappable_replacements_are_recorded_per_event_id() {
     let mut neg = CharsetNegotiator::new(Charset::SHIFT_JIS, false);
@@ -393,7 +390,7 @@ fn unmappable_replacements_are_recorded_per_event_id() {
     assert_eq!(replaced[0].level, tracing::Level::WARN);
     assert_eq!(replaced[0].field_str("id"), Some("OnSecondChange"));
     assert_eq!(replaced[0].field("replaced"), Some("2"));
-    // 要件 7.2: 後退のログは文字コードの正規名を構造化フィールドで持つ。表せなかったのは
+    // 後退のログは文字コードの正規名を構造化フィールドで持つ。表せなかったのは
     // 「そのとき送ろうとしていた文字コード」＝交渉状態の現在値である。
     assert_eq!(replaced[0].field_str("charset"), Some("Shift_JIS"));
 
@@ -412,7 +409,7 @@ fn unmappable_replacements_are_recorded_per_event_id() {
     assert_eq!(charset_events(&events).len(), 0, "{events:?}");
 }
 
-/// `policy()` は強制の有無をそのまま 2 値へ写す（要件 2.2・2.3）。
+/// `policy()` は強制の有無をそのまま 2 値へ写す。
 #[test]
 fn policy_reflects_the_forced_flag() {
     let negotiated = CharsetNegotiator::new(Charset::SHIFT_JIS, false);
@@ -425,15 +422,14 @@ fn policy_reflects_the_forced_flag() {
     assert_eq!(forced.policy(), CharsetPolicy::Force(Charset::UTF_8));
 }
 
-/// 交渉状態は起動時のクロージャ（`Send + 'static`）へ move されるため `Send` を満たす
-/// （design §State Management → Concurrency）。
+/// 交渉状態は起動時のクロージャ（`Send + 'static`）へ move されるため `Send` を満たす。
 #[test]
 fn negotiator_is_send() {
     fn assert_send<T: Send>() {}
     assert_send::<CharsetNegotiator>();
 }
 
-/// 警告済みの集まりは 64 で止まる（指摘 41）。壊れた SHIORI が応答ごとに違うラベルを返しても
+/// 警告済みの集まりは 64 で止まる。壊れた SHIORI が応答ごとに違うラベルを返しても
 /// 集まりは育ち続けず、65 個目からの知らせは `DEBUG` だけになる。
 #[test]
 fn warned_labels_stop_growing_at_the_limit() {

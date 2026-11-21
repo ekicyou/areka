@@ -1,11 +1,9 @@
-//! `areka-P0-shiori-loadu` のテスト（design「テスト → `shiori_proxy_loadu_tests.rs`」）。
-//! 既存 `mod tests`（`shiori_proxy_tests.rs`）には触らず、本仕様のテストはここへ置く。
+//! 初期化の入口 `loadu`／`load` の選択・符号化・入口名の行のテスト。
 //!
-//! 群 A（x64 常時）: 入口の選択の判断表 4 行（要件 1.1〜1.4・1.8・6.3）。DLL を読まない純関数の
-//! テストゆえ i686 に限らない（要件 9.5）。
-//! 群 C（x64 常時）: 表せない字の検出の決定論（要件 3.3・3.4・6.5）。
-//! 群 B（x64 常時）: `loadu` の枝の UTF-8 固定バイト列と入口名の語（要件 2.1・2.2・2.4・4.3・6.4）。
-//! 群 D（i686 限定）: 2 本目の偽 DLL `shiori_loadu.dll` を実際に読む 2 本（要件 6.6・6.7・6.9・9.5）。
+//! 群 A（x64 常時）: 入口の選択の判断表 4 行。DLL を読まない純関数のテストなので i686 に限らない。
+//! 群 C（x64 常時）: 表せない字の検出の決定論。
+//! 群 B（x64 常時）: `loadu` の枝の UTF-8 固定バイト列と入口名の語。
+//! 群 D（i686 限定）: 2 本目の偽 DLL `shiori_loadu.dll` を実際に読む 2 本。
 
 use super::*;
 use crate::proxy_test_support::{TestRoot, i686_target_base};
@@ -35,7 +33,7 @@ fn load_fn() -> LoadFn {
     dummy_load
 }
 
-/// 両方在る → `loadu` だけ（要件 1.1）。優先順を逆にするとここが赤になる。
+/// 両方在る → `loadu` だけ。優先順を逆にするとここが赤になる。
 #[test]
 fn both_present_chooses_loadu() {
     match choose_init_entry(Some(loadu_fn()), Some(load_fn())) {
@@ -45,7 +43,7 @@ fn both_present_chooses_loadu() {
     }
 }
 
-/// `loadu` のみ → `loadu`（要件 1.2）。
+/// `loadu` のみ → `loadu`。
 #[test]
 fn loadu_only_chooses_loadu() {
     match choose_init_entry(Some(loadu_fn()), None) {
@@ -55,7 +53,7 @@ fn loadu_only_chooses_loadu() {
     }
 }
 
-/// `load` のみ → `load`（要件 1.3・今日どおり）。
+/// `load` のみ → `load`。
 #[test]
 fn load_only_chooses_load() {
     match choose_init_entry(None, Some(load_fn())) {
@@ -65,8 +63,7 @@ fn load_only_chooses_load() {
     }
 }
 
-/// 両方無い → 入口が無い失敗。名札は既存テスト `kernel32_yields_entry_not_found` が固定する
-/// `"load"`（要件 1.4）。
+/// 両方無い → 入口が無い失敗。名札は `kernel32_yields_entry_not_found` が固定する `"load"`。
 #[test]
 fn neither_present_is_entry_not_found_load() {
     match choose_init_entry(None, None) {
@@ -76,7 +73,7 @@ fn neither_present_is_entry_not_found_load() {
     }
 }
 
-/// `func()` は選ばれた変種が持つ fn ポインタそのものを返す（呼出側はこれを 1 回だけ呼ぶ・要件 1.5）。
+/// `func()` は選ばれた変種が持つ fn ポインタそのものを返す。
 #[test]
 fn func_returns_the_held_pointer() {
     assert_eq!(
@@ -90,7 +87,7 @@ fn func_returns_the_held_pointer() {
 }
 
 // ---------------------------------------------------------------------
-// 群 C: 表せない字の検出の決定論（x64 常時・要件 3.3・3.4・6.5）
+// 群 C: 表せない字の検出の決定論（x64 常時）
 // ---------------------------------------------------------------------
 // コードページを引数で固定し、機械の既定コードページ（CP_ACP）は読まない。20127 が無効な機械では
 // 往路が 0 以下＝`Err` になって赤で気付く（黙って緑にならない・代替は 1252）。
@@ -126,7 +123,7 @@ fn utf8_emoji_is_not_lossy_and_matches_utf8() {
     assert_eq!(e.bytes, p.as_bytes());
 }
 
-/// 空パス → 空・表せない字なし（今日と同じ）。
+/// 空パス → 空・表せない字なし。
 #[test]
 fn empty_path_is_empty_and_not_lossy() {
     let e = encode_with_codepage(CP_US_ASCII, Path::new("")).expect("空は空へ");
@@ -135,7 +132,7 @@ fn empty_path_is_empty_and_not_lossy() {
 }
 
 // ---------------------------------------------------------------------
-// 群 B: `loadu` の枝の UTF-8 固定バイト列（x64 常時・要件 2.1・2.2・2.4・6.4）
+// 群 B: `loadu` の枝の UTF-8 固定バイト列（x64 常時）
 // ---------------------------------------------------------------------
 
 /// CP932 に在る字（ゴースト）と無い字（😀）を含むパス → `loadu` の前段が返すバイト列は文字列の
@@ -148,7 +145,7 @@ fn loadu_init_bytes_are_utf8_verbatim_no_nul() {
     assert!(!bytes.contains(&0u8), "NUL が混ざった");
 }
 
-/// 入口名の行の語は `loadu`／`load`（要件 4.3・fixture の記録の語と同じ）。
+/// 入口名の行の語は `loadu`／`load`（fixture の記録の語と同じ）。
 #[test]
 fn init_entry_name_is_fixed_word() {
     assert_eq!(InitEntry::Loadu(loadu_fn()).name(), "loadu");
@@ -156,10 +153,10 @@ fn init_entry_name_is_fixed_word() {
 }
 
 // ---------------------------------------------------------------------
-// 群 D: 2 本目の偽 DLL を i686 で実際に読む（要件 6.6・6.7・6.9・9.5）
+// 群 D: 2 本目の偽 DLL を i686 で実際に読む
 // ---------------------------------------------------------------------
-// env `HOST32_TESTDLL_LOADU_*` はプロセス global。既存 `mod tests` の fixture の env とは重ならないので
-// 既存 `TESTDLL_SERIAL` とは共用せず、群 D の 2 本だけを自前の mutex で直列化する。
+// env `HOST32_TESTDLL_LOADU_*` はプロセス global。`mod tests` の fixture の env とは重ならないので
+// `TESTDLL_SERIAL` とは共用せず、群 D の 2 本だけを自前の mutex で直列化する。
 
 /// 群 D の直列化（汚染ロックは無視して継続）。
 static LOADU_SERIAL: Mutex<()> = Mutex::new(());
@@ -170,7 +167,7 @@ const ENV_LOADU_RECORD: &str = "HOST32_TESTDLL_LOADU_RECORD";
 const ENV_LOADU_FAIL: &str = "HOST32_TESTDLL_LOADU_FAIL";
 
 /// 2 本目の偽 DLL `shiori_loadu.dll` の所在。env `HOST32_TESTDLL_LOADU_DLL` → i686 の debug／release
-/// 成果物 → 無ければ先ビルドの命令を書いて panic（黙って飛ばさない・要件 6.9）。
+/// 成果物 → 無ければ先ビルドの命令を書いて panic（黙って飛ばさない）。
 fn resolve_loadu_testdll() -> PathBuf {
     if let Ok(p) = std::env::var("HOST32_TESTDLL_LOADU_DLL") {
         let path = PathBuf::from(p);
@@ -237,7 +234,7 @@ fn utf8_hex(p: &Path) -> String {
         .collect()
 }
 
-/// D-1: 両方持つ DLL で `loadu` だけが実際に呼ばれ、UTF-8 のパスを受け取る（要件 6.6）。
+/// D-1: 両方持つ DLL で `loadu` だけが実際に呼ばれ、UTF-8 のパスを受け取る。
 /// 選択の優先順を逆にすると記録が `load\t…` になって赤。
 #[test]
 #[cfg_attr(
@@ -261,8 +258,8 @@ fn testdll_loadu_is_called_with_utf8_and_load_is_not() {
     );
 }
 
-/// D-2: `loadu` が偽を返すと「初期化が偽を返した」失敗になり、`load` へは落ちない（要件 6.7）。
-/// 失敗の型には fixture が 0 を返す直前に置いた最後のエラー（アクセス拒否 5）が載る（要件 5.5）。
+/// D-2: `loadu` が偽を返すと「初期化が偽を返した」失敗になり、`load` へは落ちない。
+/// 失敗の型には fixture が 0 を返す直前に置いた最後のエラー（アクセス拒否 5）が載る。
 #[test]
 #[cfg_attr(
     not(target_arch = "x86"),

@@ -1,4 +1,4 @@
-//! 実データで検査の対象が 0 件でないことの主張（要件 6.13・設計 Testing Strategy 12〜15・17）。
+//! 実データで検査の対象が 0 件でないことの主張。
 //!
 //! # なぜ件数を釘付けするのか
 //!
@@ -9,8 +9,8 @@
 //!
 //! # 数は「写す」だけでなく「導く」
 //!
-//! 件数の literal（1,749・38・6・677・542・342・188・12・24・1・1）は要件 1 と要件 3.1
-//! の実測だが、literal を並べるだけの主張は**その literal を書き換えれば黙って通る**。
+//! 件数の literal（1,749・38・6・677・542・342・188・12・24・1・1）は実データの
+//! 実測だが、literal を並べるだけの主張は**その literal を書き換えれば黙って通る**。
 //! だから同じ場所で関係も主張する:
 //!
 //! - カタログの前置き（`ukadoc_entries`）と実際に読めた行数が一致する。
@@ -35,9 +35,9 @@
 //!
 //! # ここに置かないもの
 //!
-//! - 要件ごとの対象の**有無**（空回りしている要件の名指し）は `checks.rs` の持ち物。
+//! - 検査ごとの対象の**有無**（空回りしている検査の名指し）は `checks.rs` の持ち物。
 //! - `values.md` の見出しと `model::THEMES` の一致、語彙表経路の較正は `values_md.rs` の
-//!   持ち物である（設計 Testing Strategy 16・17a）。
+//!   持ち物である。
 //! - 全体報告 `summary.md` はここでは読まない（読み込みは `mod.rs` の `RepoData`）。
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -48,13 +48,13 @@ use ukadoc_survey::model::{Domain, PageName};
 use super::RepoData;
 use super::documents::SHIORI_RESOURCE_RS;
 
-/// 正典（ukadoc）の項目数（要件 1 の実測）。
+/// 正典（ukadoc）の項目数（実測）。
 const CATALOG_ENTRIES: usize = 1_749;
 
-/// 正典のページ数（要件 1・3.1）。カタログにも割り当てにも同じ数だけ現れる。
+/// 正典のページ数（実測）。カタログにも割り当てにも同じ数だけ現れる。
 const CATALOG_PAGES: usize = 38;
 
-/// カテゴリ名と件数（要件 1 の実測・6 種）。並びは名前順（`BTreeMap` の走査順）。
+/// カテゴリ名と件数（実測・6 種）。並びは名前順（`BTreeMap` の走査順）。
 const CATEGORIES: [(&str, usize); 6] = [
     ("descript", 518),
     ("dev_guide", 7),
@@ -64,7 +64,7 @@ const CATEGORIES: [(&str, usize); 6] = [
     ("shiori_event", 637),
 ];
 
-/// ドメインごとの「台帳の項目数・担当ページ数」（要件 3.1 の表）。
+/// ドメインごとの「台帳の項目数・担当ページ数」。
 ///
 /// 並びは [`Domain::ALL`]（＝[`RepoData::ledgers`] の並び）と同じでなければならない。
 /// 食い違えば下の各事例が最初の突き合わせで赤くなる。
@@ -75,14 +75,14 @@ const DOMAIN_ROWS: [(Domain, usize, usize); 4] = [
     (Domain::Property, 188, 1),
 ];
 
-/// 走査が届いていることの錨（別々のクレートに実在するファイル・要件 9.2）。
+/// 走査が届いていることの錨（別々のクレートに実在するファイル）。
 const ANCHOR_SOURCES: [&str; 3] = [
     SHIORI_RESOURCE_RS,
     "crates/dola/src/lib.rs",
     "crates/log-capture-kit/src/lib.rs",
 ];
 
-/// 走査から外す調査クレート自身（設計 D-3）。この接頭辞を持つ相対パスは 1 本も来ない。
+/// 走査から外す調査クレート自身。この接頭辞を持つ相対パスは 1 本も来ない。
 ///
 /// 実装側の `io::sources::SELF_CRATE_DIR` は非公開で、ここ（別クレートの統合
 /// テスト）からは型検査が拒む。仮に借りられたとしても借りない——同じ定数を両側で
@@ -101,7 +101,7 @@ const SELF_CRATE_MARKER: &str = "src/lib.rs";
 /// 走査が返すファイル数の下限。
 ///
 /// 実数を釘付けするとファイルを 1 本足すたびに赤くなるので下限にする。狙いは
-/// 「0 件でない」の担保（要件 6.13・設計 Testing Strategy 15）で、走査が空を返す・
+/// 「0 件でない」の担保で、走査が空を返す・
 /// 起点を取り違える・途中の失敗を握り潰す、といった**ほとんど何も残らない**壊れ方を
 /// 捕まえる。
 ///
@@ -110,7 +110,7 @@ const SELF_CRATE_MARKER: &str = "src/lib.rs";
 /// **すべて素通りする**。ここが守るのは
 /// 「ほぼ全滅していない」であって「取りこぼしが無い」ではない。後者を言うには
 /// テストの側で走査をもう 1 度独立に組み直す必要があり、それはこの一群の役目を
-/// 越える（要件 6.13 が問うのは「0 件でない」ことである）。
+/// 越える。
 const MIN_SOURCE_FILES: usize = 500;
 
 /// 走査に現れるクレートの数の下限。
@@ -122,8 +122,7 @@ const MIN_SOURCE_CRATES: usize = 20;
 /// ドメイン別報告の本文の下限（文字数）。
 const MIN_REPORT_CHARS: usize = 500;
 
-/// カタログが 1,749 項目・38 ページ・6 カテゴリを抱えていること
-/// （設計 Testing Strategy 12）。
+/// カタログが 1,749 項目・38 ページ・6 カテゴリを抱えていること。
 #[test]
 fn the_catalog_holds_1749_entries_over_38_pages_and_6_categories() {
     let data = RepoData::load();
@@ -180,8 +179,7 @@ fn the_catalog_holds_1749_entries_over_38_pages_and_6_categories() {
     );
 }
 
-/// 台帳 4 本が 677・542・342・188 を抱え、重なりなくカタログを覆っていること
-/// （設計 Testing Strategy 13）。
+/// 台帳 4 本が 677・542・342・188 を抱え、重なりなくカタログを覆っていること。
 #[test]
 fn the_four_ledgers_hold_677_542_342_188_rows_that_add_up_to_the_catalog() {
     let data = RepoData::load();
@@ -241,8 +239,7 @@ fn the_four_ledgers_hold_677_542_342_188_rows_that_add_up_to_the_catalog() {
     );
 }
 
-/// 割り当てが 38 ページを 12・24・1・1 に分け、カタログのページを漏れなく覆うこと
-/// （設計 Testing Strategy 14）。
+/// 割り当てが 38 ページを 12・24・1・1 に分け、カタログのページを漏れなく覆うこと。
 #[test]
 fn the_assignment_splits_38_pages_into_12_24_1_1_and_covers_the_catalog() {
     let data = RepoData::load();
@@ -304,8 +301,7 @@ fn the_assignment_splits_38_pages_into_12_24_1_1_and_covers_the_catalog() {
     );
 }
 
-/// ソースの走査が実在するファイルへ届き、調査クレート由来を 1 本も含まないこと
-/// （設計 Testing Strategy 15）。
+/// ソースの走査が実在するファイルへ届き、調査クレート由来を 1 本も含まないこと。
 #[test]
 fn the_source_walk_reaches_other_crates_and_never_the_survey_crate() {
     let data = RepoData::load();
@@ -374,8 +370,7 @@ fn the_source_walk_reaches_other_crates_and_never_the_survey_crate() {
     );
 }
 
-/// ドメイン別報告 4 本が実在し、いずれも空でなく、互いに別の本文であること
-/// （設計 Testing Strategy 17・要件 7.4 の検査が空回りしていないこと）。
+/// ドメイン別報告 4 本が実在し、いずれも空でなく、互いに別の本文であること。
 #[test]
 fn the_four_domain_reports_exist_on_disk_and_are_not_empty() {
     let data = RepoData::load();

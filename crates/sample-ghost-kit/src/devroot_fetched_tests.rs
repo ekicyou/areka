@@ -1,5 +1,4 @@
-//! 行から書庫のパスを決める解決（[`sample_nar_for`]）の兄弟テスト（spec: `areka-P0-sample-url-fetch`
-//! 要件 1.4・3.1・3.2・3.4・3.8・3.9）。
+//! 行から書庫のパスを決める解決（[`sample_nar_for`]）の兄弟テスト。
 //!
 //! 登記表の URL の行（ぱすた）は取り寄せた書庫が要るので、ここでは固定入力の行
 //! [`URL_ROW`] で作り、名前空間は私有のもの（[`private_namespace`]）を [`sample_nar_for`] へ
@@ -142,8 +141,7 @@ fn resolving_a_mismatching_archive_leaves_the_master_copy_shelf_empty() {
     assert!(shelf(ns.path(), CACHE).is_empty());
 }
 
-/// 掃除は作業の棚だけを走査し、取り寄せの棚の書庫とハッシュのファイルには触らない
-/// （audit-test-kits 指摘 64）。複製を配る入口 `fresh_root_in` は取得のたびに掃除を走らせる。
+/// 掃除は作業の棚だけを走査し、取り寄せの棚の書庫とハッシュのファイルには触らない。複製を配る入口 `fresh_root_in` は取得のたびに掃除を走らせる。
 #[test]
 fn a_sweep_leaves_the_fetched_shelf_alone() {
     let ns = private_namespace();
@@ -189,7 +187,7 @@ const CHILD_VAR: &str = "SAMPLE_GHOST_KIT_TAMPER_CHILD";
 /// 子に走らせるテストの完全な名前。
 const CHILD_TEST: &str = "devroot::fetched_tests::the_tampered_shelf_child_acquires_and_is_refused";
 
-/// 窓口の入口 [`SampleRoot::acquire`] が、食い違う置き場の書庫を配らない（audit-test-kits 指摘 22）。
+/// 窓口の入口 [`SampleRoot::acquire`] が、食い違う置き場の書庫を配らない。
 ///
 /// `resolving_a_mismatching_archive_leaves_the_master_copy_shelf_empty` と
 /// `resolving_again_after_the_master_copy_exists_still_checks_the_archive` は `sample_nar_for` までしか通らない。ここは自分の実行体を子として起こし、

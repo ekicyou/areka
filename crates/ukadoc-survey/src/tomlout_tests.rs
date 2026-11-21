@@ -1,13 +1,11 @@
 //! `tomlout.rs` の在中テスト。
 //!
-//! ここが自前の書き出しの**較正**である（設計「境界の要点」の 1 つ目・`tomlout` 節の
-//! 不変条件）。書き出しライブラリを使わずに本文を組み立てる以上、「組み立てた本文を
+//! ここが自前の書き出しの**較正**である。書き出しライブラリを使わずに本文を組み立てる以上、「組み立てた本文を
 //! `toml` で読み戻すと元の値に一致する」ことを機械で押さえないと、逃がし漏れが黙って通る。
 //!
 //! ただし読み戻し一致だけでは足りない。**必要以上に逃がす**書き出し（たとえば日本語を
 //! `\uXXXX` に潰す、インラインテーブルの欄を名前順に並べ替える）は読み戻し一致を完璧に
-//! 満たしながら、要件付録 A.3 が凍結した書き方から 1 バイトずれ、設計 D-1 の 1 行の長さの
-//! 見積りも破る。だから**組み上がった本文そのものの逐語一致**を主要な形
+//! 満たしながら、凍結した書き方から 1 バイトずれ、1 行も長くなる。だから**組み上がった本文そのものの逐語一致**を主要な形
 //! すべてに置く。読み戻しは「読める・値が戻る」を、逐語一致は「どの書き方か」を
 //! それぞれ受け持つ。
 //!
@@ -15,13 +13,12 @@
 //!
 //! 1. 逐語一致 — 素の ASCII・逆斜線・二重引用符・単引用符・日本語・空文字列・制御文字、
 //!    空配列と 2 要素の配列、3 対のインラインテーブル、キー付きテーブルの見出し。
-//! 2. 読み戻し一致 — 上を `toml` で読み戻すと元の Rust 文字列に戻る（設計の不変条件）。
-//! 3. 1 行に収まること — 改行を含む値でも出力に生の改行が現れない（`tomlout` 節の事後条件）。
-//! 4. 与えた順のまま — インラインテーブルも文字列の配列も並べ替えない（設計 D-9）。
-//! 5. 設計の見本との一致 — 設計「Data Models」のカタログ 1 行と要件付録 A.1 の
-//!    テーブル見出しを、そのまま組み上げられること。
+//! 2. 読み戻し一致 — 上を `toml` で読み戻すと元の Rust 文字列に戻る。
+//! 3. 1 行に収まること — 改行を含む値でも出力に生の改行が現れない。
+//! 4. 与えた順のまま — インラインテーブルも文字列の配列も並べ替えない。
+//! 5. 見本との一致 — カタログ 1 行とテーブル見出しを、そのまま組み上げられること。
 //!
-//! スナップショットにもファイルにも触らない（要件 6.2）。すべて文字列だけで完結する。
+//! スナップショットにもファイルにも触らない。すべて文字列だけで完結する。
 
 use super::*;
 
@@ -92,7 +89,7 @@ fn basic_string_renders_empty_as_two_quotes() {
     assert_eq!(basic_string(""), r#""""#);
 }
 
-/// 要件付録 A.3 が凍結した形。逆斜線は 2 つ重ねて書く。
+/// 凍結した形。逆斜線は 2 つ重ねて書く。
 #[test]
 fn basic_string_renders_backslash_as_double_backslash() {
     assert_eq!(
@@ -106,15 +103,15 @@ fn basic_string_renders_double_quote_escaped() {
     assert_eq!(basic_string("say \"hi\""), r#""say \"hi\"""#);
 }
 
-/// 単引用符は二重引用符の文字列の中では逃がす必要が無い（設計 D-10）。
-/// 逃がすと付録 A.3 の形から 1 バイトずれる。
+/// 単引用符は二重引用符の文字列の中では逃がす必要が無い。
+/// 逃がすと凍結した形から 1 バイトずれる。
 #[test]
 fn basic_string_leaves_single_quote_alone() {
     assert_eq!(basic_string("it's"), r#""it's""#);
 }
 
 /// 日本語は生のまま書く。`\uXXXX` に潰すと読み戻しは通るがカタログが読めなくなり、
-/// 設計 D-1 の 1 行の長さの見積りも破る。
+/// 1 行も長くなる。
 #[test]
 fn basic_string_leaves_non_ascii_alone() {
     assert_eq!(
@@ -123,7 +120,7 @@ fn basic_string_leaves_non_ascii_alone() {
     );
 }
 
-/// 制御文字は `\u00XX` に逃がす（設計 D-10）。改行も含めて一様に扱う。
+/// 制御文字は `\u00XX` に逃がす。改行も含めて一様に扱う。
 #[test]
 fn basic_string_renders_control_characters_as_u00xx() {
     assert_eq!(basic_string("a\nb"), r#""a\u000Ab""#);
@@ -171,7 +168,7 @@ fn inline_table_renders_three_pairs_verbatim() {
     );
 }
 
-/// 要件付録 A.1 のテーブル見出しの形。
+/// キー付きテーブルの見出しの形。
 #[test]
 fn keyed_table_header_renders_appendix_a_form() {
     assert_eq!(
@@ -180,7 +177,7 @@ fn keyed_table_header_renders_appendix_a_form() {
     );
 }
 
-/// 鍵に逆斜線が入っても付録 A.3 の形で書く。
+/// 鍵に逆斜線が入っても凍結した形で書く。
 #[test]
 fn keyed_table_header_escapes_backslash_in_key() {
     assert_eq!(
@@ -189,10 +186,10 @@ fn keyed_table_header_escapes_backslash_in_key() {
     );
 }
 
-// ---- 5. 設計の見本をそのまま組み上げられること ----
+// ---- 5. 見本をそのまま組み上げられること ----
 
-/// 設計「Data Models」のカタログ 1 行（`ukadoc:dev_bind`）を逐語で組み上げる。
-/// これが崩れると要件 1.5 の「2 回続けて 1 バイト一致」が守る対象そのものが変わる。
+/// カタログ 1 行（`ukadoc:dev_bind`）を逐語で組み上げる。
+/// これが崩れると「2 回続けて 1 バイト一致」が守る対象そのものが変わる。
 #[test]
 fn catalog_line_matches_the_design_sample() {
     let pairs = [
@@ -217,7 +214,7 @@ fn catalog_line_matches_the_design_sample() {
     );
 }
 
-// ---- 2. 読み戻し一致（設計「tomlout」節の不変条件）----
+// ---- 2. 読み戻し一致----
 
 #[test]
 fn every_sample_round_trips_through_the_toml_reader() {
@@ -307,7 +304,7 @@ fn keyed_table_header_round_trips_as_a_table_key() {
     );
 }
 
-// ---- 3. 1 行に収まること（設計「tomlout」節の事後条件）----
+// ---- 3. 1 行に収まること----
 
 #[test]
 fn output_never_contains_a_raw_line_break() {
@@ -329,7 +326,7 @@ fn output_never_contains_a_raw_line_break() {
     assert!(!keyed_table_header("entry", "a\nb").contains('\n'));
 }
 
-// ---- 4. 与えた順のまま（設計 D-9）----
+// ---- 4. 与えた順のまま----
 
 /// 配列は並べ替えない（昇順に整えるのは呼ぶ側の仕事）。
 #[test]

@@ -105,7 +105,6 @@ fn run() -> Result<()> {
     let clusters = layout.get_cluster_metrics()?.len();
     let overhang = layout.get_overhang_metrics()?;
 
-    // 描く
     unsafe { ctx.SetTarget(&target) };
     let black = D2D1_COLOR_F {
         r: 0.0,

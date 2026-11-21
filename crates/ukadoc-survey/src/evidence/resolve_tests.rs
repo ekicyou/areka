@@ -1,15 +1,13 @@
 //! `resolve.rs` の在中テスト。
 //!
-//! 守るのは 4 つ。⑴ URL の 3 段解決（設計 D-4）——完全一致で項目の証拠になること、
+//! 守るのは 4 つ。⑴ URL の 3 段解決——完全一致で項目の証拠になること、
 //! 同じ id が複数のファイルに現れたら重複を除いた名前順に並ぶこと、カタログに無い
-//! URL は証拠に混ざらず別の一覧へ回ること。⑵ 語彙表の取り出し規則（設計 D-5・
-//! Testing Strategy 5a）——3 形のいずれからも「要素ごとの最初の文字列リテラル」だけが
+//! URL は証拠に混ざらず別の一覧へ回ること。⑵ 語彙表の取り出し規則——3 形のいずれからも「要素ごとの最初の文字列リテラル」だけが
 //! 拾われ、2 番目以降の文字列もスライスの外の文字列も拾われないこと。⑶ 名前の
 //! 突き合わせ——正規化した完全一致で 1 件に定まるときだけ証拠にし、0 件も 2 件以上も
 //! 別の一覧へ回すこと（赤にしない）。⑷ 入口の配線と決定性。
 //!
-//! **ファイルも一時ディレクトリも作らない。環境変数もスナップショットも読まない**
-//! （要件 6.2）。カタログは手で書いた本文から組み立てる。
+//! **ファイルも一時ディレクトリも作らない。環境変数もスナップショットも読まない**。カタログは手で書いた本文から組み立てる。
 
 use super::*;
 use crate::catalog::read::read;
@@ -19,7 +17,7 @@ use crate::model::EntryId;
 const LIST_RESOURCE: &str = "https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html";
 /// `list_sakura_script` のページ URL（フラグメント無し）。
 const LIST_SAKURA: &str = "https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html";
-/// アンカーを持たない項目の URL。ページ URL と綴りが同じになる（要件 1.9 の形）。
+/// アンカーを持たない項目の URL。ページ URL と綴りが同じになる。
 const DEV_BIND: &str = "https://ssp.shillest.net/ukadoc/manual/dev_bind.html";
 /// アンカー付きの項目 URL 1 本。
 const SAKURA_CHOICE: &str =
@@ -99,7 +97,7 @@ fn vocab_source(page_url: &str, body: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// ⑴ URL の 3 段解決（設計 D-4）
+// ⑴ URL の 3 段解決
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -146,7 +144,7 @@ fn a_url_outside_the_catalog_yields_no_evidence_and_one_unresolved() {
 
 #[test]
 fn a_url_that_merely_extends_a_catalog_url_is_not_resolved() {
-    // 設計 D-4 の「末尾の余計な文字」。項目 URL とページ URL のどちらの段でも、
+    // 末尾に余計な文字が付いた URL。項目 URL とページ URL のどちらの段でも、
     // 前方一致に緩めると証拠になってしまう組を 1 つずつ置く。
     let longer_entry = format!("{SAKURA_CHOICE}0");
     let longer_page = format!("{LIST_RESOURCE}#unknown");
@@ -179,7 +177,7 @@ fn a_url_that_merely_extends_a_catalog_url_is_not_resolved() {
 
 #[test]
 fn an_anchorless_entry_url_wins_over_the_page_url() {
-    // `ukadoc:dev_bind` の URL はページ URL と綴りが同じ。1 段目が勝つ（設計 D-4）。
+    // `ukadoc:dev_bind` の URL はページ URL と綴りが同じ。1 段目が勝つ。
     let hits = [hit("crates/a/src/bind.rs", DEV_BIND)];
     let index = resolve(&hits, &sources(&[("crates/a/src/bind.rs", "")]), &catalog());
 
@@ -194,7 +192,7 @@ fn an_anchorless_entry_url_wins_over_the_page_url() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑵ 語彙表の取り出し規則（設計 D-5・Testing Strategy 5a）
+// ⑵ 語彙表の取り出し規則
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -457,12 +455,12 @@ fn comments_inside_the_table_are_not_read_as_structure() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑶ 名前の突き合わせ（設計 D-5）
+// ⑶ 名前の突き合わせ
 // ---------------------------------------------------------------------------
 
 #[test]
 fn a_half_width_space_matches_a_full_width_space_after_normalization() {
-    // 設計 D-5 の「素のままでは 1 件だけ食い違い（全角空白と半角空白の差）」。実データの
+    // 素のままでは 1 件だけ食い違う（全角空白と半角空白の差）。実データの
     // `SHIORI_RESOURCE_IDS` で正規化を要するのはこの形である。
     // 効いているのは**空白の畳み込み**の側で（全角空白は空白として畳まれる）、全角形の
     // 写しの側ではない。写しの側は下の全角チルダのテストが受け持つ。
@@ -486,7 +484,7 @@ fn a_half_width_space_matches_a_full_width_space_after_normalization() {
 
 #[test]
 fn leading_trailing_and_repeated_spaces_are_folded_away() {
-    // 設計 D-5 の「連続空白の畳み込み ＋ 前後の空白落とし」。見出しの側は空白 1 個
+    // 連続空白の畳み込みと前後の空白落とし。見出しの側は空白 1 個
     // （全角）で、要素の側は前後と途中に余分な空白を持つ。
     let text = vocab_source(
         LIST_RESOURCE,
@@ -716,7 +714,7 @@ fn a_marker_whose_text_was_not_supplied_is_table_missing() {
 
 #[test]
 fn the_marker_line_is_recognized_only_in_the_extract_stages_shape() {
-    // 説明文が続く行は取り出しの段が拾わない（要件 5.3）。同じ規則をここでも使う
+    // 説明文が続く行は取り出しの段が拾わない。同じ規則をここでも使う
     // ので、この行はスライスの起点にならない。
     let text = format!(
         "// ukadoc: {LIST_RESOURCE} 参照\npub const IDS: &[&str] = &[\n    \"version\",\n];\n"
@@ -778,8 +776,8 @@ fn no_hits_yields_an_empty_index() {
     assert_eq!(index, EvidenceIndex::default());
 }
 
-/// 目印と表の間に関数が挟まれば、その後ろのスライスは読まない（設計 D-5 の「直後に
-/// 始まる最初のスライス定数」）。文字列とコメントの外の `;` か `{` で探すのを止める。
+/// 目印と表の間に関数が挟まれば、その後ろのスライスは読まない（目印の直後に
+/// 始まる最初のスライス定数だけが表）。文字列とコメントの外の `;` か `{` で探すのを止める。
 #[test]
 fn a_function_between_the_marker_and_a_slice_is_table_missing() {
     let text = vocab_source(

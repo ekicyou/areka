@@ -1,4 +1,4 @@
-//! [`compare_dirs`](super::compare_dirs) の試験（要件 13.2・13.5）。
+//! [`compare_dirs`](super::compare_dirs) の試験。
 //!
 //! 検体の PNG は `target\test-roots\` の下に `image` で書く。
 
@@ -117,7 +117,7 @@ fn missing_dir_is_err() {
     assert!(compare_dirs(ssp.path(), &ssp.child("no-such-dir")).is_err());
 }
 
-// ---- 実行ファイルの引数と出す行（要件 13.1〜13.4）----
+// ---- 実行ファイルの引数と出す行 ----
 
 fn os_args(args: &[&str]) -> Vec<std::ffi::OsString> {
     args.iter().map(std::ffi::OsString::from).collect()

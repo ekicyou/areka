@@ -1,21 +1,16 @@
 //! `assignment.rs` の在中テスト。
 //!
-//! この表の危うさは 1 つしかない——**写し違え**である。ページ名を 1 文字打ち間違えても
-//! 「38 ページ」「shiori は 12 ページ」といった数だけの検査は緑のまま通る。だから
-//! ここでは 4 つのドメインすべてについて、**担当ページの名前を並び順ごと逐語で釘付け**
-//! にする。数は「いくつ」しか言わないが、逐語の並びは「どれ」を言う。
+//! この表の危うさは**写し違え**である。ページ名を 1 文字打ち間違えても「38 ページ」
+//! 「shiori は 12 ページ」といった数だけの検査は緑のまま通る。だから 4 つのドメインすべて
+//! について、担当ページの名前を並び順ごと逐語で釘付けにする。
 //!
-//! 守るのは 5 つ。⑴ 各ドメインの担当ページが逐語で一致し、名前順で返ること
-//! （件数の内訳 shiori 12・assets 24・sakura-script 1・property 1 もこの逐語の並びが
-//! 言い切る。要件 3.1・設計 assignment の事後条件）。⑵ 38 個の名前が互いに
-//! 異なること＝1 ページは 1 ドメインにしか属さない（要件 3.2・設計の不変条件）。
+//! 守るのは 5 つ。⑴ 各ドメインの担当ページが逐語で一致し、名前順で返ること。
+//! ⑵ 38 個の名前が互いに異なること（1 ページは 1 ドメインにしか属さない）。
 //! ⑶ ページからドメインが引けること、表に無いページでは引けないこと。
-//! ⑷ 割り当ての無いページを名前順・重複無しで挙げられること（要件 3.5）。
+//! ⑷ 割り当ての無いページを名前順・重複無しで挙げられること。
 //! ⑸ ページ名は下線を含んだ丸ごとの名前として扱われること（`memo` と
 //!    `memo_shiorievent` は別のドメイン、`descript_shell` と
 //!    `descript_shell_surfaces` は別のページ）。
-//!
-//! スナップショットにもファイルにも触らない（要件 6.2）。すべて値だけで完結する。
 
 use super::*;
 use std::collections::BTreeSet;
@@ -25,7 +20,7 @@ fn spellings(pages: &[PageName]) -> Vec<&str> {
     pages.iter().map(PageName::as_str).collect()
 }
 
-/// 要件 3.1 の shiori 担当 12 ページ（名前順）。
+/// shiori 担当 12 ページ（名前順）。
 fn expected_shiori_pages() -> Vec<&'static str> {
     vec![
         "list_plugin_event",
@@ -43,7 +38,7 @@ fn expected_shiori_pages() -> Vec<&'static str> {
     ]
 }
 
-/// 要件 3.1 の assets 担当 24 ページ（名前順）。
+/// assets 担当 24 ページ（名前順）。
 fn expected_assets_pages() -> Vec<&'static str> {
     vec![
         "descript_balloon",
@@ -73,17 +68,17 @@ fn expected_assets_pages() -> Vec<&'static str> {
     ]
 }
 
-/// 要件 3.1 の sakura-script 担当 1 ページ（名前順）。
+/// sakura-script 担当 1 ページ（名前順）。
 fn expected_sakura_script_pages() -> Vec<&'static str> {
     vec!["list_sakura_script"]
 }
 
-/// 要件 3.1 の property 担当 1 ページ（名前順）。
+/// property 担当 1 ページ（名前順）。
 fn expected_property_pages() -> Vec<&'static str> {
     vec!["list_propertysystem"]
 }
 
-// ---- 担当ページの逐語一致（この節がこのモジュールの本体）----
+// ---- 担当ページの逐語一致 ----
 
 #[test]
 fn shiori_pages_are_the_twelve_pages_of_requirement_3_1() {
@@ -113,7 +108,7 @@ fn property_pages_are_the_single_page_of_requirement_3_1() {
     assert_eq!(spellings(&got), expected_property_pages());
 }
 
-// ---- 1 ページは 1 ドメインにしか属さない（要件 3.2・設計の不変条件）----
+// ---- 1 ページは 1 ドメインにしか属さない ----
 
 /// 元の表（ドメインごとの並び）を平らにした 38 個の綴りが互いに異なること。
 ///
@@ -172,7 +167,7 @@ fn domain_of_returns_none_for_a_page_outside_the_table() {
     }
 }
 
-// ---- 割り当ての無いページを挙げる（要件 3.5）----
+// ---- 割り当ての無いページを挙げる ----
 
 #[test]
 fn unassigned_is_empty_for_no_pages_at_all() {
@@ -181,7 +176,7 @@ fn unassigned_is_empty_for_no_pages_at_all() {
     assert_eq!(assignment.unassigned(pages.iter()), Vec::<PageName>::new());
 }
 
-/// 同じ名前が何度現れても 1 度だけ、並びは名前順（要件 7.3 の決定論）。
+/// 同じ名前が何度現れても 1 度だけ、並びは名前順。
 #[test]
 fn unassigned_is_sorted_and_deduplicated() {
     let assignment = PageAssignment::canonical();

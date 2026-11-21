@@ -1,4 +1,4 @@
-//! `surface-compare <SSP のフォルダ> <areka のフォルダ>`（spec: areka-P0-offline-surface-dump 要件 13）。
+//! `surface-compare <SSP のフォルダ> <areka のフォルダ>`。
 //! 判断はすべてライブラリの [`surface_compare::parse_args`]・[`surface_compare::report`] にあり、ここは出すだけ。
 
 fn main() {

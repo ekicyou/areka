@@ -1,4 +1,4 @@
-//! host の結合テストの共通の道具（audit-shiori-host32 U1・指摘 3・21・48）。
+//! host の結合テストの共通の道具。
 //!
 //! - 成果物の探し方: [`resolve_helper_exe`]・[`resolve_testdll`]・[`workspace_i686_target_base`]。
 //!   env の指定を先に見て、無ければワークスペースの `target\i686-pc-windows-msvc\{debug,release}` を探す。
@@ -8,8 +8,8 @@
 //!   helper のテストの同じ道具は `crates/shiori-host32-helper/src/proxy_test_support.rs`
 //!   （クレートをまたいで共有するには新しいクレートが要るので、2 か所に置いて互いを注釈で指す）。
 //! - 握手の上限: [`HANDSHAKE_TIMEOUT`]（30 秒）。的は「上限の中で HELLO が届く」ことで、
-//!   時間そのものではない。負荷の高い机で i686 helper の起動が遅れても赤にしない上限にする（指摘 48）。
-//! - 握手の手続き: [`handshake`]。HELLO を子のプロセスに縛ってから（`expect_helper_pid`・指摘 38）待つ。
+//!   時間そのものではない。負荷の高い机で i686 helper の起動が遅れても赤にしない上限にする。
+//! - 握手の手続き: [`handshake`]。HELLO を子のプロセスに縛ってから（`expect_helper_pid`）待つ。
 // 結合テストのファイルごとに使う関数が違い、使わないファイルで dead_code の警告が出るため許す。
 #![allow(dead_code)]
 

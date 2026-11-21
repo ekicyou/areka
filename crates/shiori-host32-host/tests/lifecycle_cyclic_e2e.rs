@@ -1,5 +1,4 @@
-//! 周期運転（連打）＋正規 clean shutdown の end-to-end テスト
-//! （task 5.1・design.md Testing Strategy #8「lifecycle_cyclic_e2e.rs::cyclic_run_and_clean_shutdown」）。
+//! 周期運転（連打）＋正規 clean shutdown の end-to-end テスト。
 //!
 //! **実 i686 helper プロセス**を spawn し、**実 i686 testdll（`shiori.dll`）**を
 //! `LoadLibraryExW` させたうえで、ハンドシェイク → LOAD 先行 → **固定応答の往復を 200 回連続
@@ -8,24 +7,24 @@
 //! （UNLOAD → ループ正常終了 → `exit(0)`）を通じて **正常終了種別（`ExitKind::Clean`）**が
 //! 観測されることを、1 つの `#[test]` 関数で実証する。
 //!
-//! 検証フロー（design.md System Flows「正規の正常終了経路」・Testing Strategy #8）:
+//! 検証フロー:
 //! - ① 親窓 `create()` → helper spawn → HELLO pump でハンドシェイク完了を観測。
 //! - ② **LOAD 先行**（helper 内に proxy を確立＝REQUEST の構造的前提）→ ack `[1]` を assert。
 //! - ③ **周期運転**（REPETITIONS=200・back-to-back・sleep なし）: 各反復で GET が fixture 固定
-//!   Value を返す（R3.2/3.3）／NOTIFY が Ok（R3.2）／`status()==Running`（helper 生存・R3.4）を assert。
-//! - ④ ループ後も `status()==Running`（200 反復を生き延びた・R3.4）を assert。
+//!   Value を返す／NOTIFY が Ok／`status()==Running`（helper 生存）を assert。
+//! - ④ ループ後も `status()==Running`（200 反復を生き延びた）を assert。
 //! - ⑤ **正規 clean shutdown**: `request_clean_shutdown` が `ExitKind::Clean` を返す
-//!   （実 helper の UNLOAD arm 経由で exit code 0＝正規の正常終了経路の成立証拠・R5.1/R5.3）。
+//!   （実 helper の UNLOAD arm 経由で exit code 0＝正規の正常終了経路の成立証拠）。
 //!
-//! R3.5 の最小十分 assert 集合（design 決定）: 200×2 往復の全成功 ＋ ループ後 `status()==Running`
-//! ＋ clean shutdown が `Clean` を返すこと。OS ハンドル数の計数は非決定的ゆえ **assert しない**。
-//! 実時間 sleep も **入れない**（R7.5・有限復帰は凍結 SMTO timeout ＋ request timeout に乗る）。
+//! assert は 200×2 往復の全成功 ＋ ループ後 `status()==Running` ＋ clean shutdown が `Clean` を
+//! 返すことに絞る。OS ハンドル数の計数は非決定的ゆえ **assert しない**。
+//! 実時間 sleep も **入れない**（有限復帰は凍結 SMTO timeout ＋ request timeout に乗る）。
 //!
 //! fixture 契約値は testdll 側 `TEST_GET_ID`／`TEST_NOTIFY_ID`／固定 Value と一致するが、host
 //! テストクレートは testdll へ依存しないため、**文字列 ID と期待 Value をハードコード**する
 //! （crates/shiori-host32-testdll/src/lib.rs の契約に忠実追随）。
 //!
-//! ## testdll / helper の所在解決（無言スキップで緑を偽装しない・R7.4）
+//! ## testdll / helper の所在解決（無言スキップで緑を偽装しない）
 //! env override 最優先 → `CARGO_MANIFEST_DIR` から `target/i686-pc-windows-msvc/{debug,release}/`
 //! を探索 → 不在は**明確な panic**（i686 未ビルドの指摘）。silent-skip（緑の偽装）を禁ずる。
 //!
@@ -52,10 +51,10 @@ use shiori_host32_ipc::MsgTag;
 mod common;
 use common::{TestRoot, handshake, resolve_helper_exe, resolve_testdll};
 
-/// 周期運転の反復回数（連打・back-to-back・sleep なし・R3.1/R7.5）。
+/// 周期運転の反復回数（連打・back-to-back・sleep なし）。
 const REPETITIONS: usize = 200;
 
-/// 実 pasta 追験（`cyclic_real_pasta_optional`）の NOTIFY 連打回数（応答内容非依存・R6.1/design #10）。
+/// 実 pasta 追験（`cyclic_real_pasta_optional`）の NOTIFY 連打回数（応答内容非依存）。
 const N_PASTA: usize = 300;
 
 // NOTE: GET／NOTIFY 往復の timeout は `Shiori3Client` が env シーム（`AREKA_SHIORI_REQUEST_TIMEOUT_MS`・
@@ -74,7 +73,7 @@ const TEST_GET_ID: &str = "OnTestValue";
 /// NOTIFY request の `ID`（testdll `TEST_NOTIFY_ID` と一致・ハードコード）。
 const TEST_NOTIFY_ID: &str = "OnTestNotify";
 
-/// 周期運転（200 回連打）＋正規 clean shutdown の E2E（task 5.1・design.md Testing Strategy #8）。
+/// 周期運転（200 回連打）＋正規 clean shutdown の E2E。
 ///
 /// PRIMARY 構造: 単一の親窓＋helper を 200 回の GET/NOTIFY 往復で再利用し（back-to-back・sleep なし）、
 /// 反復後の helper 生存を確認したうえで正規の正常終了経路（UNLOAD → 正常終了 → exit0）を発行し、
@@ -95,7 +94,6 @@ fn cyclic_run_and_clean_shutdown() {
     let dll_path = load_dir.join("shiori.dll");
     std::fs::copy(&testdll, &dll_path).expect("testdll を load_dir へコピーできない");
 
-    // --- ① 親 message-only 窓 ---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
@@ -105,14 +103,13 @@ fn cyclic_run_and_clean_shutdown() {
     // Drop が helper を終わらせて待つ（プロセスリークしない）。
     let mut lifecycle = HelperLifecycle::new(handle);
 
-    // --- HELLO 受領で helper HWND 確定＝ハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
     let helper_hwnd = handshake(&parent, lifecycle.pid());
     assert!(
         helper_hwnd.is_some(),
         "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"
     );
 
-    // --- ② LOAD 先行（helper 内に proxy を確立＝REQUEST の構造的前提・Load-before-Request 不変条件）---
+    // --- LOAD 先行（helper 内に proxy を確立しないと REQUEST は成立しない）---
     let load_ack = parent
         .send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)
         .expect("LOAD の send_request が失敗（ack 未達・proxy 未確立では REQUEST 不能）");
@@ -122,15 +119,13 @@ fn cyclic_run_and_clean_shutdown() {
         "LOAD 成功 ack [1]（proxy 確立）を先に得る（REQUEST の前提）"
     );
 
-    // --- request 出口 API を構築（ハンドシェイク＋LOAD 済みの親窓を借用）---
     // 交渉状態は接続の持ち物（本番は `ShioriConnection`）。本テストは接続の値を組まないので
-    // 適用前と同じ初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
+    // 初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
     let mut client = Shiori3Client::new(&parent, &mut negotiator);
 
-    // --- ③ 周期運転: REPETITIONS 回の GET/NOTIFY 往復（back-to-back・実時間 sleep なし・R3.1/R7.5）---
     for i in 0..REPETITIONS {
-        // GET: 固定 Value を取り出す（request 正組立＋Value 抽出＋所有権往復の証明・R3.2/3.3）。
+        // GET: 固定 Value を取り出す（request 正組立＋Value 抽出＋所有権往復の証明）。
         let value = client
             .get(TEST_GET_ID, &[], None)
             .unwrap_or_else(|e| panic!("反復 {i}: GET(OnTestValue) が Err（{e:?}）"));
@@ -140,19 +135,18 @@ fn cyclic_run_and_clean_shutdown() {
             "反復 {i}: GET は fixture 固定 Value を返す（R3.2/3.3）"
         );
 
-        // NOTIFY: 片道イベント（fixture は 204・client は応答を破棄して Ok(())・R3.2）。
+        // NOTIFY: 片道イベント（fixture は 204・client は応答を破棄して Ok(())）。
         client
             .notify(TEST_NOTIFY_ID, &[], None)
             .unwrap_or_else(|e| panic!("反復 {i}: NOTIFY(OnTestNotify) が Err（{e:?}）"));
 
-        // helper 生存継続（sticky・非ブロッキング status()・R3.4）。
+        // helper 生存継続（sticky・非ブロッキング status()）。
         assert!(
             matches!(lifecycle.status(), HelperStatus::Running),
             "反復 {i}: 往復中も helper は稼働継続している（R3.4）"
         );
     }
 
-    // --- ④ 200 反復を生き延びた（R3.4）---
     assert!(
         matches!(lifecycle.status(), HelperStatus::Running),
         "全 {REPETITIONS} 反復後も helper は稼働継続している（連打を生き延びた・R3.4）"
@@ -160,7 +154,6 @@ fn cyclic_run_and_clean_shutdown() {
 
     // --- client（`&parent` 借用）は最後に使った所で終わっているので、そのまま shutdown へ進む（clean）---
 
-    // --- ⑤ 正規の正常終了経路: UNLOAD → ループ正常終了 → exit(0) → ExitKind::Clean を観測（R5.1/R5.3）---
     let kind = lifecycle
         .request_clean_shutdown(&parent)
         .expect("clean shutdown should succeed");
@@ -170,21 +163,20 @@ fn cyclic_run_and_clean_shutdown() {
         "正規の正常終了経路が exit code 0（Clean）を生む（実 helper の UNLOAD arm 経由・R5.1/R5.3）"
     );
 
-    // --- 親窓を明示 drop → best-effort cleanup ---
     drop(parent);
 }
 
-/// 実 pasta.dll への周期連打 confidence テスト（env-gate・任意・R6.1〜6.3・design Testing Strategy #10）。
+/// 実 pasta.dll への周期連打 confidence テスト（env-gate・任意）。
 ///
 /// 上の決定的テスト（testdll・固定 response）とは扱いが異なる:
-/// - env `HOST32_PASTA_DLL`（DLL フルパス）**未設定**なら明示 skip（eprintln・CI 必須ゲートにしない・R6.3）。
+/// - env `HOST32_PASTA_DLL`（DLL フルパス）**未設定**なら明示 skip（eprintln・CI 必須ゲートにしない）。
 ///   この skip は本テスト（任意 env-gate）に限る例外であり、決定的テストの「無言スキップ禁止」規律とは
 ///   別物である（helper 不在は `resolve_helper_exe` が引き続き panic する）。
-/// - env 設定済みだが**指定 DLL が不在**なら明示 fail（silent skip を認めない・R6.2）。
+/// - env 設定済みだが**指定 DLL が不在**なら明示 fail（silent skip を認めない）。
 /// - env 設定済みで**存在**する場合は `N_PASTA = 300` 回の `notify("OnSecondChange", ..)` 連打を行い
 ///   （応答内容非依存＝notify は破棄契約ゆえ実 DLL の応答内容に依らず **transport 健全性のみ**を観測。
-///   イベント運行の意味論検証はしない＝kanade 領分・R6.1）、helper 生存を確認したうえで
-///   **正規の clean shutdown**（UNLOAD → 正常終了 → exit0）で `ExitKind::Clean` を観測する（confidence・R6.1）。
+///   イベント運行の意味論検証はしない＝kanade 領分）、helper 生存を確認したうえで
+///   **正規の clean shutdown**（UNLOAD → 正常終了 → exit0）で `ExitKind::Clean` を観測する。
 ///
 /// 構造は決定的テストと同型（HELLO pump → LOAD 先行 ack[1] → `Shiori3Client::new` → 連打 → clean shutdown）。
 /// load_dir=DLL の親 dir・shiori_name=ファイル名（実 pasta は自身の dir に住むため。request 系
@@ -194,7 +186,7 @@ fn cyclic_run_and_clean_shutdown() {
 /// ＋SMTO_ABORTIFHUNG・終了観測=`request_clean_shutdown` 内 timeout で必ず有限復帰する（ハングしない）。
 #[test]
 fn cyclic_real_pasta_optional() {
-    // --- env `HOST32_PASTA_DLL` 未設定＝任意 gate ゆえ明示 skip（R6.3・CI 必須ゲートにしない）---
+    // --- env `HOST32_PASTA_DLL` 未設定＝任意 gate ゆえ明示 skip（CI 必須ゲートにしない）---
     let Ok(pasta_dll) = std::env::var("HOST32_PASTA_DLL") else {
         eprintln!(
             "HOST32_PASTA_DLL 未設定のため実 pasta 追験を skip（任意 gate・R6.3）。\
@@ -204,7 +196,7 @@ fn cyclic_real_pasta_optional() {
         return;
     };
 
-    // --- env 設定済みだが DLL が不在なら明示 fail（silent skip を認めない・R6.2）---
+    // --- env 設定済みだが DLL が不在なら明示 fail（silent skip を認めない）---
     let dll_path = PathBuf::from(&pasta_dll);
     assert!(
         dll_path.is_file(),
@@ -214,7 +206,6 @@ fn cyclic_real_pasta_optional() {
     // helper 不在は引き続き panic（silent-skip 禁止・helper 成果物は任意ではない）。
     let helper_exe = resolve_helper_exe();
 
-    // load_dir=DLL の親 dir・shiori_name=ファイル名（実 pasta は自身の dir に住む・削除しない）。
     let load_dir = dll_path
         .parent()
         .expect("HOST32_PASTA_DLL に親 dir がない")
@@ -225,7 +216,6 @@ fn cyclic_real_pasta_optional() {
         .to_string_lossy()
         .into_owned();
 
-    // --- ① 親 message-only 窓（使用後に明示 drop）---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
@@ -235,14 +225,12 @@ fn cyclic_real_pasta_optional() {
     // Drop が helper を終わらせて待つ（プロセスリークしない）。
     let mut lifecycle = HelperLifecycle::new(handle);
 
-    // --- HELLO 受領でハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
     let helper_hwnd = handshake(&parent, lifecycle.pid());
     assert!(
         helper_hwnd.is_some(),
         "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"
     );
 
-    // --- ② LOAD 先行（実 pasta の proxy を確立＝REQUEST の構造的前提）→ ack[1] を assert ---
     let load_ack = parent
         .send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)
         .expect("LOAD の send_request が失敗（ack 未達・proxy 未確立では REQUEST 不能）");
@@ -252,17 +240,15 @@ fn cyclic_real_pasta_optional() {
         "実 pasta の LOAD 成功 ack [1]（proxy 確立）を先に得る（REQUEST の前提・R6.1）"
     );
 
-    // --- request 出口 API を構築（ハンドシェイク＋LOAD 済みの親窓を借用）---
     // 交渉状態は接続の持ち物（本番は `ShioriConnection`）。本テストは接続の値を組まないので
-    // 適用前と同じ初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
+    // 初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
     let mut client = Shiori3Client::new(&parent, &mut negotiator);
 
-    // --- ③ 周期運転: N_PASTA 回の NOTIFY 連打（応答内容非依存＝transport 健全性のみ観測・R6.1）---
-    //     NOTIFY は応答を破棄する契約ゆえ実 pasta の応答内容に依らない。イベント運行の意味論検証は
-    //     しない（kanade 領分）。連打が Err なく通ることと helper 生存継続を観測する。
+    // N_PASTA 回の NOTIFY 連打: 応答内容に依らず、連打が Err なく通ることと helper 生存継続だけを
+    // 観測する（イベント運行の意味論検証は kanade 領分）。
     for i in 0..N_PASTA {
-        // notify transport が成功すること（応答 status は破棄・内容に assert しない・R6.1）。
+        // notify transport が成功すること（応答 status は破棄・内容に assert しない）。
         client
             .notify("OnSecondChange", &[], None)
             .unwrap_or_else(|e| {
@@ -276,7 +262,6 @@ fn cyclic_real_pasta_optional() {
         );
     }
 
-    // --- ④ N_PASTA 連打を生き延びた ---
     assert!(
         matches!(lifecycle.status(), HelperStatus::Running),
         "全 {N_PASTA} 連打後も実 pasta helper は稼働継続している（R6.1）"
@@ -284,7 +269,6 @@ fn cyclic_real_pasta_optional() {
 
     // --- client（`&parent` 借用）は最後に使った所で終わっているので、そのまま shutdown へ進む（clean）---
 
-    // --- ⑤ 正規の clean shutdown: UNLOAD → 正常終了 → exit0 → ExitKind::Clean を観測（confidence・R6.1）---
     let kind = lifecycle
         .request_clean_shutdown(&parent)
         .expect("real pasta clean shutdown");
@@ -297,7 +281,6 @@ fn cyclic_real_pasta_optional() {
         "実 pasta 周期連打（{N_PASTA} 回 NOTIFY）＋正規 clean shutdown 完走（Clean・R6.1）: {pasta_dll:?}"
     );
 
-    // --- 親窓を明示 drop ---
-    //     load_dir は実 pasta 自身の dir ゆえ削除しない（本テストが作った temp ではない）。
+    // load_dir は実 pasta 自身の dir ゆえ削除しない（本テストが作った temp ではない）。
     drop(parent);
 }

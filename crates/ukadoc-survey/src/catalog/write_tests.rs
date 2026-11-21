@@ -1,16 +1,15 @@
 //! `write.rs` の在中テスト。
 //!
-//! 守るのは 5 つ。⑴ 設計「Data Models」の見本がバイト単位で再現されること
-//! （冒頭の 2 行・`[snapshot]` の 8 欄とその並び・`[entry]` の 1 項目 1 行）。
-//! ⑵ 項目が id の byte 昇順で並び、1 項目がちょうど 1 行になること（要件 1.1・D-9）。
-//! ⑶ 逃がしが設計 D-10 のとおり（逆斜線は `\\`・単引用符と日本語はそのまま）。
+//! 守るのは 5 つ。⑴ 見本がバイト単位で再現されること（冒頭の 2 行・`[snapshot]` の 8 欄と
+//! その並び・`[entry]` の 1 項目 1 行）。⑵ 項目が id の byte 昇順で並び、1 項目がちょうど
+//! 1 行になること。⑶ 逃がしは、逆斜線は `\\`・単引用符と日本語はそのまま。
 //! ⑷ 組み上げた本文が `toml` でも読めて値が一致すること（自前の書き出しの較正）。
 //! ⑸ 書き出す鍵が表の鍵であって項目の側の `id` ではないこと。
 //!
 //! ⑷ を置くのは、⑴〜⑶ が自分の読み取りだけを相手にしていると「自分の読み手だけが
 //! 許す本文」を書いていても気づけないからである。独立した読み手を 1 つ通す。
 //!
-//! **ファイルも一時ディレクトリも作らない。環境変数も読まない**（要件 6.2）。
+//! **ファイルも一時ディレクトリも作らない。環境変数も読まない**。
 //!
 //! 逐語の期待値は実装の定数を参照せず、独立した文字列リテラルで書く。定数を参照すると
 //! 表を表自身と比べるだけになる。
@@ -19,7 +18,7 @@ use std::collections::BTreeMap;
 
 use super::*;
 
-/// 設計「Data Models」の `doc/ukadoc-coverage/catalog.toml` の見本そのもの。
+/// `doc/ukadoc-coverage/catalog.toml` の見本そのもの。
 ///
 /// 見出しとハッシュは見本の当て字（`...`・`0000000000000000`）なので、下の
 /// [`design_sample_catalog`] もその綴りをそのまま持つ。
@@ -56,7 +55,7 @@ fn design_sample_meta() -> SnapshotMeta {
     }
 }
 
-/// 項目 1 件を組み立てる。ページ名は id から取る（設計 D-11）。
+/// 項目 1 件を組み立てる。ページ名は id から取る。
 fn entry_of(
     id: &str,
     title: &str,
@@ -117,7 +116,7 @@ fn the_written_key_is_the_table_key_not_the_entry_id() {
     );
 }
 
-/// 設計の見本と同じ 2 項目のカタログ。
+/// 見本と同じ 2 項目のカタログ。
 fn design_sample_catalog() -> Catalog {
     catalog_of(
         design_sample_meta(),
@@ -191,17 +190,17 @@ fn lines(body: &str) -> Vec<&str> {
         .collect()
 }
 
-/// 設計「Data Models」の見本を 1 バイトも違わずに組み上げる。
+/// 凍結した見本を 1 バイトも違わずに組み上げる。
 ///
 /// 冒頭の 2 行・`[snapshot]` の 8 欄の並び・空行の入り方・`[entry]` の 1 行の形の
 /// すべてがここに載っている。読み戻し一致では区切りの空白 1 個の違いも欄の並び替えも
-/// 捕まらないので、この逐語の主張が要件 1.5 の土台になる。
+/// 捕まらないので、この逐語の主張が 1 バイトの安定の土台になる。
 #[test]
 fn design_sample_body_is_reproduced_byte_for_byte() {
     assert_eq!(write(&design_sample_catalog()), DESIGN_SAMPLE);
 }
 
-/// 項目は id の byte 昇順に並び、渡した順には従わない（設計 D-9）。
+/// 項目は id の byte 昇順に並び、渡した順には従わない。
 #[test]
 fn entries_are_written_in_id_byte_order() {
     let body = write(&rich_catalog());
@@ -221,7 +220,7 @@ fn entries_are_written_in_id_byte_order() {
     );
 }
 
-/// 1 項目はちょうど 1 行（要件 1.1）。行数は `[entry]` までの 14 行＋項目数で決まる。
+/// 1 項目はちょうど 1 行。行数は `[entry]` までの 14 行＋項目数で決まる。
 #[test]
 fn each_entry_occupies_exactly_one_line() {
     let body = write(&rich_catalog());
@@ -238,7 +237,7 @@ fn each_entry_occupies_exactly_one_line() {
     }
 }
 
-/// 逃がしは設計 D-10 のとおり。逆斜線は `\\`、単引用符と日本語はそのまま。
+/// 逃がしは、逆斜線は `\\`、単引用符と日本語はそのまま。
 #[test]
 fn escaping_follows_design_d10() {
     let body = write(&rich_catalog());

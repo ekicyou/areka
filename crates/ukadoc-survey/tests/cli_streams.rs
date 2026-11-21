@@ -1,5 +1,4 @@
-//! 実行ファイルの入口が「どの流れへ何を出し、どの終了コードで終わるか」を守る
-//! （設計「入口 / cli」の 2 つ目の箇条書き・「Error Handling / 見張り」・要件 6.12）。
+//! 実行ファイルの入口が「どの流れへ何を出し、どの終了コードで終わるか」を守る。
 //!
 //! 在中テストからは `cli::run` の戻り値までしか見えない。**標準エラーへの写し**と
 //! **戻り値を終了コードへ写す対応表**は `main.rs` にあり（標準出力へ書くのは `cli` の
@@ -25,14 +24,14 @@
 //! 成功の腕（[`candidates_writes_its_result_to_stdout_and_exits_zero`]）は `candidates`
 //! が `crates/**/*.rs` だけを読んで成功するので、上の 3 つの線を 1 つも踏まずに閉じられる。
 //!
-//! 事例はファイルを 1 つも作らず、一時ディレクトリも使わない（設計 File Structure Plan）。
+//! 事例はファイルを 1 つも作らず、一時ディレクトリも使わない。
 
 use std::process::{Command, Output};
 
 /// 使い方の本文の 1 行目（`cli::usage` の実装を引かず、独立した文字列で書く）。
 const USAGE_FIRST_LINE: &str = "使い方: cargo run -p ukadoc-survey -- <副手続き>";
 
-/// スナップショットの場所を指す環境変数（要件 9.7・`AREKA_` 冠）。
+/// スナップショットの場所を指す環境変数（`AREKA_` 冠）。
 const SNAPSHOT_ENV: &str = "AREKA_UKADOC_SNAPSHOT";
 
 /// 実在しない場所の固定の綴り（読むだけなので一時ディレクトリは作らない）。
@@ -81,8 +80,7 @@ fn an_unknown_subcommand_echoes_the_typed_name_to_stderr_and_exits_two() {
 
 #[test]
 fn priority_apply_takes_no_arguments_and_exits_two_when_given_one() {
-    // `priority-apply` も引数を取らない（設計「入口 / cli::generate::priority_apply」の
-    // Batch / Job Contract）。ここは**振り分けの手前で断る**経路だけを見るので、
+    // `priority-apply` も引数を取らない。ここは**振り分けの手前で断る**経路だけを見るので、
     // 書き戻しそのものは走らない——走れば repo の台帳を書き換える。
     assert_usage_error(
         &["priority-apply", "shiori"],
@@ -190,7 +188,7 @@ fn catalog_with_a_missing_snapshot_fails_quietly_and_leaves_the_tree_untouched()
     // 両方捕まえる。
     //
     // 環境変数は子プロセスにだけ渡す（`Command::env`）。同一プロセスの環境を書き換える
-    // わけではないので、設計 Testing Strategy 19 の禁止（`set_var`）には当たらない。
+    // わけではないので、テストで `set_var` を使わない決まりには当たらない。
     // `catalog` はこの指定を読んで、指す先が無いことで失敗する。指定を外すと本物の
     // スナップショットを読みに行くので、外してはならない。
     //

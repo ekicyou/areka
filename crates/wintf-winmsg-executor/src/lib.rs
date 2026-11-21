@@ -51,7 +51,6 @@ pub struct JoinHandle<T> {
     task: ManuallyDrop<async_task::Task<T>>,
 }
 
-// Keep the task running when dropped.
 impl<T> Drop for JoinHandle<T> {
     fn drop(&mut self) {
         let task = unsafe { ManuallyDrop::take(&mut self.task) };
@@ -84,7 +83,6 @@ unsafe fn spawn_unchecked_lifetime<T>(future: impl Future<Output = T>) -> JoinHa
         })
     };
 
-    // Trigger initial poll.
     runnable.schedule();
 
     JoinHandle {
@@ -129,7 +127,6 @@ pub fn spawn_local<T: 'static>(future: impl Future<Output = T> + 'static) -> Joi
 pub fn block_on<'a, T: 'a>(future: impl Future<Output = T> + 'a) -> T {
     let msg_loop = &MessageLoop::new();
 
-    // Wrap the future so it quits the message loop when finished.
     // SAFETY: All borrowed variables outlive the task itself because we only
     // return from this function after the task has finished.
     let task = unsafe {
@@ -400,7 +397,6 @@ mod test {
         let window_name = w!("running_spawned_with_modal_dialog");
 
         let task = spawn_local(async move {
-            // Wait for modal window to be open.
             while window_by_name(window_name).0.is_null() {
                 yield_now().await;
             }
@@ -410,7 +406,6 @@ mod test {
                 yield_now().await;
             }
 
-            // Close the modal window.
             unsafe {
                 SendMessageW(
                     window_by_name(window_name),
@@ -497,7 +492,6 @@ mod test {
         });
 
         spawn_local(async move {
-            // Check if modal window is actually open.
             assert!(!window_by_name(window_name).0.is_null());
 
             for i in 0..10 {
@@ -505,7 +499,6 @@ mod test {
                 yield_now().await;
             }
 
-            // Close modal window again.
             unsafe {
                 SendMessageW(
                     window_by_name(window_name),

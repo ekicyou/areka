@@ -1,16 +1,14 @@
-//! 記入例が実データに実在し、道具でそのまま読めることの主張（要件 2.1・2.6・6.3・
-//! 6.7・付録 A.1・A.3・付録 B.5）。
+//! 記入例が実データに実在し、道具でそのまま読めることの主張。
 //!
 //! # なぜ記入例に見張りが要るのか
 //!
-//! 要件 2.1 は調査 spec 4 本に「本 spec の実装を待たず**付録 A の形で**台帳を書き始め
-//! てよい」と言っている。つまり付録 A.1 の記入例は読み物ではなく、4 本が最初に写す
-//! 手本である。手本の id が実在しない綴りだと、写した台帳は要件 6.3
-//! （`LedgerIdNotInCatalog`）で必ず赤くなり、書き手は「道具が壊れている」と読む。
+//! 要件文書の記入例は読み物ではなく、調査 spec 4 本の台帳が最初に写す手本である。
+//! 手本の id が実在しない綴りだと、写した台帳は `LedgerIdNotInCatalog` で必ず赤く
+//! なり、書き手は「道具が壊れている」と読む。
 //!
-//! 実際に、付録 A.1 の記入例には実データに無い綴り（`balloon.scope(ID).width` など）が
-//! 混じっていたことがある。実在する id へ訂正したものが**二度と剥がれない**ように
-//! するのがこのファイルである。
+//! 記入例に実データに無い綴り（`balloon.scope(ID).width` など）が混じっていたことが
+//! あり、実在する id へ訂正したものが**二度と剥がれない**ようにするのがこのファイル
+//! である。
 //!
 //! # 何を相手にするか
 //!
@@ -22,15 +20,15 @@
 //! # 空振りの緑を作らない
 //!
 //! 取り出しが 0 件を返せば「全部実在する」は無条件に成り立つ。だから件数の下限を
-//! 釘付けし（要件 4 件・README 3 件）、さらに取り出し自体の較正
+//! 釘付けし（要件文書 4 件・README 3 件）、さらに取り出し自体の較正
 //! （[`the_id_scan_reports_an_id_that_the_catalog_does_not_have`]）を 1 本置く。
 //! 較正は実在する id と実在しない id を 1 つずつ混ぜた小さな本文を食わせ、後者が
 //! 「カタログに無い」と報告されることを確かめる。
 //!
 //! # 読むだけ
 //!
-//! ファイルも一時ディレクトリも作らない（設計 File Structure Plan）。読むのは
-//! `RepoData` の一式と要件文書・README である。
+//! ファイルも一時ディレクトリも作らない。読むのは `RepoData` の一式と要件文書・
+//! README である。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -44,22 +42,21 @@ use super::RepoData;
 
 /// 要件文書の置き場（ワークスペース根からの相対）。
 ///
-/// 完了処理（`/kiro-complete`）が `completed/` の綴りへ書き換えた定数である。完了処理は
-/// spec を `completed/` へ移すとき `crates/` 全域から feature 名を grep して綴りを
-/// 書き換える。綴りをこの定数 1 つに集めてあるのはそのためで——本文中に散らすと、
-/// 移動のときにどれか 1 つが取り残されて
-/// [`read_workspace_file`] が「探した絶対パス」を添えて止まる。
+/// 完了処理（`/kiro-complete`）は spec を `completed/` へ移すとき `crates/` 全域から
+/// feature 名を grep して綴りを書き換える。綴りをこの定数 1 つに集めてあるのはそのため
+/// で、本文中に散らすと取り残されて [`read_workspace_file`] が「探した絶対パス」を
+/// 添えて止まる。
 const REQUIREMENTS_MD: &str =
     ".kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md";
 
-/// 台帳の README（形式の説明の正本・要件 2.5）。
+/// 台帳の README（形式の説明の正本）。
 const README_MD: &str = "doc/ukadoc-coverage/README.md";
 
 /// 要件文書の囲みの中にある id の件数の下限。
 ///
 /// 4 件は別名の項目・その `alias_of` の指す先・`system.year`・`queries` の指す先。
-/// **下限**にしてあるのは、記入例が増えることは
-/// 起こり得ても減ることは要件 2.6 の凍結に反するからで、増えた分も同じ検査を通る。
+/// **下限**にしてあるのは、記入例が増えることは起こり得ても、減ることは凍結に反する
+/// からで、増えた分も同じ検査を通る。
 const REQUIREMENTS_ID_FLOOR: usize = 4;
 
 /// README の囲みの中にある id の件数の下限。
@@ -90,7 +87,7 @@ fn read_workspace_file(relative: &str) -> String {
     files::read_normalized(&path).unwrap_or_else(|err| panic!("{err}"))
 }
 
-/// 付録 A.1 の記入例（台帳 1 ファイル分の形をした唯一の囲み）を返す。
+/// 要件文書の記入例（台帳 1 ファイル分の形をした唯一の囲み）を返す。
 fn requirements_ledger_example(markdown: &str) -> String {
     let mut found: Vec<String> = toml_blocks(markdown)
         .into_iter()
@@ -109,7 +106,7 @@ fn requirements_ledger_example(markdown: &str) -> String {
 // 主張
 // ---------------------------------------------------------------------------
 
-/// 要件文書の囲みの中の id が全部カタログに実在する（要件 2.1・6.3・付録 B.5）。
+/// 要件文書の囲みの中の id が全部カタログに実在する。
 #[test]
 fn every_id_in_the_requirements_toml_blocks_exists_in_the_catalog() {
     let catalog = &RepoData::load().catalog;
@@ -131,7 +128,7 @@ fn every_id_in_the_requirements_toml_blocks_exists_in_the_catalog() {
     );
 }
 
-/// README の囲みの中の id が全部カタログに実在する（要件 2.5・6.3）。
+/// README の囲みの中の id が全部カタログに実在する。
 #[test]
 fn every_id_in_the_readme_toml_blocks_exists_in_the_catalog() {
     let catalog = &RepoData::load().catalog;
@@ -151,13 +148,12 @@ fn every_id_in_the_readme_toml_blocks_exists_in_the_catalog() {
     );
 }
 
-/// 付録 A.1 の記入例が、道具の台帳読み手でそのまま property の台帳として読める
-/// （要件 2.1・付録 A.1）。
+/// 要件文書の記入例が、道具の台帳読み手でそのまま property の台帳として読める。
 ///
 /// 突き合わせに使うのは道具自身の [`read_ledger`] であって、この場での TOML の
 /// 読み直しではない。手本が「読める形」であることの証明は、実際に読み手を通す以外に
-/// 無いからである。並び順も同じ理由で [`ukadoc_survey::ledger::Ledger::file_order`]
-/// （本文に現れた順・設計 D-12）から取る。
+/// 無いからである。並び順も同じ理由で
+/// [`ukadoc_survey::ledger::Ledger::file_order`]（本文に現れた順）から取る。
 #[test]
 fn the_requirements_example_reads_as_a_property_ledger() {
     let example = requirements_ledger_example(&read_workspace_file(REQUIREMENTS_MD));
@@ -197,7 +193,7 @@ fn the_requirements_example_reads_as_a_property_ledger() {
     );
 }
 
-/// 記入例の `alias_of` の指す先が実在し、実台帳でそれが `alias` ではない（要件 6.7）。
+/// 記入例の `alias_of` の指す先が実在し、実台帳でそれが `alias` ではない。
 ///
 /// 「別名の連鎖の禁止」は手本にこそ効く。手本が連鎖を作っていれば、4 本の台帳が
 /// それを写して一斉に赤くなる。実在の確認（肯定）と、指す先が `alias` でないこと
@@ -247,7 +243,7 @@ fn the_alias_example_points_at_an_entry_that_is_not_an_alias() {
     }
 }
 
-/// 記入例の `links` の相手 id がカタログに実在する（要件 6.7 の「関連の両端」）。
+/// 記入例の `links` の相手 id がカタログに実在する。
 #[test]
 fn every_link_target_in_the_requirements_example_exists_in_the_catalog() {
     let repo = RepoData::load();

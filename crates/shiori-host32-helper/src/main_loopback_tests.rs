@@ -44,24 +44,21 @@ fn stand_in_parent() -> (Window<()>, ParentRecord) {
     (parent, record)
 }
 
-/// 単一 loopback テスト（HELLO 送出・未確立 REQUEST→500・LOAD・proxy 駆動 REQUEST(GET/NOTIFY)・
-/// 不正フレーム記録・bounded 生存を同一窓で網羅）。
+/// 1 組の窓で HELLO 送出・未確立 REQUEST→500・LOAD・proxy 駆動 REQUEST(GET/NOTIFY)・UNLOAD・
+/// 不正フレーム記録・bounded 生存を確かめる。
 ///
-/// 窓は stand-in parent ＋ helper の 2 つ。
-/// bounded: 有限メッセージを PostMessage で撒いた後に必ず抜ける（無限ループ禁止）。
+/// 窓は stand-in parent ＋ helper の 2 つ。有限個のメッセージを PostMessage で撒いた後に必ず抜ける。
 #[test]
 #[cfg_attr(
     not(target_arch = "x86"),
     ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
 )]
 fn loopback_hello_request_proxy_driven_and_bounded_loop() {
-    // --- stand-in parent（HELLO / RESPONSE 受け皿）。受領を Rc<Cell> に記録 ---
+    // --- stand-in parent ---
     let (parent, (hello_helper_hwnd, responses, last_response, _)) = stand_in_parent();
     let parent_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
 
-    // --- helper 窓生成（HELLO は create 内で親へ送出）---
-    // LOAD 経路検証のため、testdll(shiori.dll) を入れたテストの根を load_dir として helper を構築する。
-    // dll_path = load_dir\shiori.dll（絶対）。testdll 解決は silent skip 禁止（resolve_testdll が panic）。
+    // --- helper 窓生成（HELLO は create 内で親へ送る）---
     // 根は helper より先に作るので、helper の後に消える。
     let (root, _) = copy_testdll_into_unique_target_dir("loop");
     let load_dir = root.path().to_path_buf();
@@ -71,7 +68,6 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
             .expect("HelperMessageWindow 生成に失敗");
     let helper_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(helper.hwnd()));
 
-    // HELLO 送出経路が動いた: 親が helper HWND を復号一致で受領（要件 3.1）。
     assert_eq!(
         hello_helper_hwnd.get(),
         Some(helper_hwnd_u32),
@@ -79,9 +75,7 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     );
     assert_eq!(helper.shared().hellos_sent.get(), 1);
 
-    // --- 未確立 REQUEST: proxy 未確立（LOAD 前）で REQUEST を送っても crash せず、識別可能な
-    //     500 エラー RESPONSE を親が受領する（echo ではない・R3.1）---
-    // Load-before-Request は構造的不変だが、helper は不変違反でも crash しない最小防御を持つ。
+    // --- 未確立 REQUEST（LOAD 前）は crash せず 500 を返す ---
     let pre_load_req =
         b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestValue\r\n\r\n";
     send_copydata(
@@ -122,8 +116,7 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         );
     }
 
-    // --- LOAD 経路: MsgTag::Load（空ペイロード）→ 未確立ゆえ proxy 確立 → ack[1]（要件 4.1/5.1）---
-    // 親が受領した最新 RESPONSE を LOAD ack として観測する（load_dir\shiori.dll=testdll を確立）。
+    // --- LOAD: 未確立なので proxy を確立して ack[1] ---
     send_copydata(
         helper.hwnd(),
         parent.hwnd(),
@@ -163,8 +156,7 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         "LOAD ack は厳密 1 byte [1]（成功・要件 5.1）"
     );
 
-    // --- proxy 駆動 REQUEST(GET): 確立済み proxy で REQUEST を送ると testdll が固定 200 応答を返し、
-    //     それが echo でなく proxy 駆動結果として親へ RESPONSE 返送される（R4.7・Observable）---
+    // --- proxy 駆動 REQUEST(GET): testdll の固定 200 応答が返る ---
     let get_req = b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestValue\r\n\r\n";
     send_copydata(
         helper.hwnd(),
@@ -203,8 +195,7 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         );
     }
 
-    // --- proxy 駆動 REQUEST(NOTIFY): 同経路で helper は proxy.request を駆動し DLL 戻り（204）を
-    //     そのまま RESPONSE 返送する（GET と同一経路・host 側で破棄・R4.8 の helper 側）---
+    // --- proxy 駆動 REQUEST(NOTIFY): GET と同じ道で DLL の 204 をそのまま返す（破棄は host 側）---
     let notify_req =
         b"NOTIFY SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestNotify\r\n\r\n";
     send_copydata(
@@ -235,7 +226,7 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         );
     }
 
-    // --- 冪等再 LOAD: もう一度 Load → load 再呼出なしで ack[1] 冪等返送（R2.4・無 panic）---
+    // --- 冪等の再 LOAD: `load` を呼び直さず ack[1] ---
     send_copydata(
         helper.hwnd(),
         parent.hwnd(),
@@ -271,12 +262,8 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         "冪等 LOAD ack も厳密 1 byte [1]（R2.4）"
     );
 
-    // --- UNLOAD（正規正常終了経路のアーム機構・R5.1/R5.6・Task 3.2）---
-    // MsgTag::Unload（空ペイロード）を helper へ送ると、helper は proxy を take して `close`
-    // （unload → FreeLibrary）→ quit_requested セット → 既存 LOAD ack と同型の ack[1] を
-    // close 完了後・ループ終了前の順序で返送する。proxy は未確立へ戻る。
-    // （proxy を閉じるため、以降 proxy 確立を前提とする REQUEST 検証は置かない・R5.1）。
-    // exit 0 の観測は x64 e2e（Task 5.1）の領分ゆえここでは扱わない。
+    // --- UNLOAD: proxy を close して quit_requested を立て、ack[1] を返す ---
+    // 以降は proxy が閉じているので、proxy 確立を前提とする REQUEST は置かない。
     send_copydata(
         helper.hwnd(),
         parent.hwnd(),
@@ -312,8 +299,7 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     // 終了要求でループが抜け exit(0) に至ることの守りは、main の本物のフィルタを通す
     // `lifecycle_cyclic_e2e` の `ExitKind::Clean` の検査（ここで写しのフィルタを回しても守りにならない）。
 
-    // --- 不正フレーム: 未知タグを helper へ送っても crash せず記録のみ（要件 2.5）---
-    // 未知タグ生値 0xFF を dwData に載せて自窓へ送る（copydata_payload が UnknownTag で弾く）。
+    // --- 不正フレーム: 未知タグ 0xFF は crash せず記録のみ ---
     {
         let payload: &[u8] = b"";
         let cds = COPYDATASTRUCT {
@@ -336,7 +322,6 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         1,
         "不正フレームは crash させず記録のみ（要件 2.5）"
     );
-    // 不正フレームでは RESPONSE を送らない（無応答）。
     // 未確立 REQUEST 500(1)＋LOAD ack(2)＋GET(3)＋NOTIFY(4)＋冪等 LOAD ack(5)＋UNLOAD ack(6) の計 6 のまま。
     assert_eq!(
         responses.get(),
@@ -373,17 +358,16 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         "bounded ループが有限回で必ず抜ける（無限ループでない・要件 6.3）"
     );
 
-    // 窓は Drop で破棄（proxy は UNLOAD の close で解放済み＝None なので helper の Drop は窓だけ）。
+    // proxy は UNLOAD の close で解放済みなので、helper の Drop は窓だけ。
     drop(helper);
     drop(parent);
-    // 根（testdll の写し先）は Drop で消える。
     drop(root);
 }
 
-/// helper が始めに標準の取っ手から受け継ぎの印を落とす（design.md U5・指摘 4）。
+/// helper が始めに標準の取っ手から受け継ぎの印を落とす。
 ///
 /// 自分の標準エラーの取っ手に受け継ぎの印を立ててから `disinherit_std_handles()` を呼び、印が落ちた
-/// ことを `GetHandleInformation` で見る（呼ばなければ印は立ったまま＝赤）。印は取っ手ごとの値で、
+/// ことを `GetHandleInformation` で見る。印は取っ手ごとの値で、
 /// この crate で取っ手の印を触るテストはこの 1 本だけなので並走のテストと競らない。終わりに元の印へ戻す。
 #[test]
 #[cfg(target_arch = "x86")]
@@ -431,7 +415,7 @@ fn std_handles_are_not_inherited() {
     );
 }
 
-/// `[helper]` で始まり `needle` を含む行が記録にあるか（記録の口 `helper_log`・指摘 9・12）。
+/// `[helper]` で始まり `needle` を含む行が記録にあるか。
 fn assert_logged(log: &[String], needle: &str) {
     assert!(
         log.iter()
@@ -440,7 +424,7 @@ fn assert_logged(log: &[String], needle: &str) {
     );
 }
 
-/// 指摘 9・要件 10.11: `unload` が偽でも UNLOAD の返事は [1] のままで、失敗は `[helper]` の行に残る。
+/// `unload` が偽でも UNLOAD の返事は [1] のままで、失敗は `[helper]` の行に残る。
 /// 偽の DLL を自分だけのフォルダへ写して読み、印の環境変数は差さないので錠は取らない。
 #[test]
 #[cfg(target_arch = "x86")]
@@ -486,7 +470,7 @@ fn unload_ack_stays_one_when_unload_returns_false() {
     drop(root);
 }
 
-/// 指摘 12: 自窓を起こす `PostMessageW` が失敗したら偽を返し、`[helper]` の行に残す。
+/// 自窓を起こす `PostMessageW` が失敗したら偽を返し、`[helper]` の行に残す。
 /// 壊した窓の値を渡して失敗させる。
 #[test]
 fn wake_self_logs_a_post_failure() {
@@ -504,7 +488,7 @@ fn wake_self_logs_a_post_failure() {
     assert_logged(&take_helper_log(), "PostMessageW");
 }
 
-/// 指摘 12: `lparam` が空の `WM_COPYDATA` は不正なメッセージとして数え、`[helper]` の行に残す。
+/// `lparam` が空の `WM_COPYDATA` は不正なメッセージとして数え、`[helper]` の行に残す。
 #[test]
 fn an_empty_copydata_is_counted_as_bad() {
     let s = HelperShared::new(0, PathBuf::new(), String::new());
@@ -521,7 +505,7 @@ fn an_empty_copydata_is_counted_as_bad() {
     assert_logged(&take_helper_log(), "lparam");
 }
 
-/// 指摘 20: `OnTestNull` で DLL が null の応答を返しても、折り返しの REQUEST の腕は 500 を返す。
+/// `OnTestNull` で DLL が null の応答を返しても、折り返しの REQUEST の腕は 500 を返す。
 /// 偽の DLL を自分だけのフォルダへ写して読み、印の環境変数は差さないので錠は取らない。
 #[test]
 #[cfg(target_arch = "x86")]
@@ -557,7 +541,7 @@ fn a_null_response_answers_500() {
     drop(root);
 }
 
-/// 指摘 8 の再入の場: testdll を読んだ helper へ `OnTestReenter` を送り、DLL の `request` の中から
+/// 再入の場: testdll を読んだ helper へ `OnTestReenter` を送り、DLL の `request` の中から
 /// helper の窓へ `tag`（3＝REQUEST・5＝UNLOAD）の空の `WM_COPYDATA` を送り返させる。
 /// 返すのはテストの根・helper（この順で受ければ panic でも helper が先に消える）・親に届いた全 RESPONSE（LOAD の ack を含む）・
 /// REQUEST を送った後の `[helper]` の行。
@@ -608,7 +592,7 @@ fn reenter(
     (root, helper, all, log)
 }
 
-/// 指摘 8: DLL の呼び出しの最中の REQUEST は DLL を入れ子に呼ばずに 500、外の呼び出しは 204 のまま。
+/// DLL の呼び出しの最中の REQUEST は DLL を入れ子に呼ばずに 500、外の呼び出しは 204 のまま。
 #[test]
 #[cfg(target_arch = "x86")]
 fn request_during_a_dll_call_gets_500() {
@@ -639,7 +623,7 @@ fn request_during_a_dll_call_gets_500() {
     drop(root);
 }
 
-/// 指摘 8: DLL の呼び出しの最中の UNLOAD は ack [1] を先に返し、戻った後に遅れた応答を送らずに
+/// DLL の呼び出しの最中の UNLOAD は ack [1] を先に返し、戻った後に遅れた応答を送らずに
 /// 後始末（`close` → 終了要求）を行う。
 #[test]
 #[cfg(target_arch = "x86")]

@@ -1,4 +1,4 @@
-//! helper ライフサイクル管理（要件 R5〜R7）。
+//! helper ライフサイクル管理。
 //!
 //! 本モジュールは helper プロセスの正常終了要求（unload → ループ正常終了 →
 //! `exit(0)`）と、その結果の観測・分類を担う:
@@ -15,12 +15,12 @@ use shiori_host32_ipc::MsgTag;
 use crate::parent_window::{ParentMessageWindow, SendError};
 use crate::process_host::{ExitKind, HelperHandle, LOG_TARGET, poll_exit_kind};
 
-/// 死活監視の観測結果（Send・Copy な所有データ・R2.6）。
+/// 死活監視の観測結果（Send・Copy な所有データ）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HelperStatus {
-    /// 稼働中（終了未検出・R1.1）。
+    /// 稼働中（終了未検出）。
     Running,
-    /// 終了検出済み（種別付き・R1.2〜1.5）。sticky（以後不変）。
+    /// 終了検出済み（種別付き）。sticky（以後不変）。
     Exited(ExitKind),
 }
 
@@ -29,23 +29,23 @@ pub const UNLOAD_ACK_TIMEOUT: Duration = Duration::from_secs(30);
 /// ack 受領後、プロセス終了（ExitKind 観測）を待つ上限。
 pub const EXIT_OBSERVE_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// 死活監視の常設の器（R1.1〜1.6, 4.1, 5.2, 7.7）。
+/// 死活監視の常設の器。
 ///
 /// spawn 済み [`HelperHandle`] を**単独所有**し、非ブロッキング・sticky な死活問い合わせと
 /// 冪等な後始末を提供する。request 経路（`Shiori3Client`＝窓借用）とは別オブジェクトであり、
-/// 包まない・仲介しない（design §HelperLifecycle Responsibilities）。
+/// 包まない・仲介しない。
 ///
-/// `Child` は `Send` ゆえ本型も `Send`（将来の shiori アクター inbox から移送可能・R7.7）。
+/// `Child` は `Send` ゆえ本型も `Send`（将来の shiori アクター inbox から移送可能）。
 /// 窓（`!Send`）は保持しない。
 pub struct HelperLifecycle {
     handle: HelperHandle,
-    /// sticky 終了キャッシュ（一度 `Some` になったら以後 poll しない・R1.2）。
+    /// sticky 終了キャッシュ（一度 `Some` になったら以後 poll しない）。
     /// 不変条件: `None → Some` の一方向のみ（終了は終端状態）。
     last_exit: Option<ExitKind>,
 }
 
 impl HelperLifecycle {
-    /// spawn 済み handle を監視の器に載せる（所有移転・R1.6）。
+    /// spawn 済み handle を監視の器に載せる（所有移転）。
     #[must_use]
     pub fn new(handle: HelperHandle) -> Self {
         Self {
@@ -54,7 +54,7 @@ impl HelperLifecycle {
         }
     }
 
-    /// 非ブロッキング死活問い合わせ（R1.1/1.2）。`try_wait` ベースで呼び手を止めない。
+    /// 非ブロッキング死活問い合わせ。`try_wait` ベースで呼び手を止めない。
     ///
     /// 終了検出後は **sticky**: 一度 [`HelperStatus::Exited`] を観測したら以後は再 poll せず
     /// 同じ [`ExitKind`] を返し続ける（終了は終端状態・観測の決定性）。
@@ -73,10 +73,10 @@ impl HelperLifecycle {
         }
     }
 
-    /// 強制終了（冪等・二重 kill 安全・R5.2）。既存 [`HelperHandle::terminate`] へ委譲する。
+    /// 強制終了（冪等・二重 kill 安全）。既存 [`HelperHandle::terminate`] へ委譲する。
     ///
     /// Windows の std の kill は既終了プロセスにも `Ok` を返すため、
-    /// 二重呼び出しでも成功扱いになる。`Err` は握り潰さず `error!` ＋そのまま返す（R4.4/R7.6）。
+    /// 二重呼び出しでも成功扱いになる。`Err` は握り潰さず `error!` ＋そのまま返す。
     ///
     /// # Errors
     /// `TerminateProcess` 相当の I/O 失敗時に [`std::io::Error`] を返す。
@@ -102,13 +102,13 @@ impl HelperLifecycle {
         self.handle.terminator()
     }
 
-    /// 正規の正常終了経路（R5.1）: UNLOAD 送出 → ack[1] 観測 → 終了種別を bounded 観測。
-    /// 既終了なら送出せず Ok(観測済み kind) を返す（短絡・冪等）。再起動は一切試みない（R5.4）。
+    /// 正規の正常終了経路: UNLOAD 送出 → ack[1] 観測 → 終了種別を bounded 観測。
+    /// 既終了なら送出せず Ok(観測済み kind) を返す（短絡・冪等）。再起動は一切試みない。
     ///
     /// 3 失敗経路（送出失敗／ack 契約違反／終了未観測）はそれぞれ専用の [`ShutdownError`] 変種で
-    /// 表し、いずれも `error!` 発行と戻り値の `Err` の**双方**で surface する（R5.5/R7.6・
-    /// silent failure を許さない）。`Ok(_)` はプロセス終了の観測完了を意味し、正常系列では
-    /// `Ok(ExitKind::Clean)`（R5.1 の成立証拠）を返す。
+    /// 表し、いずれも `error!` 発行と戻り値の `Err` の**双方**で surface する
+    /// （silent failure を許さない）。`Ok(_)` はプロセス終了の観測完了を意味し、正常系列では
+    /// `Ok(ExitKind::Clean)` を返す。
     ///
     /// # Errors
     /// - [`ShutdownError::Unload`]: UNLOAD 送出／ack 往復の失敗（`SendError` を内包）。
@@ -121,7 +121,7 @@ impl HelperLifecycle {
         self.request_clean_shutdown_within(window, UNLOAD_ACK_TIMEOUT, EXIT_OBSERVE_TIMEOUT)
     }
 
-    /// [`Self::request_clean_shutdown`] の本体。待ちの長さを受け取る（テストが短い待ちで呼ぶ・指摘 17）。
+    /// [`Self::request_clean_shutdown`] の本体。待ちの長さを受け取る（テストが短い待ちで呼ぶ）。
     pub(crate) fn request_clean_shutdown_within(
         &mut self,
         window: &ParentMessageWindow,
@@ -132,11 +132,10 @@ impl HelperLifecycle {
         if let HelperStatus::Exited(kind) = self.status() {
             return Ok(kind);
         }
-        // 手順2: UNLOAD 送出（凍結 wire 語彙）。Err は error! + Err(ShutdownError::Unload)。
         let ack = match window.send_request(MsgTag::Unload, &[], ack_timeout) {
             Ok(a) => a,
             Err(e) => {
-                // 送りの最中に helper が終わっていれば、それは終わり（失敗ではない・指摘 24）。
+                // 送りの最中に helper が終わっていれば、それは終わり（失敗ではない）。
                 if let HelperStatus::Exited(kind) = self.status() {
                     tracing::info!(
                         target: LOG_TARGET,
@@ -163,7 +162,6 @@ impl HelperLifecycle {
             );
             return Err(ShutdownError::UnexpectedAck(ack));
         }
-        // 手順4: `exit_timeout` まで終わりを待つ（`WaitForSingleObject` 1 回・指摘 36）。
         if self.last_exit.is_none() {
             self.last_exit = self.handle.wait_for_exit(exit_timeout);
         }
@@ -186,7 +184,7 @@ impl HelperLifecycle {
     }
 }
 
-/// shutdown 経路の失敗語彙（R5.5・error! と対で surface）。
+/// shutdown 経路の失敗語彙（error! と対で surface）。
 #[derive(thiserror::Error, Debug)]
 pub enum ShutdownError {
     /// UNLOAD の送出／ack 往復が失敗（SendError を所有内包・凍結型不改変）。
@@ -204,7 +202,7 @@ pub enum ShutdownError {
 pub(crate) mod tests {
     use super::*;
 
-    /// `T: Send` を静的に固定する（R2.6/7.7・報告データは Send な所有データ）。
+    /// `T: Send` を静的に固定する（報告データは Send な所有データ）。
     /// 本関数が対象型で単相化できること自体が Send の証明であり、
     /// コンパイルが通れば当該型は Send（通らなければ型が Send でない）。
     const fn assert_send<T: Send>() {}
@@ -213,19 +211,19 @@ pub(crate) mod tests {
     fn lifecycle_types_are_send() {
         assert_send::<HelperStatus>();
         assert_send::<ShutdownError>();
-        // HelperLifecycle も Send（Child は Send・R7.7・design §395）。
+        // HelperLifecycle も Send（Child は Send）。
         assert_send::<HelperLifecycle>();
     }
 
     /// 降ろす段の期限が今日の値であること（UNLOAD の応答 30 秒・終了の観測 10 秒）。
-    /// OS のセッションの終了以外の経路の期限を変えない約束（session-mark-residue 要件 3.1・7.2）。
+    /// OS のセッションの終了以外の経路の期限を変えない約束。
     #[test]
     fn unload_ack_and_exit_observe_timeouts_are_todays_values() {
         assert_eq!(UNLOAD_ACK_TIMEOUT, Duration::from_secs(30));
         assert_eq!(EXIT_OBSERVE_TIMEOUT, Duration::from_secs(10));
     }
 
-    // --- HelperLifecycle: 非ブロッキング・分類・sticky・冪等後始末（R1.1〜1.6, 5.2）---
+    // --- HelperLifecycle: 非ブロッキング・分類・sticky・冪等後始末---
 
     use crate::process_host::spawn_command;
     use crate::process_host::tests::cmd_exit;
@@ -244,7 +242,7 @@ pub(crate) mod tests {
 
     /// stand-in が終了するまで非ブロッキング `status()` を bounded に回して `Exited` を得る。
     ///
-    /// 各 `status()` はブロックしない（R1.1/1.2）。全体は上限 10s・刻み 5ms で待つ。
+    /// 各 `status()` はブロックしない。全体は上限 10s・刻み 5ms で待つ。
     fn wait_exited(lc: &mut HelperLifecycle) -> ExitKind {
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
@@ -259,9 +257,9 @@ pub(crate) mod tests {
         }
     }
 
-    /// 性質①（非ブロッキング・R1.1/1.2）: 60 秒ほど生きる stand-in への `status()` が、その終わりを
+    /// 性質①（非ブロッキング）: 60 秒ほど生きる stand-in への `status()` が、その終わりを
     /// 待たずに `Running` を返す。的は「止まらずに返る」なので、混んだ PC でも揺れないよう上限は
-    /// 30 秒と広く取る（指摘 48・待つ形なら 60 秒かかる）。
+    /// 30 秒と広く取る（待つ形なら 60 秒かかる）。
     #[test]
     fn status_is_nonblocking_returns_while_running() {
         let handle = spawn_command(long_lived()).expect("stand-in を spawn できる");
@@ -275,7 +273,7 @@ pub(crate) mod tests {
         );
     }
 
-    /// 分類（Clean・R1.3）: stand-in `cmd /c exit 0` → `Exited(ExitKind::Clean)`。
+    /// 分類（Clean）: stand-in `cmd /c exit 0` → `Exited(ExitKind::Clean)`。
     #[test]
     fn status_classifies_clean_exit() {
         let handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
@@ -283,25 +281,23 @@ pub(crate) mod tests {
         assert_eq!(wait_exited(&mut lc), ExitKind::Clean);
     }
 
-    /// 性質②（分類 Abnormal ＋ sticky・R1.4/1.2）: stand-in `cmd /c exit 5` →
+    /// 性質②（分類 Abnormal ＋ sticky）: stand-in `cmd /c exit 5` →
     /// `Exited(Abnormal(5))`、以後の再問い合わせも**同値**（再 poll しない sticky）。
     #[test]
     fn status_classifies_abnormal_and_is_sticky() {
         let handle = spawn_command(cmd_exit(5)).expect("stand-in を spawn できる");
         let mut lc = HelperLifecycle::new(handle);
-        // 初回検出。
         assert_eq!(wait_exited(&mut lc), ExitKind::Abnormal(5));
         // sticky: 終了検出後の再問い合わせは同じ ExitKind を返し続ける。
         assert_eq!(lc.status(), HelperStatus::Exited(ExitKind::Abnormal(5)));
         assert_eq!(lc.status(), HelperStatus::Exited(ExitKind::Abnormal(5)));
     }
 
-    /// 性質③（冪等後始末・R5.2）: 終了済み stand-in への二重 `terminate()` が両方 `Ok`。
+    /// 性質③（冪等後始末）: 終了済み stand-in への二重 `terminate()` が両方 `Ok`。
     #[test]
     fn terminate_is_idempotent_after_exit() {
         let handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
         let mut lc = HelperLifecycle::new(handle);
-        // 先に終了を観測してから二重 terminate（既存 HelperHandle::terminate が冪等）。
         let _ = wait_exited(&mut lc);
         assert!(lc.terminate().is_ok(), "1 回目の terminate は Ok");
         assert!(
@@ -310,19 +306,17 @@ pub(crate) mod tests {
         );
     }
 
-    // --- request_clean_shutdown: 短絡経路（既終了への正常終了要求・R5.1/R5.3/R5.4/R5.5）---
-    // ParentMessageWindow は super::* で導入済み（本モジュール先頭 use）。
+    // --- request_clean_shutdown: 短絡経路（既終了への正常終了要求）---
 
-    /// 性質（短絡成功・R5.1/R5.3/R5.4）: 既終了 stand-in への `request_clean_shutdown` は
+    /// 性質（短絡成功）: 既終了 stand-in への `request_clean_shutdown` は
     /// UNLOAD を送出せず、観測済み `ExitKind::Clean` を短絡で `Ok` 返しする（既終了への
     /// 終了要求を失敗させない・冪等）。
     ///
     /// 実 helper なしで検証可能な短絡経路（手順1）を行使する。stand-in は既に死んでいるため、
     /// もし UNLOAD 送出へ進めば送出は失敗するはず。それが `Ok(Clean)` で返ることが
-    /// 「送出前に短絡した」ことの証明である。再起動は一切試みない（R5.4）。
+    /// 「送出前に短絡した」ことの証明である。再起動は一切試みない。
     #[test]
     fn request_clean_shutdown_short_circuits_when_already_exited() {
-        // 既終了 stand-in（`cmd /c exit 0` → Clean）を組み、終了を bounded 観測する。
         let handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
         let mut lc = HelperLifecycle::new(handle);
         assert_eq!(
@@ -334,7 +328,6 @@ pub(crate) mod tests {
         // 窓を立てる（送出面の借用先）。短絡経路では send_request は呼ばれない。
         let window = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
 
-        // 手順1 の短絡: 既終了なら送出せず Ok(観測済み kind)。
         let got = lc.request_clean_shutdown(&window);
         assert_eq!(
             got.expect("既終了への正常終了要求は短絡で Ok（R5.3）"),
@@ -344,7 +337,7 @@ pub(crate) mod tests {
 
         drop(window);
     }
-    // --- request_clean_shutdown_within: 失敗の道と送りの最中の終わり（指摘 17・24・34・36）---
+    // --- request_clean_shutdown_within: 失敗の道と送りの最中の終わり---
 
     use crate::HelperTerminator;
     use shiori_host32_ipc::{encode_hwnd_le, hwnd_from_u32, send_copydata, send_copydata_response};
@@ -366,7 +359,7 @@ pub(crate) mod tests {
         KillAndStaySilent(HelperTerminator, u32),
     }
 
-    /// 同じスレッドに偽の helper の窓を立て、送り手の決まり（指摘 38）どおり自分の窓の値で
+    /// 同じスレッドに偽の helper の窓を立て、送り手の決まりどおり自分の窓の値で
     /// HELLO を送って握手を済ませる（`expect_helper_pid` は自分のプロセス番号）。
     fn fake_helper(parent: &ParentMessageWindow, on_unload: OnUnload) -> Window<()> {
         let parent_hwnd = hwnd_from_u32(parent.hwnd_u32());
@@ -430,7 +423,7 @@ pub(crate) mod tests {
         }
     }
 
-    /// `ERROR` の行を集め、どれも宛名が `shiori-host32` であることを確かめて数を返す（指摘 34）。
+    /// `ERROR` の行を集め、どれも宛名が `shiori-host32` であることを確かめて数を返す。
     fn error_count_on_host_target(events: &[log_capture_kit::CapturedEvent]) -> usize {
         let errors: Vec<_> = events
             .iter()
@@ -490,7 +483,7 @@ pub(crate) mod tests {
     }
 
     /// UNLOAD を受けた偽の helper が stand-in を終わらせて返事をしない（送りは受け皿が空で失敗する）
-    /// → 送りの失敗の後に問い直して `Ok(Abnormal(_))`（指摘 24）。`ERROR` は出さない。
+    /// → 送りの失敗の後に問い直して `Ok(Abnormal(_))`。`ERROR` は出さない。
     #[test]
     fn a_helper_that_dies_during_unload_is_reported_as_exited() {
         let mut lc =

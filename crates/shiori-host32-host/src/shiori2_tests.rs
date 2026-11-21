@@ -1,17 +1,17 @@
-//! `shiori2` の決定論テスト（タスク 2.1〜2.3・要件 2.1/2.5/3.1〜3.7/4.1〜4.4/4.6/4.7/7.1〜7.3）。
+//! `shiori2` の決定論テスト。
 //!
 //! 窓も I/O も持たない純関数の入出力だけで成立する（x64 のみ・32bit 成果物不要）。
-//! 参照値のバイト列は符号化器から導かず、研究記録 10.1・10.2 節から手で写した定数として持つ。
+//! 参照値のバイト列は符号化器から導かず、手で写した定数として持つ。
 
 use super::{ShioriVersion, VersionVerdict, build_request, decide_version, version_probe_request};
 use crate::charset::Charset;
 use crate::request_headers::RequestHeaders;
 use crate::shiori3::{ABSENT_REFERENCE, Method, ShioriRequest};
 
-/// 研究記録 10.1 節の確かめの要求（SSP が華和梨へ送ったもの）の全文。
+/// SSP が華和梨へ送った確かめの要求の全文。
 const PROBE_UTF8_SSP: &[u8] = b"GET Version SHIORI/2.6\r\nCharset: UTF-8\r\nSender: SSP\r\n\r\n";
 
-/// 研究記録 10.1 節の華和梨 7.4 の答えの全文。
+/// 華和梨 7.4 の答えの全文。
 const KAWARI_REPLY: &[u8] = b"SHIORI/2.6 200 OK\r\nCharset: Shift_JIS\r\nCraftman: KawariDevelopmentTeam\r\nID: KAWARI.kdt\r\nVersion: 7.4.0\r\n\r\n";
 
 fn decided(version: ShioriVersion, evidence: &str) -> VersionVerdict {
@@ -28,7 +28,7 @@ fn version_spelling_for_logs() {
     assert_eq!(ShioriVersion::Shiori2.as_str(), "SHIORI/2.x");
 }
 
-/// 確かめの要求の全文のバイトが研究記録 10.1 節と一致する（要件 2.1）。
+/// 確かめの要求の全文のバイトが SSP の送ったものと一致する。
 #[test]
 fn probe_request_bytes_match_ssp_record() {
     assert_eq!(version_probe_request(Charset::UTF_8, "SSP"), PROBE_UTF8_SSP);
@@ -44,7 +44,7 @@ fn probe_request_uses_canonical_charset_name() {
     );
 }
 
-/// 3.0 の答えは状態の番号によらず 3.0（要件 7.3）。
+/// 3.0 の答えは状態の番号によらず 3.0。
 #[test]
 fn shiori3_replies_decide_shiori3() {
     assert_eq!(
@@ -57,7 +57,7 @@ fn shiori3_replies_decide_shiori3() {
     );
 }
 
-/// 華和梨の答えは 2.x・根拠は先頭の行そのまま（要件 7.3）。
+/// 華和梨の答えは 2.x・根拠は先頭の行そのまま。
 #[test]
 fn kawari_reply_decides_shiori2() {
     assert_eq!(
@@ -66,7 +66,7 @@ fn kawari_reply_decides_shiori2() {
     );
 }
 
-/// 空・版の字の無い先頭の行・2.x でも 3.x でもない版は決められない（要件 2.5・7.3）。
+/// 空・版の字の無い先頭の行・2.x でも 3.x でもない版は決められない。
 #[test]
 fn unknown_replies_are_undecided() {
     for reply in [&b""[..], b"garbage", b"SHIORI/1.1 200 OK\r\n\r\n"] {
@@ -78,22 +78,22 @@ fn unknown_replies_are_undecided() {
     }
 }
 
-// ---- 2.x の要求の組み立て（タスク 2.2・要件 3.1〜3.7・7.1） ----------------
+// ---- 2.x の要求の組み立て ----------------
 
-/// 研究記録 10.2 節の通知の `OnInitialize`（3.0 では NOTIFY）を SSP が送った全文。
+/// 通知の `OnInitialize`（3.0 では NOTIFY）を SSP が送った全文。
 const ON_INITIALIZE_SSP: &[u8] = b"GET Sentence SHIORI/2.2\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSender: SSP\r\nEvent: OnInitialize\r\nReference0: \r\n\r\n";
 
-/// 研究記録 10.2 節の `OnSecondChange`（`Status` あり）の全文。
+/// `OnSecondChange`（`Status` あり）の全文。
 const ON_SECOND_CHANGE_SSP: &[u8] = b"GET Sentence SHIORI/2.2\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSender: SSP\r\nEvent: OnSecondChange\r\nStatus: talking,timecritical,balloon(0=0)\r\nReference0: 193\r\nReference1: 0\r\nReference2: 0\r\nReference3: 0\r\nReference4: 64\r\n\r\n";
 
-/// 研究記録 10.2 節の `OnFirstBoot` の全文から `BaseEvent: OnBoot` の行を除いたもの
-/// （areka は 3.0 でも `BaseID` を送っていないので書かない・設計の「2.x の要求の形」）。
+/// `OnFirstBoot` の全文から `BaseEvent: OnBoot` の行を除いたもの
+/// （areka は 3.0 でも `BaseID` を送っていないので書かない）。
 const ON_FIRST_BOOT_SSP: &[u8] = b"GET Sentence SHIORI/2.2\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSender: SSP\r\nEvent: OnFirstBoot\r\nReference0: 0\r\nReference1: \r\nReference2: \r\nReference3: \r\nReference4: \r\nReference5: \r\nReference6: \r\nReference7: master\r\n\r\n";
 
-/// 研究記録 10.2 節の資源の問い合わせ `username` の全文。
+/// 資源の問い合わせ `username` の全文。
 const USERNAME_SSP: &[u8] = b"GET String SHIORI/2.5\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSecurityOrigin: null\r\nSender: SSP\r\nID: username\r\n\r\n";
 
-/// 研究記録 10.2 節の翻訳（`Status: talking`）の形。台本は記録で省かれているので短い台本を置く。
+/// 翻訳（`Status: talking`）の形。台本は記録で省かれているので短い台本を置く。
 const TRANSLATE_SSP: &[u8] = b"TRANSLATE Sentence SHIORI/2.6\r\nCharset: Shift_JIS\r\nSecurityLevel: local\r\nSecurityOrigin: null\r\nSender: SSP\r\nStatus: talking\r\nSentence: \\t\\h\\s[6]\\e\r\n\r\n";
 
 fn refs(values: &[&str]) -> Vec<String> {
@@ -138,7 +138,7 @@ fn assert_bytes(actual: Option<Vec<u8>>, expected: &[u8]) {
     );
 }
 
-/// NOTIFY の `OnInitialize` は `GET Sentence SHIORI/2.2` で送る（要件 3.2）。
+/// NOTIFY の `OnInitialize` は `GET Sentence SHIORI/2.2` で送る。
 #[test]
 fn notify_on_initialize_is_get_sentence() {
     assert_bytes(
@@ -147,7 +147,7 @@ fn notify_on_initialize_is_get_sentence() {
     );
 }
 
-/// `Status` ありの台本を求めるイベント（要件 3.1・3.6）。
+/// `Status` ありの台本を求めるイベント。
 #[test]
 fn get_with_status_is_get_sentence() {
     assert_bytes(
@@ -162,7 +162,7 @@ fn get_with_status_is_get_sentence() {
     );
 }
 
-/// `Status` なし・空の References を含む `OnFirstBoot`（要件 3.1）。
+/// `Status` なし・空の References を含む `OnFirstBoot`。
 #[test]
 fn get_on_first_boot_is_get_sentence() {
     assert_bytes(
@@ -192,7 +192,7 @@ fn absent_reference_skips_line_keeps_numbering() {
     );
 }
 
-/// `On` で始まらない外からのイベント名でも、資源の印が無ければ `GET Sentence`（要件 3.1・3.7）。
+/// `On` で始まらない外からのイベント名でも、資源の印が無ければ `GET Sentence`。
 #[test]
 fn non_on_event_without_resource_mark_is_get_sentence() {
     assert_bytes(
@@ -201,7 +201,7 @@ fn non_on_event_without_resource_mark_is_get_sentence() {
     );
 }
 
-/// 資源の印つきの GET は `GET String SHIORI/2.5`（要件 3.3・3.6）。
+/// 資源の印つきの GET は `GET String SHIORI/2.5`。
 #[test]
 fn resource_get_is_get_string() {
     assert_bytes(
@@ -210,7 +210,7 @@ fn resource_get_is_get_string() {
     );
 }
 
-/// 翻訳は `TRANSLATE Sentence SHIORI/2.6`・`Sentence` は Reference0・References は書かない（要件 3.4）。
+/// 翻訳は `TRANSLATE Sentence SHIORI/2.6`・`Sentence` は Reference0・References は書かない。
 #[test]
 fn on_translate_is_translate_sentence() {
     assert_bytes(
@@ -225,7 +225,7 @@ fn on_translate_is_translate_sentence() {
     );
 }
 
-/// `basewareversion` の NOTIFY は送らない（要件 3.5）。
+/// `basewareversion` の NOTIFY は送らない。
 #[test]
 fn basewareversion_notify_is_not_sent() {
     assert_eq!(
@@ -240,7 +240,7 @@ fn basewareversion_notify_is_not_sent() {
     );
 }
 
-/// 2 バイト文字の値も全文 1 本の経路で Shift_JIS に符号化する（要件 3.6）。
+/// 2 バイト文字の値も全文 1 本の経路で Shift_JIS に符号化する。
 #[test]
 fn shift_jis_value_is_encoded_with_whole_text() {
     // 「さくら」の Shift_JIS は 82 B3 82 AD 82 E7（手で写した値）。
@@ -256,7 +256,7 @@ fn shift_jis_value_is_encoded_with_whole_text() {
     );
 }
 
-// ---- 2.x の答えの読み（タスク 2.3・要件 4.1〜4.4/4.6/4.7/7.2） ----
+// ---- 2.x の答えの読み ----
 
 fn parse2(
     reply: &[u8],
@@ -287,7 +287,7 @@ fn sentence_200_reads_script() {
     assert_eq!(r.charset_header.as_deref(), Some("Shift_JIS"));
 }
 
-/// 2.x の `Sentence` も 3.0 と同じ読みを通る: 頭の半角だけ削り、2 つあれば後ろ（指摘 22・23）。
+/// 2.x の `Sentence` も 3.0 と同じ読みを通る: 頭の半角だけ削り、2 つあれば後ろ。
 #[test]
 fn a_sentence_keeps_full_width_spaces_and_the_last_wins() {
     let r = parse2(

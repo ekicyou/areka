@@ -1,4 +1,4 @@
-//! ドラッグの終わり（指摘 1）のテスト。`main.rs` の末尾から `drag_tests` として読む。
+//! ドラッグの終わりのテスト。`main.rs` の末尾から `drag_tests` として読む。
 //!
 //! 見えない窓（`ShowWindow` しない・DComp を組まない）を作り、ドラッグ中の印を立てて
 //! 終わりの合図を窓の手続きへ直接送る。
@@ -18,7 +18,7 @@ fn assert_drag_ends_on(msg: u32) {
     )));
     let listener = state_changed.listen();
 
-    // SAFETY: Win32 境界。自分のスレッドが作った有効な窓へ同期で送る。
+    // SAFETY: 自分のスレッドが作った有効な窓へ同期で送る。
     unsafe {
         SendMessageW(window.hwnd(), msg, Some(WPARAM(0)), Some(LPARAM(0)));
     }

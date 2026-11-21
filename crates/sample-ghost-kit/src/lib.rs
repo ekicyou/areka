@@ -1,5 +1,5 @@
 //! 検体ゴースト／バルーンを **名前で引く**窓口を、ワークスペースで **1 箇所**だけ定義する
-//! crate（spec: `areka-P0-nar-install` 要件 1）。
+//! crate。
 //!
 //! この doc は**利用手順**である。ここだけを読めば、別の crate のテスト・example から検体を
 //! 使う書き方が分かる。実装を開く必要は無い。掲載している Rust の例は **doctest** として
@@ -25,7 +25,7 @@
 //!
 //! [`SampleRoot::acquire`] に検体名を渡し、**得た値を束縛したまま**パスを借りる。取得の
 //! たびに検体の書庫を展開した原本の**使い捨ての複製**が配られ、値を捨てた時点でその複製は
-//! 消える（起動記録の無い新品で始まる＝要件 7.4）。書庫の在処は登記の行の形で決まる
+//! 消える（起動記録の無い新品で始まる）。書庫の在処は登記の行の形で決まる
 //! （下の「検体を足すとき」）。
 //!
 //! URL の行の検体（`pasta-in-windows` など）は、先に取り寄せの段
@@ -50,7 +50,7 @@
 //!
 //! 上の例が `no_run`（組むだけで走らせない）なのは、doctest の実行ファイルだけが
 //! ビルド成果物の置き場の外（OS の一時フォルダ）に置かれるため。展開先はその置き場の
-//! 下に掘るので、doctest から呼ぶと設計どおり [`SampleError::TargetDirNotFound`] に
+//! 下に掘るので、doctest から呼ぶと [`SampleError::TargetDirNotFound`] に
 //! なる（`devroot` の doc を参照）。振る舞いの判定は兄弟テストが持ち、この例は
 //! **窓口が crate の外から届くこと**（doctest は別 crate として組まれる）を固定する。
 //!
@@ -60,7 +60,7 @@
 //!
 //! # 検体を足すとき
 //!
-//! 登記の行は 2 つの形のどちらかで、どちらも 2 手で終わる（要件 1.5）。検体ごとの専用関数は
+//! 登記の行は 2 つの形のどちらかで、どちらも 2 手で終わる。検体ごとの専用関数は
 //! 増やさない。
 //!
 //! - **今の行**（[`SampleSource::Vendored`]）: `vendors/sample_ghost/<名>.nar` を 1 つ置き、
@@ -78,8 +78,8 @@
 //!
 //! [`SampleRoot::root`] が**ベースウェアの根**、[`SampleRoot::folder`] が
 //! `<根>/ghost/<名>/`（バルーンの検体なら `<根>/balloon/<名>/`）、
-//! [`SampleRoot::balloon`] が同梱バルーンの入る `<根>/ghost/<名>/balloon/<directory>/`
-//! （spec: `areka-P0-ghost-inner-balloon` 要件 7.1）。展開結果の要素が登記
+//! [`SampleRoot::balloon`] が同梱バルーンの入る `<根>/ghost/<名>/balloon/<directory>/`。
+//! 展開結果の要素が登記
 //! （種別・フォルダ名・同梱バルーン）と食い違えば [`SampleError::RegistryMismatch`]
 //! を返す（黙って存在しないパスを配らない）。
 
@@ -130,7 +130,7 @@ pub enum SampleSource {
     },
 }
 
-/// 検体の登記表。**検体を足す作業はここに 1 行**（要件 1.5）。
+/// 検体の登記表。**検体を足す作業はここに 1 行**。
 pub const SAMPLES: &[Sample] = &[
     Sample {
         name: "emo2",
@@ -222,7 +222,7 @@ pub struct SampleRoot {
 }
 
 impl SampleRoot {
-    /// 検体名から検体を取得する（要件 1.1）。
+    /// 検体名から検体を取得する。
     ///
     /// 検体の書庫を展開した原本から**使い捨ての複製**を作って配る。書庫は、今の行なら
     /// `vendors/sample_ghost/<名>.nar`、URL の行なら取り寄せの段が置いた
@@ -230,7 +230,7 @@ impl SampleRoot {
     ///
     /// # Errors
     ///
-    /// 未登録の名前なら [`SampleError::UnknownSample`]（既知の名前の一覧を含む・要件 1.4）。
+    /// 未登録の名前なら [`SampleError::UnknownSample`]（既知の名前の一覧を含む）。
     /// 展開結果が登記と食い違えば [`SampleError::RegistryMismatch`]。URL の行で置き場の
     /// 書庫かハッシュのファイルが無ければ [`SampleError::FetchedNarMissing`]、ハッシュの
     /// ファイルの形が違えば [`SampleError::FetchedChecksumInvalid`]、合わなければ
@@ -241,7 +241,7 @@ impl SampleRoot {
         SampleRoot::from_copy(sample, devroot::fresh_root(sample)?)
     }
 
-    /// 配られた複製を**登記と照合**してから窓口の形に組む（要件 1.1・1.2・1.3）。
+    /// 配られた複製を**登記と照合**してから窓口の形に組む。
     ///
     /// 照合が要るのは、位置（`<根>/ghost/<名>/` など）を登記の行から組み立てるからである。
     /// `.nar` の `install.txt` が別の `directory` や別の種別を名乗っていると、組んだ位置は
@@ -266,8 +266,7 @@ impl SampleRoot {
         })
     }
 
-    /// 検体を含む**ベースウェアの根**（`ghost/`・`balloon/` を直下に持つ）の絶対パス
-    /// （要件 1.2）。
+    /// 検体を含む**ベースウェアの根**（`ghost/`・`balloon/` を直下に持つ）の絶対パス。
     ///
     /// 返すのは借用なので、取得した値を捨ててパスだけ持ち出すことはできない。
     ///
@@ -286,7 +285,7 @@ impl SampleRoot {
     }
 
     /// 検体がインストール済み形で置かれたフォルダの絶対パス
-    /// （`<根>/ghost/<名>/` またはバルーンの検体なら `<根>/balloon/<名>/`・要件 1.1）。
+    /// （`<根>/ghost/<名>/` またはバルーンの検体なら `<根>/balloon/<名>/`）。
     ///
     /// 返すのは借用なので、取得した値を捨ててパスだけ持ち出すことはできない。
     ///
@@ -318,14 +317,14 @@ impl SampleRoot {
     }
 
     /// 同時にインストールされるバルーンのフォルダ `<根>/ghost/<名>/balloon/<directory>/` の
-    /// 絶対パス（要件 1.3・spec: `areka-P0-ghost-inner-balloon` 要件 7.1）。
+    /// 絶対パス。
     ///
     /// `folder()` に名前を継ぎ足して自分でパスを作る代わりにこれを呼ぶ。
     ///
     /// # Errors
     ///
     /// その検体が同時にインストールしないバルーン名なら [`SampleError::UnknownBalloon`]
-    /// （既知の一覧を含む・要件 1.4）。
+    /// （既知の一覧を含む）。
     ///
     /// こちらも借用なので、取得した値を捨てる書き方はコンパイルできない。
     ///
@@ -363,8 +362,7 @@ impl SampleRoot {
     }
 
     /// 配られた複製の中で `shell/<from>/` を `shell/<to_folder>/` へ再帰で写し、写した
-    /// `descript.txt` の `name` を `name` に替える（spec: `areka-P0-shell-balloon-switch`
-    /// 要件 9.1）。書き換えるのは複製の中だけで、検体の `.nar` と原本には触れない。
+    /// `descript.txt` の `name` を `name` に替える。書き換えるのは複製の中だけで、検体の `.nar` と原本には触れない。
     ///
     /// `name` の行はバイト単位で置き換え（無ければ足し）、他の行は読み直さずにそのまま残す
     /// ので `charset` の宣言も保たれる。`name` は UTF-8 のバイトで書くので、`Shift_JIS` の
@@ -475,7 +473,7 @@ pub fn fetched_shelf(sample: &Sample) -> Result<Option<(PathBuf, PathBuf)>, Samp
     }
 }
 
-/// 検体名を登記の 1 行に引き当てる（要件 1.1・1.4）。
+/// 検体名を登記の 1 行に引き当てる。
 ///
 /// 未登録の名前を受けたら既知の名前の一覧を添えて断る。窓口も下の [`manual_paths`] も
 /// ここを通るので、「黙って空のパスを返さない」の判断は 1 か所にしかない。
@@ -489,7 +487,7 @@ fn registered(name: &str) -> Result<&'static Sample, SampleError> {
         })
 }
 
-/// 配られた根の中身が登記の 1 行と合っているかを照合する（要件 1.1・1.2・1.3）。
+/// 配られた根の中身が登記の 1 行と合っているかを照合する。
 fn check_registry(sample: &'static Sample, root: &Path) -> Result<(), SampleError> {
     let declared = declared_elements(sample);
     let installed = installed_elements(root)?;
@@ -503,7 +501,7 @@ fn check_registry(sample: &'static Sample, root: &Path) -> Result<(), SampleErro
     Ok(())
 }
 
-/// 検体を**手で使う根**へ配り直し、印字する `key=value` の組を並べて返す（要件 1.9）。
+/// 検体を**手で使う根**へ配り直し、印字する `key=value` の組を並べて返す。
 ///
 /// 実機走行は絶対パス起動が定石なので、開発者はコマンド `nar-sample-path` でこれを得る。
 /// 配る先は [`SampleRoot::acquire`] の使い捨ての複製ではなく、**プロセスが終わっても残る**
@@ -561,8 +559,7 @@ fn body_folder(sample: &Sample, root: &Path) -> PathBuf {
     root.join(sample.kind.store()).join(sample.name)
 }
 
-/// 同梱バルーンの置かれる位置。書庫の本体の中の `balloon\<directory>`（spec:
-/// `areka-P0-ghost-inner-balloon` 要件 7.1）なので、根の `balloon/` ではない。
+/// 同梱バルーンの置かれる位置。書庫の本体の中の `balloon\<directory>` なので、根の `balloon/` ではない。
 fn companion_folder(sample: &Sample, root: &Path, balloon: &str) -> PathBuf {
     body_folder(sample, root).join("balloon").join(balloon)
 }
@@ -615,14 +612,14 @@ fn shelf_entries(shelf: &Path) -> Result<Vec<String>, SampleError> {
         .collect()
 }
 
-/// 登記されている検体名の一覧（失敗の理由に載せる・要件 1.4）。
+/// 登記されている検体名の一覧（失敗の理由に載せる）。
 ///
-/// [`SAMPLES`] から毎回導くので、名前の一覧が第 2 の手書きの表になることはない（要件 1.5）。
+/// [`SAMPLES`] から毎回導くので、名前の一覧が第 2 の手書きの表になることはない。
 fn known_sample_names() -> Vec<&'static str> {
     SAMPLES.iter().map(|sample| sample.name).collect()
 }
 
-/// 窓口が返す失敗。黙って空のパスを返さない（要件 1.4）。
+/// 窓口が返す失敗。黙って空のパスを返さない。
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum SampleError {
@@ -695,8 +692,7 @@ pub enum SampleError {
         #[source]
         source: std::io::Error,
     },
-    /// URL の行の書庫か、置き場のハッシュのファイルが無い（spec `areka-P0-sample-url-fetch`
-    /// 要件 3.5）。
+    /// URL の行の書庫か、置き場のハッシュのファイルが無い。
     #[error("{}", fetched::missing_text(sample, path))]
     FetchedNarMissing {
         /// 検体名。
@@ -704,8 +700,7 @@ pub enum SampleError {
         /// 無かった方のファイル（書庫かハッシュのファイル）。
         path: PathBuf,
     },
-    /// 置き場のハッシュのファイルが sha256sum の形でない（spec `areka-P0-sample-url-fetch`
-    /// 要件 3.6）。
+    /// 置き場のハッシュのファイルが sha256sum の形でない。
     #[error("{}", fetched::invalid_text(sample, path))]
     FetchedChecksumInvalid {
         /// 検体名。
@@ -713,8 +708,7 @@ pub enum SampleError {
         /// ハッシュのファイルのパス。
         path: PathBuf,
     },
-    /// 置き場の書庫の SHA-256 が、置き場のハッシュのファイルと合わない
-    /// （spec `areka-P0-sample-url-fetch` 要件 3.6）。
+    /// 置き場の書庫の SHA-256 が、置き場のハッシュのファイルと合わない。
     #[error(
         "{}",
         fetched::mismatch_text(sample, path, expected_sha256, actual_sha256)

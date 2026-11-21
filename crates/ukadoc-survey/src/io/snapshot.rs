@@ -1,25 +1,24 @@
 //! スナップショット JSON → `SnapshotDoc`。
 //!
 //! 場所は環境変数 `AREKA_UKADOC_SNAPSHOT` が最優先で、無ければ `APPDATA` から
-//! 既定の場所を組み立てる（要件 1.7・9.7・設計 D-7）。
+//! 既定の場所を組み立てる。
 //!
-//! # 常時走るテストはここを通らない（要件 6.2）
+//! # 常時走るテストはここを通らない
 //!
 //! このモジュールは `pub(crate)` である。常時走る整合検査（`tests/consistency.rs`）は
 //! ライブラリの外にある別クレートなので、`pub(crate)` の中身へは**コンパイル時点で
 //! 手が届かない**。「スナップショットの無い環境でも整合検査が赤にならない」ことを
-//! 申し合わせではなく型検査で守るための形である（設計 Testing Strategy 19 の
-//! 「`io::snapshot` を `cli` からだけ引く形にする」）。`cli` はライブラリの中にあるので
+//! 申し合わせではなく型検査で守るための形である。`cli` はライブラリの中にあるので
 //! そのまま引ける。
 //!
-//! # JSON の読み方（設計 D-2）
+//! # JSON の読み方
 //!
 //! `serde` の派生機能は使わない。[`serde_json::Value`] を手で辿って値へ写す。
 //! `serde` を直接の依存に加えずに済ませるためで、写しの規則がすべてこのファイルの
 //! 中に見える形になる。最上位の鍵は `version` / `generatedAt` / `entries`、
-//! 各 entry は `id` `title` `source` `category` `content` `url`（要件付録 B 手順 1）。
+//! 各 entry は `id` `title` `source` `category` `content` `url`。
 //!
-//! # 黙って失敗しない（要件 1.8）
+//! # 黙って失敗しない
 //!
 //! 読めない（存在しない・壊れている）ときは [`SurveyError::SnapshotUnreadable`] を、
 //! JSON としては読めるが形が違うときは [`SurveyError::SnapshotShape`] を返す。
@@ -28,7 +27,7 @@
 //! 書き出しは呼び出し側が成功した値を受け取ってから始める。
 //!
 //! `source` が `ukadoc` 以外の entry もそのまま持って返す。絞り込みは正典カタログを
-//! 建てる側の判断であり（要件 1.4）、入出力層は判断を持たない（設計 Architecture）。
+//! 建てる側の判断であり、入出力層は判断を持たない。
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -37,13 +36,13 @@ use serde_json::{Map, Value};
 
 use crate::error::SurveyError;
 
-/// スナップショットの場所を指す環境変数（要件 1.7・9.7 の `AREKA_` 冠）。
+/// スナップショットの場所を指す環境変数。
 pub const SNAPSHOT_ENV: &str = "AREKA_UKADOC_SNAPSHOT";
 
 /// 既定の場所を組み立てる元になる環境変数。
 const APPDATA_ENV: &str = "APPDATA";
 
-/// 既定の場所の、`%APPDATA%` から先の綴り（設計 D-7）。
+/// 既定の場所の、`%APPDATA%` から先の綴り。
 const DEFAULT_TAIL: [&str; 5] = [
     "npm",
     "node_modules",
@@ -52,17 +51,17 @@ const DEFAULT_TAIL: [&str; 5] = [
     "index.json",
 ];
 
-/// 提供パッケージの名前や版が読めなかったときに記録する値（設計 D-7）。
+/// 提供パッケージの名前や版が読めなかったときに記録する値。
 pub const UNKNOWN: &str = "unknown";
 
-/// スナップショット 1 つ分。カタログ冒頭に記録する情報（要件 1.6）を含む。
+/// スナップショット 1 つ分。カタログ冒頭に記録する情報を含む。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotDoc {
     /// スナップショットの版（最上位の `version`）。
     pub version: i64,
     /// 生成日時（最上位の `generatedAt`）。綴りが JSON と違う唯一の欄である。
     pub generated_at: String,
-    /// 全 entry。`source` による絞り込みはここでは行わない（要件 1.4）。
+    /// 全 entry。`source` による絞り込みはここでは行わない。
     pub entries: Vec<RawEntry>,
     /// 提供パッケージの名前（`package.json` の `name`）。
     pub package: String,
@@ -84,7 +83,7 @@ pub struct RawEntry {
 /// スナップショットの場所。環境変数 `AREKA_UKADOC_SNAPSHOT` が既定より優先する。
 ///
 /// 環境変数が無いときは `APPDATA` から既定の場所を組み立てる。`APPDATA` も無ければ
-/// 組み立てようが無いので、どの環境変数が足りないかを告げて失敗する（設計 D-7）。
+/// 組み立てようが無いので、どの環境変数が足りないかを告げて失敗する。
 pub fn default_path() -> Result<PathBuf, SurveyError> {
     resolve(
         std::env::var_os(SNAPSHOT_ENV),
@@ -107,7 +106,7 @@ fn resolve(given: Option<OsString>, appdata: Option<OsString>) -> Result<PathBuf
     }
 }
 
-/// 与えられた `%APPDATA%` から既定の場所を組み立てる（設計 D-7）。
+/// 与えられた `%APPDATA%` から既定の場所を組み立てる。
 ///
 /// 環境変数を読まないので、テストから逐語で確かめられる。
 fn default_path_from_appdata(appdata: &Path) -> PathBuf {
@@ -120,7 +119,7 @@ fn default_path_from_appdata(appdata: &Path) -> PathBuf {
 
 /// スナップショットを読んで [`SnapshotDoc`] にする。
 ///
-/// 読めないときの本文には**探した絶対パス**を載せる（要件 1.8）。相対パスを渡されても
+/// 読めないときの本文には**探した絶対パス**を載せる。相対パスを渡されても
 /// 本文に出るのは絶対パスで、どこを見に行ったのかが後から辿れる。
 pub fn load(path: &Path) -> Result<SnapshotDoc, SurveyError> {
     load_with(path, &mut |line| eprintln!("{line}"))
@@ -152,7 +151,7 @@ fn absolutize(path: &Path, current_dir: Option<&Path>) -> String {
     }
 }
 
-/// 提供パッケージの名前と版を読む（要件 1.6・設計 D-7）。
+/// 提供パッケージの名前と版を読む。
 ///
 /// 読むのはスナップショットの **2 つ上**にある `package.json`。読めないときは
 /// 標準エラーへ出す警告の 1 行を `Err` で返す。呼び出し側は名前も版も [`UNKNOWN`] に
@@ -182,7 +181,7 @@ fn package_json_path(snapshot: &Path) -> Option<PathBuf> {
 /// `package.json` の本文から名前と版を取り出す。
 ///
 /// 版が無い（または文字列でない）ときは諦める。名前だけが無いときは [`UNKNOWN`] を
-/// 名前にして版は活かす——記録したいのは版だからである（要件 1.6）。
+/// 名前にして版は活かす——記録したいのは版だからである。
 fn package_fields(text: &str) -> Option<(String, String)> {
     let value: Value = serde_json::from_str(text).ok()?;
     let table = value.as_object()?;
@@ -195,15 +194,15 @@ fn package_fields(text: &str) -> Option<(String, String)> {
     Some((name, version))
 }
 
-/// 提供パッケージの版が読めなかったことを告げる警告の 1 行（設計 D-7）。
+/// 提供パッケージの版が読めなかったことを告げる警告の 1 行。
 ///
 /// [`load`] が標準エラーへ出す。`tracing` は使わない。この道具は調査用の実行ファイルで、
-/// 記録の宛先は標準エラーに一本化してある（設計 Error Handling）。
+/// 記録の宛先は標準エラーに一本化してある。
 fn unknown_package_line(shown: &str, reason: &str) -> String {
     format!("警告: 提供パッケージの版が読めないので {UNKNOWN} と記録する: {shown}（{reason}）")
 }
 
-/// JSON の本文を [`SnapshotDoc`] へ写す（設計 D-2）。
+/// JSON の本文を [`SnapshotDoc`] へ写す。
 ///
 /// `shown` は本文に載せる**探した絶対パス**。提供パッケージの名前と版は呼び出し側が
 /// 決めて渡す——ここはファイルに触らない純粋な写しなので、テストから文字列だけで
@@ -266,7 +265,7 @@ fn root_string(root: &Map<String, Value>, key: &str) -> Result<String, SurveyErr
     }
 }
 
-/// entry 1 件を写す（欄の綴りは要件付録 B 手順 1）。どの位置のどの欄が違うかを本文に載せる。
+/// entry 1 件を写す。どの位置のどの欄が違うかを本文に載せる。
 fn raw_entry(item: &Value, index: usize) -> Result<RawEntry, SurveyError> {
     let table = item
         .as_object()
@@ -309,7 +308,7 @@ fn kind(value: &Value) -> &'static str {
     }
 }
 
-/// 探した絶対パスと理由を載せた「読めない」失敗（要件 1.8）。
+/// 探した絶対パスと理由を載せた「読めない」失敗。
 fn unreadable(shown: &str, reason: &str) -> SurveyError {
     SurveyError::SnapshotUnreadable {
         path: shown.to_owned(),
@@ -317,7 +316,7 @@ fn unreadable(shown: &str, reason: &str) -> SurveyError {
     }
 }
 
-/// どこがどう違うかを載せた「形が違う」失敗（要件 1.8）。
+/// どこがどう違うかを載せた「形が違う」失敗。
 fn shape(detail: impl Into<String>) -> SurveyError {
     SurveyError::SnapshotShape {
         detail: detail.into(),

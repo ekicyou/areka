@@ -1,5 +1,4 @@
-//! 判定 ⑷（段階と順位・`briefing.md`）の腕 a〜g と、台帳から数え直す道具
-//! （要件 11.1 ⑷・5.3・5.6・6.7・7.1〜7.3・設計「判定の一覧」・D-9）。
+//! 判定 ⑷（段階と順位・`briefing.md`）の腕 a〜g と、台帳から数え直す道具。
 //!
 //! # ⑷ が主張すること
 //!
@@ -17,13 +16,13 @@
 //! - **f 書き戻し後の分布**: `[[barrier]]`・`[[after]]`・`[priority_blank]` の数が
 //!   台帳の数え直しと一致し、`[[after]]` が 4 ドメインに 1 行ずつある。
 //! - **g 人の決め**: 段階 B の `rank` 1 の束の `themes` に「更新」が含まれ、段階 C の
-//!   最大 `rank` の束の `members` に `system.` を含む id がある（要件 5.3 の釘付け）。
+//!   最大 `rank` の束の `members` に `system.` を含む id がある。
 //!
 //! 腕を関数に割ってあるのは摂動のためである（`linkage_checks.rs` と同じ流儀）。
 //! 1 か所壊すと複数の腕が同時に赤くなるので、摂動は腕ごとに「ちょうど 1 件」を見る
-//! （要件 11.3。その主張は `briefing_checks.rs` にある）。
+//! （その主張は `briefing_checks.rs` にある）。
 //!
-//! # 導出は二重に実装しない（設計 D-4）
+//! # 導出は二重に実装しない
 //!
 //! 腕 c は `derive::priorities` の戻り値と、腕 d・e は `derive::derive_bundle` と
 //! `derive::axis_key` の戻り値と突き合わせる。ここで優先度を組み直したりテーマを
@@ -31,7 +30,7 @@
 //!
 //! # `[[barrier]]` は「ページの全項目」を数える
 //!
-//! `[[barrier]]` の各行が並べるのは**ページ 1 つの状態分布**（要件 8.1 ⑷・設計 D-2）
+//! `[[barrier]]` の各行が並べるのは**ページ 1 つの状態分布**
 //! であって、段階 A に落ちた項目だけの分布ではない。両者は別の数で、段階 A の側で
 //! 数えるとどの行も赤になる。
 //!
@@ -52,9 +51,8 @@
 //!
 //! `documents.rs`・`perturb.rs` と同じ流儀で、ここにあるのは腕そのものと数え直しの
 //! 道具だけである。実データで緑であることの主張・摂動 3 本・腕ごとの較正は兄弟の
-//! `briefing_checks.rs` にある。2 つに割ってあるのは 1 ファイル 1,000 行の目安
-//! （`structure.md`・設計「1,000 行の番人」）を守るためで、腕と摂動を同じ
-//! ファイルに置くと目安を超える。
+//! `briefing_checks.rs` にある。2 つに割ってあるのは 1 ファイル 1,000 行の目安を守るためで、
+//! 腕と摂動を同じファイルに置くと目安を超える。
 
 use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -69,23 +67,23 @@ use ukadoc_survey::model::{Domain, EntryId, PageName, Status};
 
 use super::documents::{BRIEFING_MD, LINKAGE_MD};
 
-/// 要件 5.3 が段階 B の先頭に置くと決めたテーマ。
+/// 段階 B の先頭に置くと決めたテーマ。
 pub(super) const UPDATE_THEME: &str = "更新";
 
-/// 要件 5.3 が段階 C の末尾に置くと決めた項目 id の目印。
+/// 段階 C の末尾に置くと決めた項目 id の目印。
 pub(super) const SYSTEM_MARK: &str = "system.";
 
-/// `override` の `kind = "stage-rule"` に許す `ref`（設計 D-2 の受け付け形）。
+/// `override` の `kind = "stage-rule"` に許す `ref`。
 pub(super) const STAGE_RULE_REF: &str = "要件 5.3";
 
-/// `second-stage` の `ref` に許す適合検証項目の番号の上限（要件 9.1 の 20 項目）。
+/// `second-stage` の `ref` に許す適合検証項目の番号の上限（20 項目）。
 const CONFORMANCE_ITEMS: usize = 20;
 
-/// 持ち越し 8 行の出どころ（要件 9.1・9.2。`second-stage` の `ref` のもう一方の形）。
+/// 持ち越し 8 行の出どころ（`second-stage` の `ref` のもう一方の形）。
 const CARRYOVER_DOC: &str =
     ".kiro/specs/completed/areka-P0-emo2-conformance-e2e/verification/m1-completion.md";
 
-/// 持ち越し行の数（要件 9.1）。取り出しがこの数を返さなければ読み方か出どころが
+/// 持ち越し行の数。取り出しがこの数を返さなければ読み方か出どころが
 /// 変わっている——黙って短い一覧を返すと `ref` の受け付け形が緩む。
 const CARRYOVER_ROWS: usize = 8;
 
@@ -398,7 +396,7 @@ pub(super) fn rank_order_findings(
             .collect();
 
         // 例外の印を持つ行は順序の主張から外れるが、`insufficient` の行だけは
-        // 「同じ段階の対象行より後」に並ぶこと（設計 D-9 の退路）。
+        // 「同じ段階の対象行より後」に並ぶこと。
         let last_target = rows
             .iter()
             .filter(|(_, row)| is_target(row))
@@ -468,7 +466,7 @@ fn dense_order_findings(
     findings
 }
 
-/// 例外の印の `kind` と `ref` が受け付け形に収まること（設計 D-2・D-9）。
+/// 例外の印の `kind` と `ref` が受け付け形に収まること。
 pub(super) fn override_finding(row: &RankRow, carryover: &Carryover) -> Option<String> {
     let exception = row.exception.as_ref()?;
     let reference = exception.reference.as_str();
@@ -524,7 +522,7 @@ impl Carryover {
     }
 }
 
-/// 持ち越し 8 行の見出し（要件 9.1 が名指す表の 1 列目・`——` の手前まで）。
+/// 持ち越し 8 行の見出し（表の 1 列目・`——` の手前まで）。
 ///
 /// 出どころは完了 spec の適合検証の記録である。読めない・8 行にならないときは黙って
 /// 短い一覧を返さずに止まる——短い一覧を返すと `ref` の受け付け形が緩む。
@@ -654,7 +652,7 @@ pub(super) fn distribution_findings(briefing: &Briefing, facts: &LedgerFacts) ->
 }
 
 // ---------------------------------------------------------------------------
-// 腕 g: 人の決め（要件 5.3）
+// 腕 g: 人の決め
 // ---------------------------------------------------------------------------
 
 /// その段階のその順位の行。
@@ -678,7 +676,7 @@ fn any_bundle(rows: &[&RankRow], linkage: &Linkage, keep: impl Fn(&NamedBundle) 
 /// 腕 g: 「更新」が段階 B の先頭・`system.*` が段階 C の末尾に居ること。
 ///
 /// **どちらも「いずれか」で判定する。** 同じ段階の同じ `rank` に行が複数並びうる
-/// からで、「すべての行が満たす」に読み替えると、要件 5.3 と関係の無い束が同着で
+/// からで、「すべての行が満たす」に読み替えると、「更新」・`system.*` と関係の無い束が同着で
 /// 先頭に並んだだけで赤くなる。
 pub(super) fn stage_rule_findings(linkage: &Linkage, briefing: &Briefing) -> Vec<String> {
     let mut findings = Vec::new();

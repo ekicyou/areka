@@ -1,6 +1,6 @@
-//! `priority-apply` の書き戻しと `report` の書き出しが持つ「順番」と「1 バイトも
-//! 書かない」を釘付けする（要件 7.1・7.2・7.6・1.4・12.2）。`generate_tests.rs` の子の
-//! モジュールで、台帳の置き場の綴りと小道具をそちらと共有する。
+//! `priority-apply` の書き戻しと `report` の書き出しが持つ「順番」と「1 バイトも書かない」
+//! を釘付けする。`generate_tests.rs` の子のモジュールで、台帳の置き場の綴りと小道具を
+//! そちらと共有する。
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -15,7 +15,7 @@ use crate::error::SurveyError;
 use crate::model::{Domain, EntryId};
 
 // ---------------------------------------------------------------------------
-// priority-apply（要件 7.1・7.2・7.6・1.4・12.2）
+// priority-apply
 // ---------------------------------------------------------------------------
 //
 // 書き戻しは 2 文書と台帳 4 本を読んで 4 本を書き直す。ここで見るのはその**順番**
@@ -162,7 +162,7 @@ fn apply_over(
     let asked: RefCell<Vec<String>> = RefCell::new(Vec::new());
     let from_table = reader_over(files);
     let read = |path: &Path| -> Result<String, SurveyError> {
-        // 相対の綴りで読みに来ると、失敗の本文に絶対パスが載らない（要件 1.4）。
+        // 相対の綴りで読みに来ると、失敗の本文に絶対パスが載らない。
         assert!(
             path.is_absolute(),
             "絶対パスでない場所を読みに来た: {path:?}"
@@ -229,7 +229,7 @@ fn the_derived_priority_lands_in_every_one_of_the_four_ledgers() {
             body.contains(&filled),
             "{place} に確定値が入っていない: {body}"
         );
-        // 置き換えるのは priority の 1 行だけ（要件 12.2）。戻せば元の本文に一致する。
+        // 置き換えるのは priority の 1 行だけ。戻せば元の本文に一致する。
         let before = sample_ledger(Domain::ALL[index], SAMPLE_IDS[index], "", "");
         assert_eq!(
             body.replace(&filled, "priority = \"\""),
@@ -241,8 +241,8 @@ fn the_derived_priority_lands_in_every_one_of_the_four_ledgers() {
 
 #[test]
 fn re_running_the_write_back_changes_no_item_and_leaves_the_bodies_byte_for_byte() {
-    // 冪等（設計「入口 / cli::generate::priority_apply」）。1 度目の本文をそのまま
-    // 食わせて、変更件数が 0 で本文が 1 バイトも変わらないことを見る。
+    // 冪等。1 度目の本文をそのまま食わせて、
+    // 変更件数が 0 で本文が 1 バイトも変わらないことを見る。
     let (outcome, _, first) = apply_over(&sample_files(&SAMPLE_IDS, ""));
     outcome.expect("1 度目が通らないと 2 度目の主張が立たない");
 
@@ -266,7 +266,7 @@ fn re_running_the_write_back_changes_no_item_and_leaves_the_bodies_byte_for_byte
 
 #[test]
 fn an_id_that_belongs_to_no_bundle_stops_the_run_before_a_single_write() {
-    // 導出に失敗する id があれば挙げて止まり、1 本も書かない（要件 7.1・1.4）。
+    // 導出に失敗する id があれば挙げて止まり、1 本も書かない。
     // 4 本目（property）の id だけを帰属から外す。
     let (outcome, asked, written) = apply_over(&sample_files(&SAMPLE_IDS[..3], ""));
     let err = outcome.expect_err("帰属の無い id があるのに書き戻せてしまった");
@@ -282,7 +282,7 @@ fn an_id_that_belongs_to_no_bundle_stops_the_run_before_a_single_write() {
 
 #[test]
 fn a_body_that_cannot_be_decided_on_the_fourth_ledger_leaves_the_first_three_unwritten() {
-    // 4 本の本文が全部決まってから書く（設計「入口 / cli::generate::priority_apply」）。
+    // 4 本の本文が全部決まってから書く。
     // 4 本目の備考の**行頭**に `priority = ` を置くと、その台帳だけが「どの行を直す
     // べきか決められない」で落ちる。順番が逆なら、先に決まっている 3 本が書き換わって
     // 残る。
@@ -299,8 +299,8 @@ fn a_body_that_cannot_be_decided_on_the_fourth_ledger_leaves_the_first_three_unw
 
 #[test]
 fn a_document_that_cannot_be_read_stops_with_the_absolute_path_it_looked_for() {
-    // 1 本でも読めなければ探した絶対パスを添えて止まり、1 バイトも書かない
-    // （要件 1.4）。読み手の失敗を包み直して場所を落とすと、ここが赤くなる。
+    // 1 本でも読めなければ探した絶対パスを添えて止まり、1 バイトも書かない。
+    // 読み手の失敗を包み直して場所を落とすと、ここが赤くなる。
     for missing in [linkage_file(), briefing_file(), LEDGER_FILES[3].to_owned()] {
         let mut files = sample_files(&SAMPLE_IDS, "");
         files.remove(&missing);

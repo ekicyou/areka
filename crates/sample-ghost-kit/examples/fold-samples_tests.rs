@@ -137,8 +137,7 @@ fn unknown_arguments_are_refused_not_ignored() {
     assert_eq!((from.as_deref(), check_only), (Some("x"), true));
 }
 
-/// 2 段の取り出し元を、段ごとに大小を畳んで照らす（大小の違う非 ASCII の名前を含む・
-/// audit-test-kits かけ直し 5 回目 E1）。1 段目だけを ASCII で照らす形は、取り出し元の配下を
+/// 2 段の取り出し元を、段ごとに大小を畳んで照らす（大小の違う非 ASCII の名前を含む）。1 段目だけを ASCII で照らす形は、取り出し元の配下を
 /// 本体の置き場へ写して不一致を数える。
 #[test]
 fn a_two_level_companion_source_with_other_case_round_trips_without_mismatches() {
@@ -157,7 +156,7 @@ fn a_two_level_companion_source_with_other_case_round_trips_without_mismatches()
 }
 
 /// 追跡ファイルが 0 件なら、panic でなく固定の英語の文の `Err` で断る（パスは `main` の
-/// `ascii` が写す。終了コード 1・audit-test-kits かけ直し 5 回目 E2）。
+/// `ascii` が写す。終了コード 1）。
 #[test]
 fn no_tracked_files_is_a_fixed_english_error_not_a_panic() {
     let work = WorkDir::new().unwrap();
@@ -176,8 +175,7 @@ fn no_tracked_files_is_a_fixed_english_error_not_a_panic() {
     );
 }
 
-/// 検体に居ない種別は、panic でなく ASCII の `unsupported kind` の `Err` で断る
-/// （audit-test-kits かけ直し 5 回目 E3）。
+/// 検体に居ない種別は、panic でなく ASCII の `unsupported kind` の `Err` で断る。
 #[test]
 fn an_unsupported_kind_is_an_ascii_error_not_a_panic() {
     let manifest = InstallManifest {

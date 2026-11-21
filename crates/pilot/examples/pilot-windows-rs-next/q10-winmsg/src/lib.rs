@@ -52,7 +52,6 @@ pub struct JoinHandle<T> {
     task: ManuallyDrop<async_task::Task<T>>,
 }
 
-// Keep the task running when dropped.
 impl<T> Drop for JoinHandle<T> {
     fn drop(&mut self) {
         let task = unsafe { ManuallyDrop::take(&mut self.task) };
@@ -80,7 +79,6 @@ unsafe fn spawn_unchecked_lifetime<T>(future: impl Future<Output = T>) -> JoinHa
         })
     };
 
-    // Trigger initial poll.
     runnable.schedule();
 
     JoinHandle {
@@ -125,7 +123,6 @@ pub fn spawn_local<T: 'static>(future: impl Future<Output = T> + 'static) -> Joi
 pub fn block_on<'a, T: 'a>(future: impl Future<Output = T> + 'a) -> T {
     let msg_loop = &MessageLoop::new();
 
-    // Wrap the future so it quits the message loop when finished.
     // SAFETY: All borrowed variables outlive the task itself because we only
     // return from this function after the task has finished.
     let task = unsafe {

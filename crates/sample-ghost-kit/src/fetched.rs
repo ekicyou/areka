@@ -1,9 +1,8 @@
-//! URL の行の書庫の置き場と照合（spec: `areka-P0-sample-url-fetch` 要件 1.6・3.1・3.3〜3.6・
-//! 3.9・4.1・4.2）。
+//! URL の行の書庫の置き場と照合。
 //!
 //! 置き場の棚の名前 `fetched` を持つ唯一の所。窓口はこの棚に書かず（書くのは取り寄せの段と
 //! 開発者だけ）、`devroot` の掃除（`work\`）と回収（[`CACHE`](crate::devroot::CACHE)）もこの棚を走査しない。通信の
-//! 部品も子のプロセスも持たない（要件 3.3）。
+//! 部品も子のプロセスも持たない。
 
 use std::path::{Path, PathBuf};
 
@@ -14,7 +13,7 @@ use crate::sha256::sha256_hex;
 const FETCHED: &str = "fetched";
 
 /// ハッシュのファイルの後ろの綴り。公開の `<url>.sha256` と、置き場の `<name>.nar.sha256` の
-/// 両方に使う唯一の所（areka-P0-sample-url-fetch 実装の段の裁定 2）。
+/// 両方に使う唯一の所。
 pub(crate) const CHECKSUM_SUFFIX: &str = ".sha256";
 
 /// `<namespace>\fetched\<name>.nar`。
@@ -64,7 +63,7 @@ fn read_shelf(
 }
 
 /// 置き場のハッシュのファイルと書庫を読み、書庫の SHA-256 がハッシュのファイルと合えば
-/// 書庫のパスと確かめたバイトを返す（要件 3.4・3.9・audit-test-kits 決め D13）。大きさは見ない（登記に無い）。
+/// 書庫のパスと確かめたバイトを返す。大きさは見ない（登記に無い）。
 ///
 /// # Errors
 ///
@@ -169,7 +168,7 @@ pub(crate) fn mismatch_text(
     )
 }
 
-/// URL の行の欄の形（要件 1.5）。`https://` で始まり空白と制御文字を含まない URL・
+/// URL の行の欄の形。`https://` で始まり空白と制御文字を含まない URL・
 /// `--` で始まらない名前。
 ///
 /// # Errors

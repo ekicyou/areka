@@ -1,5 +1,4 @@
-//! 調べる副手続きが持つ「判断」と「版面」を釘付けする（設計「入口 / cli」・
-//! 「Data Models / 検査の出力」・要件 5.5・5.8・5.9・6.12・8.1）。
+//! 調べる副手続きが持つ「判断」と「版面」を釘付けする。
 //!
 //! `check`・`evidence`・`diff` は repo の木（カタログ・台帳・報告）かスナップショットが要り、
 //! `candidates` は本物の `crates/` を歩いて出力が repo の中身で変わるので、ここでは走らせない
@@ -7,7 +6,7 @@
 //!
 //! - 所見の件数から終了の仕方を決める判断（[`verdict`]）
 //! - 証拠の並べ方（[`render_evidence_by_id`]・[`render_evidence`]）
-//! - 候補の並べ方と、証拠へ混ざらないこと（[`render_candidates`]・要件 5.9）
+//! - 候補の並べ方と、証拠へ混ざらないこと（[`render_candidates`]）
 //! - 2 つのカタログが比べられる形かどうかの見立て（[`super::comparability_notice`]。
 //!   [`compare`] を通して見る）と差分の版面
 //! - 検査の配線（[`examine`]）——判定を呼び、本文を組み、件数を数える 3 つが噛み合って
@@ -20,7 +19,7 @@
 //! 参照すると、綴りが一斉に変わっても緑のままになるため）。
 //!
 //! このファイルはファイルを 1 つも作らず、一時ディレクトリも使わず、スナップショットも
-//! 読まない（要件 6.2・設計 File Structure Plan）。
+//! 読まない。
 
 use std::collections::BTreeMap;
 
@@ -58,7 +57,7 @@ fn by_id(rows: &[(&str, &[&str])]) -> BTreeMap<EntryId, Vec<String>> {
 }
 
 // --------------------------------------------------------------------------
-// 終了の仕方（完了条件「所見が 0 件なら終了コード 0、所見があれば終了コード 1」）
+// 終了の仕方（所見が 0 件なら終了コード 0、所見があれば終了コード 1）
 // --------------------------------------------------------------------------
 
 #[test]
@@ -90,7 +89,7 @@ fn the_verdict_error_is_the_one_that_means_a_failed_check() {
 }
 
 // --------------------------------------------------------------------------
-// 証拠の並べ方（要件 5.5・設計 D-4）
+// 証拠の並べ方
 // --------------------------------------------------------------------------
 
 #[test]
@@ -199,7 +198,7 @@ fn the_full_evidence_report_spells_out_each_reason_for_an_unmatched_name() {
 }
 
 // --------------------------------------------------------------------------
-// 候補（要件 5.8・5.9）
+// 候補
 // --------------------------------------------------------------------------
 
 #[test]
@@ -250,7 +249,7 @@ fn an_empty_candidate_listing_still_says_how_many_there_were() {
 
 #[test]
 fn every_candidate_kind_gets_its_own_spelling() {
-    // 4 種が同じ綴りになると「種類つきで並ぶ」（要件 5.8）が成り立たない。
+    // 4 種が同じ綴りになると「種類つきで並ぶ」が成り立たない。
     let mut bodies: Vec<String> = Vec::new();
     for kind in [
         CandidateKind::AllowListElement,
@@ -274,7 +273,7 @@ fn every_candidate_kind_gets_its_own_spelling() {
 
 #[test]
 fn no_candidate_ever_appears_in_the_evidence_listing() {
-    // 要件 5.9。同じソース文から証拠と候補の両方を作り、混ざっていないことを確かめる。
+    // 同じソース文から証拠と候補の両方を作り、混ざっていないことを確かめる。
     // 「ukadoc の URL の行」と「手掛かりの行」を別のファイルに置くのは、URL の行が
     // 直下の行を手掛かりから外すため（`candidates::has_marker_above`）。
     let catalog = lib_test_support::catalog();
@@ -351,7 +350,7 @@ fn a_clean_check_still_prints_a_body_and_the_evidence() {
 
 #[test]
 fn a_failed_check_prints_the_findings_and_the_evidence_together() {
-    // 完了条件「所見の本文と、id ごとの証拠のファイルパスを並べて出す」。
+    // 所見の本文と、id ごとの証拠のファイルパスを並べて出す。
     let findings = vec![Finding::new(
         FindingKind::ImplementedWithoutEvidence,
         Some(id("ukadoc:list_shiori_event:OnBoot:1")),
@@ -571,7 +570,7 @@ fn a_catalog_of_another_shape_version_only_gets_no_claim_that_almost_every_body_
 }
 
 // --------------------------------------------------------------------------
-// 差分の版面（要件 8.1）
+// 差分の版面
 // --------------------------------------------------------------------------
 
 #[test]

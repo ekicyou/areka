@@ -1,4 +1,4 @@
-//! 問い 7（8.4・要件 8.4〜8.6）: 範囲の色・下線の位置・`TextLayout::new` の panic。
+//! 問い 7:範囲の色・下線の位置・`TextLayout::new` の panic。
 //!
 //! 範囲は areka の文字の位置（拡張書記素クラスタの序数）で受け、`choices` の換算で
 //! `windows-text` の UTF-8 のバイト位置（`set_underline`・`range_bounds`）と DirectWrite の
@@ -110,7 +110,7 @@ fn column_of(layout: &TextLayout) -> (f32, f32) {
 }
 
 /// 手当て: DirectWrite は縦書きの下線を列の左（文字の下＝反時計回りに 90 度の側）に置き、列の箱の左端を
-/// またぐ（8.4 の測り: 配置の x=-0.62..0.40）。areka の決まり（選択肢の下線は列の右）には、列の箱の左右の
+/// またぐ（測った値: 配置の x=-0.62..0.40）。areka の決まり（選択肢の下線は列の右）には、列の箱の左右の
 /// 中で鏡に映し（左端からの距離を右端からの距離にする）、鏡で右端を越えた分は内へ寄せる（列が面の右端に
 /// 接すると越えた分は切れて細る）。太さと y の範囲はそのまま。
 pub fn to_column_right(line: Rect, (left, right): (f32, f32)) -> Rect {

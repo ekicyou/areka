@@ -1,8 +1,7 @@
 //! [`super`]（3 文書の骨組みの読み手）の在中テスト。
 //!
 //! 相手にするのは**テスト本文の中の文字列だけ**である。`doc/ukadoc-coverage/` の
-//! 実ファイルは 1 行も読まない——実データを相手にする判定は統合テストの担当で
-//! （設計 D-3）、ここで読むと文書の書きかけがそのまま純粋層のテストを赤くする。
+//! 実ファイルは 1 行も読まない——実データを相手にする判定は統合テストの担当で、ここで読むと文書の書きかけがそのまま純粋層のテストを赤くする。
 //!
 //! 守るのは次の 4 つと、形の検査の主な分岐である。
 //!
@@ -17,7 +16,7 @@ use super::*;
 // 見本の本文
 // ---------------------------------------------------------------------------
 
-/// 名前付き束 1 つ分の囲み（設計 D-2 の例そのままの欄）。
+/// 名前付き束 1 つ分の囲み。
 const BUNDLE_BLOCK: &str = r#"```toml
 [bundle."時刻の刻み"]
 machine = ["ukadoc:descript_plugin:secondchangeinterval:1"]
@@ -298,7 +297,7 @@ fn a_missing_field_names_the_key_and_the_table() {
     assert!(body.contains("tally"), "表の鍵が本文に無い: {body}");
 }
 
-/// 単独項目のドメイン別内訳は 0 のドメインも省略できない（要件 4.2・11.5）。
+/// 単独項目のドメイン別内訳は 0 のドメインも省略できない。
 #[test]
 fn singles_by_domain_must_list_every_domain() {
     let broken = TALLY_BLOCK.replace("property = 0\n", "");
@@ -339,7 +338,7 @@ fn a_breakage_outside_the_vocabulary_is_rejected() {
     );
 }
 
-/// 語彙外のテーマは落ちる（台帳と同じ 8 テーマ・要件 4.4）。
+/// 語彙外のテーマは落ちる（台帳と同じ 8 テーマ）。
 #[test]
 fn a_theme_outside_the_vocabulary_is_rejected() {
     let markdown = format!(
@@ -364,7 +363,7 @@ fn an_unknown_field_is_rejected() {
     );
 }
 
-/// 名前付き束と単独項目は書ける欄が違う（設計 D-2）。
+/// 名前付き束と単独項目は書ける欄が違う。
 #[test]
 fn a_single_item_bundle_has_its_own_shape() {
     let single = SINGLE_BLOCK;
@@ -375,7 +374,6 @@ fn a_single_item_bundle_has_its_own_shape() {
     assert_eq!(bundle.members.len(), 1);
     assert_eq!(bundle.reason, "壊れる振る舞いを書けない");
 
-    // 理由の無い単独項目は落ちる（要件 4.4）。
     let no_reason = single.replace("reason = \"壊れる振る舞いを書けない\"\n", "");
     let body = err_body(read_linkage(&format!("{no_reason}\n{TALLY_BLOCK}")));
     assert!(
@@ -395,7 +393,7 @@ fn a_single_item_bundle_has_its_own_shape() {
     assert!(body.contains("reason"), "欄の名前が本文に無い: {body}");
 }
 
-/// 人手で足した id は構成 id の部分集合でなければならない（設計 D-2）。
+/// 人手で足した id は構成 id の部分集合でなければならない。
 #[test]
 fn hand_ids_must_be_members() {
     let markdown = format!(
@@ -538,7 +536,7 @@ fn the_array_tables_are_zero_rows_when_absent() {
 // roadmap-draft.md
 // ---------------------------------------------------------------------------
 
-/// spec 表の行は束名か「どの束にも属さない＋理由」のどちらかを持つ（要件 11.5）。
+/// spec 表の行は束名か「どの束にも属さない＋理由」のどちらかを持つ。
 ///
 /// 段階の欄は束と一蓮托生である——束を持つ行は必ず持ち、持たない行は必ず持たない。
 #[test]

@@ -3,7 +3,7 @@
 mod classify_tests {
     use super::super::*;
 
-    // 要件 3.2: HELLO（helper HWND u32 LE 4 バイト）は RecordHello へ分類される。
+    // HELLO（helper HWND u32 LE 4 バイト）は RecordHello へ分類される。
     #[test]
     fn hello_classifies_to_record_with_decoded_hwnd() {
         for value in [0x1u32, 0x1234_5678, 0xDEAD_BEEF, u32::MAX] {
@@ -18,7 +18,7 @@ mod classify_tests {
         }
     }
 
-    // 要件 3.2: HELLO 復号は copydata_payload→decode_hwnd_le の等価性を満たす。
+    // HELLO 復号は copydata_payload→decode_hwnd_le の等価性を満たす。
     #[test]
     fn hello_decode_matches_ipc_primitives() {
         let value = 0xCAFE_F00Du32;
@@ -30,7 +30,7 @@ mod classify_tests {
         );
     }
 
-    // 要件 2.5: HELLO だが payload 長が 4 でない → 記録せず不正扱い。
+    // HELLO だが payload 長が 4 でない → 記録せず不正扱い。
     #[test]
     fn malformed_hello_is_ignored() {
         let raw = MsgTag::Hello.as_u32() as usize;
@@ -51,7 +51,7 @@ mod classify_tests {
         );
     }
 
-    // 要件 2.5: 親が能動処理しない既知タグ（Load/Request/Unload）は IgnoreKnown（記録のみ・crash なし）。
+    // 親が能動処理しない既知タグ（Load/Request/Unload）は IgnoreKnown（記録のみ・crash なし）。
     #[test]
     fn known_nonhello_tags_are_ignored_known() {
         for tag in [MsgTag::Load, MsgTag::Request, MsgTag::Unload] {
@@ -63,7 +63,7 @@ mod classify_tests {
         }
     }
 
-    // 要件 4.2: RESPONSE は payload を StoreResponse へ分類する（再入受領で slot へ store）。
+    // RESPONSE は payload を StoreResponse へ分類する（再入受領で slot へ store）。
     #[test]
     fn response_classifies_to_store_with_payload() {
         let raw = MsgTag::Response.as_u32() as usize;
@@ -80,14 +80,14 @@ mod classify_tests {
         );
     }
 
-    // 要件 2.5: 未知タグは crash させず IgnoreBad（記録のみ）。
+    // 未知タグは crash させず IgnoreBad（記録のみ）。
     #[test]
     fn unknown_tag_is_ignored_as_bad() {
         let action = classify_inbound(0xFFusize, 0, b"");
         assert!(matches!(action, InboundAction::IgnoreBad(_)));
     }
 
-    // 要件 2.5: cbData と実長の不整合は crash させず IgnoreBad。
+    // cbData と実長の不整合は crash させず IgnoreBad。
     #[test]
     fn length_mismatch_is_ignored_as_bad() {
         let raw = MsgTag::Hello.as_u32() as usize;
@@ -99,7 +99,7 @@ mod classify_tests {
 mod gate_tests {
     use super::super::*;
 
-    // 要件 3.3: helper HWND 未確定なら送信ゲートが Incomplete で弾く（窓なしの純ロジック）。
+    // helper HWND 未確定なら送信ゲートが Incomplete で弾く（窓なしの純ロジック）。
     #[test]
     fn gate_rejects_when_helper_hwnd_unset() {
         let err = resolve_send_target(None).expect_err("未確定は Err で弾く");
@@ -109,7 +109,7 @@ mod gate_tests {
         );
     }
 
-    // 要件 3.3: helper HWND 確定なら target HWND を返し送信を許可する。
+    // helper HWND 確定なら target HWND を返し送信を許可する。
     #[test]
     fn gate_allows_when_helper_hwnd_set() {
         let wire: u32 = 0x1234_5678;
@@ -121,7 +121,7 @@ mod gate_tests {
         );
     }
 
-    // SendError の Display/Debug（要件 3.3 / 5.2 の一様報告）。
+    // SendError の Display/Debug。
     #[test]
     fn send_error_variants_render() {
         let hs = SendError::Handshake(HandshakeError::Incomplete);
@@ -138,19 +138,19 @@ mod window_tests {
 
     /// 親窓 1 つへの loopback テスト（deterministic）。以下を順に検証する:
     ///
-    /// - (a) HELLO 未受領で短い timeout の `pump_until_hello_or` が `None`（要件 3.4・Timeout 経路）。
-    /// - (b) 同じ親窓へ自分の窓を名乗る HELLO を loopback 送出 → `pump_until_hello_or` が `Some(helper_hwnd)` を返し helper_hwnd が確定する（要件 3.2）。
+    /// - (a) HELLO 未受領で短い timeout の `pump_until_hello_or` が `None`（Timeout 経路）。
+    /// - (b) 同じ親窓へ自分の窓を名乗る HELLO を loopback 送出 → `pump_until_hello_or` が `Some(helper_hwnd)` を返し helper_hwnd が確定する。
     /// - (c) 無視したメッセージの記録は [`ignored_frames_are_logged`] が確かめる。
-    /// - (d) RESPONSE を loopback 送出 → WndProc の Response アームが `response_slot` へ store する（要件 4.2）。
-    /// - (e) 無応答相手（親自身）へ `send_request` → slot が空 → `SendError::Ipc(Timeout)` に写る（要件 5.2）。同じスレッドの窓ゆえ WndProc は直に呼ばれ上限時間は効かない（上限時間は shiori-host32-ipc の send_timeout_tests）。
+    /// - (d) RESPONSE を loopback 送出 → WndProc の Response アームが `response_slot` へ store する。
+    /// - (e) 無応答相手（親自身）へ `send_request` → slot が空 → `SendError::Ipc(Timeout)` に写る。同じスレッドの窓ゆえ WndProc は直に呼ばれ上限時間は効かない（上限時間は shiori-host32-ipc の send_timeout_tests）。
     ///
     /// bounded: いずれの pump / send_request も timeout / 受領 / quit で必ず抜ける（無限ループ禁止）。
     #[test]
     fn pump_times_out_then_hello_response_and_send_timeout() {
         let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
 
-        // --- (a) HELLO 未受領 → 短い timeout で None（要件 3.4）---
-        // 的は None で返ること（返れば bounded）。経過時間は確かめない（指摘 48）。
+        // --- (a) HELLO 未受領 → 短い timeout で None---
+        // 的は None で返ること（返れば bounded）。経過時間は確かめない。
         let none = parent.pump_until_hello_or(Duration::from_millis(120));
         assert_eq!(
             none, None,
@@ -158,9 +158,9 @@ mod window_tests {
         );
         assert_eq!(parent.shared().helper_hwnd.get(), None);
 
-        // --- (b) HELLO を loopback 送出 → pump が Some(helper_hwnd) を返す（要件 3.2）---
-        // 親窓宛に HELLO（helper HWND u32 LE）を送る。送り手と中身の窓が同じでないと捨てられる
-        // （指摘 38）ので、親自身を helper として名乗る。send_copydata は同期送出ゆえ、
+        // --- (b) HELLO を loopback 送出 → pump が Some(helper_hwnd) を返す---
+        // 親窓宛に HELLO（helper HWND u32 LE）を送る。送り手と中身の窓が同じでないと捨てられるので、
+        // 親自身を helper として名乗る。send_copydata は同期送出ゆえ、
         // WndProc が呼ばれ helper_hwnd が確定した状態で戻る。
         let helper_hwnd_wire: u32 = parent.hwnd_u32();
         let hello_payload = helper_hwnd_wire.to_le_bytes();
@@ -173,14 +173,12 @@ mod window_tests {
         )
         .expect("HELLO loopback 送出に失敗");
 
-        // 送出直後に helper_hwnd は確定しているはず（send_copydata は同期）。
         assert_eq!(
             parent.shared().helper_hwnd.get(),
             Some(helper_hwnd_wire),
             "HELLO 受領で helper HWND が確定する（要件 3.2）"
         );
 
-        // 確定後の pump は即 Some を返す（bounded・要件 3.2）。
         let some = parent.pump_until_hello_or(Duration::from_secs(5));
         assert_eq!(
             some,
@@ -188,7 +186,7 @@ mod window_tests {
             "HELLO 受領後 pump は Some(helper_hwnd) を返す（要件 3.2）"
         );
 
-        // --- (d) RESPONSE を親窓へ loopback → ResponseSlot に payload が store される（要件 4.2）---
+        // --- (d) RESPONSE を親窓へ loopback → ResponseSlot に payload が store される---
         // WndProc の Response アームが store することを観測する。send_copydata は同期ゆえ、
         // 復帰時点で slot に格納済み。
         {
@@ -209,7 +207,7 @@ mod window_tests {
             );
         }
 
-        // --- (e) 応答なし → slot が空 → Timeout に写る（要件 5.2）---
+        // --- (e) 応答なし → slot が空 → Timeout に写る---
         // helper_hwnd は (b) で親自身。REQUEST を親 WndProc が受けても RESPONSE を
         // store しない（Request アームは IgnoreKnown）→ slot は空のまま → Timeout。
         // 宛先は同じスレッドの窓ゆえ SendMessageTimeoutW は WndProc を直に呼び、上限時間も
@@ -224,7 +222,7 @@ mod window_tests {
                 ),
                 "応答なし（slot が空）は Timeout に写る（要件 5.2）: got {result:?}"
             );
-            // 的は「止まらずに返る」。混んだ PC でも揺れないよう上限は広く取る（指摘 48）。
+            // 的は「止まらずに返る」。混んだ PC でも揺れないよう上限は広く取る。
             assert!(
                 before.elapsed() < Duration::from_secs(30),
                 "同じスレッドの窓への send_request は WndProc を直に呼んで返る"
@@ -234,7 +232,7 @@ mod window_tests {
         drop(parent);
     }
 
-    /// 窓 2 組が並んで生きる（指摘 40）: 2 つのスレッドで 1 つずつ親窓を作り、両方が生きている
+    /// 窓 2 組が並んで生きる: 2 つのスレッドで 1 つずつ親窓を作り、両方が生きている
     /// あいだにそれぞれへ自分あての HELLO を送って受けられる。1 プロセスに親窓が 1 つだけという制限は無い
     /// （本番で 32bit のゴーストを 2 体同時に動かすと、各 SHIORI のスレッドが自分の窓を作る）。
     #[test]
@@ -289,7 +287,7 @@ mod window_tests {
     }
 
     /// 無視したメッセージ（未知のタグ・形の崩れた HELLO・親が受けない既知の種類・lparam が空）は crash させず、
-    /// それぞれ `parent_frame_ignored` の WARN を 1 行ずつ残す（指摘 11・要件 3.1 / 4.1）。
+    /// それぞれ `parent_frame_ignored` の WARN を 1 行ずつ残す。
     /// 無視したメッセージは helper HWND を書き換えない。
     #[test]
     fn ignored_frames_are_logged() {
@@ -336,7 +334,7 @@ mod window_tests {
             .collect()
     }
 
-    /// よその送り手の HELLO を捨てる（指摘 38）: 送り手の窓と中身の窓が違う HELLO と、
+    /// よその送り手の HELLO を捨てる: 送り手の窓と中身の窓が違う HELLO と、
     /// `expect_helper_pid` の番号でないプロセスの窓からの HELLO は記録して捨てる。
     /// 伝えた番号のプロセス（ここでは自分）の窓から名乗った HELLO は受ける。
     #[test]
@@ -364,7 +362,7 @@ mod window_tests {
         assert_eq!(parent.shared().helper_hwnd.get(), Some(own));
     }
 
-    /// 2 度目の HELLO を捨てる（指摘 38）: helper の窓が決まった後の HELLO は記録して捨て、
+    /// 2 度目の HELLO を捨てる: helper の窓が決まった後の HELLO は記録して捨て、
     /// 決まった窓は変わらない。
     #[test]
     fn a_second_hello_is_dropped() {
@@ -381,7 +379,7 @@ mod window_tests {
         assert_eq!(parent.shared().helper_hwnd.get(), Some(own));
     }
 
-    /// helper でない送り手の RESPONSE を捨てる（指摘 38）: 握手の前の RESPONSE と、
+    /// helper でない送り手の RESPONSE を捨てる: 握手の前の RESPONSE と、
     /// 送り手の窓が helper の窓でない RESPONSE は受け皿に入れず記録して捨てる。
     #[test]
     fn a_response_from_a_non_helper_sender_is_dropped() {

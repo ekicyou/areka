@@ -1,4 +1,4 @@
-//! 8.4 の試験。描くのは実 GPU の画面の外だけ（机は要らない・窓は出さない）。
+//! 範囲の色・下線の位置・`TextLayout::new` の panic の試験。描くのは実 GPU の画面の外だけ（机は要らない・窓は出さない）。
 
 use super::*;
 use crate::new_side::ORIGIN_X;

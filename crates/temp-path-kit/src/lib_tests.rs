@@ -1,34 +1,25 @@
 //! [`TempPath`](super::TempPath) の自己テスト。
 //!
-//! 文中の要件の番号は spec `areka-P0-test-cage-determinism` のもの。末尾の 3 本（同じ名前の
-//! 残り・消せないフォルダの知らせ・`ascii` の規則）は spec `audit-test-kits` で足したテスト。
-//!
 //! 主な主張は、同一プロセス内で 2 度作っても名前が衝突しない／破棄で実体が消える／
 //! プロセス識別子が違えば別名になる、である。最後の 1 つは別プロセスを起こしては決定論的に確かめられ
 //! ないので、名前を組み立てる内部関数 [`compose_name`](super::compose_name) に識別子を
 //! 引数で渡して直接確かめる。**その内部関数を実際に作る側も通っている**ことは
-//! [`production_path_goes_through_compose_name`] が固定する（内部関数だけを試して
-//! 本番経路が別の式で組んでいたら、テストは何も測っていない）。
+//! [`production_path_goes_through_compose_name`] が固定する。
 //!
-//! 併せて「違う名前になる」の主張が恒真でないことの較正を対で置く——**同じ札・同じ識別子・
-//! 同じ連番なら同じ名前になる**ことを確かめれば、比較そのものが常に不一致を返す壊れた
-//! 道具ではないと分かる。
-//!
-//! 置き場の確かめは `new` と `under_target` の 2 つの入口を表で回し、どちらも
-//! `<ワークスペース>\target\test-roots` の直下に作ることを固定する。
+//! 「違う名前になる」の主張が恒真でないことの較正として、同じ入力なら同じ名前になることも
+//! 対で確かめる。
 
 use super::*;
 
 /// 較正: 3 つの入力がすべて同じなら**同じ名前**になる。
 ///
-/// 以降の `assert_ne!` 群が「何を入れても違う名前を返す」壊れた式の上に立っていないことを
-/// 示す対である（この 1 本が無いと不一致の主張は恒真でも通る）。
+/// 以降の `assert_ne!` 群が「何を入れても違う名前を返す」式の上に立っていないことを示す。
 #[test]
 fn same_inputs_compose_the_same_name() {
     assert_eq!(compose_name("cage", 4242, 7), compose_name("cage", 4242, 7));
 }
 
-/// プロセス識別子だけが違えば別名になる（要件 12.1・プロセス間の一意性）。
+/// プロセス識別子だけが違えば別名になる（プロセス間の一意性）。
 #[test]
 fn different_process_id_composes_a_different_name() {
     let mine = compose_name("cage", 4242, 7);
@@ -95,7 +86,7 @@ fn dropping_removes_the_directory_and_its_contents() {
 /// （置き場を求める式をそのまま使い回すと、式が壊れても一致してしまう）。
 #[test]
 fn both_entry_points_live_in_workspace_target_test_roots_and_are_removed_on_drop() {
-    // 型は注記でなく先頭の cast で揃える（注記の形は clippy::type_complexity に掛かる）。
+    // 型注記の形は clippy::type_complexity に掛かるので、先頭の cast で揃える。
     let entries = [
         ("new", TempPath::new as fn(&str) -> TempPath),
         ("under_target", TempPath::under_target),
@@ -130,7 +121,7 @@ fn both_entry_points_live_in_workspace_target_test_roots_and_are_removed_on_drop
     }
 }
 
-/// `child` は配られたディレクトリの下を指す（宛先の種類を増やさない形）。
+/// `child` は配られたディレクトリの下を指す。
 #[test]
 fn child_points_under_the_handed_directory() {
     let dir = TempPath::new("child-check");
@@ -147,9 +138,8 @@ fn child_points_under_the_handed_directory() {
 
 /// 実際に作る側が [`compose_name`](super::compose_name) を通っている。
 ///
-/// 内部関数の性質をいくら試しても、本番経路が別の式で名前を組んでいたら自己テストは
-/// 何も測っていない。実配置の名前から連番を読み戻し、同じ内部関数で**逐語再現**できる
-/// ことで両者が同一の式であることを固定する。
+/// 実配置の名前から連番を読み戻し、同じ内部関数で**逐語再現**できることで、
+/// 本番経路が別の式で名前を組んでいないことを固定する。
 #[test]
 fn production_path_goes_through_compose_name() {
     let dir = TempPath::new("link-check");

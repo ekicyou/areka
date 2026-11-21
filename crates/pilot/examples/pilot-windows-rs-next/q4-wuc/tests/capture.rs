@@ -1,4 +1,4 @@
-// 画面の撮り（7.1）: 窓を作らず、デスクトップの窓の矩形を撮って PNG の大きさが矩形と合うかを見る。
+// 画面の撮り:窓を作らず、デスクトップの窓の矩形を撮って PNG の大きさが矩形と合うかを見る。
 use bind_next::Windows::Win32::{GetDesktopWindow, GetWindowRect, RECT};
 
 #[test]

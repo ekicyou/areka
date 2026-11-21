@@ -8,14 +8,13 @@
 //!   cdylib は `build/shiori4-testdll/<hash>/out/` にあり、`<hash>` はツールチェーン・機能の組・
 //!   cargo の呼び方（`-p` の組）が変わるたびに増え、古いものも残る。
 //!
-//! # 新しい置き方での決め方（2026-11-13 開発者裁定 — design.md D-1「単一正準位置・フォールバック
-//! なし」を改める）
+//! # 新しい置き方での決め方
 //! 走っているテストの実行ファイルの cargo の記録（`<hash>/fingerprint/*.json` の `deps`）には、
 //! リンクした `shiori4_testdll` の rlib の指紋が載る。rlib と cdylib は同じビルドの単位で同じ
 //! `<hash>/out/` に出るので、`build/shiori4-testdll/*/fingerprint/lib-shiori4_testdll` がその指紋と
 //! 一致する `<hash>` を探し、**ちょうど 1 つ**ならその `out/` の cdylib を使う。0 個・2 個以上は明示の
 //! panic で止める。mtime で選ばず、テストがリンクしたのと同じビルドの DLL だけを使うので、古い DLL を
-//! 黙って拾って壊れたビルドを緑に見せることはない（D-1 の目的は保つ）。cargo の記録の形が変わったときも
+//! 黙って拾って壊れたビルドを緑に見せることはない。cargo の記録の形が変わったときも
 //! 一致 0 個で止まる（fail-visible）。
 //!
 //! 同じツールチェーンでも `cargo test --workspace` と `cargo test -p …` では機能の組が違って `<hash>` が

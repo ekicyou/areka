@@ -1,15 +1,15 @@
 //! `model.rs` の在中テスト。
 //!
-//! 守るのは 4 つ。⑴ 項目 id の 2 形（要件 1.9）が通り、ページ名の下線で割られないこと。
+//! 守るのは 4 つ。⑴ 項目 id の 2 形が通り、ページ名の下線で割られないこと。
 //! ⑵ 形が違う id が誤りとして返ること。⑶ 4 つの語彙（状態 7・関連 6・ドメイン 4・
-//! テーマ 8）の綴りが要件どおりで、綴り違いが誤りとして返ること（要件 2.2・4.3・4.4）。
-//! ⑷ 報告に出す平易な呼び名が要件 7.8 のとおりであること。
+//! テーマ 8）の綴りが決まりどおりで、綴り違いが誤りとして返ること。
+//! ⑷ 報告に出す平易な呼び名が決まりどおりであること。
 //!
-//! スナップショットには一切触らない（要件 6.2）。すべて文字列だけで完結する。
+//! スナップショットには一切触らない。すべて文字列だけで完結する。
 
 use super::*;
 
-// ---- 項目 id の 2 形（要件 1.9）----
+// ---- 項目 id の 2 形 ----
 
 #[test]
 fn page_wide_id_parses() {
@@ -28,7 +28,7 @@ fn anchored_id_parses() {
 
 #[test]
 fn anchored_id_with_encoded_anchor_parses() {
-    // 実データのアンカーは日本語や記号が `_5c` のように符号化されて入る（設計 D-10）。
+    // 実データのアンカーは日本語や記号が `_5c` のように符号化されて入る。
     let raw = "ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.width:1";
     let id = EntryId::parse(raw).expect("符号化されたアンカーも通るはず");
     assert_eq!(id.page().as_str(), "list_propertysystem");
@@ -37,7 +37,7 @@ fn anchored_id_with_encoded_anchor_parses() {
 
 #[test]
 fn page_name_containing_underscore_is_not_split() {
-    // 区切りはコロンだけ。下線で割ると "list" になってしまう（要件付録 B 手順 2）。
+    // 区切りはコロンだけ。下線で割ると "list" になってしまう。
     let raw = "ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2cID_5d:1";
     let id = EntryId::parse(raw).expect("下線を含むページ名も通るはず");
     assert_eq!(id.page().as_str(), "list_sakura_script");
@@ -46,7 +46,7 @@ fn page_name_containing_underscore_is_not_split() {
     assert_eq!(page_wide.page().as_str(), "descript_shell_surfacetable");
 }
 
-// ---- 形が違う id（要件 1.9 の裏）----
+// ---- 形が違う id ----
 
 #[test]
 fn malformed_ids_are_rejected() {
@@ -77,7 +77,7 @@ fn malformed_ids_are_rejected() {
     }
 }
 
-// ---- 並び（設計 D-9: id の byte 昇順）----
+// ---- 並び（id の byte 昇順）----
 
 #[test]
 fn entry_ids_order_by_bytes_of_the_id() {
@@ -97,7 +97,7 @@ fn entry_ids_order_by_bytes_of_the_id() {
     assert_eq!(sorted, expected);
 }
 
-// ---- 状態の語彙（要件 2.2・7.8）----
+// ---- 状態の語彙 ----
 
 #[test]
 fn every_status_key_round_trips() {
@@ -181,7 +181,7 @@ fn unknown_vocabulary_can_be_given_the_file_and_id() {
     assert!(message.contains("nope"), "{message}");
 }
 
-// ---- 関連の種別（要件 4.3）----
+// ---- 関連の種別 ----
 
 #[test]
 fn every_link_kind_key_round_trips() {
@@ -223,7 +223,7 @@ fn link_kind_outside_the_vocabulary_is_rejected() {
     }
 }
 
-// ---- ドメイン（要件 3.1）----
+// ---- ドメイン ----
 
 #[test]
 fn every_domain_key_round_trips() {
@@ -264,7 +264,7 @@ fn domain_outside_the_vocabulary_is_rejected() {
     }
 }
 
-// ---- テーマ（要件 4.4）----
+// ---- テーマ ----
 
 #[test]
 fn themes_are_the_eight_of_requirement_4_4_in_order() {

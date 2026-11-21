@@ -1,7 +1,6 @@
 //! `tally.rs` の在中テスト。
 //!
-//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない
-//! （要件 6.2・設計 File Structure Plan）。
+//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない。
 //!
 //! 状態の呼び名は [`Status::as_japanese`] が正本なので、期待値はそこから引かず
 //! **逐語の文字列**で書く。実装側の対応表を参照すると表を表自身と比べるだけになり、
@@ -92,7 +91,7 @@ fn sample() -> Ledger {
     ])
 }
 
-/// 分布を「日本語の呼び名, 件数」の列に開く。並びは要件 2.2 の順のはず。
+/// 分布を「日本語の呼び名, 件数」の列に開く。並びは状態の語彙の順のはず。
 fn japanese(counts: &StatusCounts) -> Vec<(&'static str, usize)> {
     counts.japanese_rows()
 }
@@ -107,12 +106,12 @@ fn name_keys(map: &BTreeMap<String, StatusCounts>) -> Vec<&str> {
     map.keys().map(String::as_str).collect()
 }
 
-// ---- 状態の分布（要件 7.1 の 1 つ目・要件 7.8） ----
+// ---- 状態の分布 ----
 
 #[test]
 fn the_overall_distribution_lists_all_seven_statuses_in_the_frozen_order() {
     let got = tally(&sample());
-    // 呼び名は要件 7.8 の平易な日本語。並びは要件 2.2 の語彙の順。
+    // 呼び名は平易な日本語。並びは状態の語彙の順。
     // `未対応` と `対象外` は 0 件だが**欄ごと消えない**——消えると「0 件」と
     // 「そもそも数えていない」が区別できなくなる。
     assert_eq!(
@@ -153,7 +152,7 @@ fn every_status_has_a_row_of_its_own() {
     }
 }
 
-// ---- ページ別の分布（要件 7.1 の 1 つ目・要件 6.9） ----
+// ---- ページ別の分布 ----
 
 #[test]
 fn the_page_distribution_is_in_name_order_even_when_id_order_disagrees() {
@@ -221,7 +220,7 @@ fn each_page_carries_the_full_seven_status_rows() {
 
 #[test]
 fn the_page_distribution_says_where_the_unclassified_entries_are() {
-    // 未分類の件数はここが正（要件 6.9）。台帳側の宣言値は持たない。
+    // 未分類の件数はここが正。台帳側の宣言値は持たない。
     let got = tally(&sample());
     let unclassified: Vec<(String, usize)> = got
         .by_page
@@ -236,7 +235,7 @@ fn the_page_distribution_says_where_the_unclassified_entries_are() {
 
 #[test]
 fn a_page_with_no_entry_does_not_appear() {
-    // ページは id の 2 番目の区切りから取る（設計 D-11）。前置きの `pages` は
+    // ページは id の 2 番目の区切りから取る。前置きの `pages` は
     // 見ない——前置きと id の食い違いは整合検査（`LedgerPagesMismatch`）の担当で、
     // 集計が黙って埋めてしまうと食い違いが見えなくなる。
     let mut ledger = ledger_of(vec![entry(
@@ -250,7 +249,7 @@ fn a_page_with_no_entry_does_not_appear() {
     assert_eq!(page_keys(&got.by_page), vec!["page_one"]);
 }
 
-// ---- 世代別の分布（要件 7.1 の 2 つ目） ----
+// ---- 世代別の分布 ----
 
 #[test]
 fn the_generation_is_the_first_two_segments_of_the_introduced_version() {
@@ -300,12 +299,12 @@ fn each_generation_carries_the_status_distribution_of_its_entries() {
     assert_eq!(generation("世代不明")[6], ("未分類", 1));
 }
 
-// ---- テーマ別の状態分布（要件 7.1 の 4 つ目） ----
+// ---- テーマ別の状態分布 ----
 
 #[test]
 fn only_the_themes_an_entry_wears_appear() {
     let got = tally(&sample());
-    // 並びは名前順（設計 report 節の事後条件「ページとテーマと束 id は名前順」）。
+    // 並びは名前順。
     // 1 件も使われていないテーマの 0 件の行は報告の側が並べる（`report::domain`）。
     assert_eq!(name_keys(&got.by_theme), vec!["更新", "気配", "触れ合い"]);
 }

@@ -1,16 +1,15 @@
-//! 強制 kill 注入 → 異常検出 → 有限復帰 → 冪等二重 kill の end-to-end テスト
-//! （task 5.3・design.md Testing Strategy #9「lifecycle_kill_e2e.rs::kill_injection_detection_and_reporting」）。
+//! 強制 kill 注入 → 異常検出 → 有限復帰 → 冪等二重 kill の end-to-end テスト。
 //!
 //! **実 i686 helper プロセス**を spawn し、**実 i686 testdll（`shiori.dll`）**を
 //! `LoadLibraryExW` させたうえで、ベースラインの GET 往復成功（healthy round-trip）を確認した後、
 //! **強制終了（`TerminateProcess` 相当）を注入**し、以下を **1 つの `#[test]` 関数**で実証する:
-//! - ① kill 後、bounded ポーリングで **異常な終了種別**（helper プロセス由来の非正常終了・R4.1）が検出される。
-//! - ② その後の request が **無限待ちにならず**、有限時間内に **観測可能なエラー**として返る（R4.2）。
-//! - ③ **二重の強制終了要求が冪等に成功**として扱われる（R5.2）。
-//! - ④（design #9 bonus）異常後の後始末の決定性: 既終了への `request_clean_shutdown` は
-//!   UNLOAD を送出せず観測済み非 Clean kind へ短絡する（R5.3）。
+//! - ① kill 後、bounded ポーリングで **異常な終了種別**（helper プロセス由来の非正常終了）が検出される。
+//! - ② その後の request が **無限待ちにならず**、有限時間内に **観測可能なエラー**として返る。
+//! - ③ **二重の強制終了要求が冪等に成功**として扱われる。
+//! - ④ 異常後の後始末の決定性: 既終了への `request_clean_shutdown` は
+//!   UNLOAD を送出せず観測済み非 Clean kind へ短絡する。
 //!
-//! 検証フロー（design.md System Flows「強制 kill 注入と統一報告」）:
+//! 検証フロー:
 //! ```text
 //! status()==Running → terminate()（kill 注入）→ bounded poll status()→Exited(Abnormal(1))
 //! → get(dummy)→Err(Ipc|Timeout)（SMTO 有限復帰）
@@ -26,7 +25,7 @@
 //! fixture 契約値は testdll 側 `TEST_GET_ID`／固定 Value と一致するが、host テストクレートは testdll へ
 //! 依存しないため、**文字列 ID と期待 Value をハードコード**する（testdll の契約に忠実追随）。
 //!
-//! ## testdll / helper の所在解決（無言スキップで緑を偽装しない・R7.4）
+//! ## testdll / helper の所在解決（無言スキップで緑を偽装しない）
 //! env override 最優先 → `CARGO_MANIFEST_DIR` から `target/i686-pc-windows-msvc/{debug,release}/`
 //! を探索 → 不在は**明確な panic**（i686 未ビルドの指摘）。silent-skip（緑の偽装）を禁ずる。
 //!
@@ -58,7 +57,7 @@ const EXPECTED_GET_VALUE: &str = r"\0\s[0]host32 request roundtrip ok\e";
 /// GET request の `ID`（testdll `TEST_GET_ID` と一致・ハードコード・イベント意味論を持たないダミー ID）。
 const TEST_GET_ID: &str = "OnTestValue";
 
-/// kill 後の request が有限復帰する上限（R4.2・無限待ちなし）。
+/// kill 後の request が有限復帰する上限（無限待ちなし）。
 ///
 /// worst-case は先頭で設定する `AREKA_SHIORI_REQUEST_TIMEOUT_MS=3000`（3s）＋SMTO_ABORTIFHUNG で
 /// 縛られるため、10s は安全なマージン付き上界。これを超えたら「有限復帰していない」＝fail。
@@ -67,12 +66,10 @@ const BOUNDED_LIMIT: Duration = Duration::from_secs(10);
 /// kill 後の終了観測（bounded poll）の上限。helper プロセスの実際の終了までの余裕。
 const EXIT_OBSERVE_LIMIT: Duration = Duration::from_secs(10);
 
-/// bounded poll の刻み（実時間 sleep はこれのみ・R7.5）。
+/// bounded poll の刻み（実時間 sleep はこれのみ）。
 const POLL_INTERVAL: Duration = Duration::from_millis(5);
 
-/// 強制 kill 注入 → 異常検出 → 有限復帰 → 冪等二重 kill の E2E
-/// （task 5.3・design.md Testing Strategy #9・System Flows「強制 kill 注入と統一報告」・
-/// R4.1/4.2/4.3, R5.2/5.3）。
+/// 強制 kill 注入 → 異常検出 → 有限復帰 → 冪等二重 kill の E2E。
 ///
 /// PRIMARY 構造: 単一の親窓＋helper を用い、ベースライン往復成功を確認したうえで強制終了を注入し、
 /// 異常検出・有限復帰・冪等二重終了要求のすべてを **1 つの `#[test]`** で実証する。
@@ -84,7 +81,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(5);
 /// ため、テスト全体もハングしない（数秒で完了する）。
 #[test]
 fn kill_injection_detection_and_reporting() {
-    // --- 有限復帰の worst-case を短く決定化（R4.2）: dead HWND 上で SMTO が fast-fail せず timeout
+    // --- 有限復帰の worst-case を短く決定化: dead HWND 上で SMTO が fast-fail せず timeout
     //     まで待つ場合に備え、request timeout を 3s に縛る。kill 後の GET より前に設定すればよい
     //     （client は往復のたびに env から実効 timeout を解決する）。単一テストバイナリ（別プロセス）
     //     ゆえこの process-global set_var は他テストバイナリへ漏れない。---
@@ -103,7 +100,6 @@ fn kill_injection_detection_and_reporting() {
     let dll_path = load_dir.join("shiori.dll");
     std::fs::copy(&testdll, &dll_path).expect("testdll を load_dir へコピーできない");
 
-    // --- ① 親 message-only 窓 ---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
@@ -113,14 +109,13 @@ fn kill_injection_detection_and_reporting() {
     // Drop が helper を終わらせて待つ（プロセスリークしない）。
     let mut lifecycle = HelperLifecycle::new(handle);
 
-    // --- HELLO 受領で helper HWND 確定＝ハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
     let helper_hwnd = handshake(&parent, lifecycle.pid());
     assert!(
         helper_hwnd.is_some(),
         "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"
     );
 
-    // --- ② LOAD 先行（helper 内に proxy を確立＝REQUEST の構造的前提・Load-before-Request 不変条件）---
+    // --- LOAD 先行（helper 内に proxy を確立しないと REQUEST は成立しない）---
     let load_ack = parent
         .send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)
         .expect("LOAD の send_request が失敗（ack 未達・proxy 未確立では REQUEST 不能）");
@@ -130,13 +125,11 @@ fn kill_injection_detection_and_reporting() {
         "LOAD 成功 ack [1]（proxy 確立）を先に得る（REQUEST の前提）"
     );
 
-    // --- request 出口 API を構築（ハンドシェイク＋LOAD 済みの親窓を借用・env timeout 3s は往復ごとに解決）---
     // 交渉状態は接続の持ち物（本番は `ShioriConnection`）。本テストは接続の値を組まないので
-    // 適用前と同じ初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
+    // 初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
     let mut client = Shiori3Client::new(&parent, &mut negotiator);
 
-    // --- ③ baseline GET: kill 前の healthy round-trip を確認（fixture 固定 Value を返す）---
     let baseline = client
         .get(TEST_GET_ID, &[], None)
         .expect("baseline GET(OnTestValue) が Err（kill 前は健全に往復するべき）");
@@ -145,18 +138,15 @@ fn kill_injection_detection_and_reporting() {
         Some(EXPECTED_GET_VALUE.to_string()),
         "baseline GET は fixture 固定 Value を返す（kill 前の healthy round-trip の証明）"
     );
-    // kill 前は稼働中である（R1.1）。
     assert!(
         matches!(lifecycle.status(), HelperStatus::Running),
         "kill 注入前は helper が稼働中である（Running）"
     );
 
-    // --- ④ 強制 kill 注入（R5.2）: 稼働中の helper を強制終了する ---
     lifecycle
         .terminate()
         .expect("kill injection should succeed");
 
-    // --- ⑤ 異常検出（R4.1）: bounded poll で非正常な終了種別を検出する ---
     let deadline = Instant::now() + EXIT_OBSERVE_LIMIT;
     let kind = loop {
         if let HelperStatus::Exited(kind) = lifecycle.status() {
@@ -170,7 +160,7 @@ fn kill_injection_detection_and_reporting() {
     };
     // Windows std の Child::kill は TerminateProcess(_, 1) → いつも Abnormal(1)（Windows の終了コードは
     // いつも値を持ち Terminated は起きない・process_host.rs の ExitKind）。下の断言は形の上で Terminated も
-    // 通すが、どちらにせよ Clean ではない（R4.1）。
+    // 通すが、どちらにせよ Clean ではない。
     assert!(
         matches!(kind, ExitKind::Abnormal(_) | ExitKind::Terminated),
         "強制終了の種別は Abnormal または Terminated（非正常・R4.1）: got {kind:?}"
@@ -182,25 +172,23 @@ fn kill_injection_detection_and_reporting() {
     );
     eprintln!("観測された強制終了種別（R4.1）: {kind:?}");
 
-    // --- ⑥ 有限復帰（R4.2）: kill 後の GET が無限待ちにならず、有限時間内に観測可能なエラーで返る ---
     let started = Instant::now();
     let err = client
         .get(TEST_GET_ID, &[], None)
         .expect_err("post-kill GET must fail (helper dead)");
     let elapsed = started.elapsed();
-    // 観測可能なエラー: transport 送出失敗（Ipc）または wire timeout（R4.2）。
+    // 観測可能なエラー: transport 送出失敗（Ipc）または wire timeout。
     assert!(
         matches!(err, RequestError::Ipc(_) | RequestError::Timeout),
         "kill 後の GET は観測可能なエラー（Ipc|Timeout）で返る（R4.2）: got {err:?}"
     );
-    // 有限復帰: worst-case（env 3s＋SMTO）内に返る（無限待ちなし・R4.2）。
+    // 有限復帰: worst-case（env 3s＋SMTO）内に返る。
     assert!(
         elapsed < BOUNDED_LIMIT,
         "kill 後の GET は有限時間内に返る（無限待ちなし・R4.2）: 経過 {elapsed:?} >= 上限 {BOUNDED_LIMIT:?}"
     );
     eprintln!("kill 後 GET の観測エラー（R4.2）: {err:?}（経過 {elapsed:?}）");
 
-    // --- ⑦ 冪等二重 kill（R5.2）: 既終了プロセスへの二重の強制終了要求は両方 Ok ---
     assert!(
         lifecycle.terminate().is_ok(),
         "既終了 helper への 2 回目の terminate は Ok（冪等・R5.2）"
@@ -210,8 +198,8 @@ fn kill_injection_detection_and_reporting() {
         "既終了 helper への 3 回目の terminate も Ok（冪等・R5.2）"
     );
 
-    // --- ⑧（design #9 bonus・R5.3）異常後後始末の決定性: 既終了への request_clean_shutdown は
-    //     UNLOAD を送出せず観測済み非 Clean kind へ短絡する（既終了への終了要求を失敗させない）---
+    // --- 既終了への request_clean_shutdown は UNLOAD を送出せず、観測済み非 Clean kind へ
+    //     短絡する（既終了への終了要求を失敗させない）---
     let kind2 = lifecycle
         .request_clean_shutdown(&parent)
         .expect("short-circuit on already-exited");
@@ -221,6 +209,5 @@ fn kill_injection_detection_and_reporting() {
         "既終了（強制 kill）への request_clean_shutdown は観測済み非 Clean kind へ短絡する（UNLOAD 非送出・R5.3）: got {kind2:?}"
     );
 
-    // --- 親窓を明示 drop → best-effort cleanup ---
     drop(parent);
 }

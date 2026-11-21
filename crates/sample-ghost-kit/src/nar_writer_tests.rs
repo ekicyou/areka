@@ -1,12 +1,10 @@
 //! `nar_writer` の兄弟テスト。
 //!
 //! 自作の書き手を自作の読み手で確かめるだけでは恒真になるので、**書き手と無関係な
-//! 出どころ**を噛ませる——⑴ deflate の戻しは `miniz_oxide::inflate`（圧縮側とは別の
-//! 実装）、⑵ CRC の刻印は外部の較正値で検算済みの `areka_nar::crc32`、⑶ 容器の構造は
-//! `areka-nar` の読取層が毎回読み直す——`areka-nar/src/container_tests.rs` の
-//! `writer_bytes_survive_both_methods_unchanged` が、ここで組んだ無圧縮と deflate の
-//! 書庫を本番の読み手に通し、原文と 1 バイトも違わずに戻ることを常設で確かめる
-//! （読み手は書き手とは別に書き起こされたもので、写しではない）。
+//! 出どころ**を噛ませる。deflate の戻しは `miniz_oxide::inflate`（圧縮側とは別の
+//! 実装）、CRC は外部の較正値で検算済みの `areka_nar::crc32`。本番の読み手での往復は
+//! `areka-nar/src/container_tests.rs` の `writer_bytes_survive_both_methods_unchanged`
+//! が確かめる。
 
 use super::*;
 use crate::WorkDir;
@@ -241,7 +239,7 @@ fn install_txt_joins_with_crlf() {
     );
 }
 
-/// 局所ヘッダの時刻と日付（オフセット 10..14）は時計を読まない固定値（audit-test-kits 指摘 25）。
+/// 局所ヘッダの時刻と日付（オフセット 10..14）は時計を読まない固定値。
 #[test]
 fn every_local_header_carries_the_fixed_dos_time() {
     let nar = NarBuilder::new()
@@ -335,7 +333,7 @@ fn write_to_puts_the_same_bytes_on_disk() {
 }
 
 /// 畳む順は名前のバイト順（大文字が小文字より先）で、NTFS の `read_dir` の順（大小無視）
-/// とは食い違う（audit-test-kits 指摘 25）。
+/// とは食い違う。
 #[test]
 fn folding_orders_entries_by_byte_order() {
     let work = WorkDir::new().expect("私有の場所");
@@ -351,7 +349,7 @@ fn folding_orders_entries_by_byte_order() {
 }
 
 /// 名前が UTF-8 にならない（対になっていないサロゲートの）ファイルは、黙って飛ばさずに
-/// `InvalidData` で断り、文は ASCII だけで書く（audit-test-kits かけ直し 4 回目 U6）。
+/// `InvalidData` で断り、文は ASCII だけで書く。
 #[test]
 fn folding_a_name_that_is_not_utf8_fails_with_invalid_data_in_ascii() {
     use std::os::windows::ffi::OsStringExt;

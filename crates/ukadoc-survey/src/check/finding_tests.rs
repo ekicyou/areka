@@ -1,4 +1,4 @@
-//! `finding.rs` の在中テスト——検査の出力の整形（要件 6.10・6.12）。
+//! `finding.rs` の在中テスト——検査の出力の整形。
 //!
 //! # 期待値は実装の定数を参照しない
 //!
@@ -9,7 +9,7 @@ use super::super::test_support::{id, ledger_place};
 use super::{Finding, FindingKind, render};
 
 // ---------------------------------------------------------------------------
-// 出力の整形（要件 6.10・6.12）
+// 出力の整形
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -17,10 +17,10 @@ fn no_findings_render_to_an_empty_body() {
     assert_eq!(render(&[]), "");
 }
 
-/// 設計「Data Models」→「検査の出力」の版面を逐語で釘付けする。
+/// 検査の出力の版面を逐語で釘付けする。
 ///
 /// 件数だけの主張では区切りの空白 1 個も並びも守れず、この本文はテストの失敗
-/// メッセージそのものになる（要件 6.12）。
+/// メッセージそのものになる。
 #[test]
 fn the_rendered_body_is_pinned_verbatim() {
     let findings = vec![
@@ -131,9 +131,9 @@ fn findings_in_one_place_are_ordered_by_id_not_by_input_order() {
 
 /// 種類ごとの塊は [`FindingKind::ALL`] の並びで出る。
 ///
-/// 入力を逆順に与えても本文の並びは変わらない。13 種すべてを 1 件ずつ与えて、
-/// 見出しの並びを逐語で釘付けする。見出しの綴りは [`FindingKind::as_key`] で、README の
-/// 所見の表と同じである。往復では守れないので、ここで逐語に並べる。
+/// 入力を逆順に与えても本文の並びは変わらない。13 種すべてを 1 件ずつ与えて、見出しの
+/// 並びを逐語で釘付けする。見出しの綴りは [`FindingKind::as_key`] で、README の所見の
+/// 表と同じである。往復では守れないので、ここで逐語に並べる。
 #[test]
 fn the_kind_blocks_come_out_in_the_declared_order() {
     let mut findings: Vec<Finding> = FindingKind::ALL

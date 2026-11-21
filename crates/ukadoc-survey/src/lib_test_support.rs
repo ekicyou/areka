@@ -14,17 +14,17 @@
 //! # 報告は台帳から作り直して持つ
 //!
 //! [`World::domain_reports`] と [`World::summary_report`] は手書きではなく
-//! [`render_domain`]・[`render_summary`] の出力である。手書きにすると新しさの検査
-//! （要件 7.4）が最初から赤になる。**台帳を壊したら [`World::refresh_reports`] を
+//! [`render_domain`]・[`render_summary`] の出力である。手書きにすると新しさの検査が
+//! 最初から赤になる。**台帳を壊したら [`World::refresh_reports`] を
 //! 呼ぶこと**——呼ばないと、壊した判定の所見に加えて `DomainReportStale` まで出てしまい
 //! 「1 件だけ出る」が成り立たない。逆に報告の側を壊す新しさの判定のテストは作り直しては
 //! いけない。同じことがソース文と証拠の索引（[`World::refresh_evidence`]）にも当てはまる。
 //!
 //! # ファイルには 1 つも触らない
 //!
-//! 見本はすべて文字列の定数から組み立てる（要件 6.2・設計 File Structure Plan）。
-//! 一時ディレクトリも使わない。ソース文に書いた `// ukadoc:` の行は本物の走査には
-//! 拾われない——走査は `crates/ukadoc-survey/` を除くからである（設計 D-3）。
+//! 見本はすべて文字列の定数から組み立てる。一時ディレクトリも使わない。ソース文に
+//! 書いた `// ukadoc:` の行は本物の走査には拾われない——走査は `crates/ukadoc-survey/` を
+//! 除くからである。
 
 use std::collections::BTreeMap;
 
@@ -55,9 +55,9 @@ struct CatalogRow {
 /// 見本のカタログ 12 件。
 ///
 /// 6 ページ・6 カテゴリにまたがり、**アンカー無しの 2 形**（`ukadoc:spec_shiori3`・
-/// `ukadoc:manual_shell`）も含む（要件 1.9）。版番号は 0 個・1 個・2 個の 3 通りを
+/// `ukadoc:manual_shell`）も含む。版番号は 0 個・1 個・2 個の 3 通りを
 /// 揃えてある——1 通りしか無いと「版番号を 1 つに絞る」取り違えが素通りする。
-/// 見出しには逆斜線を含むものを 2 件入れてある（設計 D-10）。
+/// 見出しには逆斜線を含むものを 2 件入れてある。
 const CATALOG_ROWS: [CatalogRow; 12] = [
     CatalogRow {
         id: "ukadoc:descript_ghost:charset:1",
@@ -145,7 +145,7 @@ const CATALOG_ROWS: [CatalogRow; 12] = [
     },
 ];
 
-/// 見本の台帳 1 項目。付録 A.2 の欄をそのまま並べる。
+/// 見本の台帳 1 項目。台帳の欄をそのまま並べる。
 struct LedgerRow {
     id: &'static str,
     status: Status,
@@ -177,7 +177,7 @@ const fn plain(id: &'static str, status: Status) -> LedgerRow {
 
 /// shiori 台帳の 3 項目。
 ///
-/// `OnBoot` は**実装済み＋証拠あり**（要件 6.6 の経路が生きていることの土台）で、
+/// `OnBoot` は**実装済み＋証拠あり**（証拠の経路が生きていることの土台）で、
 /// 版番号もテーマも関連も持つ。並びは id の byte 厳密昇順。
 const SHIORI_ROWS: [LedgerRow; 3] = [
     LedgerRow {
@@ -200,7 +200,7 @@ const SHIORI_ROWS: [LedgerRow; 3] = [
 /// assets 台帳の 3 項目。
 ///
 /// `charset` が `name` の**別名**で、`name` はその逆向きを `supersedes` に持つ。
-/// 別名の連鎖（要件 6.7）はここを壊して作る。
+/// 別名の連鎖はここを壊して作る。
 const ASSETS_ROWS: [LedgerRow; 3] = [
     LedgerRow {
         alias_of: Some("ukadoc:descript_ghost:name:1"),
@@ -238,7 +238,7 @@ const SAKURA_SCRIPT_ROWS: [LedgerRow; 3] = [
 
 /// property 台帳の 3 項目。
 ///
-/// `system.year` の証拠は**語彙表の経路**で付く（設計 D-5）。URL の直書きだけの見本に
+/// `system.year` の証拠は**語彙表の経路**で付く。URL の直書きだけの見本に
 /// すると、名前の突き合わせが 1 度も走らないまま緑になる。
 const PROPERTY_ROWS: [LedgerRow; 3] = [
     LedgerRow {
@@ -289,7 +289,7 @@ pub fn surface(id: u32) -> u32 {
 "#,
 );
 
-/// 見本のソース 3 本目——語彙表の経路（設計 D-5）。
+/// 見本のソース 3 本目——語彙表の経路。
 ///
 /// 目印のページ URL の**直後**にスライス定数が始まり、要素ごとの最初の文字列リテラルが
 /// 名前になる。実物と同じくタプルの形を採ってある。
@@ -433,7 +433,7 @@ fn sources() -> Vec<(String, String)> {
         .collect()
 }
 
-/// 台帳 4 本からドメイン別報告 4 本を作る（要件 7.4 の突き合わせ相手）。
+/// 台帳 4 本からドメイン別報告 4 本を作る（新しさの検査の突き合わせ相手）。
 fn domain_reports(ledgers: &[Ledger]) -> BTreeMap<Domain, String> {
     ledgers
         .iter()

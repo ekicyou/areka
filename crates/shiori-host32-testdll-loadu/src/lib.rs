@@ -1,19 +1,19 @@
 //! 2 本目の最小 SHIORI DLL fixture（出力名 `shiori_loadu.dll`）。
 //!
 //! `loadu`／`load`／`unload`／`request` の 4 つを flat-C で公開し、初期化の入口のうち
-//! **どちらが呼ばれ、何を受け取ったか**をファイルへ記録する（areka-P0-shiori-loadu 要件 6.1）。
-//! 既存 fixture `shiori-host32-testdll`（`shiori.dll`・`load` のみ）は無改変で残す（6.2）。
+//! **どちらが呼ばれ、何を受け取ったか**をファイルへ記録する。
+//! 既存 fixture `shiori-host32-testdll`（`shiori.dll`・`load` のみ）とは別の DLL。
 //!
 //! 規約:
 //! - 戻りは Win32 `BOOL` と同じ 4 バイト `i32`（既存 fixture の Rust `bool` 1 バイトと対になる）。
 //! - **入力 HGLOBAL は callee(DLL) が `GlobalFree` する**（既存 fixture・pasta と同じ）。
 //! - 応答 HGLOBAL は `GlobalAlloc(GMEM_FIXED)` で新しく確保し、解放は caller(host)。
 //!
-//! テスト専用の注入 env（本番の helper は読まない・9.2）:
+//! テスト専用の注入 env（本番の helper は読まない）:
 //! - `HOST32_TESTDLL_LOADU_RECORD`: 記録ファイルのパス。未設定なら書かない。
 //!   1 呼出 1 行を追記: `<入口名>\t<受け取ったバイト列の小文字 16 進>\n`。
 //! - `HOST32_TESTDLL_LOADU_FAIL`: `"1"` のとき `loadu` が `0` を返す。記録を書いた後・`0` を返す直前に
-//!   最後のエラーへアクセス拒否（5）を置く（仲介が失敗の型へ写すことの確かめ・areka-P0-emo2-real-run-stability 要件 5.5）。
+//!   最後のエラーへアクセス拒否（5）を置く（仲介が失敗の型へ写すことの確かめ）。
 
 use std::io::Write;
 
@@ -29,7 +29,7 @@ const ENV_RECORD: &str = "HOST32_TESTDLL_LOADU_RECORD";
 /// `loadu` の偽返却を注入する env（テスト専用・`"1"` で有効）。
 const ENV_FAIL: &str = "HOST32_TESTDLL_LOADU_FAIL";
 
-/// `request` への固定応答（解決できることだけが要件・往復は対象外）。
+/// `request` への固定応答（エクスポートが解決できればよく、往復の中身は見ない）。
 const RESP_400: &[u8] = b"SHIORI/3.0 400 Bad Request\r\n\r\n";
 
 /// 入力 HGLOBAL の `len` バイトをコピーしてから callee 解放し、記録を 1 行追記する。
@@ -158,15 +158,15 @@ mod tests {
         h
     }
 
-    /// テストの根 `<ワークスペース>\target\test-roots\shiori-host32-<名>-<pid>-<連番>` を作る（指摘 3）。
+    /// テストの根 `<ワークスペース>\target\test-roots\shiori-host32-<名>-<pid>-<連番>` を作る。
     /// helper の `crates/shiori-host32-helper/src/proxy_test_support.rs` の `TestRoot` と同じ形
     /// （偽の DLL に依存を足さないため、ここに小さく置く）。消すのは呼んだ側。
     fn new_test_root(name: &str) -> PathBuf {
         static SEQ: AtomicU64 = AtomicU64::new(0);
         let seq = SEQ.fetch_add(1, Ordering::Relaxed);
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent() // crates/
-            .and_then(Path::parent) // ワークスペースルート
+            .parent()
+            .and_then(Path::parent)
             .expect("CARGO_MANIFEST_DIR の 2 つ上（ワークスペースの根）")
             .join("target")
             .join("test-roots")

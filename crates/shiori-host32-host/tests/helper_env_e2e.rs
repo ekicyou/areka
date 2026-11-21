@@ -1,5 +1,4 @@
 //! 親に `PASTA_DEBUG=1` が立っていても、helper の下では `0` になることを確かめる
-//! （audit-shiori-host32 件 2・U4・要件 4.1・4.4・8.5・design.md「件 2 の試験」）。
 //!
 //! 親のテスト [`pasta_debug_is_zero_under_the_helper`] は自分の実行ファイルを
 //! `--exact <観測の本体> --ignored` で起こし直し、その子にだけ `PASTA_DEBUG=1` を渡す
@@ -11,7 +10,7 @@
 //! helper の下の DLL が見る `PASTA_DEBUG` を読み、結果の行を標準出力に書く。
 //! `process_host.rs` の `helper_command` から `.env("PASTA_DEBUG", "0")` を消すと値が `1` になって赤。
 //!
-//! 成果物（i686 helper・testdll）が無ければ `common` の探し方が panic する（要件 4.4）。
+//! 成果物（i686 helper・testdll）が無ければ `common` の探し方が panic する。
 //!
 //! ## 実行前提（PowerShell・Git Bash 不可）
 //! ```powershell

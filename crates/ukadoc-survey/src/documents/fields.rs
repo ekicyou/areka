@@ -8,8 +8,8 @@
 //!
 //! # 繕わない・行番号は添えない
 //!
-//! 落とす本文には**文書名と表の鍵**を添え、**行番号は添えない**（設計 Error
-//! Handling）——囲みを連結した本文の行番号は、書き手が見ている Markdown の行と
+//! 落とす本文には**文書名と表の鍵**を添え、**行番号は添えない**——囲みを連結した本文の
+//! 行番号は、書き手が見ている Markdown の行と
 //! 一致しない。
 
 use crate::error::SurveyError;
@@ -304,7 +304,7 @@ pub(super) fn domain_array_field(
     Ok(domains)
 }
 
-/// テーマの配列の欄（要件 4.4 の 8 テーマ）。
+/// テーマの配列の欄。
 pub(super) fn theme_array_field(
     table: &toml::Table,
     place: &str,

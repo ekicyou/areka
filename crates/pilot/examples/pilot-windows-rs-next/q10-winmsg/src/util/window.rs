@@ -29,10 +29,6 @@ pub fn get_instance_handle() -> HINSTANCE {
     // Gets the instance handle by taking the address of the
     // pseudo-variable created by the Microsoft linker:
     // https://devblogs.microsoft.com/oldnewthing/20041025-00/?p=37483
-
-    // This is preferred over GetModuleHandle(NULL) because it also works in DLLs:
-    // https://stackoverflow.com/questions/21718027/getmodulehandlenull-vs-hinstance
-
     extern "C" {
         static __ImageBase: u8;
     }
@@ -47,10 +43,6 @@ struct SubClassInformation {
 }
 
 /// Wrapper for the arguments to the [`WNDPROC callback function`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nc-winuser-wndproc).
-///
-/// The `hwnd`/`wparam`/`lparam` fields are now `windows` crate newtypes
-/// (`HWND`/`WPARAM`/`LPARAM`), a SemVer-breaking change from the previous
-/// `windows-sys` raw integer/pointer types.
 #[derive(Debug, Clone)]
 pub struct WindowMessage {
     pub hwnd: HWND,
@@ -152,7 +144,6 @@ impl<S> Window<S> {
             unsafe { RegisterClassW(&wnd_class) };
         });
 
-        // Pass the closure and state as user data to our typed window process.
         let subclassinfo = SubClassInformation {
             wndproc: wndproc_typed::<S, F>,
             user_data: Box::into_raw(Box::new(UserData { state, wndproc })).cast(),
@@ -254,7 +245,6 @@ unsafe extern "system" fn wndproc_setup(
         let create_params = lparam as *const CREATESTRUCTW;
         let subclassinfo = &*((*create_params).lpCreateParams as *const SubClassInformation);
 
-        // Replace our `wndproc` with the one using the correct type.
         SetWindowLongPtrW(hwnd, GWLP_WNDPROC, subclassinfo.wndproc as usize as _);
 
         // Attach user data to the window so it can be accessed from the
@@ -262,7 +252,6 @@ unsafe extern "system" fn wndproc_setup(
         // https://devblogs.microsoft.com/oldnewthing/20191014-00/?p=102992
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, subclassinfo.user_data as _);
 
-        // Forward this message to the freshly registered subclass wndproc.
         SendMessageW(hwnd, msg, wparam, lparam)
     } else {
         // This code path is only reached for messages before `WM_NCCREATE`.

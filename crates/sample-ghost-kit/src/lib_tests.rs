@@ -1,8 +1,4 @@
-//! 窓口 [`SampleRoot`](super::SampleRoot) と登記表 [`SAMPLES`](super::SAMPLES) の自己テスト
-//! （要件 1.1・1.2・1.3・1.4・1.5・7.4・8.4・9.5。登記の往復の `emily4` の枝は spec:
-//! `areka-P0-emily-ghost-verification` 要件 1.10・2.3・7.3、`dot_sakura` の枝は spec:
-//! `areka-P0-dot-sakura-specimen` 要件 2.4・5.7）。spec の名を添えていない番号は spec
-//! `areka-P0-nar-install` のもの（ほかの spec の番号はその場で spec の名を添える）。
+//! 窓口 [`SampleRoot`](super::SampleRoot) と登記表 [`SAMPLES`](super::SAMPLES) の自己テスト。
 //!
 //! 窓口は検体の書庫（`vendors/sample_ghost/<名>.nar` か、URL の行なら取り寄せの置き場）を
 //! 展開した原本から**使い捨ての複製**を作って配る。
@@ -14,8 +10,8 @@
 //! 同梱を飛ばしてゴーストだけを入れ、`dot_sakura` は警告も飛ばした同梱も無くゴーストと
 //! 同梱を入れて最上位の普通のファイルを本体の直下に置く）／取得した根へ書いた起動記録が
 //! 次に取得した根に現れない／URL の行はぱすたの 1 行だけで、書庫は Vendored の行だけが
-//! リポジトリに置く（spec `areka-P0-sample-url-fetch`）／2 つ目のシェルを写すと写した先の
-//! `name` だけが変わり、元は残る（spec `areka-P0-shell-balloon-switch`）／失敗の表示は
+//! リポジトリに置く／2 つ目のシェルを写すと写した先の
+//! `name` だけが変わり、元は残る／失敗の表示は
 //! ASCII だけで書く。
 //!
 //! 「借用しか返さないので取得した値を捨てるとコンパイルできない」ことは、コンパイル自体を
@@ -126,8 +122,7 @@ fn fetched_rows() -> Vec<(&'static str, &'static str)> {
         .collect()
 }
 
-/// URL の行はぱすた（`pasta-in-windows`）の 1 行だけで、URL は公開の置き場を指す
-/// （spec `areka-P0-sample-url-fetch` 要件 1.1・1.4・5.2）。書庫をリポジトリに置く行が
+/// URL の行はぱすた（`pasta-in-windows`）の 1 行だけで、URL は公開の置き場を指す。書庫をリポジトリに置く行が
 /// `Vendored` であることは `only_vendored_rows_have_a_nar_in_the_repository` が持つ。
 #[test]
 fn the_only_url_row_is_pasta_in_windows() {
@@ -141,7 +136,7 @@ fn the_only_url_row_is_pasta_in_windows() {
     );
 }
 
-/// 登記表の全部の URL の行が欄の形の判定を通る（spec `areka-P0-sample-url-fetch` 要件 1.5・5.2）。
+/// 登記表の全部の URL の行が欄の形の判定を通る。
 /// 母数 0 で緑にしない較正: URL の行が 1 つ以上在る。
 #[test]
 fn every_fetched_row_has_a_well_formed_url_and_name() {
@@ -152,7 +147,7 @@ fn every_fetched_row_has_a_well_formed_url_and_name() {
     }
 }
 
-/// URL の行の書庫はリポジトリに置かず、書庫をリポジトリに置く行（Vendored）の書庫は置いてある（spec `areka-P0-sample-url-fetch` 要件 1.3・1.4・5.3）。
+/// URL の行の書庫はリポジトリに置かず、書庫をリポジトリに置く行（Vendored）の書庫は置いてある。
 #[test]
 fn only_vendored_rows_have_a_nar_in_the_repository() {
     let rows = fetched_rows();
@@ -178,11 +173,10 @@ fn only_vendored_rows_have_a_nar_in_the_repository() {
     }
 }
 
-/// 登記した検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える
-/// （要件 1.1・1.2・1.3・7.4。URL の行は spec `areka-P0-sample-url-fetch` 要件 5.4・5.6）。
+/// 登記した検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える。
 ///
 /// 位置は `<根>/<格納先>/<名>` の等式で判定する。検体ごとの第 2 の表や専用関数があれば
-/// この等式は破れる（要件 1.5）。置き場に URL の行の書庫が無ければ、その失敗の文
+/// この等式は破れる。置き場に URL の行の書庫が無ければ、その失敗の文
 /// （名前・探した場所・取り寄せの段のコマンド）で落ちる。
 #[test]
 fn every_registered_sample_lands_where_its_registry_row_says() {
@@ -240,7 +234,7 @@ fn every_registered_sample_lands_where_its_registry_row_says() {
     }
 }
 
-/// 未登録の検体名は、既知の名前をすべて含む理由付きの失敗になる（要件 1.4）。
+/// 未登録の検体名は、既知の名前をすべて含む理由付きの失敗になる。
 #[test]
 fn unknown_sample_fails_with_every_known_name() {
     let names: Vec<&str> = SAMPLES.iter().map(|sample| sample.name).collect();
@@ -256,7 +250,7 @@ fn unknown_sample_fails_with_every_known_name() {
     }
 }
 
-/// 同時にインストールしていないバルーン名は、既知の一覧を含む失敗になる（要件 1.4）。
+/// 同時にインストールしていないバルーン名は、既知の一覧を含む失敗になる。
 ///
 /// 同梱バルーンを持たない検体では既知の一覧が**空**になることも明示して確かめる
 /// （引き算で導ける 0 は沈黙と同じなので書く）。主張は検体に依らないので、複製の小さい
@@ -296,7 +290,7 @@ fn unknown_balloon_fails_with_the_known_balloon_list() {
     );
 }
 
-/// 展開結果の要素が登記と食い違えば、理由付きの失敗になる（要件 1.1・1.3）。
+/// 展開結果の要素が登記と食い違えば、理由付きの失敗になる。
 ///
 /// 食い違いは本体のフォルダ名・種別・同梱の欠け・同梱の余り。対照として
 /// 登記どおりの `.nar` が通ることも見る（照合が「常に赤」ではないことの較正）。
@@ -388,7 +382,7 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
     assert_eq!(expected, "ghost/probe-window");
 }
 
-// ---- 登記の往復と新品（要件 7.4・8.4・9.5） ----
+// ---- 登記の往復と新品 ----
 
 /// 起動記録の置き場。ゴーストのフォルダの中で、前の走行が残す物が置かれる所。
 const BOOT_RECORD: [&str; 5] = ["ghost", "master", "profile", "areka", "x.toml"];
@@ -424,15 +418,13 @@ fn declared_elements_with_kind(sample: &Sample) -> Vec<String> {
 }
 
 /// 登記の往復——登記した各 `.nar` を空の根へ展開すると、置かれた要素が登記の 1 行
-/// （種別・フォルダ名・同梱バルーン）とちょうど一致する（要件 8.4 の恒常版・9.5）。
+/// （種別・フォルダ名・同梱バルーン）とちょうど一致する。
 ///
 /// 見るのは**展開器が返した要素**であって、根を走査して拾った名前ではない。種別は
 /// `install.txt` の `type` から展開器が決めた物なので、`.nar` が登記と違う種別を
 /// 名乗っていれば（置き場が偶然一致していても）ここで赤になる。
 ///
-/// 段 ① の 8.4 は畳む前の追跡ツリーとの突き合わせを 1 度だけ行う手順だった。ツリーを
-/// 消した後は突き合わせる相手が登記になるので、この形が常設の姿である。`.nar` を
-/// 中身の違う物に差し替えれば、`SAMPLES` の行と食い違った瞬間に赤になる。
+/// `.nar` を中身の違う物に差し替えれば、`SAMPLES` の行と食い違った瞬間に赤になる。
 #[test]
 fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
     assert!(
@@ -499,8 +491,7 @@ fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
             sample.name
         );
         // `emily4.nar` は `balloon.source.directory,balloon` を名乗るのに書庫に `balloon/` が
-        // 無い。入るのはゴーストだけで、飛ばした同梱が 1 件だけ載る（spec:
-        // `areka-P0-emily-ghost-verification` 要件 1.10・7.3）。ほかの検体は 0 件。
+        // 無い。入るのはゴーストだけで、飛ばした同梱が 1 件だけ載る。ほかの検体は 0 件。
         let skipped_expected = if sample.name == "emily4" {
             vec![areka_nar::SkippedCompanion {
                 directory: "emily4".to_owned(),
@@ -517,8 +508,7 @@ fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
         );
         // `dot_sakura.nar` は取り出し元が宛先と同じ名前のフォルダで書庫の最上位に在る。最上位の
         // `delete.txt`・`updates.txt` は本体の直下に普通のファイルとして置かれ、取り出し元の
-        // フォルダは残らず、同梱はゴーストの中の balloon へ入る（spec: areka-P0-dot-sakura-specimen
-        // 要件 2.4・5.7、areka-P0-ghost-inner-balloon 要件 7.1）。
+        // フォルダは残らず、同梱はゴーストの中の balloon へ入る。
         if sample.name == "dot_sakura" {
             let balloon = sample.balloons[0];
             let body = root.path().join("ghost").join("dot_sakura");
@@ -547,8 +537,7 @@ fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
     }
 }
 
-/// 窓口から取得した根へ起動記録を書いて捨てても、次に取得した根には現れない
-/// （要件 7.4・9.5）。
+/// 窓口から取得した根へ起動記録を書いて捨てても、次に取得した根には現れない。
 ///
 /// 「2 回取得できる」だけでは何も証明しない（同じ木を配り続ける実装でも緑になる）。
 /// そこで 1 回目に書いた起動記録の実在を先に主張し、2 回目の根が**完全**である
@@ -613,7 +602,7 @@ fn a_boot_record_written_into_an_acquired_root_never_appears_in_the_next_one() {
 }
 
 /// 2 つ目のシェルを写すと、写した先の `name` だけが変わり、元のシェルはバイト単位で
-/// そのまま残る（spec: `areka-P0-shell-balloon-switch` 要件 9.1・9.3）。
+/// そのまま残る。
 ///
 /// 検体は `dot_sakura`（`charset,Shift_JIS`・改行 CRLF・`name,master` を持つ）。
 /// 名前以外の行がバイト単位で残ることも見るので、文字コードを読み直す実装は赤になる。
@@ -666,7 +655,7 @@ fn a_copied_shell_gets_the_new_name_and_the_original_stays_byte_for_byte() {
     );
 }
 
-/// `descript.txt` の `name` の行は置き換え、無ければ足す（改行の形は元に合わせる・spec: `areka-P0-shell-balloon-switch` 要件 9.1）。
+/// `descript.txt` の `name` の行は置き換え、無ければ足す（改行の形は元に合わせる）。
 #[test]
 fn named_descript_replaces_the_name_line_or_appends_one() {
     assert_eq!(
@@ -681,14 +670,14 @@ fn named_descript_replaces_the_name_line_or_appends_one() {
         named_descript(b"charset,UTF-8\nname,old\n", "x"),
         b"charset,UTF-8\nname,x\n"
     );
-    // 1 行目の頭の BOM は外して照らし、置き換えても残す（audit-test-kits かけ直し 4 回目 S7）。
+    // 1 行目の頭の BOM は外して照らし、置き換えても残す。
     assert_eq!(
         named_descript(b"\xEF\xBB\xBFname,old\r\ntype,shell\r\n", "x"),
         b"\xEF\xBB\xBFname,x\r\ntype,shell\r\n"
     );
 }
 
-/// 元のシェルが無ければ、写す先のフォルダを作らずに `Io`（`NotFound`）を返す（audit-test-kits 指摘 16）。
+/// 元のシェルが無ければ、写す先のフォルダを作らずに `Io`（`NotFound`）を返す。
 #[test]
 fn copying_a_missing_shell_leaves_no_empty_folder() {
     let sakura = SampleRoot::acquire("dot_sakura").expect("登記済みの検体");
@@ -705,8 +694,7 @@ fn copying_a_missing_shell_leaves_no_empty_folder() {
     assert!(!to.exists(), "空の写す先を残さないこと: {}", to.display());
 }
 
-/// `Io` の表示は、パスと元の失敗（日本語の OS の文）を ASCII に写す。`os error N` は残る
-/// （audit-test-kits 指摘 32）。
+/// `Io` の表示は、パスと元の失敗（日本語の OS の文）を ASCII に写す。`os error N` は残る。
 #[test]
 fn the_io_error_is_shown_in_ascii_only() {
     let source = std::io::Error::new(
@@ -736,8 +724,7 @@ fn the_io_error_is_shown_in_ascii_only() {
     );
 }
 
-/// `Io` 以外の表示も、名前・パス・展開器の日本語の文を ASCII に写す（`nar-sample-path` が
-/// 標準エラーへ出す文・audit-test-kits のかけ直し 1 回目 S1）。
+/// `Io` 以外の表示も、名前・パス・展開器の日本語の文を ASCII に写す（`nar-sample-path` が標準エラーへ出す文）。
 #[test]
 fn the_other_errors_are_shown_in_ascii_only() {
     let shown = [

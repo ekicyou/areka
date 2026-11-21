@@ -1,7 +1,7 @@
 //! host-32 先進坑: 子のプロセスの見張り（x64 の親だけが取り込む）。
 //!
 //! i686 の helper を `std::process::Command` で起こし、生き死にと終わり方を
-//! 送りの層とは別に見る（要件 1.1〜1.4・2.4）。helper（i686）からは取り込まない（要件 1.5）。
+//! 送りの層とは別に見る。helper（i686）からは取り込まない。
 //!
 //! 親の HWND は下 32 ビットの 10 進で引数に載せて渡す（`argv[1]=ghostdir`・
 //! `argv[2]=parent_hwnd`）。環境変数では渡さない。
@@ -52,12 +52,12 @@ impl Drop for HelperHandle {
     }
 }
 
-/// helper の終わり方（要件 1.4: clean と異常を見分けられる形に分ける）。
+/// helper の終わり方（clean と異常を見分けられる形に分ける）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitKind {
-    /// 終了コード 0 = clean shutdown（要件 1.3）。
+    /// 終了コード 0 = clean shutdown。
     Clean,
-    /// 0 でない終了コード = 異常終了（要件 1.4）。
+    /// 0 でない終了コード = 異常終了。
     Abnormal(i32),
     /// 終了コードが取れない終わり方（強制終了など）。
     Terminated,
@@ -73,7 +73,7 @@ impl ExitKind {
         }
     }
 
-    /// clean shutdown か（要件 1.3 の観測点）。
+    /// clean shutdown か。
     pub fn is_clean(self) -> bool {
         matches!(self, ExitKind::Clean)
     }
@@ -96,7 +96,7 @@ impl ProcessHost {
         Ok(HelperHandle { child })
     }
 
-    /// 生き死にを待たずに見る（要件 1.2・2.4）。`None` = 動いている。
+    /// 生き死にを待たずに見る。`None` = 動いている。
     /// `try_wait` 自体の失敗は見張れないので `Terminated` とする。
     pub fn poll_exit_kind(handle: &mut HelperHandle) -> Option<ExitKind> {
         match handle.child.try_wait() {
@@ -106,7 +106,7 @@ impl ProcessHost {
         }
     }
 
-    /// 終わるまで待って終わり方を返す（要件 1.3・1.4）。
+    /// 終わるまで待って終わり方を返す。
     pub fn wait_kind(mut handle: HelperHandle) -> std::io::Result<ExitKind> {
         let status = handle.child.wait()?;
         Ok(ExitKind::classify(status.code()))
@@ -140,7 +140,7 @@ mod tests {
         v.iter().map(|s| s.to_string()).collect()
     }
 
-    /// 指摘 4: exe の選び方の表。
+    /// exe の選び方の表。
     #[test]
     fn resolve_helper_exe_table() {
         assert_eq!(
@@ -177,7 +177,7 @@ mod tests {
         }
     }
 
-    /// 指摘 6: 持ち手を捨てると、まだ動いている子が止まる。
+    /// 持ち手を捨てると、まだ動いている子が止まる。
     #[test]
     fn dropping_handle_kills_running_child() {
         use windows::Win32::Foundation::WAIT_OBJECT_0;
@@ -206,7 +206,7 @@ mod tests {
         );
     }
 
-    /// 要件 1.3: 終了コード 0 を `wait_kind` で Clean と見る。
+    /// 終了コード 0 を `wait_kind` で Clean と見る。
     #[test]
     fn wait_kind_classifies_zero_as_clean() {
         let kind = ProcessHost::wait_kind(spawn_exit(0)).expect("wait must succeed");
@@ -214,7 +214,7 @@ mod tests {
         assert!(kind.is_clean());
     }
 
-    /// 要件 1.4: 0 でない終了コードを Abnormal と見る。
+    /// 0 でない終了コードを Abnormal と見る。
     #[test]
     fn wait_kind_classifies_nonzero_as_abnormal() {
         let kind = ProcessHost::wait_kind(spawn_exit(3)).expect("wait must succeed");
@@ -222,7 +222,7 @@ mod tests {
         assert!(!kind.is_clean());
     }
 
-    /// 要件 1.2・2.4: 待たずに見る。動いている間は `None`、終わった後は `Some(Clean)`。
+    /// 待たずに見る。動いている間は `None`、終わった後は `Some(Clean)`。
     #[test]
     fn poll_exit_kind_is_none_while_running_then_clean_after_exit() {
         // `ping -n 2` は約 1 秒待つ（cmd の timeout は対話端末で不安定なため ping を使う）。
@@ -258,7 +258,7 @@ mod tests {
         );
     }
 
-    /// 分類の表（要件 1.3・1.4）: 0=Clean・0 でない=Abnormal・None=Terminated。
+    /// 分類の表: 0=Clean・0 でない=Abnormal・None=Terminated。
     #[test]
     fn exit_kind_classification_table() {
         assert_eq!(ExitKind::classify(Some(0)), ExitKind::Clean);

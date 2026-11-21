@@ -1,6 +1,4 @@
-//! 複製の配布と、札による保護・掃除の兄弟テスト（要件 1.9・6.5・7.4・7.5・7.7・7.9・9.5・9.7）。
-//!
-//! spec の名を添えていない番号は spec `areka-P0-nar-install` のもの。
+//! 複製の配布と、札による保護・掃除の兄弟テスト。
 //!
 //! # 「消えていない」も「増えていない」も空振りしやすい
 //!
@@ -109,10 +107,10 @@ fn usage(root: &Path) -> (usize, u64) {
     (entries, bytes)
 }
 
-// ---- 複写と 1 度のやり直し（audit-test-kits 決め D5） ----
+// ---- 複写と 1 度のやり直し ----
 
 /// 複写が落ちて原本がもう無いとき（刻印違いとして別のプロセスが退けた）だけ、原本を
-/// 用意し直して 1 度だけ写し直す（audit-test-kits 指摘 53）。原本が在るまま落ちた複写はやり直さない。
+/// 用意し直して 1 度だけ写し直す。原本が在るまま落ちた複写はやり直さない。
 #[test]
 fn a_master_reclaimed_during_the_copy_is_fetched_again_once() {
     let namespace = private_namespace();
@@ -143,9 +141,9 @@ fn a_master_reclaimed_during_the_copy_is_fetched_again_once() {
     );
 }
 
-// ---- 掃除（要件 7.7・7.9） ----
+// ---- 掃除 ----
 
-/// 取得のたびの掃除が、持ち主の居ない組と札の無い残骸を消す（要件 7.7・7.9）。
+/// 取得のたびの掃除が、持ち主の居ない組と札の無い残骸を消す。
 #[test]
 fn an_acquire_sweeps_away_a_dead_pair_and_a_lockless_leftover() {
     let namespace = private_namespace();
@@ -198,8 +196,7 @@ fn an_acquire_sweeps_away_a_dead_pair_and_a_lockless_leftover() {
     );
 }
 
-/// 退けられない残骸は 1 バイトも欠けずに残り、手が離れれば次の取得で片付く
-/// （要件 7.7）。
+/// 退けられない残骸は 1 バイトも欠けずに残り、手が離れれば次の取得で片付く。
 ///
 /// 残骸の中のファイルを開いておく。**Windows は子孫が開かれているフォルダの `rename`
 /// を拒む**ので、先に `gc-…` へ退けてから消す実装は最初の一歩で失敗し、残骸は無傷で
@@ -235,10 +232,9 @@ fn a_leftover_that_cannot_be_moved_aside_is_left_whole() {
     );
 }
 
-// ---- 複製（要件 6.5・7.4・7.5） ----
+// ---- 複製 ----
 
-/// 生きている複製は他者の取得が走らせる掃除で消えず、複製どうしは混ざらない
-/// （要件 7.5）。
+/// 生きている複製は他者の取得が走らせる掃除で消えず、複製どうしは混ざらない。
 #[test]
 fn a_live_copy_survives_another_acquires_sweep_and_the_two_copies_stay_separate() {
     let namespace = private_namespace();
@@ -296,7 +292,7 @@ fn a_live_copy_survives_another_acquires_sweep_and_the_two_copies_stay_separate(
     assert!(!lock.exists(), "破棄で札も消えること: {}", lock.display());
 }
 
-/// 複製は**原本の複写**であり、`.nar` から展開し直さない（要件 6.5）。
+/// 複製は**原本の複写**であり、`.nar` から展開し直さない。
 ///
 /// 原本にだけ在って `.nar` には無いファイルを置いてから取得する。複写なら現れ、
 /// 再インストールする実装なら現れない。
@@ -325,9 +321,9 @@ fn a_copy_is_taken_from_the_master_copy_and_never_re_installed_from_the_nar() {
     );
 }
 
-// ---- 使用量（要件 7.9） ----
+// ---- 使用量 ----
 
-/// 取得と破棄を繰り返しても名前空間の使用量が増え続けない（要件 7.9）。
+/// 取得と破棄を繰り返しても名前空間の使用量が増え続けない。
 #[test]
 fn the_namespace_usage_does_not_grow_across_many_acquire_and_drop_cycles() {
     let namespace = private_namespace();
@@ -372,10 +368,9 @@ fn the_namespace_usage_does_not_grow_across_many_acquire_and_drop_cycles() {
     );
 }
 
-// ---- 走りっぱなしの掃除との並走（要件 7.5・7.7） ----
+// ---- 走りっぱなしの掃除との並走 ----
 
-/// 掃除が走りっぱなしでも、組み上げ中の作業フォルダと生きている複製は消えない
-/// （要件 7.5・7.7）。
+/// 掃除が走りっぱなしでも、組み上げ中の作業フォルダと生きている複製は消えない。
 ///
 /// これが札を**フォルダより先に**作ること、原本の組み上げの**間ずっと**札を開いた
 /// ままにしていることの檻である。どちらかを外すと、掃除の走査が札の無い木を見つけて
@@ -417,10 +412,9 @@ fn a_sweeper_running_alongside_never_disturbs_a_staging_tree_or_a_live_copy() {
     assert!(passes > 0, "掃除が 1 周以上走ったこと（この検査の較正）");
 }
 
-// ---- 手動用の根（要件 1.9） ----
+// ---- 手動用の根 ----
 
-/// 手動用の根は**呼ぶたびに作り直す**ので、前の走行が書いた起動記録は残らない
-/// （要件 1.9・9.7）。
+/// 手動用の根は**呼ぶたびに作り直す**ので、前の走行が書いた起動記録は残らない。
 ///
 /// 「2 回呼べる」だけでは何も証明しない（作り直さない実装でも緑になる）。そこで 1 回目に
 /// 配られた根へ**起動記録の形をしたファイル**を置き、実在を較正してから 2 回目を呼ぶ。
@@ -467,7 +461,7 @@ fn the_manual_root_is_rebuilt_from_scratch_on_every_call() {
     );
 }
 
-/// 手動用の根は**掃除の対象にしない**（設計 `devroot`「回収の対象にしない」・要件 1.9）。
+/// 手動用の根は**掃除の対象にしない**。
 ///
 /// プロセスが終わった後に人が使う木なので、札を持つ者が誰も居ない。掃除が `work/` の外を
 /// 見れば、印字した直後に消える根を配ることになる。較正として、同じ掃除の走行が持ち主の
@@ -496,9 +490,9 @@ fn the_sweeper_never_touches_the_manual_root() {
     );
 }
 
-// ---- 並走（同一プロセスの多スレッド・要件 7.5・9.5） ----
+// ---- 並走（同一プロセスの多スレッド） ----
 
-/// 同じ検体を同時に取りに行くスレッドの本数（設計の「8 スレッド」）。
+/// 同じ検体を同時に取りに行くスレッドの本数。
 const RACING_THREADS: usize = 8;
 
 /// 各スレッドが自分の根の直下へ置く走行の記録。**綴りは全員同じで中身だけが自分の物**
@@ -506,7 +500,7 @@ const RACING_THREADS: usize = 8;
 const RACE_MARK: &str = "boot.log";
 
 /// 同じ検体を 8 スレッドが同時に取っても、⑴ 一方の書き込みが他方の根に現れず、
-/// ⑵ 利用中の木が差し替えられない（要件 7.5・9.5）。
+/// ⑵ 利用中の木が差し替えられない。
 ///
 /// 全員が**窓口**（[`crate::SampleRoot::acquire`]）を通るので、通る経路は共有の名前
 /// 空間を使う本物である。段は 3 つで、関門を 2 回くぐる。
@@ -625,9 +619,9 @@ struct Racer {
     tree: std::collections::BTreeMap<String, Vec<u8>>,
 }
 
-// ---- 破棄と並走する掃除（spec: areka-P0-ghost-session-test-load-flake 要件 5.2） ----
+// ---- 破棄と並走する掃除 ----
 
-/// 木を消している最中も札は握られたままで、並走する掃除は札を消せない（areka-P0-ghost-session-test-load-flake 檻 11）。
+/// 木を消している最中も札は握られたままで、並走する掃除は札を消せない。
 ///
 /// 札を閉じてから木を消すと、消している間の木は「持ち主の居ない組」に見え、同じ
 /// プロセスの別のテストの掃除が札を消して、消しかけの木を退けようとする（負荷の
@@ -657,7 +651,7 @@ fn a_work_dir_keeps_its_lease_while_its_tree_is_being_removed() {
 }
 
 /// `gc-…` へ退けた木も、消している間は札が握られ、並走する掃除はその木を退けない。
-/// 消し終えたら `gc-…` の木も札も棚に残らない（areka-P0-ghost-session-test-load-flake 檻 12）。
+/// 消し終えたら `gc-…` の木も札も棚に残らない。
 #[test]
 fn a_tree_moved_aside_keeps_a_held_lease_until_it_is_removed() {
     let namespace = private_namespace();
@@ -692,8 +686,7 @@ fn a_tree_moved_aside_keeps_a_held_lease_until_it_is_removed() {
     );
 }
 
-/// 死んだプロセスの `gc-…` の札が同じ名前で残っていても、次の連番で取り直して木を退ける
-/// （audit-test-kits かけ直し 5 回目 S5）。残りの札は他人の物かもしれないので消さない。
+/// 死んだプロセスの `gc-…` の札が同じ名前で残っていても、次の連番で取り直して木を退ける。残りの札は他人の物かもしれないので消さない。
 #[test]
 fn a_leftover_gc_lease_with_the_same_name_is_skipped() {
     let namespace = private_namespace();

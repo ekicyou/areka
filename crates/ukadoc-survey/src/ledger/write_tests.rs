@@ -3,8 +3,7 @@
 //! 見本も期待する本文もここに直に書く（実装側の定数を参照しない）。参照すると表を
 //! 表自身と比べるだけになり、綴りの取り違えを 1 件も捕まえられない。
 //!
-//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない
-//! （要件 6.2・設計 File Structure Plan）。
+//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない。
 
 use super::{merge_initial, render_initial_entry};
 use crate::error::SurveyError;
@@ -12,10 +11,10 @@ use crate::ledger::blocks;
 use crate::ledger::read::read;
 use crate::model::{Domain, EntryId, PageName, Status};
 
-/// 見本のドメインが担当するページ（要件 3.1 の property の行）。
+/// 見本のドメインが担当するページ（property の行）。
 const PAGES: [&str; 1] = ["list_propertysystem"];
 
-/// 要件 3.1 の `shiori` の行 12 ページ。**件数の多い順**（＝文字順でも逆順でもない）。
+/// `shiori` の担当ページ 12 件。**件数の多い順**（＝文字順でも逆順でもない）。
 const SHIORI_PAGES: [&str; 12] = [
     "list_shiori_event",
     "list_shiori_event_ex",
@@ -40,7 +39,7 @@ const MONTH: &str = "ukadoc:list_propertysystem:system.month:1";
 /// id の byte 昇順で 3 番目。
 const YEAR: &str = "ukadoc:list_propertysystem:system.year:1";
 
-/// 逆斜線を含む id（要件付録 A.3 の例）。
+/// 逆斜線を含む id。
 const BACKSLASH: &str = r"ukadoc:list_sakura_script:\![get,property,ID]:1";
 
 fn id(raw: &str) -> EntryId {
@@ -99,9 +98,9 @@ fn without_block(text: &str, target: &EntryId) -> String {
     out
 }
 
-// ---- 新規の組み立て（要件 3.3・付録 A.1・A.2） ----
+// ---- 新規の組み立て ----
 
-/// 既存本文が無ければ、付録 A.1 の形で全項目を書き出す。
+/// 既存本文が無ければ、台帳の書式どおりに全項目を書き出す。
 ///
 /// 期待する本文を丸ごと逐語で置く。読み戻し一致だけでは区切りの空白 1 個の違いを
 /// 捕まえられないが、1 バイトの安定はそこに載っている。
@@ -142,7 +141,7 @@ note = ""
     );
 }
 
-/// 項目が 1 件も無くても、前置きだけは付録 A.1 の形で出る。
+/// 項目が 1 件も無くても、前置きだけは台帳の書式どおりに出る。
 #[test]
 fn an_empty_id_list_renders_the_prologue_alone() {
     let text =
@@ -162,7 +161,7 @@ pages = ["list_propertysystem"]
     );
 }
 
-/// 前置きは読んでいるドメインの綴りを持つ（要件 3.4 の独立性はここから始まる）。
+/// 前置きは読んでいるドメインの綴りを持つ。
 #[test]
 fn the_prologue_names_the_domain_and_its_pages() {
     let text = merge_initial(
@@ -189,14 +188,14 @@ pages = ["list_sakura_script"]
 
 /// 担当ページが複数あるときも、**渡された順のまま**書く。
 ///
-/// 見本は要件 3.1 の `shiori` の行 12 ページを、表と同じ件数の多い順に置いてある——
+/// 見本は `shiori` の担当ページ 12 件を、割り当て表と同じ件数の多い順に置いてある——
 /// 文字順でも逆順でもない並びであることが要点である。文字順に整った一覧を渡すと、
 /// 一覧を並べ替える間違いがそのまま通ってしまう。
 ///
 /// ここを釘付けしておく理由は 3 つある。⑴ 4 本の台帳のうち `shiori`（12 ページ）と
 /// `assets`（24 ページ）は複数ページであり、1 ページきりの見本ではこの経路を 1 度も
 /// 通らない。⑵ 整合検査の担当ページの突き合わせは集合で比べるので、並びの違いは
-/// 下流でも見えない。⑶ 要件 3.3a により前置きは初回の生成以降そのまま写され続けるので、
+/// 下流でも見えない。⑶ 前置きは初回の生成以降そのまま写され続けるので、
 /// 並びが狂ったまま焼き付く。
 #[test]
 fn a_multi_page_prologue_keeps_the_given_page_order() {
@@ -222,7 +221,7 @@ pages = ["list_shiori_event", "list_shiori_event_ex", "list_shiori_resource", "l
     );
 }
 
-/// 1 項目の初期値は付録 A.2 の 1 文のとおり。
+/// 1 項目の初期値は台帳の書式どおり。
 #[test]
 fn an_initial_entry_is_pinned_verbatim() {
     assert_eq!(
@@ -240,7 +239,7 @@ note = ""
     );
 }
 
-/// 逆斜線を含む id は 2 つ重ねて書く（要件付録 A.3）。
+/// 逆斜線を含む id は 2 つ重ねて書く。
 #[test]
 fn a_backslash_in_the_id_is_doubled() {
     assert_eq!(
@@ -258,7 +257,7 @@ note = ""
     );
 }
 
-/// 書き出した本文は台帳として読み戻せる（付録 A.2 が必須とする欄が全部ある）。
+/// 書き出した本文は台帳として読み戻せる（必須の欄が全部ある）。
 ///
 /// 逐語テストと対で置く。読み戻し一致は「単射」しか言わないが、逐語は「欄が足りない」
 /// を言えない。
@@ -341,7 +340,7 @@ fn dropping_the_last_block_puts_back_only_that_block() {
     one_block_comes_back(YEAR);
 }
 
-// ---- 手で書いた本文をそのまま写す（要件 3.3a・設計 D-12） ----
+// ---- 手で書いた本文をそのまま写す ----
 
 /// 手で書いた台帳。区切りの空白も空行も持ち主の書き方のまま置いてある。
 ///
@@ -441,7 +440,7 @@ fn entries_outside_the_given_id_list_are_left_alone() {
     assert_eq!(order, [BALLOON, MONTH, YEAR], "一覧に無い id も残る");
 }
 
-/// 欠けている id が 1 つも無ければ、本文は 1 バイトも動かない（要件 3.3a）。
+/// 欠けている id が 1 つも無ければ、本文は 1 バイトも動かない。
 #[test]
 fn nothing_missing_leaves_the_hand_written_body_untouched() {
     let spliced = merge_initial(
@@ -496,7 +495,7 @@ fn a_body_without_a_trailing_newline_still_gets_a_line_start() {
     assert_eq!(order, [BALLOON, MONTH, YEAR, last]);
 }
 
-// ---- 並び順は厳密な昇順（設計 D-12） ----
+// ---- 並び順は厳密な昇順 ----
 
 /// 塊が id の順に並んでいない本文。`system.year` の後ろに `balloon…` が来る。
 const DECREASING: &str = r#"[ledger]
@@ -522,7 +521,7 @@ links = []
 note = ""
 "#;
 
-/// 並べ替えず、順序を破る id を告げて失敗する（設計 D-12）。
+/// 並べ替えず、順序を破る id を告げて失敗する。
 #[test]
 fn a_decreasing_body_fails_naming_the_offending_id() {
     let failure = merge_initial(
@@ -542,7 +541,7 @@ fn a_decreasing_body_fails_naming_the_offending_id() {
     }
 }
 
-/// 備考の中の見出しが**既にある id と同じ綴り**である本文（設計 D-12 の盲点）。
+/// 備考の中の見出しが**既にある id と同じ綴り**である本文。
 ///
 /// `toml` の鍵の集合は 1 件なので `blocks::split` の較正は素通りする。塞ぐのは
 /// 厳密な昇順の判定だけである。
@@ -562,7 +561,7 @@ note = """
 """
 "#;
 
-/// 同じ id が 2 度現れたら、重複として落ちる（設計 D-12）。
+/// 同じ id が 2 度現れたら、重複として落ちる。
 ///
 /// 判定が「非減少」だとここは通ってしまう。`ledger-init` は整合検査より先に走るので、
 /// ここが緩いと重複した塊のまま差し込みが通る。

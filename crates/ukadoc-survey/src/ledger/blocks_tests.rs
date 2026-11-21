@@ -3,13 +3,12 @@
 //! 見本の本文はここに直に書く（実装側の定数を参照しない）。参照すると表を表自身と
 //! 比べるだけになり、綴りの取り違えを 1 件も捕まえられない。
 //!
-//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない
-//! （要件 6.2・設計 File Structure Plan）。
+//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない。
 
 use super::{Block, split};
 use crate::error::SurveyError;
 
-/// 付録 A.1 の形をした見本の台帳。
+/// 台帳の書式どおりの見本。
 ///
 /// 前置き（コメント 2 行＋`[ledger]` の表）と項目 2 つを持ち、2 つ目の備考は複数行の
 /// 文字列である。備考の中には**字下げした**見出しらしき行を 1 本埋めてある。行頭では
@@ -137,7 +136,7 @@ fn an_indented_header_inside_a_note_starts_no_block() {
     assert_eq!(blocks.len(), 2);
 }
 
-// ---- 較正（設計 `ledger` 節の事後条件） ----
+// ---- 較正 ----
 
 /// 切り分けが返す id の集合は、同じ本文を `toml` で読んだ鍵の集合に一致する。
 #[test]
@@ -204,7 +203,7 @@ status = "unclassified"
 /// （件数だけのテストは綴り違いを 1 件も捕まえない）。
 ///
 /// 本文に**両側**を挙げることも併せて釘付けする。片側しか挙げないと、台帳を直す人に
-/// 食い違いの半分が見えない（要件 6.12）。
+/// 食い違いの半分が見えない。
 #[test]
 fn the_calibration_compares_members_not_counts() {
     let keys = toml_keys(SAME_SIZE_DIFFERENT_MEMBERS);
@@ -230,7 +229,7 @@ fn the_calibration_compares_members_not_counts() {
     }
 }
 
-/// 備考の中の見出しが、**既にある id と同じ綴り**である本文（設計 D-12 の盲点）。
+/// 備考の中の見出しが、**既にある id と同じ綴り**である本文。
 const NOTE_WITH_DUPLICATE: &str = r#"[entry."ukadoc:list_propertysystem:system.year:1"]
 status = "unclassified"
 note = """
@@ -238,7 +237,7 @@ note = """
 """
 "#;
 
-/// 較正は同じ綴りの重複を見抜けない（設計 D-12 が明記する盲点）。
+/// 較正は同じ綴りの重複を見抜けない（盲点）。
 ///
 /// 集合として比べる以上ここは通る。捕まえるのは台帳の並びを**厳密な昇順**で確かめる側
 /// （[`SurveyError::LedgerOutOfOrder`]）である。この形を釘付けしておくと、較正の主張が
@@ -311,7 +310,7 @@ fn a_missing_trailing_newline_does_not_shift_the_positions() {
     }
 }
 
-/// 逆斜線とコロンを含む id が、逃がしを解いた綴りで返る（付録 A.3）。
+/// 逆斜線とコロンを含む id が、逃がしを解いた綴りで返る。
 #[test]
 fn ids_with_backslashes_and_colons_are_unescaped() {
     let text = concat!(
@@ -391,7 +390,7 @@ fn a_body_that_is_not_toml_is_rejected_because_it_cannot_be_calibrated() {
 
 /// 復帰文字を落としていない本文は、黙って直さずに落ちる。
 ///
-/// 事前条件は「復帰文字を落とした本文」（設計 `ledger` 節・D-6）。ここで復帰文字を
+/// 事前条件は「復帰文字を落とした本文」。ここで復帰文字を
 /// 落として読み進めると、返すバイト位置が呼び出し側の持つ本文と食い違う。
 #[test]
 fn a_body_still_carrying_carriage_returns_is_rejected() {

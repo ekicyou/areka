@@ -1,6 +1,4 @@
-//! 見分け方: 判別対の標本点の導出と、絵・当たり判定の判別の規則（`observe.rs` から分けた）。
-//!
-//! 規則の唯一の定義は design.md §Observer。ここはそれを写しただけで、閾値を変えるなら先に design を直す。
+//! 見分け方: 判別対の標本点の導出と、絵・当たり判定の判別の規則。
 
 use areka_emo_compose::ComposedSurface;
 use bevy_ecs::name::Name;
@@ -9,7 +7,7 @@ use tracing::trace;
 use windows::Win32::Foundation::RECT;
 use wintf::ecs::{PointF, hit_test_in_window};
 
-/// 共通範囲を切る格子の升数（縦横とも・実装 2.2 で 8 から 16 へ改訂＝design §Observer）。
+/// 共通範囲を切る格子の升数（縦横とも）。
 const GRID: u32 = 16;
 /// 「不透明」の α の下限。
 const OPAQUE: u8 = 128;
@@ -25,7 +23,7 @@ const LO: f32 = 0.1;
 
 type Bgr = [u8; 3];
 
-/// 絵・当たり判定の判別結果（design の `PictureClass`／`HitClass` は同じ値の集合なので 1 つにした）。
+/// 絵・当たり判定の判別結果。
 ///
 /// 観測の `from`／`to` も `P`／`Q` で持つので、`絵 == to` のような比較がそのまま書ける。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -222,7 +220,7 @@ pub fn classify_picture(
     )
 }
 
-/// 割合 → 絵の判別（design §Observer 絵の判別）。
+/// 割合 → 絵の判別。
 fn picture_rule(has_only_p: bool, a: f32, b: f32, ab_p: f32, ab_q: f32) -> PictureClass {
     let neither = b <= LO && ab_p <= LO && ab_q <= LO;
     if has_only_p {
@@ -250,7 +248,7 @@ fn picture_rule(has_only_p: bool, a: f32, b: f32, ab_p: f32, ab_q: f32) -> Pictu
     }
 }
 
-/// 当たりの割合 → 当たり判定の判別（design §Observer 当たり判定の判別）。
+/// 当たりの割合 → 当たり判定の判別。
 ///
 /// h_p＝「P だけ」、h_q＝「Q だけ」、h_both＝「両方」の各集合で当たった割合。
 /// 「P だけ」が無い対では `Both` は Q と区別できないので出ない。

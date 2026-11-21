@@ -4,16 +4,16 @@
 //! ここは純粋層で、ファイルにもスナップショットにも触らない。文字列と値だけを受け取り、
 //! 文字列と値だけを返す。
 //!
-//! 凍結された語彙は 4 つある（要件 2.6 により、変更には要件の改訂を要する）。
+//! 凍結された語彙は 4 つある。
 //!
-//! - 状態 7 種（要件 2.2）
-//! - 関連の種別 6 種（要件 4.3）
-//! - 伺からしさのテーマ 8 種（要件 4.4。正本は `doc/ukadoc-coverage/values.md` で、
+//! - 状態 7 種
+//! - 関連の種別 6 種
+//! - 伺からしさのテーマ 8 種（正本は `doc/ukadoc-coverage/values.md` で、
 //!   ここの定数との一致は `tests/consistency/values_md.rs` が守る）
-//! - 担当ドメイン 4 種（要件 3.1）
+//! - 担当ドメイン 4 種
 //!
 //! どの語彙も文字列からの変換を失敗しうる操作にしてある。綴りが 1 文字違えば値は
-//! 作れず、黙って既定値に落ちることはない（設計「実装上の注意」）。列挙から文字列を
+//! 作れず、黙って既定値に落ちることはない。列挙から文字列を
 //! 引く向きの `match` には既定の腕を置かない。語彙を 1 つ増やすと、対応表を書き足す
 //! までコンパイルが通らなくなる。
 
@@ -23,7 +23,7 @@ use crate::error::SurveyError;
 ///
 /// この層は「どのファイルのどの項目を読んでいたか」を知らない。だから欄の名前と綴り
 /// だけを持ち、`file` と `id` は台帳を読む段（`ledger::read`）が [`Self::at`] で添えて
-/// [`SurveyError::BadVocabulary`] にする（設計 Error Handling・要件 6.10）。
+/// [`SurveyError::BadVocabulary`] にする。
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{field} の値 {value} は語彙に無い")]
 pub struct UnknownVocabulary {
@@ -52,9 +52,9 @@ impl UnknownVocabulary {
     }
 }
 
-/// 項目 id。カタログと台帳の鍵で、`ukadoc:` で始まる 2 形だけを受け付ける（要件 1.9）。
+/// 項目 id。カタログと台帳の鍵で、`ukadoc:` で始まる 2 形だけを受け付ける。
 ///
-/// 並びは中の文字列の byte 昇順（設計 D-9）。id はすべて ASCII なので、これが
+/// 並びは中の文字列の byte 昇順。id はすべて ASCII なので、これが
 /// そのまま文字順になる。
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EntryId(String);
@@ -63,7 +63,7 @@ pub struct EntryId(String);
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PageName(String);
 
-/// 台帳を分ける 4 つの担当ドメイン（要件 3.1）。
+/// 台帳を分ける 4 つの担当ドメイン。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Domain {
     Shiori,
@@ -72,7 +72,7 @@ pub enum Domain {
     Property,
 }
 
-/// 項目の状態（要件 2.2 の 7 語彙）。
+/// 項目の状態（7 語彙）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Status {
     Implemented,
@@ -84,7 +84,7 @@ pub enum Status {
     Unclassified,
 }
 
-/// 項目どうしの関連の種別（要件 4.3 の 6 語彙）。
+/// 項目どうしの関連の種別（6 語彙）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum LinkKind {
     /// 旧→新。
@@ -108,7 +108,7 @@ pub struct Link {
     pub to: EntryId,
 }
 
-/// 要件 4.4 の 8 テーマ。values.md の見出しと一致することをテストで守る。
+/// 伺からしさの 8 テーマ。values.md の見出しと一致することをテストで守る。
 pub const THEMES: [&str; 8] = [
     "気配",
     "触れ合い",
@@ -120,7 +120,7 @@ pub const THEMES: [&str; 8] = [
     "更新",
 ];
 
-/// テーマ名を凍結された 8 つの綴りへ解決する（要件 4.4）。
+/// テーマ名を凍結された 8 つの綴りへ解決する。
 ///
 /// 返すのは定数側の綴りそのもの。前後の空白を落としたり部分一致で拾ったりはしない
 /// （「気配」と「気配り」は片方が他方の接頭辞なので、緩めると取り違える）。
@@ -131,7 +131,7 @@ pub fn parse_theme(raw: &str) -> Result<&'static str, UnknownVocabulary> {
         .ok_or_else(|| UnknownVocabulary::new("values", raw))
 }
 
-/// 項目 id の区切り。ページ名自身が下線を含むので、下線では割らない（要件付録 B 手順 2）。
+/// 項目 id の区切り。ページ名自身が下線を含むので、下線では割らない。
 const ID_SEPARATOR: char = ':';
 
 /// 項目 id の先頭の欄（コロンで割った 1 欄目。`parse` の形の照合に使う）。
@@ -143,7 +143,7 @@ const ID_PREFIX: &str = "ukadoc";
 pub(crate) const ID_MARK: &str = "ukadoc:";
 
 impl EntryId {
-    /// 2 形のいずれかであることを確かめて作る（要件 1.9）。
+    /// 2 形のいずれかであることを確かめて作る。
     ///
     /// 受け付ける形は次の 2 つだけ。区切りはコロンで、下線では割らない。
     ///
@@ -174,7 +174,7 @@ impl EntryId {
         }
     }
 
-    /// ページ名。2 番目の区切りから取る（設計 D-11）。
+    /// ページ名。2 番目の区切りから取る。
     pub fn page(&self) -> PageName {
         // [`Self::parse`] を通った値は必ず 2 欄以上あるので、2 番目は必ず存在する。
         let page = self
@@ -206,7 +206,7 @@ impl PageName {
 }
 
 impl Domain {
-    /// 4 つのドメイン。台帳ファイル・報告ファイルを並べる順でもある（要件 3.1 の表）。
+    /// 4 つのドメイン。台帳ファイル・報告ファイルを並べる順でもある。
     pub const ALL: [Self; 4] = [
         Self::Shiori,
         Self::Assets,
@@ -214,7 +214,7 @@ impl Domain {
         Self::Property,
     ];
 
-    /// 台帳・報告のファイル名に使う綴り（要件 3.1）。
+    /// 台帳・報告のファイル名に使う綴り。
     pub fn as_key(&self) -> &'static str {
         // 既定の腕を置かない。ドメインを増やしたらここが赤くなる。
         match self {
@@ -235,7 +235,7 @@ impl Domain {
 }
 
 impl Status {
-    /// 7 つの状態。報告で分布を並べる順でもある（要件 2.2 の並び）。
+    /// 7 つの状態。報告で分布を並べる順でもある。
     pub const ALL: [Self; 7] = [
         Self::Implemented,
         Self::VocabularyOnly,
@@ -246,7 +246,7 @@ impl Status {
         Self::Unclassified,
     ];
 
-    /// 台帳に書く英字の綴り（要件 2.2）。
+    /// 台帳に書く英字の綴り。
     pub fn as_key(&self) -> &'static str {
         // 既定の腕を置かない。状態を増やしたらここが赤くなる。
         match self {
@@ -260,7 +260,7 @@ impl Status {
         }
     }
 
-    /// 報告に出す平易な日本語の呼び名（要件 7.8）。台帳とカタログには常に英字の綴りが
+    /// 報告に出す平易な日本語の呼び名。台帳とカタログには常に英字の綴りが
     /// 入るので、こちらを使うのは報告だけ。
     pub fn as_japanese(&self) -> &'static str {
         // 既定の腕を置かない。状態を増やしたらここが赤くなる。
@@ -275,7 +275,7 @@ impl Status {
         }
     }
 
-    /// 台帳の綴りから状態を引く。7 つのいずれでもなければ失敗する（要件 6.10）。
+    /// 台帳の綴りから状態を引く。7 つのいずれでもなければ失敗する。
     pub fn parse(raw: &str) -> Result<Self, UnknownVocabulary> {
         Self::ALL
             .into_iter()
@@ -285,7 +285,7 @@ impl Status {
 }
 
 impl LinkKind {
-    /// 6 つの関連の種別（要件 4.3 の並び）。
+    /// 6 つの関連の種別。
     pub const ALL: [Self; 6] = [
         Self::AliasOf,
         Self::Supersedes,
@@ -295,7 +295,7 @@ impl LinkKind {
         Self::SameFeature,
     ];
 
-    /// 台帳に書く英字の綴り（要件 4.3）。下線と横棒が種別ごとに違うので、写し違えない。
+    /// 台帳に書く英字の綴り。下線と横棒が種別ごとに違うので、写し違えない。
     pub fn as_key(&self) -> &'static str {
         // 既定の腕を置かない。種別を増やしたらここが赤くなる。
         match self {
