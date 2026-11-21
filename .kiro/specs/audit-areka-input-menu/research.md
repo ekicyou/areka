@@ -432,6 +432,42 @@
 | R4-B4 | `char_pointer_tests.rs` の `handler_move_sends_then_suppresses_same_position` | `move_delivers_surface_point_while_throttle_compares_client_px` が同じ表明を全部持つ | 回 1・2 で同じ重なりの兄弟（`throttle_suppresses_same_position_hover`・`identity_scale…`）を消し、回 1 でこのテストの組み立てを書き直したときに残した |
 | R4-C7 | `areka-placement` の `spawn_assembly_tests.rs` の `every_window_has_hit_test_none` | 窓の数を確かめずに回すので、窓が 0 枚でも緑 | 回 1 で `HitTest::none()` の表明を移して書いたとき |
 
+##### 回 4 の総括（Fable・2026-11-22）
+
+6 件はどれも「前の回が直した事実を、同じ事実を言う別の行が古いまま言い続けた」形。6 件を直し、そのうえで回 1〜4 が直した事実を 1 つずつ挙げ、範囲（`crates/areka-input/` の全部と、design.md「Modified Files（範囲の外）」の表のファイル）を事実ごとに grep して、同じ事実を言う行を全部今のコードと突き合わせた。直したのはコメントと doc で、コードを変えたのは R4-B4（重なったテスト 1 本を消す）・R4-C7（表明 1 行を足す）と、probe が画面に出す説明の文字列 1 行だけ。本番のコードは変えていない。
+
+| 連鎖 | 直した所 | 連鎖が閉じた根拠 |
+|---|---|---|
+| 終了要求の送り手（R4-P1） | `lib.rs` の `on_char_pointer_pressed` の doc と本文のコメントを「メニューの「終了」と OS の窓の閉鎖要求の受け口」へ | `send_close_request` を呼ぶ本番のコードは本体の `menu/mod.rs` と `app_exit.rs`（`on_ghost_os_close`）の 2 つ（ツリー全体を grep）。範囲の中で終了要求の送り手を言う行は下の「終了の道」の行で全部で、どれも 2 つを言う |
+| 押下の節の見出し（R4-A4） | 「右/中 down」を「右 down」へ | 範囲のテストの説明に「右/中」は残っていない。`balloon_pressed.rs` の doc の「右・中ボタン down は `false` 素通し」は本番の分岐（`!left_down`）の説明で、テストが見る範囲の話ではない |
+| 「副作用ゼロ」（R4-A5） | `pressed_tunnel_and_resource_degrade…` の doc の 1 行目を「false を返して縮退する」へ・`Degrade` の doc を「縮退シナリオの分類」へ・節の見出しの「で副作用が無いこと」を消した | 「副作用ゼロ」が残るのは移動の側（`moved_tunnel_and_resource_degrade…` の doc と中のコメント）だけで、そこは `choice_hover_inject` 無しと `BalloonWiring.hover` の不変を表明している |
+| 重複へ退化する条件（R4-A6） | 「choice_active=false・行あり」を「choice_active=false」へ | 隣の `moved_records_hover_per_scope_independently` は選択肢の無い文字の層で滞在を見る。重なるのは `choice_active` が偽になったときだけ |
+| 重なったテスト（R4-B4） | `handler_move_sends_then_suppresses_same_position` を消した | 名はツリー全体で `char_pointer_tests.rs` と完了済みの spec の記録とこの記録にしか無い（本体・`doc/` は指していない）。残る `move_delivers_surface_point_while_throttle_compares_client_px` が初回の送出（スコープ・当たり判定・種類・座標）と同じ位置の抑止を全部表明している。間引きの「動いたか」を一時だけ外すと、このテストが「同一 client px は hover 抑制」で赤になることを確かめてから戻した |
+| 窓の数（R4-C7） | `every_window_has_hit_test_none` に `assert_eq!(entities.len(), 4)` を足した | テストの中の `spawn_ghost_windows` を一時だけ外すと `left: 0, right: 4` で赤になることを確かめてから戻した。同じファイルで `ghost_window_entities` を回すほかの 3 本は窓の数（4）を先に表明している |
+
+洗い出した事実と、直した行（どれも範囲の中・コメントと doc）。
+
+| 事実（今のコード） | 直した行 |
+|---|---|
+| 終了の道: 利用者起因の終了要求を送るのはメニューの「終了」と OS の窓の閉鎖要求の受け口の 2 つ。強制退避は別の道（全窓を閉じて終了を指示する）で、結線の無い起動では OS の窓の閉鎖要求も直に閉じる | `lib.rs` の 2 か所（R4-P1）・同じ関数のコメントの「固まったゴーストから抜ける唯一の口」（「唯一の」を消した）・`char_pointer_menu_tests.rs` の「スコープが載る性質は本体のメニューのテストが持つ」（OS の窓の閉鎖要求のテストも持つ）・`areka-placement` の `spawn.rs` の `//!` の「終了指示は右クリックメニューの「終了」が送る」（要件 7.4 の 5）・`collision-probe.rs` が画面に出す説明の「本番の終わり方はメニューの「終了」」（文字列 1 行。読む道具が無いことを grep で確かめた） |
+| ハンドラの持ち主と付け方: キャラ窓とバルーン窓の受け手はこの crate が持ち、本体の窓を作るクロージャが spawn の直後に `attach_char_pointer_handlers`・`attach_balloon_pointer_handlers` を呼ぶ | `shell_box_handler_tests.rs` の「本体のポインタのハンドラ」「本体の押下ハンドラ」「本体の移動ハンドラ」の 3 行（指しているのは crate の根の `on_char_pointer_moved`・`on_char_pointer_pressed`）を「crate の根の」へ |
+| 系の登録と結線: 登録の関数 6 つ（`register_user_break_drain`・`register_balloon_leave_system`・`register_box_leave_system`・`register_choice_drain`・`register_char_watch`・`register_balloon_wheel`）は本体の系の登録の口からプロセスに 1 回。`dispatch_pointer_events` の前に置くのは `register_user_break_drain`・`register_char_watch`・`register_balloon_wheel` の 3 つ。結線（`wire_mouse_input`・`wire_choice_drain`・`wire_user_break`・`wire_balloon_choice`）はゴーストの起動ごとで、窓への結線が成立しなかった起動（LogSink）では `wire_mouse_input`・`wire_choice_drain`・`wire_balloon_choice` は呼ばれない | `user_break.rs` の `register_user_break_drain` の doc の「「前」はここだけである」（取り出しで前に置くのはここだけ）・`choice_drain.rs` の `drain_choice_selections` の doc の「理論上不到達」（結線の無い起動では毎フレーム通る） |
+| `wire_balloon_choice` が入れる持ち物は 4 つ（`BalloonWiring`・`ChoiceSelectionInbox`・`BalloonHover`・`ShellBoxHover`） | `balloon.rs` の `wire_balloon_choice` の doc の「`BalloonWiring`＋`ChoiceSelectionInbox`」・`balloon_wiring_tests.rs` のコメントの「BalloonWiring／Inbox 挿入」 |
+| `HoverAction` の腕と `active` の意味: 腕は `NoopInactive`・`ResetOwnState`・`Keep`・`Inject`。`active` は押せる範囲（選択肢かアンカー）があるか（`hit_active`）で、選択肢が出ているかではない。決定を場所へ当てるのは `apply_hover`（普通のバルーンと箱の移動・離脱が使う） | `balloon.rs` の `HoverAction` の doc の「移動ハンドラと離脱システムの双方が解釈する」・`hover_action` の doc の「表示中フラグ」・`BalloonWiring` の doc の「選択肢消滅時」・`balloon_pressed.rs` のコメントの「非表示（active=false）」・`balloon_pointer_handler_tests.rs` の 5 か所（「choice 非表示」2 つ・「非表示中は hover 追従なし」・「非表示=inactive」・「非表示中クリックは棄却: choice_active=false の実 runtime」）・`balloon_leave_tests.rs` の「choice 非表示」。`balloon_pure_core_tests.rs` は節の頭に「この檻の「表示中」「非表示」は `active` の真偽を指す」の 2 行を足した（表明の文も同じ語を使うので、語は変えずに意味を書いた） |
+| 縮退と戻り値: バルーン窓の押下は、矢印を取った・選択を発行した・中断を受け入れたときに真。棄却の後も中断の入口は通る | `balloon_pressed.rs` の戻り値の doc の「棄却…時は `false`」（棄却は中断を受け入れなければ偽） |
+| 選択の送り手: 発行は押下の 2 か所（普通のバルーン・箱）から `dispatch_selection`。`BalloonWiring::send_selection` は `bool` を返す | `choice_drain.rs` の `//!` の「balloon の押下ハンドラは既に一度きり発行を保証している」（箱の押下も）・`balloon.rs` の `ChoiceSelectionInbox` の doc の「`Err` にならず」 |
+| `MouseWiring` の送出の口の呼び手・crate の外が呼ぶ操作 3 つ・`char_scope` の外の使い手 | 食い違い無し（本体の `menu/trigger.rs`・`menu/mod.rs`・`app_exit.rs` を grep で照合） |
+| ホイールの行数を読む条件（`balloon_wheel_with`・`char_watch_with` の `read_lines`） | 食い違い無し |
+| 当たりの判定が見る欄（種類と rect）・GPU の許可を落とす順・ドラッグの土台の順（spawn → attach → 偽の `WindowHandle`）・「知らせ 0 件」・wintf の doc の `style` と `ex_style`・`collision-probe` の依存の向きの理由 | 食い違い無し |
+| コメントが `` ` `` で囲んで名指す識別子とファイル名 | 範囲の 60 ファイルを機械で照合し、コードに無い名は SHIORI のイベント名（`OnMouseDoubleClickEx`）・記録の名の頭（`anchor_`）・Win32 の引数名・bevy の関数名（`chain_ignore_deferred`）・説明のための例だけだった |
+
+洗い出しで見つけたが触っていない行（コメントでも doc でもない・または範囲の外）。
+
+- `balloon_pressed.rs` の記録の文「クリック確定を棄却（非表示中 or 非ヒット）: 非発行」。ログの行の文は外への約束なので変えない（記録の名 `choice_click_rejected` と `reason` は今の意味のとおり）。
+- `balloon_pointer_handler_tests.rs`・`balloon_pure_core_tests.rs` の表明の文の「非表示」「表示中」。前者は選択肢もアンカーも無い（または選択肢のある）文字の層で動かしていて、文はその場面のとおり。後者は節の頭に足した 2 行が語の意味を書く。
+- `drag_tests.rs` の `click_without_move_and_double_click_send_no_drag` の「動かさないクリック（開始の無い終了）」。開始の無い終了は wintf の溜めが捨てるので包みへ届かないが、このテストは wintf の本物の溜めと配りを通していて、捨てなくなれば終了の知らせが届いて赤になる（回 4 で消した保存の比べとは違い、落ちる道がある）。
+- 本体の `ghost_session.rs` のコメントの「`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入」。本体のファイルは触らない（要件 7.3）。完了の棚卸で `audit-areka-app` へ申し送る。
+
 ### 12.5 既定のブランチとの差分（要件 9.5）
 
 `git diff --stat f6405e09`（`git merge-base HEAD origin/main`）の作業ツリーで数えた。

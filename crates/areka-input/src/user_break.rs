@@ -213,7 +213,7 @@ pub fn wire_user_break(
 /// 押下の判定より先に旗へ畳み込むためである。後ろに置くと、旗が 1 巡遅れて
 /// 効く。`dispatch_pointer_events` 自身は wintf の既定の登録（`EcsWorld::new`）で `drain_task_pool_commands` の後に置かれているだけ
 /// なので、前に 1 本置いても順序は循環しない。隣の取り出し（`fn register_readme_drain`・
-/// `fn register_choice_drain`）はどれも「後」で、「前」はここだけである。
+/// `fn register_choice_drain`）はどれも「後」で、取り出しで「前」に置くのはここだけである。
 ///
 /// 呼び手は本体の系の登録の口（プロセスに 1 回）。
 pub fn register_user_break_drain(world: &mut World) {

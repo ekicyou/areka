@@ -191,7 +191,7 @@ crates/areka-placement/src/
 | `crates/areka-runtime/src/balloon_hover_tests.rs`（新） | `balloon_hover_defaults_to_false_for_every_scope`・`clear_balloon_hover_clears_that_scope_only_and_is_idempotent` | 指摘 31 |
 | `crates/areka-runtime/src/shell_box_hover.rs` | 末尾に `#[cfg(test)] #[path = "shell_box_hover_tests.rs"] mod tests;` の 3 行・`//!` の「入力の側は `pub(crate) use` で出し直す」（再輸出を消すと古びる）と 19 行の `areka_input::shell_box::next_box_hover` の名指しを今の事実に | 指摘 33 |
 | `crates/areka-runtime/src/shell_box_hover_tests.rs`（新） | `settle_drops_vanished_box`・`hover_mark_does_not_survive_vanished_text`（滞在は `ShellBoxHover::set` で直に置く形に書き直す）。箱の名前は `fold_boxes`＋`parse_boxes` で作る（`shell_box_assets_tests.rs` と同じ作法） | 指摘 33 |
-| `crates/areka-placement/src/spawn.rs` | 末尾の mod の並びに `#[cfg(test)] #[path = "spawn_assembly_tests.rs"] mod assembly_tests;` の 3 行 | 指摘 32 |
+| `crates/areka-placement/src/spawn.rs` | 末尾の mod の並びに `#[cfg(test)] #[path = "spawn_assembly_tests.rs"] mod assembly_tests;` の 3 行・`//!` の終了指示の送り手の一文を今の事実に（22 行の決まり） | 指摘 32 |
 | `crates/areka-placement/src/spawn_assembly_tests.rs`（新） | 13 本を移す。import は `super::…`・`super::test_support::…`・`crate::…` に。名の札 `t_i1_`〜`t_i3_` と中の札・経緯の語は移すときに消す | 指摘 32・47 |
 | `crates/areka-placement/src/spawn_zorder_pair_deferred_tests.rs` | 17・152 行の doc コメントのテストの名の 1 語 | 指摘 47・設計の討議の議題 4 |
 | `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` | 342 行の doc コメントのテストの名の 1 語 | 指摘 47・設計の討議の議題 4 |

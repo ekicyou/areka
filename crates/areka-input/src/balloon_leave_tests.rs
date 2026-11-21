@@ -90,7 +90,7 @@ fn leave_anchor_only_balloon_clears_hover_via_inject_none() {
     );
 }
 
-/// バルーン所有 leave・非表示（ResetOwnState アーム）: choice 非表示・前回注入 Some(3) →
+/// バルーン所有 leave・押せる範囲が無い（ResetOwnState アーム）: 前回注入 Some(3) →
 /// 自前状態のみ None 整合し、**inject はしない**（上流原子性が正本＝choice_hover_inject を出さない）。
 #[test]
 fn leave_balloon_owned_inactive_resets_own_state_without_inject() {

@@ -34,7 +34,7 @@ use super::{BalloonWiring, click_selection, dispatch_selection};
 /// 座標は窓 client 物理 px を**無変換**で照合する（理由は [`hit_choice_row`] の座標契約 doc）。
 ///
 /// **戻り値**: 矢印の押下を取ったとき、`ChoiceSelection` を発行したとき、または利用者の中断を受け入れたとき `true`
-/// （棄却・縮退・非左押下・Tunnel 時は `false`。途中の早期復帰では中断も作らない）。
+/// （縮退・非左押下・Tunnel 時は `false`・棄却は中断を受け入れなければ `false`。途中の早期復帰では中断も作らない）。
 ///
 /// [`attach_balloon_pointer_handlers`] が `BalloonWindowMarker` 窓へ `OnPointerPressed` として挿入する。
 pub(crate) fn on_balloon_pointer_pressed(
@@ -119,7 +119,7 @@ pub(crate) fn on_balloon_pointer_pressed(
     };
 
     let selected_now = match selection {
-        // 非表示（active=false）or 非ヒット → 棄却（非発行）。理由を弁別して debug 発火。
+        // 押せる範囲が無い（active=false）か非ヒット → 棄却（非発行）。理由を弁別して debug 発火。
         None => {
             let reason = if !active { "inactive" } else { "no_hit" };
             tracing::debug!(

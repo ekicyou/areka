@@ -466,7 +466,7 @@ pub fn on_char_pointer_moved(
 ///   shutdown→`ForceQuit` 系列へ委ねる。起動に失敗した・固まったゴーストから抜ける口として残す。true。
 /// - **Ctrl+左ダブルクリック（結線済み・Shift 非押下）→ Ctrl は無視する**:
 ///   終了指示は送らない。下の「左ダブルクリック（Ctrl なし）」とまったく同じに扱う。
-///   利用者起因の終了指示を送るのはメニューの「終了」だけである。
+///   利用者起因の終了指示を送るのはメニューの「終了」と OS の窓の閉鎖要求の受け口である。
 /// - **左ダブルクリック（Ctrl なし）** → 当たり判定を解決し
 ///   `KanadeMsg::Mouse(DoubleClick{button: Left})` を送出。配信座標は resolver が返した
 ///   `surface_point`（縮約後サーフェス px）。true。
@@ -494,10 +494,10 @@ pub fn on_char_pointer_pressed(
     //
     // 結線前（ghost boot 失敗・boot 前）、または Ctrl+**Shift** のとき、統合操作で全窓を閉じて
     // 終了を指示し、`run()` 復帰→main shutdown→`ForceQuit` 系列へ委ねる。起動に失敗した・
-    // 固まったゴーストから抜ける唯一の口である。
+    // 固まったゴーストから抜ける口である。
     //
     // 結線済み（`MouseWiring` 在）で Shift 非押下なら Ctrl は無視し、下の左ダブルクリックの経路へ
-    // そのまま落とす。終了指示はメニューの「終了」だけが送る。
+    // そのまま落とす。終了指示を送るのはメニューの「終了」と OS の窓の閉鎖要求の受け口である。
     let wired = world.get_non_send::<MouseWiring>().is_some();
     if state.ctrl_down && state.double_click == DoubleClick::Left && (!wired || state.shift_down) {
         tracing::info!(

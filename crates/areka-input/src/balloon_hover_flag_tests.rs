@@ -39,7 +39,7 @@ fn moved_records_hover_when_choice_active_but_no_row_hit() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let rt = runtime_with_active_choice("0");
-    // 前提を自前で主張する（ヘルパが劣化して choice_active=false・行あり になると、このテストは
+    // 前提を自前で主張する（ヘルパが劣化して choice_active=false になると、このテストは
     // 隣の `moved_records_hover_per_scope_independently` の重複へ静かに退化する）。
     assert!(
         rt.borrow().choice_active(&ActorKey::from("0")),

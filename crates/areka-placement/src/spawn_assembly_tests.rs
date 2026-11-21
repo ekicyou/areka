@@ -31,7 +31,9 @@ fn every_window_has_hit_test_none() {
 
     spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
 
-    for e in ghost_window_entities(&mut world) {
+    let entities = ghost_window_entities(&mut world);
+    assert_eq!(entities.len(), 4);
+    for e in entities {
         assert_eq!(world.get::<HitTest>(e).copied(), Some(HitTest::none()));
     }
 }

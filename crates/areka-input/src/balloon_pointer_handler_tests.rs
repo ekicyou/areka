@@ -90,7 +90,7 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
     );
 }
 
-/// 消滅時整合（ResetOwnState アーム）: choice 非表示・前回注入 Some(3) → 自前状態のみ
+/// 消滅時整合（ResetOwnState アーム）: 押せる範囲が無い・前回注入 Some(3) → 自前状態のみ
 /// None 整合し、**inject はしない**（上流原子性が正本＝choice_hover_inject を発火しない）。
 #[test]
 fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
@@ -130,8 +130,8 @@ fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
     );
 }
 
-/// 完全 no-op（NoopInactive アーム）: choice 非表示・前回注入なし → 自前状態を触らず
-/// inject もしない（非表示中は hover 追従なし）。
+/// 完全 no-op（NoopInactive アーム）: 押せる範囲が無い・前回注入なし → 自前状態を触らず
+/// inject もしない。
 #[test]
 fn moved_inactive_no_prior_injection_is_full_noop() {
     let mut world = World::new();
@@ -164,8 +164,8 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
 // -------------------------------------------------------------------------
 // on_balloon_pointer_pressed の配線
 //
-// 合成 `PointerState` を直接ハンドラへ与え、(a) 非左押下（右/中 down）素通し、(b) marker 不在の縮退、
-// (c) 棄却経路（非表示=inactive／非ヒット=no_hit の reason 弁別）を実 `TextLayerRuntime` で
+// 合成 `PointerState` を直接ハンドラへ与え、(a) 非左押下（右 down）素通し、(b) marker 不在の縮退、
+// (c) 棄却経路（押せる範囲が無い=inactive／非ヒット=no_hit の reason 弁別）を実 `TextLayerRuntime` で
 // 観測する。確定発行のフィールド一致・消滅時の棄却は `balloon_pure_core_tests.rs` の
 // `click_selection` のテストが持つ。
 //
@@ -226,7 +226,7 @@ fn pressed_missing_marker_errors_and_noop() {
     );
 }
 
-/// 非表示中クリックは棄却: choice_active=false の実 runtime へ左クリック →
+/// 押せる範囲が無いときのクリックは棄却: 選択肢もアンカーも無い実 runtime へ左クリック →
 /// `debug!(choice_click_rejected, reason="inactive")`。
 #[test]
 fn pressed_inactive_choice_rejected_with_reason_inactive() {
@@ -297,7 +297,7 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
 }
 
 // -------------------------------------------------------------------------
-// 資源縮退・Tunnel 素通しで副作用が無いこと
+// 資源縮退・Tunnel 素通し
 //
 // 縮退の判断分岐（Tunnel 短絡／RuntimeWiring 不在=debug／BalloonWiring 不在=error）を、両ハンドラ×
 // {Tunnel, RuntimeWiring 不在, BalloonWiring 不在} で、戻り値と記録で固定する。移動は観測資源を同居させて
@@ -310,7 +310,7 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
 // （別途スレッドテストは不要）。
 // -------------------------------------------------------------------------
 
-/// 縮退シナリオ（副作用ゼロを確かめる分類）。
+/// 縮退シナリオの分類。
 #[derive(Clone, Copy)]
 enum Degrade {
     /// Tunnel 相（全資源 present でも即 false・一切触れない）。
@@ -410,7 +410,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
     }
 }
 
-/// pressed: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する。
+/// pressed: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも false を返して縮退する。
 ///
 /// 戻り値 false と対応する記録（Tunnel=記録なし・RuntimeWiring 不在=DEBUG・BalloonWiring 不在=ERROR）で固定する。
 #[test]

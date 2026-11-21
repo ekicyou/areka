@@ -3,7 +3,7 @@
 //! UI スレッドの受信口 `ChoiceSelectionInbox`（`wire_balloon_choice` が挿入・所有は
 //! `balloon` mod）を毎フレーム drain し、`DispatcherMsg::Choice` へ写像して dispatcher の
 //! inbox 経由で kanade へ転送する薄い配線層。**判断・フィルタ・重複排除は一切行わない**——一回性の調停は
-//! kanade 側が単一真実源であり、balloon の押下ハンドラは既に
+//! kanade 側が単一真実源であり、押下のハンドラ（普通のバルーン・箱）は既に
 //! 一度きり発行を保証している。本層は**到着順に全件を素通し**する。
 //!
 //! 判断分岐は「送出失敗（dispatcher 停止後）で warn 記録して継続する」1 点と、下の種類の振り分けだけ。
@@ -112,7 +112,7 @@ fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<Dispatcher
 /// `forward_all` へ委譲する。
 ///
 /// 資源不在は self-gating の no-op（`trace!`＋return）。
-/// どちらも本体がゴーストの起動の結線で置くため理論上不到達だが、
+/// どちらも本体がゴーストの起動の結線で置くので、不在は結線の前と結線の無い起動のあいだである。
 /// 毎フレーム走る排他システムゆえ panic せず無記録でもなく縮退する。
 pub(crate) fn drain_choice_selections(world: &mut World) {
     let Some(inbox) = world.get_non_send::<ChoiceSelectionInbox>() else {

@@ -197,7 +197,7 @@ fn registered_leave_system_runs_in_input_schedule_and_clears_balloon_hover() {
     let runtime = runtime_with_active_choice("0");
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
 
-    // wire で BalloonWiring／Inbox 挿入、続けて leave system 登録。
+    // wire で持ち物を挿入、続けて leave system 登録。
     wire_balloon_choice(&mut world);
     register_balloon_leave_system(&mut world);
     // wire が挿入した BalloonWiring に前回注入値 Some(2) を仕込む（解除対象）。

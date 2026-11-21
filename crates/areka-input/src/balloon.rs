@@ -200,7 +200,7 @@ pub(super) fn apply_hover(
 ///   `ChoiceSelectionInbox` へ流れ、drain が kanade へ転送する（`resolve_choice` は本 crate から
 ///   直接呼ばない）。
 /// - `hover`: scope→最後に注入した hover ordinal の自前追跡（表示層に getter が無いため）。
-///   表示状態の正本ではなく、(a) 同値再注入の遷移検出、(b) 選択肢消滅時の自前状態整合
+///   表示状態の正本ではなく、(a) 同値再注入の遷移検出、(b) 押せる範囲が消えた時の自前状態整合
 ///   （`None` 上書き）のみに用いる。
 ///
 /// 挿入は [`wire_balloon_choice`]、消費はポインタハンドラ（`on_balloon_pointer_moved`／
@@ -245,7 +245,7 @@ impl BalloonWiring {
 
 /// 選択確定通知の受け口。
 ///
-/// `Receiver` 生存により `BalloonWiring::send_selection` は `Err` にならず、発行の mpsc 観測と
+/// `Receiver` 生存により `BalloonWiring::send_selection` は失敗せず、発行の mpsc 観測と
 /// 実機ログが成立する。構築は [`wire_balloon_choice`]、受信は drain 排他システム `choice_drain` の
 /// `drain_choice_selections`（系の登録は `register_choice_drain` を本体の系の登録の口からプロセスに 1 回・
 /// 送り口は `wire_choice_drain` がゴーストの起動ごとに置く）。
@@ -295,7 +295,7 @@ pub(crate) fn hit_choice_row(rows: &[ChoiceHitRow], x: f32, y: f32) -> Option<us
     last_hit_of(SpanKind::Choice).or_else(|| last_hit_of(SpanKind::Anchor))
 }
 
-/// hover 遷移の決定。`hover_action` が返し、移動ハンドラと離脱システムの双方が解釈する。
+/// hover 遷移の決定。`hover_action` が返し、`apply_hover` が場所へ当てる（普通のバルーンと箱の移動・離脱が使う）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum HoverAction {
     /// 押せる範囲が無く自前状態も None——何もしない。
@@ -312,7 +312,7 @@ pub(crate) enum HoverAction {
 
 /// hover 遷移の決定（純関数）。
 ///
-/// 表示中フラグ・hit 結果（ordinal 展開済）・前回注入値の 3 入力から決める。
+/// 押せる範囲の有無・hit 結果（ordinal 展開済）・前回注入値の 3 入力から決める。
 ///
 /// - `active == false`（押せる範囲が無い）:
 ///   - `last_injected == None` → [`HoverAction::NoopInactive`]（未注入ゆえ何もしない）。
@@ -395,7 +395,7 @@ pub fn attach_balloon_pointer_handlers(world: &mut World) {
     }
 }
 
-/// mpsc チャネルを生成し `BalloonWiring`＋`ChoiceSelectionInbox` を NonSend 挿入する
+/// mpsc チャネルを生成し `BalloonWiring`・`ChoiceSelectionInbox`・`BalloonHover`・`ShellBoxHover` を NonSend 挿入する
 /// （`clear_balloon_hover_on_leave` の登録は [`register_balloon_leave_system`]）。
 ///
 /// `wire_mouse_input` と同型にゴーストの起動ごとに**同期**（schedule 実行外）で呼ばれる

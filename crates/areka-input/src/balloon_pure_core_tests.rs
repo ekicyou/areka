@@ -106,7 +106,8 @@ fn hit_pathological_overlap_returns_last_match_deterministically() {
 //
 // active・hit_ordinal・last_injected の 3 入力から hover 遷移を決める純関数の
 // 全分岐（非表示時無処理／消滅時自前整合／同値維持／新規注入／解除注入）を
-// World・runtime 不要で決定的に網羅する。
+// World・runtime 不要で決定的に網羅する。この檻と下の click_selection の檻の「表示中」「非表示」は
+// `active`（押せる範囲＝選択肢かアンカーがあるか）の真偽を指す。
 // -------------------------------------------------------------------------
 
 /// 非表示時無処理: `active == false` かつ `last_injected == None` は

@@ -3,7 +3,7 @@
 //
 // 箱の四角（`shown_boxes`）と箱の選択肢の当たり行（`choice_hit_rows_at`）は提示（GPU）でしか
 // 埋まらないので、箱の中の操作は前段の本体（`move_with_point`・`press_with_point`）へ作った写しを
-// 渡して確かめる。シェルへ届く通知は、本体のポインタのハンドラと同じ並び（前段が「処理した」なら
+// 渡して確かめる。シェルへ届く通知は、crate の根のポインタのハンドラと同じ並び（前段が「処理した」なら
 // 落とさない）で既存の道を続けて呼んで数える（`Fixture::moved`・`Fixture::pressed`）。このとき
 // world に `RuntimeWiring` を置かないので、ハンドラの中の本物の前段は何もしない（写しを 2 度当てない）。
 // 箱の外は `RuntimeWiring` を置いた本物のハンドラ（写しが空の文字の層）で、箱が無いときと同じ通知に
@@ -139,7 +139,7 @@ impl Fixture {
         self
     }
 
-    /// 本体の押下ハンドラと同じ並び: 前段が処理しなければ既存の道へ。
+    /// crate の根の押下ハンドラと同じ並び: 前段が処理しなければ既存の道へ。
     fn pressed(&mut self, at: (i32, i32), double_click: DoubleClick, point: BoxPoint) -> bool {
         let state = pointer(at, double_click);
         press_with_point(&mut self.world, 0, &state, point)
@@ -151,7 +151,7 @@ impl Fixture {
             )
     }
 
-    /// 本体の移動ハンドラと同じ並び。
+    /// crate の根の移動ハンドラと同じ並び。
     fn moved(&mut self, at: (i32, i32), point: BoxPoint) -> bool {
         let state = pointer(at, DoubleClick::None);
         move_with_point(

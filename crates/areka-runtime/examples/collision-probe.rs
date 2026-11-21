@@ -232,7 +232,7 @@ fn main() -> Result<()> {
     );
     println!("  受け入れ: rustdoc プロトコル ①〜⑥（dpi≠96 を2水準必達・96 のみは不合格）");
     println!(
-        "  終了  : {SMOKE_EXIT_ENV} の有界 auto-exit のみ（ダブルクリックでは終了しない＝OnPointerPressed 未装着・本番の終わり方はメニューの「終了」）"
+        "  終了  : {SMOKE_EXIT_ENV} の有界 auto-exit のみ（ダブルクリックでは終了しない＝OnPointerPressed 未装着・本番の終わり方はメニューの「終了」と OS の窓の閉鎖要求）"
     );
     println!();
 

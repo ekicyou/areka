@@ -170,3 +170,5 @@
 - `crates/areka-placement/src/spawn_assembly_tests.rs:352` の表明の文字列に「本檻」が残る（3.3 で移したテスト）。5.2 のかけ直しで見る。
 - 4.3: `doc/COMPAT_ARCHITECTURE.md:412` の旧名の 1 語は直していない（11-21 時点で `session-module-gather` が main に未着地・そのセッションが動いている）。新しい名は `session-module-gather` のセッションへ知らせた。本体 `crates/areka/src/app_exit_tests.rs:182` の旧名は 5.1 で `audit-areka-app` へ申し送る。
 - 範囲の外（完了の棚卸へ）: `crates/areka-runtime/src/frame_test_support.rs` の `gpu_attach_world` は World を GPU の許可より先に束ねる（panic のとき許可が World より先に落ちる）。5.2 で `gpu_balloon_world` の同じ形を直した。design の範囲の外の表に無いので触っていない。
+- 範囲の外（完了の棚卸で `audit-areka-app` へ）: 本体 `crates/areka/src/ghost_session.rs` のコメント「`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入」は、`wire_balloon_choice` が 4 つを挿すので古い。
+- `emo_text_debugs` を `events_named` へ寄せる上の申し送りは成り立たない（DEBUG の行に `event` の欄が無い）。寄せずに閉じる。

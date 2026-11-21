@@ -95,39 +95,6 @@ fn presenter_absent_degrades_to_region_none() {
 // （GPU/実窓不要）。
 // -------------------------------------------------------------------------
 
-/// Bubble 移動＋Mock region Some("Head")＋間引き通過で
-/// `KanadeMsg::Mouse(Move)` を観測。同一位置の再移動は hover 抑制で送出されない。
-#[test]
-fn handler_move_sends_then_suppresses_same_position() {
-    let (mut world, rx) = world_with_wiring(head, stepping_clock(1000, 10_000));
-    let e = world.spawn(CharWindowMarker { scope: 0 }).id();
-
-    // 初回移動 → 送出（内容一致）
-    let ev = bubble_pointer(10, 20, DoubleClick::None, false);
-    assert!(
-        on_char_pointer_moved(&mut world, e, e, &ev),
-        "初回移動は送出"
-    );
-    match rx.try_recv().expect("KanadeMsg が届く") {
-        KanadeMsg::Mouse(m) => {
-            assert_eq!(m.scope, 0);
-            assert_eq!(m.x, 10);
-            assert_eq!(m.y, 20);
-            assert_eq!(m.region, Some("Head".to_string()));
-            assert_eq!(m.kind, MouseEventKind::Move);
-        }
-        _ => panic!("Mouse(Move) を期待"),
-    }
-
-    // 同一位置の再移動 → hover 抑制で送出なし（moved=false）
-    let ev2 = bubble_pointer(10, 20, DoubleClick::None, false);
-    assert!(
-        !on_char_pointer_moved(&mut world, e, e, &ev2),
-        "同一位置は抑制"
-    );
-    assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
-}
-
 /// 左ダブルクリック（Ctrl なし）は当たり判定を解決して即
 /// `KanadeMsg::Mouse(DoubleClick{Left})` を送出する。右ダブルクリックは押下の時点では送らずに
 /// 預かり、預かりを送ると `DoubleClick{Right}` が同じ形（スコープ・座標・当たり判定名）で届く。

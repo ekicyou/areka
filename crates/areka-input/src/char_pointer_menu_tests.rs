@@ -107,7 +107,7 @@ fn sending_the_pending_one_delivers_one_right_double_click_in_surface_coordinate
 /// 相方側（スコープ 1）で見る——Ctrl を見て早期に戻れば `rx` が空で落ち、強制退避の腕へ
 /// 落ちれば終了の指示が立って表明が落ちる。
 ///
-/// 「終了指示に操作した窓のスコープが載る」性質は本体のメニューのテストが持つ。ここでは重ねない。
+/// 「終了指示に操作した窓のスコープが載る」性質は本体のメニューと OS の窓の閉鎖要求のテストが持つ。ここでは重ねない。
 #[test]
 fn wired_ctrl_left_double_click_sends_no_close_request_on_the_partner_window() {
     let (mut world, rx) = world_with_half_scale_bust();
