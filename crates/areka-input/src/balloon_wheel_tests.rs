@@ -180,3 +180,10 @@ fn without_runtime_wiring_does_nothing() {
         "{lines:?}"
     );
 }
+
+/// OS の行数 `u32::MAX`（`WHEEL_PAGESCROLL`）は 1 画面ずつ、それ以外はその行数。
+#[test]
+fn wheel_lines_from_maps_the_page_scroll_value_to_page_and_others_to_lines() {
+    assert_eq!(super::wheel_lines_from(u32::MAX), WheelLines::Page);
+    assert_eq!(super::wheel_lines_from(5), WheelLines::Lines(5));
+}

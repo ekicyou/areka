@@ -93,9 +93,6 @@ pub enum RegionSource {
     /// 実運用: presenter で `resolve_hit_region` を呼ぶ。
     Presenter,
     /// 決定論檻: 固定写像で `HitRegion` を返す。
-    ///
-    /// `#[allow(dead_code)]`: mock seam ゆえ本番からは構築されない（テスト専用・恒久）。
-    #[allow(dead_code)]
     Mock(fn(u32, i64, i64) -> HitRegion),
 }
 

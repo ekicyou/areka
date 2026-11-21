@@ -83,10 +83,7 @@ fn to_anchor_input(sel: ChoiceSelection) -> AnchorInput {
 ///   する（dispatcher 停止後は終了系で正常）。アンカーの知らせは同じ形の記録を
 ///   `anchor_forward_failed` の名前で残す。
 /// - **種類で伝言を選ぶ**: 選択肢は `DispatcherMsg::Choice`、アンカーは `DispatcherMsg::Anchor`。
-///
-/// 戻り値は送出に成功した件数（呼び手は使わないが檻の観測点）。
-fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<DispatcherMsg>) -> usize {
-    let mut forwarded = 0usize;
+fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<DispatcherMsg>) {
     // try_recv ループ＝到着順に全件（滞留は 1 件も残さない）。
     while let Ok(sel) = inbox.try_recv() {
         // scope と id は送出後に使えないため、ログ用へ先に控える（写像は所有権を消費する）。
@@ -111,11 +108,8 @@ fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<Dispatcher
                 id = %id,
                 "dispatcher Sender 送出失敗（actor 停止後）: 記録して次の通知へ継続"
             );
-            continue;
         }
-        forwarded += 1;
     }
-    forwarded
 }
 
 /// 受信口 drain の排他システム（Input スケジュール）。
@@ -373,11 +367,7 @@ mod tests {
                 .expect("受信口は生存している");
         }
 
-        let forwarded = forward_all(&sel_rx, &dispatcher_tx);
-        assert_eq!(
-            forwarded, 4,
-            "滞留 4 件は全件送出される（暗黙に捨てない・Req1.2）"
-        );
+        forward_all(&sel_rx, &dispatcher_tx);
 
         for expected in arrivals {
             let got = expect_choice(dispatcher_rx.try_recv().expect("到着順に届く"));
@@ -402,12 +392,11 @@ mod tests {
         let (_sel_tx, sel_rx) = mpsc::channel::<ChoiceSelection>();
         let (dispatcher_tx, dispatcher_rx) = mpsc::channel::<DispatcherMsg>();
 
-        assert_eq!(
-            forward_all(&sel_rx, &dispatcher_tx),
-            0,
-            "空 inbox は 0 件送出"
+        forward_all(&sel_rx, &dispatcher_tx);
+        assert!(
+            dispatcher_rx.try_recv().is_err(),
+            "空 inbox では何も届かない"
         );
-        assert!(dispatcher_rx.try_recv().is_err(), "何も届かない");
     }
 
     /// 転送失敗分岐: dispatcher 受信端が drop 済みでも **panic せず**、
@@ -431,12 +420,10 @@ mod tests {
                 .expect("受信口は生存している");
         }
 
-        let mut forwarded = 0usize;
         let logs = capture_logs(|| {
-            forwarded = forward_all(&sel_rx, &dispatcher_tx);
+            forward_all(&sel_rx, &dispatcher_tx);
         });
 
-        assert_eq!(forwarded, 0, "受信端 drop 後は 1 件も送出成功しない");
         assert_eq!(
             sel_rx.try_recv().unwrap_err(),
             TryRecvError::Empty,
@@ -488,7 +475,7 @@ mod tests {
             sel_tx.send(sel).expect("受信口は生存している");
         }
 
-        assert_eq!(forward_all(&sel_rx, &dispatcher_tx), 4, "4 件とも送る");
+        forward_all(&sel_rx, &dispatcher_tx);
 
         let src = dirty_selection();
         let anchor = AnchorInput {
@@ -499,6 +486,7 @@ mod tests {
         };
         let choice = to_choice_input(src);
         let got: Vec<DispatcherMsg> = dispatcher_rx.try_iter().collect();
+        assert_eq!(got.len(), 4, "4 件とも送る");
         assert!(
             matches!(
                 &got[..],

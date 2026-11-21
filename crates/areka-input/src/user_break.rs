@@ -267,22 +267,21 @@ fn press_with_visibility(
     // 読んでから上書きする。単押しでも上書きするのは、選択を確定した 1 打目が単押しとして届くため。
     let prev_press_selected = wiring.prev_press_selected;
     wiring.prev_press_selected = selected_now;
-    if double_click != DoubleClick::Left {
-        return false;
-    }
-    tracing::trace!(
-        event = "balloon_break_detected",
-        scope,
-        "バルーンの左ダブルクリックを検出"
-    );
-
-    match judge_press(
+    let verdict = judge_press(
         double_click,
         selected_now,
         prev_press_selected,
         balloon_visible,
         wiring.no_user_break,
-    ) {
+    );
+    if verdict != PressVerdict::NotDoubleClick {
+        tracing::trace!(
+            event = "balloon_break_detected",
+            scope,
+            "バルーンの左ダブルクリックを検出"
+        );
+    }
+    match verdict {
         PressVerdict::NotDoubleClick => false,
         PressVerdict::ConsumedBySelection => {
             tracing::debug!(

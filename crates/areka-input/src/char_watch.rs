@@ -155,13 +155,9 @@ pub fn char_watch_with(world: &mut World, mut read_lines: impl FnMut() -> WheelL
         .get_non_send::<RuntimeWiring>()
         .map(|w| Rc::clone(w.runtime()));
     let mut rotations: HashMap<Entity, (u32, WheelRotation)> = HashMap::new();
+    let hovers = wiring_mut(world).hover.clone();
     for o in overs {
-        let prev = world
-            .get_non_send::<MouseWiring>()
-            .expect("MouseWiring は系の頭で存在確認済み")
-            .hover
-            .get(&o.window)
-            .cloned();
+        let prev = hovers.get(&o.window).cloned();
         let moved = prev.as_ref().is_none_or(|p| p.client != o.client);
         if !moved && o.wheel == 0 {
             continue;

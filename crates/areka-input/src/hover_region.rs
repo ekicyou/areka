@@ -36,14 +36,6 @@ pub(super) struct HoverSend {
     pub region: Option<String>,
 }
 
-fn send(edge: HoverEdge, surface: (i64, i64), region: Option<String>) -> HoverSend {
-    HoverSend {
-        edge,
-        surface,
-        region,
-    }
-}
-
 /// 前の状態と今の見え方から、次の状態と送る出入り（送る順）を返す（7 行の表）。
 pub(super) fn plan_hover(
     prev: Option<&HoverState>,
@@ -57,9 +49,17 @@ pub(super) fn plan_hover(
             // 座標は窓の中で最後に見た位置。
             let mut sends = Vec::new();
             if p.region.is_some() {
-                sends.push(send(HoverEdge::Leave, p.surface, p.region.clone()));
+                sends.push(HoverSend {
+                    edge: HoverEdge::Leave,
+                    surface: p.surface,
+                    region: p.region.clone(),
+                });
             }
-            sends.push(send(HoverEdge::LeaveAll, p.surface, p.region.clone()));
+            sends.push(HoverSend {
+                edge: HoverEdge::LeaveAll,
+                surface: p.surface,
+                region: p.region.clone(),
+            });
             (None, sends)
         }
         HoverSighting::Over {
@@ -71,17 +71,33 @@ pub(super) fn plan_hover(
             let mut sends = Vec::new();
             match prev {
                 None => {
-                    sends.push(send(HoverEdge::EnterAll, surface, region.clone()));
+                    sends.push(HoverSend {
+                        edge: HoverEdge::EnterAll,
+                        surface,
+                        region: region.clone(),
+                    });
                     if region.is_some() {
-                        sends.push(send(HoverEdge::Enter, surface, region.clone()));
+                        sends.push(HoverSend {
+                            edge: HoverEdge::Enter,
+                            surface,
+                            region: region.clone(),
+                        });
                     }
                 }
                 Some(p) if p.region != region => {
                     if p.region.is_some() {
-                        sends.push(send(HoverEdge::Leave, surface, p.region.clone()));
+                        sends.push(HoverSend {
+                            edge: HoverEdge::Leave,
+                            surface,
+                            region: p.region.clone(),
+                        });
                     }
                     if region.is_some() {
-                        sends.push(send(HoverEdge::Enter, surface, region.clone()));
+                        sends.push(HoverSend {
+                            edge: HoverEdge::Enter,
+                            surface,
+                            region: region.clone(),
+                        });
                     }
                 }
                 Some(_) => {}

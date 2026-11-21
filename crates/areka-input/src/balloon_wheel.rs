@@ -105,6 +105,11 @@ pub(super) fn os_wheel_lines() -> WheelLines {
         );
         return WheelLines::Lines(DEFAULT_WHEEL_LINES);
     }
+    wheel_lines_from(lines)
+}
+
+/// OS が返した行数を `WheelLines` へ写す（`WHEEL_PAGESCROLL` は 1 画面ずつ）。
+fn wheel_lines_from(lines: u32) -> WheelLines {
     if lines == WHEEL_PAGESCROLL {
         WheelLines::Page
     } else {

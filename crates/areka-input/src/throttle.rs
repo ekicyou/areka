@@ -57,8 +57,7 @@ pub(crate) fn plan_mouse_move(
         return (
             MouseMoveThrottle {
                 last_pos: Some(pos),
-                last_sent_region: state.last_sent_region.clone(),
-                last_sent_ms: state.last_sent_ms,
+                ..state.clone()
             },
             false,
         );
@@ -88,8 +87,7 @@ pub(crate) fn plan_mouse_move(
         (
             MouseMoveThrottle {
                 last_pos: Some(pos),
-                last_sent_region: state.last_sent_region.clone(),
-                last_sent_ms: state.last_sent_ms,
+                ..state.clone()
             },
             false,
         )
