@@ -78,6 +78,7 @@ pub fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut Worl
         balloon_visibility: state,
         balloon_models,
         clock,
+        talk_ends,
         ..
     } = wiring;
 
@@ -93,6 +94,10 @@ pub fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut Worl
     let timeout_secs = configured_timeout_secs();
 
     let lifecycle = drain_lifecycle(lifecycle_rx, state);
+    *talk_ends += lifecycle
+        .iter()
+        .filter(|s| matches!(s, TalkLifecycleSignal::TalkEnded { .. }))
+        .count() as u64;
     let observations = collect_observations(
         presenter,
         &runtime,

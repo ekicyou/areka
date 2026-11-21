@@ -10,7 +10,11 @@
 //! 並べ直しは、窓のある全部のスコープの表示が決まる（表示した、または表示しないまま決まった）まで
 //! 預かる。仮の大きさで並べると、表示の後の照合で縮んだ分だけ先頭の窓が作業領域の端から離れる。
 //!
-//! 判定はゴースト・初回起動・特定のイベントを見ない。入力は窓の在庫・表示の拡大率・窓の組の帳簿だけである。
+//! 面の指令をまだ受けていない窓は、その指令を運んだトークが終わるまで待ち、終わったら表示しないまま
+//! 決まった（隠れたまま）と読む。
+//!
+//! 判定はゴースト・初回起動・特定のイベントを見ない。入力は窓の在庫・表示の拡大率・窓の組の帳簿と、
+//! トークの終わりの通し番号だけである。
 
 use std::collections::{BTreeSet, VecDeque};
 
@@ -90,6 +94,14 @@ impl Groups<'_> {
     }
 }
 
+/// 預かった位置の指令と、届いたときのトークの終わりの通し番号。
+pub(super) struct HeldCue {
+    cue: PositionCue,
+    talk_ends: u64,
+    /// 並べ直しの `reset_window_pos_held` を残したか（待つ間に 1 度だけ残す）。
+    held_logged: bool,
+}
+
 /// `\![set,sticky-window,…]` が組にする窓（読めない並びは何も組まないので空）。
 fn sticky_members(tokens: &[String]) -> Vec<u32> {
     parse_sticky_tokens(tokens)
@@ -105,7 +117,7 @@ fn sticky_members(tokens: &[String]) -> Vec<u32> {
 fn touched_scopes(
     cue: &PositionCue,
     groups: &Groups,
-    held: &VecDeque<PositionCue>,
+    held: &VecDeque<HeldCue>,
 ) -> Option<Vec<u32>> {
     match cue {
         PositionCue::Move(d) => {
@@ -127,7 +139,7 @@ fn touched_scopes(
                 .ledger_groups()
                 .filter(|g| g.source == StickySource::Script)
                 .flat_map(|g| g.members.iter().copied())
-                .chain(held.iter().flat_map(|c| match c {
+                .chain(held.iter().flat_map(|h| match &h.cue {
                     PositionCue::SetSticky { tokens } => sticky_members(tokens),
                     _ => Vec::new(),
                 }))
@@ -137,9 +149,9 @@ fn touched_scopes(
         // 動かすので、移動とは入れ替えても同じ。順を保つのは預かったバルーン側の指令とだけ。
         PositionCue::ResetBalloonPos => Some(
             held.iter()
-                .filter_map(|c| match c {
+                .filter_map(|h| match h.cue {
                     PositionCue::BalloonMoveLock { scope, .. }
-                    | PositionCue::SetAlignment { scope, .. } => Some(*scope),
+                    | PositionCue::SetAlignment { scope, .. } => Some(scope),
                     _ => None,
                 })
                 .collect(),
@@ -156,13 +168,14 @@ enum Settle {
     Pending,
 }
 
-fn settle<S: ShownRatioSource + ?Sized>(scope: u32, shown: &S) -> Settle {
+/// `talk_ended` は、指令を運んだトークが終わったか（終わる前は面の指令の来ていない窓にも面が来うる）。
+fn settle<S: ShownRatioSource + ?Sized>(scope: u32, shown: &S, talk_ended: bool) -> Settle {
     if shown.shown_ratio(scope).is_some() {
         return Settle::Shown;
     }
     match shown.never_shown(scope) {
-        // 面の指令をまだ受けていない窓には、これから面が来うる。
-        None | Some(NeverShown::NotRequested) => Settle::Pending,
+        None => Settle::Pending,
+        Some(NeverShown::NotRequested) if !talk_ended => Settle::Pending,
         Some(reason) => Settle::NeverShown(reason),
     }
 }
@@ -180,9 +193,13 @@ fn window_scopes(windows: &GhostWindows) -> impl Iterator<Item = u32> + '_ {
 }
 
 /// 窓があり、表示の決まっていないスコープ（昇順）。空なら並べ直しを当ててよい。
-fn pending_scopes<S: ShownRatioSource + ?Sized>(windows: &GhostWindows, shown: &S) -> Vec<u32> {
+fn pending_scopes<S: ShownRatioSource + ?Sized>(
+    windows: &GhostWindows,
+    shown: &S,
+    talk_ended: bool,
+) -> Vec<u32> {
     window_scopes(windows)
-        .filter(|&s| matches!(settle(s, shown), Settle::Pending))
+        .filter(|&s| matches!(settle(s, shown, talk_ended), Settle::Pending))
         .collect()
 }
 
@@ -194,6 +211,7 @@ fn move_waits<S: ShownRatioSource + ?Sized>(
     d: &MoveDirective,
     windows: &GhostWindows,
     shown: &S,
+    talk_ended: bool,
 ) -> Vec<(u32, Settle)> {
     let base = match d.base {
         MoveBase::Scope(base) => Some(base),
@@ -202,7 +220,7 @@ fn move_waits<S: ShownRatioSource + ?Sized>(
     std::iter::once(d.scope)
         .chain(base)
         .filter(|&s| windows.char_window(s as usize).is_some())
-        .map(|s| (s, settle(s, shown)))
+        .map(|s| (s, settle(s, shown, talk_ended)))
         .collect()
 }
 
@@ -240,23 +258,37 @@ impl Blocked {
 /// 預かる理由は 3 つ: 移動の対象か基準の窓の表示がまだ決まっていない（表示しないまま決まった窓への
 /// 移動は預からずに位置だけ置く）／並べ直しのとき窓のある
 /// どれかのスコープの表示がまだ決まっていない／それより前に預かった指令と同じ窓に関わる（追い越さない）。
-/// 記録は届いた巡に 1 度だけ残す（預かり続ける巡ごとには出さない）。
+/// 記録は届いた巡に 1 度だけ残す（預かり続ける巡ごとには出さない）。塞がれて届いた並べ直しは、自分が
+/// 表示を待ち始めた巡に 1 度残す。
+///
+/// 届いた指令には `arrived_talk_ends`（前に線を取り出したときの番号）を添え、`talk_ends`（今の番号）が
+/// それより進んだ指令だけ、運んだトークが終わったと読む。今の番号を添えると、トークの終わりと同じ巡に
+/// 届いた指令が次のトークの終わりまで待つ。
 ///
 /// 並べ直し（`\![execute,resetwindowpos]`）は、それより前に預かった移動を当てずに捨てる。並べ直しは
 /// 全部の窓を既定の位置へ置くので、順のまま当てても移動の結果は残らない（結果は順のまま当てたのと同じ）。
 /// 捨てないと、最初の面を表示しない窓への移動が並べ直しを預からせ、それに続く全部の指令が預かられ
 /// 続ける（表示されない窓が 1 つで列全体が詰まる）。
 pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
-    held: &mut VecDeque<PositionCue>,
+    held: &mut VecDeque<HeldCue>,
     arrived: impl IntoIterator<Item = PositionCue>,
+    arrived_talk_ends: u64,
+    talk_ends: u64,
     windows: &GhostWindows,
     shown: &S,
     ledger: Option<&StickyGroupLedger>,
 ) -> Vec<PositionCue> {
-    let mut queue: VecDeque<(PositionCue, bool)> = std::mem::take(held)
+    let mut queue: VecDeque<(HeldCue, bool)> = std::mem::take(held)
         .into_iter()
-        .map(|cue| (cue, false))
-        .chain(arrived.into_iter().map(|cue| (cue, true)))
+        .map(|h| (h, false))
+        .chain(arrived.into_iter().map(|cue| {
+            let h = HeldCue {
+                cue,
+                talk_ends: arrived_talk_ends,
+                held_logged: false,
+            };
+            (h, true)
+        }))
         .collect();
     let mut groups = Groups {
         ledger,
@@ -264,17 +296,18 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
     };
     let mut blocked = Blocked::default();
     let mut ready = Vec::new();
-    while let Some((cue, just_arrived)) = queue.pop_front() {
-        if matches!(cue, PositionCue::ResetWindowPos)
-            && held.iter().any(|c| matches!(c, PositionCue::Move(_)))
+    while let Some((mut h, just_arrived)) = queue.pop_front() {
+        let talk_ended = talk_ends > h.talk_ends;
+        if matches!(h.cue, PositionCue::ResetWindowPos)
+            && held.iter().any(|c| matches!(c.cue, PositionCue::Move(_)))
         {
             // 預かった移動を捨て、残りの預かり（移動でない指令）を並べ直しの前へ戻して判定し直す。
             // 残りは移動に関わって預かっていただけなので、移動が無くなればこの巡で当たる。
             // 並べ直しが材料の不在で読み飛ばした窓でも、捨てた移動は後で表示しても当てない
             // （`reset_window_pos_skipped` と `move_hold_superseded` の 2 行が残る）。
-            let rest: Vec<PositionCue> = std::mem::take(held)
+            let rest: Vec<HeldCue> = std::mem::take(held)
                 .into_iter()
-                .filter(|c| match c {
+                .filter(|c| match &c.cue {
                     PositionCue::Move(d) => {
                         info!(
                             event = "move_hold_superseded",
@@ -286,34 +319,34 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
                     _ => true,
                 })
                 .collect();
-            queue.push_front((cue, just_arrived));
+            queue.push_front((h, just_arrived));
             for earlier in rest.into_iter().rev() {
                 queue.push_front((earlier, false));
             }
             blocked = Blocked::default();
             continue;
         }
-        let touched = touched_scopes(&cue, &groups, held);
-        let waits = match &cue {
-            PositionCue::Move(d) => move_waits(d, windows, shown),
+        let touched = touched_scopes(&h.cue, &groups, held);
+        let waits = match &h.cue {
+            PositionCue::Move(d) => move_waits(d, windows, shown, talk_ended),
             _ => Vec::new(),
         };
-        let unshown = match &cue {
+        let unshown = match &h.cue {
             PositionCue::Move(d) => waits
                 .iter()
                 .find(|(_, w)| matches!(w, Settle::Pending))
                 .map(|&(w, _)| (d.scope, w)),
             _ => None,
         };
-        let reset_waiting = match &cue {
-            PositionCue::ResetWindowPos => pending_scopes(windows, shown),
+        let reset_waiting = match &h.cue {
+            PositionCue::ResetWindowPos => pending_scopes(windows, shown, talk_ended),
             _ => Vec::new(),
         };
         if blocked.overlaps(&touched) {
             if just_arrived {
                 debug!(
                     event = "move_hold_behind",
-                    ?cue,
+                    cue = ?h.cue,
                     "先に預かった指令と同じ窓に関わるので追い越さずに預かる"
                 );
             }
@@ -328,7 +361,8 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
                 );
             }
         } else if !reset_waiting.is_empty() {
-            if just_arrived {
+            if !h.held_logged {
+                h.held_logged = true;
                 info!(
                     event = "reset_window_pos_held",
                     waiting = ?reset_waiting,
@@ -336,9 +370,9 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
                 );
             }
         } else {
-            if matches!(cue, PositionCue::ResetWindowPos) {
+            if matches!(h.cue, PositionCue::ResetWindowPos) {
                 for scope in window_scopes(windows) {
-                    if let Settle::NeverShown(reason) = settle(scope, shown) {
+                    if let Settle::NeverShown(reason) = settle(scope, shown, talk_ended) {
                         info!(
                             event = "reset_window_pos_unshown",
                             scope,
@@ -348,7 +382,7 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
                     }
                 }
             }
-            if let PositionCue::Move(d) = &cue
+            if let PositionCue::Move(d) = &h.cue
                 && let Some(&(waiting, Settle::NeverShown(reason))) = waits
                     .iter()
                     .find(|(_, w)| matches!(w, Settle::NeverShown(_)))
@@ -362,16 +396,16 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
                     "最初の面を表示しないまま決まった窓への \\![move] は預からずに位置だけ置く（今の大きさで当てる）"
                 );
             }
-            if let PositionCue::SetSticky { tokens } = &cue {
+            if let PositionCue::SetSticky { tokens } = &h.cue {
                 groups
                     .added
                     .push(sticky_members(tokens).into_iter().collect());
             }
-            ready.push(cue);
+            ready.push(h.cue);
             continue;
         }
         blocked.add(touched);
-        held.push_back(cue);
+        held.push_back(h);
     }
     ready
 }

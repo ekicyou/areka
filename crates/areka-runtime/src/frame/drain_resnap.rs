@@ -204,6 +204,8 @@ pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
     let ready = release_ready(
         &mut wiring.move_held.borrow_mut(),
         wiring.move_rx.try_iter(),
+        wiring.move_talk_ends_seen.replace(wiring.talk_ends),
+        wiring.talk_ends,
         windows,
         &landed,
         world.get_resource::<StickyGroupLedger>(),

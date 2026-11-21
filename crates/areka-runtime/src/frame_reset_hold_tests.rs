@@ -5,12 +5,14 @@
 //! 作業領域の右端から離れ、起動の確定がもう一度並べ直す。
 
 use std::collections::BTreeMap;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{self, Sender};
 
 use areka_emo_present::NeverShown;
 use wintf::ecs::Point;
 
+use crate::balloon_visibility::run_balloon_visibility_phase;
 use crate::move_cue::{PositionCue, parse_move_directive};
+use crate::talk_lifecycle::TalkLifecycleSignal;
 
 use super::RuntimeWiring;
 
@@ -425,5 +427,179 @@ fn a_move_waits_for_the_window_size_to_land() {
     );
     shown_before_landing(&mut harness, &wiring);
     assert_eq!(x_of(&harness, 0), 30, "着地した巡に移動が当たらない");
+    assert!(wiring.move_held.borrow().is_empty(), "預かりが残った");
+}
+
+/// 相方がまだ面の指令を受けていない（本体は表示した）読み口。
+fn partner_not_requested() -> SettledSource {
+    only_scope0_shown().unshown(1, NeverShown::NotRequested)
+}
+
+/// トークの合図を本番と同じ線で可視性の相へ流す足場。
+fn talk_rig() -> (
+    FrameHarness,
+    Sender<PositionCue>,
+    Sender<TalkLifecycleSignal>,
+    RuntimeWiring,
+) {
+    let (harness, tx, mut wiring) = settled_rig();
+    let (life_tx, life_rx) = mpsc::channel();
+    wiring.lifecycle_rx = life_rx;
+    life_tx
+        .send(TalkLifecycleSignal::TalkStarted { talk_id: None })
+        .expect("送出は成功する");
+    (harness, tx, life_tx, wiring)
+}
+
+/// 1 巡: 可視性の相 → 位置の指令の相（本番のフレームの順）。
+fn talk_round(
+    harness: &mut FrameHarness,
+    wiring: &mut RuntimeWiring,
+    shown: &SettledSource,
+) -> Vec<String> {
+    run_balloon_visibility_phase(wiring, &mut harness.world);
+    drain(harness, wiring, shown)
+}
+
+fn end_talk(life_tx: &Sender<TalkLifecycleSignal>) {
+    life_tx
+        .send(TalkLifecycleSignal::TalkEnded { at: None })
+        .expect("送出は成功する");
+}
+
+/// 面の指令の来ない相方はトークの途中は待たれ、途中で面が出ればその巡に並べ直しが当たる。
+#[test]
+fn a_reset_mid_talk_waits_for_a_partner_without_a_surface_command_and_applies_on_its_surface() {
+    let (mut harness, tx, _life_tx, mut wiring) = talk_rig();
+    tx.send(PositionCue::ResetWindowPos)
+        .expect("送出は成功する");
+    let held_round = talk_round(&mut harness, &mut wiring, &partner_not_requested());
+    let held = events(&held_round, "reset_window_pos_held");
+    assert!(
+        held.len() == 1
+            && held[0].contains("waiting=[1]")
+            && events(&held_round, "reset_window_pos").is_empty(),
+        "トークの途中に面の指令の来ない相方を待たなかった: {held_round:?}"
+    );
+    let still = talk_round(&mut harness, &mut wiring, &partner_not_requested());
+    assert!(
+        events(&still, "reset_window_pos").is_empty(),
+        "トークの途中に並べ直しが当たった: {still:?}"
+    );
+
+    let shown_round = talk_round(&mut harness, &mut wiring, &both_shown());
+    assert!(
+        events(&shown_round, "reset_window_pos").len() == 2
+            && events(&shown_round, "reset_window_pos_unshown").is_empty(),
+        "相方の面が出た巡に並べ直しが当たらない: {shown_round:?}"
+    );
+    assert!(wiring.move_held.borrow().is_empty(), "預かりが残った");
+}
+
+/// 面の指令の来ないままトークが終われば、その巡に `not_requested` の記録を 1 行残して並べ直しが当たる。
+#[test]
+fn a_reset_applies_when_the_talk_ends_without_a_partner_surface_command() {
+    let (mut harness, tx, life_tx, mut wiring) = talk_rig();
+    tx.send(PositionCue::ResetWindowPos)
+        .expect("送出は成功する");
+    let held_round = talk_round(&mut harness, &mut wiring, &partner_not_requested());
+    assert_eq!(
+        events(&held_round, "reset_window_pos_held").len(),
+        1,
+        "前提: トークの途中は預かる: {held_round:?}"
+    );
+
+    end_talk(&life_tx);
+    let ended_round = talk_round(&mut harness, &mut wiring, &partner_not_requested());
+    let unshown = events(&ended_round, "reset_window_pos_unshown");
+    assert!(
+        unshown.len() == 1
+            && unshown[0].contains("scope=1")
+            && unshown[0].contains("reason=\"not_requested\""),
+        "トークの終わりの巡に not_requested の記録が 1 行でない: {ended_round:?}"
+    );
+    assert_eq!(
+        events(&ended_round, "reset_window_pos").len(),
+        2,
+        "トークの終わりの巡に並べ直しが当たらない: {ended_round:?}"
+    );
+    assert!(wiring.move_held.borrow().is_empty(), "預かりが残った");
+}
+
+/// 並べ直しとトークの終わりが同じ巡に届いても、運んだトークは終わったと読む（次のトークを待たない）。
+#[test]
+fn a_reset_arriving_with_its_talk_end_in_one_round_applies_that_round() {
+    let (mut harness, tx, life_tx, mut wiring) = talk_rig();
+    tx.send(PositionCue::ResetWindowPos)
+        .expect("送出は成功する");
+    end_talk(&life_tx);
+    let logs = talk_round(&mut harness, &mut wiring, &partner_not_requested());
+    assert!(
+        events(&logs, "reset_window_pos").len() == 2
+            && events(&logs, "reset_window_pos_unshown").len() == 1
+            && events(&logs, "reset_window_pos_held").is_empty(),
+        "トークの終わりと同じ巡に届いた並べ直しが当たらない: {logs:?}"
+    );
+}
+
+/// トークの先頭の移動は、面の指令の来ない相方をトークの途中は待ち、相方の面の後に当たる。
+#[test]
+fn a_move_at_the_talk_start_applies_after_the_partner_surface() {
+    let (mut harness, tx, _life_tx, mut wiring) = talk_rig();
+    let before1 = x_of(&harness, 1);
+    tx.send(to_global(1, 10)).expect("送出は成功する");
+    let held_round = talk_round(&mut harness, &mut wiring, &partner_not_requested());
+    assert!(
+        events(&held_round, "move_ratio_unset").len() == 1 && x_of(&harness, 1) == before1,
+        "トークの途中に移動が当たった: {held_round:?}"
+    );
+
+    talk_round(&mut harness, &mut wiring, &both_shown());
+    assert_eq!(x_of(&harness, 1), 10, "相方の面の後に移動が当たらない");
+    assert!(wiring.move_held.borrow().is_empty(), "預かりが残った");
+}
+
+/// 前に預かった並べ直しの後ろに塞がれて届いた並べ直しが、前のものが当たった後も待つときは、
+/// その巡に預かりの記録を 1 度だけ残す（記録の無いまま待たない）。
+#[test]
+fn a_reset_blocked_behind_a_held_reset_records_its_wait_once_it_waits_alone() {
+    let (mut harness, tx, life_tx, mut wiring) = talk_rig();
+    let waiting_both = SettledSource::new().unshown(1, NeverShown::NotRequested);
+    tx.send(PositionCue::ResetWindowPos)
+        .expect("送出は成功する");
+    talk_round(&mut harness, &mut wiring, &waiting_both);
+    end_talk(&life_tx);
+    talk_round(&mut harness, &mut wiring, &waiting_both);
+
+    tx.send(PositionCue::ResetWindowPos)
+        .expect("送出は成功する");
+    let blocked_round = talk_round(&mut harness, &mut wiring, &waiting_both);
+    assert!(
+        events(&blocked_round, "reset_window_pos_held").is_empty()
+            && events(&blocked_round, "reset_window_pos").is_empty(),
+        "前提: 後の並べ直しは前の預かりに塞がれる: {blocked_round:?}"
+    );
+
+    let first_applied = talk_round(&mut harness, &mut wiring, &partner_not_requested());
+    let held = events(&first_applied, "reset_window_pos_held");
+    assert!(
+        events(&first_applied, "reset_window_pos").len() == 2
+            && held.len() == 1
+            && held[0].contains("waiting=[1]"),
+        "前の並べ直しが当たった巡に、待つ後の並べ直しの記録が 1 行でない: {first_applied:?}"
+    );
+    let next = talk_round(&mut harness, &mut wiring, &partner_not_requested());
+    assert!(
+        events(&next, "reset_window_pos_held").is_empty(),
+        "預かり続ける巡に記録が出た: {next:?}"
+    );
+
+    end_talk(&life_tx);
+    let ended_round = talk_round(&mut harness, &mut wiring, &partner_not_requested());
+    assert_eq!(
+        events(&ended_round, "reset_window_pos").len(),
+        2,
+        "後の並べ直しが自分のトークの終わりに当たらない: {ended_round:?}"
+    );
     assert!(wiring.move_held.borrow().is_empty(), "預かりが残った");
 }
