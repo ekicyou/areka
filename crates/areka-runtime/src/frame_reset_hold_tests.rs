@@ -336,3 +336,38 @@ fn a_reset_in_the_steady_state_applies_on_arrival_without_new_records() {
         "定常で新しい行が出た: {logs:?}"
     );
 }
+
+/// 表示の決まっていない窓への移動は預かり、その窓が「隠した」に決まった巡に預かりの列から出て、
+/// 移動ごとに 1 行の記録を残して今の大きさで置かれる。
+#[test]
+fn a_move_to_a_partner_settling_as_hidden_is_placed_at_the_current_size() {
+    let (mut harness, tx, wiring) = settled_rig();
+    let before1 = x_of(&harness, 1);
+    let size1 = size_of(&harness.world, harness.char_window(1));
+    tx.send(to_global(1, 10)).expect("送出は成功する");
+    tx.send(to_global(1, 20)).expect("送出は成功する");
+    let held_round = drain(&mut harness, &wiring, &only_scope0_shown());
+    assert!(
+        events(&held_round, "move_ratio_unset").len() == 1 && wiring.move_held.borrow().len() == 2,
+        "まだの間に預かられていない: {held_round:?}"
+    );
+    assert_eq!(x_of(&harness, 1), before1, "まだの間に当たった");
+
+    let settled_round = drain(&mut harness, &wiring, &partner_hidden());
+    let placed = events(&settled_round, "move_hold_unshown");
+    assert!(
+        placed.len() == 2
+            && placed.iter().all(|l| l.contains("scope=1")
+                && l.contains("waiting=1")
+                && l.contains("reason=\"hidden\"")
+                && l.contains("handling=\"placed\"")),
+        "移動ごとに 1 行の記録が無い: {settled_round:?}"
+    );
+    assert!(wiring.move_held.borrow().is_empty(), "預かりが残った");
+    assert_eq!(x_of(&harness, 1), 20, "隠した窓へ位置が置かれない");
+    assert_eq!(
+        size_of(&harness.world, harness.char_window(1)),
+        size1,
+        "今の大きさで置かれない"
+    );
+}

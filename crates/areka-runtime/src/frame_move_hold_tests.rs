@@ -229,14 +229,12 @@ fn groups_of(harness: &FrameHarness) -> Vec<Vec<u32>> {
         .collect()
 }
 
-/// 最初の面の前に隠した窓への移動の後の並べ直しは、その移動を捨てて（記録を残して）当たり、続く
-/// 表示済みの窓への指令も当たる（表示されない窓が 1 つで列全体を詰まらせない）。
+/// 最初の面の前に隠した窓への移動は預からずに置かれ（記録を残す）、後の並べ直しも続く表示済みの窓への
+/// 指令もその巡に当たる（表示されない窓が 1 つで列全体を詰まらせない）。
 #[test]
-fn a_reset_after_a_move_to_a_hidden_window_supersedes_it() {
+fn a_move_to_a_hidden_window_before_a_reset_is_placed_and_holds_nothing() {
     let mut harness = steady_harness();
     let (tx, wiring) = wiring();
-    let scope1 = harness.char_window(1);
-    let before1 = pos_of(&harness.world, scope1);
     tx.send(to_global(1, 10)).expect("送出は成功する");
     tx.send(PositionCue::ResetWindowPos)
         .expect("送出は成功する");
@@ -251,22 +249,17 @@ fn a_reset_after_a_move_to_a_hidden_window_supersedes_it() {
 
     assert!(
         logs.iter()
-            .any(|l| l.contains("move_hold_superseded") && l.contains("scope=1")),
-        "捨てた記録が無い: {logs:?}"
+            .any(|l| l.contains("move_hold_unshown") && l.contains("scope=1")),
+        "置いた記録が無い: {logs:?}"
     );
     assert!(
         logs.iter().any(|l| l.contains("reset_window_pos")),
         "並べ直しが預かられた: {logs:?}"
     );
     assert_eq!(x_of(&harness, 0), Some(30), "後の本体の指令が預かられた");
-
-    // 捨てた移動は、相方が後で表示しても当たらない（並べ直しの後に古い移動が出てこない）。
-    run_move_drain_with(&wiring, &all_shown, &mut harness.world);
-    assert_eq!(
-        pos_of(&harness.world, scope1),
-        before1,
-        "捨てた移動が当たった"
-    );
+    // この足場は並べ直しの材料を持たず、並べ直しは窓を動かさないので、置いた位置が残る。
+    assert_eq!(x_of(&harness, 1), Some(10), "隠した窓へ位置が置かれない");
+    assert!(wiring.move_held.borrow().is_empty(), "預かりが残った");
 }
 
 /// 最初の面を表示しない窓に関わらない組の作成と、その後の表示済みの窓への移動は先に当たる。

@@ -190,15 +190,15 @@ fn pending_scopes<S: ShownRatioSource + ?Sized>(windows: &GhostWindows, shown: &
         .collect()
 }
 
-/// 移動が表示を待つスコープのうち、まだ最初の面を表示していないもの（無ければ当ててよい）。
+/// 移動が表示を待つスコープ（対象・基準）の決まり。
 ///
 /// 窓の無いスコープは待っても表示されないので待たない（動かす窓が無ければ当てる側が `warn!` で残し、
 /// 基準の窓が無ければ当てる側が `screen` へ倒す）。
-fn unshown_scope<S: ShownRatioSource + ?Sized>(
+fn move_waits<S: ShownRatioSource + ?Sized>(
     d: &MoveDirective,
     windows: &GhostWindows,
     shown: &S,
-) -> Option<u32> {
+) -> Vec<(u32, Settle)> {
     let base = match d.base {
         MoveBase::Scope(base) => Some(base),
         _ => None,
@@ -206,7 +206,8 @@ fn unshown_scope<S: ShownRatioSource + ?Sized>(
     std::iter::once(d.scope)
         .chain(base)
         .filter(|&s| windows.char_window(s as usize).is_some())
-        .find(|&s| !matches!(settle(s, shown), Settle::Shown))
+        .map(|s| (s, settle(s, shown)))
+        .collect()
 }
 
 /// 預かった指令が関わる窓（この巡の判定の中で積む）。
@@ -240,7 +241,8 @@ impl Blocked {
 /// 前の巡から預かっている指令（先）と、この巡に届いた指令（後）を順に判定し、今当てる指令を順のまま
 /// 返す。当てない指令は `held` へ順のまま戻す（取りこぼさない）。
 ///
-/// 預かる理由は 3 つ: 移動の対象か基準の窓がまだ最初の面を表示していない／並べ直しのとき窓のある
+/// 預かる理由は 3 つ: 移動の対象か基準の窓の表示がまだ決まっていない（表示しないまま決まった窓への
+/// 移動は預からずに位置だけ置く）／並べ直しのとき窓のある
 /// どれかのスコープの表示がまだ決まっていない／それより前に預かった指令と同じ窓に関わる（追い越さない）。
 /// 記録は届いた巡に 1 度だけ残す（預かり続ける巡ごとには出さない）。
 ///
@@ -296,8 +298,15 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
             continue;
         }
         let touched = touched_scopes(&cue, &groups, held);
+        let waits = match &cue {
+            PositionCue::Move(d) => move_waits(d, windows, shown),
+            _ => Vec::new(),
+        };
         let unshown = match &cue {
-            PositionCue::Move(d) => unshown_scope(d, windows, shown).map(|w| (d.scope, w)),
+            PositionCue::Move(d) => waits
+                .iter()
+                .find(|(_, w)| matches!(w, Settle::Pending))
+                .map(|&(w, _)| (d.scope, w)),
             _ => None,
         };
         let reset_waiting = match &cue {
@@ -342,6 +351,20 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
                         );
                     }
                 }
+            }
+            if let PositionCue::Move(d) = &cue
+                && let Some(&(waiting, Settle::NeverShown(reason))) = waits
+                    .iter()
+                    .find(|(_, w)| matches!(w, Settle::NeverShown(_)))
+            {
+                info!(
+                    event = "move_hold_unshown",
+                    scope = d.scope,
+                    waiting,
+                    reason = reason_word(reason),
+                    handling = "placed",
+                    "最初の面を表示しないまま決まった窓への \\![move] は預からずに位置だけ置く（今の大きさで当てる）"
+                );
             }
             if let PositionCue::SetSticky { tokens } = &cue {
                 groups

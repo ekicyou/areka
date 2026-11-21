@@ -54,7 +54,7 @@
   - 2.2 の赤の檻の (a)(b)(c)(d) が全部緑になり、実行の相の crate のテストと本体の `frame_move_order_tests` が全部緑。並べ直しの本体と起動の確定のファイルに差分が無い
   - _Dispatch: standard, effort high — 既存の捨てる腕・追い越しの判定と並べ直しの預かりの順を崩さずに足す_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.5, 7.1, 7.2, 7.3_
-- [ ] 3.3 表示しないと分かった窓への移動を、預からずに位置だけ置く
+- [x] 3.3 表示しないと分かった窓への移動を、預からずに位置だけ置く
   - 移動の腕: 対象と基準のうち表示の決まっていない窓が「まだ」なら今どおり預かり `move_ratio_unset` を残す。「表示しないまま決まった」なら預からず今の大きさで当て、移動ごとに `move_hold_unshown`（スコープ・待つ窓・理由・扱い `placed`）を 1 件残す
   - 前の巡から預かっていた移動は、待つ窓が決まった巡にこの腕を通る
   - 扱いは `research.md` §10.7 の SSP 2.9.34 の測り（隠した窓・未表示の窓への移動は位置として残る）に従う
@@ -107,3 +107,4 @@
 - 赤の檻（直す前・`cargo test -p areka-runtime --lib reset_hold`）: (c) 隙間 0 は緑。(a) 先頭の窓の右端 left 2522 / right 2574（52px＝(434−330)/2）、(b) 起動の確定が `chain_finalize: 実表示寸で連鎖を再解決 scope=1 from_x=1886 to_x=1962` を出した、(d) 巡 1 に `reset_window_pos_held` が無く仮の大きさで `reset_window_pos` が即座に当たった、の 3 本が赤。1 passed; 3 failed。
 - 預かった並べ直しの `reset_window_pos_held` は届いた巡だけに出る。今は並べ直しを塞げるのは前に預かった並べ直しだけ（その行は出ている）なので記録は欠けないが、指令ごとに判定が変わる形（トークの終わりの通し番号）を入れたら、塞がれて届いた並べ直しが記録無しで待たないかを見直す。
 - `physical_size` のメソッドに一時の `cfg_attr(not(any(test, feature = "test-support")), expect(dead_code))` がある。判定が使い始めたタスクで外す。
+- 申し送り（test-crash-report-merge から・2026-11-21）: `frame_test_support.rs:886` の `window_move_lines` は placement の `test_support::window_move_lines` と同じ働きの写し。この spec は `frame_test_support.rs` を触らない約束なので付け替えていない。完了の棚卸で扱う（brief.md の末尾にも同じ申し送りが main 経由で入る）。

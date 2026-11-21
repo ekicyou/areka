@@ -425,7 +425,7 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
 8. **定常（6.5・1.3）**: 全部 `Shown` では並べ直しが届いた巡に当たり、`reset_window_pos_held`・`reset_window_pos_unshown` は出ない。
 
 ### 今の檻の改め（7.3）
-- `frame_move_hold_tests.rs` の `a_reset_after_a_move_to_a_never_shown_window_supersedes_it`: 読み口を `shown_only(&[0])` から「相方が `NeverShown(Hidden)`」の `SettledSource` に替える。見る中身（捨てた記録・並べ直しがその巡に当たる・後の本体の指令が当たる・捨てた移動が後で当たらない）は変えない。名前は相方の状態に合わせて改めてよい。
+- `frame_move_hold_tests.rs` の `a_reset_after_a_move_to_a_never_shown_window_supersedes_it`: 読み口を `shown_only(&[0])` から「相方が `NeverShown(Hidden)`」の `SettledSource` に替える。表示しないと分かった窓への移動は位置だけ置く（`research.md` §10.7）ので、この組み合わせでは移動は届いた巡に置かれ、並べ直しが捨てる預かりは残らない。檻は `a_move_to_a_hidden_window_before_a_reset_is_placed_and_holds_nothing` と改め、置いた記録・並べ直しがその巡に当たる・後の本体の指令が当たる・預かりが空、を見る。「預かった移動を並べ直しが捨て、窓が後で表示しても当たらない」道は、相方が `Pending` の `frame_reset_hold_tests.rs::a_reset_discards_the_held_move_and_is_held_itself` が固定する（2026-11-21 実装の段で改めた）。
 - 本体の `a_script_reset_sends_nothing_to_kanade`: `run_move_drain_phase(&wiring, …)` を `run_move_drain_with(&wiring, &all_shown, …)` に替える。`steady_harness` は起動の確定の後の足場なので「全部が表示した」読み口がその足場と合う。見る中身（並べ直しが手続きへ届く・kanade へ何も送らない）は変えない。
 
 ### 実機の確かめ（7.4・7.5）
