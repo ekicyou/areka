@@ -142,7 +142,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Requirements: 6.6, 6.7_
 
 - [ ] 9. 較正と構造の証跡（段 8）
-- [ ] 9.1 実のモジュールのパスで種別を引く較正を 1 本足す
+- [x] 9.1 実のモジュールのパスで種別を引く較正を 1 本足す
   - `log_history_tests.rs` に 1 本（例 `moved_modules_keep_their_kinds_by_real_module_path`）を足す。行ごとに、移したモジュールの本番の項目 1 つ（型か総称でない関数）の `std::any::type_name`／`type_name_of_val` から最後の `::<項目名>` を落とした文字列を導き、期待の字面（`areka::session::alert` ほか）と `assert_eq!` で比べてから `classify(Level::INFO, …)` を引く
   - 期待: `boot_config`・`boot_resolve`・`ghost_session`・`ghost_session::ghost_session_runtime`・`readme`・`readme::opener` は status、`alert`・`app_exit`・`session_end`・`exit_wait`・`write_failure`・`readonly`・`roots::report`・`roots::user_root` は残さない
   - 完了の形: 足した 1 本が緑で、`RULES` の 1 行を一時的に古い字面へ戻すと赤になることを確かめて戻す。移したファイルの中身には触れない

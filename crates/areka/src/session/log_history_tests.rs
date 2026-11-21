@@ -638,3 +638,78 @@ fn unclassified_event_does_not_advance_the_id() {
     assert_eq!(ids(&h, Kind::Status), [1]);
     assert_eq!(ids(&h, Kind::Error), [2]);
 }
+
+#[test]
+fn moved_modules_keep_their_kinds_by_real_module_path() {
+    fn module_of<T>() -> &'static str {
+        let name = std::any::type_name::<T>();
+        &name[..name.rfind("::").unwrap()]
+    }
+    use crate::session::{
+        alert::AlertScene, app_exit::ExitOrigin, boot_config::ConfigInputs,
+        boot_resolve::GhostDecision, exit_wait::WorkGate, ghost_session::BodySystems,
+        ghost_session::RuntimeRebuild, readme::Opener, readme::ReadmeRequest,
+        readonly::ReadOnlyRun, roots::report::ReportOccasion, roots::user_root::CopyPlan,
+        session_end::SessionEnded, write_failure::WriteFailureTx,
+    };
+    let rows: [(&str, &str, Option<Kind>); 14] = [
+        (
+            module_of::<ConfigInputs>(),
+            "areka::session::boot_config",
+            Some(Kind::Status),
+        ),
+        (
+            module_of::<GhostDecision>(),
+            "areka::session::boot_resolve",
+            Some(Kind::Status),
+        ),
+        (
+            module_of::<BodySystems>(),
+            "areka::session::ghost_session",
+            Some(Kind::Status),
+        ),
+        (
+            module_of::<RuntimeRebuild>(),
+            "areka::session::ghost_session::ghost_session_runtime",
+            Some(Kind::Status),
+        ),
+        (
+            module_of::<ReadmeRequest>(),
+            "areka::session::readme",
+            Some(Kind::Status),
+        ),
+        (
+            module_of::<Opener>(),
+            "areka::session::readme::opener",
+            Some(Kind::Status),
+        ),
+        (module_of::<AlertScene>(), "areka::session::alert", None),
+        (module_of::<ExitOrigin>(), "areka::session::app_exit", None),
+        (
+            module_of::<SessionEnded>(),
+            "areka::session::session_end",
+            None,
+        ),
+        (module_of::<WorkGate>(), "areka::session::exit_wait", None),
+        (
+            module_of::<WriteFailureTx>(),
+            "areka::session::write_failure",
+            None,
+        ),
+        (module_of::<ReadOnlyRun>(), "areka::session::readonly", None),
+        (
+            module_of::<ReportOccasion>(),
+            "areka::session::roots::report",
+            None,
+        ),
+        (
+            module_of::<CopyPlan>(),
+            "areka::session::roots::user_root",
+            None,
+        ),
+    ];
+    for (actual, expected, kind) in rows {
+        assert_eq!(actual, expected);
+        assert_eq!(classify(Level::INFO, actual), kind, "{expected}");
+    }
+}
