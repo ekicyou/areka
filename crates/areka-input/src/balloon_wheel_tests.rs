@@ -17,7 +17,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::Window;
 use wintf::ecs::pointer::{PointerState, WheelDelta};
 
-use super::super::balloon::test_support::headless_runtime_wiring;
+use super::super::balloon::test_support::{capture_logs, headless_runtime_wiring};
 use super::super::char_watch::char_watch;
 use super::super::{MouseWiring, RegionSource};
 use super::balloon_wheel_with;
@@ -198,4 +198,27 @@ fn without_runtime_wiring_does_nothing() {
 fn wheel_lines_from_maps_the_page_scroll_value_to_page_and_others_to_lines() {
     assert_eq!(super::wheel_lines_from(u32::MAX), WheelLines::Page);
     assert_eq!(super::wheel_lines_from(5), WheelLines::Lines(5));
+}
+
+/// 文字の層を借りられないと ERROR を 1 行残してその tick の回転を見送る（OS の行数は読む）。
+#[test]
+fn borrow_failure_is_recorded_once_and_the_tick_is_skipped() {
+    use areka_emo_text::state::TextLayerConfig;
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
+    let mut world = World::new();
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
+    spawn_rotation(&mut world, 120, 0);
+
+    let _held = runtime.borrow_mut();
+    let mut reads = 0;
+    let logs = capture_logs(|| reads = run(&mut world));
+
+    assert_eq!(reads, 1);
+    let errors = logs
+        .iter()
+        .filter(|l| l.contains("level=ERROR") && l.contains("balloon_runtime_borrow_failed"))
+        .count();
+    assert_eq!(errors, 1, "{logs:?}");
 }

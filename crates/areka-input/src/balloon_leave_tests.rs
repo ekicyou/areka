@@ -197,3 +197,53 @@ fn leave_runtime_absent_degrades_with_debug_and_leaves_hover() {
         "RuntimeWiring 不在は構成異常ではない＝ERROR を出さない: {logs:?}"
     );
 }
+
+/// 文字の層を借りたまま離脱を 1 巡回し、借用の失敗の ERROR を数える。
+fn leave_borrow_failures(world: &mut World, runtime: &RefCell<TextLayerRuntime>) -> usize {
+    let _held = runtime.borrow_mut();
+    capture_logs(|| clear_balloon_hover_on_leave(world))
+        .iter()
+        .filter(|l| l.contains("level=ERROR") && l.contains("balloon_runtime_borrow_failed"))
+        .count()
+}
+
+/// 文字の層を借りられないと ERROR を 1 行残して強調を外さず、滞在は消す。
+#[test]
+fn leave_borrow_failure_is_recorded_and_skips_the_highlight() {
+    let mut world = World::new();
+    spawn_balloon_leave_child(&mut world, 0);
+    let runtime = runtime_with_active_choice("0");
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
+    insert_wiring_with_hover(&mut world, 0, Some(2));
+    world
+        .get_non_send_mut::<BalloonHover>()
+        .unwrap()
+        .set_balloon_hover(0);
+
+    assert_eq!(leave_borrow_failures(&mut world, &runtime), 1);
+    assert_eq!(
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
+        Some(2),
+        "強調は外していない"
+    );
+    assert!(
+        !world
+            .get_non_send::<BalloonHover>()
+            .unwrap()
+            .is_balloon_hovered(0)
+    );
+}
+
+/// 同じバルーン窓の 2 つの entity の離脱は、スコープ 1 つ分として 1 回だけ処理する。
+#[test]
+fn leave_of_two_entities_in_one_window_is_handled_once() {
+    let mut world = World::new();
+    let child = spawn_balloon_leave_child(&mut world, 0);
+    let win = world.get::<ChildOf>(child).unwrap().parent();
+    world.spawn((PointerLeave, ChildOf(win)));
+    let runtime = runtime_with_active_choice("0");
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
+    insert_wiring_with_hover(&mut world, 0, Some(2));
+
+    assert_eq!(leave_borrow_failures(&mut world, &runtime), 1);
+}

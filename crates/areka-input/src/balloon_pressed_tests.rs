@@ -23,7 +23,9 @@ use bevy_ecs::world::World;
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, PointerState, dispatch_pointer_events};
 use wintf::ecs::{Point, Window};
 
-use super::super::test_support::{capture_logs, headless_runtime_wiring};
+use super::super::test_support::{
+    capture_logs, headless_runtime_wiring, insert_wiring, left_press, runtime_with_active_choice,
+};
 use super::super::{BalloonWiring, ChoiceSelection, dispatch_selection};
 use super::on_balloon_pointer_pressed;
 use crate::user_break::{UserBreakWiring, drain_no_user_break_signals};
@@ -304,4 +306,36 @@ fn dispatch_selection_without_receiver_logs_one_error_and_no_warn() {
             "{kind:?}: {logs:?}"
         );
     }
+}
+
+/// 文字の層を借りられないと、矢印の押下と選択の写しの借用の失敗を ERROR で 1 行ずつ残し、選択を
+/// 送らない（panic しない）。
+#[test]
+fn press_borrow_failure_is_recorded_for_the_arrow_and_the_snapshot() {
+    let mut world = World::new();
+    let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+    let runtime = runtime_with_active_choice("0");
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
+    let selections = insert_wiring(&mut world);
+
+    let held = runtime.borrow_mut();
+    let mut pressed = true;
+    let logs = capture_logs(|| {
+        pressed = on_balloon_pointer_pressed(&mut world, e, e, &left_press(10, 20))
+    });
+    drop(held);
+
+    assert!(!pressed);
+    let failures = |what: &str| {
+        logs.iter()
+            .filter(|l| {
+                l.contains("level=ERROR")
+                    && l.contains("balloon_runtime_borrow_failed")
+                    && l.contains(what)
+            })
+            .count()
+    };
+    assert_eq!(failures("矢印の押下"), 1, "{logs:?}");
+    assert_eq!(failures("click スナップショット"), 1, "{logs:?}");
+    assert!(selections.try_recv().is_err());
 }

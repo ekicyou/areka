@@ -11,8 +11,10 @@ use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
-use std::sync::mpsc;
+use std::sync::{Mutex, MutexGuard, PoisonError, mpsc};
+use std::time::{Duration, Instant};
 use wintf::ecs::pointer::{Phase, PointerState, WheelDelta};
+use wintf::ecs::world::tick_wake;
 use wintf::ecs::{PhysicalPoint, Window};
 
 thread_local! {
@@ -38,13 +40,18 @@ fn mock(scope: u32, x: i64, y: i64) -> HitRegion {
     }
 }
 
+/// 起こしの期限はプロセスに 1 つなので、溜めを作るこのファイルのテストを順に回す。
+static SERIAL: Mutex<()> = Mutex::new(());
+
 struct Rig {
     world: World,
     rx: mpsc::Receiver<KanadeMsg>,
     clock: Rc<Cell<u64>>,
+    _serial: MutexGuard<'static, ()>,
 }
 
 fn rig() -> Rig {
+    let serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
     SWAPPED.with(|s| s.set(false));
     let (tx, rx) = mpsc::channel();
     let clock = Rc::new(Cell::new(0));
@@ -55,7 +62,12 @@ fn rig() -> Rig {
         RegionSource::Mock(mock),
         Box::new(move || c.get()),
     ));
-    Rig { world, rx, clock }
+    Rig {
+        world,
+        rx,
+        clock,
+        _serial: serial,
+    }
 }
 
 impl Rig {
@@ -311,6 +323,23 @@ fn pending_wheel_is_flushed_on_a_later_run_after_the_clock_advances() {
     r.clock.set(100);
     assert_eq!(r.run(), vec![wheel(0, 360, (20, 10), Some("Head"))]);
     assert_eq!(r.run(), vec![]);
+}
+
+/// 溜めが残る回しは、残りの間隔の後に起こしの期限を預け直す。
+#[test]
+fn pending_wheel_arms_the_wake_deadline_for_the_rest_of_the_interval() {
+    let mut r = rig();
+    let (_win, child) = r.window(0);
+    r.point_wheel(child, 10, 5, 120, 0);
+    r.run();
+    tick_wake::take(Instant::now() + Duration::from_secs(3600));
+    r.clock.set(60);
+    r.point_wheel(child, 10, 5, 120, 0);
+    assert_eq!(r.run(), vec![]);
+    assert!(
+        tick_wake::take(Instant::now() + Duration::from_millis(40)).deadline_due,
+        "残り 40ms の後に起こす"
+    );
 }
 
 /// ホイールは窓ごとに別々に間引く: A の間隔の中でも B の初回はすぐ送り、A の溜めは A の期限で吐く。

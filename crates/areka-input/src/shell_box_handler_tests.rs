@@ -721,3 +721,46 @@ fn box_selection_send_failure_is_recorded_under_the_kind() {
         );
     }
 }
+
+// ---------------------------------------------------------------- 結線漏れ
+
+/// 箱の上の滞在の記録が無いと、箱の中の移動は ERROR を 1 行残して素通りする。箱の外は残さない。
+#[test]
+fn move_without_box_hover_is_recorded_once_inside_a_box() {
+    let mut f = Fixture::new();
+    f.world.remove_non_send::<ShellBoxHover>();
+    let ((), events) = capture(|| {
+        f.moved(BODY, on_a(true));
+        f.moved((500, 400), BoxPoint::default());
+    });
+    let missing = lines_of(&events, "shell_box_hover_missing");
+    assert_eq!(missing.len(), 1, "箱の中の 1 回だけ: {events:?}");
+    assert_eq!(missing[0].level, tracing::Level::ERROR);
+}
+
+/// `BalloonWiring` が無いと、箱の選択肢の押下は ERROR を 1 行残して選択を送らない。
+#[test]
+fn box_selection_without_balloon_wiring_is_recorded_and_not_sent() {
+    let mut f = Fixture::new();
+    f.world.remove_non_send::<BalloonWiring>();
+    let (_, events) = capture(|| f.pressed(ROW, DoubleClick::None, on_a(true)));
+    let missing = lines_of(&events, "balloon_wiring_missing");
+    assert_eq!(missing.len(), 1, "{events:?}");
+    assert_eq!(missing[0].level, tracing::Level::ERROR);
+    assert!(f.selections().is_empty());
+}
+
+/// 中断の持ち物が無いと、箱の中の押下は TRACE を 1 行残して話していない扱いになる。
+#[test]
+fn box_press_without_user_break_wiring_is_recorded_as_not_talking() {
+    let mut f = Fixture::new();
+    f.world.remove_non_send::<UserBreakWiring>();
+    let (_, events) = capture(|| f.pressed(BODY, DoubleClick::Left, on_a(false)));
+    let no_wiring = lines_of(&events, "box_break_no_wiring");
+    assert_eq!(no_wiring.len(), 1, "{events:?}");
+    assert_eq!(no_wiring[0].level, tracing::Level::TRACE);
+    assert_eq!(
+        lines_of(&events, "box_press")[0].field("verdict"),
+        Some("ShellOp")
+    );
+}

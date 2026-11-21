@@ -502,3 +502,34 @@ fn release_before_wiring_or_in_tunnel_is_a_no_op() {
         "Tunnel では控えを取り出さない"
     );
 }
+
+/// 大きさの無い窓は中とみなす: 押して放すと解放の知らせが 1 件届く。
+#[test]
+fn release_on_a_window_without_size_sends_one_button_up() {
+    let (tx, rx) = mpsc::channel();
+    let mut world = World::new();
+    world.insert_non_send(MouseWiring::with_clock(
+        tx,
+        RegionSource::Mock(scaled),
+        Box::new(|| 0),
+    ));
+    let entity = world.spawn(CharWindowMarker { scope: 1 }).id();
+    press(
+        &mut world,
+        entity,
+        PointerState {
+            right_down: true,
+            ..Default::default()
+        },
+    );
+    rx.try_iter().for_each(drop);
+    let released = ButtonReleased {
+        right: true,
+        ..Default::default()
+    };
+    assert!(!release(&mut world, entity, 40, 50, released));
+    assert_eq!(
+        drain(&rx),
+        vec![up(80, 150, Some("Head"), ClickButton::Right, false)]
+    );
+}

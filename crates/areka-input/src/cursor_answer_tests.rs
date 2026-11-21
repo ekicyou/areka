@@ -258,3 +258,26 @@ fn shell_file_that_cannot_be_made_falls_back_to_the_scene_default() {
     let w = char_window(&mut world, 0);
     assert_eq!(show(&world, w, 60), stock_cursor(IDC_HAND).unwrap());
 }
+
+/// ブレスのファイルが作れず descript の指差しのファイルが作れるなら、その場面は descript の
+/// ファイルの形（既定の指差しではない）。
+#[test]
+fn shell_file_that_cannot_be_made_falls_back_to_the_descript_file() {
+    use areka_runtime::shell_cursor_assets::CursorFile;
+    let mut assets = ShellCursorAssets::default();
+    assets.files.push(CursorFile::Cur(b"broken".to_vec()));
+    assets.files.push(CursorFile::Cur(BUNDLED[0].1.to_vec()));
+    assets
+        .rows
+        .rows
+        .insert((0, "Head".into(), CursorScene::Up), Shape::File(0));
+    assets.ghost.finger = Some(Shape::File(1));
+    let mut world = wired_world(Some(assets));
+    let w = char_window(&mut world, 0);
+    let shown = show(&world, w, 60);
+    let descript = world
+        .non_send::<ShellCursorAssets>()
+        .cursor_for(1, cursor_size_for_dpi(96));
+    assert_eq!(Some(shown), descript);
+    assert_ne!(shown, stock_cursor(IDC_HAND).unwrap());
+}

@@ -73,7 +73,7 @@
   - _Dispatch: mechanical — 期待値と表明の形を design が与えている_
   - _Requirements: 4.1, 4.2, 4.3, 4.7, 5.3_
 
-- [ ] 2.3 抜けていた失敗の枝と振る舞いのテストを足す（G6・指摘 9・60・61・63 の残り）
+- [x] 2.3 抜けていた失敗の枝と振る舞いのテストを足す（G6・指摘 9・60・61・63 の残り）
   - キャラの窓の見張りのテストで、溜めの残る待ちの後に起こしの期限が預け直されることを見る（指摘 9）。組み立てがファイルの中の錠を持ち、溜めを作るテストを順に回す（設計の討議の確定 5）。
   - 大きさの無い窓で押して放すと ButtonUp が 1 件届くテスト（指摘 60）、壊れたブレスと作れる手の形のファイルで 2 段目のカーソルが 3 段目と違うテスト（指摘 61・ファイルはメモリのバイト列）を足す。
   - 箱の結線漏れの 3 枝・押下とホイールの借用の失敗・離脱のスコープの重複除けに 1 本ずつ足す（指摘 63）。
@@ -164,3 +164,4 @@
 - 範囲の外（完了の棚卸へ）: `cargo clippy -p areka-runtime --all-targets --no-deps -- -D warnings` は、この spec が触らない areka-runtime のファイル（frame/wiring.rs・frame/zorder_drain.rs・frame_test_support.rs・hover_inject.rs・skin_switch.rs・switch_assets.rs・lib.rs・balloon_visibility_tests.rs・frame_dpi_reproject_tests.rs）の clippy 1.100 の指摘 11〜12 件で止まる。areka-parsers・dola にも同じ種類がある。
 - `pointer_test_support.rs` は本体が `*` で読む。足す項目は必ず `#[cfg(test)] pub(crate)`（2.2 で一度 `pub` で足して差し戻し）。テスト名は本体の名指しがあるので、タスクが言わない名の変更をしない。
 - `shell_box_tests.rs` の `…_or_window_leave` は 2.2 で離脱の表明を消したので名と中身が食い違う。移す 3.3 で直す。
+- 2.3 で足した `click_tests.rs::release_on_a_window_without_size_sends_one_button_up` は `MouseWiring::with_clock` を直に組む。3.2 の指摘 64 で `world_with_wiring` へ寄せるときに一緒に寄せる。
