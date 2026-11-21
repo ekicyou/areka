@@ -166,3 +166,4 @@
 - 6.1: 移した `areka-input` のファイルの説明に残る古いパス 6 か所（`balloon.rs` 2・`balloon_hover_flag_tests.rs`・`balloon_moved.rs`・`spawn_assembly_tests.rs` 2）は 6.7 の当たりになるので、パスとモジュールの名だけを書き換えた（意味は変えない）。
 - 6.1: `collision-probe.rs`・`collision-probe/setup.rs` の「`pub(crate)`・内部が `crate::` パス」という理由の文は移した後は古い（結論は依存の向きで成り立つ）。7.4 で `audit-areka-input-menu` へ申し送る。
 - 6.2: 設計のパスの対応表の機械的な形（`input_events::<子>` → `areka_input::<子>`）は、子の子のモジュールでは実物と合わない。実物は `areka_input::char_watch::cursor_answer`・`areka_input::hover_region::cursor_pick`。
+- 完了時にその場で解決: `shiori-abi` の使っていない依存 `windows` を外した（main でも出ていた警告・`625e8eec8`）。

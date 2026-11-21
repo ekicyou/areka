@@ -91,3 +91,16 @@
 - **要件定義のモデル**: Opus（見直しの型どおり）。
 - **分割の案**: 無し（指摘の数しだいで要件の討議で切る）。
 - **見つけた穴**: ⑴ `shortcut.rs`（キーの近道・本番 83 行）が `menu/` へ移ると、menu を外した決めのため、どの見直しの範囲にも入らなくなる＝要件の段で範囲に残すかを決める。⑵ `file_drop.rs` が本体に残るときの範囲（上）。⑶ 本体の `readme.rs:93` の説明が `input_events/choice_drain.rs` のパスを名指す（`input-crate-split` の後に古くなる・その spec の文書のパスの直しに入る）。
+
+## `input-crate-split` からの申し送り（2026-11-21 着地）
+
+- 受け持つファイルは `crates/areka-input/src/` へ移った（中身は変えていない・パスとモジュールの名だけ書き換えた）。上の「見つけた穴」⑶ の `readme.rs:93` は `crates/areka-input/src/choice_drain.rs` へ書き換え済み。
+- 古い説明（移したファイルのコメントの中身は変えていないので、見直しで拾う）:
+  - `crates/areka-input/src/lib.rs` の冒頭の説明ほか、本体の中にあった頃の書き方の説明（「The Hand／collisionex」ほか）。
+  - 「強制退避の枝へ落ちない」側のテスト 3 本（`input_events_tests.rs` の `handler_wired_ctrl_left_double_click_…`・`handler_left_double_click_without_ctrl_…`、`input_events_menu_tests.rs` の `wired_ctrl_left_double_click_…_partner_window`）の「窓が消えて件数が落ちる」という説明。入力の crate のテストの World には口が据わらないので、今は事実でない（合否の力は `try_recv` の表明が保つ）。
+  - `input_events_tests.rs` の「強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。」は、その 3 本を本体の `app_exit_escape_tests.rs` へ移したので何も指していない。
+  - `spawn_assembly_tests.rs` の 176〜181 行の「入力の側」の言い方は本体の中にあった頃のまま。
+  - `crates/areka-runtime/examples/collision-probe.rs`・`collision-probe/setup.rs` の「`pub(crate)`・内部が `crate::` パスを使う」という理由の文は古い（`attach_char_pointer_handlers` は `pub` になった）。
+  - `cargo doc -p areka-input --no-deps` の警告 20 件（移したコメントの「private item へのリンク」19 件・`MouseWiring::with_clock` の解けないリンク 1 件）。
+- 開けた項目（狭められるかの見直しの的）: 9 モジュールと `pub mod hooks`、根の 8 項目・子の 18 項目・メソッド 7 つ、それに本体の `runtime_tests/frame_shell_box_arrow_tests.rs` が使う `user_break::drain_no_user_break_signals`。`test-support` の機能で開けたのは `pointer_test_support`・`MouseWiring::with_clock`・`user_break` の `flag_rx`・`flag_source_connected`。
+- 参照: `.kiro/specs/completed/input-crate-split/design.md`・`verification.md` の「完了の申し送り」⑶。

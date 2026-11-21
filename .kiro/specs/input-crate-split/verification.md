@@ -324,6 +324,8 @@ finally {
 
 ### ⑵ `crates/areka-runtime/src/frame/wiring.rs` の 3 か所
 
+- 完了のとき（2026-11-21）に取り込んだ `origin/main`（`audit-emo2-boot-frame` 着地・PR#484）で 3 か所とも直っていた。申し送りは要らなくなった。
+
 - 2026-11-21 の `origin/main` では、295・319・326 行の説明が古い入力のパス（`input_events/mod.rs`・`input_events::…`・`input_events/balloon.rs`）のまま。`audit-emo2-boot-frame` はまだ着地していない（`.kiro/specs/audit-emo2-boot-frame/` が完了に移っていない）。
 - 受け手は `audit-emo2-boot-frame`（同 spec が 3 か所を直す予定）。着地しても直っていなければ、そのとき `audit-areka-input-menu` へ回す。新しいパスは `crates/areka-input/src/lib.rs`・`areka_input::…`・`crates/areka-input/src/balloon.rs`。
 
@@ -349,6 +351,7 @@ finally {
 ### 範囲の外の問題（完了の棚卸で起票）
 
 - `cargo check --workspace --all-targets` の `shiori-abi` の `unused dependency windows`（`crates/shiori-abi/Cargo.toml:16`）。main でも出る。
+- 完了のときにその場で直した（`windows` の依存を外した・`windows-core` だけで足りる。直した後の `cargo check --workspace --all-targets` は警告 0）。
 
 ## 全体テストと第三者の表（7.2）
 
