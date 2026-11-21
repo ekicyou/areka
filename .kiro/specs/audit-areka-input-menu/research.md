@@ -372,7 +372,7 @@
 
 ### 12.4 回 2 の連鎖（要件 9.8・Fable の総括へ）
 
-回 1 の直しが呼んだ、または回 1 の直しが同じ種類を拾い残した指摘。直さずに残している。
+回 1 の直しが呼んだ、または回 1 の直しが同じ種類を拾い残した指摘。回 2 では直さずに残し、下の「総括」でまとめて直した。
 
 | 番号 | 場所 | 中身 | 呼んだ回 1 の直し |
 |---|---|---|---|
@@ -380,6 +380,19 @@
 | R2-A7 | `balloon_pointer_handler_tests.rs` の押下の縮退のループ | 「hover は Some(2) のまま」の表明は押下の道が `set_hover` を呼ばないので落ちない | 同じ種類の `choice_active` 不変の表明を消したとき（回 1 の A2）に拾い残した |
 | R2-A10 | `balloon_test_support.rs` `gpu_balloon_world` | `world` を `gpu` より先に束ねるので、関数の中で panic すると `GpuPermit` が World より先に落ちる | `gpu_on` へ寄せたとき（回 1 の A6）に入れた |
 | R2-B5 | `drag_tests.rs` `send_failure_records_one_failure` の doc | 「知らせ 0 件」と書くが、その表明は回 1 で消した | 落ちない `rig.drain()` の表明を消したとき（回 1 の B10） |
+
+#### 総括（Fable・2026-11-22）
+
+4 件と、同じ連鎖の兄弟を回をまたいで洗い、まとめて直した。本番のコードは変えていない。
+
+| 連鎖 | 直した所 | 連鎖が閉じた根拠 |
+|---|---|---|
+| 選択肢の合図の写し（R2-A5） | `runtime_in_choice_wait` を `choice_cue(ACTOR)` へ寄せた | `CueCommand::Choice` を手で組む所は `choice_cue` と `balloon_gpu_hit_tests.rs` の `runtime_with_choices` だけ。後者は id と文面を引数で受ける別の検体（折り返す長い選択肢）で、写しではない |
+| 落ちない表明（R2-A7） | `balloon_pointer_handler_tests.rs` の headless の押下と移動のテストから、落ちる道の無い表明を全部消した: 押下の縮退のループの「hover は Some(2) のまま」・`try_recv` が空・`choice_selected` 無し（押下は強調を書かず、headless は当たり行が空で選択を作れない）、移動の縮退のループの `try_recv` が空（移動は選択を送らない）、`pressed_inactive…`・`pressed_active_non_hit…`・`pressed_on_anchor_only…` の同じ 2 種。`pressed_non_left_button_is_noop_false` は残る表明が戻り値だけになり落ちなかったので、Tunnel と同じ「何も記録しない」へ替えた。節の見出しと doc の「零 send」「Inbox Empty」も合わせた | 本番を一時だけ壊して赤を確かめた: 押下と移動の Tunnel の早期復帰を外すと縮退の 2 本が赤、押下の `left_down` の早期復帰を外すと `pressed_non_left…` が赤。当たり行の上の押下が選択を送ることは `balloon_gpu_hit_tests.rs` と `balloon_choice_settle_tests.rs` の実 GPU のテストが見る。離脱（`balloon_leave_tests.rs`）の「hover 不変」は離脱の道が強調を書くので落ちる |
+| GPU の許可を落とす順（R2-A10） | `gpu_balloon_world` で許可を World より先に束ねた（`areka-runtime` の `manual_balloon_runtime` と同じ形） | `areka-input` で GPU の許可を取る所はこの関数と `manual_balloon_runtime` の 2 つだけで、受ける側は組の先頭か構造体の最後の欄（`GpuPermit` の doc の決まりどおり） |
+| 消した表明を doc が言う（R2-B5） | `send_failure_records_one_failure` の doc から「知らせ 0 件」を消した。兄弟の `no_wiring_records_one_drop` は送り手が外した `MouseWiring` の中にしか無く `rig.drain()` が落ちないので、表明と doc の「知らせ 0 件」を消した | 残る 3 本（`target_mismatch`・`no_scope`・`no_window_pos`）は送り先が在るので `rig.drain()` が落ちる。doc の「知らせ 0 件」は表明のある所にだけ残る |
+
+範囲の外で同じ形を 1 つ見つけた（直していない）: `areka-runtime` の `frame_test_support.rs` `gpu_attach_world` は `gpu_balloon_world` の直す前と同じ順（World を先に束ねる）。design.md「Modified Files（範囲の外）」の表に無いファイルなので触らず、完了の棚卸で申し送る。
 
 ### 12.5 既定のブランチとの差分（要件 9.5）
 

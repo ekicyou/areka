@@ -15,11 +15,11 @@ use areka_emo_text::place::PlaceKey;
 use areka_emo_text::sink::EmoTextSink;
 use areka_emo_text::state::SpanKind;
 use areka_runtime::spine::pump_until_idle;
-use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
+use areka_sakura::contract::{ActorKey, CueSink};
 use wintf::executor::JoinHandle;
 
 use super::settle_after_selection;
-use super::test_support::{anchor_cues, capture_logs, empty_runtime};
+use super::test_support::{anchor_cues, capture_logs, choice_cue, empty_runtime};
 
 const ACTOR: &str = "0";
 
@@ -28,16 +28,7 @@ const ACTOR: &str = "0";
 /// 文字の線の受け口は持って返す（落とすとトークの終わりが積まれる）。
 fn runtime_in_choice_wait() -> (Rc<RefCell<TextLayerRuntime>>, EmoTextSink, JoinHandle<()>) {
     let rt = empty_runtime();
-    rt.borrow_mut().apply_cue(&TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(ACTOR),
-        command: CueCommand::Choice {
-            id: "OnYes".into(),
-            text: "はい".into(),
-            references: Vec::new(),
-        },
-        duration: 0.0,
-    });
+    rt.borrow_mut().apply_cue(&choice_cue(ACTOR));
     for cue in anchor_cues(ACTOR) {
         rt.borrow_mut().apply_cue(&cue);
     }

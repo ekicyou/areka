@@ -299,8 +299,12 @@ pub(crate) fn gpu_balloon_world(
     image: (u32, u32),
     origin: (i32, i32),
 ) -> (GpuPermit, World, Entity) {
-    let mut world = World::new();
-    let gpu = gpu_on(&mut world);
+    // 途中で panic しても許可が装置より後に捨てられるよう、許可を先に束ねる。
+    let (gpu, mut world) = {
+        let mut world = World::new();
+        let gpu = gpu_on(&mut world);
+        (gpu, world)
+    };
     let window = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let slot = world.spawn((Visual::default(), ChildOf(window))).id();
     world.flush();

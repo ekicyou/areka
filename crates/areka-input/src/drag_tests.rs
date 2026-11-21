@@ -425,7 +425,7 @@ fn call_start_capturing(rig: &mut Rig, entity: Entity, target: Entity) -> Vec<Ca
     capture(|| on_char_drag_start(&mut rig.world, entity, entity, &ev)).1
 }
 
-/// `MouseWiring` なし → `mouse_drag_dropped`（`no_wiring`・debug）1 件・知らせ 0 件。
+/// `MouseWiring` なし → `mouse_drag_dropped`（`no_wiring`・debug）1 件。
 #[test]
 fn no_wiring_records_one_drop() {
     let mut rig = Rig::new();
@@ -441,7 +441,6 @@ fn no_wiring_records_one_drop() {
         Some("no_wiring"),
         tracing::Level::DEBUG,
     );
-    assert_eq!(rig.drain(), vec![]);
     rig.close();
 }
 
@@ -506,7 +505,7 @@ fn no_window_pos_records_one_drop() {
     rig.close();
 }
 
-/// 受け口を落とす → `mouse_send_failed`（warn）1 件・知らせ 0 件。
+/// 受け口を落とす → `mouse_send_failed`（warn）1 件。
 #[test]
 fn send_failure_records_one_failure() {
     let mut rig = Rig::new();
