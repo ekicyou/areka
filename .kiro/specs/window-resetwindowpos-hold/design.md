@@ -127,7 +127,9 @@ crates/
 - `crates/areka/src/runtime_tests/frame_move_order_tests.rs` — `a_script_reset_sends_nothing_to_kanade` の呼び出しを `run_move_drain_with(&wiring, &all_shown, …)` に改める（呼び出し 1 行と `use` 1 行・7.3）。同じウェーブの `session-module-gather` がこのファイルのパスを直すので、順を合わせる（Implementation Notes）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の件 5 の行（452 行）の第 2 列・第 3 列・第 4 列（7.6）。
 
-`drain_resnap.rs`・`reset_pos.rs`・`chain_finalize.rs`・`frame_test_support.rs`・`frame_shared_test_support.rs` は触らない。
+- `crates/areka-runtime/src/frame/drain_resnap.rs` — `run_move_drain_with` の本体だけ（窓寸の着地を見る内側の読み口で包む・議題 2）。公開の形は変えない。
+
+`reset_pos.rs`・`chain_finalize.rs`・`frame_test_support.rs`・`frame_shared_test_support.rs` は触らない。
 
 ## System Flows
 
@@ -166,7 +168,7 @@ stateDiagram-v2
     NeverShownFailed --> NeverShownHidden: later hide
 ```
 
-- `Shown` は `applied_ratio` が `Some`（今の `shown_ratio`）。一度表示した窓は、後で隠しても `Shown` のまま（今の `move` の待ちと同じ）。
+- `Shown` は `applied_ratio` が `Some`（今の `shown_ratio`）で、**かつ窓の大きさが着地した**（窓寸 `WindowPos.size` が表示層の実表示寸 `target_physical_size` と一致する）こと。着地の材料は起動の確定が `ResnapNotLanded` で待つものと同じで、DPI の整合待ちの札（`DpiSyncHold`）で窓寸の照合が見送られた巡は、表示が成り立っていても `Pending` に数える（設計の議題 2・2026-11-21 承認）。判定の関数は 1 つなので、`\![move]` の待ちにも同じく効く（「表示の後の大きさで当てる」という `\![move]` の決まりの意図を満たす直し）。一度表示して着地した窓は、後で隠しても `Shown` のまま（今の `move` の待ちと同じ）。
 - `Pending` は窓があり、表示層の target がまだ無いか、面の指令がまだ来ていないか、来たが結果がまだ出ていない状態。時間でもイベントでも `Pending` から外さない（6.1・議題 2）。
 - 窓の無いスコープは判定に入れない（1.4）。
 
@@ -303,6 +305,7 @@ impl ShownRatioSource for EmoPresenter {
 }
 ```
 - 既定の実装があるので、閉包の実装（`impl<F: Fn(u32) -> Option<ScaleRatio>>`）・`all_shown`・`shown_only` はそのまま通る（閉包は「表示しないと決まった窓は無い」を答える）。
+- 大きさの着地（議題 2）: 読み口に既定の実装つきの `fn physical_size(&self, _scope: u32) -> Option<(u32, u32)> { None }` を足し、`EmoPresenter` は `target_physical_size(shell_target(scope))` を答える。`run_move_drain_with` の本体（形は変えない）が `world` の窓寸を読み、`physical_size` が `Some` で窓寸と一致しないスコープの `shown_ratio` を `None` と答える内側の読み口で包んで `release_ready` へ渡す。`None`（閉包・材料なし）は着地済みとして扱うので、今の檻はそのまま通る。`drain_resnap.rs` は本体の数行だけを触る。
 - 公開の入口 `run_move_drain_phase`・`run_move_drain_with` の形は変わらない（C24 の約束）。
 
 #### MoveHold（預かりの判定）
@@ -409,7 +412,8 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
 3. **追い越さない・届いた順（2.3〜2.5）**: 並べ直しを預かっている間に届いた本体への移動は預かられ（`move_hold_behind`）、表示の巡に並べ直しの後で当たる（最後の位置は移動の位置）。
 4. **表示しないと分かった窓で詰まらない（3.1〜3.4・5.4）**: 相方を `NeverShown(Hidden)` にした `SettledSource` で並べ直しを送る → その巡に当たり、`reset_window_pos_unshown scope=1 reason=hidden` が 1 行、後の本体への指令も同じ巡に当たる。`Pending` → `Hidden` に変わった巡に、預かっていた並べ直しが当たる形も見る。
 5. **表示しないと分かった窓への移動（4.1・4.2）**: `Pending` の間は預かる（`move_ratio_unset`）。`Hidden` に決まった巡に預かりの列から出て、移動ごとに `move_hold_unshown` が 1 行で、今の大きさで置かれる。
-6. **定常（6.5・1.3）**: 全部 `Shown` では並べ直しが届いた巡に当たり、`reset_window_pos_held`・`reset_window_pos_unshown` は出ない。
+6. **大きさの着地を待つ（議題 2）**: 表示は成り立ったが窓寸の照合が見送られた（窓寸が実表示寸と違う）スコープがある巡は、並べ直しも `\![move]` も預かり、窓寸が着地した巡のその相で当たる（足場で窓寸の着地を 1 巡遅らせる形を作る）。
+7. **定常（6.5・1.3）**: 全部 `Shown` では並べ直しが届いた巡に当たり、`reset_window_pos_held`・`reset_window_pos_unshown` は出ない。
 
 ### 今の檻の改め（7.3）
 - `frame_move_hold_tests.rs` の `a_reset_after_a_move_to_a_never_shown_window_supersedes_it`: 読み口を `shown_only(&[0])` から「相方が `NeverShown(Hidden)`」の `SettledSource` に替える。見る中身（捨てた記録・並べ直しがその巡に当たる・後の本体の指令が当たる・捨てた移動が後で当たらない）は変えない。名前は相方の状態に合わせて改めてよい。
