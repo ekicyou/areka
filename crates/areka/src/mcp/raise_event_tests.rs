@@ -12,9 +12,9 @@ use areka_mcp::{ToolContent, ToolOutcome};
 use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use crate::mcp::{McpLater, drain, install};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 
 const EVENT: &str = "OnAiTalk";
 const SCRIPT: &str = r"\0\s[0]hello\e";

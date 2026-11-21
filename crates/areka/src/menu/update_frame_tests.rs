@@ -18,10 +18,10 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring, wire_menu};
 use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::update::{self, RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason};
 
 const GHOST_URL: &str = "https://ghost.example/emo/";

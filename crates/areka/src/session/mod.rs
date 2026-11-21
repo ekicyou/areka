@@ -67,6 +67,12 @@ pub(crate) mod session_end;
 /// 後始末と OS のセッションの終了が共有する起動中の印の判定。
 pub(crate) mod session_mark;
 
+/// 起こし直しの単位。系の登録の入口 `register_systems` を持つ。
+pub(crate) mod ghost_session;
+
+/// 起動窓と起動の直後の結線のシーム。
+pub(crate) mod boot_seam;
+
 // 偽の SHIORI を持つゴーストを同じ World で起こす統合テストの土台。
 #[cfg(test)]
 pub(crate) mod ghost_switch_test_support;

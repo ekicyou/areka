@@ -453,8 +453,8 @@ fn text_slot_stays_invisible_after_the_text_layer_attaches_its_surface() {
 /// 置き場に kanade の送出端だけを持つゴーストを据え、その受信端を返す（切替は据え直しで表す）。
 fn seat_ghost(world: &mut World) -> mpsc::Receiver<areka_kanade::KanadeMsg> {
     let (tx, rx) = mpsc::channel();
-    world.insert_non_send(crate::ghost_session::GhostSlot(Some(
-        crate::ghost_session::GhostSession::for_test(
+    world.insert_non_send(crate::session::ghost_session::GhostSlot(Some(
+        crate::session::ghost_session::GhostSession::for_test(
             Some(tx),
             std::path::PathBuf::from("ghost/test"),
         ),

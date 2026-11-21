@@ -11,9 +11,9 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-use crate::ghost_session::GhostSlot;
 use crate::session::boot_config::BootContext;
 use crate::session::exit_wait::{self, WorkGate};
+use crate::session::ghost_session::GhostSlot;
 use crate::session::ghost_switch::SwitchInFlight;
 
 pub(crate) mod desk;

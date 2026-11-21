@@ -189,7 +189,7 @@ fn omitted_or_matching_name_answers_with_the_running_ghost() {
 
 // ---- 何もさせない（偽の SHIORI で起こした本物の単位） ----
 
-use crate::ghost_session::GhostSlot;
+use crate::session::ghost_session::GhostSlot;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 

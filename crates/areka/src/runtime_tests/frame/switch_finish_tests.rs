@@ -30,9 +30,9 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::run_switch_phase;
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::shell_balloon_switch::{
     SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish,
 };

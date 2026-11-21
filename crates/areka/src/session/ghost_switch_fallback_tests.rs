@@ -14,10 +14,10 @@ use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 
 /// 根に `folders` のゴーストを組む（`ghost/<名>/ghost/master/descript.txt` だけ）。
 pub(super) fn root_with(tmp: &TempPath, folders: &[&str]) -> BasewareRoot {

@@ -32,9 +32,9 @@ use tracing::Level;
 use wintf::ecs::Input;
 
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
 use areka_runtime::assets::{BootAssets, LoopTables};

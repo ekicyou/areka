@@ -19,7 +19,7 @@ use areka_emo_text::state::TextLayerConfig;
 
 use super::test_support::{binding, obs, obs_box};
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use log_capture_kit::{CapturedEvent, capture};
 // 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::status_report::test_support::{last_sent, runtime_busy_logged};

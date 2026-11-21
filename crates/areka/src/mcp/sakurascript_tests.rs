@@ -13,8 +13,8 @@ use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use super::*;
-use crate::ghost_session::GhostSession;
 use crate::mcp::{McpLater, drain, install};
+use crate::session::ghost_session::GhostSession;
 
 const SCRIPT: &str = r"\0\s[0]hello\e";
 

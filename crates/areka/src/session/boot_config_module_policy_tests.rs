@@ -3,9 +3,10 @@
 //! 指定は値として渡すだけなので、テストどうしは互いに影響しない。
 
 use super::*;
+use crate::install_boot_context;
 use crate::session::boot_config;
 use crate::session::boot_request::ModulePolicy;
-use crate::{ghost_session, install_boot_context};
+use crate::session::ghost_session;
 use areka_ghost::ShioriWiring;
 use bevy_ecs::prelude::World;
 use std::path::PathBuf;

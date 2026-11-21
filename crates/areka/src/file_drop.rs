@@ -12,9 +12,9 @@ use areka_kanade::{KanadeMsg, ShioriMethod};
 use bevy_ecs::prelude::*;
 use wintf::ecs::window::OnFilesDropped;
 
-use crate::ghost_session::GhostSlot;
 use crate::install::judge::SEPARATOR;
 use crate::install::{self, InstallOrder, InstallOrigin};
+use crate::session::ghost_session::GhostSlot;
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
 
 /// `GhostWindowMarker` を持つ全 entity へ受け手 [`on_ghost_files_dropped`] を差す。

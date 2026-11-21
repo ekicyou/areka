@@ -406,3 +406,30 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 - テストの名前の末尾と数（`session_mark_tests` 12・`fallback` 5・`session_mark_write_tests` 4）は前と同じで、道も `session_mark_tests::…`・`session_mark_write_tests::…` のまま。21 本とも緑。
 - `session/session_mark.rs` へは 5 項目を doc と `[main]` の前置きのある記録の文ごと写し、変えたのは可視性（項目と構造体の欄を `pub(crate)`）と引く道（ファイルの頭の `use crate::session::app_exit;`・`settle_session_mark` の本文の `use session::boot_resolve;` を `use crate::session::boot_resolve;`）だけ。写した項目の中の `info!` の呼び出しは 0 件（doc の字面に 2 か所あるだけ）。
 - `log_history` のテストと `doc/ssp-mcp/log-convention.md` には、この段の着手の時点で `areka::app_exit`・`areka::session_end` の字面が無かった（直す所 0）。real-run-kit は `launch.rs:372`・`launch_tests.rs`（`:76`・`:207`・`:237`・`:238` と `compose_rust_log_table` の前方一致の 2 組 `:246`〜`:247`・`:252`〜`:253`）・`close_tests.rs:8`・`bin/real-run-fake-areka.rs:17`・`:58` を `areka::session::app_exit`（ほか `areka::session::app`・`areka::session::app_exits`）へ直した。
+
+### 13.8 `ghost_session` の家族と `boot_seam.rs`（段 6・タスク 7.1・要件 2.1・2.2・2.4）
+
+- `git mv` で `session/` へ移したのは 22 本（`ghost_session*` 16 本・`shell_balloon_switch_session_*` 5 本・`boot_shell_tests.rs`）。`#[path]` の入れ子とモジュール名は今のまま（`#[path]` は宣言するファイルのディレクトリから引くので、字面を変えずに `session/` の兄弟に当たる）。`session/mod.rs` が `pub(crate) mod ghost_session;` を `main.rs` の説明ごと宣言する。
+- `session/boot_seam.rs` へは `restore_merged_placements`・`insert_persist_wiring`・`on_boot_ok`・`record_last_used_at_boot`・`record_last_used`・`boot_monitor_snapshot` を doc と `[main]` の前置きのある記録の文ごと写した。変えたのは可視性（`pub(crate)`）と引く道（署名の `session::boot_resolve::…` を `crate::session::boot_resolve::…`・本文の `use session::boot_resolve;` を `use crate::session::boot_resolve;`・ファイルの頭の `use bevy_ecs::prelude::World;`）だけ。
+- 本番の呼び手 5 か所（`ghost_session.rs:203`・`:226`・`:719`・`ghost_session_runtime.rs:54`・`session/ghost_switch.rs:571`）は `crate::session::boot_seam::…` へ。テストの呼び手（`runtime_tests/frame_chain_finalize_persist*_tests.rs` の 7 か所・`readonly_run_tests.rs`・`readonly_sites_tests.rs`・`write_failure_sites_tests.rs` の `insert_persist_wiring`）も同じ。
+- `main.rs` の残す `fn` は本文の先頭の `use session::{…};` に `ghost_session` を足して引く（`fn main`・`install_boot_context`・`boot_first_ghost`・`after_run`）。署名と構造体の欄（`boot_first_ghost` の `descript`・`AfterRun::session`）と `install_boot_context` の doc の内部リンクは `session::ghost_session::…` の道で書いた。
+- ソースと出所を読む所: `runtime_tests/zorder_wiring_tests.rs:68` を `include_str!("../session/ghost_session.rs")`・`session_end_deadline_tests.rs:405` を `"areka/session/ghost_session.rs"`・`RULES` の `areka::ghost_session` を `areka::session::ghost_session`（`ghost_session::ghost_session_runtime` の行は無い）・`log_history_tests.rs:105`・`:170`・`:462`・`doc/ssp-mcp/log-convention.md:55`・`tests/emo2_mcp_real_run.rs:18`・`:256`。
+- 説明で古い名を名指す所: `boot_resolve_tests.rs:420`（`main_persist_wiring_seam_tests.rs` → `boot_seam_persist_wiring_tests.rs`）・`boot_resolve.rs:29`（`main::on_boot_ok` → `boot_seam::on_boot_ok`）。`crates/areka-placement/src/diag.rs:46` の「`areka` の `main.rs`（`boot_monitor_snapshot`…）」は触らない crate なので直さず、9.2 の申し送りに載せる。
+- `main.rs` に残るのは `fn main`・`finish_after_run`・`after_run`・`AfterRun`・`install_boot_context`・`first_boot_origin`・`boot_first_ghost` とモジュールとテストの宣言だけ（605 行・非空行 546。設計の見込み「約 600」より少ないのは、移した 6 項目の doc が長かったため）。
+
+### 13.9 `main_*_tests.rs` の仕分け（9 本全部・要件 2.4）
+
+| 前のファイル | 確かめる相手 | 行き先 | 宣言する所とモジュール名 | 段 |
+|---|---|---|---|---|
+| `main_config_input_tests.rs` | `ConfigInputs`・`resolve_boot_from`（`boot_config`） | `session/boot_config_input_tests.rs` | `session/boot_config.rs`・`config_input_tests` | 段 4（5.2） |
+| `main_ghost_wiring_tests.rs` | `default_helper_exe_path`・`ghost_boot_options`・`is_benign_boot_error` | `session/boot_config_ghost_wiring_tests.rs` | `session/boot_config.rs`・`ghost_wiring_tests` | 段 4（5.2） |
+| `main_module_policy_tests.rs` | `ghost_boot_options` の SHIORI の読み方の指定 | `session/boot_config_module_policy_tests.rs` | `session/boot_config.rs`・`module_policy_tests` | 段 4（5.2） |
+| `main_restore_seam_tests.rs` | `restore_merged_placements` | `session/boot_seam_restore_tests.rs` | `session/boot_seam.rs`・`restore_seam_tests` | 段 6（7.1） |
+| `main_persist_wiring_seam_tests.rs` | `insert_persist_wiring`・`on_boot_ok`・`record_last_used_at_boot` | `session/boot_seam_persist_wiring_tests.rs` | `session/boot_seam.rs`・`persist_wiring_seam_tests` | 段 6（7.1） |
+| `main_monitor_snapshot_seam_tests.rs` | `boot_monitor_snapshot` | `session/boot_seam_monitor_snapshot_tests.rs` | `session/boot_seam.rs`・`monitor_snapshot_seam_tests` | 段 6（7.1） |
+| `main_finish_after_run_tests.rs` | `finish_after_run`（残る） | 残す | `main.rs`・`finish_after_run_tests` | — |
+| `main_session_mark_tests.rs`（子 `main_session_mark_fallback_tests.rs`） | `after_run`・`boot_first_ghost`・`install_boot_context`・`first_boot_origin`（残る）と `settle_session_mark`・`session_mark_verdict`（移った） | 残す | `main.rs`・`session_mark_tests`（子は `fallback`） | 段 5（6.1）で引き方を直した |
+| `main_session_mark_write_tests.rs` | `after_run`・`finish_after_run`・`boot_first_ghost`（残る）と `session_mark_verdict` | 残す | `main.rs`・`session_mark_write_tests` | 段 5（6.1）で引き方を直した |
+
+- 段 6 の 3 本は中身を変えていない（`use super::*` は `boot_seam.rs` の項目と `World` に当たる）。テストの名前の末尾と数（`restore_seam_tests` 5・`persist_wiring_seam_tests` 2・`monitor_snapshot_seam_tests` 5）は前と同じで、道が `session::boot_seam::…` に変わっただけ。
+- `cargo test -p areka --bin areka` は 1836 件が緑（無視 3）・`--list` は 1839 件。`zorder_wiring_tests` 2 本も緑。

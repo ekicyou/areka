@@ -102,7 +102,7 @@ fn status_rows_and_areka_is_exact_only() {
         "areka",
         "areka::session::boot_config",
         "areka::session::boot_resolve",
-        "areka::ghost_session",
+        "areka::session::ghost_session",
         "areka::session::ghost_switch",
         "ghost-boot",
         "ghost-shutdown",
@@ -167,7 +167,7 @@ fn rules_table_is_the_designed_fourteen_rows_in_order() {
             ("areka", Kind::Status, true),
             ("areka::session::boot_config", Kind::Status, false),
             ("areka::session::boot_resolve", Kind::Status, false),
-            ("areka::ghost_session", Kind::Status, false),
+            ("areka::session::ghost_session", Kind::Status, false),
             ("areka::session::ghost_switch", Kind::Status, false),
             ("ghost-boot", Kind::Status, false),
             ("ghost-shutdown", Kind::Status, false),
@@ -459,7 +459,7 @@ fn defaults_follow_the_kind_for_all_five_kinds() {
 fn ghost_and_label_on_other_rows_stay_in_the_body() {
     let got = draft(
         Level::INFO,
-        "areka::ghost_session",
+        "areka::session::ghost_session",
         [msg("起動した"), s("ghost", "emo2", "\"emo2\"")],
     )
     .unwrap();

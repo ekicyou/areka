@@ -19,10 +19,10 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
-use crate::ghost_session::GhostSession;
 use crate::install::desk::{InstallDesk, insert_busy_desk_for_test};
 use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::GhostSession;
 use crate::session::ghost_switch::{
     PrevGhost, SwitchEnd, SwitchStage, SwitchTarget, WelcomeAttempt,
 };

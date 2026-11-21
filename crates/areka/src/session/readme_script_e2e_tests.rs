@@ -9,7 +9,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch_test_support::standard_script;
 use crate::session::readme::os_port::{OsCall, Verb};
 use crate::session::readme::{FakeOs, Opener, drain_readme_requests, serve};

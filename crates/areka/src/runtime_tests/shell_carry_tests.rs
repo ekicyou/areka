@@ -16,7 +16,7 @@ use std::path::PathBuf;
 
 use super::test_support::set;
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::reload::carries_shell_state;
 
 /// 読み直しの印が無ければ控えない（ふつうの切替・起動は今までどおり）。控えが無ければ渡しもしない。

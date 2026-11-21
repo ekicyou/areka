@@ -200,7 +200,9 @@ pub(crate) fn prepare_ghost_windows(
     // 先頭の同期段（`areka_runtime::frame::work_area_sync`）が実行時のモニタ表から作り直す
     // （ここが作るのは起動時の初期値で、構築関数は同期段と同一）。構築と同時に全モニタの観測を
     // 1 回出す（既定 OFF・診断 `RUST_LOG` でのみ点灯）。
-    let sources = crate::boot_monitor_snapshot(&wintf::ecs::window::monitor::enumerate_monitors());
+    let sources = crate::session::boot_seam::boot_monitor_snapshot(
+        &wintf::ecs::window::monitor::enumerate_monitors(),
+    );
 
     // clickthrough 登録・OS の閉鎖要求の受け手・重なり順の対の `FrameFinalize` への結線は
     // `register_systems` が済ませてある（どれも `Added<WindowHandle>` 起点ゆえ、
@@ -223,7 +225,11 @@ pub(crate) fn prepare_ghost_windows(
     // 復元は**起動時の作業領域源を 1 度だけ**読む。以後の同期段はこの判定へ効かせない——拡大率を
     // またぐ保存位置の追従は行わない裁定（`windowposition-limit`）を踏襲する。
     let (placements, restored_scopes, restored_clamped) =
-        crate::restore_merged_placements(&cfg.ghost_root, prepared.placements, &sources.snapshot);
+        crate::session::boot_seam::restore_merged_placements(
+            &cfg.ghost_root,
+            prepared.placements,
+            &sources.snapshot,
+        );
     let titles = prepared.titles;
 
     // 組んだ時点の「窓を閉じた回数」を控え、着いたときに進んでいれば作らない（投函の後に全窓を
@@ -716,7 +722,7 @@ pub(crate) fn boot_ghost(
             // fallback boot でも生きた runtime があれば wired 経路と同型に `PersistWiring`（NonSend）を同一
             // World へ挿入する（両経路で DragEnd→persist_entries の write-through 導管を確立）。起動成功時の
             // 記憶の書き込みも wired 経路と同じ 1 か所で行う。
-            crate::on_boot_ok(world, &runtime, ghost, balloon);
+            crate::session::boot_seam::on_boot_ok(world, &runtime, ghost, balloon);
             Some(runtime)
         }
         Err(err) => {

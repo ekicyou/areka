@@ -12,11 +12,11 @@ use std::time::{Duration, Instant};
 use areka_kanade::{CloseReason, WaitBudget};
 use bevy_ecs::prelude::*;
 
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::session::boot_config::BootContext;
 use crate::session::exit_wait;
 use crate::session::ghost_quit::run_ghost_quit_phase;
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::session_mark::{MarkInputs, Teardown, settle_session_mark};
 use crate::session::write_failure;

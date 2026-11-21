@@ -12,7 +12,7 @@ use temp_path_kit::TempPath;
 use super::destination::{Target, classify};
 use super::opener::{OpenJob, Opener};
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 
 /// 説明書の持ち物を World へ直に入れる（判断分岐だけを見るここでは結線 `wire_readme` を
 /// 通さない）。送出端は要求を送るために返す。

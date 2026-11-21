@@ -42,8 +42,11 @@ fn boot_from_memory(
     world: &mut World,
     ghost: &MinimalGhost,
 ) -> (GhostWindows, Vec<areka_placement::resolver::ScopePlacement>) {
-    let (placements, restored, _) =
-        crate::restore_merged_placements(ghost.root(), prep_placements(), &work_area_snapshot());
+    let (placements, restored, _) = crate::session::boot_seam::restore_merged_placements(
+        ghost.root(),
+        prep_placements(),
+        &work_area_snapshot(),
+    );
     assert_eq!(
         restored.keys().copied().collect::<Vec<_>>(),
         vec![0, 1],
@@ -67,8 +70,11 @@ fn boot_from_memory(
 fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
     let ghost = MinimalGhost::plant("nowrite");
     let store = PersistStore::real(&ghost.ghost_master());
-    let (placements, restored, _) =
-        crate::restore_merged_placements(ghost.root(), prep_placements(), &work_area_snapshot());
+    let (placements, restored, _) = crate::session::boot_seam::restore_merged_placements(
+        ghost.root(),
+        prep_placements(),
+        &work_area_snapshot(),
+    );
     assert!(restored.is_empty(), "前提: 初めの起動は記憶が無い");
     let mut world = persist_world();
     store.wire(&mut world);

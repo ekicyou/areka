@@ -417,7 +417,7 @@ mod last_used {
     use super::*;
 
     /// 共有 fake IO（アクターへ移送しつつ、同じストアを別ハンドルの `load_scope` で観測する。
-    /// `main_persist_wiring_seam_tests.rs` と同じ形）。
+    /// `boot_seam_persist_wiring_tests.rs` と同じ形）。
     struct SharedFakeIo(Arc<FakePersistIo>);
     impl PersistIo for SharedFakeIo {
         fn read(&self, path: &Path) -> std::io::Result<Option<String>> {

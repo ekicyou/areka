@@ -20,11 +20,11 @@ use tracing::Level;
 use super::{
     Here, Stage, UpdateDesk, can_update, drain, on_steady, resolve, resolve_targets, update_current,
 };
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::menu::captions::QueryReply;
 use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::session::exit_wait::begin_close;
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::on_notice;
 use crate::update::{
     RawUpdateRequest, SummaryKind, TargetKind, TargetSpec, UpdateReason, register,

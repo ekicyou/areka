@@ -123,7 +123,7 @@ pub(crate) const RULES: &[Rule] = &[
     rule("areka", Kind::Status, true),
     rule("areka::session::boot_config", Kind::Status, false),
     rule("areka::session::boot_resolve", Kind::Status, false),
-    rule("areka::ghost_session", Kind::Status, false),
+    rule("areka::session::ghost_session", Kind::Status, false),
     rule("areka::session::ghost_switch", Kind::Status, false),
     rule("ghost-boot", Kind::Status, false),
     rule("ghost-shutdown", Kind::Status, false),

@@ -65,7 +65,7 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
 fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
     // 窓を作る側（重なりの生の値の写し）と結線へ渡す行は `ghost_session.rs`、その戻りを受けて
     // ゴーストごとの結線へ運ぶ行は `fn main`（`main.rs`）に在る。
-    let session_raw = include_str!("../ghost_session.rs");
+    let session_raw = include_str!("../session/ghost_session.rs");
     let session_code = code_only(session_raw);
     let session = squeeze(&session_code);
     let main_raw = include_str!("../main.rs");

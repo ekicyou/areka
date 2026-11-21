@@ -235,8 +235,8 @@ fn notice_before_steady_reaches_the_real_kanade_and_is_dropped_but_the_table_is_
             Box::new(|_, _| {}),
         );
         cage.world
-            .insert_non_send(crate::ghost_session::GhostSlot(Some(
-                crate::ghost_session::GhostSession::for_test(
+            .insert_non_send(crate::session::ghost_session::GhostSlot(Some(
+                crate::session::ghost_session::GhostSession::for_test(
                     Some(kanade.clone()),
                     std::path::PathBuf::from("ghost/test"),
                 ),
@@ -273,7 +273,7 @@ fn notice_before_steady_reaches_the_real_kanade_and_is_dropped_but_the_table_is_
 fn notice_without_kanade_warns_once_and_keeps_the_table_written() {
     let mut cage = Cage::new(144);
     cage.world
-        .insert_non_send(crate::ghost_session::GhostSlot(None));
+        .insert_non_send(crate::session::ghost_session::GhostSlot(None));
     cage.boot_and_show_shell();
     cage.set_shell_dpi(192);
     let ((), events) = capture(|| cage.frame());

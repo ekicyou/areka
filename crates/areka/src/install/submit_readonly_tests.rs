@@ -17,7 +17,7 @@ use log_capture_kit::capture;
 use tracing::Level;
 
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::readonly::ReadOnlyRun;
 
 /// どの出どころの依頼も断られ、積まれず、窓口は忙しくなく、記録は依頼ごとに info が 1 件で

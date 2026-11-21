@@ -350,7 +350,7 @@ fn real_unit_answers_get_active_ghost_list_in_one_frame() {
 /// LogSink へ倒れた単位（バルーンの根だけが無い＝倒れた先は実行系つきで起きる）も起動中として読める。
 #[test]
 fn logsink_fallen_unit_is_active() {
-    use crate::ghost_session::GhostSlot;
+    use crate::session::ghost_session::GhostSlot;
     use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig};
 
     let mut rig = SwitchRig::new(vec![("A", FakeShiori::BalloonMissing)]);
@@ -375,7 +375,7 @@ fn logsink_fallen_unit_is_active() {
 /// 純粋なテストでは見えない配線の唯一の檻。
 #[test]
 fn real_unit_resolves_by_sakura_name_and_ascii_case() {
-    use crate::ghost_session::GhostSlot;
+    use crate::session::ghost_session::GhostSlot;
     use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
     let mut rig = SwitchRig::new(vec![(

@@ -12,7 +12,7 @@ use std::sync::RwLock;
 use areka_emo_present::{AppliedScale, ScaleRatio};
 use areka_sylphya::{PropPath, PullShape, PullSource, SylphyaReader};
 
-use crate::ghost_session::ghost_session_scope_rect::{ScopeSelector, scope_selector};
+use crate::session::ghost_session::ghost_session_scope_rect::{ScopeSelector, scope_selector};
 #[cfg(test)]
 pub(crate) use areka_runtime::scope_scale::{ScopeScaleTable, percent_text};
 pub(crate) use areka_runtime::scope_scale::{SharedScopeScaleTable, scaling_text};

@@ -20,9 +20,9 @@ use temp_path_kit::TempPath;
 
 use areka_runtime::consumer_ledger::test_support::carrier_cue;
 
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::update::TargetKind::{self, Balloon, Ghost, Shell};
 use crate::update::{self as update, desk};
 

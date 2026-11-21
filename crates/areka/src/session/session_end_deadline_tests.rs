@@ -41,8 +41,8 @@ use log_capture_kit::{CapturedEvent, capture};
 use shiori_host32_host::{ExitKind, RequestError};
 
 use super::{SESSION_END_SHIORI_LIMIT, end_session_within};
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::boot_resolve::{read_session_mark, write_session_mark};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_runtime::spine::hold_support::HoldAt;
 use areka_runtime::spine::{
@@ -402,7 +402,7 @@ const DEADLINE_CALL_TOKENS: [&str; 3] = [".shutdown_within(", ".arm(", "end_sess
 /// OS のセッションの終了の受け手が定数を渡す 1 行・受け手の降ろし・`GhostSession` の委譲の 3 行だけ。
 const ALLOWED_DEADLINE_CALLS: [(&str, &str); 3] = [
     (
-        "areka/ghost_session.rs",
+        "areka/session/ghost_session.rs",
         "let (result, fired) = runtime.shutdown_within(reason, budget);",
     ),
     (

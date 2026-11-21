@@ -12,7 +12,7 @@ use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
 use super::resolve::{self, ActiveGhost, NOT_ACTIVE, Omitted, listed_value};
-use crate::ghost_session::GhostSlot;
+use crate::session::ghost_session::GhostSlot;
 
 /// 起動・終了・切替の手順の途中で受け付けなかったときの本文（SSP の実測の文言）。
 pub(super) const NOT_NOW: &str = "the ghost cannot accept a script now";

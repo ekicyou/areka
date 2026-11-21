@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 use std::sync::mpsc::{self};
 
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use areka_runtime::move_cue::PositionCue;
 
 use super::run_move_drain_phase;

@@ -15,7 +15,7 @@
 //! 3. strict: 誤りを 2 つ含む台本を `strict` 真で流し、
 //!    答えの `since_id` で `get_log(log_type=error, ghost_name=…)` を読むと 2 件が台本の順に読める。
 //!
-//! 記録の段は 3 つの和にする。`areka::ghost_session` の info（`本物のゴースト窓を開きました`）は
+//! 記録の段は 3 つの和にする。`areka::session::ghost_session` の info（`本物のゴースト窓を開きました`）は
 //! どれにも含まれないので、1 の「標準出力から消える」は今のまま成り立つ。
 //! 子の起こし方・MCP の呼び出し・閉じ方は窓口 `real-run-kit` に任せる。証拠を集め終えたら利用者と同じ
 //! 閉じ方で閉じ（保険の自動終了を待たない）、閉じた後に判定する。
@@ -253,7 +253,7 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
     // 1-1: 標準出力から消えた info が履歴に残る。
     assert!(
         !stdout.contains(REAL_WINDOWS),
-        "RUST_LOG に areka::ghost_session が無いのに標準出力に「{REAL_WINDOWS}」がある。\n{}",
+        "RUST_LOG に areka::session::ghost_session が無いのに標準出力に「{REAL_WINDOWS}」がある。\n{}",
         ctx()
     );
     // 1-3: 各行の頭の形と番号の昇順（継続行はタブで始まり、直前の行に属する）。

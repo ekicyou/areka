@@ -30,7 +30,7 @@ use log_capture_kit::capture;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{FakeShiori, Stall, SwitchRig, TICK_STEP_MS, standard_script};
-use crate::ghost_session::GhostSlot;
+use crate::session::ghost_session::GhostSlot;
 use crate::session::ghost_switch::SwitchInFlight;
 use areka_runtime::spine::RecordedCall;
 

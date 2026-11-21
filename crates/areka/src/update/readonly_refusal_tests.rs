@@ -19,10 +19,10 @@ use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use tracing::Level;
 
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::session::exit_wait::begin_close;
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::readonly::ReadOnlyRun;
 use crate::update::desk::{self, Stage, UpdateDesk};
 use crate::update::{RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason, register, submit};

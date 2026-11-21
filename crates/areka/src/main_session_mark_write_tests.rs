@@ -9,12 +9,12 @@ use bevy_ecs::world::World;
 use temp_path_kit::TempPath;
 
 use super::{after_run, finish_after_run};
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::alert::{AlertScene, WriteMoment};
 use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::boot_config::ConfigInputs;
 use crate::session::boot_config::{BootContext, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::session_mark::{
     MarkInputs, MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
 };
@@ -170,7 +170,7 @@ fn boot_mark_unwritable_does_not_boot_for_plain_and_halted() {
             )
         };
         unwritable(&app);
-        let descript = crate::ghost_session::StartupDescriptValues {
+        let descript = crate::session::ghost_session::StartupDescriptValues {
             author_dpi: areka_placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
             default_surfaces: areka_placement::DefaultSurfaces::builtin(),

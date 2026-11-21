@@ -16,7 +16,7 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::super::*;
 use super::applied;
-use crate::ghost_session::{GhostSlot, RuntimeRebuild, rebuild_runtime_in_place};
+use crate::session::ghost_session::{GhostSlot, RuntimeRebuild, rebuild_runtime_in_place};
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::shiori_host::ShioriHostSink;

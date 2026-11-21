@@ -51,7 +51,7 @@ pub(crate) fn rewire_runtime_consumers(
     crate::install::names::reseed(world, runtime);
     // 位置永続の World 結線: ゴースト窓を保持する同一 World へ sylphya publisher clone を持つ PersistWiring
     // （NonSend）を差し、DragEnd→persist_entries の write-through 導管を確立する。続けて起動成功時の記憶を書く。
-    crate::on_boot_ok(world, runtime, ghost, balloon);
+    crate::session::boot_seam::on_boot_ok(world, runtime, ghost, balloon);
     // 選択確定通知の受信結線: 呼び手が続けて `wire_balloon_choice` で挿入する `ChoiceSelectionInbox` を毎フレーム
     // drain し、dispatcher の inbox 経由で kanade へ全件転送する系（登録は `register_systems`）の送り口を置く。
     // 送り先が dispatcher なのは、押下の選択を再生の `ChoiceWaiting` と同じ inbox に並べて追い越させないため。

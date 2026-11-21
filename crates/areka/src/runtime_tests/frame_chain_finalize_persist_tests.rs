@@ -31,8 +31,11 @@ use wintf::ecs::window::drain_window_pos_commands;
 fn support_wired_world_delivers_positions_to_store() {
     let ghost = MinimalGhost::plant("support-check");
     let store = PersistStore::real(&ghost.ghost_master());
-    let (placements, restored, _) =
-        crate::restore_merged_placements(ghost.root(), prep_placements(), &work_area_snapshot());
+    let (placements, restored, _) = crate::session::boot_seam::restore_merged_placements(
+        ghost.root(),
+        prep_placements(),
+        &work_area_snapshot(),
+    );
     assert!(restored.is_empty(), "前提: 記憶が無い");
 
     let mut world = persist_world();
@@ -65,8 +68,11 @@ fn support_wired_world_delivers_positions_to_store() {
     }
     store.finish();
     // 実物のファイルは、起動の準備の関数が読む置き場と同じ（再起動のテストの前提）。
-    let (_, restored, _) =
-        crate::restore_merged_placements(ghost.root(), prep_placements(), &work_area_snapshot());
+    let (_, restored, _) = crate::session::boot_seam::restore_merged_placements(
+        ghost.root(),
+        prep_placements(),
+        &work_area_snapshot(),
+    );
     assert_eq!(
         restored.into_keys().collect::<Vec<_>>(),
         vec![0, 1],
@@ -91,10 +97,13 @@ fn booted(store: &PersistStore, shown: &PerTargetSizes) -> (World, GhostWindows,
     (world, gw, ghost)
 }
 
-/// 起動の準備の関数（`crate::restore_merged_placements`）が返した配置。記憶が無いことを確かめる。
+/// 起動の準備の関数（`crate::session::boot_seam::restore_merged_placements`）が返した配置。記憶が無いことを確かめる。
 fn unremembered_placements(ghost: &MinimalGhost) -> Vec<ScopePlacement> {
-    let (placements, restored, _) =
-        crate::restore_merged_placements(ghost.root(), prep_placements(), &work_area_snapshot());
+    let (placements, restored, _) = crate::session::boot_seam::restore_merged_placements(
+        ghost.root(),
+        prep_placements(),
+        &work_area_snapshot(),
+    );
     assert!(restored.is_empty(), "前提: 記憶が無い");
     placements
 }

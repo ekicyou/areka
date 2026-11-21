@@ -35,9 +35,9 @@ use super::procedure::InstalledRecord;
 use super::startup::CarriedInstall;
 use super::worker::{DeskAsk, spawn_worker};
 use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
-use crate::ghost_session::GhostSlot;
 use crate::session::boot_config::BootContext;
 use crate::session::exit_wait::WorkGate;
+use crate::session::ghost_session::GhostSlot;
 use crate::session::ghost_switch::{SwitchInFlight, record_last_installed};
 use areka_runtime::shell_balloon_resolve::{record_installed_balloon, record_installed_shell};
 

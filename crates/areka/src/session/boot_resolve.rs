@@ -26,7 +26,7 @@ use areka_sylphya::{
 };
 
 // 判断と記憶の直読みの消費者は起動前の解決（`install::startup::resolve_boot`）。記憶の書き込み
-// （[`LastUsed`]）の消費者は boot 成功直後の `main::on_boot_ok`。
+// （[`LastUsed`]）の消費者は boot 成功直後の `boot_seam::on_boot_ok`。
 
 /// 既定ゴースト（配布物に必ず同梱）。
 pub(crate) const DEFAULT_GHOST_FOLDER: &str = "emo2";

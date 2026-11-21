@@ -92,7 +92,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.6, 2.1, 2.4, 6.1, 6.2, 7.3, 7.7, 7.9_
 
 - [ ] 7. ゴーストの単位と系の登録を集める（段 6）
-- [ ] 7.1 `ghost_session` の家族を移し、`boot_seam.rs` を作る
+- [x] 7.1 `ghost_session` の家族を移し、`boot_seam.rs` を作る
   - `ghost_session*`（`_runtime`・`_scope_rect`・`_scope_scale` を含む）・`shell_balloon_switch_session_*`・`boot_shell_tests.rs` を `git mv` で移し、`#[path]` の入れ子とモジュール名は今のままにする
   - `main.rs` の `restore_merged_placements`・`insert_persist_wiring`・`on_boot_ok`・`record_last_used_at_boot`・`record_last_used`・`boot_monitor_snapshot` を字面のまま新しい `session/boot_seam.rs` へ写し、可視性だけを上げる。本番の呼び手（`ghost_session.rs:204`・`:227`・`:720`・`ghost_session_runtime.rs:55`・`session/ghost_switch.rs:569`）を `crate::session::boot_seam::…` へ
   - `main_restore_seam_tests.rs`・`main_persist_wiring_seam_tests.rs`・`main_monitor_snapshot_seam_tests.rs` を `git mv` で `session/boot_seam_{restore,persist_wiring,monitor_snapshot}_tests.rs` へ移し、`boot_seam.rs` が今のモジュール名で宣言する。古い名を説明で名指す所（`boot_resolve_tests.rs:420` の `main_persist_wiring_seam_tests.rs` ほか）を新しい名へ直す
@@ -184,3 +184,4 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
 - 5.1: `main.rs` の本文で移した項目を使う所は、道を全部書かず `fn` の先頭の `use session::{…};` にモジュールを足して引く（署名と欄だけ `session::…` の道）。
 - 5.2: `crates/areka/tests/emo2_mcp_real_run.rs` の 1 本は `#[ignore]` が無く、`cargo test -p areka --test emo2_mcp_real_run` は実機で areka を起こす（排他テストの机が要る）。5.2 の実装中に机なしで 1 回走り、緑だった。
 - 5.2: 移した宣言の doc が「本ファイル」のように元の置き場を指す語を持つときは、行き先で誤りになるのでファイル名を名指しへ直す。
+- 7.1: 触らない crate `areka-placement` に `main.rs` の `restore_merged_placements`／`boot_monitor_snapshot` を名指す古い説明が 4 か所（`src/diag.rs:46`・`src/persist.rs:330`・`src/resolver.rs:97`・`src/resolver_resolve_balloon_tests.rs:123`）。9.2 の申し送りに載せる。

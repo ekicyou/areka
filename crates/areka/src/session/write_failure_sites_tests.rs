@@ -21,18 +21,19 @@ use areka_sylphya::{PersistKey, PersistScope, SylphyaPublisher};
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::ghost_session::{GhostSlot, StartupDescriptValues};
+use crate::boot_first_ghost;
 use crate::session::app_exit::FirstExit;
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::{
     BalloonRoute, GhostRoute, LastUsed, record_last_balloon, record_last_shell,
 };
+use crate::session::boot_seam::insert_persist_wiring;
+use crate::session::ghost_session::{GhostSlot, StartupDescriptValues};
 use crate::session::ghost_switch::{
     PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
 };
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::session::session_mark::{MarkInputs, Teardown, settle_session_mark};
-use crate::{boot_first_ghost, insert_persist_wiring};
 use areka_placement::AuthorDpi;
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;

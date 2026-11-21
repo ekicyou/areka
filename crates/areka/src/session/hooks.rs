@@ -10,11 +10,11 @@ use areka_kanade::KanadeMsg;
 use areka_seriko::SerikoSink;
 use bevy_ecs::world::World;
 
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::{
     BalloonDecision, BalloonRoute, record_last_balloon, record_last_shell,
 };
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::reload;
 use areka_runtime::session_hooks::SessionHooks;

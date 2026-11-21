@@ -16,9 +16,9 @@ use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::menu::ghost_frame::tests::{FrameShape, boot_context, shape};
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring, wire_menu};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 
 // ---------------------------------------------------------------- 道具立て
 

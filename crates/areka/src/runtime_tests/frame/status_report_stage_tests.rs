@@ -16,7 +16,7 @@ use areka_seriko::{
 };
 
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 // 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::status_report::test_support::last_stage;
 
