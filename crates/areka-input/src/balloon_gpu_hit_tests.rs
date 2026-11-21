@@ -4,13 +4,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::{SpanKind, TextLayerConfig};
+use areka_emo_text::state::SpanKind;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::test_support::{
-    bubble_move, capture_logs, gpu_balloon_world, headless_runtime_wiring, insert_wiring,
-    left_press,
+    bubble_move, capture_logs, empty_runtime, gpu_balloon_world, headless_runtime_wiring,
+    insert_wiring, left_press,
 };
 use super::{
     BalloonWiring, ChoiceHitRow, hit_choice_row, on_balloon_pointer_moved,
@@ -26,9 +26,7 @@ fn init_com() {
 
 /// 普通のバルーン（scope 0）に選択肢を順に載せた文字の層。
 fn runtime_with_choices(choices: &[(&str, &str)]) -> Rc<RefCell<TextLayerRuntime>> {
-    let rt = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
+    let rt = empty_runtime();
     for (id, text) in choices {
         rt.borrow_mut().apply_cue(&TalkCue {
             at: 0.0,

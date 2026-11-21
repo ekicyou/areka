@@ -170,7 +170,7 @@ pub fn register_choice_drain(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use log_capture_kit::{LineFormat, capture_lines};
+    use crate::balloon::test_support::capture_logs;
     use std::sync::mpsc::{self, TryRecvError};
 
     /// 登録専用の関数は単独で呼べ、入力の段へ取り出しをちょうど 1 つ足し、持ち物は置かない。
@@ -229,24 +229,6 @@ mod tests {
                 "  ".to_string(),
             ],
         }
-    }
-
-    // ── ログ発火を決定論的に観測するための捕捉（捕捉層は共有機構へ委譲）──
-    //
-    // 捕捉層そのものはここに持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。
-    // 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
-    // のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
-    // interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの
-    // 判定が焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は
-    // 「不要」ゆえ、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても
-    // 取りこぼす。共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算
-    // ⑶ 番兵イベントによる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の
-    // crate doc と同 crate の `src/probe.rs`）。
-
-    /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
-    fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-        let ((), lines) = capture_lines(LineFormat::LevelFields, f);
-        lines
     }
 
     /// `DispatcherMsg` から `ChoiceInput` を取り出す（他 variant は檻失敗）。

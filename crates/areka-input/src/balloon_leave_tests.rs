@@ -12,30 +12,28 @@ use areka_runtime::balloon_hover::BalloonHover;
 use bevy_ecs::hierarchy::ChildOf;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::mpsc;
 use wintf::ecs::Window;
 use wintf::ecs::pointer::PointerLeave;
 
-use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::TextLayerConfig;
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::world::World;
 
 use super::test_support::{
-    capture_logs, headless_runtime_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
+    capture_logs, empty_runtime, headless_runtime_wiring, insert_wiring,
+    runtime_with_active_choice, spawn_balloon_leave_child,
 };
 use super::*;
 use areka_placement::spawn::BalloonWindowMarker;
 
 /// `hover[scope]=Some(k)`（`ordinal=Some`）を仕込んだ `BalloonWiring` を World へ NonSend 挿入する。
 fn insert_wiring_with_hover(world: &mut World, scope: usize, ordinal: Option<usize>) {
-    let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
-    let mut bw = BalloonWiring::new(tx);
+    let _rx = insert_wiring(world);
     if let Some(o) = ordinal {
-        bw.set_hover(scope, Some(o));
+        world
+            .get_non_send_mut::<BalloonWiring>()
+            .unwrap()
+            .set_hover(scope, Some(o));
     }
-    world.insert_non_send(bw);
-    world.insert_non_send(BalloonHover::default());
 }
 
 /// バルーン所有 leave→hover 解除（Inject(None) アーム）: choice 表示中・現行 hit=None
@@ -101,9 +99,7 @@ fn leave_balloon_owned_inactive_resets_own_state_without_inject() {
     let mut world = World::new();
     spawn_balloon_leave_child(&mut world, 0);
 
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
+    let runtime = empty_runtime();
     assert!(
         !runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=false（選択肢スパン無し）"
@@ -125,7 +121,7 @@ fn leave_balloon_owned_inactive_resets_own_state_without_inject() {
 }
 
 /// 非バルーン窓の leave は無視（key assertion）: `BalloonWindowMarker` を持たない窓の子が
-/// `PointerLeave` を保持しても、別 scope のバルーン hover は一切変化しない。
+/// `PointerLeave` を保持しても、選択肢の強調（`BalloonWiring`）も窓上の滞在（`BalloonHover`）も変化しない。
 #[test]
 fn leave_non_balloon_window_is_ignored() {
     let mut world = World::new();
@@ -136,6 +132,10 @@ fn leave_non_balloon_window_is_ignored() {
     let runtime = runtime_with_active_choice("0");
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     insert_wiring_with_hover(&mut world, 0, Some(5));
+    world
+        .get_non_send_mut::<BalloonHover>()
+        .unwrap()
+        .set_balloon_hover(0);
 
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
@@ -143,6 +143,13 @@ fn leave_non_balloon_window_is_ignored() {
         world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         Some(5),
         "非バルーン窓の leave は hover を触らない（balloon 所有チェックの key assertion）"
+    );
+    assert!(
+        world
+            .get_non_send::<BalloonHover>()
+            .unwrap()
+            .is_balloon_hovered(0),
+        "非バルーン窓の離脱は滞在を触らない"
     );
     assert!(
         !logs.iter().any(|l| l.contains("choice_hover_inject")),

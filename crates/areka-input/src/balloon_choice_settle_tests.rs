@@ -13,13 +13,13 @@ use std::rc::Rc;
 use areka_emo_text::actor::{TextLayerRuntime, present_frame, spawn_emo_text};
 use areka_emo_text::place::PlaceKey;
 use areka_emo_text::sink::EmoTextSink;
-use areka_emo_text::state::{SpanKind, TextLayerConfig};
+use areka_emo_text::state::SpanKind;
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
 
 use super::settle_after_selection;
-use super::test_support::{anchor_cues, capture_logs};
+use super::test_support::{anchor_cues, capture_logs, empty_runtime};
 
 const ACTOR: &str = "0";
 
@@ -34,9 +34,7 @@ fn pump_until_idle() {
 ///
 /// 文字の線の受け口は持って返す（落とすとトークの終わりが積まれる）。
 fn runtime_in_choice_wait() -> (Rc<RefCell<TextLayerRuntime>>, EmoTextSink, JoinHandle<()>) {
-    let rt = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
+    let rt = empty_runtime();
     rt.borrow_mut().apply_cue(&TalkCue {
         at: 0.0,
         actor: ActorKey::from(ACTOR),

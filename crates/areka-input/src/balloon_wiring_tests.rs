@@ -1,8 +1,7 @@
 use super::test_support::{
-    headless_runtime_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
+    headless_runtime_wiring, insert_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
 };
 use super::*;
-use areka_placement::follow::OffsetBase;
 use areka_runtime::balloon_hover::BalloonHover;
 use bevy_ecs::world::World;
 use std::sync::mpsc;
@@ -17,52 +16,6 @@ fn sample() -> ChoiceSelection {
     }
 }
 
-#[test]
-fn identical_field_contents_compare_equal() {
-    let a = sample();
-    let b = sample();
-    assert_eq!(
-        a, b,
-        "同一フィールド内容の ChoiceSelection は等価であるべき"
-    );
-}
-
-#[test]
-fn differing_field_contents_compare_unequal() {
-    let base = sample();
-
-    let mut different_id = sample();
-    different_id.id = "q1".to_string();
-    assert_ne!(base, different_id, "id が異なれば非等価であるべき");
-
-    let mut different_refs = sample();
-    different_refs.references = vec!["ref0".to_string()];
-    assert_ne!(
-        base, different_refs,
-        "references が異なれば非等価であるべき"
-    );
-
-    let mut different_kind = sample();
-    different_kind.kind = SpanKind::Anchor;
-    assert_ne!(base, different_kind, "種類が異なれば非等価であるべき");
-}
-
-#[test]
-fn clone_equals_original_and_debug_is_usable() {
-    let original = sample();
-    let cloned = original.clone();
-    assert_eq!(
-        original, cloned,
-        "clone は元と等価であるべき（Clone 導出の証跡）"
-    );
-
-    let rendered = format!("{original:?}");
-    assert!(
-        !rendered.is_empty(),
-        "Debug 出力は非空であるべき（Debug 導出の証跡）"
-    );
-}
-
 /// NonSend 挿入＋シーム観測檻: `BalloonWiring` を `World` へ
 /// **NonSend 挿入**でき、`ChoiceSelectionInbox` の `Receiver` 経由で発行シンクへ送った
 /// `ChoiceSelection` を一度だけ観測できる（送信値と等価・2 度目は `Empty`）。
@@ -72,12 +25,8 @@ fn clone_equals_original_and_debug_is_usable() {
 /// 発行が mpsc 上で観測できることのみを固定し、`resolve_choice` は一切呼ばない。
 #[test]
 fn wiring_inserts_non_send_and_selection_observed_via_inbox() {
-    let (tx, rx) = mpsc::channel::<ChoiceSelection>();
-    let wiring = BalloonWiring::new(tx);
-
     let mut world = World::new();
-    world.insert_non_send(wiring);
-    world.insert_non_send(BalloonHover::default());
+    let rx = insert_wiring(&mut world);
     world.insert_non_send(ChoiceSelectionInbox(rx));
 
     assert!(
@@ -150,45 +99,8 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed};
 
 use crate::attach_char_pointer_handlers;
-use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use areka_placement::source::GhostTitles;
+use areka_placement::spawn::test_support::{titles, two_scope_placements};
 use areka_placement::spawn::{CharWindowMarker, spawn_ghost_windows};
-
-/// emo2 相当 2 スコープぶんの解決済み配置（spawn.rs 檻の two_scope_placements と同値）。
-fn two_scopes() -> Vec<ScopePlacement> {
-    vec![
-        ScopePlacement {
-            scope: 0,
-            char_pos: PointPx { x: 1483, y: 733 },
-            char_size: SizePx { w: 434, h: 687 },
-            balloon_pos: PointPx { x: 1071, y: 708 },
-            balloon_size: SizePx { w: 223, h: 158 },
-            balloon_offset: PointPx { x: -412, y: -25 },
-            balloon_offset_base: OffsetBase::unpinned(PointPx { x: -412, y: -25 }),
-            // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
-            balloon_limit: true,
-            anchor: Anchor::Bottom,
-            balloon_keyword_base: None,
-        },
-        ScopePlacement {
-            scope: 1,
-            char_pos: PointPx { x: 1049, y: 1063 },
-            char_size: SizePx { w: 278, h: 357 },
-            balloon_pos: PointPx { x: 1334, y: 1044 },
-            balloon_size: SizePx { w: 223, h: 158 },
-            balloon_offset: PointPx { x: 285, y: -19 },
-            balloon_offset_base: OffsetBase::unpinned(PointPx { x: 285, y: -19 }),
-            // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
-            balloon_limit: true,
-            anchor: Anchor::Bottom,
-            balloon_keyword_base: None,
-        },
-    ]
-}
-
-fn ghost_titles() -> GhostTitles {
-    GhostTitles::from_scope_titles([(0, "a".to_string()), (1, "b".to_string())])
-}
 
 fn balloon_window_entities(world: &mut World) -> Vec<Entity> {
     world
@@ -212,7 +124,7 @@ fn has_pointer_handlers(world: &World, e: Entity) -> bool {
 #[test]
 fn attach_installs_handlers_on_all_balloon_windows_and_leaves_char_unchanged() {
     let mut world = World::new();
-    spawn_ghost_windows(&mut world, &two_scopes(), &ghost_titles());
+    spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
     // キャラ窓へ donor ハンドラを装着（非退行の対象 baseline を非自明にする）。
     attach_char_pointer_handlers(&mut world);
 
@@ -296,26 +208,6 @@ fn wire_inserts_both_non_sends() {
     assert!(
         !world.resource::<Schedules>().contains(Input),
         "wire は系を登録しない（登録は ghost_session::register_systems・要件 2.1）"
-    );
-}
-
-/// スケジュール登録檻・構造: 結線の後に登録を呼ぶと（本番は
-/// `ghost_session::register_systems`）clear_balloon_hover_on_leave が Input スケジュールへ 1 件載る。
-#[test]
-fn wire_then_register_puts_leave_system_into_input_schedule() {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-
-    wire_balloon_choice(&mut world);
-    register_balloon_leave_system(&mut world);
-
-    let schedules = world.resource::<Schedules>();
-    assert!(schedules.contains(Input), "Input スケジュールが存在する");
-    let input = schedules.get(Input).expect("Input schedule は存在する");
-    assert_eq!(
-        input.systems_len(),
-        1,
-        "Input スケジュールに 1 システム（clear_balloon_hover_on_leave）が登録される（6.6）"
     );
 }
 

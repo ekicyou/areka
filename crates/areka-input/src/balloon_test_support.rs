@@ -65,6 +65,13 @@ pub(crate) fn anchor_row(
     }
 }
 
+/// 選択肢もアンカーも持たない文字の層。
+pub(crate) fn empty_runtime() -> Rc<RefCell<TextLayerRuntime>> {
+    Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )))
+}
+
 /// 空 `EmoWorld`（空 shell から build・COM/GPU 不要の寛容契約・frame.rs 檻同型）。
 fn empty_world() -> EmoWorld {
     EmoWorld::build(&areka_parsers::shell::parse(""))
@@ -134,9 +141,7 @@ pub(crate) fn runtime_wiring_showing_talk(talk_id: TalkId) -> RuntimeWiring {
         mpsc::channel::<PositionCue>().1,
         lifecycle_rx,
         mpsc::channel::<areka_runtime::zorder_cue::ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
+        empty_runtime(),
         TalkClock::new(Arc::new(|| 0.0)),
         synth_boot_assets(),
     );
@@ -153,9 +158,7 @@ pub(crate) fn runtime_wiring_showing_talk(talk_id: TalkId) -> RuntimeWiring {
 /// 選択肢スパンを 1 つ載せて `choice_active(actor)==true` にした実 runtime を組む（GPU 不要）。
 /// `choice_hit_rows` は `present_frame`（GPU）未実行ゆえ空のまま（headless の既知制約）。
 pub(super) fn runtime_with_active_choice(actor: &str) -> Rc<RefCell<TextLayerRuntime>> {
-    let rt = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
+    let rt = empty_runtime();
     rt.borrow_mut().apply_cue(&TalkCue {
         at: 0.0,
         actor: ActorKey::from(actor),
@@ -190,29 +193,12 @@ pub(crate) fn anchor_cues(actor: &str) -> [TalkCue; 3] {
 /// アンカーの範囲だけを載せた実 runtime（選択肢は無い＝`choice_active` は偽・`hit_active` は真）。
 /// 当たりの行は [`runtime_with_active_choice`] と同じく空のまま。
 pub(super) fn runtime_with_active_anchor(actor: &str) -> Rc<RefCell<TextLayerRuntime>> {
-    let rt = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
+    let rt = empty_runtime();
     for cue in anchor_cues(actor) {
         rt.borrow_mut().apply_cue(&cue);
     }
     rt
 }
-
-// ── ログレベルを決定論的に観測するための捕捉（捕捉層は共有機構へ委譲）───────────────
-//
-// 捕捉層そのものはここに持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。
-// 行の形（1 イベント 1 行・`level=…` に続けてフィールドを訪問順で ` name=value`）も
-// 呼出側の判定内容も、移行前と 1 バイト変わらない。
-//
-// 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
-// のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
-// interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの
-// 判定が焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は
-// 「不要」ゆえ、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても
-// 取りこぼす。共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算
-// ⑶ 番兵イベントによる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の
-// crate doc と同 crate の `src/probe.rs`）。
 
 /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
 pub(crate) fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {

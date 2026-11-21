@@ -8,7 +8,6 @@ use super::*;
 // 包含／境界（半開）／行外／空／複数行／病的重なりを GPU・実窓不要で決定的に判定する。
 // -------------------------------------------------------------------------
 
-use areka_emo_text::actor::HitRectPx;
 use areka_emo_text::state::SpanKind;
 
 /// 内側包含: 矩形の内部点はその行 index を返す。
@@ -367,48 +366,23 @@ fn apply_hover_borrow_failure_writes_nothing_and_logs_one_error() {
 //
 // active・現行 rows・click 座標・scope の入力から確定 ChoiceSelection の構成を
 // 決める純関数を、World・runtime・send 不要で決定的に判定する。
-// ヒット時のフィールド一致（scope は arg 由来・ordinal 非含有）、非 hit／非表示／
-// stale 行での非構成（None）を網羅する。
+// ヒット時のフィールド一致（scope は arg 由来・ordinal 非含有）、非 hit／非表示での
+// 非構成（None）を網羅する。
 // -------------------------------------------------------------------------
-
-/// `references` を明示指定できる `ChoiceHitRow` を組む（転写忠実性の検証用）。
-fn row_with_refs(
-    ordinal: usize,
-    left: f32,
-    top: f32,
-    right: f32,
-    bottom: f32,
-    references: Vec<String>,
-) -> ChoiceHitRow {
-    ChoiceHitRow {
-        kind: SpanKind::Choice,
-        ordinal,
-        id: format!("q{ordinal}"),
-        label: format!("label{ordinal}"),
-        references,
-        rect: HitRectPx {
-            left,
-            top,
-            right,
-            bottom,
-        },
-    }
-}
 
 /// ヒット確定: 表示中・ヒット座標では現行ヒット行の全フィールドを
 /// clone 転写した `ChoiceSelection` を返す。scope は arg 由来・ordinal は非含有。
 #[test]
 fn click_hit_builds_selection_from_current_row() {
     let rows = [
-        row_with_refs(0, 0.0, 0.0, 100.0, 20.0, vec!["a".to_string()]),
-        row_with_refs(
-            1,
-            0.0,
-            20.0,
-            100.0,
-            40.0,
-            vec!["r0".to_string(), "r1".to_string()],
-        ),
+        ChoiceHitRow {
+            references: vec!["a".to_string()],
+            ..row(0, 0.0, 0.0, 100.0, 20.0)
+        },
+        ChoiceHitRow {
+            references: vec!["r0".to_string(), "r1".to_string()],
+            ..row(1, 0.0, 20.0, 100.0, 40.0)
+        },
     ];
     // (50, 30) は index 1 の行内。
     let sel = click_selection(true, &rows, 50.0, 30.0, 7)
@@ -429,7 +403,7 @@ fn click_hit_builds_selection_from_current_row() {
 /// 非ヒット→非発行: 表示中でも全矩形外の座標なら None。
 #[test]
 fn click_non_hit_returns_none() {
-    let rows = [row_with_refs(0, 10.0, 20.0, 50.0, 40.0, Vec::new())];
+    let rows = [row(0, 10.0, 20.0, 50.0, 40.0)];
     assert_eq!(
         click_selection(true, &rows, 5.0, 5.0, 0),
         None,
@@ -441,7 +415,7 @@ fn click_non_hit_returns_none() {
 /// hit 判定より前に短絡する（消滅時の stale／原子性ガード）。
 #[test]
 fn click_inactive_returns_none_even_inside_rect() {
-    let rows = [row_with_refs(0, 10.0, 20.0, 50.0, 40.0, Vec::new())];
+    let rows = [row(0, 10.0, 20.0, 50.0, 40.0)];
     // (30, 30) は矩形内だが active=false ゆえ None。
     assert_eq!(
         click_selection(false, &rows, 30.0, 30.0, 0),
@@ -450,50 +424,10 @@ fn click_inactive_returns_none_even_inside_rect() {
     );
 }
 
-/// stale 行棄却: 以前ヒットしていた座標に、現行 rows ではどの行も
-/// 存在しない（レイアウト差替後）場合、同座標の click は None。
-/// 現行ジオメトリのみを読むことを、キャッシュ座標を覆わない現行 rows で固定する。
-#[test]
-fn click_stale_coords_not_in_current_rows_returns_none() {
-    // hover 時代には座標 (30, 30) に行があったが、現行 rows はその座標を覆わない
-    // （行が消滅／別位置へ差し替わった）。
-    let current = [row_with_refs(0, 200.0, 200.0, 240.0, 220.0, Vec::new())];
-    assert_eq!(
-        click_selection(true, &current, 30.0, 30.0, 0),
-        None,
-        "現行 rows がクリック座標を覆わなければ stale 棄却で None（R3.2）"
-    );
-}
-
-/// stale 差替: 同座標に別行が現れた場合、確定は必ず**現行**行から
-/// 構成される（キャッシュではなく現行ジオメトリが正本）。
-#[test]
-fn click_replaced_row_builds_from_current_not_cached() {
-    // 現行 rows: 座標 (30, 30) を覆うのは ordinal 9 の別行のみ。
-    let current = [row_with_refs(
-        9,
-        10.0,
-        20.0,
-        50.0,
-        40.0,
-        vec!["z".to_string()],
-    )];
-    let sel =
-        click_selection(true, &current, 30.0, 30.0, 3).expect("現行行がヒットするので構成される");
-    assert_eq!(sel.id, "q9", "確定は現行ヒット行（差替後）から構成される");
-    assert_eq!(sel.label, "label9", "label も現行行から");
-    assert_eq!(
-        sel.references,
-        vec!["z".to_string()],
-        "references も現行行から"
-    );
-    assert_eq!(sel.scope, 3, "scope は引数由来");
-}
-
 /// 空 references の忠実転写: 参照列が空でも空 Vec として構成される。
 #[test]
 fn click_empty_references_transcribed_as_empty() {
-    let rows = [row_with_refs(0, 0.0, 0.0, 100.0, 20.0, Vec::new())];
+    let rows = [row(0, 0.0, 0.0, 100.0, 20.0)];
     let sel = click_selection(true, &rows, 50.0, 10.0, 0).expect("ヒットするので構成される");
     assert!(
         sel.references.is_empty(),

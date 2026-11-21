@@ -91,7 +91,7 @@
 
 - [ ] 3. テストの写しと重なりを消し、持ち物のテストを持ち主へ移す
 
-- [ ] 3.1 バルーンのテストの写しと重なりを消す（G8・指摘 4・19〜27・77・件 10）
+- [x] 3.1 バルーンのテストの写しと重なりを消す（G8・指摘 4・19〜27・77・件 10）
   - 組み立ての写しをバルーンのテストの支えへ寄せ（指摘 25）、選択の流し込みの中の記録の捕捉の写しを支えの捕捉に替える（指摘 24・件 10）。
   - 独立のテスト・stale の 2 本・シナリオ表と重なる 6 本・derive の 3 本・系の数の重なりを消す（指摘 4・19〜22）。配置の支えの写しを配置の crate の支えの import に（指摘 23）、行の写しを構造体の更新に（指摘 26）、同じ離脱の組み立ての 2 本を離脱のテストの 1 本にまとめて両方の持ち物を表明する（指摘 27）。
   - 消す前に、消すテストの名と項目をツリー全体で grep し、当たりが design.md「消す・名を変えるときの照合」の既知のものだけであることを確かめてある。
@@ -166,3 +166,4 @@
 - `shell_box_tests.rs` の `…_or_window_leave` は 2.2 で離脱の表明を消したので名と中身が食い違う。移す 3.3 で直す。
 - 2.3 で足した `click_tests.rs::release_on_a_window_without_size_sends_one_button_up` は `MouseWiring::with_clock` を直に組む。3.2 の指摘 64 で `world_with_wiring` へ寄せるときに一緒に寄せる。
 - `balloon_test_support.rs::runtime_wiring_showing_talk` は `TextLayerRuntime::new(TextLayerConfig::default())` を直に組む。3.1 で `empty_runtime()` を支えへ寄せたらそれに替える。
+- `balloon_pointer_handler_tests.rs` の押下の節の見出しに「stale 棄却は click_selection 純関数檻が網羅済み」・「pass-through 檻」が残る（3.1 で消したテストを指す古い説明）。4.2（指摘 43）で直す。

@@ -12,44 +12,16 @@
 // -------------------------------------------------------------------------
 
 use areka_runtime::balloon_hover::BalloonHover;
-use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::mpsc;
 
-use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::TextLayerConfig;
 use bevy_ecs::world::World;
-use wintf::ecs::Point;
-use wintf::ecs::pointer::{Phase, PointerState};
 
 use super::test_support::{
-    capture_logs, headless_runtime_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
+    bubble_move, capture_logs, empty_runtime, headless_runtime_wiring, insert_wiring,
+    runtime_with_active_choice, spawn_balloon_leave_child,
 };
 use super::*;
 use areka_placement::spawn::BalloonWindowMarker;
-
-/// Bubble 相の合成 `PointerState`（client 物理 px・moved ハンドラは他フィールド非参照）。
-fn bubble_move(x: i32, y: i32) -> Phase<PointerState> {
-    Phase::Bubble(PointerState {
-        client_point: Point { x, y },
-        ..Default::default()
-    })
-}
-
-/// 空の `BalloonWiring`（と並べて置く `BalloonHover`）を World へ NonSend 挿入する（`Receiver` は檻の生存期間だけ保持する）。
-fn insert_wiring(world: &mut World) -> mpsc::Receiver<ChoiceSelection> {
-    let (tx, rx) = mpsc::channel::<ChoiceSelection>();
-    world.insert_non_send(BalloonWiring::new(tx));
-    world.insert_non_send(BalloonHover::default());
-    rx
-}
-
-/// 選択肢スパンを持たない空 runtime（`choice_active==false`）。
-fn empty_runtime() -> Rc<RefCell<TextLayerRuntime>> {
-    Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )))
-}
 
 /// World 中の `BalloonHover` へ滞在を照会する短縮形。
 fn hovered(world: &World, scope: usize) -> bool {
@@ -119,35 +91,6 @@ fn moved_records_hover_when_choice_active_but_no_row_hit() {
         world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
         "滞在の記録は選択肢 hover ordinal を書き換えない（独立の軸）"
-    );
-}
-
-/// 独立の軸: 一方の更新が他方へ漏れない。
-/// 選択肢 hover を滞在フラグへ畳み込んだ実装（どちらか一方の map で両方を表す）をここで落とす。
-#[test]
-fn choice_hover_ordinal_and_balloon_hover_are_independent_axes() {
-    let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
-    let mut bw = BalloonWiring::new(tx);
-    let mut balloon_hover = BalloonHover::default();
-
-    bw.set_hover(0, Some(2));
-    assert!(
-        !balloon_hover.is_balloon_hovered(0),
-        "選択肢行の hover 注入は滞在フラグを立てない"
-    );
-
-    balloon_hover.set_balloon_hover(0);
-    assert_eq!(
-        bw.hover(0),
-        Some(2),
-        "滞在の記録は選択肢 hover ordinal を消さない"
-    );
-
-    balloon_hover.clear_balloon_hover(0);
-    assert_eq!(
-        bw.hover(0),
-        Some(2),
-        "滞在の解除は選択肢 hover ordinal を消さない"
     );
 }
 
@@ -251,31 +194,6 @@ fn leave_clears_balloon_hover_even_without_runtime_wiring() {
     assert!(
         !hovered(&world, 0),
         "観測基盤が無くても滞在は解除する（固着させない・5.5）"
-    );
-}
-
-/// 対象選別（key assertion）: 非バルーン窓の離脱では滞在を触らない。
-#[test]
-fn leave_on_non_balloon_window_keeps_balloon_hover() {
-    use bevy_ecs::hierarchy::ChildOf;
-    use wintf::ecs::Window;
-    use wintf::ecs::pointer::PointerLeave;
-
-    let mut world = World::new();
-    let win = world.spawn(Window::default()).id(); // BalloonWindowMarker 無し
-    world.spawn((PointerLeave, ChildOf(win)));
-    world.insert_non_send(headless_runtime_wiring(empty_runtime()));
-    let _rx = insert_wiring(&mut world);
-    world
-        .get_non_send_mut::<BalloonHover>()
-        .unwrap()
-        .set_balloon_hover(0);
-
-    clear_balloon_hover_on_leave(&mut world);
-
-    assert!(
-        hovered(&world, 0),
-        "非バルーン窓の離脱は滞在を触らない（key assertion）"
     );
 }
 

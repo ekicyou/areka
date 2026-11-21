@@ -17,7 +17,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::Window;
 use wintf::ecs::pointer::{PointerState, WheelDelta};
 
-use super::super::balloon::test_support::{capture_logs, headless_runtime_wiring};
+use super::super::balloon::test_support::{capture_logs, empty_runtime, headless_runtime_wiring};
 use super::super::char_watch::char_watch;
 use super::super::{MouseWiring, RegionSource};
 use super::balloon_wheel_with;
@@ -203,10 +203,7 @@ fn wheel_lines_from_maps_the_page_scroll_value_to_page_and_others_to_lines() {
 /// 文字の層を借りられないと ERROR を 1 行残してその tick の回転を見送る（OS の行数は読む）。
 #[test]
 fn borrow_failure_is_recorded_once_and_the_tick_is_skipped() {
-    use areka_emo_text::state::TextLayerConfig;
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
+    let runtime = empty_runtime();
     let mut world = World::new();
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     spawn_rotation(&mut world, 120, 0);
