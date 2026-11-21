@@ -2,8 +2,6 @@ use crate::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, EmoWorld};
 use areka_emo_text::state::TextLayerConfig;
-#[cfg(test)]
-use areka_placement::diag::WINDOW_MOVE_RECORD_TAG;
 use areka_placement::follow::OffsetBase;
 use areka_placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
 use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
@@ -884,11 +882,7 @@ impl Drop for FrameHarness {
 /// 捕捉イベントから窓移動レコード行だけを抜く（他の debug ログは無視）。
 #[cfg(test)]
 pub fn window_move_lines(events: &[CapturedEvent]) -> Vec<String> {
-    events
-        .iter()
-        .map(|e| e.message().to_string())
-        .filter(|m| m.starts_with(WINDOW_MOVE_RECORD_TAG))
-        .collect()
+    areka_placement::test_support::window_move_lines(events.iter().map(|e| e.message()))
 }
 
 /// 指定 entity の窓移動レコードから `route=` の語だけを取り出す（出現順）。

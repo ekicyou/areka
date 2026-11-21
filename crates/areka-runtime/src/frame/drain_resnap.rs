@@ -159,13 +159,55 @@ pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
     let Some(windows) = world.get_resource::<GhostWindows>() else {
         return;
     };
+    // 表示しても窓の大きさが実表示寸へ着地していない（窓寸の照合が見送られた）スコープは「まだ」と答える。
+    // 仮の大きさで当てると、着地の後に縮んだ分だけ隙間が残る。実表示寸を答えない読み口は着地済みとみなす。
+    struct Landed<'a, S: ?Sized> {
+        shown: &'a S,
+        window_sizes: Vec<(u32, Option<SizeI>)>,
+    }
+    impl<S: ShownRatioSource + ?Sized> ShownRatioSource for Landed<'_, S> {
+        fn shown_ratio(&self, scope: u32) -> Option<ScaleRatio> {
+            let ratio = self.shown.shown_ratio(scope)?;
+            let Some((w, h)) = self.shown.physical_size(scope) else {
+                return Some(ratio);
+            };
+            let real = i32::try_from(w)
+                .ok()
+                .zip(i32::try_from(h).ok())
+                .map(|(w, h)| SizeI::new(w, h));
+            self.window_sizes
+                .iter()
+                .any(|&(s, size)| s == scope && size.is_some() && size == real)
+                .then_some(ratio)
+        }
+        fn never_shown(&self, scope: u32) -> Option<areka_emo_present::NeverShown> {
+            self.shown.never_shown(scope)
+        }
+        fn physical_size(&self, scope: u32) -> Option<(u32, u32)> {
+            self.shown.physical_size(scope)
+        }
+    }
+    let landed = Landed {
+        shown,
+        window_sizes: windows
+            .scopes()
+            .filter_map(|s| {
+                let size = world
+                    .get::<WindowPos>(windows.char_window(s)?)
+                    .and_then(|wp| wp.size);
+                Some((s as u32, size))
+            })
+            .collect(),
+    };
     // 前の巡から預かった指令を先に、この巡に届いた指令（try_iter・非ブロック）を後に、順のまま判定する。
     // 当てない指令は預かりの列へ順のまま戻る（取りこぼさない）。wiring は shared 借用ゆえ列は RefCell。
     let ready = release_ready(
         &mut wiring.move_held.borrow_mut(),
         wiring.move_rx.try_iter(),
+        wiring.move_talk_ends_seen.replace(wiring.talk_ends),
+        wiring.talk_ends,
         windows,
-        shown,
+        &landed,
         world.get_resource::<StickyGroupLedger>(),
     );
     for cue in ready {

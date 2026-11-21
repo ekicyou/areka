@@ -1,7 +1,7 @@
 //! 読み取り専用の照会契約——text 層スロット view（`TextSlotView`）・物理寸・実適用 k・現サーフェス id・
 //! 表示画素の読み戻し。いずれも表示成立点で確定した値を返すのみで、表示状態を変更しない。
 
-use super::{EmoPresenter, Entity, PresentError, ScaleRatio, TargetId};
+use super::{EmoPresenter, Entity, NeverShown, PresentError, ScaleRatio, TargetId};
 
 /// 予約 text 層スロットへの読み取り専用の到達手段（emo-text-layer が消費する）。
 ///
@@ -165,6 +165,23 @@ impl EmoPresenter {
     /// （公開面を判定の依存に据えると、照会と判定で別の k を見る余地が生まれる）。
     pub fn applied_ratio(&self, target: TargetId) -> Option<ScaleRatio> {
         self.targets.get(&target)?.applied
+    }
+
+    /// target が最初の面を表示しないまま決まった理由。
+    ///
+    /// 表示が一度成り立った target と、面の指令を受けて結果がまだの target は `None`。
+    /// 未登録と面の指令を受けていない target は `Some(NotRequested)`。
+    pub fn never_shown(&self, target: TargetId) -> Option<NeverShown> {
+        let Some(t) = self.targets.get(&target) else {
+            return Some(NeverShown::NotRequested);
+        };
+        if t.applied.is_some() {
+            None
+        } else if !t.surface_requested {
+            Some(NeverShown::NotRequested)
+        } else {
+            t.never_shown
+        }
     }
 
     /// target が**最後に確立した**サーフェス id。

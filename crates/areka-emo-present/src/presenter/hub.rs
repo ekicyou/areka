@@ -11,9 +11,9 @@ use super::hit_picture::HitNotes;
 use super::scale_change::ScaleChange;
 use super::visibility::strip_finite_films;
 use super::{
-    AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, HashMap, PatternState,
-    PhantomData, PresentCommand, PresentError, PresentOutcome, PresentTarget, ReplySender,
-    ScalePolicy, ScaleRatio, TargetId, VisibilityOwnership, World,
+    AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, HashMap, NeverShown,
+    PatternState, PhantomData, PresentCommand, PresentError, PresentOutcome, PresentTarget,
+    ReplySender, ScalePolicy, ScaleRatio, TargetId, VisibilityOwnership, World,
 };
 
 /// 指令適用の統括ハブ（合成・キャッシュ・表示・マスクの一点結線・UI スレッド専有）。
@@ -82,6 +82,8 @@ impl EmoPresenter {
                 // アプリ管理拡大率は ONE 固定の縮退シーム。
                 policy: ScalePolicy::new(author_dpi, ScaleRatio::ONE),
                 applied: None,
+                never_shown: None,
+                surface_requested: false,
                 // 起点は装着ごと（差し替えもここを通るので空から始まる）。
                 scale_baseline: None,
                 native_size: None,
@@ -215,17 +217,32 @@ impl EmoPresenter {
                 })
         {
             t.held_pattern = Some(pattern);
+            self.record_show_outcome(target_id, &Ok(()));
             Self::reply(reply, Ok(()));
             return;
         }
 
         let outcome = self.apply_show(world, target_id, surface_id, binds, pattern, false);
+        self.record_show_outcome(target_id, &outcome);
         if outcome.is_ok()
             && let Some(t) = self.targets.get_mut(&target_id)
         {
             t.held_pattern = None;
         }
         Self::reply(reply, outcome);
+    }
+
+    /// 面の表示の結果から、最初の面を表示しないまま決まった理由を書く（面の指令を受けた印も立てる）。
+    pub(super) fn record_show_outcome(&mut self, target_id: TargetId, outcome: &PresentOutcome) {
+        let Some(t) = self.targets.get_mut(&target_id) else {
+            return;
+        };
+        t.surface_requested = true;
+        t.never_shown = match (t.applied, outcome) {
+            (Some(_), _) => None,
+            (None, Ok(())) => Some(NeverShown::Hidden),
+            (None, Err(_)) => Some(NeverShown::Failed),
+        };
     }
 
     /// `Hide`（`\s[-1]` 相当）の適用: visual 非表示＋当たり判定停止。装着・キャッシュは保持する。
@@ -252,6 +269,10 @@ impl EmoPresenter {
         target.visible = false;
         // Hide（`\s[-1]` 相当）は表示していない＝現サーフェス無し。
         target.current_surface_id = None;
+        target.surface_requested = true;
+        if target.applied.is_none() {
+            target.never_shown = Some(NeverShown::Hidden);
+        }
         Self::reply(reply, Ok(()));
     }
 

@@ -1,6 +1,6 @@
 //! 毎フレーム結線の NonSend 状態 [`RuntimeWiring`]（構築・アクセサ・test-support 読み口）。
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
@@ -24,6 +24,7 @@ use super::super::switch_assets::SwapPayload;
 use super::super::talk_lifecycle::TalkLifecycleSignal;
 use super::super::window_state_cue::WindowStateDirective;
 use super::super::zorder_cue::ZOrderDirective;
+use super::move_hold::HeldCue;
 use super::status_report::BalloonStatusLedger;
 use super::window_state::StayOnTopState;
 use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
@@ -37,7 +38,7 @@ use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 ///
 /// # フィールドの可視性が 2 種類ある理由
 ///
-/// 大半のフィールドは `frame` 配下の相だけが触るため `pub(super)`。バルーン可視性の相は兄弟モジュール `balloon_visibility` に置かれ、複数の欄を同時に可変借用する（表示層へ発行しながら状態を更新する）ので読み口メソッドでは組めない。そのため、その相が消費する `presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／`clock` と、届けの相の台帳 `balloon_status` などは `pub` にしてある。
+/// 大半のフィールドは `frame` 配下の相だけが触るため `pub(super)`。バルーン可視性の相は兄弟モジュール `balloon_visibility` に置かれ、複数の欄を同時に可変借用する（表示層へ発行しながら状態を更新する）ので読み口メソッドでは組めない。そのため、その相が消費する `presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／`clock`／`talk_ends` と、届けの相の台帳 `balloon_status` などは `pub` にしてある。
 pub struct RuntimeWiring {
     /// 表示層の指令適用ハブ（UI スレッド専有・`!Send`）。
     pub presenter: EmoPresenter,
@@ -47,7 +48,11 @@ pub struct RuntimeWiring {
     /// 受信端（[`run_move_drain_phase`] が消費）。
     pub(super) move_rx: Receiver<PositionCue>,
     /// 対象か基準の窓が最初の面を表示するまで預かった位置の指令（順のまま・`move_hold.rs`）。
-    pub(super) move_held: RefCell<VecDeque<PositionCue>>,
+    pub(super) move_held: RefCell<VecDeque<HeldCue>>,
+    /// トークの終わりの通し番号（バルーン可視性の相が `TalkEnded` を数えて進め、位置の指令の相が読む）。
+    pub talk_ends: u64,
+    /// 位置の指令の相が前に指令の線を取り出したときの [`Self::talk_ends`]。その後に届いた指令の届いたときの番号。
+    pub(super) move_talk_ends_seen: Cell<u64>,
     /// talk スレッド（`BalloonLifecycleSink`）からの表示ライフサイクル信号受信端（バルーン可視性相が消費）。
     ///
     /// [`super::super::wire_runtime`] が `mpsc::channel::<TalkLifecycleSignal>()` を作り、送出端を `GhostBootOptions.sinks` の 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す。会話の開始（[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端（[`TalkLifecycleSignal::DisplayEndAt`]）が talk 相対秒で FIFO に届く。送り手はもう 1 つあり、UI スレッドの押下ハンドラが送出端の複製から利用者の中断（[`TalkLifecycleSignal::UserBreak`]）を同じ線へ流す。
@@ -148,6 +153,8 @@ impl RuntimeWiring {
             rx,
             move_rx,
             move_held: RefCell::default(),
+            talk_ends: 0,
+            move_talk_ends_seen: Cell::new(0),
             lifecycle_rx,
             zorder_rx,
             zorder_ledger: ZOrderGroupLedger::default(),

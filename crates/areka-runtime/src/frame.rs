@@ -352,6 +352,15 @@ mod work_area_resnap_hold_tests;
 #[path = "frame_move_hold_tests.rs"]
 mod move_hold_tests;
 
+#[cfg(test)]
+#[path = "frame_reset_hold_test_support.rs"]
+pub mod reset_hold_test_support;
+
+// 並べ直しの預かりの檻。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_reset_hold_tests.rs"]
+mod reset_hold_tests;
+
 // 窓の組・吸着・バルーン位置初期化の指令が位置の線で当たる檻。
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_window_link_drain_tests.rs"]

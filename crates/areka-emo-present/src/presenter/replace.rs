@@ -6,7 +6,7 @@
 //! 置き換えの手順だけで、登録を消したまま戻さない経路は作らない。
 
 use super::{
-    AtlasTable, BindSet, EmoPresenter, EmoWorld, Entity, PatternState, PresentError,
+    AtlasTable, BindSet, EmoPresenter, EmoWorld, Entity, NeverShown, PatternState, PresentError,
     PresentOutcome, ReplySender, ScaleRatio, TargetId, VisibilityOwnership, World,
 };
 
@@ -22,6 +22,10 @@ pub(super) struct DetachedState {
     pub ownership: VisibilityOwnership,
     /// 実際に表示へ適用していた k（表示が一度も成立していなければ `None`）。
     pub applied: Option<ScaleRatio>,
+    /// 最初の面を表示しないまま決まった理由。
+    pub never_shown: Option<NeverShown>,
+    /// 面の指令を一度でも受けたか。
+    pub surface_requested: bool,
     /// 表示中サーフェスの素の大きさ（k 適用前）。
     pub native_size: Option<(u32, u32)>,
     /// まだ取り出されていない窓寸の要求（引き継がないと窓寸合わせが失われる）。
@@ -55,6 +59,8 @@ impl EmoPresenter {
             window: old.window,
             ownership: old.ownership,
             applied: old.applied,
+            never_shown: old.never_shown,
+            surface_requested: old.surface_requested,
             native_size: old.native_size,
             pending_resize: old.pending_resize,
             stage_generation: old.stage_generation,
@@ -96,6 +102,8 @@ impl EmoPresenter {
         target.ownership = carried.ownership;
         // 前回の物理寸を引き継ぐので、続く表示は物理寸が変わったときだけ窓寸の要求を積む。
         target.applied = carried.applied;
+        target.never_shown = carried.never_shown;
+        target.surface_requested = carried.surface_requested;
         target.native_size = carried.native_size;
         target.pending_resize = carried.pending_resize;
         target.stage_generation = carried.stage_generation;
@@ -108,8 +116,8 @@ impl EmoPresenter {
             "apply(ReplaceTarget): 古い装着を片付けて登録し直した"
         );
         if let Some((surface_id, binds)) = show {
-            // 返信は置き換え自身が返す。表示の失敗は `apply_show` の中で `error!` 済みなので結果は捨てる。
-            let _ = self.apply_show(
+            // 返信は置き換え自身が返す。表示の失敗は `apply_show` の中で `error!` 済み。
+            let outcome = self.apply_show(
                 world,
                 target_id,
                 surface_id,
@@ -117,6 +125,7 @@ impl EmoPresenter {
                 PatternState::default(),
                 false,
             );
+            self.record_show_outcome(target_id, &outcome);
         }
         Self::reply(reply, Ok(()));
     }
