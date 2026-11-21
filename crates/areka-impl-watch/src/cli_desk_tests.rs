@@ -125,28 +125,28 @@ fn refused_requests_and_merges_are_3_and_never_enter_the_wait() {
         done("queued merge repo=areka pos=1")
     );
 
-    // 2.8: 待っている申し込みと違う組。
+    // 待っている申し込みと違う組。
     let b_sole = |extra: &[&str]| request(&home, "b", "test,sole", PURPOSE, extra);
     refused_with_and_without_wait(
         &home,
         &b_sole,
         "a different desk request is already waiting",
     );
-    // 4.2: 机を持ちながら、マージの持ち主の `test` のほかの組。
+    // 机を持ちながら、マージの持ち主の `test` のほかの組。
     let a_sole = |extra: &[&str]| request(&home, "a", "test,sole", PURPOSE, extra);
     let held = "desks are held; only a merge holder may add the test desk";
     refused_with_and_without_wait(&home, &a_sole, held);
     let a_only_sole = |extra: &[&str]| request(&home, "a", "sole", PURPOSE, extra);
     refused_with_and_without_wait(&home, &a_only_sole, held);
-    // 4.8: マージの机を待つ者の申し込み。
+    // マージの机を待つ者の申し込み。
     let c_test = |extra: &[&str]| request(&home, "c", "test", PURPOSE, extra);
     let merge_waiting = "a merge request is waiting; request desks after the merge desk is granted";
     refused_with_and_without_wait(&home, &c_test, merge_waiting);
-    // 4.7: 排他テストの机を持つ者の `merge`。
+    // 排他テストの机を持つ者の `merge`。
     let a_merge = |extra: &[&str]| merge(&home, "a", SPEC, extra);
     let return_first = "return the test and sole desks before merge";
     refused_with_and_without_wait(&home, &a_merge, return_first);
-    // 2.8（2026-10-18 の裁定）: 机の申し込みを待つ者の `merge`。
+    // 机の申し込みを待つ者の `merge`。
     let b_merge = |extra: &[&str]| merge(&home, "b", SPEC, extra);
     let desk_waiting = "a desk request is waiting; merge after it is granted and returned";
     refused_with_and_without_wait(&home, &b_merge, desk_waiting);
@@ -194,12 +194,12 @@ fn refused_returns_and_running_records_are_3_and_change_nothing() {
     assert_eq!(running(&home, "a", PURPOSE), done("recorded running load"));
     let before = state_bytes(&home);
 
-    // 4.3 の但し書き（2026-10-18 の裁定）: 走っている負荷テストは 2 つを 1 組で返す。
+    // 走っている負荷テストは 2 つを 1 組で返す。
     assert_eq!(
         give_back(&home, "a", Some("test")),
         not_applied("a running load test returns test and sole together")
     );
-    // 4.5: 持っていない机。
+    // 持っていない机。
     let not_holder = not_applied("not the holder of that desk");
     assert_eq!(give_back(&home, "b", Some("test")), not_holder);
     assert_eq!(give_back(&home, "b", Some("sole")), not_holder);
@@ -207,7 +207,7 @@ fn refused_returns_and_running_records_are_3_and_change_nothing() {
         give_back(&home, "b", None),
         not_applied("holds no desk to return")
     );
-    // 5.6: どちらかの机に持ち主が居る。
+    // どちらかの机に持ち主が居る。
     assert_eq!(
         running(&home, "b", PURPOSE),
         not_applied("the test desk or the sole desk already has a holder")
@@ -230,7 +230,7 @@ fn loadrunning_by_a_merge_waiter_is_3_and_by_the_merge_holder_is_recorded() {
     );
     let before = state_bytes(&home);
 
-    // 5.7（2026-10-18 の裁定）: マージの机を待つ者の記録は断る。
+    // マージの机を待つ者の記録は断る。
     assert_eq!(
         running(&home, "c", PURPOSE),
         not_applied(
@@ -238,6 +238,6 @@ fn loadrunning_by_a_merge_waiter_is_3_and_by_the_merge_holder_is_recorded() {
         )
     );
     assert_eq!(state_bytes(&home), before);
-    // マージの机の持ち主は記録できる（5.5）。
+    // マージの机の持ち主は記録できる。
     assert_eq!(running(&home, "a", PURPOSE), done("recorded running load"));
 }

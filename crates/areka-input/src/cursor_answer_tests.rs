@@ -1,5 +1,4 @@
-//! `cursor_answer.rs` の兄弟テスト（shell-mouse-cursor tasks.md 4.2・要件 2.1・2.3・2.5・2.7・2.8・
-//! 6.1・6.2・7.1）。
+//! `cursor_answer.rs` の兄弟テスト。
 //!
 //! 当たり判定は `RegionSource::Mock`、シェルのカーソルの資源は手で組む（ファイルは読まない）。
 
@@ -92,7 +91,7 @@ fn debugs(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 #[test]
 fn char_window_gets_the_expected_stock_shapes() {
     let mut assets = ShellCursorAssets::default();
-    // スコープ 1 の Head だけ乗る形を help にする（スコープ 0 は既定のまま＝要件 2.7）。
+    // スコープ 1 の Head だけ乗る形を help にする（スコープ 0 は既定のまま）。
     assets.rows.rows.insert(
         (1, "Head".into(), CursorScene::Up),
         Shape::System(SystemCursor::Help),
@@ -104,7 +103,7 @@ fn char_window_gets_the_expected_stock_shapes() {
 
     assert_eq!(show(&world, w0, 60), finger, "Head の既定は指差し");
     assert_eq!(show(&world, w0, 200), stock_cursor(IDC_ARROW).unwrap());
-    // 当たり判定から当たり判定へ直に移ったその場で替わる（要件 2.3）。
+    // 当たり判定から当たり判定へ直に移ったその場で替わる。
     let hand = show(&world, w0, 10);
     assert_ne!(hand, finger, "Bust は同梱の手を開いた形");
     assert_eq!(show(&world, w0, 60), finger);

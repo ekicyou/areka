@@ -313,7 +313,7 @@ fn register(id: &str, kind: WaitKind, repo: Option<&str>) -> (Command, String) {
 
 // ---- 終わり方 ----
 
-/// 待ちを始め直したとき、すでに番が来ていれば眠らずに終わる（要件 6.2）。
+/// 待ちを始め直したとき、すでに番が来ていれば眠らずに終わる。
 #[test]
 fn ends_without_sleeping_when_the_turn_has_already_come() {
     let port = FakePort::new();
@@ -452,7 +452,7 @@ fn the_periodic_round_comes_on_the_30th_and_the_60th_poll() {
     assert!(ticks.iter().all(|(_, caller)| caller == "B"));
 }
 
-/// 待っている者しか居ないとき、落ちた持ち主を回収するのは待ちの周期の一回り（設計の論点 3）。
+/// 待っている者しか居ないとき、落ちた持ち主を回収するのは待ちの周期の一回り。
 #[test]
 fn the_periodic_round_reclaims_a_fallen_holder_and_the_turn_comes() {
     let port = b_queued_behind_a();
@@ -481,7 +481,7 @@ fn a_failed_periodic_round_does_not_end_the_wait() {
     assert_eq!(port.trace(), format!("Rfr{thirty}{thirty}sfrU"));
 }
 
-/// 時間の上限は無い（要件 6.1）。何も起きない 1 時間の間、読むのは 10 秒に 1 回、周期の一回りは
+/// 時間の上限は無い。何も起きない 1 時間の間、読むのは 10 秒に 1 回、周期の一回りは
 /// 30 秒に 1 回だけ。
 #[test]
 fn an_hour_of_nothing_neither_ends_the_wait_nor_reads_more_than_it_must() {
@@ -643,7 +643,7 @@ fn a_watch_registers_by_starting_the_watch() {
     assert_eq!(participant.repo, "pasta");
 }
 
-/// 立て直した見張りは、すでに停止要請が出ていれば眠らずに終わる（要件 5.4）。
+/// 立て直した見張りは、すでに停止要請が出ていれば眠らずに終わる。
 #[test]
 fn a_restarted_watch_ends_without_sleeping_when_a_stop_is_already_requested() {
     let port = c_asked_for_test_and_sole();
@@ -759,7 +759,7 @@ fn the_presence_sign_is_held_through_the_last_change_and_released_on_return() {
     assert!(!port.lock_is_held());
 }
 
-/// ループは何も出さない（終わり方を返すだけ。端末へ出すのは cli の仕事。要件 13.1・13.6）。
+/// ループは何も出さない（終わり方を返すだけ。端末へ出すのは cli の仕事）。
 #[test]
 fn the_loop_writes_nothing_to_the_terminal() {
     let source = include_str!("wait.rs");

@@ -1,41 +1,30 @@
-// ===================== S5: close deadline 超過シナリオ（task 4.6） =====================
+// ===================== S5: close deadline 超過シナリオ =====================
 //
-// design.md「spine e2e（決定論・純 x64）」の「シナリオ網羅（要件 7.5）」節・S5:
-// 「close deadline: close talk を意図的に完了させず、`KanadeMsg::Tick` の `now` を deadline
-// 超過まで注入（既定 30_000ms を数値的に跨ぐ `now` を投函するだけ・実時間ゼロ・短縮構成
-// 不要）→`Unloading{DeadlineExceeded}`→`Unload`→全 join。」を、S4（close 握手・正規の
-// Quit 経路）と対をなす「close talk が自然完了しない」経路として駆動する（要件
-// 7.4/7.5/7.6）。
+// close deadline: close talk を意図的に完了させず、`KanadeMsg::Tick` の `now` を deadline 超過まで注入（既定 30_000ms を
+// 数値的に跨ぐ `now` を投函するだけ・実時間ゼロ・短縮構成不要）→`Unloading{DeadlineExceeded}`→`Unload`→全 join。
+// S4（close 握手・正規の Quit 経路）と対をなす「close talk が自然完了しない」経路として駆動する。
 //
-// close talk の script は `\_w[49999950]this-never-completes\-`（`\_w[49999950]`＝約13.9時間
-// 相当の待ち・`\_w[ms]` は絶対ミリ秒）にする——先頭に待ちを置く
-// ことで空 sheet 高速経路（bare quit `\-`・S4 参照）を踏まず、実際に「再生完了通知が来ない」
-// 状態を作る。本シナリオは close talk 開始後、dispatcher へ一切 Tick を送らない（送れば
-// `\w` の経過秒が進み得る）ため、close talk は spawn 直後の待ちで恒久的に止まったまま
-// になる——kanade 側の deadline 判定だけが `runtime.kanade()` への直接 `Tick` 注入で駆動する。
+// close talk の script は `\_w[49999950]this-never-completes\-`（`\_w[49999950]`＝約13.9時間相当の待ち・`\_w[ms]` は
+// 絶対ミリ秒）にする——先頭に待ちを置くことで空 sheet 高速経路（bare quit `\-`・S4 参照）を踏まず、実際に「再生完了通知が
+// 来ない」状態を作る。close talk 開始後は dispatcher へ一切 Tick を送らない（送れば `\w` の経過秒が進み得る）ため、
+// close talk は spawn 直後の待ちで恒久的に止まったままになり、kanade 側の deadline 判定だけが `runtime.kanade()` への
+// 直接 `Tick` 注入で駆動する。
 //
 // # deadline の起点計算（`close.rs::deadline_from`・close.rs モジュール doc 参照）
-// 本シナリオは S1/S4 と同じ boot-settling 技法（dispatcher への Tick 注入のみ）を使う——
-// dispatcher への Tick は kanade 自身の `last_now` を一切更新しない（`KanadeMsg::Tick` を
-// 受けたときのみ更新される・`schedule/steady.rs`/`schedule/close.rs` の `last_now` 更新箇所を
-// 直接確認済み）。ゆえに `CloseRequest` 送出時点で kanade の `last_now` は依然 `None` であり、
-// `ClosePending`→`CloseTalkWait` 遷移時の `deadline_from(None, ..)` は `None`（未確定）で
-// `CloseTalkWait` に入る（close.rs「握手入口で last_now が None だった場合は deadline を
-// None のまま入り、CloseTalkWait 最初の Tick 受領時点を起点に上限を設定する」）。
+// S1/S4 と同じ boot-settling 技法（dispatcher への Tick 注入のみ）を使う。dispatcher への Tick は kanade 自身の
+// `last_now` を更新しない（`KanadeMsg::Tick` を受けたときのみ更新される）。ゆえに `CloseRequest` 送出時点で `last_now` は
+// `None` で、`ClosePending`→`CloseTalkWait` 遷移時の `deadline_from(None, ..)` は `None`（未確定）で `CloseTalkWait` に入る
+// （最初の Tick 受領時点を起点に上限を設定する）。
 //
-// `kanade` は `run_inbox`（`areka-kanade/src/actor.rs`）で 1 メッセージずつ**完全に同期**
-// 処理する（`drive()` が OnClose の同期往復・状態遷移まで完結させてから次の inbox
-// メッセージを取り出す）ため、`CloseRequest`→(直後に送る)`Tick` の到達順序は mpsc の
-// FIFO 保証と合わせて完全に決定論的である——`CloseRequest` が処理し終わる（＝
-// `CloseTalkWait` へ遷移済み）前に後続の `Tick` が処理されることはない。ゆえに:
-// - 1本目の `Tick{now: arm_now}` → `CloseTalkWait` に入って初めて受ける Tick ゆえ
-//   deadline を `arm_now + close_talk_deadline_ms` へ**確定するだけ**（超過判定はしない・
-//   close.rs の `None` 分岐は比較を行わない）。
-// - 2本目の `Tick{now: arm_now + close_talk_deadline_ms}` → `now >= deadline` で確実に
-//   超過 → `Unloading{DeadlineExceeded}` → `ShioriUnload`。
-// 2 本の Tick 送出そのものは即座に返る（inbox への enqueue のみ）ため、その後の
-// `Unload` 呼出の実際の発火（kanade スレッドが実際に処理し終わる時点）は有界スピン
-// 待機（`yield_now` のみ・sleep も追加 Tick も伴わない）で確認する。
+// `kanade` は `run_inbox`（`areka-kanade/src/actor.rs`）で 1 メッセージずつ**完全に同期**処理する（`drive()` が OnClose の
+// 同期往復・状態遷移まで完結させてから次の inbox メッセージを取り出す）ため、`CloseRequest`→(直後に送る)`Tick` の到達順序は
+// mpsc の FIFO 保証と合わせて決定論的である。ゆえに:
+// - 1本目の `Tick{now: arm_now}` → `CloseTalkWait` に入って初めて受ける Tick ゆえ deadline を
+//   `arm_now + close_talk_deadline_ms` へ**確定するだけ**（超過判定はしない）。
+// - 2本目の `Tick{now: arm_now + close_talk_deadline_ms}` → `now >= deadline` で確実に超過 →
+//   `Unloading{DeadlineExceeded}` → `ShioriUnload`。
+// 2 本の Tick 送出は即座に返る（inbox への enqueue のみ）ため、その後の `Unload` 呼出の実際の発火は有界スピン待機
+// （`yield_now` のみ・sleep も追加 Tick も伴わない）で確認する。
 
 use super::*;
 
@@ -53,8 +42,7 @@ use areka_parsers::charset::DefaultEncoding;
 /// （1本目で deadline を確定・2本目で超過を跨ぐ）、`Unloading{DeadlineExceeded}`→
 /// scripted `Ok(ExitKind::Clean)` の `Unload`→`Unloaded` 観測→`StopSelf` へ完走し、停止の通知の
 /// 原因が `DeadlineExceeded` であること（呼び出しの列は通常の Quit と同じなので、締切の道を
-/// 通ったかは原因でしか分からない）と、`runtime.shutdown()` の全スレッド join 成功を確認する
-/// （design「S5 close deadline」・要件 7.4/7.5/7.6）。
+/// 通ったかは原因でしか分からない）と、`runtime.shutdown()` の全スレッド join 成功を確認する。
 #[test]
 fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     const SHELL_NAME: &str = "S5DeadlineShell";
@@ -124,24 +112,17 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
         .expect("kanade actor should still be alive to receive the close request");
 
     // ---- close 握手が Steady を抜けて OnClose GET を発行するまで有界スピン待機する ----
-    // DD-IT-12: boot は挨拶 talk を追跡し `Steady{talk: Some(greeting)}` へ完了する。ゆえに
-    // CloseRequest 受領時に挨拶 talk がまだ active なら kanade は即握手せず `pending_close`
-    // に記録して `Steady{Some}` を維持し、挨拶 talk の TalkDone 受領時に初めて握手を開始する
-    // （steady.rs `on_close_request` / `on_talk_done`）。**kanade 宛**の Tick をこの間に
-    // 送ってしまうと `Steady{Some}` の pump として消費され台本外の OnSecondChange NOTIFY を
-    // 発行してしまう（CloseTalkWait の deadline も進まない）。ゆえに下の deadline 用 kanade
-    // Tick は OnClose GET の出現を確認してから注入する。OnClose GET が現れた後の kanade は
-    // ClosePending か CloseTalkWait のいずれかにあり、どちらでも下の 2 Tick は last_now を
-    // 起点に deadline を確定・超過させる（ClosePending の Tick は last_now 更新のみ→続く
-    // Value 応答で `deadline_from(Some)` 確定／CloseTalkWait の Tick は deadline=None を
-    // 起点確定・close.rs 参照）。
+    // boot は挨拶 talk を追跡し `Steady{talk: Some(greeting)}` へ完了する。ゆえに CloseRequest 受領時に挨拶 talk がまだ active
+    // なら kanade は即握手せず `pending_close` に記録して `Steady{Some}` を維持し、挨拶 talk の TalkDone 受領時に初めて握手を
+    // 開始する（steady.rs `on_close_request` / `on_talk_done`）。**kanade 宛**の Tick をこの間に送ると `Steady{Some}` の pump
+    // として消費され台本外の OnSecondChange NOTIFY を発行してしまう（CloseTalkWait の deadline も進まない）。ゆえに下の
+    // deadline 用 kanade Tick は OnClose GET の出現を確認してから注入する。OnClose GET が現れた後の kanade は ClosePending か
+    // CloseTalkWait のいずれかにあり、どちらでも下の 2 Tick は last_now を起点に deadline を確定・超過させる。
     //
-    // **一方 dispatcher 宛の Tick は注入し続けなければならない**（2026-07-30 是正）:
-    // 握手の起点である挨拶 talk の `TalkDone` は仮想時刻が `hello` の horizon（0.25s）を
-    // 越えて初めて出る。dispatcher の帳簿は kanade の `last_now` と独立ゆえ、ここで
-    // dispatcher へ Tick を送っても上記 pump 問題は起こらない。旧実装は `yield_now` だけで
-    // 待っており、「引き渡しが速く `now` が 0.25s 未満で止まった実行」では TalkDone が永久に
-    // 出ず 60s 安全弁まで空転していた（実測フレーキー）。
+    // **一方 dispatcher 宛の Tick は注入し続けなければならない**: 握手の起点である挨拶 talk の `TalkDone` は仮想時刻が `hello` の
+    // horizon（0.25s）を越えて初めて出る。dispatcher の帳簿は kanade の `last_now` と独立ゆえ、dispatcher へ Tick を送っても上記
+    // pump 問題は起こらない。`yield_now` だけで待つと、「引き渡しが速く `now` が 0.25s 未満で止まった実行」では TalkDone が
+    // 永久に出ず 60s 安全弁まで空転する。
     super::spin_pumping_ticks(
         "S5: OnClose GET was never issued after CloseRequest — the greeting-tracking close \
          deferral (DD-IT-12) never resolved into a close handshake",
@@ -157,7 +138,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
         },
     );
 
-    // ---- deadline 超過を Tick 2 本の注入だけで駆動する（sleep 不使用・要件 7.4) ----
+    // ---- deadline 超過を Tick 2 本の注入だけで駆動する（sleep 不使用) ----
     // 1本目: CloseTalkWait 入場後 初めて受ける Tick——deadline を
     // `arm_now + close_talk_deadline_ms` へ確定するだけで比較はしない
     // （close.rs の deadline=None 分岐）。
@@ -170,7 +151,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
         .expect("kanade actor should still be alive to receive the deadline-arming Tick");
 
     // 2本目: `now >= deadline`（`arm_now + close_talk_deadline_ms`）を確実に跨ぐ値を
-    // 注入する——生産既定 30_000ms を数値的に跨ぐだけで実時間はゼロ（要件 7.4）。
+    // 注入する——生産既定 30_000ms を数値的に跨ぐだけで実時間はゼロ。
     let cross_now = arm_now + config.close_talk_deadline_ms;
     runtime
         .kanade()
@@ -233,7 +214,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
          OnTranslate→basewareversion→OnClose→OnTranslate→Unload）が正典順序で発火していない"
     );
 
-    // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する（要件 7.3) ----
+    // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する ----
     // deadline 超過による強制終了が既に Unload まで完走済み（上の有界待機で確認済み）
     // である。ここでの `ForceQuit` が届く道と、送出が失敗する冪等の道のどちらを通るかは
     // 時機次第で、どちらでも全 join が有界時間で完走することを確かめる（S4 と同旨）。close talk（`\_w[49999950]` で止まった

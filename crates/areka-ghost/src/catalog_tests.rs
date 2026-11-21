@@ -1,8 +1,8 @@
-//! `catalog` の核となる採否と素性の決定論テスト（要件 2.1〜2.8・5.3）。
+//! `catalog` の核となる採否と素性の決定論テスト。
 //!
-//! 根は `temp-path-kit` の一時フォルダへその場で組むか（要件 8.1 の構成は
+//! 根は `temp-path-kit` の一時フォルダへその場で組むか（構成は
 //! `catalog_test_support::temp_root`）、検体の根（`SampleRoot::acquire("emo2")`）を借りる。
-//! 足すテストは列挙の採否と素性の判断分岐に限る（要件 8.4）。
+//! 足すテストは列挙の採否と素性の判断分岐に限る。
 
 use super::test_support::{
     TARGET, TempRoot, catalog_warns, hold_exclusive, put, put_ghost_in, sjis_descript, temp_root,
@@ -52,7 +52,7 @@ fn ghosts_are_folders_with_master_descript_in_byte_order() {
     // Windows の fs は大小を区別しないので、大文字は別の綴り（`Z`）で置く。
     put_ghost_in(&root.ghost_store(), "Z", "charset,UTF-8\nName,Upper\n");
     put_ghost_in(&root.ghost_store(), "a", "charset,UTF-8\n");
-    // descript の無いフォルダとフォルダ以外の項目は返さない（要件 2.1）。
+    // descript の無いフォルダとフォルダ以外の項目は返さない。
     fs::create_dir_all(root.ghost_dir("no-descript").join("ghost").join("master")).unwrap();
     put(&root.ghost_store().join("stray.txt"), b"x");
 
@@ -60,7 +60,7 @@ fn ghosts_are_folders_with_master_descript_in_byte_order() {
     let folders: Vec<&str> = listed.iter().map(|g| g.identity.folder.as_str()).collect();
     assert_eq!(folders, ["Z", "a", "b"], "バイト順（要件 2.5）");
     assert_eq!(listed[0].dir, root.ghost_dir("Z"));
-    // 鍵は ASCII 小文字化して引く（R5）。
+    // 鍵は ASCII 小文字化して引く。
     assert_eq!(listed[0].identity.name.as_deref(), Some("Upper"));
     assert_eq!(listed[1].identity.name, None);
 }
@@ -151,7 +151,7 @@ fn companion_balloon_reads_one_key() {
     assert_eq!(companion_balloon(&tmp.path().join("none")), None);
 }
 
-/// 空の値（trim 後に空）はどの鍵でも「無し」（仕様は空の値を定めない・実装時の裁定）。
+/// 空の値（trim 後に空）はどの鍵でも「無し」（空の値は仕様が定めないので無しに倒す）。
 #[test]
 fn empty_values_count_as_absent() {
     let tmp = TempPath::new("catalog-empty");
@@ -203,7 +203,7 @@ fn is_ghost_dir_checks_master_descript_only() {
     assert!(!is_ghost_dir(&tmp.path().join("nothing")));
 }
 
-/// 要件 8.1 の一時の根: 件数・採否・7 項目・バイト順・Shift_JIS の復号を全部突き合わせる。
+/// 一時の根: 件数・採否・7 項目・バイト順・Shift_JIS の復号を全部突き合わせる。
 #[test]
 fn temp_root_lists_requirement_8_1_layout() {
     let TempRoot { _tmp, root } = temp_root("catalog-layout");
@@ -218,7 +218,7 @@ fn temp_root_lists_requirement_8_1_layout() {
         shells = list_shells(&alpha);
     });
 
-    // ゴースト 2 体（descript の無い `empty`・フォルダ以外の `stray.txt` は返さない＝要件 2.1）。
+    // ゴースト 2 体（descript の無い `empty`・フォルダ以外の `stray.txt` は返さない）。
     assert_eq!(
         ghosts,
         [
@@ -246,7 +246,7 @@ fn temp_root_lists_requirement_8_1_layout() {
             },
         ]
     );
-    // シェル 2 つのうち `menu,hidden` を除く 1 つ（要件 2.2）。
+    // シェル 2 つのうち `menu,hidden` を除く 1 つ。
     let shell = alpha.join("shell").join("master");
     assert_eq!(
         shells,
@@ -261,7 +261,7 @@ fn temp_root_lists_requirement_8_1_layout() {
         }]
     );
     // バルーン: `type` 無しの偽の既定と `type,balloon`。`plugin` は warn!＋除外・`empty` は黙って
-    // 除外（要件 2.3）。大文字始まりの `StayseeBalloon` が先＝バイト順（要件 2.5）。
+    // 除外。大文字始まりの `StayseeBalloon` が先＝バイト順。
     let staysee = root.balloon_dir("StayseeBalloon");
     assert_eq!(
         balloons,
@@ -291,7 +291,7 @@ fn temp_root_lists_requirement_8_1_layout() {
         ]
     );
     assert_eq!(catalog_warns(&events), ["catalog_type_not_balloon"]);
-    // 同梱バルーン名とゴーストの判定（要件 5.3・4.8）。
+    // 同梱バルーン名とゴーストの判定。
     assert_eq!(companion_balloon(&alpha).as_deref(), Some("kaku"));
     assert_eq!(companion_balloon(&root.ghost_dir("beta")), None);
     assert!(is_ghost_dir(&alpha));
@@ -300,7 +300,7 @@ fn temp_root_lists_requirement_8_1_layout() {
 }
 
 /// 検体の根（emo2＝ゴースト 1・バルーン 1・同梱の install.txt）。同梱バルーンはゴーストの中の
-/// `balloon\` に入るので根の `balloon\` は空（areka-P0-ghost-inner-balloon 要件 7.1）。期待値は
+/// `balloon\` に入るので根の `balloon\` は空。期待値は
 /// `vendors/sample_ghost/emo2.nar` の実物から取った（ゴーストの descript の `id.emo2` は
 /// カンマが無いので `id` は無し）。
 #[test]
@@ -374,7 +374,7 @@ fn sample_root_emo2_lists_one_ghost_one_balloon() {
     assert!(!is_ghost_dir(&kaku));
 }
 
-/// descript が I/O 失敗で読めない項目は warn! 1 件＋除外し、残りの列挙を続ける（要件 2.7）。
+/// descript が I/O 失敗で読めない項目は warn! 1 件＋除外し、残りの列挙を続ける。
 #[test]
 fn unreadable_descript_warns_once_and_is_excluded() {
     let tmp = TempPath::new("catalog-unreadable");
@@ -404,7 +404,7 @@ fn unreadable_install_warns_and_yields_none() {
     assert_eq!(catalog_warns(&events), ["catalog_install_unreadable"]);
 }
 
-/// 非 UTF-8 のフォルダ名（対の無いサロゲートを含む UTF-16 名）は warn!＋除外（R6）。
+/// 非 UTF-8 のフォルダ名（対の無いサロゲートを含む UTF-16 名）は warn!＋除外。
 #[test]
 fn non_utf8_folder_name_warns_and_is_excluded() {
     use std::ffi::OsString;
@@ -432,7 +432,7 @@ fn non_utf8_folder_name_warns_and_is_excluded() {
     assert_eq!(catalog_warns(&events), ["catalog_non_utf8_name"]);
 }
 
-/// `sakura.name` の単独の読み手（要件 2.1・8.7）: 在る → 値・鍵が無い／descript が無い → 黙って None。
+/// `sakura.name` の単独の読み手: 在る → 値・鍵が無い／descript が無い → 黙って None。
 #[test]
 fn sakura_name_reads_one_key_from_master_descript() {
     let tmp = TempPath::new("catalog-sakura-name");
@@ -478,7 +478,7 @@ fn sakura_name_unreadable_warns_and_yields_none() {
     assert_eq!(catalog_warns(&events), ["catalog_descript_unreadable"]);
 }
 
-/// `install.accept` の読み手（要件 3.1）: カンマで分けて前後の空白を落とし、空の名前は落とす。
+/// `install.accept` の読み手: カンマで分けて前後の空白を落とし、空の名前は落とす。
 /// 鍵は大文字小文字を問わない。鍵が無い／descript が無い → 黙って空の列。
 #[test]
 fn install_accept_splits_trims_and_drops_empty_names() {
@@ -533,7 +533,7 @@ fn install_accept_unreadable_warns_and_yields_empty() {
     assert_eq!(catalog_warns(&events), ["catalog_descript_unreadable"]);
 }
 
-/// `homeurl`・`name` の単独の読み手（要件 1.3・1.9・2.4）: 渡したフォルダの descript.txt から読む。
+/// `homeurl`・`name` の単独の読み手: 渡したフォルダの descript.txt から読む。
 /// 鍵は大文字小文字を問わず、値は前後の空白を落として無変形。空の値・空白だけの値・鍵が無い・
 /// descript が無い → 黙って None。
 #[test]
@@ -633,7 +633,7 @@ fn homeurl_and_descript_name_unreadable_warn_and_yield_none() {
     );
 }
 
-/// readme がフォルダの外・下のフォルダを指す → 無し（最上位のファイルだけを受ける・#24）。
+/// readme がフォルダの外・下のフォルダを指す → 無し（最上位のファイルだけを受ける）。
 #[test]
 fn readme_outside_the_top_folder_is_absent() {
     let tmp = TempPath::new("catalog-readme-outside");
@@ -651,7 +651,7 @@ fn readme_outside_the_top_folder_is_absent() {
     );
 }
 
-/// descript.txt がフォルダ → 一覧の読み手も単独の鍵の読み手も warn! 1 件ずつ（#23）。
+/// descript.txt がフォルダ → 一覧の読み手も単独の鍵の読み手も warn! 1 件ずつ。
 #[test]
 fn a_descript_that_is_a_folder_warns_in_both_readers() {
     let tmp = TempPath::new("catalog-descript-folder");

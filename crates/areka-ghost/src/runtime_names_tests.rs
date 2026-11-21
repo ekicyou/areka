@@ -1,8 +1,8 @@
-//! 動作中のゴーストの名前の差し替え（[`GhostRuntime::set_names`]）のテスト（mcp-reload 要件 7.3）。
+//! 動作中のゴーストの名前の差し替え（[`GhostRuntime::set_names`]）のテスト。
 //!
 //! 検体のゴーストは由来つき起動のテストのもの（`name,TestGhost`・`sakura.name` なし）を使い、
 //! 差し替えの後にマウントの名前と sylphya の静的プロパティが新しい名前で読めることと、
-//! 新しい名前に無い静的な名前が鏡像から消えること（要件 9.15 ⑵）を見る。
+//! 新しい名前に無い静的な名前が鏡像から消えることを見る。
 use super::*;
 use areka_sylphya::FlatResolution;
 use temp_path_kit::TempPath;
@@ -62,7 +62,7 @@ fn set_names_replaces_mount_names_and_republishes_statics() {
     drop(temp);
 }
 
-/// 読み直しで新しい名前に無い静的な名前は鏡像から消える（9.15 ⑵）。`sakura.name2` を消した
+/// 読み直しで新しい名前に無い静的な名前は鏡像から消える。`sakura.name2` を消した
 /// descript の読み直しは、その descript で起動したのと同じ＝`%selfname2` に値が無い（素通し縮退）。
 /// `kero.name` も消えると `%keroname` は起動時と同じく `sakura.name` へ戻る。SHIORI 照会層の
 /// `username` は静的な名前でないので残る。

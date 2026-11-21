@@ -1,8 +1,8 @@
-//! 窓ごとのホイールの溜めと、100 ミリ秒の間引きの純関数（mouse-click-wheel-events 要件 6・design「WheelThrottle」）。
+//! 窓ごとのホイールの溜めと、100 ミリ秒の間引きの純関数。
 //!
-//! 状態の置き場所は `MouseWiring.wheel`（鍵＝窓の entity）。結線は `char_watch`（task 3.5）。
+//! 状態の置き場所は `MouseWiring.wheel`（鍵＝窓の entity）。結線は `char_watch`。
 
-/// 間引きの幅（要件 6.3 で決まるホイール自身の値。移動の間引きの 100 ms とたまたま同じ）。
+/// 間引きの幅（ホイール自身の値。移動の間引きの 100 ms とたまたま同じ）。
 pub(super) const WHEEL_MIN_INTERVAL_MS: u64 = 100;
 
 /// 溜まった回転（和と、最後の回転の位置〔縮約後サーフェス px〕と当たり判定）。
@@ -34,7 +34,7 @@ pub(super) struct WheelRotation {
 pub(super) enum WheelPlan {
     /// 送る（和・最後の回転の位置と当たり判定）。
     Send(PendingWheel),
-    /// 和が 0 になったので送らずに溜めを空にした（要件 6.6）。
+    /// 和が 0 になったので送らずに溜めを空にした。
     DropZero,
     /// 溜めが残る。`until_ms` に期限が来る（前の送出＋100 ms ちょうど）。
     Wait { until_ms: u64 },

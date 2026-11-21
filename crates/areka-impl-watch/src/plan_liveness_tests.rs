@@ -1,4 +1,4 @@
-//! `plan::turns` の行き詰まりの無さのテスト（要件 3.6）: 名前のある場面と、参加者 3 人の小さな
+//! `plan::turns` の行き詰まりの無さのテスト: 名前のある場面と、参加者 3 人の小さな
 //! 全探索。支えは親の `plan_test_support.rs` を読むだけ。
 
 use std::collections::{BTreeSet, HashSet};
@@ -23,7 +23,7 @@ const COOP_STEPS: usize = 40;
 const IDS: [&str; 3] = ["A", "B", "C"];
 const REPOS: [&str; 2] = ["r1", "r2"];
 
-/// 設計の字母: `merge`（2 つのリポジトリ）・`request` の 3 つの組・名前なしの `return`・
+/// 字母: `merge`（2 つのリポジトリ）・`request` の 3 つの組・名前なしの `return`・
 /// 名指しの `return`（`test`・`sole`）・`loadrunning`・`merged`・`stopped`・`cancel`。
 fn alphabet() -> Vec<Command> {
     let mut commands = Vec::new();
@@ -171,7 +171,7 @@ fn check_invariants(state: &State, trail: &str) {
         let test = state.test.as_ref().map(|holder| holder.id.as_str());
         assert_eq!(test, Some(sole.id.as_str()), "走っている印の組: {trail}");
     }
-    // 待ちの輪が生まれない形（4.7・4.8・2.8・5.7）。
+    // 待ちの輪が生まれない形。
     let owners = state.test.iter().map(|holder| &holder.id);
     let owners = owners.chain(state.sole.iter().map(|holder| &holder.id));
     let blocked: BTreeSet<&String> = owners
@@ -207,7 +207,7 @@ fn cooperative_move(state: &State) -> Option<Command> {
         return Some(give_back(id, None));
     }
     // マージの持ち主は `request --desk test` を申し込む。別のリポジトリのマージを待つ間は断られる
-    // （4.8）ので、排他テストを飛ばして `merged` へ進む（待ちの行列からも外れる）。
+    // ので、排他テストを飛ばして `merged` へ進む（待ちの行列からも外れる）。
     for desk in state.merge.values() {
         let Some(id) = desk.holder.as_ref().map(|holder| &holder.id) else {
             continue;
@@ -330,14 +330,14 @@ fn merge_holder_test_load_wait_and_stop_requested_ui_test_all_drain() {
 
 #[test]
 fn test_holder_merge_and_merge_waiter_request_are_refused_and_change_nothing() {
-    // 排他テストの机の持ち主の `merge`（4.7）。
+    // 排他テストの机の持ち主の `merge`。
     let mut state = state_with(&["A", "B"]);
     run(&mut state, &request("A", DeskSet::Test), Some("A"), T0);
     assert!(holds_desk(&state, "A"));
     let got = run(&mut state, &merge("A", "r1", false), Some("A"), T0);
     assert_not_applied(&got, "排他テストの机の持ち主の merge");
 
-    // マージを待つ者の `request`（4.8）。
+    // マージを待つ者の `request`。
     let mut waiter = state_with(&["A", "B"]);
     run(&mut waiter, &merge("A", "r1", false), Some("A"), T0);
     run(&mut waiter, &merge("B", "r1", false), Some("B"), T0);

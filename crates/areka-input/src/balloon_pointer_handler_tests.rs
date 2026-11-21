@@ -1,16 +1,15 @@
 // -------------------------------------------------------------------------
-// on_balloon_pointer_moved 配線層檻（task 4.1・design「配線層 > balloon ハンドラ」／
-// Error Handling／System Flows・R1.1/1.2/1.3/1.4/1.6/3.1/3.3/4.1/4.2/8.4）
+// on_balloon_pointer_moved 配線層檻
 //
 // 合成 `PointerState` を直接ハンドラへ与え、(a) Tunnel 素通し、(b) 資源不在の縮退経路を
 // 正しい**ログレベル**（RuntimeWiring 不在=debug／BalloonWiring 不在=error）で、(c) 適用アーム
 // （Inject／ResetOwnState／Noop）を実 `TextLayerRuntime` で決定的に檻へ入れる。判断分岐そのもの
-// （active×hit×last の全組合せ）は hover_action 純関数檻（task 3.2）が網羅済み。
+// （active×hit×last の全組合せ）は hover_action 純関数檻が網羅済み。
 //
 // NOTE（runtime constructibility）: `choice_hit_rows` は `present_frame`（GPU）でしか
 // `choice_snapshot` を埋めないため、headless では現行 rows が常に空＝hit=None。ゆえに
-// 「Some(ordinal) ハイライト追従」は本層では実演できず hover_action 純関数檻（3.2）＋
-// task 7.1 の pass-through 檻に委ねる。本檻はハンドラ経由の実注入として Inject(None) 遷移
+// 「Some(ordinal) ハイライト追従」は本層では実演できず hover_action 純関数檻と
+// pass-through 檻に委ねる。本檻はハンドラ経由の実注入として Inject(None) 遷移
 // （active かつ hit=None かつ last=Some → ハイライト解除注入）を観測する（inject_choice_hover を
 // 実 runtime へ実際に呼び、BalloonWiring.hover の更新と debug marker を固定する）。
 // -------------------------------------------------------------------------
@@ -39,7 +38,7 @@ fn bubble_move(x: i32, y: i32) -> Phase<PointerState> {
     })
 }
 
-/// Tunnel 素通し（R1・donor 同型）: Tunnel 相は資源に一切触れず即 `false`（副作用なし）。
+/// Tunnel 素通し（donor 同型）: Tunnel 相は資源に一切触れず即 `false`（副作用なし）。
 #[test]
 fn moved_tunnel_phase_is_noop_false() {
     let mut world = World::new();
@@ -55,7 +54,7 @@ fn moved_tunnel_phase_is_noop_false() {
     );
 }
 
-/// RuntimeWiring 不在＝正常縮退（R4.1・donor presenter=None 同型）: **DEBUG** レベルで no-op・`false`。
+/// RuntimeWiring 不在＝正常縮退（donor presenter=None 同型）: **DEBUG** レベルで no-op・`false`。
 #[test]
 fn moved_runtime_absent_degrades_with_debug_not_error() {
     let mut world = World::new();
@@ -128,7 +127,7 @@ fn moved_missing_marker_errors_and_noop() {
     );
 }
 
-/// hover 遷移注入（Inject アーム・R1.3）: choice 表示中・現行 hit=None（headless snapshot 空）・
+/// hover 遷移注入（Inject アーム）: choice 表示中・現行 hit=None（headless snapshot 空）・
 /// 前回注入 Some(2) → `Inject(None)`。ハンドラが実 runtime へ `inject_choice_hover(actor, None)` を
 /// 呼び、自前状態 `BalloonWiring.hover[scope]` を None へ更新し、`choice_hover_inject` を DEBUG 発火する。
 #[test]
@@ -175,7 +174,7 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
     );
 }
 
-/// 消滅時整合（ResetOwnState アーム・R3.4）: choice 非表示・前回注入 Some(3) → 自前状態のみ
+/// 消滅時整合（ResetOwnState アーム）: choice 非表示・前回注入 Some(3) → 自前状態のみ
 /// None 整合し、**inject はしない**（上流原子性が正本＝choice_hover_inject を発火しない）。
 #[test]
 fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
@@ -217,7 +216,7 @@ fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
     );
 }
 
-/// 完全 no-op（NoopInactive アーム・R1.4）: choice 非表示・前回注入なし → 自前状態を触らず
+/// 完全 no-op（NoopInactive アーム）: choice 非表示・前回注入なし → 自前状態を触らず
 /// inject もしない（非表示中は hover 追従なし）。
 #[test]
 fn moved_inactive_no_prior_injection_is_full_noop() {
@@ -253,25 +252,23 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
 }
 
 // -------------------------------------------------------------------------
-// on_balloon_pointer_pressed 配線層檻（task 4.2・design「配線層 > balloon ハンドラ」／
-// Error Handling／System Flows・R2.1/2.3/2.4/2.5/2.6/3.1/3.2/4.2/5.1/8.4）
+// on_balloon_pointer_pressed 配線層檻
 //
 // 合成 `PointerState` を直接ハンドラへ与え、(a) Tunnel 素通し、(b) 非左押下（右/中 down）素通し、
 // (c) 資源不在の縮退経路を正しい**ログレベル**（RuntimeWiring 不在=debug／BalloonWiring 不在=error）で、
 // (d) 棄却経路（非表示=inactive／非ヒット=no_hit の reason 弁別・零 send）を実 `TextLayerRuntime` で
-// 決定的に檻へ入れる。確定発行のフィールド一致・stale 棄却は click_selection 純関数檻（task 3.3）が
+// 決定的に檻へ入れる。確定発行のフィールド一致・stale 棄却は click_selection 純関数檻が
 // 網羅済み。
 //
 // NOTE（runtime constructibility）: `choice_hit_rows` は `present_frame`（GPU）でしか
 // `choice_snapshot` を埋めないため headless では現行 rows が常に空＝hit=None。ゆえに
-// 「ヒット→send→choice_selected info」の full pass-through は本層では実演できず、design Testing
-// Strategy item 6 の設計裁定どおり task 7.1/7.3 の pass-through 檻へ委ねる。send 機構自体は
-// task 2.2 の `send_selection`／`ChoiceSelectionInbox` 檻で、`Some` 構成は click_selection 檻
-// （3.3）で構造的に網羅済み。本檻はハンドラ経由の棄却・縮退・零 send を観測する。
+// 「ヒット→send→choice_selected info」の full pass-through は本層では実演できず、
+// pass-through 檻へ委ねる。send 機構自体は `send_selection`／`ChoiceSelectionInbox` 檻で、
+// `Some` 構成は click_selection 檻で構造的に網羅済み。本檻はハンドラ経由の棄却・縮退・零 send を観測する。
 // -------------------------------------------------------------------------
 
 /// 左シングルクリックの合成 `PointerState`（client 物理 px・left_down=true）を組む。
-/// `double_click` フィールドは既定 `None` のまま——選択の確定は `double_click` を見ない（DD-CI-9）。
+/// `double_click` フィールドは既定 `None` のまま——選択の確定は `double_click` を見ない。
 /// 押下ハンドラが `double_click` を読むのは、末尾で中断の入口へ渡すときだけである。
 fn bubble_left_press(x: i32, y: i32) -> Phase<PointerState> {
     Phase::Bubble(PointerState {
@@ -287,7 +284,7 @@ fn wiring_with_inbox() -> (BalloonWiring, Receiver<ChoiceSelection>) {
     (BalloonWiring::new(tx), rx)
 }
 
-/// Tunnel 素通し（R5.1・donor 同型）: Tunnel 相は資源に一切触れず即 `false`（副作用なし・零 send）。
+/// Tunnel 素通し（donor 同型）: Tunnel 相は資源に一切触れず即 `false`（副作用なし・零 send）。
 #[test]
 fn pressed_tunnel_phase_is_noop_false() {
     let mut world = World::new();
@@ -304,7 +301,7 @@ fn pressed_tunnel_phase_is_noop_false() {
     );
 }
 
-/// 非左押下は素通し（R5.1）: 右/中ボタン down（left_down=false）は確定でないため `false`・零 send。
+/// 非左押下は素通し: 右/中ボタン down（left_down=false）は確定でないため `false`・零 send。
 /// 左でない押下は `left_down` の分岐で先に戻るので、選択の確定にも中断の入口にも届かない。
 #[test]
 fn pressed_non_left_button_is_noop_false() {
@@ -342,7 +339,7 @@ fn pressed_non_left_button_is_noop_false() {
     );
 }
 
-/// RuntimeWiring 不在＝正常縮退（R4.1・donor presenter=None 同型）: **DEBUG** で no-op・`false`・零 send。
+/// RuntimeWiring 不在＝正常縮退（donor presenter=None 同型）: **DEBUG** で no-op・`false`・零 send。
 #[test]
 fn pressed_runtime_absent_degrades_with_debug_not_error() {
     let mut world = World::new();
@@ -414,7 +411,7 @@ fn pressed_missing_marker_errors_and_noop() {
     );
 }
 
-/// 非表示中クリックは棄却（R3.1）: choice_active=false の実 runtime へ左クリック → 発行ゼロ・
+/// 非表示中クリックは棄却: choice_active=false の実 runtime へ左クリック → 発行ゼロ・
 /// `debug!(choice_click_rejected, reason="inactive")`。Inbox の try_recv は Empty。
 #[test]
 fn pressed_inactive_choice_rejected_with_reason_inactive() {
@@ -458,7 +455,7 @@ fn pressed_inactive_choice_rejected_with_reason_inactive() {
     );
 }
 
-/// 表示中・非ヒットは棄却（R2.3）: choice_active=true でも headless では choice_hit_rows が空ゆえ
+/// 表示中・非ヒットは棄却: choice_active=true でも headless では choice_hit_rows が空ゆえ
 /// 常に非ヒット → 発行ゼロ・`debug!(choice_click_rejected, reason="no_hit")`。
 #[test]
 fn pressed_active_non_hit_rejected_with_reason_no_hit() {
@@ -507,11 +504,10 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
 }
 
 // -------------------------------------------------------------------------
-// 資源縮退・Tunnel 素通し 副作用ゼロ回帰檻（task 7.2・design Testing Strategy Integration
-// Tests item 3/4・Error Handling／R8.1/8.4）
+// 資源縮退・Tunnel 素通し 副作用ゼロ回帰檻
 //
 // 判断分岐そのもの（Tunnel 短絡／RuntimeWiring 不在=debug 縮退／BalloonWiring 不在=error 縮退／
-// marker 不在=error）の**実行網羅**は task 4.1（moved）／4.2（pressed）の各縮退檻が既に閉じている
+// marker 不在=error）の**実行網羅**は moved／pressed の各縮退檻が既に閉じている
 // （moved_tunnel_phase_is_noop_false／moved_runtime_absent_degrades_with_debug_not_error／
 // moved_balloon_wiring_absent_degrades_with_error ほか・pressed 側も同型）。ただしそれらは
 // 「戻り値 false＋ログレベル」までで、**観測資源を同居させた副作用ゼロ三点**——(a) send なし
@@ -520,11 +516,11 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
 // `choice_hover_inject` を出さない）——までは固定していない（Tunnel 檻は資源を一切挿入せず、RuntimeWiring 不在
 // 檻は BalloonWiring を挿入しないため観測点が無かった）。
 //
-// 本 7.2 檻はその副作用ゼロ次元を**両ハンドラ×{Tunnel, RuntimeWiring 不在, BalloonWiring 不在}**へ
+// 本檻はその副作用ゼロ次元を**両ハンドラ×{Tunnel, RuntimeWiring 不在, BalloonWiring 不在}**へ
 // first-class に追試する（縮退時に対応ログ＝debug／error が出つつ、いかなる観測可能状態も動かない
 // ことを、観測資源を同居させて固定する）。判断分岐の重複網羅ではなく副作用ゼロ観測の追加ゆえ非重複。
 //
-// 8.4（スレッド親和・NonSend 借用は Input スケジュール排他システム内）: 本檻は各ハンドラを単一スレッドの
+// スレッド親和（NonSend 借用は Input スケジュール排他システム内）: 本檻は各ハンドラを単一スレッドの
 // `&mut World` 排他呼出で直接叩く——NonSend 資源（`RuntimeWiring`／`BalloonWiring`・`Rc<RefCell>`）の借用が
 // 排他システム内でのみ起きるという構造契約は、ハンドラの `&mut World` シグネチャ自体が強制する
 // （別途スレッドテストは不要）。
@@ -541,12 +537,12 @@ enum Degrade {
     BalloonWiringAbsent,
 }
 
-/// moved: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する（8.1/8.4）。
+/// moved: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する。
 ///
 /// 各シナリオで観測資源（RuntimeWiring の active runtime・hover=Some(2) 仕込みの BalloonWiring・Inbox）を
 /// 可能な限り同居させ、(1) 戻り値 false、(2) 対応ログレベル（Tunnel=無縮退ログ・RuntimeWiring 不在=DEBUG・
 /// BalloonWiring 不在=ERROR）、(3) 副作用ゼロ三点（choice_hover_inject なし／hover 不変／Inbox Empty／
-/// runtime 借用・active 不変）を固定する。判断分岐網羅は 4.1、本檻は副作用ゼロ観測を担う。
+/// runtime 借用・active 不変）を固定する。判断分岐網羅は moved の各縮退檻、本檻は副作用ゼロ観測を担う。
 #[test]
 fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
     for scenario in [
@@ -655,11 +651,11 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
     }
 }
 
-/// pressed: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する（8.1/8.4）。
+/// pressed: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する。
 ///
 /// moved 版と対称。pressed の副作用は発行（send）ゆえ副作用ゼロ観測は choice_selected info の非発火＋
 /// present な Inbox の `try_recv()==Empty`＋BalloonWiring.hover 不変＋runtime 借用/active 不変で固定する。
-/// 判断分岐網羅は 4.2、本檻は副作用ゼロ観測を担う。
+/// 判断分岐網羅は pressed の各縮退檻、本檻は副作用ゼロ観測を担う。
 #[test]
 fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
     for scenario in [
@@ -769,7 +765,7 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
 }
 
 /// 押下ハンドラの末尾は、中断の入口（`super::user_break::on_left_press`）を必ず通る
-/// （areka-P0-balloon-break 要件 1.1）。GPU 無しではバルーンを出せないので受理までは進まないが、
+/// GPU 無しではバルーンを出せないので受理までは進まないが、
 /// 左ダブルクリックの検出の記録が出ることで、この 1 行の呼び出しを固定する。
 #[test]
 fn pressed_left_double_click_reaches_the_user_break_entry() {
@@ -815,7 +811,7 @@ fn pressed_left_double_click_reaches_the_user_break_entry() {
 }
 
 // -------------------------------------------------------------------------
-// アンカーだけのバルーン（areka-P0-anchor-tag-canon・要件 3.1〜3.3）
+// アンカーだけのバルーン
 //
 // 選択肢が 1 つも無くても、アンカーの範囲があれば移動と押下は「押せる範囲がある」として扱う。
 // headless では当たりの行が空なので、見分けは「範囲がある」側の腕に入ったかで付ける
@@ -840,7 +836,7 @@ fn anchor_only_world(last: Option<usize>) -> (World, Entity, Receiver<ChoiceSele
     (world, e, rx)
 }
 
-/// 強調していたアンカーから外れる移動は、強調を外す注入をする（要件 3.2）。
+/// 強調していたアンカーから外れる移動は、強調を外す注入をする。
 #[test]
 fn moved_off_an_anchor_injects_the_highlight_off() {
     let (mut world, e, _rx) = anchor_only_world(Some(0));
@@ -857,7 +853,7 @@ fn moved_off_an_anchor_injects_the_highlight_off() {
     );
 }
 
-/// アンカーだけのバルーンの押下は「範囲はあるが当たらなかった」と判定される（要件 3.3・3.6）。
+/// アンカーだけのバルーンの押下は「範囲はあるが当たらなかった」と判定される。
 #[test]
 fn pressed_on_anchor_only_balloon_is_judged_against_the_ranges() {
     let (mut world, e, rx) = anchor_only_world(None);

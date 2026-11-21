@@ -1,20 +1,19 @@
-//! 選択確定通知の受信結線（areka-P0-choice-select-events・design C1 ChoiceDrain）。
+//! 選択確定通知の受信結線。
 //!
 //! UI スレッドの受信口 [`ChoiceSelectionInbox`]（`wire_balloon_choice` が挿入・所有は
-//! choice-interact spec）を毎フレーム drain し、`DispatcherMsg::Choice` へ写像して dispatcher の
+//! `balloon.rs`）を毎フレーム drain し、`DispatcherMsg::Choice` へ写像して dispatcher の
 //! inbox 経由で kanade へ転送する薄い配線層。**判断・フィルタ・重複排除は一切行わない**——一回性の調停は
-//! kanade 側が単一真実源であり（Req1.1・design C4）、上流 balloon 押下ハンドラは既に
-//! 一度きり発行を保証している。本層は**到着順に全件を素通し**する（Req1.2）。
+//! kanade 側が単一真実源であり、上流 balloon 押下ハンドラは既に
+//! 一度きり発行を保証している。本層は**到着順に全件を素通し**する。
 //!
-//! 判断分岐は「送出失敗（dispatcher 停止後）で warn 記録して継続する」1 点のみ（Req1.6）で、
-//! それと写像純関数 [`to_choice_input`] だけが檻の対象（ECS 結線は再テストしない・steering
-//! `test-only-decision-branches-not-proven-wiring`）。
+//! 判断分岐は「送出失敗（dispatcher 停止後）で warn 記録して継続する」1 点のみで、
+//! それと写像純関数 [`to_choice_input`] だけが檻の対象（ECS 結線は再テストしない）。
 //!
-//! 知らせの種類がアンカー（`\_a`）なら、選択肢の伝言でなく `DispatcherMsg::Anchor` にして送る
-//! （areka-P0-anchor-tag-canon）。種類で伝言を選ぶこの 1 分岐のほかは選択肢と同じで、届いた
-//! アンカーの知らせも全件そのまま送る（kanade 側でも改めて照合しない・要件 4.12）。
+//! 知らせの種類がアンカー（`\_a`）なら、選択肢の伝言でなく `DispatcherMsg::Anchor` にして送る。
+//! 種類で伝言を選ぶこの 1 分岐のほかは選択肢と同じで、届いた
+//! アンカーの知らせも全件そのまま送る（kanade 側でも改めて照合しない）。
 //!
-//! 送り先は dispatcher の inbox（areka-P0-balloon-text-bugs 件 1・開発者の裁定 2026-10-16 案 (b)）。
+//! 送り先は dispatcher の inbox。
 //! 押下の選択を再生の `ChoiceWaiting` と同じ inbox に並べ、dispatcher が判断せずにその順のまま
 //! kanade へ送る——選択待ちに入る前の押下を kanade が捨てるので、選択が `ChoiceWaiting` を
 //! 追い越さないことがここで保たれる。
@@ -40,13 +39,13 @@ pub(crate) struct ChoiceForwarder {
     dispatcher: Sender<DispatcherMsg>,
 }
 
-/// 選択確定通知 → kanade 入力への写像（純関数・不透明転写・Req1.5/3.7・DD-13）。
+/// 選択確定通知 → kanade 入力への写像（純関数・不透明転写）。
 ///
 /// `id` / `label` / `references` は**改変せず move で転写**する——トリム・正規化・
-/// 空要素除去・順序変更・表示層への再照会はいずれも行わない（Req1.5）。`scope` は
-/// `usize`→`u32` の型合わせのみ（M1 の実値は {0,1}）。
+/// 空要素除去・順序変更・表示層への再照会はいずれも行わない。`scope` は
+/// `usize`→`u32` の型合わせのみ（実値は {0,1}）。
 ///
-/// `scope` は下流でも**検証・ログにのみ**用いられ Reference には載らない（Req3.7・DD-13）。
+/// `scope` は下流でも**検証・ログにのみ**用いられ Reference には載らない。
 /// 本関数は搬送するだけで用途判断を持たない。
 ///
 /// 同一入力→同一出力（純粋・決定論・失敗経路なし）。
@@ -55,7 +54,7 @@ fn to_choice_input(sel: ChoiceSelection) -> ChoiceInput {
         // id / label / references は move で素通し（clone も加工もしない＝改変の余地を作らない）。
         id: sel.id,
         label: sel.label,
-        // 型合わせのみ（M1 の scope 実値は {0,1}）。用途限定の判断は下流（DD-13）。
+        // 型合わせのみ（scope の実値は {0,1}）。用途限定の判断は下流。
         scope: sel.scope as u32,
         references: sel.references,
     }
@@ -74,21 +73,21 @@ fn to_anchor_input(sel: ChoiceSelection) -> AnchorInput {
     }
 }
 
-/// 受信口を `try_recv` で drain し、到着順に全件を dispatcher 経由で kanade へ転送する（Req1.2/1.6）。
+/// 受信口を `try_recv` で drain し、到着順に全件を dispatcher 経由で kanade へ転送する。
 ///
 /// ECS から切り離した純粋な形（`Receiver` と `Sender` のみを取る）——排他システム
 /// [`drain_choice_selections`] はこの関数へ委譲するだけの配線。
 ///
-/// - **判断・フィルタ・重複排除をしない**: 受領した通知は 1 件残らず送出を試みる（Req1.2）。
+/// - **判断・フィルタ・重複排除をしない**: 受領した通知は 1 件残らず送出を試みる。
 /// - **送出失敗で止まらない**: `warn!(event = "choice_forward_failed")` を記録して**次の件へ継続**
-///   する（dispatcher 停止後は終了系で正常・Req1.6・log-first）。アンカーの知らせは同じ形の記録を
+///   する（dispatcher 停止後は終了系で正常）。アンカーの知らせは同じ形の記録を
 ///   `anchor_forward_failed` の名前で残す。
 /// - **種類で伝言を選ぶ**: 選択肢は `DispatcherMsg::Choice`、アンカーは `DispatcherMsg::Anchor`。
 ///
 /// 戻り値は送出に成功した件数（呼び手は使わないが檻の観測点）。
 fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<DispatcherMsg>) -> usize {
     let mut forwarded = 0usize;
-    // try_recv ループ＝到着順に全件（滞留は 1 件も残さない・Req1.2）。
+    // try_recv ループ＝到着順に全件（滞留は 1 件も残さない）。
     while let Ok(sel) = inbox.try_recv() {
         // scope と id は送出後に使えないため、ログ用へ先に控える（写像は所有権を消費する）。
         let scope = sel.scope;
@@ -105,7 +104,7 @@ fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<Dispatcher
             ),
         };
         if dispatcher.send(msg).is_err() {
-            // dispatcher 停止後（終了系では正常）。無記録で打ち切らず、記録して次の件へ継続する（Req1.6）。
+            // dispatcher 停止後（終了系では正常）。無記録で打ち切らず、記録して次の件へ継続する。
             tracing::warn!(
                 event = forward_failed,
                 scope,
@@ -119,7 +118,7 @@ fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<Dispatcher
     forwarded
 }
 
-/// 受信口 drain の排他システム（Input スケジュール・design C1）。
+/// 受信口 drain の排他システム（Input スケジュール）。
 ///
 /// NonSend の [`ChoiceSelectionInbox`]（`wire_balloon_choice` 挿入）と [`ChoiceForwarder`]
 /// （[`wire_choice_drain`] 挿入）をともに共有借用し（両方 `&World` 借用ゆえ両立・donor
@@ -127,7 +126,7 @@ fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<Dispatcher
 ///
 /// 資源不在は self-gating の no-op（`trace!`＋return・donor `mouse_moved_no_wiring` 同型）。
 /// [`wire_choice_drain`] は `wire_balloon_choice` の直後に呼ばれるため理論上不到達だが、
-/// 毎フレーム走る排他システムゆえ panic せず無記録でもなく縮退する（log-first）。
+/// 毎フレーム走る排他システムゆえ panic せず無記録でもなく縮退する。
 pub(crate) fn drain_choice_selections(world: &mut World) {
     let Some(inbox) = world.get_non_send::<ChoiceSelectionInbox>() else {
         tracing::trace!(
@@ -146,7 +145,7 @@ pub(crate) fn drain_choice_selections(world: &mut World) {
     forward_all(&inbox.0, &forwarder.dispatcher);
 }
 
-/// dispatcher 投函端を NonSend 挿入する（design C1 Contracts・donor `wire_mouse_input` 同型）。
+/// dispatcher 投函端を NonSend 挿入する（donor `wire_mouse_input` 同型）。
 /// drain 排他システムの登録は [`register_choice_drain`] が行う。
 ///
 /// `ghost_session_runtime::rewire_runtime_consumers` の末尾（`ghost_session::boot_ghost` の結線で
@@ -180,8 +179,7 @@ mod tests {
     use log_capture_kit::{LineFormat, capture_lines};
     use std::sync::mpsc::{self, TryRecvError};
 
-    /// 登録専用の関数は単独で呼べ、入力の段へ取り出しをちょうど 1 つ足し、持ち物は置かない
-    /// （areka-P0-ghost-restart-unit 要件 2.1）。
+    /// 登録専用の関数は単独で呼べ、入力の段へ取り出しをちょうど 1 つ足し、持ち物は置かない。
     #[test]
     fn register_choice_drain_alone_adds_one_system_without_forwarder() {
         let mut world = World::new();
@@ -242,9 +240,6 @@ mod tests {
     // ── ログ発火を決定論的に観測するための捕捉（捕捉層は共有機構へ委譲）──
     //
     // 捕捉層そのものはここに持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。
-    // 行の形（1 イベント 1 行・`level=…` に続けてフィールドを訪問順で ` name=value`）も
-    // 呼出側の判定内容も、移行前と 1 バイト変わらない。
-    //
     // 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
     // のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
     // interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの
@@ -269,10 +264,10 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // to_choice_input 純関数檻（design Testing Strategy / Unit Tests 5・Req1.5/3.7）
+    // to_choice_input 純関数檻
     // -------------------------------------------------------------------------
 
-    /// 不透明転写（Req1.5）: `id`／`label` は受領した内容をそのまま——前後空白のトリムも
+    /// 不透明転写: `id`／`label` は受領した内容をそのまま——前後空白のトリムも
     /// 正規化も行わずバイト等価で転写される。
     #[test]
     fn to_choice_input_transcribes_id_and_label_verbatim() {
@@ -291,7 +286,7 @@ mod tests {
         );
     }
 
-    /// 不透明転写（Req1.5）: `references` は**記述順のまま全要素**が転写される——
+    /// 不透明転写: `references` は**記述順のまま全要素**が転写される——
     /// 空文字要素の除去・空白のみ要素の除去・順序変更・重複排除のいずれも起きない。
     #[test]
     fn to_choice_input_preserves_reference_order_and_empty_elements() {
@@ -317,8 +312,8 @@ mod tests {
         assert_eq!(input.references[1], "", "空文字要素はそのまま空文字で残る");
     }
 
-    /// `scope` の型合わせ（design C1・Req3.7 は下流の用途限定）: `usize`→`u32` へ値を保って写る。
-    /// 本層は搬送のみで、Reference へ載せる／載せないの判断は持たない（DD-13）。
+    /// `scope` の型合わせ（用途限定は下流）: `usize`→`u32` へ値を保って写る。
+    /// 本層は搬送のみで、Reference へ載せる／載せないの判断は持たない。
     #[test]
     fn to_choice_input_maps_scope_usize_to_u32() {
         for scope in [0usize, 1, 3] {
@@ -337,7 +332,7 @@ mod tests {
         }
     }
 
-    /// 参照列が空でも空 `Vec` のまま転写される（下流の Reference 位置省略は kanade の領分・Req3.5）。
+    /// 参照列が空でも空 `Vec` のまま転写される（下流の Reference 位置省略は kanade の領分）。
     #[test]
     fn to_choice_input_keeps_empty_reference_list_empty() {
         let sel = ChoiceSelection {
@@ -354,10 +349,10 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // forward_all 檻（design Testing Strategy / Unit Tests 5・Req1.2/1.6）
+    // forward_all 檻
     // -------------------------------------------------------------------------
 
-    /// 全件・到着順・無判断（Req1.2）: 滞留した通知は 1 件も捨てず到着順に転送される。
+    /// 全件・到着順・無判断: 滞留した通知は 1 件も捨てず到着順に転送される。
     /// **同一 id の重複を含める**ことで、本層が重複排除・フィルタを行わない（一回性の調停は
     /// kanade 側が単一真実源）ことを弁別する。
     #[test]
@@ -415,14 +410,14 @@ mod tests {
         assert!(dispatcher_rx.try_recv().is_err(), "何も届かない");
     }
 
-    /// 転送失敗分岐（Req1.6）: dispatcher 受信端が drop 済みでも **panic せず**、
+    /// 転送失敗分岐: dispatcher 受信端が drop 済みでも **panic せず**、
     /// `warn!(event = "choice_forward_failed")` を記録して**次の件へ継続**する
     /// （滞留全件が drain され、失敗件数ぶん warn が出る）。
     #[test]
     fn forward_all_warns_and_continues_when_dispatcher_receiver_dropped() {
         let (sel_tx, sel_rx) = mpsc::channel::<ChoiceSelection>();
         let (dispatcher_tx, dispatcher_rx) = mpsc::channel::<DispatcherMsg>();
-        drop(dispatcher_rx); // dispatcher 停止後（終了系では正常・Req1.6）
+        drop(dispatcher_rx); // dispatcher 停止後（終了系では正常）
 
         for id in ["a", "b", "c"] {
             sel_tx
@@ -466,7 +461,7 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // 種類の振り分け（areka-P0-anchor-tag-canon 要件 4.11・4.12）
+    // 種類の振り分け
     // -------------------------------------------------------------------------
 
     /// [`dirty_selection`] と同じ中身で、種類だけがアンカーの知らせ。

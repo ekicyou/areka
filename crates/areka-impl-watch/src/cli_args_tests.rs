@@ -1,6 +1,6 @@
 //! 引数の表・使い方の決定論テスト（`cli_tests.rs` から移した、引数の読みと `--help` の本文）。
 //!
-//! [`DESIGN`] は設計の「コマンドの表」の写しで、本番の表（`COMMANDS`）とは別に持つ
+//! [`DESIGN`] は期待する表の写しで、本番の表（`COMMANDS`）とは別に持つ
 //! （本番の表を書き換えると、このファイルのテストが赤になる）。
 
 use super::super::subject;
@@ -11,7 +11,7 @@ use crate::state::DeskSet;
 
 use Opt::{Bug, Desk, Id, Name, Pr, Purpose, Repo, Sha, Spec, Wait};
 
-/// 設計のコマンドの表: 名前・要る引数・任意の引数・`--wait` を取るか（14 行・同じ並び）。
+/// 期待するコマンドの表: 名前・要る引数・任意の引数・`--wait` を取るか（14 行・同じ並び）。
 const DESIGN: [(&str, &[Opt], &[Opt], bool); 14] = [
     ("watch", &[Id, Repo], &[Name], false),
     ("merge", &[Id, Repo, Spec], &[Bug, Name], true),
@@ -245,7 +245,7 @@ fn each_option_is_accepted_only_by_the_commands_that_list_it() {
             let mut opts = required.to_vec();
             opts.push(opt);
             let words = line(name, &opts);
-            // `clear` は名前の行に出さない別の形 `--repo` を受ける（要件 11.4）。
+            // `clear` は名前の行に出さない別の形 `--repo` を受ける。
             let variant = name == "clear" && opt == Repo;
             let listed = optional.contains(&opt) || (opt == Wait && wait) || variant;
             match parse(&words) {
@@ -577,7 +577,7 @@ fn usage_is_ascii_and_shows_every_command_argument_and_exit_code() {
 
 #[test]
 fn usage_notes_say_what_3_means_for_exactly_the_commands_that_can_end_with_3() {
-    // 設計のコマンドの表で、終わり方に 3 を持つ 9 個。
+    // 終わり方に 3 を持つ 9 個。
     let with_3 = [
         "watch",
         "merge",
@@ -664,7 +664,7 @@ fn desk_takes_test_and_sole_in_either_order() {
     assert_eq!(desks_of(&args(&["return", "--id", "a"])), None);
 }
 
-/// 空・同じ名前を 2 度・知らない名前・マージの机は使い方の誤り（要件 2.5）。断りは読みの中で
+/// 空・同じ名前を 2 度・知らない名前・マージの机は使い方の誤り。断りは読みの中で
 /// 決まり（読みは何も読み書きしない）、入口は使い方の誤りを終了コード 2 で返す。
 #[test]
 fn desk_refuses_empty_twice_unknown_and_merge() {
@@ -725,7 +725,7 @@ fn desk_refuses_empty_twice_unknown_and_merge() {
     );
 }
 
-/// 名前の行（設計の綴りのまま）の次の行が、設計の説明の行。
+/// 名前の行（期待する綴りのまま）の次の行が、説明の行。
 #[test]
 fn usage_shows_the_design_note_under_each_named_command_line() {
     let text = usage();

@@ -1,4 +1,4 @@
-//! ホイールの溜めと間引きの純関数の檻（mouse-click-wheel-events 要件 6.2〜6.6・6.8・6.9・11.2・design「WheelThrottle」）。
+//! ホイールの溜めと間引きの純関数の檻。
 
 use super::{PendingWheel, WheelAccum, WheelPlan, WheelRotation, plan_wheel};
 

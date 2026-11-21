@@ -1,4 +1,4 @@
-//! 押下の控えと新しい知らせの送出の口の檻（mouse-click-wheel-events 要件 1.5・2.1・3.4・3.5・4.4・design「PressNote・ClickJudge」）。
+//! 押下の控えと新しい知らせの送出の口の檻。
 
 use super::super::{MouseWiring, RegionSource, on_char_pointer_pressed};
 use super::{
@@ -51,7 +51,7 @@ fn plain() -> PressNote {
     }
 }
 
-/// その tick に押されたボタンごとに控えが在り、押されていないボタンには無い（要件 2.1）。
+/// その tick に押されたボタンごとに控えが在り、押されていないボタンには無い。
 #[test]
 fn note_press_writes_one_note_per_pressed_button() {
     let (mut world, entity, _rx) = wired();
@@ -72,7 +72,7 @@ fn note_press_writes_one_note_per_pressed_button() {
     );
 }
 
-/// ダブルクリックとして届いたボタンだけ「2 回目」。同じ鍵の新しい押下は上書きする（要件 4.4）。
+/// ダブルクリックとして届いたボタンだけ「2 回目」。同じ鍵の新しい押下は上書きする。
 #[test]
 fn only_the_double_clicked_button_is_marked_second() {
     let (mut world, entity, _rx) = wired();
@@ -103,7 +103,7 @@ fn only_the_double_clicked_button_is_marked_second() {
     );
 }
 
-/// 箱の押下は箱の印（要件 3.4）。
+/// 箱の押下は箱の印。
 #[test]
 fn box_press_is_marked_by_box() {
     let (mut world, entity, _rx) = wired();
@@ -203,10 +203,10 @@ fn send_mouse_reports_whether_it_was_sent() {
     assert!(!wiring.send_mouse(input, "wheel"));
 }
 
-// --- 解放の判定（task 3.4） -------------------------------------------------
+// --- 解放の判定 -------------------------------------------------
 
 /// 判定の表: 控え無し → 別の窓／箱 → 箱の選択肢／左のドラッグ → ドラッグ／窓の外 → 外／
-/// それ以外 → クリック（2 回目の印は控えの `double`）。先の理由が後の理由に勝つ（要件 3.1・3.3・3.4）。
+/// それ以外 → クリック（2 回目の印は控えの `double`）。先の理由が後の理由に勝つ。
 #[test]
 fn judge_release_follows_the_table_in_order() {
     use LeftDrag::*;
@@ -317,7 +317,7 @@ fn up(x: i64, y: i64, region: Option<&str>, button: ClickButton, second: bool) -
 }
 
 /// 5 つのボタンを押して同じ tick に放すと、左・右・中・拡張 1・拡張 2 の順に解放の知らせが届き、
-/// 座標は放した点のサーフェスの点・当たり判定はその点のもの。控えは全部取り出される（要件 1.1・1.4・2.1）。
+/// 座標は放した点のサーフェスの点・当たり判定はその点のもの。控えは全部取り出される。
 #[test]
 fn release_of_five_buttons_sends_five_button_ups_at_the_surface_point() {
     let (mut world, entity, rx) = sized();
@@ -348,7 +348,7 @@ fn release_of_five_buttons_sends_five_button_ups_at_the_surface_point() {
     assert!(notes(&world, entity).is_empty(), "控えは必ず取り出す");
 }
 
-/// 押下の無い解放・窓の外で放した解放はどれも送らず、控えはどちらでも取り出される（要件 3.3）。
+/// 押下の無い解放・窓の外で放した解放はどれも送らず、控えはどちらでも取り出される。
 #[test]
 fn release_without_note_or_outside_the_window_sends_nothing() {
     let (mut world, entity, rx) = sized();
@@ -370,7 +370,7 @@ fn release_without_note_or_outside_the_window_sends_nothing() {
     assert!(notes(&world, entity).is_empty());
 }
 
-/// 左のドラッグの後の解放は送らない。同じ tick の右の解放はクリックのまま（要件 3.1）。
+/// 左のドラッグの後の解放は送らない。同じ tick の右の解放はクリックのまま。
 #[test]
 fn left_release_after_a_drag_is_not_a_click_but_right_is() {
     let (mut world, entity, rx) = sized();
@@ -401,7 +401,7 @@ fn left_release_after_a_drag_is_not_a_click_but_right_is() {
     assert!(notes(&world, entity).is_empty());
 }
 
-/// 箱が使った押下の解放は送らない（要件 3.4）。
+/// 箱が使った押下の解放は送らない。
 #[test]
 fn release_of_a_box_press_is_not_a_click() {
     let (mut world, entity, rx) = sized();
@@ -423,7 +423,7 @@ fn release_of_a_box_press_is_not_a_click() {
 }
 
 /// 左の押下 → 解放 → ダブルクリックの押下 → 解放の順に、受信端へ
-/// 「解放（ふつう）→ OnMouseDoubleClick → 解放（2 回目）」が届く（要件 4.1・3.2）。
+/// 「解放（ふつう）→ OnMouseDoubleClick → 解放（2 回目）」が届く。
 #[test]
 fn left_double_click_delivers_up_double_click_up_in_order() {
     let (mut world, entity, rx) = sized();

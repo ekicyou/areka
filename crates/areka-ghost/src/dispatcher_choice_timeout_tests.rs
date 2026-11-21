@@ -4,28 +4,20 @@ use crate::test_support::{RecordingSink, test_system_vars};
 use std::sync::mpsc;
 use std::time::Duration;
 
-// ── task 3.2: `\![set,choicetimeout,…]` の台本から kanade の入口までの値
-//    （spec areka-P0-choice-timeout-directive・要件 9.4／9.5）。読めない値の警告は
-//    areka-sakura の `unreadable_choice_timeout_warns_once_readable_none` が縛る ──
+// ── `\![set,choicetimeout,…]` の台本から kanade の入口までの値 ──
 
 /// 選択待ちの台本に時間の指定を足したもの（時間の欄を `value` で差し替える）。
 ///
-/// compile 後（アンカー 0）: `hello`@0（D=0.25）／Wait@0.25（`\_w[100]`=0.1）／Choice@0.35
-/// （id=targetA）／Barrier@0.35。区切りの時刻は 0.35 で、指定の有無で変わらない。
+/// 区切り（Choice・Barrier）の時刻は 0.35 秒で、指定の有無で変わらない。
 fn script_with_choice_timeout(value: &str) -> String {
     format!(r"\s[10]hello\_w[100]\q[選択A,targetA]\![set,choicetimeout,{value}]\e")
 }
 
-/// **台本 → kanade の入口（要件 9.4 前半・9.5）**: 指定 `1234` の台本を dispatcher に流すと、
-/// kanade への選択待ちの知らせは表示の終わり `1_350`（base_now 1_000＋区切り 0.35 s）・
-/// 指令 `Some(1.234)` で届く。
+/// 指定 `1234` の台本を dispatcher に流すと、kanade への選択待ちの知らせは表示の終わり
+/// `1_350`（base_now 1_000＋区切り 0.35 s）・指令 `Some` で届く。
 ///
 /// 対になるテストは kanade の `choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234`
-/// （境の値 `1234`）。kanade の期限の判定は `pub(crate)` で 1 本では貫けないため、2 本の合成で
-/// 「台本から期限まで通し」を示す。片方だけ境の値を変えたら、もう片方も合わせること。
-///
-/// この檻は時計を区切り＋1.234 秒の先まで進めない（`Tick` は 1_000 と 1_500 だけ）ので、
-/// 区切りを値で飛ばさない再生層の修正には依らない（その証拠は dola と drive の檻が担う）。
+/// （境の値 `1234`）。片方だけ境の値を変えたら、もう片方も合わせること。
 #[test]
 fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
     let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
@@ -45,7 +37,7 @@ fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
         script_with_choice_timeout("1234"),
     )))
     .expect("send Start(choicetimeout 1234)");
-    // base_now=1_000 刻印 → elapsed 0.5 で Choice@0.35・Barrier@0.35 到達（WaitingForChoice）。
+    // base_now=1_000 を刻み、elapsed 0.5 で区切り 0.35 に届いて選択待ちになる。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(1_000),
     })

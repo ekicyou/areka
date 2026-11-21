@@ -1,17 +1,17 @@
-//! `areka-ghost` ⓪ghost の sylphya 結線層（task 8.1〜8.2）。
+//! `areka-ghost` ⓪ghost の sylphya 結線層。
 //!
 //! ここでは descript 由来の名前情報（`GhostNames`）から sylphya のフラット静的値
 //! （`selfname`／`selfname2`／`keroname`）を導出する純関数 [`derive_flat_statics`] と、
 //! boot 系列が sylphya（統一プロパティシステム）を起動・結線するための薄い配線ヘルパ群
 //! （アクター spawn・静的構成/baseware publish・prefetch sink クロージャ・provider 生成）を
-//! 提供する（task 8.2・design「ghost（結線・provider 差替）」）。
+//! 提供する。
 //!
-//! # 決定論檻（要件 9.4）
+//! # テストの方針
 //! [`derive_flat_statics`] は純関数（I/O・時計・乱数を持たない）であり、同一の `GhostNames`
 //! からは常に同一順序・同一内容の `Vec` を返す。descript 実値解決の全判断分岐
-//! （keroname の 3 分岐・selfname2 の有無・selfname の有無）を x64 純粋単体テストで檻に入れる。
+//! （keroname の 3 分岐・selfname2 の有無・selfname の有無）を x64 純粋単体テストで固定する。
 //! 配線ヘルパ（spawn／publish／sink／provider）は判断分岐を持たない薄い結線であり、
-//! その振る舞いは boot 統合テスト（task 8.4）が檻に入れる（記憶知見「配線は再テストしない」）。
+//! その振る舞いは boot 統合テストが受け持つ。
 
 use std::path::{Path, PathBuf};
 
@@ -26,21 +26,20 @@ use areka_sylphya::{
 
 use crate::runtime::SystemVarSource;
 
-/// baseware 識別名（大域点付き `baseware.name`・R5.1・実値）。
+/// baseware 識別名（大域点付き `baseware.name`・実値）。
 const BASEWARE_NAME: &str = "areka";
 
-/// ログ target（steering: areka-log-first-no-silent-failure）。
+/// ログ target。
 const LOG_TARGET: &str = "ghost-boot";
 
-/// descript の名前情報 → sylphya フラット静的値（純関数・決定論檻対象・R9.4）。
+/// descript の名前情報 → sylphya フラット静的値（純関数）。
 ///
-/// 生成規則（要件 4.3／4.4／4.5・design「ghost（結線・provider 差替）」・
-/// `doc/COMPAT_ARCHITECTURE.md` §8 対応表 ②③）:
+/// 生成規則（`doc/COMPAT_ARCHITECTURE.md` 参照）:
 ///
-/// - `sakura.name` が `Some(v)` → `("selfname", v)` を積む（R4.3）。未定義なら積まない（素通し縮退）。
-/// - `sakura.name2` が `Some(v)` → `("selfname2", v)` を積む（R4.4）。未定義なら**何も積まない**
+/// - `sakura.name` が `Some(v)` → `("selfname", v)` を積む。未定義なら積まない（素通し縮退）。
+/// - `sakura.name2` が `Some(v)` → `("selfname2", v)` を積む。未定義なら**何も積まない**
 ///   （素通し縮退・フォールバック創作なし・既定値なし）。
-/// - keroname（R4.5・SSP 互換）:
+/// - keroname（SSP 互換）:
 ///   - `kero.name` が `Some(v)` → `("keroname", v)` を積む。
 ///   - `kero.name` が `None` かつ `sakura.name` が `Some(v)` → `("keroname", v)` を積む
 ///     （SSP 互換フォールバック＝本体側の名前）。
@@ -48,24 +47,24 @@ const LOG_TARGET: &str = "ghost-boot";
 ///
 /// フラットトークン名は sylphya のフラット語彙に合わせ `%` を含まない
 /// （`"selfname"`／`"selfname2"`／`"keroname"`）。返す `Vec` は決定論的な安定順
-/// （selfname → selfname2 → keroname）で、これらは task 8.2 で ghost が `PublishStatic` する。
+/// （selfname → selfname2 → keroname）で、これらは ghost が `PublishStatic` する。
 pub fn derive_flat_statics(names: &GhostNames) -> Vec<(String, String)> {
     // 名前を足したら FLAT_STATIC_NAMES にも足す（読み直しで消す範囲）。
     let mut out: Vec<(String, String)> = Vec::new();
 
-    // %selfname＝sakura.name（R4.3）。未定義→積まない（素通し縮退）。
+    // %selfname＝sakura.name。未定義→積まない（素通し縮退）。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_25selfname:1
     if let Some(v) = &names.sakura_name {
         out.push(("selfname".to_string(), v.clone()));
     }
 
-    // %selfname2＝sakura.name2（R4.4）。未定義→積まない（素通し縮退・対応表 ②）。
+    // %selfname2＝sakura.name2。未定義→積まない（素通し縮退・対応表 ②）。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_25selfname2:1
     if let Some(v) = &names.sakura_name2 {
         out.push(("selfname2".to_string(), v.clone()));
     }
 
-    // %keroname＝kero.name。未定義なら sakura.name へフォールバック（SSP 互換・R4.5・対応表 ③）。
+    // %keroname＝kero.name。未定義なら sakura.name へフォールバック（SSP 互換）。
     // 両者未定義なら積まない（素通し縮退）。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_25keroname:1
     if let Some(v) = &names.kero_name {
@@ -82,7 +81,7 @@ pub const FLAT_STATIC_NAMES: [&str; 3] = ["selfname", "selfname2", "keroname"];
 
 /// `names` で起動したなら積まれない静的名（[`FLAT_STATIC_NAMES`] のうち
 /// [`derive_flat_statics`] に無いもの）。読み直しはこれを鏡像から消し、起動時と同じ状態にする
-/// （ukadoc は名前が無いときの値を定めない・要件 9.15 ⑵）。
+/// （ukadoc は名前が無いときの値を定めない）。
 pub fn absent_flat_statics(names: &GhostNames) -> Vec<String> {
     let flat = derive_flat_statics(names);
     FLAT_STATIC_NAMES
@@ -93,20 +92,19 @@ pub fn absent_flat_statics(names: &GhostNames) -> Vec<String> {
 }
 
 // ============================================================================
-// task 8.2: sylphya 起動・結線の薄い配線ヘルパ（判断分岐なし・boot 図の結線正本）
+// sylphya 起動・結線の薄い配線ヘルパ（判断分岐なし）
 // ============================================================================
 
-/// スコープ root の profile フォルダ（`<base>/profile/areka/`）を組む（R6.5・層別 profile 物理分離）。
+/// スコープ root の profile フォルダ（`<base>/profile/areka/`）を組む（層別 profile 物理分離）。
 ///
-/// sylphya はパスを解釈しない最下層規律ゆえ、所属実体（ghost/shell）の分離は結線側の
-/// per-実体 profile ディレクトリの物理分離が担う。ghost スコープは `<MountModel.shiori.dir>`、
-/// shell スコープは `<ShellMount.dir>` を base に取る（design「boot 系列」）。
+/// sylphya はパスを解釈しない最下層規律ゆえ、所属実体（ghost/shell）の分離は結線側の per-実体 profile
+/// ディレクトリの物理分離が担う。ghost スコープは `<MountModel.shiori.dir>`、shell スコープは
+/// `<ShellMount.dir>` を base に取る。
 pub fn profile_areka_root(base: &Path) -> PathBuf {
     base.join("profile").join("areka")
 }
 
-/// ghost 自身の `AskerId` を `MountModel.shiori.dir` の正準文字列から構築する（設計「ghost 自身の
-/// AskerId は MountModel.shiori.dir の正準文字列から構築」）。
+/// ghost 自身の `AskerId` を `MountModel.shiori.dir` の正準文字列から構築する。
 ///
 /// フラット静的値（selfname 等）・SHIORI 照会値（username）の per-asker 着地先であり、
 /// provider／prefetch sink が同一 asker を共有する（同一ゴーストの読み書きが一致する）。
@@ -121,7 +119,7 @@ pub fn ghost_asker_id(shiori_dir: &Path) -> AskerId {
 /// profile の根の作成（`runtime.rs` の step 2b）が行う。返る [`SylphyaParts`] の reader は
 /// 結線直後から無待機で読める。
 ///
-/// `failures` は保存の失敗の受け口（要件 1.3）。`Some` なら保存が失敗するたびに中身を 1 件送る。
+/// `failures` は保存の失敗の受け口。`Some` なら保存が失敗するたびに中身を 1 件送る。
 pub fn spawn_ghost_sylphya(
     roots: ScopeRoots,
     failures: Option<std::sync::mpsc::Sender<areka_sylphya::PersistFailure>>,
@@ -136,12 +134,12 @@ pub fn spawn_ghost_sylphya(
     )
 }
 
-/// 静的構成層を publish する（フラット＝`derive_flat_statics`・大域点付き＝baseware 2 項・R4.3-4.5/R5.1）。
+/// 静的構成層を publish する（フラット＝`derive_flat_statics`・大域点付き＝baseware 2 項）。
 ///
 /// フラット（selfname/selfname2/keroname）は `asker` の per-asker 区画へ、baseware（`baseware.name`
 /// ＝実値 `"areka"`／`baseware.version`＝`baseware_version`）は大域点付き区画へ着地する
-/// （design「boot 系列」・sylphya `PublishStatic` の flat/dotted 区分に対応）。投函のみで反映は
-/// アクターが担う——呼び出し側は必要に応じ `barrier()` で反映完了を待つ。
+/// （sylphya `PublishStatic` の flat/dotted 区分に対応）。投函のみで反映はアクターが担う——呼び出し側は
+/// 必要に応じ `barrier()` で反映完了を待つ。
 pub fn publish_ghost_statics(
     publisher: &SylphyaPublisher,
     asker: AskerId,
@@ -158,25 +156,24 @@ pub fn publish_ghost_statics(
     publisher.publish_static(asker, flat, dotted);
 }
 
-/// kanade へ注入する実 [`ResourceSink`]（publish_shiori＋barrier のクロージャ・R4.1/R4.2）。
+/// kanade へ注入する実 [`ResourceSink`]（publish_shiori＋barrier のクロージャ）。
 ///
 /// prefetch 段（kanade boot 系列）が `(id, outcome)` を **同期的に** 呼ぶ。本 sink は:
 /// - [`ResourceOutcome::Value(v)`] → `publish_shiori(asker, id, Some(v))`
 /// - [`ResourceOutcome::NoContent`]／[`ResourceOutcome::Failed`] → `publish_shiori(asker, id, None)`
-///   （不在の観測記録・既定値は書かない＝sakura の唯一定義点に残置・R4.2）
+///   （不在の観測記録・既定値は書かない＝sakura の唯一定義点に残置）
 ///
 /// を投函した **後** `barrier()` で反映完了を待ってから返る。これにより prefetch→初回 talk までの
-/// 反映順序が決定論化する（研究 §12-1）。barrier が [`areka_actor::ReplyError`] を返す
-/// （sylphya アクター死亡）場合は **error＋続行**（永久ブロックしない・panic しない・design Risks）。
+/// 反映順序が決定論化する。barrier が [`areka_actor::ReplyError`] を返す（sylphya アクター死亡）場合は
+/// **error＋続行**（永久ブロックしない・panic しない）。
 pub fn make_username_resource_sink(publisher: SylphyaPublisher, asker: AskerId) -> ResourceSink {
     Box::new(move |id, outcome| {
         let value = match outcome {
             ResourceOutcome::Value(v) => Some(v),
-            // 204／失敗は不在記録（既定値縮退は消費側 sakura の責務・R4.2）。
+            // 204／失敗は不在記録（既定値縮退は消費側 sakura の責務）。
             ResourceOutcome::NoContent | ResourceOutcome::Failed(_) => None,
         };
         publisher.publish_shiori(asker.clone(), id.to_string(), value);
-        // 反映フェンス: 投函済み publish の反映完了を同期観測してから返る（初回 talk 前の順序保証）。
         if let Err(err) = publisher.barrier() {
             tracing::error!(
                 target: LOG_TARGET,
@@ -189,20 +186,18 @@ pub fn make_username_resource_sink(publisher: SylphyaPublisher, asker: AskerId) 
     })
 }
 
-/// `FromSylphya` provider を構築する（reader＋自 asker を捕捉・`talk_snapshot` → [`SystemVarSnapshot`]・R7.1）。
+/// `FromSylphya` provider を構築する（reader＋自 asker を捕捉・`talk_snapshot` → [`SystemVarSnapshot`]）。
 ///
 /// dispatcher が talk 起動ごとに一度呼び出す（凍結像の刻印点）。呼び出し時点の鏡像から
 /// [`SylphyaReader::talk_snapshot`]（値実在フラット名のみの `BTreeMap`）を取り、各名→値を
 /// sakura 所有の [`SystemVarSnapshot`] へ insert 写像して返す。sakura の契約（`SystemVarSnapshot`・
-/// 値源優先・既定値唯一定義点）は無改変で、変わるのは **スナップショットの源**（sylphya 鏡像）だけ
-/// （R7.1/R2.2・provider 差替の核）。
+/// 値源優先・既定値唯一定義点）は無改変で、変わるのは **スナップショットの源**（sylphya 鏡像）だけ。
 pub fn from_sylphya_provider(reader: SylphyaReader, asker: AskerId) -> SystemVarSource {
     let ctx = AskerContext { asker };
     Box::new(move || {
         let raw = reader.talk_snapshot(&ctx);
-        // provider 差替の証跡（design Monitoring 固定ログ・R9.3 サインオフ用）。
         // talk 起動ごとに 1 回、スナップショットの源が sylphya 読み口であることを記録する
-        // （固定 target/メッセージは Revalidation Trigger——変更時は design Monitoring を更新）。
+        // （この固定 target/メッセージは実機の確かめと単体テストが見る）。
         tracing::debug!(
             target: "areka_ghost",
             asker = ctx.asker.as_str(),
@@ -258,9 +253,9 @@ mod tests {
         n
     }
 
-    // --- selfname（R4.3） ---
+    // --- selfname ---
 
-    /// sakura.name あり → `selfname` エントリが実値で積まれる（R4.3）。
+    /// sakura.name あり → `selfname` エントリが実値で積まれる。
     #[test]
     fn selfname_present_when_sakura_name_defined() {
         let got = derive_flat_statics(&names(Some("むらさき"), None, None));
@@ -270,7 +265,7 @@ mod tests {
         );
     }
 
-    /// sakura.name 未定義 → `selfname` エントリを積まない（素通し縮退・R4.3）。
+    /// sakura.name 未定義 → `selfname` エントリを積まない（素通し縮退）。
     #[test]
     fn selfname_absent_when_sakura_name_undefined() {
         let got = derive_flat_statics(&names(None, None, None));
@@ -280,9 +275,9 @@ mod tests {
         );
     }
 
-    // --- selfname2（R4.4・対応表 ②） ---
+    // --- selfname2 ---
 
-    /// sakura.name2 あり → `selfname2` エントリが実値で積まれる（R4.4）。
+    /// sakura.name2 あり → `selfname2` エントリが実値で積まれる。
     #[test]
     fn selfname2_present_when_name2_defined() {
         let got = derive_flat_statics(&names(Some("むらさき"), Some("紫"), None));
@@ -292,7 +287,7 @@ mod tests {
         );
     }
 
-    /// sakura.name2 未定義 → `selfname2` エントリを積まない（素通し縮退・フォールバック創作なし・R4.4）。
+    /// sakura.name2 未定義 → `selfname2` エントリを積まない（素通し縮退・フォールバック創作なし）。
     #[test]
     fn selfname2_absent_when_name2_undefined() {
         let got = derive_flat_statics(&names(Some("むらさき"), None, None));
@@ -302,9 +297,9 @@ mod tests {
         );
     }
 
-    // --- keroname 3 分岐（R4.5・対応表 ③） ---
+    // --- keroname 3 分岐 ---
 
-    /// (a) kero.name あり → `keroname` = kero.name（R4.5）。
+    /// (a) kero.name あり → `keroname` = kero.name。
     #[test]
     fn keroname_from_kero_name_when_defined() {
         let got = derive_flat_statics(&names(Some("むらさき"), None, Some("エモ")));
@@ -314,7 +309,7 @@ mod tests {
         );
     }
 
-    /// (b) kero.name 未定義＋sakura.name あり → `keroname` = sakura.name（SSP 互換フォールバック・R4.5）。
+    /// (b) kero.name 未定義＋sakura.name あり → `keroname` = sakura.name（SSP 互換フォールバック）。
     #[test]
     fn keroname_falls_back_to_sakura_name_when_kero_undefined() {
         let got = derive_flat_statics(&names(Some("むらさき"), None, None));
@@ -324,7 +319,7 @@ mod tests {
         );
     }
 
-    /// (c) kero.name・sakura.name 両方未定義 → `keroname` エントリを積まない（素通し縮退・R4.5）。
+    /// (c) kero.name・sakura.name 両方未定義 → `keroname` エントリを積まない（素通し縮退）。
     #[test]
     fn keroname_absent_when_both_undefined() {
         let got = derive_flat_statics(&names(None, None, None));
@@ -362,7 +357,7 @@ mod tests {
         );
     }
 
-    /// 同一 `GhostNames` からは常に同一の `Vec`（順序・内容）を返す（決定論・R9.4/R2.5）。
+    /// 同一 `GhostNames` からは常に同一の `Vec`（順序・内容）を返す（決定論）。
     #[test]
     fn deterministic_same_input_same_output() {
         let n = names(Some("むらさき"), None, None);
@@ -380,7 +375,7 @@ mod tests {
     }
 
     /// [`FLAT_STATIC_NAMES`] は [`derive_flat_statics`] が積みうる名の全部と一致する
-    /// （名を足して一覧に足し忘れると、読み直しで古い値が残る・要件 9.15 ⑵）。
+    /// （名を足して一覧に足し忘れると、読み直しで古い値が残る）。
     #[test]
     fn flat_static_names_match_what_derive_can_publish() {
         let all = names(Some("むらさき"), Some("紫"), Some("エモ"));
@@ -395,12 +390,11 @@ mod tests {
         );
     }
 
-    // --- provider 差替の固定ログ（design Monitoring・R9.3 サインオフ証跡・Task 10.1） ---
+    // --- provider 差替の固定ログ ---
 
-    /// `from_sylphya_provider` が生成するスナップショットのたびに、design Monitoring の固定ログ
-    /// `debug!(target: "areka_ghost", "talk snapshot from sylphya reader")` が**必ず 1 回**発火する
-    /// （provider の源が sylphya 読み口であることの R9.3 grep 証跡）。ログが削除・target/メッセージ
-    /// 変更・レベル変更されると本檻が落ちる（固定ログの回帰檻）。
+    /// `from_sylphya_provider` が生成するスナップショットのたびに、固定ログ
+    /// `debug!(target: "areka_ghost", "talk snapshot from sylphya reader")` が**必ず 1 回**発火する。
+    /// ログが削除・target/メッセージ変更・レベル変更されると落ちる。
     ///
     /// 共有機構へ委譲する [`crate::test_log_capture::capture`] で捕捉し、並列 `cargo test` 負荷下
     /// でも `Interest::never` 焼き付きに影響されず決定論的に判定する（bare `with_default` 不使用）。
@@ -454,7 +448,7 @@ mod tests {
     }
 
     /// sylphya の役者を畳んだ後に sink を呼ぶと、barrier の失敗が ERROR で 1 件だけ記録され、
-    /// sink は panic せず返る（続行・要件 9.5・design #30）。
+    /// sink は panic せず返る（続行）。
     #[test]
     fn a_dead_sylphya_barrier_is_logged_as_error() {
         use crate::test_log_capture::capture;

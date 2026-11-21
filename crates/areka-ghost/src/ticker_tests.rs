@@ -29,7 +29,7 @@ fn starting_at_aligns_to_absolute_grid_not_relative_to_spawn_time() {
     // クロックがグリッド非整列値（2347ms）で起動しても、最初の締切は
     // 「起動時刻+interval」（3347）ではなく OS クロック絶対グリッド上の
     // 次の境界（3000）へ整列する——将来の複数 ticker インスタンスが
-    // 共有機構なしで同一グリッドへ自然同期するための不変条件（design 参照）。
+    // 共有機構なしで同一グリッドへ自然同期するための不変条件。
     let schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(2347));
     assert_eq!(
         schedule.next_deadline_ms, 3000,
@@ -313,7 +313,7 @@ fn spawn_ticker_keeps_kanade_alive_after_dispatcher_disconnects() {
     );
 }
 
-// ---- kanade の 1 回だけの起こし（選択待ちの期限・要件 9.5） ----
+// ---- kanade の 1 回だけの起こし（選択待ちの期限） ----
 
 #[test]
 fn wake_remaining_is_zero_at_and_after_the_wake_and_max_without_one() {

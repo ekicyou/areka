@@ -1,5 +1,4 @@
-//! ドラッグの受け手から組の連れ動きまでの結合の檻（areka-P0-window-link-directives task 3.2・
-//! 要件 2.1〜2.4・4.1〜4.6・4.8・設計「sticky_follow」・設計の決め 4・6・12）。
+//! ドラッグの受け手から組の連れ動きまでの結合の檻。
 //!
 //! 本番と同じ順に組んだ 2 スコープの窓（[`Rig`]・scope 1 をドラッグし scope 0 が組の相手）へ、
 //! 帳簿を 2.1 の `seed_sticky_descript` で直に据え、wintf の配り（`dispatch_drag_events`）で
@@ -112,7 +111,7 @@ fn bottom_form(rig: &Rig, window: Entity, pos: Point) -> PointPx {
 }
 
 /// 組の片方のドラッグで、相手とそのバルーンが同じ量だけ動き、終わりに両方の位置が記憶に
-/// 書かれる（4.1・4.4・4.5）。どちらも下に吸着しているので量は横だけ（2.1）。
+/// 書かれる。どちらも下に吸着しているので量は横だけ。
 #[test]
 fn partner_and_its_balloon_move_by_the_same_amount_and_both_are_saved() {
     let mut rig = Rig::new();
@@ -153,7 +152,7 @@ fn partner_and_its_balloon_move_by_the_same_amount_and_both_are_saved() {
     rig.close();
 }
 
-/// 相手が下に吸着していれば、ドラッグした窓が縦にも動いても相手は横にだけ動く（4.2）。
+/// 相手が下に吸着していれば、ドラッグした窓が縦にも動いても相手は横にだけ動く。
 #[test]
 fn bottom_partner_moves_only_sideways() {
     let mut rig = Rig::new();
@@ -181,7 +180,7 @@ fn bottom_partner_moves_only_sideways() {
     rig.close();
 }
 
-/// ドラッグした窓が吸着で動かなかった軸では、吸着なしの相手も動かない（4.3）。
+/// ドラッグした窓が吸着で動かなかった軸では、吸着なしの相手も動かない。
 #[test]
 fn axis_the_dragged_window_could_not_move_does_not_move_the_partner() {
     let mut rig = Rig::new();
@@ -259,7 +258,7 @@ fn end_without_dragging_state_still_moves_and_saves_the_partner() {
 }
 
 /// ドラッグ中に台本が向きを変えても、そのドラッグの終わりまでは始めの向きで縛り、終わりに
-/// 今の向きで当て直す（2.4）。
+/// 今の向きで当て直す。
 #[test]
 fn anchor_change_mid_drag_binds_by_the_start_anchor_and_reapplies_at_the_end() {
     let mut rig = Rig::new();
@@ -290,7 +289,7 @@ fn anchor_change_mid_drag_binds_by_the_start_anchor_and_reapplies_at_the_end() {
 }
 
 /// 2 つとも吸着なしの組では、どちらの窓も wintf でなく areka が同じ回に書き、どの回でも
-/// 位置の関係が変わらない（4.1・設計の決め 12）。
+/// 位置の関係が変わらない。
 #[test]
 fn two_free_windows_in_a_group_are_both_written_by_areka_each_step() {
     let mut rig = Rig::new();
@@ -325,7 +324,7 @@ fn two_free_windows_in_a_group_are_both_written_by_areka_each_step() {
     rig.close();
 }
 
-/// バルーンのドラッグでは、キャラクターの窓も組の相手も動かない（4.6）。
+/// バルーンのドラッグでは、キャラクターの窓も組の相手も動かない。
 #[test]
 fn balloon_drag_does_not_move_the_partner() {
     let mut rig = Rig::new();
@@ -349,7 +348,7 @@ fn balloon_drag_does_not_move_the_partner() {
 }
 
 /// 台本で `free` にした窓をドラッグして離した位置が、次の起動の読み戻し（descript の向き＝下）で
-/// 同じ x に出る（4.8）。組に無い吸着なしの窓なので wintf が窓を動かす。
+/// 同じ x に出る。組に無い吸着なしの窓なので wintf が窓を動かす。
 #[test]
 fn free_window_drag_restores_to_the_released_x_on_next_boot() {
     let mut rig = Rig::new();

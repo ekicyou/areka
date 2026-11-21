@@ -1,5 +1,5 @@
 //! 何を聞かれても中身なしで答える SHIORI（`EmptyShiori`・`--option dontloadmodule`）の
-//! 決定論テスト（spec `areka-P0-startup-options-core` タスク 4.1・要件 7.2〜7.5・11.4）。
+//! 決定論テスト。
 //!
 //! 窓も 32bit 成果物も実 SHIORI も要さない。起動のテストは `shiori` の行の無いゴーストを
 //! 差し替え口（`ShioriWiring::Custom(Box::new(empty_connect()))`）で起こし、起動と終了の
@@ -17,7 +17,7 @@ use crate::dispatcher::DispatcherMsg;
 use crate::runtime::{GhostBootOptions, ShioriWiring, boot};
 use crate::test_support::{fake_options, shutdown_bounded};
 
-/// 4 つの答え（要件 7.2・7.5）: 問い合わせ→中身なし・知らせ→成功・終わり→きれいな終了・
+/// 4 つの答え: 問い合わせ→中身なし・知らせ→成功・終わり→きれいな終了・
 /// 状態→動いている。問い合わせの名前や Reference に依らない。
 #[test]
 fn empty_shiori_answers_no_content_success_clean_and_running() {
@@ -96,9 +96,9 @@ impl ShioriBackend for Recording {
     }
 }
 
-/// `shiori` の行の無いゴースト（要件 7.4）を差し替え口で起こすと起動は成功し、起動の
-/// 問い合わせ（`OnBoot`）は中身なし（要件 7.3）、「終了」の問い合わせ（`OnClose`）も中身
-/// なしで、その 204 で終了の系列へ進み `unload` がきれいな終了を返す（要件 7.5）。
+/// `shiori` の行の無いゴーストを差し替え口で起こすと起動は成功し、起動の
+/// 問い合わせ（`OnBoot`）は中身なし、「終了」の問い合わせ（`OnClose`）も中身
+/// なしで、その 204 で終了の系列へ進み `unload` がきれいな終了を返す。
 #[test]
 fn ghost_without_shiori_line_boots_and_closes_through_empty_connect() {
     let temp = TempPath::under_target("ghost-shiori-wiring-empty-boot");

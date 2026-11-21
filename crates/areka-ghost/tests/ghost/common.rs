@@ -2,7 +2,7 @@
 //!
 //! `tests/ghost.rs` の束ねと `tests/real_pasta_online.rs` の 2 つの実行ファイルがパス指定で取り込む。
 //!
-//! - [`test_system_vars`]: 退役した `areka_ghost::default_system_vars()`（W1 暫定 provider）の代役。
+//! - [`test_system_vars`]: 退役した `areka_ghost::default_system_vars()`の代役。
 //!   既存 e2e テストの既定 username 前提を [`areka_ghost::SystemVarWiring::Custom`] の直接注入で保つ。
 //! - [`resolve_helper_exe`]: 実 pasta のテストが使う i686 helper の探し。
 //! - [`run_bounded`]／[`run_bounded_shutdown`]: 宙吊りを括る有界の実行と正規の終了。

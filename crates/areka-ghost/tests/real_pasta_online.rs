@@ -1,11 +1,10 @@
-//! env ゲート実 pasta 追験: emo2（ぱすた）は `Status` に `online` が載っている間は雑談を
-//! 始めない（spec `areka-P0-status-execution-states` 要件 8.4・design「E2E / 実機」）。
+//! env ゲート実 pasta 追験: emo2（ぱすた）は `Status` に `online` が載っている間は雑談を始めない。
 //!
 //! # なぜ別の実行ファイルか
 //! 実ゴーストの結線は `KanadeConfig::new` の既定を使い、殻はプロセスに 1 つの
 //! `areka_kanade::online::PROCESS` を読む。このテストはそれを立てるので、`Status` を完全一致で
 //! 照合する `tests/ghost.rs` の束ねと同じ実行ファイルに入れると、並列に走る他のテストへ
-//! `online` が漏れる（design「online の数と殻の同期 > テストの決定論 ⑶」）。
+//! `online` が漏れる。
 //!
 //! # env ゲート（`tests/ghost/real_pasta_test.rs` と同じ語法）
 //! `HOST32_PASTA_DLL`（pasta DLL のフルパス）が未設定なら silent skip。設定済みだが DLL 不在なら

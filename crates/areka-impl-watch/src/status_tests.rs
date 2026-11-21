@@ -73,7 +73,7 @@ fn desk_request(id: &str, desks: DeskSet, requested: u64) -> DeskRequest {
     }
 }
 
-/// 設計の端末の要約の見本そのままの状態（a はマージの机・b は排他テストの机を持ち、
+/// 端末の要約の見本そのままの状態（a はマージの机・b は排他テストの机を持ち、
 /// a が排他テストの机を申し込んで待つ。全員が「作業中」で見張りも居る）。
 fn design_sample() -> State {
     let mut state = State::empty();

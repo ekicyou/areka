@@ -66,7 +66,7 @@ fn second_hold_is_not_acquired_after_five_tries() {
 
 #[test]
 fn hold_gets_the_lock_when_it_is_released_between_tries() {
-    // 探りが一瞬ロックを取っていた、の形（設計「探りと watch の開始が同時」）。
+    // 探りが一瞬ロックを取っていた、の形（探りと watch の開始が同時）。
     let root = TempPath::under_target("impl-watch-presence");
     let home = home_in(&root);
     let path = home.alive_path("a", WaitKind::Watch);
@@ -225,7 +225,7 @@ fn hold_reports_an_io_failure_as_an_error_not_as_not_acquired() {
 }
 
 /// 開けない理由が「無い」でないとき（ここではフォルダ＝アクセス拒否）、探りは「居る」に倒す。
-/// 「居ない」に倒すと、生きている参加者が回収されて机を失う（要件 7.2）。
+/// 「居ない」に倒すと、生きている参加者が回収されて机を失う。
 /// Windows だけ: ほかの OS はフォルダを読み取りで開けるので、この失敗が起きない。
 #[cfg(windows)]
 #[test]

@@ -1,9 +1,9 @@
-//! 普通のバルーンの窓のホイールの系（balloon-scroll-arrows 要件 6・design「BalloonWheel」）。
+//! 普通のバルーンの窓のホイールの系。
 //!
 //! キャラ窓の見張り（`char_watch`）と同じ `Input` の段・`dispatch_pointer_events` の前で、
 //! `PointerState` の持ち主から `BalloonWindowMarker` の窓を引き、縦の回転をそのスコープの
 //! バルーンの場所の手動の送り（`wheel_at`）へ渡す。`OnMouseWheel` は送らず、横の回転は読まない
-//! （要件 6.7）。OS の「1 回にスクロールする行数」は回転を受けた時だけ読む（設定の変わり目は
+//! OS の「1 回にスクロールする行数」は回転を受けた時だけ読む（設定の変わり目は
 //! OS が知らせないので、受けた時に引く）。
 
 use std::rc::Rc;
@@ -40,7 +40,7 @@ pub(crate) fn balloon_wheel(world: &mut World) {
 
 /// 本体。`read_lines` は縦の回転を受けた tick に 1 回だけ呼ぶ（テストは数えて差し替える）。
 pub(super) fn balloon_wheel_with(world: &mut World, read_lines: impl FnOnce() -> WheelLines) {
-    // 持ち主（1 窓に高々 1 つ）の縦の回転をバルーン窓のスコープへ写す。横は読まない（要件 6.7）。
+    // 持ち主（1 窓に高々 1 つ）の縦の回転をバルーン窓のスコープへ写す。横は読まない。
     let owners: Vec<(Entity, i16)> = world
         .query::<(Entity, &PointerState)>()
         .iter(world)

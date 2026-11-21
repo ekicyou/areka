@@ -94,7 +94,7 @@ fn a_merge_holder_without_a_watch_is_reclaimed_and_the_next_holder_comes_in_the_
 
     // A の机・申し込み（マージの机も排他テストの机の申し込みも）・待ちの記録（見張りも申し込みの
     // 待ちも）・参加者の記録が消え、回収が「最近の出来事」に識別・理由・時刻つきで残る。空いた机の
-    // 次の番は同じ呼び出しで B に来る（要件 6.1）。
+    // 次の番は同じ呼び出しで B に来る。
     let mut expected = state_with(&["B", "C"]);
     expected.merge.insert(
         "areka".to_owned(),
@@ -122,7 +122,7 @@ fn a_load_holder_without_a_watch_is_reclaimed_and_the_others_go_on_in_the_same_c
     let got = tick(&mut state, Some("C"), T0 + 10, &no_watch(&["A"]));
 
     // 2 つの机が外れ、排他テストの机は訳 `reclaimed` で空く。負荷テストが無くなったので、同じ
-    // 呼び出しで B が再開し、C にマージの番が来る（要件 6.1）。
+    // 呼び出しで B が再開し、C にマージの番が来る。
     let mut expected = state_with(&["B", "C"]);
     let b = expected.participants.get_mut("B").expect("B が居る");
     b.since = T0 + 10;

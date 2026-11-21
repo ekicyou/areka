@@ -1,10 +1,10 @@
-//! ドラッグの知らせのテストの土台（areka-P0-mouse-drag-events・design「Testing Strategy > areka」）。
+//! ドラッグの知らせのテストの土台。
 //!
 //! 本番と同じ順に組む: 本物の `spawn_ghost_windows`（本体と相方）→ 偽の `WindowHandle` →
 //! [`attach_char_pointer_handlers`]。wintf のドラッグの資源・`MonitorSnapshot`・偽の記憶の書き手
 //! （`FakePersistIo`）を持つ `PersistWiring`・当たり判定の偽物（`RegionSource::Mock`）と止めた時計を
 //! 入れた `MouseWiring` と、その受け口（kanade の受信箱の代わり）を持つ。比べるために、包みを
-//! 付けない本 spec の前の組み方（[`Rig::without_wrapper`]）も持つ。
+//! 付けない従来の組み方（[`Rig::without_wrapper`]）も持つ。
 //!
 //! 知らせは wndproc の代わりに wintf の運ぶ箱（`DragAccumulatorResource`）へ種を積み、
 //! `dispatch_drag_events` で配る（本番と同じ配りの経路で、Tunnel と Bubble の 2 回の呼び出しも通る）。
@@ -135,7 +135,7 @@ impl Rig {
         Self::build(true)
     }
 
-    /// 本 spec の前の付け方（`spawn_ghost_windows` だけ＝位置の保存の受け手を包まない）。
+    /// 従来の付け方（`spawn_ghost_windows` だけ＝位置の保存の受け手を包まない）。
     pub(super) fn without_wrapper() -> Self {
         Self::build(false)
     }

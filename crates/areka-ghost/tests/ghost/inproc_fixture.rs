@@ -1,11 +1,10 @@
 //! inproc_fixture.rs — InProc 実 DLL 駆動のテストゴースト組立と成果物 DLL locate（テスト支援）。
 //!
-//! 本ファイルの LOCATE 部（task 4.1）は、`cargo test --workspace` がビルドした x64 cdylib
-//! `shiori4_testdll.dll` の場所を返す [`locate_built_test_dll`] を提供する。
-//! 組立部は錠つきの共有ゴースト [`shared_test_ghost`] を配る（consume は I1・I2）。
+//! LOCATE 部は、`cargo test --workspace` がビルドした x64 cdylib `shiori4_testdll.dll` の場所を返す
+//! [`locate_built_test_dll`] を提供する。組立部は錠つきの共有ゴースト [`shared_test_ghost`] を配る。
 //!
-//! DLL の場所の決め方は [`shiori4_testdll::locate_built_dll`] が持つ（cargo 1.100 の新しい置き方に
-//! 対応・2026-11-13 開発者裁定で design.md D-1 を改めた。理由と規則はその関数の説明を参照）。
+//! DLL の場所の決め方は [`shiori4_testdll::locate_built_dll`] が持つ（cargo 1.100 の新しい置き方に対応。
+//! 理由と規則はその関数の説明を参照）。
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, OnceLock, TryLockError};
@@ -19,9 +18,9 @@ pub fn locate_built_test_dll() -> PathBuf {
 /// `src` ディレクトリツリーを `dst` へ再帰的に**実体化**する（外部 crate 非依存・手書き）。
 ///
 /// ディレクトリ構造を再現し、通常ファイルは [`materialize_file`]（ハードリンク優先・フォールバック
-/// copy）で張る——emo2 実物 shell の surfaces.txt＋PNG 一式を verbatim 流用するため（要件 4.1）。
-/// ハードリンク先は実物とバイト完全同一なので忠実度は copy 以上であり、新規バイト列を書かないため
-/// Defender 再走査による FS 飽和（spine starvation）を回避する（`materialize_file` の rationale 参照）。
+/// copy）で張る——emo2 実物 shell の surfaces.txt＋PNG 一式を verbatim 流用するため。
+/// ハードリンク先は実物とバイト完全同一で、新規バイト列を書かないため Defender 再走査による
+/// FS 飽和（spine starvation）を回避する（`materialize_file` の説明参照）。
 fn copy_dir_recursive(src: &Path, dst: &Path) {
     std::fs::create_dir_all(dst)
         .unwrap_or_else(|e| panic!("create dir {} に失敗: {e}", dst.display()));
@@ -48,26 +47,22 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
 /// `src` の 1 ファイルを `dst` へ**実体化**する。まず**ハードリンク**を試み、失敗時のみ
 /// `std::fs::copy` へフォールバックする。
 ///
-/// # なぜハードリンク優先か（FS 飽和＝兄弟 spine テスト starvation の根絶）
+/// # なぜハードリンク優先か
 /// テストゴースト組立は emo2 実物 shell（65 ファイル・約 2.5MB）＋ビルド済み cdylib を配置する。
-/// `std::fs::copy` は**新規バイト列を書き込む**ため、Windows Defender 等のリアルタイム保護が
-/// 生成直後のファイル（特に実行可能な DLL）を走査して CPU を占有し、同一 `ghost` テストバイナリ内で
-/// 並列実行される spine 側の協調反復ループ（`spine_e2e_test.rs`——`BOUND` の壁時計で上限を切り、
-/// relay/dispatcher スレッドの被スケジューリングに依存）の到達を遅らせ（壁時計の上限内でも余裕を食う）、
-/// 決定論緑をフレークへ転落させる（レビュー
-/// reject の回帰根因）。ハードリンクは**既存（=走査済み）の実体へ新しいディレクトリ項目を張るだけ**で
-/// 新規バイト列を書かないため、この再走査ストームが発生せず、かつリンク先は実物とバイト完全同一
-/// （`copy` 以上に verbatim 忠実・要件 4.1）。共有ゴーストを消してもリンク項目のみが消える
-/// （元の emo2 実物・deps DLL は別リンクが残るため無傷）。
+/// `std::fs::copy` は新規バイト列を書き込むため、Windows Defender 等のリアルタイム保護が生成直後のファイル
+/// （特に DLL）を走査して CPU を占有し、同一 `ghost` テストバイナリ内で並列実行される spine 側の協調反復
+/// ループ（`spine_e2e_test.rs`——`BOUND` の壁時計で上限を切る）の到達を遅らせて決定論緑をフレークに
+/// する。ハードリンクは既存（走査済み）の実体へ新しいディレクトリ項目を張るだけで新規バイト列を書かず、
+/// リンク先は実物とバイト完全同一。共有ゴーストを消してもリンク項目のみが消える（元の emo2 実物・
+/// deps DLL は別リンクが残るため無傷）。
 ///
-/// フォールバック（`copy`）は、`dst` が `src` と別ボリューム上でハードリンク不可な環境
-/// （`target` を別ドライブへ向けた等）でも組立が成立するための保険である。根は既定で
-/// ワークツリーの `target\test-roots` の下（repo と同一ドライブ）なのでハードリンク経路が使われ、飽和回帰は生じない。
+/// フォールバック（`copy`）は、`dst` が `src` と別ボリュームでハードリンク不可な環境でも組立が成立するための
+/// 保険。根は既定でワークツリーの `target\test-roots` の下（repo と同一ドライブ）なのでハードリンク経路が使われる。
 fn materialize_file(from: &Path, to: &Path) {
     if std::fs::hard_link(from, to).is_ok() {
         return;
     }
-    // 別ボリューム等でハードリンク不可なら実コピーへフォールバック（機能的等価・忠実度同等）。
+    // 別ボリューム等でハードリンク不可なら実コピーへフォールバックする。
     std::fs::copy(from, to).unwrap_or_else(|e| {
         panic!(
             "materialize {} -> {} に失敗: {e}",
@@ -103,17 +98,17 @@ fn ghost_descript() -> String {
 /// 与えられた `root` の直下へテストゴーストの実体（descript／shell／DLL）を配置する
 /// （[`shared_test_ghost`] の唯一の組立手続き・`OnceLock` が直列にする）。
 fn materialize_test_ghost_tree(root: &Path) {
-    // 1. 事前削除（冪等・Idempotency——固定パスの共有 fixture を作り直す経路で効く）。
+    // 事前削除（冪等——固定パスの共有 fixture を作り直す経路で効く）。
     let _ = std::fs::remove_dir_all(root);
 
-    // 2. ghost/master/descript.txt（`shiori,` 行はテスト DLL を指す・要件 4.2）。
+    // ghost/master/descript.txt（`shiori,` 行はテスト DLL を指す）。
     let ghost_master = root.join("ghost").join("master");
     std::fs::create_dir_all(&ghost_master)
         .unwrap_or_else(|e| panic!("create ghost/master に失敗: {e}"));
     std::fs::write(ghost_master.join("descript.txt"), ghost_descript())
         .unwrap_or_else(|e| panic!("write ghost descript.txt に失敗: {e}"));
 
-    // 3. emo2 実物 shell/master/ を再帰的に実体化（ハードリンク優先・自作最小 shell を作らない・要件 4.1）。
+    // emo2 実物 shell/master/ を再帰的に実体化（ハードリンク優先・自作最小 shell を作らない）。
     let shell_src = emo2_shell_master_src();
     assert!(
         shell_src.is_dir(),
@@ -122,16 +117,15 @@ fn materialize_test_ghost_tree(root: &Path) {
     );
     copy_dir_recursive(&shell_src, &root.join("shell").join("master"));
 
-    // 4. 特定済みビルド済み DLL（4.1）を ghost/master/ へ配置（要件 4.3・`mount.shiori.dir.join(file)`）。
-    //    ハードリンク優先（フォールバック copy）——新規 DLL バイト列の書き込みを避け、Defender の
-    //    実行可能ファイル再走査による FS 飽和＝spine starvation を根絶する（`materialize_file` 参照）。
+    // ビルド済み DLL を ghost/master/ へ配置（`mount.shiori.dir.join(file)`）。ハードリンク優先
+    // （フォールバック copy）で、Defender の再走査による FS 飽和＝spine starvation を避ける。
     let built_dll = locate_built_test_dll();
     materialize_file(
         &built_dll,
         &ghost_master.join(shiori4_testdll::DLL_FILE_NAME),
     );
 
-    // 5. balloon は非同梱（要件 4.2）——何も配置しない。
+    // balloon は非同梱——何も配置しない。
 }
 
 /// 共有ゴーストの錠。I1・I2・組みの確かめは同じ固定の根を使うので、1 本ずつ順に持つ
@@ -151,13 +145,12 @@ impl SharedGhost {
     }
 }
 
-/// InProc テスト一族が共有する**一度だけ組み立てる**テストゴーストを、錠を取ってから返す
-/// （要件 4.1〜4.3／design.md「fixture 組立と DLL locate」）。
+/// InProc テスト一族が共有する**一度だけ組み立てる**テストゴーストを、錠を取ってから返す。
 ///
-/// # なぜ共有 fixture か（FS 飽和による兄弟テスト starvation の除去）
-/// 組立は emo2 実物 shell/master/ の PNG ツリーの実体化＋ビルド済み cdylib の配置という重い
-/// ファイル I/O を伴う。テストごとに組み立てると FS が飽和して spine 側の協調反復テストを
-/// starve させるので、組立は `OnceLock` で 1 回に抑え、プロセスをまたいでも再利用する。
+/// # なぜ共有 fixture か
+/// 組立は emo2 実物 shell/master/ の PNG ツリーの実体化＋ビルド済み cdylib の配置という重いファイル I/O を
+/// 伴う。テストごとに組み立てると FS が飽和して spine 側の協調反復テストを starve させるので、組立は
+/// `OnceLock` で 1 回に抑え、プロセスをまたいでも再利用する。
 ///
 /// # 置き場と再利用
 /// 根は `<ワークスペース>\target\test-roots\areka_shiori4_test_ghost_shared`（ワークツリーごと）。
@@ -228,13 +221,12 @@ fn shared_root() -> &'static Path {
 /// （[`shared_test_ghost`] のプロセス跨ぎ再利用ガード）。
 ///
 /// 健全条件（全て満たすとき true）:
-/// - `shell/master/surfaces.txt` が実在（emo2 実物 shell 流用の証跡・要件 4.1）。
-/// - `ghost/master/<DLL>` が実在（DLL 物理配置の証跡・要件 4.3）。
-/// - `balloon/` が非在（balloon 非同梱の証跡・要件 4.2）。
+/// - `shell/master/surfaces.txt` が実在（emo2 実物 shell 流用の証跡）。
+/// - `ghost/master/<DLL>` が実在（DLL 物理配置の証跡）。
+/// - `balloon/` が非在（balloon 非同梱の証跡）。
 /// - `ghost/master/descript.txt` のバイトが [`ghost_descript`] と同じ（書き換えや古い組立を拾わない）。
 /// - キャッシュ DLL が**現行ビルド済み DLL より古くない**（再ビルド陳腐化の検出）。ビルド済み DLL の
-///   再ビルドは新 inode 生成で mtime を進めるため、旧ハードリンクを掴んだキャッシュはここで陳腐と
-///   判定され作り直される（後続タスク 5.x の実ロードが常に最新実体を掴む保証）。
+///   再ビルドは新 inode 生成で mtime を進めるため、旧ハードリンクを掴んだキャッシュはここで陳腐と判定され作り直される。
 ///
 /// mtime 取得不能などの疑わしいケースは**安全側**（false＝作り直す）へ倒す。
 fn shared_ghost_is_fresh(root: &Path) -> bool {
@@ -264,7 +256,7 @@ fn shared_ghost_is_fresh(root: &Path) -> bool {
     }
 }
 
-/// このテストゴーストの LOCATE 檻。
+/// このテストゴーストの LOCATE のテスト。
 mod tests {
     /// `locate_built_test_dll()` は (a) 実在し (b) ファイル名が [`shiori4_testdll::DLL_FILE_NAME`] で
     /// (c) cargo の置き方どおり親ディレクトリ名が `deps`（cargo 1.99 まで）か `out`（cargo 1.100 から）の
@@ -288,39 +280,38 @@ mod tests {
         );
     }
 
-    // ---- 共有ゴーストの組立檻 ----
+    // ---- 共有ゴーストの組立 ----
     //
-    // 読み取り専用の観測 assert（要件 4.1・4.2・4.3）は read 経路の並行スレッドを 1 本に抑えるため
-    // **単一のテスト**へ畳み、共有 fixture（[`super::shared_test_ghost`]）に対して実行する。
+    // 読み取り専用の観測 assert は read 経路の並行スレッドを 1 本に抑えるため単一のテストへ畳み、
+    // 共有 fixture（[`super::shared_test_ghost`]）に対して実行する。
 
     use areka_parsers::charset::DefaultEncoding;
     use areka_parsers::package;
 
-    /// 共有テストゴースト（[`super::shared_test_ghost`]）が要件 4.1・4.2・4.3 の観測可能な完了条件を
-    /// すべて満たすこと。read 経路の並行スレッドを 1 本へ抑えるため 4 観点を単一テストへ畳み込む
-    /// （FS 飽和による spine starvation 回避——モジュール冒頭コメント参照）:
-    /// - **4.2 実マウント解決**: `package::resolve_with_shell` が Ok を返し、`shiori,` 行がテスト DLL 名
+    /// 共有テストゴースト（[`super::shared_test_ghost`]）が次の 4 観点をすべて満たすこと。read 経路の並行
+    /// スレッドを 1 本へ抑えるため単一テストへ畳み込む（FS 飽和による spine starvation 回避）:
+    /// - **実マウント解決**: `package::resolve_with_shell` が Ok を返し、`shiori,` 行がテスト DLL 名
     ///   （== [`shiori4_testdll::DLL_FILE_NAME`]）を指す（boot が内部で通すのと同一契約）。
-    /// - **4.3 DLL 物理配置**: 特定済みビルド済み DLL が `ghost/master/shiori4_testdll.dll` に在る。
-    /// - **4.2 balloon 非同梱**: `balloon` ディレクトリを同梱しない。
-    /// - **4.1 emo2 実物 shell 流用**: `shell/master/surfaces.txt` と入れ子 PNG
-    ///   （`purple/0/base1.png`）が実在＝自作最小 shell でなく実物の入れ子構造まで流用している。
+    /// - **DLL 物理配置**: ビルド済み DLL が `ghost/master/shiori4_testdll.dll` に在る。
+    /// - **balloon 非同梱**: `balloon` ディレクトリを同梱しない。
+    /// - **emo2 実物 shell 流用**: `shell/master/surfaces.txt` と入れ子 PNG（`purple/0/base1.png`）が実在
+    ///   ＝自作最小 shell でなく実物の入れ子構造まで流用している。
     #[test]
     fn assembled_shared_ghost_satisfies_mount_dll_shell_and_no_balloon() {
         let shared = super::shared_test_ghost();
         let root = shared.root();
 
-        // 4.2 実マウント解決（boot が内部で通すのと同一契約）が Ok＝完全な解決可能ゴースト。
+        // 実マウント解決が Ok＝完全な解決可能ゴースト。
         let mount = package::resolve_with_shell(root, DefaultEncoding::Utf8, None)
             .expect("組み立てた共有ゴーストは実マウント解決を成功裏に通過すべき（shell dir 込み）");
-        // `shiori,` 行がテスト DLL 名（== 契約定数）を指す（要件 4.2）。
+        // `shiori,` 行がテスト DLL 名（== 契約定数）を指す。
         assert_eq!(
             mount.shiori.file,
             Some(shiori4_testdll::DLL_FILE_NAME.to_string()),
             "mount.shiori.file は組立時に書いたテスト DLL 名を指すべき"
         );
 
-        // 4.3 特定済みビルド済み DLL が ghost/master/ へ物理配置されている。
+        // ビルド済み DLL が ghost/master/ へ物理配置されている。
         let dll = root
             .join("ghost")
             .join("master")
@@ -331,7 +322,7 @@ mod tests {
             dll.display()
         );
 
-        // 4.2 balloon 資産は非同梱（起動〜終話経路＝`resolve()` が balloon を消費しない判断）。
+        // balloon 資産は非同梱（`resolve()` は balloon を消費しない）。
         let balloon = root.join("balloon");
         assert!(
             !balloon.exists(),
@@ -339,7 +330,7 @@ mod tests {
             balloon.display()
         );
 
-        // 4.1 emo2 実物 shell 流用（surfaces.txt＋入れ子 PNG まで＝自作最小 shell でない）。
+        // emo2 実物 shell 流用（surfaces.txt＋入れ子 PNG まで）。
         let shell_master = root.join("shell").join("master");
         assert!(
             shell_master.join("surfaces.txt").is_file(),
@@ -354,7 +345,7 @@ mod tests {
         );
     }
 
-    /// descript.txt の中身が組立の文と違えば、残った共有ゴーストを再利用しない（R2-g6-1）。
+    /// descript.txt の中身が組立の文と違えば、残った共有ゴーストを再利用しない。
     #[test]
     fn a_shared_ghost_with_a_changed_descript_is_not_fresh() {
         let shared = super::shared_test_ghost();

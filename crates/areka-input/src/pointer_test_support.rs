@@ -19,7 +19,7 @@ pub fn bubble_pointer(
     })
 }
 
-/// Bubble 相の合成 `PointerState`（Ctrl／Shift を別々に指定する版・R15.1／15.2）。
+/// Bubble 相の合成 `PointerState`（Ctrl／Shift を別々に指定する版）。
 ///
 /// [`bubble_pointer`] は Ctrl だけを取る（既存の呼び手 20 箇所以上がそのまま動く）。結線済みでは
 /// 強制退避と通常の左ダブルクリックが Shift の有無で分かれるため、両方を指定できる口をここへ足す。

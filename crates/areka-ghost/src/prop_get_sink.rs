@@ -1,9 +1,9 @@
-//! `\![get,property,イベント名,プロパティ名…]` の受け口（spec `shell-scale-linkage` 要件 1・2）。
+//! `\![get,property,イベント名,プロパティ名…]` の受け口。
 //!
 //! broadcast された全 cue のうち、名前 [`PROP_GET_CUE_NAME`]・第 1 引数 [`PROP_GET_SELECTOR`] の
 //! キャリアだけを選び、各名前の値を MCP の `get_property` と同じ問い手・同じ関数
 //! （[`SylphyaReader::resolve_dotted_str`]）で引いて、kanade へ返しのイベント
-//! （[`KanadeMsg::PropertyEvent`]）を 1 回だけ頼む。送出は待たず、再生を止めない（要件 1.6）。
+//! （[`KanadeMsg::PropertyEvent`]）を 1 回だけ頼む。送出は待たず、再生を止めない。
 //! 段の分け方は [`crate::prop_sink::PropSetCueSink`] と同じ（自分宛の非正準は warn・担当外は debug）。
 
 use std::sync::mpsc::Sender;
@@ -19,9 +19,9 @@ pub const PROP_GET_CUE_NAME: &str = "get";
 /// `\![get,property,…]` の選別子（第 1 引数）。
 pub const PROP_GET_SELECTOR: &str = "property";
 
-/// `\![get,property]` の台本のスレッド側の受け口（design「PropGetCueSink」）。
+/// `\![get,property]` の台本のスレッド側の受け口。
 ///
-/// 受け口は許可の表も `On` 接頭も見ない（要件 2.1）。dispatcher が talk ごとに clone するので、
+/// 受け口は許可の表も `On` 接頭も見ない。dispatcher が talk ごとに clone するので、
 /// 中身はどれも clone できる送信端・読み口だけにする。
 #[derive(Clone)]
 pub struct PropGetCueSink {
@@ -43,7 +43,7 @@ impl PropGetCueSink {
 
 impl CueSink for PropGetCueSink {
     fn emit(&mut self, cue: TalkCue) {
-        // 1) キャリア抽出。宛名が自分（`get`）の非正準は warn、ほかは担当外として debug。
+        // 宛名が自分（`get`）の非正準は warn、ほかは担当外として debug。
         let Some((name, tokens)) = cue.command.as_command_carrier() else {
             match &cue.command {
                 CueCommand::Custom { command, .. } if command == PROP_GET_CUE_NAME => warn!(
@@ -58,7 +58,6 @@ impl CueSink for PropGetCueSink {
             return;
         };
 
-        // 2) 名前と第 1 引数で選ぶ。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1
         if name != PROP_GET_CUE_NAME || tokens.first() != Some(&PROP_GET_SELECTOR) {
             debug!(
@@ -69,7 +68,6 @@ impl CueSink for PropGetCueSink {
             return;
         }
 
-        // 3) イベント名が無い・空・空白だけは送らない（要件 2.2）。
         let event = match tokens.get(1) {
             Some(event) if !event.trim().is_empty() => *event,
             _ => {
@@ -82,7 +80,6 @@ impl CueSink for PropGetCueSink {
             }
         };
 
-        // 4) 名前が 1 つも無いときは値を引く前に打ち切る（要件 2.4）。
         let names = &tokens[2..];
         if names.is_empty() {
             debug!(
@@ -93,7 +90,7 @@ impl CueSink for PropGetCueSink {
             return;
         }
 
-        // 5) MCP の get_property と同じ問い手・同じ関数で引く。無い値は空にして番号を保つ（要件 1.1・1.4）。
+        // 無い値は空にして、名前との番号の対応を保つ。
         let references: Vec<String> = names
             .iter()
             .map(
@@ -104,7 +101,7 @@ impl CueSink for PropGetCueSink {
             )
             .collect();
 
-        // 6) イベント名か値に CR・LF・NUL があれば送らない（要件 2.3・空は 3) で弾き済み）。
+        // イベント名か値に CR・LF・NUL があれば送らない。
         if validate_notify(event, &references).is_err() {
             warn!(
                 event = "property_get_control_char",
@@ -115,7 +112,6 @@ impl CueSink for PropGetCueSink {
             return;
         }
 
-        // 7) kanade へ 1 回だけ頼み、待たない（要件 1.6・2.5）。
         let count = references.len();
         let msg = KanadeMsg::PropertyEvent {
             id: event.to_string(),

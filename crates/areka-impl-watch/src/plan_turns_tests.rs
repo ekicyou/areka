@@ -46,7 +46,7 @@ fn assert_fixed_point(state: &State, label: &str) {
     assert!(events.is_empty(), "{label}: {events:?}");
 }
 
-/// 一度に渡す（要件 2.3）: 止まる必要のある全員が止まっていて、両方の机が空いていれば、
+/// 一度に渡す: 止まる必要のある全員が止まっていて、両方の机が空いていれば、
 /// `test,sole` の申し込みは 1 回の呼び出しで両方を受け、出来事 `DeskGranted` は 1 件。
 #[test]
 fn test_and_sole_are_granted_at_once_in_one_call() {
@@ -78,7 +78,7 @@ fn test_and_sole_are_granted_at_once_in_one_call() {
     );
 }
 
-/// ひとり占めだけの番（要件 4.1）: `sole` だけを申し込んだ者は、止まる必要のある全員が止まった
+/// ひとり占めだけの番: `sole` だけを申し込んだ者は、止まる必要のある全員が止まった
 /// ときにひとり占めだけを受け、排他テストの机は誰も持たない。続けて参加した者の `test` は同じ
 /// 呼び出しで渡る（ひとり占めは待たれていない）。
 #[test]
@@ -108,7 +108,7 @@ fn a_sole_only_request_gets_only_the_sole_desk() {
     assert_fixed_point(&state, "joined test");
 }
 
-/// 一部を渡さない（要件 2.2）: 排他テストの机が空いていても、ひとり占めが渡せない間（止まって
+/// 一部を渡さない: 排他テストの机が空いていても、ひとり占めが渡せない間（止まって
 /// いない者が居る・マージの持ち主が居る）は、`test,sole` の申し込みにどちらの机も渡さない。
 #[test]
 fn test_and_sole_get_nothing_while_the_sole_desk_cannot_be_granted() {
@@ -142,7 +142,7 @@ fn test_and_sole_get_nothing_while_the_sole_desk_cannot_be_granted() {
     assert_fixed_point(&merging, "merging");
 }
 
-/// 追い越し（要件 3.3・3.4）: 先の `test,sole` が止まりを待つ間に、後から申し込んだマージの持ち主の
+/// 追い越し: 先の `test,sole` が止まりを待つ間に、後から申し込んだマージの持ち主の
 /// `test` が同じ呼び出しで渡る。先の申し込みのために排他テストの机を取っておかない。
 #[test]
 fn a_later_test_request_of_a_merge_holder_overtakes_a_waiting_load_test() {
@@ -175,7 +175,7 @@ fn a_later_test_request_of_a_merge_holder_overtakes_a_waiting_load_test() {
     assert_fixed_point(&state, "overtaken");
 }
 
-/// 要件 3.4: ひとり占めを含む申し込みが待たれる間、排他テストの机は「停止要請中」の者とマージの
+/// ひとり占めを含む申し込みが待たれる間、排他テストの机は「停止要請中」の者とマージの
 /// 持ち主にだけ渡り、「作業中」の者（マージの机を待つ者を含む）には渡らない。
 #[test]
 fn while_a_load_test_waits_the_test_desk_goes_only_to_the_asked_and_merge_holders() {
@@ -188,7 +188,7 @@ fn while_a_load_test_waits_the_test_desk_goes_only_to_the_asked_and_merge_holder
     };
 
     // マージの机を待つ x は止まる必要が無いので「作業中」のまま。その `test` は渡らない（マージを
-    // 待つ者の申し込みは要件 4.8 で断られるので、申し込みは状態を組み立てて置く）。
+    // 待つ者の申し込みは断られるので、申し込みは状態を組み立てて置く）。
     let mut working = base();
     queue_merge(&mut working, "pasta", "x", T0);
     queue_request(&mut working, "x", DeskSet::Test, T0 + 2);
@@ -214,7 +214,7 @@ fn while_a_load_test_waits_the_test_desk_goes_only_to_the_asked_and_merge_holder
     assert_fixed_point(&holder, "merge holder");
 }
 
-/// 要件 3.5: 「止まった」の者の `test` は渡らず、ひとり占めの申し込みが消えて再開した同じ呼び出しで
+/// 「止まった」の者の `test` は渡らず、ひとり占めの申し込みが消えて再開した同じ呼び出しで
 /// 渡る。
 #[test]
 fn a_stopped_participant_gets_the_test_desk_in_the_call_that_resumes_it() {
@@ -245,7 +245,7 @@ fn a_stopped_participant_gets_the_test_desk_in_the_call_that_resumes_it() {
     assert_fixed_point(&state, "resumed");
 }
 
-/// 要件 6.2: 排他テストの机を持つ者の「止まった」の報告で机が空き、出来事 `TestFreed`（訳
+/// 排他テストの机を持つ者の「止まった」の報告で机が空き、出来事 `TestFreed`（訳
 /// `stopped`）と最近の出来事が 1 件ずつ残る。空いたので待っていた負荷テストに同じ呼び出しで番が来る。
 #[test]
 fn reporting_stopped_frees_the_test_desk_and_records_it_once() {
@@ -272,7 +272,7 @@ fn reporting_stopped_frees_the_test_desk_and_records_it_once() {
     assert_fixed_point(&state, "stopped");
 }
 
-/// 持ちながらの申し込み（要件 4.1・4.2）: マージの持ち主の `test` は加わる。机を持つ者のほかの組
+/// 持ちながらの申し込み: マージの持ち主の `test` は加わる。机を持つ者のほかの組
 /// （`test` の持ち主の `test,sole`・`sole`、ひとり占めの持ち主の `test`）と、マージの持ち主の
 /// `sole`・`test,sole` は断られ、状態は同じ。
 #[test]
@@ -314,7 +314,7 @@ fn requests_while_holding_are_accepted_only_for_a_merge_holder_adding_test() {
     }
 }
 
-/// 要件 2.7・2.8: 同じ組の再申し込みは待ち行列に 1 件のまま、持っていれば直ちに番（状態は同じ）。
+/// 同じ組の再申し込みは待ち行列に 1 件のまま、持っていれば直ちに番（状態は同じ）。
 /// 待っている者の違う組の申し込みは断る。
 #[test]
 fn a_repeated_request_keeps_one_entry_and_a_different_set_is_refused() {
@@ -345,7 +345,7 @@ fn a_repeated_request_keeps_one_entry_and_a_different_set_is_refused() {
     }
 }
 
-/// 返し方（要件 4.3〜4.5）: 名指しした机だけを空け、名指しなしは全部を空ける。持っていない机を
+/// 返し方: 名指しした机だけを空け、名指しなしは全部を空ける。持っていない机を
 /// 返そうとしたら断り、状態は同じ。
 #[test]
 fn return_frees_the_named_desk_or_everything_and_refuses_desks_not_held() {
@@ -372,7 +372,7 @@ fn return_frees_the_named_desk_or_everything_and_refuses_desks_not_held() {
     assert_eq!(state.recent, [test_freed_record("a", "returned", T0 + 1)]);
     assert_fixed_point(&state, "return test");
 
-    // ひとり占めだけ: 排他テストの机は持ったまま（止まった b の再開は要件 4.6 のテストで見る）。
+    // ひとり占めだけ: 排他テストの机は持ったまま（止まった b の再開は別のテストで見る）。
     let mut state = held();
     let cmd = give_back("a", Some(DeskSet::Sole));
     let got = run(&mut state, &cmd, Some("a"), T0 + 1);
@@ -403,7 +403,7 @@ fn return_frees_the_named_desk_or_everything_and_refuses_desks_not_held() {
     }
 }
 
-/// 要件 4.6: ひとり占めを返すと、ほかに待たれていなければ止まった者が同じ呼び出しで再開する。
+/// ひとり占めを返すと、ほかに待たれていなければ止まった者が同じ呼び出しで再開する。
 #[test]
 fn returning_the_sole_desk_resumes_the_stopped_in_the_same_call() {
     let mut state = state_with(&["a", "b", "c"]);
@@ -431,7 +431,7 @@ fn returning_the_sole_desk_resumes_the_stopped_in_the_same_call() {
     assert_fixed_point(&state, "resumed");
 }
 
-/// 要件 5.5・5.6: 走っている負荷テストの記録は、両方の机が空なら停止要請なしで、走っている印つきの
+/// 走っている負荷テストの記録は、両方の机が空なら停止要請なしで、走っている印つきの
 /// 両方の持ち主にする（記録は参加の申し出を兼ねる）。test だけ・sole だけ・両方（持ち主に走って
 /// いる印が在っても無くても）のどれかに持ち主が居れば断り、状態は同じ。断るときは名前・リポジトリの
 /// 更新も、参加も、「作業中」への戻しもしない（元のスクリプトは断っても参加させて「作業中」へ戻す）。

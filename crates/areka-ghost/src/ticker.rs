@@ -3,7 +3,7 @@
 //! OS時計の絶対グリッド（既定 50ms・1000ms の2周期）に整列して時刻の刻みを配り、
 //! 処理遅延が蓄積しないようにする。大幅な遅延で複数の境界を跨いだ場合は各系統
 //! 1回のみ配り、次の境界へスナップする。決定論テストでは起動せず外部からの
-//! 直接投函に道を譲れるようにする（design.md「ghost::ticker」）。
+//! 直接投函に道を譲れるようにする。
 //!
 //! # 構造
 //!
@@ -23,7 +23,7 @@ use areka_kanade::{KanadeMsg, MonotonicMs};
 pub enum TickerMsg {
     /// 即時停止。
     Close,
-    /// この時刻に 1 回だけ kanade を起こす頼み（選択待ちの期限・要件 9.5）。時刻を過ぎたと
+    /// この時刻に 1 回だけ kanade を起こす頼み（選択待ちの期限）。時刻を過ぎたと
     /// 見たら [`KanadeMsg::ChoiceTimeoutDue`] を 1 通送る。新しい頼みは古い頼みを置き換える。
     /// [`spawn_loop_ticker`] は読み飛ばす。
     WakeKanadeAt(MonotonicMs),
@@ -268,7 +268,7 @@ where
 /// [`spawn_ticker`] の 2 系統（dispatcher 50ms／kanade 1000ms）とは独立した、
 /// SERIKO ループ評価専用の単発 tick レーン（[`spawn_loop_ticker`]）の運行構成。
 /// 16ms は 60Hz 近似で、`\w` 系の最小 wait（22ms）を 1 tick 以内で拾える解像度
-/// （design.md「spawn_loop_ticker」）。
+/// 。
 pub struct LoopTickerConfig {
     /// ループ評価の基本周期（既定 16ms）。
     pub interval: Duration,
@@ -293,15 +293,14 @@ impl Default for LoopTickerConfig {
 /// **再利用**し、単一系統として `config.clock` を絶対グリッドへ整列させる。グリッド境界へ
 /// 到達するたびに `deliver` を**ちょうど 1 回**呼ぶ（複数境界を跨いだ大幅遅延でも catch-up
 /// 政策により 1 回に畳む）。`TickerMsg::Close` 受領または制御チャンネル切断（`stop_rx`
-/// disconnected）で正常終了する（design.md「spawn_loop_ticker」・R1.1/1.3/1.4）。
+/// disconnected）で正常終了する。
 ///
 /// 配送は **クロージャ**（`Box<dyn FnMut(Tick) + Send>`）経由で行い、`From<Tick>` による
 /// 型付きチャネル境界（[`spawn_ticker`] の流儀）は使わない。これは意図的な設計判断で、
-/// ghost が seriko の型を知らずに済ませる（orphan rule 回避・型結合ゼロ・design D-1
-/// 「areka-ghost は seriko に依存しない」）。配送失敗の観測は closure 側の責務とする。
+/// ghost が seriko の型を知らずに済ませる（orphan rule 回避・型結合ゼロ）。配送失敗の観測は closure 側の責務とする。
 ///
-/// worker スレッド駆動＝表示状態・vsync に非従属（R1.3）。既存 [`spawn_ticker`]・
-/// [`TickerConfig`]・2 系統の挙動／シグネチャは一切変更しない純粋な additive 追加（R1.4）。
+/// worker スレッド駆動＝表示状態・vsync に非従属。既存 [`spawn_ticker`]・[`TickerConfig`]・2 系統の
+/// 挙動／シグネチャは変更しない。
 pub fn spawn_loop_ticker(
     config: LoopTickerConfig,
     mut deliver: Box<dyn FnMut(Tick) + Send>,

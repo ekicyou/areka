@@ -1,13 +1,12 @@
 // -------------------------------------------------------------------------
-// バルーン滞在フラグ檻（areka-P0-balloon-visibility task 2.2・design「hover 観測フラグ
-// （crates/areka-input/src/balloon.rs）」・Requirements 5.2/5.5）
+// バルーン滞在フラグ檻
 //
 // 「ポインタがバルーン窓の上に居る」を選択肢行の追跡（`BalloonWiring.hover`）とは**独立の軸**として
 // 記録することを檻へ入れる。観測点は 3 つ——(a) 記録（`on_balloon_pointer_moved` が選択肢の有無に
 // 依らず当該 scope を真にする）、(b) 解除（`clear_balloon_hover_on_leave` が `PointerLeave` で偽へ戻す）、
-// (c) 掃除口（`clear_balloon_hover`＝非表示遷移時にコントローラが呼ぶ・消費は task 4.4）。
+// (c) 掃除口（`clear_balloon_hover`＝非表示遷移時にコントローラが呼ぶ）。
 //
-// 記録側と解除側の縮退方向は意図的に非対称である（Requirement 5.5「消えないまま固着する側へ倒さない」）:
+// 記録側と解除側の縮退方向は意図的に非対称である（消えないまま固着する側へ倒さない）:
 // 記録は上流資源が揃うときだけ行い（抑止を増やす側は保守的）、解除は上流 runtime の可否に依らず行う
 // （抑止を解く側は積極的）。この非対称は下 2 本のテスト（moved 側／leave 側）が明示的に固定する。
 // -------------------------------------------------------------------------
@@ -68,7 +67,7 @@ fn balloon_hover_defaults_to_false_for_every_scope() {
     assert!(!bw.is_balloon_hovered(7), "未観測 scope 7 は偽");
 }
 
-/// 記録（Requirement 5.2）: 選択肢が**一つも表示されていない**バルーン窓上の移動でも滞在は真になる。
+/// 記録: 選択肢が**一つも表示されていない**バルーン窓上の移動でも滞在は真になる。
 /// 選択肢行の上に居るときだけ記録する実装をここで落とす。
 #[test]
 fn moved_over_balloon_records_hover_without_any_choice() {
@@ -93,7 +92,7 @@ fn moved_over_balloon_records_hover_without_any_choice() {
     );
 }
 
-/// 記録（Requirement 5.2）: 選択肢表示中でも**行に当たっていない**移動で滞在は真になる
+/// 記録: 選択肢表示中でも**行に当たっていない**移動で滞在は真になる
 /// （headless では `choice_hit_rows` が空＝hit なし）。選択肢の追跡軸とは独立であることの表側。
 #[test]
 fn moved_records_hover_when_choice_active_but_no_row_hit() {
@@ -123,7 +122,7 @@ fn moved_records_hover_when_choice_active_but_no_row_hit() {
     );
 }
 
-/// 独立の軸（design「既存の選択肢 hover 機構とは独立の軸として持つ」）: 一方の更新が他方へ漏れない。
+/// 独立の軸: 一方の更新が他方へ漏れない。
 /// 選択肢 hover を滞在フラグへ畳み込んだ実装（どちらか一方の map で両方を表す）をここで落とす。
 #[test]
 fn choice_hover_ordinal_and_balloon_hover_are_independent_axes() {
@@ -152,7 +151,7 @@ fn choice_hover_ordinal_and_balloon_hover_are_independent_axes() {
     );
 }
 
-/// per-scope 独立（Requirement 5.2 は「当該 scope」）: 別 scope の滞在は互いに影響しない。
+/// per-scope 独立: 別 scope の滞在は互いに影響しない。
 #[test]
 fn moved_records_hover_per_scope_independently() {
     let mut world = World::new();
@@ -201,7 +200,7 @@ fn moved_records_hover_before_choice_snapshot_degrades() {
     );
 }
 
-/// 記録側の縮退方向（Requirement 5.5）: 観測基盤（`RuntimeWiring`）が無い間は記録しない
+/// 記録側の縮退方向: 観測基盤（`RuntimeWiring`）が無い間は記録しない
 /// ＝抑止を増やす側は保守的に倒す。解除側（次の檻）と非対称であることが意図。
 #[test]
 fn moved_without_runtime_wiring_does_not_record_hover() {
@@ -217,7 +216,7 @@ fn moved_without_runtime_wiring_does_not_record_hover() {
     );
 }
 
-/// 解除（Requirement 5.2 後段）: バルーン所有の `PointerLeave` で当該 scope の滞在が偽へ戻る。
+/// 解除: バルーン所有の `PointerLeave` で当該 scope の滞在が偽へ戻る。
 #[test]
 fn leave_on_balloon_window_clears_balloon_hover() {
     let mut world = World::new();
@@ -235,7 +234,7 @@ fn leave_on_balloon_window_clears_balloon_hover() {
     assert!(!hovered(&world, 0), "離脱で滞在は偽へ戻る（5.2）");
 }
 
-/// 解除側の縮退方向（Requirement 5.5）: 観測基盤（`RuntimeWiring`）が無くても解除は行う
+/// 解除側の縮退方向: 観測基盤（`RuntimeWiring`）が無くても解除は行う
 /// ＝抑止を解く側は積極的に倒す（滞在フラグが固着して恒久抑止になる経路を作らない）。
 #[test]
 fn leave_clears_balloon_hover_even_without_runtime_wiring() {
@@ -304,7 +303,7 @@ fn leave_clears_only_the_leaving_scope() {
     assert!(hovered(&world, 1), "離脱していない scope 1 は真のまま");
 }
 
-/// 掃除口（Requirement 5.5・消費は task 4.4）: 非表示遷移で呼ぶ `clear_balloon_hover` は当該 scope の
+/// 掃除口: 非表示遷移で呼ぶ `clear_balloon_hover` は当該 scope の
 /// みを偽にし、再呼出でも壊れない（不可視中は `PointerLeave` が届かないための明示掃除）。
 #[test]
 fn clear_balloon_hover_clears_that_scope_only_and_is_idempotent() {

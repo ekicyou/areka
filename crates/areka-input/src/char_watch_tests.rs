@@ -1,4 +1,4 @@
-//! 毎 tick の窓の見張りの系の檻（mouse-click-wheel-events 要件 3.3・6・7・11.2・11.3・design「CharWatch」）。
+//! 毎 tick の窓の見張りの系の檻。
 //!
 //! 偽の窓（`Window`＋`CharWindowMarker`）の子に `PointerState` を載せ、注入の時計で系を回す。
 
@@ -138,7 +138,7 @@ fn wheel(scope: u32, delta: i32, at: (i64, i64), region: Option<&str>) -> MouseI
     }
 }
 
-/// 入る順: EnterAll → Enter。A→B は Leave(A) → Enter(B)。出る順: Leave → LeaveAll（要件 7.1–7.5）。
+/// 入る順: EnterAll → Enter。A→B は Leave(A) → Enter(B)。出る順: Leave → LeaveAll。
 #[test]
 fn enter_move_across_and_leave_in_order() {
     let mut r = rig();
@@ -170,7 +170,7 @@ fn enter_move_across_and_leave_in_order() {
     assert!(r.wiring().hover.is_empty());
 }
 
-/// 位置が同じなら何も出ない。止まったまま当たり判定が替わっても、動くまで出ない（要件 7.9）。
+/// 位置が同じなら何も出ない。止まったまま当たり判定が替わっても、動くまで出ない。
 #[test]
 fn no_events_without_movement_even_if_region_changes() {
     let mut r = rig();
@@ -190,7 +190,7 @@ fn no_events_without_movement_even_if_region_changes() {
     );
 }
 
-/// 窓 2 つは別々: 本体から相方へ移ると、出る窓の出入りが先（要件 7.14）。
+/// 窓 2 つは別々: 本体から相方へ移ると、出る窓の出入りが先。
 #[test]
 fn two_windows_are_separate_and_leaving_window_goes_first() {
     let mut r = rig();
@@ -210,7 +210,7 @@ fn two_windows_are_separate_and_leaving_window_goes_first() {
     );
 }
 
-/// 窓を消すと何も送らず、3 つの表の覚えが消える（要件 7.10）。
+/// 窓を消すと何も送らず、3 つの表の覚えが消える。
 #[test]
 fn despawned_window_is_forgotten_silently() {
     let mut r = rig();
@@ -237,7 +237,7 @@ fn despawned_window_is_forgotten_silently() {
     assert!(w.presses.is_empty());
 }
 
-/// 窓の外へ出たら右・中・拡張の控えを捨てる（左は残す・要件 3.3）。
+/// 窓の外へ出たら右・中・拡張の控えを捨てる（左は残す）。
 #[test]
 fn leaving_window_discards_side_button_notes() {
     let mut r = rig();
@@ -266,7 +266,7 @@ fn leaving_window_discards_side_button_notes() {
     assert_eq!(keys, vec![(win, ClickButton::Left)]);
 }
 
-/// 縦のホイールで送り、横だけでは何も出ない（要件 6.1・6.7）。
+/// 縦のホイールで送り、横だけでは何も出ない。
 #[test]
 fn vertical_wheel_sends_horizontal_only_does_not() {
     let mut r = rig();
@@ -279,7 +279,7 @@ fn vertical_wheel_sends_horizontal_only_does_not() {
     assert_eq!(r.run(), vec![wheel(0, -120, (20, 10), Some("Head"))]);
 }
 
-/// 持ち主が窓の entity そのもの（絵の透けた所）ならホイールを送らない（要件 6.10）。
+/// 持ち主が窓の entity そのもの（絵の透けた所）ならホイールを送らない。
 #[test]
 fn wheel_over_transparent_area_is_not_sent() {
     let mut r = rig();
@@ -292,7 +292,7 @@ fn wheel_over_transparent_area_is_not_sent() {
     assert!(r.wiring().wheel.is_empty());
 }
 
-/// 間隔の中の回転は溜まり、時計を進めた次の回しで回転を待たずに吐き出す（要件 6.5・11.2）。
+/// 間隔の中の回転は溜まり、時計を進めた次の回しで回転を待たずに吐き出す。
 #[test]
 fn pending_wheel_is_flushed_on_a_later_run_after_the_clock_advances() {
     let mut r = rig();
@@ -313,7 +313,7 @@ fn pending_wheel_is_flushed_on_a_later_run_after_the_clock_advances() {
     assert_eq!(r.run(), vec![]);
 }
 
-/// ホイールは窓ごとに別々に間引く: A の間隔の中でも B の初回はすぐ送り、A の溜めは A の期限で吐く（要件 6.8・11.2）。
+/// ホイールは窓ごとに別々に間引く: A の間隔の中でも B の初回はすぐ送り、A の溜めは A の期限で吐く。
 #[test]
 fn wheel_is_throttled_per_window() {
     let mut r = rig();
@@ -355,7 +355,7 @@ fn wheel_is_throttled_per_window() {
     assert_eq!(r.run(), vec![]);
 }
 
-/// 出入りは同じ tick の `OnMouseMove` より先に届く（要件 7.7）。
+/// 出入りは同じ tick の `OnMouseMove` より先に届く。
 #[test]
 fn hover_arrives_before_move_of_the_same_tick() {
     let mut r = rig();
@@ -375,7 +375,7 @@ fn hover_arrives_before_move_of_the_same_tick() {
     );
 }
 
-/// 移動の間引きが閉じていても出入りは出る（系は移動の間引きの状態を読まない・要件 7.6）。
+/// 移動の間引きが閉じていても出入りは出る（系は移動の間引きの状態を読まない）。
 #[test]
 fn hover_is_not_throttled_by_the_move_throttle() {
     let mut r = rig();

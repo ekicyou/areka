@@ -1,5 +1,4 @@
-//! えみりの形の固定入力から組んだ配置の全 scope の窓で、マウスを動かしても panic しない
-//! （spec: areka-P0-emily-ghost-verification 要件 4.7・6.7）。
+//! えみりの形の固定入力から組んだ配置の全 scope の窓で、マウスを動かしても panic しない。
 //!
 //! 窓の scope は手で書かず、配置の設定が返した scope の全部で作る。scope 2 以上の窓が
 //! 作られると `char_scope` の `debug_assert!(scope <= 1)` で落ちる。

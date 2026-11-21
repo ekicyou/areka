@@ -1,9 +1,8 @@
-//! 本物の結線（sylphya の写し → 展開）で、翻訳の前の展開と再生側の文字の並びを確かめる
-//! （spec `areka-P0-translate-pipeline` 要件 2.2・2.5・2.6）。
+//! 本物の結線（sylphya の写し → 展開）で、翻訳の前の展開と再生側の文字の並びを確かめる。
 //!
 //! 利用者名は偽の SHIORI の `username` の照会（「太郎」）から sylphya へ入り、翻訳用と再生用の
 //! 写しの源（[`SystemVarWiring::FromSylphya`]）の両方がそこから読む。再生側は dispatcher の
-//! 受け口に届いた文字の cue を並べて見る。切替の送り先（要件 3.5）は、2 体の実行系を実際に
+//! 受け口に届いた文字の cue を並べて見る。切替の送り先は、2 体の実行系を実際に
 //! 作る `crates/areka` の切替の土台の側（`ghost_session_switch_translate_tests.rs`）で確かめる。
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
@@ -145,8 +144,8 @@ fn boot_and_play(
     (references, played)
 }
 
-/// `username` を持つゴーストの台詞 `%usernameさん` は `OnTranslate` に `太郎さん` で届き
-/// （要件 2.2）、204 のとき再生側の文字の並びは翻訳を通さない今日の並びと同じ（要件 2.5）。
+/// `username` を持つゴーストの台詞 `%usernameさん` は `OnTranslate` に `太郎さん` で届き、
+/// 204 のとき再生側の文字の並びは翻訳を通さない今日の並びと同じ。
 #[test]
 fn expanded_script_reaches_on_translate_and_204_plays_as_today() {
     const GREETING: &str = r"\0%usernameさん\e";
@@ -164,7 +163,7 @@ fn expanded_script_reaches_on_translate_and_204_plays_as_today() {
 }
 
 /// 翻訳の結果に `%username` の綴りが残っていれば、再生時に今日と同じ規則で展開される
-/// （要件 2.6）。元の挨拶には `%` が無いので、`太郎さん` は翻訳の結果からしか来ない。
+/// 元の挨拶には `%` が無いので、`太郎さん` は翻訳の結果からしか来ない。
 #[test]
 fn spelling_left_by_translation_is_expanded_at_playback() {
     const GREETING: &str = r"\0こんにちは\e";

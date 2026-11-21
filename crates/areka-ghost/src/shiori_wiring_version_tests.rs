@@ -1,5 +1,5 @@
 //! 読み込み直後の版の確かめ（`record_version`／`ghost_label`／`real_connect` の結線）の
-//! 決定論テスト（タスク 4.2・要件 2.1／2.3〜2.6／7.3〜7.5）。
+//! 決定論テスト。
 //!
 //! 窓も 32bit 成果物も実 SHIORI も要さない。記録は `capture_events` の観測で固定する
 //! （捕捉窓は番兵で生存を確かめるので「1 件」の主張は恒真にならない）。
@@ -13,7 +13,7 @@ use tracing::Level;
 use super::{ghost_label, helper_load_dir, record_version};
 use crate::test_log_capture::capture_events;
 
-/// 起動ログの宛先（`shiori_wiring` の `LOG_TARGET` と同じ綴り・design §Monitoring）。
+/// 起動ログの宛先（`shiori_wiring` の `LOG_TARGET` と同じ綴り）。
 const BOOT_TARGET: &str = "ghost-boot";
 
 /// 宛先 `ghost-boot` の版の記録（決めた INFO／決められない WARN）を全部取り出す。
@@ -30,7 +30,7 @@ fn version_events(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .collect()
 }
 
-/// 決めたら INFO を 1 行（ゴースト・版・根拠）出し、その版を返す（要件 2.4）。
+/// 決めたら INFO を 1 行（ゴースト・版・根拠）出し、その版を返す。
 #[test]
 fn decided_records_one_info_line_and_returns_the_version() {
     for (version, evidence) in [
@@ -61,7 +61,7 @@ fn decided_records_one_info_line_and_returns_the_version() {
 }
 
 /// 決められなければ WARN を 1 行（理由・`assumed = "SHIORI/3.0"`）出し、3.0 を返す
-/// （要件 2.5・7.3）。
+/// 。
 #[test]
 fn undecided_records_one_warn_line_and_assumes_shiori3() {
     let mut got = None;
@@ -96,7 +96,7 @@ fn ghost_label_takes_the_folder_two_levels_above_master() {
     assert_eq!(ghost_label(Path::new("master")), "master");
 }
 
-/// helper の `load` へ渡すパスは絶対パス・`\` の区切り・末尾に `\` が 1 つ（要件 6.4・
+/// helper の `load` へ渡すパスは絶対パス・`\` の区切り・末尾に `\` が 1 つ（
 /// `shiori4-api` の決定 6）。華和梨はこれにファイル名をそのままつなげて辞書を開く。
 #[test]
 fn helper_load_dir_is_absolute_backslashed_with_one_trailing_separator() {
@@ -114,7 +114,7 @@ fn helper_load_dir_is_absolute_backslashed_with_one_trailing_separator() {
     }
 }
 
-/// 整えたパスは helper にだけ渡し、記録のゴーストの名前は元のパスから取る（要件 6.4）。
+/// 整えたパスは helper にだけ渡し、記録のゴーストの名前は元のパスから取る。
 #[test]
 fn real_connect_spawns_with_the_shaped_dir_and_labels_from_the_original() {
     const SOURCE: &str = include_str!("shiori_wiring.rs");
@@ -134,7 +134,7 @@ fn real_connect_spawns_with_the_shaped_dir_and_labels_from_the_original() {
     );
 }
 
-/// 確かめの往復の結線（要件 2.1・2.3・7.4）。
+/// 確かめの往復の結線。
 ///
 /// 接続の値は中継が無いと組めないので（先例
 /// `the_connection_receives_the_already_decided_negotiator` と同じ理由）、本番ファイルの

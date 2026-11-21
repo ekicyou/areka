@@ -1,11 +1,11 @@
-//! task 2.1 の 4 態様檻（design.md Testing Strategy・要件 3.1/3.5）:
-//! 1. 正常ロード（happy path）——1.1 spike の deps-dir 解決で built cdylib を実ロード。
+//! `InProcLibrary::load` の 4 態様のテスト:
+//! 1. 正常ロード（happy path）——deps-dir 解決で built cdylib を実ロード。
 //! 2. DLL 欠落——不在パスで `LoadLibraryExW` 失敗。
 //! 3. 不正イメージ——非 PE テキストファイルを `.dll` 名でロードし失敗。
 //! 4. シンボル未解決——`shiori_factory` を持たない実 x64 DLL（kernel32.dll）で `GetProcAddress` 失敗。
 //!
-//! いずれの失敗態様も `Err` を返し（silent success を偽装しない・要件 3.5）、取得済み HMODULE は
-//! Drop で解放される。COM は初期化しない（D-6）。
+//! いずれの失敗態様も `Err` を返し、取得済み HMODULE は
+//! Drop で解放される。COM は初期化しない。
 //!
 //! 相対の DLL パスを読まないこと（#28）と、相対のフォルダを整えて接続できること（#29）もここで縛る。
 //! テストの DLL の探し（[`built_test_dll`]）と、それを写したゴースト（[`dll_ghost`]）は
@@ -69,7 +69,7 @@ fn relative_from_cwd(path: &Path) -> PathBuf {
 }
 
 /// 態様2（**DLL 欠落**・`DLL欠落`）: 実在しないパスは `LoadLibraryExW` が失敗し `Err`
-/// （要件 3.5）。アーティファクト不要の決定論檻。
+/// 。アーティファクト不要の決定論檻。
 #[test]
 fn missing_dll_returns_err() {
     let result = InProcLibrary::load(Path::new(r"Z:\does\not\exist\nope.dll"));
@@ -110,7 +110,7 @@ fn invalid_image_returns_err() {
 }
 
 /// 態様4（**シンボル未解決**・`シンボル未解決`）: `kernel32.dll` は必ず存在しロードは成功するが
-/// `shiori_factory` を持たない。ゆえに解決段で `GetProcAddress` 失敗＝`Err`（要件 3.5）。
+/// `shiori_factory` を持たない。ゆえに解決段で `GetProcAddress` 失敗＝`Err`。
 /// エラー文言でロード失敗ではなく**シンボル解決失敗**であることを確認する（決定論）。
 /// 相対パスは読まない（#28）ので、システムフォルダの絶対パスで渡す。
 #[test]
@@ -135,7 +135,7 @@ fn unresolved_symbol_returns_err() {
 }
 
 /// 態様1（**正常ロード**・`正常ロード`）: deps の built cdylib を実ロードし、
-/// `shiori_factory` を解決して `IShioriFactory` を得る（要件 3.1）。
+/// `shiori_factory` を解決して `IShioriFactory` を得る。
 #[test]
 fn happy_path_loads_and_resolves_factory() {
     let dll_path = built_test_dll();

@@ -723,7 +723,7 @@ fn the_wait_record_takes_its_start_time_from_the_clock_of_the_store() {
     assert_eq!(*seen.borrow(), [Some(T0)], "始めた時刻は止めた時刻");
 }
 
-/// 待ちのループの 1 秒の眠りは状態ファイルの口の待ちを通る（要件 8.1）。
+/// 待ちのループの 1 秒の眠りは状態ファイルの口の待ちを通る。
 #[test]
 fn the_wait_sleep_asks_the_store_for_one_second() {
     let root = TempPath::new("store-wait-sleep");
@@ -734,7 +734,7 @@ fn the_wait_sleep_asks_the_store_for_one_second() {
     assert_eq!(*pauses.borrow(), [Duration::from_secs(1)]);
 }
 
-/// 安全網は 1 秒の待ちをその場で止め、眠りを見分ける字を出す（要件 8.1）。
+/// 安全網は 1 秒の待ちをその場で止め、眠りを見分ける字を出す。
 #[test]
 fn the_safety_net_refuses_one_second() {
     let stopped_by = std::panic::catch_unwind(|| refuse_poll(Duration::from_secs(1)))
@@ -745,15 +745,14 @@ fn the_safety_net_refuses_one_second() {
     );
 }
 
-/// 安全網は試しの間の短い待ちには何もしない（要件 8.1）。
+/// 安全網は試しの間の短い待ちには何もしない。
 #[test]
 fn the_safety_net_lets_short_pauses_through() {
     refuse_poll(Duration::from_millis(20));
 }
 
 /// 最後の抹消（[`WaitPort::finish`]）は、居る印を `state.lock` の排他の中で解く: ログの口の中
-/// （排他の中）で、印の探りが「居ない」かつ `state.lock` が握られているのが 1 件だけ見える
-/// （要件 6.1・6.4）。
+/// （排他の中）で、印の探りが「居ない」かつ `state.lock` が握られているのが 1 件だけ見える。
 #[test]
 fn the_last_unregister_releases_the_presence_mark_inside_the_exclusion() {
     use std::cell::RefCell;

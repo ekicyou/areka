@@ -1,5 +1,4 @@
-//! task 3.1（要件 2.6・design.md「BootCueSink::begin_talk」）: 配送がトークの起動ごとに、
-//! 複製した受け口へそのトークの番号を渡すことの檻。
+//! 配送がトークの起動ごとに、複製した受け口へそのトークの番号を渡すことの檻。
 
 use super::choice_tests::close_and_join;
 use super::*;
@@ -34,7 +33,6 @@ impl CueSink for TalkIdSink {
 
 impl BootCueSink for TalkIdSink {
     fn clone_box(&self) -> Box<dyn BootCueSink> {
-        // 複製は状態（番号）を引き継がない。
         Box::new(TalkIdSink {
             name: self.name,
             talk_id: None,
@@ -53,7 +51,7 @@ impl BootCueSink for TalkIdSink {
 
 impl Drop for TalkIdSink {
     fn drop(&mut self) {
-        // 番号を受けた複製（＝トークへ渡したもの）の落ちだけを記録する。登録された原本は数えない。
+        // 番号を受けた複製（トークへ渡したもの）の落ちだけを記録する。登録された原本は数えない。
         if let Some(talk_id) = self.talk_id {
             self.log
                 .lock()
@@ -87,7 +85,7 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
     let talk_a = TalkId(7);
     let talk_b = TalkId(8);
 
-    // A: 長い待ちで自然には終わらない。最初の Tick で冒頭の cue だけ出す。
+    // A は長い待ちで自然には終わらない。
     tx.send(DispatcherMsg::Start(StartTalk::new(
         talk_a,
         r"\s[1]A\_w[2500]A_END\e",
@@ -98,8 +96,7 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
     })
     .expect("send Tick(A)");
 
-    // B で置き換える。B も自然には終わらせず、Close（終了させて join する）で落とす
-    // ——自然完了は slot を空けるだけで join しないので、落ちの時点が決まらない。
+    // B で置き換える。B は Close（join する）で落とす。自然完了は join しないので落ちの時点が決まらない。
     tx.send(DispatcherMsg::Start(StartTalk::new(
         talk_b,
         r"\s[2]B\_w[2500]B_END\e",
@@ -114,7 +111,6 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
 
     let log = log.lock().expect("log mutex poisoned").clone();
 
-    // cue はどれも番号を受けた後の複製に届き、その時点の番号を持つ（番号なしの cue は無い）。
     assert!(
         log.contains(&Event::Emit("s0", Some(talk_a))),
         "A の複製は A の番号で cue を受ける: {log:?}"
@@ -128,8 +124,7 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
         "番号を受ける前の複製に cue が届いてはならない: {log:?}"
     );
 
-    // 番号の受け渡しと落ちの順（cue は除く）: A の 2 つの複製が A を受け、置き換えで両方が
-    // 落ちてから B の 2 つの複製が B を受ける。B の複製は Close で落ちる。
+    // cue を除いた番号の受け渡しと落ちの順。
     let lifecycle: Vec<Event> = log
         .into_iter()
         .filter(|e| !matches!(e, Event::Emit(..)))
@@ -164,7 +159,7 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
     assert!(kanade_rx.try_recv().is_err(), "kanade へは何も届かない");
 }
 
-/// 出どころを記録するだけの受け口（task 6.1・要件 1.4）。複製は記録先を共有する。
+/// 出どころを記録するだけの受け口。複製は記録先を共有する。
 struct OriginSink {
     seen: Arc<Mutex<Vec<(TalkId, ScriptOrigin)>>>,
 }
@@ -188,8 +183,7 @@ impl BootCueSink for OriginSink {
     }
 }
 
-/// 配送はトークの起動の出どころ（`StartTalk::origin`）を、そのトークの全ての複製へ渡す
-/// （task 6.1・要件 1.4・design.md「begin_talk の出どころ」）。
+/// 配送はトークの起動の出どころ（`StartTalk::origin`）を、そのトークの全ての複製へ渡す。
 #[test]
 fn each_talk_start_hands_its_origin_to_every_clone() {
     let (kanade_tx, _kanade_rx) = mpsc::channel::<KanadeMsg>();

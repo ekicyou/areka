@@ -1,4 +1,4 @@
-//! リポジトリの分だけ記録を消す判断（`clear --repo`・要件 11）の決定論テスト。時刻と生死は引数で渡し、
+//! リポジトリの分だけ記録を消す判断（`clear --repo`）の決定論テスト。時刻と生死は引数で渡し、
 //! 眠らない。
 
 use super::test_support::{
@@ -76,7 +76,7 @@ fn clear_repo_leaves_the_repo_and_empties_its_desk_and_resumes_the_stopped() {
     assert_eq!(got.verdict, Verdict::Applied);
     // 外れ方は `leave` と同じで昇順に 1 人 1 件（排他テストの机は訳 `left` で空く）→ 机の残りの
     // 取り消し（持ち主 → 待ち行列）→ ひとり占めが空いたので止められていた者の再開 → ほかの
-    // リポジトリのマージの番（要件 6.4）。
+    // リポジトリのマージの番。
     assert_eq!(
         got.events,
         vec![

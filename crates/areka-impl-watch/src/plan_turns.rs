@@ -2,7 +2,7 @@
 //! 決め直し（停止要請か再開 → 渡せる申し込みへ渡すを繰り返す → マージの番）と、待ち行列の番の
 //! 来る順。親の `plan.rs` と同じく、ファイルも時計もプロセスもログも触らない。
 //!
-//! 番の決まり（設計「番の決め方」）:
+//! 番の決まり:
 //!
 //! 1. 申し込みに並べた机が全部渡せるときだけ、同じ呼び出しの中で全部を渡す（一部だけ渡さない）。
 //! 2. 早い順に見て、渡せる最初の申し込みに渡すを、渡せるものが無くなるまで繰り返す（渡せない
@@ -22,7 +22,7 @@ use crate::state::{
     RecentKind, SoleHolder, State, StopReason, TestHolder,
 };
 
-/// 持ちながらの申し込みの断り（要件 4.2）。
+/// 持ちながらの申し込みの断り。
 const HELD: &str = "desks are held; only a merge holder may add the test desk";
 
 /// 申し込み（参加を兼ねる）。状態を変えない断りは参加より先に見る。
@@ -37,7 +37,7 @@ pub(super) fn request(
     now: u64,
     events: &mut Vec<Event>,
 ) -> Verdict {
-    // 1. 自分の申し込みが待っている（要件 2.7・2.8）。
+    // 1. 自分の申し込みが待っている。
     if let Some(waiting) = state.requests.iter().find(|request| request.id == id) {
         return if waiting.desks == desks {
             Verdict::Applied
@@ -45,7 +45,7 @@ pub(super) fn request(
             Verdict::NotApplied("a different desk request is already waiting")
         };
     }
-    // 2. 机を持つ: 同じ組なら直ちに番（要件 2.7・4.2）。
+    // 2. 机を持つ: 同じ組なら直ちに番。
     if let Some(holds) = held(state, id) {
         return if holds == desks {
             Verdict::Applied
@@ -53,11 +53,11 @@ pub(super) fn request(
             Verdict::NotApplied(HELD)
         };
     }
-    // 3. マージの机を持つ: 足せるのは排他テストの机だけ（要件 4.1・4.2）。
+    // 3. マージの机を持つ: 足せるのは排他テストの机だけ。
     if holds_merge(state, id) && desks != DeskSet::Test {
         return Verdict::NotApplied(HELD);
     }
-    // 3a. マージの机を待つ（要件 4.8）。
+    // 3a. マージの机を待つ。
     if waits_merge(state, id) {
         return Verdict::NotApplied(
             "a merge request is waiting; request desks after the merge desk is granted",
@@ -78,7 +78,7 @@ pub(super) fn request(
     Verdict::Applied
 }
 
-/// 返す。`None` はマージの机のほかの全部（要件 4.3〜4.5）。再開は続く番の決め直しが行う（4.6）。
+/// 返す。`None` はマージの机のほかの全部。再開は続く番の決め直しが行う。
 pub(super) fn give_back(
     state: &mut State,
     id: &str,
@@ -116,8 +116,8 @@ pub(super) fn give_back(
     Verdict::Applied
 }
 
-/// 走っている負荷テストの記録: 両方の机が空いていれば、停止要請を出さずに両方の持ち主にする
-/// （要件 5.5・5.6）。断るときは状態を変えない（参加もさせない）。
+/// 走っている負荷テストの記録: 両方の机が空いていれば、停止要請を出さずに両方の持ち主にする。
+/// 断るときは状態を変えない（参加もさせない）。
 pub(super) fn load_running(
     state: &mut State,
     id: &str,
@@ -130,7 +130,7 @@ pub(super) fn load_running(
     if state.test.is_some() || state.sole.is_some() {
         return Verdict::NotApplied("the test desk or the sole desk already has a holder");
     }
-    // マージの机を待つ者は持ち主にしない（要件 5.7。持ち主はマージの待ち行列に居ない形を保つ）。
+    // マージの机を待つ者は持ち主にしない（持ち主はマージの待ち行列に居ない形を保つ）。
     if waits_merge(state, id) {
         return Verdict::NotApplied(
             "a merge request is waiting; record the running load after the merge desk is granted",
@@ -158,8 +158,8 @@ pub(super) fn load_running(
     Verdict::Applied
 }
 
-/// 排他テストの机を空ける唯一の道: 持ち主を外し、出来事 `TestFreed` と最近の出来事に訳を残す
-/// （要件 6.2）。持ち主が居なければ何もしない。
+/// 排他テストの机を空ける唯一の道: 持ち主を外し、出来事 `TestFreed` と最近の出来事に訳を残す。
+/// 持ち主が居なければ何もしない。
 pub(super) fn free_test(state: &mut State, why: &'static str, now: u64, events: &mut Vec<Event>) {
     let Some(holder) = state.test.take() else {
         return;

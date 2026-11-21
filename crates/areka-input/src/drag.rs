@@ -1,4 +1,4 @@
-//! キャラクター窓のドラッグの開始・終了を kanade へ知らせる配線（areka-P0-mouse-drag-events）。
+//! キャラクター窓のドラッグの開始・終了を kanade へ知らせる配線。
 //!
 //! 3 つの部品を置く:
 //!
@@ -20,7 +20,7 @@ use wintf::ecs::pointer::{Phase, PhysicalPoint};
 use super::{MouseWiring, char_scope, resolve_hit_owned};
 use areka_placement::follow::{begin_char_drag, on_char_drag_end};
 
-/// キャラクター窓のドラッグの開始を kanade へ 1 回知らせる（要件 1.1〜1.4）。
+/// キャラクター窓のドラッグの開始を kanade へ 1 回知らせる。
 ///
 /// Tunnel の相は何もしない（同じ知らせの前半であり、後半の Bubble で 1 回だけ送る）。
 /// wintf が開始を配る時点で窓はまだ動いていないので、`ev.position − WindowPos.position` が
@@ -32,7 +32,7 @@ pub(super) fn on_char_drag_start(
     ev: &Phase<DragStartEvent>,
 ) -> bool {
     if let Phase::Bubble(ev) = ev {
-        // 組の連れ動きの控え（wintf が `move_window` を控えたのと同じ回・設計の決め 4・12）。
+        // 組の連れ動きの控え（wintf が `move_window` を控えたのと同じ回）。
         if ev.target == entity {
             begin_char_drag(world, entity);
         }
@@ -47,8 +47,7 @@ pub(super) fn on_char_drag_start(
     false
 }
 
-/// 位置の保存を今までどおり行い、その後でドラッグの終了を kanade へ 1 回知らせる
-/// （要件 2.1〜2.5・6.1・6.2）。
+/// 位置の保存を今までどおり行い、その後でドラッグの終了を kanade へ 1 回知らせる。
 ///
 /// どの相でも先に [`on_char_drag_end`] を受けた引数のまま呼び、戻り値を控えて返す。保存は
 /// 知らせの結果に左右されない（送り先が無い・送出に失敗した・送らないと決めた、のどれでも
@@ -76,8 +75,7 @@ pub(super) fn on_char_drag_end_and_notify(
     handled
 }
 
-/// 画面の物理 px から、スコープ・SHIORI へ渡す座標・当たり判定を引いて `KanadeMsg::Mouse` を送る
-/// （要件 1.3・1.4・2.5・4.2・4.4・4.5・8.2）。
+/// 画面の物理 px から、スコープ・SHIORI へ渡す座標・当たり判定を引いて `KanadeMsg::Mouse` を送る。
 ///
 /// 判断の順（上から。送らないときは 1 件記録して戻る）:
 ///
@@ -88,8 +86,8 @@ pub(super) fn on_char_drag_end_and_notify(
 /// 5. 窓の中の物理 px ＝ `screen − WindowPos.position` を [`resolve_hit_owned`] へ渡し、返った
 ///    `surface_point` と当たり判定で送る。送出失敗は warn `mouse_send_failed`。
 ///
-/// 当たり判定の有無では分けない（要件 1.3）。移動の間引き（`plan_and_send_move`）は通らず、
-/// その状態にも触れない（要件 1.4・2.5）。
+/// 当たり判定の有無では分けない。移動の間引き（`plan_and_send_move`）は通らず、
+/// その状態にも触れない。
 fn notify_drag(
     world: &mut World,
     entity: Entity,
@@ -151,7 +149,7 @@ fn notify_drag(
     let x = i64::from(screen.x) - i64::from(origin.x);
     let y = i64::from(screen.y) - i64::from(origin.y);
 
-    // presenter 借用を解いて解決結果を owned で取り出してから &mut MouseWiring を取る（DD-IE-9）。
+    // presenter 借用を解いて解決結果を owned で取り出してから &mut MouseWiring を取る。
     let hit = resolve_hit_owned(world, scope, x, y);
     let wiring = world
         .get_non_send_mut::<MouseWiring>()

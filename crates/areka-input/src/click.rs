@@ -1,4 +1,4 @@
-//! 押下の控えと解放の判定（mouse-click-wheel-events 要件 1・2・3・4・design「PressNote・ClickJudge」）。
+//! 押下の控えと解放の判定。
 //!
 //! 控えの置き場所は `MouseWiring.presses`（鍵＝キャラ窓の entity とボタン）。
 
@@ -56,7 +56,7 @@ pub(super) enum LeftDrag {
     Dragged,
 }
 
-/// クリックにしなかった理由（記録の `reason`・要件 3.6・9.3）。
+/// クリックにしなかった理由（記録の `reason`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum NotClickReason {
     OtherWindow,

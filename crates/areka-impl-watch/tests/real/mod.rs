@@ -282,7 +282,7 @@ impl Running<'_> {
         }
     }
 
-    /// まだ走っていて、何も出していない（待っている間はセッションを起こさない。要件 13.1）。
+    /// まだ走っていて、何も出していない（待っている間はセッションを起こさない）。
     pub fn assert_waiting_silently(&mut self) {
         let ended = self.child.try_wait().expect("子の終わりを見られる");
         let (said, shown) = ((read(&self.out), read(&self.err)), &self.shown);

@@ -1,7 +1,7 @@
-//! 翻訳（`OnTranslate`）のための写しの源の結線（spec `areka-P0-translate-pipeline`）。
+//! 翻訳（`OnTranslate`）のための写しの源の結線。
 //!
-//! kanade は翻訳の前に台詞の環境変数を展開する（要件 2.1）。展開の値は再生と同じ写しの源
-//! （[`SystemVarSource`]）から読む（要件 2.3）。ここでは、写しの源から kanade へ渡す展開の関数
+//! kanade は翻訳の前に台詞の環境変数を展開する。展開の値は再生と同じ写しの源
+//! （[`SystemVarSource`]）から読む。ここでは、写しの源から kanade へ渡す展開の関数
 //! （[`ScriptExpander`]）を組む関数と、注入された 1 つの源を翻訳用と再生用の 2 つに分ける関数を置く。
 
 use std::sync::{Arc, Mutex};

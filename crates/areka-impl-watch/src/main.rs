@@ -2,7 +2,7 @@
 //!
 //! 引数と環境変数の値を [`cli::run`] へ渡し、結果を終了コードへ写すだけの層で、判断は一切
 //! 持たない（0 = できた・1 = 失敗・2 = 使い方の誤り・3 = 当てはまらなかった。写像は
-//! [`cli::exit_code`] の 1 か所。設計「Error Handling / 終了コード」）。
+//! [`cli::exit_code`] の 1 か所）。
 //!
 //! モジュールの読み込みの向きは `error` → `state` → `plan`（子 `turns`＝`plan_turns.rs` は番の
 //! 決め直しと待ち行列の順。外へは `plan` が出し直す）→ `home`／`presence`／`status` → `store` →

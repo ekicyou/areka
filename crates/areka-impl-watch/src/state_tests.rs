@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use super::{DeskSet, ParticipantStatus, RECENT_MAX, Recent, RecentKind, State, VERSION, WaitKind};
 
-/// 設計「Data Models / 状態ファイル `state.json`（版 2）」の見本そのまま。
+/// 状態ファイル `state.json`（版 2）の見本。
 const SAMPLE: &str = r#"{
   "version": 2,
   "participants": { "a": { "id": "a", "name": "spec-x", "repo": "areka", "status": "working", "since": 0,

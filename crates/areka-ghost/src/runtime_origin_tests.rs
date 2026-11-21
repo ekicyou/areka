@@ -1,4 +1,4 @@
-//! 由来つき起動（[`boot_with_origin`]）の結線のテスト（要件 4.1・8.6）。
+//! 由来つき起動（[`boot_with_origin`]）の結線のテスト。
 //!
 //! 起動の由来とシェルのフォルダ名が kanade の設定へ届いたことを、偽の SHIORI が受けた
 //! `OnGhostChanged`／`OnBoot` の Reference で確かめる（設定は kanade のスレッドの中にしか

@@ -3,9 +3,9 @@
 //! descript.txt 起点のマウント解決（`areka_parsers::package::resolve_with_shell`）を入力として、
 //! shiori 通信層（`shiori-host32-host` 経由の kanade shiori actor）・kanade（③）・
 //! sakura（④・per-talk dispatcher 経由）・ticker（時刻供給）を起動順に結線し、
-//! 終了時は逆順で統括する（design.md「Architecture」「System Flows」）。
+//! 終了時は逆順で統括する。
 //!
-//! # このクレートの構成（design.md「File Structure Plan」）
+//! # このクレートの構成
 //!
 //! - [`runtime`] — boot 手順・`GhostRuntime`・終了統括（`shutdown`／`into_parts`）・起動失敗の器
 //!   （`GhostBootError`）。
@@ -42,14 +42,11 @@ pub mod sylphya_wiring;
 pub mod ticker;
 mod translate_wiring;
 
-// Task 10.1: 固定ログイベント檻の共有基盤（捕捉窓は共有 crate `log-capture-kit` へ委譲し、
-// 並列負荷下の Interest::never 焼き付きを根絶・決定論檻・R9.3／R8.1）。`crate::sylphya_wiring` の
-// provider debug 固定ログテストが `crate::test_log_capture::capture` から、`crate::sink` の
-// 構造化ログ檻が `crate::test_log_capture::capture_events` から利用する（crate 内の捕捉窓は 1 箇所）。
+// ログ捕捉の共有基盤。捕捉窓は crate 内でここ 1 箇所（実体は共有 crate `log-capture-kit`）。
 #[cfg(test)]
 mod test_log_capture;
 
-// src の単体テストが分け合う道具（写しを持たない）。
+// src の単体テストが分け合う道具。
 #[cfg(test)]
 mod test_support;
 
@@ -58,14 +55,14 @@ pub use runtime::{
     ShioriWiring, SystemVarSource, SystemVarWiring, TickerMode, boot, boot_with_kanade_stop,
     boot_with_origin,
 };
-// baseware-root-layout: 根の目録（列挙と素性）。bin は `areka_ghost::catalog::…` で引く。
+// 根の目録（列挙と素性）。
 pub use catalog::{
     BalloonEntry, BasewareRoot, GhostEntry, Identity, RootMark, ShellEntry, sakura_name,
 };
-// baseware-root-list: 根の並びと、フォルダ名・根の比べ方。
+// 根の並びと、フォルダ名・根の比べ方。
 pub use catalog_roots::{
     BasewareRoots, GhostBalloons, Hidden, InstallRoot, StoreKind, Survey, fold_key,
     same_folder_name, same_root,
 };
-// task 2.3: InProc 結線の connect closure 構成関数（D-3・テストの Recorder 合成と α 後の直接利用に供する）。
+// InProc 結線の connect closure 構成関数。
 pub use shiori_inproc::inproc_connect;

@@ -20,7 +20,7 @@ fn taro_source(calls: Arc<AtomicUsize>) -> SystemVarSource {
     })
 }
 
-/// 展開の関数は、呼ばれるたびに写しを 1 回読み、その値で台詞の環境変数を展開する（要件 2.3）。
+/// 展開の関数は、呼ばれるたびに写しを 1 回読み、その値で台詞の環境変数を展開する。
 #[test]
 fn script_expander_expands_with_one_snapshot_per_call() {
     let calls = Arc::new(AtomicUsize::new(0));
@@ -36,7 +36,7 @@ fn script_expander_expands_with_one_snapshot_per_call() {
     assert_eq!(calls.load(Ordering::SeqCst), 2, "呼ばれるたびに読み直す");
 }
 
-/// 分けた 2 つの源は、同じ源を呼んで同じ値を返す（要件 2.3）。
+/// 分けた 2 つの源は、同じ源を呼んで同じ値を返す。
 #[test]
 fn split_halves_return_the_same_snapshot() {
     let calls = Arc::new(AtomicUsize::new(0));
@@ -50,7 +50,7 @@ fn split_halves_return_the_same_snapshot() {
 }
 
 /// 源が途中で panic して排他が壊れたら、記録 `translate_snapshot_poisoned` を残して空の写しで
-/// 進む（源がその後は値を返せる状態でも、壊れた排他の向こうは読まない・要件 8.4）。
+/// 進む（源がその後は値を返せる状態でも、壊れた排他の向こうは読まない）。
 #[test]
 fn poisoned_source_logs_and_yields_empty_snapshot() {
     let calls = Arc::new(AtomicUsize::new(0));
@@ -91,7 +91,7 @@ fn poisoned_source_logs_and_yields_empty_snapshot() {
 }
 
 /// 翻訳用の sylphya の読み口は再生用と同じ値を返し、再生用の固定の記録（実機の確かめで数を
-/// 数える記録）を出さず、翻訳用の `debug!` を出す（要件 2.3・8.4）。
+/// 数える記録）を出さず、翻訳用の `debug!` を出す。
 #[test]
 fn translate_reader_matches_playback_without_its_fixed_log() {
     let parts = spawn_ghost_sylphya(ScopeRoots::default(), None);
@@ -138,7 +138,7 @@ fn translate_reader_matches_playback_without_its_fixed_log() {
         .expect("clean close joins without panic");
 }
 
-// ---- ゴーストの起動の経路（task 4.2） ----
+// ---- ゴーストの起動の経路 ----
 
 use crate::runtime::{GhostBootOptions, ShioriWiring, SystemVarWiring, boot};
 use areka_kanade::ShioriBackend;
@@ -187,7 +187,7 @@ impl ShioriBackend for TranslateProbeBackend {
 }
 
 /// ゴーストの起動の経路は口つきの起動を通り、挨拶の `OnTranslate` の Reference0 は
-/// 注入した写しの源で展開済みの台詞になる（要件 1.1・2.3。素通しの口なら `%username` のまま）。
+/// 注入した写しの源で展開済みの台詞になる（素通しの口なら `%username` のまま）。
 #[test]
 fn boot_sends_on_translate_with_the_expanded_script() {
     let temp = temp_path_kit::TempPath::new("ghost-translate-wiring-boot");

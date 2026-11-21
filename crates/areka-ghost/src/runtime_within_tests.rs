@@ -1,4 +1,4 @@
-//! 期限つきで降ろす入口（[`GhostRuntime::shutdown_within`]）のテスト（要件 1.1・1.6・2.1・3.3）。
+//! 期限つきで降ろす入口（[`GhostRuntime::shutdown_within`]）のテスト。
 //!
 //! 偽の SHIORI は `OnClose` の通知で「解かれるまで固まる」ことができ、解く手の呼ばれた回数を
 //! 数える。見張りは手動の口（`cut_now`）で起こすので、結果は時刻に依らない。
@@ -124,7 +124,7 @@ fn budget(limit: Duration) -> WaitBudget {
     }
 }
 
-/// 上限の中で降り切れば今日どおり `Ok` で、打ち切りは無く、解く手も呼ばれない（要件 1.6・2.6）。
+/// 上限の中で降り切れば今日どおり `Ok` で、打ち切りは無く、解く手も呼ばれない。
 #[test]
 fn shutdown_within_returns_no_cut_when_teardown_finishes_inside_the_limit() {
     let Booted { runtime, gate, .. } = boot_holding("inside-limit", false);
@@ -145,7 +145,7 @@ fn shutdown_within_returns_no_cut_when_teardown_finishes_inside_the_limit() {
 }
 
 /// `OnClose` の通知で固まった SHIORI を見張りが解き、残りの後始末を今日どおり走らせて戻る
-/// （要件 1.1・2.1）。段の語は `on_close_notify`、解く手は 1 回。
+/// 。段の語は `on_close_notify`、解く手は 1 回。
 #[test]
 fn shutdown_within_cuts_a_held_on_close_and_finishes_the_teardown() {
     let Booted {
@@ -179,7 +179,7 @@ fn shutdown_within_cuts_a_held_on_close_and_finishes_the_teardown() {
     assert_eq!(gate.unblock_calls.load(Ordering::SeqCst), 1);
 }
 
-/// 既存の降ろし方は見張りを張らない（要件 3.3）: 手動の口の予約を置いてから `shutdown` しても
+/// 既存の降ろし方は見張りを張らない: 手動の口の予約を置いてから `shutdown` しても
 /// 解く手は呼ばれず、予約は消費されずに残る。残った予約は、後から張った見張りを即発火させる
 /// （張っていれば予約はその場で消費されるので、この発火は起きない）。
 #[test]

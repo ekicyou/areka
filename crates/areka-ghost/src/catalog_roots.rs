@@ -1,11 +1,11 @@
-//! ベースウェアの根の並び（design.md「CatalogRoots」）。
+//! ベースウェアの根の並び。
 //!
 //! 並びは呼び手（bin）が決めた順のまま持つ（上ほど先に探す）。重複を除くのは作り手。
-//! 見つからない根も並びに残り、在否（`is_dir`）は呼ぶたびに見直す（要件 9.3）。
-//! フォルダ名の同じ・違う（要件 2.8）と同じ根（要件 1.9）の規則を 1 つずつ持つ。
-//! 並び全体の和・隠れ・引き当て・入れる根は、どれも同じ和（`union`）の上で決める（要件 2.6）。
+//! 見つからない根も並びに残り、在否（`is_dir`）は呼ぶたびに見直す。
+//! フォルダ名の同じ・違うと同じ根の規則を 1 つずつ持つ。
+//! 並び全体の和・隠れ・引き当て・入れる根は、どれも同じ和（`union`）の上で決める。
 //! ゴーストの中の `balloon\` との合わせ方（ゴーストの中が先・同じフォルダ名は根を隠す）もここ
-//! （`balloons_for`・areka-P0-ghost-inner-balloon）。根だけの口はゴーストの中を見ない。
+//! （`balloons_for`）。根だけの口はゴーストの中を見ない。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -58,7 +58,7 @@ impl BasewareRoots {
     }
 }
 
-/// 隠れの種類（ゴーストとバルーンは別々に判断する＝要件 2.4）。
+/// 隠れの種類（ゴーストとバルーンは別々に判断する）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StoreKind {
     Ghost,
@@ -82,7 +82,7 @@ pub struct Survey {
     pub hidden: Vec<Hidden>,
 }
 
-/// 見つかる根を上から走査して和を組み、隠れを控える（要件 2.2〜2.4・2.7・3.1〜3.3）。
+/// 見つかる根を上から走査して和を組み、隠れを控える。
 pub fn survey(roots: &BasewareRoots) -> Survey {
     let mut hidden = Vec::new();
     let ghosts = union(
@@ -128,21 +128,21 @@ pub fn list_balloons(roots: &BasewareRoots) -> Vec<BalloonEntry> {
     )
 }
 
-/// 和からフォルダ名で 1 つ（`same_folder_name`・要件 2.1・2.6）。
+/// 和からフォルダ名で 1 つ（`same_folder_name`）。
 pub fn find_ghost(roots: &BasewareRoots, folder: &str) -> Option<GhostEntry> {
     list_ghosts(roots)
         .into_iter()
         .find(|e| same_folder_name(&e.identity.folder, folder))
 }
 
-/// 和からフォルダ名で 1 つ（`same_folder_name`・要件 2.1・2.6）。
+/// 和からフォルダ名で 1 つ（`same_folder_name`）。
 pub fn find_balloon(roots: &BasewareRoots, folder: &str) -> Option<BalloonEntry> {
     list_balloons(roots)
         .into_iter()
         .find(|e| same_folder_name(&e.identity.folder, folder))
 }
 
-/// 今のゴーストの候補の一覧と、ゴーストの中が隠した根の項目（areka-P0-ghost-inner-balloon）。
+/// 今のゴーストの候補の一覧と、ゴーストの中が隠した根の項目。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GhostBalloons {
     /// ゴーストの中が先・根の和が後（それぞれフォルダ名のバイト順）。
@@ -175,14 +175,14 @@ pub fn balloons_for(roots: &BasewareRoots, ghost_dir: &Path) -> GhostBalloons {
 }
 
 /// 入れる根。見えているものがあればその根、無ければ見つかるいちばん上の根。
-/// `head_skipped` は先頭の根が見つからず飛ばしたときのその根（要件 5.2 の記録用）。
+/// `head_skipped` は先頭の根が見つからず飛ばしたときのその根（記録用）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstallRoot {
     pub root: PathBuf,
     pub head_skipped: Option<PathBuf>,
 }
 
-/// 入れる根を決める（要件 5.1〜5.3）。見つかる根が 1 つも無ければ `None`。
+/// 入れる根を決める。見つかる根が 1 つも無ければ `None`。
 /// 一時の置き場は入れ先にしない。先に並びから除いてから探すので、一時の置き場が
 /// 同じフォルダ名を隠していても、その奥で見えている根を答える。
 pub fn install_root(roots: &BasewareRoots, kind: StoreKind, folder: &str) -> Option<InstallRoot> {
@@ -248,7 +248,7 @@ fn union<E>(
     out
 }
 
-/// フォルダ名の同じ・違う（要件 2.8 の 1 つの規則）。
+/// フォルダ名の同じ・違う。
 pub fn same_folder_name(a: &str, b: &str) -> bool {
     fold_key(a) == fold_key(b)
 }
