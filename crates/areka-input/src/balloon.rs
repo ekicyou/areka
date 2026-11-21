@@ -204,8 +204,8 @@ pub(super) fn apply_hover(
 ///   （`None` 上書き）のみに用いる。
 ///
 /// 挿入は [`wire_balloon_choice`]、消費はポインタハンドラ（`on_balloon_pointer_moved`／
-/// `on_balloon_pointer_pressed`・[`attach_balloon_pointer_handlers`] で装着）と離脱システム
-/// `clear_balloon_hover_on_leave`。バルーンの上の滞在の集合は `BalloonHover` に分けてある。
+/// `on_balloon_pointer_pressed`・[`attach_balloon_pointer_handlers`] で装着）・離脱システム
+/// `clear_balloon_hover_on_leave`・箱の選択の送り出し（`shell_box_handler`）。バルーンの上の滞在の集合は `BalloonHover` に分けてある。
 pub struct BalloonWiring {
     /// [`ChoiceSelection`] 発行シンク（mpsc）。
     selection_tx: Sender<ChoiceSelection>,

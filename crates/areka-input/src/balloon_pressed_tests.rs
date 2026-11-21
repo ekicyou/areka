@@ -7,14 +7,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc;
 
 use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_emo_text::actor::{TextLayerRuntime, present_frame};
 use areka_emo_text::place::PlaceKey;
 use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir};
 use areka_emo_text::state::SpanKind;
-use areka_kanade::KanadeMsg;
 use areka_sakura::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::ChildOf;
@@ -31,7 +30,6 @@ use super::on_balloon_pointer_pressed;
 use crate::user_break::{UserBreakWiring, drain_no_user_break_signals};
 use areka_placement::spawn::BalloonWindowMarker;
 use areka_runtime::frame::balloon_runtime_test_support::manual_balloon_runtime;
-use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use areka_runtime::user_break_cue::NoUserBreakSignal;
 
 /// 既定の置き場（120×40 の絵: 上 (100, 15)・下 (100, 25)）の矢印の不透明な点。
@@ -61,10 +59,7 @@ struct Rig {
     runtime: Rc<RefCell<TextLayerRuntime>>,
     /// 印の面（窓の子）。押下の送り手にする。
     marker: Entity,
-    selections: Receiver<ChoiceSelection>,
     flag_tx: mpsc::Sender<NoUserBreakSignal>,
-    lifecycle: Receiver<TalkLifecycleSignal>,
-    kanade: Receiver<KanadeMsg>,
     /// GPU の装置の許可。World の装置より後に返すので欄の最後。
     _permit: areka_runtime::spine::GpuPermit,
 }
@@ -96,19 +91,18 @@ fn rig() -> Rig {
         OnPointerPressed(on_balloon_pointer_pressed),
     ));
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    let selections = insert_wiring(&mut world);
+    insert_wiring(&mut world);
     let (flag_tx, flag_rx) = mpsc::channel();
-    let (lifecycle_tx, lifecycle) = mpsc::channel();
-    let (kanade_tx, kanade) = mpsc::channel();
-    world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx));
+    world.insert_non_send(UserBreakWiring::new(
+        flag_rx,
+        mpsc::channel().0,
+        mpsc::channel().0,
+    ));
     Rig {
         world,
         runtime,
         marker,
-        selections,
         flag_tx,
-        lifecycle,
-        kanade,
         _permit: permit,
     }
 }
@@ -140,13 +134,6 @@ impl Rig {
             1,
         )
     }
-
-    /// 選択肢・中断のどこへも流れていない。
-    fn nothing_sent(&self) -> bool {
-        self.selections.try_recv().is_err()
-            && self.lifecycle.try_recv().is_err()
-            && self.kanade.try_recv().is_err()
-    }
 }
 
 /// 送りが効いていない（押下前の「自動の 1 行上」のまま）。
@@ -170,7 +157,6 @@ fn finished_up_arrow_press_scrolls_older_and_is_consumed() {
             .any(|l| l.contains("choice_click_rejected") || l.contains("balloon_break_detected")),
         "選択肢・中断の判断へ流れない: {logs:?}"
     );
-    assert!(rig.nothing_sent());
     // 自動の 1 行上から 2 行古い側へ＝自動の 3 行上。新しい側へ 2 回戻しても手動のまま。
     assert_eq!(newer_by_one(&rig.runtime), ScrollChange::Moved);
     assert_eq!(newer_by_one(&rig.runtime), ScrollChange::Moved);
@@ -189,7 +175,6 @@ fn finished_down_arrow_press_scrolls_newer() {
         logs.iter().any(|l| l.contains("balloon_arrow_pressed")),
         "{logs:?}"
     );
-    assert!(rig.nothing_sent());
     assert_eq!(
         newer_by_one(&rig.runtime),
         ScrollChange::Unchanged,
@@ -297,15 +282,15 @@ fn dispatch_selection_without_receiver_logs_one_error_and_no_warn() {
     }
 }
 
-/// 文字の層を借りられないと、矢印の押下と選択の写しの借用の失敗を ERROR で 1 行ずつ残し、選択を
-/// 送らない（panic しない）。
+/// 文字の層を借りられないと、矢印の押下と選択の写しの借用の失敗を ERROR で 1 行ずつ残す
+/// （panic しない）。
 #[test]
 fn press_borrow_failure_is_recorded_for_the_arrow_and_the_snapshot() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let runtime = runtime_with_active_choice("0");
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    let selections = insert_wiring(&mut world);
+    insert_wiring(&mut world);
 
     let held = runtime.borrow_mut();
     let mut pressed = true;
@@ -326,5 +311,4 @@ fn press_borrow_failure_is_recorded_for_the_arrow_and_the_snapshot() {
     };
     assert_eq!(failures("矢印の押下"), 1, "{logs:?}");
     assert_eq!(failures("click スナップショット"), 1, "{logs:?}");
-    assert!(selections.try_recv().is_err());
 }

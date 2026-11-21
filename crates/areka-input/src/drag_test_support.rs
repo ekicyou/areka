@@ -1,20 +1,20 @@
 //! ドラッグの知らせのテストの土台。
 //!
-//! 本番と同じ順に組む: 本物の `spawn_ghost_windows`（本体と相方）→ 偽の `WindowHandle` →
-//! [`attach_char_pointer_handlers`]。wintf のドラッグの資源・`MonitorSnapshot`・偽の記憶の書き手
-//! （`FakePersistIo`）を持つ `PersistWiring`・当たり判定の偽物（`RegionSource::Mock`）と止めた時計を
-//! 入れた `MouseWiring` と、その受け口（kanade の受信箱の代わり）を持つ。比べるために、包みを
+//! 本番と同じ順に組む: 本物の `spawn_ghost_windows`（本体と相方）→
+//! [`attach_char_pointer_handlers`] → 偽の `WindowHandle`。wintf のドラッグの資源・`MonitorSnapshot`・
+//! 偽の記憶の書き手（`FakePersistIo`）で動く sylphya へ投函する `PersistWiring`・当たり判定の偽物
+//! （`RegionSource::Mock`）と止めた時計を入れた `MouseWiring` と、その受け口（kanade の受信箱の代わり）を持つ。比べるために、包みを
 //! 付けない組み方（[`Rig::without_wrapper`]）も持つ。
 //!
 //! 知らせは wndproc の代わりに wintf の運ぶ箱（`DragAccumulatorResource`）へ種を積み、
 //! `dispatch_drag_events` で配る（本番と同じ配りの経路で、Tunnel と Bubble の 2 回の呼び出しも通る）。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use areka_kanade::{KanadeMsg, MouseInput};
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
     PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
 };
@@ -102,17 +102,6 @@ fn fake_handle(raw: usize) -> WindowHandle {
     }
 }
 
-/// アクターへ渡す口と観測する口が同じストアを指す偽の記憶の書き手。
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// 本番の順で組んだ 2 スコープのゴースト窓と、マウスの知らせの受け口。
 pub(super) struct Rig {
     pub(super) world: World,
@@ -150,7 +139,7 @@ impl Rig {
         };
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(store.clone())),
+            io: Box::new(store.clone()),
             runtime_sink: None,
         });
 
@@ -165,12 +154,15 @@ impl Rig {
             publisher: parts.publisher.clone(),
         });
 
-        // 本番の順: spawn → 偽の WindowHandle（`enqueue_window_set_pos` が位置を書ける条件）→ attach。
+        // 本番の順: spawn → attach → 偽の WindowHandle（`enqueue_window_set_pos` が位置を書ける条件）。
         let gw = spawn_ghost_windows(
             &mut world,
             &placements(),
             &GhostTitles::from_scope_titles([(0, "a".to_string()), (1, "b".to_string())]),
         );
+        if attach {
+            attach_char_pointer_handlers(&mut world);
+        }
         let mut raw = 0x100usize;
         for scope in [0, 1] {
             for e in [
@@ -180,9 +172,6 @@ impl Rig {
                 world.entity_mut(e).insert(fake_handle(raw));
                 raw += 0x10;
             }
-        }
-        if attach {
-            attach_char_pointer_handlers(&mut world);
         }
 
         // 止めた時計（間引きの時間の窓は開かない）。
@@ -262,11 +251,7 @@ impl Rig {
             .publisher
             .barrier_within(SPIN_WAIT)
             .expect("アクターが生きている間は期限内に barrier が返るはず");
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo(self.store.clone()),
-        )
+        load_scope(PersistScope::Ghost, &self.roots, &*self.store)
     }
 
     /// 受け口に溜まったマウスの知らせを全部取り出す（マウス以外が来たら落とす）。

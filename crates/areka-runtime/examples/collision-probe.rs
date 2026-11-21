@@ -62,7 +62,7 @@
 //! `OnPointerPressed` は付いていない（キャラ窓のポインタハンドラは
 //! `areka_input::attach_char_pointer_handlers` が装着するが、`areka-input` は `areka-runtime` に依存するので
 //! runtime の example からは使えない）。本番で利用者が終了を指示する道は右クリックメニューの「終了」
-//! （`menu::request_close`）だけで、結線済みの Ctrl+左ダブルクリックはふつうの左ダブルクリックとして配る。
+//! （`menu::request_close`）と OS の窓の閉鎖要求で、結線済みの Ctrl+左ダブルクリックはふつうの左ダブルクリックとして配る。
 //! この配り方は `areka-input` の `char_pointer_menu_tests.rs` が確かめる。
 //!
 //! # 起動時のパス（絶対パスの要否）

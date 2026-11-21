@@ -112,7 +112,7 @@ fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<Dispatcher
 /// `forward_all` へ委譲する。
 ///
 /// 資源不在は self-gating の no-op（`trace!`＋return）。
-/// [`wire_choice_drain`] は `wire_balloon_choice` の直後に呼ばれるため理論上不到達だが、
+/// どちらも本体がゴーストの起動の結線で置くため理論上不到達だが、
 /// 毎フレーム走る排他システムゆえ panic せず無記録でもなく縮退する。
 pub(crate) fn drain_choice_selections(world: &mut World) {
     let Some(inbox) = world.get_non_send::<ChoiceSelectionInbox>() else {

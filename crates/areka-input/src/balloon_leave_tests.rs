@@ -155,24 +155,19 @@ fn leave_non_balloon_window_is_ignored() {
     );
 }
 
-/// マーカー不在は完全 no-op: `PointerLeave` を一切持たない World では hover を
-/// 触らず、RuntimeWiring にも触れずに即 return する（完全 no-op）。
+/// マーカー不在は完全 no-op: `PointerLeave` を一切持たない World では、結線が無くても
+/// 何も記録しない（結線漏れの ERROR は離脱のあるフレームだけ）。
 #[test]
 fn leave_no_marker_is_full_noop() {
     let mut world = World::new();
     // バルーン窓はあるが PointerLeave マーカーは一切無い。
     world.spawn((BalloonWindowMarker { scope: 0 }, Window::default()));
 
-    let runtime = runtime_with_active_choice("0");
-    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    insert_wiring_with_hover(&mut world, 0, 1);
+    let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
-    clear_balloon_hover_on_leave(&mut world);
-
-    assert_eq!(
-        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
-        Some(1),
-        "マーカー不在フレームは完全 no-op（hover 不変）"
+    assert!(
+        logs.is_empty(),
+        "マーカー不在フレームは何も記録しない: {logs:?}"
     );
 }
 

@@ -2,7 +2,7 @@ use super::balloon::test_support::events_named;
 use super::pointer_test_support::*;
 use super::*;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
-use areka_placement::spawn::{CharWindowMarker, GhostWindowMarker};
+use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::hit_region::HitRegion;
 use std::sync::mpsc;
 use wintf::ecs::Point;
@@ -184,7 +184,7 @@ fn handler_double_click_left_and_right_send() {
 }
 
 /// 中／拡張ボタンのダブルクリックと単発クリックはいずれも
-/// 送出せず false を返す（`OnMouseDoubleClickEx` と `OnMouseClick` 単発は送らない）。
+/// 送出せず false を返す（押下の受け手は `OnMouseDoubleClickEx` を送らない・単発のクリックは解放の受け手が送る）。
 #[test]
 fn handler_middle_xbutton_and_single_click_do_not_send() {
     let (mut world, rx) = world_with_wiring(
@@ -383,9 +383,7 @@ fn double_click_delivers_surface_point() {
 #[test]
 fn handlers_ignore_tunnel_phase() {
     let (mut world, rx) = world_with_wiring(head, stepping_clock(1000, 1000));
-    let w = world
-        .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
-        .id();
+    let w = world.spawn(CharWindowMarker { scope: 0 }).id();
 
     let tunnel_move = Phase::Tunnel(PointerState {
         client_point: Point { x: 10, y: 20 },

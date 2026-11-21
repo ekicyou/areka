@@ -36,7 +36,7 @@ use crate::pointer_test_support::world_with_wiring;
 use crate::shell_box::ShellBoxHover;
 use crate::user_break::{UserBreakWiring, drain_no_user_break_signals};
 use crate::{on_char_pointer_moved, on_char_pointer_pressed};
-use areka_placement::spawn::CharWindowMarker;
+use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 use areka_runtime::hit_region::HitRegion;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use areka_runtime::user_break_cue::NoUserBreakSignal;
@@ -295,7 +295,6 @@ fn press_outside_boxes_is_unchanged() {
         [KanadeMsg::Mouse(ref m)] if m.kind == MouseEventKind::DoubleClick { button: MouseButton::Left }
     ));
     assert!(f.break_rx.try_iter().next().is_none(), "中断しない");
-    assert!(f.selections().is_empty());
     // 写しで箱の外を渡しても素通り。
     assert!(!press_with_point(
         &mut f.world,
@@ -353,7 +352,14 @@ fn move_to_another_box_and_outside() {
     let (_, events) = capture(|| f.moved((250, 10), on_b()));
     assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "b")), None));
     assert_eq!(hover_injections(&events), 1, "前の箱の強調を外す");
-    assert!(!f.moved((500, 400), BoxPoint::default()));
+    assert!(!move_with_point(
+        &mut f.world,
+        &f.runtime,
+        0,
+        BoxPoint::default(),
+        500.0,
+        400.0
+    ));
     assert_eq!(f.hover(), (None, None));
 }
 
@@ -378,7 +384,7 @@ fn leaving_the_shell_window_clears_hover_and_highlight() {
     let mut f = Fixture::new();
     f.moved(ROW, on_a(true));
     let mut f = f.with_runtime();
-    // 強調を外す注入は「選択肢が出ている」ときだけ（普通のバルーンと同じ hover_action）。
+    // 強調を外す注入は押せる範囲（選択肢かアンカー）が出ているときだけ（普通のバルーンと同じ hover_action）。
     f.runtime.borrow_mut().apply_cue(&choice_cue("0"));
     let win = f
         .world
@@ -389,6 +395,43 @@ fn leaving_the_shell_window_clears_hover_and_highlight() {
     let ((), events) = capture(|| clear_box_hover_on_leave(&mut f.world));
     assert_eq!(f.hover(), (None, None));
     assert_eq!(hover_injections(&events), 1, "強調を外す: {events:?}");
+}
+
+/// 文字の層を借りられないと、離脱は ERROR を 1 行残して強調を外さず、滞在だけは消す。
+#[test]
+fn leaving_with_a_borrow_failure_still_clears_the_stay() {
+    let mut f = Fixture::new();
+    f.moved(ROW, on_a(true));
+    let mut f = f.with_runtime();
+    let win = f
+        .world
+        .spawn((CharWindowMarker { scope: 0 }, Window::default()))
+        .id();
+    f.world.spawn((PointerLeave, ChildOf(win)));
+
+    let held = f.runtime.borrow_mut();
+    let ((), events) = capture(|| clear_box_hover_on_leave(&mut f.world));
+    drop(held);
+    assert_eq!(f.hover(), (None, None), "滞在は消える");
+    let failed = events_named(&events, "balloon_runtime_borrow_failed");
+    assert_eq!(failed.len(), 1, "{events:?}");
+    assert_eq!(failed[0].level, tracing::Level::ERROR);
+    assert_eq!(hover_injections(&events), 0, "強調は外せない: {events:?}");
+}
+
+/// シェルの窓でない窓（同じスコープのバルーン窓）の離脱は、箱の滞在を消さない。
+#[test]
+fn leaving_a_balloon_window_keeps_the_box_stay() {
+    let mut f = Fixture::new();
+    f.moved(ROW, on_a(true));
+    let win = f
+        .world
+        .spawn((BalloonWindowMarker { scope: 0 }, Window::default()))
+        .id();
+    f.world.spawn((PointerLeave, ChildOf(win)));
+
+    clear_box_hover_on_leave(&mut f.world);
+    assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "a")), Some(0)));
 }
 
 // ---------------------------------------------------------------- アンカー
@@ -680,11 +723,11 @@ fn move_without_box_hover_is_recorded_once_inside_a_box() {
 fn box_selection_without_balloon_wiring_is_recorded_and_not_sent() {
     let mut f = Fixture::new();
     f.world.remove_non_send::<BalloonWiring>();
-    let (_, events) = capture(|| f.pressed(ROW, DoubleClick::None, on_a(true)));
+    let (handled, events) = capture(|| f.pressed(ROW, DoubleClick::None, on_a(true)));
     let missing = events_named(&events, "balloon_wiring_missing");
     assert_eq!(missing.len(), 1, "{events:?}");
     assert_eq!(missing[0].level, tracing::Level::ERROR);
-    assert!(f.selections().is_empty());
+    assert!(!handled, "送れていないので選択で使った押下にしない");
 }
 
 /// 中断の持ち物が無いと、箱の中の押下は TRACE を 1 行残して話していない扱いになる。

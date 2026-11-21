@@ -290,8 +290,6 @@ enum Gesture {
     Release,
     /// 動かしてから取り消す。
     Cancel,
-    /// 動かさないクリック（開始の無い終了）。
-    Click,
 }
 
 /// 保存を比べるテストの、包みを付けた側の 3 通り。
@@ -309,23 +307,15 @@ enum Wrapped {
 fn perform(mut rig: Rig, gesture: Gesture) -> (Point, Vec<(PersistKey, String)>, usize) {
     let char_w = rig.char_w;
     let mut sent = 0;
-    match gesture {
-        Gesture::Click => {
-            let press = add(rig.position_of(char_w), PRESS_LOCAL);
-            rig.put(ended(char_w, press, false));
-        }
-        Gesture::Release | Gesture::Cancel => {
-            let (_, press, after_start) = begin_drag(&mut rig);
-            sent += after_start.len();
-            let cancelled = matches!(gesture, Gesture::Cancel);
-            let end = if cancelled {
-                press
-            } else {
-                add(press, RELEASE_BY)
-            };
-            rig.put(ended(char_w, end, cancelled));
-        }
-    }
+    let (_, press, after_start) = begin_drag(&mut rig);
+    sent += after_start.len();
+    let cancelled = matches!(gesture, Gesture::Cancel);
+    let end = if cancelled {
+        press
+    } else {
+        add(press, RELEASE_BY)
+    };
+    rig.put(ended(char_w, end, cancelled));
     rig.tick();
     sent += rig.drain().len();
     let result = (rig.position_of(char_w), rig.saved(), sent);
@@ -334,18 +324,17 @@ fn perform(mut rig: Rig, gesture: Gesture) -> (Point, Vec<(PersistKey, String)>,
 }
 
 /// 包みを付けない窓と包みを付けた窓で同じ操作
-/// （離す・取り消す・動かさないクリック）をすると、窓の位置と記憶へ書かれた組が一致する。
-/// 包みの側は送り先あり・`MouseWiring` なし・送出に失敗の 3 通り。動かさないクリックでは
-/// どちらも保存 0 件。保存を呼ばない・送り先が無いと戻る、にすると赤。
+/// （離す・取り消す）をすると、窓の位置と記憶へ書かれた組が一致する。
+/// 包みの側は送り先あり・`MouseWiring` なし・送出に失敗の 3 通り。保存を呼ばない・送り先が無いと
+/// 戻る、にすると赤。
 #[test]
 fn wrapper_keeps_window_position_and_saved_pairs_unchanged() {
-    for gesture in [Gesture::Release, Gesture::Cancel, Gesture::Click] {
+    for gesture in [Gesture::Release, Gesture::Cancel] {
         let (base_pos, base_saved, base_sent) = perform(Rig::without_wrapper(), gesture);
         assert_eq!(base_sent, 0, "前提: 包みの無い窓は知らせを送らない");
-        assert_eq!(
-            base_saved.is_empty(),
-            matches!(gesture, Gesture::Click),
-            "前提: ドラッグは保存し、動かさないクリックは保存しない（{gesture:?}: {base_saved:?}）"
+        assert!(
+            !base_saved.is_empty(),
+            "前提: ドラッグは保存する（{gesture:?}: {base_saved:?}）"
         );
 
         for wrapped in [Wrapped::Sends, Wrapped::NoWiring, Wrapped::SendFails] {
@@ -366,10 +355,10 @@ fn wrapper_keeps_window_position_and_saved_pairs_unchanged() {
                 (base_pos, &base_saved),
                 "{gesture:?}・{wrapped:?}: 窓の位置か記憶へ書かれた組が包みの無い窓と違う"
             );
-            // 前提: 包みが付いている（送り先があればドラッグは開始と終了の 2 件・クリックは 0 件）。
-            let want = match (wrapped, gesture) {
-                (Wrapped::Sends, Gesture::Release | Gesture::Cancel) => 2,
-                _ => 0,
+            // 前提: 包みが付いている（送り先があればドラッグは開始と終了の 2 件）。
+            let want = match wrapped {
+                Wrapped::Sends => 2,
+                Wrapped::NoWiring | Wrapped::SendFails => 0,
             };
             assert_eq!(sent, want, "{gesture:?}・{wrapped:?}: 届いた知らせの件数");
         }

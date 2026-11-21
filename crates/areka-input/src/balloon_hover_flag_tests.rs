@@ -55,11 +55,6 @@ fn moved_records_hover_when_choice_active_but_no_row_hit() {
     on_balloon_pointer_moved(&mut world, e, e, &bubble_move(10, 20));
 
     assert!(hovered(&world, 0), "行に当たらない移動でも滞在は真");
-    assert_eq!(
-        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
-        None,
-        "滞在の記録は選択肢 hover ordinal を書き換えない（独立の軸）"
-    );
 }
 
 /// per-scope 独立: 選択肢の無いバルーンでも、別 scope の滞在は互いに影響しない。

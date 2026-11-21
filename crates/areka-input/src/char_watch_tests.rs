@@ -5,6 +5,7 @@
 use super::super::pointer_test_support::drain_mouse;
 use super::super::{MouseWiring, RegionSource, on_char_pointer_moved};
 use super::char_watch;
+use crate::balloon::test_support::{capture_logs, empty_runtime, headless_runtime_wiring};
 use areka_kanade::{ClickButton, HoverEdge, KanadeMsg, MouseEventKind, MouseInput};
 use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::hit_region::HitRegion;
@@ -284,6 +285,31 @@ fn vertical_wheel_sends_horizontal_only_does_not() {
     assert_eq!(r.run(), vec![]);
     r.point_wheel(child, 10, 5, -120, 0);
     assert_eq!(r.run(), vec![wheel(0, -120, (20, 10), Some("Head"))]);
+}
+
+/// 文字の層を借りられないと、箱の上の回転かを確かめられないので ERROR を 1 行残し、
+/// `OnMouseWheel` へ回す。
+#[test]
+fn wheel_with_a_runtime_borrow_failure_is_recorded_and_sent_as_mouse_wheel() {
+    let mut r = rig();
+    let runtime = empty_runtime();
+    r.world
+        .insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
+    let (_win, child) = r.window(0);
+    r.point(child, 10, 5);
+    r.run();
+    r.point_wheel(child, 10, 5, -120, 0);
+
+    let held = runtime.borrow_mut();
+    let mut sent = Vec::new();
+    let logs = capture_logs(|| sent = r.run());
+    drop(held);
+    assert_eq!(sent, vec![wheel(0, -120, (20, 10), Some("Head"))]);
+    let failed = logs
+        .iter()
+        .filter(|l| l.contains("level=ERROR") && l.contains("balloon_runtime_borrow_failed"))
+        .count();
+    assert_eq!(failed, 1, "{logs:?}");
 }
 
 /// 持ち主が窓の entity そのもの（絵の透けた所）ならホイールを送らない。

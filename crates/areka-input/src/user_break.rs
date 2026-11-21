@@ -196,7 +196,7 @@ pub fn drain_no_user_break_signals(world: &mut World) {
 /// 中断の持ち物を World へ入れる（`fn wire_readme` と同型）。
 /// 旗の取り出しの登録は [`register_user_break_drain`] が行う。
 ///
-/// 呼び手は boot 成功後の `wire_runtime`（ゴーストの起動ごとに n 回＝
+/// 呼び手は本体の、実行系が成立した後に受信端を据える側（ゴーストの起動ごとに n 回＝
 /// 状態の載せ替え。系の登録は本体の系の登録の口からプロセスに 1 回）。
 pub fn wire_user_break(
     world: &mut World,

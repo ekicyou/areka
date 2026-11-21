@@ -162,7 +162,7 @@ fn wire_inserts_its_non_sends() {
     );
     assert!(
         !world.resource::<Schedules>().contains(Input),
-        "wire は系を登録しない（登録は本体のゴースト起動の側が行う）"
+        "wire は系を登録しない（登録は `register_balloon_leave_system`）"
     );
 }
 

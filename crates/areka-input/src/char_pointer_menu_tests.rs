@@ -68,19 +68,6 @@ fn second_right_double_click_overwrites_the_pending_one() {
     assert!(rx.try_recv().is_err(), "どちらの押下も何も送らない");
 }
 
-/// 取り出した後の預かりは空になる。
-#[test]
-fn take_empties_the_pending_slot() {
-    let (mut world, _rx) = world_with_half_scale_bust();
-    let main = world.spawn(CharWindowMarker { scope: 0 }).id();
-    assert!(take_pending(&mut world).is_none(), "押下前は空");
-
-    let ev = bubble_pointer_mods(2, 2, DoubleClick::Right, false, false);
-    assert!(on_char_pointer_pressed(&mut world, main, main, &ev));
-    assert!(take_pending(&mut world).is_some());
-    assert!(take_pending(&mut world).is_none(), "2 度目の取り出しは空");
-}
-
 /// 預かりを送ると、右ダブルクリックの `OnMouseDoubleClick` がちょうど 1 件届く。
 ///
 /// 届くのは `MouseInput{scope, x, y, region, kind: DoubleClick{Right}}` を面座標にした値

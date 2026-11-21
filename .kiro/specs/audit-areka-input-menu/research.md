@@ -353,10 +353,13 @@
 | 1 | 0 | 20 | 25 | 3 | 全部直した |
 | 2 | 0 | 15 | 7 | 5 | 18 件を直した。4 件は回 1 の直しが呼んだ連鎖（要件 9.8）で、直さずに Fable の総括へ回す |
 | 3 | 0 | 6 | 8 | 1 | 12 件を直した。2 件は前の回の直しが拾い残した連鎖（要件 9.8）で、直さずに Fable の総括へ回す（下の 12.4 の回 3） |
+| 4 | 0 | 16 | 11 | 1 | 21 件を直した。6 件は前の回の直しが拾い残した連鎖（要件 9.8）で、直さずに Fable の総括へ回す（下の 12.4 の回 4） |
 
 回 1 の芯は、落ちる力の無いテスト（Tunnel の押下の表明・`choice_active` 不変の表明・÷k の持ち上げの檻・`hover_arrives_before_move…`・`MouseWiring` を直に叩く 4 本）、重なったテストと支えの写し（GPU の組み立て・`pump_until_idle`・`TWO_BOX_SHELL`・預かりの取り出し・`drain_mouse`）、古い説明（`send_selection` の記録・`inject_choice_hover` の名・`hover_region` の「後から足すカーソル」・`spawn_assembly_tests.rs:352` の「本檻」・`collision-probe.rs` のテストのファイル名）。`HitTest::none()` の表明は持ち主の `areka-placement` の `spawn_assembly_tests.rs` へ移した。
 
 回 3 の芯は、落ちる力の足りないテスト（`on_left_press_asks_the_presenter…` が `RuntimeWiring` を置かず照会を通らない・取り消しのテストがドラッグした窓の保存を見ない）と、言えないことを言う説明（`fast_drag_in_one_dispatch…` の「開始の座標は動く前の窓から」・`MouseWiring` の「送出ヘルパはポインタハンドラ経由でのみ」・`wire_user_break…` の「登録は本体のゴースト起動の側」・`HoverAction` の「choice 非表示」・押下の戻り値の矢印の抜け）。ほかに `bubble_move` と `bubble_pointer` の写し・`plan_mouse_move` の同じ 2 つの返し・テストの名の「stock」・wintf の doc の crate の無い名指し。足した・強めた表明 2 本（`on_left_press…` と取り消しの保存）は、本番を一時だけ壊して赤を確かめてから戻した（照会を `.map(|_| true)` に・取り消しのときドラッグした窓の保存を飛ばす）。
+
+回 4 の芯は、落ちる力の無いテスト（`leave_no_marker_is_full_noop`・矢印の押下の `nothing_sent`・`box_selection_without_balloon_wiring…` の選択 0 件・`move_to_another_box_and_outside` が間引きで偽になる表明・ドラッグの包みのテストの「動かさないクリック」〔開始の無い終了は wintf の溜めが捨てるので受け手へ届かない〕）、危うい枝のテストの抜け（シェルの窓の離脱の借用の失敗とバルーン窓の離脱・箱の上のホイールの借用の失敗）、言えないことを言う説明（`wire_user_break` の呼び手・`collision-probe.rs` の終了の道・`drain_choice_selections` の結線の順・`BalloonWiring` の使い手・wintf の doc の `ex_style` だけの理由・ドラッグの土台の「本番と同じ順」）、既にある包みの写し（`SharedFakeIo`＝sylphya の `Arc` の `PersistIo`）。回 3 の総括が範囲の外として残した 2 つ（`wire_user_break` の doc・`collision-probe.rs`）は範囲の中のファイルなので、この回の指摘として直した。足した・強めた表明 6 本は、本番を一時だけ壊して赤を確かめてから戻した（離脱の系の結線の確かめを頭へ・箱の選択の送り口が結線漏れで真を返す・シェルの窓の離脱で借りられないと滞在を消さない・離脱の窓をシェルの窓に限らない・箱の外の移動で真を返す・箱の上のホイールの借用の失敗で真を返す）。
 
 回 2 の芯は、回 1 で見落とした同じ種類の古い説明と重なり（`attach_balloon…` が受け手を上書きしても落ちない表明・`throttle.rs` の per-scope の 1 本・`identity_scale…`・Tunnel の Ctrl+左が Shift 無しで落ちない表明・`ShellBoxHover::set` の強調の記録の分岐のテスト抜け）。
 
@@ -372,6 +375,7 @@
 | 2 | `shell_box_tests.rs` の局所の `anchor_row` | ギャップ分析の指摘 66 で、`test_support` を `..` で使う今の形と決めた |
 | 2 | `shell_box::ShellBoxHover` の `pub use` を狭める | 本体のテスト（`input_events::shell_box::ShellBoxHover`）が使っている。狭められない |
 | 2 | crate の中のファイル名（`shell_box.rs` など）をコメントに書く | 決まりが禁じるのは本体のファイルのパス。crate の中の兄弟の名は指摘に当たらない |
+| 4 | `user_break_tests.rs` の `second_click_after_selecting_an_anchor_is_not_a_break` と `shell_box_tests.rs` の `click_on_anchor_in_box_is_consumed_by_selection` が他のテストと重なる（判定の関数は範囲の種類を見ない） | 前者は `doc/anchor-compat.md` が 2 か所で名指す（`doc/` は触らない）。後者はその箱の側の対で、同じ裁定（話している最中のアンカーの押下）を箱で固定する。重なりは小さい |
 | 3 | `areka-placement` の `spawn_assembly_tests.rs:152` が `t_i4_…` のテストの名を指す（作業の番号の札が残る名） | 名の持ち主は `spawn_follow_pipeline_tests.rs` ほか（`t_i4_`・`t_i5_` が 8 本・design.md「Modified Files（範囲の外）」の表に無い）。名を変えるなら 152 行も一緒に変える。完了の棚卸で申し送る |
 
 ### 12.4 回 2 の連鎖（要件 9.8・Fable の総括へ）
@@ -415,7 +419,18 @@
 | 腕の名（R3-A3） | 見出しの「Noop」を `NoopInactive` へ | `HoverAction` の腕は `NoopInactive`・`ResetOwnState`・`Keep`・`Inject` の 4 つ。範囲のファイルのコメントに、この 4 つのほかの腕の名は無い |
 | 同じ形の兄弟（洗い出しで見つけた 2 つ） | `balloon_wheel_with` の doc の「縦の回転を受けた tick に 1 回だけ」（`RuntimeWiring` が無いと呼ばない・バルーン窓の回転だけ。`without_runtime_wiring_does_nothing` が 0 回を表明している）。`MouseWiring` の doc の「crate の外から呼べるのはメニュー側が使う 3 つ」（`new` と `defer_right_double_click` も `pub`・`send_close_request` は OS の窓の閉鎖要求の受け口も呼ぶ）を「crate の外の本番のコードが呼ぶ操作は 3 つ」へ。同じ事実を言う `send_close_request` の doc（「本番の呼び手はそれだけ」）も 2 つの呼び手に合わせた | 範囲のファイルのコメントが `` ` `` で囲んで名指す識別子とファイル名は、全部が今のコードに在る（機械で照合・在りもしない名が照合に掛かることは先に確かめた）。書き直した行の言い分は、乗っているコードを読んで 1 行ずつ確かめ、食い違いは上の 2 つだけだった |
 
-洗い出しの外で 2 つ見つけた（回 1〜3 が書き直していない行なので直していない・完了の棚卸で扱う）: `user_break.rs` の `wire_user_break` の doc の「呼び手は boot 成功後の `wire_runtime`」（呼ぶのは本体の起動の組み立てで、`wire_runtime` は `areka-runtime` の関数）、`collision-probe.rs` の「利用者が終了を指示する道は右クリックメニューの「終了」だけ」（OS の窓の閉鎖要求も同じ終了要求を送る）。
+洗い出しの外で 2 つ見つけた（回 1〜3 が書き直していない行）: `user_break.rs` の `wire_user_break` の doc の「呼び手は boot 成功後の `wire_runtime`」（呼ぶのは本体の起動の組み立てで、`wire_runtime` は `areka-runtime` の関数）、`collision-probe.rs` の「利用者が終了を指示する道は右クリックメニューの「終了」だけ」（OS の窓の閉鎖要求も同じ終了要求を送る）。どちらも範囲の中のファイルなので、回 4 の指摘として直した（12.2 の回 4）。
+
+#### 回 4 の連鎖（要件 9.8・Fable の総括へ）
+
+| 番号 | 場所 | 中身 | 呼んだ前の回の直し |
+|---|---|---|---|
+| R4-P1 | `lib.rs` の `on_char_pointer_pressed` の doc（「利用者起因の終了指示を送るのはメニューの「終了」だけである」）と本文のコメント（「終了指示はメニューの「終了」だけが送る」） | OS の窓の閉鎖要求も `send_close_request` で同じ終了要求を送る | 回 3 の総括で同じファイルの `MouseWiring` と `send_close_request` の doc を 2 つの呼び手に合わせたとき、同じ事実を言うこの 2 か所を拾い残した |
+| R4-A4 | `balloon_pointer_handler_tests.rs` の押下の節の見出し「(a) 非左押下（右/中 down）素通し」 | テストは右だけ | 回 2・3 で同じ節の関数の doc を「右/中」から「右」へ直したときに見出しを拾い残した |
+| R4-A5 | `balloon_pointer_handler_tests.rs` の `pressed_tunnel_and_resource_degrade_are_side_effect_free` の doc の 1 行目（「いずれも副作用ゼロで縮退する」）と縮退の節の doc の「副作用ゼロを確かめる分類」 | R2-A7 の総括の後は戻り値と記録しか見ない | R2-A7 の総括で同じ doc の続きの行を書き直したときに 1 行目を残した |
+| R4-A6 | `balloon_hover_flag_tests.rs` の `moved_records_hover_when_choice_active_but_no_row_hit` のコメント（「choice_active=false・行あり になると…重複へ退化」） | 隣の重複になるのは `choice_active=false` のときだけで、行が在ると「行に当たらない」の前提が崩れる | 回 1 で隣のテストの名を書き直したときに残した |
+| R4-B4 | `char_pointer_tests.rs` の `handler_move_sends_then_suppresses_same_position` | `move_delivers_surface_point_while_throttle_compares_client_px` が同じ表明を全部持つ | 回 1・2 で同じ重なりの兄弟（`throttle_suppresses_same_position_hover`・`identity_scale…`）を消し、回 1 でこのテストの組み立てを書き直したときに残した |
+| R4-C7 | `areka-placement` の `spawn_assembly_tests.rs` の `every_window_has_hit_test_none` | 窓の数を確かめずに回すので、窓が 0 枚でも緑 | 回 1 で `HitTest::none()` の表明を移して書いたとき |
 
 ### 12.5 既定のブランチとの差分（要件 9.5）
 
