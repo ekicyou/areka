@@ -116,7 +116,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Requirements: 4.2_
 
 - [ ] 8. 本体の外の説明・文書・steering のパスを追従させる（段 7・モジュールが全部移った後）
-- [ ] 8.1 (P) ほかの crate の説明と `tools/` のパスを直す
+- [x] 8.1 (P) ほかの crate の説明と `tools/` のパスを直す
   - `crates/areka-runtime/src/placement_tests/transition_judge_offset_signoff_tests.rs:57`（`crates/areka-runtime/` で触るのはこの 1 か所だけ）・`crates/areka-kanade/src/schedule/script_log.rs:16`・`crates/pilot/examples/pilot-windows-rs-next/REWRITE_TABLE.md:66`・`crates/areka/tests/emo2_real_run.rs:58` のパスを移した先へ。`crates/real-run-kit/` の説明に残る本体のパスは `git grep` で所と行を挙げてから直す
   - `tools/package.ps1:149`・`:153`・`:695`・`tools/perf/judge-perf.py:96` は説明のパスだけを直し、道具が字面で読む目印の本文は変えない
   - 完了の形: 警告 0 件で通り、上の各所が移した先の実在するパスを指し、`git diff --name-only` で `crates/areka-runtime/` の変更が 1 ファイルだけ

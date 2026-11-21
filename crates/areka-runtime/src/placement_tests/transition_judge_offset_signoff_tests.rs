@@ -54,7 +54,7 @@
 //! ## 2.2 実行体の隣の 32bit helper のアーキテクチャを確かめる
 //!
 //! areka はゴーストの SHIORI を、**自分の実行体と同じフォルダに置かれた**
-//! `shiori-host32-helper.exe` 経由で読み込む（`crates/areka/src/boot_config.rs` の
+//! `shiori-host32-helper.exe` 経由で読み込む（`crates/areka/src/session/boot_config.rs` の
 //! `default_helper_exe_path`——起動した exe の本当の場所（`exe_location`）の親フォルダへこのファイル名を結合するだけで
 //! あり、別の場所を指させる環境変数は無い）。この helper は **32bit（i686）でなければ
 //! ならない**。
