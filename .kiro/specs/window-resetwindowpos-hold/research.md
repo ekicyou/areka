@@ -181,3 +181,91 @@
 - 待ちの記録の語（新しい語か `move_ratio_unset` を広げるか）。
 - §8 の書き換えの範囲（件 5 の行 452 だけか、並べ直しの行 143 の「起動と違い右端にそろう」にも及ぶか）。
 - 赤の檻の形（R1 の確かめで、位置の相だけで作るか、起動の確定まで通すか）と、表示層に足す状態の最小の形（R2）。
+
+## 9. 設計の段の調べ（2026-11-21・`/kiro-spec-design -y`）
+
+> 発見の形は light（今ある預かりの判定の延長・新しい外部の依存なし）。使った手引き: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、テンプレート `design.md`・`research.md`。ukadoc は MCP（`\![move]` の注記の `--base` の値）を引いた。コードはワークツリーの `74be6ccb0` で読んだ。
+
+### 9.1 R1 の答え（コードの読みで、実行で未確認）
+
+- 読んだ所: `crates/areka-runtime/src/frame.rs` 199〜238（取り出し → 窓寸の照合 → 再スナップ → 位置の指令の相 → 面の `move` のずれ → 起動の確定）、`crates/areka-placement/src/reset_pos.rs` 50〜135、`crates/areka-runtime/src/frame/drain_resnap.rs` 419〜567（`finalize_chain_once_with`）、`crates/areka-placement/src/chain_finalize.rs`（「先頭スコープは動かさない」・`boot_pair_decision`）、`crates/areka-placement/src/persist_save.rs` 301（記憶は下端の中央の x）、`follow/window_move.rs` 774（`track_default_char_pos`）。
+- 本体と相方が最初の面を出す前の巡 t0 に並べ直しが当たると、仮の幅 `w0p`・`w1p` で `x0 = R − w0p`・`x1 = x0 − w1p` に置き、既定の位置をその値にして `ScriptPlaced` を外し、記憶へ送る。
+- 両方が最初の面を出す巡 t1 に、再スナップが揃え方を保って大きさを変え（下端なら下端の中央）、既定の位置も同じ量だけ運ぶ。同じ巡の起動の確定は先頭を動かさず、相方を `JoinLeft` で `x0' − w1` に解き直す。**窓どうしの隙間は今のコードでも t1 に消える見込み**。
+- **残るのは先頭の窓の位置**: 右端は `R − (w0p − w0)/2`。本当の幅が狭いとき（測り ⑸ の 868→764 なら 52px）右端から離れ、鎖全体がその分だけ左へずれる。広いときは右へはみ出し、`place_chain_in_work_area` が寄せ戻す見込み。
+- **記憶**: 先頭の下端の中央の x は再スナップで変わらないので、離れた位置が記憶に書かれ、次の起動もそこに出る（起動の確定の後の 2 度目の保存も同じ値）。
+- **2 度動く**: 並べ直しと起動の確定の 2 回で置かれる（要件 1.7 に反する）。
+- 相方だけが未表示の巡に並べ直しが当たる形では、先頭は本当の幅で置かれ、相方の隙間は起動の確定が埋めるので残りは無い見込み。
+- よって赤の檻は「再スナップ → 位置の指令の相 → 起動の確定」まで通し、先頭の右端のそろいと「起動の確定が動かさない」を見る（設計の Testing Strategy の 1）。案 0（預からない）は先頭の位置と記憶が直らないので成り立たない。
+
+### 9.2 R2 の答え（表示しないと分かった窓の覚え方）
+
+- 候補 1: 表示層（`PresentTarget`）に「最初の面を表示しないまま決まった理由」の欄を 1 つ足す。書く点は `apply` の `ShowSurface`・`Hide`・`ReplaceTarget` の 3 腕で、`applied` が `None` のまま `Hide`／`Ok` の縮退なら `Hidden`、`Err` なら `Failed`、表示が成り立てば `None`。
+- 候補 2: 位置の相の側で `PresentCommand` を写し見て覚える。表示層の結果（成り立ったか・失敗したか）は指令だけでは分からず、第 2 の帳簿になる。
+- **候補 1 を取る**。表示層が一次情報源（`target_visible` の照会と同じ考え）・欄 1 つと照会 1 本で済む・装着の前は指令がチャネルに残る（`drain_resnap.rs` 58 行の `attached` のゲート）ので、未装着の target への適用は起きない。
+- 読み口は `ShownRatioSource` に既定の実装つきの `never_shown(scope) -> Option<NeverShown>` を足す。閉包・`all_shown` はそのまま通り、公開の入口の形は変わらない。
+
+### 9.3 R3・R5・R6
+
+- R3: SSP の測りの手順は §10。設計は枝 A（捨てる）・枝 B（位置だけ置く）を【SSP の測りの後に決める】で並べ、仮の既定を枝 B にした。
+- R5: 新しい失敗の道は足さない（照会は `None` を返すだけ・判定は失敗しうる箇所を持たない）。
+- R6: 実機の検体は並べ直しをトークの先頭に置く。`reset_window_pos_held` が出たかで「最初の面の前に届いた」回かを見分ける（出なければ同じ巡に届いた回）。
+
+### 9.4 設計の決め
+
+| 事項 | 決め | 理由 |
+|---|---|---|
+| 待ちの範囲（§8.1） | スコープごとの表示の決まり（案 A＋案 C）。`ChainFinalized` は使わない | 議題 2 の決め・下流 `extra-character-windows` の確定の後の窓も同じ決まりで待つ・6.1 |
+| 本体の檻 | `run_move_drain_with(&wiring, &all_shown, …)` へ改める（呼び出し 1 行と `use` 1 行） | `steady_harness` は確定の後の足場なので「全部が表示した」読み口がその足場に合う。`session-module-gather` と順を合わせる |
+| 記録の語（§8.1） | 新しい語 `reset_window_pos_held`・`reset_window_pos_unshown`・`move_hold_unshown` | `move_ratio_unset` は移動の対象と基準を欄に持つ測りの語で形が違う。`reset_window_pos_` で始めて grep で並べ直しの行が全部引ける |
+| §8 の範囲（§8.1） | 件 5 の行（452）だけ | 143 行の「今表示している窓の大きさで解く」はこの直しの後も正しい |
+| 赤の檻の形（§8.1） | 起動の確定まで通す | 9.1 のとおり窓どうしの隙間は今も消えるので、先頭の右端と「確定が動かさない」が赤の材料 |
+| 新しいテストの足場 | `frame_reset_hold_test_support.rs`（偽の読み口 `SettledSource`） | C24 の約束（`frame_test_support.rs` に足さない） |
+
+### 9.5 総合（design-synthesis）
+
+- 一般化: 「窓の表示が決まるまで待つ」は移動と並べ直しで同じ問題で、スコープの決まり `Settle`（`Shown`／`NeverShown`／`Pending`）1 つで両方を判定する。移動の待ち（対象と基準）と並べ直しの待ち（窓のある全部のスコープ）は待つスコープの集め方だけが違う。
+- 作るか借りるか: 外の仕組みは要らない。表示の事実は表示層の今の照会（`applied_ratio`）の隣に置く。
+- 簡素化: 枝 A／枝 B を切り替える設定や口は作らない（測りの後に片方だけを実装）。預かった並べ直しの待ちのスコープは覚えず毎巡読み直す。起動の確定・`reset_pos.rs`・相の順は触らない。
+
+## 10. SSP の測りの手順（要件 4.3・設計の段で行う・進行役が回す）
+
+> 目的: SSP が「表示していない窓」への `\![move]` を、当てずに捨てるか、位置だけ動かすかを測る。結果で設計の枝 A／枝 B を決める。開発者の許し 2026-11-21（要件の話し合いの議題 3）。SSP は最初の面の前の窓を作らない（シェルを出し終えてから台本を流す）ので、(1) 一度出した窓を `\s[-1]` で隠した形と、(3) まだ一度も出していない追加のスコープ `\p[2]` の形の 2 つで近づける。
+
+### 10.1 前提と後始末
+
+- 排他テストの机を持ってから始め、終わったらすぐ手放す（`doc/impl-watch.md`）。ほかのウェーブのセッションに、SSP を使う旨を先に知らせる。
+- 使う道具は SSP の MCP（`mcp__ssp__get_active_ghost_list`・`get_property`・`sakurascript`・`get_log`）だけ。`reload`・設定の変更・profile の書き換えはしない。
+- 版: `get_property` の `baseware.version`（と `baseware.name`）を控える。ゴースト名は `get_active_ghost_list` の先頭を使う（以下 `<G>`）。
+- 測る前の位置と面を控える: `currentghost.scope(0).rect`・`currentghost.scope(1).rect`・`currentghost.scope(0).surface.num`・`currentghost.scope(1).surface.num`（以下 `R0_0`・`R0_1`・`S0`・`S1`）。`currentghost.scope(2).rect` も読み、空でなければ (3) は行わない（そのゴーストはすでに `\p[2]` を出している）。
+- 後始末（毎回・測りの最後）: `\0\s[<S0>]\1\s[<S1>]\e` で面を戻し、`\0\![move,--X=<R0_0.left>,--Y=<R0_0.top>,--base=global,--option=ignore-sticky-window]\1\![move,--X=<R0_1.left>,--Y=<R0_1.top>,--base=global,--option=ignore-sticky-window]\e` で位置を戻す。`--base=global` は ukadoc の `\![move]` の注記の「システム座標系」で、`--base-offset`・`--move-offset` の既定は `left.top`。戻した後に rect を読み、`R0_0`・`R0_1` と同じことを確かめる。`\![execute,resetwindowpos]` は記憶を書くので使わない。
+
+### 10.2 測り (1): 隠した窓を動かす
+
+1. `sakurascript`: `\1\s[-1]\e`（相方を隠す）。
+2. `get_property` `currentghost.scope(1).rect` → `H1`（隠した窓の rect の答え方を控える）。
+3. `sakurascript`: `\1\![move,--X=100,--Y=100,--base=primaryscreen,--base-offset=left.top,--move-offset=left.top,--option=ignore-sticky-window]\e`。
+4. `get_property` `currentghost.scope(1).rect` → `H2`。
+5. `sakurascript`: `\1\s[<S1>]\e`（同じ面で出し直す）。
+6. `get_property` `currentghost.scope(1).rect` → `H3`。`get_log` で 1〜5 の間の警告・エラーの行を控える。
+- 読み方: `H3` の左上が主モニタの `(100,100)` なら **位置だけ動かす**（枝 B）。`H3` が `R0_1` のままなら **捨てる**（枝 A）。`H2` が `H1` と違うかも控える（隠している間に位置が更新されるか）。
+
+### 10.3 測り (2): 隠した窓を基準に動かす
+
+1. `sakurascript`: `\1\s[-1]\e`。
+2. `sakurascript`: `\0\![move,--X=0,--Y=0,--base=1,--base-offset=left.top,--move-offset=right.top,--option=ignore-sticky-window]\e`（本体の右上を、隠した相方の左上へ）。
+3. `get_property` `currentghost.scope(0).rect`・`currentghost.scope(1).rect` → `B0`・`B1`。
+4. 後始末へ（10.1）。
+- 読み方: `B0` の右上が `B1` の左上なら、隠した窓も基準として使う（枝 B と合う）。`B0` が `R0_0` のままなら基準の窓が隠れていると移動を捨てる（枝 A と合う）。
+
+### 10.4 測り (3): まだ出していない窓（`\p[2]`）を面より先に動かす
+
+1. `sakurascript`: `\p[2]\![move,--X=200,--Y=200,--base=primaryscreen,--base-offset=left.top,--move-offset=left.top,--option=ignore-sticky-window]\e`。
+2. `get_property` `currentghost.scope(2).rect` → `P1`。
+3. `sakurascript`: `\p[2]\s[<S1>]\e`（相方の面の番号で `\p[2]` を出す）。
+4. `get_property` `currentghost.scope(2).rect` → `P2`。`get_log` を控える。
+5. `sakurascript`: `\p[2]\s[-1]\e` で隠す。
+- 読み方: `P2` の左上が `(200,200)` なら、まだ出していない窓への移動も位置を覚えて当てる（areka の「表示しないと分かった窓」より強い形で枝 B と合う）。`P2` が SSP の既定の位置なら、出していない窓への移動は捨てる。`\p[2]` の位置が SSP の記憶に残るかもしれないので、残ったら記録に書く（消す操作はしない）。
+
+### 10.5 記録の形
+
+- この節の下に「10.6 結果」を足し、SSP の版・ゴースト名・日時・各手の rect の値・`get_log` の該当行・後始末の確かめを書く。結果から枝 A／枝 B を決め、設計の「MoveHold の判定の規則 2」と OPEN QUESTION 2 を改め、`doc/COMPAT_ARCHITECTURE.md` §8 の件 5 の行の第 3 列に測りの版と結果を書く。
