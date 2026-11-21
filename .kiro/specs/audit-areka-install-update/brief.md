@@ -96,3 +96,10 @@
 - **同じウェーブに置けない相手**: crate 分けの 2 本・`doc-compat-architecture-rename`（`install/judge.rs:90` が文書を名指す）・`balloon-text-visual-tree`（`mcp/dump_balloon.rs`・待つ側）。`audit-areka-app`・`audit-emo2-boot-switch` とは、上の件を持ち主が直せば 0。
 - **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。要件定義のモデル: Opus（見直しの型どおり）。分割の案: 無し。
 - **古くなった記述**: Upstream の「`mcp-reload`（v0.1.0・2026-10-19 に着手中）」は着地済み。Current State の大きさ（107 ファイル）は起票のときの数え。
+
+## 申し送り（session-module-gather より・2026-11-22）
+
+- **前提の変化**: `readme`・`roots` の芯は `crates/areka/src/session/readme*`・`crates/areka/src/session/roots/` へ移った（持ち主は変わらずこの spec）。`src/roots.rs` は新しい薄い入口。詳しくは `.kiro/specs/completed/session-module-gather/research.md` の §14.6。
+- **件 1（所見の文のパス）**: この brief の所見の文（2026-11-13 の申し送りの節ほか）の移す前のパスは、要件の段で `session/…` へ読み替える。
+- **件 2（呼び手の説明）**: `crates/areka/src/install/mod.rs:132`・`crates/areka/src/update/mod.rs:224` の doc は呼び手を `ghost_session::register_systems` と書く。関数ポインタ経由で今も正しいが、名目上の渡し手は `main.rs` の `BODY_SYSTEMS`。直すかどうかを見直しで決める。
+- 完了の時にその場で直したもの: `crates/areka/src/update/worker.rs:40`・`:110` の `exe_dir()` のパス。

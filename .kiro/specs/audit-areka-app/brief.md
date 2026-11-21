@@ -146,3 +146,10 @@
 - **件 2（テストのファイルの古い名）**: `crates/areka/src/app_exit_tests.rs:182` の説明が「`input_events_tests.rs` の `world_with_wiring` は私有」と書く。ファイルは `crates/areka-input/src/char_pointer_tests.rs` に名を変えた。`world_with_wiring` は入力の crate の `pointer_test_support` の公開の補助なので「私有」も事実でない。パスと名を書かずに、役目で指す形に直す。
 
 - **件 3（古いコメント・2026-11-22 完了の棚卸で追記）**: `crates/areka/src/ghost_session.rs:820` のコメント「`BalloonWiring`／`ChoiceSelectionInbox`」は、結線する `areka_input::balloon::wire_balloon_choice`（`crates/areka-input/src/balloon.rs` の 407〜412 行）が `BalloonWiring`・`BalloonHover`・`ChoiceSelectionInbox`・`ShellBoxHover` の 4 つを挿すので古い。本体のファイルは `audit-areka-input-menu` の範囲の外（要件 7.3）。
+
+## 申し送り（session-module-gather より・2026-11-22）
+
+- **前提の変化**: 起動・終了・切替の層が `crates/areka/src/session/` へ移った（`git mv`・中身はパスだけ）。`main.rs` の項目は `session/session_mark.rs`・`session/boot_seam.rs`・`session/boot_request.rs` へ分かれ、本体だけの系の登録は `main.rs` の `BODY_SYSTEMS`（`BodySystems`）から `session::ghost_session::register_systems` へ渡す。ログの出所は `areka::session::…`。詳しくは `.kiro/specs/completed/session-module-gather/research.md` の §14.6。
+- **件 1（所見の文のパス）**: この brief の所見の文（2026-11-06〜11-21 の申し送りの節）に、移す前のパス（`boot_config.rs`・`boot_resolve_tests.rs`・`main_persist_wiring_seam_tests.rs`・`session_end_sync_send_tests.rs`・`readonly_tests.rs` など）が残る。要件の段で `session/…`（`main_persist_wiring_seam_tests.rs` は `session/boot_seam_persist_wiring_tests.rs`）へ読み替える。
+- **件 2（呼び手の説明）**: `crates/areka/src/menu/mod.rs:223`・`:254`・`crates/areka/src/mcp/mod.rs:48` の doc は呼び手を `ghost_session::register_systems` と書く。関数ポインタ経由で今も正しいが、名目上の渡し手は `main.rs` の `BODY_SYSTEMS`。直すかどうかを見直しで決める。
+- 完了の時にその場で直したもの（この brief の件ではなくなった）: `doc/click-through.md:3`・`:136`、`tools/perf/invoke-perf-run.ps1:29`、`session/app_exit_tests.rs:182`、`areka-placement` の 4 か所、`doc/COMPAT_ARCHITECTURE.md` の `shell_balloon_resolve_tests.rs` の 4 か所。
