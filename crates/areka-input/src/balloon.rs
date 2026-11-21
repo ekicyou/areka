@@ -159,6 +159,41 @@ pub(super) fn dispatch_selection(
     true
 }
 
+/// 強調の決定を場所へ当てる。自前の記録に書く値を返す（`None` は書かない）。
+pub(super) fn apply_hover(
+    runtime: &RefCell<TextLayerRuntime>,
+    place: &PlaceKey,
+    scope: usize,
+    action: HoverAction,
+) -> Option<Option<usize>> {
+    let value = match action {
+        HoverAction::NoopInactive | HoverAction::Keep => return None,
+        HoverAction::ResetOwnState => return Some(None),
+        HoverAction::Inject(value) => value,
+    };
+    let Ok(mut rt) = runtime.try_borrow_mut() else {
+        tracing::error!(
+            event = "balloon_runtime_borrow_failed",
+            scope,
+            "runtime try_borrow_mut 失敗（強調の注入）: no-op 縮退"
+        );
+        return None;
+    };
+    rt.inject_choice_hover_at(place, value);
+    let (event, box_name) = match &place.place {
+        TextPlace::Box(name) => ("box_choice_hover_inject", Some(name.as_str())),
+        TextPlace::Balloon => ("choice_hover_inject", None),
+    };
+    tracing::debug!(
+        event,
+        scope,
+        r#box = box_name,
+        ordinal = ?value,
+        "選択肢の強調を注入"
+    );
+    Some(value)
+}
+
 /// バルーン選択肢対話の配線資源（NonSend）。
 ///
 /// UI スレッド所有の資源として `World` へ NonSend 挿入し（`insert_non_send`）、Input

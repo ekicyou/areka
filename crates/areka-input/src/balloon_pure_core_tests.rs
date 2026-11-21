@@ -343,6 +343,93 @@ fn hover_active_leaves_row_injects_none() {
     );
 }
 
+fn emo_text_debugs(
+    events: &[log_capture_kit::CapturedEvent],
+) -> Vec<&log_capture_kit::CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.target == "areka_emo_text::actor" && e.level == tracing::Level::DEBUG)
+        .collect()
+}
+
+/// 箱 a・b を置いたシェル。
+const TWO_BOX_SHELL: &str = "\
+balloon.a
+{
+size,100,50
+}
+balloon.b
+{
+size,100,50
+}
+surface0
+{
+element1,balloon,a,0,0
+element2,balloon,b,200,0
+}
+";
+
+/// 普通のバルーンにだけ ordinal 0 の選択肢があるので、文字の層が「無い ordinal」を記録するのは
+/// 箱の場所へ注入したときだけ。注入の到達と場所の取り違えの両方がここで分かる。
+#[test]
+fn apply_hover_injects_at_the_given_place() {
+    let rt = super::test_support::runtime_with_active_choice("0");
+    let balloon = PlaceKey::balloon(&ActorKey::from("0"));
+    let boxed = PlaceKey {
+        actor: ActorKey::from("0"),
+        place: TextPlace::Box(super::test_support::box_name(TWO_BOX_SHELL, "b")),
+    };
+
+    let (written, events) =
+        log_capture_kit::capture(|| apply_hover(&rt, &balloon, 0, HoverAction::Inject(Some(0))));
+    assert_eq!(written, Some(Some(0)));
+    assert!(emo_text_debugs(&events).is_empty(), "{events:?}");
+
+    let (written, events) =
+        log_capture_kit::capture(|| apply_hover(&rt, &boxed, 0, HoverAction::Inject(Some(0))));
+    assert_eq!(written, Some(Some(0)));
+    let debugs = emo_text_debugs(&events);
+    assert_eq!(debugs.len(), 1, "{events:?}");
+    assert_eq!(debugs[0].field("ordinal"), Some("0"));
+}
+
+#[test]
+fn apply_hover_reset_own_state_does_not_inject() {
+    let rt = super::test_support::runtime_with_active_choice("0");
+    let boxed = PlaceKey {
+        actor: ActorKey::from("0"),
+        place: TextPlace::Box(super::test_support::box_name(TWO_BOX_SHELL, "b")),
+    };
+    let (written, events) =
+        log_capture_kit::capture(|| apply_hover(&rt, &boxed, 0, HoverAction::ResetOwnState));
+    assert_eq!(written, Some(None));
+    assert!(events.is_empty(), "{events:?}");
+}
+
+#[test]
+fn apply_hover_borrow_failure_writes_nothing_and_logs_one_error() {
+    let rt = super::test_support::runtime_with_active_choice("0");
+    let balloon = PlaceKey::balloon(&ActorKey::from("0"));
+    let held = rt.borrow();
+    let (written, events) =
+        log_capture_kit::capture(|| apply_hover(&rt, &balloon, 0, HoverAction::Inject(Some(0))));
+    drop(held);
+    assert_eq!(written, None);
+    let errors: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::ERROR)
+        .collect();
+    assert_eq!(errors.len(), 1, "{events:?}");
+    assert_eq!(
+        errors[0].field_str("event"),
+        Some("balloon_runtime_borrow_failed")
+    );
+    assert!(
+        events.iter().all(|e| e.level == tracing::Level::ERROR),
+        "{events:?}"
+    );
+}
+
 // -------------------------------------------------------------------------
 // click_selection 純関数檻
 //

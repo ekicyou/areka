@@ -18,7 +18,7 @@
   - _Dispatch: standard — 2 か所の写しを場所を引数に取る 1 関数へ寄せる新しい分岐がある_
   - _Requirements: 3.1, 3.3, 3.5, 4.1, 4.2, 6.2, 7.1, 7.7, 7.8_
 
-- [ ] 1.2 強調の当て方を 1 つにする（G2）
+- [x] 1.2 強調の当て方を 1 つにする（G2）
   - 普通のバルーンの移動・離脱と箱の移動の 3 か所に写された強調の適用を、バルーンの親のモジュールの 1 つの関数（design.md「`apply_hover`」）へ寄せる。関数は書く値を返し、自前の記録へは呼び手が書く。
   - 文字の層の不変借用で写しを取る段と、その借用の失敗の記録は呼び手に残す（design.md「System Flows」の注）。
   - 4 か所の `try_borrow_mut().is_ok()` の表明を消し、代わりに場所を見分ける注入の単体テストを置く（design.md「Testing Strategy」の表の `apply_hover` の行：普通のバルーンにだけ ordinal 0 を持たせ、普通のバルーンの場所では DEBUG 0 行・箱の場所では 1 行。target・水準・`ordinal` の欄で照合する）。`ResetOwnState` は注入しないこと・借用の失敗は ERROR 1 行で書かないことも同じ単体テストで見る。
@@ -159,3 +159,4 @@
 
 ## Implementation Notes
 - clippy は `cargo clippy -p areka-input --all-targets --no-deps -- -D warnings` で見る。`--no-deps` が無いと依存の crate（areka-parsers・dola）にある clippy 1.100 の `collapsible_if` で止まる（範囲の外・この spec の前からある）。
+- 1.2 で足した `box_name(shell, name)`（`balloon_test_support.rs`）と `emo_text_debugs`（`balloon_pure_core_tests.rs`）は、3.2 で箱の名前の写しと `events_named` へ寄せる相手。

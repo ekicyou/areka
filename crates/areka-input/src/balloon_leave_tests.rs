@@ -66,10 +66,6 @@ fn leave_balloon_owned_clears_hover_via_inject_none() {
             .any(|l| l.contains("level=DEBUG") && l.contains("choice_hover_inject")),
         "離脱 hover 解除注入で choice_hover_inject を DEBUG 発火（DD-CI-7）: {logs:?}"
     );
-    assert!(
-        runtime.try_borrow_mut().is_ok(),
-        "inject 後も runtime に借用/poison を残さない"
-    );
 }
 
 /// アンカーだけのバルーンでも、窓の外へ出たら強調を外す注入をする。

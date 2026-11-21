@@ -187,6 +187,23 @@ pub(super) fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
     lines
 }
 
+/// シェル `shell` を畳んだ箱のうち、名前が `name` のもの（`BoxName` は畳み込みからしか作れない）。
+pub(crate) fn box_name(shell: &str, name: &str) -> areka_emo_compose::BoxName {
+    let world = EmoWorld::build(&areka_parsers::shell::parse(shell));
+    let (layout, _) = areka_emo_compose::fold_boxes(
+        &areka_parsers::shell::parse_boxes(shell),
+        &BTreeMap::new(),
+        &world,
+    );
+    layout
+        .placements(0)
+        .iter()
+        .find(|p| p.name.as_str() == name)
+        .expect("検体に在る箱")
+        .name
+        .clone()
+}
+
 /// バルーン窓（`BalloonWindowMarker`＋`Window`）を組み、その子 entity へ `PointerLeave` を載せる。
 /// 子の親チェーンは window へ届く（`find_owner_window` 相当）。
 pub(super) fn spawn_balloon_leave_child(world: &mut World, scope: usize) -> Entity {

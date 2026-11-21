@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use areka_emo_text::place::PlaceKey;
 use areka_sakura::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
@@ -11,7 +12,7 @@ use areka_placement::spawn::BalloonWindowMarker;
 use areka_runtime::balloon_hover::BalloonHover;
 use areka_runtime::frame::RuntimeWiring;
 
-use super::{BalloonWiring, HoverAction, hit_choice_row, hover_action};
+use super::{BalloonWiring, apply_hover, hit_choice_row, hover_action};
 
 // ---------------------------------------------------------------------------
 // 配線層
@@ -130,39 +131,11 @@ pub(crate) fn on_balloon_pointer_moved(
         }
     };
 
-    match action {
-        HoverAction::NoopInactive | HoverAction::Keep => {}
-        // 消滅時整合: 自前状態のみ None 整合・inject はしない（上流原子性が正本）。
-        HoverAction::ResetOwnState => {
-            let mut bw = world
-                .get_non_send_mut::<BalloonWiring>()
-                .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）");
-            bw.set_hover(scope, None);
-        }
-        HoverAction::Inject(value) => {
-            match runtime.try_borrow_mut() {
-                Ok(mut rt) => rt.inject_choice_hover(&actor, value),
-                Err(_) => {
-                    tracing::error!(
-                        event = "balloon_runtime_borrow_failed",
-                        scope,
-                        "runtime try_borrow_mut 失敗（inject）: no-op 縮退"
-                    );
-                    return false;
-                }
-            }
-            let mut bw = world
-                .get_non_send_mut::<BalloonWiring>()
-                .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）");
-            bw.set_hover(scope, value);
-            // hover 遷移注入の marker（トラブルシュート用・info ではない）。
-            tracing::debug!(
-                event = "choice_hover_inject",
-                scope,
-                ordinal = ?value,
-                "hover 遷移を上流 runtime へ注入"
-            );
-        }
+    if let Some(value) = apply_hover(&runtime, &PlaceKey::balloon(&actor), scope, action) {
+        world
+            .get_non_send_mut::<BalloonWiring>()
+            .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）")
+            .set_hover(scope, value);
     }
 
     false

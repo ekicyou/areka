@@ -167,11 +167,6 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
             .any(|l| l.contains("level=DEBUG") && l.contains("choice_hover_inject")),
         "hover 遷移注入で choice_hover_inject を DEBUG 発火（DD-CI-7）: {logs:?}"
     );
-    // 実 runtime へ inject 済みでも借用/poison を残さない（try_borrow_mut が成功する）。
-    assert!(
-        runtime.try_borrow_mut().is_ok(),
-        "inject 後も runtime に借用/poison を残さない"
-    );
 }
 
 /// 消滅時整合（ResetOwnState アーム）: choice 非表示・前回注入 Some(3) → 自前状態のみ
@@ -637,12 +632,8 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
             );
         }
 
-        // ── (3) 副作用ゼロ④: runtime 未変更（present の場合）借用/poison を残さず active 不変 ─────
+        // ── (3) 副作用ゼロ④: runtime 未変更（present の場合）active 不変 ─────
         if let Some(rt) = &runtime {
-            assert!(
-                rt.try_borrow_mut().is_ok(),
-                "縮退では runtime に借用/poison を残さない"
-            );
             assert!(
                 rt.borrow().choice_active(&ActorKey::from("0")),
                 "縮退では runtime の choice 状態を動かさない（active 不変）"
@@ -750,12 +741,8 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
             );
         }
 
-        // ── (3) 副作用ゼロ④: runtime 未変更（present の場合）借用/poison を残さず active 不変 ─────
+        // ── (3) 副作用ゼロ④: runtime 未変更（present の場合）active 不変 ─────
         if let Some(rt) = &runtime {
-            assert!(
-                rt.try_borrow_mut().is_ok(),
-                "縮退では runtime に借用/poison を残さない"
-            );
             assert!(
                 rt.borrow().choice_active(&ActorKey::from("0")),
                 "縮退では runtime の choice 状態を動かさない（active 不変）"

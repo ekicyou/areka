@@ -30,7 +30,8 @@ use wintf::ecs::pointer::{PointerLeave, PointerState, dispatch_pointer_events};
 use wintf::ecs::{Input, find_owner_window};
 
 use super::balloon::{
-    BalloonWiring, ChoiceSelection, HoverAction, dispatch_selection, finished_talking, hover_action,
+    BalloonWiring, ChoiceSelection, HoverAction, apply_hover, dispatch_selection, finished_talking,
+    hover_action,
 };
 use super::shell_box::{
     BoxMove, BoxPressVerdict, ShellBoxHover, box_under_point, judge_box_click, judge_box_move,
@@ -185,7 +186,6 @@ pub(super) fn move_with_point(
     }
 }
 
-/// 強調の決定を箱の場所へ当てる（`balloon_moved.rs` の適用と同じ腕）。
 fn apply_highlight(
     world: &mut World,
     runtime: &Rc<RefCell<TextLayerRuntime>>,
@@ -193,29 +193,8 @@ fn apply_highlight(
     name: &BoxName,
     action: HoverAction,
 ) {
-    let value = match action {
-        HoverAction::NoopInactive | HoverAction::Keep => return,
-        // 選択肢が消えた: 自前の記録だけ落とす（注入はしない・上流が正本）。
-        HoverAction::ResetOwnState => None,
-        HoverAction::Inject(value) => {
-            let Ok(mut rt) = runtime.try_borrow_mut() else {
-                tracing::error!(
-                    event = "balloon_runtime_borrow_failed",
-                    scope,
-                    "runtime try_borrow_mut 失敗（箱の強調）: no-op 縮退"
-                );
-                return;
-            };
-            rt.inject_choice_hover_at(&box_place(scope, name), value);
-            tracing::debug!(
-                event = "box_choice_hover_inject",
-                scope,
-                r#box = name.as_str(),
-                ordinal = ?value,
-                "箱の選択肢の強調を注入"
-            );
-            value
-        }
+    let Some(value) = apply_hover(runtime, &box_place(scope, name), scope, action) else {
+        return;
     };
     if let Some(mut hover) = world.get_non_send_mut::<ShellBoxHover>() {
         hover.set_injected(scope, value);

@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use areka_emo_text::place::PlaceKey;
 use areka_sakura::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::query::With;
@@ -13,7 +14,7 @@ use areka_placement::spawn::BalloonWindowMarker;
 use areka_runtime::balloon_hover::BalloonHover;
 use areka_runtime::frame::RuntimeWiring;
 
-use super::{BalloonWiring, HoverAction, hover_action};
+use super::{BalloonWiring, apply_hover, hover_action};
 
 // ---------------------------------------------------------------------------
 // clear_balloon_hover_on_leave 排他システム
@@ -129,39 +130,11 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
             }
         };
 
-        match action {
-            HoverAction::NoopInactive | HoverAction::Keep => {}
-            // 消滅時整合: 自前状態のみ None 整合・inject はしない（上流原子性が正本）。
-            HoverAction::ResetOwnState => {
-                let mut bw = world
-                    .get_non_send_mut::<BalloonWiring>()
-                    .expect("BalloonWiring は頭で存在確認済み");
-                bw.set_hover(scope, None);
-            }
-            HoverAction::Inject(value) => {
-                match runtime.try_borrow_mut() {
-                    Ok(mut rt) => rt.inject_choice_hover(&actor, value),
-                    Err(_) => {
-                        tracing::error!(
-                            event = "balloon_runtime_borrow_failed",
-                            scope,
-                            "runtime try_borrow_mut 失敗（離脱 inject）: no-op 縮退"
-                        );
-                        continue;
-                    }
-                }
-                let mut bw = world
-                    .get_non_send_mut::<BalloonWiring>()
-                    .expect("BalloonWiring は頭で存在確認済み");
-                bw.set_hover(scope, value);
-                // hover 遷移注入の marker（トラブルシュート用・info ではない）。
-                tracing::debug!(
-                    event = "choice_hover_inject",
-                    scope,
-                    ordinal = ?value,
-                    "窓外離脱で hover 解除を上流 runtime へ注入"
-                );
-            }
+        if let Some(value) = apply_hover(&runtime, &PlaceKey::balloon(&actor), scope, action) {
+            world
+                .get_non_send_mut::<BalloonWiring>()
+                .expect("BalloonWiring は頭で存在確認済み")
+                .set_hover(scope, value);
         }
     }
 }
