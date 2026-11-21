@@ -33,14 +33,14 @@ use wintf::AppExit;
 use wintf::ecs::Input;
 
 use super::ghost_switch::drain_change_requests;
-use crate::ConfigInputs;
-use crate::boot_config::{BootContext, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{
     GhostBootInputs, GhostBootInputsSource, GhostSlot, StartupDescriptValues, boot_ghost,
     register_systems,
 };
 use crate::sample_test_support::acquire_emo2;
+use crate::session::boot_config::ConfigInputs;
+use crate::session::boot_config::{BootContext, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::session::ghost_quit::{KanadeNoticeRx, run_ghost_quit_phase};
 use areka_placement::AuthorDpi;
 use areka_runtime::RuntimeInputs;

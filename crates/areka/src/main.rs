@@ -97,24 +97,6 @@ mod shiori_lifecycle_e2e_tests;
 #[cfg(test)]
 mod shiori_reference_e2e_tests;
 
-// ---------------------------------------------------------------------------
-// Config Inputs / Ghost Wiring
-// ---------------------------------------------------------------------------
-
-/// 起動時の構成入力解決と ghost 結線ヘルパ。
-///
-/// 本ファイルの 1,000 行規約のため切り出した。可視性は `pub(crate)`。
-mod boot_config;
-
-pub(crate) use boot_config::{
-    ConfigInputs, default_app_profile_dir, default_helper_exe_path, ghost_boot_options,
-    is_benign_boot_error,
-};
-
-/// 起動解決の純粋な判断（ゴースト 6 分岐・バルーン 8 分岐）と既定の定数。
-/// 起動前の解決は `install::startup::resolve_boot` が、記憶の書き込みは boot 成功直後の `on_boot_ok` が結線する。
-mod boot_resolve;
-
 /// `.nar` を入れる手続き。
 mod install;
 
@@ -144,7 +126,11 @@ mod scope_bind_fixture_test_support;
 // ---------------------------------------------------------------------------
 
 fn main() -> Result<()> {
-    use session::{alert, boot_request, exit_wait, log_history, readonly, write_failure};
+    use session::{
+        alert,
+        boot_config::{self, default_app_profile_dir, default_helper_exe_path},
+        boot_request, boot_resolve, exit_wait, log_history, readonly, write_failure,
+    };
     human_panic::setup_panic!();
 
     // RUST_LOG が未設定・非UTF-8・不正な構文なら "info" へフォールバックする（panic 経路なし）。
@@ -409,7 +395,7 @@ fn finish_after_run(
 /// パスと停止通知の送出端の写しと文脈の記憶の置き場で閉じたもの（切替が相手のゴーストを起こすときにも同じ入力になる）。
 fn install_boot_context(
     world: &mut World,
-    ctx: boot_config::BootContext,
+    ctx: session::boot_config::BootContext,
     kanade_stop: std::sync::mpsc::Sender<areka_kanade::KanadeNotice>,
     modules: session::boot_request::ModulePolicy,
 ) {
@@ -449,12 +435,13 @@ fn first_boot_origin(halted: Option<String>) -> areka_kanade::BootOrigin {
 /// ので、2 つの書き手が同時に書くと片方が消えうる）。
 fn boot_first_ghost(
     world: &mut World,
-    cfg: &ConfigInputs,
+    cfg: &session::boot_config::ConfigInputs,
     origin: areka_kanade::BootOrigin,
     descript: &ghost_session::StartupDescriptValues,
-    ghost: &boot_resolve::GhostDecision,
-    balloon: &boot_resolve::BalloonDecision,
+    ghost: &session::boot_resolve::GhostDecision,
+    balloon: &session::boot_resolve::BalloonDecision,
 ) -> std::result::Result<(), areka_sylphya::PersistFailure> {
+    use session::{boot_config, boot_resolve};
     let argv_session = world
         .get_resource::<boot_config::BootContext>()
         .is_some_and(|ctx| ctx.argv_session);
@@ -536,7 +523,7 @@ struct Teardown {
 /// ゴーストのまま残るので、起こそうとしていた既定ゴーストの名前（フォルダ名）と場所で組む
 /// （致命になるのは既定ゴーストを起こせなかったときだけ＝`ghost_switch::fatal` の呼び手）。
 fn after_run(world: &mut World) -> AfterRun {
-    use session::alert;
+    use session::{alert, boot_config, boot_resolve};
     let session = world
         .get_non_send_mut::<ghost_session::GhostSlot>()
         .and_then(|mut slot| slot.0.take());
@@ -693,6 +680,7 @@ fn settle_session_mark(
     mark: &MarkInputs,
     end: Teardown,
 ) -> (MarkVerdict, Option<areka_sylphya::PersistFailure>) {
+    use session::boot_resolve;
     let verdict = session_mark_verdict(
         mark.first.as_ref(),
         mark.argv_session,
@@ -778,8 +766,8 @@ fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPub
 fn on_boot_ok(
     world: &mut World,
     runtime: &areka_ghost::GhostRuntime,
-    ghost: &boot_resolve::GhostDecision,
-    balloon: &boot_resolve::BalloonDecision,
+    ghost: &session::boot_resolve::GhostDecision,
+    balloon: &session::boot_resolve::BalloonDecision,
 ) {
     insert_persist_wiring(world, runtime.sylphya_publisher().clone());
     record_last_used_at_boot(
@@ -797,9 +785,10 @@ fn on_boot_ok(
 fn record_last_used_at_boot(
     publisher: &areka_sylphya::SylphyaPublisher,
     shell_dir: &std::path::Path,
-    ghost: &boot_resolve::GhostDecision,
-    balloon: &boot_resolve::BalloonDecision,
+    ghost: &session::boot_resolve::GhostDecision,
+    balloon: &session::boot_resolve::BalloonDecision,
 ) {
+    use session::boot_resolve;
     if ghost.route == boot_resolve::GhostRoute::Switched {
         tracing::debug!(
             event = "last_used_deferred",
@@ -818,9 +807,10 @@ fn record_last_used_at_boot(
 pub(crate) fn record_last_used(
     publisher: &areka_sylphya::SylphyaPublisher,
     shell_dir: &std::path::Path,
-    ghost: &boot_resolve::GhostDecision,
-    balloon: &boot_resolve::BalloonDecision,
+    ghost: &session::boot_resolve::GhostDecision,
+    balloon: &session::boot_resolve::BalloonDecision,
 ) {
+    use session::boot_resolve;
     let Some(shell_folder) = shell_dir.file_name().map(|n| n.to_string_lossy()) else {
         // `<ゴースト>/shell/<名>` の形で末尾が無いことは起きない。来たら書かずに残す。
         tracing::error!(
@@ -871,20 +861,6 @@ fn boot_monitor_snapshot(
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
-#[path = "main_config_input_tests.rs"]
-mod config_input_tests;
-
-/// ghost 結線ヘルパの headless 単体テスト。
-///
-/// `areka_ghost::boot`／`GhostRuntime::shutdown` 自体は実 I/O・実スレッドを伴うため、
-/// ここでは純粋な組み立て・分類ロジック（`default_helper_exe_path`／`ghost_boot_options`／
-/// `is_benign_boot_error`）だけを headless に検証する。実際の boot→shutdown 一巡は
-/// 既存の実プロセス smoke テスト（`tests/smoke_boot_loop_exit.rs`）が証明する。
-#[cfg(test)]
-#[path = "main_ghost_wiring_tests.rs"]
-mod ghost_wiring_tests;
-
 /// 復元マージシームの headless 単体テスト。
 ///
 /// `restore_merged_placements`（`load_restored_state`→`apply_restored_placements`）を檻に入れ、
@@ -918,10 +894,6 @@ mod monitor_snapshot_seam_tests;
 #[path = "main_finish_after_run_tests.rs"]
 mod finish_after_run_tests;
 
-/// SHIORI の読み方の指定から結線を決める口と倒れ先の表。
-#[cfg(test)]
-#[path = "main_module_policy_tests.rs"]
-mod module_policy_tests;
 /// 据え付けと `run()` の後・起動中の印のテスト。
 #[cfg(test)]
 #[path = "main_session_mark_tests.rs"]

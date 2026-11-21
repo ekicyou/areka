@@ -9,12 +9,12 @@ use bevy_ecs::world::World;
 use temp_path_kit::TempPath;
 
 use super::{MarkVerdict, Teardown, after_run, finish_after_run, session_mark_verdict};
-use crate::ConfigInputs;
 use crate::app_exit::{ExitOrigin, FirstExit};
-use crate::boot_config::{BootContext, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::alert::{AlertScene, WriteMoment};
+use crate::session::boot_config::ConfigInputs;
+use crate::session::boot_config::{BootContext, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 
 /// 根 `tmp`・ゴースト A・置き場に単位 1 つ・最初の出所 `first` を組んだ World。
 fn world_with(tmp: &TempPath, first: ExitOrigin) -> World {

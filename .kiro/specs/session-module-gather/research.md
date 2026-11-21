@@ -380,3 +380,17 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 - 芯（`mod.rs`・`resolve.rs`・`report.rs`・`user_root.rs`）は `session/roots/` へ移り、出所は `areka::session::roots::{report,user_root,resolve}` になった。残る `edit`・`desk`・`pick` は `areka::roots::{edit,desk,pick}` のまま。
 - このため `RUST_LOG=areka::roots=debug` は、移した後は芯を開かない（`edit`・`desk`・`pick` だけを開く）。芯も開くには `areka::session::roots=debug` を足す。この指定は文書にもテストにも無く（5 章の 11・design.md の RootsSplit の Risks）、既定の動きには関わらない。
 - `RULES`・`log-convention.md`・ログのテストの文字列に `areka::roots` は 0 件（どちらの出所も決まりの表に当たらず、種別は前と同じ「残さない」）。`structure.md:418`・`:419` の `areka::roots::user_root` は 8.3 で直す。
+
+### 13.6 `main_*_tests.rs` の仕分け（段 4・タスク 5.2・要件 2.4）
+
+| 前のファイル | 行き先 | 宣言する所とモジュール名 | 足した名前 |
+|---|---|---|---|
+| `main_config_input_tests.rs` | `session/boot_config_input_tests.rs` | `session/boot_config.rs`・`config_input_tests` | 0（`use super::ConfigInputs` は移った先の `super` で同じ型に当たる） |
+| `main_ghost_wiring_tests.rs` | `session/boot_config_ghost_wiring_tests.rs` | `session/boot_config.rs`・`ghost_wiring_tests` | 0 |
+| `main_module_policy_tests.rs` | `session/boot_config_module_policy_tests.rs` | `session/boot_config.rs`・`module_policy_tests` | `crate::session::boot_config`・`crate::{ghost_session, install_boot_context}`・`bevy_ecs::prelude::World`（前は `use super::*` が `main.rs` から引いていた） |
+
+- 3 本のテストの名前の末尾と数（`config_input_tests` 13・`ghost_wiring_tests` 4・`module_policy_tests` 3）は前と同じで、道が `session::boot_config::…` に変わっただけ。
+- 宣言の上の説明は `main.rs` の字面のまま `boot_config.rs` へ移した（`config_input_tests` は説明なし）。
+- 残る `main_persist_wiring_seam_tests.rs` は `use super::*` で `boot_resolve` を引いていたので、`use crate::session::boot_resolve::{…}` に直した（段 6 で移る）。
+- 残る 4 本（`finish_after_run`・`session_mark`・`session_mark_fallback`・`session_mark_write`）と段 6 の 3 本は 6.1・6.2 で足す。
+- real-run-kit の `bin/real-run-fake-areka.rs` に `"areka::boot_config"` は無かった（出所は `areka::app_exit` だけ・段 5 で直す）。この段で直したのは `launch_tests.rs:211`・`:212` だけ。

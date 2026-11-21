@@ -12,10 +12,10 @@ use wintf::AppExit;
 use wintf::ecs::{Input, Update};
 
 use super::*;
-use crate::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::acquire_emo2;
+use crate::session::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::session::ghost_quit::KanadeNoticeRx;
 use crate::session::readme::ReadmeWiring;
 use areka_input::user_break::UserBreakWiring;

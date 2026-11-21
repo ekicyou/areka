@@ -19,9 +19,9 @@ fn config_inputs_holds_resolved_roots() {
 // （ゴースト・バルーンの 13 分岐は `boot_resolve_tests.rs`、実プロセスの配線は smoke）。
 
 mod boot {
-    use crate::boot_config::resolve_boot_from;
-    use crate::boot_resolve::{BalloonRoute, GhostRoute};
     use crate::session::alert::AlertScene;
+    use crate::session::boot_config::resolve_boot_from;
+    use crate::session::boot_resolve::{BalloonRoute, GhostRoute};
     use log_capture_kit::capture;
     use std::path::Path;
     use temp_path_kit::TempPath;
@@ -160,8 +160,8 @@ mod boot {
 // それを呼び、戻りの 4 つ目に「起動中の印の値（前回落ちたゴーストの名前・読むだけで消さない）」を載せる。
 
 mod switch_balloon {
-    use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
-    use crate::boot_resolve::{
+    use crate::session::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
+    use crate::session::boot_resolve::{
         BalloonRoute, DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, read_session_mark,
         write_session_mark,
     };
@@ -425,7 +425,7 @@ mod switch_balloon {
     /// 起動前の解決の結果から起動の文脈を組み、World の資源として読める（据え付けは 8.5）。
     #[test]
     fn boot_context_holds_the_resolved_current_ghost() {
-        use crate::boot_config::{BootContext, CurrentGhost};
+        use crate::session::boot_config::{BootContext, CurrentGhost};
         let tmp = TempPath::new("switch-balloon-context");
         let ghost = fixture(&tmp);
         let (cfg, g, b, _, _) = resolve_boot_from(

@@ -228,7 +228,10 @@ fn run_demo_if_enabled_with(
 
 /// 環境変数ゲートを評価し、明示有効化時のみデモを駆動する。
 pub fn run_demo_if_enabled() -> Result<(), DemoError> {
-    run_demo_if_enabled_with(demo_enabled(), Some(crate::default_app_profile_dir()))
+    run_demo_if_enabled_with(
+        demo_enabled(),
+        Some(crate::session::boot_config::default_app_profile_dir()),
+    )
 }
 
 #[cfg(test)]

@@ -226,8 +226,8 @@ pub(crate) fn before_boot_alert_suppressed(no_alert: bool, smoke_exit_ms: Option
 pub(crate) fn resolve_boot(
     request: &BootRequest,
     startup: &mut StartupInstall,
-) -> Result<crate::boot_config::BootResolved, crate::session::alert::AlertScene> {
-    let app_profile_dir = crate::boot_config::default_app_profile_dir();
+) -> Result<crate::session::boot_config::BootResolved, crate::session::alert::AlertScene> {
+    let app_profile_dir = crate::session::boot_config::default_app_profile_dir();
     let before = BeforeBootEnv {
         readonly: crate::session::readonly::is_on(),
         alert_suppressed: before_boot_alert_suppressed(
@@ -241,7 +241,7 @@ pub(crate) fn resolve_boot(
         startup,
         before,
         &app_profile_dir,
-        crate::boot_resolve::pick_index,
+        crate::session::boot_resolve::pick_index,
         crate::session::roots::user_root::writable_ghost,
     )
 }
@@ -257,7 +257,7 @@ pub(crate) fn resolve_boot_with_env(
     app_profile_dir: &Path,
     pick: fn(usize) -> usize,
     prepare_ghost: fn(&BasewareRoots, &Path) -> PathBuf,
-) -> Result<crate::boot_config::BootResolved, crate::session::alert::AlertScene> {
+) -> Result<crate::session::boot_config::BootResolved, crate::session::alert::AlertScene> {
     let call_ghost = match &resolved {
         Ok(found) => startup.run_before_boot(&found.roots, request, before),
         Err(_) => {
@@ -267,7 +267,7 @@ pub(crate) fn resolve_boot_with_env(
             None
         }
     };
-    crate::boot_config::resolve_boot_with(
+    crate::session::boot_config::resolve_boot_with(
         resolved,
         request,
         call_ghost.as_deref(),

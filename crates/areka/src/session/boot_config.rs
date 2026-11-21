@@ -3,9 +3,9 @@
 //! 構成入力（根 → ゴースト → バルーン）の起動前の解決と、`GhostBootOptions` の組み立てを置く。
 //! 根の並びの決め方は `crate::session::roots`。
 //!
-//! 消費者は `main.rs`（`pub(crate) use` で crate 直下へ再輸出）と `runtime`
-//! （`crate::default_app_profile_dir` / `crate::is_benign_boot_error`）、および
-//! 檻 `main_config_input_tests.rs` / `main_ghost_wiring_tests.rs`。
+//! 消費者は `main.rs` と `runtime`（`crate::session::boot_config::default_app_profile_dir` /
+//! `crate::session::boot_config::is_benign_boot_error`）、および
+//! 檻 `boot_config_input_tests.rs` / `boot_config_ghost_wiring_tests.rs`。
 
 // ---------------------------------------------------------------------------
 // Config Inputs
@@ -163,8 +163,8 @@ pub(crate) fn exe_location() -> Option<&'static std::path::Path> {
 /// 根の並び（起動の文脈へ渡す）。
 pub(crate) type BootResolved = (
     ConfigInputs,
-    crate::boot_resolve::GhostDecision,
-    crate::boot_resolve::BalloonDecision,
+    crate::session::boot_resolve::GhostDecision,
+    crate::session::boot_resolve::BalloonDecision,
     Option<String>,
     crate::session::roots::ResolvedRoots,
 );
@@ -189,10 +189,10 @@ pub(crate) struct BootContext {
 /// 今のゴースト（構成入力・ゴーストの決定・バルーンの決定）。
 pub(crate) struct CurrentGhost {
     pub cfg: ConfigInputs,
-    pub ghost: crate::boot_resolve::GhostDecision,
+    pub ghost: crate::session::boot_resolve::GhostDecision,
     /// 読み手は切替の定常到達の記憶（`ghost_switch::record_steady_memory`）と、後続の
     /// `shell-balloon-switch`（今のバルーンを入れ替える口）。
-    pub balloon: crate::boot_resolve::BalloonDecision,
+    pub balloon: crate::session::boot_resolve::BalloonDecision,
 }
 
 /// テストの口: 引数の列を読み方（`cli::parse`）に通し、起動の求めで [`resolve_boot_with`] を呼ぶ。
@@ -235,8 +235,8 @@ pub(crate) fn resolve_boot_with(
     pick: fn(usize) -> usize,
     prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
 ) -> Result<BootResolved, crate::session::alert::AlertScene> {
-    use crate::boot_resolve::{self, BalloonInputs, GhostInputs, NoBalloon, NoGhost};
     use crate::session::alert::AlertScene;
+    use crate::session::boot_resolve::{self, BalloonInputs, GhostInputs, NoBalloon, NoGhost};
     use crate::session::roots::report::{self, ReportOccasion};
     use areka_ghost::catalog;
 
@@ -448,8 +448,9 @@ pub(crate) fn resolve_balloon_for_ghost(
     roots: &areka_ghost::BasewareRoots,
     ghost_dir: &std::path::Path,
     pick: fn(usize) -> usize,
-) -> Result<crate::boot_resolve::BalloonDecision, crate::boot_resolve::NoBalloon> {
-    use crate::boot_resolve::{self, BalloonInputs};
+) -> Result<crate::session::boot_resolve::BalloonDecision, crate::session::boot_resolve::NoBalloon>
+{
+    use crate::session::boot_resolve::{self, BalloonInputs};
     use areka_ghost::catalog;
 
     let memory = boot_resolve::read_last_balloon(ghost_dir);
@@ -648,3 +649,22 @@ mod readonly_tests;
 #[cfg(test)]
 #[path = "boot_config_callghost_tests.rs"]
 mod callghost_tests;
+
+#[cfg(test)]
+#[path = "boot_config_input_tests.rs"]
+mod config_input_tests;
+
+/// ghost 結線ヘルパの headless 単体テスト。
+///
+/// `areka_ghost::boot`／`GhostRuntime::shutdown` 自体は実 I/O・実スレッドを伴うため、
+/// ここでは純粋な組み立て・分類ロジック（`default_helper_exe_path`／`ghost_boot_options`／
+/// `is_benign_boot_error`）だけを headless に検証する。実際の boot→shutdown 一巡は
+/// 既存の実プロセス smoke テスト（`tests/smoke_boot_loop_exit.rs`）が証明する。
+#[cfg(test)]
+#[path = "boot_config_ghost_wiring_tests.rs"]
+mod ghost_wiring_tests;
+
+/// SHIORI の読み方の指定から結線を決める口と倒れ先の表。
+#[cfg(test)]
+#[path = "boot_config_module_policy_tests.rs"]
+mod module_policy_tests;

@@ -208,8 +208,8 @@ fn compose_rust_log_table() {
     let table: &[(&str, String)] = &[
         // 全体が warn 以下で、どちらの出所も親も名指していない → 両方足す。
         (
-            "warn,areka::boot_config=info",
-            format!("warn,areka::boot_config=info{S}{X}"),
+            "warn,areka::session::boot_config=info",
+            format!("warn,areka::session::boot_config=info{S}{X}"),
         ),
         ("error", format!("error{S}{X}")),
         ("off", format!("off{S}{X}")),

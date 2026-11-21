@@ -49,6 +49,15 @@ pub(crate) mod roots;
 /// 起動の求め（`BootRequest`）と SHIORI の読み方の指定（`ModulePolicy`）。
 pub(crate) mod boot_request;
 
+/// 起動時の構成入力解決と ghost 結線ヘルパ。
+///
+/// `main.rs` の 1,000 行規約のため切り出した。可視性は `pub(crate)`。
+pub(crate) mod boot_config;
+
+/// 起動解決の純粋な判断（ゴースト 6 分岐・バルーン 8 分岐）と既定の定数。
+/// 起動前の解決は `install::startup::resolve_boot` が、記憶の書き込みは boot 成功直後の `on_boot_ok` が結線する。
+pub(crate) mod boot_resolve;
+
 // 偽の SHIORI を持つゴーストを同じ World で起こす統合テストの土台。
 #[cfg(test)]
 pub(crate) mod ghost_switch_test_support;

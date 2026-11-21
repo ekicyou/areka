@@ -13,11 +13,11 @@ use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, load_scope};
 use super::fallback_tests::{B_NAME, default_ghost, fallback_rig};
 use super::*;
 use crate::app_exit::quit_app;
-use crate::boot_config::BootContext;
-use crate::boot_resolve::{
+use crate::ghost_session::GhostSlot;
+use crate::session::boot_config::BootContext;
+use crate::session::boot_resolve::{
     DEFAULT_GHOST_FOLDER, read_last_ghost, read_session_mark, write_session_mark,
 };
-use crate::ghost_session::GhostSlot;
 use crate::session::ghost_switch::{SwitchStage, WelcomeAttempt};
 use crate::session::ghost_switch_test_support::BALLOON;
 use crate::{MarkVerdict, Teardown, after_run, settle_session_mark};

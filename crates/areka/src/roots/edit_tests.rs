@@ -259,8 +259,8 @@ fn user_root_mark_survives_add_remove_front() {
 
 mod apply {
     use super::*;
-    use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-    use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+    use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+    use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
     use crate::session::roots::{decode_memory, read_memory};
     use bevy_ecs::world::World;
     use log_capture_kit::{CapturedEvent, capture};

@@ -16,8 +16,8 @@ use super::GhostSlot;
 use super::shell_balloon_switch_session_lap_tests::{
     CREEP, LookLog, abs, calls_a, done_marks, got, idle, kinds, lap_rig, look_of, refs_of,
 };
-use crate::boot_config::BootContext;
-use crate::boot_resolve::read_last_balloon;
+use crate::session::boot_config::BootContext;
+use crate::session::boot_resolve::read_last_balloon;
 use crate::session::ghost_switch_test_support::{BALLOON, SwitchRig, standard_script};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::target_map::balloon_target;

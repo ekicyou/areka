@@ -17,10 +17,10 @@ use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::menu::{MenuAction, MenuWiring, wire_menu};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::session::ghost_switch::SwitchInFlight;
 
 // ---------------------------------------------------------------- 道具立て

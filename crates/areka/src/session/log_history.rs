@@ -121,8 +121,8 @@ pub(crate) const RULES: &[Rule] = &[
     rule("areka::install", Kind::Update, false),
     // 下のモジュールまで含めるとアプリ本体の info が全部 status になるので完全一致だけ。
     rule("areka", Kind::Status, true),
-    rule("areka::boot_config", Kind::Status, false),
-    rule("areka::boot_resolve", Kind::Status, false),
+    rule("areka::session::boot_config", Kind::Status, false),
+    rule("areka::session::boot_resolve", Kind::Status, false),
     rule("areka::ghost_session", Kind::Status, false),
     rule("areka::session::ghost_switch", Kind::Status, false),
     rule("ghost-boot", Kind::Status, false),

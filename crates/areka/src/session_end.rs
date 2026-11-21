@@ -13,8 +13,8 @@ use areka_kanade::{CloseReason, WaitBudget};
 use bevy_ecs::prelude::*;
 
 use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
-use crate::boot_config::BootContext;
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::boot_config::BootContext;
 use crate::session::exit_wait;
 use crate::session::ghost_quit::run_ghost_quit_phase;
 use crate::session::ghost_switch::SwitchInFlight;

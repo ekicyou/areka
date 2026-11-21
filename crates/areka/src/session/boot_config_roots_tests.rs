@@ -5,11 +5,11 @@
 //! フォルダの列を `; ` でつないだもの）・0 体の失敗が各根の格納フォルダを持つこと・起動中の印に
 //! 書く名前が和を引かず決まったゴーストの場所から引けること。根は `TempPath::under_target`。
 
-use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
-use crate::boot_resolve::{
+use crate::session::alert::AlertScene;
+use crate::session::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
+use crate::session::boot_resolve::{
     BalloonRoute, DEFAULT_BALLOON_FOLDER, GhostDecision, GhostRoute, running_name,
 };
-use crate::session::alert::AlertScene;
 use crate::session::roots::{ResolvedRoots, RootStatus, RootsOrigin};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use log_capture_kit::{CapturedEvent, capture};

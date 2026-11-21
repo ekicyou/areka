@@ -50,8 +50,8 @@ target の照合は 2 通りある。
 | update | `areka::update` | 下も含む |
 | update | `areka::install` | 下も含む |
 | status | `areka` | 完全一致 |
-| status | `areka::boot_config` | 下も含む |
-| status | `areka::boot_resolve` | 下も含む |
+| status | `areka::session::boot_config` | 下も含む |
+| status | `areka::session::boot_resolve` | 下も含む |
 | status | `areka::ghost_session` | 下も含む |
 | status | `areka::session::ghost_switch` | 下も含む |
 | status | `ghost-boot` | 下も含む |

@@ -13,9 +13,9 @@ use areka_sylphya::PersistFailure;
 use bevy_ecs::world::World;
 
 use super::{GhostBootInputsSource, GhostSlot};
-use crate::boot_config::BootContext;
-use crate::boot_resolve::{BalloonDecision, GhostDecision, write_switch_drop};
 use crate::menu;
+use crate::session::boot_config::BootContext;
+use crate::session::boot_resolve::{BalloonDecision, GhostDecision, write_switch_drop};
 use crate::session::runtime_boot;
 use areka_runtime::frame::RuntimeWiring;
 

@@ -12,8 +12,8 @@ use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{PersistKey, PersistOutcome, PersistScope, ScopeRoots, save_scope};
 use bevy_ecs::world::World;
 
-use crate::boot_config::BootContext;
 use crate::ghost_session::GhostSlot;
+use crate::session::boot_config::BootContext;
 use crate::session::roots::report::{ReportOccasion, log_hidden, log_roots};
 use crate::session::roots::{ResolvedRoots, RootStatus, RootsOrigin, encode_memory};
 

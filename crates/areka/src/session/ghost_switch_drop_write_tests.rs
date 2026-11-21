@@ -16,7 +16,10 @@ use crate::app_exit::{ExitOrigin, FirstExit};
 #[test]
 fn switch_drop_write_failure_is_fatal_and_does_not_boot_target() {
     let tmp = TempPath::under_target("ghost-switch-drop-unwritable");
-    let root = root_with(&tmp, &["A", "B", crate::boot_resolve::DEFAULT_GHOST_FOLDER]);
+    let root = root_with(
+        &tmp,
+        &["A", "B", crate::session::boot_resolve::DEFAULT_GHOST_FOLDER],
+    );
     let mut world = switching_world(&root, "B");
     // アプリの記憶の置き場がファイル＝書けない。
     let profile = world.resource::<BootContext>().app_profile_dir.clone();

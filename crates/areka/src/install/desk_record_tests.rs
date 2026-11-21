@@ -14,9 +14,9 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
-use crate::boot_resolve::read_last_balloon;
 use crate::install::names::LastInstallNames;
 use crate::install::procedure::InstalledRecord;
+use crate::session::boot_resolve::read_last_balloon;
 use crate::session::ghost_switch::LastInstalledGhost;
 use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use areka_runtime::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};

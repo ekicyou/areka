@@ -11,8 +11,8 @@ use areka_ghost::{BasewareRoot, RootMark, same_root};
 use bevy_ecs::world::World;
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
-use crate::boot_config::BootContext;
 use crate::roots::{self, desk, pick};
+use crate::session::boot_config::BootContext;
 use crate::session::roots::RootsOrigin;
 
 /// 3 枠の供給関数を登記する。呼び手はゴーストを起こすたびの結線（`wire_menu` の後）。

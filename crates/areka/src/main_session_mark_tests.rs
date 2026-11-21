@@ -20,15 +20,15 @@ use temp_path_kit::TempPath;
 use super::finish_after_run;
 use super::{AfterRun, MarkInputs, MarkVerdict, Teardown, after_run, boot_first_ghost};
 use super::{first_boot_origin, install_boot_context, session_mark_verdict, settle_session_mark};
-use crate::ConfigInputs;
 use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
-use crate::boot_config::{BootContext, CurrentGhost, resolve_boot_from};
-use crate::boot_resolve::{
+use crate::ghost_session::{GhostBootInputsSource, GhostSession, GhostSlot, StartupDescriptValues};
+use crate::session::alert::AlertScene;
+use crate::session::boot_config::ConfigInputs;
+use crate::session::boot_config::{BootContext, CurrentGhost, resolve_boot_from};
+use crate::session::boot_resolve::{
     BalloonDecision, BalloonRoute, DEFAULT_GHOST_FOLDER, GhostDecision, GhostRoute,
     read_last_ghost, read_session_mark, write_session_mark,
 };
-use crate::ghost_session::{GhostBootInputsSource, GhostSession, GhostSlot, StartupDescriptValues};
-use crate::session::alert::AlertScene;
 use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use areka_placement::AuthorDpi;
 use areka_runtime::spine::RecordedCall;

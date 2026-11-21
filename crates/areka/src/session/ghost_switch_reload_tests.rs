@@ -358,8 +358,8 @@ fn a_shiori_reload_keeps_the_sticky_ledger_and_anchor_source() {
 /// `BootFailed` を既定へ戻さないと、既定が起きずに待ちが打ち切られ赤。
 #[test]
 fn a_failed_shiori_rebuild_falls_back_to_the_default_ghost() {
-    use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
     use crate::ghost_session::GhostBootInputsSource;
+    use crate::session::boot_resolve::DEFAULT_GHOST_FOLDER;
 
     let mut rig = running_a_with(vec![
         ("A", a_shiori_script()),
@@ -373,7 +373,7 @@ fn a_failed_shiori_rebuild_falls_back_to_the_default_ghost() {
         .remove_non_send::<GhostBootInputsSource>()
         .expect("作り口が据わっている");
     rig.world.insert_non_send(GhostBootInputsSource(Box::new(
-        move |cfg: &crate::ConfigInputs, origin| {
+        move |cfg: &crate::session::boot_config::ConfigInputs, origin| {
             let mut inputs = (original.0)(cfg, origin);
             if cfg.ghost_root.ends_with("A") {
                 inputs.wiring.ghost_root = cfg.ghost_root.join("実在しない根");
@@ -417,8 +417,8 @@ fn a_failed_shiori_rebuild_falls_back_to_the_default_ghost() {
 /// （または 2 度目の試みの致命が数に乗り）赤。
 #[test]
 fn a_failed_shiori_rebuild_of_the_default_ghost_is_fatal() {
-    use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
     use crate::ghost_session::GhostBootInputsSource;
+    use crate::session::boot_resolve::DEFAULT_GHOST_FOLDER;
 
     let mut rig = SwitchRig::new(vec![(DEFAULT_GHOST_FOLDER, a_shiori_script())]);
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
@@ -430,7 +430,7 @@ fn a_failed_shiori_rebuild_of_the_default_ghost_is_fatal() {
         .remove_non_send::<GhostBootInputsSource>()
         .expect("作り口が据わっている");
     rig.world.insert_non_send(GhostBootInputsSource(Box::new(
-        move |cfg: &crate::ConfigInputs, origin| {
+        move |cfg: &crate::session::boot_config::ConfigInputs, origin| {
             let mut inputs = (original.0)(cfg, origin);
             inputs.wiring.ghost_root = cfg.ghost_root.join("実在しない根");
             inputs
@@ -573,8 +573,8 @@ fn a_ghost_reload_hands_the_shown_surfaces_to_the_new_windows_but_a_switch_does_
 /// 結線が控えを持って `Some(true)` で赤。
 #[test]
 fn a_failed_ghost_reload_hands_no_carry_to_the_default_ghost() {
-    use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
     use crate::ghost_session::GhostBootInputsSource;
+    use crate::session::boot_resolve::DEFAULT_GHOST_FOLDER;
 
     let mut rig = running_a_with(vec![
         ("A", a_script()),
@@ -588,7 +588,7 @@ fn a_failed_ghost_reload_hands_no_carry_to_the_default_ghost() {
         .remove_non_send::<GhostBootInputsSource>()
         .expect("作り口が据わっている");
     rig.world.insert_non_send(GhostBootInputsSource(Box::new(
-        move |cfg: &crate::ConfigInputs, origin| {
+        move |cfg: &crate::session::boot_config::ConfigInputs, origin| {
             let mut inputs = (original.0)(cfg, origin);
             if cfg.ghost_root.ends_with("A") {
                 inputs.wiring.ghost_root = cfg.ghost_root.join("実在しない根");
@@ -655,8 +655,8 @@ fn a_ghost_reload_keeps_the_ghost_inner_balloon_through_the_memory() {
     rig.plant_last_balloon("A", "inner");
     rig.boot_with_balloon(
         "A",
-        crate::boot_resolve::BalloonDecision {
-            route: crate::boot_resolve::BalloonRoute::Memory,
+        crate::session::boot_resolve::BalloonDecision {
+            route: crate::session::boot_resolve::BalloonRoute::Memory,
             dir: inner.clone(),
             folder: Some("inner".to_owned()),
         },
@@ -676,7 +676,7 @@ fn a_ghost_reload_keeps_the_ghost_inner_balloon_through_the_memory() {
     });
     let balloon = rig
         .world
-        .resource::<crate::boot_config::BootContext>()
+        .resource::<crate::session::boot_config::BootContext>()
         .current
         .balloon
         .clone();
@@ -686,7 +686,7 @@ fn a_ghost_reload_keeps_the_ghost_inner_balloon_through_the_memory() {
     assert_eq!(
         (balloon.route, balloon.folder.as_deref(), balloon.dir),
         (
-            crate::boot_resolve::BalloonRoute::Memory,
+            crate::session::boot_resolve::BalloonRoute::Memory,
             Some("inner"),
             inner
         ),

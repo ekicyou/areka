@@ -8,8 +8,8 @@
 use areka_kanade::KanadeMsg;
 
 use super::*;
-use crate::ConfigInputs;
 use crate::ghost_session::GhostBootInputsSource;
+use crate::session::boot_config::ConfigInputs;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_runtime::spine::RecordedCall;
 

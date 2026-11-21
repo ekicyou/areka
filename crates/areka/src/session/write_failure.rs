@@ -16,8 +16,8 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::Update;
 
 use crate::app_exit::{ExitOrigin, quit_app};
-use crate::boot_config::ConfigInputs;
 use crate::session::alert::{self, AlertScene, WriteMoment, remembered_text};
+use crate::session::boot_config::ConfigInputs;
 
 /// 受け口の送り手（World の NonSend・プロセスに 1 つ）。
 pub(crate) struct WriteFailureTx(pub(crate) Sender<PersistFailure>);

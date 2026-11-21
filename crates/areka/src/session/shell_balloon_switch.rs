@@ -23,9 +23,9 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
 use super::ghost_switch::SwitchInFlight;
-use crate::boot_config::BootContext;
-use crate::boot_resolve::pick_index;
 use crate::ghost_session::GhostSlot;
+use crate::session::boot_config::BootContext;
+use crate::session::boot_resolve::pick_index;
 use crate::session::exit_wait::{self, WorkGate};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::shell_balloon_resolve::{

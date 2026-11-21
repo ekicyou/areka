@@ -8,9 +8,9 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
 
 use super::*;
-use crate::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::acquire_emo2;
+use crate::session::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::session::runtime_boot;
 use areka_runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching};
 

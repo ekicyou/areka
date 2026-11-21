@@ -29,8 +29,8 @@ use super::ghost_switch::{
 };
 use super::hooks;
 use super::shell_balloon_switch::{SwitchContext, accept_skin};
-use crate::boot_config::BootContext;
 use crate::ghost_session::GhostSlot;
+use crate::session::boot_config::BootContext;
 use crate::session::exit_wait::{self, WorkGate};
 use crate::session::log_history::TARGET_ERROR;
 use areka_runtime::reload_args::{DescriptNotes, DescriptParts, ReloadTarget, ScriptReload};
@@ -362,7 +362,7 @@ fn start_switch(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, g
     });
     let to = SwitchTarget {
         dir: current.dir.clone(),
-        name: crate::boot_resolve::running_name(&current),
+        name: crate::session::boot_resolve::running_name(&current),
         folder: folder.clone(),
         sakura_name: None,
     };

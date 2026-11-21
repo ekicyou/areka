@@ -15,8 +15,8 @@ use tracing::Level;
 use windows::Win32::Foundation::E_FAIL;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::session::roots::RootsOrigin;
 use areka_ghost::{BasewareRoot, BasewareRoots};
 

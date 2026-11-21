@@ -28,8 +28,8 @@ use real_run_kit::{EndedBy, Launch, McpError, RealRun, Run};
 const REAL_WINDOWS: &str = "本物のゴースト窓を開きました";
 /// 本文を比べる出来事の目印。
 const GHOST_RESOLVED: &str = "event=\"ghost_resolved\"";
-/// 標準出力の行で本文が始まる前置き（`<時刻>  INFO areka::boot_config: <本文>`）。
-const BOOT_CONFIG_PREFIX: &str = "areka::boot_config: ";
+/// 標準出力の行で本文が始まる前置き（`<時刻>  INFO areka::session::boot_config: <本文>`）。
+const BOOT_CONFIG_PREFIX: &str = "areka::session::boot_config: ";
 /// 起動のトークの後の実行状態（talking が無くバルーンが在る）。トークの前はバルーンが無い。
 const BOOT_TALK_ENDED: &str = "status=Some(\"balloon(";
 /// SHIORI へ送る直前の記録の目印。
@@ -111,7 +111,9 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
             name: "emo2".into(),
             balloon: Some("emo2-kakukaku".into()),
         })
-        .rust_log("warn,areka::boot_config=info,kanade=trace,areka_input::user_break=debug")
+        .rust_log(
+            "warn,areka::session::boot_config=info,kanade=trace,areka_input::user_break=debug",
+        )
         // 3 つを 1 回で行うので、初回の起動のトーク（約 17 秒）の後まで保険の自動終了（既定 45 秒）に掛からない幅を取る。
         .safety_exit(Duration::from_secs(120))
         .spawn();

@@ -16,8 +16,8 @@ use log_capture_kit::{CapturedEvent, capture};
 
 use super::super::RuntimeWiring;
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 
 use super::test_support::{
     OFF, ON, marked, queue_in, queue_text, state_with_channel, world_with_windows,

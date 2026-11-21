@@ -3,7 +3,7 @@
 //! 選び分けは旗を引数で受ける [`app_profile_dir_for`] で両方の腕を見る（プロセスの旗は立てない）。
 //! 覚える所は試験の中の `OnceLock` を [`remembered`] へ渡して見る。根は `TempPath::under_target`。
 
-use crate::boot_config::{app_profile_dir_for, remembered};
+use crate::session::boot_config::{app_profile_dir_for, remembered};
 use areka_user_data::{Layout, Reason, UserRoot, UserRootOrigin};
 use log_capture_kit::capture;
 use std::path::PathBuf;

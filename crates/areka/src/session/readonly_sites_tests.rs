@@ -24,12 +24,12 @@ use bevy_ecs::prelude::*;
 use temp_path_kit::TempPath;
 
 use crate::app_exit::{ExitOrigin, FirstExit};
-use crate::boot_config::BootContext;
-use crate::boot_resolve::{
+use crate::ghost_session::{GhostSlot, StartupDescriptValues};
+use crate::session::boot_config::BootContext;
+use crate::session::boot_resolve::{
     BalloonRoute, DEFAULT_GHOST_FOLDER, GhostRoute, LastUsed, record_last_balloon,
     record_last_shell, running_name,
 };
-use crate::ghost_session::{GhostSlot, StartupDescriptValues};
 use crate::session::ghost_switch::{
     PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
 };

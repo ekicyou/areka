@@ -17,9 +17,9 @@ use temp_path_kit::TempPath;
 use super::super::destination::{Destination, classify};
 use super::super::opener_test_support::{build_ghost_root, refused_files};
 use super::{OpenJob, Opener, submit};
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::session::log_history::TARGET_ERROR;
 
 fn dest(url: &str) -> Destination {

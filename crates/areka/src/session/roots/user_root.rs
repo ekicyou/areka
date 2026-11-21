@@ -157,7 +157,7 @@ pub(crate) fn copy_for_write(
 
 /// 実行ファイルのフォルダ（`exe_location` の親・環境変数を読まず物も作らない）。
 pub(crate) fn exe_dir() -> Option<PathBuf> {
-    crate::boot_config::exe_location()
+    crate::session::boot_config::exe_location()
         .and_then(Path::parent)
         .map(Path::to_path_buf)
 }

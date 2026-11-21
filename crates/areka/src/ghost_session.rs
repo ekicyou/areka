@@ -16,11 +16,11 @@ use wintf::ecs::FrameFinalize;
 use wintf::ecs::widget::bitmap_source::{BoxedCommand, CommandSender, WintfTaskPool};
 
 use crate::app_exit::{self, WindowsClosed};
-use crate::boot_resolve::{BalloonDecision, GhostDecision};
 use crate::menu;
+use crate::session::boot_config::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
+use crate::session::boot_resolve::{BalloonDecision, GhostDecision};
 use crate::session::readme;
 use crate::session::runtime_boot::CueSinkSources;
-use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
 #[path = "ghost_session_scope_rect.rs"]
 pub(crate) mod ghost_session_scope_rect;
@@ -111,7 +111,7 @@ pub(crate) struct BootShellChoice {
 fn take_boot_shell(world: &mut World, ghost_root: &Path) -> Option<String> {
     match world.remove_resource::<BootShellChoice>() {
         Some(choice) if choice.ghost_root == ghost_root => choice.shell,
-        _ => crate::boot_resolve::decide_boot_shell(ghost_root),
+        _ => crate::session::boot_resolve::decide_boot_shell(ghost_root),
     }
 }
 
@@ -185,7 +185,7 @@ pub(crate) fn prepare_ghost_windows(
     }
     // 起動のシェルはここで 1 度だけ決め（記憶の先が無ければ `warn!` もここの 1 件）、配置の
     // 情報源へ渡したうえで資源に置く。起こす処理の入口が取り出し、同じ値を資産と実行系へ運ぶ。
-    let shell = crate::boot_resolve::decide_boot_shell(&cfg.ghost_root);
+    let shell = crate::session::boot_resolve::decide_boot_shell(&cfg.ghost_root);
     let prepared = areka_placement::prepare_ghost_windows_for_shell(
         &cfg.ghost_root,
         &cfg.balloon_root,
@@ -365,7 +365,7 @@ impl GhostBootInputs {
             wiring: areka_runtime::RuntimeInputs {
                 ghost_root: cfg.ghost_root.clone(),
                 balloon_root: cfg.balloon_root.clone(),
-                shiori: crate::boot_config::shiori_wiring_for(modules, helper_exe.clone()),
+                shiori: crate::session::boot_config::shiori_wiring_for(modules, helper_exe.clone()),
                 ticker: areka_ghost::TickerMode::Real(Default::default()),
                 app_profile_dir,
                 boot_origin,

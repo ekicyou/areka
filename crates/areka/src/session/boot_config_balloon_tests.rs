@@ -4,8 +4,8 @@
 //! 「読んだ 2 鍵が鎖へ届くこと」「ゴーストの中の `balloon\` が根より先に候補へ入ること」
 //! 「引数の腕は読まないこと」と記録の件数だけ。根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
-use crate::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER};
+use crate::session::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
+use crate::session::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER};
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;

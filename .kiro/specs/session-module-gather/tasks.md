@@ -60,7 +60,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: standard — 項目ごとに芯か残る側かを分ける書き換えがある_
   - _Requirements: 1.1, 1.2, 1.4, 3.1, 3.4, 3.5, 6.1_
 
-- [ ] 5. 起動の構成を集める（段 4）
+- [x] 5. 起動の構成を集める（段 4）
 - [x] 5.1 cli の型 2 つを `session/boot_request.rs` へ移す
   - `cli/mod.rs` 54〜74 行の `BootRequest`・`ModulePolicy` を、`derive`・欄・doc の字面のまま新しい `session/boot_request.rs` へ写し、可視性だけを `pub(crate)` に上げる
   - `cli/mod.rs` は私有の `use crate::session::boot_request::{BootRequest, ModulePolicy};` で引き、出し直さない。`crate::cli::{BootRequest, ModulePolicy}` の呼び手（13 ファイル・まだ src 直下にある `boot_config.rs` を含む）を `crate::session::boot_request::…` へ
@@ -69,7 +69,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 型を字面のまま写し呼び手のパスを直すだけ_
   - _Requirements: 3.3, 3.4, 6.1_
 
-- [ ] 5.2 `boot_config`・`boot_resolve` を移し、出し直しを外し、テスト 3 本を仕分ける
+- [x] 5.2 `boot_config`・`boot_resolve` を移し、出し直しを外し、テスト 3 本を仕分ける
   - `boot_resolve*` 6 本・`boot_config*` 8 本を `git mv` で移し、宣言と呼び手を直す
   - `main.rs` の `pub(crate) use boot_config::{ConfigInputs, default_app_profile_dir, default_helper_exe_path, ghost_boot_options, is_benign_boot_error}` を外し、`crate::{ConfigInputs, …}` の形の呼び手を全部この段で `crate::session::boot_config::…` へ（今の測りで `ghost_session.rs:24`・`ghost_session_runtime_tests.rs:11`・`session_end_tests.rs:21`・`main_session_mark_tests.rs:23`・`main_session_mark_write_tests.rs:12`・`session/ghost_switch_test_support.rs:36`・`session/ghost_switch_reload_tests.rs:376`・`:433`・`:591`・`session/runtime_boot.rs:138`・`shiori_demo.rs:231`。着手のときに数え直す）。`main.rs` の残す `fn` が使う分は、その本文の先頭の `use session::{…};` で引く
   - `main_config_input_tests.rs`・`main_ghost_wiring_tests.rs`・`main_module_policy_tests.rs` を `git mv` で `session/boot_config_{input,ghost_wiring,module_policy}_tests.rs` へ移し、`boot_config.rs` に今のモジュール名（`config_input_tests` ほか）で `#[cfg(test)] #[path]` の宣言を足す。足りなくなる名前は `crate::session::…` で足す
@@ -182,3 +182,5 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
 - 3.3: 宣言を移すとき、元に doc が無い宣言へ新しい doc を書くなら、モジュールの `//!` の 1 行目と同じにする（中身を言い換えると取り違える）。
 - 4.2: `update/worker.rs:40`・`:110` の doc の `roots::user_root::exe_dir()` はモジュール名だけの古い説明（6.9 で当たりにしない）。9.2 の申し送りに載せる。
 - 5.1: `main.rs` の本文で移した項目を使う所は、道を全部書かず `fn` の先頭の `use session::{…};` にモジュールを足して引く（署名と欄だけ `session::…` の道）。
+- 5.2: `crates/areka/tests/emo2_mcp_real_run.rs` の 1 本は `#[ignore]` が無く、`cargo test -p areka --test emo2_mcp_real_run` は実機で areka を起こす（排他テストの机が要る）。5.2 の実装中に机なしで 1 回走り、緑だった。
+- 5.2: 移した宣言の doc が「本ファイル」のように元の置き場を指す語を持つときは、行き先で誤りになるのでファイル名を名指しへ直す。

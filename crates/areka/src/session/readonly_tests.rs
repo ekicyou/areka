@@ -192,13 +192,16 @@ fn tree(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
 /// アプリもゴーストも書けない置き場（フォルダの在るべき所に普通のファイル）。根は `target\` の下。
 fn unwritable_places(
     tmp: &temp_path_kit::TempPath,
-) -> (crate::boot_config::ConfigInputs, std::path::PathBuf) {
+) -> (
+    crate::session::boot_config::ConfigInputs,
+    std::path::PathBuf,
+) {
     let app = tmp.child("app-profile");
     std::fs::write(&app, "x").unwrap();
     let root = tmp.child("ghost-a");
     std::fs::create_dir_all(root.join("ghost").join("master")).unwrap();
     std::fs::write(root.join("ghost").join("master").join("profile"), "x").unwrap();
-    let cfg = crate::boot_config::ConfigInputs {
+    let cfg = crate::session::boot_config::ConfigInputs {
         ghost_root: root,
         balloon_root: tmp.child("balloon"),
     };

@@ -21,7 +21,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{BootShellChoice, GhostSlot, prepare_ghost_windows};
-use crate::boot_resolve::read_last_shell;
+use crate::session::boot_resolve::read_last_shell;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_runtime::spine::RecordedCall;

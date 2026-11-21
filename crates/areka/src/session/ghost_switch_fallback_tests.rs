@@ -15,9 +15,9 @@ use wintf::AppExit;
 
 use super::*;
 use crate::app_exit::{ExitOrigin, FirstExit};
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 
 /// 根に `folders` のゴーストを組む（`ghost/<名>/ghost/master/descript.txt` だけ）。
 pub(super) fn root_with(tmp: &TempPath, folders: &[&str]) -> BasewareRoot {
@@ -138,7 +138,10 @@ fn switch_to_default_without_default_ghost_is_fatal() {
 #[test]
 fn switch_to_without_inputs_source_falls_back_to_default() {
     let tmp = TempPath::new("ghost-switch-no-source");
-    let root = root_with(&tmp, &["A", "B", crate::boot_resolve::DEFAULT_GHOST_FOLDER]);
+    let root = root_with(
+        &tmp,
+        &["A", "B", crate::session::boot_resolve::DEFAULT_GHOST_FOLDER],
+    );
     let mut world = switching_world(&root, "B");
 
     let ((), events) = capture(|| switch_to(&mut world, ChangeHandoff { script: None }));
@@ -179,8 +182,11 @@ fn switch_to_without_inputs_source_falls_back_to_default() {
 #[test]
 fn switch_to_default_ghost_failure_is_fatal_without_retry() {
     let tmp = TempPath::new("ghost-switch-target-default");
-    let root = root_with(&tmp, &["A", crate::boot_resolve::DEFAULT_GHOST_FOLDER]);
-    let mut world = switching_world(&root, crate::boot_resolve::DEFAULT_GHOST_FOLDER);
+    let root = root_with(
+        &tmp,
+        &["A", crate::session::boot_resolve::DEFAULT_GHOST_FOLDER],
+    );
+    let mut world = switching_world(&root, crate::session::boot_resolve::DEFAULT_GHOST_FOLDER);
 
     let ((), events) = capture(|| switch_to(&mut world, ChangeHandoff { script: None }));
 
@@ -199,21 +205,24 @@ fn switch_to_default_ghost_failure_is_fatal_without_retry() {
 fn switch_to_records_drop_once_and_fallback_keeps_it() {
     let run = |argv_session: bool| {
         let tmp = TempPath::new("ghost-switch-drop-record");
-        let root = root_with(&tmp, &["A", "B", crate::boot_resolve::DEFAULT_GHOST_FOLDER]);
+        let root = root_with(
+            &tmp,
+            &["A", "B", crate::session::boot_resolve::DEFAULT_GHOST_FOLDER],
+        );
         let mut world = switching_world(&root, "B");
         world.resource_mut::<BootContext>().argv_session = argv_session;
         let profile = world.resource::<BootContext>().app_profile_dir.clone();
-        let _ = crate::boot_resolve::write_session_mark(&profile, "A");
+        let _ = crate::session::boot_resolve::write_session_mark(&profile, "A");
 
         let ((), events) = capture(|| switch_to(&mut world, ChangeHandoff { script: None }));
 
         (
             count_event(&events, "switch_drop_recorded"),
-            crate::boot_resolve::read_last_ghost(&profile),
-            crate::boot_resolve::read_session_mark(&profile),
+            crate::session::boot_resolve::read_last_ghost(&profile),
+            crate::session::boot_resolve::read_session_mark(&profile),
         )
     };
-    let default = Some(crate::boot_resolve::DEFAULT_GHOST_FOLDER.to_owned());
+    let default = Some(crate::session::boot_resolve::DEFAULT_GHOST_FOLDER.to_owned());
     assert_eq!(
         [run(false), run(true)],
         [

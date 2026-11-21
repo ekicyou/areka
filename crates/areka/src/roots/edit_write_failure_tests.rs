@@ -11,8 +11,8 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::app_exit::{ExitOrigin, FirstExit};
-use crate::boot_config::{ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::boot_config::{ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 
 fn world(root: &Path, app_profile_dir: PathBuf) -> World {
     let mut world = World::new();

@@ -26,14 +26,16 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
 use crate::app_exit::{ExitOrigin, WindowsClosed, close_windows_for_restart, quit_app};
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost, resolve_balloon_for_ghost};
-use crate::boot_resolve::{
-    DEFAULT_GHOST_FOLDER, GhostDecision, GhostRoute, NoBalloon, pick_index, running_name,
-    write_switch_drop,
-};
 use crate::ghost_session::{
     GhostBootInputsSource, GhostSlot, RuntimeRebuild, boot_ghost_strict, commit_ghost_windows,
     rebuild_runtime_in_place, reopen_ghost_windows,
+};
+use crate::session::boot_config::{
+    BootContext, ConfigInputs, CurrentGhost, resolve_balloon_for_ghost,
+};
+use crate::session::boot_resolve::{
+    DEFAULT_GHOST_FOLDER, GhostDecision, GhostRoute, NoBalloon, pick_index, running_name,
+    write_switch_drop,
 };
 use areka_runtime::frame::{DiscardReason, log_stay_on_top_discard};
 #[cfg(test)]

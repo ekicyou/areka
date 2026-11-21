@@ -29,9 +29,9 @@ use log_capture_kit::capture;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
-use crate::boot_config::BootContext;
 use crate::ghost_session::GhostSlot;
 use crate::install::{InstallOrder, InstallOrigin};
+use crate::session::boot_config::BootContext;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::session::readonly::ReadOnlyRun;

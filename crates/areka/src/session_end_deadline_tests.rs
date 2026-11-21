@@ -41,8 +41,8 @@ use log_capture_kit::{CapturedEvent, capture};
 use shiori_host32_host::{ExitKind, RequestError};
 
 use super::{SESSION_END_SHIORI_LIMIT, end_session_within};
-use crate::boot_resolve::{read_session_mark, write_session_mark};
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::boot_resolve::{read_session_mark, write_session_mark};
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_runtime::spine::hold_support::HoldAt;
 use areka_runtime::spine::{

@@ -19,7 +19,7 @@ use super::shell_balloon_switch_session_lap_tests::{
     recorded_shells,
 };
 use crate::app_exit::{ExitOrigin, FirstExit, on_ghost_os_close};
-use crate::boot_resolve::read_last_shell;
+use crate::session::boot_resolve::read_last_shell;
 use crate::session::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, request_ghost_switch,
 };

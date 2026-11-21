@@ -85,7 +85,7 @@ fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
 /// 戻し）は最後のゴースト（App）とシェル（Ghost）を書く。
 #[test]
 fn last_used_is_deferred_only_for_the_switch_route() {
-    use boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+    use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
     let run = |route: GhostRoute| {
         let shared = Arc::new(FakePersistIo::new());
         let roots = ScopeRoots {

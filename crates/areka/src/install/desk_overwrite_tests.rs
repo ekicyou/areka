@@ -28,10 +28,10 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use super::InstallDesk;
 use super::overwrite::take;
 use crate::app_exit::{ExitOrigin, FirstExit};
-use crate::boot_config::BootContext;
-use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
 use crate::install::procedure::Overwritten;
 use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
+use crate::session::boot_config::BootContext;
+use crate::session::boot_resolve::DEFAULT_GHOST_FOLDER;
 use crate::session::ghost_switch::{
     GhostSpec, LastInstalledGhost, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage,
     SwitchTarget, SwitchVerdict, request_ghost_switch,

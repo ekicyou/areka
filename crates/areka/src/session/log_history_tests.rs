@@ -100,8 +100,8 @@ fn update_rows_match_self_or_children_only() {
 fn status_rows_and_areka_is_exact_only() {
     for target in [
         "areka",
-        "areka::boot_config",
-        "areka::boot_resolve",
+        "areka::session::boot_config",
+        "areka::session::boot_resolve",
         "areka::ghost_session",
         "areka::session::ghost_switch",
         "ghost-boot",
@@ -165,8 +165,8 @@ fn rules_table_is_the_designed_fourteen_rows_in_order() {
             ("areka::update", Kind::Update, false),
             ("areka::install", Kind::Update, false),
             ("areka", Kind::Status, true),
-            ("areka::boot_config", Kind::Status, false),
-            ("areka::boot_resolve", Kind::Status, false),
+            ("areka::session::boot_config", Kind::Status, false),
+            ("areka::session::boot_resolve", Kind::Status, false),
             ("areka::ghost_session", Kind::Status, false),
             ("areka::session::ghost_switch", Kind::Status, false),
             ("ghost-boot", Kind::Status, false),
@@ -194,7 +194,7 @@ fn rule_matches_self_or_double_colon_child() {
         exact: true,
     };
     assert!(exact.matches("areka"));
-    assert!(!exact.matches("areka::boot_config"));
+    assert!(!exact.matches("areka::session::boot_config"));
 }
 
 // ---------------------------------------------------------------------------

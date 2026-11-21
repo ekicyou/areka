@@ -30,7 +30,7 @@ use wintf::ecs::{
 };
 
 use super::GhostSlot;
-use crate::boot_resolve::read_last_shell;
+use crate::session::boot_resolve::read_last_shell;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use crate::session::shell_balloon_switch::{

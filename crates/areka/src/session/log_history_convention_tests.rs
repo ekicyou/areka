@@ -149,7 +149,7 @@ const LEVELS: [Level; 5] = [
 const TARGETS: [&str; 9] = [
     "areka::perf",
     "wintf::tick_diag",
-    "areka::boot_config",
+    "areka::session::boot_config",
     "areka::update::desk",
     "areka::log::script",
     "areka::log::error",
@@ -183,12 +183,12 @@ fn an_event_is_wanted_and_passes_exactly_when_classify_hits() {
     let cases = [
         (Level::WARN, "wintf::tick_diag", true),
         (Level::ERROR, "areka::session::alert", true),
-        (Level::INFO, "areka::boot_config", true),
+        (Level::INFO, "areka::session::boot_config", true),
         (Level::INFO, "areka::log::script", true),
         (Level::INFO, "areka::update::desk", true),
         (Level::DEBUG, "areka::log::script", false),
         (Level::DEBUG, "areka::perf", false),
-        (Level::TRACE, "areka::boot_config", false),
+        (Level::TRACE, "areka::session::boot_config", false),
         (Level::INFO, "areka::session::alert", false),
         (Level::INFO, "log", false),
     ];

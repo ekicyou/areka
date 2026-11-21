@@ -3,8 +3,11 @@
 //! 指定は値として渡すだけなので、テストどうしは互いに影響しない。
 
 use super::*;
+use crate::session::boot_config;
 use crate::session::boot_request::ModulePolicy;
+use crate::{ghost_session, install_boot_context};
 use areka_ghost::ShioriWiring;
+use bevy_ecs::prelude::World;
 use std::path::PathBuf;
 
 fn helper() -> PathBuf {
@@ -54,7 +57,7 @@ fn fallback_boot_options_follow_module_policy() {
 /// 「読まない」なら差し替え口、「読む」なら helper の結線。
 #[test]
 fn installed_source_follows_module_policy_for_first_boot_and_switch() {
-    use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+    use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
     let base = PathBuf::from("C:/custom/root");
     let cfg = |name: &str| ConfigInputs {
         ghost_root: base.join("ghost").join(name),

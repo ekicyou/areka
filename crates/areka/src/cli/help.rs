@@ -47,7 +47,7 @@ pub(crate) fn open_readme(
 /// `Err(E_FAIL)`（0 でない終了）。
 pub(crate) fn run() -> windows::core::Result<()> {
     crate::session::readme::os_port::init_com_for_shell();
-    let exe_dir = crate::boot_config::exe_location().and_then(Path::parent);
+    let exe_dir = crate::session::boot_config::exe_location().and_then(Path::parent);
     match open_readme(exe_dir, &mut crate::session::readme::os_port::WindowsShell) {
         Ok(path) => {
             tracing::info!(

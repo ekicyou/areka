@@ -2,7 +2,7 @@
 
 use areka_ghost::same_folder_name;
 
-use crate::boot_resolve::{GhostDecision, running_name};
+use crate::session::boot_resolve::{GhostDecision, running_name};
 
 use super::ghost_switch::SwitchTarget;
 

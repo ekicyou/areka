@@ -3,8 +3,8 @@
 use areka_kanade::{BootOrigin, ChangedFrom};
 
 use super::*;
-use crate::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::menu::MenuWiring;
+use crate::session::boot_resolve::{BalloonRoute, GhostRoute};
 use areka_input::MouseWiring;
 use log_capture_kit::capture;
 
@@ -185,7 +185,7 @@ fn origin_given_to_source_reaches_wiring_inputs() {
 /// 既定の置き場（`default_app_profile_dir`）へ書かれ、読み返しが `None` で赤。
 #[test]
 fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
-    use crate::boot_resolve::read_last_ghost;
+    use crate::session::boot_resolve::read_last_ghost;
     use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig};
 
     let (descript, ghost, balloon) = decisions();
