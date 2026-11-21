@@ -5,7 +5,7 @@
 - 足す・変えるコードのコメントは `CLAUDE.md` の Comments 節に従う（spec・要件・タスクの番号を書かない）。
 - 実機を使うタスク（5.1）は排他テストの机（`areka-impl-watch request --desk test --wait`）を取り、終わったらすぐ返す。
 
-- [ ] 1. 表示層に「最初の面を表示しないまま決まった理由」を持たせる
+- [x] 1. 表示層に「最初の面を表示しないまま決まった理由」を持たせる
 - [x] 1.1 理由の列挙・target の欄・照会を足す
   - 公開の列挙 `NeverShown`（隠した・出せなかった・面の指令を一度も受けていない の 3 つ）を表示層に定義して crate の外へ出す
   - target に「理由」の欄と「面の指令を一度でも受けた」の印を足し、装着で空にし、置き換えでは適用の結果と同じく引き継ぐ
@@ -21,7 +21,7 @@
   - _Dispatch: standard — 早期の戻りを覆う結果の受け取りと 3 腕の書き分けを組む_
   - _Requirements: 3.1, 3.4, 4.1, 5.6, 6.1_
 
-- [ ] 2. 読み口を広げ、直す前の赤を確かめる
+- [x] 2. 読み口を広げ、直す前の赤を確かめる
 - [x] 2.1 位置の預かりの読み口に、表示しないまま決まった理由と実表示寸を足す
   - 読み口に既定の実装つきのメソッド 2 つ（理由は無し・実表示寸は無し を既定で答える）を足し、表示層の実装は 1 の照会とシェルの実表示寸をスコープの target について答える
   - 閉包の実装と `all_shown`・`shown_only` は変えずにそのまま通る
@@ -37,7 +37,7 @@
   - _Dispatch: standard — 足場の既存の形を組み合わせて相を通す檻を組む_
   - _Requirements: 1.5, 1.7, 6.2, 7.1_
 
-- [ ] 3. 預かりの判定と記録
+- [x] 3. 預かりの判定と記録
 - [x] 3.1 本体のテスト 1 本の呼び出しを、全部が表示した読み口へ改める
   - 着手の前に、同じウェーブの `session-module-gather` のセッションへ、`crates/areka/src/runtime_tests/frame_move_order_tests.rs` の呼び出し 1 行と `use` 1 行を変えることと着地の順を伝える（先に着地した側の後に、もう片方が取り込んで合わせる）
   - `a_script_reset_sends_nothing_to_kanade` の呼び出しを、公開の入口から全部が表示した読み口を渡す入口へ替える。見る中身（並べ直しが手続きへ届く・kanade へ何も送らない）は変えない
@@ -84,7 +84,7 @@
   - _Dispatch: mechanical — 書き足す中身を要件と設計が与える_
   - _Requirements: 7.6_
 
-- [ ] 5. 確かめ
+- [x] 5. 確かめ
 - [x] 5.1 実機で、並べ直しが全部の窓の最初の面の後に当たることを確かめる
   - `vendors\sample_ghost\emo2.nar` の原本をワークツリーの `target\wrwh\root` へ写し、写しの `＊OnFirstBoot` のトークの先頭に `\![execute,resetwindowpos]` を足す。記憶は `AREKA_USER_ROOT=target\wrwh\user`（毎回空）
   - 排他テストの机を取り、`AREKA_NO_ALERT=1`・`RUST_LOG=info,areka::placement=debug`・絶対パス・有界の自動終了で 1 回起こす。ほかのぱすたがデバッグの口を持つときは `PASTA_DEBUG=0` をその起動の中だけで使う。終わったらすぐ机を返す
@@ -93,7 +93,7 @@
   - _Depends: 3.5_
   - _Dispatch: standard — 実機の検体を作りログと矩形を読む_
   - _Requirements: 7.4, 7.5_
-- [ ] 5.2 触らない約束と回帰を確かめる
+- [x] 5.2 触らない約束と回帰を確かめる
   - `reset_pos.rs`・`chain_finalize.rs`・`frame_test_support.rs`・`frame_shared_test_support.rs`・メニューの位置初期化の道・起動のイベントを流す所に差分が無く、`run_move_drain_phase`・`run_move_drain_with` の公開の形が変わっていないことを `git diff main` で確かめる
   - 表示層・実行の相・本体の crate のテストと clippy・整形が緑（赤が出たら赤のテストだけ回し直す）
   - _Dispatch: mechanical — 決まったコマンドで差分と緑を確かめる_
