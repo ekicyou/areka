@@ -22,12 +22,12 @@ use areka_seriko::{BindResolver, SerikoLoopConfig, SurfaceResolver, spawn_seriko
 use bevy_ecs::world::World;
 
 use super::*;
-use crate::input_events::user_break::UserBreakWiring;
-use crate::readme::ReadmeWiring;
 use crate::sample_test_support::acquire_emo2;
 use crate::session::ghost_switch::ChangeRx;
 use crate::session::ghost_switch_test_support::{TICK_EVERY, TICK_STEP_MS};
+use crate::session::readme::ReadmeWiring;
 use crate::session::shell_balloon_switch::SwitchRx;
+use areka_input::user_break::UserBreakWiring;
 use areka_runtime::RuntimeInputs;
 use areka_runtime::adapter::PresentBridge;
 use areka_runtime::consumer_ledger::test_support::carrier_cue;

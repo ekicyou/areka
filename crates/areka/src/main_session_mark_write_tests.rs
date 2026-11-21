@@ -8,13 +8,16 @@ use areka_sylphya::{PersistFailure, PersistFailureCause, PersistKey, PersistScop
 use bevy_ecs::world::World;
 use temp_path_kit::TempPath;
 
-use super::{MarkVerdict, Teardown, after_run, finish_after_run, session_mark_verdict};
-use crate::ConfigInputs;
-use crate::alert::{AlertScene, WriteMoment};
-use crate::app_exit::{ExitOrigin, FirstExit};
-use crate::boot_config::{BootContext, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::ghost_session::{GhostSession, GhostSlot};
+use super::{after_run, finish_after_run};
+use crate::session::alert::{AlertScene, WriteMoment};
+use crate::session::app_exit::{ExitOrigin, FirstExit};
+use crate::session::boot_config::ConfigInputs;
+use crate::session::boot_config::{BootContext, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
+use crate::session::session_mark::{
+    MarkInputs, MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
+};
 
 /// 根 `tmp`・ゴースト A・置き場に単位 1 つ・最初の出所 `first` を組んだ World。
 fn world_with(tmp: &TempPath, first: ExitOrigin) -> World {
@@ -23,7 +26,7 @@ fn world_with(tmp: &TempPath, first: ExitOrigin) -> World {
     let mut world = World::new();
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: tmp.child("app-profile"),
         helper_exe: tmp.child("shiori-host32-helper.exe"),
         argv_session: false,
@@ -167,7 +170,7 @@ fn boot_mark_unwritable_does_not_boot_for_plain_and_halted() {
             )
         };
         unwritable(&app);
-        let descript = crate::ghost_session::StartupDescriptValues {
+        let descript = crate::session::ghost_session::StartupDescriptValues {
             author_dpi: areka_placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
             default_surfaces: areka_placement::DefaultSurfaces::builtin(),
@@ -258,8 +261,8 @@ fn clear_mark_unwritable_tells_running_once() {
     let tmp = TempPath::under_target("mark-write-clear");
     let app = tmp.child("app-profile");
     unwritable(&app);
-    let (verdict, failed) = super::settle_session_mark(
-        &super::MarkInputs {
+    let (verdict, failed) = settle_session_mark(
+        &MarkInputs {
             app_profile_dir: app,
             argv_session: false,
             first: Some(ExitOrigin::Escape),
@@ -274,7 +277,7 @@ fn clear_mark_unwritable_tells_running_once() {
     assert_eq!(verdict, MarkVerdict::Clear);
     let failed = failed.expect("印を消せない失敗が返る");
     let (told, events) = log_capture_kit::capture(|| {
-        crate::write_failure::tell_at_close(None, Some(failed), None, true)
+        crate::session::write_failure::tell_at_close(None, Some(failed), None, true)
     });
     let alerts: Vec<_> = events
         .iter()

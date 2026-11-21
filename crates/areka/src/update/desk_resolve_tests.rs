@@ -20,11 +20,11 @@ use tracing::Level;
 use super::{
     Here, Stage, UpdateDesk, can_update, drain, on_steady, resolve, resolve_targets, update_current,
 };
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::exit_wait::begin_close;
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::menu::captions::QueryReply;
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::exit_wait::begin_close;
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::on_notice;
 use crate::update::{
     RawUpdateRequest, SummaryKind, TargetKind, TargetSpec, UpdateReason, register,
@@ -325,7 +325,7 @@ fn world(root: &Root, ghost: &str, balloon: &str) -> (World, Receiver<KanadeMsg>
     register(&mut world);
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.path("profile"),
         helper_exe: root.path("helper.exe"),
         argv_session: false,

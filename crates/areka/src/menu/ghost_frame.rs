@@ -12,7 +12,7 @@ use areka_kanade::ChangeOrigin;
 use bevy_ecs::world::World;
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
-use crate::boot_config::BootContext;
+use crate::session::boot_config::BootContext;
 use crate::session::ghost_switch::{GhostSpec, SwitchRequest, request_ghost_switch};
 
 /// 「ゴースト」枠の供給関数を登記する。呼び手はゴーストを起こすたびの結線（`wire_menu` の直後）。

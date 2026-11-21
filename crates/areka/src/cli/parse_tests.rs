@@ -4,7 +4,8 @@
 
 use super::*;
 use crate::cli::listen::ListenNote;
-use crate::cli::{BootRequest, ListenPlan, ModulePolicy, StartupOptions};
+use crate::cli::{ListenPlan, StartupOptions};
+use crate::session::boot_request::{BootRequest, ModulePolicy};
 use std::path::PathBuf;
 
 /// `args[0]` に exe を足して読む。

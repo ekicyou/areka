@@ -37,11 +37,11 @@ fn shell_switch_hands_the_new_cursor_table_to_the_char_window_answer() {
 
     let mut world = World::new();
     // 答えの関数は時計を読まないので、本番の構築子でよい。
-    world.insert_non_send(crate::input_events::MouseWiring::new(
+    world.insert_non_send(areka_input::MouseWiring::new(
         mpsc::channel().0,
-        crate::input_events::RegionSource::Mock(all_head),
+        areka_input::RegionSource::Mock(all_head),
     ));
-    crate::input_events::char_watch::cursor_answer::register_char_cursor(&mut world);
+    areka_input::char_watch::cursor_answer::register_char_cursor(&mut world);
     let window = world
         .spawn((
             wintf::ecs::Window::default(),

@@ -14,7 +14,7 @@ use bevy_ecs::world::World;
 use tracing::{info, warn};
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
-use crate::ghost_session::GhostSlot;
+use crate::session::ghost_session::GhostSlot;
 use areka_placement::reset_pos::reset_window_positions;
 use areka_placement::spawn::GhostWindows;
 

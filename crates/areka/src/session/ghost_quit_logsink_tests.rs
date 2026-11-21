@@ -15,7 +15,7 @@ use areka_parsers::charset::DefaultEncoding;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::app_exit::{ExitOrigin, FirstExit, fault_of};
+use crate::session::app_exit::{ExitOrigin, FirstExit, fault_of};
 
 const CONNECT_ERR: &str = "logsink-side simulated connect failure";
 

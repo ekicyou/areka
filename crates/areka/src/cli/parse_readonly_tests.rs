@@ -1,7 +1,7 @@
 //! `--option readonly` の語。
 
 use super::*;
-use crate::cli::ModulePolicy;
+use crate::session::boot_request::ModulePolicy;
 
 /// `args[0]` に exe を足して読む。
 fn run(args: &[&str]) -> Parsed {

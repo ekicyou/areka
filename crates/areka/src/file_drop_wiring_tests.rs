@@ -14,8 +14,8 @@ use temp_path_kit::TempPath;
 use wintf::ecs::window::OnFilesDropped;
 
 use super::{ON_DIRECTORY_DROP, ON_FILE_DROP2, attach_file_drop_receivers, on_ghost_files_dropped};
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::install::{self, InstallOrder, InstallOrigin};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
 
 type Receiver = fn(&mut World, bevy_ecs::entity::Entity, Vec<std::path::PathBuf>);

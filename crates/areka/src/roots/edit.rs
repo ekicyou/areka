@@ -12,10 +12,10 @@ use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{PersistKey, PersistOutcome, PersistScope, ScopeRoots, save_scope};
 use bevy_ecs::world::World;
 
-use super::report::{ReportOccasion, log_hidden, log_roots};
-use super::{ResolvedRoots, RootStatus, RootsOrigin, encode_memory};
-use crate::boot_config::BootContext;
-use crate::ghost_session::GhostSlot;
+use crate::session::boot_config::BootContext;
+use crate::session::ghost_session::GhostSlot;
+use crate::session::roots::report::{ReportOccasion, log_hidden, log_roots};
+use crate::session::roots::{ResolvedRoots, RootStatus, RootsOrigin, encode_memory};
 
 /// 追加の判断。
 #[derive(Debug, PartialEq, Eq)]
@@ -167,7 +167,7 @@ pub(crate) fn move_to_front(world: &mut World, dir: PathBuf) {
                 path = %dir.display(),
                 "[RootsEdit] 置き場を並びの先頭へ動かしました"
             );
-            return apply(world, roots, super::user_root::exe_dir());
+            return apply(world, roots, crate::session::roots::user_root::exe_dir());
         }
         FrontVerdict::AlreadyFront => "already_front",
         FrontVerdict::EnvLocked => "env_var",
@@ -200,7 +200,7 @@ pub(crate) fn add_root(world: &mut World, picked: PathBuf) {
                     "[RootsEdit] 足した置き場の直下に ghost も balloon もありません"
                 );
             }
-            apply(world, roots, super::user_root::exe_dir());
+            apply(world, roots, crate::session::roots::user_root::exe_dir());
         }
         AddVerdict::AlreadyListed { existing } => tracing::warn!(
             event = "roots_add_already_listed",
@@ -228,7 +228,7 @@ pub(crate) fn remove_root(world: &mut World, dir: PathBuf) {
     };
     let reason = match decide_remove(&ctx.roots, ctx.roots_origin, &dir) {
         RemoveVerdict::Removed { roots, .. } => {
-            return apply(world, roots, super::user_root::exe_dir());
+            return apply(world, roots, crate::session::roots::user_root::exe_dir());
         }
         RemoveVerdict::LastOne => "last_one",
         RemoveVerdict::EnvLocked => "env_var",
@@ -285,7 +285,7 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
                     reason = ?failure.cause,
                     "[RootsEdit] 置き場の並びを記憶へ書けません（終了します）"
                 );
-                crate::write_failure::fatal(world, failure);
+                crate::session::write_failure::fatal(world, failure);
             }
         }
     }

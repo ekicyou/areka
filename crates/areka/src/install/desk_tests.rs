@@ -18,12 +18,12 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::exit_wait::begin_close;
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::install::procedure::{InstalledRecord, Overwritten};
 use crate::install::{InstallOrigin, SubmitVerdict, register, submit};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::exit_wait::begin_close;
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::{
     PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, on_notice,
 };
@@ -618,16 +618,18 @@ fn a_busy_overwrite_is_not_retried_after_the_exit_was_instructed() {
     assert!(change_requests(&kanade).is_empty(), "予約の間は頼まない");
 
     rig.world.remove_non_send::<SwitchInFlight>();
-    rig.world.insert_resource(crate::app_exit::FirstExit(
-        crate::app_exit::ExitOrigin::Escape,
-    ));
+    rig.world
+        .insert_resource(crate::session::app_exit::FirstExit(
+            crate::session::app_exit::ExitOrigin::Escape,
+        ));
     rig.drain();
     assert!(
         change_requests(&kanade).is_empty(),
         "終了の指示の後は頼まない"
     );
 
-    rig.world.remove_resource::<crate::app_exit::FirstExit>();
+    rig.world
+        .remove_resource::<crate::session::app_exit::FirstExit>();
     rig.drain();
     assert_eq!(
         change_requests(&kanade),
@@ -726,7 +728,7 @@ fn run_between_installs_only_on_the_switch_to_the_held_destination() {
 fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
     BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.dir().join("profile"),
         helper_exe: root.dir().join("helper.exe"),
         argv_session: false,

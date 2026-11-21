@@ -15,7 +15,7 @@
 //! 3. strict: 誤りを 2 つ含む台本を `strict` 真で流し、
 //!    答えの `since_id` で `get_log(log_type=error, ghost_name=…)` を読むと 2 件が台本の順に読める。
 //!
-//! 記録の段は 3 つの和にする。`areka::ghost_session` の info（`本物のゴースト窓を開きました`）は
+//! 記録の段は 3 つの和にする。`areka::session::ghost_session` の info（`本物のゴースト窓を開きました`）は
 //! どれにも含まれないので、1 の「標準出力から消える」は今のまま成り立つ。
 //! 子の起こし方・MCP の呼び出し・閉じ方は窓口 `real-run-kit` に任せる。証拠を集め終えたら利用者と同じ
 //! 閉じ方で閉じ（保険の自動終了を待たない）、閉じた後に判定する。
@@ -28,8 +28,8 @@ use real_run_kit::{EndedBy, Launch, McpError, RealRun, Run};
 const REAL_WINDOWS: &str = "本物のゴースト窓を開きました";
 /// 本文を比べる出来事の目印。
 const GHOST_RESOLVED: &str = "event=\"ghost_resolved\"";
-/// 標準出力の行で本文が始まる前置き（`<時刻>  INFO areka::boot_config: <本文>`）。
-const BOOT_CONFIG_PREFIX: &str = "areka::boot_config: ";
+/// 標準出力の行で本文が始まる前置き（`<時刻>  INFO areka::session::boot_config: <本文>`）。
+const BOOT_CONFIG_PREFIX: &str = "areka::session::boot_config: ";
 /// 起動のトークの後の実行状態（talking が無くバルーンが在る）。トークの前はバルーンが無い。
 const BOOT_TALK_ENDED: &str = "status=Some(\"balloon(";
 /// SHIORI へ送る直前の記録の目印。
@@ -111,7 +111,9 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
             name: "emo2".into(),
             balloon: Some("emo2-kakukaku".into()),
         })
-        .rust_log("warn,areka::boot_config=info,kanade=trace,areka_input::user_break=debug")
+        .rust_log(
+            "warn,areka::session::boot_config=info,kanade=trace,areka_input::user_break=debug",
+        )
         // 3 つを 1 回で行うので、初回の起動のトーク（約 17 秒）の後まで保険の自動終了（既定 45 秒）に掛からない幅を取る。
         .safety_exit(Duration::from_secs(120))
         .spawn();
@@ -251,7 +253,7 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
     // 1-1: 標準出力から消えた info が履歴に残る。
     assert!(
         !stdout.contains(REAL_WINDOWS),
-        "RUST_LOG に areka::ghost_session が無いのに標準出力に「{REAL_WINDOWS}」がある。\n{}",
+        "RUST_LOG に areka::session::ghost_session が無いのに標準出力に「{REAL_WINDOWS}」がある。\n{}",
         ctx()
     );
     // 1-3: 各行の頭の形と番号の昇順（継続行はタブで始まり、直前の行に属する）。

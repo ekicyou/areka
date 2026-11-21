@@ -11,7 +11,7 @@ use areka_sylphya::{AskerContext, DottedResolution};
 use bevy_ecs::world::World;
 
 use super::resolve::{ActiveGhost, listed_value};
-use crate::ghost_session::GhostSlot;
+use crate::session::ghost_session::GhostSlot;
 
 /// 値が無い・名前の書式が読めないときの本文（SSP と同じ）。
 const NOT_FOUND: &str = "Cannot find such property name.";

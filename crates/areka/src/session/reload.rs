@@ -29,10 +29,10 @@ use super::ghost_switch::{
 };
 use super::hooks;
 use super::shell_balloon_switch::{SwitchContext, accept_skin};
-use crate::boot_config::BootContext;
-use crate::exit_wait::{self, WorkGate};
-use crate::ghost_session::GhostSlot;
-use crate::log_history::TARGET_ERROR;
+use crate::session::boot_config::BootContext;
+use crate::session::exit_wait::{self, WorkGate};
+use crate::session::ghost_session::GhostSlot;
+use crate::session::log_history::TARGET_ERROR;
 use areka_runtime::reload_args::{DescriptNotes, DescriptParts, ReloadTarget, ScriptReload};
 use areka_runtime::reload_cue::ReloadRx;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
@@ -362,7 +362,7 @@ fn start_switch(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, g
     });
     let to = SwitchTarget {
         dir: current.dir.clone(),
-        name: crate::boot_resolve::running_name(&current),
+        name: crate::session::boot_resolve::running_name(&current),
         folder: folder.clone(),
         sakura_name: None,
     };
@@ -647,9 +647,9 @@ fn reload_names(world: &mut World) -> bool {
         .and_then(|mut slot| slot.0.as_mut().map(|s| s.set_names(model.names)))
         .unwrap_or(false);
     if replaced {
-        crate::readme::set_path(
+        crate::session::readme::set_path(
             world,
-            crate::readme::resolve_path(&root, model.readme.as_deref()),
+            crate::session::readme::resolve_path(&root, model.readme.as_deref()),
         );
     }
     replaced

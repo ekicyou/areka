@@ -16,10 +16,10 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::exit_wait::begin_close;
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::exit_wait::begin_close;
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::update::refs::executing_refs;
 use crate::update::{SubmitVerdict, SummaryKind, UpdateOrder, UpdateReason, register, submit};
@@ -48,7 +48,7 @@ impl Rig {
         register(&mut world);
         world.insert_resource(BootContext {
             roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-            roots_origin: crate::roots::RootsOrigin::EnvVar,
+            roots_origin: crate::session::roots::RootsOrigin::EnvVar,
             app_profile_dir: root.path().join("profile"),
             helper_exe: root.path().join("helper.exe"),
             argv_session: false,

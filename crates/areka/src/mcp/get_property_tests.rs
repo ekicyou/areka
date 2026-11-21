@@ -19,7 +19,7 @@ use areka_sylphya::AskerId;
 use log_capture_kit::capture;
 
 use super::*;
-use crate::ghost_session::GhostSlot;
+use crate::session::ghost_session::GhostSlot;
 
 /// `handle` を 1 回呼び、返った直後の答えを取り出す（まだ答えていなければ None）。
 fn ask(world: &mut World, ghost: &ActiveGhost, property_name: &str) -> Option<ToolOutcome> {
@@ -151,10 +151,10 @@ mod scope_rect {
     use wintf::ecs::WindowHandle;
 
     use super::*;
-    use crate::ghost_session::ghost_session_scope_rect::{
+    use crate::session::ghost_session::ghost_session_scope_rect::{
         ScopeRectReadSeam, ScreenRect, WindowKey,
     };
-    use crate::ghost_session::{RuntimeRebuild, rebuild_runtime_in_place};
+    use crate::session::ghost_session::{RuntimeRebuild, rebuild_runtime_in_place};
     use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
     use crate::shiori_host::ShioriHostSink;
     use areka_placement::follow::OffsetBase;

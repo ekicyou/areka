@@ -93,7 +93,7 @@ profile で変わるため、profile が無いと途中で切れた長時間走�
 ログ行の形（実測で確定した契約面）
 --------------------------------
 areka は `tracing_subscriber::registry().with(fmt::layer().with_filter(EnvFilter..))..init()` で
-初期化する（`crates/areka/src/log_history.rs` の `init()`）。この fmt 層の既定書式が出す 1 行は次の形である：
+初期化する（`crates/areka/src/session/log_history.rs` の `init()`）。この fmt 層の既定書式が出す 1 行は次の形である：
 
     <時刻>Z <水準> <スパン>: <target>: <メッセージ> <名前>=<値> <名前>=<値> ...
 

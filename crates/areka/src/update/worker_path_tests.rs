@@ -20,9 +20,9 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::desk::{Stage, UpdateDesk, raw_sender};
 use super::{RawUpdateRequest, TargetKind};
-use crate::ghost_session::GhostSlot;
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::menu::captions::send_query;
+use crate::session::ghost_session::GhostSlot;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_runtime::spine::{HOMEURL_RESOURCE, RecordedCall};

@@ -32,9 +32,9 @@ use tracing::Level;
 use wintf::ecs::Input;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
 use areka_runtime::assets::{BootAssets, LoopTables};
@@ -130,7 +130,7 @@ fn rig(label: &str) -> Rig {
     world.init_resource::<Schedules>();
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: temp.path().join("profile"),
         helper_exe: temp.path().join("helper.exe"),
         argv_session: false,
@@ -541,7 +541,7 @@ fn exit_cleanup_drops_the_marker_with_one_info() {
     );
     let had = marker_folder(&rig.world);
     let ((), events) = capture(|| {
-        crate::exit_wait::begin_close(&mut rig.world);
+        crate::session::exit_wait::begin_close(&mut rig.world);
     });
     let dropped: Vec<_> = events
         .iter()

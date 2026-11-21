@@ -35,7 +35,7 @@ use super::super::{
 };
 use super::test_support::attach_headless;
 use super::*;
-use crate::input_events::balloon::{BalloonWiring, ChoiceSelection};
+use areka_input::balloon::{BalloonWiring, ChoiceSelection};
 use areka_runtime::assets::{BootAssets, LoopTables};
 use areka_runtime::talk_clock::TalkClock;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;

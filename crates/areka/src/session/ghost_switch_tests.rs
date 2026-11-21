@@ -19,9 +19,9 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -84,7 +84,7 @@ fn fixture_root(tmp: &TempPath) -> BasewareRoot {
 fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
     BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.dir().join("profile"),
         helper_exe: root.dir().join("helper.exe"),
         argv_session: false,

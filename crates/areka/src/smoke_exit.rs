@@ -2,7 +2,7 @@
 //!
 //! `main.rs` の 1,000 行の上限のため外へ出した。
 
-use crate::app_exit;
+use crate::session::app_exit;
 use wintf::WinApp;
 
 /// env ゲート付き自動 close 機構（CI smoke）。

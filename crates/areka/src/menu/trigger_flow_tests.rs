@@ -17,10 +17,10 @@ use wintf::ecs::pointer::ButtonReleased;
 use wintf::ecs::{Point, WindowHandle};
 
 use super::*;
-use crate::input_events::{MouseWiring, RegionSource};
 use crate::menu::captions::QUERY_TIMEOUT;
 use crate::menu::plan::PlanEntry;
 use crate::menu::{ItemBody, MenuWiring};
+use areka_input::{MouseWiring, RegionSource};
 use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::hit_region::HitRegion;
 

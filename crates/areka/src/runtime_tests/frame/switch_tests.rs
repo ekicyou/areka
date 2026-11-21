@@ -24,7 +24,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::run_switch_phase;
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::session::shell_balloon_switch::{SkinKind, SkinSwitchInFlight, SkinSwitchStage};
 use areka_placement::reseed::BalloonPlacementInputs;

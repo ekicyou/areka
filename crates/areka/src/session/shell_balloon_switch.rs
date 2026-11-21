@@ -23,10 +23,10 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
 use super::ghost_switch::SwitchInFlight;
-use crate::boot_config::BootContext;
-use crate::boot_resolve::pick_index;
-use crate::exit_wait::{self, WorkGate};
-use crate::ghost_session::GhostSlot;
+use crate::session::boot_config::BootContext;
+use crate::session::boot_resolve::pick_index;
+use crate::session::exit_wait::{self, WorkGate};
+use crate::session::ghost_session::GhostSlot;
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::shell_balloon_resolve::{
     SkinCandidate, balloon_candidates, installed_for, resolve_skin_target, shell_candidates,

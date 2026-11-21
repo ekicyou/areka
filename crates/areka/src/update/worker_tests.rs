@@ -25,8 +25,8 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::exit_wait::{ClosingWaits, begin_close, register_gate};
 use crate::install::fetch_url_test_support::FakeFetch;
+use crate::session::exit_wait::{ClosingWaits, begin_close, register_gate};
 use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 

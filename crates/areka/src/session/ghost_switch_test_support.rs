@@ -33,15 +33,15 @@ use wintf::AppExit;
 use wintf::ecs::Input;
 
 use super::ghost_switch::drain_change_requests;
-use crate::ConfigInputs;
-use crate::boot_config::{BootContext, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::ghost_session::{
+use crate::sample_test_support::acquire_emo2;
+use crate::session::boot_config::ConfigInputs;
+use crate::session::boot_config::{BootContext, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_quit::{KanadeNoticeRx, run_ghost_quit_phase};
+use crate::session::ghost_session::{
     GhostBootInputs, GhostBootInputsSource, GhostSlot, StartupDescriptValues, boot_ghost,
     register_systems,
 };
-use crate::sample_test_support::acquire_emo2;
-use crate::session::ghost_quit::{KanadeNoticeRx, run_ghost_quit_phase};
 use areka_placement::AuthorDpi;
 use areka_runtime::RuntimeInputs;
 use areka_runtime::spine::{
@@ -234,7 +234,7 @@ impl SwitchRig {
         world.init_resource::<Schedules>();
         world.insert_non_send(AppExit::new());
         let (notice_tx, notice_rx) = mpsc::channel::<KanadeNotice>();
-        register_systems(&mut world, notice_rx);
+        register_systems(&mut world, notice_rx, crate::BODY_SYSTEMS);
 
         let boots: BootLedger = Rc::default();
         let scripts: HashMap<String, FakeShiori> = scripts
@@ -303,7 +303,7 @@ impl SwitchRig {
                     // 結線ありの腕を通す形では、fallback に落ちると記録が残らず判定が赤になる。WiringFail／BalloonMissing はわざと倒れ、倒れた先の SHIORI はこの helper で接続に失敗する。
                     helper_exe: PathBuf::from("ghost_switch_test_support/使わない/helper.exe"),
                     kanade_stop: notice_tx.clone(),
-                    modules: crate::cli::ModulePolicy::Load,
+                    modules: crate::session::boot_request::ModulePolicy::Load,
                 }
             },
         )));
@@ -423,7 +423,7 @@ impl SwitchRig {
         let inputs = (self.world.non_send::<GhostBootInputsSource>().0)(&cfg, BootOrigin::Plain);
         self.world.insert_resource(BootContext {
             roots: areka_ghost::BasewareRoots::single(self.root.dir().to_path_buf()),
-            roots_origin: crate::roots::RootsOrigin::EnvVar,
+            roots_origin: crate::session::roots::RootsOrigin::EnvVar,
             app_profile_dir: self.app_dir(),
             helper_exe: inputs.helper_exe.clone(),
             argv_session: false,

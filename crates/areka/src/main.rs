@@ -56,23 +56,10 @@ mod tick_gate_config;
 /// 本体に頼る切替・読み直し・起動・終わる相の層。
 mod session;
 
-/// UI→kanade のマウス入力配信配線。キャラ窓のポインタイベントを捉え、当たり判定名を resolver で
-/// 解決し、送出間引き（`throttle`）を通して kanade へ配信する薄い配線層。
-use areka_input as input_events;
-
-/// 終了の統合操作。全窓を閉じてから終了を指示する `quit_app` と出所の語彙 `ExitOrigin` を持つ。
-mod app_exit;
-mod log_history;
 mod mcp;
 mod menu;
 /// 乗算済み BGRA → 透過 PNG（MCP とオフラインの書き出しが共有）。
 mod png_image;
-mod readme;
-/// OS のセッションの終了（`WM_ENDSESSION`）を窓の手続きの中できれいな終わりにする受け手。
-mod session_end;
-
-/// 起こし直しの単位。系の登録の入口 `register_systems` を持つ。
-mod ghost_session;
 
 /// アクタースレッドの役割名の宣言。
 /// `areka-actor` のスレッド開始フックを導入し、生成されるアクタースレッド 1 本ごとに
@@ -103,39 +90,12 @@ mod shiori_lifecycle_e2e_tests;
 #[cfg(test)]
 mod shiori_reference_e2e_tests;
 
-// ---------------------------------------------------------------------------
-// Config Inputs / Ghost Wiring
-// ---------------------------------------------------------------------------
-
-/// 起動時の構成入力解決と ghost 結線ヘルパ。
-///
-/// 本ファイルの 1,000 行規約のため切り出した。可視性は `pub(crate)`。
-mod boot_config;
-
-pub(crate) use boot_config::{
-    ConfigInputs, default_app_profile_dir, default_helper_exe_path, ghost_boot_options,
-    is_benign_boot_error,
-};
-
-/// 無いときの告知（根なし／ゴーストなし／バルーンなし／起動窓を開けない）と
-/// 告知の抑止（`AREKA_NO_ALERT`）。
-mod alert;
-
-/// 記憶を書けない失敗を集める致命の机。
-mod write_failure;
-
-/// 起動解決の純粋な判断（ゴースト 6 分岐・バルーン 8 分岐）と既定の定数。
-/// 起動前の解決は `install::startup::resolve_boot` が、記憶の書き込みは boot 成功直後の `on_boot_ok` が結線する。
-mod boot_resolve;
-
 /// `.nar` を入れる手続き。
 mod install;
 
 /// ゴースト・シェル・バルーンのネットワーク更新。
 mod update;
 
-/// 終了の後始末が、背景で書いている仕事の終わりを上限つきで待つ口。
-mod exit_wait;
 mod file_drop;
 
 /// ベースウェアの根の並びの決め方。
@@ -143,9 +103,6 @@ mod roots;
 
 /// 自動 close の仕掛け（`AREKA_APP_SMOKE_EXIT_MS`・CI smoke）。
 mod smoke_exit;
-
-/// 1 回の走りが読み取りだけかを 1 度だけ立てて配る口。
-mod readonly;
 
 /// 起動オプションの読み方。
 mod cli;
@@ -162,6 +119,13 @@ mod scope_bind_fixture_test_support;
 // ---------------------------------------------------------------------------
 
 fn main() -> Result<()> {
+    use session::{
+        alert,
+        boot_config::{self, default_app_profile_dir, default_helper_exe_path},
+        boot_request, boot_resolve, exit_wait, ghost_session, log_history, readonly,
+        session_mark::{Teardown, settle_session_mark},
+        write_failure,
+    };
     human_panic::setup_panic!();
 
     // RUST_LOG が未設定・非UTF-8・不正な構文なら "info" へフォールバックする（panic 経路なし）。
@@ -181,7 +145,7 @@ fn main() -> Result<()> {
     let mut startup_install = install::startup::StartupInstall::new(opts.install);
     // 読み取りだけかを 1 度だけ立てる（置き場の形と受け口が決まる前）。
     readonly::engage(opts.readonly);
-    if opts.modules == cli::ModulePolicy::Skip {
+    if opts.modules == boot_request::ModulePolicy::Skip {
         tracing::info!(
             event = "shiori_skipped",
             "[main] --option dontloadmodule により、SHIORI を読まずに起動する"
@@ -239,7 +203,11 @@ fn main() -> Result<()> {
     // 系の登録（プロセスに 1 回・ここ 1 か所）。停止通知の channel は 1 本だけ作り、受信端をここで
     // 受け口へ据え、送出端の写しを下の起動の 2 経路へ渡す。main 自身の送出端は起動の分岐の後で落とす。
     let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel();
-    ghost_session::register_systems(app.world().borrow_mut().world_mut(), kanade_stop_rx);
+    ghost_session::register_systems(
+        app.world().borrow_mut().world_mut(),
+        kanade_stop_rx,
+        BODY_SYSTEMS,
+    );
     mcp::install(app.world().borrow_mut().world_mut(), mcp_inbox);
     roots::install(app.world().borrow_mut().world_mut());
     readonly::install(app.world().borrow_mut().world_mut());
@@ -393,6 +361,20 @@ fn main() -> Result<()> {
     })
 }
 
+/// 本体だけのモジュールの系の登録（`register_systems` へ渡す）。
+pub(crate) const BODY_SYSTEMS: session::ghost_session::BodySystems =
+    session::ghost_session::BodySystems {
+        menu_poll: menu::register_menu_poll,
+        after_input: register_body_after_input,
+    };
+
+/// `install::register` → `update::register` → `mcp::register` の順。
+fn register_body_after_input(world: &mut World) {
+    install::register(world);
+    update::register(world);
+    mcp::register(world);
+}
+
 /// `run()` の結果を受けて後始末へ進む判断。
 ///
 /// 後始末は成否によらず必ず 1 回通す。`run` の失敗・後始末の失敗・Fault のどれか 1 つでも
@@ -422,14 +404,15 @@ fn finish_after_run(
 // ---------------------------------------------------------------------------
 
 /// 起動の文脈と起動入力の作り口（本番版）を World へ据える（系の登録の直後に 1 回）。
-/// 作り口は本番の入力の組み立て（[`ghost_session::GhostBootInputs::production`]）を文脈の helper の
+/// 作り口は本番の入力の組み立て（[`session::ghost_session::GhostBootInputs::production`]）を文脈の helper の
 /// パスと停止通知の送出端の写しと文脈の記憶の置き場で閉じたもの（切替が相手のゴーストを起こすときにも同じ入力になる）。
 fn install_boot_context(
     world: &mut World,
-    ctx: boot_config::BootContext,
+    ctx: session::boot_config::BootContext,
     kanade_stop: std::sync::mpsc::Sender<areka_kanade::KanadeNotice>,
-    modules: cli::ModulePolicy,
+    modules: session::boot_request::ModulePolicy,
 ) {
+    use session::ghost_session;
     let helper_exe = ctx.helper_exe.clone();
     // 記憶の置き場は文脈のもの（本番は `default_app_profile_dir()` と同じ値）。
     let app_profile_dir = ctx.app_profile_dir.clone();
@@ -466,12 +449,13 @@ fn first_boot_origin(halted: Option<String>) -> areka_kanade::BootOrigin {
 /// ので、2 つの書き手が同時に書くと片方が消えうる）。
 fn boot_first_ghost(
     world: &mut World,
-    cfg: &ConfigInputs,
+    cfg: &session::boot_config::ConfigInputs,
     origin: areka_kanade::BootOrigin,
-    descript: &ghost_session::StartupDescriptValues,
-    ghost: &boot_resolve::GhostDecision,
-    balloon: &boot_resolve::BalloonDecision,
+    descript: &session::ghost_session::StartupDescriptValues,
+    ghost: &session::boot_resolve::GhostDecision,
+    balloon: &session::boot_resolve::BalloonDecision,
 ) -> std::result::Result<(), areka_sylphya::PersistFailure> {
+    use session::{boot_config, boot_resolve, ghost_session};
     let argv_session = world
         .get_resource::<boot_config::BootContext>()
         .is_some_and(|ctx| ctx.argv_session);
@@ -513,37 +497,14 @@ fn boot_first_ghost(
 /// `run()` の後に置き場と起動の文脈から組むもの。
 struct AfterRun {
     /// 降ろす単位（置き場が空＝切替の途中の致命か、OS のセッションの終了で降ろし済みなら `None`）。
-    session: Option<ghost_session::GhostSession>,
+    session: Option<session::ghost_session::GhostSession>,
     /// 告知の場面（最初の出所が Fault か記憶を書けなかったもので、OS のセッションの終了を処理していないときだけ）。
-    scene: Option<alert::AlertScene>,
+    scene: Option<session::alert::AlertScene>,
     /// 起動中の印の判定の材料（起動の文脈が無いか、OS のセッションの終了で済んでいれば `None`＝
     /// 印に触れない）。判定は降ろした後。
-    mark: Option<MarkInputs>,
+    mark: Option<session::session_mark::MarkInputs>,
     /// 終了コードを 1 にするか（最初の出所に失敗の中身がある＝`fault_of`／`write_failure_of`・告知の場面の有無とは独立）。
     fault: bool,
-}
-
-/// 起動中の印の判定の材料（`run()` の後に組み、降ろした後に [`settle_session_mark`] へ渡す）。
-struct MarkInputs {
-    /// 記憶の置き場（App スコープ）。
-    app_profile_dir: std::path::PathBuf,
-    /// 起動の文脈の argv の旗。
-    argv_session: bool,
-    /// 最初に終了を指示した出所（無ければ `None`）。
-    first: Option<app_exit::ExitOrigin>,
-    /// 最初の起動が LogSink へ倒れたか（倒れた先の成否を問わない）。
-    logsink_fallback: bool,
-}
-
-/// 降ろした結果（`fn main` の後始末は `shiori_cut=false`・OS のセッションの終了は見張りの結果）。
-#[derive(Debug, Clone, Copy)]
-struct Teardown {
-    /// メッセージループ（`run()`）が成功したか。
-    run_ok: bool,
-    /// 降ろす処理が成功したか。
-    down_ok: bool,
-    /// OS のセッションの終了で SHIORI の待ちを上限で打ち切ったか。
-    shiori_cut: bool,
 }
 
 /// 置き場の単位を取り出し、最初に終了を指示した出所から告知の場面と印の判定の材料を組む。
@@ -553,6 +514,10 @@ struct Teardown {
 /// ゴーストのまま残るので、起こそうとしていた既定ゴーストの名前（フォルダ名）と場所で組む
 /// （致命になるのは既定ゴーストを起こせなかったときだけ＝`ghost_switch::fatal` の呼び手）。
 fn after_run(world: &mut World) -> AfterRun {
+    use session::{
+        alert, app_exit, boot_config, boot_resolve, ghost_session, session_end,
+        session_mark::MarkInputs,
+    };
     let session = world
         .get_non_send_mut::<ghost_session::GhostSlot>()
         .and_then(|mut slot| slot.0.take());
@@ -640,304 +605,15 @@ fn after_run(world: &mut World) -> AfterRun {
     }
 }
 
-/// きれいな終わりの判定の結論。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MarkVerdict {
-    /// きれいに終わった＝印を消す。
-    Clear,
-    /// きれいに終わらなかった＝印を残す（理由は記録の `reason`）。
-    Keep(&'static str),
-    /// argv で始まったプロセス＝印に触れない。
-    Untouched,
-}
-
-/// きれいな終わりの判定（後始末と OS のセッションの終了が共有する唯一の判定）。
-///
-/// 時系列で最初に起きた理由を採る。上から順に: argv で始まったプロセスは触らない → 最初の起動が
-/// LogSink へ倒れた → 最初の出所が無い → 出所が失敗（SHIORI の失敗・既定へ戻せない致命）→ `run()` の
-/// 失敗 → OS のセッションの終了で SHIORI の待ちを上限で打ち切った → 降ろす処理の失敗 → それ以外は
-/// 消す。出所は網羅の match で見るので、出所を足すとこの判定の漏れがコンパイルで止まる。
-/// 名前は見ないので、倒れたのが既定ゴースト自身でも同じく残す。
-fn session_mark_verdict(
-    first: Option<&app_exit::ExitOrigin>,
-    argv_session: bool,
-    logsink_fallback: bool,
-    end: Teardown,
-) -> MarkVerdict {
-    use app_exit::ExitOrigin;
-    use areka_kanade::KanadeStopCause;
-    if argv_session {
-        return MarkVerdict::Untouched;
-    }
-    if logsink_fallback {
-        return MarkVerdict::Keep("logsink_fallback");
-    }
-    let Some(first) = first else {
-        return MarkVerdict::Keep("no_exit_origin");
-    };
-    match first {
-        ExitOrigin::KanadeStopped(KanadeStopCause::Fault(_)) => return MarkVerdict::Keep("fault"),
-        ExitOrigin::GhostFallbackFailed(_) => return MarkVerdict::Keep("switch_fatal"),
-        ExitOrigin::KanadeStopped(
-            KanadeStopCause::Quit
-            | KanadeStopCause::Forced
-            | KanadeStopCause::CloseSilent
-            | KanadeStopCause::DeadlineExceeded,
-        )
-        | ExitOrigin::Escape
-        | ExitOrigin::Smoke
-        | ExitOrigin::OsClose
-        | ExitOrigin::SessionEnd
-        | ExitOrigin::MemoryWriteFailed(_) => {}
-    }
-    if !end.run_ok {
-        return MarkVerdict::Keep("run_failed");
-    }
-    if end.shiori_cut {
-        return MarkVerdict::Keep("session_end_deadline");
-    }
-    if !end.down_ok {
-        return MarkVerdict::Keep("down_failed");
-    }
-    MarkVerdict::Clear
-}
-
-/// 降ろした後の印の始末: 判定して、消すなら消し（`info!(session_mark_cleared)`）、残すなら理由つきの
-/// `info!(session_mark_kept)`（`boot_resolve::keep_session_mark`）、argv なら `debug!` だけ。
-/// 呼ぶのはゴーストの実行系が 0 の時点だけ。印を消せなかった失敗は組の 2 つ目で返す（記録済み）。
-fn settle_session_mark(
-    mark: &MarkInputs,
-    end: Teardown,
-) -> (MarkVerdict, Option<areka_sylphya::PersistFailure>) {
-    let verdict = session_mark_verdict(
-        mark.first.as_ref(),
-        mark.argv_session,
-        mark.logsink_fallback,
-        end,
-    );
-    let failed = match verdict {
-        MarkVerdict::Clear => boot_resolve::clear_session_mark(&mark.app_profile_dir).err(),
-        MarkVerdict::Keep(reason) => {
-            boot_resolve::keep_session_mark(&mark.app_profile_dir, reason, mark.first.as_ref());
-            None
-        }
-        MarkVerdict::Untouched => {
-            tracing::debug!(
-                event = "session_mark_untouched_argv",
-                "[main] argv で始まったプロセスなので起動中の印に触れません"
-            );
-            None
-        }
-    };
-    (verdict, failed)
-}
-
-// ---------------------------------------------------------------------------
-// Startup Window
-// ---------------------------------------------------------------------------
-
-/// 復元マージのシーム。
-///
-/// `ghost_session::open_ghost_windows` が `spawn_ghost_windows` へ渡す placements を、起動時に
-/// 先読みした永続 entries で差し替える（保存位置優先・毎起動 live 再射影）。`open_ghost_windows` は
-/// 実モニタの列挙と作業プール（`WintfTaskPool`）を要してテスト困難なので、純粋シーム（load→apply）を
-/// 本ヘルパへ抽出して単体で檻に入れる（IO は [`areka_placement::persist::load_restored_state`] の
-/// 1 点のみ・merge は純関数）。
-fn restore_merged_placements(
-    ghost_root: &std::path::Path,
-    placements: Vec<areka_placement::resolver::ScopePlacement>,
-    snapshot: &areka_placement::follow::MonitorSnapshot,
-) -> (
-    Vec<areka_placement::resolver::ScopePlacement>,
-    std::collections::BTreeMap<usize, Option<areka_placement::chain_finalize::AdjacencyMark>>,
-    bool,
-) {
-    // 唯一の IO 点: mount 解決 → Ghost スコープ永続 entries 先読み。
-    let entries = areka_placement::persist::load_restored_state(ghost_root);
-    // 純関数 merge（永続不書込・保存位置優先 → project_restore → balloon 導出）と、記憶の位置を
-    // 寄せて表示したかの判定（窓を作る閉包が `RestoredPositionsClamped` へ据える）。
-    let (merged, clamped) =
-        areka_placement::persist::restore_and_judge(placements, &entries, snapshot);
-    // 起動時関門: 経路①（spawn 初期値）と経路②（復元 merge）はどちらもこの合流点の出力を消費するため、
-    // ここ 1 点で両方が被覆される。merge **後**に置くのは保存値優先の合流規則を変えないためで、補正は
-    // `balloon_pos`（表示位置）だけに作用する——`balloon_offset`（論理相対位置）は生値のまま
-    // （補正を焼き付けない）。
-    let merged = areka_placement::balloon_limit::apply_balloon_limit(merged, snapshot);
-    // 記憶に位置（x・y の両方）があるスコープ集合。起動の並べ直しは覚えた印で、拡大率の変化の後は
-    // 変わる直前の隣り合いで決める。値の違いでなく記憶の有無で決める＝記憶の値がたまたま既定と同じでも
-    // 記憶として扱う（判定は merge と同じ読み取り `has_saved_char_pos`）。値は覚えた隣り合いの印
-    // （無ければ None）で、窓を作る閉包が窓の一式へ据える。
-    let restored = areka_placement::persist::restored_scope_marks(&entries, &merged);
-    (merged, restored, clamped)
-}
-
-/// `PersistWiring`（NonSend）を、ゴースト窓を保持する同一 World へ挿入するシーム。
-///
-/// wired 経路（実 sink 結線成立）と fallback boot 経路（`LogSink`×2）の**両方**が、生きた ghost
-/// runtime が存在するときにこのヘルパで `runtime.sylphya_publisher().clone()` を World の NonSend
-/// リソースとして挿入する。以降、follow.rs の DragEnd 観測点が
-/// [`areka_placement::persist::persist_entries`] 経由でこの publisher の clone 送信端から保存 entries を
-/// write-through 投函できる。
-///
-/// 生きた runtime が無い経路（wired の `None` ghost・fallback の `Err`）では挿入しない＝永続結線なし
-/// （`persist_entries` は `PersistWiring` 不在で debug!＋no-op へ縮退）。挿入は純粋な World 変異ゆえ
-/// headless 単体テスト可能。
-/// を薄く包み `#[cfg(test)]` の檻に入れる）。
-fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPublisher) {
-    world.insert_non_send(areka_placement::persist::PersistWiring { publisher });
-}
-
-/// boot が `Ok` を返した直後の結線（wired／fallback の両アームが呼ぶ 1 か所）。
-///
-/// 位置永続の導管を挿入し（[`insert_persist_wiring`]）、続けて起動成功時の記憶を書く
-/// （[`record_last_used_at_boot`]）。
-fn on_boot_ok(
-    world: &mut World,
-    runtime: &areka_ghost::GhostRuntime,
-    ghost: &boot_resolve::GhostDecision,
-    balloon: &boot_resolve::BalloonDecision,
-) {
-    insert_persist_wiring(world, runtime.sylphya_publisher().clone());
-    record_last_used_at_boot(
-        runtime.sylphya_publisher(),
-        &runtime.mount().shell.dir,
-        ghost,
-        balloon,
-    );
-}
-
-/// 起動の呼び出しが返った時点の記憶（初回の起動・既定への戻しはここで書く）。
-///
-/// 経路が切替なら書かない: 壊れた切替先の名前を最後のゴーストに一瞬も載せないため、切替先の記憶は
-/// 定常到達で `ghost_switch::record_steady_memory` が同じ [`record_last_used`] で書く。
-fn record_last_used_at_boot(
-    publisher: &areka_sylphya::SylphyaPublisher,
-    shell_dir: &std::path::Path,
-    ghost: &boot_resolve::GhostDecision,
-    balloon: &boot_resolve::BalloonDecision,
-) {
-    if ghost.route == boot_resolve::GhostRoute::Switched {
-        tracing::debug!(
-            event = "last_used_deferred",
-            ghost = ?ghost.folder,
-            "[main] 切替で起こしたゴーストの記憶は定常到達まで書きません"
-        );
-        return;
-    }
-    record_last_used(publisher, shell_dir, ghost, balloon);
-}
-
-/// 最後に使ったもの（ゴースト・バルーン・シェル）を、動いているゴーストの記憶の書き手へ投函する。
-/// 書き込みは投函だけで待たない（反映は `shutdown` の barrier に任せる）。シェルのフォルダ名は
-/// `shell_dir`（`mount().shell.dir`）の末尾（非 UTF-8 は `to_string_lossy` で写す）。呼び手は起動の直後と
-/// 切替の定常到達（`ghost_switch::record_steady_memory`）。
-pub(crate) fn record_last_used(
-    publisher: &areka_sylphya::SylphyaPublisher,
-    shell_dir: &std::path::Path,
-    ghost: &boot_resolve::GhostDecision,
-    balloon: &boot_resolve::BalloonDecision,
-) {
-    let Some(shell_folder) = shell_dir.file_name().map(|n| n.to_string_lossy()) else {
-        // `<ゴースト>/shell/<名>` の形で末尾が無いことは起きない。来たら書かずに残す。
-        tracing::error!(
-            event = "last_used_shell_folder_missing",
-            shell_dir = %shell_dir.display(),
-            "[main] シェルのフォルダ名が取れないので記憶を書きません"
-        );
-        return;
-    };
-    boot_resolve::LastUsed {
-        ghost,
-        balloon,
-        shell_folder: &shell_folder,
-    }
-    .record(publisher);
-}
-
-/// 起動時モニタスナップショットの構築＋出力シーム。
-///
-/// [`areka_placement::follow::MonitorSnapshot`] は **placement の全判断が読む権威**（work area 解決・
-/// アンカー射影・可視性判定がすべてこの Resource を引く）なので、正典の出力点はこの構築点にする。
-/// ここで観測した値だけが「以後の判断が実際に見た値」であり、他所で列挙し直した値ではない。
-///
-/// 出力は共有ヘルパ [`areka_placement::diag::log_monitor_snapshot`] 1 本で、呼出点タグ
-/// [`areka_placement::MONITOR_SNAPSHOT_CONTEXT`] を名乗る。`prepare_ghost_windows` の列挙点も
-/// 同じヘルパを別タグで呼ぶため、語彙は共有したままログ上で出所を弁別でき、両者の食い違いは
-/// grep 突合で検出できる。
-///
-/// 観測を足すだけで snapshot の中身は変えない。実モニタを列挙する `ghost_session::open_ghost_windows`
-/// から切り出したシームゆえ、合成モニタで headless 檻に入る。
-///
-/// # 2 源を同じ構築関数で作る
-///
-/// 返すのは作業領域源と**モニタ別拡大率表**の組である。実行時の同期段
-/// （`areka_runtime::frame::work_area_sync`）も同じ [`areka_placement::follow::MonitorSources::from_monitors`]
-/// を通る——起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う形になり得る。
-fn boot_monitor_snapshot(
-    monitors: &[wintf::ecs::window::monitor::Monitor],
-) -> areka_placement::follow::MonitorSources {
-    areka_placement::diag::log_monitor_snapshot(
-        &areka_placement::monitor_records(monitors),
-        areka_placement::MONITOR_SNAPSHOT_CONTEXT,
-    );
-    areka_placement::follow::MonitorSources::from_monitors(monitors)
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-#[cfg(test)]
-#[path = "main_config_input_tests.rs"]
-mod config_input_tests;
-
-/// ghost 結線ヘルパの headless 単体テスト。
-///
-/// `areka_ghost::boot`／`GhostRuntime::shutdown` 自体は実 I/O・実スレッドを伴うため、
-/// ここでは純粋な組み立て・分類ロジック（`default_helper_exe_path`／`ghost_boot_options`／
-/// `is_benign_boot_error`）だけを headless に検証する。実際の boot→shutdown 一巡は
-/// 既存の実プロセス smoke テスト（`tests/smoke_boot_loop_exit.rs`）が証明する。
-#[cfg(test)]
-#[path = "main_ghost_wiring_tests.rs"]
-mod ghost_wiring_tests;
-
-/// 復元マージシームの headless 単体テスト。
-///
-/// `restore_merged_placements`（`load_restored_state`→`apply_restored_placements`）を檻に入れ、
-/// 植えた sylphya.toml の保存位置が既定位置に優先して merge 済み placements の char_pos へ載ること／
-/// 永続不在なら既定 placement に恒等であることを証明する（＝spawn される窓の初期位置が保存位置に
-/// なる結線の証明）。
-#[cfg(test)]
-#[path = "main_restore_seam_tests.rs"]
-mod restore_seam_tests;
-
-/// `PersistWiring` 挿入シームの headless 単体テスト。
-///
-/// wired／fallback 両経路が使う挿入ヘルパ `insert_persist_wiring` を檻に入れる。実 publisher
-/// （`spawn_sylphya`＋共有 fake IO）を headless World へ挿入し、(a) NonSend リソース `PersistWiring` が
-/// 存在すること、(b) その World 越しの `persist_entries` 投函が barrier 後に別ハンドルの `load_scope` で
-/// 読み戻せる（＝World レベルの配線導管が正しく確立されている）ことを証明する。
-#[cfg(test)]
-#[path = "main_persist_wiring_seam_tests.rs"]
-mod persist_wiring_seam_tests;
-
-/// 起動時モニタスナップショット出力シームの headless 単体テスト。
-///
-/// [`boot_monitor_snapshot`] を合成モニタ（混在 DPI・負座標・3200 超）で檻に入れる。
-/// 実モニタも実 GPU も要さない。
-#[cfg(test)]
-#[path = "main_monitor_snapshot_seam_tests.rs"]
-mod monitor_snapshot_seam_tests;
 
 /// `finish_after_run` の単体テスト。
 #[cfg(test)]
 #[path = "main_finish_after_run_tests.rs"]
 mod finish_after_run_tests;
 
-/// SHIORI の読み方の指定から結線を決める口と倒れ先の表。
-#[cfg(test)]
-#[path = "main_module_policy_tests.rs"]
-mod module_policy_tests;
 /// 据え付けと `run()` の後・起動中の印のテスト。
 #[cfg(test)]
 #[path = "main_session_mark_tests.rs"]

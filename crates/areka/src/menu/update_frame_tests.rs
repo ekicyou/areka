@@ -18,10 +18,10 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring, wire_menu};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::update::{self, RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason};
 
 const GHOST_URL: &str = "https://ghost.example/emo/";
@@ -45,7 +45,7 @@ fn wired_world(label: &str, ghost_homeurl: Option<&str>) -> (World, TempPath) {
     update::register(&mut world);
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: tmp.path().join("profile"),
         helper_exe: tmp.path().join("helper.exe"),
         argv_session: false,
@@ -214,13 +214,13 @@ fn rewiring_gives_a_fresh_registration_with_the_update_frame() {
     );
 }
 
-/// 読み取りだけの走り（World に [`crate::readonly::ReadOnlyRun`]）では、更新先が在っても灰色。
+/// 読み取りだけの走り（World に [`crate::session::readonly::ReadOnlyRun`]）では、更新先が在っても灰色。
 /// 対照: 印が無ければ今どおり選べる。
 #[test]
 fn item_is_greyed_in_a_readonly_run() {
     let (plain, _tmp_plain) = wired_world("areka-update-frame-plain", Some(GHOST_URL));
     let (mut readonly, _tmp_ro) = wired_world("areka-update-frame-readonly", Some(GHOST_URL));
-    readonly.insert_resource(crate::readonly::ReadOnlyRun);
+    readonly.insert_resource(crate::session::readonly::ReadOnlyRun);
     assert_eq!(
         (
             update_item(&plain).map(|i| i.enabled),

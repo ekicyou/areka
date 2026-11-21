@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use bevy_ecs::world::World;
 
-use crate::ghost_session::GhostSlot;
+use crate::session::ghost_session::GhostSlot;
 
 /// 起動中のゴースト 1 体（World も実行系も持たない値）。
 #[derive(Debug, Clone, PartialEq, Eq)]

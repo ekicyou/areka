@@ -32,7 +32,7 @@ use super::{
     ScriptedShioriBackend, ShowGateKey, SpineHarness, TalkLifecycleSignal, shell_target, show_gate,
     wait_until, wait_until_paced,
 };
-use crate::app_exit::{ExitOrigin, FirstExit, fault_of};
+use crate::session::app_exit::{ExitOrigin, FirstExit, fault_of};
 use crate::session::ghost_quit::run_ghost_quit_phase;
 use areka_placement::test_support::emily_shaped_scopes;
 

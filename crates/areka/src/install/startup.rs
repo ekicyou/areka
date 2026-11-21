@@ -10,7 +10,8 @@ use bevy_ecs::world::World;
 use super::before_boot_ports::BootPorts;
 use super::procedure::{ArchiveEnd, run_order};
 use super::{InstallOrder, InstallOrigin};
-use crate::cli::{BootRequest, InstallArgs};
+use crate::cli::InstallArgs;
+use crate::session::boot_request::BootRequest;
 
 /// exe の隣に置くと起動のたびに 1 回だけ入れる書庫の名前（大小を問わない）。
 pub(crate) const INITIAL_INSTALL_FILE: &str = "initial_install.nar";
@@ -76,7 +77,7 @@ pub(crate) struct CarriedInstall {
 impl StartupInstall {
     /// `main` から 1 度だけ（`--help`・`--offline-dump` の早い戻りの後・起動の解決の前）。
     pub(crate) fn new(args: InstallArgs) -> StartupInstall {
-        StartupInstall::new_with(args, crate::roots::user_root::exe_dir())
+        StartupInstall::new_with(args, crate::session::roots::user_root::exe_dir())
     }
 
     /// `new` の中身（テストは exe の隣の代わりに `target\` の下のフォルダを渡す）。areka はどこでも
@@ -225,23 +226,23 @@ pub(crate) fn before_boot_alert_suppressed(no_alert: bool, smoke_exit_ms: Option
 pub(crate) fn resolve_boot(
     request: &BootRequest,
     startup: &mut StartupInstall,
-) -> Result<crate::boot_config::BootResolved, crate::alert::AlertScene> {
-    let app_profile_dir = crate::boot_config::default_app_profile_dir();
+) -> Result<crate::session::boot_config::BootResolved, crate::session::alert::AlertScene> {
+    let app_profile_dir = crate::session::boot_config::default_app_profile_dir();
     let before = BeforeBootEnv {
-        readonly: crate::readonly::is_on(),
+        readonly: crate::session::readonly::is_on(),
         alert_suppressed: before_boot_alert_suppressed(
-            crate::alert::suppressed(),
+            crate::session::alert::suppressed(),
             crate::smoke_exit::smoke_exit_ms(),
         ),
     };
     resolve_boot_with_env(
-        crate::roots::resolve_roots(&app_profile_dir),
+        crate::session::roots::resolve_roots(&app_profile_dir),
         request,
         startup,
         before,
         &app_profile_dir,
-        crate::boot_resolve::pick_index,
-        crate::roots::user_root::writable_ghost,
+        crate::session::boot_resolve::pick_index,
+        crate::session::roots::user_root::writable_ghost,
     )
 }
 
@@ -249,14 +250,14 @@ pub(crate) fn resolve_boot(
 /// 入れる物を取り出して warn `root_missing` を 1 件残す。どちらの後も、`callghost` の相手を添えて
 /// 起動の解決へ渡す（根の記録と告知の場面は `resolve_boot_with` が出す）。
 pub(crate) fn resolve_boot_with_env(
-    resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
+    resolved: Result<crate::session::roots::ResolvedRoots, crate::session::roots::RootError>,
     request: &BootRequest,
     startup: &mut StartupInstall,
     before: BeforeBootEnv,
     app_profile_dir: &Path,
     pick: fn(usize) -> usize,
     prepare_ghost: fn(&BasewareRoots, &Path) -> PathBuf,
-) -> Result<crate::boot_config::BootResolved, crate::alert::AlertScene> {
+) -> Result<crate::session::boot_config::BootResolved, crate::session::alert::AlertScene> {
     let call_ghost = match &resolved {
         Ok(found) => startup.run_before_boot(&found.roots, request, before),
         Err(_) => {
@@ -266,7 +267,7 @@ pub(crate) fn resolve_boot_with_env(
             None
         }
     };
-    crate::boot_config::resolve_boot_with(
+    crate::session::boot_config::resolve_boot_with(
         resolved,
         request,
         call_ghost.as_deref(),

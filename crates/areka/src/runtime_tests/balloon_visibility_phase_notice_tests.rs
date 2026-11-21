@@ -18,7 +18,7 @@ use tracing::Level;
 
 use super::super::test_support::{Frame, TALK_ID, seen};
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 待ち時間（秒）と前の台詞の占有終端（talk 相対秒）。

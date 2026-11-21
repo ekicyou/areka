@@ -19,10 +19,10 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::ghost_session::GhostSession;
 use crate::install::desk::{InstallDesk, insert_busy_desk_for_test};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::GhostSession;
 use crate::session::ghost_switch::{
     PrevGhost, SwitchEnd, SwitchStage, SwitchTarget, WelcomeAttempt,
 };
@@ -67,7 +67,7 @@ fn rig(label: &str) -> Rig {
 pub(super) fn boot_context(temp: &TempPath, root: &BasewareRoot) -> BootContext {
     BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: temp.path().join("profile"),
         helper_exe: temp.path().join("helper.exe"),
         argv_session: false,
@@ -263,7 +263,7 @@ fn missing_ghost_or_kanade_is_no_context() {
 fn closing_returns_closing_and_exit_drops_the_mark() {
     let mut rig = rig("areka-reload-closing");
     plant_reload(&mut rig.world);
-    let (_, events) = capture(|| crate::exit_wait::begin_close(&mut rig.world));
+    let (_, events) = capture(|| crate::session::exit_wait::begin_close(&mut rig.world));
     let dropped = named(&events, "reload_dropped")
         .into_iter()
         .map(|e| {

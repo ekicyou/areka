@@ -16,8 +16,8 @@ use log_capture_kit::{CapturedEvent, capture};
 
 use super::super::RuntimeWiring;
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 
 use super::test_support::{
     OFF, ON, marked, queue_in, queue_text, state_with_channel, world_with_windows,
@@ -32,7 +32,7 @@ fn boot_context() -> BootContext {
     let root = BasewareRoot::new(PathBuf::from("skins"));
     BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: PathBuf::from("skins/profile"),
         helper_exe: PathBuf::from("skins/helper.exe"),
         argv_session: false,

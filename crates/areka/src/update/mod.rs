@@ -11,9 +11,9 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-use crate::boot_config::BootContext;
-use crate::exit_wait::{self, WorkGate};
-use crate::ghost_session::GhostSlot;
+use crate::session::boot_config::BootContext;
+use crate::session::exit_wait::{self, WorkGate};
+use crate::session::ghost_session::GhostSlot;
 use crate::session::ghost_switch::SwitchInFlight;
 
 pub(crate) mod desk;
@@ -159,7 +159,7 @@ fn judge(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> Subm
     if desk.gate.is_closing() {
         return SubmitVerdict::Closing;
     }
-    if crate::readonly::of(world) {
+    if crate::session::readonly::of(world) {
         readonly_refusal::refuse(world, &raw, reason);
         return SubmitVerdict::ReadOnly;
     }
@@ -214,7 +214,7 @@ fn judge(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> Subm
         order,
         kanade,
         roots,
-        exe_dir: crate::roots::user_root::exe_dir(),
+        exe_dir: crate::session::roots::user_root::exe_dir(),
     };
     desk::hand_over(world, job)
 }

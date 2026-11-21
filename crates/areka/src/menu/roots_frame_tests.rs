@@ -14,10 +14,10 @@ use bevy_ecs::world::World;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::menu::{MenuWiring, wire_menu};
-use crate::roots::RootsOrigin;
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::roots::RootsOrigin;
 
 /// 並び `dirs`・出どころ `origin` の起動の文脈と置き場の受け口を据え、2 枠を登記した World。
 fn wired_world(dirs: &[PathBuf], origin: RootsOrigin) -> World {
@@ -191,7 +191,7 @@ fn user_root_child_is_disabled_others_unchanged() {
 
 /// 実行ファイルのフォルダ（「置き場を先頭へ ▸」が印の付いた並びで選べなくする子）。
 fn exe_dir() -> PathBuf {
-    crate::roots::user_root::exe_dir().expect("テストの実行ファイルのフォルダ")
+    crate::session::roots::user_root::exe_dir().expect("テストの実行ファイルのフォルダ")
 }
 
 /// 書ける根を使わない形: 「置き場を先頭へ ▸」は既定名で SHIORI のリソース名なしに出て、見出しは選べ、

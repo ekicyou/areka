@@ -14,7 +14,7 @@ use areka_ghost::catalog_roots::same_folder_name;
 use bevy_ecs::world::World;
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
-use crate::ghost_session::GhostSlot;
+use crate::session::ghost_session::GhostSlot;
 use crate::session::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, request_skin_switch,
 };

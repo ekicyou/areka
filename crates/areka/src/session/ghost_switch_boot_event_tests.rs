@@ -10,7 +10,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
-use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
+use crate::session::boot_resolve::DEFAULT_GHOST_FOLDER;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_runtime::spine::RecordedCall;
 

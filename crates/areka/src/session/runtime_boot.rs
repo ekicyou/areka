@@ -22,7 +22,7 @@ use tracing::{error, warn};
 use super::ghost_switch::{self, ChangeRequestRaw};
 use super::shell_balloon_switch;
 use crate::install::install_cue::InstallCueSink;
-use crate::readme::readme_cue::ReadmeCueSink;
+use crate::session::readme::readme_cue::ReadmeCueSink;
 use crate::update::update_cue::UpdateCueSink;
 use areka_runtime::RuntimeInputs;
 use areka_runtime::change_cue::ChangeCueSink;
@@ -41,7 +41,7 @@ pub(crate) use areka_runtime::CueSinkSources;
 
 /// 受信端が窓の側に無い線の手元の端（実行系の成立後にだけ World へ据える）。
 struct RuntimeLines {
-    readme_rx: Receiver<crate::readme::ReadmeRequest>,
+    readme_rx: Receiver<crate::session::readme::ReadmeRequest>,
     no_user_break_rx: Receiver<NoUserBreakSignal>,
     /// 中断を受け入れた UI が同じ線へ「中断された」を送る送出端の複製。
     user_break_lifecycle_tx: Sender<TalkLifecycleSignal>,
@@ -131,11 +131,11 @@ pub(crate) fn boot_runtime(
         Some(kanade_stop),
         boot_origin,
         shell,
-        crate::write_failure::sender(world),
+        crate::session::write_failure::sender(world),
     ) {
         Ok(runtime) => runtime,
         Err(err) => {
-            if crate::is_benign_boot_error(&err) {
+            if crate::session::boot_config::is_benign_boot_error(&err) {
                 warn!(
                     error = %err,
                     "runtime: ghost boot の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録）"
@@ -190,12 +190,13 @@ fn install_lines(
         switch_rx,
         reload_rx,
     } = lines;
-    let readme_path = crate::readme::resolve_path(ghost_root, runtime.mount().readme.as_deref());
-    crate::readme::wire_readme(world, readme_path, readme_rx);
+    let readme_path =
+        crate::session::readme::resolve_path(ghost_root, runtime.mount().readme.as_deref());
+    crate::session::readme::wire_readme(world, readme_path, readme_rx);
     ghost_switch::wire_change_rx(world, change_rx);
     shell_balloon_switch::wire_switch_rx(world, switch_rx);
     // 「最後に届けた旗」は新しい実行系の初期値から始まる。
-    crate::input_events::user_break::wire_user_break(
+    areka_input::user_break::wire_user_break(
         world,
         no_user_break_rx,
         user_break_lifecycle_tx,

@@ -30,11 +30,11 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
-use crate::boot_config::BootContext;
-use crate::boot_resolve::{BalloonDecision, BalloonRoute};
-use crate::ghost_session::GhostSession;
-use crate::readme::ReadmeWiring;
+use crate::session::boot_config::BootContext;
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute};
+use crate::session::ghost_session::GhostSession;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::readme::ReadmeWiring;
 use areka_runtime::assets::{BootAssets, LoopTables};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::reload_args::DescriptParts;

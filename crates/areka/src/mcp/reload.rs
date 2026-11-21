@@ -6,7 +6,7 @@ use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
 use super::resolve::{self, ActiveGhost};
-use crate::log_history::{self, TARGET_ERROR};
+use crate::session::log_history::{self, TARGET_ERROR};
 use crate::session::reload::{ReloadOrigin, ReloadRequest, ReloadVerdict, request_reload};
 use areka_runtime::reload_args::{DescriptNotes, McpTarget, ReloadTarget};
 

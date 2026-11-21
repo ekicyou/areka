@@ -22,7 +22,7 @@ use wintf::ecs::drag::snapshot_drag_state;
 use wintf::ecs::pointer::{Phase, PointerState};
 use wintf::ecs::world::{EcsWorld, EcsWorldSelfRef};
 
-use crate::input_events::{MouseWiring, PendingDoubleClick, char_scope};
+use areka_input::{MouseWiring, PendingDoubleClick, char_scope};
 
 use super::captions::{self, QUERY_TIMEOUT, QueryFailure, QueryReply, Visibility};
 use super::plan::{self, MenuPlan};

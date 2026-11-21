@@ -24,7 +24,7 @@ use wintf::ecs::pointer::{ButtonReleased, OnPointerReleased, Phase, PointerState
 use wintf::ecs::{Input, Point, WindowHandle};
 
 use super::*;
-use crate::input_events::{MouseWiring, RegionSource};
+use areka_input::{MouseWiring, RegionSource};
 use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::hit_region::HitRegion;
 
@@ -161,8 +161,8 @@ fn the_readme_item_follows_the_file_at_snapshot_time() {
 
     let dir = TempPath::new("menu-readme-item");
     let path = dir.child("readme.txt");
-    let (_tx, requests) = channel::<crate::readme::ReadmeRequest>();
-    crate::readme::wire_readme(&mut world, path.clone(), requests);
+    let (_tx, requests) = channel::<crate::session::readme::ReadmeRequest>();
+    crate::session::readme::wire_readme(&mut world, path.clone(), requests);
     assert!(
         !item_of(&world, Frame::Readme).enabled,
         "ファイルが無ければ無効"
@@ -482,7 +482,7 @@ fn press_right(world: &mut World, window: Entity) {
         right_down: true,
         ..Default::default()
     };
-    crate::input_events::on_char_pointer_pressed(world, window, window, &Phase::Bubble(state));
+    areka_input::on_char_pointer_pressed(world, window, window, &Phase::Bubble(state));
 }
 
 /// 届いた照会を取り出して返信端を返す。
@@ -550,7 +550,7 @@ fn answer_visible(visible: &str) -> (World, Receiver<KanadeMsg>, Vec<String>) {
     world
         .get_non_send_mut::<MouseWiring>()
         .expect("結線済み")
-        .defer_right_double_click(crate::input_events::PendingDoubleClick {
+        .defer_right_double_click(areka_input::PendingDoubleClick {
             scope: 0,
             surface_pos: (7, 4),
             region: Some("Bust".to_string()),

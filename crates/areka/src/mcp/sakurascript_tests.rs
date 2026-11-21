@@ -13,8 +13,8 @@ use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use super::*;
-use crate::ghost_session::GhostSession;
 use crate::mcp::{McpLater, drain, install};
+use crate::session::ghost_session::GhostSession;
 
 const SCRIPT: &str = r"\0\s[0]hello\e";
 
@@ -264,16 +264,16 @@ const STRICT_HEAD: &str = "OK:strict errors will be recorded to the error log. C
 
 /// 送った後・返事の前に記録を 1 件積み、その番号を返す（答えの `<n>` が送る前の値かを測る）。
 fn record_one() -> u64 {
-    crate::log_history::record(
-        crate::log_history::Stamp {
+    crate::session::log_history::record(
+        crate::session::log_history::Stamp {
             year: 2026,
             month: 10,
             day: 30,
             hour: 12,
             minute: 0,
         },
-        crate::log_history::Draft {
-            kind: crate::log_history::Kind::Error,
+        crate::session::log_history::Draft {
+            kind: crate::session::log_history::Kind::Error,
             label: "strict".to_string(),
             name: String::new(),
             body: "test".to_string(),
@@ -287,7 +287,7 @@ fn record_one() -> u64 {
 #[test]
 fn strict_true_answer_carries_the_id_read_before_sending() {
     let (mut world, rx) = rig();
-    let before = crate::log_history::last_id();
+    let before = crate::session::log_history::last_id();
     let (pending, called) = call(&mut world, SCRIPT, None, Some(true));
     let (_, _, reply) = take_send(&rx);
     let recorded = record_one();

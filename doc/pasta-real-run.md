@@ -124,7 +124,7 @@ Remove-Item Env:AREKA_NO_ALERT, Env:AREKA_USER_ROOT -ErrorAction SilentlyContinu
 Remove-Item Env:PASTA_DEBUG -ErrorAction SilentlyContinue   # ぱすたのデバッグの待受を開かせない（2 節）
 $env:AREKA_ROOT = "$v\root"
 $env:AREKA_PROFILE_DIR = "$v\profile"
-$env:RUST_LOG = 'info,areka::boot_resolve=debug,areka::install=debug,areka_nar=debug,areka_input=debug'
+$env:RUST_LOG = 'info,areka::session::boot_resolve=debug,areka::install=debug,areka_nar=debug,areka_input=debug'
 $env:AREKA_APP_SMOKE_EXIT_MS = '3600000'
 $env:NO_COLOR = '1'
 $p = Start-Process -FilePath "$w\target\debug\areka.exe" -ArgumentList @('--ghost', "`"$v\root\ghost\pasta-in-windows`"") -WorkingDirectory $v -WindowStyle Hidden -RedirectStandardOutput "$v\logs\$run.stdout.log" -RedirectStandardError "$v\logs\$run.stderr.log" -PassThru
@@ -138,7 +138,7 @@ $p.WaitForExit(); "areka exit=$($p.ExitCode)" | Tee-Object -FilePath "$v\logs\$r
 |---|---|---|
 | `AREKA_ROOT` | `<w>\target\pasta-verify\root` | 根 |
 | `AREKA_PROFILE_DIR` | `<w>\target\pasta-verify\profile`（準備で毎回空にする） | 記憶の置き場。空なので、起動のイベントは `OnFirstBoot` になる |
-| `RUST_LOG` | `info,areka::boot_resolve=debug,areka::install=debug,areka_nar=debug,areka_input=debug` | バルーンの決め方の分岐と、マウスの形が替わったこと（段 3）が記録に出る水準。段の判定に別の分岐が要るときは、その対象を足し、足した値を記録に書く |
+| `RUST_LOG` | `info,areka::session::boot_resolve=debug,areka::install=debug,areka_nar=debug,areka_input=debug` | バルーンの決め方の分岐と、マウスの形が替わったこと（段 3）が記録に出る水準。段の判定に別の分岐が要るときは、その対象を足し、足した値を記録に書く |
 | `AREKA_APP_SMOKE_EXIT_MS` | `3600000`（60 分） | 安全弁。7 段の所要（30〜45 分の見込み）より長く |
 | `NO_COLOR` | `1` | 記録を色の制御文字の無い平文にする |
 | `AREKA_NO_ALERT`・`AREKA_USER_ROOT` | 消す | 本物の利用者の置き場（`%LOCALAPPDATA%\areka`）に触らない |

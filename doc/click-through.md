@@ -1,6 +1,6 @@
 # クリック透過機構（`WS_EX_TRANSPARENT` 動的トグル）
 
-本書は `wintf` のクリック透過機構——GPU 合成描画（WUC/DComp）を維持したまま、キャラクター描画領域以外の透明領域上のクリックを背面プロセスへ透過させる仕組み——の概要・仕組みの流れ・不採用手段の理由・API 使用例・既知の制約を記す。実装は `crates/wintf/src/ecs/clickthrough/`（`mod.rs`/`registry.rs`/`monitor.rs`/`controller.rs`）・`crates/wintf/src/win_style.rs`（`apply_click_through`）・`crates/wintf/src/runtime/mod.rs`（`wire_click_through`）・`crates/areka/src/main.rs`（DComp オプトイン＋窓登録）にある。
+本書は `wintf` のクリック透過機構——GPU 合成描画（WUC/DComp）を維持したまま、キャラクター描画領域以外の透明領域上のクリックを背面プロセスへ透過させる仕組み——の概要・仕組みの流れ・不採用手段の理由・API 使用例・既知の制約を記す。実装は `crates/wintf/src/ecs/clickthrough/`（`mod.rs`/`registry.rs`/`monitor.rs`/`controller.rs`）・`crates/wintf/src/win_style.rs`（`apply_click_through`）・`crates/wintf/src/runtime/mod.rs`（`wire_click_through`）・`crates/areka-placement/src/spawn.rs`（`register_ghost_windows_click_through`＝窓登録）にある。
 
 ## 1. 概要: 二層分離（表示層／当たり判定層）
 
@@ -133,7 +133,7 @@ pub(crate) fn start_click_through(
 areka のようなアプリ側は、窓生成後に window Entity と HWND を登録する。登録面は `pub` NonSend リソース `ClickThroughRegistryHandle` として World にあり、eval ループと同一 `Rc<RefCell<ClickThroughRegistry>>` を共有するため登録は即反映される。
 
 ```rust
-// crates/areka/src/main.rs（register_click_through_windows システム相当）
+// crates/areka-placement/src/spawn.rs（register_ghost_windows_click_through 相当）
 fn register_click_through_windows(
     new_windows: Query<(Entity, &WindowHandle),
         (Added<WindowHandle>, Or<(With<ShellWindowMarker>, With<BalloonWindowMarker>)>)>,

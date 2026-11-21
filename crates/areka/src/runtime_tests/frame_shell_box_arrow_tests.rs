@@ -21,9 +21,9 @@ use bevy_ecs::hierarchy::ChildOf;
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerState, WheelDelta};
 use wintf::ecs::{PhysicalPoint, Point};
 
-use crate::input_events::char_watch::char_watch_with;
-use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};
-use crate::input_events::{MouseWiring, RegionSource, on_char_pointer_pressed};
+use areka_input::char_watch::char_watch_with;
+use areka_input::user_break::{UserBreakWiring, drain_no_user_break_signals};
+use areka_input::{MouseWiring, RegionSource, on_char_pointer_pressed};
 use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::hit_region::HitRegion;
 use areka_runtime::user_break_cue::NoUserBreakSignal;

@@ -25,13 +25,15 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-use crate::app_exit::{ExitOrigin, WindowsClosed, close_windows_for_restart, quit_app};
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost, resolve_balloon_for_ghost};
-use crate::boot_resolve::{
+use crate::session::app_exit::{ExitOrigin, WindowsClosed, close_windows_for_restart, quit_app};
+use crate::session::boot_config::{
+    BootContext, ConfigInputs, CurrentGhost, resolve_balloon_for_ghost,
+};
+use crate::session::boot_resolve::{
     DEFAULT_GHOST_FOLDER, GhostDecision, GhostRoute, NoBalloon, pick_index, running_name,
     write_switch_drop,
 };
-use crate::ghost_session::{
+use crate::session::ghost_session::{
     GhostBootInputsSource, GhostSlot, RuntimeRebuild, boot_ghost_strict, commit_ghost_windows,
     rebuild_runtime_in_place, reopen_ghost_windows,
 };
@@ -383,9 +385,9 @@ pub(crate) fn accept_switch(
         boot_event = ?req.boot_event.as_ref().map(|(id, _)| *id),
         "切替の要求を kanade へ送った"
     );
-    let exe_dir = crate::roots::user_root::exe_dir();
+    let exe_dir = crate::session::roots::user_root::exe_dir();
     let copy = super::switch_copy::start(
-        crate::readonly::of(world),
+        crate::session::readonly::of(world),
         &ctx.roots,
         exe_dir.as_deref(),
         &target.dir,
@@ -521,7 +523,7 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
                     "切替は中止された——予約を下ろす（元のゴーストは定常へ戻るか、終了要求が勝っていれば今日どおり終わる）"
                 );
                 crate::update::desk::on_switch_end(world, false);
-            } else if world.contains_resource::<crate::session_end::SessionEnded>() {
+            } else if world.contains_resource::<crate::session::session_end::SessionEnded>() {
                 tracing::debug!(
                     event = "ghost_switch_cancelled",
                     reason = ?reason,
@@ -566,7 +568,7 @@ fn record_steady_memory(world: &World) {
         return;
     };
     let publisher = runtime.sylphya_publisher();
-    crate::record_last_used(
+    crate::session::boot_seam::record_last_used(
         publisher,
         &runtime.mount().shell.dir,
         &ctx.current.ghost,
@@ -624,7 +626,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
             RuntimeRebuild::Rebuilt => set_stage(world, WelcomeAttempt::Target),
             RuntimeRebuild::WriteFailed(failure) => {
                 end_switch(world, SwitchEnd::WriteFailure);
-                crate::write_failure::fatal(world, failure);
+                crate::session::write_failure::fatal(world, failure);
             }
             RuntimeRebuild::BootFailed
                 if same_folder_name(&target.folder, DEFAULT_GHOST_FOLDER) =>
@@ -659,7 +661,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
                 (!ctx.argv_session).then_some(target.name.as_str()),
             ) {
                 end_switch(world, SwitchEnd::WriteFailure);
-                crate::write_failure::fatal(world, failure);
+                crate::session::write_failure::fatal(world, failure);
                 return;
             }
         }
@@ -711,7 +713,7 @@ pub(crate) fn switch_to_default(world: &mut World, fallen_name: &str) {
     let default_dir = world.get_resource::<BootContext>().and_then(|ctx| {
         // 非常口は起こす前に同期で写す（写せなければ元のフォルダ）。
         areka_ghost::catalog_roots::find_ghost(&ctx.roots, DEFAULT_GHOST_FOLDER).map(|e| {
-            crate::roots::user_root::writable_copy(
+            crate::session::roots::user_root::writable_copy(
                 &ctx.roots,
                 areka_ghost::StoreKind::Ghost,
                 &e.dir,

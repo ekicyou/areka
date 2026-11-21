@@ -34,7 +34,7 @@ use bevy_ecs::world::World;
 use dola::cue::{CueCommand, CuePlayer, TalkCue};
 use wintf::ecs::FrameTime;
 
-use crate::input_events::balloon::BalloonWiring;
+use areka_input::balloon::BalloonWiring;
 use areka_runtime::assets::{BootAssets, LoopTables};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::move_cue::PositionCue;

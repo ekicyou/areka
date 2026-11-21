@@ -16,7 +16,7 @@
 // 実時間の待機は使わない。前の台詞は scope 0 に 5 文字を残す。
 // =============================================================================
 
-use crate::input_events::balloon::BalloonWiring;
+use areka_input::balloon::BalloonWiring;
 use areka_runtime::balloon_hover::BalloonHover;
 use std::sync::mpsc;
 

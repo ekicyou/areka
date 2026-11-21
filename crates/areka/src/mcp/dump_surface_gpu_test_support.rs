@@ -43,8 +43,8 @@ use wintf::com::wic::{
 };
 use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucGraphicsResource};
 
-use crate::ghost_session::GhostSlot;
 use crate::mcp::resolve;
+use crate::session::ghost_session::GhostSlot;
 use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::RectPx;

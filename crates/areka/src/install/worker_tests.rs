@@ -24,9 +24,9 @@ use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::exit_wait::{begin_close, register_gate};
 use crate::install::desk::InstallDesk;
 use crate::install::{InstallOrigin, SubmitVerdict, submit};
+use crate::session::exit_wait::{begin_close, register_gate};
 use crate::session::ghost_switch::{LastInstalledGhost, SwitchInFlight};
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_runtime::spine::RecordedCall;

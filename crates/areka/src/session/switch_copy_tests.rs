@@ -16,14 +16,14 @@ use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::readonly::ReadOnlyRun;
+use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::{
     GhostSpec, PrevGhost, SwitchRequest, SwitchTarget, SwitchVerdict, accept_switch,
     request_ghost_switch,
 };
+use crate::session::readonly::ReadOnlyRun;
 
 /// 書ける根 `user` と実行ファイルの隣の根 `exe`（同梱のゴースト `A`・`B`）。
 struct Fixture {
@@ -77,7 +77,7 @@ impl Fixture {
         let a = self.bundled("A");
         world.insert_resource(BootContext {
             roots: self.roots(),
-            roots_origin: crate::roots::RootsOrigin::Default,
+            roots_origin: crate::session::roots::RootsOrigin::Default,
             app_profile_dir: self.user.join("profile"),
             helper_exe: self.exe.join("helper.exe"),
             argv_session: false,

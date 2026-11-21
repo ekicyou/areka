@@ -20,7 +20,7 @@ use super::shared_test_support::{
     gap, low_sizes, lower_the_scale, pair_gap, remembered_placements, seat_remembered_pair,
 };
 use super::test_support::{FakeReports, FrameHarness, PerTargetSizes, pos_of};
-use crate::app_exit::close_windows_for_restart;
+use crate::session::app_exit::close_windows_for_restart;
 use areka_placement::chain_finalize::{AdjacencyMark, ChainFinalized};
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::{PointPx, ScopePlacement};

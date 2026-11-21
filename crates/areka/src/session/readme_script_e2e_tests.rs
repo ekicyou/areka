@@ -9,10 +9,10 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use super::*;
-use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::readme::os_port::{OsCall, Verb};
-use crate::readme::{FakeOs, Opener, drain_readme_requests, serve};
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch_test_support::standard_script;
+use crate::session::readme::os_port::{OsCall, Verb};
+use crate::session::readme::{FakeOs, Opener, drain_readme_requests, serve};
 use log_capture_kit::{LineFormat, capture_lines};
 
 /// 説明書を開いてから区間に入って出る起動の台本（`Leave` が読み終わりの目印）。

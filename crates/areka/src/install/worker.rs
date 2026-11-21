@@ -23,8 +23,8 @@ use super::destination::install_into;
 use super::judge::GhostFacts;
 use super::procedure::{ArchiveEnd, InstallPorts, InstalledRecord, Overwritten, Raised, run_order};
 use super::terms::TermsNotice;
-use crate::alert::{self, YesNo};
-use crate::exit_wait::WorkGate;
+use crate::session::alert::{self, YesNo};
+use crate::session::exit_wait::WorkGate;
 
 /// 背景のスレッドから窓口への頼み。どれも返信端を 1 つ持ち、窓口が答えるか落とす。
 pub(crate) enum DeskAsk {
