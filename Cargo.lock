@@ -2044,7 +2044,6 @@ name = "shiori-abi"
 version = "0.1.0"
 dependencies = [
  "thiserror",
- "windows",
  "windows-core",
 ]
 
