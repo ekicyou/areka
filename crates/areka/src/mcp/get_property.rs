@@ -1,4 +1,4 @@
-//! `get_property` の処理（spec: areka-P0-mcp-get-property）。
+//! `get_property` の処理。
 //!
 //! 置き場の実行系の記憶の読み手に、そのゴースト自身の問い手として名前を聞き、
 //! 値なら素のまま、無ければ `NG:Cannot find such property name.` で答える。
@@ -18,7 +18,7 @@ const NOT_FOUND: &str = "Cannot find such property name.";
 /// 置き場に実行系が無いときの本文（areka 独自）。
 const UNAVAILABLE: &str = "Property system is not available";
 
-/// 置き場の実行系から読み、返る前にちょうど 1 回答える（要件 1.1〜1.6・2.1〜2.3・3.1〜3.3）。
+/// 置き場の実行系から読み、返る前にちょうど 1 回答える。
 ///
 /// 名前は手直しせず読み手へ渡す。`ghost` は実行系が無いときの `warn!` の欄にだけ使う
 /// （実行系は置き場の 1 つから引く）。待たず、普通の答えでは記録を出さない。

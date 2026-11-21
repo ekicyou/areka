@@ -1,5 +1,4 @@
-//! 閉じる → 出すの競り合いを、着く順の全部の並びで固定する（spec: areka-P0-animated-image-playback
-//! task 4.4・要件 2.3・3.3・design Testing 7）。
+//! 閉じる → 出すの競り合いを、着く順の全部の並びで固定する。
 //!
 //! 面の表・コマ・指令の送り方は 4.2 と同じ `presenter_test_support.rs` の補助を使う（面 0 ＝
 //! 回数つき `fin.png`（3 コマ）と終わりなし `end.png`（2 コマ）を並べたバルーン、面 1 ＝静止画）。

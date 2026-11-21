@@ -1,19 +1,19 @@
 // =============================================================================
-// 利用者の中断の判定と送り出しの決定論テスト（areka-P0-balloon-break）
+// 利用者の中断の判定と送り出しの決定論テスト
 // =============================================================================
 //
 // 押下を中断にするかの判定・中断を禁じる旗の出入り・送出が 1 件ずつであることをここで固定する。
 //
 // 純関数 2 本（`judge_press`・`fold_no_user_break`）について確かめること: 押下 1 回を 5 つの
 // 結論へ写す順序（左ダブルクリックでない・選択の確定に消費された・バルーンが出ていない・
-// 無効化の区間・受理）と、その順序が上から順であること（要件 1.2・1.5・1.6・1.9・2.3・7.1・
-// 7.3）。旗は入る・出る・トークの始まりで解く・区間外の「出る」の 4 通りと、入れ子を数えない
-// ことを固定する（要件 5.1・5.2・5.4・5.5・5.6）。
+// 無効化の区間・受理）と、その順序が上から順であること。旗は入る・出る・トークの始まりで解く・
+// 区間外の「出る」の 4 通りと、入れ子を数えない
+// ことを固定する。
 //
 // 押下の入口と旗の取り出しについて確かめること: 受理のとき 2 本の線へちょうど 1 件ずつ届く・
 // 片方の線の受け手が消えていても記録してもう片方へは届ける・結線前は何もしない・無効化の
 // 区間ではどちらの線へも送らない・直前の押下の記憶は読んでから上書きする・旗の出入りが
-// 記録される（要件 1.1・1.7・1.8・2.3・5.7・6.3・6.4・6.6）。
+// 記録される。
 //
 // 「バルーンが出ているか」は表示層への照会で、GPU 無しのテストでは可視のバルーンを作れない
 // （表示が一度も確立していない target は可視化できない）。そこで送り出しのテストは照会の結果を
@@ -21,7 +21,7 @@
 // 足した薄い包みで、照会が効いていること（可視を決め打ちしていないこと）は 1 本で確かめる。
 //
 // 結線 `wire_user_break` について確かめること: 旗の取り出しがポインタの配送より前に登録されて
-// いて、押下と同じ巡に届いた合図がその押下の判定に効く（要件 4.5・5.1）。入力の段は wintf が
+// いて、押下と同じ巡に届いた合図がその押下の判定に効く。入力の段は wintf が
 // 組んだ本物を使い、押下は本物の配送を通す。
 
 use std::sync::mpsc::{self, Receiver};
@@ -50,13 +50,13 @@ fn judge(args: (DoubleClick, bool, bool, Option<bool>, bool)) -> PressVerdict {
 
 // ---------------------------------------------------------------- 押下の判定
 
-/// 何も妨げが無ければ受け入れる（要件 1.1・1.6）。
+/// 何も妨げが無ければ受け入れる。
 #[test]
 fn all_clear_is_break() {
     assert_eq!(judge(all_clear()), PressVerdict::Break);
 }
 
-/// 左以外のダブルクリック・単押しからは中断の合図を作らない（要件 1.2）。
+/// 左以外のダブルクリック・単押しからは中断の合図を作らない。
 #[test]
 fn non_left_double_click_is_not_double_click() {
     for kind in [
@@ -76,7 +76,7 @@ fn non_left_double_click_is_not_double_click() {
     }
 }
 
-/// 今回の押下が選択の確定なら作らない（要件 1.5）。
+/// 今回の押下が選択の確定なら作らない。
 #[test]
 fn selected_now_is_consumed_by_selection() {
     let mut args = all_clear();
@@ -84,7 +84,7 @@ fn selected_now_is_consumed_by_selection() {
     assert_eq!(judge(args), PressVerdict::ConsumedBySelection);
 }
 
-/// 1 打目が選択の確定だったときの 2 打目も作らない（要件 1.5・判断分岐 ⑸）。
+/// 1 打目が選択の確定だったときの 2 打目も作らない（判断分岐 ⑸）。
 #[test]
 fn prev_press_selected_is_consumed_by_selection() {
     let mut args = all_clear();
@@ -92,7 +92,7 @@ fn prev_press_selected_is_consumed_by_selection() {
     assert_eq!(judge(args), PressVerdict::ConsumedBySelection);
 }
 
-/// バルーンが隠れている・表示層に相手が居ないのどちらも作らない（要件 1.9）。
+/// バルーンが隠れている・表示層に相手が居ないのどちらも作らない。
 #[test]
 fn balloon_not_visible_is_balloon_hidden() {
     for visible in [Some(false), None] {
@@ -106,7 +106,7 @@ fn balloon_not_visible_is_balloon_hidden() {
     }
 }
 
-/// 無効化の区間では退ける（要件 2.3・判断分岐 ⑷）。
+/// 無効化の区間では退ける（判断分岐 ⑷）。
 #[test]
 fn no_user_break_is_disabled() {
     let mut args = all_clear();
@@ -114,20 +114,17 @@ fn no_user_break_is_disabled() {
     assert_eq!(judge(args), PressVerdict::Disabled);
 }
 
-/// 判定は上から順で、先に当たった結論が後ろの結論より優先する（design「判定の順」）。
+/// 判定は上から順で、先に当たった結論が後ろの結論より優先する。
 #[test]
 fn verdicts_are_ordered_top_down() {
-    // 左でない × 他 3 つすべて → 左でないが勝つ
     assert_eq!(
         judge_press(DoubleClick::Right, true, true, Some(false), true),
         PressVerdict::NotDoubleClick
     );
-    // 選択の確定 × 隠れている × 無効化 → 選択の確定が勝つ
     assert_eq!(
         judge_press(DoubleClick::Left, true, false, Some(false), true),
         PressVerdict::ConsumedBySelection
     );
-    // 隠れている × 無効化 → 隠れているが勝つ
     assert_eq!(
         judge_press(DoubleClick::Left, false, false, None, true),
         PressVerdict::BalloonHidden
@@ -136,7 +133,7 @@ fn verdicts_are_ordered_top_down() {
 
 // ---------------------------------------------------------------- 旗の畳み込み
 
-/// `\![enter,nouserbreakmode]` で区間に入る（要件 5.1）。
+/// `\![enter,nouserbreakmode]` で区間に入る。
 #[test]
 fn enter_raises_flag() {
     assert_eq!(
@@ -145,7 +142,7 @@ fn enter_raises_flag() {
     );
 }
 
-/// `\![leave,nouserbreakmode]` で区間から出る（要件 5.2）。
+/// `\![leave,nouserbreakmode]` で区間から出る。
 #[test]
 fn leave_inside_section_lowers_flag() {
     assert_eq!(
@@ -154,7 +151,7 @@ fn leave_inside_section_lowers_flag() {
     );
 }
 
-/// 区間外の「出る」は旗を下ろしたままにし、その旨を返す（要件 5.6）。
+/// 区間外の「出る」は旗を下ろしたままにし、その旨を返す。
 #[test]
 fn leave_outside_section_is_reported() {
     assert_eq!(
@@ -163,7 +160,7 @@ fn leave_outside_section_is_reported() {
     );
 }
 
-/// 閉じ忘れたままトークが始まったら解く（要件 5.4）。
+/// 閉じ忘れたままトークが始まったら解く。
 #[test]
 fn talk_started_clears_flag() {
     assert_eq!(
@@ -177,7 +174,7 @@ fn talk_started_clears_flag() {
 }
 
 /// トークが終わったら旗を下ろす——`\![leave,nouserbreakmode]` を書かずに終わったトークの旗を、
-/// 次のトークの立ち上がりまで残さない（areka-P0-status-execution-states 要件 3.3・3.4）。
+/// 次のトークの立ち上がりまで残さない。
 #[test]
 fn talk_ended_lowers_flag() {
     assert_eq!(
@@ -192,7 +189,7 @@ fn talk_ended_lowers_flag() {
     );
 }
 
-/// 入れ子は数えない——「入る」2 回でも「出る」1 回で区間から出る（要件 5.5）。
+/// 入れ子は数えない——「入る」2 回でも「出る」1 回で区間から出る。
 #[test]
 fn nesting_is_not_counted() {
     let (flag, _) = fold_no_user_break(false, NoUserBreakSignal::Enter);
@@ -275,7 +272,7 @@ fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> 
         .collect()
 }
 
-/// 受理のとき、表示の合図の線と運行への線へちょうど 1 件ずつ届く（要件 1.1・2.8・6.6）。
+/// 受理のとき、表示の合図の線と運行への線へちょうど 1 件ずつ届く。
 #[test]
 fn accepted_break_sends_exactly_one_to_each_line() {
     let mut lines = Lines::wired();
@@ -303,7 +300,7 @@ fn accepted_break_sends_exactly_one_to_each_line() {
 }
 
 /// 単押しは中断にせず、検出としても記録しない。同じ窓で左ダブルクリックの検出が見えている
-/// ことで、「記録が無い」が捕捉の空振りでないことを示す（要件 1.2・6.6）。
+/// ことで、「記録が無い」が捕捉の空振りでないことを示す。
 #[test]
 fn single_press_sends_nothing_and_is_not_recorded_as_detected() {
     let mut lines = Lines::wired();
@@ -315,7 +312,7 @@ fn single_press_sends_nothing_and_is_not_recorded_as_detected() {
     assert_eq!(named(&events, "balloon_break_detected").len(), 1);
 }
 
-/// 表示の側の受け手が消えていても記録し、運行への要求は送る（要件 1.7・6.4）。
+/// 表示の側の受け手が消えていても記録し、運行への要求は送る。
 #[test]
 fn dropped_lifecycle_receiver_is_recorded_and_kanade_still_receives() {
     let mut lines = Lines::wired();
@@ -329,7 +326,7 @@ fn dropped_lifecycle_receiver_is_recorded_and_kanade_still_receives() {
     assert_eq!(lines.kanade().len(), 1, "もう一方の送出はやめない");
 }
 
-/// 運行の側の受け手が消えていても記録し、隠す合図は送る（要件 1.7・6.4）。
+/// 運行の側の受け手が消えていても記録し、隠す合図は送る。
 #[test]
 fn dropped_kanade_receiver_is_recorded_and_lifecycle_still_receives() {
     let mut lines = Lines::wired();
@@ -343,7 +340,7 @@ fn dropped_kanade_receiver_is_recorded_and_lifecycle_still_receives() {
     assert_eq!(lines.lifecycle(), vec![TalkLifecycleSignal::UserBreak]);
 }
 
-/// 結線前の押下は記録だけして何もしない（要件 1.8）。
+/// 結線前の押下は記録だけして何もしない。
 #[test]
 fn unwired_press_is_recorded_and_does_nothing() {
     let mut world = World::new();
@@ -361,7 +358,7 @@ fn unwired_press_is_recorded_and_does_nothing() {
 }
 
 /// 無効化の区間ではどちらの線へも送らず、退けた旨を記録する。区間を出れば同じ押下が受理に
-/// なる（要件 2.3・6.3・判断分岐 ⑷）。
+/// なる（判断分岐 ⑷）。
 #[test]
 fn disabled_section_sends_nothing_until_left() {
     let mut lines = Lines::wired();
@@ -387,7 +384,7 @@ fn disabled_section_sends_nothing_until_left() {
 }
 
 /// 直前の押下の記憶は読んでから今回で上書きする: 選択を確定した単押しに続く左ダブルクリックは
-/// 何も送らず、その次の左ダブルクリックは受理になる（要件 1.5・判断分岐 ⑸）。
+/// 何も送らず、その次の左ダブルクリックは受理になる（判断分岐 ⑸）。
 #[test]
 fn previous_press_memory_is_read_then_overwritten() {
     let mut lines = Lines::wired();
@@ -413,7 +410,7 @@ fn previous_press_memory_is_read_then_overwritten() {
 }
 
 /// 話している最中の単クリックでアンカーを選ぶと、続く 2 打目（左ダブルクリック）は中断に
-/// ならない（areka-P0-anchor-tag-canon 要件 3.4）。1 打目の「選択で使った」は、当たった範囲が
+/// ならない。1 打目の「選択で使った」は、当たった範囲が
 /// アンカーでも選択の知らせが作られることから来る。2 打目はアンカーの上のまま（範囲が残って
 /// いる）でも、範囲の外（答えの台詞に替わった）でも同じ。
 #[test]
@@ -448,7 +445,7 @@ fn second_click_after_selecting_an_anchor_is_not_a_break() {
 }
 
 /// 外側の入口は表示層へ照会した結果で判定する: 表示層に相手が居なければ、結線済みでも
-/// どちらの線へも送らない（要件 1.9）。
+/// どちらの線へも送らない。
 #[test]
 fn on_left_press_asks_the_presenter_and_ignores_when_no_balloon_is_shown() {
     let mut lines = Lines::wired();
@@ -463,7 +460,7 @@ fn on_left_press_asks_the_presenter_and_ignores_when_no_balloon_is_shown() {
     assert_eq!(ignored[0].field_str("reason"), Some("balloon_hidden"));
 }
 
-/// 旗の取り出しは、旗が変わったときと区間外の「出る」を記録する（要件 5.6・5.7・6.3）。
+/// 旗の取り出しは、旗が変わったときと区間外の「出る」を記録する。
 #[test]
 fn drain_records_flag_changes_and_leave_outside() {
     let mut lines = Lines::wired();
@@ -480,7 +477,6 @@ fn drain_records_flag_changes_and_leave_outside() {
     assert_eq!(changed[0].field("value"), Some("true"));
     assert!(lines.flag());
 
-    // 閉じ忘れたままトークが始まる → 解ける。続く「出る」は区間外。
     let (_, events) = capture(|| {
         lines.flag_tx.send(NoUserBreakSignal::TalkStarted).unwrap();
         lines.flag_tx.send(NoUserBreakSignal::Leave).unwrap();
@@ -503,7 +499,7 @@ fn drain_without_wiring_does_nothing() {
     assert!(world.get_non_send::<UserBreakWiring>().is_none());
 }
 
-// ---------------------------------------------------------------- 旗の変化の届け（areka-P0-status-execution-states）
+// ---------------------------------------------------------------- 旗の変化の届け
 
 /// 運行への線へ届いた分のうち、中断の無効化モードの知らせだけを値で取り出す。
 fn no_user_break_updates(msgs: &[KanadeMsg]) -> Vec<bool> {
@@ -515,8 +511,8 @@ fn no_user_break_updates(msgs: &[KanadeMsg]) -> Vec<bool> {
         .collect()
 }
 
-/// 「入る」の後、kanade へ旗の知らせがちょうど 1 件届く。同じ巡に「入る」が重なっても 1 件
-/// （要件 3.1）。旗が変わらない巡は何も送らない。
+/// 「入る」の後、kanade へ旗の知らせがちょうど 1 件届く。同じ巡に「入る」が重なっても 1 件。
+/// 旗が変わらない巡は何も送らない。
 #[test]
 fn enter_sends_exactly_one_no_user_break_true_to_kanade() {
     let mut lines = Lines::wired();
@@ -534,7 +530,7 @@ fn enter_sends_exactly_one_no_user_break_true_to_kanade() {
 }
 
 /// 同じ巡に「入る」とトークの終わりが届けば、畳んだ後の旗は最後に送った値と同じなので
-/// 何も送らない（要件 3.1・3.3・全件畳んでから比べる）。
+/// 何も送らない（全件畳んでから比べる）。
 #[test]
 fn enter_and_talk_ended_in_the_same_drain_send_nothing() {
     let mut lines = Lines::wired();
@@ -546,8 +542,7 @@ fn enter_and_talk_ended_in_the_same_drain_send_nothing() {
     assert!(!lines.flag());
 }
 
-/// `\![leave,nouserbreakmode]` を書かずにトークが終わっても、旗が下りたことが kanade へ届く
-/// （要件 3.2・3.3・3.4）。
+/// `\![leave,nouserbreakmode]` を書かずにトークが終わっても、旗が下りたことが kanade へ届く。
 #[test]
 fn talk_ended_without_leave_sends_false_after_true() {
     let mut lines = Lines::wired();
@@ -560,7 +555,7 @@ fn talk_ended_without_leave_sends_false_after_true() {
     assert_eq!(no_user_break_updates(&msgs), vec![false]);
 }
 
-/// kanade の受け手が消えていれば error を 1 行記録し、最後に送った値は更新しない（要件 7.1）。
+/// kanade の受け手が消えていれば error を 1 行記録し、最後に送った値は更新しない。
 /// 合図の届かない巡では送り直さない（記録が毎巡積もらない）。
 #[test]
 fn dropped_kanade_receiver_records_one_error_and_keeps_the_last_sent_value() {
@@ -635,7 +630,7 @@ fn drain_is_ordered_before_dispatch(world: &World) -> bool {
 }
 
 /// 旗の取り出しは、同じ巡のポインタの配送より前に走る: 押下と同じ巡に届いた「入る」で
-/// その押下が退けられ、押下と同じ巡に届いた「出る」でその押下が受理になる（要件 4.5・5.1）。
+/// その押下が退けられ、押下と同じ巡に届いた「出る」でその押下が受理になる。
 ///
 /// 入力の段は wintf が組んだ本物（`EcsWorld::new` がポインタの配送を登録済み）で、そこへ結線
 /// `wire_user_break` が持ち物を入れ、登録 `register_user_break_drain` が取り出しを足す。登録を「配送の後」へ変えると、1 巡目の押下は旗が
@@ -673,7 +668,6 @@ fn signal_arriving_in_the_same_round_is_drained_before_the_press_is_judged() {
         "止めない（旗の知らせは別のテストで見る）"
     );
 
-    // 2 巡目: 「出る」と押下が同じ巡に届く → 受理。
     flag_tx.send(NoUserBreakSignal::Leave).unwrap();
     world.entity_mut(window).insert(left_double_click());
     world.run_schedule(Input);
@@ -691,7 +685,7 @@ fn signal_arriving_in_the_same_round_is_drained_before_the_press_is_judged() {
     );
 }
 
-// ---------------------------------------------------------------- 登録と受信端（areka-P0-ghost-restart-unit 要件 2.1・2.4）
+// ---------------------------------------------------------------- 登録と受信端
 
 /// 入力の段に載っている系の数（段がまだ無ければ 0）。
 fn input_systems_len(world: &World) -> usize {
@@ -747,7 +741,7 @@ fn flag_source_connected_is_true_while_the_sender_lives_even_with_an_unread_valu
 }
 
 /// 旗の受信端は、送出端が落ちていれば未読の値が残っていても「古い」（1 度の `try_recv` が
-/// `Ok` を返しても生きているとは言わない・設計レビューの指摘 1）。
+/// `Ok` を返しても生きているとは言わない）。
 #[test]
 fn flag_source_connected_is_false_after_the_sender_drops_even_with_an_unread_value() {
     let (flag_tx, flag_rx) = mpsc::channel();
@@ -760,7 +754,7 @@ fn flag_source_connected_is_false_after_the_sender_drops_even_with_an_unread_val
     assert!(!wiring.flag_source_connected(), "送出端は落ちている");
 }
 
-// ---------------------------------------------------------------- 話している最中か・箱での中断（areka-P0-shell-balloon 要件 9.6）
+// ---------------------------------------------------------------- 話している最中か・箱での中断
 
 impl Lines {
     fn talking(&self) -> bool {
@@ -776,7 +770,7 @@ impl Lines {
     }
 }
 
-/// 台詞の始まりで真・終わりで偽。中断を禁じる区間の出入りは旗を動かさない（要件 9.6）。
+/// 台詞の始まりで真・終わりで偽。中断を禁じる区間の出入りは旗を動かさない。
 #[test]
 fn talk_signals_flip_the_talking_flag() {
     let mut lines = Lines::wired();
@@ -791,7 +785,7 @@ fn talk_signals_flip_the_talking_flag() {
 }
 
 /// 話している最中の箱の左ダブルクリックは、普通のバルーンの窓の左ダブルクリックと同じ
-/// 送り出し（「隠せ」→「止めろ」が 1 件ずつ）になる（要件 9.6）。
+/// 送り出し（「隠せ」→「止めろ」が 1 件ずつ）になる。
 #[test]
 fn box_break_dispatches_the_same_as_the_balloon_double_click() {
     let mut balloon = Lines::wired();
@@ -828,7 +822,7 @@ fn box_break_dispatches_the_same_as_the_balloon_double_click() {
     );
 }
 
-/// 話していないあいだの箱の左ダブルクリックはシェルへの操作で、何も送らない（要件 9.6・9.7）。
+/// 話していないあいだの箱の左ダブルクリックはシェルへの操作で、何も送らない。
 #[test]
 fn box_double_click_while_not_talking_is_a_shell_op() {
     let mut lines = Lines::wired();
@@ -839,7 +833,7 @@ fn box_double_click_while_not_talking_is_a_shell_op() {
     assert!(lines.lifecycle().is_empty() && lines.kanade().is_empty());
 }
 
-/// 中断を禁じる区間では何も送らず、debug を 1 行だけ残す（要件 9.6）。
+/// 中断を禁じる区間では何も送らず、debug を 1 行だけ残す。
 #[test]
 fn box_break_in_the_no_break_section_sends_nothing_and_logs_one_debug_line() {
     let mut lines = Lines::wired();

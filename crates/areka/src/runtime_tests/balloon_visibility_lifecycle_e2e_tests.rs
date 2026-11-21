@@ -1,21 +1,19 @@
 // =============================================================================
-// 会話終了観測から判断中核までの端から端（task 6.6 の 4 番目の項）
+// 会話終了観測から判断中核までの端から端のテスト。
 //
-// 既存の 2 本は鎖の別々の区間しか見ていない:
-//   - `talk_lifecycle_tests.rs`（task 6.3）は**送出側**——台本の占有終端が sink から出ること。
-//   - `frame_attach_tests.rs::talk_playback_reaches_runtime_wiring_lifecycle_receiver`（task 4.1）は
-//     **受信端まで**——信号がフレーム配線の受け口へ届くこと。
-// どちらも「届いた信号が判断中核の計測起点になる」ところを見ていない。ここが繋ぎ目である。
+// `talk_lifecycle_tests.rs` は送出側（台本の占有終端が sink から出ること）、
+// `frame_attach_tests.rs::talk_playback_reaches_runtime_wiring_lifecycle_receiver` は受信端まで
+// （信号がフレーム配線の受け口へ届くこと）しか見ない。届いた信号が判断中核の計測起点になる繋ぎ目をここで見る。
 //
 // 実台本を compile して実 `CuePlayer` で再生し、実 `BalloonLifecycleSink` から mpsc を通し、
 // 本番の相関数を 1 フレーム回して、判断中核が持つ占有終端と、その終端を起点に確立した計測が
 // 台本の占有区間の終端と一致することを主張する。
 //
-// 表示層は headless（GPU 資源なし）で足りる——本項が見るのは時刻の鎖であって描画ではない。
-// 再生は注入時刻のみで駆動し、実時間の待機は用いない（Requirements 4.9 / 9.2 / 9.3）。
+// 表示層は headless（GPU 資源なし）で足りる。見るのは時刻の鎖であって描画ではない。
+// 再生は注入時刻のみで駆動し、実時間の待機は用いない。
 //
-// 続き（時間切れで隠し、受け口の番号の知らせが kanade へ届くまで）は、バルーンを可視にできる
-// 実 GPU の檻 `frame_balloon_timeout_notice_e2e_tests.rs` が持つ（areka-P0-balloon-lifecycle-events task 5.2）。
+// 時間切れで隠し、受け口の番号の知らせが kanade へ届くまでは、バルーンを可視にできる
+// 実 GPU の檻 `frame_balloon_timeout_notice_e2e_tests.rs` が持つ。
 // =============================================================================
 
 use areka_runtime::balloon_hover::BalloonHover;
@@ -46,7 +44,7 @@ use areka_runtime::target_map::balloon_target;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 use super::{configured_timeout_secs, run_balloon_visibility_phase};
-// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+// 私有の欄は渡し口から読み書きする。
 use areka_runtime::balloon_visibility::test_support::display_end;
 
 /// 表示資産を 1 つも持たない `BootAssets`（相は資産を読まない——読むのは `balloon_models` だけ）。
@@ -68,7 +66,7 @@ fn empty_assets() -> BootAssets {
     }
 }
 
-/// 台本の占有終端が判断中核の計測起点になる（Requirement 4.1 の端から端）。
+/// 台本の占有終端が判断中核の計測起点になる。
 ///
 /// 待機（`\w9`）を含む台本を使う——占有終端が最後の文字の出現時刻より**後**になる形であり、
 /// 「最後の文字が出た時刻」を起点に採る実装ではここが必ず食い違う。
@@ -122,7 +120,6 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
         96,
     );
 
-    // ── 実台本 → compile → `CuePlayer` → 実 `BalloonLifecycleSink` → mpsc ──
     let instructions = areka_parsers::sakura::parse(r"\0あい\w9\1うえ\e");
     let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());
     let horizon = compiled.sheet.absolute_end_time();
@@ -142,7 +139,6 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
         lifecycle_tx,
         wiring.clock.clone(),
     )));
-    // 台本の発火時刻を昇順に辿り、最後に占有終端へ達する（sleep もスピンも使わない）。
     let mut tick_points: Vec<f64> = compiled
         .sheet
         .cues()
@@ -165,23 +161,20 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     });
     wiring.clock.observe_cue(0.0);
     // 台本を最後まで流し終えたところで受け口が落ち、トークの終わり（止まった時刻＝占有終端）が
-    // 届く。時間切れの計測はこれが届いてから始まる（areka-P0-balloon-lifecycle-events 決定 D6）。
+    // 届く。時間切れの計測はこれが届いてから始まる。
     *wall.lock().expect("時計の錠") = horizon;
     drop(player);
     let now = horizon + 1.0;
     world.insert_resource(FrameTime(now));
 
-    // ── 本番の相を 1 フレーム回す ──
     let (_, events) = capture(|| run_balloon_visibility_phase(&mut wiring, &mut world));
 
-    // ⑴ 判断中核が持つ占有終端が台本の占有区間の終端と一致する。
     assert_eq!(
         display_end(&wiring.balloon_visibility),
         Some(horizon),
         "台本の占有区間の終端が sink→受信端→判断中核まで無傷で届く（待機込み・Requirement 4.1）"
     );
 
-    // ⑵ その終端を起点に計測が確立している（起点を現在時刻に取り違えるとここで落ちる）。
     let started: Vec<&CapturedEvent> = events
         .iter()
         .filter(|e| e.message().contains("タイムアウト計測を開始"))

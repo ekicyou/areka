@@ -1,4 +1,4 @@
-//! `--install` の値の並びと語 `callghost`・`deletesource`（startup-install-option 要件 1.1・1.3〜1.6・9.1・10.5）。
+//! `--install` の値の並びと語 `callghost`・`deletesource`。
 
 use super::*;
 use crate::cli::InstallArgs;
@@ -45,7 +45,7 @@ fn without(word: &str) -> ParseNote {
     ParseNote::InstallWordWithoutInstall { word: s(word) }
 }
 
-/// 1.1: 値は書いた順・書いた綴りのまま。短い形・旧い形・`=` の形・重ねは続けて足す（`Repeated` は出ない）。
+/// 値は書いた順・書いた綴りのまま。短い形・旧い形・`=` の形・重ねは続けて足す（`Repeated` は出ない）。
 #[test]
 fn install_values_in_written_order() {
     let rows: Vec<(Vec<&str>, Vec<&str>)> = vec![
@@ -59,7 +59,7 @@ fn install_values_in_written_order() {
             vec!["--install", "b.nar", "--random", "-i", "a.nar"],
             vec!["b.nar", "a.nar"],
         ),
-        // 綴りのまま（相対・大小・空白入り）。空の値は入らない（1.2 の「空の値は値なし」）
+        // 綴りのまま（相対・大小・空白入り）。空の値は入らない
         (
             vec!["--install", r"x\B.NAR", "", r"C:\d e\f.nar"],
             vec![r"x\B.NAR", r"C:\d e\f.nar"],
@@ -85,7 +85,7 @@ fn install_values_in_written_order() {
     }
 }
 
-/// 1.3: 値が 0 本の `--install` は注 1 件で、まとめの無視の側へ。重ねても 1 件。
+/// 値が 0 本の `--install` は注 1 件で、まとめの無視の側へ。重ねても 1 件。
 #[test]
 fn install_without_values_is_one_note() {
     let rows: Vec<Vec<&str>> = vec![
@@ -112,7 +112,7 @@ fn install_without_values_is_one_note() {
     }
 }
 
-/// 1.4: 2 つの語は大小を問わず、カンマの並び・`--option` の重ねでも効く語になり、まだ扱わない記録は出ない。
+/// 2 つの語は大小を問わず、カンマの並び・`--option` の重ねでも効く語になり、まだ扱わない記録は出ない。
 /// `kiosk` は今のまま「まだ扱わない」。
 #[test]
 fn install_words_are_effective_with_install() {
@@ -148,7 +148,7 @@ fn install_words_are_effective_with_install() {
     assert_eq!(ignored, &[s("kiosk")]);
 }
 
-/// 1.5・10.5: `--install` の値なしの語は語ごとに注 1 件、旗は偽、まとめの無視の側へ。ほかは変えない。
+/// `--install` の値なしの語は語ごとに注 1 件、旗は偽、まとめの無視の側へ。ほかは変えない。
 #[test]
 fn install_words_without_install_are_noted_and_off() {
     // (引数, まとめの前の材料, 効く, 無視)
@@ -182,12 +182,11 @@ fn install_words_without_install_are_noted_and_off() {
         assert_eq!(effective, want_effective.as_slice(), "{args:?}");
         assert_eq!(ignored, want_ignored.as_slice(), "{args:?}");
     }
-    // ほかは変えない
     let parsed = run(&["--option", "nobootcheck,callghost"]);
     assert!(parsed.options.boot.no_boot_check);
 }
 
-/// 1.6: `--offline-dump` と一緒なら今の決まりどおり、`install` と `option` は効かせない記録に載り、
+/// `--offline-dump` と一緒なら今の決まりどおり、`install` と `option` は効かせない記録に載り、
 /// 名前と語はまとめの無視の側へ。値なしや語だけでも `--install` 向けの注は出ない。
 #[test]
 fn install_with_offline_dump_is_not_effective() {
@@ -238,7 +237,7 @@ fn install_with_offline_dump_is_not_effective() {
     }
 }
 
-/// 記録の形: 設計の記録の表の `event`・warn・前置き `[cli]`。
+/// 記録の形: `event`・warn・前置き `[cli]`。
 #[test]
 fn install_notes_log_one_warn_each() {
     use tracing::Level;

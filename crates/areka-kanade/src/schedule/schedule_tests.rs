@@ -112,7 +112,7 @@ fn shiori_down_goes_to_unloading_fault() {
         },
         &config(),
     );
-    // 死活報告の種類と理由がそのまま終了原因へ載る（要件 2.2）。
+    // 死活報告の種類と理由がそのまま終了原因へ載る。
     let Phase::Unloading {
         cause: TermCause::Fault(fault),
     } = &next.phase
@@ -141,7 +141,7 @@ fn shiori_reply_failed_goes_to_unloading_fault() {
         },
         &config(),
     );
-    // 呼出失敗の種類と理由（`error=` と同じ Display の文言）が終了原因へ載る（要件 2.2）。
+    // 呼出失敗の種類と理由（`error=` と同じ Display の文言）が終了原因へ載る。
     let Phase::Unloading {
         cause: TermCause::Fault(fault),
     } = &next.phase
@@ -257,7 +257,7 @@ fn initial_state_is_idle_with_monotonic_counter() {
     );
 }
 
-// --- 10. Mouse 横断ルーティング（DD-IE-8） ---
+// --- 10. Mouse 横断ルーティング ---
 
 fn mouse_move() -> MouseInput {
     MouseInput {
@@ -270,7 +270,7 @@ fn mouse_move() -> MouseInput {
 }
 
 // 非 Steady フェーズ（boot／close／terminate 後）への Mouse は状態不変・SHIORI 問い合わせ
-// 一切なし（DD-IE-8: マウスは Steady でのみ受理・他は安全に無視）。
+// 一切なし（マウスは Steady でのみ受理・他は安全に無視）。
 #[test]
 fn mouse_input_in_non_steady_phases_is_ignored() {
     for phase in [
@@ -296,7 +296,7 @@ fn mouse_input_in_non_steady_phases_is_ignored() {
 /// ドラッグの GET を組む関数（`events::on_mouse_drag_start`／`_end`）の型。
 type DragGetBuilder = fn(i64, i64, u32, Option<&str>, &ExecutionSnapshot) -> ShioriCall;
 
-// ドラッグの開始・終了（areka-P0-mouse-drag-events 要件 1.1・2.1）: Steady では種類に対応する
+// ドラッグの開始・終了: Steady では種類に対応する
 // 組み立ての GET がちょうど 1 件出る（Status は他のマウスの GET と同じ snapshot から）。phase 不変。
 #[test]
 fn drag_input_in_steady_emits_matching_get() {
@@ -329,7 +329,7 @@ fn drag_input_in_steady_emits_matching_get() {
 }
 
 // ============================================================
-// 11. 選択系（Req4.4・DD-3／DD-10）
+// 11. 選択系
 // ============================================================
 
 /// 檻用の選択確定入力（内容は本檻で load-bearing でない＝写像・帳簿の存在のみを見る）。
@@ -342,7 +342,7 @@ fn choice_input() -> ChoiceInput {
     }
 }
 
-/// C4 規則 1・Req1.3: 非 Steady フェーズの選択確定は棄却する（状態不変・Action なし）。
+/// 非 Steady フェーズの選択確定は棄却する（状態不変・Action なし）。
 ///
 /// 受理すべき選択待ちが構造上存在しないフェーズ（boot 中・close 握手以降・終了系列）へ
 /// 届いた選択確定は、帳簿の有無に関わらず横断アームで棄却される。棄却は既存帳簿にも
@@ -383,7 +383,7 @@ fn choice_input_in_non_steady_phases_is_rejected_without_changing_state() {
 }
 
 // ============================================================
-// 12. 選択待ち通知の受領と帳簿確立（Req7.1／7.6／7.7・C4 規則 4・DD-8）
+// 12. 選択待ち通知の受領と帳簿確立
 // ============================================================
 
 /// 檻用の選択待ち通知（候補列・起点・指令を明示して組む）。
@@ -401,11 +401,11 @@ fn choice_waiting_of(
     }
 }
 
-/// C4 規則 4・Req7.1: 現行トークと識別子が一致する通知は帳簿を確立する。
+/// 現行トークと識別子が一致する通知は帳簿を確立する。
 ///
-/// 確立された帳簿は通知の候補列を表示順のまま保持し、期限は DD-8 写像済みの値
+/// 確立された帳簿は通知の候補列を表示順のまま保持し、期限は 写像済みの値
 /// （未指定→起点＋既定 30_000ms）を持ち、段フェーズは `Waiting` である。`Phase` は
-/// 一切触らない（DD-3）。
+/// 一切触らない。
 #[test]
 fn choice_waiting_matching_talk_id_establishes_waiting_ledger() {
     let (next, actions) = step(
@@ -439,20 +439,20 @@ fn choice_waiting_matching_talk_id_establishes_waiting_ledger() {
     );
 }
 
-/// DD-8・Req7.6／7.7: 期限は指令 3 値語彙どおりに写る（実値で突合）。
+/// 期限は指令 3 値語彙どおりに写る（実値で突合）。
 ///
-/// 既定値以外の明示秒指定も同一規律で写る（Req7.7）。無効化（0／-1）は期限なし＝無期限
-/// であり、帳簿自体は確立される（Req7.6：計測を開始しないだけで選択待ちは継続する）。
+/// 既定値以外の明示秒指定も同一規律で写る。無効化（0／-1）は期限なし＝無期限
+/// であり、帳簿自体は確立される（計測を開始しないだけで選択待ちは継続する）。
 #[test]
 fn choice_waiting_deadline_follows_dd8_directive_mapping() {
     let display_end = MonotonicMs(2_000);
     let cases: [(Option<f64>, Option<MonotonicMs>); 5] = [
         // 未指定＝既定へ委譲（config.choice_timeout_default_ms = 30_000）。
         (None, Some(MonotonicMs(32_000))),
-        // 無効化＝無期限（Req7.6）。
+        // 無効化＝無期限。
         (Some(0.0), None),
         (Some(-1.0), None),
-        // 明示秒指定（Req7.7・既定値は関与しない）。
+        // 明示秒指定（既定値は関与しない）。
         (Some(5.0), Some(MonotonicMs(7_000))),
         (Some(2.5), Some(MonotonicMs(4_500))),
     ];
@@ -472,7 +472,7 @@ fn choice_waiting_deadline_follows_dd8_directive_mapping() {
     }
 }
 
-/// C4 規則 4・Req7.1: 識別子が現行トークと一致しない通知は帳簿を確立しない。
+/// 識別子が現行トークと一致しない通知は帳簿を確立しない。
 #[test]
 fn choice_waiting_with_mismatched_talk_id_does_not_establish_ledger() {
     let (next, actions) = step(
@@ -488,7 +488,7 @@ fn choice_waiting_with_mismatched_talk_id_does_not_establish_ledger() {
     assert!(actions.is_empty(), "棄却は Action を発行しない");
 }
 
-/// C4 規則 4: 再生中でない Steady（`Steady{None}`）の通知は受理しない。
+/// 再生中でない Steady（`Steady{None}`）の通知は受理しない。
 #[test]
 fn choice_waiting_without_active_talk_does_not_establish_ledger() {
     let (next, actions) = step(
@@ -504,7 +504,7 @@ fn choice_waiting_without_active_talk_does_not_establish_ledger() {
     assert!(actions.is_empty());
 }
 
-/// C4 規則 4: 非 Steady フェーズの通知は受理しない（挨拶追跡中の `BootVersion{Some}` も含む）。
+/// 非 Steady フェーズの通知は受理しない（挨拶追跡中の `BootVersion{Some}` も含む）。
 #[test]
 fn choice_waiting_in_non_steady_phase_does_not_establish_ledger() {
     for phase in [
@@ -535,7 +535,7 @@ fn choice_waiting_in_non_steady_phase_does_not_establish_ledger() {
     }
 }
 
-/// C4 規則 4: 棄却は**既存の帳簿にも触れない**（状態不変が棄却の定義）。
+/// 棄却は**既存の帳簿にも触れない**（状態不変が棄却の定義）。
 #[test]
 fn stale_choice_waiting_leaves_existing_ledger_untouched() {
     let mut s = state_in(steady_with_talk(TalkId(5)));
@@ -558,14 +558,14 @@ fn stale_choice_waiting_leaves_existing_ledger_untouched() {
 }
 
 // ============================================================
-// 13. 選択待ち中の実行状態導出（Req6.1／6.2／6.4・C5・裁定 6）
+// 13. 選択待ち中の実行状態導出
 // ============================================================
 
-/// C5: `choice_active` の源は `State.choice` の**3 段フェーズすべて**である。
+/// `choice_active` の源は `State.choice` の**3 段フェーズすべて**である。
 ///
 /// `Cascading`／`TimeoutInFlight` は SHIORI 応答待ちであって選択待ちの終了ではない——
 /// 段が進んでいる間も選択肢は表示されたままであり、`choosing` はアクティブであり続ける。
-/// 併せて裁定 6／Req6.4（選択待ち中も talk slot 占有は継続＝`talking` 真）を固定する。
+/// 併せて選択待ち中も talk slot 占有は継続する（`talking` 真）ことを固定する。
 #[test]
 fn state_snapshot_marks_choice_active_in_every_ledger_phase() {
     for phase in [
@@ -596,7 +596,7 @@ fn state_snapshot_marks_choice_active_in_every_ledger_phase() {
     }
 }
 
-/// Req6.2: 帳簿が消えた（解決・タイムアウト終了）状態では `choosing` は非アクティブへ戻る。
+/// 帳簿が消えた（解決・タイムアウト終了）状態では `choosing` は非アクティブへ戻る。
 #[test]
 fn state_snapshot_drops_choice_active_when_ledger_is_gone() {
     let s = state_in(steady_with_talk(TalkId(5)));
@@ -609,11 +609,11 @@ fn state_snapshot_drops_choice_active_when_ledger_is_gone() {
 }
 
 // ============================================================
-// 1 世代 stale 防御（C4 規則 9・F1 残余レース・Req1.6）
+// 1 世代 stale 防御（残余レース）
 // ============================================================
 //
 // slot 差替（選択・マウスの答え・SSTP の台本・時間切れの答えのどれでも）の直後は、旧 talk の即時 `Done{Ended}`（drive.rs の即 settle）が
-// dispatcher の slot 差替より前に投函され得る（design F1「順序の決定性と残余レース」）。
+// dispatcher の slot 差替より前に投函され得る。
 // 到着した遅延 `TalkDone` は `prev_talk` と照合して `talk_done_stale`（info）
 // で棄却し、`unknown_talk_done`（error）を**真に未知の id 専用**に保つ。
 
@@ -624,7 +624,7 @@ fn state_with_prev_talk(active: TalkId, prev: TalkId) -> State {
     s
 }
 
-/// 規則 9: 1 世代保持した旧 talk_id の遅延 `TalkDone` は info で棄却し、状態を壊さない。
+/// 1 世代保持した旧 talk_id の遅延 `TalkDone` は info で棄却し、状態を壊さない。
 #[test]
 fn stale_choice_talk_done_is_demoted_to_info_and_keeps_state() {
     let cfg = config();
@@ -657,7 +657,7 @@ fn stale_choice_talk_done_is_demoted_to_info_and_keeps_state() {
     );
 }
 
-/// 規則 9: `unknown_talk_done`（error）は**真に未知の id 専用**のまま保つ。
+/// `unknown_talk_done`（error）は**真に未知の id 専用**のまま保つ。
 #[test]
 fn truly_unknown_talk_done_still_logs_error() {
     let cfg = config();
@@ -680,7 +680,7 @@ fn truly_unknown_talk_done_still_logs_error() {
     assert!(matches!(next.phase, Phase::Steady { talk: Some(_) }));
 }
 
-/// 規則 9: 現 talk の `TalkDone` 到達で 1 世代保持は消え、以後の同 id は真に未知へ戻る。
+/// 現 talk の `TalkDone` 到達で 1 世代保持は消え、以後の同 id は真に未知へ戻る。
 #[test]
 fn current_talk_done_clears_the_one_generation_stale_slot() {
     let cfg = config();

@@ -95,7 +95,7 @@ fn collect_bindings(
     (bindings, surface_unknown)
 }
 
-/// 届けの相。装着済みバルーンのスコープ（昇順）について照会 → 組 → 差分 → 送出 → 記録。
+/// 届けの相。装着済みバルーンのスコープ（昇順）について組を作り、前と違うときだけ送る。
 ///
 /// 文字の層を借りる手前で、窓の知らせ（[`report_stages`]）を seriko へ送る。
 /// スコープの一覧は相の中で自分で作る（可視性の相の手元の一覧は使わない）。文字の層を借りられない
@@ -152,8 +152,8 @@ pub fn report_stages(
     );
 }
 
-/// 観測から先（組 → 差分 → 送出 → 記録）。送り手が無い（置き場にゴーストが居ない）フレームは
-/// 台帳を変えずに見送り、ゴーストが据わった最初のフレームで送る。
+/// 観測から先の段。送り手が無い（置き場にゴーストが居ない）フレームは台帳を変えずに見送り、
+/// ゴーストが据わった最初のフレームで送る。
 fn report_stage_observed(
     ledger: &mut BalloonStatusLedger,
     observed: &[StageObservation],
@@ -190,8 +190,7 @@ fn report_stage_observed(
     }
 }
 
-/// 照会の配線。照会（表示層 2 本＋文字の層の `shown_boxes`）→ 純関数 → 差分 →
-/// 置き場のゴーストの kanade（本体の口）へ送出 → 記録。
+/// 照会の配線: 表示層 2 本と文字の層の `shown_boxes` を引き、置き場のゴーストの kanade（本体の口）へ送る。
 ///
 /// `scopes` は装着済みバルーンの scope 昇順（[`run_status_report_phase`] が作る）。
 pub fn report_balloons(
@@ -218,7 +217,7 @@ pub fn report_balloons(
     report_observed(world, ledger, &observed);
 }
 
-/// 観測から先（組 → 警告 → 差分 → 送出 → 記録）。照会を持たない檻が直接踏む。
+/// 観測から先の段。照会を持たない檻が直接踏む。
 fn report_observed(
     world: &World,
     ledger: &mut BalloonStatusLedger,

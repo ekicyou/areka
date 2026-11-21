@@ -1,24 +1,18 @@
 //! host-32 IPC WM_COPYDATA ワイヤ規約（framing 部分）。
 //!
 //! x64/arm64 親プロセスと i686 helper プロセスの間で生バイト列を往復させる
-//! transport 層のうち、**メッセージ framing・HWND 符号化・不正フレーム検出**を担う。
+//! transport 層のうち、**メッセージ framing・HWND 符号化・不正フレーム検出**と送受信を担う。
 //! 下流と凍結共有する単一ソース。
 //!
-//! 設計制約（design.md §272-336・要件 2.1-2.5 / 7.2 / 7.3）:
 //! - `MsgTag` は `dwData` の**低 32bit のみ**に載る（跨ビットネス安全）。
 //! - payload は**生バイト列**（`cbData` = 長さ・in-band のヘッダを持たない）。
 //!   ポインタ・HANDLE・struct を境界を越えて共有しない。
 //! - HWND は**常に u32 LE 4 バイト**でワイヤ表現する。
 //! - shift/mask 評価は必ず `u64` cast で行い、i686 の `usize` = 32bit での
-//!   overflow を回避する（要件 7.2）。
+//!   overflow を回避する。
 //!
-//! 送信プリミティブ（`send_copydata` / `send_copydata_response` / `send_request`）・
-//! 受信の取り出し（`read_copydata`）・`ResponseSlot`・`IpcError` も本モジュールに同居する（跨ビットネス共有の単一ソース）。
-//! 送信関数は `SendMessageTimeoutW` の上限時間で無限待機を構造的に排除する（要件 5.3）。
-//! 旗は**送出の向き**で分ける（[`SendFlavor`]・[`send_flags`]・要件 16.1/16.2）:
-//! 要求方向（ホスト → helper）は `SMTO_ABORTIFHUNG` ＋上限時間、応答方向
-//! （helper → ホスト）は上限時間のみ。実往復の再入受領は実窓を要すため
-//! 統合タスクで検証する（本モジュールは型・timeout 契約・slot 消費の確立まで）。
+//! 送信は `SendMessageTimeoutW` の上限時間で無限待機を構造的に排除する。
+//! 旗は**送出の向き**で分ける（[`SendFlavor`]・[`send_flags`]）。
 
 use core::cell::RefCell;
 use core::time::Duration;
@@ -34,7 +28,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 /// WM_COPYDATA メッセージ種別タグ（`dwData` の低 32bit に載る）。
 ///
 /// 判別子は全て u32 の低 32bit に収まり、跨ビットネス安全である
-/// （`(tag.as_u32() as u64) >> 32 == 0`・要件 7.2）。
+/// （`(tag.as_u32() as u64) >> 32 == 0`）。
 ///
 /// 本クレートはタグの規約だけを持ち、意味づけは使い手（host と helper）が行う。
 #[repr(u32)]
@@ -61,7 +55,7 @@ impl MsgTag {
 
     /// `dwData` から取り出した u32 生値をタグへ復元する。
     ///
-    /// 未知の生値は不正フレームの観測点として `Err(raw)` を返す（要件 2.5）。
+    /// 未知の生値は不正フレームの観測点として `Err(raw)` を返す。
     #[inline]
     pub fn try_from_u32(raw: u32) -> Result<Self, u32> {
         match raw {
@@ -75,21 +69,18 @@ impl MsgTag {
     }
 }
 
-/// HWND を **u32 リトルエンディアン 4 バイト**へ符号化する（要件 2.2）。
+/// HWND を **u32 リトルエンディアン 4 バイト**へ符号化する。
 ///
-/// HWND は USER ハンドルゆえ 32bit 有意であり、ワイヤは常に u32 LE。
-/// x64/arm64 では HWND は 64bit だが下位 32bit のみをワイヤへ載せる。
-/// 抽出は `u64` cast 経由で mask し、i686 の `usize` = 32bit での
-/// shift overflow を回避する（要件 7.2）。
+/// HWND は USER ハンドルゆえ 32bit 有意であり、x64/arm64 でも下位 32bit のみをワイヤへ載せる。
+/// 抽出は `u64` cast 経由で mask し、i686 の `usize` = 32bit での shift overflow を回避する。
 #[inline]
 pub fn encode_hwnd_le(hwnd: HWND) -> [u8; 4] {
-    // HWND(*mut c_void) の数値を usize で取り出し、u64 へ widen して下位 32bit を mask。
     let raw = hwnd.0 as usize as u64;
     let low = (raw & 0xFFFF_FFFF) as u32;
     low.to_le_bytes()
 }
 
-/// u32 LE 4 バイトから HWND の 32bit 有意値を復元する（要件 2.2・2.3）。
+/// u32 LE 4 バイトから HWND の 32bit 有意値を復元する。
 #[inline]
 pub fn decode_hwnd_le(bytes: [u8; 4]) -> u32 {
     u32::from_le_bytes(bytes)
@@ -112,24 +103,20 @@ pub fn hwnd_from_u32(value: u32) -> HWND {
 /// - `declared_len`: `COPYDATASTRUCT.cbData`（宣言された payload 長）。
 /// - `data`: `COPYDATASTRUCT.lpData` が指す実バイト列。
 ///
-/// 検証（要件 2.5・不正フレーム検出）:
+/// 検証:
 /// - 未知タグ（`try_from_u32` が `Err`）→ `Err`。
 /// - 宣言長 `cbData` と実 payload 長の不整合 → `Err`。
 ///
 /// `dw_data` の型は `usize`（`COPYDATASTRUCT.dwData` は跨ビットネスで幅が異なる）。
-/// 低 32bit のみを `u64` cast 経由で取り出してタグ判定するため、i686 の
-/// `usize` = 32bit でも overflow しない（要件 7.2）。
+/// 低 32bit のみを `u64` cast 経由で取り出すため、i686 の `usize` = 32bit でも overflow しない。
 pub fn copydata_payload(
     dw_data: usize,
     declared_len: usize,
     data: &[u8],
 ) -> Result<(MsgTag, &[u8]), FramingError> {
-    // dwData の低 32bit のみが種別タグとして有意（要件 2.1 / 7.2）。
     let raw_tag = ((dw_data as u64) & 0xFFFF_FFFF) as u32;
     let tag = MsgTag::try_from_u32(raw_tag).map_err(FramingError::UnknownTag)?;
 
-    // 宣言長 (cbData) と実 payload 長が一致しないフレームは破損として拒否する
-    // （要件 2.5・payload は in-band のヘッダを持たないので cbData = payload 長）。
     if declared_len != data.len() {
         return Err(FramingError::LengthMismatch {
             declared: declared_len,
@@ -165,11 +152,9 @@ pub unsafe fn read_copydata(lparam: LPARAM) -> Option<(usize, usize, Vec<u8>)> {
     Some((dw_data, len, payload))
 }
 
-/// framing レベルの不正フレーム表現（要件 2.5）。
+/// framing レベルの不正フレーム表現。
 ///
-/// 本ユニットは framing ローカルな軽量エラーに留める。送信・往復層の
-/// [`IpcError`] へは `IpcError::CorruptFrame` として `From` で持ち上げる
-/// （下の `impl From<FramingError> for IpcError`）。
+/// 送信・往復層の [`IpcError`] へは `IpcError::CorruptFrame` として `From` で持ち上げる。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FramingError {
     /// `dwData` の低 32bit が既知の [`MsgTag`] でない（未知タグ）。
@@ -178,28 +163,24 @@ pub enum FramingError {
     LengthMismatch { declared: usize, actual: usize },
 }
 
-/// 送信・往復トランスポート層の構造化エラー（要件 5.2 / 5.3・design.md §486-506）。
+/// 送信・往復トランスポート層の構造化エラー。
 ///
 /// **一様な失敗報告**: peer の生死やハングを distinct なバリアントで区別せず、
 /// 期限切れは `Timeout`、到達不能・ハング peer の中断（`SMTO_ABORTIFHUNG`）は
 /// `SendFailed` に集約する（distinct な PeerGone は設けない）。
-/// ハング打ち切りが起きうるのは**要求方向だけ**である（旗は送出の向きで決まる・
-/// [`send_flags`]・要件 16.1）。
-/// peer の生死は送信結果に混ぜず、上位の `ExitKind`（ProcessHost・別タスク）で
-/// 観測する（Requirement 1 と 5 の分離）。
+/// ハング打ち切りが起きうるのは**要求方向だけ**である（[`send_flags`]）。
+/// peer の生死は送信結果に混ぜず、上位の `ExitKind`（ProcessHost）で観測する。
 ///
-/// framing レベルの不正フレーム（[`FramingError`]）は `CorruptFrame` へ
-/// `From` で持ち上げ、呼び出し側が `?` で一様に扱えるようにする
-/// （task 2.1 CONCERNS 統合）。
+/// [`FramingError`] は `CorruptFrame` へ `From` で持ち上げ、呼び出し側が `?` で一様に扱う。
 #[derive(thiserror::Error, Debug)]
 pub enum IpcError {
-    /// 応答が上限時間内に返らなかった（要件 5.2）: `SendMessageTimeoutW` が上限時間で
+    /// 応答が上限時間内に返らなかった: `SendMessageTimeoutW` が上限時間で
     /// 打ち切られた（戻り 0 かつ last error が `ERROR_TIMEOUT`）か、往復の応答が受け皿に
     /// 届かなかった（[`send_request`]）。
     #[error("ipc request timed out")]
     Timeout,
     /// `SendMessageTimeoutW` が期限切れ以外の理由で 0 を返した（宛先の窓が無い・
-    /// 要求方向の送出でハング peer が `SMTO_ABORTIFHUNG` で中断された（要件 5.3）など）。
+    /// 要求方向の送出でハング peer が `SMTO_ABORTIFHUNG` で中断された、など）。
     #[error("ipc send failed")]
     SendFailed,
     /// 受信フレームが framing 規約に整合しない（未知タグ・長さ不整合など）。
@@ -227,15 +208,14 @@ impl core::fmt::Display for FramingError {
 
 impl core::error::Error for FramingError {}
 
-/// single-in-flight の応答受け皿（要件 4.1 / 4.3・design.md §328-331）。
+/// single-in-flight の応答受け皿。
 ///
-/// UI スレッド固定かつ往復は同時に 1 つ（single-in-flight）ゆえ、内部同期は
-/// [`RefCell`] で足りる（`Mutex` 不要）。応答 WndProc が再入で [`store`](Self::store)
-/// し、[`send_request`] 側が [`take`](Self::take) する共有参照モデルであり、
-/// `send_request` と WndProc は同一の `&ResponseSlot` を参照する。
+/// UI スレッド固定かつ往復は同時に 1 つゆえ、内部同期は [`RefCell`] で足りる（`Mutex` 不要）。
+/// 応答 WndProc が再入で [`store`](Self::store) し、[`send_request`] が [`take`](Self::take)
+/// する。両者は同一の `&ResponseSlot` を参照する。
 ///
-/// 状態機械: `clear`（残骸排除＝None 化）→ 送信ブロック中に WndProc が `store`
-/// → 復帰後 `take` で 1 回消費（再 `take` は `None`）。
+/// 状態機械: `clear` → 送信ブロック中に WndProc が `store` → 復帰後 `take` で 1 回消費
+/// （再 `take` は `None`）。
 #[derive(Debug, Default)]
 pub struct ResponseSlot {
     inner: RefCell<Option<Vec<u8>>>,
@@ -273,14 +253,13 @@ impl ResponseSlot {
 
 /// `SendMessageTimeoutW` へ渡す `Duration` をミリ秒 `u32` に飽和変換する。
 ///
-/// `u32::MAX` ミリ秒（約 49.7 日）で上限をクランプし、無限待機を構造的に
-/// 排除する（要件 5.3）。
+/// `u32::MAX` ミリ秒（約 49.7 日）で上限をクランプする。
 #[inline]
 fn timeout_millis(timeout: Duration) -> u32 {
     timeout.as_millis().min(u32::MAX as u128) as u32
 }
 
-/// 送出の**向き**（要件 16.2・design.md D16）。
+/// 送出の**向き**。
 ///
 /// 向きによって `SendMessageTimeoutW` へ渡す旗が変わる。どちらの向きにどの旗が付くかは
 /// [`send_flags`] が単独で決める（呼び出し側に旗を書かせない）。
@@ -293,12 +272,12 @@ pub enum SendFlavor {
     Response,
 }
 
-/// 向きに応じた `SendMessageTimeoutW` の旗を返す純関数（要件 16.1・16.2）。
+/// 向きに応じた `SendMessageTimeoutW` の旗を返す純関数。
 ///
 /// - [`SendFlavor::Request`] → `SMTO_ABORTIFHUNG`（相手が応答なしなら待たずに打ち切る）。
 /// - [`SendFlavor::Response`] → `SMTO_NORMAL`（旗なし＝上限時間だけで送る）。応答の宛先は
 ///   自分の要求の中でこの応答を待っている相手であり、「応答なし」判定はこの向きでは
-///   誤検知にしかならない（design.md D16）。
+///   誤検知にしかならない。
 #[inline]
 #[must_use]
 pub const fn send_flags(flavor: SendFlavor) -> SEND_MESSAGE_TIMEOUT_FLAGS {
@@ -308,8 +287,7 @@ pub const fn send_flags(flavor: SendFlavor) -> SEND_MESSAGE_TIMEOUT_FLAGS {
     }
 }
 
-/// 生バイト payload を WM_COPYDATA として**要求方向**へ片道送出する
-/// （要件 2.1 / 5.3 / 16.1・design.md §315・D16）。
+/// 生バイト payload を WM_COPYDATA として**要求方向**へ片道送出する。
 ///
 /// 旗は [`send_flags`]`(`[`SendFlavor::Request`]`)`＝`SMTO_ABORTIFHUNG` ＋上限時間。送出先が
 /// ハング中でも上限時間で復帰する（無限待機の構造的排除）。戻り 0 のうち期限切れは
@@ -342,7 +320,7 @@ pub fn send_copydata(
     )
 }
 
-/// 生バイト payload を WM_COPYDATA として**応答方向**へ片道送出する（要件 16.1・design.md D16）。
+/// 生バイト payload を WM_COPYDATA として**応答方向**へ片道送出する。
 ///
 /// [`send_copydata`] との違いは旗だけ——`SMTO_ABORTIFHUNG` を付けず、上限時間のみで送る。
 /// 応答の宛先は自分の `SendMessageTimeoutW` の中でこの応答を待っている相手であり、往復の間は
@@ -369,10 +347,7 @@ pub fn send_copydata_response(
     )
 }
 
-/// 向きを明示して片道送出する共通本体（[`send_copydata`]／[`send_copydata_response`] の実体）。
-///
-/// 旗以外は両方向で同一である（COPYDATASTRUCT の組み立て・timeout の飽和変換・戻り 0 の
-/// 写像＝期限切れは [`IpcError::Timeout`]・他は [`IpcError::SendFailed`]）。
+/// [`send_copydata`]／[`send_copydata_response`] の共通本体（違いは旗だけ）。
 ///
 /// # 前提
 /// [`send_copydata`] の前提（有効 `target`・`payload` 生存）を引き継ぐ。
@@ -396,8 +371,7 @@ fn send_copydata_with(
     // SAFETY: スレッド局所のエラー値を書くだけ。
     unsafe { SetLastError(ERROR_SUCCESS) };
     // SAFETY: target は有効 HWND 前提。&cds は本呼び出し中生存し、その lpData が指す
-    // payload も同期送信中生存する。timeout_ms により無期限ブロックしない（要件 5.3）。
-    // 旗は向きで決まる（要件 16.1/16.2・応答方向は SMTO_ABORTIFHUNG を付けない）。
+    // payload も同期送信中生存する。timeout_ms により無期限ブロックしない。
     let ret: LRESULT = unsafe {
         SendMessageTimeoutW(
             target,
@@ -410,9 +384,7 @@ fn send_copydata_with(
         )
     };
 
-    // 戻り 0 = 送出失敗 / timeout / hung peer の中断。期限切れ（last error が ERROR_TIMEOUT）
-    // だけを Timeout に、他は SendFailed に写す（distinct PeerGone を設けない・design.md §286）。
-    // hung peer の中断は last error 0 のまま返るので SendFailed に残る。
+    // hung peer の中断は last error 0 のまま返るので SendFailed に落ちる。
     if ret.0 == 0 {
         // SAFETY: 直前の SendMessageTimeoutW が残したスレッド局所のエラー値を読むだけ。
         if unsafe { GetLastError() } == ERROR_TIMEOUT {
@@ -423,20 +395,14 @@ fn send_copydata_with(
     Ok(())
 }
 
-/// 1 往復送信（再入受領・single-in-flight・要件 4.1 / 4.3 / 5.2・design.md §319）。
+/// 1 往復送信（再入受領・single-in-flight）。
 ///
-/// 手順:
-///   1. `slot.clear()` — 受け皿を空に（single-in-flight の前提確立）。
-///   2. [`send_copydata`] で REQUEST を同期送出。親はここでブロックし、待機中に
-///      Windows が helper の RESPONSE（2nd WM_COPYDATA）を親 WndProc へ再入配送し、
-///      WndProc が `slot.store()` して即 return する（跨プロセス SendMessage を発行しない）。
-///   3. 復帰後 `slot.take()` — `Some(bytes)` なら `Ok`、`None`（上限内未受領）なら
-///      [`IpcError::Timeout`]。
+/// [`send_copydata`] で REQUEST を同期送出してブロックする間に、Windows が helper の
+/// RESPONSE（2nd WM_COPYDATA）を親 WndProc へ再入配送する。WndProc は `slot.store()` して
+/// 即 return する（跨プロセス SendMessage を発行しない）。復帰後に受け皿が空（上限内未受領）なら
+/// [`IpcError::Timeout`]。
 ///
 /// `slot` は親の応答 WndProc が参照するものと同一 `&ResponseSlot`。往復は同時に 1 つ。
-///
-/// **注意**: 実際の再入往復は実窓を要すため統合 task（4.3 / 5.1）で検証する。本関数は
-/// timeout 契約と slot 消費ロジックの確立まで。
 ///
 /// # 前提
 /// [`send_copydata`] の前提（有効 `target`・`payload` 生存）を引き継ぐ。
@@ -448,13 +414,10 @@ pub fn send_request(
     timeout: Duration,
     slot: &ResponseSlot,
 ) -> Result<Vec<u8>, IpcError> {
-    // ① 受け皿を空に（前回残骸排除・single-in-flight）。
     slot.clear();
 
-    // ② REQUEST を同期送出。ブロック中に RESPONSE が再入配送され slot.store される。
     send_copydata(target, self_hwnd, tag, payload, timeout)?;
 
-    // ③ 復帰後に受領済み応答を取り出す。未受領（None）は timeout。
     slot.take().ok_or(IpcError::Timeout)
 }
 
@@ -465,7 +428,6 @@ mod send_timeout_tests;
 mod slot_error_tests {
     use super::*;
 
-    // Unit Test 3（design 533・要件 4.3）: ResponseSlot clear/store/take semantics
     #[test]
     fn slot_clear_then_take_is_none() {
         let slot = ResponseSlot::new();
@@ -498,14 +460,12 @@ mod slot_error_tests {
 
     #[test]
     fn slot_store_overwrites_latest() {
-        // single-in-flight 前提: 最新格納で上書き
         let slot = ResponseSlot::new();
         slot.store(b"first".to_vec());
         slot.store(b"second".to_vec());
         assert_eq!(slot.take(), Some(b"second".to_vec()));
     }
 
-    // IpcError バリアント構築・Display/Debug（要件 5.2/5.3）
     #[test]
     fn ipc_error_variants_display() {
         let timeout = IpcError::Timeout;
@@ -515,7 +475,6 @@ mod slot_error_tests {
         assert!(!format!("{timeout:?}").is_empty());
     }
 
-    // From<FramingError> 持ち上げ（task 2.1 CONCERNS 統合）
     #[test]
     fn framing_error_lifts_into_ipc_error() {
         let fe = FramingError::UnknownTag(9);
@@ -536,7 +495,6 @@ mod framing_tests {
         MsgTag::Unload,
     ];
 
-    // (a) MsgTag u32 往復ロスレス（要件 2.1）
     #[test]
     fn msgtag_u32_roundtrip_lossless() {
         for tag in ALL_TAGS {
@@ -545,7 +503,6 @@ mod framing_tests {
         }
     }
 
-    // (b) 低 32bit 占有: (as_u32() as u64) >> 32 == 0（要件 7.2）
     #[test]
     fn msgtag_occupies_low_32_bits_only() {
         for tag in ALL_TAGS {
@@ -554,7 +511,6 @@ mod framing_tests {
         }
     }
 
-    // (c) 未知タグは Err(raw)（要件 2.5・不正フレーム観測点）
     #[test]
     fn msgtag_unknown_is_err() {
         for raw in [0u32, 6u32, 0xFFFF_FFFF] {
@@ -562,7 +518,6 @@ mod framing_tests {
         }
     }
 
-    // (d) HWND u32 LE 往復（要件 2.2・7.3）
     #[test]
     fn hwnd_u32_le_roundtrip_and_byte_order() {
         for value in [0x1u32, 0x1234_5678, 0xDEAD_BEEF, u32::MAX] {
@@ -573,7 +528,6 @@ mod framing_tests {
         }
     }
 
-    // framing: 正当フレームで Ok((tag, payload))（要件 2.1・2.3・2.4）
     #[test]
     fn framing_accepts_valid_frame() {
         let payload: &[u8] = b"hello-echo";
@@ -582,25 +536,20 @@ mod framing_tests {
         assert_eq!(result, Ok((MsgTag::Request, payload)));
     }
 
-    // framing: cbData ≠ 実長 → Err（要件 2.5）
     #[test]
     fn framing_rejects_length_mismatch() {
         let payload: &[u8] = b"1234";
         let dw_data = MsgTag::Request.as_u32();
-        // 宣言長 (cbData) が実長より大きい
         assert!(copydata_payload(dw_data as usize, payload.len() + 1, payload).is_err());
-        // 宣言長 (cbData) が実長より小さい
         assert!(copydata_payload(dw_data as usize, payload.len() - 1, payload).is_err());
     }
 
-    // framing: 未知タグ生値 → Err（要件 2.5）
     #[test]
     fn framing_rejects_unknown_tag() {
         let payload: &[u8] = b"";
         assert!(copydata_payload(6usize, payload.len(), payload).is_err());
     }
 
-    // framing: 空 payload の正当フレーム
     #[test]
     fn framing_accepts_empty_payload() {
         let payload: &[u8] = b"";
@@ -612,17 +561,11 @@ mod framing_tests {
     }
 }
 
-/// 送出の向きごとの旗の檻（要件 16.1・16.2・16.3⑴・design.md D16）。
-///
-/// 応答方向（helper → ホスト）は「応答なし」判定で打ち切ってはならない。ホストは自分の
-/// `SendMessageTimeoutW` の中でその応答を必ず待っており、往復の間はメッセージを取り出さない
-/// （手空き時の周期的な保守は往復の外でしか走らない）ため、往復が長引けば OS からは「応答なし」に
-/// 見えうるが、これはこの向きでは誤検知にしかならない。
+/// 送出の向きごとの旗の檻（応答方向を「応答なし」判定で打ち切ってはならない）。
 #[cfg(test)]
 mod send_flavor_tests {
     use super::*;
 
-    // 応答方向の旗に `SMTO_ABORTIFHUNG` が立っていない（要件 16.1・16.3⑴）。
     #[test]
     fn response_flavor_has_no_abort_if_hung() {
         let flags = send_flags(SendFlavor::Response);
@@ -633,7 +576,6 @@ mod send_flavor_tests {
         );
     }
 
-    // 要求方向の旗には従来どおり `SMTO_ABORTIFHUNG` が立つ（要件 16.1 後段）。
     #[test]
     fn request_flavor_keeps_abort_if_hung() {
         let flags = send_flags(SendFlavor::Request);
@@ -644,7 +586,7 @@ mod send_flavor_tests {
         );
     }
 
-    // 向きが違えば旗も違う（区別が名前だけの見せかけでないことの固定・要件 16.2）。
+    // 区別が名前だけの見せかけでないことの固定。
     #[test]
     fn the_two_flavors_do_not_share_the_same_flags() {
         assert_ne!(
@@ -654,7 +596,6 @@ mod send_flavor_tests {
         );
     }
 
-    // 応答方向は「旗を全部落とす」＝ `SMTO_NORMAL`（上限時間だけで送る・要件 16.1）。
     #[test]
     fn response_flavor_is_plain_normal() {
         assert_eq!(send_flags(SendFlavor::Response).0, SMTO_NORMAL.0);

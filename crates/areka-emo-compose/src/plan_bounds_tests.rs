@@ -1,6 +1,6 @@
-//! シェル全体の外形 [`shell_bounds`] の試験（areka-P0-offline-surface-dump 要件 4.3）。
+//! シェル全体の外形 [`shell_bounds`] の試験。
 //!
-//! 数は SSP の測り（research.md §10.6・`g_anim` の 18×14・`g_size` の 12×14）と同じ形の検体で固める。
+//! 数は SSP の測り（`g_anim` の 18×14・`g_size` の 12×14）と同じ形の検体で固める。
 
 use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::parse;
@@ -27,7 +27,7 @@ fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
     (bound_world(&parse(text), &[], &atlas), atlas)
 }
 
-/// どの面の合成の絵の大きさも外形の右下を超えない（design ShellCanvasBounds の Invariants）。
+/// どの面の合成の絵の大きさも外形の右下を超えない。
 fn assert_every_surface_fits(world: &EmoWorld, atlas: &AtlasTable, b: ShellBounds) {
     let mut composer = Composer::new();
     for id in world.surface_ids() {
@@ -219,7 +219,7 @@ fn bind_cycle_emits_no_warn() {
     assert_every_surface_fits(&world, &atlas, b.expect("外形"));
 }
 
-/// 広がりの予算（指摘 3）: 子の面は入る 1 ＋行 1 つで 2 を数える（指摘 130）。予算 4 のシェルの外形は、負の位置に
+/// 広がりの予算: 子の面は入る 1 ＋行 1 つで 2 を数える。予算 4 のシェルの外形は、負の位置に
 /// 置いた element定義の子 3 つのうち 2 つ目まで入って 3 つ目を数えず、`error!` を 1 行だけ出す。予算 6 なら 3 つとも数える。
 #[test]
 fn spent_budget_leaves_children_not_yet_entered_out_of_the_bounds() {

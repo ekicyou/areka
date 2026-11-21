@@ -1,11 +1,7 @@
-//! UI→kanade のマウス入力配信配線（areka-P0-input-events）。
+//! UI→kanade のマウス入力配信配線。
 //!
 //! キャラ窓のポインタイベントを捉え、当たり判定名を collision-geometry の resolver で解決し、
 //! 送出間引き（[`throttle`]）を通して kanade へマウス入力メッセージとして配信する薄い配線層。
-//!
-//! 本モジュールは現状 [`throttle`]（送出間引きの純粋・決定的判定・task 2.4）のみを収める。
-//! per-scope 間引き状態を `HashMap` で保持する `MouseWiring` とポインタハンドラ結線は
-//! task 2.6／2.7 で本 mod へ増設される。
 
 pub mod balloon;
 pub mod balloon_wheel;
@@ -35,30 +31,28 @@ use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::hit_region::{HitRegion, resolve_hit_region};
 use throttle::{MouseMoveThrottle, plan_mouse_move};
 
-/// UI スレッド所有のマウス入力配信資源（NonSend・DD-IE-9）。
+/// UI スレッド所有のマウス入力配信資源（NonSend）。
 ///
-/// kanade への投函端（[`Sender`] クローン・1.4）・per-scope 間引き状態・当たり判定 resolver の
-/// 供給源（実／mock の差し替えシーム・[`RegionSource`]・1.5）・注入可能な時刻源（`now_ms`）を
+/// kanade への投函端（[`Sender`] クローン）・per-scope 間引き状態・当たり判定 resolver の
+/// 供給源（実／mock の差し替えシーム・[`RegionSource`]）・注入可能な時刻源（`now_ms`）を
 /// 1 資源に束ねる。[`Sender`] 単体は `Send` だが、resolver（presenter 読み）と間引き状態が
 /// UI スレッド所有ゆえ NonSend 1 個に束ねる（`RuntimeWiring` 前例と同型・順序依存なし self-gating）。
 ///
-/// 本 struct と送出ヘルパは task 2.6 の範囲。ポインタハンドラ（`on_char_pointer_moved` /
-/// `on_char_pointer_pressed`）と強制退避（Ctrl+左ダブルクリック）は task 2.7。`wire_mouse_input`
-/// による World 挿入（`ghost_session::boot_ghost` の boot 成功後呼出）は task 3.1 で結線済み＝`new` は本番から到達可能。
+/// ポインタハンドラ（`on_char_pointer_moved` / `on_char_pointer_pressed`）と送出ヘルパを持つ。`wire_mouse_input`
+/// が World へ挿入する（`ghost_session::boot_ghost` の boot 成功後呼出）。
 /// 送出ヘルパ群はポインタハンドラ経由でのみ参照される。ハンドラのキャラ窓登録は本モジュールの
-/// [`attach_char_pointer_handlers`]（依存方向 input_events→placement。stand-in `on_ghost_pressed`
-/// を退役して差し替え・`ghost_session::prepare_ghost_windows` が spawn 直後に呼ぶ）で完了済み＝本番消費者が到達したため
-/// dead_code 抑止は不要になった。
+/// [`attach_char_pointer_handlers`]（依存方向 input_events→placement・`ghost_session::prepare_ghost_windows`
+/// が spawn 直後に呼ぶ）が行う。
 ///
 /// 例外はメニュー側（`menu`）から呼ばれる 3 つである: 右ダブルクリックの預かりの取り出しと送出
 /// （`take_pending_right_double_click`／`send_pending_right_double_click`・[`PendingDoubleClick`] の
 /// 不変条件）と、メニューの「終了」が呼ぶ `send_close_request`。
 pub struct MouseWiring {
-    /// `GhostRuntime::kanade()` クローン（1.4・std mpsc）。
+    /// `GhostRuntime::kanade()` クローン（std mpsc）。
     sender: Sender<KanadeMsg>,
     /// per-scope 間引き状態（scope→状態）。
     throttle: HashMap<u32, MouseMoveThrottle>,
-    /// 実／mock の差し替えシーム（1.5）。
+    /// 実／mock の差し替えシーム。
     region_source: RegionSource,
     /// 注入可能 clock（既定: 起動からの経過 ms・単調）。
     now_ms: Box<dyn FnMut() -> u64>,
@@ -72,12 +66,12 @@ pub struct MouseWiring {
     wheel: HashMap<Entity, wheel::WheelAccum>,
 }
 
-/// 押下ハンドラが預かる右ダブルクリック 1 件分の材料（areka-P0-popup-menu-minimal 要件 1.10）。
+/// 押下ハンドラが預かる右ダブルクリック 1 件分の材料。
 ///
 /// # 不変条件
 ///
 /// これは `OnMouseDoubleClick`（Ref5＝1）を**組み立てる材料**であって、送出の決定ではない。
-/// 送るかどうかを決める場所はメニュー側の 1 か所（`menu::trigger`）に限る（要件 1.10／11.3）。
+/// 送るかどうかを決める場所はメニュー側の 1 か所（`menu::trigger`）に限る。
 /// 規則は「右クリックでメニューを出すなら捨てる・ゴーストが `popupmenu.visible`＝0 でメニューを
 /// 抑止したときだけ [`MouseWiring::send_pending_right_double_click`] で送る」。本モジュールは
 /// 預かるだけで自分からは送らず、`menu` を参照もしない（依存は `menu` → 本モジュールの向き）。
@@ -94,11 +88,11 @@ pub struct PendingDoubleClick {
 
 /// 当たり判定名の供給源シーム（実／mock）。
 ///
-/// `Presenter` は `wire_mouse_input`（task 3.1）が本番構築する。`Mock` は決定論檻専用。
+/// `Presenter` は `wire_mouse_input`が本番構築する。`Mock` は決定論檻専用。
 pub enum RegionSource {
-    /// 実運用: presenter で `resolve_hit_region` を呼ぶ（1.3）。
+    /// 実運用: presenter で `resolve_hit_region` を呼ぶ。
     Presenter,
-    /// 決定論檻: 固定写像で `HitRegion` を返す（1.5）。
+    /// 決定論檻: 固定写像で `HitRegion` を返す。
     ///
     /// `#[allow(dead_code)]`: mock seam ゆえ本番からは構築されない（テスト専用・恒久）。
     #[allow(dead_code)]
@@ -146,27 +140,26 @@ impl MouseWiring {
         }
     }
 
-    /// (scope, 窓 client 物理 px) → [`HitRegion`]（当たり判定名＋配信空間の座標・DD-IE-10 改訂）。
+    /// (scope, 窓 client 物理 px) → [`HitRegion`]（当たり判定名＋配信空間の座標）。
     ///
-    /// - [`RegionSource::Mock`] → `f(scope, x, y)`（presenter を無視・1.5）。
-    /// - [`RegionSource::Presenter`] → `Some(p)` なら `resolve_hit_region(p, scope, x, y)`（1.3）。
+    /// - [`RegionSource::Mock`] → `f(scope, x, y)`（presenter を無視）。
+    /// - [`RegionSource::Presenter`] → `Some(p)` なら `resolve_hit_region(p, scope, x, y)`。
     ///   `presenter` 不在（`RuntimeWiring` 未挿入＝boot 前／失敗時）は `region: None` へ正常縮退する
-    ///   （collision-geometry design の消費想定どおり・trace）。このとき `surface_point` は**無変換の
+    ///   （collision-geometry の消費想定どおり・trace）。このとき `surface_point` は**無変換の
     ///   入力値**とする——presenter が居なければ実適用 k を知る術が無く、等倍相当（縮約は恒等）が
-    ///   唯一整合する縮退規約である（presenter 側の k 不在縮退＝要件 1.6 と同じ扱い。座標空間の
+    ///   唯一整合する縮退規約である（presenter 側の k 不在縮退と同じ扱い。座標空間の
     ///   正準契約は `areka_runtime::hit_region` の冒頭 doc）。
     ///
-    /// # 座標空間（DD-IE-10 改訂・areka-P0-collision-dpi-hittest）
+    /// # 座標空間
     ///
-    /// 旧 DD-IE-10 の「座標は素通し＝DPI 変換なし・k=1.0 限定契約」は**解除済み**。現契約は次のとおりで、
-    /// 全体像の正本は [`areka_runtime::hit_region`] の冒頭 doc（受領空間・吸収点・配信空間・
+    /// 座標の全体像の正本は [`areka_runtime::hit_region`] の冒頭 doc（受領空間・吸収点・配信空間・
     /// shell 限定の旨）である。本 doc はそこへの参照＋本層の差分のみを述べる。
     ///
     /// - 受領する `x`/`y` は当該 shell 窓の client 物理 px であり、**そのまま** resolver へ渡す
     ///   （呼び手側で ÷k しない＝前処理は二重縮約になる）。
     /// - ÷k は resolver の先の presenter（`hit_region_client`）が吸収する。本層は縮約の式を持たない。
     /// - 返る [`HitRegion::surface_point`] が SHIORI へ配信する座標（縮約後サーフェス px）であり、
-    ///   throttle の位置比較だけは縮約前の client px を使い続ける（[`plan_and_send_move`] 参照・6.8）。
+    ///   throttle の位置比較だけは縮約前の client px を使い続ける（[`plan_and_send_move`] 参照）。
     ///
     /// [`plan_and_send_move`]: MouseWiring::plan_and_send_move
     fn resolve_region(
@@ -197,22 +190,22 @@ impl MouseWiring {
         }
     }
 
-    /// per-scope 間引き判定を通し、送出条件成立時のみ `OnMouseMove` 相当を送出する（5.1・DD-IE-5）。
+    /// per-scope 間引き判定を通し、送出条件成立時のみ `OnMouseMove` 相当を送出する。
     ///
     /// per-scope の [`MouseMoveThrottle`] を引き（無ければ既定生成）、[`plan_mouse_move`] で
     /// (次状態, 送出可否) を求めて次状態を保存し、送出可否が true のときだけ
     /// `KanadeMsg::Mouse(MouseInput { .., kind: Move })` を [`Sender`] へ送る。
     ///
-    /// # 2 つの座標空間（DD-IE-10 改訂・DD-4）
+    /// # 2 つの座標空間
     ///
     /// - `client_pos`: 窓 client 物理 px。**throttle の位置比較専用**であり、縮約前の空間を保持し
-    ///   続ける唯一の分岐である（縮約すると移動検出の実効粒度が k 倍粗くなる・6.8）。
+    ///   続ける唯一の分岐である（縮約すると移動検出の実効粒度が k 倍粗くなる）。
     /// - `surface_pos`: resolver が返した縮約後サーフェス px。**配信する `MouseInput{x,y}` の値**
-    ///   であり、`region` と同一空間に揃う（1.8）。k=1.0 では両者が一致し従前の配信値と同一（1.9）。
+    ///   であり、`region` と同一空間に揃う。k=1.0 では両者が一致し従前の配信値と同一。
     ///
     /// 座標契約の全体像は [`areka_runtime::hit_region`] の冒頭 doc（正本）を参照。
     /// 返り値は実際に送出したか。
-    /// 送出失敗（kanade 停止後の [`Sender`] エラー）は warn＋no-op（false 返し・log-first）。
+    /// 送出失敗（kanade 停止後の [`Sender`] エラー）は warn＋no-op（false 返し）。
     fn plan_and_send_move(
         &mut self,
         scope: u32,
@@ -222,7 +215,7 @@ impl MouseWiring {
     ) -> bool {
         let now = (self.now_ms)();
         let state = self.throttle.entry(scope).or_default();
-        // 位置比較は縮約前 client px のまま（throttle.rs は無変更・6.8）。
+        // 位置比較は縮約前 client px のまま（throttle.rs は無変更）。
         let (next, send) = plan_mouse_move(state, client_pos, &region, now);
         *state = next;
 
@@ -250,19 +243,18 @@ impl MouseWiring {
         true
     }
 
-    /// 終了指示（[`KanadeMsg::CloseRequest`]）を 1 件送る（R15.1・design D15 の 1）。
+    /// 終了指示（[`KanadeMsg::CloseRequest`]）を 1 件送る。
     ///
     /// これが kanade の**正規の終了の握手**（`OnClose` GET →終了挨拶の再生 → `\-` →解放）の
     /// 入口である。送るだけで窓には触れない——窓を閉じるのは握手が終わったことを知らせる
     /// 停止通知を受けた側（`areka_runtime::frame` の終了相）であり、この順序が
     /// 「終了挨拶をしてから消える」という見え方を作る。
     ///
-    /// 送出失敗（kanade 停止後の [`Sender`] エラー）は warn＋no-op（log-first）。既に kanade が
+    /// 送出失敗（kanade 停止後の [`Sender`] エラー）は warn＋no-op。既に kanade が
     /// 止まっているなら終了は進行済みであり、ここで新たに始めるものは無い。
     ///
-    /// モジュール外から呼べるのは、メニューの「終了」がここを使うためである
-    /// （areka-P0-popup-menu-minimal 要件 5.1）。利用者起因の終了指示を送る本番の呼び手は
-    /// それだけである（要件 5.3・隠しの Ctrl+左ダブルクリックの入口は 2026-09-19 に取り除いた）。
+    /// モジュール外から呼べるのは、メニューの「終了」がここを使うためである。
+    /// 利用者起因の終了指示を送る本番の呼び手はそれだけである。
     /// 操作した窓のスコープは呼び手が `reason` に載せる。
     pub fn send_close_request(&mut self, reason: CloseReason) {
         if self
@@ -278,12 +270,12 @@ impl MouseWiring {
         }
     }
 
-    /// `OnMouseDoubleClick` 相当を無条件送出する（間引きなし・1.2/3.x）。
+    /// `OnMouseDoubleClick` 相当を無条件送出する（間引きなし）。
     ///
     /// クリックは間引き対象外ゆえ throttle を通さず即送出する。`surface_pos` は resolver が返した
-    /// 縮約後サーフェス px＝配信空間の値（1.8・DD-IE-10 改訂）。throttle を経ないため本経路に
+    /// 縮約後サーフェス px＝配信空間の値。throttle を経ないため本経路に
     /// client px は現れない。座標契約の正本は [`areka_runtime::hit_region`] の冒頭 doc。
-    /// 送出失敗は warn＋no-op（log-first）。
+    /// 送出失敗は warn＋no-op。
     fn send_double_click(
         &mut self,
         scope: u32,
@@ -352,15 +344,15 @@ impl MouseWiring {
 }
 
 /// boot 成功後に `ghost_session::boot_ghost` からゴーストごとに呼ぶ（状態の載せ替え＝n 回・系は
-/// 登録しない・task 3.1・DD-IE-9）。
+/// 登録しない）。
 ///
 /// kanade Sender クローンで `MouseWiring`（NonSend・`RegionSource::Presenter`）を World へ挿入する。
 /// `RuntimeWiring` 挿入（`wire_runtime` の `insert_non_send`）と同型・self-gating＝窓 spawn と挿入の順序に
-/// 依存しない（click-through 登録と同型）。窓へのポインタハンドラ登録は task 3.2（spawn.rs）。
+/// 依存しない（click-through 登録と同型）。
 ///
 /// `wire_runtime` 成功時（`wired=true`）に呼ばれる前提で `Presenter` を選ぶ。boot 成功時は
 /// `RuntimeWiring` 挿入済みゆえ presenter 経由の region 解決が成立する（万一 presenter 不在でも
-/// `resolve_region` が region None へ正常縮退する・DD-IE-9）。
+/// `resolve_region` が region None へ正常縮退する）。
 pub fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
     world.insert_non_send(MouseWiring::new(sender, RegionSource::Presenter));
 }
@@ -368,15 +360,15 @@ pub fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
 /// キャラ窓へポインタハンドラ（[`on_char_pointer_moved`]／[`on_char_pointer_pressed`]）を装着する。
 ///
 /// 全 [`CharWindowMarker`] 窓に `OnPointerMoved`＋`OnPointerPressed` を挿入する
-/// （バルーン窓には付けない＝M1 はバルーンにマウス送出なし・DD-IE-12）。
+/// （バルーン窓には付けない＝バルーンにマウス送出なし）。
 ///
-/// # 依存方向（regression 修正）
+/// # 依存方向
 ///
 /// この結線は本来 `areka_placement::spawn` が担うのが素直だが、配置の crate
 /// （`areka-placement`）は本体（`areka`）に依存できず、本体の `crate::` パスを持てない
 /// （example の `window-placement.rs`／`collision-probe.rs` も crate の公開面で配置を使う）。設計の依存方向も
 /// `input_events → placement` ゆえ、ハンドラ装着は placement に依存できる
-/// **本モジュール側**が所有する（stand-in 即終了 `on_ghost_pressed` は退役）。
+/// **本モジュール側**が所有する。
 ///
 /// # タイミング契約
 ///
@@ -384,14 +376,14 @@ pub fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
 /// （キャラ窓が既に存在する状態・`ghost_session::prepare_ghost_windows` が組む窓を作るクロージャ）。同一
 /// World-mutation 内で同期実行するため async race はない。
 ///
-/// # ドラッグの受け手（areka-P0-mouse-drag-events）
+/// # ドラッグの受け手
 ///
 /// 同じ `insert` で `OnDragStart`（[`drag::on_char_drag_start`]）と `OnDragEnd`
 /// （[`drag::on_char_drag_end_and_notify`]）も入れる。この `OnDragEnd` は `areka_placement::spawn` が
 /// 先に付けた `OnDragEnd(on_char_drag_end)` を**置き換える**（同じ型の部品は 1 つの窓に 1 つ）。
 /// 包みが同じ `on_char_drag_end` を先に呼ぶので位置の保存は続く。順を入れ替えない
 /// （`spawn_ghost_windows` の直後に呼ぶ。逆にすると spawn が包みを上書きし、知らせが止まる）。
-/// バルーン窓（`OnDragEnd(on_balloon_drag_end)`）には何も付けない（要件 3.3）。
+/// バルーン窓（`OnDragEnd(on_balloon_drag_end)`）には何も付けない。
 pub fn attach_char_pointer_handlers(world: &mut World) {
     // `&mut World` を借用中にクエリで別の可変借用を取れないため、まず対象 entity を
     // 収集してから 1 件ずつ挿入する。
@@ -410,37 +402,36 @@ pub fn attach_char_pointer_handlers(world: &mut World) {
 }
 
 // ---------------------------------------------------------------------------
-// ポインタハンドラ（task 2.7・wintf `PointerEventHandler` 署名）
+// ポインタハンドラ（wintf `PointerEventHandler` 署名）
 //
 // 署名は `fn(&mut World, sender: Entity, entity: Entity, ev: &Phase<PointerState>) -> bool`
 // （`wintf::ecs::pointer::PointerEventHandler`）。Bubble 相のみ処理し Tunnel は no-op false
 // （伝播続行）。キャラ窓への登録は本モジュールの `attach_char_pointer_handlers`（依存方向
-// input_events→placement・`ghost_session::prepare_ghost_windows` が spawn 直後に呼ぶ）で行う＝stand-in `on_ghost_pressed`
-// を退役して `OnPointerMoved`／`OnPointerPressed` へ差し替え。
+// input_events→placement・`ghost_session::prepare_ghost_windows` が spawn 直後に呼ぶ）で行う。
 // ---------------------------------------------------------------------------
 
-/// キャラ窓 `CharWindowMarker.scope`（usize→u32）を取り出す（M1 実値 {0,1} を `debug_assert`）。
+/// キャラ窓 `CharWindowMarker.scope`（usize→u32）を取り出す（実値 {0,1} を `debug_assert`）。
 ///
 /// マーカー不在（本来キャラ窓には常在）は `None` を返し、呼び手は no-op で縮退する（panic しない）。
 ///
 /// モジュール外から呼べるのは、メニュー側も「右クリックされた窓のスコープ」を同じ規則で
-/// 引くためである（areka-P0-popup-menu-minimal 要件 5.2）。
+/// 引くためである。
 pub fn char_scope(world: &World, entity: Entity) -> Option<u32> {
     let scope = world.get::<CharWindowMarker>(entity)?.scope;
     debug_assert!(scope <= 1, "M1 の scope は {{0,1}} を想定: {scope}");
     Some(scope as u32)
 }
 
-/// (scope, 窓 client 物理 px) → [`HitRegion`] を owned で解決する（DD-IE-9 の借用規律）。
+/// (scope, 窓 client 物理 px) → [`HitRegion`] を owned で解決する。
 ///
 /// presenter 借用（`&RuntimeWiring`）と間引き状態（`&mut MouseWiring`）が同じ `&mut World` 上の別
 /// NonSend 資源であるため、**presenter を含む解決は共有借用のみで完結させ結果を owned で取り
 /// 出してから** `&mut MouseWiring` を取る（送出は呼び手が行う）。`RuntimeWiring` 不在（boot 前／失敗時）
 /// は presenter=None ゆえ `resolve_region` が `region: None` へ正常縮退する（RegionSource::Mock は
-/// presenter を無視）。呼び手は事前に `MouseWiring` 在を確認済み（self-gating）。
+/// presenter を無視）。呼び手は事前に `MouseWiring` 在を確認済み。
 ///
-/// 返り値には `region` に加えて配信空間の座標 [`HitRegion::surface_point`] が載る（DD-4）。
-/// 呼び手はこれを `MouseInput{x,y}` へ載せ、throttle へは受領した client px を渡す（6.8）。
+/// 返り値には `region` に加えて配信空間の座標 [`HitRegion::surface_point`] が載る。
+/// 呼び手はこれを `MouseInput{x,y}` へ載せ、throttle へは受領した client px を渡す。
 fn resolve_hit_owned(world: &World, scope: u32, x: i64, y: i64) -> HitRegion {
     let wiring = world
         .get_non_send::<MouseWiring>()
@@ -452,15 +443,15 @@ fn resolve_hit_owned(world: &World, scope: u32, x: i64, y: i64) -> HitRegion {
     wiring.resolve_region(presenter, scope, x, y)
 }
 
-/// キャラ窓のポインタ移動ハンドラ（Bubble のみ処理・1.1/1.3・5.x）。
+/// キャラ窓のポインタ移動ハンドラ（Bubble のみ処理）。
 ///
 /// `CharWindowMarker.scope` と `PointerState.client_point`（窓 client 物理 px・前処理せず resolver へ
 /// 渡す）を取り、当たり判定を解決し [`plan_mouse_move`] の間引き判定を通して送出条件成立時のみ
 /// `KanadeMsg::Mouse(Move)` を送出する。`MouseWiring` 不在（wiring 前）は self-gating no-op（false・
 /// trace）。Tunnel 相は伝播続行のため常に false。
 ///
-/// 座標（DD-IE-10 改訂）: 間引きの位置比較は受領した client px のまま（6.8）、配信する
-/// `MouseInput{x,y}` は resolver が返した `surface_point`（縮約後サーフェス px・1.8）。
+/// 座標: 間引きの位置比較は受領した client px のまま、配信する
+/// `MouseInput{x,y}` は resolver が返した `surface_point`（縮約後サーフェス px）。
 pub fn on_char_pointer_moved(
     world: &mut World,
     _sender: Entity,
@@ -472,7 +463,7 @@ pub fn on_char_pointer_moved(
         Phase::Bubble(s) => s,
     };
 
-    // 箱の前段（areka-P0-shell-balloon）: 箱の選択肢の行の上は強調だけで、シェルへは送らない。
+    // 箱の前段: 箱の選択肢の行の上は強調だけで、シェルへは送らない。
     if shell_box_handler::on_box_pointer_moved(world, entity, state) {
         return true;
     }
@@ -488,7 +479,7 @@ pub fn on_char_pointer_moved(
     let x = state.client_point.x as i64;
     let y = state.client_point.y as i64;
 
-    // presenter 借用を解いて解決結果を owned で取り出してから &mut MouseWiring を取る（DD-IE-9）。
+    // presenter 借用を解いて解決結果を owned で取り出してから &mut MouseWiring を取る。
     let hit = resolve_hit_owned(world, scope, x, y);
     let mut wiring = world
         .get_non_send_mut::<MouseWiring>()
@@ -497,24 +488,24 @@ pub fn on_char_pointer_moved(
     wiring.plan_and_send_move(scope, (x, y), hit.surface_point, hit.region)
 }
 
-/// キャラ窓のポインタ押下ハンドラ（Bubble のみ処理・1.2/3.3・6.2/6.3・7.1/7.3/7.4）。
+/// キャラ窓のポインタ押下ハンドラ（Bubble のみ処理）。
 ///
-/// - **Ctrl+左ダブルクリック（結線前）／Ctrl+Shift+左ダブルクリック → 強制退避**（要件 5.5）:
+/// - **Ctrl+左ダブルクリック（結線前）／Ctrl+Shift+左ダブルクリック → 強制退避**:
 ///   本体の終了の統合操作 `app_exit::quit_app`（出所 `Escape`）を [`InputHooks`](hooks::InputHooks)
 ///   経由で呼び、全窓を閉じて終了を指示し、`run()` 復帰→main
 ///   shutdown→`ForceQuit` 系列へ委ねる。起動に失敗した・固まったゴーストから抜ける口として残す。true。
-/// - **Ctrl+左ダブルクリック（結線済み・Shift 非押下）→ Ctrl は無視する**（要件 5.3・開発者裁定
-///   2026-09-19）: 終了指示は送らない。下の「左ダブルクリック（Ctrl なし）」とまったく同じに扱う。
+/// - **Ctrl+左ダブルクリック（結線済み・Shift 非押下）→ Ctrl は無視する**:
+///   終了指示は送らない。下の「左ダブルクリック（Ctrl なし）」とまったく同じに扱う。
 ///   利用者起因の終了指示を送るのはメニューの「終了」（`menu::request_close`）だけである。
 /// - **左ダブルクリック（Ctrl なし）** → 当たり判定を解決し
 ///   `KanadeMsg::Mouse(DoubleClick{button: Left})` を送出。配信座標は resolver が返した
-///   `surface_point`（縮約後サーフェス px・1.8・DD-IE-10 改訂）。true。
+///   `surface_point`（縮約後サーフェス px）。true。
 /// - **右ダブルクリック** → 当たり判定を解決するが**送らない**。スコープ・`surface_point`・
 ///   当たり判定名を [`PendingDoubleClick`] として高々 1 件預かる（前の預かりは上書き）。送るか
-///   どうかはメニュー側が決める（areka-P0-popup-menu-minimal 要件 1.10）。true。
-/// - **中／拡張ボタンのダブルクリック** → 送出しない（OnMouseDoubleClickEx は α 後・7.1）。false。
-/// - **単発クリック**（`DoubleClick::None`）→ 送出しない（7.3）。false。
-/// - The Hand／collisionex は実装しない（7.4）。右クリックメニューは本ハンドラでは扱わない
+///   どうかはメニュー側が決める。true。
+/// - **中／拡張ボタンのダブルクリック** → 送出しない（OnMouseDoubleClickEx は α 後）。false。
+/// - **単発クリック**（`DoubleClick::None`）→ 送出しない。false。
+/// - The Hand／collisionex は実装しない。右クリックメニューは本ハンドラでは扱わない
 ///   （引き金は押下ではなく右ボタンの解放で、`menu` モジュールの担当）。
 ///
 /// Tunnel 相は伝播続行のため常に false。送出・預かりは `MouseWiring` 不在時 self-gating no-op（強制退避は
@@ -530,15 +521,14 @@ pub fn on_char_pointer_pressed(
         Phase::Bubble(s) => s,
     };
 
-    // 強制退避（Ctrl+左ダブルクリック・要件 5.5）。腕は 1 つだけである。
+    // 強制退避（Ctrl+左ダブルクリック）。腕は 1 つだけである。
     //
     // 結線前（ghost boot 失敗・boot 前）、または Ctrl+**Shift** のとき、統合操作で全窓を閉じて
     // 終了を指示し、`run()` 復帰→main shutdown→`ForceQuit` 系列へ委ねる。起動に失敗した・
     // 固まったゴーストから抜ける唯一の口である。
     //
     // 結線済み（`MouseWiring` 在）で Shift 非押下なら Ctrl は無視し、下の左ダブルクリックの経路へ
-    // そのまま落とす——かつてここに置いていた隠しの終了指示は、メニューの「終了」が同じ役目を
-    // 果たすため取り除いた（開発者裁定 2026-09-19・要件 5.3）。
+    // そのまま落とす。終了指示はメニューの「終了」だけが送る。
     let wired = world.get_non_send::<MouseWiring>().is_some();
     if state.ctrl_down && state.double_click == DoubleClick::Left && (!wired || state.shift_down) {
         tracing::info!(
@@ -551,7 +541,7 @@ pub fn on_char_pointer_pressed(
         return true;
     }
 
-    // 箱の前段（areka-P0-shell-balloon）: 箱の選択肢の確定・箱での中断はシェルへ送らない。
+    // 箱の前段: 箱の選択肢の確定・箱での中断はシェルへ送らない。
     // 箱の判定は 1 回だけ。結果を控えてから今までどおりに返す（控えは結線の前は書かれない）。
     let by_box = shell_box_handler::on_box_pointer_pressed(world, entity, state);
     click::note_press(world, entity, state, by_box);
@@ -559,7 +549,7 @@ pub fn on_char_pointer_pressed(
         return true;
     }
 
-    // 扱うのは左／右ダブルクリックのみ。中／拡張ボタン・単発クリックは何もしない（7.1/7.3）。
+    // 扱うのは左／右ダブルクリックのみ。中／拡張ボタン・単発クリックは何もしない。
     let right = match state.double_click {
         DoubleClick::Left => false,
         DoubleClick::Right => true,
@@ -584,7 +574,7 @@ pub fn on_char_pointer_pressed(
     let mut wiring = world
         .get_non_send_mut::<MouseWiring>()
         .expect("MouseWiring は直上で存在確認済み");
-    // 座標は surface_point（縮約後サーフェス px・1.8）。クリックは throttle を通らない。
+    // 座標は surface_point（縮約後サーフェス px）。クリックは throttle を通らない。
     if right {
         // 右は送らずに預かる。送るかどうかはメニュー側が決める（[`PendingDoubleClick`] の不変条件）。
         wiring.defer_right_double_click(PendingDoubleClick {

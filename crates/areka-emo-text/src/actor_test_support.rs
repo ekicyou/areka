@@ -1,8 +1,5 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
-
 // UI スレッド常駐ランタイム（TextLayerRuntime／spawn_emo_text／present_frame）のテスト
 // （`actor_*_tests.rs`・`sink` のテスト）が共有する部品（`crate::actor::test_support`）。
-// cue の組み立て・予約スロットの World・読み戻し・箱の束・受信口の drain・記録の捕捉を置く。
 
 use std::collections::BTreeMap;
 use std::ops::{ControlFlow, RangeInclusive};
@@ -42,8 +39,8 @@ use crate::state::TextItem;
 // ── テスト土台 ──
 
 /// reveal 間隔（秒/グリフ）。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、
-/// Text cue へ `N × REVEAL_INTERVAL` の duration を焼き込むことで interval=0.05 の進行を得る
-/// （旧 char_wait=0.05 既定と機能等価・進行観測は安全マージン付き時刻 0.06/0.11 で行う）。
+/// Text cue へ `N × REVEAL_INTERVAL` の duration を焼き込んで interval=0.05 の進行を得る
+/// （進行の観測は安全マージン付き時刻 0.06/0.11 で行う）。
 pub(crate) const REVEAL_INTERVAL: f64 = 0.05;
 
 /// テスト用 cue。Text cue には配送 duration = `N × REVEAL_INTERVAL` を焼き込む
@@ -229,7 +226,7 @@ pub(crate) fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&st
     }
 }
 
-// ══ 提示パイプラインとヒット行スナップショット配線（COM・headless・R3.1/3.2/3.3/5.2/6.3） ══
+// ══ 提示パイプラインとヒット行スナップショット配線（COM・headless） ══
 
 /// 3 資源（GraphicsCore/WucGraphicsResource/予約スロット）を積んだ World を組む土台。
 /// 返り値は (world, window, slot)。COM は本番 UI スレッド（MTA）を再現する。
@@ -502,7 +499,7 @@ pub(crate) fn number_field(event: &CapturedEvent, name: &str) -> f32 {
 
 // ── 警告の文（発行点と 1 文字も違わないこと） ──
 
-/// 折返し基準の警告（`areka-P0-emo2-conformance-e2e` の手順書 §5.7 の grep 語・変えると実機走行の判定が静かに壊れる・同じ spec の要件 14.3）。
+/// 折返し基準の警告（実機走行の判定が grep する語・変えると判定が静かに壊れる）。
 pub(crate) const COARSE_WRAP_MESSAGE: &str = "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）";
 
 /// 無視した `origin` 宣言の警告（`actor_decoration.rs` の発行点）。

@@ -75,7 +75,6 @@ fn main() -> Result<()> {
         run_setup(tx).await;
     });
 
-    // クリック透過機構への窓登録システム（areka と同一パターン）。
     world
         .borrow_mut()
         .add_systems(FrameFinalize, register_click_through_windows);
@@ -96,7 +95,6 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// クリック透過機構へ検証窓を登録する（`Added<WindowHandle>` で HWND 付与直後を捉える）。
 fn register_click_through_windows(
     new_windows: Query<(Entity, &WindowHandle), (Added<WindowHandle>, With<TwoRectsWindowMarker>)>,
     handle: Option<NonSend<ClickThroughRegistryHandle>>,
@@ -110,7 +108,6 @@ fn register_click_through_windows(
     }
 }
 
-/// 非同期タスクで検証窓（2 矩形）を生成する。
 async fn run_setup(tx: CommandSender) {
     let _ = tx.send(Box::new(|world: &mut World| {
         create_test_window(world);
@@ -146,13 +143,11 @@ fn create_test_window(world: &mut World) -> Entity {
             },
             // 窓自身はヒット対象外（全面ヒットを避ける）。当たりは子の矩形・画像だけ。
             HitTest::none(),
-            // 矩形/画像を掴んで窓ごとドラッグ移動（move_window=true 既定）。ドラッグ中に
-            // クリック透過が入らず、終了後に再収束する（R5 抑止）ことも本台で確認できる。
+            // 矩形/画像を掴んで窓ごとドラッグ移動する。移動中はクリック透過が入らず、終了後に再収束する。
             DragConfig::default(),
         ))
         .id();
 
-    // 赤い矩形（左上）: client (20,20)-(140,140)。
     spawn_rect(
         world,
         window,
@@ -169,7 +164,6 @@ fn create_test_window(world: &mut World) -> Entity {
         },
     );
 
-    // 青い矩形（右下・対角にズラす）: client (260,260)-(380,380)。
     spawn_rect(
         world,
         window,
@@ -186,13 +180,9 @@ fn create_test_window(world: &mut World) -> Entity {
         },
     );
 
-    // 左下: 透過 PNG（キャラ画像）を αピクセル判定で置く。client (20,180)-(180,390)。
-    //
-    // `HitTest` を省いても `BitmapSource` の on_add が `HitTest::alpha_mask()` を入れる。ここでは
-    // αピクセル判定を使うことを読み手に示すため明示している。`generate_alpha_mask_system` は
-    // `Changed<BitmapSourceResource>` ＋ `HitTest` ＋ `HitTestMode::AlphaMask` で、まだαマスクが
-    // 無い時だけαマスクを生成する（`HitTest::bounds()` などを付ければ全面矩形判定でαは効かない）。
-    // 表示は `draw_bitmap` が bounds（BoxStyle サイズ）へスケールするため、表示と判定域は一致する。
+    // `BitmapSource` の on_add が `HitTest::alpha_mask()` を入れるので省いてもよいが、αピクセル判定を
+    // 使うことを示すため明示している。`HitTest::bounds()` を付けると全面矩形判定になりαは効かない。
+    // αマスクを作るのは wintf の `generate_alpha_mask_system`（`HitTestMode::AlphaMask` のときだけ）。
     // 期待: キャラの不透明ピクセル上だけ十字カーソル ON・透明な周辺はクリック透過（背面へ）。
     world.spawn((
         Name::new("Image-alpha"),
@@ -249,7 +239,7 @@ fn spawn_rect(
             }),
             ..Default::default()
         },
-        // 赤/青の矩形をダブルクリックで終了（ヒット当事者に直付けして確実に発火させる）。
+        // ダブルクリックで終了する。ヒット当事者に直付けして確実に発火させる。
         OnPointerPressed(on_pressed_quit),
         ChildOf(parent),
     ));

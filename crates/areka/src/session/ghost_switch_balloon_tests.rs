@@ -1,5 +1,4 @@
-//! 切替先のバルーンを作者の指定で決め、決まった段を 1 件記録する兄弟テスト
-//! （areka-P0-ghost-standard-balloon タスク 4・design「Testing Strategy」切替・要件 4.1・5.8・7.6・7.7）。
+//! 切替先のバルーンを作者の指定で決め、決まった段を 1 件記録する兄弟テスト。
 //!
 //! 切替の土台（[`SwitchRig`]・根は検体の複製＝ワークツリーの `target\` の下）に 2 つ目のバルーンを足し、
 //! A から B へ本物の経路で切り替える。準備のたびに B に記憶（`[last] balloon`）が無いことを確かめる
@@ -99,7 +98,7 @@ fn assert_one_record(events: &[CapturedEvent], rig: &SwitchRig, route: &str) {
 }
 
 /// 切替先の descript.txt の `balloon` が 2 つ目のバルーンの `name` を指すと、同梱（`emo2-kakukaku`）より
-/// 先に descript の段で 2 つ目に決まり、記録が 1 件残る（要件 4.1・5.8）。
+/// 先に descript の段で 2 つ目に決まり、記録が 1 件残る。
 ///
 /// # 非空虚性
 /// 切替で descript の段を見ないと同梱の段で `emo2-kakukaku` に決まり、記録が無いと件数が 0 で赤。
@@ -128,7 +127,7 @@ fn switching_to_a_ghost_whose_descript_names_a_balloon_uses_it_and_records_the_d
 }
 
 /// 切替先の install.txt が番号付きだけ（`balloon0.directory` が 2 つ目）だと、同梱の段で 2 つ目に決まり、
-/// 記録が 1 件残る（要件 4.1・5.8）。
+/// 記録が 1 件残る。
 ///
 /// # 非空虚性
 /// 番号付きを読まないと同梱の段を素通りして無作為の段へ落ち、段の判定で赤。
@@ -155,7 +154,7 @@ fn switching_to_a_ghost_with_numbered_companions_uses_the_first_and_records_the_
 }
 
 // ---------------------------------------------------------------------------
-// ゴーストの中のバルーン（areka-P0-ghost-inner-balloon タスク 2.2・要件 2.3・4.6・5.2〜5.6・8.5・10.1）
+// ゴーストの中のバルーン
 // ---------------------------------------------------------------------------
 
 /// A・B それぞれのゴーストの中のバルーン（フォルダ名・`name`）。
@@ -185,7 +184,7 @@ fn count(events: &[CapturedEvent], name: &str) -> usize {
 }
 
 /// 切替先 B の中のバルーンを descript が指すと、それに決まり、記憶にはフォルダ名だけが書かれ、
-/// 次の切替の決め方（`resolve_balloon_for_ghost`）は記憶の段から同じ場所を出す（要件 2.3・4.6・5.2〜5.4）。
+/// 次の切替の決め方（`resolve_balloon_for_ghost`）は記憶の段から同じ場所を出す。
 ///
 /// # 非空虚性
 /// 切替の候補にゴーストの中が入らないと descript の段が当たらず同梱の段へ落ちて赤。
@@ -202,7 +201,7 @@ fn switching_to_a_ghost_with_its_own_balloon_uses_and_remembers_it_by_folder_nam
         (BalloonRoute::Descript, Some(B_INNER), &inner),
         "{events:?}"
     );
-    // 記憶の形は今と同じ（フォルダ名 1 つ・場所を書かない）。
+    // 記憶はフォルダ名 1 つだけで場所を書かない。
     assert_eq!(
         read_last_balloon(&rig.root.ghost_dir("B")).as_deref(),
         Some(B_INNER)
@@ -218,7 +217,7 @@ fn switching_to_a_ghost_with_its_own_balloon_uses_and_remembers_it_by_folder_nam
 }
 
 /// 候補は切替先のものに入れ替わる: B の descript が A の中のバルーンの `name` を指しても当たらず、
-/// `descript_balloon_not_found` を残して次の段へ進む（要件 2.3・4.6）。
+/// `descript_balloon_not_found` を残して次の段へ進む。
 ///
 /// # 非空虚性
 /// 切替の候補が切替前のゴースト（A）の中を数えると descript の段で A の中に当たって赤。
@@ -240,8 +239,8 @@ fn switching_does_not_see_the_balloon_inside_the_previous_ghost() {
     );
 }
 
-/// 本 spec の前の形の記憶（`[last] balloon = "<フォルダ名>"`）がそのまま読め、ゴーストの中のバルーンに
-/// 記憶の段で当たる（要件 5.4・5.6）。
+/// ゴーストの中のバルーンを持たない旧い形の記憶（`[last] balloon = "<フォルダ名>"`）がそのまま読め、ゴーストの中のバルーンに
+/// 記憶の段で当たる。
 ///
 /// # 非空虚性
 /// 記憶の段の候補にゴーストの中が入らないと記憶が当たらず `last_balloon_not_found` で赤。
@@ -262,7 +261,7 @@ fn a_memory_written_before_this_spec_finds_the_ghost_inner_balloon() {
 }
 
 /// 記憶のバルーンがゴーストの中から消えたら `last_balloon_not_found` を 1 件残して次の段
-/// （descript）へ進む（要件 5.5・8.5）。
+/// （descript）へ進む。
 ///
 /// # 非空虚性
 /// 消えた記憶で止まると切替が倒れ、記録が無いと件数が 0 で赤。

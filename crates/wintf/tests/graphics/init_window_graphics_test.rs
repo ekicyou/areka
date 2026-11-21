@@ -1,4 +1,4 @@
-//! W3a-T: init_wuc_resource・init_window_graphics（systems/init.rs）のヘッドレステスト
+//! init_wuc_resource・init_window_graphics（systems/init.rs）のヘッドレステスト
 //!
 //! WindowGraphics 本体の作成は DesktopWindowTarget（実 HWND 必須）のため
 //! ヘッドレスでは検証不能だが、前段の分岐はデバイス非依存に検証できる:
@@ -112,7 +112,7 @@ fn invalid_graphics_core_defers_initialization() {
     });
 }
 
-/// 作り直しに一度失敗した窓も、合図を立て直さずに次の回で作り直される（39 番）。
+/// 作り直しに一度失敗した窓も、合図を立て直さずに次の回で作り直される。
 ///
 /// 1 回目の作り直しは壊れた HWND で失敗させ、その後 HWND を本物へ戻すだけ（変化の印は
 /// 立てない）で回すと、世代の番号が進んで有効になる。
@@ -149,7 +149,6 @@ fn failed_recreation_is_retried_without_a_new_mark() {
                 HasGraphicsResources,
             ))
             .id();
-        // 1 回目で WUC の資源が入り、2 回目で窓の的が作られる
         schedule.run(&mut world);
         schedule.run(&mut world);
         let wg = world.get::<WindowGraphics>(entity).expect("初回の作成");
@@ -165,7 +164,6 @@ fn failed_recreation_is_retried_without_a_new_mark() {
         schedule.run(&mut world);
         assert!(!world.get::<WindowGraphics>(entity).unwrap().is_valid());
 
-        // HWND を本物へ戻すだけ（変化の印は立てない）
         world.get_mut::<WindowHandle>(entity).unwrap().hwnd = hwnd;
         schedule.run(&mut world);
 

@@ -1,20 +1,18 @@
 //! `FrameTiming`: 表示 1 コマ適用（`apply_show`）の段階別計時と perf サマリ行の emit。
 //!
-//! 「何が重いか」を推測でなく実測で確定するための観測基盤である（Requirement 1.1/1.2/1.5）。
-//! 表示 1 コマの適用を **キャッシュ照会・合成・当たり判定マスク生成・表示の記録**
-//! の 4 段へ刻み、合計と併せて 1 適用 = 1 行の固定スキーマで出す。この行だけが
-//! `tools/perf/judge-perf.py`（判定スクリプト）とコードの間のデータ契約である。
+//! 表示 1 コマの適用を キャッシュ照会・合成・当たり判定マスク生成・表示の記録 の 4 段へ刻み、合計と併せて
+//! 1 適用 = 1 行の固定スキーマで出す。この行だけが `tools/perf/judge-perf.py`（判定スクリプト）と
+//! コードの間のデータ契約である。
 //!
-//! # 計測は無条件・emit だけがフィルタに従う（Requirement 1.5・design.md D5）
+//! # 計測は無条件・emit だけがフィルタに従う
 //!
-//! [`FrameTiming::start`]／[`FrameTiming::mark`] は [`Instant::now`]（段あたり数十 ns）を
-//! **ログ設定を一切参照せずに**呼ぶ。ログ水準の判定に触れるのは [`FrameTiming::emit`] 内の
-//! `tracing::debug!` だけであり、その中でも「行を出すか」しか変わらない。ゆえに
-//! 「計時ログの有効・無効で表示結果が変わらない」は檻ではなく**構造**で成立する——表示経路に
-//! ログ設定による分岐が 1 つも無いためである。`if tracing::enabled!(..)` のような前置ガードを
-//! 足すと、この構造的保証が失われる（＝入れてはならない）。
+//! [`FrameTiming::start`]／[`FrameTiming::mark`] は [`Instant::now`]（段あたり数十 ns）をログ設定を参照せずに
+//! 呼ぶ。ログ水準の判定に触れるのは [`FrameTiming::emit`] 内の `tracing::debug!` だけで、その中でも「行を
+//! 出すか」しか変わらない。ゆえに「計時ログの有効・無効で表示結果が変わらない」は、表示経路にログ設定による
+//! 分岐が 1 つも無いことで成立する。`if tracing::enabled!(..)` のような前置ガードを足すとこの保証が失われる
+//! ので入れてはならない。
 //!
-//! # 行のスキーマ（design.md §Data Models「perf サマリ行スキーマ」）
+//! # 行のスキーマ
 //!
 //! 固定文言 [`PERF_LINE_MESSAGE`]・`debug` 水準・target は本モジュールのモジュールパス
 //! （`areka_emo_present::presenter::timing`）＝既存の `RUST_LOG=areka_emo_present=debug` 流儀で
@@ -22,19 +20,16 @@
 //!
 //! - `target_id`（Debug）・`surface_id`（u32）・`cache_hit`（bool）: 適用対象と引き当ての可否
 //! - `t_cache_us` `t_compose_us` `t_mask_us` `t_upload_us` `t_total_us`（u64・µs）:
-//!   **全段が常に出る**。実行されなかった段は 0 である。これにより判定スクリプトは
-//!   「段フィールドの欠落」を行単位で検出でき、部分集計を黙って出さずに済む（Requirement 2.5）
-//! - `alloc_compose_dst` `alloc_mask`（u32）: この適用で起きた
-//!   新規確保／容量成長の計数（Requirement 1.3・供給元は `FrameBudget`）
+//!   全段が常に出る。実行されなかった段は 0 で、判定スクリプトは「段フィールドの欠落」を行単位で検出でき、
+//!   部分集計を黙って出さずに済む
+//! - `alloc_compose_dst` `alloc_mask`（u32）: この適用で起きた新規確保／容量成長の計数（供給元は `FrameBudget`）
 //! - `key_hash`（u64）: 合成キーの安定ハッシュ。run 内の異なりキー数＝必要スロット数の実測根拠
-//!   （Requirement 7.2 のキャッシュ容量裁定材料）
-//! - `frame`（u32・**末尾**）: この適用が走った tick のフレーム番号。遷移観測チャネル
-//!   （`wintf::transition`）の全レコードと同じ番号系列であり、段階別計時の行を遷移の時系列へ
-//!   差し込むための唯一の鍵である（`areka-P0-dpi-transition-atomicity` Requirement 2.8・D12）
+//!   （キャッシュ容量の裁定材料）
+//! - `frame`（u32・末尾）: この適用が走った tick のフレーム番号。遷移観測チャネル（`wintf::transition`）の
+//!   全レコードと同じ番号系列で、段階別計時の行を遷移の時系列へ差し込むための唯一の鍵
 //!
-//! 既存の表示成立点の行（`"apply(ShowSurface): 表示・マスクを更新"`）とは**別行**であり、
-//! 同一適用の対として隣接して出る（配線は show.rs の責務）。文言・フィールド名の変更は
-//! `judge-perf.py` と計時檻の再検証トリガである（design.md §Revalidation Triggers）。
+//! 既存の表示成立点の行（`"apply(ShowSurface): 表示・マスクを更新"`）とは別行で、同一適用の対として
+//! 隣接して出る（配線は show.rs の責務）。文言・フィールド名の変更は `judge-perf.py` と計時檻の再検証が要る。
 
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
@@ -47,15 +42,12 @@ use crate::command::TargetId;
 /// perf サマリ行の固定文言（grep の唯一の足がかり・判定スクリプトとの契約面）。
 ///
 /// `tracing` のメッセージは文字列リテラルでなければならないため、[`FrameTiming::emit_at`] 内の
-/// `debug!` には同じ文言を直接書いてある。両者の乖離は単体檻が RED で捕まえる。
-///
-/// 読み手は檻だけである（`timing_tests.rs`・task 1.4 の計時ログ較正檻）——製品コードは
-/// リテラルを直接持つため参照しない。契約面を名前で 1 箇所に据えることが本定数の目的であり、
-/// 死蔵ではない。
+/// `debug!` には同じ文言を直接書いてある。両者の乖離は単体檻が捕まえる。読み手は檻だけ
+/// （`timing_tests.rs`・計時ログ較正檻）で、製品コードはリテラルを直接持つため参照しない。
 #[cfg(test)]
 pub(super) const PERF_LINE_MESSAGE: &str = "perf(apply_show): 段階別計時";
 
-/// 計時対象の段（Requirement 1.1 の列挙と 1:1）。
+/// 計時対象の段。
 ///
 /// 合計は段ではなく「起点から emit までの全区間」として別に取る（段の総和ではない——段の外側で
 /// 費やされた時間があれば差として現れ、内訳の取りこぼしが判る）。
@@ -95,9 +87,9 @@ pub(super) struct EmitContext {
     pub(super) surface_id: u32,
     /// この適用が引き当てで済んだか。
     pub(super) cache_hit: bool,
-    /// 合成キーの安定ハッシュ（[`compose_key_hash`] の値・Requirement 7.2）。
+    /// 合成キーの安定ハッシュ（[`compose_key_hash`] の値）。
     pub(super) key_hash: u64,
-    /// この適用が走った tick のフレーム番号（`areka-P0-dpi-transition-atomicity` Requirement 2.8）。
+    /// この適用が走った tick のフレーム番号。
     ///
     /// 遷移観測チャネルの全レコード（窓書込・モニタ表更新・サーフェス更新）が同じ番号を持つため、
     /// この 1 フィールドで「段階別計時の行」と「遷移の時系列」が突合できる。供給元は
@@ -121,12 +113,12 @@ pub(super) struct FrameTiming {
 }
 
 impl FrameTiming {
-    /// 適用の冒頭で計時を開始する（ログ設定を参照しない＝D5）。
+    /// 適用の冒頭で計時を開始する（ログ設定を参照しない）。
     pub(super) fn start() -> Self {
         Self::start_at(Instant::now())
     }
 
-    /// 起点を注入して開始する（檻が実時間に依存しないための私有シーム・Requirement 6.2）。
+    /// 起点を注入して開始する（檻が実時間に依存しないための私有シーム）。
     fn start_at(now: Instant) -> Self {
         Self {
             started: now,
@@ -160,14 +152,14 @@ impl FrameTiming {
     ///
     /// 確保計数（[`BudgetDelta`]）は行へ載せるだけで、値は作らない——確保の発生点を知るのは
     /// 計数シームの所有者 `FrameBudget` 側であり、`FrameTiming` はその 1 適用分の増分を
-    /// 受け取って同居させる運搬役である（Requirement 1.3）。
+    /// 受け取って同居させる運搬役である。
     pub(super) fn emit(self, ctx: &EmitContext, allocs: BudgetDelta) {
         self.emit_at(ctx, allocs, Instant::now());
     }
 
     /// 終端時刻を注入して emit する（私有シーム）。
     ///
-    /// 全段フィールドを**常に**載せる: 記録の無い段は 0 である（Requirement 2.5 の行単位欠落
+    /// 全段フィールドを**常に**載せる: 記録の無い段は 0 である（行単位欠落
     /// 検出は「段が常に出る」ことに依存する。条件付きでフィールドを落とすと、実行されなかった
     /// 段と欠陥で消えた段が判定スクリプトから区別できなくなる）。
     fn emit_at(self, ctx: &EmitContext, allocs: BudgetDelta, now: Instant) {
@@ -190,8 +182,8 @@ impl FrameTiming {
             alloc_mask,
         } = allocs;
 
-        // 文言は PERF_LINE_MESSAGE の写し（リテラル必須）。水準・target（モジュールパス既定）と
-        // ともに judge-perf.py との契約面であり、変更は Revalidation Trigger である。
+        // 文言は PERF_LINE_MESSAGE の写し（リテラル必須）。水準・target と共に judge-perf.py との
+        // 契約面で、変更は判定スクリプトと計時檻の再検証が要る。
         tracing::debug!(
             ?target_id,
             surface_id,
@@ -204,9 +196,8 @@ impl FrameTiming {
             alloc_compose_dst,
             alloc_mask,
             key_hash,
-            // **末尾追加**（design D12）。既存フィールドの順序・名前・文言を 1 つも動かさない
-            // ——`tools/perf/judge-perf.py::parse_fields` は `名前=値` を辞書化して必須フィールドの
-            // 存在だけを見るため、末尾への追加は互換である（DoD で `--selftest` を回して確かめる）。
+            // 末尾追加。既存フィールドの順序・名前・文言を動かさない: `tools/perf/judge-perf.py::parse_fields`
+            // は `名前=値` を辞書化して必須フィールドの存在だけを見るので、末尾への追加は互換である。
             // 既存の perf 行に `frame` という名前は無いので、後勝ちの上書きも起きない。
             frame,
             "perf(apply_show): 段階別計時"
@@ -224,7 +215,7 @@ fn as_micros_u64(d: Duration) -> u64 {
     u64::try_from(d.as_micros()).unwrap_or(u64::MAX)
 }
 
-// ── 合成キーの安定ハッシュ（Requirement 7.2） ─────────────────────────────────────────
+// ── 合成キーの安定ハッシュ ─────────────────────────────────────────
 
 /// FNV-1a 64bit のオフセット基底。
 const FNV_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
@@ -237,7 +228,7 @@ const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 /// プロセス毎にシードされ run 間・run 内の比較可能性を落とす経路を持つこと ⑵`DefaultHasher` の
 /// アルゴリズム自体が「将来変わり得る」と規定されており、判定スクリプトが数える異なりキー数の
 /// 意味がツールチェーン更新で静かに変質しうること、の 2 点による。FNV-1a は仕様が固定で
-/// シードを持たないため、**同一 run 内で安定**（Requirement 7.2 の要求）であることに加えて
+/// シードを持たないため、**同一 run 内で安定**（要求）であることに加えて
 /// run をまたいでも同一値になる。暗号用途ではない（衝突耐性は集計用途に十分）。
 #[derive(Debug, Clone, Copy)]
 struct Fnv1a(u64);
@@ -262,12 +253,9 @@ impl Hasher for Fnv1a {
 
 /// 合成キー（surface id ＋ bind 集合 ＋ pattern 状態）の安定ハッシュ。
 ///
-/// キー要素は `ComposeCache` の `ComposeKey` と同一である（**表示スケール k はキー要素ではない**
-/// ——合成結果は原寸であり k に依らない）——run 中に現れた**異なりキー数**が
-/// 「いくつのスロットが要るのか」の実測根拠になるため、要素を 1 つでも取りこぼすと異なり数が
-/// 過少になり、裁定材料（Requirement 7.2）として成立しない。この材料をもとに 2026-08-15 の
-/// 開発者裁定で容量が 1 → 3 へ改訂された（要件 7.1）。以後も同じ役割を担う——容量を再検討する
-/// ときの入力は毎回ここから採る。
+/// キー要素は `ComposeCache` の `ComposeKey` と同一（表示スケール k はキー要素ではない。合成結果は原寸で
+/// k に依らない）。run 中に現れた異なりキー数が「いくつのスロットが要るのか」の実測根拠になるので、
+/// 要素を 1 つでも取りこぼすと異なり数が過少になる。キャッシュ容量を再検討するときの入力は毎回ここから採る。
 ///
 /// `BindSet` と `PatternState` は `Hash` を実装しないため、公開アクセサ（昇順正準の `ids()`・
 /// animation id 昇順の `iter()`、ほかの欄は正準順の `cells()`）から値等価と同じ順序で流し込む。`ComposeMethod` は
@@ -285,7 +273,7 @@ pub(super) fn compose_key_hash(surface_id: u32, binds: &BindSet, pattern: &Patte
         animation_id.hash(&mut hasher);
         hash_frame(frame, &mut hasher);
     }
-    // 一番上のコマ以外の欄（部品の欄・動く絵の子の欄・「消えている」・要件 7.5）。在るときだけ件数を
+    // 一番上のコマ以外の欄（部品の欄・動く絵の子の欄・「消えている」）。在るときだけ件数を
     // 前置して足す——一番上のコマだけの `PatternState` の鍵は、これらを混ぜる前と同じ値に保つ
     // （前の run の perf の行と異なりキー数を比べられる）。
     let is_extra = |(part, _, cell): &(Option<PartKey>, u32, Cell<'_>)| {

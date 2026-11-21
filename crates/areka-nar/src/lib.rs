@@ -3,8 +3,7 @@
 //!
 //! 公開面はコンテナ読取・エントリ名の復号と検証・`install.txt` の解釈・配置計画・
 //! 原子的な展開と `refresh`・閉じた拒否語彙（[`RefuseReason`]）で構成する。
-//! 根の場所は決めず、`&Path` として受け取る（決めるのは `baseware-root-layout`）。
-//! 検体の在処も知らない（窓口は開発専用の `sample-ghost-kit` にある）。
+//! 根の場所は決めず、`&Path` として受け取る。
 //!
 //! # 2 段で使う
 //!
@@ -35,8 +34,7 @@
 //!
 //! [`NarArchive::open`] と [`NarArchive::install`] が `Err` を返す直前に、失敗の記録を
 //! **1 回だけ**出す（[`log_failure`]）。下の層は理由を値として返すだけで記録を出さない
-//! ——出すと、ログを読む人には 1 回の失敗が 2 回に見える。記録の無い失敗経路も持たない
-//! （要件 9.1）。
+//! ——出すと、ログを読む人には 1 回の失敗が 2 回に見える。記録の無い失敗経路も持たない。
 
 use crate::container::{
     MAX_TOTAL_DECLARED_SIZE, TAIL_WINDOW, archive_too_large, inflate_entry,
@@ -69,7 +67,7 @@ pub use manifest::{Companion, ExistingPolicy, InstallKind, InstallManifest};
 /// [`NarArchive::open`] を通った時点で、コンテナの構造・全エントリの伸長と CRC の突合・
 /// 名前の復号と安全性・`install.txt` の解釈まで全て済んでいる。伸長済みのバイト列は
 /// この値が持つので、[`NarArchive::install`] は**保持したものを書くだけ**で、原本を
-/// 読み直すことも伸長をやり直すこともない（設計 `container`）。
+/// 読み直すことも伸長をやり直すこともない。
 pub struct NarArchive {
     /// 読んだ `.nar` のパス。失敗の理由と記録に載せる。
     archive: PathBuf,
@@ -80,7 +78,7 @@ pub struct NarArchive {
 }
 
 impl NarArchive {
-    /// `.nar` を読み、全ての検証を済ませる。**1 バイトも書かない**（要件 4.1）。
+    /// `.nar` を読み、全ての検証を済ませる。**1 バイトも書かない**。
     ///
     /// # Errors
     ///
@@ -107,7 +105,7 @@ impl NarArchive {
             .map(|entry| self.contents[entry.index].as_slice())
     }
 
-    /// 検証済みの中身をベースウェアの根へ入れる（要件 5.10・5.11）。
+    /// 検証済みの中身をベースウェアの根へ入れる。
     ///
     /// 何度呼んでも同じ結果になる。2 度目以降は既存の宛先の扱い（[`ExistingState`]）が
     /// `New` から `Overlaid`／`Refreshed` に変わるだけで、置かれる木は同じ。
@@ -115,8 +113,9 @@ impl NarArchive {
     /// # Errors
     ///
     /// 宛先ゴーストが無いとき [`NarError::Refused`]（宛先には触れていない）。同梱バルーンの
-    /// 取り出し元が無いときは断らず、その同梱を飛ばして [`InstallOutcome::skipped`] に載せる。組み上げ・確定・巻き戻しの I/O が失敗したとき
-    /// [`NarError::Io`]（どこまで確定したかと巻き戻せたかを持つ＝要件 6.4）。
+    /// 取り出し元が無いときは断らず、その同梱を飛ばして [`InstallOutcome::skipped`] に載せる。
+    /// 組み上げ・確定・巻き戻しの I/O が失敗したとき [`NarError::Io`]
+    /// （どこまで確定したかと巻き戻せたかを持つ）。
     pub fn install(&self, request: &InstallRequest<'_>) -> Result<InstallOutcome, NarError> {
         let mut work = Vec::new();
         let mut overridden = Vec::new();
@@ -132,7 +131,7 @@ impl NarArchive {
         }
         match placed {
             Ok(outcome) => {
-                // 拒否ではないが黙って通さないもの（要件 3.9）。1 件ずつ出す。
+                // 拒否ではないが黙って通さないもの。1 件ずつ出す。
                 for warning in &outcome.warnings {
                     tracing::warn!(
                         archive = %self.archive.display(),
@@ -148,7 +147,7 @@ impl NarArchive {
                         "[areka_nar] work folder left behind"
                     );
                 }
-                // 取り出し元の無い同梱は断らずに飛ばした（要件 1.4）。1 件ずつ出す。
+                // 取り出し元の無い同梱は断らずに飛ばした。1 件ずつ出す。
                 for skip in &outcome.skipped {
                     tracing::warn!(
                         archive = %self.archive.display(),
@@ -182,8 +181,7 @@ impl NarArchive {
         let raw = read_central_directory(&bytes).map_err(refused)?;
         let names = validate_entry_names(&raw).map_err(refused)?;
         // 伸長と CRC の突合は**全エントリに対して**ここで済ませ、結果を保持する。
-        // これで「壊れていれば 1 バイトも書かない」（要件 2.6）と「書き込みの前に
-        // 検証を終える」（要件 4.1）が、展開の段の書き方によらず成り立つ。
+        // 壊れた書庫では 1 バイトも書かず、検証は書き込みの前に終わる。
         let contents = raw
             .iter()
             .map(|entry| inflate_entry(&bytes, entry))
@@ -279,7 +277,7 @@ impl NarArchive {
 }
 
 /// 最上位に `install.txt` が在るか。書庫の目次（中央ディレクトリ）と名前の検証までで止め、
-/// 伸長も書き込みも記録も無い（要件 1.9・2.2・2.4）。
+/// 伸長も書き込みも記録も無い。
 ///
 /// `Ok(true)`＝在る（ASCII の大文字小文字は問わない）／`Ok(false)`＝無い（包みフォルダの
 /// 下にだけ在るものを含む）／`Err`＝目次が読めない。探し方は [`NarArchive::open`] と同じ
@@ -390,10 +388,10 @@ fn read_failed(path: &Path) -> impl Fn(std::io::Error) -> NarError + '_ {
     }
 }
 
-/// 失敗の記録を 1 回だけ出し、受け取った失敗をそのまま返す（要件 9.1・6.4）。
+/// 失敗の記録を 1 回だけ出し、受け取った失敗をそのまま返す。
 ///
-/// `NarError` の表示は確定済みの件数も巻き戻せたかも持たない（設計の逐語）ので、
-/// 要件 6.4 が見えることを求めている 2 つは欄として足す。`work` はこの走行が掘った
+/// `NarError` の表示は確定済みの件数も巻き戻せたかも持たないので、この 2 つは
+/// 欄として足す。`work` はこの走行が掘った
 /// 本体の根の作業フォルダ（1 つ）の場所で、巻き戻せたかに関わらず載せる（掘る前の
 /// 失敗と拒否では空）。元の木を持たない失敗（組み上げの失敗・巻き戻せた確定の失敗）では、
 /// その場所はその場で消しにかかる（消せなかった残りは次の走行の片付けが拾う）。

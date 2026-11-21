@@ -40,14 +40,14 @@ use windows::Win32::System::JobObjects::{
 ///
 /// いずれかの Win32 呼び出しが失敗した場合は `None` を返して**縮退**する（`error!` 記録の上、
 /// spawn 自体は継続＝孤児化防止だけを諦める。子が生成直後に即終了しており割り当て不能な
-/// 場合も含む）。panic はしない（log-first・R6.4 と同格の非致命縮退）。
+/// 場合も含む）。panic はしない（非致命縮退）。
 #[must_use]
 pub(crate) fn attach_kill_on_close_job(child: &Child) -> Option<OwnedHandle> {
     // SAFETY: 各 Win32 呼び出しは下記契約で用い、失敗は Result で受けて panic しない。
     // 生成した job ハンドルは、成功時は OwnedHandle へ move して RAII 管理、失敗時は
     // 明示 CloseHandle で確実に解放する（二重クローズなし）。
     unsafe {
-        // 1) 無名 job を生成（非継承ハンドル＝子は job ハンドルを継承しない）。
+        // 非継承ハンドルの無名 job（子は job ハンドルを継承しない）。
         let job: HANDLE = match CreateJobObjectW(None, None) {
             Ok(h) => h,
             Err(e) => {
@@ -60,9 +60,9 @@ pub(crate) fn attach_kill_on_close_job(child: &Child) -> Option<OwnedHandle> {
             }
         };
 
-        // 2) KILL_ON_JOB_CLOSE（job の最後のハンドルが閉じたら所属プロセスを全 kill）と
+        // KILL_ON_JOB_CLOSE（job の最後のハンドルが閉じたら所属プロセスを全 kill）と
         //    SILENT_BREAKAWAY_OK（helper が起こしたプロセス＝SHIORI の子は job に入らず、ゴーストを
-        //    閉じても残る＝SSP と同じ向き・要件 10.7）を設定する。helper 自身は job に残る。
+        //    閉じても残る＝SSP と同じ向き）を設定する。helper 自身は job に残る。
         let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
         info.BasicLimitInformation.LimitFlags =
             JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
@@ -81,7 +81,6 @@ pub(crate) fn attach_kill_on_close_job(child: &Child) -> Option<OwnedHandle> {
             return None;
         }
 
-        // 3) helper を job へ割り当て（child の OS プロセスハンドル）。
         let child_handle = HANDLE(child.as_raw_handle());
         if let Err(e) = AssignProcessToJobObject(job, child_handle) {
             tracing::error!(
@@ -93,7 +92,6 @@ pub(crate) fn attach_kill_on_close_job(child: &Child) -> Option<OwnedHandle> {
             return None;
         }
 
-        // 4) job ハンドルを RAII owner へ（drop で CloseHandle → KILL_ON_JOB_CLOSE 発火）。
         Some(OwnedHandle::from_raw_handle(job.0))
     }
 }
@@ -118,7 +116,7 @@ mod tests {
     }
 
     /// job の旗を読み戻すと、道連れ（KILL_ON_JOB_CLOSE）と孫の抜け出し（SILENT_BREAKAWAY_OK）の
-    /// 2 つが立っている（要件 10.7・指摘 13）。
+    /// 2 つが立っている。
     #[test]
     fn job_limits_let_grandchildren_break_away() {
         let mut child = long_lived();
@@ -161,11 +159,8 @@ mod tests {
 
         let guard = attach_kill_on_close_job(&child).expect("job 割り当てが成功する");
 
-        // job ハンドルを閉じる → KILL_ON_JOB_CLOSE で所属プロセス（helper 役の child 自身・子孫は SILENT_BREAKAWAY_OK で抜けている）を全 kill。
         drop(guard);
 
-        // 締切内に子が終了する（＝kill された）ことを非ブロッキング poll で確認する。
-        // 割り当てが効いていれば <1s で終了、破れていれば ~60s 生存し締切超過で FAIL。
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
             match child.try_wait() {

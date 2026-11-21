@@ -10,11 +10,10 @@ fn asker() -> AskerId {
     AskerId::new("ghost/test")
 }
 
-// === SET 分類 3 分岐（决定论檻・全分岐可達）===
+// === SET 分類 3 分岐（決定論檻・全分岐可達）===
 
 #[test]
 fn classify_set_effective_key_is_runtime_command() {
-    // SET 有効群の正準語彙 → RuntimeCommand。
     assert_eq!(classify_set("surface.num"), SetClass::RuntimeCommand);
     assert_eq!(classify_set("menu"), SetClass::RuntimeCommand);
     assert_eq!(
@@ -25,7 +24,6 @@ fn classify_set_effective_key_is_runtime_command() {
 
 #[test]
 fn classify_set_free_dotted_key_is_store_write() {
-    // 正準語彙外の自由 dotted key → StoreWrite（host 区画の受け皿）。
     assert_eq!(classify_set("myplugin.customstate"), SetClass::StoreWrite);
     assert_eq!(classify_set("foo.bar.baz"), SetClass::StoreWrite);
 }
@@ -41,7 +39,6 @@ fn classify_set_canonical_non_effective_is_not_settable() {
 
 #[test]
 fn classify_set_unparseable_key_is_store_write() {
-    // parse 不能 key（正準語彙ではない）→ StoreWrite 分岐（決定論・無音失敗なし）。
     assert_eq!(classify_set("a..b"), SetClass::StoreWrite);
     assert_eq!(classify_set(""), SetClass::StoreWrite);
 }
@@ -264,11 +261,11 @@ fn apply_barrier_emits_barrier() {
     assert_eq!(core().apply(&msg), vec![Effect::Barrier]);
 }
 
-// === design Monitoring 固定ログ: アクター適用記録 debug!（R9.3 サインオフ証跡・Task 10.1）===
+// === アクター適用記録の固定ログ debug!===
 
-/// SET store-write の適用時に、design Monitoring の固定ログ
+/// SET store-write の適用時に、固定ログ
 /// `debug!(target: "areka_sylphya::actor", ...)`（publish/SET/persist の適用記録）が発火する
-/// （R9.3 grep 証跡・無音でない適用記録・R8.1）。`apply` は純関数ゆえテストスレッド上で駆動でき、
+/// （無音でない適用記録）。`apply` は純関数ゆえテストスレッド上で駆動でき、
 /// 共有機構経由 [`crate::test_log_capture::capture`] で並列負荷下でも決定論捕捉する
 /// （bare `with_default` 不使用）。ログが削除・target/レベル変更されると本檻が落ちる。
 #[test]
@@ -291,7 +288,7 @@ fn apply_store_write_emits_actor_debug_log() {
 }
 
 /// PublishShiori{None}（204/失敗＝不在記録）の適用時にも同 target の固定 debug! が発火する
-/// （SHIORI 照会系の適用記録・無音でない不在縮退・R8.1）。
+/// （SHIORI 照会系の適用記録・無音でない不在縮退）。
 #[test]
 fn apply_publish_shiori_absent_emits_actor_debug_log() {
     use crate::test_log_capture::{assert_logged, capture};

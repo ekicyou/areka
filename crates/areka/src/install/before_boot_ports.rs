@@ -1,4 +1,4 @@
-//! 起動の前の手続きの口（design「BootPorts」・spec: install-before-boot）。
+//! 起動の前の手続きの口。
 //!
 //! ゴーストも窓口も居ない起動の前に、手続き [`run_order`](super::procedure::run_order) の口として
 //! 答える。イベントはどれも送らない（送る相手を持たない）・今のゴーストの素性は「在る・中身は空」・
@@ -58,7 +58,7 @@ impl InstallPorts for BootPorts {
     }
 
     fn raise(&mut self, id: &'static str, _references: Vec<String>) -> Raised {
-        // 起動の前の断りは、どれも受け取るゴーストが居ないため（要件 2.5）。
+        // 起動の前の断りは、どれも受け取るゴーストが居ないため。
         if id == ON_INSTALL_REFUSE {
             tracing::info!(
                 event = "install_refused_no_ghost",

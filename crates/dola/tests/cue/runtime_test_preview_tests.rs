@@ -1,5 +1,4 @@
-//! 先渡し（`CueSink::preview`）の檻: 中身・時点・途中登録・既定の実装の受け手の `emit` 列
-//! （areka-P0-budoux-reveal-reflow 要件 2.1・2.8）。
+//! 先渡し（`CueSink::preview`）の檻: 中身・時点・途中登録・既定の実装の受け手の `emit` 列。
 
 use super::{BarrierKind, CueCommand, CuePlayer, CueSheet, CueSink, Rc, RefCell, TalkCue};
 use crate::test_support::{barrier, choice, logged_commands, recording_sink, text};
@@ -187,8 +186,7 @@ fn default_preview_sink_emits_unchanged() {
     assert_eq!(logged_commands(&plain_log).len(), 5);
 }
 
-/// 選択待ちの始まり（`CueSink::choice_wait_began`）を受けた順を、共有の列へ受け手の番号で残す受け手
-/// （areka-P0-balloon-text-bugs 要件 1.10・1.11）。
+/// 選択待ちの始まり（`CueSink::choice_wait_began`）を受けた順を、共有の列へ受け手の番号で残す受け手。
 struct ChoiceWaitSink {
     id: usize,
     log: Rc<RefCell<Vec<usize>>>,

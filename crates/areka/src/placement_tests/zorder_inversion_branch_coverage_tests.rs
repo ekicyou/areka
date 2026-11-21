@@ -1,17 +1,16 @@
-//! 要件 8.2（`areka-P0-zorder-scope-inversion`）が名指しする 10 分岐（並びも語も要件本文の逐語）と、
+//! 逆転・非隣接など 10 分岐と、
 //! 結び直しの 5 通り・外し損ねの巡の輪の確かめを覆う「実際に実行されるテスト」の対応表。
 //!
-//! 作りは `areka-P0-scope-zorder-pinning` の対応表（`zorder_group_branch_coverage_tests.rs`）と
+//! 作りは `zorder_group_branch_coverage_tests.rs` の対応表と
 //! 同じで、表の各行を兄弟の `zorder_branch_coverage_test_support.rs`（`check_table`）で確かめる。
 //!
-//! `areka-P0-zorder-scope-inversion` の判断は areka（解釈・合成・公開）と wintf（組の外し・
+//! 逆転の判断は areka（解釈・合成・公開）と wintf（組の外し・
 //! 結び直し・輪の確かめ）にまたがるので、wintf 側の錨もファイルを読んで（`include_str!`）同じ検査に掛ける。
 
 use super::zorder_branch_coverage_test_support::check_table;
 use crate::crate_source_test_support::crate_source;
 
-/// 要件 8.2 の 10 分岐（並びも語も要件本文の逐語）と、design の Testing Strategy「替え玉で 1 巡」の
-/// 7（結び直しの 5 通り）・4 と 8（外し損ねの巡の輪の確かめ）。
+/// 10 分岐と、結び直しの 5 通り・外し損ねの巡の輪の確かめ。
 const BRANCHES: [&str; 16] = [
     "逆転",
     "非隣接",
@@ -128,7 +127,7 @@ const MAINTAIN: &str = "wintf/zorder_pair_maintain_release_tests.rs";
 
 /// 分岐 → それを覆うテスト（分岐・テストファイルの見出し・テスト関数の名前）。
 const COVERAGE: [(&str, &str, &str); 52] = [
-    // ── 逆転（要件 1）
+    // ── 逆転
     ("逆転", LEDGER, "t_zwo03_adjacent_inversion_is_kept"),
     (
         "逆転",
@@ -146,7 +145,7 @@ const COVERAGE: [(&str, &str, &str); 52] = [
         REAL_W,
         "an_inverted_plan_lands_on_real_windows_and_reset_restores_the_pairs",
     ),
-    // ── 非隣接（要件 2）
+    // ── 非隣接
     (
         "非隣接",
         LEDGER,
@@ -168,7 +167,7 @@ const COVERAGE: [(&str, &str, &str); 52] = [
         REAL_W,
         "a_split_plan_lands_on_real_windows_and_reset_restores_the_pairs",
     ),
-    // ── 逆転と補いの組み合わせ（要件 1.2・3）
+    // ── 逆転と補いの組み合わせ
     (
         "逆転と補いの組み合わせ（`s0,b0,s1`）",
         LEDGER,
@@ -189,7 +188,7 @@ const COVERAGE: [(&str, &str, &str); 52] = [
         REAL_A,
         "the_pasta_directive_lands_s0_b0_b1_s1_on_real_windows",
     ),
-    // ── 逆転の無い明示の記法（要件 1.6・4.4）
+    // ── 逆転の無い明示の記法
     (
         "逆転の無い明示の記法",
         LEDGER,
@@ -206,7 +205,7 @@ const COVERAGE: [(&str, &str, &str); 52] = [
         MAINTAIN,
         "a_pair_the_chain_keeps_contiguous_is_still_fixed",
     ),
-    // ── 数字だけの記法（要件 4.2）
+    // ── 数字だけの記法
     (
         "数字だけの記法",
         LEDGER,
@@ -217,7 +216,7 @@ const COVERAGE: [(&str, &str, &str); 52] = [
         COMPOSE,
         "t_zcc01_numeric_mode_puts_left_scope_in_front_as_a_block",
     ),
-    // ── 解除で組の重なりへ戻ること（要件 4.3・4.5）
+    // ── 解除で組の重なりへ戻ること
     (
         "解除で組の重なりへ戻ること",
         DRAIN_WO,
@@ -253,7 +252,7 @@ const COVERAGE: [(&str, &str, &str); 52] = [
         ESTABLISH,
         "after_the_chain_is_cleared_a_new_balloon_is_linked_as_a_pair",
     ),
-    // ── descript の逆転（要件 1.3）
+    // ── descript の逆転
     (
         "descript の逆転",
         DRAIN_WO,
@@ -269,7 +268,7 @@ const COVERAGE: [(&str, &str, &str); 52] = [
         ESTABLISH,
         "a_pair_the_chain_releases_is_not_linked_when_its_handles_arrive",
     ),
-    // ── バルーンの窓の後からの出現と破棄（要件 6.1・6.2）
+    // ── バルーンの窓の後からの出現と破棄
     (
         "バルーンの窓の後からの出現と破棄",
         REAL_A,
@@ -280,7 +279,7 @@ const COVERAGE: [(&str, &str, &str); 52] = [
         REAL_A,
         "a_balloon_destroyed_and_recreated_returns_to_its_written_place",
     ),
-    // ── キャラクターの窓の破棄（要件 6.4）
+    // ── キャラクターの窓の破棄
     (
         "キャラクターの窓の破棄",
         REAL_A,

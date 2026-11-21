@@ -21,7 +21,7 @@ pub(super) fn emit_control() {
     tracing::info!(target: TRANSITION_TARGET, "{CONTROL_LINE}");
 }
 
-/// テスト冒頭の初期化——キューの残りと刻印の写しを落とす（要件 7.7）。
+/// テスト冒頭の初期化——キューの残りと刻印の写しを落とす。
 pub(super) fn clean_slate() {
     let _residue = drain_window_pos_commands();
     transition_diag::reset_for_test();
@@ -33,12 +33,8 @@ pub(super) fn clean_slate() {
 /// 32bit が 0 のまま下位が負域にある値はハンドル表に存在し得ない。それでも他プロセスの
 /// 実窓を掴んでいないことを `IsWindow` で毎回確かめる。
 pub(super) fn fake_hwnd(tag: u8) -> HWND {
-    // 下位に識別子を載せ、必ず奇数にする（ハンドル値の粒度に載らない）。
-    //
-    // 識別子は**左へ 1 桁ずらしてから**奇数化する。`usize::from(tag) | 1` だと 0x20 と
-    // 0x21 が同じ値へ潰れ、「別の窓」を意図した呼び分けが同一窓を指してしまう
-    // （合流の導入で `drain_returns_the_enqueued_commands_verbatim_without_executing_them`
-    //  が偽の失敗を出して露見した・task 5.3）。
+    // 識別子は左へ 1 桁ずらしてから奇数化する。`usize::from(tag) | 1` だと 0x20 と
+    // 0x21 が同じ値へ潰れ、別の窓のつもりの呼び分けが同一窓を指してしまう。
     let value = 0xFFFF_FE00_usize | (usize::from(tag) << 1) | 1;
     let hwnd = HWND(value as *mut core::ffi::c_void);
     // SAFETY: `IsWindow` は任意のハンドル値に対して安全に真偽を返す読み取り専用 API で

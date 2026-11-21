@@ -1,5 +1,4 @@
 //! Integration tests — round-trip (JSON: dev-only `serde_json`; TOML: feature `toml`) and E2E tests
-//! Tasks 11.2, 11.3, 11.4, 12.1, 12.2
 
 use dola::*;
 use std::collections::BTreeMap;
@@ -14,7 +13,6 @@ fn build_complete_document() -> DolaDocument {
     let doc = DolaDocument {
         schema_version: "1.0".to_string(),
         variable: BTreeMap::from([
-            // 3変数
             (
                 "opacity".to_string(),
                 AnimationVariableDef::Float {
@@ -46,7 +44,6 @@ fn build_complete_document() -> DolaDocument {
             ),
         ]),
         transition: BTreeMap::from([
-            // 2トランジション
             (
                 "fade_in".to_string(),
                 TransitionDef {

@@ -1,4 +1,4 @@
-//! 入れ子をたどる走査が、深い鎖で落ちず、菱形の広がりで固まらないこと（指摘 3・要件 4.4・4.5）。
+//! 入れ子をたどる走査が、深い鎖で落ちず、菱形の広がりで固まらないこと。
 //!
 //! 合成・外形・シェルの外形・当たり判定の持ち込み・見える部品／到達の確かめへ同じ検体を通す。深い鎖は
 //! 予算の内に収まる長さ（頭で確かめる）で予算の記録を見ず、菱形（2^30 の道）は予算の値に依らず必ず切れる。
@@ -140,7 +140,7 @@ fn deep_chain_walks_finish_on_a_small_stack() {
             &mut parts,
         );
         assert_eq!(parts.len(), LAST as usize, "面 1 … 10000 が部品");
-        // 到達の確かめは輪を 1 周たどりきったときだけ循環を見つける（指摘 125）。形の誤りは戻りの pattern の 1 件、
+        // 到達の確かめは輪を 1 周たどりきったときだけ循環を見つける。形の誤りは戻りの pattern の 1 件、
         // 入れ子の報告は面 0 → 1 の element定義の 1 件。
         let (world, _) = ring_of(RING_LAST, false);
         assert_eq!(
@@ -172,7 +172,6 @@ fn diamond_walks_are_cut_once_per_call_and_compose_the_same() {
     let build = capture_logs(|| world = Some(world_of(LAST, 2)));
     let (world, atlas) = world.expect("組める");
     assert_once_per_call(&build, "hit_import");
-    // 外形は束縛のとき（`bind_atlas`）に根ごとに 1 度だけたどる（指摘 8）。
     assert_once_per_call(&build, "extent");
 
     let mut composer = Composer::new();
@@ -276,7 +275,7 @@ fn insert_chain_composes_on_a_small_stack() {
 /// 覚え（きれいに終わった面の答え）: 全部の面を根に回す 3 つの走査で、根の間で覚えを共有した答えと記録が、
 /// 覚えを使わない答えと記録に一致する。予算を 0 から全部入れる数の先まで 1 つずつ変え、残りが覚えた分に
 /// 足りず覚えを使えない場合と、循環（面 4 ⇄ 5）の下で覚えない場合を含める（予算の単位が面の行の全部に
-/// 広がったので、持ち込みが面 1 を覚える数まで届くよう 80 まで回す・指摘 130）。
+/// 広がったので、持ち込みが面 1 を覚える数まで届くよう 80 まで回す）。
 #[test]
 fn memo_gives_the_same_answers_and_records_as_walking_again() {
     use crate::budget::Budget;
@@ -300,7 +299,7 @@ fn memo_gives_the_same_answers_and_records_as_walking_again() {
     for limit in 0..=80 {
         let (mut extent_memo, mut bounds_memo) = Default::default();
         let mut hit_memo = crate::hit_import::HitMemo::new(crate::hit_import::IMPORT_BUDGET);
-        // シェルの外形は作業場を根の間で共有する（予算の `error!` は作業場 1 つにつき 1 度・指摘 1）ので、
+        // シェルの外形は作業場を根の間で共有する（予算の `error!` は作業場 1 つにつき 1 度）ので、
         // 覚えを使わない側も作業場を 1 つにして比べる。
         let (mut scratch, mut again_scratch) = (BoundsScratch::default(), BoundsScratch::default());
         for &id in &ids {
@@ -376,7 +375,7 @@ fn diamond_with_leaves(last: u32, leaves: u32) -> (EmoWorld, AtlasTable) {
     (bound_world(&parse(&text), &[], &atlas), atlas)
 }
 
-/// 段の積み荷（指摘 21）: 小さな予算の命令列は、葉の絵の多い菱形でも命令の数が予算を越えない
+/// 段の積み荷: 小さな予算の命令列は、葉の絵の多い菱形でも命令の数が予算を越えない
 /// （根の面 0 は子へ入る積み荷だけ）。最初の葉は入る面となめる行（76）の後の残り 24 枚まで積む。`error!` は 1 行。
 #[test]
 fn plan_counts_the_layer_payload_against_the_budget() {
@@ -386,7 +385,7 @@ fn plan_counts_the_layer_payload_against_the_budget() {
     assert_eq!(errors(&logs, "plan", 0), 1, "{}", errors_only(&logs));
 }
 
-/// 持ち込みの数（指摘 22）: 面 0 が子 1（当たり判定 300 個）を 300 行置くと、直しが無ければ 9 万個を
+/// 持ち込みの数: 面 0 が子 1（当たり判定 300 個）を 300 行置くと、直しが無ければ 9 万個を
 /// 持ち込む。取り込む領域も予算から引くので、持ち込みの列は予算で止まり `error!` は 1 行。
 #[test]
 fn hit_import_counts_the_imported_regions_against_the_budget() {
@@ -412,8 +411,8 @@ fn hit_import_counts_the_imported_regions_against_the_budget() {
     assert_eq!(errors(&logs, "hit_import", 0), 1, "{}", errors_only(&logs));
 }
 
-/// 面積の上限（指摘 23）: 一辺は上限の内でも、面積が `plan::MAX_AREA` 画素を越える外形は `ExtentTooLarge`。
-/// ちょうど `plan::MAX_AREA` 画素（8192×4096）は通る。一辺の上限 `plan::MAX_EXTENT`（指摘 90）: 面積は上限の内の 16385×2 も
+/// 面積の上限: 一辺は上限の内でも、面積が `plan::MAX_AREA` 画素を越える外形は `ExtentTooLarge`。
+/// ちょうど `plan::MAX_AREA` 画素（8192×4096）は通る。一辺の上限 `plan::MAX_EXTENT`: 面積は上限の内の 16385×2 も
 /// `ExtentTooLarge`、16384×2 は通る。
 #[test]
 fn extent_over_the_area_limit_is_too_large() {

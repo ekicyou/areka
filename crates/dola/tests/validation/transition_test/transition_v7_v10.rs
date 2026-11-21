@@ -65,7 +65,7 @@ mod v10_tests {
     #[test]
     fn object_with_from_error() {
         let fields = object_violation_fields(TransitionDef {
-            from: Some(TransitionValue::Dynamic(DynamicValue::Null)), // not allowed!
+            from: Some(TransitionValue::Dynamic(DynamicValue::Null)),
             to: Some(TransitionValue::Dynamic(DynamicValue::String(
                 "img.png".to_string(),
             ))),

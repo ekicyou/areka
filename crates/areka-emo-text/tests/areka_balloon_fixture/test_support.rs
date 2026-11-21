@@ -1,12 +1,7 @@
-//! テーマ間で共有する検体の取得と、要件の数値から手で書いた期待値の表。
+//! テーマ間で共有する検体の取得と、手で書いた期待値の表。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `default-balloon-selfmade` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `default-balloon-selfmade`（要件 **12.1**・**2.2**・**3.1**・**3.2**・**5.4**〜**5.7**・
-//! **5.9**・**6.2**・**7.1**・**10.3**）。
-//!
-//! 期待値は要件と設計「ファイルの表」から**手で**書き、絵の道具のコードを参照しない
-//! （道具と独立に要件と突き合わせるため・設計「Testing Strategy」）。実測に合わせて緩めない。
+//! 期待値は**手で**書き、絵の道具のコードを参照しない
+//! （道具と独立に突き合わせるため）。実測に合わせて緩めない。
 
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -26,10 +21,9 @@ pub(crate) fn balloon_root() -> PathBuf {
     BALLOON.folder().to_path_buf()
 }
 
-// ── 書庫の中身（設計「ファイルの表」・23 ファイル）──────────────────────────────
+// ── 書庫の中身（23 ファイル）──────────────────────────────
 
-/// 書庫の全 23 ファイル（名前の昇順）。`.pna`・GIF・2 倍の絵・`online1` 以降は無い
-/// （要件 2.4・2.6・3.2・3.4）。
+/// 書庫の全 23 ファイル（名前の昇順）。`.pna`・GIF・2 倍の絵・`online1` 以降は無い。
 pub(crate) const EXPECTED_FILE_NAMES: [&str; 23] = [
     "arrow0.png",
     "arrow1.png",
@@ -56,7 +50,7 @@ pub(crate) const EXPECTED_FILE_NAMES: [&str; 23] = [
     "sstp.png",
 ];
 
-/// PNG の絵 13 枚の寸法（要件 2.1・2.2・3.1・4.1）: 本体側の面 4・相方側の面 2・入力の箱 4・
+/// PNG の絵 13 枚の寸法: 本体側の面 4・相方側の面 2・入力の箱 4・
 /// 矢印 2・SSTP 1。
 pub(crate) const EXPECTED_PNG_SIZES: [(&str, u32, u32); 13] = [
     ("balloons0.png", 326, 169),
@@ -74,7 +68,7 @@ pub(crate) const EXPECTED_PNG_SIZES: [(&str, u32, u32); 13] = [
     ("sstp.png", 7, 9),
 ];
 
-/// 各 scope の面 0 として焼き込まれる絵の名前（共有の部品の定数・要件 2.1・2.2）。
+/// 各 scope の面 0 として焼き込まれる絵の名前。
 pub(crate) use crate::support::fixture::SCOPE_FACE0_FILES;
 
 /// [`EXPECTED_PNG_SIZES`] から絵の寸法を引く。表に無い名前は名指しで落とす。
@@ -103,8 +97,7 @@ pub(crate) fn scope_image_size(scope: u32) -> (u32, u32) {
 /// 範囲の 4 辺（左・上・右・下・image px）。
 pub(crate) type Edges = (f32, f32, f32, f32);
 
-/// scope ごとの面 0 を解いた範囲（左・上・右・下・image px）と折り返し基準 x
-/// （設計「描画範囲の解け方」の表）。
+/// scope ごとの面 0 を解いた範囲（左・上・右・下・image px）と折り返し基準 x。
 ///
 /// 範囲は `validrect.left,0`・`top,0`・`right,326` と `bottom`（本体側 `-20` → 169 − 20 ＝ 149・
 /// 相方側は面別の `-14` → 96 − 14 ＝ 82）、基準は 326 − 30 ＝ 296（`wordwrappoint.x,-30`）。
@@ -130,14 +123,14 @@ fn expected_face0_region_row(scope: u32) -> (u32, Edges, f32) {
         .unwrap_or_else(|| panic!("scope {scope} の範囲の期待値が表に無い"))
 }
 
-/// オンラインの印 `online0.webp` の寸法（要件 3.2）。
+/// オンラインの印 `online0.webp` の寸法。
 pub(crate) const EXPECTED_ONLINE_SIZE: (&str, u32, u32) = ("online0.webp", 77, 36);
 
-// ── 文のファイルの鍵と値（要件 5.4〜5.7・5.9・6.2・7.1）─────────────────────────
+// ── 文のファイルの鍵と値─────────────────────────
 //
-// 並びは手本（research.md 10.2）の順で書くが、比べるのは鍵の集合ごとの一致である。
+// 並びは手本の順で書くが、比べるのは鍵の集合ごとの一致である。
 // `windowpos.*`・`onlinemarker.filename`・`onlinemarker.interval`・`validrect.right,0` は
-// 無いこと自体が期待値（要件 3.5・5.7・6.3）。
+// 無いこと自体が期待値。
 
 /// `descript.txt`（手本の全体の値・替えるのは `charset`・`name`・`id`・`craftman`・
 /// `use_self_alpha`・`validrect.right` だけ）。
@@ -200,7 +193,7 @@ pub(crate) const EXPECTED_DESCRIPT: &[(&str, &str)] = &[
     ("communicatebox.height", "20"),
 ];
 
-/// 面別の設定 6 つ（要件 5.5・`windowpos.*` を写さない＝要件 5.7・`wordwrappoint.y,0` は手本どおり）。
+/// 面別の設定 6 つ（`windowpos.*` は写さない・`wordwrappoint.y,0` は手本どおり）。
 pub(crate) const EXPECTED_FACE_SETTINGS: [(&str, &[(&str, &str)]); 6] = [
     (
         "balloons0s.txt",
@@ -272,7 +265,7 @@ pub(crate) const EXPECTED_FACE_SETTINGS: [(&str, &[(&str, &str)]); 6] = [
     ),
 ];
 
-/// `install.txt`（要件 7.1・設計「ファイルの表」）。
+/// `install.txt`。
 pub(crate) const EXPECTED_INSTALL: &[(&str, &str)] = &[
     ("charset", "UTF-8"),
     ("type", "balloon"),

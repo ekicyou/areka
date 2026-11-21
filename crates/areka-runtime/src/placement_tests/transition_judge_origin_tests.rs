@@ -1,4 +1,4 @@
-//! 起点集合の**和集合**と、同じ変化を指す起点の**畳み込み**（`areka-P0-balloon-offset-dpi` 要件 8.2〜8.5）。
+//! 起点集合の**和集合**と、同じ変化を指す起点の**畳み込み**。
 //!
 //! 判定器の起点は `kind=monitor`（モニタ表の値変化＝表示設定の変更）と `kind=windpi`
 //! （窓の表示 DPI の書き換え＝モニタ間の移動）の 2 種別である。本ファイルは
@@ -135,7 +135,7 @@ fn the_opposite_direction_in_the_same_frame_is_a_new_transition() {
 
 #[test]
 fn frames_are_compared_by_difference_so_the_counter_may_wrap() {
-    // D14: `frame` は u32 で周回する。差分で見るかぎり `u32::MAX` の次の `0` は
+    // `frame` は u32 で周回する。差分で見るかぎり `u32::MAX` の次の `0` は
     // 「同一フレーム」ではない（絶対値の大小比較を判定語に使っていないことの裏取り）。
     let log = log_of(&[
         windpi(u32::MAX, "42v1", 192, 144),

@@ -1,5 +1,4 @@
-//! 一番上とバルーンの面の刻みと合図で働きのコマを当てる結合のテスト（spec: seriko-pattern-calls
-//! 要件 3.1・3.4・3.5・3.6・3.8・3.9・4.1・4.5・11.2・11.3・9.1）。
+//! 一番上とバルーンの面の刻みと合図で働きのコマを当てる結合のテスト。
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -61,7 +60,7 @@ fn shell_shown(text: &str, rng: LoopRng, pick_rng: LoopRng) -> (LoopRuntime, Sco
 
 /// `alternativestart` は並びの全部から等しく 1 つを選び、選んだ相手を呼び出しの予定の時刻に頭から
 /// 始める。遅れた刻みでも開始は予定の時刻で、相手の今のコマは同じ刻みの `Show` に載る。呼んだ側は
-/// 働きのコマが今のコマでも前の描くコマを残す（3.1・3.3・3.9・1.3）。
+/// 働きのコマが今のコマでも前の描くコマを残す。
 #[test]
 fn alternativestart_starts_the_pick_from_head_at_call_time_in_the_same_show() {
     for (pick, target, other) in [(0, 0, 1), (1, 1, 0)] {
@@ -92,7 +91,7 @@ fn alternativestart_starts_the_pick_from_head_at_call_time_in_the_same_show() {
     }
 }
 
-/// `never` を足しても、同じ種なら抽選の結果は変わらない（3.6・11.3）。
+/// `never` を足しても、同じ種なら抽選の結果は変わらない。
 #[test]
 fn adding_a_never_animation_keeps_the_lottery() {
     const PLAIN: &str = "surface0\n{\n\
@@ -116,7 +115,7 @@ fn adding_a_never_animation_keeps_the_lottery() {
     assert_eq!(trace(format!("{PLAIN}{NEVER}}}\n")), plain);
 }
 
-/// `stop` の見え方は `-1` と同じ（相手の欄と再生が外れる・呼んだ側は残る・4.1）。
+/// `stop` の見え方は `-1` と同じ（相手の欄と再生が外れる・呼んだ側は残る）。
 #[test]
 fn stop_looks_the_same_as_minus_one() {
     const STOP: &str = "surface0\n{\n\
@@ -151,7 +150,7 @@ fn stop_looks_the_same_as_minus_one() {
     assert_eq!(stop, run(MINUS_ONE));
 }
 
-/// 止めた `always` は、面を出すまで始め直さない。面を出したら印が消え、次の評価で始まる（M2）。
+/// 止めた `always` は、面を出すまで始め直さない。面を出したら印が消え、次の評価で始まる。
 #[test]
 fn stopped_always_stays_stopped_until_the_surface_is_shown() {
     const STOP_ALWAYS: &str = "surface0\n{\n\
@@ -183,7 +182,7 @@ fn stopped_always_stays_stopped_until_the_surface_is_shown() {
 }
 
 /// 合図の時刻の更新でも頭のコマを置く前に当てる。`always` の周の頭が働きのコマなら、前の周の最後の
-/// 描くコマを残す（1 周目は欄を外す・1.3・7.7）。
+/// 描くコマを残す（1 周目は欄を外す）。
 #[test]
 fn refresh_applies_calls_at_the_event_time_and_always_lap_head_keeps_last_draw() {
     const CALLER: &str = "surface0\n{\n\
@@ -213,8 +212,7 @@ fn refresh_applies_calls_at_the_event_time_and_always_lap_head_keeps_last_draw()
     );
 }
 
-/// 引き金の相（`periodic` が刻みの中で鳴った後）でも、鳴った時刻の頭の働きのコマを同じ刻みで当てる
-/// （3.1・3.9）。
+/// 引き金の相（`periodic` が刻みの中で鳴った後）でも、鳴った時刻の頭の働きのコマを同じ刻みで当てる。
 #[test]
 fn periodic_start_applies_its_head_call_in_the_same_tick() {
     const PERIODIC: &str = "surface0
@@ -239,7 +237,7 @@ fn periodic_start_applies_its_head_call_in_the_same_tick() {
     assert_eq!(cell(&states, Slot::Shell, 1), Some(110));
 }
 
-/// バルーンの面でも同じに動く（3.8）。
+/// バルーンの面でも同じに動く。
 #[test]
 fn balloon_surface_applies_calls_the_same_way() {
     let (lottery, _probe) = counting_rng(&[0]);
@@ -260,9 +258,8 @@ fn balloon_surface_applies_calls_the_same_way() {
     assert_eq!(cell(&states, Slot::Balloon, 2), Some(120));
 }
 
-/// 抽選で動く animation0 が 100 の絵の後に `move` を 4 度当て、最後に `-1` で止まる（spec:
-/// seriko-pattern-calls 7.1・7.2・7.6）。1000 に始まれば: 1100 (3,5)・1200 絵 101 と (7,5)・
-/// 1300 同じ (7,5)・1400 (0,9999)・1500 `-1`。
+/// 抽選で動く animation0 が 100 の絵の後に `move` を 4 度当て、最後に `-1` で止まる。
+/// 1000 に始まれば: 1100 (3,5)・1200 絵 101 と (7,5)・1300 同じ (7,5)・1400 (0,9999)・1500 `-1`。
 const MOVES: &str = "surface0\n{\n\
     animation0.interval,random,2\n\
     animation0.pattern0,overlay,100,0,0,0\n\
@@ -298,7 +295,7 @@ fn shifts_of(cmds: &[DisplayCommand]) -> Vec<(i64, i64)> {
 }
 
 /// ずれは値が変わった刻みにだけ、同じ刻みの `Show` の後に出る（同じ値は繰り返さない）。終わり・`-1`
-/// では戻さず、面を出したときに (0, 0) を 1 度だけ出す（3.8・7.1・7.2・7.6・M3）。
+/// では戻さず、面を出したときに (0, 0) を 1 度だけ出す。
 #[test]
 fn move_shift_is_emitted_when_it_changes_and_reset_only_when_the_surface_is_shown() {
     let (lottery, _probe) = counting_rng(&[0]);
@@ -339,7 +336,7 @@ fn move_shift_is_emitted_when_it_changes_and_reset_only_when_the_surface_is_show
     assert!(rt.take_shifts().is_empty(), "0 のときは出さない");
 }
 
-/// バルーンの面のずれはバルーン用の命令で出る（3.8）。
+/// バルーンの面のずれはバルーン用の命令で出る。
 #[test]
 fn balloon_surface_emits_the_balloon_shift() {
     let (lottery, _probe) = counting_rng(&[0]);
@@ -372,7 +369,7 @@ fn balloon_surface_emits_the_balloon_shift() {
     );
 }
 
-/// 合図の時刻の更新で鳴った `runonce` の `move` も、その時刻のずれとして積まれる（3.1・7.1）。
+/// 合図の時刻の更新で鳴った `runonce` の `move` も、その時刻のずれとして積まれる。
 #[test]
 fn runonce_move_applied_at_the_event_time_is_queued() {
     const RUNONCE: &str = "surface0\n{\n\
@@ -395,7 +392,7 @@ fn runonce_move_applied_at_the_event_time_is_queued() {
     assert!(rt.take_shifts().is_empty(), "同じコマを 2 度当てない");
 }
 
-/// オフラインの書き出しの結果にずれは写らない（ずれは `PatternState` の外・9.6・M8）。
+/// オフラインの書き出しの結果にずれは写らない（ずれは `PatternState` の外）。
 #[test]
 fn settled_surface_carries_no_shift() {
     let settle = |text: &str| {
@@ -443,7 +440,7 @@ fn minus_one_then_zero_wait_insert_stops_and_clears_the_cell() {
 
 /// `-1` と `-2` のすぐ後に待ち 0 の働きのコマがあっても、warn の番号は止めた描くコマの番号:
 /// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する。続くのが待ち 0 の描くコマでも
-/// 同じ（要件 4.1）。
+/// 同じ。
 #[test]
 fn negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
     for tail in ["insert,0,0,0,0", "overlay,110,0,0,0"] {
@@ -477,7 +474,7 @@ fn negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
 
 /// 再生が末尾に着く刻みに抽選が当たっても、その刻みまでの古い再生の働きのコマを先に当てる:
 /// 抽選はその後に引くので、末尾に着いた 0 は同じ刻みで抽選に戻り、当たれば同じ時刻に始め直す
-/// （`periodic` と同じ順・seriko-pattern-calls 要件 3.1）。
+/// （`periodic` と同じ順）。
 #[test]
 fn last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery() {
     let text = "surface0\n{\n\
@@ -508,8 +505,7 @@ fn last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery() {
 }
 
 /// `periodic` の次の回の時刻と、前の回の終わりの働きのコマが重なっても、前の回のコマを先に当ててから
-/// 同じ時刻に始め直す（回を飛ばさない・部品と同じ順・seriko-pattern-calls 要件 3.1・
-/// areka-P0-seriko-trigger-intervals 要件 3.1）。
+/// 同じ時刻に始め直す（回を飛ばさない・部品と同じ順）。
 #[test]
 fn last_action_frame_on_the_periodic_restart_tick_is_not_lost() {
     const PERIODIC: &str = "surface0\n{\n\
@@ -533,7 +529,7 @@ fn last_action_frame_on_the_periodic_restart_tick_is_not_lost() {
 }
 
 /// 先に当てる段の呼び出しが、引き金の始める animation をちょうど開始の時刻に始めたときは、その再生を
-/// 入れ替えず、頭の働きのコマを 1 度だけ当てる（選びの乱数も 1 度だけ・seriko-pattern-calls 要件 3.1・5.2）。
+/// 入れ替えず、頭の働きのコマを 1 度だけ当てる（選びの乱数も 1 度だけ）。
 #[test]
 fn call_starting_the_trigger_animation_at_its_start_time_fires_its_head_once() {
     const SELF_CALL: &str = "surface0\n{\n\
@@ -571,8 +567,7 @@ fn call_starting_the_trigger_animation_at_its_start_time_fires_its_head_once() {
 }
 
 /// 遅れた刻みで 2 つの `periodic` の開始の時刻が番号と逆の順に並び、その間に別の再生の `stop,1` が
-/// 来るときも、時刻の順に当てる（1 は 2030 に始まり 2500 に止まる・0 は 3030 に始まる・
-/// seriko-pattern-calls 要件 3.1・4.1・areka-P0-seriko-trigger-intervals 要件 3.1）。
+/// 来るときも、時刻の順に当てる（1 は 2030 に始まり 2500 に止まる・0 は 3030 に始まる）。
 #[test]
 fn trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
     const LATE: &str = "surface0\n{\n\
@@ -597,7 +592,7 @@ fn trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
 }
 
 /// 引き金の「再生中か」は、開始の時刻までの働きのコマを当てた後で測る（2000 に止められた 0 は
-/// 2030 に再生中でないので鳴る・areka-P0-seriko-trigger-intervals 要件 3.1・3.3）。
+/// 2030 に再生中でないので鳴る）。
 #[test]
 fn periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary() {
     const STOPPED: &str = "surface0\n{\n\
@@ -620,7 +615,7 @@ fn periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary() {
 
 /// 窓が開いた刻みに生まれた一番上の `always` に、それより前の時刻の呼び出しは当たらない（閉じている
 /// 間に抽選の 1 が 1000 に始まり、`stop,0` は 1030・窓は 1050 に開く。0 は 1050 に生まれて動き続け、
-/// 止めた印も付かない・seriko-pattern-calls 要件 3.1・4.1）。
+/// 止めた印も付かない）。
 #[test]
 fn earlier_stop_does_not_hit_an_always_born_when_the_window_opens() {
     const TEXT: &str = "surface0\n{\n\
@@ -666,8 +661,7 @@ fn earlier_stop_does_not_hit_an_always_born_when_the_window_opens() {
 }
 
 /// 抽選の境目の刻みより前の時刻に別の再生の `start,1` が抽選の 1 を始めていたら、抽選は 1 を再生中と
-/// 見て乱数を引かない（`runonce` の 0 が 30 に鳴り、`start,1` は 1010・刻みは 1050・
-/// seriko-pattern-calls 要件 3.1・areka-P0-seriko-loop 要件 2.3）。
+/// 見て乱数を引かない（`runonce` の 0 が 30 に鳴り、`start,1` は 1010・刻みは 1050）。
 #[test]
 fn lottery_sees_a_play_started_by_an_earlier_call_in_the_same_tick() {
     const TEXT: &str = "surface0\n{\n\
@@ -688,8 +682,7 @@ fn lottery_sees_a_play_started_by_an_earlier_call_in_the_same_tick() {
 }
 
 /// 面を出し直して始め直した一番上の `always` にも、合図の時刻より前の呼び出しは当たらない（抽選の 1 が
-/// 1000 に始まり、`stop,0` は 1050 と 1150。1100 の刻みで止まった 0 を 1170 の出し直しが始め直す・
-/// seriko-pattern-calls 要件 3.1・3.5・4.1）。
+/// 1000 に始まり、`stop,0` は 1050 と 1150。1100 の刻みで止まった 0 を 1170 の出し直しが始め直す）。
 #[test]
 fn earlier_stop_does_not_hit_an_always_restarted_by_reshow() {
     const TEXT: &str = "surface0\n{\n\

@@ -1,5 +1,5 @@
 //! wintf のサンプル（examples）の exe にだけ、標準の部品（comctl32）の版 6 を使う申告の
-//! マニフェスト `examples.manifest` を埋める（areka-P0-wintf-tooltip 要件 3.15）。
+//! マニフェスト `examples.manifest` を埋める。
 //!
 //! 指示は `rustc-link-arg-examples` で出すので、ライブラリ・テストの exe・wintf を使う側の exe には
 //! 届かない。リンカが MSVC のときだけ出す。

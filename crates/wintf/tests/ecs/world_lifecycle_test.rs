@@ -1,12 +1,11 @@
 //! `EcsWorld`（src/ecs/world/mod.rs）のライフサイクル特性化テスト。
 //!
-//! W7b-T2（ECS基盤・World × テスト網羅性）で追加。`EcsWorld::new()` の
-//! デバイス非依存な観測可能挙動（フレームカウンタ初期値・進行、スケジュール
+//! `EcsWorld::new()` のデバイス非依存な観測可能挙動（フレームカウンタ初期値・進行、スケジュール
 //! ラベル登録、Default 等価性）を固定する。
 //!
 //! 注: 本ファイルは device 非依存の `try_tick_world`
-//! 経路のみを対象とする（既存 taffy_flex_layout_pure_test 同様、Window/
-//! WindowHandle を持たない World では graphics 系システムが no-op となる）。
+//! 経路のみを対象とする（Window/WindowHandle を持たない World では graphics 系システムが
+//! no-op となる）。
 
 use bevy_ecs::schedule::Schedules;
 use wintf::ecs::world::EcsWorld;

@@ -1,15 +1,12 @@
 //! `capture_under_filter` の自己テスト（feature `env-filter` のときだけコンパイルされる）。
 //!
-//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
-//!
-//! 本 API の契約は `wintf` の呼出がそのまま回帰スイートになる形で決まっている
-//! （設計 `## Components and Interfaces` → `#### C1 log-capture-kit`）。よってここで固定
-//! するのは、その呼出が依存している次の点である。
+//! 本 API の契約は `wintf` の呼出がそのまま回帰スイートになる形で決まっている。
+//! よってここで固定するのは、その呼出が依存している次の点である。
 //!
 //! ⒜ **directive が実際に効く**（部分一致の模倣ではなく [`tracing_subscriber::EnvFilter`]
 //!   による実濾過）。⒝ **番兵行が戻り値に現れない**（呼出側の主張が番兵の分だけ変わらない）。
 //!   ⒞ **行の形**（ANSI 無し・レベル・宛先・本文・フィールド）。
-//!   ⒟ **解釈できない指令は panic する**（黙って捨てない。spec `audit-test-kits` で足した約束）。
+//!   ⒟ **解釈できない指令は panic する**（黙って捨てない）。
 //!
 //! 「出ない」ことの主張は、同じ窓で必ず「出る」側の対照を隣に置く（不在だけの主張は
 //! 捕捉が死んでいても緑になるため）。発行点の interest はプロセス大域に焼き付くので、
@@ -31,7 +28,7 @@ const TARGET_TYPO: &str = "log_capture_kit::selftest::filter_misspelled_level";
 
 // ---- ⒜ directive が実際に効く --------------------------------------------
 
-/// 要件 1.2: 宛先ごとの水準指定が効き、指定の無い宛先は既定水準で切られる。
+/// 宛先ごとの水準指定が効き、指定の無い宛先は既定水準で切られる。
 ///
 /// 対照（`info` は通る）を同じ窓に置いてあるので、捕捉そのものが死んで全部空になった
 /// 場合はこのテストが赤になる＝不在の主張が空振りしない。
@@ -58,7 +55,7 @@ fn per_target_directives_decide_which_events_reach_the_output() {
     );
 }
 
-/// 要件 1.2: 宛先を持たない裸の水準指定は全宛先の既定として効く。
+/// 宛先を持たない裸の水準指定は全宛先の既定として効く。
 #[test]
 fn a_bare_level_directive_applies_to_every_target() {
     let out = capture_under_filter("debug", || {
@@ -76,7 +73,7 @@ fn a_bare_level_directive_applies_to_every_target() {
     );
 }
 
-/// 要件 1.2: **空の directive** は `EnvFilter` の既定（ERROR 水準）のまま振る舞う。
+/// **空の directive** は `EnvFilter` の既定（ERROR 水準）のまま振る舞う。
 ///
 /// 番兵の directive を文字列連結で足すと、空文字列のときだけ「解釈できた指令が
 /// 番兵 1 件」になって既定 ERROR が付かなくなり、呼出側の `error!` が黙って消える。
@@ -98,7 +95,7 @@ fn empty_directives_still_carry_the_env_filter_default_of_error() {
     );
 }
 
-/// 要件 1.2: 末尾のコンマ（空の指令片）があっても結果が変わらない。
+/// 末尾のコンマ（空の指令片）があっても結果が変わらない。
 #[test]
 fn a_trailing_comma_in_the_directives_changes_nothing() {
     let plain = format!("info,{TARGET_COMMA}=debug");
@@ -137,7 +134,7 @@ fn a_misspelled_directive_panics_instead_of_being_dropped() {
 
 // ---- ⒝ 番兵は内部で通し、戻り値からは消える ------------------------------
 
-/// 要件 1.2: 呼出側の directive が**何も通さない**場合でも番兵検査は成立し、
+/// 呼出側の directive が**何も通さない**場合でも番兵検査は成立し、
 /// 戻り値は 1 バイトも無い（番兵行が漏れない）。
 ///
 /// 番兵の directive を内部で足していなければ番兵が濾過で消えて panic するので、
@@ -154,7 +151,7 @@ fn a_directive_that_passes_nothing_yields_an_empty_string_not_a_sentinel_line() 
     );
 }
 
-/// 要件 1.2: 通常の窓でも戻り値に番兵の宛先が現れない（対照は同じ窓の実データ）。
+/// 通常の窓でも戻り値に番兵の宛先が現れない（対照は同じ窓の実データ）。
 #[test]
 fn the_returned_string_never_mentions_the_sentinel_target() {
     let out = capture_under_filter("info", || {
@@ -202,7 +199,7 @@ fn stripping_panics_when_no_sentinel_line_is_present() {
 
 // ---- ⒞ 行の形（`wintf` の呼出が読んでいる文字列そのもの） -----------------------
 
-/// 要件 1.2: 1 イベント 1 行・ANSI 無し・レベル／宛先／本文／フィールドが載る。
+/// 1 イベント 1 行・ANSI 無し・レベル／宛先／本文／フィールドが載る。
 ///
 /// `wintf` の呼出は `contains("stage=begin")` のようにこの形の内側を読む。
 /// 整形器の設定を変えるとここが赤になる。

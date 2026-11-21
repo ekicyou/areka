@@ -34,7 +34,6 @@ fn test_hit_test_entity_ex_named_regions_rect_hit() {
         .id();
     assert_eq!(world.get::<GlobalArrangement>(entity), Some(&global));
 
-    // local (50, 20) → screen (50, 20) — "head" 領域内
     let point = PointF::new(50.0, 20.0);
     let r = hit_test_entity_ex(&world, entity, point);
     assert!(
@@ -61,13 +60,12 @@ fn test_hit_test_entity_ex_named_regions_no_region() {
         ))
         .id();
 
-    // local (5, 80) — bounds内だが領域外
     let point = PointF::new(5.0, 80.0);
     let r = hit_test_entity_ex(&world, entity, point);
     assert!(matches!(r, RegionHit::Hit(None)), "{r:?}");
 }
 
-/// NamedRegions + HitRegionMap 不在 → Bounds フォールバック (1.3)
+/// NamedRegions + HitRegionMap 不在 → Bounds フォールバック
 #[test]
 fn test_hit_test_entity_ex_named_regions_no_region_map_fallback() {
     let mut world = World::new();
@@ -76,7 +74,6 @@ fn test_hit_test_entity_ex_named_regions_no_region_map_fallback() {
         .spawn((
             make_global_arrangement(0.0, 0.0, 100.0, 100.0),
             HitTest::named_regions(),
-            // HitRegionMap なし
         ))
         .id();
 

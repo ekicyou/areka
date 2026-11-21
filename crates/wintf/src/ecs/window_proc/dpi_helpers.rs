@@ -23,11 +23,10 @@ use crate::ecs::{Point, SizeI};
 /// * `policy` - 当該窓の [`DpiSuggestedRectPolicy`]。component 未付与は `None` で表現する。
 /// * `suggested` - `WM_DPICHANGED` の LPARAM が指す OS 提案矩形。
 ///
-/// 寸は使わない（サイズは ECS レイアウトパイプラインの所管＝`SWP_NOSIZE`）ため、
+/// サイズは ECS レイアウトパイプラインの所管（`SWP_NOSIZE`）のため使わず、
 /// 参照するのは矩形の左上のみである。
-//
-// 配線済み（タスク 5.1・Phase C）: `window_pos.rs` の `WM_DPICHANGED` が本関数の
-// 戻り値で `DpiChangeContext::set` と `guarded_set_window_pos` をまとめて分岐する。
+///
+/// 呼び手は `window_pos.rs` の `WM_DPICHANGED`。
 pub(super) fn dpi_suggested_position_decision(
     policy: Option<&DpiSuggestedRectPolicy>,
     suggested: &RECT,
@@ -98,18 +97,15 @@ pub(super) fn correct_position_for_dpi_center_preserve(
     box_style: Option<&crate::ecs::layout::BoxStyle>,
     dpi: &crate::ecs::window::DPI,
 ) -> Point {
-    // DPI 変更なし → 補正不要
     let Some(_ctx) = dpi_context else {
         return client_pos;
     };
 
-    // BoxStyle が取得できない → フォールバック
     let Some(bs) = box_style else {
         warn!("[WM_WINDOWPOSCHANGED] DPI center correction skipped: BoxStyle not found");
         return client_pos;
     };
 
-    // 物理サイズ計算不可（Dimension::Px 以外等）→ フォールバック
     let Some(new_physical_size) = calculate_physical_size_from_box_style(bs, dpi) else {
         trace!("[WM_WINDOWPOSCHANGED] DPI center correction skipped: BoxStyle.size not Px");
         return client_pos;

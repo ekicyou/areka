@@ -1,7 +1,6 @@
-//! 同梱を飛ばしたインストールの警告の口のテスト（areka-P0-emily-ghost-verification 要件 1.5・
-//! 1.12・7.1・7.2・design「手続きの警告」）。
+//! 同梱を飛ばしたインストールの警告の口のテスト。
 //!
-//! 偽の口の上で本物の `areka-nar` を一時の根へ走らせ、要件 7.1 の 6 場面ごとに口
+//! 偽の口の上で本物の `areka-nar` を一時の根へ走らせ、6 場面ごとに口
 //! `warn_skipped` の呼び出しの件数（飛ばした場面は 1・全部在る場面は 0）と題名・本文を見る。
 //! あわせて、同じ書庫で 2 つ飛ばしても呼び出しは 1 回で本文に 2 行並ぶこと、イベントの列が
 //! 今の成功と同じ形で口がその後ろにあること、締めの知らせが「閉じた」でも口が 1 回呼ばれる
@@ -18,7 +17,7 @@ use super::*;
 
 /// 書庫のファイル名（本文の 1 行目に載る）。
 const ARCHIVE: &str = "skip.nar";
-/// 本文の最後の行（設計の逐語）。
+/// 本文の最後の行。
 const SUBSTITUTE: &str = "入らなかったバルーンの代わりに、入っている別のバルーンが使われます。";
 
 /// 本物の書庫 1 本を偽の口で一周させる。
@@ -59,9 +58,9 @@ fn shell_with(companions: &[&str]) -> NarBuilder {
         .done()
 }
 
-// ---- 6 場面（要件 7.1・7.2） ----
+// ---- 6 場面 ----
 
-/// ⑴ 無印の同梱の取り出し元が無い → 口 1 回。イベントの列は今の成功と同じ形で、口はその後ろ（1.5）。
+/// ⑴ 無印の同梱の取り出し元が無い → 口 1 回。イベントの列は今の成功と同じ形で、口はその後ろ。
 #[test]
 fn a_plain_skipped_companion_warns_once_after_the_closing_notice() {
     let mut ports = FakePorts::new();
@@ -261,7 +260,7 @@ fn companions_with_all_sources_do_not_warn() {
 
 // ---- まとめ方と止まり方 ----
 
-/// 同じ書庫で 2 つ飛ばす → 口は 1 回で、本文に飛ばした行が 2 行並ぶ（1.12）。
+/// 同じ書庫で 2 つ飛ばす → 口は 1 回で、本文に飛ばした行が 2 行並ぶ。
 #[test]
 fn two_skipped_companions_in_one_archive_warn_once_with_two_lines() {
     let mut ports = FakePorts::new();

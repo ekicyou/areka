@@ -2,7 +2,7 @@
 //!
 //! 規則（`render`）・読み取りと記録（`load`）・配線（`handle`）。
 //! 空の World で `handle` を呼ぶと、シェルのフォルダが引けないので `warn!` を 1 件出し、
-//! 既定の 15 件の全文を素の値（isError: false）で答える（要件 1.7・3.5・5.9）。
+//! 既定の 15 件の全文を素の値（isError: false）で答える。
 
 use std::path::PathBuf;
 
@@ -39,14 +39,14 @@ fn an_empty_world_answers_the_15_defaults_with_one_warning() {
     );
 }
 
-// ---- 規則（render(&parse_surfacetable(..))・期待値は ssp-measurements.md の写し） ----
+// ---- 規則（render(&parse_surfacetable(..))・期待値は SSP の実測の写し） ----
 
-/// 期待値の各行を `\r\n` で終えて 1 本にする（行の終わりは survey.md の `\r\n`・要件 1.3）。
+/// 期待値の各行を `\r\n` で終えて 1 本にする（行の終わりは survey.md の `\r\n`）。
 fn crlf(lines: &str) -> String {
     lines.lines().map(|line| format!("{line}\r\n")).collect()
 }
 
-/// SSP の実測 14 の検体（ssp-measurements.md の検体 1・字下げはタブ）。
+/// SSP の実測 14 の検体（検体 1・字下げはタブ）。
 const SAMPLE_1: &str = "charset,UTF-8
 version,1
 
@@ -162,20 +162,20 @@ const DEFAULTS_ONLY_ANSWER: &str = r"|scope \0,\1,\p[2]...|character name|descri
 |\0||歌|\s[25]|
 ";
 
-/// 実測 14 の検体の全文が、見出し行から最後の `\r\n` まで SSP の答えと一致する（要件 7.1・4.1〜4.3）。
+/// 実測 14 の検体の全文が、見出し行から最後の `\r\n` まで SSP の答えと一致する。
 #[test]
 fn sample_1_matches_the_ssp_answer_in_full() {
     assert_eq!(render(&parse_surfacetable(SAMPLE_1)), crlf(SAMPLE_1_ANSWER));
 }
 
-/// 空の転記は既定の 15 件だけの表（検体 2・要件 3.1・3.5）。
+/// 空の転記は既定の 15 件だけの表（検体 2）。
 #[test]
 fn an_empty_table_renders_the_15_defaults_only() {
     assert_eq!(render(&SurfaceTable::default()), crlf(DEFAULTS_ONLY_ANSWER));
 }
 
-/// スコープ 2 以上は `\p[n]`（要件 1.4）。`__disabled` と `__parts` の行は載らないが、
-/// その ID の既定は消える（要件 2.8・2.9・3.4）。
+/// スコープ 2 以上は `\p[n]`。`__disabled` と `__parts` の行は載らないが、
+/// その ID の既定は消える。
 #[test]
 fn scope_two_is_written_as_p_and_disabled_or_parts_rows_hide_defaults() {
     let text = "group,__disabled\n{\n10,__parts\n}\ngroup,x\n{\nscope,2\n11,__parts\n200,y\n}\n";
@@ -189,9 +189,9 @@ fn scope_two_is_written_as_p_and_disabled_or_parts_rows_hide_defaults() {
     assert!(!rendered.contains("__"));
 }
 
-// ---- 実測ごとの行と既定の重ね合わせの境目（ssp-measurements.md の検体 3〜9） ----
+// ---- 実測ごとの行と既定の重ね合わせの境目（検体 3〜9） ----
 
-/// 見出し行と区切り行を前に付け、各行を `\r\n` で終えて 1 本にする（要件 1.1・1.3）。
+/// 見出し行と区切り行を前に付け、各行を `\r\n` で終えて 1 本にする。
 fn answer(rows: &str) -> String {
     crlf(&format!(
         "|scope \\0,\\1,\\p[2]...|character name|description|surface number : \\s[]|\n\
@@ -200,7 +200,7 @@ fn answer(rows: &str) -> String {
 }
 
 /// 検体 3（`group` の無い平たいファイル）: `group` の外の行はスコープ `\0`・キャラクタ名は空で載り、
-/// 既定の 20 はシェルの行に替わる。既定にも行にも無い ID（21〜24 など）は載らない（要件 2.5・2.11）。
+/// 既定の 20 はシェルの行に替わる。既定にも行にも無い ID（21〜24 など）は載らない。
 #[test]
 fn sample_3_rows_outside_any_group_are_scope_0_with_no_name() {
     let text = "charset,Shift_JIS\n\n0,素\n20,パーカー素\n30,両手素\n40,片手素\n50,チラ見せ\n";
@@ -230,7 +230,7 @@ fn sample_3_rows_outside_any_group_are_scope_0_with_no_name() {
 }
 
 /// 検体 4（名前の省略と閉じていない `{`）: 名前を省略した行は説明の列を空にして載り、既定の 0 を消す。
-/// 閉じないまま終わっても読めた分で組む（要件 1.5・2.6・3.4・5.5）。
+/// 閉じないまま終わっても読めた分で組む。
 #[test]
 fn sample_4_an_omitted_name_is_an_empty_description_even_in_an_unclosed_group() {
     let text = "charset,Shift_JIS\nversion,1\ngroup,本体基本\n{\n0,\n";
@@ -256,8 +256,7 @@ fn sample_4_an_omitted_name_is_an_empty_description_even_in_an_unclosed_group() 
     );
 }
 
-/// 検体 5（`__disabled` が既定を消す）: `__disabled` の行は載らず、その中の 10 は既定の 10 も消す
-/// （要件 2.8・2.9・3.3・3.4）。
+/// 検体 5（`__disabled` が既定を消す）: `__disabled` の行は載らず、その中の 10 は既定の 10 も消す。
 #[test]
 fn sample_5_disabled_rows_are_not_shown_and_hide_the_default() {
     let text = "charset,Shift_JIS
@@ -309,7 +308,7 @@ group,__disabled
 }
 
 /// 検体 6 と同じ形（グループ名が空・`scope` の行なし・字下げはタブ）: 行はスコープ `\0`・
-/// キャラクタ名は空で載り、書かれていない 11・20 の既定が ID の順の位置に入る（要件 2.3・2.4・4.3）。
+/// キャラクタ名は空で載り、書かれていない 11・20 の既定が ID の順の位置に入る。
 #[test]
 fn sample_6_shape_an_empty_group_name_without_scope_is_scope_0_with_no_name() {
     let text = "group,\n{\n\t10,星\n\t15,にっこり\n\t16,お祈り\n\t18,照れ手組口開け\n\
@@ -342,7 +341,7 @@ fn sample_6_shape_an_empty_group_name_without_scope_is_scope_0_with_no_name() {
 
 /// 検体 7 と同じ形: スコープ 2 は `\p[2]`、同じスコープ 2 の `group` が 2 つあると `group` ごとに
 /// まとめず ID の順に混ざる（ここではファイルに `その他` を先に書く）。スコープ 1 に書かれた
-/// 10・11・19 は `\0` の既定を消し、25 は消さない（要件 1.4・2.7・3.4・4.1・4.4）。
+/// 10・11・19 は `\0` の既定を消し、25 は消さない。
 #[test]
 fn sample_7_shape_scope_2_groups_mix_by_id_and_scope_1_ids_hide_defaults() {
     let text = "charset,Shift_JIS
@@ -456,7 +455,7 @@ const SAMPLE_8_ANSWER: &str = r"|\0||素|\s[0]|
 |\0|\0|ヤダ|\s[100]|";
 
 /// 検体 8: `option,DisableNoDefineSurfaces` の有無で同じ文字列になり、定義の無い既定の 19・20・25 も
-/// 載る（要件 3.7・3.8・7.5）。
+/// 載る。
 #[test]
 fn sample_8_disable_no_define_surfaces_does_not_change_the_table() {
     let with = render(&parse_surfacetable(&format!(
@@ -469,7 +468,7 @@ fn sample_8_disable_no_define_surfaces_does_not_change_the_table() {
     assert_eq!(without, with);
 }
 
-/// 検体 9（行の終わりの `}`・ファイルはそこで終わる）: `}` は名前の一部として載る（要件 5.6）。
+/// 検体 9（行の終わりの `}`・ファイルはそこで終わる）: `}` は名前の一部として載る。
 #[test]
 fn sample_9_a_trailing_brace_is_part_of_the_name() {
     let text = "group,ほつれ銀糸\n{\n21,赤瞳孔_狂\n100,黒塗り}";
@@ -499,7 +498,7 @@ fn sample_9_a_trailing_brace_is_part_of_the_name() {
 
 /// 既定が消える 3 つ（スコープ 1 に書かれた 10・`__disabled` の中に `__parts` でない名前で書かれた 11・
 /// 名前を省略した 0）と、消えない 1 つ（どこにも書かれていない 1〜9・20・25）。`__disabled` の外の
-/// `__parts`（19）も載らずに既定を消す（要件 2.8・2.9・3.2〜3.4・7.3）。
+/// `__parts`（19）も載らずに既定を消す。
 #[test]
 fn defaults_are_hidden_by_any_written_id_and_kept_otherwise() {
     let text = "group,テディ\n{\nscope,1\n10,素\n19,__parts\n}\ngroup,__disabled\n{\n11,腕\n}\n\
@@ -525,7 +524,7 @@ fn defaults_are_hidden_by_any_written_id_and_kept_otherwise() {
 }
 
 /// 同じ（スコープ, ID）が 2 度書かれたら、両方が書かれた順に載る（グループ名の順ではない）。
-/// 表全体は失敗しない（要件 5.9・5.10）。
+/// 表全体は失敗しない。
 #[test]
 fn the_same_id_written_twice_is_shown_twice_in_written_order() {
     let text = "group,b\n{\n30,二\n}\ngroup,a\n{\n30,一\n}\n";
@@ -540,7 +539,7 @@ fn the_same_id_written_twice_is_shown_twice_in_written_order() {
 }
 
 /// 同じスコープの 2 つの `group` の ID は互い違いでも ID の順に混ざり、別のスコープに書かれた
-/// 同じ ID はそれぞれのスコープに載る（要件 4.4・2.7）。
+/// 同じ ID はそれぞれのスコープに載る。
 #[test]
 fn ids_interleave_across_groups_and_the_same_id_appears_in_each_scope() {
     let text =
@@ -611,8 +610,7 @@ fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 }
 
 /// Shift_JIS（`charset` なし・`charset,Shift_JIS`）と UTF-8（`Charset,UTF-8`・BOM 付き・BOM なし
-/// `charset,UTF-8`）のそれぞれで、キャラクタ名と説明が元の字のとおりの表になる。どれも記録を出さない
-/// （要件 7.4・1.6・5.1・5.2）。
+/// `charset,UTF-8`）のそれぞれで、キャラクタ名と説明が元の字のとおりの表になる。どれも記録を出さない。
 #[test]
 fn each_charset_and_bom_reads_names_as_written() {
     let cases: [(&str, Vec<u8>); 5] = [
@@ -630,7 +628,7 @@ fn each_charset_and_bom_reads_names_as_written() {
     }
 }
 
-/// `surfacetable.txt` が無い → 既定の 15 件だけ・`warn!` は出さない（要件 3.5）。
+/// `surfacetable.txt` が無い → 既定の 15 件だけ・`warn!` は出さない。
 #[test]
 fn a_missing_file_is_defaults_only_without_a_warning() {
     let dir = TempPath::new("expression-table");
@@ -639,7 +637,7 @@ fn a_missing_file_is_defaults_only_without_a_warning() {
     assert!(warns(&events).is_empty(), "{events:?}");
 }
 
-/// `surfacetable.txt` という名前のフォルダ（開けない）→ 既定の 15 件だけ・`warn!` が 1 件（要件 5.8）。
+/// `surfacetable.txt` という名前のフォルダ（開けない）→ 既定の 15 件だけ・`warn!` が 1 件。
 #[test]
 fn an_unopenable_file_is_defaults_only_with_one_warning() {
     let dir = TempPath::new("expression-table");
@@ -656,8 +654,7 @@ fn an_unopenable_file_is_defaults_only_with_one_warning() {
     assert!(warns[0].field("error").is_some(), "{events:?}");
 }
 
-/// 読めない行が 2 つあっても、読めた分の表が返り、`warn!` は 1 件だけで行番号の列を持つ
-/// （要件 7.6・5.7）。
+/// 読めない行が 2 つあっても、読めた分の表が返り、`warn!` は 1 件だけで行番号の列を持つ。
 #[test]
 fn unreadable_lines_keep_the_readable_rows_and_warn_once_with_line_numbers() {
     let dir = shell_dir_with(
@@ -676,7 +673,7 @@ fn unreadable_lines_keep_the_readable_rows_and_warn_once_with_line_numbers() {
 }
 
 /// 同じフォルダの `surfaces.txt` の `surface.alias`ブレスと surface*ブレスの `name` は表を変えず、
-/// `surfaces.txt` にだけ定義された ID も載らない（要件 2.10・2.12）。
+/// `surfaces.txt` にだけ定義された ID も載らない。
 #[test]
 fn surfaces_txt_in_the_same_folder_does_not_change_the_table() {
     let dir = shell_dir_with(&utf8_hontai("charset,UTF-8\r\n"));
@@ -733,7 +730,7 @@ fn settle_kanade(world: &World) {
 /// 偽の SHIORI で実行系つきの単位を起こし、受け口を置いて定常に落ち着かせる。今のシェルのフォルダへ
 /// `surfacetable.txt` を置き、2 件続けて送って `Input` の段を 1 回回すと 2 件とも同じ表で答え、
 /// SHIORI の呼出の記録は増えない。`set_shell_dir` でリグの根の下の別のシェルのフォルダへ替えて呼ぶと、
-/// 替えた後の表で答える（要件 1.7・6.1・6.2・6.4）。
+/// 替えた後の表で答える。
 #[test]
 fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
     use std::sync::mpsc;

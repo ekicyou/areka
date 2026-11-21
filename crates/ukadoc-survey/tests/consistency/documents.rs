@@ -1,8 +1,7 @@
 //! 3 文書と spec ディレクトリの一覧を読む道具、判定が共有する所見の見方と
-//! 綴りの定数、本文の写しの狙った綴り・1 つの欄だけを壊す道具、母数の下限を集める器（設計「入口 /
-//! `tests/consistency`」→「`documents.rs`」）。
+//! 綴りの定数、本文の写しの狙った綴り・1 つの欄だけを壊す道具、母数の下限を集める器。
 //!
-//! **テストの本体はここに 1 つも置かない**（`structure.md` の流儀・`perturb.rs` と同じ）。
+//! **テストの本体はここに 1 つも置かない**（`perturb.rs` と同じ流儀）。
 //! 母数の下限は兄弟の `documents_non_vacuity.rs`、器と壊す道具の較正は
 //! `documents_tools.rs` にあり、判定 6 種は `documents_checks.rs`（⑴ ⑵ ⑹）と
 //! `linkage_checks.rs`（⑶）と `briefing_checks.rs`（⑷）と `spec_checks.rs`（⑸）が持つ。
@@ -28,7 +27,7 @@ pub(super) const SPECS_DIR: &str = ".kiro/specs";
 /// 完了した spec を集めるディレクトリの名前（`.kiro/specs/` の直下）。
 pub(super) const COMPLETED_DIR: &str = "completed";
 
-/// spec ディレクトリを spec だと見分ける目印（要件 10.2 の「brief 済み」）。
+/// spec ディレクトリを spec だと見分ける目印（「brief 済み」）。
 pub(super) const BRIEF_FILE: &str = "brief.md";
 
 /// 3 文書のワークスペース根からの相対パス（失敗の本文はこの綴りで名指す）。
@@ -36,7 +35,7 @@ pub(super) const LINKAGE_MD: &str = "doc/ukadoc-coverage/linkage.md";
 pub(super) const BRIEFING_MD: &str = "doc/ukadoc-coverage/briefing.md";
 pub(super) const ROADMAP_MD: &str = "doc/ukadoc-coverage/roadmap-draft.md";
 
-/// 既存の語彙台帳（要件 9.2 の「置き換えない」相手）。走査が届いていることの錨にも、
+/// 既存の語彙台帳（置き換えない相手）。走査が届いていることの錨にも、
 /// 語彙表経路の較正の相手にも使う。
 pub(super) const SHIORI_RESOURCE_RS: &str = "crates/areka-sylphya/src/vocab/shiori_resource.rs";
 
@@ -265,7 +264,7 @@ pub(super) fn drop_member(text: &str, id: &str) -> String {
 /// # 錨は表の中だけに置く
 ///
 /// 錨を本文全体に置くと、同じ綴りが**別の表**や**地の文**に現れただけで摂動が
-/// 空振りして止まる。`briefing.md` は設計 D-2 により `[stage.A]`〜`[stage.E]` の 5 つが
+/// 空振りして止まる。`briefing.md` は `[stage.A]`〜`[stage.E]` の 5 つが
 /// `bundles`・`singles`・`items` を 1 つずつ持つので、本文全体を錨にすると実データで止まる。
 /// `linkage.md` の「数の突き合わせ」の恒等式は今は鍵を 1 つずつ逆引用符で囲んで書いて
 /// いるので当たらないが、囲まずに書けば同じことが起きる。だから `table`（`[tally]`・`[stage.B]` のような表の見出しの
@@ -371,7 +370,7 @@ fn only_occurrence(text: &str, needle: &str, role: &str) -> usize {
 // 母数の下限を集める器
 // ---------------------------------------------------------------------------
 
-/// 「この検査は何件を相手にしているか」の下限を集める器（要件 11.4）。
+/// 「この検査は何件を相手にしているか」の下限を集める器。
 ///
 /// 母数 0 の緑は恒真である。下限を 1 か所へ集めておくと、下回った行を**まとめて**
 /// 名指せる——1 つ目で止まると、残りが 0 件に落ちていることに気づけない。

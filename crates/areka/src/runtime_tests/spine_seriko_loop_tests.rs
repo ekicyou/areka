@@ -85,7 +85,7 @@ fn shell_pattern_frame(cmd: &PresentCommand, shown_surface: u32, anim_id: u32) -
 /// 注入しない。ゆえにまばたきの指令は出ず、汲む指令は OnBoot talk の有限の列（条件の面へ向かう歩み）
 /// だけになる。受けた数がそのまま条件に向かう進みなので、面の数などへ絞る必要が無い。
 ///
-/// **areka-P0-kero-balloon 要件 7.8（注入模擬時刻が観測窓を追い越して観測条件を壊すクラス）とは別クラス**であり、時刻の頭打ちでは
+/// **注入模擬時刻が観測窓を追い越して観測条件を壊すクラスとは別**であり、時刻の頭打ちでは
 /// 直らない。判別根拠は 2 点——(a) 観測 `satisfied` は**ラッチ**で、一度成立したら後続 cue に壊されない。
 /// (b) 本関数の呼出点の台本はいずれも `\s[...]\e` 系で `\w`／`\c` を含まず**全 cue が `at=0.0`** ＝観測を
 /// 壊す後続 cue が構造的に存在しない。ゆえに注入時刻の前進は観測に有利にしか働かず、頭打ちは不要。
@@ -320,12 +320,12 @@ fn spine_e2e_sakura_blink_default_off_emits_nothing() {
 }
 
 // ===========================================================================
-// areka-P0-emo-dpi-scaling 要件 4.3（進行中挙動が DPI 変化を跨いで失われない）の実経路檻
+// 進行中の SERIKO ループが DPI 変化を跨いで失われないことの実経路檻
 //
 // 既存の DPI 変化 spine 2 本（`spine_dpi_change_refreshes_balloon_text_scale_on_real_attach`／
 // `spine_dpi_change_while_balloon_hidden_lands_on_next_show`）はいずれも `SpineHarness::boot`
 // ＝`LoopDriver::Inert` で起動しており、**活性ループと DPI 変化が一度も同居していない**。
-// ゆえに areka-P0-emo-dpi-scaling 要件 4.3 の主張のうち (a) クラッシュ・表示消失なし／(b) 文字の状態保存は檻に
+// ゆえに (a) クラッシュ・表示消失なし／(b) 文字の状態保存は檻に
 // 入っていたが、(c)「SERIKO ループが DPI 変化を跨いで進行し続ける」は
 // 「ループ状態は presenter の外（seriko worker）にある」という**構造からの帰結**にとどまり、
 // 一度も観測されていなかった。以下がその空白を閉じる。
@@ -342,8 +342,8 @@ fn shell_applied_scale(harness: &SpineHarness, scope: u32) -> f32 {
 
 /// シェル target の**物理寸権威**（`target_physical_size`＝`scaled_extent(applied, native)`）を読む短縮。
 ///
-/// 読み戻し（`read_back`）は native 原寸ゆえ k が変わっても長さが変わらない
-/// （`areka-P0-present-gpu-transform-scale` 要件 6.2）。「k が実描画へ届いたか」はこの照会で見る。
+/// 読み戻し（`read_back`）は native 原寸ゆえ k が変わっても長さが変わらない。
+/// 「k が実描画へ届いたか」はこの照会で見る。
 fn shell_physical_size(harness: &SpineHarness, scope: u32) -> (u32, u32) {
     harness
         .wiring
@@ -377,7 +377,7 @@ fn seriko_tick_apply_one(
     (frame, px)
 }
 
-/// **活性 SERIKO ループを跨ぐ DPI 変化**（areka-P0-emo-dpi-scaling 要件 4.3 の残る主張 (c)）: 実 emo2 表＋常時発火
+/// **活性 SERIKO ループを跨ぐ DPI 変化**: 実 emo2 表＋常時発火
 /// 固定 rng で `boot_live` し、kero まばたき（surface2100 `animation0`＝2106/2110/`-1`）を 1 周の**途中まで**
 /// 歩かせた状態で**シェル窓の DPI を変える**。その後——
 ///
@@ -388,30 +388,29 @@ fn seriko_tick_apply_one(
 /// 3. その全区間で shell の `read_back` が成立し全透明にならない（クラッシュ・表示消失なし）。
 /// 4. DPI 変化以降の表示は一貫して**新 k の物理寸**（`target_physical_size`・旧 k の寸が残らない＝k 変化が
 ///    実描画へ届いている）。読み戻しバイト列は **native 原寸**のまま長さを変えない
-///    （拡大は GPU の Visual 変換の領分・`areka-P0-present-gpu-transform-scale` 要件 6.2）。
+///    （拡大は GPU の Visual 変換の領分）。
 ///
 /// # 既存 DPI 檻との差（なぜ本ケースが要るか）
 ///
 /// 既存 2 本は `LoopDriver::Inert`（ループ完全不活性）で、変化させるのも**バルーン**窓の DPI である。
 /// SERIKO ループが載るのはシェル表示スロットゆえ、活性ループ×シェル窓 DPI 変化という本番の組み合わせは
-/// どこにも存在しなかった。本ケースはその 1 点だけを足す（(a)(b) の重複観測はしない）。
+/// 既存 2 本のどちらも踏まない。本ケースはその 1 点だけを足す（(a)(b) の重複観測はしない）。
 ///
 /// # 決定論（時刻は注入・乱数も注入）
 ///
 /// tick は `send_tick` 直接注入（loop ticker 不起動）、乱数は常時発火の固定注入列。DPI は
 /// [`bump_char_window_dpi`] が現在値と必ず異なる実機水準を選ぶ（「たまたま同値」で空虚化しない）。
 ///
-/// # 実測の変異キル（2026-07-26 の実測）
+/// # 檻が捕まえる変異
 ///
 /// - `EmoPresenter::refresh_scale` が再表示時に `last_show` の pattern を捨てて
-///   `PatternState::default()` で `apply_show` する変異（＝DPI 変化で進行中の SERIKO コマを失う）:
-///   `-p areka` では**本テストだけ**が落ち、落ちる assert も狙いどおり
+///   `PatternState::default()` で `apply_show` する変異（＝DPI 変化で進行中の SERIKO コマを失う）は、
+///   `-p areka` では**本テストだけ**が落ち、落ちる assert は
 ///   「DPI 変化直後の再表示が進行中コマを失いベース面へ戻っている」である。同変異は
-///   `-p areka-emo-present` では **1 本も落ちない**——`refresh_scale` の pattern 保存は
-///   本テスト追加前まで repo 内のどの檻も観測していなかった（exclusive）。
+///   `-p areka-emo-present` では **1 本も落ちない**。
 /// - `apply_show` が k≠1 のとき `binds`／`pattern` を既定へ落とす変異では、本テストと
 ///   `areka-emo-present` の `show_surface_scales_layered_bind_and_pattern_content_with_single_k`
-///   （同時追加檻）が**共倒れ**（shared）。ほかは 1 本も落ちない。
+///   が**共倒れ**になる。ほかは 1 本も落ちない。
 #[test]
 fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     // 実表＋常時発火固定 rng でループ活性化（既存 DPI 檻は Inert＝この組み合わせは本ケースが初）。
@@ -468,8 +467,8 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
         "DPI 変化直後の shell readback が全透明（表示消失）: len={}",
         frame1_k1.len()
     );
-    // 読み戻しは **native 原寸**（拡大は GPU の Visual 変換・`areka-P0-present-gpu-transform-scale`
-    // 要件 6.2）ゆえ、k が変わっても長さは変わらない。「k が実描画へ届いた」ことは物理寸権威
+    // 読み戻しは **native 原寸**（拡大は GPU の Visual 変換）ゆえ、k が変わっても長さは変わらない。
+    // 「k が実描画へ届いた」ことは物理寸権威
     // （`target_physical_size`＝`scaled_extent(applied, native)`）が変わることで見る。
     assert_eq!(
         frame1_k1.len(),

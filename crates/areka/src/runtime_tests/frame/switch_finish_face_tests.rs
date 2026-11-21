@@ -1,5 +1,4 @@
-//! バルーンの切り替えで面ごとの定義の束が入れ替わる決定論テスト（balloon-scroll-arrows 要件 1.7・
-//! tasks.md 5.3）。
+//! バルーンの切り替えで面ごとの定義の束が入れ替わる決定論テスト。
 //!
 //! 土台は親（`switch_finish_tests.rs`）の頼んだ段の組み立てをそのまま使う。
 
@@ -17,8 +16,8 @@ pub(super) fn new_balloon_definitions(scope: u32) -> ScopeBalloonDefinitions {
     )
 }
 
-/// バルーンの切り替えは新しい束を入れ、今の面（ここでは面 0）の定義を書き手が今の定義にする
-/// （balloon-scroll-arrows 要件 1.7・task 5.3）。前の束・前のモデルは残らない。
+/// バルーンの切り替えは新しい束を入れ、今の面（ここでは面 0）の定義を書き手が今の定義にする。
+/// 前の束・前のモデルは残らない。
 #[test]
 fn balloon_switch_installs_the_new_bundle_through_the_face_writer() {
     let mut rig = rig(SkinKind::Balloon, false);
@@ -167,7 +166,7 @@ fn two_face_windowposition_definitions(scope: u32) -> ScopeBalloonDefinitions {
     defs
 }
 
-/// シェルの切り替えは、今出している面の `windowposition` で解き直す（balloon-scroll-arrows 要件 1.7）。
+/// シェルの切り替えは、今出している面の `windowposition` で解き直す。
 /// 切り替えの読み込みはバルーンのフォルダの面 0 だけを読むので、ここでは読み込みの値を面 0 の値
 /// （`windowposition.x,0`）にし、今の面 2 は自分の設定ファイルで `windowposition.x,40`・
 /// `windowposition.limit,0` を持つ。後始末の後のずらし・画面の内に保つ指定・材料は、読み込みが

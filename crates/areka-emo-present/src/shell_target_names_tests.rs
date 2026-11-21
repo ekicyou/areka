@@ -8,10 +8,7 @@ fn images(names: &[&str]) -> Vec<(u32, String)> {
         .collect::<Vec<_>>()
 }
 
-/// R1.2/R7.1 先頭の 0 を無視して 10 進数として読む: 4 表記がすべて面 0 になる。
-///
-/// 数字列を**数として**読まず字面のまま扱うと（`surface00.png` を面 0 と認めない・
-/// `surface0010.png` を面 10 と読まない）この表明が赤になる（R7.9 の摂動点）。
+/// 先頭の 0 を無視して 10 進数として読む: 4 表記がすべて面 0 になる。
 #[test]
 fn leading_zeros_are_ignored_and_digits_read_as_decimal() {
     for name in [
@@ -33,10 +30,10 @@ fn leading_zeros_are_ignored_and_digits_read_as_decimal() {
     );
 }
 
-/// R1.3/R7.1 面の画像と認めない名前は 0 件になる。
+/// 面の画像と認めない名前は 0 件になる。
 ///
 /// `surface` で始まらないもの・数字以外を含むもの・拡張子が `.png` でないものの 3 系統。
-/// `.pna` が 0 件であることが R2.6（同名の `.pna` を読まない）の構造的な担保である。
+/// `.pna` が 0 件であることが、同名の `.pna` を読まない担保になる。
 #[test]
 fn non_surface_image_names_yield_nothing() {
     for name in [
@@ -46,7 +43,7 @@ fn non_surface_image_names_yield_nothing() {
         "surface+0.png",       // 符号付きは全数字でない
         "surface-1.png",       // 符号付きは全数字でない
         "surface.png",         // 残余が空
-        "surface0.pna",        // 非 png（R2.6）
+        "surface0.pna",        // 非 png
         "surface0.jpg",        // 非 png
     ] {
         let selection = select_surface_images(&[name]);
@@ -62,7 +59,7 @@ fn non_surface_image_names_yield_nothing() {
     }
 }
 
-/// R1.4 接頭辞 `surface` と拡張子 `.png` の大小を区別しない（`face_digits_of` と同じ扱い）。
+/// 接頭辞 `surface` と拡張子 `.png` の大小を区別しない（`face_digits_of` と同じ扱い）。
 #[test]
 fn prefix_and_extension_are_case_insensitive() {
     assert_eq!(
@@ -72,9 +69,9 @@ fn prefix_and_extension_are_case_insensitive() {
     );
 }
 
-/// R1.5 同じ番号に複数あれば**ファイル名の辞書順で最小**を採り、捨てた名前を `duplicates` に積む。
+/// 同じ番号に複数あれば**ファイル名の辞書順で最小**を採り、捨てた名前を `duplicates` に積む。
 ///
-/// 記録（`warn!`）を出すのは呼び手（読み込みの権威）であり、本純関数は事実を返すだけである。
+/// 記録（`warn!`）を出すのは呼び手で、本純関数は事実を返すだけ。
 #[test]
 fn duplicate_ids_adopt_lexicographic_minimum_and_report_the_dropped() {
     let selection = select_surface_images(&["surface0000.png", "surface0.png"]);
@@ -94,7 +91,7 @@ fn duplicate_ids_adopt_lexicographic_minimum_and_report_the_dropped() {
     );
 }
 
-/// R1.6 数字列が面の番号として表せないほど大きければ、画像と認めず `overflow` に積む。
+/// 数字列が面の番号として表せないほど大きければ、画像と認めず `overflow` に積む。
 #[test]
 fn digits_too_large_for_a_surface_id_go_to_overflow() {
     let selection = select_surface_images(&["surface99999999999.png", "surface1.png"]);
@@ -110,7 +107,7 @@ fn digits_too_large_for_a_surface_id_go_to_overflow() {
     );
 }
 
-/// R1.8 同じフォルダの内容なら、走査順が違っても同じ対応を得る。
+/// 同じフォルダの内容なら、走査順が違っても同じ対応を得る。
 #[test]
 fn selection_is_independent_of_input_order() {
     let ascending = [

@@ -1,7 +1,6 @@
 //! `bundle.rs` の在中テスト。
 //!
-//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない
-//! （要件 6.2・設計 File Structure Plan）。
+//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない。
 //!
 //! 見本の関連の対は**わざと乱した順**で書く。整列済みの見本は「整列する」摂動を
 //! 素通りさせるので、並び順を主張するテストの見本にはならない。
@@ -18,7 +17,7 @@ fn edge(from: &str, to: &str) -> (EntryId, EntryId) {
 }
 
 // 3 つの連結成分。どの成分も「最初に現れた id」が「最小の id」ではない形にしてある
-// （束 id を先着で決める実装と区別するため・要件 7.9）。
+// （束 id を先着で決める実装と区別するため）。
 //
 // - 成分 A: alpha — bravo — charlie（3 構成 id・2 対の鎖）
 // - 成分 B: mike — november
@@ -66,7 +65,7 @@ fn shuffled() -> Vec<(EntryId, EntryId)> {
 }
 
 /// 見本 2 つが期待する答え。束 id は構成 id の最小値、構成 id は byte 昇順、
-/// 束の並びは束 id の昇順（要件 7.9・設計 report 節の事後条件）。
+/// 束の並びは束 id の昇順。
 fn expected() -> Vec<Bundle> {
     vec![
         Bundle {
@@ -84,7 +83,7 @@ fn expected() -> Vec<Bundle> {
     ]
 }
 
-// ---- 連結成分ごとに 1 つの束（要件 7.1 の 5 つ目・要件 7.9） ----
+// ---- 連結成分ごとに 1 つの束 ----
 
 #[test]
 fn shuffling_the_input_changes_neither_the_bundle_ids_nor_the_list_order() {
@@ -136,8 +135,8 @@ fn two_links_converging_on_the_same_id_merge() {
     // （`alias_of` の欄は辺にならない）。
     //
     // 書かれた向きにしか繋がりを認めない実装はここで 2 束に割れ、`linkage.md` が
-    // 引用している束 id が黙って付け替わる（要件 7.9 の安定した束 id が防ごうと
-    // しているのはまさにこれ）。`bundle.rs` の「関連の向きも見ない」という主張は
+    // 引用している束 id が黙って付け替わる（束 id を構成 id だけから決めるのは
+    // これを防ぐため）。`bundle.rs` の「関連の向きも見ない」という主張は
     // この 1 本と `two_links_leaving_the_same_id_merge` の 2 本が背負う。
     let got = bundles(&[edge(ALPHA, BRAVO), edge(CHARLIE, BRAVO)]);
     assert_eq!(
@@ -257,8 +256,7 @@ fn the_same_link_written_twice_does_not_duplicate_a_member() {
 
 #[test]
 fn an_id_that_appears_in_no_link_never_appears_in_a_bundle() {
-    // 頂点は対に現れた id だけ。関連を持たない項目は束に出ない（要件 7.1 の
-    // 「関連で繋がった束」）。ここでは mike が対に一度も現れない。
+    // 頂点は対に現れた id だけ。関連を持たない項目は束に出ない。ここでは mike が対に一度も現れない。
     let got = bundles(&[edge(BRAVO, ALPHA)]);
     let seen: Vec<&str> = got
         .iter()

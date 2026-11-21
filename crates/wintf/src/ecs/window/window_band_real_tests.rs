@@ -1,5 +1,5 @@
 //! 実際の窓で、帯の系が並びを保って帯へ入れる・帯から出す・今いる帯の最上へ出すことを
-//! 確かめる（`stay-on-top-directives` 要件 2.4・2.6・2.9・3.1・7.3）。
+//! 確かめる。
 //!
 //! 偽の OS（兄弟の `window_band_tests.rs` の `double`）は据えない——台本が無い間は本番の
 //! Win32 が呼ばれる。窓は持ち主の関係を張った自分のトップレベルの窓 4 枚（キャラクター 2・
@@ -160,7 +160,7 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
     // 積む順は重なりの順と違えておく（帯の系が奥から順に並べ直すことも確かめる）。
     let entities = [eb0, ec1, ec0, eb1];
 
-    // 入る: 全部帯・並びは元のまま（要件 2.4・3.1）。
+    // 入る: 全部帯・並びは元のまま。
     run_op(&mut world, BandOp::Enter, &entities);
     assert!(
         ours.iter().all(|h| in_band(*h)),
@@ -169,7 +169,7 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
     assert_eq!(relative_order(&ours), original, "入るの後も並びは元のまま");
     assert_shape("入る");
 
-    // 出る: 全部帯の外・並びは元のまま（要件 3.1）。
+    // 出る: 全部帯の外・並びは元のまま。
     run_op(&mut world, BandOp::Leave, &entities);
     assert!(
         ours.iter().all(|h| !in_band(*h)),
@@ -178,7 +178,7 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
     assert_eq!(relative_order(&ours), original, "出るの後も並びは元のまま");
     assert_shape("出る");
 
-    // 手前へ出す（帯の外）: 先に普通の窓の対照を最上へ置き、出した後は普通の窓の最上（要件 2.9）。
+    // 手前へ出す（帯の外）: 先に普通の窓の対照を最上へ置き、出した後は普通の窓の最上。
     let normal_probe = create_ghost_shaped(w!("wintf-band-real-normal-probe"), 120);
     insert_after(normal_probe, HWND_TOP);
     assert!(
@@ -238,14 +238,13 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
     }
 }
 
-/// 実機の 2 回目の走りの形（task 7.1）: 組が 2 つ（鎖なし・キャラクターに持ち主なし）で、
-/// 普通の窓 1 枚の奥に居るところから入る。持ち主（キャラクター）も帯に入り、並びが元のまま、
-/// 普通の窓より手前に居る。実機では持ち主だけが帯へ入らず元の位置に残った
-/// （`[window_band] band mismatch after apply`）。
+/// 組が 2 つ（鎖なし・キャラクターに持ち主なし）で、普通の窓 1 枚の奥に居るところから入る。
+/// 持ち主（キャラクター）も帯に入り、並びが元のまま、普通の窓より手前に居る。実機では持ち主だけが
+/// 帯へ入らず元の位置に残った（`[window_band] band mismatch after apply`）。
 ///
-/// この試験は実機の赤を**再現しない**（直す前の `SWP_NOOWNERZORDER` なしでも同じプロセスの窓では緑
+/// この試験は実機の赤を**再現しない**（`SWP_NOOWNERZORDER` なしでも同じプロセスの窓では緑
 /// だった。他のプロセスの窓・DComp・IME の窓が効くと見られる）。直したことの証ではなく、形の回帰の
-/// 見張りとして残す。直したことは 7.1 の実機の走りで確かめる。
+/// 見張りとして残す。
 #[test]
 #[ignore = "実窓の重なり順は他プロセスの可視窓に割り込まれて間欠的に赤くなる（AREKA_WINTF_REAL_WINDOW_ZORDER を与えて明示実行する）"]
 fn owners_of_balloons_enter_the_band_from_behind_a_normal_window_on_real_windows() {

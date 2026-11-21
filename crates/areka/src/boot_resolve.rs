@@ -1,16 +1,16 @@
-//! 起動解決の純粋な判断（areka-P0-baseware-root-layout 要件 4・5）。
+//! 起動解決の純粋な判断。
 //!
 //! 起動するゴースト（6 分岐）とバルーン（8 分岐＝argv・記憶・descript・同梱・唯一・既定・
 //! 無作為・0）を「argv・記憶の値・ゴーストの descript の 2 鍵・同梱の名・列挙の素性」だけから
 //! 決める。判断は I/O・時計・乱数源を持たず、無作為は「候補数 → 添字」の関数を注入する
-//! （本番は [`pick_index`]）。列挙の並びは判断に使わない（裁定 3）。ただ 1 点、descript の
+//! （本番は [`pick_index`]）。列挙の並びは判断に使わない。ただ 1 点、descript の
 //! `balloon` に `name` が一致するバルーンが複数在るときだけ、列挙の並び（ゴーストの中が先、それぞれフォルダ名の昇順）で
-//! 最初のものにする（areka-P0-ghost-standard-balloon 要件 2.6）。
+//! 最初のものにする。
 //!
 //! 既定の定数 [`DEFAULT_GHOST_FOLDER`]／[`DEFAULT_BALLOON_FOLDER`] はこのファイルだけが持ち、
-//! 解決の判断での参照はそれぞれゴーストの段 4・バルーンの段 6 の 1 か所だけ（要件 4.11・5.9）。
+//! 解決の判断での参照はそれぞれゴーストの段 4・バルーンの段 6 の 1 か所だけ。
 //! 判断の外では、切替の降ろした直後の記憶 [`write_switch_drop`] が既定ゴーストを最後のゴーストの
-//! 書き先に使う（要件 12.6）。
+//! 書き先に使う。
 
 use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
@@ -28,28 +28,28 @@ use areka_sylphya::{
 // 判断と記憶の直読みの消費者は起動前の解決（`install::startup::resolve_boot`）。記憶の書き込み
 // （[`LastUsed`]）の消費者は boot 成功直後の `main::on_boot_ok`。
 
-/// 既定ゴースト（要件 4.4・4.11。配布物に必ず同梱＝裁定 3）。
+/// 既定ゴースト（配布物に必ず同梱）。
 pub(crate) const DEFAULT_GHOST_FOLDER: &str = "emo2";
-/// 既定バルーン（要件 5.5・5.9。フォルダ名と id はバイト一致＝完了 spec で実測済み）。
+/// 既定バルーン（フォルダ名と id はバイト一致）。
 pub(crate) const DEFAULT_BALLOON_FOLDER: &str = "areka-balloon";
 
-/// ゴーストが決まった経路（要件 4.10 の記録に載せる）。
+/// ゴーストが決まった経路（記録に載せる）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GhostRoute {
     Argv,
-    /// `--ghost` の指し先で決まった（記憶・印の書き込みは他の経路と同じ・areka-P0-startup-options-core 要件 3.9）。
+    /// `--ghost` の指し先で決まった（記憶・印の書き込みは他の経路と同じ）。
     Pointed,
-    /// 起動の前の道が `callghost` で選んだ（記憶の前の段・ほかの起動と同じに扱う・install-before-boot 要件 4.3・4.10）。
+    /// 起動の前の道が `callghost` で選んだ（記憶の前の段・ほかの起動と同じに扱う）。
     CallGhost,
     Memory,
     Only,
     Default,
     Random,
-    /// 実行中の切替で決まった（記憶を書く経路＝要件 4.6。書かないのは `Argv` だけ）。
+    /// 実行中の切替で決まった（記憶を書く経路。書かないのは `Argv` だけ）。
     Switched,
 }
 
-/// バルーンが決まった経路（要件 5.11 の記録に載せる）。
+/// バルーンが決まった経路（記録に載せる）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BalloonRoute {
     Argv,
@@ -79,19 +79,19 @@ pub(crate) struct BalloonDecision {
     pub folder: Option<String>,
 }
 
-/// 0 体（要件 4.7・9.6）。告知の文面に置くべき場所を載せるため各根の格納フォルダ（上から）を持つ。
+/// 0 体。告知の文面に置くべき場所を載せるため各根の格納フォルダ（上から）を持つ。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NoGhost {
     pub ghost_stores: Vec<PathBuf>,
 }
 
-/// 0（要件 5.8・9.7）。告知の文面に置くべき場所を載せるため各根の格納フォルダ（上から）を持つ。
+/// 0。告知の文面に置くべき場所を載せるため各根の格納フォルダ（上から）を持つ。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NoBalloon {
     pub balloon_stores: Vec<PathBuf>,
 }
 
-/// ゴーストの判断の入力（要件 4.9「argv・記憶の値・列挙の結果だけ」）。
+/// ゴーストの判断の入力（argv・記憶の値・列挙の結果だけ）。
 /// `argv` があるとき `memory`／`listed`／`stores` は読まない（空でよい）。
 pub(crate) struct GhostInputs<'a> {
     /// argv[1]
@@ -137,7 +137,7 @@ fn joined(stores: &[PathBuf]) -> String {
         .join("; ")
 }
 
-/// フォルダ名が `name` と同じ（要件 2.8 の 1 つの規則）和の項目（在る・無いの判定だけ。並びは見ない）。
+/// フォルダ名が `name` と同じ和の項目（在る・無いの判定だけ。並びは見ない）。
 fn find<'a>(listed: &'a [GhostEntry], name: &str) -> Option<&'a GhostEntry> {
     listed
         .iter()
@@ -152,7 +152,7 @@ fn find_balloon<'a>(listed: &'a [BalloonEntry], name: &str) -> Option<&'a Balloo
 }
 
 /// descript の `balloon` の突き合わせ: `name` が一致する最初（列挙の並び＝ゴーストの中が先、それぞれフォルダ名の昇順）、
-/// 1 つも無いときに限りフォルダ名（実行中の `\![change,balloon,名前]` のふつうの名前と同じ・要件 2.6）。
+/// 1 つも無いときに限りフォルダ名（実行中の `\![change,balloon,名前]` のふつうの名前と同じ）。
 fn find_balloon_by_name<'a>(listed: &'a [BalloonEntry], name: &str) -> Option<&'a BalloonEntry> {
     listed
         .iter()
@@ -163,7 +163,7 @@ fn find_balloon_by_name<'a>(listed: &'a [BalloonEntry], name: &str) -> Option<&'
 /// descript の段で鍵ごとに使う突き合わせ（[`find_balloon`] か [`find_balloon_by_name`]）。
 type FindBalloon = for<'l> fn(&'l [BalloonEntry], &str) -> Option<&'l BalloonEntry>;
 
-/// 段 1〜5＋0 体（要件 4.1〜4.7）に、areka-P0-startup-options-core の段 1b（指し先）と
+/// 段 1〜5＋0 体に、段 1b（指し先）と
 /// `--random` の段を足した並び。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
 pub(crate) fn resolve_ghost(
     inputs: &GhostInputs<'_>,
@@ -177,7 +177,7 @@ pub(crate) fn resolve_ghost(
             folder: None,
         });
     }
-    // 段 1b: `--ghost` の指し先（記憶・印・列挙に関わらず・要件 3.1・4.3）。
+    // 段 1b: `--ghost` の指し先（記憶・印・列挙に関わらず）。
     if let Some((dir, folder)) = inputs.pointed {
         return Ok(GhostDecision {
             route: GhostRoute::Pointed,
@@ -192,7 +192,7 @@ pub(crate) fn resolve_ghost(
         dir: entry.dir.clone(),
         folder: Some(entry.identity.folder.clone()),
     };
-    // `--random`: 記憶・唯一・既定を飛ばして列挙から選ぶ（要件 5.1・5.2・5.4）。
+    // `--random`: 記憶・唯一・既定を飛ばして列挙から選ぶ。
     if inputs.random {
         let entry = match listed {
             [] => {
@@ -211,7 +211,7 @@ pub(crate) fn resolve_ghost(
         );
         return Ok(at(GhostRoute::Random, entry));
     }
-    // callghost の相手（記憶の前・印に関わらない・install-before-boot 要件 4.3・4.7）。在らねば warn して記憶へ。
+    // callghost の相手（記憶の前・印に関わらない）。在らねば warn して記憶へ。
     if let Some(folder) = inputs.call_ghost {
         match find(listed, folder) {
             Some(entry) => return Ok(at(GhostRoute::CallGhost, entry)),
@@ -223,7 +223,7 @@ pub(crate) fn resolve_ghost(
             ),
         }
     }
-    // 段 2: 記憶（列挙に在れば）。在らねば黙って読み替えず warn して次へ（要件 4.6）。
+    // 段 2: 記憶（列挙に在れば）。在らねば黙って読み替えず warn して次へ。
     if let Some(memory) = inputs.memory {
         match find(listed, memory) {
             Some(entry) => return Ok(at(GhostRoute::Memory, entry)),
@@ -236,7 +236,6 @@ pub(crate) fn resolve_ghost(
         }
     }
     match listed {
-        // 0 体（要件 4.7）。
         [] => Err(NoGhost {
             ghost_stores: inputs.stores.to_vec(),
         }),
@@ -260,8 +259,7 @@ pub(crate) fn resolve_ghost(
     }
 }
 
-/// 段 1〜7＋0（完了 spec の要件 5.1〜5.8 に areka-P0-ghost-standard-balloon の要件 3.1 の descript の段を
-/// 足した並び）。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
+/// 段 1〜7＋0。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
 pub(crate) fn resolve_balloon(
     inputs: &BalloonInputs<'_>,
     pick: impl FnOnce(usize) -> usize,
@@ -282,7 +280,7 @@ pub(crate) fn resolve_balloon(
         folder: Some(entry.identity.folder.clone()),
     };
     let store = joined(inputs.stores);
-    // 段 2: ゴーストごとの記憶（同梱より先＝裁定 4）。
+    // 段 2: ゴーストごとの記憶（同梱より先）。
     if let Some(memory) = inputs.memory {
         match find_balloon(listed, memory) {
             Some(entry) => return Ok(at(BalloonRoute::Memory, entry)),
@@ -296,7 +294,7 @@ pub(crate) fn resolve_balloon(
     }
     // 段 3: ゴーストの descript.txt（`default.balloon.path` → `balloon`・当たった鍵より後ろは見ない）。
     // 値は読み替えない（`..`・絶対パス・区切りはフォルダ名に完全一致しないので当たらない）。
-    // `random`・`lastinstalled` も他の値と同じく突き合わせるだけ（要件 2.8）。
+    // `random`・`lastinstalled` も他の値と同じく突き合わせるだけ。
     let descript: [(&str, Option<&str>, FindBalloon); 2] = [
         (
             "default.balloon.path",
@@ -331,7 +329,6 @@ pub(crate) fn resolve_balloon(
         }
     }
     match listed {
-        // 0（要件 5.8）。
         [] => Err(NoBalloon {
             balloon_stores: inputs.stores.to_vec(),
         }),
@@ -356,12 +353,12 @@ pub(crate) fn resolve_balloon(
 }
 
 /// 本番の添字（std の `RandomState` のプロセスごとの鍵から。新規依存 0）。
-/// 質は問わない（初回起動の 1 回だけ・その後は記憶で固定＝design の Risks）。`n == 0` は呼ばれない。
+/// 質は問わない（初回起動の 1 回だけ・その後は記憶で固定）。`n == 0` は呼ばれない。
 pub(crate) fn pick_index(n: usize) -> usize {
     (RandomState::new().hash_one(n) % n as u64) as usize
 }
 
-// ---------------------------------------------------------------- 記憶の直読みと書き込み（要件 3）
+// ---------------------------------------------------------------- 記憶の直読みと書き込み
 
 /// `scope` の記憶ファイルを実 fs から直接読み、`key` の値を拾う（アクター不在の起動前用）。
 /// 読めなければ無し（`load_scope` が不在・読取失敗を空へ縮退し、失敗は warn を残す）。
@@ -371,7 +368,7 @@ fn read_last(scope: PersistScope, roots: &ScopeRoots, key: PersistKey) -> Option
         .find_map(|(k, v)| (k == key).then_some(v))
 }
 
-/// 起動前の記憶の直読み（App スコープ `areka.last.ghost`・要件 4.2）。無ければ `None`。
+/// 起動前の記憶の直読み（App スコープ `areka.last.ghost`）。無ければ `None`。
 pub(crate) fn read_last_ghost(app_profile_dir: &Path) -> Option<String> {
     read_last(
         PersistScope::App,
@@ -380,7 +377,7 @@ pub(crate) fn read_last_ghost(app_profile_dir: &Path) -> Option<String> {
     )
 }
 
-/// 起動前の記憶の直読み（起動するゴーストの Ghost スコープ `areka.last.balloon`・要件 5.2・裁定 4）。
+/// 起動前の記憶の直読み（起動するゴーストの Ghost スコープ `areka.last.balloon`）。
 /// 根は boot が据える場所と同じ `profile_areka_root(<ゴースト>/ghost/master)`。無ければ `None`。
 pub(crate) fn read_last_balloon(ghost_dir: &Path) -> Option<String> {
     read_last(
@@ -390,7 +387,7 @@ pub(crate) fn read_last_balloon(ghost_dir: &Path) -> Option<String> {
     )
 }
 
-/// 起動前の記憶の直読み（起動するゴーストの Ghost スコープ `areka.last.shell`・要件 6.2）。
+/// 起動前の記憶の直読み（起動するゴーストの Ghost スコープ `areka.last.shell`）。
 /// 置き場は [`read_last_balloon`] と同じ。無ければ `None`。
 pub(crate) fn read_last_shell(ghost_dir: &Path) -> Option<String> {
     read_last(
@@ -408,7 +405,7 @@ fn ghost_roots(ghost_dir: &Path) -> ScopeRoots {
     }
 }
 
-/// 起動のシェル（要件 6.2・6.3）。記憶の名の `shell/<名>/descript.txt` が在ればその名
+/// 起動のシェル。記憶の名の `shell/<名>/descript.txt` が在ればその名
 /// （`menu,hidden` でも可）・記憶が無ければ `None`（既定のシェル）。記憶の先が無いか、名前が
 /// `shell/` の下の 1 段のフォルダ名でない（`..`・区切り・絶対パス＝壊れた記憶）ときは
 /// `warn!` 1 件で `None`。記憶は起動の成功（`LastUsed::record`）が既定のシェルへ書き直す。
@@ -450,7 +447,7 @@ fn save_app(app_profile_dir: &Path, entries: Vec<(PersistKey, String)>) -> Persi
     )
 }
 
-// ---------------------------------------------------------------- 起動中の印（要件 12.1〜12.8）
+// ---------------------------------------------------------------- 起動中の印
 //
 // 印（App スコープ `areka.last.running`）は「今動いているゴーストの名前」。起こす前に書き、
 // きれいな終わりでだけ消す（強制終了・クラッシュ・電源断では消えずに残る）。次の起動で残って
@@ -471,7 +468,7 @@ pub(crate) fn read_session_mark(app_profile_dir: &Path) -> Option<String> {
 }
 
 /// 印を書く（初回の起動の前・呼び手は argv で始まったプロセスでないときだけ呼ぶ）。
-/// 書けなければ失敗の中身を返す（呼び手が起動を止める・要件 3.1）。
+/// 書けなければ失敗の中身を返す（呼び手が起動を止める）。
 pub(crate) fn write_session_mark(
     app_profile_dir: &Path,
     running: &str,
@@ -510,8 +507,8 @@ pub(crate) fn write_session_mark(
 }
 
 /// 切替で前のゴーストを降ろした直後: 最後に使ったゴースト＝既定と（`mark` が在れば）印＝切替先を
-/// 1 回の書き込みで書く。argv で始まったプロセスは `mark` に `None` を渡す（印に触れない・要件 12.5）。
-/// 呼び手は `ghost_switch::switch_to`。書けなければ失敗の中身を返す（呼び手が終える・要件 3.3）。
+/// 1 回の書き込みで書く。argv で始まったプロセスは `mark` に `None` を渡す（印に触れない）。
+/// 呼び手は `ghost_switch::switch_to`。書けなければ失敗の中身を返す（呼び手が終える）。
 pub(crate) fn write_switch_drop(
     app_profile_dir: &Path,
     mark: Option<&str>,
@@ -552,7 +549,7 @@ pub(crate) fn write_switch_drop(
 }
 
 /// きれいな終わり: 印を消す（空文字を書く）。呼び手は後始末で降ろした後。
-/// 消せなければ記憶の印を読み直し、残る印が在るときだけ次の起動を予告する（要件 4.2）。
+/// 消せなければ記憶の印を読み直し、残る印が在るときだけ次の起動を予告する。
 pub(crate) fn clear_session_mark(app_profile_dir: &Path) -> Result<(), PersistFailure> {
     match save_app(
         app_profile_dir,
@@ -593,8 +590,8 @@ pub(crate) fn clear_session_mark(app_profile_dir: &Path) -> Result<(), PersistFa
 }
 
 /// きれいに終わらなかったので印を残すときの記録（`session_mark_kept`）。記憶の印を読み直し、
-/// 印が在るときだけ次の起動の Ref6/7 を予告する（要件 4.3）。呼び手は `main::settle_session_mark`。
-/// 置き場が控える範囲の中なら印を読み直さない（控えの印で次の起動を予告しない・readonly-mode 要件 6.3）。
+/// 印が在るときだけ次の起動の Ref6/7 を予告する。呼び手は `main::settle_session_mark`。
+/// 置き場が控える範囲の中なら印を読み直さない（控えの印で次の起動を予告しない）。
 pub(crate) fn keep_session_mark(
     app_profile_dir: &Path,
     reason: &'static str,
@@ -642,7 +639,7 @@ pub(crate) fn running_name(ghost: &GhostDecision) -> String {
     areka_ghost::catalog::descript_name(&ghost.dir.join("ghost").join("master")).unwrap_or(folder)
 }
 
-/// 起動成功時に書く内容（要件 3.2〜3.5・裁定 5）。
+/// 起動成功時に書く内容。
 pub(crate) struct LastUsed<'a> {
     pub ghost: &'a GhostDecision,
     pub balloon: &'a BalloonDecision,
@@ -653,9 +650,9 @@ pub(crate) struct LastUsed<'a> {
 impl LastUsed<'_> {
     /// App へ `LastGhost`（argv 以外のとき）、Ghost へ `LastBalloon`（argv 以外のとき）＋`LastShell`
     /// （常に）を投函する。argv で決まった側は書かず info を残す。投函だけで待たない
-    /// （反映は `GhostRuntime::shutdown` の barrier に任せる＝design R1）。
-    /// `areka.last.shell` は次の起動のシェルの決定（[`decide_boot_shell`]・要件 6.2）が読む。
-    /// 記憶の先が無かった起動では、ここで今マウントした既定のシェルへ書き直る（要件 6.3）。
+    /// （反映は `GhostRuntime::shutdown` の barrier に任せる）。
+    /// `areka.last.shell` は次の起動のシェルの決定（[`decide_boot_shell`]）が読む。
+    /// 記憶の先が無かった起動では、ここで今マウントした既定のシェルへ書き直る。
     pub(crate) fn record(&self, publisher: &SylphyaPublisher) {
         let ghost = remembered(
             self.ghost.route == GhostRoute::Argv,
@@ -691,7 +688,7 @@ impl LastUsed<'_> {
     }
 }
 
-/// シェルの差し替えの完了: Ghost スコープへ `LastShell` だけを投函する（要件 6.1）。
+/// シェルの差し替えの完了: Ghost スコープへ `LastShell` だけを投函する。
 /// `LastBalloon`・App スコープには触れない。投函だけで待たない（[`LastUsed::record`] と同じ）。
 pub(crate) fn record_last_shell(publisher: &SylphyaPublisher, folder: &str) {
     publisher.persist_put(
@@ -705,7 +702,7 @@ pub(crate) fn record_last_shell(publisher: &SylphyaPublisher, folder: &str) {
     );
 }
 
-/// バルーンの差し替えの完了: Ghost スコープへ `LastBalloon` だけを投函する（要件 6.1・6.7）。
+/// バルーンの差し替えの完了: Ghost スコープへ `LastBalloon` だけを投函する。
 /// 3 つを書く [`LastUsed::record`] を通さないのは、入れた直後の `remember_balloon` の記憶を
 /// 上書きしないため。`LastShell`・App スコープには触れない。
 pub(crate) fn record_last_balloon(publisher: &SylphyaPublisher, folder: &str) {
@@ -720,7 +717,7 @@ pub(crate) fn record_last_balloon(publisher: &SylphyaPublisher, folder: &str) {
     );
 }
 
-/// argv で決まった側は `None`（書かない旨を info に残す＝要件 3.5）。それ以外はフォルダ名。
+/// argv で決まった側は `None`（書かない旨を info に残す）。それ以外はフォルダ名。
 fn remembered<'a>(
     argv: bool,
     side: &str,

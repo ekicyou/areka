@@ -45,13 +45,13 @@ use sample_ghost_kit::SampleRoot;
 
 /// 上限時間の環境変数（本体 `areka` の smoke と同じ名前）。
 const EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
-/// 上限時間の既定（design Key Decision 10）。
+/// 上限時間の既定。
 const DEFAULT_EXIT_MS: u64 = 90_000;
 /// 窓の固定位置（物理 px・スクリーン座標）。
 const WINDOW_POS: Point = Point { x: 160, y: 160 };
 
 // ---------------------------------------------------------------------------
-// 終了の理由と終了コード（design §Runner・Key Decision 7）
+// 終了の理由と終了コード
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,7 +91,7 @@ fn exit_ms_from_env() -> u64 {
 }
 
 // ---------------------------------------------------------------------------
-// 検体の資産（design §Runner Service Interface）
+// 検体の資産
 // ---------------------------------------------------------------------------
 
 /// 検体 2 つの資産と、判別に使う面の合成結果（premultiplied BGRA・原寸）。
@@ -222,7 +222,7 @@ fn deadline_system(
     observer.summarize(true, frame.0);
     for (e, wh) in &windows {
         if let Some(wh) = wh {
-            // 窓が最後まで画面に出ていたことの控え（要件 3.7）。
+            // 窓が最後まで画面に出ていたことの控え。
             let mut rect = RECT::default();
             // SAFETY: 生きている窓の HWND（despawn はこの後）。
             let visible = unsafe { IsWindowVisible(wh.hwnd) }.as_bool();
@@ -358,7 +358,7 @@ fn boot_and_run() -> Result<ExitReason, String> {
             UISetup,
             observe::queued_rect_system.after(apply_window_pos_changes),
         );
-        // 台本の system は 2 段に登録し、段は閉じ込める（design Key Decision 2）。
+        // 台本の system は 2 段に登録し、段は閉じ込める。
         w.add_systems(Update, swap::swap_system_for(swap::Stage::Update));
         w.add_systems(
             FrameFinalize,

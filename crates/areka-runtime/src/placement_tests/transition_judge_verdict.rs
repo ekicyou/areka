@@ -1,27 +1,26 @@
 //! 遷移判定の**上限と合否**——決定論の上限と実機サインオフ専用の上限を別々に持ち、違反を
 //! 列で返す（純関数・I/O 無し）。
 //!
-//! design.md の C7（`transition_judge`）が正本である。[`super`] が集めた判定量
-//! （[`TransitionSummary`]）に上限（[`Bounds`]）を当てて合否を出す層であり、量を数える側とは
-//! 分けてある（量の集計は語彙に追随し、上限は要件に追随するので、変更の理由が異なる）。
+//! [`super`] が集めた判定量（[`TransitionSummary`]）に上限（[`Bounds`]）を当てて合否を出す層であり、
+//! 量を数える側とは分けてある（量の集計は語彙に追随し、上限は要件に追随するので、変更の理由が異なる）。
 //!
 //! # 上限は 2 系統・判定は別々の呼び出し
 //!
 //! - [`Bounds::deterministic`]——フレーム差・窓ごとの書込回数・経路 A の同期書込・接地点差・
-//!   連鎖再解決の回数。**回帰テストが固定する**決定論量だけを持つ（`areka-P0-dpi-transition-atomicity` 要件 7.1）。
+//!   連鎖再解決の回数。**回帰テストが固定する**決定論量だけを持つ。
 //! - [`Bounds::signoff`]——可視化から窓書込までの経過（`visualize_to_write_us`）と一括書込の
 //!   総所要（`flush_total_us`）。**実機サインオフ専用**であり非決定なので、**回帰テストは
-//!   値を固定しない**（C7・設計討議 A-2）。C8 の Q2／Q3 の分岐条件はこの系統の超過である。
+//!   値を固定しない**。この系統の超過が実機での切り分けの分岐条件になる。
 //!
 //! 2 系統は `judge(summary, &Bounds::deterministic())` と `judge(summary, &Bounds::signoff())`
-//! の**別々の呼び出し**で評価し、[`Report`] は両方の結果を並べて持つ（C7）。片方へ畳むと、
+//! の**別々の呼び出し**で評価し、[`Report`] は両方の結果を並べて持つ。片方へ畳むと、
 //! 非決定量の揺れが決定論判定の合否を動かす。
 //!
 //! # 「量が無いこと」を合格の根拠にしない
 //!
 //! [`judge`] は沈黙を合格にしない。次はそれぞれ**別の [`Violation`]** として返す:
 //!
-//! - [`TransitionSummary::frames_indeterminate`]（フレーム系列が読めない・`areka-P0-dpi-transition-atomicity` 要件 8.5）
+//! - [`TransitionSummary::frames_indeterminate`]（フレーム系列が読めない）
 //! - [`TransitionSummary::malformed_records`] が 1 件以上（語彙の規約を破った行・
 //!   `diff`・`total_us` が数として読めない行がある）
 //! - 上限を当てる対象そのものが欠けていること（[`Violation::Unmeasured`]）
@@ -43,65 +42,63 @@ use areka_placement::diag::WindowKind;
 // 上限の定数
 // ---------------------------------------------------------------------------
 
-/// 起点から最終書込までの許容フレーム差（C7・`areka-P0-dpi-transition-atomicity` 要件 4.4）。
+/// 起点から最終書込までの許容フレーム差。
 ///
 /// 0＝「モニタ表更新と同じフレームで全窓の書込が終わる」。可視化と窓書込の食い違い
-/// （[`TransitionSummary::mismatch_frames_per_window`]・`areka-P0-dpi-transition-atomicity` 要件 4.2／4.3）にも同じ値を当てる
+/// （[`TransitionSummary::mismatch_frames_per_window`]）にも同じ値を当てる
 /// ——どちらも「食い違うフレームを 1 枚も出さない」という同一の要求である。
 pub const TRANSITION_FRAME_BOUND: u32 = 0;
 
-/// 整合待ち（`hold`）を含む遷移でフレーム差に足す許容（C7）。
+/// 整合待ち（`hold`）を含む遷移でフレーム差に足す許容。
 ///
 /// 値の正本は**本番の整合ゲートの上限**（`dpi_sync::DPI_SYNC_HOLD_MAX_FRAMES`）である。
-/// 当初は本番側に定数が無く同じ値をここに置いていたが、整合ゲートが
-/// 着地したので参照へ替えた——判定の許容が本番の待ちより短ければ、規約どおりに待った遷移が
-/// 不合格になる（判定語の単一定義元と同じ理屈が値にも及ぶ）。
+/// 判定の許容が本番の待ちより短ければ、規約どおりに待った遷移が不合格になる。
 /// hold を含まない遷移（`holds == 0`）では 1 フレームも足さない。
 pub const HOLD_FRAME_ALLOWANCE: u32 = areka_placement::dpi_sync::DPI_SYNC_HOLD_MAX_FRAMES;
 
-/// 1 つの窓に対する遷移 1 回ぶんの窓書込回数の上限（C7・`areka-P0-dpi-transition-atomicity` 要件 4.5）。
+/// 1 つの窓に対する遷移 1 回ぶんの窓書込回数の上限。
 pub const WRITES_PER_WINDOW_MAX: u32 = 1;
 
-/// 経路 A（OS 提案位置の同期書込）の件数の上限（C7・`areka-P0-dpi-transition-atomicity` 要件 4.5）。
+/// 経路 A（OS 提案位置の同期書込）の件数の上限。
 ///
 /// `origin=dpi-suggested` の書込と、その裏取りである `stage=sync` の書込の**両方**へ当てる。
 /// 片方だけに当てると、札と段のどちらかが壊れた退行が判定から消える。
 pub const PATH_A_WRITES_MAX: u32 = 0;
 
-/// 接地点と作業領域下端の差の絶対値の上限（C7・`areka-P0-dpi-transition-atomicity` 要件 5.3）。
+/// 接地点と作業領域下端の差の絶対値の上限。
 pub const GROUND_DIFF_MAX: i32 = 0;
 
-/// 遷移 1 回あたりの連鎖再解決の回数の上限（C7・`areka-P0-dpi-transition-atomicity` 要件 6.6「一度だけ」）。
+/// 遷移 1 回あたりの連鎖再解決の回数の上限（一度だけ）。
 pub const CHAIN_REALIGN_PER_TRANSITION: u32 = 1;
 
-/// 可視化から当該窓の窓書込までの経過（µs）の上限。**確定値**（確定台帳 L9）。
+/// 可視化から当該窓の窓書込までの経過（µs）の上限。**確定値**。
 ///
 /// 実機サインオフ専用（[`Bounds::signoff`]）。値の根拠は**採取機に依らない**——表示に
 /// 提示される 1 フレームは、リフレッシュレートが 60Hz を下回らない限り高々 1/60 秒＝
 /// 16,667µs である。ゆえにこれを超えた食い違いは**どの機械でも**必ず 1 枚以上の提示
-/// フレームをまたぐ（`areka-P0-dpi-transition-atomicity` 要件 4.2「食い違い可視フレームを提示しない」を µs の側から**一方向に**
-/// 押さえた形——超えていれば必ずまたぐが、逆に超えていないことは `areka-P0-dpi-transition-atomicity` 要件 4.2 の成立を意味しない）。
+/// フレームをまたぐ（超えていれば必ずまたぐが、逆に超えていないことは食い違い可視フレームが
+/// 無いことを意味しない）。
 /// 逆に上限以下の隔たりは 1 フレームに収まり**得る**ので違反として立てない。
 ///
-/// 採取機の実測周期（本仕様の再採取は 8.37〜8.82ms＝113〜119 フレーム/秒）を定数にしない
+/// 採取機の実測周期（8.37〜8.82ms＝113〜119 フレーム/秒）を定数にしない
 /// のは、リフレッシュレートの違う機械で判定が変わるからである。60Hz を下回る表示では
 /// 1 フレームが本値より長くなり上限は厳しすぎる側へ倒れる——そのときは実測周期を添えて
-/// 台帳で再裁定する（**目視に合わせて緩めない**・手順書 §6.5）。
+/// 再裁定する（**目視に合わせて緩めない**）。
 ///
-/// 非決定量ゆえ回帰テストはこの**値**を固定しない（C7）。固定するのは [`Bounds::signoff`]
+/// 非決定量ゆえ回帰テストはこの**値**を固定しない。固定するのは [`Bounds::signoff`]
 /// がこの定数から引いていること（結線）と、値が 0 でないことだけである。
 pub const VISUALIZE_TO_WRITE_US_MAX: u64 = 16_667;
 
-/// 一括書込 1 区間の総所要（µs）の上限。**確定値**（確定台帳 L9）。
+/// 一括書込 1 区間の総所要（µs）の上限。**確定値**。
 ///
 /// 根拠は [`VISUALIZE_TO_WRITE_US_MAX`] と同一である。一括書込が 1 フレームを超えると、
-/// 区間の前半で書いた窓と後半で書いた窓が**別の提示フレーム**に現れる＝`areka-P0-dpi-transition-atomicity` 要件 4.5 が
-/// 「1 回の書込」で消そうとしている逐次適用が、書込の回数を下限化しても時間の側に
+/// 区間の前半で書いた窓と後半で書いた窓が**別の提示フレーム**に現れる＝逐次適用が、
+/// 書込の回数を下限化しても時間の側に残る形になる。
 /// 残る形になる。ゆえに上限は窓の枚数に比例させない（枚数ぶん緩めると、枚数を増やす
 /// だけで合格する上限になる）。
 pub const FLUSH_TOTAL_US_MAX: u64 = 16_667;
 
-/// 実機ログの受け渡しに使う環境変数（C7 の起動手順）。
+/// 実機ログの受け渡しに使う環境変数。
 pub const TRANSITION_LOG_ENV: &str = "AREKA_TRANSITION_LOG";
 
 // ---------------------------------------------------------------------------
@@ -150,9 +147,9 @@ impl Bounds {
         }
     }
 
-    /// 決定論の上限（回帰テストが固定する・`areka-P0-dpi-transition-atomicity` 要件 7.1）。
+    /// 決定論の上限（回帰テストが固定する）。
     ///
-    /// 実機専用の 2 項目は `None` のままにする——非決定量を決定論判定へ混ぜない（C7）。
+    /// 実機専用の 2 項目は `None` のままにする——非決定量を決定論判定へ混ぜない。
     pub const fn deterministic() -> Self {
         Self {
             frame_bound: Some(TRANSITION_FRAME_BOUND),
@@ -165,10 +162,10 @@ impl Bounds {
         }
     }
 
-    /// 実機サインオフ専用の上限（**確定値**・台帳 L9 で裁定した）。
+    /// 実機サインオフ専用の上限（**確定値**）。
     ///
     /// 決定論の項目は `None` のままにする——同一 tick の内側の食い違いはフレーム単位の量では
-    /// 是正前でも 0 になるので、この系統だけが C8 の Q2／Q3 を分岐できる。
+    /// 是正前でも 0 になるので、この系統だけがその食い違いを検出できる。
     pub const fn signoff() -> Self {
         Self {
             visualize_to_write_us_max: Some(VISUALIZE_TO_WRITE_US_MAX),
@@ -226,7 +223,7 @@ impl fmt::Display for Quantity {
 /// 判定違反 1 件。
 ///
 /// 種別を分けてあるのは、ランナーが列挙するときに「どの量が・いくつで・上限がいくつか」を
-/// そのまま読めるようにするためである（沈黙を PASS にしない＝design「Error Handling」）。
+/// そのまま読めるようにするためである（沈黙を PASS にしない）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Violation {
     /// 上限を 1 つも当てていない組で判定した。
@@ -238,7 +235,7 @@ pub enum Violation {
         /// 件数。
         count: u32,
     },
-    /// フレーム差が判定不能（`areka-P0-dpi-transition-atomicity` 要件 8.5）。
+    /// フレーム差が判定不能。
     FramesIndeterminate,
     /// 区間の先頭が起点レコードでない。
     MissingOrigin,
@@ -260,7 +257,7 @@ pub enum Violation {
         /// 上限。
         max: u32,
     },
-    /// 随伴バルーンがキャラ窓と別のフレームで書かれた（`areka-P0-dpi-transition-atomicity` 要件 4.3）。
+    /// 随伴バルーンがキャラ窓と別のフレームで書かれた。
     BalloonWrittenInAnotherFrame,
     /// 窓ごとの書込回数が上限超。
     WritesPerWindow {
@@ -390,7 +387,7 @@ impl fmt::Display for Violation {
 // 合否
 // ---------------------------------------------------------------------------
 
-/// 遷移 1 回ぶんの合否を出す（C7）。
+/// 遷移 1 回ぶんの合否を出す。
 ///
 /// 違反は**列**で返す。1 件見つけた時点で打ち切らないのは、ランナーが遷移ごとに全ての違反を
 /// 列挙して初めて「何を直せばよいか」が読めるためである。
@@ -415,7 +412,7 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
         violations.push(Violation::FramesIndeterminate);
     }
 
-    // ⑶ フレーム差（`areka-P0-dpi-transition-atomicity` 要件 4.2／4.3／4.4）。
+    // ⑶ フレーム差。
     if let Some(frame_bound) = bounds.frame_bound {
         // 整合待ちを含む遷移だけが待ちの許容を使える（`holds == 0` には 1 フレームも足さない）。
         let last_write_bound = if summary.holds > 0 {
@@ -466,15 +463,14 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
         }
     }
 
-    // ⑷ 窓ごとの書込回数（`areka-P0-dpi-transition-atomicity` 要件 4.5）。
+    // ⑷ 窓ごとの書込回数。
     //
     // 見送り窓（`skipped_windows`）を**わざと除いていない**。⑼ のように `judged_windows` を
     // 回せば「見送り窓が位置は定刻・寸は表示時にと 2 本書く」形の偽の違反は消えるが、同時に
-    // 「大きさと位置を別々に書く」本物の欠陥（`areka-P0-dpi-transition-atomicity` タスク 5.3 が直したもの）も見送り窓の上では
-    // 見えなくなる。偽の違反は実機 15 遷移で 0 件だった。裁定と根拠は
-    // `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` §13.1（2026-09-24 に再確認して取り下げ）。
+    // 「大きさと位置を別々に書く」本物の欠陥も見送り窓の上では見えなくなる。偽の違反は
+    // 実機 15 遷移で 0 件だった。
     // 直すなら丸ごと除くのではなく「見送り窓は遷移のフレームで書いた回数だけを数える」形にし、
-    // この裁定を固定している既存テスト 3 本（台帳 §13.1 に列挙）の期待値ごと改める。
+    // この判断を固定している既存テスト 3 本の期待値ごと改める。
     if let Some(max) = bounds.writes_per_window_max {
         for (window, writes) in &summary.writes_per_window {
             if *writes > max {
@@ -503,7 +499,7 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
         }
     }
 
-    // ⑹ 接地点差（`areka-P0-dpi-transition-atomicity` 要件 5.3）。符号は保ったまま絶対値で比べる（浮きも沈みも違反）。
+    // ⑹ 接地点差。符号は保ったまま絶対値で比べる（浮きも沈みも違反）。
     // 差が番兵（`diff=-`）の行が 1 つでもあれば、別の scope が量を出していても測れていない。
     if let Some(max) = bounds.ground_diff_abs_max {
         if summary.ground_diff_unmeasured || summary.ground_diff_max.is_none() {
@@ -516,7 +512,7 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
         }
     }
 
-    // ⑺ 連鎖再解決（`areka-P0-dpi-transition-atomicity` 要件 6.6）。
+    // ⑺ 連鎖再解決。
     if let Some(max) = bounds.chain_realigned_max
         && summary.chain_realigned > max
     {
@@ -526,7 +522,7 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
         });
     }
 
-    // ⑻ 実機専用（非決定・C8 の Q2／Q3 の分岐条件）。
+    // ⑻ 実機専用（非決定）。
     if let Some(max) = bounds.visualize_to_write_us_max {
         for (window, us) in &summary.visualize_to_write_us {
             if *us > max {
@@ -547,7 +543,7 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
     }
 
     // ⑼ 窓ごとの量の被覆——書込のあった窓が当該の量を 1 つも持たないことは、上限
-    // （`≤ 0`）を満たしたのではなく**測っていない**。見送り窓は `areka-P0-dpi-transition-atomicity` 要件 4.6 で合否から外す。
+    // （`≤ 0`）を満たしたのではなく**測っていない**。見送り窓は合否から外す。
     //
     // 先に**除外が全窓へ広がっていないこと**を見る。下の走査は `judged_windows` を回るので、
     // 全窓が除外されると 1 度も回らず、被覆検査は恒真になる（＝「零件だから合格」）。
@@ -671,12 +667,11 @@ impl fmt::Display for Report {
     }
 }
 
-/// 遷移 1 回ぶんの判定量を**合否によらず**書き出す（`areka-P0-dpi-transition-atomicity` タスク 4.3 の裁定）。
+/// 遷移 1 回ぶんの判定量を**合否によらず**書き出す。
 ///
 /// 違反の列挙だけでは `PASS` になった系統の量が 1 つも残らない。是正の前後を並べるのは
-/// 「上限の合否」ではなく**量そのもの**なので（基準値 §7）、合否で刷り分けると比較の側が
-/// 毎回**生ログから手で起こす**羽目になる——`areka-P0-dpi-transition-atomicity` のタスク 4.2 が実際にそうなり、9 量 × 12 遷移を
-/// 手で起こした。ここで無条件に刷れば `areka-P0-dpi-transition-atomicity` のタスク 7.3 は同じ表を機械で得られる。
+/// 「上限の合否」ではなく**量そのもの**なので、合否で刷り分けると比較の側が
+/// 毎回**生ログから手で起こす**羽目になる。ここで無条件に刷れば同じ表を機械で得られる。
 ///
 /// 上限は当てない（当てるのは [`judge`] の仕事）。ここは量を読める形に並べるだけである。
 fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> fmt::Result {
@@ -759,7 +754,7 @@ fn write_family(
     }
 }
 
-/// ログ全文を解析・切り出し・集計・判定まで通す（C7 の合成）。
+/// ログ全文を解析・切り出し・集計・判定まで通す。
 ///
 /// 2 系統は**別々の呼び出し**で評価し、両方を [`TransitionVerdict`] に並べて持つ。
 pub fn judge_transition_log(log: &str) -> Report {
@@ -815,17 +810,17 @@ struct CompanionExpectation<'a> {
 
 /// 書込のあったキャラ窓ごとに、随伴の対に何が期待できるかを出す。
 ///
-/// キャラ窓が見送り窓のときは 1 件も出さない——`areka-P0-dpi-transition-atomicity` 要件 4.3 の引き金は「キャラ窓が遷移後の
-/// 寸法・位置で可視化されるとき」であり、再表示を見送られたキャラ窓では立たない。
+/// キャラ窓が見送り窓のときは 1 件も出さない——随伴の義務は「キャラ窓が遷移後の
+/// 寸法・位置で可視化されるとき」に立ち、再表示を見送られたキャラ窓では立たない。
 /// バルーン側の見送りは対の期待を消さない（随伴の窓書込は不可視のバルーンにも出る）が、
-/// 「見送られていて**位置の書込**も無い」対だけは `areka-P0-dpi-transition-atomicity` 要件 4.6 に従って求めない。
+/// 「見送られていて**位置の書込**も無い」対だけは求めない。
 ///
 /// 判定の鍵は**経路語**である。対を検査できるのはバルーンが
 /// [`TransitionSummary::balloon_follow_windows`] に居るとき——つまり `origin=BalloonFollow` の
 /// **位置指令が書込へ着地した**ときだけであって、寸の指令（`KeepPositionResize`）が届いた
-/// だけでは `areka-P0-dpi-transition-atomicity` 要件 4.3 の義務は 1 度も観測されていない。
+/// だけでは随伴の義務は 1 度も観測されていない。
 ///
-/// 着地は経路語を名乗る書込に限らない。C2 の合流は**先着の経路語を残す**ので、畳まれた
+/// 着地は経路語を名乗る書込に限らない。合流は**先着の経路語を残す**ので、畳まれた
 /// 随伴の指令は `kind=enqueue` の `merged_into_seq` から合流先の書込を引き当てて数える
 /// （集計側の [`super::summarize`] が行う）。本関数はその結果である
 /// [`TransitionSummary::balloon_follow_windows`] を読むだけで、引き当ての規則は持たない。
@@ -842,7 +837,7 @@ fn companion_expectations(summary: &TransitionSummary) -> Vec<CompanionExpectati
         let state = if summary.balloon_follow_windows.contains(&balloon) {
             CompanionState::Checkable
         } else if summary.skipped_windows.contains(&balloon) {
-            // 見送られたうえ位置の書込も無い＝現状維持（`areka-P0-dpi-transition-atomicity` 要件 4.6）。求めない。
+            // 見送られたうえ位置の書込も無い＝現状維持。求めない。
             continue;
         } else {
             CompanionState::BalloonNotWritten

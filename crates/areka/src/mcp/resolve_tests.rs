@@ -1,8 +1,8 @@
-//! `resolve` の決定論テスト（mcp-tool-entrances 要件 3.9・mcp-ghost-name-match 要件 5.1 の全場合）。
+//! `resolve` の決定論テスト（解決の判断の全場合）。
 //!
 //! ⑴ 解決の判断（名前・本体側名・英字の大小・前後の空白・フルパス・省略・空と空白だけ・0 体・`Reject`）
-//! ⑵ 一覧の値（名前あり・`name` 無し）が同じゴーストへ戻ること（4.2・4.4）
-//! ⑶ World からの読み取り（GhostSlot 無し・置き場が空・実行系の無い単位は無し・3.8）
+//! ⑵ 一覧の値（名前あり・`name` 無し）が同じゴーストへ戻ること
+//! ⑶ World からの読み取り（GhostSlot 無し・置き場が空・実行系の無い単位は無し）
 
 use std::path::PathBuf;
 
@@ -61,10 +61,10 @@ fn name_differing_only_in_ascii_case_resolves() {
 #[test]
 fn sakura_name_resolves() {
     assert_eq!(solve(Some("エミリ")), Ok(named()));
-    // `name` が無くても本体側名で解決する（要件 1.2）。
+    // `name` が無くても本体側名で解決する。
     let g = sakura_only();
     assert_eq!(resolve(Some(&g), Some("エミリ"), Omitted::Reject), Ok(&g));
-    // 本体側名も名前と同じ規則で、半角の英字の大小を畳む（要件 1.2）。
+    // 本体側名も名前と同じ規則で、半角の英字の大小を畳む。
     let g = ActiveGhost {
         sakura_name: Some("Emi".to_string()),
         ..sakura_only()
@@ -74,7 +74,7 @@ fn sakura_name_resolves() {
 
 #[test]
 fn non_name_strings_do_not_resolve() {
-    // 相方の名前・sakura.name2 に当たる文字列も、ActiveGhost が持たないのでただの外れ（要件 1.4）。
+    // 相方の名前・sakura.name2 に当たる文字列も、ActiveGhost が持たないのでただの外れ。
     for g in [named(), sakura_only()] {
         for given in ["エモ", "エミリー", "Emily", "Nobody"] {
             assert_eq!(
@@ -97,7 +97,7 @@ fn kana_width_and_fullwidth_case_differences_do_not_resolve() {
         resolve(Some(&g), Some("えもＡＢＣ"), Omitted::UseActive),
         Ok(&g)
     );
-    // かなの違い・全角の英字の大小・全角と半角（要件 1.3）。
+    // かなの違い・全角の英字の大小・全角と半角。
     for given in ["エモＡＢＣ", "えもａｂｃ", "えもABC"] {
         assert_eq!(
             resolve(Some(&g), Some(given), Omitted::UseActive),
@@ -133,7 +133,7 @@ fn inner_whitespace_difference_does_not_resolve() {
         resolve(Some(&g), Some("Emily Phase"), Omitted::UseActive),
         Ok(&g)
     );
-    // 途中の空白は除かない（要件 2.2）。
+    // 途中の空白は除かない。
     for given in ["Emily  Phase", "Emily\u{3000}Phase", "EmilyPhase"] {
         assert_eq!(
             resolve(Some(&g), Some(given), Omitted::UseActive),
@@ -145,7 +145,7 @@ fn inner_whitespace_difference_does_not_resolve() {
 
 #[test]
 fn blank_or_empty_cannot_find() {
-    // 空文字・空白だけは省略ではなく、何にも当たらない名前（要件 2.4・0 体も）。
+    // 空文字・空白だけは省略ではなく、何にも当たらない名前（0 体も）。
     let (n, u, s) = (named(), unnamed(), sakura_only());
     for active in [Some(&n), Some(&u), Some(&s), None] {
         for omitted in [Omitted::UseActive, Omitted::Reject] {
@@ -163,7 +163,7 @@ fn blank_or_empty_cannot_find() {
 
 #[test]
 fn full_path_with_surrounding_whitespace_does_not_resolve() {
-    // フルパスとの照合では前後の空白を除かない（要件 2.3）。
+    // フルパスとの照合では前後の空白を除かない。
     for g in [named(), unnamed()] {
         for given in [
             r" C:\ssp\ghost\emily4",
@@ -183,7 +183,7 @@ fn full_path_with_surrounding_whitespace_does_not_resolve() {
 
 #[test]
 fn every_spelling_resolves_to_the_same_ghost() {
-    // 綴りは返り値に残らない。どの綴りでも起動中のゴーストの値そのもの（要件 1.5・4.4）。
+    // 綴りは返り値に残らない。どの綴りでも起動中のゴーストの値そのもの。
     let g = named();
     for given in [
         "Emily/Phase4.5",

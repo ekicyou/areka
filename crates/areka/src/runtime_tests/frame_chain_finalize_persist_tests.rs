@@ -24,7 +24,7 @@ use areka_sylphya::{Axis, PersistKey};
 use wintf::ecs::SizeI;
 use wintf::ecs::window::drain_window_pos_commands;
 
-/// 部品の確かめ: 起動の準備の関数が返した配置から窓を作り、準備と違う幅の絵を出して置き直し、
+/// 起動の準備の関数が返した配置から窓を作り、準備と違う幅の絵を出して置き直し、
 /// 送り口を置いた World で並べ直しを回すと、`target\` の下の実物のファイルへ両方のスコープの
 /// 位置が届く。
 #[test]
@@ -140,7 +140,7 @@ fn seed_sentinels(world: &World, scopes: &[u32]) {
     persist_entries(world, entries);
 }
 
-/// テスト 9（要件 1.1）: 記憶なしの 2 スコープで並べ直しを回すと、両方の位置が書かれ、相方の値は
+/// 記憶なしの 2 スコープで並べ直しを回すと、両方の位置が書かれ、相方の値は
 /// 並べ直した後の位置（下端の中央の x）。
 #[test]
 fn finalize_writes_both_scopes_with_partner_after_rearrangement() {
@@ -164,7 +164,7 @@ fn finalize_writes_both_scopes_with_partner_after_rearrangement() {
     let _residue = drain_window_pos_commands();
 }
 
-/// テスト 10: 同じ World でもう一度回しても書かない（1 度だけ）。1 回目の後に記憶を目印で
+/// 同じ World でもう一度回しても書かない（1 度だけ）。1 回目の後に記憶を目印で
 /// 上書きしておき、2 回目が書けば目印が消えることで見分ける。
 #[test]
 fn finalize_writes_only_once_per_window_set() {
@@ -186,7 +186,7 @@ fn finalize_writes_only_once_per_window_set() {
     let _residue = drain_window_pos_commands();
 }
 
-/// テスト 11（要件 1.6）: 相方の絵が出ていないまま何フレーム回しても、並べ終えないので記憶は
+/// 相方の絵が出ていないまま何フレーム回しても、並べ終えないので記憶は
 /// 空のまま。最後に相方の絵を出すと書かれる（送り口がつながっているので、空には意味がある）。
 #[test]
 fn nothing_is_written_until_partner_is_shown() {
@@ -212,7 +212,7 @@ fn nothing_is_written_until_partner_is_shown() {
     let _residue = drain_window_pos_commands();
 }
 
-/// テスト 11b（要件 1.7）: 並べ終える前に、記憶に位置が無い相方を SHIORI の移動の指示と同じ口
+/// 並べ終える前に、記憶に位置が無い相方を SHIORI の移動の指示と同じ口
 /// （`move_window_to`）で動かすと、相方は書かれず本体だけ書かれる。相方の記憶には目印を
 /// 入れておき、書けば目印が消えることで見分ける。
 #[test]
@@ -257,9 +257,9 @@ fn partner_moved_by_shiori_before_finalize_is_not_written() {
     let _residue = drain_window_pos_commands();
 }
 
-/// テスト 11c（要件 1.7）: 並べ終える前に、記憶に位置が無い相方を `\![move]`（基準は自分・Y だけ
+/// 並べ終える前に、記憶に位置が無い相方を `\![move]`（基準は自分・Y だけ
 /// 動かす・時間 0）で**縦にだけ**動かすと、x は既定のままでも台本が置いた窓なので並べ直しは
-/// 相方を動かさず（areka-P0-scope-chain-gap 7.3）、相方は書かれず本体だけ書かれる（台本の y は既定の位置に入らない）。
+/// 相方を動かさず、相方は書かれず本体だけ書かれる（台本の y は既定の位置に入らない）。
 /// 相方の記憶には目印を入れておき、書けば目印が消えることで見分ける。
 #[test]
 fn partner_moved_only_vertically_by_shiori_before_finalize_is_not_written() {
@@ -309,7 +309,7 @@ fn partner_moved_only_vertically_by_shiori_before_finalize_is_not_written() {
     let _residue = drain_window_pos_commands();
 }
 
-/// テスト 11d（要件 1.7）: 並べ終える前に、記憶に位置が無い相方を `\![move]`（基準は自分・
+/// 並べ終える前に、記憶に位置が無い相方を `\![move]`（基準は自分・
 /// 動かす量 0・時間 0）で**ちょうど既定の位置へ**置くと、位置は既定と同じでも台本が置いた窓
 /// （印 `ScriptPlaced`）なので書かれず、本体だけ書かれる。相方の記憶には目印を入れておき、
 /// 書けば目印が消えることで見分ける。
@@ -350,7 +350,7 @@ fn partner_placed_exactly_on_default_by_shiori_before_finalize_is_not_written() 
     let _residue = drain_window_pos_commands();
 }
 
-/// テスト 12（要件 1.3）: ゴーストの切り替えの閉じ方（`close_windows_for_restart`）で閉じ、記憶の
+/// ゴーストの切り替えの閉じ方（`close_windows_for_restart`）で閉じ、記憶の
 /// 送り口を別の保存先へ差し替えて窓を作り直すと、並べ直しがもう 1 度書き、書かれるのは
 /// 差し替えた後の保存先だけ。前の保存先には目印を入れておき、書けば目印が消えることで見分ける。
 #[test]
@@ -378,7 +378,7 @@ fn restart_writes_once_more_to_the_new_store_only() {
     let _residue = drain_window_pos_commands();
 }
 
-/// テスト 16（要件 4.1・5.4）: 書き込みを失敗させても印 `ChainFinalized` は置かれ、記憶は前の
+/// 書き込みを失敗させても印 `ChainFinalized` は置かれ、記憶は前の
 /// まま、次のフレームの処理（置き直し → 並べ直し）が続く。最後に窓を作り直して並べ終え、
 /// 書き込みが届くことで、失敗のあとも書き手が止まっていないことを確かめる。
 ///

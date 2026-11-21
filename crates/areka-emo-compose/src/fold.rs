@@ -2,7 +2,7 @@
 //!
 //! plain `surfaceN,M`／`N-M` は無い id を新設し、既にある id へは行を足す（[`add_lines`]・
 //! 追記と同じ足し方）・`surface.append` は既にある id のみへ追記（存在条件付き・ukadoc 意味論）。「既にある」には、波括弧が 1 行も無くてもファイル名だけで
-//! 置かれた絵を持つ番号（`SurfaceImages`）を含む（要件 3.7）。ターゲット記述子の単一・列挙・
+//! 置かれた絵を持つ番号（`SurfaceImages`）を含む。ターゲット記述子の単一・列挙・
 //! 範囲を展開し、除外指定
 //! （`!N`／`!a-b`）を展開時に減算適用する。複数定義が同一 surface に効く場合は登場順を保った
 //! 順序で決定的に適用し、append ブロックが持つ element・collision・animation を対象 surface へ
@@ -23,19 +23,19 @@ use crate::nesting::element_kind;
 use crate::normalized::{NormalizedElement, SurfaceMaster, Transform};
 use crate::world::{AliasMap, Records, SurfaceId, SurfaceIndex};
 
-/// `Shell.definitions` を登場順に single-pass で走査し `World` へ畳み込む（要件 1.7）。
+/// `Shell.definitions` を登場順に single-pass で走査し `World` へ畳み込む。
 ///
 /// plain `surface` ヘッダ（[`DefRef::Surface`]）は無い id を新設し、既にある id へは行を足す
 /// （[`add_lines`]・[`fold_plain_surface`]）、`surface.append`
-/// （[`DefRef::Append`]）は展開後その時点で既にある id のみへ追記する（存在条件付き・要件 2.2。
+/// （[`DefRef::Append`]）は展開後その時点で既にある id のみへ追記する（存在条件付き。
 /// 「既にある」は画像だけで存在する面を含む＝[`fold_append`]）。登場順で走査するため、append は「その時点までに積まれた状態」に対して効き、後続で
-/// 定義される surface へは遡及しない（要件 2.3・前方参照なし）。alias（[`DefRef::Alias`]）は
-/// `AliasMap` へ収集し、同一キーは登場順で後勝ちとする（要件 3.1/3.2）。
+/// 定義される surface へは遡及しない（前方参照なし）。alias（[`DefRef::Alias`]）は
+/// `AliasMap` へ収集し、同一キーは登場順で後勝ちとする。
 ///
-/// 欠落・不整合はパニックせず `warn` で観測可能化する（要件 1.4）。
+/// 欠落・不整合はパニックせず `warn` で観測可能化する。
 ///
 /// 記録の行を出すかどうかは `records` で切り替える
-/// （枝の選び方と面の表への書き込みは変えない・spec: emo-bake-log-overlap 要件 2.3）。
+/// （枝の選び方と面の表への書き込みは変えない）。
 pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records) {
     let mut added = HashMap::new();
     let mut copied = Copied::default();
@@ -79,7 +79,7 @@ pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records
                 }
                 None => {}
             },
-            // `DefRef` は `#[non_exhaustive]`。未知の定義種別はパニックせず観測可能化する（要件 1.4）。
+            // `DefRef` は `#[non_exhaustive]`。未知の定義種別はパニックせず観測可能化する。
             other if records.emits() => {
                 tracing::warn!(
                     target: "areka_emo_compose",
@@ -91,7 +91,7 @@ pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records
         }
     }
     // 行を足した面の element を layer 昇順へ 1 度だけ安定ソートする（同じ番号の中は前の行が先・
-    // 足すたびに並べ直さない・指摘 27）。
+    // 足すたびに並べ直さない）。
     for id in added.into_keys() {
         let entity = world.resource::<SurfaceIndex>().0.get(&id).copied();
         if let Some(mut master) = entity.and_then(|e| world.get_mut::<SurfaceMaster>(e)) {
@@ -100,7 +100,7 @@ pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records
     }
 }
 
-/// 畳み込み 1 回で、見出しの番号ごとに本体の行を写す数の合計の上限（指摘 78・面と箱で 1 つずつ）。
+/// 畳み込み 1 回で、見出しの番号ごとに本体の行を写す数の合計の上限（面と箱で 1 つずつ）。
 /// 読む側の上限は番号の数だけを抑えるので、本体の行数との積をここで抑える。仮の値で、測り直しの候補。
 pub(crate) const MAX_COPIED_LINES: usize = 1 << 20;
 
@@ -111,9 +111,9 @@ pub(crate) struct Copied {
     reported: bool,
 }
 
-/// 記述子 1 つの本体（`lines` 行）を `ids` の番号ごとに写してよいか（指摘 78）。写す数を `copied` に足し、
+/// 記述子 1 つの本体（`lines` 行）を `ids` の番号ごとに写してよいか。写す数を `copied` に足し、
 /// 合計が [`MAX_COPIED_LINES`] を越えるなら足さずに false（呼び手はその記述子を捨てる）。記録（番号の範囲・
-/// 行の数・上限）は畳み込み 1 回で初めの 1 度だけ `error!`、以後は `debug!`（7 回目の指摘 23）。`table` は
+/// 行の数・上限）は畳み込み 1 回で初めの 1 度だけ `error!`、以後は `debug!`。`table` は
 /// 記録の欄（面の `"surfaces"` か箱の `"boxes"`）。
 pub(crate) fn may_copy(
     copied: &mut Copied,
@@ -165,7 +165,7 @@ fn body_lines(elements: &[Element], collisions: &[Collision], animations: &[Anim
     crate::budget::rows(elements.len().saturating_add(collisions.len()), animations)
 }
 
-/// 行を足した面ごとの、すでにある番号の集合（[`add_lines`] が重なりと先勝ちを表で引く・指摘 27）。
+/// 行を足した面ごとの、すでにある番号の集合（[`add_lines`] が重なりと先勝ちを表で引く）。
 #[derive(Default)]
 struct Numbers {
     elements: HashSet<u32>,
@@ -183,12 +183,11 @@ impl Numbers {
     }
 }
 
-/// plain `surface` 定義 1 件を展開し、各 id を surface として常駐させる（要件 1.1/2.1）。
+/// plain `surface` 定義 1 件を展開し、各 id を surface として常駐させる。
 ///
 /// ターゲット記述子（単一・列挙・範囲）を記述順に展開し、共有ボディ（element/collision/animation）
 /// から正規化 [`SurfaceMaster`] を id ごとに生成する。無い id は新設し、既にある id（前の波括弧・
-/// 追記で定義された番号）は前の定義へ後のブレスの行を足す（[`add_lines`]・
-/// spec: areka-P0-emily-ghost-verification 開発者の決め 2026-10-17「足し合わせる」）。
+/// 追記で定義された番号）は前の定義へ後のブレスの行を足す（[`add_lines`]）。
 fn fold_plain_surface(
     world: &mut World,
     surface: &Surface,
@@ -235,19 +234,18 @@ enum Source {
     Append,
 }
 
-/// 追記と 2 つ目の波括弧の 1 つの足し方（SSP 2.9.29 の測り・spec: audit-emo-compose 設計の議題 7 案 A）。
+/// 追記と 2 つ目の波括弧の 1 つの足し方（SSP 2.9.29 の測り）。
 ///
 /// - element: 同じ element番号でも前の行を残して両方を足す。layer 昇順への安定ソート（同じ番号の
 ///   中は前の行が先）は畳み込みの最後に 1 度（[`fold_shell_with`]）。同じ番号が重なったときだけ
 ///   `warn!`（SSP も「二重定義」の Warning を出す）。
 /// - animation: すでにある animation番号の後の行は interval も pattern も捨てる（先勝ち・`warn!`）。
 ///   無い番号は末尾へ足す。
-/// - collision: 同じ collision番号でも前の行を残して書いた順に末尾へ足す（後の行が手前・SSP 2.9 の測り・
-///   spec: collisionex-regions 要件 3.3）。波括弧が足す行がすでにある番号と重なったときだけ `warn!`
-///   （SSP も「二重定義」の警告を出す）。追記が足す行の重なりは警告しない（要件 3.7）。
+/// - collision: 同じ collision番号でも前の行を残して書いた順に末尾へ足す（後の行が手前・SSP 2.9 の測り）。波括弧が足す行がすでにある番号と重なったときだけ `warn!`
+///   （SSP も「二重定義」の警告を出す）。追記が足す行の重なりは警告しない。
 ///
 /// 重なりと先勝ちは `numbers`（その面のすでにある番号）で引き、足した番号を書き足す。`warn!` は種類ごとに
-/// 足す記述子 1 つにつき 1 行（最初の番号と重なった数・指摘 136）。
+/// 足す記述子 1 つにつき 1 行（最初の番号と重なった数）。
 fn add_lines(
     master: &mut SurfaceMaster,
     later: SurfaceMaster,
@@ -319,14 +317,14 @@ fn add_lines(
     }
 }
 
-/// `surface.append` 定義 1 件を展開し、**その時点で既にある id のみ**へ追記する（要件 2.2/2.4/3.7）。
+/// `surface.append` 定義 1 件を展開し、**その時点で既にある id のみ**へ追記する。
 ///
 /// ターゲット記述子を plain と同一規則で展開し（単一・列挙・両端含む範囲・[`expand_targets_with`]）、
 /// 各 id が [`SurfaceIndex`] に存在する場合は対象 [`SurfaceMaster`] へ波括弧と同じ [`add_lines`] で
 /// in-place に足す（despawn/respawn しない）。波括弧が 1 行も無くても [`SurfaceImages`] に画像が在る番号は
-/// 「既にある面」に数え、空の [`SurfaceMaster`] をその場で作ってから同じ追記を行う（要件 3.7・C6）。
-/// どちらにも無い id は新設せず `warn` でスキップする（要件 1.4/2.2/3.8）。
-/// 登場順の走査（[`fold_shell_with`]）ゆえ、後続で定義される surface へは遡及しない（要件 2.3）。
+/// 「既にある面」に数え、空の [`SurfaceMaster`] をその場で作ってから同じ追記を行う。
+/// どちらにも無い id は新設せず `warn` でスキップする。
+/// 登場順の走査（[`fold_shell_with`]）ゆえ、後続で定義される surface へは遡及しない。
 fn fold_append(
     world: &mut World,
     append: &SurfaceAppend,
@@ -339,13 +337,12 @@ fn fold_append(
     if !may_copy(copied, "surfaces", &ids, lines, records) {
         return;
     }
-    // 追記 element は plain と同一の正規化（x,y→Transform・method=Overlay）で用意する。
     let append_elements: Vec<NormalizedElement> =
         append.elements.iter().map(normalize_element).collect();
 
     for id in ids {
         // 存在条件: その時点でツリーに在る id と、ファイル名だけで置かれた絵を持つ id が対象
-        // （どちらにも無ければ新設しない・要件 2.2/3.7/3.8）。
+        // （どちらにも無ければ新設しない）。
         let entity = match world.resource::<SurfaceIndex>().0.get(&id).copied() {
             Some(entity) => entity,
             None if has_base_image(world, id) => {
@@ -398,7 +395,7 @@ fn fold_append(
     }
 }
 
-/// 番号 `id` が、ファイル名だけで置かれた絵を持つか（要件 3.7）。
+/// 番号 `id` が、ファイル名だけで置かれた絵を持つか。
 ///
 /// [`SurfaceImages`] は面の表を組む入口（[`crate::EmoWorld::build_with_images`]）が畳み込みの前に
 /// 置く。[`fold_shell_with`] を直に呼ぶテストは置かないことがあるので、欠けていれば「画像 0 件」と
@@ -409,12 +406,12 @@ fn has_base_image(world: &World, id: u32) -> bool {
         .is_some_and(|images| images.0.contains_key(&id))
 }
 
-/// `kero.surface.alias` の 1 エントリを `AliasMap` へ収集する（要件 3.1/3.2）。
+/// `kero.surface.alias` の 1 エントリを `AliasMap` へ収集する。
 ///
 /// alias キー → 順序付き数値 id リストを `BTreeMap` へ挿入する。`BTreeMap::insert` は同一キーで
 /// 上書きするため、登場順 single-pass 走査（[`fold_shell_with`]）と併せて重複キーは後勝ちで決定的に
-/// なる（要件 3.2）。id リストはソート・重複除去せず記述順のまま複製する（alias の順序付き
-/// ターゲット列＝要件 3.1・BindSet の正規化とは別物）。
+/// なる。id リストはソート・重複除去せず記述順のまま複製する（alias の順序付き
+/// ターゲット列・BindSet の正規化とは別物）。
 fn fold_alias(world: &mut World, alias: &SurfaceAlias) {
     world
         .resource_mut::<AliasMap>()
@@ -422,21 +419,19 @@ fn fold_alias(world: &mut World, alias: &SurfaceAlias) {
         .insert(alias.key.as_str().to_string(), alias.ids.clone());
 }
 
-/// ターゲット記述子を記述順に展開し、除外指定（`!N`／`!a-b`）を減算した id 列を返す（要件 2.5）。
+/// ターゲット記述子を記述順に展開し、除外指定（`!N`／`!a-b`）を減算した id 列を返す。
 ///
 /// 二相構成: (1) 包含記述子（[`AppendTarget::Single`]／[`AppendTarget::Range`]・両端含む）を
 /// **記述順**に列挙し、(2) 除外記述子（[`AppendTarget::Exclude`]／[`AppendTarget::ExcludeRange`]・
 /// 両端含む）を番号へ広げず範囲の組として集め、包含列からどれかの範囲に入る id を取り除く。除外は記述子の登場位置に
-/// 依らず展開結果全体へ効く（ukadoc: `!` は集合から除去）。生存 id の記述順・重複は保つ（design
-/// 「展開結果の適用順は記述順」）。
+/// 依らず展開結果全体へ効く（ukadoc: `!` は集合から除去）。生存 id の記述順・重複は保つ（展開結果の適用順は記述順）。
 ///
-/// emo2 は除外を使用しないが、記述子の口は保持し減算まで実装する（要件 2.5/12.3）。
+/// emo2 は除外を使用しないが、記述子の口は保持し減算まで実装する。
 ///
 /// 範囲の幅に上限はかけない: 読む側（parsers）がシェル全体の範囲の幅の合計に上限をかけ、越えた記述子を捨てて記録するので、ここへ届く展開は有界。
 ///
 /// 知らない記述子の記録を出すかどうかは `records` で切り替える（面と箱の畳み込みが面の表の組み方を渡す）。
 pub(crate) fn expand_targets_with(targets: &[AppendTarget], records: Records) -> Vec<u32> {
-    // (1) 包含 id を記述順に列挙（重複はそのまま保つ）。
     let mut included: Vec<u32> = Vec::new();
     // (2) 除外は両端含みの範囲 (lo, hi) のまま集める（記述位置に依らず全体へ効かせるため先に全走査）。
     // 番号へ広げない: 読む側の範囲の上限は包含だけにかかり、`!0-4294967295` は約 43 億件になる。
@@ -466,7 +461,7 @@ pub(crate) fn expand_targets_with(targets: &[AppendTarget], records: Records) ->
                 };
                 excluded.push((lo, hi));
             }
-            // `AppendTarget` は `#[non_exhaustive]`。未知の記述子はパニックせず観測可能化する（要件 1.4）。
+            // `AppendTarget` は `#[non_exhaustive]`。未知の記述子はパニックせず観測可能化する。
             ref other => {
                 if records.emits() {
                     tracing::warn!(
@@ -479,7 +474,6 @@ pub(crate) fn expand_targets_with(targets: &[AppendTarget], records: Records) ->
         }
     }
 
-    // 除外の組を並べ、重なり・隣接を 1 つにまとめる（単独の除外を大量に並べても 2 乗にしない）。
     excluded.sort_unstable();
     let mut merged: Vec<(u32, u32)> = Vec::with_capacity(excluded.len());
     for (lo, hi) in excluded {
@@ -496,7 +490,7 @@ pub(crate) fn expand_targets_with(targets: &[AppendTarget], records: Records) ->
     included
 }
 
-/// 共有ボディから id 固有の正規化 [`SurfaceMaster`] を生成する（要件 4.2/4.4）。
+/// 共有ボディから id 固有の正規化 [`SurfaceMaster`] を生成する。
 ///
 /// element は layer 昇順（同 layer は登場順）に安定ソートし、x,y を [`Transform::translate`] へ、
 /// method は M1 契約により常に [`ComposeMethod::Overlay`] とする。collision/animation は転記のまま
@@ -504,7 +498,6 @@ pub(crate) fn expand_targets_with(targets: &[AppendTarget], records: Records) ->
 fn normalize_surface(id: u32, surface: &Surface) -> SurfaceMaster {
     let mut elements: Vec<NormalizedElement> =
         surface.elements.iter().map(normalize_element).collect();
-    // layer 昇順・同 layer は登場順（安定ソート）。
     elements.sort_by_key(|e| e.layer);
 
     SurfaceMaster {
@@ -516,11 +509,11 @@ fn normalize_surface(id: u32, surface: &Surface) -> SurfaceMaster {
 }
 
 /// 転記 element を正規化 element へ写す（x,y→[`Transform`]・置くものは [`element_kind`] の読み分け
-/// ＝`surface*`・`surface.append*` の両方がここを通る・要件 1.1/1.2）。
+/// ＝`surface*`・`surface.append*` の両方がここを通る）。
 ///
 /// 読み手が届ける element定義は描画メソッドが `overlay` と `base` の行だけで、どちらも
 /// [`Overlay`] で置き、X,Y は必ず位置として使う（`base` の「XY 無視」は pattern定義の話で、
-/// element定義には当てない・areka-P0-element-base-method 要件 1.1・4.4）。
+/// element定義には当てない）。
 ///
 /// [`Overlay`]: ComposeMethod::Overlay
 fn normalize_element(element: &Element) -> NormalizedElement {

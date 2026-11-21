@@ -1,10 +1,10 @@
 // =============================================================================
-// 投げ込みの振り分けの決定論テスト（areka-P0-file-drop・設計のテスト 9）
+// 投げ込みの振り分けの決定論テスト
 // =============================================================================
 //
 // `sort_drops` の規則 1〜4 を、フォルダかどうかと目次の有無を閉包で注入して判定する。
 // 目次の問い合わせ（`has_install_txt`）を受けたパスを記録し、フォルダと拡張子の合わない物では
-// 問い合わせが 0 回であることまで確かめる（要件 2.2）。どのテストでも 3 つの数の和が入力の数と
+// 問い合わせが 0 回であることまで確かめる。どのテストでも 3 つの数の和が入力の数と
 // 等しいことを見る。
 
 use std::io;
@@ -77,7 +77,7 @@ fn pb(list: &[&str]) -> Vec<PathBuf> {
     list.iter().map(PathBuf::from).collect()
 }
 
-/// 規則 1: `foo.nar` という名のフォルダはフォルダ。目次は問わない（要件 2.1 ⑴・10.3）。
+/// 規則 1: `foo.nar` という名のフォルダはフォルダ。目次は問わない。
 #[test]
 fn folder_wins_over_archive_extension() {
     let (sort, peeked) = run(&[(r"C:\d\foo.nar", Dir::Yes, Peek::Has)]);
@@ -87,7 +87,7 @@ fn folder_wins_over_archive_extension() {
     assert!(peeked.is_empty(), "フォルダの目次は問わない");
 }
 
-/// 規則 1: `install.txt` を持つフォルダもフォルダ（要件 2.3）。
+/// 規則 1: `install.txt` を持つフォルダもフォルダ。
 #[test]
 fn folder_holding_install_txt_is_a_folder() {
     let (sort, peeked) = run(&[(r"C:\d\ghost", Dir::Yes, Peek::Has)]);
@@ -96,7 +96,7 @@ fn folder_holding_install_txt_is_a_folder() {
     assert!(peeked.is_empty());
 }
 
-/// 規則 4: 拡張子は ASCII 大小無視・`.nar` と `.zip` は同じ扱いでインストール対象（要件 2.1 ⑵）。
+/// 規則 4: 拡張子は ASCII 大小無視・`.nar` と `.zip` は同じ扱いでインストール対象。
 #[test]
 fn archives_with_install_txt_are_installs_case_insensitively() {
     let items = [
@@ -112,7 +112,7 @@ fn archives_with_install_txt_are_installs_case_insensitively() {
     assert!(sort.files.is_empty() && sort.dirs.is_empty() && sort.notes.is_empty());
 }
 
-/// 規則 4: `install.txt` の無い書庫はファイル（`.nar`・`.zip` とも・要件 2.4・10.7）。
+/// 規則 4: `install.txt` の無い書庫はファイル（`.nar`・`.zip` とも）。
 #[test]
 fn archives_without_install_txt_are_files() {
     let (sort, peeked) = run(&[
@@ -124,7 +124,7 @@ fn archives_without_install_txt_are_files() {
     assert!(sort.installs.is_empty() && sort.notes.is_empty());
 }
 
-/// 規則 4: 目次の読めない書庫は覚え書き 1 件を積んでファイルへ倒す（要件 2.4）。
+/// 規則 4: 目次の読めない書庫は覚え書き 1 件を積んでファイルへ倒す。
 #[test]
 fn unreadable_archive_is_a_file_with_one_note() {
     let (sort, _) = run(&[(r"C:\d\broken.nar", Dir::No, Peek::Unreadable)]);
@@ -139,7 +139,7 @@ fn unreadable_archive_is_a_file_with_one_note() {
     }
 }
 
-/// 規則 3: 拡張子なし・`.txt`・`.nar` を名前に含むだけの物はファイル。目次は問わない（要件 2.2）。
+/// 規則 3: 拡張子なし・`.txt`・`.nar` を名前に含むだけの物はファイル。目次は問わない。
 #[test]
 fn non_archive_extensions_are_files_without_peeking() {
     let (sort, peeked) = run(&[
@@ -161,7 +161,7 @@ fn non_archive_extensions_are_files_without_peeking() {
     assert!(sort.notes.is_empty());
 }
 
-/// 規則 2: フォルダかどうかを問えなかった物は覚え書きを積み、拡張子で決める（要件 2.5・10.6）。
+/// 規則 2: フォルダかどうかを問えなかった物は覚え書きを積み、拡張子で決める。
 #[test]
 fn is_dir_failure_notes_and_falls_through_to_extension() {
     let (sort, peeked) = run(&[
@@ -189,7 +189,7 @@ fn is_dir_failure_notes_and_falls_through_to_extension() {
     );
 }
 
-/// 規則 2 → 4: 問えずに消えた書庫は目次も読めず、覚え書き 2 件でファイルへ倒れる（要件 2.5 の括弧）。
+/// 規則 2 → 4: 問えずに消えた書庫は目次も読めず、覚え書き 2 件でファイルへ倒れる。
 #[test]
 fn vanished_archive_notes_twice_and_is_a_file() {
     let (sort, _) = run(&[(r"C:\d\gone.zip", Dir::Fail, Peek::Unreadable)]);
@@ -203,7 +203,7 @@ fn vanished_archive_notes_twice_and_is_a_file() {
     ));
 }
 
-/// 混ざった 6 件: 3 つの並びはどれも入力の順（要件 2.6）。
+/// 混ざった 6 件: 3 つの並びはどれも入力の順。
 #[test]
 fn mixed_six_keep_input_order_in_each_kind() {
     let (sort, peeked) = run(&[
@@ -230,7 +230,7 @@ fn empty_input_sorts_to_nothing() {
 }
 
 // =============================================================================
-// Reference の形（設計のテスト 10・11・要件 4.2〜4.4・4.6・5.2）
+// Reference の形
 // =============================================================================
 
 /// `OnFileDrop2`: 2 ファイルで長さ 3・区切りは byte 値 1・拡張子なしの MIME は空でも区切りが残る。

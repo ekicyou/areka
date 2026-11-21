@@ -1,5 +1,4 @@
-//! 起動の根の表（[`boot_root`]）と定常到達の通知のテスト
-//! （areka-P0-ghost-shell-balloon-switch 要件 3.5・4.1〜4.5・6.2・10.13・11.3）。
+//! 起動の根の表（[`boot_root`]）と定常到達の通知のテスト。
 //!
 //! 起動記録の有無（`first_boot`）と起動の由来（`boot_origin`）の組ごとに、username 照会の応答の
 //! 直後にどの根が出るか・根の応答の既存の腕（204 → `OnBoot`・台本 → `OnBoot` を飛ばす）が
@@ -64,7 +63,7 @@ fn notice_count(actions: &[Action]) -> usize {
 #[test]
 fn boot_root_table_picks_one_root_per_origin() {
     let snap = &ExecutionSnapshot::INACTIVE;
-    // 起動記録なしは由来を問わず OnFirstBoot（初回起動が最優先・要件 4.4・11.3）。
+    // 起動記録なしは由来を問わず OnFirstBoot（初回起動が最優先）。
     for origin in [
         BootOrigin::Plain,
         BootOrigin::ChangedFrom(from()),
@@ -79,7 +78,7 @@ fn boot_root_table_picks_one_root_per_origin() {
             parts(Some(events::on_first_boot(snap, 0)))
         );
     }
-    // 起動記録あり＋切替で来た → OnGhostChanged（要件 4.1）。
+    // 起動記録あり＋切替で来た → OnGhostChanged。
     let c = cfg(false, BootOrigin::ChangedFrom(from()));
     assert_eq!(
         parts(boot_root(&State::initial(), &c)),
@@ -89,7 +88,7 @@ fn boot_root_table_picks_one_root_per_origin() {
             snap
         )))
     );
-    // 起動記録あり＋ネットワーク更新で読み直した → 渡した名前と Reference の GET（要件 5.5）。
+    // 起動記録あり＋ネットワーク更新で読み直した → 渡した名前と Reference の GET。
     assert_eq!(
         parts(boot_root(&State::initial(), &cfg(false, updated()))),
         Some(("OnUpdateComplete".to_string(), update_refs()))
@@ -144,7 +143,7 @@ fn changed_from_sends_on_ghost_changed_then_204_falls_through_to_on_boot() {
         &actions[1],
         &events::on_ghost_changed(&from(), &c.shell_folder, &ExecutionSnapshot::INACTIVE),
     );
-    // 204 → OnBoot（Ref0 だけ・要件 4.2）。
+    // 204 → OnBoot（Ref0 だけ）。
     let (s, next) = reply(s, ShioriOutcome::NoContent, &c);
     assert!(matches!(s.phase, Phase::BootMain));
     assert_eq!(next.len(), 1);
@@ -165,7 +164,7 @@ fn changed_from_with_script_skips_on_boot() {
         matches!(s.phase, Phase::BootType),
         "根 OnGhostChanged の応答待ち"
     );
-    // 台本 → OnBoot を飛ばして basewareversion（要件 4.3）。
+    // 台本 → OnBoot を飛ばして basewareversion。
     let (s, next) = reply(
         s,
         ShioriOutcome::Value("交代".to_string(), areka_talk::SecurityLevel::Local),
@@ -249,7 +248,7 @@ fn steady_notice_is_emitted_exactly_once_when_entering_steady() {
     }
 }
 
-// ---- ネットワーク更新で読み直した（areka-P0-network-update 要件 5.5・9.9・10.6） ----
+// ---- ネットワーク更新で読み直した ----
 
 #[test]
 fn updated_sends_given_event_as_root_and_logs_boot_update_root() {

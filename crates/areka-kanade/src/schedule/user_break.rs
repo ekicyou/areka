@@ -5,10 +5,10 @@
 //! 押されたバルーンのトークの番号が分かり、今のトークと違えば止めない（再生中でないのと同じ扱い）。
 //! 再生中でないときの合図は、読み終えたバルーンを閉じた知らせとして
 //! [`super::balloon_events::on_idle_double_click`]（表 C）へ渡す。
-//! 場面（起動の挨拶・定常のトーク・別れの台詞）でもスコープ番号でも結論を変えない（要件 2.5）。
+//! 場面（起動の挨拶・定常のトーク・別れの台詞）でもスコープ番号でも結論を変えない。
 //!
-//! 止めるのは既存の単一の閉じ口（[`Action::CancelChoice`]）であり、第 2 の停止経路は作らない
-//! （要件 3.2）。受理そのものは SHIORI への要求を 1 件も積まない（要件 3.9・裁定 1）。止めたトークの
+//! 止めるのは既存の単一の閉じ口（[`Action::CancelChoice`]）であり、第 2 の停止経路は作らない。
+//! 受理そのものは SHIORI への要求を 1 件も積まない。止めたトークの
 //! 完了の後に `OnBalloonBreak`（行き違いでは `OnBalloonClose`）を送るかは
 //! [`super::balloon_events::after_talk_done`] が決める。
 
@@ -19,7 +19,7 @@ use crate::talk::{TalkDone, TalkEndReason, TalkId};
 /// 利用者の中断の要求を受ける。再生中なら停止の指示を 1 件返し、相手と scope を帳簿に控える。
 ///
 /// `scope`（どのバルーンで起きたか）は記録と控え（`OnBalloonBreak` の Reference1 の源）へ載せる
-/// だけで、受理の判断には使わない（要件 2.5）。
+/// だけで、受理の判断には使わない。
 /// `pending_close` の有無でも断らない——受理は SHIORI へ何も出さないため、マウス入力の
 /// 「close 保留中は GET を出さない」規則の対象外である（完了の後のイベントは終了の保留を見て送らない）。
 pub(super) fn on_user_break(
@@ -78,7 +78,7 @@ pub(super) fn on_user_break(
         "利用者の中断を受け入れた——現行のトークを止める（要件 2.1・6.1）"
     );
     state.user_break_talk = Some(BreakNote { talk_id, scope });
-    // 選択の帳簿は**受理のこの時点で**消す（要件 2.6・裁定 4）。完了通知を待って消す形だと、
+    // 選択の帳簿は**受理のこの時点で**消す。完了通知を待って消す形だと、
     // 受理から `TalkDone` が戻るまでの間に期限を過ぎた `Tick` が届いたとき、
     // `steady::fire_choice_timeout_if_due`（中断の有無を見ない）が `OnChoiceTimeout` を
     // SHIORI へ送ってしまう。利用者は選ばずに終わらせると決めたのだから、帳簿はここで役目を終える。
@@ -90,7 +90,7 @@ pub(super) fn on_user_break(
 ///
 /// 帳簿を空にするのは終わり方に依らない——呼び手（[`super::on_talk_done`]）が現行トークの完了と
 /// 突合した後に 1 度だけ呼ぶので、ここが不変条件「帳簿は現行トークの完了で必ず空になる」の
-/// 単一の履行点であり、1 つの中断の控えを取り出すのも 1 回だけになる（要件 1.8）。
+/// 単一の履行点であり、1 つの中断の控えを取り出すのも 1 回だけになる。
 pub(super) fn take_break(state: &mut State, done: &TalkDone) -> Option<BreakNote> {
     state
         .user_break_talk
@@ -101,10 +101,10 @@ pub(super) fn take_break(state: &mut State, done: &TalkDone) -> Option<BreakNote
 /// 取り出した控え（[`take_break`]）から、終了へ進むべきかを返す。
 ///
 /// 真になるのは「利用者の中断で終わり（控えた相手と一致する `Interrupted`）、かつ止めた時点で
-/// 台本が終了を予約していた（`quit_reserved`）」ときだけである（要件 3.8）。
+/// 台本が終了を予約していた（`quit_reserved`）」ときだけである。
 ///
 /// 新しいトークによる差し替えと選択肢の時間切れの解除は、控えが無いので偽になる——終了の予約は
-/// 利用者の中断のときだけ効く（設計「終了の予約」の場面の表）。
+/// 利用者の中断のときだけ効く。
 pub(super) fn is_break_quit(broke: Option<BreakNote>, done: &TalkDone) -> bool {
     broke.is_some() && done.reason == TalkEndReason::Interrupted && done.quit_reserved
 }

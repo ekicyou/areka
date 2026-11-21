@@ -1,16 +1,16 @@
-//! 要件 11.2・5.4・11.4: surface1000（全パーツ MAYUNA bind の本体 surface）＋有効 bind 集合の
+//! surface1000（全パーツ MAYUNA bind の本体 surface）＋有効 bind 集合の
 //! golden テーマ。
 //!
 //! emo2 の surface1000 は静的 element を一切持たず、可視パーツが着せ替えの animation（`interval,bind`
 //! の各 pattern0 が 1100 系パーツ surface を overlay 参照・まばたきの 1400 は `bind+random`）で構成される「着せ替え
-//! base surface」である。これは要件 5.4 の中核ケース＝静的 element ゼロでも有効 bind 集合が
+//! base surface」である。これは中核ケース＝静的 element ゼロでも有効 bind 集合が
 //! あれば非空ビットマップになる surface。ここでは:
 //!   ① 空 BindSet → 描画命令ゼロ → 全画素 α==0（全透明）だが、外形は bind 非依存の静的量
 //!      （全部の bind の描くコマの原寸の和集合）ゆえ非ゼロで、bind を全部入れたときと同じ。
-//!   ② bind 数に応じた重なりを要点サンプリング（要件 11.2）: パーツごとに判別可能な色・サイズを
+//!   ② bind 数に応じた重なりを要点サンプリング: パーツごとに判別可能な色・サイズを
 //!      与え、特定パーツだけが覆う画素が「その bind が有効なときだけ不透明」になることで、合成が
 //!      固定画像でなく bind 集合を反映していることを証明する。
-//! すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし・要件 11.4）。
+//! すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし）。
 
 use super::BindSet;
 use super::test_support::{
@@ -22,7 +22,7 @@ use areka_parsers::shell::AppendTarget;
 
 /// surface1000 が「静的 element ゼロ・全パーツ bind」の着せ替え base surface であることを実データで確認する。
 ///
-/// 下の 2 本の前提（要件 5.4 の対象 surface である）を fixture で固定する診断テスト。
+/// 下の 2 本の前提を fixture で固定する診断テスト。
 #[test]
 fn surface1000_is_all_bind_no_static_elements() {
     let shell = parse_emo2_shell();
@@ -67,7 +67,7 @@ fn surface1000_is_all_bind_no_static_elements() {
     }
 }
 
-/// ①（要件 5.4・11.2）: 空 BindSet → 全透明（α==0）だが外形は非ゼロ。
+/// ①: 空 BindSet → 全透明（α==0）だが外形は非ゼロ。
 ///
 /// surface1000 は静的 element ゼロゆえ、空 BindSet では描画可能命令が一切生まれず、合成結果は
 /// 全画素 α==0（全透明）になる。一方、外形（[`Extent`]）は**有効 bind 非依存の静的量**（全部の bind
@@ -81,7 +81,6 @@ fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
 
     let out = compose_surface1000(&shell, &atlas, &BindSet::default());
 
-    // 外形は非ゼロ（bind 非依存の静的外形＝挿入パーツ原寸の和集合）。
     assert!(
         out.width() > 0 && out.height() > 0,
         "外形は bind 非依存で非ゼロ"
@@ -92,7 +91,6 @@ fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
         "premultiplied BGRA stride 契約"
     );
 
-    // bind on/off で外形は変わらない（代表 bind 3 本を入れた合成と同じ幅・高さ）。
     let full = compose_surface1000(&shell, &atlas, &BindSet::from_ids([1100, 1200, 1302]));
     assert_eq!(
         (out.width(), out.height()),
@@ -100,7 +98,6 @@ fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
         "外形は有効 bind に依らない"
     );
 
-    // 全画素 α==0（描画命令ゼロ＝全透明）。α>0 の画素が 1 つも無いことを固定する。
     assert_eq!(
         opaque_pixel_count(&out),
         0,
@@ -108,7 +105,7 @@ fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
     );
 }
 
-/// ②（要件 11.2・5.4）: bind 数に応じた重なりを要点サンプリング。
+/// ②: bind 数に応じた重なりを要点サンプリング。
 ///
 /// 各パーツに **判別可能な色・サイズ**を与え、特定パーツだけが覆う画素を「その bind が有効な
 /// ときだけ不透明・無効なら透明」であることでサンプリング検証する。合成が固定画像でなく
@@ -127,7 +124,6 @@ fn surface1000_bind_count_overlap_point_sampling() {
     const ARM_ONLY: (u32, u32) = (70, 5); // 腕 1100（80×20）内・口/目の外。
     const EYE_ONLY: (u32, u32) = (5, 80); // 目 1302（20×90）内・腕/口の外。
 
-    // (a) 腕 1100 のみ有効 → 腕専用画素は不透明・目専用画素は透明。
     let out_arm = compose_surface1000(&shell, &atlas, &BindSet::from_ids([1100]));
     assert!(
         px(&out_arm, ARM_ONLY.0, ARM_ONLY.1)[3] > 0,
@@ -139,7 +135,6 @@ fn surface1000_bind_count_overlap_point_sampling() {
         "目 1302 無効 → 目専用画素 (5,80) は透明（合成は bind 集合を反映）"
     );
 
-    // (b) 目 1302 のみ有効 → 目専用画素は不透明・腕専用画素は透明（対称の反証）。
     let out_eye = compose_surface1000(&shell, &atlas, &BindSet::from_ids([1302]));
     assert!(
         px(&out_eye, EYE_ONLY.0, EYE_ONLY.1)[3] > 0,
@@ -151,7 +146,6 @@ fn surface1000_bind_count_overlap_point_sampling() {
         "腕 1100 無効 → 腕専用画素 (70,5) は透明"
     );
 
-    // (c) 腕＋目 両方有効 → 両専用画素とも不透明。
     let out_both = compose_surface1000(&shell, &atlas, &BindSet::from_ids([1100, 1302]));
     assert!(
         px(&out_both, ARM_ONLY.0, ARM_ONLY.1)[3] > 0

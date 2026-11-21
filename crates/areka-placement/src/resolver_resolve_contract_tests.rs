@@ -9,10 +9,10 @@ use crate::config::{Alignment, build_placement_config};
 use crate::shared_test_support::MEASURE_DPI;
 
 // ------------------------------------------------------------------
-// anchor 伝搬（4.2・DD15 基盤）
+// anchor 伝搬
 // ------------------------------------------------------------------
 
-/// 4.2 補: 混在スコープでスコープごとに独立に伝搬し、`cfg.scopes` 未収載
+/// 混在スコープでスコープごとに独立に伝搬し、`cfg.scopes` 未収載
 /// スコープは既定 `ScopeConfig`（＝Bottom）ゆえ `Anchor::Bottom`。
 #[test]
 fn anchor_mixed_scopes_and_missing_config_defaults_to_bottom() {
@@ -53,7 +53,7 @@ fn anchor_mixed_scopes_and_missing_config_defaults_to_bottom() {
     }
 }
 
-/// 4.2 完了条件: **4 層優先度カスケード**（`build_placement_config`）で解決された
+/// **4 層優先度カスケード**（`build_placement_config`）で解決された
 /// 各アンカー設定（bottom・free・未指定＝既定 bottom・混在スコープ）が、
 /// `resolve_placement` を通って対応する 5 値アンカーとして `ScopePlacement.anchor`
 /// へ正しく伝搬する（KV → config → resolver → anchor の実経路）。
@@ -66,7 +66,7 @@ fn anchor_mixed_scopes_and_missing_config_defaults_to_bottom() {
 /// - scope2: `char2.` 接頭キーでスコープ検出のみ・alignment はどの層にも不在
 ///   → 既定 `Bottom`（未指定＝既定）
 ///
-/// cascade 解決自体は config.rs の領分（改変しない・Req6.3）。ここでは解決済み
+/// cascade 解決自体は config.rs の領分。ここでは解決済み
 /// alignment が anchor として正しく運ばれることのみを固定する。
 #[test]
 fn anchor_propagates_through_build_placement_config_cascade() {
@@ -115,7 +115,7 @@ fn anchor_propagates_through_build_placement_config_cascade() {
 }
 
 // ------------------------------------------------------------------
-// 事後条件（design Postconditions・resolve_placement の出力時点で成立する条件）
+// 事後条件（resolve_placement の出力時点で成立する条件）
 // ------------------------------------------------------------------
 
 /// 事後条件: 出力長＝入力長・入力順保存・寸法転記。

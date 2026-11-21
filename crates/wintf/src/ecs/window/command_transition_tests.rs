@@ -13,7 +13,7 @@
 //! - **既定 OFF**——観測 target を点けていない運転では `flush_window_pos_commands` が観測行を 1 行も出さず、
 //!   読み戻し（`GetWindowRect`）も計時も行わないこと。
 //!
-//! # 実行形態の明示（要件 7.6）
+//! # 実行形態の明示
 //!
 //! 本ファイルの検証はすべて**テストスレッド上の直接呼出**である。`flush_window_pos_commands` は bevy の
 //! スケジュール実行器を介さないため、`tracing` のスレッド局所 subscriber
@@ -23,7 +23,7 @@
 //! 加えて「出ない」を見るテストには、同じ捕捉窓の内側に必ず拾えるはずの**対照行**を置く
 //! ——捕捉が死んでいるだけで緑になる形にしない。
 //!
-//! # 自発書込カウンタはスレッド局所である（要件 7.7）
+//! # 自発書込カウンタはスレッド局所である
 //!
 //! `flush_window_pos_commands` は `guarded_set_window_pos` を通り `SELF_INITIATED_DEPTH` を一時的に持ち上げる。
 //! このカウンタは**スレッドごとに独立**であり（`command.rs` の `thread_local!`）、持ち上げ・
@@ -125,7 +125,7 @@ fn the_zorder_maintenance_site_tags_its_commands_without_changing_them() {
     );
     assert_eq!(cmd.tag.kind, MISSING, "窓種別も同じく番兵");
 
-    // 指令そのものは Z のみのまま——位置・寸法・活性化は伴わない（要件 10.3）。
+    // 指令そのものは Z のみのまま——位置・寸法・活性化は伴わない。
     assert_eq!(cmd.hwnd, target);
     assert_eq!((cmd.x, cmd.y, cmd.width, cmd.height), (0, 0, 0, 0));
     assert_eq!(cmd.flags, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -151,7 +151,7 @@ fn the_generic_window_pos_site_tags_the_command_it_enqueues() {
     ));
 
     // 単一スレッド実行に固定する——積み上げ先はスレッド局所のキューであり、
-    // ワーカースレッドへ載ると本スレッドからは取り出せない（要件 7.6）。
+    // ワーカースレッドへ載ると本スレッドからは取り出せない。
     let mut schedule = Schedule::default();
     schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(apply_window_pos_changes);
@@ -388,8 +388,8 @@ fn a_nested_flush_epoch_restores_the_outer_one_instead_of_clearing_it() {
     // 手順②（`window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` ハンドラ）が錠を取れて
     // `flush_window_pos_commands()` をもう一度呼ぶためである。内側の解除が起点を消すと、
     // 2 本目以降の書込のあいだ `since_flush_us()` が `None` になり、
-    // 「`WM_DPICHANGED` が `SetWindowPos` の内側で受理された」証跡（task 2.4 の `msg`
-    // レコード）が失われる——本仕様が追っている当の機序が測れなくなる。
+    // 「`WM_DPICHANGED` が `SetWindowPos` の内側で受理された」証跡（`msg` レコード）が
+    // 失われる。
     clean_slate();
 
     let outer = transition_diag::begin_flush();
@@ -421,7 +421,7 @@ fn flush_keeps_the_front_guard_so_the_default_run_pays_no_observation_cost() {
     // 「既定の directive で 1 行も出ない」は前置ガードを外しても成立してしまう
     // ——`emit_line` の水準（debug）を subscriber が濾すからである。よって
     // **費用を払わないこと**（行の組立・`GetWindowRect` の読み戻し・`Instant` の読み取り）は
-    // 出力では示せず、構造で固定するほかない（要件 10.4＝定常状態のアロケーション 0）。
+    // 出力では示せず、構造で固定するほかない（定常状態のアロケーション 0）。
     //
     // ガードそのものの真偽が directive に追随することは
     // `transition_diag_tests::is_enabled_follows_the_directive` が実濾過で示している。
@@ -512,10 +512,7 @@ fn enqueue_records_the_command_with_the_merge_sentinel() {
 
 /// 同一窓の寸指令と位置指令は**先着の枠へ畳まれて 1 本**になる。
 ///
-/// 本テストは是正前まで「積み上げは指令を畳まない」を固定していた。task 5.3 の合流で当の
-/// 主張が**退役**したので、逆側を固定する形へ書き換えてある（削らずに残すのは、ここが
-/// 「既存挙動の維持」の節であり、どの挙動が意図的に反転したのかを一覧で辿れるようにする
-/// ため）。合流規則そのものの網羅は `command_coalesce_tests` が持つ。
+/// 合流規則そのものの網羅は `command_coalesce_tests` が持つ。
 #[test]
 fn enqueue_folds_a_size_command_and_a_move_command_for_the_same_window() {
     clean_slate();

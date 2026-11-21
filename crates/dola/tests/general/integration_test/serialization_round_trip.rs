@@ -1,8 +1,7 @@
 //! Serialization round-trip tests (JSON: dev-only `serde_json`; TOML: feature `toml`)
-//! Tasks 11.2, 11.4
 
 // =============================================================
-// Task 11.2: JSON round-trip
+// JSON round-trip
 // =============================================================
 
 mod json_integration_tests {

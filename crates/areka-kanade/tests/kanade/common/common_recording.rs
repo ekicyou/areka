@@ -32,7 +32,7 @@ pub enum CallMethod {
 ///
 /// fixture・検証・実装が単一の正本（events 表）を共有するため、期待値は
 /// [`expected_call`] / [`expected_unload`] で `areka_kanade::events::*` から導出する
-/// （ハーネス内に期待 References 定数をハードコードしない・Req 7.1）。
+/// （ハーネス内に期待 References 定数をハードコードしない）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordedCall {
     /// 呼出の Method（GET / NOTIFY / Unload）。
@@ -44,8 +44,8 @@ pub struct RecordedCall {
     /// 送出時の `Status` 実行状態集合の wire 値（`None` ⇔ ヘッダ行なし・5.1）。
     ///
     /// `ExecutionStatus::render()` の結果を写す。これにより mock が記録した呼出と
-    /// [`expected_call`] 導出の期待値が Status ヘッダまで含めて突合される
-    /// （Testing Strategy #15・DD-IT-3/DD-IT-5）。Unload は Status を持たないため `None`。
+    /// [`expected_call`] 導出の期待値が Status ヘッダまで含めて突合される。
+    /// Unload は Status を持たないため `None`。
     pub status: Option<String>,
 }
 
@@ -81,7 +81,7 @@ impl RecordedCall {
 ///
 /// fixture・assert・実装が単一の正本（events 表）を共有するための唯一の経路。
 /// テストは `expected_call(events::on_boot(&config))` のように書き、期待 References を
-/// ハーネス側にハードコードしない（Req 7.1）。
+/// ハーネス側にハードコードしない。
 pub fn expected_call(call: ShioriCall) -> RecordedCall {
     RecordedCall::from_call(&call)
 }

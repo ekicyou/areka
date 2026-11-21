@@ -1,4 +1,4 @@
-//! 利用者の中断（バルーンの左ダブルクリック）の判定と送り出し（areka-P0-balloon-break）。
+//! 利用者の中断（バルーンの左ダブルクリック）の判定と送り出し。
 //!
 //! 中断を禁じる旗・直前の押下の記憶・送出端を持ち、押下のたびに「中断にするか」を決めて、
 //! 表示の側へ「隠せ」、kanade へ `KanadeMsg::UserBreak` を 1 件ずつ送る層がここへ入る。
@@ -26,18 +26,18 @@ use areka_runtime::user_break_cue::NoUserBreakSignal;
 pub struct UserBreakWiring {
     /// 旗の線の受信端（talk スレッドの受け口 `NoUserBreakCueSink` と対）。
     flag_rx: Receiver<NoUserBreakSignal>,
-    /// 中断を禁じる旗（要件 5）。
+    /// 中断を禁じる旗。
     no_user_break: bool,
-    /// kanade へ最後に届けた旗（areka-P0-status-execution-states 要件 3.1・3.2）。送れなかった
+    /// kanade へ最後に届けた旗。送れなかった
     /// 値は記録しない（次に合図が届いた取り出しで送り直す）。
     reported_no_user_break: bool,
     /// 表示の合図の線の送出端の複製（「中断された」を送る）。
     lifecycle_tx: Sender<TalkLifecycleSignal>,
     /// 運行（kanade）への送出端の複製。
     kanade: Sender<KanadeMsg>,
-    /// 直前の左押下が選択の確定だったか（要件 1.5）。
+    /// 直前の左押下が選択の確定だったか。
     prev_press_selected: bool,
-    /// 話している最中か（台詞の始まりで真・終わりで偽・areka-P0-shell-balloon 要件 9.6）。
+    /// 話している最中か（台詞の始まりで真・終わりで偽）。
     talking: bool,
 }
 
@@ -59,8 +59,8 @@ impl UserBreakWiring {
         }
     }
 
-    /// 旗の読み口（要件 5.7）。読み手は [`drain_no_user_break_signals`] の送出で、畳んだ後の旗を
-    /// kanade へ届ける（areka-P0-status-execution-states 要件 3.1・3.2）。
+    /// 旗の読み口。読み手は [`drain_no_user_break_signals`] の送出で、畳んだ後の旗を
+    /// kanade へ届ける。
     pub(crate) fn no_user_break(&self) -> bool {
         self.no_user_break
     }
@@ -93,28 +93,28 @@ impl UserBreakWiring {
     }
 }
 
-/// 押下 1 回の結論（design「UserBreakWiring と judge_press」）。
+/// 押下 1 回の結論。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PressVerdict {
-    /// 左ダブルクリックではない——何もしない（要件 1.2）。
+    /// 左ダブルクリックではない——何もしない。
     NotDoubleClick,
-    /// この押下か直前の押下が選択の確定——合図を作らない（要件 1.5）。
+    /// この押下か直前の押下が選択の確定——合図を作らない。
     ConsumedBySelection,
-    /// バルーンが出ていない・観測できない——作らない（要件 1.9）。
+    /// バルーンが出ていない・観測できない——作らない。
     BalloonHidden,
-    /// 中断を禁じる区間——止めず隠さず記録だけ（要件 2.3）。
+    /// 中断を禁じる区間——止めず隠さず記録だけ。
     Disabled,
-    /// 受け入れ——隠して、止める要求を送る（要件 1.1・1.6）。
+    /// 受け入れ——隠して、止める要求を送る。
     Break,
 }
 
 /// 押下 1 回を結論へ写す（純関数）。上から順に、最初に当たった結論を返す。
 ///
 /// 順は ⑴ 左ダブルクリックでない ⑵ 選択の確定に消費された ⑶ バルーンが出ていない
-/// ⑷ 無効化の区間 ⑸ 受理（design「判定の順」）。`balloon_visible` の `None` は
-/// 「表示層に相手が居ない＝観測できない」で、作らない側へ倒す（要件 1.9）。
+/// ⑷ 無効化の区間 ⑸ 受理。`balloon_visible` の `None` は
+/// 「表示層に相手が居ない＝観測できない」で、作らない側へ倒す。
 ///
-/// SSTP に関する判定は 1 つも置かない（要件 5.8）。
+/// SSTP に関する判定は 1 つも置かない。
 pub(crate) fn judge_press(
     double_click: DoubleClick,
     selected_now: bool,
@@ -137,10 +137,10 @@ pub(crate) fn judge_press(
 
 /// 中断を禁じる旗の畳み込み（純関数）。返り値は（次の旗, 区間外の「出る」だったか）。
 ///
-/// 入れ子は数えない——「入る」が重なっても旗は 1 本で、「出る」1 回で区間から出る
-/// （要件 5.5）。トークの終わりで旗を下ろす（areka-P0-status-execution-states 要件 3.3・3.4）。
-/// トークの始まりでも閉じ忘れた区間を解く（要件 5.4・トークの終わりとの二重の守り）。
-/// 区間外の「出る」は旗を変えず、呼び手が記録できるように第 2 の返り値で伝える（要件 5.6）。
+/// 入れ子は数えない——「入る」が重なっても旗は 1 本で、「出る」1 回で区間から出る。
+/// トークの終わりで旗を下ろす。
+/// トークの始まりでも閉じ忘れた区間を解く（トークの終わりとの二重の守り）。
+/// 区間外の「出る」は旗を変えず、呼び手が記録できるように第 2 の返り値で伝える。
 pub(crate) fn fold_no_user_break(flag: bool, signal: NoUserBreakSignal) -> (bool, bool) {
     match signal {
         NoUserBreakSignal::Enter => (true, false),
@@ -152,13 +152,12 @@ pub(crate) fn fold_no_user_break(flag: bool, signal: NoUserBreakSignal) -> (bool
 
 /// 旗の線に溜まった合図を全部取り出して旗へ畳み込む（入力の段で毎巡走る）。
 ///
-/// 旗が変わったときと、区間外の「出る」を記録する（要件 5.6・6.3）。持ち物が無い（結線前）は
+/// 旗が変わったときと、区間外の「出る」を記録する。持ち物が無い（結線前）は
 /// 取り出す線そのものが無いので、何もしない。
 ///
 /// 全件畳んだ**後**の旗が kanade へ最後に届けた値と違えば、知らせを 1 件だけ送る（途中の値は
-/// 送らない・areka-P0-status-execution-states 要件 3.1〜3.4）。比べるのは合図が届いた巡だけで、
-/// 送れなかったときは error を記録し、最後に届けた値を変えない＝次に合図が届いた巡で送り直す
-/// （要件 7.1）。
+/// 送らない）。比べるのは合図が届いた巡だけで、
+/// 送れなかったときは error を記録し、最後に届けた値を変えない＝次に合図が届いた巡で送り直す。
 pub fn drain_no_user_break_signals(world: &mut World) {
     let Some(mut wiring) = world.get_non_send_mut::<UserBreakWiring>() else {
         return;
@@ -216,7 +215,7 @@ pub fn wire_user_break(
 /// 旗の取り出しを毎巡の入力の段へ登録する（登録だけ・持ち物は置かない）。
 ///
 /// 並びは `dispatch_pointer_events` の**前**——押下と同じ巡に届いた「入る」「出る」を、その
-/// 押下の判定より先に旗へ畳み込むためである（要件 4.5・5.1）。後ろに置くと、旗が 1 巡遅れて
+/// 押下の判定より先に旗へ畳み込むためである。後ろに置くと、旗が 1 巡遅れて
 /// 効く。`dispatch_pointer_events` 自身は wintf の既定の登録（`EcsWorld::new`・
 /// `crates/wintf/src/ecs/world/mod.rs`）で `drain_task_pool_commands` の後に置かれているだけ
 /// なので、前に 1 本置いても順序は循環しない。隣の取り出し（`fn register_readme_drain`・
@@ -234,8 +233,7 @@ pub fn register_user_break_drain(world: &mut World) {
 /// 中断を受け入れたら `true`。
 ///
 /// 「バルーンが出ているか」を表示層へ照会し、残りを [`press_with_visibility`] に任せる。
-/// `RuntimeWiring` が無い・表示層に相手が居ないはどちらも「観測できない」で、作らない側へ倒れる
-/// （要件 1.9）。
+/// `RuntimeWiring` が無い・表示層に相手が居ないはどちらも「観測できない」で、作らない側へ倒れる。
 pub fn on_left_press(
     world: &mut World,
     scope: usize,
@@ -320,7 +318,7 @@ fn press_with_visibility(
     }
 }
 
-/// 押されたバルーンに出ている台詞のトークの番号（表示の側の可視の状態が持つ・audit-kanade #6）。
+/// 押されたバルーンに出ている台詞のトークの番号（表示の側の可視の状態が持つ）。
 /// `RuntimeWiring` が無い・番号を知らないは `None`（kanade は今のトークを止める）。
 fn shown_talk_id(world: &World) -> Option<TalkId> {
     world
@@ -330,8 +328,8 @@ fn shown_talk_id(world: &World) -> Option<TalkId> {
 
 /// 中断の送り出し: 「隠せ」→「止めろ」を 1 件ずつ。どちらの失敗も記録し、もう一方の送出は
 /// やめない——止める要求だけ落ちると「バルーンは消えたのに再生が続く」になるので、隣の
-/// `fn send_selection` より重い水準で記録する（要件 1.7・2.8）。普通のバルーンの窓と箱の
-/// 両方の入口が使う（areka-P0-shell-balloon 要件 9.6）。
+/// `fn send_selection` より重い水準で記録する。普通のバルーンの窓と箱の
+/// 両方の入口が使う。
 fn send_break(wiring: &UserBreakWiring, scope: usize, talk_id: Option<TalkId>) {
     if wiring
         .lifecycle_tx
@@ -358,8 +356,8 @@ fn send_break(wiring: &UserBreakWiring, scope: usize, talk_id: Option<TalkId>) {
     }
 }
 
-/// 文字の出ている箱の中の押下の入口（シェルの窓の押下ハンドラから呼ばれる・
-/// areka-P0-shell-balloon 要件 9.6）。結論が [`BoxPressVerdict::ShellOp`] 以外なら呼び手は
+/// 文字の出ている箱の中の押下の入口（シェルの窓の押下ハンドラから呼ばれる）。
+/// 結論が [`BoxPressVerdict::ShellOp`] 以外なら呼び手は
 /// 「処理した」として既存の道へ落とさない。
 ///
 /// 普通のバルーンの窓と同じ規則（直前の押下の記憶・中断を禁じる区間）で判断し、中断なら同じ
@@ -379,7 +377,6 @@ pub(crate) fn on_box_press(
         );
         return judge_box_press(double_click, selected_now, false, false, false);
     };
-    // 読んでから上書きする（普通のバルーンの窓の入口と同じ）。
     let prev_press_selected = wiring.prev_press_selected;
     wiring.prev_press_selected = selected_now;
     let verdict = judge_box_press(

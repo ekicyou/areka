@@ -26,7 +26,7 @@ fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
 
     harness.attach_all();
 
-    // attach 相はバルーンを不可視のまま確立する（`areka-P0-balloon-visibility` Requirement 1.1）。
+    // attach 相はバルーンを不可視のまま確立する。
     // 本ケースの主題は**可視**バルーンの DPI 変化ゆえ、その前提をここで明示的に組む——不可視のままだと
     // `refresh_scale` の可視ゲート（Hide/全透明退化を蘇らせない）に阻まれて適用 k が動かず、
     // 観測すべき正常系そのものが成立しない（不可視経路は下のケースが所有する）。
@@ -79,7 +79,7 @@ fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
     harness.shutdown_bounded();
 }
 
-/// **不可視中の DPI 変化が `Show` で着地する**（一次実走の欠陥の本丸）:
+/// **不可視中の DPI 変化が `Show` で着地する**:
 /// `\b[-1]`→（DPI 変化）→`\b[0]` の順で、文字層が最終的に**新 k** へ着地することを固定する。
 ///
 /// # なぜこの順序が本質なのか
@@ -160,14 +160,13 @@ fn spine_dpi_change_while_balloon_hidden_lands_on_next_show() {
     harness.shutdown_bounded();
 }
 
-/// **箱の同期の結線**（areka-P0-shell-balloon 要件 3.5・design.md「箱の束の結線」）: 文字の層の
+/// **箱の同期の結線**: 文字の層の
 /// 拡大率の相が、シェルの窓の `text_slot_view` を集めて `sync_boxes` を呼ぶ。呼ばれなければ
 /// 箱の場所は登録されず、文字を持っていても面にならない（`shown_boxes` が空のまま）。
 ///
 /// 面 0 に箱 `talk` を置いた束を渡し、`\s[0]` と文字を当てて、相 → 提示の順に 1 フレーム回す。
 /// 続けて絵を隠し（差し込み口は残り、絵の番号だけが無くなる）、もう 1 フレーム回して箱の登録が
-/// 外れることを確かめる——相は差し込み口と絵の番号を組にして渡す（areka-P0-shell-balloon-frame-align
-/// 要件 1.3・1.7）。
+/// 外れることを確かめる——相は差し込み口と絵の番号を組にして渡す。
 #[test]
 fn text_scale_phase_syncs_boxes_on_the_shell_window() {
     use areka_sakura::ActorKey;
@@ -259,8 +258,8 @@ element1,balloon,talk,10,10
         "拡大率の相が箱を同期し、提示が箱 talk を面にする"
     );
 
-    // 絵を隠す（`\s[-1]` 相当）。差し込み口は残るが絵の番号は無くなる（areka-P0-shell-balloon-frame-align
-    // 要件 1.3）。拡大率の相が差し込み口だけを渡していれば、登録が残って箱が出続ける。
+    // 絵を隠す（`\s[-1]` 相当）。差し込み口は残るが絵の番号は無くなる。
+    // 拡大率の相が差し込み口だけを渡していれば、登録が残って箱が出続ける。
     harness.wiring.apply_present(
         &mut harness.world,
         PresentCommand::Hide {

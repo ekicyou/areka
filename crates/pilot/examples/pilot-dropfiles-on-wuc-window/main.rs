@@ -38,18 +38,18 @@ use dropfiles::{DROP_COUNT, Fix};
 
 /// 上限時間の環境変数（本体 `areka` の smoke と同じ名前）。
 const EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
-/// 上限時間の既定（design Key Decision 5）。
+/// 上限時間の既定。
 const DEFAULT_EXIT_MS: u64 = 180_000;
 /// 窓の固定位置（物理 px・スクリーン座標）。
 const WINDOW_POS: Point = Point { x: 160, y: 160 };
-/// 窓の大きさ（論理 px・design Key Decision 2）。
+/// 窓の大きさ（論理 px）。
 const WINDOW_SIZE: f32 = 320.0;
 /// 不透明な矩形の左上と一辺（論理 px・クライアント座標）。
 const RECT_POS: f32 = 100.0;
 const RECT_SIZE: f32 = 120.0;
 
 // ---------------------------------------------------------------------------
-// 終了の理由と終了コード（design Key Decision 9）
+// 終了の理由と終了コード
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -217,7 +217,7 @@ fn deadline_system(
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            // 透過の切り替えの行（clickthrough の debug）を既定で見せる（要件 2.7）。
+            // 透過の切り替えの行（clickthrough の debug）を既定で見せる。
             EnvFilter::new("info,wintf::ecs::clickthrough=debug")
         }))
         .init();

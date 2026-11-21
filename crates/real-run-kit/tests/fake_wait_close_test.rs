@@ -1,5 +1,4 @@
-//! 窓口の待ち・閉じ方・止め方・環境を偽の子で確かめる（spec: areka-P0-real-run-mcp-kit タスク 5.1・
-//! 要件 1.5〜1.7・3.1・3.2・3.4・3.5・5.1〜5.6・8.2・9.1・10.1）。
+//! 窓口の待ち・閉じ方・止め方・環境を偽の子で確かめる。
 //!
 //! 公開の API だけを使う。子は `real-run-fake-areka`（手順は `REAL_RUN_FAKE_STEPS`）。試験は並んで走るので、
 //! 試験の側の環境変数は変えない。わざと落とす試験は、残った回の置き場を最後に自分で消す。
@@ -22,10 +21,10 @@ use temp_path_kit::TempPath;
 const SHORT_DEADLINE_CAGE: Duration = Duration::from_secs(30);
 
 /// `f` の中の panic を捕まえて文を返す。`f` は立てた子の番号と回の置き場を `seen` へ控える。
-/// 残った回の置き場は消す（落ちた回の証拠＝6.1 は 5.3 の試験が確かめる）。
+/// 残った回の置き場は消す（落ちた回の証拠は fake_evidence_test が確かめる）。
 ///
 /// 呼び手はどれも `.deadline()` で短い締切を渡す。その指定が待ちに届かなければ窓口の既定の締切まで
-/// 待つので、かかった時間が `SHORT_DEADLINE_CAGE` に届いたら落とす（3.3）。
+/// 待つので、かかった時間が `SHORT_DEADLINE_CAGE` に届いたら落とす。
 fn expect_panic(f: impl FnOnce(&mut Option<(u32, PathBuf)>)) -> (String, u32) {
     let mut seen = None;
     let started = Instant::now();
@@ -44,7 +43,7 @@ fn note(run: &Run, seen: &mut Option<(u32, PathBuf)>) {
     *seen = Some((run.pid(), run.run_dir().to_path_buf()));
 }
 
-/// 3.2: 出力に現れた文字列を待って見つける。
+/// 出力に現れた文字列を待って見つける。
 #[test]
 fn wait_for_finds_string() {
     let mut run = fake("out:ここにいる;window").spawn();
@@ -52,7 +51,7 @@ fn wait_for_finds_string() {
     assert_eq!(run.close().by, EndedBy::UserClose);
 }
 
-/// 3.5: 待ちの途中で子が終われば、締切切れでなく子の終わりと終了コード。
+/// 待ちの途中で子が終われば、締切切れでなく子の終わりと終了コード。
 #[test]
 fn child_exit_during_wait_is_reported_with_code() {
     let mut run = fake("exit:3").spawn();
@@ -60,7 +59,7 @@ fn child_exit_during_wait_is_reported_with_code() {
     assert_eq!(exited.status.code(), Some(3));
 }
 
-/// 3.4・5.4: 生き続ける子に短い締切で panic し、その後に子は止まっている。
+/// 生き続ける子に短い締切で panic し、その後に子は止まっている。
 #[test]
 fn hang_hits_deadline_and_child_is_stopped() {
     let (text, pid) = expect_panic(|seen| {
@@ -75,7 +74,7 @@ fn hang_hits_deadline_and_child_is_stopped() {
     assert!(!alive(pid), "締切の後も子（PID {pid}）が生きている");
 }
 
-/// 3.1: 大量の出力でも子は詰まらずに終わる。
+/// 大量の出力でも子は詰まらずに終わる。
 #[test]
 fn flood_does_not_block_child() {
     let mut run = fake("flood:4096").spawn();
@@ -84,7 +83,7 @@ fn flood_does_not_block_child() {
     assert!(run.stdout().len() >= 4096 * 1024, "出力が足りない");
 }
 
-/// 1.5〜1.7・8.2: 子に届いた環境変数と引数（呼び手の `env` が最後に勝つ）。
+/// 子に届いた環境変数と引数（呼び手の `env` が最後に勝つ）。
 #[test]
 fn child_receives_env_and_args() {
     let mut run = fake("env")
@@ -130,7 +129,7 @@ fn child_receives_env_and_args() {
     assert!(!out.contains("arg 3="), "{out}");
 }
 
-/// 5.1・5.3: 窓に閉じる知らせで、利用者と同じ閉じ方と終了コード 0。2 度目は同じ終わり。
+/// 窓に閉じる知らせで、利用者と同じ閉じ方と終了コード 0。2 度目は同じ終わり。
 #[test]
 fn close_window_is_user_close() {
     let mut run = fake("window").spawn();
@@ -140,7 +139,7 @@ fn close_window_is_user_close() {
     assert_eq!(run.close(), ended);
 }
 
-/// 5.4: 知らせを無視する窓は締切 → 止める → 止めたことと終了コードを含む panic。
+/// 知らせを無視する窓は締切 → 止める → 止めたことと終了コードを含む panic。
 #[test]
 fn deaf_window_is_stopped_after_deadline() {
     let (text, pid) = expect_panic(|seen| {
@@ -158,7 +157,7 @@ fn deaf_window_is_stopped_after_deadline() {
     assert!(!alive(pid), "止めた後も子（PID {pid}）が生きている");
 }
 
-/// 5.4: 自分で終わらない子を `wait_exit` で待つと、締切 → 止める → 止めたことを含む panic。
+/// 自分で終わらない子を `wait_exit` で待つと、締切 → 止める → 止めたことを含む panic。
 #[test]
 fn wait_exit_stops_hanging_child_after_deadline() {
     let (text, pid) = expect_panic(|seen| {
@@ -173,7 +172,7 @@ fn wait_exit_stops_hanging_child_after_deadline() {
     assert!(!alive(pid), "止めた後も子（PID {pid}）が生きている");
 }
 
-/// 5.2・5.3: 閉じる知らせを送らずに待つと、保険の自動終了で終わる。
+/// 閉じる知らせを送らずに待つと、保険の自動終了で終わる。
 #[test]
 fn wait_exit_ends_by_safety_exit() {
     let mut run = fake("smoke")
@@ -184,7 +183,7 @@ fn wait_exit_ends_by_safety_exit() {
     assert_eq!(ended.status.code(), Some(0));
 }
 
-/// 5.5: 閉じずに取っ手を捨てると、破棄が閉じる知らせで子を終わらせる（目印のファイル）。
+/// 閉じずに取っ手を捨てると、破棄が閉じる知らせで子を終わらせる（目印のファイル）。
 #[test]
 fn drop_closes_running_window() {
     let marks = TempPath::under_target("rr-mark");
@@ -196,7 +195,7 @@ fn drop_closes_running_window() {
     assert!(!alive(pid), "破棄の後も子（PID {pid}）が生きている");
 }
 
-/// audit-test-kits 指摘 9: `close()` も `wait_exit()` も呼ばずに捨てた取っ手の子が閉じる知らせに答えなければ、破棄が子を止めて
+/// `close()` も `wait_exit()` も呼ばずに捨てた取っ手の子が閉じる知らせに答えなければ、破棄が子を止めて
 /// panic し、その unwind の中で回の置き場（証拠）が残る。
 #[test]
 fn dropping_a_run_whose_child_ignores_close_panics_and_keeps_the_evidence() {
@@ -216,7 +215,7 @@ fn dropping_a_run_whose_child_ignores_close_panics_and_keeps_the_evidence() {
     assert!(!alive(pid), "破棄の後も子（PID {pid}）が生きている");
 }
 
-/// audit-test-kits 指摘 27: 窓ができる前に届いた閉じる知らせは送り直す（最初の送りは窓の無い子に届かない）。
+/// 窓ができる前に届いた閉じる知らせは送り直す（最初の送りは窓の無い子に届かない）。
 #[test]
 fn a_close_sent_before_the_window_exists_is_resent() {
     let mut run = fake("sleep:1500;window")
@@ -225,7 +224,7 @@ fn a_close_sent_before_the_window_exists_is_resent() {
     assert_eq!(run.close().by, EndedBy::UserClose, "{}", run.output());
 }
 
-/// audit-test-kits 指摘 27: 受け取りの行が出た後は送り直さない（子は受け取ってから 2.5 秒残り、その間の知らせにも行を出す）。
+/// 受け取りの行が出た後は送り直さない（子は受け取ってから 2.5 秒残り、その間の知らせにも行を出す）。
 #[test]
 fn no_close_is_resent_after_the_acknowledgement() {
     let mut run = fake("window-linger:2500").spawn();
@@ -235,7 +234,7 @@ fn no_close_is_resent_after_the_acknowledgement() {
     assert_eq!(acks, 1, "受け取りの行がちょうど 1 行でない:\n{out}");
 }
 
-/// 9.1: 2 つの走りを同時に立てると、置き場が別（空きの番号が別であることは OS が保証しないので見ない）。
+/// 2 つの走りを同時に立てると、置き場が別（空きの番号が別であることは OS が保証しないので見ない）。
 #[test]
 fn two_runs_at_once_are_separate() {
     let mut a = fake("window").spawn();

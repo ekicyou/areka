@@ -1,8 +1,4 @@
-//! GraphicsCommandList コンポーネントのギャップテスト (W3b-T)
-//!
-//! GraphicsCommandList は他テストでフィクスチャとして使用されるのみで、
-//! 直接のユニットテストが存在しなかったため追加する。
-//! 対象: crates/wintf/src/ecs/graphics/command_list.rs
+//! GraphicsCommandList コンポーネントのテスト（対象は `src/ecs/graphics/command_list.rs`）
 
 use wintf::ecs::{GraphicsCommandList, GraphicsCore};
 
@@ -22,7 +18,6 @@ fn new_wraps_real_command_list() {
 
     let component = GraphicsCommandList::new(raw.clone());
     assert!(component.command_list().is_some());
-    // COM スマートポインタは同一インターフェイスを指す
     assert_eq!(component.command_list(), Some(&raw));
 }
 
@@ -40,7 +35,6 @@ fn clone_and_partial_eq_semantics() {
     assert_eq!(GraphicsCommandList::empty(), GraphicsCommandList::empty());
     assert_ne!(a, GraphicsCommandList::empty());
 
-    // 別個に作成した CommandList は別ポインタなので非等価
     let other = unsafe { dc.CreateCommandList() }.expect("second command list");
     assert_ne!(a, GraphicsCommandList::new(other));
 }

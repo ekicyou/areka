@@ -1,5 +1,4 @@
-//! 起動の並べ直しが、記憶に位置の無いスコープを resolver と同じ揃え方の規則で解き直す檻
-//! （audit-placement-core 指摘 485）。
+//! 起動の並べ直しが、記憶に位置の無いスコープを resolver と同じ揃え方の規則で解き直す檻。
 //!
 //! 窓は本番と同じく resolver（`resolve_placement`）の出力で生やし、並べ直しの材料
 //! （`DefaultPlacementBasis`）も起動の準備と同じ形で置く。並べ直しは resolver の決めを崩さず、
@@ -100,7 +99,7 @@ pub(super) fn x_of(world: &World, scope: usize) -> i32 {
         .x
 }
 
-/// ⑴ `kero.defaultx,36` の隙間は並べ直しの後も残る（areka-P0-scope-chain-gap 要件 2.8）。
+/// ⑴ `kero.defaultx,36` の隙間は並べ直しの後も残る。
 #[test]
 fn boot_finalize_keeps_the_defaultx_gap() {
     let shown = sizes(&SPAWN[..2]);
@@ -121,7 +120,7 @@ fn boot_finalize_keeps_the_defaultx_gap() {
     );
 }
 
-/// ⑵ 左右の辺のスコープは辺に残る（audit-placement-core 指摘 1・SSP の測り 210）。
+/// ⑵ 左右の辺のスコープは辺に残る。
 #[test]
 fn boot_finalize_leaves_side_edge_scopes_on_their_edge() {
     for (word, edge_x) in [("right", WA.right - 278), ("left", WA.left)] {
@@ -143,7 +142,7 @@ fn boot_finalize_leaves_side_edge_scopes_on_their_edge() {
     }
 }
 
-/// ⑶ x を書いた Free のスコープは動かない（areka-P0-scope-chain-gap P3）。
+/// ⑶ x を書いた Free のスコープは動かない。
 #[test]
 fn boot_finalize_leaves_a_free_scope_with_x_in_place() {
     let shown = sizes(&SPAWN[..2]);
@@ -187,7 +186,7 @@ fn boot_finalize_skips_side_edge_scopes_as_the_chain_base() {
 }
 
 /// ⑷ は辺のスコープの次が記憶から戻したスコープでも同じ: 覚えた印は鎖の前の窓（辺のスコープを
-/// 飛ばした本体）との組として読み、今の本体の幅でその隣へ付く（audit-placement-core 494・495）。
+/// 飛ばした本体）との組として読み、今の本体の幅でその隣へ付く。
 #[test]
 fn boot_finalize_skips_a_side_edge_scope_for_a_remembered_next_scope() {
     let shown = sizes(&[(500, 687), SPAWN[1], SPAWN[2]]);

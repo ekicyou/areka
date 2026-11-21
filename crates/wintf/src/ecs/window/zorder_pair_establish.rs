@@ -1,9 +1,8 @@
 //! 案 A の owner 確立系——両窓のハンドルが揃った巡に owner を 1 回だけ張る。
 //!
 //! ペア宣言（[`KeepDirectlyAbove`]）は entity 参照だけの宣言であり、それを Win32 の
-//! owner 関係へ落とすのが本モジュールである（design.md「案 A の確立フロー」）。
-//! 確立が済めば「バルーンはキャラのすぐ手前」（要件 1.1）の維持は OS の保証へ移り、
-//! 以後は再断行の要求（[`ReassertZOrder`]）と実機ゲートの判定だけが残る。
+//! owner 関係へ落とすのが本モジュールである。確立が済めば「バルーンはキャラのすぐ手前」の
+//! 維持は OS の保証へ移り、以後は再断行の要求（[`ReassertZOrder`]）と実機ゲートの判定だけが残る。
 //!
 //! 宣言・状態・判断・診断記録の語彙は隣の [`zorder_pair`](super::zorder_pair) が持つ。
 //! 本モジュールが足すのは**確立の手順**と、失敗を繰り返さないための印
@@ -11,7 +10,7 @@
 //!
 //! 維持系（トリガ→判断→適用→検証）と破棄時の owner 切離しは、いずれも隣の
 //! [`zorder_pair_maintain`](super::zorder_pair_maintain) が持つ（後者は
-//! `detach_owner_links_for_lost_peers`）。本モジュールが担うのは確立の手順のみである。
+//! `detach_owner_links_for_lost_peers`）。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::NonSendMarker;
@@ -33,13 +32,12 @@ use crate::api::set_window_owner;
 
 /// owner の確立に失敗したハンドルの組（バルーン窓へ付与）。
 ///
-/// design.md「Error Strategy」の確立失敗は「回復は次の `Added<WindowHandle>` 巡では
-/// 行わない——同一 HWND での再試行は同じ失敗を繰り返すのみ・ログ二重化を避ける」と
-/// 定める。その「同一 HWND」を判定するために、**試して失敗したハンドルの組そのもの**を
-/// 印として残す。窓が作り直されて別のハンドルが付いた場合は組が変わり、確立をもう一度
-/// 試みる——抑止しているのは「同じ失敗の繰り返し」であって「二度と試さないこと」ではない。
-///
-/// [`OwnerLink`] を流用しないのは、あちらが**張れた事実**の記録であり、切離し（要件 5.9）が
+/// 同一 HWND での再試行は同じ失敗を繰り返すのみでログも二重になるため、確立失敗からの回復は
+/// 次の `Added<WindowHandle>` 巡では行わない。その「同一 HWND」を判定するために、
+/// **試して失敗したハンドルの組そのもの**を印として残す。窓が作り直されて別のハンドルが
+/// 付いた場合は組が変わり、確立をもう一度試みる——抑止しているのは「同じ失敗の繰り返し」で
+/// あって「二度と試さないこと」ではない。
+/// [`OwnerLink`] を流用しないのは、あちらが**張れた事実**の記録であり、切離しが
 /// その有無で対象を選ぶためである。張れなかったペアに [`OwnerLink`] が付くと、
 /// 切離しが張っていない owner を外そうとする。
 ///
@@ -89,19 +87,19 @@ type DeclarationQuery<'w, 's> = Query<
 /// 付与が無い巡は判断そのものを行わない
 /// ——これが「毎フレーム巡回では動かない」（維持系と共通の受動性）の実装である。
 ///
-/// # 手順（design.md「案 A の確立フロー」2）
+/// # 手順
 ///
-/// 1. 揃っていなければ理由つきで見送る（要件 6.3）。理由は 3 通り——相手の実体が既に
-///    無い（`PeerMissing`・要件 1.5）／まだハンドルが付いていない（`HandleMissing`）／
+/// 1. 揃っていなければ理由つきで見送る。理由は 3 通り——相手の実体が既に
+///    無い（`PeerMissing`）／まだハンドルが付いていない（`HandleMissing`）／
 ///    現在のストラテジが案 B で owner を張らない構成である（`StrategyDisabled`）。
 /// 2. 揃っていれば `set_window_owner(balloon_hwnd, char_hwnd)` を呼ぶ。
 /// 3. 成功: [`OwnerLink`] を付け、初期隣接を確定させるため [`ReassertZOrder`] を 1 発入れ、
-///    確立の記録（info・要件 6.1）を出す。記録には確立直後に採った「キャラ窓の最も近い可視の手前」の
-///    実測を載せる——ここにバルーン窓が現れることが案 A の中核保証（ゲート G6）の証跡になる。
-/// 4. 失敗: error 水準で記録し（要件 6.2）、同じハンドルの組では再試行しないよう
-///    [`OwnerEstablishFailed`] を付ける。窓は現行どおり表示され続ける（要件 6.4）。
+///    確立の記録（info）を出す。記録には確立直後に採った「キャラ窓の最も近い可視の手前」の
+///    実測を載せる——ここにバルーン窓が現れることが確立の証跡になる。
+/// 4. 失敗: error 水準で記録し、同じハンドルの組では再試行しないよう
+///    [`OwnerEstablishFailed`] を付ける。窓は現行どおり表示され続ける。
 ///
-/// # 鎖が外させる組は張らない（要件 1.3・6.1）
+/// # 鎖が外させる組は張らない
 ///
 /// 同じフレームの `Update` で公開済みの望む鎖（[`ZOrderChainPlan`]）を直に読み、
 /// `pair_released_by_chain` が真の組は張らずに `ReleasedByChain` を記録する。
@@ -115,8 +113,8 @@ type DeclarationQuery<'w, 's> = Query<
 ///
 /// # UI スレッド固定
 ///
-/// [`NonSendMarker`] を取るのは Win32 を呼ぶためである（design.md「Responsibilities &
-/// Constraints」）。この印が付いた system をスケジュール実行器はメインスレッド以外で
+/// [`NonSendMarker`] を取るのは Win32 を呼ぶためである。この印が付いた system をスケジュール実行器は
+/// メインスレッド以外で
 /// 走らせない——窓を作ったスレッド以外から窓を触らせないための固定である。
 pub fn establish_owner_links(
     _ui_thread: NonSendMarker,
@@ -129,7 +127,7 @@ pub fn establish_owner_links(
     // 「実体はあるがハンドルがまだ無い」——見送りの理由を分けるためこの形にする。
     handles: Query<Option<Ref<WindowHandle>>>,
 ) {
-    // ストラテジ未挿入は結線前の状態。既定（案 A）で動く（design.md「State」の既定値）。
+    // ストラテジ未挿入は結線前の状態。既定（案 A）で動く。
     let strategy = strategy.map(|s| *s).unwrap_or_default();
     let chain = chain.as_deref().and_then(|plan| plan.chain.as_ref());
 
@@ -138,8 +136,6 @@ pub fn establish_owner_links(
         let owned = handles.get(entity).ok().flatten();
         let peer_lookup = handles.get(peer);
 
-        // この巡で宣言かどちらかのハンドルが付いたか（付与が無い巡は判断そのものを行わない）。
-        // 宣言を見るのは、ハンドルの付いた窓に後から宣言を付けた組も張るため。
         let added = declaration.is_added()
             || owned.as_ref().is_some_and(Ref::is_added)
             || peer_lookup
@@ -177,7 +173,7 @@ pub fn establish_owner_links(
         }
 
         let Ok(owner) = peer_lookup else {
-            // 相手の実体が既に無い。残る窓には一切書き込まない（要件 1.5）。
+            // 相手の実体が既に無い。残る窓には一切書き込まない。
             record_decision(entity, peer, PairFixDecision::Skip(SkipReason::PeerMissing));
             continue;
         };
@@ -192,9 +188,9 @@ pub fn establish_owner_links(
         };
         let (owned_hwnd, owner_hwnd) = (owned.hwnd, owner.hwnd);
 
-        // 同じハンドルの組で既に失敗している場合は、もう試さない（design.md
-        // 「Error Strategy」）。記録も足さない——error 水準の失敗記録は同じ entity に
-        // 対して既に出ており、ここで見送りを重ねるとログの二重化を避けた意味が消える。
+        // 同じハンドルの組で既に失敗している場合は、もう試さない。記録も足さない——
+        // error 水準の失敗記録は同じ entity に対して既に出ており、ここで見送りを重ねると
+        // ログの二重化を避けた意味が消える。
         if failed
             == Some(&OwnerEstablishFailed {
                 owned_hwnd,
@@ -207,12 +203,12 @@ pub fn establish_owner_links(
         match set_window_owner(owned_hwnd, owner_hwnd) {
             Ok(()) => {
                 // 確立直後の「キャラ窓の最も近い可視の手前」——ここにバルーン窓が居ることが
-                // 案 A の中核保証の証跡（ゲート G6）。実測できなくても確立は成立する。
+                // 確立の証跡。実測できなくても確立は成立する。
                 let measured_prev = measure_window_above(owner_hwnd);
                 commands.entity(entity).insert((
                     OwnerLink { owner_hwnd },
                     // 初期隣接の確定（維持系が消費する一回限りの要求）。確立は窓の
-                    // 生成直後・ペアにつき 1 度きりであり、外から挿す口（要件 2.6 の再表示・
+                    // 生成直後・ペアにつき 1 度きりであり、外から挿す口（再表示・
                     // 今は挿す側が無い）もこれより後にしか動かない——ゆえにここでの挿入が
                     // 検証待ちの要求を踏み潰すことはない。
                     ReassertZOrder::default(),

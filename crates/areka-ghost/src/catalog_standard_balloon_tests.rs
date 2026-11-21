@@ -1,10 +1,9 @@
-//! ゴーストの標準のバルーンの指定の読み手のテスト（spec: areka-P0-ghost-standard-balloon・
-//! 要件 1.1〜1.6・1.14・2.1・2.2・2.13・2.14・5.4・7.1・7.4・7.5）。
+//! ゴーストの標準のバルーンの指定の読み手のテスト。
 //!
 //! 同梱の最初の 1 個（`install.txt` の無印 → `balloon0`）の、番号付きの場面だけを足す。
 //! 無印だけ・無印と `balloon0` の両方・`install.txt` が無い・読めないは `catalog_tests.rs` が担う。
 //! descript の 2 鍵の読み手（`standard_balloon_keys`）の場面もここに置く。
-//! 一時フォルダは `TempPath::under_target`（ワークツリーの `target\test-roots\` の下・要件 7.7）。
+//! 一時フォルダは `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
 use super::test_support::{hold_exclusive, put, put_ghost_in};
 use super::*;
@@ -12,7 +11,7 @@ use crate::test_log_capture::capture;
 use temp_path_kit::TempPath;
 
 /// `install.txt` に `body` を置いたゴーストで `companion_balloon` を呼び、戻り値を返す。
-/// 記録は 0 件であること（要件 1.5・1.14）まで判定する。
+/// 記録は 0 件であることまで判定する。
 fn companion_of(label: &str, body: &str) -> Option<String> {
     let tmp = TempPath::under_target(label);
     let ghost = tmp.path().join("g");
@@ -23,7 +22,7 @@ fn companion_of(label: &str, body: &str) -> Option<String> {
     companion
 }
 
-/// 番号付きだけ → 最初の 1 個は `balloon0`（要件 1.1・1.4・1.10・7.1）。
+/// 番号付きだけ → 最初の 1 個は `balloon0`。
 #[test]
 fn numbered_only_yields_balloon0() {
     let got = companion_of(
@@ -43,7 +42,7 @@ fn the_later_row_wins_across_case_like_the_installer() {
     assert_eq!(got.as_deref(), Some("x"));
 }
 
-/// `balloon0` が欠番で `balloon1` だけ → 無し（探索は最初に無い番号で止まる・要件 1.5・7.1）。
+/// `balloon0` が欠番で `balloon1` だけ → 無し（探索は最初に無い番号で止まる）。
 #[test]
 fn balloon1_only_yields_none() {
     let got = companion_of(
@@ -53,7 +52,7 @@ fn balloon1_only_yields_none() {
     assert_eq!(got, None);
 }
 
-/// 先頭に 0 を付けた綴りは番号に数えない → 無し（要件 1.6・7.1）。
+/// 先頭に 0 を付けた綴りは番号に数えない → 無し。
 #[test]
 fn zero_padded_number_yields_none() {
     let got = companion_of(
@@ -63,7 +62,7 @@ fn zero_padded_number_yields_none() {
     assert_eq!(got, None);
 }
 
-/// `*.directory` の行が無く同じ接頭辞の他の鍵だけ → 無し（要件 1.2・7.1）。
+/// `*.directory` の行が無く同じ接頭辞の他の鍵だけ → 無し。
 #[test]
 fn other_keys_with_same_prefix_yield_none() {
     let got = companion_of(
@@ -73,7 +72,7 @@ fn other_keys_with_same_prefix_yield_none() {
     assert_eq!(got, None);
 }
 
-/// 空の値の無印も「見つかった」に数え、`balloon0` へ進まない（要件 1.14・7.5）。
+/// 空の値の無印も「見つかった」に数え、`balloon0` へ進まない。
 #[test]
 fn empty_unnumbered_stops_before_balloon0() {
     let got = companion_of(
@@ -83,7 +82,7 @@ fn empty_unnumbered_stops_before_balloon0() {
     assert_eq!(got, None);
 }
 
-/// 空の値の `balloon0` も「見つかった」に数え、`balloon1` へ繰り下げない（要件 1.14・7.5）。
+/// 空の値の `balloon0` も「見つかった」に数え、`balloon1` へ繰り下げない。
 #[test]
 fn empty_balloon0_stops_before_balloon1() {
     let got = companion_of(
@@ -94,7 +93,7 @@ fn empty_balloon0_stops_before_balloon1() {
 }
 
 /// ゴーストの `ghost/master/descript.txt` に `descript` を置いて `standard_balloon_keys` を呼ぶ。
-/// 記録は 0 件であること（要件 2.13）まで判定する。
+/// 記録は 0 件であることまで判定する。
 fn keys_of(label: &str, descript: &str) -> StandardBalloonKeys {
     let tmp = TempPath::under_target(label);
     let root = BasewareRoot::new(tmp.path().to_path_buf());
@@ -112,8 +111,8 @@ fn keys(path: Option<&str>, balloon: Option<&str>) -> StandardBalloonKeys {
     }
 }
 
-/// 2 鍵とも書かれている → 両方の値（前後の空白は落とし、中身は読み替えない・要件 2.1・7.4）。
-/// `recommended.*` は引かない（要件 2.14）。
+/// 2 鍵とも書かれている → 両方の値（前後の空白は落とし、中身は読み替えない）。
+/// `recommended.*` は引かない。
 #[test]
 fn standard_keys_reads_both_keys_verbatim() {
     let got = keys_of(
@@ -124,7 +123,7 @@ fn standard_keys_reads_both_keys_verbatim() {
     assert_eq!(got, keys(Some("../balloon/x"), Some("しずく 縦")));
 }
 
-/// 片方だけ → 書かれた鍵だけ。`recommended.*` は書かれていない鍵の代わりにならない（要件 2.13・2.14）。
+/// 片方だけ → 書かれた鍵だけ。`recommended.*` は書かれていない鍵の代わりにならない。
 #[test]
 fn standard_keys_reads_one_key_alone() {
     let path_only = keys_of(
@@ -139,7 +138,7 @@ fn standard_keys_reads_one_key_alone() {
     assert_eq!(name_only, keys(None, Some("claudia")));
 }
 
-/// 鍵の大文字が混じっても読む（値の大文字はそのまま・要件 2.1）。
+/// 鍵の大文字が混じっても読む（値の大文字はそのまま）。
 #[test]
 fn standard_keys_match_keys_case_insensitively() {
     let got = keys_of(
@@ -149,7 +148,7 @@ fn standard_keys_match_keys_case_insensitively() {
     assert_eq!(got, keys(Some("Claudia"), Some("Vertical")));
 }
 
-/// 値が空・鍵が無い → 無し（要件 2.2・2.13）。
+/// 値が空・鍵が無い → 無し。
 #[test]
 fn standard_keys_treat_empty_values_as_absent() {
     let empty = keys_of(
@@ -161,7 +160,7 @@ fn standard_keys_treat_empty_values_as_absent() {
     assert_eq!(absent, StandardBalloonKeys::default());
 }
 
-/// descript.txt が読めない → 2 欄とも無しで、読めない記録がちょうど 1 件（要件 5.4）。
+/// descript.txt が読めない → 2 欄とも無しで、読めない記録がちょうど 1 件。
 #[test]
 fn standard_keys_unreadable_warns_exactly_once() {
     let tmp = TempPath::under_target("catalog-standard-unreadable");

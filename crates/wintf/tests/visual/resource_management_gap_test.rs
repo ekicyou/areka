@@ -1,7 +1,6 @@
-//! visual_resource_management_system の早期リターン経路ギャップテスト (W3b-T)
+//! visual_resource_management_system の早期リターン経路ギャップテスト
 //!
-//! 既存テスト（graphics_auto_creation_test）は正常系と GraphicsCore 無効を
-//! 検証済みだが、WucGraphicsResource 不在・空の早期リターンは未固定だったため追加する。
+//! WucGraphicsResource 不在・空の早期リターンを固定する。
 //! 対象: crates/wintf/src/ecs/graphics/visual_manager.rs
 
 use bevy_ecs::prelude::*;

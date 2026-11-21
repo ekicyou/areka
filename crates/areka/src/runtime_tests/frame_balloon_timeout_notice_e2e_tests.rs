@@ -1,12 +1,12 @@
 // =============================================================================
-// 受け口から可視性の相までの通し（areka-P0-balloon-lifecycle-events task 5.2）
+// 受け口から可視性の相までの通し
 //
 // `balloon_visibility_lifecycle_e2e_tests.rs`（台本の占有終端が判断中核の計測起点になる）の続き。
 // あちらは headless の表示層で相を回すのでバルーンが可視にならず、時間切れまで届かない。ここは
 // 親の檻（実 emo2 fixture ＋ 実 GPU・本番の `frame_system`）で、
 //   台詞 → 本物の受け口（配送と同じく原本を複製して番号を渡す）→ トークの終わり → 時刻の注入
 //   → 隠す発行 → 置き場のゴーストの kanade への知らせ
-// までを 1 本で通す（要件 2.1・5.1・8.1・8.2・9.1）。可視性の相の中の知らせの送出の 1 行を
+// までを 1 本で通す。可視性の相の中の知らせの送出の 1 行を
 // 踏むのはこの檻だけである（相の檻 `balloon_visibility_phase_notice_tests.rs` は判断と送出を
 // 自分で並べて呼ぶ）。
 //
@@ -197,7 +197,7 @@ fn expire_at(cage: &mut Cage, horizon: f64, deadline: f64) {
 }
 
 /// 台詞の終わりから既定の待ち時間で時間切れになり、本物の相が受け口の番号の知らせを kanade へ
-/// 送る（要件 2.1・5.1）。
+/// 送る。
 #[test]
 fn timeout_after_a_real_talk_sends_the_sink_number_through_the_real_phase() {
     // 待ち時間の確定はプロセスで一度きりの記録なので、捕捉窓の外で先に確定させる。
@@ -207,7 +207,7 @@ fn timeout_after_a_real_talk_sends_the_sink_number_through_the_real_phase() {
     expire_at(&mut cage, horizon, horizon + timeout_secs);
 }
 
-/// `\![set,balloontimeout,…]` を含む台詞では、そのトークの満了の時刻が指定の値へ動く（要件 9.1）。
+/// `\![set,balloontimeout,…]` を含む台詞では、そのトークの満了の時刻が指定の値へ動く。
 /// 直前で隠れずちょうどで隠れるので、既定の待ち時間のままなら（既定が長くても短くても）落ちる。
 #[test]
 fn balloontimeout_in_the_talk_moves_the_expiry_of_that_talk() {

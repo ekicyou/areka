@@ -1,8 +1,5 @@
-//! resolve_inherited_brushes システムのギャップテスト (W3b-T)
-//!
-//! Brush 継承解決はデバイス非依存の純粋 ECS ロジックだが、
-//! システム本体のテストが存在しなかったため追加する。
-//! 対象: crates/wintf/src/ecs/graphics/systems/brushes.rs
+//! resolve_inherited_brushes システム（Brush 継承解決）のテスト
+//! （対象は `src/ecs/graphics/systems/brushes.rs`）
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
@@ -156,7 +153,6 @@ fn partially_resolved_parent_gives_its_decided_field() {
             background: Brush::BLUE,
         })
         .id();
-    // 親は前景だけ決まっている（背景は Inherit）
     let parent = world
         .spawn((
             Brushes {

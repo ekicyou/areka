@@ -12,7 +12,7 @@ pub(crate) fn cmd_exit(code: i32) -> Command {
 
 /// handle が終了するまで非ブロッキング poll を回して終了種別を得る。
 ///
-/// 各 poll がブロックしないこと（要件 1.2）を、poll 単体の所要時間が
+/// 各 poll がブロックしないことを、poll 単体の所要時間が
 /// ごく短いことで担保しつつ、全体は上限時間で bounded に待つ。
 fn wait_kind(handle: &mut HelperHandle) -> ExitKind {
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -28,7 +28,7 @@ fn wait_kind(handle: &mut HelperHandle) -> ExitKind {
     }
 }
 
-/// `try_wait` の失敗は `ERROR` を 1 行書いてから「動いている」（`None`）とみなす（指摘 10）。
+/// `try_wait` の失敗は `ERROR` を 1 行書いてから「動いている」（`None`）とみなす。
 #[test]
 fn a_try_wait_failure_is_logged() {
     let failure = Err(std::io::Error::other("try_wait failed"));
@@ -41,7 +41,7 @@ fn a_try_wait_failure_is_logged() {
     assert_eq!(errors.len(), 1, "{events:?}");
 }
 
-/// job を持たない `HelperHandle` でも、捨てれば子が終わっている（Drop が終わらせて待つ・指摘 14）。
+/// job を持たない `HelperHandle` でも、捨てれば子が終わっている（Drop が終わらせて待つ）。
 #[test]
 fn dropping_a_handle_without_job_ends_the_child() {
     use std::os::windows::io::{AsHandle, AsRawHandle};
@@ -68,11 +68,10 @@ fn dropping_a_handle_without_job_ends_the_child() {
     assert_eq!(state, WAIT_OBJECT_0, "Drop の後も子が動いている");
 }
 
-// --- ExitKind::classify 純関数（要件 1.3 / 1.4）---
+// --- ExitKind::classify 純関数---
 
 #[test]
 fn classify_clean_from_exit_zero() {
-    // 実プロセスで code() == Some(0) を作り Clean へ分類（要件 1.3）。
     let status = cmd_exit(0)
         .status()
         .expect("cmd.exe /c exit 0 が起動できる");
@@ -81,18 +80,16 @@ fn classify_clean_from_exit_zero() {
 
 #[test]
 fn classify_abnormal_from_nonzero_exit() {
-    // 実プロセスで code() == Some(3) を作り Abnormal(3) へ分類（要件 1.4）。
     let status = cmd_exit(3)
         .status()
         .expect("cmd.exe /c exit 3 が起動できる");
     assert_eq!(ExitKind::classify(&status), ExitKind::Abnormal(3));
 }
 
-// --- spawn + 非ブロッキング poll（要件 1.1 / 1.2 / 1.3 / 1.4）---
+// --- spawn + 非ブロッキング poll---
 
 #[test]
 fn spawn_command_then_poll_classifies_clean() {
-    // stand-in を spawn（下位 seam）→ 終了後に Clean 分類（要件 1.1/1.3）。
     let mut handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
     assert!(handle.pid() > 0, "spawn 成功で helper への参照を保持する");
     assert_eq!(wait_kind(&mut handle), ExitKind::Clean);
@@ -100,14 +97,13 @@ fn spawn_command_then_poll_classifies_clean() {
 
 #[test]
 fn spawn_command_then_poll_classifies_abnormal() {
-    // stand-in を spawn → 終了後に Abnormal(5) 分類（要件 1.4）。
     let mut handle = spawn_command(cmd_exit(5)).expect("stand-in を spawn できる");
     assert_eq!(wait_kind(&mut handle), ExitKind::Abnormal(5));
 }
 
-// --- spawn の起動パラメーター契約（arg1..3・env 3 種・cwd＝design §SpawnContract）---
+// --- spawn の起動パラメーター契約（arg1..3・env 3 種・cwd）---
 
-/// env キー名が design §SpawnContract どおりに固定されていること（契約回帰防止）。
+/// env キー名が固定されていること（契約回帰防止）。
 #[test]
 fn spawn_env_key_names_match_contract() {
     assert_eq!(PARENT_HWND_ENV, "HOST32_PARENT_HWND");
@@ -115,13 +111,13 @@ fn spawn_env_key_names_match_contract() {
     assert_eq!(SHIORI_NAME_ENV, "HOST32_SHIORI_NAME");
 }
 
-/// LOAD 用 ack 待機の推奨既定 timeout が 30 秒であること（R5.2・design §Load timeout）。
+/// LOAD 用 ack 待機の推奨既定 timeout が 30 秒であること。
 #[test]
 fn load_ack_timeout_default_is_30s() {
     assert_eq!(LOAD_ACK_TIMEOUT, Duration::from_secs(30));
 }
 
-// --- request timeout 定数 + env seam 解決（R4.3 / R5.1・design §Shiori3Client）---
+// --- request timeout 定数 + env seam 解決---
 
 /// request 往復の既定 timeout が 60 秒で、env キー名が契約どおりであること（回帰防止）。
 #[test]
@@ -133,7 +129,6 @@ fn request_timeout_default_is_60s_and_env_key_matches() {
 /// env 不在／空／空白のみ／parse 不能 → 既定 60s へ安全側フォールバック（無限へ昇格させない）。
 #[test]
 fn resolve_request_timeout_defaults_to_60s_when_absent_or_garbage() {
-    // 不在。
     assert_eq!(resolve_request_timeout(None), Some(REQUEST_TIMEOUT));
     assert_eq!(resolve_request_timeout(None), Some(Duration::from_secs(60)));
     // 空文字・空白のみ。
@@ -175,15 +170,13 @@ fn resolve_request_timeout_positive_millis_are_used() {
         resolve_request_timeout(Some("1500".to_string())),
         Some(Duration::from_millis(1500))
     );
-    // trim 済みで採用されること。
     assert_eq!(
         resolve_request_timeout(Some("  250  ".to_string())),
         Some(Duration::from_millis(250))
     );
 }
 
-/// `spawn` が使う [`helper_command`] の中身（引数・環境・作業フォルダ）を読んで確かめる
-/// （R3.1〜3.3・要件 8.1・8.2・10.4）。
+/// `spawn` が使う [`helper_command`] の中身（引数・環境・作業フォルダ）を読んで確かめる。
 #[test]
 fn helper_command_sets_args_env_cwd_and_pasta_debug_zero() {
     let parent_hwnd: u32 = 4_294_967_295; // u32::MAX（10進境界値）

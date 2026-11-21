@@ -1,14 +1,10 @@
-//! ランタイム単位の変数購読管理と差分検出。
-//!
-//! variable_id ベースの一元購読管理を提供する。
+//! ランタイム単位の変数購読管理と差分検出（variable_id ベース）。
 
 use std::collections::{BTreeMap, HashMap};
 
 use super::types::{EvaluatedValue, RuntimeError};
 
-/// ランタイム単位の変数購読管理と差分検出を行う内部コンポーネント。
-///
-/// 購読登録は指示書受信前でも受付可能（Req 1.4）。
+/// 購読登録は指示書受信前でも受付可能。
 /// variable_id は 0-origin のモノトニック増加カウンタで採番し、再利用しない。
 pub(crate) struct SubscriptionManager {
     // --- ID 管理 ---
@@ -40,12 +36,10 @@ impl SubscriptionManager {
     /// 変数購読登録。冪等（同一名→同一ID返却）。
     /// unsubscribe 済みの名前は新規IDを割り当てる。
     pub fn subscribe(&mut self, variable_name: &str) -> i64 {
-        // 既に購読中なら同一IDを返却（冪等）
         if let Some(&id) = self.name_to_id.get(variable_name) {
             return id;
         }
 
-        // 新規ID割り当て
         let id = self.next_id;
         self.next_id += 1;
         self.name_to_id.insert(variable_name.to_string(), id);
@@ -60,10 +54,7 @@ impl SubscriptionManager {
             return Err(RuntimeError::InvalidVariableId(variable_id));
         };
 
-        // name_to_id から削除（再 subscribe 時に新IDを割り当てるため）
         self.name_to_id.remove(&name);
-
-        // last_values, last_sent_values から削除
         self.last_values.remove(&variable_id);
         self.last_sent_values.remove(&variable_id);
 
@@ -97,16 +88,16 @@ impl SubscriptionManager {
         let mut changed = Vec::new();
 
         for (&id, name) in &self.id_to_name {
-            // evaluate 結果があれば凍結値を更新し、現在値 = 凍結値
+            // evaluate 結果があれば凍結値を更新する。現在値は常に凍結値
             if let Some(v) = evaluate(name) {
                 self.last_values.insert(id, v);
             }
-            // 値が存在しない（未定義変数の購読）→ 無視
+            // 未定義変数の購読は値が無いので無視する
             let Some(current) = self.last_values.get(&id) else {
                 continue;
             };
 
-            // 前回配信値と比較（初回は常に変化あり）
+            // 初回は常に変化あり
             if self.last_sent_values.get(&id) != Some(current) {
                 changed.push((id, current.clone()));
                 self.last_sent_values.insert(id, current.clone());
@@ -124,7 +115,6 @@ impl SubscriptionManager {
     ) -> HashMap<i64, EvaluatedValue> {
         let mut result = HashMap::new();
         for (name, val) in name_values {
-            // name_to_id は購読中の名前だけを持つ
             if let Some(&id) = self.name_to_id.get(name) {
                 result.insert(id, val.clone());
             }

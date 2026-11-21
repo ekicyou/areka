@@ -1,4 +1,4 @@
-//! 「シェル位置初期化」の葉の檻（areka-P0-move-canon 要件 8.3〜8.5・design ResetPosFrame）。
+//! 「シェル位置初期化」の葉の檻。
 //!
 //! 並べ直したかは [`reset_window_positions`] の記録で見る: 材料の無い World では
 //! `reset_window_pos_skipped` が必ず 1 行出るので、その行の有無が「呼んだか」になる。
@@ -220,7 +220,7 @@ fn poll_dropped_receiver_warns_without_reset_and_clears_pending() {
     );
 }
 
-// ---------------------------------------------------------------- 項目の登記（要件 8.1〜8.3・task 4.3）
+// ---------------------------------------------------------------- 項目の登記
 
 /// メニューを結線し「シェル位置初期化」枠を登記した World（`windows` が真なら窓の組も置く）。
 /// 運行への送り口は `GhostSlot` に置き、その受信端を返す。
@@ -265,7 +265,7 @@ fn planned(world: &World, captions: &crate::menu::captions::CaptionMap) -> (Stri
 }
 
 /// 既定の名前「シェル位置初期化」とゴーストの返す名前（`switchmovetodefaultpositionbutton.caption`）の
-/// 両方で出て、窓の組が在り答えを待っていなければ選べる（要件 8.1・8.2）。
+/// 両方で出て、窓の組が在り答えを待っていなければ選べる。
 #[test]
 fn item_shows_with_default_and_ghost_names() {
     let (world, _rx) = wired_world(true);
@@ -286,7 +286,7 @@ fn item_shows_with_default_and_ghost_names() {
     );
 }
 
-/// 選ぶと `OnResetWindowPos` が送られて保留が置かれ、保留がある間は選べない（要件 8.3）。
+/// 選ぶと `OnResetWindowPos` が送られて保留が置かれ、保留がある間は選べない。
 #[test]
 fn choosing_places_pending_and_greys_the_item_until_answered() {
     let (mut world, rx) = wired_world(true);

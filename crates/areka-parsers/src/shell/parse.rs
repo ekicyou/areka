@@ -2,15 +2,14 @@
 //!
 //! デコード済みの surfaces.txt 文字列を 1 回だけ字句に分け（`lexer::lex`）、閉じたブレスの列を
 //! 画像の読み手（`decode::decode_token` → `Shell`）・箱・描けない行・cursorブレスの転記へ 1 本の輪で渡し、
-//! 字句の段の崩れと読みで飛ばした記述子（`decode::Reading`）を登場順の `ShellIssue` へ集める
-//! （指摘 35・36・5・6）。状態も I/O も持たず、記録も出さない
-//! （記録は読み込む側・依存方向 `model ← lexer ← decode ← parse`）。
+//! 字句の段の崩れと読みで飛ばした記述子（`decode::Reading`）を登場順の `ShellIssue` へ集める。
+//! 状態も I/O も持たず、記録も出さない（記録は読み込む側・依存方向 `model ← lexer ← decode ← parse`）。
 //!
-//! 契約（design「Facade Layer — parse」）:
-//! - 空入力 → 空 `Shell`（surfaces/appends/aliases すべて空・要件 2.2）。
-//! - `Result` を返さない（常に `Shell` を返す・subset 外/不正入力は部分認識で吸収・要件 9.3）。
-//! - 同一入力 → 同一出力の純粋・決定的関数（副作用なし・host 非依存・要件 2.1/2.4）。
-//! - パニックしない（局所吸収・全域継続・要件 9.3）。
+//! 契約:
+//! - 空入力 → 空 `Shell`（surfaces/appends/aliases すべて空）。
+//! - `Result` を返さない（常に `Shell` を返す・subset 外/不正入力は部分認識で吸収）。
+//! - 同一入力 → 同一出力の純粋・決定的関数（副作用なし・host 非依存）。
+//! - パニックしない（局所吸収・全域継続）。
 
 use super::boxes::{BoxDefinition, transcribe_block};
 use super::cursor::{CursorBrace, cursor_brace};
@@ -77,11 +76,8 @@ pub fn parse_all(input: &str) -> ShellText {
 
 /// デコード済み surfaces.txt 文字列を値まで正規化した `Shell` モデルへ変換する純粋関数。
 ///
-/// 寛容パススルー: `Result` を返さず常に `Shell` を返す（要件 9.3）。`parse_all` の射影。
-///
-/// - Preconditions: `input` はデコード済み（charset 適用後の）文字列（要件 2.1）。
-/// - Postconditions: 空入力で空 `Shell`（要件 2.2）。順序保持のモデル（要件 2.1）。
-/// - Invariants: 純粋・決定的・副作用なし・非パニック（要件 2.4/9.3）。
+/// `Result` を返さず常に `Shell` を返す。`parse_all` の射影。
+/// `input` はデコード済み（charset 適用後の）文字列。空入力で空 `Shell`。
 pub fn parse(input: &str) -> Shell {
     parse_all(input).shell
 }

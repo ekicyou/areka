@@ -1,7 +1,6 @@
 //! 配置のテストだけが使う一時フォルダと合成の検体（`temp-path-kit` に頼る・`#[cfg(test)]`）。
 //!
-//! 外のテストも使う支えは `test_support`、見本のゴーストの入口は `sample_test_support`
-//! （spec: placement-crate-split 設計 D8）。
+//! 外のテストも使う支えは `test_support`、見本のゴーストの入口は `sample_test_support`。
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -21,8 +20,7 @@ use super::sample_test_support::balloon_root;
 
 /// えも？？ の絵を写した一時フォルダへ、本物の えも？？ と同じ透過の宣言 `1` だけを書いた
 /// `descript.txt` を置く。写しが宣言なしの決まりに当たり、絵の中身しだいで結果が変わることを
-/// 防ぐ（下の合成の補助も同じ宣言を書く・spec: areka-P0-self-alpha-declaration 設計
-/// 「入口を一時フォルダで通す既存のテストの棚卸し」）。`key` はシェルなら
+/// 防ぐ（下の合成の補助も同じ宣言を書く）。`key` はシェルなら
 /// `seriko.use_self_alpha`、バルーンなら `use_self_alpha`。
 pub(super) fn write_self_alpha_one_descript(dir: &Path, key: &str) {
     fs::write(
@@ -106,7 +104,7 @@ pub(super) fn assert_no_event(events: &[CapturedEvent], needle: &str) {
 }
 
 /// `windowposition` 供給層の観測点（`lib.rs` の `merge_scope_windowpositions` が scope ごとに出す
-/// info 行・観測点 4・実機サインオフの grep 対象）の本文の一部。檻がこの行を拾う目印。
+/// info 行・実機サインオフの grep 対象）の本文の一部。檻がこの行を拾う目印。
 pub(super) const WINDOWPOSITION_SUPPLY_NEEDLE: &str = "windowposition を初期既定位置の調整量へ";
 
 /// 決定論テストが [`super::resolver::resolve_placement`] へ渡す**採寸 DPI**（正典既定 96）。
@@ -114,7 +112,7 @@ pub(super) const WINDOWPOSITION_SUPPLY_NEEDLE: &str = "windowposition を初期�
 /// 配置式 P1〜P5 は採寸 DPI を 1 度も読まない——値は基準対
 /// （`ScopePlacement::balloon_offset_base`）へ刻まれるだけである。ゆえに幾何の檻は
 /// この既定を渡せばよく、採寸 DPI の決め方そのものの檻は `placement_prepare_tests.rs`
-/// が持つ（areka-P0-balloon-offset-dpi task 2.1）。
+/// が持つ。
 pub(super) const MEASURE_DPI: DPI = DPI {
     dpi_x: 96,
     dpi_y: 96,
@@ -124,9 +122,8 @@ pub(super) const MEASURE_DPI: DPI = DPI {
 
 /// Drop 時に自身を再帰削除する一時ディレクトリ。
 ///
-/// 名前の組み立ては共通窓口 [`TempPath`] へ一本化してある。この crate の中に
-/// 「窓口」と「窓口の移植元になった同型の実装」の 2 系統を残さないための包みで、
-/// 出来上がる名前は移植前と同じ `areka-placement-prepare-{プロセス識別子}-{連番}`。
+/// 名前の組み立ては共通窓口 [`TempPath`] へ一本化してある。
+/// 出来上がる名前は `areka-placement-prepare-{プロセス識別子}-{連番}`。
 pub(super) struct TempDir(TempPath);
 
 impl TempDir {

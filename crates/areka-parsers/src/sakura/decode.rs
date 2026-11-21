@@ -2,28 +2,27 @@
 //!
 //! Lexer（`lexer::lex`・位置つきは `lexer::lex_spanned`）が産んだ構文トークン列を消費し、
 //! emo2 subset タグの値正規化を施した `Instruction` 列を産む（依存方向
-//! `model ← lexer ← decode`）。下流が再パース不要なのは、この層が値を
-//! decode しきるため（要件 1.2）。
+//! `model ← lexer ← decode`）。下流が再パース不要なのは、この層が値を decode しきるため。
 //!
 //! 本ファイルが担うのは **emo2 subset の値正規化**と、それ以外のトークンの素通し:
 //! - 待ち時間 `\wN` / `\_w[ms]` → 単一 `Wait(Duration)`
-//!   （`\wN` = n × 50ms、`\_w[ms]` = 絶対 ms。要件 3）。正典に無い括弧形
-//!   `\w[n]` は待ちにしない（`\w` は知らない素の綴りの `Raw`、`[n]` は字・要件 18.1 を R18 で改めた）。
+//!   （`\wN` = n × 50ms、`\_w[ms]` = 絶対 ms）。正典に無い括弧形
+//!   `\w[n]` は待ちにしない（`\w` は知らない素の綴りの `Raw`、`[n]` は字）。
 //! - 改行 `\n` / `\n[percent]` / `\n[half]` → `NewLine(NewLineRatio)`
-//!   （素の `\n` = 1.0、`percent`/100、`half` = 0.5、負値は符号付き保持。要件 4）。
-//! - 選択肢 `\q[disp,target,refs...]` → `Choice`（disp/target 分離・要件 5.1/5.2）。
-//! - `\![name,...]` → `GenericCommand`（`move` も含め、どの名前も同じ汎用の道・要件 7.1〜7.3）。
+//!   （素の `\n` = 1.0、`percent`/100、`half` = 0.5、負値は符号付き保持）。
+//! - 選択肢 `\q[disp,target,refs...]` → `Choice`（disp/target 分離）。
+//! - `\![name,...]` → `GenericCommand`（`move` も含め、どの名前も同じ汎用の道）。
 //! - 話者スコープ → `SpeakerScope`: 角括弧付き `\p[n]`、括弧なし `\pN`（0〜9・shorthand）、
-//!   および正典 bare 形 `\0`/`\h`（本体側=0）・`\1`/`\u`（相方側=1）を写像（ukadoc・R1.5/R4.4）。
+//!   および正典 bare 形 `\0`/`\h`（本体側=0）・`\1`/`\u`（相方側=1）を写像。
 //!   サーフェス `\s[...]` → `Surface`（無加工保持）、
-//!   カーソル `\_l[x,y]` → `Cursor`、制御 `\e`/`\c`/`\-` → `End`/`Clear`/`Quit`（要件 2/6）。
+//!   カーソル `\_l[x,y]` → `Cursor`、制御 `\e`/`\c`/`\-` → `End`/`Clear`/`Quit`。
 //! - アンカー: 角括弧付き `\_a[ID,r…]` → `Anchor`（ID と引数の列）、角括弧の無い `\_a` →
 //!   `AnchorEnd`（意味を読まない転記・開きと閉じの対応は消費側）。
 //! - 裸の `\+`／`\_+` → `\![change,ghost,random]`／`\![change,ghost,sequential]` と同じ `GenericCommand`（別名の転記）。
-//! - システム変数 `%keyword` → `SystemVar`（展開なし・要件 8）、テキスト → `Text`（要件 9）。
+//! - システム変数 `%keyword` → `SystemVar`（展開なし）、テキスト → `Text`。
 //! - subset 外タグ・不正トークンは `decode_passthrough_*` の関数が `GenericCommand` / `Raw` へ
 //!   素通しする。`\q` 旧 2 連形はシーケンス依存ゆえ `fold_legacy_q` が捕捉する。
-//!   印 `\![*]` は汎用の `\!` の道、`%*` は同じ印の命令になる（script-small-tags 要件 4）。
+//!   印 `\![*]` は汎用の `\!` の道、`%*` は同じ印の命令になる。
 //!
 //! 本体の入口は `decode_noted`（`parse_noted`→`parse` から呼ぶ）。範囲なしの `decode` は
 //! その上に載せた、テストだけの入口。
@@ -62,17 +61,14 @@ pub(crate) fn decode(tokens: Vec<Token>) -> Vec<Instruction> {
 /// （mod 内・`parse_noted` が結線）。
 ///
 /// - 入力 `tokens` は lexer 出力（構文区切り済み・`lex_spanned`）。
-/// - 全 `Token` がいずれかの `Instruction` へ写像され、未デコード文字列断片は残さない
-///   （要件 1.2）。出力順は入力順（要件 1.3）。
+/// - 全 `Token` がいずれかの `Instruction` へ写像され、未デコード文字列断片は残さない。
+///   出力順は入力順。
 /// - 各 `Read::span` は元のトークンの範囲。畳んだ命令は畳んだ全部を覆う。
-/// - 失敗しない（`Vec` を返す・`Result` でない・要件 10.2）。
+/// - 失敗しない（`Vec` を返す・`Result` でない）。
 ///
-/// **シーケンス認識**: 大半のトークンは 1:1 写像だが、
-/// 一部は隣接トークンを見て局所的に畳む（design L421）:
+/// **シーケンス認識**: 大半のトークンは 1:1 写像だが、一部は隣接トークンを見て局所的に畳む:
 /// - 旧 2 連 `\q[ID][タイトル]`（`Tag{q|q*,[1]}` ＋ 直後 `Text("[...]")`）→ 単一 `Raw`
-///   （Choice 化せず丸ごと吸収・要件 5.3）。
-///
-/// そのため `Vec<(Token, Range)>` を peekable に走査する（`map` でなく明示ループ）。
+///   （Choice 化せず丸ごと吸収）。
 pub(crate) fn decode_noted(tokens: Vec<(Token, Range<usize>)>) -> Vec<Read> {
     let mut out = Vec::with_capacity(tokens.len());
     let mut it = tokens.into_iter().peekable();
@@ -83,11 +79,11 @@ pub(crate) fn decode_noted(tokens: Vec<(Token, Range<usize>)>) -> Vec<Read> {
         let mut notes = Vec::new();
         let instruction = match token {
             // 旧 2 連 `\q[ID][タイトル]` / `\q*[...]`: 直後 `Text("[...]")` を併せて
-            // 単一 `Raw` に吸収（Choice 化しない・要件 5.3）。
+            // 単一 `Raw` に吸収（Choice 化しない）。
             Token::Tag { word, args } if is_legacy_q_head(&word, &args, it.peek()) => {
                 fold_legacy_q(&word, &args, &mut it, &mut end, &mut notes)
             }
-            // 文字の番号 `\_u[…]`・`\_m[…]`（script-small-tags 要件 1・2）: サロゲートの組を
+            // 文字の番号 `\_u[…]`・`\_m[…]`: サロゲートの組を
             // 作るのに次のトークンを先読みするので、ここで読む。
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_u_5b0x0000_5d:1
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_m_5b0x00_5d:1
@@ -96,7 +92,7 @@ pub(crate) fn decode_noted(tokens: Vec<(Token, Range<usize>)>) -> Vec<Read> {
             }
             other => decode_token(other, &mut notes),
         };
-        // 本文が続くのは埋め込みの隣だけ。前の本文へつなぎ、出力に本文を 2 つ続けない（要件 1.5）。
+        // 本文が続くのは埋め込みの隣だけ。前の本文へつなぎ、出力に本文を 2 つ続けない。
         if let Instruction::Text(s) = &instruction
             && let Some(Read {
                 instruction: Instruction::Text(prev),
@@ -118,14 +114,14 @@ pub(crate) fn decode_noted(tokens: Vec<(Token, Range<usize>)>) -> Vec<Read> {
     out
 }
 
-/// `\_u`・`\_m`（文字の番号の埋め込み）の綴りか。2 つは同じ決まりで読む（要件 2.5）。
+/// `\_u`・`\_m`（文字の番号の埋め込み）の綴りか。2 つは同じ決まりで読む。
 fn is_char_code_tag(word: &str) -> bool {
     word == "_u" || word == "_m"
 }
 
-/// `\_u[…]`・`\_m[…]` を最初の引数だけで読み（要件 1.4）、出せる番号は本文の字、捨てる番号は
+/// `\_u[…]`・`\_m[…]` を最初の引数だけで読み、出せる番号は本文の字、捨てる番号は
 /// `CharCodeDropped` にする。上位のサロゲートの直後が下位のサロゲートの埋め込みなら、その
-/// トークンも消化して 1 字にする（要件 1.9）。組にならない片割れは捨てる（要件 2.3）。
+/// トークンも消化して 1 字にする。組にならない片割れは捨てる。
 fn decode_char_code(
     word: &str,
     args: &[String],
@@ -170,10 +166,6 @@ fn decode_char_code(
 /// 旧形の弁別条件:
 /// - word が `q`（現行形と同綴）または `q*`／`q0`〜`q9`（旧専用綴り・`*` は通し番号）。
 /// - 直後トークンが `Text` で、`[` 始まり `]` 終わり（宙に浮く 2 個目の `[...]`）。
-///
-/// `q*` は word 自体が現行 `q` と異なるため、後続 Text が無くとも現行 Choice には
-/// ならない（`decode_tag` の subset 外 → Raw 経路へ）。本判定が拾うのは「現行 `q` の
-/// 綴りだが直後に浮く `[...]` がある」旧形と、「`q*` ＋ 浮く `[...]`」旧形の双方。
 fn is_legacy_q_head(word: &str, args: &[String], next: Option<&(Token, Range<usize>)>) -> bool {
     // lexer が `q` で始まる語にするのは `q`・旧形の `q*`・`q0`〜`q9` だけ。
     word.starts_with('q')
@@ -183,7 +175,7 @@ fn is_legacy_q_head(word: &str, args: &[String], next: Option<&(Token, Range<usi
 
 /// 旧 2 連 `\q` を単一 `Raw` へ畳む。先頭タグ（`\q[ID]` / `\q*[ID]`）と直後の浮く
 /// `Text("[タイトル]")` を結合し、元の見かけを復元した `Raw` を 1 個だけ産む
-/// （Choice 化しない・情報を失わない・要件 5.3）。腕の無い綴りなので「知らないタグ」の印。
+/// （Choice 化しない・情報を失わない）。腕の無い綴りなので「知らないタグ」の印。
 fn fold_legacy_q(
     word: &str,
     args: &[String],
@@ -192,7 +184,6 @@ fn fold_legacy_q(
     notes: &mut Vec<ReadNote>,
 ) -> Instruction {
     notes.push(ReadNote::UnknownTag);
-    // 先頭タグの概形（`\q[ID]` 等）を復元。
     let mut raw = reconstruct_tag(word, args);
     // 直後の浮く `Text("[...]")` を取り込む（判定済みなので必ず存在する）。
     if let Some((Token::Text(t), span)) = it.next() {
@@ -208,35 +199,34 @@ fn fold_legacy_q(
 fn decode_token(token: Token, notes: &mut Vec<ReadNote>) -> Instruction {
     match token {
         Token::Text(s) => Instruction::Text(s),
-        // `%*` は `\![*]` と同じ印の命令（script-small-tags 要件 4.3）。
+        // `%*` は `\![*]` と同じ印の命令。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_25_2a:1
         Token::SysVar(keyword) if keyword == MARKER_COMMAND => Instruction::GenericCommand {
             name: keyword,
             raw_args: Vec::new(),
         },
         Token::SysVar(keyword) => Instruction::SystemVar(keyword),
-        // 短縮形 `\<word>N` の意味写像は語で分岐する。待ち `\wN` = n × 50ms（既存等価）。
+        // 短縮形 `\<word>N` の意味は語で分岐する。待ち `\wN` = n × 50ms。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1
         Token::Shorthand {
             word: ShorthandWord::Wait,
             n,
         } => Instruction::Wait(wait_units(n as u64)),
-        // バルーン面短縮 `\bN`（要件 1.2/1.3）: 1 桁の面数字を不透明文字列で保持し
+        // バルーン面短縮 `\bN`: 1 桁の面数字を不透明文字列で保持して
         // `BalloonSurface` へ。`\b[N]` ブラケット形の第 1 引数と対称（数値化しない）。
         Token::Shorthand {
             word: ShorthandWord::Balloon,
             n,
         } => Instruction::BalloonSurface(SurfaceArg::new(n.to_string())),
-        // 話者スコープ括弧なし短縮 `\pN`（ukadoc `\pID`＝任意番号・0〜9 のみ・R1.5/R4.4）:
-        // 単一桁を scope 番号として `SpeakerScope{n}` へ。`\p[n]` ブラケット形（`decode_tag`
-        // の `"p"` アーム）と等価。lexer が 1 桁のみ消費するため `\p10` = scope 1 ＋ Text("0")。
+        // 話者スコープ括弧なし短縮 `\pN`（0〜9 のみ）。lexer が 1 桁のみ消費するため
+        // `\p10` = scope 1 ＋ Text("0")。
         Token::Shorthand {
             word: ShorthandWord::Scope,
             n,
         } => Instruction::SpeakerScope { n: n as u32 },
         Token::Bare(word) => decode_bare(&word, notes),
         Token::Tag { word, args } => decode_tag(word, args, notes),
-        // 字句が区切れず `Raw` に吸収した不正断片（未閉じ `[`/`"`・要件 10.1/13.8）は
+        // 字句が区切れず `Raw` に吸収した不正断片（未閉じ `[`/`"`）は
         // 意味を詐称せずそのまま保持し、「閉じていない」の印を付ける。
         Token::Raw(s) => {
             notes.push(ReadNote::Unclosed);
@@ -247,15 +237,13 @@ fn decode_token(token: Token, notes: &mut Vec<ReadNote>) -> Instruction {
 
 /// bare タグ（角括弧なしタグの綴り・1〜3 文字）を写像する。
 ///
-/// `\n`（bare）は既定比率 1.0 の改行（要件 4.2）。`\e`/`\c`/`\-` は制御命令（要件 6.2-6.4）。
+/// `\n`（bare）は既定比率 1.0 の改行。`\e`/`\c`/`\-` は制御命令。
 ///
-/// **正典スコープタグ（bare 形・R1.5/R4.4）**: ukadoc により `\0`/`\h` = 本体側
+/// **正典スコープタグ（bare 形）**: ukadoc により `\0`/`\h` = 本体側
 /// （scope 0）、`\1`/`\u` = 相方側（scope 1）。これらを `SpeakerScope{n}` へ写像する
-/// （角括弧付き `\p[n]` と等価な話者スコープ切替）。これは完了 spec
-/// `areka-P0-sakura-parse` req 11.2（bare スコープタグを「M1 未使用 → passthrough」と
-/// 分類）の**意図的なスーパーセット更新**であり、非 emo2 ゴースト・bare タグ経路の
-/// fixture（`boot.pasta:79` の `\1\![move,...]` 等）が正しく動くようにする（emo2 自身は
-/// `\p[n]` を発行するため無影響）。
+/// （角括弧付き `\p[n]` と等価）。bare タグ経路の fixture（`boot.pasta:79` の
+/// `\1\![move,...]` 等）が正しく動くようにするためで、emo2 自身は `\p[n]` を発行する
+/// ので無影響。
 fn decode_bare(word: &str, notes: &mut Vec<ReadNote>) -> Instruction {
     match word {
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5ce:1
@@ -266,36 +254,30 @@ fn decode_bare(word: &str, notes: &mut Vec<ReadNote>) -> Instruction {
         "-" => Instruction::Quit,
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cn:1
         "n" => Instruction::NewLine(NewLineRatio::new(1.0)),
-        // 正典スコープタグ bare 形（R1.5/R4.4・ukadoc）: `\0`/`\h`=本体側、`\1`/`\u`=相方側。
+        // 正典スコープタグ bare 形: `\0`/`\h`=本体側、`\1`/`\u`=相方側。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c0_3082_3057_304f_306f_5ch:1
         "0" | "h" => Instruction::SpeakerScope { n: 0 },
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c1_3082_3057_304f_306f_5cu:1
         "1" | "u" => Instruction::SpeakerScope { n: 1 },
-        // 引数なしの裸の `\f`（text-decoration-canon 要件 2.6）: 角括弧が無いので
-        // 字句解析は bare 形にする。角括弧付きと同じ受け皿へ引数 0 個で載せ、
-        // `Raw` のまま台本の組み立ての catch-all へ落ちる経路を残さない
-        // （表示を変えない扱いは消費側が担う——本層は転記に徹する）。
+        // 引数なしの裸の `\f`: 角括弧付きと同じ受け皿へ引数 0 個で載せる
+        // （表示を変えない扱いは消費側が担う）。
         "f" => Instruction::Font { args: Vec::new() },
-        // 裸の `\+`／`\_+`（ghost-change-name-resolution 要件 1）: 角括弧付き
-        // `\![change,ghost,random]`／`\![change,ghost,sequential]` と同じ値へ写す
-        // 別名の転記。誰が消費するかは決めない（意味づけは消費側）。
+        // 裸の `\+`／`\_+`: 角括弧付き `\![change,ghost,random]`／
+        // `\![change,ghost,sequential]` と同じ値へ写す別名の転記（意味づけは消費側）。
         // 角括弧付きの `\+[…]` は正典に無いので `decode_tag` に腕を作らない。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_2b:1
         "+" => decode_passthrough_bang(["change", "ghost", "random"].map(String::from).into()),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c__2b:1
         "_+" => decode_passthrough_bang(["change", "ghost", "sequential"].map(String::from).into()),
-        // アンカーの閉じ（anchor-tag-canon 要件 1.4）: 角括弧の無い `\_a`。開きとの対応
-        // （閉じ無し・重なり・開いていない閉じ）は読まない（判定は消費側）。
+        // アンカーの閉じ: 角括弧の無い `\_a`。開きとの対応は読まない（判定は消費側）。
         "_a" => Instruction::AnchorEnd,
-        // 手前へ出す裸の `\v`（stay-on-top-directives 要件 1.1）: `\j` の前例と同じく運搬名の
-        // 汎用コマンドへ写す（窓をどう動かすかは消費側）。角括弧付きの `\v[…]` は正典に無いので
-        // `decode_tag` に腕を作らない。
+        // 手前へ出す裸の `\v`: `\j` の前例と同じく運搬名の汎用コマンドへ写す（窓をどう動かすかは
+        // 消費側）。角括弧付きの `\v[…]` は正典に無いので `decode_tag` に腕を作らない。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cv:1
         "v" => Instruction::GenericCommand {
             name: super::model::RAISE_TAG_CARRIER.to_owned(),
             raw_args: Vec::new(),
         },
-        // 上記以外の subset 外 bare タグ（`\i` `\j`・`\_n` `\__q` 等）は素通しする。
         other => decode_passthrough_bare(other, notes),
     }
 }
@@ -305,42 +287,34 @@ fn decode_bare(word: &str, notes: &mut Vec<ReadNote>) -> Instruction {
 /// word ごとに emo2 subset の値正規化を施す。subset 外 word は素通しする。
 fn decode_tag(word: String, args: Vec<String>, notes: &mut Vec<ReadNote>) -> Instruction {
     match word.as_str() {
-        // 待ち時間（要件 3.3）: `\_w[ms]` = 絶対 ms。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_w_5b_6642_9593_5d:1
         "_w" => Instruction::Wait(wait_absolute_ms(args.first(), notes)),
-        // 改行（要件 4.1）: `\n[percent]` = percent/100、`\n[half]` = 0.5。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cn_5bhalf_5d:1
         "n" => Instruction::NewLine(newline_ratio_from_arg(args.first(), notes)),
-        // 話者スコープ（要件 2.1）: `\p[n]`。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cp_5bID_756a_53f7_5d:1
         "p" => Instruction::SpeakerScope {
             n: speaker_scope_n(args.first(), notes),
         },
-        // サーフェス（要件 2.2/2.3）: `\s[...]` 中身は不透明文字列で無加工保持。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cs_5bID_756a_53f7_5d:1
         "s" => Instruction::Surface(SurfaceArg::new(args.into_iter().next().unwrap_or_default())),
-        // バルーン面切替（balloon-face-cue 要件 1.1/1.4/1.5）: `\b[...]` は `\s` と完全対称。
         // **第 1 引数のみ**を不透明保持する（fallback 形 `\b[2,--fallback=4]` は `"2"` に
         // 落ちる＝graceful）。数値化・範囲展開・alias 解決・`-1` 解釈は一切行わない。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cb_5bID_756a_53f7_5d:1
         "b" => Instruction::BalloonSurface(SurfaceArg::new(
             args.into_iter().next().unwrap_or_default(),
         )),
-        // カーソル絶対位置（要件 6.1）: `\_l[x,y]`（x/y は文字列のまま保持）。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_l_5bx_2cy_5d:1
         "_l" => decode_cursor(args),
-        // 選択肢（要件 5.1/5.2）: `\q[disp,target,refs...]`。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1
         "q" => decode_choice(args, notes),
-        // `\!` コマンド（要件 7.1〜7.3）: `move` も含め、どの名前も汎用の道（指摘 28）。
+        // `\!` コマンド: `move` も含め、どの名前も汎用の道。
         "!" => decode_passthrough_bang(args),
-        // 文字装飾 `\f[key,args...]`（text-decoration-canon 要件 2.1/2.2/2.7）: 引数列を
-        // 意味を読まずに記述順のまま転記する（空のトークンも潰さない）。キーの意味付けは
-        // 消費側（文字レンダリング層）が自己選別で行う。
+        // 文字装飾 `\f[key,args...]`: 引数列を意味を読まずに記述順のまま転記する
+        // （空のトークンも潰さない）。キーの意味付けは消費側（文字レンダリング層）が行う。
         //
-        // 本仕様が意味を与える 12 項目（フォント系 10 ＋ 一括の戻し 2）:
+        // 意味を与える 12 項目（フォント系 10 ＋ 一括の戻し 2）:
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bname_2c_30d5_30a9_30f3_30c8_540d_5d:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bheight_2c_6570_5024_5d:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bcolor_2c_8272_6307_5b9a_5d:1
@@ -355,28 +329,26 @@ fn decode_tag(word: String, args: Vec<String>, notes: &mut Vec<ReadNote>) -> Ins
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bdisable_5d:1
         //
         // 残る 31 形（寄せ 2・影 3・選択肢マーカー 10・アンカー 16）は本腕が同じ受け皿へ
-        // 転記するだけで、意味はそれぞれの所有仕様（text-align-shadow-canon・
-        // choice-marker-styling・anchor-style-canon）が後から与える。
+        // 転記するだけで、意味は消費側が与える。
         "f" => Instruction::Font { args },
-        // ジャンプ `\j[ID]`（open-external-tags 要件 1.5/1.6）: 運搬名の汎用コマンドへ
+        // ジャンプ `\j[ID]`: 運搬名の汎用コマンドへ
         // 引数列を記述順のまま転記する。ID の意味付け（URL・ファイル・イベント）は消費側。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cj_5bID_5d:1
         "j" => Instruction::GenericCommand {
             name: super::model::JUMP_TAG_CARRIER.to_owned(),
             raw_args: args,
         },
-        // アンカーの開き `\_a[ID,r…]`（anchor-tag-canon 要件 1.1〜1.3・1.11）: 第 1 引数を ID、
+        // アンカーの開き `\_a[ID,r…]`: 第 1 引数を ID、
         // 以降を引数の列として記述順のまま転記する。ID が `On` で始まるかどうかは読まない
         // （どのイベントを送るかは消費側）。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_a_5bID_2cr2_2cr3..._5d:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_a_5bOnID_2cr0_2cr1..._5d:1
         "_a" => decode_anchor(args),
-        // subset 外タグ（`\i` 等）は素通しする。
         _ => decode_passthrough_tag(word, args, notes),
     }
 }
 
-/// `\_l[x,y]` → カーソル絶対位置。x/y は文字列のまま保持（要件 6.1・design 値定数）。
+/// `\_l[x,y]` → カーソル絶対位置。x/y は文字列のまま保持。
 fn decode_cursor(args: Vec<String>) -> Instruction {
     let mut it = args.into_iter();
     let x = it.next().unwrap_or_default();
@@ -384,7 +356,7 @@ fn decode_cursor(args: Vec<String>) -> Instruction {
     Instruction::Cursor { x, y }
 }
 
-/// `\q[disp,target,refs...]` → disp/target 分離 ＋ 追加 references（順序保持・要件 5.1/5.2）。
+/// `\q[disp,target,refs...]` → disp/target 分離 ＋ 追加 references（順序保持）。
 ///
 /// 引数が 2 つ未満なら欠けた分を空にするので「既定へ落とした」印を付ける。
 fn decode_choice(args: Vec<String>, notes: &mut Vec<ReadNote>) -> Instruction {
@@ -403,10 +375,9 @@ fn decode_choice(args: Vec<String>, notes: &mut Vec<ReadNote>) -> Instruction {
 }
 
 /// `\_a[ID,r…]` → アンカーの開き。第 1 引数が ID、以降が引数の列（記述順・空のトークンも
-/// 潰さない・anchor-tag-canon 要件 1.1〜1.3）。
+/// 潰さない）。
 ///
-/// 正典は ID の形を限っていないので、`\_a[]`（ID が空）でも「既定へ落とした」印は付けない
-/// （要件 1.11）。
+/// 正典は ID の形を限っていないので、`\_a[]`（ID が空）でも「既定へ落とした」印は付けない。
 fn decode_anchor(args: Vec<String>) -> Instruction {
     let mut it = args.into_iter();
     let id = it.next().unwrap_or_default();
@@ -414,12 +385,12 @@ fn decode_anchor(args: Vec<String>) -> Instruction {
     Instruction::Anchor(Anchor { id, references })
 }
 
-/// n ウェイト単位を `Duration` へ（`\wN` = n × 50ms・要件 3.2）。
+/// n ウェイト単位を `Duration` へ（`\wN` = n × 50ms）。
 fn wait_units(n: u64) -> Duration {
     Duration::from_millis(n.saturating_mul(WAIT_UNIT_MS))
 }
 
-/// `\_w[ms]` の引数（絶対ミリ秒・要件 3.3）から待ち時間を求める。引数欠落・非数は 0ms
+/// `\_w[ms]` の引数（絶対ミリ秒）から待ち時間を求める。引数欠落・非数は 0ms
 /// （「既定へ落とした」印を付ける）。
 fn wait_absolute_ms(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> Duration {
     let ms = arg.and_then(|s| s.parse::<u64>().ok()).unwrap_or_else(|| {
@@ -429,7 +400,7 @@ fn wait_absolute_ms(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> Duration
     Duration::from_millis(ms)
 }
 
-/// `\n[percent]` / `\n[half]` から比率を求める（要件 4.1・design 値定数）。
+/// `\n[percent]` / `\n[half]` から比率を求める。
 ///
 /// - `half` → 0.5。
 /// - 数値 percent → percent / 100（`150` → 1.5・負値は符号付き保持）。
@@ -450,7 +421,7 @@ fn newline_ratio_from_arg(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> Ne
     }
 }
 
-/// `\p[n]` の話者スコープ番号（要件 2.1）。引数欠落・非数は 0（「既定へ落とした」印を付ける）。
+/// `\p[n]` の話者スコープ番号。引数欠落・非数は 0（「既定へ落とした」印を付ける）。
 fn speaker_scope_n(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> u32 {
     arg.and_then(|s| s.parse::<u32>().ok()).unwrap_or_else(|| {
         notes.push(ReadNote::ArgumentDefaulted);
@@ -459,20 +430,19 @@ fn speaker_scope_n(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> u32 {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// 寛容パススルー規則（要件 10/11.2/13.8）
+// 寛容パススルー規則
 //
 // emo2 subset 外タグ・`\!`・不正トークンの吸収先。
 // `\!` は `GenericCommand`（種別＋生引数保持）、それ以外（subset 外正準タグ・
 // subset 外 bare＝**正典スコープ bare `\0`/`\1`/`\h`/`\u` を除く**・lexer Raw 断片）は
-// 生情報を失わない `Raw` へ。いずれもエラーを
-// 送出せず解析を中断しない（要件 10.2）。`\q` 旧 2 連形は
-// シーケンス依存ゆえ `decode` の peekable 走査側で捕捉する（fold_legacy_q）。
+// 生情報を失わない `Raw` へ。いずれもエラーを送出せず解析を中断しない。
+// `\q` 旧 2 連形はシーケンス依存ゆえ `decode_noted` の peekable 走査側で捕捉する
+// （fold_legacy_q）。
 // ───────────────────────────────────────────────────────────────────
 
 /// subset 外の正準タグ（`\i` `\q*[..]` 等）→ 構文区切りのまま `Raw`
-/// 保持（要件 11.2/13.8）。生情報を復元して失わない。
+/// 保持。生情報を復元して失わない。
 /// 腕の無い綴りなので「知らないタグ」の印を付ける。
-/// 呼び手は 1 つだが、網羅台帳と互換の設計書が名指しているので残す。
 fn decode_passthrough_tag(
     word: String,
     args: Vec<String>,
@@ -482,13 +452,13 @@ fn decode_passthrough_tag(
     Instruction::Raw(reconstruct_tag(&word, &args))
 }
 
-/// `\!` → `GenericCommand { name, raw_args }`（要件 7.2/7.3）。
+/// `\!` → `GenericCommand { name, raw_args }`。
 ///
 /// 第 1 引数をコマンド種別 `name`、残りを生引数 `raw_args` として保持する
-/// （意味解釈・構造化はしない・design L426/L517）。引数が空（`\![]`）の場合は
-/// 種別空・生引数空の汎用コマンドとし、情報を捨てずエラーも送出しない（要件 10.2）。
+/// （意味解釈・構造化はしない）。引数が空（`\![]`）の場合は
+/// 種別空・生引数空の汎用コマンドとし、情報を捨てずエラーも送出しない。
 ///
-/// 印 `\![*]` もこの道で `MARKER_COMMAND` の汎用コマンドになる（script-small-tags 要件 4.1・4.2）。
+/// 印 `\![*]` もこの道で `MARKER_COMMAND` の汎用コマンドになる。
 fn decode_passthrough_bang(args: Vec<String>) -> Instruction {
     let mut it = args.into_iter();
     let name = it.next().unwrap_or_default();
@@ -497,11 +467,10 @@ fn decode_passthrough_bang(args: Vec<String>) -> Instruction {
 }
 
 /// subset 外の bare タグ（`\i` `\j`・`\_n` `\__q` 等・**スコープタグを除く**）
-/// → 綴りを `\` 付きで復元した `Raw` として保持し、生情報を失わない（要件 11.2）。
+/// → 綴りを `\` 付きで復元した `Raw` として保持し、生情報を失わない。
 /// 正典スコープ bare 形 `\0`/`\1`/`\h`/`\u` は `decode_bare` で
-/// `SpeakerScope` へ写像されるため、ここへは到達しない（R1.5/R4.4）。
+/// `SpeakerScope` へ写像されるため、ここへは到達しない。
 /// 腕の無い綴りなので「知らないタグ」の印を付ける。
-/// 呼び手は 1 つだが、網羅台帳と互換の設計書が名指しているので残す。
 fn decode_passthrough_bare(word: &str, notes: &mut Vec<ReadNote>) -> Instruction {
     notes.push(ReadNote::UnknownTag);
     Instruction::Raw(format!("\\{word}"))

@@ -1,4 +1,4 @@
-//! 自動の上げ下げの判断の純粋な規則（設計の PromotionRule）と、その状態の部品 [`AutoPromotion`]。
+//! 自動の上げ下げの判断の純粋な規則と、その状態の部品 [`AutoPromotion`]。
 //!
 //! 時刻は f64 秒のまま丸めずに比べる。前の回より戻った時刻は前の回の値として扱い（経過 0）、
 //! 同じ時刻の複数の更新は 1 回に数える。ログの水準は読まない（同じ入力から同じ答え）。
@@ -171,7 +171,7 @@ impl RuleState {
 #[derive(Component, Debug, Default, Clone)]
 pub struct AutoPromotion {
     pub(crate) rule: RuleState,
-    /// 最後に記録した見送りの理由（続く間は記録しない・要件 7.2）。
+    /// 最後に記録した見送りの理由（続く間は記録しない）。
     pub(crate) skip_memo: Option<Ineligible>,
     /// 用意中に部分の列を描いた回が在るか（次の回に描画面の有無で Ready／Failed を決める）。
     pub(crate) built: bool,

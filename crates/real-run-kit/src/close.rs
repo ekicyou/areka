@@ -1,8 +1,8 @@
-//! 閉じる知らせの送り直し・終わりの待ち・止め方・終わり方の読み取り（要件 3.7・5.1〜5.6・D-3・D-5）。
+//! 閉じる知らせの送り直し・終わりの待ち・止め方・終わり方の読み取り。
 //!
 //! 閉じる知らせは `taskkill /PID <番号>`（`/F` なし・`/T` なし）＝利用者が窓を閉じるのと同じ
 //! 閉じる要求。送る直前に取っ手の `try_wait` で子が生きていることを見るので、届くのは窓口が
-//! 起こした子だけ（取っ手を持つ間、OS はその番号を使い回さない＝5.6）。止めるのは取っ手への
+//! 起こした子だけ（取っ手を持つ間、OS はその番号を使い回さない）。止めるのは取っ手への
 //! `Child::kill` だけで、名前やほかの番号では止めない。時間は呼び手が渡す
 //! （`close`・`wait_exit` は欄ごとの値・`stop_on_drop` は `Limits`）。既定の値はここでは作らない。
 
@@ -19,7 +19,7 @@ const ACK: [&str; 2] = ["event=\"os_close_request\"", EXIT_LINE];
 /// 終わり方の行（`quit_app` の `info`）。閉じる引用符まで含めて `app_exit_again` などと分ける。
 const EXIT_LINE: &str = "event=\"app_exit\"";
 
-/// 子の終わり方（5.3・D-5）。
+/// 子の終わり方。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EndedBy {
     /// 利用者と同じ閉じ方（`origin=KanadeStopped(…)` か `origin=OsClose`）。
@@ -32,7 +32,7 @@ pub enum EndedBy {
     Unlogged,
 }
 
-/// 終わった走りの終了コードと終わり方（5.1〜5.3）。下の段の close で定め、run とクレートの入口が使う。
+/// 終わった走りの終了コードと終わり方。下の段の close で定め、run とクレートの入口が使う。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ended {
     /// 子の終わり方（終了コードは `status.code()`）。
@@ -85,7 +85,7 @@ fn debug_value(s: &str) -> &str {
     s
 }
 
-/// 閉じる知らせを送り直しながら終わりを待つ（5.1）。締切で子を止めて回収し、panic する（5.4）。
+/// 閉じる知らせを送り直しながら終わりを待つ。締切で子を止めて回収し、panic する。
 pub(crate) fn close(
     child: &mut Child,
     files: [&Path; 2],
@@ -99,7 +99,7 @@ pub(crate) fn close(
     }
 }
 
-/// 破棄から呼ぶ形（5.5・audit-test-kits 指摘 9）: `close` と同じ手順で閉じる知らせを送り直しつつ締切まで待つ。締切で子を止めて
+/// 破棄から呼ぶ形: `close` と同じ手順で閉じる知らせを送り直しつつ締切まで待つ。締切で子を止めて
 /// 回収したら、panic の途中なら ASCII の 1 行を標準エラーへ書くだけ（二重の panic にしない）、違えば理由を
 /// 書いて panic する（閉じ忘れて子を止めた回を緑にしない）。
 pub(crate) fn stop_on_drop(child: &mut Child, files: [&Path; 2], limits: &Limits) {
@@ -125,7 +125,7 @@ pub(crate) fn stop_on_drop(child: &mut Child, files: [&Path; 2], limits: &Limits
     }
 }
 
-/// 閉じる知らせを送らずに子が自分で終わるのを待つ（5.2）。締切で子を止めて回収し、panic する（5.4）。
+/// 閉じる知らせを送らずに子が自分で終わるのを待つ。締切で子を止めて回収し、panic する。
 pub(crate) fn wait_exit(
     child: &mut Child,
     files: [&Path; 2],
@@ -152,7 +152,7 @@ struct Stopped {
 }
 
 impl Stopped {
-    /// 締切切れの文: 止めたこと・最後の送り・出力の場所と末尾（末尾の組み立ては output と共用＝3.4）。
+    /// 締切切れの文: 止めたこと・最後の送り・出力の場所と末尾（末尾の組み立ては output と共用）。
     fn failure(&self, what: &str, deadline: Duration, files: [&Path; 2]) -> String {
         let reaped = match &self.reaped {
             Ok(status) => format!("回収した終わり方 {status}"),
@@ -176,7 +176,7 @@ fn ended(status: ExitStatus, files: [&Path; 2]) -> Ended {
     }
 }
 
-/// 状態の図「閉じる知らせの扱い」: Sending（`close_retry` ごとに送り直す）→ Acked（送り直さない）
+/// Sending（`close_retry` ごとに送り直す）→ Acked（送り直さない）
 /// → Exited。締切なら Killed（`Err`）。
 fn close_or_kill(
     child: &mut Child,
@@ -190,7 +190,6 @@ fn close_or_kill(
     // 送り直しをまたいで読んだ位置を持つ（送り直すたびに頭から読み直さない）。
     let mut tails = output::tails(files);
     loop {
-        // 送る直前に生きていることを見る（5.6）。
         if let Ok(Some(status)) = child.try_wait() {
             return Ok(status);
         }
@@ -200,7 +199,6 @@ fn close_or_kill(
         last_send = send_close(child.id());
         let next = (Instant::now() + close_retry).min(end);
         match output::wait_any(&mut tails, &ACK, child, next, poll) {
-            // 受け取った後は送り直さず、終わりだけを待つ。
             Ok(_) => return wait_until(child, end, poll).ok_or_else(|| kill(child, last_send)),
             Err(WaitEnd::ChildExited(exited)) => return Ok(exited.status),
             Err(WaitEnd::Deadline) => {}
@@ -234,7 +232,7 @@ fn wait_until(child: &mut Child, end: Instant, poll: Duration) -> Option<ExitSta
     }
 }
 
-/// 窓口の取っ手の子だけを止めて回収する（5.4・5.6）。
+/// 窓口の取っ手の子だけを止めて回収する。
 fn kill(child: &mut Child, last_send: String) -> Stopped {
     // 既に終わっていれば kill は失敗するが、回収はできる。
     let _ = child.kill();

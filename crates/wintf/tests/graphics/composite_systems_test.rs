@@ -1,10 +1,9 @@
-//! 入れ物を通した描画面の実 GPU のテスト（wintf-d2d-composite-rules 7.1・要件 4.2, 6.1, 6.2, 7.10）と、
-//! 差分の描き直しの範囲だけの道と全部の道の一致（wintf-visual-damage-redraw 6.3・要件 2.9, 4.2, 7.4, 7.5）。
+//! 入れ物を通した描画面の実 GPU のテストと、差分の描き直しの範囲だけの道と全部の道の一致。
 //!
 //! 本物の登録（`EcsWorld` の `PreRenderSurface` と `RenderSurface`）を実の装置と WUC の資源で回す。
 //! 窓は HWND の無い `Window` の部品だけ（画面に出さない）。WUC の描画面の画素は
 //! `ICompositionDrawingSurfaceInterop2::CopySurface` で D2D のビットマップへ写して読む
-//! （research.md §10.5・テストの確かめ方で本番には使わない）。
+//! （テストの確かめ方で、本番には使わない）。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::RunSystemOnce;
@@ -281,9 +280,9 @@ fn composite_reaches_wuc_surface_on_real_gpu() {
     });
 }
 
-// ---- 差分の描き直しの実 GPU の確かめ（wintf-visual-damage-redraw 6.3・要件 2.9, 4.2, 7.4, 7.5） ----
+// ---- 差分の描き直しの実 GPU の確かめ ----
 
-/// 範囲だけの道を通す持ち主の大きさ（DIP）。拡大 1.25 でもにじみの余白で全面にならない大きさ（6.1 と同じ）。
+/// 範囲だけの道を通す持ち主の大きさ（DIP）。拡大 1.25 でもにじみの余白で全面にならない大きさ。
 const SIDE: f32 = 40.0;
 
 fn at(x: f32, y: f32, width: f32, height: f32) -> Arrangement {
@@ -324,7 +323,7 @@ type Build = fn(&mut World, Entity) -> Vec<Entity>;
 type Change = fn(&mut World, &[Entity]);
 
 /// 自分の窓の下に、`name` の SIDE 四方・拡大 `s` の持ち主を置き、`build` で木を組む（根の命令の列は
-/// 持たない＝範囲だけの道に乗る・R1 の規則 2）。窓を分けるのは、後から足す持ち主が先の持ち主の窓の子を
+/// 持たない＝範囲だけの道に乗る）。窓を分けるのは、後から足す持ち主が先の持ち主の窓の子を
 /// 変えないため。
 fn owner(world: &mut World, name: &'static str, s: f32, build: Build) -> (Entity, Vec<Entity>) {
     let window = world.spawn(Window::default()).id();
@@ -417,7 +416,7 @@ fn assert_same(got: &[u8], want: &[u8], width: u32, what: &str) {
     }
 }
 
-/// 同じ装置の描画面 2 枚で、範囲だけの道と初めから全部の道の答えをバイトで比べる（要件 2.9・4.2・7.4・7.5）。
+/// 同じ装置の描画面 2 枚で、範囲だけの道と初めから全部の道の答えをバイトで比べる。
 ///
 /// 1. 持ち主 A を `build` の形で全部で描いて写す。
 /// 2. A を `change` で変え、同じ回に B（`build` → `change` の形・作りたて）を足して描く。A は範囲だけの道
@@ -537,7 +536,7 @@ fn opacity_layer_across_draw_rect_edge_partial_matches_full_on_real_gpu() {
 }
 
 /// 根の下の矩形の切り抜き (8,8)-(32,32) の中に動かす中身（24×40）。中身には赤 (2,2)・小数の位置の青・
-/// 下の外の緑（入る）・上へはみ出す黄（出る）。6.2 の WARP で上へ 4 の写しが効く形（余白込みで件の範囲が
+/// 下の外の緑（入る）・上へはみ出す黄（出る）。WARP で上へ 4 の写しが効く形（余白込みで件の範囲が
 /// 重ならない・規則 (1) が帯を写しの先へ広げない）。返すのは [中身]。
 fn scroll_box(world: &mut World, root: Entity) -> Vec<Entity> {
     let clip = Visual {

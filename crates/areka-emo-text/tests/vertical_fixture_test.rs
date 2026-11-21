@@ -1,33 +1,10 @@
-//! # vertical_fixture_test — 縦書き観測用 fixture 変種の読み込み検証（R11.4）
+//! 縦書き観測用 fixture 変種（`examples/fixtures/emo2-vertical/`・`emo2-vertical-canon/`）の読み込み検証。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
-//!
-//! example ローカル fixture 変種 `examples/fixtures/emo2-vertical/` を実ファイルから
-//! 読み込み、以下を檻化する（design.md「File Structure Plan」・「観測」縦横切替が正典）:
-//!
-//! - **writing_mode の縦書き解決**: descript 基層の `writing_mode,vertical_rl` 宣言が
-//!   [`WritingMode::VerticalRl`] へ解決される（R11.4）。
-//! - **折返し閾値の非退化**: 縦書きの折返し軸は `wordwrappoint.y`（軸読み替え正準表）。
-//!   共有 fixture は `wordwrappoint.y,0`＝縦書き折返しが退化するため（design.md
-//!   「軸読み替え正準表」補足）、変種は非ゼロ・有効領域内で意味のある折返しが起きる
-//!   値を与える。
-//! - **画像別上書き層の実観測**: descript 基層＜ `balloons0s.txt`（後勝ち）の 2 層
-//!   マージが変種でも有効である（R11.4・2層マージの実観測）。
-//!
-//! バルーン枠画像は共有 fixture（`検体 emo2 の同梱バルーン
-//! emo2-kakukaku の balloons0.png`・400×224 image px）を再利用し、変種が差し替えるのは
-//! balloon descript の parse 入力（descript.txt＋balloons0s.txt）だけ——本テストの
-//! 画像原寸定数はその共有枠画像の実測原寸である。
-//!
-//! ## 正典キー版フィクスチャ `emo2-vertical-canon`（areka-P0-balloon-vertical-canon task 5.1）
-//!
-//! 上記の拡張キー版に加え、SSP 正典キー `vertical,1` を宣言するだけが異なる第 2 の変種
-//! `examples/fixtures/emo2-vertical-canon/` を読み、**両版が同一の [`WritingMode`] と
-//! 同一の [`TextRegion`]（全成分）を与える**ことを檻にする
-//! （`areka-P0-balloon-vertical-canon` 要件 10.1／10.2・design.md「C6 縦書きフィクスチャ 2 種」／DD9）。
-//! あわせて、両版の `descript.txt` の差分が **`writing_mode,vertical_rl` → `vertical,1` の
-//! 1 行だけ**であること・`balloons0s.txt` が同内容であること・**両版とも `origin` を
-//! 宣言しない**こと（正典推奨形・`areka-P0-balloon-vertical-canon` 要件 10.9）を機械で固定する（人の目視に頼らない）。
+//! 縦書きの解決（`writing_mode,vertical_rl`／正典キー `vertical,1`）・折返し閾値が縦書きの軸
+//! （`wordwrappoint.y`）で非退化であること・descript 基層＜ `balloons0s.txt`（後勝ち）の 2 層マージ・
+//! 両版が同一の [`WritingMode`] と [`TextRegion`] を与えること・両版の差分が 1 行だけで `origin` を
+//! 宣言しないことを実ファイルから固定する。バルーン枠画像は共有 fixture（emo2-kakukaku の
+//! balloons0.png・400×224 image px）を再利用する。
 
 #[path = "support/mod.rs"]
 mod support;
@@ -41,8 +18,7 @@ use areka_parsers::balloon::BalloonModel;
 /// 共有 fixture のバルーン枠画像 balloons0.png の実測原寸（image px・再利用・非改変）。
 const FIXTURE_IMAGE_SIZE: (u32, u32) = (400, 224);
 
-/// fixture 変種（`examples/fixtures/emo2-vertical/`・example `emo-text-layer` が起動引数で切り替える
-/// 参照先）の descript 基層のみ（画像別上書き層なし）の BalloonModel。
+/// fixture 変種 `emo2-vertical` の descript 基層のみ（画像別上書き層なし）の BalloonModel。
 fn base_model() -> BalloonModel {
     variant_base_model(EXT_KEY_FIXTURE)
 }
@@ -52,10 +28,10 @@ fn merged_model() -> BalloonModel {
     variant_merged_model(EXT_KEY_FIXTURE)
 }
 
-// ── R11.4: writing_mode が縦書きへ解決される ──
+// ── writing_mode が縦書きへ解決される ──
 
-/// 縦書き宣言は descript 基層が持つ（`areka-P0-emo-text-layer` の design.md の正典: `writing_mode,vertical_rl`）——
-/// 基層のみでも 2 層マージ後でも `VerticalRl` へ解決される。
+/// 縦書き宣言は descript 基層が持つ（`writing_mode,vertical_rl`）。基層のみでも 2 層マージ後でも
+/// `VerticalRl` へ解決される。
 #[test]
 fn variant_writing_mode_resolves_to_vertical_rl() {
     assert_eq!(
@@ -70,7 +46,7 @@ fn variant_writing_mode_resolves_to_vertical_rl() {
     );
 }
 
-// ── R11.4: 縦書きの折返し閾値が退化しない ──
+// ── 縦書きの折返し閾値が退化しない ──
 
 /// 2 層マージ後の変種を共有枠画像原寸で解決すると、縦書きの折返し閾値
 /// （`wordwrappoint.y` 軸・負値=下辺基準）が非ゼロかつ有効領域内の値になり、
@@ -81,29 +57,24 @@ fn variant_vertical_wrap_threshold_is_nondegenerate() {
     let mode = WritingMode::resolve(&merged);
     let region = TextRegion::resolve(&merged, FIXTURE_IMAGE_SIZE, mode);
 
-    // validrect は非退化（共有 fixture 由来の上書き値 top46/bottom-56/left36/right-44）。
     assert_eq!(
         (region.left(), region.top(), region.right(), region.bottom()),
         (36.0, 46.0, 356.0, 168.0),
         "validrect が画像座標空間の非退化矩形へ解決される"
     );
 
-    // 折返し閾値: balloons0s.txt の wordwrappoint.y,-60（負値=下辺基準）→ 224-60=164。
-    // 164 は非ゼロで、書字開始側の top 46 より先・有効領域の bottom 168 以下にある
-    // ＝行内軸（+y）で意味のある折返しが起きる値。
+    // balloons0s.txt の wordwrappoint.y,-60（負値=下辺基準）→ 224-60=164。非ゼロで top 46 より先・
+    // bottom 168 以下＝行内軸（+y）で意味のある折返しが起きる値。
     assert_eq!(region.wrap_threshold(), 164.0);
 
-    // vertical_rl の書字開始角は validrect 右上（軸読み替え正準表）——変種でも成立。
+    // vertical_rl の書字開始角は validrect 右上。
     assert_eq!(region.start(), (356.0, 46.0));
 }
 
-// ── R11.4: 画像別上書き層（後勝ち）の実観測 ──
+// ── 画像別上書き層（後勝ち）の実観測 ──
 
-/// 画像別上書き層 `balloons0s.txt` が descript 基層の値を後勝ちで上書きする——
-/// 2 層マージの実観測（基層 150 → 上書き -60・値が異なることでマージ経路を証明）。
-///
-/// 基層だけでも折返し閾値は退化しない（`wordwrappoint.y,150`＝非ゼロ）——上書き層の
-/// 欠落・不読でも縦書き観測が全損しない fixture 設計であることも基層の値で固定する。
+/// 画像別上書き層 `balloons0s.txt` が descript 基層の値を後勝ちで上書きする（基層 150 → 上書き -60。
+/// 値が異なることでマージ経路を証明する）。基層だけでも折返し閾値は非ゼロ（`wordwrappoint.y,150`）。
 #[test]
 fn image_override_layer_wins_for_wrap_threshold() {
     let base = base_model();
@@ -120,15 +91,14 @@ fn image_override_layer_wins_for_wrap_threshold() {
     );
 }
 
-// ── areka-P0-balloon-vertical-canon task 5.1: 正典キー版フィクスチャと拡張キー版の同値 ──
+// ── 正典キー版フィクスチャと拡張キー版の同値 ──
 
 /// 拡張キー版（`writing_mode,vertical_rl`）フィクスチャのディレクトリ名。
 const EXT_KEY_FIXTURE: &str = "emo2-vertical";
 /// 正典キー版（`vertical,1`）フィクスチャのディレクトリ名。
 const CANON_KEY_FIXTURE: &str = "emo2-vertical-canon";
 
-/// 指定変種のファイルを生バイトで読む——**存在しないか空なら panic する**
-/// （フィクスチャ不在が「対象 0 件だから緑」へ化けない規律）。
+/// 指定変種のファイルを生バイトで読む。存在しないか空なら panic する。
 fn read_variant_bytes(variant: &str, name: &str) -> Vec<u8> {
     read_fixture_bytes(&example_fixture_dir(variant), name)
 }
@@ -148,8 +118,7 @@ fn variant_merged_model(variant: &str) -> BalloonModel {
     support::fixture::merged_model(&example_fixture_dir(variant), Some("balloons0s.txt"))
 }
 
-/// `areka-P0-balloon-vertical-canon` 要件 10.1: 正典キー `vertical,1` を宣言するフィクスチャが縦書きへ解決される——
-/// descript 基層のみでも、`balloons0s.txt` を重ねた 2 層マージ後でも `VerticalRl`。
+/// 正典キー `vertical,1` を宣言するフィクスチャが、基層のみでも 2 層マージ後でも `VerticalRl` へ解決される。
 #[test]
 fn canon_key_fixture_resolves_to_vertical_rl() {
     assert_eq!(
@@ -169,7 +138,7 @@ fn canon_key_fixture_resolves_to_vertical_rl() {
     );
 }
 
-/// `areka-P0-balloon-vertical-canon` 要件 10.2: 両版の `TextRegion` が**全成分で逐語一致**する（同一の表示結果の実観測）。
+/// 両版の `TextRegion` が全成分で逐語一致する。
 #[test]
 fn canon_and_extension_fixtures_agree_on_text_region() {
     let canon_merged = variant_merged_model(CANON_KEY_FIXTURE);
@@ -191,8 +160,7 @@ fn canon_and_extension_fixtures_agree_on_text_region() {
     );
 }
 
-/// `areka-P0-balloon-vertical-canon` 要件 10.1／10.2: 正典キー版の解決後 `TextRegion` を `areka-P0-balloon-vertical-canon` design.md「Data Models →
-/// `emo2-vertical-canon` フィクスチャのデータ形」の表どおりに逐語固定する
+/// 正典キー版の解決後 `TextRegion` を逐語固定する
 /// （left 36／top 46／right 356／bottom 168／start (356,46)／wrap 224-60=164）。
 #[test]
 fn canon_fixture_text_region_matches_design_data_model() {
@@ -216,8 +184,7 @@ fn canon_fixture_text_region_matches_design_data_model() {
     );
 }
 
-/// `areka-P0-balloon-vertical-canon` 要件 10.9: 両版とも `origin` を宣言しない（正典推奨形＝「通常は指定せず validrect の
-/// 定義に任せる」）——基層・2 層マージ後のいずれでも `origin.x`／`origin.y` が未宣言。
+/// 両版とも `origin` を宣言しない（通常は指定せず validrect の定義に任せる形）。
 #[test]
 fn neither_fixture_declares_origin() {
     for variant in [EXT_KEY_FIXTURE, CANON_KEY_FIXTURE] {
@@ -239,10 +206,8 @@ fn neither_fixture_declares_origin() {
     }
 }
 
-/// `areka-P0-balloon-vertical-canon` DD9 の「差分は 1 行だけ」を人の目視でなく機械で守る構造檻——2 つの `descript.txt` を
-/// 行単位で比較し、**異なる行がちょうど 1 組**で、それが
-/// `writing_mode,vertical_rl` → `vertical,1` であることを固定する。
-/// `balloons0s.txt` は全行一致（同内容）であることも固定する。
+/// 2 つの `descript.txt` を行単位で比べ、異なる行がちょうど 1 組で
+/// `writing_mode,vertical_rl` → `vertical,1` であること、`balloons0s.txt` が同内容であることを固定する。
 #[test]
 fn canon_descript_differs_from_extension_by_exactly_one_line() {
     let ext = read_variant_decoded(EXT_KEY_FIXTURE, "descript.txt");

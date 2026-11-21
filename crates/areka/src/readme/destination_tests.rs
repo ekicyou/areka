@@ -1,7 +1,6 @@
-//! 行き先の規則のテスト（areka-P0-open-external-tags task 2.1・2.2・要件 1.1・1.4・1.7・2.6・
-//! 3.2・4.7・5.2・6.3・8.1〜8.5・10.3・10.4）。
+//! 行き先の規則のテスト。
 //!
-//! 設計の「分類の表」の全行を 1 つの表で判定する。
+//! 分類の表の全行を 1 つの表で判定する。
 
 use super::{OpenKind, Rejection, Store, Target, classify};
 use areka_parsers::sakura::JUMP_TAG_CARRIER;
@@ -369,7 +368,7 @@ fn open_kind_strings_are_the_log_field_values() {
     }
 }
 
-// ── 台本からの取り出し（task 2.2・要件 8.1〜8.5・10.4）
+// ── 台本からの取り出し
 
 /// 結果を (書かれた綴り, 種類, 元のタグ) の列にする。
 fn summary(script: &str) -> Vec<(String, OpenKind, String)> {

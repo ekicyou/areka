@@ -133,10 +133,9 @@ pub fn enqueue(
 
 /// 窓書込指令の積み上げ（合流先の通し番号を字面で受け取る＝番兵も渡せる）。
 ///
-/// 合流（C2）を通ると後着の指令は先着の枠へ畳まれ、`merged_into_seq` に**先着の通し番号**
+/// 合流を通ると後着の指令は先着の枠へ畳まれ、`merged_into_seq` に**先着の通し番号**
 /// （一括書込の `write` の `seq` と同じ数え方）が載る。畳まれた側の経路語は書込の行に残ら
-/// ないので、この形を組めないと「合流で書込が消えた随伴」を檻へ入れられない
-/// （`areka-P0-dpi-transition-atomicity` タスク 6.6 の欠陥そのもの）。
+/// ないので、この形を組めないと「合流で書込が消えた随伴」を檻へ入れられない。
 pub fn enqueue_merged_into(
     frame: u32,
     t_us: u64,
@@ -263,7 +262,7 @@ pub fn compliant_transition_lines() -> Vec<String> {
 
 /// 起点と本体のフレーム番号を別に指定した [`compliant_transition_lines`]。
 ///
-/// 周回境界（D14）の負例が `origin_frame = u32::MAX`・`body_frame = 0` で使う。
+/// 周回境界の負例が `origin_frame = u32::MAX`・`body_frame = 0` で使う。
 pub fn compliant_transition_lines_at(origin_frame: u32, body_frame: u32) -> Vec<String> {
     vec![
         monitor(origin_frame, 96, 192, 1752, 1704),

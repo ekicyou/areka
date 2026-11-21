@@ -1,19 +1,17 @@
-//! 無いときの告知（areka-P0-baseware-root-layout 要件 6）。
+//! 無いときの告知。
 //!
 //! 起動を止める 4 場面（根なし／ゴーストなし／バルーンなし／起動窓を開けない）と
-//! SHIORI が動かなくなった場面（areka-P0-shiori-fault-notice 要件 1・5）と
-//! 記憶を書けない場面（areka-P0-write-failure-notice 要件 2.4・2.7・6.2）を
+//! SHIORI が動かなくなった場面と、記憶を書けない場面を
 //! [`AlertScene`] 1 つの型で数え、利用者向けのタスクダイアログ（`TaskDialogIndirect`）と
 //! 同じ内容の `error!` を出す。文面は [`alert_text`] が純粋に組む（テストで固定する）。
 //! 告知は環境変数 `AREKA_NO_ALERT` で抑えられる（自動テストでモーダルが止まらない）。
 //! 終わりの告知（[`raise`]）は有界の自動終了 `AREKA_APP_SMOKE_EXIT_MS` が立つ走行でも抑える。
 //! 終了コードは呼び手（`main`）の責務で、ここは告げるだけ。
 //!
-//! はい／いいえを尋ねる口 [`ask_yes_no`]（areka-P0-ghost-install 要件 4.4）と、
-//! OK だけの警告の口 [`warn_ok`]（areka-P0-emily-ghost-verification 要件 1.12）も置く。
+//! はい／いいえを尋ねる口 [`ask_yes_no`] と、OK だけの警告の口 [`warn_ok`] も置く。
 //!
 //! 3 つの口はどれも [`show_box`] 1 つの道で画面を出し、出す間だけスレッドの DPI の扱いを
-//! モニタごとの v2 にする（alert-dialog-per-monitor-dpi）。
+//! モニタごとの v2 にする。
 //!
 //! この module の `unsafe` は [`set_thread_dpi_context`]・[`show_box`] の中の `TaskDialogIndirect`・
 //! [`bring_to_front`] の 3 か所に閉じる。
@@ -39,23 +37,23 @@ use windows::core::{HRESULT, HSTRING, PCWSTR};
 
 use crate::roots::{RootError, RootsOrigin};
 
-/// 告知を抑える環境変数（要件 6.5・裁定 2）。設定されていれば抑える。
+/// 告知を抑える環境変数。設定されていれば抑える。
 /// ただし未設定・空・空白だけ・"0" は「設定されていない」と読む（`AREKA_TICK_GATE=0` と同じく 0 で切れる）。
 pub(crate) const NO_ALERT_ENV: &str = "AREKA_NO_ALERT";
 
-/// 告知の場面（要件 6.1・6.4）。
+/// 告知の場面。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AlertScene {
-    /// 根が決まらない（要件 1.4）。
+    /// 根が決まらない。
     RootMissing(RootError),
-    /// ゴーストが無い（要件 4.7）／argv のフォルダがゴーストでない（要件 4.8・argv は Some）。
+    /// ゴーストが無い／argv のフォルダがゴーストでない（argv は Some）。
     GhostMissing {
         ghost_stores: Vec<PathBuf>,
         argv: Option<PathBuf>,
     },
-    /// バルーンが無い（要件 5.8）。
+    /// バルーンが無い。
     BalloonMissing { balloon_stores: Vec<PathBuf> },
-    /// 起動窓を開けない（要件 6.4）。`reason` は失敗の内容（`PlacementError` の表示）。
+    /// 起動窓を開けない。`reason` は失敗の内容（`PlacementError` の表示）。
     StartupWindow { reason: String },
     /// SHIORI が動かなくなった（起動時か会話中かは載せない）。
     ShioriFault {
@@ -63,14 +61,14 @@ pub(crate) enum AlertScene {
         ghost_root: PathBuf,
         fault: ShioriFault,
     },
-    /// 記憶を書けない（write-failure-notice 要件 2.1〜2.4）。起動の時点か途中かを載せる。
+    /// 記憶を書けない。起動の時点か途中かを載せる。
     MemoryWrite {
         failure: PersistFailure,
         moment: WriteMoment,
     },
 }
 
-/// 記憶を書けなかった時点（write-failure-notice 要件 6.2・足す告知は 2 つの時点だけ）。
+/// 記憶を書けなかった時点（足す告知は 2 つの時点だけ）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WriteMoment {
     /// 起動の時点（ゴーストを起こす前）。
@@ -85,11 +83,11 @@ const TITLE: &str = "areka を起動できません";
 const SHIORI_FAULT_TITLE: &str = "SHIORI が動かなくなりました";
 /// 動いている途中で記憶を書けなくなった場面の題名（起動の時点は [`TITLE`]）。
 const MEMORY_WRITE_TITLE: &str = "areka の記憶を書けません";
-/// 記憶を書けない場面の直し方（環境変数の名前と既定の置き場の場所は書かない・要件 2.4）。
+/// 記憶を書けない場面の直し方（環境変数の名前と既定の置き場の場所は書かない）。
 /// 説明書の節の名前は user-data-root の `dist/README.txt` に合わせる。
 const MEMORY_WRITE_FIX: &str = "直し方: この置き場を書ける状態にしてください。置き場の変え方は、説明書（README.txt）の「■ 記憶の置き場」にあります。";
 
-/// 置き場の場面の文面（利用者向けの語は「置き場」・要件 9.5）。
+/// 置き場の場面の文面（利用者向けの語は「置き場」）。
 const ROOT_SHAPE: &str = "置くもの: ghost フォルダと balloon フォルダを持つフォルダ";
 const ROOT_BY_ENV: &str =
     "環境変数 AREKA_ROOT に、置き場のフォルダの絶対パスを ; で区切って複数渡せます。";
@@ -139,7 +137,7 @@ pub(crate) fn remembered_text(failure: &PersistFailure) -> String {
     words.join("・")
 }
 
-/// 題名と本文（純粋・テストで文面を固定する）。題名は場面ごと。本文は行数可変（要件 9.5〜9.7）:
+/// 題名と本文（純粋・テストで文面を固定する）。題名は場面ごと。本文は行数可変:
 /// 置き場の場面は「理由」「試した場所（1 行ずつ・出どころつき）」「置くもの」「AREKA_ROOT の案内」、
 /// ゴースト・バルーンの場面は「何が無いか」「探した場所（各置き場の `ghost\`／`balloon\` を 1 行ずつ）」
 /// 「置くもの」、起動窓の場面は「何が起きたか」「失敗の内容」「確かめること」、
@@ -244,7 +242,7 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
     (title.to_owned(), lines.join("\n"))
 }
 
-/// 並びの出どころを利用者向けの語へ（要件 9.5）。
+/// 並びの出どころを利用者向けの語へ。
 fn origin_text(origin: RootsOrigin) -> &'static str {
     match origin {
         RootsOrigin::EnvVar => "環境変数 AREKA_ROOT",
@@ -253,7 +251,7 @@ fn origin_text(origin: RootsOrigin) -> &'static str {
     }
 }
 
-/// 格納フォルダの場面の行: 「何が無いか」、探した場所を 1 行ずつ、「置くもの」（要件 9.6・9.7）。
+/// 格納フォルダの場面の行: 「何が無いか」、探した場所を 1 行ずつ、「置くもの」。
 fn store_lines(what: String, stores: &[PathBuf], shape: &str) -> Vec<String> {
     std::iter::once(what)
         .chain(
@@ -309,7 +307,7 @@ pub(crate) fn raise(scene: &AlertScene, suppressed: bool) {
     }
 }
 
-/// はい／いいえの答え（ghost-install 要件 4.4・4.7・4.8）。
+/// はい／いいえの答え。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum YesNo {
     Yes,

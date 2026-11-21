@@ -1,9 +1,9 @@
-//! 終了フロー（research.md §R3: termination シーム）
+//! 終了フロー
 //!
 //! Conclude / Cancel / Finish の各終了フローと境界条件を束ねる。
 
 // =========================================================================
-// 8.5 Conclude/Cancel/Finish フローテスト
+// Conclude/Cancel/Finish フローテスト
 // =========================================================================
 mod conclude_cancel_finish {
     use super::super::*;

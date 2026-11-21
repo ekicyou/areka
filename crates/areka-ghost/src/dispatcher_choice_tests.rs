@@ -7,21 +7,18 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tracing::Level;
 
-// ── task 3.3: 選択系 3 アームの中継意味論と時刻換算（design C9・DD-9/DD-11・R1.3/5.5/7.2/7.5） ──
+// ── 選択系 3 アームの中継意味論と時刻換算 ──
 //
-// 檻は 2 段構えで、それぞれ弁別できるものが違う:
-//
-// - **同期 state 檻**（[`state_fixture`]＋[`spawn_probe_talk`]）: [`DispatcherState::handle`] を
-//   テストスレッド上で直接駆動する。talk スタンドインが受けた [`SakuraMsg`] を**そのまま**
-//   突合できる（＝中継の送出内容の直接固定）ほか、棄却・防御アームのログを
-//   [`capture`](crate::test_log_capture::capture) で観測できる（捕捉窓は呼出スレッド局所
-//   ゆえ actor スレッドのログは載らない＝この段でしか語彙を固定できない）。
-// - **actor e2e 檻**（[`spawn_dispatcher`]＋実 talk）: 実再生層を通した往復（選択待ち成立通知の
+// - 同期 state の檻（[`state_fixture`]＋[`spawn_probe_talk`]）: [`DispatcherState::handle`] を
+//   テストスレッド上で直接駆動し、talk スタンドインが受けた [`SakuraMsg`] をそのまま突合する。
+//   棄却・防御アームのログは [`capture`](crate::test_log_capture::capture) で見る。捕捉窓は
+//   呼出スレッド局所で actor スレッドのログは載らないので、ログの語彙はこの段でしか固定できない。
+// - actor e2e の檻（[`spawn_dispatcher`]＋実 talk）: 実再生層を通した往復（選択待ち成立通知の
 //   ms 換算・解決による再開・Close funnel の中断 ACK 帰還）を固定する。
 
-/// 中継先 talk の**スタンドイン**（probe）。dispatcher が送った [`SakuraMsg`] を観測チャンネルへ
-/// 素通しするだけの actor で、[`TalkHandle`] の形（inbox＋join ハンドル）を満たす。実再生を挟まない
-/// ため、中継の**送出内容そのもの**を突合できる。`Close` を受けたら（実 talk 同様）停止する。
+/// 中継先 talk のスタンドイン（probe）。dispatcher が送った [`SakuraMsg`] を観測チャンネルへ
+/// 素通しするだけの actor で、実再生を挟まないので中継の送出内容をそのまま突合できる。
+/// `Close` を受けたら（実 talk 同様）停止する。
 fn spawn_probe_talk() -> (TalkHandle, mpsc::Receiver<SakuraMsg>) {
     let (obs_tx, obs_rx) = mpsc::channel::<SakuraMsg>();
     let (inbox, actor) = spawn_actor::<SakuraMsg, _>("probe-talk", move |rx| {
@@ -36,10 +33,9 @@ fn spawn_probe_talk() -> (TalkHandle, mpsc::Receiver<SakuraMsg>) {
     (TalkHandle { inbox, actor }, obs_rx)
 }
 
-/// 既に消滅した talk のスタンドイン（中継の送出失敗経路を**決定的に**再現する）。
+/// 既に消滅した talk のスタンドイン（中継の送出失敗を再現する）。
 ///
-/// body は `rx` を drop してから合図を送るため、合図受領後に inbox へ送ると必ず `Err` になる
-/// （`is_finished` のポーリングに頼らない）。
+/// body は `rx` を drop してから合図を送るので、合図の後に inbox へ送ると必ず `Err` になる。
 fn spawn_vanished_talk() -> TalkHandle {
     let (gone_tx, gone_rx) = mpsc::channel::<()>();
     let (inbox, actor) = spawn_actor::<SakuraMsg, _>("probe-talk-vanished", move |rx| {
@@ -52,7 +48,7 @@ fn spawn_vanished_talk() -> TalkHandle {
     TalkHandle { inbox, actor }
 }
 
-/// 同期駆動用の dispatcher 状態 fixture。
+/// 同期駆動用の dispatcher 状態の fixture。
 struct StateFixture {
     state: DispatcherState,
     kanade_rx: mpsc::Receiver<KanadeMsg>,
@@ -78,9 +74,8 @@ fn state_fixture() -> StateFixture {
 }
 
 impl StateFixture {
-    /// 1 メッセージを同期処理する。選択系 3 アームは（`Tick`/`Done` と同じく）**決して
-    /// dispatcher を停止させない**ため、`Continue` であることを毎回併せて固定する
-    /// （停止経路は `Close` 単独・要件 4.5）。
+    /// 1 メッセージを同期処理する。選択系 3 アームは（`Tick`/`Done` と同じく）dispatcher を
+    /// 停止させないので、`Continue` であることを毎回固定する（停止経路は `Close` だけ）。
     fn feed(&mut self, msg: DispatcherMsg) {
         assert_eq!(
             self.state.handle(msg),
@@ -90,7 +85,7 @@ impl StateFixture {
     }
 }
 
-/// slot へ talk スタンドインを据える（`base_now` は Tick 未着なら `None`）。
+/// slot へ talk スタンドインを据える（`base_now` は Tick が未着なら `None`）。
 fn occupy(state: &mut DispatcherState, talk_id: TalkId, handle: TalkHandle) {
     state.active = Some(ActiveTalk {
         talk_id,
@@ -99,7 +94,7 @@ fn occupy(state: &mut DispatcherState, talk_id: TalkId, handle: TalkHandle) {
     });
 }
 
-/// 後始末: slot に残ったスタンドインを畳む（スレッドを残さない）。
+/// slot に残ったスタンドインを畳む。
 fn release(state: &mut DispatcherState) {
     if let Some(active) = state.active.take() {
         let _ = active.handle.inbox.send(SakuraMsg::Close);
@@ -107,7 +102,7 @@ fn release(state: &mut DispatcherState) {
     }
 }
 
-/// 後始末: dispatcher へ `Close` を送り、有界の時間で join する（dispatcher のテストで共有）。
+/// dispatcher へ `Close` を送り、有界の時間で join する（dispatcher のテストで共有）。
 pub(super) fn close_and_join(tx: &mpsc::Sender<DispatcherMsg>, handle: ActorHandle) {
     tx.send(DispatcherMsg::Close).expect("send Close");
     run_bounded(
@@ -121,15 +116,13 @@ pub(super) fn close_and_join(tx: &mpsc::Sender<DispatcherMsg>, handle: ActorHand
     );
 }
 
-/// 実 talk の選択待ち台本（sakura drive.rs の MENU_SCRIPT と同一）。
+/// 実 talk の選択待ち台本（sakura drive.rs の MENU_SCRIPT と同じ）。
 ///
-/// compile 後（アンカー 0）: `hello`@0（D=0.25）／Wait@0.25（`\_w[100]`=0.1）／Choice@0.35（id=targetA）
-/// ／Barrier@0.35。占有 horizon＝0.35（barrier が最終 horizon 要素の menu ケース）。
+/// 占有 horizon は 0.35（Choice と Barrier が 0.35 にあり、barrier が最終 horizon 要素の menu ケース）。
 const MENU_SCRIPT: &str = r"\s[10]hello\_w[100]\q[選択A,targetA]\e";
 
-/// **一致中継（Resolve）・R5.5**: 現行 slot と `talk_id` が一致する `ResolveChoice` は
-/// `SakuraMsg::ResolveChoice{id}` として talk へ無改変で転送され、slot と `base_now` は動かない
-/// （解決はバリアを解くだけで talk の同一性も時刻起点も変えない）。kanade へは何も出さない。
+/// 現行 slot と `talk_id` が一致する `ResolveChoice` は `SakuraMsg::ResolveChoice{id}` として
+/// talk へ無改変で転送され、slot と `base_now` は動かない。kanade へは何も出さない。
 #[test]
 fn resolve_choice_relays_id_to_matching_talk_without_touching_slot_or_base() {
     let mut fx = state_fixture();
@@ -137,7 +130,7 @@ fn resolve_choice_relays_id_to_matching_talk_without_touching_slot_or_base() {
     let talk_id = TalkId(901);
     occupy(&mut fx.state, talk_id, probe);
 
-    // base_now を Tick で刻印し（中継が起点を動かさないことを見るため）、ミリ秒→秒の換算も見る。
+    // Tick で base_now を刻み、中継が起点を動かさないことと、ミリ秒→秒の換算を見る。
     fx.feed(DispatcherMsg::Tick {
         now: MonotonicMs(7_000),
     });
@@ -185,15 +178,15 @@ fn resolve_choice_relays_id_to_matching_talk_without_touching_slot_or_base() {
     release(&mut fx.state);
 }
 
-/// **不一致棄却（Resolve）・R1.3/5.5**: `talk_id` が現行 slot と一致しない／slot が空の
-/// `ResolveChoice` は talk へ何も送らず、`resolve_choice_stale`（info）で記録して棄却される。
+/// `talk_id` が現行 slot と一致しない／slot が空の `ResolveChoice` は talk へ何も送らず、
+/// `resolve_choice_stale`（info）で記録して棄却される。
 #[test]
 fn resolve_choice_with_mismatched_or_empty_slot_is_discarded_as_stale() {
     let mut fx = state_fixture();
     let (probe, obs_rx) = spawn_probe_talk();
     occupy(&mut fx.state, TalkId(902), probe);
 
-    // (1) 不一致（旧 talk 宛の遅延指示）。
+    // 旧 talk 宛の遅れた指示。
     let events = capture(|| {
         fx.feed(DispatcherMsg::ResolveChoice {
             talk_id: TalkId(999),
@@ -216,7 +209,7 @@ fn resolve_choice_with_mismatched_or_empty_slot_is_discarded_as_stale() {
         "stale 棄却は現行 slot を乱さない"
     );
 
-    // (2) slot 空（talk 終了後の遅延指示）。
+    // talk 終了後の遅れた指示。
     release(&mut fx.state);
     let events = capture(|| {
         fx.feed(DispatcherMsg::ResolveChoice {
@@ -236,16 +229,14 @@ fn resolve_choice_with_mismatched_or_empty_slot_is_discarded_as_stale() {
     );
 }
 
-/// **送出失敗でも運行継続（Resolve）**: 一致していても talk が直前に消滅していた場合、中継の
-/// `send` は失敗する。dispatcher は黙って捨てず `debug` で記録し、処理を継続する
-/// （steering: areka-log-first-no-silent-failure）。
+/// 一致していても talk が直前に消滅していると、中継の `send` は失敗する。dispatcher は
+/// 黙って捨てず `debug` で記録し、処理を続ける。
 #[test]
 fn resolve_choice_relay_failure_after_talk_vanished_is_recorded_at_debug_and_continues() {
     let mut fx = state_fixture();
     let talk_id = TalkId(903);
     occupy(&mut fx.state, talk_id, spawn_vanished_talk());
 
-    // `feed` は `Continue`（＝送出失敗でも dispatcher を停止させない）を併せて固定する。
     let events = capture(|| {
         fx.feed(DispatcherMsg::ResolveChoice {
             talk_id,
@@ -262,12 +253,11 @@ fn resolve_choice_relay_failure_after_talk_vanished_is_recorded_at_debug_and_con
     release(&mut fx.state);
 }
 
-/// **一致中継（Cancel）＋slot 維持・R7.5/DD-11**: 一致する `CancelChoice` は `SakuraMsg::Close`
-/// を talk へ**転送**するだけで、slot も join も保持する。その結果、talk 発の
-/// `TalkDone{Interrupted}` は `on_done` の一致判定を通り kanade へ届く。
+/// 一致する `CancelChoice` は `SakuraMsg::Close` を talk へ転送するだけで、slot も join も保つ。
+/// そのため talk 発の `TalkDone{Interrupted}` は `on_done` の一致判定を通り kanade へ届く。
 ///
-/// **弁別**: `close_active_if_any`（即 join・slot 先行解放）を使う実装なら、Close 転送直後に
-/// slot が `None` になるため後続 assert が落ち、続く `Done` も stale 棄却されて kanade へ届かない。
+/// `close_active_if_any`（即 join・slot の先行解放）を使う実装なら、Close 転送の直後に slot が
+/// `None` になって後続の assert が落ち、続く `Done` も stale として棄却される。
 #[test]
 fn cancel_choice_forwards_close_and_keeps_slot_so_talkdone_reaches_kanade() {
     let mut fx = state_fixture();
@@ -290,7 +280,7 @@ fn cancel_choice_forwards_close_and_keeps_slot_so_talkdone_reaches_kanade() {
         "Close は転送のみ——slot は維持される（close_active_if_any を使っていない直接証跡）"
     );
 
-    // talk 発の中断 ACK（正規経路）。slot が維持されているので一致判定を通る。
+    // talk 発の中断 ACK。slot が保たれているので一致判定を通る。
     fx.feed(DispatcherMsg::Done(TalkDone {
         talk_id,
         reason: TalkEndReason::Interrupted,
@@ -316,17 +306,15 @@ fn cancel_choice_forwards_close_and_keeps_slot_so_talkdone_reaches_kanade() {
     release(&mut fx.state);
 }
 
-/// **送出失敗でも運行継続（Cancel）**: 一致していても talk が直前に消滅していた場合、Close 転送の
-/// `send` は失敗する。dispatcher は黙って捨てず `debug` で記録し、slot を維持したまま継続する
-/// （steering: areka-log-first-no-silent-failure）——その talk は既に自力で終端しており、
-/// 別途届く `TalkDone` が slot を解放する（Resolve 側の同型檻と対をなす失敗経路）。
+/// 一致していても talk が直前に消滅していると、Close 転送の `send` は失敗する。dispatcher は
+/// 黙って捨てず `debug` で記録し、slot を保ったまま続ける。その talk は既に自力で終端していて、
+/// 別に届く `TalkDone` が slot を解放する。
 #[test]
 fn cancel_choice_relay_failure_after_talk_vanished_is_recorded_at_debug_and_continues() {
     let mut fx = state_fixture();
     let talk_id = TalkId(909);
     occupy(&mut fx.state, talk_id, spawn_vanished_talk());
 
-    // `feed` は `Continue`（＝送出失敗でも dispatcher を停止させない）を併せて固定する。
     let events = capture(|| {
         fx.feed(DispatcherMsg::CancelChoice { talk_id });
     });
@@ -345,8 +333,8 @@ fn cancel_choice_relay_failure_after_talk_vanished_is_recorded_at_debug_and_cont
     release(&mut fx.state);
 }
 
-/// **不一致棄却（Cancel）・R1.3**: `talk_id` 不一致／slot 空の `CancelChoice` は Close を
-/// 一切転送せず、`cancel_choice_stale`（info）で記録して棄却される（現行 talk を巻き添えにしない）。
+/// `talk_id` 不一致／slot 空の `CancelChoice` は Close を転送せず、`cancel_choice_stale`（info）で
+/// 記録して棄却される（現行 talk を巻き添えにしない）。
 #[test]
 fn cancel_choice_with_mismatched_or_empty_slot_is_discarded_as_stale() {
     let mut fx = state_fixture();
@@ -392,8 +380,8 @@ fn cancel_choice_with_mismatched_or_empty_slot_is_discarded_as_stale() {
     );
 }
 
-/// 換算の実測ヘルパ: `base` を初回 Tick で刻印し（続けて `extra_ticks` を打ち）、
-/// `ChoiceWaiting` を投函して kanade へ転送された 1 通を返す。
+/// `base` を初回 Tick で刻み（続けて `extra_ticks` を打ち）、`ChoiceWaiting` を投函して、
+/// kanade へ転送された 1 通を返す。
 fn relay_choice_waiting(
     base: MonotonicMs,
     extra_ticks: &[MonotonicMs],
@@ -429,13 +417,12 @@ fn relay_choice_waiting(
     msg
 }
 
-/// **換算値（ChoiceWaiting）・R7.2/DD-9**: `display_end_ms = base_now + round(秒 × 1000)`。
-/// `base_now` は **Tick 中継の既存起点**（初回 Tick の `now`）であり、後続 Tick でも通知時刻でも
-/// ない（新しい時間基準を作らない）。候補 id 列とタイムアウト指令は無改変で運ばれる。
+/// `display_end_ms = base_now + round(秒 × 1000)`。`base_now` は Tick 中継の起点（初回 Tick の
+/// `now`）で、後続 Tick でも通知時刻でもない。候補 id 列とタイムアウト指令は無改変で運ばれる。
 ///
-/// **弁別**: 0.3567s は 356.7ms ゆえ切り捨て実装なら 356（→ 4_356）で落ちる。1.2504s は
-/// 1250.4ms ゆえ切り上げ実装なら 1251（→ 5_251）で落ちる。両者の同時固定で「四捨五入」を挟み撃つ。
-/// 起点は base(4_000) 固定ゆえ、後続 Tick(9_000) を起点に取る実装なら 9_357 になって落ちる。
+/// 0.3567s は 356.7ms なので、切り捨て実装なら 356（→ 4_356）で落ちる。1.2504s は 1250.4ms
+/// なので、切り上げ実装なら 1251（→ 5_251）で落ちる。2 つで四捨五入を挟み撃つ。
+/// 後続 Tick(9_000) を起点に取る実装なら 9_357 になって落ちる。
 #[test]
 fn choice_waiting_converts_elapsed_secs_to_ms_from_the_tick_base_and_forwards_to_kanade() {
     match relay_choice_waiting(
@@ -490,8 +477,8 @@ fn choice_waiting_converts_elapsed_secs_to_ms_from_the_tick_base_and_forwards_to
     }
 }
 
-/// **不一致棄却（ChoiceWaiting）・R1.3**: `talk_id` 不一致／slot 空の通知は kanade へ転送されず、
-/// `choice_waiting_stale`（info）で記録して棄却される。
+/// `talk_id` 不一致／slot 空の通知は kanade へ転送されず、`choice_waiting_stale`（info）で
+/// 記録して棄却される。
 #[test]
 fn choice_waiting_with_mismatched_or_empty_slot_is_discarded_as_stale() {
     let mut fx = state_fixture();
@@ -541,9 +528,8 @@ fn choice_waiting_with_mismatched_or_empty_slot_is_discarded_as_stale() {
     );
 }
 
-/// **`base_now` 未確定の防御・DD-9**: Tick 前に通知が出るのは構造上あり得ない（通知は tick 駆動の
-/// バリア到達で出る）。それでも起点欠如を黙って埋めず `warn` で記録し、kanade へは転送しない
-/// （でっち上げた起点で誤った deadline を配らない）。
+/// Tick の前に通知が出ることは本来ない（通知は tick 駆動のバリア到達で出る）。それでも起点の欠如を
+/// 黙って埋めず `warn` で記録し、kanade へは転送しない（作った起点で誤った deadline を配らない）。
 #[test]
 fn choice_waiting_before_any_tick_is_defended_with_warning_and_not_forwarded() {
     let mut fx = state_fixture();
@@ -573,13 +559,11 @@ fn choice_waiting_before_any_tick_is_defended_with_warning_and_not_forwarded() {
     release(&mut fx.state);
 }
 
-/// **転送失敗でも運行継続（ChoiceWaiting）**: kanade が既に停止していると転送の `send` は失敗する。
-/// dispatcher は黙って捨てず `debug` で記録し、slot を乱さず継続する（停止経路は `Close` のみ・
-/// steering: areka-log-first-no-silent-failure）。
+/// kanade が既に停止していると転送の `send` は失敗する。dispatcher は黙って捨てず `debug` で
+/// 記録し、slot を乱さず続ける。
 ///
-/// **決定性**: `kanade_rx` を投函**前**に drop するため送出は必ず `Err` になる（`is_finished`
-/// 等のポーリングに依存しない）。`feed` を使わず [`DispatcherState::handle`] を直呼びするのは、
-/// fixture から受信端だけを取り出して drop するためである（`Continue` の固定は同等に行う）。
+/// `kanade_rx` を投函前に drop するので送出は必ず `Err` になる。`feed` を使わず
+/// [`DispatcherState::handle`] を直に呼ぶのは、fixture から受信端だけを取り出して drop するため。
 #[test]
 fn choice_waiting_forward_failure_after_kanade_stopped_is_recorded_at_debug_and_continues() {
     let StateFixture {
@@ -591,14 +575,13 @@ fn choice_waiting_forward_failure_after_kanade_stopped_is_recorded_at_debug_and_
     let talk_id = TalkId(910);
     occupy(&mut state, talk_id, probe);
 
-    // base_now を刻印（換算アームまで到達させる＝warn 防御枝ではないことを担保）。
+    // base_now を刻み、換算アームまで届かせる（warn の防御枝にしない）。
     assert_eq!(
         state.handle(DispatcherMsg::Tick {
             now: MonotonicMs(3_000)
         }),
         ControlFlow::Continue(())
     );
-    // 投函前に kanade 側を停止（以降の転送は必ず Err）。
     drop(kanade_rx);
 
     let events = capture(|| {
@@ -628,10 +611,10 @@ fn choice_waiting_forward_failure_after_kanade_stopped_is_recorded_at_debug_and_
     release(&mut state);
 }
 
-/// **e2e（実 talk・R7.2/5.1）**: 実再生層が選択待ちバリアへ到達すると `ChoiceWaiting` が
-/// dispatcher 経由で kanade へ届き、`display_end` は **base_now ＋ 台本由来の占有 horizon**
-/// （tick 時刻ではない）になる。続く `ResolveChoice` は talk のバリアを解き、menu ケースゆえ
-/// その場で完了して `TalkDone{Ended}` が kanade へ届く。
+/// 実 talk が選択待ちバリアへ到達すると `ChoiceWaiting` が dispatcher 経由で kanade へ届き、
+/// `display_end` は base_now ＋ 台本由来の占有 horizon（tick 時刻ではない）になる。続く
+/// `ResolveChoice` は talk のバリアを解き、menu ケースなのでその場で完了して
+/// `TalkDone{Ended}` が kanade へ届く。
 #[test]
 fn menu_talk_choice_waiting_reaches_kanade_and_resolve_resumes_it_to_completion() {
     let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
@@ -648,7 +631,7 @@ fn menu_talk_choice_waiting_reaches_kanade_and_resolve_resumes_it_to_completion(
     let talk_id = TalkId(931);
     tx.send(DispatcherMsg::Start(StartTalk::new(talk_id, MENU_SCRIPT)))
         .expect("send Start(menu)");
-    // base_now=1_000 刻印 → elapsed 0.5 で Choice@0.35・Barrier@0.35 到達（WaitingForChoice）。
+    // base_now=1_000 を刻み、elapsed 0.5 で区切り 0.35 に届いて選択待ちになる。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(1_000),
     })
@@ -707,11 +690,11 @@ fn menu_talk_choice_waiting_reaches_kanade_and_resolve_resumes_it_to_completion(
     close_and_join(&tx, handle);
 }
 
-/// **e2e（実 talk・R7.5/DD-11）**: 選択待ち中の `CancelChoice` は Close funnel を通って talk を
-/// 終了させ、talk 発の `TalkDone{Interrupted}` が**正規経路で** kanade へ届く。
+/// 選択待ち中の `CancelChoice` は Close funnel を通って talk を終了させ、talk 発の
+/// `TalkDone{Interrupted}` が kanade へ届く。
 ///
-/// **弁別**: dispatcher が `close_active_if_any`（slot 先行解放）を使う実装なら、返ってきた
-/// `TalkDone` は stale 判定で棄却され kanade へ届かず、この recv が timeout で落ちる。
+/// dispatcher が `close_active_if_any`（slot の先行解放）を使う実装なら、返ってきた `TalkDone` は
+/// stale として棄却され、この recv が timeout で落ちる。
 #[test]
 fn menu_talk_cancel_choice_ends_talk_and_interrupted_talkdone_reaches_kanade() {
     let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
@@ -737,7 +720,7 @@ fn menu_talk_cancel_choice_ends_talk_and_interrupted_talkdone_reaches_kanade() {
     })
     .expect("send Tick(base+500ms)");
 
-    // バリア成立（＝Cancel を送る前提条件）を通知の到着で決定的に待つ。
+    // Cancel の前提の選択待ちが成立するのを、通知の到着で待つ。
     assert!(
         matches!(
             kanade_rx.recv_timeout(Duration::from_secs(5)),
@@ -767,13 +750,13 @@ fn menu_talk_cancel_choice_ends_talk_and_interrupted_talkdone_reaches_kanade() {
     close_and_join(&tx, handle);
 }
 
-// ── areka-P0-balloon-text-bugs task 4.6: 押下の選択の取り次ぎ（design「押下の選択の取り次ぎ」・案 (b)） ──
+// ── 押下の選択の取り次ぎ ──
 //
 // UI の押下の選択は `ChoiceWaiting` と同じ inbox に並び、dispatcher は判断せずに inbox の順のまま
-// kanade へ送る（slot と突き合わせない・中身を変えない）。檻は同期 state 檻で、inbox へ積む順を
-// テストが決めて kanade の口に着く順を見る（1 つの inbox・1 本のスレッドで汲むことの写し）。
+// kanade へ送る（slot と突き合わせない・中身を変えない）。同期 state の檻で、inbox へ積む順を
+// テストが決めて、kanade の口に着く順を見る。
 
-/// 中身の改変を弁別できる「汚い」選択肢の入力（前後空白・空文字の引数・さくらスクリプト風）。
+/// 中身の改変を見分けられる選択肢の入力（前後空白・空文字の引数・さくらスクリプト風）。
 fn dirty_choice_input() -> ChoiceInput {
     ChoiceInput {
         id: "  Onおしゃべり頻度  ".to_string(),
@@ -783,7 +766,7 @@ fn dirty_choice_input() -> ChoiceInput {
     }
 }
 
-/// 同じく「汚い」アンカーの入力。
+/// 同じくアンカーの入力。
 fn dirty_anchor_input() -> AnchorInput {
     AnchorInput {
         id: " https://example.invalid/ ".to_string(),
@@ -793,9 +776,9 @@ fn dirty_anchor_input() -> AnchorInput {
     }
 }
 
-/// **順（件 1・1.11）**: 稼働中のトークの `ChoiceWaiting` の後に inbox へ積んだ選択は、間に時刻の
-/// 前進とトークの起動を挟んでも、kanade の口へ `ChoiceWaiting` → `Choice` → `Anchor` の順で着き、
-/// 中身は積んだまま（`Start` が slot を差し替えても棄却しない）。
+/// 稼働中のトークの `ChoiceWaiting` の後に inbox へ積んだ選択は、間に時刻の前進とトークの起動を
+/// 挟んでも、kanade の口へ `ChoiceWaiting` → `Choice` → `Anchor` の順で着き、中身は積んだまま
+/// （`Start` が slot を差し替えても棄却しない）。
 #[test]
 fn pressed_selection_queued_after_choice_waiting_reaches_kanade_in_inbox_order() {
     let mut fx = state_fixture();
@@ -841,8 +824,8 @@ fn pressed_selection_queued_after_choice_waiting_reaches_kanade_in_inbox_order()
     release(&mut fx.state);
 }
 
-/// **棄却しない（1.11）**: slot が空でも選択肢とアンカーは stale として捨てず、そのまま kanade へ送る
-/// （受けるかどうかは kanade が決める）。stale の記録も残さない。
+/// slot が空でも選択肢とアンカーは stale として捨てず、そのまま kanade へ送る（受けるかどうかは
+/// kanade が決める）。stale の記録も残さない。
 #[test]
 fn pressed_selection_with_empty_slot_is_forwarded_without_rejection() {
     let mut fx = state_fixture();
@@ -873,8 +856,8 @@ fn pressed_selection_with_empty_slot_is_forwarded_without_rejection() {
     );
 }
 
-/// **送れなかったとき（log-first）**: kanade の停止後は、選択肢は `choice_forward_failed`・アンカーは
-/// `anchor_forward_failed` の `warn!` を 1 行ずつ残し、dispatcher は止まらずに続く（後の Tick も受ける）。
+/// kanade の停止後は、選択肢は `choice_forward_failed`・アンカーは `anchor_forward_failed` の
+/// `warn!` を 1 行ずつ残し、dispatcher は止まらずに続く（後の Tick も受ける）。
 #[test]
 fn pressed_selection_forward_failure_after_kanade_stopped_warns_once_and_continues() {
     let StateFixture {

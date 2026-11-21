@@ -9,18 +9,11 @@ use tracing::trace;
 
 /// BrushInheritマーカーを持つエンティティのBrushesを解決するシステム
 ///
-/// # 処理フロー
-/// 1. With<BrushInherit>でクエリ（未解決のみ）し、深さの浅い順に並べる
-/// 2. 前景・背景を別々に、決まった色を持つ最も近い祖先から取る
-///    （この回に解決した色の表を先に見るので、同じ回に作った親子でも親の色が届く）
-/// 3. 決まった祖先が無ければデフォルト値を適用
-/// 4. Brushesを挿入し、BrushInheritマーカーを除去
+/// 前景・背景を別々に、決まった色を持つ最も近い祖先から取り（無ければデフォルト値）、
+/// Brushesを挿入してBrushInheritマーカーを除去する。深さの浅い順に処理し、この回に解決した色の表を
+/// 先に見るので、同じ回に作った親子でも親の色が届く。
 ///
 /// 祖先の走査は上限つき（`ancestors`）なので、親の輪があっても終わる。
-///
-/// # Requirements
-/// - Req 4.4: resolve_inherited_brushesシステム
-/// - Req 4.5: デフォルト色適用
 pub fn resolve_inherited_brushes(
     mut commands: Commands,
     query: Query<(Entity, Option<&Brushes>), With<BrushInherit>>,
@@ -55,7 +48,6 @@ pub fn resolve_inherited_brushes(
             .unwrap_or(DEFAULT_BACKGROUND),
         };
 
-        // Brushesを挿入/更新し、BrushInheritマーカーを除去
         commands
             .entity(entity)
             .insert(resolved.clone())

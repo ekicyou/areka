@@ -3,13 +3,13 @@
 //! surface 定義＋element overlay＋collision 矩形＋animation（bind / random / bind+random）＋
 //! surface.append（範囲）＋alias（重複キー）＋負 ID overlay＋コメント/空行を含む最小
 //! `surfaces.txt` 断片を**テスト内で自作**し、公開 `parse` 経由でモデル全構成を
-//! end-to-end 検証する（要件 10.1）。
+//! end-to-end 検証する。
 //!
 //! 仕様解釈の正典は ukadoc（SERIKO/surfaces.txt 仕様）であり、期待値はリテラル直書きで
-//! ukadoc の行文法に接地する。emo2 fixture の偶発的内容を正解の根拠にはしない（要件 10.2）。
+//! ukadoc の行文法に接地する。emo2 fixture の偶発的内容を正解の根拠にはしない。
 //! 断片は `include_str!` を用いずテスト内リテラルで組み立てる。
 //!
-//! ukadoc 行文法（design.md「ukadoc 正典に基づく行文法」・期待値の唯一の根拠）:
+//! ukadoc 行文法（期待値の唯一の根拠）:
 //! - element:   `elementN,overlay,PATH,X,Y` → `Element { layer=N, path(opaque), x, y }`・レイヤ昇順。
 //! - collision: `collision*,始点X,始点Y,終点X,終点Y,ID` → `Collision { index=*, left, top, right, bottom, name(opaque) }`。
 //! - pattern:   `animation*.pattern*,描画メソッド,サーフェス番号,ウェイト,X,Y`（負 ID はセンチネル・i64 保持）。
@@ -27,10 +27,10 @@ use super::parse;
 /// ukadoc 準拠の自前通し断片（主軸）— surface 定義・element overlay・collision 矩形・
 /// animation（bind / random / bind+random）・負 ID overlay・surface.append（範囲）・
 /// alias（重複キー）・コメント/空行を 1 断片に集約し、`parse` の全出力を
-/// リテラル期待値と end-to-end で照合する（要件 10.1/10.2）。
+/// リテラル期待値と end-to-end で照合する。
 ///
 /// 期待値は上記モジュールコメントの ukadoc 行文法に接地しており、emo2 の偶発的内容
-/// （特定 surface 番号・画像名・領域名）に依存しない（要件 10.2）。
+/// （特定 surface 番号・画像名・領域名）に依存しない。
 #[test]
 fn ukadoc_end_to_end_conformance_fragment() {
     // 自作断片: コメント/空行を意図的に散在させ、無視されることを断片自体で検証する。
@@ -85,9 +85,9 @@ kero.surface.alias
 
     let expected = Shell {
         surfaces: vec![Surface {
-            // 単一形ヘッダ `surface10` の記述子は [Single(10)]（要件 12.5(b)）。
+            // 単一形ヘッダ `surface10` の記述子は [Single(10)]。
             targets: vec![AppendTarget::Single(10)],
-            // element は入力順（2,0,1）に依らずレイヤ昇順（0,1,2）で保持される（要件 4.4）。
+            // element は入力順（2,0,1）に依らずレイヤ昇順（0,1,2）で保持される。
             elements: vec![
                 Element {
                     layer: 0,
@@ -96,7 +96,7 @@ kero.surface.alias
                     y: 0,
                 },
                 Element {
-                    // バックスラッシュ区切りは無加工保持（要件 4.3）・負座標は i64 保持（要件 4.2）。
+                    // バックスラッシュ区切りは無加工保持・負座標は i64 保持。
                     layer: 1,
                     path: ElementPath::new("parts\\face.png".to_string()),
                     x: -5,
@@ -109,7 +109,7 @@ kero.surface.alias
                     y: 4,
                 },
             ],
-            // collision は 始点X/始点Y/終点X/終点Y = left/top/right/bottom（ukadoc 順序・要件 6.1/6.2）。
+            // collision は 始点X/始点Y/終点X/終点Y = left/top/right/bottom（ukadoc 順序）。
             collisions: vec![
                 Collision {
                     index: 0,
@@ -132,7 +132,7 @@ kero.surface.alias
                     name: CollisionName::new("Bust".to_string()),
                 },
             ],
-            // animation は id 初出順（0,1,2）で保持（順序付け実行はしない・要件 5.6）。
+            // animation は id 初出順（0,1,2）で保持（順序付け実行はしない）。
             animations: vec![
                 Animation {
                     id: 0,
@@ -161,7 +161,7 @@ kero.surface.alias
                             y: 0,
                         },
                         Pattern {
-                            // 負 ID overlay は -1 センチネルとして i64 保持（要件 5.5）。
+                            // 負 ID overlay は -1 センチネルとして i64 保持。
                             index: 1,
                             method: DrawMethod::new("overlay".to_string()),
                             surface_id: -1,
@@ -175,7 +175,7 @@ kero.surface.alias
                 Animation {
                     id: 2,
                     interval: Interval::BindRandom { k: 7 },
-                    // 疎 index（0,2・pattern1 欠番）を合成せず保持（要件 5.4）。
+                    // 疎 index（0,2・pattern1 欠番）を合成せず保持。
                     patterns: vec![
                         Pattern {
                             index: 0,
@@ -200,7 +200,7 @@ kero.surface.alias
             ],
         }],
         appends: vec![SurfaceAppend {
-            // ヘッダ数値 10 は第1要素 Single、`2100-2110` は Range（展開しない）、末尾 2200 は Single（要件 7.2）。
+            // ヘッダ数値 10 は第1要素 Single、`2100-2110` は Range（展開しない）、末尾 2200 は Single。
             targets: vec![
                 AppendTarget::Single(10),
                 AppendTarget::Range {
@@ -209,7 +209,7 @@ kero.surface.alias
                 },
                 AppendTarget::Single(2200),
             ],
-            // append 内 element は本断片に無いため空（従来黙殺→転記対象・要件 12.5(c)）。
+            // append 内 element は本断片に無いため空。
             elements: vec![],
             collisions: vec![Collision {
                 index: 0,
@@ -235,7 +235,7 @@ kero.surface.alias
                 }],
             }],
         }],
-        // 重複キー "6" は 2 エントリとも順序保持（要件 8.4）。日本語キー "静観" は不透明保持（要件 8.2）。
+        // 重複キー "6" は 2 エントリとも順序保持。日本語キー "静観" は不透明保持。
         aliases: vec![
             SurfaceAlias {
                 key: AliasKey::new("6".to_string()),
@@ -250,10 +250,10 @@ kero.surface.alias
                 ids: vec![3106, 3206],
             },
         ],
-        // sort キーは本断片に無いため未指定（要件 12.5(a)）。
+        // sort キーは本断片に無いため未指定。
         animation_sort: None,
         collision_sort: None,
-        // 登場順ストリーム: surface10 → surface.append10 → alias 3 エントリ（要件 12.5(d)）。
+        // 登場順ストリーム: surface10 → surface.append10 → alias 3 エントリ。
         definitions: vec![
             DefRef::Surface(0),
             DefRef::Append(0),
@@ -266,7 +266,7 @@ kero.surface.alias
     assert_eq!(shell, expected);
 }
 
-/// 範囲ターゲットが展開されず記述子のまま保持されることを、記述子数で直接示す（要件 7.2）。
+/// 範囲ターゲットが展開されず記述子のまま保持されることを、記述子数で直接示す。
 /// `surface.append0-2,5` → [Range{0,2}, Single(5)]（範囲展開後の個別 ID 4 個ではない）。
 /// ここでは意図的にヘッダ自体を範囲 `append0-2` にし、ヘッダ数値の一律 Single 扱いに
 /// 依存しない範囲保持を証明する。
@@ -290,16 +290,16 @@ surface.append0-2,5
     );
 }
 
-// --- タスク 6.2: emo2 実物 fixture スモーク（要件 10.3）と subset 外吸収（要件 4.5/5.7/6.3/9.2）---
+// --- emo2 実物 fixture スモークと subset 外吸収 ---
 //
-// 6.1 の自前適合断片が「唯一の適合基準」（ukadoc）を厳密照合するのに対し、ここでは
-// emo2 実物 fixture（検体 emo2 の shell/master/surfaces.txt）
-// の代表抜粋を**リテラル転記**し、パニックせず・スコープ内機能（surface/element/animation/
-// collision/append/alias）を解釈し切ることを**緩め**に確認する（emo2 は最小適合サンプルであって
-// 書式の聖典ではない・要件 10.2/10.3）。`include_str!` はクレート跨ぎを避けるため用いない。
+// 上の自前適合断片が ukadoc を厳密に照合するのに対し、ここでは emo2 実物 fixture
+// （検体 emo2 の shell/master/surfaces.txt）の代表抜粋を**リテラル転記**し、パニックせず
+// スコープ内機能（surface/element/animation/collision/append/alias）を解釈し切ることを
+// **緩め**に確認する（emo2 は最小適合サンプルであって書式の聖典ではない）。
+// `include_str!` はクレート跨ぎを避けるため用いない。
 
 /// emo2 実物 fixture の代表抜粋（VERBATIM 転記）を `parse` に通し、パニックせず
-/// スコープ内機能を解釈し切ることをスモーク検証する（要件 10.3）。
+/// スコープ内機能を解釈し切ることをスモーク検証する。
 ///
 /// 転記元の実行（fixture 行番号は 2026-07-02 時点）:
 /// - surface0（L10-13）: `element0,overlay,surface0.png,0,0`（element overlay）。
@@ -312,7 +312,7 @@ surface.append0-2,5
 /// - kero.surface.alias（L458-507 抜粋）: 数値/日本語キー・重複キー・複数 ID。
 ///
 /// アサートは 6.1 より緩く「パースが通り・スコープ内機能が解釈されている」ことに絞る
-/// （非空・期待 kind の存在）。偶発的な全値の固定化はしない（要件 10.3）。
+/// （非空・期待 kind の存在）。偶発的な全値の固定化はしない。
 #[test]
 fn emo2_fixture_representative_excerpt_smoke() {
     // emo2 実物 fixture からの VERBATIM 抜粋（改行・区切り・番号は転記元のまま）。
@@ -387,7 +387,7 @@ kero.surface.alias
 }
 ";
 
-    // (a) パニックしない（スモークの第一義・要件 10.3）。
+    // (a) パニックしない（スモークの第一義）。
     let shell = parse(input);
 
     // (b) スコープ内機能が解釈され切っている（非空・期待 kind の存在）。
@@ -402,7 +402,7 @@ kero.surface.alias
         .expect("surface0 が存在しない");
     assert_eq!(s0.elements.len(), 1);
     assert_eq!(s0.elements[0].layer, 0);
-    // 画像パスは不透明保持（無加工・要件 4.3）。
+    // 画像パスは不透明保持（無加工）。
     assert_eq!(s0.elements[0].path.as_str(), "surface0.png");
     // 複数 element を持つ surface1410（element0/element1）。
     let s1410 = shell
@@ -419,7 +419,7 @@ kero.surface.alias
         .find(|s| s.targets == [AppendTarget::Single(1000)])
         .expect("surface1000 が存在しない");
     assert_eq!(s1000.collisions.len(), 2, "collision が解釈されていない");
-    // ukadoc 順序 left/top/right/bottom（要件 6.1）で転記値が入っている。
+    // ukadoc 順序 left/top/right/bottom で転記値が入っている。
     assert_eq!(
         s1000.collisions[0],
         Collision {
@@ -450,7 +450,7 @@ kero.surface.alias
         .expect("animation1400 が存在しない");
     assert_eq!(a1400.interval, Interval::BindRandom { k: 4 });
     assert_eq!(a1400.patterns.len(), 3, "疎 pattern が解釈されていない");
-    // pattern index は転記元の 1/2/3（連番前提を置かない・要件 5.4）。
+    // pattern index は転記元の 1/2/3（連番前提を置かない）。
     assert_eq!(
         a1400.patterns.iter().map(|p| p.index).collect::<Vec<_>>(),
         vec![1, 2, 3]
@@ -469,7 +469,7 @@ kero.surface.alias
             })
         })
         .expect("範囲ターゲットの append が存在しない");
-    // ヘッダ数値 10 は第1要素 Single、範囲は展開せず記述子保持（要件 7.2）。
+    // ヘッダ数値 10 は第1要素 Single、範囲は展開せず記述子保持。
     assert_eq!(
         range_append.targets,
         vec![
@@ -494,7 +494,7 @@ kero.surface.alias
     assert_eq!(blink_append.animations.len(), 1);
     let blink_anim = &blink_append.animations[0];
     assert_eq!(blink_anim.interval, Interval::Random { k: 4 });
-    // `pattern3,overlay,-1,...` の -1 は負センチネルとして i64 保持（要件 5.5）。
+    // `pattern3,overlay,-1,...` の -1 は負センチネルとして i64 保持。
     let neg = blink_anim
         .patterns
         .iter()
@@ -504,7 +504,7 @@ kero.surface.alias
 
     // --- alias（数値/日本語キー・重複キー・複数 ID）---
     assert!(!shell.aliases.is_empty(), "alias が解釈されていない");
-    // 日本語キーが不透明保持されている（要件 8.2）。
+    // 日本語キーが不透明保持されている。
     assert!(
         shell.aliases.iter().any(|a| a.key.as_str() == "通常"),
         "日本語 alias キーが解釈されていない"
@@ -516,7 +516,7 @@ kero.surface.alias
         .find(|a| a.key.as_str() == "6")
         .expect("alias キー 6 が存在しない");
     assert_eq!(alias6.ids, vec![2106, 2206]);
-    // 重複キー `100`（fixture に 2 回出現）は潰さず全保持（要件 8.4）。
+    // 重複キー `100`（fixture に 2 回出現）は潰さず全保持。
     let key100_count = shell
         .aliases
         .iter()
@@ -527,17 +527,15 @@ kero.surface.alias
 
 /// subset 外機能を含む emo2 風の複合断片を**公開 `parse` 経由**で通し、要素ごとに
 /// 吸収（element/collision）と忠実転記（pattern method/interval）を区別しつつ、隣接する
-/// 認識可能ブロックが壊れないことを検証する（要件 4.5/4.6/6.3/8.2/9.2）。
+/// 認識可能ブロックが壊れないことを検証する。
 ///
-/// タスク 4.6 は同性質を decode レイヤの合成断片で検証済み。ここは**バリデーション層で
-/// 公開 facade を通す**補完で、emo2 風の実在感ある断片を用いる（重複ではない）。
+/// 断片は decode レイヤの合成断片と同性質の検証を、バリデーション層で公開 facade を通して行う。
 ///
 /// 断片は認識可能ブロックの「間」に subset 外を挟む:
-/// - element定義の `base`（`element0,base,...`）→ overlay と同じ値（element-base-method 要件 1.1）。
-/// - 非 overlay pattern メソッド（`pattern0,replace,...`）→ 忠実転記（method を落とさない・要件 4.6/8.4）。
-/// - 3 種以外の interval（`sometimes`）→ `Interval::Other(原文)` へ忠実転記（要件 8.2・討議 #1）。
-/// - 正しい書式の `collisionex`（多角形）→ 値になり、純 collision と書いた順に並ぶ
-///   （collisionex-regions 要件 1.4・1.8・8.8）。
+/// - element定義の `base`（`element0,base,...`）→ overlay と同じ値。
+/// - 非 overlay pattern メソッド（`pattern0,replace,...`）→ 忠実転記（method を落とさない）。
+/// - 3 種以外の interval（`sometimes`）→ `Interval::Other(原文)` へ忠実転記。
+/// - 正しい書式の `collisionex`（多角形）→ 値になり、純 collision と書いた順に並ぶ。
 #[test]
 fn subset_out_features_absorbed_via_public_parse_without_breaking_neighbors() {
     let input = "\
@@ -630,7 +628,7 @@ element0,overlay,tail.png,7,8
     ));
 
     // animation: sometimes は Interval::Other へ忠実転記され、replace/overlay 双方の pattern が
-    // method を落とさず残る（overlay フィルタ・fallback-Bind ともに撤去済み・要件 4.6/8.2）。
+    // method を落とさず残る。
     assert_eq!(s200.animations.len(), 1);
     let a = &s200.animations[0];
     assert_eq!(

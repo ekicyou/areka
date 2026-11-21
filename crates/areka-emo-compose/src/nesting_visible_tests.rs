@@ -1,4 +1,4 @@
-//! 参照の表と「今の絵に出ている部品」（要件 5.11・5.13・8.3）。
+//! 参照の表と「今の絵に出ている部品」。
 //!
 //! 規則（`flatten_surface` と同じ辺）: 一番上から ① element定義の子 ② 有効な純 `bind` の手順の描くコマの先
 //! （同じ animation の番号にコマが在ればコマが置き換える・`bind+random` は手順を持たない）②' `always` の経過 0 のコマの先
@@ -6,7 +6,7 @@
 //! 部品は部品の欄）のうち描画メソッドが動くもので、`bind+random` なら有効なものの先、をたどる。
 //! 先祖へ戻る辺は進まない。
 //!
-//! 後半は合成との一致の檻（要件 3.2・5.12）: 「部品 X のコマを足すと命令列が変わる」⇔
+//! 後半は合成との一致の檻: 「部品 X のコマを足すと命令列が変わる」⇔
 //! 「X が部品の列に在る」・外れた `bind+random` のコマは両方を変えない・合成が切る循環の辺は報告に在る。
 
 use std::collections::BTreeSet;
@@ -76,9 +76,7 @@ fn fixture_table_lists_children_and_bind_targets() {
     );
     let children = |id: u32| table.parts(id).unwrap().children.clone();
     assert_eq!(children(0), vec![10, 30]);
-    // surface.append1 の element2 が 30 を足す（element定義の番号の昇順）。
     assert_eq!(children(1), vec![10, 30]);
-    // ファイル名の慣習だけで建つ 11 も「在る」。
     assert_eq!(children(2), vec![10, 11]);
     assert_eq!(children(30), vec![31]);
     assert_eq!(children(31), vec![32]);
@@ -107,7 +105,6 @@ fn fixture_visible_parts_follow_children_binds_and_frames() {
         visible(&table, 0, &BindSet::default(), &empty),
         vec![10, 30, 31, 32]
     );
-    // ② 有効な着せ替えの pattern0 の先。
     assert_eq!(
         visible(&table, 0, &BindSet::from_ids([100]), &empty),
         vec![10, 30, 31, 32, 40]
@@ -121,7 +118,6 @@ fn fixture_visible_parts_follow_children_binds_and_frames() {
         vec![10, 11]
     );
     assert_eq!(visible(&table, 71, &BindSet::default(), &empty), vec![70]);
-    // 部品の無い面。
     assert_eq!(
         visible(&table, 32, &BindSet::from_ids([100]), &empty),
         Vec::<u32>::new()
@@ -182,7 +178,7 @@ fn frame_replaces_bind_pattern0() {
 }
 
 /// ③ 有効でない `bind+random` のコマは数えない。純 `bind`・着せ替えでないコマは無条件に数える
-/// （純 `bind` のコマは呼ばれて始まったものだけ・seriko-pattern-calls 5.6・M5 で期待を直した）。
+/// （純 `bind` のコマは呼ばれて始まったものだけ）。
 #[test]
 fn inactive_bind_random_frames_are_not_counted() {
     let text = "\
@@ -222,7 +218,7 @@ element0,overlay,eye.png,0,0
         })
     );
 
-    // 一番上の欄: 無効な純 `bind` 9 のコマも数える（M5）。
+    // 一番上の欄: 無効な純 `bind` 9 のコマも数える。
     let mut top = PatternState::default();
     top.set(9, frame(7, 0, 0));
     assert_eq!(visible(&table, 0, &BindSet::default(), &top), vec![5, 7]);
@@ -241,7 +237,6 @@ element0,overlay,eye.png,0,0
         vec![5, 6, 7]
     );
 
-    // 描画メソッドが動かないコマは数えない。
     let mut not_drawn = PatternState::default();
     not_drawn.set_part(
         5,
@@ -255,7 +250,7 @@ element0,overlay,eye.png,0,0
 }
 
 /// 着せ替えの先は手順の「描く」コマ（0 以上・描画メソッドが動く・欄 2 が animation の番号の語を除く）だけ。
-/// 純 `bind` は pattern0 に限らない（animation4 の pattern1・seriko-pattern-calls M6）。
+/// 純 `bind` は pattern0 に限らない（animation4 の pattern1）。
 #[test]
 fn bind_targets_keep_only_drawable_steps() {
     let text = "\
@@ -304,8 +299,8 @@ element0,overlay,eye.png,0,0
     );
 }
 
-/// seriko-pattern-calls 6.8・M6: 入れ子の辺は着せ替えの手順の「描く」コマから作る。純 `bind` は全部の
-/// コマ（呼び出しの語は除く）。`bind+random` は手順を持たないので、有効でもコマが無ければ数えない（件 26）。
+/// 入れ子の辺は着せ替えの手順の「描く」コマから作る。純 `bind` は全部の
+/// コマ（呼び出しの語は除く）。`bind+random` は手順を持たないので、有効でもコマが無ければ数えない。
 #[test]
 fn bind_targets_come_from_bind_steps_draws() {
     let text = "\
@@ -391,7 +386,7 @@ fn out_is_cleared_and_reused() {
     assert!(out.is_empty());
 }
 
-// ── 合成との一致の檻（要件 3.2・5.11・5.12・5.13・8.3） ──
+// ── 合成との一致の檻 ──
 //
 // 規則（`visible_parts`）と合成の平坦化（`derive_ops` → `flatten_surface`）は別々に書いてあるので、
 // 片方だけを変えるとずれる。ここでは両者を同じ面の表・同じ着せ替えの集合・同じコマの状態で動かし、
@@ -470,7 +465,7 @@ impl Case {
             .collect()
     }
 
-    /// 3.2 の報告の循環（親, element, 指した番号）。
+    /// 読み込みの報告の循環（親, element, 指した番号）。
     fn reported_cycles(&self) -> BTreeSet<(u32, u32, u32)> {
         self.world
             .nest_report()
@@ -497,22 +492,17 @@ fn not_drawn(surface_id: u32) -> PatternFrame {
 
 /// 検体: 子・3 段の入れ子・着せ替え 100 の pattern0 の先 40・40 の口 41・循環 60〜62。
 fn fixture_case() -> Case {
-    // 先頭 2 つは pattern定義どおりのコマだけ（10 のまばたき→12・40 の口→41）。
     let mut parts = PatternState::default();
     parts.set_part(10, 0, frame(12, 0, 0));
     parts.set_part(40, 0, frame(41, 0, 0));
-    // 一番上のコマが着せ替え 100 の pattern0 を置き換える。
     let mut replaced = parts.clone();
     replaced.set(100, frame(41, 0, 0));
-    // 一番上の欄の着せ替えでないコマ。
     let mut top_plain = PatternState::default();
     top_plain.set(0, frame(12, 0, 0));
-    // 多段の内側・pattern定義の先のさらに先の部品のコマ（先祖へ戻るものを含む）。
     let mut deep = parts.clone();
     deep.set_part(32, 0, frame(12, 0, 0));
     deep.set_part(31, 0, frame(0, 0, 0));
     deep.set_part(41, 0, frame(30, 0, 0));
-    // 描画メソッドが動かないコマ。
     let mut reduce = PatternState::default();
     reduce.set(100, not_drawn(41));
     reduce.set_part(10, 0, not_drawn(12));
@@ -661,7 +651,7 @@ fn cases() -> [Case; 3] {
     [fixture_case(), layered_case(), mixed_cycle_case()]
 }
 
-/// 「部品 X のコマを足すと命令列が変わる」⇔「X が今の絵に出ている部品に在る」（要件 5.11・5.13）。
+/// 「部品 X のコマを足すと命令列が変わる」⇔「X が今の絵に出ている部品に在る」。
 ///
 /// 足すコマは、X の部品の欄の、どの文面にも無い animation の番号に、目印のサーフェスを指す Overlay。
 /// X の段が合成されれば必ず目印の命令が 1 つ増え、合成されなければ何も変わらない。一番上 T と
@@ -721,7 +711,7 @@ fn equivalence_cage_reaches_pattern_targets_and_inner_part_frames() {
 }
 
 /// 着せ替えの集合から外れた `bind+random` のコマ（一番上の欄・部品の欄）を足しても、命令列も
-/// 部品の列も変わらない（要件 5.12・純 `bind` は M5 で外した）。
+/// 部品の列も変わらない（純 `bind` は着せ替えの層に入らない）。
 #[test]
 fn inactive_bind_random_frames_change_neither_ops_nor_parts() {
     let mut rows = 0;
@@ -775,7 +765,7 @@ fn cut_element_edges(logs: &str) -> Vec<(u32, u32, u32)> {
         .collect()
 }
 
-/// 合成が実際に切る循環の element定義の辺は、どの一番上から見ても 3.2 の報告に在る（要件 3.2・8.3）。
+/// 合成が実際に切る循環の element定義の辺は、どの一番上から見ても読み込みの報告に在る。
 /// pattern定義の辺で切る循環（`debug!`）は報告の対象でない。検体と文面では、全ての一番上で切った辺を
 /// 合わせると報告の循環にちょうどなる。
 #[test]

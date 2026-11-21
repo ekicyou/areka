@@ -1,5 +1,4 @@
-//! 偽の SHIORI で起動の道を通す、台本の出どころの通しのテスト（areka-P0-script-security-level
-//! 要件 1.4・3.1・4.2・4.3・design「E2E（x64 の偽の SHIORI）」）。
+//! 偽の SHIORI で起動の道を通す、台本の出どころの通しのテスト。
 //!
 //! 親（`runtime_boot_tests.rs`）と同じ組み方（`ShioriWiring::Custom` に偽の受け手・束から組む受け口）で
 //! 起こし、`OnBoot` の台本 `\![enter,nouserbreakmode]…` の応答に `SecurityLevel` を添える。
@@ -97,7 +96,7 @@ fn boot_signals(on_boot_level: Option<&'static str>) -> Vec<NoUserBreakSignal> {
     signals
 }
 
-/// 応答の `SecurityLevel: external` で起動のトークが外部扱いになり、線に `Enter` が出ない（areka-P0-script-security-level 要件 4.2）。
+/// 応答の `SecurityLevel: external` で起動のトークが外部扱いになり、線に `Enter` が出ない。
 /// 運ぶ道のどこかが既定の値（ゴースト自身＝`local`）に落ちると `Enter` が出て赤になる。
 #[test]
 fn external_on_boot_reply_keeps_enter_off_the_line() {
@@ -107,7 +106,7 @@ fn external_on_boot_reply_keeps_enter_off_the_line() {
     );
 }
 
-/// `local` または応答のレベル無しでは今どおり `Enter` が出る（areka-P0-script-security-level 要件 1.4・3.1・4.3）。
+/// `local` または応答のレベル無しでは今どおり `Enter` が出る。
 #[test]
 fn local_or_absent_on_boot_reply_lets_enter_through() {
     for level in [Some("local"), None] {

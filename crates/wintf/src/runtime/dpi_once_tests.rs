@@ -1,4 +1,4 @@
-//! `ensure_process_dpi_awareness` の 1 回だけの決まり（要件 2.2・2.3・10.3）。
+//! `ensure_process_dpi_awareness` の 1 回だけの決まり。
 
 use super::ensure_process_dpi_awareness;
 

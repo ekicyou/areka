@@ -1,5 +1,5 @@
 //! 「常時最前面ではない普通の窓」という既定の重なりと、常時最前面の政策を後から
-//! 足しても要件 1 の隣接が壊れないことを固定するテスト（要件 8.1／8.2）。
+//! 足してもペアの隣接が壊れないことを固定するテスト。
 //!
 //! # 兄弟ファイルとの分担
 //!
@@ -15,14 +15,14 @@
 //!
 //! Windows はトップレベル窓を 2 つの帯に分けて重ねる——常時最前面（`WS_EX_TOPMOST`）の
 //! 一群が、そうでない一群より必ず手前に来る。`\v` 相当の政策を後から足すというのは、
-//! ゴースト一式をこの帯へ移すということである（要件 8.2）。よって独立性の主張は
+//! ゴースト一式をこの帯へ移すということである。よって独立性の主張は
 //! 「一式が同じ帯に居ても、ペアの隣接は同じように成立する」という形で確かめられる。
 //!
 //! **組と鎖は帯を書かない**。本番でゴーストの窓を帯へ入れる・帯から出すのは帯の働きの
 //! ファイル（`window_band.rs`。ほかの帯の書き手はその頭の doc に挙げてある）であり、ここで
 //! 帯を作るのはテストが自分で生成した窓に対してだけである。
 //! 組の是正が帯の窓を挿入位置に指すのは、キャラクターも帯に居るときだけである
-//! （`stay-on-top-directives` 要件 2.4・末尾の 1 件）。
+//! （末尾の 1 件）。
 //!
 //! # トップレベル窓と子窓の使い分け
 //!
@@ -38,7 +38,7 @@
 //! # 明示実行へ隔離した 3 本
 //!
 //! 次の 3 本は `#[ignore]` と本体 1 行目の門（`require_explicit_real_window_run`）で
-//! 既定の走行から外してある（根治の引受先は `zorder-chain-residue` の A-1）。
+//! 既定の走行から外してある（戻す条件は `require_explicit_real_window_run` の TODO）。
 //!
 //! - `pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares`（帯の印だけを見る）
 //! - `the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band`
@@ -134,7 +134,7 @@ fn sink_to_bottom(hwnd: HWND) {
 }
 
 // -------------------------------------------------------------------------
-// 要件 8.2: 常時最前面の政策を足しても、ペアの隣接は同じように成立する
+// 常時最前面の政策を足しても、ペアの隣接は同じように成立する
 // -------------------------------------------------------------------------
 
 /// 帯の内外で変わってはならない観測（隣接の成立と、出た記録の本数）。
@@ -206,7 +206,7 @@ fn run_pair_convergence(tag: PCWSTR, always_on_top: bool) -> (ConvergenceOutcome
 }
 
 /// 一式が常時最前面の帯に居ても、居なくても、ペアの隣接はまったく同じように成立する
-/// （要件 8.2——隣接を保つ仕組みと、一式を最前面へ上げる政策とは互いに独立している）。
+/// （隣接を保つ仕組みと、一式を最前面へ上げる政策とは互いに独立している）。
 ///
 /// 同じ筋書きを帯の外と中で 1 度ずつ走らせ、観測が**一致すること**を主張する。
 /// 片側だけを見て「成立した」と言うと、帯の有無に関係なく成立する主張と区別できない
@@ -218,7 +218,7 @@ fn pair_adjacency_converges_identically_inside_and_outside_the_always_on_top_ban
     let (outside, outside_band) = run_pair_convergence(w!("wintf-zorder-band-outside"), false);
     let (inside, inside_band) = run_pair_convergence(w!("wintf-zorder-band-inside"), true);
 
-    // まず帯の中で不変条件が成立していること（要件 1 の隣接）。
+    // まず帯の中で不変条件が成立していること。
     assert!(
         inside.balloon_directly_above_character,
         "常時最前面の帯の中でもバルーンはキャラのすぐ手前に来るはず: {inside:?}"
@@ -246,7 +246,7 @@ fn pair_adjacency_converges_identically_inside_and_outside_the_always_on_top_ban
 }
 
 // -------------------------------------------------------------------------
-// 要件 8.1／8.2: 是正の指令は帯の所属を動かさない
+// 是正の指令は帯の所属を動かさない
 // -------------------------------------------------------------------------
 
 /// 一式が同じ帯を共有していれば、是正の 3 通りの指令はどれも帯の所属を動かさない。
@@ -278,7 +278,7 @@ fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
         "前提: ペアの 2 窓とも常時最前面の帯に居るはず"
     );
 
-    // 腕①（`PlaceAboveOverBelow` の `After`・要件 1.2）の形の指令。挿入位置にキャラそのものを渡すので
+    // 腕①（`PlaceAboveOverBelow` の `After`）の形の指令。挿入位置にキャラそのものを渡すので
     // バルーンはキャラのすぐ背後へ入る（本番はキャラの最も近い可視の手前の窓を渡す）。見るのは帯の印だけ。
     SetWindowPosCommand::enqueue(pair_fix_command(balloon, InsertSpec::After(character)));
     flush_window_pos_commands();
@@ -290,7 +290,7 @@ fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
     flush_window_pos_commands();
     assert!(is_always_on_top(balloon), "腕②でバルーンが帯から出た");
 
-    // 腕③「キャラをバルーンのすぐ背後へ」（要件 1.3）
+    // 腕③「キャラをバルーンのすぐ背後へ」
     SetWindowPosCommand::enqueue(pair_fix_command(character, InsertSpec::After(balloon)));
     flush_window_pos_commands();
     assert!(is_always_on_top(character), "腕③でキャラが帯から出た");
@@ -333,7 +333,7 @@ fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
 }
 
 // -------------------------------------------------------------------------
-// 要件 8.1: 既定の一式は帯の外のまま
+// 既定の一式は帯の外のまま
 // -------------------------------------------------------------------------
 
 /// 本番と同じ形のゴースト窓へ確立系と維持系を通しても、常時最前面の印は付かない。
@@ -408,7 +408,7 @@ fn the_pair_machinery_never_puts_ghost_shaped_windows_into_the_always_on_top_ban
 }
 
 // -------------------------------------------------------------------------
-// 要件 8.1／1.2: 挿入位置が常時最前面の窓だったときの是正
+// 挿入位置が常時最前面の窓だったときの是正
 // -------------------------------------------------------------------------
 
 /// 実測した挿入位置が他アプリの常時最前面窓だったとき、是正はバルーンを帯へ引き込まない。
@@ -423,9 +423,9 @@ fn the_pair_machinery_never_puts_ghost_shaped_windows_into_the_always_on_top_ban
 ///
 /// この形が診断で見つからないのは、引き込まれた後もバルーンはキャラのすぐ手前に居るためで
 /// ある——次巡の実測照合は一致し、`verify-failed` も `error!` も出ない。露見するのは
-/// 他アプリを活性化したときの `sink-observed` だけ（要件 4.1／4.2 の毀損）である。
+/// 他アプリを活性化したときの `sink-observed` だけである。
 ///
-/// 主張は帯の所属そのもの（要件 8.1）で、対照として同じ窓・同じ経路で**帯へ引き込む指令**も
+/// 主張は帯の所属そのもので、対照として同じ窓・同じ経路で**帯へ引き込む指令**も
 /// 出す（読み取りが常に偽を返しているのではないこと、および危険が実在することの両方を示す）。
 #[test]
 fn a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_band() {
@@ -488,7 +488,7 @@ fn a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_ban
     }
 }
 
-/// 通常帯の最上へ置く是正でも、バルーンはキャラのすぐ手前に入る（要件 1.2）。
+/// 通常帯の最上へ置く是正でも、バルーンはキャラのすぐ手前に入る。
 ///
 /// # なぜ隣接だけ子窓で測るのか
 ///
@@ -583,7 +583,7 @@ fn the_top_of_normal_band_fix_still_lands_the_balloon_directly_above_the_charact
 /// この 1 ビットが挿入位置を分ける（[`InsertSpec::After`] か
 /// [`InsertSpec::TopOfNormalBand`] か）ので、読み取りが常に同じ答えを返していないことを
 /// 両側で示す必要がある。読めなかった場合に**帯の中へ倒す**のは、`false` へ倒すと
-/// 「帯の中の窓を挿入位置に指す」経路が復活し、要件 8.1 を毀損する側へ倒れるからである。
+/// 「帯の中の窓を挿入位置に指す」経路が復活し、バルーンを帯へ引き込みうる側へ倒れるからである。
 /// 倒したこと自体は黙って落とさず記録に残す。
 #[test]
 fn measuring_band_membership_answers_both_ways_and_falls_back_into_the_band_on_failure() {
@@ -619,7 +619,7 @@ fn measuring_band_membership_answers_both_ways_and_falls_back_into_the_band_on_f
 ///
 /// 挿入位置の窓の実測（直上のテスト）と倒す向きが逆である——こちらの真は「帯の窓を
 /// 挿入位置に指してよい」を開くので、読めないときに真へ倒すと帯の外のキャラのバルーンを
-/// 帯へ引き込む（要件 3.3）。倒したことは 1 度だけ記録に残す。
+/// 帯へ引き込む。倒したことは 1 度だけ記録に残す。
 #[test]
 fn measuring_the_character_band_answers_both_ways_and_falls_back_out_of_the_band_on_failure() {
     let inside = create_always_on_top_toplevel(w!("wintf-zorder-below-band-inside"));
@@ -742,7 +742,7 @@ fn the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_ba
 }
 
 // -------------------------------------------------------------------------
-// stay-on-top-directives 要件 2.4: 帯の中の組の是正
+// 帯の中の組の是正
 // -------------------------------------------------------------------------
 
 /// キャラクターとバルーンが帯に居て間に他の帯の窓が居るとき、是正はバルーンを帯の中で

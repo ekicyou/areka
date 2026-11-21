@@ -13,13 +13,12 @@ use crate::normalized::SurfaceMaster;
 use crate::world::AtlasBinding;
 
 /// 全 surface entity の `SurfaceMaster.elements` を `AtlasTable::resolve` で一度きり
-/// `ElementId` へ束縛し、平行な `AtlasBinding` を entity へ挿入する（要件 4.3）。
+/// `ElementId` へ束縛し、平行な `AtlasBinding` を entity へ挿入する。
 ///
-/// resolve は本関数（構築時）でのみ呼ぶ（design Postconditions「束縛後の compose 経路に
-/// resolve 呼び出しが存在しない」）。`ElementPath.as_str()` は無改変で `AtlasTable` の
-/// `rel_path` キーと同一規約ゆえ、bake 済みの既知パスは `Some(ElementId)`・未知パスは
-/// `None`＋`debug` になる（design Risks）。パニックしない。画像でない element
-/// （[`ElementKind`] が `Image` 以外）は引かずに `None` を置き、警告も出さない。
+/// resolve は本関数（構築時）でのみ呼ぶ。束縛後の compose 経路に resolve 呼び出しは無い。
+/// `ElementPath.as_str()` は無改変で `AtlasTable` の `rel_path` キーと同一規約ゆえ、
+/// bake 済みの既知パスは `Some(ElementId)`・未知パスは `None`＋`debug` になる。パニックしない。
+/// 画像でない element（[`ElementKind`] が `Image` 以外）は引かずに `None` を置き、警告も出さない。
 ///
 /// `AtlasBinding.0` は `SurfaceMaster.elements` と同じ添字で並ぶ（index 対応の契約）。
 pub(crate) fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId) {
@@ -32,7 +31,7 @@ pub(crate) fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId) {
             .iter()
             .map(|element| {
                 // 画像でない element（サーフェスの番号・範囲を超える数）はアトラスから引かない。
-                // 画像ではないので未束縛の警告も出さない（記録は読み込みの入口の役目・要件 1.5/3.5）。
+                // 画像ではないので未束縛の警告も出さない（記録は読み込みの入口の役目）。
                 if element.kind != ElementKind::Image {
                     return None;
                 }
@@ -69,21 +68,19 @@ mod tests {
     use crate::world::{AtlasBinding, EmoWorld};
     use std::path::Path;
 
-    /// テスト①（受入基準）: 既知パスは `Some(ElementId)`・未知パスは `None`（debug 済み）に束縛される。
+    /// 既知パスは `Some(ElementId)`・未知パスは `None`（debug 済み）に束縛される。
     ///
     /// KNOWN パスと BOGUS パスの 2 element を持つ surface を fold し、KNOWN のみ bake した
     /// `AtlasTable` に対し `bind_atlas` を実行。`AtlasBinding` の既知 index が `Some`・未知 index が
-    /// `None` であることを検証する（要件 4.3・design AtlasBinder）。
+    /// `None` であることを検証する。
     #[test]
     fn known_resolves_some_unknown_none() {
         let base = Path::new("shell/master");
-        // atlas には known.png のみを焼く（bogus.png は未束縛になる）。
         let atlas = bake_atlas(base, &["known.png"]);
         let expected_id = atlas
             .resolve(SetId(0), "known.png")
             .expect("known.png は bake 済みで resolve できる");
 
-        // surface の element は [known.png(layer0), bogus.png(layer1)]（layer 昇順で保たれる）。
         let shell = shell_of(vec![surface(
             1000,
             vec![elem(0, "known.png", 0, 0), elem(1, "bogus.png", 0, 0)],
@@ -92,14 +89,12 @@ mod tests {
 
         let master = world.surface(1000).expect("surface1000 常駐");
         let binding = surface_binding(&world, 1000);
-        // 既知 index（known.png）→ Some(expected_id)。
         let known_idx = master
             .elements
             .iter()
             .position(|e| e.path.as_str() == "known.png")
             .expect("known.png element がある");
         assert_eq!(binding.0[known_idx], Some(expected_id));
-        // 未知 index（bogus.png）→ None。
         let bogus_idx = master
             .elements
             .iter()
@@ -108,13 +103,12 @@ mod tests {
         assert_eq!(binding.0[bogus_idx], None);
     }
 
-    /// テスト②: 束縛は `SurfaceMaster.elements` と index 対応で平行（長さ一致・全 surface）。
+    /// 束縛は `SurfaceMaster.elements` と index 対応で平行（長さ一致・全 surface）。
     #[test]
     fn binding_parallel_to_elements_len_matches() {
         let base = Path::new("shell/master");
         let atlas = bake_atlas(base, &["a.png", "b.png", "c.png"]);
 
-        // 2 surface（要素数の異なる）を fold し、各 surface で長さ一致を確かめる。
         let shell = shell_of(vec![
             surface(0, vec![elem(0, "a.png", 0, 0), elem(1, "b.png", 0, 0)]),
             surface(1, vec![elem(0, "c.png", 0, 0)]),
@@ -129,7 +123,6 @@ mod tests {
                 master.elements.len(),
                 "surface {id} の AtlasBinding は elements と平行（同長）",
             );
-            // 全て bake 済みゆえ Some（index 対応の実挙動確認）。
             for (i, e) in master.elements.iter().enumerate() {
                 let resolved = atlas.resolve(SetId(0), e.path.as_str());
                 assert!(
@@ -147,11 +140,10 @@ mod tests {
         }
     }
 
-    /// テスト③: 全パス未知でもパニックせず全 `None`（非パニック・debug のみ）。
+    /// 全パス未知でもパニックせず全 `None`（非パニック・debug のみ）。
     #[test]
     fn all_unknown_paths_yield_all_none_without_panic() {
         let base = Path::new("shell/master");
-        // atlas は別パスのみ焼く（surface の element は一切 bake されない）。
         let atlas = bake_atlas(base, &["elsewhere.png"]);
 
         let shell = shell_of(vec![surface(
@@ -163,7 +155,6 @@ mod tests {
             ],
         )]);
         let mut world = EmoWorld::build(&shell);
-        // パニックしないこと（呼び出しが返ること自体が保証）。
         world.bind_atlas(&atlas, SetId(0));
 
         let binding = surface_binding(&world, 1);
@@ -171,7 +162,7 @@ mod tests {
         assert!(binding.0.iter().all(|b| b.is_none()), "全 element が None");
     }
 
-    /// テスト④: 空 World（surface ゼロ）でも `bind_atlas` はパニックしない。
+    /// 空 World（surface ゼロ）でも `bind_atlas` はパニックしない。
     #[test]
     fn empty_world_bind_does_not_panic() {
         let base = Path::new("shell/master");
@@ -179,7 +170,7 @@ mod tests {
         bound_world(&shell_of(Vec::new()), &[], &atlas);
     }
 
-    /// テスト⑤: 別 SetId で bind すると（set がキーの一部ゆえ）既知パスも `None` になる。
+    /// 別 SetId で bind すると（set がキーの一部ゆえ）既知パスも `None` になる。
     ///
     /// bake は SetId(0) に焼く。SetId(1) で bind すると同名 rel_path でも resolve が None を返す
     /// （atlas 契約 `resolve` は set スコープ）。set 取り違えが未束縛として観測される実証。

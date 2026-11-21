@@ -1,14 +1,14 @@
-//! 初回の起動が LogSink へ倒れた回の印（areka-P0-session-mark-residue 要件 4.1〜4.4・4.6・7.3）のテスト。
+//! 初回の起動が LogSink へ倒れた回の印のテスト。
 //!
 //! `main_session_mark_tests.rs` の子モジュール（1 ファイル 1,000 行の目安で切り出した）。土台と
 //! 補助（`first_boot`・`next_boot`・`expected_halted_next` など）は親のものを使う。
 
 use super::*;
 
-/// 初回の起動が LogSink へ倒れた（要件 4.1・4.3・4.6）: argv でなければ帰結を書いた
+/// 初回の起動が LogSink へ倒れた: argv でなければ帰結を書いた
 /// `warn!(session_mark_pinned_by_fallback)` が 1 件残り、置き場の単位の旗と `run()` の後に組む
 /// 印の材料の旗が立つ。argv なら同じ事象は `debug!` どまり（旗は立つが判定は argv が先に効く）。
-/// 結線が成立した起動では事象は 0 件で旗は偽（要件 4.8）。記録はどれも `boot_first_ghost` を
+/// 結線が成立した起動では事象は 0 件で旗は偽。記録はどれも `boot_first_ghost` を
 /// 呼んだスレッドで出るので、同じスレッドの捕捉で数える。
 ///
 /// # 非空虚性
@@ -165,7 +165,7 @@ fn expected_fallen_lap(runtime: bool) -> FallenLap {
     }
 }
 
-/// 倒れた先の LogSink の起動が成功した（バルーンの根が無い・実行系は起きる・要件 4.1〜4.4・7.3）:
+/// 倒れた先の LogSink の起動が成功した（バルーンの根が無い・実行系は起きる）:
 /// 倒れた `warn!` 1 件 → きれいに終えても印＝A が理由 `logsink_fallback` で残る → 次の起動は
 /// 既定ゴースト＋Ref6＝halt・Ref7＝A。
 #[test]
@@ -179,7 +179,7 @@ fn logsink_fallback_that_boots_keeps_mark_and_next_boot_is_default_with_halt() {
     assert_eq!(next, expected, "次の起動");
 }
 
-/// 倒れた先の LogSink の起動も失敗した（ゴーストの根が無い・実行系なし・要件 4.1〜4.4・7.3）:
+/// 倒れた先の LogSink の起動も失敗した（ゴーストの根が無い・実行系なし）:
 /// 成功した回と同じく印＝A が理由 `logsink_fallback` で残り、次の起動は既定ゴースト＋Ref6/7。
 #[test]
 fn logsink_fallback_that_fails_keeps_mark_and_next_boot_is_default_with_halt() {
@@ -192,7 +192,7 @@ fn logsink_fallback_that_fails_keeps_mark_and_next_boot_is_default_with_halt() {
     assert_eq!(next, expected, "次の起動");
 }
 
-/// LogSink へ倒れた回が OS のセッションの終了で終わる（要件 4.1・6.1）: 受け手は降ろす前に単位の
+/// LogSink へ倒れた回が OS のセッションの終了で終わる: 受け手は降ろす前に単位の
 /// 倒れた旗を読んで印の材料に載せるので、上限の中できれいに降りても（打ち切りなし）印＝A が理由
 /// `logsink_fallback` で残る。上限は負荷で揺れないよう大きく取って引数の入口で渡す。
 #[test]
@@ -226,7 +226,7 @@ fn logsink_fallback_ended_by_os_session_end_keeps_mark() {
     );
 }
 
-/// argv で始まって LogSink へ倒れた（要件 4.6）: 解決は印を読まず、起こしても書かず、きれいに終えても
+/// argv で始まって LogSink へ倒れた: 解決は印を読まず、起こしても書かず、きれいに終えても
 /// 消さない（前から在った印がそのまま残る）。倒れた記録は `debug!` 1 件どまりで `warn!` は 0 件、
 /// 印を残した記録も 0 件。
 ///

@@ -82,7 +82,7 @@ fn synth_boot_assets() -> BootAssets {
             emo_world: empty_world(),
             atlas: empty_atlas(),
             definitions: areka_runtime::assets::empty_definitions(0),
-            // headless 純合成のバルーンは面画像を持たない＝背景色は既定の白（要件 4.6）。
+            // headless 純合成のバルーンは面画像を持たない＝背景色は既定の白。
             background_color: (255, 255, 255),
             name: String::new(),
         }],

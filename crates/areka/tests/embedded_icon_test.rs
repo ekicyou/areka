@@ -1,8 +1,6 @@
-//! 組んだ `areka.exe` に埋めたアイコンの資源を確かめる結合テスト（areka-P0-app-icon 要件 2.3・
-//! 3.1・3.2・3.4・3.6・6.1・6.2）。
+//! 組んだ `areka.exe` に埋めたアイコンの資源を確かめる結合テスト。
 //!
-//! exe はデータとして開くだけで動かさない（`LOAD_LIBRARY_AS_DATAFILE`）。見ること（設計の
-//! 「Service Interface」の検査 1〜6）:
+//! exe はデータとして開くだけで動かさない（`LOAD_LIBRARY_AS_DATAFILE`）。見ること:
 //! 1. 組 1（アプリ）と組 2（通知領域）の `RT_GROUP_ICON` が在り、目録の頭が「予約 0・種別 1・枚数 8」。
 //! 2. 目録の 8 項目の寸法の集まりが `SIZES` とちょうど同じで、色の深さが 32。
 //! 3. 各項目の絵の番号の `RT_ICON` が在り、大きさが目録と同じで、PNG の幅と高さが項目の寸法と同じ。
@@ -11,7 +9,7 @@
 //! 6. `RT_MANIFEST` の 1 番に標準の部品（comctl32）の版 6 の申告が在る。
 //!
 //! 欠けは止まらずに全部集め、組の番号・寸法・絵の番号を含む文で並べてから失敗する。
-//! MSVC でなければアイコンは入らない（要件 3.5）ので、このファイルは MSVC のときだけ組む。
+//! MSVC でなければアイコンは入らないので、このファイルは MSVC のときだけ組む。
 #![cfg(target_env = "msvc")]
 
 use std::collections::BTreeMap;
@@ -266,13 +264,13 @@ fn assert_no_defects(exe: &Path) {
     );
 }
 
-/// Cargo が先に組んだ `areka.exe` を検査する（要件 6.1・6.2）。
+/// Cargo が先に組んだ `areka.exe` を検査する。
 #[test]
 fn built_areka_exe_has_app_and_tray_icons() {
     assert_no_defects(Path::new(env!("CARGO_BIN_EXE_areka")));
 }
 
-/// 環境変数で渡した exe（arm64 の確かめ・要件 3.6・6.4）を同じ検査に通す。無ければ飛ばしを 1 行出す。
+/// 環境変数で渡した exe（arm64 の確かめ）を同じ検査に通す。無ければ飛ばしを 1 行出す。
 #[test]
 fn extra_exe_has_app_and_tray_icons() {
     match std::env::var_os(EXTRA_EXE_ENV) {

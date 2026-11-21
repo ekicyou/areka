@@ -1,10 +1,9 @@
-//! 置き場の追加・外す・先頭へ動かすの判断（純粋・design.md「RootsEdit」、
-//! areka-P0-user-data-root design.md「RootsFront」）。
+//! 置き場の追加・外す・先頭へ動かすの判断（純粋）。
 //!
 //! 値だけで判断する: 今の並び・出どころ・足すフォルダ（または外す根の絶対パス）。
-//! フォルダそのものは消さない・動かさない（要件 7.2）。触るのは並びの値だけ。
+//! フォルダそのものは消さない・動かさない。触るのは並びの値だけ。
 //! 適用（起動の文脈・記憶・記録）は UI スレッドの入口 [`add_root`]・[`remove_root`]・[`move_to_front`]。
-//! 並べ替えは「先頭へ動かす」だけ（areka-P0-user-data-root 要件 3.7）。
+//! 並べ替えは「先頭へ動かす」だけ。
 
 use std::path::{Path, PathBuf};
 
@@ -21,11 +20,11 @@ use crate::ghost_session::GhostSlot;
 /// 追加の判断。
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum AddVerdict {
-    /// 末尾に足した。`empty` は直下に ghost も balloon も無い（6.7 の warn）。
+    /// 末尾に足した。`empty` は直下に ghost も balloon も無い（warn）。
     Added { roots: BasewareRoots, empty: bool },
-    /// すでにある（6.6 の warn・変えない）。
+    /// すでにある（warn・変えない）。
     AlreadyListed { existing: PathBuf },
-    /// `AREKA_ROOT` で渡している（8.6・変えない）。
+    /// `AREKA_ROOT` で渡している（変えない）。
     EnvLocked,
 }
 
@@ -36,16 +35,16 @@ pub(crate) enum RemoveVerdict {
         roots: BasewareRoots,
         removed: PathBuf,
     },
-    /// 根が 1 つしか無い（7.3・変えない）。
+    /// 根が 1 つしか無い（変えない）。
     LastOne,
     EnvLocked,
     /// 並びに無い（メニューを出した後に並びが変わった・warn・変えない）。
     Stale,
-    /// 一時の置き場だけに一致した（areka-P0-startup-options-core 要件 3.6・warn・変えない）。
+    /// 一時の置き場だけに一致した（warn・変えない）。
     Temporary,
 }
 
-/// 先頭へ動かすの判断（areka-P0-user-data-root 要件 3.7）。
+/// 先頭へ動かすの判断。
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum FrontVerdict {
     /// 先頭へ動かした（ほかの順は保つ）。
@@ -56,7 +55,7 @@ pub(crate) enum FrontVerdict {
     EnvLocked,
     /// 並びに無い（メニューを出した後に並びが変わった・warn）。
     Stale,
-    /// 一時の置き場だけに一致した（areka-P0-startup-options-core 要件 3.6・warn・変えない）。
+    /// 一時の置き場だけに一致した（warn・変えない）。
     Temporary,
 }
 
@@ -81,9 +80,8 @@ fn only_temporary(roots: &BasewareRoots, dir: &Path) -> bool {
         .any(|r| is_temp(r) && same_root(r.dir(), dir))
 }
 
-/// 追加: 末尾に足す（要件 6.4）。一時の置き場は重なりに数えない＝同じフォルダは普通の置き場として足す
-/// （areka-P0-startup-options-core 要件 3.7）。実行ファイルのフォルダも絶対パスのまま入る（記憶へは
-/// `encode_memory` が `<exe>` で書く＝要件 6.8）。
+/// 追加: 末尾に足す。一時の置き場は重なりに数えない＝同じフォルダは普通の置き場として足す。
+/// 実行ファイルのフォルダも絶対パスのまま入る（記憶へは `encode_memory` が `<exe>` で書く）。
 pub(crate) fn decide_add(roots: &BasewareRoots, origin: RootsOrigin, picked: &Path) -> AddVerdict {
     if origin == RootsOrigin::EnvVar {
         return AddVerdict::EnvLocked;
@@ -103,8 +101,8 @@ pub(crate) fn decide_add(roots: &BasewareRoots, origin: RootsOrigin, picked: &Pa
     }
 }
 
-/// 外す: メニューに出した根の絶対パスで受け、並びの値から外すだけ（要件 7.2・7.3・8.6）。
-/// 一時の置き場は外さず、「最後の 1 つ」は覚える置き場で数える（areka-P0-startup-options-core 要件 3.6）。
+/// 外す: メニューに出した根の絶対パスで受け、並びの値から外すだけ。
+/// 一時の置き場は外さず、「最後の 1 つ」は覚える置き場で数える。
 pub(crate) fn decide_remove(
     roots: &BasewareRoots,
     origin: RootsOrigin,
@@ -131,7 +129,7 @@ pub(crate) fn decide_remove(
 }
 
 /// 先頭へ動かす: 項目を複写して動かす（書ける根の印は残る）。動かす先は覚える置き場の先頭＝一時の項目の直後で、
-/// 一時の置き場は並びの先頭のまま・一時の置き場は動かさない（areka-P0-startup-options-core 要件 3.6・3.9）。
+/// 一時の置き場は並びの先頭のまま・一時の置き場は動かさない。
 pub(crate) fn decide_front(roots: &BasewareRoots, origin: RootsOrigin, dir: &Path) -> FrontVerdict {
     if origin == RootsOrigin::EnvVar {
         return FrontVerdict::EnvLocked;
@@ -153,7 +151,7 @@ pub(crate) fn decide_front(roots: &BasewareRoots, origin: RootsOrigin, dir: &Pat
 }
 
 /// UI スレッドの入口: 置き場を並びの先頭へ動かす（今のゴースト・バルーンは切り替えない）。
-/// 記憶へ書けなかった結果は `apply` の中で扱う（要件 3.9）。
+/// 記憶へ書けなかった結果は `apply` の中で扱う。
 pub(crate) fn move_to_front(world: &mut World, dir: PathBuf) {
     let Some(ctx) = world.get_resource::<BootContext>() else {
         tracing::error!(
@@ -184,7 +182,7 @@ pub(crate) fn move_to_front(world: &mut World, dir: PathBuf) {
     );
 }
 
-/// UI スレッドの入口: 置き場を足す（判断・適用・記録・design「RootsEdit」）。
+/// UI スレッドの入口: 置き場を足す（判断・適用・記録）。
 pub(crate) fn add_root(world: &mut World, picked: PathBuf) {
     let Some(ctx) = world.get_resource::<BootContext>() else {
         tracing::error!(
@@ -219,7 +217,7 @@ pub(crate) fn add_root(world: &mut World, picked: PathBuf) {
     }
 }
 
-/// UI スレッドの入口: 置き場を外す（並びの値だけ・フォルダは消さず動かさない・要件 7.2）。
+/// UI スレッドの入口: 置き場を外す（並びの値だけ・フォルダは消さず動かさない）。
 pub(crate) fn remove_root(world: &mut World, dir: PathBuf) {
     let Some(ctx) = world.get_resource::<BootContext>() else {
         tracing::error!(
@@ -245,9 +243,9 @@ pub(crate) fn remove_root(world: &mut World, dir: PathBuf) {
     );
 }
 
-/// 適用: ①起動の文脈の並びと出どころ（記憶）を書き換える（その回に効かせる・要件 8.2・8.5）
-/// ②記憶へ書く（要件 8.1）③変更のときの並びと隠れを記録する（要件 8.3）。
-/// 今のゴースト・バルーン（`BootContext.current`）には触らない（要件 8.4）。
+/// 適用: ①起動の文脈の並びと出どころ（記憶）を書き換える（その回に効かせる）
+/// ②記憶へ書く③変更のときの並びと隠れを記録する。
+/// 今のゴースト・バルーン（`BootContext.current`）には触らない。
 fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
     let value = encode_memory(&roots, exe_dir.as_deref());
     let Some(mut ctx) = world.get_resource_mut::<BootContext>() else {
@@ -277,7 +275,7 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
                 app: Some(app_profile_dir.clone()),
                 ..ScopeRoots::default()
             };
-            // 書けなければ記録を残して致命へ渡す（書き換えた起動の文脈の並びは戻さない・要件 1.5）。
+            // 書けなければ記録を残して致命へ渡す（書き換えた起動の文脈の並びは戻さない）。
             if let PersistOutcome::Degraded(failure) =
                 save_scope(PersistScope::App, &scope_roots, &FsPersistIo, entries)
             {

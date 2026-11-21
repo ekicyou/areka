@@ -1,12 +1,12 @@
 //! events — ukadoc Reference 表の実装正本（イベント発火順序の単一正本）。
 //!
 //! 本モジュールは boot 系列・定常運転・close の各イベントについて、NOTIFY／GET の別と
-//! Reference 構成を設計書「ukadoc Reference 表（運行表の単一正本）」どおりに組み立てる
+//! Reference 構成を下表どおりに組み立てる
 //! **純粋関数群**を提供する（副作用なし・時刻や config を引数で受け取り [`ShioriCall`] を
-//! 返すだけ）。mock fixture の期待応答・状態機械の期待列・観測ハーネス（4.1）の assert は
-//! すべて本表から導出され、fixture・検証・実装が単一の正本を共有する（Req 7.1・DD-9）。
+//! 返すだけ）。mock fixture の期待応答・状態機械の期待列・観測ハーネスの assert は
+//! すべて本表から導出され、fixture・検証・実装が単一の正本を共有する。
 //!
-//! # 公開面（DD-9 の例外）
+//! # 公開面（の例外）
 //! `schedule/` は `pub(crate)` に閉じるが、[`crate::events`] が再び公開する Reference 表構成関数
 //! （と許可集合・`SourceEvent`）だけは例外的に `pub` とする。`tests/` 配下の統合テストクレートは
 //! `pub(crate)` を参照できないため、ハーネスが同一の値を fixture の期待値として再利用できるよう、
@@ -17,17 +17,17 @@
 //! # ukadoc Reference 表（本モジュールが唯一の実装点）
 //! | イベント | Method | M1 送出値 |
 //! |---|---|---|
-//! | `OnInitialize` | NOTIFY | References なし（空 Vec）。SHIORI だけの読み直しの起動でだけ Ref0=`reload`（`boot.rs` が載せる・areka-P0-mcp-reload 要件 4.3） |
+//! | `OnInitialize` | NOTIFY | References なし（空 Vec）。SHIORI だけの読み直しの起動でだけ Ref0=`reload`（`boot.rs` が載せる） |
 //! | `OnFirstBoot` | GET | Ref0=`vanish_count` の 10 進（記録が無ければ `"0"`） |
 //! | `OnBoot` | GET | Ref0=`config.shell_name`（前回落ちたときだけ Ref1〜5=空・Ref6=`halt`・Ref7=落ちたゴースト名） |
 //! | `basewareversion` | NOTIFY | Ref0=`config.baseware_version`・Ref1=`config.baseware_name`（Ref2 省略） |
 //! | `OnSecondChange` | GET（talk 再生可能時）／NOTIFY（talk 再生不能時） | Ref0=`now_ms / 3_600_000` の 10 進文字列・Ref1=`"0"`・Ref2=`"0"`・Ref3=`"1"`(GET)/`"0"`(NOTIFY) |
 //! | `OnClose` | GET | Ref0=`reason.as_ref_str()`（"user"/"system"）・"user" のみ Ref1=Ref2=スコープ番号（ForceQuit の NOTIFY は Ref0 のみ） |
 //! | `OnDestroy` | NOTIFY（台詞の切れ目の口の印） | Ref0=`reload`（SHIORI だけの読み直し・`areka` の `session::reload` が渡す列のまま） |
-//! | `OnChoiceSelectEx` | GET | Ref0=ラベル・Ref1=選択肢 ID・Ref2 以降=付随参照列（空なら位置なし・Req3.1/3.5） |
-//! | `OnChoiceSelect` | GET | Ref0=選択肢 ID（Req3.2） |
-//! | 任意名（`\q` の `On` 始まり ID） | GET | Ref0 以降=付随参照列のみ（空なら References なし・Req3.3/3.5） |
-//! | `OnChoiceTimeout` | GET | Ref0=タイムアウトした選択肢を含むトークの起動スクリプト（Req3.4） |
+//! | `OnChoiceSelectEx` | GET | Ref0=ラベル・Ref1=選択肢 ID・Ref2 以降=付随参照列（空なら位置なし） |
+//! | `OnChoiceSelect` | GET | Ref0=選択肢 ID |
+//! | 任意名（`\q` の `On` 始まり ID） | GET | Ref0 以降=付随参照列のみ（空なら References なし） |
+//! | `OnChoiceTimeout` | GET | Ref0=タイムアウトした選択肢を含むトークの起動スクリプト |
 //! | `OnGhostChanging` | GET | Ref0〜3=切替先の本体側の名前・出どころ・名前・フォルダの絶対パス |
 //! | `OnGhostChanged` | GET | Ref0〜3=直前のゴーストの本体側の名前・切替時の台本・名前・パス・Ref4〜6=空・Ref7=シェルのフォルダ名 |
 //! | 汎用の入口（許可表の名前） | GET／NOTIFY | 渡された列のまま |
@@ -93,36 +93,35 @@ use crate::status::{ExecutionSnapshot, ExecutionStatus};
 const MS_PER_HOUR: u64 = 3_600_000;
 
 /// Ref1（見切れ）の M1 固定値。
-// SEAM(Req1.6): 実測供給時は ExecutionSnapshot の geometry から導出する。
+// SEAM: 実測供給時は ExecutionSnapshot の geometry から導出する。
 const REF1_OFFSCREEN_M1: &str = "0";
 /// Ref2（重なり）の M1 固定値。
-// SEAM(Req1.6): 実測供給時は ExecutionSnapshot の geometry から導出する。
+// SEAM: 実測供給時は ExecutionSnapshot の geometry から導出する。
 const REF2_OVERLAP_M1: &str = "0";
 
-/// OnMouseMove Ref2（ホイール回転量）の値（Req2.4）。
+/// OnMouseMove Ref2（ホイール回転量）の値。
 ///
 /// 移動の Ref2 は常に "0"（ホイールの量は `OnMouseWheel` が運ぶ）。
 const REF2_WHEEL_M1: &str = "0";
-/// マウス系イベント Ref6（入力デバイス種）の M1 固定値（DD-IE-6）。
+/// マウス系イベント Ref6（入力デバイス種）の M1 固定値。
 ///
 /// M1 は物理マウスのみを対象とするため常に "mouse"。touch/pen/eraser の区別は
 /// α 後のシーム（呼び手がデバイス種を渡す形へ）として残す。
 const REF6_DEVICE_MOUSE: &str = "mouse";
 
 /// **スケジューラ起源**（[`crate::msg::EventId::Static`]）で送出し得るイベント ID の
-/// 確定ホワイトリスト（Req3.1）。
+/// 確定ホワイトリスト。
 ///
 /// 本表は**正典（ukadoc）固定 ID の部分集合**である——載る ID はすべて正典に実在する固定名で、
 /// 実行時に生成される任意名は 1 つも載らない（この性質は表への追加が起きても不変）。
-/// `OnTalk`／`OnHour` は emo2 が OnSecondChange 内部で自発生成するため**恒久的に含めない**（Req3.2）。
+/// `OnTalk`／`OnHour` は emo2 が OnSecondChange 内部で自発生成するため**恒久的に含めない**。
 ///
 /// 選択関連の固定 3 ID（`OnChoiceSelectEx`／`OnChoiceSelect`／`OnChoiceTimeout`）も
-/// 正典固定 ID である（DD-2）。一方 `\q[タイトル,OnID]` 由来の**任意名イベント**（emo2 唯一の依存形・
+/// 正典固定 ID である。一方 `\q[タイトル,OnID]` 由来の**任意名イベント**（emo2 唯一の依存形・
 /// menu.pasta:15 実物）は固定 const 表には載らず、[`is_allowed_choice_event`] という
-/// **出所別の受理規則**で検証する（DD-1／DD-2・id 型は [`crate::msg::EventId::Choice`] が
+/// **出所別の受理規則**で検証する（id 型は [`crate::msg::EventId::Choice`] が
 /// 任意名を逐語で運ぶ）。ゆえに本表の恒久禁止（`OnTalk`／`OnHour`）は選択起源へ波及しない
-/// （禁止の根拠＝自発生成との二重駆動は、作者が明示的に書いた 1 クリック 1 回の発火に該当しない・
-/// Req2.9・裁定 8）。
+/// （禁止の根拠＝自発生成との二重駆動は、作者が明示的に書いた 1 クリック 1 回の発火に該当しない）。
 pub const ALLOWED_EVENT_IDS: &[&str] = &[
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInitialize:1
     "OnInitialize",
@@ -136,7 +135,7 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnSecondChange",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnClose:1
     "OnClose",
-    // shiori の読み直しの 1 語（areka-P0-mcp-reload 要件 4.1）。NOTIFY・Ref0=`reload`。
+    // shiori の読み直しの 1 語。NOTIFY・Ref0=`reload`。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnDestroy:1
     "OnDestroy",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseMove:1
@@ -153,8 +152,8 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnGhostChanging",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostChanged:1
     "OnGhostChanged",
-    // インストール系の 8 語（areka-P0-ghost-install）。汎用の入口から送る。送り先を他の
-    // ゴーストへ移す場面は作らないので `OnInstallReroute` は載せない（要件 2.11）。
+    // インストール系の 8 語。汎用の入口から送る。送り先を他の
+    // ゴーストへ移す場面は作らないので `OnInstallReroute` は載せない。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallBegin:1
     "OnInstallBegin",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallComplete:1
@@ -171,13 +170,13 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnGhostTermsAccept",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostTermsDecline:1
     "OnGhostTermsDecline",
-    // 投げ込みの 2 語（areka-P0-file-drop）。汎用の入口から送る。
+    // 投げ込みの 2 語。汎用の入口から送る。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnFileDrop2:1
     "OnFileDrop2",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnDirectoryDrop:1
     "OnDirectoryDrop",
-    // ネットワーク更新の 19 語（areka-P0-network-update）。汎用の入口から送る。`checkonly` の系の
-    // `OnUpdateCheck*` 4 語・`OnUpdateResultExplorer`・作る側の `OnUpdatedata*` は載せない（要件 2.15）。
+    // ネットワーク更新の 19 語。汎用の入口から送る。`checkonly` の系の
+    // `OnUpdateCheck*` 4 語・`OnUpdateResultExplorer`・作る側の `OnUpdatedata*` は載せない。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateProcessExec:1
     "OnUpdateProcessExec",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateBegin:1
@@ -216,7 +215,7 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnUpdateResult",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateResultEx:1
     "OnUpdateResultEx",
-    // シェル・バルーン切替の 3 語（areka-P0-shell-balloon-switch 要件 8.2）。
+    // シェル・バルーン切替の 3 語。
     // `OnShellChanging` は台詞の切れ目の口の印として、残り 2 語は汎用の入口から送る。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnShellChanging:1
     "OnShellChanging",
@@ -224,17 +223,17 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnShellChanged",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonChange:1
     "OnBalloonChange",
-    // 翻訳の 1 語（areka-P0-translate-pipeline 要件 3.4）。SHIORI が返した台詞を
+    // 翻訳の 1 語。SHIORI が返した台詞を
     // 再生の前に、その台詞を返した SHIORI へ送る。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnTranslate:1
     "OnTranslate",
-    // ドラッグの 2 語（areka-P0-mouse-drag-events 要件 7.1）。キャラクター窓を
+    // ドラッグの 2 語。キャラクター窓を
     // 左ボタンで動かし始めたとき・終えたときに送る。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseDragStart:1
     "OnMouseDragStart",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseDragEnd:1
     "OnMouseDragEnd",
-    // バルーンの寿命の 3 語（areka-P0-balloon-lifecycle-events 要件 3.5・6.4）。利用者の
+    // バルーンの寿命の 3 語。利用者の
     // 中断の後・読み終えたバルーンを閉じたとき・時間切れで隠れたときに送る。クリックで閉じたことは
     // `OnBalloonClose` だけで知らせ、正典に無い `OnBalloonClick` は載せない。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonBreak:1
@@ -243,19 +242,18 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnBalloonClose",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonTimeout:1
     "OnBalloonTimeout",
-    // アンカーの 2 語（areka-P0-anchor-tag-canon 要件 4.1・4.2）。バルーンの本文の
+    // アンカーの 2 語。バルーンの本文の
     // アンカー（`\_a`）が押されたときに送る。`On` で始まる ID の直接の送出は選択肢の任意名と
     // 同じ道（[`is_allowed_choice_event`]）を通るので、表には載らない。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnAnchorSelectEx:1
     "OnAnchorSelectEx",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnAnchorSelect:1
     "OnAnchorSelect",
-    // シェル位置初期化の 1 語（areka-P0-move-canon 要件 8.3）。右クリックのメニューの
-    // 「シェル位置初期化」を選んだときに送る。`\![execute,resetwindowpos]` からは送らない（要件 8.7）。
+    // シェル位置初期化の 1 語。右クリックのメニューの
+    // 「シェル位置初期化」を選んだときに送る。`\![execute,resetwindowpos]` からは送らない。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnResetWindowPos:1
     "OnResetWindowPos",
-    // マウスの解放・クリック・ホイール・出入りの 9 語（mouse-click-wheel-events 要件 1.1・2.1・6.1・
-    // 7.5・10.1）。ボタンを放したとき・クリックのとき・ホイールを回したとき・当たり判定
+    // マウスの解放・クリック・ホイール・出入りの 9 語。ボタンを放したとき・クリックのとき・ホイールを回したとき・当たり判定
     // やキャラクター窓に出入りしたときに送る。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseUp:1
     "OnMouseUp",
@@ -275,17 +273,17 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnMouseEnterAll",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseLeaveAll:1
     "OnMouseLeaveAll",
-    // シェル・バルーンにかかった倍率の 2 語（shell-scale-linkage 要件 5.1・5.2）。
+    // シェル・バルーンにかかった倍率の 2 語。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnShellScaling:1
     "OnShellScaling",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonScaling:1
     "OnBalloonScaling",
 ];
 
-/// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
+/// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する。
 ///
 /// **スケジューラ起源専用**の判定である。選択起源（[`crate::msg::EventId::Choice`]）は
-/// 本判定ではなく [`is_allowed_choice_event`] を用いる（DD-2）。
+/// 本判定ではなく [`is_allowed_choice_event`] を用いる。
 pub fn is_allowed_event_id(id: &str) -> bool {
     ALLOWED_EVENT_IDS.contains(&id)
 }
@@ -293,7 +291,7 @@ pub fn is_allowed_event_id(id: &str) -> bool {
 /// 許可表（[`ALLOWED_EVENT_IDS`]）と一致した綴りを `&'static str` で返す（無ければ `None`）。
 ///
 /// 汎用の入口が外から受けた名前を [`EventId::Static`] と再生中のトークの `origin` の両方へ
-/// 使える形に写す照合（要件 7.2）。判定は逐語（大小文字の揺れは補正しない）。
+/// 使える形に写す照合。判定は逐語（大小文字の揺れは補正しない）。
 pub(crate) fn allowed_static(id: &str) -> Option<&'static str> {
     ALLOWED_EVENT_IDS
         .iter()
@@ -301,10 +299,10 @@ pub(crate) fn allowed_static(id: &str) -> Option<&'static str> {
         .find(|allowed| *allowed == id)
 }
 
-/// 再生中に届いた GET の応答（台本）で今のトークを置き換えるか（要件 7.3）。
+/// 再生中に届いた GET の応答（台本）で今のトークを置き換えるか。
 ///
-/// `OnSecondChange` と倍率の 2 語（`OnShellScaling`・`OnBalloonScaling`・shell-scale-linkage
-/// 要件 5.11）の応答は捨て、それ以外（マウス・汎用の入口・`OnGhostChanging`）は置き換える。
+/// `OnSecondChange` と倍率の 2 語（`OnShellScaling`・`OnBalloonScaling`）
+/// の応答は捨て、それ以外（マウス・汎用の入口・`OnGhostChanging`）は置き換える。
 pub(crate) fn value_replaces_active_talk(origin: &str) -> bool {
     !matches!(
         origin,
@@ -312,7 +310,7 @@ pub(crate) fn value_replaces_active_talk(origin: &str) -> bool {
     )
 }
 
-/// **選択起源**（[`crate::msg::EventId::Choice`]）の任意名イベント受理規則（Req2.6／2.9・DD-2）。
+/// **選択起源**（[`crate::msg::EventId::Choice`]）の任意名イベント受理規則。
 ///
 /// ゴースト作者が `\q` の ID に書いた名前を**事前の固定登録なしに逐語で**発火するため、判定は
 /// 「`On` 接頭であること」ただ 1 条件とする（[`ALLOWED_EVENT_IDS`] への登録は要求しない）。
@@ -320,7 +318,7 @@ pub(crate) fn value_replaces_active_talk(origin: &str) -> bool {
 /// スケジューラ起源の恒久禁止（`OnTalk`／`OnHour`）は本規則へ**適用しない**——禁止の根拠は
 /// 「ベースウェアが自発的に周期発火すると消費側ゴーストの自発生成と二重駆動する」ことであり、
 /// 作者が選択肢へ明示的に書いた 1 クリック = 1 回の発火はこの根拠に該当しないため、
-/// `OnTalk` も選択起源なら発火できる（Req2.9・裁定 8）。
+/// `OnTalk` も選択起源なら発火できる。
 ///
 /// 大小文字の揺れ（`on`／`ONMENU`）は正典の書式ではないため補正せず拒否する（逐語判定）。
 pub(crate) fn is_allowed_choice_event(id: &str) -> bool {
@@ -330,7 +328,7 @@ pub(crate) fn is_allowed_choice_event(id: &str) -> bool {
 /// `OnInitialize`（NOTIFY・References なし）。
 ///
 /// ふつうの起動では Ref0（正典: リロード時 `reload`）を送らず空 Vec とする。SHIORI だけの読み直しの
-/// 起動の Ref0=`reload` は `boot.rs` がこの呼び出しの代わりに載せる（areka-P0-mcp-reload 要件 4.3）。
+/// 起動の Ref0=`reload` は `boot.rs` がこの呼び出しの代わりに載せる。
 pub fn on_initialize(snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Notify {
         id: EventId::Static("OnInitialize"),
@@ -342,7 +340,7 @@ pub fn on_initialize(snapshot: &ExecutionSnapshot) -> ShioriCall {
 /// `OnFirstBoot`（GET・Ref0=`vanish_count` 由来）。
 ///
 /// Ref0 は呼び手が渡す vanish 回数（永続状態由来・値なしは `0`）をそのまま 10 進文字列化して
-/// 構成する（Req 4.1／4.2）。永続状態に記録が無い場合や M1（vanish 発生源が未実装）では
+/// 構成する。永続状態に記録が無い場合や M1（vanish 発生源が未実装）では
 /// 呼び手が `0` を渡すため、従来の固定値 `"0"` と同値の運行に縮退する。
 /// この応答が 204 であれば呼び手はフォールスルーして [`on_boot`] へ進む。
 pub fn on_first_boot(snapshot: &ExecutionSnapshot, vanish_count: u32) -> ShioriCall {
@@ -356,7 +354,7 @@ pub fn on_first_boot(snapshot: &ExecutionSnapshot, vanish_count: u32) -> ShioriC
 /// `OnBoot`（GET・Ref0=`config.shell_name`）。
 ///
 /// 起動の由来が「前回落ちた」（[`BootOrigin::Halted`]）なら Ref1〜5＝空・Ref6＝`halt`・
-/// Ref7＝落ちたゴースト名を載せる（番号を詰めない・要件 6.2・11.10）。それ以外は Ref0 だけ。
+/// Ref7＝落ちたゴースト名を載せる（番号を詰めない）。それ以外は Ref0 だけ。
 pub fn on_boot(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> ShioriCall {
     let mut references = vec![config.shell_name.clone()];
     if let BootOrigin::Halted { ghost_name } = &config.boot_origin {
@@ -372,7 +370,7 @@ pub fn on_boot(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> ShioriCal
 
 /// `OnGhostChanging`（GET・Ref0〜3＝切替先の本体側の名前・出どころ・名前・フォルダの絶対パス）。
 ///
-/// 本体側の名前が無ければ Ref0 は空のまま位置を保つ（要件 2.1・11.7）。
+/// 本体側の名前が無ければ Ref0 は空のまま位置を保つ。
 pub fn on_ghost_changing(req: &ChangeRequest, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Static("OnGhostChanging"),
@@ -389,7 +387,7 @@ pub fn on_ghost_changing(req: &ChangeRequest, snapshot: &ExecutionSnapshot) -> S
 /// `OnGhostChanged`（GET・Ref0〜3＝直前のゴーストの本体側の名前・切替時の台本・名前・パス、
 /// Ref4〜6＝空、Ref7＝シェルのフォルダ名）。
 ///
-/// 切替時の台本が無ければ Ref1 は空のまま位置を保つ（要件 4.1・11.5）。
+/// 切替時の台本が無ければ Ref1 は空のまま位置を保つ。
 pub(crate) fn on_ghost_changed(
     from: &ChangedFrom,
     shell_folder: &str,
@@ -415,7 +413,7 @@ pub(crate) fn on_ghost_changed(
 ///
 /// 欠番は呼び手が空文字で埋める（本関数は詰めも補いもしない）。`id` は許可表の綴りか呼び手の
 /// 定数のまま（本関数は検査しない）——汎用の入口と台詞の切れ目の見張りの印は [`allowed_static`] を
-/// 通した綴り（要件 7.2・7.3）、読み直しの `OnInitialize` と起動の根の [`BootOrigin::Updated`] は
+/// 通した綴り、読み直しの `OnInitialize` と起動の根の [`BootOrigin::Updated`] は
 /// 呼び手の定数。許可表の最終の検査は送出点（`actor::round_trip_raw`）が行う。
 pub fn raise(
     id: &'static str,
@@ -455,8 +453,8 @@ pub fn baseware_version(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> 
 
 /// `OnSecondChange`（talk 再生可能なら GET・不能なら NOTIFY）。
 ///
-/// GET/NOTIFY の別・Ref3・`Status.talking` を**単一の [`ExecutionSnapshot`] から**導出する
-/// （DD-IT-3）。`talk_playable = !snapshot.talk_active` ゆえ「Ref3=`"1"` かつ `Status: talking`」
+/// GET/NOTIFY の別・Ref3・`Status.talking` を**単一の [`ExecutionSnapshot`] から**導出する。
+/// `talk_playable = !snapshot.talk_active` ゆえ「Ref3=`"1"` かつ `Status: talking`」
 /// という不整合の組み合わせは構造的に発生しない。
 ///
 /// - Ref0: `now_ms / 3_600_000` の 10 進文字列（正典: OS 連続起動時間 hour）。
@@ -465,7 +463,7 @@ pub fn baseware_version(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> 
 /// - Ref3: talk 再生可否——`talk_playable==true` なら `"1"`（GET・status 空）、`false` なら
 ///   `"0"`（NOTIFY・status `talking`）。
 ///
-/// DD-6: talk 再生中（再生不能時）は NOTIFY（Ref3=0）で発行し、返却スクリプトは構造的に
+/// talk 再生中（再生不能時）は NOTIFY（Ref3=0）で発行し、返却スクリプトは構造的に
 /// 破棄される（active talk 中に Value が届く経路を発生源から塞ぐ）。
 pub fn on_second_change(now: MonotonicMs, snapshot: &ExecutionSnapshot) -> ShioriCall {
     let talk_playable = !snapshot.talk_active;
@@ -512,9 +510,9 @@ pub fn on_close(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall
 
 /// `OnClose`（**NOTIFY**・ForceQuit の best-effort 通知・Ref0=`reason.as_ref_str()`）。
 ///
-/// 通常握手の [`on_close`] は **GET** を返すので、NOTIFY を要する `force_quit` 用に別に持つ（DD-IT-8）。
+/// 通常握手の [`on_close`] は **GET** を返すので、NOTIFY を要する `force_quit` 用に別に持つ。
 /// 通常握手と違い、利用者起因でもスコープ番号（Ref1／Ref2）は載せない（Ref0 のみ）。
-/// snapshot は Unloading へ遷移後の会話なしの作り方（`State::snapshot_without_talk`）を渡す（DD-IT-4）。
+/// snapshot は Unloading へ遷移後の会話なしの作り方（`State::snapshot_without_talk`）を渡す。
 pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Notify {
         id: EventId::Static("OnClose"),
@@ -530,16 +528,16 @@ pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> Shi
 ///
 /// - Ref0=`x`（ローカル x 座標・**縮約後サーフェス px**・下記「座標空間」節）。
 /// - Ref1=`y`（ローカル y 座標・同上）。
-/// - Ref2=[`REF2_WHEEL_M1`]（ホイール回転量・M1 固定 "0"・Req2.4）。
+/// - Ref2=[`REF2_WHEEL_M1`]（ホイール回転量・M1 固定 "0"）。
 /// - Ref3=`scope`（対象スコープ・本体 0／相方 1）。
-/// - Ref4=`region`（当たり判定の識別子・不透明転写・`None`→空文字・Req2.3/DD-IE-6）。
-/// - Ref5=`"0"`（移動はボタン押下を伴わないため常に "0"・Req2.5）。
-/// - Ref6=[`REF6_DEVICE_MOUSE`]（入力デバイス種・M1 固定 "mouse"・DD-IE-6）。
+/// - Ref4=`region`（当たり判定の識別子・不透明転写・`None`→空文字）。
+/// - Ref5=`"0"`（移動はボタン押下を伴わないため常に "0"）。
+/// - Ref6=[`REF6_DEVICE_MOUSE`]（入力デバイス種・M1 固定 "mouse"）。
 ///
 /// `region` は collision resolver 由来の領域名を意味解釈せず不透明転写する（kanade は
-/// 当たり判定名を解釈しない・[[areka-surface-args-opaque-string-downstream-resolve]] と同精神）。
+/// 当たり判定名を解釈しない）。
 ///
-/// # 座標空間（areka-P0-collision-dpi-hittest・R1.8/R5.3）
+/// # 座標空間
 ///
 /// Ref0/Ref1 の値は **縮約後のサーフェス px**（作者定義の合成座標系）であり、Ref4 の当たり判定
 /// 識別子が解決された空間と**同一**である。窓 client 物理 px ではない——÷k（実適用の表示スケール）は
@@ -547,7 +545,7 @@ pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> Shi
 /// （[`crate::msg::MouseInput`] の `x`/`y`）から受けた値を**無変換で** Reference へ載せるだけである。座標契約の
 /// 正本は `areka_runtime::hit_region` モジュール冒頭 doc。正典（ukadoc）の `OnMouseMove`
 /// Reference0/1 は「ローカル座標」としか規定せず空間を定義していないため、サーフェス px を採ることは
-/// areka 側の裁定である（R1.8）。k=1.0 では縮約が恒等ゆえ従前の配信値と完全に一致する。
+/// areka 側の裁定である。k=1.0 では縮約が恒等ゆえ従前の配信値と完全に一致する。
 pub fn on_mouse_move(
     x: i64,
     y: i64,
@@ -571,18 +569,18 @@ pub fn on_mouse_move(
 ///
 /// ダブルクリック入力を SSP/NINIX 準拠の正典 Reference layout で組み立てる純粋関数
 /// （副作用なし）。Reference 数は常に 7。[`on_mouse_move`] と同一の Reference 構造で、
-/// Ref2 が常に "0"・Ref5 がボタン識別（左 "0"／右 "1"・Req3.3）である点のみ異なる。
+/// Ref2 が常に "0"・Ref5 がボタン識別（左 "0"／右 "1"）である点のみ異なる。
 ///
 /// - Ref0=`x`／Ref1=`y`（座標・**縮約後サーフェス px**・[`on_mouse_move`] の「座標空間」節と同一契約）。
-/// - Ref2=`"0"`（正典で常に "0"・Req3.2）。
+/// - Ref2=`"0"`（正典で常に "0"）。
 /// - Ref3=`scope`（対象スコープ・本体 0／相方 1）。
-/// - Ref4=`region`（当たり判定の識別子・不透明転写・`None`→空文字・Req3.4/DD-IE-6）。
-/// - Ref5=`button`（左 [`MouseButton::Left`]→"0"／右 [`MouseButton::Right`]→"1"・Req3.3）。
-/// - Ref6=[`REF6_DEVICE_MOUSE`]（入力デバイス種・M1 固定 "mouse"・DD-IE-6）。
+/// - Ref4=`region`（当たり判定の識別子・不透明転写・`None`→空文字）。
+/// - Ref5=`button`（左 [`MouseButton::Left`]→"0"／右 [`MouseButton::Right`]→"1"）。
+/// - Ref6=[`REF6_DEVICE_MOUSE`]（入力デバイス種・M1 固定 "mouse"）。
 ///
 /// 座標は Ref4 の当たり判定識別子と同一空間（作者定義のサーフェス px）に揃う。÷k は
 /// `areka-emo-present` の `EmoPresenter::hit_region_client` が吸収済みで、本関数は無変換で転写する
-/// （正本＝`areka_runtime::hit_region` モジュール冒頭 doc・areka 側の裁定＝R1.8）。
+/// （正本＝`areka_runtime::hit_region` モジュール冒頭 doc・areka 側の裁定）。
 pub fn on_mouse_double_click(
     x: i64,
     y: i64,
@@ -607,7 +605,7 @@ pub fn on_mouse_double_click(
     )
 }
 
-/// `OnMouseDragStart`（GET・Ref0..6 正典 layout・areka-P0-mouse-drag-events 要件 4）。
+/// `OnMouseDragStart`（GET・Ref0..6 正典 layout）。
 ///
 /// [`on_mouse_double_click`] の左ボタンと同じ並び `[x, y, "0", scope, region, "0", "mouse"]`
 /// で組み立てる純粋関数。座標は押した位置を呼び手から受け、無変換で載せる（座標空間の契約は
@@ -622,7 +620,7 @@ pub fn on_mouse_drag_start(
     mouse_get("OnMouseDragStart", x, y, "0", scope, region, "0", snapshot)
 }
 
-/// `OnMouseDragEnd`（GET・Ref0..6 正典 layout・areka-P0-mouse-drag-events 要件 4）。
+/// `OnMouseDragEnd`（GET・Ref0..6 正典 layout）。
 ///
 /// 中身は [`on_mouse_drag_start`] と名前だけが違う。座標は終わった位置（離したときは離した位置・
 /// 取り消しのときは押した位置）を呼び手から受け、無変換で載せる。
@@ -665,37 +663,37 @@ pub(super) fn mouse_get(
 }
 
 // ---------------------------------------------------------------------------
-// 選択関連イベント（`\q` 選択確定の 4 構築関数・設計 C3・Req3.1〜3.6）
+// 選択関連イベント（`\q` 選択確定の 4 構築関数）
 // ---------------------------------------------------------------------------
 //
-// # 空参照列の規約（マウス系とは**非対称**・Req3.5）
+// # 空参照列の規約（マウス系とは**非対称**）
 //
 // 付随参照列が空のときは、対応する Reference **位置そのものを作らない**（空文字で埋めない）。
 // これは [`on_mouse_move`]／[`on_mouse_double_click`] の Ref4（`region: None` → `""` と
 // 転写し**位置は保持**する）とは**逆**の規約である。マウス系は正典 layout が固定長で後続
 // Reference（Ref5/Ref6）が続くため位置を維持せねばならないのに対し、選択関連の付随参照列は
-// 末尾可変長であり、正典では「位置ごと存在しない」形が定義であるため（Req3.5）。
+// 末尾可変長であり、正典では「位置ごと存在しない」形が定義であるため。
 // 両者が同一ファイルに同居する以上、この非対称は意図であって漏れではない。
 //
-// # 共通リクエストヘッダ（Req3.6）
+// # 共通リクエストヘッダ
 //
 // 4 関数すべてが `snapshot: &ExecutionSnapshot` を**必須引数**として受け取り、
-// [`ExecutionStatus::derive`] で自ら共通ヘッダを構成する（既存構築関数と同一規律・DD-IT-3）。
+// [`ExecutionStatus::derive`] で自ら共通ヘッダを構成する（既存構築関数と同一規律）。
 // ヘッダ欠落は「引数を渡さない」という書き方が存在しないため構造上起こらない。
 
 /// `OnChoiceSelectEx`（GET・Ref0=ラベル／Ref1=ID／Ref2 以降＝付随参照列）。
 ///
-/// 正典形（`On` 始まりでない選択肢 ID）カスケードの**先行段**（設計 C3・裁定 2）。
+/// 正典形（`On` 始まりでない選択肢 ID）カスケードの**先行段**。
 ///
-/// - Ref0=`label`（表示ラベル・不透明転写・Req3.1）。
-/// - Ref1=`id`（選択肢 ID・不透明転写・Req3.1）。
-/// - Ref2..=`references`（付随参照列を**記述順**のまま・Req3.1）。
+/// - Ref0=`label`（表示ラベル・不透明転写）。
+/// - Ref1=`id`（選択肢 ID・不透明転写）。
+/// - Ref2..=`references`（付随参照列を**記述順**のまま）。
 ///
 /// `references` が空なら Ref2 以降の位置を作らず、Reference は Ref0/Ref1 の 2 個で終わる
-/// （空文字で埋めない・Req3.5。上記「空参照列の規約」を参照）。
+/// （空文字で埋めない。上記「空参照列の規約」を参照）。
 ///
 /// ラベル・ID・参照列はいずれも意味解釈せず逐語で転写する（トリム・正規化・空要素除去を
-/// しない・Req1.5／[[areka-surface-args-opaque-string-downstream-resolve]] と同精神）。
+/// しない）。
 pub fn on_choice_select_ex(
     label: &str,
     id: &str,
@@ -707,18 +705,18 @@ pub fn on_choice_select_ex(
 
 /// `OnChoiceSelect`（GET・Ref0=選択肢 ID のみ）。
 ///
-/// 正典形カスケードの**後続段**（先行 `OnChoiceSelectEx` が 204 のときのみ発行・裁定 2）。
-/// Reference は常に 1 個で、付随参照列・表示ラベルは載せない（Req3.2）。
+/// 正典形カスケードの**後続段**（先行 `OnChoiceSelectEx` が 204 のときのみ発行）。
+/// Reference は常に 1 個で、付随参照列・表示ラベルは載せない。
 pub fn on_choice_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
     select_get("OnChoiceSelect", id, snapshot)
 }
 
 /// `OnAnchorSelectEx`（GET・Ref0=範囲の文字／Ref1=ID／Ref2 以降＝引数）。
 ///
-/// `On` で始まらない ID のアンカーが押されたときに最初に送る（areka-P0-anchor-tag-canon 要件 4.1）。
+/// `On` で始まらない ID のアンカーが押されたときに最初に送る。
 /// 並びは [`on_choice_select_ex`] と同じで、Ref0 が選択肢のラベルの代わりにアンカーの範囲に
 /// 表示された文字になる。引数（`\_a[ID,r2,r3...]` の 2 番目以降）は記述順のまま逐語で載せ、
-/// 無ければ Ref2 以降の位置を作らない（要件 4.6。上記「空参照列の規約」を参照）。
+/// 無ければ Ref2 以降の位置を作らない（上記「空参照列の規約」を参照）。
 pub(crate) fn on_anchor_select_ex(
     text: &str,
     id: &str,
@@ -730,7 +728,7 @@ pub(crate) fn on_anchor_select_ex(
 
 /// `OnAnchorSelect`（GET・Ref0=ID のみ）。
 ///
-/// 先に送った `OnAnchorSelectEx` が 204 のときだけ続けて送る（areka-P0-anchor-tag-canon 要件 4.2）。
+/// 先に送った `OnAnchorSelectEx` が 204 のときだけ続けて送る。
 /// Reference は常に 1 個で、範囲の文字・引数は載せない。
 pub(crate) fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
     select_get("OnAnchorSelect", id, snapshot)
@@ -747,7 +745,6 @@ fn select_ex_get(
     let mut refs = Vec::with_capacity(2 + references.len());
     refs.push(text.to_string());
     refs.push(id.to_string());
-    // 空参照列なら extend は 1 要素も足さない＝Ref2 以降の位置が生えない（Req3.5）。
     refs.extend(references.iter().cloned());
     ShioriCall::Get {
         id: EventId::Static(event),
@@ -767,15 +764,15 @@ fn select_get(event: &'static str, id: &str, snapshot: &ExecutionSnapshot) -> Sh
 
 /// 任意名イベント（GET・イベント名＝選択肢 ID 逐語・Ref0 以降＝付随参照列のみ）。
 ///
-/// `On` 始まり選択肢 ID の**直接発火 1 段のみ**（先行 Ex／無印を発行しない・裁定 1）。
+/// `On` 始まり選択肢 ID の**直接発火 1 段のみ**（先行 Ex／無印を発行しない）。
 /// `id` は [`EventId::Choice`] として運ぶ——ゴースト作者が書いた名前を事前登録なしで逐語発火
-/// する選択起源カテゴリであり、スケジューラ起源の固定表（[`ALLOWED_EVENT_IDS`]）には載らない
-/// （DD-1・Req2.6）。本関数は `EventId::Choice` を構成する events.rs 側の唯一点である。
+/// する選択起源カテゴリであり、スケジューラ起源の固定表（[`ALLOWED_EVENT_IDS`]）には載らない。
+/// 本関数は `EventId::Choice` を構成する events.rs 側の唯一点である。
 ///
-/// - Ref0..=`references`（付随参照列を**記述順**のまま・Req3.3）。
-/// - 表示ラベルと選択肢 ID は Reference に**含めない**（Req3.3。ID はイベント名側が運ぶ）。
+/// - Ref0..=`references`（付随参照列を**記述順**のまま）。
+/// - 表示ラベルと選択肢 ID は Reference に**含めない**（ID はイベント名側が運ぶ）。
 ///
-/// `references` が空なら Reference を 1 個も作らない（空 Vec・Req3.5）。
+/// `references` が空なら Reference を 1 個も作らない（空 Vec）。
 pub fn on_choice_named(
     id: String,
     references: &[String],
@@ -783,7 +780,6 @@ pub fn on_choice_named(
 ) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Choice(id),
-        // 空参照列なら空 Vec のまま＝Reference 位置を 1 個も作らない（Req3.5）。
         references: references.to_vec(),
         status: ExecutionStatus::derive(snapshot),
     }
@@ -804,7 +800,7 @@ pub struct SourceEvent {
 /// Ref0＝展開済みの台詞、Ref1＝欠番（[`ABSENT_REFERENCE`]・areka には出所が無い）、
 /// Ref2＝元のイベントの ID、Ref3＝元のイベントの Reference をバイト値 1 で連ねたもの
 /// （0 個なら空文字列）。Status は呼び手が渡した値をそのまま載せる。要求の出どころは元のイベントの
-/// 出どころを引き継ぎ、送り手は areka（要件 2.5・2.6）。
+/// 出どころを引き継ぎ、送り手は areka。
 pub fn on_translate(expanded: &str, source: &SourceEvent, status: ExecutionStatus) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Translate(RequestOrigin::for_translated(&source.id)),
@@ -823,7 +819,7 @@ pub(crate) const REF1_SSTP_SEND_OWNED: &str = "sstp-send,owned";
 
 /// 外から頼まれた任意の名前の GET（`EventId::Sstp`・渡された Reference をそのまま）。
 ///
-/// 許可表に在る名前でも Reference を補わない（0 個なら 0 個・要件 2.1・2.2）。
+/// 許可表に在る名前でも Reference を補わない（0 個なら 0 個）。
 /// 本関数は `EventId::Sstp` を構成する唯一点である。
 pub(crate) fn sstp_notify(
     id: String,
@@ -859,8 +855,8 @@ pub(crate) fn property_event(
 /// SSTP SEND の台本の `OnTranslate`（GET・Ref0＝展開済み・Ref1＝[`REF1_SSTP_SEND_OWNED`]・
 /// Ref2 以降なし）。
 ///
-/// Ref2・3 の欠番は列を Ref1 で止めて表す（要件 4.4）。イベントへの応答の翻訳は
-/// [`on_translate`] のまま（要件 4.6）。要求の出どころは MCP の SEND（要件 2.4）。
+/// Ref2・3 の欠番は列を Ref1 で止めて表す。イベントへの応答の翻訳は
+/// [`on_translate`] のまま。要求の出どころは MCP の SEND。
 pub(crate) fn on_translate_sstp(expanded: &str, status: ExecutionStatus) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Translate(RequestOrigin::MCP_SEND_TRANSLATE),
@@ -871,9 +867,8 @@ pub(crate) fn on_translate_sstp(expanded: &str, status: ExecutionStatus) -> Shio
 
 /// `OnChoiceTimeout`（GET・Ref0=タイムアウトした選択肢を含むトークの起動スクリプト）。
 ///
-/// Reference は常に 1 個。`script` は選択肢を含むトークの起動スクリプト（`ActiveTalk.script`・
-/// DD-10）を不透明転写する（Req3.4）。
-// 消費点は steady 調停の期限到達アーム（`fire_choice_timeout_if_due`・C4 規則 5）。
+/// Reference は常に 1 個。`script` は選択肢を含むトークの起動スクリプト（`ActiveTalk.script`）
+/// を不透明転写する。
 pub fn on_choice_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Static("OnChoiceTimeout"),
@@ -883,16 +878,15 @@ pub fn on_choice_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCa
 }
 
 // ---------------------------------------------------------------------------
-// バルーンの寿命の 3 イベント（areka-P0-balloon-lifecycle-events 要件 1〜4）
+// バルーンの寿命の 3 イベント
 // ---------------------------------------------------------------------------
 //
-// どれも GET（要件 4.1）。送るかどうかの判断は `schedule/balloon_events.rs` が持ち、本節は
+// どれも GET。送るかどうかの判断は `schedule/balloon_events.rs` が持ち、本節は
 // Reference の並びだけを持つ。Status は送る時点の状態から導く（[`on_choice_timeout`] と同じ）。
 
 /// `OnBalloonBreak`（GET・Ref0=止めたトークの台本・Ref1=スコープ番号の十進・Ref2=空）。
 ///
-/// Reference は常に 3 個。Ref2（中断位置）は今は作らず空で送り、位置は保つ（要件 1.4・
-/// 縮退の追跡先は `balloon-break-position`）。
+/// Reference は常に 3 個。Ref2（中断位置）は今は作らず空で送り、位置は保つ。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonBreak:1
 pub(crate) fn on_balloon_break(
     script: &str,
@@ -908,7 +902,7 @@ pub(crate) fn on_balloon_break(
 
 /// `OnBalloonClose`（GET・Ref0=閉じたバルーンに出ていた台本）。
 ///
-/// Reference は常に 1 個（要件 3.2）。
+/// Reference は常に 1 個。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonClose:1
 pub(crate) fn on_balloon_close(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
@@ -920,7 +914,7 @@ pub(crate) fn on_balloon_close(script: &str, snapshot: &ExecutionSnapshot) -> Sh
 
 /// `OnBalloonTimeout`（GET・Ref0=時間切れで隠れたバルーンに出ていた台本・Ref1=`0`）。
 ///
-/// 時間切れの時点で待ち時間の残りは無いので Ref1 は常に `0`（要件 2.3）。
+/// 時間切れの時点で待ち時間の残りは無いので Ref1 は常に `0`。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonTimeout:1
 pub(crate) fn on_balloon_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {

@@ -1,20 +1,17 @@
 //! # scroll_marker — 場所ごとの手動の位置と送りの規則（純粋層）
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
-//!
 //! バルーン（箱）の文字を利用者が矢印やホイールで読み返す「手動の位置」を、場所ごとに
 //! [`PlaceScroll`] 1 つで持つ。手動の位置は「先頭に見せる行の番号」で、いつも
 //! `0 ≤ line < auto_first`（`auto_first`＝前のフレームの自動の送りの先頭行）に収まる。
 //!
-//! - 矢印のクリック 1 回で [`ARROW_STEP_LINES`] 行送る（SSP 2.9.26 で測った量・要件 5.1・5.2）。
+//! - 矢印のクリック 1 回で [`ARROW_STEP_LINES`] 行送る（SSP 2.9.26 で測った量）。
 //! - 古い側は行 0 で止まり（行き過ぎは 0 に詰める）、新しい側で `auto_first` に達したら
-//!   手動を捨てて自動へ戻る（要件 5.3・5.4）。
+//!   手動を捨てて自動へ戻る。
 //! - ホイールは 120 ごとに 1 目盛り、1 目盛りで OS の行数（「1 画面ずつ」なら見えている行の数）
-//!   を送り、端数は送れる間だけ持ち越す（要件 6.3〜6.6）。
-//! - 見える字の数が前より増えたら手動を捨てる（要件 8.1）。
-//!
+//!   を送り、端数は送れる間だけ持ち越す。
+//! - 見える字の数が前より増えたら手動を捨てる。
 //! - 見える範囲（[`window_for`]）・矢印の出る条件（[`marker_visibility`]）・置き場
-//!   （[`ResolvedMarkerPlacement`]）もここで純粋に決める（要件 3.1〜3.4・3.7・4.1・4.2・7.1・7.2・7.7）。
+//!   （[`ResolvedMarkerPlacement`]）もここで純粋に決める。
 //!
 //! **層規律**: 純粋層。時計も窓も `World` も見ない（`PURE_SOURCES` に載せて走査する）。
 
@@ -24,7 +21,7 @@ use crate::layout::{LayoutEngine, PositionedLine, VisibleWindow};
 use crate::region::TextRegion;
 use crate::writing::WritingMode;
 
-/// 矢印のクリック 1 回で送る行数（SSP 2.9.26 で測った量・要件 5.1・5.2）。
+/// 矢印のクリック 1 回で送る行数（SSP 2.9.26 で測った量）。
 pub const ARROW_STEP_LINES: usize = 2;
 
 /// ホイールの 1 目盛り（OS の `WHEEL_DELTA`）。
@@ -52,7 +49,7 @@ pub enum ScrollChange {
     Unchanged,
 }
 
-/// 手動の位置を捨てた理由（要件 5.4・8.1〜8.3・8.6）。
+/// 手動の位置を捨てた理由。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StopReason {
     /// 新しい側への送りが自動の位置に追い付いた。
@@ -78,7 +75,7 @@ pub enum WheelLines {
     Page,
 }
 
-/// 場所ごとの手動の位置の状態（要件 8.8: 場所ごとに 1 つ）。
+/// 場所ごとの手動の位置の状態（場所ごとに 1 つ）。
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PlaceScroll {
     /// 先頭に見せる行の番号（`None`＝自動）。
@@ -95,7 +92,7 @@ pub struct PlaceScroll {
 
 impl PlaceScroll {
     /// `dir` の向きへ `lines` 行送る。古い側は行 0 に詰め、新しい側で `auto_first` に達したら
-    /// 手動を捨てて自動へ戻る。隠れた古い行が無ければ何もしない（要件 5.3・5.4・6.5）。
+    /// 手動を捨てて自動へ戻る。隠れた古い行が無ければ何もしない。
     pub fn step(&mut self, dir: ScrollDir, lines: usize) -> ScrollChange {
         if lines == 0 {
             return ScrollChange::Unchanged;
@@ -129,7 +126,7 @@ impl PlaceScroll {
 
     /// ホイールの回転 `delta`（正＝向こう側＝古い側）を足し、120 ごとの目盛りで送る。
     /// 1 目盛りの行数は `per_notch`（`Page` なら `visible_lines`）。送れない間は端数を 0 に戻す
-    /// （持ち越しは送れる間だけ・要件 6.3〜6.5）。絵の有無とは無関係（要件 6.6）。
+    /// （持ち越しは送れる間だけ）。絵の有無とは無関係。
     pub fn wheel(
         &mut self,
         delta: i32,
@@ -163,7 +160,7 @@ impl PlaceScroll {
     }
 
     /// このフレームの見える字の数を覚える。前より増えていて手動の位置にいたら手動を捨て、
-    /// [`StopReason::NewText`] を返す。減った（消去）ときは覚え直すだけ（要件 8.1）。
+    /// [`StopReason::NewText`] を返す。減った（消去）ときは覚え直すだけ。
     pub fn observe_visible(&mut self, count: usize) -> Option<StopReason> {
         let grew = count > self.last_visible;
         self.last_visible = count;
@@ -197,7 +194,7 @@ impl PlaceScroll {
 
 /// 矢印の種類。`Up`＝`arrow0`（古い側へ送る）・`Down`＝`arrow1`（新しい側へ送る）。
 /// 古い側は書字方向の正準表で決まる（横書き＝上・`vertical_rl`＝右・`vertical_lr`＝左）が、
-/// 矢印の役目と座標の意味は書字方向で入れ替えない（要件 4.1・4.2）。
+/// 矢印の役目と座標の意味は書字方向で入れ替えない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MarkerKind {
     /// `arrow0`。
@@ -218,7 +215,7 @@ impl MarkerKind {
 
 /// このフレームの見える範囲。自動の先頭行を覚え直し、手動の位置が自動の位置に追い付いて
 /// いたら捨てる（捨てた理由を返す＝呼び手が `debug!` する）。手動の位置が在れば、その行から
-/// 自動と同じ式で範囲を作る（行 0 なら一番古い行が描画範囲の始まりに来る・要件 5.3・8.5・8.7）。
+/// 自動と同じ式で範囲を作る（行 0 なら一番古い行が描画範囲の始まりに来る）。
 /// 同じフレームの [`PlaceScroll::observe_visible`] の**後**に呼ぶ（字が増えたフレームを自動で描く）。
 pub fn window_for(
     lines: &[PositionedLine],
@@ -257,7 +254,7 @@ pub struct MarkerShown {
 }
 
 /// 出る条件: 見えている先頭の行 > 0 で `arrow0`、手動の位置が在れば `arrow1`。
-/// どちらも無ければ出さない（要件 3.1〜3.3・4.1・7.2。書字方向に依らず同じ）。
+/// どちらも無ければ出さない（書字方向に依らず同じ）。
 pub fn marker_visibility(window: &VisibleWindow, scroll: &PlaceScroll) -> MarkerShown {
     MarkerShown {
         up: window.first_visible_line > 0,
@@ -266,7 +263,7 @@ pub fn marker_visibility(window: &VisibleWindow, scroll: &PlaceScroll) -> Marker
 }
 
 /// 座標が無いときの置き場（左上・image px）。SSP 2.9.26 で測った値:
-/// `arrow0`＝`(幅 − 20, 15)`・`arrow1`＝`(幅 − 20, 高さ − 15)`（要件 3.7・7.7）。
+/// `arrow0`＝`(幅 − 20, 15)`・`arrow1`＝`(幅 − 20, 高さ − 15)`。
 pub fn default_marker_position(kind: MarkerKind, extent: (i64, i64)) -> (i64, i64) {
     let (w, h) = extent;
     match kind {
@@ -286,8 +283,8 @@ pub struct ResolvedMarkerPlacement {
 
 impl ResolvedMarkerPlacement {
     /// x・y がそろった座標は広がり（画像の大きさ・箱は箱の大きさ）に解き、無ければ（片方だけも）
-    /// 既定の置き場にする（要件 3.4・3.7・4.2・7.1・7.7）。広がりは `i32` に入らないこともあるので
-    /// `i64` で解く（[`MarkerCoord::resolve`] の `i32` は使わない・audit-emo-text-state-actor 指摘 3）。
+    /// 既定の置き場にする。広がりは `i32` に入らないこともあるので
+    /// `i64` で解く（[`MarkerCoord::resolve`] の `i32` は使わない）。
     pub fn resolve(keys: &ArrowKeys, extent: (u32, u32)) -> Self {
         let extent = (i64::from(extent.0), i64::from(extent.1));
         let at = |kind, point: &MarkerPoint| match point.both() {

@@ -1,4 +1,4 @@
-//! ループ再生 統合テスト（dola-runtime-5-loop Task 5.2）
+//! ループ再生 統合テスト
 //!
 //! facade 経由でのループ再生エンドツーエンド検証。
 
@@ -449,7 +449,7 @@ fn end_time_unified_for_single_and_infinite() {
 
 #[test]
 fn short_duration_infinite_loop_error() {
-    // start を待たず読み込みで拒む（裁定 (d)）
+    // start を待たず読み込みで拒む
     let mut rt = DolaRuntime::new();
 
     let err = rt.load_document(loop_doc("fade", -1, 0.05)).unwrap_err();

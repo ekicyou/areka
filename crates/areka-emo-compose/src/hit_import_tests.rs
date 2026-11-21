@@ -1,4 +1,4 @@
-//! 子の領域の持ち込み（要件 4.1〜4.10・7.1・8.3）。
+//! 子の領域の持ち込み。
 //!
 //! 持ち込み済みの列を [`EmoWorld::hit_regions`] で引き、並びそのもの（後ろが手前）を確かめる。並びは［子から持ち込む分（element定義の番号の昇順）］→［親に直接書いた領域］。
 
@@ -24,7 +24,7 @@ fn has_regions(world: &EmoWorld, id: u32) -> bool {
     component_of::<HitRegions>(world.world(), id).is_some()
 }
 
-/// 子の領域が element定義の X,Y だけずれた位置で当たり、元の位置では当たらない（要件 4.1・4.2）。
+/// 子の領域が element定義の X,Y だけずれた位置で当たり、元の位置では当たらない。
 #[test]
 fn child_region_hits_at_shifted_position() {
     let w = world_of(
@@ -41,7 +41,7 @@ fn child_region_hits_at_shifted_position() {
     assert!(!has_regions(&w, 1));
 }
 
-/// 重なった 2 つの子では、element定義の番号の大きい子が手前（サーフェスの番号ではない・要件 4.3）。
+/// 重なった 2 つの子では、element定義の番号の大きい子が手前（サーフェスの番号ではない）。
 #[test]
 fn higher_numbered_element_child_is_front() {
     let children = "surface1\n{\ncollision0,0,0,10,10,One\n}\n\
@@ -56,7 +56,7 @@ fn higher_numbered_element_child_is_front() {
     assert_eq!(names(&w, 0), ["Two", "One"]);
 }
 
-/// 1 つの子の中の手前奥は、その子を単独で表示したときと同じ（要件 4.4）。
+/// 1 つの子の中の手前奥は、その子を単独で表示したときと同じ。
 #[test]
 fn order_inside_child_matches_standalone() {
     let w = world_of(
@@ -78,7 +78,7 @@ fn order_inside_child_matches_standalone() {
     );
 }
 
-/// 親に直接書いた領域が、子から持ち込んだ領域より手前（要件 4.5）。
+/// 親に直接書いた領域が、子から持ち込んだ領域より手前。
 #[test]
 fn parent_direct_region_is_front() {
     let w = world_of(
@@ -92,7 +92,7 @@ fn parent_direct_region_is_front() {
     );
 }
 
-/// 親と同じ名前の子の領域は、親の領域と重なっていない場所でも持ち込まない（要件 4.8）。
+/// 親と同じ名前の子の領域は、親の領域と重なっていない場所でも持ち込まない。
 #[test]
 fn child_region_with_parent_name_never_hits() {
     let w = world_of(
@@ -110,7 +110,7 @@ fn child_region_with_parent_name_never_hits() {
     );
 }
 
-/// 孫→子→親の段ごとに名前で落とす（要件 4.9）。孫の A は子に A が在るので子で落ち（親に A が無くても
+/// 孫→子→親の段ごとに名前で落とす。孫の A は子に A が在るので子で落ち（親に A が無くても
 /// 親へ届かない）、孫の B は子へは持ち込まれるが親に B が在るので親で落ちる。位置は各段の X,Y の和。
 #[test]
 fn names_are_dropped_level_by_level() {
@@ -143,7 +143,7 @@ fn names_are_dropped_level_by_level() {
     );
 }
 
-/// 親に無い同じ名前を 2 つの子が持てば、両方とも持ち込む（要件 4.10）。
+/// 親に無い同じ名前を 2 つの子が持てば、両方とも持ち込む。
 #[test]
 fn same_name_from_two_children_both_hit() {
     let w = world_of(
@@ -162,7 +162,7 @@ fn same_name_from_two_children_both_hit() {
     );
 }
 
-/// 無い番号・範囲を超える数・自分自身を指す辺からは持ち込まない（要件 4.6）。持ち込みが無いので何も付かない。
+/// 無い番号・範囲を超える数・自分自身を指す辺からは持ち込まない。持ち込みが無いので何も付かない。
 #[test]
 fn missing_numbers_and_self_cycle_import_nothing() {
     let w = world_of(
@@ -176,7 +176,7 @@ fn missing_numbers_and_self_cycle_import_nothing() {
     assert_eq!(w.hit_regions(1), Some(&[coll(0, 0, 0, 10, 10, "Self")][..]));
 }
 
-/// 相互の循環では、根から見て先祖へ戻る辺だけを持ち込まない（合成が描く範囲と同じ・要件 4.6）。
+/// 相互の循環では、根から見て先祖へ戻る辺だけを持ち込まない（合成が描く範囲と同じ）。
 #[test]
 fn mutual_cycle_cuts_only_the_back_edge() {
     let w = world_of(
@@ -193,7 +193,7 @@ fn mutual_cycle_cuts_only_the_back_edge() {
     );
 }
 
-/// pattern定義が指すサーフェス（着せ替えの pattern0 を含む）からは持ち込まない（要件 4.7）。
+/// pattern定義が指すサーフェス（着せ替えの pattern0 を含む）からは持ち込まない。
 #[test]
 fn pattern_targets_import_nothing() {
     let w = world_of(
@@ -207,7 +207,7 @@ fn pattern_targets_import_nothing() {
 }
 
 /// 入れ子の無いシェル（emo2）では、どのサーフェスにも [`HitRegions`] が付かず、当たり判定の列は転記の
-/// ままの `SurfaceMaster.collisions`（要件 7.1）。無い番号は `None`。
+/// ままの `SurfaceMaster.collisions`。無い番号は `None`。
 #[test]
 fn shell_without_nesting_gets_no_hit_regions() {
     let w = EmoWorld::build(&crate::sample_test_support::emo2_shell());
@@ -265,7 +265,7 @@ fn fixture_parents_hit_child_names_at_placed_position() {
     assert_eq!(with, vec![0, 1, 2]);
 }
 
-/// 広がりの予算（指摘 3・22・130）: 予算は入る面と面の行と持ち込む領域を数える（collision 1 行の子 1 つで
+/// 広がりの予算（22・130）: 予算は入る面と面の行と持ち込む領域を数える（collision 1 行の子 1 つで
 /// 入る 1 ＋行 1 ＋渡す 1＝3）。予算 6 の持ち込みは
 /// element定義の子 3 つのうち 2 つ目まで入って 3 つ目を持ち込まず、`error!` を 1 行だけ出す。黙らせる
 /// 組み方の予算は同じく断って記録を出さない。
@@ -309,7 +309,7 @@ fn spent_budget_does_not_import_children_not_yet_entered() {
     assert_eq!(w.hit_regions(0).map(<[_]>::len), Some(3));
 }
 
-/// 指摘 6（2000 根の形の小さな版）: 面 1000 に "Y" が 20 行、面 100+i が "Z" 1 行と面 1000 を置き、面 i が
+/// 面 1000 に "Y" が 20 行、面 100+i が "Z" 1 行と面 1000 を置き、面 i が
 /// "Y" 1 行と面 100+i を置く（i は 20 組）。根をまたいで共有する覚えは面 100+i ごとに 21 本の列を持ち、根の
 /// 答えも覚えるので、上限が無ければ合計 480 本になる。覚えの予算 100 では合計が 100 以下で止まり、後の面は
 /// 覚えず、どの根の答えも覚えを使わないときと同じ。
@@ -349,7 +349,7 @@ fn memo_stops_at_its_budget_and_answers_stay_the_same() {
     );
 }
 
-/// 形ごとの持ち込みのずらし: 全形が飽和の足し算で、腕は変わらない（要件 3.4）。
+/// 形ごとの持ち込みのずらし: 全形が飽和の足し算で、腕は変わらない。
 #[test]
 fn shifted_moves_every_shape_saturating() {
     use super::shifted;
@@ -419,7 +419,7 @@ const FIVE_SHAPES: &str = "surface1\n{\ncollisionex0,R,rect,1,2,3,4\ncollisionex
      collisionex2,C,circle,5,6,7\ncollisionex3,P,polygon,0,0,5,6,9,1\n\
      collisionex4,G,region,m.png,255,0,0\n}\n";
 
-/// 取り込み経由（要件 3.4・8.2）: 5 つの形が element定義の X,Y だけずれて親に並ぶ。円の半径はそのまま・
+/// 取り込み経由: 5 つの形が element定義の X,Y だけずれて親に並ぶ。円の半径はそのまま・
 /// 多角形は全頂点が順を保ってずれ・`region` は置く位置がずれる。どの形も並びから除かれない。
 #[test]
 fn import_shifts_all_five_shapes_by_element_offset() {
@@ -459,7 +459,7 @@ fn import_shifts_all_five_shapes_by_element_offset() {
     assert_eq!(shapes(&w, 1).len(), 5);
 }
 
-/// `i64` の端の近くでは飽和し、パニックしない（要件 3.4）。
+/// `i64` の端の近くでは飽和し、パニックしない。
 #[test]
 fn import_saturates_near_i64_limits() {
     let max = i64::MAX;
@@ -492,7 +492,7 @@ fn import_saturates_near_i64_limits() {
     );
 }
 
-/// 親に直接書いた同じ名前は `region` でも子の同じ名前を落とし、落とされなかった形は並びに残る（要件 3.5・5.3）。
+/// 親に直接書いた同じ名前は `region` でも子の同じ名前を落とし、落とされなかった形は並びに残る。
 #[test]
 fn parent_direct_region_drops_child_same_name() {
     let w = world_of(&format!(

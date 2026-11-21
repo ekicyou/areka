@@ -1,6 +1,4 @@
-//! 文字の単位がクラスタであることを cue の適用で確かめる（要件 2.2・2.4・2.5・2.7・6.2）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-color-emoji` のもの（別の spec のものはその場で名を書く）。
+//! 文字の単位がクラスタであることを cue の適用で確かめる。
 //!
 //! 複数の符号でできた 6 形が、それぞれ 1 アイテム・1 段で積まれ、途中の段に部品が
 //! 見えないことを判定する。形はソース上で紛れないよう符号の値で書く。
@@ -21,7 +19,7 @@ const KEYCAP_ONE: &str = "\u{0031}\u{FE0F}\u{20E3}";
 /// 結合文字つき: か 半濁点（結合用）
 const KA_HANDAKUTEN: &str = "\u{304B}\u{309A}";
 
-/// 要件 2.2 の 6 形すべて。
+/// 複数の符号でできた 6 形すべて。
 const SIX_FORMS: [&str; 6] = [
     FAMILY,
     FLAG_JP,
@@ -123,7 +121,7 @@ fn choice_cue_range_counts_clusters() {
     );
 }
 
-/// 選択肢とアンカーの始まりは、前の字のクラスタの数（改行は数えない・audit-emo-text-state-actor 指摘 23⑷）。
+/// 選択肢とアンカーの始まりは、前の字のクラスタの数（改行は数えない）。
 /// 「か゚」（2 符号で 1 字）・改行・選択肢「B」の後に開いたアンカーは 2 から始まる。
 #[test]
 fn choice_and_anchor_start_counts_clusters_before_them() {

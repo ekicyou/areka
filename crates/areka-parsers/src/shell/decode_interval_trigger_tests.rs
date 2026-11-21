@@ -1,5 +1,4 @@
-//! 引き金の 3 語（`talk,数値`・`runonce`・`periodic,数値`）の読みの檻
-//! （areka-P0-seriko-trigger-intervals タスク 1.1・要件 1.1〜1.6・9.1）。
+//! 引き金の 3 語（`talk,数値`・`runonce`・`periodic,数値`）の読みの檻。
 //!
 //! 見るのは `normalize_interval` の判断の分岐だけ: 小文字の完全一致で 3 語を見分けること、
 //! 数値を落とさないこと、数値が 1 以上の整数として読めないときに第 2 欄以降を `,` で繋いだ
@@ -19,14 +18,14 @@ fn interval_of(rest: &str) -> Interval {
     shell.surfaces[0].animations[0].interval.clone()
 }
 
-/// `talk,数値`・`periodic,数値` は語と数値の両方を運ぶ（要件 1.1・1.2）。
+/// `talk,数値`・`periodic,数値` は語と数値の両方を運ぶ。
 #[test]
 fn talk_and_periodic_carry_word_and_number() {
     assert_eq!(interval_of("talk,3"), Interval::Talk { n: 3 });
     assert_eq!(interval_of("periodic,5"), Interval::Periodic { secs: 5 });
 }
 
-/// `runonce` は語を運ぶ。余分な欄（`runonce,3`）は読まない（要件 1.3）。
+/// `runonce` は語を運ぶ。余分な欄（`runonce,3`）は読まない。
 #[test]
 fn runonce_carries_word_and_ignores_extra_fields() {
     assert_eq!(interval_of("runonce"), Interval::Runonce);
@@ -34,14 +33,14 @@ fn runonce_carries_word_and_ignores_extra_fields() {
 }
 
 /// 数値が無い `talk`／`periodic` は、第 2 欄以降の原文（＝語だけ）を「その他の語」へ運ぶ
-/// （要件 1.5 の読み手の側・読み手は失敗しない）。
+/// （読み手は失敗しない）。
 #[test]
 fn talk_and_periodic_without_number_become_other_verbatim() {
     assert_eq!(interval_of("talk"), Interval::Other("talk".into()));
     assert_eq!(interval_of("periodic"), Interval::Other("periodic".into()));
 }
 
-/// 数値が 0 の `talk`／`periodic` は、第 2 欄以降を `,` で繋いだ原文を運ぶ（要件 1.5）。
+/// 数値が 0 の `talk`／`periodic` は、第 2 欄以降を `,` で繋いだ原文を運ぶ。
 #[test]
 fn talk_and_periodic_with_zero_become_other_verbatim() {
     assert_eq!(interval_of("talk,0"), Interval::Other("talk,0".into()));
@@ -52,7 +51,7 @@ fn talk_and_periodic_with_zero_become_other_verbatim() {
 }
 
 /// 数値が非数値の `talk`／`periodic` は、第 2 欄以降を `,` で繋いだ原文を運ぶ
-/// （第 4 欄以降も落とさない・要件 1.5）。
+/// （第 4 欄以降も落とさない）。
 #[test]
 fn talk_and_periodic_with_non_number_become_other_verbatim() {
     assert_eq!(interval_of("talk,abc"), Interval::Other("talk,abc".into()));
@@ -62,7 +61,7 @@ fn talk_and_periodic_with_non_number_become_other_verbatim() {
     );
 }
 
-/// 大文字混じりの綴りは 3 語として読まず、今までどおり語だけを運ぶ（要件 1.4）。
+/// 大文字混じりの綴りは 3 語として読まず、今までどおり語だけを運ぶ。
 #[test]
 fn mixed_case_spellings_stay_other_keyword_only() {
     assert_eq!(interval_of("Talk,3"), Interval::Other("Talk".into()));
@@ -73,7 +72,7 @@ fn mixed_case_spellings_stay_other_keyword_only() {
     );
 }
 
-/// `+` を含む綴りは 3 語として読まず、今までどおり語だけを運ぶ（要件 1.4）。
+/// `+` を含む綴りは 3 語として読まず、今までどおり語だけを運ぶ。
 #[test]
 fn plus_combinations_stay_other_keyword_only() {
     assert_eq!(

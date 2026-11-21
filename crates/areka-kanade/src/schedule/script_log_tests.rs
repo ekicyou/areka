@@ -1,7 +1,7 @@
-//! script 種別のログの決定論テスト（`schedule/script_log.rs` の兄弟・要件 7.1 ⑽）。
+//! script 種別のログの決定論テスト（`schedule/script_log.rs` の兄弟・ ⑽）。
 //!
 //! 最上位の `step` から各道を通し、呼んだスレッドで捕まえた `areka::log::script` の記録が
-//! トーク 1 つにつき 1 件・表示の語が表のとおり・本文が翻訳の後の台本であることを固定する（要件 4.1〜4.3）。
+//! トーク 1 つにつき 1 件・表示の語が表のとおり・本文が翻訳の後の台本であることを固定する。
 
 use super::{PLAIN_LABEL, SSTP_SEND_LABEL, TARGET, event_label};
 use crate::msg::{
@@ -264,7 +264,7 @@ fn close_greeting_is_logged_once_as_ghost_onclose() {
     assert_one(&records, "Ghost:OnClose", "\\h訳したまたね\\e");
 }
 
-/// 翻訳の輸送路が失敗したトークは始まらないので 0 件（要件 4.3）。
+/// 翻訳の輸送路が失敗したトークは始まらないので 0 件。
 #[test]
 fn translate_transport_failure_logs_nothing() {
     let records = script_records(|| {

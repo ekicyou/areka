@@ -8,7 +8,7 @@ use taffy::prelude::*;
 #[repr(transparent)]
 pub struct TaffyStyle(pub(crate) Style);
 
-// taffy 0.13 の Style は CompactLength（calc 式用の *const () タグ付きポインタ）を含むため
+// SAFETY: taffy 0.13 の Style は CompactLength（calc 式用の *const () タグ付きポインタ）を含むため
 // 自動では Send/Sync にならない。`TaffyStyle::new` は公開なので calc の値も入りうるが、
 // wintf が使う `TaffyTree<()>` は calc のポインタを一度も読まない（`resolve_calc_value` は
 // 0 を返すだけ）。ポインタの先に触れないので、スレッドをまたいでも安全。

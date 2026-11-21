@@ -1,8 +1,8 @@
 //! `transition_judge` の**フレーム刻印の扱い**の決定論テスト。
 //!
 //! 1 箇所へ集めるのは、フレーム番号にまつわる規約が 3 つとも「静かに壊れる」たぐいだから
-//! である——周回（D14）は差分でしか扱えず、縮退値 `frame=0` は「1 フレームで完了」に
-//! 化け（`areka-P0-dpi-transition-atomicity` 要件 8.5）、値が読めなかった行は 0 として通ってしまう。どれも壊れた側が
+//! である——周回は差分でしか扱えず、縮退値 `frame=0` は「1 フレームで完了」に
+//! 化け、値が読めなかった行は 0 として通ってしまう。どれも壊れた側が
 //! **良い数字**を返すので、赤にする檻を明示的に持たないと合格が捏造される。
 //!
 //! 集計の本体（回数・窓ごとの内訳・接地点差など）は姉妹モジュール
@@ -53,7 +53,7 @@ fn parse_reports_a_missing_prefix_field() {
 fn parse_reports_an_unreadable_prefix_value_separately_from_a_missing_one() {
     // フィールドは在るが値が数として読めない場合（欠落とは別の欠陥）。ここを黙って
     // 0 にすると、「frame が読めなかった」と「frame は本当に 0 だった」が同じ値になり、
-    // `areka-P0-dpi-transition-atomicity` 要件 8.5 の判定不能ガードが根拠を失う。
+    // 判定不能のガードが根拠を失う。
     let line = monitor_with_raw_frame(&format!("{FIELD_FRAME}=4x2y"));
     let parsed = parse_transition_line(&line).expect("タグを含む行は解析結果を返す");
     assert!(
@@ -108,12 +108,12 @@ fn summarize_refuses_a_series_whose_frames_could_not_be_read() {
 }
 
 // ---------------------------------------------------------------------------
-// 周回（D14）——差分でしか扱わない
+// 周回——差分でしか扱わない
 // ---------------------------------------------------------------------------
 
 #[test]
 fn summarize_takes_the_frame_difference_across_the_wraparound_boundary() {
-    // `frame` は u32 で周回する。差分でしか扱わない（D14）。
+    // `frame` は u32 で周回する。差分でしか扱わない。
     let summary = summarize_lines(&[
         monitor(u32::MAX, 192, 96, 1704, 1752),
         write(
@@ -175,7 +175,7 @@ fn the_visualize_to_write_frame_gap_also_wraps_around() {
 
 #[test]
 fn the_visualize_to_write_microseconds_are_only_measured_inside_one_frame() {
-    // C7 が測るのは「**同一 frame** の可視化から当該窓の書込まで」である。別フレームの
+    // 測るのは「**同一 frame** の可視化から当該窓の書込まで」である。別フレームの
     // 書込まで拾うと、tick をまたいだ待ち時間が同一 tick 内の食い違いとして報告され、
     // `Bounds::signoff` が実在しない症状を測ることになる。
     let summary = summarize_lines(&[

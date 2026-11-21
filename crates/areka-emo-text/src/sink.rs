@@ -1,13 +1,11 @@
 //! # sink — cue 受信口（結線層）
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
-//!
 //! **単一の出力契約** [`dola::cue::CueSink`] を実装する `EmoTextSink` と搬送 envelope
 //! `TextMsg` を担う。`emit` は cue 再生ランタイム（`CuePlayer`）／sakura drive の worker
 //! スレッド上で呼ばれ、cue を UI ドレインへ非ブロック送出する（`UiSender` が配送口そのもの）。
 //!
-//! 演者非依存の `CueSink` 1 本へ集約する（旧 `SurfaceSink`/`TextSink` の 2 分割は
-//! broadcast＋演者側 relevance ゆえ不要・`areka-P0-cue-playback-duration` R11.6）。ghost live-path も `CueSink` 注入で結線する。
+//! 演者非依存の `CueSink` 1 本へ集約する（担当かどうかは broadcast された全 cue に対し演者側
+//! relevance で選ぶ）。ghost live-path も `CueSink` 注入で結線する。
 //!
 //! **層規律**: 結線層。送信失敗（UI アクター停止後）は `tracing::error!` 1 行・panic しない
 //! （`emit` は infallible 契約・log-first）。複製が落ちるときのトークの終わりの合図（`Drop`）だけは
@@ -19,7 +17,7 @@ use areka_actor::{UiSendError, UiSender};
 use areka_sakura::contract::{CueCommand, TalkCue};
 use dola::cue::CueProbe;
 
-/// UI ドレインへの搬送 envelope（`Send + 'static`・design.md 結線層 正本）。
+/// UI ドレインへの搬送 envelope（`Send + 'static`）。
 ///
 /// [`EmoTextSink`] が worker スレッドから積み、UI ドレイン（`spawn_ui` の drain タスク）が
 /// [`handle_text_msg_with`] で写像する。cue と終了指示を同一 FIFO 口で運ぶことで、
@@ -36,9 +34,9 @@ pub enum TextMsg {
     Upcoming(Vec<TalkCue>),
     /// 終了指示（結線側が talk 経路の畳み込みで送る・`Ok(Break)` 経路）。
     Close,
-    /// トークの終わり（cue を送った複製が落ちるときに 1 回・そのトークの cue の後に届く・areka-P0-balloon-text-bugs 件 1）。
+    /// トークの終わり（cue を送った複製が落ちるときに 1 回・そのトークの cue の後に届く）。
     TalkEnded,
-    /// 再生が選択待ちに入った（[`dola::cue::CueSink::choice_wait_began`] の写し・areka-P0-balloon-text-bugs 件 1）。
+    /// 再生が選択待ちに入った（[`dola::cue::CueSink::choice_wait_began`] の写し）。
     ChoiceWaitBegan,
 }
 
@@ -46,14 +44,14 @@ pub enum TextMsg {
 /// 非ブロック送出する受信口（担当外 cue も届き、reveal を汚さず duration を honor する）。
 ///
 /// - `dola::cue::CueSink + Clone + Send + 'static` を満たす（cue 再生ランタイム／`GhostBootOptions.sinks`
-///   へ登録・注入可能な形・注入自体は emo2-boot の責務・`areka-P0-cue-playback-duration` R10.1/R11.6）。
-/// - `emit` は `CuePlayer`／sakura drive の worker スレッド上で呼ばれる＝受信端はワーカー側
-///   （R1.3 前半）。中間アクターは設けない（[`UiSender`] が配送口そのもの——design.md 結線層）。
+///   へ登録・注入可能な形・注入自体は emo2-boot の責務）。
+/// - `emit` は `CuePlayer`／sakura drive の worker スレッド上で呼ばれる＝受信端はワーカー側。
+///   中間アクターは設けない（[`UiSender`] が配送口そのもの）。
 /// - cue は FIFO で UI ドレインへ到達する（unbounded・非ブロック）。
 ///
 /// # Invariants
 ///
-/// `emit`／`close` はいかなる失敗でも panic しない（送信失敗は `tracing::error!` のみ・R1.5）。
+/// `emit`／`close` はいかなる失敗でも panic しない（送信失敗は `tracing::error!` のみ）。
 pub struct EmoTextSink {
     tx: UiSender<TextMsg>,
     /// この複製が cue を 1 つ以上送った（＝落ちるときに [`TextMsg::TalkEnded`] を送る）。
@@ -68,7 +66,7 @@ impl Clone for EmoTextSink {
     }
 }
 
-/// **トークの終わり**——cue を送った複製が落ちるときに [`TextMsg::TalkEnded`] を 1 回送る（areka-P0-balloon-text-bugs 件 1）。
+/// **トークの終わり**——cue を送った複製が落ちるときに [`TextMsg::TalkEnded`] を 1 回送る。
 ///
 /// 複製はトークの再生が所有し、最後まで・中断・置き換えのどの終わり方でも落ちる。同じ口の FIFO で
 /// そのトークの cue の後に並び、置き換えでは配送が古いトークのスレッドを合流してから新しいトークを
@@ -92,8 +90,8 @@ impl EmoTextSink {
 
     /// 終了指示（`emit` と同じ口・FIFO で cue の後に並ぶ）。
     ///
-    /// UI ドレインは [`TextMsg::Close`] 受領で `Ok(Break)`＝error ログなしのクリーン終了
-    /// （R1.4 相当）。送信失敗（UI ドレイン停止後）は `tracing::error!` のみ・panic しない。
+    /// UI ドレインは [`TextMsg::Close`] 受領で `Ok(Break)`＝error ログなしのクリーン終了。
+    /// 送信失敗（UI ドレイン停止後）は `tracing::error!` のみ・panic しない。
     pub fn close(&self) {
         if self.tx.send(TextMsg::Close).is_err() {
             tracing::error!(
@@ -102,11 +100,11 @@ impl EmoTextSink {
         }
     }
 
-    /// 1 発火を UI ドレインへ積む（unbounded・非ブロック・R1.1）。単一の出力契約
+    /// 1 発火を UI ドレインへ積む（unbounded・非ブロック）。単一の出力契約
     /// [`dola::cue::CueSink`] の `emit` が用いる送出本体。
     ///
     /// 送信失敗（UI ドレイン停止後）は失われた cue の文脈付き `tracing::error!` のみで、
-    /// panic せず infallible 契約に従い戻り値なし（R1.5・log-first）。後続の `emit` も
+    /// panic せず infallible 契約に従い戻り値なし。後続の `emit` も
     /// 引き続き受理される（受信口は失敗で壊れない）。
     fn deliver(&mut self, msg: TextMsg) {
         self.started = true;
@@ -124,20 +122,18 @@ impl EmoTextSink {
     }
 }
 
-/// **単一の出力契約**（`areka-P0-cue-playback-duration` R11.6）: 演者非依存の [`dola::cue::CueSink`] を実装する。
+/// **単一の出力契約**: 演者非依存の [`dola::cue::CueSink`] を実装する。
 ///
 /// `CuePlayer` は登録された全 sink へ全 cue を broadcast し、emo-text は担当（Balloon）か否かを
 /// 演者側 relevance（`cue_target_of`）で選別する——action を無視しても duration は honor する
-/// （担当外 cue も本 sink 経由で純粋状態機械へ届き、reveal を汚さない・`areka-P0-cue-playback-duration` R2.2/R2.3）。配送先スロットの
-/// 2 分割（旧 SurfaceSink/TextSink）は broadcast＋演者側 relevance ゆえ廃し、
-/// `CueSink` 一本にしている。
+/// （担当外 cue も本 sink 経由で純粋状態機械へ届き、reveal を汚さない）。
 impl dola::cue::CueSink for EmoTextSink {
     fn emit(&mut self, cue: TalkCue) {
         self.deliver(TextMsg::Cue(cue));
     }
 
     /// 名前の形の `\b[名前]`（鍵が整数として読めない＝`resolve_balloon_key` の名前の形）だけ口付きで積む。
-    /// 箱を探すのは UI の取り出しなので、知らせもそこで決まる（`mcp-strict-errors` 要件 4.2）。ほかは `emit` と同じ。
+    /// 箱を探すのは UI の取り出しなので、知らせもそこで決まる。ほかは `emit` と同じ。
     fn emit_with(&mut self, cue: TalkCue, probe: &CueProbe) {
         match &cue.command {
             CueCommand::BalloonSurface { key } if key.parse::<i64>().is_err() => {
@@ -147,7 +143,7 @@ impl dola::cue::CueSink for EmoTextSink {
         }
     }
 
-    /// 先渡しを写して [`TextMsg::Upcoming`] として合図と同じ口へ積む（`areka-P0-budoux-reveal-reflow` 要件 2.1）。
+    /// 先渡しを写して [`TextMsg::Upcoming`] として合図と同じ口へ積む。
     /// 積めなかったとき（UI ドレイン停止後）は `emit`・`close` と同じく `error!` 1 行のみ・panic しない。
     fn preview(&mut self, upcoming: &[TalkCue]) {
         if self.tx.send(TextMsg::Upcoming(upcoming.to_vec())).is_err() {
@@ -158,7 +154,7 @@ impl dola::cue::CueSink for EmoTextSink {
         }
     }
 
-    /// 選択待ちの始まりを [`TextMsg::ChoiceWaitBegan`] として合図と同じ口へ積む（areka-P0-balloon-text-bugs 件 1）。
+    /// 選択待ちの始まりを [`TextMsg::ChoiceWaitBegan`] として合図と同じ口へ積む。
     /// 積めなかったとき（UI ドレイン停止後）は `preview` と同じく `error!` 1 行のみ・panic しない。
     fn choice_wait_began(&mut self) {
         if self.tx.send(TextMsg::ChoiceWaitBegan).is_err() {
@@ -169,20 +165,20 @@ impl dola::cue::CueSink for EmoTextSink {
     }
 }
 
-/// 終了規律の正準写像（design.md 結線層——drain handler の器）。
+/// 終了規律の正準写像。
 ///
 /// cue の処理（状態機械適用等）を `on_cue`、先渡し（[`TextMsg::Upcoming`]）を `on_upcoming`、
 /// トークの印（[`TextMsg::TalkEnded`]・[`TextMsg::ChoiceWaitBegan`] のどちらかだけが渡る）を
 /// `on_talk_mark` で差し込む。`on_cue` の 2 つ目は [`TextMsg::ProbedCue`] の口（`Cue` なら `None`）。
-/// 終了経路はちょうど 2 つ（R1.4 相当）:
+/// 終了経路はちょうど 2 つ:
 ///
 /// - [`TextMsg::Close`] 受領 → `Ok(ControlFlow::Break(()))`（受け取りはどれも呼ばれない・
 ///   基盤 `spawn_ui` が error ログなしで drain を終了する）。
 /// - 全 [`UiSender`]（＝全 [`EmoTextSink`] クローン）drop → drain の `recv` が閉じて正常終了
 ///   （本関数の外・基盤の規約）。
 ///
-/// 受け取りの失敗は `Err` として返し、基盤が `error!`＋継続する（R1.5——
-/// **失敗は終了経路ではない**・ループを殺さない）。
+/// 受け取りの失敗は `Err` として返し、基盤が `error!`＋継続する（**失敗は終了経路ではない**・
+/// ループを殺さない）。
 pub fn handle_text_msg_with<E>(
     msg: TextMsg,
     on_cue: impl FnOnce(TalkCue, Option<CueProbe>) -> Result<(), E>,
@@ -216,17 +212,12 @@ mod tests {
 
     // ── ログ捕捉（WARN/ERROR 件数の集計は共有機構 `log-capture-kit` へ委譲） ──
 
-    // 記録は `log-capture-kit` の `count_levels` で数える（WARN/ERROR 件数の唯一の定義元）。
-    //
-    // 捕捉の範囲は**呼出スレッド**に閉じる。drain タスクは本テストスレッド（＝pump スレッド）
-    // 上で走るため、handler／基盤 drain ループ／`emit` 失敗経路の全ログが窓に入る。
-    // ただし「スレッドの範囲に閉じるから並行実行でも安全」は誤りである——差し替わるのは
-    // スレッドローカルの既定 dispatcher だけで、そのログを評価するかどうかを決める callsite の
-    // **有効判定（interest）キャッシュはプロセス全体で 1 つ**しかなく、その発行点を最初に
-    // 踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドが先に踏むと `never` が
-    // 大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。共有機構は
-    // ⑴ probe の常駐 ⑵ 窓の内側での有効判定の再計算 ⑶ 番兵イベントによる空振り検出の
-    // 3 点でこれを塞ぐ（機序は `log_capture_kit` の crate doc）。
+    // 記録は `log-capture-kit` の `count_levels` で数える。捕捉の範囲は呼出スレッドに閉じ、
+    // drain タスクは本テストスレッド（＝pump スレッド）上で走るので、handler／基盤 drain ループ／
+    // `emit` 失敗経路の全ログが窓に入る。ただし「スレッドに閉じるから並行実行でも安全」は誤りで、
+    // callsite の有効判定（interest）キャッシュはプロセス全体で 1 つしかなく、捕捉窓を持たない
+    // スレッドが先に踏むと `never` が大域へ焼き付いて取りこぼす。共有機構が probe の常駐・窓内での
+    // 有効判定の再計算・番兵イベントによる空振り検出でこれを塞ぐ（機序は `log_capture_kit` の crate doc）。
 
     // ── テスト土台（実 channel・実 spawn_ui・bounded pump） ──
 
@@ -245,7 +236,7 @@ mod tests {
     ///
     /// - handler は [`handle_text_msg_with`]（終了規律の正準写像）へ委譲し、cue を `records` へ
     ///   push する（＝「描画を担う側」への配送先スタンドイン。状態機械の適用はここでは見ない）。
-    /// - `poison` が指す本文の Text cue は `Err` を返す（個別配送失敗の再現・R1.5）。
+    /// - `poison` が指す本文の Text cue は `Err` を返す（個別配送失敗の再現）。
     /// - 本テストスレッドが pump スレッドを演じる（`spawn_ui` と pump は同一スレッド必須）。
     fn spawn_recording_drain(
         poison: Option<&'static str>,
@@ -257,7 +248,6 @@ mod tests {
         let (tx, _detached_drain) = areka_actor::spawn_ui(
             "emo-text-drain-test",
             move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
-                // センチネルを handler クロージャへ捕捉（drain future の drop で flag が立つ）。
                 let _hold = &sentinel;
                 handle_text_msg_with(
                     msg,
@@ -285,7 +275,7 @@ mod tests {
 
     /// コンパイル時検証: `EmoTextSink` は cue 再生ランタイムへの登録・`GhostBootOptions.sinks` への
     /// 注入が可能な**単一の出力契約**（`dola::cue::CueSink + Clone + Send + 'static`）を満たす
-    /// （`areka-P0-cue-playback-duration` R10.1/R11.6・単一トレイト・注入自体は emo2-boot の責務）。
+    /// （単一トレイト・注入自体は emo2-boot の責務）。
     #[test]
     fn emo_text_sink_satisfies_cue_sink_contract() {
         assert_cue_sink_contract::<EmoTextSink>();
@@ -293,7 +283,7 @@ mod tests {
 
     // ── 終了規律の正準写像（handle_text_msg_with・純粋部） ──
 
-    /// `TextMsg::Close` → `Ok(Break)`（終了指示＝クリーン終了経路・R1.4 相当の写像）。
+    /// `TextMsg::Close` → `Ok(Break)`（終了指示＝クリーン終了経路）。
     /// on_cue は呼ばれない。
     #[test]
     fn handle_text_msg_maps_close_to_break() {
@@ -328,8 +318,8 @@ mod tests {
         );
     }
 
-    /// 個別配送失敗は `Err` として基盤へ返す（基盤が error!＋継続する・R1.5——
-    /// Break にはしない＝失敗は終了経路ではない）。
+    /// 個別配送失敗は `Err` として基盤へ返す（基盤が error!＋継続する。Break にはしない＝
+    /// 失敗は終了経路ではない）。
     #[test]
     fn handle_text_msg_propagates_cue_failure_as_err() {
         let result = handle_text_msg_with(
@@ -343,8 +333,8 @@ mod tests {
 
     // ── 3 ケースの実 channel 再現（実 spawn_ui drain・bounded pump） ──
 
-    /// ケース1: 終了指示（`close()`）——error ログを伴わずクリーンに終了する（R1.4 相当）。
-    /// あわせて疎通の正準観測: clone 間で interleave した emit が FIFO で配送される（R1.1）。
+    /// ケース1: 終了指示（`close()`）——error ログを伴わずクリーンに終了する。
+    /// あわせて疎通の正準観測: clone 間で interleave した emit が FIFO で配送される。
     #[test]
     fn close_directive_terminates_drain_cleanly_after_fifo_delivery() {
         // 対照の 1 件のほかに ERROR が出ないことは `capture_checked` が確かめる。
@@ -378,7 +368,7 @@ mod tests {
     }
 
     /// ケース2: 全送信元切断（全 `EmoTextSink` clone drop）——queue 済み cue を届け切った上で
-    /// error ログを伴わずクリーンに終了する（R1.4 相当）。
+    /// error ログを伴わずクリーンに終了する。
     #[test]
     fn dropping_all_sinks_terminates_drain_cleanly() {
         let ((), _events) = capture_checked(|| {
@@ -407,7 +397,7 @@ mod tests {
     }
 
     /// ケース3a: 個別配送失敗（handler の `Err`）——panic せず error ログ 1 件を記録した上で、
-    /// 後続 cue の受理を継続する（R1.5・失敗はループを殺さない）。
+    /// 後続 cue の受理を継続する（失敗はループを殺さない）。
     #[test]
     fn delivery_failure_is_logged_and_subsequent_cues_processed() {
         let ((), counts) = count_levels(|| {
@@ -441,7 +431,7 @@ mod tests {
 
     /// ケース3b: 送信側の配送失敗（UI drain 停止後の `emit`／`close`）——panic せず
     /// 1 呼び出しにつき 1 件の error ログのみで、後続の `emit` 受理（infallible 契約）を
-    /// 継続する（R1.5・design「送信失敗は error! のみ」）。
+    /// 継続する。
     #[test]
     fn emit_after_drain_stop_logs_error_without_panic_and_stays_callable() {
         // まず drain を正規経路（Close）で停止させる（channel closed 状態を作る）。
@@ -462,7 +452,7 @@ mod tests {
         );
     }
 
-    // ── 先渡し（TextMsg::Upcoming・budoux-reveal-reflow task 1.3・`areka-P0-budoux-reveal-reflow` 要件 2.1） ──
+    // ── 先渡し（TextMsg::Upcoming） ──
 
     /// `handle_text_msg_with` は先渡しを無変形で on_upcoming へ渡し、失敗は `Err` で返す。
     #[test]

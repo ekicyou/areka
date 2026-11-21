@@ -1,5 +1,5 @@
-//! 第 1 段再観測 §3.1（遷移 1・192→96）を**新語彙へ整形した埋め込みログ**からの逐語再現と、
-//! `areka-P0-dpi-transition-atomicity` の再観測 §3.2 の**6 遷移すべて**に対する判定の突合（後半は後から足した）。
+//! 再観測レポートの遷移 1（192→96）を**新語彙へ整形した埋め込みログ**からの逐語再現と、
+//! 同レポートの**6 遷移すべて**に対する判定の突合（後半は後から足した）。
 //!
 //! 後半が要るのは、判定の上限をテストの作った形に合わせて書くと、レポートが「欠陥ではない」と
 //! 明記した遷移を不合格にしてしまうからである（レビューで 2 度起きた）。判定器を
@@ -10,15 +10,14 @@
 //! `visualize_to_write_us`／`flush_total_us` はその補った値で決まるので、実測の値の根拠に
 //! 読まないこと（決定論側の判定は `t_us` を判定語に使わない）。
 //!
-//! 正本は `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/reobservation-2026-08-15.md` の §3.1
-//! （全行を引用した代表例）である。当時のログにはフレーム番号が無く順序と遅れは時刻近似
-//! だったので、整形にあたって次の 2 点を補った——どちらも再観測レポートの本文から導ける:
+//! 当時のログにはフレーム番号が無く順序と遅れは時刻近似だったので、整形にあたって次の
+//! 2 点を補った——どちらも再観測レポートの本文から導ける:
 //!
 //! - **フレーム番号は 1 つ**（`41231`）。6 回の窓書込はいずれも `+103〜255ms` に並ぶが、これは
 //!   1 回の一括書込の内側で `SetWindowPos` が 1 本ずつ 60〜80ms を要しているためであり
-//!   （§5「逐次区間の内側では `SetWindowPos` 1 回ごとに当該窓の `WM_DPICHANGED` 処理が同期で
-//!   挟まる」）、区間全体が同一 tick に載る。design C8（`areka-P0-dpi-transition-atomicity`）の脚注「4.4 の決定論値
-//!   `TRANSITION_FRAME_BOUND = 0` は現行コードで既に成立する」と同じ事実である。
+//!   （逐次区間の内側では `SetWindowPos` 1 回ごとに当該窓の `WM_DPICHANGED` 処理が同期で
+//!   挟まる）、区間全体が同一 tick に載る。決定論値 `TRANSITION_FRAME_BOUND = 0` が現行コードで
+//!   既に成立するのと同じ事実である。
 //! - **`t_us` は起点を 0 とする相対 ms を µs へ引き伸ばした値**（`+13ms` → `13000`）。同一
 //!   µs に 2 行が並ぶ箇所だけ、レポートの記述順に 100µs 刻みでずらしてある。
 //!
@@ -28,7 +27,7 @@
 //! （書込 6・経路 A 0・接地点差 −48px・フレーム量 0）には 1 つも効かない:
 //!
 //! - 起点行の `t_us=214`——モニタ表更新は tick の内側で起きるという以上の根拠は無い。
-//! - 6 本の `call_us`——レポートは「`SetWindowPos` 1 回が 60〜80ms」（§5・内訳は未特定）と
+//! - 6 本の `call_us`——レポートは「`SetWindowPos` 1 回が 60〜80ms」（内訳は未特定）と
 //!   書くだけで 1 回ごとの値を持たない。行の間隔から辻褄の合う値を置いてある。
 //! - `flush stage=begin`／`stage=end` の刻印と `total_us`——レポートに一括書込の区間の記録は
 //!   無い（当時その観測点が無かった）。最初の書込の直前から最後の書込の直後までを覆う値。
@@ -43,7 +42,7 @@
 //! ここが押さえる要点は、フレーム単位の量が**是正前でも 0 になる**ことである
 //! （`frames_to_last_write=0`・`mismatch_frames_per_window` が全窓 0）。同一 tick の内側の
 //! 食い違いは µs でしか見えないので、実機サインオフ専用の量
-//! （`visualize_to_write_us`・`flush_total_us_max`）が要る——設計討議 A-2 の裁定そのものである。
+//! （`visualize_to_write_us`・`flush_total_us_max`）が要る。
 
 use areka_emo_present::presenter::{
     SURFACE_REASON_INVISIBLE, SURFACE_STAGE_SKIPPED, SURFACE_STAGE_VISUALIZE,
@@ -57,7 +56,7 @@ use areka_placement::diag::{PlacementRoute, WindowKind};
 /// 起点のフレーム番号（整形時に与えた 1 つの値）。
 const ORIGIN_FRAME: u32 = 41231;
 
-/// 再観測 §3.1（遷移 1・192→96）を新語彙へ整形した埋め込みログ。
+/// 再観測レポートの遷移 1（192→96）を新語彙へ整形した埋め込みログ。
 ///
 /// `[transition]` を持たない 3 行（`info` の本文・`[diag.window_move]`・段階別計時）は
 /// 実機ログの混ざり方をそのまま再現するために残してある。判定器はこれを 1 件も数えない。
@@ -141,7 +140,6 @@ fn lines_without_the_record_tag_are_not_counted() {
 
 #[test]
 fn reproduces_six_writes_no_path_a_write_and_a_minus_48_ground_difference() {
-    // `areka-P0-dpi-transition-atomicity` のタスク 3.1 の観察可能な完了条件そのもの（再観測 §3.2 の表・§6 の接地点）。
     let summary = summary();
     assert_eq!(summary.writes, 6, "再観測 §3.2「書込回数 6」");
     assert_eq!(summary.path_a_writes, 0, "再観測 §3.2「経路 A 0」");
@@ -154,7 +152,7 @@ fn reproduces_six_writes_no_path_a_write_and_a_minus_48_ground_difference() {
 
 #[test]
 fn reproduces_the_per_window_write_breakdown() {
-    // 再観測 §3.2 の内訳: キャラ窓 1 回 ×2・バルーン窓 2 回 ×2。
+    // 内訳: キャラ窓 1 回 ×2・バルーン窓 2 回 ×2。
     let summary = summary();
     for scope in [0, 1] {
         assert_eq!(
@@ -205,7 +203,7 @@ fn the_frame_unit_quantities_are_already_zero_before_any_correction() {
 
 #[test]
 fn the_same_tick_divergence_is_only_visible_in_microseconds() {
-    // 「描画内容は +13〜47ms に新寸・窓矩形は +63〜309ms まで旧寸」（再観測 §4.1）は
+    // 「描画内容は +13〜47ms に新寸・窓矩形は +63〜309ms まで旧寸」は
     // 同一 tick の内側なので、実機サインオフ専用の量でしか測れない。
     let summary = summary();
     let expected = [
@@ -229,7 +227,7 @@ fn the_same_tick_divergence_is_only_visible_in_microseconds() {
 #[test]
 fn the_first_and_last_write_times_come_from_the_report_the_call_total_does_not() {
     let summary = summary();
-    // ここだけがレポート由来（§3.1: 最初の書込 +103ms・最後の書込 +255ms）。
+    // ここだけがレポート由来（最初の書込 +103ms・最後の書込 +255ms）。
     assert_eq!(summary.wall.first_write_t_us, Some(103_000));
     assert_eq!(summary.wall.last_write_t_us, Some(255_000));
     // 総和は**発明した `call_us` の合計**であり、レポートに対応する数値は無い
@@ -261,19 +259,18 @@ fn nothing_was_held_realigned_or_skipped_in_this_transition() {
 }
 
 // ---------------------------------------------------------------------------
-// 6 遷移すべての突合（再観測 §3.2 の一覧）
+// 6 遷移すべての突合
 // ---------------------------------------------------------------------------
 //
-// 上の逐語再現は `areka-P0-dpi-transition-atomicity` の再観測 §3.1（遷移 1）だけを見る。判定の上限を書くときに見なければ
-// ならないのは**残り 5 遷移**であり、とりわけ `areka-P0-dpi-transition-atomicity` の §3.2 がただ 1 つ「Requirement 4.6 の現状維持
-// 挙動＝欠陥ではない」と明記した遷移 2 である。判定器がそれを不合格にしたら、それは
+// 上の逐語再現は遷移 1 だけを見る。判定の上限を書くときに見なければならないのは**残り 5 遷移**
+// であり、とりわけレポートがただ 1 つ「現状維持の挙動＝欠陥ではない」と明記した遷移 2 である。判定器がそれを不合格にしたら、それは
 // ゴーストの欠陥ではなく判定器の欠陥である——2 度の是正はどちらもこの突合を先にしていれば
 // 防げた（判定を「テストの作った形」に合わせて書いたのが機序）。
 
 /// 見送られた寸書込が届くまでのフレーム差（レポートの +649〜660ms ≒ 60Hz で 40 フレーム）。
 const DEFERRED_RESIZE_FRAMES: u32 = 40;
 
-/// §3.2 の 1 行ぶん（2 スコープ・書込 6 回）を新語彙で組む。
+/// レポートの遷移 1 行ぶん（2 スコープ・書込 6 回）を新語彙で組む。
 ///
 /// `deferred_balloon_scope` を与えると、そのスコープのバルーンは**遷移時点で不可視**として
 /// 再表示を見送られ（`stage=skipped reason=invisible`）、寸書込だけが
@@ -285,7 +282,7 @@ fn baseline_transition(
     new_dpi: u32,
     deferred_balloon_scope: Option<u32>,
 ) -> Vec<String> {
-    // 接地点は全 12 件で 1704 固定（§6）。作業領域下端は 96 で 1752・192 で 1704。
+    // 接地点は全 12 件で 1704 固定。作業領域下端は 96 で 1752・192 で 1704。
     let wa_bottom = if new_dpi == 96 { 1752 } else { 1704 };
     let old_bottom = if new_dpi == 96 { 1704 } else { 1752 };
     let mut lines = vec![monitor(frame, old_dpi, new_dpi, old_bottom, wa_bottom)];
@@ -338,7 +335,7 @@ fn baseline_transition(
     lines.push(flush(frame, 100_500, STAGE_BEGIN, 6, MISSING));
     for scope in [1_u32, 0] {
         let deferred = deferred_balloon_scope == Some(scope);
-        // バルーンの寸（`areka-P0-dpi-transition-atomicity` 要件 4.6 が先送りを許す側）。
+        // バルーンの寸（見送り＝先送りが許される側）。
         lines.push(write(
             if deferred {
                 frame + DEFERRED_RESIZE_FRAMES
@@ -368,7 +365,7 @@ fn baseline_transition(
             57_000,
         ));
         t_us += 35_000;
-        // 随伴の位置（`areka-P0-dpi-transition-atomicity` 要件 4.3 が同一フレームで求める側）——見送られた遷移でも定刻に届く。
+        // 随伴の位置（同一フレームで求められる側）——見送られた遷移でも定刻に届く。
         lines.push(write(
             frame,
             t_us,
@@ -386,7 +383,7 @@ fn baseline_transition(
     lines
 }
 
-/// §3.2 の 6 遷移（方向と、遷移 2 の外れ値だけが違う）。
+/// レポートの 6 遷移（方向と、遷移 2 の外れ値だけが違う）。
 fn baseline_transitions() -> Vec<(usize, Vec<String>)> {
     [
         (1, 192, 96, None),
@@ -410,8 +407,8 @@ fn baseline_transitions() -> Vec<(usize, Vec<String>)> {
 #[test]
 fn every_baseline_transition_is_judged_exactly_as_the_report_describes_it() {
     // レポートが是正対象として記した量だけが出ること。6 遷移すべてでバルーン窓の書込 2 回
-    // （§3.2「バルーン窓 2 回（`KeepPositionResize` 寸＋`BalloonFollow` 位置）」→ `areka-P0-dpi-transition-atomicity` タスク 5.3）、
-    // 192→96 の 3 遷移だけ接地点差 −48px（§6 の表・3/3 → `areka-P0-dpi-transition-atomicity` タスク 5.1／5.2）。
+    // （`KeepPositionResize` 寸＋`BalloonFollow` 位置）、
+    // 192→96 の 3 遷移だけ接地点差 −48px。
     // フレーム量は是正前でも 0 なので、フレーム由来の違反は 1 件も出てはならない。
     for (number, lines) in baseline_transitions() {
         let violations = deterministic_verdict(&lines).expect_err("是正前なので合格しない");
@@ -439,8 +436,8 @@ fn every_baseline_transition_is_judged_exactly_as_the_report_describes_it() {
 
 #[test]
 fn the_deferred_resize_of_transition_two_is_not_judged_as_a_defect() {
-    // §3.2 の注「バルーン 1 …は遷移時点で不可視…だったため見送られ、+649ms に表示された
-    // 時点で新寸へ（**Requirement 4.6 の現状維持挙動＝欠陥ではない**）」。判定器がこれを
+    // レポートの注「バルーン 1 …は遷移時点で不可視…だったため見送られ、+649ms に表示された
+    // 時点で新寸へ（**現状維持の挙動＝欠陥ではない**）」。判定器がこれを
     // 欠陥と呼ばないことは、同じ方向（96→192）の他の 2 遷移と**判定が一致する**ことで示す
     // ——「違反が少ない」ではなく「外れ値が判定に現れない」が主張である。
     let all = baseline_transitions();

@@ -1,8 +1,8 @@
-//! バルーンの 3 つのイベントの判断の檻（areka-P0-balloon-lifecycle-events）。
+//! バルーンの 3 つのイベントの判断の檻。
 //!
 //! どれも最上位の [`step`] に実際の入力を順に入れて駆動する（時刻は `Tick` で注入する）。
 //! ここではトークの控え（`State.shown`）と中断の控え（`State.user_break_talk`）の出入りを固定する
-//! ——翻訳の後の最終の台本が控えに入ること、切替の `OnClose` の別れの台詞も控えに入ること（要件 1.2・
+//! ——翻訳の後の最終の台本が控えに入ること、切替の `OnClose` の別れの台詞も控えに入ること（
 //! 1.3・2.2・3.2）。表 B の檻は `balloon_events_done_tests.rs` に、置き換えで控えを捨てる檻は
 //! `balloon_events_cleanup_tests.rs` に置き、ここの補助を使う。
 
@@ -109,7 +109,7 @@ pub(super) fn steady_after_talk() -> (State, TalkId) {
     (s, talk)
 }
 
-/// 翻訳の後の最終の台本が控えに入り、送り済み・預かりの印は新しいトークで下りる（要件 1.2・2.2・3.2）。
+/// 翻訳の後の最終の台本が控えに入り、送り済み・預かりの印は新しいトークで下りる。
 #[test]
 fn shown_talk_keeps_the_final_script_after_translation() {
     let mut s = steady_none();
@@ -156,7 +156,7 @@ fn shown_talk_keeps_the_final_script_after_translation() {
     );
 }
 
-/// 切替の `OnClose` の別れの台詞（`ChangeCloseTalkWait`）も控えに入る（設計 D2）。
+/// 切替の `OnClose` の別れの台詞（`ChangeCloseTalkWait`）も控えに入る。
 #[test]
 fn shown_talk_keeps_the_change_farewell_script() {
     let mut s = steady_none();

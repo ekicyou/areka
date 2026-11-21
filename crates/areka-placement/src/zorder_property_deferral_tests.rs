@@ -1,16 +1,16 @@
 //! 先送りしたプロパティ `currentghost.seriko.zorder` について、⑴プロパティの一覧
 //! （sylphya の語彙表）に名前が現れないこと、⑵参照と書込が未提供のプロパティに
 //! 対する現行どおりの応答になること、⑶その試みが窓の重なりの状態を動かさないこと、
-//! の 3 つを固定する檻（要件 13.1／13.2／13.5）。⑶は書込が何も蓄えず、生む効果が
-//! 「書けない」の知らせ `NotSettable` 1 つだけであることで成り立つので、[`t_zpd30_writing_the_deferred_property_is_dropped`] が受け持つ。
+//! の 3 つを固定するテスト。⑶は書込が何も蓄えず、生む効果が
+//! 「書けない」の知らせ `NotSettable` 1 つだけであることで成り立つので、
+//! [`t_zpd30_writing_the_deferred_property_is_dropped`] が受け持つ。
 //!
 //! # なぜ Z 順の機能の側に置くか
 //!
-//! `areka-P0-scope-zorder-pinning` の design の要件対応表は要件 13 を「実装なし＝現行どおりの
-//! 応答を維持・sylphya 非接触」と定めている。守るべきものは sylphya の中の何かではなく、
-//! **Z 順の機能が sylphya へ何も足していないこと**なので、檻は Z 順の機能の側（台帳の兄弟）に
-//! 置く。sylphya のファイルは
-//! 1 行も編集しない。
+//! 先送りしたプロパティは実装せず、現行どおりの応答を維持する（sylphya 非接触）。
+//! 守るべきものは sylphya の中の何かではなく、
+//! **Z 順の機能が sylphya へ何も足していないこと**なので、テストは Z 順の機能の側（台帳の兄弟）に
+//! 置く。sylphya のファイルは 1 行も編集しない。
 //!
 //! # 恒真を避けるための対照
 //!
@@ -29,9 +29,9 @@
 //! - ソース走査（[`t_zpd40_the_property_system_sources_never_mention_the_name`]）には、
 //!   同じ走査が既知の語を必ず拾うことと、走査したファイル数の下限を添える。
 //!
-//! # 期待値は檻の側の literal
+//! # 期待値はテストの側の literal
 //!
-//! 応答の期待値（`NotFound`／`NotSettable`）は実装から導出せず、この檻の中に文字として
+//! 応答の期待値（`NotFound`／`NotSettable`）は実装から導出せず、このテストの中に文字として
 //! 書く。実装から引いた値を期待値にすると、実装が変わったときに期待値も一緒に動いて
 //! 何も守らなくなる。
 
@@ -50,19 +50,19 @@ use areka_sylphya::{
 };
 
 // ---------------------------------------------------------------------------
-// 檻の道具
+// 道具
 // ---------------------------------------------------------------------------
 
-/// 先送りして提供しないプロパティの完全な名前（要件 13.1）。
+/// 先送りして提供しないプロパティの完全な名前。
 const DEFERRED_PROPERTY: &str = "currentghost.seriko.zorder";
 
 /// 先送りした名前を語彙表とソースから探すときの探し語（小文字）。
 ///
 /// 完全名だけを探すと `seriko.zorder` の形での先行登録を見逃すので、両方に共通する
-/// 部分語で探す（要件 13.5 の「名前だけの先行登録もしない」）。
+/// 部分語で探す（名前だけの先行登録もしない）。
 const DEFERRED_NEEDLE: &str = "zorder";
 
-/// 問い合わせ元（本檻はどのテストも同じ 1 つを使う。値そのものに意味は無い）。
+/// 問い合わせ元（どのテストも同じ 1 つを使う。値そのものに意味は無い）。
 const ASKER: &str = "ghost/zorder-property-deferral";
 
 fn asker_ctx() -> AskerContext {
@@ -86,8 +86,7 @@ const SCANNED_VOCAB_TABLES: [&str; 6] = [
 
 /// 走査対象外＝`vocab/` の公開 const のうち、**プロパティ名を載せない**もの（と外す理由）。
 ///
-/// 要件 13.5 が言う「プロパティ一覧」は、プロパティの名前そのものを要素として持つ表を
-/// 指す。ここに挙げた 3 本はいずれもそれに当たらないので走査対象へ入れない——入れると
+/// 「プロパティ一覧」は、プロパティの名前そのものを要素として持つ表を指す。ここに挙げた 3 本はいずれもそれに当たらないので走査対象へ入れない——入れると
 /// 「一覧」の定義が、記法の記録やイベント名の予約まで含む別物へ広がってしまう。
 const NON_PROPERTY_VOCAB_CONSTS: [(&str, &str); 3] = [
     (
@@ -164,7 +163,7 @@ fn vocabulary_entries_containing(needle: &str) -> Vec<(&'static str, &'static st
 
 /// 統一プロパティシステム（`areka-sylphya`）のソース木の根。
 fn sylphya_src_dir() -> PathBuf {
-    // 配置が依存する下の crate を読む唯一の所なので、読み口は作らない（spec: placement-crate-split 要件 5.2）。
+    // 配置が依存する下の crate を読む唯一の所なので、読み口は作らない。
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("areka-sylphya")
@@ -249,10 +248,10 @@ fn set_effects(key: &str, value: &str) -> Vec<Effect> {
 }
 
 // ---------------------------------------------------------------------------
-// ⑴ 一覧に名前が現れない（要件 13.5）
+// ⑴ 一覧に名前が現れない
 // ---------------------------------------------------------------------------
 
-/// 語彙表 6 本のどれにも先送りした名前が載っていない（要件 13.1／13.5）。
+/// 語彙表 6 本のどれにも先送りした名前が載っていない。
 #[test]
 fn t_zpd10_no_vocabulary_table_carries_the_deferred_name() {
     let hits = vocabulary_entries_containing(DEFERRED_NEEDLE);
@@ -314,7 +313,7 @@ fn t_zpd11_the_scanned_vocabulary_tables_are_live() {
 /// # なぜ名簿を 2 本にするか
 ///
 /// 素朴に「公開 const 全数が走査対象名簿に載っていること」を主張すると、記法の記録や
-/// イベント名の予約まで「プロパティ一覧」に数えることになり、要件 13.5 の対象が歪む。
+/// イベント名の予約まで「プロパティ一覧」に数えることになり、対象が歪む。
 /// そこで走査対象名簿（[`SCANNED_VOCAB_TABLES`]）と除外名簿
 /// （[`NON_PROPERTY_VOCAB_CONSTS`]）の 2 本を置き、抜き出した公開 const がどちらかに
 /// **ちょうど 1 回**現れることを主張する——新しい表が生えたら「どちらへ入れるか決めろ」
@@ -398,10 +397,10 @@ fn t_zpd12_every_public_vocab_const_is_scanned_or_excluded_on_purpose() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑵ 参照・書込が現行どおりの応答（要件 13.1／13.2）
+// ⑵ 参照・書込が現行どおりの応答
 // ---------------------------------------------------------------------------
 
-/// 参照は未提供のプロパティに対する現行どおりの応答＝`NotFound` を返す（要件 13.2）。
+/// 参照は未提供のプロパティに対する現行どおりの応答＝`NotFound` を返す。
 #[test]
 fn t_zpd20_reading_the_deferred_property_is_not_found() {
     let reader = reader_with_one_provided_property();
@@ -417,7 +416,7 @@ fn t_zpd20_reading_the_deferred_property_is_not_found() {
     );
 }
 
-/// 対照: 同じ鏡像・同じ読み口で、提供済みのプロパティは値を返す（読み口が生きている）。
+/// 対照: 同じ鏡像・同じ読み口で、提供済みのプロパティは値を返す。
 #[test]
 fn t_zpd21_a_provided_property_still_resolves_to_its_value() {
     let reader = reader_with_one_provided_property();
@@ -429,7 +428,7 @@ fn t_zpd21_a_provided_property_still_resolves_to_its_value() {
 }
 
 /// 書込は現行どおり「SET 無効な正準語彙」として落ち、書けないの知らせ `NotSettable` を 1 つだけ
-/// 生み、値を書く効果は生まない（要件 13.1／13.2）。
+/// 生み、値を書く効果は生まない。
 #[test]
 fn t_zpd30_writing_the_deferred_property_is_dropped() {
     assert_eq!(
@@ -483,7 +482,7 @@ fn t_zpd31_other_property_names_take_different_write_paths() {
     );
 }
 
-/// プロパティシステムのソースが先送りした名前を 1 度も書いていない（要件 13.1／13.5）。
+/// プロパティシステムのソースが先送りした名前を 1 度も書いていない。
 ///
 /// 語彙表の走査（`t_zpd10`）は**表に載る名前**しか見ないので、表を経ない実装
 /// （読み口や分類器の中の名前ごとの特別扱い）を拾えない。ソース全走査がその裏を取る。

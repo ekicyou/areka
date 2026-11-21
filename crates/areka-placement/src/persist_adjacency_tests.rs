@@ -1,5 +1,4 @@
-//! 位置を書く束への隣り合いの印の書き足しと、記憶からの印の読みの決定論テスト
-//! （dpi-realign-remembered-chain 要件 4.6・6.2・6.4・8.6・design AdjacencyPersist）。
+//! 位置を書く束への隣り合いの印の書き足しと、記憶からの印の読みの決定論テスト。
 //!
 //! 窓の一式は本番と同じ `spawn_ghost_windows` で組み、各キャラ窓の `WindowPos` を書き換えて
 //! 画面の並びを作る。束に足す中身は [`with_adjacency_marks`]（[`persist_entries`] が送る前に
@@ -92,7 +91,7 @@ fn position_batch_adds_left_and_right_marks_of_touched_pairs() {
     );
 }
 
-/// 隙間・重なりが許す幅（2 px）に収まれば隣り合い、越えれば `none`（要件 6.4）。
+/// 隙間・重なりが許す幅（2 px）に収まれば隣り合い、越えれば `none`。
 #[test]
 fn apart_and_overlapped_pairs_are_marked_none_with_positive_pair() {
     for (x1, expected) in [
@@ -108,7 +107,7 @@ fn apart_and_overlapped_pairs_are_marked_none_with_positive_pair() {
     }
 }
 
-/// 組（StickyGroupLedger）に入った窓は、隣り合っていても `none`（要件 6.4）。組の外は判定どおり。
+/// 組（StickyGroupLedger）に入った窓は、隣り合っていても `none`。組の外は判定どおり。
 #[test]
 fn sticky_group_member_is_marked_none() {
     let mut world = world_with(&[(0, 1000, 400), (1, 600, 400), (2, 1000, 300)]);
@@ -207,7 +206,7 @@ fn missing_ghost_windows_adds_no_mark_and_logs_debug() {
 }
 
 /// 並べ直しの材料（`DefaultPlacementBasis`）が無いときは、全スコープを下端・`defaultx` 0 として
-/// 印を決め、その決めを `debug!` 1 行に残す（黙って既定へ落とさない・audit-placement-core 507）。
+/// 印を決め、その決めを `debug!` 1 行に残す（黙って既定へ落とさない）。
 #[test]
 fn missing_basis_marks_with_the_bottom_rule_and_logs_debug() {
     // 0: 1000..1400、1: 600..1000（0 の左に隙間 0）。
@@ -272,7 +271,7 @@ pub(super) fn with_basis(world: &mut World, shell_kv: &[(&str, &str)]) {
 }
 
 /// 左の組は隙間 0 のほか、そのスコープの `defaultx` の隙間（±2 px）も `left`。右の組は隙間 0
-/// だけが `right`（resolver の P2 は左へだけ空ける・audit-placement-core 494）。
+/// だけが `right`（resolver の P2 は左へだけ空ける）。
 #[test]
 fn a_defaultx_gap_on_the_left_is_marked_left() {
     for (x1, expected) in [
@@ -292,7 +291,7 @@ fn a_defaultx_gap_on_the_left_is_marked_left() {
 }
 
 /// 鎖の前の窓は、左右の辺に揃えるスコープ（descript の揃え方）を飛ばした一番近いスコープ。
-/// 辺のスコープ自身の印は `none`（鎖の外・audit-placement-core 494・495）。
+/// 辺のスコープ自身の印は `none`（鎖の外）。
 #[test]
 fn a_side_edge_scope_is_skipped_as_the_previous_chain_window() {
     // 0: 1000..1400、1: 右の辺 2000..2300、2: 700..1000（本体の左に隙間 0）。

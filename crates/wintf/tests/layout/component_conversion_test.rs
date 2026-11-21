@@ -1,5 +1,4 @@
-/// Task 7.1: 高レベルコンポーネント→TaffyStyle変換テスト
-/// BoxStyle統合後の新API使用版
+/// 高レベルコンポーネント→TaffyStyle変換テスト
 use bevy_ecs::prelude::*;
 use wintf::ecs::layout::*;
 
@@ -7,7 +6,6 @@ use wintf::ecs::layout::*;
 fn test_box_size_to_taffy_style() {
     let mut world = World::new();
 
-    // BoxStyleコンポーネントを持つエンティティを作成
     let entity = world
         .spawn(BoxStyle {
             size: Some(BoxSize {
@@ -18,18 +16,15 @@ fn test_box_size_to_taffy_style() {
         })
         .id();
 
-    // TaffyStyleを自動挿入するシステムを実行
     let mut schedule = Schedule::default();
     schedule.add_systems(build_taffy_styles_system);
     schedule.run(&mut world);
 
-    // TaffyStyleが挿入され、正しく変換されていることを確認
     let taffy_style = world
         .get::<TaffyStyle>(entity)
         .expect("TaffyStyle should be inserted");
     let style = taffy_style.style();
 
-    // taffy::Dimension::length() で期待値を作成
     assert_eq!(style.size.width, ::taffy::Dimension::length(100.0));
     assert_eq!(style.size.height, ::taffy::Dimension::length(200.0));
 }
@@ -237,7 +232,7 @@ fn test_multiple_components_combined() {
     assert_eq!(style.flex_basis, ::taffy::Dimension::auto());
 }
 
-// ===== W4a ギャップテスト: build_taffy_styles_system の未カバー分岐 =====
+// ===== ギャップテスト: build_taffy_styles_system の未カバー分岐 =====
 
 /// BoxStyle を持たない LayoutRoot 単独エンティティにはデフォルトの TaffyStyle と
 /// TaffyComputedLayout / ArrangementTreeChanged が自動挿入される
@@ -286,14 +281,12 @@ fn test_box_style_change_updates_existing_taffy_style() {
     schedule.add_systems(build_taffy_styles_system);
     schedule.run(&mut world);
 
-    // 初回: TaffyStyle が挿入され 100x200
     {
         let style = world.get::<TaffyStyle>(entity).unwrap().style().clone();
         assert_eq!(style.size.width, ::taffy::Dimension::length(100.0));
         assert_eq!(style.size.height, ::taffy::Dimension::length(200.0));
     }
 
-    // BoxStyle を変更（Changed<BoxStyle> 発火）
     {
         let mut box_style = world.get_mut::<BoxStyle>(entity).unwrap();
         box_style.size = Some(BoxSize {
@@ -303,7 +296,6 @@ fn test_box_style_change_updates_existing_taffy_style() {
     }
     schedule.run(&mut world);
 
-    // 変更が既存 TaffyStyle に反映される
     let style = world.get::<TaffyStyle>(entity).unwrap().style().clone();
     assert_eq!(style.size.width, ::taffy::Dimension::length(300.0));
     assert_eq!(style.size.height, ::taffy::Dimension::length(400.0));

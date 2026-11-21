@@ -1,14 +1,12 @@
 //! # box_attach_test — 箱の面の窓の子としての装着を GPU の読み戻しで確かめる
 //!
-//! 出典 spec: `areka-P0-shell-balloon`（断りの無い要件の番号と design.md の参照はこの spec のもの・別の spec のものはその場で名を書く）。
-//!
 //! シェル相当の 1 target を実 `EmoPresenter` で表示確立し（窓 DPI 192＝拡大率 2）、その
 //! `text_slot_view` を毎フレームの箱の同期（`sync_boxes`）へ渡して、箱 2 つを持つスコープを
-//! `present_frame` で提示する。確かめること（要件 1.6・3.1〜3.4・3.7・3.9・6.8・9.4）:
+//! `present_frame` で提示する。確かめること:
 //!
 //! - 窓の `Children` が「差し込み口 → element番号の大きい箱 → 小さい箱 → 絵」に並ぶ
 //!   （element番号の大きい順の数え方はこの GPU の通しでしか踏めない）
-//! - 箱の面の当たり判定は表示されている字の矩形の集まり（字の無い所は受けない・要件 9.4）
+//! - 箱の面の当たり判定は表示されている字の矩形の集まり（字の無い所は受けない）
 //! - 読み戻しで箱ごとに独立に文字が描かれ、背景は透明（絵を描かない）
 //! - 箱の位置が `(X + 領域の左, Y + 領域の上) × 拡大率`
 //! - 箱の束の差し替えで箱の面の entity が消える
@@ -196,7 +194,7 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
     rt.sync_boxes(&mut world, &[(actor(), Some((view, shown)))]);
     present_frame(&mut rt, &mut world, LATE).expect("提示フレーム");
 
-    // ── 並び（要件 3.7・3.9）: 差し込み口 → b（element2）→ a（element1）→ 絵 ──
+    // ── 並び: 差し込み口 → b（element2）→ a（element1）→ 絵 ──
     let child_of = |place: &PlaceKey| {
         rt.surface_at(place)
             .and_then(|s| s.window_child())
@@ -209,7 +207,7 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
         "窓の子は 差し込み口 → element番号の大きい箱 → 小さい箱 → 絵"
     );
 
-    // ── 当たり判定は表示されている字の矩形の集まり（要件 9.4）・装着の構造 ──
+    // ── 当たり判定は表示されている字の矩形の集まり・装着の構造 ──
     for (name, child) in [("a", child_a), ("b", child_b)] {
         assert_eq!(
             world.get::<HitTest>(child).copied(),
@@ -237,7 +235,7 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
         );
     }
 
-    // ── 位置（要件 3.1〜3.4）: (X + 領域の左, Y + 領域の上) × 拡大率 ──
+    // ── 位置: (X + 領域の左, Y + 領域の上) × 拡大率 ──
     let offset = |child: Entity| {
         let a = world.get::<Arrangement>(child).expect("Arrangement");
         (a.offset.x, a.offset.y, a.size.width, a.size.height)
@@ -258,7 +256,7 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
         "箱 b: 領域は全域"
     );
 
-    // ── 読み戻し（要件 1.6・3.4）: 箱ごとに文字が描かれ、背景は透明 ──
+    // ── 読み戻し: 箱ごとに文字が描かれ、背景は透明 ──
     let (bytes_a, bytes_b) = (read_back_at(&rt, &box_a), read_back_at(&rt, &box_b));
     for (name, bytes, (w, h)) in [
         ("a", &bytes_a, rt.surface_at(&box_a).expect("a").size()),
@@ -311,7 +309,7 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
         "提示を重ねても面は作り直されず並びも同じ"
     );
 
-    // ── 箱の束の差し替え（要件 6.8）: 箱の面の entity が消える ──
+    // ── 箱の束の差し替え: 箱の面の entity が消える ──
     rt.set_box_layout(&mut world, self::layout(), resolver(), vec![]);
     for (name, child) in [("a", child_a), ("b", child_b)] {
         assert!(

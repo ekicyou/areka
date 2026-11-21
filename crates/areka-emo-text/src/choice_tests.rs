@@ -1,5 +1,3 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
-
 use super::test_support::{NO_OFFSET, line, region, seg, span};
 use super::*;
 use crate::layout::{FixedMetrics, LineRect};
@@ -26,7 +24,7 @@ fn single_line_single_span_yields_one_segment_with_inline_range() {
 /// 半角/全角混在の送り幅でも inline_range は先頭位置〜末尾位置＋末尾送り幅で決まる。
 #[test]
 fn single_span_inline_range_uses_first_pos_and_last_pos_plus_advance() {
-    // 'a'(6) 'あ'(12) 'b'(6): 位置 0,6,18。範囲 0..2 は先頭 0 〜 6+12=18。
+    // 'a'(6) 'あ'(12) 'b'(6): 位置 0,6,18。
     let lines = [line(
         (0.0, 0.0, 0.0, 0.0),
         &[(0.0, 6.0), (6.0, 12.0), (18.0, 6.0)],
@@ -114,7 +112,7 @@ fn three_spans_folded_across_two_lines_split_per_line() {
     );
 }
 
-/// 空範囲スパン（空 text 選択肢）はセグメントを生まない（非退行・`areka-P0-choice-render` design.md Invariants）。
+/// 空範囲スパン（空 text 選択肢）はセグメントを生まない。
 #[test]
 fn empty_range_span_produces_no_segment() {
     let lines = [line((0.0, 0.0, 0.0, 0.0), &[(0.0, 10.0), (10.0, 10.0)])];
@@ -190,7 +188,7 @@ fn empty_inputs_yield_empty_segments() {
 //
 // 座標系: layout 出力（inline_range／行矩形）は絶対 image px（描画開始点＝validrect 原点起点）。
 // CanvasHitRow.rect は canvas-local（validrect-local）——from_layout と同一の原点差引きゆえ
-// ハイライト矩形と数値一致（正典確定「ハイライト矩形＝ヒット矩形と同一」・`areka-P0-choice-render` R3.3）。
+// ハイライト矩形と数値一致（正典確定「ハイライト矩形＝ヒット矩形と同一」）。
 // 窓物理化は to_window_physical: 行内=(origin+inline)×k・ブロック=(origin+block)×k+committed。
 
 use crate::region::ScaleContract;
@@ -365,7 +363,7 @@ fn derive_out_of_range_line_index_is_skipped() {
     );
 }
 
-// ── to_window_physical: `areka-P0-choice-render` design.md §座標写像式（行内=(origin+inline)×k・ブロック=(origin+block)×k+committed） ──
+// ── to_window_physical: 行内=(origin+inline)×k・ブロック=(origin+block)×k+committed ──
 
 /// canvas-local (10,0,30,10)・原点 (36,46)。横書きは committed をブロック軸（y=top/bottom）へ。
 #[test]
@@ -429,7 +427,7 @@ fn to_window_physical_vertical_puts_committed_on_x_block_axis() {
 }
 
 /// 現行契約 k=1.0・committed=0（非スクロール）: 窓物理 px は絶対 image px と一致
-/// （canvas-local + 原点 = 絶対）——2 空間モデルの恒等（`areka-P0-choice-render` R2.2 の DPI=96 経路）。
+/// （canvas-local + 原点 = 絶対）——2 空間モデルの恒等（DPI=96 経路）。
 #[test]
 fn to_window_physical_unit_scale_no_scroll_equals_absolute_image_px() {
     let region = region(36, 46, 356, 168);
@@ -510,7 +508,7 @@ fn to_window_physical_adds_the_box_origin_before_scaling() {
     );
 }
 
-// ── 行ごとの帯（line_bands・要件 11.5 のブロック軸） ──
+// ── 行ごとの帯（line_bands のブロック軸） ──
 
 /// 行ごとに丈が違う——帯の基準は**その行に置かれた最も大きい em**（行矩形のブロック軸寸）で、
 /// アクターに 1 つの既定の大きさではない。
@@ -570,7 +568,7 @@ fn undecorated_lines_all_get_the_default_size_band() {
     assert_eq!(extents, vec![(12.0, 1.0); 2], "2 行とも同じ帯");
 }
 
-/// `derive_hit_rows` は行ごとの帯の丈をヒット矩形のブロック軸寸にそのまま使う（要件 11.5）。
+/// `derive_hit_rows` は行ごとの帯の丈をヒット矩形のブロック軸寸にそのまま使う。
 /// 塗る帯とクリックを受ける帯の突き合わせは `choice_anchor_tests.rs` の
 /// `highlight_bands_and_hit_rows_share_one_band_in_every_writing_mode` が持つ。
 #[test]
@@ -607,9 +605,8 @@ fn derive_hit_rows_takes_each_line_band_extent_as_the_block_size() {
 
 // ── descent 込みハイライト帯（highlight_band_extent／derive_hit_rows の帯適用） ──
 //
-// 実機不具合（実 fixture Yu Gothic UI 28px で hover 文字の下が帯からはみ出す）の真因は
-// 「帯＝em ボックス丈（font_height）」だった。帯は実 font metrics の行ボックス丈
-// （ascent+descent）を源にし、行送りピッチで頭打ちにする。
+// 帯は実 font metrics の行ボックス丈（ascent+descent）を源にし、行送りピッチで頭打ちにする
+// （帯＝em ボックス丈だと Yu Gothic UI 28px で hover 文字の下が帯からはみ出す）。
 
 /// 行ボックス丈が em ボックスとピッチの間にあるとき、帯は**行ボックス丈そのもの**
 /// （descent を覆う。ＭＳ ゴシック系＝比 1.0 は em と一致し従来どおり）。
@@ -638,7 +635,7 @@ fn band_extent_never_below_font_height() {
 
 /// Observable（本不具合の純粋層側の檻）: 帯が em ボックス丈を超えるとき、ヒット矩形の
 /// ブロック軸下端は**行矩形の bottom（em ボックス下端）より下**へ伸びる——描画側
-/// `highlight_rect`（住人原点＋band_extent）と同一の式ゆえ数値一致する（`areka-P0-choice-render` R3.3）。
+/// `highlight_rect`（住人原点＋band_extent）と同一の式ゆえ数値一致する。
 #[test]
 fn hit_row_block_band_extends_beyond_em_box_when_band_is_larger() {
     let region = region(36, 46, 356, 168);
@@ -692,12 +689,11 @@ fn hit_row_vertical_block_band_uses_band_extent_from_left_edge() {
 
 // ── 帯を行ボックスの中央へ寄せる（highlight_band_offset／derive_hit_rows の offset 適用） ──
 //
-// 実機の目視（`areka-P0-emo2-conformance-e2e` の開発者裁定 第 2 回・R13）: 帯を行矩形のブロック軸近端へ揃えると、
-// 行送りで頭打ちになった帯が行ボックスの中で上に余り、下でインクを切る（「色反転位置が
-// 2 ドット程上すぎる」）。帯を広げるのではなく、余りを上下へ等分して帯を内側へ寄せる。
+// 帯を行矩形のブロック軸近端へ揃えると、行送りで頭打ちになった帯が行ボックスの中で上に余り、
+// 下でインクを切る。帯を広げるのではなく、余りを上下へ等分して帯を内側へ寄せる。
 
 /// 寄せの量は「行ボックス丈 − 帯の丈」の半分（四捨五入）。正典 28・fixture 20・既定フォントの
-/// 3 通りを固定する——既定フォント（行ボックス丈 ＝ 帯の丈）は **0**＝非退行の証拠（`areka-P0-emo2-conformance-e2e` R13.1/13.6）。
+/// 3 通りを固定する——既定フォント（行ボックス丈 ＝ 帯の丈）は **0**＝非退行の証拠。
 #[test]
 fn band_offset_centers_the_band_in_the_line_box() {
     // 正典 Yu Gothic UI 28: 行ボックス 37.24・帯 clamp(37.24, 28, 30)=30 → round(7.24/2)=4。
@@ -746,7 +742,7 @@ fn derive_hit_rows_shifts_horizontal_band_down_by_offset() {
 }
 
 /// 縦書き: 同じ規則をブロック軸（x）で適用する——帯は行矩形の left から符号つきの
-/// `band_offset` だけずれて始まる（`areka-P0-emo2-conformance-e2e` R13.7）。右から左は負の寄せ（行矩形の左へ出る）、左から右は
+/// `band_offset` だけずれて始まる。右から左は負の寄せ（行矩形の左へ出る）、左から右は
 /// 正の寄せ（ここでは明示の帯 −1 と 2 で足し算だけを見る）。行内軸（y）は寄せの影響を受けない。
 /// 寄せ 0 では行内＝y（セグメントの範囲）・ブロック＝x（行矩形の left..right）の軸割当そのもの。
 #[test]
@@ -774,7 +770,7 @@ fn derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis() {
     }
 }
 
-/// 隣接する行の帯は**接するが重ならない**（`areka-P0-emo2-conformance-e2e` R13.4）。正典 28（行送り 30・帯 30・寄せ 4）では
+/// 隣接する行の帯は**接するが重ならない**。正典 28（行送り 30・帯 30・寄せ 4）では
 /// 上の行の帯が 4..34・下の行が 34..64 で、共有する辺は 34 の 1 本だけ。ヒット判定は半開区間
 /// （`y >= top && y < bottom`）ゆえ、その 1 点はたかだか 1 行にしか当たらない。
 #[test]
@@ -803,7 +799,7 @@ fn adjacent_rows_bands_touch_but_do_not_overlap() {
     assert!(shared >= rows[1].rect.top && shared < rows[1].rect.bottom);
 }
 
-/// 帯の丈の式は NaN を渡しても落ちない（audit-emo-text-state-actor 指摘 4）。`clamp` は下限が NaN だと panic する。
+/// 帯の丈の式は NaN を渡しても落ちない。`clamp` は下限が NaN だと panic する。
 ///
 /// 較正: 式を `clamp` に戻すと、`font_height` が NaN の 2 行（上限も下限も NaN になる・
 /// 下限だけ NaN になる）で panic して赤。`line_box_height`・`line_pitch` の NaN は `clamp` でも

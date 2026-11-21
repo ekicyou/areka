@@ -1,10 +1,8 @@
-//! 箱の束の受け取りと、箱を隠す印（`actor.rs` の子・design.md「箱の登録と同期」）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//! 箱の束の受け取りと、箱を隠す印（`actor.rs` の子）。
 //!
 //! 箱の束（置き場所の表・`\s` の解決の閉包・フォントを探す場所の順）は結線がシェルを読むたびに
 //! （装着の相とシェルの切替）渡す。受け取ると前の箱の面を片付け、箱の場所の文字を捨て、
-//! 新しい表を純粋状態へ入れる（要件 6.8）。普通のバルーンの場所には触れない。
+//! 新しい表を純粋状態へ入れる。普通のバルーンの場所には触れない。
 //!
 //! 毎フレームの箱の同期（`sync_boxes`）は、文字を持つ箱の場所ごとに、結線が渡す「シェルの窓が
 //! いま表示している絵の番号」から「あるべき置き場所」を導いて登録（装着先・配置の入力・置き場所）を
@@ -37,13 +35,13 @@ impl TextLayerRuntime {
     /// 箱の束を受け取る（UI スレッドから・装着の相とシェルの切替が呼ぶ）。
     ///
     /// 1. 前の箱の面（シェルの窓の子）を片付け、箱の場所ごとの実行時の表も捨てる。
-    /// 2. 箱の名前ごとにブレスの定義を白を混色の相手として 1 度だけ解いて覚え（登録はその複製・audit-emo-text-state-actor 指摘 7）、
-    ///    既定の 2 層（その `font.looks`・拡大率に依らない・design.md「装飾の持ち運び」）と種類を状態へ渡す。
-    ///    解いた直後に書字方向の宣言を前を渡さずに記録する（名前ごとに 1 度・`emo-text-reveal-incremental` 要件 3.4）。
+    /// 2. 箱の名前ごとにブレスの定義を白を混色の相手として 1 度だけ解いて覚え（登録はその複製）、
+    ///    既定の 2 層（その `font.looks`・拡大率に依らない）と種類を状態へ渡す。
+    ///    解いた直後に書字方向の宣言を前を渡さずに記録する（名前ごとに 1 度）。
     /// 3. 新しい表を状態へ入れる。状態は箱の場所の文字を捨て、各スコープの今のサーフェス番号を保ち、
-    ///    行き先を新しい表での既定へ引き直す（要件 6.8）。種類は 3 の持ち運びの判定が引くので、
+    ///    行き先を新しい表での既定へ引き直す。種類は 3 の持ち運びの判定が引くので、
     ///    **2 を 3 より先に**行う（`set_box_index` は今ある箱の種類で持ち運びを判定するため）。
-    /// 4. `\s` の解決の閉包とフォントを探す場所の順（要件 3.10）を入れ替える。
+    /// 4. `\s` の解決の閉包とフォントを探す場所の順を入れ替える。
     pub fn set_box_layout(
         &mut self,
         world: &mut World,
@@ -78,7 +76,7 @@ impl TextLayerRuntime {
         self.box_definition_warned.clear();
         self.box_resolved.clear();
         self.shown_boxes.clear();
-        // 箱の場所の区間の全文と数えも捨てる（新しい表では箱の場所が別物になる・`areka-P0-budoux-reveal-reflow` 要件 2.7）。
+        // 箱の場所の区間の全文と数えも捨てる（新しい表では箱の場所が別物になる）。
         self.lookahead.forget_boxes();
         self.lookahead_rev += 1;
 
@@ -87,7 +85,7 @@ impl TextLayerRuntime {
             .map(|(id, placements)| (id, placements.iter().map(|p| p.name.clone()).collect()))
             .collect();
         // 置き場所の表は名前のブレスが採られたものだけを載せる（`fold_boxes`）ので、定義は必ず引ける。
-        // 同じ名前が幾つのサーフェスに在っても解くのは 1 度（audit-emo-text-state-actor 指摘 7）。
+        // 同じ名前が幾つのサーフェスに在っても解くのは 1 度。
         let names: BTreeSet<&BoxName> = index.values().flatten().collect();
         let traits: BTreeMap<BoxName, BoxTraits> = names
             .into_iter()
@@ -102,8 +100,7 @@ impl TextLayerRuntime {
                 def.map(|def| (name.clone(), def))
             })
             .map(|(name, def)| {
-                // 解決の中の作者向けの警告と、書字方向の宣言の記録（前を渡さない・`emo-text-reveal-incremental`
-                // 要件 3.4）は、ここで名前ごとに 1 度だけ出る。
+                // 解決の中の作者向けの警告と、書字方向の宣言の記録（前を渡さない）は、ここで名前ごとに 1 度だけ出る。
                 let resolved = ResolvedBalloonText::resolve_with_background(
                     &def.model,
                     def.size,
@@ -128,13 +125,13 @@ impl TextLayerRuntime {
         self.state.set_box_traits(traits);
         self.state.set_box_index(index);
         self.surface_resolver = Some(resolve);
-        // 箱の表と解決の閉包が変わった＝空回しの出発点が変わったので、区間の全文を求め直す（`areka-P0-budoux-reveal-reflow` 要件 2.7）。
+        // 箱の表と解決の閉包が変わった＝空回しの出発点が変わったので、区間の全文を求め直す。
         self.rehearse_again();
         self.box_font_dirs = font_dirs;
         self.box_layout = layout;
     }
 
-    /// シェルの切替: 今の面が新しいシェルに無いスコープを seriko と同じ戻り先へ替える（`descript-window-keys` 要件 3.2・3.5）。
+    /// シェルの切替: 今の面が新しいシェルに無いスコープを seriko と同じ戻り先へ替える。
     /// [`Self::set_box_layout`] の直後に呼ぶ。替えたスコープがあったときだけ区間の全文を求め直す。
     pub fn fall_back_box_surfaces(&mut self, fallback: &SurfaceFallback) {
         if self.state.fall_back_surfaces(fallback) {
@@ -142,9 +139,8 @@ impl TextLayerRuntime {
         }
     }
 
-    /// 箱の `font.name` のフォントファイルを探す場所の順（シェル → ゴースト・要件 3.10）。
-    /// 束が来るまでは空。読み込みそのものは `balloon-font-file` が行う。本番の呼び手はまだ無い継ぎ目で、
-    /// 名指す spec（`balloon-font-file`）が閉じたら消す（呼び手が付いていればこの一文を消す）。
+    /// 箱の `font.name` のフォントファイルを探す場所の順（シェル → ゴースト）。
+    /// 束が来るまでは空。TODO: フォントファイルの読み込みそのもの。本番の呼び手はまだ無い継ぎ目。
     pub fn box_font_dirs(&self) -> &[PathBuf] {
         &self.box_font_dirs
     }
@@ -165,7 +161,7 @@ impl TextLayerRuntime {
         self.shown_boxes.get(actor).map_or(&[], Vec::as_slice)
     }
 
-    /// 普通のバルーンの窓に今出ている文字の数（要件 5.1・5.2）: `shown_surface`（そのスコープの
+    /// 普通のバルーンの窓に今出ている文字の数: `shown_surface`（そのスコープの
     /// シェルの窓がいま表示している絵の番号・非表示と未確立は `None`）が箱を持つ面なら 0（窓を
     /// 出さない）、そうでなければ普通のバルーンの場所の見えている文字の数。台本の `\s` の受け取り
     /// には従わない。箱の表が空のシェルでは絵の番号に依らない。
@@ -190,7 +186,7 @@ impl TextLayerRuntime {
 pub struct ShownBox {
     /// 箱の名前（`balloon.*`ブレスの名前）。
     pub name: BoxName,
-    /// 今のサーフェスでの element番号（大きいほど手前・要件 3.9）。
+    /// 今のサーフェスでの element番号（大きいほど手前）。
     pub element: u32,
     /// 箱の四角（シェルの窓の物理 px＝`(X, Y, X+幅, Y+高さ) × 拡大率`）。
     pub rect: HitRectPx,
@@ -206,8 +202,8 @@ impl TextLayerRuntime {
     }
 
     /// 場所の面を切る右と下（場所の左上を原点とする image px）: 普通のバルーンは画像の大きさ、箱は
-    /// 箱の大きさとシェルの画像の重なり（`min(箱の幅, シェルの幅 − X)`・高さも同じ・`i64` で求める・
-    /// audit-emo-text-state-actor 指摘 3）。箱がシェルの右か下の外なら 0 以下（描かない）。
+    /// 箱の大きさとシェルの画像の重なり（`min(箱の幅, シェルの幅 − X)`・高さも同じ・`i64` で求める）。
+    /// 箱がシェルの右か下の外なら 0 以下（描かない）。
     pub(super) fn image_limit(&self, place: &PlaceKey, binding: &TextSlotBinding) -> (f32, f32) {
         let (w, h) = (
             i64::from(binding.image_size.0),
@@ -287,7 +283,7 @@ impl TextLayerRuntime {
     /// 箱の場所が今も描かれたままでよいか: 登録があり、隠す印が無く、文字を持つ。登録は直近の
     /// 同期が絵の番号から導いた置き場所で、絵はフレームの外では替わらないので、登録があること
     /// 自体が「絵と合っている」ことを表す。台本の `\s` の受け取り（行き先だけが替わる）と
-    /// `\b[名前]`（要件 4.5）では外さない。`\c`・台詞の頭は文字が無くなるので外れ、絵の切替・
+    /// `\b[名前]`では外さない。`\c`・台詞の頭は文字が無くなるので外れ、絵の切替・
     /// 非表示は次の同期が登録を外す（`unregister_box`）ので外れる。
     fn box_still_shown(&self, key: &PlaceKey) -> bool {
         self.box_sites.contains_key(key)
@@ -355,7 +351,7 @@ impl TextLayerRuntime {
             .box_sites
             .keys()
             .filter(|key| {
-                // 印の絵が変わった actor の箱も登録し直して押し直す（`script-small-tags` 要件 5.1）。
+                // 印の絵が変わった actor の箱も登録し直して押し直す。
                 self.inline_marker_changed.contains(&key.actor)
                     || desired.get(*key).is_none_or(|want| {
                         self.routing.get(*key) != Some(&want.binding)
@@ -414,12 +410,12 @@ impl TextLayerRuntime {
     }
 
     /// 箱の場所を登録する。配置の入力は普通のバルーンと同じ式で、箱の大きさを画像の大きさとし、
-    /// 背景は白を混色の相手とする（要件 3.1〜3.3）。はみ出す置き場所は採ったうえで、
+    /// 背景は白を混色の相手とする。はみ出す置き場所は採ったうえで、
     /// （サーフェス番号, 名前）ごとに 1 度だけ警告する。定義の 3 つの警告（折り返しの基準・無視した
-    /// 書き出し位置・選択肢の飾りの縮退＝spec real-run-log-noise 要件 2.1〜2.4）は名前の欄を
+    /// 書き出し位置・選択肢の飾りの縮退）は名前の欄を
     /// `balloon.*`ブレスの名前にして、箱の名前ごとに 1 度だけ出す
-    /// （登録し直しには前の配置の入力が無いので、毎回出さないよう名前で覚える・要件 3.11）。
-    /// 描画範囲の潰れは場所の記憶と突き合わせて状態の変わり目に 1 回だけ記録する（areka-P0-balloon-text-bugs 件 2・要件 2.7）。
+    /// （登録し直しには前の配置の入力が無いので、毎回出さないよう名前で覚える）。
+    /// 描画範囲の潰れは場所の記憶と突き合わせて状態の変わり目に 1 回だけ記録する。
     fn register_box(&mut self, key: PlaceKey, want: DesiredBox) {
         let Some(def) = self.box_layout.def(&want.site.name) else {
             // `desired_box` が定義の在る名前だけを通すので構造上起こらない。
@@ -429,7 +425,7 @@ impl TextLayerRuntime {
             );
             return;
         };
-        // 箱もそのスコープの普通のバルーンの印を使う（`script-small-tags` 要件 5.1）。表を入れたときの覚えを複製して押す（audit-emo-text-state-actor 指摘 7）。
+        // 箱もそのスコープの普通のバルーンの印を使う。表を入れたときの覚えを複製して押す。
         let Some(memo) = self.box_resolved.get(&want.site.name) else {
             // 覚えは表に載る名前ごとに入るので構造上起こらない。
             warn!(
@@ -446,7 +442,7 @@ impl TextLayerRuntime {
             decoration::warn_cursor_fallback(name, &CursorFallback::of(def.model.cursor()), None);
         }
         let (w, h) = (i64::from(def.size.0), i64::from(def.size.1));
-        // 潰れの記録（areka-P0-balloon-text-bugs 件 2）。`def` の借用が切れた後に呼ぶ。
+        // 潰れの記録。`def` の借用が切れた後に呼ぶ。
         self.note_region_collapse(&key, want.site.name.as_str(), &resolved);
         let (sw, sh) = (
             i64::from(want.surface_size.0),
@@ -507,7 +503,7 @@ impl TextLayerRuntime {
     }
 
     /// 箱の面を窓の `Children`（`children`）のどこへ挿すか: 差し込み口の直後から、element番号の
-    /// 大きい順（絵より前＝手前・要件 3.7・3.9）。同じスコープで面を持つ、より大きい element番号の
+    /// 大きい順（絵より前＝手前）。同じスコープで面を持つ、より大きい element番号の
     /// 箱の面の数（文字の面と印の面の両方）だけ後ろへずらす。差し込み口が子に無い・登録されていない
     /// 箱は `None`。
     pub(super) fn box_child_index(&self, children: &[Entity], place: &PlaceKey) -> Option<usize> {

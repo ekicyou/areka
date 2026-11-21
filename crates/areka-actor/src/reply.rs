@@ -2,13 +2,13 @@
 //!
 //! per-request に [`std::sync::mpsc::channel`] を 1 本生成し、薄い newtype 対
 //! （[`ReplySender`]／[`ReplyReceiver`]）で包んで返す。自前 oneshot（Mutex/Condvar/
-//! unsafe）は持たず、std mpsc の配送保証と drop 意味論をそのまま利用する（DD-4）。
+//! unsafe）は持たず、std mpsc の配送保証と drop 意味論をそのまま利用する。
 //!
-//! - [`ReplySender::send`] は `self` を consume し「応答は高々 1 回」を型で強制する
-//!   （2.2 の oneshot 相当）。受信端が既に drop 済みなら未達値を `Err(value)` で返す。
+//! - [`ReplySender::send`] は `self` を consume し「応答は高々 1 回」を型で強制する。
+//!   受信端が既に drop 済みなら未達値を `Err(value)` で返す。
 //! - [`ReplyReceiver::recv`]／[`recv_timeout`](ReplyReceiver::recv_timeout) は、応答が
-//!   送られる前に `ReplySender` が drop されると [`ReplyError::Dropped`] を返す（3.6・切断の
-//!   自己シグナル・永久ブロックしない）。`recv_timeout` は期限超過を [`ReplyError::Timeout`]
+//!   送られる前に `ReplySender` が drop されると [`ReplyError::Dropped`] を返す
+//!   （永久ブロックしない）。`recv_timeout` は期限超過を [`ReplyError::Timeout`]
 //!   として `Dropped` と区別する。
 
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
@@ -27,7 +27,7 @@ pub fn reply_channel<T: Send>() -> (ReplySender<T>, ReplyReceiver<T>) {
 ///
 /// メッセージ enum の variant にフィールドとして同梱し、受信側アクターがこれ 1 本へ
 /// 応答を返す（envelope 規約）。応答未送信のまま drop されると、対応する
-/// [`ReplyReceiver`] は [`ReplyError::Dropped`] を観測する（3.6）。
+/// [`ReplyReceiver`] は [`ReplyError::Dropped`] を観測する。
 pub struct ReplySender<T>(Sender<T>);
 
 impl<T: Send> ReplySender<T> {
@@ -42,8 +42,8 @@ impl<T: Send> ReplySender<T> {
 
 /// request/reply の返信用受信端（oneshot 相当・応答は高々 1 回受け取る）。
 ///
-/// 対応する [`ReplySender`] が応答を送れば必ず受け取れる（2.3・mpsc の配送保証）。
-/// 応答が送られず `ReplySender` が drop されれば [`ReplyError::Dropped`] を返す（3.6）。
+/// 対応する [`ReplySender`] が応答を送れば必ず受け取れる（mpsc の配送保証）。
+/// 応答が送られず `ReplySender` が drop されれば [`ReplyError::Dropped`] を返す。
 pub struct ReplyReceiver<T>(Receiver<T>);
 
 impl<T: Send> ReplyReceiver<T> {
@@ -51,7 +51,7 @@ impl<T: Send> ReplyReceiver<T> {
     ///
     /// [`ReplySender`] が応答せず drop された場合は [`ReplyError::Dropped`] を返す
     /// （std mpsc の [`RecvError`](std::sync::mpsc::RecvError)＝全 Sender drop を写像・
-    /// 永久ブロックしない・3.6）。
+    /// 永久ブロックしない）。
     pub fn recv(self) -> Result<T, ReplyError> {
         self.0.recv().map_err(|_| ReplyError::Dropped)
     }
@@ -59,7 +59,7 @@ impl<T: Send> ReplyReceiver<T> {
     /// 上限時間付きで応答を待つ（`self` consume）。
     ///
     /// 期限内に応答が来なければ [`ReplyError::Timeout`]、期限前に [`ReplySender`] が応答せず
-    /// drop されれば [`ReplyError::Dropped`] を返す（両者を区別する・3.6）。
+    /// drop されれば [`ReplyError::Dropped`] を返す（両者を区別する）。
     pub fn recv_timeout(self, timeout: Duration) -> Result<T, ReplyError> {
         self.0.recv_timeout(timeout).map_err(|e| match e {
             RecvTimeoutError::Timeout => ReplyError::Timeout,
@@ -70,7 +70,7 @@ impl<T: Send> ReplyReceiver<T> {
     /// 待たずに覗く（`&self`・consume しない）。
     ///
     /// 今届いていれば `Ok(Some(value))`、届いていなければ `Ok(None)`、[`ReplySender`] が
-    /// 応答せず drop 済みなら [`ReplyError::Dropped`] を返す（3.2・3.4・UI スレッドを塞がない
+    /// 応答せず drop 済みなら [`ReplyError::Dropped`] を返す（UI スレッドを塞がない
     /// tick 内ポーリング用）。`recv`／`recv_timeout` の待つ振る舞いは変えない。
     pub fn try_recv(&self) -> Result<Option<T>, ReplyError> {
         match self.0.try_recv() {
@@ -97,7 +97,6 @@ mod tests {
     use super::*;
     use std::thread;
 
-    // ケース1: 送受信往復。応答を送れば受信側は同じ値を受け取る（2.3）。
     #[test]
     fn round_trip_delivers_value() {
         let (tx, rx) = reply_channel::<u32>();
@@ -106,19 +105,16 @@ mod tests {
         assert_eq!(rx.recv().expect("value should be delivered"), 42);
     }
 
-    // ケース2: 送信端 drop → Dropped（3.6・永久ブロックしない）。
     #[test]
     fn sender_dropped_without_reply_yields_dropped() {
         let (tx, rx) = reply_channel::<u32>();
-        drop(tx); // 応答せず drop。
-        // Sender は既に drop 済みゆえ recv は即時 Err で復帰する（ハングしない）。
+        drop(tx);
         match rx.recv() {
             Err(ReplyError::Dropped) => {}
             other => panic!("expected Err(Dropped), got {other:?}"),
         }
     }
 
-    // ケース3: timeout → Timeout（Sender は生存させたまま応答しない）。
     #[test]
     fn timeout_is_distinct_from_dropped() {
         let (tx, rx) = reply_channel::<u32>();
@@ -136,7 +132,6 @@ mod tests {
         drop(tx);
     }
 
-    // 追加: recv_timeout 経由の往復成功。
     #[test]
     fn recv_timeout_returns_value_when_replied() {
         let (tx, rx) = reply_channel::<&'static str>();
@@ -149,7 +144,6 @@ mod tests {
         assert_eq!(got, "pong");
     }
 
-    // 追加: 受信端 drop 後の send は未達値を Err(value) で返す。
     #[test]
     fn send_after_receiver_dropped_returns_value() {
         let (tx, rx) = reply_channel::<String>();
@@ -160,7 +154,6 @@ mod tests {
         }
     }
 
-    // 追加: recv_timeout でも Sender drop は Dropped（Timeout と区別）。
     #[test]
     fn recv_timeout_sees_dropped_when_sender_gone() {
         let (tx, rx) = reply_channel::<u32>();
@@ -171,7 +164,6 @@ mod tests {
         }
     }
 
-    // try_recv ケース1: 未着信なら Ok(None)（待たない・Sender は生存中）。
     #[test]
     fn try_recv_returns_none_when_empty() {
         let (tx, rx) = reply_channel::<u32>();
@@ -179,7 +171,6 @@ mod tests {
         drop(tx);
     }
 
-    // try_recv ケース2: 送信済みなら Ok(Some(value))。
     #[test]
     fn try_recv_returns_some_after_send() {
         let (tx, rx) = reply_channel::<u32>();
@@ -188,7 +179,6 @@ mod tests {
         assert_eq!(rx.try_recv().expect("no error expected"), Some(7));
     }
 
-    // try_recv ケース3: 送信端 drop 済みなら Err(Dropped)（recv と同じ切断表現）。
     #[test]
     fn try_recv_returns_dropped_when_sender_gone() {
         let (tx, rx) = reply_channel::<u32>();

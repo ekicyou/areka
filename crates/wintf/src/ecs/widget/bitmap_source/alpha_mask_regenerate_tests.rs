@@ -1,18 +1,15 @@
 //! `AlphaMask::regenerate_from_pbgra32` の等価檻とバッファ再利用檻
 //!
-//! design.md `#### AlphaMask 再生成・共有（wintf・additive）` ／ `## Testing Strategy` Unit Tests 4
-//! （要件 3.1・6.2・6.3）。
-//!
 //! 固定する主張は 2 つ:
 //! 1. **等価**: `regenerate_from_pbgra32` は同一入力に対して `from_pbgra32` と完全に同一の
 //!    マスク（`PartialEq`＝data／width／height の全一致）を作る。**寸法が縮む方向**でも前の
 //!    内容が 1 ビットも残らない。
 //! 2. **再利用**: 同寸または縮小方向の再生成でバッファを作り直さない（容量が減らず、確保
-//!    位置も動かない）。task 4.1 の教訓に従い、**縮小方向の節**を必ず含める——同寸の反復
-//!    だけでは毎回新規確保する実装が同じ容量に着地して素通りするため。
+//!    位置も動かない）。**縮小方向の節**を必ず含める——同寸の反復だけでは毎回新規確保する
+//!    実装が同じ容量に着地して素通りするため。
 //!
-//! 実時間は合否条件に使わない（要件 6.2）。純 x64・常設 `cargo test`・env ゲートなし・
-//! `#[ignore]` なし（要件 6.3）。GPU は一切使わない（`AlphaMask` は純粋な CPU 構造）。
+//! 実時間は合否条件に使わない。純 x64・常設 `cargo test`・env ゲートなし・`#[ignore]` なし。
+//! GPU は一切使わない（`AlphaMask` は純粋な CPU 構造）。
 
 use super::*;
 
@@ -108,8 +105,7 @@ fn regenerate_from_empty_equals_from_pbgra32_for_all_shapes() {
 
 /// **縮小方向**の再生成で前の内容が残らない（全不透明 → より小さい全透明）
 ///
-/// これが本タスクが名指しする失敗形。clear を落とすと保持されたバイト列の前半が
-/// 生き残り、`from_pbgra32` と一致しなくなる。
+/// clear を落とすと保持されたバイト列の前半が生き残り、`from_pbgra32` と一致しなくなる。
 #[test]
 fn regenerate_shrink_leaves_no_stale_content() {
     // 前状態: 32x32 全不透明（data は 4*32 = 128 バイトが全て 0xFF）
@@ -206,9 +202,8 @@ fn regenerate_same_size_clears_previous_content() {
 
 /// **縮小方向**の再生成でバッファを作り直さない（容量が減らず、確保位置も動かない）
 ///
-/// task 4.1 の教訓（`scale_resample_tests.rs:629` の節）と同型。同寸の反復だけでは
-/// 毎回 `vec![0u8; len]` する実装が毎回同じ容量に着地して素通りするため、**より小さい
-/// 寸法での再生成で容量が縮まないこと**を檻の要にする。
+/// 同寸の反復だけでは毎回 `vec![0u8; len]` する実装が毎回同じ容量に着地して素通りするため、
+/// **より小さい寸法での再生成で容量が縮まないこと**を檻の要にする。
 #[test]
 fn regenerate_reuses_buffer_on_shrink() {
     // 32x32 → row_bytes=4、data.len() = 128

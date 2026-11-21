@@ -150,7 +150,7 @@ fn round_trip_via_runner(backend: FakeBackend, call: ShioriCall) -> ShioriOutcom
     outcome
 }
 
-// --- map_error: 4 語彙の機械的写像（Req 6.1）------------------------------
+// --- map_error: 4 語彙の機械的写像------------------------------
 
 #[test]
 fn map_error_handshake_maps_to_handshake_with_display() {
@@ -308,13 +308,13 @@ fn notify_err_maps_to_failed() {
     );
 }
 
-// --- status 転送檻: render 済み wire 値が backend の status 引数へ届く（Req 2.2/2.3・Testing #9）---
+// --- status 転送檻: render 済み wire 値が backend の status 引数へ届く---
 
 /// `handle_call` が `ExecutionStatus::render()` の結果を backend の `status` 引数へ Some/None
-/// 双方で届けることを固定する（語彙は kanade 所有・backend は転記のみ・DD-IT-1）。
+/// 双方で届けることを固定する（語彙は kanade 所有・backend は転記のみ）。
 #[test]
 fn handle_call_forwards_rendered_status_to_backend() {
-    // talk_active=true → render() == Some("talking") が NOTIFY backend の status へ届く（Req 2.2）。
+    // talk_active=true → render() == Some("talking") が NOTIFY backend の status へ届く。
     let (talking_tx, talking_rx) = mpsc::channel::<Option<String>>();
     let notify_backend = fake_notify(move |_id, _refs, status: Option<&str>| {
         let _ = talking_tx.send(status.map(|s| s.to_string()));
@@ -343,7 +343,7 @@ fn handle_call_forwards_rendered_status_to_backend() {
         "talk_active=true の render 結果 Some(\"talking\") が backend の status へ届く"
     );
 
-    // INACTIVE → render() == None（ヘッダ行なし）が GET backend の status へ届く（Req 2.3）。
+    // INACTIVE → render() == None（ヘッダ行なし）が GET backend の status へ届く。
     let (idle_tx, idle_rx) = mpsc::channel::<Option<String>>();
     let get_backend = fake_get(move |_id, _refs, status: Option<&str>| {
         let _ = idle_tx.send(status.map(|s| s.to_string()));
@@ -369,7 +369,7 @@ fn handle_call_forwards_rendered_status_to_backend() {
     );
 }
 
-// --- Unload 正規化: Ok(Clean)／Ok(非 Clean)／Err の 3 分岐（要件 6.2/6.3）--
+// --- Unload 正規化: Ok(Clean)／Ok(非 Clean)／Err の 3 分岐--
 
 /// 手空きの周期（降ろしの後の手空きを速く見届けるため本番より短い）。
 const UNLOAD_IDLE_TICK: Duration = Duration::from_millis(5);
@@ -500,7 +500,7 @@ fn unload_err_logs_error_and_returns_failed_ipc() {
     );
 }
 
-// --- 死活監視: メッセージ到達ごとの sticky 検出（要件 3.2/3.4）------------
+// --- 死活監視: メッセージ到達ごとの sticky 検出------------
 
 #[test]
 fn death_detected_once_reports_shiori_down_and_only_once() {
@@ -693,7 +693,7 @@ fn connect_failure_reports_shiori_down_and_answers_requests_with_handshake() {
     }
 
     // 死活報告より先に kanade が要求を送っても、答えは「通信が切れた」ではなく接続の失敗
-    // （同じ理由）になる。放置もしない（要件 2.2・2.4）。
+    // （同じ理由）になる。放置もしない。
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     shiori_tx
         .send(ShioriMsg::Request {
@@ -740,15 +740,14 @@ fn connect_failure_reports_shiori_down_and_answers_requests_with_handshake() {
     );
 }
 
-// --- 交渉状態の置き場（要件 5.1）---------------------------------------------
+// --- 交渉状態の置き場---------------------------------------------
 
-/// 接続 1 つにつき交渉状態は 1 つだけ存在する——接続の値が持ち、呼び出しごとに作り直さない
-/// （要件 5.1）。
+/// 接続 1 つにつき交渉状態は 1 つだけ存在する——接続の値が持ち、呼び出しごとに作り直さない。
 ///
 /// `ShioriConnection` の構築には実窓と実 helper が要り、純 x64 のテストでは組み立てられない
-/// （要件 9.8 の趣旨で実機依存の檻を作らない）。ゆえに「作り直していない」ことは**本番ファイル
+/// （実機依存の檻は作らない）。ゆえに「作り直していない」ことは**本番ファイル
 /// `real.rs` 1 本の本文**で機械的に確かめる: そこに交渉状態の構築子が 1 つも無く、応答待ち・
-/// 片道の 2 つの入口とそのヘッダつき版 2 つ（areka-P0-script-security-level 要件 2.1）の計 4 つが
+/// 片道の 2 つの入口とそのヘッダつき版 2 つの計 4 つが
 /// 共通に呼ぶ client の組み立て 1 か所だけが接続のフィールドを借用して結線へ渡している（4 つの手が
 /// その組み立てを呼ぶことは `real_resource_mark_tests.rs` が固定する）。
 ///

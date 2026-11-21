@@ -1,4 +1,4 @@
-// tests/layout.rs — wintf layout domain test entry point
+// wintf layout 領域のテストの入口
 #[path = "layout/arrangement_bounds_test/mod.rs"]
 mod arrangement_bounds_test;
 #[path = "layout/box_style_consolidation_test.rs"]

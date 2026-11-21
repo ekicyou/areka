@@ -1,31 +1,23 @@
-//! balloon.rs: バルーン枠画像を **シェルと同一の** compose/present 経路へ
-//! 載せる入力適合層（R5.1）。
+//! バルーン枠画像を、シェルと同一の compose/present 経路へ載せる入力適合層。
 //!
-//! バルーンの入力は **scope 別に解決した面画像**である（R1.1/R1.2）。本モジュールは scope 番号から
-//! 接頭辞優先連鎖（`prefix_chain`）を導出し、面 ID 単位で連鎖を辿って採用面列
-//! （`ResolvedFace`）を決め、そこから **synthetic surfaces.txt テキスト**（`surface{ID}` に単一
-//! overlay element＝採用面の実ファイル名）を生成 → `areka_parsers::shell::parse` →
-//! `areka_emo_atlas::bake` → `EmoWorld::build`＋`bind_atlas` と、シェルが辿るのと**寸分違わぬ
-//! 公開 API 経路**で `(EmoWorld, AtlasTable)` を組み上げる。直 WIC バイパスは設けない（R5.1）。
+//! バルーンの入力は scope 別に解決した面画像。scope 番号から接頭辞優先連鎖（`prefix_chain`）を導出し、
+//! 面 ID 単位で連鎖を辿って採用面列（`ResolvedFace`）を決め、synthetic surfaces.txt テキスト
+//! （`surface{ID}` に単一 overlay element＝採用面の実ファイル名）を生成して `areka_parsers::shell::parse` →
+//! `areka_emo_atlas::bake` → `EmoWorld::build`＋`bind_atlas` と、シェルと同じ公開 API 経路で
+//! `(EmoWorld, AtlasTable)` を組む。直 WIC バイパスは設けない。
 //!
-//! # 正典整理（本モジュールが従う分類）
+//! - 列挙対象は当該 scope の連鎖に載る接頭辞の `{接頭辞}{ID}.png` だけ（scope 0 は `balloonp0def`/`balloons`、
+//!   scope 1 はそれらに先立つ `balloonp1def`/`balloonk`）。`balloonc*`（入力ボックス）・`arrow*`・`marker*`・
+//!   `online*` はどの連鎖にも載らず列挙されない。`balloonk*` は scope 1 以上でのみ採用される。
+//! - 透過の宣言は基層 `descript.txt` の `use_self_alpha` を `load_balloon_use_self_alpha` がバルーン 1 つにつき
+//!   1 回読み、[`build_balloon_target_from_faces`] が引数で受ける。面ごとの設定ファイルでは上書きしない。
+//!   `.pna` は表示に使わない。
+//! - surface id は `{接頭辞}{ID}` の ID そのまま（`balloon.defaultsurface` 既定 0 と整合）。
 //!
-//! - **面画像のみ入力**（R5.3）: 列挙対象は当該 scope の連鎖に載る接頭辞の `{接頭辞}{ID}.png` に
-//!   限る（scope 0 は `balloonp0def`/`balloons`、scope 1 はそれらに先立つ `balloonp1def`/`balloonk`）。
-//!   `balloonc*`（入力ボックス）・`arrow*`（スクロール矢印）・`marker*`（行の中の印）・
-//!   `online*`（受信アニメ）はどの連鎖にも載らず列挙されない。相方側 `balloonk*` は
-//!   **scope 1 以上でのみ**採用される正規の面系列であり、scope 0 の連鎖には現れない。
-//! - **透過の宣言**（spec: areka-P0-self-alpha-declaration 要件 2）: 基層の `descript.txt` の
-//!   `use_self_alpha` を `load_balloon_use_self_alpha` がバルーン 1 つにつき 1 回読み、焼く関数
-//!   [`build_balloon_target_from_faces`] が値を引数で受ける。面ごとの設定ファイルでは上書きしない。
-//!   `.pna` は表示に使わず、フォルダ直下の数を記録するだけである。
-//! - **surface id = ID**（`{接頭辞}{ID}` の ID をそのまま採用）。`balloon.defaultsurface` 既定 0 と整合。
-//!
-//! 失敗経路は log-first（`tracing::error!`＋`Err`・silent failure 禁止）。一覧の失敗・面 0 が
-//! 解決できない・採用面列が空・bake の脱落は、真因をログへ出したうえで原因ごとの
-//! [`BalloonLoadError`] を返す。読み込みの失敗は提示（`apply_show`）より前に呼び手へ返るので、
-//! 合成の全透明（Hide 縮退）とは別物である。呼び手は自分の縮退（バルーン未配線・告知・採寸の
-//! 見送り）へ伝えるだけで、ゴーストごと殺さない。
+//! 失敗経路は log-first（`tracing::error!`＋`Err`）。一覧の失敗・面 0 が解決できない・採用面列が空・bake の脱落は、
+//! 真因をログへ出したうえで原因ごとの [`BalloonLoadError`] を返す。読み込みの失敗は提示（`apply_show`）より前に
+//! 呼び手へ返るので、合成の全透明（Hide 縮退）とは別物。呼び手はバルーン未配線・告知・採寸の見送りへ縮退するだけで、
+//! ゴーストごと殺さない。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -40,15 +32,14 @@ use areka_parsers::charset::{DefaultEncoding, decode};
 
 use crate::load_records::LoadRecords;
 
-/// 面画像の拡張子（小文字比較）。接頭辞は scope 番号から連鎖として導出するため定数を持たない。
-/// シェル側の面画像（`surface{ID}.png`）も同じ拡張子で、判定 [`face_digits_of`] ごと共有する。
+/// 面画像の拡張子（小文字比較）。シェル側の面画像（`surface{ID}.png`）も同じで、判定 [`face_digits_of`] ごと共有する。
 const FRAME_SUFFIX: &str = ".png";
 /// バルーンの読み込みの失敗（原因ごと・[`crate::shell_target::ShellLoadError`] と同じ形）。
 ///
 /// どの変位も、返す前に権威の側が真因を `error!` で記録している。
 #[derive(Debug, thiserror::Error)]
 pub enum BalloonLoadError {
-    /// バルーンのフォルダの一覧が取れなかった（R6.4）。
+    /// バルーンのフォルダの一覧が取れなかった。
     #[error("balloon フォルダの一覧に失敗: {path}")]
     List {
         /// 一覧しようとしたバルーンのフォルダ。
@@ -57,7 +48,7 @@ pub enum BalloonLoadError {
         #[source]
         source: std::io::Error,
     },
-    /// 面 ID 0 が連鎖のどの接頭辞でも見つからない（R1.7）。
+    /// 面 ID 0 が連鎖のどの接頭辞でも見つからない。
     #[error("balloon の面 0 がどの接頭辞でも見つからない: {path} scope {scope}")]
     NoFace0 {
         /// バルーンのフォルダ。
@@ -82,18 +73,15 @@ pub enum BalloonLoadError {
 /// バルーン既定設定ファイル名（2 層マージの**基層**・シェル側 descript と同名別物）。
 pub(crate) const DESCRIPT_TXT: &str = "descript.txt";
 
-/// 系列族の定義（**表データ**・候補追加が構造改変を伴わない形・R1.9）。
+/// 系列族の定義（表データ）。
 ///
-/// 正典のバルーン資産は族をまたいで同一の scope 別接尾辞体系を持つ——吹き出し
-/// `balloons` / `balloonk` / `balloonp{n}def`、スクロール矢印 `arrows` / `arrowk` /
-/// `arrowp{n}def`、マーカー `markers` / `markerk` / `markerp{n}def`……。本構造体は
-/// その体系を **族名でパラメタ化**して保持するため、他族の scope 別対応（本仕様では
-/// 対象外）が同じ機構をそのまま再利用できる。
+/// バルーン資産は族をまたいで同一の scope 別接尾辞体系を持つ（吹き出し `balloons` / `balloonk` /
+/// `balloonp{n}def`、スクロール矢印 `arrows` / `arrowk` / `arrowp{n}def`、マーカー `markers` / `markerk` /
+/// `markerp{n}def`）。族名でパラメタ化して保持するので、他族も同じ機構を再利用できる。
 ///
-/// 旧名候補は **可変長**である。装飾族には旧名がもう一段深く存在する（正典「`arrows` が
-/// 本体用・旧バージョン対応のために `arrow` で代用を推奨」／`markers` に対する `marker` も
-/// 同型）ため、`scope0_legacy` に `["arrows", "arrow"]` と積めば構造改変なしに表現できる
-/// （R7.1(c) の語彙記録に対する縮退シーム）。
+/// 旧名候補は可変長。装飾族には旧名がもう一段深く存在する（`arrows` が本体用で、旧バージョン対応のため
+/// `arrow` で代用を推奨／`markers` に対する `marker` も同型）ので、`scope0_legacy` に `["arrows", "arrow"]` と
+/// 積めば表現できる。
 #[derive(Debug, Clone, Copy)]
 pub struct SeriesFamily {
     /// 族の基底名（吹き出し族＝`"balloon"`・正規名は `{base}p{n}def`）。
@@ -125,20 +113,19 @@ pub(crate) struct SeriesPrefix {
 pub enum ChainTier {
     /// 当該 scope 自身の候補（正規名＋当該 scope の旧名）。
     Own,
-    /// n≧2 連鎖の**名指し**相方系列（`balloonk`）。正典が三人目以降の流用先として名指しした
-    /// 系列であり、scope 1 の解決へ再帰的に縮退するものではない。
+    /// n≧2 連鎖の名指し相方系列（`balloonk`）。正典が三人目以降の流用先として名指ししたもので、
+    /// scope 1 の解決へ再帰的に縮退するものではない。
     KeroNamed,
-    /// デフォルト定義（`balloonp0def` → `balloons`）。全連鎖の最終受け皿は scope 0 のみが
-    /// 持つ地位であり、scope 1 はデフォルトの地位を持たない。
+    /// デフォルト定義（`balloonp0def` → `balloons`）。全連鎖の最終受け皿は scope 0 だけが持つ地位で、
+    /// scope 1 は持たない。
     Default,
 }
 
 impl SeriesFamily {
-    /// 当該 scope の**正規名** `{base}p{scope}def`。
+    /// 当該 scope の正規名 `{base}p{scope}def`。
     ///
-    /// 正典は p 系列を `\p[2]` 以降としてのみ記述しており、scope 0 / 1 の正規名
-    /// （`balloonp0def` / `balloonp1def`）を先行探索することは areka 裁量の正規化拡張である
-    /// （R1.10・対応表へ記録する対象）。
+    /// 正典は p 系列を `\p[2]` 以降としてのみ記述する。scope 0 / 1 の正規名（`balloonp0def` / `balloonp1def`）を
+    /// 先行探索するのは areka 裁量の正規化拡張。
     fn canonical(&self, scope: u32) -> String {
         format!("{}p{scope}def", self.base)
     }
@@ -153,7 +140,7 @@ impl SeriesFamily {
     }
 }
 
-/// scope 番号から**接頭辞優先連鎖**を導出する（純関数・表データ駆動・R1.1/1.8/1.9）。
+/// scope 番号から**接頭辞優先連鎖**を導出する（純関数・表データ駆動）。
 ///
 /// 連鎖は 3 段の連結である——
 ///
@@ -164,22 +151,16 @@ impl SeriesFamily {
 ///   KeroNamed: 正典が名指しする相方系列の旧名候補列（[balloonk]）
 ///   Default  : 正規名 {base}p0def ＋ scope 0 の旧名候補列（[balloonp0def, balloons]）
 /// ```
+/// 各段では正規名を先頭・旧名を後続に置く。結果は scope 0 が `balloonp0def` → `balloons`、
+/// scope 1 が `balloonp1def` → `balloonk` → `balloonp0def` → `balloons`、scope n（n≧2）が
+/// `balloonp{n}def` → `balloonk` → `balloonp0def` → `balloons`。
 ///
-/// 各段では**正規名を先頭・旧名を後続**に置く。結果として
-/// scope 0 は `balloonp0def` → `balloons`、scope 1 は `balloonp1def` → `balloonk` →
-/// `balloonp0def` → `balloons`、scope n（n≧2）は `balloonp{n}def` → `balloonk` →
-/// `balloonp0def` → `balloons` となる。
-///
-/// 相方系列の段は**正典が名指しした系列**であって scope 1 の解決へ再帰的に縮退するもの
-/// ではないため、scope 2 以上の連鎖に scope 1 の正規名 `balloonp1def` は含めない（R1.1）。
-///
-/// scope は最後まで**数値のみ**で扱う。`Sakura`/`Kero` 等の 2 値列挙も、さくらスクリプト側の
-/// 別語彙（`\h`/`\u`）も内部の正準表現としない（R1.9）。ゆえに解決規則は M1 の実行時 scope
-/// （0 と 1）に閉じず、scope 番号一般（n≧2 を含む）で定義される（R1.6）。
+/// 相方系列の段は正典が名指しした系列で、scope 1 の解決へ再帰的に縮退するものではないので、
+/// scope 2 以上の連鎖に `balloonp1def` は含めない。scope は最後まで数値のみで扱い（`Sakura`/`Kero` 等の
+/// 2 値列挙も `\h`/`\u` も正準表現としない）、n≧2 を含む scope 番号一般で解決規則を定義する。
 pub(crate) fn prefix_chain(family: &SeriesFamily, scope: u32) -> Vec<SeriesPrefix> {
     let mut chain: Vec<SeriesPrefix> = Vec::new();
 
-    // (i) 当該 scope 自身の候補: 正規名を先頭に、当該 scope の旧名を後続に置く。
     chain.push(SeriesPrefix {
         prefix: family.canonical(scope),
         tier: ChainTier::Own,
@@ -191,8 +172,6 @@ pub(crate) fn prefix_chain(family: &SeriesFamily, scope: u32) -> Vec<SeriesPrefi
         });
     }
 
-    // (ii) 相方系列（scope 2 以上のみ）: 正典が名指しした系列そのもの＝旧名候補列のみ。
-    // scope 1 の解決への再帰縮退ではないため、scope 1 の正規名はここに含めない。
     if scope >= 2 {
         for name in family.scope1_legacy {
             chain.push(SeriesPrefix {
@@ -202,7 +181,6 @@ pub(crate) fn prefix_chain(family: &SeriesFamily, scope: u32) -> Vec<SeriesPrefi
         }
     }
 
-    // (iii) デフォルト定義（scope 1 以上のみ）: 最終受け皿は scope 0 の系列。
     if scope >= 1 {
         chain.push(SeriesPrefix {
             prefix: family.canonical(0),
@@ -221,96 +199,72 @@ pub(crate) fn prefix_chain(family: &SeriesFamily, scope: u32) -> Vec<SeriesPrefi
 
 /// 解決済みの 1 面（連鎖探索の採用結果）。
 ///
-/// 解決の**一時値**であり、構築後に保持する必要はない——採用面から上書きファイル名を導出する
-/// 規則は本モジュール（系列解決の単一権威）にあり、いつでも再導出できるため。
+/// 解決の一時値で、構築後に保持しない（上書きファイル名は本モジュールの規則でいつでも再導出できる）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedFace {
     /// 面 ID（`{接頭辞}{ID}.png` の `{ID}` ＝ surface id）。
     pub surface_id: u32,
     /// 採用接頭辞（連鎖内で最初に画像が存在したもの）。
     pub prefix: String,
-    /// 採用接頭辞が連鎖内で担っていた役割（scope≧1 での [`ChainTier::Default`] 採用＝
-    /// 本体側への縮退であり、警告記録の判定に用いる）。
+    /// 採用接頭辞が連鎖内で担っていた役割（scope≧1 での [`ChainTier::Default`] 採用は本体側への縮退で、
+    /// 警告記録の判定に使う）。
     pub tier: ChainTier,
     /// 実ファイル名（**原形保持**——実 WIC デコードが実パスを読むため大小を正規化しない）。
     pub file_name: String,
 }
 
 impl ResolvedFace {
-    /// 採用接頭辞に対応する**面別上書きファイル名** `{採用接頭辞}{面 ID}s.txt`（R2.2/R2.3）。
+    /// 採用接頭辞に対応する面別上書きファイル名 `{採用接頭辞}{面 ID}s.txt`。
     ///
-    /// 上書き層は**採用した画像に対応するもの**を引く——scope 1 が `balloonk0` を採ったなら
-    /// `balloonk0s.txt` であり、連鎖の他の接頭辞の `balloons0s.txt` ではない（R2.2）。ID 単位
-    /// フォールバックで後段接頭辞へ落ちた面についても同様に、その後段接頭辞の同一 ID の
-    /// 上書き層が対応する（R2.3——正典が面別上書きを「対応する ID のサーフェスに対して」
-    /// 適用すると定めることの帰結）。
-    ///
-    /// 導出元は [`Self::file_name`]（実ファイル名・原形保持）ではなく **連鎖上の接頭辞**
-    /// [`Self::prefix`] である。実ファイル名の大小は資産側の都合で揺れるが、上書きファイルの
-    /// 探索名は連鎖から一意に決まる小文字正準形でなければ、採用画像と上書き層の対応が
-    /// 資産の表記揺れに左右されてしまうため。
+    /// 上書き層は採用した画像に対応するものを引く（scope 1 が `balloonk0` を採ったなら `balloonk0s.txt`。
+    /// ID 単位フォールバックで後段接頭辞へ落ちた面も、その接頭辞の同一 ID の上書き層が対応する）。
+    /// 導出元は実ファイル名の [`Self::file_name`] でなく連鎖上の接頭辞 [`Self::prefix`]
+    /// （実ファイル名の大小は資産側の都合で揺れるため）。
     pub fn override_file_name(&self) -> String {
         format!("{}{}s.txt", self.prefix, self.surface_id)
     }
 }
 
-/// `{prefix}{数字列}.png`（大小無視）なら**数字列そのもの**を返す。面でなければ `None`。
+/// `{prefix}{数字列}.png`（大小無視）なら数字列そのものを返す。面でなければ `None`。
 ///
-/// 判定は**厳密 3 段**である——
+/// 判定は厳密 3 段——接頭辞の完全一致 strip（大小無視）・`.png` の strip・残余の全数字化（空でなく、
+/// すべて ASCII 数字）。接頭辞が完全一致なので、`balloonc0.png`（入力ウィンドウ用）を `balloonk` の面と
+/// 誤認しない。3 段目を `u32::parse` 任せにせず全数字を検査するのは、`parse` が符号
+/// （`balloons+0.png` の `+0`）を受理するため。
 ///
-/// 1. **接頭辞の完全一致 strip**（大小無視）
-/// 2. **`.png` の strip**
-/// 3. **残余の全数字化**（空でなく、すべて ASCII 数字であること）
-///
-/// 接頭辞は完全一致ゆえ、入力ウィンドウ用 `balloonc0.png` を `balloonk` の面と誤認する事故は
-/// 構造的に起こり得ない。装飾用の `arrow*` / `marker*` / `online*` も吹き出し族のどの接頭辞にも
-/// 一致しない。3 段目を `u32::parse` 任せにせず全数字を明示検査するのは、`parse` が符号
-/// （`balloons+0.png` の `+0`）を受理してしまうためで、正典の面 ID 表記は符号を持たない。
-///
-/// 数を返さず**数字列**を返すのは、シェル側の面画像判定
-/// （[`crate::shell_target::select_surface_images`]・接頭辞 `surface`）と同じ 3 段を 1 つの実装で
-/// 共有するためである。シェル側は `u32` に収まらない数字列を「桁溢れ」として別に数える必要が
-/// あり（シェル側 spec areka-P0-shell-implicit-surface 要件 1.6）、数へ畳んだ戻りではその区別が付かない。
+/// 数でなく数字列を返すのは、シェル側の面画像判定（[`crate::shell_target::select_surface_images`]・
+/// 接頭辞 `surface`）と同じ 3 段を共有するため。シェル側は `u32` に収まらない数字列を「桁溢れ」として
+/// 別に数える必要があり、数へ畳むとその区別が付かない。
 pub(crate) fn face_digits_of(prefix: &str, name: &str) -> Option<String> {
     let lower = name.to_ascii_lowercase();
-    // (1) 接頭辞 strip（大小無視）→ (2) 拡張子 strip。
     let digits = lower
         .strip_prefix(prefix.to_ascii_lowercase().as_str())?
         .strip_suffix(FRAME_SUFFIX)?;
-    // (3) 残余の全数字化（空・非数字・符号付きは面でない）。
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
     Some(digits.to_string())
 }
 
-/// `{prefix}{ID}.png`（大小無視）なら面 ID を返す。バルーン面でなければ `None`（R1.5）。
+/// `{prefix}{ID}.png`（大小無視）なら面 ID を返す。バルーン面でなければ `None`。
 ///
-/// 判定そのものは [`face_digits_of`] が持ち、本関数は得た数字列を 10 進数として読むだけである
-/// （先頭の 0 は無視される）。`u32` に収まらない数字列はバルーンでは面と認めない（`None`）。
+/// [`face_digits_of`] の数字列を 10 進数として読むだけ（先頭の 0 は無視）。`u32` に収まらない数字列は面と認めない。
 fn face_id_of(prefix: &str, name: &str) -> Option<u32> {
     face_digits_of(prefix, name)?.parse::<u32>().ok()
 }
 
-/// ファイル名リストと接頭辞連鎖から採用面列を決める**純核**（fs 非依存・R1.2/1.3/1.4/1.5）。
+/// ファイル名リストと接頭辞連鎖から採用面列を決める純核（fs 非依存）。
 ///
-/// 手順は 2 段である——
-///
-/// 1. **面 ID 集合の和**: 連鎖内の**全**接頭辞にまたがって面 ID を集める。ある接頭辞にしか
-///    存在しない ID も候補に入り、先頭接頭辞の ID 集合には閉じない。
-/// 2. **ID 単位の連鎖走査**: 各 ID について連鎖を**先頭から**辿り、最初に画像が存在した
-///    接頭辞の面を採用する（R1.2）。ある ID の欠落は当該 ID の採用先を後段へずらすだけで、
-///    当該 scope の系列全体を後段の接頭辞へ切り替えない（R1.3——`balloonk0` があり
+/// 1. 面 ID 集合の和: 連鎖内の全接頭辞にまたがって面 ID を集める。ある接頭辞にしか存在しない ID も候補に入る。
+/// 2. ID 単位の連鎖走査: 各 ID について連鎖を先頭から辿り、最初に画像が存在した接頭辞の面を採用する。
+///    ある ID の欠落は当該 ID の採用先を後段へずらすだけで、系列全体は切り替えない（`balloonk0` があり
 ///    `balloonk1` が無ければ、scope 1 の面 0 は `balloonk0`・面 1 は `balloons1`）。
 ///
-/// 連鎖の末尾は常に族の scope 0 旧名（吹き出し族＝`balloons`）ゆえ、先頭側接頭辞の画像を
-/// 1 枚も含まないバルーンでは全 scope が `balloons` 系列へ収束し、本仕様適用前と同一の
-/// 面集合を得る（R1.4）。
+/// 連鎖の末尾は常に族の scope 0 旧名（`balloons`）なので、先頭側接頭辞の画像を 1 枚も含まないバルーンでは
+/// 全 scope が `balloons` 系列へ収束する。
 ///
-/// 戻りは **surface id 昇順**——`(面 ID, 連鎖位置)` をキーとする [`BTreeMap`] の順序で決定化して
-/// おり、入力（ディレクトリ走査順）に依存しない。走査順は非決定ゆえ、同一 (ID, 接頭辞) に大小
-/// 違いの複数ファイルが併存する病的入力では**ファイル名の辞書順最小**を採り、ここでも走査順に
-/// 結果を左右させない。
+/// 戻りは surface id 昇順で、ディレクトリ走査順に依存しない。同一 (ID, 接頭辞) に大小違いの複数ファイルが
+/// 併存する病的入力では、ファイル名の辞書順最小を採る。
 pub(crate) fn select_faces<S: AsRef<str>>(
     names: &[S],
     chain: &[SeriesPrefix],
@@ -337,7 +291,6 @@ pub(crate) fn select_faces<S: AsRef<str>>(
 
     let mut faces: Vec<ResolvedFace> = Vec::new();
     for ((surface_id, index), file_name) in hits {
-        // 同一 ID の 2 件目以降は連鎖のより後段＝不採用（先頭から最初の一致のみを採る）。
         if faces.last().is_some_and(|f| f.surface_id == surface_id) {
             continue;
         }
@@ -351,14 +304,12 @@ pub(crate) fn select_faces<S: AsRef<str>>(
     faces
 }
 
-/// `balloon_dir` 直下のファイル名を **1 回の走査**で集める（面判定は行わない）。
+/// `balloon_dir` 直下のファイル名を 1 回の走査で集める（面判定は行わない）。
 ///
-/// 面判定を課さずに全名を返すのは、連鎖内の接頭辞ごとに走査を繰り返さないためである
-/// （列挙 1 回・選択は純核 [`select_faces`] が担う）。非 UTF-8 名は面のファイル名規約
-/// （ASCII の接頭辞＋数字＋拡張子）を満たし得ないためこの段で落とす。
-///
-/// ディレクトリ走査に失敗した場合は log-first で [`BalloonLoadError::List`] を返す（R6.4）。
-/// 1 件を飛ばす `warn!` は `records` が出すときだけ出し、走査の失敗の `error!` は常に出す。
+/// 連鎖内の接頭辞ごとに走査を繰り返さないため、全名を返して選択は [`select_faces`] に任せる。非 UTF-8 名は
+/// 面のファイル名規約（ASCII の接頭辞＋数字＋拡張子）を満たし得ないのでこの段で落とす。
+/// 走査の失敗は log-first で [`BalloonLoadError::List`] を返す。1 件を飛ばす `warn!` は `records` が出すときだけ、
+/// 走査失敗の `error!` は常に出す。
 fn enumerate_file_names(
     balloon_dir: &Path,
     records: LoadRecords,
@@ -380,7 +331,6 @@ fn enumerate_file_names(
         let entry = match entry {
             Ok(e) => e,
             Err(e) => {
-                // 個別エントリの取得失敗は致命ではない（他エントリ継続・log-first）。
                 if records.emits() {
                     tracing::warn!(error = %e, "balloon: ディレクトリエントリの取得に失敗（スキップ）");
                 }
@@ -394,28 +344,23 @@ fn enumerate_file_names(
     Ok(names)
 }
 
-/// `balloon_dir` から当該 `scope` の**採用面列**を解決する（全消費者共通の単一施行点）。
+/// `balloon_dir` から当該 `scope` の採用面列を解決する（全消費者共通の単一施行点）。
 ///
-/// 手順は 3 段——`prefix_chain` で連鎖を導出し、`enumerate_file_names` で
-/// ディレクトリを **1 回だけ**走査し、純核 `select_faces` で面 ID 単位の連鎖探索を行う
-/// （R1.2/R1.3）。面 ID は連鎖内の全接頭辞にまたがる ID 集合の和であり、戻りは
-/// **surface id 昇順**・同一入力に対し決定論的（ディレクトリ走査順に依存しない）。
+/// `prefix_chain` で連鎖を導出し、`enumerate_file_names` で走査を 1 回だけ行い、`select_faces` で面 ID 単位の
+/// 連鎖探索を行う。戻りは surface id 昇順で決定論的。
 ///
-/// # 面 0 必在契約（R1.7）
+/// # 面 0 必在契約
 ///
-/// 面 ID 0 が連鎖のどの接頭辞でも解決できない場合、理由を `error!` で記録したうえで
-/// [`BalloonLoadError::NoFace0`] を返す。この契約を**権威側の 1 箇所**で施行することで、消費者
-/// （placement / boot）それぞれが独自に面 0 の有無を判定する必要をなくし、無言で空の
-/// バルーンを表示するログ無し経路を構造的に作らない。返した失敗は消費者側の既存の縮退経路
-/// （バルーン未配線・起動窓を開けない告知と終了）へそのまま伝播する——プロセス終了ポリシー自体は
-/// 本関数で変更しない。
+/// 面 ID 0 が連鎖のどの接頭辞でも解決できなければ、`error!` で記録して [`BalloonLoadError::NoFace0`] を返す。
+/// 権威側の 1 箇所で施行するので、消費者（placement / boot）が独自に面 0 の有無を判定する必要はなく、
+/// 無言で空のバルーンを表示するログ無し経路を作らない。失敗は消費者側の縮退経路（バルーン未配線・起動窓を
+/// 開けない告知と終了）へそのまま伝播し、プロセス終了ポリシーは本関数で変えない。
 ///
-/// # 観測（R6.1/R6.2）
+/// # 観測
 ///
-/// - 解決完了時に `info!` で scope・連鎖・採用面一覧 `(id, prefix, file)` を記録する（R6.1）。
-/// - scope 1 以上で [`ChainTier::Default`]（デフォルト定義側＝本体側）へ縮退した面について、
-///   scope・面 ID・採用ファイルを面ごとに `warn!` で記録する（R6.2）。これは失敗ではなく
-///   正典準拠のフォールバック動作の観測であり、解決自体は成功として続行する。
+/// - 解決完了時に `info!` で scope・連鎖・採用面一覧 `(id, prefix, file)` を記録する。
+/// - scope 1 以上で [`ChainTier::Default`]（本体側）へ縮退した面は、scope・面 ID・採用ファイルを面ごとに
+///   `warn!` で記録する。失敗ではなく正典準拠のフォールバックの観測で、解決は成功として続行する。
 pub fn resolve_balloon_faces(
     balloon_dir: &Path,
     scope: u32,
@@ -424,8 +369,8 @@ pub fn resolve_balloon_faces(
 }
 
 /// [`resolve_balloon_faces`] と同じ中身で解決し、読み込みの記録（縮退の `warn!`・解決の完了の
-/// `info!`・一覧の 1 件を飛ばす `warn!`）を出さない（採寸と windowposition の読み・spec:
-/// placement-measure-bake-once 要件 3.2・3.6）。戻り値は [`resolve_balloon_faces`] と等しい。
+/// `info!`・一覧の 1 件を飛ばす `warn!`）を出さない（採寸と windowposition の読み）。
+/// 戻り値は [`resolve_balloon_faces`] と等しい。
 ///
 /// # Errors
 ///
@@ -444,14 +389,11 @@ fn resolve_balloon_faces_with(
     records: LoadRecords,
 ) -> Result<Vec<ResolvedFace>, BalloonLoadError> {
     let chain = prefix_chain(&BALLOON_FAMILY, scope);
-    // 列挙は 1 回のみ（接頭辞ごとに走査を繰り返さない）。
     let names = enumerate_file_names(balloon_dir, records)?;
     let faces = select_faces(&names, &chain);
 
-    // ログ用の簡約形（連鎖＝接頭辞列・採用面＝(id, prefix, file) 列）。
     let chain_view: Vec<&str> = chain.iter().map(|p| p.prefix.as_str()).collect();
 
-    // 面 0 必在契約（R1.7）: 施行点は本関数のみ。
     if !faces.iter().any(|f| f.surface_id == 0) {
         tracing::error!(
             balloon_dir = %balloon_dir.display(),
@@ -469,8 +411,7 @@ fn resolve_balloon_faces_with(
         return Ok(faces);
     }
 
-    // R6.2: デフォルト定義側へ縮退した面を面ごとに記録する（scope 0 はデフォルト段を
-    // 持たない＝自身が最終受け皿ゆえ縮退の概念がない）。
+    // scope 0 はデフォルト段を持たない（自身が最終受け皿）ので縮退しない。
     if scope >= 1 {
         for face in faces.iter().filter(|f| f.tier == ChainTier::Default) {
             tracing::warn!(
@@ -483,7 +424,6 @@ fn resolve_balloon_faces_with(
         }
     }
 
-    // R6.1: 解決結果（どの scope がどの系列・どの面ファイルを採ったか）。
     let faces_view: Vec<(u32, &str, &str)> = faces
         .iter()
         .map(|f| (f.surface_id, f.prefix.as_str(), f.file_name.as_str()))
@@ -501,17 +441,15 @@ fn resolve_balloon_faces_with(
 
 /// バルーン記述ファイルを文字コード解決つきで読む（既定 Ansi・宣言優先＝emo2 は `charset,UTF-8`）。
 ///
-/// 戻りは **読めたテキスト**か **失敗の [`std::io::Error`]** をそのまま返す。層ごとに要求される
-/// ログレベルが異なる（D8——基層は `warn!`・上書き層の不在は `debug!`）ため、レベル判断は
-/// 呼び出し側の 2 つの薄いラッパへ委ね、本関数は判断を持たない。
+/// 読めたテキストか失敗の [`std::io::Error`] をそのまま返す。必要なログレベルが層ごとに異なる
+/// （基層は `warn!`・上書き層の不在は `debug!`）ので、レベル判断は呼び出し側に任せる。
 fn read_decoded(path: &Path) -> Result<String, std::io::Error> {
     std::fs::read(path).map(|bytes| decode(&bytes, DefaultEncoding::Ansi))
 }
 
-/// **基層**（`descript.txt`）を寛容に読む。読取失敗は `warn!`＋`None`（空層で継続・D8）。
+/// 基層（`descript.txt`）を寛容に読む。読取失敗は `warn!`＋`None`（空層で継続）。
 ///
-/// 基層の欠落はバルーン既定設定が丸ごと得られない事態であり、正常縮退ではない（相方側で
-/// 毎起動鳴る類の事象でもない）。ゆえに現行の `warn!` を維持し `debug!` へ降格しない。
+/// 基層の欠落はバルーン既定設定が丸ごと得られない事態で、正常縮退ではない。ゆえに `debug!` へ降格しない。
 pub(crate) fn read_descript_layer(path: &Path, records: LoadRecords) -> Option<String> {
     match read_decoded(path) {
         Ok(text) => Some(text),
@@ -528,13 +466,11 @@ pub(crate) fn read_descript_layer(path: &Path, records: LoadRecords) -> Option<S
     }
 }
 
-/// **面別上書き層**（`{採用接頭辞}{ID}s.txt`）を寛容に読む（D8 のレベル階層）。
+/// 面別上書き層（`{採用接頭辞}{ID}s.txt`）を寛容に読む。
 ///
-/// - 不在（[`std::io::ErrorKind::NotFound`]）→ `debug!`。上書き層を持たない面は正典上まったく
-///   正常であり（R2.4「欠落を失敗として扱わない」）、既定設定のみで定義が確定する。相方側の
-///   バルーンが上書き層を持たないだけで毎起動 `warn!` が鳴る事故を構造的に防ぐ。
-/// - その他の入出力エラー（権限・I/O 障害等）→ `warn!`。こちらは資産配置の異常であり、
-///   既定設定のみで継続はするが観測可能に残す。
+/// - 不在（[`std::io::ErrorKind::NotFound`]）→ `debug!`。上書き層を持たない面は正常で、既定設定のみで定義が確定する。
+///   相方側のバルーンが上書き層を持たないだけで毎起動 `warn!` が鳴らないようにする。
+/// - その他の入出力エラー（権限・I/O 障害等）→ `warn!`。資産配置の異常で、既定設定のみで継続するが観測可能に残す。
 fn read_face_override_layer(path: &Path, scope: u32, file_name: &str) -> Option<String> {
     match read_decoded(path) {
         Ok(text) => Some(text),
@@ -560,62 +496,51 @@ fn read_face_override_layer(path: &Path, scope: u32, file_name: &str) -> Option<
     }
 }
 
-/// 当該 scope 専用の**マージ済みバルーン定義**を組む（R2.1〜R2.5・全消費者共通の単一施行点）。
+/// 当該 scope 専用のマージ済みバルーン定義を組む（全消費者共通の単一施行点）。
 ///
-/// バルーン既定設定 `descript.txt`（基層）へ、`face0` が採用した面に**対応する**面別上書き
-/// ファイル `{採用接頭辞}{ID}s.txt`（[`ResolvedFace::override_file_name`]）を重ねた 2 層を、
-/// 既存パーサ `areka_parsers::balloon::parse_str` へそのまま渡す。マージ規則（後勝ち・未指定
-/// 項目の基層継承＝R2.5）はパーサ側の既存契約であり、本関数はパーサを改造せず**層を用意する
-/// だけ**である。上書き層は採用面に対応するもの 1 つのみを引くため、ID 単位フォールバックで
-/// 後段接頭辞へ落ちた面にはその後段接頭辞の上書き層が対応する（R2.2/R2.3）。
+/// 基層 `descript.txt` へ、`face0` が採用した面に対応する面別上書きファイル `{採用接頭辞}{ID}s.txt`
+/// （[`ResolvedFace::override_file_name`]）を重ねた 2 層を、`areka_parsers::balloon::parse_str` へそのまま渡す。
+/// マージ規則（後勝ち・未指定項目の基層継承）はパーサ側の契約で、本関数は層を用意するだけ。
 ///
-/// # 失敗の扱い（D8・log-first）
+/// # 失敗の扱い（log-first）
 ///
-/// `parse_str` は `Result` を返さず panic しない寛容写像ゆえ、本関数も常に [`BalloonModel`] を
-/// 返す（読取失敗は空層で継続＝欠落キーは当該スカラ `None`）。層ごとのログレベルは
-/// `read_descript_layer`／`read_face_override_layer` のとおりで、上書き層の**不在のみ**が
-/// `debug!`（正常縮退）である。
+/// `parse_str` は `Result` を返さず panic しない寛容写像なので、本関数も常に [`BalloonModel`] を返す
+/// （読取失敗は空層で継続＝欠落キーは当該スカラ `None`）。層ごとのログレベルは `read_descript_layer`／
+/// `read_face_override_layer` のとおりで、上書き層の不在のみ `debug!`（正常縮退）。
 ///
 /// # scope 引数について
 ///
-/// 設計の署名は `(balloon_dir, face0)` だが、観測（R6.3）は確定値を **scope とともに**記録する
-/// ことを求める。scope は [`ResolvedFace`] から逆算できない——本体側へ縮退した相方の面は採用
-/// 接頭辞が `balloons` になり、scope 0 の面と区別が付かないためである。ゆえに scope を明示的に
-/// 受け取る（列挙側 [`resolve_balloon_faces`] と同じ `(dir, scope, ...)` の引数順に揃える）。
+/// scope は [`ResolvedFace`] から逆算できない（本体側へ縮退した相方の面は採用接頭辞が `balloons` になり、
+/// scope 0 の面と区別が付かない）ので明示的に受け取る。
 ///
-/// # 観測（R6.3）
+/// # 観測
 ///
-/// 確定した `windowposition` / `validrect` の実値を scope・採用上書きファイル名とともに `info!`
-/// で記録する。placement からは scope あたり 1 行出る。boot は `load_scope_balloon_definitions` から面ごとに
-/// （面 0 と、自前の設定ファイルを持つ面）1 行ずつ出し、面 0 の行は placement の行と**値が一致する**——
-/// それが権威一元化の生き証人になる。
+/// 確定した `windowposition` / `validrect` の実値を scope・採用上書きファイル名とともに `info!` で記録する。
+/// placement からは scope あたり 1 行、boot は `load_scope_balloon_definitions` から面ごとに（面 0 と、自前の
+/// 設定ファイルを持つ面）1 行ずつ出し、面 0 の行は placement の行と値が一致する。
 pub fn load_scope_balloon_model(
     balloon_dir: &Path,
     scope: u32,
     face0: &ResolvedFace,
 ) -> BalloonModel {
-    // 基層: バルーン既定設定（読取失敗は warn!＋空層）。
     let descript =
         read_descript_layer(&balloon_dir.join(DESCRIPT_TXT), LoadRecords::Emit).unwrap_or_default();
     scope_balloon_model_with(balloon_dir, scope, face0, &descript)
 }
 
-/// [`load_scope_balloon_model`] の核。基層の本文は呼び手が 1 回読んで渡す（面ごとに読み直さない・指摘 40）。
+/// [`load_scope_balloon_model`] の核。基層の本文は呼び手が 1 回読んで渡す（面ごとに読み直さない）。
 pub(crate) fn scope_balloon_model_with(
     balloon_dir: &Path,
     scope: u32,
     face0: &ResolvedFace,
     descript: &str,
 ) -> BalloonModel {
-    // 上書き層: 採用面に対応する 1 つのみ（不在は debug! の正常縮退・D8）。
     let override_name = face0.override_file_name();
     let face_override =
         read_face_override_layer(&balloon_dir.join(&override_name), scope, &override_name);
 
-    // マージ規則そのものは既存パーサの契約（後勝ち・未指定は基層継承＝R2.5）に委ねる。
     let model = areka_parsers::balloon::parse_str(descript, face_override.as_deref());
 
-    // R6.3: 確定した表示位置指定と文字範囲の実値を scope とともに記録する。
     let wp = model.windowposition();
     let vr = model.validrect();
     tracing::info!(
@@ -634,17 +559,14 @@ pub(crate) fn scope_balloon_model_with(
     model
 }
 
-/// 採用面列から synthetic surfaces.txt テキストを生成する（転記層の流儀）。
+/// 採用面列から synthetic surfaces.txt テキストを生成する。
 ///
-/// 各面は `surface{ID}` ブロックに単一 overlay element（`element0,overlay,{実ファイル名},0,0`）として
-/// 転記する。`areka_parsers::shell::parse` が受理する surfaces.txt 文法に忠実で、独自構文は発明
-/// しない（surface ヘッダ→`{`→element 行→`}` の登場順ストリーム）。element path に用いるのは
-/// [`ResolvedFace::file_name`]（原形保持の実ファイル名）であり、連鎖上の接頭辞ではない——
-/// bake が `base_dir.join(rel)` で実パスを開くため。
+/// 各面は `surface{ID}` ブロックに単一 overlay element（`element0,overlay,{実ファイル名},0,0`）として転記する。
+/// `areka_parsers::shell::parse` が受理する文法に従う。element path は [`ResolvedFace::file_name`]
+/// （原形保持の実ファイル名）で、連鎖上の接頭辞ではない（bake が `base_dir.join(rel)` で実パスを開くため）。
 fn synthetic_surfaces_txt(faces: &[ResolvedFace]) -> String {
     let mut text = String::new();
     for face in faces {
-        // `surface{ID}` ブロック・単一 overlay element（layer 0・オフセット 0,0）。
         let (id, file_name) = (face.surface_id, &face.file_name);
         text.push_str(&format!(
             "surface{id}\n{{\nelement0,overlay,{file_name},0,0\n}}\n\n"
@@ -653,20 +575,17 @@ fn synthetic_surfaces_txt(faces: &[ResolvedFace]) -> String {
     text
 }
 
-/// 当該 `scope` のバルーン面を **シェルと同一の** compose/present 経路へ載せ
-/// `(EmoWorld, AtlasTable)` を返す。
+/// 当該 `scope` のバルーン面をシェルと同一の compose/present 経路へ載せ、`(EmoWorld, AtlasTable)` を返す。
 ///
-/// 系列解決（[`resolve_balloon_faces`]・R1.1/R1.2/R1.3）と透過の宣言の読み
-/// （[`load_balloon_use_self_alpha`]）を内包する 1 スコープ用の薄いラッパであり、構築本体は
-/// [`build_balloon_target_from_faces`] が担う。ゆえに **World の面は当該 scope が解決した系列の
-/// 面**であり、全 scope が本体側 `balloons` 系列へ畳み込まれることはない（scope 1 が
-/// `balloonk0.png` を採ったなら World の面 0 はその画像である）。
+/// 系列解決（[`resolve_balloon_faces`]）と透過の宣言の読み（[`load_balloon_use_self_alpha`]）を内包する
+/// 1 スコープ用の薄いラッパで、構築本体は [`build_balloon_target_from_faces`]。World の面は当該 scope が解決した
+/// 系列の面で、全 scope が `balloons` 系列へ畳み込まれることはない（scope 1 が `balloonk0.png` を採ったなら
+/// World の面 0 はその画像）。
 ///
-/// 解決済み面列を既に手元へ持つ消費者（起動時資産構築・窓配置採寸）は、二重列挙を避けるため
-/// [`build_balloon_target_from_faces`] を直接呼べる。
+/// 解決済み面列を既に持つ消費者は、二重列挙を避けるため [`build_balloon_target_from_faces`] を直接呼べる。
 ///
-/// 失敗（面 0 不在・ディレクトリ走査失敗・bake 脱落）は log-first で真因をログしたうえで
-/// 原因ごとの [`BalloonLoadError`] を返す。
+/// 失敗（面 0 不在・ディレクトリ走査失敗・bake 脱落）は log-first で真因をログし、原因ごとの
+/// [`BalloonLoadError`] を返す。
 pub fn build_balloon_target(
     balloon_dir: &Path,
     decoder: &impl ElementDecoder,
@@ -677,15 +596,15 @@ pub fn build_balloon_target(
     build_balloon_target_from_faces(balloon_dir, decoder, &faces, use_self_alpha)
 }
 
-/// バルーンの透過の宣言（`use_self_alpha`）を読む（spec: areka-P0-self-alpha-declaration 要件 2）。
+/// バルーンの透過の宣言（`use_self_alpha`）を読む。
 ///
 /// バルーン 1 つの読み込みにつき 1 回呼ぶ（スコープのループの外）。記録はここで 1 度だけ出る。
 /// 読むのは基層の `descript.txt` だけで、面ごとの設定ファイル（`balloons0s.txt` など）と
-/// [`load_scope_balloon_model`] の 2 層の重ね合わせは通さないので、上書きは構造として起きない
-/// （要件 2.7）。シェルのキー `seriko.use_self_alpha` は読まない（要件 2.8）。
+/// [`load_scope_balloon_model`] の 2 層の重ね合わせは通さないので、上書きは構造として起きない。
+/// シェルのキー `seriko.use_self_alpha` は読まない。
 ///
 /// 同じ関数がフォルダ直下の `.pna`（拡張子の大小を区別しない）を数え、0 でなければ数つきの
-/// `warn!` を 1 行出す（要件 5.7）。`.pna` は表示に使わない。数には areka が読まない絵（矢印など）に
+/// `warn!` を 1 行出す。`.pna` は表示に使わない。数には areka が読まない絵（矢印など）に
 /// 添えた物も含む。
 ///
 /// `descript.txt` が読めないときは `read_descript_layer` の `warn!` を通して宣言なしとし、
@@ -696,9 +615,8 @@ pub fn load_balloon_use_self_alpha(balloon_dir: &Path) -> UseSelfAlpha {
 }
 
 /// [`load_balloon_use_self_alpha`] と同じ中身で読み、読み込みの記録（descript.txt が読めない
-/// `warn!`・透過の宣言の記録・`.pna` の `warn!`・一覧の 1 件を飛ばす `warn!`）を出さない（採寸の
-/// 読み・spec: placement-measure-bake-once 要件 3.2・3.6）。戻り値は [`load_balloon_use_self_alpha`]
-/// と等しい。フォルダの走査の失敗の `error!` は出す。
+/// `warn!`・透過の宣言の記録・`.pna` の `warn!`・一覧の 1 件を飛ばす `warn!`）を出さない（採寸の読み）。
+/// 戻り値は [`load_balloon_use_self_alpha`] と等しい。フォルダの走査の失敗の `error!` は出す。
 pub fn load_balloon_use_self_alpha_quiet(balloon_dir: &Path) -> UseSelfAlpha {
     load_balloon_use_self_alpha_with(balloon_dir, LoadRecords::Quiet)
 }
@@ -730,17 +648,16 @@ fn load_balloon_use_self_alpha_with(balloon_dir: &Path, records: LoadRecords) ->
     use_self_alpha
 }
 
-/// 解決済み面列から `(EmoWorld, AtlasTable)` を組む（構築本体・R5.1/R5.2/R5.3）。
+/// 解決済み面列から `(EmoWorld, AtlasTable)` を組む（構築本体）。
 ///
 /// 採用面列 → synthetic surfaces.txt → `shell::parse` → `bake`（透過は引数 `use_self_alpha`）→
-/// `EmoWorld::build`＋`bind_atlas` と、直 WIC バイパス無しでシェルと同一機構に載せる（R5.1）。
-/// 得た組を `attach_target` に渡すだけでバルーン target がシェルと同じ提示経路へ乗る。
+/// `EmoWorld::build`＋`bind_atlas` と、直 WIC バイパス無しでシェルと同一機構に載せる。得た組を
+/// `attach_target` に渡すだけでシェルと同じ提示経路へ乗る。
 ///
-/// 系列解決を引数として受け取るため、**どの scope の面列であるかは呼び出し側が決める**。
-/// 透過の宣言も同じく呼び出し側が [`load_balloon_use_self_alpha`] でスコープのループの外で
-/// 1 回読んで渡す（スコープごとに読むと記録がスコープの数だけ出るため）。
-/// 面列が空／bake がエラーを産んだ場合は log-first で真因をログし
-/// [`BalloonLoadError::Empty`]／[`BalloonLoadError::Bake`] を返す。
+/// どの scope の面列かは呼び出し側が決める。透過の宣言も呼び出し側が [`load_balloon_use_self_alpha`] で
+/// スコープのループの外で 1 回読んで渡す（スコープごとに読むと記録がスコープの数だけ出る）。
+/// 面列が空／bake がエラーなら log-first で真因をログし [`BalloonLoadError::Empty`]／
+/// [`BalloonLoadError::Bake`] を返す。
 pub fn build_balloon_target_from_faces(
     balloon_dir: &Path,
     decoder: &impl ElementDecoder,
@@ -757,7 +674,7 @@ pub fn build_balloon_target_from_faces(
 }
 
 /// [`build_balloon_target_from_faces`] の動く絵の上限を外から渡す版（記録も失敗も同じ・上限だけが
-/// 違う）。環境変数に左右されないテストのための口（spec: audit-placement-core 要件 2.7・2.8）。
+/// 違う）。環境変数に左右されないテストのための口。
 ///
 /// # Errors
 ///
@@ -779,9 +696,8 @@ pub fn build_balloon_target_from_faces_with_limits(
     )
 }
 
-/// [`build_balloon_target_from_faces`] と同じ中身で、焼く段と面の表の記録を出さない入口（採寸の
-/// 面 0・spec: emo-bake-log-overlap 要件 1.4・1.6）。戻り値は [`build_balloon_target_from_faces`]
-/// と等しい。面列が空の失敗と bake の脱落の `error!` は出す（要件 3.5）。
+/// [`build_balloon_target_from_faces`] と同じ中身で、焼く段と面の表の記録を出さない入口（採寸の面 0）。
+/// 戻り値は同じ。面列が空の失敗と bake の脱落の `error!` は出す。
 pub fn build_balloon_target_from_faces_quiet(
     balloon_dir: &Path,
     decoder: &impl ElementDecoder,
@@ -818,12 +734,9 @@ fn build_from_faces_core(
         });
     }
 
-    // synthetic surfaces.txt をシェルと同一の parser で解釈する（転記層・R5.1）。
     let text = synthetic_surfaces_txt(faces);
     let shell = areka_parsers::shell::parse(&text);
 
-    // 呼び手が読んだバルーンの宣言で bake。base_dir は balloon_dir（実パスは
-    // base_dir.join(rel) で一度だけ実体化される）。
     let set = SurfaceSet {
         surfaces: &shell.surfaces,
         base_dir: balloon_dir,
@@ -835,7 +748,6 @@ fn build_from_faces_core(
         bake_quiet(&[set], decoder, PackConfig::default())
     };
 
-    // bake の脱落（decode 失敗）は log-first で真因を出し、構築失敗として畳む。
     // 採用面は解決済みの固定小集合ゆえ全枚デコード成功が前提＝脱落は制作者ミス/配置不備の兆候。
     if !baked.errors.is_empty() {
         for err in &baked.errors {
@@ -850,7 +762,7 @@ fn build_from_faces_core(
         });
     }
 
-    // シェルと同一の compose 前段: World 構築 → アトラス束縛（SetId(0)・resolve は本呼び出し限り）。
+    // アトラス束縛は SetId(0)・resolve は本呼び出し限り。
     let mut world = if records.emits() {
         EmoWorld::build(&shell)
     } else {

@@ -6,9 +6,7 @@ pub(crate) fn resolve_region_name(
     entity: Entity,
     state: &PointerState,
 ) -> Option<String> {
-    // ウィンドウエンティティを探索
     let window = find_owner_window(world, entity)?;
-    // hit_test_in_window_ex でリージョン名を含む結果を取得
     let result = hit_test_in_window_ex(
         world,
         window,
@@ -71,7 +69,6 @@ pub(crate) fn on_region_box_pressed(
     entity: Entity,
     ev: &Phase<PointerState>,
 ) -> bool {
-    // Bubble フェーズでのみ処理
     if !ev.is_bubble() {
         return false;
     }
@@ -86,7 +83,6 @@ pub(crate) fn on_region_box_pressed(
         .map(|n| n.as_str().to_string())
         .unwrap_or_else(|| format!("{:?}", entity));
 
-    // リージョン名を取得
     let region = resolve_region_name(world, entity, state);
 
     info!(
@@ -99,7 +95,6 @@ pub(crate) fn on_region_box_pressed(
         state.local_point.y,
     );
 
-    // リージョンに応じた色に変更
     let color = region_color(region.as_deref());
     if let Some(mut brushes) = world.get_mut::<Brushes>(entity) {
         brushes.foreground = wintf::ecs::widget::brushes::Brush::Solid(color);
@@ -123,7 +118,6 @@ pub(crate) fn on_region_box_moved(
 
     let state = ev.value();
 
-    // 頻度制限: 30回に1回ログ出力
     static REGION_MOVE_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let count = REGION_MOVE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if count % 30 != 0 {

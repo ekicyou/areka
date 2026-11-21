@@ -1,9 +1,8 @@
 //! 窓の組（`\![set,sticky-window,...]`・descript の `seriko.sticky-window`）の帳簿と、
 //! ID の並びの読み（純・Win32 非依存）。
 //!
-//! 拒否は値（[`StickyReject`]）で返し、記録は World の側の薄い関数が出す
-//! （design「StickyGroupLedger」）。台本の指令と descript の値は同じ読み
-//! （[`parse_sticky_tokens`]）を通る（要件 3.8）。
+//! 拒否は値（[`StickyReject`]）で返し、記録は World の側の薄い関数が出す。
+//! 台本の指令と descript の値は同じ読み（[`parse_sticky_tokens`]）を通る。
 //!
 //! 不変条件: どの ID も高々 1 つの組に入る。組は 2 つ以上の ID を持つ。descript の組は
 //! 高々 1 つ（descript のキーは 1 つ）。
@@ -29,12 +28,12 @@ pub enum StickySource {
 /// 窓の組 1 つ。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StickyGroup {
-    /// 並び順に意味を持たせない（要件 3.2）。
+    /// 並び順に意味を持たせない。
     pub members: BTreeSet<u32>,
     pub source: StickySource,
 }
 
-/// 組を作らずに捨てた理由（要件 3.4・3.5・3.9・6.5）。
+/// 組を作らずに捨てた理由。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StickyReject {
     /// 数として読めない ID（受け取ったままの綴り）。
@@ -43,13 +42,13 @@ pub enum StickyReject {
     DuplicateScope { scope: u32 },
     /// 異なる ID が 2 つ未満。
     TooFewScopes { count: usize },
-    /// 既にほかの組（descript の組を含む）に入っている ID（昇順・要件 3.4）。
+    /// 既にほかの組（descript の組を含む）に入っている ID（昇順）。
     AlreadyGrouped { scopes: Vec<u32> },
 }
 
 /// ID の並びを読む。各 ID は前後の空白を除いて `parse_scope_id`（ASCII の数字だけ・あふれは
-/// 拒否）で読む。検査の順: 数でない → 同じ ID の重ね書き → 異なる ID が 2 つ未満（要件 3.5）。
-/// 上限は置かない（設計の決め 11）。
+/// 拒否）で読む。検査の順: 数でない → 同じ ID の重ね書き → 異なる ID が 2 つ未満。
+/// 上限は置かない。
 pub fn parse_sticky_tokens<S: AsRef<str>>(tokens: &[S]) -> Result<BTreeSet<u32>, StickyReject> {
     let mut scopes = Vec::with_capacity(tokens.len());
     for token in tokens {
@@ -73,7 +72,7 @@ pub fn parse_sticky_tokens<S: AsRef<str>>(tokens: &[S]) -> Result<BTreeSet<u32>,
     Ok(members)
 }
 
-/// 窓の組の帳簿（World の資源・設計の決め 1）。
+/// 窓の組の帳簿（World の資源）。
 #[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
 pub struct StickyGroupLedger {
     /// 作った順。
@@ -81,7 +80,7 @@ pub struct StickyGroupLedger {
 }
 
 impl StickyGroupLedger {
-    /// 台本の組を足す。重なりがあれば何も変えずに拒否（要件 3.1・3.4）。
+    /// 台本の組を足す。重なりがあれば何も変えずに拒否。
     pub fn try_add_script_group(&mut self, members: BTreeSet<u32>) -> Result<(), StickyReject> {
         self.reject_overlap(&members)?;
         self.groups.push(StickyGroup {
@@ -91,7 +90,7 @@ impl StickyGroupLedger {
         Ok(())
     }
 
-    /// 台本の組をすべて解く。解いた組の数を返す（要件 3.7）。
+    /// 台本の組をすべて解く。解いた組の数を返す。
     pub fn reset_to_descript(&mut self) -> usize {
         let before = self.groups.len();
         self.groups
@@ -100,7 +99,7 @@ impl StickyGroupLedger {
     }
 
     /// descript の組を取り替える（起動は空の帳簿へ、シェルの切り替えは今の帳簿へ）。値が無い・
-    /// 空なら組なし。台本の組と重なれば作らず拒否を返す（要件 3.8・3.9・6.5）。台本の組は触らない。
+    /// 空なら組なし。台本の組と重なれば作らず拒否を返す。台本の組は触らない。
     /// 拒否のときも前の descript の組は外れたままにする（新しいシェルの値に取り替えたので）。
     pub fn replace_descript(&mut self, raw: Option<&str>) -> Result<(), StickyReject> {
         self.groups
@@ -123,7 +122,7 @@ impl StickyGroupLedger {
         &self.groups
     }
 
-    /// 他の機能が「この窓はどの組か」を確かめる口（areka-P0-window-link-directives の裁定 7）。
+    /// 他の機能が「この窓はどの組か」を確かめる口。
     pub fn group_of(&self, scope: u32) -> Option<&StickyGroup> {
         self.groups
             .iter()
@@ -161,12 +160,12 @@ impl StickyGroupLedger {
     }
 }
 
-// ---- World の側の薄い関数（記録を出す・設計「StickyGroupLedger」） ----
+// ---- World の側の薄い関数（記録を出す） ----
 //
 // 記録はここだけで出す（帳簿は拒否を値で返す）。どの関数も最後に `DragConfig.move_window` を
-// 付け直す（設計の決め 12）。
+// 付け直す。
 
-/// 組を変えた／変えようとした後の共通の後始末: その時点のすべての組を記録し、書き手を付け直す（9.2）。
+/// 組を変えた／変えようとした後の共通の後始末: その時点のすべての組を記録し、書き手を付け直す。
 fn log_groups_and_resync(world: &mut World, action: &'static str) {
     if let Some(ledger) = world.get_resource::<StickyGroupLedger>() {
         info!(
@@ -179,7 +178,7 @@ fn log_groups_and_resync(world: &mut World, action: &'static str) {
     sync_drag_writer(world);
 }
 
-/// 拒否を記録する（3.4・3.5・3.9・6.5・9.2）。
+/// 拒否を記録する。
 fn warn_rejected<S: AsRef<str> + std::fmt::Debug>(
     source: &'static str,
     tokens: &[S],
@@ -194,7 +193,7 @@ fn warn_rejected<S: AsRef<str> + std::fmt::Debug>(
     );
 }
 
-/// 受け付けた組のうち窓の無いスコープを記録する（受け付けたまま・3.6）。
+/// 受け付けた組のうち窓の無いスコープを記録する（受け付けたまま）。
 fn warn_absent_members(world: &mut World, members: &BTreeSet<u32>, when: &'static str) {
     let present: BTreeSet<u32> = world
         .query::<&CharWindowMarker>()
@@ -219,7 +218,7 @@ fn warn_no_ledger(directive: &'static str) {
     );
 }
 
-/// 台本の `\![set,sticky-window,ID,ID,...]` を当てる。組を作れば真（3.1・3.4〜3.6）。
+/// 台本の `\![set,sticky-window,ID,ID,...]` を当てる。組を作れば真。
 pub fn apply_set_sticky(world: &mut World, tokens: &[String]) -> bool {
     let Some(mut ledger) = world.get_resource_mut::<StickyGroupLedger>() else {
         warn_no_ledger("set");
@@ -243,7 +242,7 @@ pub fn apply_set_sticky(world: &mut World, tokens: &[String]) -> bool {
     ok
 }
 
-/// 台本の `\![reset,sticky-window]` を当てる（台本の組だけを解く・3.7）。帳簿があれば真。
+/// 台本の `\![reset,sticky-window]` を当てる（台本の組だけを解く）。帳簿があれば真。
 pub fn apply_reset_sticky(world: &mut World) -> bool {
     let Some(mut ledger) = world.get_resource_mut::<StickyGroupLedger>() else {
         warn_no_ledger("reset");
@@ -254,7 +253,7 @@ pub fn apply_reset_sticky(world: &mut World) -> bool {
     true
 }
 
-/// 帳簿の descript の組を取り替え、拒否と窓の無いスコープを記録する（3.6・3.8・3.9・6.5）。
+/// 帳簿の descript の組を取り替え、拒否と窓の無いスコープを記録する。
 fn apply_descript(world: &mut World, raw: Option<&str>, action: &'static str, when: &'static str) {
     let result = world
         .resource_mut::<StickyGroupLedger>()
@@ -279,13 +278,13 @@ fn apply_descript(world: &mut World, raw: Option<&str>, action: &'static str, wh
     log_groups_and_resync(world, action);
 }
 
-/// 起動で帳簿を据え、descript の `seriko.sticky-window` の組を入れる（3.8・3.9）。
+/// 起動で帳簿を据え、descript の `seriko.sticky-window` の組を入れる。
 pub fn seed_sticky_descript(world: &mut World, raw: Option<&str>) {
     world.insert_resource(StickyGroupLedger::default());
     apply_descript(world, raw, "descript_seed", "seed");
 }
 
-/// シェルの切り替えで descript の組だけを取り替える（台本の組は保つ・6.5）。
+/// シェルの切り替えで descript の組だけを取り替える（台本の組は保つ）。
 pub fn replace_sticky_descript(world: &mut World, raw: Option<&str>) {
     if !world.contains_resource::<StickyGroupLedger>() {
         warn_no_ledger("descript_replace");

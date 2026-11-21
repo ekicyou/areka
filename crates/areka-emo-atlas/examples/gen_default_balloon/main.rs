@@ -1,4 +1,4 @@
-//! 既定バルーン `areka-balloon` の書庫を作り直す道具（spec: default-balloon-selfmade 要件 8・10.1・13.8）。
+//! 既定バルーン `areka-balloon` の書庫を作り直す道具。
 //!
 //! 呼び方: `cargo run -p areka-emo-atlas --example gen_default_balloon`（書く）／`-- --check`（書かずに比べる）。
 //! 終了コード: 0＝書いた／同じ・1＝失敗（今の書庫は上書きしない）・2＝引数の誤り。端末へ出す文は ASCII だけ。

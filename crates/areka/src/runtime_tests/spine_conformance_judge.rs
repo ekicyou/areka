@@ -1,15 +1,15 @@
-//! 適合一周走行の判定（areka-P0-emo2-conformance-e2e・design D3「記録の台帳」）。
+//! 適合一周走行の判定。
 //!
 //! 同一の走行から採った 3 つの列——**交信の列**・**〈段名・表示指令〉の列**・**進行状態の列**——を、
-//! 段の駆動をすべて終えた**後にまとめて**、期待と**等値**で突き合わせる（areka-P0-emo2-conformance-e2e の R2.3・R2.4・R2.5）。
+//! 段の駆動をすべて終えた**後にまとめて**、期待と**等値**で突き合わせる。
 //! 部分一致・包含判定・「少なくとも N 件」の類は 1 つも使わない。
 //!
-//! # 置き場を分けた理由（areka-P0-emo2-conformance-e2e の R2.11）
+//! # 置き場を分けた理由
 //!
-//! 判定は主題単位に分け、親（`spine_conformance_lap_tests.rs`）の末尾から接続する（areka-P0-emo2-conformance-e2e の R2.11）。
+//! 判定は主題単位に分け、親（`spine_conformance_lap_tests.rs`）の末尾から接続する。
 //! 終了握手・列の同一走行性の照合も、判定である以上ここへ集めた。
 //!
-//! # 「送らないこと」がなぜ等値だけで成立するか（areka-P0-emo2-conformance-e2e の R3.6・R3.7）
+//! # 「送らないこと」がなぜ等値だけで成立するか
 //!
 //! 会話の発火（`OnTalk`）・時報（`OnHour`）・更新系 4 種・バルーン変更は、期待列
 //! （[`expected_calls`]）に**書かれていない**。等値照合は長さも並びも固定するので、これらが 1 件でも
@@ -24,15 +24,15 @@
 //!
 //! 例外は `OnBalloonTimeout` だけで、列の照合の外にある（実時間で決まるので、台本に無ければ偽の SHIORI は記録せず 204 で答える）。
 //!
-//! # 判定の本体が 2 行しかないこと（areka-P0-emo2-conformance-e2e の R12.5 の記録・完成判定へ申し送る）
+//! # 判定の本体が 2 行しかないこと
 //!
-//! areka-P0-emo2-conformance-e2e の design D3 は〈段名・表示指令〉の列の完全一致を「判定の本体」と書く。ところが一周で表示指令を
+//! 〈段名・表示指令〉の列の完全一致は判定の本体と見なされる。ところが一周で表示指令を
 //! 生む段は**装着と撫での 2 つだけ**であり、この列は **2 行**にしかならない（理由は
-//! [`expected_display`] の doc）。**areka-P0-emo2-conformance-e2e の R2.4 の判定は設計が想定するより実質的に弱い**。本走行が機械で
+//! [`expected_display`] の doc）。**この列だけの判定は想定より実質的に弱い**。本走行が機械で
 //! 証明していると言えるのは、3 列を合わせた全行の等値であって、表示指令の列だけではない。
 //! 架空の表示指令で列を水増しすることも、台本の応答を実物から離して指令を作り出すこともしない。
 //!
-//! # 自己検査と製品の判定を混ぜない（areka-P0-emo2-conformance-e2e の design D3 の裁定）
+//! # 自己検査と製品の判定を混ぜない
 //!
 //! 「採取した時点の注入時刻が当該段の宣言区間に入る」ことは**駆動器が契約どおり動いたことの
 //! 自己検査**であって製品の判定ではない。駆動器は採取のたびにこれを見て
@@ -54,14 +54,14 @@ use super::{LapLedgers, get_calls};
 /// **最初に食い違う位置**は必ず本文に出るので、省略しても原因の頭は失われない。
 const MAX_DIFF_LINES: usize = 12;
 
-/// 3 つの列を期待と等値で突き合わせる（areka-P0-emo2-conformance-e2e の design D3・R2.3／2.4／2.5・R3.6／3.7）。
+/// 3 つの列を期待と等値で突き合わせる。
 ///
-/// 呼び手は段の駆動を**すべて終えてから**1 度だけ呼ぶ（段の途中で部分照合しない・areka-P0-emo2-conformance-e2e の design D1）。
+/// 呼び手は段の駆動を**すべて終えてから**1 度だけ呼ぶ（段の途中で部分照合しない）。
 pub(super) fn judge_lap(ledgers: &LapLedgers) {
-    // ── 自己検査（製品の判定ではない・areka-P0-emo2-conformance-e2e の design D3 の裁定） ──
+    // ── 自己検査（製品の判定ではない） ──
     assert_display_collected_within_declared_stage(&ledgers.display);
 
-    // ── 解放の件数（areka-P0-emo2-conformance-e2e の design「失敗の形」の独立した 1 行・R3.9） ──
+    // ── 解放の件数（独立した 1 行） ──
     //     等値照合でも捕まるが、件数の食い違いは列の差分より先に、件数として読めた方が速い。
     assert_eq!(
         unload_calls(&ledgers.calls),
@@ -76,7 +76,7 @@ pub(super) fn judge_lap(ledgers: &LapLedgers) {
         get_calls(&ledgers.calls, "OnClose")
     );
 
-    // ── 3 つの列が同一の走行から採れていること（areka-P0-emo2-conformance-e2e の design D1「一貫性」） ──
+    // ── 3 つの列が同一の走行から採れていること ──
     //     進行状態は照会・片道の 2 種にだけ載り、解放には載らない。
     assert_eq!(
         ledgers.statuses.len(),
@@ -90,7 +90,7 @@ pub(super) fn judge_lap(ledgers: &LapLedgers) {
     // ── 判定 1: 交信の列（呼出の別・id・参照列）──
     assert_sequence_eq("交信の列", &ledgers.calls, &expected_calls());
 
-    // ── 判定 2: 〈段名・表示指令〉の列（areka-P0-emo2-conformance-e2e の design D3 の「判定の本体」）──
+    // ── 判定 2: 〈段名・表示指令〉の列 ──
     let display: Vec<(&'static str, DisplayProjection)> = ledgers
         .display
         .iter()
@@ -98,7 +98,7 @@ pub(super) fn judge_lap(ledgers: &LapLedgers) {
         .collect();
     assert_sequence_eq("〈段名・表示指令〉の列", &display, &expected_display());
 
-    // ── 判定 3: 進行状態の列（選択待ちを会話中と区別できる唯一の列・areka-P0-emo2-conformance-e2e の R3.8）──
+    // ── 判定 3: 進行状態の列（選択待ちを会話中と区別できる唯一の列）──
     assert_sequence_eq("進行状態の列", &ledgers.statuses, &expected_statuses());
 }
 
@@ -112,7 +112,7 @@ fn unload_calls(calls: &[RecordedCall]) -> usize {
 
 /// 2 つの列を**等値**で突き合わせ、違えば食い違う位置を名指しして落とす。
 ///
-/// # なぜ素の `assert_eq!` を使わないのか（areka-P0-emo2-conformance-e2e の R12.5）
+/// # なぜ素の `assert_eq!` を使わないのか
 ///
 /// 列は数十要素に及び、素の `assert_eq!` は 2 つの列を丸ごと 1 行に印字するだけで、**どこが**
 /// 違うのかを読み手に探させる。1 件の挿入と 1 件の値の違いも同じ見た目になるため、退行の形が
@@ -155,7 +155,7 @@ fn assert_sequence_eq<T: PartialEq + std::fmt::Debug>(label: &str, actual: &[T],
 ///
 /// 製品の判定ではない。駆動器の不変条件（注入時刻は段の上限を超えない）が守られる限り必ず真に
 /// なるため、製品が退行しても赤にならない——残す理由は、テスト自身の駆動が壊れたときに
-/// 「段名の食い違い」として製品の退行に見えることを防ぐためである（areka-P0-emo2-conformance-e2e の design D3 の裁定）。
+/// 「段名の食い違い」として製品の退行に見えることを防ぐためである。
 ///
 /// 段名 `サブメニューと戻り` は区間を 2 つ持つ（選択肢 ID が直前の台本の `\q` 帳簿に縛られるため
 /// 1 段では 2 つ選べない）。ゆえに「**同名のいずれかの区間**に入っていること」を見る。

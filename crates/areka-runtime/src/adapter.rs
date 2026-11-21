@@ -1,15 +1,12 @@
-//! 表示指令の変換と配送（薄い変換＋配送のみ・状態を持たない・areka-P0-emo2-boot 要件 3.6）。
+//! 表示指令の変換と配送（薄い変換＋配送のみ・状態を持たない）。
 //!
-//! `map_display_command`（`DisplayCommand`→`PresentCommand` の純変換・areka-P0-emo2-boot 設計 DD-5・`target_map` を利用）と
+//! `map_display_command`（`DisplayCommand`→`PresentCommand` の純変換・`target_map` を利用）と
 //! `PresentBridge`（seriko の `SurfaceOutput` 本番実装・`mpsc::Sender` へ非ブロック送出）を
-//! 所有する。`ShowBalloon`／`HideBalloon` はバルーン表示対象へ `BindSet::default()` 付きで
-//! 配送する（areka-P0-emo2-boot 要件 5.1／5.2）。送出失敗（受信端 drop）は `debug!`・数でない、または大きすぎる
-//! scope の drop は `warn!` で log-first 観測する（areka-P0-emo2-boot 要件 3.7・design.md「Error Categories and Responses」）。
+//! 所有する。`ShowBalloon`／`HideBalloon` はバルーン表示対象へ `BindSet::default()` 付きで配送する。
+//! 送出失敗（受信端 drop）は `debug!`、数でない、または大きすぎる scope の drop は `warn!` で観測する。
 //!
-//! 本ファイルは `map_display_command`（純変換）と `PresentBridge`（`SurfaceOutput` 本番実装・
-//! UI 配送）を持つ。定義を替えた合図 `Rebased` は、橋渡しが持つ
-//! 荷物の置き場と突き合わせて scope ごとの `ReplaceTarget` へ写す（spec:
-//! areka-P0-shell-balloon-switch・design「Adapter」）。
+//! 定義を替えた合図 `Rebased` は、橋渡しが持つ荷物の置き場と突き合わせて scope ごとの
+//! `ReplaceTarget` へ写す。
 
 use std::sync::PoisonError;
 
@@ -21,30 +18,29 @@ use wintf::ecs::world::tick_wake;
 use crate::switch_assets::{SwapPayload, SwapSlot};
 use crate::target_map::{balloon_target, scope_of, shell_target};
 
-/// `DisplayCommand` → `PresentCommand` の純変換（areka-P0-emo2-boot 設計 DD-5・`target_map` を利用）。
+/// `DisplayCommand` → `PresentCommand` の純変換（`target_map` を利用）。
 ///
-/// 可変状態・I/O を持たない純関数で、次の写像を与える（areka-P0-emo2-boot 要件 3.6）:
+/// 可変状態・I/O を持たない純関数で、次の写像を与える:
 /// - `Show { scope, surface_id, binds, pattern }` → シェル表示対象へ `ShowSurface`。`surface_id`
-///   （数値）・`binds`・`pattern` を**非改変で転写**する（areka-P0-emo2-boot 要件 3.1／5.1）。
-/// - `Hide { scope }` → シェル表示対象の `Hide`（areka-P0-emo2-boot 要件 3.2）。
+///   （数値）・`binds`・`pattern` を**非改変で転写**する。
+/// - `Hide { scope }` → シェル表示対象の `Hide`。
 /// - `ShowBalloon { scope, surface_id, pattern }` → バルーン表示対象へ `ShowSurface`。`binds` は
-///   `BindSet::default()`（空集合＝areka-P0-emo2-boot の M-boot にバルーン着せ替えは存在しない・要件 3.3／5.1）。
-///   `surface_id` は seriko が解決済みの数値 id をそのまま転写し、**alias を再適用しない**（areka-P0-emo2-boot 要件 5.3）。
-///   `pattern` はシェル面 `Show` と同様に非改変で転写する（areka-P0-emo2-boot 要件 5.1・cue 由来は空 pattern＝要件 5.4）。
-/// - `HideBalloon { scope }` → バルーン表示対象の `Hide`（areka-P0-emo2-boot 要件 3.4／5.2）。
+///   `BindSet::default()`（空集合＝バルーン着せ替えは無い）。`surface_id` は seriko が解決済みの数値 id を
+///   そのまま転写し、**alias を再適用しない**。`pattern` はシェル面 `Show` と同様に非改変で転写する
+///   （cue 由来は空 pattern）。
+/// - `HideBalloon { scope }` → バルーン表示対象の `Hide`。
 /// - `StageAck { scope, generation }` → バルーン表示対象の `StageAck`（世代はそのまま）。
 /// - `MoveShift { scope, x, y }` / `MoveShiftBalloon { scope, x, y }` → シェル／バルーン表示対象の
-///   `MoveShift`（値はそのまま・spec: seriko-pattern-calls 要件 7.1・7.6）。
+///   `MoveShift`（値はそのまま）。
 ///
-/// `reply` は常に `None`（撃ちっぱなし・fire-and-forget）。scope（`ActorKey`）が数でない、
-/// または大きすぎるとき（`scope_of` が `None`）は本関数も `None` を返し、呼び手（`PresentBridge::send`）が `warn!` ＋
-/// 当該指令 drop で握り潰さず log-first 観測する（areka-P0-emo2-boot 要件 3.7）。
+/// `reply` は常に `None`（撃ちっぱなし）。scope（`ActorKey`）が数でない、または大きすぎるとき
+/// （`scope_of` が `None`）は本関数も `None` を返し、呼び手（`PresentBridge::send`）が `warn!` ＋
+/// 当該指令 drop で観測する。
 ///
 /// `DisplayCommand` は `#[non_exhaustive]` でないため網羅 `match` で全経路を尽くす
 /// （定義を替えた合図 `Rebased` は写さず `None`＝`PresentBridge::send` が先に捌く）。
 pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
     Some(match cmd {
-        // Show: シェル表示対象へそのまま。surface_id・binds・pattern は非改変で転写。
         DisplayCommand::Show {
             scope,
             surface_id,
@@ -57,14 +53,10 @@ pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
             pattern,
             reply: None,
         },
-        // Hide: シェル表示対象の非表示。
         DisplayCommand::Hide { scope } => PresentCommand::Hide {
             target: shell_target(scope_of(&scope)?),
             reply: None,
         },
-        // ShowBalloon: バルーン表示対象へ。binds は既定（空集合＝バルーン着せ替え無し）。
-        // surface_id は seriko 解決済み数値 id をそのまま転写（alias 非再適用）。pattern は
-        // シェル面 Show と同様に非改変で転写する（cue 由来は空 pattern）。
         DisplayCommand::ShowBalloon {
             scope,
             surface_id,
@@ -76,7 +68,7 @@ pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
             pattern,
             reply: None,
         },
-        // HideBalloon: バルーン表示対象の非表示（`\b[-1]` 相当）。
+        // `\b[-1]` 相当。
         DisplayCommand::HideBalloon { scope } => PresentCommand::Hide {
             target: balloon_target(scope_of(&scope)?),
             reply: None,
@@ -84,12 +76,10 @@ pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
         // 定義を替えた合図は 1 件の命令へ写せない（scope ごとの置き換えは荷物と突き合わせて
         // `PresentBridge::send` が先に捌く）。純変換としては写す先が無い。
         DisplayCommand::Rebased { .. } => return None,
-        // 出番の世代を知った合図: バルーン表示対象へ（spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
         DisplayCommand::StageAck { scope, generation } => PresentCommand::StageAck {
             target: balloon_target(scope_of(&scope)?),
             generation,
         },
-        // ずれ: シェル／バルーンの表示対象へ値をそのまま（spec: seriko-pattern-calls 要件 7.1・7.6）。
         DisplayCommand::MoveShift { scope, x, y } => PresentCommand::MoveShift {
             target: shell_target(scope_of(&scope)?),
             x,
@@ -108,19 +98,18 @@ pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
 /// `spawn_seriko(out = PresentBridge)` で seriko worker スレッドへ move され（`O: SurfaceOutput
 /// + Send + 'static`）、worker 上で受けた `DisplayCommand` を
 /// [`map_display_command`] で `PresentCommand` へ純変換し、UI スレッドの表示層（frame drain 側の
-/// `Receiver`）へ `mpsc::Sender` で**非ブロック**配送する（areka-P0-emo2-boot 要件 3.7）。
+/// `Receiver`）へ `mpsc::Sender` で**非ブロック**配送する。
 ///
-/// 可変状態を一切持たず、フィールドは配送用 `Sender` と、UI と共有する荷物の置き場（任意）だけ
-/// （areka-P0-emo2-boot 要件 3.6「変換と配送のみを行い、状態を保持しない」）。変換は [`map_display_command`] の純関数へ、
-/// 配送は `Sender::send` へ委ね、本型自身は両者を繋ぐだけの薄いアダプタに徹する（キャッシュ・
+/// 可変状態を持たず、フィールドは配送用 `Sender` と、UI と共有する荷物の置き場（任意）だけ。
+/// 変換は [`map_display_command`] の純関数へ、配送は `Sender::send` へ委ねる（キャッシュ・
 /// カウンタ等の内部状態を持たない）。
 pub struct PresentBridge {
     /// UI フレーム drain 側 `Receiver` への非ブロック配送口。
     tx: std::sync::mpsc::Sender<PresentCommand>,
-    /// 差し替えの荷物の置き場（spec: areka-P0-shell-balloon-switch・design「Adapter」）。
+    /// 差し替えの荷物の置き場。
     ///
-    /// 橋渡し自身は状態を持たない。置き場は UI が荷物を置き、合図 `Rebased` を受けたときに
-    /// ここから取り出すだけの共有の器である（既定は無し＝合図が来れば `error!` で何も送らない）。
+    /// 置き場は UI が荷物を置き、合図 `Rebased` を受けたときにここから取り出すだけの共有の器である
+    /// （既定は無し＝合図が来れば `error!` で何も送らない）。
     swap: Option<SwapSlot>,
 }
 
@@ -142,22 +131,18 @@ impl SurfaceOutput for PresentBridge {
     /// seriko worker から届いた `DisplayCommand` を写像し、成功時のみ UI へ非ブロック配送する。
     ///
     /// - 写像成功（`scope_of` が番号を返す scope）: `PresentCommand` を `tx.send`。受信端 drop（＝shutdown 中の
-    ///   期待事象）で失敗しても **panic せず** `debug!` で観測して破棄する（log-first・areka-P0-emo2-boot 要件 3.7）。
-    /// - 写像不能（数でない、または大きすぎる scope＝[`map_display_command`] が `None`）: `warn!` で観測して drop する
-    ///   （握り潰さない・areka-P0-emo2-boot design.md「Error Categories and Responses」配送時）。
+    ///   期待事象）で失敗しても **panic せず** `debug!` で観測して破棄する。
+    /// - 写像不能（数でない、または大きすぎる scope＝[`map_display_command`] が `None`）: `warn!` で観測して drop する。
     ///
     /// `SurfaceOutput::send` は infallible（`-> ()`）契約ゆえ、いかなる配送失敗でも panic させない。
     fn send(&mut self, command: DisplayCommand) {
-        // 定義を替えた合図（spec: areka-P0-shell-balloon-switch）は荷物と突き合わせて scope ごとの
-        // 置き換えの命令へ写す。それ以外は今日の純変換のまま。
+        // 定義を替えた合図は荷物と突き合わせて scope ごとの置き換えの命令へ写す。
         if let DisplayCommand::Rebased { epoch, kind, shows } = command {
             self.send_rebased(epoch, kind, shows);
             return;
         }
         match map_display_command(command) {
-            // 写像成功: UI フレーム drain 側へ非ブロック配送。
             Some(cmd) => self.deliver(cmd),
-            // 写像不能（数でない、または大きすぎる scope）: 握り潰さず warn! で観測して drop。
             None => {
                 tracing::warn!(
                     "PresentBridge: 数でない、または大きすぎる scope の DisplayCommand を写像できず drop しました"
@@ -169,21 +154,20 @@ impl SurfaceOutput for PresentBridge {
 
 impl PresentBridge {
     /// 1 件を UI へ非ブロック配送する。受信端 drop（shutdown 中の期待事象）は panic させず
-    /// `debug!` で観測して破棄する（log-first）。
+    /// `debug!` で観測して破棄する。
     fn deliver(&self, cmd: PresentCommand) {
         if self.tx.send(cmd).is_err() {
             tracing::debug!(
                 "PresentBridge: PresentCommand の配送先（UI receiver）が drop 済み（shutdown 中）— 破棄"
             );
         }
-        // 表示指令が UI へ届いた＝次の画面更新に仕事がある（areka-P0-draw-load-parity 設計 C16 の `PRESENT`）。
-        // 送出の**後**に立てる——先に立てると、読み取りと送出の隙間で旗だけが倒れ、
-        // 指令が次の起床まで置き去りになる。逆順なら余分に 1 回回るだけで済む。
+        // 表示指令が UI へ届いた＝次の画面更新に仕事がある。送出の**後**に立てる——先に立てると、
+        // 読み取りと送出の隙間で旗だけが倒れ、指令が次の起床まで置き去りになる。逆順なら余分に 1 回回るだけで済む。
         tick_wake::mark(tick_wake::PRESENT);
     }
 
     /// 合図 `Rebased` を、置き場の世代の一致する荷物と突き合わせて scope ごとの
-    /// `ReplaceTarget` へ写す（spec: areka-P0-shell-balloon-switch 要件 4.1・4.2・design「Adapter」）。
+    /// `ReplaceTarget` へ写す。
     ///
     /// - 対象の番号は `target_map` の `shell_target`／`balloon_target`。
     /// - 最初の表示は合図の同じ scope の面と着せ替え。合図に無い scope・面の無い scope は登録だけ。
@@ -236,10 +220,8 @@ impl PresentBridge {
     }
 }
 
-/// 静的境界表明（撃ちっぱなし檻）: `PresentBridge` は `spawn_seriko(out)` で worker スレッドへ
-/// move されるため `O: SurfaceOutput + Send + 'static` を満たす必要がある。
-/// `mpsc::Sender<T>` は `T: Send` のとき `Send`・`PresentCommand` は `'static` ゆえ現状は充足するが、
-/// 将来 `!Send`／非 `'static` なフィールドが混入したらここでコンパイルを止める。
+/// `PresentBridge` は `spawn_seriko(out)` で worker スレッドへ move されるため `O: SurfaceOutput + Send + 'static`
+/// を満たす必要がある。将来 `!Send`／非 `'static` なフィールドが混入したらここでコンパイルを止める。
 const _: fn() = || {
     fn assert_send_static<T: Send + 'static>() {}
     assert_send_static::<PresentBridge>();
@@ -264,7 +246,7 @@ mod tests {
     use std::sync::mpsc::{self, TryRecvError};
 
     /// 非空の `PatternState`（animation `anim_id` に surface `surf` の `Overlay` コマ 1 枚）を作る
-    /// （`PatternState::default()` と等価でない＝pattern 透過の非改変転写を反証する load-bearing 値）。
+    /// （`PatternState::default()` と等価でない＝pattern の非改変転写を反証する値）。
     fn pattern_of(anim_id: u32, surf: u32) -> PatternState {
         let mut p = PatternState::default();
         p.set(
@@ -280,7 +262,7 @@ mod tests {
     }
 
     /// `Show` → シェル表示対象の `ShowSurface`。`surface_id`（非自明値）・非既定 `binds`・非空
-    /// `pattern` が非改変で透過することを反証する（areka-P0-emo2-boot 要件 3.1／5.1／5.3）。`reply` は `None`。
+    /// `pattern` が非改変で透過することを反証する。`reply` は `None`。
     #[test]
     fn show_maps_to_shell_show_surface_transcribing_id_binds_and_pattern() {
         let binds = BindSet::from_ids([1100, 1500]);
@@ -318,7 +300,7 @@ mod tests {
         }
     }
 
-    /// `Hide` → シェル表示対象の `Hide`（areka-P0-emo2-boot 要件 3.2）。`reply` は `None`。
+    /// `Hide` → シェル表示対象の `Hide`。`reply` は `None`。
     #[test]
     fn hide_maps_to_shell_hide() {
         let out = map_display_command(DisplayCommand::Hide {
@@ -336,7 +318,7 @@ mod tests {
     }
 
     /// `ShowBalloon` → バルーン表示対象の `ShowSurface`。`surface_id`・`pattern` は非改変転写・
-    /// `binds` は既定（空集合）（areka-P0-emo2-boot 要件 3.3／5.1／5.3）。`reply` は `None`。
+    /// `binds` は既定（空集合）。`reply` は `None`。
     #[test]
     fn show_balloon_maps_to_balloon_show_surface_with_default_binds() {
         let pattern = pattern_of(3, 9);
@@ -376,7 +358,7 @@ mod tests {
         }
     }
 
-    /// `HideBalloon` → バルーン表示対象の `Hide`（areka-P0-emo2-boot 要件 3.4／5.2）。`reply` は `None`。
+    /// `HideBalloon` → バルーン表示対象の `Hide`。`reply` は `None`。
     #[test]
     fn hide_balloon_maps_to_balloon_hide() {
         let out = map_display_command(DisplayCommand::HideBalloon {
@@ -446,7 +428,7 @@ mod tests {
     }
 
     /// 複数 scope（"0"/"1"）でシェル（偶数）／バルーン（奇数）表示対象の偶奇が写像へ流れる
-    /// （target_map の areka-P0-emo2-boot 設計 DD-3 採番規約が adapter を貫くこと）。
+    /// （target_map の採番規約が adapter を貫くこと）。
     #[test]
     fn shell_and_balloon_target_parity_flows_through() {
         for scope in [0u32, 1] {
@@ -485,10 +467,9 @@ mod tests {
 
     // ── PresentBridge（SurfaceOutput 本番実装）の檻 ──────────────────────
     //
-    // ログ発火（warn/debug）を目視でなく実行テストで決定論的に檻へ入れる（決定論網羅マンデート）。
-    // 捕捉の道具は `frame::test_support` の共有のもの（硬化の機序の解説もそちら）を使う。
+    // ログ発火（warn/debug）の捕捉は `frame::test_support` の共有の道具を使う。
 
-    /// 有効指令 → 変換済み `PresentCommand` が mpsc 越しに受信側へ**ちょうど 1 件**届く（areka-P0-emo2-boot 要件 3.7）。
+    /// 有効指令 → 変換済み `PresentCommand` が mpsc 越しに受信側へ**ちょうど 1 件**届く。
     /// `Show{scope:"0"}` が `ShowSurface{shell_target(0), id, binds, reply:None}` として全フィールド
     /// 一致で到達し、2 度目の `try_recv` が `Empty`（余分な送出なし）であることを反証する。
     #[test]
@@ -504,7 +485,7 @@ mod tests {
             pattern: pattern.clone(),
         });
 
-        // PresentCommand は #[non_exhaustive] かつ非 PartialEq ゆえフィールド分解＋`_` arm で照合。
+        // PresentCommand は #[non_exhaustive] かつ非 PartialEq ゆえフィールド分解＋`_` arm で照合する。
         match rx
             .try_recv()
             .expect("変換済み PresentCommand が 1 件届くこと")
@@ -531,10 +512,9 @@ mod tests {
         );
     }
 
-    /// 非数値 scope → 何も送出せず `warn!` がちょうど 1 回発火する（areka-P0-emo2-boot 要件 3.6/3.7・log-first の決定論檻）。
-    /// スレッドローカル捕捉 subscriber を差し込み、`Hide{scope:"側"}` 送出で (a) チャネルが空
-    /// （何も送らない）・(b) WARN がちょうど 1 件発火・(c) 送出自体を行わないため send 失敗の DEBUG は
-    /// 無い、ことを assert する。ログ発火を可視目視でなく実行テストで檻に入れる（決定論網羅マンデート）。
+    /// 非数値 scope → 何も送出せず `warn!` がちょうど 1 回発火する。
+    /// `Hide{scope:"側"}` 送出で (a) チャネルが空・(b) WARN がちょうど 1 件・(c) 送出自体を行わないため
+    /// send 失敗の DEBUG は無い、ことを assert する。
     #[test]
     fn send_non_numeric_scope_emits_warn_and_sends_nothing() {
         let (tx, rx) = mpsc::channel::<PresentCommand>();
@@ -562,10 +542,10 @@ mod tests {
         );
     }
 
-    /// 受信端 drop 後の送出は **panic せず** `debug!` 経路で握り潰す（areka-P0-emo2-boot 要件 3.7・shutdown 中の期待事象）。
+    /// 受信端 drop 後の送出は **panic せず** `debug!` 経路で握り潰す（shutdown 中の期待事象）。
     /// `SurfaceOutput::send` は infallible 契約ゆえ配送失敗でもクラッシュしてはならない。`rx` を drop
-    /// 後に有効 `Show` を送り、(a) 関数が正常復帰（panic しない）・(b) DEBUG がちょうど 1 件・(c) WARN は
-    /// 無い（数値 scope ゆえ写像は成功）ことを決定論的に反証する。
+    /// 後に有効 `Show` を送り、(a) panic しない・(b) DEBUG がちょうど 1 件・(c) WARN は無い
+    /// （数値 scope ゆえ写像は成功）ことを反証する。
     #[test]
     fn send_after_receiver_dropped_does_not_panic_and_logs_debug() {
         let (tx, rx) = mpsc::channel::<PresentCommand>();
@@ -580,7 +560,6 @@ mod tests {
                 pattern: PatternState::default(),
             });
         });
-        // ここへ到達した時点で send は panic しなかった（infallible 契約の実証）。
 
         assert_eq!(
             count_level(&logs, "DEBUG"),

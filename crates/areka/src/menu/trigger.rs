@@ -1,16 +1,14 @@
-//! メニューを出す引き金（areka-P0-popup-menu-minimal）。
+//! メニューを出す引き金。
 //!
 //! キャラクター窓で右ボタンを離したときのハンドラ（[`on_char_pointer_released`]＝登記の写しを
 //! 取り、照会を送って返事待ちを預ける）と、照会の返事を毎 tick 覗いて表示するかどうかを決め、
 //! 表示する計画まで作る system（[`poll_menu_query`]）と、メニューを出して閉じた後に動作を
 //! 1 回だけ行う表示のタスク（[`show_task`]）を置く。
 //!
-//! このうち判断そのもの（[`poll_step`]・[`decide`]）は OS も World も触らない純粋関数で、
-//! 時刻は引数で受け取る。待ち時間を実際に過ごさずに 4 通りを確かめられるようにするためで、
-//! 兄弟テストはどれも寝ずに判定を全部踏む。World を触る 2 つの入口も、時刻を引数で受ける
-//! 内側の関数（[`handle_release`]・[`poll_once`]）へ仕事を渡すだけにしてある。
-//! 表示のタスクも同じ考え方で、OS の表示関数を引数で受ける内側の関数（[`run_show`]）を呼ぶだけ
-//! なので、テストは OS のメニューを出さずに表示の前後の判断を全部踏める。
+//! 判断そのもの（[`poll_step`]・[`decide`]）は OS も World も触らない純粋関数で、時刻は引数で
+//! 受け取る（テストが寝ずに全分岐を踏めるように）。World を触る入口（[`handle_release`]・
+//! [`poll_once`]）と表示のタスク（[`run_show`]）も、時刻や OS の表示関数を引数で受ける内側の関数へ
+//! 仕事を渡すだけにしてある。
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
@@ -36,7 +34,7 @@ pub(crate) struct MenuRequest {
     pub scope: u32,
     /// 操作した窓の entity。表示の直前に窓がまだ在るか確かめるのに使う。
     pub entity: Entity,
-    /// メニューの持ち主にする窓ハンドル（メニュー用の窓は作らない・要件 7.5）。
+    /// メニューの持ち主にする窓ハンドル（メニュー用の窓は作らない）。
     pub hwnd: HWND,
     /// メニューを出す画面座標。
     pub screen_pos: (i32, i32),
@@ -70,7 +68,7 @@ impl Drop for InFlightGuard {
 pub(crate) struct PendingQuery {
     /// 右ボタンを離した時点の要求。
     pub request: MenuRequest,
-    /// 右クリックの時点で取った登記の写し（要件 6.2）。
+    /// 右クリックの時点で取った登記の写し。
     pub snapshot: Vec<(Frame, MenuItem)>,
     /// 返事の受け口。`None` は照会を送れなかったことを表し、次の tick で全件が既定名になる。
     pub rx: Option<ReplyReceiver<QueryReply>>,
@@ -108,7 +106,7 @@ pub(crate) enum PollOutcome {
     Decided(Result<QueryReply, QueryFailure>),
 }
 
-/// 返事を 1 回覗いて、待ちを続けるか終えるかを決める（純粋・要件 3.4）。
+/// 返事を 1 回覗いて、待ちを続けるか終えるかを決める（純粋）。
 ///
 /// 覗く順は ⑴ 返事の有無 → ⑵ 期限。既に届いている返事は期限が切れていても使う——待った理由は
 /// 返事を得ることであり、手元にある返事を捨てて既定名に落とす理由が無いからである。
@@ -130,7 +128,7 @@ pub(crate) fn poll_step(pending: &PendingQuery, now: Instant) -> PollOutcome {
     }
 }
 
-/// 表示可否と、預かった右ダブルクリックの行き先（要件 1.10・3.7・11.3）。
+/// 表示可否と、預かった右ダブルクリックの行き先。
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Decision {
     /// メニューを出す。預かりがあれば捨てる（送らない）。
@@ -145,8 +143,8 @@ pub(crate) enum Decision {
 /// メニューを出すかどうかと、預かった右ダブルクリックを送るかどうかを 1 か所で決める（純粋）。
 ///
 /// 正典の Ref5＝1 は「メニューを抑止したゴースト」のためのものなので、送るのは抑止したときだけで、
-/// メニューを出すなら預かりは捨てる（要件 1.10）。1 度目の解放と 2 度目の押下が同じ処理単位に
-/// 入っても、送る／送らないを決める場所はここ 1 か所に限る（要件 11.3）。
+/// メニューを出すなら預かりは捨てる。1 度目の解放と 2 度目の押下が同じ処理単位に
+/// 入っても、送る／送らないを決める場所はここ 1 か所に限る。
 pub(crate) fn decide(visibility: Visibility, pending: Option<&PendingDoubleClick>) -> Decision {
     match visibility {
         Visibility::Show => Decision::Show,
@@ -169,16 +167,16 @@ pub(crate) struct ReadyMenu {
 /// キャラクター窓のポインタ解放ハンドラ（Bubble 相のみ処理）。
 ///
 /// 右ボタンの解放だけを見る。結線前・ドラッグ中なら、預かっていた右ダブルクリックを捨てて
-/// `trace!` で記録し、何もしない（要件 1.8・1.9）。返事待ちまたは表示中（表示 1 枚の旗が立って
+/// `trace!` で記録し、何もしない。返事待ちまたは表示中（表示 1 枚の旗が立って
 /// いる間）も `trace!` で記録して何もしないが、**預かりには触れない**（理由は下）。それ以外は
-/// 右クリックの時点の登記の写しを取り（要件 6.2）、運行へ照会を送って返事待ちを預け、表示
+/// 右クリックの時点の登記の写しを取り、運行へ照会を送って返事待ちを預け、表示
 /// 1 枚の旗を立てる。**返事は待たない**——覗くのは毎 tick の [`poll_menu_query`] である。
 ///
 /// 旗が立っている間の解放が預かりに触れないのは、右ダブルクリックが「押下 1 →解放 1 →押下 2
 /// （ここで預かる）→解放 2」の順に届くからである。SHIORI の返事がダブルクリックの間隔より
 /// 遅いと、解放 2 は解放 1 の照会がまだ返事を待っている間に届く。そこで預かりを捨てると、
 /// 後から `popupmenu.visible`＝0 が返ってきても送る材料が残っておらず、メニューを抑止する
-/// ゴーストへ右ダブルクリックが届かなくなる（要件 1.10）。預かりは残しておき、送るか捨てるかは
+/// ゴーストへ右ダブルクリックが届かなくなる。預かりは残しておき、送るか捨てるかは
 /// 返事が決着した tick の [`decide`] が決める。
 ///
 /// Tunnel 相は伝播を続けるため常に `false`。要求を預かったときだけ `true`。
@@ -233,7 +231,7 @@ fn handle_release(world: &mut World, entity: Entity, state: &PointerState, now: 
 
     let snapshot = wiring.registry.snapshot(world, &MenuContext { scope });
     // 送れなかった理由はここでは記録しない。受け口の無い返事待ちとして預け、次の tick の
-    // `interpret` が「全件既定名」の警告 1 行にまとめる（要件 3.4）。
+    // `interpret` が「全件既定名」の警告 1 行にまとめる。
     let rx = captions::send_query(&wiring.kanade, captions::query_ids(&snapshot, scope)).ok();
     let guard = InFlightGuard::engage(&wiring.in_flight);
 
@@ -287,8 +285,7 @@ fn take_deferred_double_click(world: &mut World) -> Option<PendingDoubleClick> {
 /// 表示のタスクを起こす。
 ///
 /// 表示そのものはここでは行わない。ここは tick の中＝外側の World を借りている最中で、
-/// OS のメニューは閉じるまで戻らないので、ここで出すと表示の間じゅう tick が回らなくなる
-/// （要件 7.2）。実行器へ載せたタスクが最初に進むのは tick が返って借用が解けた後である。
+/// OS のメニューは閉じるまで戻らないので、ここで出すと表示の間じゅう tick が回らなくなる。実行器へ載せたタスクが最初に進むのは tick が返って借用が解けた後である。
 ///
 /// タスクへ渡す外側の World への弱い参照は、wintf が起動時に入れる [`EcsWorldSelfRef`] から
 /// 複製する。これが無い World（本番の起動経路を通っていない）では動作を行う手段が無いので、
@@ -351,7 +348,7 @@ fn poll_once(world: &mut World, now: Instant) -> Option<ReadyMenu> {
     }
 
     let scope = request.scope;
-    // 別の窓の預かりは、この要求の決着では送らない。`decide` へ渡す前に捨てる（要件 4.2）。
+    // 別の窓の預かりは、この要求の決着では送らない。`decide` へ渡す前に捨てる。
     let deferred = deferred.filter(|d| {
         let same_window = d.scope == scope;
         if !same_window {
@@ -434,7 +431,7 @@ fn run_show(
 }
 
 /// メニューを出す。外側の World には触れない（弱い参照すら受け取らない）ので、表示の間も
-/// tick は World を借りて回れる（要件 7.2）。
+/// tick は World を借りて回れる。
 ///
 /// 「出した」の記録は表示の関数を呼ぶ**直前**に出す。OS の表示はメニューが閉じるまで戻らない
 /// ので、呼んだ後に記録すると「出した」が「選ばれた」の直前にしか現れず、表示中のログを見ても
@@ -468,7 +465,7 @@ fn display(
 /// [`decide`] の tick が来ないので、ここで捨てないと後の無関係な要求の抑止で送られてしまう。
 /// World を借りられなかったときは捨てる手段が無い。
 ///
-/// 動作を呼ぶのは、操作した窓がまだ窓ハンドルを持っているときだけである（要件 7.4）。表示中も
+/// 動作を呼ぶのは、操作した窓がまだ窓ハンドルを持っているときだけである。表示中も
 /// tick は回るので、SHIORI の終了指示などで窓が消えていることが実際に起こりうる。
 fn finish(
     outer: &Weak<RefCell<EcsWorld>>,

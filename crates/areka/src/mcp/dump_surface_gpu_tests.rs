@@ -1,6 +1,4 @@
-//! `dump_surface` の実際の描画を通るテスト（spec: areka-P0-mcp-dump-images・要件 1.1・1.3〜1.6・
-//! 2.1〜2.3・4.1〜4.3・4.6・5.2・5.3・6.1・6.2・7.4 ⑴⑵⑹、spec: areka-P0-mcp-dump-images-residue・
-//! 要件 5.1・x64 だけ接続）。土台は [`super::gpu_test_support`]。
+//! `dump_surface` の実際の描画を通るテスト（x64 だけ接続）。土台は [`super::gpu_test_support`]。
 
 use std::time::Duration;
 
@@ -21,7 +19,7 @@ use areka_runtime::target_map::shell_target;
 /// 起動のときの 0 と違う番号で、台本で出したことが ID に現れる。
 const SHOWN: u32 = 1101;
 
-/// 今の見た目（要件 1.1・1.3・1.4）: 台本 `\0\s[1101]` の後の `dump_surface`（省略）の PNG を
+/// 今の見た目: 台本 `\0\s[1101]` の後の `dump_surface`（省略）の PNG を
 /// 復号した画素が、同じ surface を合成器で合成して乗算を戻した絵と一致し、本文が今の見た目の逐語。
 /// 窓の `DPI` を 144（拡大率 1.5）にして、拡大を掛ける前の原寸であることも同時に固定する。
 ///
@@ -169,7 +167,7 @@ fn refusal(reason: &str) -> ToolOutcome {
     }
 }
 
-/// 指定した surface（要件 2.1・2.3・2.4）: 表示中の 1101 と別の 1100 を指定すると、1100 を合成した
+/// 指定した surface: 表示中の 1101 と別の 1100 を指定すると、1100 を合成した
 /// 絵の画素で返り、呼ぶ前と、呼んだ直後と、その後に巡を回した後とで、スコープ 0・1 の今の surface と
 /// 可視が同じ。
 ///
@@ -216,7 +214,7 @@ fn specified_surface_returns_its_pixels_without_changing_the_screen() {
     );
 }
 
-/// スコープ 0 でスコープ 1 用の ID（要件 2.1「どのスコープ用の絵かは問わない」）: スコープを省いて
+/// スコープ 0 でスコープ 1 用の ID（どのスコープ用の絵かは問わない）: スコープを省いて
 /// 10 を指定すると、10 を合成した絵の画素で成功する。
 ///
 /// # 非空虚性
@@ -247,7 +245,7 @@ fn scope_zero_renders_a_surface_meant_for_scope_one() {
     );
 }
 
-/// 別名の表にだけ在る番号（要件 2.1「別名は解かない」・4.2）: 本物のシェルで 100 を指定すると
+/// 別名の表にだけ在る番号（別名は解かない）: 本物のシェルで 100 を指定すると
 /// `NG:No such surface ID. Check get_expression_table tool`（画像なし）。
 ///
 /// # 非空虚性
@@ -289,7 +287,7 @@ fn number_only_in_the_alias_table_is_no_such_surface() {
     );
 }
 
-/// 隠したキャラクター（要件 1.6）: `\s[-1]` で隠した後の `dump_surface`（省略）が、隠す直前の 1101 の
+/// 隠したキャラクター: `\s[-1]` で隠した後の `dump_surface`（省略）が、隠す直前の 1101 の
 /// 絵と ID で、今の見た目の本文の成功を返す。
 ///
 /// # 非空虚性
@@ -327,7 +325,7 @@ fn hidden_character_returns_the_picture_before_hiding() {
     );
 }
 
-/// 一度も表示していないスコープ（要件 4.3・2.3）: 台本がスコープ 1 に触れないとき、スコープ 1 の
+/// 一度も表示していないスコープ: 台本がスコープ 1 に触れないとき、スコープ 1 の
 /// 省略は `NG:No surface has been shown in this scope yet`、指定（2100）はその絵で成功する。
 ///
 /// # 非空虚性
@@ -376,7 +374,7 @@ fn never_shown_scope_refuses_the_omitted_but_renders_the_specified() {
     );
 }
 
-/// 絵の資産の無いスコープ（要件 4.1）: 検体はスコープ 0・1 だけなので、スコープ 2 は省略も指定も
+/// 絵の資産の無いスコープ: 検体はスコープ 0・1 だけなので、スコープ 2 は省略も指定も
 /// `NG:No such scope in this ghost`。
 ///
 /// # 非空虚性
@@ -406,7 +404,7 @@ fn scope_two_is_no_such_scope() {
     );
 }
 
-/// 装着の前（要件 6.1）: 最初の巡を回す前（装着の相がまだ）に呼ぶとその場では答えが無く、巡を回すと
+/// 装着の前: 最初の巡を回す前（装着の相がまだ）に呼ぶとその場では答えが無く、巡を回すと
 /// 後から答えが届く（指定した 1100 の絵）。
 ///
 /// # 非空虚性
@@ -454,7 +452,7 @@ fn before_attachment_answers_after_the_frames_run() {
     );
 }
 
-/// 邪魔をしない（要件 6.2・4.6）: 成功と判断の失敗を混ぜた一連の呼び出しの前後で、偽の SHIORI の
+/// 邪魔をしない: 成功と判断の失敗を混ぜた一連の呼び出しの前後で、偽の SHIORI の
 /// 呼び出しの列が、後の関所の印 1 件のほかに増えず、ERROR の記録が 0 件。
 ///
 /// # 非空虚性
@@ -515,8 +513,7 @@ fn calls_do_not_disturb_the_ghost() {
     );
 }
 
-/// 符号化のスレッドの記録（spec: areka-P0-mcp-dump-images-residue・要件 5.1）: 台本の surface が
-/// 出た後、本物の `answer` が返した写しまで済んだ仕事を、記録を数える中で符号化のスレッドの体
+/// 符号化のスレッドの記録: 台本の surface が出た後、本物の `answer` が返した写しまで済んだ仕事を、記録を数える中で符号化のスレッドの体
 /// （`finish`）に通すと、ERROR が 0 件で画像つきの成功。
 ///
 /// # 非空虚性

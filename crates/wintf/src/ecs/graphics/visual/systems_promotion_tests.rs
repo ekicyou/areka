@@ -1,4 +1,4 @@
-//! 描画の木を組む係（`update_draw_trees`）の 1 回の判断と部分の列の配線（要件 1.9, 3.1, 3.3, 5.1, 8.6）。
+//! 描画の木を組む係（`update_draw_trees`）の 1 回の判断と部分の列の配線。
 //! 本物の登録を通すため `EcsWorld` の `PreRenderSurface` だけを回し、フレームの時刻（`FrameTime`）を注入する。
 //! 配置の伝播は回さないので `GlobalArrangement` は手で置く。画素は読まない。
 
@@ -108,7 +108,7 @@ fn draws(world: &World, root: Entity, e: Entity) -> bool {
 }
 
 /// 頻繁に更新した節が用意中を経て上げたへ進み、親の列から外れて自分の列で描かれ、
-/// 落ち着くと親の列へ戻る（要件 1.9, 3.1, 3.3）。
+/// 落ち着くと親の列へ戻る。
 #[test]
 fn frequent_node_promotes_leaves_parent_and_returns_when_quiet() {
     let mut ecs = device_world();
@@ -180,7 +180,7 @@ fn auto_owner_missing_from_every_scan_demotes() {
 }
 
 /// 根が 2 つの木（持ち主 → 節 → 持ち主 → 節）で、内の持ち主の置き場は外の根の回で書かれ、
-/// 内の根の回で外されず、回をまたいで付いたり外れたりしない（要件 5.1）。
+/// 内の根の回で外されず、回をまたいで付いたり外れたりしない。
 #[test]
 fn nested_owner_placement_does_not_flap_with_two_roots() {
     let mut ecs = device_world();
@@ -237,7 +237,7 @@ fn auto_size(world: &World, e: Entity) -> Option<(u32, u32)> {
 }
 
 /// 自動の持ち主の描画面は配置の外接矩形でなく置き場の大きさで作り、範囲がはみ出した回は
-/// 作り直す（要件 2.7）。
+/// 作り直す。
 #[test]
 fn auto_owner_surface_takes_placement_size_and_regrows() {
     let mut ecs = device_world();

@@ -1,4 +1,4 @@
-//! 決定論 spine e2e（design.md「spine e2e（決定論・純 x64）」）。
+//! 決定論 spine e2e。
 //!
 //! 本ファイルは spine の子モジュールと兄弟の統合テストが共有するテスト専用の型と道具を置く:
 //! - [`ScriptedShioriBackend`] — `areka_kanade::ShioriBackend` を実装する台本 fake。
@@ -24,27 +24,24 @@ pub(crate) const BOUND: std::time::Duration = std::time::Duration::from_secs(60)
 /// talk 駆動の効果（cue 発火・TalkDone・その後段の close 握手）を待つ有界スピン。
 /// **待っている間も dispatcher へ Tick を注入し続ける**のが本ヘルパの要点である。
 ///
-/// # なぜ「待つ間も注入し続ける」必要があるか（2026-07-30・S1/S4/S5 の共通根因）
+/// # なぜ「待つ間も注入し続ける」必要があるか
 ///
-/// `TickerMode::Disabled` 下では仮想時刻は**注入された Tick でしか進まない**。ゆえに
-/// 「最初の cue が出たら Tick を止めて `yield_now` だけで待つ」旧形は、スレッド
-/// スケジューリング次第で**両方向に**壊れる:
+/// `TickerMode::Disabled` 下では仮想時刻は**注入された Tick でしか進まない**。ゆえに「最初の cue が出たら
+/// Tick を止めて `yield_now` だけで待つ」形は、スレッドスケジューリング次第で**両方向に**壊れる:
 ///
-/// - **注入不足**（引き渡しが速く `now` が talk horizon 未満で止まる）: 挨拶 talk
-///   （`\s[0]hello\e`＝`hello` の 0.25s）が完了せず `TalkDone` が出ない。kanade は
-///   DD-IT-12 により `Steady{talk: Some(greeting)}` で close を保留し続け、以降 Tick が
-///   来ないので**永久に握手が始まらない**（S4 の `Unload` 待ち・S5 の `OnClose` 待ちが
-///   60s 安全弁まで空転して落ちる）。
-/// - **注入過多**（引き渡しが遅く、dispatcher の**無制限** inbox に Tick が溜まる）:
-///   溜まった分を一気に drain して仮想時刻が horizon を飛び越え、初回起動 epilogue cue
-///   （`areka.prop.set`@0.25）まで発火してしまう（S1 の cue 列アサートが 3 件期待で落ちる）。
+/// - **注入不足**（引き渡しが速く `now` が talk horizon 未満で止まる）: 挨拶 talk（`\s[0]hello\e`＝`hello` の
+///   0.25s）が完了せず `TalkDone` が出ない。kanade は `Steady{talk: Some(greeting)}` で close を保留し続け、
+///   以降 Tick が来ないので**永久に握手が始まらない**（S4 の `Unload` 待ち・S5 の `OnClose` 待ちが 60s 安全弁まで
+///   空転して落ちる）。
+/// - **注入過多**（引き渡しが遅く、dispatcher の**無制限** inbox に Tick が溜まる）: 溜まった分を一気に drain して
+///   仮想時刻が horizon を飛び越え、初回起動 epilogue cue（`areka.prop.set`@0.25）まで発火してしまう（S1 の
+///   cue 列アサートが 3 件期待で落ちる）。
 ///
-/// どちらも「仮想時刻の進み具合」を**待機の副作用**に委ねていたことが原因である。本ヘルパは
-/// 待機条件を `done` で明示的に表明させ、仮想時刻は常に単調前進させる——これにより
-/// 「何を待っているか」と「時計をどれだけ進めたか」が分離され、結果が決定的になる。
+/// 本ヘルパは待機条件を `done` で明示的に表明させ、仮想時刻は常に単調前進させる。これにより「何を待っているか」と
+/// 「時計をどれだけ進めたか」が分離され、結果が決定的になる。
 ///
-/// `send_tick` は dispatcher 宛の Tick 送出のみを行うこと（kanade 宛の Tick は
-/// `Steady` pump として消費され台本外の `OnSecondChange` NOTIFY を誘発する）。
+/// `send_tick` は dispatcher 宛の Tick 送出のみを行うこと（kanade 宛の Tick は `Steady` pump として消費され
+/// 台本外の `OnSecondChange` NOTIFY を誘発する）。
 pub(crate) fn spin_pumping_ticks(
     what: &str,
     now: &mut u64,
@@ -190,10 +187,9 @@ pub(crate) fn non_status_calls(handle: &ScriptedShioriHandle) -> Vec<RecordedCal
 
 // ===================== ScriptedShioriBackend =====================
 
-/// backend が受領した 1 呼出の記録（照合用・要件 7.1「発火内容を蓄積して照合できる」）。
+/// backend が受領した 1 呼出の記録（照合用）。
 ///
-/// `Get`/`Notify` は id・references を保持する（task-spec の「id + references 最低限」）。
-/// `Unload`/`Status` は引数を持たないため variant のみで足りる。
+/// `Get`/`Notify` は id・references を保持する。`Unload`/`Status` は引数を持たないため variant のみで足りる。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecordedCall {
     /// GET 呼出（応答を要するイベント）。
@@ -308,12 +304,11 @@ impl Default for ScriptedShioriBackendBuilder {
     }
 }
 
-/// 台本化したテスト専用 SHIORI backend（`areka_kanade::ShioriBackend` 実装・要件 7.1/7.6）。
+/// 台本化したテスト専用 SHIORI backend（`areka_kanade::ShioriBackend` 実装）。
 ///
-/// プロセス spawn・実窓・i686 成果物を一切要さない（純 x64・要件 7.6）。応答・終了結果は
-/// [`ScriptedShioriBackendBuilder`] で事前登録し、`status()` は [`ScriptedShioriHandle`]
-/// 経由でテスト自身のスレッドから途中差し替え可能（helper がシナリオ途中で死ぬ様子を
-/// 再現するための capability・後続タスクの S3 が利用する）。
+/// プロセス spawn・実窓・i686 成果物を一切要さない（純 x64）。応答・終了結果は [`ScriptedShioriBackendBuilder`] で
+/// 事前登録し、`status()` は [`ScriptedShioriHandle`] 経由でテスト自身のスレッドから途中差し替え可能
+/// （helper がシナリオ途中で死ぬ様子を再現する。S3 が利用する）。
 pub struct ScriptedShioriBackend {
     get_scripts: HashMap<String, VecDeque<Result<Option<String>, RequestError>>>,
     notify_scripts: HashMap<String, VecDeque<Result<(), RequestError>>>,
@@ -422,11 +417,10 @@ impl ScriptedShioriHandle {
 
 /// テスト専用の `Clone` 可能な記録 sink（演者非依存の単一出力契約 [`CueSink`] を実装する）。
 ///
-/// sakura の `MockSink`（`tests/ghost/` から見て他クレートの凍結面）とは同型だが
-/// `Clone` を実装しない。dispatcher の per-talk 注入（`S: CueSink + Clone`/`T: CueSink + Clone`）
-/// を満たすため、`tests/ghost/` 側で定義し直す（sakura の `sink.rs` には手を入れない・
-/// design.md 「spine e2e」参照）。broadcast ゆえ登録された全 sink が全 cue を受ける
-/// （surface/text スロットの別なく同一の全 cue が届く・演者側 relevance が action を選別する）。
+/// sakura の `MockSink`（`tests/ghost/` から見て他クレートの凍結面）とは同型だが `Clone` を実装しない。
+/// dispatcher の per-talk 注入（`S: CueSink + Clone`/`T: CueSink + Clone`）を満たすため、`tests/ghost/` 側で
+/// 定義し直す。broadcast ゆえ登録された全 sink が全 cue を受ける（surface/text スロットの別なく同一の全 cue が
+/// 届き、演者側 relevance が action を選別する）。
 #[derive(Clone)]
 pub struct RecordingSink {
     records: Arc<Mutex<Vec<TalkCue>>>,

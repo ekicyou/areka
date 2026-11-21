@@ -1,5 +1,3 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
-
 use areka_sakura::contract::{ActorKey, CueCommand};
 
 use super::test_support::{
@@ -9,12 +7,12 @@ use super::test_support::{
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::{SpanKind, TextLayerConfig};
 
-// ══ Clear/ClearAll の原子的無効化（hover リセット＋ヒット行スナップショット無効化・R5.1/5.2/5.4） ══
+// ══ Clear/ClearAll の原子的無効化（hover リセット＋ヒット行スナップショット無効化） ══
 
-/// Observable（5.1/5.2/5.4）: `apply_cue(Clear)` は当該 actor の hover を None へリセットし、
-/// ヒット行スナップショットを純粋状態の選択肢消去と**原子的**に無効化する（present を待たず
-/// `choice_hit_rows` が空・`choice_active` が false へ同時に揃う——表示と hit の片方だけが
-/// 古い状態に残らない）。後続の新選択肢集合は stale hover を引き継がず、ハイライト無しで描画される。
+/// `apply_cue(Clear)` は当該 actor の hover を None へ戻し、ヒット行スナップショットを
+/// 選択肢の消去と**原子的**に無効化する。present を待たず `choice_hit_rows` が空・
+/// `choice_active` が false に同時に揃い、表示と hit の片方だけが古い状態に残らない。
+/// 続く新しい選択肢は古い hover を引き継がず、ハイライト無しで描画される。
 #[test]
 fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
     let (mut world, window, slot) = com_world();
@@ -29,14 +27,12 @@ fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    // 選択肢を提示しヒット行を population・ordinal 0 を hover 注入して再提示（ハイライトが載る）。
     present_frame(&mut rt, &mut world, 10.0).expect("提示（population）");
     assert_eq!(rt.choice_hit_rows(&actor).len(), 2, "Clear 前はヒット行 2");
     assert!(rt.choice_active(&actor), "Clear 前は choice_active=true");
     rt.inject_choice_hover(&actor, Some(0));
     present_frame(&mut rt, &mut world, 10.0).expect("hover 提示");
 
-    // Clear 注入——present を待たず表示層 state と hit スナップショットが原子的に無効化される。
     rt.apply_cue(&cue("0", 11.0, CueCommand::Clear));
     assert!(
         rt.choice_hit_rows(&actor).is_empty(),
@@ -47,11 +43,10 @@ fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
         "Clear は選択肢スパンを消し choice_active=false（5.1）"
     );
 
-    // Clear 後フレーム（提示の後もヒット行が空のままなのは
-    // `clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic` が見る）。
+    // 提示の後もヒット行が空のままなのは
+    // `clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic` が見る。
     present_frame(&mut rt, &mut world, 12.0).expect("Clear 後フレーム");
 
-    // 新しい選択肢集合を注入——stale hover（Some(0)）を引き継がず、ハイライト無しで描画される（5.4）。
     rt.apply_cue(&choice_cue("0", 13.0, "OnA", "あか", &["a"]));
     rt.apply_cue(&choice_cue("0", 13.2, "OnB", "あお", &["b"]));
     present_frame(&mut rt, &mut world, 20.0).expect("新選択肢提示");
@@ -62,8 +57,8 @@ fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
 
     let read = |rt: &TextLayerRuntime| -> usize { opaque_count(&read_back(rt, &actor)) };
     let after_new = read(&rt);
-    // hover を明示 None にして再提示——Clear が hover を既に None へ揃えていれば NoChange
-    // （ハイライトの増減なし）。stale hover が残っていれば present で剥がれてピクセルが減る。
+    // Clear が hover を既に None にしていれば再提示は NoChange。古い hover が残っていれば
+    // 再提示で剥がれて画素が減る。
     rt.inject_choice_hover(&actor, None);
     present_frame(&mut rt, &mut world, 20.0).expect("None 再提示");
     let after_none = read(&rt);
@@ -73,9 +68,9 @@ fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
     );
 }
 
-/// Observable（5.1/5.2/5.4・ClearAll 全スコープ）: `apply_cue(ClearAll)` は cue が名指ししない
-/// actor を含む**全** actor の hover を None へリセットし、各 actor のヒット行スナップショットを
-/// 純粋状態の全スコープ消去と原子的に無効化する。後続の新選択肢集合は stale hover を引き継がない。
+/// `apply_cue(ClearAll)` は cue が名指ししない actor を含む**全** actor の hover を None へ戻し、
+/// 各 actor のヒット行スナップショットを全スコープの消去と原子的に無効化する。
+/// 続く新しい選択肢は古い hover を引き継がない。
 #[test]
 fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
     let (mut world, window0, slot0) = com_world();
@@ -85,7 +80,6 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
     let a1 = ActorKey::from("1");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let image = (120u32, 60u32);
-    // 両 actor に選択肢＋装着。
     rt.apply_cue(&choice_cue("0", 0.0, "Q0", "はい", &["r0"]));
     rt.apply_cue(&choice_cue("1", 0.0, "Q1", "いいえ", &["r1"]));
     rt.register_actor(
@@ -110,12 +104,10 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
         1,
         "ClearAll 前 actor1 ヒット行 1"
     );
-    // 両 actor に hover 注入して再提示（両供給面へハイライトが載る）。
     rt.inject_choice_hover(&a0, Some(0));
     rt.inject_choice_hover(&a1, Some(0));
     present_frame(&mut rt, &mut world, 10.0).expect("hover 提示");
 
-    // ClearAll（cue.actor="0"）——名指ししない actor(1) を含む全スコープが原子的に無効化される。
     rt.apply_cue(&cue("0", 11.0, CueCommand::ClearAll));
     for a in [&a0, &a1] {
         assert!(
@@ -129,7 +121,6 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
     }
     present_frame(&mut rt, &mut world, 12.0).expect("ClearAll 後フレーム");
 
-    // 新選択肢集合を両 actor へ——stale hover を引き継がずハイライト無しで描画（5.4）。
     rt.apply_cue(&choice_cue("0", 13.0, "N0", "あか", &["a"]));
     rt.apply_cue(&choice_cue("1", 13.0, "N1", "あお", &["b"]));
     present_frame(&mut rt, &mut world, 20.0).expect("新選択肢提示");
@@ -146,7 +137,6 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
     );
     let after_new_0 = read(&rt, &a0);
     let after_new_1 = read(&rt, &a1);
-    // 両 actor の hover を明示 None にして再提示——ClearAll が既に None へ揃えていれば NoChange。
     rt.inject_choice_hover(&a0, None);
     rt.inject_choice_hover(&a1, None);
     present_frame(&mut rt, &mut world, 20.0).expect("None 再提示");
@@ -162,11 +152,11 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
     );
 }
 
-// ══ ライフサイクル無効化の同一フレーム原子性（画素消滅＋契約無効化の同時観測・R5.1/5.2/5.3/7.3/7.4） ══
+// ══ ライフサイクル無効化の同一フレーム原子性（画素消滅＋契約無効化の同時観測） ══
 
-/// Observable（5.1/5.2/7.3/7.4・シナリオA=Clear）: Clear 注入→FullClear フレームの**同一 post-present 観測**で、
-/// 選択肢行バンドのインク消滅・`choice_hit_rows` 空・`choice_active=false` の三者が**同時**に成立する
-/// （上の節は present 前の契約レベル原子性——この節は FullClear 提示後の画素消滅を契約空と同一フレームで束ねる）。
+/// Clear を注入した FullClear フレームの提示後に、選択肢行バンドのインク消滅・
+/// `choice_hit_rows` 空・`choice_active=false` が**同時**に成立する。
+/// 上の節は present 前の契約の原子性で、この節は FullClear 提示後の画素消滅を同じ時点で束ねる。
 #[test]
 fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
     let (mut world, window, slot) = com_world();
@@ -182,12 +172,10 @@ fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    // ── ベースライン: 提示で選択肢を population。選択肢行バンドを捕捉し、三者の生存を確認。
     present_frame(&mut rt, &mut world, 10.0).expect("提示（population）");
     let base_rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(base_rows.len(), 2, "Clear 前はヒット行 2");
     assert!(rt.choice_active(&actor), "Clear 前は choice_active=true");
-    // 選択肢行バンド（各ヒット行の y レンジ）を捕捉。
     let bands: Vec<(u32, u32)> = base_rows
         .iter()
         .map(|r| {
@@ -203,32 +191,29 @@ fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
         );
     }
 
-    // ── Clear 注入→FullClear フレーム提示。この直後の**同一観測**で三者が同時に揃う。
     rt.apply_cue(&cue("0", 11.0, CueCommand::Clear));
     present_frame(&mut rt, &mut world, 12.0).expect("FullClear フレーム提示");
 
-    // 同一 post-present 観測①: 供給面は全域透明（選択肢行の帯のインクも消える・FullClear＝描画 0 件の全域リセット・7.3/7.4）。
+    // FullClear は描画 0 件の全域リセットなので、供給面は全域透明（選択肢行の帯のインクも消える）。
     let cleared_bytes = read_back(&rt, &actor);
     assert_eq!(
         opaque_count(&cleared_bytes),
         0,
         "FullClear 後の供給面は全域透明"
     );
-    // 同一観測②: 契約ヒット行が空。
     assert!(
         rt.choice_hit_rows(&actor).is_empty(),
         "FullClear 後の同一フレームで choice_hit_rows が空（5.2）"
     );
-    // 同一観測③: choice_active=false。
     assert!(
         !rt.choice_active(&actor),
         "FullClear 後の同一フレームで choice_active=false（5.1）"
     );
 }
 
-/// Observable（5.1/5.2/5.3/7.3/7.4・シナリオB=新 talk）: ClearAll＋新 Choice 集合（別 id）注入→提示の
-/// 同一フレームで、旧選択肢が画素・契約とも消え、**新集合のみ**が保持される（5.3）。ClearAll 直後（提示前）に
-/// 旧集合のヒット行が残らないことは `clear_all_resets_hover_and_hit_rows_for_every_actor` が見る。
+/// ClearAll と別 id の新しい選択肢を注入して提示した同一フレームで、旧選択肢が画素・契約とも
+/// 消え、**新しい選択肢だけ**が残る。ClearAll 直後（提示前）に旧ヒット行が残らないことは
+/// `clear_all_resets_hover_and_hit_rows_for_every_actor` が見る。
 #[test]
 fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
     let (mut world, window, slot) = com_world();
@@ -242,7 +227,6 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    // ── 集合1（旧）: OnYes/OnNo を population。ベースラインの id・画素を確認。
     rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
     rt.apply_cue(&choice_cue("0", 0.2, "OnNo", "いいえ", &["r1"]));
     present_frame(&mut rt, &mut world, 10.0).expect("提示（集合1 population）");
@@ -260,10 +244,8 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
     let old_bytes = read_back(&rt, &actor);
     assert!(opaque_count(&old_bytes) > 0, "集合1 は画素が描かれる");
 
-    // ── ClearAll 注入（提示前の無効化は `clear_all_resets_hover_and_hit_rows_for_every_actor` が見る）。
     rt.apply_cue(&cue("0", 11.0, CueCommand::ClearAll));
 
-    // ── FullClear フレーム提示（2 段階クリアの第 1 相・上の節と同型）——旧集合の画素が消える。
     present_frame(&mut rt, &mut world, 12.0).expect("FullClear フレーム提示");
     let cleared_bytes = read_back(&rt, &actor);
     assert_eq!(
@@ -272,12 +254,10 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
         "FullClear で旧集合（集合1）の画素は全域消滅する（stale 残留なし）"
     );
 
-    // ── 集合2（新・別 id）: OnA/OnB を注入し提示。この同一フレームで新集合のみが保持される。
     rt.apply_cue(&choice_cue("0", 13.0, "OnA", "あか", &["a"]));
     rt.apply_cue(&choice_cue("0", 13.2, "OnB", "あお", &["b"]));
     present_frame(&mut rt, &mut world, 20.0).expect("提示（集合2）");
 
-    // 契約: 新集合のみ（旧 id は一切残らない・5.3）。
     let new_rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(new_rows.len(), 2, "集合2 はヒット行 2（新集合のみ）");
     assert_eq!(
@@ -290,7 +270,6 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
         "集合2 提示後は choice_active=true"
     );
 
-    // 画素: 新集合の行バンドにインクがある＝新選択肢が描かれている（7.3/7.4）。
     let new_bytes = read_back(&rt, &actor);
     for (i, r) in new_rows.iter().enumerate() {
         let (_, y0, _, y1) = row_px(r);
@@ -383,7 +362,7 @@ fn clear_drops_anchor_hit_rows_and_hit_active_atomically() {
     assert!(!rt.hit_active(&actor));
 }
 
-// ══ 全消しの後の作りたての場所（audit-emo-text-state-actor 指摘 11） ══
+// ══ 全消しの後の作りたての場所 ══
 
 /// `\p[0]a`〜`\p[999]a` の後に全消しを 2 回すると、場所の数は登録した 2 つのスコープへ戻る
 /// （作りたてと同じで面を持たない場所を外す）。消した回数は外さないので減らない。

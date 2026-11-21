@@ -2,9 +2,8 @@
 //!
 //! WM_ERASEBKGND, WM_PAINT, WM_CLOSE, WM_ENDSESSION, WM_DISPLAYCHANGE
 //!
-//! NOTE: WM_NCCREATE / WM_NCDESTROY（GWLP_USERDATA への Entity 格納・破棄時 despawn）は
-//! 旧 `ecs_wndproc` 専用だったため撤去した（task 4.5）。新経路ではウィンドウ生成・破棄を
-//! ライブラリ／`WindowRegistry` の drop 駆動が所管する。
+//! WM_NCCREATE / WM_NCDESTROY は扱わない。ウィンドウの生成・破棄はライブラリと `WindowRegistry` の
+//! drop 駆動が所管する。
 
 #![allow(non_snake_case)]
 
@@ -23,18 +22,12 @@ use crate::ecs::world::EcsWorld;
 type HandlerResult = Option<LRESULT>;
 
 /// 「対象 entity が既に破棄済み（despawn 済み）ゆえ正常終了系として打ち切った」ことを
-/// 終了時ログから grep で引くための接頭辞（Req 6.2/6.3・design D16）。
+/// 終了時ログから grep で引くための接頭辞。
 ///
-/// # なぜ wintf 側に同じ語を置くのか
-///
-/// この区別——**entity 不在＝破棄済み（正常終了系・`debug!`）／entity は実在するが規約
-/// component が欠落（真の異常・`warn!`）**——はタスク 3.2 が areka の消費側 4 入口へ、
-/// タスク 7.3 が areka の despawn 呼出点 2 箇所へ敷いたものと**同一**である。終了時ログの
-/// 読み手は主体を問わず 1 語で引けなければならないので、**文字列は areka
-/// （`areka_placement::diag::DESPAWNED_SKIP_TAG`）と同一に保つ**こと。
-///
-/// 定数そのものを共有しないのは design の依存方向規約（**wintf → areka の import は禁止**・
-/// File Structure Plan 直下）による。areka 側の定数を参照してはならない。
+/// entity 不在＝破棄済み（正常終了系・`debug!`）／entity は実在するが規約 component が欠落
+/// （真の異常・`warn!`）という区別は areka 側と同一で、終了時ログの読み手が主体を問わず 1 語で
+/// 引けるよう、文字列は `areka_placement::diag::DESPAWNED_SKIP_TAG` と同一に保つこと。
+/// wintf から areka への import は禁止なので、定数は共有せず同じ値を置く。
 pub(crate) const DESPAWNED_SKIP_TAG: &str = "[despawn-skip]";
 
 /// WM_ERASEBKGND: 背景消去要求
@@ -48,7 +41,7 @@ pub(super) fn WM_ERASEBKGND(
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    Some(LRESULT(1)) // 背景消去をスキップ
+    Some(LRESULT(1))
 }
 
 /// WM_PAINT: 再描画要求
@@ -62,38 +55,28 @@ pub(super) fn WM_PAINT(
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    // GPU 合成（WUC）は OS 管理: DefWindowProcW に委譲
     None
 }
 
 /// WM_CLOSE: ウィンドウクローズ要求
 ///
 /// 対象 Entity の除去要求（despawn）として処理する。`DestroyWindow` を直叩きせず、
-/// `Window` コンポーネント消失を `RemovedComponents<Window>`（reconcile_window_registry・
-/// タスク 3.3）が検知し、レジストリ要素 drop 駆動で `DestroyWindow` させることで
-/// ハンドル破棄を Entity ライフサイクルに一致させる（要件 1.3）。
+/// `Window` コンポーネント消失を `RemovedComponents<Window>`（`reconcile_window_registry`）が
+/// 検知し、レジストリ要素の drop で `DestroyWindow` させることで、ハンドル破棄を Entity
+/// ライフサイクルに一致させる。
 ///
-/// 同期再入時の二重借用を避けるため `try_borrow_mut` を用い、既に借用中なら
-/// safe-skip する（パニックさせない）。`Some(LRESULT(0))` を返して既定手続きの
-/// `DestroyWindow` を抑止する（破棄は reconcile 経由・要件 2.3）。
+/// 同期再入時の二重借用を避けるため `try_borrow_mut` を用い、既に借用中なら safe-skip する
+/// （パニックしない）。`Some(LRESULT(0))` を返して既定手続きの `DestroyWindow` を抑止する。
 ///
-/// # 陳腐化した id の打ち切り（要件 6.2/6.3・design D16・タスク 7.5）
+/// # 陳腐化した id の打ち切り
 ///
-/// 本ハンドラへ届く `entity` は**既に破棄済み**のことがある。despawn から登録簿の掃除
-/// （`reconcile_window_registry` が `DestroyWindow` する）までの間に利用者や OS が投げた
-/// `WM_CLOSE` が届くと来る。
+/// 届いた `entity` は既に破棄済みのことがある（despawn から登録簿の掃除までの間に利用者や OS が
+/// 投げた `WM_CLOSE` が届く）。そのまま `despawn` すると `bevy_ecs` が `Could not despawn entity`
+/// を `warn!` で出す（`bevy_ecs-0.18.1` `src/world/mod.rs:1462-1469`）が、これは終了処理の
+/// 正常終了系で、警告にすると本物の異常が良性ノイズに埋もれる。ゆえに [`DESPAWNED_SKIP_TAG`] の
+/// `debug!` で打ち切る。生存 entity への挙動は変わらない。
 ///
-/// そのまま `despawn` を叩くと `bevy_ecs` が `Could not despawn entity` を `warn!` で出す
-/// （`bevy_ecs-0.18.1` `src/world/mod.rs:1462-1469`）。これは終了処理の**正常終了系**であり、
-/// 警告として残すと良性ノイズが本物の異常を埋める（要件 6.2）。ゆえにタスク 3.2／7.3 と
-/// **同一の区別**をこの呼出点へも敷く: entity 不在＝正常終了系ゆえ [`DESPAWNED_SKIP_TAG`]
-/// の `debug!` で打ち切る。
-///
-/// **窓破棄の正準シグナル（`world.despawn(entity)`・
-/// `clickthrough/controller.rs:90`）は変更していない**（D16 帰結⑶）——変えたのは受け手が
-/// 陳腐化 id をどう報告するかだけであり、生存 entity に対する挙動は従来と同一である。
-///
-/// # OS の閉鎖要求を利用側へ渡す（app-lifetime-separation 要件 2.9〜2.11・3.12）
+/// # OS の閉鎖要求を利用側へ渡す
 ///
 /// 生存 entity が [`OnCloseRequest`] を持つときは、窓を消さずにその関数を呼ぶ
 /// （Alt＋F4・`taskkill`（`/F` なし）・「タスクの終了」を利用側の終了操作へ乗せる口）。
@@ -189,14 +172,12 @@ pub(super) fn WM_ENDSESSION(
 ///
 /// Appリソースのmark_display_changeを呼び出す
 ///
-/// # 遷移観測（要件 2.1）
+/// # 遷移観測
 ///
 /// 受理を `msg` レコードとして残す。モニタ表の更新は**次 tick の `Update`** で
 /// `detect_display_change_system` が行うため、受理の刻印（直近 tick の番号）と
 /// `monitor` レコードの刻印は 1 フレームずれ得る——1 本の時系列に並べたときに
 /// 「受理はいつで、表の更新はどのフレームか」が読めることが本記録の目的である。
-///
-/// 戻り値（`None`＝`DefWindowProcW` へ委譲）と `App` への標識は変えない。
 #[inline]
 pub(super) fn WM_DISPLAYCHANGE(
     world: &Rc<RefCell<EcsWorld>>,
@@ -223,7 +204,7 @@ pub(super) fn WM_DISPLAYCHANGE(
             app.mark_display_change();
         }
     }
-    None // DefWindowProcWに委譲
+    None
 }
 
 #[cfg(test)]
@@ -243,14 +224,13 @@ mod tests {
     }
 
     /// WM_CLOSE は対象 Entity を despawn し（`DestroyWindow` 直叩きをしない）、
-    /// `Some(LRESULT(0))`（既定破棄抑止）を返す（要件 1.3 / 2.3）。
+    /// `Some(LRESULT(0))`（既定破棄抑止）を返す。
     /// ヘッドレス: 実 HWND / メッセージループ不要。
     #[test]
     fn wm_close_despawns_target_entity() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
         let entity = spawn_window_entity(&world);
 
-        // 事前条件: Entity は生存している。
         assert!(
             world.borrow().world().get_entity(entity).is_ok(),
             "spawn 直後は Entity が生存しているべき"
@@ -264,14 +244,12 @@ mod tests {
             LPARAM(0),
         );
 
-        // 既定 DestroyWindow 抑止のため Some(LRESULT(0))。
         assert_eq!(
             ret,
             Some(LRESULT(0)),
             "WM_CLOSE は既定破棄抑止の Some(LRESULT(0)) を返すべき"
         );
 
-        // 反転: 除去要求として Entity が despawn されている。
         assert!(
             world.borrow().world().get_entity(entity).is_err(),
             "WM_CLOSE 後は対象 Entity が despawn されているべき（除去要求）"
@@ -279,7 +257,7 @@ mod tests {
     }
 
     /// world が既に `borrow_mut` 保持中でも WM_CLOSE はパニックせず safe-skip する
-    /// （`try_borrow_mut` による同期再入の二重借用回避・要件 2.3）。
+    /// （`try_borrow_mut` による同期再入の二重借用回避）。
     /// 借用失敗のため Entity は残存する。
     #[test]
     fn wm_close_safe_skips_when_world_already_borrowed() {
@@ -297,14 +275,12 @@ mod tests {
         );
         drop(guard);
 
-        // パニックせず Some(LRESULT(0)) を返す。
         assert_eq!(
             ret,
             Some(LRESULT(0)),
             "再入時も Some(LRESULT(0)) を返す（safe-skip）"
         );
 
-        // try_borrow_mut 失敗のため despawn されず Entity は残存。
         assert!(
             world.borrow().world().get_entity(entity).is_ok(),
             "借用中の再入では despawn されず Entity が残存するべき"
@@ -314,30 +290,23 @@ mod tests {
     /// 捕捉ハーネスに渡す directive（本モジュールの `debug!` を通す最小構成）。
     const CAPTURE_DIRECTIVES: &str = "info,wintf::ecs::window_proc=debug";
 
-    /// 陳腐化した id への `WM_CLOSE` は正常終了系として打ち切られる（Req 6.2/6.3・D16）。
+    /// 陳腐化した id への `WM_CLOSE` は正常終了系として打ち切られる。
     ///
-    /// # 経路
+    /// despawn から登録簿の掃除までの間に届いた `WM_CLOSE` では、本ハンドラが回る時点で `entity` は
+    /// 既に破棄済みである。
     ///
-    /// despawn から登録簿の掃除（`reconcile_window_registry` が `DestroyWindow` する）までの
-    /// 間に利用者や OS が投げた `WM_CLOSE` が届くと、本ハンドラが回る時点で `entity` は
-    /// **既に破棄済み**である。
+    /// # 「捕捉に警告が無い」を根拠にできない理由
     ///
-    /// # なぜ「捕捉に警告が無い」を根拠にできないか（空虚性 9 例目）
+    /// `bevy_ecs` の `Could not despawn entity` は `log::warn!` で出る（`World::despawn` は警告と
+    /// `false` を同一分岐で返す）。これが tracing 側へ届くには `LogTracer` の大域インストールが要る。
+    /// 本番は `areka` の `main.rs` の `tracing_subscriber` の `.init()` がそれを立てるが、捕捉ハーネス
+    /// `capture_under_filter` は `with_default`（スレッドローカルの差替え）で大域ブリッジを立てない
+    /// ため、`log` 発の記録は 1 件も届かない。ゆえに「捕捉に bevy の警告が無い」は恒真で、檻として
+    /// 空虚である。
     ///
-    /// `bevy_ecs` は `log::warn!` で `Could not despawn entity` を出す（`bevy_ecs-0.18.1`
-    /// `src/world/mod.rs:71` が `use log::warn;`・`World::despawn` は `:1462-1469` で
-    /// `warn!` と `false` を**同一分岐**で返す）。この `log` レコードが tracing 側へ渡るには
-    /// `LogTracer` の**大域インストール**が要る——本番は `areka` の `main.rs` が
-    /// `tracing_subscriber` の `.init()` を呼ぶことで（既定 feature の `tracing-log` 経由で）
-    /// これを立てており、実機ログに 3 件の `WARN` が載ったのはそのためである。対して
-    /// 捕捉ハーネス `capture_under_filter` は `with_default`（スレッドローカルの差替え）
-    /// であって大域ブリッジを立てないため、`log` 発の記録は**原理的に 1 件も届かない**。
-    /// ゆえに「捕捉に bevy の警告が無い」は恒真＝檻として空虚である。
-    ///
-    /// そこで本檻は ⑴**対照アーム**で `World::despawn` の戻り値 `false`（＝警告と同一分岐に
-    /// ある観測可能量）を実測し、⑵**本体アーム**で自前の打ち切り行が**在ること**を主張する。
-    /// 捕捉に対する陰性主張は wintf 自身の tracing 出力にのみ適用し、その捕捉可能性は
-    /// ⑶**自己証明アーム**で先に示す。
+    /// そこで対照アームで `World::despawn` の戻り値 `false` を実測し、本体アームで自前の打ち切り行が
+    /// 在ることを主張する。捕捉に対する陰性主張は wintf 自身の tracing 出力にだけ適用し、その
+    /// 捕捉可能性は自己証明アームで先に示す。
     #[test]
     fn wm_close_skips_stale_entity_as_normal_teardown() {
         use crate::ecs::test_support::capture_under_filter;
@@ -393,7 +362,7 @@ mod tests {
             );
         });
 
-        // D16 帰結⑶: 投函契約・窓破棄の正準シグナルは不変（既定破棄抑止のまま）。
+        // 投函契約・窓破棄の正準シグナルは不変（既定破棄抑止のまま）。
         assert_eq!(
             ret,
             Some(LRESULT(0)),
@@ -449,7 +418,7 @@ mod tests {
             );
         });
 
-        // 窓破棄の正準シグナル（`world.despawn(entity)`・clickthrough/controller.rs:90）は不変。
+        // 窓破棄の正準シグナル（`world.despawn(entity)`）は不変。
         assert!(
             world.borrow().world().get_entity(entity).is_err(),
             "生存 entity は従来どおり despawn される（正準シグナルを弱めてはならない）"

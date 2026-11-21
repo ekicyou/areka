@@ -1,4 +1,4 @@
-//! strict の台本の合図の配り口（spec: mcp-strict-errors）。`compile_strict` が残す控え [`StrictTrace`] と、
+//! strict の台本の合図の配り口。`compile_strict` が残す控え [`StrictTrace`] と、
 //! strict の talk だけ実の sink を覆う [`StrictTap`] を置く。
 
 use std::cell::RefCell;

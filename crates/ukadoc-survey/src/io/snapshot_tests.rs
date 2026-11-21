@@ -1,14 +1,14 @@
 //! `io/snapshot.rs` の在中テスト。
 //!
-//! 守るのは 4 つ。⑴ 既定の場所の組み立てが逐語で正しいこと（設計 D-7）。⑵ JSON を
+//! 守るのは 4 つ。⑴ 既定の場所の組み立てが逐語で正しいこと。⑵ JSON を
 //! `SnapshotDoc` へ写す規則が逐語で正しいこと——鍵の綴り（`generatedAt`）と欄の値を
-//! 実際の文字列で固定する（設計 D-2・付録 B 手順 1）。⑶ 形が違うとき・読めないときに
-//! 黙って通らず、どこがどう違うかと探した絶対パスが本文に載ること（要件 1.8）。
-//! ⑷ 提供パッケージの版の読み取り（要件 1.6）が package.json の欄から来て、
-//! `load_with` がその名前と版をそのまま `SnapshotDoc` へ渡すこと。
+//! 実際の文字列で固定する。⑶ 形が違うとき・読めないときに黙って通らず、どこがどう
+//! 違うかと探した絶対パスが本文に載ること。⑷ 提供パッケージの版の読み取りが
+//! package.json の欄から来て、`load_with` がその名前と版をそのまま `SnapshotDoc` へ
+//! 渡すこと。
 //!
 //! **ここでは本物のスナップショット（既定の場所や環境変数の指す先）を 1 度も読まない。
-//! 環境変数も 1 つも読まないし書かない**（要件 6.2・設計 Testing Strategy 19）。場所の
+//! 環境変数も 1 つも読まないし書かない**。場所の
 //! 決め方も JSON の写しも「値を引数で受け取る純粋な関数」に切り出してあるので、値だけで
 //! 確かめられる。ファイルを作るのは ⑷ の配線を見る 1 本だけで、置き場はワークツリーの
 //! `target\ukadoc-survey-tests\<テスト名>\`（`io::files` のテストの書き場の道具を使う）。
@@ -49,7 +49,7 @@ fn parse_minimal(text: &str) -> Result<SnapshotDoc, SurveyError> {
     parse(text, SHOWN, "ukagaka-doc-mcp", "0.2.7")
 }
 
-// ---- 既定の場所の組み立て（設計 D-7）----
+// ---- 既定の場所の組み立て ----
 
 #[test]
 fn default_path_from_appdata_spells_the_whole_tail() {
@@ -70,7 +70,7 @@ fn default_path_from_appdata_keeps_the_given_root() {
 }
 
 /// 場所の決め方の 4 通り。空の `AREKA_UKADOC_SNAPSHOT` は無いのと同じで既定へ戻り、
-/// `APPDATA` も無ければどの環境変数が足りないかを告げて失敗する（設計 D-7）。
+/// `APPDATA` も無ければどの環境変数が足りないかを告げて失敗する。
 #[test]
 fn resolve_prefers_a_non_empty_given_path_and_falls_back_to_appdata() {
     let given = || Some(OsString::from(r"D:\snap\index.json"));
@@ -93,7 +93,7 @@ fn resolve_prefers_a_non_empty_given_path_and_falls_back_to_appdata() {
     );
 }
 
-// ---- 探した絶対パスの組み立て（要件 1.8）----
+// ---- 探した絶対パスの組み立て ----
 
 #[test]
 fn absolutize_leaves_an_absolute_path_alone() {
@@ -114,7 +114,7 @@ fn absolutize_falls_back_to_the_given_spelling() {
     assert_eq!(got, "index.json");
 }
 
-/// `load` の入口が `absolutize` に繋がっていること（要件 1.8）。
+/// `load` の入口が `absolutize` に繋がっていること。
 ///
 /// `absolutize` 単体は上の 3 本で固定してあるが、`load` がそれを呼ばずに渡された綴りを
 /// そのまま載せても、単体テストは全部緑のままになる。実在しない相対パスを渡し、本文に
@@ -139,7 +139,7 @@ fn load_reports_an_absolute_path_even_when_given_a_relative_one() {
     );
 }
 
-/// 相対パスを渡しても、提供パッケージの警告の行は絶対パスを名指す（要件 1.8）。
+/// 相対パスを渡しても、提供パッケージの警告の行は絶対パスを名指す。
 ///
 /// 相手は作業ディレクトリ（`cargo test` ではこの crate の manifest の置き場）にある
 /// 本物の `Cargo.toml`。読めるのでパッケージの版を探しに行き、2 つ上の `package.json`
@@ -152,7 +152,6 @@ fn load_warns_with_an_absolute_path_even_when_given_a_relative_one() {
         "前提が崩れている: 作業ディレクトリに Cargo.toml が無い"
     );
     let here = std::env::current_dir().expect("作業ディレクトリが取れない");
-    // 絶対パスにしてから 2 つ上＝作業ディレクトリの 1 つ上の package.json を名指す。
     let expected = here
         .parent()
         .expect("作業ディレクトリの 1 つ上がある")
@@ -171,7 +170,7 @@ fn load_warns_with_an_absolute_path_even_when_given_a_relative_one() {
     );
 }
 
-// ---- 形の整った JSON の写し（設計 D-2・付録 B 手順 1）----
+// ---- 形の整った JSON の写し ----
 
 #[test]
 fn parse_reads_every_field_of_a_well_formed_document() {
@@ -210,7 +209,7 @@ fn parse_maps_generated_at_from_the_camel_case_key() {
 }
 
 /// 順序も件数も写しのまま。`source` が `ukadoc` 以外の entry もここでは落とさない
-/// （落とす／落とさないの判断はカタログ側の仕事＝要件 1.4）。
+/// （落とす／落とさないの判断はカタログ側の仕事）。
 #[test]
 fn parse_carries_every_entry_through_in_order() {
     let text = r#"{
@@ -242,7 +241,7 @@ fn parse_accepts_an_empty_entry_list() {
     assert_eq!(doc.generated_at, "t");
 }
 
-// ---- 形が違うとき（要件 1.8）----
+// ---- 形が違うとき ----
 
 #[test]
 fn parse_rejects_a_missing_top_level_version() {
@@ -337,7 +336,7 @@ fn parse_rejects_an_entry_that_is_not_a_table() {
     assert!(body.contains("entries[0]"), "何番目かが載るはず: {body}");
 }
 
-// ---- 読めないとき（要件 1.8）----
+// ---- 読めないとき ----
 
 #[test]
 fn parse_reports_broken_json_with_the_absolute_path() {
@@ -351,7 +350,7 @@ fn parse_reports_broken_json_with_the_absolute_path() {
     assert!(body.contains("JSON"), "理由が載るはず: {body}");
 }
 
-// ---- 提供パッケージの版（要件 1.6・設計 D-7）----
+// ---- 提供パッケージの版 ----
 
 #[test]
 fn package_json_path_is_two_directories_above_the_snapshot() {
@@ -399,7 +398,7 @@ fn package_fields_gives_up_on_broken_json() {
     assert!(package_fields("{\"name\":").is_none());
 }
 
-/// `load_with` が読めた名前と版を捨てずに `SnapshotDoc` へ渡すこと（要件 1.6）。
+/// `load_with` が読めた名前と版を捨てずに `SnapshotDoc` へ渡すこと。
 ///
 /// `package_fields` と `package_json_path` は単体で固定してあるが、`load_with` が成功の
 /// 値を捨てて常に [`UNKNOWN`] を入れても、警告が出ないだけで単体テストは緑のまま。

@@ -35,7 +35,7 @@ fn missing(events: &[CapturedEvent]) -> Vec<String> {
         .collect()
 }
 
-/// 頭の `surface` は付けても省いても、大文字小文字を問わず同じ（3.1）。
+/// 頭の `surface` は付けても省いても、大文字小文字を問わず同じ。
 #[test]
 fn surface_prefix_is_optional_and_case_insensitive() {
     let (ids, events) = run("0,surface1,SURFACE2,Surface3-4,!4");
@@ -51,7 +51,7 @@ fn only_one_surface_prefix_is_removed() {
     assert_eq!(warns(&events, UNREADABLE), vec!["surfacesurface1"]);
 }
 
-/// 範囲は両端を含み、在る面だけになる。範囲の中の欠番は記録しない（3.2・3.4）。
+/// 範囲は両端を含み、在る面だけになる。範囲の中の欠番は記録しない。
 #[test]
 fn range_keeps_existing_ids_and_silently_skips_gaps() {
     let (ids, events) = run("9-25");
@@ -67,7 +67,7 @@ fn range_with_equal_ends_is_one_surface() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// 除外と除外の範囲は、書かれた位置に関わらず包含から引く（3.2）。
+/// 除外と除外の範囲は、書かれた位置に関わらず包含から引く。
 #[test]
 fn exclusions_subtract_from_inclusions_regardless_of_position() {
     let (ids, events) = run("!3,0-10,!5-7,20");
@@ -83,7 +83,7 @@ fn exclusions_alone_select_nothing() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// 読めない要素（空・数でない・`a > b`）はその要素だけ Warning で飛ばし、ほかは読む（3.5）。
+/// 読めない要素（空・数でない・`a > b`）はその要素だけ Warning で飛ばし、ほかは読む。
 #[test]
 fn unreadable_elements_are_skipped_with_a_warning_each() {
     let (ids, events) = run("1,,abc,5-3,!x,-2,3-,surface,2");
@@ -95,7 +95,7 @@ fn unreadable_elements_are_skipped_with_a_warning_each() {
     assert_eq!(events.len(), 7, "読めない要素ごとに 1 件だけ: {events:?}");
 }
 
-/// 単独の番号で指した無い面は Warning（3.3）。除外で指した無い面は記録しない。
+/// 単独の番号で指した無い面は Warning。除外で指した無い面は記録しない。
 #[test]
 fn missing_single_surface_warns_once() {
     let (ids, events) = run("1,15,15,surface15,!16");
@@ -104,7 +104,7 @@ fn missing_single_surface_warns_once() {
     assert_eq!(events.len(), 1, "{events:?}");
 }
 
-/// 同じ面を何度指しても 1 度だけ・番号の昇順（3.7）。
+/// 同じ面を何度指しても 1 度だけ・番号の昇順。
 #[test]
 fn duplicates_are_written_once_in_ascending_order() {
     let (ids, events) = run("20,3,1-4,surface3,2");

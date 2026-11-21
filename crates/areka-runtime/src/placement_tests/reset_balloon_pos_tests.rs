@@ -1,5 +1,4 @@
-//! バルーン位置初期化（[`reset_balloon_positions`]）の檻（areka-P0-window-link-directives
-//! 要件 7.1〜7.4・9.5・design「reset_balloon_pos」）。
+//! バルーン位置初期化（[`reset_balloon_positions`]）のテスト。
 //!
 //! 窓の一式は起動の準備（`prepare_ghost_windows_with_work_area`）が解いた配置を本番と同じ
 //! `spawn_ghost_windows` で組み、材料は準備が運んだ [`DefaultPlacementBasis`] を置く。標準の位置は
@@ -166,7 +165,7 @@ fn events_named(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
         .collect()
 }
 
-/// キーワードのバルーン（`windowposition.x,center`）で組む合成の検体（本文は `reseed_tests` t_rs05 と同じ共有の定数）。
+/// キーワードのバルーン（`windowposition.x,center`）で組む合成の検体（本文は `reseed_tests` と同じ共有の定数）。
 fn keyword_fixture(root: &TempPath) -> (PathBuf, PathBuf) {
     let (ghost, balloon) = synth_declared_dpi_ghost(
         root.path(),
@@ -181,7 +180,7 @@ fn keyword_fixture(root: &TempPath) -> (PathBuf, PathBuf) {
     (ghost, balloon)
 }
 
-/// areka-P0-window-link-directives 要件 7.1・7.2・7.3・9.5: ドラッグでずらしたバルーンが標準の位置（起動の準備が解いた位置）へ戻り、
+/// ドラッグでずらしたバルーンが標準の位置（起動の準備が解いた位置）へ戻り、
 /// 部品のずらしの基準とキーワードの素材が標準どおりに入り、記憶のずらしの鍵が消え、
 /// スコープごとに 1 行記録される。キャラクターの窓・`Anchored`・`AnchorSource`・組の帳簿は変わらない。
 #[test]
@@ -377,7 +376,7 @@ fn reset_forgets_offsets_in_one_commit_and_next_boot_uses_the_keyword_standard()
     rig.finish();
 }
 
-/// areka-P0-window-link-directives 要件 7.4: 起動の準備が置く材料と、同じシェルへ切り替えたときの資産づくりから置く材料で、
+/// 起動の準備が置く材料と、同じシェルへ切り替えたときの資産づくりから置く材料で、
 /// 初期化したバルーンの位置が同じになる（どちらも起動の標準の位置）。
 #[test]
 fn boot_basis_and_switch_basis_give_the_same_positions() {
@@ -481,7 +480,7 @@ fn unresolved_scope_is_skipped_with_scope_and_the_rest_reset() {
     assert_eq!(skips[0].field("scope"), Some("0"));
     assert_eq!(skips[0].field_str("reason"), Some("not_resolved"));
     assert_eq!(rig.balloon_pos(0), stuck, "外したスコープは動かない");
-    // 残ったスコープ 1 だけで解くので位置は起動と違い得る——今の部品のずらしで付いたことを見る。
+    // 残ったスコープ 1 だけで解くので位置は起動と違い得る。部品のずらしで付いたことを見る。
     let c1 = rig.char_window(1);
     let off = rig.world.get::<BalloonFollow>(c1).unwrap().offset();
     assert_ne!(off, DRAGGED, "スコープ 1 は標準のずらしへ入れ直される");

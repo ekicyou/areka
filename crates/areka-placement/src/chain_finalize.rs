@@ -1,12 +1,11 @@
-//! 実表示寸での連鎖再解決（areka-P0-scope-chain-gap 要件 7・design C6）。
+//! 実表示寸での連鎖再解決。
 //!
 //! # なぜ要るか
 //!
 //! 初期配置（[`super::resolver::resolve_placement`]）は **spawn 時点で判っているサーフェス寸**で
 //! 解決される。ところがゴーストは起動直後に別のサーフェスを選び得るため、実表示寸が配置時と
-//! 異なることがある。窓は下端中央を保ったまま再アンカーされる（`follow::resize_window_to`・
-//! 完了済み `areka-P0-surface-resize-resnap` の領分）ので**各キャラの接地点は正しい**が、
-//! スコープ間の連鎖は再計算されず、幅の変化ぶんだけ隣接が崩れる。
+//! 異なることがある。窓は下端中央を保ったまま再アンカーされる（`follow::resize_window_to`）ので
+//! **各キャラの接地点は正しい**が、スコープ間の連鎖は再計算されず、幅の変化ぶんだけ隣接が崩れる。
 //!
 //! 実機実測（emo2・拡大率 200%）: 配置は scope0 幅 868 で解決され隙間 0。直後に実表示面
 //! （幅 764）へ切り替わり、下端中央固定の再アンカーで左端が `(868−764)÷2 = 52` 右へ寄って
@@ -14,28 +13,28 @@
 //!
 //! # 何をするか
 //!
-//! 「初期配置は実表示寸が確定するまで暫定」とみなし、確定時に**連鎖だけ**を解き直す
-//! （要件 7.1）。式は組の決めで 3 つある（[`resolve_chain`]）——左に付ける組は resolver の P2 式
+//! 「初期配置は実表示寸が確定するまで暫定」とみなし、確定時に**連鎖だけ**を解き直す。
+//! 式は組の決めで 3 つある（[`resolve_chain`]）——左に付ける組は resolver の P2 式
 //! `new_x(n) = x(prev) − w(n)`、`defaultx` だけ空けて左に付ける組は `new_x(n) = x(prev) − w(n) − defaultx`、
 //! 右に付ける組（起動では記憶の印が右）は `new_x(n) = x(prev) + w(prev)`（prev は鎖の前のスロット）。
 //! 記憶に位置の無いスコープをどの式で解くか（または動かさないか）は、resolver と同じ揃え方の規則で決める（[`boot_default_decision`]）。
 //!
-//! - **先頭スコープは動かさない**（連鎖の起点・接地点は不変・7.2）。
-//! - **Y は扱わない**（下端吸着は各窓の再アンカーが既に保っている・7.2）。
-//! - **明示的に再配置されたスコープは対象外**（7.3）。起動時の確定の判定は「現在位置が既定位置と
+//! - **先頭スコープは動かさない**（連鎖の起点・接地点は不変）。
+//! - **Y は扱わない**（下端吸着は各窓の再アンカーが既に保っている）。
+//! - **明示的に再配置されたスコープは対象外**。起動時の確定の判定は「現在位置が既定位置と
 //!   一致するか」で行う——利用者のドラッグで動いた窓は一致しなくなるため除外できる。ゴースト台本の
 //!   `\![move]` が置いた窓（連れ動いた組の相手を含む）は、x が既定のまま（縦にだけ動いた・
 //!   ちょうど既定へ置いた）でも一致してしまうので、移動側が印 [`ScriptPlaced`] を付け、起動時の
 //!   確定はその窓を動かさない。除外したスコープの**実位置**は以後の連鎖の基準
-//!   として使う（「クランプ後の実配置を連鎖基準とする」現行原則と同型・要件 2.7）。
+//!   として使う（「クランプ後の実配置を連鎖基準とする」現行原則と同型）。
 //! - 解きの核は組ごとの決め（[`PairDecision`]）を受け取る [`resolve_chain`] で、起動時の確定
 //!   （`runtime::frame` の `finalize_chain_once_with`）は記憶に位置の無いスコープを既定位置との
 //!   一致から、記憶から戻したスコープを覚えた印（[`remembered_decision`]）から決めて渡す
-//!   （`chain_rule::boot_chain`・dpi-realign-remembered-chain 要件 6.3）。拡大率の後の詰め直しは
-//!   変わる直前の隣り合い（[`judge_chain_adjacency`]）から決めを作る（`chain_realign`・同 要件 1）。
+//!   （`chain_rule::boot_chain`）。拡大率の後の詰め直しは
+//!   変わる直前の隣り合い（[`judge_chain_adjacency`]）から決めを作る（`chain_realign`）。
 //!   組の作り方は 3 か所（起動・詰め直し・隣り合いの印の保存）で同じ「鎖の規則」
 //!   （[`super::chain_rule`] の説明）。
-//! - 確定は**一度きり**で、以後のサーフェス切替では駆動しない（7.4）。その制御は呼び手
+//! - 確定は**一度きり**で、以後のサーフェス切替では駆動しない。その制御は呼び手
 //!   （`runtime::frame`）が持ち、本モジュールは純粋な判定だけを担う。
 //!
 //! # 確定が起きなかったとき
@@ -44,28 +43,28 @@
 //! 永久に揃わない）を兼ねる（起動時の確定が数えるのは areka 自身の待ちだけで、ゴースト待ちは数えない）。どちらも無音だと、隣接が崩れたままの報告を受けたときに
 //! 「確定が走らなかった」のか「走って移動 0 だった」のかをログから判別できない。そこで
 //! [`ChainFinalizeStall`] が見送りを数え、有界の待ち（[`CHAIN_FINALIZE_STALL_FRAMES`]）を
-//! 超えた時点で**一度だけ**理由つきの診断を出す（areka-P0-scope-chain-gap 6.5・steering「ログ無し失敗経路の禁止」）。
+//! 超えた時点で**一度だけ**理由つきの診断を出す（ログ無し失敗経路を作らない）。
 
 use std::fmt;
 
 use bevy_ecs::prelude::{Component, Resource};
 
 use super::resolver::Anchor;
-// 鎖に入る揃え方と左の隙間の決まりは resolver の P2 と 1 つ（audit-placement-core 503）。
+// 鎖に入る揃え方と左の隙間の決まりは resolver の P2 と 1 つ。
 pub use super::resolver::{chain_gap, joins_chain};
 
-/// 初期配置が実表示寸で確定済みであることを表す標識（要件 7.4）。
+/// 初期配置が実表示寸で確定済みであることを表す標識。
 ///
 /// 挿入されている間は連鎖の再解決を駆動しない。**一度きり**の確定を保証する制御であり、
 /// 以後のサーフェス切替（会話中の表情差替等）で位置が動かないことの構造的な根拠になる。
 ///
 /// 「一度きり」は**窓の一式ごと**である。ゴーストの切替で窓を全部閉じるとき
 /// （`app_exit::close_windows_for_restart`）に本標識と [`ChainFinalizeStall`] は外れ、
-/// 作り直した窓でも初回の起動と同じく確定が 1 回走る（areka-P0-ghost-shell-balloon-switch 要件 4.10）。
+/// 作り直した窓でも初回の起動と同じく確定が 1 回走る。
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ChainFinalized;
 
-/// 台本の `\![move]` が置いたキャラクターの窓の印（組の相手として連れ動いた窓を含む・7.3）。
+/// 台本の `\![move]` が置いたキャラクターの窓の印（組の相手として連れ動いた窓を含む）。
 ///
 /// 読むのは起動時の確定（`runtime::frame` の `finalize_chain_once_with`）・並べ終えた時点の保存
 /// （`persist::persist_unremembered_char_positions`）・面が大きくなったときの寄せ
@@ -74,7 +73,7 @@ pub struct ChainFinalized;
 /// 戻した窓からも外す。
 ///
 /// 差し込み（付け直しを含む）は拡大率の後の詰め直しへ知らせる——武装中なら「武装の後に台本が
-/// 置いた窓」として記録される（`dpi-realign-remembered-chain` 要件 3.1）。本モジュールの判定は
+/// 置いた窓」として記録される。本モジュールの判定は
 /// その記録を読まない。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[component(on_insert = super::chain_realign::note_script_placed_after_arm)]
@@ -97,8 +96,7 @@ pub struct ScopeChainState {
     /// **`None` は「そもそも既定配置ではない」**（記憶から戻したスコープ・既定の位置は外してある）。
     /// 起動の並べ直しは今の位置ではなく覚えた印で決める（[`boot_pair_decision`]）: `left`／`right` は
     /// 今の幅で鎖の前の窓に付け（`left` は `defaultx` の隙間で・鎖の規則 ⑶）、`none` と印なし・組の窓・
-    /// 台本の印は動かさない
-    /// （dpi-realign-remembered-chain 要件 6.3〜6.5）。
+    /// 台本の印は動かさない。
     pub default_x: Option<i32>,
 }
 
@@ -113,7 +111,7 @@ pub struct ChainMove {
     pub new_x: i32,
 }
 
-/// 起動の並べ直しで組（鎖の前の窓, n）に当てる決め（dpi-realign-remembered-chain design BootRemembered）。
+/// 起動の並べ直しで組（鎖の前の窓, n）に当てる決め。
 ///
 /// | 条件 | 決め |
 /// |---|---|
@@ -144,7 +142,7 @@ pub fn boot_pair_decision(
 
 /// 記憶に位置の無い、既定のままのスコープ（[`boot_pair_decision`] が `JoinLeft` を返したもの）の
 /// 決めを、resolver（[`resolve_placement`](super::resolver::resolve_placement)）と同じ揃え方の
-/// 規則で作る（audit-placement-core 指摘 485）。`anchor` と `default_x` は descript から組んだ
+/// 規則で作る。`anchor` と `default_x` は descript から組んだ
 /// 配置の設定（`ScopeConfig`）の値で、`default_x` は DPI で換算しない生の値（resolver と同じ）。
 ///
 /// | 揃え方 | 決め（resolver の式） |
@@ -161,7 +159,7 @@ pub fn boot_default_decision(anchor: Anchor, default_x: Option<i32>) -> PairDeci
 }
 
 // ---------------------------------------------------------------------------
-// 鎖の規則の部品（規則と道ごとの当て方は `chain_rule` の説明・audit-placement-core 494・495）
+// 鎖の規則の部品（規則と道ごとの当て方は `chain_rule` の説明）
 // ---------------------------------------------------------------------------
 //
 // 起動の並べ直し（`chain_rule::boot_chain`）・隣り合いの印の保存（`persist::push_adjacency_marks`）・
@@ -194,7 +192,7 @@ pub fn adjacency_decision(adjacency: Adjacency, gap: i32) -> PairDecision {
 }
 
 // ---------------------------------------------------------------------------
-// 隣り合いの判定と記憶の印の語（dpi-realign-remembered-chain 要件 1.2・2.1・2.2）
+// 隣り合いの判定と記憶の印の語
 // ---------------------------------------------------------------------------
 
 /// キャラ窓の矩形（物理 px・左上と大きさ）。
@@ -209,7 +207,7 @@ pub struct ChainRect {
 /// 隣り合いと見なす隙間・重なりの幅の上限（物理 px）。
 ///
 /// 各窓の下端中央を保つ置き直しで、幅の半分の整数割りが窓ごとに最大 1 px ずれるため、
-/// 2 つの窓の分を足した値（要件 1.2。実機の確かめ（要件 8.7）では、どの組も隙間 0 で足りた）。
+/// 2 つの窓の分を足した値（実機の確かめでは、どの組も隙間 0 で足りた）。
 pub const ADJACENT_TOLERANCE_PX: i32 = 2;
 
 /// 組（前の窓, n）の並びの判定。`gap` は向かい合う端の隙間（負は重なり）。
@@ -220,9 +218,9 @@ pub enum Adjacency {
     Left { gap: i32 },
     /// n が前の窓の右に隣り合う（|gap| ≤ 許す幅）。
     Right { gap: i32 },
-    /// 隙間が許す幅より広い、または縦の範囲が重ならない（2.1）。
+    /// 隙間が許す幅より広い、または縦の範囲が重ならない。
     Apart { gap: i32 },
-    /// 重なりが許す幅を超える（gap < −許す幅・2.2）。
+    /// 重なりが許す幅を超える（gap < −許す幅）。
     Overlapped { gap: i32 },
 }
 
@@ -315,7 +313,7 @@ impl AdjacencyMark {
 }
 
 // ---------------------------------------------------------------------------
-// 組ごとの決めからの解き（dpi-realign-remembered-chain 要件 1.3・1.5・6.3・6.4）
+// 組ごとの決めからの解き
 // ---------------------------------------------------------------------------
 
 /// 鎖の前のスロットとの組をどうするか（ふつうは組 (n−1, n)。呼び手が左右の辺のスコープを鎖から
@@ -349,15 +347,15 @@ impl PairDecision {
 /// 動かさない理由（ログの語は [`KeepReason::as_str`] の固定語）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeepReason {
-    /// 変わる直前に離れていた（2.1）。
+    /// 変わる直前に離れていた。
     Apart { gap: i32 },
-    /// 変わる直前に重なっていた（2.2）。
+    /// 変わる直前に重なっていた。
     Overlapped { gap: i32 },
-    /// 組の窓が組にかかわる（2.3）。
+    /// 組の窓が組にかかわる。
     StickyGroup { scope: usize },
-    /// ドラッグ中の窓が組にかかわる（2.4）。
+    /// ドラッグ中の窓が組にかかわる。
     Dragging { scope: usize },
-    /// 武装の後に台本が置いた窓が組にかかわる（3.1）。
+    /// 武装の後に台本が置いた窓が組にかかわる。
     ScriptMovedAfterArm { scope: usize },
     /// 控えに無い・矩形が読めない窓が組にかかわる。
     Unreadable { scope: usize },
@@ -411,7 +409,7 @@ pub struct ChainSlot {
 
 /// 先頭のスロットから昇順に解き、動かす窓と新しい x を返す（今の x と同じものは含めない）。
 ///
-/// 組の基準は前の窓の**解いた後の** x（1.5）。
+/// 組の基準は前の窓の**解いた後の** x。
 /// JoinLeft: new_x = base_x − width(n)。JoinLeftOffset: new_x = base_x − width(n) − offset。
 /// JoinRight: new_x = base_x + width(prev)（prev は前のスロット）。
 /// Keep・幅が非正（n、JoinRight では前のスロットも）: 動かさず、今の x を次の基準にする（左右の辺の
@@ -442,7 +440,6 @@ pub fn resolve_chain(slots: &[ChainSlot]) -> Vec<ChainMove> {
             {
                 Some(base_x.saturating_add(prev_w))
             }
-            // 先頭のスロット・Keep・非正寸は動かさない。
             _ => None,
         };
         let resulting_x = match target {
@@ -466,7 +463,7 @@ pub fn resolve_chain(slots: &[ChainSlot]) -> Vec<ChainMove> {
 /// 式が使う幅が非正の `JoinLeft`／`JoinRight` を `Keep(NonPositiveWidth)` に改める。
 ///
 /// [`resolve_chain`] は同じ組を動かさないので解きは変わらない。組の行の語を実際の扱い
-/// （"non-positive-width"）と揃えるため、解く前に呼び手が通す（7.1）。
+/// （"non-positive-width"）と揃えるため、解く前に呼び手が通す。
 pub fn mark_non_positive_widths(slots: &mut [ChainSlot]) {
     for i in 1..slots.len() {
         let prev_w = slots[i - 1].width;
@@ -491,7 +488,7 @@ fn join_usable(decision: PairDecision, width: i32, prev_width: i32) -> bool {
     }
 }
 
-/// 起動の並べ直しで記憶から戻したスコープに当てる決め（6.3・6.4）。
+/// 起動の並べ直しで記憶から戻したスコープに当てる決め。
 ///
 /// Left→JoinLeft・Right→JoinRight・Separate→Keep(RememberedSeparate)・
 /// None（印の無い古い記憶）→Keep(NoRememberedMark)。`Left` の `defaultx` の隙間は呼び手が
@@ -506,10 +503,10 @@ pub fn remembered_decision(mark: Option<AdjacencyMark>) -> PairDecision {
 }
 
 // ---------------------------------------------------------------------------
-// 確定が見送られ続けたときの一発診断（areka-P0-scope-chain-gap 6.5・design C6「確定が見送られ続けた場合の一発診断」）
+// 確定が見送られ続けたときの一発診断
 // ---------------------------------------------------------------------------
 
-/// 診断を出すまでに待つフレーム数（有界の待ち・areka-P0-scope-chain-gap 6.5）。
+/// 診断を出すまでに待つフレーム数（有界の待ち）。
 ///
 /// 呼び手（`runtime::frame::frame_system`）は 60Hz の tick ループから毎フレーム確定を
 /// 試みるため、**約 10 秒**ぶんに相当する。起動時の確定（`finalize_chain_once_with`）が数えるのは
@@ -522,7 +519,7 @@ pub fn remembered_decision(mark: Option<AdjacencyMark>) -> PairDecision {
 /// 時間で数えるのは、門を既定で開ける段で直す。
 pub const CHAIN_FINALIZE_STALL_FRAMES: u32 = 600;
 
-/// 確定の見送りを数える（診断を一度だけ出すための状態・areka-P0-scope-chain-gap 6.5）。
+/// 確定の見送りを数える（診断を一度だけ出すための状態）。
 ///
 /// [`ChainFinalized`] と同じく**一発フラグ**の形。起動時の確定は確定標識で先に打ち切るので、
 /// 確定の後に読むのは拡大率の遷移の後の解き直し（`chain_realign`）だけで、武装のたびに
@@ -536,7 +533,7 @@ pub struct ChainFinalizeStall {
 }
 
 impl ChainFinalizeStall {
-    /// 停滞の計数と一発フラグを初期化する（`areka-P0-dpi-transition-atomicity` 要件 6.3）。
+    /// 停滞の計数と一発フラグを初期化する。
     ///
     /// 起動時の確定は文字どおり一度きりなので、本資源も一度使い切れば足りた。DPI 遷移後の
     /// 連鎖再解決（`chain_realign`）は**遷移のたびに**待ちが始まるため、武装の
@@ -547,7 +544,7 @@ impl ChainFinalizeStall {
     }
 }
 
-/// 確定を見送った理由（診断ログの本文・areka-P0-scope-chain-gap 6.5）。
+/// 確定を見送った理由（診断ログの本文）。
 ///
 /// 「どのスコープが」「どの条件で」見送られたかを一意に表す。走査は最初に躓いた条件で
 /// 打ち切るため、報告されるのは**その時点の先頭の障害**である。
@@ -574,9 +571,9 @@ pub enum ChainDeferReason {
         window: (i32, i32),
     },
     /// 整合待ちの札（`DpiSyncHold`）を持つゴースト窓がまだ残っている
-    /// （`areka-P0-dpi-transition-atomicity` 設計 C4・遷移後の解き直し専用の理由）。
+    /// （遷移後の解き直し専用の理由）。
     ///
-    /// 起動時の確定（`scope-chain-gap`）では起こらない——待ち札は拡大率の遷移でしか付かない。
+    /// 起動時の確定では起こらない——待ち札は拡大率の遷移でしか付かない。
     DpiSyncHeld { scope: usize },
 }
 
@@ -655,7 +652,7 @@ impl fmt::Display for ChainDeferReason {
     }
 }
 
-/// 見送りを 1 フレームぶん記録し、**この呼び出しで診断を出すべきか**を返す（areka-P0-scope-chain-gap 6.5）。
+/// 見送りを 1 フレームぶん記録し、**この呼び出しで診断を出すべきか**を返す。
 ///
 /// - 閾値（[`CHAIN_FINALIZE_STALL_FRAMES`]）に**到達したちょうどその 1 回**だけ `true`。
 /// - それ以前は `false`（毎フレームの見送りは無音）。

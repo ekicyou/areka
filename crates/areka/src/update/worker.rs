@@ -1,12 +1,12 @@
-//! 更新の手続きを走らせる背景のスレッドと、kanade へ直接送る本物の口（design「背景スレッドと本物の口
-//! （`update/worker.rs`）」）。
+//! 更新の手続きを走らせる背景のスレッドと、kanade へ直接送る本物の口。
 //!
 //! スレッド `update` は仕事 [`UpdateJob`] を 1 件ずつ受けて [`run_order`] を走らせ、終わったら口を落として
 //! 通信中の数を戻してから窓口へ [`DeskAsk::OrderDone`] を頼む（数は標準の手続きの間だけ立つ）。
-//! 本物の口 [`KanadePorts`] はイベントと照会を仕事の送出端へ直接送って返事を待ち（UI を塞がない＝要件 1.11）、エンジンの一周を終了の門 [`WorkGate`] の出入りで囲む
-//! （要件 7.1・7.3）。終了が始まった後は何も送らない（要件 7.4）。
+//! 本物の口 [`KanadePorts`] はイベントと照会を仕事の送出端へ直接送って返事を待ち（UI を塞がない）、
+//! エンジンの一周を終了の門 [`WorkGate`] の出入りで囲む。
+//! 終了が始まった後は何も送らない。
 //!
-//! 窓口への頼みの型はこのモジュールが定義し、窓口（6.3）が読む。本番の取得口の型を綴る本体の
+//! 窓口への頼みの型はこのモジュールが定義し、窓口が読む。本番の取得口の型を綴る本体の
 //! 本番ファイルは、このファイルと `install/fetch_url.rs` の 2 つだけ（`worker_tests` の字面の検査）。
 
 use std::cell::Cell;
@@ -35,7 +35,7 @@ pub(super) const USEORIGIN1: &str = "useorigin1";
 pub(crate) struct UpdateJob {
     pub order: UpdateOrder,
     pub kanade: Sender<KanadeMsg>,
-    /// 並び（バルーンの対象を写す判断に使う・spec: areka-P0-user-data-root 要件 4.4）。
+    /// 並び（バルーンの対象を写す判断に使う）。
     pub roots: BasewareRoots,
     /// 実行ファイルのフォルダ（本番は `roots::user_root::exe_dir()`・テストは差し替える）。
     pub exe_dir: Option<PathBuf>,
@@ -47,7 +47,7 @@ pub(crate) enum DeskAsk {
     /// 標準の手続きが始まった（`OnUpdateProcessExec` に応えが無かった・照会の直前）。
     Started,
     /// 同じゴーストを読み直す（全対象の後・`changed` が 1 つ以上）。`tail` は後送りの列（先頭が
-    /// 読み直した後の起動の知らせ・決めたこと 21）。
+    /// 読み直した後の起動の知らせ）。
     Reload {
         ghost_dir: PathBuf,
         tail: Vec<(&'static str, Vec<String>)>,
@@ -105,7 +105,7 @@ pub(crate) struct KanadePorts {
     online: &'static OnlineCounter,
     /// 標準の手続きの間の守り手（[`UpdatePorts::standard_started`] で立て、口を落とすと戻る）。
     online_guard: Cell<Option<OnlineGuard>>,
-    /// 並び（バルーンの対象を写す判断に使う・spec: areka-P0-user-data-root 要件 4.4）。
+    /// 並び（バルーンの対象を写す判断に使う）。
     roots: BasewareRoots,
     /// 実行ファイルのフォルダ（本番は `roots::user_root::exe_dir()`・テストは差し替える）。
     exe_dir: Option<PathBuf>,
@@ -216,7 +216,7 @@ impl UpdatePorts for KanadePorts {
             );
             return EngineRun::Closed;
         }
-        // 作れないときの `error!` は手続きが 1 件だけ残す（design の手続きの節）。
+        // 作れないときの `error!` は手続きが 1 件だけ残す。
         let fetch = match (self.new_fetch)() {
             Ok(fetch) => fetch,
             Err(error) => {
@@ -251,7 +251,7 @@ impl UpdatePorts for KanadePorts {
         );
     }
 
-    /// バルーンの対象を写す口へ通して答えのフォルダへ替える（spec: areka-P0-user-data-root 要件 4.4・10.4）。
+    /// バルーンの対象を写す口へ通して答えのフォルダへ替える。
     /// ゴースト・シェルは起こしたフォルダ（写し）なので通さない。バルーンの更新先は descript の homeurl
     /// だけなので、それの無いもの（表示だけ・`run_target` が飛ばす）も写さない。
     fn prepare_targets(&self, targets: &mut [TargetSpec]) {
@@ -269,7 +269,7 @@ impl UpdatePorts for KanadePorts {
     }
 
     fn standard_started(&self) {
-        // 承諾待ち（`OnUpdateProcessExec` の答え待ち）は含めない（要件 2.1）。口を落とすと戻る（要件 2.3）。
+        // 承諾待ち（`OnUpdateProcessExec` の答え待ち）は含めない。口を落とすと戻る。
         self.online_guard.set(Some(self.online.begin("update")));
         ask_desk(&self.desk, DeskAsk::Started);
     }

@@ -24,20 +24,20 @@ pub(super) fn choice_references() -> Vec<String> {
 /// 注入 `ChoiceWaiting` の表示完了時刻（[`establish_choice_wait`] が投函する値）。
 pub(super) const CHOICE_DISPLAY_END_MS: u64 = 1_000;
 
-/// 選択肢タイムアウトの既定値（`KanadeConfig::choice_timeout_default_ms`・裁定 5・Req7.8）。
+/// 選択肢タイムアウトの既定値（`KanadeConfig::choice_timeout_default_ms`）。
 ///
 /// `timeout_directive_secs: None`（未指定）のとき kanade が加算する値の**期待値**である。
 /// 檻はこの値を config から読まず独立に置く——実装側の既定値が動けば群 5 の 2 点注入
-/// （期限手前で非発火・期限到達で発火）が両方向とも落ちる（値そのものの固定・Req7.8）。
+/// （期限手前で非発火・期限到達で発火）が両方向とも落ちる（値そのものの固定）。
 const CHOICE_TIMEOUT_DEFAULT_MS: u64 = 30_000;
 
-/// 注入 `ChoiceWaiting` から導かれる期限（`display_end + 既定値`・DD-8 写像の未指定分岐）。
+/// 注入 `ChoiceWaiting` から導かれる期限（`display_end + 既定値`）。
 pub(super) const CHOICE_DEADLINE_MS: u64 = CHOICE_DISPLAY_END_MS + CHOICE_TIMEOUT_DEFAULT_MS;
 
 /// カスケード段・タイムアウト GET が帯びる運行状態（active talk＋選択待ち継続中＝`talking,choosing`）。
 ///
 /// C5 の `choice_active` の源は帳簿の 3 段すべて（`Waiting`／`Cascading`／`TimeoutInFlight`）ゆえ、
-/// カスケード段 GET と `OnChoiceTimeout` GET は同一の複合スナップショットを帯びる（裁定 6）。
+/// カスケード段 GET と `OnChoiceTimeout` GET は同一の複合スナップショットを帯びる。
 pub(super) fn cascading_snapshot() -> ExecutionSnapshot {
     ExecutionSnapshot {
         talk_active: true,
@@ -78,7 +78,7 @@ pub(super) fn establish_choice_wait(
             talk_id: TalkId(1),
             choice_ids: candidates.iter().map(|s| s.to_string()).collect(),
             display_end: MonotonicMs(CHOICE_DISPLAY_END_MS),
-            // None＝未指定は既定値へ委譲（期限は CHOICE_DEADLINE_MS・DD-8 の未指定分岐）。
+            // None＝未指定は既定値へ委譲（期限は CHOICE_DEADLINE_MS）。
             timeout_directive_secs: directive,
         })
         .expect("send ChoiceWaiting");
@@ -108,7 +108,7 @@ pub(super) fn choice_get_ids(recorded: &[RecordedCall]) -> Vec<&str> {
 
 /// [`TalkCommand`] 到着順を可読なタグ列へ写す（`Start`／`Resolve`／`Cancel` の順序観測面）。
 ///
-/// `TalkCommand` は `PartialEq` を持たないため、順序の突合は本タグ列で行う（DD-4 の FIFO 契約は
+/// `TalkCommand` は `PartialEq` を持たないため、順序の突合は本タグ列で行う（FIFO 契約は
 /// 「どの指示がどの順で届いたか」で観測するのが正であり、値の等価性は要らない）。
 pub(super) fn command_tags(commands: &[TalkCommand]) -> Vec<String> {
     commands

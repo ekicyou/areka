@@ -1,11 +1,4 @@
-//! UI 側の窓口の決定論テスト（design「Testing Strategy / 窓口と入口」・要件 1.1・1.9・1.10・2.10・2.13・9.3）。
-//!
-//! 確かめること: 受付の 4 つの判定と記録・手続きの最中に届いた依頼が届いた順に 1 件ずつ背景の
-//! スレッドへ渡ること・イベントの頼みは切替の予約が在る間は送らず、予約が下りた tick に送る
-//! 時点のゴーストへ送ること・送り直しの頼みは前に送った後に定常到達が届いてから送ること・
-//! 素性の答え・宛先が起動中のゴーストでない上書きの頼みは書庫を返すこと・起動中のゴーストへの
-//! 上書きの切替が中止されたら「預かった」へ戻して次の定常到達で頼み直すこと・切替の入口が
-//! `NotFound`／`NoContext` なら `warn!` を 1 件残して書庫を返すこと。
+//! UI 側の窓口の決定論テスト。
 //!
 //! 背景のスレッドは起こさない: 窓口の依頼の送出端を受信端に差し替え、頼みは窓口の頼みの送出端へ
 //! 直接入れる。kanade の代わりは置き場の中身に持たせた送出端の受信端。取り出しの系は `drain` を
@@ -188,7 +181,7 @@ fn submit_queues_and_logs_origin_and_count() {
     assert_eq!(queued[0].field("count"), Some("2"));
 }
 
-/// 起動の依頼の出どころは、記録の `origin` 欄に `StartupArgs`・`InitialInstall` の綴りで載る（要件 2.5・4.8）。
+/// 起動の依頼の出どころは、記録の `origin` 欄に `StartupArgs`・`InitialInstall` の綴りで載る。
 #[test]
 fn submit_logs_startup_origin_spellings() {
     for (origin, word) in [
@@ -235,7 +228,7 @@ fn submit_refuses_empty_no_desk_and_closing() {
 // ---------------------------------------------------------------- 待ち行列
 
 /// 生の要求は取り出しで受付を通って依頼になり、手続きの最中に届いた 2 件は、前の依頼の
-/// 終わりの知らせのたびに 1 件ずつ、届いた順に背景のスレッドへ渡る（要件 9.3）。
+/// 終わりの知らせのたびに 1 件ずつ、届いた順に背景のスレッドへ渡る。
 #[test]
 fn orders_arriving_mid_procedure_reach_the_worker_in_order() {
     let mut rig = Rig::new();
@@ -259,7 +252,6 @@ fn orders_arriving_mid_procedure_reach_the_worker_in_order() {
         }]
     );
 
-    // 1 件目の手続きの最中に 2 件。
     send("C:/2.nar");
     send("C:/3.nar");
     rig.drain();
@@ -330,7 +322,6 @@ fn raise_waits_for_the_switch_and_goes_to_the_ghost_at_send_time() {
         "頼みは手元に置く（返信端は生きている）"
     );
 
-    // 切替で置き場のゴーストが替わり、予約が下りた。
     let new_kanade = rig.put_ghost("ghost/B".into());
     rig.world.remove_non_send::<SwitchInFlight>();
     rig.drain();
@@ -552,7 +543,7 @@ fn change_requests(kanade: &Receiver<KanadeMsg>) -> Vec<(String, bool, &'static 
 }
 
 /// 「切替を頼んだ」のまま切替が中止された（予約が下りた）ら「預かった」へ戻し、その tick では
-/// 頼み直さず、次の定常到達で頼み直す（design「desk / State Management」）。頼みはどれも同じ
+/// 頼み直さず、次の定常到達で頼み直す。頼みはどれも同じ
 /// フォルダの名指し・知らせなし・出どころ「自動」。背景のスレッドは答えを待ち続ける（捨てない）。
 #[test]
 fn a_cancelled_overwrite_switch_goes_back_to_held_and_retries_on_the_next_steady() {
@@ -707,7 +698,6 @@ fn run_between_installs_only_on_the_switch_to_the_held_destination() {
     );
     let marker = root.ghost_dir("A").join("ghost/master/overwritten.txt");
 
-    // 予約は残したまま、切替先だけが別のゴースト（B）。
     rig.world.insert_non_send(reservation());
     let ((), other) = capture(|| run_overwrite_between(&mut rig.world));
     assert!(
@@ -725,7 +715,6 @@ fn run_between_installs_only_on_the_switch_to_the_held_destination() {
         "背景のスレッドは待ったまま"
     );
 
-    // 切替先が預かった宛先（綴りの大文字小文字だけが違う）。
     rig.world.non_send_mut::<SwitchInFlight>().target.folder = "a".to_owned();
     let ((), ours) = capture(|| run_overwrite_between(&mut rig.world));
     let done = events_named(&ours, "install_overwrite_done");
@@ -760,7 +749,7 @@ fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
     }
 }
 
-/// 窓口が忙しいか（mcp-reload 要件 2.1）: 実行中・待ち行列・預かった上書きのどれかで真、どれも無ければ偽。
+/// 窓口が忙しいか: 実行中・待ち行列・預かった上書きのどれかで真、どれも無ければ偽。
 #[test]
 fn is_busy_while_running_queued_or_holding_an_overwrite() {
     assert!(!is_busy(&World::new()), "窓口が無ければ偽");
@@ -790,6 +779,6 @@ fn is_busy_while_running_queued_or_holding_an_overwrite() {
     assert!(is_busy(&rig.world), "預かった上書き");
 }
 
-/// 終了の後始末での窓口の片付け（task 9・要件 8.2・8.5・8.6・11.8）。
+/// 終了の後始末での窓口の片付け。
 #[path = "desk_exit_tests.rs"]
 mod exit_tests;

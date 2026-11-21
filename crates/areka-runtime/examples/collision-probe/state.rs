@@ -1,7 +1,7 @@
 use super::{AtlasTable, EmoPresenter, EmoWorld, Entity};
 
 // ---------------------------------------------------------------------------
-// Boot resource（NonSend・EmoPresenter を内包・donor と同型）
+// Boot resource（NonSend・EmoPresenter を内包）
 // ---------------------------------------------------------------------------
 
 /// probe の駆動フェーズ。GPU 資源到達で表示→本番 resize→（次フレーム以降で）物理寸整合 assert、の順に
@@ -18,7 +18,7 @@ pub(super) enum ProbePhase {
 }
 
 /// 起動時に構築した presenter・装着待ちアセット・駆動フェーズを束ねる NonSend リソース
-/// （`EmoPresenter` が `!Send` ゆえ本型も NonSend・donor `EmoBoot`/`PlacementBoot` と同作法）。
+/// （`EmoPresenter` が `!Send` ゆえ本型も NonSend）。
 pub(super) struct ProbeBoot {
     /// 提示段の統括ハブ（scope0 shell target を装着・表示する）。
     pub(super) presenter: EmoPresenter,
@@ -28,7 +28,6 @@ pub(super) struct ProbeBoot {
     pub(super) author_dpi: u16,
     /// scope0 shell アセット（`attach_target` で move 消費・装着後は `None`）。
     pub(super) assets: Option<(EmoWorld, AtlasTable)>,
-    /// 駆動フェーズ。
     pub(super) phase: ProbePhase,
     /// 現表示サーフェスの **native 原寸**（作者定義 px・WaitingAttach で確定・ログ用）。
     pub(super) native_size: (u32, u32),

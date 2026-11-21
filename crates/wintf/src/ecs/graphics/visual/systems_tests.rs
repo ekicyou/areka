@@ -1,4 +1,4 @@
-//! 後からの部品の出入りにも規則を効かせる係（`sync_surface_owner_parts`・要件 1.2a〜2c）。
+//! 後からの部品の出入りにも規則を効かせる係（`sync_surface_owner_parts`）。
 //! 本物の登録を通すため `EcsWorld` の `PreRenderSurface` だけを回す（装置も実の窓も要らない）。
 
 use super::draw_content_test_support::solid_rect_content;
@@ -228,7 +228,7 @@ fn tree_edits_catch_promotion_and_demotion() {
     );
 }
 
-/// 装置の失いの立ち直りの後に単位矩形が新しい工場の図形で作り直される（3.4・外のテストからは見えない欄）。
+/// 装置の失いの立ち直りの後に単位矩形が新しい工場の図形で作り直される（外のテストからは見えない欄）。
 /// 立ち直りは `init_graphics_core` と同じく装置の資源を同じ場所で入れ替えて与える。
 #[test]
 fn unit_rect_recreated_after_device_loss_recovery() {
@@ -265,7 +265,7 @@ fn unit_rect_recreated_after_device_loss_recovery() {
     assert_ne!(before.as_raw(), after.as_raw());
 }
 
-/// 持ち主の `VisualTransform` は WUC の写しで効かせるので、入った回も変わった回も `warn!` を残さない（要件 5.1）。
+/// 持ち主の `VisualTransform` は WUC の写しで効かせるので、入った回も変わった回も `warn!` を残さない。
 #[test]
 fn owner_transform_does_not_warn() {
     use log_capture_kit::{LineFormat, capture_lines};
@@ -356,7 +356,7 @@ fn unchanged_round_neither_rebuilds_nor_marks() {
     assert_eq!(change_ticks(world, owner), before, "変化が無ければ書かない");
 }
 
-/// 描く中身の混ぜ方を変えた回に列が組み直され、新しい混ぜ方と同一性で描き直しの印が立つ（1.8）。
+/// 描く中身の混ぜ方を変えた回に列が組み直され、新しい混ぜ方と同一性で描き直しの印が立つ。
 #[test]
 fn mix_mode_change_rebuilds_and_marks_dirty() {
     use windows::Win32::Graphics::Direct2D::Common::D2D1_BLEND_MODE_MULTIPLY;
@@ -379,7 +379,7 @@ fn mix_mode_change_rebuilds_and_marks_dirty() {
     assert_ne!(hash1, hash0, "同一性も変わる");
 }
 
-/// 節の不透明度を変えた回に列が組み直され、不透明度の層が入って描き直しの印が立つ（2.7）。
+/// 節の不透明度を変えた回に列が組み直され、不透明度の層が入って描き直しの印が立つ。
 #[test]
 fn node_opacity_change_rebuilds_and_marks_dirty() {
     let mut ecs = EcsWorld::new();
@@ -421,7 +421,7 @@ fn drive_to(world: &mut World, e: Entity, phase: Phase) {
     assert_eq!(a.rule.phase(), phase);
 }
 
-/// 相が節でなくなった節（自動の持ち主）に 3 部品が入り、戻した次の回に `DrawTree` ごと外れる（要件 2.1・2.6）。
+/// 相が節でなくなった節（自動の持ち主）に 3 部品が入り、戻した次の回に `DrawTree` ごと外れる。
 #[test]
 fn phase_change_moves_surface_parts_in_and_out() {
     for phase in [Phase::Preparing, Phase::Active] {
@@ -448,7 +448,7 @@ fn phase_change_moves_surface_parts_in_and_out() {
 }
 
 /// 自動の持ち主に目印か命令の列が入ると、状態が初期化され、自動の形で持っていた `DrawTree` が
-/// 外れる。外した後は規則の答え（節）に戻る（要件 2.2）。
+/// 外れる。外した後は規則の答え（節）に戻る。
 #[test]
 fn manual_mark_resets_auto_promotion() {
     for with_list in [false, true] {

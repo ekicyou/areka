@@ -211,14 +211,12 @@ async fn the_handshake_defaults_and_every_reply_mode_answer_as_named() {
     let server = FakeServer::start(script);
     let port = server.port();
 
-    // 1 本の接続で initialize → notifications/initialized（202）→ tools/list → ping。
     let mut stream = connect(port).await;
     let initialize = json!({"jsonrpc": "2.0", "id": "a", "method": "initialize", "params": {
         "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "self-check", "version": "0"}}});
     send(&mut stream, &initialize, false).await;
     let (status, _, body) = receive(&mut stream).await;
     assert_eq!(status, 200);
-    // rmcp が応答を読むのと同じ型で読めて、initialize の結果と判る。
     let ServerJsonRpcMessage::Response(response) =
         serde_json::from_slice(&body).expect("rmcp の型で読める")
     else {

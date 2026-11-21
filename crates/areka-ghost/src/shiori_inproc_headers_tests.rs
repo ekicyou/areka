@@ -1,4 +1,4 @@
-//! 同じプロセスの経路の要求の組み立てと応答のレベル（areka-P0-script-security-level 要件 2.8・3.1）。
+//! 同じプロセスの経路の要求の組み立てと応答のレベル。
 
 use super::*;
 use shiori_host32_host::{ValueReply, request_of};
@@ -7,7 +7,7 @@ use shiori_host32_host::{ValueReply, request_of};
 const S_OK: HRESULT = HRESULT(0);
 
 /// 同じヘッダから同じプロセスの経路が組んだ入力は、共通の手（UTF-8）で組んだ要求の文と
-/// バイト列で一致する（GET・NOTIFY・`Status` の有無の 3 通り・要件 2.8）。
+/// バイト列で一致する（GET・NOTIFY・`Status` の有無の 3 通り）。
 #[test]
 fn build_input_equals_request_of_bytes() {
     let headers = RequestHeaders {
@@ -36,7 +36,7 @@ fn build_input_equals_request_of_bytes() {
     }
 }
 
-/// 結果の写しは応答の `SecurityLevel` の生の値（前後の空白を落とした値）を返す（要件 3.1）。
+/// 結果の写しは応答の `SecurityLevel` の生の値（前後の空白を落とした値）を返す。
 #[test]
 fn map_get_outcome_carries_the_raw_level() {
     let bytes =
@@ -50,7 +50,7 @@ fn map_get_outcome_carries_the_raw_level() {
     );
 }
 
-/// 応答に `SecurityLevel` が無ければ生の値も無し（要件 3.1）。
+/// 応答に `SecurityLevel` が無ければ生の値も無し。
 #[test]
 fn map_get_outcome_without_level_is_none_level() {
     let bytes = b"SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: hi\r\n\r\n";

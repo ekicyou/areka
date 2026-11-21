@@ -1,5 +1,4 @@
-//! shell・balloon・descript の読み直しの列の決定論テスト（areka-P0-mcp-reload 要件 2.5・5.1・6.1・7.1・
-//! 7.2・7.3・7.6・8.4・9.1・9.2・9.3）。
+//! shell・balloon・descript の読み直しの列の決定論テスト。
 //!
 //! 置き場のゴーストは kanade の送出端と seriko の送り手だけを持つテスト用の組み立て（実行系が無いので
 //! 今のシェルは分からず、シェルの段は始められない）。差し替えの相の合図（`skin_applied`・
@@ -245,7 +244,7 @@ fn steps_are_built_from_the_target() {
 }
 
 /// balloon の読み直し: 今のバルーンのフォルダを切替先に `raise` 無しの待ちを 1 件頼み、予約の鍵を印に
-/// 控える。述語は鍵が合うときだけ真（areka-P0-mcp-reload 要件 2.5・6.1）。
+/// 控える。述語は鍵が合うときだけ真。
 #[test]
 fn balloon_reload_reserves_the_current_balloon() {
     let mut rig = rig("areka-reload-skin-balloon");
@@ -278,7 +277,7 @@ fn balloon_reload_reserves_the_current_balloon() {
     );
 }
 
-/// 差し替えが済んだ相の終わりで列が空なら `reload_done` を 1 件残して印を下ろす（areka-P0-mcp-reload 要件 8.4）。
+/// 差し替えが済んだ相の終わりで列が空なら `reload_done` を 1 件残して印を下ろす。
 #[test]
 fn applied_phase_end_with_empty_queue_is_done() {
     let mut rig = rig("areka-reload-skin-done");
@@ -346,8 +345,7 @@ fn applied_phase_end_starts_the_next_step() {
     );
 }
 
-/// 差し替えが済まずに相が終わったら `reload_failed(skin_failed)` を残して止まる（残りの段は始めない・
-/// areka-P0-mcp-reload 要件 9.2・9.3）。
+/// 差し替えが済まずに相が終わったら `reload_failed(skin_failed)` を残して止まる（残りの段は始めない）。
 #[test]
 fn phase_end_without_applied_fails_and_stops() {
     let mut rig = rig("areka-reload-skin-failed");
@@ -426,7 +424,7 @@ fn foreign_reservation_is_false_and_ends_as_overtaken() {
 
 /// descript の `ghost`: descript.txt が読めなければ値を保って `reload_descript_read_failed` を
 /// （ファイルとゴースト名つきで）1 件残し列を続ける（ここでは次のシェルの段が今のシェルを知らずに
-/// `no_context` で止まる）。読めても実行系が無く名前を替えられなければ `names_failed`（areka-P0-mcp-reload 要件 7.6・9.3）。
+/// `no_context` で止まる）。読めても実行系が無く名前を替えられなければ `names_failed`。
 #[test]
 fn names_step_read_failure_keeps_going_and_no_runtime_fails() {
     let mut rig = rig("areka-reload-skin-names");
@@ -486,8 +484,7 @@ fn names_step_read_failure_keeps_going_and_no_runtime_fails() {
 }
 
 /// 偽の SHIORI で起こしたゴーストで descript（`ghost`）を読み直す: 名前と readme の置き場が書き換えた
-/// descript.txt の値に替わり、続くシェルの段が実行系のマウントの今のシェルを切替先に予約する
-/// （areka-P0-mcp-reload 要件 5.1・7.2・7.3）。
+/// descript.txt の値に替わり、続くシェルの段が実行系のマウントの今のシェルを切替先に予約する。
 #[test]
 fn descript_ghost_replaces_names_and_readme_then_reserves_the_current_shell() {
     let mut rig = SwitchRig::new(vec![(
@@ -550,8 +547,7 @@ fn descript_ghost_replaces_names_and_readme_then_reserves_the_current_shell() {
 }
 
 /// ゴーストの中のバルーン（`<ゴースト>\balloon\<名>`）を使っているときの balloon の読み直し（`\![reload,balloon]`・
-/// MCP の読み直しと同じ窓口）は、同じ場所とフォルダ名で予約し、根の同じ名前へ組み直さない
-/// （areka-P0-ghost-inner-balloon 要件 5.7）。
+/// MCP の読み直しと同じ窓口）は、同じ場所とフォルダ名で予約し、根の同じ名前へ組み直さない。
 ///
 /// # 非空虚性
 /// 今のバルーンをフォルダ名から根で組み直すと、予約の鍵と切替先が `balloon\inner` になって赤。
@@ -591,7 +587,7 @@ fn balloon_reload_keeps_the_ghost_inner_balloon_in_place() {
 
 /// kanade が落ちた後（受信端の drop）: shiori・ghost・balloon を 1 回ずつ要求すると、どれも
 /// `reload_failed` を 1 件だけ残して印 `ReloadInFlight` を残さず、4 回目の要求は断られない
-/// （印が残ると以後の読み直しが全部 `reload_in_flight` で断られる・areka-P0-mcp-reload 要件 4.1・4.2）。
+/// （印が残ると以後の読み直しが全部 `reload_in_flight` で断られる）。
 /// `accept_skin` の送り損ねの道を通すため、実行系の要らないバルーンで回す。
 #[test]
 fn reload_requests_after_kanade_died_fail_once_and_leave_no_mark() {

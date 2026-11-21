@@ -1,14 +1,14 @@
-//! 実機サインオフ用 hover 注入デバッグ導線（design.md「結線層 / HoverInjectConduit」・R8.2/8.4/8.6）。
+//! 実機サインオフ用 hover 注入デバッグ導線。
 //!
 //! 実ポインタに依存せず、env ゲート駆動で済んでいない選択肢を持つ actor のハイライトを周期巡回させる有界導線。
 //! `AREKA_CHOICE_HOVER_INJECT` が **未設定/空/不正なら完全 no-op（本番既定）**。`cycle`＝既定周期
 //! 700ms・`cycle:<ms>`＝指定周期。text phase の frame clock（`TalkClock::talk_time` と同じ時刻源）で
 //! 駆動し、注入時刻の商（time÷period の整数商）で `None→0→1→…→None→…` を巡回する——**実時間 sleep を
-//! 使わず**決定論的な ordinal 系列を再現する。各注入は `info!`（`RUST_LOG` grep サインオフ材料・8.2/12.1）。
+//! 使わず**決定論的な ordinal 系列を再現する。各注入は `info!`（`RUST_LOG` grep サインオフ材料）。
 //!
 //! 本導線はライブラリ公開 API（[`TextLayerRuntime::inject_choice_hover`]／[`TextLayerRuntime::choice_active`]／
 //! [`TextLayerRuntime::choice_hit_rows`]）の一消費者に過ぎず、emo-text 本体・本番描画経路・決定論資産に
-//! 変更を加えない（8.6）。frame.rs の text phase から present_frame の**後**に駆動され
+//! 変更を加えない。frame.rs の text phase から present_frame の**後**に駆動され
 //! （`choice_active`／`choice_hit_rows` が当該フレームを反映する）、env 無効ならば存在が消える。
 //!
 //! # 純関数分割（決定論単体テスト）
@@ -28,7 +28,7 @@ use wintf::ecs::world::tick_wake;
 /// hover 注入導線を駆動する env 変数（`AREKA_` 名前空間規約）。
 const ENV_KEY: &str = "AREKA_CHOICE_HOVER_INJECT";
 
-/// `cycle`（周期未指定）時の既定周期ミリ秒（design.md「Batch / Job Contract」）。
+/// `cycle`（周期未指定）時の既定周期ミリ秒。
 const DEFAULT_PERIOD_MS: u64 = 700;
 
 /// env ゲートの解決形（`parse_hover_inject` の戻り値・純粋・env 非依存）。
@@ -50,14 +50,12 @@ pub enum HoverInjectConfig {
 /// - `cycle:<ms>`（`<ms>` は正の `u64`） → [`HoverInjectConfig::Cycle`]（指定周期）。
 /// - 上記以外（未知トークン・`cycle:` の非数値/0/負値/溢れ） → `warn!`＋[`HoverInjectConfig::Disabled`]。
 pub fn parse_hover_inject(value: Option<&str>) -> HoverInjectConfig {
-    // 未設定/空/空白のみは無効（本番既定・完全 no-op）。
     let Some(raw) = value.map(str::trim) else {
         return HoverInjectConfig::Disabled;
     };
     if raw.is_empty() {
         return HoverInjectConfig::Disabled;
     }
-    // `cycle`（周期未指定）→ 既定周期。
     if raw == "cycle" {
         return HoverInjectConfig::Cycle {
             period_ms: DEFAULT_PERIOD_MS,
@@ -69,7 +67,6 @@ pub fn parse_hover_inject(value: Option<&str>) -> HoverInjectConfig {
             Ok(period_ms) if period_ms > 0 => {
                 return HoverInjectConfig::Cycle { period_ms };
             }
-            // 0・負値・非数値・溢れ・欠落は不正値として warn＋無効へ倒す。
             _ => {
                 warn!(
                     env = ENV_KEY,
@@ -80,7 +77,6 @@ pub fn parse_hover_inject(value: Option<&str>) -> HoverInjectConfig {
             }
         }
     }
-    // 未知トークンは warn＋無効。
     warn!(
         env = ENV_KEY,
         value = raw,
@@ -89,23 +85,19 @@ pub fn parse_hover_inject(value: Option<&str>) -> HoverInjectConfig {
     HoverInjectConfig::Disabled
 }
 
-/// 巡回 ordinal の純判定（design.md「Batch / Job Contract」・実時間 sleep なし・時刻商で決定論巡回）。
+/// 巡回 ordinal の純判定（実時間 sleep なし・時刻商で決定論巡回）。
 ///
 /// `frame_time`（talk 起点相対秒・非負想定）を `period_secs` で割った整数商を、`ordinal_count + 1`
 /// スロット（スロット0＝`None`・スロット`k`(1..=count)＝`Some(k-1)`）で巡回させる。
 /// `ordinal_count == 0`（ヒット行未 population 等）はスロット数 1＝常に `None`。防御的に非正/非有限
 /// `period_secs` は `None`（parse 段で弾かれるが純関数を total に保つ）・`frame_time` は 0.0 clamp。
 pub fn cycle_ordinal(frame_time: f64, period_secs: f64, ordinal_count: usize) -> Option<usize> {
-    // 防御: 非正/非有限周期は注入なし（parse 段で弾かれるが純関数を total に保つ）。
     if !(period_secs > 0.0) || !period_secs.is_finite() {
         return None;
     }
-    // 負の frame_time は 0.0 clamp（talk_time は 0.0 clamp 済みだが二重防波堤）。
     let t = frame_time.max(0.0);
     // 時刻商（実時間 sleep なし・注入時刻÷周期の整数商）。非負有限ゆえ u64 へ truncate（飽和）。
     let quotient = (t / period_secs).floor() as u64;
-    // スロット数＝ordinal_count + 1（スロット0＝None・スロット k(1..=count)＝Some(k-1)）。
-    // ordinal_count == 0 はスロット数 1＝常に None（ヒット行未 population 等の縮退）。
     let slots = ordinal_count as u64 + 1;
     let step = quotient % slots;
     if step == 0 {
@@ -118,7 +110,7 @@ pub fn cycle_ordinal(frame_time: f64, period_secs: f64, ordinal_count: usize) ->
 /// config＋actor スナップショット（actor・choice_active・hit_row 数）＋注入クロージャで巡回駆動する
 /// 純ドライバ（runtime 非依存・呼び出し回数を檻に入れられる）。
 ///
-/// [`HoverInjectConfig::Disabled`] は即 return し **`inject` を一度も呼ばない**（本番既定 no-op・8.6）。
+/// [`HoverInjectConfig::Disabled`] は即 return し **`inject` を一度も呼ばない**（本番既定 no-op）。
 /// [`HoverInjectConfig::Cycle`] は `active` な各 actor について [`cycle_ordinal`] の結果を `inject` へ渡し
 /// `info!` する（非 active はスキップ）。
 pub fn run_hover_inject_with(
@@ -127,21 +119,18 @@ pub fn run_hover_inject_with(
     actors: &[(ActorKey, bool, usize)],
     mut inject: impl FnMut(&ActorKey, Option<usize>),
 ) {
-    // Disabled は即 return（inject を一度も呼ばない・本番既定 no-op・8.6）。
     let HoverInjectConfig::Cycle { period_ms } = config else {
         return;
     };
     let period_secs = *period_ms as f64 / 1000.0;
     for (actor, active, hit_rows) in actors {
-        // 「済んでいない選択肢がある」でない actor はスキップ（照会のみ・8.4 の実ポインタ非依存）。
-        // 選択肢が全部済んだ actor には注入しない。一部の場所だけが済んだときに巡回の番号が済んだ
-        // 選択肢を指しても、提示がその強調を装飾へ渡さない（areka-P0-balloon-text-bugs 件 1）。
+        // 「済んでいない選択肢がある」でない actor はスキップ。選択肢が全部済んだ actor には注入しない:
+        // 一部の場所だけが済んだときに巡回の番号が済んだ選択肢を指しても、提示がその強調を装飾へ渡さない。
         if !active {
             continue;
         }
         let ordinal = cycle_ordinal(frame_time, period_secs, *hit_rows);
         inject(actor, ordinal);
-        // 各注入ステップを info!（RUST_LOG grep でのサインオフ判定材料・8.2/12.1）。
         info!(
             actor = %actor.as_str(),
             frame_time,
@@ -163,11 +152,9 @@ pub fn run_hover_inject(
     runtime: &mut TextLayerRuntime,
     frame_time: f64,
 ) {
-    // Disabled は actor 走査すら行わず即 return（本番既定・完全 no-op・8.6）。
     if matches!(config, HoverInjectConfig::Disabled) {
         return;
     }
-    // 不変借用でスナップショット（actor key clone・active・hit_row 数）を取り切ってから可変注入へ移る。
     let snapshot: Vec<(ActorKey, bool, usize)> = runtime
         .state()
         .actors()
@@ -196,7 +183,7 @@ fn config() -> &'static HoverInjectConfig {
 pub fn drive(runtime: &mut TextLayerRuntime, frame_time: f64) {
     let config = config();
     // 注入が有効な間は周期巡回を進めるために毎画面更新で回る必要があるので、次の画面更新を
-    // 予約する（設計 C16 の `REARM`）。無効（本番既定）なら旗も立てない＝完全 no-op のまま。
+    // 予約する。無効（本番既定）なら旗も立てない。
     if !matches!(config, HoverInjectConfig::Disabled) {
         tick_wake::mark(tick_wake::REARM);
     }
@@ -302,7 +289,6 @@ mod tests {
     fn cycle_ordinal_series_none_then_each_ordinal_then_wrap() {
         let period = 1.0; // 1.0 秒周期（商＝floor(frame_time)）。
         let count = 3;
-        // frame_time を 0.0,1.0,2.0,… と進め、各周期スロットの注入 ordinal を確認する。
         let expected: [Option<usize>; 8] = [
             None,    // 商0 → スロット0 = None
             Some(0), // 商1 → スロット1 = ordinal0
@@ -357,7 +343,7 @@ mod tests {
         );
     }
 
-    /// 同一 frame 時刻→同一注入（純関数駆動の冪等・design Idempotency）。
+    /// 同一 frame 時刻→同一注入（純関数駆動の冪等）。
     #[test]
     fn cycle_ordinal_is_deterministic_for_same_time() {
         let (t, period, count) = (3.5, 0.7, 2);
@@ -368,7 +354,7 @@ mod tests {
 
     // ── run_hover_inject_with（driver・disabled は注入ゼロ／cycle は active のみ）──────
 
-    /// **観測可能な完了条件（8.6）**: Disabled では active な actor があっても `inject` が一度も呼ばれない。
+    /// **観測可能な完了条件**: Disabled では active な actor があっても `inject` が一度も呼ばれない。
     #[test]
     fn driver_disabled_never_injects() {
         let calls = Cell::new(0usize);

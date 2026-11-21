@@ -1,5 +1,4 @@
-//! 窓を残して実行系だけを組み直す本体の決定論テスト（areka-P0-mcp-reload task 7.2・要件 4.2・4.4・
-//! design「GhostSession の口」・Flow 3）。
+//! 窓を残して実行系だけを組み直す本体の決定論テスト。
 //!
 //! 切替の土台（[`SwitchRig`]）で A を起こし、置き場の単位に [`rebuild_runtime_in_place`] を当てる。
 //! 確かめること: 組み直せたら同じ単位に新しい実行系が付き（seriko・loop ticker・束は残る）、新しい
@@ -52,7 +51,7 @@ fn kanade_answers(kanade: &std::sync::mpsc::Sender<KanadeMsg>) -> bool {
             .is_ok()
 }
 
-/// 組み直せた（要件 4.2）: 同じ単位に新しい実行系が付き、窓の側は残り、単位の送出端の先に生きた
+/// 組み直せた: 同じ単位に新しい実行系が付き、窓の側は残り、単位の送出端の先に生きた
 /// kanade が居る。新しい SHIORI は `OnInitialize` の Ref0＝`reload` で起き（由来 `Reloaded{Shiori}`）、
 /// 台詞を求める GET（`OnBoot` ほか）を受けない。
 ///
@@ -113,7 +112,7 @@ fn rebuilt_runtime_is_attached_to_the_same_unit() {
     );
 }
 
-/// 起こせなかった（要件 4.4・design Flow 3「失敗」）: 実行系の無い単位が置き場に戻り、seriko・loop
+/// 起こせなかった: 実行系の無い単位が置き場に戻り、seriko・loop
 /// ticker・束が残る（呼び手が既定へ戻すときの `take_down` が正しく降ろせる）。最後に降ろすと join が戻る。
 ///
 /// 起こす根を実在しない場所へ向けた作り口に差し替えて、2 回目の起動を同期で失敗させる。

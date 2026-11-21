@@ -1,7 +1,4 @@
-//! バリデーションルールヘルパー関数群
-//!
-//! validate/mod.rs の `DolaDocument::validate` から呼び出される
-//! 個々のバリデーションルール実装。
+//! `DolaDocument::validate` から呼ばれる個々のバリデーションルール。
 
 use std::collections::BTreeSet;
 
@@ -18,7 +15,7 @@ pub(crate) const IMPLICIT_KEYFRAME_PREFIX: &str = "__implicit_";
 /// 期待されるスキーマバージョン
 pub(super) const EXPECTED_SCHEMA_VERSION: &str = "1.0";
 
-/// V1: スキーマバージョン検証
+/// スキーマバージョン検証
 pub(super) fn validate_schema_version(doc: &DolaDocument, errors: &mut Vec<DolaError>) {
     if doc.schema_version != EXPECTED_SCHEMA_VERSION {
         errors.push(DolaError::SchemaVersionMismatch {
@@ -162,7 +159,7 @@ fn push_unless(errors: &mut Vec<DolaError>, location: &str, field: &str, value: 
     }
 }
 
-/// V12: 変数初期値の値域検証
+/// 変数初期値の値域検証
 pub(super) fn validate_variable_ranges(doc: &DolaDocument, errors: &mut Vec<DolaError>) {
     for (var_name, var_def) in &doc.variable {
         match var_def {
@@ -217,13 +214,13 @@ pub(super) fn validate_variable_ranges(doc: &DolaDocument, errors: &mut Vec<Dola
                 }
             }
             AnimationVariableDef::Object { .. } => {
-                // Object 型には値域検証なし
+                // 値域検証なし
             }
         }
     }
 }
 
-/// V2: キーフレーム名重複検出（明示的 keyframe フィールドのみ対象）
+/// キーフレーム名重複検出（明示的 keyframe フィールドのみ対象）
 pub(super) fn validate_duplicate_keyframes(
     sb_name: &str,
     sb: &crate::storyboard::Storyboard,
@@ -242,7 +239,7 @@ pub(super) fn validate_duplicate_keyframes(
     }
 }
 
-/// V3: 予約キーフレーム名検証（"start" と暗黙名の接頭辞 `__implicit_` は使用禁止）
+/// 予約キーフレーム名検証（"start" と暗黙名の接頭辞 `__implicit_` は使用禁止）
 pub(super) fn validate_reserved_keyframe_names(
     sb_name: &str,
     sb: &crate::storyboard::Storyboard,
@@ -261,13 +258,13 @@ pub(super) fn validate_reserved_keyframe_names(
     }
 }
 
-/// V6: キーフレーム参照検証（前方参照許可 + 暗黙的KF追跡）
+/// キーフレーム参照検証（前方参照を許可し、暗黙のキーフレームも参照先に含める）
 pub(super) fn validate_keyframe_references(
     sb_name: &str,
     sb: &crate::storyboard::Storyboard,
     errors: &mut Vec<DolaError>,
 ) {
-    // 第1パス: 全キーフレーム名を収集（明示的 + 暗黙的 + "start" 予約）
+    // 全キーフレーム名を収集する（明示的 + 暗黙的 + "start" 予約）
     let mut known_keyframes = BTreeSet::new();
     known_keyframes.insert("start".to_string());
 
@@ -275,12 +272,10 @@ pub(super) fn validate_keyframe_references(
         if let Some(ref kf_name) = entry.keyframe {
             known_keyframes.insert(kf_name.clone());
         } else {
-            // 暗黙的KF: __implicit_{index}
             known_keyframes.insert(format!("{IMPLICIT_KEYFRAME_PREFIX}{idx}"));
         }
     }
 
-    // 第2パス: at/between の参照先が存在するか検証
     for entry in &sb.entry {
         if let Some(ref kf_ref) = entry.at {
             let names = collect_keyframe_names_from_ref(kf_ref);
@@ -322,7 +317,7 @@ pub(crate) fn collect_keyframe_names_from_ref(kf_ref: &KeyframeRef) -> Vec<Strin
     }
 }
 
-/// V10, V12(transition), V13: 変数型に基づくトランジション制約
+/// 変数型に基づくトランジション制約
 pub(super) fn validate_transition_type_constraints(
     sb_name: &str,
     entry_idx: usize,
@@ -333,7 +328,7 @@ pub(super) fn validate_transition_type_constraints(
 ) {
     match var_def {
         AnimationVariableDef::Object { .. } => {
-            // V10: Object 型 → to のみ許可、from/relative_to/easing 不可、to は Dynamic のみ
+            // Object 型は to のみ許可（from/relative_to/easing 不可、to は Dynamic のみ）
             for (field, is_present) in [
                 ("from", trans_def.from.is_some()),
                 ("relative_to", trans_def.relative_to.is_some()),
@@ -358,7 +353,7 @@ pub(super) fn validate_transition_type_constraints(
             }
         }
         AnimationVariableDef::Float { .. } | AnimationVariableDef::Integer { .. } => {
-            // V13: f64/i64 変数 → from/to は Scalar のみ
+            // f64/i64 変数の from/to は Scalar のみ
             if let Some(ref from) = trans_def.from
                 && matches!(from, TransitionValue::Dynamic(_))
             {
@@ -380,7 +375,6 @@ pub(super) fn validate_transition_type_constraints(
                 });
             }
 
-            // V12: トランジション from/to の値域検証
             let (min_f, max_f) = match var_def {
                 AnimationVariableDef::Float { min, max, .. } => (
                     min.unwrap_or(f64::NEG_INFINITY),
@@ -414,7 +408,7 @@ pub(super) fn validate_transition_type_constraints(
     }
 }
 
-/// V14-V17: loop_offset バリデーション（NaN は `validate_numbers` が拒む）
+/// loop_offset バリデーション（NaN は `validate_numbers` が拒む）
 pub(super) fn validate_loop_offset(
     sb_name: &str,
     sb: &crate::storyboard::Storyboard,
@@ -430,7 +424,6 @@ pub(super) fn validate_loop_offset(
         LoopOffset::Range(r) => (r.min, r.max),
     };
 
-    // V14: min < 0
     if min < 0.0 {
         errors.push(DolaError::LoopOffsetNegativeMin {
             storyboard: sb_name.to_string(),
@@ -438,7 +431,6 @@ pub(super) fn validate_loop_offset(
         });
     }
 
-    // V15: max < 0
     if max < 0.0 {
         errors.push(DolaError::LoopOffsetNegativeMax {
             storyboard: sb_name.to_string(),
@@ -446,7 +438,7 @@ pub(super) fn validate_loop_offset(
         });
     }
 
-    // V16: min > max（Scalar は min が 0 なので、逆転は負の max として V15 が報告済み）
+    // Scalar は min が 0 なので、逆転は負の max として上で報告済み
     if matches!(lo, LoopOffset::Range(_)) && min > max {
         errors.push(DolaError::LoopOffsetRangeInverted {
             storyboard: sb_name.to_string(),
@@ -454,21 +446,15 @@ pub(super) fn validate_loop_offset(
             max,
         });
     }
-
-    // V17: easing は serde の型システムが保証（追加バリデーション不要）
 }
 
-/// V15t: トリガー循環参照検出（ドキュメントレベル DFS）
-///
-/// ドキュメント内全ストーリーボードのトリガーグラフを構築し、
-/// DFS で循環を検出する。O(V+E)。
+/// トリガー循環参照検出（ドキュメント内全ストーリーボードのトリガーグラフを DFS する）。
 // shortcut: トリガーの枝分かれの数は数えない。各段が次を 2 回起こす n 段の鎖は、1 回の tick に 2^n − 2 個の子を起こす
 // （16 段で約 6.5 万件・約 0.17 秒、24 段で約 45 秒の見込み、1 段ごとに倍）。作者の書いた文書を読み込むようになったら、
 // 循環の無いことを確かめた後に、1 回の start が起こす子の数（1 ＋ 起こす先の数の和・飽和で足す）に上限を置く。
 pub(super) fn validate_trigger_cycles(doc: &DolaDocument, errors: &mut Vec<DolaError>) {
     use std::collections::{HashMap, HashSet};
 
-    // トリガーグラフ構築: SB名 → トリガー先SB名のリスト
     let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
     for (sb_name, sb) in &doc.storyboard {
         let targets: Vec<&str> = sb
@@ -479,7 +465,6 @@ pub(super) fn validate_trigger_cycles(doc: &DolaDocument, errors: &mut Vec<DolaE
         graph.insert(sb_name.as_str(), targets);
     }
 
-    // DFS による循環検出
     let mut visited: HashSet<&str> = HashSet::new();
     let mut in_stack: HashSet<&str> = HashSet::new();
     let mut path: Vec<&str> = Vec::new();
@@ -500,7 +485,7 @@ pub(super) fn validate_trigger_cycles(doc: &DolaDocument, errors: &mut Vec<DolaE
     }
 }
 
-/// DFS ヘルパー: 循環検出時にパスを返す
+/// DFS ヘルパー: 循環を見つけたらそのパスを返す
 ///
 /// 細工した深い鎖でコールスタックを使い切らないよう、再帰でなく明示のスタックで回す。
 /// `path` が節のスタックで、`next_idx` は同じ深さの節が次に見る隣の位置。
@@ -530,13 +515,12 @@ fn dfs_detect_cycle<'a>(
             path.push(next);
             next_idx.push(0);
         } else if in_stack.contains(next) {
-            // 循環検出: path から next の位置以降を抽出
             // SAFETY: in_stack への挿入/除去は path への push/pop と常に対で
             // 行われるため両者は同一の要素集合を保持する。in_stack に含まれる
             // next は必ず path 内に存在し、position(..).unwrap() は panic 不能。
             let start_pos = path.iter().position(|&n| n == next).unwrap();
             let mut cycle: Vec<String> = path[start_pos..].iter().map(|s| s.to_string()).collect();
-            cycle.push(next.to_string()); // 循環を閉じる
+            cycle.push(next.to_string());
             return Some(cycle);
         }
     }

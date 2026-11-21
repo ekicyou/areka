@@ -1,4 +1,4 @@
-//! 予算を面の行の全部で数える（指摘 129〜132・134・136・137）: どの走査も面に入るときに「入る 1 ＋面の行の全部」を
+//! 予算を面の行の全部で数える: どの走査も面に入るときに「入る 1 ＋面の行の全部」を
 //! 引き、足りなければ入らない。旧い単位（入る 1 だけ・命令列は element と animation の数だけ）では入ってしまう
 //! 小さな版で、仕事が上限で止まることを確かめる。
 
@@ -33,7 +33,7 @@ fn rows(n: usize, prefix: &str, suffix: &str) -> String {
     (0..n).map(|i| format!("{prefix}{i}{suffix}\n")).collect()
 }
 
-/// 指摘 129: 面 1 は絵 1 枚と、描かない pattern 1,000 行の animation 1 つを持つ。旧い単位（入る 1＋element 1＋
+/// 面 1 は絵 1 枚と、描かない pattern 1,000 行の animation 1 つを持つ。旧い単位（入る 1＋element 1＋
 /// animation 1＋積み荷 1＝4）なら予算 100 で開くが、pattern の行も数えると 1＋1＋（1＋1,000）＋積み荷 1＝1,004 なので
 /// 開かず、`error!` は合成器 1 つで 1 行。1,004 なら切れず、1 つ少ない 1,003 では切れる（interval の 1 行も数える）。
 #[test]
@@ -49,7 +49,7 @@ fn plan_counts_the_pattern_rows_of_an_entered_surface() {
     assert_eq!(run(1_004), (1, 0), "予算の内なら絵を描き、記録は無い");
 }
 
-/// 指摘 130: 面 1 は絵 1 枚と当たり判定 1,000 行を持つ（入る 1＋行 1,001＝1,002）。旧い単位（入る 1 だけ）なら
+/// 面 1 は絵 1 枚と当たり判定 1,000 行を持つ（入る 1＋行 1,001＝1,002）。旧い単位（入る 1 だけ）なら
 /// 予算 100 で入るが、面ごとの外形とシェルの外形はどちらも入らず（面 1 の絵を数えない）、`error!` を 1 行出す。
 /// 1,002 なら入り、1 つ少ない 1,001 では入らない。
 #[test]
@@ -81,7 +81,7 @@ fn extent_and_bounds_count_the_rows_of_an_entered_surface() {
     assert_eq!(run_bounds(1_002), (-5, 0));
 }
 
-/// 指摘 130: 当たり判定の持ち込みも、入るときに面の行の全部を引く。旧い単位なら予算 100 で面 1 に入って領域を
+/// 当たり判定の持ち込みも、入るときに面の行の全部を引く。旧い単位なら予算 100 で面 1 に入って領域を
 /// 99 本持ち込むが、入る 1＋行 1,001 が越えるので 1 本も持ち込まない。入る 1,002＋渡す 1,000＝2,002 なら全部。
 #[test]
 fn hit_import_counts_the_rows_of_an_entered_surface() {
@@ -98,7 +98,7 @@ fn hit_import_counts_the_rows_of_an_entered_surface() {
     assert_eq!(run(2_002), (1000, 0));
 }
 
-/// 指摘 137: 渡す列を予算で切るときは奥（持ち込み）から落とし、直接の領域（いちばん手前）を残す。面 1 は
+/// 渡す列を予算で切るときは奥（持ち込み）から落とし、直接の領域（いちばん手前）を残す。面 1 は
 /// 直接の領域 `Direct` と、`G1`・`G2` を持つ面 2 を置く。予算 9（面 1 に入る 3・面 2 に入る 3・面 2 から渡す 2）で
 /// 面 1 から渡せるのは 3 本のうち 1 本だけ＝`Direct`。
 #[test]
@@ -115,8 +115,8 @@ fn hit_import_drops_the_far_regions_first() {
     assert_eq!(errors(&logs, "walk=\"hit_import\""), 1, "{logs}");
 }
 
-/// 指摘 134: 描かない描画メソッドの命令は重ねないので、重ねる画素の上限に数えない。外形の外に置いた描く命令も、
-/// 外形の中で重ねる画素が無いので数えない（7 回目の指摘 7）。外形 2×2（上限 256 画素）に描かない 2×2 の命令
+/// 描かない描画メソッドの命令は重ねないので、重ねる画素の上限に数えない。外形の外に置いた描く命令も、
+/// 外形の中で重ねる画素が無いので数えない。外形 2×2（上限 256 画素）に描かない 2×2 の命令
 /// 100 枚と (100,100) に置いた描く命令 100 枚（どちらも数えれば 400 画素）と描く命令 1 枚を並べても、1 枚も捨てない。
 #[test]
 fn undrawn_ops_count_no_pixels() {
@@ -147,7 +147,7 @@ fn undrawn_ops_count_no_pixels() {
 }
 
 /// 波括弧・追記・波括弧・追記・波括弧の順に同じ collision番号を足しても、どの行も除かれず並びは書いた順
-/// （spec: collisionex-regions 要件 3.3・3.7・SSP 2.9 の測り）。警告は、すでにある番号を足した波括弧ごとに
+/// （SSP の測りどおり）。警告は、すでにある番号を足した波括弧ごとに
 /// 1 行（2 つ目の波括弧は collision0 が 2 行・3 つ目は collision1 が 1 行）で、追記と最初の波括弧は黙る。
 #[test]
 fn brace_and_append_keep_every_same_numbered_collision_in_written_order() {
@@ -183,7 +183,7 @@ fn brace_and_append_keep_every_same_numbered_collision_in_written_order() {
     );
 }
 
-/// 指摘 136: 重なりの `warn!` は（面, 記述子）ごとに 1 行で、重なった数を `count` に書く。2 つ目の波括弧が element
+/// 重なりの `warn!` は（面, 記述子）ごとに 1 行で、重なった数を `count` に書く。2 つ目の波括弧が element
 /// 10 行と animation 5 つを重ねても、element と animation で 1 行ずつ。
 #[test]
 fn overlap_warns_once_per_descriptor_with_the_count() {
@@ -217,9 +217,9 @@ fn overlap_warns_once_per_descriptor_with_the_count() {
     );
 }
 
-/// 指摘 132: 同じ子を指す element定義が多くても、（子, 親）の組ごとに 1 度だけたどる。面 0 が面 1 を 1,000 行で
+/// 同じ子を指す element定義が多くても、（子, 親）の組ごとに 1 度だけたどる。面 0 が面 1 を 1,000 行で
 /// 置き、面 1 … 200 が鎖になる（循環は無い）。報告は空で、`reaches` を呼ぶのは組の数の 200 回（行ごとに
-/// たどり直すと 1,199 回）。鎖そのものの深さの 2 乗は design の「未解決」。
+/// たどり直すと 1,199 回）。鎖そのものの深さの 2 乗は未解決。
 #[test]
 fn nest_report_walks_each_child_parent_pair_once() {
     let mut text = String::from("charset,UTF-8\nsurface0\n{\n");

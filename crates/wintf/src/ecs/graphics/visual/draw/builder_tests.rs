@@ -1,4 +1,4 @@
-//! `build` の純粋なテスト（工場だけ・装置なし・要件 1.1, 1.3, 1.5, 2.4〜2.8, 4.5, 4.6, 5.1, 5.2, 5.5〜5.7, 6.7）。
+//! `build` の純粋なテスト（工場だけ・装置なし）。
 //! `fill_world_visuals` で埋めた後の値から列を組む（本番と同じ順）。
 
 use super::super::draw_content_test_support::solid_rect_content;
@@ -534,7 +534,7 @@ fn individual_rounded_clip_rounds_each_corner_by_its_own_radius() {
     }
 }
 
-/// 持ち主の WUC 側と同じ見た目か: 同じ大きさ・半径の D2D 角丸矩形と内外が一致する（2.4）。
+/// 持ち主の WUC 側と同じ見た目か: 同じ大きさ・半径の D2D 角丸矩形と内外が一致する。
 /// 半径が辺の半分を超えると X と Y で別々に頭を打ち、角は楕円になる。
 #[test]
 fn rounded_clip_matches_d2d_rounded_rectangle_including_over_large_radius() {
@@ -677,7 +677,7 @@ fn layer_commands_and_draw_items_carry_their_node_entity_and_version() {
     assert_eq!((g.entity, g.version), (b, 11));
     let item = first_draw(&out);
     assert_eq!((item.entity, item.version), (c, 13));
-    // 件の hash の作りは変えない（4.5）。
+    // 件の hash の作りは変えない。
     assert_eq!(
         item.hash,
         hash_draw(

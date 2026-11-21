@@ -19,12 +19,10 @@ pub fn clear_transient_pointer_state(
     mut commands: Commands,
     leave_query: Query<Entity, With<PointerLeave>>,
 ) {
-    // wheel をリセット（1フレームのみ有効）
     for mut pointer in query.iter_mut() {
         pointer.wheel = WheelDelta::default();
     }
 
-    // PointerLeave マーカー除去
     for entity in leave_query.iter() {
         commands.entity(entity).remove::<PointerLeave>();
     }
@@ -44,7 +42,6 @@ pub fn debug_pointer_state_changes(
 ) {
     use tracing::debug;
 
-    // 新規追加（Enter）
     for (entity, pointer) in added_query.iter() {
         debug!(
             entity = ?entity,
@@ -59,11 +56,8 @@ pub fn debug_pointer_state_changes(
         );
     }
 
-    // 変更（移動・ボタン・ホイール等）
     for (entity, pointer) in changed_query.iter() {
         // Added の tick も Changed に含まれる（スキップはしない）。ここで出すのはホイールの回転だけ。
-
-        // ホイール回転時のみログ
         if pointer.wheel.vertical != 0 || pointer.wheel.horizontal != 0 {
             debug!(
                 entity = ?entity,

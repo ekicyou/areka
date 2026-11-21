@@ -1,5 +1,4 @@
-//! SHIORI の読み方の指定（`cli::ModulePolicy`）から結線を決める口と倒れ先の表
-//! （areka-P0-startup-options-core・要件 7.1・11.4）。
+//! SHIORI の読み方の指定（`cli::ModulePolicy`）から結線を決める口と倒れ先の表。
 //!
 //! 指定は値として渡すだけなので、テストどうしは互いに影響しない。
 
@@ -52,7 +51,7 @@ fn fallback_boot_options_follow_module_policy() {
 }
 
 /// 据え付けた作り口が指定どおりの結線を組む: 初回の起動（`Plain`）と切替の先（別の根）の両方で、
-/// 「読まない」なら差し替え口、「読む」なら helper の結線（要件 7.1・7.6）。
+/// 「読まない」なら差し替え口、「読む」なら helper の結線。
 #[test]
 fn installed_source_follows_module_policy_for_first_boot_and_switch() {
     use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};

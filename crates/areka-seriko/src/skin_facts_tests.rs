@@ -1,4 +1,4 @@
-//! `\s`・数の `\b` の判定の決定論テスト（spec: mcp-strict-errors 要件 2.7）。事実は写しの形
+//! `\s`・数の `\b` の判定の決定論テスト。事実は写しの形
 //! （[`SkinFacts::new`]）で手で組み、検出点の答えを固定する。
 
 use std::collections::{BTreeMap, BTreeSet};

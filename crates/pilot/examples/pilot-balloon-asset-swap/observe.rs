@@ -1,6 +1,5 @@
 //! 観測の規則: 数え方（1 フレームの判定）。見分け方（標本点・絵と当たり判定の判別）は `signature.rs`。
 //!
-//! 規則の唯一の定義は design.md §Observer。ここはそれを写しただけで、閾値を変えるなら先に design を直す。
 //! World を読む部分（tick の記録・当たり判定の採取）と、観測の窓・集計ログ・較正の合否もここ。
 
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -67,7 +66,7 @@ pub struct Counts {
     pub size: u32,
 }
 
-/// 較正の項（design §SwapDriver `Calibration`）。
+/// 較正の項。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Calib {
     Static,
@@ -460,7 +459,7 @@ pub fn judge_frame(obs: &mut Observation, frame: &FrameRecord, tick: &TickRecord
 }
 
 // ---------------------------------------------------------------------------
-// 観測の窓（design Key Decision 8・§Observer 観測の窓）
+// 観測の窓
 // ---------------------------------------------------------------------------
 
 /// 揃った tick の後に数え続ける tick 数。
@@ -614,7 +613,7 @@ impl Observer {
         info!(name, pair = PAIR_NAMES[pair], request_tick, "観測を開いた");
     }
 
-    /// 差し替えの失敗: 開いている観測を数えずに「測れない」で閉じる（design §Error Handling）。
+    /// 差し替えの失敗: 開いている観測を数えずに「測れない」で閉じる。
     pub fn abort(&mut self, why: &'static str) {
         let Some(o) = self.open.take() else {
             error!(why, "閉じる観測が開いていない");
@@ -688,7 +687,7 @@ impl Observer {
         self.late = Some(l);
     }
 
-    /// 最終の並べ出し（4.8・6.6）。`partial` は上限時間での打ち切り（開いている観測は「途中」で並べる）。
+    /// 最終の並べ出し。`partial` は上限時間での打ち切り（開いている観測は「途中」で並べる）。
     pub fn summarize(&mut self, partial: bool, now: u32) -> Verdict {
         self.finished = true;
         let (ticks, frames) = {
@@ -773,7 +772,7 @@ pub enum Verdict {
     Failed(Vec<String>),
 }
 
-/// 閉じた較正の観測から合否を決める（design §Observer 較正の合否）。較正が 0 項なら合格。
+/// 閉じた較正の観測から合否を決める。較正が 0 項なら合格。
 pub fn calibration_verdict(done: &[Observation]) -> Verdict {
     let failed: Vec<String> = done
         .iter()

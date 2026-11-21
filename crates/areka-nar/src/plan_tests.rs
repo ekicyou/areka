@@ -1,5 +1,5 @@
 //! `plan` の兄弟テスト——4 種の宛先・同梱バルーンの接頭辞剥がしと複製の不在・
-//! 宛先ゴーストの拒否 3 種・取り出し元の無い同梱の飛ばし・フォルダの作り分け・根の外へ出ないことの全数勘定（要件 4.8・5.1〜5.8・6.3）。
+//! 宛先ゴーストの拒否 3 種・取り出し元の無い同梱の飛ばし・フォルダの作り分け・根の外へ出ないことの全数勘定。
 //!
 //! 期待値の置き方は 3 つ。⑴ 受理の側は組み上がった [`Placement`] の**全ての欄**を
 //! 突き合わせる（「置かれた」ではなく「どこに何が置かれるか」を見る）。⑵ 拒否の側は
@@ -35,7 +35,7 @@ pub(crate) fn read_archive(bytes: &[u8]) -> (Vec<RawEntry>, Vec<EntryName>, Inst
 
 /// 宛先ゴースト `name` が実在する空の根を 1 つ借りる。
 ///
-/// OS の一時フォルダは使わない（要件 7.10）。`WorkDir` が破棄で木ごと片付ける。
+/// OS の一時フォルダは使わない。`WorkDir` が破棄で木ごと片付ける。
 pub(crate) fn root_with_ghost(name: &str) -> WorkDir {
     let work = WorkDir::new().expect("作業フォルダを取れる");
     std::fs::create_dir_all(work.path().join("ghost").join(name)).expect("宛先ゴーストを作れる");
@@ -97,7 +97,7 @@ fn relative_files(placement: &Placement) -> Vec<&str> {
 /// `manifest` の兄弟テストが実物の `install.txt` で見ているので、こちらは形だけ借りる。
 ///
 /// `ghost/`・`ghost/master/` はフォルダのエントリを持ち、`shell/master/` は持たない。
-/// 同梱バルーンの側も `test-balloon/balloon/` のエントリを持たない。4.9 の 2 つの形が
+/// 同梱バルーンの側も `test-balloon/balloon/` のエントリを持たない。フォルダのエントリを持つ形と持たない形が
 /// 1 つの書庫に同居する。
 fn ghost_archive() -> NarBuilder {
     NarBuilder::new()
@@ -220,7 +220,7 @@ fn no_folder_entry_archive() -> NarBuilder {
         .done()
 }
 
-// ---- 4 種の宛先（要件 5.2・5.5・5.6・5.8） ----
+// ---- 4 種の宛先 ----
 
 /// ゴーストは根のゴースト格納先へ置かれ、同梱バルーンの取り出し元だけが除かれる。
 #[test]
@@ -345,7 +345,7 @@ fn a_supplement_overlays_the_target_ghost_without_the_top_level_install_txt() {
     assert_eq!(supplement.dirs, vec!["ghost", "ghost/master", "sub"]);
 }
 
-// ---- 同梱バルーン（要件 5.3・5.4・6.3） ----
+// ---- 同梱バルーン ----
 
 /// 同梱バルーンは接頭辞を剥がしてバルーン格納先へ置かれる。
 #[test]
@@ -393,7 +393,7 @@ fn a_companion_balloon_goes_to_the_balloon_folder_with_its_prefix_stripped() {
     assert_eq!(companion.dirs, vec!["balloon"]);
 }
 
-/// ゴースト側に同梱バルーンの複製が残らない（要件 5.3 の後半）。
+/// ゴースト側に同梱バルーンの複製が残らない。
 ///
 /// バルーン側へ置かれることだけを見ると、両方へ置く計画も緑になる。
 #[test]
@@ -507,7 +507,7 @@ fn the_companion_source_matches_the_archive_spelling_ignoring_case() {
     );
 }
 
-/// 同梱バルーンは自分の `*.refresh` を持ち運ぶ（要件 6.3）。
+/// 同梱バルーンは自分の `*.refresh` を持ち運ぶ。
 #[test]
 fn the_companion_carries_its_own_refresh_policy() {
     let root = root_with_ghost("other");
@@ -550,8 +550,8 @@ fn the_companion_carries_its_own_refresh_policy() {
 }
 
 /// 取り出し元がフォルダのエントリだけ（中身が 1 件も無い）なら、その同梱を飛ばして
-/// 本体だけを置く（要件 1.1・1.2）。`*.source.directory` を書かない同梱なので、鍵は
-/// `*.directory` の鍵・値は置き場の名前（要件 1.4）。
+/// 本体だけを置く。`*.source.directory` を書かない同梱なので、鍵は
+/// `*.directory` の鍵・値は置き場の名前。
 #[test]
 fn skips_a_companion_whose_source_folder_is_empty() {
     let root = root_with_ghost("other");
@@ -592,8 +592,8 @@ fn skips_a_companion_whose_source_folder_is_empty() {
     );
 }
 
-/// 取り出し元の名前が書庫のどこにも無ければ、その同梱を飛ばして本体だけを置く
-/// （要件 1.1・1.2）。鍵は書かれていた `*.source.directory`・値は書かれていた値（要件 1.4）。
+/// 取り出し元の名前が書庫のどこにも無ければ、その同梱を飛ばして本体だけを置く。
+/// 鍵は書かれていた `*.source.directory`・値は書かれていた値。
 #[test]
 fn skips_a_companion_whose_source_folder_is_absent() {
     let root = root_with_ghost("other");
@@ -635,7 +635,7 @@ fn skips_a_companion_whose_source_folder_is_absent() {
     );
 }
 
-// ---- 宛先ゴースト（要件 5.7） ----
+// ---- 宛先ゴースト ----
 
 /// 宛先ゴーストが渡されなければ、シェルもサプリメントも拒否する。
 #[test]
@@ -693,7 +693,7 @@ fn refuses_a_target_ghost_name_that_is_not_a_one_level_name() {
     }
 }
 
-// ---- フォルダの作り分け（要件 4.9） ----
+// ---- フォルダの作り分け ----
 
 /// フォルダのエントリは空フォルダになり、エントリが無くてもファイルの親は作られる。
 #[test]
@@ -724,7 +724,7 @@ fn folder_entries_become_folders_and_missing_parents_are_derived() {
     );
 }
 
-// ---- 根の外へ出ない（要件 4.8） ----
+// ---- 根の外へ出ない ----
 
 /// `candidate` が `root` の配下か。`root` 自身は配下とみなす。
 ///
@@ -792,7 +792,7 @@ fn every_accepted_plan(root: &WorkDir) -> Vec<(&'static str, Vec<Placement>)> {
     ]
 }
 
-/// 全ての固定入力の全ての宛先・ファイル・フォルダが根の配下に収まる（要件 4.8）。
+/// 全ての固定入力の全ての宛先・ファイル・フォルダが根の配下に収まる。
 #[test]
 fn every_path_of_every_plan_stays_under_the_root() {
     let root = root_with_ghost("test-ghost");

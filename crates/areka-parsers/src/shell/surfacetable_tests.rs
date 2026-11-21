@@ -1,6 +1,6 @@
-//! 表情の表の転記（`parse_surfacetable`）の単体テスト（要件 2.1〜2.7・3.8・5.2〜5.8）。
+//! 表情の表の転記（`parse_surfacetable`）の単体テスト。
 //!
-//! 設計の「行の読み分け」の表の各行を 1 つずつ固定する。検体ファイルは読まず、
+//! `surfacetable.rs` の「行の読み分け」の各行を 1 つずつ固定する。検体ファイルは読まず、
 //! テストの中に surfacetable.txt の文面を持つ。
 
 use super::{SurfaceTable, SurfaceTableRow, parse_surfacetable};
@@ -18,7 +18,7 @@ fn table(rows: Vec<SurfaceTableRow>, unreadable: Vec<usize>) -> SurfaceTable {
     SurfaceTable { rows, unreadable }
 }
 
-/// 2.1・2.2: `group`＋`scope`＋行 → グループ名と scope が行に写る。
+/// `group`＋`scope`＋行 → グループ名と scope が行に写る。
 #[test]
 fn group_and_scope_are_copied_to_rows() {
     let t = parse_surfacetable("group,本体\n{\nscope,1\n0,素\n1,照れ\n}\n");
@@ -31,21 +31,21 @@ fn group_and_scope_are_copied_to_rows() {
     );
 }
 
-/// 2.3: `scope` の行が無い `group` の行は scope 0。
+/// `scope` の行が無い `group` の行は scope 0。
 #[test]
 fn group_without_scope_is_zero() {
     let t = parse_surfacetable("group,本体\n{\n0,素\n}\n");
     assert_eq!(t, table(vec![row(0, "素", "本体", 0)], vec![]));
 }
 
-/// 2.4: グループ名が空の `group`。
+/// グループ名が空の `group`。
 #[test]
 fn empty_group_name_is_empty() {
     let t = parse_surfacetable("group,\n{\nscope,1\n10,素\n}\n");
     assert_eq!(t, table(vec![row(10, "素", "", 1)], vec![]));
 }
 
-/// 2.5: `group` の外の行（平たいファイル）はグループ名が空・scope 0。
+/// `group` の外の行（平たいファイル）はグループ名が空・scope 0。
 #[test]
 fn row_outside_group_is_empty_and_zero() {
     let t = parse_surfacetable("0,素\n1,照れ\n");
@@ -55,14 +55,14 @@ fn row_outside_group_is_empty_and_zero() {
     );
 }
 
-/// 2.6: 名前を省略した行（`0,`）も空の名前で転記する。
+/// 名前を省略した行（`0,`）も空の名前で転記する。
 #[test]
 fn omitted_name_is_empty() {
     let t = parse_surfacetable("0,\n");
     assert_eq!(t, table(vec![row(0, "", "", 0)], vec![]));
 }
 
-/// 2.7: 同じ scope の `group` が 2 つ → 各行は自分のグループ名を持つ。
+/// 同じ scope の `group` が 2 つ → 各行は自分のグループ名を持つ。
 #[test]
 fn two_groups_with_same_scope_keep_own_names() {
     let t = parse_surfacetable("group,甲\n{\nscope,0\n5,笑\n}\ngroup,乙\n{\nscope,0\n3,泣\n}\n");
@@ -120,7 +120,7 @@ fn second_scope_wins() {
     );
 }
 
-/// 5.3・3.8: `version`・`option`・`//`・空行は行にならず `unreadable` にもならない。
+/// `version`・`option`・`//`・空行は行にならず `unreadable` にもならない。
 #[test]
 fn version_option_comment_and_blank_are_skipped() {
     let t = parse_surfacetable(
@@ -129,7 +129,7 @@ fn version_option_comment_and_blank_are_skipped() {
     assert_eq!(t, table(vec![row(0, "素", "", 0)], vec![]));
 }
 
-/// 5.4: タブと空白の字下げを落として読む。
+/// タブと空白の字下げを落として読む。
 #[test]
 fn tab_and_space_indent_is_ignored() {
     let t = parse_surfacetable("group,g\n\t{\n\t  scope , 1 \n \t0 ,素 \n\t}\n");
@@ -156,7 +156,7 @@ fn ideographic_space_is_kept() {
     assert_eq!(t, table(vec![row(0, "\u{3000}素", "", 0)], vec![2]));
 }
 
-/// 5.2: 見出し語は大小を区別しない（`Charset`・`GROUP`・`Scope`・`VERSION`・`Option`）。
+/// 見出し語は大小を区別しない（`Charset`・`GROUP`・`Scope`・`VERSION`・`Option`）。
 #[test]
 fn keywords_are_case_insensitive() {
     let t =
@@ -171,14 +171,14 @@ fn known_charset_is_skipped() {
     assert_eq!(t, table(vec![row(0, "素", "", 0)], vec![]));
 }
 
-/// 5.8: 知らない `charset` の名前は `unreadable`。読める行は残る。
+/// 知らない `charset` の名前は `unreadable`。読める行は残る。
 #[test]
 fn unknown_charset_is_unreadable() {
     let t = parse_surfacetable("charset,no-such-encoding\n0,素\n");
     assert_eq!(t, table(vec![row(0, "素", "", 0)], vec![1]));
 }
 
-/// 5.5: 閉じていない `{` のままファイルが終わっても、読めた分を返す。
+/// 閉じていない `{` のままファイルが終わっても、読めた分を返す。
 #[test]
 fn unclosed_brace_returns_rows_read() {
     let t = parse_surfacetable("group,本体\n{\n0,\n1,照れ");
@@ -191,7 +191,7 @@ fn unclosed_brace_returns_rows_read() {
     );
 }
 
-/// 5.6: 行末の `}` は名前の一部で、次の行も同じ group に属する。
+/// 行末の `}` は名前の一部で、次の行も同じ group に属する。
 #[test]
 fn trailing_brace_is_part_of_name() {
     let t = parse_surfacetable("group,ほつれ銀糸\n{\n100,黒塗り}\n101,白\n}\n");
@@ -241,7 +241,7 @@ fn leading_zero_id_is_number() {
     assert_eq!(t, table(vec![row(7, "a", "", 0)], vec![]));
 }
 
-/// 5.7: 読めない行の各種は行番号だけを書かれた順に返し、読める行は残る。
+/// 読めない行の各種は行番号だけを書かれた順に返し、読める行は残る。
 #[test]
 fn unreadable_lines_are_numbered_in_order() {
     let text = "\

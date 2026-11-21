@@ -6,9 +6,9 @@
 //!    変わらないことを、実際に歩いて突き合わせる（走査そのものの較正を 3 本持つ）。
 //! ⑵ `install` は伸長をやり直さない——`open` の後に原本を潰しても、展開された
 //!    バイト列が元のままであることで測る（潰れたことの対照も置く）。
-//! ⑶ `install` は何度呼んでも同じ結果になる（設計 `install` の節）。
+//! ⑶ `install` は何度呼んでも同じ結果になる。
 //! ⑷ 記録は公開面の 2 つの関数だけが出す——本番のソースの字面で見張る。
-//! ⑸ 伸長器の書き込み側の名前を本番のソースが綴らない（要件 10.2）。
+//! ⑸ 伸長器の書き込み側の名前を本番のソースが綴らない。
 //! ⑹ 部品の本体が入出力を綴らないことを見張る共有の道具（[`assert_source_has_no_io`]）。
 //! ⑺ 名前・パスの長さの上限（200 単位）の境界を公開の入口 `open` で測る。
 //! ⑻ 組み上げ・確定の段の失敗を公開の入口 `install` で本当に起こし、失敗の値と記録の両方が
@@ -18,7 +18,7 @@
 //!
 //! 語彙の全数対応と「失敗のたびに記録が 1 回」は [`vocabulary`] が持つ。
 //!
-//! 根は OS の一時フォルダではなく [`WorkDir`] が配る（要件 7.10）。
+//! 根は OS の一時フォルダではなく [`WorkDir`] が配る。
 
 use super::*;
 use log_capture_kit::capture;
@@ -138,7 +138,7 @@ pub(super) fn assert_source_has_no_io(source: &str, needles: &[&str], harmless: 
     assert!(found.is_empty(), "本体が入出力の綴りを持つ: {found:?}");
 }
 
-// ---- 公開面が外から届く（設計「公開面」） ----
+// ---- 公開面が外から届く ----
 
 /// 公開面の型が `areka_nar::X` として外から届くことは、`lib.rs` の doctest が
 /// **別クレートとして**組まれることで測る。ここではその doctest が実在することだけを
@@ -152,7 +152,7 @@ fn the_public_surface_doctest_exists() {
     );
 }
 
-// ---- `open` は 1 バイトも書かない（要件 4.1・9.1） ----
+// ---- `open` は 1 バイトも書かない ----
 
 /// 受理される入力も拒否される入力も、`open` を通した前後で根の木が 1 つも変わらない。
 ///
@@ -204,7 +204,7 @@ fn the_tree_snapshot_notices_every_kind_of_change() {
     assert_ne!(tree(root), before, "消えたフォルダを見落とした");
 }
 
-// ---- 名前・パスの長さの上限（本仕様 要件 1.3・1.4・1.5・1.9） ----
+// ---- 名前・パスの長さの上限 ----
 
 /// `ghost_with_balloon()`（4 件）の後ろに `name` のファイルを 1 件足して `open` する。
 /// 足した 1 件のエントリ番号は 4。
@@ -278,7 +278,7 @@ fn the_length_is_counted_in_utf16_units_not_chars() {
     );
 }
 
-/// フォルダのエントリは末尾の `/` を除いて測る——200 単位＋`/` は通る（要件 1.1）。
+/// フォルダのエントリは末尾の `/` を除いて測る——200 単位＋`/` は通る。
 #[test]
 fn a_directory_entry_is_measured_without_its_trailing_slash() {
     let work = WorkDir::new().expect("根を借りられる");
@@ -319,7 +319,7 @@ fn a_directory_name_one_over_the_limit_is_refused_with_a_bounded_value() {
     );
 }
 
-// ---- `install` は伸長をやり直さない（設計 `container`） ----
+// ---- `install` は伸長をやり直さない ----
 
 /// `open` の後に原本を潰しても、展開された中身は元のバイト列のまま。
 ///
@@ -377,7 +377,7 @@ fn the_inflate_call_appears_once_outside_its_definition() {
     );
 }
 
-// ---- 組み上げ・確定の失敗を公開の入口で起こす（本仕様 要件 3.1〜3.4） ----
+// ---- 組み上げ・確定の失敗を公開の入口で起こす ----
 
 /// 読むことだけを共有して開いたまま持つ（起動中の `shiori.dll` の再現）。`install` の兄弟テストも借りる。
 ///
@@ -401,7 +401,7 @@ pub(super) fn hold(path: &Path) -> fs::File {
 /// 現れたときに別々の欄の食い違いが同じ綴りへ潰れる。
 #[test]
 fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder() {
-    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る。
     crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("根を借りられる");
     let root = work.path();
@@ -525,7 +525,7 @@ fn a_stage_failure_removes_the_work_folder_named_in_the_record() {
     );
 }
 
-// ---- 入れ子の同梱の確定の失敗（本仕様 要件 7.7・10.3） ----
+// ---- 入れ子の同梱の確定の失敗 ----
 
 /// ゴーストの書庫の同梱はゴーストの中へ入れ子に置かれ、その確定が失敗すると本体も元へ戻る。
 /// 作業フォルダは本体の根 1 つだけで、根の置き場（`<根>\balloon`）へは何も入らず、失敗の
@@ -612,7 +612,7 @@ fn a_failing_nested_companion_rolls_the_ghost_back_within_one_root() {
     );
 }
 
-// ---- 何度呼んでも同じ結果（設計 `install`） ----
+// ---- 何度呼んでも同じ結果 ----
 
 /// 同じ根へ同じ書庫を 2 度入れると、2 度目は `Overlaid` になり中身は同じ。
 #[test]
@@ -658,7 +658,7 @@ fn install_is_idempotent() {
     );
 }
 
-// ---- 記録は公開面だけが出す（要件 9.1・設計「Monitoring」） ----
+// ---- 記録は公開面だけが出す ----
 
 /// `tracing` を綴る本番のソースは `lib.rs` だけで、`error!` はその中に 1 つだけ。
 ///
@@ -685,9 +685,9 @@ fn only_the_public_surface_writes_records() {
     );
 }
 
-// ---- 伸長器の書き込み側を呼ばない（要件 10.2） ----
+// ---- 伸長器の書き込み側を呼ばない ----
 
-/// 本番のソースが伸長器の書き込み側の名前を 1 つも綴らない（設計「Open Questions」）。
+/// 本番のソースが伸長器の書き込み側の名前を 1 つも綴らない。
 ///
 /// 綴りはこのファイルに直に書くと自分自身が当たるので連結して組む。走査するファイルが
 /// 無ければ恒真なので、主な本体が走査の対象に入っていることも確かめる。
@@ -706,7 +706,7 @@ fn no_deflate_side_is_called() {
     }
 }
 
-// ---- 同梱のバルーンを公開の入口で通す（areka-P0-install-companion-reading 要件 8.2・8.3） ----
+// ---- 同梱のバルーンを公開の入口で通す ----
 
 /// 根の下の全てのファイルの相対パス（フォルダは除く）。
 pub(super) fn files_under(root: &Path) -> Vec<String> {
@@ -750,7 +750,7 @@ fn install_into_empty_root(nar: &NarBuilder, root: &Path) -> InstallOutcome {
 
 /// 無印と `balloon0`〜`balloon10` を持つ書庫を入れると、入れたものの名前の列は
 /// 本体 → 無印 → 0 → 1 … → 10 の数の順（`10` が `1` と `2` の間に来ない）。
-/// 根の全てのファイルが本体か各宛先の配下に在り、記録は 0 件（要件 1.7・5.6・8.2・8.3）。
+/// 根の全てのファイルが本体か各宛先の配下に在り、記録は 0 件。
 #[test]
 fn eleven_numbered_companions_install_in_number_order_under_their_homes() {
     let numbers: Vec<String> = (0..=10).map(|n| n.to_string()).collect();
@@ -816,8 +816,7 @@ fn eleven_numbered_companions_install_in_number_order_under_their_homes() {
 
 /// `balloon0.source.directory,../extra\bal1` と、打ち切りの後ろの `balloon2.directory` を
 /// 持つ書庫を入れる。同梱は `extra/bal1` の段を剥がした位置に置かれ、`balloon2` の宛先は
-/// 作られない。記録は「探索で読まなかった」→「取り除いた」の順の完全一致
-/// （要件 2.2・3.1・5.6・6.1・6.3・8.2）。
+/// 作られない。記録は「探索で読まなかった」→「取り除いた」の順の完全一致。
 #[test]
 fn a_cleaned_hierarchical_source_installs_stripped_and_records_in_order() {
     let nar = NarBuilder::new()
@@ -892,7 +891,7 @@ fn a_cleaned_hierarchical_source_installs_stripped_and_records_in_order() {
 
 /// 書庫の `balloon/kaku/` を名指しされた同梱 `kaku` が本体から除くと、warn
 /// `companion_overrides_archive_folder` が 1 件残り、ゴーストの中の `balloon\kaku` は
-/// 同梱の中身だけになる（本仕様 要件 7.5・10.3）。
+/// 同梱の中身だけになる。
 #[test]
 fn an_overridden_archive_folder_is_recorded_once() {
     let nar = NarBuilder::new()

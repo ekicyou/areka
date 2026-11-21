@@ -1,4 +1,4 @@
-//! 動く絵の検体を作る（spec: areka-P0-animated-image-decode 要件 8.1）。
+//! 動く絵の検体を作る。
 //!
 //! `cargo run -p areka-emo-atlas --example gen_animated_samples` で
 //! `src/testdata/animated/` に 12 個を書く。使うのは `image` と std だけ。

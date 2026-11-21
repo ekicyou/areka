@@ -16,14 +16,14 @@ pub struct ShellWindowMarker;
 pub struct BalloonWindowMarker;
 
 // ---------------------------------------------------------------------------
-// Surface cycle（R6.4 の切替観測: surface0 ⇄ surface1000[binds] ⇄ Hide）
+// Surface cycle（surface0 ⇄ surface1000[binds] ⇄ Hide）
 // ---------------------------------------------------------------------------
 
 /// シェル target のまばたき巡回状態（[`CYCLE_INTERVAL_SECS`] 周期で開閉し、各遷移で `apply` を 1 回発行）。
 ///
 /// さくらスクリプト `\s[1000]\![bind,腕,組み,1]\![bind,紅,差し,0]\![bind,口,‥‥,1]\![bind,眉,悲しみ,1]`
 /// `\![bind,目,通常,1]\![bind,まばたき,通常,1]` 相当を seriko 代役でハンドコンパイルした表情を、
-/// **まばたきアニメーションを指令切替で手動再現**する形で表示する（アニメ＝SERIKO ループは seriko 別 spec・未実装）。
+/// まばたきアニメーションを指令切替で手動再現する形で表示する。
 /// 共通表情（腕組み=1101・口‥‥=1206・目通常=1302・眉悲しみ=1502・髪飾りリボン=1800／紅なし）は据え置き、
 /// まばたき通常（1400）の有無だけをトグルする（1400 は静止合成で閉じまぶた(1412)を乗せる＝目を閉じる）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,10 +45,8 @@ impl CycleState {
 
     /// この状態でシェル target（`TargetId(0)`）へ発行する指令を組む。
     ///
-    /// 切替は必ず `EmoPresenter::apply`（指令 API）経由で行うため、状態ごとの `PresentCommand` を
-    /// ここで一元的に定義する（bypass しない）。共通表情に対しまばたき（1400）のみ差分する。
+    /// 切替は必ず `EmoPresenter::apply`（指令 API）経由で行う。共通表情に対しまばたき（1400）のみ差分する。
     pub(super) fn command(self) -> PresentCommand {
-        // 共通表情: 腕組み・口‥‥・目通常・眉悲しみ・髪飾りリボン（紅なし）。
         let binds = match self {
             CycleState::EyesOpen => BindSet::from_ids([1101, 1206, 1302, 1502, 1800]),
             CycleState::EyesClosed => BindSet::from_ids([1101, 1206, 1302, 1400, 1502, 1800]),
@@ -64,7 +62,7 @@ impl CycleState {
 }
 
 // ---------------------------------------------------------------------------
-// Boot resource（NonSend・EmoPresenter を内包）
+// Boot resource（NonSend）
 // ---------------------------------------------------------------------------
 
 /// 起動時に構築した presenter・窓・アセットを束ね、GPU 資源が揃うまで attach/apply を保留する

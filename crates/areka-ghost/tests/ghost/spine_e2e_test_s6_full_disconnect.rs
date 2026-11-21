@@ -1,28 +1,19 @@
-// ===================== S6: 全断線（段階的解体）シナリオ（task 4.7） =====================
+// ===================== S6: 全断線（段階的解体）シナリオ =====================
 //
-// design.md「アクター別の停止経路（正本）」表・「シナリオ網羅（要件 7.5）」節・S6:
-// 「全断線（段階的解体）: `into_parts` で分解し、①`DispatcherMsg::Close` 送出→dispatcher
-// join（Close-only アクターの正規停止）②`KanadeMsg::Close` 送出→kanade join（運行意味論を
-// 経ない素の停止）③残る senders を全 drop→shiori actor（kanade の `shiori_tx` drop による
-// inbox 切断）・down-relay（shiori 停止による `down_tx` drop）・start-relay（kanade 停止に
-// よる `start_tx` drop）が切断伝播だけで有界時間内に正常終了することを join で確認する。
-// 純粋な「全 Sender drop 一斉解放」は Sender 環（停止経路マトリクス参照）ゆえ構造的に
-// 成立しない——本シナリオはマトリクスの全行（Close 経路×2・切断経路×3）を 1 シナリオで
-// 検証する再定義である。」
+// 全断線（段階的解体）: `into_parts` で分解し、①`DispatcherMsg::Close` 送出→dispatcher join（Close-only アクターの
+// 正規停止）②`KanadeMsg::Close` 送出→kanade join（運行意味論を経ない素の停止）③残る senders を全 drop→shiori actor
+// （kanade の `shiori_tx` drop による inbox 切断）・down-relay（shiori 停止による `down_tx` drop）・start-relay（kanade 停止
+// による `start_tx` drop）が切断伝播だけで有界時間内に正常終了することを join で確認する。純粋な「全 Sender drop 一斉解放」は
+// Sender 環ゆえ構造的に成立しない——本シナリオは停止経路の全行（Close 経路×2・切断経路×3）を 1 シナリオで検証する。
 //
-// `GhostRuntime`/`GhostParts` は `shiori_tx` を保持しない（design「GhostRuntime は
-// shiori_tx を保持しない」・runtime.rs 3.1/3.2・`into_parts` の rustdoc）。`shiori_tx` は
-// kanade 自身のアクタースレッドが `spawn_kanade(config, shiori_tx, start_tx)` の引数として
-// **内部に**保持し続ける（`run_inbox` のクロージャが `shiori`/`sakura` を move キャプチャ
-// する・`areka-kanade/src/actor.rs::spawn_kanade`）。ゆえに kanade スレッドが（`Close` によ
-// る即時 `Break` で）終了しクロージャが return するとき、`shiori_tx`・`start_tx`（＝
-// kanade にとっての `sakura` パラメータ）はその関数フレームの終了と共に**自動的に**
-// drop される——手動 `drop()` は一切不要（そもそもこのテストは `shiori_tx`/`start_tx` を
-// 握っていないため不可能でもある）。同様に `down_tx` は shiori actor 自身が受信ループの
-// 全生涯にわたり保持する（task 1.4 の設計・`on_down` 保持）ため、shiori スレッドが終了
-// すればそれも自動的に drop される。`ActorHandle::join` はスレッド関数の完全な終了
-// （＝これらの drop が既に起こった後）を待ってから返るため、各 join の成功はその
-// drop が既に起きたことの直接証跡になる。
+// `GhostRuntime`/`GhostParts` は `shiori_tx` を保持しない（`into_parts` の rustdoc）。`shiori_tx` は kanade 自身の
+// アクタースレッドが `spawn_kanade(config, shiori_tx, start_tx)` の引数として**内部に**保持し続ける（`run_inbox` の
+// クロージャが `shiori`/`sakura` を move キャプチャする・`areka-kanade/src/actor.rs::spawn_kanade`）。ゆえに kanade
+// スレッドが（`Close` による即時 `Break` で）終了しクロージャが return するとき、`shiori_tx`・`start_tx` はその関数
+// フレームの終了と共に**自動的に** drop される——手動 `drop()` は不要（このテストは両者を握っていないため不可能でもある）。
+// 同様に `down_tx` は shiori actor 自身が受信ループの全生涯にわたり保持するので、shiori スレッドが終了すれば自動的に
+// drop される。`ActorHandle::join` はスレッド関数の完全な終了（＝これらの drop が既に起こった後）を待ってから返るため、
+// 各 join の成功はその drop が既に起きたことの直接証跡になる。
 
 use super::*;
 
@@ -33,16 +24,11 @@ use areka_ghost::{
 use areka_kanade::KanadeMsg;
 use areka_parsers::charset::DefaultEncoding;
 
-/// S6: 全断線（段階的解体）——`into_parts` で分解し、①dispatcher へ `Close`→join
-/// （Close-only アクターの正規停止・「アクター別の停止経路」表の dispatcher 行）②
-/// kanade へ raw `Close`→join（運行意味論——OnClose NOTIFY／Unload 等——を一切経ない
-/// 「非常口」停止。S2〜S5 のいずれも駆動していない、design「停止規約の Close」の
-/// bare な構造的停止・同表の kanade 行）③以降は手動 `drop()` も追加送信も一切行わずに
-/// shiori／down-relay／start-relay を join し、②で kanade スレッドが終了したことに
-/// 伴う自動 drop カスケードだけで全て有界時間内に自然終了することを確認する（同表の
-/// shiori／down-relay／start-relay の 3 行）。合計 5 join で「アクター別の停止経路」
-/// マトリクスの全 5 行（Close 経路×2・切断経路×3）を 1 シナリオで検証する（design が
-/// 述べる「マトリクスの全行…を1シナリオで検証する再定義」・要件 7.4/7.5/7.6）。
+/// S6: 全断線（段階的解体）——`into_parts` で分解し、①dispatcher へ `Close`→join（Close-only アクターの正規停止）
+/// ②kanade へ raw `Close`→join（運行意味論——OnClose NOTIFY／Unload 等——を一切経ない「非常口」停止。S2〜S5 のいずれも
+/// 駆動していない bare な構造的停止）③以降は手動 `drop()` も追加送信も一切行わずに shiori／down-relay／start-relay を
+/// join し、②で kanade スレッドが終了したことに伴う自動 drop カスケードだけで全て有界時間内に自然終了することを確認する。
+/// 合計 5 join で停止経路の全 5 行（Close 経路×2・切断経路×3）を 1 シナリオで検証する。
 #[test]
 fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() {
     const SHELL_NAME: &str = "S6DisconnectShell";
@@ -50,15 +36,10 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
     let temp = write_ghost_fixture("S6TestGhost", SHELL_NAME);
     let root = temp.path().to_path_buf();
 
-    // 起動系列（親の `boot_script()` が台本化する列。kanade スレッドで非同期に走る）が
-    // panic しない最小限の台本のみ用意する——本シナリオの
-    // 焦点は解体の「構造」であり、boot talk（`\s[0]hello\e`）の再生完了までは駆動
-    // しない（dispatcher の active slot に乗ったまま未進行でも、後続①の
-    // `DispatcherMsg::Close` が既存の Close funnel で安全に中断させる・dispatcher.rs
-    // 自身の単体テストで既に確認済みの挙動）。OnClose／Unload は台本化
-    // しない——本シナリオは kanade へ `CloseRequest`／`ForceQuit` のいずれも送らず、
-    // 運行意味論を経ない raw `KanadeMsg::Close` のみで停止させるため、shiori backend
-    // の `unload()` が呼ばれることはない。
+    // 起動系列（kanade スレッドで非同期に走る）が panic しない最小限の台本のみ用意する——焦点は解体の「構造」であり、
+    // boot talk の再生完了までは駆動しない（active slot に乗ったまま未進行でも、後続①の `DispatcherMsg::Close` が既存の
+    // Close funnel で安全に中断させる・`dispatcher.rs` の単体テストが確かめる）。OnClose／Unload は台本化しない——kanade へ `CloseRequest`／`ForceQuit` を送らず、
+    // raw `KanadeMsg::Close` のみで停止させるため、shiori backend の `unload()` は呼ばれない。
     let (backend, _handle) = boot_script().build();
 
     let options = GhostBootOptions {
@@ -98,9 +79,8 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
     } = handles;
 
     // ---- ①: DispatcherMsg::Close → dispatcher join ----
-    // dispatcher の唯一の停止経路（「アクター別の停止経路」表・Close-only。self-sender
-    // 保持ゆえ切断では構造的に止まらない）。boot talk が active slot に乗ったまま
-    // 未進行でも、Close funnel が中断させて正規停止することを直接運動させる。
+    // dispatcher の唯一の停止経路（Close-only。self-sender 保持ゆえ切断では構造的に止まらない）。boot talk が active slot に
+    // 乗ったまま未進行でも、Close funnel が中断させて正規停止することを直接運動させる。
     dispatcher
         .send(DispatcherMsg::Close)
         .expect("dispatcher actor should still be alive to receive Close");
@@ -108,12 +88,9 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
         .expect("dispatcher should terminate after its only stop path (Close)");
 
     // ---- ②: KanadeMsg::Close → kanade join ----
-    // kanade の raw「非常口」停止（`KanadeMsg::Close` は step を経ず即時 Break・
-    // areka-kanade/src/actor.rs::spawn_kanade）。OnClose NOTIFY も Unload も一切
-    // 呼ばれない——S2〜S5 が駆動する運行意味論（ForceQuit／CloseRequest／Fault）とは
-    // 異なる、この e2e で初めて運動させる経路。kanade スレッドが Break で return する
-    // 時点で、その関数フレームが内部に保持していた `shiori_tx`（shiori actor 自身の
-    // inbox 送信端）・`start_tx`（start-relay の上流送信端）が自動的に drop される。
+    // kanade の raw「非常口」停止（`KanadeMsg::Close` は step を経ず即時 Break・areka-kanade/src/actor.rs::spawn_kanade）。
+    // OnClose NOTIFY も Unload も一切呼ばれない。kanade スレッドが Break で return する時点で、その関数フレームが内部に
+    // 保持していた `shiori_tx`（shiori actor 自身の inbox 送信端）・`start_tx`（start-relay の上流送信端）が自動的に drop される。
     kanade
         .send(KanadeMsg::Close)
         .expect("kanade actor should still be alive to receive raw Close");

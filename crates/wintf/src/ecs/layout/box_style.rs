@@ -7,8 +7,6 @@ use bevy_ecs::prelude::*;
 use super::dimension::*;
 
 // ===== 高レベルレイアウトコンポーネント（値オブジェクト） =====
-// 注: これらの型は以前はComponentでしたが、BoxStyle統合後は値オブジェクトとして使用します。
-// Componentとしての利用は廃止され、BoxStyleを使用してください。
 
 /// ボックスサイズ（値オブジェクト）
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -156,7 +154,6 @@ impl From<&BoxStyle> for taffy::Style {
     fn from(style: &BoxStyle) -> Self {
         let mut taffy_style = taffy::Style::default();
 
-        // Box系プロパティ変換
         if let Some(size) = &style.size {
             apply_box_size(&mut taffy_style.size, size);
         }
@@ -182,7 +179,7 @@ impl From<&BoxStyle> for taffy::Style {
             taffy_style.inset = inset.0.into();
         }
 
-        // Flex系プロパティ変換（display は taffy の既定の Flex のまま）
+        // display は taffy の既定の Flex のまま
         if let Some(dir) = style.flex_direction {
             taffy_style.flex_direction = dir;
         }

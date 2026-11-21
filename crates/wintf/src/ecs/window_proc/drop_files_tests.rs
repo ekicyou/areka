@@ -62,7 +62,7 @@ fn warn_count(events: &[CapturedEvent]) -> usize {
     events.iter().filter(|e| e.level <= Level::WARN).count()
 }
 
-/// 要件 1.1・9.1: 部品を差した窓に偽の一覧 2 件を渡すと、受け手が同じ一覧で 1 回呼ばれ、
+/// 部品を差した窓に偽の一覧 2 件を渡すと、受け手が同じ一覧で 1 回呼ばれ、
 /// その前に `files_dropped`（`count = 2`）の `info!` がちょうど 1 行出る。
 #[test]
 fn deliver_calls_receiver_once_with_the_same_list() {
@@ -88,7 +88,7 @@ fn deliver_calls_receiver_once_with_the_same_list() {
     assert_eq!(warn_count(&events), 0, "警告以上が出ている: {events:?}");
 }
 
-/// 要件 9.1: 部品の無い窓では呼ばず、`files_dropped_no_receiver` の `debug!` 1 行・警告 0。
+/// 部品の無い窓では呼ばず、`files_dropped_no_receiver` の `debug!` 1 行・警告 0。
 #[test]
 fn deliver_without_receiver_only_logs_debug() {
     let (world, _, plain) = drop_world();
@@ -107,7 +107,7 @@ fn deliver_without_receiver_only_logs_debug() {
     assert_eq!(warn_count(&events), 0, "警告以上が出ている: {events:?}");
 }
 
-/// 要件 3.5・6.4: 破棄済みの entity（終了の直後に届いた投げ込み）では呼ばず、
+/// 破棄済みの entity（終了の直後に届いた投げ込み）では呼ばず、
 /// `DESPAWNED_SKIP_TAG` の `debug!` 1 行で打ち切る。警告 0。
 ///
 /// 「警告が無い」は捕捉が警告を見られるときにだけ意味を持つので、先にそれを示す
@@ -155,7 +155,7 @@ fn deliver_on_despawned_entity_skips_as_normal_teardown() {
     assert_eq!(warn_count(&events), 0, "警告以上が出ている: {events:?}");
 }
 
-/// 要件 9.1: World の借用中は呼べない。`files_dropped_world_busy`（`count`）の `warn!` 1 行・panic なし。
+/// World の借用中は呼べない。`files_dropped_world_busy`（`count`）の `warn!` 1 行・panic なし。
 #[test]
 fn deliver_while_world_borrowed_warns_without_call() {
     let (world, hooked, _) = drop_world();
@@ -177,7 +177,7 @@ fn deliver_while_world_borrowed_warns_without_call() {
     assert_eq!(hits[0].field("count"), Some("2"));
 }
 
-/// 設計テスト 1（要件 1.7・9.1）: 振り分け表に `WM_DROPFILES` の腕が在り、取っ手 0 の投げ込みでは
+/// 振り分け表に `WM_DROPFILES` の腕が在り、取っ手 0 の投げ込みでは
 /// `files_dropped_read_failed`（`error` が `NullHandle`）の `warn!` がちょうど 1 行・受け手 0 回・
 /// 戻り値は既定処理（`None`）でない `Some(LRESULT(0))`。取っ手が無いので `DragFinish` は呼ばない。
 #[test]
@@ -216,7 +216,7 @@ fn dispatch_null_hdrop_warns_once_without_call() {
     assert_eq!(warn_count(&events), 1, "警告が 1 行でない: {events:?}");
 }
 
-/// 設計テスト 6（要件 1.7）: `DropReadError` の 2 変種は `files_dropped_read_failed` の `error` 欄で
+/// `DropReadError` の 2 変種は `files_dropped_read_failed` の `error` 欄で
 /// 読み分けられる（`NullHandle`／`Query` は何番目・何本のうちかを載せる）。実物の `HDROP` を読む
 /// 通常の道は `dispatch_real_hdrop_delivers_the_same_two_paths` が固定する。`Query` の腕は
 /// 形の正しい `HDROP` でも踏めない（空のパスで一覧が終わるので、数えたパスの長さは 0 にならない）
@@ -253,7 +253,7 @@ unsafe extern "system" {
 /// `GPTR`（`GMEM_FIXED | GMEM_ZEROINIT`）: 取っ手がそのまま番地になり、0 で埋まる。
 const GPTR: u32 = 0x0040;
 
-/// research.md 12.1 の形の `HDROP` を組む: `DROPFILES` の頭（20 バイト・`pFiles=20`・
+/// `HDROP` を組む: `DROPFILES` の頭（20 バイト・`pFiles=20`・
 /// `fWide=1`）の後に NUL で区切った UTF-16 のパスを並べ、終わりにもう 1 つ NUL。
 /// 片付けは受け手の `DragFinish`（`GlobalFree`）が行う。
 fn build_hdrop(paths: &[Vec<u16>]) -> usize {
@@ -276,7 +276,7 @@ fn build_hdrop(paths: &[Vec<u16>]) -> usize {
     }
 }
 
-/// research.md 49 番: 日本語を含むパス 2 本（存在しなくてよい）の実物の `HDROP` を
+/// 日本語を含むパス 2 本（存在しなくてよい）の実物の `HDROP` を
 /// `WM_DROPFILES` で配ると、OS から読んだ一覧が同じ 2 本で受け手へ届く。比べは UTF-16 のまま
 /// （コンソールの文字コードに依らない）。長さを 1 つ間違えると最後の 1 文字が欠けて赤になる。
 #[test]

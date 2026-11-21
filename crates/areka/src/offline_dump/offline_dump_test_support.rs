@@ -1,9 +1,8 @@
-//! オフラインの書き出しの試験の検体を `target\` の下（`temp-path-kit`）に組む部品（試験専用・
-//! spec: areka-P0-offline-surface-dump 要件 12.6）。
+//! オフラインの書き出しの試験の検体を `target\` の下（`temp-path-kit`）に組む部品（試験専用）。
 //!
 //! 組むのは `ghost/master/descript.txt` と `shell/<フォルダ>/`（descript.txt・surfaces.txt・
 //! 1 色塗りの α 付き PNG）。3 つのテキストは `charset,UTF-8` を先頭に CRLF で書き、シェルの
-//! descript.txt には `seriko.use_self_alpha,1` も書く（research.md §10.0 の測りと同じ）。
+//! descript.txt には `seriko.use_self_alpha,1` も書く。
 //! スコープごとに既定の着せ替えが分かれる検体は `crate::scope_bind_fixture_test_support` を使う。
 
 use std::path::Path;
@@ -92,8 +91,8 @@ pub(crate) const CORNER_IMAGE: &str = "corner.png";
 /// `CORNER_IMAGE` の色（α 128）。
 pub(crate) const CORNER_RGBA: [u8; 4] = [255, 255, 0, 128];
 
-/// research.md §10 の形（runonce・always・random・periodic・負の座標・mustselect／multiple・
-/// element の絵の欠け・中身の無い面）を 1 つに持つシェル。土台は 16×8 の灰。
+/// runonce・always・random・periodic・負の座標・mustselect／multiple・
+/// element の絵の欠け・中身の無い面を 1 つに持つシェル。土台は 16×8 の灰。
 pub(crate) fn variety_shell(folder: &str) -> ShellSpec<'_> {
     ShellSpec {
         folder,

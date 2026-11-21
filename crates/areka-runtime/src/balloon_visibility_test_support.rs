@@ -1,7 +1,5 @@
 // =============================================================================
 // 判断中核テストの共有ヘルパ（観測スナップショットの組立て）
-//
-// design.md「File Structure Plan」の `balloon_visibility_test_support.rs`。
 // 観測は「scope → (可視グリフ数, 現に可視か)」の表でしかないため、ここに置くのは
 // その表を組む最小の道具だけにする。実時間の待機・スリープは一切用いない。
 // =============================================================================
@@ -42,7 +40,7 @@ pub fn unobserved(visible: bool) -> ScopeObservation {
     }
 }
 
-/// ポインタが滞在している scope にする（Requirement 5.2）。
+/// ポインタが滞在している scope にする。
 pub fn hovered(observation: ScopeObservation) -> ScopeObservation {
     ScopeObservation {
         hover: Some(true),
@@ -50,7 +48,7 @@ pub fn hovered(observation: ScopeObservation) -> ScopeObservation {
     }
 }
 
-/// 抑止条件の観測が 1 つも取れなかった scope にする（Requirement 5.5）。
+/// 抑止条件の観測が 1 つも取れなかった scope にする。
 pub fn suppression_unobserved(observation: ScopeObservation) -> ScopeObservation {
     ScopeObservation {
         hover: None,
@@ -91,8 +89,7 @@ pub struct Frame {
 impl Frame {
     /// 観測から 1 フレームを組む（既定は時刻なし・タイムアウトは既定時間・抑止なし・信号なし）。
     ///
-    /// タイムアウトの既定は [`DEFAULT_BALLOON_TIMEOUT_SECS`] から引く（Requirement 4.2——
-    /// 同じ数値を複数箇所へ散らさない）。
+    /// タイムアウトの既定は [`DEFAULT_BALLOON_TIMEOUT_SECS`] から引く（同じ数値を複数箇所へ散らさない）。
     pub fn new(entries: &[(u32, ScopeObservation)]) -> Self {
         Self {
             obs: observations(entries),
@@ -131,8 +128,7 @@ impl Frame {
 
     /// 占有終端とトークの終わり（止まった時刻＝占有終端）を本フレームに一緒に届ける。
     ///
-    /// 時間切れの計測はトークの終わりが届いてから始まる（areka-P0-balloon-lifecycle-events
-    /// 決定 D6）。止まった時刻は判断中核が丸めた後の終端（下限 0.0・数でなければ 0.0）と同じに
+    /// 時間切れの計測はトークの終わりが届いてから始まる。止まった時刻は判断中核が丸めた後の終端（下限 0.0・数でなければ 0.0）と同じに
     /// するので、起点は終端のままで満了の時刻は変わらない。
     pub fn ended_at(self, end: f64) -> Self {
         let mut frame = self.display_end(end);
@@ -148,7 +144,7 @@ impl Frame {
         self
     }
 
-    /// いずれかのバルーン窓がドラッグ中である状態にする（Requirement 5.1）。
+    /// いずれかのバルーン窓がドラッグ中である状態にする。
     pub fn dragging(mut self) -> Self {
         self.obs.dragging = true;
         self
@@ -161,7 +157,7 @@ impl Frame {
 }
 
 // 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の欄へそのまま渡す口（`test-support` のときだけ・
-// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+// 本番の可視性は変えない）。
 #[cfg(feature = "test-support")]
 use super::ScopeVisibility;
 

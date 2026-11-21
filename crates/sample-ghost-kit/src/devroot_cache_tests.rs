@@ -1,12 +1,10 @@
 //! 原本（[`CACHE`] の `<検体>-<刻印>/`）の兄弟テスト——刻印・初回の展開・古い原本の回収・
-//! 多重プロセスの競合（要件 7.2・7.3・7.6・7.7・7.8・9.5）。
-//!
-//! spec の名を添えていない番号は spec `areka-P0-nar-install` のもの。
+//! 多重プロセスの競合。
 //!
 //! # 私有の名前空間で測る
 //!
 //! 判定は全て [`WorkDir`] の中に掘った**私有の名前空間**の上で行う。共有の
-//! `target/nar-samples/` を使うと、「名前空間を丸ごと消す」（要件 7.8）や「原本は 1 つ」
+//! `target/nar-samples/` を使うと、「名前空間を丸ごと消す」や「原本は 1 つ」
 //! の主張が、同時に走っている他のテストの原本や作業フォルダを巻き込む／巻き込まれる。
 //! 私有にすれば主張は全数で書けるし、破棄で丸ごと消えるので後始末も要らない。
 //!
@@ -40,8 +38,7 @@ pub(super) fn private_namespace() -> WorkDir {
     WorkDir::new().expect("私有の名前空間は取れるはず")
 }
 
-/// 最小のゴースト 1 体だけを含む `.nar` のバイト列（原本の作りは確かめたバイトを受ける＝
-/// audit-test-kits 決め D13 なので、ファイルを介さない）。
+/// 最小のゴースト 1 体だけを含む `.nar` のバイト列（原本の作りは確かめたバイトを受けるので、ファイルを介さない）。
 ///
 /// `mark` は中身の目印で、長さを変えずに中身だけ変えられる。
 pub(super) fn tiny_ghost_bytes(name: &str, mark: &[u8]) -> Vec<u8> {
@@ -167,7 +164,7 @@ fn the_stamp_is_split_off_from_the_end_so_a_name_prefix_is_not_confused_for_the_
 
 // ---- 初回の展開と刻印の変化 ----
 
-/// 原本が無い状態からの取得が、刻印を名前に含む**完全な原本 1 つ**に落ち着く（要件 7.2）。
+/// 原本が無い状態からの取得が、刻印を名前に含む**完全な原本 1 つ**に落ち着く。
 #[test]
 fn an_acquire_with_no_master_copy_installs_exactly_one_complete_master_copy() {
     let namespace = private_namespace();
@@ -207,7 +204,7 @@ fn an_acquire_with_no_master_copy_installs_exactly_one_complete_master_copy() {
     //
     // 原本へ目印を置いて「残っているか」を見る形では判定にならない——展開し直す実装は
     // 据え付けの `rename` に負けるだけで、原本は目印ごと無傷のまま残るからである
-    // （要件 7.2 の「無いときだけ展開し直す」が丸ごと無検査になる）。
+    // （「無いときだけ展開し直す」が丸ごと無検査になる）。
     std::fs::remove_dir_all(namespace.path().join(WORK)).ok();
     std::fs::write(namespace.path().join(WORK), b"no shelf here").expect("棚の場所を塞げる");
 
@@ -216,8 +213,7 @@ fn an_acquire_with_no_master_copy_installs_exactly_one_complete_master_copy() {
     assert_eq!(again, master, "刻印が同じなら同じ原本");
 }
 
-/// 刻印を変えた `.nar` での取得が、新しい原本 1 つに落ち着き、古い原本は回収される
-/// （要件 7.3）。
+/// 刻印を変えた `.nar` での取得が、新しい原本 1 つに落ち着き、古い原本は回収される。
 ///
 /// 目印の長さを変えずに書き換えるので、刻印が長さだけで決まっていれば赤になる。
 #[test]
@@ -244,7 +240,7 @@ fn a_changed_nar_installs_a_new_master_copy_and_the_old_one_is_reclaimed() {
     assert!(!old.exists(), "古い原本が消えていること: {}", old.display());
 }
 
-/// 別の検体の原本は、名前が接頭辞になっていても回収されない（要件 7.3 の範囲）。
+/// 別の検体の原本は、名前が接頭辞になっていても回収されない。
 #[test]
 fn reclaiming_one_sample_leaves_another_samples_master_copy_alone() {
     let namespace = private_namespace();
@@ -272,8 +268,7 @@ fn reclaiming_one_sample_leaves_another_samples_master_copy_alone() {
     );
 }
 
-/// 退避（[`CACHE`] から出す `rename`）に失敗しても取得は成功し、次の取得で回収し直す
-/// （要件 7.3・7.7）。
+/// 退避（[`CACHE`] から出す `rename`）に失敗しても取得は成功し、次の取得で回収し直す。
 ///
 /// 古い原本の中のファイルを開いたまま取得する。**Windows は子孫が開かれている
 /// フォルダの `rename` を拒む**（下の較正で実測する。共有モードに削除を足しても同じ）
@@ -325,7 +320,7 @@ fn a_reclaim_that_cannot_move_the_stale_copy_keeps_going_and_retries_on_the_next
     );
 }
 
-/// 新しい `.nar` が拒否されたときは、古い原本を回収しない（要件 7.3・7.7）。
+/// 新しい `.nar` が拒否されたときは、古い原本を回収しない。
 ///
 /// 回収を据え付けより**先**に行うと、展開に失敗した瞬間に「使える原本が 1 つも無い」
 /// 状態になる。順序が守られていれば、拒否されても手元には前の原本が残る。
@@ -367,7 +362,7 @@ fn a_refused_nar_leaves_the_previous_master_copy_in_place() {
     );
 }
 
-/// 原本は確かめたバイトから作り、パスのファイルを読み直さない（audit-test-kits 決め D13・指摘 52）。
+/// 原本は確かめたバイトから作り、パスのファイルを読み直さない。
 ///
 /// 確かめた後にパスのファイルを違うバイトへ替えておく。読み直す作りなら、刻印は確かめた
 /// バイトのものなのに中身は替えた後のもの、という食い違った原本ができる。
@@ -398,7 +393,7 @@ fn staging_uses_the_verified_bytes_not_a_second_read() {
     );
 }
 
-/// 原本の棚を作るとき、名前を上げる前の世代の棚（`cache\` など）を退ける（audit-test-kits 指摘 54）。
+/// 原本の棚を作るとき、名前を上げる前の世代の棚（`cache\` など）を退ける。
 #[test]
 fn an_older_generation_cache_shelf_is_discarded() {
     let namespace = private_namespace();
@@ -425,9 +420,9 @@ fn an_older_generation_cache_shelf_is_discarded() {
     );
 }
 
-// ---- 作り直し（要件 7.7・7.8） ----
+// ---- 作り直し ----
 
-/// 名前空間を丸ごと消しても、次の取得で作り直す（要件 7.8）。
+/// 名前空間を丸ごと消しても、次の取得で作り直す。
 #[test]
 fn deleting_the_whole_namespace_rebuilds_the_master_copy_on_the_next_acquire() {
     let namespace = private_namespace();
@@ -449,7 +444,7 @@ fn deleting_the_whole_namespace_rebuilds_the_master_copy_on_the_next_acquire() {
     );
 }
 
-/// 作業フォルダに半端な木が在っても cache-hit にならない（要件 7.7）。
+/// 作業フォルダに半端な木が在っても cache-hit にならない。
 ///
 /// 「名前が合う原本は完全」は [`CACHE`] の中でだけ成り立つ約束なので、据え付け前の木を
 /// 原本と同じ名前で `work/` に置いても答えにしてはならない。
@@ -478,9 +473,9 @@ fn a_half_built_tree_in_the_work_shelf_is_never_taken_as_the_master_copy() {
     );
 }
 
-// ---- 多重プロセスの初回展開（要件 7.6） ----
+// ---- 多重プロセスの初回展開 ----
 
-/// 据え付けに負けた側は、自分の作業を捨てて勝者の木を使う（要件 7.6）。
+/// 据え付けに負けた側は、自分の作業を捨てて勝者の木を使う。
 ///
 /// 勝者を先に置いてから**据え付けだけ**をもう一度走らせる。宛先が空でない木なので
 /// `rename` は必ず失敗する＝負けの経路を時刻に頼らず必ず通る。
@@ -517,7 +512,7 @@ fn a_lost_race_discards_its_own_stage_and_keeps_the_winner() {
 }
 
 /// 空の名前空間へ 4 つのプロセスが同時に取得を始めても、全員が完全な木を受け取り、
-/// [`CACHE`] に半端な木が残らない（要件 7.6・9.5）。
+/// [`CACHE`] に半端な木が残らない。
 ///
 /// 子は**自分自身のテストバイナリ**で、`--exact` で下の子側のテストだけを走らせる。
 /// 子の名前空間は `CARGO_TARGET_DIR` で私有の場所へ振るので、この検査の外で走っている

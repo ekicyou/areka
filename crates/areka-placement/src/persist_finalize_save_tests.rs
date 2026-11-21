@@ -1,6 +1,4 @@
-//! 並べ終えた時点の保存（[`persist_unremembered_char_positions`]）の分かれ道のテスト
-//! （areka-P0-char-position-save-on-exit 要件 1.1・1.2・1.4・1.5・1.7・4.1・4.2・4.3・5.4・
-//! design Testing Strategy「書く関数の分かれ道」1〜5）。
+//! 並べ終えた時点の保存（[`persist_unremembered_char_positions`]）の分かれ道のテスト。
 //!
 //! 窓の一式は本番と同じ `spawn_ghost_windows` で組む（既定の位置の台帳も本番の経路で用意する）。
 //! 記憶は実物のアクター（`spawn_sylphya`）と偽の保存先 `FakePersistIo` に置き、`barrier` の後に
@@ -234,7 +232,7 @@ pub(super) fn find<'a>(
         .collect()
 }
 
-/// テスト 1（1.1・1.2・1.4・1.5）: 記憶に位置が無いスコープ 1・2 だけが書かれ、記憶に位置がある
+/// 記憶に位置が無いスコープ 1・2 だけが書かれ、記憶に位置がある
 /// スコープ 0 とほかの鍵（バルーンの相対位置・起動の記録）は前後で同じ。書いた値は窓の左上から
 /// 下端の中央の x へ直した値。
 #[test]
@@ -242,7 +240,7 @@ fn writes_only_unremembered_scopes_and_keeps_other_keys() {
     let mut rig = Rig::new(true);
     rig.seed(seed_entries());
     let mut before = rig.load();
-    // 種のスコープ 0 の位置が組 (0,1) の印を連れてくる（dpi-realign-remembered-chain 6.2）。
+    // 種のスコープ 0 の位置が組 (0,1) の印を連れてくる。
     assert_eq!(
         before.len(),
         2 + 6 + 1 + 1,
@@ -259,8 +257,7 @@ fn writes_only_unremembered_scopes_and_keeps_other_keys() {
     assert_eq!(expected_saved(1), ("1239".to_string(), "400".to_string()));
     assert_eq!(expected_saved(2), ("818".to_string(), "500".to_string()));
 
-    // 書いた鍵はスコープ 1・2 の位置の 4 つと、触れる組 (0,1)・(1,2) の隣り合いの印の 2 つだけ
-    // （dpi-realign-remembered-chain 6.2）。SCOPES の並びはどの組も離れているので印は `none`。
+    // 書いた鍵はスコープ 1・2 の位置の 4 つと、触れる組 (0,1)・(1,2) の隣り合いの印の 2 つだけ。SCOPES の並びはどの組も離れているので印は `none`。
     // ほかは前と同じ。
     let mut rest = after.clone();
     for scope in [1, 2] {
@@ -285,7 +282,7 @@ fn writes_only_unremembered_scopes_and_keeps_other_keys() {
 }
 
 /// 面の `move` のずれが当たったキャラ窓も、ずれを引いた元の位置（既定の位置）として書く
-/// （seriko-pattern-calls task 6.2・要件 7.8・ずれが起動のたびに積もらない）。
+/// （ずれが起動のたびに積もらない）。
 #[test]
 fn pattern_shift_is_subtracted_before_saving() {
     let mut rig = Rig::new(true);
@@ -321,7 +318,7 @@ fn pattern_shift_is_subtracted_before_saving() {
     rig.finish();
 }
 
-/// テスト 2（4.2）: 1 つのスコープの窓の大きさを読めなくすると、そのスコープは `warn!` を
+/// 1 つのスコープの窓の大きさを読めなくすると、そのスコープは `warn!` を
 /// 出して飛ばし、残りのスコープは書く。
 #[test]
 fn unreadable_size_skips_that_scope_with_warn_and_writes_the_rest() {
@@ -352,7 +349,7 @@ fn unreadable_size_skips_that_scope_with_warn_and_writes_the_rest() {
     rig.finish();
 }
 
-/// テスト 3: 記憶の送り口が無ければ panic せず `info!` を 1 行だけ出す（スコープごとの行は
+/// 記憶の送り口が無ければ panic せず `info!` を 1 行だけ出す（スコープごとの行は
 /// 出さない）。`GhostWindows` が無い World でも panic しない（`debug!`）。
 #[test]
 fn without_persist_wiring_logs_one_info_and_does_not_panic() {
@@ -377,7 +374,7 @@ fn without_persist_wiring_logs_one_info_and_does_not_panic() {
     rig.finish();
 }
 
-/// テスト 4（4.1・5.4）: 次の書き込みを失敗させても関数は戻り、記憶は前のまま。そのあとの
+/// 次の書き込みを失敗させても関数は戻り、記憶は前のまま。そのあとの
 /// ドラッグの確定の書き込みは成功する（失敗は送った先の記録に残り、UI の側へは戻らない）。
 #[test]
 fn commit_failure_keeps_previous_store_and_later_drag_end_write_succeeds() {
@@ -418,7 +415,7 @@ fn commit_failure_keeps_previous_store_and_later_drag_end_write_succeeds() {
     rig.finish();
 }
 
-/// テスト 5（4.3）: 書いた行・記憶があるので書かなかった行が target `areka::persist::save` に
+/// 書いた行・記憶があるので書かなかった行が target `areka::persist::save` に
 /// `info!` で出る。書いた行にはスコープ・窓の左上・記憶に書く値・窓の幅・揃え方が載る。
 #[test]
 fn written_and_skipped_scopes_are_logged_under_save_target() {
@@ -452,7 +449,7 @@ fn written_and_skipped_scopes_are_logged_under_save_target() {
     rig.finish();
 }
 
-/// 1.7: 並べ終える前に動かされた（今の位置が既定の位置と違う）スコープは書かず、今の位置と
+/// 並べ終える前に動かされた（今の位置が既定の位置と違う）スコープは書かず、今の位置と
 /// 既定の位置を `info!` に残す。残りは書く。
 #[test]
 fn scope_moved_before_finalize_is_not_written() {
@@ -479,7 +476,7 @@ fn scope_moved_before_finalize_is_not_written() {
     rig.finish();
 }
 
-/// 1.7: 縦にだけ動かされたスコープも書かない。連鎖の起点（スコープ 0）は並べ直しが動かさない
+/// 縦にだけ動かされたスコープも書かない。連鎖の起点（スコープ 0）は並べ直しが動かさない
 /// ので、台本の移動の指示が縦にだけ動かすと x は既定の位置のまま残る。x だけで比べると
 /// 書いてしまう。
 #[test]
@@ -507,7 +504,7 @@ fn scope_moved_only_vertically_before_finalize_is_not_written() {
     rig.finish();
 }
 
-/// 要件 4.8: 台本で今の向きを `free` にした窓も、書く形は descript の向き（下）で決まり、
+/// 台本で今の向きを `free` にした窓も、書く形は descript の向き（下）で決まり、
 /// 下端の中央の x で書かれる（今の向きの形＝左上のままでは書かない）。
 #[test]
 fn writes_in_descript_form_even_when_current_anchor_is_free() {
@@ -562,7 +559,7 @@ pub(super) fn old_memory_rig() -> (Rig, HashMap<PersistKey, String>) {
     (rig, before)
 }
 
-/// テスト（dpi-realign-remembered-chain 6.5・8.6 ⑸）: 印の無い古い記憶のスコープ 1 には、位置を
+/// 印の無い古い記憶のスコープ 1 には、位置を
 /// 書かずに画面の並びから決めた印だけが書き足され、`info!` が残る。覚えた印のあるスコープ 2 と
 /// スコープ 0（前の窓が無い）には書き足さない。
 #[test]
@@ -591,7 +588,7 @@ fn old_memory_gets_only_the_adjacency_mark_added() {
     rig.finish();
 }
 
-/// window-work-area-clamp 要件 4.6: 記憶の位置を寄せて表示した起動では、隣の窓（記憶に位置が
+/// 記憶の位置を寄せて表示した起動では、隣の窓（記憶に位置が
 /// 無いスコープ 0）の位置を書く束からも、印の無い古い記憶（スコープ 1）へ印を書き足さない。
 /// スコープ 0 の位置は書く。
 #[test]
@@ -623,7 +620,7 @@ fn clamped_boot_adds_no_mark_to_old_memory_through_the_neighbours_position() {
     rig.finish();
 }
 
-/// window-work-area-clamp 要件 4.6: 寄せて表示した起動のあいだは、ドラッグや連れ動きの保存
+/// 寄せて表示した起動のあいだは、ドラッグや連れ動きの保存
 /// （[`persist_entries`]）の束からも、印の無い古い記憶（スコープ 1）へ印を書き足さず、外した印の
 /// スコープ（スコープ 2 は束に触れないので載らない）を 1 行に残す。寄せずに起動した回は、同じ束が
 /// 印を書き、行は出ない（飛ばすのは寄せた起動だけ）。
@@ -686,7 +683,7 @@ fn clamped_boot_keeps_the_mark_of_the_scope_whose_position_is_written() {
 }
 
 /// 古い記憶へ印を書き足す道も、印は descript の `defaultx` を鎖の規則に入れて決める: スコープ 1 が
-/// スコープ 0 の左に `kero.defaultx` の 36 px だけ空けて並ぶと `left`（audit-placement-core 494・506）。
+/// スコープ 0 の左に `kero.defaultx` の 36 px だけ空けて並ぶと `left`。
 #[test]
 fn old_memory_mark_uses_the_defaultx_gap_of_the_descript() {
     let (mut rig, _) = old_memory_rig();
@@ -714,7 +711,7 @@ fn old_memory_mark_uses_the_defaultx_gap_of_the_descript() {
 }
 
 /// 1 回の並べ終えた時点の保存で、descript の読めない値の `warn!` は 1 度だけ（位置を書くスコープ 0 と
-/// 印だけを書き足す古い記憶のスコープ 1 が同じ回にあっても、鎖の見方を組むのは 1 度・502・508）。
+/// 印だけを書き足す古い記憶のスコープ 1 が同じ回にあっても、鎖の見方を組むのは 1 度）。
 #[test]
 fn one_finalize_save_warns_once_for_an_unreadable_defaultx() {
     let mut rig = Rig::new(true);

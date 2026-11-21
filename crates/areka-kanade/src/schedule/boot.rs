@@ -1,4 +1,4 @@
-//! boot 系列の Phase 分岐（Req 1・状態機械図の Idle→…→Steady）。
+//! boot 系列の Phase 分岐（状態機械図の Idle→…→Steady）。
 //!
 //! 本モジュールは boot 各待ち点（[`Phase::Idle`] からの起動・BootInit / BootPrefetch /
 //! BootType / BootMain / BootVersion の応答進行）の遷移本体を担い、運行表の `step`
@@ -13,26 +13,23 @@ use resources::ResourceOutcome;
 /// boot 系列（Idle / BootInit / BootPrefetch / BootType / BootMain / BootVersion）のフェーズ分岐。
 ///
 /// 起動指示受領から基盤バージョン通知完了までの正典順序を状態機械として実装する
-/// （Req 1.1–1.4・1.6）。各段階でスクリプト（Value）が返った場合は一意な talk_id を
-/// 採番して再生起動要求（[`Action::StartTalk`]）を発行する（Req 2.1）。起動種別問い合わせ
+/// 各段階でスクリプト（Value）が返った場合は一意な talk_id を
+/// 採番して再生起動要求（[`Action::StartTalk`]）を発行する。起動種別問い合わせ
 /// （BootType）にスクリプトが返った場合は `OnBoot` を飛ばして basewareversion へ進む
-/// （正典フォールスルー打ち切り・design §"boot 系列"）。204 は talk なし（Req 2.3）。
+/// （正典フォールスルー打ち切り）。204 は talk なし。
 ///
 /// boot 中の [`Input::CloseRequest`] は `pending_close` として記録するのみで boot は
-/// 中断しない（握手開始は steady/close 層の責務・design System Flows 補足）。
+/// 中断しない（握手開始は steady/close 層の責務）。
 pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match input {
-        // 起動指示（Idle 前提・非 Idle は mod.rs 側で warn!＋無視済み）。
+        // 非 Idle は `mod.rs` 側で warn! して捨て済み。
         Input::Boot => boot_start(state, config),
-        // 応答進行（各待ち点で直前呼出の結果を受ける）。origin（DD-IE-3）は boot では未使用。
         Input::ShioriReply { outcome, .. } => on_reply(state, outcome, config),
-        // boot 中の close 指示は保留記録のみ（boot 継続・握手は後続層）。
         Input::CloseRequest { reason } => record_pending_close(state, reason),
-        // 基盤バージョン通知の応答待ち中に届いた追跡中トークの完了（突合・非 quit 判定は mod.rs 済み）。
+        // 突合と非 quit の判定は `mod.rs` で済んでいる。
         Input::TalkDone(done) if matches!(state.phase, Phase::BootVersion { talk: Some(_) }) => {
             on_talk_done(state, done)
         }
-        // 上記以外（Tick など）は boot 進行に無関係——防御的に無視する。
         _ => {
             tracing::warn!(target: "kanade", event = "boot_input_ignored", "boot 系列に無関係な入力を無視");
             (state, Vec::new())
@@ -40,11 +37,11 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
     }
 }
 
-/// Idle + Boot: `OnInitialize` NOTIFY を発行し BootInit へ（Req 1.1）。
+/// Idle + Boot: `OnInitialize` NOTIFY を発行し BootInit へ。
 ///
 /// SHIORI だけの読み直し（[`BootOrigin::Reloaded`] の [`ReloadScope::Shiori`]）では Ref0＝`reload`
-/// を載せる（ukadoc `OnInitialize`「リロード時にreload」・areka-P0-mcp-reload 要件 4.3）。それ以外は
-/// References なし（ゴーストの読み直しも含む・要件 3.4）。
+/// を載せる（ukadoc `OnInitialize`「リロード時にreload」）。それ以外は
+/// References なし（ゴーストの読み直しも含む）。
 fn boot_start(mut state: State, config: &KanadeConfig) -> (State, Vec<Action>) {
     tracing::info!(target: "kanade", event = "boot_start", "起動指示を受領——OnInitialize NOTIFY を発行");
     state.phase = Phase::BootInit;
@@ -70,9 +67,6 @@ fn boot_start(mut state: State, config: &KanadeConfig) -> (State, Vec<Action>) {
 /// boot 各待ち点の応答進行（正典順序の状態機械）。
 fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (State, Vec<Action>) {
     match state.phase {
-        // BootInit + Notified: OnInitialize 完了→**username リソース照会（prefetch）GET** を発行し
-        // BootPrefetch へ（R4.1・prefetch は OnInitialize 後・OnFirstBoot 前に 1 回）。既存 shiori
-        // request 経路（単一 in-flight・shiori_tx 専有）をそのまま使う。応答受領後に起動の根（boot_root）へ進む。
         Phase::BootInit => match outcome {
             ShioriOutcome::Notified => {
                 let mut state = state;
@@ -83,13 +77,10 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             other => unexpected_reply(state, "BootInit", other),
         },
         // BootPrefetch + 応答: username 照会結果を写像・sink へ渡し（同期）・完了固定ログを出し、
-        // 起動の根（boot_root）を発行する（R4.1・R9.3）。失敗でも boot を殺さず続行する。
+        // 起動の根（boot_root）を発行する。失敗でも boot を殺さず続行する。
         Phase::BootPrefetch => on_prefetch_reply(state, outcome, config),
-        // BootType: 204→OnBoot GET（BootMain へ・Req 1.3）。Value→OnBoot をスキップし
-        // StartTalk＋basewareversion（正典フォールスルー打ち切り・Req 2.1）。
         Phase::BootType => match outcome {
-            // ネットワーク更新の起動の知らせ（根が OnFirstBoot でない）は 204 でも OnBoot へ続けない
-            // （areka-P0-network-update 要件 5.5）。
+            // ネットワーク更新の起動の知らせ（根が OnFirstBoot でない）は 204 でも OnBoot へ続けない。
             ShioriOutcome::NoContent
                 if !config.first_boot
                     && matches!(config.boot_origin, BootOrigin::Updated { .. }) =>
@@ -109,16 +100,12 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             }
             other => unexpected_reply(state, "BootType", other),
         },
-        // BootMain + OnBoot 応答: Value→StartTalk（Req 1.4・2.1）／204→talk なし（Req 2.3）。
-        // いずれも basewareversion NOTIFY を発行し BootVersion へ。
         Phase::BootMain => match outcome {
             ShioriOutcome::Value(script, _) => to_baseware_version(state, Some(script), config),
             ShioriOutcome::NoContent => to_baseware_version(state, None, config),
             other => unexpected_reply(state, "BootMain", other),
         },
-        // BootVersion + Notified: basewareversion 完了→boot 系列完了・Steady へ（Req 1.4 完了）・
-        // 定常到達の通知を 1 件返す。
-        // DD-IT-12: 追跡中の挨拶 talk（BootVersion{talk: Some}）を Steady{talk} へそのまま引き継ぐ
+        // 追跡中の挨拶 talk（BootVersion{talk: Some}）を Steady{talk} へそのまま引き継ぐ
         // （204 経路は None のまま＝従来意味論を保存）。以後の Tick は Steady{Some} 由来で
         // NOTIFY・Ref3=0・Status: talking を発行し、挨拶 TalkDone は slot と照合される。
         Phase::BootVersion { .. } => match outcome {
@@ -128,7 +115,6 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
                 if let Phase::BootVersion { talk } = state.phase {
                     state.phase = Phase::Steady { talk };
                 }
-                // 定常に入った時点を外へ知らせる（要件 3.5・切替の目印を下ろす合図）。
                 (state, vec![Action::Notice(KanadeNotice::Steady)])
             }
             other => unexpected_reply(state, "BootVersion", other),
@@ -142,21 +128,20 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
 }
 
 /// prefetch 応答（username GET）を [`ResourceOutcome`] へ写像し、sink 呼出指示＋完了固定ログを添えて
-/// 起動の根（[`boot_root`]）を発行する（根があれば BootType・無ければ OnBoot で BootMain）（R4.1・R9.3）。
-/// 読み直しの起動（[`BootOrigin::Reloaded`]）は根も OnBoot も送らず basewareversion へ直行する
-/// （areka-P0-mcp-reload 要件 3.3・4.3）。
+/// 起動の根（[`boot_root`]）を発行する（根があれば BootType・無ければ OnBoot で BootMain）。
+/// 読み直しの起動（[`BootOrigin::Reloaded`]）は根も OnBoot も送らず basewareversion へ直行する。
 ///
 /// 写像: 200 Value→[`ResourceOutcome::Value`]／204→[`ResourceOutcome::NoContent`]／失敗（タイムアウト・
 /// IPC 断）→[`ResourceOutcome::Failed`]。失敗時は `warn!` を残しつつ **boot を殺さず**続行する（起動を
-/// 殺さない・R4.1）。GET 応答が構造上あり得ない Notified/Unloaded で来た場合も防御的に `Failed` 扱いとし
+/// 殺さない）。GET 応答が構造上あり得ない Notified/Unloaded で来た場合も防御的に `Failed` 扱いとし
 /// 起動を続行する。
 ///
 /// リソース照会は talk を生成しない（Invariant）——結果は [`Action::ResourceOutcome`] で sink へ渡すのみで
 /// StartTalk へは流さない。返す Action 列は `[ResourceOutcome, ShioriRequest(根または OnBoot)]` の順
 /// （読み直しでは `[ResourceOutcome, (初回の記録だけの StartTalk)?, ShioriRequest(basewareversion の
-/// NOTIFY)]`）であり、シェルは sink 呼出（同期・返るまで待つ）を先に実行してから次の GET を送出する（design boot 図）。
+/// NOTIFY)]`）であり、シェルは sink 呼出（同期・返るまで待つ）を先に実行してから次の GET を送出する。
 ///
-/// # 完了固定ログ（R9.3 grep 証跡）
+/// # 完了固定ログ（grep 証跡）
 /// 経路によらず `info!(target: "areka_kanade::resource", id = "username", outcome = <value|no_content|
 /// failed>, "shiori resource prefetch done")` を**ちょうど 1 回**発行する（実照会経路の実機 signoff 証跡）。
 fn on_prefetch_reply(
@@ -179,7 +164,7 @@ fn on_prefetch_reply(
             "failed"
         }
     };
-    // R9.3 grep 証跡: prefetch 完了固定ログ（target・fields・message 固定・必ず 1 回・研究 §12-10）。
+    // grep 証跡: prefetch 完了固定ログ（target・fields・message 固定・必ず 1 回）。
     tracing::info!(
         target: "areka_kanade::resource",
         id = "username",
@@ -192,7 +177,7 @@ fn on_prefetch_reply(
         outcome: resource_outcome,
     };
     // 読み直しで起こし直した → 起動の根も OnBoot も見ずに basewareversion へ直行する（`first_boot`
-    // も見ない＝OnFirstBoot も送らない・areka-P0-mcp-reload 要件 3.3・4.3）。初回の記録の epilogue は
+    // も見ない＝OnFirstBoot も送らない）。初回の記録の epilogue は
     // `to_baseware_version` の既存の腕に任せる（台詞は出ず記録だけ）。
     if matches!(config.boot_origin, BootOrigin::Reloaded { .. }) {
         tracing::info!(target: "kanade", event = "boot_reload_silent", "読み直しの起動——起動の知らせを送らず basewareversion へ");
@@ -214,7 +199,7 @@ fn on_prefetch_reply(
     }
 }
 
-/// 起動の根の表（ukadoc の「204 なら続けて」の木の根を 1 つ選ぶ・要件 4.1〜4.4・6.2・11.3）。
+/// 起動の根の表（ukadoc の「204 なら続けて」の木の根を 1 つ選ぶ）。
 ///
 /// 起動記録なし（`first_boot`）→ `OnFirstBoot`（由来を問わず最優先）。切替で来た
 /// （[`BootOrigin::ChangedFrom`]）→ `OnGhostChanged`。ネットワーク更新で読み直した
@@ -222,7 +207,7 @@ fn on_prefetch_reply(
 /// それ以外（`Plain`・`Halted`）→ 根なし
 /// （`OnBoot` だけ。`Halted` の Ref6/7 は [`events::on_boot`] が載せる）。範囲外の根は
 /// [`BootOrigin`] に値を足し、この表に行を足すだけで入る。スナップショットは会話なしの作り方
-/// （online と balloon だけ写しから残す・要件 5.1）。
+/// （online と balloon だけ写しから残す）。
 fn boot_root(state: &State, config: &KanadeConfig) -> Option<ShioriCall> {
     let snapshot = &state.snapshot_without_talk();
     if config.first_boot {
@@ -235,7 +220,7 @@ fn boot_root(state: &State, config: &KanadeConfig) -> Option<ShioriCall> {
             snapshot,
         )),
         // ネットワーク更新で読み直した → 渡された名前と Reference の GET（`OnGhostChanged` と同じく
-        // 根は許可表を通さない・areka-P0-network-update 要件 5.5・決めたこと 22）。
+        // 根は許可表を通さない）。
         BootOrigin::Updated { id, references } => {
             tracing::info!(target: "kanade", event = "boot_update_root", id = *id, "起動の根にネットワーク更新の起動の知らせを選んだ");
             Some(events::raise(
@@ -254,14 +239,14 @@ fn boot_root(state: &State, config: &KanadeConfig) -> Option<ShioriCall> {
 /// StartTalk（Value 時のみ・一意採番）を積み、basewareversion NOTIFY を発行し BootVersion へ。
 ///
 /// Value（`Some`）なら [`State::next_talk_id`] を採番して [`Action::StartTalk`] を先頭に積み
-/// （単調増番・再利用しない・Req 2.1）、その挨拶を [`ActiveTalk`]（`origin="boot"`）として
-/// `Phase::BootVersion{talk: Some(_)}` で**正規追跡する**（DD-IT-12）。204（`None`）なら
-/// StartTalk なし・`BootVersion{talk: None}`（Req 2.3・従来意味論を保存）。boot の talk は
+/// （単調増番・再利用しない）、その挨拶を [`ActiveTalk`]（`origin="boot"`）として
+/// `Phase::BootVersion{talk: Some(_)}` で**正規追跡する**。204（`None`）なら
+/// StartTalk なし・`BootVersion{talk: None}`（従来意味論を保存）。boot の talk は
 /// fire-and-forget（完了を待たず basewareversion へ進む）だが、追跡 slot は boot 完了時に
 /// `Steady{talk}` へ引き継がれる（`Steady{talk: None}` へ丸めない）。
 ///
 /// `baseware_version` の `Status` は**フェーズ更新後**のスナップショットから導出する
-/// （DD-IT-12・DD-IT-4「送出時点の phase」）。Value 経路は `BootVersion{Some}`→`talk_active=true`
+/// （送出時点の phase）。Value 経路は `BootVersion{Some}`→`talk_active=true`
 /// ＝`Status: talking`、204 経路は `BootVersion{None}`→非アクティブ＝Status 行なし。
 fn to_baseware_version(
     mut state: State,
@@ -271,7 +256,7 @@ fn to_baseware_version(
     let mut actions: Vec<Action> = Vec::new();
     let talk = if let Some(script) = script {
         // Value 経路: 挨拶 talk を採番し、first_boot_epilogue を末尾へ添付して起動する
-        // （epilogue 空＝従来 StartTalk::new と同値・design C9 Some アーム）。
+        // （epilogue 空＝従来 StartTalk::new と同値 Some アーム）。
         let talk_id = super::take_talk_id(&mut state);
         tracing::info!(target: "kanade", event = "boot_talk", talk_id = talk_id.0, "起動グリーティングを再生起動");
         actions.push(Action::StartTalk(StartTalk {
@@ -281,7 +266,7 @@ fn to_baseware_version(
             origin: ScriptOrigin::GHOST,
             strict: false,
         }));
-        // script は起動値の保持（DD-10）。boot 起動 talk も steady 起動 talk と同一の追跡 slot
+        // script は起動値の保持。boot 起動 talk も steady 起動 talk と同一の追跡 slot
         // （[`ActiveTalk`]）に載るため、`OnChoiceTimeout` Ref0 の供給源は起動経路に依らず同一。
         Some(ActiveTalk {
             talk_id,
@@ -290,7 +275,7 @@ fn to_baseware_version(
         })
     } else if !config.first_boot_epilogue.is_empty() {
         // 204 かつ epilogue 非空（初回かつ挨拶トーク皆無・204-204）: epilogue-only StartTalk
-        // （空 script・末尾 SET 1 件＝即時完走）を発行し、Some として正規追跡する（design C9 None アーム）。
+        // （空 script・末尾 SET 1 件＝即時完走）を発行し、Some として正規追跡する。
         // これにより記録は挨拶 talk と同一の書込経路（cue 1 本）に載る。
         let talk_id = super::take_talk_id(&mut state);
         tracing::info!(target: "kanade", event = "boot_talk", talk_id = talk_id.0, "epilogue-only 起動記録トークを再生起動（挨拶トーク皆無）");
@@ -304,14 +289,14 @@ fn to_baseware_version(
         Some(ActiveTalk {
             talk_id,
             origin: super::sstp::BOOT_GREETING_ORIGIN,
-            // epilogue-only talk の起動 script は空——保持規律は挨拶経路と同一（DD-10）。
+            // epilogue-only talk の起動 script は空——保持規律は挨拶経路と同一。
             script: String::new(),
         })
     } else {
         // 204 かつ epilogue 空（通常起動・既存全ケース）: StartTalk なし・BootVersion{talk: None}（不変）。
         None
     };
-    // フェーズを先に確定してからスナップショットを撮る（DD-IT-4: 送出時点の phase）。
+    // フェーズを先に確定してからスナップショットを撮る（送出時点の phase）。
     state.phase = Phase::BootVersion { talk };
     actions.push(Action::ShioriRequest(events::baseware_version(
         config,

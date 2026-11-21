@@ -1,14 +1,12 @@
-//! env ゲート実 pasta 追験（task 4.8・design.md「real pasta 追験（env ゲート）」・
-//! 要件 8.1/8.4）。
+//! env ゲート実 pasta 追験。
 //!
 //! 実 32bit helper＋実 pasta（emo2）DLL 越しに、ghost 結線層の `boot`
 //! （`ShioriWiring::Helper`・`TickerMode::Real`）から起動〜正規終了までの一周が
 //! 実運行として完走することを、`HOST32_PASTA_DLL` env が設定されている場合のみ
-//! 追験する（要件 8.4: 常時 `cargo test --workspace`（x64）緑化の前提とせず、
-//! x86/i686 成果物への常時依存を課さない・opt-in gate）。
+//! 追験する（常時 `cargo test --workspace`（x64）緑化の前提とせず、x86/i686 成果物への常時依存を課さない
+//! opt-in gate）。
 //!
-//! # env-gate（既存 host32 E2E／`crates/areka-kanade/tests/kanade/real_helper_test.rs`
-//! の慣行の踏襲）
+//! # env-gate（既存 host32 E2E／`crates/areka-kanade/tests/kanade/real_helper_test.rs` の慣行の踏襲）
 //! `HOST32_PASTA_DLL`（pasta DLL のフルパス）が未設定なら silent skip（`return`）。
 //! 設定済みだが DLL 不在なら明示 fail（silent skip を認めない）。helper exe は
 //! `HOST32_HELPER_EXE` 優先→ワークスペース
@@ -19,11 +17,9 @@
 //! フィクスチャでは応答できない。検体 `emo2` の使い捨ての複製（`sample-ghost-kit`・起動記録の
 //! 無い新品）を根にし、その `ghost/master/pasta.dll` を `HOST32_PASTA_DLL` で上書きする。
 //!
-//! # 検証水準（design.md 引用）
-//! 「応答スクリプトの内容は実ブレイン依存ゆえ照合しない（完走のみ・既存
-//! `real_helper_test` と同じ検証水準）」——本テストは OnBoot 一周で
-//! `RecordingSink` に**何らかの**発火が記録されることのみを確認し、`shutdown`
-//! が `Ok(())` を返すことをもって完走を確認する。
+//! # 検証水準
+//! 応答スクリプトの内容は実ブレイン依存ゆえ照合しない（完走のみ）。OnBoot 一周で `RecordingSink` に
+//! **何らかの**発火が記録されることのみを確認し、`shutdown` が `Ok(())` を返すことをもって完走を確認する。
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -43,11 +39,9 @@ use crate::spine_e2e_test::RecordingSink;
 /// 秒単位の余裕を持たせる）。
 pub(crate) const OBSERVE_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// 有界待機の再試行間隔。`TickerMode::Real` が背後で実 wall-clock 駆動している
-/// ため、実 pasta の env ゲート追験に限りポーリング用の実 sleep は許容される（design「OnBoot
-/// 一周（sink 発火の非空を有界待機で観測）」の文字どおりの意味）。決定論
-/// spine e2e（S1〜S7・要件 7.4 の sleep 不使用）はこの limitation の対象外——
-/// 本テストはそもそも決定論性を要求されない env ゲート追験である。
+/// 有界待機の再試行間隔。`TickerMode::Real` が背後で実 wall-clock 駆動しているため、実 pasta の env ゲート
+/// 追験に限りポーリング用の実 sleep は許容される。決定論 spine e2e（S1〜S7）の sleep 不使用はこの対象外で、
+/// 本テストはそもそも決定論性を要求されない。
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 /// `shutdown()` 呼出自体を有界に観測する上限。
@@ -74,7 +68,7 @@ pub(crate) fn wait_for_a_cue(
     false
 }
 
-/// env ゲート実 pasta 追験（design.md「real pasta 追験（env ゲート）」・要件 8.1/8.4）。
+/// env ゲート実 pasta 追験。
 ///
 /// `HOST32_PASTA_DLL` 未設定なら silent skip（CI 必須ゲートにしない）。設定時は
 /// 実 32bit helper＋実 pasta 越しに ghost 結線層の `boot`〜`shutdown` 一周を追験する。
@@ -101,9 +95,7 @@ fn real_pasta_boot_observes_a_cue_then_shuts_down_cleanly() {
         "HOST32_PASTA_DLL={pasta_dll:?} が指す DLL が存在しません（指定 DLL 不在は明示 fail）"
     );
 
-    // helper 不在も接続失敗へ倒すのではなく、追験の前提として明示 fail させる
-    // （`real_helper_test.rs` と同じ哲学: 「helper 不在も connect 失敗
-    // （ShioriDown）へ倒すのではなく、追験の前提として明示 fail させる」）。
+    // helper 不在も接続失敗（ShioriDown）へ倒さず、追験の前提として明示 fail させる。
     let helper_exe = resolve_helper_exe().expect("i686 helper exe の解決に失敗");
 
     // 起動記録の無い新品の emo2（辞書込み）に、指定の DLL を持ち込む。
@@ -131,9 +123,8 @@ fn real_pasta_boot_observes_a_cue_then_shuts_down_cleanly() {
         ticker: TickerMode::Real(TickerConfig::default()),
     };
 
-    // 起動自体が失敗するのはここでは環境ゲート条件ではなく genuine failure
-    // （DLL/helper の実在は既に確認済み——mount 解決も含め boot が Err を返すのは
-    // フィクスチャ／環境の不備であり、gate の対象ではない）。
+    // 起動自体が失敗するのは環境ゲート条件ではなく genuine failure（DLL/helper の実在は確認済みで、
+    // mount 解決も含め boot が Err を返すのはフィクスチャ／環境の不備）。
     let runtime =
         boot(options).expect("real pasta 越しの boot は DLL/helper 実在確認済みなら成功するはず");
 

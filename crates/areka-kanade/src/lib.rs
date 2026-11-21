@@ -19,7 +19,7 @@
 //! ## 依存規律
 //!
 //! talk 契約の物理正本（`areka-talk`）は `std` のみに依存し、host32 型・areka-actor 型に
-//! 一切依存しない（DD-1）。
+//! 一切依存しない。
 
 pub mod actor;
 pub mod anchor_input;
@@ -66,10 +66,10 @@ pub use status::{BalloonBinding, ExecutionSnapshot, ExecutionStateUpdate, Execut
 pub use talk::{StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
 pub use translate::{ScriptExpander, TranslateSeams};
 
-/// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。
+/// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード。
 ///
 /// `schedule/` は `pub(crate)` に閉じるが、`tests/` 配下の統合テストクレートは
-/// `pub(crate)` を参照できない。Req 7.1（fixture・検証・実装が単一の正本を共有）を
+/// `pub(crate)` を参照できない。fixture・検証・実装が単一の正本を共有することを
 /// 成立させる唯一の経路として、外（`tests/`・`areka`・`areka-ghost`）が使う Reference 表構成関数
 /// だけを本ファサード経由でクレート公開面に露出する（`areka_kanade::events::on_boot(&config)` 等）。
 /// 運行状態機械の内部（Phase／State／Action／Input／step 本体・遷移ロジック）は
@@ -84,12 +84,12 @@ pub mod events {
     };
 }
 
-/// SHIORI Resource 照会増分の公開ファサード（DD-9 例外・[`events`] と同じ露出規律）。
+/// SHIORI Resource 照会増分の公開ファサード（[`events`] と同じ露出規律）。
 ///
 /// boot 系列の username prefetch（`schedule/boot.rs`・OnInitialize 後・OnFirstBoot 前）で使う
 /// リソース照会構築関数・結果語彙・注入シームを、クレート公開面へ露出する。ghost が
 /// [`spawn_kanade`] へ [`resources::ResourceSink`] を注入し、`tests/` がハーネスの期待値導出
-/// （`expected_call(resources::resource_get("username", ..))`）に用いる唯一の経路（Req 7.1・DD-9）。
+/// （`expected_call(resources::resource_get("username", ..))`）に用いる唯一の経路。
 /// 運行状態機械の内部（Phase／State／Action／step 本体）は `pub(crate)` のまま非公開に保つ。
 pub mod resources {
     pub use crate::schedule::resources::{

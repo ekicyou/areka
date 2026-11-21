@@ -1,9 +1,6 @@
 //! Windows.UI.Composition (WUC) interop 安全 wrapper 群。
 //!
-//! WUC の interop インターフェイス（`ICompositorInterop` /
-//! `ICompositorDesktopInterop` / `ICompositionDrawingSurfaceInterop`）は、
-//! IID＋void** out-param を伴う `unsafe` メソッドを露出する。本モジュールは
-//! それらを安全な Rust wrapper（`#[inline(always)]`・`Result` 返却・`unsafe` の局所化）へ包む。
+//! WUC の interop インターフェイスの `unsafe` メソッドを、`Result` を返す安全な wrapper へ包む。
 
 use bind_next::Windows::System::DispatcherQueueController;
 use bind_next::Windows::UI::Composition::CompositionGraphicsDevice;
@@ -22,19 +19,14 @@ use bind_next::Windows::Win32::{ID2D1Device, ID2D1DeviceContext, ID2D1DeviceCont
 use windows_core::{Interface, Result};
 
 /// `ICompositorInterop` の interop メソッドを安全 wrapper 化する Ext trait。
-///
-/// 既存の D2D デバイスから `CompositionGraphicsDevice` を生成する
-/// `CreateGraphicsDevice`（要件 2.1）を包む。
 pub trait CompositorInteropExt {
     /// CreateGraphicsDevice — 既存 D2D デバイスから合成グラフィックスデバイスを生成。
     fn create_graphics_device(&self, d2d_device: &ID2D1Device)
     -> Result<CompositionGraphicsDevice>;
 
-    /// CreateCompositionSurfaceForSwapChain — 自前所有 swap chain から合成面を生成（要件 8.1）。
+    /// CreateCompositionSurfaceForSwapChain — 自前所有 swap chain から合成面を生成。
     ///
-    /// `com/dxgi::create_composition_swap_chain` が生成した読み戻し可能な供給面を
-    /// WUC の `ICompositionSurface`（SpriteVisual＋SurfaceBrush への装着材料）へ包む
-    /// 安全 wrapper。`unsafe` は本メソッドへ隔離する（汎用・emo 非依存）。
+    /// 返る `ICompositionSurface` は SpriteVisual＋SurfaceBrush へ装着できる。
     fn create_composition_surface_for_swap_chain(
         &self,
         swapchain: &IDXGISwapChain1,
@@ -61,9 +53,6 @@ impl CompositorInteropExt for ICompositorInterop {
 }
 
 /// `ICompositorDesktopInterop` の interop メソッドを安全 wrapper 化する Ext trait。
-///
-/// HWND に束縛した `DesktopWindowTarget` を生成する
-/// `CreateDesktopWindowTarget`（要件 4.1）を包む。
 pub trait CompositorDesktopInteropExt {
     /// CreateDesktopWindowTarget — HWND への合成出力先ターゲットを生成。
     fn create_desktop_window_target(
@@ -88,8 +77,6 @@ impl CompositorDesktopInteropExt for ICompositorDesktopInterop {
 }
 
 /// `ICompositionDrawingSurfaceInterop` の interop メソッドを安全 wrapper 化する Ext trait。
-///
-/// D2D 直描き経路（`BeginDraw`→D2D DC 描画→`EndDraw`・要件 6.1/6.2）を包む。
 pub trait DrawingSurfaceInteropExt {
     /// BeginDraw — 更新矩形を渡し、`ID2D1DeviceContext3` へ cast した D2D デバイスコンテキストと
     /// atlas offset（描く位置の平行移動）を返す。
@@ -109,16 +96,15 @@ impl DrawingSurfaceInteropExt for ICompositionDrawingSurfaceInterop {
 
     #[inline(always)]
     fn end_draw(&self) -> Result<()> {
-        // 戻り値の無い COM メソッドは HRESULT を返す。
         unsafe { self.EndDraw().ok() }
     }
 }
 
 /// DispatcherQueueController を現在スレッド種別（`DQTYPE_THREAD_CURRENT`）で生成する。
 ///
-/// WUC の `Compositor` は同一 UI スレッド上に DispatcherQueue を要求する（要件 3.1）。
+/// WUC の `Compositor` は同一 UI スレッド上に DispatcherQueue を要求する。
 /// `apartment` は呼び出し側の COM 状態に応じて選ぶ（COM 初期化済みなら `DQTAT_COM_NONE`、
-/// 未初期化なら `DQTAT_COM_ASTA`）。後続タスク 2.1（WucGraphicsResource）とテストで再利用する。
+/// 未初期化なら `DQTAT_COM_ASTA`）。
 #[inline(always)]
 pub fn create_dispatcher_queue_controller(
     apartment: DISPATCHERQUEUE_THREAD_APARTMENTTYPE,

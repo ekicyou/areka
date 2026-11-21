@@ -1,10 +1,8 @@
 //! 提示段の指令 API 契約正本（`PresentCommand`）と構造化エラー（`PresentError`）。
 //!
-//! 本モジュールは emo-present が下流 seriko-engine へ公開する**指令 API の契約正本**である。
-//! surface 切替・非表示（`\s[-1]` 相当）・キャッシュ無効化を運ぶ指令の形を定義し、それらを
-//! メッセージ enum（将来の `EmoMsg` 級）の variant へそのまま転写できる `Send + 'static` 所有形
-//! （`areka-actor` の envelope 規約準拠）として与える。合成の実体や表示リソースには触れない
-//! 純粋な契約層であり、wintf にも依存しない（依存方向: `emo-compose → emo-present`）。
+//! emo-present が下流 seriko-engine へ公開する指令 API の契約。surface 切替・非表示・キャッシュ無効化を
+//! 運ぶ指令の形を、`Send + 'static` 所有形（`areka-actor` の envelope 規約準拠）で与える。合成の実体や
+//! 表示リソースには触れず、wintf にも依存しない（依存方向: `emo-compose → emo-present`）。
 //!
 //! # 責務分界（呼び手＝seriko 側の解決責務）
 //!
@@ -47,11 +45,11 @@ pub enum PresentCommand {
         surface_id: u32,
         /// 有効 bind 集合（解決済みスナップショット・bind 状態所有は seriko）。
         binds: areka_emo_compose::BindSet,
-        /// pattern 進行状態（現在コマ集合・合成入力の第一級要素・R5.1/5.2）。
+        /// pattern 進行状態（現在コマ集合・合成入力の第一級要素）。
         ///
-        /// `binds` と同格の合成入力キー要素であり、seriko の pattern タイムライン評価が生産した
-        /// スナップショットを値で運ぶ（envelope 規約準拠の `Send + 'static` 所有）。空
-        /// （[`areka_emo_compose::PatternState::default`]）は pattern 寄与なし＝拡張前と観測等価（R5.4）。
+        /// `binds` と同格の合成入力キー要素で、seriko の pattern タイムライン評価が生産した
+        /// スナップショットを値で運ぶ。空（[`areka_emo_compose::PatternState::default`]）は
+        /// pattern 寄与なし。
         pattern: areka_emo_compose::PatternState,
         /// 結果返信端（任意・`Some` のとき高々 1 回応答する）。
         reply: Option<areka_actor::ReplySender<PresentOutcome>>,
@@ -70,11 +68,11 @@ pub enum PresentCommand {
         /// 結果返信端（任意・`Some` のとき高々 1 回応答する）。
         reply: Option<areka_actor::ReplySender<PresentOutcome>>,
     },
-    /// 装着の置き換え（シェル・バルーンの差し替え・`areka-P0-shell-balloon-switch` 要件 4.1・4.6）。
+    /// 装着の置き換え（シェル・バルーンの差し替え）。
     ///
     /// 同じ窓の古い装着を片付け、新しい資産で登録し直し、`show` があれば表示する——を 1 回の適用の
-    /// 中で行う。可視性の持ち主・適用済みの k・素の大きさ・保留中の窓寸の要求は古い装着から引き継ぐ
-    /// （要件 4.3）。失敗（reply `Err`）は target が未装着のときだけで、そのとき表は変わらない。
+    /// 中で行う。可視性の持ち主・適用済みの k・素の大きさ・保留中の窓寸の要求は古い装着から引き継ぐ。
+    /// 失敗（reply `Err`）は target が未装着のときだけで、そのとき表は変わらない。
     ReplaceTarget {
         /// 置き換える target（登録済みであること）。
         target: TargetId,
@@ -92,7 +90,7 @@ pub enum PresentCommand {
         /// 結果返信端（任意・`Some` のとき高々 1 回応答する）。
         reply: Option<areka_actor::ReplySender<PresentOutcome>>,
     },
-    /// 合図: seriko が出番の世代 `generation` を知った（`animated-image-playback` 要件 2.3）。
+    /// 合図: seriko が出番の世代 `generation` を知った。
     ///
     /// 外から所有される対象の「追い付いた世代」を大きい方へ進めるだけで、合成・可視性には触らない
     /// （応答なし）。追い付くまで、その対象へ着く `ShowSurface` は回数つきの動く絵の子の欄を外される
@@ -103,7 +101,7 @@ pub enum PresentCommand {
         /// seriko が知った出番の世代。
         generation: u64,
     },
-    /// ずれ（`seriko-pattern-calls` 要件 7.1・7.6）: 対象を作者の座標で `(x, y)` だけずらしたい。
+    /// ずれ: 対象を作者の座標で `(x, y)` だけずらしたい。
     ///
     /// 対象の欄に覚えるだけで、合成・可視性・合成の覚えには触らない（応答なし）。窓の位置へ当てるのは
     /// 置き方の層が [`crate::EmoPresenter::move_shift`] で読んで行う。未装着の対象は捨てる。
@@ -161,15 +159,13 @@ pub enum PresentError {
 
 /// `windows_core::Error` を [`PresentError::Device`]（ログ＋`HRESULT`＋文脈）へ写像するクロージャ。
 ///
-/// 失敗経路はログ規律（`error!` ＋ `Err` 戻り値・パニック禁止）に従い、発生箇所の静的文脈を添えて
-/// 構造化エラーへ畳む。`.map_err(device_err("<where>", repeat))?` の形で D2D 呼び出しを包む。
-///
-/// [`PresentError`] と同じ場所に置く共有の写像であり、提示段のどのモジュール（`display`・`presenter`）
-/// からも同一の形で使える（同形の写像を各モジュールへ複写しないため）。
+/// `.map_err(device_err("<where>", repeat))?` の形で D2D 呼び出しを包む。失敗経路はログ規律
+/// （`error!` ＋ `Err` 戻り値・パニック禁止）に従う。提示段のどのモジュール（`display`・`presenter`）
+/// からも同一の形で使えるよう、ここに共有で置く。
 ///
 /// `repeat` は前に記録した同じ対象の失敗の原因（`context`・`hresult`）。今の原因と同じなら同じ
-/// 文言・同じ欄で `debug!` に落とし（同じ原因の続きを積まない・要件 4.3）、それ以外（`None` を
-/// 含む）は今と同じ `error!`（要件 1.6）。
+/// 文言・同じ欄で `debug!` に落とし（同じ原因の続きを積まない）、それ以外（`None` を
+/// 含む）は `error!`。
 pub(crate) fn device_err(
     context: &'static str,
     repeat: Option<(&'static str, i32)>,
@@ -196,10 +192,9 @@ mod tests {
     /// 型 `T` が `Send + 'static` であることをコンパイル時に要求するヘルパ。
     fn _assert_send_static<T: Send + 'static>() {}
 
-    /// Req 3.1/7.2 不変条件: `PresentCommand` が `Send + 'static` 所有であることを静的に固定する。
+    /// 不変条件: `PresentCommand` が `Send + 'static` 所有であることを静的に固定する。
     ///
-    /// 借用フィールドの混入や `!Send` な内部型の導入でこのテストのコンパイルが失敗し、メッセージ
-    /// enum の variant へ転写可能である envelope 規約の逸脱を檻に入れる。
+    /// 借用フィールドの混入や `!Send` な内部型の導入でこのテストのコンパイルが失敗する。
     #[test]
     fn present_command_is_send_static() {
         _assert_send_static::<PresentCommand>();

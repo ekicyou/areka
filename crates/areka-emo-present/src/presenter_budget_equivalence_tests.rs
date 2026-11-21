@@ -1,5 +1,4 @@
-//! 新旧経路のバイト等価の檻（design.md §Testing Strategy「Integration Tests（presenter 経由）」
-//! 項目 2・付録 A′ #8・要件 3.3／6.2／6.3／6.4）。
+//! 新旧経路のバイト等価の檻（presenter 経由）。
 //!
 //! # 何を突き合わせるのか
 //!
@@ -8,7 +7,7 @@
 //! `AlphaMask::from_pbgra32`——と 1 バイト単位で突き合わせる
 //! （`test_support::native_golden_with` がその合成そのものである）。
 //!
-//! # 期待値は拡大率に依らない（裁定 D・要件 5.1）
+//! # 期待値は拡大率に依らない
 //!
 //! presenter が抱えるのは原寸バイトそのもので、拡大は wintf の描画経路（`Arrangement.scale`
 //! ＝D2D 変換行列）が掛ける。ゆえに期待値は窓 DPI がいくつでも**同一の 1 組**であり、CPU で
@@ -42,7 +41,7 @@
 //! 表示バイトに不透明画素が実在することを適用のたびに確かめる。マスクに立っているビットと
 //! 落ちているビットが**両方**在ることは検体の檻（`the_rotating_face_fixture_differs_in_bytes`）が確かめる。全透明や一様マスクを回す実装は「バイト等価」を空虚に満たしてしまう。
 //!
-//! # 実時間を合否条件に使わない（要件 6.2）／純 x64 常設（要件 6.3）
+//! # 実時間を合否条件に使わない／純 x64 常設
 //!
 //! 判定量はバイト・外形・番地・ビット数だけである。環境変数ゲートも `#[ignore]` も持たない。
 
@@ -84,7 +83,7 @@ const FACES: [u32; ROTATING_FACES] = [1000, 3000, 5000, 7000];
 const FACE_A: u32 = FACES[0];
 
 /// 窓 DPI（author_dpi は 96 固定ゆえ k は恒等・2/1・5/4 になる）。**期待値はこの 3 通りで同一**
-/// でなければならない——それが「拡大は描画側の係数だけ」（裁定 D）の観測形である。
+/// でなければならない——それが「拡大は描画側の係数だけ」の観測形である。
 const WINDOW_DPIS: [u16; 3] = [96, 192, 120];
 
 /// n 回目に適用する面 id。
@@ -181,11 +180,11 @@ fn assert_expected_is_not_empty(e: &Expected, at: &str) {
 
 // ── 檻 ────────────────────────────────────────────────────────────────────────────────
 
-/// 要件 3.3／6.4 観測完了: **使い回しバッファの上を走る本番経路**の表示バイトと当たり判定マスクが、
+/// **使い回しバッファの上を走る本番経路**の表示バイトと当たり判定マスクが、
 /// まっさらな出力先を使う便宜経路と 1 バイトも違わない。**窓 DPI 3 水準で同じ 1 組の期待値**に
-/// 一致する（k は表示バイトにもマスクにも現れない・要件 5.1）。
+/// 一致する（k は表示バイトにもマスクにも現れない）。
 ///
-/// 4 面を巡回適用する。合成キャッシュは容量 3（要件 7.1）ゆえ**巡回長 4 > 容量 3** で毎回ミスし、
+/// 4 面を巡回適用する。合成キャッシュは容量 3ゆえ**巡回長 4 > 容量 3** で毎回ミスし、
 /// 最も古い引き当てのエントリが追い出されてその表示バッファが回収され、交代で合成先席に入る
 /// ——**いま合成している器には別の面の絵が入っている**。便宜経路との差はこの一点だけである。
 ///
@@ -206,7 +205,7 @@ fn assert_expected_is_not_empty(e: &Expected, at: &str) {
 #[test]
 fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_path() {
     // 便宜経路は presenter が握るのと別の実体で辿る（内部値の追認にしない）。**窓 DPI に依らず
-    // 1 組で足りる**ことが裁定 D の観測形そのものである。
+    // 1 組で足りる**ことが観測形そのものである。
     // fixture 前提（各面が別の絵・別のマスク）は `the_rotating_face_fixture_differs_in_bytes` が持つ。
     let want = expected_faces();
 
@@ -228,7 +227,7 @@ fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_pa
             let at = format!("{at_dpi} の {i} 回目（面 {id}）");
             // ⑺ ミス経路であることの陽性対照: 定常の各適用の前に、その面がスロットに無い。
             // 巡回長がキャッシュ容量以下へ縮むと本檻は静かにヒット経路の檻へ化けるので、ここで
-            // 止める（本 spec は「ミスしか踏まない／ヒットしか踏まない」取り違えを 2 度踏んだ）。
+            // 止める。
             if i >= WARMUP {
                 let target = presenter
                     .targets
@@ -319,7 +318,7 @@ fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_pa
         // （合否はあくまで上のバイト比較である）。
         //
         // 回る器は **k に依らず** キャッシュの 3 本＋合成先席の 1 本＝4 本である（交代は拡大率で
-        // 分岐しない・要件 1.3／7.3・`show.rs` の `swap_native_scratch` は無条件）。
+        // 分岐しない・`show.rs` の `swap_native_scratch` は無条件）。
         let circulating = CACHE_CAPACITY + 1;
         let mut distinct = steady_display_ptrs.clone();
         distinct.sort_unstable();
@@ -333,7 +332,7 @@ fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_pa
     }
 }
 
-/// 要件 3.3／6.4 観測完了（**同一入力の反復＝ヒット経路を含む**）: 同じ面を続けて適用しても、
+/// **同一入力の反復＝ヒット経路を含む**: 同じ面を続けて適用しても、
 /// 表示バイトとマスクは便宜経路と一致し続ける。
 ///
 /// 上の檻は設計上すべての適用がミスする（面を毎回変える）。`show.rs` 手順 (3)——表示記録の反映
@@ -345,7 +344,7 @@ fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_pa
 /// 巡回長がキャッシュ容量より大きいので、暖機の一巡で面 [`FACE_A`] は既に追い出されている。
 #[test]
 fn repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent() {
-    // 期待値は窓 DPI に依らず 1 組（裁定 D）。
+    // 期待値は窓 DPI に依らず 1 組。
     let (probe_world, probe_atlas) = build_alpha_varying_faces(NATIVE_W, NATIVE_H);
     let want = expected_of(&probe_world, &probe_atlas, FACE_A);
     assert_expected_is_not_empty(&want, &format!("面 {FACE_A}"));
@@ -425,8 +424,8 @@ fn repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent() {
 /// fixture 自身の健全性: 巡回する 4 面が **同じ原寸外形・互いに別のバイト**であり、マスクが
 /// 一様でないこと（面の本数は `ROTATING_FACES` が容量から決めるので、ここでは確かめない）。
 ///
-/// 檻の前提が壊れていれば等価主張は全て空虚になる。本 spec は fixture 側の破綻で 3 度
-/// 偽の緑を踏んでいるため、生成器そのものを 1 本の檻で押さえる。
+/// 檻の前提が壊れていれば等価主張は全て空虚になる。fixture 側の破綻で
+/// 偽の緑になった前例があるため、生成器そのものを 1 本の檻で押さえる。
 ///
 /// 拡大率で場合分けしないのは、期待値が原寸だけで決まるからである（k は fixture に現れない）。
 #[test]

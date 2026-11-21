@@ -1,8 +1,4 @@
-//! 並びでインストールの宛先の根に答える部品の決定論テスト（areka-P0-baseware-root-list task 4.5）。
-//!
-//! 確かめること: 新しいものは先頭の根・すでにあるものはその根・先頭の根が見つからないときは
-//! 見つかるいちばん上と warn `install_head_root_skipped`・見つかる根が無いときは作れない
-//! （要件 5.1・5.2・5.3・5.6・12.4）。答えは並びの写しの綴り（tasks.md Implementation Notes 1.5）。
+//! 並びでインストールの宛先の根に答える部品の決定論テスト。
 
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_nar::InstallRoots;
@@ -98,7 +94,7 @@ fn answers_built_root_when_all_roots_vanish_after_build() {
 }
 
 /// 起動中のゴーストの根が並びから外れ、別の根に同じフォルダ名が見えていても、起動中のゴーストの
-/// フォルダ名には起動中のゴーストの根を答える（要件 8.7・5.3）。別のフォルダ名は今の答えのまま。
+/// フォルダ名には起動中のゴーストの根を答える。別のフォルダ名は今の答えのまま。
 #[test]
 fn running_ghost_folder_answers_its_own_root_even_off_the_list() {
     let tmp = TempPath::under_target("install-destination-running-pin");
@@ -121,7 +117,7 @@ fn running_ghost_folder_answers_its_own_root_even_off_the_list() {
     );
 }
 
-// ---- 並びを宛先にして入れる（install_into・tasks.md 4.6・要件 5.1・5.3・5.4・5.5・5.7・5.9・12.4） ----
+// ---- 並びを宛先にして入れる（install_into） ----
 
 use std::collections::BTreeMap;
 use std::os::windows::fs::OpenOptionsExt;
@@ -175,7 +171,7 @@ fn tree(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 }
 
 /// 新しいゴーストは先頭の根へ、同梱のバルーンはそのゴーストの中へ入り、要素ごとに `install_placed`。
-/// 別の根に在る同じフォルダ名のバルーンには触らない（areka-P0-ghost-inner-balloon 要件 7.1・7.3）。
+/// 別の根に在る同じフォルダ名のバルーンには触らない。
 #[test]
 fn new_ghost_goes_to_head_and_companion_balloon_inside_it() {
     let tmp = TempPath::under_target("install-into-companion");
@@ -244,7 +240,7 @@ fn existing_ghost_is_overwritten_in_its_root_and_the_hidden_one_is_untouched() {
 }
 
 /// 別の根の同じフォルダ名のバルーンが使用中（掴まれている）でも、同梱はゴーストの中へ入り、
-/// 掴まれたほうは 1 バイトも変わらない（同梱は根の置き場を宛先にしない＝要件 7.3）。
+/// 掴まれたほうは 1 バイトも変わらない（同梱は根の置き場を宛先にしない）。
 #[test]
 fn a_held_root_balloon_of_the_same_name_does_not_block_the_companion() {
     let tmp = TempPath::under_target("install-into-held-root-balloon");
@@ -275,7 +271,7 @@ fn a_held_root_balloon_of_the_same_name_does_not_block_the_companion() {
 }
 
 /// 見つかる根が無ければ入れずに error `install_no_root` を残し、書く前の失敗として返す。
-/// 段は `Stage` なので、失敗理由の語は `fileio`（write-failure-notice 要件 5.2）。
+/// 段は `Stage` なので、失敗理由の語は `fileio`。
 #[test]
 fn no_found_root_fails_before_writing_with_an_error() {
     let tmp = TempPath::under_target("install-into-no-root");
@@ -312,7 +308,7 @@ fn no_found_root_fails_before_writing_with_an_error() {
     assert!(!tmp.child("a").exists(), "何も作らない");
 }
 
-// ---- 同梱の物は写しの根で答える（areka-P0-user-data-root task 4.3・要件 4.4・4.8・10.4） ----
+// ---- 同梱の物は写しの根で答える ----
 
 /// 並び `[書ける根（印付き）, 実行ファイルの隣]` と、実行ファイルの隣の同梱のゴースト `emo2`。
 fn bundled(label: &str) -> (TempPath, PathBuf, PathBuf) {
@@ -357,7 +353,7 @@ fn unmarked_list_answers_the_same_root_as_today() {
     assert!(!user.join("ghost").exists(), "写さない");
 }
 
-// ---- 根の置き場の同名と以前の同梱に触らない（areka-P0-ghost-inner-balloon tasks.md 5.3・要件 6.4・7.3・8.2） ----
+// ---- 根の置き場の同名と以前の同梱に触らない ----
 
 /// 同梱のバルーン `kaku` つきのシェル `dress` の書庫を開く。
 fn shell_nar_with_companion(tmp: &TempPath) -> NarArchive {

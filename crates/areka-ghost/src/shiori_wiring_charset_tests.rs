@@ -1,5 +1,4 @@
-//! 初期の文字コード決定（`initial_charset`／`default_charset`）の決定論テスト
-//! （タスク 3.2・要件 1.3／2.1／2.4／2.6／7.1／9.4／10.3）。
+//! 初期の文字コード決定（`initial_charset`／`default_charset`）の決定論テスト。
 //!
 //! 窓も 32bit 成果物も実 SHIORI も要さない。descript の固定物は本番と同じ経路
 //! （`package::resolve_with_shell`）で作り（`ShioriMount` は `#[non_exhaustive]`）、決定の結果は
@@ -24,7 +23,7 @@ use tracing::Level;
 use super::{default_charset, initial_charset, real_connect};
 use crate::test_log_capture::capture_events;
 
-/// 起動ログの宛先（`shiori_wiring` の `LOG_TARGET` と同じ綴り・design §Monitoring）。
+/// 起動ログの宛先（`shiori_wiring` の `LOG_TARGET` と同じ綴り）。
 const BOOT_TARGET: &str = "ghost-boot";
 
 /// descript の 2 キーを持つ固定物を作る（共通の [`crate::test_support::shiori_mount`]）。
@@ -88,7 +87,7 @@ fn expect_single_initial(events: &[CapturedEvent]) -> (String, String) {
     (charset, source)
 }
 
-/// ⑴ 両方が解決できるなら `shiori.forceencoding` が勝ち、強制が効く（要件 2.1・2.2）。
+/// ⑴ 両方が解決できるなら `shiori.forceencoding` が勝ち、強制が効く。
 #[test]
 fn force_encoding_wins_over_encoding_and_is_forced() {
     let (_temp, shiori) = build_shiori_mount(Some("UTF-8"), Some("EUC-JP"));
@@ -113,7 +112,7 @@ fn force_encoding_wins_over_encoding_and_is_forced() {
     );
 }
 
-/// ⑵ `shiori.encoding` だけなら、その値が初期値になり強制はされない（要件 2.3）。
+/// ⑵ `shiori.encoding` だけなら、その値が初期値になり強制はされない。
 #[test]
 fn encoding_only_is_adopted_and_not_forced() {
     let (_temp, shiori) = build_shiori_mount(Some("EUC-JP"), None);
@@ -138,7 +137,7 @@ fn encoding_only_is_adopted_and_not_forced() {
     );
 }
 
-/// ⑶ 宣言が無ければ既定の固定写像で決まる（要件 1.3・`Ansi`→Shift_JIS／`Utf8`→UTF-8）。
+/// ⑶ 宣言が無ければ既定の固定写像で決まる（`Ansi`→Shift_JIS／`Utf8`→UTF-8）。
 #[test]
 fn no_declaration_falls_back_to_the_fixed_default_mapping() {
     for (default, expected) in [
@@ -173,7 +172,7 @@ fn no_declaration_falls_back_to_the_fixed_default_mapping() {
     }
 }
 
-/// `default_charset` の 2 腕の固定写像そのもの（要件 1.3・OS ロケールを読まない）。
+/// `default_charset` の 2 腕の固定写像そのもの（OS ロケールを読まない）。
 #[test]
 fn default_charset_is_a_fixed_two_arm_mapping() {
     assert_eq!(default_charset(DefaultEncoding::Ansi), Charset::SHIFT_JIS);
@@ -181,7 +180,7 @@ fn default_charset_is_a_fixed_two_arm_mapping() {
 }
 
 /// ⑷ 強制の宣言が「通信では使えない既知の限界」なら、警告 1 行を出して `shiori.encoding`
-/// へ後退し、**強制の効力も失う**（要件 2.4・10.3）。
+/// へ後退し、**強制の効力も失う**。
 #[test]
 fn unusable_force_encoding_warns_once_and_loses_the_forcing_effect() {
     let (_temp, shiori) = build_shiori_mount(Some("UTF-8"), Some("UTF-16"));
@@ -222,7 +221,7 @@ fn unusable_force_encoding_warns_once_and_loses_the_forcing_effect() {
     assert_eq!(source, "encoding");
 }
 
-/// ⑸ 2 キーとも未知のラベルなら警告 2 行を出して既定へ後退する（要件 9.4・10.3）。
+/// ⑸ 2 キーとも未知のラベルなら警告 2 行を出して既定へ後退する。
 #[test]
 fn both_keys_unknown_warn_twice_and_fall_back_to_the_default() {
     let (_temp, shiori) =
@@ -265,7 +264,7 @@ fn both_keys_unknown_warn_twice_and_fall_back_to_the_default() {
 }
 
 /// ⑹ 情報ログの `charset` は派生 `Debug`（`Charset(Encoding { .. })`）ではなく正規名であり、
-/// `source` は 3 語彙のいずれかである（要件 2.6・design §Monitoring）。
+/// `source` は 3 語彙のいずれかである。
 #[test]
 fn charset_initial_records_the_canonical_name_not_the_debug_form() {
     let (_temp, shiori) = build_shiori_mount(None, Some("shift_jis"));
@@ -286,15 +285,15 @@ fn charset_initial_records_the_canonical_name_not_the_debug_form() {
     assert_eq!(source, "forceencoding");
 }
 
-/// ⑺ 初期値の決定は [`real_connect`] を**呼んだ時点**で同期に済んでいる（タスク 3.4・要件 2.7）。
+/// ⑺ 初期値の決定は [`real_connect`] を**呼んだ時点**で同期に済んでいる。
 ///
 /// このテストは返ってきたクロージャを**一度も呼ばない**。それでも決定の情報ログが 1 行
 /// 出ていることを見るので、決定がクロージャの内側（＝shiori アクタースレッド上・接続成功時）
 /// へ遅れていないことが分かる。決定を `move ||` の内側へ落とす退化を入れると、捕捉窓が
 /// 別スレッド・別時点の発火を拾えず `charset_initial` が 0 件になって赤になる。
 ///
-/// 遅らせてはならない理由は 2 つ（design §shiori_wiring）: 起動ログが呼出スレッドの同期発火
-/// しか捕捉できないこと、そして接続に失敗しても決定と根拠が記録に残ること（要件 2.6）。
+/// 遅らせてはならない理由は 2 つ: 起動ログが呼出スレッドの同期発火しか捕捉できないこと、そして接続に失敗しても
+/// 決定と根拠が記録に残ること。
 #[test]
 fn real_connect_decides_the_initial_charset_before_returning_the_closure() {
     let (_temp, shiori) = build_shiori_mount(None, Some("EUC-JP"));
@@ -312,7 +311,7 @@ fn real_connect_decides_the_initial_charset_before_returning_the_closure() {
     assert_eq!(source, "forceencoding", "決定根拠も記録される");
 }
 
-/// ⑻ 接続のたびに初期値を決め直し、前回の結果を引き継がない（要件 5.2）。
+/// ⑻ 接続のたびに初期値を決め直し、前回の結果を引き継がない。
 ///
 /// [`real_connect`] を 2 回呼ぶと `charset_initial` は 2 行出て、各行の文字コードは
 /// **その呼び出しに渡した既定**を反映する。交渉状態を 1 つだけ作って共有したり、
@@ -357,14 +356,14 @@ fn every_connect_derives_the_initial_value_again_and_inherits_nothing() {
     }
 }
 
-/// ⑼ 接続の値は「起動時に決めた交渉状態」をそのまま受け取る（要件 2.7・5.2）。
+/// ⑼ 接続の値は「起動時に決めた交渉状態」をそのまま受け取る。
 ///
 /// この最後の受け渡しだけは挙動で確かめられない——接続の値が組まれるのは i686 helper との
 /// 接続が成立した後だけで、決定論テストからは到達できないため。そこで本番ファイルの本文
 /// そのものを判定材料にし、交渉状態を**組み立てている箇所が 1 つだけ**であることを数える。
 ///
 /// 唯一の組立点は初期値を決める関数の末尾であり、接続の値へは決まった値を渡すだけである。
-/// 接続のところで暫定の値を作り直す形（本タスク以前の継ぎ目）へ戻すと組立点が 2 つになって
+/// 接続のところで暫定の値を作り直す形へ戻すと組立点が 2 つになって
 /// 赤になる。関数の本文はコメントも含めて検査するので、説明の側では組立の綴りを書かない
 /// （書くと赤になる——検査を緩めるのではなく説明の方を言い換えること）。
 #[test]
@@ -377,9 +376,7 @@ fn the_connection_receives_the_already_decided_negotiator() {
         "交渉状態の組立点は初期値を決める関数の 1 か所だけのはず\
          （接続のところで作り直すと 2 になる・要件 2.7／5.2）"
     );
-    // 「接続の値がフィールド短縮記法で受け取ること」を別に主張していたが、外した。
-    // 意味の変わらない書き換え（`negotiator: negotiator,`）で赤になる一方、決定を
-    // クロージャの内側へ移す退化は上の出現数と
-    // `real_connect_decides_the_initial_charset_before_returning_the_closure` が既に
-    // 捕まえる。欠陥を捕まえず書き方だけを縛る検査は置かない。
+    // 接続の値がフィールド短縮記法で受け取ることは固定しない: 意味の変わらない書き換え（`negotiator: negotiator,`）で
+    // 赤になる一方、決定をクロージャの内側へ移す退化は上の出現数と
+    // `real_connect_decides_the_initial_charset_before_returning_the_closure` が捕まえる。
 }

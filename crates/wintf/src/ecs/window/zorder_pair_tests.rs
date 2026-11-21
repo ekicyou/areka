@@ -3,10 +3,9 @@
 //! 本ファイルが固定するのは 2 つである。
 //!
 //! - **状態の契約**——宣言・再断行要求・owner 記録・実行時ストラテジが、素の `World` 上で
-//!   付与・読取・除去でき、既定値が設計の明記どおりであること
-//!   （design.md「State（コンポーネント契約）」）。
+//!   付与・読取・除去でき、既定値が明記どおりであること。
 //! - **是正判断の全分岐**——`decide_pair_fix` がトリガ種別・両窓の生存・実測隣接から
-//!   何を決めるか（design.md「Testing Strategy > Unit Tests」の 1・2）。
+//!   何を決めるか。
 //!
 //! 適用系（`SetWindowPos` 発行・検証・ログ）は維持系のテスト（`zorder_pair_maintain_tests.rs` ほか）が持つ。
 
@@ -27,7 +26,7 @@ use crate::ecs::window::zorder_pair_test_support::fake_hwnd;
 fn assert_send_sync<T: Send + Sync + 'static>() {}
 
 // -------------------------------------------------------------------------
-// 既定値（design.md「State（コンポーネント契約）」）
+// 既定値
 // -------------------------------------------------------------------------
 
 /// 実行時ストラテジの既定は案 A（owner 保証）・raise assist 無効。
@@ -79,7 +78,7 @@ fn zorder_pair_strategy_round_trips_as_resource() {
         ZOrderPairStrategy::ExplicitMaintenance
     );
 
-    // raise assist 有効化（ゲート G7 FAIL 時の形）
+    // raise assist 有効化
     world.insert_resource(ZOrderPairStrategy::OwnerLink { raise_assist: true });
     assert_eq!(
         *world.resource::<ZOrderPairStrategy>(),
@@ -468,14 +467,14 @@ fn decide_pair_fix_yields_top_edge_when_character_is_frontmost() {
     );
 }
 
-/// キャラの手前の窓が常時最前面だったときは、その窓を指さず通常帯の最上へ置く（要件 8.1）。
+/// キャラの手前の窓が常時最前面だったときは、その窓を指さず通常帯の最上へ置く。
 ///
 /// `SetWindowPos` の `hWndInsertAfter` に常時最前面の帯の中の窓を渡すと、対象窓にも
 /// `WS_EX_TOPMOST` が付いて帯へ移ってしまう（実測で確定した OS の性質）。キャラ窓が可視の
 /// 通常窓のうち最前面に居るとき、キャラの最も近い可視の手前は他アプリの常時最前面窓に
 /// なるため、そのまま挿入位置にするとバルーン窓が黙って常時最前面になる。
 ///
-/// 判断は Win32 を呼ばない（要件 7.1）ので、帯の所属は観測のフィールドとして届く。
+/// 判断は Win32 を呼ばないので、帯の所属は観測のフィールドとして届く。
 /// ここで固定するのはその 1 ビットが挿入位置を分けることそのものである。
 #[test]
 fn decide_pair_fix_avoids_pointing_at_an_always_on_top_window_as_the_insert_position() {
@@ -531,7 +530,7 @@ fn decide_pair_fix_avoids_pointing_at_an_always_on_top_window_as_the_insert_posi
     }
 }
 
-/// 手前へ置く腕の決めの表（stay-on-top-directives design.md の PairFixBandCondition）の
+/// 手前へ置く腕の決めの表（`PairFixBandCondition`）の
 /// 4 行を、全トリガ・全ストラテジで手前へ寄せる腕が出るときに固定する。
 ///
 /// | 手前の窓 | 手前の窓が帯 | キャラが帯 | 決め |
@@ -600,9 +599,9 @@ fn decide_pair_fix_follows_the_band_table_for_the_place_above_arm() {
     );
 }
 
-/// バルーン側の重なりが動いたら、キャラをバルーンのすぐ背後へ引き上げる（要件 1.3）。
+/// バルーン側の重なりが動いたら、キャラをバルーンのすぐ背後へ引き上げる。
 ///
-/// 処理するのは raise assist 有効時（ゲート G7 FAIL）と案 B のみ。
+/// 処理するのは raise assist 有効時と案 B のみ。
 #[test]
 fn decide_pair_fix_places_character_directly_under_balloon_on_raised_above() {
     for strategy in [
@@ -621,7 +620,7 @@ fn decide_pair_fix_places_character_directly_under_balloon_on_raised_above() {
 
 /// キャラ側の重なりが動いた場合の扱いはストラテジで分かれる。
 ///
-/// - 案 B: 明示維持ゆえバルーンをキャラのすぐ手前へ（要件 1.2）
+/// - 案 B: 明示維持ゆえバルーンをキャラのすぐ手前へ
 /// - 案 A（raise assist 有効）: キャラの浮上には OS が被 owner のバルーンを連れて上がる
 ///   ため是正は要らない——エコーないし無関係として見送る
 #[test]
@@ -648,8 +647,7 @@ fn decide_pair_fix_handles_raised_below_per_strategy() {
 
 /// 案 A・raise assist 無効では、重なりの変化を契機とする両トリガが見送られる。
 ///
-/// z 変化検知そのものを結線しない（design.md「WM_WINDOWPOSCHANGED z 変化検知」）
-/// ——万一トリガが届いても判断側で止まることを固定する。
+/// z 変化検知そのものを結線しない——万一トリガが届いても判断側で止まることを固定する。
 #[test]
 fn decide_pair_fix_skips_z_change_triggers_when_raise_assist_is_disabled() {
     let disabled = ZOrderPairStrategy::OwnerLink {
@@ -682,7 +680,7 @@ fn decide_pair_fix_skips_z_change_triggers_when_raise_assist_is_disabled() {
     );
 }
 
-/// 片方の窓が存在しないときは理由つきで見送る（要件 1.5）。
+/// 片方の窓が存在しないときは理由つきで見送る。
 ///
 /// 純関数ゆえ残る窓へ書き込む手段そのものが無いが、返り値が是正でないことを固定する。
 #[test]
@@ -795,15 +793,15 @@ fn decide_pair_fix_always_skips_when_already_adjacent() {
 
 /// 全分岐を機械的に列挙し、常時最前面を返す経路が存在しないことを対照込みで確かめる。
 ///
-/// - 要件 4.3／8.1: 判断が返しうる重なり指定は「ある窓の背後」と「最上位」だけであり、
+/// - 判断が返しうる重なり指定は「ある窓の背後」と「最上位」だけであり、
 ///   `ZOrder::TopMost` 相当（常時最前面）を表す値は返り値の型に**存在しない**。
 ///   下の `match` は網羅（`_` の受けを置いていない）ため、常時最前面を運べる腕が
 ///   足されればこのテストはコンパイルできなくなる。
-/// - 要件 1.6: 各腕をフィールド省略（`..`）無しで分解しており、座標・寸法のフィールドが
+/// - 各腕をフィールド省略（`..`）無しで分解しており、座標・寸法のフィールドが
 ///   足されれば同じくコンパイルできなくなる。
 /// - 対照: 「最上位へ置く」（`TopEdge`）は実際に返り得る。常時最前面が返らないという主張が
 ///   「そもそも何も返らない」による恒真になっていない。
-/// - 帯の条件（stay-on-top-directives 要件 2.4・3.3）: 帯の外のキャラには帯の窓を基準に
+/// - 帯の条件: 帯の外のキャラには帯の窓を基準に
 ///   選ばない（帯の外のキャラのときの決めは今のまま）。キャラも帯に居れば、手前の帯の窓の
 ///   すぐ背後へ入れる（帯の中ですぐ手前）。どちらの形も行列の中で実際に出ることを確かめる。
 #[test]
@@ -864,7 +862,7 @@ fn decide_pair_fix_covers_every_arm_and_uses_a_band_window_as_base_only_for_a_ch
         }
     }
 
-    // 見送りは 5 種すべてが実際に出る（理由が 1 つに潰れていない＝要件 6.3 の素地）
+    // 見送りは 5 種すべてが実際に出る（理由が 1 つに潰れていない）
     for reason in [
         SkipReason::AlreadyAdjacent,
         SkipReason::PeerMissing,
@@ -894,7 +892,7 @@ fn decide_pair_fix_covers_every_arm_and_uses_a_band_window_as_base_only_for_a_ch
     );
 }
 
-/// 動かす対象は宣言されたペアの 2 窓に限られる（要件 3.4／3.1〜3.3）。
+/// 動かす対象は宣言されたペアの 2 窓に限られる。
 ///
 /// 是正の腕は 2 つしか無く、それぞれ動かすのはバルーン窓かキャラ窓のどちらか 1 枚である。
 /// 挿入位置には他アプリ窓が現れうるが、それは**基準**であって動かす対象ではない

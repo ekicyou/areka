@@ -1,4 +1,4 @@
-//! 箱の転記（`parse_boxes`）の単体テスト（要件 1.1・1.7・2.1・2.8）。
+//! 箱の転記（`parse_boxes`）の単体テスト。
 //!
 //! 検体ファイルは読まず、テストの中に surfaces.txt の文面を持つ。
 
@@ -79,7 +79,7 @@ version,1
 }
 ";
 
-/// ブレスの名前と本体、両方のブレスの見出しと箱の element定義が登場順に原文どおり並ぶ（要件 1.1・2.1）。
+/// ブレスの名前と本体、両方のブレスの見出しと箱の element定義が登場順に原文どおり並ぶ。
 #[test]
 fn transcribes_brace_and_surface_lines_in_order() {
     let boxes = parse_boxes(WITH_BOXES);
@@ -137,7 +137,7 @@ elementX,balloon,b,-1,abc
     );
 }
 
-/// 箱の無い文面では `Brace` が 0 件、各ブレスの箱の element定義は空（設計の Postconditions）。
+/// 箱の無い文面では `Brace` が 0 件、各ブレスの箱の element定義は空。
 #[test]
 fn text_without_boxes_has_no_brace() {
     let boxes = parse_boxes(WITHOUT_BOXES);
@@ -171,7 +171,7 @@ fn transcription_is_deterministic() {
     assert_eq!(parse_boxes(WITH_BOXES), parse_boxes(WITH_BOXES));
 }
 
-/// 箱を含む文面でも、画像の読み手の結果は箱の行を除いた文面と同じ（要件 1.7・2.8）。
+/// 箱を含む文面でも、画像の読み手の結果は箱の行を除いた文面と同じ。
 /// 画像の element は `overlay` と `base` の行だけで、描画メソッド `balloon` の行は画像に入らない。
 #[test]
 fn image_reader_ignores_box_lines() {

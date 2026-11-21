@@ -1,6 +1,4 @@
 //! 選択肢の配送列合流とバッグ並存の檻。
-//!
-//! `newline`・`cursor` は本テーマからしか参照されないのでここに残した。
 
 use super::{ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet};
 use crate::test_support::{barrier, choice, logged_commands, recording_sink};
@@ -30,21 +28,15 @@ fn cursor(start_time: f64, x: &str, y: &str) -> Cue {
 }
 
 // ============================================================================
-// Task 2.2 対置換: 配送列の交互配置檻 ＋ バッグ並存檻（R8.6/R9.7・案C＝R1.8）
-//
-// 旧「先積み一択」檻（Choice を配送列から隠す）を、Choice が NewLine/Cursor と**交互のまま
-// 配送列へ現れる**ことを固定する配送列檻へ対置換し（削除でなく対置換＝非退行の観測を残す）、
-// 併せて「bag 内容は tick 列に不変」を固定するバッグ並存檻を新設する（責務二分＝配送列は
-// 表示の単一真実源／バッグは解決照合の単一真実源）。
+// 配送列の交互配置の檻と、バッグ並存の檻（配送列は表示の単一真実源・バッグは解決照合の単一真実源）
 // ============================================================================
 
-/// **配送列の交互配置檻（R1.8/R8.6/R9.7）**: `\q \n \q \_l \q` に相当する
+/// **配送列の交互配置檻**: `\q \n \q \_l \q` に相当する
 /// Choice/NewLine/Choice/Cursor/Choice を台本記述順に並べた schedule を tick すると、配送列
 /// （＝表示の単一真実源・broadcast 記録 sink で見る）に、3 つの Choice が
 /// NewLine/Cursor と**交互のまま同一相対順序で**現れる（Choice を配送列から隠さない）。
 ///
-/// この檻は旧「先積み一択」挙動（Choice を配送列から分離し pending_choices のみへ積む）では
-/// 3 つの Choice が配送列から欠落するため落ちる＝実挙動（案C の配送列合流）を厳密に固定する。
+/// Choice を配送列から外して pending_choices のみへ積む実装では、3 つの Choice が欠落して落ちる。
 #[test]
 fn choice_interleaves_with_newline_and_cursor_in_delivery_stream() {
     // \q \n \q \_l \q に相当（記述順で配送列へ順序保存されることを固定）。
@@ -59,10 +51,8 @@ fn choice_interleaves_with_newline_and_cursor_in_delivery_stream() {
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
-    // 全 cue の発火時刻を跨ぐ単一 tick で配送列を一括収集する（バリアなしゆえ一括配送）。
     player.tick(10.0);
 
-    // 期待する配送順（Choice が NewLine/Cursor と交互のまま保存される）。
     let expected = vec![
         CueCommand::Choice {
             id: "a".into(),
@@ -86,7 +76,7 @@ fn choice_interleaves_with_newline_and_cursor_in_delivery_stream() {
         },
     ];
 
-    // 配送列（＝表示の単一真実源）を記録 sink で見る。交互配置がそのまま現れる（Choice を隠さない・案C・R9.7）。
+    // 配送列（＝表示の単一真実源）を記録 sink で見る。交互配置がそのまま現れる（Choice を隠さない）。
     assert_eq!(
         logged_commands(&log),
         expected,
@@ -94,7 +84,7 @@ fn choice_interleaves_with_newline_and_cursor_in_delivery_stream() {
     );
 }
 
-/// **バッグ並存檻（R8.6/R9.7・「bag 内容は tick 列に不変」）**: Choice は配送列へ合流しつつ、
+/// **バッグ並存檻（「bag 内容は tick 列に不変」）**: Choice は配送列へ合流しつつ、
 /// 解決照合用に `pending_choices`（バッグ）へも積まれる（責務二分＝バッグは照合の単一真実源）。
 /// バッグ内容は tick 列に**不変**である——同一時刻の冪等再 tick でバッグは成長しない
 /// （二重積みしない）。かつバッグの選択肢集合は配送列に現れた Choice 集合と一致する
@@ -131,7 +121,6 @@ fn choice_bag_coexists_with_delivery_stream_and_is_invariant_across_reticks() {
             .collect::<Vec<_>>()
     };
 
-    // バッグは 3 選択肢を記述順で各 1 回だけ保持する（配送列と並存＝責務二分）。
     assert_eq!(
         bag_ids(&player),
         vec!["a", "b", "c"],
@@ -148,8 +137,6 @@ fn choice_bag_coexists_with_delivery_stream_and_is_invariant_across_reticks() {
         "冪等再 tick でバッグは二重積みされない（bag 内容は tick 列に不変）"
     );
 
-    // 責務二分の並存: バッグの選択肢集合は配送列（broadcast 記録 sink）に現れた Choice 集合と
-    // 一致する（同一の選択肢が配送列とバッグの両方に現れる）。
     let delivered_choice_ids: Vec<String> = log
         .borrow()
         .iter()

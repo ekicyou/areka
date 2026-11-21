@@ -2,18 +2,18 @@ use super::test_support::row;
 use super::*;
 
 // -------------------------------------------------------------------------
-// hit_choice_row 純関数檻（task 3.1・design「純関数判定核」／Testing Strategy item 1/4）
+// hit_choice_row 純関数檻
 //
 // 上流実型 `ChoiceHitRow`／`HitRectPx`（全 pub フィールド）で fixture を組み、
-// 包含／境界（半開）／行外／空／複数行／病的重なりを GPU・実窓不要で決定的に判定する
-// （R1.1/1.5/2.3/5.2）。座標を**無変換**で照合する不変条件（矩形側が実適用 k で ×k 済み
-// ゆえ正しい・÷k 追加は二重縮約）は直後の DD-11 檻（R3.7）が k=2.0 で固定する。
+// 包含／境界（半開）／行外／空／複数行／病的重なりを GPU・実窓不要で決定的に判定する。
+// 座標を**無変換**で照合する不変条件（矩形側が実適用 k で ×k 済み
+// ゆえ正しい・÷k 追加は二重縮約）は後段の逆向き整合の檻が k=2.0 で固定する。
 // -------------------------------------------------------------------------
 
 use areka_emo_text::actor::HitRectPx;
 use areka_emo_text::state::SpanKind;
 
-/// 内側包含（R1.1）: 矩形の内部点はその行 index を返す。
+/// 内側包含: 矩形の内部点はその行 index を返す。
 #[test]
 fn hit_inside_rect_returns_index() {
     let rows = [row(0, 10.0, 20.0, 50.0, 40.0)];
@@ -24,14 +24,14 @@ fn hit_inside_rect_returns_index() {
     );
 }
 
-/// 空 rows（R2.3）: 判定対象が無ければ常に None。
+/// 空 rows: 判定対象が無ければ常に None。
 #[test]
 fn hit_empty_rows_returns_none() {
     let rows: [ChoiceHitRow; 0] = [];
     assert_eq!(hit_choice_row(&rows, 30.0, 30.0), None, "空 rows は None");
 }
 
-/// 行外（R2.3・非ヒット→None）: 矩形外の点は None。四方向すべて外側を確認。
+/// 行外（非ヒット→None）: 矩形外の点は None。四方向すべて外側を確認。
 #[test]
 fn hit_outside_rect_returns_none() {
     let rows = [row(0, 10.0, 20.0, 50.0, 40.0)];
@@ -41,7 +41,7 @@ fn hit_outside_rect_returns_none() {
     assert_eq!(hit_choice_row(&rows, 30.0, 50.0), None, "下外");
 }
 
-/// 半開区間の境界（design Testing Strategy item 1）: `left`/`top` 辺は包含・
+/// 半開区間の境界: `left`/`top` 辺は包含・
 /// `right`/`bottom` 辺は非包含（whole-pixel 行矩形と整合）。
 #[test]
 fn hit_half_open_boundary_edges() {
@@ -58,7 +58,7 @@ fn hit_half_open_boundary_edges() {
     assert_eq!(hit_choice_row(&rows, 50.0, 40.0), None, "右下角は非包含");
 }
 
-/// 複数の非重複行のうち正しい行（design Testing Strategy item 1）: 点を含む行の
+/// 複数の非重複行のうち正しい行: 点を含む行の
 /// index が返る。各行が独立に判定される。
 #[test]
 fn hit_multiple_non_overlapping_rows_returns_correct_index() {
@@ -73,7 +73,7 @@ fn hit_multiple_non_overlapping_rows_returns_correct_index() {
     assert_eq!(hit_choice_row(&rows, 50.0, 70.0), None, "全行外");
 }
 
-/// 病的重なり→最終一致（R1.5・DD-CI-5）: 点を含む行が複数あっても、逆順走査の最初の
+/// 病的重なり→最終一致: 点を含む行が複数あっても、逆順走査の最初の
 /// 一致＝スライス**最終** index を決定的に返す（後定義が手前・画家のアルゴリズム）。
 /// 期待 index を各行で一意にするため、重なり方を非対称にして「最初一致」なら別 index に
 /// なる配置を用いる（最初一致=1／最終一致=2 を弁別）。
@@ -104,20 +104,18 @@ fn hit_pathological_overlap_returns_last_match_deterministically() {
 }
 
 // -------------------------------------------------------------------------
-// バルーン逆向き整合の不変条件檻（DD-11・R3.7／R5.6/5.7/6.4）
+// バルーン逆向き整合の不変条件檻
 //
-// 旧「座標素通し（k=1.0）」fixture の**強化版**（新規並置ではなく理由の是正＋条件の拡張）。
-// 旧版は「k=1.0 だから素通し」を理由とし、行矩形を実 k で持ち上げた条件を持たなかった。
 // 本檻は上流の実写像 `to_window_physical` に **k=2.0** を実供給して行矩形を窓物理 px へ
 // 持ち上げ、そこへ (a) **無変換の** client 物理 px 点が正しくヒットすること、(b) 同じ点を
 // ÷k してしまうと外れること（＝二重縮約の退行検出）を `click_selection` で固定する。
 //
 // 成立根拠は「矩形側が既に ×k 済み」——k=1.0 であることではない。シェル窓は逆向き（矩形は
 // 作者定義サーフェス px のまま・点を ÷k）であり、両者は等価に正しい。バルーン経路へ ÷k を
-// 足すと矩形 ×k と点 ÷k の二重縮約になり正常動作を壊す（R6.4 が明文で禁じる）。
+// 足すと矩形 ×k と点 ÷k の二重縮約になり正常動作を壊す。
 //
-// f32 誤差との無関係化（design Risks）: `to_window_physical` は f32 積を含み 1px の余地が
-// あるため、檻の点は矩形境界から **8px 以上**（要件の 2px 以上を満たす）内側／外側に置く。
+// f32 誤差との無関係化: `to_window_physical` は f32 積を含み 1px の余地が
+// あるため、檻の点は矩形境界から **8px 以上**内側／外側に置く。
 // -------------------------------------------------------------------------
 
 use areka_emo_text::choice::{CanvasHitRow, to_window_physical};
@@ -213,7 +211,7 @@ fn cage_rows_are_lifted_to_window_physical_px_by_real_k() {
     );
 }
 
-/// 檻 (a)（R3.7）: k=2.0 で持ち上げた行矩形に対し、**無変換の** client 物理 px 点
+/// 檻 (a): k=2.0 で持ち上げた行矩形に対し、**無変換の** client 物理 px 点
 /// (110, 120) が正しく行 1 へヒットし `ChoiceSelection` を構成する。
 ///
 /// 点は行 1 の矩形 `[92, 132) × [112, 132)` の内側で、最寄り境界（top=112）から 8px 離れて
@@ -234,7 +232,7 @@ fn click_untransformed_point_hits_row_lifted_by_real_k() {
     assert_eq!(sel.scope, 7, "scope は引数由来（判定空間とは独立）");
 }
 
-/// 檻 (b)（R3.7・二重縮約の退行検出）: 檻 (a) と**同一の行矩形・同一の点**に対し、点を
+/// 檻 (b)（二重縮約の退行検出）: 檻 (a) と**同一の行矩形・同一の点**に対し、点を
 /// ÷k してしまうと `(55, 60)` となり全行の外（最寄り境界 left=92 から 37px・top=92 から
 /// 32px 外）＝ヒットしない。
 ///
@@ -262,14 +260,14 @@ fn click_double_reduced_point_misses_row_lifted_by_real_k() {
 }
 
 // -------------------------------------------------------------------------
-// hover_action 純関数檻（task 3.2・design「純関数判定核」／Observable 全分岐）
+// hover_action 純関数檻（全分岐）
 //
 // active・hit_ordinal・last_injected の 3 入力から hover 遷移を決める純関数の
 // 全分岐（非表示時無処理／消滅時自前整合／同値維持／新規注入／解除注入）を
-// World・runtime 不要で決定的に網羅する（R1.2/1.3/1.4/3.4）。
+// World・runtime 不要で決定的に網羅する。
 // -------------------------------------------------------------------------
 
-/// 非表示時無処理（R1.4）: `active == false` かつ `last_injected == None` は
+/// 非表示時無処理: `active == false` かつ `last_injected == None` は
 /// 何もしない。hit_ordinal（Some/None いずれも）は無視される。
 #[test]
 fn hover_inactive_no_prior_injection_is_noop() {
@@ -285,7 +283,7 @@ fn hover_inactive_no_prior_injection_is_noop() {
     );
 }
 
-/// 消滅時自前整合（R3.4）: `active == false` かつ `last_injected == Some(k)` は
+/// 消滅時自前整合: `active == false` かつ `last_injected == Some(k)` は
 /// 自前状態を None 整合する `ResetOwnState`（inject はしない＝上流原子性が正本）。
 /// hit_ordinal（Some/None いずれも）は無視される。
 #[test]
@@ -318,7 +316,7 @@ fn hover_active_same_value_keeps() {
     );
 }
 
-/// 新規注入（R1.2）: 表示中で hover 対象が変化したら新値を Inject する。
+/// 新規注入: 表示中で hover 対象が変化したら新値を Inject する。
 /// None→Some の初回注入と Some→Some の遷移の双方を確認する。
 #[test]
 fn hover_active_new_row_injects() {
@@ -334,7 +332,7 @@ fn hover_active_new_row_injects() {
     );
 }
 
-/// 解除注入（R1.3）: 表示中で hover が行外へ出たら None を Inject する
+/// 解除注入: 表示中で hover が行外へ出たら None を Inject する
 /// （Some→None＝ハイライト解除の遷移）。
 #[test]
 fn hover_active_leaves_row_injects_none() {
@@ -346,12 +344,12 @@ fn hover_active_leaves_row_injects_none() {
 }
 
 // -------------------------------------------------------------------------
-// click_selection 純関数檻（task 3.3・design「純関数判定核」／R2.1/2.2/2.3/3.1/3.2）
+// click_selection 純関数檻
 //
 // active・現行 rows・click 座標・scope の入力から確定 ChoiceSelection の構成を
 // 決める純関数を、World・runtime・send 不要で決定的に判定する。
 // ヒット時のフィールド一致（scope は arg 由来・ordinal 非含有）、非 hit／非表示／
-// stale 行での非構成（None）を網羅する（R2.1/2.2/2.3/3.1/3.2/6.2/6.3）。
+// stale 行での非構成（None）を網羅する。
 // -------------------------------------------------------------------------
 
 /// `references` を明示指定できる `ChoiceHitRow` を組む（転写忠実性の検証用）。
@@ -378,7 +376,7 @@ fn row_with_refs(
     }
 }
 
-/// ヒット確定（R2.1/2.2）: 表示中・ヒット座標では現行ヒット行の全フィールドを
+/// ヒット確定: 表示中・ヒット座標では現行ヒット行の全フィールドを
 /// clone 転写した `ChoiceSelection` を返す。scope は arg 由来・ordinal は非含有。
 #[test]
 fn click_hit_builds_selection_from_current_row() {
@@ -409,7 +407,7 @@ fn click_hit_builds_selection_from_current_row() {
     );
 }
 
-/// 非ヒット→非発行（R2.3）: 表示中でも全矩形外の座標なら None。
+/// 非ヒット→非発行: 表示中でも全矩形外の座標なら None。
 #[test]
 fn click_non_hit_returns_none() {
     let rows = [row_with_refs(0, 10.0, 20.0, 50.0, 40.0, Vec::new())];
@@ -420,7 +418,7 @@ fn click_non_hit_returns_none() {
     );
 }
 
-/// 非表示中は非発行（R3.1）: `active == false` は、たとえ矩形内座標でも None。
+/// 非表示中は非発行: `active == false` は、たとえ矩形内座標でも None。
 /// hit 判定より前に短絡する（消滅時の stale／原子性ガード）。
 #[test]
 fn click_inactive_returns_none_even_inside_rect() {
@@ -433,7 +431,7 @@ fn click_inactive_returns_none_even_inside_rect() {
     );
 }
 
-/// stale 行棄却（R3.2/6.3）: 以前ヒットしていた座標に、現行 rows ではどの行も
+/// stale 行棄却: 以前ヒットしていた座標に、現行 rows ではどの行も
 /// 存在しない（レイアウト差替後）場合、同座標の click は None。
 /// 現行ジオメトリのみを読むことを、キャッシュ座標を覆わない現行 rows で固定する。
 #[test]
@@ -448,7 +446,7 @@ fn click_stale_coords_not_in_current_rows_returns_none() {
     );
 }
 
-/// stale 差替（R3.2/2.5）: 同座標に別行が現れた場合、確定は必ず**現行**行から
+/// stale 差替: 同座標に別行が現れた場合、確定は必ず**現行**行から
 /// 構成される（キャッシュではなく現行ジオメトリが正本）。
 #[test]
 fn click_replaced_row_builds_from_current_not_cached() {
@@ -485,7 +483,7 @@ fn click_empty_references_transcribed_as_empty() {
 }
 
 // -------------------------------------------------------------------------
-// 選択肢とアンカーが混ざった当たりの行（areka-P0-anchor-tag-canon・要件 3.5・3.6）
+// 選択肢とアンカーが混ざった当たりの行
 //
 // 行の列は通し番号の昇順で、選択肢とアンカーが台本の順に混ざる。判定は種類の 2 段——選択肢を
 // 後ろから見て、当たらなければアンカーを後ろから見る。
@@ -493,7 +491,7 @@ fn click_empty_references_transcribed_as_empty() {
 
 use super::test_support::anchor_row;
 
-/// 重なる矩形では選択肢が勝つ。台本での定義の順がどちらでも同じ（要件 3.5）。
+/// 重なる矩形では選択肢が勝つ。台本での定義の順がどちらでも同じ。
 #[test]
 fn overlapping_choice_wins_over_anchor_in_either_order() {
     // どちらの並びでも (50, 30) を選択肢とアンカーの両方が含む。
@@ -531,7 +529,7 @@ fn overlapping_choice_wins_over_anchor_in_either_order() {
 }
 
 /// 選択肢に当たらずアンカーに当たればアンカー。アンカー同士が重なれば後ろの行。
-/// どの範囲の外でもなければ今までどおり無し（要件 3.5・3.6）。
+/// どの範囲の外でもなければ今までどおり無し。
 #[test]
 fn anchor_is_hit_only_where_no_choice_covers_the_point() {
     let rows = [
@@ -550,7 +548,7 @@ fn anchor_is_hit_only_where_no_choice_covers_the_point() {
 }
 
 /// 選択の知らせは当たった行の種類を写す。重なりでは選択肢の知らせになり、範囲の外では
-/// 今までどおり作らない（要件 3.3・3.5・3.6）。
+/// 今までどおり作らない。
 #[test]
 fn click_selection_copies_the_kind_of_the_hit_row() {
     let rows = [

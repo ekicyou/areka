@@ -1,5 +1,4 @@
-//! 焼く入口の動く絵の枝の結合テスト（spec: areka-P0-animated-image-decode 要件 3.1〜3.3・3.5・
-//! 4.1〜4.4・4.7・5.1）。
+//! 焼く入口の動く絵の枝の結合テスト。
 //!
 //! 偽の読み手 `MemoryDecoder` で、全コマを読めた動く絵が本番と同じ入口 `bake_with_limits` を
 //! 通ってアトラスへ載ることを確かめる。ファイルにも検体にも依存しない。
@@ -181,14 +180,14 @@ fn frames_follow_the_key_entries_and_the_key_resolves_to_frame_zero() {
     }
 }
 
-/// 同じ入力から 2 回焼いて同じ表（要件 4.7）。
+/// 同じ入力から 2 回焼いて同じ表。
 #[test]
 fn baking_twice_gives_the_same_table() {
     let dec = with_animation(three_frames());
     assert_eq!(dump(&bake(&dec).table), dump(&bake(&dec).table));
 }
 
-/// 透明度の無い動く絵は、0 番のコマの左上の色だけを全コマから消す（要件 3.3）。
+/// 透明度の無い動く絵は、0 番のコマの左上の色だけを全コマから消す。
 #[test]
 fn opaque_animation_clears_only_frame_zero_top_left_from_every_frame() {
     let dec = with_animation(animated(
@@ -212,7 +211,7 @@ fn opaque_animation_clears_only_frame_zero_top_left_from_every_frame() {
     }
 }
 
-/// 全透明のコマは位置無しで番号と待ち時間を残し、全透明の `warn!` は出さない（要件 3.5）。
+/// 全透明のコマは位置無しで番号と待ち時間を残し、全透明の `warn!` は出さない。
 #[test]
 fn transparent_frame_keeps_its_number_and_delay_without_warning() {
     let dec = with_animation(animated(
@@ -235,7 +234,7 @@ fn transparent_frame_keeps_its_number_and_delay_without_warning() {
 }
 
 /// 0 番のコマだけが全透明（見えない所から始まる動く絵）でも、鍵のエントリは位置無しで残り、
-/// 全透明の `warn!` は出さない（要件 3.5）。静止画なら警告する唯一の分かれ目。
+/// 全透明の `warn!` は出さない。静止画なら警告する唯一の分かれ目。
 #[test]
 fn transparent_frame_zero_keeps_the_key_entry_without_warning() {
     let dec = with_animation(animated(
@@ -265,11 +264,11 @@ fn all_transparent_animation_warns_once() {
     assert!(log.contains("anim.png"), "names the picture: {log}");
 }
 
-// ---- 1 枚へ縮める 3 段（要件 3.3・4.3・6.2〜6.8・8.4・8.5） ----
+// ---- 1 枚へ縮める 3 段 ----
 
 /// 上限で縮むときの全コマの答え。`decode_frames` が呼ばれれば `reason` にこの文が出る。
 const NOT_READ: &str = "all frames must not be read";
-/// 3 つの `warn!` に共通の欄（設計 Monitoring）。どの絵も組 0 に在る。
+/// 3 つの `warn!` に共通の欄。どの絵も組 0 に在る。
 const SET: &str = " set=0 ";
 const TARGET: &str = "target=areka_emo_atlas ";
 
@@ -336,7 +335,7 @@ struct Reason {
     says: &'static str,
 }
 
-/// 縮める理由 7 つ（設計の Testing Strategy の順）と、寸法の食い違い。見出しはどれも 2×2・3 コマ。
+/// 縮める理由 7 つと、寸法の食い違い。見出しはどれも 2×2・3 コマ。
 fn reasons(anim: &AnimatedImage) -> Vec<Reason> {
     let d = AnimationLimits::default();
     let over = |name, limits, cfg, says| Reason {
@@ -413,7 +412,7 @@ fn reasons(anim: &AnimatedImage) -> Vec<Reason> {
 
 /// どの理由でも 1 枚へ縮み、その 1 枚は上限を広げて全コマを焼いたときの 0 番のコマと同じ
 /// （透明度なしでも 0 番の左上の色が抜ける）。`warn!` は 1 回・失敗の一覧は空。上限なら全コマを
-/// 読まず、段 1 で済むので今までの 1 枚読み（別の絵 Y を登録）は出ない（要件 3.3・4.3・6.2〜6.4・8.4）。
+/// 読まず、段 1 で済むので今までの 1 枚読み（別の絵 Y を登録）は出ない。
 #[test]
 fn each_reason_shrinks_to_frame_zero_of_the_full_bake() {
     let anim = opaque_frames();
@@ -490,7 +489,7 @@ fn three_animations(broken: Option<&str>) -> MemoryDecoder {
 const ANIMS: [&str; 3] = ["anim1.png", "anim2.png", "anim3.png"];
 
 /// 合計の上限 16 画素: 3 つ目だけが縮み、2 回焼いても同じ絵が縮む（合計は呼び出しごとに 0 から）。
-/// 縮めた絵は合計に足さないので、1 つ目が読めずに縮むと 2 つ目・3 つ目は両方載る（要件 6.8）。
+/// 縮めた絵は合計に足さないので、1 つ目が読めずに縮むと 2 つ目・3 つ目は両方載る。
 #[test]
 fn total_limit_shrinks_only_the_third_animation() {
     let limits = AnimationLimits {
@@ -508,7 +507,7 @@ fn total_limit_shrinks_only_the_third_animation() {
     let (first, log) = bake_logged(&dec, &ANIMS, limits, PackConfig::default());
     assert!(first.errors.is_empty(), "{:?}", first.errors);
     assert_eq!(animated_of(&first.table), [true, true, false]);
-    // 2 つの動く絵のコマは、鍵のエントリ 3 つの後ろへ親の番号の昇順・コマの番号の昇順に並ぶ（要件 4.7）。
+    // 2 つの動く絵のコマは、鍵のエントリ 3 つの後ろへ親の番号の昇順・コマの番号の昇順に並ぶ。
     let frames_of = |rel| {
         let id = first.table.resolve(SetId(0), rel).unwrap();
         first.table.animation(id).unwrap().frames.clone()
@@ -535,7 +534,7 @@ fn total_limit_shrinks_only_the_third_animation() {
 }
 
 /// 段 1 が `Err` なら段 2（今までの 1 枚読み）の絵が出て `warn!` は 2 回（2 回目に段 1 の理由）。
-/// 段 2 も `Err` なら段 3: 失敗の一覧に 1 件で、ほかの絵は載る（要件 6.4〜6.6）。
+/// 段 2 も `Err` なら段 3: 失敗の一覧に 1 件で、ほかの絵は載る。
 #[test]
 fn first_frame_failure_falls_back_to_the_old_reader_then_to_the_failure_list() {
     let broken = |legacy: bool| {
@@ -602,7 +601,7 @@ fn first_frame_failure_falls_back_to_the_old_reader_then_to_the_failure_list() {
     }
 }
 
-// ---- 宣言ごとの動く絵と `.pna`（spec: areka-P0-self-alpha-declaration 要件 3.3・4.3・4.4・5.5・5.7・9.4） ----
+// ---- 宣言ごとの動く絵と `.pna` ----
 
 /// 半透明（乗算済みの 0,0,64・α=128）。
 const H: Px = [0, 0, 64, 128];
@@ -631,7 +630,7 @@ fn frames_as(anim: AnimatedImage, decl: UseSelfAlpha) -> (Vec<Vec<Px>>, String) 
 }
 
 /// `0` の動く絵: 全部のコマで α を 255 にしてから、1 枚目の左上（α を 255 にした後）と同じ色を
-/// 全部のコマから抜く。どのコマにも半透明が無い（要件 5.5）。抜いた色を 1 回だけ記録する。
+/// 全部のコマから抜く。どのコマにも半透明が無い。抜いた色を 1 回だけ記録する。
 #[test]
 fn off_animation_clears_frame_zero_top_left_from_every_frame_and_leaves_no_translucency() {
     // 1 枚目の左上は半透明 H → 抜く色は 0,0,64,255。2 枚目の H も同じ色になって抜かれる。
@@ -648,7 +647,7 @@ fn off_animation_clears_frame_zero_top_left_from_every_frame_and_leaves_no_trans
     assert_eq!(log.matches(KEYED).count(), 1, "{log}");
 }
 
-/// `full` × α なしの動く絵: 全部のコマが不透明で、左上と同じ色も抜かれない（要件 4.4）。
+/// `full` × α なしの動く絵: 全部のコマが不透明で、左上と同じ色も抜かれない。
 /// 抜かないので抜いた色の記録は出ない。
 #[test]
 fn full_animation_without_alpha_is_opaque_in_every_frame() {
@@ -661,7 +660,7 @@ fn full_animation_without_alpha_is_opaque_in_every_frame() {
     assert!(!log.contains(KEYED), "{log}");
 }
 
-/// 宣言なしの動く絵は 1 枚目の中身で決め、全部のコマが同じ側になる（要件 9.4）。
+/// 宣言なしの動く絵は 1 枚目の中身で決め、全部のコマが同じ側になる。
 /// 1 枚目が半透明を持てば、全部不透明な 2 枚目も抜かない。1 枚目が全部不透明なら、
 /// 半透明を持つ 2 枚目からも 1 枚目の左上の色を抜く。
 #[test]
@@ -684,7 +683,7 @@ fn undeclared_animation_follows_frame_zero_in_every_frame() {
 }
 
 /// `.pna` を添えた α なしの絵（静止画と動く絵）は、4 通りの宣言のどれでも `.pna` が無いときと
-/// 同じ画素で載り、失敗の一覧は空で、`ignored_pna` は添えた枚数に等しい（要件 3.3・4.3・5.7）。
+/// 同じ画素で載り、失敗の一覧は空で、`ignored_pna` は添えた枚数に等しい。
 #[test]
 fn pna_is_ignored_and_counted_for_every_declaration() {
     let names = ["anim.png", "s.png"];

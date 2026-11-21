@@ -1,4 +1,4 @@
-//! 公開面（`lib.rs`）の兄弟テスト（要件 3.1・3.3・7.4・8.1・8.4・10.8）。
+//! 公開面（`lib.rs`）の兄弟テスト。
 //!
 //! ⑴ 語彙の全数対応: 1 語につき 1 つの固定入力を 1 本で回し、得た `kind()` の集合が
 //!    `FailReason::ALL_KINDS` と完全一致し、失敗ごとに `error` が 1 件で、その欄が
@@ -20,7 +20,7 @@ use crate::run_tests::{
 use crate::testkit::{FakeFetch, MD5_ABC, dau, hold, junction, pe_image};
 use std::collections::BTreeSet;
 
-// ---- 語彙の全数対応（7.4・8.1・8.4） ----
+// ---- 語彙の全数対応 ----
 
 /// 失敗の語彙 1 語につき固定入力 1 つ。順は `ALL_KINDS` の宣言順。
 fn cases() -> Vec<fn() -> Ran> {
@@ -133,7 +133,7 @@ fn every_fail_kind_has_a_fixture_and_is_recorded_once_with_matching_fields() {
     assert_eq!(kinds.len(), all.len(), "同じ語を 2 度数えている: {kinds:?}");
 }
 
-// ---- 字面の見張り（3.1・3.3・8.1・10.8） ----
+// ---- 字面の見張り ----
 
 /// 本番のソース（`*_tests.rs` と `testkit.rs` を除く）を (ファイル名, コード行) で返す。
 ///
@@ -216,7 +216,7 @@ fn the_scan_looks_at_real_production_files_only() {
     assert_eq!(code("a\n  /// doc\n//! m\nb // tail"), "a\nb // tail");
 }
 
-/// 記録を綴る本番のソースは `lib.rs` だけ（二重記録を避ける・8.1）。
+/// 記録を綴る本番のソースは `lib.rs` だけ（二重記録を避ける）。
 #[test]
 fn only_the_public_surface_writes_records() {
     assert_eq!(files_where(|t| t.contains("tracing")), ["lib.rs"]);
@@ -233,7 +233,7 @@ fn the_failure_record_is_fired_from_one_place() {
     assert_eq!(counted, [("lib.rs".to_string(), 1)]);
 }
 
-/// WinHTTP の API を綴るのは取得口の実装だけ（3.1・3.3）。
+/// WinHTTP の API を綴るのは取得口の実装だけ。
 #[test]
 fn only_the_fetch_implementation_spells_winhttp() {
     assert_eq!(files_where(spells_winhttp_api), ["winhttp.rs"]);
@@ -290,7 +290,7 @@ fn dev_tools_in_production_deps(manifest: &str) -> Vec<String> {
     found
 }
 
-/// dev 専用の道具が本番の依存に無い（10.8）。
+/// dev 専用の道具が本番の依存に無い。
 #[test]
 fn dev_only_tools_stay_out_of_production_dependencies() {
     let manifest = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))

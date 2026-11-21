@@ -1,4 +1,4 @@
-//! 合成で、動く絵の子と `always` の経過 0 を描く（要件 1.4・3.1・4.1・4.5・4.6・7.1）。
+//! 合成で、動く絵の子と `always` の経過 0 を描く。
 //!
 //! 欄が「載っていない」なら経過 0 の絵、「消えている」なら何も、コマならそのコマ。動く絵の子は
 //! 下に何も敷かず、コマの絵 1 枚だけを置いた element の描画メソッドで命令にする。
@@ -148,8 +148,8 @@ fn op(name: &str, x: i64, y: i64) -> (String, i64, i64) {
 const TARGETS: &str = "surface5\n{\nelement0,overlay,a.png,0,0\n}\n\
                        surface6\n{\nelement0,overlay,b.png,0,0\n}\n";
 
-/// 要件 3.1・4.1: 一番上の手書きの `always` は、欄が空なら経過 0 の pattern（待ち 0 の pattern0）を
-/// pattern の X,Y で描く。「消えている」なら何も描かず（4.5）、コマならコマが置き換える。
+/// 一番上の手書きの `always` は、欄が空なら経過 0 の pattern（待ち 0 の pattern0）を
+/// pattern の X,Y で描く。「消えている」なら何も描かず、コマならコマが置き換える。
 #[test]
 fn top_always_draws_rest_pattern_when_cell_is_empty() {
     let text = format!(
@@ -177,7 +177,7 @@ fn top_always_draws_rest_pattern_when_cell_is_empty() {
     );
 }
 
-/// 7 回目の指摘 4: 経過 0 の pattern の描画メソッドが大文字や `-`・`_` の入った語（`Over-Lay`）でも描き、
+/// 経過 0 の pattern の描画メソッドが大文字や `-`・`_` の入った語（`Over-Lay`）でも描き、
 /// 同じ合成器で繰り返し合成しても命令列と作業場の容量は伸びない（語の比べは合成のたびに引かれる）。
 #[test]
 fn always_with_uppercase_method_recomposes_without_growing() {
@@ -211,7 +211,7 @@ fn always_with_uppercase_method_recomposes_without_growing() {
     }
 }
 
-/// 要件 3.1・4.1: 部品（element定義で置いたサーフェス）の手書きの `always` も、部品の欄が空なら経過 0
+/// 部品（element定義で置いたサーフェス）の手書きの `always` も、部品の欄が空なら経過 0
 /// を描く。部品の欄の「消えている」で消え、一番上の同じ番号の欄は効かない。
 #[test]
 fn part_always_draws_rest_pattern_when_part_cell_is_empty() {
@@ -243,7 +243,7 @@ fn part_always_draws_rest_pattern_when_part_cell_is_empty() {
     );
 }
 
-/// 要件 4.6: 待ち時間の合計が 0 の手書きの `always` は、1 周だけ評価した絵（最後のコマ）を描く。
+/// 待ち時間の合計が 0 の手書きの `always` は、1 周だけ評価した絵（最後のコマ）を描く。
 #[test]
 fn zero_total_always_draws_the_picture_after_one_lap() {
     let text = format!(
@@ -256,7 +256,7 @@ fn zero_total_always_draws_the_picture_after_one_lap() {
     );
 }
 
-/// 要件 1.4・3.1: 動く絵の子は、欄が空なら経過 0 のコマ（1 枚目の待ちが 0 なのでコマ 1）を、置いた
+/// 動く絵の子は、欄が空なら経過 0 のコマ（1 枚目の待ちが 0 なのでコマ 1）を、置いた
 /// element の位置・描画メソッドで 1 枚だけ描く（下に 1 枚目を敷かない＝透明な所から透けない）。
 /// コマの欄が在ればそのコマ、全透明のコマは命令にならない。
 #[test]
@@ -344,7 +344,7 @@ fn film_without_sheet_is_not_drawn_and_logs_error() {
     assert_eq!(errors(&logs, "動く絵の子の定義が無い"), 1, "{logs}");
 }
 
-/// 要件 7.1: `always` でない animation（組み合わせ・大文字・ほかの語）は欄が空でも何も足さない。
+/// `always` でない animation（組み合わせ・大文字・ほかの語）は欄が空でも何も足さない。
 /// 命令列は animation の行を消した文面と同じ。
 #[test]
 fn surfaces_without_always_keep_their_ops() {

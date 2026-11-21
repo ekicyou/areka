@@ -3,22 +3,21 @@
 //! 見本の本文はここに直に書く（実装側の定数を参照しない）。参照すると表を表自身と
 //! 比べるだけになり、綴りの取り違えを 1 件も捕まえられない。
 //!
-//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない
-//! （要件 6.2・設計 File Structure Plan）。
+//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない。
 
 use super::read;
 use crate::error::SurveyError;
 use crate::ledger::Ledger;
 use crate::model::{Domain, EntryId, Link, LinkKind, PageName, Status};
 
-/// 要件付録 A.1 の形をした見本の台帳。
+/// 台帳の書式どおりの見本。
 ///
-/// 付録 A.1 と同じく `system.year` を先に、`balloon.scope(ID).width` を後に書く。
+/// `system.year` を先に、`balloon.scope(ID).width` を後に書く。
 /// id の byte 昇順は `balloon…` が先なので、**本文の順と id の順は食い違う**。
-/// 並び順の検査（設計 D-12）はこの食い違いが見えることに載っている。
+/// 並び順の検査はこの食い違いが見えることに載っている。
 ///
-/// 1 つ目の項目は付録 A.2 の欄をすべて（任意の 2 欄も含めて）埋め、備考は複数行、
-/// 関連の相手には逆斜線を含む id を置いてある（付録 A.3 の逆斜線 2 つ重ね）。
+/// 1 つ目の項目は欄をすべて（任意の 2 欄も含めて）埋め、備考は複数行、
+/// 関連の相手には逆斜線 2 つ重ねで書いた id を置いてある。
 const SAMPLE: &str = r#"# doc/ukadoc-coverage/ledger/property.toml
 # 人手で記入・機械で検査する台帳。形式の正本は
 # .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
@@ -63,7 +62,7 @@ pages = ["list_propertysystem"]
 /// 備考の複数行文字列の中に**行頭**の見出しらしき行がある台帳。
 ///
 /// `toml` はこれを備考の一部として読むが、行だけを見る切り分けはここで塊を割る。
-/// 食い違いは `blocks::split` の較正が捕まえる（設計 D-12）。
+/// 食い違いは `blocks::split` の較正が捕まえる。
 const NOTE_WITH_HEAD: &str = r#"[ledger]
 domain = "property"
 pages = ["list_propertysystem"]
@@ -144,9 +143,9 @@ fn id(raw: &str) -> EntryId {
     EntryId::parse(raw).expect("見本の id は 2 形のいずれかのはず")
 }
 
-// ---- 欄を型のある値として読む（要件 2.1・付録 A.2） ----
+// ---- 欄を型のある値として読む ----
 
-/// 付録 A.2 の欄がすべて、それぞれの型の値として読まれる。
+/// 欄がすべて、それぞれの型の値として読まれる。
 ///
 /// 件数ではなく逐語で釘付けする（件数だけでは綴り違いを捕まえない）。
 #[test]
@@ -174,7 +173,7 @@ fn reads_every_column_of_the_appendix_sample() {
         vec![
             Link {
                 kind: LinkKind::Queries,
-                // 台帳には逆斜線 2 つ重ねで書かれている（付録 A.3）。読み終えた値は
+                // 台帳には逆斜線 2 つ重ねで書かれている。読み終えた値は
                 // 逆斜線 1 つでなければならない。
                 to: id("ukadoc:list_sakura_script:\\![get,property,ID]:1"),
             },
@@ -215,9 +214,9 @@ fn reads_every_column_of_the_appendix_sample() {
     );
 }
 
-/// 本文に現れた順と id の順は別に持つ（設計 D-12）。
+/// 本文に現れた順と id の順は別に持つ。
 ///
-/// 見本は付録 A.1 と同じ並びで、本文の順（`system.year` が先）と id の byte 昇順
+/// 見本は本文の順（`system.year` が先）と id の byte 昇順
 /// （`balloon…` が先）が食い違う。両方を逐語で釘付けし、食い違い自体も主張する——
 /// `file_order` が表の鍵の写しになっていたら、この 3 つ目で赤になる。
 #[test]
@@ -267,10 +266,9 @@ fn read_goes_through_the_block_split() {
     }
 }
 
-// ---- 語彙（要件 2.2・4.3・4.4・6.10） ----
+// ---- 語彙 ----
 
-/// 状態の綴りを 1 文字変えると読み取りが失敗し、**どの id のどの欄か**が本文に載る
-/// （要件 2.2・6.10）。
+/// 状態の綴りを 1 文字変えると読み取りが失敗し、**どの id のどの欄か**が本文に載る。
 #[test]
 fn a_one_character_status_typo_names_the_id_and_the_field() {
     let text = tweak(r#"status = "implemented""#, r#"status = "implementad""#);
@@ -284,7 +282,7 @@ fn a_one_character_status_typo_names_the_id_and_the_field() {
     assert_eq!(value, "implementad");
 }
 
-/// テーマの綴りを 1 文字変えると失敗し、id と欄が本文に載る（要件 4.4・6.10）。
+/// テーマの綴りを 1 文字変えると失敗し、id と欄が本文に載る。
 #[test]
 fn a_theme_typo_names_the_id_and_the_field() {
     let text = tweak(
@@ -301,7 +299,7 @@ fn a_theme_typo_names_the_id_and_the_field() {
     assert_eq!(value, "更心");
 }
 
-/// 関連の種別が 6 種に無ければ失敗し、id と欄が本文に載る（要件 4.3・6.10）。
+/// 関連の種別が 6 種に無ければ失敗し、id と欄が本文に載る。
 #[test]
 fn a_link_kind_typo_names_the_id_and_the_field() {
     let text = tweak(r#"kind = "same-feature""#, r#"kind = "same_feature""#);
@@ -341,9 +339,9 @@ fn the_declared_domain_must_match_the_file() {
     assert_mentions(&err, &["property", "shiori"]);
 }
 
-// ---- 別名の写像（要件 2.4・付録 A.2） ----
+// ---- 別名の写像 ----
 
-/// 別名でない行に写像先を書いたら失敗する（付録 A.2「それ以外は書かない」）。
+/// 別名でない行に写像先を書いたら失敗する（`alias_of` は別名の行にだけ書ける）。
 #[test]
 fn alias_of_outside_an_alias_row_is_rejected() {
     let text = tweak(
@@ -355,7 +353,7 @@ fn alias_of_outside_an_alias_row_is_rejected() {
     assert_mentions(&err, &[YEAR, "alias_of"]);
 }
 
-/// 別名の行に写像先が無ければ失敗する（付録 A.2「`status = \"alias\"` のとき必須」）。
+/// 別名の行に写像先が無ければ失敗する（`status = "alias"` のとき必須）。
 #[test]
 fn an_alias_row_without_alias_of_is_rejected() {
     let text = without_line(
@@ -366,9 +364,9 @@ fn an_alias_row_without_alias_of_is_rejected() {
     assert_mentions(&err, &[BALLOON, "alias_of"]);
 }
 
-// ---- 台帳に「無い」欄（要件 2.3・6.9） ----
+// ---- 台帳に「無い」欄 ----
 
-/// 証拠の欄を書いたら失敗する（要件 2.3。台帳に証拠の欄は無い）。
+/// 証拠の欄を書いたら失敗する（台帳に証拠の欄は無い）。
 ///
 /// 黙って読み飛ばすと、手書きの台帳が「証拠を書いたつもり」のまま検査を素通りする。
 #[test]
@@ -382,7 +380,7 @@ fn an_evidence_column_is_rejected() {
     assert_mentions(&err, &[YEAR, "evidence"]);
 }
 
-/// 未分類件数を宣言する欄を書いたら失敗する（要件 6.9。件数は報告側の分布が正）。
+/// 未分類件数を宣言する欄を書いたら失敗する（件数は報告側の分布が正）。
 #[test]
 fn an_unclassified_count_field_is_rejected() {
     let text = tweak(
@@ -418,9 +416,9 @@ fn an_unknown_link_field_is_rejected() {
     assert_mentions(&err, &[YEAR, "why"]);
 }
 
-// ---- 必須の欄（付録 A.2） ----
+// ---- 必須の欄 ----
 
-/// 付録 A.2 が必須とする 7 欄は、1 つでも欠けたら失敗し、id と欄名が本文に載る。
+/// 必須の 7 欄は、1 つでも欠けたら失敗し、id と欄名が本文に載る。
 #[test]
 fn every_required_column_is_required() {
     // 2 つ目の項目（別名の行）は全欄が 1 行なので、行ごと落とせる。
@@ -472,9 +470,9 @@ fn a_link_without_kind_or_to_is_rejected() {
     assert_mentions(&err_of(&missing_kind), &[YEAR, "kind"]);
 }
 
-// ---- 項目 id の形（要件 1.9） ----
+// ---- 項目 id の形 ----
 
-/// 表の鍵が 2 形のどちらでもなければ、どの台帳かを添えて失敗する（要件 6.10）。
+/// 表の鍵が 2 形のどちらでもなければ、どの台帳かを添えて失敗する。
 #[test]
 fn a_malformed_table_key_is_rejected() {
     let text = tweak(
@@ -561,7 +559,7 @@ fn a_malformed_reference_id_names_the_entry() {
     assert_mentions(&err_of(&in_link), &[YEAR, "to"]);
 }
 
-// ---- 型（付録 A.2 の「型」の列） ----
+// ---- 型 ----
 
 /// 欄の型が違えば失敗する。黙って別の値に読み替えない。
 #[test]
@@ -599,7 +597,7 @@ fn a_ledger_without_a_prologue_is_rejected() {
     assert_mentions(&err, &["[ledger]"]);
 }
 
-/// TOML として読めない本文は、置き場を添えて落とす（要件 6.12）。
+/// TOML として読めない本文は、置き場を添えて落とす。
 #[test]
 fn an_unreadable_body_names_the_file() {
     let text = tweak(r#"owner = "property-catalog-lists""#, "owner = ");
@@ -625,7 +623,7 @@ note = """
 """
 "#;
 
-/// 塊への切り分けの失敗も、どの台帳かを名指す（要件 6.12）。
+/// 塊への切り分けの失敗も、どの台帳かを名指す。
 ///
 /// 切り分けはドメインを知らないので、読み取りが置き場を差し替える。
 #[test]
@@ -646,7 +644,7 @@ fn a_split_failure_names_the_ledger_file() {
     }
 }
 
-/// 1 項目に同じテーマを 2 度書くと、id とテーマを挙げて落ちる（要件 4.4・6.10）。
+/// 1 項目に同じテーマを 2 度書くと、id とテーマを挙げて落ちる。
 ///
 /// 黙って受けると、テーマ別の表でその項目が 2 件に数えられる。
 #[test]

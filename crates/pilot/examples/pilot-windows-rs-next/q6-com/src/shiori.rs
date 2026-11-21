@@ -1,20 +1,17 @@
-// COM 規約に従い PascalCase メソッド名を用いる。`#[interface]` は生成 vtable/実装トレイト面にも
-// PascalCase を伝播するため、本 ABI モジュール全体で non_snake_case を許可する。
+// `#[interface]` は生成する vtable と実装トレイトにも COM の PascalCase を伝えるので、モジュール全体で許す。
 #![allow(non_snake_case)]
 
 use windows_core::{HRESULT, HSTRING, IUnknown, Result, implement, interface};
 
-/// 脳側が実装する痩身 COM 境界（design.md §InterfaceLayer, R9.1/9.2/9.3）。
+/// 脳側が実装する痩身 COM 境界。
 ///
-/// IID（dev 用・流動契約下でリリースまで変動可・**リリース時に凍結**）: 本タスクで v4 採番した
-/// `327998D4-8491-4912-BA85-6B8F52831B14`（旧 IShiori IID `E7887AB4-...` からは再採番）。
+/// IID は dev 用で、リリースまでは変わりうる。リリース時に凍結する。
 ///
 /// `Get`（同期 request・GET SHIORI/3.0 後継）＋`Notify`（片道通知・NOTIFY SHIORI/3.0 後継）の 2 操作
-/// のみ。`Load`/`Unload` は存在しない（[`IShioriFactory::CreateInstance`] の create 融合＋Drop
-/// teardown で代替・R9.2）。詳細な契約（HSTRING 所有権規約・Get の 2 分岐）はモジュール doc 参照。
+/// のみ。`Load`/`Unload` は無く、[`IShioriFactory::CreateInstance`] での生成と Drop で代える。
 #[interface("327998D4-8491-4912-BA85-6B8F52831B14")]
 pub unsafe trait IShiori: IUnknown {
-    /// 同期 request。即時/遅延を HRESULT で 2 分岐する（R9.1・GET SHIORI/3.0 後継）。
+    /// 同期 request。即時/遅延を HRESULT で 2 分岐する。
     ///
     /// 成功 2 値（`S_OK`=即時／[`crate::error::SHIORI_S_PENDING`]=遅延+token）ゆえ HRESULT 生返し必須。
     ///
@@ -34,14 +31,10 @@ pub unsafe trait IShiori: IUnknown {
         out_token: &mut u64,
     ) -> HRESULT;
 
-    /// 片道通知（応答なし・R9.1・NOTIFY SHIORI/3.0 後継）。
+    /// 片道通知（応答なし）。
     ///
     /// - `input`: `[in]` 通知 content（借用・callee 保持は clone）。
-    ///
-    /// # 戻り値
-    /// 成功 = `Ok(())` / 失敗 = error。応答は返さない（片道性）。
     pub unsafe fn Notify(&self, input: &HSTRING) -> Result<()>;
-    // Load/Unload は存在しない（create 融合＋Drop teardown・R9.2）。
 }
 
 /// 遅延の成功コード（`shiori-abi` の `error.rs` と同じ値 `0x20A1_0001`。写しは `error.rs` を持たない）。
@@ -52,10 +45,7 @@ const IMMEDIATE_RESPONSE: &str = "pong";
 /// 遅延応答時に発行する固定相関トークン。
 const PENDING_TOKEN: u64 = 0xDEAD_BEEF;
 
-/// vtable 健全性検証用の最小モック脳。
-///
-/// `Get` は `defer` フラグで即時（`S_OK`＋`out_response` move-out）と遅延
-/// （[`SHIORI_S_PENDING`]＋`out_token`）の 2 分岐を切り替える。`Notify` は受領を記録する。
+/// vtable 健全性検証用の最小モック脳。`defer` で `Get` の即時と遅延を切り替える。
 #[implement(IShiori)]
 struct MockBrain {
     defer: bool,
@@ -70,18 +60,15 @@ impl IShiori_Impl for MockBrain_Impl {
         out_token: &mut u64,
     ) -> HRESULT {
         if self.defer {
-            // 遅延: 相関トークンを out_token へ（out_response は未書き込み＝空のまま）。
             *out_token = PENDING_TOKEN;
             SHIORI_S_PENDING
         } else {
-            // 即時応答: callee が確保した HSTRING を out-param へ move-out（所有権規約）。
             *out_response = HSTRING::from(IMMEDIATE_RESPONSE);
             HRESULT(0) // S_OK
         }
     }
 
     unsafe fn Notify(&self, input: &HSTRING) -> Result<()> {
-        // `[in]` 借用: 保持する場合は clone する（所有権規約）。
         self.notified.borrow_mut().push(input.clone());
         Ok(())
     }
@@ -95,7 +82,6 @@ pub fn run() {
     }
     .into();
 
-    // 即時 Get: S_OK と move-out された応答を観測する。
     let input = HSTRING::from("GET SHIORI/3.0...");
     let mut out_response = HSTRING::new();
     let mut out_token: u64 = 0;
@@ -107,7 +93,6 @@ pub fn run() {
         "move-out された即時応答を観測できること"
     );
 
-    // Notify（片道・Result<()>）が dispatch すること。
     let notify_input = HSTRING::from("NOTIFY SHIORI/3.0...");
     unsafe { brain.Notify(&notify_input) }.expect("Notify は Ok であること");
     println!(

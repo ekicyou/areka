@@ -1,7 +1,6 @@
-// ===================== 本タスク（4.1）の証明テスト =====================
+// ===================== `ScriptedShioriBackend` の確認テスト =====================
 //
-// 「台本通りの応答・終了結果・死活遷移を任意に再現できることを確認できる」
-// （tasks.md 4.1 の観測可能な完了条件）を、6 シナリオで直接固定する。
+// 台本通りの応答・終了結果・死活遷移を任意に再現できることを、6 シナリオで直接固定する。
 
 use super::*;
 
@@ -89,7 +88,7 @@ fn scripted_unload_returns_exact_exit_kind() {
 /// シナリオ5: 死活状態の遷移。初期 `status()` は台本どおり `Running` を返し、その後
 /// テストのスレッドから `handle.set_status` で `Exited(Abnormal(1))` へ差し替えると、
 /// 以降の `status()` 呼出はその新しい値を返す（helper がシナリオ途中で死ぬ様子を
-/// 「backend の外側・テスト自身」から駆動できることの直接証跡・要件 7.1）。
+/// 「backend の外側・テスト自身」から駆動できることの直接証跡）。
 #[test]
 fn status_transitions_from_running_to_exited_when_mutated_externally_mid_scenario() {
     let (mut backend, handle) = ScriptedShioriBackend::builder()

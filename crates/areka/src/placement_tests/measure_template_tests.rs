@@ -1,12 +1,11 @@
-//! 採寸と表示が同じ結果になることの檻の、本体の片割れ（spec: areka-P0-shell-implicit-surface
-//! task 5.3・要件 3.6／7.6、spec: placement-crate-split 要件 5.2・5.3）。
+//! 採寸と表示が同じ結果になることの檻の、本体の片割れ。
 //!
 //! 配置の crate の片割れ（`crates/areka-placement/src/measure_template_tests.rs`）が、採寸と表示の
 //! 外形の一致と、配置のファイル（`measure.rs`・`measure_first_frame.rs`・
 //! `examples/window-placement.rs`）の走査を持つ。ここは本体のファイル（`crates/areka-runtime/src/assets.rs`・
 //! 本体の examples）がシェルの読み込みを自前でやり直していないことを見張る。採寸側と起動側の
 //! どちらか一方だけが自前の読み込みへ戻ると、外形の一致はその場では緑のまま、実機でだけ
-//! 「採寸した窓の大きさと表示された絵の外形が食い違う」形で現れる（要件 3.6）。
+//! 「採寸した窓の大きさと表示された絵の外形が食い違う」形で現れる。
 //!
 //! 走査器は 2 つの片割れが共に使う `areka_placement::test_support::measure_template` に 1 つだけ
 //! あり、ここでは本体の実物で較正する。
@@ -47,9 +46,9 @@ fn the_source_scan_drops_a_spelling_that_only_lives_in_a_comment() {
     );
 }
 
-/// 要件 3.6: 起動側（`areka_runtime::assets`）がシェルの読み込みを自前でやり直していない。
+/// 起動側（`areka_runtime::assets`）がシェルの読み込みを自前でやり直していない。
 ///
-/// 採寸側と起動側は「同じ絵を見る」ことが要件であり、片側だけが自前の読み込みへ戻る形が
+/// 採寸側と起動側は「同じ絵を見る」ことが前提であり、片側だけが自前の読み込みへ戻る形が
 /// いちばん危うい（実機でしか現れない）。採寸側（配置の片割れ）と同じ 1 本の綴りで見張る。
 #[test]
 fn the_boot_side_does_not_parse_the_shell_itself() {
@@ -62,7 +61,7 @@ fn the_boot_side_does_not_parse_the_shell_itself() {
     );
 }
 
-/// 要件 3.2: `load_shell_target` を呼ぶ examples 3 本も自前でやり直していない（本体の 2 本。
+/// `load_shell_target` を呼ぶ examples 3 本も自前でやり直していない（本体の 2 本。
 /// 配置の crate の 1 本は配置の片割れが見る）。
 ///
 /// examples は製品と同じ入口で絵を読むことが前提の手元確認の道具であり、ここで自前の解析へ

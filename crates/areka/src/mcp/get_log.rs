@@ -1,4 +1,4 @@
-//! `get_log` の処理（spec: areka-P0-mcp-tool-entrances・areka-P0-mcp-log-history）。
+//! `get_log` の処理。
 
 use areka_mcp::ToolOutcome;
 use areka_mcp::tools::get_log::Args;
@@ -15,7 +15,7 @@ pub(crate) const UNKNOWN_LOG_TYPE: &str =
 pub(crate) const NO_ENTRIES: &str = "(no log entries)";
 
 /// 入口。World は `ghost_name` があるときに起動中のゴーストを読むだけで、ゴーストに何もさせない。
-/// 置き場の写しで答え、その場で送る（要件 3.4・3.5）。
+/// 置き場の写しで答え、その場で送る。
 pub(super) fn handle(world: &mut World, args: Args, reply: ReplyTo) {
     let active = args
         .ghost_name
@@ -26,7 +26,7 @@ pub(super) fn handle(world: &mut World, args: Args, reply: ReplyTo) {
 
 /// 純粋な答え。`rows_of` は種別の記録（古い順）を返す口で、種別とゴーストが決まった後に 1 度だけ呼ぶ
 /// （`NG:` では呼ばない）。`active` は起動中のゴースト（`ghost_name` が無いときは見ない）。
-/// 絞り込みは種別 → `ghost_name` → `since_id` → `max_count` の順（要件 5.9）。
+/// 絞り込みは種別 → `ghost_name` → `since_id` → `max_count` の順。
 fn answer(
     rows_of: impl FnOnce(Kind) -> Vec<Record>,
     active: Option<&ActiveGhost>,

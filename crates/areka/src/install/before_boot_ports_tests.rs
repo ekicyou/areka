@@ -1,5 +1,4 @@
-//! 起動の前の手続きの口の決定論テスト（design「Testing Strategy / Unit」・要件 1.4・2.4・2.5・2.7・
-//! 3.1・3.4・9.3・9.4）。
+//! 起動の前の手続きの口の決定論テスト。
 //!
 //! 確かめること: イベントはどれも「送らなかった」でどこへも送られない・素性は「在る・中身は空」・
 //! `accept` 付きの書庫は断られて `install_refused_no_ghost` が出る・バルーンの控えが目録の綴りに
@@ -61,7 +60,7 @@ fn order(archives: Vec<PathBuf>) -> InstallOrder {
     }
 }
 
-/// どのイベントにも「送らなかった」を返し、「閉じた」は返さない（要件 3.1・10.2）。
+/// どのイベントにも「送らなかった」を返し、「閉じた」は返さない。
 #[test]
 fn every_event_is_unsent_never_closed() {
     let root = TempPath::under_target("before-boot-ports");
@@ -78,7 +77,7 @@ fn every_event_is_unsent_never_closed() {
     }
 }
 
-/// 素性は必ず在り、根の並びのほかは空（要件 2.5・2.6）。
+/// 素性は必ず在り、根の並びのほかは空。
 #[test]
 fn ghost_facts_are_present_and_empty() {
     let root = TempPath::under_target("before-boot-ports");
@@ -95,7 +94,7 @@ fn ghost_facts_are_present_and_empty() {
 }
 
 /// 空の根に入れたゴーストは置き場に在り、イベントはどこへも送られず（info `install_event` 0 件・
-/// debug `install_event_unsent` だけ）、控えが目録の綴りで残る（要件 1.4・3.1・3.4・9.4）。
+/// debug `install_event_unsent` だけ）、控えが目録の綴りで残る。
 #[test]
 fn a_ghost_lands_in_the_empty_root_and_no_event_is_sent() {
     let root = TempPath::under_target("before-boot-ports");
@@ -142,7 +141,7 @@ fn a_ghost_lands_in_the_empty_root_and_no_event_is_sent() {
 }
 
 /// `accept` 付きのゴーストの書庫は、受け取るゴーストが居ないので断られ、info
-/// `install_refused_no_ghost` が書庫のパスつきで 1 件出る。根には何も入らない（要件 2.5）。
+/// `install_refused_no_ghost` が書庫のパスつきで 1 件出る。根には何も入らない。
 #[test]
 fn an_archive_with_accept_is_refused_and_logged() {
     let root = TempPath::under_target("before-boot-ports");
@@ -187,7 +186,7 @@ fn plant_balloon(root: &Path, folder: &str) {
 }
 
 /// バルーンの控えは目録の綴りになり、記憶へは書かず info `install_balloon_memory_skipped` が
-/// 1 件出る（要件 2.7・3.4）。
+/// 1 件出る。
 #[test]
 fn a_balloon_is_carried_in_the_catalog_spelling_and_memory_is_skipped() {
     let root = TempPath::under_target("before-boot-ports");
@@ -220,7 +219,7 @@ fn a_balloon_is_carried_in_the_catalog_spelling_and_memory_is_skipped() {
     );
 }
 
-/// 控えは入れた順に取り出せる。ゴーストの記録ではバルーンの記録は出ない（要件 3.4）。
+/// 控えは入れた順に取り出せる。ゴーストの記録ではバルーンの記録は出ない。
 #[test]
 fn carried_installs_come_out_in_order() {
     let root = TempPath::under_target("before-boot-ports");
@@ -253,7 +252,7 @@ fn carried_installs_come_out_in_order() {
     );
 }
 
-/// 抑止なら利用条件の画面を出さず「抑止」を返し、手続きは拒否にする（要件 2.4）。
+/// 抑止なら利用条件の画面を出さず「抑止」を返し、手続きは拒否にする。
 #[test]
 fn suppressed_terms_are_declined() {
     let root = TempPath::under_target("before-boot-ports");

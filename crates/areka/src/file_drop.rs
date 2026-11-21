@@ -1,4 +1,4 @@
-//! 窓への投げ込み（areka-P0-file-drop）。
+//! ゴースト窓への投げ込み（ファイルのドロップ）。
 //!
 //! ゴースト窓に落とされた物を「インストール対象でないファイル」「フォルダ」「インストール対象」の
 //! 3 つに分ける。振り分け [`sort_drops`] は純粋で、fs にも記録にも触れない——フォルダかどうかと
@@ -17,7 +17,7 @@ use crate::install::judge::SEPARATOR;
 use crate::install::{self, InstallOrder, InstallOrigin};
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
 
-/// `GhostWindowMarker` を持つ全 entity へ受け手 [`on_ghost_files_dropped`] を差す（要件 1.1〜1.3）。
+/// `GhostWindowMarker` を持つ全 entity へ受け手 [`on_ghost_files_dropped`] を差す。
 ///
 /// `ghost_session::prepare_ghost_windows` の窓を作る閉包の中で、spawn の直後に同期に呼ぶ
 /// （`attach_balloon_pointer_handlers` と同じ契約）。起こし直しも同じ閉包を通るので、回数によらず
@@ -34,10 +34,10 @@ pub(crate) fn attach_file_drop_receivers(world: &mut World) {
     }
 }
 
-/// 窓に差す受け手（`OnFilesDropped` の署名）。1 回の投げ込みをこの 1 回の呼び出しで終える
-/// （要件 6.5）: スコープ → 振り分け → 問い合わせの失敗の記録 → 受け取りの記録 →
-/// `OnFileDrop2` を 1 回 → `OnDirectoryDrop` を落とされた順に 1 つずつ → 依頼（要件 6.1・6.2）。
-/// 途中で戻るのは窓に印が無いときだけ。依頼はゴーストが定常かどうかを見ずに渡す（要件 3.8）。
+/// 窓に差す受け手（`OnFilesDropped` の署名）。1 回の投げ込みをこの 1 回の呼び出しで終える:
+/// スコープ → 振り分け → 問い合わせの失敗の記録 → 受け取りの記録 →
+/// `OnFileDrop2` を 1 回 → `OnDirectoryDrop` を落とされた順に 1 つずつ → 依頼。
+/// 途中で戻るのは窓に印が無いときだけ。依頼はゴーストが定常かどうかを見ずに渡す。
 pub(crate) fn on_ghost_files_dropped(world: &mut World, entity: Entity, paths: Vec<PathBuf>) {
     let count = paths.len();
     let scope = if let Some(m) = world.get::<CharWindowMarker>(entity) {
@@ -113,11 +113,11 @@ pub(crate) fn on_ghost_files_dropped(world: &mut World, entity: Entity, paths: V
     }
 }
 
-/// 今のゴーストへ GET・応え不要で 1 件送る（汎用の通知の入口・要件 7.4）。
+/// 今のゴーストへ GET・応え不要で 1 件送る（汎用の通知の入口）。
 ///
 /// 送り口は送る時点の置き場から取る。無ければ（切替の途中・結線なしの起動）`file_drop_no_kanade`、
 /// kanade が止まっていれば `file_drop_send_failed` を warn に 1 件残して送らない（送り直さない）。
-/// 定常かどうかは見ない（kanade が定常以外を捨てて記録する・要件 6.3）。
+/// 定常かどうかは見ない（kanade が定常以外を捨てて記録する）。
 fn send_event(world: &World, id: &'static str, references: Vec<String>, scope: usize) {
     let Some(kanade) = world
         .get_non_send::<GhostSlot>()
@@ -132,7 +132,6 @@ fn send_event(world: &World, id: &'static str, references: Vec<String>, scope: u
         );
         return;
     };
-    // 要約は Reference0 の要素数と先頭のパス（MIME の並びは載せない）。
     let reference0 = references.first().map_or("", String::as_str);
     let summary = (
         reference0.split(SEPARATOR).count(),
@@ -182,28 +181,28 @@ pub(crate) struct DropSort {
 /// 問い合わせの失敗。どちらも当該の物は「インストール対象でないファイル」側へ倒れる。
 #[derive(Debug)]
 pub(crate) enum ProbeNote {
-    /// フォルダかどうかを問えなかった（フォルダでないものとして拡張子で決めた・要件 2.5）。
+    /// フォルダかどうかを問えなかった（フォルダでないものとして拡張子で決めた）。
     IsDirFailed {
         path: PathBuf,
         error: std::io::Error,
     },
-    /// 書庫の目次が読めなかった（`files` へ倒した・要件 2.4）。
+    /// 書庫の目次が読めなかった（`files` へ倒した）。
     ArchiveUnreadable {
         path: PathBuf,
         error: areka_nar::NarError,
     },
 }
 
-/// 純粋な振り分け（要件 2.1〜2.6）。1 つの物につき上から順に最初に当たった種類に決める。
+/// 純粋な振り分け。1 つの物につき上から順に最初に当たった種類に決める。
 ///
-/// 1. `is_dir` が `Ok(true)` → `dirs`（`install.txt` を持つフォルダもフォルダ・要件 2.3）。
+/// 1. `is_dir` が `Ok(true)` → `dirs`（`install.txt` を持つフォルダもフォルダ）。
 /// 2. `is_dir` が `Err` → [`ProbeNote::IsDirFailed`] を積み、フォルダでないものとして 3 へ。
 /// 3. 拡張子が `.nar`／`.zip`（ASCII 大小無視）でなければ → `files`（目次は問わない）。
 /// 4. `has_install_txt` が `Ok(true)` → `installs`／`Ok(false)` → `files`／
 ///    `Err` → [`ProbeNote::ArchiveUnreadable`] を積んで `files`。
 ///
-/// 2 つの閉包と拡張子のほかは見ない（中身・大きさ・他のエントリを見ない・要件 2.2）。3 つの `Vec` は
-/// 入力の順に押す（要件 2.6）。記録は出さず、問い合わせの失敗は `notes` に載せる。
+/// 2 つの閉包と拡張子のほかは見ない（中身・大きさ・他のエントリを見ない）。3 つの `Vec` は
+/// 入力の順に押す。記録は出さず、問い合わせの失敗は `notes` に載せる。
 ///
 /// 本番の注入は `fs::metadata(p).map(|m| m.is_dir())` と [`areka_nar::peek_install_txt`]。
 pub(crate) fn sort_drops(
@@ -250,17 +249,17 @@ fn is_archive_ext(path: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("nar") || e.eq_ignore_ascii_case("zip"))
 }
 
-// 送るイベント名はこの 2 定数だけ（要件 7.1・8.8）。
+// 送るイベント名はこの 2 定数だけ。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnFileDrop2:1
 pub(crate) const ON_FILE_DROP2: &str = "OnFileDrop2";
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnDirectoryDrop:1
 pub(crate) const ON_DIRECTORY_DROP: &str = "OnDirectoryDrop";
 
-/// `OnFileDrop2` の Reference 3 つ（要件 4.2〜4.4・4.6）:
+/// `OnFileDrop2` の Reference 3 つ:
 /// [パスを byte 値 1 で連結, スコープ番号（十進）, 同じ並び・同じ数の MIME を byte 値 1 で連結]。
 ///
 /// 決められない MIME は空文字のまま連結するので区切りは残り、Reference0 と Reference2 の要素数は
-/// 常に等しい。パスは `to_string_lossy` で載せる（正規化も検査もしない・設計で決めたこと 10）。
+/// 常に等しい。パスは `to_string_lossy` で載せる（正規化も検査もしない）。
 pub(crate) fn file_drop2_references(files: &[PathBuf], scope: usize) -> Vec<String> {
     let paths: Vec<_> = files.iter().map(|p| p.to_string_lossy()).collect();
     let mimes: Vec<_> = files.iter().map(|p| mime_for(p)).collect();
@@ -271,12 +270,12 @@ pub(crate) fn file_drop2_references(files: &[PathBuf], scope: usize) -> Vec<Stri
     ]
 }
 
-/// `OnDirectoryDrop` の Reference 2 つ（要件 5.2）: [パス, スコープ番号（十進）]。
+/// `OnDirectoryDrop` の Reference 2 つ: [パス, スコープ番号（十進）]。
 pub(crate) fn directory_drop_references(dir: &Path, scope: usize) -> Vec<String> {
     vec![dir.to_string_lossy().into_owned(), scope.to_string()]
 }
 
-/// 拡張子（ASCII 大小無視）から MIME を引く（要件 4.5・10.5）。表に無い・拡張子なしは `""`。
+/// 拡張子（ASCII 大小無視）から MIME を引く。表に無い・拡張子なしは `""`。
 pub(crate) fn mime_for(path: &Path) -> &'static str {
     let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
         return "";
@@ -288,7 +287,7 @@ pub(crate) fn mime_for(path: &Path) -> &'static str {
 }
 
 /// 拡張子（小文字）→ MIME の定数表（拡張子 38・MIME 33 種・値は IANA の登録名）。
-/// 広げるときは行を足し、`file_drop_mime_tests.rs` の直書きの数も直す（要件 9.8）。
+/// 広げるときは行を足し、`file_drop_mime_tests.rs` の直書きの数も直す。
 const MIME_TABLE: &[(&str, &str)] = &[
     // 画像 8
     ("png", "image/png"),

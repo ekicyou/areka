@@ -2,8 +2,8 @@
 //!
 //! 本ファイルが固定するのは 4 つである。
 //!
-//! - **行の逐語書式**——6 種のレコードが design.md「Data Models > Logical Data Model
-//!   （レコード語彙）」の表どおりの `kind` 語・`stage` 語・フィールド名・並びで 1 行に載ること。
+//! - **行の逐語書式**——6 種のレコードが決められた `kind` 語・`stage` 語・フィールド名・並びで
+//!   1 行に載ること。
 //!   判定側（別 crate の `transition_judge`・サインオフ手順書の grep 語）は**この行の字面**を
 //!   直接読むため、字面が黙って変わると手順と判定が同時に嘘になる。
 //! - **欠損の扱い**——値が無いフィールドは番兵 `-` になり、**フィールドごと消えない**。
@@ -188,8 +188,8 @@ fn windpi_line_is_verbatim() {
 }
 
 /// 新起点（`kind=windpi`）は既存の起点（`kind=monitor`）と**同名・同義・同値形**の欄で
-/// 読めること。判定器は両者を同じ読み方で起点に採る（task 8.4 の前提）ので、欄名が
-/// 1 文字でもずれたら起点集合の拡張が静かに空振りする。
+/// 読めること。判定器は両者を同じ読み方で起点に採るので、欄名が 1 文字でもずれたら
+/// 起点集合の拡張が静かに空振りする。
 #[test]
 fn windpi_reads_like_the_monitor_origin() {
     let windpi = windpi_line(&WindowDpiRecord {
@@ -395,7 +395,6 @@ fn missing_values_render_as_sentinel_and_keep_their_fields() {
             "欠損は番兵で埋める（フィールドは落とさない）: {name} / {line}"
         );
     }
-    // 必須フィールドの集合は欠損時も変わらない。
     assert!(matches(&line, KIND_WRITE, WRITE_FIELDS));
 }
 
@@ -499,7 +498,6 @@ fn no_line_repeats_a_field_name() {
             unique.len(),
             "1 行に同じフィールド名が 2 度出てはならない（後勝ちで値が消える）: {line}"
         );
-        // レコード種別は接頭語のものが残る。
         assert!(
             parse_fields(&line).contains_key(FIELD_KIND),
             "接頭語の kind= が生き残ること: {line}"
@@ -705,7 +703,7 @@ fn is_enabled_follows_the_directive() {
 }
 
 // ---------------------------------------------------------------------------
-// 刻印の権威（D1）——資源が正・スレッド局所ミラーは World 外専用
+// 刻印の権威——資源が正・スレッド局所ミラーは World 外専用
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -755,7 +753,7 @@ fn resource_and_mirror_stamps_agree_on_the_frame_within_one_tick() {
 
 #[test]
 fn the_mirror_does_not_reach_other_threads_but_the_resource_does() {
-    // D1 の核心——ミラーはスレッド局所ゆえ、ワーカースレッドからは読めない。
+    // ミラーはスレッド局所ゆえ、ワーカースレッドからは読めない。
     // World を持つ観測点が `stamp()` を呼ぶと frame=0 の行が出る（＝退行）ので、
     // それらは必ず `stamp_from_world` を使う、という取り決めの根拠がこれである。
     let start = Instant::now();
@@ -783,7 +781,7 @@ fn the_mirror_does_not_reach_other_threads_but_the_resource_does() {
 }
 
 // ---------------------------------------------------------------------------
-// 多スレッド実行器のままの検証（design C1 Validation）
+// 多スレッド実行器のままの検証
 // ---------------------------------------------------------------------------
 
 /// 観測系システムが 1 回の実行で記録する値。
@@ -822,7 +820,7 @@ fn observe_stamp<const N: usize>(
 
 /// 既定の多スレッド実行器のまま `Update` を回し、World 資源から組んだ刻印のフレーム番号が
 /// `FrameCount` と一致することを、**ログ捕捉に依らず**（システムが載るスレッドによっては
-/// 捕捉が届かない・要件 7.6）レコード純関数へ渡す値そのもので確かめる。
+/// 捕捉が届かない）レコード純関数へ渡す値そのもので確かめる。
 #[test]
 fn world_stamps_match_frame_count_under_the_default_multi_threaded_executor() {
     let mut ecs = EcsWorld::new();
@@ -834,11 +832,8 @@ fn world_stamps_match_frame_count_under_the_default_multi_threaded_executor() {
     ecs.add_systems(Update, observe_stamp::<2>);
     ecs.add_systems(Update, observe_stamp::<3>);
 
-    // 検証が空振りしていないこと——`Update` は既定の実行器（多スレッド）のままである。
-    // bevy 0.19 で `Schedule::get_executor_kind` が撤去され（実行器は `Box<dyn SystemExecutor>`
-    // として私有）、実行形態を実行時に読む手段が無くなった。ゆえに**構築側の字面**で見張る——
-    // `Update` だけは実行器を差し替えずに挿入されている、という形をそのまま固定する。
-    // 誰かが `Update` を `set_executor` で単スレッドへ落とせば、この逐語が消えて赤になる。
+    // bevy 0.19 には実行器の種類を実行時に読む手段が無い（`Schedule::get_executor_kind` が無い）ので、
+    // 構築側の字面で見張る。`Update` を `set_executor` で単スレッドへ落とせば、この逐語が消えて赤になる。
     assert!(
         WORLD_CONSTRUCTION_SRC.contains("schedules.insert(Schedule::new(Update));"),
         "本番の World 構築が `Update` の実行器を差し替えている。既定の多スレッド実行器を前提とする本テストは空振りする"

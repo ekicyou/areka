@@ -1,20 +1,17 @@
-//! シェルの読み込みの権威の核（[`load_shell_target`]・[`build_shell_target`]・[`ShellTarget`]）の檻。
+//! シェルの読み込みの核（[`load_shell_target`]・[`build_shell_target`]・[`ShellTarget`]）の檻。
 //!
-//! 見ているのは 3 つの判断である——⑴ 焼く絵の一覧へ「使う画像」を足す綴りが、面の表の層 0 の
+//! 見ているのは 3 つ——⑴ 焼く絵の一覧へ「使う画像」を足す綴りが、面の表の層 0 の
 //! パスと完全一致すること（索引表は文字列の完全一致で引くので、ずれれば絵は黙って出ない）
-//! ⑵ `emo2` が今日どおり「使う画像 0 件・使わない画像 2 件」で読めること ⑶ 3 つの失敗
+//! ⑵ `emo2` が「使う画像 0 件・使わない画像 2 件」で読めること ⑶ 3 つの失敗
 //! （一覧・読取・面 0 個）がそれぞれの枝で返ること。
 //!
-//! 併せて ⑷ 権威が出す記録（要件 6）——6 種の記録が読み込み 1 回につきそれぞれ 1 度だけ出て、
+//! 併せて ⑷ 記録——6 種の記録が読み込み 1 回につきそれぞれ 1 度だけ出て、
 //! `build_world` は新しい記録を 0 本出すこと、3 つの失敗がどれも `error!` を伴うこと——を
 //! 本ファイル後半で判定する。`emo2` の絵の不変（A／B の全画素の一致）は
 //! `shell_target_emo2_tests.rs` が持つ。
 //!
-//! # 受け口の置き場所
-//!
-//! 検体の受け口・COM 初期化・記録の手伝い（describe・warn_lines）は、`shell_target` の檻が共有する
-//! `shell_target_test_support.rs`（[`super::test_support`]）に在る。一時フォルダは共有窓口
-//! [`temp_path_kit::TempPath`] をその場で呼ぶ。
+//! 検体の受け口・COM 初期化・記録の手伝い（describe・warn_lines）は `shell_target_test_support.rs`
+//! （[`super::test_support`]）に在る。一時フォルダは [`temp_path_kit::TempPath`] をその場で呼ぶ。
 
 use super::*;
 
@@ -32,7 +29,7 @@ use log_capture_kit::capture;
 
 /// 核の結線（表イ）: 層 0 の空いた面へ足した画像が、**同じ綴りで**索引表にも載る。
 ///
-/// これが本タスクの要所である——焼く絵の一覧へ足す合成 `Surface` の `element0` のパスと、
+/// ここが要所である——焼く絵の一覧へ足す合成 `Surface` の `element0` のパスと、
 /// 面の表の層 0 の [`ElementPath`] がずれると、`AtlasTable::resolve`（文字列の完全一致）が
 /// 引けず、絵は記録も無しに描かれない。fs には触れず、メモリ上の復号器で核だけを通す。
 #[test]
@@ -76,7 +73,7 @@ fn used_image_is_baked_under_the_same_spelling_as_layer_zero() {
         "使った画像として数えられていない"
     );
 
-    // 同じ `ShellTarget` から何度組んでも同じ面の表になる（design Postconditions）。
+    // 同じ `ShellTarget` から何度組んでも同じ面の表になる。
     let again = target.build_world();
     assert_eq!(
         world.surface_ids().collect::<Vec<_>>(),
@@ -90,7 +87,7 @@ fn used_image_is_baked_under_the_same_spelling_as_layer_zero() {
     );
 }
 
-/// 要件 1.3: 一覧はフォルダ**直下**の**ファイルだけ**。フォルダは名前が慣習に合っていても
+/// 一覧はフォルダ**直下**の**ファイルだけ**。フォルダは名前が慣習に合っていても
 /// 面の画像と認めず、サブフォルダの中身も数えない。
 ///
 /// 名前の判定（[`select_surface_images`]）は渡された名前の列しか見ないので、フォルダを除くのは
@@ -129,7 +126,7 @@ fn directories_are_not_taken_as_surface_images() {
     );
 }
 
-// ── 記録（要件 1.5・1.6・3.5・6.1・6.2・6.4・6.5）──────────────────────────────
+// ── 記録──────────────────────────────
 
 /// 宛先が権威のもので、本文に `needle` を含む記録を 1 件だけ取り出す。
 fn only_from_shell_target<'a>(
@@ -150,7 +147,7 @@ fn only_from_shell_target<'a>(
 }
 
 /// 透過の扱いの記録（宛先 `self_alpha`）が読み込み 1 回につき 1 行だけで、シェルのキーを読んだ
-/// ことを確かめ、採った扱い（`treatment`）を返す（spec: areka-P0-self-alpha-declaration 要件 7.1）。
+/// ことを確かめ、採った扱い（`treatment`）を返す。
 fn only_shell_self_alpha_info(events: &[CapturedEvent]) -> String {
     let hits: Vec<&CapturedEvent> = events
         .iter()
@@ -170,7 +167,7 @@ fn only_shell_self_alpha_info(events: &[CapturedEvent]) -> String {
         .to_string()
 }
 
-/// 6 種の記録が、**読み込み 1 回につきそれぞれ 1 度だけ**出る（要件 6.1・6.2・6.4）。
+/// 6 種の記録が、**読み込み 1 回につきそれぞれ 1 度だけ**出る。
 ///
 /// 1 つのシェルに 6 つの事象を同居させてある——面 0 は同じ番号の画像が 2 枚（重複）で
 /// `element0` を持つ（使わない）、面 1 は画像を土台に使い、相手の居ないコマ（面 777）を持ち、
@@ -182,7 +179,7 @@ fn every_record_is_emitted_once_per_load() {
 
     let (target, events) = capture(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
 
-    // 6.1: 一覧の結果は 1 行だけ。
+    // 一覧の結果は 1 行だけ。
     let summary = only_from_shell_target(&events, tracing::Level::INFO, "一覧");
     assert_eq!(summary.field("recognized"), Some("2"), "認めた画像は 2 枚");
     assert_eq!(
@@ -205,15 +202,15 @@ fn every_record_is_emitted_once_per_load() {
         1,
         "読み込み 1 回につき `info!` は 1 行だけ"
     );
-    // 透過の宣言の `info!` は宛先 `self_alpha` で 1 行（spec: areka-P0-self-alpha-declaration）。
+    // 透過の宣言の `info!` は宛先 `self_alpha` で 1 行。
     assert_eq!(only_shell_self_alpha_info(&events), "1");
 
-    // 6.2: 使わなかった画像は面ごとに 1 行。
+    // 使わなかった画像は面ごとに 1 行。
     let shadowed = only_from_shell_target(&events, tracing::Level::DEBUG, "element0");
     assert_eq!(shadowed.field("surface_id"), Some("0"));
     assert_eq!(shadowed.field_str("file"), Some("surface0.png"));
 
-    // 1.6: 桁溢れは名前ごとに 1 行。
+    // 桁溢れは名前ごとに 1 行。
     let overflow = only_from_shell_target(&events, tracing::Level::DEBUG, "大きすぎる");
     assert_eq!(overflow.field_str("file"), Some("surface99999999999.png"));
 
@@ -223,7 +220,7 @@ fn every_record_is_emitted_once_per_load() {
         "`debug!` は使わなかった画像 1 行＋桁溢れ 1 行だけ"
     );
 
-    // 1.5: 同じ番号の重複は番号ごとに 1 行。
+    // 同じ番号の重複は番号ごとに 1 行。
     let duplicate = only_from_shell_target(&events, tracing::Level::WARN, "同じ番号");
     assert_eq!(duplicate.field("surface_id"), Some("0"));
     assert_eq!(duplicate.field_str("adopted"), Some("surface0.png"));
@@ -233,12 +230,12 @@ fn every_record_is_emitted_once_per_load() {
         "捨てた名前が読み取れる"
     );
 
-    // 3.5: 相手の無いコマは組ごとに 1 行。
+    // 相手の無いコマは組ごとに 1 行。
     let dangling = only_from_shell_target(&events, tracing::Level::WARN, "コマ");
     assert_eq!(dangling.field("surface_id"), Some("1"));
     assert_eq!(dangling.field("target"), Some("777"));
 
-    // 4.9 ほか: 焼く段で落ちた絵は絵ごとに 1 行（実機確認が数える語を含む）。
+    // 焼く段で落ちた絵は絵ごとに 1 行（実機確認が数える語を含む）。
     let bake = only_from_shell_target(
         &events,
         tracing::Level::ERROR,
@@ -258,7 +255,7 @@ fn every_record_is_emitted_once_per_load() {
         "`warn!` は重複・相手の無いコマの 2 行だけ（脱落は `error!`）"
     );
 
-    // `build_world` は新しい記録を 0 本出す（design「Monitoring」）。
+    // `build_world` は新しい記録を 0 本出す。
     let (world, again) = capture(|| target.build_world());
     assert_eq!(
         from_shell_target(&again, tracing::Level::WARN).len()
@@ -279,7 +276,7 @@ fn every_record_is_emitted_once_per_load() {
     assert!(world.surface(1).is_some(), "対照の面の表は実際に組めている");
 }
 
-/// 要件 6.4・1.7: 一覧が取れない失敗は `error!` を伴う（記録の無い失敗経路を持たない）。
+/// 一覧が取れない失敗は `error!` を伴う（記録の無い失敗経路を持たない）。
 #[test]
 fn list_failure_is_recorded_before_the_error() {
     let root = TempPath::new("shell-target-records-no-dir");
@@ -297,12 +294,11 @@ fn list_failure_is_recorded_before_the_error() {
     assert!(hit.field("error").is_some(), "OS の理由が載っている");
 }
 
-/// 要件 6.4: `surfaces.txt` が読めない失敗は `error!` を伴う。
+/// `surfaces.txt` が読めない失敗は `error!` を伴う。
 #[test]
 fn read_failure_is_recorded_before_the_error() {
     let dir = TempPath::new("shell-target-records-no-surfaces-txt");
-    // 無いのではなく読めない（フォルダ）——無いときは画像だけで組む（spec:
-    // areka-P0-self-alpha-declaration 要件 6.6）。
+    // 無いのではなく読めない（フォルダ）——無いときは画像だけで組む。
     std::fs::create_dir(dir.child("surfaces.txt")).expect("フォルダ作成");
     let dec = MemoryDecoder::new();
 
@@ -313,7 +309,7 @@ fn read_failure_is_recorded_before_the_error() {
     assert!(hit.field("error").is_some(), "OS の理由が載っている");
 }
 
-/// 要件 6.4: 面が 0 個の失敗は `error!` を伴う。
+/// 面が 0 個の失敗は `error!` を伴う。
 #[test]
 fn empty_failure_is_recorded_before_the_error() {
     let dir = TempPath::new("shell-target-records-empty-surfaces-txt");
@@ -331,7 +327,7 @@ fn empty_failure_is_recorded_before_the_error() {
     assert_eq!(hit.field_str("surfaces_txt"), Some("empty"));
 }
 
-/// 観測可能な完了（タスク 4.2）: `emo2` のシェルで `recognized=2 used=0 shadowed=2` の
+/// 観測可能な完了: `emo2` のシェルで `recognized=2 used=0 shadowed=2` の
 /// `info!` が 1 行、使わなかった画像の `debug!` が 2 行、`warn!` が 0 行になる。
 #[test]
 fn emo2_shell_records_two_shadowed_images_and_no_warnings() {
@@ -374,7 +370,7 @@ fn emo2_shell_records_two_shadowed_images_and_no_warnings() {
     });
 }
 
-/// spec: emo-bake-log-overlap 要件 2.2・4.1: 面の表を組み直しても畳み込みの記録は出ない
+/// 面の表を組み直しても畳み込みの記録は出ない
 /// （読み込みの核が 1 度だけ出す）。追記の相手の無い面を持つ読み込みの結果で 2 回組み直す。
 #[test]
 fn build_world_does_not_repeat_fold_records() {

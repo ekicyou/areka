@@ -1,8 +1,8 @@
 //! 組の実窓テスト（維持・沈降・測り・確立・鎖の適用）が共有する下ごしらえの正本。
 //!
 //! 実窓の作り方・World への載せ方・1 巡分の schedule・記録の数え方・判定語を 1 か所に置く。
-//! 各テストのファイルに写しを置くと、作法を直したときに 1 本だけ古いまま残る
-//! （research.md 32 番）。テストの時だけ `window/mod.rs` から宣言する。
+//! 各テストのファイルに写しを置くと、作法を直したときに 1 本だけ古いまま残る。
+//! テストの時だけ `window/mod.rs` から宣言する。
 //!
 //! # 窓の作り方
 //!
@@ -38,7 +38,7 @@ use crate::ecs::window::{
 // 捕捉の絞り込みと判定語
 // -------------------------------------------------------------------------
 
-/// 実機サインオフが用いる `RUST_LOG` 相当（design.md「Real-Machine Signoff」の wintf 側）。
+/// 実機サインオフが用いる `RUST_LOG` 相当（wintf 側）。
 pub(super) const SIGNOFF_DIRECTIVES: &str = "info,wintf::ecs::window::zorder_pair=debug";
 
 /// [`SIGNOFF_DIRECTIVES`] に、指令の実施記録を出す `command` モジュールを足したもの。
@@ -82,15 +82,14 @@ const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
 /// 門の内側のテストは実窓の位置関係を直に測るため、他プロセスの可視窓が自分の窓の間へ
 /// 割り込むと崩れる。既定の `cargo test` に置いたままだと間欠的な赤が出て、「全通過」
 /// という記録が全通過を意味しなくなる。よって既定の走行からは外し（`#[ignore]`）、
-/// 狙って走らせるときだけ走る形にした。根治（判定の作り直し）の引受先は
-/// `.kiro/specs/zorder-chain-residue/brief.md` の A-1 で、そちらが「実窓の重なり順を
-/// 割り込みに強い形で測る」を持つ。
+/// 狙って走らせるときだけ走る形にした。
 ///
 /// # 門が閉じたまま呼ばれたら緑にしない
 ///
 /// `--ignored` で無差別に呼ばれたときに素通りで緑を返すと、「実窓で測った」という
 /// 記録に化ける。既存の手本（`crates/areka-runtime/src/placement_tests/transition_signoff_tests.rs`
 /// の実機ログ判定）と同じく、条件が揃っていない呼び出しは失敗として落とす。
+// TODO: 実窓の重なり順を他プロセスの窓の割り込みに強い形で測るよう判定を作り直し、門を外して既定の走行へ戻す。
 pub(super) fn require_explicit_real_window_run() {
     assert!(
         std::env::var_os(REAL_WINDOW_ZORDER_ENV).is_some(),
@@ -214,7 +213,6 @@ impl Trio {
         let character = create_test_child(parent, w!("character"));
         let intruder = create_test_child(parent, w!("intruder"));
         let balloon = create_test_child(parent, w!("balloon"));
-        // 「バルーン／割り込み／キャラ」の順（手前 → 背後）を明示的に作る。
         insert_after(intruder, balloon);
         insert_after(character, intruder);
         let trio = Self {
@@ -284,7 +282,7 @@ pub(super) fn declare_pair(world: &mut World, balloon: Entity, character: Entity
         .insert(KeepDirectlyAbove { peer: character });
 }
 
-/// 一回限りの再断行要求を外から挿入する（要件 2.6 のシームと同じ形＝未適用の既定値）。
+/// 一回限りの再断行要求を外から挿入する（未適用の既定値）。
 pub(super) fn request_reassert(world: &mut World, balloon: Entity) {
     world.entity_mut(balloon).insert(ReassertZOrder::default());
 }

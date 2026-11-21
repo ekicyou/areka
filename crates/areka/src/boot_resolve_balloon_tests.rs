@@ -1,4 +1,4 @@
-//! バルーンを決める鎖の descript の段の決定論テスト（areka-P0-ghost-standard-balloon 要件 7.2〜7.5）。
+//! バルーンを決める鎖の descript の段の決定論テスト。
 //!
 //! 確かめること: 段の並び（引数 → 記憶 → descript → 同梱 → 唯一 → 既定 → 無作為）と、
 //! 当たらなかった段の記録の件数と欄、descript の 2 鍵の突き合わせの各場面、実行中のバルーンの
@@ -117,9 +117,9 @@ fn all_hit(root: &BasewareRoot) -> Vec<BalloonEntry> {
     )
 }
 
-// ---------------------------------------------------------------- 段の並び（要件 3・7.2）
+// ---------------------------------------------------------------- 段の並び
 
-/// 記憶が根に在れば、descript の 2 鍵と同梱が当たっても記憶（記録 0 件）（要件 3.3）。
+/// 記憶が根に在れば、descript の 2 鍵と同梱が当たっても記憶（記録 0 件）。
 #[test]
 fn memory_wins_over_descript_and_companion() {
     let root = root();
@@ -135,7 +135,7 @@ fn memory_wins_over_descript_and_companion() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// 記憶が無く descript が当たれば、同梱が当たっても descript（どちらの鍵でも・記録 0 件）（要件 3.4）。
+/// 記憶が無く descript が当たれば、同梱が当たっても descript（どちらの鍵でも・記録 0 件）。
 #[test]
 fn descript_wins_over_companion() {
     let root = root();
@@ -156,7 +156,7 @@ fn descript_wins_over_companion() {
     }
 }
 
-/// 同梱は既定より先（候補 3 個・既定のバルーンも在る・記録 0 件）（要件 3.5）。
+/// 同梱は既定より先（候補 3 個・既定のバルーンも在る・記録 0 件）。
 #[test]
 fn companion_wins_over_default() {
     let root = root();
@@ -177,7 +177,7 @@ fn companion_wins_over_default() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// 同梱は唯一より先（候補 1 個がそのまま同梱の名前 → 段は同梱）（要件 7.2）。
+/// 同梱は唯一より先（候補 1 個がそのまま同梱の名前 → 段は同梱）。
 #[test]
 fn companion_wins_over_only() {
     let root = root();
@@ -191,7 +191,7 @@ fn companion_wins_over_only() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// 同梱は無作為より先（候補 2 個・既定のバルーンなし。添字は呼ばれない）（要件 3.5）。
+/// 同梱は無作為より先（候補 2 個・既定のバルーンなし。添字は呼ばれない）。
 #[test]
 fn companion_wins_over_random() {
     let root = root();
@@ -205,7 +205,7 @@ fn companion_wins_over_random() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// 記憶の先が根に無い: 記憶の警告 1 件で descript へ（descript の警告は 0 件）（要件 3.4・7.2）。
+/// 記憶の先が根に無い: 記憶の警告 1 件で descript へ（descript の警告は 0 件）。
 #[test]
 fn memory_missing_falls_to_descript() {
     let root = root();
@@ -225,7 +225,7 @@ fn memory_missing_falls_to_descript() {
     assert_eq!(events.len(), 1, "{events:?}");
 }
 
-/// descript の先が根に無い: 書かれた鍵の数だけ警告（鍵・値・置き場）を出して同梱へ（要件 2.12・5.2・5.5）。
+/// descript の先が根に無い: 書かれた鍵の数だけ警告（鍵・値・置き場）を出して同梱へ。
 #[test]
 fn descript_missing_falls_to_companion_one_warning_per_key() {
     let root = root();
@@ -261,7 +261,7 @@ fn descript_missing_falls_to_companion_one_warning_per_key() {
 }
 
 /// 同梱の最初の 1 個が根に無ければ、2 個目の名前のバルーンが在っても繰り下げず既定へ
-/// （同梱の警告 1 件）（要件 1.9・1.10・5.3）。
+/// （同梱の警告 1 件）。
 #[test]
 fn companion_first_missing_goes_to_default_not_second() {
     let root = root();
@@ -285,7 +285,7 @@ fn companion_first_missing_goes_to_default_not_second() {
 }
 
 /// 同梱の値が区切りを含む: 読み替えず（`_` への置き換えも区切りの取り除きもしない）当たらない
-/// として同梱の警告 1 件・値はそのまま載る（要件 1.15・5.3）。
+/// として同梱の警告 1 件・値はそのまま載る。
 #[test]
 fn companion_with_separator_is_not_rewritten() {
     let root = root();
@@ -315,7 +315,7 @@ fn companion_with_separator_is_not_rewritten() {
     }
 }
 
-/// 引数が在れば、当たらない記憶・descript・同梱を渡しても見ない（記録 0 件で `Argv`）（要件 3.2）。
+/// 引数が在れば、当たらない記憶・descript・同梱を渡しても見ない（記録 0 件で `Argv`）。
 #[test]
 fn argv_ignores_everything_else() {
     let root = root();
@@ -339,7 +339,7 @@ fn argv_ignores_everything_else() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-// ---------------------------------------------------------------- descript の突き合わせ（要件 2・7.4）
+// ---------------------------------------------------------------- descript の突き合わせ
 
 /// 突き合わせの場面に使う候補の並び（フォルダ名の昇順＝`list_balloons` の並び）。
 /// `shared` はフォルダ名、`zz_named` は `name` が同じ綴り（フォルダ名の側が並びで先）。
@@ -376,7 +376,7 @@ fn descript(
 }
 
 /// `default.balloon.path` だけ: フォルダ名に当たれば descript（記録 0 件）、当たらなければ警告 1 件で
-/// 同梱へ。`name` とは突き合わせない（`名前A` は `name` に在ってもフォルダ名に無いので当たらない）（要件 2.3・2.12）。
+/// 同梱へ。`name` とは突き合わせない（`名前A` は `name` に在ってもフォルダ名に無いので当たらない）。
 #[test]
 fn default_balloon_path_alone_hits_folder_or_warns_once() {
     let root = root();
@@ -396,7 +396,7 @@ fn default_balloon_path_alone_hits_folder_or_warns_once() {
 }
 
 /// `default.balloon.path` の値が `..`・区切り・絶対パスを含む: 読み替えず（`x` を当てない）、
-/// 値そのままの警告 1 件で同梱へ（要件 2.4・5.2）。
+/// 値そのままの警告 1 件で同梱へ。
 #[test]
 fn default_balloon_path_with_parent_separator_or_absolute_is_not_rewritten() {
     let root = root();
@@ -416,7 +416,7 @@ fn default_balloon_path_with_parent_separator_or_absolute_is_not_rewritten() {
 }
 
 /// `balloon` だけ: `name` で当たる・フォルダ名で当たる（記録 0 件）・どちらにも当たらない（警告 1 件で
-/// 同梱へ）（要件 2.6・2.11・2.12）。
+/// 同梱へ）。
 #[test]
 fn balloon_name_hits_by_name_or_folder_or_warns_once() {
     let root = root();
@@ -435,7 +435,7 @@ fn balloon_name_hits_by_name_or_folder_or_warns_once() {
 }
 
 /// `name` と別のバルーンのフォルダ名の両方に一致 → 並びで先のフォルダ名でなく `name` の側。
-/// 同じ `name` が複数 → 列挙の並びで最初（要件 2.6・2.7）。
+/// 同じ `name` が複数 → 列挙の並びで最初。
 #[test]
 fn balloon_name_prefers_name_then_first_in_listing() {
     let root = root();
@@ -446,8 +446,8 @@ fn balloon_name_prefers_name_then_first_in_listing() {
     }
 }
 
-/// 大文字と小文字だけ違う: フォルダ名の突き合わせは 1 つの規則（大文字小文字を区別しない・
-/// areka-P0-baseware-root-list 要件 2.8）で当たり、決まるフォルダ名は項目の綴り。`name` の
+/// 大文字と小文字だけ違う: フォルダ名の突き合わせは大文字小文字を区別しないので当たり、
+/// 決まるフォルダ名は項目の綴り。`name` の
 /// 突き合わせは今のまま区別する（`DUP` は `name` の `dup` に当たらず、同じフォルダ名も無いので警告 1 件）。
 #[test]
 fn descript_folder_match_ignores_case_but_name_match_does_not() {
@@ -467,7 +467,7 @@ fn descript_folder_match_ignores_case_but_name_match_does_not() {
 }
 
 /// `random`・`lastinstalled` は特別に解かない: その `name` のバルーンが在れば当たり、無ければ警告 1 件。
-/// どちらも無作為の添字は呼ばれない（`no_pick`）（要件 2.8）。
+/// どちらも無作為の添字は呼ばれない（`no_pick`）。
 #[test]
 fn balloon_name_random_and_lastinstalled_are_plain_names() {
     let root = root();
@@ -494,7 +494,7 @@ fn balloon_name_random_and_lastinstalled_are_plain_names() {
 }
 
 /// 両方が書かれた 3 通り: `default.balloon.path` が当たる → `balloon` が別に当たっても記録 0 件／
-/// 先が外れ `balloon` が当たる → 警告 1 件／どちらも外れる → 警告 2 件で同梱へ（要件 2.9〜2.12・5.5）。
+/// 先が外れ `balloon` が当たる → 警告 1 件／どちらも外れる → 警告 2 件で同梱へ。
 #[test]
 fn both_keys_path_first_then_name() {
     let root = root();
@@ -522,7 +522,7 @@ fn both_keys_path_first_then_name() {
     assert_eq!(events.len(), 2, "{events:?}");
 }
 
-/// どちらも書かれていない: descript の段は記録 0 件で同梱へ（要件 2.13・5.6）。
+/// どちらも書かれていない: descript の段は記録 0 件で同梱へ。
 #[test]
 fn no_descript_keys_is_silent() {
     let root = root();
@@ -531,7 +531,7 @@ fn no_descript_keys_is_silent() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-// ---------------------------------------------------------------- 実行中の決め方との一致（要件 2.6・4.2）
+// ---------------------------------------------------------------- 実行中の決め方との一致
 
 /// 同じ一覧と同じ名前で、鎖の descript の段（`balloon`）と、実行中のバルーンの切替の決め方
 /// （`resolve_skin_target` に `SkinSpec::Name`）が同じフォルダを選ぶ（当たらないときはどちらも外れ）。
@@ -589,7 +589,7 @@ fn descript_balloon_agrees_with_runtime_switch() {
 }
 
 /// 同じ `name` のバルーンがゴーストの中と根に在る一覧（`balloons_for` の並び＝ゴーストの中が先）で、
-/// descript の `balloon` はゴーストの中に当たる（areka-P0-ghost-inner-balloon 要件 4.2・10.1）。
+/// descript の `balloon` はゴーストの中に当たる。
 #[test]
 fn balloon_name_hits_ghost_inner_first_in_listing() {
     let root = root();

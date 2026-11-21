@@ -1,7 +1,7 @@
 //! **拡大率の往復**——遷移が元の水準へ戻ったとき、追従オフセットが基準から引き直されて
 //! bit 同一で戻ることの檻。
 //!
-//! # ここが押さえる欠陥（2026-08-28 の実装時是正）
+//! # ここが押さえる欠陥
 //!
 //! 追随の適用相は恒等比の腕（`OffsetRescale::Unchanged`）で**現在値を据え置いて**いた。
 //! 純関数は「比が恒等」としか言っておらず、「Component の現在値が既に正しい」とは
@@ -273,7 +273,6 @@ fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
         );
     }
 
-    // 判定語は値が動いた事実に一致する（`unchanged` は嘘になる）。
     let lines = offset_lines(&logs);
     assert_eq!(
         lines.len(),

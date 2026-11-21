@@ -1,4 +1,4 @@
-//! render_surface: 続く失敗の記録の間引き（設計討議 議題 1・要件 6.6）
+//! render_surface: 続く失敗の記録の間引き
 
 use super::render::{FailureLog, forget_failures_on_device_lost, note_failure};
 use bevy_ecs::prelude::*;
@@ -88,7 +88,7 @@ fn device_loss_clears_the_memo() {
     assert!(note_failure(&mut log, b, "EndDraw", E_FAIL));
 }
 
-// ========== 描き直しの量の記録（5.3・3.4・5.4・6.1〜6.4） ==========
+// ========== 描き直しの量の記録 ==========
 
 use super::render::{DamageRecord, damage_record, log_damage};
 use crate::ecs::graphics::damage::{ComposePlan, FullReason, PartialPlan, RegionShift};
@@ -263,7 +263,7 @@ fn record_is_silent_unless_damage_debug_is_open() {
 }
 
 /// 根の変換の選び: 部分の列（`device_px`）は恒等、ほかは配置の拡大（自動で上げた持ち主の描画面に
-/// DPI の拡大を二重に掛けない・研究 R-e）。
+/// DPI の拡大を二重に掛けない）。
 #[test]
 fn segment_tree_replays_with_identity_root_transform() {
     use super::render::replay_transform;

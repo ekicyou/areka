@@ -1,10 +1,9 @@
 //! 台本の時間の指令（`\![set,choicetimeout,N]` が運ぶ `timeout_directive_secs`）を受けた kanade が、
-//! 指令どおりの期限で `OnChoiceTimeout` を出すことを外側から確かめる檻（areka-P0-choice-timeout-directive
-//! 要件 1.1／1.2／1.4／2.1／2.2／9.4 後半／9.5）。
+//! 指令どおりの期限で `OnChoiceTimeout` を出すことを外側から確かめる檻。
 //!
 //! 選択待ちは共有の補助関数 `establish_choice_wait` に指令を渡して作る（Boot → `Tick(1_000)` で
 //! steady talk id=1 を起こす → `ChoiceWaiting`）。時刻はすべて注入 Tick の論理値であり、
-//! 実時刻も sleep も読まない（要件 9.5）。
+//! 実時刻も sleep も読まない。
 
 use super::test_support::{
     CANONICAL_CHOICE_ID, CHOICE_DISPLAY_END_MS, cascading_snapshot, choice_get_ids, command_tags,
@@ -65,7 +64,7 @@ fn run_choice_wait(directive: Option<f64>, ticks: &[u64]) -> (Vec<RecordedCall>,
     (recorded, commands)
 }
 
-/// **指令 `Some(1.234)` の期限の両側（要件 1.1・1.2・1.4・9.4 後半）**: 表示の終わり `1_000` から
+/// **指令 `Some(1.234)` の期限の両側**: 表示の終わり `1_000` から
 /// ＋1233 ms の Tick では時間切れが出ず、＋1234 ms ちょうどの Tick で `OnChoiceTimeout` が出る。
 ///
 /// 対になるテストは ghost の `script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive`
@@ -78,7 +77,7 @@ fn run_choice_wait(directive: Option<f64>, ticks: &[u64]) -> (Vec<RecordedCall>,
 /// - 期限が早まる（＋1233 以前）と＋1233 の Tick で発火してその周期の pump が消え、記録順が
 ///   「`OnChoiceTimeout` → NOTIFY pump」へ逆転し、pump から `choosing` も消えて落ちる。
 /// - `OnChoiceTimeout` は既定の時間切れと同じ events 表導出（Ref0＝起動スクリプト）と完全一致し、
-///   204 で `CancelChoice` が出る（同じ経路・要件 1.2）。
+///   204 で `CancelChoice` が出る（同じ経路）。
 #[test]
 fn choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234() {
     let just_before = CHOICE_DISPLAY_END_MS + BOUNDARY_MS - 1;
@@ -135,7 +134,7 @@ fn choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234() {
     );
 }
 
-/// **指令 `Some(0.0)`・`Some(-0.001)` は時間切れにしない（要件 2.1・2.2）**: 既定の 30 秒を越えた
+/// **指令 `Some(0.0)`・`Some(-0.001)` は時間切れにしない**: 既定の 30 秒を越えた
 /// 表示の終わり＋60,000 ms の Tick でも `OnChoiceTimeout` が出ず、その Tick は選択待ち継続中の pump を出す。
 ///
 /// # 較正

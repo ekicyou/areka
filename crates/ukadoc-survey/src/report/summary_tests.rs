@@ -1,7 +1,6 @@
 //! `summary.rs` の在中テスト。
 //!
-//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない
-//! （要件 6.2・設計 File Structure Plan）。
+//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない。
 //!
 //! 期待値は実装側の定数を参照せず**逐語の文字列**で書く。実装の表を実装の表自身と
 //! 比べるだけのテストは、綴りの取り違えも並べ替えも 1 件も捕まえない。本文の全文を
@@ -100,7 +99,7 @@ fn catalog_of(generated_at: &str) -> Catalog {
 
 const GENERATED_AT: &str = "2026-08-24T04:08:57.881Z";
 
-/// 見本の台帳 4 本。**渡す順は名前順でも要件 3.1 の並びでもない**（整列済みの見本は
+/// 見本の台帳 4 本。**渡す順は名前順でも宣言順でもない**（整列済みの見本は
 /// 並び順を 1 つも守らない）。
 ///
 /// - 項目数と未分類件数は**4 本とも違う値**（3/2・5/3・2/0・4/1）。同じ値だと台帳
@@ -181,7 +180,7 @@ fn sample_body() -> String {
 /// 見本の本文の逐語の期待値。
 ///
 /// テストファイルの改行が復帰文字に化けても期待値が変わらないよう、行の列を `\n` で
-/// 繋いで組む（本文は改行だけ・設計 D-6）。
+/// 繋いで組む（本文は改行だけ）。
 fn expected_body() -> String {
     let lines = [
         "# ukadoc 網羅状況の全体報告",
@@ -270,11 +269,11 @@ fn section_body(body: &str, heading: &str) -> String {
     }
 }
 
-// ---- 版面の逐語の釘（要件 7.3・11.2） ----
+// ---- 版面の逐語の釘 ----
 
 #[test]
 fn the_body_is_pinned_verbatim() {
-    // 前提の確認——見本の台帳は名前順でも要件 3.1 の並び（shiori・assets・
+    // 前提の確認——見本の台帳は名前順でも宣言順（shiori・assets・
     // sakura-script・property）でもない順で渡している。本文が名前順に並ぶのは
     // 渡された順に頼らないからで、この前提が崩れると逐語の比べが並べ替えを守らない。
     let arrived: Vec<&str> = sample_ledgers()
@@ -289,7 +288,7 @@ fn the_body_is_pinned_verbatim() {
     assert_eq!(sample_body(), expected_body());
 }
 
-// ---- 時刻はカタログから来る（要件 7.3） ----
+// ---- 時刻はカタログから来る ----
 
 #[test]
 fn the_snapshot_time_comes_from_the_catalog_and_is_not_baked_in() {
@@ -302,7 +301,7 @@ fn the_snapshot_time_comes_from_the_catalog_and_is_not_baked_in() {
     assert!(!body.contains(GENERATED_AT), "{body}");
 }
 
-// ---- ドメインを跨いで繋がった束（設計 D-11） ----
+// ---- ドメインを跨いで繋がった束 ----
 
 #[test]
 fn several_links_leaving_the_same_id_all_become_edges() {
@@ -372,7 +371,7 @@ fn an_empty_cross_domain_bundle_list_says_there_is_none() {
     assert!(!section.contains("| 束 id |"), "{section}");
 }
 
-// ---- テーマ別の状態分布（全体・要件 4.4 の 8 テーマ） ----
+// ---- テーマ別の状態分布（全体・8 テーマ） ----
 
 #[test]
 fn a_theme_name_that_only_the_argument_carries_still_gets_a_row() {

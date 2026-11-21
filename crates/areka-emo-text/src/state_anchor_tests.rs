@@ -1,7 +1,5 @@
 //! アンカーの範囲の記録（`\_a` の開き → 伸長 → 閉じ → 消去）。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-anchor-tag-canon` のもの（別の spec のものはその場で名を書く）。
-//!
 //! 合図（`AnchorBegin`／`AnchorEnd`）だけから範囲を組み、範囲の位置（グリフ序数）・範囲の文字
 //! （Reference0 になる）・通し番号・開いている印の寿命・既定の下線を固定する。箱の構成と組み立ての支援は
 //! `state_route_tests.rs` のものを使う（0: a・b（既定は a） 3: 箱なし）。
@@ -39,7 +37,7 @@ fn anchor(ordinal: usize, id: &str, label: &str, range: core::ops::Range<usize>)
     }
 }
 
-// ---- 開き → 文字 → 閉じ（要件 1.7・2.1）
+// ---- 開き → 文字 → 閉じ
 
 /// 開きから閉じまでに追記された文字が範囲になり、前後の文字は入らない。
 /// ID と引数は合図のまま写る。
@@ -136,7 +134,7 @@ fn anchor_wrapping_a_choice_includes_the_choice_text() {
     );
 }
 
-// ---- 複数のアンカー（要件 2.8）
+// ---- 複数のアンカー
 
 /// 1 つの台詞の 2 つのアンカーは、別の通し番号・別の範囲になる。あいだの文字はどちらにも入らない。
 #[test]
@@ -258,7 +256,7 @@ fn text_back_in_the_open_place_continues_the_range() {
     assert_eq!(spans(&state, "1"), vec![]);
 }
 
-// ---- 本文の消去（要件 2.7）
+// ---- 本文の消去
 
 /// `\c` はその場所の範囲の列と開いている印を一緒に消す。印が残っていれば、消した後に
 /// 同じ通し番号で入る選択肢が後続の文字で伸びてしまう。
@@ -315,7 +313,7 @@ fn clear_all_drops_every_range_and_the_open_mark() {
     assert_eq!(spans(&state, "1"), vec![]);
 }
 
-// ---- 下見の空回し（要件 2.10）
+// ---- 下見の空回し
 
 /// 空回しの写しは、アンカーの合図で記録を 1 件も出さない（本番の適用が出す）。
 /// 写しの中の範囲の記録は本番と同じ。
@@ -362,7 +360,7 @@ fn rehearsal_emits_no_records() {
     );
 }
 
-// ---- 既定の下線（要件 5.1・5.3〜5.5）
+// ---- 既定の下線
 
 /// スコープの普通のバルーンの場所の内容。
 fn balloon<'a>(state: &'a TextLayerState, actor: &str) -> &'a ActorTextState {
@@ -430,7 +428,7 @@ fn text_in_another_place_while_open_is_not_underlined() {
     assert_eq!(underlines(balloon(&state, "1")), [false]);
 }
 
-/// シェルの中の箱でも、普通のバルーンと同じ装飾番号の並びになる（要件 5.5）。
+/// シェルの中の箱でも、普通のバルーンと同じ装飾番号の並びになる。
 #[test]
 fn box_text_gets_the_same_underline_numbers() {
     let talk = [
@@ -544,7 +542,7 @@ fn bulk_reset_restores_the_same_look_with_or_without_the_anchor() {
     }
 }
 
-// ---- 下見の空回しと下線（spec `areka-P0-anchor-tag-canon` の設計「既存アーキテクチャの分析」の空回しの項）
+// ---- 下見の空回しと下線
 
 /// 下見の空回しと本番で、装飾番号の並びと装飾の表が一致する。先渡しを受け取ってから合図を
 /// 1 つずつ流すと、流すたびに届いた内容が空回しの全文の先頭と一致する（全文で配置される）。
@@ -560,7 +558,6 @@ fn rehearsal_and_production_agree_on_style_numbers() {
         text("0", "う"),
     ];
 
-    // 空回しの写しと本番の状態へ同じ列を流す。
     let production = applied(&talk);
     let mut rehearsed = TextLayerState::default().rehearsal_copy();
     for c in &talk {

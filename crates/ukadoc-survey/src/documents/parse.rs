@@ -1,21 +1,20 @@
 //! 3 文書の本文 → 骨組み（欄と語彙の検証つき）。
 //!
-//! ここは純粋層で、**ファイルには触らない**——本文の文字列だけを受け取る（設計
-//! 「境界」）。読み取りは `toml` に任せ、表を手で辿る（既存の台帳の読み手と同じ流儀。
+//! ここは純粋層で、**ファイルには触らない**——本文の文字列だけを受け取る。読み取りは `toml` に任せ、表を手で辿る（既存の台帳の読み手と同じ流儀。
 //! `serde` の派生は使わない・`Cargo.toml` の注記）。
 //!
 //! # 囲みを連結して 1 度だけ読む
 //!
 //! 1 文書の ```toml の囲みは**改行で連結して 1 度だけ** [`toml::Table`] にする。
 //! そうすると ⑴ `[[rank]]` のような配列表を段階ごとに別の囲みへ分けて書けて、
-//! ⑵ 同じ表の鍵が 2 度現れれば `toml` が重複として落とす（設計 `documents::parse`）。
+//! ⑵ 同じ表の鍵が 2 度現れれば `toml` が重複として落とす。
 //! 囲みの外の地の文は読まない——地の文には反例や書き方の説明が現れる。
 //!
 //! # 繕わない・行番号は添えない
 //!
 //! 3 文書は人が手で書くので、形が違えば黙って直さずに落とす。落とす本文には
 //! **文書名と表の鍵**（束名・`[[rank]]` の段階と順位・spec 名）を添え、**行番号は
-//! 添えない**（設計 Error Handling）——囲みを連結した本文の行番号は、書き手が見て
+//! 添えない**——囲みを連結した本文の行番号は、書き手が見て
 //! いる Markdown の行と一致しない。
 //!
 //! # 3 つの口
@@ -149,7 +148,7 @@ pub fn backticked_ids(markdown: &str) -> Vec<String> {
 /// 地の文で引用符にも逆引用符にも囲まれていない `ukadoc:` 始まりの語を返す。
 ///
 /// **0 件であるべき**——3 文書の書き方の規律は「id は必ず逆引用符か引用符で囲む」で、
-/// 裸で書かれた id は判定 ⑴ の網から漏れる（設計 D-1）。ここが 0 件でないことを
+/// 裸で書かれた id は判定 ⑴ の網から漏れる。ここが 0 件でないことを
 /// 判定が赤にする。
 pub fn bare_id_tokens(markdown: &str) -> Vec<String> {
     let mut tokens = Vec::new();
@@ -205,10 +204,10 @@ fn collect_bare_tokens(text: &str, out: &mut Vec<String>) {
 // linkage.md
 // ---------------------------------------------------------------------------
 
-/// `linkage.md` の根に置いてよい表（設計 D-2）。
+/// `linkage.md` の根に置いてよい表。
 const LINKAGE_TABLES: [&str; 2] = ["bundle", "tally"];
 
-/// 束の表に置いてよい欄（設計 D-2 の 8 項目＋単独項目の 2 欄）。
+/// 束の表に置いてよい欄（8 項目＋単独項目の 2 欄）。
 const BUNDLE_FIELDS: [&str; 9] = [
     "single",
     "machine",
@@ -232,7 +231,7 @@ const TALLY_FIELDS: [&str; 7] = [
     "singles_by_domain",
 ];
 
-/// `linkage.md` の骨組みを読む（要件 4.1・4.2）。
+/// `linkage.md` の骨組みを読む。
 pub fn read_linkage(markdown: &str) -> Result<Linkage, SurveyError> {
     let file = document_file(LINKAGE_FILE);
     let root = read_blocks(markdown, &file)?;
@@ -265,7 +264,7 @@ fn read_bundles(
 
 /// 束 1 つ分を読む。
 ///
-/// 名前付き束と単独項目は書ける欄が違う（設計 D-2）。単独項目は `reason` を持ち
+/// 名前付き束と単独項目は書ける欄が違う。単独項目は `reason` を持ち
 /// `machine`・`hand`・`foundation` を持たない——「単独項目に落とした」ことの印が
 /// 名前付き束に紛れ込まないようにするためである。
 fn read_bundle(
@@ -383,7 +382,7 @@ fn reject_repeated<'a>(
     Ok(())
 }
 
-/// `[tally]` を読む。ドメイン別内訳は 4 つ揃わなければ落ちる（要件 4.2・11.5）。
+/// `[tally]` を読む。ドメイン別内訳は 4 つ揃わなければ落ちる。
 fn read_tally(root: &toml::Table, file: &str) -> Result<Tally, SurveyError> {
     let place = "[tally]";
     let table = required_table(root, "tally", place, file)?;
@@ -472,7 +471,7 @@ const TEMPLATE_FIELDS: [&str; 8] = [
 /// `[priority_blank]` に置いてよい欄。
 const PRIORITY_BLANK_FIELDS: [&str; 2] = ["alias", "not_applicable"];
 
-/// `briefing.md` の骨組みを読む（要件 5.6・6.2）。
+/// `briefing.md` の骨組みを読む。
 pub fn read_briefing(markdown: &str) -> Result<Briefing, SurveyError> {
     let file = document_file(BRIEFING_FILE);
     let root = read_blocks(markdown, &file)?;
@@ -505,7 +504,7 @@ fn read_ranks(root: &toml::Table, file: &str) -> Result<Vec<RankRow>, SurveyErro
     Ok(rows)
 }
 
-/// 順位の行 1 つを読む。`bundle` と `singles` は**ちょうど一方**（設計 `documents::parse`）。
+/// 順位の行 1 つを読む。`bundle` と `singles` は**ちょうど一方**。
 fn read_rank(item: &toml::Table, file: &str) -> Result<RankRow, SurveyError> {
     let place = "[[rank]]";
     reject_unknown_keys(item, &RANK_FIELDS, place, file)?;
@@ -544,7 +543,7 @@ fn read_rank(item: &toml::Table, file: &str) -> Result<RankRow, SurveyError> {
         stage,
         rank,
         target,
-        // 数え直される値なので、書かなければ 0（設計「数の置き方の規則」）。
+        // 数え直される値なので、書かなければ 0。
         assets: optional_usize_field(item, place, "assets", file)?,
         shared: optional_usize_field(item, place, "shared", file)?,
         exception: read_override(item, place, file)?,
@@ -732,7 +731,7 @@ const SPEC_FIELDS: [&str; 7] = [
 /// `[[reserved]]` に置いてよい欄。
 const RESERVED_FIELDS: [&str; 4] = ["name", "bundle", "none", "reason"];
 
-/// `roadmap-draft.md` の骨組みを読む（要件 10.2）。
+/// `roadmap-draft.md` の骨組みを読む。
 pub fn read_roadmap_draft(markdown: &str) -> Result<RoadmapDraft, SurveyError> {
     let file = document_file(ROADMAP_FILE);
     let root = read_blocks(markdown, &file)?;
@@ -813,7 +812,7 @@ fn read_stage(
 }
 
 /// 属する束、または「どの束にも属さない＋理由」を読む。「属さない」を空欄や省略で
-/// 表すことは許さない（要件 11.5）——黙って空にできると、束を書き忘れた行と、束が
+/// 表すことは許さない——黙って空にできると、束を書き忘れた行と、束が
 /// 無いことを確かめた行が見分けられなくなる。
 fn read_bundle_ref(item: &toml::Table, place: &str, file: &str) -> Result<BundleRef, SurveyError> {
     if bool_field(item, place, "none", file)? {

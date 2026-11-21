@@ -1,4 +1,4 @@
-//! 面 1 つを時点 T まで進めて組み、シェル全体の下地に置いて PNG のファイルにする（要件 4.1・4.3〜4.9・6.1〜6.8）。
+//! 面 1 つを時点 T まで進めて組み、シェル全体の下地に置いて PNG のファイルにする。
 
 use std::path::{Path, PathBuf};
 
@@ -20,7 +20,7 @@ pub(crate) struct Canvas {
 }
 
 impl Canvas {
-    /// 外形の大きさ `(right - left) × (bottom - top)` の下地（要件 4.3）。
+    /// 外形の大きさ `(right - left) × (bottom - top)` の下地。
     pub(crate) fn from_bounds(bounds: ShellBounds) -> Self {
         let span =
             |lo: i32, hi: i32| (i64::from(hi) - i64::from(lo)).clamp(0, u32::MAX as i64) as u32;
@@ -33,7 +33,7 @@ impl Canvas {
     }
 }
 
-/// 頭の文字列の既定（`--dump-output-prefix` が無いとき・要件 6.1）。
+/// 頭の文字列の既定（`--dump-output-prefix` が無いとき）。
 pub(crate) const DEFAULT_PREFIX: &str = "surface";
 
 /// 面 1 つを描けなかったわけ。
@@ -51,8 +51,8 @@ pub(crate) enum RenderError {
 }
 
 /// 面 1 つを時点 T まで画面と同じ道で進め、画面と同じ入力の形で合成し、下地の `(-left, -top)` に
-/// 置いた乗算済み BGRA を返す（テストが画素を見る口・要件 4.1・4.3〜4.5・4.7・4.9）。
-#[allow(clippy::too_many_arguments)] // design の口の形（走りが持つ部品をそのまま渡す）
+/// 置いた乗算済み BGRA を返す（テストが画素を見る口）。
+#[allow(clippy::too_many_arguments)] // 走りが持つ部品をそのまま渡す口の形
 pub(crate) fn render_surface(
     composer: &mut Composer,
     world: &EmoWorld,
@@ -68,7 +68,7 @@ pub(crate) fn render_surface(
     let pic = match composer.compose(world, atlas, surface_id, binds, &pattern) {
         Ok(pic) => pic,
         Err(_) => {
-            // 合成が error を出しているので、ここは info だけ（1 つの誤りは 1 行・要件 4.8）。
+            // 合成が error を出しているので、ここは info だけ（1 つの誤りは 1 行）。
             tracing::info!(
                 event = "offline_dump_surface_skipped",
                 surface = surface_id,
@@ -104,7 +104,7 @@ pub(crate) fn render_surface(
     Ok(out)
 }
 
-/// [`render_surface`] の絵を MCP と同じ `png_image::encode_png` で PNG のバイト列にする（要件 4.6）。
+/// [`render_surface`] の絵を MCP と同じ `png_image::encode_png` で PNG のバイト列にする。
 #[allow(clippy::too_many_arguments)] // render_surface と同じ口
 pub(crate) fn render_png(
     composer: &mut Composer,
@@ -122,14 +122,14 @@ pub(crate) fn render_png(
     Ok(png_image::encode_png(&bgra, canvas.width, canvas.height))
 }
 
-/// 面の PNG のファイルの道 `<出力先>\<頭の文字列><番号>.png`（スコープは入れない・要件 6.1・6.2・6.7）。
-/// 頭の文字列の `\`・`/` は出力先からの相対の道になる（6.8）。
+/// 面の PNG のファイルの道 `<出力先>\<頭の文字列><番号>.png`（スコープは入れない）。
+/// 頭の文字列の `\`・`/` は出力先からの相対の道になる。
 pub(crate) fn png_path(output_dir: &Path, prefix: &str, surface_id: u32) -> PathBuf {
     output_dir.join(format!("{prefix}{surface_id}.png"))
 }
 
 /// 面 1 つを描いて [`png_path`] へ書く。書く直前に出力先だけを作り、頭の文字列の下のフォルダは
-/// 作らない。同じ名前は置き換える。書けなければ error 1 行（要件 6.3〜6.6・6.8）。
+/// 作らない。同じ名前は置き換える。書けなければ error 1 行。
 #[allow(clippy::too_many_arguments)] // render_surface の口に出力先と頭の文字列を足した形
 pub(crate) fn write_surface(
     composer: &mut Composer,

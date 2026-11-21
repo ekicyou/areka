@@ -1,17 +1,13 @@
-//! テスト専用ログ捕捉ヘルパ（Task 4.1 flaky 根治・R9.1／R8.1）。
+//! テスト専用ログ捕捉ヘルパ。
 //!
 //! 永続 format 層（[`crate::persist::format`]）は寛容読取の縮退アーム（parse 失敗・未知
-//! バージョン）ごとに `tracing::warn!` を発行する（steering:
-//! areka-log-first-no-silent-failure・「ログ無しの失敗経路を持たない」）。本モジュールは
-//! その発行を**実行可能なテストで**捕捉し、各アームが規約どおりの `target`・レベル（WARN）・
-//! メッセージでログを出していることを決定論的に検証可能にする（R9.1「テスト可能領域は全て
-//! 実行テスト」）。
+//! バージョン）ごとに `tracing::warn!` を発行する。本モジュールはその発行を捕捉し、各アームが
+//! 規約どおりの `target`・レベル（WARN）・メッセージでログを出していることを検証できるようにする。
 //!
 //! # 硬化機構は 1 箇所にしかない
-//! 捕捉窓も捕捉した 1 件の型も共有 crate [`log_capture_kit`] のものをそのまま使う（spec:
-//! areka-P0-test-cage-determinism・要件 1.5／2.2）。本モジュールが持つのは、その上の薄い
-//! 2 つの関数（[`capture`] と [`assert_logged`]）だけで、subscriber の設置も interest の管理も
-//! 型の写しも自前では持たない。
+//! 捕捉窓も捕捉した 1 件の型も共有 crate [`log_capture_kit`] のものをそのまま使う。本モジュールが
+//! 持つのは、その上の薄い 2 つの関数（[`capture`] と [`assert_logged`]）だけで、subscriber の設置も
+//! interest の管理も型の写しも自前では持たない。
 //!
 //! # 機序（「スレッドローカルゆえ安全」は誤り）
 //! `tracing::subscriber::with_default` が差し替えるのはスレッドローカルの既定 dispatcher
@@ -41,7 +37,7 @@ pub(crate) fn capture<F: FnOnce()>(f: F) -> Vec<CapturedEvent> {
 
 /// 捕捉列に `target`・`level`・`message ⊇ needle` のイベントが存在することを表明する。
 ///
-/// アームのログが削除・語彙変更・レベル変更されると本表明は失敗する（R9.1 の回帰檻）。
+/// アームのログが削除・語彙変更・レベル変更されると本表明は失敗する。
 pub(crate) fn assert_logged(events: &[CapturedEvent], level: Level, target: &str, needle: &str) {
     let hit = events
         .iter()

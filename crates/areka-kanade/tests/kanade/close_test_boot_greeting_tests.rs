@@ -7,8 +7,7 @@ use super::{
 };
 
 // ============================================================================
-// シナリオ 5・6: 挨拶 active 中の Tick → NOTIFY（Req 1.5・2.4）と、挨拶 TalkDone → GET pump 再開
-// （Req 4.4・DD-IT-12 相関成立の統合証左）
+// シナリオ 5・6: 挨拶 active 中の Tick → NOTIFYと、挨拶 TalkDone → GET pump 再開
 // ============================================================================
 
 /// boot 挨拶を保留（active 窓）→ 解放で挨拶 TalkDone{Ended} を着弾させ、次 Tick で
@@ -18,7 +17,7 @@ use super::{
 /// （＝boot が `Steady{Some(挨拶)}` へ完了し、その slot 由来で pump を発行している証左・シナリオ 5）も
 /// ここで見る。挨拶が `Steady{None}` へ丸められていたら Tick は GET になり NOTIFY の確かめが落ちる。
 ///
-/// これは DD-IT-12 の「挨拶 TalkDone が slot と照合される（`unknown_talk_done` ERROR が出ない）」
+/// これは「挨拶 TalkDone が slot と照合される（`unknown_talk_done` ERROR が出ない）」
 /// の**統合層の証左**である: 挨拶 talk（id=1）の TalkDone が `Steady{Some(挨拶)}` の slot と照合されて
 /// `Steady{None}` へ復帰したからこそ、以降の Tick が GET（問い合わせ）へ戻る。もし照合が成立しなければ
 /// kanade は `Steady{Some}` に留まり NOTIFY を出し続け、GET は決して現れない——ゆえに「active 窓（NOTIFY）
@@ -99,7 +98,7 @@ fn boot_greeting_talkdone_resumes_get_pump() {
         "挨拶 talk active 中の Tick は OnSecondChange NOTIFY（Ref3=0・talking）を発行するはず（DD-IT-12）"
     );
 
-    // (b) 完了後の GET 再開（DD-IT-12 相関成立の統合証左）: active 窓（NOTIFY）より後に OnSecondChange
+    // (b) 完了後の GET 再開: active 窓（NOTIFY）より後に OnSecondChange
     //     GET が現れ、Ref3=1・Status なし（`Steady{None}`＝挨拶 slot と照合されて復帰した証左）。復帰後の
     //     GET の now はループ依存ゆえ、now 非依存の Ref3／Status のみを events から導出して照合する。
     let resumed_get = resumed_get_after_active_window(&recorded).expect(
@@ -132,12 +131,12 @@ fn boot_greeting_talkdone_resumes_get_pump() {
 }
 
 // ============================================================================
-// シナリオ 7: 挨拶中 CloseRequest → CloseTalkWait 経由 OnClose 握手（Req 3.1・DD-IT-12）
+// シナリオ 7: 挨拶中 CloseRequest → CloseTalkWait 経由 OnClose 握手
 // ============================================================================
 
 /// boot 挨拶再生中に受領した close 指示は即握手せず `pending_close` に記録され、挨拶 TalkDone
-/// 着弾で通常 talk と同じ close 握手（OnClose GET→別れの Value→close talk）が始まることを観測する
-/// （DD-IT-12「挨拶中 close は通常 talk と同じ CloseTalkWait」）。既存の
+/// 着弾で通常 talk と同じ close 握手（OnClose GET→別れの Value→close talk）が始まることを観測する。
+/// 既存の
 /// `farewell_talk_without_quit_tag_still_terminates`／full_run の close 握手
 /// （`Steady{None}` からの即握手）に対し、本 cage は
 /// **`Steady{Some(挨拶)}` からの繰延握手**（active 挨拶中の close）を統合層で埋める。
@@ -148,7 +147,7 @@ fn boot_greeting_talkdone_resumes_get_pump() {
 /// 送った Tick を目印にして、繰延を一意に決める 2 点を join の後の記録で確かめる:
 ///   - **(A) 挨拶が active＝`Steady{Some(挨拶)}` である**: 挨拶保留中に Tick を 1 つ注入し、その Tick が
 ///     `OnSecondChange` **NOTIFY**（Ref3="0"・Status: talking）を発行する（`Steady{Some}` の pump 意味論）。
-///     DD-IT-12 が revert され boot が `Steady{None}` へ丸まっていれば Tick は **GET**（Ref3="1"）になり、
+///     挨拶の追跡が無くなり boot が `Steady{None}` へ丸まっていれば Tick は **GET**（Ref3="1"）になり、
 ///     この NOTIFY は現れず (A) が落ちる。
 ///   - **(B) OnClose 握手はその NOTIFY より後に始まる**: `Steady{Some}` の CloseRequest が `pending_close` を
 ///     迂回して即 `begin_close` する回帰（または `Steady{None}` 即握手）なら、OnClose GET が NOTIFY より前に
@@ -165,7 +164,7 @@ fn boot_greeting_talkdone_resumes_get_pump() {
 /// まで inbox へ入らないため、Tick は必ず TalkDone より先に処理される（interleaving なし・待ち不要）。
 ///
 /// # 非空虚性（下の実 assert に対応する）
-/// - (A) 挨拶が `Steady{None}` へ丸められていたら（DD-IT-12 revert）Tick は GET になり NOTIFY が現れず
+/// - (A) 挨拶が `Steady{None}` へ丸められていたらTick は GET になり NOTIFY が現れず
 ///   (A) の確かめが落ちる。
 /// - (B) `Steady{Some}` の close が即 `begin_close` する回帰（`pending_close` 迂回）なら OnClose GET が
 ///   NOTIFY より前に出て (B) の確かめが落ちる。
@@ -225,11 +224,11 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
 
     // (b) 通常 close 握手を通った: OnClose GET（Ref0=user・INACTIVE＝Status なし）が現れる。
     //     挨拶中 close は即握手せず、挨拶 TalkDone 着弾で begin_close→OnClose GET が発行される
-    //     （＝この GET の存在自体が握手経路＝CloseTalkWait を踏んだ証左・DD-IT-12）。
+    //     （＝この GET の存在自体が握手経路＝CloseTalkWait を踏んだ証左）。
     let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
         .expect("挨拶 TalkDone 後に OnClose GET（Ref0=user）が現れるはず（挨拶中 close の握手）");
 
-    // (A) 挨拶保留中の Tick は NOTIFY（＝boot が Steady{Some(挨拶)} へ完了・DD-IT-12）。
+    // (A) 挨拶保留中の Tick は NOTIFY（＝boot が Steady{Some(挨拶)} へ完了）。
     let notify_index = recorded
         .iter()
         .position(|c| *c == expected_notify)

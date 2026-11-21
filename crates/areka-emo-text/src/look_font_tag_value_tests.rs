@@ -1,20 +1,10 @@
 //! `\f` の値の状態機械（[`super::apply_font_tag`]）のうち、**値を持つ 3 キー**
-//! （`height`・`color`・`name`）の決定論テスト（タスク 3.4・要件 7.1〜7.7・8.5〜8.8・
-//! 9.5／9.6・15.3）。
+//! （`height`・`color`・`name`）の決定論テスト。
 //!
-//! ## 章立て
-//!
-//! | § | 内容 | 要件 |
-//! |---|---|---|
-//! | §12 | 大きさ（絶対・相対の重ね掛け・百分率の基準・層への戻し・非正／非有限・読めない値・語彙） | 7.1〜7.7 |
-//! | §13 | 色（各書式・戻し先の語彙の解決先・アンカーの縮退・読めない値） | 8.5〜8.8 |
-//! | §14 | フォント名（候補列を記述順のまま保持・層への戻し・候補なし） | 9.5, 9.6 |
-//!
-//! §7〜§10（真偽 5 キー・上下付き・一括の戻し・所有外キー）は兄弟の
-//! `look_font_tag_tests.rs`、§1〜§6（見た目の値・2 層・装飾の表）は `look_tests.rs` にある。
-//! 本ファイルを分けたのは `look_font_tag_tests.rs` へ本タスクの分を足すと
-//! 1 ファイル 1,000 行の見張り（要件 1.3・`crates/log-capture-kit/tests/file_length_guard_test.rs`）
-//! の射程に入るため。
+//! 真偽 5 キー・上下付き・一括の戻し・所有外キーは兄弟の `look_font_tag_tests.rs`、
+//! 見た目の値・2 層・装飾の表は `look_tests.rs` にある。本ファイルを分けたのは
+//! 1 ファイル 1,000 行の見張り（`crates/log-capture-kit/tests/file_length_guard_test.rs`）の
+//! 射程に入らないようにするため。
 //!
 //! **狙った 1 項目だけが動くこと**を毎回見る——[`expect_only`] は「出発点に 1 項目だけ手を
 //! 入れた見た目」と丸ごと比べるので、`\f[height,15]` が色まで動かせば赤になる。
@@ -97,10 +87,9 @@ fn expect_refused(args: &[&str], reason: &str) {
     assert_eq!(issue.value, args[1..].join(","), "{args:?} の記録の値");
 }
 
-// ---------------------------------------------------------------- §12 大きさ（height）
+// ---------------------------------------------------------------- 大きさ（height）
 
-/// 値を持つ 3 キーは**受理される**——「所有しているが未実装」の仮置き（タスク 3.3）が
-/// 残っていれば、ここが最初に赤くなる（要件 7.1・8.1・9.1）。
+/// 値を持つ 3 キーは**受理される**（未実装の仮置きが残っていればここが最初に赤くなる）。
 #[test]
 fn the_three_keys_that_carry_a_value_are_interpreted() {
     for args in [
@@ -113,8 +102,8 @@ fn the_three_keys_that_carry_a_value_are_interpreted() {
     }
 }
 
-/// スタイルシートの大きさキーワードは CSS の絶対 7 語＋相対 2 語——母数を先に固定する
-/// （要件 7.7）。語が増減したらこのテストが先に赤くなる。
+/// スタイルシートの大きさキーワードは CSS の絶対 7 語＋相対 2 語——母数を先に固定する。
+/// 語が増減したらこのテストが先に赤くなる。
 #[test]
 fn the_stylesheet_size_keywords_are_the_nine_css_words() {
     assert_eq!(
@@ -126,7 +115,7 @@ fn the_stylesheet_size_keywords_are_the_nine_css_words() {
     );
 }
 
-/// `\f[height,N]` は em の大きさを `N` image px にする（要件 7.1）。
+/// `\f[height,N]` は em の大きさを `N` image px にする。
 #[test]
 fn an_absolute_height_sets_the_em_size_in_image_px() {
     let cases = [("15", 15.0_f32), ("8", 8.0), ("1", 1.0), ("12.5", 12.5)];
@@ -137,7 +126,7 @@ fn an_absolute_height_sets_the_em_size_in_image_px() {
     }
 }
 
-/// `\f[height,+N]`／`-N` は**そのとき効いている大きさ**に加減し、重ねて効く（要件 7.2）。
+/// `\f[height,+N]`／`-N` は**そのとき効いている大きさ**に加減し、重ねて効く。
 ///
 /// 出発点 33 → `+3` → 36 → `+3` → 39 → `-9` → 30。道中を毎回断言する——最後だけを見ると
 /// 「2 度目の `+3` を無視する」形まで緑で通る。
@@ -154,7 +143,7 @@ fn a_signed_height_stacks_on_the_size_in_effect() {
     }
 }
 
-/// `\f[height,N%]` は**既定の見た目の大きさ**（ここでは 20）を基準にする（要件 7.3）。
+/// `\f[height,N%]` は**既定の見た目の大きさ**（ここでは 20）を基準にする。
 #[test]
 fn a_percent_height_is_measured_against_the_default_size() {
     let cases = [("200%", 40.0_f32), ("50%", 10.0), ("100%", 20.0)];
@@ -165,7 +154,7 @@ fn a_percent_height_is_measured_against_the_default_size() {
     }
 }
 
-/// `\f[height,default]`／`disable` は大きさ**だけ**を当該層の値へ（要件 7.4・7.5）。
+/// `\f[height,default]`／`disable` は大きさ**だけ**を当該層の値へ。
 #[test]
 fn height_default_and_disable_take_the_layer_size() {
     let layers = value_layers();
@@ -182,7 +171,7 @@ fn height_default_and_disable_take_the_layer_size() {
     }
 }
 
-/// 結果が 0 以下になる大きさは値を変えず理由を返す（要件 7.6）。
+/// 結果が 0 以下になる大きさは値を変えず理由を返す。
 #[test]
 fn a_zero_or_negative_height_leaves_the_size_alone() {
     for value in ["0", "0.0", "0%"] {
@@ -190,7 +179,7 @@ fn a_zero_or_negative_height_leaves_the_size_alone() {
     }
 }
 
-/// 相対指定で 0 以下へ落ちる場合も値を変えず理由を返す（要件 7.6）。
+/// 相対指定で 0 以下へ落ちる場合も値を変えず理由を返す。
 /// 出発点は 33 なので、`-33` はちょうど 0、`-40` は負。
 #[test]
 fn a_relative_height_that_falls_to_zero_or_below_leaves_the_size_alone() {
@@ -200,7 +189,7 @@ fn a_relative_height_that_falls_to_zero_or_below_leaves_the_size_alone() {
     }
 }
 
-/// 非有限（無限大・非数）の大きさも値を変えず理由を返す（要件 7.6）。
+/// 非有限（無限大・非数）の大きさも値を変えず理由を返す。
 #[test]
 fn a_non_finite_height_leaves_the_size_alone() {
     for value in ["inf", "-inf", "NaN", "1e40"] {
@@ -209,7 +198,7 @@ fn a_non_finite_height_leaves_the_size_alone() {
 }
 
 /// 数値・相対・百分率・6 語・スタイルシートの語のいずれとしても読めない値は、
-/// 値を変えず理由を返す（要件 7.6 の「非数」）。語は**小文字の完全一致のみ**なので
+/// 値を変えず理由を返す。語は**小文字の完全一致のみ**なので
 /// `Default`・`X-Large` は読めない値である。
 #[test]
 fn a_height_value_that_cannot_be_read_leaves_the_size_alone() {
@@ -218,15 +207,14 @@ fn a_height_value_that_cannot_be_read_leaves_the_size_alone() {
     }
 }
 
-/// 大きさの値はちょうど 1 つ——値なしと 2 つ以上はどちらも大きさを変えない（要件 7.6）。
+/// 大きさの値はちょうど 1 つ——値なしと 2 つ以上はどちらも大きさを変えない。
 #[test]
 fn a_height_needs_exactly_one_value() {
     expect_refused(&["height"], REASON_VALUE_COUNT);
     expect_refused(&["height", "15", "20"], REASON_VALUE_COUNT);
 }
 
-/// スタイルシートの大きさキーワードは語彙として受理し、**大きさは変えず**印を返す
-/// （要件 7.7・design §A 項目 3）。
+/// スタイルシートの大きさキーワードは語彙として受理し、**大きさは変えず**印を返す。
 #[test]
 fn a_stylesheet_size_keyword_is_accepted_as_vocabulary_only() {
     for value in STYLESHEET_SIZE_KEYWORDS {
@@ -239,10 +227,10 @@ fn a_stylesheet_size_keyword_is_accepted_as_vocabulary_only() {
     }
 }
 
-// ------------------------------------------------------------------- §13 色（color）
+// ------------------------------------------------------------------- 色（color）
 
 /// 書式の解析は `color::parse_color` の担当だが、`\f[color]` の腕がそれを通していることは
-/// ここで見る（要件 8.1〜8.4 の各書式が実際の色になる）。
+/// ここで見る（各書式が実際の色になる）。
 #[test]
 fn a_color_resolves_each_written_format() {
     let cases: [(&[&str], (u8, u8, u8)); 5] = [
@@ -261,7 +249,7 @@ fn a_color_resolves_each_written_format() {
     }
 }
 
-/// 戻し先の語彙は 2 層＋選択肢文字色のどれを引くかまで固定する（要件 8.5〜8.7）。
+/// 戻し先の語彙は 2 層＋選択肢文字色のどれを引くかまで固定する。
 #[test]
 fn a_color_vocabulary_resolves_to_the_right_layer() {
     let layers = value_layers();
@@ -279,8 +267,7 @@ fn a_color_vocabulary_resolves_to_the_right_layer() {
     }
 }
 
-/// アンカー 3 語はアンカーの色定義がまだ無いので **`default` と同じ色**を適用し、印を返す
-/// （要件 8.8・design §A 項目 11）。
+/// アンカー 3 語はアンカーの色定義がまだ無いので **`default` と同じ色**を適用し、印を返す。
 #[test]
 fn an_anchor_color_falls_back_to_the_default_layer_with_a_mark() {
     let layers = value_layers();
@@ -300,8 +287,8 @@ fn an_anchor_color_falls_back_to_the_default_layer_with_a_mark() {
     }
 }
 
-/// 読めない色指定は色を変えず、`color::parse_color` の理由をそのまま記録に載せる
-/// （要件 8.9）。理由を潰して 1 つにまとめない——記録から何が悪かったかが分かる。
+/// 読めない色指定は色を変えず、`color::parse_color` の理由をそのまま記録に載せる。
+/// 理由を潰して 1 つにまとめない——記録から何が悪かったかが分かる。
 #[test]
 fn a_color_that_cannot_be_read_leaves_the_color_alone() {
     let cases: [(&[&str], &str); 6] = [
@@ -321,16 +308,16 @@ fn a_color_that_cannot_be_read_leaves_the_color_alone() {
     }
 }
 
-/// 値の無い `\f[color]` も色を変えない（成分数 0・要件 8.9）。
+/// 値の無い `\f[color]` も色を変えない（成分数 0）。
 #[test]
 fn a_color_without_a_value_leaves_the_color_alone() {
     expect_refused(&["color"], REASON_COMPONENT_COUNT);
 }
 
-// ------------------------------------------------------------------ §14 フォント名（name）
+// ------------------------------------------------------------------ フォント名（name）
 
-/// 候補列は**記述順のまま**保つ（要件 9.1・9.2）。実在の判定と読み飛ばしは描画層の担当なので、
-/// フォントファイル名の候補もここでは落とさない（要件 9.3 は COM 層の `FontCatalog` が持つ）。
+/// 候補列は**記述順のまま**保つ。実在の判定と読み飛ばしは描画層の担当なので、
+/// フォントファイル名の候補もここでは落とさない（COM 層の `FontCatalog` が持つ）。
 #[test]
 fn a_name_keeps_the_candidate_list_in_written_order() {
     let cases: [(&[&str], &[&str]); 3] = [
@@ -356,7 +343,7 @@ fn a_name_keeps_the_candidate_list_in_written_order() {
     }
 }
 
-/// `\f[name,default]`／`disable` はフォント**だけ**を当該層の候補列へ（要件 9.5・9.6）。
+/// `\f[name,default]`／`disable` はフォント**だけ**を当該層の候補列へ。
 #[test]
 fn name_default_and_disable_take_the_layer_candidates() {
     let layers = value_layers();

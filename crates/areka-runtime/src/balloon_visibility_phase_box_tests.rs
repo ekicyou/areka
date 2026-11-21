@@ -1,15 +1,14 @@
 // =============================================================================
-// 表示の相の観測と発行に箱をつなぐ配線の決定論テスト（areka-P0-shell-balloon task 10.3）
+// 表示の相の観測と発行に箱をつなぐ配線の決定論テスト
 //
 // 観測: 「箱に文字が出ている」は四角の写し（`shown_boxes`）から、滞在は「バルーンの窓の上、
 // または文字の出ている箱の上」。文字の数（普通のバルーンの窓に今出ている数）はシェルの窓の
 // 絵の番号で決まり、ここの表示層（`attach_headless`）はシェルの窓も絵の番号も持たないので、
-// 数の判断は文字の層の檻が、番号を渡すことは枠の檻（`frame_shell_box_integration_tests.rs`）が持つ
-// （areka-P0-shell-balloon-frame-align）。
+// 数の判断は文字の層の檻が、番号を渡すことは枠の檻（`frame_shell_box_integration_tests.rs`）が持つ。
 // 箱の上の滞在は観測の直前に毎フレーム整える。発行: 隠す契機が箱に届くなら箱を隠す印も立てる。
 //
 // 写しは提示（GPU）でしか埋まらないので、写しを受け取る箱の観測は 1 スコープ分の関数へ
-// 作った写しを渡して確かめ、相の観測の収集は写しが空の形で通す（通しの確かめは 12.3）。
+// 作った写しを渡して確かめ、相の観測の収集は写しが空の形で通す。
 // =============================================================================
 
 use areka_emo_present::EmoPresenter;
@@ -25,7 +24,7 @@ use wintf::ecs::WindowDragging;
 /// 箱を隠す印を立てたときに文字の層が残す 1 行（`actor_box.rs` の `hide_boxes`）。
 const HIDE_BOXES_MESSAGE: &str = "箱を隠す印を立てた（次の台詞の頭まで）";
 
-/// 滞在はバルーンの窓の上、または文字の出ている箱の上（要件 6.11）。窓の観測が無くても
+/// 滞在はバルーンの窓の上、または文字の出ている箱の上。窓の観測が無くても
 /// 箱の上に居れば滞在あり、どちらも観測なしなら観測なしのまま（抑止しない）。
 #[test]
 fn hover_is_over_the_window_or_over_a_shown_box() {
@@ -36,7 +35,7 @@ fn hover_is_over_the_window_or_over_a_shown_box() {
     assert_eq!(combine_hover(None, false), None);
 }
 
-/// 箱に文字が出ている scope では、その scope のシェルの窓のドラッグも待ちを止める（要件 6.11）。
+/// 箱に文字が出ている scope では、その scope のシェルの窓のドラッグも待ちを止める。
 /// 別の scope のシェルの窓・ドラッグしていないシェルの窓は数えない。
 #[test]
 fn shell_window_drag_counts_for_scopes_with_box_text() {
@@ -103,7 +102,7 @@ fn issue_hide(trigger: VisibilityTrigger, latch: bool) -> (Vec<u32>, Vec<String>
     (outcome.hidden, marked)
 }
 
-/// 時間切れは窓と箱の両方を隠す（要件 6.10）。
+/// 時間切れは窓と箱の両方を隠す。
 #[test]
 fn timeout_hides_the_window_and_raises_the_hide_boxes_flag() {
     for latch in [false, true] {
@@ -127,7 +126,7 @@ fn user_break_raises_the_flag_only_while_latched() {
 }
 
 /// 文字が 0 に落ちたことによる非表示は窓だけ（箱のあるサーフェスへ移っても箱の文字は出し
-/// 続ける・要件 5.1）。
+/// 続ける）。
 #[test]
 fn clear_hides_only_the_window() {
     for latch in [false, true] {
@@ -137,7 +136,7 @@ fn clear_hides_only_the_window() {
     }
 }
 
-/// 隠すと普通のバルーンの手動の位置を捨てる（balloon-scroll-arrows 要件 8.3）。箱に届く契機
+/// 隠すと普通のバルーンの手動の位置を捨てる。箱に届く契機
 /// （時間切れ）でも届かない契機（文字が 0 に落ちた）でも同じ。
 #[test]
 fn hiding_forgets_the_manual_position() {

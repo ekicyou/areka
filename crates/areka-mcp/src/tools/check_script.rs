@@ -1,6 +1,6 @@
 //! `check_script` の入口（定義・型の付いた引数・help の 1 行・診断の型・結果の組み立て）。
 //!
-//! SSP に無い areka 独自のツール（spec: areka-P0-mcp-author-tools）。台本を再生せずに確かめ、
+//! SSP に無い areka 独自のツール。台本を再生せずに確かめ、
 //! 診断の列を結果の本文にする。判断はアプリ本体の側（`crates/areka/src/mcp/check_script_judge.rs`）が持つ。
 
 use serde_json::{Map, Value, json};

@@ -19,7 +19,7 @@ fn rec(hour: u8, minute: u8, second: u8, level: Level, body: &str) -> CapturedRe
     }
 }
 
-/// 空は 0・warn だけは 1・error があれば 2（8.1）。最も重いレベルの語も同じ段で決まる。
+/// 空は 0・warn だけは 1・error があれば 2。最も重いレベルの語も同じ段で決まる。
 #[test]
 fn exit_code_and_worst_follow_the_heaviest_level() {
     let warn = rec(1, 2, 3, Level::WARN, "w");
@@ -33,7 +33,7 @@ fn exit_code_and_worst_follow_the_heaviest_level() {
     assert_eq!((exit_code(&mixed), worst(&mixed)), (2, Some("Error")));
 }
 
-/// BOM・CRLF・4 列・時刻の 0 埋め・レベルの語・`"` の重ね（7.1・7.2・7.4）。
+/// BOM・CRLF・4 列・時刻の 0 埋め・レベルの語・`"` の重ね。
 #[test]
 fn csv_bytes_has_bom_crlf_quoted_four_columns() {
     let records = [
@@ -50,14 +50,14 @@ fn csv_bytes_has_bom_crlf_quoted_four_columns() {
     );
 }
 
-/// ゴースト名が無ければ空の `""`（7.2）。
+/// ゴースト名が無ければ空の `""`。
 #[test]
 fn empty_ghost_name_is_an_empty_quoted_column() {
     let bytes = csv_bytes("", &[rec(0, 0, 1, Level::WARN, "x")]);
     assert_eq!(&bytes[3..], b"\"00:00:01\",\"\",\"Warning\",\"x\"\r\n");
 }
 
-/// 10,001 件を間引かずに 1 件ずつ書く（7.5）。
+/// 10,001 件を間引かずに 1 件ずつ書く。
 #[test]
 fn ten_thousand_and_one_records_are_all_written() {
     let records: Vec<_> = (0..10_001)
@@ -69,7 +69,7 @@ fn ten_thousand_and_one_records_are_all_written() {
     assert!(text.ends_with("\"r10000\"\r\n"));
 }
 
-/// 写しが空なら作らず、在るファイルにも触れない（7.6）。
+/// 写しが空なら作らず、在るファイルにも触れない。
 #[test]
 fn empty_records_do_not_create_or_touch_the_file() {
     let root = TempPath::under_target("offline_dump_report_empty");
@@ -104,7 +104,7 @@ fn write_csv_writes_the_csv_bytes() {
     );
 }
 
-/// 書けなければ error を道筋と OS の誤りつきで出して Err（7.7）。
+/// 書けなければ error を道筋と OS の誤りつきで出して Err。
 #[test]
 fn unwritable_path_logs_error_and_returns_err() {
     let root = TempPath::under_target("offline_dump_report_unwritable");

@@ -1,11 +1,9 @@
 use super::*;
 
-// ===== unsafe impl Send/Sync の不変条件（W7a-V） =====
+// ===== unsafe impl Send/Sync の不変条件 =====
 
-/// `ZOrder` / `WindowPos` は HWND（`*mut c_void` newtype・非 Send/Sync）を内包する
-/// ため手動 `unsafe impl Send/Sync` で Send+Sync を表明している。本テストはその
-/// 不変条件をコンパイル時に固定する: 将来フィールドが追加され（かつ手動 impl が
-/// 撤去され）て Send/Sync が壊れた場合に検出する回帰検知器。device 非依存（型のみ）。
+/// `ZOrder` / `WindowPos` は手動 `unsafe impl Send/Sync` で Send+Sync を表明している。
+/// 手動 impl が外れて Send/Sync が壊れたらコンパイル時に検出する。
 #[test]
 fn test_window_pos_types_are_send_sync() {
     fn assert_send_sync<T: Send + Sync>() {}
@@ -40,7 +38,6 @@ fn test_default_uses_cw_usedefault_position_and_size() {
             height: CW_USEDEFAULT
         })
     );
-    // 全ての SWP bool フラグは既定で false
     assert!(!pos.no_redraw);
     assert!(!pos.no_activate);
     assert!(!pos.frame_changed);
@@ -154,7 +151,6 @@ fn test_build_flags_size_none_sets_nosize() {
 #[test]
 fn test_build_flags_nonzero_zorder_clears_nozorder() {
     let flags = WindowPos::new().zorder_top().build_flags_for_system();
-    // NoChange 以外では NOZORDER は立たない
     assert_eq!(flags & SWP_NOZORDER, SET_WINDOW_POS_FLAGS(0));
 }
 
@@ -265,7 +261,6 @@ fn overlapped_expected() -> (i32, i32, i32, i32) {
 
 #[test]
 fn test_to_window_coords_for_creation_both_given_adds_frame() {
-    // 位置と大きさを両方与えると、外枠の矩形をそのまま返す
     let mut pos = WindowPos::new();
     pos.position = Some(Point { x: 500, y: 50 });
     pos.size = Some(SizeI {
@@ -278,7 +273,6 @@ fn test_to_window_coords_for_creation_both_given_adds_frame() {
 
 #[test]
 fn test_to_window_coords_for_creation_position_only_adds_frame_to_position() {
-    // 位置だけ与えると、位置に枠の分を足し、大きさは既定のまま返す
     let (bx, by, _, _) = overlapped_expected();
     let mut pos = WindowPos::new();
     pos.position = Some(Point { x: 500, y: 50 });
@@ -288,7 +282,6 @@ fn test_to_window_coords_for_creation_position_only_adds_frame_to_position() {
 
 #[test]
 fn test_to_window_coords_for_creation_size_only_adds_frame_to_size() {
-    // 大きさだけ与えると、位置は既定のまま、大きさに枠の分を足して返す
     let (_, _, bw, bh) = overlapped_expected();
     let mut pos = WindowPos::new();
     pos.size = Some(SizeI {

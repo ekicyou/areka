@@ -1,6 +1,4 @@
-// =============================================================================
-// MoveCueSink の lock・unlock の名前の選別と実行者のスコープ（descript-window-keys・要件 5.1・5.2）
-// =============================================================================
+// MoveCueSink の lock・unlock の名前の選別と実行者のスコープ。
 
 use super::*;
 use crate::consumer_ledger::test_support::actor_carrier_cue;
@@ -28,7 +26,7 @@ fn lock_and_unlock_send_one_cue_in_actor_scope() {
     }
 }
 
-/// 第 1 引数が balloonmove でない lock・unlock は今どおり担当外で、何も送らない。
+/// 第 1 引数が balloonmove でない lock・unlock は担当外で、何も送らない。
 #[test]
 fn lock_with_other_first_arg_is_not_mine() {
     for (name, tokens) in [
@@ -66,7 +64,7 @@ fn extra_args_are_accepted_unread() {
     );
 }
 
-/// 実行者が数でない lock は捨てる（今の `actor_scope` の扱い）。
+/// 実行者が数でない lock は捨てる（`actor_scope` の扱い）。
 #[test]
 fn non_numeric_actor_sends_nothing() {
     assert_eq!(

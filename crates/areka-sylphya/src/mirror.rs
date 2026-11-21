@@ -2,11 +2,10 @@
 //!
 //! 掲示板（マテリアライズド・ビュー）モデルの状態核。読みは共有読みハンドル
 //! [`SharedMirror::load`] による同期・無待機（read lock 内 `Arc` clone のみ）。供給は
-//! アクター（Task 5.x）が copy-on-write で新しい `Arc<MirrorImage>` を構築し
-//! [`SharedMirror::publish`] で swap する（epoch 単調増加・design §「鏡像＋SylphyaReader」
-//! State Management）。
+//! アクターが copy-on-write で新しい `Arc<MirrorImage>` を構築し
+//! [`SharedMirror::publish`] で swap する（epoch 単調増加）。
 //!
-//! ## 区画（設計討議 #1 裁定）
+//! ## 区画
 //!
 //! `MirrorImage` は集約ルート 1 つで、次の 3 区画を保持する:
 //!
@@ -27,10 +26,10 @@ use std::sync::{Arc, RwLock};
 /// 生成後は不変として扱う（`Arc` 共有で publish される——interior mutability を持たず、
 /// 公開 `&mut self` ミューテータも持たない）。後継像は [`MirrorImage::successor`] で
 /// copy-on-write により構築する（区画を clone し `epoch` を +1）。フィールドは公開だが、
-/// 変異は「後継像を組み立ててから `Arc` へ封じて publish する」経路に限る（design §State Management）。
+/// 変異は「後継像を組み立ててから `Arc` へ封じて publish する」経路に限る。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MirrorImage {
-    /// 単調増加する世代番号。後継像ごとに +1（決定論の観測条件・R2.5）。
+    /// 単調増加する世代番号。後継像ごとに +1（決定論の観測条件）。
     pub epoch: u64,
     /// フラット語彙の per-asker 区画（`%名前`・ゴースト相対）。
     pub flat_per_asker: BTreeMap<AskerId, BTreeMap<String, String>>,
@@ -65,7 +64,7 @@ impl MirrorImage {
 /// 安価に共有する（`Clone` は `Arc` の clone のみ）。
 ///
 /// single-writer（アクター）×multi-reader の並行戦略。single-writer 保証はアクター側
-/// （Task 5.x）の責務で、ここでは swap プリミティブのみを提供する。
+/// の責務で、ここでは swap プリミティブのみを提供する。
 #[derive(Clone)]
 pub struct SharedMirror {
     inner: Arc<RwLock<Arc<MirrorImage>>>,
@@ -81,16 +80,15 @@ impl SharedMirror {
 
     /// 現在の鏡像スナップショットを取得する（同期・無待機）。
     ///
-    /// # 無ブロッキング照会不変（R2.7 / R8.3）
+    /// # 無ブロッキング照会不変
     ///
     /// この関数が行うのは **read lock 取得 → `Arc` clone → lock 解放** のみである。
-    /// 他エンジン・他スレッドへのブロッキング照会を行わず、遅延しうる値源を載せない
-    /// （完了 spec `areka-P0-sylphya` の要件 2.7）。外部環境の値はここではなく、外から
-    /// 登録された読み手（注入可能な値源シーム・同 8.3）を通る。ゆえにプロパティ解決の
+    /// 他エンジン・他スレッドへのブロッキング照会を行わず、遅延しうる値源を載せない。外部環境の値はここではなく、外から
+    /// 登録された読み手（注入可能な値源シーム）を通る。ゆえにプロパティ解決の
     /// 読み経路がシステム全体の直列化点（大域ロック）にならない。
     pub fn load(&self) -> Arc<MirrorImage> {
         // lock が poison していても保持する Arc<MirrorImage> は常に整合な不変値なので
-        // 復帰して読み経路を非 panic に保つ（読み経路は決して失敗させない・R2.7）。
+        // 復帰して読み経路を非 panic に保つ（読み経路は決して失敗させない）。
         let guard = self.inner.read().unwrap_or_else(|e| e.into_inner());
         Arc::clone(&guard)
     }

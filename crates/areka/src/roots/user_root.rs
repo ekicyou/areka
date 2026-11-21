@@ -1,4 +1,4 @@
-//! プロセスに 1 つの形と、写す判断（spec: areka-P0-user-data-root 要件 3.4・4.3〜4.9・7.1）。
+//! プロセスに 1 つの形と、写す判断。
 //!
 //! 形は [`layout`] が 1 回だけ決めて覚える（`exe_location` と同じ型）。写す判断 [`plan_copy`] は
 //! 純粋で、並びの印（`RootMark::UserRoot`）・実行ファイルのフォルダ・種類・フォルダだけを読む。
@@ -14,7 +14,7 @@ use areka_user_data::{CopyDone, Layout, UserRoot};
 use super::ROOTS_ENV;
 
 /// プロセスに 1 つの形（初回に `establish` を 1 回だけ呼んで覚える）。読み取りだけの走りでは
-/// 作らず写さない `establish_readonly`（readonly-mode 要件 4.1・4.5）。
+/// 作らず写さない `establish_readonly`。
 pub(crate) fn layout() -> &'static Layout {
     static LAYOUT: OnceLock<Layout> = OnceLock::new();
     LAYOUT.get_or_init(|| {
@@ -33,7 +33,7 @@ pub(crate) fn listed_user_root() -> Option<&'static UserRoot> {
     listed_from(std::env::var_os(ROOTS_ENV).as_deref(), layout())
 }
 
-/// [`listed_user_root`] の値の判断: `AREKA_ROOT` が在れば（空でも）足さない（要件 3.4）。
+/// [`listed_user_root`] の値の判断: `AREKA_ROOT` が在れば（空でも）足さない。
 pub(crate) fn listed_from<'a>(
     roots_env: Option<&OsStr>,
     layout: &'a Layout,
@@ -60,7 +60,7 @@ fn store_of(root: &BasewareRoot, kind: StoreKind) -> PathBuf {
     }
 }
 
-/// 純粋な判断（要件 4.3・4.4・3.4・7.1）。`Copy` になるのは、並びに印の付いた項目が在り、
+/// 純粋な判断。`Copy` になるのは、並びに印の付いた項目が在り、
 /// `dir` の親が `<exe_dir>\<kind の置き場>` で、並びで書ける根が実行ファイルの隣の根より上に在るとき。
 pub(crate) fn plan_copy(
     roots: &BasewareRoots,
@@ -76,7 +76,7 @@ pub(crate) fn plan_copy(
     let user_at = items
         .iter()
         .position(|r| matches!(r.mark(), RootMark::UserRoot { .. }));
-    // 一時の置き場（`--ghost` の親）が実行ファイルのフォルダと同じ綴りでも、隣の根とは数えない（要件 3.9）。
+    // 一時の置き場（`--ghost` の親）が実行ファイルのフォルダと同じ綴りでも、隣の根とは数えない。
     let exe_at = items
         .iter()
         .position(|r| !r.is_temporary() && same_root(r.dir(), exe_dir));
@@ -99,7 +99,7 @@ fn kind_name(kind: StoreKind) -> &'static str {
 }
 
 /// 判断して写し、使うフォルダを返す（すべてのフックが通る 1 つの口）。
-/// 行き先が在れば写さずにそれ（要件 4.8・4.9）・写せた／先を越されたら行き先・失敗なら `dir` のまま（要件 4.7）。
+/// 行き先が在れば写さずにそれ・写せた／先を越されたら行き先・失敗なら `dir` のまま。
 pub(crate) fn copy_for_write(
     roots: &BasewareRoots,
     exe_dir: Option<&Path>,
@@ -163,7 +163,6 @@ pub(crate) fn exe_dir() -> Option<PathBuf> {
 }
 
 /// `readonly` なら写さず `dir` を返す（写すはずだったときだけ info 1 件）。そうでなければ `copy_for_write`。
-/// 写しの計画と写しの本体は変えない（readonly-mode 要件 4.4・4.5）。
 pub(crate) fn copy_unless_readonly(
     readonly: bool,
     roots: &BasewareRoots,

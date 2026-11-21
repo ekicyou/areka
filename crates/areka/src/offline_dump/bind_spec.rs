@@ -1,4 +1,4 @@
-//! `--dump-bind` の読みと、スコープの着せ替えへの当て方（要件 5.1〜5.9）。
+//! `--dump-bind` の読みと、スコープの着せ替えへの当て方。
 
 use areka_sakura::ActorKey;
 use areka_seriko::{BindResolver, NamedBindResult, ScopeStates, apply_named_bind, scope_namespace};

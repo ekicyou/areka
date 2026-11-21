@@ -1,4 +1,4 @@
-//! ヘッダつきの GET／NOTIFY の既定の実装の檻（areka-P0-script-security-level 要件 2.1・2.8・3.1）。
+//! ヘッダつきの GET／NOTIFY の既定の実装の檻。
 //!
 //! 既定のままの受け手（テストの偽物・中身なしの受け手）は、ヘッダを使わず今の `get`／`notify`
 //! を呼び、応答のレベルは無し——振る舞いは今と同じであることを固定する。
@@ -247,7 +247,7 @@ fn seen(sender: &str, sender_type: &str) -> Seen {
 
 #[test]
 fn schedule_category_passes_areka_internal() {
-    // 運行表（要件 2.2）: GET も NOTIFY も同じ入れ物。
+    // 運行表: GET も NOTIFY も同じ入れ物。
     let (got, _) = via_worker(get(EventId::Static("OnBoot")), None);
     assert_eq!(got, vec![seen("areka", "internal")]);
     let (got, outcome) = via_worker(notify(EventId::Static("OnNotifyOSInfo")), None);
@@ -257,14 +257,14 @@ fn schedule_category_passes_areka_internal() {
 
 #[test]
 fn choice_category_passes_areka_internal() {
-    // 選択肢（要件 2.2）。
+    // 選択肢。
     let (got, _) = via_worker(get(EventId::Choice("OnChoiceX".to_string())), None);
     assert_eq!(got, vec![seen("areka", "internal")]);
 }
 
 #[test]
 fn raise_event_category_passes_mcp_external_sstp() {
-    // MCP の raise_event（要件 2.3）: GET も NOTIFY も同じ入れ物。
+    // MCP の raise_event: GET も NOTIFY も同じ入れ物。
     let (got, _) = via_worker(get(EventId::Sstp("OnMcpEvent".to_string())), None);
     assert_eq!(got, vec![seen("MCP", "external,sstp")]);
     let (got, _) = via_worker(notify(EventId::Sstp("OnMcpEvent".to_string())), None);
@@ -273,20 +273,20 @@ fn raise_event_category_passes_mcp_external_sstp() {
 
 #[test]
 fn translate_category_passes_the_held_origin() {
-    // MCP の sakurascript の翻訳（要件 2.4）。
+    // MCP の sakurascript の翻訳。
     let (got, _) = via_worker(
         get(EventId::Translate(RequestOrigin::MCP_SEND_TRANSLATE)),
         None,
     );
     assert_eq!(got, vec![seen("MCP", "internal")]);
-    // ゴースト自身の応答の翻訳（要件 2.5）。
+    // ゴースト自身の応答の翻訳。
     let ghost = RequestOrigin {
         sender: SenderName::Areka,
         origin: ScriptOrigin::GHOST,
     };
     let (got, _) = via_worker(get(EventId::Translate(ghost)), None);
     assert_eq!(got, vec![seen("areka", "internal")]);
-    // raise_event の応答の翻訳（要件 2.6）。
+    // raise_event の応答の翻訳。
     let raised = RequestOrigin::for_translated(&EventId::Sstp("OnMcpEvent".to_string()));
     let (got, _) = via_worker(get(EventId::Translate(raised)), None);
     assert_eq!(got, vec![seen("areka", "external,sstp")]);
@@ -304,7 +304,7 @@ fn level_of(outcome: ShioriOutcome) -> SecurityLevel {
 
 #[test]
 fn external_reply_level_reaches_the_outcome() {
-    // 応答の external（大小無視）で結果のレベルが external（要件 3.1）。
+    // 応答の external（大小無視）で結果のレベルが external。
     let (_, outcome) = via_worker(get(EventId::Static("OnBoot")), Some("External"));
     assert_eq!(level_of(outcome), SecurityLevel::External);
     let (_, outcome) = via_worker(
@@ -316,7 +316,7 @@ fn external_reply_level_reaches_the_outcome() {
 
 #[test]
 fn absent_or_unreadable_reply_level_is_local() {
-    // 無い → local・読めない → local（要件 3.4）。
+    // 無い → local・読めない → local。
     let (_, outcome) = via_worker(get(EventId::Static("OnBoot")), None);
     assert_eq!(level_of(outcome), SecurityLevel::Local);
     let (_, outcome) = via_worker(get(EventId::Static("OnBoot")), Some("bogus"));

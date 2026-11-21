@@ -1,4 +1,4 @@
-//! 透過の宣言の読み（spec: areka-P0-self-alpha-declaration 要件 1・2・7）。
+//! 透過の宣言の読み。
 //!
 //! シェル（`seriko.use_self_alpha`）とバルーン（`use_self_alpha`）の 2 つの入口が、キー名と記録の
 //! `kind` の欄だけを変えて同じ関数 [`read_use_self_alpha`] を通る。fs には触らない（descript.txt の
@@ -14,7 +14,7 @@ use crate::load_records::LoadRecords;
 ///
 /// `descript` は descript.txt の本文（読めなかったら `None`）。`kind` は "shell" か "balloon"。
 /// 呼ぶたびに `info!` を 1 行（採った扱い・宣言によるかどうか）、値が読めないときは値つきの
-/// `warn!` をもう 1 行出す（要件 7.1・7.2）。`records` が [`LoadRecords::Quiet`] ならどちらも出さない。
+/// `warn!` をもう 1 行出す。`records` が [`LoadRecords::Quiet`] ならどちらも出さない。
 /// 同じキーが 2 行在るときは後の行が勝つ（`parse_kv` の決まり）。
 pub(crate) fn read_use_self_alpha(
     kind: &'static str,

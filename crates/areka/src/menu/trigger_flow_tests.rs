@@ -1,5 +1,4 @@
-//! 右ボタンの解放から計画ができるまでの流れ（[`handle_release`]・[`poll_once`]）の決定論テスト
-//! （要件 1.8・1.9・1.10・3.2・3.4・3.7・6.2・7.4）。
+//! 右ボタンの解放から計画ができるまでの流れ（[`handle_release`]・[`poll_once`]）の決定論テスト。
 //!
 //! 合成した `PointerState` で解放ハンドラを直接呼び、運行（kanade）宛ての受信端と
 //! [`MenuWiring`] の中身で結果を観測する。実窓も OS のメニューも使わない: 窓ハンドルは偽の値で、
@@ -284,7 +283,7 @@ fn a_release_of_another_button_does_nothing() {
     );
 }
 
-/// 入力の結線が済む前（`MouseWiring` が無い）の右解放は、記録して何もしない（要件 1.8）。
+/// 入力の結線が済む前（`MouseWiring` が無い）の右解放は、記録して何もしない。
 #[test]
 fn a_release_before_the_mouse_wiring_is_ignored() {
     let mut f = fixture();
@@ -301,7 +300,7 @@ fn a_release_before_the_mouse_wiring_is_ignored() {
     assert!(f.kanade.try_recv().is_err(), "何も送らない");
 }
 
-/// メニューの結線が済む前（`MenuWiring` が無い）も同じ扱い（要件 1.8）。
+/// メニューの結線が済む前（`MenuWiring` が無い）も同じ扱い。
 #[test]
 fn a_release_before_the_menu_wiring_is_ignored() {
     let mut f = fixture();
@@ -332,7 +331,7 @@ impl Drop for ResetDragState {
 /// 左ボタンを 1 度押して離した後（ドラッグの状態は `JustEnded` で休む）の右解放はメニューへ進む。
 ///
 /// 製品には状態を待機へ戻す呼び手が無いので、`JustEnded` を「ドラッグ中」と読むと、最初の
-/// 左クリック以降メニューが二度と出なくなる（実機確認 9.3 で発覚）。押下→解放は製品と同じ関数で踏む。
+/// 左クリック以降メニューが二度と出なくなる。押下→解放は製品と同じ関数で踏む。
 #[test]
 fn a_release_after_a_finished_left_click_still_opens_the_menu() {
     let mut f = fixture();
@@ -349,7 +348,7 @@ fn a_release_after_a_finished_left_click_still_opens_the_menu() {
     assert!(menu_wiring(&f.world).pending.is_some());
 }
 
-/// ドラッグの途中（左ボタンを押したまま）の右解放は、預かりを捨てて記録し何もしない（要件 1.9）。
+/// ドラッグの途中（左ボタンを押したまま）の右解放は、預かりを捨てて記録し何もしない。
 #[test]
 fn a_release_while_dragging_is_ignored_and_drops_the_deferred_double_click() {
     let mut f = fixture();
@@ -448,7 +447,7 @@ fn right_double_click_answered_late(visible: &str) -> (Fixture, Option<ReadyMenu
     (f, ready)
 }
 
-/// 返事が遅くても、メニューを抑止するゴーストへ右ダブルクリックがちょうど 1 件届く（要件 1.10）。
+/// 返事が遅くても、メニューを抑止するゴーストへ右ダブルクリックがちょうど 1 件届く。
 #[test]
 fn a_late_suppressing_reply_still_delivers_the_right_double_click() {
     let (mut f, ready) = right_double_click_answered_late("0");
@@ -665,7 +664,7 @@ fn a_suppressed_tick_without_a_deferred_double_click_sends_nothing() {
     assert!(!in_flight(&f.world));
 }
 
-/// 窓 1 の預かりは、窓 0 の要求が抑止に決着しても送らずに捨て、両方の窓番号を記録する（要件 4.2・4.5）。
+/// 窓 1 の預かりは、窓 0 の要求が抑止に決着しても送らずに捨て、両方の窓番号を記録する。
 #[test]
 fn a_suppressed_tick_drops_a_deferred_double_click_of_another_window() {
     let mut f = fixture();
@@ -702,7 +701,7 @@ fn a_suppressed_tick_drops_a_deferred_double_click_of_another_window() {
     );
 }
 
-/// メニューを出すなら、預かっていた右ダブルクリックは送らずに捨てる（要件 1.10）。
+/// メニューを出すなら、預かっていた右ダブルクリックは送らずに捨てる。
 #[test]
 fn a_shown_menu_drops_the_deferred_double_click_without_sending_it() {
     let mut f = fixture();
@@ -729,7 +728,7 @@ fn a_shown_menu_drops_the_deferred_double_click_without_sending_it() {
     );
 }
 
-/// 返事が来ないまま期限内なら待ち続け、期限を過ぎたら全件を既定名にして計画を作る（要件 3.4）。
+/// 返事が来ないまま期限内なら待ち続け、期限を過ぎたら全件を既定名にして計画を作る。
 #[test]
 fn an_unanswered_query_waits_until_the_deadline_then_falls_back_to_the_default_labels() {
     let mut f = fixture();
@@ -827,7 +826,7 @@ fn a_window_that_disappeared_while_waiting_drops_the_request() {
 
 /// 返事が速いとき（ふつうの場合）の右ダブルクリック: 解放 1 の照会は 2 度目の押下より前に
 /// 決着し（預かりはまだ無いので何も送らない）、2 度目の押下で預かり、解放 2 が 2 件目の要求として
-/// 受け付けられ、その照会の決着が預かりを送る（要件 1.10）。
+/// 受け付けられ、その照会の決着が預かりを送る。
 ///
 /// 受け付けた解放が預かりに触れると、2 件目の決着の時点で送る材料が無くなり、最後の表明が落ちる。
 #[test]
@@ -835,7 +834,6 @@ fn a_fast_suppressing_reply_still_delivers_the_right_double_click_through_the_se
     let mut f = fixture();
     let now = Instant::now();
 
-    // 解放 1: 照会はすぐ決着する。預かりはまだ無いので何も送らない。
     assert!(handle_release(
         &mut f.world,
         f.window,
@@ -850,7 +848,6 @@ fn a_fast_suppressing_reply_still_delivers_the_right_double_click_through_the_se
     assert!(f.kanade.try_recv().is_err(), "預かりが無いので何も送らない");
     assert!(!in_flight(&f.world), "1 件目が終わって印が降りている");
 
-    // 2 度目の押下で預かり、解放 2 は 2 件目の要求として受け付けられる。
     defer_double_click(&mut f.world);
     assert!(handle_release(
         &mut f.world,
@@ -872,7 +869,6 @@ fn a_fast_suppressing_reply_still_delivers_the_right_double_click_through_the_se
         .expect("MouseWiring は挿入済み")
         .defer_right_double_click(deferred);
 
-    // 2 件目の決着が預かりを送る。
     reply
         .send(vec![value("sakura.popupmenu.visible", "0")])
         .expect("受け口は生きている");

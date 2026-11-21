@@ -76,7 +76,6 @@ pub fn update_typewriters(
 
     for (entity, mut talk, layout_cache) in query.iter_mut() {
         let before = (talk.visible_cluster_count(), talk.state());
-        // 状態を更新し、発火すべきイベントを取得
         let events = talk
             .bypass_change_detection()
             .update(current_time, layout_cache.timeline());
@@ -173,7 +172,7 @@ pub fn draw_typewriters(
         );
 
         // 寸法を読む所の失敗も記録の失敗と同じ道へ渡す（列の無い部品に空の列を入れ、毎回やり直さない）。
-        // 透明の筆や描く効果が設定できないときは全文を描かず失敗にする（前の絵を残す・設計の決め 4）
+        // 透明の筆や描く効果が設定できないときは全文を描かず失敗にする（前の絵を残す）
         let recorded = text_ranges_and_origin(text_layout, typewriter.direction, visible_count)
             .and_then(|(whole_text, hidden, origin)| {
                 record_command_list(dc, |dc| {

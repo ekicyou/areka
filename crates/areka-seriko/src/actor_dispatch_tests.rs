@@ -1,9 +1,4 @@
 //! 受け口（`SerikoSink`）と受信の役者（`handle_message`）の結合テスト。
-//!
-//! 番号の出どころ: 無印と R の番号は areka-P0-seriko-engine の要件。2.2・2.3・5.4・11.6（R つきを
-//! 含む）と D4 は areka-P0-cue-playback-duration、バルーンの面のケース 6〜11 の 4.x は
-//! areka-P0-balloon-face-cue の要件。「ケース N」は spec の番号ではなく、このファイル（1〜14）と
-//! `actor_bind_loop_tests.rs`（15〜21）の通し番号。
 
 use super::test_support::*;
 use super::*;
@@ -11,8 +6,8 @@ use crate::output::{DisplayCommand, MockSurfaceOutput};
 use areka_sakura::{ActorKey, CueCommand};
 use dola::cue::CueSink;
 
-/// 受信端が生きていれば `emit` が `SerikoMsg::Cue` を inbox へ無変形で橋渡しする（R1.1/1.2・
-/// R11.6）。trait 実装＝結線契約（追加の口を設けず単一の出力契約 `CueSink` 経由でのみ届く）。
+/// 受信端が生きていれば `emit` が `SerikoMsg::Cue` を inbox へ無変形で橋渡しする。
+/// trait 実装＝結線契約（追加の口を設けず単一の出力契約 `CueSink` 経由でのみ届く）。
 #[test]
 fn emit_forwards_cue_to_inbox() {
     let (tx, rx) = std::sync::mpsc::channel::<SerikoMsg>();
@@ -34,7 +29,7 @@ fn emit_forwards_cue_to_inbox() {
 }
 
 /// コンパイル時検証: `SerikoSink` は cue 再生ランタイムへ登録可能な**単一の出力契約**
-/// （`dola::cue::CueSink + Clone + Send + 'static`）を満たす（R11.6・単一トレイト）。
+/// （`dola::cue::CueSink + Clone + Send + 'static`）を満たす。
 /// トレイトはフルパス束縛で参照する（`areka-emo-text` の `sink.rs` の `assert_cue_sink_contract` と同型）。
 fn assert_cue_sink_contract<T: dola::cue::CueSink + Clone + Send + 'static>() {}
 
@@ -43,24 +38,21 @@ fn seriko_sink_satisfies_cue_sink_contract() {
     assert_cue_sink_contract::<SerikoSink>();
 }
 
-/// 単発シナリオ（主 observable・R1.3/5.3）: 単純な発火 1 件を入力すると、
+/// 単発シナリオ: 単純な発火 1 件を入力すると、
 /// 期待どおりの表示指令 1 件が観測用出力先へちょうど記録される。
 ///
-/// 解決層・状態層・発行層（areka-P0-seriko-engine tasks.md 2.1〜2.3）を独立スレッド上で一本の
+/// 解決層・状態層・発行層を独立スレッド上で一本の
 /// 経路で結び、`emit_display` 単一発行点から発行されることを end-to-end で固定する。同期は
 /// `Close`→`ActorHandle::join`（Break 後のスレッド終了待ち）で決定論的に行い、sleep を
 /// 一切用いない（先に送った Cue は FIFO 単一スレッドゆえ join 復帰時に処理済み）。
 #[test]
 fn single_cue_emits_one_display_command() {
-    // 解決表（"通常"→2100 の 1 件だけ持つ小さな alias 表）と静的 bind 集合。
     let resolver = tiny_resolver();
     let binds = BindSet::from_ids([1100, 1207]);
 
-    // 観測用出力先。records() ハンドルを move 前に取得しておく。
     let out = MockSurfaceOutput::new();
     let records = out.records();
 
-    // アクター起動→単純な Shell 系 Emote 1 件を emit→Close→join で終了同期。
     let (mut sink, handle) = spawn_seriko(
         resolver,
         crate::DefaultBinds::uniform(binds.clone()),
@@ -72,7 +64,6 @@ fn single_cue_emits_one_display_command() {
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 
-    // 表示指令がちょうど 1 件、期待値どおり記録されていること（全値比較）。
     let recorded = records.lock().expect("records mutex poisoned");
     assert_eq!(recorded.len(), 1, "単発発火で表示指令はちょうど 1 件");
     assert_eq!(
@@ -88,7 +79,7 @@ fn single_cue_emits_one_display_command() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// 停止経路・異常系の網羅テスト（1.4/2.1/2.4/6.2/6.3/6.4/7.4）。
+// 停止経路・異常系の網羅テスト。
 //
 // 設計要点（cross-thread log の決定論化）:
 // - handler スレッドで発火する log（Unresolved の error!／非 Shell の debug!）は
@@ -102,7 +93,7 @@ fn single_cue_emits_one_display_command() {
 
 use areka_emo_compose::{BindSet, PatternState};
 
-/// ケース1（1.4/7.4）: 停止指令 Close による正常終了を独立実行テストで確認する。
+/// 停止指令 Close による正常終了を独立実行テストで確認する。
 ///
 /// `spawn_seriko`→`close()`→`join()` で `Break` 経由の正常終了（`Ok`）を決定論的に固定する。
 /// 同期は `join()` の一点のみ・sleep/polling なし。「Close による正常終了」だけを主張する
@@ -119,14 +110,13 @@ fn close_stops_normally() {
     );
 
     sink.close().expect("Close を送れること");
-    // Break→スレッド正常終了。panic なし＝Ok。
     assert!(
         handle.join().is_ok(),
         "Close 受領でアクターが正常終了する（Break 経路・1.4）"
     );
 }
 
-/// ケース2（1.4）: 送信端が全て失われた場合（disconnect）の正常終了を独立実行テストで確認する。
+/// 送信端が全て失われた場合（disconnect）の正常終了を独立実行テストで確認する。
 ///
 /// `spawn_seriko`→**全 Sender drop**（`SerikoSink` を drop・他に clone を残さない）→`join()`。
 /// inbox の `RecvError` で `run_inbox` ループが正常終了することを固定する。Close を送らない
@@ -142,22 +132,20 @@ fn disconnect_stops_normally() {
         out,
     );
 
-    // 全送信端（唯一の SerikoSink＝唯一の Sender）を drop。Close は送らない。
     drop(sink);
 
-    // 受信端の RecvError→ループ正常終了（Ok）。
     assert!(
         handle.join().is_ok(),
         "全 Sender drop（disconnect）でアクターが正常終了する（1.4）"
     );
 }
 
-/// ケース4（2.1/2.4/7.4）: 数値解釈の境界値が解決不能として扱われる（handler 経路＋解決失敗ログ）。
+/// 数値解釈の境界値が解決不能として扱われる（handler 経路＋解決失敗ログ）。
 ///
 /// 非表示指定以外の負値（`"-2"`）と許容範囲超（`"4294967296"`＝`u32::MAX+1`）を
 /// 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で流し、`Unresolved` の
 /// `error!` が残り・発行なし・`Continue` を決定論的に固定する。解決層単体は
-/// resolve.rs の 2.1 で檻済み。ここは **アクター handler 経路の解決失敗ログ**（7.4）を実行檻化。
+/// resolve.rs で檻済み。ここは **アクター handler 経路の解決失敗ログ** を固定する。
 #[test]
 fn numeric_boundary_is_unresolved() {
     for bad in ["-2", "4294967296"] {
@@ -200,7 +188,7 @@ fn numeric_boundary_is_unresolved() {
     }
 }
 
-/// ケース5（6.3/6.4）: アクター停止後の emit がログのみ残し panic せず全体を異常終了させない。
+/// アクター停止後の emit がログのみ残し panic せず全体を異常終了させない。
 ///
 /// 受信端の消失を**実アクター停止**で作る: `spawn_seriko`→`close()`→`join()`（アクター完全停止＝inbox 受信端消失）→
 /// その後テストスレッドで `emit` を `capture_text` 直下で呼ぶ。send 失敗が `error!` として
@@ -217,11 +205,10 @@ fn emit_after_actor_stopped_logs_no_panic() {
         out,
     );
 
-    // アクターを完全停止させる（Break→スレッド終了→inbox 受信端消失）。
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 
-    // 停止後の emit: send は Err だが panic せず error! を残して戻る（infallible 契約・6.3/6.4）。
+    // 停止後の emit: send は Err だが panic せず error! を残して戻る（infallible 契約）。
     let logs = capture_text(|| {
         CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100"));
     });
@@ -234,11 +221,11 @@ fn emit_after_actor_stopped_logs_no_panic() {
         logs.contains("target=areka_seriko"),
         "本クレート target で発火すること: {logs}"
     );
-    // panic せず本行へ到達したこと自体が「処理系全体が異常終了しない」証跡（6.4）。
+    // panic せず本行へ到達したこと自体が「処理系全体が異常終了しない」証跡。
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// バルーン面切替コマンドの消費経路（早期分岐）の網羅テスト（4.1/4.2/4.3/4.5/4.6）。
+// バルーン面切替コマンドの消費経路（早期分岐）の網羅テスト。
 //
 // 早期分岐（key 抽出 match の前段）は解決→適用→発行を arm 内で完結し値を返さないため、
 // 同期 `handle_message`＋`MockSurfaceOutput` の records 照合で発行を、`capture_logs_flow` で
@@ -246,7 +233,7 @@ fn emit_after_actor_stopped_logs_no_panic() {
 // 檻化する（cross-thread log 問題を回避）。
 // ─────────────────────────────────────────────────────────────────────
 
-/// ケース6（4.1）: 数値 key はバルーン面表示指令を単一発行点から発行する。
+/// 数値 key はバルーン面表示指令を単一発行点から発行する。
 ///
 /// `BalloonSurface{key:"2"}` を同期 `handle_message` へ流すと、`ShowBalloon{scope, surface_id:2}`
 /// がちょうど 1 件記録される（binds なし＝バルーンに着せ替え無し）。BalloonSurface
@@ -286,7 +273,7 @@ fn balloon_numeric_key_emits_showballoon() {
     );
 }
 
-/// ケース7（4.2）: `-1` はバルーン非表示指令を発行する。
+/// `-1` はバルーン非表示指令を発行する。
 #[test]
 fn balloon_minus_one_emits_hideballoon() {
     let resolver = tiny_resolver();
@@ -320,7 +307,7 @@ fn balloon_minus_one_emits_hideballoon() {
     );
 }
 
-/// ケース8（shell-balloon 4.8/4.9）: 名前形 key は文字の層が読むので、seriko は debug! だけを残し発行しない。
+/// 名前形 key は文字の層が読むので、seriko は debug! だけを残し発行しない。
 ///
 /// `\b[バルーン１]` 相当の非数値 key＝`NameForm` の行き先は文字の層（emo-text）が決め、名前形に
 /// ついての警告は文字の層だけが出す。同期 `handle_message`＋`capture_logs_flow` で warn! も
@@ -385,7 +372,7 @@ fn balloon_name_form_is_debug_only_no_emit() {
     );
 }
 
-/// ケース9（4.5・severity split）: 不正な数値 key は error! を 1 回だけ残し発行しない。
+/// 不正な数値 key は error! を 1 回だけ残し発行しない。
 ///
 /// 負の非 `-1`（`-2`）と `u32` 超過（`4294967296`）は破損入力＝`Invalid`。シェル経路の
 /// `Unresolved`→error! と同水準で、error! が**1 回だけ**・warn! は**0 回**・発行なし・`Continue`。
@@ -449,7 +436,7 @@ fn balloon_invalid_numeric_errors_once_no_emit() {
     }
 }
 
-/// ケース10（4.3・冪等）: 同一バルーン面への再指定は指令を再発行しない。
+/// 同一バルーン面への再指定は指令を再発行しない。
 ///
 /// `\b[2]` を 2 回流すと、2 回目は状態不変ゆえ `ShowBalloon` が 1 件のみ記録される
 /// （per-scope の冪等ガード・単一発行点の冪等抑止）。
@@ -502,11 +489,11 @@ fn balloon_same_surface_twice_emits_once() {
     );
 }
 
-/// ケース11（4.6・独立性）: シェル面切替とバルーン面切替の混在で双方が独立に記録される。
+/// シェル面切替とバルーン面切替の混在で双方が独立に記録される。
 ///
 /// `Emote{key:"2100"}`（シェル）と `BalloonSurface{key:"2"}`（バルーン）を同一 scope・同一
 /// states へ順に流すと、`Show{..,binds}`（シェル・binds 同梱）と `ShowBalloon{2}`（バルーン・
-/// binds なし）が互いに干渉せず送信順どおりに記録される（別 map・別発行・4.6）。
+/// binds なし）が互いに干渉せず送信順どおりに記録される（別 map・別発行）。
 /// バルーン cue が catch-all へ落ちると ShowBalloon が欠落して列照合が落ちる。
 #[test]
 fn shell_and_balloon_recorded_independently() {
@@ -516,7 +503,6 @@ fn shell_and_balloon_recorded_independently() {
     let mut loop_runtime = inert_runtime();
     let records = out.records();
 
-    // シェル面（Emote）→バルーン面（BalloonSurface）を同一 scope へ順に流す。
     let shell = handle_message(
         &resolver,
         &BindResolver::empty(),
@@ -562,17 +548,17 @@ fn shell_and_balloon_recorded_independently() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// broadcast honor 契約——担当外 cue の受信は正常経路（良性 debug!）（2.2/2.3/5.4/11.6）。
+// broadcast honor 契約——担当外 cue の受信は正常経路（良性 debug!）。
 //
-// broadcast（D4）で seriko は全 cue を受け取る。Balloon 系（Text/NewLine/Clear/ClearAll/Choice）は
+// broadcast で seriko は全 cue を受け取る。Balloon 系（Text/NewLine/Clear/ClearAll/Choice）は
 // emo-text の担当、Wait はどの演者の担当でもない純粋な待ち。いずれも seriko にとって「異常」でなく
 // 「正常な担当外受信」であり、action を無視しつつ duration を honor（＝新ローカル遅延を生まない・
 // seriko は自前 reveal/timeline を持たないので skip で自明に満たす）。ログは良性 debug! へ格下げ
 // （warn/error を出さない＝実害ない水準）。genuine anomaly（Unresolved=error/Invalid=error）
-// は据え置き——格下げしない（NameForm は shell-balloon で debug! へ）。
+// は据え置き——格下げしない（NameForm は debug!）。
 // ─────────────────────────────────────────────────────────────────────
 
-/// ケース12（6.2/2.3・broadcast honor）: 担当外（非 Shell＝Balloon 担当）の cue を broadcast
+/// 担当外（非 Shell＝Balloon 担当）の cue を broadcast
 /// 受信すると、異常でなく正常経路として skip され、ログは良性 `debug!`（WARN/ERROR を出さない）。
 ///
 /// 同期 `handle_message`＋`capture_logs_flow` で、WARN も ERROR も 0 件・DEBUG は観測可能
@@ -630,13 +616,13 @@ fn non_shell_broadcast_reception_is_benign_debug_no_warn_error() {
     );
 }
 
-/// ケース13（6.2/5.4・純粋 Wait honor）: Wait cue（どの演者の担当でもない純粋な待ち）を
+/// Wait cue（どの演者の担当でもない純粋な待ち）を
 /// broadcast 受信すると、action なしで skip され、ログは良性 `debug!`（WARN/ERROR なし）。
 ///
 /// `cue_target_of(Wait)==None` だが「分類不能」ではなく「担当演者なし」——Wait cue は正規に
 /// 届く合図なので、`warn!("分類できない")` は意味的に不正確なノイズ。debug! で残すことを
 /// 固定する。seriko は自前 timeline を持たず skip が新ローカル遅延を生まない
-/// （duration honor＝否定的 no-op・R5.4）。`None` 腕が `warn!` を出すと WARN=0 が落ちる。
+/// （duration honor＝否定的 no-op）。`None` 腕が `warn!` を出すと WARN=0 が落ちる。
 #[test]
 fn wait_broadcast_reception_is_benign_debug_no_warn_error() {
     let resolver = tiny_resolver();
@@ -684,7 +670,7 @@ fn wait_broadcast_reception_is_benign_debug_no_warn_error() {
     );
 }
 
-/// ケース14（2.2/2.3）: Shell でない合図と Wait を読み飛ばし、続く Emote は出る。spawn 経由の
+/// Shell でない合図と Wait を読み飛ばし、続く Emote は出る。spawn 経由の
 /// observable ゆえ cross-thread log には依存せず、発行列で示す。
 #[test]
 fn non_shell_and_wait_are_no_op_then_shell_cue_still_emits() {

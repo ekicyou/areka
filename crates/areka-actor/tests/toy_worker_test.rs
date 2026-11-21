@@ -1,17 +1,17 @@
-//! toy(a) 統合試験（8.1）: worker⇄worker request/reply を軸に、停止規約・積み残し破棄・
+//! toy(a) 統合試験: worker⇄worker request/reply を軸に、停止規約・積み残し破棄・
 //! 全 Sender drop 終了・panic join 観測・handler Err 後の受信継続を単一の試験群として
 //! 機械検証する。
 //!
 //! 本ファイルはクレートの**公開 API のみ**を用いる統合試験である（`use areka_actor::...`）。
 //! 全ケースは `recv_timeout`／bounded join を用い、**どのケースも無限ブロックしない**
-//! （8.3・設計「無限ブロックする試験を書かない」）。deadline は CI 余裕込み（応答は ms
+//! （無限ブロックする試験は書かない）。deadline は CI 余裕込み（応答は ms
 //! 到達・deadline は秒単位）。
 //!
-//! ケース対応（design toy(a) の i–vi・(i)・(ii) は (vi)・(iii) が含む）:
-//! - (iii) [`backlog_after_close_is_discarded_and_reply_dropped`] 積み残し破棄→要求側 Err(Dropped)（3.3/3.6）
-//! - (iv)  [`all_senders_dropped_joins_ok`]            全 Sender drop で join Ok（3.5）
-//! - (v)   [`panicking_body_join_is_panicked`]         panic body の join が Err(Panicked)（1.3）
-//! - (vi)  [`handler_err_does_not_stop_receive_loop`]  handler Err 後も後続処理継続（3.7）
+//! ケース対応（(i)・(ii) は (vi)・(iii) が含む）:
+//! - (iii) [`backlog_after_close_is_discarded_and_reply_dropped`] 積み残し破棄→要求側 Err(Dropped)
+//! - (iv)  [`all_senders_dropped_joins_ok`]            全 Sender drop で join Ok
+//! - (v)   [`panicking_body_join_is_panicked`]         panic body の join が Err(Panicked)
+//! - (vi)  [`handler_err_does_not_stop_receive_loop`]  handler Err 後も後続処理継続
 
 use std::fmt;
 use std::ops::ControlFlow;
@@ -24,7 +24,7 @@ use areka_actor::{ActorError, ReplyError, ReplySender, reply_channel, run_inbox,
 /// テスト全体の待機上限（CI 余裕込み）。実応答は ms 単位で到達する。
 const DEADLINE: Duration = Duration::from_secs(5);
 
-/// design の規範リファレンス形（envelope 規約の実例）。下流消費者はこの形の上に
+/// 規範リファレンス形（envelope 規約の実例）。下流消費者はこの形の上に
 /// 自分のメッセージ型を定義する。
 enum EchoMsg {
     /// payload をそのまま reply へ返す request/reply variant。
@@ -32,7 +32,7 @@ enum EchoMsg {
         payload: String,
         reply: ReplySender<String>,
     },
-    /// 横断制御の停止メッセージ（3.1・即時停止）。
+    /// 横断制御の停止メッセージ（即時停止）。
     Close,
 }
 
@@ -44,7 +44,7 @@ fn spawn_echo_worker() -> (Sender<EchoMsg>, areka_actor::ActorHandle) {
     spawn_actor::<EchoMsg, _>("echo-worker", |rx| {
         run_inbox::<EchoMsg, std::convert::Infallible>(rx, |msg| match msg {
             EchoMsg::Echo { payload, reply } => {
-                // 受信端が生存していれば必ず届く（2.3）。要求側が既に去っていれば
+                // 受信端が生存していれば必ず届く。要求側が既に去っていれば
                 // 未達値が Err で返るが、それは要求側キャンセルであり worker の失敗ではない。
                 let _ = reply.send(payload);
                 Ok(ControlFlow::Continue(()))
@@ -54,7 +54,7 @@ fn spawn_echo_worker() -> (Sender<EchoMsg>, areka_actor::ActorHandle) {
     })
 }
 
-/// (iii) Close 後続メッセージ破棄→要求側 Err(Dropped)（3.3/3.6）。
+/// (iii) Close 後続メッセージ破棄→要求側 Err(Dropped)。
 ///
 /// `Close` の**後ろ**に `Echo` を積む。worker は Close で即時停止し積み残しの Echo を
 /// drain せず破棄する。破棄された Echo に同梱された `ReplySender` も drop されるため、
@@ -64,7 +64,6 @@ fn backlog_after_close_is_discarded_and_reply_dropped() {
     let (tx, handle) = spawn_echo_worker();
 
     let (reply_tx, reply_rx) = reply_channel::<String>();
-    // Close を先に積み、その後ろに Echo を積む＝Echo は Close 越しの積み残しになる。
     tx.send(EchoMsg::Close).expect("send Close");
     tx.send(EchoMsg::Echo {
         payload: "should-be-discarded".to_owned(),
@@ -72,7 +71,6 @@ fn backlog_after_close_is_discarded_and_reply_dropped() {
     })
     .expect("send trailing Echo (still enqueues; will be discarded on stop)");
 
-    // worker は Close で止まり Echo を捨てる → 同梱 reply Sender drop → Dropped 観測。
     match reply_rx.recv_timeout(DEADLINE) {
         Err(ReplyError::Dropped) => {}
         other => panic!(
@@ -80,7 +78,6 @@ fn backlog_after_close_is_discarded_and_reply_dropped() {
         ),
     }
 
-    // 停止は決定的に完走する。
     let joined = join_within(DEADLINE, handle);
     assert!(
         matches!(joined, Some(Ok(()))),
@@ -88,7 +85,7 @@ fn backlog_after_close_is_discarded_and_reply_dropped() {
     );
 }
 
-/// (iv) 全 Sender drop で join Ok（3.5）。
+/// (iv) 全 Sender drop で join Ok。
 ///
 /// `Close` を送らず、`Sender<EchoMsg>` の全クローンを drop する。inbox が Disconnected に
 /// なり受信ループは正常終了、`join()` は `Ok(())`（有界）。
@@ -108,7 +105,7 @@ fn all_senders_dropped_joins_ok() {
     );
 }
 
-/// (v) panic body の join が Err(Panicked)（1.3）。
+/// (v) panic body の join が Err(Panicked)。
 ///
 /// body が panic するアクターを起動し、`join()` が `Err(ActorError::Panicked{..})` を返す。
 /// アクター名と panic payload（メッセージ）が観測可能であること。
@@ -132,7 +129,7 @@ fn panicking_body_join_is_panicked() {
     }
 }
 
-/// (vi) handler Err 後も後続処理継続（3.7・受信ループ耐障害）。
+/// (vi) handler Err 後も後続処理継続（受信ループ耐障害）。
 ///
 /// handler が「毒 payload」に対し `Err` を返す。基盤は error! 記録のうえ受信を継続し、
 /// 後続の `Echo` は正常に処理され reply が届く（後続 reply を観測して継続を確認）。
@@ -150,7 +147,6 @@ fn handler_err_does_not_stop_receive_loop() {
 
     let (tx, handle) = spawn_actor::<EchoMsg, _>("resilient-echo", |rx| {
         run_inbox::<EchoMsg, PoisonedPayload>(rx, |msg| match msg {
-            // 毒 payload は Err（＝この 1 件は処理失敗）。基盤はログして継続するはず。
             EchoMsg::Echo { payload, reply } if payload == "poison" => {
                 // reply は送らず drop（要求側は Dropped を観測し得るが本ケースの主眼ではない）。
                 drop(reply);
@@ -164,7 +160,6 @@ fn handler_err_does_not_stop_receive_loop() {
         });
     });
 
-    // 1件目: 毒 payload（handler が Err を返す）。その reply は破棄され Dropped。
     let (poison_reply_tx, poison_reply_rx) = reply_channel::<String>();
     tx.send(EchoMsg::Echo {
         payload: "poison".to_owned(),
@@ -178,7 +173,6 @@ fn handler_err_does_not_stop_receive_loop() {
         other => panic!("poison message reply should be Dropped, got {other:?}"),
     }
 
-    // 2件目: 正常 payload。handler Err の後でもループが生きていれば処理され reply が届く。
     let (ok_reply_tx, ok_reply_rx) = reply_channel::<String>();
     tx.send(EchoMsg::Echo {
         payload: "after-error".to_owned(),
@@ -190,7 +184,6 @@ fn handler_err_does_not_stop_receive_loop() {
         .expect("message AFTER a handler Err must still be processed and replied (3.7)");
     assert_eq!(got, "after-error", "follow-up reply payload must match");
 
-    // 後始末。
     tx.send(EchoMsg::Close).expect("send Close");
     handle.join().expect("resilient worker joins cleanly");
 }

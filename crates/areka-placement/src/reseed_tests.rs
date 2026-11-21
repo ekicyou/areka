@@ -1,4 +1,4 @@
-//! シェルの見た目の値の入れ直し（要件 2.7）の決定論テスト。
+//! シェルの見た目の値の入れ直しの決定論テスト。
 //!
 //! 窓は bare `World` に spawn の本物で組み、偽 HWND の `WindowHandle` で窓書込の口を通す
 //! （`SetWindowPosCommand` は enqueue だけで flush しない＝実窓には触れない）。
@@ -89,7 +89,6 @@ fn t_rs01_new_offset_and_alignment_reach_the_char_window_parts() {
     // キーワードの素材は新しい値に無いので外れる。
     assert!(world.get::<BalloonKeywordBase>(c0).is_none());
 
-    // 窓の位置とスコープの集合は不変・窓は増えない。
     assert_eq!(char_positions(&world, &windows), before);
     assert_eq!(
         world
@@ -100,7 +99,6 @@ fn t_rs01_new_offset_and_alignment_reach_the_char_window_parts() {
     );
     assert_eq!(char_window_count(&mut world), 2);
 
-    // バルーン窓は新しいずらしで置き直された。
     let p0 = before[0];
     assert_eq!(
         position_of(&world, windows.balloon_window(0).unwrap()),
@@ -372,7 +370,7 @@ fn anchor_of(world: &World, windows: &GhostWindows, scope: usize) -> (Anchor, An
     )
 }
 
-/// シェルの切り替えは台本で変えた向きを保つ（areka-P0-window-link-directives 要件 6.4・9.1）:
+/// シェルの切り替えは台本で変えた向きを保つ:
 /// 台本の印のある窓（scope 0・`free`）は向きが残り、印の無い窓（scope 1）は新しいシェルの向き
 /// （`top`）になる。どの窓も `AnchorSource.descript` は新しい値。向きが変わった窓だけ
 /// `alignment_changed`（shell_switch）が出て、`move_window` は書き手どおり（組なし・`free` だけ真）。
@@ -439,7 +437,7 @@ fn t_rs06_script_alignment_survives_and_unmarked_scopes_take_the_new_shell() {
     );
 }
 
-/// `move_window` は書き手（帳簿と向き）から付け直す（設計の決め 12）: 組 `{0,1}` の窓は、新しい
+/// `move_window` は書き手（帳簿と向き）から付け直す: 組 `{0,1}` の窓は、新しい
 /// シェルが `free` でも wintf に動かさせない。
 #[test]
 fn t_rs07_move_window_follows_the_drag_writer_for_grouped_windows() {
@@ -551,7 +549,7 @@ fn reanchor_to_top(
     (world, windows, events)
 }
 
-/// 4 回目（要件 6.1・6.2・6.4・単体 7 ⑵）: シェルの切り替えの置き直しは整合待ちの札のある窓を
+/// シェルの切り替えの置き直しは整合待ちの札のある窓を
 /// 見送り（位置は前のまま・`reseed_held` の `debug!`）、札の無い窓は新しい揃え方へ動かす。
 /// 見送りを外すと札のある窓への書込が窓書込の口の `debug_assert!`（`route=Some(AnchorChange)`）で落ちる。
 #[test]
@@ -572,7 +570,7 @@ fn t_rs10_reanchor_holds_a_window_with_the_dpi_sync_tag() {
     assert_eq!(held, vec![(tracing::Level::DEBUG, "0")], "{events:?}");
 }
 
-/// 単体 7 ⑶: 札を外して拡大率の相の書込（`DpiReproject`）を通すと、見送った窓は入れ直した
+/// 札を外して拡大率の相の書込（`DpiReproject`）を通すと、見送った窓は入れ直した
 /// 揃え方の位置（札が無かったときの置き直しと同じ位置）に置かれる。
 #[test]
 fn t_rs11_held_window_takes_the_new_alignment_once_the_tag_is_removed() {

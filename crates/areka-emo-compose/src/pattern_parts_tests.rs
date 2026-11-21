@@ -1,4 +1,4 @@
-//! `PatternState` の部品の欄（要件 5.3, 5.4, 5.10）。
+//! `PatternState` の部品の欄。
 //!
 //! 部品のコマは一番上のコマと別の欄で運ぶ。等しさは派生のままなので、`ComposeKey` の等価判定は
 //! 部品のコマを自動で含む。ここでは空の状態と部品の欄の走査・置換を固定する（挿入順・全部消した後・
@@ -23,7 +23,6 @@ fn part_frame_makes_state_non_empty_and_distinct() {
     a.set_part(1400, 0, frame(1401, 0, 0));
     assert!(!a.is_empty());
     assert_ne!(a, PatternState::default());
-    // 一番上の欄は空のまま。
     assert_eq!(a.iter().count(), 0);
 }
 

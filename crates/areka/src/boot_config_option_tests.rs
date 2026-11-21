@@ -1,8 +1,7 @@
-//! 起動の求め（`cli::BootRequest`）から起動の答えへ（areka-P0-startup-options-core タスク 5.2・
-//! 要件 2.2・2.4・2.5・5.3・6.2・6.3・6.8・11.2・11.5）。
+//! 起動の求め（`cli::BootRequest`）から起動の答えへ。
 //!
 //! テストの口 `resolve_boot_from` に引数の列を渡し（中で読み方を通す）、経路・場所・起動中の印の値を見る。
-//! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下・11.5）。
+//! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
 use crate::boot_config::{BootResolved, resolve_boot_from};
 use crate::boot_resolve::{
@@ -75,7 +74,7 @@ fn answer(got: &BootResolved) -> (GhostRoute, PathBuf, Option<String>) {
     (got.1.route, got.1.dir.clone(), got.3.clone())
 }
 
-/// オプションなしは今と同じ答え（2.2）: 引数なしは記憶、位置の引数は `Argv` で印を読まない。
+/// オプションなしは今と同じ答え: 引数なしは記憶、位置の引数は `Argv` で印を読まない。
 #[test]
 fn without_options_the_answer_is_as_today() {
     let tmp = fixture("cfg-opt-none");
@@ -97,7 +96,7 @@ fn without_options_the_answer_is_as_today() {
     );
 }
 
-/// 位置の引数と `--ghost` の両方なら位置の引数のゴーストは使わない（2.4）。
+/// 位置の引数と `--ghost` の両方なら位置の引数のゴーストは使わない。
 /// 指し先が見つからなくても位置の引数へ戻らず、いつもの選び方（記憶）。
 #[test]
 fn ghost_option_overrides_positional_ghost() {
@@ -109,7 +108,7 @@ fn ghost_option_overrides_positional_ghost() {
     );
 }
 
-/// `nobootcheck` なら印を読まない（6.2）: 印が在っても値は返らず、記憶で決まる。
+/// `nobootcheck` なら印を読まない: 印が在っても値は返らず、記憶で決まる。
 #[test]
 fn nobootcheck_does_not_read_the_mark() {
     let tmp = fixture("cfg-opt-nobootcheck");
@@ -120,7 +119,7 @@ fn nobootcheck_does_not_read_the_mark() {
     );
 }
 
-/// `--random` でも印を読み、値を返す（6.8）。選びは無作為の段（記憶・既定を見ない）。
+/// `--random` でも印を読み、値を返す。選びは無作為の段（記憶・既定を見ない）。
 #[test]
 fn random_still_returns_the_mark() {
     let tmp = fixture("cfg-opt-random-mark");
@@ -132,7 +131,7 @@ fn random_still_returns_the_mark() {
     );
 }
 
-/// 位置の引数のゴーストと `--random` なら位置の引数を起こし、無作為を使わなかったことを info（5.3）。
+/// 位置の引数のゴーストと `--random` なら位置の引数を起こし、無作為を使わなかったことを info。
 #[test]
 fn positional_ghost_with_random_logs_unused_random() {
     let tmp = fixture("cfg-opt-positional-random");
@@ -148,7 +147,7 @@ fn positional_ghost_with_random_logs_unused_random() {
     assert_eq!(unused, 1);
 }
 
-/// 位置のバルーンは `--ghost` の有無に関わらず今の道で使う（2.5）。
+/// 位置のバルーンは `--ghost` の有無に関わらず今の道で使う。
 #[test]
 fn positional_balloon_is_used_with_or_without_ghost_option() {
     let tmp = fixture("cfg-opt-positional-balloon");
@@ -170,7 +169,7 @@ fn positional_balloon_is_used_with_or_without_ghost_option() {
 }
 
 // ---------------------------------------------------------------------------
-// `--ghost` の指し先（タスク 5.3・要件 3.1〜3.3・3.8・3.10・3.11・4.1〜4.5・4.7・5.3・6.8）
+// `--ghost` の指し先
 // ---------------------------------------------------------------------------
 
 /// `boot` と同じだが写しの口を選べる。
@@ -217,7 +216,7 @@ fn count(events: &[log_capture_kit::CapturedEvent], level: tracing::Level, event
 }
 
 /// 絶対パスで置き場の外のゴーストを指すと、親が一時の置き場として並びと状態の先頭に足され、
-/// そのフォルダが `Pointed` で起きる（3.1・3.2）。info `temporary_root_added` が 1 件。
+/// そのフォルダが `Pointed` で起きる。info `temporary_root_added` が 1 件。
 #[test]
 fn absolute_path_adds_temporary_root_at_head() {
     let tmp = fixture("cfg-opt-ghost-abs");
@@ -246,7 +245,7 @@ fn absolute_path_adds_temporary_root_at_head() {
     );
 }
 
-/// 親がすでに置き場の `ghost\` なら一時の置き場を足さず、そのゴーストとして起こす（3.3）。
+/// 親がすでに置き場の `ghost\` なら一時の置き場を足さず、そのゴーストとして起こす。
 #[test]
 fn absolute_path_under_root_ghost_store_adds_no_temporary_root() {
     let tmp = fixture("cfg-opt-ghost-abs-in-root");
@@ -264,7 +263,7 @@ fn absolute_path_under_root_ghost_store_adds_no_temporary_root() {
     );
 }
 
-/// 同じフォルダ名のゴーストが置き場にあっても、写しの口があっても、指されたフォルダそのもの（3.8）。
+/// 同じフォルダ名のゴーストが置き場にあっても、写しの口があっても、指されたフォルダそのもの。
 #[test]
 fn absolute_path_boots_the_pointed_folder_itself() {
     let tmp = fixture("cfg-opt-ghost-abs-same-name");
@@ -278,7 +277,7 @@ fn absolute_path_boots_the_pointed_folder_itself() {
     );
 }
 
-/// 絶対パスだがゴーストのフォルダでない: 一時の置き場を足さず warn 1 件・いつもの選び方（3.10）。
+/// 絶対パスだがゴーストのフォルダでない: 一時の置き場を足さず warn 1 件・いつもの選び方。
 #[test]
 fn absolute_path_not_a_ghost_folder_falls_back_to_usual() {
     let tmp = fixture("cfg-opt-ghost-abs-not-ghost");
@@ -297,7 +296,7 @@ fn absolute_path_not_a_ghost_folder_falls_back_to_usual() {
     );
 }
 
-/// 次の起動で一時の置き場が無く、記憶が一時の置き場のゴーストを指す: 見つからないを記録して次の段へ（3.11）。
+/// 次の起動で一時の置き場が無く、記憶が一時の置き場のゴーストを指す: 見つからないを記録して次の段へ。
 #[test]
 fn next_boot_does_not_find_the_temporary_ghost_in_memory() {
     use areka_sylphya::persist::FsPersistIo;
@@ -322,7 +321,7 @@ fn next_boot_does_not_find_the_temporary_ghost_in_memory() {
     );
 }
 
-/// 名前は `name` が先・一致が無ければフォルダ名（4.1〜4.3）。名前の指し先は写す。
+/// 名前は `name` が先・一致が無ければフォルダ名。名前の指し先は写す。
 #[test]
 fn name_matches_descript_name_before_folder_name() {
     let tmp = fixture("cfg-opt-ghost-name");
@@ -347,7 +346,7 @@ fn name_matches_descript_name_before_folder_name() {
     );
 }
 
-/// 名前が見つからない: warn 1 件・いつもの選び方（4.4）。
+/// 名前が見つからない: warn 1 件・いつもの選び方。
 #[test]
 fn name_not_found_falls_back_to_usual() {
     let tmp = fixture("cfg-opt-ghost-name-miss");
@@ -362,7 +361,7 @@ fn name_not_found_falls_back_to_usual() {
     );
 }
 
-/// 値が 2 つ以上なら最初の値のゴーストだけ（4.5）。
+/// 値が 2 つ以上なら最初の値のゴーストだけ。
 #[test]
 fn extra_ghost_values_boot_only_the_first() {
     let tmp = fixture("cfg-opt-ghost-extra");
@@ -373,7 +372,7 @@ fn extra_ghost_values_boot_only_the_first() {
     );
 }
 
-/// 値が無ければいつもの選び方（4.7）。
+/// 値が無ければいつもの選び方。
 #[test]
 fn ghost_without_value_uses_usual_choice() {
     let tmp = fixture("cfg-opt-ghost-empty");
@@ -384,7 +383,7 @@ fn ghost_without_value_uses_usual_choice() {
     );
 }
 
-/// `--ghost` でも起動中の印を読み、値を返す（6.8）。起こすのは指し先（印に関わらず・3.1・4.3）。
+/// `--ghost` でも起動中の印を読み、値を返す。起こすのは指し先（印に関わらず）。
 #[test]
 fn ghost_option_still_returns_the_mark() {
     let tmp = fixture("cfg-opt-ghost-mark");
@@ -401,7 +400,7 @@ fn ghost_option_still_returns_the_mark() {
     }
 }
 
-/// 指し先と `--random`: 指し先を起こし、無作為を使わなかったことを info 1 件（5.3）。
+/// 指し先と `--random`: 指し先を起こし、無作為を使わなかったことを info 1 件。
 #[test]
 fn pointed_ghost_with_random_logs_unused_random() {
     let tmp = fixture("cfg-opt-ghost-random");

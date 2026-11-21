@@ -75,7 +75,7 @@ fn diag_lines(events: &[log_capture_kit::CapturedEvent]) -> Vec<String> {
         .collect()
 }
 
-/// 要件 1.1 正典出力点: 構築点で全モニタの識別子・bounds・work_area・DPI・primary が
+/// 正典出力点: 構築点で全モニタの識別子・bounds・work_area・DPI・primary が
 /// 物理 px で 1 回出力され、行は呼出点タグ `monitor_snapshot` を名乗る。
 /// ログだけからモニタ構成（台数・各台の全 5 フィールド）を再構成できる。
 #[test]
@@ -110,7 +110,7 @@ fn boot_snapshot_logs_every_monitor_with_the_canonical_call_site_tag() {
 }
 
 /// 呼出点タグは列挙点（`prepare_ghost_windows`）と**別**でなければならない
-/// （要件 1.1「呼出点タグで区別できる」）。構築点をもう一方のタグへ collapse する
+/// （呼出点タグで区別できる）。構築点をもう一方のタグへ collapse する
 /// 退行はここで赤になる。
 #[test]
 fn boot_snapshot_tag_differs_from_the_prepare_call_site_tag() {
@@ -130,12 +130,11 @@ fn boot_snapshot_tag_differs_from_the_prepare_call_site_tag() {
 }
 
 /// シームは観測を足すだけで、権威 Resource の中身（placement の全判断が読む値）を
-/// 一切変えない（D2: 観測増設は挙動変更に数えない）。
+/// 一切変えない。
 ///
 /// 起動時が作るのは作業領域源と**モニタ別拡大率表**の 2 源であり、実行時の同期段
-/// （`areka_runtime::frame::work_area_sync`）と**同一の構築関数**を通る（atom task 5.1・
-/// 要件 5.1）——起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う
-/// 形になり得る。
+/// （`areka_runtime::frame::work_area_sync`）と**同一の構築関数**を通る——起動時だけが別の作り方を
+/// すると、同期が入った後も起動時の値だけが違う形になり得る。
 #[test]
 fn boot_snapshot_returns_the_same_authority_resource_as_before() {
     let monitors = synthetic_monitors();
@@ -147,7 +146,7 @@ fn boot_snapshot_returns_the_same_authority_resource_as_before() {
 }
 
 /// 起動時に挿す 2 源は**同じモニタ列**から作られ、台数も並びも一致する（片方だけ古い運転を
-/// 作らない・atom C6）。
+/// 作らない）。
 #[test]
 fn boot_snapshot_builds_both_sources_from_the_same_monitor_list() {
     let monitors = synthetic_monitors();

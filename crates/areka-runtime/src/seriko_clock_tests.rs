@@ -1,4 +1,4 @@
-//! 刻みと seriko が同じ時計を読むことの檻（spec: areka-P0-animated-image-playback 要件 1.6・2.9）。
+//! 刻みと seriko が同じ時計を読むことの檻。
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -20,6 +20,6 @@ fn ticker_and_seriko_read_the_same_clock() {
         assert_eq!((config.clock)().0, t, "刻みの時計");
         assert_eq!(seriko_clock(), t, "seriko の時計");
     }
-    // 周期は今までの既定（16 ms）のまま。
+    // 周期は既定（16 ms）のまま。
     assert_eq!(config.interval, LoopTickerConfig::default().interval);
 }

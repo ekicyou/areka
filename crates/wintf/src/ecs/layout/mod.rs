@@ -58,11 +58,7 @@
 //! instead of all four points, achieving O(2) fast rectangle transformation.
 //!
 //! Constraint: Rotation and skew transformations are not supported.
-//!
-//! The arrangement propagation systems in the systems module leverage generic functions from
-//! ecs::common::tree_system: sync_simple_transforms, mark_dirty_trees, and propagate_parent_transforms.
 
-// Layout System サブモジュール
 pub mod arrangement;
 pub mod box_style;
 pub mod dimension;
@@ -73,13 +69,12 @@ pub mod rect;
 pub mod systems;
 pub mod taffy;
 
-// 公開API
 pub use arrangement::*;
 pub use box_style::*;
 pub use dimension::*;
 pub use hit_test::*;
 pub use metrics::*;
-pub use rect::*; // D2DRect, D2DRectExt, transform_rect_axis_aligned
+pub use rect::*;
 pub use systems::*;
 pub use taffy::*;
 
@@ -127,14 +122,12 @@ use bevy_ecs::prelude::*;
 #[component(storage = "SparseSet", on_add = on_layout_root_add)]
 pub struct LayoutRoot;
 
-/// LayoutRootコンポーネントが追加されたときに呼ばれるフック
-/// Arrangementを自動挿入する（既に存在する場合はスキップ）
+/// LayoutRootが追加されたとき、Arrangementが無ければ挿入するフック
 fn on_layout_root_add(
     mut world: bevy_ecs::world::DeferredWorld,
     context: bevy_ecs::lifecycle::HookContext,
 ) {
     let entity = context.entity;
-    // Arrangementがまだ存在しない場合のみ挿入
     if world.get::<Arrangement>(entity).is_none() {
         world
             .commands()

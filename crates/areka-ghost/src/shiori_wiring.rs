@@ -1,14 +1,12 @@
 //! 本番の SHIORI 接続手続き（`real_connect`）。
 //!
-//! 実行ファイル起動から応答待ち受け・読み込み確認までの一連の接続手順を、
-//! 起動時に一度だけ実行される形で提供する。接続に必要なパスはマウント解決
-//! 結果（`MountModel.shiori`）から取り出し、欠落時は接続失敗として扱う
-//! （design.md「ghost::shiori_wiring」）。
+//! 実行ファイル起動から応答待ち受け・読み込み確認までの一連の接続手順を、起動時に一度だけ実行される形で提供する。
+//! 接続に必要なパスはマウント解決結果（`MountModel.shiori`）から取り出し、欠落時は接続失敗として扱う。
 //!
 //! `crates/areka-kanade/tests/kanade/real_helper_test.rs` の `connect_real_helper`
 //! 実証手順（`ParentMessageWindow::create()` → `spawn` → `pump_until_hello_or` →
 //! `send_request(MsgTag::Load, ..)` ack 確認）を本番結線へ昇格したものであり、
-//! host-32 の語彙・IPC・プロトコルは変更せず消費のみ行う（要件 3.5）。
+//! host-32 の語彙・IPC・プロトコルは変更せず消費のみ行う。
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -32,13 +30,11 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 /// `RUST_LOG` は **target 名**で指定する（`ghost-boot=debug`。モジュールパス名では点かない）。
 const LOG_TARGET: &str = "ghost-boot";
 
-/// 既定の文字コードを、ファイル層（`DefaultEncoding::to_encoding`）と同じ固定写像で決める
-/// （要件 1.3）。
+/// 既定の文字コードを、ファイル層（`DefaultEncoding::to_encoding`）と同じ固定写像で決める。
 ///
-/// OS のロケール設定は読まない（読む箇所 0）。ファイル層から橋渡しせず ghost 側に写像を
-/// 置くのは、host-32 側の `Charset` へ渡す際に「UTF-16 でない」ことを検査する失敗腕が要り、
-/// その腕が固定写像では到達不能＝記録のない死んだ失敗経路になるため（design
-/// §shiori_wiring の裁定）。ここには失敗経路が無い。
+/// OS のロケール設定は読まない。ファイル層から橋渡しせず ghost 側に写像を置くのは、host-32 側の `Charset` へ
+/// 渡す際に「UTF-16 でない」ことを検査する失敗腕が要り、その腕が固定写像では到達不能＝記録のない
+/// 死んだ失敗経路になるため。ここには失敗経路が無い。
 ///
 /// `DefaultEncoding` は `#[non_exhaustive]` ゆえ網羅の腕が要るが、本番の既定は `Ansi`
 /// ＝Shift_JIS であり、写像は値を返すだけで失敗しない。
@@ -46,21 +42,19 @@ fn default_charset(default: DefaultEncoding) -> Charset {
     match default {
         DefaultEncoding::Ansi => Charset::SHIFT_JIS,
         DefaultEncoding::Utf8 => Charset::UTF_8,
-        // `#[non_exhaustive]` が要求する腕。覆うのは将来の新しい変種だけで、
-        // 現在の 2 つはいずれも上で名指ししている。
+        // `#[non_exhaustive]` が要求する腕。覆うのは将来の新しい変種だけ。
         _ => Charset::SHIFT_JIS,
     }
 }
 
-/// descript の 2 キーから初期の文字コードを決め、交渉状態を組み立てる（要件 2.1・2.4・2.6）。
+/// descript の 2 キーから初期の文字コードを決め、交渉状態を組み立てる。
 ///
 /// 優先順は `shiori.forceencoding` ＞ `shiori.encoding` ＞ 既定（[`default_charset`]）。
 /// 解決できない宣言は警告ログ 1 行（キー名・ラベル・理由・採用した後退先）を出して次の
 /// 優先順へ後退し、`shiori.forceencoding` が退けられたときは**強制の効力も失う**
-/// （以後は応答の `Charset` ヘッダに従う・要件 2.4）。記録なしに後退する経路は無い（要件 7.1）。
+/// （以後は応答の `Charset` ヘッダに従う）。記録なしに後退する経路は無い。
 ///
-/// 警告の `fallback` には最終的に採用した正規名を書くため、決定を先に済ませてから
-/// 警告・情報の順に記録する（design「後退先を先に決めてから記録する」）。
+/// 警告の `fallback` には最終的に採用した正規名を書くため、決定を先に済ませてから警告・情報の順に記録する。
 pub(crate) fn initial_charset(shiori: &ShioriMount, default: DefaultEncoding) -> CharsetNegotiator {
     // 退けた宣言（キー名・生ラベル・理由）。後退先が決まるまで記録を保留する。
     let mut rejected: Vec<(&'static str, &str, &'static str)> = Vec::new();
@@ -109,9 +103,9 @@ pub(crate) fn initial_charset(shiori: &ShioriMount, default: DefaultEncoding) ->
 
 /// 本番 connect クロージャを構成する（実行は shiori アクタースレッド上・一度だけ）。
 ///
-/// 接続手順（`real_helper_test.rs::connect_real_helper` を昇格したもの）:
+/// 接続手順（`areka-kanade` の `real_helper_test.rs::connect_real_helper` と同じ手順）:
 /// 1. `shiori.file` が `None` なら DLL ファイル名が未解決＝即座に接続失敗（`Err`）。
-///    ウィンドウ生成・プロセス起動のいずれも試みない（推測しない・design.md）。
+///    ウィンドウ生成・プロセス起動のいずれも試みない（推測しない）。
 /// 2. `ParentMessageWindow::create()` で親 message-only 窓を生成する（`!Send`・
 ///    呼び出しスレッド＝shiori アクタースレッド上で実行される前提）。
 /// 3. `spawn(helper_exe, helper_dir, shiori_name, parent_hwnd)` で i686 helper を起動する
@@ -120,21 +114,18 @@ pub(crate) fn initial_charset(shiori: &ShioriMount, default: DefaultEncoding) ->
 /// 4. `pump_until_hello_or(HANDSHAKE_TIMEOUT)` で HELLO 受領（ハンドシェイク完了）を観測する。
 /// 5. `send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)` で LOAD を発行し ack `[1]` を確認する。
 /// 6. 版の確かめを 1 往復し、[`record_version`] で記録して決めた版を接続へ渡す
-///    （確かめの失敗は 3.0 とみなすだけで、接続を失敗にしない・要件 2.1・2.5）。
+///    （確かめの失敗は 3.0 とみなすだけで、接続を失敗にしない）。
 ///
 /// いずれかの段で失敗すれば `Err(String)`（呼び出し側で `ShioriDown` へ写る）。成功時は
 /// `Box<dyn ShioriBackend>`（実体は `ShioriConnection { window, helper, negotiator }`）を返す。
 ///
-/// # 初期の文字コード（要件 2.7・5.2）
-/// 初期値の決定（[`initial_charset`]）は**クロージャを返す前に**、つまり `real_connect` を
-/// 呼んだスレッド上で同期に行う。理由は 2 つ（design §shiori_wiring）: 起動ログが呼出
-/// スレッドの同期発火しか捕捉できないこと、そして接続に失敗しても決定と根拠が記録に
-/// 残ること（要件 2.6）。決めた交渉状態はクロージャへ move され、接続成立時に
-/// `ShioriConnection` の持ち物になる。
+/// # 初期の文字コード
+/// 初期値の決定（[`initial_charset`]）は**クロージャを返す前に**、つまり `real_connect` を呼んだスレッド上で
+/// 同期に行う。起動ログが呼出スレッドの同期発火しか捕捉できないことと、接続に失敗しても決定と根拠が
+/// 記録に残ることが理由。決めた交渉状態はクロージャへ move され、接続成立時に `ShioriConnection` の持ち物になる。
 ///
-/// 交渉状態はこの呼び出しごとに新しく作られるので、ゴーストを起動し直す（SHIORI を
-/// load し直す）たびに descript 由来の初期値へ戻り、前回セッションの採用結果は引き継が
-/// れない（要件 5.2）。
+/// 交渉状態はこの呼び出しごとに新しく作られるので、ゴーストを起動し直す（SHIORI を load し直す）たびに
+/// descript 由来の初期値へ戻り、前回セッションの採用結果は引き継がれない。
 pub fn real_connect(
     helper_exe: PathBuf,
     shiori: ShioriMount,
@@ -144,7 +135,7 @@ pub fn real_connect(
     let negotiator = initial_charset(&shiori, default_encoding);
 
     move || {
-        // 1. `file` が None なら推測せず即座に失敗（design.md「推測しない」）。
+        // `file` が None なら推測せず即座に失敗する。
         let Some(shiori_name) = shiori.file else {
             return Err(format!(
                 "SHIORI DLL のファイル名が未解決のため接続できません（dir={}）",
@@ -152,7 +143,7 @@ pub fn real_connect(
             ));
         };
         let load_dir = shiori.dir;
-        // helper へは決定 6 の形で渡す（記録の名前は元のパスから取る・要件 6.4）。
+        // helper へは決定 6 の形で渡す（記録の名前は元のパスから取る）。
         let helper_dir = helper_load_dir(&load_dir).map_err(|e| {
             format!(
                 "読み込みのパスを絶対パスにできない（dir={}）: {e}",
@@ -194,7 +185,7 @@ pub fn real_connect(
         }
 
         // 6. 版の確かめ（SSP と同じ GET Version の 1 往復）。読み込みのたびにこの閉包が
-        //    走るので、読み直しで確かめ直す。失敗しても 3.0 とみなして接続は続ける（要件 2.5）。
+        //    走るので、読み直しで確かめ直す。失敗しても 3.0 とみなして接続は続ける。
         let mut negotiator = negotiator;
         let verdict = Shiori3Client::new(&window, &mut negotiator).probe_version();
         let version = record_version(&ghost_label(&load_dir), verdict);
@@ -202,36 +193,27 @@ pub fn real_connect(
         Ok(Box::new(ShioriConnection {
             window,
             helper: HelperLifecycle::new(helper),
-            // 起動時に決めた初期値（この `real_connect` 呼び出しに 1 つ・要件 5.2）。
+            // 起動時に決めた初期値（この `real_connect` 呼び出しに 1 つ）。
             //
-            // 宣言を持たない UTF-8 のゴースト（emo2 の pasta）では初期値が既定の Shift_JIS に
-            // なる。そこから採用が起きるまでに `Charset: Shift_JIS` を名乗る要求は **3 本**
-            // ある——片道イベントの応答は採用の根拠に用いない（要件 5.3）ためで、並びは
-            // 上の版の確かめと、`areka-kanade` の boot 状態機械（`schedule/boot.rs`）の
-            // 発行点 3 つで決まる:
+            // 宣言を持たない UTF-8 のゴースト（emo2 の pasta）では初期値が既定の Shift_JIS になり、
+            // 採用が起きるまでに `Charset: Shift_JIS` を名乗る要求が 3 本ある（片道イベントの応答は
+            // 採用の根拠に用いないため）。並びは `areka-kanade` の `schedule/boot.rs` の発行点で決まる:
+            // 0. この閉包の中の版の確かめ（`GET Version`）。応答は採用に回さない。
+            // 1. `boot_start` が発行する `OnInitialize`＝片道の NOTIFY。応答は `client.rs` の `notify` が
+            //    破棄するだけで、応答ヘッダを採用へ回す手続きを呼ばない。
+            // 2. `on_reply` の `BootInit` + `Notified` 腕が発行する username リソース照会＝応答待ちの GET。
+            //    相手が名乗る `Charset: UTF-8` を採用するのはこの応答。
+            // 3. `OnFirstBoot`（起動記録があれば `OnBoot`）の GET から UTF-8 になり、以後は変わらない。
             //
-            // 0. この閉包の中の版の確かめ（`GET Version`・上の 6.）。応答は採用に回さない。
-            // 1. `boot_start`（Idle+Boot の遷移関数）が発行する `OnInitialize`＝**片道の
-            //    NOTIFY**。その応答は `client.rs` の `notify` が破棄するだけで、応答ヘッダを
-            //    採用へ回す手続きを呼ばない（同関数の本文にその経路が無いことは通信層の
-            //    構造検査が数えている）。よってこの応答では採用が起きない。
-            // 2. `on_reply` の `BootInit` + `Notified` 腕が発行する username リソース照会
-            //    ＝**応答待ちの GET**。これも Shift_JIS で出る。相手が名乗る
-            //    `Charset: UTF-8` を採用するのはこの応答。
-            // 3. prefetch 応答を写して発行する `OnFirstBoot`＝GET（初回起動の場合。起動記録が
-            //    あれば同じ腕が `OnFirstBoot` を飛ばして `OnBoot` を発行するが、4 本目から
-            //    UTF-8 になる点は変わらない）。ここから UTF-8 になり、以後は変わらない（要件 2.7）。
-            //
-            // 3 本とも本文は ASCII のみ（References を持たず `Sender`／`Status` の値も ASCII の
-            // 語彙）なので、適用前と違うのは `Charset` ヘッダの値だけ。採用の規則は実行層では
-            // なく交渉状態の持ち物であり、ここは決めた値を渡すだけ。
+            // 本文は ASCII のみなので、`Charset` ヘッダの値だけが違う。採用の規則は交渉状態の持ち物で、
+            // ここは決めた値を渡すだけ。
             negotiator,
             version,
         }) as Box<dyn ShioriBackend>)
     }
 }
 
-/// 版の確かめの結果を 1 行記録し、話す版を返す（要件 2.4・2.5）。
+/// 版の確かめの結果を 1 行記録し、話す版を返す。
 ///
 /// 決めたら INFO、決められなければ WARN を出して 3.0 とみなす。
 fn record_version(ghost: &str, verdict: VersionVerdict) -> ShioriVersion {
@@ -277,7 +259,6 @@ fn ghost_label(master_dir: &Path) -> String {
 }
 
 /// helper の `load` へ渡すフォルダのパス＝絶対パス・`\` の区切り・末尾に `\` が 1 つ
-/// （要件 6.4・`shiori4-api` の決定 6 の helper の道の前倒し）。
 ///
 /// 華和梨などはこれにファイル名をそのままつなげて辞書を開くので、区切りの混在や末尾の
 /// 区切りなし（`…\ghost/master`）では読めない。同じプロセス内の道（`inproc_connect`）も
@@ -290,11 +271,11 @@ pub(crate) fn helper_load_dir(dir: &Path) -> std::io::Result<PathBuf> {
     Ok(shaped)
 }
 
-/// 何を聞かれても中身なしで答える SHIORI（`--option dontloadmodule`・要件 7.2〜7.5）。
+/// 何を聞かれても中身なしで答える SHIORI（`--option dontloadmodule`）。
 ///
 /// 問い合わせには中身なし（204）、知らせには成功、終わりにはきれいな終了、状態には
-/// 動いている、で答える。起動の問い合わせの 204 は台本なしで次へ進み（要件 7.3）、
-/// 終了の問い合わせの 204 は終わる（要件 7.5）——どちらも kanade の今の決まりのまま。
+/// 動いている、で答える。起動の問い合わせの 204 は台本なしで次へ進み、終了の問い合わせの 204 は終わる
+/// ——どちらも kanade の今の決まりのまま。
 pub struct EmptyShiori;
 
 impl ShioriBackend for EmptyShiori {
@@ -328,7 +309,7 @@ impl ShioriBackend for EmptyShiori {
 /// `ShioriWiring::Custom` に渡す [`EmptyShiori`] の閉包。
 ///
 /// 窓もプロセスも作らず、`descript.txt` の SHIORI の行（`mount.shiori`）を読まないので、
-/// SHIORI の行が無い・読めない SHIORI を指すゴーストでも起動は失敗にならない（要件 7.4）。
+/// SHIORI の行が無い・読めない SHIORI を指すゴーストでも起動は失敗にならない。
 pub fn empty_connect() -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send + 'static {
     || Ok(Box::new(EmptyShiori) as Box<dyn ShioriBackend>)
 }
@@ -347,12 +328,11 @@ mod tests {
         crate::test_support::shiori_mount("ghost-shiori-wiring", &descript)
     }
 
-    /// `shiori.file` が `None`（DLL ファイル名未解決）なら、ウィンドウ生成やプロセス起動を
-    /// 一切試みずに即座に接続失敗となる（design.md「`file` が `None` の場合は接続失敗」）。
+    /// `shiori.file` が `None`（DLL ファイル名未解決）なら、ウィンドウ生成やプロセス起動を一切試みずに
+    /// 即座に接続失敗となる。
     ///
-    /// `helper_exe` も意図的に存在しないパスにしておき、もし実装が誤って spawn まで
-    /// 進んでしまった場合でも「別の」エラー（spawn 失敗）に化けてこのテストが誤って
-    /// 通ってしまわないよう、エラーメッセージの内容がファイル名未解決由来であることまで確認する。
+    /// `helper_exe` も意図的に存在しないパスにし、誤って spawn まで進んでも別のエラーに化けて通らないよう、
+    /// エラーメッセージがファイル名未解決由来であることまで確認する。
     #[test]
     fn missing_shiori_file_fails_immediately_without_spawning() {
         let helper_exe = PathBuf::from("Z:\\definitely\\does\\not\\exist\\helper.exe");

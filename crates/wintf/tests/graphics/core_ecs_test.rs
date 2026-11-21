@@ -9,30 +9,23 @@ use wintf::ecs::{FrameCount, GraphicsCore, init_graphics_core};
 
 #[test]
 fn test_init_graphics_core_creates_resource() {
-    // init_graphics_coreシステムがリソースを作成することを確認
-
     let mut world = World::new();
 
-    // FrameCountリソースを追加
     world.insert_resource(FrameCount::default());
 
-    // 初期状態ではGraphicsCoreリソースが存在しないことを確認
     assert!(
         world.get_resource::<GraphicsCore>().is_none(),
         "初期状態ではGraphicsCoreリソースは存在しない"
     );
 
-    // init_graphics_coreシステムを作成して実行
     let mut system = IntoSystem::into_system(init_graphics_core);
     system.initialize(&mut world);
     system
         .run((), &mut world)
         .expect("init_graphics_core の実行");
 
-    // コマンドを適用
     system.apply_deferred(&mut world);
 
-    // GraphicsCoreリソースが作成されたことを確認
     let graphics_res = world.get_resource::<GraphicsCore>();
     assert!(
         graphics_res.is_some(),
@@ -42,13 +35,9 @@ fn test_init_graphics_core_creates_resource() {
 
 #[test]
 fn test_init_graphics_core_idempotent() {
-    // init_graphics_coreが冪等であることを確認
-    // （有効なリソースが既に存在する場合は作り直さない）
-
     let mut world = World::new();
     world.insert_resource(FrameCount::default());
 
-    // 最初のGraphicsCoreを作成して登録
     let first_graphics = GraphicsCore::new().expect("GraphicsCore作成成功");
     world.insert_resource(first_graphics);
     let before = world
@@ -57,7 +46,6 @@ fn test_init_graphics_core_idempotent() {
         .cloned()
         .expect("事前のD2D装置");
 
-    // init_graphics_coreシステムを実行
     let mut system = IntoSystem::into_system(init_graphics_core);
     system.initialize(&mut world);
     system
@@ -65,7 +53,6 @@ fn test_init_graphics_core_idempotent() {
         .expect("init_graphics_core の実行");
     system.apply_deferred(&mut world);
 
-    // 同じ装置のまま（作り直されていない）ことを確認
     let after = world
         .resource::<GraphicsCore>()
         .d2d_device()

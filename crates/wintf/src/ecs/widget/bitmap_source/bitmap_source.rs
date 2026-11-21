@@ -58,7 +58,6 @@ fn on_bitmap_source_add(mut world: DeferredWorld, hook: HookContext) {
 
     let entity = hook.entity;
 
-    // 無ければ入れる（Rectangle/Labelパターン踏襲）。HitTest は利用者が先に入れていればそれを使う
     let has_visual = world.get::<Visual>(entity).is_some();
     let has_graphics = world.get::<BitmapSourceGraphics>(entity).is_some();
     let has_hit_test = world.get::<HitTest>(entity).is_some();
@@ -70,11 +69,11 @@ fn on_bitmap_source_add(mut world: DeferredWorld, hook: HookContext) {
     if !has_graphics {
         entity_commands.insert(BitmapSourceGraphics::new());
     }
+    // HitTest は利用者が先に入れていればそれを使う
     if !has_hit_test {
         entity_commands.insert(HitTest::alpha_mask());
     }
 
-    // WicCoreをcloneして取得
     let wic_core = match world.get_resource::<WicCore>() {
         Some(wic) => wic.clone(),
         None => {
@@ -83,16 +82,13 @@ fn on_bitmap_source_add(mut world: DeferredWorld, hook: HookContext) {
         }
     };
 
-    // パスを取得
     let path = match world.get::<BitmapSource>(entity) {
         Some(bs) => bs.path().to_owned(),
         None => return,
     };
 
-    // 非同期読み込みタスクを起動
     if let Some(task_pool) = world.get_resource::<WintfTaskPool>() {
         task_pool.spawn(move |tx| async move {
-            // パス解決
             let resolved = match super::systems::resolve_path(&path) {
                 Ok(p) => p,
                 Err(e) => {
@@ -105,8 +101,7 @@ fn on_bitmap_source_add(mut world: DeferredWorld, hook: HookContext) {
             match super::systems::load_decoded_bitmap(wic_core.factory(), &resolved) {
                 Ok(source) => {
                     use super::resource::BitmapSourceResource;
-                    // BitmapSourceResourceにラップしてからクロージャに渡す
-                    // (BitmapSourceResourceはSend実装済み、IWICBitmapSourceは未実装)
+                    // IWICBitmapSource は Send 未実装のため、Send 実装済みの BitmapSourceResource に包んで渡す
                     let resource = BitmapSourceResource::new(source);
                     let cmd: BoxedCommand = Box::new(move |world: &mut bevy_ecs::world::World| {
                         insert_loaded_resource(world, entity, &path, resource);
@@ -160,7 +155,6 @@ fn on_bitmap_source_remove(mut world: DeferredWorld, hook: HookContext) {
 
     let entity = hook.entity;
 
-    // GraphicsCommandListをクリア（Changed検出のため）
     if let Some(mut cmd_list) = world.get_mut::<GraphicsCommandList>(entity) {
         cmd_list.set_if_neq(GraphicsCommandList::empty());
     }

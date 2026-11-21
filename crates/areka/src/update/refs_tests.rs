@@ -1,4 +1,4 @@
-//! 写しの兄弟テスト（design「Testing Strategy / 写し」・要件 9.1〜9.3・9.8）。
+//! 写しの兄弟テスト。
 
 use std::collections::BTreeSet;
 use std::io;
@@ -33,7 +33,7 @@ const ALL_19: [&str; 19] = [
     ON_UPDATE_RESULT_EX,
 ];
 
-/// 正典に在るが送らない 7 語の失敗理由（要件 4.3）。
+/// 正典に在るが送らない 7 語の失敗理由。
 const UNSENT_WORDS: [&str; 7] = [
     "too slow",
     "artificial",
@@ -123,7 +123,7 @@ fn ghost_uses_on_update_and_shell_balloon_use_on_update_other() {
     }
 }
 
-/// `Progress` 6 変種 × ゴースト（manual）／シェル（script）の名・件数・Reference（要件 9.1）。
+/// `Progress` 6 変種 × ゴースト（manual）／シェル（script）の名・件数・Reference。
 #[test]
 fn progress_maps_to_events_for_ghost_and_shell() {
     for (kind, reason, prefix) in [
@@ -206,7 +206,7 @@ fn progress_maps_to_events_for_ghost_and_shell() {
     }
 }
 
-/// `useorigin1` の `1`・`0`・返事なし（と空）で番号と件数の読み（要件 2.13・9.2）。
+/// `useorigin1` の `1`・`0`・返事なし（と空）で番号と件数の読み。
 #[test]
 fn useorigin1_shifts_ready_count_and_download_numbers() {
     let tail = Tail::new(TargetKind::Ghost, UpdateReason::Script);
@@ -396,7 +396,7 @@ fn fail_samples() -> Vec<(FailReason, String)> {
     out
 }
 
-/// 失敗理由の表（要件 4.2・9.8）: 11 種と 8 種の全部が語に写り、判定した種類の数が全種類の数と等しい。
+/// 失敗理由の表: 11 種と 8 種の全部が語に写り、判定した種類の数が全種類の数と等しい。
 #[test]
 fn failure_table_covers_all_eleven_and_eight_kinds() {
     let mut fail_kinds = BTreeSet::new();
@@ -416,7 +416,7 @@ fn failure_table_covers_all_eleven_and_eight_kinds() {
     assert_eq!(fetch_kinds.len(), FETCH_KINDS);
 }
 
-/// 正典に在るが送らない 7 語が、どの写しからも出ない（要件 4.3）。
+/// 正典に在るが送らない 7 語が、どの写しからも出ない。
 #[test]
 fn unsent_seven_words_never_appear() {
     let words: Vec<String> = fail_samples()
@@ -440,7 +440,7 @@ fn spec(kind: TargetKind, name: &str) -> TargetSpec {
     }
 }
 
-/// 成功と失敗の混ざった 3 対象の総括の 2 形（要件 3.2・3.3・9.3）。飛ばした対象は載らない。
+/// 成功と失敗の混ざった 3 対象の総括の 2 形。飛ばした対象は載らない。
 #[test]
 fn summary_refs_in_both_forms_for_mixed_three_targets() {
     let (ghost, shell, balloon) = (
@@ -487,7 +487,7 @@ fn summary_refs_in_both_forms_for_mixed_three_targets() {
     assert_eq!(SEPARATOR, SEP);
 }
 
-/// 読み取りだけの断りの総括の 2 形を欄に割った語（送らない 7 語の檻へ足す・要件 7.5・11.3）。
+/// 読み取りだけの断りの総括の 2 形を欄に割った語（送らない 7 語の檻へ足す）。
 fn readonly_summary_words() -> Vec<String> {
     let targets = [
         spec(TargetKind::Ghost, "emo2"),
@@ -500,7 +500,7 @@ fn readonly_summary_words() -> Vec<String> {
         .collect()
 }
 
-/// 読み取りだけの断りの総括（SSP の測りと字まで同じ・要件 7.5・11.3）。
+/// 読み取りだけの断りの総括（SSP の測りと字まで同じ）。
 #[test]
 fn readonly_summary_refs_match_ssp_measurement() {
     let balloon = [spec(TargetKind::Balloon, "にゃんばるーん")];

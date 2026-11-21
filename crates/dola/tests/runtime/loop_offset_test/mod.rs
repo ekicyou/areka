@@ -1,10 +1,4 @@
-//! LoopOffset serde round-trip tests
-//! Task 1.2: serde ラウンドトリップテスト
-//! Task 5.1-5.3: バリデーションテスト
-//! Task 2.2: コンパイル統合テスト
-//!
-//! Task 6.4: 巨大テストファイルの分割（挙動非破壊）
-//! serde / validation / compile の 3 群へ分割。リーフ名・内部モジュール名は不変。
+//! LoopOffset のテスト群（serde / validation / compile の 3 群）
 
 use crate::support::linear;
 use dola::*;

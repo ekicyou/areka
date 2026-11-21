@@ -1,4 +1,4 @@
-//! 切替の失敗方向の統合テスト（areka-P0-ghost-shell-balloon-switch task 9.2・要件 4.10・6.1〜6.5・10.5）。
+//! 切替の失敗方向の統合テスト。
 //!
 //! 偽の SHIORI の土台で A から B へ切り替え、B が起きられないときの行き先を本物の経路で通す:
 //! ⑴ B の SHIORI が接続に失敗（起こした後に非同期の `Fault`）→ 既定ゴーストが `OnBoot` の
@@ -193,7 +193,7 @@ fn target_connect_fail_boots_default_with_halt_and_no_alert() {
 
 /// 根に既定ゴーストが無いまま B が接続に失敗 → 戻す先が無いので致命: 終了が指示され、最初の出所は
 /// 「既定ゴーストへ戻せなかった」（理由に落ちた B の名前）。`main` の後始末は既存の SHIORI の失敗の
-/// 場面を既定ゴーストの名前で組み、終了コード 1（要件 6.4・10.5）。
+/// 場面を既定ゴーストの名前で組み、終了コード 1。
 ///
 /// # 非空虚性
 /// 既定が目録に無いときに致命へ進まず何もしないと、終了が指示されず期限切れで赤。
@@ -244,8 +244,7 @@ fn target_fault_without_default_ghost_is_fatal() {
 }
 
 /// 既定ゴーストも接続に失敗 → 戻す試みは 1 回だけ（既定から先へは戻さない）で、今日の SHIORI の失敗の
-/// 経路（最初の出所が kanade の停止の `Fault`・告知の場面は既存の 1 つ・終了コード 1）で終える
-/// （要件 6.4・6.5・10.5）。
+/// 経路（最初の出所が kanade の停止の `Fault`・告知の場面は既存の 1 つ・終了コード 1）で終える。
 ///
 /// # 非空虚性
 /// 既定の失敗でも既定へ戻す経路へ入ると、既定を起こし直し続けて終了が指示されず（期限切れ）赤。
@@ -300,7 +299,7 @@ fn default_ghost_fault_after_fallback_exits_through_shiori_fault_path() {
     );
 }
 
-// ── 孤児の窓 0（要件 4.10・6.1） ──
+// ── 孤児の窓 0 ──
 
 /// 台詞を返さない A（`OnBoot` 204＝定常に入ったとき再生中の台詞が無い）。台詞の時計を回さずに
 /// 切替の要求が受理されて A が降ろされる（`Input` 段を回さずに切替を進めるため）。
@@ -363,8 +362,7 @@ fn one_bundle_covers_all(world: &mut World) -> bool {
 
 /// `Input` 段を `done` が真になるまで有界に回す（作業プールの閉包は別スレッドから届く）。
 /// 条件の中で足場を書き換えるので、World を借りない進みの目印（`progress_probe`）を先に取ってから
-/// 芯の待ちへ渡す（areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。打ち切ったら、呼び出しの
-/// 場所を添えた文言を標準エラーへ 1 行出して `false`。
+/// 芯の待ちへ渡す。打ち切ったら、呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`。
 #[track_caller]
 fn run_input_until(rig: &mut SwitchRig, mut done: impl FnMut(&mut World) -> bool) -> bool {
     let probe = rig.progress_probe();

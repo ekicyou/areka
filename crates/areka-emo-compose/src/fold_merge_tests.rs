@@ -1,11 +1,10 @@
 //! 同じ番号の `surface*`ブレスが 2 つ以上あるときの足し合わせ
-//! （spec: areka-P0-emily-ghost-verification 要件 6.1・7.5・開発者の決め 2026-10-17「足し合わせる」）。
+//! （開発者の決め 2026-10-17「足し合わせる」）。
 //!
 //! 面ごとのブレスに絵（element定義）を書き、複数の番号を並べた共有のブレスに当たり判定と
 //! 着せ替えを書くシェル（えみりの形）で、後のブレスが前の絵を消さないことを確かめる。
-//! 同じ番号の行が重なったときは SSP 2.9.29 と同じ（設計の議題 7 案 A・追記と同じ 1 つの足し方）:
-//! element は両方を足す・animation は前の行が勝つ（後の行は捨てる）・collision は両方を足す（後の行が手前・
-//! spec: collisionex-regions 要件 3.3・3.7・SSP 2.9 の測りは同 research.md 9 節）。
+//! 同じ番号の行が重なったときは SSP 2.9.29 と同じ（追記と同じ 1 つの足し方）:
+//! element は両方を足す・animation は前の行が勝つ（後の行は捨てる）・collision は両方を足す（後の行が手前・SSP 2.9 の測り）。
 //! ファイル名と座標は本テストのための作り物（えみりの資産は写さない）。
 
 use areka_parsers::shell::{CollisionShape, Interval, parse};
@@ -98,7 +97,6 @@ fn shared_brace_adds_to_the_per_face_brace_instead_of_replacing_it() {
     );
     assert_eq!(collisions(&world, 11), vec![(0, "Head".into())]);
 
-    // 共有のブレスだけの番号は今までどおり新しく作られる。
     assert!(layers(&world, 6).is_empty());
     assert_eq!(collisions(&world, 6).len(), 2);
     assert!(layers(&world, 12).is_empty());
@@ -137,7 +135,6 @@ animation9.pattern1,overlay,201,60,0,0
     let mut built = None;
     let logs = capture_logs(|| built = Some(EmoWorld::build(&parse(text))));
     let mut world = built.expect("面の表");
-    // 足し合わせても面の entity は 1 件のみ（表も entity も 7 だけ）。
     let mut q = world.world_mut().query::<&crate::world::SurfaceId>();
     let live: Vec<u32> = q.iter(world.world()).map(|s| s.0).collect();
     assert_eq!(live, vec![7]);
@@ -204,8 +201,8 @@ fn pattern_surfaces(world: &EmoWorld, id: u32, anim: u32) -> Vec<i64> {
         .collect()
 }
 
-/// SSP 2.9.29 の測りの形（research.md 12 節の 0・1・2・3・5・6・8・9）を写したシェル。
-/// 形 4 は SSP 2.9 の当たり判定の測り（spec: collisionex-regions research.md 9 節・座標と名前も同じ）:
+/// SSP 2.9.29 の測りの形（形 0・1・2・3・5・6・8・9）を写したシェル。
+/// 形 4 は SSP 2.9 の当たり判定の測り（座標と名前も同じ）:
 /// 前のブレスの `collision4`・`collision5` と後のブレスの `collisionex4`・`collision5`。形 7 は areka の裁量
 /// （同じブレスの中の重なりと追記の重なり・SSP では測っていない）。
 /// 絵の名前は測りと同じ（灰・赤・緑・青）。pattern の面は 100＝赤・101＝緑・102＝青。

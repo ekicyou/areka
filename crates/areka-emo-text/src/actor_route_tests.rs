@@ -1,6 +1,4 @@
-//! 文字の層の実行時の `\s` の解決と場所ごとの表（要件 4.1・5.4・8.4・10.5）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//! 文字の層の実行時の `\s` の解決と場所ごとの表。
 //!
 //! 箱の名前は公開の構築口を持たないので、テストの中に持つ surfaces.txt の文面を
 //! `parse_boxes` → `fold_boxes` で畳んで箱の表を作る（検体は読まない）。COM は使わない。
@@ -54,7 +52,7 @@ fn runtime_with_boxes() -> TextLayerRuntime {
     rt
 }
 
-/// 閉包が無いあいだは、箱の表があっても `\s` を読まず、行き先は普通のバルーンのまま（要件 5.4）。
+/// 閉包が無いあいだは、箱の表があっても `\s` を読まず、行き先は普通のバルーンのまま。
 #[test]
 fn without_resolver_emote_never_leaves_balloon() {
     let mut rt = runtime_with_boxes();
@@ -75,7 +73,7 @@ fn without_resolver_emote_never_leaves_balloon() {
     );
 }
 
-/// 偽の閉包と箱の表を入れると、`\s` の後の行き先はそのサーフェスの先頭の箱になる（要件 4.1）。
+/// 偽の閉包と箱の表を入れると、`\s` の後の行き先はそのサーフェスの先頭の箱になる。
 #[test]
 fn with_resolver_emote_routes_to_first_box_of_surface() {
     let mut rt = runtime_with_boxes();
@@ -131,7 +129,7 @@ fn with_resolver_emote_routes_to_first_box_of_surface() {
     );
 }
 
-/// 選択肢が箱の場所にだけあっても、スコープの「選択肢があるか」は真（要件 8.4）。
+/// 選択肢が箱の場所にだけあっても、スコープの「選択肢があるか」は真。
 /// `\c` でその箱を消すと偽へ戻る。
 #[test]
 fn choice_active_sees_every_place_of_the_scope() {

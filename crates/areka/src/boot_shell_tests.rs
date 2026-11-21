@@ -1,4 +1,4 @@
-//! 起動時のシェル（spec: areka-P0-shell-balloon-switch 要件 6.2〜6.4・6.6・11.7）。
+//! 起動時のシェル。
 //!
 //! 偽の SHIORI を持つゴースト A（`ghost_switch_test_support` の土台）に 2 つ目のシェルを写し、
 //! 記憶の名を置いてから、本番と同じ順（配置の準備 [`prepare_ghost_windows`] → 起動
@@ -6,8 +6,8 @@
 //! 解決の 4 か所（配置の情報源・資産・実行系のマウント・`OnBoot` の Ref0）に届くことを判定する。
 //! 資産のシェルは、シェル読み込みの権威が資産の組み立てで 1 回だけ残す `info!`（`shell_dir`）で、
 //! 採寸のシェルは準備が置いたシェルの選択（[`BootShellChoice`]）で見る（採寸は記録を出さない入口を
-//! 通る・spec: placement-measure-bake-once D5）。後半は起動と切り替えの通しで、読み込みの記録の行の
-//! 数を固定する（同 要件 1.3・3.1〜3.3・3.5・3.7・4.4）。
+//! 通る）。後半は起動と切り替えの通しで、読み込みの記録の行の
+//! 数を固定する。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -50,7 +50,7 @@ fn default_shell_dir(ghost_dir: &Path) -> PathBuf {
 }
 
 /// 既定のシェルを `shell/<folder>/` へ写し、`name` を差し替えて `menu,hidden` を足す
-/// （隠しシェルでも記憶の名なら起きる＝要件 6.2）。
+/// （隠しシェルでも記憶の名なら起きる）。
 fn add_hidden_shell(ghost_dir: &Path, folder: &str, name: &str) {
     add_hidden_shell_from(&default_shell_dir(ghost_dir), ghost_dir, folder, name);
 }
@@ -320,8 +320,7 @@ fn boot_a_in_production_order(rig: &mut SwitchRig) -> (bool, Vec<CapturedEvent>)
 }
 
 /// emo2 の写しを本番の順で起こすと、シェルの一覧・シェルとバルーンの透過の宣言が 1 行ずつ、
-/// 系列の解決の完了が scope ごとに 1 行、2 層マージの確定が scope ごとに 2 行（今のまま）出る
-/// （spec: placement-measure-bake-once 要件 3.1・3.2・3.7・4.4）。
+/// 系列の解決の完了が scope ごとに 1 行、2 層マージの確定が scope ごとに 2 行（今のまま）出る。
 ///
 /// # 非空虚性
 /// 採寸か windowposition の読みを記録を出す入口へ戻すと、一覧か系列の解決が 2 行になって赤。
@@ -340,7 +339,7 @@ fn production_boot_emits_each_load_record_once() {
 }
 
 /// 動く絵の検体のシェルを隠しシェルとして写し、記憶の名で起こしても、記録の行の数は
-/// [`production_boot_emits_each_load_record_once`] と同じで、起動が通る（要件 1.3 の起動の側・4.4）。
+/// [`production_boot_emits_each_load_record_once`] と同じで、起動が通る。
 #[test]
 fn animated_hidden_shell_boot_emits_each_load_record_once() {
     const ANIMATED: &str = "animated";
@@ -383,7 +382,7 @@ fn animated_hidden_shell_boot_emits_each_load_record_once() {
 }
 
 /// A を本番の順で起こし、台本の `\![change,ghost,B,…]` で B へ切り替えると、切り替え 1 回につき
-/// 起動と同じ数の記録がもう 1 組出る（要件 1.3・3.3）。
+/// 起動と同じ数の記録がもう 1 組出る。
 #[test]
 fn each_switch_adds_one_more_set_of_load_records() {
     let mut rig = SwitchRig::new(vec![

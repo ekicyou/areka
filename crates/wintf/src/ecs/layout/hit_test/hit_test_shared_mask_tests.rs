@@ -1,12 +1,10 @@
 //! `AlphaMaskResource::set_shared` の檻
 //!
-//! design.md `#### AlphaMask 再生成・共有（wintf・additive）`（要件 3.1・6.2・6.3）。
-//!
 //! 固定する主張は 1 つ: `set_shared` は渡された確保をそのまま保持する（深いコピーを
-//! 作らない＝共有供給の要件）。`set` / `mask()` の観測とヒットテスト経路からの読み取りは
+//! 作らない＝共有供給）。`set` / `mask()` の観測とヒットテスト経路からの読み取りは
 //! `tests_ex/alpha_mask_resource.rs` が固定している。
 //!
-//! 純 x64・常設 `cargo test`・env ゲートなし・`#[ignore]` なし（要件 6.3）。
+//! 純 x64・常設 `cargo test`・env ゲートなし・`#[ignore]` なし。
 //! GPU も World も使わない（`AlphaMaskResource` 単体の檻）。
 
 use super::*;

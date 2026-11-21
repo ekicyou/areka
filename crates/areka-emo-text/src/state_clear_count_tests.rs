@@ -1,7 +1,4 @@
-//! scope ごとの消去の回数（`TextLayerState::clear_count`）の数え方を確かめる
-//! （`areka-P0-balloon-reappear-short-talk` 要件 1.1・1.5・3.4・3.5）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//! scope ごとの消去の回数（`TextLayerState::clear_count`）の数え方を確かめる。
 //!
 //! `Clear` は名指しの scope だけを 1 進め、`ClearAll` は既にある全 scope を 1 ずつ進める。
 //! 他の cue では動かない。時刻は cue に焼き込んだ値だけで、実時間を待たない。
@@ -120,8 +117,8 @@ fn mixed_clear_sequence_yields_these_counts() {
     );
 }
 
-/// 文字の表と消去の数の表の鍵は場所の鍵（要件 4.6）。スコープで引く既存の読み口は
-/// 「普通のバルーンの場所」を引き、場所の鍵で普通のバルーンを引いた値と同じになる（要件 10.5）。
+/// 文字の表と消去の数の表の鍵は場所の鍵。スコープで引く既存の読み口は
+/// 「普通のバルーンの場所」を引き、場所の鍵で普通のバルーンを引いた値と同じになる。
 #[test]
 fn scope_readers_read_the_ordinary_balloon_place() {
     use crate::place::{PlaceKey, TextPlace};

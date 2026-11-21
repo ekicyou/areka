@@ -10,7 +10,7 @@ const VERTICAL_RL_OFFSET: f32 = 13.0;
 
 const VERTICAL_LR_OFFSET: f32 = -13.0;
 
-// ── R5.1–5.3: 軸写像（横=y・縦=x）と符号素通し（独自の軸規則を発明しない） ──
+// ── 軸写像（横=y・縦=x）と符号素通し（独自の軸規則を発明しない） ──
 
 /// 横書きはブロック軸＝y（`(0, v)`）・縦書きは x（`(v, 0)`）へ写り、符号は
 /// `block_offset` をそのまま素通しする（layout.rs/draw.rs の軸割当正準と 1:1）。
@@ -19,7 +19,6 @@ fn block_offset_maps_to_expected_axis_and_sign_per_writing_mode() {
     let contract = ScaleContract::new(1.0, None);
     let planner = ScrollPlanner::new();
 
-    // 横書き: committed=-13 → y 軸のみ（x=0）・符号（負）素通し。
     let h = planner.resolve_position(HORIZONTAL_OFFSET, &contract);
     assert_eq!(h.committed, -13);
     assert_eq!(
@@ -27,7 +26,6 @@ fn block_offset_maps_to_expected_axis_and_sign_per_writing_mode() {
         (0, -13)
     );
 
-    // vertical_rl: committed=13 → x 軸のみ（y=0）・符号（正）素通し。
     let rl = planner.resolve_position(VERTICAL_RL_OFFSET, &contract);
     assert_eq!(rl.committed, 13);
     assert_eq!(
@@ -35,7 +33,7 @@ fn block_offset_maps_to_expected_axis_and_sign_per_writing_mode() {
         (13, 0)
     );
 
-    // vertical_lr: committed=-13 → x 軸のみ（y=0）・符号（負）素通し（rl と同軸・符号のみ逆）。
+    // rl と同軸・符号のみ逆。
     let lr = planner.resolve_position(VERTICAL_LR_OFFSET, &contract);
     assert_eq!(lr.committed, -13);
     assert_eq!(
@@ -44,7 +42,7 @@ fn block_offset_maps_to_expected_axis_and_sign_per_writing_mode() {
     );
 }
 
-// ── DD11/R6.4/R8.2: 真位置と量子化（真位置からの直接丸め・round half away from zero） ──
+// ── 真位置と量子化（真位置からの直接丸め・round half away from zero） ──
 
 /// 量子化は真位置からの直接丸め（`round(pos)`）で、半整数は 0 から遠い側へ丸める
 /// （trunc/floor 変異を殺す境界値・k=1.0 の端数 `block_offset`＝ratio 改行由来）。
@@ -80,7 +78,7 @@ fn nonunit_scale_keeps_committed_within_half_pixel() {
     assert!((boundary.committed as f32 - boundary.pos).abs() <= 0.5);
 }
 
-// ── R7.5 系: 契約点の初期状態・blit 軸写像委譲 ──
+// ── 契約点の初期状態・blit 軸写像委譲 ──
 
 /// 初期計画者の契約点は真位置 0・確定位置 0（commit 前）。
 #[test]
@@ -115,7 +113,7 @@ fn blit_vector_maps_target_committed_to_block_axis() {
     );
 }
 
-// ── 指摘 3: 飽和した確定位置からのずらしはあふれず ±面の寸に収まる ──
+// ── 飽和した確定位置からのずらしはあふれず ±面の寸に収まる ──
 
 /// 確定位置が両端に飽和していても、ずらしは飽和の引き算で求まり（あふれの panic なし）、
 /// 面の寸で頭打ちにした結果は ±面の寸に収まって向きを保つ。

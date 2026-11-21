@@ -1,4 +1,4 @@
-//! `PropGetCueSink` の檻（spec `shell-scale-linkage` 要件 7.1・design「Testing Strategy」1）。
+//! `PropGetCueSink` の檻。
 //!
 //! 偽の読み口＝FakeIo の sylphya に点付きの値を publish したもの、偽の kanade＝`mpsc` の受信端。
 //! 受信端に届いた知らせ（`KanadeMsg::PropertyEvent`）と、捕捉した記録の段で振る舞いを固定する。
@@ -24,7 +24,7 @@ fn carrier(name: &str, tokens: &[&str]) -> TalkCue {
     }
 }
 
-/// 点付きの値 2 つ（`baseware.name`・`currentghost.scope(0).scaling`）を持つ読み口と、受け口と受信端。
+/// 点付きの値 2 つ（`baseware.name`・`currentghost.scope.scaling`）を持つ読み口と、受け口と受信端。
 fn rig() -> (SylphyaParts, PropGetCueSink, Receiver<KanadeMsg>) {
     let parts = spawn_sylphya(SylphyaInit {
         roots: ScopeRoots::default(),
@@ -70,8 +70,8 @@ fn warns(events: &[CapturedEvent]) -> usize {
         .count()
 }
 
-/// 値は名前の順に Reference0 から並び、無い名前は空で番号をずらさない（要件 1.2・1.4）。
-/// 受け手は名前を問わない（`baseware.name`・要件 1.5）。送るのは 1 回だけで、成功は debug（要件 2.5）。
+/// 値は名前の順に Reference0 から並び、無い名前は空で番号をずらさない。
+/// 受け手は名前を問わない（`baseware.name`）。送るのは 1 回だけで、成功は debug。
 #[test]
 fn values_in_order_missing_is_empty_and_sent_once() {
     let (_parts, mut sink, rx) = rig();
@@ -98,7 +98,7 @@ fn values_in_order_missing_is_empty_and_sent_once() {
     assert_eq!(warns(&events), 0);
 }
 
-/// `On` で始まらない名前もそのまま送る（要件 2.1）。
+/// `On` で始まらない名前もそのまま送る。
 #[test]
 fn event_name_not_starting_with_on_is_sent() {
     let (_parts, mut sink, rx) = rig();
@@ -112,7 +112,7 @@ fn event_name_not_starting_with_on_is_sent() {
     );
 }
 
-/// イベント名が空・空白だけ・無いは送らず warn 1 件（要件 2.2）。
+/// イベント名が空・空白だけ・無いは送らず warn 1 件。
 #[test]
 fn empty_blank_or_missing_event_name_warns_and_does_not_send() {
     for tokens in [
@@ -128,7 +128,7 @@ fn empty_blank_or_missing_event_name_warns_and_does_not_send() {
     }
 }
 
-/// 名前が 1 つも無いときは値を引く前に debug で打ち切り、送らない（要件 2.4）。
+/// 名前が 1 つも無いときは値を引く前に debug で打ち切り、送らない。
 #[test]
 fn no_names_stops_below_warn() {
     let (_parts, mut sink, rx) = rig();
@@ -138,7 +138,7 @@ fn no_names_stops_below_warn() {
     assert_eq!(warns(&events), 0);
 }
 
-/// 引いた値・イベント名に CR・LF・NUL があれば warn で送らない（要件 2.3）。
+/// 引いた値・イベント名に CR・LF・NUL があれば warn で送らない。
 #[test]
 fn control_characters_warn_and_do_not_send() {
     for tokens in [

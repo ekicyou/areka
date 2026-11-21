@@ -1,4 +1,4 @@
-//! 箱の上のポインタの判断（areka-P0-shell-balloon・design「箱のポインタの前段」）。
+//! 箱の上のポインタの判断。
 //!
 //! シェルの窓に届いた操作を、箱の選択肢・箱での中断・シェルへの操作に振り分ける判断を
 //! 純関数で置く。ハンドラ（`mod.rs` の `on_char_pointer_moved`・`on_char_pointer_pressed`）は
@@ -18,7 +18,7 @@ pub use areka_runtime::shell_box_hover::ShellBoxHover;
 #[cfg(test)]
 pub(crate) use areka_runtime::shell_box_hover::settle_box_hover;
 
-/// 届いた座標の下にある、文字の出ている箱を 1 つ選ぶ（要件 9.5・3.9）。
+/// 届いた座標の下にある、文字の出ている箱を 1 つ選ぶ。
 ///
 /// `boxes` は `shown_boxes` の並び（手前＝element番号の大きい順）なので、最初に当たった箱が
 /// 手前。四角は半開区間 `[left, right) × [top, bottom)`（選択肢の行の判定と同じ）。
@@ -32,14 +32,13 @@ pub(crate) fn box_under_point(boxes: &[ShownBox], x: f32, y: f32) -> Option<&Sho
 /// 押下 1 回の結論。`ShellOp` 以外は「処理した」で、シェルへの操作としては通知しない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BoxPressVerdict {
-    /// シェルへの操作として既存の道へ（要件 9.1・9.7）。
+    /// シェルへの操作として既存の道へ。
     ShellOp,
-    /// この押下か直前の押下が選択の確定（要件 8.5）。選択肢・アンカーのどちらでも同じ
-    /// （areka-P0-anchor-tag-canon 要件 3.3・3.7）。
+    /// この押下か直前の押下が選択の確定。選択肢・アンカーのどちらでも同じ。
     ConsumedBySelection,
-    /// 中断を禁じる区間（止めず、シェルへも送らない・要件 9.6）。
+    /// 中断を禁じる区間（止めず、シェルへも送らない）。
     Disabled,
-    /// 台詞を中断する（要件 9.6）。
+    /// 台詞を中断する。
     Break,
 }
 
@@ -74,9 +73,9 @@ pub(crate) fn judge_box_press(
 pub(crate) enum BoxMove {
     /// 文字の出ている箱の四角の外 → 既存の道へ。
     Outside,
-    /// 選択肢の行の上 → 強調して、シェルへは送らない（要件 8.2）。アンカーの範囲の上も同じ。
+    /// 選択肢の行の上 → 強調して、シェルへは送らない。アンカーの範囲の上も同じ。
     OverChoice { name: BoxName, ordinal: usize },
-    /// 箱の中で行の上でない → 滞在だけ記録して既存の道へ（要件 9.1・9.7）。
+    /// 箱の中で行の上でない → 滞在だけ記録して既存の道へ。
     OverBody { name: BoxName },
 }
 
@@ -101,7 +100,7 @@ pub(crate) fn judge_box_move(
     }
 }
 
-/// 左押下が箱の選択肢の確定か（要件 8.3・8.5）。中身は普通のバルーンの確定
+/// 左押下が箱の選択肢の確定か。中身は普通のバルーンの確定
 /// （[`click_selection`]）と同じで、箱の外は必ず `None`。
 pub(crate) fn judge_box_click(
     hit: Option<&ShownBox>,
@@ -115,7 +114,7 @@ pub(crate) fn judge_box_click(
     click_selection(active, rows, x, y, scope)
 }
 
-/// 滞在の記録の次の値と、強調を外す箱（要件 6.11・8.2）。
+/// 滞在の記録の次の値と、強調を外す箱。
 ///
 /// 外す箱は、前に居た箱から出た・別の箱へ移ったときはその箱、同じ箱で行の上から外れた
 /// （行の上でない）ときもその箱。前に行の上に居なかった場合も返すので、外す側は
@@ -136,7 +135,7 @@ pub(crate) fn next_box_hover(
     (next.cloned(), clear)
 }
 
-/// 台詞の始まりと終わりの合図から「話している最中か」を畳む（要件 9.1・9.6〜9.8）。
+/// 台詞の始まりと終わりの合図から「話している最中か」を畳む。
 ///
 /// 始まりで真・終わりで偽。中断を禁じる区間の出入りは変えない（選択肢を待つあいだも最中）。
 pub(crate) fn fold_talking(talking: bool, signal: NoUserBreakSignal) -> bool {

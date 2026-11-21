@@ -1,40 +1,37 @@
 //! model — 下流共有 I/O 契約型。
 //!
 //! surfaces.txt を表すシェルサーフェスモデルの正本型を定義する。値は正規化済み
-//! （ID/座標は数値・alias 値は数値 ID リスト）であり、下流は再パース不要
-//! （要件 1.1/1.2）。意味解釈を下流へ委ねる値（画像パス・alias キー・collision 名）は
-//! 不透明 NewType＋read-only アクセサで保持する（要件 1.3）。
+//! （ID/座標は数値・alias 値は数値 ID リスト）であり、下流は再パース不要。
+//! 意味解釈を下流へ委ねる値（画像パス・alias キー・collision 名）は
+//! 不透明 NewType＋read-only アクセサで保持する。
 //!
-//! 設計規律（design.md「State Management」・確定契約スケッチに従う）:
-//! - 全公開型に `#[derive(Clone, Debug, PartialEq)]`（`serde` / `Eq` / `Hash` は
-//!   sakura 規律に倣い付さず最小派生に留める・要件 1.5）。
-//! - 公開 enum（`Interval` / `AppendTarget`）は `#[non_exhaustive]`（要件 1.4）。
+//! - 公開型の派生は `Clone, Debug, PartialEq` に留める（`serde` / `Eq` / `Hash` は付けない）。
+//! - 公開 enum（`Interval` / `AppendTarget`）は `#[non_exhaustive]`。
 //! - opaque NewType（`ElementPath` / `AliasKey` / `CollisionName`）はフィールド非公開・
-//!   `new()` コンストラクタ＋read-only accessor（`as_str`）のみ公開（dola `ActorKey` 流儀）。
-//! - descript ヘッダ・charset はモデルに保持しない（要件 3.4・2 例目の実需まで追加しない要件 10.5）。
+//!   `new()` と `as_str` のみ公開。
+//! - descript ヘッダ・charset はモデルに保持しない。
 //!
 //! 依存方向 `model ← lexer ← decode ← parse` の最上流ゆえ他層に依存しない（std と、崩れの記録の重さ `tracing::Level` だけ）。
 
 /// surfaces.txt 全体のルート集約（下流共有 I/O 契約）。
-/// descript ヘッダ・charset は寛容スキップし保持しない（要件 3）。
+/// descript ヘッダ・charset は保持しない。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Shell {
     /// surfaceNNN 定義（出現順保持）。
     pub surfaces: Vec<Surface>,
     /// surface.append 追記定義（ターゲット指定を記述子で保持〔展開しない〕・出現順保持）。
     pub appends: Vec<SurfaceAppend>,
-    /// kero.surface.alias 写像（重複キー保持・出現順保持・要件 8.4）。
+    /// kero.surface.alias 写像（重複キー保持・出現順保持）。
     pub aliases: Vec<SurfaceAlias>,
-    /// `animation-sort` の値（記述のまま。未指定は None・既定解釈は下流・要件 12.5(a)/1.6）。
+    /// `animation-sort` の値（記述のまま。未指定は None・既定解釈は下流）。
     pub animation_sort: Option<SortOrder>,
-    /// `collision-sort` の値（同上・未指定は None・none 既定の解釈も下流・要件 12.5(a)/1.6）。
+    /// `collision-sort` の値（同上・未指定は None・none 既定の解釈も下流）。
     pub collision_sort: Option<SortOrder>,
-    /// 登場順の単一定義ストリーム（3 Vec への index 参照・種別間 interleaving を保持・
-    /// データ重複なし・要件 12.5(d)/1.7）。
+    /// 登場順の単一定義ストリーム（3 Vec への index 参照・種別間の登場順を保持・データ重複なし）。
     pub definitions: Vec<DefRef>,
 }
 
-/// ソート順の値（`animation-sort`／`collision-sort` の記述のまま。既定の適用は下流・要件 12.5(a)）。
+/// ソート順の値（`animation-sort`／`collision-sort` の記述のまま。既定の適用は下流）。
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SortOrder {
@@ -46,8 +43,7 @@ pub enum SortOrder {
     Other(Box<str>),
 }
 
-/// 種別間 interleaving を保持する登場順参照ストリームの要素（3 Vec への index・要件 12.5(d)）。
-/// 各 variant の `usize` は対応する Vec 内の位置（データを複製しない index 参照）。
+/// 登場順参照ストリームの要素。各 variant の `usize` は対応する Vec 内の位置。
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DefRef {
@@ -59,26 +55,26 @@ pub enum DefRef {
     Alias(usize),
 }
 
-/// 1 個の surfaceNNN 定義（要件 4.1）。
+/// 1 個の surfaceNNN 定義。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Surface {
-    /// ヘッダ記述子の忠実転記（単一形は `[Single(id)]`・多 id 形は列挙/範囲を保持・要件 12.5(b)）。
+    /// ヘッダ記述子の転記（単一形は `[Single(id)]`・多 id 形は列挙/範囲を保持）。
     /// 範囲展開・実 surface ツリーへの転記は下流の責務。
     pub targets: Vec<AppendTarget>,
-    /// element定義の `overlay` と `base` の行（どちらも同じ値・レイヤインデックス昇順・要件 4.4）。
+    /// element定義の `overlay` と `base` の行（どちらも同じ値・レイヤインデックス昇順）。
     pub elements: Vec<Element>,
     /// collision 矩形群（出現順）。
     pub collisions: Vec<Collision>,
-    /// SERIKO animation 群（出現順・ID 順序付け実行は下流・要件 5.6）。
+    /// SERIKO animation 群（出現順・ID 順序付け実行は下流）。
     pub animations: Vec<Animation>,
 }
 
-/// element定義の `overlay` と `base` の行 elementN,overlay,PATH,X,Y（`base` も同じ値・要件 4.2）。
+/// element定義の `overlay` と `base` の行 elementN,overlay,PATH,X,Y（`base` も同じ値）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Element {
     /// element の N（レイヤインデックス）。
     pub layer: u32,
-    /// 無加工画像パス（区切り含む・要件 4.3）。
+    /// 無加工画像パス（区切り含む）。
     pub path: ElementPath,
     /// X 座標。
     pub x: i64,
@@ -86,79 +82,75 @@ pub struct Element {
     pub y: i64,
 }
 
-/// element 画像パスの opaque 中身（読込・検証しない・要件 4.3）。
+/// element 画像パスの opaque 中身（読込・検証しない）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct ElementPath(String);
 
 impl ElementPath {
-    /// 無加工の画像パス文字列を保持する `ElementPath` を構築する（要件 4.3）。
+    /// 無加工の画像パス文字列を保持する `ElementPath` を構築する。
     pub fn new(inner: String) -> Self {
         ElementPath(inner)
     }
 
-    /// 画像パスの opaque 中身を読み取る（改変不可・要件 4.3）。
+    /// 画像パスの opaque 中身を読み取る（改変不可）。
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// SERIKO animation（interval＋pattern 群を animation ID で束ねる・要件 5）。
+/// SERIKO animation（interval＋pattern 群を animation ID で束ねる）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Animation {
-    /// animation ID（要件 5.6）。
+    /// animation ID。
     pub id: u32,
-    /// interval 指定（要件 5.1-5.3）。interval 行が無いときは既定 `Interval::Bind`。
+    /// interval 指定。interval 行が無いときは既定 `Interval::Bind`。
     pub interval: Interval,
-    /// pattern index を明示保持する pattern 群（疎許容・要件 5.4）。
+    /// pattern index を明示保持する pattern 群（疎許容）。
     pub patterns: Vec<Pattern>,
 }
 
-/// interval 語彙（emo2 subset は 3 種を駆動・拡張は non_exhaustive シーム・要件 5.1-5.3/5.7/8.2）。
+/// interval 語彙（emo2 subset は 3 種を駆動・拡張は non_exhaustive シーム）。
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Interval {
-    /// `interval,bind`（要件 5.1）。
+    /// `interval,bind`。
     Bind,
-    /// `interval,random,K`（要件 5.2）。
+    /// `interval,random,K`。
     Random {
         /// 頻度パラメータ K。
         k: u32,
     },
-    /// `interval,bind+random,K`（要件 5.3）。
+    /// `interval,bind+random,K`。
     BindRandom {
         /// 頻度パラメータ K。
         k: u32,
     },
-    /// `interval,runonce`（第 3 欄以降は読まない・areka-P0-seriko-trigger-intervals 要件 1.3）。
+    /// `interval,runonce`（第 3 欄以降は読まない）。
     Runonce,
-    /// `interval,periodic,秒`（`secs >= 1` を構築時に保証する・同 要件 1.2）。
+    /// `interval,periodic,秒`（`secs >= 1` を構築時に保証する）。
     Periodic {
         /// 周期の秒数（1 以上）。
         secs: u32,
     },
-    /// `interval,talk,文字数`（`n >= 1` を構築時に保証する・同 要件 1.1）。
+    /// `interval,talk,文字数`（`n >= 1` を構築時に保証する）。
     Talk {
         /// 何文字ごとに鳴らすか（1 以上）。
         n: u32,
     },
-    /// 未認識 interval 語彙の原文忠実転記（sometimes/rarely/always 等・要件 8.2）。
-    /// 転記層は語彙を落とさず黙らない＝「完全形保持」が字義どおり成立する。
-    /// 駆動しない（下流 bind 分類にも静的経路にも該当しない）が値としては保持する。
+    /// 未認識 interval 語彙の原文（sometimes/rarely/always 等）。駆動しないが値としては保持する。
     /// `talk`／`periodic` で数値が 1 以上の整数として読めないとき（欠落・0・非数値）は
-    /// 第 2 欄以降を `,` で繋いだ原文（例 `talk,abc`・`periodic`）を運ぶ
-    /// （areka-P0-seriko-trigger-intervals 要件 1.5）。
+    /// 第 2 欄以降を `,` で繋いだ原文（例 `talk,abc`・`periodic`）を運ぶ。
     Other(Box<str>),
 }
 
-/// animationN.patternM,描画メソッド,SURFACE_ID,WAIT,X,Y（要件 5.4/5.5/4.6）。
+/// animationN.patternM,描画メソッド,SURFACE_ID,WAIT,X,Y。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Pattern {
-    /// patternM の M（疎・連番前提を置かない・要件 5.4）。
+    /// patternM の M（疎・連番前提を置かない）。
     pub index: u32,
-    /// 描画メソッド（method）の忠実転記（要件 4.6/8.4）。意味解釈（同義写像・実装可否）は
-    /// 下流の責務ゆえ parser は原文を無加工で運ぶ（`DrawMethod` 参照）。
+    /// 描画メソッド（method）の原文（意味解釈は下流・`DrawMethod` 参照）。
     pub method: DrawMethod,
-    /// 参照 surface ID。負値はレイヤクリア/停止センチネル（要件 5.5・下流解釈）。
+    /// 参照 surface ID。負値はレイヤクリア/停止センチネル（下流解釈）。
     pub surface_id: i64,
     /// 欄 2 の原文（`(` で始まる並びは `)` まで継ぎ直した原文）。8 語の相手の欄として下流が読む。
     pub target: String,
@@ -170,27 +162,25 @@ pub struct Pattern {
     pub y: i64,
 }
 
-/// コマ描画メソッドの opaque 中身（意味解釈しない・要件 4.6/8.4）。
+/// コマ描画メソッドの opaque 中身（意味解釈しない）。
 ///
-/// 正典位置（コマ記法の描画メソッド欄）を転記する:
 /// - **新形式** `animation*.pattern*,描画メソッド,サーフェス番号,ウェイト,X,Y`
 ///   ＝method は第 1 位置（現行 lexer の対象）。
-/// - **旧形式**（SERIKO 1.x）＝method は第 3 位置（旧形式キー行の字句解析は emo2 subset
-///   外＝Non-Goals。将来 lexer が旧位置を吸収して同一欄へ転記する）。
+/// - **旧形式**（SERIKO 1.x）＝method は第 3 位置。旧形式キー行の字句解析は emo2 subset 外。
 ///
 /// 語彙（overlay/base/move/scaling/start/stop/alternativestart/alternativestop/
-/// parallelstart/parallelstop/insert/auto 等）は全て忠実に転記し完全形で保持する。
-/// 同義写像・実装可否の判定は下流の責務（要件 8.4）。
+/// parallelstart/parallelstop/insert/auto 等）は全て原文のまま保持する。
+/// 同義写像・実装可否の判定は下流の責務。
 #[derive(Clone, Debug, PartialEq)]
 pub struct DrawMethod(String);
 
 impl DrawMethod {
-    /// 無加工の描画メソッド文字列を保持する `DrawMethod` を構築する（要件 4.6）。
+    /// 無加工の描画メソッド文字列を保持する `DrawMethod` を構築する。
     pub fn new(inner: String) -> Self {
         DrawMethod(inner)
     }
 
-    /// 描画メソッドの opaque 中身を読み取る（改変不可・要件 4.6）。
+    /// 描画メソッドの opaque 中身を読み取る（改変不可）。
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -203,7 +193,7 @@ pub struct Collision {
     pub index: u32,
     /// 形（collision* は常に矩形）。
     pub shape: CollisionShape,
-    /// 領域名 opaque（Head/Bust 等・要件 6.2）。
+    /// 領域名 opaque（Head/Bust 等）。
     pub name: CollisionName,
 }
 
@@ -247,40 +237,39 @@ pub struct CollisionRegion {
     pub y: i64,
 }
 
-/// collision 領域名の opaque 中身（意味解釈しない・要件 6.2）。
+/// collision 領域名の opaque 中身（意味解釈しない）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct CollisionName(String);
 
 impl CollisionName {
-    /// 領域名文字列を保持する `CollisionName` を構築する（要件 6.2）。
+    /// 領域名文字列を保持する `CollisionName` を構築する。
     pub fn new(inner: String) -> Self {
         CollisionName(inner)
     }
 
-    /// 領域名の opaque 中身を読み取る（改変不可・要件 6.2）。
+    /// 領域名の opaque 中身を読み取る（改変不可）。
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// surface.append 追記定義（ターゲット指定は記述子で保持・展開しない・要件 7）。
-/// collision/animation は通常 surface と同一型（要件 7.3）。
+/// surface.append 追記定義（ターゲット指定は記述子で保持・展開しない）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceAppend {
     /// ターゲット指定（ヘッダ数値を第1要素とする単一/範囲の順序付きリスト）。
-    /// 範囲の個別 ID 展開・実 surface ツリーへの転記は下流の責務（要件 7.2）。
+    /// 範囲の個別 ID 展開・実 surface ツリーへの転記は下流の責務。
     pub targets: Vec<AppendTarget>,
-    /// 追記 element 群（append 内 element の転記・従来黙殺していた分・レイヤ昇順・要件 12.5(c)/2.4）。
+    /// 追記 element 群（レイヤ昇順）。
     pub elements: Vec<Element>,
-    /// 追記 collision 群（通常 surface と同一表現・要件 7.3）。
+    /// 追記 collision 群（通常 surface と同一表現）。
     pub collisions: Vec<Collision>,
-    /// 追記 animation 群（通常 surface と同一表現・要件 7.3）。
+    /// 追記 animation 群（通常 surface と同一表現）。
     pub animations: Vec<Animation>,
 }
 
-/// surface.append のターゲット指定要素（parse 時展開しない・要件 7.2）。
+/// surface.append のターゲット指定要素（parse 時展開しない）。
 /// `surface.append10,2100-2110` → `[Single(10), Range{start:2100,end:2110}]`。
-/// ヘッダ数値も列挙要素と同格の第1要素（カテゴリ番号等の特別扱いはしない）。
+/// ヘッダ数値も列挙要素と同格の第1要素。
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum AppendTarget {
@@ -293,9 +282,9 @@ pub enum AppendTarget {
         /// 範囲終点（含む）。
         end: u32,
     },
-    /// 除外指定 `!N`（記述子のまま保持・減算適用は下流の展開時・要件 2.5）。
+    /// 除外指定 `!N`（記述子のまま保持・減算適用は下流の展開時）。
     Exclude(u32),
-    /// 除外範囲指定 `!a-b`（両端含む・記述子のまま保持・減算適用は下流・要件 2.5）。
+    /// 除外範囲指定 `!a-b`（両端含む・記述子のまま保持・減算適用は下流）。
     ExcludeRange {
         /// 除外範囲始点（含む）。
         start: u32,
@@ -304,47 +293,47 @@ pub enum AppendTarget {
     },
 }
 
-/// kero.surface.alias の 1 エントリ KEY,[id,...]（要件 8）。
+/// kero.surface.alias の 1 エントリ KEY,[id,...]。
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceAlias {
-    /// alias キー opaque（数値・日本語いずれも・要件 8.2）。
+    /// alias キー opaque（数値・日本語いずれも）。
     pub key: AliasKey,
-    /// 順序付き数値 ID（要件 8.3）。
+    /// 順序付き数値 ID。
     pub ids: Vec<u32>,
 }
 
-/// alias キーの opaque 中身（意味解釈しない・要件 8.2）。
+/// alias キーの opaque 中身（意味解釈しない）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct AliasKey(String);
 
 impl AliasKey {
-    /// alias キー文字列を保持する `AliasKey` を構築する（要件 8.2）。
+    /// alias キー文字列を保持する `AliasKey` を構築する。
     pub fn new(inner: String) -> Self {
         AliasKey(inner)
     }
 
-    /// alias キーの opaque 中身を読み取る（改変不可・要件 8.2）。
+    /// alias キーの opaque 中身を読み取る（改変不可）。
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// 範囲の幅の合計の上限（シェル全体・指摘 6）。ukadoc が MATERIA の制限として載せる番号の数（0〜8192）を借りた。
-/// 番号の値にはかけない。`audit-emo-compose` の fold の範囲の展開はこの上限だけに頼るので、緩めるときは先に伝える。
+/// 範囲の幅の合計の上限（シェル全体）。ukadoc が MATERIA の制限として載せる番号の数（0〜8192）を借りた。
+/// 番号の値にはかけない。emo-compose の fold の範囲の展開はこの上限だけに頼るので、緩めるときは先に伝える。
 pub const RANGE_WIDTH_CAP: u64 = 8193;
 
 /// 読みの崩れ 1 件。見出しは原文、行の番号は見出し行の 1 始まりの番号。
-#[derive(Clone, Debug, PartialEq)] // #[non_exhaustive] を付けない（指摘 30 と同じ理由）
+#[derive(Clone, Debug, PartialEq)] // #[non_exhaustive] を付けない
 pub enum ShellIssue {
-    /// 終わりで閉じていないブレス（中身は落とした・指摘 34）。
+    /// 終わりで閉じていないブレス（中身は落とした）。
     UnclosedAtEnd { heading: String, line: usize },
-    /// `}` が抜け、次の `{` で区切り直したブレス（中身は残した・指摘 33）。
+    /// `}` が抜け、次の `{` で区切り直したブレス（中身は残した）。
     ClosedByNextBrace { heading: String, line: usize },
-    /// 読めない数の記述子・項目を飛ばした（0 にしない・指摘 36）。`text` は飛ばした行の欄を `,` で繋いだもの。
+    /// 読めない数の記述子・項目を飛ばした（0 にしない）。`text` は飛ばした行の欄を `,` で繋いだもの。
     UnreadableNumber { heading: String, text: String },
-    /// シェル全体の範囲の幅の合計が上限を越える範囲の記述子を飛ばした（指摘 6）。
+    /// シェル全体の範囲の幅の合計が上限を越える範囲の記述子を飛ばした。
     RangeTooWide { heading: String, text: String },
-    /// ウェイトの `最小-最大` の最小を待ちにした（ランダムに選ぶのは未対応・指摘 5）。
+    /// ウェイトの `最小-最大` の最小を待ちにした（ランダムに選ぶのは未対応）。
     WaitRange { heading: String, text: String },
     /// ブレスの外の `}` だけの行・見出しの無い `{` だけの行を読み飛ばした。1 始まりの行の番号。
     StrayBrace { line: usize },

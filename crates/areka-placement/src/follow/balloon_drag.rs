@@ -18,27 +18,25 @@ use super::{
 };
 
 /// バルーン単独ドラッグで確定した相対位置を、キャラ窓の表示 DPI を読めないまま
-/// **未係留**の基準として確立したときの記録タグ（
-/// areka-P0-balloon-offset-dpi 要件 5.2／9.4）。
+/// **未係留**の基準として確立したときの記録タグ。
 ///
 /// `[balloon-drag] ` 接頭辞＋弁別語 1 語という形は
 /// [`BALLOON_LIMIT_UNRESOLVED_TAG`]・`[balloon-keyword] ` 系と同じ規律であり、
 /// 決定論テストがこの定数を逐語で固定する（生リテラルを書かない）。
 pub(super) const BALLOON_DRAG_BASE_UNPINNED_TAG: &str = "[balloon-drag] BaseUnpinned";
 
-/// `OnDrag` ハンドラ: バルーン窓単独ドラッグの相対位置記憶（areka-P0-window-placement 要件 4.8・DD16）。
+/// `OnDrag` ハンドラ: バルーン窓単独ドラッグの相対位置記憶。
 ///
 /// バルーン窓自体は `DragConfig { move_window: true }` により wndproc レベルで
 /// 移動済み（`WindowPos.position` 更新済み・物理 px）。キャラ窓は不動で、
-/// bottom 吸着（4.7）の対象外＝バルーンドラッグでキャラ窓の Y 釘付けは発火しない。
+/// bottom 吸着の対象外＝バルーンドラッグでキャラ窓の Y 釘付けは発火しない。
 ///
 /// 本ハンドラは `BalloonFollow.balloon == ドラッグ中バルーン` のキャラ窓を
 /// query 走査で逆引きし（窓は高々数個・全走査で十分）、
-/// `BalloonFollow.offset = balloon_pos − char_pos`（物理 px・再スケールなし・U4）
+/// `BalloonFollow.offset = balloon_pos − char_pos`（物理 px・再スケールなし）
 /// へ更新するだけ。既存 consumer（[`on_char_drag`]／[`move_window_to`]）は
-/// 無改変で調整後 offset を読む（DD16・4.4 の恒等式
-/// `balloon_pos − char_pos ≡ offset` は更新後も不変）。ghost.dat への保存は離したときの
-/// `on_balloon_drag_end` が行う。
+/// 無改変で調整後 offset を読む（`balloon_pos − char_pos ≡ offset` は更新後も不変）。
+/// ghost.dat への保存は離したときの `on_balloon_drag_end` が行う。
 ///
 /// イベントは消費しない（常に `false`＝伝播続行。[`on_char_drag`] と同じ規約）。
 pub fn on_balloon_drag(
@@ -50,15 +48,14 @@ pub fn on_balloon_drag(
     match ev {
         Phase::Tunnel(_) => false,
         Phase::Bubble(ev) => {
-            // 他 entity 宛イベントには何もしない（ハードニング・DD15 v2 (6)）
+            // 他 entity 宛イベントには何もしない
             if ev.target != entity {
                 return false;
             }
-            // 止めたドラッグは追従のずれを引き直さない（descript-window-keys 要件 6.1）
+            // 止めたドラッグは追従のずれを引き直さない
             if balloon_drag_held(world, entity) {
                 return false;
             }
-            // バルーン窓の現在位置（wndproc が実窓位置から更新済み・物理 px）
             let Some(wp) = world.get::<WindowPos>(entity) else {
                 return false;
             };
@@ -75,8 +72,7 @@ pub fn on_balloon_drag(
 /// `BalloonFollow.balloon == balloon` のキャラ窓を逆引きし、追従の基準を `balloon_pos − char_pos`
 /// から確立し直す。ドラッグ中（[`on_balloon_drag`]）と、離したときの保存の直後が呼ぶ。
 fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: Point) {
-    // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし、確定 offset を組む。
-    // ここは**読取だけ**で閉じる（可変借用は次の段で 1 窓ずつ取る）。
+    // 読取だけで閉じる（可変借用は次の段で 1 窓ずつ取る）。
     let mut chars = world.query::<(Entity, &BalloonFollow, &WindowPos)>();
     let targets: Vec<(Entity, PointPx)> = chars
         .iter(world)
@@ -91,8 +87,8 @@ fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: P
                 );
                 return None;
             };
-            // 不変条件: 両者とも仮想スクリーン座標範囲のため、減算が i32 を
-            // 溢れることはない（溢れは入力源の異常・on_char_drag と同じ流儀）
+            // 両者とも仮想スクリーン座標範囲のため、減算が i32 を溢れることはない
+            // （溢れは入力源の異常）
             debug_assert!(
                 balloon_pos.x.checked_sub(char_pos.x).is_some()
                     && balloon_pos.y.checked_sub(char_pos.y).is_some(),
@@ -110,21 +106,20 @@ fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: P
 
     for (char_window, new_offset) in targets {
         super::super::face_windowposition::mark_user_moved(world, char_window);
-        // 同時借用を避けるため表示 DPI を先に読んでから追従 Component を可変で借りる（design drag_follow の項）。
+        // 同時借用を避けるため表示 DPI を先に読んでから追従 Component を可変で借りる。
         let current_dpi = world.get::<DPI>(char_window).copied();
         let Some(mut follow) = world.get_mut::<BalloonFollow>(char_window) else {
             continue;
         };
         match current_dpi {
-            // 確立点: ドラッグで決まった相対位置を新しい**基準**として焼き直す。
-            // 作者指定と同一の追随規則がここから効く（areka-P0-balloon-offset-dpi 要件 3.5・design D14）。
+            // ドラッグで決まった相対位置を新しい**基準**として焼き直す。
+            // 作者指定と同一の追随規則がここから効く。
             Some(dpi) => follow.reestablish(new_offset, dpi),
             None => {
                 // 表示 DPI を読めない窓（DPI component 未付与）。値は確定して
                 // いるが「どの表示 DPI に属するか分からない」ので、永続値の腕と
                 // 同じ**未係留**の基準として確立する——基準 DPI を発明すると
-                // 次の遷移で二重に拡大する。最初の観測で値を変えずに係留される
-                // （areka-P0-balloon-offset-dpi 要件 5.2／5.4）。無ログの縮退経路は作らない（要件 9.4）。
+                // 次の遷移で二重に拡大する。最初の観測で値を変えずに係留される。
                 *follow = BalloonFollow::new(balloon, OffsetBase::unpinned(new_offset));
                 warn!(
                     entity = ?char_window,
@@ -137,12 +132,11 @@ fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: P
     }
 }
 
-/// `OnDragEnd` ハンドラ: バルーン単独ドラッグ確定 offset の永続 write-through
-/// （areka-P0-position-persist 要件 2.1・8.1・design C2/C3）。
+/// `OnDragEnd` ハンドラ: バルーン単独ドラッグ確定 offset の永続 write-through。
 ///
 /// [`on_balloon_drag`] が**連続**イベント（ドラッグ中の in-session offset 更新）で
 /// あるのに対し、本ハンドラは DragEnd の**確定**観測点でのみ発火する保存トリガである
-/// （1 ドラッグ＝1 書込・発火規律）。永続へバルーン offset を書くのはこの観測点のみ。
+/// （1 ドラッグ＝1 書込）。永続へバルーン offset を書くのはこの観測点のみ。
 ///
 /// # 最終確定位置の源（`on_char_drag_end` との差）
 ///
@@ -150,16 +144,14 @@ fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: P
 /// `WindowPos.position` へ更新済み——DragEnd 時点の**最終確定位置**はこの
 /// `WindowPos.position` で読める（[`on_balloon_drag`] と同源）。したがって
 /// [`on_char_drag_end`] のように `DraggingState`＋`ev.position`（カーソル）から生座標を
-/// 再構成する必要はなく、`ev.position` は使わない（char 窓は move_window=false で
-/// wndproc 移動が無いため cursor 再構成が要るが、balloon は move_window=true で窓自身が
-/// 動くため WindowPos が確定位置＝「最終確定位置」意味論は両者で一致する）。
+/// 再構成する必要はなく、`ev.position` は使わない。
 ///
-/// # 保存値の導出（in-session offset を使わない・design 検証 Issue 1 対応）
+/// # 保存値の導出
 ///
 /// 追従元キャラ窓（`BalloonFollow.balloon == 自バルーン`）を逆引きし、その最終
 /// `char_pos`（`WindowPos.position`）・`anchor`（[`Anchored`]）・`char_size`
 /// （`WindowPos.size`）を読む。offset は [`on_balloon_drag`] と**同式**
-/// `offset_tl = balloon_pos − char_pos`（左上基準・物理 px・再スケールなし・U4）で
+/// `offset_tl = balloon_pos − char_pos`（左上基準・物理 px・再スケールなし）で
 /// **最終確定位置から再導出**する——in-session の `BalloonFollow.offset`（連続ドラッグ中の
 /// 表現）は**流用しない**（最後の OnDrag 配信と最終確定位置はずれ得るため）。導出した
 /// 左上基準 offset は基準変換せずそのまま [`balloon_offset_entries`]→[`persist_entries`]
@@ -173,31 +165,31 @@ fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: P
 ///
 /// バルーンの `WindowPos.position` 不在／[`BalloonWindowMarker`] 不在／追従元キャラ窓
 /// （その `WindowPos.position`・`WindowPos.size` のいずれか）不在は「位置を保存しなかった」の
-/// `warn!`＋skip する（[`Anchored`] は記録だけが使うので無くても保存する）。`BalloonFollow.offset`（in-session 表現）は保存の直後に最終確定位置から
+/// `warn!`＋skip する（[`Anchored`] は記録だけが使うので無くても保存する）。
+/// `BalloonFollow.offset`（in-session 表現）は保存の直後に最終確定位置から
 /// 出し直す（補正の前の位置・[`reestablish_balloon_follow`]）。最後の OnDrag の値のまま残さない。
 ///
-/// # 解放時の limit 補正と**順序の固定**（areka-P0-windowposition-limit C8・要件 2.5/5.4）
+/// # 解放時の limit 補正と**順序の固定**
 ///
 /// バルーン単独ドラッグは wndproc が窓を直接動かす ECS 経路**外**の移動であり、
 /// [`enqueue_window_set_pos`] の runtime 関門を一度も通らない。よって解放の瞬間だけが
 /// 「はみ出したまま静止した位置」を捕まえられる唯一の観測点であり、ここに 3 つ目の
 /// 関門（[`apply_release_limit_correction`]）を置く。ドラッグ**中**（[`on_balloon_drag`]）
-/// へは一切介入しない——カーソル追随の自由は areka-P0-windowposition-limit 要件 2.5 前段が明示的に守るものである。
+/// へは一切介入しない——カーソル追随の自由を守る。
 ///
-/// 本ハンドラの処理順は**固定**である（DD6・5.4）:
+/// 本ハンドラの処理順は**固定**である:
 ///
 /// 1. 解放位置の取得（`WindowPos.position`＝wndproc の最終確定位置）
 /// 2. 生 offset（`balloon_pos − char_pos`）の導出と永続 write-through
 ///    2′. 同じ最終確定位置から追従の基準を出し直す（[`reestablish_balloon_follow`]）
-/// 3. キーワード素材の退役（[`retire_keyword_base_on_save`]・areka-P0-windowposition-limit 要件 4.7）
+/// 3. キーワード素材の退役（[`retire_keyword_base_on_save`]）
 /// 4. `BalloonLimit(true)` かつ補正が要るときだけ表示位置を補正
 ///
 /// **2 と 4 を入れ替えてはならない。** 先に補正すると、4 が書いた補正後位置を 2 が
 /// `balloon_pos` として読み、補正値が保存値（`BalloonOffset`）へ焼き付く——以後キャラ窓が
-/// 作業領域の余裕ある位置へ戻っても、作者指定・保存の相対位置へ復帰できなくなる
-/// （DD6「補正を相対位置へ焼き付けない」）。同じ理由で 4 は `BalloonFollow.offset`
-/// （in-session 表現）にも触れない。次のバルーンドラッグ開始時の offset は、補正済みの
-/// 表示位置から [`on_balloon_drag`] が自然に再導出する。
+/// 作業領域の余裕ある位置へ戻っても、作者指定・保存の相対位置へ復帰できなくなる。
+/// 同じ理由で 4 は `BalloonFollow.offset`（in-session 表現）にも触れない。次のバルーンドラッグ開始時の
+/// offset は、補正済みの表示位置から [`on_balloon_drag`] が自然に再導出する。
 ///
 /// イベントは消費しない（常に `false`＝伝播続行。[`on_balloon_drag`] と同じ規約）。
 pub(crate) fn on_balloon_drag_end(
@@ -209,19 +201,17 @@ pub(crate) fn on_balloon_drag_end(
     match ev {
         Phase::Tunnel(_) => false,
         Phase::Bubble(ev) => {
-            // 他 entity 宛イベントには何もしない（ハードニング・on_balloon_drag と同じ規約）
+            // 他 entity 宛イベントには何もしない
             if ev.target != entity {
                 return false;
             }
-            // 止めたドラッグは記憶・素材・補正を動かさず記録 1 件だけ（descript-window-keys 要件 6.1・6.6）
+            // 止めたドラッグは記憶・素材・補正を動かさず記録 1 件だけ
             if end_balloon_drag(world, entity) {
                 return false;
             }
             // 面の move のずれは 0 へ（ドラッグで作った相対の位置へ二重に足さない）。
             reset_applied(world, entity);
 
-            // 最終確定位置＝バルーン窓の WindowPos.position（wndproc が move_window=true で
-            // 更新済み・on_balloon_drag と同源。ev.position(cursor) は使わない）。
             let Some(balloon_pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position)
             else {
                 warn!(
@@ -231,7 +221,6 @@ pub(crate) fn on_balloon_drag_end(
                 return false;
             };
 
-            // scope はバルーン窓自身の BalloonWindowMarker（追従元 char と同番号）。
             let Some(scope) = world.get::<BalloonWindowMarker>(entity).map(|m| m.scope) else {
                 warn!(
                     ?entity,
@@ -240,8 +229,6 @@ pub(crate) fn on_balloon_drag_end(
                 return false;
             };
 
-            // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし、最終 char_pos・anchor・
-            // char_size を読む（in-session の BalloonFollow.offset は SAVE に使わない）。
             // anchor は記録だけが使うので任意（無くても保存する）。
             let mut chars =
                 world.query::<(Entity, &BalloonFollow, &WindowPos, Option<&Anchored>)>();
@@ -275,9 +262,7 @@ pub(crate) fn on_balloon_drag_end(
                 return false;
             };
 
-            // offset_tl = balloon_final_pos − char_pos（左上基準・on_balloon_drag と同式）。
-            // 不変条件: 両者とも仮想スクリーン座標範囲のため減算は i32 を溢れない
-            // （溢れは入力源の異常・on_balloon_drag と同じ流儀）。
+            // 両者とも仮想スクリーン座標範囲のため減算は i32 を溢れない（溢れは入力源の異常）。
             debug_assert!(
                 balloon_pos.x.checked_sub(char_pos.x).is_some()
                     && balloon_pos.y.checked_sub(char_pos.y).is_some(),
@@ -288,13 +273,9 @@ pub(crate) fn on_balloon_drag_end(
                 y: balloon_pos.y - char_pos.y,
             };
 
-            // 保存基準＝ランタイム基準（char 左上）ゆえ基準変換なし（balloon_offset_entries
-            // の基準記述）→ BalloonOffset entries を Ghost 永続スコープへ即時
-            // write-through（fire-and-forget・7.1）。
+            // 保存基準＝ランタイム基準（char 左上）ゆえ基準変換なし（balloon_offset_entries の基準記述）。
             let persist = offset_tl;
-            // 保存の計測ログ（実機診断・保存↔復元の座標突合）: balloon_pos＝バルーン最終位置、
-            // char_pos＝追従元 char の最終位置、offset_tl＝左上基準差分、persist＝保存値
-            // （＝offset_tl・BalloonOffset entries として書かれる値）、char_size＝診断用の現寸。
+            // 保存↔復元の座標突合に使う実機診断ログ。char_size は診断用の現寸。
             tracing::info!(
                 target: "areka::persist::save",
                 scope,
@@ -309,69 +290,61 @@ pub(crate) fn on_balloon_drag_end(
             let entries = balloon_offset_entries(scope as u32, persist);
             persist_entries(world, entries);
 
-            // ②′ 追従の基準を最終確定位置から出し直す（補正の前・最後の OnDrag の値を残さない）。
+            // 2′: 追従の基準を最終確定位置から出し直す（補正の前・最後の OnDrag の値を残さない）。
             reestablish_balloon_follow(world, entity, balloon_pos);
 
-            // ③ キーワード素材の退役（areka-P0-windowposition-limit 要件 4.7）。**②と同じ観測点**であること
-            // 自体が要点なので、②の直後に置く（詳細は [`retire_keyword_base_on_save`]）。
+            // 3: キーワード素材の退役。2 と同じ観測点であること自体が要点なので、2 の直後に置く
+            // （詳細は [`retire_keyword_base_on_save`]）。
             retire_keyword_base_on_save(world, char_window, entity, scope);
 
-            // ④ 解放時補正（C8・areka-P0-windowposition-limit 要件 2.5/5.4）。**②の永続 write-through より後**である
-            // ことが順序の要点であり、この 1 行が上へ動いた瞬間に補正値が保存値へ
-            // 焼き付く（本関数 doc「順序の固定」）。
+            // 4: 解放時補正。2 の永続 write-through より後であることが順序の要点であり、
+            // この 1 行が上へ動いた瞬間に補正値が保存値へ焼き付く（本関数 doc「順序の固定」）。
             apply_release_limit_correction(world, entity, scope, balloon_pos, char_pos, char_size);
             false
         }
     }
 }
 
-/// 保存された相対位置が生まれた瞬間に、キーワード由来の基本位置の素材を退役させる
-/// （areka-P0-windowposition-limit 要件 4.7・task 4.6）。
+/// 保存された相対位置が生まれた瞬間に、キーワード由来の基本位置の素材を退役させる。
 ///
 /// # 何を直しているのか
 ///
-/// areka-P0-windowposition-limit 要件 4.7 は While 節（状態）である——「永続化されたバルーン相対位置が**存在する間**は
-/// 永続値を優先し、キーワード指定の適用は初期既定位置の供給にとどめる」。areka-P0-windowposition-limit のタスク 4.5 は
-/// この規則を `persist::merge_scope`（＝**起動時**に読み込んだ保存値の有無）にだけ置いた。
-/// しかし保存された相対位置はセッション中にも生まれる——それがまさに本ハンドラの手順②
-/// である。対応する退役点が無いと、次にキャラ窓の寸が変わった書込で
+/// 永続化されたバルーン相対位置が**存在する間**は永続値を優先し、キーワード指定の適用は
+/// 初期既定位置の供給にとどめる。この規則は `persist::merge_scope`（＝**起動時**に読み込んだ
+/// 保存値の有無）にあるが、保存された相対位置はセッション中にも生まれる——それがまさに
+/// [`on_balloon_drag_end`] の手順 2 である。対応する退役点が無いと、次にキャラ窓の寸が変わった書込で
 /// [`super::keyword_base::rederive_keyword_balloon_offset`] が発火し、利用者がドラッグで
 /// 決めた相対位置をキーワード既定へ**上書きする**（保存値優先の順位が静かに反転する）。
 ///
-/// これは隅の症状ではない。実表示寸確定の再解決は同寸の書込を skip するため、採寸寸と
-/// 実表示寸が一致する**ふつうの**ゴーストでは素材が起動時に一度も消費されず、装填された
-/// まま残り続ける——面替え・再吸着・DPI 移動のどれかが来た瞬間に発火する。
+/// 実表示寸確定の再解決は同寸の書込を skip するため、採寸寸と実表示寸が一致する
+/// **ふつうの**ゴーストでは素材が起動時に一度も消費されず、装填されたまま残り続ける
+/// ——面替え・再吸着・DPI 移動のどれかが来た瞬間に発火する。
 ///
 /// # なぜ退役点が [`on_balloon_drag`]（連続）ではなく DragEnd（確定）なのか
 ///
-/// areka-P0-windowposition-limit 要件 4.7 の条件は「**永続化された**相対位置が存在する間」であり、その状態が生まれる
-/// 唯一の観測点が DragEnd の write-through である（1 ドラッグ＝1 書込・発火規律）。
-/// 「同じ事象が保存値を作り、同じ事象が素材を退役させる」——起動時に
+/// 「永続化された」状態が生まれる唯一の観測点が DragEnd の write-through である。
+/// 同じ事象が保存値を作り、同じ事象が素材を退役させる——起動時に
 /// `persist::merge_scope` が保存値の存在をもって素材を落とすのと**同一の規則**であり、
 /// 二つの退役点が別々の条件で動く形にしない。
 ///
-/// [`on_balloon_drag`] にも置かない理由はもう一つある。ドラッグ**中**に寸法変化が挟まって
-/// 再導出が走った場合でも、被害は残らない——利用者はまだバルーンを掴んでおり、次の
-/// カーソル移動で [`on_balloon_drag`] が `balloon_pos − char_pos` から offset を引き直し、
-/// 続く DragEnd がその値を保存する。すなわち連続側の穴は自己修復するのに対し、確定側の
-/// 穴（本欠陥）はセッションが終わるまで残る。加えて連続イベントごとに構造変更
-/// （Component 除去）を試みるのは、`BalloonLimit` と同じ「持たない窓は 1 bit も触らない」
-/// 流儀にも反する。
+/// ドラッグ**中**に再導出が走っても被害は残らない（次のカーソル移動で [`on_balloon_drag`] が
+/// offset を引き直し、続く DragEnd がその値を保存する）。確定側の穴だけがセッションが終わるまで
+/// 残る。加えて連続イベントごとに構造変更（Component 除去）を試みるのは、`BalloonLimit` と同じ
+/// 「持たない窓は 1 bit も触らない」流儀にも反する。
 ///
-/// # 縮退を持たない理由（areka-P0-windowposition-limit 要件 6.3 の適用範囲）
+/// # 縮退を持たない理由
 ///
-/// 追従元キャラ窓が解決できない場合は、呼出元が**手前で**既に `warn!`＋skip している
-/// （保存値の導出に同じ entity が要る）。ここへ到達した時点で対象は確定しており、解決に
-/// 失敗する余地が無い。素材を持たない窓（`Side`・保存値が効いた scope・消費済み）は縮退
-/// ではなく**正常な no-op** ゆえ警告も出さない——出すと `Side` のバルーンをドラッグする
-/// たびに良性の警告が積み上がり、本物の異常を埋める。
+/// 追従元キャラ窓が解決できない場合は、呼出元が**手前で**既に `warn!`＋skip している。
+/// ここへ到達した時点で対象は確定している。素材を持たない窓（`Side`・保存値が効いた scope・
+/// 消費済み）は縮退ではなく**正常な no-op** ゆえ警告も出さない——出すと `Side` のバルーンを
+/// ドラッグするたびに良性の警告が積み上がり、本物の異常を埋める。
 fn retire_keyword_base_on_save(
     world: &mut World,
     char_window: Entity,
     balloon: Entity,
     scope: usize,
 ) {
-    // 実際に装填されていたときだけ記録する（no-op を毎回書かない）。
+    // 実際に装填されていたときだけ記録する。
     if world.get::<BalloonKeywordBase>(char_window).is_none() {
         return;
     }
@@ -384,16 +357,15 @@ fn retire_keyword_base_on_save(
     );
 }
 
-/// バルーン単独ドラッグの解放位置を作業領域内へ引き戻す（design「C8: 解放時補正」・
-/// areka-P0-windowposition-limit 要件 2.5／5.4／6.1／6.3）。**[`on_balloon_drag_end`] の永続 write-through より後**に
-/// 呼ばれることが契約である（呼出点の doc 参照）。
+/// バルーン単独ドラッグの解放位置を作業領域内へ引き戻す。**[`on_balloon_drag_end`] の永続
+/// write-through より後**に呼ばれることが契約である（呼出点の doc 参照）。
 ///
-/// # 発動条件はデータ駆動（DD1・runtime 関門と同一）
+/// # 発動条件はデータ駆動（runtime 関門と同一）
 ///
 /// 対象が [`BalloonLimit`]`(true)` を持つときだけ働く。持たない窓と `false` の窓は
-/// 1 bit も触らずに戻る——縮退ではないので警告も出さない（areka-P0-windowposition-limit 要件 2.7/2.8）。
+/// 1 bit も触らずに戻る——縮退ではないので警告も出さない。
 ///
-/// # 基準領域はキャラ窓の帰属モニタ（areka-P0-windowposition-limit 要件 5.5）
+/// # 基準領域はキャラ窓の帰属モニタ
 ///
 /// 呼出元が保存値の導出で既に読み終えている追従元キャラ窓の位置・寸をそのまま受け取り、
 /// [`work_area_for_window`] の既存の帰属規則（窓中心 half-open ＋最近傍フォールバック）へ
@@ -402,7 +374,7 @@ fn retire_keyword_base_on_save(
 /// 済みであり、同じ World を二度引くと保存に使った char と補正の基準 char が乖離し得る
 /// からである（同一 DragEnd 内では同じ char を見る）。
 ///
-/// # 書き込む位置と route（DD7）
+/// # 書き込む位置と route
 ///
 /// 補正後位置を [`enqueue_window_set_pos`] へ [`PlacementRoute::BalloonLimitRelease`] で
 /// 渡す。この書込はドラッグ随伴でも位置据置きリサイズでもない**独立した新規書込**ゆえ
@@ -410,17 +382,17 @@ fn retire_keyword_base_on_save(
 /// 側の runtime 関門は同じ位置をもう一度クランプするが、クランプは**冪等**ゆえ二重適用は
 /// 無害であり、[`limit_correction`] が `None` を返して二重のログも出ない。
 ///
-/// # 何に触れないか（DD6）
+/// # 何に触れないか
 ///
 /// `BalloonFollow.offset` と永続値は解放時の**生値**のまま。本関数は表示位置しか書かない。
 ///
-/// # 縮退（log-first・areka-P0-windowposition-limit 要件 6.3）
+/// # 縮退（log-first）
 ///
 /// 判定寸・基準作業領域のいずれかが解決できないときは
 /// [`BALLOON_LIMIT_UNRESOLVED_TAG`] の `warn!` を残して補正を見送る（無ログの縮退経路を
 /// 作らない）。補正が実際に位置を動かしたときだけ [`BALLOON_LIMIT_CLAMP_TAG`] の `info!`
 /// を出す——[`limit_correction`] の `None` は「クランプしても位置が動かない」の意であって
-/// 「内包されている」ではない（areka-P0-windowposition-limit 要件 6.1 は「実際に動かしたとき」の記録を求める）。
+/// 「内包されている」ではない。
 fn apply_release_limit_correction(
     world: &mut World,
     balloon: Entity,
@@ -429,7 +401,7 @@ fn apply_release_limit_correction(
     char_pos: Point,
     char_size: SizePx,
 ) {
-    // 発動条件（DD1）: limit 無効・Component 非保持は 1 bit も触らず戻る。
+    // limit 無効・Component 非保持は 1 bit も触らず戻る。
     if !matches!(world.get::<BalloonLimit>(balloon), Some(BalloonLimit(true))) {
         return;
     }
@@ -462,7 +434,7 @@ fn apply_release_limit_correction(
         return;
     };
 
-    // 基準はキャラ窓の帰属モニタ（areka-P0-windowposition-limit 要件 5.5）。位置のセンチネル・非正寸は矩形を組めない。
+    // 基準はキャラ窓の帰属モニタ。位置のセンチネル・非正寸は矩形を組めない。
     let char_rect = (char_pos.x != CW_USEDEFAULT
         && char_pos.y != CW_USEDEFAULT
         && char_size.w > 0

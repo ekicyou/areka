@@ -1,4 +1,4 @@
-//! visual_property_sync_system のテスト (W3b-T)
+//! visual_property_sync_system のテスト
 //!
 //! WUC の `Visual` は `Opacity()`・`Offset()` を読み戻せるので、同期の後に読んで期待の値と比べる
 //! （読み出しも GPU の持ち主のスレッドの閉包の中で行う）。

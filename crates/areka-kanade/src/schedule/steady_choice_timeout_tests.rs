@@ -13,16 +13,16 @@ use crate::talk::{StartTalk, TalkEndReason};
 use tracing::Level;
 
 // ============================================================
-// 選択肢タイムアウト（C4 規則 5／6・Req7.3〜7.5・DD-10／DD-11）
+// 選択肢タイムアウト
 // ============================================================
 //
 // 完了状態の要求は「**注入時刻のみ**で期限到達・イベント発行・空応答時の解除までが再現し、
 // 実時間待機に依存しない」ことである。よって本群は一切スリープせず、`Input::Tick { now }` の
-// 注入値と帳簿の `deadline` の比較だけで全分岐を踏む（`deterministic-test-coverage-mandate`）。
+// 注入値と帳簿の `deadline` の比較だけで全分岐を踏む。
 
 /// 選択待ち（`Waiting`）帳簿つきの `Steady{Some}` を、起動スクリプトと期限を指定して構築する。
 ///
-/// `deadline: None` は無期限（`0`／`-1` 指令が [`choice_deadline`] で写った形・Req7.6）。
+/// `deadline: None` は無期限（`0`／`-1` 指令が [`choice_deadline`] で写った形）。
 fn steady_waiting(
     talk_id: TalkId,
     next_id: u64,
@@ -41,9 +41,9 @@ fn steady_waiting(
     s
 }
 
-// --- A. 期限到達（規則 5・Req7.3） ---
+// --- A. 期限到達 ---
 
-/// Req7.3・DD-10: 注入時刻が期限**ちょうど**（`now == deadline`）で到達し、`OnChoiceTimeout` を
+/// 注入時刻が期限**ちょうど**（`now == deadline`）で到達し、`OnChoiceTimeout` を
 /// Ref0＝起動スクリプトで発行する。帳簿は `TimeoutInFlight` へ進み、当該 Tick は pump を出さない。
 #[test]
 fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
@@ -145,7 +145,7 @@ fn choice_timeout_does_not_fire_before_deadline() {
     );
 }
 
-/// Req7.6: 無期限（`deadline == None`）は計測を開始せず、どれだけ時刻が進んでも発行しない。
+/// 無期限（`deadline == None`）は計測を開始せず、どれだけ時刻が進んでも発行しない。
 /// 選択待ちは継続し、pump は通常どおり発行される。
 #[test]
 fn choice_timeout_never_fires_for_indefinite_deadline() {
@@ -176,7 +176,7 @@ fn choice_timeout_never_fires_for_indefinite_deadline() {
     }
 }
 
-/// 規則 5: 発行した Tick でのみ pump を止める——**次 Tick からは再開**する
+/// 発行した Tick でのみ pump を止める——**次 Tick からは再開**する
 /// （応答待ち中も slot 占有は継続＝NOTIFY・choosing 継続）。
 #[test]
 fn pump_resumes_on_the_tick_after_choice_timeout_fired() {
@@ -219,11 +219,11 @@ fn pump_resumes_on_the_tick_after_choice_timeout_fired() {
     );
 }
 
-// --- B. タイムアウト応答（規則 6・Req7.4／7.5） ---
+// --- B. タイムアウト応答 ---
 
-/// Req7.4: 応答スクリプトは**既存の起動経路**で置換再生する（新 talk_id 採番・slot 差替・
+/// 応答スクリプトは**既存の起動経路**で置換再生する（新 talk_id 採番・slot 差替・
 /// 旧 talk_id は 1 世代保持）。解決指示（`ResolveChoice`）は発行しない——旧トークは
-/// dispatcher の Close-then-spawn で終了する（F3）。
+/// dispatcher の Close-then-spawn で終了する。
 #[test]
 fn choice_timeout_value_replaces_talk_via_existing_start_path() {
     let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::TimeoutInFlight);
@@ -273,7 +273,7 @@ fn choice_timeout_value_replaces_talk_via_existing_start_path() {
     );
 }
 
-/// Req7.5・DD-11: 204 は選択待ちを解除し `CancelChoice` を発行する（Close funnel の入口）。
+/// 204 は選択待ちを解除し `CancelChoice` を発行する（Close funnel の入口）。
 /// 独自のバリア状態・小細工（skip_barrier 等）は使わない——発行するのは正規の型付き指示のみ。
 #[test]
 fn choice_timeout_no_content_cancels_choice() {
@@ -307,13 +307,13 @@ fn choice_timeout_no_content_cancels_choice() {
     assert_logged(&ev, Level::INFO, "choice_timeout_cancelled");
 }
 
-// --- C. 解除後の棄却（Req7.5 後半・DD-11 の正規到達点） ---
+// --- C. 解除後の棄却（後半・ の正規到達点） ---
 
-/// Req7.5: 解除後に到着する当該選択待ち宛の選択確定は棄却する。
+/// 解除後に到着する当該選択待ち宛の選択確定は棄却する。
 ///
 /// 経路は正規（小細工なし）: 期限到達 → `OnChoiceTimeout` → 204 → `CancelChoice` →
 /// （dispatcher が Close を転送し talk が返す）`TalkDone{Interrupted}` → `Steady{None}` 復帰。
-/// この `Interrupted` こそ DD-11 が本設計で**正規到達点**にした経路である（mod.rs 防御アーム）。
+/// この `Interrupted` こそが**正規到達点**にした経路である（mod.rs 防御アーム）。
 #[test]
 fn choice_after_timeout_cancel_is_rejected() {
     let cfg = config();
@@ -356,7 +356,7 @@ fn choice_after_timeout_cancel_is_rejected() {
         "CancelChoice→Close→Interrupted で Steady{{None}} へ復帰する（DD-11）"
     );
     assert!(done_actions.is_empty());
-    // 4) 以降に届く当該選択待ち宛の選択確定は棄却される（Req7.5）。
+    // 4) 以降に届く当該選択待ち宛の選択確定は棄却される。
     let (s4, late, ev2) = step_capturing(
         s3,
         Input::Choice(choice_input_of("OnMenu", "メニュー", &[])),
@@ -370,7 +370,7 @@ fn choice_after_timeout_cancel_is_rejected() {
     assert_logged(&ev2, Level::WARN, "choice_rejected_no_wait");
 }
 
-/// 選択待ち中の周期送出（choosing）が、解除後の pump からは消える（Req6.2 のタイムアウト側）。
+/// 選択待ち中の周期送出（choosing）が、解除後の pump からは消える（のタイムアウト側）。
 #[test]
 fn tick_after_timeout_cancel_drops_choosing() {
     let cfg = config();
@@ -398,10 +398,10 @@ fn tick_after_timeout_cancel_drops_choosing() {
 }
 
 // ============================================================
-// 帳簿の掃除・選択起因の失敗例外（C4 規則 7／8・DD-12・Req1.3／4.5／6.2）
+// 帳簿の掃除・選択起因の失敗例外
 // ============================================================
 
-/// 規則 7 の不変条件: 帳簿があるなら、その対象 talk は現行 talk と一致する。
+/// 不変条件: 帳簿があるなら、その対象 talk は現行 talk と一致する。
 ///
 /// 「帳簿の対象と現行トークが食い違う状態を残さない」ことの直接表明。帳簿が残る保留記録の点で突合する。
 fn assert_choice_invariant(state: &State) {
@@ -418,9 +418,9 @@ fn assert_choice_invariant(state: &State) {
     }
 }
 
-// --- A. 帳簿の掃除（規則 7・Req1.3／6.2） ---
+// --- A. 帳簿の掃除 ---
 
-/// 規則 7: 対象トークの完了（`TalkDone{Ended}`）で帳簿を消去する。
+/// 対象トークの完了（`TalkDone{Ended}`）で帳簿を消去する。
 #[test]
 fn talk_done_of_target_talk_clears_choice_ledger() {
     let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::Waiting);
@@ -441,7 +441,7 @@ fn talk_done_of_target_talk_clears_choice_ledger() {
     assert!(actions.is_empty());
 }
 
-/// 規則 7: 対象トークの `TalkDone{Quit}`（終了系列直行）でも帳簿を消去する。
+/// 対象トークの `TalkDone{Quit}`（終了系列直行）でも帳簿を消去する。
 #[test]
 fn talk_done_quit_clears_choice_ledger() {
     let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::Waiting);
@@ -467,7 +467,7 @@ fn talk_done_quit_clears_choice_ledger() {
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
 }
 
-/// 規則 7: **マウス由来**の slot 置換でも帳簿を消去し、1 世代保持は置き換えた古い番号に変わる。
+/// **マウス由来**の slot 置換でも帳簿を消去し、1 世代保持は置き換えた古い番号に変わる。
 #[test]
 fn mouse_slot_replacement_clears_choice_ledger_and_stale_slot() {
     let mut s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::Waiting);
@@ -501,7 +501,7 @@ fn mouse_slot_replacement_clears_choice_ledger_and_stale_slot() {
     );
 }
 
-/// 規則 7: close 握手の開始（`ClosePending` への遷移）で帳簿を消去する。
+/// close 握手の開始（`ClosePending` への遷移）で帳簿を消去する。
 ///
 /// 経路は正規: active talk 中の `CloseRequest` は保留記録のみ（選択待ちは継続——ここで
 /// 帳簿を消すと選択が棄却され、バリアが解けず `TalkDone` が来ないため握手が進まない）。
@@ -540,7 +540,7 @@ fn close_handshake_transition_clears_choice_ledger() {
     );
 }
 
-/// 規則 7: `ForceQuit` の横断遷移で帳簿を消去する。
+/// `ForceQuit` の横断遷移で帳簿を消去する。
 #[test]
 fn force_quit_clears_choice_ledger() {
     let s = steady_with_ledger(
@@ -569,7 +569,7 @@ fn force_quit_clears_choice_ledger() {
     assert!(next.choice.is_none(), "終了系遷移で帳簿は消える（規則 7）");
 }
 
-/// 規則 7: `ShioriDown`（Fault 直行）で帳簿を消去する。
+/// `ShioriDown`（Fault 直行）で帳簿を消去する。
 #[test]
 fn shiori_down_clears_choice_ledger() {
     let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::Waiting);
@@ -591,9 +591,9 @@ fn shiori_down_clears_choice_ledger() {
     assert!(next.choice.is_none(), "終了系遷移で帳簿は消える（規則 7）");
 }
 
-// --- B. 選択起因の失敗例外（規則 8・DD-12・Req4.5） ---
+// --- B. 選択起因の失敗例外 ---
 
-/// DD-12: **`step()` 経由**でカスケード段の `Failed` を受けても `Unloading{Fault}` へ倒れず、
+/// **`step()` 経由**でカスケード段の `Failed` を受けても `Unloading{Fault}` へ倒れず、
 /// 204 相当（残段ありなら次段 GET）で継続する（横断 Failed アームの免除）。
 #[test]
 fn cascade_failed_via_step_does_not_fall_into_unloading_fault() {
@@ -632,7 +632,7 @@ fn cascade_failed_via_step_does_not_fall_into_unloading_fault() {
     assert_not_logged(&ev, "shiori_failed");
 }
 
-/// DD-12: 最終段の `Failed` も `step()` 経由で解決のみ（起動なし）へ倒れる。
+/// 最終段の `Failed` も `step()` 経由で解決のみ（起動なし）へ倒れる。
 #[test]
 fn cascade_failed_at_last_stage_via_step_resolves_and_continues() {
     let s = steady_with_ledger(
@@ -664,7 +664,7 @@ fn cascade_failed_at_last_stage_via_step_resolves_and_continues() {
     assert_logged(&ev, Level::ERROR, "choice_shiori_failed_as_204");
 }
 
-/// DD-12: タイムアウト GET の `Failed` も `step()` 経由で `CancelChoice` へ進む。
+/// タイムアウト GET の `Failed` も `step()` 経由で `CancelChoice` へ進む。
 #[test]
 fn timeout_failed_via_step_cancels_without_unloading() {
     let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::TimeoutInFlight);
@@ -689,7 +689,7 @@ fn timeout_failed_via_step_cancels_without_unloading() {
     assert_logged(&ev, Level::INFO, "choice_timeout_cancelled");
 }
 
-/// DD-12 の免除は **choice in-flight に限る**——選択待ち（`Waiting`）中や帳簿不在の
+/// の免除は **choice in-flight に限る**——選択待ち（`Waiting`）中や帳簿不在の
 /// `Failed` は従来どおり `Unloading{Fault}` へ倒れる（非 choice 経路を巻き込まない）。
 #[test]
 fn non_choice_failed_still_falls_into_unloading_fault() {
@@ -773,7 +773,7 @@ fn choice_happy_path_emits_no_error_level_logs() {
             ),
             &cfg,
         );
-        // 4) 旧 talk の遅延 Done（F1 残余レース）→ 1 世代 stale 防御で info 棄却。
+        // 4) 旧 talk の遅延 Done（残余レース）→ 1 世代 stale 防御で info 棄却。
         let (s4, late) = step(
             s3,
             Input::TalkDone(TalkDone {

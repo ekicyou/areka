@@ -1,27 +1,22 @@
 //! # actor_region_warn_tests — 折返し警告は「装着ごとに 1 件」（結線層・兄弟テスト）
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo2-conformance-e2e` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `areka-P0-emo2-conformance-e2e`（要件 **14.1**〜**14.4**・design **D14**）。
-//!
 //! ## なぜ登録口が持つのか
 //!
-//! 粗いバルーン定義（折返し基準が描画範囲の遠辺の外）を知らせる警告は、かつて
-//! [`TextRegion::resolve`](crate::region::TextRegion::resolve) の中にあった。しかし
+//! 粗いバルーン定義（折返し基準が描画範囲の遠辺の外）を知らせる警告を、
+//! [`TextRegion::resolve`](crate::region::TextRegion::resolve) は書かない。
 //! 再追従シーム（[`TextLayerRuntime::refresh_actor_binding`]）は churn ガードの判定キーを
-//! 得るために解決を**毎フレーム**通すため、実機の一周走行では生ログ 30,837 行のうち
-//! **27,908 行**が同じ警告になった（`areka-P0-emo2-conformance-e2e` の実機走行の実測）。件数が意味を持たなくなり、
-//! 生ログが読めなくなる。
+//! 得るために解決を**毎フレーム**通すので、解決が書くと実機の一周走行では生ログ 30,837 行のうち
+//! **27,908 行**が同じ警告になり、件数が意味を持たず生ログが読めなくなる。
 //!
 //! 「読み込み（装着）1 回につき 1 件」という意味を持つのは、解決する側ではなく **actor の
-//! 登録口**（[`TextLayerRuntime::register_actor`]）である。そこで解決からは粗さの記録を外し
+//! 登録口**（[`TextLayerRuntime::register_actor`]）である。解決は粗さを記録せず
 //! （`region_inline_limit_tests.rs` が「0 件」を固定する）、警告は登録口が
 //! 「解決済み領域の値が新しく決まったとき」だけ書く。本ファイルはその件数と欄を固定する。
 //!
 //! ## 固定するもの
 //!
 //! 1. 粗いバルーンの**装着で 1 件**——欄は `balloon`・`axis`・`wrap_threshold`・`inline_limit`
-//!    の 4 つで、文言は上流と 1 文字も違わない（手順書 §5.7 の grep 語・要件 14.3）。
+//!    の 4 つで、文言は上流と 1 文字も違わない（実機走行の判定が grep する語）。
 //! 2. 値の変わらない**再追従を 3 回**繰り返しても**追加 0 件**（churn ガードに達する経路）。
 //! 3. binding だけが変わって領域が同値の再追従も **0 件**——再構築は起きる（`true`）のに
 //!    警告は出ない、という形で「判定は領域の値である」ことを示す。
@@ -34,7 +29,7 @@
 //! 件数を見るテストは捕捉窓の内側で対照の `error!` を 1 件発行し、その 1 件が数えられて
 //! いることを件数の主張と同時に確かめる（`region_inline_limit_tests.rs` と同じ流儀）。
 //!
-//! ## `origin` の警告も同じ登録口が書く（`areka-P0-balloon-origin-outside-validrect` 要件 3.1〜3.4／5.6）
+//! ## `origin` の警告も同じ登録口が書く
 //!
 //! 範囲外ゆえ無視した `origin` 宣言の警告も、同じ理由で同じ登録口が書く——件数の規律も
 //! 同じである（装着で成分 1 つにつき 1 件・値の変わらない再追従で 0 件）。同じ捕捉窓に
@@ -156,7 +151,7 @@ fn assert_coarse_warning(warn: &CapturedEvent, axis: &str, wrap_threshold: f32, 
     assert_eq!(warn.field_str("axis"), Some(axis), "行内軸の欄");
     assert_eq!(number_field(warn, "wrap_threshold"), wrap_threshold);
     assert_eq!(number_field(warn, "inline_limit"), inline_limit);
-    // 折返しの警告を見る呼出側はどれも相方（スコープ 1）で、名前を入れていない（`areka-P0-shell-balloon` 要件 3.12）。
+    // 折返しの警告を見る呼出側はどれも相方（スコープ 1）で、名前を入れていない。
     assert_eq!(
         warn.field_str("balloon"),
         Some("スコープ1のバルーン"),
@@ -179,7 +174,7 @@ fn binding(slot: Entity, window: Entity, image: (u32, u32)) -> TextSlotBinding {
     TextSlotBinding::new(slot, window, 1.0, image, image)
 }
 
-// ── 要件 14.2／14.3: 装着 1 回につき 1 件・欄と文言は不変 ──
+// ── 装着 1 回につき 1 件・欄と文言は不変 ──
 
 /// 粗い相方側バルーン（折返し基準 254 > 遠辺 240）の**装着**は警告をちょうど 1 件記録し、
 /// 4 つの欄（バルーン名・軸・折返し基準・遠辺）を載せる。
@@ -229,7 +224,7 @@ fn attaching_a_vertical_coarse_balloon_warns_with_the_inline_axis_of_the_block_d
 }
 
 /// 折返し基準が遠辺の内にある本体側バルーン（351 ≤ 356）は装着でも警告を出さない
-/// （警告が「どのバルーンでも出る」ものでないことの対照・要件 14.4）。
+/// （警告が「どのバルーンでも出る」ものでないことの対照）。
 #[test]
 fn attaching_a_balloon_with_wrap_threshold_inside_the_range_does_not_warn() {
     let mut world = World::new();
@@ -286,7 +281,7 @@ fn attaching_a_balloon_with_wrap_threshold_exactly_on_the_far_edge_does_not_warn
     );
 }
 
-// ── 要件 14.2／14.4: 再追従は「値が変わったときだけ」 ──
+// ── 再追従は「値が変わったときだけ」 ──
 
 /// 値の変わらない再追従を 3 回繰り返しても追加の警告は 0 件——毎フレーム走る経路で
 /// 警告が積み上がらないことの本体（上の 27,908 行はここで消える）。
@@ -362,7 +357,7 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn() {
     );
 }
 
-/// 解決済み領域の値が変わる再追従は、新しい値でもう 1 件記録する（要件 14.2 の後半）。
+/// 解決済み領域の値が変わる再追従は、新しい値でもう 1 件記録する。
 #[test]
 fn refresh_with_a_changed_region_warns_once_with_the_new_values() {
     let mut world = World::new();
@@ -392,7 +387,7 @@ fn refresh_with_a_changed_region_warns_once_with_the_new_values() {
     assert_coarse_warning(&warns[0], "x", WIDER_WRAP_X, WIDER_RIGHT);
 }
 
-// ── `areka-P0-balloon-origin-outside-validrect` 要件 3.1〜3.4／5.6: 無視した `origin` 宣言は成分 1 つにつき 1 件 ──
+// ── 無視した `origin` 宣言は成分 1 つにつき 1 件 ──
 //
 // 上の 6 本は `origin` を宣言しない入力なので、下の追加分とは別の警告を見ている。
 // 同じ捕捉窓に 2 種類の警告が混ざりうるため、下の群は**文言で選り分けてから**数える
@@ -482,7 +477,7 @@ fn assert_ignored_origin_warning(
         corner,
         "実際に用いた書き始めの角の欄"
     );
-    // 呼出側は名前を入れていない（`areka-P0-shell-balloon` 要件 3.12）。
+    // 呼出側は名前を入れていない。
     assert_eq!(
         warn.field_str("balloon"),
         Some(balloon),
@@ -531,7 +526,7 @@ fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_compon
     );
 }
 
-/// 片方の成分だけが範囲の外なら 1 件だけ——範囲の内の成分は警告を生まない（`areka-P0-balloon-origin-outside-validrect` 要件 3.4）。
+/// 片方の成分だけが範囲の外なら 1 件だけ——範囲の内の成分は警告を生まない。
 #[test]
 fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
     let mut world = World::new();
@@ -564,7 +559,7 @@ fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
 }
 
 /// 範囲の内に宣言したバルーンの装着は WARN を 1 件も出さない——ここだけは文言で選り分けず
-/// **総数**を 0 と主張する（選り分けない 0 のほうが強い主張である・`areka-P0-balloon-origin-outside-validrect` 要件 3.4／5.6）。
+/// **総数**を 0 と主張する（選り分けない 0 のほうが強い主張である）。
 #[test]
 fn attaching_a_balloon_with_origin_inside_the_range_does_not_warn_at_all() {
     let mut world = World::new();
@@ -587,7 +582,7 @@ fn attaching_a_balloon_with_origin_inside_the_range_does_not_warn_at_all() {
 }
 
 /// 値の変わらない再追従を 3 回繰り返しても、無視した `origin` の警告は 1 件も増えない
-/// （毎フレーム走る経路で警告が積み上がらない・`areka-P0-balloon-origin-outside-validrect` 要件 3.2）。
+/// （毎フレーム走る経路で警告が積み上がらない）。
 #[test]
 fn repeated_refresh_with_unchanged_values_adds_no_ignored_origin_warning() {
     let mut world = World::new();
@@ -625,7 +620,7 @@ fn repeated_refresh_with_unchanged_values_adds_no_ignored_origin_warning() {
 }
 
 /// binding だけが変わって領域が同値の再追従は、**再構築は起きる**のに警告は 0 件
-/// （判定が「登録口に達したか」ではなく「領域の値が変わったか」であることを示す・`areka-P0-balloon-origin-outside-validrect` 要件 3.2）。
+/// （判定が「登録口に達したか」ではなく「領域の値が変わったか」であることを示す）。
 #[test]
 fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() {
     let mut world = World::new();
@@ -711,7 +706,7 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
     );
 }
 
-/// 領域の差が**無視した宣言の値だけ**でも、警告は新しい値で出し直す（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）。
+/// 領域の差が**無視した宣言の値だけ**でも、警告は新しい値で出し直す。
 ///
 /// 直前の 1 本は面の原寸を変えて値を動かすので、遠辺・折返し基準・原寸も一緒に動く。
 /// それらのどれか 1 つでも判定に効いていれば通ってしまうので、「無視した値が変われば
@@ -792,7 +787,7 @@ fn refresh_that_only_changes_the_ignored_origin_value_warns_again_with_the_new_v
     );
 }
 
-/// 2 種類の警告が同じ装着で同時に出ても、互いの件数・欄・文言を乱さない（`areka-P0-balloon-origin-outside-validrect` 要件 3.3）。
+/// 2 種類の警告が同じ装着で同時に出ても、互いの件数・欄・文言を乱さない。
 /// 粗い相方側バルーンに範囲外の `origin` を足すと、折返しの 1 件と `origin` の 2 件で総数 3 件。
 #[test]
 fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
@@ -850,7 +845,7 @@ fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
     assert_coarse_warning(coarse[0], "x", KERO_WRAP_X, KERO_RIGHT);
 }
 
-// ── `areka-P0-shell-balloon` 要件 3.12: 名前の欄は結線が入れた名前・未設定はスコープから導く ──
+// ── 名前の欄は結線が入れた名前・未設定はスコープから導く ──
 
 /// 結線が名前（バルーンのフォルダ名）を入れたスコープは、2 つの警告の名前の欄にその名前を出す。
 /// 入れていないスコープは `スコープ{番号}のバルーン` のまま（名前はスコープごと）。

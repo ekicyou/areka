@@ -1,4 +1,4 @@
-//! `catalog` のテストが一時フォルダに根を組むヘルパ（要件 8.1・design「File Structure Plan」）。
+//! `catalog` のテストが一時フォルダに根を組むヘルパ。
 //!
 //! 組むのは `temp-path-kit` の一時フォルダの下だけで、検体や作業ツリーには書かない。
 //! `catalog` と `catalog_roots` のテストが共に使う fixture の道具はここに 1 つずつ置く。
@@ -69,7 +69,7 @@ pub(super) fn hold_exclusive(path: &Path) -> fs::File {
         .expect("共有なしで開く")
 }
 
-/// `Shift_JIS` 宣言の descript（`name`＝「吹き出し」・`craftmanw`＝「作者」を生バイトで・要件 2.8）。
+/// `Shift_JIS` 宣言の descript（`name`＝「吹き出し」・`craftmanw`＝「作者」を生バイトで）。
 pub(super) fn sjis_descript() -> Vec<u8> {
     let mut sjis = b"charset,Shift_JIS\nname,".to_vec();
     sjis.extend_from_slice(&[0x90, 0x81, 0x82, 0xAB, 0x8F, 0x6F, 0x82, 0xB5]);
@@ -79,7 +79,7 @@ pub(super) fn sjis_descript() -> Vec<u8> {
     sjis
 }
 
-/// 要件 8.1 の構成の一時の根。`_tmp` を束縛している間だけ実在する。
+/// 一時の根。`_tmp` を束縛している間だけ実在する。
 ///
 /// - `ghost/`: `alpha`（素性 7 項目が全部ある・install.txt で `kaku` を同梱・シェル 2 つの
 ///   うち `hidden` は `menu,hidden`）・`beta`（素性はほぼ無し）・`empty`（descript の無い

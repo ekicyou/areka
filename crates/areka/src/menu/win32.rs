@@ -1,11 +1,10 @@
-//! メニューの OS 表示（areka-P0-popup-menu-minimal）。
+//! メニューの OS 表示。
 //!
 //! 計画から `HMENU` を組み立て、`TrackPopupMenuEx` で表示して選ばれた識別子を返す。
 //! フォアグラウンドの作法とクライアント座標からスクリーン座標への変換もここに置く。
 //! メニュー module の `unsafe` はこのファイルと、その読み戻しテスト（`win32_tests.rs`）だけに閉じる。
 //!
-//! 描画・キーボード操作・メニュー外クリックでの閉じ方は OS に任せ、自前の窓は作らない
-//! （要件 1.2・7.5——持ち主はキャラクター窓そのもの）。記録は呼び手が知りえないことだけを
+//! 描画・キーボード操作・メニュー外クリックでの閉じ方は OS に任せ、自前の窓は作らない（持ち主はキャラクター窓そのもの）。記録は呼び手が知りえないことだけを
 //! ここで出し、表示・選択・未選択・失敗の記録は呼び手（`trigger`）が戻り値から出す。
 
 use windows::Win32::Foundation::{
@@ -34,8 +33,8 @@ pub(crate) enum ShowError {
 ///
 /// 戻り値で 3 つを区別する: `Ok(Some(id))`＝項目が選ばれた・`Ok(None)`＝何も選ばれずに
 /// 閉じた・`Err`＝組み立て（[`ShowError::Build`]）か表示（[`ShowError::Track`]）に失敗した
-/// （どちらも何も表示されていない・要件 1.7）。
-/// `owner` はキャラクター窓の実ハンドルで、メニューのための窓は別に作らない（要件 7.5）。
+/// （どちらも何も表示されていない）。
+/// `owner` はキャラクター窓の実ハンドルで、メニューのための窓は別に作らない。
 pub(crate) fn show(
     owner: HWND,
     screen_pos: (i32, i32),
@@ -45,7 +44,7 @@ pub(crate) fn show(
     let flags = TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_LEFTALIGN | TPM_TOPALIGN;
 
     // 持ち主を前面にしてから出す。そうしないとメニューの外をクリックしても閉じない
-    // （要件 1.3・Microsoft KB Q135788 の作法）。前面にできなくても表示は試みる。
+    // （Microsoft KB Q135788 の作法）。前面にできなくても表示は試みる。
     // SAFETY: 窓ハンドルを値で渡すだけで、無効なハンドルには API が失敗を返す。
     if !unsafe { SetForegroundWindow(owner) }.as_bool() {
         tracing::debug!(
@@ -134,7 +133,7 @@ fn build(entries: &[PlanEntry]) -> Result<Owned<HMENU>> {
     Ok(menu)
 }
 
-/// 選べない項目は灰色にする（要件 2.5）。
+/// 選べない項目は灰色にする。
 fn grayed(enabled: bool) -> MENU_ITEM_FLAGS {
     if enabled { MF_ENABLED } else { MF_GRAYED }
 }

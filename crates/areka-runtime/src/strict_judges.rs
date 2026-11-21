@@ -1,4 +1,4 @@
-//! strict の記録の areka の判定（spec: mcp-strict-errors 要件 2.7）。
+//! strict の記録の areka の判定。
 //!
 //! 判定は自分で持たず、`check_script` と同じ物差し（`\!` の受け取り手の台帳
 //! [`ConsumerLedger::consumer_of`]・文字の層の `\f` の分類 [`classify_font_tag`]）の答えを写すだけにする。

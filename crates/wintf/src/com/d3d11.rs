@@ -33,10 +33,8 @@ where
             featurelevel,
             immediatecontext,
         )
-        // NOTE: この unwrap は成功経路でのみ到達する。ppDevice（Some(&mut device)）を
-        // 非 null で渡しているため、D3D11CreateDevice の契約上 HRESULT 成功時には
-        // out パラメータが必ず書き込まれる（失敗時は map が実行されず unwrap に
-        // 到達しない）。
+        // ppDevice を非 null で渡しているので、D3D11CreateDevice の契約上 HRESULT 成功時には
+        // out パラメータが必ず書き込まれている。
         .map(|()| device.unwrap())
     }
 }

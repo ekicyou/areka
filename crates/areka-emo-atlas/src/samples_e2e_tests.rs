@@ -1,9 +1,8 @@
-//! 本物の読み手で検体のフォルダを焼く結合テスト（spec: areka-P0-animated-image-decode
-//! 要件 1.2・1.3・1.4・3.3・4.3・8.3〜8.6）。
+//! 本物の読み手で検体のフォルダを焼く結合テスト。
 //!
 //! `WicDecoderArm` で `testdata/animated/`（中身は同じフォルダの README）の検体を 1 つのシェルに
 //! 並べて焼く。動く絵の全コマと縮めた 1 枚は `image` が読むので、結果は Windows の WebP の拡張機能の
-//! 有無に依らない。そのため WIC の WebP の読み手が要る `single.webp` と、段 2（WIC）へ落ちる
+//! 有無に依らない。そのため WIC の WebP の読み手が要る `single.webp` と、WIC へ落ちる
 //! `deep16.apng` はここに入れない（どちらも偽の読み手・兄弟のテストが判定する）。
 
 use crate::test_support::{
@@ -107,7 +106,7 @@ fn samples_folder_bakes_every_frame_and_single_pictures() {
             "{name}: no warning: {log}"
         );
     }
-    // 拡張子が `.png` の WebP は `alpha.webp` と同じ絵になる（要件 1.2）。
+    // 拡張子が `.png` の WebP は `alpha.webp` と同じ絵になる。
     let (webp, named) = (id(table, "alpha.webp"), id(table, "webp_named.png"));
     let (wf, nf) = (
         &table.animation(webp).unwrap().frames,
@@ -119,7 +118,7 @@ fn samples_folder_bakes_every_frame_and_single_pictures() {
     // 1 番のコマは 0 番が背景へ戻って左上が透明（固定コミットの `image-webp` の分かれ目）。
     assert_eq!(full(table, wf[1])[0], CLEAR, "alpha.webp frame 1 top-left");
 
-    // GIF と 1 コマの APNG は 1 枚の絵（要件 1.3・1.4）。
+    // GIF と 1 コマの APNG は 1 枚の絵。
     let gif = id(table, "two_frames.gif");
     assert!(table.animation(gif).is_none(), "gif is one picture");
     // GIF は透明度を持たないので、0 番のコマ（全面が赤）の左上の色が抜けて全部が透明になる。
@@ -169,7 +168,7 @@ fn samples_folder_bakes_every_frame_and_single_pictures() {
 
 /// 上限を 1 コマにして焼くと、どの動く絵も 1 枚へ縮み、その 1 枚は上限を広げて焼いたときの
 /// 0 番のコマと同じ（`default_image.apng` は既定の絵の黒でなく赤・`rgb.webp` は左上の色が抜ける）。
-/// 縮めた 1 枚は段 1（`image`）で読むので、WIC へは落ちない。
+/// 縮めた 1 枚は `image` で読むので、WIC へは落ちない。
 #[test]
 fn one_frame_limit_shrinks_to_frame_zero_of_the_wide_bake() {
     let (wide, _) = bake_samples(AnimationLimits::default());

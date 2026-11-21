@@ -1,5 +1,5 @@
-//! `\![execute,install,url]` の取得の兄弟テスト（design「Testing Strategy / URL の取得」・要件 6.1・
-//! 6.4・6.6・9.11）。偽の取得口だけを差し、ネットワークへ出ない。一時フォルダは `temp-path-kit`。
+//! `\![execute,install,url]` の取得の兄弟テスト。
+//! 偽の取得口だけを差し、ネットワークへ出ない。一時フォルダは `temp-path-kit`。
 //! 通信中の数はテストごとの `static` を渡し、プロセスの数（`PROCESS`）には触れない。
 
 use std::fs::{self, File};
@@ -121,7 +121,6 @@ fn download_writes_body_under_pid_serial_safe_name() {
     assert_name_shape(&path, "my_ghost.nar");
     assert_eq!(fs::read(&path).expect("読める"), BODY);
 
-    // 区切りの後ろが空なら download.nar。
     let empty =
         download("https://example.com/dl/", &fake, &dir, SystemTime::now()).expect("落とせる");
     assert_name_shape(&empty, "download.nar");
@@ -228,7 +227,7 @@ fn thread_round_failure_sends_nothing() {
 }
 
 /// 取得の失敗・取得口を作れない、のどちらも `error!(install_fetch_failed)` 1 件（URL と理由）で
-/// 依頼 0（要件 6.4・10.15）。
+/// 依頼 0。
 #[test]
 fn failure_logs_one_error_with_url_and_reason_and_sends_nothing() {
     let unavailable: MakeFetch = Box::new(|| Err(FetchError::Other { code: 12007 }));
@@ -294,7 +293,7 @@ fn success_logs_done_without_warnings() {
 }
 
 /// 取得口を作る時点で通信中の数は立っていて、取得口を作れない・取得の失敗・書けない・送れない・
-/// 成功、のどの経路で抜けても 0 に戻る（要件 2.2・2.3）。経路を踏んだことは記録で確かめる。
+/// 成功、のどの経路で抜けても 0 に戻る。経路を踏んだことは記録で確かめる。
 #[test]
 fn online_is_raised_during_the_fetch_and_restored_on_every_exit() {
     static ONLINE: OnlineCounter = OnlineCounter::new();

@@ -43,8 +43,8 @@ fn assert_linked_to_areka(link: &Link) {
     assert_eq!(info["protocolVersion"], "2025-11-25", "{info}");
 }
 
-/// 先に居る SSP を飛ばして、後ろの areka に決める（要件 2.2・2.3）。SSP に届くのは確かめの 1 つ
-/// だけ。決めた番号には rmcp のクライアントが旧式の `initialize` で立つ（設計 D-3）。
+/// 先に居る SSP を飛ばして、後ろの areka に決める。SSP に届くのは確かめの 1 つ
+/// だけ。決めた番号には rmcp のクライアントが旧式の `initialize` で立つ。
 #[tokio::test]
 async fn a_peer_with_another_name_is_passed_over_for_areka_behind_it() {
     let ssp = FakeServer::start(Script::named(SSP));
@@ -55,7 +55,6 @@ async fn a_peer_with_another_name_is_passed_over_for_areka_behind_it() {
     only_the_check_arrived(&ssp).await;
     assert_linked_to_areka(&link);
 
-    // rmcp の手順: `initialize`（名乗りは中継の名前と版）→ `notifications/initialized`。
     let log = areka
         .wait(|log| {
             let mut methods = log.requests.iter().map(|r| r.method.as_str());
@@ -77,8 +76,7 @@ async fn a_peer_with_another_name_is_passed_over_for_areka_behind_it() {
     );
 }
 
-/// areka が 2 つ居れば先の 1 つで決め、後ろの候補には接続を開くだけで 1 バイトも書かない
-/// （要件 2.2・設計 D-5）。
+/// areka が 2 つ居れば先の 1 つで決め、後ろの候補には接続を開くだけで 1 バイトも書かない。
 #[tokio::test]
 async fn the_first_areka_decides_and_a_later_candidate_gets_no_byte() {
     let first = FakeServer::start(Script::areka());
@@ -99,7 +97,7 @@ async fn the_first_areka_decides_and_a_later_candidate_gets_no_byte() {
 }
 
 /// areka がどこにも居なければ「見つからない」。areka でない名乗りが応えた番号と名乗りを、候補の順に
-/// 集める（要件 3.6）。その相手にも、届くのは確かめの 1 つだけ。
+/// 集める。その相手にも、届くのは確かめの 1 つだけ。
 #[tokio::test]
 async fn without_areka_the_other_names_are_collected_in_candidate_order() {
     let (_socket_a, closed_a) = nobody();
@@ -121,7 +119,7 @@ async fn without_areka_the_other_names_are_collected_in_candidate_order() {
     only_the_check_arrived(&other).await;
 }
 
-/// 接続は受けるが返事をしない相手は、確かめの上限で見切って次の候補へ進む（要件 2.9）。
+/// 接続は受けるが返事をしない相手は、確かめの上限で見切って次の候補へ進む。
 #[tokio::test]
 async fn a_silent_peer_is_given_up_and_the_next_candidate_is_tried() {
     let silent = FakeServer::start(Script::areka().on("initialize", Reply::Never));
@@ -144,7 +142,7 @@ async fn a_silent_peer_is_given_up_and_the_next_candidate_is_tried() {
     only_the_check_arrived(&silent).await;
 }
 
-/// 番号 1 つの列（`AREKA_MCP_PORT=<番号>` の形）でも同じ確かめをする（要件 2.4）: 名乗りが違えば
+/// 番号 1 つの列（`AREKA_MCP_PORT=<番号>` の形）でも同じ確かめをする: 名乗りが違えば
 /// 見つからず、areka ならその番号に決まる。
 #[tokio::test]
 async fn a_single_candidate_gets_the_same_check() {
@@ -179,7 +177,7 @@ async fn peers_without_a_readable_name_are_skipped_but_not_collected() {
     assert_eq!(others, []);
 }
 
-/// 接続は候補の全部へ並べて開く（設計 D-5）: 誰も居ない番号がいくつ並んでも、待つのは接続の上限の
+/// 接続は候補の全部へ並べて開く: 誰も居ない番号がいくつ並んでも、待つのは接続の上限の
 /// 1 回分ほど。順に開くと、この机では 10 × 500 ms = 5 秒かかる（居ない番号への接続は、断られる
 /// より先に上限で切れる）。
 #[tokio::test]

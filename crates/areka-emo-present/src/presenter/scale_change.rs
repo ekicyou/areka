@@ -1,4 +1,4 @@
-//! 表示成立点の倍率の記録（`shell-scale-linkage` 要件 3.3・3.4・4.2・4.4・5.6・5.7）。
+//! 表示成立点の倍率の記録。
 //!
 //! 表示成立点（`apply_show` の `applied` を書く唯一の点）で、装着ごとの起点
 //! （`PresentTarget::scale_baseline`）と（k・その k を出した窓の DPI）の組が違うときだけ

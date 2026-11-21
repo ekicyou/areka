@@ -21,7 +21,7 @@ use super::test_support::{binding, obs, obs_box};
 use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use log_capture_kit::{CapturedEvent, capture};
-// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+// 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::status_report::test_support::{last_sent, runtime_busy_logged};
 
 fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
@@ -57,7 +57,7 @@ fn sent(rx: &Receiver<KanadeMsg>) -> Vec<Vec<BalloonBinding>> {
 // 差分・送出・記録
 // ---------------------------------------------------------------------------
 
-/// 差分のときだけ送り、同じ組は送らない。消えたら空の組を送る（要件 4.1・4.5・4.6）。
+/// 差分のときだけ送り、同じ組は送らない。消えたら空の組を送る。
 #[test]
 fn sends_only_on_change_and_never_resends_the_same_set() {
     let (world, rx) = world_with_ghost();
@@ -116,7 +116,7 @@ fn empty_slot_skips_with_debug_and_keeps_the_ledger() {
     assert_eq!(sent(&rx), vec![vec![binding(1, 0)]]);
 }
 
-/// 受け手が落ちていれば error が 1 件。台帳は更新するので次のフレームで鳴り直さない（要件 7.1）。
+/// 受け手が落ちていれば error が 1 件。台帳は更新するので次のフレームで鳴り直さない。
 #[test]
 fn dropped_receiver_records_exactly_one_error() {
     let (world, rx) = world_with_ghost();
@@ -156,7 +156,7 @@ fn surface_unknown_warns_once_per_scope_and_rearms_when_the_number_returns() {
 }
 
 /// 番号が取れたフレームで覚え（窓が見えていなくても）、次に箱だけ・番号なしになったらその番号で載せる。
-/// 警告の段の行は出さない（areka-P0-shell-balloon-frame-align 要件 3.1・3.2）。
+/// 警告の段の行は出さない。
 #[test]
 fn box_only_without_number_reports_the_number_remembered_from_an_earlier_frame() {
     let (world, rx) = world_with_ghost();
@@ -178,7 +178,7 @@ fn box_only_without_number_reports_the_number_remembered_from_an_earlier_frame()
     );
 }
 
-/// 照会の経路: 未装着の scope は見えていない扱いで、前に送った組から落ちる（要件 4.5・4.7）。
+/// 照会の経路: 未装着の scope は見えていない扱いで、前に送った組から落ちる。
 #[test]
 fn report_balloons_reads_the_presenter_and_drops_unattached_scopes() {
     let (world, rx) = world_with_ghost();

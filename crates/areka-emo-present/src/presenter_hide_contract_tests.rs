@@ -1,6 +1,5 @@
 //! 明示的な非表示指令（`PresentCommand::Hide` ＝ `\b[-1]` 相当）が枠の面と文字層の双方へ
-//! 及ぶことの検証（`areka-P0-balloon-visibility` Requirement 1.2・1.7・1.8・6.3・9.1／
-//! design §VisualMount 両 entity 化・§Testing Strategy > Unit Tests 4）。
+//! 及ぶことの検証。
 //!
 //! `mount_visibility_tests.rs` は [`crate::mount::VisualMount::set_visible`] を直接呼ぶ形で契約を
 //! 固定している。本ファイルが足すのは**既存の指令の入口から流した場合**の主張である。
@@ -13,7 +12,7 @@
 //!    双方が復帰すること。予約スロットへ内容（`VisualGraphics`）を挿す形は emo-text の
 //!    `TextSurface::attach`（`crates/areka-emo-text/src/surface.rs`）と同一である。
 //! 3. 外部所有の不可視構築を**指令経由**で行ったとき、1 回目は `Visual` が可視の値で挿入されず、
-//!    2 回目からは `Visual` が書き換えられないこと（Requirement 1.2 の「同一フレーム内の往復も禁止」）。装着 API を直接叩く
+//!    2 回目からは `Visual` が書き換えられないこと（同一フレーム内の往復も禁止）。装着 API を直接叩く
 //!    `mount_visibility_tests.rs` の検査は初期可視性を引数で渡すため、初期可視性を
 //!    `presenter/show.rs` が所有権から導出する側の往復は覆えない。
 
@@ -97,7 +96,7 @@ fn assert_layers(
 
 /// 既定の可視性所有（＝従来の指令駆動）の target を 1 つ組み、初回の表示指令まで済ませて返す。
 ///
-/// 所有権を設定しないことが要点である——本ファイルが対象とするのは本仕様が新設した経路ではなく、
+/// 所有権を設定しないことが要点である——本ファイルが対象とするのは可視性の所有権の経路ではなく、
 /// 従来から存在する明示的な非表示指令の経路そのものだからである。
 fn command_driven_target_after_first_show(salt: u8) -> (World, EmoPresenter, TargetId) {
     let mut world = make_world_with_gpu();
@@ -133,9 +132,9 @@ fn attach_content_to_slot(world: &mut World, slot: Entity) {
     world.flush();
 }
 
-// ── ⑴ 指令経由の非表示が双方へ及ぶ（Requirement 1.7/1.8/6.3）─────────────────────────────
+// ── ⑴ 指令経由の非表示が双方へ及ぶ─────────────────────────────
 
-/// Requirement 1.7／1.8／6.3: 既存の明示的な非表示指令を指令の入口へ流すと、可視だった枠の面と
+/// 既存の明示的な非表示指令を指令の入口へ流すと、可視だった枠の面と
 /// 文字層スロットが**双方とも**不可視かつポインタ判定停止へ遷移する。
 ///
 /// 非表示の直前に双方が可視であることを先に主張しているのは、事後状態だけの検査が恒真になるためで
@@ -170,7 +169,7 @@ fn explicit_hide_command_transitions_both_layers_from_visible_to_hidden() {
 
 // ── ⑵ 内容を持つ文字層でも同じ（完了状態「文字が残らない」）───────────────────────────────
 
-/// Requirement 1.7／6.3: 文字層スロットが**実際に描画内容を持つ**状態でも、明示的な非表示指令は
+/// 文字層スロットが**実際に描画内容を持つ**状態でも、明示的な非表示指令は
 /// スロットを不可視かつポインタ判定停止にする（枠だけ消えて文字が残らない）。
 ///
 /// 併せて、非表示が内容そのものを破棄しないこと（再表示に再描画を要さない＝装着・表示記録・
@@ -208,7 +207,6 @@ fn explicit_hide_command_covers_a_text_layer_that_holds_drawn_content() {
         "非表示は文字層の内容そのものを破棄してはならない（再表示は再描画を要さない）"
     );
 
-    // 指令経由の再表示（同一面の再指令）で双方が復帰する。
     show_ok(&mut presenter, &mut world, target, 1000);
     assert_layers(
         &world,
@@ -223,9 +221,9 @@ fn explicit_hide_command_covers_a_text_layer_that_holds_drawn_content() {
     );
 }
 
-// ── ⑶ 指令経由の不可視構築は可視状態を経由しない（Requirement 1.2）───────────────────────
+// ── ⑶ 指令経由の不可視構築は可視状態を経由しない───────────────────────
 
-/// Requirement 1.2: 外部所有の target へ**指令経由**で初回の表示を確立させたとき、枠の面・文字層
+/// 外部所有の target へ**指令経由**で初回の表示を確立させたとき、枠の面・文字層
 /// スロットのいずれの `Visual` も可視の値で挿入されない。
 ///
 /// 事後に不可視であることだけでは「可視で作ってから同一フレーム内で消した」経路を排除できない。
@@ -256,7 +254,6 @@ fn external_construction_through_the_command_funnel_never_inserts_a_visible_visu
         }
     });
 
-    // 表示の確立（装着の遅延生成はこの中で起きる）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     let (surface, slot) = mount_entities(&presenter, TargetId(0));

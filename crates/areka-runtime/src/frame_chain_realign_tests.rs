@@ -1,6 +1,6 @@
 //! DPI／拡大率の遷移後に連鎖を一度だけ解き直すことの**観察可能な帰結**を、多フレーム駆動で固定する。
 //!
-//! # ここが押さえる是正
+//! # ここが押さえるもの
 //!
 //! 起動時の連鎖確定は一度きりで、確定後のサーフェス切替では駆動しない。
 //! ところが拡大率が変わると全スコープの幅が k 倍に変わり、各窓は下端中央を保ったまま置き直される
@@ -8,8 +8,8 @@
 //! **359px**（幅 764→382 と 672→336 の左端差 `191 + 168`）だった。
 //!
 //! 本ファイルの探針はその実測をそのまま決定論へ写したものである
-//! （[`the_gap_returns_after_a_scale_change_and_the_realign_closes_it`]）——是正前は隙間 359 が
-//! 残って赤くなり、遷移後の解き直しが入ると 0 になる。
+//! （[`the_gap_returns_after_a_scale_change_and_the_realign_closes_it`]）——遷移後の解き直しが
+//! 無いと隙間 359 が残って赤くなり、入ると 0 になる。
 //!
 //! # 零件の主張には陽性の対を置く
 //!
@@ -122,9 +122,9 @@ fn release_char_window(harness: &mut FrameHarness, scope: usize) {
 // 観察可能な完了条件
 // ---------------------------------------------------------------------------
 
-/// **是正前は赤・是正後は緑**: 幅が半分になる遷移のあと、隣接ペアの隙間が 0 に戻る。
+/// 幅が半分になる遷移のあと、隣接ペアの隙間が 0 に戻る。
 ///
-/// 是正前は左端差の和（実機 359px の決定論版）が残る。
+/// 解き直しが無いと左端差の和（実機 359px の決定論版）が残る。
 #[test]
 fn the_gap_returns_after_a_scale_change_and_the_realign_closes_it() {
     let mut harness = FrameHarness::new();
@@ -252,7 +252,7 @@ fn one_transition_realigns_exactly_once() {
 /// 武装と解決が同一 tick に落ちるので、キャラ窓の書込は**窓あたり 1 回のまま**である
 /// （合流で `DpiReproject` 指令へ畳まれる）。
 ///
-/// 解き直しが窓書込の回数を増やしたら、遷移の逐次性を減らすという本仕様の主目的と衝突する。
+/// 解き直しが窓書込の回数を増やしたら、遷移の逐次性を減らすという主目的と衝突する。
 #[test]
 fn the_realign_write_coalesces_into_the_reprojection_of_the_same_tick() {
     let mut harness = FrameHarness::new();

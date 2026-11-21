@@ -7,7 +7,7 @@ use crate::status::ExecutionSnapshot;
 use crate::talk::TalkId;
 
 // ========================================================================
-// username リソース照会 prefetch（OnInitialize 後・OnFirstBoot 前・R4.1/R9.3）
+// username リソース照会 prefetch（OnInitialize 後・OnFirstBoot 前）
 // ========================================================================
 
 use crate::msg::ShioriFailure;
@@ -28,11 +28,10 @@ fn resource_outcome_of(actions: &[Action]) -> &ResourceOutcome {
 }
 
 /// prefetch は OnInitialize（NOTIFY）の後・OnFirstBoot（GET）の前に username GET を 1 回だけ発行し、
-/// 応答受領後は OnFirstBoot GET を発行して BootType へ進む（順序の檻・R4.1）。
+/// 応答受領後は OnFirstBoot GET を発行して BootType へ進む（順序の檻）。
 #[test]
 fn prefetch_username_get_is_issued_once_between_initialize_and_firstboot() {
     let cfg = config();
-    // Idle+Boot → OnInitialize NOTIFY（username GET はまだ出ない）。
     let (s, actions) = step(State::initial(), Input::Boot, &cfg);
     assert_notify(
         &actions[0],
@@ -43,7 +42,6 @@ fn prefetch_username_get_is_issued_once_between_initialize_and_firstboot() {
         "OnInitialize 段では GET を発行しない"
     );
 
-    // BootInit+Notified → username GET（OnFirstBoot はまだ出ない）。
     let (s, actions) = reply(s, ShioriOutcome::Notified, &cfg);
     assert!(matches!(s.phase, Phase::BootPrefetch));
     assert_eq!(
@@ -52,13 +50,12 @@ fn prefetch_username_get_is_issued_once_between_initialize_and_firstboot() {
         "prefetch の username GET はちょうど 1 回・応答前に OnFirstBoot を発行しない"
     );
 
-    // BootPrefetch+NoContent → [ResourceOutcome, OnFirstBoot GET]・BootType。
     let (s, actions) = reply(s, ShioriOutcome::NoContent, &cfg);
     assert!(
         matches!(s.phase, Phase::BootType),
         "prefetch 完了後は BootType（OnFirstBoot 待ち）"
     );
-    // sink 呼出指示（ResourceOutcome）が OnFirstBoot GET より前に積まれる（design boot 図: sink 先行）。
+    // sink 呼出指示（ResourceOutcome）が OnFirstBoot GET より前に積まれる（sink 先行）。
     assert!(
         matches!(actions[0], Action::ResourceOutcome { .. }),
         "ResourceOutcome は OnFirstBoot より前（sink 先行）"
@@ -70,12 +67,11 @@ fn prefetch_username_get_is_issued_once_between_initialize_and_firstboot() {
     );
 }
 
-/// 応答の [`ResourceOutcome`] 写像: 200 Value→Value(body)／204→NoContent／失敗→Failed（R4.1）。
+/// 応答の [`ResourceOutcome`] 写像: 200 Value→Value(body)／204→NoContent／失敗→Failed。
 #[test]
 fn prefetch_maps_outcomes_to_resource_outcome() {
     let cfg = config();
 
-    // 200 Value → ResourceOutcome::Value(body)。
     let (_, actions) = reply(
         drive_to_prefetch(&cfg),
         ShioriOutcome::Value("bob".to_string(), areka_talk::SecurityLevel::Local),
@@ -86,11 +82,9 @@ fn prefetch_maps_outcomes_to_resource_outcome() {
         &ResourceOutcome::Value("bob".to_string())
     );
 
-    // 204 → ResourceOutcome::NoContent。
     let (_, actions) = reply(drive_to_prefetch(&cfg), ShioriOutcome::NoContent, &cfg);
     assert_eq!(resource_outcome_of(&actions), &ResourceOutcome::NoContent);
 
-    // 失敗（タイムアウト）→ ResourceOutcome::Failed（理由文字列を保持）。
     let (_, actions) = reply(
         drive_to_prefetch(&cfg),
         ShioriOutcome::Failed(ShioriFailure::Timeout("30s".to_string())),
@@ -107,7 +101,7 @@ fn prefetch_maps_outcomes_to_resource_outcome() {
     }
 }
 
-/// 照会失敗（タイムアウト/IPC 断）でも boot は殺さず OnFirstBoot へ続行する（起動を殺さない・R4.1）。
+/// 照会失敗（タイムアウト/IPC 断）でも boot は殺さず OnFirstBoot へ続行する（起動を殺さない）。
 /// `step()`（mod.rs 横断アーム込み）を通し、BootPrefetch の Failed が Unloading{Fault} へ**倒れない**
 /// ことを固定する（横断 Failed→Fault 経路が prefetch では迂回される檻）。
 #[test]
@@ -127,7 +121,6 @@ fn prefetch_failure_continues_boot_not_fault() {
         resource_outcome_of(&actions),
         &ResourceOutcome::Failed("shiori ipc failure: pipe closed".to_string())
     );
-    // OnFirstBoot GET が発行され boot が前進する（Unload ではない）。
     assert_eq!(
         get_ids(&actions),
         ["OnFirstBoot"],
@@ -157,7 +150,7 @@ fn prefetch_value_does_not_produce_a_talk() {
     );
 }
 
-/// 完了固定ログ（R9.3 grep 証跡）: 経路（value/no_content/failed）ごとに `info!` が
+/// 完了固定ログ（grep 証跡）: 経路（value/no_content/failed）ごとに `info!` が
 /// `target="areka_kanade::resource"`・`outcome=<label>`・message 固定で**ちょうど 1 回**出る。
 #[test]
 fn prefetch_emits_fixed_completion_log_exactly_once() {
@@ -185,7 +178,7 @@ fn prefetch_emits_fixed_completion_log_exactly_once() {
 }
 
 // ========================================================================
-// 初回ゲート分岐（3.1-3.4）＋ epilogue 添付（design C9）
+// 初回ゲート分岐＋ epilogue 添付
 // ========================================================================
 
 use crate::talk::EpilogueCommand;
@@ -219,7 +212,7 @@ fn start_talk_of(actions: &[Action]) -> &StartTalk {
 }
 
 /// 3.3: 起動記録あり（first_boot=false）→ OnFirstBoot をスキップし OnBoot（BootMain）から起動運行を始める。
-/// prefetch 段は不変（3.5）——照会応答後の分岐のみが分岐する。`boot_gate skip_first_boot` を info で残す。
+/// prefetch 段は不変——照会応答後の分岐のみが分岐する。`boot_gate skip_first_boot` を info で残す。
 #[test]
 fn prefetch_first_boot_false_skips_onfirstboot_and_starts_from_onboot() {
     use crate::schedule::log_capture::{assert_logged, capture};
@@ -237,7 +230,6 @@ fn prefetch_first_boot_false_skips_onfirstboot_and_starts_from_onboot() {
         actions_out = actions;
     });
 
-    // OnFirstBoot・BootType を飛ばして BootMain 直行（3.3）。
     assert!(
         phase_is_main,
         "first_boot=false は BootType を飛ばし BootMain へ直行する（OnFirstBoot スキップ・3.3）"
@@ -247,13 +239,11 @@ fn prefetch_first_boot_false_skips_onfirstboot_and_starts_from_onboot() {
         matches!(actions_out[0], Action::ResourceOutcome { .. }),
         "ResourceOutcome は request より前（sink 先行）"
     );
-    // OnFirstBoot GET は出さず、代わりに OnBoot GET をちょうど 1 回発行して起動運行を始める。
     assert_eq!(
         get_ids(&actions_out),
         ["OnBoot"],
         "first_boot=false は OnFirstBoot を飛ばし OnBoot GET から始める（3.3）"
     );
-    // grep 証跡: boot_gate skip_first_boot。
     assert_logged(&events, Level::INFO, "boot_gate");
 }
 
@@ -265,7 +255,7 @@ fn first_boot_true_204_falls_through_to_onboot() {
     // BootPrefetch 204 → OnFirstBoot GET / BootType（表明は
     // prefetch_username_get_is_issued_once_between_initialize_and_firstboot が持つ）。
     let (s, _) = reply(s, ShioriOutcome::NoContent, &cfg);
-    // BootType 204 → OnBoot GET / BootMain（204 フォールスルー・3.2）。
+    // BootType 204 → OnBoot GET / BootMain（204 フォールスルー）。
     let (s, actions) = reply(s, ShioriOutcome::NoContent, &cfg);
     assert!(
         matches!(s.phase, Phase::BootMain),
@@ -296,8 +286,8 @@ fn onfirstboot_ref0_reflects_config_vanish_count() {
     );
 }
 
-/// design C9 Some アーム: 挨拶 talk は `config.first_boot_epilogue` を添付して起動する。
-/// 追跡の枠（`ActiveTalk.script`）も自ら作った script を保持する（DD-10・`OnChoiceTimeout` Ref0 の供給源）。
+/// Some アーム: 挨拶 talk は `config.first_boot_epilogue` を添付して起動する。
+/// 追跡の枠（`ActiveTalk.script`）も自ら作った script を保持する（`OnChoiceTimeout` Ref0 の供給源）。
 #[test]
 fn boot_greeting_talk_carries_epilogue() {
     let cfg = config_with_epilogue();
@@ -321,7 +311,7 @@ fn boot_greeting_talk_carries_epilogue() {
     );
 }
 
-/// design C9 None アーム（epilogue 非空・204-204）: 挨拶トーク皆無でも epilogue-only StartTalk
+/// None アーム（epilogue 非空・204-204）: 挨拶トーク皆無でも epilogue-only StartTalk
 /// （空 script・talk_id 採番・`BootVersion{talk: Some}` で正規追跡）を発行して起動記録を書く。
 #[test]
 fn first_boot_204_204_with_epilogue_emits_epilogue_only_tracked_talk() {
@@ -342,7 +332,7 @@ fn first_boot_204_204_with_epilogue_emits_epilogue_only_tracked_talk() {
         st.epilogue, cfg.first_boot_epilogue,
         "epilogue-only talk は first_boot_epilogue を運ぶ"
     );
-    // 正規追跡（Some）——即時完走で記録が書かれる経路（DD-IT-12 と同じ slot）。
+    // 正規追跡（Some）——即時完走で記録が書かれる経路（同じ slot）。
     assert!(
         matches!(
             s.phase,
@@ -362,7 +352,7 @@ fn first_boot_204_204_with_epilogue_emits_epilogue_only_tracked_talk() {
     );
 }
 
-/// design C9 None アーム（epilogue 空・通常 204）: 従来どおり StartTalk なし・`BootVersion{talk: None}`。
+/// None アーム（epilogue 空・通常 204）: 従来どおり StartTalk なし・`BootVersion{talk: None}`。
 #[test]
 fn normal_204_with_empty_epilogue_emits_no_talk() {
     let cfg = config(); // 既定 epilogue 空

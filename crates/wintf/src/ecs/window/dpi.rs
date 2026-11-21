@@ -138,7 +138,7 @@ impl DPI {
 /// `WM_DPICHANGED` の OS 提案矩形（位置）の適用方針。
 ///
 /// 未付与の窓は [`DpiSuggestedRectPolicy::ApplyPosition`] と同じ扱いになる
-/// （従来挙動・Per-Monitor v2 の標準応答）。これが後方互換の非退行保証である。
+/// （Per-Monitor v2 の標準応答）。
 ///
 /// 純 component（データのみ）。付与の責務は窓の所有者側（配置システム）にあり、
 /// wintf は読むだけで書かない。判断は

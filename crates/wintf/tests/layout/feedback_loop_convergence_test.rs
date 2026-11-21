@@ -1,10 +1,10 @@
 /// フィードバックループ収束検証テスト
 ///
-/// R4-AC1: ユーザーがウィンドウをドラッグ移動した場合、
+/// ユーザーがウィンドウをドラッグ移動した場合、
 /// WindowPos → Arrangement → GlobalArrangement → WindowPos の更新連鎖が
 /// 1フレーム内で収束し、次フレームで同一値の再更新が発生しないこと
 ///
-/// R1-AC1: Changed<WindowPos> フィルタにより WindowPos が変更された Window のみ処理すること
+/// Changed<WindowPos> フィルタにより WindowPos が変更された Window のみ処理すること
 ///
 /// 同じ値の書き直しは値の比較では見えないので、変更の刻み（`get_change_ticks`）を比べる。
 use bevy_ecs::change_detection::Tick;
@@ -78,7 +78,7 @@ fn changed_tick<T: Component>(world: &World, e: Entity) -> Tick {
 }
 
 // =============================================================================
-// Task 1.1: Changed<WindowPos> フィルタの検証
+// Changed<WindowPos> フィルタの検証
 // =============================================================================
 
 /// sync_window_arrangement_from_window_pos が Changed<WindowPos> フィルタを持ち、
@@ -98,7 +98,6 @@ fn test_sync_window_arrangement_only_processes_changed_window_pos() {
     // --- 初回実行: WindowPos は "新規追加" なので Changed 扱い ---
     schedule.run(&mut world);
 
-    // Arrangement.offset が WindowPos.position / scale = (100, 200) / 1.0 に更新されていること
     let arrangement = world.get::<Arrangement>(entity).unwrap();
     assert_eq!(
         arrangement.offset.x, 100.0,
@@ -153,7 +152,7 @@ fn test_sync_window_arrangement_only_processes_changed_window_pos() {
 }
 
 // =============================================================================
-// Task 1.1 + R2: DPI 変換の正確性検証
+// DPI 変換の正確性検証
 // =============================================================================
 
 /// DPI 192 (200%) 環境で WindowPos.position がそのまま Arrangement.offset に設定されること
@@ -185,7 +184,7 @@ fn test_sync_window_arrangement_dpi_192_no_division() {
 }
 
 // =============================================================================
-// Task 1.1 + R3: エッジケース検証
+// エッジケース検証
 // =============================================================================
 
 /// WindowPos.position が None の場合、Arrangement を更新しないこと
@@ -246,7 +245,6 @@ fn test_sync_window_arrangement_skips_cw_usedefault() {
 #[test]
 fn test_sync_window_arrangement_skips_equal_offset() {
     let mut world = new_world();
-    // 事前にオフセットが既に正しい値に設定されている
     let entity = spawn_window(
         &mut world,
         Some(Point { x: 100, y: 200 }),
@@ -274,7 +272,7 @@ fn test_sync_window_arrangement_skips_equal_offset() {
 }
 
 // =============================================================================
-// Task 3.1: フィードバックループ収束検証（R4-AC1）
+// フィードバックループ収束検証
 // =============================================================================
 
 /// 3 つの部品の変更の刻み。
@@ -303,14 +301,12 @@ fn test_feedback_loop_converges_in_one_frame_dpi_96() {
     // 初回実行で初期化（Added による初期処理）
     schedule.run(&mut world);
 
-    // --- ユーザーがウィンドウをドラッグ: position を変更 ---
     {
         let mut wp = world.get_mut::<WindowPos>(entity).unwrap();
         wp.position = Some(Point { x: 500, y: 300 });
     }
     let wp_tick_moved = changed_tick::<WindowPos>(&world, entity);
 
-    // フレーム1: 変更が伝播
     schedule.run(&mut world);
 
     let arr1 = *world.get::<Arrangement>(entity).unwrap();
@@ -322,7 +318,6 @@ fn test_feedback_loop_converges_in_one_frame_dpi_96() {
         "Frame1: 同じ位置を WindowPos へ書き戻さないこと"
     );
 
-    // フレーム2: 収束確認（どの部品にも書かない）
     let before = ticks(&world, entity);
     schedule.run(&mut world);
     assert_eq!(
@@ -359,7 +354,6 @@ fn test_feedback_loop_converges_dpi_192() {
         ))
         .id();
 
-    // Window entity — LayoutRoot の子
     let entity = spawn_window(
         &mut world,
         Some(Point { x: 0, y: 0 }),
@@ -369,17 +363,14 @@ fn test_feedback_loop_converges_dpi_192() {
     world.entity_mut(entity).insert(ChildOf(layout_root));
     let mut schedule = post_layout_schedule();
 
-    // 初回実行
     schedule.run(&mut world);
 
-    // ユーザーがウィンドウをドラッグ: (200, 400) 物理px
     {
         let mut wp = world.get_mut::<WindowPos>(entity).unwrap();
         wp.position = Some(Point { x: 200, y: 400 });
     }
     let wp_tick_moved = changed_tick::<WindowPos>(&world, entity);
 
-    // フレーム1
     schedule.run(&mut world);
 
     let arr1 = *world.get::<Arrangement>(entity).unwrap();
@@ -397,7 +388,6 @@ fn test_feedback_loop_converges_dpi_192() {
         "DPI 192: 同じ位置を WindowPos へ書き戻さないこと"
     );
 
-    // フレーム2: 収束確認
     let before = ticks(&world, entity);
     schedule.run(&mut world);
     assert_eq!(
@@ -408,7 +398,7 @@ fn test_feedback_loop_converges_dpi_192() {
 }
 
 /// DPI 192 で親（LayoutRoot）をまだ持たない窓も、位置を倍率倍に跳ばさず 1 フレームで収束する。
-/// 親の無い根の bounds は `From<Arrangement>` で決まり、ずらしは自分の倍率で伸ばさない（146 番）
+/// 親の無い根の bounds は `From<Arrangement>` で決まり、ずらしは自分の倍率で伸ばさない
 #[test]
 fn test_feedback_loop_converges_dpi_192_without_parent() {
     let mut world = new_world();

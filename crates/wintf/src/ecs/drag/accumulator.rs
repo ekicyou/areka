@@ -78,7 +78,7 @@ impl DragAccumulator {
                     return;
                 }
                 self.current_dragging_entity = None;
-                // 終わったドラッグの移動量を次のドラッグへ配らない（指摘 1 ⑶）
+                // 終わったドラッグの移動量を次のドラッグへ配らない
                 self.accumulated_delta = PhysicalPoint::new(0, 0);
             }
         }
@@ -94,7 +94,6 @@ impl DragAccumulator {
         let entity = self.current_dragging_entity;
         let position = self.current_pos;
 
-        // デルタをリセット
         self.accumulated_delta = PhysicalPoint::new(0, 0);
 
         FlushResult {

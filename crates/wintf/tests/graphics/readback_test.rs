@@ -1,4 +1,4 @@
-//! 読み戻しの公開の口（要件 6.4）が crate の外から使える。装置なしで動く（GPU に触らない）。
+//! 読み戻しの公開の口が crate の外から使える。装置なしで動く（GPU に触らない）。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::RunSystemOnce;

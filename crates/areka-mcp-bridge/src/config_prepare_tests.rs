@@ -1,5 +1,4 @@
-//! 値だけを受ける内側の口（`Config::from_inputs`）を、ワークツリーの `target\` の下に組んだ根で呼ぶテスト
-//! （spec: bridge-store-user-root 要件 2.2〜2.11・3.2・3.3・3.8・6.3〜6.7）。
+//! 値だけを受ける内側の口（`Config::from_inputs`）を、ワークツリーの `target\` の下に組んだ根で呼ぶテスト。
 //!
 //! 偽の `LOCALAPPDATA` と exe のフォルダ（空の `areka.exe`・隣の記憶 `profile\areka\sylphya.toml`）を組み、
 //! 記録を捕まえながら呼ぶ。プロセスの環境変数は書き換えない（値と `Signals` を注入する）。
@@ -159,7 +158,7 @@ fn assert_growth_only_under(fx: &Fixture, cache_dir: &Path, before: &[(PathBuf, 
     }
 }
 
-/// 頭が `[bridge]` の行の文と、決まった語の欄（`reason`）が ASCII（要件 3.8）。パスの欄は見ない。
+/// 頭が `[bridge]` の行の文と、決まった語の欄（`reason`）が ASCII。パスの欄は見ない。
 fn assert_bridge_lines_ascii(events: &[CapturedEvent]) {
     for event in events
         .iter()
@@ -196,7 +195,7 @@ fn assert_only_w1(events: &[CapturedEvent], reason: &str, root: &Path) {
     );
 }
 
-/// 要件 2.4・3.2: 根がまだ無い → 控え無し・W1（`user_root_missing`）。保存しても根は作られない（2.2・6.5）。
+/// 根がまだ無い → 控え無し・W1（`user_root_missing`）。保存しても根は作られない。
 #[test]
 fn absent_root_runs_without_cache_and_creates_nothing() {
     let fx = fixture("bridge-prep-absent");
@@ -207,8 +206,8 @@ fn absent_root_runs_without_cache_and_creates_nothing() {
     assert!(!fx.root.exists(), "書ける根は作らない");
 }
 
-/// 要件 2.5・3.2: 根は在るが記憶がまだ写されていない → 控え無し・W1（`app_memory_not_migrated`）。
-/// 保存しても根の `profile\areka` は作られず、exe の隣の中身が同じ（2.3・6.5）。
+/// 根は在るが記憶がまだ写されていない → 控え無し・W1（`app_memory_not_migrated`）。
+/// 保存しても根の `profile\areka` は作られず、exe の隣の中身が同じ。
 #[test]
 fn pending_migration_runs_without_cache_and_copies_nothing() {
     let fx = fixture("bridge-prep-pending");
@@ -223,7 +222,7 @@ fn pending_migration_runs_without_cache_and_copies_nothing() {
     );
 }
 
-/// 要件 2.6: 根の記憶が在る → 根の `profile\areka\mcp-bridge`。中継の行は 0 件。
+/// 根の記憶が在る → 根の `profile\areka\mcp-bridge`。中継の行は 0 件。
 #[test]
 fn root_memory_present_puts_cache_under_root() {
     let fx = fixture("bridge-prep-ready");
@@ -238,7 +237,7 @@ fn root_memory_present_puts_cache_under_root() {
     assert_growth_only_under(&fx, &expected, &before);
 }
 
-/// 要件 2.6: 根は在るが記憶がどこにも無い → 同じ置き場で、保存で増えるのはその下だけ。
+/// 根は在るが記憶がどこにも無い → 同じ置き場で、保存で増えるのはその下だけ。
 #[test]
 fn root_without_memory_anywhere_puts_cache_under_root() {
     let fx = fixture("bridge-prep-ready-empty");
@@ -253,7 +252,7 @@ fn root_without_memory_anywhere_puts_cache_under_root() {
     assert_growth_only_under(&fx, &expected, &before);
 }
 
-/// 要件 2.7・3.3: 決められない（`LOCALAPPDATA` が無い・`AREKA_USER_ROOT` が相対）→ exe の隣に置かず控え無し。
+/// 決められない（`LOCALAPPDATA` が無い・`AREKA_USER_ROOT` が相対）→ exe の隣に置かず控え無し。
 /// `areka-user-data` の error（`user_root_unavailable`）の後に W2 が warn で 1 件（順を固める）。
 #[test]
 fn unlocatable_root_runs_without_cache_after_the_user_data_error() {
@@ -294,7 +293,7 @@ fn unlocatable_root_runs_without_cache_after_the_user_data_error() {
     }
 }
 
-/// 要件 2.8: zip の形（winget の控え無し・書ける）→ exe の隣の `profile\areka\mcp-bridge`。
+/// zip の形（winget の控え無し・書ける）→ exe の隣の `profile\areka\mcp-bridge`。
 #[test]
 fn zip_layout_puts_cache_beside_exe() {
     let fx = fixture("bridge-prep-zip");
@@ -308,7 +307,7 @@ fn zip_layout_puts_cache_beside_exe() {
     assert!(!fx.root.exists());
 }
 
-/// 要件 2.9: `AREKA_PROFILE_DIR` 在り → その下の `mcp-bridge`・根は作られない・W1 は 0 件。
+/// `AREKA_PROFILE_DIR` 在り → その下の `mcp-bridge`・根は作られない・W1 は 0 件。
 #[test]
 fn profile_env_puts_cache_under_it_without_touching_root() {
     let fx = fixture("bridge-prep-profile-env");
@@ -322,7 +321,7 @@ fn profile_env_puts_cache_under_it_without_touching_root() {
     assert!(!fx.root.exists(), "書ける根は作らない");
 }
 
-/// 要件 2.10: 隣に areka が無い → `LOCALAPPDATA\areka\mcp-bridge`。
+/// 隣に areka が無い → `LOCALAPPDATA\areka\mcp-bridge`。
 #[test]
 fn no_areka_beside_puts_cache_under_local_app_data() {
     let fx = fixture("bridge-prep-no-areka");
@@ -331,7 +330,7 @@ fn no_areka_beside_puts_cache_under_local_app_data() {
     assert!(bridge_lines(&events).is_empty());
 }
 
-/// 要件 2.11: 根がまだ無い起動は控え無し。areka が置き場を作った後の 2 回目の起動で控えが置かれる。
+/// 根がまだ無い起動は控え無し。areka が置き場を作った後の 2 回目の起動で控えが置かれる。
 #[test]
 fn second_start_after_areka_prepares_root_uses_cache() {
     let fx = fixture("bridge-prep-second-start");

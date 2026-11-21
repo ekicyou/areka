@@ -1,4 +1,4 @@
-//! 32bit の仲介の判定と揃え方（要件 2.1〜2.6）。
+//! 32bit の仲介の判定と揃え方。
 //!
 //! `cargo build --workspace` は x64 の仲介を `areka.exe` の隣へ置くので、「隣にある」だけでは
 //! 32bit の前提を満たさない（x64 の仲介は 32bit の SHIORI の DLL を読めず接続に落ちる）。
@@ -18,7 +18,7 @@ pub(crate) struct I686Spec<'a> {
     pub package: &'a str,
 }
 
-/// 32bit の仲介の定め。`areka.exe` の隣へ揃える（要件 2.1）。
+/// 32bit の仲介の定め。`areka.exe` の隣へ揃える。
 pub(crate) const HELPER: I686Spec<'static> = I686Spec {
     file_name: "shiori-host32-helper.exe",
     env_var: "HOST32_HELPER_EXE",
@@ -47,7 +47,7 @@ fn same_copy(a: &Path, b: &Path) -> bool {
     matches!((key(a), key(b)), (Ok(x), Ok(y)) if x == y)
 }
 
-/// `spec` の成果物を `dest_dir` へ 32bit で揃えて、そのパスを返す（要件 2.1〜2.6）。
+/// `spec` の成果物を `dest_dir` へ 32bit で揃えて、そのパスを返す。
 ///
 /// `env_value` は `spec.env_var` の値、`i686_target` は `<target>\i686-pc-windows-msvc`。
 /// 先に元を 環境変数 → debug → release の順に 32bit であるものから選び、置き先が無い・
@@ -60,7 +60,7 @@ pub(crate) fn ensure(
     i686_target: &Path,
     dest_dir: &Path,
 ) -> PathBuf {
-    // プロセスの中では 1 本ずつ揃える（要件 2.6）。試験の panic で毒になっても鍵は使い続ける。
+    // プロセスの中では 1 本ずつ揃える。試験の panic で毒になっても鍵は使い続ける。
     static LOCK: Mutex<()> = Mutex::new(());
     let _guard = LOCK.lock().unwrap_or_else(PoisonError::into_inner);
 
@@ -100,8 +100,8 @@ pub(crate) fn ensure(
     dest
 }
 
-/// `src` を `<dest>.<pid>.<連番>.tmp` へ写してから `dest` へ改名する（書きかけを起動させない・
-/// 要件 2.6）。改名に失敗したら置き先を見直し、32bit になっていれば通す（別のプロセスが先に
+/// `src` を `<dest>.<pid>.<連番>.tmp` へ写してから `dest` へ改名する（書きかけを起動させない）。
+/// 改名に失敗したら置き先を見直し、32bit になっていれば通す（別のプロセスが先に
 /// 置いた・使用中で替えられない）。32bit でなければ理由を添えて panic する。
 ///
 /// 通した置き先が元と長さか更新時刻で違う（古い写しのまま走る）ときは、その旨の ASCII の 1 行を

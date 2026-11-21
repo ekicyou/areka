@@ -1,5 +1,4 @@
-//! 検体の展開済みツリーを `.nar` に畳む**使い捨ての手順**（spec: `areka-P0-nar-install`
-//! タスク 5.1・要件 8.2〜8.4・8.7）。
+//! 検体の展開済みツリーを `.nar` に畳む**使い捨ての手順**。
 //!
 //! # 呼び方
 //!
@@ -13,24 +12,23 @@
 //!   フォルダ名から採る。
 //! - `--check`: `.nar` を書き直さず、既にある `.nar` の往復だけを確かめる。
 //!
-//! `--from` は必須である。段 ③ の登記表は展開形の在処を持たない（保管は
-//! `vendors/sample_ghost/<名>.nar` に統一され、展開形はタスク 5.6 で消える）ので、畳む元の
-//! フォルダは呼び手が指すしかない。
+//! `--from` は必須である。登記表は展開形の在処を持たない（保管は
+//! `vendors/sample_ghost/<名>.nar` に統一されている）ので、畳む元のフォルダは呼び手が指す
+//! しかない。
 //!
 //! # なぜ使い捨てか
 //!
-//! 畳むのは検体を足すときの 1 回だけで、常設の判定は「登記の往復」（タスク 5.7）が
+//! 畳むのは検体を足すときの 1 回だけで、常設の判定は「登記の往復」が
 //! 持つ。ここに残すのは**同じ結果をもう一度作れる**ようにするためで、手順そのものは
-//! `vendors/sample_ghost/README.md`（タスク 6.4）が案内する。
+//! `vendors/sample_ghost/README.md` が案内する。
 //!
-//! # 何を入れるか——`git ls-files` が唯一の出どころ（要件 8.3）
+//! # 何を入れるか——`git ls-files` が唯一の出どころ
 //!
 //! フォルダを走査して入れると、追跡外の永続化フォルダ（`ghost/master/profile/`）まで
 //! 入る（emo2 の木では走査と追跡がずれていた）。そこで**追跡ファイルだけを作業フォルダへ
-//! 写してから畳む**。写しは
-//! バイトの複製なので、改行も文字コードも変わらない（要件 8.7）。
+//! 写してから畳む**。写しはバイトの複製なので、改行も文字コードも変わらない。
 //!
-//! # 何と突き合わせるか（要件 8.4）
+//! # 何と突き合わせるか
 //!
 //! 畳んだ `.nar` を本番の展開器で空の根へ入れ、**インストール済み形の全ファイル**を
 //! 元の追跡ファイルと 1 バイト単位で突き合わせる。同梱バルーンを持つ検体は
@@ -69,7 +67,6 @@ fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (from, check_only) = parse_args(&args)?;
 
-    // 畳む対象。`--from` は登記表を見ない＝まだ登記していない検体でも畳める。
     // 引数の読みは作業の置き場を消す前に（書き損じの呼び出しで置き場を消さない）。
     let root = workspace_root();
     let source = match &from {
@@ -151,7 +148,6 @@ fn fold_one(
         .into());
     }
 
-    // 追跡ファイルだけを作業フォルダへ写す。
     let stage = scratch.join("stage").join(&name);
     for relative in tracked {
         let to = stage.join(relative.replace('/', MAIN_SEPARATOR_STR));
@@ -175,7 +171,6 @@ fn fold_one(
         out
     };
 
-    // 往復——空の根へ入れて、元のツリーと突き合わせる。
     let dest_root = scratch.join("roundtrip").join(&name);
     fs::create_dir_all(&dest_root)?;
     let archive = NarArchive::open(&nar)?;
@@ -269,7 +264,7 @@ fn resolve(root: &Path, spelled: &str) -> Result<PathBuf, Box<dyn Error>> {
     Err(format!("--from {spelled} is not a folder").into())
 }
 
-/// 元のツリーの相対パスが、インストール済み形でどこへ置かれるか（要件 8.4 の写像）。
+/// 元のツリーの相対パスが、インストール済み形でどこへ置かれるか。
 ///
 /// 同梱バルーンの取り出し元の配下は取り出し元の段を剥がして本体のフォルダの中のバルーン格納先
 /// （`<根>/<格納先>/<directory>/balloon/<バルーンの directory>/`・`areka-nar` の置き方と

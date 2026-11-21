@@ -1,4 +1,4 @@
-//! 問い 4（7.2）: q1 の窓に WUC の合成の各段を通し、塗った色を画面の DC から撮る。
+//! 問い 4: q1 の窓に WUC の合成の各段を通し、塗った色を画面の DC から撮る。
 //! 段ごとに `[q4] step=<名前> ok|err=<HRESULT>` を 1 行出す。終了コードは README の ExitContract。
 use std::cell::Cell;
 use std::process::ExitCode;
@@ -56,7 +56,7 @@ fn run() -> std::result::Result<ExitCode, ExitCode> {
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(30_000);
-    // 認識しない exe は 200% で窓が論理の座標・画面の DC が物理の座標になり、撮りの矩形がずれる（7.2 の 1 回目の走り）。
+    // 認識しない exe は 200% で窓が論理の座標・画面の DC が物理の座標になり、撮りの矩形がずれる。
     step(
         "dpi_awareness",
         unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) }.ok(),

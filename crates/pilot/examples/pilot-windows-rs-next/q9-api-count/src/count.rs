@@ -97,7 +97,7 @@ pub fn tally(index: &Index) -> Result<Tally, String> {
     let mut t = Tally::new();
     let mut matched = 0usize;
     for doc in &index.documents {
-        // Windows で作った索引は `crates\wintf\src\…` と綴る（9.2）
+        // Windows で作った索引は `crates\wintf\src\…` と綴る
         let path = doc.relative_path.replace('\\', "/");
         let mut parts = path.split('/');
         let (Some("crates"), Some(krate)) = (parts.next(), parts.next()) else {

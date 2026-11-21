@@ -1,5 +1,4 @@
-//! 常に手前の状態と台本の重なりの組の寿命（ゴーストの側）の決定論テスト（stay-on-top-directives
-//! task 5.3・要件 4.1・4.2・4.3・5.3・5.4・6.4・7.2・7.4・design「常に手前の状態の寿命」）。
+//! 常に手前の状態と台本の重なりの組の寿命（ゴーストの側）の決定論テスト。
 //!
 //! 切替の土台（[`SwitchRig`]）で A を起こし、結線状態の常に手前をオンにして台本の組を 1 本載せてから、
 //! ゴーストの読み直し・ゴーストの切り替え・SHIORI だけの読み直しを本物の経路で通す。
@@ -20,7 +19,7 @@ use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_
 use crate::session::reload::{ReloadInFlight, ReloadOrigin, ReloadRequest, request_reload};
 use areka_placement::zorder_group_ledger::{GroupSource, parse_zorder_tokens};
 use areka_runtime::reload_args::{DescriptNotes, ReloadTarget};
-// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+// 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::window_state::test_support::{on, on_mut};
 use areka_runtime::frame::wiring::test_support::{
     window_state, window_state_mut, zorder_ledger, zorder_ledger_mut,
@@ -114,7 +113,7 @@ fn reload(rig: &mut SwitchRig, target: ReloadTarget) -> Vec<CapturedEvent> {
     events
 }
 
-/// ゴーストの読み直し（要件 4.2・5.3・6.4）: 新しい結線状態はオフで台本の組が無く（descript の基底だけ）、
+/// ゴーストの読み直し: 新しい結線状態はオフで台本の組が無く（descript の基底だけ）、
 /// オンのまま降ろした記録が理由 `reload` で 1 行残る。
 ///
 /// # 非空虚性
@@ -139,7 +138,7 @@ fn a_ghost_reload_starts_off_with_no_script_group_and_logs_the_reload_discard() 
     );
 }
 
-/// ゴーストの切り替え（要件 4.1・6.4）: 切替先 B はオフで台本の組が無く、オンのまま降ろした記録が
+/// ゴーストの切り替え: 切替先 B はオフで台本の組が無く、オンのまま降ろした記録が
 /// 理由 `switch` で 1 行残る。
 ///
 /// # 非空虚性
@@ -182,7 +181,7 @@ fn a_ghost_switch_starts_the_target_off_and_logs_the_switch_discard() {
     );
 }
 
-/// SHIORI だけの読み直し（要件 4.3・5.4）: 結線状態は残り、常に手前のオンと台本の組がそのまま残る。
+/// SHIORI だけの読み直し: 結線状態は残り、常に手前のオンと台本の組がそのまま残る。
 /// 降ろした記録は残らない（オフへ戻していない）。
 ///
 /// # 非空虚性

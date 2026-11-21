@@ -1,5 +1,4 @@
-//! 定義を替えた合図 `Rebased` を置き換えの命令へ写す橋渡しの兄弟テスト
-//! （spec: areka-P0-shell-balloon-switch 要件 4.1・4.2・design「Adapter」）。
+//! 定義を替えた合図 `Rebased` を置き換えの命令へ写す橋渡しの兄弟テスト。
 
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
@@ -226,7 +225,7 @@ fn rebased_with_other_epoch_logs_error_once_and_leaves_payload() {
     );
 }
 
-/// 合図より前の指令は置き換えの命令より前に、後の指令は後に並ぶ（それ以外の指令は今日どおり）。
+/// 合図より前の指令は置き換えの命令より前に、後の指令は後に並ぶ（それ以外の指令はそのまま）。
 #[test]
 fn commands_before_rebased_stay_before_replace_targets() {
     let (p, _receivers) = payload(9, &[0]);

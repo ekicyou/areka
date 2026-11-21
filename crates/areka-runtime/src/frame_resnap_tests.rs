@@ -33,7 +33,6 @@ fn resnap_from_sizes_drives_resize_and_resnap_on_size_change() {
         "前提: 初期位置（bottom 不変量を満たす）"
     );
 
-    // h 687→700 の異寸を注入。
     resnap_from_sizes(
         &mut world,
         [(0usize, SizePx { w: 434, h: 700 })].into_iter(),
@@ -119,13 +118,11 @@ fn resnap_from_sizes_never_resizes_balloon_window() {
         [(0usize, SizePx { w: 500, h: 720 })].into_iter(),
     );
 
-    // char は新寸へ（駆動された証拠）。
     assert_eq!(
         size_of(&world, char0),
         Some(SizeI::new(500, 720)),
         "char は resize される"
     );
-    // balloon の寸は不変（balloon を resize 対象にしていない）。
     assert_eq!(
         size_of(&world, balloon0),
         balloon_size_before,
@@ -211,7 +208,6 @@ fn resnap_shell_targets_is_noop_with_unattached_presenter() {
     let size_before = size_of(&world, char0);
     let pos_before = pos_of(&world, char0);
 
-    // 未装着 presenter は `PhysicalSizeSource`（本番は `target_physical_size`）が全 None → 全 scope skip（窓状態不変・panic しない）。
     let presenter = EmoPresenter::new();
     resnap_shell_targets(&presenter, &mut world);
     assert_eq!(
@@ -225,7 +221,6 @@ fn resnap_shell_targets_is_noop_with_unattached_presenter() {
         "未装着は全 scope skip（position 不変）"
     );
 
-    // GhostWindows 未挿入の素の World でも安全（no-op・panic しない）。
     let mut empty = World::new();
     resnap_shell_targets(&presenter, &mut empty);
 }

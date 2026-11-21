@@ -100,8 +100,8 @@ pub fn synth_assets_with_balloons(shells: &[(u32, u32)], balloon_scopes: &[u32])
 // ── drain／text フェーズ＋frame_system の檻 ──────────────────────
 //
 // ログ発火を目視でなく実行テストで決定論的に檻へ入れる。捕捉層そのものはここに持たず、
-// 硬化機構の唯一の定義元 `log-capture-kit` へ委譲する（行の形も呼出側の判定内容も移行前と
-// 1 バイト変わらない）。`EmoPresenter::apply` は未装着 target への `Hide`（reply: None）で
+// 硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。`EmoPresenter::apply` は未装着 target への
+// `Hide`（reply: None）で
 // `error!(?target_id, ...)` を発火するため（`areka-emo-present` の `presenter/hub.rs` の `apply_hide`・reply-less でも
 // log-first）、この ERROR を観測して drain の apply 到着順（FIFO）を強く檻に入れられる。
 //
@@ -526,14 +526,14 @@ pub fn s2_monitors_with_neighbor_work_area(dpi: u16, work_area: RectPx) -> Vec<M
 }
 
 /// 窓の**接地点**（下端中央・物理 px）。伺かの立ち絵は足元中央が原点であり、寸法変動でも
-/// 動かない（記憶〈キャラ窓の原点は下端中央〉・[`resize_window_to`] 手順 3b）。
+/// 動かない（[`resize_window_to`] 手順 3b）。
 pub fn s2_ground_point(world: &World, e: Entity) -> (i32, i32) {
     let pos = pos_of(world, e).expect("WindowPos.position がある");
     let size = size_of(world, e).expect("WindowPos.size がある");
     (pos.x + size.width / 2, pos.y + size.height)
 }
 
-/// 探針の**非退化**自己検査（記憶〈2.2 の空虚性の教訓〉＝不変を主張する檻は、探針が欠陥の
+/// 探針の**非退化**自己検査（不変を主張する檻は、探針が欠陥の
 /// 不動点に落ちていないかを自ら確かめる）。
 ///
 /// work area 下端が DPI 水準の間で実際に動かなければ、再射影の欠落はどの探針値でも観測
@@ -875,12 +875,6 @@ impl FrameHarness {
 
 impl Drop for FrameHarness {
     /// 次に走るのがハーネスでない場合に備えて、末尾でも閉じる。
-    ///
-    /// `new` 側の後始末だけだと、ハーネスを使ったテストの次にハーネスを使わないテストが
-    /// 来たとき、キューと観測の写しが汚れたまま渡る。この向きは areka 側に現在読み手が
-    /// 居ないため**どのテストでも赤にできない**——検査できない残留を放置しないために、
-    /// 構築と破棄の両側で閉じる。`Drop` はスコープ末尾で走るので、ハーネスを生かしたまま
-    /// 次を組む形（残留の検査そのもの）は壊れない。
     fn drop(&mut self) {
         let _residue = drain_window_pos_commands();
         transition_diag::reset_for_test();
@@ -915,7 +909,7 @@ pub fn window_move_routes_of(events: &[CapturedEvent], entity: Entity) -> Vec<St
 ///
 /// attach ゲートは `GhostWindows`＋`GraphicsCore`＋`WucGraphicsResource::is_valid()` の連言ゆえ、
 /// 本番 attach を駆動するにはこの 3 点が要る。本番 UI スレッドと同じ MTA で COM を初期化する
-/// （記憶: areka WUC は MTA スレッドで動く）。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
+/// （areka WUC は MTA スレッドで動く）。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
 ///
 /// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
 pub fn gpu_attach_world() -> (crate::spine::GpuPermit, World, GhostWindows) {

@@ -2,7 +2,7 @@
 //!
 //! rmcp の `ServerHandler`／`ToolRouter` を綴るのはこのモジュールだけ。登録表の中身は
 //! [`ArekaHandler::new`] が 1 度だけ `ToolRouter` へ写し、呼び出し・定義の取得はそこへ委ねる
-//! （未登録の名前は `ToolRouter::call` が `-32602` にする＝設計 B-6）。一覧は `ToolRouter` が
+//! （未登録の名前は `ToolRouter::call` が `-32602` にする）。一覧は `ToolRouter` が
 //! 名前順に並べ替えるので、写すときに登録順で積んだ列を返す。写しの中で `arguments` を
 //! 登録した `inputSchema` に照らし、合わなければ `-32602` にする。`params` の形が合わない
 //! `tools/call`・`initialize`・`completion/complete` は `-32602`、ほかの型のない要求は rmcp の既定と
@@ -34,8 +34,8 @@ pub const SERVER_NAME: &str = "areka-mcp-server";
 /// 組み込みの答えにこの値を読む。
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// `initialize` の `instructions`（英文・3 文）。2 文目の後の 1 文が独自のツール `check_script` の案内
-/// （spec: areka-P0-mcp-author-tools）。中継（areka-mcp-bridge）も組み込みの答えにこの文を読む。
+/// `initialize` の `instructions`（英文・3 文）。2 文目の後の 1 文が独自のツール `check_script` の案内。
+/// 中継（areka-mcp-bridge）も組み込みの答えにこの文を読む。
 pub const INSTRUCTIONS: &str = "This server controls areka, a desktop mascot (Ukagaka-compatible baseware) running on this machine. It exposes the same tools as the MCP server of SSP; call get_active_ghost_list first to get the ghost name for the ghost_name parameter. check_script is an areka-only tool that SSP does not have: it checks SakuraScript without playing it (the ghost does nothing), so use it before sakurascript.";
 
 /// rmcp へ渡す受け手。中身は登録表を写した `ToolRouter` と登録順の定義の列（複製は `Arc` の複製）。
@@ -122,7 +122,7 @@ pub(crate) fn custom_request_error(method: &str) -> ErrorData {
 }
 
 impl ServerHandler for ArekaHandler {
-    /// tools の能力だけ（resources・prompts なし）。版の交渉は rmcp の既定に任せる（設計 B-11）。
+    /// tools の能力だけ（resources・prompts なし）。版の交渉は rmcp の既定に任せる。
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new(SERVER_NAME, SERVER_VERSION))
@@ -136,8 +136,8 @@ impl ServerHandler for ArekaHandler {
     ) -> Result<ListToolsResult, ErrorData> {
         // `ToolRouter::list_all` は名前順に並べ替えるので、登録順の列を返す。
         let result = ListToolsResult::with_all_items(self.tools.as_ref().clone());
-        // 2026-07-28 以降は `ttlMs`・`cacheScope` が必須（rmcp は欄を空のまま出す＝設計 B-12）。
-        // 無状態では list_changed を送れず、後の spec で道具が増えるので 0／private
+        // 2026-07-28 以降は `ttlMs`・`cacheScope` が必須（rmcp は欄を空のまま出す）。
+        // 無状態では list_changed を送れず、道具は後から増えるので 0／private
         // （`server/discover` の rmcp の既定と同じ）。旧式の版には付けない。
         if context
             .protocol_version()

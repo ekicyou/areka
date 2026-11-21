@@ -1,4 +1,4 @@
-//! 判断（`service.rs`）のテストのうち、届ける前の失敗の扱い（要件 2.10・2.11・設計 D-6）:
+//! 判断（`service.rs`）のテストのうち、届ける前の失敗の扱い:
 //! 覚えた番号に areka が居なくなったら、覚えを捨てて探し直し、見つかれば同じ要求を 1 回だけ送る。
 //!
 //! 道具は `service_tests.rs` と `crate::desk` のもの。ここも `current_thread` の `#[tokio::test]` だけで書く。
@@ -39,9 +39,9 @@ fn only_checks(requests: &[Received]) -> bool {
     requests.iter().all(check)
 }
 
-/// areka が別の番号で起動し直した（要件 2.10）: 覚えた番号に接続できないので、探し直して、同じ要求を
+/// areka が別の番号で起動し直した: 覚えた番号に接続できないので、探し直して、同じ要求を
 /// 新しいつなぎ先へ 1 回だけ送る。要求の `_meta` も同じまま届く（`2026-07-28` の要求はその版のまま）。
-/// 新しい areka のサーバーの情報が控えに入り、次の要求も届く（要件 4.6）。
+/// 新しい areka のサーバーの情報が控えに入り、次の要求も届く。
 #[tokio::test]
 async fn a_request_reaches_areka_restarted_on_another_port_exactly_once() {
     // 止めた後も番号は `nobody()` が握るので、覚えた番号への接続は必ず断られる。
@@ -84,7 +84,7 @@ async fn a_request_reaches_areka_restarted_on_another_port_exactly_once() {
     assert_eq!(handshakes(&back), 1, "{:?}", back.requests());
 }
 
-/// 覚えた番号に別の名乗りの相手が立った（要件 2.11）: 要求の本文はその相手に届かず（届くのは確かめの
+/// 覚えた番号に別の名乗りの相手が立った: 要求の本文はその相手に届かず（届くのは確かめの
 /// `initialize` だけ）、探し直して、別の番号の areka へ 1 回だけ送る。
 #[tokio::test]
 async fn a_request_never_reaches_another_server_that_took_over_the_port() {
@@ -111,7 +111,7 @@ async fn a_request_never_reaches_another_server_that_took_over_the_port() {
 }
 
 /// 覚えた番号に別の名乗りの相手が立ち、areka はどこにも居ない: 探し直して、居ないときの答え（その番号に
-/// 応えた名乗りを載せたエラー・`ping` は自分で答える）。areka が戻れば、次の要求は届く（要件 4.6）。
+/// 応えた名乗りを載せたエラー・`ping` は自分で答える）。areka が戻れば、次の要求は届く。
 #[tokio::test]
 async fn without_areka_anywhere_a_takeover_gets_the_not_found_answers() {
     let fake = FakeServer::start(Script::areka());

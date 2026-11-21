@@ -1,5 +1,4 @@
-//! 終了の後始末での窓口の片付けのテスト（design「Testing Strategy / 窓口と入口」の終了・要件 8.2・
-//! 8.5・8.6・11.8）。`desk_tests.rs` の子（道具立ての `Rig`・根・書庫を借りる）。
+//! 終了の後始末での窓口の片付けのテスト。`desk_tests.rs` の子（道具立ての `Rig`・根・書庫を借りる）。
 //!
 //! 確かめること: 終了が始まると待っている依頼を始めずに捨て、捨てた書庫の件数とパスを `warn!` に
 //! 1 件残す・終了の後に届いたイベントの頼みは kanade へ 0 件で、返信端は落ちる・預かった書庫
@@ -18,7 +17,7 @@ use crate::session::ghost_quit::KanadeNoticeRx;
 use crate::session_end::end_session_from;
 
 /// 待っている依頼（2 本の依頼と 1 本の依頼）は始めずに捨て、`warn!(install_pending_discarded)` を
-/// 1 件残す。件数は捨てた書庫の数（要件 8.5「待っている依頼（まだ始めていない書庫）」）で、パスと
+/// 1 件残す。件数は捨てた書庫の数（まだ始めていない書庫）で、パスと
 /// 数が揃う。背景のスレッドへは 1 件も渡らない。
 #[test]
 fn exit_discards_waiting_orders_with_archive_count_and_paths() {
@@ -51,7 +50,7 @@ fn exit_discards_waiting_orders_with_archive_count_and_paths() {
 }
 
 /// 終了の前に手元に置いた頼みも、終了の後に届いた頼み（イベント・素性）も、kanade へは 0 件で、
-/// 返信端は落ちる（背景のスレッドは閉じた扱いで止まる・要件 8.6）。予約が下りた後も送らない。
+/// 返信端は落ちる（背景のスレッドは閉じた扱いで止まる）。予約が下りた後も送らない。
 #[test]
 fn asks_after_exit_reach_kanade_zero_times() {
     let tmp = TempPath::new("desk-exit-asks");
@@ -93,7 +92,7 @@ fn asks_after_exit_reach_kanade_zero_times() {
 
 /// 「切替を頼んだ」まま終了が始まった預かった書庫は捨てる: 背景のスレッドの返信端が落ち（閉じた
 /// 扱い）、捨てた宛先が `warn!(install_pending_discarded)` に載る。書く前なので、門の名前（書庫の
-/// パス）は `exit_wait_abandoned` に残る（要件 8.4）。切替の道筋から後で呼ばれても展開しない。
+/// パス）は `exit_wait_abandoned` に残る。切替の道筋から後で呼ばれても展開しない。
 #[test]
 fn exit_discards_a_parked_overwrite_and_releases_the_worker() {
     let tmp = TempPath::new("desk-exit-parked");
@@ -177,7 +176,7 @@ fn exit_after_the_overwrite_ran_returns_the_result_without_abandoning() {
 /// OS のセッションの終了: 展開の最中（門が書いている最中のまま）でも、後始末に入った時点から
 /// 数えて上限で待つのをやめ、`warn!(exit_wait_timeout)` を 1 件残して後始末を終える。出発点を上限
 /// だけ過去に置いた予算（前の段が上限を使い切った形）では待たずに戻る＝降ろす待ちの後に上限を
-/// 数え直さず、合計は上限を超えない（要件 8.2・11.8）。数え直すと 3 秒待つ。
+/// 数え直さず、合計は上限を超えない。数え直すと 3 秒待つ。
 #[test]
 fn os_session_end_waits_within_the_shared_budget() {
     let mut rig = Rig::new();

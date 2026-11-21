@@ -69,14 +69,14 @@ fn cue_command_balloon_surface_serde_roundtrip() {
     }
 }
 
-/// `Cursor`（カーソル位置指定 `\_l` の不透明転写）の additive 追加檻（3.1・3.2・8.1）。
+/// `Cursor`（カーソル位置指定 `\_l` の不透明転写）の additive 追加檻。
 ///
 /// - x・y は**記述通りの不透明 String**であり、単位付き（`5em`/`2lh`/`50%`）・裸数値・
-///   相対（`@` 前置）・空（省略）の区別を失わず往復する（dola は換算/解決しない・3.2/3.3）。
-/// - externally tagged で additive（既存 variant のワイヤ形は不変・8.1）。
+///   相対（`@` 前置）・空（省略）の区別を失わず往復する（dola は換算/解決しない）。
+/// - externally tagged で additive（既存 variant のワイヤ形は不変）。
 #[test]
 fn cue_command_cursor_serde_roundtrip() {
-    // 代表形: 単位付き。設計「Data Models / ワイヤ形」表の Cursor 行と**バイト同一**。
+    // 代表形: 単位付き。ワイヤ形は**バイト同一**に固定。
     let cmd = CueCommand::Cursor {
         x: "5em".into(),
         y: "2lh".into(),
@@ -86,7 +86,7 @@ fn cue_command_cursor_serde_roundtrip() {
     let parsed: CueCommand = serde_json::from_str(&json).unwrap();
     assert_eq!(cmd, parsed);
 
-    // 双方空（省略）の区別を保つ——空でも欠落させず忠実に往復する（3.2・3.5）。
+    // 双方空（省略）の区別を保つ——空でも欠落させず忠実に往復する。
     let empty = CueCommand::Cursor {
         x: "".into(),
         y: "".into(),
@@ -98,7 +98,7 @@ fn cue_command_cursor_serde_roundtrip() {
     // 空は代表形と別物（区別保持）。
     assert_ne!(empty, cmd);
 
-    // 裸数値・相対（`@` 前置）・%・片側空のいずれも不透明のまま忠実に往復する（3.2）。
+    // 裸数値・相対（`@` 前置）・%・片側空のいずれも不透明のまま忠実に往復する。
     for (x, y) in [
         ("50", "100"),  // 裸数値
         ("@10", "@-5"), // 相対（`@` 前置）
@@ -122,7 +122,7 @@ fn cue_command_cursor_serde_roundtrip() {
 /// `Wait`（純粋な待ち）・`ClearAll`（全スコープ消去）の additive 追加檻。
 ///
 /// 両者は unit variant ゆえ externally tagged のワイヤ形は裸の文字列
-/// （`"Wait"` / `"ClearAll"`）になる（5.2・6.3）。
+/// （`"Wait"` / `"ClearAll"`）になる。
 #[test]
 fn cue_command_wait_and_clear_all_serde_roundtrip() {
     for (cmd, wire) in [
@@ -137,7 +137,7 @@ fn cue_command_wait_and_clear_all_serde_roundtrip() {
 }
 
 /// `Clear`（対象スコープのみ消去）と `ClearAll`（全スコープ消去）は峻別される
-/// 別コマンドであり、ワイヤ上でも取り違えられない（6.3）。
+/// 別コマンドであり、ワイヤ上でも取り違えられない。
 #[test]
 fn clear_and_clear_all_are_distinct_commands() {
     assert_ne!(CueCommand::Clear, CueCommand::ClearAll);
@@ -154,7 +154,7 @@ fn clear_and_clear_all_are_distinct_commands() {
 }
 
 /// `Wait` は action を持たない（unit variant）——時間は envelope `duration` が担う
-/// （D2/D3: payload 埋め込みでなく envelope）。ワイヤ形にも duration は現れない（5.1/5.2）。
+/// （payload 埋め込みでなく envelope）。ワイヤ形にも duration は現れない。
 #[test]
 fn wait_carries_no_action_and_time_lives_in_envelope_duration() {
     // Wait 単体のワイヤ形に時間値は含まれない（payload は裸の "Wait" のみ）。
@@ -179,40 +179,12 @@ fn wait_carries_no_action_and_time_lives_in_envelope_duration() {
     );
 }
 
-// ── R8.1 ワイヤ互換回帰 カバレッジマトリクス（Task 10.5）──
-//
-// R8.1「既存 cue の外部表現（シリアライズ形）を変えずに additive 拡張し、既存台本データの
-// 読み込み互換を保つ」の回帰は、本 spec の 3 つの additive デルタ
-// （references skip_serializing・Cursor variant・`\!` キャリア形）が
-// 既存ワイヤ形のバイト列を一切変えないことを、以下の既存檻が**期待 JSON リテラル**で
-// 網羅固定している（設計 Data Models「ワイヤ形」表・Testing Strategy Integration#5 の
-// 「ワイヤ檻〔既存 7 variant 無改変緑＋Cursor/references/キャリア形の追加檻〕」に一致）。
-// Task 10.5 監査結論: 下記で完全網羅ゆえ、同一リテラルを再主張する檻の新設は
-// 重複（[[test-only-decision-branches-not-proven-wiring]]）——追加せず、この対応表を正典とする。
-//
-//   R8.1 デルタ／義務                     | 固定する檻（本モジュール）
-//   ------------------------------------ | ------------------------------------------------
-//   既存 7 variant がバイト同一（現行spec）| existing_seven_variants_wire_forms_are_unchanged_by_additive_extension
-//     └ Choice(references:vec![]) 込み    |   （Choice の期待 JSON に references キー無し＝skip 後を固定）
-//   references 空＝現行とバイト同一        | choice_references_additive_wire_form (a)
-//   references あり＝キー付き記述順        | choice_references_additive_wire_form (b)
-//   references 欠落の旧 Choice を default 読 | choice_references_additive_wire_form (c)
-//   Cursor（additive・空/単位/相対/裸/%）  | cue_command_cursor_serde_roundtrip
-//   `\!` キャリア（Custom params 正準形）   | command_carrier_wire_form_is_canonical
-//   キャリア非正準は None（良性スキップ）    | as_command_carrier_returns_none_for_non_canonical
-//   Cue.duration 欠落の旧資産を 0 で読む     | cue_duration_defaults_to_zero_for_legacy_serialized_data
-//   Wait/ClearAll unit variant のワイヤ形    | cue_command_wait_and_clear_all_serde_roundtrip
-//
-// 注記: Cursor/キャリア(Custom) は externally-tagged enum への variant 追加ゆえ、
-// 既存 variant のバイト列は構造的に不変（新タグは既存タグの表現へ干渉しない）。上記 7-variant
-// 檻はその不変を期待リテラルで固定し、万一の破壊を回帰として捕捉する load-bearing な檻である。
-
 /// 既存 7 variant のワイヤ形が Wait/ClearAll の additive 追加後も**完全に不変**である
-/// ことを、期待 JSON リテラルで固定する（5.2・6.3・9.3）。
+/// ことを、期待 JSON リテラルで固定する。
 ///
-/// Task 10.5 監査: Choice の期待 JSON は `references` キーを持たない（`references: vec![]`
+/// Choice の期待 JSON は `references` キーを持たない（`references: vec![]`
 /// が `skip_serializing_if = "Vec::is_empty"` で消える形）ため、本檻は references 追加**後**の
-/// 7-variant バイト同一を固定する consolidated 回帰檻でもある（R8.1・上の対応表参照）。
+/// 7-variant バイト同一も固定する。
 #[test]
 fn existing_seven_variants_wire_forms_are_unchanged_by_additive_extension() {
     let expected: Vec<(CueCommand, &str)> = vec![
@@ -261,11 +233,11 @@ fn existing_seven_variants_wire_forms_are_unchanged_by_additive_extension() {
     }
 }
 
-/// `Choice.references` の additive 拡張檻（1.3・8.1）。
+/// `Choice.references` の additive 拡張檻。
 ///
 /// - (a) references 空のシリアライズ形は現行と**バイト同一**（`references` キーが現れない
 ///   ＝`skip_serializing_if = "Vec::is_empty"`）。既存ワイヤ形不変の直接証跡。
-/// - (b) references ありは `references` キー付きで往復する（欠落させず記述順を保つ・1.3）。
+/// - (b) references ありは `references` キー付きで往復する（欠落させず記述順を保つ）。
 /// - (c) `references` を持たない旧 JSON 資産は `default` により空 vec へ復元される（後方互換）。
 #[test]
 fn choice_references_additive_wire_form() {
@@ -368,13 +340,11 @@ fn actor_key_new_display_as_str() {
     assert_eq!(key.as_str(), "sakura");
     assert_eq!(key.to_string(), "sakura"); // Display 実装
 
-    // From<String> / From<&str> の等価性
     assert_eq!(ActorKey::from("kero"), ActorKey::from("kero".to_string()));
 }
 
 #[test]
 fn cue_payload_and_cue_serde_roundtrip() {
-    // CuePayload 2 種のラウンドトリップ
     let payloads = vec![
         CuePayload::Command(CueCommand::Custom {
             command: "fade".to_string(),
@@ -516,11 +486,11 @@ fn duration_is_uniform_envelope_field_across_all_payloads() {
     }
 }
 
-// ── `\!` 汎用キャリア正準形（command_carrier / as_command_carrier）檻（4.1・4.2・8.1）──
+// ── `\!` 汎用キャリア正準形（command_carrier / as_command_carrier）檻──
 
-/// 往復同一（4.1・4.2）: `as_command_carrier(&command_carrier(n, t)) == Some((n, t))`。
+/// 往復同一: `as_command_carrier(&command_carrier(n, t)) == Some((n, t))`。
 /// 空トークン（省略スロット）を欠落させず保持する（fixture `\![move,-353,,,0,base,base]`
-/// は空トークン 2 個を保った 6 トークン列・4.2）。
+/// は空トークン 2 個を保った 6 トークン列）。
 #[test]
 fn command_carrier_round_trip_preserves_empty_tokens() {
     let tokens = vec![
@@ -540,9 +510,9 @@ fn command_carrier_round_trip_preserves_empty_tokens() {
     );
 }
 
-/// キャリアのワイヤ形（不変条件・8.1）: 正準コンストラクタは `Custom` の
-/// `params: Array<String>` 正準形を単一箇所で構築し、設計「Data Models / ワイヤ形」表の
-/// `\!` キャリア行と**バイト同一**の JSON になる。
+/// キャリアのワイヤ形（不変条件）: 正準コンストラクタは `Custom` の
+/// `params: Array<String>` 正準形を単一箇所で構築し、毎回
+/// **バイト同一**の JSON になる（ワイヤ形は固定）。
 #[test]
 fn command_carrier_wire_form_is_canonical() {
     let cmd = CueCommand::command_carrier(
@@ -609,12 +579,8 @@ fn as_command_carrier_returns_none_for_non_canonical() {
 
 // ── 配送エンベロープ（TalkCue）檻 ──
 //
-// NOTE(Task 3.2): 旧 `talk_cue_envelope_carries_cue_duration_untransformed` と
-// `talk_cue_duration_is_uniform_across_every_command_variant` は、テスト本体で
-// `TalkCue { .., duration: cue.duration }` を組んでから自身に等価を主張する**自己充足檻**
-// だった（Rust の構造体代入が自分自身を主張しているだけ・変異テストで素通しを実測）。
-// 「無変形の carry」の behavioral な証明は、実 canonical 変換 `dola::cue::to_talk_schedule` を
-// 通す `crates/dola/tests/cue/sheet_test.rs` の
-// `to_talk_schedule_carries_finite_duration_untransformed` /
-// `to_talk_schedule_duration_uniform_across_every_command_variant` が load-bearing に担う
-// ため、こちらの自己充足檻は撤去した。
+// TalkCue へ duration をそのまま複写して自身に等価を主張するだけの檻は意味がないので置かない。
+// 「無変形の carry」の証明は、実 canonical 変換 `dola::cue::to_talk_schedule` を通す
+// `crates/dola/tests/cue/sheet_test.rs` の
+// `to_talk_schedule_carries_finite_duration_untransformed` と
+// `to_talk_schedule_duration_uniform_across_every_command_variant` が担う。

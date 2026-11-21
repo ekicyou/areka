@@ -67,7 +67,6 @@ fn test_start_preparing_ignored_when_already_active() {
     let first = entity(1);
     let second = entity(2);
     start_preparing(first, PhysicalPoint::new(1, 1), null_hwnd());
-    // 2 回目（別エンティティ・別座標）は無視されるはず
     start_preparing(second, PhysicalPoint::new(99, 99), null_hwnd());
 
     let snap = snapshot_drag_state();
@@ -163,7 +162,6 @@ fn test_update_dragging_just_started_to_dragging_without_context() {
         } => {
             assert_eq!(entity, e);
             assert_eq!((current_pos.x, current_pos.y), (6, 6));
-            // 初回 Dragging では prev_pos == current_pos
             assert_eq!((prev_pos.x, prev_pos.y), (6, 6));
             assert!(!move_window, "context 無しでは move_window=false");
             assert!(constraint.is_none());
@@ -395,7 +393,6 @@ fn test_check_threshold_false_below_distance() {
 #[test]
 fn test_check_threshold_false_when_not_preparing() {
     force_idle();
-    // Idle 状態
     assert!(!check_threshold(PhysicalPoint::new(100, 100), 1));
     force_idle();
 }
@@ -506,7 +503,7 @@ fn test_cancel_rests_until_next_press() {
     force_idle();
 }
 
-// --- 休ませた結果と終了の種（要件 2.1・2.2・3.1〜3.3・4.1〜4.3） -------------
+// --- 休ませた結果と終了の種-------------
 
 /// このスレッドの控えへ新しい累積器を置き、World の資源と同じ実体の複製を返す（種を数えるため）。
 fn install_handle() -> DragAccumulatorResource {
@@ -765,7 +762,7 @@ fn test_capture_lost_marks_guard_released_before_cancelling() {
     force_idle();
 }
 
-// --- 直前の左の解放はドラッグか（mouse-click-wheel-events 要件 3.1・11.5） ------
+// --- 直前の左の解放はドラッグか------
 
 /// 印は休みへ移すときにだけ書き換わり、次の `start_preparing` では消えない。
 #[test]

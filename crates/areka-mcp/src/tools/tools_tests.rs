@@ -20,7 +20,7 @@ fn parse_by_name(name: &str, args: Value) -> ToolCall {
     parse(&obj(args))
 }
 
-/// (要件 1.2・1.3) 10 本の定義が読めて `ToolSpec` になり、並びと中身が保存した JSON と一致する。
+/// 10 本の定義が読めて `ToolSpec` になり、並びと中身が保存した JSON と一致する。
 #[test]
 fn definitions_are_verbatim_copies_of_saved_list() {
     let saved = saved_tools();
@@ -48,7 +48,7 @@ fn spec_from_definition_rejects_broken_definition() {
     assert_eq!(spec.description, None);
 }
 
-/// (要件 5.3) 10 本の詰め替え: 欄が全部ある・省略・`null`・`references` の省略・空の `ghost_name`。
+/// 10 本の詰め替え: 欄が全部ある・省略・`null`・`references` の省略・空の `ghost_name`。
 #[test]
 fn parse_fills_typed_args() {
     let g = |s: &str| Some(s.to_owned());
@@ -279,7 +279,7 @@ fn names(registry: &ToolRegistry) -> Vec<String> {
         .collect()
 }
 
-/// (要件 1.1・1.3) 組んだ登録表は 10 本を SSP の並びで持ち、定義は表の行と同じ。
+/// 組んだ登録表は 10 本を SSP の並びで持ち、定義は表の行と同じ。
 #[test]
 fn table_registers_ten_in_ssp_order() {
     let (registry, _rx) = register_rows(TABLE, REPLY_WAIT);
@@ -299,7 +299,6 @@ fn table_registers_ten_in_ssp_order() {
 #[test]
 fn every_handler_delivers_typed_call_and_returns_the_answer() {
     let (registry, rx) = register_rows(TABLE, REPLY_WAIT);
-    // 偽のアプリ本体: 届いた呼び出しを書き写して返す。
     let answerer = std::thread::spawn(move || {
         for request in rx {
             let text = format!("{:?}", request.call);
@@ -336,7 +335,7 @@ fn non_object_arguments_are_read_as_empty() {
     );
 }
 
-/// (spec: areka-P0-mcp-tool-entrances 要件 6.5) 誰も汲まない間に届いた要求は受け口に溜まり、後から汲める。
+/// 誰も汲まない間に届いた要求は受け口に溜まり、後から汲める。
 #[test]
 fn requests_queue_until_someone_drains() {
     let (registry, rx) = register_rows(TABLE, Duration::from_millis(1));

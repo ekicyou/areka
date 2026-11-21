@@ -1,11 +1,11 @@
-//! 13 種の書き込みを読み取りだけで踏む行列（readonly-mode 要件 2.1・2.3・6.1・6.2・10.1）。
+//! 13 種の書き込みを読み取りだけで踏む行列。
 //!
 //! 書けないときの告知の行列（`write_failure_sites_tests.rs`）と同じ表 [`KINDS`] を読み、検体の根に
 //! 試験の取っ手（[`WithholdGuard::under`]）を立てて、13 種の書き込みの場所を 1 つずつ呼ぶ。
 //! どの種類も、次の 3 つを判定する。
-//! - 記憶のファイルの中身と置き場の木が、呼ぶ前と同じ（要件 2.1）
-//! - 保存の口（`load_scope`・`FsPersistIo`）から期待の値が読み返せる（要件 2.3）
-//! - 致命の机に何も届かない（最初の出所が無い・要件 6.1・6.2）
+//! - 記憶のファイルの中身と置き場の木が、呼ぶ前と同じ
+//! - 保存の口（`load_scope`・`FsPersistIo`）から期待の値が読み返せる
+//! - 致命の机に何も届かない（最初の出所が無い）
 //!
 //! 判定した種類の集まりが表と等しいことも判定する（1 種でも抜けたら赤）。ふつうの起動で書くことは、
 //! 同じ表を使う `every_write_kind_reaches_the_desk` が判定する。プロセスに 1 つの旗は立てない
@@ -167,7 +167,6 @@ fn every_write_kind_is_withheld_under_the_guard() {
     let _guard = WithholdGuard::under(&root);
     let before = tree(&root);
 
-    // 1 種ずつ: 呼ぶ → 机に届かない・木が同じ・期待の値が読み返せる。
     let mut judged: Vec<&str> = Vec::new();
     let mut failed: Vec<String> = Vec::new();
     let mut judge = |kind: &'static str, desk: bool, expect: Expect| {
@@ -494,7 +493,7 @@ fn every_write_kind_is_withheld_under_the_guard() {
         failed.is_empty(),
         "読み取りだけで守れなかった書き込み: {failed:#?}"
     );
-    // 判定した種類の集まりが要件 1 の表の 13 種と等しい（置き場の並びは居る・居ないの 2 回で 1 種）。
+    // 判定した種類の集まりが表の 13 種と等しい（置き場の並びは居る・居ないの 2 回で 1 種）。
     judged.sort_unstable();
     judged.dedup();
     let mut table = KINDS.to_vec();

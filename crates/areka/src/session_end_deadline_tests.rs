@@ -1,5 +1,4 @@
-//! OS のセッションの終了で SHIORI を待つ上限（[`SESSION_END_SHIORI_LIMIT`]）のテスト
-//! （areka-P0-session-mark-residue task 5.3・要件 1.1・1.3〜1.5・2.1〜2.4・2.6・3.3・7.1・7.2）。
+//! OS のセッションの終了で SHIORI を待つ上限（[`SESSION_END_SHIORI_LIMIT`]）のテスト。
 //!
 //! 偽の SHIORI の土台（`SwitchRig`）で A を起こし、台本の「解かれるまで固まる」呼び出し
 //! （`hold_at`）で段ごとに待ちを作ってから、上限を引数で受ける入口 [`end_session_within`] を呼ぶ。
@@ -28,8 +27,8 @@
 //! - T より短い: 台本が自分で期限切れを返す形＝[`self_timeout_shorter_than_limit_is_not_cut`]
 //!   （打ち切り 0 件・印の判定は今日どおり）。
 //!
-//! 終了の観測の段は UNLOAD で固まる形で代表する（`request_clean_shutdown` の中で分けられない＝
-//! 設計 D4。補助プロセスが終わった後の観測は host32 の既存の短絡のテストが固定する）。
+//! 終了の観測の段は UNLOAD で固まる形で代表する（`request_clean_shutdown` の中で分けられない。
+//! 補助プロセスが終わった後の観測は host32 の既存の短絡のテストが固定する）。
 //! 呼び出しの外（`idle`）の段は見張り部品のテスト（`areka-kanade` の `probe_tests.rs`）が見る。
 
 use std::collections::BTreeSet;
@@ -243,7 +242,7 @@ fn cut_while_on_close_notify_is_held() {
     );
 }
 
-/// UNLOAD で固まる → `unload`（UNLOAD の応答と終了の観測の 2 段をこの 1 つで代表する＝設計 D4）。
+/// UNLOAD で固まる → `unload`（UNLOAD の応答と終了の観測の 2 段をこの 1 つで代表する）。
 #[test]
 fn cut_while_unload_is_held() {
     assert_cut_at(HoldAt::Unload, "unload", vec!["system".to_owned()]);
@@ -388,13 +387,13 @@ fn unbounded_shutdown_never_cuts() {
     );
 }
 
-/// 上限の定数は 3 秒（2026-09-27 開発者の確定・要件 1.2・8.1）。
+/// 上限の定数は 3 秒。
 #[test]
 fn session_end_limit_is_three_seconds() {
     assert_eq!(SESSION_END_SHIORI_LIMIT, Duration::from_secs(3));
 }
 
-// ============================ 期限つきの降ろしと見張りの張りを呼ぶ所（要件 3.3・7.2）
+// ============================ 期限つきの降ろしと見張りの張りを呼ぶ所
 
 /// 走査の字面: 期限つきの降ろし・見張りの張り・上限を受ける入口の呼び出し。
 const DEADLINE_CALL_TOKENS: [&str; 3] = [".shutdown_within(", ".arm(", "end_session_within("];
@@ -418,7 +417,7 @@ const ALLOWED_DEADLINE_CALLS: [(&str, &str); 3] = [
 
 /// 本体（`crates/areka/src/`）・`crates/areka-runtime/src/`・`crates/areka-input/src/` の本番 `.rs`（テストとテストの土台＝
 /// `_tests.rs`・`_support.rs` を除く）を `(<crate>/<src の中のパス>, 本文)` で集める。分ける前に本体の
-/// `src` が覆っていた範囲を歩く（runtime-crate-split 要件 5.4）。
+/// `src` が覆っていた範囲を歩く。
 fn production_sources() -> Vec<(String, String)> {
     fn walk(krate: &str, root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
         let entries = std::fs::read_dir(dir).unwrap_or_else(|e| {

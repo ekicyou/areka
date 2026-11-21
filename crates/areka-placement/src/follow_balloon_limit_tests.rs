@@ -16,8 +16,7 @@ use crate::spawn::{BalloonLimit, GhostWindows};
 use log_capture_kit::{ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
-// runtime 関門の wiring 檻（`areka-P0-windowposition-limit` task 3.3・design「C7: runtime 関門」・
-// Testing Strategy Integration 1・`areka-P0-windowposition-limit` 要件 2.1/2.2/2.6/2.7/2.8/2.9/5.5/6.1/6.3）
+// runtime 関門の wiring 檻
 //
 // 何を固定するか: 純関数のクランプ式（`balloon_limit_tests.rs` が全網羅）ではなく、
 // **単一ライター `enqueue_window_set_pos` の内側で実際に走るか・誰に対して走るか・
@@ -28,10 +27,10 @@ use log_capture_kit::{ExpectField, capture, expect_one};
 //       （はみ出していなければ `limit_correction` は `None` を返し、緑が何も
 //       意味しなくなる）
 //   (2) **キャラ窓は動かない**こと——バルーン側の成果とキャラ窓側の挙動を
-//       読み違えない（`areka-P0-windowposition-limit` 要件 2.8 は構造保証だが、位置 assert でも二重に固定する）
+//       読み違えない（構造保証だが、位置 assert でも二重に固定する）
 //   (3) 判定語のリテラルを檻側にも持つ（本体定数と独立に固定する既存規約）
 //   (4) 縮退（解決不能）では**書込が通る**ことまで見る——「補正しない」だけでは
-//       素通しの証明にならない（`areka-P0-windowposition-limit` 要件 6.3 の log-first と対）
+//       素通しの証明にならない
 //
 // World は実 spawn（`spawn_ghost_windows`）で組む。`BalloonLimit` の付与も
 // `BalloonWindowMarker` も `GhostWindows` も本番の構築経路そのものであり、
@@ -82,11 +81,11 @@ fn probe_self_check_out_of_area_is_really_outside_and_corrected_is_inside() {
 }
 
 // -------------------------------------------------------------------------
-// (a) 発動条件はデータ駆動（2.7/2.8・DD1）
+// 発動条件はデータ駆動
 // -------------------------------------------------------------------------
 
 /// `BalloonLimit(true)` の窓への書込は作業領域内へ補正され、scope・補正前後・契機が
-/// 記録される（2.1/2.2/6.1）。
+/// 記録される。
 #[test]
 fn enqueue_clamps_the_write_when_the_target_carries_balloon_limit_true() {
     let (mut world, _char_window, balloon) = char_overflowing_world(true);
@@ -134,7 +133,7 @@ fn enqueue_clamps_the_write_when_the_target_carries_balloon_limit_true() {
     );
 }
 
-/// `BalloonLimit(false)` の scope は補正しない（2.7＝現行挙動の維持）。
+/// `BalloonLimit(false)` の scope は補正しない（現行挙動の維持）。
 #[test]
 fn enqueue_passes_through_when_balloon_limit_is_disabled() {
     let (mut world, _char_window, balloon) = base_world(false);
@@ -162,7 +161,7 @@ fn enqueue_passes_through_when_balloon_limit_is_disabled() {
     );
 }
 
-/// `BalloonLimit` を持たない窓（キャラ窓・placement 外の窓）は素通し（2.8）。
+/// `BalloonLimit` を持たない窓（キャラ窓・placement 外の窓）は素通し。
 #[test]
 fn enqueue_passes_through_for_windows_without_the_balloon_limit_component() {
     let (mut world, char_window, balloon) = base_world(true);
@@ -199,11 +198,11 @@ fn enqueue_passes_through_for_windows_without_the_balloon_limit_component() {
 }
 
 // -------------------------------------------------------------------------
-// (b) 各書込経路での補正（2.2 経路③④⑤⑦）
+// 各書込経路での補正
 // -------------------------------------------------------------------------
 
-/// 経路③: `\![move]`／連鎖確定の随伴——キャラ窓移動に随伴するバルーン書込が補正され、
-/// **キャラ窓自身は 1 px も動かない**（2.8）。
+/// `\![move]`／連鎖確定の随伴——キャラ窓移動に随伴するバルーン書込が補正され、
+/// **キャラ窓自身は 1 px も動かない**。
 #[test]
 fn move_window_to_clamps_the_trailing_balloon_but_never_the_char_window() {
     let (mut world, char_window, balloon) = base_world(true);
@@ -232,11 +231,11 @@ fn move_window_to_clamps_the_trailing_balloon_but_never_the_char_window() {
     assert_eq!(clamp.expect_field("from"), format!("{proposed:?}"));
 }
 
-/// 経路④⑤: `follow_balloon` の随伴——**引き金によらず**同一に補正される。
+/// `follow_balloon` の随伴——**引き金によらず**同一に補正される。
 ///
 /// ドラッグ随伴（可視性ガード適用外）と配置系随伴（ガード適用）の双方で最終位置が
 /// 一致することが、「limit の補正が引き金・route に依存しない常時不変量である」
-/// （2.1）ことの檻である。
+/// ことの檻である。
 #[test]
 fn follow_balloon_clamps_for_every_trigger() {
     let char_target = Point { x: 1500, y: 700 };
@@ -255,7 +254,7 @@ fn follow_balloon_clamps_for_every_trigger() {
     }
 }
 
-/// 経路⑦: 位置据え置きのリサイズ——**位置は同じまま寸だけが変わる**書込でも、
+/// 位置据え置きのリサイズ——**位置は同じまま寸だけが変わる**書込でも、
 /// 新しい寸が作る矩形ではみ出すなら補正される（判定対象は位置と寸が作る矩形）。
 #[test]
 fn resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area() {
@@ -280,7 +279,7 @@ fn resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area(
         max_pos(odd_edge_wa(), new_size),
         "寸法変更だけの書込が補正されていない（経路⑦が素通り）"
     );
-    // 2.9: 位置だけを補正し、寸はそのまま書かれる。
+    // 位置だけを補正し、寸はそのまま書かれる。
     assert_eq!(
         world
             .get::<WindowPos>(balloon)
@@ -294,7 +293,7 @@ fn resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area(
 }
 
 // -------------------------------------------------------------------------
-// (e) 可視性ガードとの順序（DD5・limit が最後の語）
+// 可視性ガードとの順序（limit が最後の語）
 // -------------------------------------------------------------------------
 
 /// 可視性ガード（先）→ limit 補正（後）の順序が固定であること。
@@ -355,7 +354,7 @@ fn visibility_guard_runs_first_and_the_limit_correction_has_the_last_word() {
 }
 
 // -------------------------------------------------------------------------
-// (f) 可視性状態を入力に持たない（2.6）
+// 可視性状態を入力に持たない
 // -------------------------------------------------------------------------
 
 /// 非表示のバルーン窓でも可視のときと **bit 同一**に補正されること。
@@ -419,10 +418,10 @@ fn runtime_gate_result_is_identical_for_hidden_and_visible_balloons() {
 }
 
 // -------------------------------------------------------------------------
-// (5.5) 基準はキャラ窓の帰属モニタ
+// 基準はキャラ窓の帰属モニタ
 // -------------------------------------------------------------------------
 
-/// 複数モニタで、キャラ窓が属する側の作業領域が基準になること（5.5）。
+/// 複数モニタで、キャラ窓が属する側の作業領域が基準になること。
 ///
 /// バルーンの提案位置は**右モニタの中**に中心を持つ一方、キャラ窓は左モニタに居る。
 /// 左右で補正結果が完全に食い違う配置にしてあるので、どちらのモニタを基準にしたかが
@@ -431,7 +430,7 @@ fn runtime_gate_result_is_identical_for_hidden_and_visible_balloons() {
 fn the_reference_work_area_is_the_one_the_char_window_belongs_to() {
     let mut placement = base_placement(true);
     placement.char_pos = PointPx { x: -800, y: 300 };
-    // キャラ窓を左モニタの下辺からはみ出させ、押し込みの経路で基準モニタを問う（`window-work-area-clamp` 要件 5.6）。
+    // キャラ窓を左モニタの下辺からはみ出させ、押し込みの経路で基準モニタを問う。
     placement.char_size.h = 720;
     placement.balloon_pos = PointPx { x: -500, y: 700 };
     placement.balloon_offset = PointPx { x: 300, y: 400 };
@@ -472,13 +471,13 @@ fn the_reference_work_area_is_the_one_the_char_window_belongs_to() {
 }
 
 // -------------------------------------------------------------------------
-// (c) 縮退（解決不能）——warn を残して素通し・書込は阻害しない（6.3）
+// 縮退（解決不能）——warn を残して素通し・書込は阻害しない
 // -------------------------------------------------------------------------
 
 /// 基準が解決できない 4 経路すべてで、警告のうえ**書込が通る**こと。
 ///
 /// 「補正しない」だけでは素通しの証明にならない——位置が実際に書かれ、戻り値が
-/// `true` であることまで見る（`areka-P0-windowposition-limit` 要件 2.2 の書込を関門が落とさない）。
+/// `true` であることまで見る。
 #[test]
 fn unresolvable_reference_warns_and_lets_the_write_through() {
     let proposed = out_of_area();
@@ -601,7 +600,7 @@ fn undetermined_balloon_size_warns_but_an_explicit_size_still_clamps() {
 }
 
 // -------------------------------------------------------------------------
-// (g) 位置ログは補正後の最終位置・route は元書込のもの（DD7・6.1）
+// 位置ログは補正後の最終位置・route は元書込のもの
 // -------------------------------------------------------------------------
 
 /// `[diag.window_move]` レコードが**補正後**の位置を記録し、route は元書込のままで
@@ -640,8 +639,7 @@ fn the_window_move_record_carries_the_corrected_position_and_the_original_route(
     );
 }
 
-/// 収まっている書込では**何も起きない**（無補正が観測できること・6.1 の「実際に
-/// 動かしたとき」に限る規約）。
+/// 収まっている書込では**何も起きない**（無補正が観測できること）。
 #[test]
 fn a_write_that_already_fits_produces_no_correction_and_no_log() {
     let (mut world, _char_window, balloon) = base_world(true);

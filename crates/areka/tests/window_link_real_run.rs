@@ -1,4 +1,4 @@
-//! areka-P0-window-link-directives タスク 9.2 の実機の確かめ（要件 9.7・9.8・既定 OFF）。
+//! 窓の組・窓の連れ動きの指示（window-link）の実機の確かめ（既定 OFF を含む）。
 //!
 //! 検体「窓際のぱすたさん」（`pasta-in-windows`）を `real-run-kit` で起こし、窓の組の連れ動き・
 //! `ignore-sticky-window`・起こし直しでの重なり・位置初期化の 2 つの近道を、窓の矩形と記録で判定する。
@@ -10,9 +10,9 @@
 //! `sample_ghost_kit::SampleRoot::acquire` が名前で引いて、使い捨ての複製を配る）。
 //! 32bit の仲介 `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` も建てておく。
 //!
-//! 根・記憶の置き場・記録はすべて `target\wl-signoff\` の下（要件 9.8）。根は配られた複製の写しに、
+//! 根・記憶の置き場・記録はすべて `target\wl-signoff\` の下。根は配られた複製の写しに、
 //! ゴーストの中のバルーン `pasta_tategaki` を根の `balloon\` へ写して作る（ゴーストの中のバルーンを
-//! 探すかどうかは `areka-P0-pasta-in-windows-verification` の持ち分なので、ここでは利用者が置いた形にする）。
+//! 探す仕組みには頼らず、利用者が置いた形にする）。
 //!
 //! 判定は 1 行ずつ `target\wl-signoff\judgments.txt` に書き、走りの記録は `run1.log`・`run2.log` へ写す。
 
@@ -451,7 +451,6 @@ fn window_link_directives_on_pasta_in_windows() {
         balloon,
         &root.join("balloon").join(balloon.file_name().unwrap()),
     );
-    // 根は写し終えたので、配られた複製はここで返す。
     drop(sample);
     std::fs::create_dir_all(&profile).unwrap();
     let exe = env!("CARGO_BIN_EXE_areka");
@@ -478,7 +477,6 @@ fn window_link_directives_on_pasta_in_windows() {
             .is_some_and(|l| l.contains("descript_seed") && l.contains('0') && l.contains('1')),
         groups.clone().unwrap_or_else(|| "行なし".into()),
     );
-    // 起動の段取り（窓あわせ・重ね順）が済むのを待つ。
     let _ = wait_new(&run, "sticky_follow_ignored", 0, 30);
     sleep(Duration::from_secs(4));
     let boot = windows_of(run.pid());

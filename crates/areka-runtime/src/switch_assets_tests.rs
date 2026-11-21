@@ -1,4 +1,4 @@
-//! 背景の資産づくりと荷物の置き場のテスト（spec: areka-P0-shell-balloon-switch 要件 4.4・5.5・5.6）。
+//! 背景の資産づくりと荷物の置き場のテスト。
 //!
 //! - 荷物・結果・置き場が線を越えて送れること（コンパイル時の確かめ）
 //! - 背景のスレッドが COM（MTA）の上で名前の先のシェル・バルーンの資産を作って線で返すこと
@@ -16,7 +16,7 @@ use crate::sample_test_support::emo2_balloon_root;
 /// 失敗の記録の目印（`event = "switch_assets_failed"`）。
 const FAILED_MARK: &str = "switch_assets_failed";
 
-/// 送れること（design「SwitchAssets」の送れること）: 背景のスレッドから UI へ渡す結果と、
+/// 送れること: 背景のスレッドから UI へ渡す結果と、
 /// seriko のスレッドの橋渡しが取り出す荷物・置き場が、線を越えて送れる形であることを
 /// コンパイル時に固定する（どれかが `Send` でなくなるとここでビルドが止まる）。
 #[test]
@@ -111,8 +111,8 @@ fn shell_build_runs_on_worker_and_returns_named_shell() {
     );
 }
 
-/// バルーン位置初期化の材料は起動とシェルの切り替えで同じ形・同じ値になる
-/// （areka-P0-window-link-directives 要件 7.4・設計の決め 7）: 起動の準備が置く材料と、同じシェルへ
+/// バルーン位置初期化の材料は起動とシェルの切り替えで同じ形・同じ値になる。
+/// 起動の準備が置く材料と、同じシェルへ
 /// 切り替えたときの資産づくりの結果から後始末が置く材料（descript の値＋走っているバルーンの
 /// `windowposition`・作者の DPI）が等しい。
 #[test]
@@ -161,7 +161,7 @@ fn default_basis_from_boot_equals_the_one_from_shell_switch() {
 }
 
 /// バルーン: 背景のスレッドがバルーンの資産（scope ごとの文字の模型・背景色・アニメ表）を作る。
-/// アニメ表は装着の全 scope ぶん作る（4.2 の合図の `shows` がこれを前提にする）。
+/// アニメ表は装着の全 scope ぶん作る（装着の全 scope ぶんの合図の `shows` がこれを前提にする）。
 #[test]
 fn balloon_build_runs_on_worker_and_builds_every_scope() {
     let rx = spawn_switch_build(SwitchBuildRequest::Balloon {
@@ -262,7 +262,7 @@ fn undecodable_balloon_image_fails_with_one_error() {
 }
 
 /// 復号できない画像（シェルの面 0 の画像が画像でない）: 起動なら読み飛ばして続けるところを、
-/// 切替では差し替えの前の失敗として返し（要件 5.5・5.6）、`switch_assets_failed` が 1 件。
+/// 切替では差し替えの前の失敗として返し、`switch_assets_failed` が 1 件。
 #[test]
 fn undecodable_shell_image_fails_with_one_error() {
     // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。

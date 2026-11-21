@@ -16,8 +16,7 @@ use super::EvaluatedValue;
 
 /// Object 値の intern pool（同一内容の DynamicValue に同一 Rc を返す）。
 ///
-/// compile 時または evaluate 時に使用し、Object 型変数の
-/// 差分比較を `Rc::ptr_eq()` による O(1) で実行可能にする。
+/// Object 型変数の差分比較を `Rc::ptr_eq()` による O(1) で行えるようにする。
 pub(crate) struct ObjectInternPool {
     pool: HashMap<DynamicValue, Rc<DynamicValue>>,
 }
@@ -75,17 +74,16 @@ impl Interpolator {
         progress_t: f64,
         intern_pool: Option<&mut ObjectInternPool>,
     ) -> EvaluatedValue {
-        // NOTE(数値境界): f64::clamp は min <= max（定数 0.0 <= 1.0）のため panic せず、
-        // progress_t = NaN の場合は NaN をそのまま返す（クランプされない）。
-        // NaN の伝播先: Object は `t >= 1.0` が false → from_value 側、
-        // Float は NaN が結果へ伝播、Integer は `NaN.round() as i64` の飽和キャストで 0。
-        // +inf / -inf は 1.0 / 0.0 にクランプされる。いずれの経路も panic しない
-        // （tests.rs の数値境界のテストで固定）。
+        // progress_t = NaN はクランプされず NaN のまま通る。
+        // Object は `t >= 1.0` が false で from_value 側、Float は NaN が結果へ伝播、
+        // Integer は `NaN.round() as i64` の飽和キャストで 0。
+        // +inf / -inf は 1.0 / 0.0 にクランプされる。いずれも panic しない
+        // （`tests.rs` の数値境界のテストが確かめる）。
         let t = progress_t.clamp(0.0, 1.0);
 
         match variable_type {
             VariableTypeHint::Object => {
-                // Object 型: 即時切替（t >= 1.0 で to_value）
+                // 補間せず即時切替（t >= 1.0 で to_value）
                 let value = if t >= 1.0 {
                     &segment.to_value
                 } else {
@@ -109,9 +107,7 @@ impl Interpolator {
                 let to = scalar_value(&segment.to_value);
                 let eased_t = apply_easing(t, segment.easing.as_ref());
                 let result = lerp(from, to, eased_t);
-                // NOTE(数値境界): `as i64` は飽和キャスト（Rust 1.45+）であり panic しない:
-                // NaN → 0、i64::MAX 超 / +inf → i64::MAX、i64::MIN 未満 / -inf → i64::MIN。
-                // round() も全 f64 入力で panic しない。
+                // `as i64` は飽和キャスト: NaN → 0、i64::MAX 超 / +inf → i64::MAX、i64::MIN 未満 / -inf → i64::MIN
                 EvaluatedValue::Integer(result.round() as i64)
             }
         }
@@ -130,24 +126,23 @@ fn lerp(from: f64, to: f64, t: f64) -> f64 {
 /// `EasingFunction` を適用して進捗率を変換する。
 pub(super) fn apply_easing(t: f64, easing: Option<&EasingFunction>) -> f64 {
     match easing {
-        None => t, // デフォルト: 線形補間
+        None => t,
         Some(EasingFunction::Named(name)) => apply_named_easing(t, *name),
         Some(EasingFunction::Parametric(param)) => apply_parametric_easing(t, param),
     }
 }
 
-/// `EasingName` を `interpolation::EaseFunction` にマッピングして適用する。
+/// `EasingName` を適用する。
 ///
 /// Sine In/Out と Elastic 系だけは自前の式: 外のクレート 0.3.0 は `PI_2` を 2π と定義して
 /// π/2 の所に使うので、SineOut と ElasticIn が終わりに 0 へ戻る（外のクレートはそのまま使う決まり）。
 ///
-/// NOTE(数値境界): 呼び手は t を [0,1] に収めて渡す（interpolation クレートの各 ease 関数も
-/// 内部で [0,1] にクランプする。NaN は比較が false となりそのまま素通り）。実装は多項式・
-/// sqrt・sin・powf・定数除算のみで、入力依存の除算を含まず全 f64 入力で
-/// panic しない。NaN 入力は NaN として伝播する。
+/// 呼び手は t を [0,1] に収めて渡す（interpolation クレートの各 ease 関数も内部で
+/// クランプする。NaN は比較が false となりそのまま素通りし、NaN として伝播する）。
+/// 入力依存の除算を含まず、全 f64 入力で panic しない。
 fn apply_named_easing(t: f64, name: EasingName) -> f64 {
     match name {
-        EasingName::Linear => t, // Linear はそのまま返す
+        EasingName::Linear => t,
         EasingName::QuadraticIn => t.calc(EaseFunction::QuadraticIn),
         EasingName::QuadraticOut => t.calc(EaseFunction::QuadraticOut),
         EasingName::QuadraticInOut => t.calc(EaseFunction::QuadraticInOut),
@@ -189,11 +184,9 @@ fn elastic_in(t: f64) -> f64 {
 
 /// パラメトリックイージング（ベジェ曲線）を適用する。
 ///
-/// NOTE(数値境界): quad_bez / cub_bez は lerp（乗算・加減算のみ）の合成で
-/// 除算を含まず、全 f64 入力で panic しない。制御点 x0..x3 は指示書由来の
-/// f64 で、NaN/inf は validate の数値の規則が拒むので有限に限られる。
+/// 制御点 x0..x3 は指示書由来で、NaN/inf は validate の数値の規則が拒むので有限に限られる。
 /// 出力は [0,1] にクランプされないため、制御点次第で from/to を超える外挿（オーバーシュート）が起きる。
-/// これは Back/Elastic 系の overshoot と同様に許容された挙動。
+/// Back/Elastic 系の overshoot と同様に許容された挙動。
 fn apply_parametric_easing(t: f64, param: &ParametricEasing) -> f64 {
     match param {
         ParametricEasing::QuadraticBezier { x0, x1, x2 } => interpolation::quad_bez(x0, x1, x2, &t),
@@ -210,11 +203,9 @@ fn scalar_value(value: &TransitionValue) -> f64 {
         TransitionValue::Dynamic(dv) => match dv {
             DynamicValue::Float(f) => *f,
             DynamicValue::Integer(i) => *i as f64,
-            // NOTE(防御的フォールバック): f64/i64 変数の from/to はバリデーション
-            // （V13）で数値に制限されるため、非数値 Dynamic はコンパイル済み
-            // データが不変条件を満たす限り到達しない。到達時も panic せず 0.0 に
-            // 縮退する（tests.rs::float_interpolation_non_numeric_dynamic_falls_back_to_zero
-            // で特性化済み）。
+            // f64/i64 変数の from/to は validate で数値に限られるので、非数値 Dynamic は
+            // 通常到達しない。到達時も panic せず 0.0 に縮退する
+            // （`tests.rs` の `float_interpolation_non_numeric_dynamic_falls_back_to_zero`）。
             _ => 0.0,
         },
     }

@@ -117,7 +117,7 @@ fn watch_keeps_waiting_while_working() {
     let mut state = state_with(&[("A", WORKING), ("B", STOP_REQUESTED)]);
     assert_eq!(judged(&watch("A"), &state), None);
 
-    // 机を持っていても・並んでいても、見張りは終わらない（要件 5.3）。
+    // 机を持っていても・並んでいても、見張りは終わらない。
     state.merge.entry("areka".to_owned()).or_default().holder = granted_holder("A");
     state.requests.push(desk_request("A", DeskSet::Test));
     assert_eq!(judged(&watch("A"), &state), None);

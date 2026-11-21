@@ -1,12 +1,10 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
-
 // バルーン背景色の受け口（[`TextLayerRuntime::set_balloon_background`]／
 // `background_of`）と、装着の 1 点（[`TextLayerRuntime::register_actor`]）で 2 層を
-// 純粋状態へ差し込む配線（要件 4.6／3.1）。
+// 純粋状態へ差し込む配線。
 //
-// 檻に入れるのは判断分岐だけ——「背景を受け取っているか」「装着で 2 層が届くか」
-// 「再追従が同じ背景で作り直しを起こさないか」の 3 点。ここまでは COM は要らない
-// （`register_actor_binding`／`refresh_actor_binding` は純粋な導出と HashMap 更新のみ）。
+// 固定するのは判断分岐だけ——「背景を受け取っているか」「装着で 2 層が届くか」
+// 「再追従が同じ背景で作り直しを起こさないか」。`register_actor_binding`／
+// `refresh_actor_binding` は純粋な導出と HashMap 更新のみなので COM は要らない。
 // 最後の 1 本（描き手の組み立ての失敗）だけは実 GPU（`com_world`）を使う。
 
 use areka_parsers::balloon::{
@@ -58,7 +56,7 @@ fn binding(world: &mut World) -> (TextSlotBinding, ActorKey) {
     )
 }
 
-/// R3.1／R4.6: 装着（`register_actor`）の 1 点で解決済みの 2 層が純粋状態へ届く。
+/// 装着（`register_actor`）の 1 点で解決済みの 2 層が純粋状態へ届く。
 ///
 /// 較正: 「装着で 2 層を差し込まない」誤りを再現すると、状態は `LookLayers::default()`
 /// のまま残り本述語が赤になる（`styled_model` が既定と全項目で違うため）。
@@ -87,7 +85,7 @@ fn attaching_an_actor_delivers_both_look_layers_to_the_pure_state() {
     );
 }
 
-/// R4.6: 背景の受け口が未設定なら白（[`DEFAULT_BALLOON_BACKGROUND`]）。
+/// 背景の受け口が未設定なら白（[`DEFAULT_BALLOON_BACKGROUND`]）。
 #[test]
 fn balloon_background_is_white_until_it_is_set() {
     let mut world = World::new();
@@ -114,7 +112,7 @@ fn balloon_background_is_white_until_it_is_set() {
     );
 }
 
-/// R4.6: 背景を設定してから装着すると、無効表示の色がその背景との混色になる。
+/// 背景を設定してから装着すると、無効表示の色がその背景との混色になる。
 ///
 /// 較正: 「背景を受け取らず常に白として 2 層を組む」誤りを再現すると、
 /// 白との混色と一致してしまい `assert_ne!` の側が赤になる。
@@ -147,14 +145,14 @@ fn the_disabled_look_mixes_with_the_configured_background() {
     );
 }
 
-/// R4.6: 装着と再追従が**同じ導出**を通る——同じ背景での再追従は churn ガードに掛かり、
+/// 装着と再追従が**同じ導出**を通る——同じ背景での再追従は churn ガードに掛かり、
 /// 作り直しの実回数が 0 になる。
 ///
 /// 較正: 「再追従で同じ背景でも作り直す」誤り（＝再追従だけが白で解き直す／装着だけが
-/// 背景付きで解く）を再現すると作り直し回数が **1** になる（実測——1 度目の再追従が白の
-/// 値を `layout_input` へ書き込むので 2 度目以降は一致してしまう。それでも本番では
-/// 「装着直後の 1 フレームで供給面を捨てて全再描画する」退行なので赤にする価値がある）。
-/// 数えているのは保持庫の要素数ではなく **`refresh_actor_binding` が再構築を行った実回数**。
+/// 背景付きで解く）を再現すると作り直し回数が **1** になる（1 度目の再追従が白の値を
+/// `layout_input` へ書き込むので 2 度目以降は一致する）。それでも本番では装着直後の 1 フレームで
+/// 供給面を捨てて全再描画する退行なので、赤にする価値がある。
+/// 数えているのは **`refresh_actor_binding` が再構築を行った実回数**。
 #[test]
 fn refreshing_with_the_same_background_rebuilds_zero_times() {
     let mut world = World::new();
@@ -173,7 +171,7 @@ fn refreshing_with_the_same_background_rebuilds_zero_times() {
     );
 }
 
-/// R4.6: 背景が変われば再追従は作り直す（上のテストが「常に false」で恒真になっていない
+/// 背景が変われば再追従は作り直す（上のテストが「常に false」で恒真になっていない
 /// ことの対照——判定キーに背景由来の値が実際に載っている）。
 #[test]
 fn refreshing_after_the_background_changed_rebuilds_once() {
@@ -206,7 +204,7 @@ fn refreshing_after_the_background_changed_rebuilds_once() {
     );
 }
 
-/// R4.6: 背景の受け口は actor ごとに独立する（本体側の背景が相方側に効かない）。
+/// 背景の受け口は actor ごとに独立する（本体側の背景が相方側に効かない）。
 #[test]
 fn the_background_slot_is_per_actor() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -220,8 +218,8 @@ fn the_background_slot_is_per_actor() {
     );
 }
 
-/// R4.6: `ResolvedBalloonText::resolve` は背景 白の
-/// [`ResolvedBalloonText::resolve_with_background`]（既存の呼び手を 1 バイトも変えない）。
+/// `ResolvedBalloonText::resolve` は背景 白の
+/// [`ResolvedBalloonText::resolve_with_background`] と同じ。
 #[test]
 fn resolve_is_resolve_with_a_white_background() {
     let model = styled_model();
@@ -232,9 +230,9 @@ fn resolve_is_resolve_with_a_white_background() {
     );
 }
 
-// ══ spec real-run-log-noise 要件 2.1〜2.4・5.1: 選択肢の飾りの警告は置き場ごとに値が決まったときだけ ══
+// ══ 選択肢の飾りの警告は置き場ごとに値が決まったときだけ ══
 
-/// 下線系の飾りの警告の文言（今のまま 1 文字も変えない）。
+/// 下線系の飾りの警告の文言。
 const UNDERLINE_FALLBACK: &str = "cursor.style underline 系は M1 未対応: SquareFill へ縮退";
 
 /// `cursor.style` と `cursor.blendmethod` を書いたバルーン（色は在る＝未指定バルーンでない）。
@@ -256,7 +254,7 @@ fn warns<'a>(events: &'a [CapturedEvent], message: &str) -> Vec<&'a CapturedEven
         .collect()
 }
 
-/// `real-run-log-noise` 要件 2.1〜2.4・5.1: ROP 系と下線系のバルーンを名前を入れて装着すると 2 つの `warn` が
+/// ROP 系と下線系のバルーンを名前を入れて装着すると 2 つの `warn` が
 /// 1 件ずつ（`balloon` の欄が入れた名前）。値の同じ再追従 3 回で 0 件、拡大率の変わる再追従でも
 /// 0 件、`blendmethod` だけ `xor` に替えた再追従で ROP 系だけ 1 件。
 ///
@@ -314,7 +312,7 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
     );
 }
 
-// ══ spec audit-emo-text-state-actor（2・3 回目のかけ直し R2-12・R3-5）: 知らない cursor.style の警告 ══
+// ══ 知らない cursor.style の警告 ══
 
 /// 知らない `cursor.style` の警告の文言。
 const UNKNOWN_STYLE: &str = "cursor.style が正典の値（square・underline・square+underline・none）のどれでもない: 既定の square で描く";
@@ -350,7 +348,7 @@ fn unknown_cursor_style_warns_once_naming_the_value() {
     assert_eq!(unknown[0].field_str("style"), Some("sqare"));
 }
 
-/// audit-emo-text-state-actor 指摘 5: 描き手の組み立てが失敗すれば、面を付ける閉包は呼ばれず、窓の子の entity は増えない
+/// 描き手の組み立てが失敗すれば、面を付ける閉包は呼ばれず、窓の子の entity は増えない
 /// （面を付けるのは書体・計測器・描き手が全部通った後）。組み立ては無効にした `GraphicsCore` で
 /// 落とし、閉包は生きた装置で本物の窓の子の面を付ける——先に呼べば子が 1 つ増えて赤になる。
 #[test]

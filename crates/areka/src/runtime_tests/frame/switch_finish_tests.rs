@@ -1,5 +1,4 @@
-//! 差し替えの相の完了の段と後始末の決定論テスト（spec: areka-P0-shell-balloon-switch task 9.4・
-//! 要件 2.4・2.7・3.2・3.3・3.4・4.4・6.1・6.5・6.7・design「SwitchPhase」）。
+//! 差し替えの相の完了の段と後始末の決定論テスト。
 //!
 //! 置き換えの返信は、テストが持つ送り手から偽の値を流す（drain も GPU も回さない）。置き場の
 //! ゴーストは kanade の送出端の代わりに観測用の線と、偽の置き場（`FakePersistIo`）へ書く本物の
@@ -52,7 +51,7 @@ use areka_runtime::shell_box_assets::ShellBoxAssets;
 use areka_runtime::shell_cursor_assets::ShellCursorAssets;
 use areka_runtime::switch_assets::{SwapPayload, SwapSlot};
 use face_tests::new_balloon_definitions;
-// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+// 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::wiring::test_support::{last_drain_mut, zorder_ledger};
 
 // ---------------------------------------------------------------- 土台
@@ -342,7 +341,7 @@ fn attach_failure() -> PresentOutcome {
 // ---------------------------------------------------------------- 失敗と待ち
 
 /// 置き換えの返信のどれかが失敗か送り手の脱落なら `error!(skin_switch_failed, stage=attach)` 1 件で
-/// 印を消し、記憶・通知（kanade への便り）は 0（要件 6.1 の「差し替えが済む」が成り立たない）。
+/// 印を消し、記憶・通知（kanade への便り）は 0。
 #[test]
 fn reply_failure_records_one_error_and_writes_nothing() {
     type Poke = fn(&mut Rig);
@@ -393,7 +392,7 @@ fn wire_bridge_slot(wiring: &mut RuntimeWiring) -> SwapSlot {
 
 /// 頼んだ段で seriko（表示の橋渡し）が合図を出す前に倒れたら、荷物と返信の送り手は橋渡しと一緒に
 /// 消え、`error!(skin_switch_failed, stage=attach)` 1 件で印を消す（記憶・通知 0）。結線状態が
-/// 荷物を生かし続けると印が残り、以後の切替がずっと断られる（design「SwitchPhase」）。
+/// 荷物を生かし続けると印が残り、以後の切替がずっと断られる。
 #[test]
 fn bridge_gone_while_committed_fails_attach_and_clears_the_marker() {
     let mut got = Vec::new();
@@ -457,7 +456,7 @@ fn partial_replies_keep_waiting_until_all_arrive() {
 /// シェル: `OnShellChanged`（Ref0＝新しいシェルの名前・Ref1＝ゴーストの名前・Ref2＝新しいシェルの
 /// 絶対パス）を GET・返信なしで 1 件、`LastShell` だけを書き（`LastBalloon` は不変）、重なりの基底を
 /// 新しいシェルの `seriko.zorder` へ置き直し、`info!(skin_switch_done)` 1 件で印を消す。今の
-/// バルーンは触らない（要件 2.4・2.7・6.1・6.5）。
+/// バルーンは触らない。
 #[test]
 fn shell_success_raises_on_shell_changed_and_records_only_last_shell() {
     let mut rig = rig(SkinKind::Shell, true);
@@ -507,8 +506,7 @@ fn shell_success_raises_on_shell_changed_and_records_only_last_shell() {
 
 /// バルーン: `OnBalloonChange`（Ref0＝名前・Ref1＝絶対パス）を GET・返信なしで 1 件、`LastBalloon`
 /// だけを書き（argv で起きたプロセスでも・`LastShell` は不変）、今のバルーンを記憶の経路の新しい
-/// バルーンにし、scope ごとの文字の模型を替えて `info!(skin_switch_done)` 1 件で印を消す
-/// （要件 3.2・3.3・3.4・6.1・6.7）。
+/// バルーンにし、scope ごとの文字の模型を替えて `info!(skin_switch_done)` 1 件で印を消す。
 #[test]
 fn balloon_success_raises_on_balloon_change_and_records_only_last_balloon() {
     let mut rig = rig(SkinKind::Balloon, true);
@@ -555,7 +553,7 @@ fn balloon_success_raises_on_balloon_change_and_records_only_last_balloon() {
 }
 
 /// 記憶の書き手が無ければ `warn!(skin_memory_not_recorded)` 1 件で、切替は成功として扱う
-/// （通知 1 件・完了 1 件・印を消す・要件 6.1）。
+/// （通知 1 件・完了 1 件・印を消す）。
 #[test]
 fn missing_memory_writer_warns_and_still_succeeds() {
     let mut got = Vec::new();
@@ -580,7 +578,7 @@ fn missing_memory_writer_warns_and_still_succeeds() {
 }
 
 /// `swap_ms` は、返信のそろったフレームの drain の時間（置き換えの適用を含む上限）と後始末の
-/// 時間の和（要件 4.4）。drain の時間を 50 ms と置けば、記録は 50 ms 以上になる。
+/// 時間の和。drain の時間を 50 ms と置けば、記録は 50 ms 以上になる。
 #[test]
 fn swap_ms_includes_the_drain_of_the_completing_frame() {
     let mut got = Vec::new();
@@ -603,7 +601,7 @@ fn swap_ms_includes_the_drain_of_the_completing_frame() {
     );
 }
 
-/// 揃え方は新しいシェルから読み直す（要件 2.7）: 起動のシェルが下端揃え（bottom）で、新しい
+/// 揃え方は新しいシェルから読み直す: 起動のシェルが下端揃え（bottom）で、新しい
 /// シェルが上端揃え（top）なら、後始末の後のキャラ窓は今の窓寸のまま作業領域の上端へ揃う
 /// （窓寸が変わらないフレームでも、後段の再スナップを待たずに置き直す）。
 #[test]
@@ -637,10 +635,10 @@ fn shell_finish_moves_char_windows_to_the_new_alignment() {
     );
 }
 
-/// 並べ直しの材料は新しいシェルの descript の値へ替わる（areka-P0-move-canon 要件 8.6・
-/// design ResetPos State Management (2)）: 起動のシェルの値（重なりの宣言なし）が、後始末の後は
+/// 並べ直しの材料は新しいシェルの descript の値へ替わる:
+/// 起動のシェルの値（重なりの宣言なし）が、後始末の後は
 /// 新しいシェルの値（`seriko.zorder` は `1,0`）と走っているバルーンの配置の値になる
-/// （起動の準備と同じ形・areka-P0-window-link-directives 要件 7.4）。
+/// （起動の準備と同じ形）。
 #[test]
 fn shell_finish_replaces_the_default_placement_basis() {
     let mut rig = rig(SkinKind::Shell, false);
@@ -671,7 +669,7 @@ fn shell_finish_replaces_the_default_placement_basis() {
 }
 
 /// シェルの切り替えは descript の組だけを新しいシェルの `seriko.sticky-window` へ取り替え、台本の組は
-/// 保つ（areka-P0-window-link-directives 要件 6.5・9.2）。起動の descript の組 `{0,1}` は、値の無い
+/// 保つ。起動の descript の組 `{0,1}` は、値の無い
 /// シェルへ替えると消える。台本の組 `{0,1}` は残り、新しいシェルの重なる組 `0,1` は作られずに記録される。
 #[test]
 fn shell_finish_replaces_only_the_descript_sticky_group() {
@@ -733,7 +731,7 @@ fn shell_finish_replaces_only_the_descript_sticky_group() {
 }
 
 /// シェルの切り替えは動かせない指定の descript の段だけを新しいシェルの値へ取り替え、台本の lock は
-/// 保つ（descript-window-keys 要件 4.4・5.4）。起動の descript の段 `{0}` は新しいシェルの
+/// 保つ。起動の descript の段 `{0}` は新しいシェルの
 /// `kero.balloon.dontmove,1` の `{1}` へ替わり、スコープ 1 の台本の lock は残る。
 #[test]
 fn shell_finish_replaces_only_the_descript_balloon_lock() {

@@ -1,4 +1,4 @@
-//! スレッド別・プロセス全体の CPU 報告器（areka-P0-draw-load-parity task 2.4・要件 2.3/2.6/2.12/3.8）。
+//! スレッド別・プロセス全体の CPU 報告器。
 //!
 //! # 何を出すか
 //!
@@ -6,13 +6,13 @@
 //! 1 行の `perf(thread)` と、プロセス全体 1 行の `perf(process)` を出す。名簿に載って
 //! いないスレッド（bevy のタスクプール等）は、プロセス CPU から名簿の合計を引いた差を
 //! `role=unregistered_rest` の**1 行**として必ず出す——観測が黙って消えない形にするため
-//! である（要件 2.3）。
+//! である。
 //!
 //! # 既定 OFF（費用 0）
 //!
 //! 点灯の判定 [`is_enabled`] は `tracing::enabled!(target: "areka::perf", DEBUG)` であり、
 //! [`start`] が**起動時に 1 度だけ**評価する。消灯していれば報告スレッドを起こさない
-//! （`Instant` も Win32 も 1 度も触らない＝要件 3.8）。点灯していれば `areka-perf-report`
+//! （`Instant` も Win32 も 1 度も触らない）。点灯していれば `areka-perf-report`
 //! スレッドが [`DEFAULT_PERIOD_SEC`] 秒ごと（`AREKA_PERF_THREAD_REPORT_SEC` で変更可）と
 //! **終了直前**にスナップショットを出す。費用は ON でも 1 周期に 1 回・スレッド数 ×数 µs。
 //!
@@ -21,15 +21,15 @@
 //! `GetThreadTimes`／`GetProcessTimes` が返すのはプロセス開始からの**累積**であり、行に
 //! 出るのもその累積値である。「この区間で誰が重かったか」は読み手が隣り合うスナップ
 //! ショットの差を取って得る（`snap=` で対にする）。差の取り方は [`delta`] が権威で、
-//! 順位表を作る `tools/perf/perf-rank.py`（task 6.2）は同じ規則を写す。
+//! 順位表を作る `tools/perf/perf-rank.py` は同じ規則を写す。
 //!
-//! # 壁時計と CPU 時間は混ぜない（要件 2.6）
+//! # 壁時計と CPU 時間は混ぜない
 //!
 //! `perf(process)` の `wall_ms` だけが壁時計（経過時間）で、`cpu_us`／`kernel_us`／
 //! `user_us` はすべて CPU 時間である。GPU 待ちなどの待ち時間は前者にだけ現れる。
 //! `perf(thread)` は壁時計を持たない。
 //!
-//! # 行の語彙（要件 2.12）
+//! # 行の語彙
 //!
 //! 1 行に同じフィールド名を 2 度出さない。値に含まれる空白は `_` へ潰す——判定
 //! スクリプト `tools/perf/judge-perf.py` の `parse_fields` は「空白の直後の `名前=`」を
@@ -110,7 +110,7 @@ impl ThreadSample {
     }
 }
 
-/// プロセス全体の標本。壁時計はここにだけ在る（要件 2.6）。
+/// プロセス全体の標本。壁時計はここにだけ在る。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ProcessSample {
     /// 報告器の起動からの経過（ms・**壁時計**）。
@@ -139,7 +139,7 @@ impl ProcessSample {
 ///
 /// 判定スクリプトの `parse_fields` は「行頭または空白の直後の `名前=`」だけを
 /// フィールドの始まりと読む。値の中に空白が残っていると、その先の `語=` が新しい
-/// フィールドとして立ち上がり、1 行の語彙が壊れる（要件 2.12）。空白さえ無ければ
+/// フィールドとして立ち上がり、1 行の語彙が壊れる。空白さえ無ければ
 /// 値の中の `=` は安全である。
 fn sanitize(value: &str) -> String {
     let replaced: String = value
@@ -172,7 +172,7 @@ pub fn format_thread_line(snap: u32, t_s: u64, s: &ThreadSample) -> String {
 
 /// プロセス全体を 1 行へ組む（純関数）。
 ///
-/// `wall_ms` だけが壁時計で、残る 3 つは CPU 時間である（要件 2.6）。
+/// `wall_ms` だけが壁時計で、残る 3 つは CPU 時間である。
 pub fn format_process_line(snap: u32, t_s: u64, p: &ProcessSample) -> String {
     format!(
         "perf(process): プロセス CPU snap={snap} t_s={t_s} wall_ms={wall_ms} \
@@ -188,7 +188,7 @@ pub fn format_process_line(snap: u32, t_s: u64, p: &ProcessSample) -> String {
 /// 名簿外の残りを 1 行ぶんの標本として算出する（プロセス CPU − 名簿の合計）。
 ///
 /// 名簿に載らないスレッド（bevy のタスクプール等）は必ず残るので、その分を黙って
-/// 落とさずここで拾う（要件 2.3）。終了済みのスレッドも名簿に残り、その最終値は
+/// 落とさずここで拾う。終了済みのスレッドも名簿に残り、その最終値は
 /// プロセス CPU に含まれているので、引く側からも外さない。
 ///
 /// 読み取り時刻がずれてプロセスより名簿の合計が大きく見えることがある（スナップ
@@ -310,7 +310,7 @@ impl ReportHandle {
     }
 }
 
-/// 報告器を起動する。点灯していなければ**何も起こさず** `None` を返す（要件 3.8）。
+/// 報告器を起動する。点灯していなければ**何も起こさず** `None` を返す。
 ///
 /// 呼ぶのは起動のできるだけ早い段階で 1 度きり（`main` のスレッド役割フック導入直後）。
 /// スレッドの生成に失敗したときは `error!` を残して `None` を返す——本体は止めない。

@@ -1,4 +1,4 @@
-//! Multi-variable, mixed-type, builder-flow, and serialization integration tests.
+//! 複数変数・混在型・ビルダー経由・シリアライズの統合テスト
 
 use super::*;
 
@@ -71,7 +71,6 @@ fn complex_multi_variable_mixed_placement() {
 
     let result = compile_storyboard(&doc, "entrance", 0.0).unwrap();
 
-    // Verify metadata
     assert_eq!(result.storyboard_name, "entrance");
     assert_eq!(result.start_time, 0.0);
     assert_eq!(result.time_scale, 1.5);
@@ -177,7 +176,6 @@ fn all_variable_types_mixed() {
 
     let result = compile_storyboard(&doc, "mixed", 0.0).unwrap();
 
-    // Check variable type hints
     assert_eq!(
         result.timelines.get("opacity").unwrap().variable_type,
         VariableTypeHint::Float
@@ -203,7 +201,6 @@ fn all_variable_types_mixed() {
         TransitionValue::Dynamic(DynamicValue::String("active".to_string()))
     );
 
-    // Integer min/max
     let frame_tl = result.timelines.get("frame").unwrap();
     assert_eq!(frame_tl.min_value, Some(-10.0));
     assert_eq!(frame_tl.max_value, Some(10.0));

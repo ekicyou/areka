@@ -78,7 +78,7 @@ impl ComposedSurface {
 
     /// バッファを `w×h`（行の幅 `w*4`）へ再確保し、全画素を 0（全透明）へクリアする。
     ///
-    /// 既存の `Vec<u8>` 容量を**再利用**する（要件 10.3・毎フレーム経路のゼロアロケーション）:
+    /// 既存の `Vec<u8>` 容量を**再利用**する（毎フレーム経路のゼロアロケーション）:
     /// 必要バイト数が現容量以下なら再割り当てせず `truncate`＋`resize`／不足時のみ伸長する。
     /// クリアは全 0 上書き（前フレームの残像が混ざらない）。blit 実行器（[`crate::blit`]）が
     /// 転写前に呼び、以後 [`bytes_mut`] へ premultiplied BGRA を書き込む。
@@ -99,7 +99,7 @@ impl ComposedSurface {
         self.width = width;
         self.height = height;
         // 容量再利用: 既存要素を 0 で埋め直し、長さを len へ合わせる（>len は捨て・<len は 0 追加）。
-        // Vec::resize は容量が足りれば再割り当てしない（10.3）。
+        // Vec::resize は容量が足りれば再割り当てしない。
         self.bytes.clear();
         self.bytes.resize(len, 0u8);
     }
@@ -171,7 +171,7 @@ mod tests {
         assert_eq!(bytes.len(), 2 * 4 * 2);
     }
 
-    /// 指摘 33: 外形の上限を越える幅は入口で止める（`stride()` を u32 であふれさせない）。
+    /// 外形の上限を越える幅は入口で止める（`stride()` を u32 であふれさせない）。
     #[test]
     #[cfg(debug_assertions)]
     #[should_panic(expected = "外形の上限")]

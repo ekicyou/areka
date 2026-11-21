@@ -1,9 +1,7 @@
-//! ゴースト・シェル・バルーンのネットワーク更新（spec: areka-P0-network-update）。
+//! ゴースト・シェル・バルーンのネットワーク更新。
 //!
 //! メニューと台本の受け口は、対象を解く前の要求 [`RawUpdateRequest`] を窓口へ運び、窓口が解いた
 //! 依頼 [`UpdateOrder`] を手続きへ渡す。取得・照合・確定は `areka-update` のエンジンに任せる。
-//! 登録の口と受付の口、子のモジュール（写し・手続き・背景のスレッド・UI 側の窓口）は、それを作る
-//! タスクが宣言を 1 行ずつ足す。
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -22,7 +20,7 @@ pub(crate) mod desk;
 mod procedure;
 mod readonly_refusal;
 mod refs;
-/// `\![update…]` の受け口（runtime-module-untangle 2.2 で持ち主へ移した）。
+/// `\![update…]` の受け口。
 pub(crate) mod update_cue;
 mod worker;
 

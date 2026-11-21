@@ -1,10 +1,9 @@
-//! アニメの表が持つ参照の表の写しと「動く部品が在るか」の檻
-//! （spec: areka-P0-surface-element-nesting 要件 5.1・7.2・7.3・tasks.md 7.1）。
+//! アニメの表が持つ参照の表の写しと「動く部品が在るか」の檻。
 //!
 //! 入力は `surfaces.txt` の本文そのもの（解析 → 畳み込みを経る実経路）で組む。
 //! 「部品になりうるサーフェス」は ① element定義の子 ② 着せ替えの pattern0 の先 ③ 採った animation の
-//! コマが指す 0 以上の番号（描画メソッドで絞らない・design.md「Table」の字句どおり）④ `always` の
-//! 経過 0 の pattern の先（spec: areka-P0-animated-image-playback）の 4 つの経路があるので、経路ごとに
+//! コマが指す 0 以上の番号（描画メソッドで絞らない）④ `always` の
+//! 経過 0 の pattern の先の 4 つの経路があるので、経路ごとに
 //! 1 つだけ立てた本文で真を、どれも立たない本文で偽を確かめる。
 
 use areka_emo_compose::EmoWorld;
@@ -13,7 +12,7 @@ use super::AnimationTable;
 use crate::sample_test_support::emo2_root;
 use crate::test_support::table_of;
 
-/// 入れ子の検体（compose の検体フォルダの本文をそのまま読む・design.md「解決したこと」）。
+/// 入れ子の検体（compose の検体フォルダの本文をそのまま読む）。
 const FIXTURE: &str =
     include_str!("../../areka-emo-compose/tests/fixtures/surface-nesting/surfaces.txt");
 
@@ -21,7 +20,7 @@ fn world_of(text: &str) -> EmoWorld {
     EmoWorld::build(&areka_parsers::shell::parse(text))
 }
 
-/// 空の表と、入れ子も動く部品も無い本文では偽（要件 7.2・7.3）。
+/// 空の表と、入れ子も動く部品も無い本文では偽。
 #[test]
 fn table_without_nesting_or_animated_parts_is_false() {
     let empty = AnimationTable::empty();
@@ -54,13 +53,12 @@ fn each_part_path_decides_has_animated_parts() {
     let child = "surface0\n{\nelement0,overlay,200,0,0\n}\n";
     // 着せ替えの先を持つのは純 `bind` だけ（呼ばれるだけの animation として表に載り、コマの経路も立つ）。
     // コマの無い `bind+random` は手順を持たないので、`k == 0` で表に採らない `bind+random,0` の
-    // pattern0 の先は動く部品に数えない（audit-emo-compose 指摘 4）。
+    // pattern0 の先は動く部品に数えない。
     let bind = "surface0\n{\nanimation5.interval,bind\nanimation5.pattern0,overlay,200,0,0,0\n}\n";
     let bind_random_rest = "surface0\n{\nanimation5.interval,bind+random,0\nanimation5.pattern0,overlay,200,0,0,0\n}\n";
     let frame = "surface0\n{\nanimation1.interval,random,2\n\
                  animation1.pattern0,overlay,200,40,0,0\n}\n";
-    // 合計 0 の `always`（採らない）の経過 0 の pattern（pattern1）だけが 200 を指す（spec:
-    // areka-P0-animated-image-playback・合成が経過 0 として描く先）。
+    // 合計 0 の `always`（採らない）の経過 0 の pattern（pattern1）だけが 200 を指す（合成が経過 0 として描く先）。
     let always_rest = "surface0
 {
 animation1.interval,always
@@ -107,7 +105,7 @@ animation1.interval,always
     }
 }
 
-/// 入れ子の検体では真。写しは面の表の参照の表と同じもの（要件 5.1・7.2）。
+/// 入れ子の検体では真。写しは面の表の参照の表と同じもの。
 #[test]
 fn fixture_has_animated_parts_and_keeps_a_copy_of_the_nest_table() {
     let world = world_of(FIXTURE);
@@ -121,7 +119,7 @@ fn fixture_has_animated_parts_and_keeps_a_copy_of_the_nest_table() {
     );
 }
 
-/// emo2 では `\1` のまばたきのコマ 2110・2210 が自分の animation を持つので真（design.md「emo2 についての事実」）。
+/// emo2 では `\1` のまばたきのコマ 2110・2210 が自分の animation を持つので真。
 #[test]
 fn emo2_has_animated_parts_through_2110_and_2210() {
     let path = emo2_root()
@@ -142,7 +140,7 @@ fn emo2_has_animated_parts_through_2110_and_2210() {
     );
 }
 
-/// 部品の番号で引いた animation の列は、同じサーフェスを一番上に表示するときの列と同じ（要件 5.1）。
+/// 部品の番号で引いた animation の列は、同じサーフェスを一番上に表示するときの列と同じ。
 #[test]
 fn part_animations_equal_those_shown_as_top() {
     let nested = table_of(FIXTURE);

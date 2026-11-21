@@ -3,7 +3,7 @@
 //! # 本ファイルが持つもの／持たないもの
 //!
 //! 相の結合（`FrameHarness` で本番と同じ順に相を回す）で追随を見る檻は 3 ファイルに分かれる。
-//! 重複を作らないための分担は次のとおりで、本ファイルは**残りの 5 つ**を持つ。
+//! 重複を作らないための分担は次のとおり。
 //!
 //! | 項目 | 置き場所 |
 //! |---|---|
@@ -228,7 +228,6 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
                     "{anchor:?} {from}→{to} scope={scope}: 期待値が旧値と同じ（この組は追随を観測できない）"
                 );
 
-                // 主張そのもの——手計算の逐語値と bit 一致。
                 assert_eq!(
                     offset_of(&harness, scope),
                     expected,
@@ -293,10 +292,7 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
         reached, MATRIX_COMBINATIONS,
         "行列が全組へ到達していない（到達 {reached} 組・期待 {MATRIX_COMBINATIONS} 組）"
     );
-    // X の恒等式を免除した組の件数を固定する——免除が黙って広がると、行列は緑のまま
-    // 「バルーンがどこに居ても通る」檻へ退化する。免除は `Anchor::Left` × scope 0 の
-    // 3 遷移ぶんだけ（キャラ窓が作業領域左端 31 に固定され、offset −412 系のバルーンが
-    // 主・隣接いずれの作業領域とも交差しなくなる組）である。
+    // 免除が黙って広がると、行列は緑のまま「バルーンがどこに居ても通る」檻へ退化する。
     assert_eq!(
         clamped, MATRIX_CLAMPED_COMBINATIONS,
         "可視性ガードで X を免除した組の件数が変わった（免除 {clamped} 組・期待 {MATRIX_CLAMPED_COMBINATIONS} 組）"
@@ -598,7 +594,6 @@ fn a_surface_swap_at_a_constant_scale_does_not_move_the_offset() {
             1,
             "scope={scope}: 面の切替でキャラ窓が書かれていない（駆動が死んでいる）: {writes:?}"
         );
-        // 主張そのもの——現在値も基準対も bit 同一。
         assert_eq!(
             follow_of(&harness, scope),
             old,
@@ -658,7 +653,6 @@ fn a_work_area_resnap_at_a_constant_scale_does_not_move_the_offset() {
             old_ground,
             "scope={scope}: 接地点が 1px も動いていない"
         );
-        // 主張そのもの。
         assert_eq!(
             follow_of(&harness, scope),
             old,
@@ -777,7 +771,6 @@ fn a_drag_established_offset_follows_by_the_same_rule_as_an_author_specified_one
             },
             "scope={scope}: 追随がドラッグ由来の基準対を書き換えた"
         );
-        // バルーンが実際に新しい相対位置へ動いた。
         assert!(
             !writes_for(&writes, scope_u32, WindowKind::Balloon).is_empty(),
             "scope={scope}: バルーンへの窓書込が 1 件も無い: {writes:?}"

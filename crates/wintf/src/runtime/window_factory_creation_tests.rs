@@ -1,4 +1,4 @@
-//! 窓の生成の位置・失敗・記録（`audit-wintf-runtime` 要件 4.1・4.2・5.2・7.1、設計 R2 の 3・6・9・10）。
+//! 窓の生成の位置・失敗・記録。
 //!
 //! 本物の窓を作るテストは、作った直後に `ShowWindow(SW_HIDE)` で隠してから確かめる。
 
@@ -42,7 +42,7 @@ fn hide(world: &World, entity: Entity) -> HWND {
     hwnd
 }
 
-/// 3: 両方既定なら呼ばない・位置だけなら大きさを変えない・大きさだけなら動かさない・両方なら両方。
+/// 両方既定なら呼ばない・位置だけなら大きさを変えない・大きさだけなら動かさない・両方なら両方。
 #[test]
 fn initial_pos_flags_four_cases() {
     let base = SWP_NOZORDER | SWP_NOACTIVATE;
@@ -58,7 +58,7 @@ fn initial_pos_flags_four_cases() {
     assert_eq!(initial_pos_flags(100, 300), Some(base));
 }
 
-/// 3: 位置だけを与えた本物の窓は、作った時点で左上がその位置にある。
+/// 位置だけを与えた本物の窓は、作った時点で左上がその位置にある。
 #[test]
 fn position_only_window_is_created_at_the_given_position() {
     let shared = shared_world();
@@ -78,7 +78,7 @@ fn position_only_window_is_created_at_the_given_position() {
     assert_eq!((rect.left, rect.top), (123, 77));
 }
 
-/// 6: 失敗の枝は印を入れ、`error` を 1 行だけ残す。
+/// 失敗の枝は印を入れ、`error` を 1 行だけ残す。
 #[test]
 fn creation_failure_marks_entity_and_logs_one_error() {
     let mut world = World::new();
@@ -88,7 +88,7 @@ fn creation_failure_marks_entity_and_logs_one_error() {
     assert_eq!(counts.error, 1);
 }
 
-/// 6: 印の付いた実体には `create_windows` が窓を作らない。印を外すと次の刻みで作る。
+/// 印の付いた実体には `create_windows` が窓を作らない。印を外すと次の刻みで作る。
 #[test]
 fn create_windows_skips_marked_entity_until_the_mark_is_removed() {
     let shared = shared_world();
@@ -113,7 +113,7 @@ fn create_windows_skips_marked_entity_until_the_mark_is_removed() {
     hide(&world, entity);
 }
 
-/// 9: 壊した親を渡すと、付け替えの失敗を `error` で残し、窓は作られる。
+/// 壊した親を渡すと、付け替えの失敗を `error` で残し、窓は作られる。
 #[test]
 fn broken_parent_logs_error_and_still_creates_the_window() {
     // SAFETY: Win32 境界。作ってすぐ壊した窓の HWND を「壊れた親」として使う。
@@ -150,7 +150,7 @@ fn broken_parent_logs_error_and_still_creates_the_window() {
     assert!(counts.error >= 1, "親の付け替えの失敗は error で残す");
 }
 
-/// 10: 登録簿の無い World で作ると、その場で作って入れ、`error` を 1 行残す。
+/// 登録簿の無い World で作ると、その場で作って入れ、`error` を 1 行残す。
 #[test]
 fn missing_registry_logs_one_error() {
     let shared = shared_world();

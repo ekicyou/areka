@@ -92,7 +92,7 @@ impl CueSheet {
     }
 }
 
-/// duration を「有限かつ非負」へ丸める（dola ingress の**単一権威**・R1.8）。
+/// duration を「有限かつ非負」へ丸める（dola ingress の**単一権威**）。
 ///
 /// 非有限（NaN/±inf）・負値はすべて 0（瞬時）とみなす。+inf も畳み込む——horizon が ∞ に
 /// なると talk が永遠に終わらない同種の病理ゆえ（開発者決裁）。この clamp を通した値のみが
@@ -116,10 +116,9 @@ fn relative_end(cues: &[Cue]) -> f64 {
 }
 
 /// 台本 [`CueSheet`] を時刻駆動可能な [`TimedSchedule`]`<`[`TalkCue`]`>` へ変換する
-/// **唯一の canonical 変換**（R11.1・dola ingress の単一権威）。
+/// **唯一の canonical 変換**（dola ingress の単一権威）。
 ///
-/// 旧 2 変換（min 正規化で**先頭待ちを食う**版と、旧 sakura の独自 `to_schedule`・いずれも撤去済）
-/// の二重を廃した 1 本。以下を同時に成立させる:
+/// 以下を同時に成立させる:
 ///
 /// - **絶対アンカーの継承**: スケジュールの `start_time` に [`CueSheet::absolute_start_time`]
 ///   を用いる（dispatch 刻印前は 0.0）。各 cue の相対 `start_time` はエントリオフセットとして
@@ -130,11 +129,11 @@ fn relative_end(cues: &[Cue]) -> f64 {
 ///   その**同一値**を配送エンベロープ [`TalkCue::duration`] と占有 horizon の両方へ用いる。
 /// - **占有 horizon の算出**: 全 cue の `max(start_time + clamp(duration))`（空台本は 0.0）を
 ///   相対 horizon としてスケジュールへ保持し、[`TimedSchedule::is_completed`] が配送完了でなく
-///   **占有終了**で真になるようにする（末尾待ちの duration を終端で落とさない・R2.5/D6）。
+///   **占有終了**で真になるようにする（末尾待ちの duration を終端で落とさない）。
 ///
 /// ペイロード写像: [`CuePayload::Command`] → [`Entry::Payload`]（[`TalkCue`] を組む）、
 /// [`CuePayload::Barrier`] → [`Entry::Barrier`]。
-/// Barrier は presentation でなく（R1.6）envelope duration を持たないが、その
+/// Barrier は presentation でなくenvelope duration を持たないが、その
 /// `start_time` は horizon の fold に一律に寄与する（duration 相当は 0）。
 pub fn to_talk_schedule(sheet: &CueSheet) -> TimedSchedule<TalkCue> {
     let mut schedule =

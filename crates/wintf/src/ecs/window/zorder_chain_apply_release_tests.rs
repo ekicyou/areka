@@ -1,12 +1,8 @@
-//! 鎖の適用系の 1 巡の**組の外しと結び直し**——替え玉で窓口の呼び出し列を固定する
-//! （`areka-P0-zorder-scope-inversion` 要件 1.5・6.1・6.2・6.4・6.5・7.1・7.2・7.3）。
+//! 鎖の適用系の 1 巡の**組の外しと結び直し**——替え玉で窓口の呼び出し列を固定する。
 //!
-//! 窓口の替え玉は [`double`](super::double) をそのまま使う（中身は変えない）。檻は兄弟の
+//! 窓口の替え玉は [`double`](super::double) をそのまま使う。檻は兄弟の
 //! `zorder_chain_apply_tests.rs` と同じく単一スレッドの実行器を明示する——記録の捕捉も
 //! 台本もスレッドローカルであり、多スレッドの実行器では検査が空虚に緑になる。
-//!
-//! 組が 1 つも外れず結ばれもしない巡の呼び出し列が今と同じであることは、既存の替え玉の
-//! 試験（`zorder_chain_apply_tests.rs` ほか）が書き換えなしで緑であることが示す。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
@@ -305,7 +301,7 @@ fn restore_failure_is_recorded_and_the_rest_continue() {
 // ===========================================================================
 
 /// 組の外しが窓口を呼んでも、鎖の付与が 1 本も書けなければ持ち越しを続ける。
-/// 印は持ち越しの巡でも先に付き、ハンドルが揃った巡で付与が張られる（要件 6.1）。
+/// 印は持ち越しの巡でも先に付き、ハンドルが揃った巡で付与が張られる。
 #[test]
 fn handle_wait_carries_over_even_when_the_pair_release_called_the_os() {
     let mut world = World::new();
@@ -334,7 +330,6 @@ fn handle_wait_carries_over_even_when_the_pair_release_called_the_os() {
         "組の操作の分で持ち越しが解けた"
     );
 
-    // ハンドルが付いた巡: 組の操作は無く、鎖の付与だけが張られる。
     world.entity_mut(s0).insert(handle(11));
     let (_, used) = run_once(&mut world, Script::default());
 
@@ -352,7 +347,7 @@ fn handle_wait_carries_over_even_when_the_pair_release_called_the_os() {
 }
 
 // ===========================================================================
-// 解除の後押しの出し分け（要件 4.5・7.3）
+// 解除の後押しの出し分け
 // ===========================================================================
 
 const SETTLED: &str = "[zorder-chain] settled";
@@ -500,7 +495,7 @@ fn a_failed_restore_still_lets_the_chain_attach_and_nudge() {
 }
 
 // ===========================================================================
-// 外し損ねの巡だけの輪の確かめ（要件 7.1・7.2）
+// 外し損ねの巡だけの輪の確かめ
 // ===========================================================================
 
 const LINK_REFUSED: &str = "[zorder-chain] link-refused";

@@ -1,4 +1,4 @@
-//! 線形の探索で 2 乗に伸びていた所が、大きな検体でも短く終わること（指摘 25〜30・要件 2.1・4.4・4.5）。
+//! 線形の探索で 2 乗に伸びていた所が、大きな検体でも短く終わること。
 //!
 //! 直す前はどれも n の 2 乗に伸びた（n を 2 倍にして約 4 倍・debug で測った）。検体は直す前なら debug で
 //! 十数秒〜数十秒かかる大きさに取り、直した後は 1 つ 1 秒前後で終わる。時間の閾値は見ない（揺れるので）。
@@ -50,7 +50,7 @@ fn visible(world: &EmoWorld, frames: usize) -> Vec<u32> {
 }
 
 /// 幅: 面 0 が面 20000 … 1 を（番号の大きい方から）1 つずつ置き、10 フレーム求める。印を列で引けば
-/// 2 乗（指摘 25）。
+/// 2 乗。
 #[test]
 fn visible_parts_of_a_wide_surface_finish_short_and_ascending() {
     const N: u32 = 20_000;
@@ -70,7 +70,7 @@ fn visible_parts_of_a_wide_surface_finish_short_and_ascending() {
     );
 }
 
-/// 深さ: 面 0 → 1 → … → 10000 の鎖を、毎フレームのように 100 回求める（指摘 25）。
+/// 深さ: 面 0 → 1 → … → 10000 の鎖を、毎フレームのように 100 回求める。
 #[test]
 fn visible_parts_of_a_deep_chain_finish_short_every_frame() {
     const LAST: u32 = 10_000;
@@ -89,7 +89,7 @@ fn visible_parts_of_a_deep_chain_finish_short_every_frame() {
 }
 
 /// 有効な着せ替え 20000 本が `insert` で次を差し込む鎖（最後が面 1 を描く）。差し込みの決めを列で
-/// 引けば 2 乗（指摘 26）。
+/// 引けば 2 乗。
 #[test]
 fn composing_many_active_binds_finishes_short() {
     const N: u32 = 20_000;
@@ -113,7 +113,7 @@ fn composing_many_active_binds_finishes_short() {
 }
 
 /// 面 0 へ 40000 回の追記（element と animation を 1 つずつ・element は番号の大きい方から）。足すたびに
-/// 並べ直し、重なりを列で引けば 2 乗（指摘 27）。並びは layer 昇順で、同じ番号の中は前の行が先。
+/// 並べ直し、重なりを列で引けば 2 乗。並びは layer 昇順で、同じ番号の中は前の行が先。
 #[test]
 fn folding_many_appends_to_one_surface_finishes_short_and_sorted() {
     const N: u32 = 40_000;
@@ -145,7 +145,7 @@ fn folding_many_appends_to_one_surface_finishes_short_and_sorted() {
 
 /// `always` の animation 10000 本（どれも経過 0 で面 1 を描く）と、animation の無い番号のコマ 20000 枚
 /// を予算を外して 3 回合成する。コマの番号ごとに重ねる列と animation の列を順に引けば 2 乗
-/// （指摘 28・29）。animation の数は抑えた（読む側の `parse` が animation の数の 2 乗に伸びる）。
+/// （29）。animation の数は抑えた（読む側の `parse` が animation の数の 2 乗に伸びる）。
 #[test]
 fn composing_many_animations_finishes_short() {
     const ANIMS: u32 = 10_000;

@@ -50,7 +50,7 @@ fn unchanged_observation_is_not_sent_again() {
     assert_eq!(notes, vec![note(0, true, 3, 1), note(1, false, 0, 0)]);
 }
 
-/// 同じフレームの中で隠して出し直すと、開いたまま・同じ面でも世代だけが進む（要件 2.3）。
+/// 同じフレームの中で隠して出し直すと、開いたまま・同じ面でも世代だけが進む。
 #[test]
 fn advanced_generation_is_sent_even_while_staying_open() {
     let (notes, _) = notes_of(&[

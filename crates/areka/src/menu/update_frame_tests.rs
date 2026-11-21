@@ -1,4 +1,4 @@
-//! 「ネットワーク更新」枠の決定論テスト（areka-P0-network-update・要件 1.2・1.3・1.4・9.5）。
+//! 「ネットワーク更新」枠の決定論テスト。
 //!
 //! 確かめること: 枠の項目は既定名「ネットワーク更新」と `updatebutton.caption` を持つ葉であること・
 //! 3 つとも更新先が無ければ灰色（1 つに在れば選べる）・走っている間は灰色・選ぶと理由 `manual` の
@@ -102,7 +102,7 @@ fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> 
         .collect()
 }
 
-/// 更新先が在れば、既定名「ネットワーク更新」・`updatebutton.caption`・選べる・印なしの葉（要件 1.2・1.3）。
+/// 更新先が在れば、既定名「ネットワーク更新」・`updatebutton.caption`・選べる・印なしの葉。
 #[test]
 fn item_is_a_selectable_leaf_with_the_default_label_and_caption() {
     let (world, _tmp) = wired_world("areka-update-frame-shape", Some(GHOST_URL));
@@ -127,7 +127,7 @@ fn item_is_a_selectable_leaf_with_the_default_label_and_caption() {
     );
 }
 
-/// 3 つとも更新先が無ければ灰色（枠は出る）。対照: ゴーストの `descript.txt` に在れば選べる（要件 1.3・9.5）。
+/// 3 つとも更新先が無ければ灰色（枠は出る）。対照: ゴーストの `descript.txt` に在れば選べる。
 #[test]
 fn item_is_greyed_when_none_of_the_three_has_a_source() {
     let (none, _tmp_none) = wired_world("areka-update-frame-none", None);
@@ -142,7 +142,7 @@ fn item_is_greyed_when_none_of_the_three_has_a_source() {
 }
 
 /// 走っている間は灰色: 台本の依頼が走り出した後（`Running`）も、メニューで選んで答えを待つ間
-/// （`AwaitingExec`）も選べない（要件 1.3・9.5）。
+/// （`AwaitingExec`）も選べない。
 #[test]
 fn item_is_greyed_while_an_update_runs() {
     let (mut script, _tmp_script) = wired_world("areka-update-frame-running", Some(GHOST_URL));
@@ -171,7 +171,7 @@ fn item_is_greyed_while_an_update_runs() {
 }
 
 /// 選ぶと今の 3 つを対象にした理由 `manual` の依頼がちょうど 1 件受付を通る（解けないシェルと
-/// `descript.txt` の無いバルーンは飛ばされ、渡るのはゴーストだけ・要件 1.4）。
+/// `descript.txt` の無いバルーンは飛ばされ、渡るのはゴーストだけ）。
 #[test]
 fn selecting_submits_one_manual_order_to_the_intake() {
     let (mut world, _tmp) = wired_world("areka-update-frame-select", Some(GHOST_URL));
@@ -191,7 +191,7 @@ fn selecting_submits_one_manual_order_to_the_intake() {
     );
 }
 
-/// 結線をやり直すと登記は新品で、「ネットワーク更新」枠は置き換えの記録なしに登記し直される（要件 1.2）。
+/// 結線をやり直すと登記は新品で、「ネットワーク更新」枠は置き換えの記録なしに登記し直される。
 #[test]
 fn rewiring_gives_a_fresh_registration_with_the_update_frame() {
     let (mut world, _tmp) = wired_world("areka-update-frame-rewire", Some(GHOST_URL));
@@ -215,7 +215,7 @@ fn rewiring_gives_a_fresh_registration_with_the_update_frame() {
 }
 
 /// 読み取りだけの走り（World に [`crate::readonly::ReadOnlyRun`]）では、更新先が在っても灰色。
-/// 対照: 印が無ければ今どおり選べる（readonly-mode 要件 8.7）。
+/// 対照: 印が無ければ今どおり選べる。
 #[test]
 fn item_is_greyed_in_a_readonly_run() {
     let (plain, _tmp_plain) = wired_world("areka-update-frame-plain", Some(GHOST_URL));

@@ -1,4 +1,4 @@
-//! 一時の置き場の目録（startup-options-core 要件 3.2・3.5・3.9）。
+//! 一時の置き場の目録。
 //!
 //! 一時フォルダは `temp-path-kit` の `under_target` の下だけに組む。
 
@@ -24,7 +24,7 @@ fn temp_then_plain(label: &str) -> (TempPath, PathBuf, PathBuf, BasewareRoots) {
     (tmp, t, a, roots)
 }
 
-/// 一時の項目は印 `Temporary` で、ゴーストの置き場はフォルダそのもの（要件 3.2）。
+/// 一時の項目は印 `Temporary` で、ゴーストの置き場はフォルダそのもの。
 #[test]
 fn temporary_root_ghost_store_is_the_folder_itself() {
     let dir = PathBuf::from(r"C:\x\ghosts");
@@ -34,7 +34,7 @@ fn temporary_root_ghost_store_is_the_folder_itself() {
     assert_eq!(root.ghost_dir("g"), dir.join("g"));
 }
 
-/// 先頭の一時の置き場のゴーストが、同じフォルダ名のほかの根のゴーストより先に当たる（要件 3.9）。
+/// 先頭の一時の置き場のゴーストが、同じフォルダ名のほかの根のゴーストより先に当たる。
 #[test]
 fn head_temporary_ghost_wins_over_same_folder_name() {
     let (_tmp, t, a, roots) = temp_then_plain("catalog-roots-temp-wins");
@@ -53,7 +53,7 @@ fn head_temporary_ghost_wins_over_same_folder_name() {
     assert_eq!(roots.ghost_stores(), [t.clone(), a.join("ghost")]);
 }
 
-/// 一時の項目では `balloon\` を探さず、バルーンの置き場の列にも入れない（要件 3.2）。
+/// 一時の項目では `balloon\` を探さず、バルーンの置き場の列にも入れない。
 #[test]
 fn temporary_root_does_not_look_for_balloons() {
     let (_tmp, t, a, roots) = temp_then_plain("catalog-roots-temp-balloon");
@@ -64,7 +64,7 @@ fn temporary_root_does_not_look_for_balloons() {
     assert_eq!(roots.balloon_stores(), [a.join("balloon")]);
 }
 
-/// 新しく入れるものの入れ先は一時の項目を飛ばして決める（要件 3.5）。
+/// 新しく入れるものの入れ先は一時の項目を飛ばして決める。
 #[test]
 fn temporary_root_is_never_install_destination() {
     let (_tmp, t, a, roots) = temp_then_plain("catalog-roots-temp-install");
@@ -87,7 +87,7 @@ fn temporary_root_is_never_install_destination() {
     assert_eq!(install_root(&only, StoreKind::Ghost, "new"), None);
 }
 
-/// 一時の置き場の次の根が見つからないとき、飛ばした先頭はその根（一時の置き場ではない・#32）。
+/// 一時の置き場の次の根が見つからないとき、飛ばした先頭はその根（一時の置き場ではない）。
 #[test]
 fn head_skipped_names_the_first_plain_root_after_the_temporary_one() {
     let tmp = TempPath::under_target("catalog-roots-temp-skipped");
@@ -107,7 +107,7 @@ fn head_skipped_names_the_first_plain_root_after_the_temporary_one() {
     assert_eq!(got.head_skipped, Some(gone));
 }
 
-/// 一時の置き場が同じフォルダ名を隠していても、入れ先はその奥で見えている根（#R4-g3-1）。
+/// 一時の置き場が同じフォルダ名を隠していても、入れ先はその奥で見えている根。
 /// 一時の置き場を先に除いてから探すので、`b` の `g` を `a` で覆わない（呼び手の並びと同じ答え）。
 #[test]
 fn install_root_sees_through_a_temporary_root_hiding_the_same_folder() {

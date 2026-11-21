@@ -120,7 +120,6 @@ impl DWriteTextLayoutExt for IDWriteTextLayout {
                 return Ok(Vec::new());
             }
 
-            // バッファを確保して再取得
             let mut metrics = vec![DWRITE_CLUSTER_METRICS::default(); actual_count as usize];
             self.GetClusterMetrics(Some(&mut metrics), &mut actual_count)?;
             metrics.truncate(actual_count as usize);

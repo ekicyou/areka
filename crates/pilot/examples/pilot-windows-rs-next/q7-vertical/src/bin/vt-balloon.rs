@@ -1,4 +1,4 @@
-//! 問い 7（8.6・要件 8.7・8.8）: 透過の枠なしの窓（q1 の写し）に q4 の合成を通し、描画面へ自前の
+//! 問い 7:透過の枠なしの窓（q1 の写し）に q4 の合成を通し、描画面へ自前の
 //! Direct2D で縦書きの文（カラー絵文字を含む）と選択肢 2 つを描いて撮る。その後、選択肢ごとに中心へ
 //! `SendInput` で動かしてクリックし、`WM_LBUTTONDOWN` の位置を `windows-text` の `hit_test_point` に
 //! 渡して `[q7] hit choice=<番号> target=<番号>` を出す。カーソルは元の位置へ戻す。
@@ -90,7 +90,7 @@ fn run() -> std::result::Result<ExitCode, ExitCode> {
         .unwrap_or(30_000);
     let start = Instant::now();
     let deadline = Duration::from_millis(exit_ms);
-    // 認識しないと 200% の画面で窓は論理の座標・撮りと SendInput は物理の画素になり、当たりもずれる（7.2）。
+    // 認識しないと 200% の画面で窓は論理の座標・撮りと SendInput は物理の画素になり、当たりもずれる。
     step(
         "dpi_awareness",
         unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) }.ok(),

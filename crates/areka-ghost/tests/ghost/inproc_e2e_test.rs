@@ -1,21 +1,19 @@
-//! inproc 決定論 e2e I1〜I3（design.md「inproc 決定論 e2e（I1〜I3）」）。I1＝実 DLL 越しの一周の演出列・
-//! I2＝同じ一周の交信列・I3＝ロード失敗の主要態様。
+//! inproc 決定論 e2e I1〜I3。I1＝実 DLL 越しの一周の演出列・I2＝同じ一周の交信列・I3＝ロード失敗の主要態様。
 //!
 //! I1 は spine の S1（`spine_e2e_test.rs` の `s1_boot_success`）を **実 InProc DLL 境界越し**で再演する。
 //! S1 は台本 fake backend（`ScriptedShioriBackend`）が `\s[0]hello\e` を返すのに対し、本 I1 は
 //! `ShioriWiring::InProc` で実ビルド済み `shiori4_testdll.dll` をロードし、その OnFirstBoot 応答（凍結
-//! スナップショット由来の実採取起動挨拶・task 6.2）が kanade→start-relay→dispatcher→sakura→
-//! `RecordingSink` へ届くまでを **注入時刻のみ**（時刻前進＝talk 進行は単調増加する
-//! `DispatcherMsg::Tick` の `now` 注入のみ・実時計は talk を進めない）で駆動し、演出 cue 列を凍結台本
-//! 由来の期待列と **全順序**で照合する（要件 5.1/5.5・design.md I1）。駆動ループは反復回数境界でなく
-//! **壁時計 deadline 境界**（task 2.4 方式）で括り、poll 周期は `yield_now()`（sleep 不使用・要件 1.3）
-//! ——deadline は宙吊り防止の上限にすぎず sim 時刻は注入 Tick の `now` のみが進める。
+//! スナップショット由来の実採取起動挨拶）が kanade→start-relay→dispatcher→sakura→`RecordingSink` へ届く
+//! までを **注入時刻のみ**（時刻前進＝talk 進行は単調増加する `DispatcherMsg::Tick` の `now` 注入のみ・
+//! 実時計は talk を進めない）で駆動し、演出 cue 列を凍結台本由来の期待列と **全順序**で照合する。
+//! 駆動ループは反復回数境界でなく**壁時計 deadline 境界**で括り、poll 周期は `yield_now()`（sleep 不使用）。
+//! deadline は宙吊り防止の上限にすぎず、sim 時刻は注入 Tick の `now` のみが進める。
 //!
-//! さらに凍結応答が差し替えられた際の検出漏れを塞ぐため、期待列（ハードコードした
-//! `expected_greeting_sequence` の `(actor, command)` 全順序）が独立の **ドリフト検出ピン**となる
-//! （要件 5.2）——凍結 Value が変われば DLL→compile が別列を産み、この期待列に一致しなくなる。
-//! 正常終了の握手は `shutdown(CloseReason::System)==Ok(())` で観測する（要件 5.3）。観測は演出配送の
-//! **受領レベル**（`RecordingSink`）に留め、実描画（サーフェス合成・画素読戻し）は要求しない（要件 5.5）。
+//! 凍結応答が差し替えられた際の検出漏れを塞ぐため、ハードコードした期待列 `expected_greeting_sequence` の
+//! `(actor, command)` 全順序が独立の **ドリフト検出ピン**となる（凍結 Value が変われば DLL→compile が
+//! 別列を産み、この期待列に一致しなくなる）。正常終了の握手は `shutdown(CloseReason::System)==Ok(())` で
+//! 観測する。観測は演出配送の**受領レベル**（`RecordingSink`）に留め、実描画（サーフェス合成・画素読戻し）は
+//! 要求しない。
 //!
 //! # 兄弟 spine テストとの共存
 //! 同じ `ghost` テストバイナリで spine と並走するため、共有ゴースト（`inproc_fixture::shared_test_ghost()`）を
@@ -43,11 +41,10 @@ use crate::recorder::{
 };
 use crate::spine_e2e_test::RecordingSink;
 
-/// 凍結 OnFirstBoot スナップショットの Value 行 payload（起動挨拶さくらスクリプト・task 6.2 実採取）を
-/// 抽出する。giant literal を持たず凍結スナップショットから導出して実採取差し替えへ自動追随させる
-/// （tasks.md 6.2）。ドリフト検出（要件 5.2）の第一義の錨は**ハードコードした期待 cue 列**
-/// [`expected_greeting_sequence`] であり、凍結 Value が変われば DLL→compile が別列を産んで一致
-/// しなくなる。本値は I2 の交信列（OnFirstBoot GET の Value 結果）の照合にも用いる。
+/// 凍結 OnFirstBoot スナップショットの Value 行 payload（起動挨拶さくらスクリプト）を抽出する。
+/// giant literal を持たず凍結スナップショットから導出して実採取差し替えへ自動追随させる。ドリフト検出の
+/// 第一義の錨は**ハードコードした期待 cue 列** [`expected_greeting_sequence`] であり、凍結 Value が変われば
+/// DLL→compile が別列を産んで一致しなくなる。本値は I2 の交信列（OnFirstBoot GET の Value 結果）の照合にも用いる。
 fn expected_onfirstboot_value() -> String {
     let snapshot = shiori4_testdll::snapshot_for("OnFirstBoot").expect(
         "OnFirstBoot は shiori4-testdll のスナップショット表に収載されていること（narrowing: GET）",
@@ -59,20 +56,17 @@ fn expected_onfirstboot_value() -> String {
         .to_string()
 }
 
-/// I1/I2 の起動挨拶（実 emo2 OnFirstBoot 応答・task 6.2 実採取）が決定論的にコンパイルされる
-/// 期待演出列（(actor, command) の全順序・118 件）。
+/// I1/I2 の起動挨拶（実 emo2 OnFirstBoot 応答）が決定論的にコンパイルされる期待演出列
+/// （(actor, command) の全順序・118 件）。
 ///
-/// この列は sakura コンパイラ規則から構造的に導出し、実 parse+compile の観測列と照合済み
-/// （tasks.md「[6.2 sakura コンパイラ規則]」）である。要点（areka-P0-sakura-dialogue-tags 統合後の
-/// 現行規則）: 非空台本は先頭に ClearAll（actor 0）を前置／話者スコープ指定（p タグ・裸の数字
-/// スコープとも）が actor を切替（SpeakerScope・cue は生まない）／bang コマンド（move / bind 等）は
-/// command_carrier(name, tokens) 経由で Custom キャリア cue を生む（旧規則の「無視」から卒業）／
-/// サーフェス指定は Emote{key}／ウェイトは第一級 Wait／改行は NewLine{ratio}／テキスト run は Text／
-/// 終端で以降を切詰め。独立の drift-detection ピン（要件 5.2）——凍結 Value が変われば
-/// DLL→compile 出力が変わり本列に一致しなくなる。
+/// sakura コンパイラ規則から構造的に導出し、実 parse+compile の観測列と照合済み。要点: 非空台本は先頭に
+/// ClearAll（actor 0）を前置／話者スコープ指定（p タグ・裸の数字スコープとも）が actor を切替
+/// （SpeakerScope・cue は生まない）／bang コマンド（move / bind 等）は command_carrier(name, tokens) 経由で
+/// Custom キャリア cue を生む／サーフェス指定は Emote{key}／ウェイトは第一級 Wait／改行は NewLine{ratio}／
+/// テキスト run は Text／終端で以降を切詰め。凍結 Value が変われば DLL→compile 出力が変わり本列に一致しなくなる。
 ///
 /// at/duration の float は照合しない（テキスト速度チューニングが台本改変なしに壊すため）——
-/// 照合対象は (actor, command) の全順序と at の非減少性のみ（tasks.md 6.2 I1）。
+/// 照合対象は (actor, command) の全順序と at の非減少性のみ。
 fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
     vec![
         (ActorKey::from("0"), CueCommand::ClearAll),
@@ -581,13 +575,11 @@ fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
             CueCommand::Text("よろしくね。".to_string()),
         ),
         (ActorKey::from("1"), CueCommand::Wait),
-        // 末尾の起動記録 SET cue（position-persist task 7.1 の behavioral ripple）: 起動記録が無い
-        // 初回起動では `GhostRuntime::apply_boot_record_gate` が first_boot=true と判定し
-        // `first_boot_epilogue`（`areka.prop.set` / `areka.boot.count` / "1"）を KanadeConfig へ注入する。
-        // sakura が CueSheet 末尾（horizon・duration 0）へこのキャリア cue を付加し、挨拶再生を**完走**
-        // したときのみ broadcast されて起動記録が書かれる（要件 3.4・design C5-3/C7）。共有 fixture
-        // （shared_test_ghost）は起動記録を書くが、`shared_test_ghost()` が錠を取った後に `profile\areka`
-        // を消すので、毎回初回扱いになり、挨拶の列は必ずこの 1 件で閉じる。
+        // 末尾の起動記録 SET cue: 起動記録が無い初回起動では `GhostRuntime::apply_boot_record_gate` が
+        // first_boot=true と判定し `first_boot_epilogue`（`areka.prop.set` / `areka.boot.count` / "1"）を
+        // KanadeConfig へ注入する。sakura が CueSheet 末尾（horizon・duration 0）へこのキャリア cue を付加し、
+        // 挨拶再生を**完走**したときのみ broadcast されて起動記録が書かれる。`shared_test_ghost()` が錠を取った後に
+        // `profile\areka` を消すので、毎回初回扱いになり、挨拶の列は必ずこの 1 件で閉じる。
         (
             ActorKey::from("0"),
             CueCommand::command_carrier(
@@ -599,17 +591,15 @@ fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
 }
 
 /// I1・I2 の駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで待つ。反復回数ではなく
-/// **壁時計デッドライン**で括る（task 2.4 方式）——InProc 経路は最初の SHIORI 呼出で実 DLL の
-/// `LoadLibraryExW`／`CreateInstance` を初めて走らせ数十 ms を要するため。デッドラインは宙吊り防止の上限に
-/// すぎず、talk timeline の前進は依然として注入 Tick の `now` のみ（実時計で進めない・要件 5.1）。挨拶は
-/// 複数秒の台本ゆえ `now` を **大股**（+500ms/Tick）で前進させ、単一 Tick が at 昇順で due cue を
-/// 一括排出する（`dola/src/cue/schedule.rs`）。golden 列長は待機の**十分条件**（超過 Tick は排出済み
-/// schedule に無害）であり、届いた列の**内容**の正しさは後段の `assert_greeting_broadcast` が担う——
-/// golden が凍結 Value の実 compile と食い違えば必ず fail する fail-visible 設計（決定論）。
+/// **壁時計デッドライン**で括る——InProc 経路は最初の SHIORI 呼出で実 DLL の `LoadLibraryExW`／
+/// `CreateInstance` を初めて走らせ数十 ms を要するため。デッドラインは宙吊り防止の上限にすぎず、
+/// talk timeline の前進は注入 Tick の `now` のみ。挨拶は複数秒の台本ゆえ `now` を **大股**
+/// （+500ms/Tick）で前進させ、単一 Tick が at 昇順で due cue を一括排出する（`dola/src/cue/schedule.rs`）。
+/// golden 列長は待機の**十分条件**（超過 Tick は排出済み schedule に無害）であり、届いた列の**内容**の
+/// 正しさは後段の `assert_greeting_broadcast` が担う——golden が凍結 Value の実 compile と食い違えば必ず fail する。
 ///
-/// poll 周期は `yield_now()`（task 2.4 先例と同形・sleep 不使用）。兄弟 spine のプローブループは task 5.0 で
-/// 壁時計 deadline へ硬化済みゆえ、本テストの並走による CPU 競合は spine の cue 到達を deadline 内で遅らせる
-/// だけで偽陽性を生まない。
+/// poll 周期は `yield_now()`（sleep 不使用）。兄弟 spine のプローブループも壁時計 deadline で括られており、
+/// 本テストの並走による CPU 競合は cue の到達を deadline 内で遅らせるだけで偽陽性を生まない。
 fn drive_until_greeting_settles(
     runtime: &areka_ghost::GhostRuntime,
     surface_records: &Arc<Mutex<Vec<TalkCue>>>,
@@ -644,11 +634,11 @@ fn drive_until_greeting_settles(
 }
 
 /// I1: 起動から終話までの一周を注入時刻のみで駆動し、起動挨拶の演出列が凍結台本由来の期待列と
-/// 全順序で一致することを照合する（＋ドリフト検出＋正常終了握手・要件 5.1/5.2/5.3/5.4/5.5/1.1/1.3）。
+/// 全順序で一致することを照合する（＋ドリフト検出＋正常終了握手）。
 #[test]
 fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
     // ---- 実 InProc 一周の駆動 ----
-    // 自前 assemble せず共有 fixture を再利用（tasks.md「[4.2 重大]」・spine starvation 回避）。
+    // 自前 assemble せず共有 fixture を再利用（spine starvation 回避）。
     // 錠は終了の確かめまで持つ（I2 の記録の消去と競らない）。
     let shared = shared_test_ghost();
     let ghost_root = shared.root().to_path_buf();
@@ -676,7 +666,7 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
 
     drive_until_greeting_settles(&runtime, &surface_records, &text_records, "I1");
 
-    // ---- 演出列の全順序照合（要件 5.1・broadcast・(actor, command) 全順序・at 非減少）----
+    // ---- 演出列の全順序照合（broadcast・(actor, command) 全順序・at 非減少）----
     let surface = surface_records
         .lock()
         .expect("records mutex poisoned")
@@ -686,7 +676,7 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
     assert_greeting_broadcast(&surface, "surface");
     assert_greeting_broadcast(&text, "text");
 
-    // ---- 正常終了の握手（要件 5.3）----
+    // ---- 正常終了の握手----
     // shutdown（ForceQuit→OnClose NOTIFY→Unload）が clean に完走し `Ok(())` を返すこと。有界待機で
     // 宙吊りを防ぐ（`shutdown` 内部の全 actor join を括る）。
     run_bounded_shutdown(
@@ -698,15 +688,12 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
     drop(shared);
 }
 
-/// 起動挨拶の broadcast cue 列を全順序照合する共有ヘルパ（I1/I2 が同一の演出出力 assert を
-/// 「同じ手口」で再演するために free 関数へ括り出す）。
+/// 起動挨拶の broadcast cue 列を全順序照合する共有ヘルパ（I1/I2 が同一の演出出力 assert を再演するため）。
 ///
-/// 期待列はハードコードした [`expected_greeting_sequence`]（実 emo2 OnFirstBoot 挨拶＋末尾の
-/// position-persist 起動記録 SET cue・118 件・構造導出＋実 compile 観測で照合済み）。照合対象は
-/// `(actor, command)` の全順序と `at` の
-/// 非減少性のみ——`at`/`duration` の float はテキスト速度チューニングが台本改変なしに壊すため
-/// 照合しない（tasks.md 6.2 I1）。broadcast ゆえ surface/text いずれの sink も同一の全順序で
-/// これを受ける（partition は演者側 relevance・凍結台本由来）。
+/// 期待列はハードコードした [`expected_greeting_sequence`]（実 emo2 OnFirstBoot 挨拶＋末尾の起動記録 SET cue・
+/// 118 件）。照合対象は `(actor, command)` の全順序と `at` の非減少性のみ——`at`/`duration` の float は
+/// テキスト速度チューニングが台本改変なしに壊すため照合しない。broadcast ゆえ surface/text いずれの sink も
+/// 同一の全順序でこれを受ける。
 fn assert_greeting_broadcast(cues: &[TalkCue], who: &str) {
     let golden = expected_greeting_sequence();
     let observed: Vec<(ActorKey, CueCommand)> = cues
@@ -718,37 +705,33 @@ fn assert_greeting_broadcast(cues: &[TalkCue], who: &str) {
         "{who} sink は broadcast で凍結 OnFirstBoot 挨拶の (actor, command) 全順序を受けること \
          （partition は演者側 relevance・凍結台本由来）: {cues:?}"
     );
-    // at の絶対値は照合せず非減少性のみ固定する（速度チューニング耐性・tasks.md 6.2 I1）。
+    // at の絶対値は照合せず非減少性のみ固定する（速度チューニング耐性）。
     for pair in cues.windows(2) {
         assert!(pair[0].at <= pair[1].at, "{who} 発火列は at 昇順であるべき");
     }
 }
 
 /// I2: 実 InProc DLL を駆動しながら交信記録デコレータ `Recorder` を被せ、**交信列**（発行イベントの
-/// 種別・ID・順序・結果）と**演出出力列**（cue）の**双方**を同一の一周から同一手口で照合する
-/// （要件 1.4「二記録装置」・design.md「inproc 決定論 e2e」シナリオ I2・D-3）。
+/// 種別・ID・順序・結果）と**演出出力列**（cue）の**双方**を同一の一周から照合する。
 ///
-/// I1 が演出出力（`RecordingSink`）のみを見るのに対し、本 I2 は同じ DLL 境界に対し `ShioriBackend`
-/// seam へ `Recorder` を合成（`Custom(Recorder(inproc_connect(..)))`・D-3）して**交信列**も同時に
-/// 捕捉する。boot が resolve を内部で行うのと同型に、ここでは mount を**自前で解決**して
-/// `mount.shiori` を `inproc_connect` へ渡し（`boot()` の InProc arm が `inproc_connect(mount.shiori.clone())`
-/// を呼ぶのと同じ導出）、その実 InProc backend を `Recorder` で包んで `Custom` wiring として注入する。
-/// connect closure は shiori アクタースレッド上で spawn 時に一度だけ走り、`RecorderHandle` を
-/// 共有スロット経由でテストスレッドへ逃がす（駆動後に読む）。
+/// I1 が演出出力（`RecordingSink`）のみを見るのに対し、本 I2 は同じ DLL 境界に対し `ShioriBackend` seam へ
+/// `Recorder` を合成（`Custom(Recorder(inproc_connect(..)))`）して交信列も同時に捕捉する。boot が resolve を
+/// 内部で行うのと同型に、ここでは mount を自前で解決して `mount.shiori` を `inproc_connect` へ渡し
+/// （`boot()` の InProc arm が `inproc_connect(mount.shiori.clone())` を呼ぶのと同じ導出）、その実 InProc
+/// backend を `Recorder` で包んで `Custom` wiring として注入する。connect closure は shiori アクタースレッド上で
+/// spawn 時に一度だけ走り、`RecorderHandle` を共有スロット経由でテストスレッドへ逃がす（駆動後に読む）。
 ///
 /// # 交信列の決定論（ticker 無効＋Tick は dispatcher 止まり）
 /// `TickerMode::Disabled` かつ dispatcher は `Tick` を kanade へ中継しない（`TalkDone` のみ中継）ため、
 /// kanade は駆動ループ中に Tick を一切受けず、定常運転由来の追加交信を発行しない。したがって交信列は
 /// boot 系列（`OnInitialize` NOTIFY → `username` GET(204) → `OnFirstBoot` GET(Value) →
-/// `OnTranslate` GET(204) → `basewareversion` NOTIFY）に続き、
-/// shutdown（ForceQuit）が起こす close 系列（`OnClose` NOTIFY → `Unload` Clean）で閉じる——全順序が
-/// 決定論的。`OnFirstBoot` が Value を返すため kanade フォールスルーは `OnBoot` GET を**スキップ**する
-/// （task 6.2 実採取・`schedule/boot.rs`）。記録は shutdown 完了後に読む（`OnClose`/`Unload` は
-/// shutdown が起こす）。
+/// `OnTranslate` GET(204) → `basewareversion` NOTIFY）に続き、shutdown（ForceQuit）が起こす close 系列
+/// （`OnClose` NOTIFY → `Unload` Clean）で閉じる。`OnFirstBoot` が Value を返すため kanade フォールスルーは
+/// `OnBoot` GET を**スキップ**する（`schedule/boot.rs`）。記録は shutdown 完了後に読む。
 #[test]
 fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
-    // ---- 実 InProc backend へ Recorder を合成した Custom wiring を組む（D-3）----
-    // 自前 assemble せず共有 fixture を再利用（tasks.md「[4.2 重大]」・spine starvation 回避）。
+    // ---- 実 InProc backend へ Recorder を合成した Custom wiring を組む ----
+    // 自前 assemble せず共有 fixture を再利用（spine starvation 回避）。
     // 錠は終了の確かめまで持つ（I1 の記録の消去と競らない）。
     let shared = shared_test_ghost();
     let ghost_root = shared.root();
@@ -792,7 +775,7 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
 
     drive_until_greeting_settles(&runtime, &surface_records, &text_records, "I2");
 
-    // ---- 正常終了の握手（要件 5.3）: shutdown（ForceQuit→OnClose NOTIFY→Unload）を完走させる。----
+    // ---- 正常終了の握手: shutdown（ForceQuit→OnClose NOTIFY→Unload）を完走させる。----
     // 交信列の close 系列（OnClose/Unload）は shutdown が起こすため、記録は shutdown 完了後に読む。
     run_bounded_shutdown(
         "shutdown after I2 boot talk completion",
@@ -809,7 +792,6 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
         .expect("connect closure が RecorderHandle をスロットへ格納しているはず（shiori actor spawn 済み）")
         .records();
 
-    // 観測を可視化（RED phase の実列採取・回帰時の突合材料）。
     eprintln!("I2 observed exchange records ({} 件):", records.len());
     for (i, r) in records.iter().enumerate() {
         eprintln!(
@@ -819,10 +801,8 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
     }
 
     // 交信列を (kind, id, outcome) の全順序で照合する（status() は Recorder 非記録・status フィールドは
-    // 定常 nuance を持つため assert 対象外）。OnFirstBoot の Value 結果は演出列の値源
-    // （凍結スナップショットの Value 行 payload）と同一（`InProcBackend::get("OnFirstBoot")` は Value 行
-    // payload を返す）——二記録装置の連結固定。OnFirstBoot が Value を返すため OnBoot GET はスキップ
-    // される（kanade フォールスルー・task 6.2）。
+    // 定常 nuance を持つため assert 対象外）。OnFirstBoot の Value 結果は演出列の値源（凍結スナップショットの
+    // Value 行 payload）と同一——二記録装置の連結固定。OnFirstBoot が Value を返すため OnBoot GET はスキップされる。
     let observed: Vec<(ExchangeKind, Option<String>, ExchangeOutcome)> = records
         .iter()
         .map(|r| (r.kind.clone(), r.id.clone(), r.outcome.clone()))
@@ -834,8 +814,8 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
             Some("OnInitialize".to_string()),
             ExchangeOutcome::NotifyOk,
         ),
-        // task 8.2 の username prefetch GET（OnInitialize 後・OnFirstBoot 前・R4.1）。実テスト DLL は
-        // username リソースを提供しないため NoContent が返る（既定 username＝DEFAULT_USERNAME 相当の世界）。
+        // username prefetch GET（OnInitialize 後・OnFirstBoot 前）。実テスト DLL は username リソースを提供しないため
+        // NoContent が返る（既定 username＝DEFAULT_USERNAME 相当の世界）。
         (
             ExchangeKind::Get,
             Some("username".to_string()),
@@ -889,26 +869,22 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
 }
 
 // ============================================================================
-// I3: ロード失敗の主要態様を決定論的に検証する（task 5.3・design.md「inproc 決定論 e2e」
-//     シナリオ I3・Error Handling「connect 失敗」行・要件 3.5）。
+// I3: ロード失敗の主要態様を決定論的に検証する。
 //
-// I1/I2 が実 InProc DLL 越しの一周（boot→talk→shutdown）を協調ループで駆動するのに対し、
-// I3 は **boot しない**——`inproc_connect(shiori)()` を直接（unit-style）呼び、ロード確立の
-// 2 態様（DLL 欠落 / 不正イメージ）がいずれも **panic せず** `Err`（log-first・要件 3.5）として
-// 顕在化することのみを軽量・決定論的に確かめる。参照先未指定（`file: None`）は
+// I1/I2 が実 InProc DLL 越しの一周を協調ループで駆動するのに対し、I3 は **boot しない**——
+// `inproc_connect(shiori)()` を直接呼び、ロード確立の 2 態様（DLL 欠落 / 不正イメージ）がいずれも
+// **panic せず** `Err`（log-first）として顕在化することのみを確かめる。参照先未指定（`file: None`）は
 // `src/shiori_inproc_adapter_tests.rs` の `inproc_connect_missing_file_fails_immediately` が持つ。
-// アクタースレッド・drive ループ・共有 fixture・実ビルド済み DLL のいずれも要さない
-// （どちらも「失敗」検証ゆえ成功ロードが不要）。
+// アクタースレッド・drive ループ・共有 fixture・実ビルド済み DLL のいずれも要さない。
 // ============================================================================
 
 /// I3 用フィクスチャ組み立てヘルパ（`shiori_wiring.rs::build_shiori_mount` を鏡写しにしたもの）。
 ///
-/// 一意な一時ゴースト（`ghost/master/descript.txt`＋`shell/master/` dir）を作り、本番と同じ
-/// 経路（`package::resolve_with_shell`）で `ShioriMount` を得る（`ShioriMount` は `#[non_exhaustive]` ゆえ
-/// struct リテラルで組めない・実フィクスチャの resolve が唯一の入手経路）。descript に
-/// `shiori,<shiori_line>` 行を書く（`file: Some(shiori_line)`）。root は [`TempPath`] で返す
-/// （破棄で中身ごと消える）。`dll_bytes` が `Some` なら resolve 後の `mount.shiori.dir`
-/// （=`ghost/master`・`inproc_connect` が `dir.join(file)` で組むロード元）へ指定バイト列を
+/// 一意な一時ゴースト（`ghost/master/descript.txt`＋`shell/master/` dir）を作り、本番と同じ経路
+/// （`package::resolve_with_shell`）で `ShioriMount` を得る（`ShioriMount` は `#[non_exhaustive]` ゆえ
+/// struct リテラルで組めない）。descript に `shiori,<shiori_line>` 行を書く（`file: Some(shiori_line)`）。
+/// root は [`TempPath`] で返す（破棄で中身ごと消える）。`dll_bytes` が `Some` なら resolve 後の
+/// `mount.shiori.dir`（=`ghost/master`・`inproc_connect` が `dir.join(file)` で組むロード元）へ指定バイト列を
 /// `shiori_line` の名前で書き出す（不正イメージ態様のため）。
 fn build_i3_mount(shiori_line: &str, dll_bytes: Option<&[u8]>) -> (ShioriMount, TempPath) {
     let root = TempPath::new("areka-ghost-i3-load-failure");
@@ -937,8 +913,7 @@ fn build_i3_mount(shiori_line: &str, dll_bytes: Option<&[u8]>) -> (ShioriMount, 
 }
 
 /// I3-① **DLL 欠落**: `shiori,someMissing.dll` 行はあるが `ghost/master/` に当該 DLL が存在しない。
-/// `inproc_connect` は `LoadLibraryExW` を不在パスへ試み、失敗を `error!` 済み `Err` へ写す（panic せず・
-/// 要件 3.5）。
+/// `inproc_connect` は `LoadLibraryExW` を不在パスへ試み、失敗を `error!` 済み `Err` へ写す（panic せず）。
 #[test]
 fn i3_load_failure_missing_dll_returns_err() {
     let (shiori, _root) = build_i3_mount("someMissing.dll", None);
@@ -966,8 +941,7 @@ fn i3_load_failure_missing_dll_returns_err() {
 }
 
 /// I3-② **不正イメージ**: `shiori,bogus.dll` 行があり `ghost/master/bogus.dll` は非 PE テキスト。
-/// `LoadLibraryExW` は不正イメージを拒否し、`inproc_connect` は失敗を `error!` 済み `Err` へ写す
-/// （panic せず・要件 3.5）。
+/// `LoadLibraryExW` は不正イメージを拒否し、`inproc_connect` は失敗を `error!` 済み `Err` へ写す（panic せず）。
 #[test]
 fn i3_load_failure_invalid_image_returns_err() {
     let (shiori, _root) = build_i3_mount("bogus.dll", Some(b"this is not a valid PE image"));

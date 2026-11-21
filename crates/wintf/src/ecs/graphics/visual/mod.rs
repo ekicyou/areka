@@ -174,7 +174,6 @@ fn insert_graphics_parts(entity_cmds: &mut EntityCommands) {
 fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
     let entity = context.entity;
 
-    // 先に全てのチェックを行う（借用の問題を回避）
     let needs_arrangement = world
         .get::<crate::ecs::layout::Arrangement>(entity)
         .is_none();
@@ -182,7 +181,6 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
         .get::<crate::ecs::widget::BrushInherit>(entity)
         .is_none();
 
-    // owner Window 存在判定: 祖先に Window があるかを確認
     let has_owner_window = owner_window_exists(&world, entity);
     // bevy はバンドルを全部書いてからフックを呼ぶので、同じバンドルの部品が見える。
     let wants_surface = wants_own_surface(
@@ -193,23 +191,19 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
         false,
     );
 
-    // コマンドを発行（チェック完了後に一度だけ commands を借用する）
     let mut cmds = world.commands();
     let mut entity_cmds = cmds.entity(entity);
 
-    // Arrangementがまだ存在しない場合のみ挿入
-    // Arrangementのon_addフックがGlobalArrangementとArrangementTreeChangedを自動挿入する
+    // Arrangement の on_add フックが GlobalArrangement と ArrangementTreeChanged を連鎖で入れる。
     if needs_arrangement {
         entity_cmds.insert(crate::ecs::layout::Arrangement::default());
     }
 
-    // owner Window が存在し、規則が描画面の持ち主と答える場合のみ graphics コンポーネントを挿入する
     if has_owner_window && wants_surface {
         insert_graphics_parts(&mut entity_cmds);
     }
 
-    // BrushInheritマーカーを挿入（継承解決システムで処理される）
-    // Note: Brushesコンポーネントは挿入しない（オプショナル設計）
+    // Brushes は入れない（任意の部品）。
     if needs_brush_inherit {
         entity_cmds.insert(crate::ecs::widget::BrushInherit);
     }

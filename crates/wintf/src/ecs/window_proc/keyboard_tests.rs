@@ -170,7 +170,7 @@ fn capturechanged_before_threshold_dispatches_no_drag_end() {
     );
 }
 
-/// 準備中の非活性化は今も終了の知らせを配らない（修正の前後とも緑）。
+/// 準備中の非活性化は終了の知らせを配らない。
 #[test]
 fn deactivation_before_threshold_dispatches_no_drag_end() {
     let (world, entity) = setup_preparing();
@@ -185,7 +185,7 @@ fn deactivation_before_threshold_dispatches_no_drag_end() {
 }
 
 // ============================================================================
-// OnKeyDown の受け渡し（要件 8.1・8.2・8.4）
+// OnKeyDown の受け渡し
 // ============================================================================
 
 use super::{deliver_key_down, key_down_from};
@@ -262,7 +262,7 @@ fn f10() -> KeyDown {
     }
 }
 
-/// 要件 8.1: `WM_KEYDOWN` と `WM_SYSKEYDOWN` のどちらでも受け手が仮想キーつきで呼ばれ、
+/// `WM_KEYDOWN` と `WM_SYSKEYDOWN` のどちらでも受け手が仮想キーつきで呼ばれ、
 /// 真を返せば押下は消費される（`Some(LRESULT(0))`＝DefWindowProc へ渡らない）。
 #[test]
 fn both_key_messages_reach_the_receiver_and_true_consumes() {
@@ -284,7 +284,7 @@ fn both_key_messages_reach_the_receiver_and_true_consumes() {
     }
 }
 
-/// 要件 8.4: 偽を返す受け手・受け手の無い窓では押下は素通し（`None`＝DefWindowProc へ）。
+/// 偽を返す受け手・受け手の無い窓では押下は素通し（`None`＝DefWindowProc へ）。
 #[test]
 fn false_or_no_receiver_passes_through() {
     for msg in [WM_KEYDOWN, WM_SYSKEYDOWN] {
@@ -325,7 +325,7 @@ fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a Captured
         .collect()
 }
 
-/// 要件 8.1: World の借用中は受け手を呼ばず、`key_down_dropped`（vk・reason=world_busy）の
+/// World の借用中は受け手を呼ばず、`key_down_dropped`（vk・reason=world_busy）の
 /// `warn!` を 1 行出して素通しする。
 #[test]
 fn world_busy_logs_and_does_not_deliver() {

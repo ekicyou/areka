@@ -1,4 +1,4 @@
-//! `ProcessHost`（要件 1.1〜1.5）: helper プロセスの起動と、IPC と直交する
+//! `ProcessHost`: helper プロセスの起動と、IPC と直交する
 //! 非ブロッキング生存監視。
 //!
 //! 判定の純ロジック（`ExitKind::classify`・`resolve_request_timeout` 等）は
@@ -8,7 +8,7 @@
 //! `MultiByteToWideChar`）と、[`spawn_command`] が helper の**孤児化防止**として割り当てる
 //! KILL_ON_JOB_CLOSE 付き Job Object（[`crate::job`] にまとめ、割り当て失敗時は縮退＝現行挙動）。
 //!
-//! 子への起動パラメーター受け渡し規約（cross-task 契約・design §SpawnContract・R3.1〜3.3）:
+//! 子への起動パラメーター受け渡し規約:
 //! helper は起動パラメーターを **arg-n 優先・fallback env** の順で取得する。
 //! [`spawn`] は子引数と env の両方に同一値を二重供給し、helper の
 //! arg優先/env fallback どちらの読み取りにも整合させる。
@@ -20,9 +20,9 @@
 //!
 //! env は同値を二重供給する: [`PARENT_HWND_ENV`]（parent_hwnd 10進）・
 //! [`LOAD_DIR_ENV`]（load_dir）・[`SHIORI_NAME_ENV`]（shiori_name）。cwd
-//! （`current_dir`）は load_dir に設定する（伺か慣習・R3.3）。
+//! （`current_dir`）は load_dir に設定する（伺か慣習）。
 //!
-//! helper の向きの確かめ（dev-helper-x64-clobber 要件 3.1〜3.6）: [`spawn`] は起こす前に、
+//! helper の向きの確かめ: [`spawn`] は起こす前に、
 //! 渡された helper の実行ファイルの見出し（先頭の最大 4 KiB）を読み、32bit（i686）版で
 //! なければ理由と直し方の入ったエラーの 1 行（`helper_not_i686`）を、確かめられなければ
 //! 警告の 1 行（`helper_image_unverified`）を残す。記録だけで、`spawn` の結果も起こし方も
@@ -41,52 +41,51 @@ use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
 use crate::error::SpawnError;
 
-/// helper が親 HWND を fallback で読む環境変数名（cross-task 契約）。
+/// helper が親 HWND を fallback で読む環境変数名。
 ///
 /// 値は親 HWND の 10進 u32 表現。arg1 が優先で、arg1 が読めない場合に
 /// helper はこの env を `parse::<u32>()` する。
 pub const PARENT_HWND_ENV: &str = "HOST32_PARENT_HWND";
 
-/// helper が load_dir（ゴーストディレクトリ）を fallback で読む環境変数名（R3.1/3.2）。
+/// helper が load_dir（ゴーストディレクトリ）を fallback で読む環境変数名。
 ///
 /// 値は arg2 と同一の load_dir パス。arg2 が優先で、arg2 が読めない場合に
-/// helper はこの env を参照する。cwd も同値に設定される（R3.3）。
+/// helper はこの env を参照する。cwd も同値に設定される。
 pub const LOAD_DIR_ENV: &str = "HOST32_LOAD_DIR";
 
-/// helper が SHIORI 名（DLL ファイル名）を fallback で読む環境変数名（R3.1/3.2）。
+/// helper が SHIORI 名（DLL ファイル名）を fallback で読む環境変数名。
 ///
 /// 値は arg3 と同一の shiori_name（descript 解決済みの DLL ファイル名・親の領分）。
 /// arg3 が優先で、arg3 が読めない場合に helper はこの env を参照する。
 pub const SHIORI_NAME_ENV: &str = "HOST32_SHIORI_NAME";
 
-/// LOAD の `send_request` に用いる推奨既定 timeout（per-call 引数・R5.2）。
+/// LOAD の `send_request` に用いる推奨既定 timeout（per-call 引数）。
 ///
 /// `MsgTag::Load` の ack 待機に使う（`SMTO_ABORTIFHUNG` ＋この上限で有限復帰）。
 /// ipc の timeout 機構自体は変更せず、この定数は per-call 引数として渡すためだけの
-/// 推奨既定値である（echo 系の 5s とは別建て・design §Load timeout 方針）。
+/// 推奨既定値である（echo 系の 5s とは別建て）。
 pub const LOAD_ACK_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// request 往復（GET／NOTIFY）の `send_request` に用いる既定 timeout（per-call 引数・R4.3/R5.1）。
+/// request 往復（GET／NOTIFY）の `send_request` に用いる既定 timeout（per-call 引数）。
 ///
 /// `MsgTag::Request` の応答待機に使う（`SMTO_ABORTIFHUNG` ＋この上限で有限復帰）。
 /// [`LOAD_ACK_TIMEOUT`]（30s）とは**別建て**の 60s とする（GET は SHIORI 側の
-/// 思考時間を含み得るため長めに取る・design §Shiori3Client Implementation Notes・
-/// 開発者決定 2026-07-04）。ipc の timeout 機構自体は変更せず、この定数は per-call 引数
+/// 思考時間を含み得るため長めに取る）。ipc の timeout 機構自体は変更せず、この定数は per-call 引数
 /// として渡すためだけの既定値である。env [`REQUEST_TIMEOUT_ENV`] が未設定のときの既定。
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// request 往復 timeout を上書きする環境変数名（ミリ秒指定・R4.3/R5.1）。
+/// request 往復 timeout を上書きする環境変数名（ミリ秒指定）。
 ///
 /// 値はミリ秒の 10 進整数。未設定なら [`REQUEST_TIMEOUT`]（60s）が既定。`"0"` は
 /// **無限待ち**（timeout 無効）を意味し、ブレークポイントデバッグ用の明示 opt-in である
 /// （ブレークポイント停止と真のハングを機械的に区別できないため、開発者の明示指定を
-/// 代替手段とする・design §Shiori3Client Implementation Notes）。
+/// 代替手段とする）。
 ///
 /// 命名根拠: `AREKA_` 名前空間で OS 共有 env との衝突を回避し、`SHIORI_` で対象概念を
-/// 自己説明する（内部コードネーム `host32` は本番 env 名に用いない・design.md）。
+/// 自己説明する（内部コードネーム `host32` は本番 env 名に用いない）。
 pub const REQUEST_TIMEOUT_ENV: &str = "AREKA_SHIORI_REQUEST_TIMEOUT_MS";
 
-/// env 値文字列から実効 request timeout を解決する**決定的な純関数**（R4.3/R5.1）。
+/// env 値文字列から実効 request timeout を解決する**決定的な純関数**。
 ///
 /// `std::env` を直接読まず env 値を `Option<String>` として受け取る（単体テスト可能・
 /// helper 側 `resolve_param` と同型の arg/env 分離）。戻り値の `Option<Duration>` は
@@ -102,12 +101,9 @@ pub const REQUEST_TIMEOUT_ENV: &str = "AREKA_SHIORI_REQUEST_TIMEOUT_MS";
 /// [`request_timeout_from_env`] が担う。
 #[must_use]
 pub fn resolve_request_timeout(env: Option<String>) -> Option<Duration> {
-    // trim 後に空でなければ採用（helper 側 resolve_param と同様の正規化）。
     let trimmed = env.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     match trimmed.and_then(|s| s.parse::<u64>().ok()) {
-        // "0" は無限待ち（timeout 無効・デバッグ opt-in）。
         Some(0) => None,
-        // 正のミリ秒指定を採用。
         Some(n) => Some(Duration::from_millis(n)),
         // 不在／空／parse 不能は既定 60s へ安全側フォールバック（無限へ昇格させない）。
         None => Some(REQUEST_TIMEOUT),
@@ -124,17 +120,17 @@ pub fn request_timeout_from_env() -> Option<Duration> {
     resolve_request_timeout(std::env::var(REQUEST_TIMEOUT_ENV).ok())
 }
 
-/// helper プロセスの終了種別（要件 1.3 / 1.4）。
+/// helper プロセスの終了種別。
 ///
 /// [`std::process::ExitStatus`] からの分類は [`ExitKind::classify`] が担う
 /// 純関数として切り出してあり、実プロセスに依存せず単体テストできる。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitKind {
-    /// 正常終了（終了コード 0・要件 1.3）。
+    /// 正常終了（終了コード 0）。
     Clean,
-    /// 異常終了（終了コードが非 0・要件 1.4）。保持値は当該終了コード。
+    /// 異常終了（終了コードが非 0）。保持値は当該終了コード。
     Abnormal(i32),
-    /// 終了コードを持たない終了（`ExitStatus::code()` が `None`・要件 1.4）。
+    /// 終了コードを持たない終了（`ExitStatus::code()` が `None`）。
     ///
     /// Windows の `ExitStatus::code()` はいつも値を持つので、この腕は Windows では起きない
     /// （`TerminateProcess(..,1)` は [`ExitKind::Abnormal(1)`]）。公開の形を変えないために残す。
@@ -142,7 +138,7 @@ pub enum ExitKind {
 }
 
 impl ExitKind {
-    /// [`ExitStatus`] を終了種別へ分類する純関数（要件 1.3 / 1.4）。
+    /// [`ExitStatus`] を終了種別へ分類する純関数。
     ///
     /// - `code() == Some(0)` → [`ExitKind::Clean`]
     /// - `code() == Some(n)`（n ≠ 0） → [`ExitKind::Abnormal(n)`]
@@ -159,7 +155,7 @@ impl ExitKind {
     }
 }
 
-/// spawn 済み helper プロセスへの参照（要件 1.1）。
+/// spawn 済み helper プロセスへの参照。
 ///
 /// 起動した子プロセスの [`Child`] を保持し、[`poll_exit_kind`] による非ブロッキング生存監視の
 /// 対象となる。
@@ -235,11 +231,10 @@ fn wait_handle(handle: std::os::windows::io::RawHandle, timeout: Duration) -> bo
     unsafe { WaitForSingleObject(HANDLE(handle), millis) == WAIT_OBJECT_0 }
 }
 
-/// 包む前に捨てられた helper も、job を持たない helper も残さない（指摘 14）。
+/// 包む前に捨てられた helper も、job を持たない helper も残さない。
 impl Drop for HelperHandle {
     fn drop(&mut self) {
         let pid = self.pid();
-        // 終わっていれば `terminate` は `Ok`（冪等）。
         if let Err(error) = self.terminate() {
             tracing::error!(
                 target: LOG_TARGET,
@@ -274,27 +269,27 @@ impl Drop for HelperHandle {
     }
 }
 
-/// helper exe を起動し、[`HelperHandle`] を返す（要件 1.1 / 3.1 / 3.2 / 3.3 / 5.2）。
+/// helper exe を起動し、[`HelperHandle`] を返す。
 ///
-/// `std::process::Command` で `helper_exe` を起動する。起動パラメーター契約
-/// （design §SpawnContract・R3.1〜3.3）に従い、次を子へ二重供給する:
+/// `std::process::Command` で `helper_exe` を起動する。起動パラメーター契約に従い、
+/// 次を子へ二重供給する:
 ///
 /// - **子引数**: arg1 = `parent_hwnd`（10進 u32・helper の arg1 読み取り互換を維持）・
 ///   arg2 = `load_dir`・arg3 = `shiori_name`。
 /// - **env（同値 fallback）**: [`PARENT_HWND_ENV`] = parent_hwnd 10進・
 ///   [`LOAD_DIR_ENV`] = load_dir・[`SHIORI_NAME_ENV`] = shiori_name。
-/// - **cwd**: `load_dir`（伺か慣習・R3.3）。
+/// - **cwd**: `load_dir`（伺か慣習）。
 /// - **`PASTA_DEBUG=0`**: 親の値を受け継がせない（[`helper_command`]）。
 /// - **標準エラー**: 管にし、行ごとに `warn`（`event = "helper_stderr"`）で記録へ回す。
 ///
 /// Rust 関数の引数順（`helper_exe, load_dir, shiori_name, parent_hwnd`）と
 /// 子引数の並び（arg1=parent_hwnd 先頭）は別物である点に注意。`shiori_name` は
 /// 親側で descript 解決済みの DLL ファイル名であり、helper/factory は descript を
-/// 解釈しない（R3.6）。
+/// 解釈しない。
 ///
 /// spawn に失敗（exe 不在・実行権限不足など）した場合は
 /// [`SpawnError`] を返し、[`HelperHandle`] を返さない（＝稼働中の helper が
-/// 存在しない状態を保つ・要件 1.5）。
+/// 存在しない状態を保つ）。
 ///
 /// # Errors
 /// `Command::spawn` の I/O 失敗を [`SpawnError`] として返す。
@@ -316,7 +311,7 @@ pub fn spawn(
 /// helper を起こす [`Command`] を 1 か所で組む（引数・環境・作業フォルダ・標準エラーの管）。中身はテストが
 /// `get_args`／`get_envs`／`get_current_dir` で読む。
 ///
-/// `PASTA_DEBUG` は常に `0`（開ける口は無い＝要件 8.1・8.2・10.4）。親（areka）に立っていても
+/// `PASTA_DEBUG` は常に `0`（開ける口は無い）。親（areka）に立っていても
 /// helper の下の SHIORI（pasta）へは受け継がせない。
 fn helper_command(
     helper_exe: &Path,
@@ -327,16 +322,14 @@ fn helper_command(
     let mut command = Command::new(helper_exe);
     let parent_hwnd_decimal = parent_hwnd.to_string();
     command
-        // 子引数: arg1=parent_hwnd（互換維持）・arg2=load_dir・arg3=shiori_name。
         .arg(&parent_hwnd_decimal)
         .arg(load_dir)
         .arg(shiori_name)
-        // env: 同値二重供給（arg 読み取り不能時の fallback・R3.2）。
+        // env: 同値二重供給（arg 読み取り不能時の fallback）。
         .env(PARENT_HWND_ENV, &parent_hwnd_decimal)
         .env(LOAD_DIR_ENV, load_dir)
         .env(SHIORI_NAME_ENV, shiori_name)
         .env("PASTA_DEBUG", "0")
-        // cwd=load_dir（伺か慣習・R3.3）。
         .current_dir(load_dir);
     // helper の `[helper]` の行を areka の記録へ回す（[`spawn_command`] が読み手を起こす）。
     command.stderr(Stdio::piped());
@@ -372,7 +365,6 @@ pub(crate) fn spawn_command_with(
 ) -> Result<HelperHandle, SpawnError> {
     let mut child = command.creation_flags(CREATE_NO_WINDOW.0).spawn()?;
     // 孤児化防止: spawn 直後に KILL_ON_JOB_CLOSE 付き job へ割り当てる（失敗は縮退＝None）。
-    // これにより、親プロセスが UNLOAD を送らずに終了しても helper が OS 機構で kill される。
     // shortcut: 起こしてから job に入れるまでのあいだに areka が落ちると helper が残る。閉じるには CREATE_SUSPENDED か PROC_THREAD_ATTRIBUTE_JOB_LIST（std の Command の外）が要る。残った helper が実際に見つかったら上げる
     let job = crate::job::attach_kill_on_close_job(&child);
     let pid = child.id();
@@ -465,7 +457,7 @@ fn log_helper_line(pid: u32, line: &str) {
     tracing::warn!(target: LOG_TARGET, event = "helper_stderr", pid, "{line}");
 }
 
-/// helper の終了を非ブロッキングで問い合わせ、終了種別を分類する（要件 1.2〜1.4）。
+/// helper の終了を非ブロッキングで問い合わせ、終了種別を分類する。
 ///
 /// 稼働中なら `None`、終了済みなら `Some(ExitKind)`（[`ExitKind::classify`]
 /// による分類）。`try_wait` ベースゆえ呼び出し側スレッドをブロックしない。

@@ -2,7 +2,7 @@ use super::fixture::SMOKE_EXIT_ENV;
 use super::{Entity, GhostWindowMarker, WinApp, With};
 
 // ---------------------------------------------------------------------------
-// Smoke auto close（env ゲート・hands-off のビルド/起動確認用・donor と同型）
+// Smoke auto close（env ゲート・hands-off のビルド/起動確認用）
 // ---------------------------------------------------------------------------
 
 /// [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む（未設定・空・非数値・負値はゲート OFF）。
@@ -24,7 +24,7 @@ fn smoke_exit_ms() -> Option<u64> {
     parsed
 }
 
-/// env ゲート付き smoke 自動 close を結線する（window-placement donor `install_smoke_exit` と同作法）。
+/// env ゲート付き smoke 自動 close を結線する。
 /// 指定 ms 後に全 [`GhostWindowMarker`] 窓を despawn → `WindowRegistry` 空遷移 → `run()` 正常復帰。
 /// 窓が 1 枚も無いとき（準備の失敗）は空遷移が起きないので、`wintf::AppExit` へ終了を直に指示する。
 pub(super) fn install_smoke_exit(app: &WinApp) {
@@ -39,7 +39,7 @@ pub(super) fn install_smoke_exit(app: &WinApp) {
     );
     wintf::executor::spawn_local(async move {
         async_io::Timer::after(std::time::Duration::from_millis(ms)).await;
-        // shutdown 済みなら strong 所有者は消えており upgrade は None ＝ no-op。
+        // shutdown 済みなら strong 所有者は消えており upgrade は None。
         let Some(world) = world_weak.upgrade() else {
             tracing::debug!("collision-probe smoke 自動 close: world 既に drop 済み — no-op");
             return;
@@ -52,7 +52,6 @@ pub(super) fn install_smoke_exit(app: &WinApp) {
             .collect();
         let count = targets.len();
         if count == 0 {
-            // 準備の失敗で窓が 1 枚も無いと空遷移が起きず `run()` が戻らないので、終了を直に指示する。
             tracing::info!(
                 "collision-probe smoke 自動 close: ゴースト窓が無い — 終了を直に指示します"
             );

@@ -1,4 +1,4 @@
-//! 記憶から戻した配置に組の寄せを当てる檻（window-work-area-clamp・task 2.4・要件 4.1〜4.5・7.7）。
+//! 記憶から戻した配置に組の寄せを当てる檻。
 //!
 //! 数値は開発者の机の形の合成: 主の画面の作業領域 `0..2880 × 0..1704`。記憶の位置は右に外した
 //! モニタ（x=5000 から）で、今のどのモニタとも交わらない。窓は 640×840 の下端吸着
@@ -60,8 +60,8 @@ fn xs(out: &[ScopePlacement]) -> Vec<i32> {
     out.iter().map(|p| p.char_pos.x).collect()
 }
 
-/// ⑷ 全員が外の隣り合っていた組は、互いの差（640）を保って作業領域へ戻る。バルーンの位置は
-/// 窓と同じ量だけ動き、ずらし（`balloon_offset`）は記憶の値のまま（要件 4.1・4.2・7.7）。
+/// 全員が外の隣り合っていた組は、互いの差（640）を保って作業領域へ戻る。バルーンの位置は
+/// 窓と同じ量だけ動き、ずらし（`balloon_offset`）は記憶の値のまま。
 #[test]
 fn all_outside_group_keeps_spacing_and_balloon_follows() {
     let off0 = PointPx { x: -300, y: 50 };
@@ -84,7 +84,7 @@ fn all_outside_group_keeps_spacing_and_balloon_follows() {
     }
 }
 
-/// 印が `none` でも記憶の矩形が重なっていた組は一緒に動く（要件 4.1）。
+/// 印が `none` でも記憶の矩形が重なっていた組は一緒に動く。
 #[test]
 fn overlapped_group_without_mark_moves_together() {
     let off = PointPx { x: -200, y: 0 };
@@ -93,7 +93,7 @@ fn overlapped_group_without_mark_moves_together() {
     assert_eq!(xs(&restore(&entries)), vec![1940, 2240]);
 }
 
-/// ⑸ どれも見えている組は動かない＝記憶の位置のまま（要件 4.3）。
+/// どれも見えている組は動かない＝記憶の位置のまま。
 #[test]
 fn all_visible_group_stays_at_remembered_positions() {
     let off = PointPx { x: -200, y: 0 };
@@ -102,7 +102,7 @@ fn all_visible_group_stays_at_remembered_positions() {
     assert_eq!(xs(&restore(&entries)), vec![1000, 1640]);
 }
 
-/// ⑹ 離れていた組は窓ごと: どちらも窓ごとの判定のまま右端へ寄る（要件 4.4）。
+/// 離れていた組は窓ごと: どちらも窓ごとの判定のまま右端へ寄る。
 #[test]
 fn apart_windows_are_clamped_one_by_one() {
     let off = PointPx { x: -200, y: 0 };
@@ -111,7 +111,7 @@ fn apart_windows_are_clamped_one_by_one() {
     assert_eq!(xs(&restore(&entries)), vec![2240, 2240]);
 }
 
-/// 見えている窓のある組では、見えている窓は記憶の位置のまま・外の窓は窓ごとの結果（要件 4.1 の改め）。
+/// 見えている窓のある組では、見えている窓は記憶の位置のまま・外の窓は窓ごとの結果。
 #[test]
 fn partner_visible_group_keeps_per_window_results() {
     let off = PointPx { x: -200, y: 0 };
@@ -128,7 +128,7 @@ fn placement_at(scope: usize, anchor: Anchor) -> ScopePlacement {
     }
 }
 
-/// T8（audit-placement-follow-residue 要件 1.3）: 中のスコープが無い（0 と 2 だけ）起動でも、
+/// 中のスコープが無い（0 と 2 だけ）起動でも、
 /// 2 の印 `right` は鎖の前の窓 0 との組の印で、組の差 640 が保たれる（(n−1, n) の線では組にならず落ちる）。
 #[test]
 fn missing_middle_scope_keeps_the_pair_spacing() {
@@ -146,7 +146,7 @@ fn missing_middle_scope_keeps_the_pair_spacing() {
     assert_eq!(xs(&out), vec![1600, 2240], "組の差 640 が保たれていない");
 }
 
-/// T6 ⑴（要件 1.2）: 0 下端・1 右の辺・2 下端で 2 の印が `right` なら、辺を飛ばして 0 と 2 が組になり
+/// 0 下端・1 右の辺・2 下端で 2 の印が `right` なら、辺を飛ばして 0 と 2 が組になり
 /// 差 640 が保たれる（(n−1, n) の線では辺の 1 と組んで落ちる）。
 #[test]
 fn edge_scope_between_keeps_the_pair_spacing() {
@@ -167,7 +167,7 @@ fn edge_scope_between_keeps_the_pair_spacing() {
     assert_eq!((a, c), (1600, 2240), "0 と 2 の差 640 が保たれていない");
 }
 
-/// 判定は組の寄せの後の配置で読む: 全員が外の組は寄せたので真・どれも見えている組は偽（要件 4.6）。
+/// 判定は組の寄せの後の配置で読む: 全員が外の組は寄せたので真・どれも見えている組は偽。
 #[test]
 fn judgement_reads_the_layout_after_the_group_shift() {
     let off = PointPx { x: -200, y: 0 };
@@ -212,7 +212,7 @@ mod clamped_flag_at_finalize {
         (added, events)
     }
 
-    /// 寄せた起動（資源が真）は古い記憶へ印を書き足さず、そのことを info で 1 行残す（要件 4.6）。
+    /// 寄せた起動（資源が真）は古い記憶へ印を書き足さず、そのことを info で 1 行残す。
     #[test]
     fn true_skips_the_mark_and_logs_info() {
         let (added, events) = run(Some(true));

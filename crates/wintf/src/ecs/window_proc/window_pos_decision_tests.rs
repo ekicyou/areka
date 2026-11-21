@@ -23,7 +23,7 @@ use crate::ecs::window::{
 use crate::ecs::world::{EcsWorld, engage_tick_flush_guard};
 
 /// 錠（`engage_tick_flush_guard`）を取ったまま積んだ指令は、`WM_WINDOWPOSCHANGED` を
-/// 受けても流れない——受け手の流しは錠を取る手順②だけで、錠を取らない流しを持たない（41 番）。
+/// 受けても流れない——受け手の流しは錠を取る手順②だけで、錠を取らない流しを持たない。
 #[test]
 fn windowposchanged_does_not_flush_the_queue_while_the_lock_is_held() {
     let _residue = drain_window_pos_commands();
@@ -85,7 +85,7 @@ fn windowposchanged_does_not_flush_the_queue_while_the_lock_is_held() {
 }
 
 // ---------------------------------------------------------------------------
-// 判断の本体（42 番）: 照り返しの書き方・DPI の直後の `BoxStyle` の飛ばし
+// 判断の本体: 照り返しの書き方・DPI の直後の `BoxStyle` の飛ばし
 // ---------------------------------------------------------------------------
 
 /// 判断の後に読む値: `WindowPos` の変更の印・位置・`BoxStyle.size`。

@@ -1,6 +1,6 @@
 use super::*;
 
-// Task 6.3: D2DRectExt拡張トレイトのテスト
+// D2DRectExt拡張トレイトのテスト
 
 #[test]
 fn test_d2drect_from_offset_size() {
@@ -134,10 +134,8 @@ fn test_d2drect_union() {
     assert_eq!(union.bottom, 80.0); // max(60, 80)
 }
 
-// W4b-T: 個別エッジセッターのギャップテスト
-// set_offset / set_size は既存テストで固定済みだが、4 個の単独エッジセッター
-// (set_left/set_top/set_right/set_bottom) は未検証だった。各々が対応する
-// フィールドのみを書き換え、他のエッジに副作用がないことを特性化する。
+// 個別エッジセッターのテスト
+// set_left/set_top/set_right/set_bottom は対応するフィールドのみを書き換え、他のエッジに副作用がないこと。
 
 #[test]
 fn test_d2drect_set_left() {
@@ -149,7 +147,6 @@ fn test_d2drect_set_left() {
     };
     rect.set_left(5.0);
     assert_eq!(rect.left, 5.0);
-    // 他のエッジは不変
     assert_eq!(rect.top, 20.0);
     assert_eq!(rect.right, 110.0);
     assert_eq!(rect.bottom, 70.0);
@@ -201,13 +198,9 @@ fn test_d2drect_set_bottom() {
 }
 
 /// validate() は正常な矩形（left<=right, top<=bottom）でパニックしない
-///
-/// 既存テストは left>right / top>bottom の panic ケースのみ固定していた。
-/// 等号境界を含む正常系で debug_assert が発火しないことを特性化する。
 #[cfg(debug_assertions)]
 #[test]
 fn test_d2drect_validate_valid_does_not_panic() {
-    // 通常の正常矩形
     let rect = Rect {
         left: 10.0,
         top: 20.0,
@@ -254,7 +247,7 @@ fn test_d2drect_validate_invalid_vertical() {
     rect.validate();
 }
 
-// Task 6.2: transform_rect_axis_aligned関数のテスト
+// transform_rect_axis_aligned関数のテスト
 
 #[test]
 fn test_transform_rect_identity() {

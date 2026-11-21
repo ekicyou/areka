@@ -8,9 +8,9 @@ use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, step};
 use crate::talk::StartTalk;
 
-// --- A. 棄却分岐（規則 1）: すべて状態不変・Action なし ---
+// --- A. 棄却分岐: すべて状態不変・Action なし ---
 
-/// Req1.3: 選択待ち帳簿が無い（解決済み・未成立）状態の選択確定は棄却する。
+/// 選択待ち帳簿が無い（解決済み・未成立）状態の選択確定は棄却する。
 #[test]
 fn choice_without_ledger_is_rejected_and_leaves_state_unchanged() {
     let (next, actions) = step(
@@ -27,7 +27,7 @@ fn choice_without_ledger_is_rejected_and_leaves_state_unchanged() {
     assert!(actions.is_empty(), "棄却は Action を発行しない");
 }
 
-/// Req1.3: 帳簿の対象 talk が現行 talk と食い違う場合は棄却する（帳簿も無傷）。
+/// 帳簿の対象 talk が現行 talk と食い違う場合は棄却する（帳簿も無傷）。
 #[test]
 fn choice_with_ledger_of_other_talk_is_rejected() {
     let mut s = steady_some(TalkId(3), 6);
@@ -48,7 +48,7 @@ fn choice_with_ledger_of_other_talk_is_rejected() {
     assert!(actions.is_empty());
 }
 
-/// Req1.3: 再生中でない（`Steady{None}`＝トーク切替で選択肢が消滅済み）なら棄却する。
+/// 再生中でない（`Steady{None}`＝トーク切替で選択肢が消滅済み）なら棄却する。
 #[test]
 fn choice_without_active_talk_is_rejected() {
     let mut s = steady_none(5);
@@ -68,7 +68,7 @@ fn choice_without_active_talk_is_rejected() {
     assert!(actions.is_empty());
 }
 
-/// Req1.1: 段の進行中（`Cascading`／`TimeoutInFlight`）の二重確定は棄却する。
+/// 段の進行中（`Cascading`／`TimeoutInFlight`）の二重確定は棄却する。
 #[test]
 fn choice_during_cascade_or_timeout_is_rejected_as_busy() {
     for phase in [
@@ -97,7 +97,7 @@ fn choice_during_cascade_or_timeout_is_rejected_as_busy() {
     }
 }
 
-/// Req1.4: 候補集合に無い ID は棄却し、選択待ち状態を変更しない。
+/// 候補集合に無い ID は棄却し、選択待ち状態を変更しない。
 #[test]
 fn choice_with_id_outside_candidates_is_rejected() {
     let s = steady_with_ledger(TalkId(3), 6, &["OnMenu", "choice1"], ChoicePhase::Waiting);
@@ -119,9 +119,9 @@ fn choice_with_id_outside_candidates_is_rejected() {
     );
 }
 
-// --- B. 受理とカスケード第 1 段（規則 2・裁定 1／7） ---
+// --- B. 受理とカスケード第 1 段 ---
 
-/// Req2.1・裁定 1: `On` 始まり ID は任意名 1 段のみ（Ex／無印を先行発火しない）。
+/// `On` 始まり ID は任意名 1 段のみ（Ex／無印を先行発火しない）。
 #[test]
 fn named_choice_emits_only_the_named_event() {
     let s = steady_with_ledger(
@@ -163,7 +163,7 @@ fn named_choice_emits_only_the_named_event() {
     );
 }
 
-/// Req2.2／3.1: 正典形は `OnChoiceSelectEx` が先行し Reference が正典 layout で並ぶ。
+/// 正典形は `OnChoiceSelectEx` が先行し Reference が正典 layout で並ぶ。
 #[test]
 fn canonical_choice_emits_choice_select_ex_with_canonical_layout() {
     let s = steady_with_ledger(TalkId(3), 6, &["choice1"], ChoicePhase::Waiting);
@@ -197,9 +197,9 @@ fn canonical_choice_emits_choice_select_ex_with_canonical_layout() {
     }
 }
 
-// --- C. カスケード応答（規則 3・DD-4） ---
+// --- C. カスケード応答 ---
 
-/// Req4.3／4.6／5.1・DD-4: 応答スクリプトは `[ResolveChoice, StartTalk]` をこの順で同一バッチに載せる。
+/// 応答スクリプトは `[ResolveChoice, StartTalk]` をこの順で同一バッチに載せる。
 #[test]
 fn cascade_value_emits_resolve_then_start_in_this_order() {
     let s = steady_with_ledger(
@@ -262,7 +262,7 @@ fn cascade_value_emits_resolve_then_start_in_this_order() {
     );
 }
 
-/// Req2.3: 204 かつ残段ありなら次段（無印・Ref0=ID）を発行する。
+/// 204 かつ残段ありなら次段（無印・Ref0=ID）を発行する。
 #[test]
 fn cascade_no_content_advances_to_choice_select_stage() {
     let s = steady_with_ledger(
@@ -296,7 +296,7 @@ fn cascade_no_content_advances_to_choice_select_stage() {
     assert_eq!(next.next_talk_id, 6, "204 は採番しない");
 }
 
-/// Req2.3／5.3: 204 かつ残段なしなら選択解決のみ（起動なし）。
+/// 204 かつ残段なしなら選択解決のみ（起動なし）。
 #[test]
 fn cascade_no_content_at_last_stage_resolves_without_start() {
     let s = steady_with_ledger(
@@ -381,7 +381,7 @@ fn unexpected_reply_resolves_last_stage_and_cancels_timeout_like_no_content() {
     }
 }
 
-// --- D. 完了状態（一回性・Req1.1／4.6／5.4） ---
+// --- D. 完了状態（一回性） ---
 
 /// 1 回の選択確定は高々 1 カスケード・高々 1 選択解決・高々 1 起動要求しか生じない（任意名形）。
 #[test]
@@ -445,7 +445,7 @@ fn one_choice_yields_at_most_one_cascade_resolve_and_start() {
     assert!(s4.choice.is_none(), "解決後に帳簿は復活しない");
 }
 
-/// 正典形の 2 段が両方 204 でも、選択解決はちょうど 1 回・起動要求は 0（Req2.3／4.2／5.3）。
+/// 正典形の 2 段が両方 204 でも、選択解決はちょうど 1 回・起動要求は 0。
 #[test]
 fn canonical_two_stage_204_yields_single_resolve_and_no_start() {
     let s = steady_with_ledger(TalkId(3), 6, &["choice1"], ChoicePhase::Waiting);
@@ -495,7 +495,7 @@ fn canonical_two_stage_204_yields_single_resolve_and_no_start() {
     assert!(s3.choice.is_none());
 }
 
-/// Req2.4: 先行段が応答スクリプトを返したら以降の段を発行しない（正典形の短絡）。
+/// 先行段が応答スクリプトを返したら以降の段を発行しない（正典形の短絡）。
 #[test]
 fn canonical_value_at_first_stage_skips_the_remaining_stage() {
     let s = steady_with_ledger(TalkId(3), 6, &["choice1"], ChoicePhase::Waiting);
@@ -528,11 +528,11 @@ fn canonical_value_at_first_stage_skips_the_remaining_stage() {
     assert!(s2.choice.is_none());
 }
 
-/// Req6.1／6.3／6.4・裁定 6: 選択待ち中の周期リクエストは **NOTIFY**（Ref3=`"0"`）で送出され、
+/// 選択待ち中の周期リクエストは **NOTIFY**（Ref3=`"0"`）で送出され、
 /// `Status` に複合値 `talking,choosing` が**正典順**で載る。
 ///
 /// NOTIFY は応答スクリプトを運べない型であり（[`ShioriOutcome::Notified`] のみ）、選択待ち中の
-/// 自発トーク抑止は既存 pump 分岐の構造だけで成立する（Req6.5・新しい抑止機構を作らない）。
+/// 自発トーク抑止は既存 pump 分岐の構造だけで成立する（新しい抑止機構を作らない）。
 #[test]
 fn tick_during_choice_waiting_notifies_with_talking_and_choosing() {
     let now = MonotonicMs(1_000);
@@ -568,7 +568,7 @@ fn tick_during_choice_waiting_notifies_with_talking_and_choosing() {
     );
 }
 
-/// Req6.2: 選択が解決して帳簿が消えた後の周期リクエストからは `choosing` が消える。
+/// 選択が解決して帳簿が消えた後の周期リクエストからは `choosing` が消える。
 ///
 /// 実解決経路（カスケード最終段 204 → `ResolveChoice` 発行・帳簿消去）を通してから pump を
 /// 採る——帳簿を手で消すのではなく、解決の実装が `choosing` を落とすことを固定する。
@@ -616,7 +616,7 @@ fn tick_after_choice_resolution_drops_choosing() {
     );
 }
 
-/// Req6.1・C5: **カスケード各段の GET も** 選択待ち継続中として `choosing` を帯びる。
+/// **カスケード各段の GET も** 選択待ち継続中として `choosing` を帯びる。
 ///
 /// `on_choice`／`on_cascade_reply` は検証・分解のため帳簿を `State` から取り出した状態で
 /// スナップショットを採る。`State::snapshot` をそのまま呼ぶと当該 2 点だけ `choosing` が

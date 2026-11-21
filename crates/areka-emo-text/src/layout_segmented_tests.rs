@@ -5,11 +5,11 @@ use crate::region::TextRegion;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
 
-// ── Task 4.1: 塊先決による折返し（WrapPlan::Segmented・手組み SegmentPlan 注入） ──
+// ── 塊先決による折返し（WrapPlan::Segmented・手組み SegmentPlan 注入） ──
 //
-// budouy 非依存でゲート③の判断分岐を全網羅するため、plan は手組み（from_segments）で
-// 注入する（design「テスト形: 手組み SegmentPlan」）。共通前提: FixedMetrics・font 10 →
-// 全角 'あ' の advance 10・pitch 12。閾値は wordwrappoint x（横書き）／y（縦書き）。
+// budouy 非依存で折返し判定の判断分岐を網羅するため、plan は手組み（from_segments）で注入する。
+// 共通前提: FixedMetrics・font 10 → 全角 'あ' の advance 10・pitch 12。
+// 閾値は wordwrappoint x（横書き）／y（縦書き）。
 
 /// 各グリフの (行 index, 行内位置, 文字) を配置順に平坦化する（prefix 一致比較用）。
 fn flat_glyphs(lines: &[PositionedLine]) -> Vec<(usize, f32, &str)> {
@@ -20,7 +20,7 @@ fn flat_glyphs(lines: &[PositionedLine]) -> Vec<(usize, f32, &str)> {
         .collect()
 }
 
-/// 2.1/2.3: 残り行幅に収まる塊は分割せず現在行へ継続配置する（塊内は追加判定なし）。
+/// 残り行幅に収まる塊は分割せず現在行へ継続配置する（塊内は追加判定なし）。
 /// 行頭の塊 {0,2}（fit）→ 続く塊 {2,2} も残り行幅 30 に収まる → 全 4 グリフが 1 行。
 #[test]
 fn segmented_fits_places_on_current_line_without_split() {
@@ -44,7 +44,7 @@ fn segmented_fits_places_on_current_line_without_split() {
     assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0, 20.0, 30.0]);
 }
 
-/// 2.2: 残り行幅に収まらないが行頭幅には収まる塊は、塊の前で行送りして塊全体を次行頭へ
+/// 残り行幅に収まらないが行頭幅には収まる塊は、塊の前で行送りして塊全体を次行頭へ
 /// 移す（途中分割しない）。塊 {4,2}（seg_sum 20）は残り行幅 10 に入らず行頭幅 50 に入る。
 /// CharByChar（5+1 割り）との対比で ON が効いていることを示す。
 #[test]
@@ -86,7 +86,7 @@ fn segmented_not_fit_breaks_before_whole_segment() {
     assert_ne!(seg_lines, char_lines, "ON（塊維持）が char 割りと異なる");
 }
 
-/// 2.2/2.3: 境界値の檻（`<=` vs `<`）。塊の advance 合計がちょうど残り行幅に一致すれば
+/// 境界値の檻（`<=` vs `<`）。塊の advance 合計がちょうど残り行幅に一致すれば
 /// 残留、1 グリフ増えて超えれば塊前で行送り。prefix {0,2}（inline 20・残り行幅 30）に対し、
 /// seg_sum 30（={2,3}）は残留・seg_sum 40（={2,4}）は行送り。
 #[test]
@@ -127,10 +127,9 @@ fn segmented_boundary_exactly_fits_stays_else_breaks() {
     assert_eq!(over[1].glyphs.len(), 4, "塊 {{2,4}} は分割されず次行へ");
 }
 
-/// 2.1/2.3（counter）: 先決済み塊の内部では追加判定を通さず配置する（残グリフ数カウンタ）。
+/// 先決済み塊の内部では追加判定を通さず配置する（残グリフ数カウンタ）。
 /// threshold 30 で塊 {2,3}（seg_sum 30）が break-before で行 1 頭へ移り、3 グリフが分割
-/// されずに行 1 へ連続配置される。CharByChar は g2 まで行 0（塊を割る）——counter による
-/// 塊維持が char 割りと異なることを示す。
+/// されずに行 1 へ連続配置される。CharByChar は g2 まで行 0（塊を割る）。
 #[test]
 fn segmented_predecided_segment_is_not_split_inside() {
     let region = TextRegion::resolve(
@@ -170,7 +169,7 @@ fn segmented_predecided_segment_is_not_split_inside() {
     assert_ne!(seg, ch, "counter による塊維持が char 割りと異なる");
 }
 
-/// 4.2: plan に被覆されないグリフ（不整合・長大塊継続）は既存の文字単位規則で配置される
+/// plan に被覆されないグリフ（不整合・長大塊継続）は既存の文字単位規則で配置される
 /// （優しい縮退）。塊 {0,2} のみ被覆・g2..g5 は非被覆 → 出力は純 CharByChar と完全一致。
 #[test]
 fn plan_non_covered_glyphs_fall_back_to_char_rule() {
@@ -207,9 +206,9 @@ fn plan_non_covered_glyphs_fall_back_to_char_rule() {
     assert_eq!(seg[1].glyphs.len(), 1);
 }
 
-/// 7.1/8.3（INV-1/INV-2）: 塊先決は visible_count に依存しない。同一 items+plan で visible を
-/// 段階的に増やすと、各段階の配置は全量出力の先頭 v グリフ（行所属・行内位置とも）に一致する
-/// （リフロー跳び不発生）。核心: g4（塊 {4,2} 先頭）は g5 が不可視でも行 1 へ落ちる
+/// 塊先決は visible_count に依存しない。同一 items+plan で visible を段階的に増やすと、
+/// 各段階の配置は全量出力の先頭 v グリフ（行所属・行内位置とも）に一致する（リフロー跳びなし）。
+/// 核心: g4（塊 {4,2} 先頭）は g5 が不可視でも行 1 へ落ちる
 /// （seg_sum が全文 items から算出されるため——可視部分列で計算する実装なら行 0 に留まり失敗）。
 #[test]
 fn predecision_is_independent_of_visible_count() {
@@ -246,7 +245,7 @@ fn predecision_is_independent_of_visible_count() {
             "visible {v}: 配置が全量出力の prefix と不一致（リフロー跳び）"
         );
     }
-    // 核心: visible 5（g5 不可視）でも g4 は行 1（塊先決は全文由来・INV-1）。
+    // 核心: visible 5（g5 不可視）でも g4 は行 1（塊先決は全文由来）。
     let v5 = LayoutEngine::layout(
         &items,
         5,
@@ -261,7 +260,7 @@ fn predecision_is_independent_of_visible_count() {
     assert_eq!(v5[1].glyphs[0].inline_pos, 0.0);
 }
 
-/// 6.1/6.2: 縦書き（vertical_rl/vertical_lr）でも軸読み替えのみで同一の塊先決式が成立する。
+/// 縦書き（vertical_rl/vertical_lr）でも軸読み替えのみで同一の塊先決式が成立する。
 /// 同一 items+plan で塊 {4,2} が 2 列目へ移り（4+2）、行内軸の先決（塊割れ点・行内位置）が
 /// rl/lr で完全一致する（新規 mode 分岐なし・単一読み替え規則）。
 #[test]
@@ -292,13 +291,13 @@ fn segmented_same_rule_in_vertical_modes() {
     );
 }
 
-// ── Task 4.2: 長大塊の文字単位縮退（WrapPlan::Segmented・design System Flows H-No→D→C） ──
+// ── 長大塊の文字単位縮退（WrapPlan::Segmented） ──
 //
 // 縮退は `seg_sum > cap_full`（行頭からでも 1 行に収まらない塊）に限って発火し、当該塊のみ
-// 既存の文字単位規則へ委譲する（design「縮退は塊に閉じる」3.3）。共通前提は 4.1 と同じ
+// 既存の文字単位規則へ委譲する。共通前提は上と同じ
 // FixedMetrics・font 10（全角 'あ' advance 10）。
 
-/// 3.1: 縮退は `seg_sum > cap_full` の塊に限る。長大塊 {0,5}（seg_sum 50 > cap_full 30）は
+/// 縮退は `seg_sum > cap_full` の塊に限る。長大塊 {0,5}（seg_sum 50 > cap_full 30）は
 /// 文字単位で複数行へ割られ（塊維持でも欠落でもない）、直後の収まる塊 {5,2} は縮退せず塊ごと
 /// 1 行へ載る。threshold 30・font 10。
 #[test]
@@ -337,7 +336,7 @@ fn segmented_degrades_only_when_exceeding_cap_full() {
     assert_eq!(flat_glyphs(&lines).len(), 7);
 }
 
-/// 3.2: 縮退中も行頭 1 グリフは閾値超過でも配置し（無限折返し回避）、呼出は必ず停止して
+/// 縮退中も行頭 1 グリフは閾値超過でも配置し（無限折返し回避）、呼出は必ず停止して
 /// 全グリフを配置する。極小閾値 3・font 10（'あ' advance 10 > threshold）で 1 グリフ/行。
 /// char モードの `single_glyph_exceeding_threshold_is_placed_per_line` を Segmented で鏡写す。
 #[test]
@@ -371,7 +370,7 @@ fn segmented_degrade_places_line_head_glyph_and_terminates() {
     assert_eq!(flat_glyphs(&lines).len(), 3);
 }
 
-/// 3.3: 縮退は当該塊に閉じ、直後の塊で通常の塊単位判定が再開する。長大塊 {0,4}（seg_sum 40 >
+/// 縮退は当該塊に閉じ、直後の塊で通常の塊単位判定が再開する。長大塊 {0,4}（seg_sum 40 >
 /// cap_full 30）は char 割り、続く塊 {4,3}（seg_sum 30 == cap_full 30）は縮退を引き継がず塊前
 /// 行送りで塊ごと次行へ載る。char モードなら g4 は行 1 に残る（塊維持でない）——差分が再開の証左。
 #[test]
@@ -416,7 +415,7 @@ fn segmented_degrade_scoped_to_segment_resumes_next() {
     assert_ne!(seg, ch, "後続塊で塊単位判定が再開＝char 全割りと異なる");
 }
 
-/// 8.3: 極端に長い塊でも全グリフが配置され表示が破綻しない（panic せず停止し無損失）。
+/// 極端に長い塊でも全グリフが配置され表示が破綻しない（panic せず停止し無損失）。
 /// 50 グリフ単一塊・threshold 30 → char 縮退で複数行に割れ、全グリフがちょうど一度ずつ現れる。
 #[test]
 fn segmented_extremely_long_segment_places_all_glyphs() {
@@ -460,20 +459,18 @@ fn segmented_extremely_long_segment_places_all_glyphs() {
     );
 }
 
-// ── Task 4.4: 保留改行との整合とリフロー跳び不発生（WrapPlan::Segmented） ──
+// ── 保留改行との整合とリフロー跳び不発生（WrapPlan::Segmented） ──
 //
-// ゲート順序（①可視打切り→②保留フラッシュ→③折返し判定→④配置）は 4.1 で確立済み。
-// ここではその順序契約の帰結を檻化する: 保留改行の実体化直後は行頭（inline_pos ==
-// inline_start）ゆえ塊先決が「塊先頭かつ残り行幅最大（cap_rem == cap_full）」で走り
-// （design System Flows「保留フラッシュとの順序」5.3）、deferred newline の意味論
-// （遅延・累算・蒸発）は ON でも一切変わらず（5.1/5.2）、typewriter リビール進行の
-// 全段階で配置済みグリフの行が動かない（INV-2・7.2/7.3）。共通前提は 4.1/4.2 と同じ
-// FixedMetrics・font 10（全角 'あ' advance 10・pitch 12）。
+// 判定の順序は ①可視打切り→②保留フラッシュ→③折返し判定→④配置。
+// 保留改行の実体化直後は行頭（inline_pos == inline_start）なので、塊先決は
+// 「塊先頭かつ残り行幅最大（cap_rem == cap_full）」で走る。deferred newline の意味論
+// （遅延・累算・蒸発）は塊先決でも変わらず、typewriter リビール進行の全段階で
+// 配置済みグリフの行が動かない。共通前提は上と同じ。
 
-/// 5.3: 保留改行の実体化直後の行頭で塊先決が走る。`[塊A, \n, 塊B, 塊C]`（run2 = 塊B+塊C）で、
+/// 保留改行の実体化直後の行頭で塊先決が走る。`[塊A, \n, 塊B, 塊C]`（run2 = 塊B+塊C）で、
 /// 保留改行が run2 を 2 行目行頭へ送り、そこで塊 C が塊ごと 3 行目へワードラップされる
-/// （フラッシュ後の行で塊単位判定が効いている証左）。block 前進は `pitch × Σratio` で OFF と
-/// 同一（char 経路の 2 行目 top と一致）。CharByChar は run2 を char 割りして塊 C を割る。
+/// （フラッシュ後の行で塊単位判定が効いている）。block 前進は `pitch × Σratio` で char 経路と
+/// 同一（2 行目 top が一致）。CharByChar は run2 を char 割りして塊 C を割る。
 #[test]
 fn segmented_predecision_runs_at_line_head_after_pending_flush() {
     let region = TextRegion::resolve(
@@ -537,7 +534,7 @@ fn segmented_predecision_runs_at_line_head_after_pending_flush() {
     );
 }
 
-/// 5.1/5.2: deferred newline の意味論（遅延・累算・蒸発）は ON でも不変。ワードラップが
+/// deferred newline の意味論（遅延・累算・蒸発）は ON でも不変。ワードラップが
 /// 発火しない（全塊が収まる）入力では Segmented 出力は CharByChar 出力と完全一致する
 /// ——segmentation は改行意味論を変えず、行内の折返し粒度だけを担う。
 /// (a) 末尾保留改行の蒸発（空行なし）・(b) 連続 `\n\n` の単一累算フラッシュ。
@@ -617,7 +614,7 @@ fn deferred_newline_semantics_unchanged_under_segmented() {
     );
 }
 
-/// 7.2/7.3（INV-2 の核心）: 保留改行 + ワードラップが共存する入力で、可視グリフ数を 0 から
+/// 保留改行 + ワードラップが共存する入力で、可視グリフ数を 0 から
 /// 段階的に増やしても、各段階の配置は全量出力の先頭 v グリフ（行所属・行内位置とも）に
 /// 常に一致する（配置済みグリフの行が後から動かない＝リフロー跳び不発生）。
 /// `[塊A(2), \n, 塊B(3), 塊C(3)]`・threshold 50 で塊C は残り行幅に入らず塊ごと 3 行目へ。
@@ -662,7 +659,7 @@ fn segmented_prefix_stable_across_pending_flush_and_wrap() {
             "visible {v}: 配置が全量出力の prefix と不一致（リフロー跳び発生）"
         );
     }
-    // 核心の明示: visible 6（g5 のみ可視）で g5 は 3 行目行頭（塊C 先決は全文由来・INV-1/INV-2）。
+    // 核心の明示: visible 6（g5 のみ可視）で g5 は 3 行目行頭（塊C 先決は全文由来）。
     let v6 = LayoutEngine::layout(
         &items,
         6,
@@ -680,7 +677,7 @@ fn segmented_prefix_stable_across_pending_flush_and_wrap() {
     );
 }
 
-/// 6.1/6.2 × 7.2/7.3: 縦書き（vertical_rl）でも保留改行 + ワードラップ共存下で prefix 安定性が
+/// 縦書き（vertical_rl）でも保留改行 + ワードラップ共存下で prefix 安定性が
 /// 成立する（軸読み替えのみ・新規 mode 分岐なし）。横書きと同一 items+plan を vertical_rl で
 /// 段階リビールし、各段階の配置（列所属・行内軸位置）が全量出力の prefix に一致する。
 #[test]
@@ -724,7 +721,7 @@ fn segmented_prefix_stable_in_vertical_mode() {
     }
 }
 
-/// 指摘 5（空行を出さない裁定）: `\_l[50,]` の直後の塊は、行が空なので「塊の前で行送り」の枝に
+/// `\_l[50,]` の直後の塊は、行が空なので「塊の前で行送り」の枝に
 /// 入らず、字の無い行を出さない。塊 {0,6}（seg_sum 60）は残り 50 に入らず行頭からの 100 には
 /// 入るが、行が空なので長い塊の枝（文字の規則）へ落ちる＝最初の字は x＝50 のまま・6 字目で折れる。
 #[test]
@@ -759,11 +756,10 @@ fn segmented_after_cursor_move_emits_no_blank_line() {
     assert_eq!(inline_positions(&lines[1]), vec![0.0]);
 }
 
-/// 指摘 9（塊の字幅の合計を今の位置からにする）: 塊 3,000 の大きな全文で、配置の結果が直す前と
-/// 同じ。字幅は半角 5・全角 10 を混ぜ、改行と `\_l` を挟み（列の位置と字の番号がずれる）、見た目
-/// （大きさ 10／14）を字の番号で変える（見た目を通し番号で引くことも確かめる）。
-/// 期待値は直す前のコード（`segment_advance_sum` が全文の先頭から数えていたとき）で測って固定した。
-/// 値は数え方に依らないので、合計が見た項目の数（`SEGMENT_SUM_VISITS`）が項目数に比例することも見る。
+/// 塊の字幅の合計は今の位置から数える: 塊 3,000 の大きな全文で、配置の結果が全文の先頭から
+/// 数えた値と同じ。字幅は半角 5・全角 10 を混ぜ、改行と `\_l` を挟み（列の位置と字の番号が
+/// ずれる）、見た目（大きさ 10／14）を字の番号で変える。値は数え方に依らないので、
+/// 合計が見た項目の数（`SEGMENT_SUM_VISITS`）が項目数に比例することも見る。
 #[test]
 fn segmented_large_text_layout_unchanged_by_linear_sum() {
     let region = TextRegion::resolve(

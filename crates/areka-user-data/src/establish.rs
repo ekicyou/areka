@@ -1,6 +1,5 @@
 //! 実物を読む口（[`probe`]）・書けるかの確かめの唯一の部品（[`open_dir_for_add`]）と、
-//! プロセスのはじめに 1 回だけ走る準備（[`establish`]）（spec: areka-P0-user-data-root
-//! 要件 1.1・1.2・1.5・1.6・2.2・2.4・5.4・5.5）。利用者には何も尋ねない。記録の文は ASCII。
+//! プロセスのはじめに 1 回だけ走る準備（[`establish`]）。利用者には何も尋ねない。記録の文は ASCII。
 
 use crate::{
     AppProfile, CopyDone, Decision, Layout, Reason, Signals, USER_ROOT_ENV, Unlocatable, UserRoot,
@@ -125,7 +124,7 @@ pub(crate) fn establish_from(
     layout
 }
 
-/// 読み取りだけの走りの準備（spec: readonly-mode 要件 4.1・4.2・4.5）: probe → decide → 記録。
+/// 読み取りだけの走りの準備: probe → decide → 記録。
 /// 書ける根は作らず（無ければ隣の形）、記憶も写さない。
 /// `profile_env` は形を変えない（空・相対の値の記録だけ・記憶の置き場は [`readonly_app_profile_dir`]）。
 pub fn establish_readonly(exe_dir: Option<&Path>, profile_env: Option<&OsStr>) -> Layout {
@@ -152,7 +151,7 @@ pub fn establish_readonly_from(signals: &Signals, exe_dir: Option<&Path>) -> Lay
     layout
 }
 
-/// 読み取りだけの走りの記憶の置き場（spec: readonly-mode 要件 4.3・11.2）。
+/// 読み取りだけの走りの記憶の置き場。
 /// 使える `profile_env` が在ればそれ（空・相対は捨てる）。写すはずの場面（[`migrate_source`]）なら写す元をそのまま返す。
 /// ほかは [`app_profile_dir`](crate::app_profile_dir) と同じ値。
 pub fn readonly_app_profile_dir(
@@ -175,7 +174,7 @@ pub fn readonly_app_profile_dir(
     crate::app_profile_dir(profile_env, layout, exe_dir)
 }
 
-/// 記憶の置き場を決めるだけ（作らない・写さない。spec: bridge-store-user-root 要件 2.1〜2.9）。
+/// 記憶の置き場を決めるだけ（作らない・写さない）。
 /// 判断と記録は [`establish`] と分け合う。`signals` は呼び手が [`probe`] で詰める（テストは組んで渡す）。
 pub fn locate_app_profile(
     signals: &Signals,
@@ -275,7 +274,7 @@ fn create(root: UserRoot, reason: &Reason) -> Option<UserRoot> {
 }
 
 /// 実行ファイルの隣の記憶を書ける根へ一度だけ写す。隣は読むだけ。
-/// 写せなくても置き場は書ける根の `profile\areka` のまま（要件 5.5）。
+/// 写せなくても置き場は書ける根の `profile\areka` のまま。
 fn migrate(root: &Path, exe_dir: &Path) {
     let Some((from, to)) = migrate_source(root, exe_dir) else {
         return;

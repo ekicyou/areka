@@ -1,8 +1,8 @@
-//! スコープの倍率と DPI の読み手（spec shell-scale-linkage 要件 3・4）。
+//! スコープの倍率と DPI の読み手。
 //!
 //! 表示層が表示成立点で決めた（倍率・その倍率を出した DPI）を、スコープごとの表に持ち、
 //! `currentghost.scope(ID).scaling` などの 4 つの名前に答える。値はメモリの表だけで、
-//! 写しにも保存にも載せない（要件 4.6）。
+//! 写しにも保存にも載せない。
 
 use std::sync::Arc;
 #[cfg(test)]
@@ -50,12 +50,12 @@ impl ScopeScaleSource {
 
 impl PullSource for ScopeScaleSource {
     fn read(&self, path: &PropPath) -> Option<String> {
-        // 負の番号・書式の誤り・窓の無い番号は値なし（要件 3.9）。
+        // 負の番号・書式の誤り・窓の無い番号は値なし。
         let ScopeSelector::Index(scope) = scope_selector(path)? else {
             return None;
         };
         let scope = u32::try_from(scope).ok()?;
-        // 鍵は値を写す間だけ持つ。poison でも中身で続ける（要件 4.3）。
+        // 鍵は値を写す間だけ持つ。poison でも中身で続ける。
         let applied = self
             .table
             .read()

@@ -113,8 +113,7 @@ fn dau_charset_only_honoured_as_last_field_of_first_entry() {
     assert!(w.is_empty());
 }
 
-/// ゴーストの更新の一覧に載ったゴーストの中のバルーンのファイル（`balloon/<名>/...`）は、他の下の段の
-/// パスと同じく拒まない（spec: areka-P0-ghost-inner-balloon 要件 8.1・8.2）。
+/// ゴーストの更新の一覧に載ったゴーストの中のバルーンのファイル（`balloon/<名>/...`）は、他のパスと同じく拒まない。
 #[test]
 fn ghost_inner_balloon_paths_are_accepted() {
     let lines: &[&[&str]] = &[

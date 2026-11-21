@@ -17,7 +17,7 @@ use bevy_ecs::world::World;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
-// 中で記録を出す私有の関数は渡し口から同じ名前で引く（設計 D3 ⑷）。
+// 中で記録を出す私有の関数は渡し口から同じ名前で引く。
 use areka_runtime::balloon_visibility::phase::test_support::{
     collect_observations, emit_visibility_logs, notify_timeout, observe_scope_boxes,
 };
@@ -25,12 +25,12 @@ use areka_runtime::balloon_visibility::phase::test_support::{
 #[cfg(test)]
 #[path = "balloon_visibility_phase_tests.rs"]
 mod tests;
-// 隠れたバルーンが次の台詞の最初の文字とともに現れること（areka-P0-balloon-reappear-short-talk）。
+// 隠れたバルーンが次の台詞の最初の文字とともに現れること。
 // 本物の文字の層と本物の観測の収集を通し、場面ごとの各フレームの行動と記録を見る決定論テスト。
 #[cfg(test)]
 #[path = "balloon_visibility_phase_reappear_tests.rs"]
 mod reappear_tests;
-// 観測と発行に箱をつなぐ配線（areka-P0-shell-balloon task 10.3）。
+// 観測と発行に箱をつなぐ配線。
 #[cfg(test)]
 #[path = "balloon_visibility_phase_box_tests.rs"]
 mod box_tests;

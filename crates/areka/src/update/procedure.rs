@@ -1,8 +1,8 @@
-//! 更新の手続き（要求 1 件の一周・対象 1 つの一周。design「手続き（`update/procedure.rs`）」）。
+//! 更新の手続き（要求 1 件の一周・対象 1 つの一周）。
 //!
 //! 外とのやり取りは口 [`UpdatePorts`] の 5 つだけ（イベントを送って応えを待つ・リソースを 1 回
 //! 照会する・エンジンを 1 周回す・読み直しを頼む・標準の手続きが始まったと知らせる）。本番の口は
-//! 背景スレッドの口（6.1）、テストは偽の口。手続きは告知（`alert`）を呼ばない（要件 4.1）。
+//! 背景スレッドの口、テストは偽の口。手続きは告知（`alert`）を呼ばない。
 
 use std::path::Path;
 
@@ -32,8 +32,8 @@ pub(crate) trait UpdatePorts {
     fn request_reload(&self, ghost_dir: &Path, tail: Vec<(&'static str, Vec<String>)>);
     /// 標準の手続きが始まったと窓口へ知らせる（`OnUpdateProcessExec` の段を抜けた直後・要求 1 件につき高々 1 回）。
     fn standard_started(&self);
-    /// 照会が通った後・対象を扱う前に、対象のフォルダを書ける所へ替える（本番はバルーンの写し・
-    /// spec: areka-P0-user-data-root 要件 4.4。照会で依頼をやめたときは呼ばない）。既定は何もしない。
+    /// 照会が通った後・対象を扱う前に、対象のフォルダを書ける所へ替える（本番はバルーンの写し）。
+    /// 照会で依頼をやめたときは呼ばない。既定は何もしない。
     fn prepare_targets(&self, _targets: &mut [TargetSpec]) {}
 }
 
@@ -74,7 +74,7 @@ pub(crate) struct OrderEnd {
     pub reload_requested: bool,
 }
 
-/// 要求 1 件を並んだ順に扱う（design「要求 1 件の一周」）。
+/// 要求 1 件を並んだ順に扱う。
 pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEnd {
     tracing::info!(
         event = "update_order_begin",
@@ -85,7 +85,7 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
     );
     let mut end = OrderEnd::default();
 
-    // メニューからだけ `OnUpdateProcessExec`（要件 1.12・1.13）。
+    // メニューからだけ `OnUpdateProcessExec`。
     if order.reason == UpdateReason::Manual {
         match send(
             ports,
@@ -137,7 +137,7 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
     let mut targets = order.targets.clone();
     ports.prepare_targets(&mut targets);
 
-    // 後送りの列（決めたこと 21・要件 2.16）: ゴーストの成功の締めを取っておき、最後に総括を足す。
+    // 後送りの列: ゴーストの成功の締めを取っておき、最後に総括を足す。
     let mut tail: Vec<(&'static str, Vec<String>)> = Vec::new();
     for spec in &targets {
         let target_end = run_target(spec, order.reason, &resources, numbering, ports, &mut tail);
@@ -154,7 +154,7 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
         }
     }
 
-    // 総括を列の最後へ（飛ばした対象は載せない・全部飛ばせば列は空で送らない。要件 3・1.10）。
+    // 総括を列の最後へ（飛ばした対象は載せない・全部飛ばせば列は空で送らない）。
     let pairs: Vec<(&TargetSpec, &TargetEnd)> = targets.iter().zip(&end.ends).collect();
     let summary = refs::summary_refs(order.summary, &pairs);
     if summary.is_empty() {
@@ -173,7 +173,7 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
     tail.push((id, summary));
     let count = tail.len();
 
-    // changed が 1 つでもあれば列を添えて読み直しを頼む（列は送らない・要件 5.2・5.4）。
+    // changed が 1 つでもあれば列を添えて読み直しを頼む（列は送らない）。
     if end.ends.iter().any(|e| matches!(e, TargetEnd::Changed(_))) {
         tracing::debug!(
             event = "update_tail_deferred",
@@ -191,7 +191,7 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
         return end;
     }
 
-    // 読み直さないときは列を今のゴーストへ順に送る（閉じたら残りを捨てる・要件 3.1・7.4）。
+    // 読み直さないときは列を今のゴーストへ順に送る（閉じたら残りを捨てる）。
     for (id, references) in tail {
         if send(ports, id, references) == Raised::Closed {
             tracing::warn!(
@@ -214,7 +214,7 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
 }
 
 /// 対象 1 つの一周（更新先を解く → 始まり → エンジン → 締め 1 件）。ゴーストの成功の締め
-/// （`OnUpdateComplete`）はその場で送らずに後送りの列 `deferred` へ積む（要件 2.16）。
+/// （`OnUpdateComplete`）はその場で送らずに後送りの列 `deferred` へ積む。
 fn run_target(
     spec: &TargetSpec,
     reason: UpdateReason,
@@ -226,7 +226,7 @@ fn run_target(
     let tail = Tail::new(spec.kind, reason);
     let names = EventNames::for_kind(spec.kind);
 
-    // ゴーストは照会の値 → descript.txt、他は descript.txt（要件 1.9）。
+    // ゴーストは照会の値 → descript.txt、他は descript.txt。
     let resource = match spec.kind {
         TargetKind::Ghost => resources
             .homeurl
@@ -254,7 +254,7 @@ fn run_target(
         "[update] 対象の更新を始めます"
     );
 
-    // Reference1 は絶対パス（要件 2.4）。
+    // Reference1 は絶対パス。
     let dir = std::path::absolute(&spec.dir).unwrap_or_else(|error| {
         tracing::warn!(
             event = "update_absolute_failed",
@@ -268,7 +268,7 @@ fn run_target(
         return done(spec, TargetEnd::Abandoned);
     }
 
-    // 観測の中で進捗をイベントへ写して送る。閉じた後は送らない（要件 5.7）。
+    // 観測の中で進捗をイベントへ写して送る。閉じた後は送らない。
     let mut closed = false;
     let mut observe = |p: &Progress| {
         tracing::debug!(event = "update_progress", progress = ?p, "[update] 進捗");

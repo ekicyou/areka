@@ -1,4 +1,4 @@
-//! 配り口が印の真の台本だけ strict の束ねを渡すことの檻（spec: mcp-strict-errors 要件 3.5・task 6.1）。
+//! 配り口が印の真の台本だけ strict の束ねを渡すことの檻。
 
 use super::*;
 use crate::test_log_capture::capture;

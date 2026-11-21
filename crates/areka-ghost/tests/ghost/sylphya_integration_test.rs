@@ -1,34 +1,29 @@
-//! sylphya × ghost 結線 統合テスト（task 8.4・design「ghost 結線 Validation」・
-//! Testing Strategy → Integration Tests 2（ghost 結線）＋4（prefetch→初回 talk 順序））。
+//! sylphya × ghost 結線 統合テスト。
 //!
-//! 8.2 で sylphya（統一プロパティシステム）が ghost boot 系列へ結線された。本ファイルは
-//! その end-to-end 結線を実 boot（mock shiori backend）で駆動し、下記 3 檻で固定する:
+//! sylphya（統一プロパティシステム）は ghost boot 系列へ結線されている。本ファイルはその end-to-end 結線を
+//! 実 boot（mock shiori backend）で駆動し、下記 3 点で固定する:
 //!
-//! 1. **boot 後の reader 実値解決**（R4.3/4.4/4.5/5.1/9.4）: descript 由来の selfname 系
-//!    （`selfname`／`selfname2`／`keroname`）と baseware（`baseware.name`＝実値 `"areka"`／
-//!    `baseware.version`＝areka-ghost の `CARGO_PKG_VERSION`）が、boot が据えた sylphya reader
-//!    ＋ゴースト自身の `AskerId` から実値解決される（Degraded／NotFound でない）。
-//! 2. **shutdown 全段成功（sylphya 段含む）**（R6.1/6.4/6.5）: boot→shutdown が全段
-//!    （kanade→dispatcher→shiori→relay 2 本→sylphya Close＋join）を完走し `Ok(())` を返す。
-//! 3. **username=Value → 初回 talk スナップショットに必ず入る（barrier フェンス・レース非依存）**
-//!    （R2.1/2.2/4.2 ＋ prefetch→初回 talk 順序）: mock shiori が resource `username` へ
-//!    `Value("SomeUser")` を返す構成で boot すると、prefetch sink の barrier が publish を
-//!    初回 talk 前にフェンスするため、初回 talk が発火した時点の `talk_snapshot`（＝
-//!    `from_sylphya_provider` が刻印する像そのもの）に `username = "SomeUser"` が**必ず**含まれる
-//!    （sleep／retry なしで決定論成立）。companion で 204（NoContent）→ snapshot 非包含も固定する。
+//! 1. **boot 後の reader 実値解決**: descript 由来の selfname 系（`selfname`／`selfname2`／`keroname`）と baseware
+//!    （`baseware.name`＝実値 `"areka"`／`baseware.version`＝areka-ghost の `CARGO_PKG_VERSION`）が、boot が据えた
+//!    sylphya reader＋ゴースト自身の `AskerId` から実値解決される（Degraded／NotFound でない）。
+//! 2. **shutdown 全段成功（sylphya 段含む）**: boot→shutdown が全段（kanade→dispatcher→shiori→relay 2 本→
+//!    sylphya Close＋join）を完走し `Ok(())` を返す。
+//! 3. **username=Value → 初回 talk スナップショットに必ず入る（barrier フェンス・レース非依存）**: mock shiori が
+//!    resource `username` へ `Value("SomeUser")` を返す構成で boot すると、prefetch sink の barrier が publish を
+//!    初回 talk 前にフェンスするため、初回 talk が発火した時点の `talk_snapshot`（＝`from_sylphya_provider` が刻印する
+//!    像そのもの）に `username = "SomeUser"` が**必ず**含まれる（sleep／retry なしで決定論成立）。companion で
+//!    204（NoContent）→ snapshot 非包含も固定する。
 //!
 //! ## ゴーストの AskerContext の入手
-//! reader 照会は問い合わせ元 [`AskerContext`] を第一級で要する（R2.6）。本番 boot は
-//! `ghost_asker_id(&mount.shiori.dir)` で構築し、`mount.shiori.dir` は
-//! `areka_parsers::package::shiori_dir` が合成する（正準化しない）。ゆえにテストは同じ導出
-//! ——`ghost_asker_id(&shiori_dir(&root))`——で production と**同一** asker を本番同型に再構築できる（GhostParts は asker を露出しない）。
+//! reader 照会は問い合わせ元 [`AskerContext`] を第一級で要する。本番 boot は `ghost_asker_id(&mount.shiori.dir)` で
+//! 構築し、`mount.shiori.dir` は `areka_parsers::package::shiori_dir` が合成する（正準化しない）。ゆえにテストは同じ導出
+//! ——`ghost_asker_id(&shiori_dir(&root))`——で production と**同一** asker を再構築できる（GhostParts は asker を露出しない）。
 //!
 //! ## mock shiori の username=Value 台本化
-//! username prefetch は kanade boot 系列が resource id `"username"`（`resource_get`・
-//! `ALLOWED_RESOURCE_IDS`）へ GET する。mock backend が `get("username")` へ `Ok(Some("SomeUser"))`
-//! を返すと、boot が kanade へ注入した実 `ResourceSink`（`make_username_resource_sink`）が
-//! `publish_shiori(ghost_asker, "username", Some("SomeUser"))`＋`barrier()` を実行し、初回 talk 前に
-//! 反映をフェンスする。
+//! username prefetch は kanade boot 系列が resource id `"username"`（`resource_get`・`ALLOWED_RESOURCE_IDS`）へ GET する。
+//! mock backend が `get("username")` へ `Ok(Some("SomeUser"))` を返すと、boot が kanade へ注入した実 `ResourceSink`
+//! （`make_username_resource_sink`）が `publish_shiori(ghost_asker, "username", Some("SomeUser"))`＋`barrier()` を実行し、
+//! 初回 talk 前に反映をフェンスする。
 
 use std::collections::HashMap;
 
@@ -49,8 +44,7 @@ use crate::spine_e2e_test::{
 };
 
 /// 解決できるゴーストを書いて返す（親の [`write_ghost_fixture_with`]）。ghost の descript.txt の
-/// `sakura.name`／`sakura.name2`／`kero.name` を引数の既知値で書く（selfname 系実値解決の入力・
-/// R4.3/4.4/4.5）。
+/// `sakura.name`／`sakura.name2`／`kero.name` を引数の既知値で書く（selfname 系実値解決の入力）。
 fn write_named_ghost_fixture(
     sakura_name: &str,
     sakura_name2: Option<&str>,
@@ -189,7 +183,7 @@ fn drive_until_first_cue(
 }
 
 // ============================================================================
-// 檻 1: boot → reader が selfname 系＋baseware を実値解決する（R4.3/4.4/4.5/5.1/9.4）
+// 檻 1: boot → reader が selfname 系＋baseware を実値解決する
 // ============================================================================
 
 /// descript の `sakura.name`／`sakura.name2`／`kero.name` を既知値で与えて boot すると、boot が
@@ -216,7 +210,7 @@ fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
             Box::new(RecordingSink::new()),
             Box::new(RecordingSink::new()),
         ],
-        // 本番既定 provider（sylphya 読み口由来）で結線する（8.4 は結線の end-to-end を見る）。
+        // 本番既定 provider（sylphya 読み口由来）で結線する。
         system_vars: SystemVarWiring::FromSylphya,
         app_profile_dir: None,
         ticker: TickerMode::Disabled,
@@ -253,7 +247,7 @@ fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
         "keroname は kero.name の実値へ解決されるべき（R4.5）"
     );
 
-    // --- baseware（大域点付き・実値・R5.1） ---
+    // --- baseware（大域点付き・実値） ---
     assert_eq!(
         parts
             .sylphya_reader
@@ -273,7 +267,7 @@ fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
 }
 
 // ============================================================================
-// 檻 2: shutdown 全段（sylphya 段含む）が成功する（R6.1/6.4/6.5）
+// 檻 2: shutdown 全段（sylphya 段含む）が成功する
 // ============================================================================
 
 /// boot した `GhostRuntime` に `shutdown(System)` を打つと、全段（kanade→dispatcher→ticker（無）→
@@ -308,7 +302,6 @@ fn boot_then_shutdown_all_stages_including_sylphya_succeed() {
 
 // ============================================================================
 // 檻 3: username=Value → 初回 talk スナップショットに必ず入る（barrier フェンス・レース非依存）
-//        （R2.1/2.2/4.2 ＋ prefetch→初回 talk 順序・Integration Test 4）
 // ============================================================================
 
 /// mock shiori が resource `username` へ `Value("SomeUser")` を返す構成で boot する。prefetch sink
@@ -327,7 +320,7 @@ fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
     let records = probe.records();
 
     let backend = MapShioriBackend::new()
-        // username prefetch（OnInitialize 後・OnFirstBoot 前・R4.1）が GET する resource id。
+        // username prefetch（OnInitialize 後・OnFirstBoot 前）が GET する resource id。
         .with_get("username", "SomeUser")
         // OnBoot 挨拶（`\w` 無し＝active slot 装填直後の単一 Tick で全発火・自然終端）。
         .with_get("OnBoot", r"\s[0]hello\e");
@@ -370,7 +363,7 @@ fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
 }
 
 /// companion: mock shiori が resource `username` へ 204（NoContent）を返す構成では、prefetch sink が
-/// 不在を記録するのみ（鏡像へ書かない・既定値は sakura の唯一定義点に残置・R4.2）ゆえ、初回 talk
+/// 不在を記録するのみ（鏡像へ書かない・既定値は sakura の唯一定義点に残置）ゆえ、初回 talk
 /// スナップショットに `username` は**含まれない**（default 適用は下流 sakura の責務）。selfname は
 /// 静的層由来で依然実在することも併せて固定する（不在記録が他フラット値を巻き添えにしない）。
 #[test]

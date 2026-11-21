@@ -105,7 +105,6 @@ pub fn cached_nchittest(
     entity: bevy_ecs::prelude::Entity,
     ecs_world: &Rc<RefCell<EcsWorld>>,
 ) -> Option<LRESULT> {
-    // キャッシュヒット判定
     if let Some(lresult) = lookup(hwnd, screen_point) {
         trace!(
             hwnd = ?hwnd,
@@ -117,7 +116,6 @@ pub fn cached_nchittest(
         return Some(lresult);
     }
 
-    // キャッシュミス: クライアント座標に変換
     let mut pt = POINT {
         x: screen_point.0,
         y: screen_point.1,
@@ -127,7 +125,6 @@ pub fn cached_nchittest(
         return None;
     }
 
-    // World 借用して hit_test 実行
     let hit_result = match ecs_world.try_borrow() {
         Ok(world_ref) => hit_test_in_window(
             world_ref.world(),
@@ -135,7 +132,7 @@ pub fn cached_nchittest(
             PointF::new(pt.x as f32, pt.y as f32),
         ),
         Err(_) => {
-            return None; // 借用失敗時は DefWindowProcW に委譲
+            return None;
         }
     };
 
@@ -144,7 +141,6 @@ pub fn cached_nchittest(
     let button_held = crate::ecs::drag::read_drag_state(|state| state.is_button_held());
     let lresult = answer(hit_result.is_some(), button_held);
 
-    // キャッシュに挿入
     insert(hwnd, screen_point, lresult);
 
     trace!(
@@ -185,19 +181,14 @@ mod tests {
         let screen_point = (100, 200);
         let lresult = LRESULT(1);
 
-        // キャッシュが空の状態でルックアップ
         assert!(lookup(hwnd, screen_point).is_none());
 
-        // キャッシュに挿入
         insert(hwnd, screen_point, lresult);
 
-        // 同じ座標でルックアップ
         assert_eq!(lookup(hwnd, screen_point), Some(lresult));
 
-        // 異なる座標でルックアップ
         assert!(lookup(hwnd, (101, 200)).is_none());
 
-        // クリーンアップ
         clear_nchittest_cache();
     }
 
@@ -216,7 +207,6 @@ mod tests {
         assert_eq!(lookup(hwnd1, screen_point), Some(lresult1));
         assert_eq!(lookup(hwnd2, screen_point), Some(lresult2));
 
-        // クリーンアップ
         clear_nchittest_cache();
     }
 
@@ -243,18 +233,15 @@ mod tests {
         let lresult1 = LRESULT(1);
         let lresult2 = LRESULT(-1);
 
-        // 最初の座標を挿入
         insert(hwnd, point1, lresult1);
         assert_eq!(lookup(hwnd, point1), Some(lresult1));
 
-        // 異なる座標で上書き
         insert(hwnd, point2, lresult2);
         // 古い座標はヒットしない
         assert!(lookup(hwnd, point1).is_none());
         // 新しい座標がヒット
         assert_eq!(lookup(hwnd, point2), Some(lresult2));
 
-        // クリーンアップ
         clear_nchittest_cache();
     }
 

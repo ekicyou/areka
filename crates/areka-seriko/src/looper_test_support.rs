@@ -1,4 +1,4 @@
-//! looper のテストが共有する足場（spec: areka-P0-seriko-trigger-intervals）。
+//! looper のテストが共有する足場。
 
 use super::tests::{cfg, counting_rng};
 use super::*;

@@ -1,4 +1,4 @@
-//! 解決表（design.md「Data Models ／ 解決表」）の**全網羅**テスト（タスク 3.3）。
+//! 解決表の**全網羅**テスト。
 //!
 //! ## 章立て（表の行 → 檻の対応）
 //!
@@ -6,12 +6,12 @@
 //! |---|---|---|
 //! | §1 | 表駆動の全行 × 両軸（[`CASES`]・[`Row`]） | 解決表 11 行すべて |
 //! | §2 | 被覆の機械的主張（行・軸・単位の取りこぼしを赤にする） | 同上（主張そのもの） |
-//! | §3 | 単位が軸に依らない（`@` 相対側） | `@N`（R1.4） |
-//! | §4 | 境界値（`0`・`-0`・`@0`・`@-0`・大きな負値。小数は §1 の `12.5`・`-1.5em` 等） | `N` / `@N`（R9.4） |
-//! | §5 | 正典の記述例 3 つ（縦書きの記述例 2 つ `@-1lh`・`@1em` は §1 の行。列への割り当ては `layout_cursor_vertical_canon_tests.rs` の V3・V4） | 付録 A 逐語（R9.3） |
-//! | §6 | ログ件数（解決は無言・警告は分岐とキャラクターの組ごとに 1 件） | 縮退表 全行（R5.2/5.3/5.5） |
+//! | §3 | 単位が軸に依らない（`@` 相対側） | `@N` |
+//! | §4 | 境界値（`0`・`-0`・`@0`・`@-0`・大きな負値。小数は §1 の `12.5`・`-1.5em` 等） | `N` / `@N` |
+//! | §5 | 正典の記述例 3 つ（縦書きの記述例 2 つ `@-1lh`・`@1em` は §1 の行。列への割り当ては `layout_cursor_vertical_canon_tests.rs` の V3・V4） | 付録 A 逐語 |
+//! | §6 | ログ件数（解決は無言・警告は分岐とキャラクターの組ごとに 1 件） | 縮退表 全行 |
 //!
-//! 縮退表（design.md「Error Handling ／ 縮退表」）の行との対応は §6 の doc に置く。
+//! 縮退表の行との対応は §6 の doc に置く。
 //! 範囲外記録（縮退表 最終行）と警告一回化の**判断分岐そのもの**は姉妹モジュール
 //! `cursor_tag_tests.rs` が持つ（本ファイルは件数の側から重ねて締める）。
 //!
@@ -34,7 +34,7 @@ use log_capture_kit::count_levels;
 
 // ── §1 解決表の全行 × 両軸 ──
 
-/// design.md 解決表の**行 ID**（本ファイルの被覆主張の鍵）。
+/// 解決表の**行 ID**（本ファイルの被覆主張の鍵）。
 ///
 /// 表の 11 行と 1 対 1 に対応する。行を増やしたら [`ALL_ROWS`] にも足さない限り §2 が赤になる。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,7 +110,7 @@ struct Case {
     coord: CursorCoord,
     /// 適用軸。
     axis: CursorAxis,
-    /// 期待値を基点束から導く式（design.md 解決表の右辺そのもの）。
+    /// 期待値を基点束から導く式（解決表の右辺そのもの）。
     expect: fn(&CursorBasis) -> Result<Option<f32>, CursorDegrade>,
 }
 
@@ -388,7 +388,7 @@ const CASES: &[Case] = &[
     ),
 ];
 
-/// 解決表の全行 × 両軸を、**2 つの基点束**で通す（R9.1/9.3/9.4）。
+/// 解決表の全行 × 両軸を、**2 つの基点束**で通す。
 ///
 /// 2 周目の [`discriminating_basis`] は 3 基点が両軸とも相異なるので、共通前提の
 /// `image_size.0 / 2 == current.0`（＝200）という偶然の一致に隠れる取り違えを弁別する。
@@ -431,7 +431,7 @@ fn row_index(row: Row) -> usize {
     }
 }
 
-/// 表の各行が「1 つ以上のケースを持つ」ことを機械で示す（タスク 3.3 の完了条件）。
+/// 表の各行が「1 つ以上のケースを持つ」ことを機械で示す。
 ///
 /// 「全部書いた」で終わらせず、行・軸・単位の 3 方向から取りこぼしを赤にする。
 #[test]
@@ -472,7 +472,7 @@ fn every_resolution_table_row_is_covered_on_both_axes() {
             .any(|c| c.coord == CursorCoord::CenterY && c.axis == CursorAxis::X),
         "`centery` を X 軸に書いたケースが無い"
     );
-    // 単位は絶対・相対の双方 × 両軸で存在すること（R1.1/1.4）。
+    // 単位は絶対・相対の双方 × 両軸で存在すること。
     for unit in ALL_UNITS {
         for axis in [CursorAxis::X, CursorAxis::Y] {
             assert!(
@@ -489,9 +489,9 @@ fn every_resolution_table_row_is_covered_on_both_axes() {
     }
 }
 
-// ── §3 単位は軸に依らない（R1.4） ──
+// ── §3 単位は軸に依らない ──
 
-/// 同じ `@Nlh` を X と Y に与えると、**基点からの移動量が等しい**（R1.4）。
+/// 同じ `@Nlh` を X と Y に与えると、**基点からの移動量が等しい**。
 ///
 /// 絶対側（基点＝`origin`）は姉妹モジュール `cursor_tag_tests.rs` の
 /// `unit_coefficient_is_a_scalar_that_does_not_depend_on_the_axis` が持つ。ここは相対側
@@ -514,7 +514,7 @@ fn relative_line_pitch_moves_the_same_amount_on_both_axes() {
     assert_eq!(x - b.current.0, y - b.current.1);
 }
 
-// ── §4 境界値（R9.4） ──
+// ── §4 境界値 ──
 
 /// `0`・`-0` は基点そのもの、`@0`・`@-0` は現在位置そのもの（両軸）。
 ///
@@ -555,7 +555,7 @@ fn zero_and_negative_zero_land_exactly_on_the_basepoint() {
     }
 }
 
-/// 大きな負値は**字義どおり**返り（内側へ寄せない・R2.6）、範囲外として `debug` 1 件が残る。
+/// 大きな負値は**字義どおり**返り（内側へ寄せない）、範囲外として `debug` 1 件が残る。
 ///
 /// 「値を返すこと」と「記録すること」は別の口である——解決は値を歪めず、記録は位置を動かさない。
 #[test]
@@ -582,7 +582,7 @@ fn large_negative_value_is_returned_literally_and_noted_as_out_of_range() {
     assert_eq!(counts.warn, 0, "範囲外は警告ではない");
 }
 
-// ── §5 正典の記述例（付録 A 逐語・R9.3） ──
+// ── §5 正典の記述例（付録 A 逐語） ──
 
 /// 正典の記述例と同じ前提（未宣言バルーン＝文字描画開始点が `(0, 0)`）の基点束。
 ///
@@ -595,10 +595,10 @@ fn canon_basis() -> CursorBasis {
     }
 }
 
-/// 正典 付録 A の記述例 3 つを、解決層の単位（1 軸の解決値）へ翻訳して固定する（R9.3）。
+/// 正典 付録 A の記述例 3 つを、解決層の単位（1 軸の解決値）へ翻訳して固定する。
 ///
 /// 期待値は正典の日本語（「座標X=30pixel、座標Y=5文字分高さ」等）から書く。配線（横書きで
-/// 実際に文字が落ちる位置）の検証は design.md 検証表 H4 の担当である。
+/// 実際に文字が落ちる位置）の検証は 配線のテストの担当である。
 #[test]
 fn canonical_examples_resolve_to_the_documented_numbers() {
     let b = canon_basis();
@@ -674,7 +674,7 @@ fn canonical_examples_resolve_to_the_documented_numbers() {
 
 // ── §6 ログ件数（縮退表の行 → 件数） ──
 //
-// 縮退表（design.md「Error Handling ／ 縮退表」）の各行との対応:
+// 縮退表の各行との対応:
 //
 // | 縮退表の行 | 本ファイルの檻 |
 // |---|---|
@@ -715,7 +715,7 @@ fn warn_if_degraded(case: &Case, b: &CursorBasis, actor: &ActorKey, guard: &mut 
     }
 }
 
-/// 配線の契約を表の全ケースで通したときの件数（R5.2/5.3/5.5）。
+/// 配線の契約を表の全ケースで通したときの件数。
 ///
 /// 表の 28 ケースのうち縮退は 6 件（軸取り違え 2・解釈不能 2・有限でない 2）だが、一回化の鍵が
 /// `(キャラクター, 分岐)` なので同一キャラクターでは **3 件**にまとまる。別キャラクターでは
@@ -739,7 +739,7 @@ fn degrade_warns_once_per_branch_and_actor() {
         "縮退のケース数（軸取り違え 2・解釈不能 2・有限でない 2）"
     );
 
-    // 省略と実導出だけを通す＝0 件（R5.2/5.5）。
+    // 省略と実導出だけを通す＝0 件。
     let ((), counts) = count_levels(|| {
         for case in &derived {
             warn_if_degraded(case, &b, &a0, &mut guard);
@@ -775,7 +775,7 @@ fn degrade_warns_once_per_branch_and_actor() {
     assert_eq!(counts.warn, 3, "別キャラクターでは再び分岐ごとに 1 件");
 }
 
-/// 共通前提の定数が design.md「Unit Tests」の逐語どおりであること（檻の前提を檻にする）。
+/// 共通前提の定数が 決めた値どおりであること（檻の前提を檻にする）。
 ///
 /// ここが黙って変わると、上の全ケースの期待値が「実装に合わせて動く」ようになる。
 #[test]

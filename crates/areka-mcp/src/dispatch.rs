@@ -2,7 +2,7 @@
 //!
 //! rmcp の `StreamableHttpService` を呼ぶのも、HTTP の状態（`StatusCode`）を綴るのも
 //! このモジュールだけ。本文の上限は [`MAX_BODY_BYTES`] 1 つを、ここでの読み取りと
-//! rmcp の `with_max_request_body_bytes` の両方へ渡す（設計 B-7）。
+//! rmcp の `with_max_request_body_bytes` の両方へ渡す。
 
 use std::convert::Infallible;
 use std::path::PathBuf;
@@ -50,7 +50,7 @@ impl State {
     /// rmcp の設定をここ 1 か所で組む: 無状態（`legacy_session_mode(false)`・
     /// `NeverSessionManager`）・JSON の単発応答・本文の上限・取り消しの合図。
     /// `allowed_hosts` は既定（`localhost`・`127.0.0.1`・`::1`）のまま、`allowed_origins` は
-    /// 空のまま（`Origin` の検査は手前の `gate` が持つ＝設計 B-1）。
+    /// 空のまま（`Origin` の検査は手前の `gate` が持つ）。
     pub(crate) fn new(
         port: u16,
         bridge_exe: Option<PathBuf>,
@@ -81,7 +81,7 @@ pub(crate) async fn handle(
     req: Request<Incoming>,
 ) -> Result<HttpResponse, Infallible> {
     let path = req.uri().path().to_owned();
-    // 検査は path によらず最初に（spec: areka-P0-mcp-server-core 要件 4.3・6.3）。値が文字列として読めなくても
+    // 検査は path によらず最初に。値が文字列として読めなくても
     // 「無し」へ倒さず、置換文字入りの値として gate に拒ませる。
     let header = |name: HeaderName| {
         req.headers()
@@ -142,7 +142,7 @@ async fn forward(
     let rpc = peek(&bytes);
     let header = |name| parts.headers.get(name).and_then(|v| v.to_str().ok());
     let protocol_version = header(HEADER_MCP_PROTOCOL_VERSION).map(str::to_owned);
-    // rmcp と同じ見方。JSON でない `Content-Type` の 415 は今のまま（spec: mcp-strict-errors 要件 6.7）。
+    // rmcp と同じ見方。JSON でない `Content-Type` の 415 は今のまま。
     let json_body =
         header(CONTENT_TYPE.as_str()).is_some_and(|v| v.starts_with("application/json"));
     let Ok(response) = state
@@ -150,7 +150,7 @@ async fn forward(
         .clone()
         .call(Request::from_parts(parts, Full::new(bytes.clone())))
         .await;
-    // rmcp が読めた要求は rmcp の答えのまま。415 のときだけ本文を読み直す（spec: mcp-strict-errors 要件 6.3・6.7）。
+    // rmcp が読めた要求は rmcp の答えのまま。415 のときだけ本文を読み直す。
     if !json_body || response.status() != StatusCode::UNSUPPORTED_MEDIA_TYPE {
         return (response, Some(rpc));
     }
@@ -196,7 +196,7 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError> {
 /// `2026-07-28` 以降（rmcp と同じ文字列の比較）の `-32602` だけ 400、ほかは 200（旧式の版は rmcp も 200）。
 /// rmcp 3.9.0 の `-32602` の 400 は `_meta` が欠けたときだけだが、`params` がオブジェクトでない要求は
 /// `_meta` を持てないので、ここの `-32602` はいつも 400 の側に当たる。
-/// rmcp の版を上げたら、rmcp 自身の `-32602` の状態と突き合わせるテストで確かめる（spec: mcp-strict-errors 要件 6.4）。
+/// rmcp の版を上げたら、rmcp 自身の `-32602` の状態と突き合わせるテストで確かめる。
 fn shape_error_status(protocol_version: Option<&str>, code: ErrorCode) -> StatusCode {
     if protocol_version.is_some_and(|v| v >= ProtocolVersion::V_2026_07_28.as_str())
         && code == ErrorCode::INVALID_PARAMS

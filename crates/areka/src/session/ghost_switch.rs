@@ -1,14 +1,14 @@
-//! ゴーストの切替の入口（areka-P0-ghost-shell-balloon-switch・design「GhostSwitch」）。
+//! ゴーストの切替の入口。
 //!
 //! 切替要求は台本の `\![change,ghost,…]` とメニューの「ゴースト」枠の 2 つの出どころから、
-//! ここの [`request_ghost_switch`] 1 本だけを通る（要件 1.1）。入口は降ろす前・`OnGhostChanging`
-//! を送る前に目録と突き合わせ（要件 1.5〜1.7）、受理したら切替の予約 [`SwitchInFlight`] を
+//! ここの [`request_ghost_switch`] 1 本だけを通る。入口は降ろす前・`OnGhostChanging`
+//! を送る前に目録と突き合わせ、受理したら切替の予約 [`SwitchInFlight`] を
 //! 立てて kanade へ切替の要求を送る。台本からの要求は受け口 `ChangeCueSink` から受信端
 //! [`ChangeRx`] を経て、入力の段の取り出しの系 [`drain_change_requests`] が入口へ渡す。
 //! 送り出しの握手が済んだら [`switch_to`] が降ろして切替先を起こし、失敗なら
 //! [`switch_to_default`] が既定ゴーストへ 1 回だけ戻す（それも失敗なら致命で終了）。
 //! 台本の特別な名前（`random`・`sequential`・`lastinstalled`）は、入口が目録を読んだ直後に
-//! [`resolve_special_name`] で目録のフォルダ名へ解いてから突き合わせる（areka-P0-ghost-change-name-resolution）。
+//! [`resolve_special_name`] で目録のフォルダ名へ解いてから突き合わせる。
 
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
@@ -90,7 +90,7 @@ pub(crate) fn drain_change_requests(world: &mut World) {
     }
 }
 
-/// 切替要求（要件 1.1 の入口の型）。
+/// 切替要求（入口 [`request_ghost_switch`] の型）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SwitchRequest {
     pub ghost: GhostSpec,
@@ -125,7 +125,7 @@ pub(crate) struct SwitchTarget {
     pub folder: String,
     /// `descript.txt` の `name`（無ければフォルダ名）。
     pub name: String,
-    /// `descript.txt` の `sakura.name`（切替先だけ読む・要件 8.7）。
+    /// `descript.txt` の `sakura.name`（切替先だけ読む）。
     pub sakura_name: Option<String>,
 }
 
@@ -148,14 +148,14 @@ pub(crate) enum SwitchStage {
     CopyWait,
 }
 
-/// 迎え入れているゴースト（既定へ戻す試みは 1 回だけ＝`Default` からは戻らない・要件 6.5）。
+/// 迎え入れているゴースト（既定へ戻す試みは 1 回だけ＝`Default` からは戻らない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WelcomeAttempt {
     Target,
     Default,
 }
 
-/// 切替の予約（World の NonSend・在れば切替中）。二重要求の判定はこの有無で行う（要件 1.9）。
+/// 切替の予約（World の NonSend・在れば切替中）。二重要求の判定はこの有無で行う。
 #[derive(Debug)]
 pub(crate) struct SwitchInFlight {
     pub target: SwitchTarget,
@@ -193,7 +193,7 @@ pub(crate) fn end_switch(world: &mut World, end: SwitchEnd) {
     world.remove_non_send::<SwitchInFlight>();
 }
 
-/// 純粋: 目録の項目と指し方から切替先を決める（要件 1.5・1.8・11.8）。
+/// 純粋: 目録の項目と指し方から切替先を決める。
 ///
 /// 名前は `descript.txt` の `name` と先に突き合わせ、一致が無ければフォルダ名と突き合わせる。
 /// フォルダ名の指し方はフォルダ名とだけ突き合わせる。`name` は大文字小文字を区別し、フォルダ名は
@@ -237,20 +237,17 @@ pub(crate) fn record_last_installed(world: &mut World, folder: String) {
     world.insert_resource(LastInstalledGhost(folder));
 }
 
-/// 切替要求の唯一の入口（要件 1.1・1.6・1.7・1.9）。乱数は本番の `pick_index`。
+/// 切替要求の唯一の入口。乱数は本番の `pick_index`。
 pub(crate) fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> SwitchVerdict {
     request_ghost_switch_with(world, req, pick_index)
 }
 
 /// 入口の中身。乱数を外から受ける（決定論テスト用・本番は [`request_ghost_switch`] が `pick_index` を渡す）。
 ///
-/// ⑴ 予約が在れば `warn!(ghost_switch_busy)`。⑵ 起動の文脈の根で目録を読み、名前の要求だけ特別な
-/// 名前を解いてから（解けたら `info!(ghost_switch_resolved)` でフォルダの名指しへ読み替える）突き合わせ、
-/// 切替先が決まらない（該当なし・特別な名前が解けない）ときは `warn!(ghost_switch_unknown)` を
-/// `reason` つきで 1 件（降ろさず kanade へ何も送らない）。⑶ 置き場のゴーストの送出端が
-/// 無ければ `warn!(ghost_switch_no_context)`。⑷ 切替先の `sakura.name` だけを読み（要件 8.7）、
-/// kanade へ切替の要求を送って予約を立てる。送出に失敗したら `error!(ghost_switch_send_failed)` で
-/// 予約は立てない（送ってから立てるので、下ろすべき予約は残らない）。
+/// 予約が在れば `warn!(ghost_switch_busy)`。名前の要求は特別な名前を解いてから目録と突き合わせ
+/// （解けたら `info!(ghost_switch_resolved)`）、切替先が決まらない（該当なし・特別な名前が解けない）
+/// ときは `warn!(ghost_switch_unknown)` を `reason` つきで 1 件（降ろさず kanade へ何も送らない）。
+/// 決まったら [`accept_switch`] へ。
 pub(crate) fn request_ghost_switch_with(
     world: &mut World,
     req: SwitchRequest,
@@ -319,10 +316,9 @@ pub(crate) fn request_ghost_switch_with(
     accept_switch(world, target, req)
 }
 
-/// 受理の後半: 置き場のゴーストと `PrevGhost` → `sakura_name` → `ChangeGhost` 送出 →
-/// [`super::switch_copy::start`] → [`SwitchInFlight`]。[`request_ghost_switch_with`] は目録の解決の後に
-/// これを呼ぶ。文脈・置き場の送出端が無ければ `warn!(ghost_switch_no_context)`、送出に失敗したら
-/// `error!(ghost_switch_send_failed)` で予約は立てない。
+/// 受理の後半: kanade へ切替の要求を送って予約 [`SwitchInFlight`] を立てる。文脈・置き場の送出端が
+/// 無ければ `warn!(ghost_switch_no_context)`、送出に失敗したら `error!(ghost_switch_send_failed)` で
+/// 予約は立てない（送ってから立てるので、下ろすべき予約は残らない）。
 pub(crate) fn accept_switch(
     world: &mut World,
     mut target: SwitchTarget,
@@ -404,17 +400,17 @@ pub(crate) fn accept_switch(
     SwitchVerdict::Accepted
 }
 
-/// 予約の下で届いた停止通知を切替の段で振り分ける（要件 2.4・2.8・3.3・6.6・design Flow 3）。
+/// 予約の下で届いた停止通知を切替の段で振り分ける。
 ///
-/// 送り出し＋中身あり → [`switch_to`]（握手の途中の失敗でも中身があれば続ける・要件 2.8）。
-/// 送り出し＋中身なし → `warn!(ghost_switch_not_accepted)`・予約を下ろし今日どおり終了。
+/// 送り出し＋中身あり → [`switch_to`]（握手の途中の失敗でも中身があれば続ける）。
+/// 送り出し＋中身なし → `warn!(ghost_switch_not_accepted)`・予約を下ろして終了。
 /// 迎え入れ（切替先）＋失敗 → `error!(ghost_switch_target_fault)` の上で [`switch_to_default`]。
-/// 迎え入れ（既定）か、既定ゴーストへの切替の迎え入れ＋失敗 → 予約を下ろし今日の失敗の経路
-/// （告知・終了コード 1）で終了（戻す試みは 1 回だけ・要件 6.5）。記録は既定ゴーストの失敗を表す
+/// 迎え入れ（既定）か、既定ゴーストへの切替の迎え入れ＋失敗 → 予約を下ろし失敗の経路
+/// （告知・終了コード 1）で終了（戻す試みは 1 回だけ）。記録は既定ゴーストの失敗を表す
 /// `error!(ghost_switch_default_fault)`（切替先の失敗 `ghost_switch_target_fault` とは別の語）。
-/// 迎え入れ＋失敗以外 → `info!(ghost_switch_target_quit)`・予約を下ろし今日どおり終了。
-/// 予約が無ければ今日どおり終了（呼び手は予約が在るときだけ呼ぶ）。エラー応答は停止通知を
-/// 生まないので、ここに判断は無い（要件 6.7）。
+/// 迎え入れ＋失敗以外 → `info!(ghost_switch_target_quit)`・予約を下ろして終了。
+/// 予約が無ければ終了（呼び手は予約が在るときだけ呼ぶ）。エラー応答は停止通知を
+/// 生まないので、ここに判断は無い。
 pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
     let Some((stage, target_name, target_is_default)) =
         world.get_non_send::<SwitchInFlight>().map(|f| {
@@ -480,7 +476,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
     }
 }
 
-/// 運行の通知を切替の段で振り分ける（要件 3.5・5.2）。
+/// 運行の通知を切替の段で振り分ける。
 ///
 /// 定常到達: 迎え入れの予約を下ろし `info!(ghost_switch_done)`。送り出しの段の予約は残す（まだ
 /// 握手の途中）。予約が無ければ `debug!`（初回起動・切替の外）。切替の中止: 予約を下ろし
@@ -543,7 +539,7 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
     }
 }
 
-/// 迎え入れたゴーストが定常に入った時点の記憶（要件 4.6・4.7・12.6・12.7・design Flow 6）。
+/// 迎え入れたゴーストが定常に入った時点の記憶。
 ///
 /// 段を問わず同じ手順で、置き場のゴーストの記憶の書き手へ最後に使ったもの（ゴースト・バルーン・
 /// シェル）と、argv で始まったプロセスでなければ印＝今のゴーストの名前を投函する。実行系が動いて
@@ -595,15 +591,15 @@ fn record_steady_memory(world: &World) {
     );
 }
 
-/// 切替先を起こす（要件 2.7・3.1・3.2・3.7・3.8・4.6・4.7・6.1・design Flow 1）。
+/// 切替先を起こす。
 ///
 /// 予約の切替先へ: 置き場のゴーストを同期で降ろす → 全窓を閉じる → [`boot_into`]（由来＝切替で
 /// 来た〔予約に起動の知らせが在ればネットワーク更新で読み直した〕・経路＝切替）。成功なら段を「迎え入れ（切替先）」に。同期の失敗は、切替先が既定なら致命、
 /// そうでなければ [`switch_to_default`]（窓は投函していないので壊れた切替先の窓は生えない）。
 ///
 /// shiori の読み直し（窓口自身の予約・[`super::reload::wants_runtime_only`]）だけは降ろさず・窓を閉じず・
-/// 起動中のゴーストへ入れる一周も回さずに、[`rebuild_runtime_in_place`] で実行系だけを組み直す
-/// （要件 4.1〜4.4・design Flow 3）。組み直せたら段を「迎え入れ（切替先）」に。降ろした直後の記憶を
+/// 起動中のゴーストへ入れる一周も回さずに、[`rebuild_runtime_in_place`] で実行系だけを組み直す。
+/// 組み直せたら段を「迎え入れ（切替先）」に。降ろした直後の記憶を
 /// 書けなければ予約を下ろして書けない致命へ。起こせなければ、切替先が既定なら致命、そうでなければ
 /// [`switch_to_default`]。
 pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
@@ -621,8 +617,8 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let Some(dir) = super::switch_copy::boot_dir(world, &handoff) else {
         return;
     };
-    // shiori の読み直し（窓口自身の予約）: 窓・seriko・loop ticker を残して実行系だけを組み直す
-    // （要件 4.2・4.4・design Flow 3）。`take_down`・`close_windows_for_restart`・`run_overwrite_between` は呼ばない。
+    // shiori の読み直し（窓口自身の予約）: 窓・seriko・loop ticker を残して実行系だけを組み直す。
+    // `take_down`・`close_windows_for_restart`・`run_overwrite_between` は呼ばない。
     if super::reload::wants_runtime_only(world) {
         match rebuild_runtime_in_place(world, &target.name) {
             RuntimeRebuild::Rebuilt => set_stage(world, WelcomeAttempt::Target),
@@ -642,7 +638,6 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         }
         return;
     }
-    // ghost の読み直し（窓口自身の予約）だけは、窓を閉じる前に表示中の面を控える（要件 3.8）。
     let carries = super::reload::carries_shell_state(world);
     let carry = areka_runtime::shell_carry::capture_for_reload(world, carries);
     let reason = if carries {
@@ -653,10 +648,10 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     log_stay_on_top_discard(world, reason);
     take_down(world);
     // 降ろし終えた直後（前のゴーストの記憶の書き手は処理し切って join 済み＝動いている実行系は 0）に
-    // 最後のゴースト＝既定・印＝切替先を 1 回で書く（要件 12.6）。UI スレッドが App スコープへ直接
-    // 書くのは実行系が 1 つも動いていない間だけ（動いている間はそのゴーストの記憶の書き手を通す）。
-    // 既定への戻しと致命はこれに触れない（印は切替先のまま・要件 12.7・12.8）。
-    // 書けなければ切替の予約を下ろして致命へ渡し、切替先を起こさずに戻る（要件 3.3）。
+    // 最後のゴースト＝既定・印＝切替先を 1 回で書く。UI スレッドが App スコープへ直接書くのは
+    // 実行系が 1 つも動いていない間だけ（動いている間はそのゴーストの記憶の書き手を通す）。
+    // 既定への戻しと致命はこれに触れない（印は切替先のまま）。
+    // 書けなければ切替の予約を下ろして致命へ渡し、切替先を起こさずに戻る。
     match world.get_resource::<BootContext>() {
         Some(ctx) => {
             if let Err(failure) = write_switch_drop(
@@ -676,8 +671,8 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let closed = close_windows_for_restart(world);
     // 起動中のゴーストへ入れる一周（預かった宛先への切替のときだけ・降ろした後・起こす前に展開する）。
     crate::install::desk::run_overwrite_between(world);
-    // 読み直しの窓口自身の予約なら読み直しの由来（要件 3.2〜3.4）。それ以外は、起動の知らせが在れば
-    // （ネットワーク更新の読み直し）それを根に、無ければ今日どおり「切替で来た」（決めたこと 23・要件 3.6）。
+    // 読み直しの窓口自身の予約なら読み直しの由来。それ以外は、起動の知らせが在れば
+    // （ネットワーク更新の読み直し）それを根に、無ければ「切替で来た」。
     let origin = super::reload::boot_origin_override(world).unwrap_or_else(|| match boot_event {
         Some((id, references)) => BootOrigin::Updated { id, references },
         None => BootOrigin::ChangedFrom(ChangedFrom {
@@ -708,13 +703,13 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     }
 }
 
-/// 既定ゴーストへ戻す（要件 6.1〜6.5・design Flow 3）。試みは 1 回だけで、失敗は致命。告知は出さない。
+/// 既定ゴーストへ戻す。試みは 1 回だけで、失敗は致命。告知は出さない。
 ///
 /// 既定が目録に無ければ致命。在れば置き場のゴースト（切替先）が残っていれば降ろして全窓を閉じ、
 /// [`boot_into`]（由来＝前回落ちた・経路＝既定）。成功なら段を「迎え入れ（既定）」に。
 pub(crate) fn switch_to_default(world: &mut World, fallen_name: &str) {
     let default_dir = world.get_resource::<BootContext>().and_then(|ctx| {
-        // 非常口は起こす前に同期で写す（要件 4.3・写せなければ元のフォルダ・要件 4.7）。
+        // 非常口は起こす前に同期で写す（写せなければ元のフォルダ）。
         areka_ghost::catalog_roots::find_ghost(&ctx.roots, DEFAULT_GHOST_FOLDER).map(|e| {
             crate::roots::user_root::writable_copy(
                 &ctx.roots,
@@ -755,7 +750,7 @@ pub(crate) fn switch_to_default(world: &mut World, fallen_name: &str) {
     }
 }
 
-/// 置き場のゴーストを同期で降ろす（SHIORI の解放を待つ・要件 2.7）。所要 ms を残す（要件 3.8）。
+/// 置き場のゴーストを同期で降ろす（SHIORI の解放を待つ）。所要 ms を残す。
 /// 置き場が空なら何もしない。降ろす失敗は `shutdown` が `error!` 済みで、戻す先が無いので続ける。
 fn take_down(world: &mut World) {
     let Some(session) = world
@@ -880,8 +875,8 @@ fn set_stage(world: &mut World, attempt: WelcomeAttempt) {
     );
 }
 
-/// 致命: 予約を下ろし、出所「既定ゴーストへ戻せなかった」で終了を指示する（要件 6.4）。
-/// 告知と終了コード 1 は `main` の後始末が今日の SHIORI の失敗の経路で行う。
+/// 致命: 予約を下ろし、出所「既定ゴーストへ戻せなかった」で終了を指示する。
+/// 告知と終了コード 1 は `main` の後始末が SHIORI の失敗と同じ経路で行う。
 fn fatal(world: &mut World, reason: String) {
     end_switch(world, SwitchEnd::Fatal);
     tracing::error!(

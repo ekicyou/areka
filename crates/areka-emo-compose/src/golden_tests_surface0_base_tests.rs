@@ -1,4 +1,4 @@
-//! 要件 11.1・11.4: emo2 surface0 の単層 base surface 合成が、`MemoryDecoder` へ
+//! emo2 surface0 の単層 base surface 合成が、`MemoryDecoder` へ
 //! 挿入した既知画像とバイト等価であることを固定する golden テーマ。
 
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
@@ -30,7 +30,7 @@ fn distinctive_opaque(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
     (w, h, stride, bgra, true)
 }
 
-/// emo2 surface0 の element0 を含む `AtlasTable` を COM/WIC 非依存に構築する（要件 11.4）。挿入した
+/// emo2 surface0 の element0 を含む `AtlasTable` を COM/WIC 非依存に構築する。挿入した
 /// 画像スペック（w,h,premultiplied BGRA）も返す。
 ///
 /// surfaces.txt 全体を `SurfaceSet` として bake するが、`MemoryDecoder` には surface0 の
@@ -47,7 +47,7 @@ fn build_atlas_for_surface0(shell: &Shell, base: &Path) -> (AtlasTable, u32, u32
     (bake_emo2(shell, base, &dec), w, h, bgra)
 }
 
-/// 受入基準（要件 11.1・11.4）: emo2 surface0 の element0 単層合成が挿入画像とバイト等価。
+/// emo2 surface0 の element0 単層合成が挿入画像とバイト等価。
 ///
 /// 経路: surfaces.txt を parse → `EmoWorld::build`（fold）→ `MemoryDecoder`+`bake` で `AtlasTable`
 /// 構築（COM/WIC/表示なし）→ `bind_atlas` → `Composer::compose(surface0, EMPTY BindSet)`。
@@ -87,10 +87,8 @@ fn surface0_element0_single_layer_equals_inserted_image() {
     let base = shell_master_dir();
     let (atlas, iw, ih, inserted) = build_atlas_for_surface0(&shell, &base);
 
-    // fold → bind（構築時に一度きり resolve・以降 hot path は entry O(1)）。
     let world = bound_world(&shell, &[], &atlas);
 
-    // 空 BindSet で surface0 を合成（着せ替え bind を一切適用しない単層経路）。
     let mut composer = Composer::new();
     let out: ComposedSurface = composer
         .compose(
@@ -102,12 +100,10 @@ fn surface0_element0_single_layer_equals_inserted_image() {
         )
         .expect("surface0 の単層合成は Ok（要件 11.1）");
 
-    // 外形一致: キャンバス外形 == 挿入画像外形（trim 恒等・原点配置ゆえ）。
     assert_eq!(out.width(), iw, "合成幅 == 挿入画像幅");
     assert_eq!(out.height(), ih, "合成高 == 挿入画像高");
     assert_eq!(out.stride(), iw * 4, "stride == w*4（premultiplied BGRA）");
 
-    // バイト等価（要件 11.1 の中核）: 単層 (0,0) SourceOver onto 透明キャンバス == コピー。
     assert_eq!(
         out.bytes(),
         inserted.as_slice(),

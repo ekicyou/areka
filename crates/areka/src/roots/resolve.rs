@@ -1,7 +1,7 @@
-//! 起動時の根の並びの決め方（純粋）と、アプリの記憶の値の形（design.md「RootsResolve」）。
+//! 起動時の根の並びの決め方（純粋）と、アプリの記憶の値の形。
 //!
 //! 入力はすべて値で受ける（環境変数の値・記憶の値・実行ファイルのフォルダ）。プロセスの
-//! 環境変数と記憶のファイルを読むのは `mod.rs` の薄い口だけ（要件 12.7）。
+//! 環境変数と記憶のファイルを読むのは `mod.rs` の薄い口だけ。
 //! 控え（飛ばした項目）と「既定へ倒した」は結果に載せ、記録は `RootsReport` が残す。
 
 use std::ffi::{OsStr, OsString};
@@ -11,13 +11,13 @@ use std::path::{Path, PathBuf};
 use areka_ghost::{BasewareRoot, BasewareRoots, same_root};
 use areka_user_data::{UserRoot, UserRootOrigin};
 
-/// 根の並びを渡す環境変数（要件 1.5）。
+/// 根の並びを渡す環境変数。
 pub(crate) const ROOTS_ENV: &str = "AREKA_ROOT";
-/// 記憶の中の「実行ファイルの隣」の綴り（要件 1.10）。
+/// 記憶の中の「実行ファイルの隣」の綴り。
 pub(crate) const EXE_TOKEN: &str = "<exe>";
 /// 記憶の値の項目の区切り。
 pub(crate) const MEMORY_SEPARATOR: char = '|';
-/// `AREKA_ROOT` の項目の区切り（引用符は解かない＝要件 1.14）。
+/// `AREKA_ROOT` の項目の区切り（引用符は解かない）。
 const ENV_SEPARATOR: u16 = b';' as u16;
 
 /// 並び全体の出どころ（並びで 1 つ）。
@@ -53,14 +53,14 @@ pub(crate) struct ResolvedRoots {
     pub origin: RootsOrigin,
     pub status: Vec<RootStatus>,
     pub skipped: Vec<RootSkip>,
-    /// 記憶の読める項目が 0 だったので既定へ倒した（要件 1.13 の warn）。
+    /// 記憶の読める項目が 0 だったので既定へ倒した（warn）。
     pub memory_fell_back: bool,
 }
 
-/// 並びが決まらない理由（告知へ・要件 9.4）。
+/// 並びが決まらない理由（告知へ）。
 ///
 /// どの腕も控え（`skipped`）と「既定へ倒した」（`memory_fell_back`）を持つ。起動が失敗しても
-/// 控えの warn を残すため（要件 1.7・1.9・1.12・1.13）。
+/// 控えの warn を残すため。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum RootError {
     /// 既定（記憶の `<exe>` だけで既定へ倒したときも）なのに実行ファイルの場所が取れない。
@@ -84,14 +84,13 @@ pub(crate) enum RootError {
     },
 }
 
-/// 並びを決める純粋な判断（要件 1.3〜1.9・1.12・1.13・9.2・9.4）。
+/// 並びを決める純粋な判断。
 ///
 /// - `env`: `AREKA_ROOT` の値（`None`＝未設定）。在れば記憶は見ない。
 /// - `memory`: アプリの記憶の `[baseware] roots`（`None`＝鍵が無い・空文字は 0 項目）。
 /// - `exe_dir`: 実行ファイルのフォルダ（`None`＝取れない）。
-/// - `user_root`: 並びに入れる書ける根（`None`＝今の形）。環境変数の腕は見ない（要件 3.4）。
-///   既定の腕は「書ける根 → 実行ファイルの隣」、記憶の腕は無ければ先頭へ・在れば記憶の順のまま
-///   （要件 3.1・3.2）。どちらでもその項目に印を付ける。既定の並びは記憶に書かない（要件 3.5）。
+/// - `user_root`: 並びに入れる書ける根（`None`＝今の形）。環境変数の腕は見ない。
+///   既定の腕は「書ける根 → 実行ファイルの隣」、記憶の腕は無ければ先頭へ・在れば記憶の順のまま。どちらでもその項目に印を付ける。既定の並びは記憶に書かない。
 pub(crate) fn resolve_roots_from(
     env: Option<OsString>,
     memory: Option<String>,
@@ -122,7 +121,7 @@ pub(crate) fn resolve_roots_from(
                 items = decoded;
             }
             if items.is_empty() {
-                // 既定＝（書ける根 →）実行ファイルのフォルダ（要件 1.3・1.13・3.1）。
+                // 既定＝（書ける根 →）実行ファイルのフォルダ。
                 let exe_dir = exe_dir.filter(|d| !d.as_os_str().is_empty());
                 match (user_root, exe_dir) {
                     (Some(user), exe_dir) => {
@@ -143,7 +142,7 @@ pub(crate) fn resolve_roots_from(
                 }
             } else {
                 if let Some(user) = user_root {
-                    // 記憶の並びに在れば記憶の順のまま、無ければ先頭へ（要件 3.2）。
+                    // 記憶の並びに在れば記憶の順のまま、無ければ先頭へ。
                     user_at = items.iter().position(|d| same_root(d, &user.dir));
                     if user_at.is_none() {
                         items.insert(0, user.dir.clone());
@@ -155,7 +154,7 @@ pub(crate) fn resolve_roots_from(
         }
     };
 
-    // 重複は上を残して下を控える（要件 1.9）。印の項目は同じ根の最初なので必ず残る。
+    // 重複は上を残して下を控える。印の項目は同じ根の最初なので必ず残る。
     let mut kept: Vec<PathBuf> = Vec::with_capacity(items.len());
     let mut kept_user = None;
     for (i, dir) in items.into_iter().enumerate() {
@@ -173,7 +172,7 @@ pub(crate) fn resolve_roots_from(
         }
     }
 
-    // 見つからない根も並びに残す（要件 9.2）。どれも見つからなければ告知へ（要件 9.4）。
+    // 見つからない根も並びに残す。どれも見つからなければ告知へ。
     let status: Vec<RootStatus> = kept
         .iter()
         .map(|dir| RootStatus {
@@ -209,7 +208,7 @@ pub(crate) fn resolve_roots_from(
 }
 
 /// `AREKA_ROOT` を `;` だけで区切る（引用符は解かない・`split_paths` は使わない）。
-/// 空の項目は飛ばして控え、相対の項目はカレント基準で絶対にする（要件 1.6〜1.8・1.14）。
+/// 空の項目は飛ばして控え、相対の項目はカレント基準で絶対にする。
 fn split_env(env: &OsStr, skipped: &mut Vec<RootSkip>) -> Vec<PathBuf> {
     let wide: Vec<u16> = env.encode_wide().collect();
     let mut items = Vec::new();
@@ -233,8 +232,8 @@ fn split_env(env: &OsStr, skipped: &mut Vec<RootSkip>) -> Vec<PathBuf> {
     items
 }
 
-/// 記憶の値を並びへ（`<exe>` の読み替え・空／相対／読めない項目の控え）。純粋（要件 1.10・1.12）。
-/// 空文字は 0 項目（要件 1.13 の「0 項目」）。
+/// 記憶の値を並びへ（`<exe>` の読み替え・空／相対／読めない項目の控え）。純粋。
+/// 空文字は 0 項目。
 pub(crate) fn decode_memory(value: &str, exe_dir: Option<&Path>) -> (Vec<PathBuf>, Vec<RootSkip>) {
     let mut items = Vec::new();
     let mut skipped = Vec::new();
@@ -271,8 +270,8 @@ fn has_invalid_chars(item: &str) -> bool {
         .any(|c| c < ' ' || matches!(c, '<' | '>' | '"' | '?' | '*'))
 }
 
-/// 並びを記憶の値へ。実行ファイルのフォルダと同じ根は `<exe>`、ほかは絶対パスの綴り（要件 1.10・6.8）。
-/// 一時の置き場は書かない（areka-P0-startup-options-core 要件 3.4）。純粋。
+/// 並びを記憶の値へ。実行ファイルのフォルダと同じ根は `<exe>`、ほかは絶対パスの綴り。
+/// 一時の置き場は書かない。純粋。
 pub(crate) fn encode_memory(roots: &BasewareRoots, exe_dir: Option<&Path>) -> String {
     roots
         .roots()

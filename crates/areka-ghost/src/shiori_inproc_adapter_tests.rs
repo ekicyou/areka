@@ -1,6 +1,5 @@
-//! task 2.3: `map_get_outcome` 写像表の全行（純関数・COM 不要）＋実 DLL 越しの `inproc_connect`
-//! 往復（get/notify/status/unload）＋`inproc_connect` の `file: None` 即失敗
-//! （design.md §InProcBackend・「`IShiori::Get` 応答の写像表」・要件 3.2/3.3/3.4/3.5/7.1）。
+//! `map_get_outcome` 写像表の全行（純関数・COM 不要）＋実 DLL 越しの `inproc_connect`
+//! 往復（get/notify/status/unload）＋`inproc_connect` の `file: None` 即失敗。
 
 use super::*;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShioriError};
@@ -22,9 +21,9 @@ fn resp(status_line: &str, headers: &[&str]) -> Vec<u8> {
     s.into_bytes()
 }
 
-// --- map_get_outcome 写像表（全 6 行・純関数・要件 3.2）--------------------
+// --- map_get_outcome 写像表（全 6 行・純関数）--------------------
 
-/// `S_OK`＋200＋`Value` → `Ok(Some(value))`（写像表 1 行目・要件 3.2）。
+/// `S_OK`＋200＋`Value` → `Ok(Some(value))`（写像表 1 行目）。
 #[test]
 fn map_s_ok_200_with_value_is_some() {
     let bytes = resp(
@@ -35,7 +34,7 @@ fn map_s_ok_200_with_value_is_some() {
     assert_eq!(out.map(|r| r.value), Some(r"\s[0]hi\e".to_string()));
 }
 
-/// `S_OK`＋200（`Value` 欠落）→ `Ok(None)`（写像表 1 行目・欠落枝・要件 3.2）。
+/// `S_OK`＋200（`Value` 欠落）→ `Ok(None)`（写像表 1 行目・欠落枝）。
 #[test]
 fn map_s_ok_200_without_value_is_none() {
     let bytes = resp("SHIORI/3.0 200 OK", &["Charset: UTF-8"]);
@@ -43,7 +42,7 @@ fn map_s_ok_200_without_value_is_none() {
     assert_eq!(out, None);
 }
 
-/// `S_OK`＋204 → `Ok(None)`（写像表 2 行目・要件 3.2）。
+/// `S_OK`＋204 → `Ok(None)`（写像表 2 行目）。
 #[test]
 fn map_s_ok_204_is_none() {
     let bytes = resp("SHIORI/3.0 204 No Content", &[]);
@@ -65,7 +64,7 @@ fn map_s_ok_400_is_shiori_status_error() {
     );
 }
 
-/// `S_OK`＋500 → `Err(Shiori(Status{500}))`（写像表 3 行目・要件 3.2）。
+/// `S_OK`＋500 → `Err(Shiori(Status{500}))`（写像表 3 行目）。
 #[test]
 fn map_s_ok_500_is_shiori_status_error() {
     let bytes = resp("SHIORI/3.0 500 Internal Server Error", &[]);
@@ -112,10 +111,10 @@ fn map_s_ok_unparseable_is_parse_error() {
     );
 }
 
-/// `SHIORI_S_PENDING` → `Err(Shiori(Parse))`（写像表 5 行目・防衛線・M1 InProc 非対応・要件 7.4）。
+/// `SHIORI_S_PENDING` → `Err(Shiori(Parse))`（写像表 5 行目・防衛線・M1 InProc 非対応）。
 #[test]
 fn map_pending_is_parse_error_defensive() {
-    // SHIORI_S_PENDING は成功コードだが M1 InProc 非対応＝防衛線で Parse（要件 7.4）。
+    // SHIORI_S_PENDING は成功コードだが M1 InProc 非対応＝防衛線で Parse。
     let err = map_get_outcome(SHIORI_S_PENDING, &[]).expect_err("PENDING は防衛線で Err");
     assert!(
         matches!(err, RequestError::Shiori(ShioriError::Parse)),
@@ -123,7 +122,7 @@ fn map_pending_is_parse_error_defensive() {
     );
 }
 
-/// 任意の error HRESULT → `Err(Shiori(Parse))`（写像表 6 行目・解釈不能を Parse へ集約・D-7）。
+/// 任意の error HRESULT → `Err(Shiori(Parse))`（写像表 6 行目・解釈不能を Parse へ集約）。
 #[test]
 fn map_error_hresult_is_parse_error() {
     let err = map_get_outcome(E_FAIL, &[]).expect_err("error HRESULT は Err");
@@ -133,7 +132,7 @@ fn map_error_hresult_is_parse_error() {
     );
 }
 
-// --- 実 DLL 越しの InProcBackend 往復（design.md D-1・要件 3.2/3.3/3.4）------
+// --- 実 DLL 越しの InProcBackend 往復 ------
 
 /// `TempPath` の下に DLL を写したゴーストを `resolve` し、本番の [`inproc_connect`] で
 /// backend を組む（手で写した接続の道具は持たない・#34）。fixture は backend より長く生かすこと。
@@ -150,13 +149,13 @@ fn build_real_backend() -> (temp_path_kit::TempPath, Box<dyn ShioriBackend>) {
 }
 
 /// 実 `IShiori` 境界を横断して get/notify/status/unload が正しく往復すること
-/// （build_request→Get→parse→map の全経路・要件 3.2/3.3/3.4）。
+/// （build_request→Get→parse→map の全経路）。
 #[test]
 fn adapter_roundtrips_through_real_ishiori() {
     let (_ghost, mut backend) = build_real_backend();
 
-    // GET OnFirstBoot（収載）→ Ok(Some(value))＝凍結スナップショットの Value 行 payload
-    // （task 6.2 実採取の起動挨拶さくらスクリプト）。envelope 全文ではなく Value 行 payload のみが
+    // GET OnFirstBoot（収載）→ Ok(Some(value))＝凍結スナップショットの Value 行 payload。
+    // envelope 全文ではなく Value 行 payload のみが
     // 返ること（build_request→Get→parse→map の実証）。期待値は凍結スナップショットの Value 行から
     // 導出し、実採取差し替え時に自動追随させる（ハードコード giant literal を避ける）。
     let snapshot =
@@ -196,20 +195,20 @@ fn adapter_roundtrips_through_real_ishiori() {
         .notify("OnInitialize", &[], None)
         .expect("NOTIFY は Ok");
 
-    // status: ロード中は Running（別プロセスがなく死活監視対象なし・要件 3.3）。
+    // status: ロード中は Running（別プロセスがなく死活監視対象なし）。
     assert_eq!(
         backend.status(),
         HelperStatus::Running,
         "ロード中は Running"
     );
 
-    // unload: 常に Ok(Clean)（構造的に不能失敗・D-7・要件 3.4）。
+    // unload: 常に Ok(Clean)（構造的に不能失敗）。
     assert!(
         matches!(backend.unload(), Ok(ExitKind::Clean)),
         "unload は常に Ok(ExitKind::Clean)"
     );
 
-    // unload 後の status: Exited(Clean)（正直な語彙・D-7）。
+    // unload 後の status: Exited(Clean)（正直な語彙）。
     assert_eq!(
         backend.status(),
         HelperStatus::Exited(ExitKind::Clean),
@@ -217,9 +216,9 @@ fn adapter_roundtrips_through_real_ishiori() {
     );
 }
 
-// --- inproc_connect の file:None 即失敗（決定論・DLL 不要・要件 3.5）---------
+// --- inproc_connect の file:None 即失敗（決定論・DLL 不要）---------
 
-/// `shiori.file` が `None`（DLL 名未解決）なら DLL ロードを試みず即座に `Err`（推測しない・要件 3.5）。
+/// `shiori.file` が `None`（DLL 名未解決）なら DLL ロードを試みず即座に `Err`（推測しない）。
 /// 共通の `test_support::shiori_mount` で得る。
 #[test]
 fn inproc_connect_missing_file_fails_immediately() {

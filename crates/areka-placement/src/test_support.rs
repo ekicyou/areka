@@ -3,9 +3,9 @@
 //! 頼るのは配置の型・`bevy_ecs`・`windows`・`wintf`・`areka_sylphya`・`areka_parsers`・`areka_emo_atlas`・std だけ。
 //! `#[cfg(test)]` だけの項目と共有のテスト用の crate
 //! （`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`）には頼らない——本体のテストを組むときの
-//! 配置は `test` が立たず機能だけが立つので、頼ると組めなくなる（spec: placement-crate-split 要件 3.3・3.4）。
+//! 配置は `test` が立たず機能だけが立つので、頼ると組めなくなる。
 //! 見本のゴーストの入口は crate ごとの `sample_test_support`、配置のテストだけが使う一時フォルダと
-//! 合成の検体は `shared_test_support` にある（本体のテストも使う合成の検体はここに置く）。ログの判定の補助は `log_capture_kit` を直に使う（要件 3.1）。
+//! 合成の検体は `shared_test_support` にある（本体のテストも使う合成の検体はここに置く）。ログの判定の補助は `log_capture_kit` を直に使う。
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -110,7 +110,7 @@ pub fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {
         && pos.y.saturating_add(size.h) <= area.bottom
 }
 
-/// 決定論テスト用の合成 work area（物理 px・resolver T-R 群と同流儀）。
+/// 決定論テスト用の合成 work area（物理 px）。
 pub const WA: RectPx = RectPx {
     left: 0,
     top: 0,
@@ -136,12 +136,12 @@ pub const KEYWORD_BALLOON_DESCRIPT: &str =
 ///
 /// 合成バルーンへ複写するのは本体側 `balloons0.png` の 1 枚のみ（相方側 `balloonk*` を
 /// 置かない）。ゆえに全 scope の連鎖が本体側系列へ収束し、バルーン寸は scope に依らず
-/// 同一になる——本補助を使う檻は同時に要件 3.7（`balloonk*` 不在時の後方互換）の錨でもある。
+/// 同一になる——本補助を使う檻は同時に `balloonk*` 不在時の後方互換の錨でもある。
 ///
 /// `balloon_windowposition`: `Some((x, y))` ならバルーン既定設定へ
 /// `windowposition.x`/`.y` を宣言する（面別上書き `balloons0s.txt` は置かないので、
 /// 確定値はこの基層のみが供給する）。`None` なら**どの層にも `windowposition` が無い**
-/// ＝要件 3.4 の「数値指定なし」検体になる。
+/// ＝「数値指定なし」検体になる。
 pub fn synth_declared_dpi_ghost(
     root: &Path,
     emo2_root: &Path,
@@ -197,8 +197,8 @@ pub fn synth_declared_dpi_ghost(
     (root.to_path_buf(), balloon_dir)
 }
 
-/// えみり（`emily4`）と同じ形のゴーストの `descript.txt`（spec: areka-P0-emily-ghost-verification
-/// 要件 6.7）。`kero.name` に加えて `char2.name` を持つ。名前は架空で、えみりの文面は写さない。
+/// えみり（`emily4`）と同じ形のゴーストの `descript.txt`。`kero.name` に加えて `char2.name` を持つ。
+/// 名前は架空で、えみりの文面は写さない。
 pub(crate) const EMILY_SHAPED_GHOST_DESCRIPT: &str =
     "charset,UTF-8\nname,かたち\nsakura.name,ひとり\nkero.name,ふたり\nchar2.name,さんにん\n";
 
@@ -259,8 +259,8 @@ pub mod animated_image {
     }
 }
 
-/// 割った `measure_template_tests` の 2 つの片割れ（配置の crate と本体）が共に使う走査器
-/// （spec: placement-crate-split 要件 3.6・5.3）。写しを作らず、ここに 1 つだけ置く。
+/// 割った `measure_template_tests` の 2 つの片割れ（配置の crate と本体）が共に使う走査器。
+/// 写しを作らず、ここに 1 つだけ置く。
 pub mod measure_template {
     /// 見張る綴り。
     ///
@@ -377,15 +377,14 @@ pub mod measure_template {
 }
 
 /// 割った `spawn_zorder_pair_deferred_tests` の 2 つの片割れ（配置の crate と本体）が共に使う
-/// 語の表と走査器（spec: placement-crate-split 要件 3.6・5.3）。写しを作らず、ここに 1 つだけ置く。
+/// 語の表と走査器。写しを作らず、ここに 1 つだけ置く。
 /// 名簿の走査（[`assert_vocabulary_absent`]・[`assert_roster_covers`]）と探針の自己検査
 /// （[`assert_needles_are_detected`]）もここにあり、片割れは名簿と実物での較正だけを持つ。
 /// [`measure_template`] の `code_only` とは中身が違う（こちらは `//` の行を落とすだけ）のでまとめない。
 pub mod zorder_pair_deferred {
     /// 先送り語彙（小文字）と、それが何の入口かの説明。
     ///
-    /// 最小化・タスクバーの扱いは別の spec（`tasktray-minimize` ほか）の持ち物で、まだ先送りの
-    /// ままである。兄弟の wintf 側テスト（`crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs`）
+    /// 最小化・タスクバーの扱いはまだ先送りのままである。兄弟の wintf 側テスト（`crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs`）
     /// と同じ 2 つの表（この表と [`BAND_NEEDLES`]）を持つ。片方だけを増やすと守りが片肺になるので、
     /// どちらの表へ足すときも両方のファイル（wintf の兄弟とこのファイル）へ足すこと。
     pub const DEFERRED_NEEDLES: [(&str, &str); 6] = [
@@ -409,8 +408,8 @@ pub mod zorder_pair_deferred {
         ),
     ];
 
-    /// 帯の語（小文字）。常に手前を読むのは本体の受け口と取り出しの相のファイルだけであり
-    /// （`stay-on-top-directives`）、重なり順の機構の本番ファイルには 1 つも無い。
+    /// 帯の語（小文字）。常に手前を読むのは本体の受け口と取り出しの相のファイルだけで、
+    /// 重なり順の機構の本番ファイルには 1 つも無い。
     pub const BAND_NEEDLES: [(&str, &str); 3] = [
         (
             "topmost",

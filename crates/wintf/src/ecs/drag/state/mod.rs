@@ -77,7 +77,7 @@ pub enum DragState {
         prev_pos: PhysicalPoint,
         /// 開始時刻
         start_time: Instant,
-        // --- WndProc レベルドラッグ用の新規フィールド ---
+        // --- WndProc レベルドラッグ用 ---
         /// Window の Win32 ハンドル
         hwnd: HWND,
         /// ドラッグ開始時のウィンドウ位置（ウィンドウ枠を含むスクリーン座標）
@@ -249,7 +249,6 @@ pub fn update_dragging(
                 ..
             } => {
                 let (entity, start_pos, start_time) = (*entity, *start_pos, *start_time);
-                // WindowDragContextResource から Window 情報を読み取り
                 // 窓を動かすのは、控えが動かすと言い、かつ始めの位置があるときだけ
                 let (hwnd, initial_window_pos, move_window, constraint) = match drag_context
                     .and_then(|ctx_res| ctx_res.get())
@@ -386,7 +385,7 @@ fn close_drag(
 
 /// ドラッグ終了（位置と取り消しの印を指定して休ませる）。
 ///
-/// 戻り値は [`DragClose`]（以前は `()`）。前の状態が `JustStarted`／`Dragging` なら、
+/// 戻り値は [`DragClose`]。前の状態が `JustStarted`／`Dragging` なら、
 /// 呼ぶだけで終了の種（`DragTransition::Ended`）が累積器へ積まれる。呼び出し側でも
 /// 積むと二重になる（2 件目は累積器の入口で捨てられる）。
 #[inline]
@@ -400,7 +399,7 @@ pub fn end_dragging(position: PhysicalPoint, cancelled: bool) -> DragClose {
 
 /// ドラッグキャンセル（ESCキー、WM_CANCELMODE、非活性化時）。押した位置・取り消しの印つきで休ませる。
 ///
-/// 戻り値は [`DragClose`]（以前は `()`）。種の規則は [`end_dragging`] と同じで、
+/// 戻り値は [`DragClose`]。種の規則は [`end_dragging`] と同じで、
 /// 呼ぶだけで終了の種が積まれる（呼び出し側でも積むと二重になる）。
 #[inline]
 pub fn cancel_dragging() -> DragClose {

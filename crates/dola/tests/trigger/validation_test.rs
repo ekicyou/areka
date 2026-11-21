@@ -1,4 +1,4 @@
-//! トリガー機能のテスト — 5.2: バリデーションユニットテスト（V9更新, V14t–V18t）
+//! トリガー機能のテスト — バリデーションユニットテスト
 
 use super::common::minimal_trigger_doc;
 use dola::{
@@ -7,7 +7,7 @@ use dola::{
 };
 
 // ============================================================
-// 5.2: バリデーションユニットテスト
+// バリデーションユニットテスト
 // ============================================================
 
 /// V9 更新: trigger_storyboard のみのエントリは V9 エラーにならない
@@ -226,7 +226,7 @@ fn v16t_trigger_with_transition_is_error() {
     );
 }
 
-/// V15t（#49）: 深いトリガーの鎖を 64 KiB のスタックで検証できる
+/// V15t: 深いトリガーの鎖を 64 KiB のスタックで検証できる
 ///
 /// `dfs_detect_cycle` が鎖の深さに比例してコールスタックを使うと、このスレッドは
 /// スタックを使い切って落ちる（再帰に戻すと赤）。
@@ -307,7 +307,7 @@ fn v15t_cycle_path_is_closed_and_contains_members() {
     assert_eq!(cycle.as_slice(), ["sb_a", "sb_b", "sb_a"]);
 }
 
-/// V15t（#6）: 循環を見つけた根の道とスタックの印を次の根へ持ち越さない
+/// V15t: 循環を見つけた根の道とスタックの印を次の根へ持ち越さない
 ///
 /// {a→b, b→a, c→a} で、閉路に入らない c が閉路の一員として 2 件目に報告されない。
 #[test]
@@ -447,7 +447,7 @@ fn v18t_trigger_target_not_found() {
     );
 }
 
-/// #31: トリガー以外のエントリの trigger_start_offset は黙って捨てられるので拒む
+/// トリガー以外のエントリの trigger_start_offset は黙って捨てられるので拒む
 #[test]
 fn trigger_start_offset_on_non_trigger_is_rejected() {
     let sb = StoryboardBuilder::new()

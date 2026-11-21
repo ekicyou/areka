@@ -4,7 +4,7 @@ use super::*;
 use windows_core::Interface;
 
 // ============================================================
-// Task 1.1: WicCore Tests
+// WicCore
 // ============================================================
 
 // COMを初期化するヘルパー（COINIT_MULTITHREADED for WIC free-threaded factory）
@@ -27,7 +27,6 @@ fn with_com_initialized<F: FnOnce()>(f: F) {
 
 #[test]
 fn test_wic_core_creation() {
-    // WicCoreが正常に作成できることを確認
     with_com_initialized(|| {
         let result = WicCore::new();
         assert!(result.is_ok(), "WicCore creation should succeed");
@@ -35,11 +34,7 @@ fn test_wic_core_creation() {
 }
 
 // ============================================================
-// W5b-T 追加: resolve_path のデバイス非依存パス解決ロジック
-//
-// resolve_path は WIC/D2D に一切依存しない純粋なパス変換
-// （絶対パスはそのまま / 相対パスは実行ファイルディレクトリ基準で join）。
-// 既存テストはゼロだったため特性化する。
+// resolve_path のデバイス非依存パス解決（絶対パスはそのまま／相対パスは実行ファイルディレクトリ基準で join）
 // ============================================================
 
 #[test]
@@ -67,14 +62,13 @@ fn test_resolve_path_relative_is_joined_under_exe_dir() {
     let expected = exe_dir.join("assets/logo.png");
 
     assert_eq!(resolved, expected);
-    // 解決結果は実行ファイルディレクトリ配下（絶対パス）になる
     assert!(resolved.is_absolute());
     assert!(resolved.starts_with(exe_dir));
     assert!(resolved.ends_with("logo.png"));
 }
 
 // ============================================================
-// 11 番: 解読は裏の作業の 1 回だけ
+// 解読は裏の作業の 1 回だけ
 // ============================================================
 
 #[test]
@@ -96,7 +90,7 @@ fn load_decoded_bitmap_returns_in_memory_bitmap() {
 }
 
 // ============================================================
-// 7 番: 外す・付け直すと、新しい絵と当たりになる（実 GPU）
+// 外す・付け直すと、新しい絵と当たりになる（実 GPU）
 // ============================================================
 
 use bevy_ecs::prelude::*;
@@ -264,7 +258,7 @@ fn alpha_mask_for_previous_image_is_dropped() {
 }
 
 // ============================================================
-// 10・21 番: D2D の画像が作れない失敗も骨組みの道を通り、毎回やり直さない（実 GPU）
+// D2D の画像が作れない失敗も骨組みの道を通り、毎回やり直さない（実 GPU）
 // ============================================================
 
 #[test]
@@ -373,7 +367,7 @@ fn failed_bitmap_for_new_image_drops_previous_bitmap() {
 }
 
 // ============================================================
-// 7.1 二度目の見直し N5: 読み込んだ後に当たりを AlphaMask へ替えてもマスクを作る（実 GPU なし）
+// 読み込んだ後に当たりを AlphaMask へ替えてもマスクを作る（実 GPU なし）
 // ============================================================
 
 #[test]
@@ -410,7 +404,7 @@ fn switching_hit_test_to_alpha_mask_after_load_builds_mask() {
 }
 
 // ============================================================
-// αマスクの読み込みの大きさ（W5）— CPU だけ
+// αマスクの読み込みの大きさ — CPU だけ
 // ============================================================
 
 /// 行の幅と全体の大きさは u32 に収まるときだけ返し、収まらなければ測れないと返す

@@ -1,5 +1,4 @@
-//! 動かせない指定の帳簿と書き手の決定論の檻（要件 4.1・4.3・4.4・5.1〜5.4・5.8・
-//! 6.2・7.3・design「BalloonLock」）。
+//! 動かせない指定の帳簿と書き手の決定論の檻。
 //!
 //! 窓は偽の部品（`BalloonWindowMarker`＋`DragConfig`）だけで組み、記録は
 //! `log-capture-kit`（`log_capture_kit::capture`）で取る。
@@ -32,7 +31,7 @@ fn reason(world: &World, scope: u32) -> Option<HoldReason> {
     hold_reason(world.resource::<BalloonLockLedger>(), scope)
 }
 
-/// descript の段だけ: 書かれたスコープだけ動かせず、ほかは動かせる（4.1・4.3）。
+/// descript の段だけ: 書かれたスコープだけ動かせず、ほかは動かせる。
 #[test]
 fn seed_holds_only_descript_scopes() {
     let (mut world, e) = world_with_balloons();
@@ -50,7 +49,7 @@ fn seed_holds_only_descript_scopes() {
     assert_eq!(reason(&world, 0), None);
 }
 
-/// 帳簿が空なら今と同じく全部動かせる（4.3）。
+/// 帳簿が空なら今と同じく全部動かせる。
 #[test]
 fn empty_seed_keeps_every_balloon_movable() {
     let (mut world, e) = world_with_balloons();
@@ -61,7 +60,7 @@ fn empty_seed_keeps_every_balloon_movable() {
     assert!(movable(&world, e[1]));
 }
 
-/// `\0` の lock で `\0` だけ止まり `\1` は動かせる・記録 1 件（5.1・5.8）。
+/// `\0` の lock で `\0` だけ止まり `\1` は動かせる・記録 1 件。
 #[test]
 fn script_lock_applies_only_to_writing_scope() {
     let (mut world, e) = world_with_balloons();
@@ -81,7 +80,7 @@ fn script_lock_applies_only_to_writing_scope() {
     );
 }
 
-/// unlock は書いた所のスコープの台本の分だけ解き、ほかのスコープの lock は残す（5.2・5.8）。
+/// unlock は書いた所のスコープの台本の分だけ解き、ほかのスコープの lock は残す。
 #[test]
 fn script_unlock_releases_only_its_scope() {
     let (mut world, e) = world_with_balloons();
@@ -97,7 +96,7 @@ fn script_unlock_releases_only_its_scope() {
     assert_eq!(events_with(&events, "balloon_move_unlock_held").len(), 0);
 }
 
-/// descript の段の間は unlock で解けず、`balloon_move_unlock_held` が 1 件（5.3・5.8）。
+/// descript の段の間は unlock で解けず、`balloon_move_unlock_held` が 1 件。
 #[test]
 fn unlock_cannot_release_descript_tier() {
     let (mut world, e) = world_with_balloons();
@@ -118,7 +117,7 @@ fn unlock_cannot_release_descript_tier() {
     );
 }
 
-/// 取り替えは descript の段だけを替え、台本の lock を保つ（4.4・5.4）。
+/// 取り替えは descript の段だけを替え、台本の lock を保つ。
 #[test]
 fn replace_descript_keeps_script_lock() {
     let (mut world, e) = world_with_balloons();
@@ -131,7 +130,7 @@ fn replace_descript_keeps_script_lock() {
     assert!(!movable(&world, e[1]), "台本の lock は残る");
 }
 
-/// 帳簿が無い所への lock は警告 1 件の上で空の帳簿を据えて当てる（design の失敗表）。
+/// 帳簿が無い所への lock は警告 1 件の上で空の帳簿を据えて当てる。
 #[test]
 fn lock_without_ledger_warns_and_seeds_empty() {
     let (mut world, e) = world_with_balloons();
@@ -143,7 +142,7 @@ fn lock_without_ledger_warns_and_seeds_empty() {
     assert!(!movable(&world, e[1]));
 }
 
-/// 書き手は `move_window` だけを書き、有効の印と閾値は変えない（6.2）。
+/// 書き手は `move_window` だけを書き、有効の印と閾値は変えない。
 #[test]
 fn writer_touches_only_move_window() {
     let mut world = World::new();

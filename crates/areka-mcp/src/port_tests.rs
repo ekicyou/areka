@@ -1,4 +1,4 @@
-//! `port` の決定論テスト（要件 2.6 の 9 値＋20 候補の並び＋非 UTF-8）。ソケットは開かない。
+//! `port` の決定論テスト（9 値＋20 候補の並び＋非 UTF-8）。ソケットは開かない。
 
 use std::env::VarError;
 use std::ffi::OsString;
@@ -20,7 +20,7 @@ fn defaults() -> Vec<u16> {
     candidates_from_env_value(None)
 }
 
-/// (要件 2.1, 2.8) 既定の候補は 9801 → 9821 から始まり、隣（+1〜+9）を交互に足した 20 個。
+/// 既定の候補は 9801 → 9821 から始まり、隣（+1〜+9）を交互に足した 20 個。
 #[test]
 fn default_candidates_are_twenty_in_alternating_order() {
     assert_eq!(DEFAULT_PORTS, [9801, 9821]);
@@ -38,7 +38,7 @@ fn default_candidates_are_twenty_in_alternating_order() {
     assert_eq!(unique.len(), 20, "重複なし: {got:?}");
 }
 
-/// (要件 2.1〜2.3, 2.5, 2.6) 9 値の表: 値 → 試す候補の列（空＝待ち受けない）と warn の件数。
+/// 9 値の表: 値 → 試す候補の列（空＝待ち受けない）と warn の件数。
 #[test]
 fn candidates_from_env_value_fixed_table() {
     let defaults = defaults();
@@ -69,7 +69,7 @@ fn candidates_from_env_value_fixed_table() {
     }
 }
 
-/// (要件 2.5) 空白だけ・溢れる値も読めない値として既定の候補へ倒す。
+/// 空白だけ・溢れる値も読めない値として既定の候補へ倒す。
 #[test]
 fn candidates_from_env_value_blank_and_overflow_fall_back() {
     for value in ["   ", "99999999999999999999", "+"] {
@@ -79,7 +79,7 @@ fn candidates_from_env_value_blank_and_overflow_fall_back() {
     }
 }
 
-/// (要件 2.5) 読めない値の warn にはその値を載せ、文面は「areka の MCP の口の番号に既定の候補を使う」で「待ち受ける」を含まない。
+/// 読めない値の warn にはその値を載せ、文面は「areka の MCP の口の番号に既定の候補を使う」で「待ち受ける」を含まない。
 #[test]
 fn candidates_from_env_value_warn_carries_the_value() {
     let (_, events) = capture(|| candidates_from_env_value(Some("abc")));
@@ -97,7 +97,7 @@ fn candidates_from_env_value_warn_carries_the_value() {
     assert!(!warn.message().contains("待ち受ける"), "{warn:?}");
 }
 
-/// (要件 2.5) UTF-8 でない値は warn 1 件で既定の候補へ倒す（実際の環境変数は触らず、読み口の判断へ直接渡す）。
+/// UTF-8 でない値は warn 1 件で既定の候補へ倒す（実際の環境変数は触らず、読み口の判断へ直接渡す）。
 #[test]
 fn read_port_candidates_non_unicode_falls_back_with_warn() {
     // 対になっていないサロゲート＝UTF-8 へ写せない値。
@@ -114,7 +114,7 @@ fn read_port_candidates_non_unicode_falls_back_with_warn() {
     assert!(!events[0].message().contains("待ち受ける"), "{events:?}");
 }
 
-/// (要件 2.2, 2.3) 読み口は未設定と読める値を純粋な判断へそのまま渡す（指定の番号に隣は足さない）。
+/// 読み口は未設定と読める値を純粋な判断へそのまま渡す（指定の番号に隣は足さない）。
 #[test]
 fn candidates_from_var_passes_through_to_the_decision() {
     let (got, events) = capture(|| candidates_from_var(Err(VarError::NotPresent)));

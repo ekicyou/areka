@@ -28,17 +28,15 @@ fn make_test_monitor(handle: isize, left: i32, top: i32, right: i32, bottom: i32
     }
 }
 
-// ===== Task 11.1: LayoutRoot Singleton生成とMonitor列挙テスト =====
+// ===== LayoutRoot Singleton生成とMonitor列挙テスト =====
 
 #[test]
 fn test_layout_root_singleton_creation() {
     let mut world = World::new();
     world.insert_resource(TaffyLayoutResource::default());
 
-    // initialize_layout_rootを実行
     initialize_layout_root(&mut world);
 
-    // LayoutRootが1つだけ生成されることを検証
     let layout_roots: Vec<Entity> = world
         .query_filtered::<Entity, With<LayoutRoot>>()
         .iter(&world)
@@ -67,26 +65,21 @@ fn test_monitor_enumeration() {
     let mut world = World::new();
     world.insert_resource(TaffyLayoutResource::default());
 
-    // initialize_layout_rootを実行
     initialize_layout_root(&mut world);
 
-    // Monitorエンティティが生成されることを検証
     let monitor_count = world.query::<&Monitor>().iter(&world).count();
 
-    // システムに少なくとも1つのモニターが存在することを検証
     assert!(
         monitor_count >= 1,
         "At least one monitor should be enumerated"
     );
 
-    // LayoutRootエンティティを取得
     let mut layout_root_query = world.query_filtered::<Entity, With<LayoutRoot>>();
     let layout_root_entity = layout_root_query
         .iter(&world)
         .next()
         .expect("LayoutRoot should exist");
 
-    // 各MonitorエンティティがLayoutRootの子であることを検証
     for (entity, monitor) in world.query::<(Entity, &Monitor)>().iter(&world) {
         let child_of = world
             .get::<ChildOf>(entity)
@@ -97,7 +90,6 @@ fn test_monitor_enumeration() {
             "Monitor should be a child of LayoutRoot"
         );
 
-        // Monitor情報の妥当性を検証
         assert!(monitor.dpi > 0, "Monitor DPI should be positive");
         assert!(
             monitor.bounds.right > monitor.bounds.left,
@@ -132,27 +124,23 @@ fn test_monitor_enumeration() {
     }
 }
 
-// ===== Task 13.1: Taffyツリー同期とレイアウト計算テスト =====
+// ===== Taffyツリー同期とレイアウト計算テスト =====
 
 #[test]
 fn test_taffy_tree_sync_and_layout_computation() {
     let mut world = World::new();
     world.insert_resource(TaffyLayoutResource::default());
 
-    // LayoutRootとMonitorを初期化
     initialize_layout_root(&mut world);
 
-    // TaffyStyleを構築
     let mut schedule2 = Schedule::default();
     schedule2.add_systems(build_taffy_styles_system);
     schedule2.run(&mut world);
 
-    // Taffyツリーを同期
     let mut schedule3 = Schedule::default();
     schedule3.add_systems(sync_taffy_tree_system);
     schedule3.run(&mut world);
 
-    // LayoutRootとMonitorのEntityを先に取得
     let layout_root = world
         .query_filtered::<Entity, With<LayoutRoot>>()
         .iter(&world)
@@ -164,17 +152,14 @@ fn test_taffy_tree_sync_and_layout_computation() {
         .iter(&world)
         .collect();
 
-    // Entity↔NodeIdマッピングの検証
     {
         let taffy_res = world.resource::<TaffyLayoutResource>();
 
-        // LayoutRootのマッピング検証
         assert!(
             taffy_res.get_node(layout_root).is_some(),
             "LayoutRoot should have a Taffy node"
         );
 
-        // Monitorのマッピング検証
         for monitor_entity in monitors.iter() {
             assert!(
                 taffy_res.get_node(*monitor_entity).is_some(),
@@ -183,7 +168,6 @@ fn test_taffy_tree_sync_and_layout_computation() {
         }
     }
 
-    // レイアウト計算を実行
     let mut schedule4 = Schedule::default();
     schedule4.add_systems(compute_taffy_layout_system);
     schedule4.run(&mut world);
@@ -202,26 +186,23 @@ fn test_taffy_tree_sync_and_layout_computation() {
     }
 }
 
-// ===== Task 14.1: DisplayConfigurationChangedフラグテスト =====
+// ===== DisplayConfigurationChangedフラグテスト =====
 
 #[test]
 fn test_display_configuration_changed_flag() {
     let mut app = App::new();
 
-    // 初期状態ではフラグがfalse
     assert!(
         !app.display_configuration_changed(),
         "Flag should be false initially"
     );
 
-    // mark_display_change()でフラグがtrueになる
     app.mark_display_change();
     assert!(
         app.display_configuration_changed(),
         "Flag should be true after mark_display_change"
     );
 
-    // reset_display_change()でフラグがfalseになる
     app.reset_display_change();
     assert!(
         !app.display_configuration_changed(),
@@ -229,45 +210,39 @@ fn test_display_configuration_changed_flag() {
     );
 }
 
-// ===== Task 14.2: モニター追加・削除・更新テスト =====
+// ===== モニター追加・削除・更新テスト =====
 
 #[test]
 fn test_monitor_update_on_change() {
     let mut world = World::new();
     world.insert_resource(TaffyLayoutResource::default());
     world.insert_resource(App::new());
-    // 遷移観測の刻印（D1）: `detect_display_change_system` は World 資源から
+    // 遷移観測の刻印: `detect_display_change_system` は World 資源から
     // 刻印を組むため、`EcsWorld::new` が入れる 2 資源を素の World にも用意する。
     world.insert_resource(wintf::ecs::world::FrameCount::default());
     world.insert_resource(wintf::ecs::window::transition_diag::TickStart(
         std::time::Instant::now(),
     ));
 
-    // LayoutRootとMonitorを初期化
     initialize_layout_root(&mut world);
 
-    // 初期のMonitor数を取得
     let initial_count = world.query::<&Monitor>().iter(&world).count();
 
-    // ディスプレイ構成変更をシミュレート
     {
         let mut app = world.resource_mut::<App>();
         app.mark_display_change();
     }
 
-    // detect_display_change_systemを実行
     let mut schedule2 = Schedule::default();
     schedule2.add_systems(detect_display_change_system);
     schedule2.run(&mut world);
 
-    // フラグがリセットされていることを検証
     let app = world.resource::<App>();
     assert!(
         !app.display_configuration_changed(),
         "Flag should be reset after detect_display_change_system"
     );
 
-    // Monitor数が維持されていることを検証（実際の環境では変化しない想定）
     let current_count = world.query::<&Monitor>().iter(&world).count();
     assert_eq!(
         initial_count, current_count,
@@ -275,14 +250,13 @@ fn test_monitor_update_on_change() {
     );
 }
 
-// ===== Task 15.1: 既存システム互換性テスト =====
+// ===== 既存システム互換性テスト =====
 
 #[test]
 fn test_backward_compatibility_without_layout_root() {
     let mut world = World::new();
     world.insert_resource(TaffyLayoutResource::default());
 
-    // LayoutRootなしでWidgetエンティティを作成
     let widget = world
         .spawn((
             BoxStyle {
@@ -297,23 +271,19 @@ fn test_backward_compatibility_without_layout_root() {
         ))
         .id();
 
-    // build_taffy_styles_systemを実行
     let mut schedule = Schedule::default();
     schedule.add_systems(build_taffy_styles_system);
     schedule.run(&mut world);
 
-    // TaffyStyleが自動生成されることを検証
     assert!(
         world.get::<TaffyStyle>(widget).is_some(),
         "TaffyStyle should be auto-generated even without LayoutRoot"
     );
 
-    // sync_taffy_tree_systemを実行
     let mut schedule2 = Schedule::default();
     schedule2.add_systems(sync_taffy_tree_system);
     schedule2.run(&mut world);
 
-    // Taffyノードが作成されることを検証
     let taffy_res = world.resource::<TaffyLayoutResource>();
     assert!(
         taffy_res.get_node(widget).is_some(),
@@ -321,10 +291,8 @@ fn test_backward_compatibility_without_layout_root() {
     );
 }
 
-// ===== W4b-T: update_monitor_layout_system 単独テスト =====
-// 既存テストは initialize_layout_root / detect_display_change_system を固定していたが、
-// Monitor 変更時に BoxStyle.size/inset を再計算する update_monitor_layout_system は
-// 直接検証されていなかった。実 HMONITOR 不要のデバイス非依存ロジックのため特性化する。
+// ===== update_monitor_layout_system 単独テスト =====
+// Monitor 変更時に BoxStyle.size/inset を再計算する update_monitor_layout_system を直接検証する。
 
 /// Changed<Monitor> 検出時に BoxStyle.size と inset が bounds から再計算される
 #[test]

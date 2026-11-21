@@ -5,7 +5,7 @@ use super::{WorkAreaResolution, work_area_for_window_with_origin};
 use crate::resolver::SizePx;
 
 // -------------------------------------------------------------------------
-// MonitorSnapshot / work_area_for_window（`areka-P0-window-placement` 要件 4.7・DD15 基盤）
+// MonitorSnapshot / work_area_for_window
 // -------------------------------------------------------------------------
 
 use super::{MonitorSnapshot, work_area_for_window};
@@ -56,7 +56,7 @@ fn work_area_for_window_boundary_center_is_half_open_and_first_match_wins() {
     let snapshot = MonitorSnapshot {
         work_areas: vec![a, b],
     };
-    // 中心 x=1920 ちょうど（共有辺）→ a の right は排他ゆえ b
+    // 中心 x=1920 ちょうど（共有辺）→ a の right は排他なので b
     let window = rect(1520, 220, 2320, 820); // 中心 (1920, 520)
     assert_eq!(work_area_for_window(&snapshot, window), Some(b));
 
@@ -105,7 +105,6 @@ fn with_origin_reports_contains_when_center_belongs() {
         let snapshot = mixed_layout(dpi);
         let size = char_size(dpi);
 
-        // 右モニタの中央付近
         let pos = point(px(800, dpi), grounded_y(right_wa(dpi), size));
         assert_eq!(
             work_area_for_window_with_origin(&snapshot, win(pos, size)),
@@ -113,7 +112,6 @@ fn with_origin_reports_contains_when_center_belongs() {
             "dpi={dpi}: 右モニタ内の窓は Contains"
         );
 
-        // 左モニタ（負座標）の中央付近
         let pos = point(-1200, grounded_y(left_wa(), size));
         assert_eq!(
             work_area_for_window_with_origin(&snapshot, win(pos, size)),
@@ -123,15 +121,15 @@ fn with_origin_reports_contains_when_center_belongs() {
     }
 }
 
-/// どのモニタにも属さない中心は `NearestFallback` として判別される
-/// （S3 後半＝最近傍フォールバックが異常を無観測で吸収する性質の是正・`areka-P0-dpi-window-vanish` 要件 3.2）。
+/// どのモニタにも属さない中心は、最近傍フォールバックが異常を無観測で吸収しないよう
+/// `NearestFallback` として判別される。
 #[test]
 fn with_origin_reports_nearest_fallback_when_center_belongs_nowhere() {
     for dpi in DPIS {
         let snapshot = mixed_layout(dpi);
         let size = char_size(dpi);
 
-        // ① 右モニタの右外（192 では 3200 超座標）
+        // 右モニタの右外（192 では 3200 超座標）
         let far_right = point(
             px(1920, dpi) + px(400, dpi),
             grounded_y(right_wa(dpi), size),
@@ -145,7 +143,7 @@ fn with_origin_reports_nearest_fallback_when_center_belongs_nowhere() {
         );
         assert_eq!(wa, right_wa(dpi), "dpi={dpi}: 最近傍は右モニタ");
 
-        // ② 左モニタの左外（負座標側）
+        // 左モニタの左外（負座標側）
         let far_left = point(-4000, 400);
         let (wa, origin) = work_area_for_window_with_origin(&snapshot, win(far_left, size))
             .expect("非空 snapshot ゆえ Some");
@@ -156,8 +154,8 @@ fn with_origin_reports_nearest_fallback_when_center_belongs_nowhere() {
         );
         assert_eq!(wa, left_wa(), "dpi={dpi}: 最近傍は左モニタ");
 
-        // ③ 2 面のあいだの帯（右モニタのタスクバー上・非対称 work area 由来）
-        //    幅 px(40) の窓を帯へ完全に収め、中心を帯の中へ落とす
+        // 2 面のあいだの帯（右モニタのタスクバー上・非対称 work area 由来）。
+        // 幅 px(40) の窓を帯へ完全に収め、中心を帯の中へ落とす
         let strip_size = SizePx {
             w: px(40, dpi),
             h: px(40, dpi),
@@ -185,7 +183,6 @@ fn with_origin_empty_snapshot_is_none() {
 
 // -------------------------------------------------------------------------
 // MonitorDpiTable / MonitorSources / same_monitors
-// （areka-P0-dpi-transition-atomicity task 5.1・設計 C6・要件 5.1／5.4）
 // -------------------------------------------------------------------------
 
 use super::{MonitorDpiEntry, MonitorDpiTable, MonitorSources, same_monitors};
@@ -227,8 +224,8 @@ fn two_monitors() -> Vec<Monitor> {
     ]
 }
 
-/// モニタ別拡大率表は列挙順のまま、**`bounds`**（`work_area` ではない）と拡大率を
-/// 単位変換なしで忠実転写する。
+/// モニタ別拡大率表は列挙順のまま、`bounds`（`work_area` ではない）と拡大率を
+/// 単位変換なしで転写する。
 #[test]
 fn monitor_dpi_table_transcribes_bounds_and_dpi_in_enumeration_order() {
     let table = MonitorDpiTable::from_monitors(&two_monitors());
@@ -255,7 +252,7 @@ fn monitor_dpi_table_from_no_monitors_is_empty() {
     assert!(MonitorSources::from_monitors(&[]).is_empty());
 }
 
-/// 順序非依存の比較: 同じ台の集合なら**並びが逆でも同じ**と見なす。
+/// 順序非依存の比較: 同じ台の集合なら並びが逆でも同じと見なす。
 #[test]
 fn same_monitors_ignores_the_order_of_the_table() {
     let forward = MonitorSources::from_monitors(&two_monitors());
@@ -278,7 +275,7 @@ fn same_monitors_sees_a_one_pixel_work_area_difference() {
     assert!(!same_monitors(&a, &MonitorSources::from_monitors(&moved)));
 }
 
-/// 対: 作業領域も矩形も同じで**拡大率だけ**違えば別物。
+/// 対: 作業領域も矩形も同じで拡大率だけ違えば別物。
 ///
 /// 作業領域だけを比べていると、この構成変更を静かに取りこぼして拡大率表が古いまま残る。
 #[test]
@@ -294,7 +291,7 @@ fn same_monitors_sees_a_scale_only_difference() {
     assert!(!same_monitors(&a, &b));
 }
 
-/// 対: 作業領域も拡大率も同じで**矩形だけ**違えば別物（解像度変更で作業領域が偶然一致する形）。
+/// 対: 作業領域も拡大率も同じで矩形だけ違えば別物（解像度変更で作業領域が偶然一致する形）。
 #[test]
 fn same_monitors_sees_a_bounds_only_difference() {
     let a = MonitorSources::from_monitors(&two_monitors());
@@ -313,7 +310,7 @@ fn same_monitors_sees_a_count_difference() {
 }
 
 /// 同一の台が 2 度並ぶ表（複製）と 1 台だけの表を「同じ」と言わない
-/// ——集合ではなく**多重集合**として比べていること。
+/// ——集合ではなく多重集合として比べている。
 #[test]
 fn same_monitors_compares_as_a_multiset_not_a_set() {
     let one = MonitorSources::from_monitors(&two_monitors()[..1]);
@@ -326,16 +323,16 @@ fn same_monitors_compares_as_a_multiset_not_a_set() {
 }
 
 // -------------------------------------------------------------------------
-// 帰属規則の共有（areka-P0-dpi-transition-atomicity task 5.4・設計 C5）
+// 帰属規則の共有
 // -------------------------------------------------------------------------
 
-/// 表からの拡大率の引き当ては、表示基盤側の再導出が使う帰属規則と**同一の関数**を通る。
+/// 表からの拡大率の引き当ては、表示基盤側の再導出が使う帰属規則と同一の関数を通る。
 ///
-/// 配置側に同規則の述語を置く案は採らなかったので、ここが確かめるのは「同じ答えを返すか」
-/// ではなく「同じ関数へ届いているか」である——`Monitor` の列に対する
+/// 配置側に同規則の述語を置かないので、確かめるのは「同じ答えを返すか」
+/// ではなく「同じ関数へ届いているか」。`Monitor` の列に対する
 /// `monitor_containing` と、同じ列から作った表に対する [`MonitorDpiTable::dpi_for_point`] が
 /// 全ての探針で一致することを問う。片方が `work_area` を読むように書き換われば
-/// （`MonitorBounds` の実装は表側だけが自前で持つ唯一の部分である）ここが落ちる。
+/// （`MonitorBounds` の実装は表側だけが自前で持つ唯一の部分）ここが落ちる。
 #[test]
 fn the_table_lookup_agrees_with_the_display_layer_attribution_rule() {
     let monitors = two_monitors();
@@ -362,8 +359,7 @@ fn the_table_lookup_agrees_with_the_display_layer_attribution_rule() {
         );
     }
 
-    // 探針の非退化: 上の列には `Some` と `None` の双方が実際に出る（全部 `None` なら
-    // 「どちらも何も返さない」で恒真に通ってしまう）。
+    // 全部 `None` だと「どちらも何も返さない」で恒真に通るので、`Some` と `None` の双方が出ることを確かめる。
     let answers: Vec<Option<u32>> = probes
         .iter()
         .map(|&(x, y)| table.dpi_for_point(x, y))

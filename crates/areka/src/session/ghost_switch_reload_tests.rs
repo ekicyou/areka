@@ -1,10 +1,9 @@
-//! ゴースト切替の起こし方に読み直しの由来を通す兄弟テスト
-//! （areka-P0-mcp-reload タスク 7.1・design「GhostSwitch の口」・Flow 2・要件 3.2〜3.6・12.2・12.4）。
+//! ゴースト切替の起こし方に読み直しの由来を通す兄弟テスト。
 //!
 //! 切替の土台（[`SwitchRig`]）の上で、読み直しの窓口・切替・kanade・偽の SHIORI を本物の経路で通す。
 //! 確かめること: 印（窓口自身の予約）があれば `switch_to` は `Reloaded{Ghost}` で起こし、降ろす側に
 //! `OnGhostChanging`・`OnClose`、起こす側に `OnBoot`・`OnGhostChanged`・`OnFirstBoot` が無く、情報の通知
-//! （`OnInitialize`・`username`・`basewareversion`）はある／印が無い・他人の予約なら今までどおり `OnGhostChanged`。
+//! （`OnInitialize`・`username`・`basewareversion`）はある／印が無い・他人の予約なら `OnGhostChanged`。
 
 use areka_kanade::ChangeOrigin;
 use log_capture_kit::{CapturedEvent, capture};
@@ -140,7 +139,7 @@ fn a_ghost_reload_reboots_with_no_boot_notice_but_with_the_information_notices()
     assert_eq!(named(&events, "reload_failed"), 0, "{events:?}");
 }
 
-/// 印が無い自分自身への切替は今までどおり `OnGhostChanged` で起きる（要件 3.6・12.4）。
+/// 印が無い自分自身への切替は `OnGhostChanged` で起きる。
 #[test]
 fn a_switch_without_the_mark_boots_with_on_ghost_changed_as_before() {
     let mut rig = running_a();
@@ -162,7 +161,7 @@ fn a_switch_without_the_mark_boots_with_on_ghost_changed_as_before() {
 }
 
 /// 印があっても進行中の予約が他人のもの（鍵が違う）なら由来は上書きされず `OnGhostChanged` で起き、
-/// 印は `reload_failed(overtaken)` を残して下りる（design「述語の契約」）。
+/// 印は `reload_failed(overtaken)` を残して下りる。
 #[test]
 fn a_foreign_switch_under_a_reload_mark_boots_as_before_and_drops_the_mark_as_overtaken() {
     let mut rig = running_a();
@@ -240,7 +239,7 @@ fn ticker_closed(events: &[CapturedEvent]) -> usize {
         .count()
 }
 
-/// shiori の読み直し（要件 4.1〜4.3・12.5）: 窓は閉じられず（`WindowsEpoch` 不変）、単位は降ろされない
+/// shiori の読み直し: 窓は閉じられず（`WindowsEpoch` 不変）、単位は降ろされない
 /// （seriko・loop ticker は同じもの）。古い SHIORI は `OnDestroy(reload)` の後に unload され、`OnClose`・
 /// `OnGhostChanging` を受けない。新しい SHIORI は `OnInitialize(reload)` で起き、台詞を求める GET は 0。
 /// 終わりの記録は `reload_done` の 1 件。
@@ -305,7 +304,7 @@ fn a_shiori_reload_keeps_the_windows_and_rebuilds_only_the_runtime() {
     assert_eq!(named(&events, "reload_failed"), 0, "{events:?}");
 }
 
-/// shiori の読み直しは窓の組の帳簿と吸着の出どころを残す（areka-P0-window-link-directives 要件 6.3）:
+/// shiori の読み直しは窓の組の帳簿と吸着の出どころを残す:
 /// 台本の組の入った帳簿と、台本で向きを変えた印の付いた `AnchorSource` が、読み直しの後も同じ値のまま。
 ///
 /// # 非空虚性
@@ -350,7 +349,7 @@ fn a_shiori_reload_keeps_the_sticky_ledger_and_anchor_source() {
     );
 }
 
-/// 組み直しの失敗（要件 4.4）: 新しい SHIORI を起こせなければ既定のゴーストへ戻り、印は
+/// 組み直しの失敗: 新しい SHIORI を起こせなければ既定のゴーストへ戻り、印は
 /// `reload_failed(fell_back_to_default)` を残して下りる。
 ///
 /// A の 2 回目の起動の根を実在しない場所へ向けて、組み直しを同期で失敗させる。
@@ -410,7 +409,7 @@ fn a_failed_shiori_rebuild_falls_back_to_the_default_ghost() {
     );
 }
 
-/// 組み直しの失敗・切替先が既定（要件 4.4）: 既定のゴーストの新しい SHIORI を起こせなければ、既定へ
+/// 組み直しの失敗・切替先が既定: 既定のゴーストの新しい SHIORI を起こせなければ、既定へ
 /// 戻す試みをせずに致命で終わる（`ghost_switch_fatal` の 1 件・組み直しの後に起こす試みが無い）。
 ///
 /// # 非空虚性
@@ -465,7 +464,7 @@ fn a_failed_shiori_rebuild_of_the_default_ghost_is_fatal() {
     );
 }
 
-/// 組み直しの降ろした直後の記憶を書けない（要件 4.4・write-failure-notice 要件 3.3 と同じ扱い）:
+/// 組み直しの降ろした直後の記憶を書けない:
 /// 予約と印を下ろし、最初の出所が `MemoryWriteFailed` で終了が指示され、窓は閉じられない。
 ///
 /// アプリの記憶の置き場の位置に普通のファイルを置いて書けなくする（足場は実行系へ置き場を渡さない
@@ -525,8 +524,8 @@ fn carry_records(events: &[CapturedEvent]) -> usize {
     named(events, "reload_shell_captured") + named(events, "reload_shell_carry_unavailable")
 }
 
-/// ghost の読み直しは窓を閉じる前に表示中の面を控え、起こし直した新しい結線へ渡す（要件 3.8）。
-/// 窓口を通さない自分自身への切替は控えない（要件 3.6・今までどおり最初の `\s` まで面を出さない）。
+/// ghost の読み直しは窓を閉じる前に表示中の面を控え、起こし直した新しい結線へ渡す。
+/// 窓口を通さない自分自身への切替は控えない（最初の `\s` まで面を出さない）。
 ///
 /// # 非空虚性
 /// `switch_to` が控えを取らない・渡さないと、読み直しの側が `Some(false)` で赤。読み直しでない切替でも
@@ -567,7 +566,7 @@ fn a_ghost_reload_hands_the_shown_surfaces_to_the_new_windows_but_a_switch_does_
 }
 
 /// ghost の読み直しで起こし直しに失敗し既定のゴーストへ戻ったときは、控えを既定のゴーストの窓へ渡さない
-/// （要件 3.7・3.8: 控えは読み直したゴーストの面と着せ替えで、別のゴーストの窓には効かせない）。
+/// （控えは読み直したゴーストの面と着せ替えで、別のゴーストの窓には効かせない）。
 ///
 /// # 非空虚性
 /// `hand_over` を `boot_into` の成否より前（または `switch_to_default` の後）に呼ぶと、既定のゴーストの
@@ -644,7 +643,7 @@ fn a_failed_ghost_reload_hands_no_carry_to_the_default_ghost() {
 }
 
 /// ゴーストの中のバルーン（`<A>\balloon\inner`）を使っているときのゴーストの読み直し（自分への切替）は、
-/// 記憶の段から同じ `<A>\balloon\inner` を出す（areka-P0-ghost-inner-balloon 要件 5.7）。
+/// 記憶の段から同じ `<A>\balloon\inner` を出す。
 ///
 /// # 非空虚性
 /// 自分への切替の候補にゴーストの中が入らないと記憶が当たらず、根の同梱（`emo2-kakukaku`）へ落ちて赤。

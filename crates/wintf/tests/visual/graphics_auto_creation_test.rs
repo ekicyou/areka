@@ -1,9 +1,9 @@
-//! VisualGraphics 自動作成テスト (R2)
+//! VisualGraphics 自動作成テスト
 //!
 //! visual_resource_management_system は VisualGraphics が存在するエンティティにGPUリソースを作成し、
 //! SurfaceGraphics は作成しないことをテストする。
 //!
-//! Phase 2: on_visual_add は VisualGraphics を自動挿入しなくなったため、
+//! on_visual_add は VisualGraphics を自動挿入しないため、
 //! テスト内で明示的に VisualGraphics::default() を挿入する。
 
 use bevy_ecs::prelude::*;
@@ -27,14 +27,11 @@ fn setup_world_with_graphics() -> Result<World> {
 }
 
 /// Visual追加時に VisualGraphics が存在すればGPUリソースが作成されることを確認
-/// Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
 #[test]
 fn test_visual_triggers_visual_graphics_creation() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
         let mut world = setup_world_with_graphics()?;
 
-        // Visual + VisualGraphics を持つ Entity を作成
-        // Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
         let entity = world
             .spawn((Visual::default(), VisualGraphics::default()))
             .id();
@@ -42,12 +39,10 @@ fn test_visual_triggers_visual_graphics_creation() -> Result<()> {
         // この時点では VisualGraphics の GPU リソースはまだない
         assert!(!world.get::<VisualGraphics>(entity).unwrap().is_valid());
 
-        // システムを実行すると作成される
         let mut schedule = Schedule::default();
         schedule.add_systems(visual_resource_management_system);
         schedule.run(&mut world);
 
-        // VisualGraphics の GPU リソースが作成されていることを確認
         assert!(
             world.get::<VisualGraphics>(entity).unwrap().is_valid(),
             "VisualGraphics should get GPU resources for entity with Visual"
@@ -57,13 +52,12 @@ fn test_visual_triggers_visual_graphics_creation() -> Result<()> {
     })
 }
 
-/// Visual追加時に SurfaceGraphics は即時作成されないことを確認（R2 AC#5, R5で遅延作成）
+/// Visual追加時に SurfaceGraphics は即時作成されないことを確認（遅延作成）
 #[test]
 fn test_visual_does_not_trigger_immediate_surface_creation() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
         let mut world = setup_world_with_graphics()?;
 
-        // Visual を持つ Entity を作成
         let entity = world.spawn(Visual::default()).id();
 
         let mut schedule = Schedule::default();
@@ -89,7 +83,6 @@ fn test_visual_graphics_not_recreated_if_exists() -> Result<()> {
             .spawn((Visual::default(), VisualGraphics::default()))
             .id();
 
-        // 最初のシステム実行
         let mut schedule = Schedule::default();
         schedule.add_systems(visual_resource_management_system);
         schedule.run(&mut world);
@@ -156,7 +149,6 @@ fn test_multiple_entities_get_visual_graphics() -> Result<()> {
 }
 
 /// GraphicsCore が無効（invalidate済み）の場合は VisualGraphics のGPUリソースが作成されないことを確認
-/// Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
 /// （合成器は有効なまま入れて、合成器が無いことでなく GraphicsCore の無効で止まることを見る）
 #[test]
 fn test_no_visual_graphics_with_invalid_graphics_core() -> Result<()> {

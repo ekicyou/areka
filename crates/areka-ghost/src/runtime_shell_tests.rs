@@ -1,5 +1,5 @@
 //! シェル名つきの起動（[`boot_with_origin`] の `shell`）と今のシェルの書き換え
-//! （[`GhostRuntime::set_shell_dir`]）のテスト（要件 6.4・6.5・6.6）。
+//! （[`GhostRuntime::set_shell_dir`]）のテスト。
 //!
 //! 偽の SHIORI と検体のゴーストは由来つき起動のテストのものを使い、2 つ目のシェル
 //! `shell/B/`（`name,ShellB`）を足して名前ありで起動する。

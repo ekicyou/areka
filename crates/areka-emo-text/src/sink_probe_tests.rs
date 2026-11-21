@@ -1,4 +1,4 @@
-//! 名前の形の `\b[名前]` を、文字の層が箱を探した場で知らせる（mcp-strict-errors task 5.2・要件 4.2・7.3）。
+//! 名前の形の `\b[名前]` を、文字の層が箱を探した場で知らせる。
 //!
 //! 受け口 [`EmoTextSink::emit_with`] は名前の形の `\b` だけ [`TextMsg::ProbedCue`] を積み、UI の取り出し
 //! （[`spawn_emo_text`]）は箱が見つからず空回しの写しでもないときだけ 1 回知らせる。実 channel・実 pump。

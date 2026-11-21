@@ -1,56 +1,51 @@
 //! バルーン追従コンポーネントと窓移動の公開 API。
 //!
-//! - [`BalloonFollow`]: キャラ窓に付与する追従 Component（配置時確定の暫定 offset・
-//!   物理 px・4.4。offset は `ScopePlacement.balloon_offset` の転写）
-//! - [`on_char_drag`]: `OnDrag` ハンドラ（mock-shell donor `on_shell_drag` の一般化。
-//!   マーカー全走査ではなく `BalloonFollow.balloon` の `WindowHandle` を直接引く）
-//! - [`on_balloon_drag`]: バルーン窓の `OnDrag` ハンドラ（areka-P0-window-placement 要件 4.8・DD16）——
-//!   バルーン単独ドラッグの相対位置記憶。`BalloonFollow.offset` を
-//!   `balloon_pos − char_pos` へ更新する（キャラ窓は不動）
-//! - [`move_window_to`]: R7 公開 API（UI スレッド関数・物理 px スクリーン座標直渡し）
-//! - [`project_anchor`]: bottom 吸着ドラッグ（areka-P0-window-placement 要件 4.7・DD15 v2）の核——
-//!   「生ドラッグ座標→実窓位置」の純粋写像（`Bottom` の腕は下端吸着）。吸着した窓と組に
-//!   入った窓は `DragConfig{move_window:false}` で wndproc 移動を止め、
-//!   [`on_char_drag`]／[`on_char_drag_end`] がドラッグの始めに控えた向きで
-//!   [`project_anchor`] 適用済み座標を**単一ライター**として書く（組に入った Free は恒等・
-//!   設計の決め 12。v1 の事後再釘付けは wndproc と競合し振動→撤去）
+//! - [`BalloonFollow`]: キャラ窓に付与する追従 Component（物理 px。offset は
+//!   `ScopePlacement.balloon_offset` の転写）
+//! - [`on_char_drag`]: `OnDrag` ハンドラ。`BalloonFollow.balloon` の `WindowHandle` を直接引く
+//! - [`on_balloon_drag`]: バルーン窓の `OnDrag` ハンドラ。バルーン単独ドラッグの相対位置を記憶し、
+//!   `BalloonFollow.offset` を `balloon_pos − char_pos` へ更新する（キャラ窓は不動）
+//! - [`move_window_to`]: UI スレッド関数・物理 px スクリーン座標直渡し
+//! - [`project_anchor`]: bottom 吸着ドラッグの核。「生ドラッグ座標→実窓位置」の純粋写像
+//!   （`Bottom` の腕は下端吸着）。吸着した窓と組に入った窓は `DragConfig{move_window:false}` で
+//!   wndproc 移動を止め、[`on_char_drag`]／[`on_char_drag_end`] がドラッグの始めに控えた向きで
+//!   [`project_anchor`] 適用済み座標を**単一ライター**として書く（組に入った Free は恒等。
+//!   ドラッグ後に再釘付けする方式は wndproc と競合して振動した）
 //! - [`MonitorSnapshot`]／[`work_area_for_window`]: 全モニタ work area 集合の
 //!   Resource と窓中心→モニタ解決の純粋ヘルパ（ポリシーの入力）
 //!
-//! # 座標単位契約（design U1/U4）
+//! # 座標単位契約
 //!
 //! 本モジュールの座標はすべて**物理 px**。`WindowPos.position` は wndproc が
 //! 実ウィンドウ位置から更新する物理 px であり、ここに DPI 再スケール
-//! （`dpi/96` 乗除）を一切挟まない（2026-07-05 の二重スケール欠陥の檻）。
+//! （`dpi/96` 乗除）を一切挟まない（二重スケールになる）。
 //!
-//! # UI スレッド契約（7.1/7.2/7.3）
+//! # UI スレッド契約
 //!
 //! 署名は `&mut World` のみで完結し channel／actor 型を持たない。`&mut World` は
-//! wintf の UI スレッド tick 内でのみ到達可能なため、窓操作の UI スレッド専有
-//! （7.2）を型で担保する。UI 配送ブリッジ（`spawn_ui`／`UiSender`）との結線は
-//! 後続の領分（7.3）。
+//! wintf の UI スレッド tick 内でのみ到達可能なため、窓操作の UI スレッド専有を型で担保する。
+//! UI 配送ブリッジ（`spawn_ui`／`UiSender`）との結線は後続の領分。
 
 mod anchor;
 mod balloon_drag;
 mod drag_follow;
 mod keyword_base;
-// 面の `move` のずれを窓の位置へ当てる口（seriko-pattern-calls・task 6.1）。
+// 面の `move` のずれを窓の位置へ当てる口。
 mod move_shift;
-// バルーン位置オフセットの単位空間契約の定義元（areka-P0-balloon-offset-dpi・design C1）。
+// バルーン位置オフセットの単位空間契約の定義元。
 mod offset_space;
 // 並べ直しの後の判定し直し。
 mod other_chars;
-// 窓の組の連れ動き（areka-P0-window-link-directives・設計「sticky_follow」）。
+// 窓の組の連れ動き。
 mod sticky_follow;
 mod visibility;
 mod window_move;
 mod work_area;
-// キャラ窓を作業領域へ寄せる判定と記録（window-work-area-clamp）。
+// キャラ窓を作業領域へ寄せる判定と記録。
 mod work_area_clamp;
 
-// limit 補正の式とタグ語彙（windowposition-limit C5/C10）。runtime 関門
-// （`window_move::enqueue_window_set_pos`）と解放時補正
-// （`balloon_drag::on_balloon_drag_end`）が消費する。
+// limit 補正の式とタグ語彙。runtime 関門（`window_move::enqueue_window_set_pos`）と
+// 解放時補正（`balloon_drag::on_balloon_drag_end`）が消費する。
 use super::balloon_limit::{
     BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_PUSHED_HOW, BALLOON_LIMIT_RELEASE_CONTEXT,
     BALLOON_LIMIT_RUNTIME_CONTEXT, BALLOON_LIMIT_UNRESOLVED_TAG, limit_correction,
@@ -62,8 +57,7 @@ use super::persist::{
 use super::resolver::{Anchor, PointPx, RectPx, SizePx, keyword_balloon_pos};
 use super::spawn::{BalloonKeywordBase, BalloonWindowMarker, CharWindowMarker, GhostWindows};
 // runtime 関門（`window_move::enqueue_window_set_pos`）と解放時補正
-// （`balloon_drag::on_balloon_drag_end`）が読む limit 値の
-// ファサード再束縛（windowposition-limit C9「follow facade から再輸出」）。
+// （`balloon_drag::on_balloon_drag_end`）が読む limit 値の再束縛。
 // `spawn::BalloonLimit` は既に公開ゆえここは私有再束縛に留め、公開面は増やさない
 // （`BalloonWindowMarker`／`CharWindowMarker` と同じ扱い）。
 use super::spawn::BalloonLimit;
@@ -82,17 +76,14 @@ pub(crate) use self::balloon_drag::on_balloon_drag;
 pub(crate) use self::balloon_drag::on_balloon_drag_end;
 pub(crate) use self::drag_follow::on_char_drag;
 pub use self::drag_follow::on_char_drag_end;
-// 追従 Component の定義元は単位空間契約のモジュール（`offset_space`）へ移した
-// （areka-P0-balloon-offset-dpi・design D14／task 3.1）。外部からの参照はすべて
-// このファサードを経由するため、移設の波及はこの 1 行に閉じる。
+// 追従 Component の定義元は単位空間契約のモジュール（`offset_space`）。外部からの参照は
+// すべてこのファサードを経由する。
 pub use self::offset_space::BalloonFollow;
-/// 遷移時の唯一の変換規則と、その判定結果
-/// （areka-P0-balloon-offset-dpi・要件 3.1／3.3／3.6・task 6.1）。
+/// 遷移時の唯一の変換規則と、その判定結果。
 ///
 /// 呼び手は追随の適用相（`runtime::…` の `balloon_offset_follow`）。
 pub use self::offset_space::{OffsetRescale, rescale_follow_offset};
-/// 作者空間のオフセットを合流欄の空間（物理 px）へ換算する純関数と、その 1 軸ぶんの結果
-/// （areka-P0-balloon-offset-dpi・要件 1.2／2.1／2.5・task 4.1）。
+/// 作者空間のオフセットを合流欄の空間（物理 px）へ換算する純関数と、その 1 軸ぶんの結果。
 ///
 /// 供給層（`placement::apply_author_balloon_offset_scale`）だけが呼ぶため crate 内に留める。
 pub(crate) use self::offset_space::{ScaledAxis, scale_author_offset};
@@ -102,16 +93,16 @@ pub use self::work_area::{MonitorSnapshot, work_area_for_window};
 pub use self::work_area::{WorkAreaResolution, work_area_for_window_with_origin};
 #[cfg(not(feature = "test-support"))]
 pub(crate) use self::work_area::{WorkAreaResolution, work_area_for_window_with_origin};
-/// 追従オフセットの基準対（型の定義は `resolver`・依存の向きの規約①・spec: placement-crate-split 要件 7.6。areka-P0-balloon-offset-dpi・要件 1.1／3.1）。
+/// 追従オフセットの基準対（型の定義は `resolver`）。
 ///
 /// 配置解決の出力（`resolver::ScopePlacement`）と復元 merge（`persist`）が運ぶため、
-/// 移設の波及をここで吸収するファサード再輸出に載せる（design「Modified Files」）。
+/// ファサード再輸出に載せる。
 pub use super::resolver::OffsetBase;
 // 2 源の型と比較。呼び手は `runtime::…` の作業領域の同期。
 pub use self::work_area::{MonitorDpiTable, MonitorSources, same_monitors};
 // モニタ別拡大率表の要素型。表の外から要素を組めないと `entries` が事実上読めない型になるので公開する。
 pub use self::work_area::MonitorDpiEntry;
-// 作業領域へ寄せる鎖の World の口と記録の語（window-work-area-clamp・task 1.2）。呼び手は `runtime::…` の
+// 作業領域へ寄せる鎖の World の口と記録の語。呼び手は `runtime::…` の
 // 起動の並べ直しと詰め直し。記録の語の残り 2 つと純関数の核は、檻が定義元の道で引く。
 pub use self::work_area_clamp::{
     ChainClampOutcome, ChainPlacement, ClampScene, place_chain_in_work_area,
@@ -121,7 +112,7 @@ pub use self::work_area_clamp::{
 pub use self::work_area_clamp::WORK_AREA_CLAMP_TAG;
 // 面の拡大の寄せ。`window_move` の `resize_window_to` が `super::` で辿る私有の再束縛。
 use self::work_area_clamp::clamp_grown_free_default;
-// 記憶から戻した組の寄せ（`window-work-area-clamp`）。呼び手は記憶の戻し（`persist::restore_and_judge`）。
+// 記憶から戻した組の寄せ。呼び手は記憶の戻し（`persist::restore_and_judge`）。
 pub(crate) use self::work_area_clamp::{RestoredWindow, keep_restored_groups};
 // 戻りの型を名前で呼ぶのは檻だけなので、テストの外では未使用に見える。
 #[allow(unused_imports)]
@@ -138,10 +129,8 @@ pub use self::window_move::move_window_with_route;
 pub(crate) use self::window_move::move_window_with_route;
 
 // 私有・crate 内の再束縛と、`runtime::…` などが呼ぶ公開の口（呼び手は下の各行の注）。
-// サブモジュール間の相互参照とテストモジュールからの `super::` 参照は、いずれも
-// ここを経由する。
-// 追随相（`runtime::…`）が収束の保証（design D16）で `follow_balloon` を呼ぶため、
-// 次の 2 項目は公開する。
+// サブモジュール間の相互参照とテストモジュールからの `super::` 参照は、いずれもここを経由する。
+// 追随相（`runtime::…`）が収束の保証で `follow_balloon` を呼ぶため、次の 2 項目は公開する。
 pub use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
 // キーワード由来のバルーン基本位置の一度きりの再導出（`resize_window_to` が使う）。
 use self::keyword_base::rederive_keyword_balloon_offset;
@@ -153,7 +142,7 @@ pub use self::move_shift::{
 };
 use self::move_shift::{balloon_shift, reset_applied};
 pub(crate) use self::move_shift::{origin_position, rebase_shift};
-// 組の指令・descript の組の適用の後に `DragConfig.move_window` を付け直す（設計の決め 12）。
+// 組の指令・descript の組の適用の後に `DragConfig.move_window` を付け直す。
 // 外へはテストのビルド（`test-support`）でだけ開く。crate の中は使い手がある（道と名前は同じ）。
 #[cfg(feature = "test-support")]
 pub use self::sticky_follow::sync_drag_writer;
@@ -176,21 +165,21 @@ use self::window_move::enqueue_window_set_pos;
 pub use self::other_chars::register_balloon_rejudge;
 pub(crate) use self::other_chars::rejudge_all_balloons;
 use self::window_move::window_rect_of;
-// 遷移観測（`kind=ground` の発行口・書込指令の要求語彙タグ）のファサード再束縛。
+// 遷移観測（`kind=ground` の発行口・書込指令の要求語彙タグ）の再束縛。
 // `window_move` は `super::transition_diag` としてここを辿る（兄弟モジュールへの
-// 直接参照はファサード分割では届かない・structure.md「ファサード形式」の注意点）。
+// 直接参照はファサード分割では届かない）。
 use super::transition_diag;
-// 整合待ちの札（atom 設計 C5）のファサード再束縛。単一の窓書込口（`window_move` の
+// 整合待ちの札の再束縛。単一の窓書込口（`window_move` の
 // `enqueue_window_set_pos`）が待ち札の適用範囲の不変条件を見張るために読む。
 //
 // 見張る相手は**見送りが覆うべき経路**に限る——利用者のドラッグ（route 無し）や
-// `\![move]`・ドラッグ解放時の補正といった**明示操作**は設計上そもそも見送らないので、鳴らせば
+// `\![move]`・ドラッグ解放時の補正といった**明示操作**は見送らないので、鳴らせば
 // 偽の警報になる（debug ビルドではドラッグ 1 回で落ちていた）。どの経路語で鳴るかの分類は
 // `window_move::deferral_covers_route` が 13 語＋route 無しの網羅 match で 1 本に持つ。
 use super::dpi_sync::DpiSyncHold;
 
 // =============================================================================
-// Tests（TDD RED: 実装前に振る舞いを固定する）
+// Tests
 // =============================================================================
 
 #[cfg(test)]
@@ -202,6 +191,9 @@ mod balloon_drag_tests;
 #[cfg(test)]
 #[path = "follow_balloon_limit_tests.rs"]
 mod balloon_limit_wiring_tests;
+#[cfg(test)]
+#[path = "follow_default_pos_track_tests.rs"]
+mod default_pos_track_tests;
 #[cfg(test)]
 #[path = "follow_drag_end_gate_tests.rs"]
 mod drag_end_gate_tests;
@@ -263,28 +255,20 @@ mod visibility_guard_tests;
 #[path = "follow_window_move_diag_tests.rs"]
 mod window_move_diag_tests;
 #[cfg(test)]
+#[path = "follow_window_move_hold_watch_tests.rs"]
+mod window_move_hold_watch_tests;
+#[cfg(test)]
 #[path = "follow_window_move_tests.rs"]
 mod window_move_tests;
 #[cfg(test)]
-#[path = "follow_work_area_tests.rs"]
-mod work_area_tests;
-// 既定位置の追跡規則（design D9／D16・areka-P0-dpi-transition-atomicity 要件 6.2）。
-#[cfg(test)]
-#[path = "follow_default_pos_track_tests.rs"]
-mod default_pos_track_tests;
-// 整合待ちの札の監視が鳴る対象の分類（design C5・areka-P0-dpi-transition-atomicity 要件 5.8）。
-#[cfg(test)]
-#[path = "follow_window_move_hold_watch_tests.rs"]
-mod window_move_hold_watch_tests;
-// 作業領域へ寄せる鎖の核（window-work-area-clamp・task 1.1・要件 10.1）。
-#[cfg(test)]
 #[path = "follow_work_area_clamp_chain_tests.rs"]
 mod work_area_clamp_chain_tests;
-// 面の拡大の寄せ（window-work-area-clamp・task 1.3・要件 10.1 ⑶⑸⑹）。
 #[cfg(test)]
 #[path = "follow_work_area_clamp_grow_tests.rs"]
 mod work_area_clamp_grow_tests;
-// 記憶から戻した組の寄せ（window-work-area-clamp・task 1.4・要件 10.1 ⑷⑸⑹）。
 #[cfg(test)]
 #[path = "follow_work_area_clamp_restore_tests.rs"]
 mod work_area_clamp_restore_tests;
+#[cfg(test)]
+#[path = "follow_work_area_tests.rs"]
+mod work_area_tests;

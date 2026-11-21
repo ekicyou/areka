@@ -1,6 +1,6 @@
 //! `real.rs` の兄弟のテスト: 接続の 4 つの手が共通の client の組み立てを呼び、その組み立てが版を
 //! client へ渡し、資源の印は GET の 2 つの手から呼んだときだけ・資源の一覧の判定の後ろにだけ付く
-//! ことを構造で固定する（shiori2-protocol 要件 2.2・3.3・3.7）。
+//! ことを構造で固定する。
 //!
 //! 接続（[`super::ShioriConnection`]）は窓と中継が無いと組めないので、往復を回して確かめる代わりに
 //! 実装の本文を読む（先例: host32 の `the_one_way_event_body_contains_no_adoption_path`）。

@@ -1,7 +1,4 @@
-//! 毎フレームの矢印の出し分けと当たりの写しの檻（balloon-scroll-arrows task 4.3・要件 3.1〜3.4・
-//! 3.8・5.7・7.3・8.6・11.1）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
+//! 毎フレームの矢印の出し分けと当たりの写しの檻。
 //!
 //! 実 GPU で提示し、矢印が出ているかを公開の当たりの口（`marker_at_point`）で読む: 押し出された行の
 //! 有無が変わった次の提示で矢印が合うこと、モデルを替えると置き場が替わり古い印の面が窓の子から
@@ -104,7 +101,7 @@ fn shown(rt: &TextLayerRuntime, place: &PlaceKey) -> (bool, bool) {
 }
 
 /// 押し出された行が無いうちは印の面を作らず、あふれた次の提示で上の矢印が出る。手動で戻すと
-/// 次の提示で下の矢印も出て、自動へ帰ると下の矢印が消える（要件 3.1〜3.3・3.8）。
+/// 次の提示で下の矢印も出て、自動へ帰ると下の矢印が消える。
 #[test]
 fn arrows_follow_the_pushed_out_lines_on_the_next_present() {
     let (mut world, window, slot) = com_world();
@@ -142,7 +139,7 @@ fn arrows_follow_the_pushed_out_lines_on_the_next_present() {
     assert_eq!(shown(&rt, &place), (true, false));
 }
 
-/// 当たりは矢印の絵の α ≥ 0.5 の画素だけ（要件 5.7）。矢印の外も当たらない。
+/// 当たりは矢印の絵の α ≥ 0.5 の画素だけ。矢印の外も当たらない。
 #[test]
 fn transparent_arrow_pixels_and_outside_do_not_hit() {
     let (mut world, window, slot) = com_world();
@@ -171,7 +168,7 @@ fn transparent_arrow_pixels_and_outside_do_not_hit() {
     assert_eq!(rt.marker_at_point(&place, (-1.0, -1.0)), None);
 }
 
-/// 再追従でモデルの矢印の鍵が替わると、置き場が替わり（要件 3.4・8.6）、前の印の面は
+/// 再追従でモデルの矢印の鍵が替わると、置き場が替わり、前の印の面は
 /// 次の提示で窓の子から消えて新しい面に替わる（窓の子を残さない）。
 #[test]
 fn model_change_moves_the_arrow_and_drops_the_old_marker_surface() {
@@ -214,7 +211,7 @@ fn model_change_moves_the_arrow_and_drops_the_old_marker_surface() {
     assert_eq!(rt.marker_at_point(&place, (9.0, 4.0)), Some(MarkerKind::Up));
 }
 
-/// 箱の矢印の足りない番号は、そのスコープの普通のバルーンの絵で埋める（要件 7.3）。出していない
+/// 箱の矢印の足りない番号は、そのスコープの普通のバルーンの絵で埋める。出していない
 /// 矢印と、どこにも絵の無い矢印は並べない。
 #[test]
 fn box_missing_arrow_is_filled_from_the_scope_balloon() {
@@ -412,7 +409,7 @@ fn assert_matches_full_redraw(
     );
 }
 
-/// 手動で古い側へ戻した提示は、同じ見える範囲を全域で描き直した面と同じ（実機 8.2: 既定のバルーン・
+/// 手動で古い側へ戻した提示は、同じ見える範囲を全域で描き直した面と同じ（既定のバルーン・
 /// 2 倍・15 行で、戻した後に 1 行が上の一部しか描かれなかった）。自動の位置（6 行目が先頭）から
 /// arrow0 で 2 行、ホイール 1 目盛り（3 行）で一番上へ戻す。
 #[test]

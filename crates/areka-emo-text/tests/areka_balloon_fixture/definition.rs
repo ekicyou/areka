@@ -1,11 +1,6 @@
 //! 文のファイルの中身・本番の読み込みの記録・描画範囲の解け方を固定する。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `default-balloon-selfmade` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `default-balloon-selfmade`（要件 **12.4**・**3.5**・**5.1**・**5.3**〜**5.9**・
-//! **6.2**・**6.3**・**6.5**・設計「描画範囲の解け方」「Testing Strategy」の `definition.rs`）。
-//!
-//! 期待値は `test_support.rs` の表と、設計「描画範囲の解け方」の表から手で書く。
+//! 期待値は `test_support.rs` の表から手で書く。
 
 use std::collections::BTreeMap;
 
@@ -25,10 +20,10 @@ use super::test_support::{
     expected_wrap_threshold, scope_face0_file, scope_image_size,
 };
 
-/// 1 行目に置く文字コードの宣言（要件 5.3）。
+/// 1 行目に置く文字コードの宣言。
 const CHARSET_LINE: &str = "charset,UTF-8";
 
-/// 鍵と値の読み物ではないが、文字コードと 1 行目は同じ規約で書く文のファイル（設計「文のファイル」）。
+/// 鍵と値の読み物ではないが、文字コードと 1 行目は同じ規約で書く文のファイル。
 const README: &str = "readme.txt";
 
 /// scope ごとの面 0 の期待値（`descript.txt` に面別の設定を重ねた宣言値）。面 0 の絵の名前・
@@ -42,7 +37,7 @@ struct Face0Expectation {
     /// モデルが写す宣言値 `wordwrappoint.x`・`y`。
     wordwrappoint: (i32, i32),
     /// 面の系列解決で本体側の系列へ縮退する面 `(面 id, 接頭辞)`（`warn!` の欄）。
-    /// 相方側は面 2・3 を持たない（要件 2.2）のでちょうど 2 件、本体側は 0 件。
+    /// 相方側は面 2・3 を持たないのでちょうど 2 件、本体側は 0 件。
     expected_fallback: &'static [(u32, &'static str)],
 }
 
@@ -63,7 +58,7 @@ const FACE0: [Face0Expectation; 2] = [
     },
 ];
 
-/// 書体の宣言（`descript.txt` の手本の値・要件 5.6）。
+/// 書体の宣言（`descript.txt` の手本の値）。
 const EXPECTED_FONT_NAME: &str = "ＭＳ ゴシック";
 const EXPECTED_FONT_HEIGHT: u32 = 12;
 const EXPECTED_FONT_COLOR: (u8, u8, u8) = (0, 0, 0);
@@ -87,7 +82,7 @@ fn read_bytes(name: &str) -> Vec<u8> {
     bytes
 }
 
-/// 印なしの UTF-8 として読み、本文を返す（要件 5.3・5.8）。
+/// 印なしの UTF-8 として読み、本文を返す。
 fn read_utf8(name: &str) -> String {
     let bytes = read_bytes(name);
     assert!(
@@ -97,7 +92,7 @@ fn read_utf8(name: &str) -> String {
     String::from_utf8(bytes).unwrap_or_else(|e| panic!("{name} が UTF-8 として読めない: {e}"))
 }
 
-/// 各文ファイルが印なしの UTF-8 で、1 行目が `charset,UTF-8`（要件 5.3）。
+/// 各文ファイルが印なしの UTF-8 で、1 行目が `charset,UTF-8`。
 #[test]
 fn every_text_file_is_bomless_utf8_starting_with_the_charset_line() {
     let mut names: Vec<&str> = kv_tables().iter().map(|(n, _)| *n).collect();
@@ -112,7 +107,7 @@ fn every_text_file_is_bomless_utf8_starting_with_the_charset_line() {
     }
 }
 
-/// 鍵と値の並びが期待値の表と鍵の集合ごと一致する（要件 3.5・5.1・5.4〜5.7・5.9・6.3）。
+/// 鍵と値の並びが期待値の表と鍵の集合ごと一致する。
 ///
 /// 集合が一致するので、表に無い `windowpos.*`・`onlinemarker.filename`／`interval`・`validrect.right,0`
 /// は書庫にも無い。
@@ -157,7 +152,7 @@ fn load_with_records(scope: u32) -> (BalloonModel, String, Vec<CapturedEvent>) {
 }
 
 /// 本番の読み込みで、記録が期待どおり（`ERROR` 0 件・`WARN` は相方側の面 2・3 の縮退 2 件だけ）で、
-/// モデルの値が表のとおり（要件 5.8・5.4〜5.6・6.5）。
+/// モデルの値が表のとおり。
 #[test]
 fn production_loading_records_only_the_expected_fallbacks_and_models_the_declared_values() {
     for exp in &FACE0 {
@@ -211,7 +206,7 @@ fn production_loading_records_only_the_expected_fallbacks_and_models_the_declare
     }
 }
 
-/// 透過の宣言が起動時と同じ入口で `use_self_alpha,1` に読める（要件 5.9）。同じ窓で、扱いを決めた
+/// 透過の宣言が起動時と同じ入口で `use_self_alpha,1` に読める。同じ窓で、扱いを決めた
 /// `info!` がちょうど 1 件出る（記録を出す入口を通った対照）ことを見てから、WARN 以上が 0 件と言う。
 #[test]
 fn use_self_alpha_is_declared_on() {
@@ -242,8 +237,8 @@ fn use_self_alpha_is_declared_on() {
     assert!(warns.is_empty(), "WARN 以上の記録がある: {warns:?}");
 }
 
-/// 解いた描画範囲が設計「描画範囲の解け方」の表と同じで、潰れず、折り返し基準が範囲の内、
-/// origin が宣言どおり（要件 6.2・6.5）。警告の条件と同じ判定で見る。
+/// 解いた描画範囲が `test_support.rs` の表と同じで、潰れず、折り返し基準が範囲の内、
+/// origin が宣言どおり。警告の条件と同じ判定で見る。
 #[test]
 fn resolved_region_matches_the_design_table() {
     for exp in &FACE0 {

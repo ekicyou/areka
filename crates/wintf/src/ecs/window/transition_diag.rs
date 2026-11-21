@@ -1,9 +1,9 @@
 //! DPI／拡大率遷移の**観測チャネル**——専用 target・レコード語彙・行を組む純関数。
 //!
-//! design.md の C1（`transition_diag`）が正本である。1 回の遷移に含まれる窓書込・
-//! サーフェス更新・モニタ表更新・メッセージ受理を**単一のフレーム番号系列**の 1 本の
-//! 時系列へ並べるために、3 つの crate（wintf・areka-emo-present・areka-placement）の行を組む関数が同じ target と
-//! 同じ接頭語で行を出す。その語彙をここ 1 箇所に閉じ込める。
+//! 1 回の遷移に含まれる窓書込・サーフェス更新・モニタ表更新・メッセージ受理を
+//! **単一のフレーム番号系列**の 1 本の時系列へ並べるために、3 つの crate（wintf・
+//! areka-emo-present・areka-placement）の行を組む関数が同じ target と同じ接頭語で行を出す。
+//! その語彙をここ 1 箇所に閉じ込める。
 //!
 //! # 行の形
 //!
@@ -23,8 +23,7 @@
 //! 辞書化は**後勝ち**なので、1 行に同じ名前が 2 度出ると先の値が消える。接頭語の
 //! `kind=` はレコード種別（`monitor`／`write`／…）に予約されているため、書込タグが運ぶ
 //! **窓の種別**は行の上では `win_kind=` という別名で出す（[`WriteTag::kind`] の値が入る）。
-//! この一点だけが design.md「Data Models」表の字面からの意図的な逸脱であり、逸脱しないと
-//! `kind=write … kind=shell` の 2 度出しでレコード種別が判定側から消える。
+//! 2 度出しすると `kind=write … kind=shell` となり、レコード種別が判定側から消える。
 //!
 //! # ここに置いてよいもの・置いてはならないもの
 //!
@@ -37,8 +36,7 @@
 //!
 //! 本チャネルは `debug` 水準・専用 target [`TRANSITION_TARGET`] で出るため、既定の
 //! `RUST_LOG=info` では 1 行も出ない。有効化は `RUST_LOG=wintf::transition=debug` の 1 語。
-//! 有効化されていない状態の「出力が無いこと」を、いかなる判定の根拠にも用いてはならない
-//! （Requirement 2.5）。
+//! 有効化されていない状態の「出力が無いこと」を、いかなる判定の根拠にも用いてはならない。
 
 use std::cell::Cell;
 use std::time::Instant;
@@ -48,7 +46,7 @@ use windows::Win32::Foundation::{HWND, RECT};
 
 use crate::ecs::world::FrameCount;
 
-/// 観測チャネルの専用 target（3 crate が同じ文字列で発行する・D2）。
+/// 観測チャネルの専用 target（3 crate が同じ文字列で発行する）。
 ///
 /// `RUST_LOG` の directive は 1 語で足りる: `wintf::transition=debug`。
 pub const TRANSITION_TARGET: &str = "wintf::transition";
@@ -71,18 +69,16 @@ pub const KIND_MONITOR: &str = "monitor";
 ///
 /// [`KIND_MONITOR`] が出るのは**モニタ表そのもの**の値が変わったとき——すなわち表示設定の
 /// 変更——だけである。ゴーストを拡大率の異なるモニタへ移すと、窓の表示 DPI は変わるのに
-/// モニタ表は 1 つも変わらないため `monitor` 行は 1 行も出ない（実測＝
-/// `.kiro/specs/completed/areka-P0-balloon-offset-dpi/real-run-attempt-2026-08-28.md` の検出 2b）。
+/// モニタ表は 1 つも変わらないため `monitor` 行は 1 行も出ない。
 /// 「拡大率が変わった」を起点として読む側（`areka` の判定器）は、この経路を別の語で
 /// 見分けられなければ遷移を 1 本も切り出せない。
 ///
 /// # 語の選び方
 ///
-/// 既存の 11 語——wintf の 5 語（`monitor`／`write`／`flush`／`msg`／`enqueue`＝
-/// [`KIND_ALL`] から `windpi` を除いた 5 語）・areka-emo-present の 1 語（`surface`）・areka-placement の 5 語（`snapshot`／
-/// `hold`／`ground`／`chain`／`offset`＝`PLACEMENT_KIND_ALL`）——のいずれとも衝突せず、
-/// フィールド名 [`FIELD_WIN_KIND`] と同じ「窓の」の接頭で**窓の DPI** と読める最短の語と
-/// して `windpi` を採る。
+/// 既存の 11 語——wintf の 5 語（[`KIND_ALL`] から `windpi` を除いた `monitor`／`write`／
+/// `flush`／`msg`／`enqueue`）・areka-emo-present の 1 語（`surface`）・areka-placement の
+/// 5 語（`PLACEMENT_KIND_ALL` の `snapshot`／`hold`／`ground`／`chain`／`offset`）——の
+/// いずれとも衝突せず、**窓の DPI** と読める最短の語として `windpi` を採る。
 pub const KIND_WINDPI: &str = "windpi";
 /// 窓書込 1 回（一括 flush・メッセージ受理時の同期書込のいずれも）。
 pub const KIND_WRITE: &str = "write";
@@ -153,7 +149,7 @@ pub const ORIGIN_WINDOW_POS: &str = "window-pos";
 ///
 /// 上 2 語と違い、この経路は**キューへ積まない**——受理の内側で直に撃つ（経路 A）。
 /// `stage=sync` でも見分けは付くが、`origin` は「どの経路が書込を要求したか」を運ぶ
-/// フィールド（要件 2.1）であり、実在する要求元を番兵で埋めると
+/// フィールドであり、実在する要求元を番兵で埋めると
 /// [`WriteTag::UNTAGGED`]（＝タグの付け忘れ）と区別が付かなくなる。
 pub const ORIGIN_DPI_SUGGESTED: &str = "dpi-suggested";
 
@@ -274,10 +270,10 @@ pub const WRITE_FIELDS: &[&str] = &[
 ///
 /// # なぜ必須（[`WRITE_FIELDS`]）ではないのか
 ///
-/// [`FIELD_IN_BATCH`] は一括書込のバッチ化（設計 C8 の候補 B-2b・task 7.2）と同時に増えた
-/// フィールドであり、**それ以前に採取した実機ログには 1 行も載っていない**。必須列へ入れると
-/// 判定器（`transition_judge::required_fields`）が過去の逐語ログを軒並み「壊れた行」として
-/// 数え、確定済みの証跡（`mechanism-ledger.md` §3・§10 の採取）を後から否定してしまう。
+/// [`FIELD_IN_BATCH`] は一括書込のバッチ化と同時に増えたフィールドであり、**それ以前に
+/// 採取した実機ログには 1 行も載っていない**。必須列へ入れると判定器
+/// （`transition_judge::required_fields`）が過去の逐語ログを軒並み「壊れた行」として
+/// 数えてしまう。
 ///
 /// 発行側が本フィールドを**必ず**載せることは行の逐語テスト
 /// （`transition_diag_tests::write_line_is_verbatim`）が固定する——任意なのは
@@ -312,13 +308,13 @@ pub const ENQUEUE_FIELDS: &[&str] = &[
 ///
 /// 発行点が値を組んで渡し、レコード純関数は**受け取るだけ**（時刻を読まない）。
 /// World を借りられる観測点は `FrameCount`／`TickStart` から、借りられない観測点
-/// （一括 flush・wndproc）はスレッド局所ミラーから組む（D1）。
+/// （一括 flush・wndproc）はスレッド局所ミラーから組む。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stamp {
     /// フレーム番号（`FrameCount`・u32・周回する）。
     ///
     /// 周回するため、判定は `wrapping_sub` の差分だけで行い、絶対値比較を判定語に
-    /// 用いてはならない（D14）。
+    /// 用いてはならない。
     pub frame: u32,
     /// tick 開始からの経過（µs）。参考値であって判定語ではない。
     pub t_us: u64,
@@ -422,7 +418,7 @@ pub struct MonitorRecord {
 /// `old_dpi`／`new_dpi` は `u32` の DPI 値（96 = 100%）である。窓の `DPI` component は
 /// `dpi_x`／`dpi_y` の 2 軸を持つが、行に載せるのは**横軸の値**である。2 軸を別欄で出すと
 /// 既存の起点（[`MonitorRecord`]・単一のスカラ）と同じ読み方ができなくなるうえ、
-/// 本仕様が追う量（拡大率の比）はもともと 1 つのスカラだからである。発行元の 2 経路とも
+/// 追う量（拡大率の比）はもともと 1 つのスカラだからである。発行元の 2 経路とも
 /// 2 軸へ同じ値を書く（`WM_DPICHANGED` の wparam の LOWORD／HIWORD は OS が同値で運び、
 /// モニタ表からの再導出は `Monitor::dpi` という単一のスカラを 2 軸へ配る）。
 #[derive(Clone, Copy, Debug)]
@@ -470,7 +466,7 @@ pub struct WriteRecord {
     pub call_us: u64,
     /// 書込の成否。
     pub ok: bool,
-    /// `DeferWindowPos` の 1 バッチで投入されたか（設計 C8 の候補 B-2b）。
+    /// `DeferWindowPos` の 1 バッチで投入されたか。
     ///
     /// 偽になるのは ⑴ メッセージ受理時の同期書込（`stage=sync`）と ⑵ バッチ投入に失敗して
     /// 1 本ずつの `SetWindowPos` へ**縮退**した一括 flush の 2 つである。縮退は
@@ -684,8 +680,7 @@ pub fn enqueue_line(record: &EnqueueRecord) -> String {
 /// 観測チャネルが点灯しているか（前置ガード）。
 ///
 /// レコードを組む前にこれで分岐すれば、既定 OFF の運転で文字列の確保も
-/// `GetWindowRect` の読み戻しも一切行わない（`recompose-budget` が成立させた定常状態の
-/// アロケーション 0 を壊さないための口）。
+/// `GetWindowRect` の読み戻しも一切行わない（定常状態のアロケーション 0 を壊さないための口）。
 #[inline]
 pub fn is_enabled() -> bool {
     tracing::enabled!(target: TRANSITION_TARGET, tracing::Level::DEBUG)
@@ -701,7 +696,7 @@ pub fn emit_line(line: &str) {
 }
 
 // ---------------------------------------------------------------------------
-// 刻印の権威（D1）——World 資源が正・スレッド局所ミラーは World 外専用
+// 刻印の権威——World 資源が正・スレッド局所ミラーは World 外専用
 // ---------------------------------------------------------------------------
 
 /// tick の開始時刻（`FrameCount` と**同じ点**で更新される World 資源）。
@@ -718,7 +713,7 @@ thread_local! {
     ///
     /// スレッド局所なのは、⑴ World を借りられない観測点（一括 flush・wndproc）はどれも
     /// UI スレッド上にあり、⑵ プロセス大域の atomic にするとテスト間で値が残って判定を
-    /// 変えてしまう（要件 7.7）ためである。テストはスレッドごとに走るので、この形なら
+    /// 変えてしまうためである。テストはスレッドごとに走るので、この形なら
     /// 隔離が自然に成立する（それでも [`reset_for_test`] で明示的に初期化する）。
     static TICK_MIRROR: Cell<Option<(u32, Instant)>> = const { Cell::new(None) };
 }
@@ -744,10 +739,10 @@ pub fn begin_tick(frame: u32, start: Instant) {
 /// 読んでよいのは一括 flush（World の借用を解放した後に走る）と wndproc の同期経路
 /// だけである。World を借りられる観測点は既定の**多スレッド**実行器でワーカースレッドへ
 /// 載り得て、そこからは UI スレッドの写しが見えない（frame=0 の行が出る）ため、必ず
-/// [`stamp_from_world`] を使うこと（D1）。
+/// [`stamp_from_world`] を使うこと。
 ///
 /// tick 前は `0`。tick の外で読むと「直近 tick の番号」になるため、判定は
-/// `wrapping_sub` の差分だけで行う（D14）。
+/// `wrapping_sub` の差分だけで行う。
 pub fn current_frame() -> u32 {
     TICK_MIRROR
         .with(|mirror| mirror.get())
@@ -779,7 +774,7 @@ pub fn stamp() -> Stamp {
 ///
 /// 既定の実行器は多スレッドであり、ワーカースレッドからは UI スレッドの写しが見えない。
 /// `Res<FrameCount>`＋`Res<TickStart>` から組めば、どのスレッドに載っても同一 tick の
-/// 全レコードが同じ `frame` を持つ（D1）。
+/// 全レコードが同じ `frame` を持つ。
 pub fn stamp_from_world(frame: &FrameCount, start: &TickStart) -> Stamp {
     Stamp {
         frame: frame.0,
@@ -799,7 +794,7 @@ thread_local! {
 /// 一括 flush 区間の生存札。
 ///
 /// 落ちると起点が**開く前の値へ戻る**ので、最外の札が落ちた時点で [`since_flush_us`] は
-/// 必ず `None` を返す——テスト間に起点が残らない（Requirement 7.7）。
+/// 必ず `None` を返す——テスト間に起点が残らない。
 ///
 /// # 区間は入れ子になる（だから復元する）
 ///
@@ -812,8 +807,7 @@ thread_local! {
 ///
 /// 内側の解除が起点を `None` へ潰すと、2 本目以降の書込のあいだ [`since_flush_us`] が
 /// `None` を返し、「そのメッセージは `SetWindowPos` の内側で受理された」という証跡が
-/// 消える。本仕様が追っている機序そのものが測れなくなるため、**内側は自分が上書きした
-/// 値を持ち帰り、落ちるときに書き戻す**。
+/// 消える。そのため**内側は自分が上書きした値を持ち帰り、落ちるときに書き戻す**。
 #[must_use = "生存札を落とすと flush 区間が即座に閉じる"]
 pub struct FlushEpoch {
     /// この札が開く直前の起点（外側の区間があればその値・無ければ `None`）。
@@ -844,7 +838,7 @@ pub fn since_flush_us() -> Option<u64> {
 
 /// スレッド局所の写しと時刻基準（tick 開始・flush 開始）を初期化する。
 ///
-/// テスト冒頭・末尾で呼ぶための口である（要件 7.7＝テスト間で状態を汚染しない）。
+/// テスト冒頭・末尾で呼ぶための口である（テスト間で状態を汚染しない）。
 /// 写しはスレッド局所なので並列実行するテスト同士は元より隔離されているが、同一
 /// スレッドで続けて走るテストへ前のフレーム番号を持ち越さないために明示的に初期化する。
 /// 初期化後は [`current_frame`] が `0`・[`since_tick_start_us`] が `0`・

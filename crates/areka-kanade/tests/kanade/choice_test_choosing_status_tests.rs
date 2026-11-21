@@ -17,21 +17,11 @@ fn talking_only_snapshot() -> ExecutionSnapshot {
 }
 
 // ============================================================================
-// 群 4: Req9.2(c) — 選択待ち中の周期リクエストに `choosing` が載り、解決後に消える
+// 群 4: 選択待ち中の周期リクエストに `choosing` が載り、解決後に消える
 // ============================================================================
 
 /// 選択待ち確立後の周期リクエストが **NOTIFY**（Ref3="0"）で `Status: talking,choosing` を帯び、
-/// 選択解決後の周期リクエストからは `choosing` が消えて `talking` 単独へ戻る
-/// （Req9.2(c)・6.1／6.2／6.4・C5・裁定 6）。
-///
-/// # 駆動（決定的・sleep なし）
-/// 挨拶なし boot →`Steady{None}` 直行 → Tick1（`OnSecondChange` GET Value）で steady talk（id=1）を
-/// 起こし、保留ハーネス（`hold_indices=[0]`）でその `TalkDone` を park して active talk 窓を保つ。
-/// `ChoiceWaiting` を確立してから **Tick2** を注入し（選択待ち中の pump）、`Choice` を注入して
-/// 正典形カスケードを 204／204 で走らせ（＝解決のみ・帳簿消去）、続けて **Tick3** を注入する
-/// （解決後の pump）。終了は `CloseRequest`＋保留解放（`TalkDone{Ended}`→close 握手→別れ talk
-/// quit:true）で駆動する。注入 Tick はいずれも期限 `CHOICE_DEADLINE_MS` より手前ゆえ、
-/// タイムアウト経路は踏まない。
+/// 選択解決後の周期リクエストからは `choosing` が消えて `talking` 単独へ戻る。
 ///
 /// # 非空虚性・discriminative 性
 /// - 周期リクエストのうち **NOTIFY はちょうど 2 件**（Tick2／Tick3）であり、それぞれの `status` を
@@ -39,9 +29,9 @@ fn talking_only_snapshot() -> ExecutionSnapshot {
 ///   いなければ 1 件目が `"talking"` になり落ち、解決時の帳簿消去が漏れていれば 2 件目が
 ///   `"talking,choosing"` のまま残って落ちる（両方向の退行を弁別する）。
 /// - 連結順序（正典順 `talking,choosing`）も実値突合に含まれる——順序が逆（`choosing,talking`）に
-///   なる退行はここで落ちる（Req6.3 の既存規律が複合値でも保たれること）。
+///   なる退行はここで落ちる。
 /// - 両件が **NOTIFY・Ref3="0"** であること（GET でないこと）を明示確認する＝選択待ち中も slot
-///   占有継続として扱われ、応答スクリプトを運べない型で送出される（Req6.4／6.5 の構造充足）。
+///   占有継続として扱われ、応答スクリプトを運べない型で送出される。
 /// - 記録位置の前後（Tick2 の NOTIFY < カスケード段 GET < Tick3 の NOTIFY）を突合し、2 件目が
 ///   確かに**解決後**の pump であることを固定する（空虚な合格を防ぐ）。
 #[test]
@@ -92,7 +82,7 @@ fn choosing_rides_pump_status_while_waiting_then_clears_after_resolution() {
         "active talk 窓で注入した 2 本の Tick は NOTIFY pump を 1 件ずつ発行するはず: {recorded:?}"
     );
 
-    // (2) 選択待ち中の pump: NOTIFY・Ref3="0"・Status は複合値 `talking,choosing`（Req6.1／6.4・裁定 6）。
+    // (2) 選択待ち中の pump: NOTIFY・Ref3="0"・Status は複合値 `talking,choosing`。
     let expected_choosing = expected_call(events::on_second_change(
         MonotonicMs(2_000),
         &cascading_snapshot(),
@@ -111,7 +101,7 @@ fn choosing_rides_pump_status_while_waiting_then_clears_after_resolution() {
         "選択待ち中も slot 占有継続＝Ref3 は \"0\"（応答スクリプトを再生しない・Req6.4）"
     );
 
-    // (3) 解決後の pump: 同じ active talk 窓のまま `choosing` だけが消える（Req6.2）。
+    // (3) 解決後の pump: 同じ active talk 窓のまま `choosing` だけが消える。
     let expected_resolved = expected_call(events::on_second_change(
         MonotonicMs(3_000),
         &talking_only_snapshot(),
@@ -155,7 +145,6 @@ fn choosing_rides_pump_status_while_waiting_then_clears_after_resolution() {
         "本檻の Tick は期限手前のみ＝OnChoiceTimeout は発行されないはず: {recorded:?}"
     );
 
-    // (6) 終了系列を完走した（末尾 Unload）。
     assert_eq!(
         recorded.last().expect("記録列は空でない"),
         &expected_unload(),

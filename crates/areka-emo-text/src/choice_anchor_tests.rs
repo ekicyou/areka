@@ -1,6 +1,4 @@
-//! 選択肢とアンカーが同じ列に並ぶときの当たりの檻（要件 2.1〜2.3・2.8・8.4）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-anchor-tag-canon` のもの（別の spec のものはその場で名を書く）。
+//! 選択肢とアンカーが同じ列に並ぶときの当たりの檻。
 //!
 //! 行の注釈（[`annotate_lines`]）と当たりの行（[`derive_hit_rows`]）は範囲の位置と通し番号しか
 //! 読まないので、種類がアンカーでも選択肢と同じに働く。ここではそれを、合図（`AnchorBegin`／
@@ -104,7 +102,7 @@ fn hit_in(
     (ranges.segments, rows)
 }
 
-/// 折り返しをまたぐアンカーの範囲は、またいだ行ごとに当たりの区間を 1 つずつ持つ（要件 2.1・2.3）。
+/// 折り返しをまたぐアンカーの範囲は、またいだ行ごとに当たりの区間を 1 つずつ持つ。
 /// 範囲の外の字（前の「あい」・後ろの「き」）は当たりに入らない。
 #[test]
 fn anchor_across_a_wrap_has_a_hit_segment_on_each_line() {
@@ -141,7 +139,7 @@ fn anchor_across_a_wrap_has_a_hit_segment_on_each_line() {
     );
 }
 
-/// 1 字ずつ出ている途中の当たりは、出た字までで打ち切られる（要件 2.2）。
+/// 1 字ずつ出ている途中の当たりは、出た字までで打ち切られる。
 /// 範囲の記録は最初から全文ぶんで、切るのは配置の側。
 #[test]
 fn hit_area_stops_at_what_has_been_revealed() {
@@ -174,7 +172,7 @@ fn hit_area_stops_at_what_has_been_revealed() {
     assert_eq!(hit(&state, 6.0).1, expected[6]);
 }
 
-/// 選択肢とアンカーが混ざる列でも、当たりの矩形と種類は範囲ごとに合う（要件 2.8・8.4）。
+/// 選択肢とアンカーが混ざる列でも、当たりの矩形と種類は範囲ごとに合う。
 #[test]
 fn mixed_choices_and_anchors_keep_their_rects_and_kinds() {
     // 選択肢「はい」＋「か」＋アンカー「あい」＋選択肢「いいえ」:
@@ -239,10 +237,10 @@ fn same_kind_ranges_are_disjoint_and_an_anchor_may_wrap_a_choice() {
     );
 }
 
-/// 縦書きのアンカーの当たりの帯は、同じ字の範囲の選択肢の帯と同じ形（`vertical-choice-hover-band` 要件 1.7）。
+/// 縦書きのアンカーの当たりの帯は、同じ字の範囲の選択肢の帯と同じ形。
 /// 帯は厚み＝列の em 10・寄せは em の箱を列の箱の真ん中に置いた値の丸め＝右から左 round(−1.65)＝−2・
-/// 左から右 round(1.65)＝2（列の箱 13.3 が em を越える分 s＝3.3・列は右から左で 30..40・左から右で 0..10）。期待値を数で書くので、`line_bands` の縦書きの枝を
-/// 戻すと赤になる。
+/// 左から右 round(1.65)＝2（列の箱 13.3 が em を越える分 s＝3.3・列は右から左で 30..40・左から右で 0..10）。
+/// 期待値を数で書くので、`line_bands` の縦書きの枝を戻すと赤になる。
 #[test]
 fn vertical_anchor_band_has_the_same_shape_as_a_choice() {
     // 「か」＋範囲「あいう」＋「き」を、範囲がアンカーのときと選択肢のときで並べる。
@@ -270,7 +268,7 @@ fn vertical_anchor_band_has_the_same_shape_as_a_choice() {
 }
 
 /// 縦書きで列をまたぐ選択肢は、またいだ列ごとに当たりの行を 1 つずつ持ち、どの行の帯もその列の
-/// 行矩形の左辺＋寄せから厚み em（`vertical-choice-hover-band` 要件 1.5）。列は 20 字（描画範囲の丈 200 ÷ 字の丈 10）なので、
+/// 行矩形の左辺＋寄せから厚み em。列は 20 字（描画範囲の丈 200 ÷ 字の丈 10）なので、
 /// 前置き 19 字の後の選択肢「はいいえ」は 1 列目に「は」・2 列目に「いいえ」。列の左辺は
 /// 右から左で 1 列目 30・2 列目 18（列送り 12）、左から右で 0・12。寄せは右から左 −2・左から右 ＋2
 /// （上の `vertical_anchor_band_has_the_same_shape_as_a_choice` と同じ）。期待値を数で書くので、
@@ -304,8 +302,8 @@ fn vertical_choice_across_columns_has_a_band_on_each_column() {
     }
 }
 
-/// 強調へ渡す帯（`ranges.bands`）とクリックを受ける範囲のブロック軸は同じ帯から出る（`choice-ranges-one-function` 要件 3.6・
-/// 4.2）。期待値は帯と行の矩形から組み直すので、片方の帯だけをずらすと決まった字幅のまま赤になる。
+/// 強調へ渡す帯（`ranges.bands`）とクリックを受ける範囲のブロック軸は同じ帯から出る。
+/// 期待値は帯と行の矩形から組み直すので、片方の帯だけをずらすと決まった字幅のまま赤になる。
 #[test]
 fn highlight_bands_and_hit_rows_share_one_band_in_every_writing_mode() {
     let horizontal = applied(&[text("あい"), choice(ACTOR, "x", "うえおか"), text("き")]);

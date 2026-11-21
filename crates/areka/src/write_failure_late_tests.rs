@@ -1,5 +1,4 @@
-//! 別の出所で終わり始めた後に届いた書けない失敗のテスト（areka-P0-write-failure-notice
-//! 最終検証の指摘・要件 1.1・1.2・2.3・2.5）。
+//! 別の出所で終わり始めた後に届いた書けない失敗のテスト。
 //!
 //! 最初の出所が別の物（`Escape` など）に決まった後の失敗を [`fatal`] へ渡すと、出所は
 //! 最初の物のまま残り、記録だけ残って告知が出ない。汲み出しはそれを受け手に残し、後始末が
@@ -86,7 +85,7 @@ fn a_failure_after_a_write_failure_is_still_drained() {
     assert!(take_receiver(&mut world).unwrap().try_recv().is_err());
 }
 
-/// OS のセッションの終了の後は告げない（要件 2.3 の例外）ので、今までどおり汲み出して記録する。
+/// OS のセッションの終了の後は告げないので、今までどおり汲み出して記録する。
 #[test]
 fn a_failure_after_os_session_end_is_drained_and_logged() {
     let mut world = installed_world();

@@ -1,4 +1,4 @@
-//! 1 回の判断（設計の PromotionRound）: 1 つの手動の持ち主の走査の列から、帰属・祖先の優先・相の移り・
+//! 1 回の判断: 1 つの手動の持ち主の走査の列から、帰属・祖先の優先・相の移り・
 //! 置き場の書き込み・描く列の分け方を決める。使い手の部品（`OwnSurface`・`GraphicsCommandList`・
 //! `VisualDrawContent`・`VisualTransform`）には触らず、`AutoPromotion` と `SurfacePlacement` だけを書く。
 
@@ -295,8 +295,8 @@ fn readiness(
     }
 }
 
-/// 相の移りの回だけ 1 行、見送りは理由が前の見送りと違うときだけ残す（要件 7.1〜7.3）。
-/// `skip_memo` は水準によらず進める（答えをログの水準で変えない・要件 1.8）。
+/// 相の移りの回だけ 1 行、見送りは理由が前の見送りと違うときだけ残す。
+/// `skip_memo` は水準によらず進める（答えをログの水準で変えない）。
 fn record(e: Entity, name: Option<&Name>, verdict: Verdict, skip_memo: &mut Option<Ineligible>) {
     let entity = || format_entity_name(e, name);
     match verdict {
@@ -328,7 +328,7 @@ fn record(e: Entity, name: Option<&Name>, verdict: Verdict, skip_memo: &mut Opti
     }
 }
 
-/// 節の下の手動の持ち主 `input.idx` の効かせられない形を、種類ごとに続く間 1 度 `warn!` に残す（要件 4.9）。
+/// 節の下の手動の持ち主 `input.idx` の効かせられない形を、種類ごとに続く間 1 度 `warn!` に残す。
 fn report_unhonored(
     input: &ShapeInput,
     clip: &PlacementClip,

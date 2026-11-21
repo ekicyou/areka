@@ -1,7 +1,7 @@
-//! emo2 検体を `runtime` 配下のテストへ配る共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
+//! emo2 検体を `runtime` 配下のテストへ配る共有の受け口。
 //!
 //! 検体は窓口 `sample-ghost-kit` から取得する。取得のたびに**起動記録の無い新品の複製**が
-//! 配られ、得た値を捨てた時点でその複製は消える（areka-P0-nar-install 要件 7.4）。
+//! 配られ、得た値を捨てた時点でその複製は消える。
 //!
 //! **読むだけ**のテストは [`emo2_root`]／[`emo2_balloon_root`] を使う。こちらは
 //! プロセス寿命の複製 1 つを共有するので、テストバイナリあたり木は 1 つで済む
@@ -18,7 +18,7 @@ use sample_ghost_kit::SampleRoot;
 /// 読むだけのテストが共有する複製（プロセス寿命）。
 static EMO2: LazyLock<SampleRoot> = LazyLock::new(acquire_emo2);
 
-/// emo2 検体の新品の複製を 1 つ取得する（areka-P0-nar-install 要件 7.4・共有の複製 `EMO2` の作り手）。
+/// emo2 検体の新品の複製を 1 つ取得する（共有の複製 `EMO2` の作り手）。
 fn acquire_emo2() -> SampleRoot {
     SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体")
 }

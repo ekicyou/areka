@@ -1,6 +1,6 @@
 //! `mount.rs` テストの共有フィクスチャ（純 ECS の装着・GPU 不要）。
 //!
-//! 装着（[`VisualMount::attach`]）は COM を呼ばない純 ECS の spawn になったため、構造アサートを
+//! 装着（[`VisualMount::attach`]）は COM を呼ばない純 ECS の spawn なので、構造アサートを
 //! 共有する複数のテストモジュール（`tests`／`visibility_tests`）へ GPU 無しの World を配る。
 //! 表示記録には [`GraphicsCommandList::empty`] を渡す（値として扱えるため装着の構造は成立する）。
 

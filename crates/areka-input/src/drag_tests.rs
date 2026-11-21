@@ -1,5 +1,5 @@
 //! ドラッグの開始・終了の知らせが届く・届かないの基本と、終了の座標・位置の保存
-//! （areka-P0-mouse-drag-events・design「Testing Strategy > areka」A1〜A8）と、送らない経路の記録（A9）。
+//! （A1〜A8）と、送らない経路の記録（A9）。
 //!
 //! 土台は [`super::test_support::Rig`]（本番の順で組んだ窓と受け口）。期待する知らせは偽の当たり判定
 //! （[`fake_hit`]）へ「押した位置 − 窓の位置」を渡して作る（受け口の座標・当たり判定から、
@@ -52,7 +52,7 @@ fn offset(p: Point, by: Point) -> Point {
     }
 }
 
-/// A1（要件 1.1・1.2・1.3・2.1・2.3・2.4・4.4・4.5・9.1 ⑴⑷⑸）: 開始 → 配る → 離す終了 → 配る。
+/// A1: 開始 → 配る → 離す終了 → 配る。
 /// 受け口に `DragStart` 1 件 → `DragEnd` 1 件がこの順で届き、スコープ・座標・当たり判定
 /// （開始はある位置・終了は無い位置）が期待どおり。
 #[test]
@@ -80,7 +80,7 @@ fn drag_start_then_end_each_arrive_once_in_order() {
     rig.close();
 }
 
-/// A2（要件 1.1・2.1・9.1 ⑴⑷）: 開始と終了を同じ配りに積む（速いドラッグ）。
+/// A2: 開始と終了を同じ配りに積む（速いドラッグ）。
 /// 順は開始 → 終了・各 1 件。開始の座標は動く前の窓から引く。
 #[test]
 fn fast_drag_in_one_dispatch_sends_start_then_end_once() {
@@ -105,7 +105,7 @@ fn fast_drag_in_one_dispatch_sends_start_then_end_once() {
     rig.close();
 }
 
-/// A3（要件 3.1・3.2・9.1 ⑵）: 動かさないクリック（開始の無い終了）とダブルクリックの押下では
+/// A3: 動かさないクリック（開始の無い終了）とダブルクリックの押下では
 /// ドラッグの知らせは 0 件。ダブルクリックは今どおり 1 件。
 #[test]
 fn click_without_move_and_double_click_send_no_drag() {
@@ -143,7 +143,7 @@ fn click_without_move_and_double_click_send_no_drag() {
     rig.close();
 }
 
-/// A5（要件 3.3・9.1 ⑵）: バルーン窓を対象にした開始 → 終了。マウスの知らせは 0 件。
+/// A5: バルーン窓を対象にした開始 → 終了。マウスの知らせは 0 件。
 #[test]
 fn balloon_drag_sends_nothing() {
     let mut rig = Rig::new();
@@ -163,7 +163,7 @@ fn balloon_drag_sends_nothing() {
     rig.close();
 }
 
-/// A8（要件 1.4・2.5・9.1 ⑻）: 直前に移動を 1 件送って間引きが閉じている状態（時計は止めたまま）で
+/// A8: 直前に移動を 1 件送って間引きが閉じている状態（時計は止めたまま）で
 /// 開始 → 終了。2 件とも届き、間引きの状態は変わらない。移動は開始と同じ窓の中の位置に置く
 /// （開始が間引きを通ると、同じ位置ゆえ抑えられて赤になる）。
 #[test]
@@ -223,7 +223,7 @@ fn begin_drag(rig: &mut Rig) -> (Point, Point, Vec<MouseInput>) {
     (start_win, press, rig.drain())
 }
 
-/// A4（要件 2.2・4.2・9.1 ⑶⑸）: 開始 → 窓を動かす → 取り消しの終了（位置＝押した位置）。
+/// A4: 開始 → 窓を動かす → 取り消しの終了（位置＝押した位置）。
 /// 窓が開始の位置へ戻り、`DragEnd` が 1 件届き、座標と当たり判定が `DragStart` と同じ値。
 /// 保存の前の窓の位置から引くと、動かした先の窓から見た値になって赤。
 #[test]
@@ -257,7 +257,7 @@ fn cancelled_drag_end_reports_the_start_coordinates() {
     rig.close();
 }
 
-/// A6（要件 4.2・9.1 ⑸・決定 D1）: 下端へ寄せる置き方の窓で、押した位置から横と縦へ動かして離す
+/// A6: 下端へ寄せる置き方の窓で、押した位置から横と縦へ動かして離す
 /// （窓は横へだけ動く）。`DragEnd` の座標は「離した位置 − 保存の後の窓の位置」と一致し、
 /// 「離した位置 − 保存の前の窓の位置」とは違う。
 #[test]
@@ -343,7 +343,7 @@ fn perform(mut rig: Rig, gesture: Gesture) -> (Point, Vec<(PersistKey, String)>,
     result
 }
 
-/// A7（要件 6.1・6.2・6.3・9.1 ⑺）: 包みを付けない窓（本 spec の前）と包みを付けた窓で同じ操作
+/// A7: 包みを付けない窓（従来）と包みを付けた窓で同じ操作
 /// （離す・取り消す・動かさないクリック）をすると、窓の位置と記憶へ書かれた組が一致する。
 /// 包みの側は送り先あり・`MouseWiring` なし・送出に失敗の 3 通り。動かさないクリックでは
 /// どちらも保存 0 件。保存を呼ばない・送り先が無いと戻る、にすると赤。
@@ -432,7 +432,7 @@ fn call_start_capturing(rig: &mut Rig, entity: Entity, target: Entity) -> Vec<Ca
     capture(|| on_char_drag_start(&mut rig.world, entity, entity, &ev)).1
 }
 
-/// A9（要件 8.2・9.2）: `MouseWiring` なし → `mouse_drag_dropped`（`no_wiring`・debug）1 件・知らせ 0 件。
+/// A9: `MouseWiring` なし → `mouse_drag_dropped`（`no_wiring`・debug）1 件・知らせ 0 件。
 #[test]
 fn no_wiring_records_one_drop() {
     let mut rig = Rig::new();
@@ -452,7 +452,7 @@ fn no_wiring_records_one_drop() {
     rig.close();
 }
 
-/// A9（要件 8.2・9.2）: 対象が別の窓 → `mouse_drag_dropped`（`target_mismatch`・warn）1 件・知らせ 0 件。
+/// A9: 対象が別の窓 → `mouse_drag_dropped`（`target_mismatch`・warn）1 件・知らせ 0 件。
 #[test]
 fn target_mismatch_records_one_drop() {
     let mut rig = Rig::new();
@@ -470,7 +470,7 @@ fn target_mismatch_records_one_drop() {
     rig.close();
 }
 
-/// A9（要件 8.2・9.2）: `CharWindowMarker` なし（バルーン窓）→ `mouse_drag_dropped`（`no_scope`・warn）
+/// A9: `CharWindowMarker` なし（バルーン窓）→ `mouse_drag_dropped`（`no_scope`・warn）
 /// 1 件・知らせ 0 件。
 #[test]
 fn no_scope_records_one_drop() {
@@ -489,7 +489,7 @@ fn no_scope_records_one_drop() {
     rig.close();
 }
 
-/// A9（要件 8.2・9.2）: `WindowPos.position` なし → `mouse_drag_dropped`（`no_window_pos`・warn）
+/// A9: `WindowPos.position` なし → `mouse_drag_dropped`（`no_window_pos`・warn）
 /// 1 件・知らせ 0 件。
 #[test]
 fn no_window_pos_records_one_drop() {
@@ -513,7 +513,7 @@ fn no_window_pos_records_one_drop() {
     rig.close();
 }
 
-/// A9（要件 8.2・9.2）: 受け口を落とす → `mouse_send_failed`（warn）1 件・知らせ 0 件。
+/// A9: 受け口を落とす → `mouse_send_failed`（warn）1 件・知らせ 0 件。
 #[test]
 fn send_failure_records_one_failure() {
     let mut rig = Rig::new();

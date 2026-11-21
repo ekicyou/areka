@@ -1,5 +1,4 @@
-//! 出番の世代と、合図が追い付くまでの欄の外し（spec: areka-P0-animated-image-playback task 4.3・
-//! 要件 2.3）。
+//! 出番の世代と、合図が追い付くまでの欄の外し。
 //!
 //! 面の表・コマ・指令の送り方は 4.2 と同じ `presenter_test_support.rs` の補助を使う（面 0 ＝
 //! 回数つき `fin.png` と終わりなし `end.png` を並べたバルーン）。
@@ -68,7 +67,6 @@ fn too_large_and_unattached_acks_are_ignored() {
         "大きすぎる合図で追い付いたことになった"
     );
 
-    // 追い付いた後に古い合図が来ても戻らない（大きい方を取る）。
     ack(&mut presenter, &mut world, T, 1);
     ack(&mut presenter, &mut world, T, 0);
     let running = frames(&w, Some(2), Some(0));

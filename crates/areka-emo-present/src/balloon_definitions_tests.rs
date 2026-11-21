@@ -1,4 +1,4 @@
-//! 面ごとの定義の束 [`load_scope_balloon_definitions`] のテスト（要件 1.3・1.5・1.7・11.1）。
+//! 面ごとの定義の束 [`load_scope_balloon_definitions`] のテスト。
 //!
 //! 一時フォルダ（ワークツリーの `target\` の下）に設定ファイルと名前だけの絵を置き、絵は偽の読み手
 //! （[`MemoryDecoder`]）が返す。
@@ -19,7 +19,7 @@ fn load(dir: &TempDir, dec: &MemoryDecoder) -> (ScopeBalloonDefinitions, Vec<Cap
     log_capture_kit::capture(|| load_scope_balloon_definitions(dir.path(), 0, &faces, dec, ALPHA))
 }
 
-/// 指摘 20: 空の面列を渡すと、面 0 の定義が無い `error!` を 1 行出して空の定義を返す
+/// 空の面列を渡すと、面 0 の定義が無い `error!` を 1 行出して空の定義を返す
 /// （panic しない・面 0 必在の契約を破った呼び手でも続ける）。
 #[test]
 fn empty_faces_record_one_error_and_give_empty_definition() {
@@ -42,7 +42,7 @@ fn empty_faces_record_one_error_and_give_empty_definition() {
     assert_eq!(defs, ScopeBalloonDefinitions::single(0, empty));
 }
 
-/// 面 2 の設定ファイルの `validrect`・書体・矢印の鍵は面 2 の定義にだけ入る（要件 1.3・1.7）。
+/// 面 2 の設定ファイルの `validrect`・書体・矢印の鍵は面 2 の定義にだけ入る。
 #[test]
 fn face_override_lands_only_in_its_face() {
     let dir = TempDir::new();
@@ -94,7 +94,7 @@ fn face_override_lands_only_in_its_face() {
     assert_eq!(defs.for_face(9), f0, "定義の無い面は面 0");
 }
 
-/// 面 0 以外の設定ファイルを持たないバルーンでは全部の面が面 0 と同じ（要件 1.6）。
+/// 面 0 以外の設定ファイルを持たないバルーンでは全部の面が面 0 と同じ。
 #[test]
 fn faces_without_own_settings_equal_face0() {
     let dir = TempDir::new();
@@ -114,7 +114,7 @@ fn faces_without_own_settings_equal_face0() {
     }
 }
 
-/// 矢印の絵は `arrow.filename` ごとに 1 回だけ解き、面どうしで共有する（設計 MarkerFamilies の Risks）。
+/// 矢印の絵は `arrow.filename` ごとに 1 回だけ解き、面どうしで共有する。
 /// 面 0・2・3 は名前なし、面 4・5 は `two` → 解決は 2 回・名前の無い絵の warn も 1 回だけ。
 #[test]
 fn arrow_images_resolved_once_per_name_and_shared() {
@@ -156,7 +156,7 @@ fn arrow_images_resolved_once_per_name_and_shared() {
     ));
 }
 
-/// 読めない座標の値は (鍵, 値) ごとにスコープにつき 1 回だけ warn（要件 1.5）。
+/// 読めない座標の値は (鍵, 値) ごとにスコープにつき 1 回だけ warn。
 #[test]
 fn unreadable_coordinate_warns_once_per_key_and_value() {
     let dir = TempDir::new();
@@ -216,8 +216,7 @@ fn count(events: &[CapturedEvent], level: Level, prefix: &str) -> usize {
         .count()
 }
 
-/// 面ごとの `marker.filename` で印の絵を選び、設定ファイルを持たない面・番号の無い面は面 0 の値
-/// （script-small-tags 要件 5.2）。同じ名前は 1 回だけ読み、面どうしで共有する。
+/// 面ごとの `marker.filename` で印の絵を選び、設定ファイルを持たない面・番号の無い面は面 0 の値。同じ名前は 1 回だけ読み、面どうしで共有する。
 #[test]
 fn inline_marker_per_face_and_face0_fallback() {
     let dir = TempDir::new();
@@ -260,7 +259,7 @@ fn inline_marker_per_face_and_face0_fallback() {
     );
 }
 
-/// 書いた名前の絵が無ければ warn（名前・スコープ・フォルダ）を 1 行出し、連鎖の残りで探す（要件 5.3）。
+/// 書いた名前の絵が無ければ warn（名前・スコープ・フォルダ）を 1 行出し、連鎖の残りで探す。
 #[test]
 fn inline_marker_missing_explicit_warns_and_falls_back() {
     let dir = TempDir::new();
@@ -285,7 +284,7 @@ fn inline_marker_missing_explicit_warns_and_falls_back() {
     assert!(w.field("balloon_dir").is_some());
 }
 
-/// 絵が 1 枚も無いバルーンは「絵なし」で、info の記録は面と名前がいくつあっても 1 回だけ（要件 5.4）。
+/// 絵が 1 枚も無いバルーンは「絵なし」で、info の記録は面と名前がいくつあっても 1 回だけ。
 #[test]
 fn inline_marker_none_records_info_once() {
     let dir = TempDir::new();
@@ -314,7 +313,7 @@ fn inline_marker_none_records_info_once() {
     );
 }
 
-/// 矢印でない数の鍵の読めない値も同じ `warn!` の輪で (鍵, 値) ごとに 1 回（audit-parsers-sakura 指摘 18）。
+/// 矢印でない数の鍵の読めない値も同じ `warn!` の輪で (鍵, 値) ごとに 1 回。
 #[test]
 fn unreadable_numeric_key_warns_once() {
     let dir = TempDir::new();
@@ -335,7 +334,7 @@ fn unreadable_numeric_key_warns_once() {
     assert_eq!(warns, vec![("font.height".to_string(), "28px".to_string())]);
 }
 
-/// 指摘 40: `descript.txt` の無いバルーンで上書きを持つ面が 2 つあっても、descript は読み込み 1 回に
+/// `descript.txt` の無いバルーンで上書きを持つ面が 2 つあっても、descript は読み込み 1 回に
 /// つき 1 回だけ読むので、読めない `warn!` も 1 件だけ（面ごとに読み直さない）。
 #[test]
 fn missing_descript_warns_once_across_overriding_faces() {

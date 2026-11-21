@@ -1,4 +1,4 @@
-//! シェルの窓のハンドラの箱の前段（areka-P0-shell-balloon・design「箱のポインタの前段」）。
+//! シェルの窓のハンドラの箱の前段。
 //!
 //! `mod.rs` の `on_char_pointer_moved`・`on_char_pointer_pressed` の先頭（強制退避の判定の後）から
 //! 呼ばれ、「処理した」（`true`）なら呼び手は既存の道へ落とさない。判断は `shell_box.rs` の純関数に
@@ -7,12 +7,12 @@
 //! 持ち物へ書く・送る）。
 //!
 //! - 移動: 選択肢の行の上は強調だけでシェルへ送らない。箱の中で行の上でない移動は滞在を記録して
-//!   から既存の道へ落とす（要件 8.2・9.1・9.7）。
+//!   から既存の道へ落とす。
 //! - 押下: 箱の中の押下はすべて中断の入口（`user_break.rs` の `on_box_press`）を通す。左押下が
-//!   選択の確定なら既存の選択の送り口で送り、結論がシェルへの操作なら既存の道へ（要件 8.3・8.5・9.6）。
-//! - シェルの窓から出たら滞在を無しにし、強調も外す（`balloon_exit.rs` と同じ後始末・要件 6.11）。
+//!   選択の確定なら既存の選択の送り口で送り、結論がシェルへの操作なら既存の道へ。
+//! - シェルの窓から出たら滞在を無しにし、強調も外す（`balloon_exit.rs` と同じ後始末）。
 //!
-//! 箱の外（`shown_boxes` の四角の外）は何もしない＝本 spec の前と同じ通知（要件 9.2・9.8）。
+//! 箱の外（`shown_boxes` の四角の外）は何もしない＝箱が無いときと同じ通知。
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -232,7 +232,7 @@ pub(super) fn on_box_pointer_pressed(
     let Some((scope, runtime, point)) = locate(world, entity, state) else {
         return false;
     };
-    // 矢印（balloon-scroll-arrows 要件 7.4）: 話し終えた後の左押下が押された箱の矢印に当たれば、
+    // 矢印: 話し終えた後の左押下が押された箱の矢印に当たれば、
     // 送りだけをして消費する（中断・選択・`OnMouseClick` へ流さない）。矢印かどうかは送り手でなく点で決める。
     let at = (state.client_point.x as f32, state.client_point.y as f32);
     if state.left_down
@@ -333,7 +333,7 @@ fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
         return false;
     };
     if wiring.send_selection(sel) {
-        // 送れた選択が選択肢なら、箱の選択肢を済みにする（件 1・アンカーは済まない）。
+        // 送れた選択が選択肢なら、箱の選択肢を済みにする（アンカーは済まない）。
         if let Some(runtime) = runtime_of(world) {
             settle_after_selection(&runtime, &box_place(scope, &hit.name), kind);
         }

@@ -45,9 +45,8 @@ pub struct Label {
     pub direction: TextDirection,
 }
 
-/// Label追加時のフック: Visualコンポーネントを自動挿入 (R4)
+/// Label追加時のフック: Visualコンポーネントを自動挿入
 fn on_label_add(mut world: DeferredWorld, hook: HookContext) {
-    // 既にVisualを持っている場合はスキップ
     if world.get::<Visual>(hook.entity).is_some() {
         return;
     }
@@ -78,8 +77,8 @@ fn on_label_remove(mut world: DeferredWorld, hook: HookContext) {
     }
 }
 
-/// 読む向きと行の向きを書式へ設定する。DirectWrite は組み合わせを配置を使う所で確かめる
-/// （research.md 8.3）ので、設定の順はこのままでよい。
+/// 読む向きと行の向きを書式へ設定する。DirectWrite は組み合わせを配置を使う所で確かめるので、
+/// 設定の順はこのままでよい。
 pub(crate) fn apply_direction(
     format: &IDWriteTextFormat,
     direction: TextDirection,

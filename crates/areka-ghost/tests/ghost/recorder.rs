@@ -1,15 +1,14 @@
 //! recorder.rs — 駆動対象非依存の交信記録デコレータ `Recorder<B: ShioriBackend>`（テスト支援）。
 //!
-//! 設計 design.md「Recorder（交信記録デコレータ）」の Service Interface が型定義の正本。
-//! 発行イベントの種別・ID・順序・結果を、駆動対象（InProc 実 DLL backend／`ScriptedShioriBackend`
-//! ／実 `ShioriConnection`）の種類を問わず同一の手口（`ShioriBackend` seam へのデコレート）で
-//! 記録する（要件 1.4「同一手口」）。採取ハーネス（要件 2.6）とも共用する。
+//! 発行イベントの種別・ID・順序・結果を、駆動対象（InProc 実 DLL backend／`ScriptedShioriBackend`／実
+//! `ShioriConnection`）の種類を問わず同一の手口（`ShioriBackend` seam へのデコレート）で記録する。
+//! 採取ハーネスとも共用する。
 //!
 //! # 不変条件
 //! - 記録は呼出順（shiori actor による直列化）で**追記のみ**（並べ替え・削除をしない）。
 //! - `status()` は素通し（sticky 死活検査ノイズを記録に混ぜない・append-only を呼出順で保つ）。
 //! - `RequestError` は非 Clone/非 PartialEq のため、結果は要約列挙 [`ExchangeOutcome`]（文字列化）
-//!   で保持し assert 可能性（PartialEq）を確保する（design「Data Models → ExchangeRecord」）。
+//!   で保持し assert 可能性（PartialEq）を確保する。
 //!
 //! 使う pub 項目は子モジュールごとに違い、この test binary で未使用のものもあるため dead-code 警告を抑止する。
 #![allow(dead_code)]

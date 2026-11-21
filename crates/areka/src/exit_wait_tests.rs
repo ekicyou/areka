@@ -1,4 +1,4 @@
-//! 終了で背景の仕事を待つ口の決定論テスト（要件 8.1・8.3・8.4・8.10・11.8・12.4）。
+//! 終了で背景の仕事を待つ口の決定論テスト。
 //!
 //! 確かめること: 書いていない仕事は待たずに記録を 1 件残す・書いている最中は書き終わりの合図で戻る・
 //! 残り 0 の予算では直ちに戻って `warn!(exit_wait_timeout)` が 1 件・前の段と同じ出発点から数える・
@@ -45,7 +45,7 @@ fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a Captured
 
 // ---------------------------------------------------------------- 書いていない仕事
 
-/// 書く前の段に居る仕事は待たない。途中でやめた物の名前を `warn!` に 1 件残す（要件 8.4）。
+/// 書く前の段に居る仕事は待たない。途中でやめた物の名前を `warn!` に 1 件残す。
 #[test]
 fn work_not_writing_is_abandoned_without_waiting() {
     let (mut world, gate) = world_with_gate();
@@ -89,7 +89,7 @@ fn idle_gate_and_empty_world_leave_no_record() {
 
 // ---------------------------------------------------------------- 書いている最中の仕事
 
-/// 書いている最中の仕事は、書き終わりの合図で戻り `info!(exit_wait_done)` を 1 件残す（要件 8.1）。
+/// 書いている最中の仕事は、書き終わりの合図で戻り `info!(exit_wait_done)` を 1 件残す。
 #[test]
 fn writing_work_returns_when_write_ends() {
     let (mut world, gate) = world_with_gate();
@@ -126,8 +126,8 @@ fn writing_work_returns_when_write_ends() {
     assert!(events_named(&events, "exit_wait_timeout").is_empty());
 }
 
-/// 残り 0 の予算では待たずに戻り、`warn!(exit_wait_timeout)` を 1 件残す（要件 8.3）。本文は門に
-/// 依らない語で、書きかけの場所は `label` の欄が運ぶ（network-update 要件 7.3・9.14）。
+/// 残り 0 の予算では待たずに戻り、`warn!(exit_wait_timeout)` を 1 件残す。本文は門に
+/// 依らない語で、書きかけの場所は `label` の欄が運ぶ。
 #[test]
 fn spent_budget_returns_at_once_with_one_timeout_warning() {
     let (mut world, gate) = world_with_gate();
@@ -144,7 +144,7 @@ fn spent_budget_returns_at_once_with_one_timeout_warning() {
     assert_eq!(timeout[0].level, tracing::Level::WARN);
     assert_eq!(timeout[0].field_str("name"), Some(NAME));
     assert_eq!(timeout[0].field_str("label"), Some(LABEL));
-    // 本文は門（インストール・更新）に依らない語で、場所は `label` が運ぶ（network-update 決めたこと 14）。
+    // 本文は門（インストール・更新）に依らない語で、場所は `label` が運ぶ。
     let message = timeout[0].message();
     assert!(
         message.contains("取得か書き込みの途中だった")
@@ -160,7 +160,7 @@ fn spent_budget_returns_at_once_with_one_timeout_warning() {
 }
 
 /// OS の終了の形: 前の段（ゴーストを降ろす待ち）と同じ出発点を渡すと、使った分だけ短く待ち、
-/// 出発点からの合計は上限を超えない（要件 8.2・11.8）。今から上限を数え直すと 1 秒以上待つ。
+/// 出発点からの合計は上限を超えない。今から上限を数え直すと 1 秒以上待つ。
 #[test]
 fn shared_start_keeps_total_within_limit() {
     // 前の段が上限を使い切った（さらに超えた）後: 待たずに戻る。
@@ -199,7 +199,7 @@ fn shared_start_keeps_total_within_limit() {
 
 // ---------------------------------------------------------------- 閉じた門・片付け
 
-/// 門が閉じた後は「始める」「書く段へ入る」が偽を返す（要件 12.4・設計で決めたこと 8）。
+/// 門が閉じた後は「始める」「書く段へ入る」が偽を返す。
 #[test]
 fn closed_gate_refuses_begin_and_enter_write() {
     let (mut world, gate) = world_with_gate();
@@ -213,7 +213,7 @@ fn closed_gate_refuses_begin_and_enter_write() {
 #[derive(Resource)]
 struct Cleaned(&'static str);
 
-/// 登記した片付けは `begin_close` で UI スレッドの World を渡されて呼ばれる（要件 8.10）。
+/// 登記した片付けは `begin_close` で UI スレッドの World を渡されて呼ばれる。
 #[test]
 fn begin_close_runs_registered_cleanup() {
     let mut world = World::new();

@@ -1,9 +1,4 @@
-//! # actor_region_collapse_tests — 潰れた描画範囲は状態の変わり目に 1 回だけ記録する（areka-P0-balloon-text-bugs 件 2）
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-text-bugs` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **2.3**〜**2.5**・**2.7**・**4.2**、design
-//! 「潰れた描画範囲（areka-P0-balloon-text-bugs 件 2）」）。
+//! # actor_region_collapse_tests — 潰れた描画範囲は状態の変わり目に 1 回だけ記録する
 //!
 //! 解決（[`TextRegion::resolve`](crate::region::TextRegion::resolve)）は毎フレーム走るので記録を
 //! 出さない（`region_tests.rs` が固定する）。記録は登録口
@@ -18,7 +13,7 @@
 //! 4. 箱の登録→外し→登録で 1 回（記憶は登録を外しても消えない）。
 //! 5. 箱を隠す・出すで 0 回。箱の束を差し替えても記憶は残り、正の定義で戻れば情報 1 回。
 //!
-//! 片付けの口 `TextSurface::release`（要件 **2.9**）は後の節 `release`（ECS・実 GPU）が固定する。
+//! 片付けの口 `TextSurface::release`は後の節 `release`（ECS・実 GPU）が固定する。
 //! 提示（`actor_present.rs`）の檻（実 GPU）は兄弟の `actor_region_collapse_present_tests.rs` に置く。
 //!
 //! ## 0 件の主張が恒真にならないようにする
@@ -40,7 +35,7 @@ use super::{TextLayerRuntime, TextSlotBinding};
 use crate::place::{PlaceKey, TextPlace};
 use crate::state::TextLayerConfig;
 
-/// 潰れに入ったときの警告の文（実機の確かめが探す語・design「記録の一覧」）。
+/// 潰れに入ったときの警告の文（実機の確かめが探す語）。
 const COLLAPSED: &str =
     "文字の描画範囲が潰れている（幅か高さが 0 以下）——このバルーンの文字は描かない";
 /// 戻ったときの情報の文。
@@ -148,7 +143,7 @@ impl Balloon {
     }
 }
 
-// ── 普通のバルーン（要件 2.3〜2.5） ──
+// ── 普通のバルーン ──
 
 /// 潰れた領域の装着で警告 1 回。どのバルーンのどの値かが読める（名前・4 辺・画像の大きさ）。
 #[test]
@@ -238,7 +233,7 @@ fn the_balloon_field_uses_the_label_the_wiring_set() {
     assert_eq!(warns[0].field_str("balloon"), Some("小さいバルーン"));
 }
 
-// ── 箱（要件 2.7） ──
+// ── 箱 ──
 
 struct Shell {
     world: World,
@@ -407,7 +402,7 @@ fn replacing_the_bundle_keeps_the_memory_and_recovery_logs_info_once() {
     assert_eq!(number_field(&infos[0], "height"), 50.0);
 }
 
-// ── 面の片付け（要件 2.9・ECS・実 GPU） ──
+// ── 面の片付け（ECS・実 GPU） ──
 //
 // 描いた後に潰れたら、提示（`actor_present.rs`）が `TextSurface::release` で前の字の面を外す。ここは片付けの口
 // そのものを固定する: 差し込み口の面は差し込み口から文字の層の部品を外し、差し込み口の entity と

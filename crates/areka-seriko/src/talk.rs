@@ -1,7 +1,7 @@
-//! talk: 文字が現れる時刻の写し（spec: areka-P0-seriko-trigger-intervals 要件 4.2・4.3・4.10・6.3・6.4）。
+//! talk: 文字が現れる時刻の写し。
 //!
 //! `talk,数値` の引き金は「数値分の文字がバルーンに現れた時刻」で鳴る。その時刻を、文字の層と同じ式で
-//! seriko の時計の上に写す。時計は持たず、渡された時計の読み（ms）から見積もるだけ（要件 6.3）。
+//! seriko の時計の上に写す。時計は持たず、渡された時計の読み（ms）から見積もるだけ。
 //!
 //! - [`TalkEpoch`]: 台本の 0 秒が seriko の時計の何 ms に当たるか（起点）の見積もり。届いた cue ごとに
 //!   「今 − cue の時刻」の最大を取る（文字の層の時刻源 `TalkClock::observe_cue` と同じ式）。
@@ -63,7 +63,7 @@ pub(crate) struct TalkFeed {
 }
 
 impl TalkFeed {
-    /// 文字の cue 1 件（台詞の文字・選択肢の文字）を、書記素クラスタの数だけ積む（要件 4.2）。
+    /// 文字の cue 1 件（台詞の文字・選択肢の文字）を、書記素クラスタの数だけ積む。
     pub(crate) fn push_text(&mut self, at_s: f64, duration_s: f64, text: &str) {
         self.push_chunk(at_s, duration_s, cluster_count(text));
     }

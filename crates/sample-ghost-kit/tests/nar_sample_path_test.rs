@@ -1,5 +1,4 @@
-//! コマンド `nar-sample-path` の検査（spec: `areka-P0-nar-install` 要件 1.9・
-//! `areka-P0-sample-url-fetch` 要件 2.9・3.5〜3.7）。
+//! コマンド `nar-sample-path` の検査。
 //!
 //! URL の行の失敗（終了コード 3）と `--fetch-list` は、`CARGO_TARGET_DIR` を私有の場所
 //! （[`WorkDir`]）へ振って置き場をそこへ移して判定する。置き場のパスは `--fetch-list` から
@@ -8,10 +7,9 @@
 //! # 組み上がった実行体を起こす
 //!
 //! 判定するのは出力の形・終了コード・どちらの流れに出るかの 3 つで、どれも `main` の配線
-//! そのものである。中の関数を直に呼ぶと「関数は正しいが `main` が繋いでいない」形を見逃す
-//! ので、**実行体を起こして**実測する。実行体の場所は cargo が `CARGO_BIN_EXE_<名>` で
-//! 教える（この検査が結合テストとして置かれているのは、この 1 点のため——`src/` の兄弟
-//! テストにすると実行体は組まれず、場所も教わらない）。
+//! そのもの。中の関数を直に呼ぶと「関数は正しいが `main` が繋いでいない」形を見逃すので、
+//! **実行体を起こして**実測する。`src/` の兄弟テストでは実行体が組まれず
+//! `CARGO_BIN_EXE_<名>` も教わらないので、結合テストに置く。
 //!
 //! `cargo run` は使わない。検査の途中で組み直しが走ると、測っているものが変わる。
 //!
@@ -68,8 +66,8 @@ fn pairs(out: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// 登記した検体のうち並びの要所を覆う 3 つ（同梱バルーン 2・0・バルーンの種類）で、1 行 1 組・`key=value`・絶対パス・末尾の区切り記号なしの形で
-/// 根・検体フォルダ・同梱バルーンが出る（要件 1.9）。
+/// 登記した検体のうち並びの要所を覆う 3 つ（同梱バルーン 2・0・バルーンの種類）で、根・検体
+/// フォルダ・同梱バルーンが 1 行 1 組・`key=value`・絶対パス・末尾の区切り記号なしで出る。
 ///
 /// この出力は `tools/package.ps1` の `Read-SamplePaths` が鍵（`folder=`・`balloon.<名>=`）の
 /// 行として読む。鍵の綴りと並び、値の形（`..` を畳んだ絶対パス）をここで固定する——受け手は
@@ -151,8 +149,7 @@ fn the_command_prints_one_absolute_path_per_line_for_the_chosen_samples() {
     }
 }
 
-/// コマンドを 2 回続けて呼ぶと、2 回とも**起動記録の無い根**が印字される（完了状態・
-/// 要件 1.9・9.7）。
+/// コマンドを 2 回続けて呼ぶと、2 回とも**起動記録の無い根**が印字される。
 ///
 /// 「2 回呼べる」だけでは作り直さない実装でも緑になる。1 回目に印字された根へ起動記録の形
 /// をしたファイルを置き、実在を較正してから 2 回目を呼ぶ。プロセスが終わっても木が残ること
@@ -200,7 +197,7 @@ fn two_runs_in_a_row_each_hand_out_a_root_with_no_boot_record() {
     );
 }
 
-/// 未登録の名前は、理由を**標準エラー**に出して終了コード 2 で終わる（要件 1.4・1.9）。
+/// 未登録の名前は、理由を**標準エラー**に出して終了コード 2 で終わる。
 ///
 /// 標準出力は空でなければならない（断ったときは何も出さない約束）。読み手の
 /// `tools/package.ps1` は 0 以外の終了コードで止まる。
@@ -222,7 +219,7 @@ fn an_unregistered_name_prints_the_reason_to_standard_error_and_exits_with_two()
     }
 }
 
-/// 引数なしは名前の空の未登録として、標準エラーに理由を出して終了コード 2（audit-test-kits 指摘 69）。
+/// 引数なしは名前の空の未登録として、標準エラーに理由を出して終了コード 2。
 #[test]
 fn no_argument_exits_with_2() {
     let (code, out, err) = finish(&mut std::process::Command::new(COMMAND));
@@ -290,7 +287,7 @@ fn assert_fetched_failure(name: &str, (code, out, err): &(Option<i32>, String, S
     );
 }
 
-/// 置き場が空の私有の場所で URL の行を引くと終了コード 3（要件 3.5・3.7）。
+/// 置き場が空の私有の場所で URL の行を引くと終了コード 3。
 #[test]
 fn a_url_row_with_an_empty_shelf_exits_with_three() {
     let private = WorkDir::new().expect("私有の場所");
@@ -300,7 +297,7 @@ fn a_url_row_with_an_empty_shelf_exits_with_three() {
 }
 
 /// `--fetch-list` は URL の行ごとに 5 列の 1 行を登記の順で出し、置き場のパスは
-/// `CARGO_TARGET_DIR` の下を指す（要件 2.9）。
+/// `CARGO_TARGET_DIR` の下を指す。
 #[test]
 fn fetch_list_prints_five_columns_per_url_row_under_the_target_dir() {
     let private = WorkDir::new().expect("私有の場所");
@@ -338,7 +335,7 @@ fn fetch_list_prints_five_columns_per_url_row_under_the_target_dir() {
 }
 
 /// 置き場の書庫とハッシュのファイルが合わないと終了コード 3、ハッシュのファイルの値が載る。
-/// 形の違うハッシュのファイルも 3（要件 3.6・3.7）。
+/// 形の違うハッシュのファイルも 3。
 #[test]
 fn a_mismatched_or_malformed_checksum_on_the_shelf_exits_with_three() {
     let private = WorkDir::new().expect("私有の場所");

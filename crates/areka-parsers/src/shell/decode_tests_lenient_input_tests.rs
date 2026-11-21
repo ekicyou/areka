@@ -1,27 +1,14 @@
-//! subset 外・不正入力の振り分け（元 decode_tests.rs タスク 4.6/1.2 区画）。
-//!
-//! 本ファイルは `decode_tests.rs` のテーマ分割（areka-P0-file-slimming タスク 8.5・要件 1.7）で
-//! 切り出したものであり、テスト本文は分割前と同一である。
+//! subset 外・不正入力の振り分け。
 
 use super::{
     Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DrawMethod,
     Element, ElementPath, Interval, Pattern, decode, lex,
 };
 
-// --- タスク 4.6/1.2: subset 外・不正入力の振り分け（吸収 or 忠実転記・既定値・非パニック） ---
-//
-// 検証範囲（要件 2.3/4.5/4.6/6.3/8.2/9.2/10.4）:
-// - element の overlay・base 以外のメソッドは値化せず passthrough で吸収する
-//   （モデルに materialize しない・要件 4.5/10.4）。正しい書式の collisionex は値になる
-//   （collisionex-regions 要件 1・8.8。読みの檻の本体は `decode_collisionex_tests.rs`）。
-// - pattern メソッド（overlay/replace 等）・未認識 interval キーワード（sometimes 等）は
-//   task 1.2 で overlay フィルタ／fallback-Bind を撤去し、吸収でなく忠実転記へ転じた
-//   （method＝field[1] verbatim・未認識 interval＝`Interval::Other(原文)`・要件 4.6/8.2）。
-// - 非数トークン・欠損フィールドを既定値（0）へ倒し、パニックしない（要件 3.3/2.3）。
-// - subset 外を含む断片が、隣接する認識可能ブロックのパースを壊さない（要件 9.2/10.4 の核心）。
+// 正しい書式の collisionex は値になる。読みの檻の本体は `decode_collisionex_tests.rs`。
 
 /// element定義の描画メソッド `base`（`element0,base,...`）は `overlay` と同じ値になり、
-/// 同じ surface の overlay element と並ぶ（areka-P0-element-base-method 要件 1.1・1.2）。
+/// 同じ surface の overlay element と並ぶ。
 #[test]
 fn base_element_method_becomes_value_beside_overlay_sibling() {
     let input = "\
@@ -33,7 +20,6 @@ element1,overlay,over.png,7,8
 ";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
-    // base の element も overlay と同じ値になり、レイヤ昇順で土台が先に並ぶ。
     assert_eq!(
         shell.surfaces[0].elements,
         vec![
@@ -53,18 +39,14 @@ element1,overlay,over.png,7,8
     );
 }
 
-/// pattern を伴わない未知 interval のみの行も忠実転記される（fallback-Bind 撤去後は
-/// interval 行が当該 ID の slot を確定させる・要件 8.2）。`interval,yen-e` は
-/// `Interval::Other("yen-e")` の animation を初出順で 1 個積む（pattern は空）。
-/// 認識可能 interval 単独行が既に slot を作る挙動と対称（語彙を落とさない黙らない）。
-/// （検体の語は元 `periodic`。areka-P0-seriko-trigger-intervals で `periodic,数値` が
-/// 読める語になったので、未認識のままの語へ替えた。）
+/// pattern を伴わない未知 interval のみの行も原文のまま転記される。
+/// `interval,yen-e` は `Interval::Other("yen-e")` の animation を初出順で 1 個積む（pattern は空）。
+/// 認識可能 interval 単独行が既に slot を作る挙動と対称。
 #[test]
 fn unknown_interval_only_line_is_transcribed_as_other() {
     let input = "surface0\n{\nanimation0.interval,yen-e,3\n}\n";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
-    // yen-e は Interval::Other へ転記され、pattern を持たない animation slot が立つ。
     assert_eq!(shell.surfaces[0].animations.len(), 1);
     assert_eq!(shell.surfaces[0].animations[0].id, 0);
     assert_eq!(
@@ -75,7 +57,7 @@ fn unknown_interval_only_line_is_transcribed_as_other() {
 }
 
 /// 正しい書式（名前が 2 番目の欄）の `collisionex` 行は値になり、同一ブロック内の
-/// 純 `collisionN` 矩形と書いた順に並ぶ（collisionex-regions 要件 1.1・1.8・8.8）。
+/// 純 `collisionN` 矩形と書いた順に並ぶ。
 #[test]
 fn collisionex_becomes_value_beside_plain_collision_in_written_order() {
     let input = "\
@@ -114,8 +96,8 @@ collision1,80,140,260,300,Bust
     );
 }
 
-/// 非数トークンを含む collision 行 → 該当フィールドは既定 0 へ倒れ、パニックしない
-/// （要件 2.3/3.3）。領域名は非数でも opaque 保持される。
+/// 非数トークンを含む collision 行 → 該当フィールドは既定 0 へ倒れ、パニックしない。
+/// 領域名は非数でも opaque 保持される。
 #[test]
 fn collision_with_non_numeric_fields_defaults_to_zero() {
     let input = "surface1000\n{\ncollision0,x,y,z,w,Head\n}\n";
@@ -136,8 +118,8 @@ fn collision_with_non_numeric_fields_defaults_to_zero() {
     );
 }
 
-/// フィールド欠損（短い行）→ 欠損フィールドは既定 0・欠損文字列は空へ倒れ、パニックしない
-/// （要件 2.3/3.3・9.2）。`collision0` のみで後続座標・名前が無い極端に短い行。
+/// フィールド欠損（短い行）→ 欠損フィールドは既定 0・欠損文字列は空へ倒れ、パニックしない。
+/// `collision0` のみで後続座標・名前が無い極端に短い行。
 #[test]
 fn short_collision_line_defaults_missing_fields() {
     let input = "surface1000\n{\ncollision0\n}\n";
@@ -159,7 +141,7 @@ fn short_collision_line_defaults_missing_fields() {
 }
 
 /// 複合断片: 認識可能ブロックの「間」に subset 外ブロック/行を挟んでも、両側の
-/// 認識可能ブロックが完全に decode される（要件 9.2/10.4 の核心）。
+/// 認識可能ブロックが完全に decode される。
 /// 未知トップレベル行・未知ブロック・不正断片で挟んでも走査は中断しない。
 #[test]
 fn subset_out_fragment_between_recognizable_blocks_does_not_break_neighbors() {
@@ -182,10 +164,8 @@ animation0.pattern0,overlay,2206,0,0,0
 }
 ";
     let shell = decode(lex(input));
-    // 両側の認識可能 surface が完全に decode される（間の subset 外は吸収）。
     assert_eq!(shell.surfaces.len(), 2);
 
-    // 前方ブロック: surface2100 の overlay element が完全に残る。
     assert_eq!(shell.surfaces[0].targets, [AppendTarget::Single(2100)]);
     assert_eq!(
         shell.surfaces[0].elements,
@@ -197,7 +177,6 @@ animation0.pattern0,overlay,2206,0,0,0
         }]
     );
 
-    // 後方ブロック: surface2200 の collision と animation が完全に残る。
     assert_eq!(shell.surfaces[1].targets, [AppendTarget::Single(2200)]);
     assert_eq!(
         shell.surfaces[1].collisions,
@@ -231,11 +210,10 @@ animation0.pattern0,overlay,2206,0,0,0
 }
 
 /// 単一 surface 内で吸収対象（element replace）と忠実転記対象（pattern method・interval・
-/// collisionex）を混在させ、各々が正しく振り分けられ互いを壊さないことを確認する
-/// （要件 4.5/4.6/8.2/9.2）。overlay element・collisionex の円・純 collision は書いた順に残り、
-/// replace element は吸収される一方、replace/overlay 両 pattern と `always` interval は忠実転記される
-/// （areka-P0-element-base-method 要件 2.4: 描けない語の行だけが吸収され隣の行は残る・
-/// collisionex-regions 要件 1.3・1.8・8.8）。
+/// collisionex）を混在させ、各々が正しく振り分けられ互いを壊さないことを確認する。
+/// overlay element・collisionex の円・純 collision は書いた順に残り、
+/// replace element は吸収される一方、replace/overlay 両 pattern と `always` interval は原文のまま転記される
+/// （描けない語の行だけが吸収され隣の行は残る）。
 #[test]
 fn mixed_valid_and_subset_out_lines_in_one_surface() {
     let input = "\
@@ -254,7 +232,6 @@ animation0.pattern1,overlay,901,4,0,0
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
     let s = &shell.surfaces[0];
-    // overlay と base の element が残る（replace 吸収）。
     assert_eq!(
         s.elements,
         vec![
@@ -272,7 +249,6 @@ animation0.pattern1,overlay,901,4,0,0
             },
         ]
     );
-    // collisionex の円と純 collision が書いた順に残る。
     assert_eq!(
         s.collisions,
         vec![
@@ -298,7 +274,7 @@ animation0.pattern1,overlay,901,4,0,0
         ]
     );
     // always interval は Interval::Other へ転記、replace/overlay 双方の pattern が method を
-    // 忠実転記して出現順で残る（overlay フィルタ・fallback-Bind ともに撤去済み）。
+    // 原文のまま運んで出現順で残る。
     assert_eq!(
         s.animations,
         vec![Animation {
@@ -328,7 +304,7 @@ animation0.pattern1,overlay,901,4,0,0
     );
 }
 
-/// 読めない数は 0 にせず飛ばして `UnreadableNumber` を積む（指摘 36）。範囲の両端は trim し、
+/// 読めない数は 0 にせず飛ばして `UnreadableNumber` を積む。範囲の両端は trim し、
 /// 見出しがちょうど `surface.alias` のブレスは読まない（崩れも積まない）。
 #[test]
 fn unreadable_numbers_are_skipped_not_zero() {
@@ -415,7 +391,7 @@ surface.alias
 }
 
 /// 崩れの見出しは頭の 64 字で切る。番号を並べた長い見出しの下に崩れが何件あっても、
-/// 1 件ごとに見出しの全文を写さない（かけ直しの指摘・崩れの数×見出しの長さで記録が膨らまない）。
+/// 1 件ごとに見出しの全文を写さない（崩れの数×見出しの長さで記録が膨らまない）。
 #[test]
 fn issue_heading_is_clipped_to_64_chars() {
     use crate::shell::{ShellIssue, parse_all};
@@ -461,7 +437,7 @@ fn alias_fields_after_the_value_are_recorded() {
     );
 }
 
-/// `}` の抜けを次の `{` で区切り直したら、`parse_all` が `ClosedByNextBrace` を返す（指摘 33）。
+/// `}` の抜けを次の `{` で区切り直したら、`parse_all` が `ClosedByNextBrace` を返す。
 #[test]
 fn missing_close_brace_is_returned_as_issue() {
     use crate::shell::{ShellIssue, parse_all};

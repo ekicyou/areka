@@ -4,7 +4,7 @@
 ///
 /// UI 配線層が、押されたアンカーの範囲の中身を詰めて送る。kanade は `id`・`text`・`references` を
 /// 解釈せず、そのまま SHIORI のイベントへ写す（引数は記述順のまま）。選択肢と違い、選択待ちの
-/// 帳簿との照合はしない（届いた知らせはそのまま送る・areka-P0-anchor-tag-canon 要件 4.12）。
+/// 帳簿との照合はしない（届いた知らせはそのまま送る）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnchorInput {
     /// アンカーの ID（不透明）。`On` で始まれば、その名前のイベントを送る。

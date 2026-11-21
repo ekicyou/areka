@@ -32,30 +32,30 @@ pub(crate) enum Input {
         reason: String,
     },
     /// マウス入力（[`MouseEventKind`](crate::msg::MouseEventKind) の 7 種）。Steady のみ `steady::on_mouse` へ委譲し、
-    /// 他フェーズでは状態を変えず安全に無視する（DD-IE-8）。
+    /// 他フェーズでは状態を変えず安全に無視する。
     Mouse(MouseInput),
     /// 直前の Action::ShioriRequest／ShioriUnload の結果（シェルが即時再投入）。
     ///
-    /// `origin` は再投入元の呼出イベント ID（シェルが送出した call の id を転記・DD-IE-3）。
+    /// `origin` は再投入元の呼出イベント ID（シェルが送出した call の id を転記）。
     /// 後続処理（マウス GET の origin 別 reply 政策）が応答の出所を識別するための
     /// 内部情報。unload の応答には出所イベントが無いため `"Unload"` を転記する。
     ShioriReply {
         outcome: ShioriOutcome,
         origin: &'static str,
     },
-    /// 選択確定（バルーン上で確定した選択肢・UI 配線層 → kanade）。additive 増分（Req 4.4）。
+    /// 選択確定（バルーン上で確定した選択肢・UI 配線層 → kanade）。
     ///
     /// 受領検証（選択待ちの有無・talk_id 突合・候補集合照合）とカスケード駆動は
-    /// [`steady::on_choice`]（C4 規則 1／2）が持つ。Steady のみ委譲し、他フェーズは状態を
+    /// [`steady::on_choice`]が持つ。Steady のみ委譲し、他フェーズは状態を
     /// 変えず warn 記録の上で棄却する。
     Choice(ChoiceInput),
     /// アンカーの選択（UI 配線層 → kanade）。受理の規則と段の記憶は [`anchor::on_anchor`] が持つ。
     Anchor(crate::anchor_input::AnchorInput),
-    /// 選択待ち成立の通知（talk → dispatcher → kanade）。additive 増分（Req 4.4）。
+    /// 選択待ち成立の通知（talk → dispatcher → kanade）。
     ///
-    /// `display_end` は dispatcher が `base_now` で単調 ms へ換算済み（DD-9・時間基準を新設しない）。
-    /// `timeout_directive_secs` から期限への写像は [`choice::choice_deadline`]（DD-8）が担い、
-    /// 帳簿確立は [`steady::on_choice_waiting`]（C4 規則 4）が行う。
+    /// `display_end` は dispatcher が `base_now` で単調 ms へ換算済み（時間基準は新設しない）。
+    /// `timeout_directive_secs` から期限への写像は [`choice::choice_deadline`]が担い、
+    /// 帳簿確立は [`steady::on_choice_waiting`]が行う。
     ChoiceWaiting {
         talk_id: TalkId,
         choice_ids: Vec<String>,
@@ -121,18 +121,18 @@ pub(crate) enum Input {
     },
 }
 
-/// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
+/// 運行フェーズ。各待ち点は「直前に発行した
 /// 呼出の応答待ち」を表す（in-flight ≤ 1 ゆえ相関 id 不要）。
 pub(crate) enum Phase {
     Idle,
     BootInit,
-    /// username リソース照会（prefetch）応答待ち（OnInitialize 後・OnFirstBoot 前・R4.1）。
+    /// username リソース照会（prefetch）応答待ち（OnInitialize 後・OnFirstBoot 前）。
     /// 応答（Value/NoContent/Failed）は [`resources::ResourceOutcome`] へ写像され sink へ渡される
-    /// （talk は生成しない・Invariant）。照会失敗でも boot は殺さず OnFirstBoot へ続行する。
+    /// （talk は生成しない）。照会失敗でも boot は殺さず OnFirstBoot へ続行する。
     BootPrefetch,
     BootType,
     BootMain,
-    /// basewareversion 応答待ち。起動挨拶を追跡する場合は `talk: Some(_)`（DD-IT-12）。
+    /// basewareversion 応答待ち。起動挨拶を追跡する場合は `talk: Some(_)`。
     /// 挨拶が無い（204）boot は `talk: None`＝従来どおり `Steady{talk: None}` へ完了する。
     BootVersion {
         talk: Option<ActiveTalk>,
@@ -170,25 +170,25 @@ pub(crate) enum Phase {
 pub(crate) struct ActiveTalk {
     pub talk_id: TalkId,
     pub origin: &'static str,
-    /// 当該 talk の起動スクリプト（`OnChoiceTimeout` の Reference0 供給源・DD-10）。
+    /// 当該 talk の起動スクリプト（`OnChoiceTimeout` の Reference0 供給源）。
     ///
     /// **kanade が [`StartTalk`] で自ら作った値**の保持であり、新しい情報源ではない
-    /// （通知同梱にせず kanade 内で完結させる・Req3.4）。
+    /// （通知同梱にせず kanade 内で完結させる）。
     pub script: String,
 }
 
-/// 選択待ち〜choice 系 in-flight の帳簿（DD-3）。
+/// 選択待ち〜choice 系 in-flight の帳簿。
 ///
 /// **バリア状態の複製ではなく kanade 側の配送状態**である（再生層のバリアは sakura が所有し、
-/// 解決は [`Action::ResolveChoice`] という正規入力経路でのみ行う・Req5.6）。[`Phase`] を一切
-/// 触らず [`State`] へ置くのは `pending_close` と同型の扱いであり、Req4.4「既存の決定的状態機械の
-/// 観測資産を変更しない」に最忠実な形である（DD-3）。
+/// 解決は [`Action::ResolveChoice`] という正規入力経路でのみ行う）。[`Phase`] を一切
+/// 触らず [`State`] へ置くのは `pending_close` と同型の扱いであり、既存の決定的状態機械の
+/// 観測資産を変えない形である。
 pub(crate) struct ChoiceState {
     /// 対象 talk（`ActiveTalk.talk_id` と一致することが不変条件）。
     pub talk_id: TalkId,
-    /// 照合用の候補選択肢 ID 列（表示順を保存・DD-7）。
+    /// 照合用の候補選択肢 ID 列（表示順を保存）。
     pub candidates: Vec<String>,
-    /// 選択待ちの期限（`None`＝無期限。DD-8 の写像済み値）。
+    /// 選択待ちの期限（`None`＝無期限）。
     pub deadline: Option<MonotonicMs>,
     /// 帳簿の段フェーズ。
     pub phase: ChoicePhase,
@@ -207,7 +207,7 @@ pub(crate) enum ChoicePhase {
     TimeoutInFlight,
 }
 
-/// カスケードの残段（正典形の無印 1 段のみ・裁定 2）。
+/// カスケードの残段（正典形の無印 1 段のみ）。
 pub(crate) enum CascadeNext {
     Select,
 }
@@ -219,16 +219,16 @@ pub(crate) struct State {
     pub last_now: Option<MonotonicMs>,
     /// talk_id 採番カウンタ（単調増番・再利用しない・StartTalk 生成時にインクリメント）。
     pub next_talk_id: u64,
-    /// boot 中・active talk 中に受領した close 指示の保留（System Flows 補足遷移）。
+    /// boot 中・active talk 中に受領した close 指示の保留。
     pub pending_close: Option<CloseReason>,
-    /// 選択待ち〜choice 系 in-flight の帳簿（`pending_close` と同型に Phase 外へ置く・DD-3）。
+    /// 選択待ち〜choice 系 in-flight の帳簿（`pending_close` と同型に Phase 外へ置く）。
     pub choice: Option<ChoiceState>,
-    /// slot 差替で失われた旧 talk_id を 1 世代だけ保持する枠（F1 残余レース対策）。
+    /// slot 差替で失われた旧 talk_id を 1 世代だけ保持する枠。
     ///
     /// 遅れて届く旧 talk の `TalkDone` を `unknown_talk_done`（error）ではなく
     /// `talk_done_stale`（info）で捌くための照合先（[`on_talk_done`] の防御アーム）。
     ///
-    /// 保持は**ちょうど 1 世代**である（C4 規則 9）: 書き込み点はどの slot 差替でも共通の
+    /// 保持は**ちょうど 1 世代**である: 書き込み点はどの slot 差替でも共通の
     /// [`super::start_talk`]（選択・マウスの答え・SSTP の台本・時間切れの答え）、消去点は現 talk の
     /// `TalkDone` 到達と次の slot 差替（次の旧 talk_id で上書き）である。
     pub prev_talk: Option<TalkId>,
@@ -288,11 +288,11 @@ impl State {
     }
 
     /// 送出時点の実行状態スナップショット（talk は相から・choice は選択帳簿から・nouserbreak・
-    /// online・balloons は外から届いた写しから作る・DD-IT-3／設計 C5）。
+    /// online・balloons は外から届いた写しから作る）。
     ///
     /// 本番の [`ExecutionSnapshot`] は本メソッド（と [`snapshot_with_choice`](State::snapshot_with_choice)）
     /// か [`snapshot_without_talk`](State::snapshot_without_talk) からしか作らない。wire 送出契約
-    /// （連結順序・区切り・空集合→ヘッダ行省略）は無改変である（Req6.3）。
+    /// （連結順序・区切り・空集合→ヘッダ行省略）は無改変である。
     pub(crate) fn snapshot(&self) -> ExecutionSnapshot {
         let choice_active = self
             .choice
@@ -306,11 +306,11 @@ impl State {
     /// [`steady::on_choice`] と [`steady::on_cascade_reply`] は検証・分解のために帳簿を
     /// [`Option::take`] してから呼出を組み立てるため、その最中は `self.choice` が空である。
     /// どちらの呼出点も選択待ちが続いているので `true` を直に渡す——[`snapshot`](State::snapshot) を
-    /// そのまま呼ぶとカスケード段の呼出から `choosing` が落ちる（設計 C5 の源は
+    /// そのまま呼ぶとカスケード段の呼出から `choosing` が落ちる（選択待ちは
     /// `Waiting|Cascading|TimeoutInFlight` の全段である）。
     ///
     /// nouserbreak は「再生中のトーク かつ 写しの旗」——写しは UI の旗を遅れて追う鏡であり
-    /// トークの境界で下ろさないため、トークが無い間に旗が残っていても載せない（要件 3.3）。
+    /// トークの境界で下ろさないため、トークが無い間に旗が残っていても載せない。
     pub(crate) fn snapshot_with_choice(&self, choice_active: bool) -> ExecutionSnapshot {
         let talk_active = talk_active_of(&self.phase);
         ExecutionSnapshot {
@@ -323,7 +323,7 @@ impl State {
     }
 
     /// 会話も選択も無いと決めて送る場面（起動の各段・切替・終了の握手・強制終了）の
-    /// スナップショット。talk・choice・nouserbreak は無し、online と balloons は写しのまま（要件 5.1）。
+    /// スナップショット。talk・choice・nouserbreak は無し、online と balloons は写しのまま。
     pub(crate) fn snapshot_without_talk(&self) -> ExecutionSnapshot {
         ExecutionSnapshot {
             talk_active: false,
@@ -335,12 +335,12 @@ impl State {
     }
 }
 
-/// 選択帳簿の段フェーズが「選択待ち継続中」かを判定する（設計 C5 の源の定義）。
+/// 選択帳簿の段フェーズが「選択待ち継続中」かを判定する。
 ///
 /// 3 段すべてが継続中である——`Cascading`／`TimeoutInFlight` は SHIORI 応答待ちであって
 /// 選択待ちの終了ではなく、選択肢は表示されたままである。選択待ちが終わるのは帳簿そのものが
 /// 消えるとき（解決・タイムアウト解除・トーク差替）だけであり、それを
-/// [`State::snapshot`] の `Option` 判定が表す（Req6.2）。
+/// [`State::snapshot`] の `Option` 判定が表す。
 ///
 /// wildcard を置かないため、段フェーズの追加時は本表での判断がコンパイル時に要求される。
 fn choice_phase_active(phase: &ChoicePhase) -> bool {
@@ -370,8 +370,8 @@ pub(crate) enum Action {
     ShioriUnload,
     StartTalk(StartTalk),
     /// リソース照会結果を注入クロージャ（[`resources::ResourceSink`]）へ**同期的に**渡す
-    /// （prefetch・R4.1）。シェルが sink を呼ぶ副作用指示であり、sink が返るまで次段（OnFirstBoot）
-    /// へ進まない。リソース照会は talk を生成しない——結果を StartTalk へ流さず sink へ渡すのみ（Invariant）。
+    /// （prefetch）。シェルが sink を呼ぶ副作用指示であり、sink が返るまで次段（OnFirstBoot）
+    /// へ進まない。リソース照会は talk を生成しない——結果を StartTalk へ流さず sink へ渡すのみ。
     ResourceOutcome {
         id: &'static str,
         outcome: resources::ResourceOutcome,
@@ -382,14 +382,14 @@ pub(crate) enum Action {
     ///
     /// `talk_id` は再生層／dispatcher の stale ガード用・`id` は確定した選択肢 ID。発行点は
     /// [`steady`] の選択調停（`script:` の選択肢の解決・カスケード終端）に単一化されている
-    /// （1 選択＝高々 1 解決・Req5.4）。
+    /// （1 選択＝高々 1 解決）。
     ResolveChoice {
         talk_id: TalkId,
         id: String,
     },
     /// 選択待ちの解除＋トーク終了指示（→ [`TalkCommand::CancelChoice`](crate::talk::TalkCommand)）。
     ///
-    /// 発行点は 2 つある。⑴ タイムアウト後に SHIORI が応答を返さなかった場合の解除（Req7.5）。
+    /// 発行点は 2 つある。⑴ タイムアウト後に SHIORI が応答を返さなかった場合の解除。
     /// ⑵ 利用者の中断の受理（[`user_break::on_user_break`]）——再生中のトークを止める唯一の指示で
     /// ある。dispatcher の受け口は選択の状態を見ず、現行の枠と `talk_id` が一致すれば閉じ指示を
     /// 転送するだけなので、選択待ちでないトークに使っても副作用は無い。名前が「選択」を指すのは

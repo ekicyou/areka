@@ -1,12 +1,9 @@
-//! W3a-T: Surface 系 ECS システムのヘッドレステスト
+//! Surface 系 ECS システムのヘッドレステスト
 //!
 //! 実 WUC デバイスを用い、以下を Schedule 経由で実行して検証する。
 //! - deferred_surface_creation_system: 作成・スキップ・同サイズ no-op・リサイズ + 統計
 //! - cleanup_surface_on_commandlist_removed: CommandList 削除時の Surface クリア + 統計
 //! - render_surface: Changed<SurfaceGraphicsDirty> 駆動の自己描画（begin_draw/end_draw）
-//!
-//! WUC 移行: commit_composition は廃止（要件 7.1・WUC の暗黙リフレクション）。
-//! 旧 commit_composition テスト群は削除した。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
@@ -236,7 +233,6 @@ fn cleanup_clears_surface_when_commandlist_removed() {
 fn cleanup_skips_already_invalid_surface() {
     crate::common::on_gpu_owner_thread(move || {
         let mut world = setup_world();
-        // Surface 未作成（invalid）のまま CommandList を除去
         let entity = spawn_surface_target(&mut world, 100.0, 50.0);
         world.entity_mut(entity).remove::<GraphicsCommandList>();
 
@@ -318,7 +314,7 @@ fn deferred_creation_recreates_surface_for_recreated_visual() {
 }
 
 // ==========================================================================
-// mark_dirty_surfaces（11 番）
+// mark_dirty_surfaces
 // ==========================================================================
 
 fn set_transform(world: &mut World, entity: Entity, scale: f32, offset: f32) {
@@ -462,7 +458,6 @@ fn render_surface_draws_dirty_surface_without_error() {
             cmd,
         ));
 
-        // スポーン直後は Changed<SurfaceGraphicsDirty> が立っている → 描画対象
         let mut schedule = single_system_schedule(render_surface);
         // begin_draw → SetTransform → clear → DrawImage → end_draw が失敗なく通る。
         // 本番は失敗を error! して続けるので、ログの数で見る（購読はこのスレッドに付く）
@@ -522,7 +517,7 @@ fn dirty_changed_tick(world: &World, entity: Entity) -> bevy_ecs::change_detecti
 }
 
 /// 失いでない BeginDraw の失敗（大きさ 0 の面）では装置の資源に変化の印を立てず、装置も有効のまま。
-/// その面は描き直しの印を立て直し、次の回の描画の係に拾わせる（41 番）
+/// その面は描き直しの印を立て直し、次の回の描画の係に拾わせる
 #[test]
 fn render_surface_non_loss_begin_draw_failure_does_not_mark_graphics_core_changed() {
     crate::common::on_gpu_owner_thread(move || {
@@ -575,11 +570,3 @@ fn render_surface_skips_invalid_surface_without_error() {
         assert_eq!(counts.error, 0, "描画面の無い部品で error を残した");
     });
 }
-
-// ==========================================================================
-// commit_composition — WUC 移行で廃止（要件 7.1）
-// ==========================================================================
-// 旧テスト（commit_composition_without_dcomp_resource_is_noop /
-// commit_composition_commits_valid_device / commit_composition_skips_invalidated_resource）は、
-// commit_composition システムそのものが削除されたため撤去した。WUC は暗黙リフレクションで
-// 反映するため明示 commit の概念がなく、これらのテストは対象を失った。

@@ -1,7 +1,7 @@
 //! 失敗の分岐と終了コード: ゴーストのフォルダの末尾の `\`・今のフォルダからの相対パス・
 //! `--dump-error-log` の有無・無い `--dump-shell`・無いゴースト・面の指定なし・`--offline-dump` の
-//! 値なし・中身の無い面・無いシェルのフォルダ（要件 1.8・2.1・2.2・2.5〜2.7・3.6・4.8・8.2・8.4・
-//! 12.4・12.6）。根・今のフォルダ・出力はどれも `temp-path-kit` で `target\` の下。
+//! 値なし・中身の無い面・無いシェルのフォルダ。
+//! 根・今のフォルダ・出力はどれも `temp-path-kit` で `target\` の下。
 
 use temp_path_kit::TempPath;
 
@@ -32,7 +32,7 @@ fn dump(ghost: &TempPath, args: &[&str]) -> (i32, String) {
     run_areka(ghost.path(), &all)
 }
 
-/// 末尾の `\` の有無で同じ PNG のバイト列（2.1）。
+/// 末尾の `\` の有無で同じ PNG のバイト列。
 #[test]
 fn a_trailing_backslash_on_the_ghost_folder_writes_the_same_pngs() {
     let root = plain_ghost("offline-exe-trailing");
@@ -65,7 +65,7 @@ fn a_trailing_backslash_on_the_ghost_folder_writes_the_same_pngs() {
 }
 
 /// 相対の `--offline-dump`・`--dump-output-dir`・`--dump-error-log` は起動したときの今のフォルダから
-/// 読む（2.2）。CSV は単独で指した無い面 999 の Warning で出る。
+/// 読む。CSV は単独で指した無い面 999 の Warning で出る。
 #[test]
 fn relative_paths_are_read_from_the_current_folder() {
     let cwd = TempPath::under_target("offline-exe-relative");
@@ -91,7 +91,7 @@ fn relative_paths_are_read_from_the_current_folder() {
     assert_eq!(rows[0].ghost, "g_rel");
 }
 
-/// 終了コードは `--dump-error-log` の有無で変わらない（8.2）。誤りの無いシェルで無い面 999 の
+/// 終了コードは `--dump-error-log` の有無で変わらない。誤りの無いシェルで無い面 999 の
 /// Warning だけなら 1、絵の欠けたシェル（読み込みの段で Error）なら 2。
 #[test]
 fn the_exit_code_is_the_same_without_an_error_log() {
@@ -125,7 +125,7 @@ fn the_exit_code_is_the_same_without_an_error_log() {
     }
 }
 
-/// 無い `--dump-shell` は既定のシェルに代えず PNG を書かず、Error 1 行で 2（2.5）。
+/// 無い `--dump-shell` は既定のシェルに代えず PNG を書かず、Error 1 行で 2。
 #[test]
 fn a_missing_dump_shell_writes_no_png_and_exits_two() {
     let root = plain_ghost("offline-exe-no-dump-shell");
@@ -151,7 +151,7 @@ fn a_missing_dump_shell_writes_no_png_and_exits_two() {
     assert!(rows[0].body.contains("no_such_shell"), "{}", rows[0].body);
 }
 
-/// ゴーストのフォルダが無いと 0 で、CSV も PNG も作らない（2.6・8.4）。
+/// ゴーストのフォルダが無いと 0 で、CSV も PNG も作らない。
 #[test]
 fn a_missing_ghost_folder_exits_zero_without_csv() {
     let root = TempPath::under_target("offline-exe-no-ghost");
@@ -174,7 +174,7 @@ fn a_missing_ghost_folder_exits_zero_without_csv() {
     assert!(!out.exists(), "PNG を書かない");
 }
 
-/// `--offline-dump` の値なしはゴーストの読み込みの失敗と同じに 0・CSV なし（1.8）。
+/// `--offline-dump` の値なしはゴーストの読み込みの失敗と同じに 0・CSV なし。
 #[test]
 fn offline_dump_without_a_value_exits_zero_without_csv() {
     let root = plain_ghost("offline-exe-no-value");
@@ -197,7 +197,7 @@ fn offline_dump_without_a_value_exits_zero_without_csv() {
     assert!(!out.exists(), "PNG を書かない");
 }
 
-/// 面の指定なしは PNG を書かず、読み込みの記録だけを CSV に残す（3.6）。CSV を作るのは知らない
+/// 面の指定なしは PNG を書かず、読み込みの記録だけを CSV に残す。CSV を作るのは知らない
 /// `animation-sort` の Warning（シェルの読み込みの段で出る）の 1 行。
 #[test]
 fn without_a_surface_list_no_png_is_written_but_the_csv_is() {
@@ -224,7 +224,7 @@ fn without_a_surface_list_no_png_is_written_but_the_csv_is() {
     assert!(rows[0].body.contains("animation-sort"), "{}", rows[0].body);
 }
 
-/// 中身の無い面は合成の失敗の Error ちょうど 1 行で飛ばし、残りの面は書く（4.8）。
+/// 中身の無い面は合成の失敗の Error ちょうど 1 行で飛ばし、残りの面は書く。
 #[test]
 fn an_empty_surface_is_one_error_and_the_rest_are_written() {
     let surfaces: Vec<&str> = PLAIN
@@ -257,7 +257,7 @@ fn an_empty_surface_is_one_error_and_the_rest_are_written() {
     );
 }
 
-/// 既定のシェルのフォルダが無いと PNG を書かず 2（2.7）。
+/// 既定のシェルのフォルダが無いと PNG を書かず 2。
 #[test]
 fn a_missing_shell_folder_writes_no_png_and_exits_two() {
     let root = plain_ghost("offline-exe-no-shell");

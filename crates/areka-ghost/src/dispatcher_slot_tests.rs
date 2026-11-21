@@ -5,8 +5,7 @@ use areka_sakura::contract::{CueCommand, TalkCue, TalkEndReason};
 use std::sync::mpsc;
 use std::time::Duration;
 
-/// テスト専用の `Clone` 可能なチャンネル中継 sink（発火の到着を barrier として同期受信する
-/// ため、`recv_timeout` で1件ずつ決定的に観測できる・sakura drive.rs のテスト流儀を踏襲）。
+/// cue をチャンネルで中継する `Clone` 可能な sink（`recv_timeout` で 1 件ずつ観測できる）。
 #[derive(Clone)]
 struct ChannelSink {
     tx: mpsc::Sender<TalkCue>,
@@ -18,17 +17,15 @@ impl CueSink for ChannelSink {
     }
 }
 
-/// task 1.4（DD-5・C9）: `From<TalkCommand> for DispatcherMsg` の**全 variant** 網羅変換。
+/// `From<TalkCommand> for DispatcherMsg` が全 variant を無損失で対応アームへ写す。
 ///
-/// kanade の送出口（`Sender<TalkCommand>`）から start-relay を経て dispatcher inbox へ入る
-/// 唯一の変換点であり、ここで variant が落ちると当該指示が物理的に到達不能になる。3 形すべてが
-/// 情報無損失で対応アームへ写ることを固定する。本体の `From<TalkCommand>` は受け皿を持たないので、
-/// variant が増えるとコンパイラが本体の直しを迫る。このテストへの追加は手で行う。
+/// kanade の送出口から start-relay を経て dispatcher inbox へ入る唯一の変換点なので、
+/// variant が落ちるとその指示は届かない。本体の `From` は受け皿を持たないので、variant が増えると
+/// コンパイラが本体の直しを迫る。このテストへの追加は手で行う。
 #[test]
 fn talk_command_converts_to_dispatcher_msg_for_every_variant() {
     use areka_sakura::contract::TalkCommand;
 
-    // Start: StartTalk を情報無損失で包み直すだけ。
     let start = StartTalk::new(TalkId(101), r"\s[0]hi\e");
     match DispatcherMsg::from(TalkCommand::Start(start.clone())) {
         DispatcherMsg::Start(got) => {
@@ -39,7 +36,6 @@ fn talk_command_converts_to_dispatcher_msg_for_every_variant() {
         _ => panic!("TalkCommand::Start は DispatcherMsg::Start へ変換されるべき"),
     }
 
-    // ResolveChoice: talk_id（stale ガード用）と選択肢 id をそのまま運ぶ。
     match DispatcherMsg::from(TalkCommand::ResolveChoice {
         talk_id: TalkId(102),
         id: "choice-1".to_string(),
@@ -51,7 +47,6 @@ fn talk_command_converts_to_dispatcher_msg_for_every_variant() {
         _ => panic!("TalkCommand::ResolveChoice は DispatcherMsg::ResolveChoice へ変換されるべき"),
     }
 
-    // CancelChoice: talk_id をそのまま運ぶ。
     match DispatcherMsg::from(TalkCommand::CancelChoice {
         talk_id: TalkId(103),
     }) {
@@ -60,11 +55,8 @@ fn talk_command_converts_to_dispatcher_msg_for_every_variant() {
     }
 }
 
-/// task 1.4（DD-5・C9）: `From<ChoiceWaiting> for DispatcherMsg` の全フィールド無損失変換。
-///
-/// `ChoiceWaiting` は talk → dispatcher の done ポート（`spawn_talk` の `D: From<..>` 境界）を
-/// 流れるため、この `From` が無ければ通知経路が型として成立しない。搬送値（候補 id 列・
-/// 表示完了時刻・タイムアウト指令）が一切改変されずに届くことを固定する。
+/// `From<ChoiceWaiting> for DispatcherMsg` が全フィールド（候補 id 列・表示完了時刻・
+/// タイムアウト指令）を改変せず運ぶ。
 #[test]
 fn choice_waiting_converts_to_dispatcher_msg_without_loss() {
     use areka_sakura::contract::ChoiceWaiting;
@@ -80,7 +72,7 @@ fn choice_waiting_converts_to_dispatcher_msg_without_loss() {
         _ => panic!("ChoiceWaiting は DispatcherMsg::ChoiceWaiting へ変換されるべき"),
     }
 
-    // 未指定（None＝下流既定値へ委譲）も同様に無改変で運ばれる。
+    // 未指定（None＝下流の既定値に任せる）も同じ。
     let unspecified = ChoiceWaiting {
         talk_id: TalkId(202),
         choice_ids: Vec::new(),
@@ -93,10 +85,8 @@ fn choice_waiting_converts_to_dispatcher_msg_without_loss() {
     }
 }
 
-/// シナリオ1: 単一 slot 維持・置き換え。`Start(A)` 稼働中に `Start(B)` を送ると、A は
-/// Close-then-join で終了してから B が spawn される。A の完了通知（`Interrupted`）は
-/// 既に B へ差し替わった後に dispatcher inbox へ届く stale 通知となり、kanade へは決して
-/// 転送されない（要件 4.1/4.2・stale 棄却は Close-then-spawn の直接帰結として自然発生する）。
+/// `Start(A)` 稼働中に `Start(B)` を送ると、A は Close して join してから B が spawn される。
+/// A の完了通知（`Interrupted`）は B へ差し替わった後に届く stale 通知で、kanade へは転送されない。
 #[test]
 fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_talk() {
     let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
@@ -113,22 +103,20 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
     let talk_a = TalkId(1);
     let talk_b = TalkId(2);
 
-    // A: 長い待ちを持つ script（差し替えまで一切 Tick を送らないので自然完了しない）。
+    // A は差し替えまで Tick を送らないので自然完了しない。
     tx.send(DispatcherMsg::Start(StartTalk::new(
         talk_a,
         r"\s[1]A\_w[2500]A_END\e",
     )))
     .expect("send Start(A)");
 
-    // B: 短い script（差し替え後にこれを完走させる）。
     tx.send(DispatcherMsg::Start(StartTalk::new(
         talk_b,
         r"\s[2]B\_w[100]B_END\e",
     )))
     .expect("send Start(B)");
 
-    // B を完走させる（D 焼き込み後 B/B_END の再生完了＋\_w[100] を含む占有 horizon=0.40 を跨ぐ
-    // elapsed 0.5・base_now は最初の Tick の now で確定）。
+    // B の占有 horizon=0.40 を跨ぐ elapsed 0.5 まで進めて完走させる（base_now は最初の Tick の now）。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(1_000),
     })
@@ -138,7 +126,6 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
     })
     .expect("send Tick(base+500ms)");
 
-    // kanade は B の TalkDone のみを受け取る（A の stale Interrupted は転送されない）。
     let done = kanade_rx
         .recv_timeout(Duration::from_secs(5))
         .expect("kanade should receive TalkDone for B");
@@ -153,7 +140,6 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
         _ => unreachable!("dispatcher only forwards KanadeMsg::TalkDone"),
     }
 
-    // A についての通知は決して kanade へ届かない（stale 棄却の直接観測）。
     assert!(
         kanade_rx.try_recv().is_err(),
         "no further KanadeMsg (in particular no stale TalkDone for A) should reach kanade"
@@ -162,9 +148,8 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
     close_and_join(&tx, handle);
 }
 
-/// シナリオ2: 明示的な stale `Done` の棄却。A→B へ差し替え済みの状態で、A の
-/// `talk_id` を持つ `Done` を手動投函しても kanade へは転送されず、B の slot は
-/// 乱されない（要件 4.4 の直接固定）。
+/// A→B へ差し替え済みの状態で A の `talk_id` を持つ `Done` を手動で投函しても、kanade へは
+/// 転送されず、B の slot も乱れない。
 #[test]
 fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current_slot() {
     let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
@@ -192,7 +177,6 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
     )))
     .expect("send Start(B)");
 
-    // 手動で A の stale Done（自然発生分に加えた明示的な追験）を投函する。
     tx.send(DispatcherMsg::Done(TalkDone {
         talk_id: talk_a,
         reason: TalkEndReason::Interrupted,
@@ -200,8 +184,7 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
     }))
     .expect("send manual stale Done(A)");
 
-    // B の slot は乱されず、B を完走させれば正しく kanade へ転送される
-    // （D 焼き込み後の占有 horizon=0.40 を跨ぐ elapsed 0.5）。
+    // 占有 horizon=0.40 を跨ぐ elapsed 0.5 で B を完走させる。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(2_000),
     })
@@ -232,11 +215,9 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
     close_and_join(&tx, handle);
 }
 
-/// シナリオ3: 停止時のクリーンアップ。稼働中の talk がある状態で `Close` を送ると、
-/// dispatcher は active talk へ `SakuraMsg::Close` を送って join してから、自身も
-/// 停止する。`close_active_if_any` は `Break` より前に talk actor の join を完了させる
-/// ため、dispatcher 自身の join が有界時間内に成功すること自体が、内側の talk actor が
-/// 先に正常終了していたことの直接証跡になる（要件 4.5）。
+/// 稼働中の talk がある状態で `Close` を送ると、dispatcher は active talk へ `SakuraMsg::Close` を
+/// 送って join してから自身も停止する。`close_active_if_any` は `Break` より前に talk actor の join を
+/// 終えるので、dispatcher の join が有界時間内に成功すれば、内側の talk actor が先に正常終了している。
 #[test]
 fn close_while_active_closes_and_joins_active_talk_before_stopping_dispatcher() {
     let (kanade_tx, _kanade_rx) = mpsc::channel::<KanadeMsg>();
@@ -250,7 +231,6 @@ fn close_while_active_closes_and_joins_active_talk_before_stopping_dispatcher() 
         None,
     );
 
-    // 長い待ちを持つ script（Close 時点では自然完了していない）。
     tx.send(DispatcherMsg::Start(StartTalk::new(
         TalkId(21),
         r"\s[1]X\_w[2500]X_END\e",
@@ -260,14 +240,14 @@ fn close_while_active_closes_and_joins_active_talk_before_stopping_dispatcher() 
     close_and_join(&tx, handle);
 }
 
-/// \_w[200]=200ms・\_w[300]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
-///   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45（FIRST の D=0.25 + \_w[200]=0.20）/
-///   Wait@0.75 / THIRD@1.05（SECOND の D=0.30 + \_w[300]=0.30）。占有 horizon=1.30（THIRD 再生完了）。
+/// 発火の時刻（broadcast なので text sink も全 cue を受ける）:
+///   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45 / Wait@0.75 / THIRD@1.05。
+///   占有 horizon=1.30（THIRD の再生完了）。
 const THREE_TEXTS: &str = r"\s[5]FIRST\_w[200]SECOND\_w[300]THIRD\e";
 
 /// `THREE_TEXTS` を起動して刻み `ticks` を送り、dispatcher を閉じて join してから届いた Text を順に返す。
-/// Close は talk を join してから dispatcher を止めるので、join の後は送られた刻みの発火が出揃っている
-/// （直後の `try_recv` の競りに頼らずに「まだ出ない」を見られる）。
+/// Close は talk を join してから dispatcher を止めるので、join の後は刻みの発火が出揃っており、
+/// 「まだ出ない」を `try_recv` の競りに頼らず見られる。
 fn texts_after_ticks(ticks: &[u64]) -> Vec<String> {
     let (kanade_tx, _kanade_rx) = mpsc::channel::<KanadeMsg>();
     let (text_tx, text_rx) = mpsc::channel::<TalkCue>();
@@ -301,8 +281,7 @@ fn texts_after_ticks(ticks: &[u64]) -> Vec<String> {
         .collect()
 }
 
-/// シナリオ4 の保留: 各 Tick は対応する発火群だけを解放する（elapsed 0.0 で FIRST・0.5 で SECOND まで・
-/// 1.1 で THIRD まで）。
+/// 各 Tick は対応する発火群だけを解放する（elapsed 0.0 で FIRST・0.5 で SECOND まで・1.1 で THIRD まで）。
 #[test]
 fn tick_relay_releases_only_the_cues_due_at_each_elapsed_time() {
     assert_eq!(texts_after_ticks(&[5_000]), ["FIRST"]);
@@ -313,10 +292,9 @@ fn tick_relay_releases_only_the_cues_due_at_each_elapsed_time() {
     );
 }
 
-/// シナリオ4: 経過時間換算を伴う Tick 中継。複数の `Tick{now}` を送ると、dispatcher は
-/// 最初の tick を経過秒 0.0 の起点として記録し、以降 `(now - base) / 1000.0` 秒を
-/// `SakuraMsg::Tick(f64)` として active talk へ中継する（要件 5.2）。換算の値そのものは
-/// 同期の檻（`choice_tests` の `resolve_choice_relays_id_…`）が縛る。ここは実 talk で順と自然終端を見る。
+/// dispatcher は最初の `Tick{now}` を経過秒 0.0 の起点として記録し、以降 `(now - base) / 1000.0` 秒を
+/// `SakuraMsg::Tick(f64)` として active talk へ中継する。換算の値そのものは `choice_tests` の
+/// `resolve_choice_relays_id_…` が縛り、ここは実 talk で順と自然終端を見る。
 #[test]
 fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
     let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
@@ -337,8 +315,7 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
     )))
     .expect("send Start");
 
-    // broadcast: text sink には Emote/Wait 等の担当外 cue も届く。本テストは Text 発火の
-    // 順序・保留のみを観測するため、次の目的 Text 発火まで担当外 cue を読み飛ばす barrier ヘルパを使う。
+    // text sink には Emote/Wait 等の担当外 cue も届くので、目的の Text まで読み飛ばす。
     let recv_text = |want: &str| {
         loop {
             let cue = text_rx
@@ -350,28 +327,28 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
         }
     };
 
-    // 初回 tick: elapsed=0.0 起点 → ClearAll@0.0・Emote@0.0・FIRST@0.0 のみ due（SECOND/THIRD は未 due）。
+    // 初回 tick は elapsed=0.0 が起点で、FIRST までが due。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(5_000),
     })
     .expect("send first Tick (anchors base_now)");
     recv_text("FIRST");
 
-    // 2 回目 tick: now - base = 500ms → elapsed=0.5 → Wait@0.25・SECOND@0.45 due（THIRD@1.05 はまだ）。
+    // elapsed=0.5 で SECOND まで due。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(5_500),
     })
     .expect("send second Tick (elapsed 0.5)");
     recv_text("SECOND");
 
-    // 3 回目 tick: now - base = 1100ms → elapsed=1.1 → Wait@0.75・THIRD@1.05 due。
+    // elapsed=1.1 で THIRD が due。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(6_100),
     })
     .expect("send third Tick (elapsed 1.1)");
     recv_text("THIRD");
 
-    // 4 回目 tick: elapsed=1.4 → 占有 horizon=1.30 到達で自然終端（末尾テキストの D を落とさない）。
+    // elapsed=1.4 は占有 horizon=1.30 を超え、自然終端する（末尾テキストの D を落とさない）。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(6_400),
     })
@@ -391,10 +368,9 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
     close_and_join(&tx, handle);
 }
 
-/// シナリオ5: 完了通知の転送（happy path）。talk が自然完了すると `KanadeMsg::TalkDone`
-/// が正しい `talk_id`/`reason` で kanade へ届き、slot は解放される。解放されたことは、
-/// 後続の `Start` が（明示 Close を要さず）新しい talk を正しく再生し、2 件目の
-/// `TalkDone` も過不足なく届くことで確認する（要件 4.3）。
+/// talk が自然完了すると `KanadeMsg::TalkDone` が正しい `talk_id`/`reason` で kanade へ届き、
+/// slot が解放される。解放は、後続の `Start` が明示 Close なしで再生され、2 件目の `TalkDone` が
+/// 過不足なく届くことで見る。
 #[test]
 fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
     let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
@@ -419,7 +395,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         now: MonotonicMs(9_000),
     })
     .expect("send Tick(base)");
-    // D 焼き込み後 C の占有 horizon=0.60（world 再生完了）を跨ぐ elapsed 0.7。
+    // C の占有 horizon=0.60 を跨ぐ elapsed 0.7。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(9_700),
     })
@@ -436,14 +412,13 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         _ => unreachable!("dispatcher only forwards KanadeMsg::TalkDone"),
     }
 
-    // slot は解放済み: 後続 Start は Close を要さず新規 talk をそのまま再生できる。
     let talk_d = TalkId(42);
     tx.send(DispatcherMsg::Start(StartTalk::new(
         talk_d,
         r"\s[8]again\e",
     )))
     .expect("send Start(D)");
-    // D（`again`＝5 char・D=0.25）の占有 horizon=0.25 を跨ぐため base(10_000)＋elapsed 0.3 の 2 tick。
+    // D の占有 horizon=0.25 を跨ぐ base(10_000)＋elapsed 0.3 の 2 tick。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(10_000),
     })
@@ -468,8 +443,8 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         "exactly two TalkDone (C then D) — no stray duplicates or stale entries"
     );
 
-    // broadcast: surface sink には両 talk の全 cue（ClearAll/Text/Wait 含む）が届くため、
-    // Emote 発火だけを抽出して「C=scope9・D=scope8 が 1 件ずつ」を確認する（partition は演者側 relevance の責務）。
+    // surface sink には両 talk の全 cue が届くので、Emote だけを抜いて C=scope9・D=scope8 が
+    // 1 件ずつなことを見る。
     let surface = surface_records.lock().expect("records mutex poisoned");
     let emotes: Vec<&CueCommand> = surface
         .iter()
@@ -488,20 +463,13 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
     close_and_join(&tx, handle);
 }
 
-/// シナリオ6（task 6.2・凍結像の刻印点）: `system_vars` provider が talk 起動ごとに
-/// 一度呼び出され、その時点で凍結されたスナップショットが sakura 側のコンパイルへ流れる
-/// ことを end-to-end に固定する（R7.3/7.4）。
+/// `system_vars` provider が talk 起動ごとに一度呼ばれ、その時点で凍結されたスナップショットが
+/// sakura 側のコンパイルへ流れる。
 ///
-/// 呼び出しのたびに `username` を `user1`→`user2`… と変える counter provider を注入し、
-/// `%username` を含む talk を 2 回起動する。各 talk の `%username` は**その talk の起動
-/// 時点で凍結された**値（1 本目=`user1`／2 本目=`user2`）の Text cue へ展開され、broadcast
-/// で観測できる。値が talk 間で異なること自体が「talk ごとに独立して凍結される」意味論
-/// （sylphya の per-talk 凍結と同形）の直接証跡になる。provider の呼出回数が talk 起動数と
-/// 一致することも固定する（＝ per-talk 刻印であって boot 時 1 回きりの固定像ではない）。
-///
-/// task 6.1 の暫定既定橋渡し（`SystemVarSnapshot::default()`）のままでは provider は
-/// 一度も呼ばれず、`%username` は既定値 `DEFAULT_USERNAME` へ展開されるため、本檻は
-/// `user1`/`user2` を観測できず（かつ呼出回数 0）RED になる。
+/// 呼び出しのたびに `username` を `user1`→`user2`… と変える provider を注入し、`%username` を含む
+/// talk を 2 回起動する。各 talk の `%username` はその起動時点の値（1 本目=`user1`／2 本目=`user2`）の
+/// Text cue へ展開される。値が talk 間で異なることが talk ごとの凍結の証拠で、provider の呼出回数が
+/// talk 起動数と一致することは、boot 時 1 回きりの固定像でないことの証拠になる。
 #[test]
 fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
     use crate::runtime::SystemVarSource;
@@ -514,8 +482,6 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
     let surface = RecordingSink::new();
     let text = ChannelSink { tx: text_tx };
 
-    // 呼び出しごとに username を `user{n}` と変える provider（凍結＝各 talk が自分の
-    // 起動時点の値を見ることの証明用）。呼出回数も観測する。
     let calls = Arc::new(AtomicUsize::new(0));
     let calls_for_provider = Arc::clone(&calls);
     let provider: SystemVarSource = Box::new(move || {
@@ -532,7 +498,7 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         None,
     );
 
-    // broadcast: text sink には ClearAll/Emote 等の担当外 cue も届く。次の Text 発火まで読み飛ばす。
+    // text sink には ClearAll/Emote 等の担当外 cue も届くので、次の Text まで読み飛ばす。
     let recv_text = |want: &str| -> TalkCue {
         loop {
             let cue = text_rx
@@ -544,18 +510,15 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         }
     };
 
-    // talk 1: `%username`（→ 起動時点で凍結された provider 値 `user1` へ展開）。
     tx.send(DispatcherMsg::Start(StartTalk::new(
         TalkId(61),
         r"\s[0]%username\e",
     )))
     .expect("send Start(1)");
-    // 初回 Tick で base_now 刻印＋elapsed=0.0 群（ClearAll/Emote/Text@0.0）を発火。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(1_000),
     })
     .expect("send Tick for talk 1");
-    // talk 1 の %username は起動時点で凍結された provider 値 user1 へ展開される（既定値でない）。
     recv_text("user1");
     assert_eq!(
         calls.load(Ordering::SeqCst),
@@ -563,7 +526,6 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         "provider は talk 1 の起動で 1 回だけ呼ばれる（刻印点）"
     );
 
-    // talk 2: 差し替え起動（talk 1 は Close funnel で終了）。provider の次の呼出＝`user2`。
     tx.send(DispatcherMsg::Start(StartTalk::new(
         TalkId(62),
         r"\s[0]%username\e",
@@ -573,7 +535,6 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         now: MonotonicMs(2_000),
     })
     .expect("send Tick for talk 2");
-    // talk 2 は自分の起動時点で凍結された provider 値 user2 を見る（talk ごと独立凍結）。
     recv_text("user2");
     assert_eq!(
         calls.load(Ordering::SeqCst),

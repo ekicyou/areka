@@ -35,9 +35,8 @@ impl Rectangle {
     }
 }
 
-/// Rectangle追加時のフック: Visualコンポーネントを自動挿入 (R4)
+/// Rectangle追加時のフック: Visualコンポーネントを自動挿入
 fn on_rectangle_add(mut world: DeferredWorld, hook: HookContext) {
-    // 既にVisualを持っている場合はスキップ
     if world.get::<Visual>(hook.entity).is_some() {
         return;
     }

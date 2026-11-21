@@ -13,7 +13,7 @@ use areka_sakura::cluster::clusters;
 use areka_sakura::contract::ActorKey;
 use log_capture_kit::capture;
 
-// ── R4.5: FixedMetrics の決定論仮想値（全角=height・半角=height/2・pitch=height+行間 2） ──
+// ── FixedMetrics の決定論仮想値（全角=height・半角=height/2・pitch=height+行間 2） ──
 
 /// 全角（非 ASCII）は font_height・半角（ASCII）は font_height/2。
 #[test]
@@ -25,7 +25,7 @@ fn fixed_metrics_advance_full_width_for_nonascii_half_for_ascii() {
     assert_eq!(m.advance("漢", 10.0), 10.0);
 }
 
-/// 行送りピッチは `font_height + 行間 2`（丸めなし・2026-09-05 の裁定）。
+/// 行送りピッチは `font_height + 行間 2`（丸めなし）。
 ///
 /// 判別力（この式以外の値では赤になる）:
 /// - `12 → 14`・`10 → 12` は係数を掛ける式（`ceil(font_height × 1.25)` なら 15・13）と食い違う。
@@ -34,12 +34,12 @@ fn fixed_metrics_advance_full_width_for_nonascii_half_for_ascii() {
 #[test]
 fn fixed_metrics_line_pitch_adds_default_gap() {
     let m = FixedMetrics;
-    assert_eq!(m.line_pitch(12.0), 14.0); // 12 + 2（旧式なら 15 で赤）
-    assert_eq!(m.line_pitch(10.0), 12.0); // 10 + 2（旧式なら 13 で赤）
+    assert_eq!(m.line_pitch(12.0), 14.0); // 12 + 2（係数式なら 15 で赤）
+    assert_eq!(m.line_pitch(10.0), 12.0); // 10 + 2（係数式なら 13 で赤）
     assert_eq!(m.line_pitch(10.5), 12.5); // 端数は丸めずそのまま（ceil を足すと 13 で赤）
 }
 
-// ── R6.1: 横書き——行内 +x・行送り +y・折返し閾値 wordwrappoint.x ──
+// ── 横書き——行内 +x・行送り +y・折返し閾値 wordwrappoint.x ──
 
 /// 横書きの折返し: 行内位置＋次グリフ幅 > 閾値で折返し、
 /// ちょうど閾値で終わるグリフは折返さない（> 判定・境界檻）。既定の折返し
@@ -89,7 +89,7 @@ fn horizontal_wraps_before_glyph_exceeding_threshold() {
     );
 }
 
-/// 半角/全角混在の送り幅が累積する（グリフ別 advance の出力整合・R9.4）。
+/// 半角/全角混在の送り幅が累積する（グリフ別 advance の出力整合）。
 #[test]
 fn horizontal_mixed_width_advances_accumulate() {
     let region = TextRegion::resolve(
@@ -118,7 +118,7 @@ fn horizontal_mixed_width_advances_accumulate() {
     assert_eq!(lines[0].rect.right, 24.0);
 }
 
-// ── R6.2: 日本語縦書き（vertical_rl）——行内 +y・行送り −x・閾値 wordwrappoint.y ──
+// ── 日本語縦書き（vertical_rl）——行内 +y・行送り −x・閾値 wordwrappoint.y ──
 
 /// vertical_rl: 折返しは y 閾値・列は右→左へ pitch 分進む・列矩形は左方向へ厚み。
 #[test]
@@ -164,7 +164,7 @@ fn vertical_rl_wraps_on_y_threshold_and_feeds_leftward() {
     );
 }
 
-// ── R6.3: vertical_lr——行内軸は rl と同一・行送りだけ +x（単一読み替え規則） ──
+// ── vertical_lr——行内軸は rl と同一・行送りだけ +x（単一読み替え規則） ──
 
 /// vertical_lr: 折返し・行内位置は vertical_rl と完全一致し、
 /// 列送りの向きだけが +x へ反転する（軸読み替えの単一規則の檻）。
@@ -370,8 +370,8 @@ fn visible_count_gates_placed_glyphs() {
 }
 
 /// 可視 prefix 内の改行マーカーは遅延（deferred newline）: その後ろに可視グリフが
-/// 現れるまで行を開かず保留する（R4.2）。次の可視グリフが reveal された時点でのみ
-/// 一括実体化する（R4.1）——保留中は空行を出さない（R1.2）。
+/// 現れるまで行を開かず保留する。次の可視グリフが reveal された時点でのみ
+/// 一括実体化する——保留中は空行を出さない。
 #[test]
 fn line_break_defers_until_next_visible_glyph() {
     let region = TextRegion::resolve(
@@ -384,7 +384,7 @@ fn line_break_defers_until_next_visible_glyph() {
         TextItem::LineBreak { ratio: 1.0 },
         TextItem::glyph("b"),
     ];
-    // visible=1: b が未リビール——改行は保留のまま行を開かない（R4.2）。
+    // visible=1: b が未リビール——改行は保留のまま行を開かない。
     let held = LayoutEngine::layout(
         &items,
         1,
@@ -397,7 +397,7 @@ fn line_break_defers_until_next_visible_glyph() {
     assert_eq!(held.len(), 1, "保留改行は行を開かない（空行を出さない）");
     assert_eq!(held[0].glyphs.len(), 1);
     assert_eq!(&*held[0].glyphs[0].text, "a");
-    // visible=2: b がリビール——保留改行が実体化して 2 行になる（R4.1）。
+    // visible=2: b がリビール——保留改行が実体化して 2 行になる。
     let materialized = LayoutEngine::layout(
         &items,
         2,
@@ -423,8 +423,8 @@ fn line_break_defers_until_next_visible_glyph() {
     );
 }
 
-/// 末尾改行（後続の可視グリフを持たない）は保留のまま蒸発する——空行を開かない
-/// （R1.1/1.2/5.2）。A→B 切替で A の末尾段落区切りが痕跡を残さない核心。
+/// 末尾改行（後続の可視グリフを持たない）は保留のまま蒸発する——空行を開かない。
+/// A→B 切替で A の末尾段落区切りが痕跡を残さない核心。
 #[test]
 fn trailing_line_break_defers_and_evaporates() {
     let region = TextRegion::resolve(
@@ -446,9 +446,9 @@ fn trailing_line_break_defers_and_evaporates() {
     assert_eq!(lines[0].glyphs.len(), 1);
 }
 
-// ── 遅延意味論（deferred newline・newline-defer）の判断分岐（FixedMetrics 全網羅） ──
+// ── 遅延意味論（deferred newline）の判断分岐（FixedMetrics 全網羅） ──
 
-/// 3.1: 連続する複数の改行マーカーは単一の累算保留として実体化され、中間に空行が生じず
+/// 連続する複数の改行マーカーは単一の累算保留として実体化され、中間に空行が生じず
 /// 行間が ratio 合計（`pitch × Σratio`）になる。実体化後の後続グリフは通常配置（pending
 /// 消費済み）。`[a, \n, \n(0.5), b, c]` → 2 行（a／b c・間隔 pitch×1.5）。
 #[test]
@@ -486,9 +486,9 @@ fn consecutive_newlines_accumulate_into_single_flush() {
     );
 }
 
-/// 3.2: 先頭改行（可視グリフ配置前の保留）は空行を作らず block 前進のみで実体化する
-/// （DD-2）・`ratio 0` の改行は「送りゼロで行を替える」縮退挙動を保つ（DD-5）・改行
-/// マーカーのみの入力（可視グリフなし）は 0 行を返し内容ビューボックスを変化させない（1.5）。
+/// 先頭改行（可視グリフ配置前の保留）は空行を作らず block 前進のみで実体化する。
+/// `ratio 0` の改行は「送りゼロで行を替える」。改行マーカーのみの入力（可視グリフなし）は
+/// 0 行を返し内容ビューボックスを変化させない。
 #[test]
 fn leading_newline_zero_ratio_and_newline_only_input() {
     let region = TextRegion::resolve(
@@ -550,8 +550,8 @@ fn leading_newline_zero_ratio_and_newline_only_input() {
     );
 }
 
-/// 3.3: typewriter リビール進行との整合。同一 items で可視グリフ数を段階的に増やすと、
-/// 改行マーカーの実体化はその改行より後ろの可視グリフが現れた時点でのみ起きる（R4.1/4.2）。
+/// typewriter リビール進行との整合。同一 items で可視グリフ数を段階的に増やすと、
+/// 改行マーカーの実体化はその改行より後ろの可視グリフが現れた時点でのみ起きる。
 /// `[a, \n, b, \n, c]` の可視 1→2→3 で行数 1→2→3。
 #[test]
 fn reveal_progression_materializes_only_when_next_glyph_appears() {
@@ -583,12 +583,12 @@ fn reveal_progression_materializes_only_when_next_glyph_appears() {
             visible,
             "可視 {visible}: 改行の実体化は後続グリフの reveal 時のみ（保留は行を開かない）"
         );
-        // 末尾行は必ず可視グリフを含む（空行を出さない Postcondition 1）。
+        // 末尾行は必ず可視グリフを含む（空行を出さない）。
         assert!(lines.iter().all(|l| !l.glyphs.is_empty()));
     }
 }
 
-/// 3.4: 満杯付近で保留改行が実体化された直後にあふれ判定が発火する（3.2/7.3 後段）。
+/// 満杯付近で保留改行が実体化された直後にあふれ判定が発火する。
 /// 満杯 3 行＋`\n`＋**次の可視グリフ**（実体化トリガあり）→ 4 行目が実体化しあふれ発火。
 /// 保留のみ（次グリフなし）で不発火である対の片側は `trailing_pending_newline_does_not_
 /// trigger_overflow`（`layout_visible_window_tests.rs`）が担保する。
@@ -615,8 +615,8 @@ fn materialized_newline_near_full_triggers_overflow() {
     );
 }
 
-/// 3.5: 縦書き（vertical_rl／vertical_lr）でも横書きと同一の遅延・累算・実体化・蒸発規則が
-/// 成立し、行送りが軸読み替え正準表（`block_dir × pitch × Σratio`）に従う（R6.1/6.2）。
+/// 縦書き（vertical_rl／vertical_lr）でも横書きと同一の遅延・累算・実体化・蒸発規則が
+/// 成立し、行送りが軸読み替え正準表（`block_dir × pitch × Σratio`）に従う。
 #[test]
 fn deferred_rules_hold_in_vertical_modes() {
     // (a) vertical_rl 累算実体化: `[あ, \n, \n(0.5), あ]` → 2 列・列送り −x で Σratio 1.5。
@@ -692,8 +692,7 @@ fn wrapped_lines_return_to_start_inline_component() {
 
 /// 位置が有限でなくなる保留の改行（`\n[3e38]`×10＋字・`\n[-3e38]`×20＋字）は送りを捨てて
 /// 位置を保ち、guard つきの配置では `warn!`（欄は `actor`・`block_pos`・`ratio_sum`）を 1 件だけ残す。
-/// guard の無い配置では毎回（2 件）。ふつうの割合（1.0・0.5・1.5）は今と同じ位置
-/// （`audit-emo-text-layout-draw` 指摘 1・申し送り R17）。
+/// guard の無い配置では毎回（2 件）。ふつうの割合（1.0・0.5・1.5）は位置が変わらない。
 #[test]
 fn non_finite_pending_newline_keeps_positions_finite_with_one_warn() {
     let region = TextRegion::resolve(
@@ -771,8 +770,7 @@ fn non_finite_pending_newline_keeps_positions_finite_with_one_warn() {
 }
 
 /// `\f[height,1e38]` の字（行送り・字幅とも 1e38）でも、折り返しの送りと字の送りは
-/// 有限でない結果を捨てて位置を保ち、guard つきの配置では `warn!` を 1 件だけ残す
-/// （`audit-emo-text-layout-draw` 指摘 1・指摘 20 で上限を置かない前提）。
+/// 有限でない結果を捨てて位置を保ち、guard つきの配置では `warn!` を 1 件だけ残す。
 /// 折り返し: 幅 400 に 6 字＝6 行・4 行目（3e38）から先へは送れない。
 /// 字の送り: `\_l[3e38,]` の後の 1 字は 3e38 + 1e38 へ送れない。
 #[test]

@@ -1,14 +1,12 @@
 //! スコープごとの文字の行き先（純粋層・`state.rs` の子モジュール）。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
-//!
 //! スコープごとに「今のサーフェス番号（非表示なら無し）」と「今の行き先」を持ち、届いた指令の
-//! 順に design.md「文字の行き先の決まり方」の表どおりに遷移させる。時計も窓も `World` も見ない。
+//! 順に遷移させる。時計も窓も `World` も見ない。
 //! 「箱の列」はサーフェス番号に対する element番号の昇順の箱の名前の列（[`TextLayerState::set_box_index`]
 //! で受け取る）で、「既定」は列が空なら普通のバルーン、空でなければ列の先頭の箱である。
 //!
 //! 不変条件: 行き先が `Box(n)` のとき、`n` は必ずそのスコープの今のサーフェスの箱の列にある。
-//! 箱の表が空なら、行き先は 1 度も普通のバルーンから動かない（要件 5.4）。
+//! 箱の表が空なら、行き先は 1 度も普通のバルーンから動かない。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -29,7 +27,7 @@ pub enum SurfaceKeyOutcome {
     Unresolved,
 }
 
-/// シェルの切替の戻り先（descript-window-keys 要件 3.2・3.5）。seriko の戻り先と同じ材料。
+/// シェルの切替の戻り先。seriko の戻り先と同じ材料。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SurfaceFallback {
     /// 新しいシェルの面の番号の集合（「在る」の判定）。
@@ -65,8 +63,8 @@ impl TextLayerState {
     /// 箱の表（サーフェス番号 → element番号の昇順の箱の名前）を差し替える（シェルの切替）。
     ///
     /// 各スコープの今のサーフェス番号は保ち、行き先だけを新しい表での既定へ引き直す。
-    /// 箱の場所の文字は捨てる（要件 6.8）。スコープの `\f` の指定を箱が持っていたら、捨てる前に
-    /// 普通のバルーンの場所へ写して持ち主を普通のバルーンにする（design.md「装飾の持ち運び」）。
+    /// 箱の場所の文字は捨てる。スコープの `\f` の指定を箱が持っていたら、捨てる前に
+    /// 普通のバルーンの場所へ写して持ち主を普通のバルーンにする。
     pub fn set_box_index(&mut self, index: BTreeMap<u32, Vec<BoxName>>) {
         self.fold_shared_into_balloon();
         self.box_index = index;
@@ -79,7 +77,7 @@ impl TextLayerState {
         );
     }
 
-    /// `\s` の解決結果でスコープのサーフェス番号と行き先を決める（要件 4.1・4.2・6.1・6.2・6.4・6.6・6.9）。
+    /// `\s` の解決結果でスコープのサーフェス番号と行き先を決める。
     pub fn route_surface(&mut self, actor: &ActorKey, outcome: SurfaceKeyOutcome) {
         let surface = match outcome {
             SurfaceKeyOutcome::Show(id) => Some(id),
@@ -104,8 +102,8 @@ impl TextLayerState {
     }
 
     /// シェルの切替: 今の面が新しいシェルに無いスコープだけを、候補の最初に在る面（無ければ非表示）へ
-    /// 替える（descript-window-keys 要件 3.2・3.5）。行き先の引き直しは [`Self::route_surface`] に
-    /// 任せる。替えたスコープがあれば `true`。非表示のスコープは替えない。
+    /// 替える（行き先の引き直しは [`Self::route_surface`] に任せる）。非表示のスコープは替えない。
+    /// 替えたスコープがあれば `true`。
     pub fn fall_back_surfaces(&mut self, fallback: &SurfaceFallback) -> bool {
         // 面の番号の集合が空＝材料なし（seriko の fall_back_shell_surfaces と同じ）。
         if fallback.surface_ids.is_empty() {
@@ -131,14 +129,13 @@ impl TextLayerState {
         !missing.is_empty()
     }
 
-    /// 名前の形の `\b[名前]` で行き先を切り替える（要件 4.3・4.9）。
+    /// 名前の形の `\b[名前]` で行き先を切り替える。
     ///
     /// 今のサーフェスの箱の列にその名前が無ければ、名前・サーフェス番号・スコープを含む
-    /// `warn!` を 1 行残して行き先を変えない（要件 4.4・10.1）。空回しの写し
+    /// `warn!` を 1 行残して行き先を変えない。空回しの写し
     /// （[`TextLayerState::rehearsal_copy`]）では `warn!` を残さない（本番の適用が残す）。
     ///
-    /// 箱が見つからず空回しの写しでもない（＝`warn!` を残した）ときだけ真を返す（strict の知らせ・
-    /// mcp-strict-errors 要件 4.2）。
+    /// 箱が見つからず空回しの写しでもない（＝`warn!` を残した）ときだけ真を返す（strict の知らせ）。
     pub fn route_select(&mut self, actor: &ActorKey, name: &str) -> bool {
         let surface = self.current_surface(actor);
         let found = boxes_of(&self.box_index, surface)
@@ -177,11 +174,11 @@ impl TextLayerState {
         self.routes.get(actor).and_then(|route| route.surface)
     }
 
-    /// 台詞の頭・シェルの切替: 全スコープの行き先を既定へ戻す（要件 4.10。サーフェス番号は変えない）。
+    /// 台詞の頭・シェルの切替: 全スコープの行き先を既定へ戻す（サーフェス番号は変えない）。
     ///
     /// 持ち主を普通のバルーンへ戻してから、普通のバルーンを出発点に既定の行き先へ移す
     /// （既定がスコープに従う箱なら、そこへ指定を写して持ち主にする）。台詞の頭では
-    /// どの場所の指定も空なので何も写らない（要件 3.19）。
+    /// どの場所の指定も空なので何も写らない。
     pub(super) fn reset_routes(&mut self) {
         self.fold_shared_into_balloon();
         let actors: Vec<ActorKey> = self.routes.keys().cloned().collect();
@@ -226,7 +223,7 @@ fn boxes_of(index: &BTreeMap<u32, Vec<BoxName>>, surface: Option<u32>) -> &[BoxN
         .map_or(&[], Vec::as_slice)
 }
 
-/// 既定の行き先: 箱の列が空なら普通のバルーン、空でなければ先頭の箱（要件 4.2）。
+/// 既定の行き先: 箱の列が空なら普通のバルーン、空でなければ先頭の箱。
 fn default_dest(index: &BTreeMap<u32, Vec<BoxName>>, surface: Option<u32>) -> TextPlace {
     boxes_of(index, surface)
         .first()

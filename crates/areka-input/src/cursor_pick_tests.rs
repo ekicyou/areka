@@ -1,4 +1,4 @@
-//! 形の状態と選びの純関数の檻（shell-mouse-cursor 要件 2〜5・design「CursorPick」の 13 行の表と pick_shape の決まり）。
+//! 形の状態と選びの純関数の檻。
 
 use std::cell::Cell;
 
@@ -82,7 +82,7 @@ fn row02_move_while_pressed_and_button_down_keeps_pressed_scene_and_region() {
 
 #[test]
 fn row03_move_while_pressed_without_button_returns_to_free() {
-    // 解放を落としたとき（メニューが食べた・窓の外で放した）の戻り（design・要件 3.4）。
+    // 解放を落としたとき（メニューが食べた・窓の外で放した）の戻り。
     let prev = wc(P, region("head"), pressed(Down, "head"));
     let (next, s, called) = plan(Some(&prev), Move, Q, false, region("bust"));
     assert!(called);
@@ -116,7 +116,7 @@ fn row05_press_over_region_holds_down_or_right_down() {
 
 #[test]
 fn row06_press_off_region_keeps_the_place_shape() {
-    // 要件 3.5: 当たり判定の無い所で押しても形を変えない。
+    // 当たり判定の無い所で押しても形を変えない。
     let prev = wc(P, Spot::Plain, Hold::Free);
     let (next, s, called) = plan(Some(&prev), Press { right: false }, P, true, Spot::Plain);
     assert!(called);
@@ -176,7 +176,7 @@ fn row10_hover_is_ignored_when_resting_pressed_or_off_region() {
         // ホイールの形を止まったで上書きしない。
         wc(P, region("head"), Hold::Resting(Wheel)),
         wc(P, region("head"), Hold::Resting(Hover)),
-        // 要件 4.5: 押している間は受けない。
+        // 押している間は受けない。
         wc(P, region("head"), pressed(Down, "head")),
         wc(P, Spot::Plain, Hold::Free),
         wc(P, Spot::SeeThrough, Hold::Free),
@@ -264,7 +264,7 @@ fn first_sighting_resolves_for_every_trigger() {
 
 #[test]
 fn walk_region_to_region_to_plain_to_see_through() {
-    // 要件 2.1・2.3・2.4・2.5: 移ったその場で替わる。
+    // 移ったその場で替わる。
     let (a, s, _) = plan(None, Move, (0, 0), false, region("head"));
     assert_eq!(s, shown(Up, "head"));
     let (b, s, _) = plan(Some(&a), Move, (1, 0), false, region("face"));
@@ -277,7 +277,7 @@ fn walk_region_to_region_to_plain_to_see_through() {
 
 #[test]
 fn walk_press_drag_out_to_see_through_then_release() {
-    // 要件 3.3・3.4: 押したまま外へ・透けた所へ出ても押したときの形、放せばその位置の形。
+    // 押したまま外へ・透けた所へ出ても押したときの形、放せばその位置の形。
     let (a, _, _) = plan(None, Move, (0, 0), false, region("bust"));
     let (b, s, _) = plan(
         Some(&a),
@@ -298,7 +298,7 @@ fn walk_press_drag_out_to_see_through_then_release() {
 
 #[test]
 fn surface_change_without_motion_waits_for_the_next_move() {
-    // 要件 2.6: 動かない間は前の当たり判定のまま、動いた時点で引き直す。
+    // 動かない間は前の当たり判定のまま、動いた時点で引き直す。
     let (a, _, _) = plan(None, Move, P, false, region("head"));
     let (b, s, called) = plan(Some(&a), Move, P, false, region("face"));
     assert!(!called);
@@ -383,7 +383,6 @@ fn defaults_by_scene_and_bust_case_insensitive() {
 
 #[test]
 fn ghost_descript_replaces_defaults() {
-    // 要件 5.1〜5.4。
     let r = rows(&[]);
     let g = ghost_all();
     let gd = |n: &str| Some((file(n), Origin::GhostDescript));
@@ -398,7 +397,7 @@ fn ghost_descript_replaces_defaults() {
 
 #[test]
 fn brace_row_beats_ghost_and_default() {
-    // 要件 5.5: 行がある場面は行の形。
+    // 行がある場面は行の形。
     let r = rows(&[
         (0, "bust", Up, sys(SystemCursor::Help)),
         (0, "bust", Down, file("d.cur")),
@@ -427,7 +426,6 @@ fn brace_row_beats_ghost_and_default() {
 
 #[test]
 fn hover_and_wheel_use_their_row_or_stay_on_the_up_shape() {
-    // 要件 4.1・4.3。
     let r = rows(&[
         (0, "head", Hover, sys(SystemCursor::Help)),
         (0, "head", Wheel, sys(SystemCursor::Move)),
@@ -464,7 +462,7 @@ fn hover_and_wheel_use_their_row_or_stay_on_the_up_shape() {
 
 #[test]
 fn scopes_are_separate() {
-    // 要件 2.7: スコープ 0 の行はスコープ 1 に効かない。
+    // スコープ 0 の行はスコープ 1 に効かない。
     let r = rows(&[(0, "head", Up, sys(SystemCursor::Help))]);
     let g = no_ghost();
     assert_eq!(

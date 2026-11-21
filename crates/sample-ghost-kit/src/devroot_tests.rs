@@ -1,4 +1,4 @@
-//! `devroot` の兄弟テスト。要件の番号は spec `areka-P0-nar-install` のもの。
+//! `devroot` の兄弟テスト。
 //!
 //! # 「残っていない」を空振りにしない
 //!
@@ -12,7 +12,7 @@
 //! 下が空であることは主張しない（同じプロセスの別のテストが同時に別の作業フォルダを
 //! 持っているのが正常な状態であり、そこを見ると走らせ方次第で赤くなる）。
 //!
-//! # OS の一時フォルダを使わないこと（要件 7.10）の担保
+//! # OS の一時フォルダを使わないことの担保
 //!
 //! ここでは置き場の綴りを**持たない**。本ファイルが一時フォルダの入口を綴ると、常設検査
 //! `temp_path_guard_test` の例外表に「窓口の迂回」として登録させることになり、迂回を
@@ -167,7 +167,7 @@ fn the_configured_target_dir_wins_over_the_ancestor_search() {
     assert_eq!(found, Path::new(r"C:\x\target"));
 }
 
-/// 相対の設定値は、実行体の祖先のうちその値で終わる最も近いものに解く（audit-test-kits 決め D4）。
+/// 相対の設定値は、実行体の祖先のうちその値で終わる最も近いものに解く。
 ///
 /// cargo は起こした場所の上で解き、テストの実行体はパッケージの場所で走るので、
 /// 作業フォルダの上で解くと別の場所（ソースの木の中）を指してしまう。
@@ -202,7 +202,7 @@ fn a_relative_target_dir_is_resolved_against_the_exe_ancestors() {
     );
 }
 
-/// 死んだプロセスが残した同じ名前の札やフォルダに当たっても、次の連番で取り直す（audit-test-kits 指摘 7）。
+/// 死んだプロセスが残した同じ名前の札やフォルダに当たっても、次の連番で取り直す。
 ///
 /// 残りの札は他人の物かもしれないので消さない（片付けるのは掃除の仕事）。
 #[test]
@@ -251,7 +251,7 @@ fn a_missing_target_dir_fails_with_the_place_it_searched_from() {
     );
 }
 
-/// 原本の据え付けが `rename` の勝敗で決まる（7.6）ことの**前提の実測**。
+/// 原本の据え付けが `rename` の勝敗で決まることの**前提の実測**。
 ///
 /// 設計は「Windows の `std::fs::rename` は宛先が**空でない**フォルダのときに失敗し、
 /// 空フォルダなら置き換える」という規則の上に立っている。この規則が崩れると、負けた側が
@@ -292,7 +292,7 @@ fn a_rename_onto_a_non_empty_folder_fails_and_onto_an_empty_folder_replaces() {
     assert!(!source.exists(), "移した元は残らないこと");
 }
 
-/// 設定値が空・空白だけなら無いものとして祖先の探しへ戻る（audit-test-kits 指摘 69）。
+/// 設定値が空・空白だけなら無いものとして祖先の探しへ戻る。
 #[test]
 fn a_blank_target_dir_falls_back_to_the_ancestor_search() {
     let exe = Path::new(r"C:\x\target\debug\deps\t.exe");
@@ -305,7 +305,7 @@ fn a_blank_target_dir_falls_back_to_the_ancestor_search() {
     }
 }
 
-/// 手動用の根の中を削除を拒む形で掴まれていると、黙って重ねず `Io` で断る（audit-test-kits 指摘 23）。
+/// 手動用の根の中を削除を拒む形で掴まれていると、黙って重ねず `Io` で断る。
 #[test]
 fn manual_root_refuses_a_tree_it_cannot_remove() {
     let namespace = WorkDir::new().expect("私有の名前空間");
@@ -385,8 +385,7 @@ fn a_cleanup_failure_is_written_to_the_given_sink_and_not_found_writes_nothing()
     assert!(not_found.is_empty(), "既に無いのは黙って通す");
 }
 
-/// 並走する掃除が先に消して消去待ちになった札は、`retire_lease` が何も書かない
-/// （audit-test-kits かけ直し 4 回目 S2）。
+/// 並走する掃除が先に消して消去待ちになった札は、`retire_lease` が何も書かない。
 ///
 /// 削除を共有する手綱で札を開いたまま、`FILE_FLAG_DELETE_ON_CLOSE` の手綱を閉じて先に
 /// 消すと、残りの手綱を閉じるまで札は消去待ちになる——掃除が消している最中の札と同じ

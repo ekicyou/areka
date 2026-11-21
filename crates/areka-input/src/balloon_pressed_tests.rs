@@ -1,4 +1,4 @@
-//! 普通のバルーンの窓の矢印の押下の檻（balloon-scroll-arrows 要件 5.1・5.2・5.5・5.6・11.1）。
+//! 普通のバルーンの窓の矢印の押下の檻。
 //!
 //! 手動の位置（自動の 1 行上）にいる文字の層を実 GPU で作り（`manual_balloon_runtime`）、矢印の絵を
 //! 入れて提示し直して上下の矢印を出す。押下は印の面の entity を送り手にして `dispatch_pointer_events`
@@ -163,7 +163,7 @@ fn unmoved(rig: &Rig) -> bool {
 }
 
 /// 話し終えた後、印の面の上の上の矢印の押下は窓の受け口へ届き、古い側へ 2 行送って消費する
-/// （要件 5.1・5.5）。左ダブルクリックでも中断・選択肢の確定へ流さない。
+/// 左ダブルクリックでも中断・選択肢の確定へ流さない。
 #[test]
 fn finished_up_arrow_press_scrolls_older_and_is_consumed() {
     let mut rig = rig();
@@ -184,7 +184,7 @@ fn finished_up_arrow_press_scrolls_older_and_is_consumed() {
     assert_eq!(rig.newer_by_one(), ScrollChange::Moved);
 }
 
-/// 話し終えた後の下の矢印の押下は新しい側へ送る（自動の 1 行上から自動へ戻る・要件 5.2・5.5）。
+/// 話し終えた後の下の矢印の押下は新しい側へ送る（自動の 1 行上から自動へ戻る）。
 #[test]
 fn finished_down_arrow_press_scrolls_newer() {
     let mut rig = rig();
@@ -201,7 +201,7 @@ fn finished_down_arrow_press_scrolls_newer() {
     );
 }
 
-/// 話している最中の矢印の押下は今までどおりのクリック（中断の入口へ流れ、送らない・要件 5.6）。
+/// 話している最中の矢印の押下は今までどおりのクリック（中断の入口へ流れ、送らない）。
 #[test]
 fn talking_arrow_press_flows_to_the_usual_click() {
     let mut rig = rig();
@@ -218,7 +218,7 @@ fn talking_arrow_press_flows_to_the_usual_click() {
     assert!(unmoved(&rig), "送らない");
 }
 
-/// 矢印の絵の透けた画素と矢印の無い所は今までどおりのクリック（要件 5.6・5.7）。
+/// 矢印の絵の透けた画素と矢印の無い所は今までどおりのクリック。
 #[test]
 fn transparent_pixel_and_no_arrow_flow_to_the_usual_click() {
     for point in [UP_TRANSPARENT, NO_ARROW] {
@@ -257,7 +257,7 @@ fn finished_talking_follows_the_talk_signals() {
     assert!(super::finished_talking(&world));
 }
 
-/// 上の矢印を押し続けると行 0 で止まる（古い側の端・要件 5.3 の配線）。
+/// 上の矢印を押し続けると行 0 で止まる（古い側の端）。
 #[test]
 fn repeated_up_arrow_stops_at_line_zero() {
     let mut rig = rig();

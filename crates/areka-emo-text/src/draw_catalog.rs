@@ -1,20 +1,20 @@
 //! # draw_catalog — フォント候補列の解決（COM 層・draw ファサードの子）
 //!
 //! [`FontCatalog`] は「記述順に並んだフォント名の候補列」から、この機械に実際に
-//! 入っている顔（[`FontFace`]＝家族名・太さ・幅・斜体）を 1 つ選ぶ（要件 9.1／9.2）。
-//! 選んだ結果は候補列ごとに覚えるので、同じ列を文字ごとに引き直さない（要件 9.7／3.11）。
+//! 入っている顔（[`FontFace`]＝家族名・太さ・幅・斜体）を 1 つ選ぶ。
+//! 選んだ結果は候補列ごとに覚えるので、同じ列を文字ごとに引き直さない。
 //!
 //! - 各候補は家族名として引き、無ければ GDI の名前（例「游ゴシック Medium」）として
-//!   引き直す（emo-text-dwrite-fidelity 要件 3.1〜3.5）。家族名で当たれば Regular の顔、
+//!   引き直す。家族名で当たれば Regular の顔、
 //!   GDI の名前で当たればその名前が指す家族・太さ・幅・斜体。切り替えの設定も新しい
-//!   名前の書き方も持たない（要件 3.8／3.9）。number ほかの表示もこの台帳を通せば同じ
-//!   引き直しが効く（要件 4.7・共有の唯一の入口）。
+//!   名前の書き方も持たない。number ほかの表示もこの台帳を通せば同じ
+//!   引き直しが効く（共有の唯一の入口）。
 //! - 候補がフォントファイル名（`.ttf`／`.otf`／`.ttc`・大小無視）のときは読み込まず、
-//!   記録を 1 度だけ残して次の候補へ進む（要件 9.3）。
+//!   記録を 1 度だけ残して次の候補へ進む。
 //! - 候補が全滅したときは、試した候補を添えた記録を 1 度だけ残して既定のフォントへ
-//!   戻す（要件 9.4／13.2）。
+//!   戻す。
 //! - バルーン定義の候補列（`font.name` のカンマ区切り）にも同じ規則を当てる
-//!   （[`FontCatalog::pick`]・要件 9.8）。
+//!   （[`FontCatalog::pick`]）。
 //!
 //! **層規律**: COM 層——UI スレッド専有。失敗は log-first（`error!`／`warn!`）で扱い
 //! panic しない。
@@ -23,7 +23,7 @@
 //!
 //! 記録済みかどうかは [`WarnKey`]——**候補列そのものを保った**鍵——で判定する。
 //! 台本作者の書いた文字列を区切り文字で 1 本の綴りへ潰すと、別々の失敗が同じ鍵に
-//! なって片方が無記録で消える（要件 13.5 違反）。引用符はカンマを守るので
+//! なって片方が無記録で消える。引用符はカンマを守るので
 //! `\f[name,a,b]` と `\f[name,"a,b"]` は別の候補列として到達する。
 
 use std::cell::{Cell, RefCell};
@@ -45,7 +45,7 @@ use windows::core::{BOOL, HSTRING, Interface};
 use super::{DEFAULT_FONT_NAME, ResolvedFont, device_err};
 use crate::TextLayerError;
 
-/// フォントファイル名と見なす拡張子（大小無視・要件 9.3）。読み込みは実装しない。
+/// フォントファイル名と見なす拡張子（大小無視）。読み込みは実装しない。
 const FONT_FILE_EXTENSIONS: [&str; 3] = [".ttf", ".otf", ".ttc"];
 
 /// GDI の名前になりうる最大の長さ（`LOGFONTW::lfFaceName` の 32 単位から終端を除いた数）。
@@ -62,7 +62,7 @@ pub struct FontFace {
 }
 
 impl FontFace {
-    /// 家族名で当たった候補の顔（太さ・幅・斜体とも NORMAL・要件 3.3）。
+    /// 家族名で当たった候補の顔（太さ・幅・斜体とも NORMAL）。
     pub fn regular(family: &str) -> FontFace {
         FontFace {
             family: family.to_owned(),
@@ -72,7 +72,7 @@ impl FontFace {
         }
     }
 
-    /// 太字の指定を重ねた太さ。真なら名前の太さと BOLD の大きい方、偽なら名前の太さ（要件 4.2・4.3）。
+    /// 太字の指定を重ねた太さ。真なら名前の太さと BOLD の大きい方、偽なら名前の太さ。
     pub fn weight_with(&self, bold: bool) -> DWRITE_FONT_WEIGHT {
         if bold {
             // 太字が名前の太さより軽くならないよう大きい方（Black＋太字は 900 のまま）。
@@ -82,7 +82,7 @@ impl FontFace {
         }
     }
 
-    /// 斜体の指定を重ねた斜体。真なら ITALIC、偽なら名前の斜体（要件 4.4・4.5）。
+    /// 斜体の指定を重ねた斜体。真なら ITALIC、偽なら名前の斜体。
     pub fn style_with(&self, italic: bool) -> DWRITE_FONT_STYLE {
         if italic {
             DWRITE_FONT_STYLE_ITALIC
@@ -116,22 +116,20 @@ enum FamilySource {
     },
 }
 
-/// 候補列→実在する顔の解決・記憶・記録の 1 度化（要件 9.1〜9.4／9.7／9.8／13.2・3.1〜3.11）。
+/// 候補列→実在する顔の解決・記憶・記録の 1 度化。
 pub struct FontCatalog {
     families: FamilySource,
     /// 候補列→解決した顔（`None`＝全滅）。鍵は候補列そのもの。
     memo: RefCell<HashMap<Vec<String>, Option<FontFace>>>,
     /// 記録済みの鍵（[`WarnKey`]）。
     ///
-    /// **記録の周期は「台帳の寿命のあいだ 1 度」**（タスク 9.4 の裁定・6.2 の申し送り）。
-    /// 台詞の切れ目（[`FontCatalog::forget_talk`]）でも空にしない——記録は要件 9.3／9.4 の
-    /// 「1 台詞につき 1 度」より少ない側へ寄るので「記録があふれない」（要件 13.4）の目的は満たし、
-    /// 記録なしの失敗経路（要件 13.5）も作らない（audit-emo-text-layout-draw の設計で残すと決めた）。
+    /// **記録の周期は「台帳の寿命のあいだ 1 度」**。台詞の切れ目（[`FontCatalog::forget_talk`]）でも
+    /// 空にしない——「1 台詞につき 1 度」より少ない側へ寄るので記録はあふれず、記録なしの失敗経路も作らない。
     warned: RefCell<BTreeSet<WarnKey>>,
-    /// 記憶に無くて実際に問い合わせた回数（要件 9.7 の観測点）。
+    /// 記憶に無くて実際に問い合わせた回数（観測点）。
     lookups: Cell<usize>,
     /// 台詞の番号（[`FontCatalog::forget_talk`] のたびに 1 進む）。台帳を共有する計測器は
-    /// これを自分の覚えた番号と比べて、台詞の寿命の表を空にする（指摘 11）。
+    /// これを自分の覚えた番号と比べて、台詞の寿命の表を空にする。
     talk: Cell<u64>,
 }
 
@@ -174,7 +172,7 @@ impl FontCatalog {
         FontCatalog::with_faces(installed, &[])
     }
 
-    /// テスト用——家族名の集合と「GDI の名前 → 顔」の表で偽の台帳を作る（要件 6.2）。
+    /// テスト用——家族名の集合と「GDI の名前 → 顔」の表で偽の台帳を作る。
     #[cfg(test)]
     pub(crate) fn with_faces(families: &[&str], gdi: &[(&str, FontFace)]) -> FontCatalog {
         FontCatalog::with_source(FamilySource::Fake {
@@ -186,7 +184,7 @@ impl FontCatalog {
         })
     }
 
-    /// 記憶に無くて実際に問い合わせた回数（要件 9.7 の観測点）。
+    /// 記憶に無くて実際に問い合わせた回数（観測点）。
     #[cfg(test)]
     pub(super) fn lookup_count(&self) -> usize {
         self.lookups.get()
@@ -205,7 +203,7 @@ impl FontCatalog {
     }
 
     /// 記述順に問い合わせて最初に入っている顔。空列は `None`（記録なし）。
-    /// 全滅は `warn!` 1 度＋`None`（要件 3.4／3.6）。
+    /// 全滅は `warn!` 1 度＋`None`。
     pub fn face_for(&self, candidates: &[String]) -> Option<FontFace> {
         if candidates.is_empty() {
             return None;
@@ -218,7 +216,7 @@ impl FontCatalog {
         let mut resolved = None;
         for candidate in candidates {
             if is_font_file(candidate) {
-                // 読み込みは実装しない（要件 9.3）——記録を 1 度残して次の候補へ。
+                // 読み込みは実装しない——記録を 1 度残して次の候補へ。
                 if self.first_time(WarnKey::FontFile(candidate.clone())) {
                     warn!(
                         candidate = %candidate,
@@ -227,7 +225,7 @@ impl FontCatalog {
                 }
                 continue;
             }
-            // 家族名 → GDI の名前の順（GDI の名前は家族名にも当たるので順を守る・要件 3.4）。
+            // 家族名 → GDI の名前の順（GDI の名前は家族名にも当たるので順を守る）。
             resolved = if self.has_family(candidate) {
                 Some(FontFace::regular(candidate))
             } else {
@@ -261,14 +259,14 @@ impl FontCatalog {
             .unwrap_or_else(|| FontFace::regular(DEFAULT_FONT_NAME))
     }
 
-    /// [`FontCatalog::face_for`]、全滅なら `fallback`（束縛の顔・要件 4.10）。
+    /// [`FontCatalog::face_for`]、全滅なら `fallback`（束縛の顔）。
     pub fn face_or(&self, candidates: &[String], fallback: &FontFace) -> FontFace {
         self.face_for(candidates)
             .unwrap_or_else(|| fallback.clone())
     }
 
     /// バルーン定義の候補列（`[name] ++ fallback_chain`）を解決した顔を `face` に、その
-    /// 家族名を `name` に据えた複製を返す（要件 9.8・3.2）。全滅は [`DEFAULT_FONT_NAME`] の Regular。
+    /// 家族名を `name` に据えた複製を返す。全滅は [`DEFAULT_FONT_NAME`] の Regular。
     ///
     /// 既存の書式生成関数（`create_text_format`／`try_create_format`）は**この複製で**
     /// 呼ぶ——解決は書式生成の手前で終わっているので、生成関数の本文は変わらない。
@@ -279,7 +277,7 @@ impl FontCatalog {
         picked
     }
 
-    /// この鍵での記録がまだ無ければ記録済みにして `true`（記録の 1 度化・要件 9.3／9.4）。
+    /// この鍵での記録がまだ無ければ記録済みにして `true`（記録の 1 度化）。
     fn first_time(&self, key: WarnKey) -> bool {
         self.warned.borrow_mut().insert(key)
     }
@@ -306,7 +304,7 @@ impl FontCatalog {
         }
     }
 
-    /// GDI の名前としてその名前が指す顔（要件 3.1／3.2／3.5）。見つからない名前は `None`
+    /// GDI の名前としてその名前が指す顔。見つからない名前は `None`
     /// （記録しない）・想定外の失敗は `error!` を残して `None`（次の候補へ進む）。
     fn gdi_face(&self, name: &str) -> Option<FontFace> {
         let units: Vec<u16> = name.encode_utf16().collect();
@@ -361,7 +359,7 @@ fn face_of(font: &IDWriteFont) -> Option<FontFace> {
     })
 }
 
-/// 候補がフォントファイル名か（大小無視・要件 9.3）。
+/// 候補がフォントファイル名か（大小無視）。
 fn is_font_file(candidate: &str) -> bool {
     let lower = candidate.to_ascii_lowercase();
     FONT_FILE_EXTENSIONS.iter().any(|ext| lower.ends_with(ext))

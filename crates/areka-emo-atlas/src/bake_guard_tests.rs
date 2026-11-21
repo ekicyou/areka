@@ -1,4 +1,4 @@
-//! 信用できない読み手の答えを焼きの段で断るテスト（spec: audit-emo-atlas 指摘 2・18）。
+//! 信用できない読み手の答えを焼きの段で断るテスト。
 //!
 //! 替え玉の読み手 `MemoryDecoder` は登録どおりに返す（約束を確かめない）ので、一辺の上限を越える絵や
 //! 長さが約束より短い絵を作れる。焼きの入口がそれを読めなかった絵として扱い、panic しないことを確かめる。
@@ -36,7 +36,7 @@ fn single_decode_error(result: &BakeResult) -> &str {
     }
 }
 
-/// 指摘 2: 見出しが 16,385×1 の動く絵は縮めずに読めなかった絵になり、「1 枚だけ読みます」の記録は出ない。
+/// 見出しが 16,385×1 の動く絵は縮めずに読めなかった絵になり、「1 枚だけ読みます」の記録は出ない。
 #[test]
 fn animated_header_over_max_side_fails_without_shrinking() {
     let path = Path::new(BASE).join("wide.png");
@@ -72,7 +72,7 @@ fn animated_header_over_max_side_fails_without_shrinking() {
     assert!(!log.contains("1 枚だけ読みます"), "no shrink warn: {log}");
 }
 
-/// 指摘 2: 16,385×1 の静止画は読めなかった絵になり、表に載らない。
+/// 16,385×1 の静止画は読めなかった絵になり、表に載らない。
 #[test]
 fn still_over_max_side_fails() {
     let mut dec = MemoryDecoder::new();
@@ -100,7 +100,7 @@ fn short_bgra() -> Vec<u8> {
     bgra
 }
 
-/// 指摘 18: 長さが約束より短い静止画は panic せず読めなかった絵になり、文に長さが出る。
+/// 長さが約束より短い静止画は panic せず読めなかった絵になり、文に長さが出る。
 #[test]
 fn still_shorter_than_contract_fails_without_panic() {
     let mut dec = MemoryDecoder::new();
@@ -119,7 +119,7 @@ fn still_shorter_than_contract_fails_without_panic() {
     assert!(source.contains("12"), "{source}");
 }
 
-/// 指摘 18: コマの長さが約束に合わない動く絵は「読めなかった」の記録を 1 行出して 1 枚へ縮める。
+/// コマの長さが約束に合わない動く絵は「読めなかった」の記録を 1 行出して 1 枚へ縮める。
 #[test]
 fn animated_frame_shorter_than_contract_shrinks() {
     let path = Path::new(BASE).join("anim.png");
@@ -157,7 +157,7 @@ fn animated_frame_shorter_than_contract_shrinks() {
     assert_eq!(log.matches(BROKEN).count(), 1, "{log}");
 }
 
-/// 指摘 6⑶: 見出しが 1 コマの動く絵は panic せず 1 枚へ縮み、「読めなかった」の記録を 1 行出す
+/// 見出しが 1 コマの動く絵は panic せず 1 枚へ縮み、「読めなかった」の記録を 1 行出す
 /// （`AtlasTable::with_frames` は 2 コマ以上しか受けない）。
 #[test]
 fn animated_with_one_frame_shrinks_without_panic() {

@@ -1,4 +1,4 @@
-//! W7b-T1: `ecs/common/tree_system.rs` ジェネリック階層伝播システムの特性化テスト
+//! `ecs/common/tree_system.rs` ジェネリック階層伝播システムの特性化テスト。
 //!
 //! 対象（すべて `crate::ecs::common::tree_system` の `pub` 関数。`ecs::*` から再エクスポート）:
 //! - `sync_simple_transforms<L, G, M>` — 階層に属さないルート（`Without<ChildOf>` かつ

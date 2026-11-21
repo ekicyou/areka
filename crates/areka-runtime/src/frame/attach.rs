@@ -64,9 +64,9 @@ pub struct PlannedAttach {
     pub balloon_target: TargetId,
     /// 初期表示 surface id（`ScopeAssets.initial_surface_id`）。
     ///
-    /// **注記**: attach フェーズはこの値でシェル初回表示を駆動しなく
-    /// なった（シェルは最初の `\s` cue まで非表示）。ghost の読み直しで控えた面が読み直したシェルに
-    /// 無いときの戻り先（descript の既定の面・違えば続けて組み込みの既定の面の候補の並び）として使う。
+    /// attach フェーズはこの値でシェル初回表示を駆動しない（シェルは最初の `\s` cue まで非表示）。
+    /// ghost の読み直しで控えた面が読み直したシェルに無いときの戻り先（descript の既定の面・違えば
+    /// 続けて組み込みの既定の面の候補の並び）として使う。
     pub initial_surface_id: u32,
     /// `assets.shells` 内の対応添字（attach フェーズの add 消費用）。
     pub shell_index: usize,
@@ -90,22 +90,15 @@ pub struct PlannedAttach {
 /// 状態・I/O・GPU なし。戻り値は入力順に決定論的（`window_scopes`／`assets.shells` の順序を保つ）。
 /// `window_scopes` は `GhostWindows` 契約により一意昇順が期待されるが、本関数は分類の正しさを
 /// その前提に依存しない（重複窓は重複項目として忠実に写す）。
-///
-/// # scope 整合
-/// 窓あり資産なしは `warn!`＋skip 縮退、資産あり窓なしは `debug!`＋破棄を呼び手（attach フェーズ）が
-/// 行い、件数を `info!` に出す。`items.len()` が期待窓数と一致することの表明は本体の spine のテストが
-/// 持ち、縮退が scope 導出バグを隠さないことを担保する。
 pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachPlan {
     let mut items = Vec::new();
     let mut missing_assets = Vec::new();
 
-    // GhostWindows::scopes()（正）を走査し、usize→u32 の吸収をここで一度だけ行う。
     for &scope_usize in window_scopes {
         let Some(scope) = window_scope(scope_usize) else {
             missing_assets.push(scope_usize);
             continue;
         };
-        // 資産存在の正は shells の scope フィールド。一致した添字を attach フェーズへ運ぶ。
         match assets.shells.iter().position(|s| s.scope == scope) {
             Some(shell_index) => {
                 // balloon 資産は同 scope で引く（build_boot_assets は shell と同 scope 集合で組むが、
@@ -120,12 +113,10 @@ pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachP
                     balloon_index,
                 });
             }
-            // 窓はあるが対応資産が無い → warn!＋skip 縮退の対象（呼び手が観測）。
             None => missing_assets.push(scope_usize),
         }
     }
 
-    // 資産あり窓なし: shells の scope で window_scopes に不在のものを集める。
     // u32→usize は無損失（対象プラットフォームの usize は 32bit 以上）ゆえ as で比較する。
     let mut unused_assets = Vec::new();
     for shell in &assets.shells {
@@ -155,19 +146,17 @@ pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachP
 /// 件数一致を積極 assert）。個別の attach 失敗・窓欠落は `error!`／`warn!`＋継続であり
 /// panic しない——1 scope の失敗は他 scope を巻き込まない。
 ///
-/// donor（例 `emo-present` の `systems.rs` の `boot_present_system`）の attach 駆動を、複数 scope × `GhostWindows`
-/// 由来の窓解決へ一般化したもの。`apply` は同期実行のため balloon の `text_slot_view` は同一フレームで
+/// `apply` は同期実行のため balloon の `text_slot_view` は同一フレームで
 /// `Some` になるのが正常経路。万一 `None`（上流の遅延化）なら接続せず `unconnected_text` に
 /// 控え、繋ぎ直しは配置先が取れた最初のフレームの
 /// [`run_text_scale_phase`](super::run_text_scale_phase) が行う（[`connect_balloon_text`]）。
 pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
-    // 高々 1 回: 装着済みなら以降 no-op（装着後の remove/insert churn を避ける donor 慣行）。
+    // 装着済みなら以降 no-op（装着後の remove/insert churn を避ける）。
     if wiring.attached {
         return;
     }
 
-    // ゲート: GhostWindows Resource ＋ GPU 資源（GraphicsCore と WucGraphicsResource の is_valid）。
-    // いずれか欠けるか無効な間は資産を消費せず attached も立てず、次フレーム再試行へ委ねる（hang しない）。
+    // ゲートが欠けるか無効な間は資産を消費せず attached も立てず、次フレーム再試行へ委ねる（hang しない）。
     let gate_ready = world.get_resource::<GhostWindows>().is_some()
         && world
             .get_resource::<GraphicsCore>()
@@ -198,10 +187,8 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
         return;
     };
 
-    // 窓一覧（正）× 資産の突き合わせ（純関数・GPU 不要）。
     let plan = plan_attachments(&window_scopes, &assets);
 
-    // log-first の縮退観測: 窓あり資産なし＝warn!（表示なし縮退・skip）・資産あり窓なし＝debug!（破棄）。
     if !plan.missing_assets.is_empty() {
         warn!(
             missing_scopes = ?plan.missing_assets,
@@ -221,16 +208,14 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
         balloons,
         // resolver は attach では未使用（seriko へは `wire_runtime` が手渡す）。
         resolver: _,
-        // static_binds はシェルの初回表示には使わない: シェル初回表示を attach で
-        // 焼き付けなくなったため。起動時オンの bindgroup default は seriko が保持し（spawn_seriko へ
-        // 手渡し済み）、最初の `\s` cue が駆動する Show{shell,id,binds=static_binds} に載って表示層へ届く。
+        // static_binds はシェルの初回表示には使わない（初回表示は最初の `\s` cue が駆動する
+        // Show{shell,id,binds=static_binds} に載る・起動時オンの bindgroup default は seriko が保持）。
         // ghost の読み直しで控えた着せ替えを、読み直したシェルの既定との差として名前で出し直すのにだけ
         // 使う。
         static_binds,
         // bind_resolver の写しも同じく読み直しの着せ替えの名前を引くのにだけ使う（解決は seriko の写し）。
         bind_resolver,
-        // loop_tables は attach では未使用（SERIKO ループ表は spawn_seriko の actor 構築が
-        // 手渡す）。attach 相はループを駆動しないため破棄する。
+        // loop_tables は attach では未使用（SERIKO ループ表は spawn_seriko の actor 構築が手渡す）。
         loop_tables: _,
         // author_dpi: descript 宣言由来の原稿 DPI を attach 時の target 政策として
         // 供給する。shell と balloon で別宣言ゆえ引き当てを取り違え
@@ -307,15 +292,11 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
             // shell/balloon の取り違えが 1 行の中で目視可能になる（両者 u16 で型は守ってくれない）。
             author_dpis.for_target(item, item.shell_target),
         );
-        // シェルは初回 ShowSurface を attach で発行しない。SSP 互換の
-        // 既定は「シェル表示なし（surface -1）」であり、attach 時に surface0/surface10 を焼き付けると
-        // ゴースト起動の一瞬に規定面がちらつく。初回シェル表示は、最初のさくら
-        // スクリプト `\s[N]` cue が seriko→PresentBridge→drain 経路で運ぶ ShowSurface が駆動する
-        // （起動時オンの bindgroup default は seriko 保持の static_binds が Show に載る）。上の
-        // attach_target で target 自体は生成済みゆえ、後続の `\s`-driven ShowSurface はこの
-        // shell_target へ適用できる（emo2 murasaki は `\s[1000]`／kero は `\s[通常]` を OnBoot で
-        // 発行するため、talk 開始直後にシェルは表示される）。
-        // シェル target の装着成功を計上（planned==attached の積極 assert 用・balloon と対で 1 scope）。
+        // シェルは初回 ShowSurface を attach で発行しない。SSP 互換の既定は「シェル表示なし（surface -1）」
+        // であり、attach 時に surface0/surface10 を焼き付けるとゴースト起動の一瞬に規定面がちらつく。
+        // 初回シェル表示は、最初の `\s[N]` cue が seriko→PresentBridge→drain 経路で運ぶ ShowSurface が
+        // 駆動する（起動時オンの bindgroup default は seriko 保持の static_binds が Show に載る）。
+        // シェル target の装着成功を計上（planned==attached の assert 用・balloon と対で 1 scope）。
         attached_count += 1;
         carried_shows.extend(carried.map(|show| (scope, show)));
         if let Some(binds) = carry.as_ref().and_then(|c| c.binds(scope)) {
@@ -377,8 +358,6 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
         );
         // バルーンの可視性は可視性制御ただ一つが所有する。装着直後・初回指令の**前**に外部所有へ移す——後に置くと直下の
         // ShowSurface が先に可視化してしまい、起動時の不可視が成立しない。
-        // 移した後の ShowSurface は表示状態の確立（合成・表示記録・文字スロット・面 id・寸法）だけを
-        // 行って可視化しないため、面 0 は「不可視のままの確立」として維持される。
         // 未装着 target のみが失敗し得る（直上で attach_target 済みゆえ通常は起こらない）が、
         // 沈黙させると以降のバルーンが理由の記録なく不可視で放置されるため error!＋skip する
         // （log-first。他 scope は巻き込まない）。
@@ -393,9 +372,8 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
             );
             continue;
         }
-        // バルーンの表示確立は面 0・bind なし・pattern なし（初回サーフェス表示＝バルーン枠表示）。上で外部所有へ移してあるため画面には出ず、文字の配置先と面だけが
-        // 立つ（可視化は可視性制御が可視コンテンツの配置を契機に別途付与する）。初回枠は SERIKO
-        // ループ非駆動ゆえ空 pattern＝拡張前と観測等価。
+        // バルーンの表示確立は面 0・bind なし・pattern なし（初回枠）。上で外部所有へ移してあるため
+        // 画面には出ず、文字の配置先と面だけが立つ。初回枠は SERIKO ループ非駆動ゆえ空 pattern。
         wiring.presenter.apply(
             world,
             PresentCommand::ShowSurface {
@@ -457,14 +435,13 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
         sink.set_facts(skin_facts_copy::copy(wiring.presenter(), scopes));
     }
 
-    // ゲートを通過した attach 試行の完了。以降は no-op（高々 1 回）。
     wiring.attached = true;
 }
 
 /// バルーン文字層スロットの接続判断（`None` 分岐を headless に切り出した補助）。
 ///
 /// `text_slot_view` が `Some` なら [`TextLayerRuntime::register_actor_view`] で actor を登録し
-/// `true` を返す。`None`（初回 `ShowSurface` 未合流＝上流の遅延化・Revalidation Trigger）なら
+/// `true` を返す。`None`（初回 `ShowSurface` 未合流＝上流の遅延化）なら
 /// 登録せず `warn!` して `false` を返す（panic しない）。繋ぎ直しは文字の拡大率の相
 /// （[`run_text_scale_phase`](super::run_text_scale_phase)）が配置先の取れた最初のフレームで行う。
 /// 登録判断を純結線として切り出すことで、GPU 不要の headless 単体テストが None 経路を檻に入れられる。

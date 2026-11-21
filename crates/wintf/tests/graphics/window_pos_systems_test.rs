@@ -1,12 +1,10 @@
-//! window_pos.rs 系システムのギャップテスト (W3b-T)
+//! `src/ecs/graphics/systems/window_pos.rs` 系システムのテスト
 //!
 //! - invalidate_dependent_components: 装置が無効なとき窓・見た目・描画面・画像・WUC を
 //!   全部倒し、命令の列を外すこと。装置の資源が無いときの no-op 経路。
 //! - apply_window_pos_changes: 積んだ SetWindowPosCommand を `drain_window_pos_commands()` で
 //!   取り出し、飛ばす・積む・対象外の 3 つの分岐を確かめる。キューはスレッドごとなので、
 //!   GPU の持ち主のスレッドでは包まない（包むと共有のスレッドに指令が残る）。
-//!
-//! 対象: crates/wintf/src/ecs/graphics/systems/window_pos.rs
 
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
@@ -180,7 +178,6 @@ fn invalidate_invalidates_all_and_removes_command_lists() {
             ))
             .id();
 
-        // デバイスロストを模擬
         world.resource_mut::<GraphicsCore>().invalidate();
         world.init_resource::<ChangedVisuals>();
         let mut schedule = Schedule::default();
@@ -218,7 +215,7 @@ fn invalidate_invalidates_all_and_removes_command_lists() {
 }
 
 /// 装置の失いで木の資源が倒れる: 節の描く中身が外れ（節のまま）、根の列が空になり、
-/// 任意の図形の切り抜きが「切り抜きなし」へ戻る（要件 3.4）。
+/// 任意の図形の切り抜きが「切り抜きなし」へ戻る。
 #[test]
 fn invalidate_drops_draw_tree_resources() {
     use wintf::ecs::{ClipShape, DrawCommand, DrawTree, Visual, VisualDrawContent, WorldVisual};

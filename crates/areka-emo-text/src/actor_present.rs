@@ -1,7 +1,5 @@
 //! actor の子: 1 コマの描画の流れ（未解決の見送り・描画範囲の潰れた場所の見送り・初回の装着・配置→装飾→描画→提示）。
-//! 足す予定の spec: text-reveal-fade（`present_actor`）・balloon-markers。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
 
 use bevy_ecs::change_detection::DetectChangesMut;
 use bevy_ecs::hierarchy::Children;
@@ -35,7 +33,7 @@ use super::{
 
 /// 文字の面の物理寸の一辺の上限（Direct3D 11 の機能水準 11 の 2D テクスチャの一辺の最大）。
 pub(crate) const MAX_SURFACE_SIDE: u32 = 16_384;
-/// 文字の面の物理寸の面積の上限（8K の画面より大きい・`audit-emo-compose` の `MAX_AREA` と同じ）。
+/// 文字の面の物理寸の面積の上限（8K の画面より大きい・emo-compose の `plan::MAX_AREA` と同じ）。
 pub(crate) const MAX_SURFACE_AREA: u64 = 1 << 25;
 /// 上限を越える面を作らなかったときの記録の文。
 pub(crate) const SURFACE_LIMIT_MESSAGE: &str =
@@ -51,7 +49,7 @@ pub(crate) fn over_surface_limit((w, h): (u32, u32)) -> bool {
 }
 
 /// フレーム提示ステップ（毎フレーム UI スレッドで呼ぶ・example/emo2-boot が駆動）:
-/// `talk_time` は注入時刻（talk 起点相対秒・実時間 sleep 不使用・`areka-P0-emo-text-layer` R3.3）。
+/// `talk_time` は注入時刻（talk 起点相対秒・実時間 sleep 不使用）。
 ///
 /// actor ごとに「リビール進行の解決（純粋）→ レイアウト決定（純粋）→ viewbox ダーティ矩形
 /// スクロール描画（COM）→ 変化ありのフレームだけ供給面を提示（Present のみ）」を駆動する:
@@ -61,10 +59,10 @@ pub(crate) fn over_surface_limit((w, h): (u32, u32)) -> bool {
 /// - **初回解決フレーム**: World 資源（[`GraphicsCore`]／[`WucGraphicsResource`]）から
 ///   供給面/描画実行部を構築し予約スロットへ装着する（`ActorRender` 不在時のみ・`info!`）。
 ///   通常は actor ごと初回の 1 回だが、k 再追従（[`TextLayerRuntime::refresh_actor_scale`]）で
-///   `ActorRender` を破棄した直後のフレームでも再発火する（新 k の物理寸で再生成・`areka-P0-emo-dpi-scaling` R8.2）。
+///   `ActorRender` を破棄した直後のフレームでも再発火する（新 k の物理寸で再生成）。
 /// - **装着済み actor のグリフ更新**: viewbox ダーティ矩形スクロール描画→（変化ありのフレームだけ）
-///   swapchain Present で完結し、バルーン surface 本体の再合成（emo-compose 再駆動）を要求しない（`areka-P0-emo-text-layer` R9.3）。
-/// - **描画範囲の潰れた場所**（areka-P0-balloon-text-bugs 件 2）: 装着せず描かず記録もせず、残った描画資源は外して捨てる。
+///   swapchain Present で完結し、バルーン surface 本体の再合成（emo-compose 再駆動）を要求しない。
+/// - **描画範囲の潰れた場所**: 装着せず描かず記録もせず、残った描画資源は外して捨てる。
 ///   「提示した場所」に数えない（箱の写しに載せない）。ほかの場所の提示は続ける。
 /// - **デバイス失敗**: 失敗源で `error!` 済み（log-first）。当該 actor の当該フレーム提示を
 ///   skip して他 actor の処理は継続し、最初の失敗を `Err` として返す（次フレーム再試行）。
@@ -145,8 +143,7 @@ pub fn present_frame(
 }
 
 /// `GraphicsCore` の変化の印（作り直しと本当の失いのときだけ立つ）を見たら、全部の描き手と印の面を
-/// 差し込み口・窓の子から外して捨てる（audit-wintf-graphics-world 6 番・要件 3.1）。古い装置の
-/// swap chain・文脈を使い続けない。作り直しは同じ回の作る門が、装置が有効なときだけ行う。
+/// 差し込み口・窓の子から外して捨てる（古い装置の swap chain・文脈を使い続けない）。作り直しは同じ回の作る門が、装置が有効なときだけ行う。
 /// 初めて呼んだ回は印を控えるだけ（描き手はまだ無い）。
 fn drop_renders_after_device_change(runtime: &mut TextLayerRuntime, world: &mut World) {
     let Some(changed) = world
@@ -227,14 +224,14 @@ fn present_actor(
     };
 
     // 文字の面は画像（箱は箱とシェルの画像の重なり）の右と下で切る（外は窓に映らない）。左と上は
-    // 面の原点なので切らない（近い辺は上限が止める）。切って空なら潰れた場所と同じく描かない（audit-emo-text-state-actor 指摘 3・要件 2.1）。
+    // 面の原点なので切らない（近い辺は上限が止める）。切って空なら潰れた場所と同じく描かない。
     let region = &resolved.region;
     let lim = runtime.image_limit(place, &binding);
     let clip = (region.right().min(lim.0), region.bottom().min(lim.1));
 
-    // ── 描画範囲の潰れた場所: 装着せず描かず記録もしない（areka-P0-balloon-text-bugs 件 2・要件 2.1・2.2・2.7） ──
-    // 描いた後に潰れた（再追従が描画資源を残した）なら、ここで差し込み口から外して前の字を残さない
-    // （`areka-P0-balloon-text-bugs` 要件 2.9）。当たり行の写しも外す。記録は登録口が状態の変わり目に 1 回だけ出す。
+    // ── 描画範囲の潰れた場所: 装着せず描かず記録もしない ──
+    // 描いた後に潰れた（再追従が描画資源を残した）なら、ここで差し込み口から外して前の字を残さない。
+    // 当たり行の写しも外す。記録は登録口が状態の変わり目に 1 回だけ出す。
     if region.is_collapsed() || clip.0 <= region.left() || clip.1 <= region.top() {
         if let Some(render) = runtime.surfaces.remove(place) {
             render.discard(world, Some(binding.slot));
@@ -405,7 +402,7 @@ fn present_actor(
     let visible = actor_state.reveal().visible(talk_time);
     let spans = actor_state.choices();
     // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し）。済んだ選択肢を指す強調は
-    // 装飾へ渡さない（注釈は全部の範囲のまま＝字・色・印は変わらない・areka-P0-balloon-text-bugs 件 1 の要件 1.10／1.12）。
+    // 装飾へ渡さない（注釈は全部の範囲のまま＝字・色・印は変わらない）。
     let hover = runtime
         .choice_hover
         .get(place)
@@ -421,7 +418,7 @@ fn present_actor(
         hover,
         lookahead_rev: runtime.lookahead_rev,
     };
-    // 鍵が前のフレームと同じなら、覚えた行・区切り・帯・キャンバスで描き手を回す（audit-emo-text-state-actor 指摘 8）。
+    // 鍵が前のフレームと同じなら、覚えた行・区切り・帯・キャンバスで描き手を回す。
     let mut memo = match render.frame_memo.take() {
         Some(memo) if memo.matches(&key, resolved) => memo,
         _ => {
@@ -439,16 +436,15 @@ fn present_actor(
                 // 直前で状態を引けている——構造上起こらない（防御的に空フレーム扱い）。
                 return Ok(true);
             };
-            // ── 選択肢パイプライン: 同一 lines を単一の源に 注釈→装飾→描画（表示とヒットの単一導出・`areka-P0-choice-render` R3.3/5.2） ──
-            // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——`areka-P0-choice-render` の design.md の Precondition）。
+            // ── 選択肢パイプライン: 同一 lines を単一の源に 注釈→装飾→描画（表示とヒットの単一導出） ──
+            // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない）。
             // 範囲と帯は choice_ranges が 1 度だけ出す（当たりは描き替えたときだけ同じ値から出す）。
-            // ハイライト帯／ヒット帯のブロック軸寸と寄せ量を**行ごとに 1 度だけ**決め（**単一の源**・
-            // `areka-P0-choice-render` R3.3・`areka-P0-emo2-conformance-e2e` R13.1/R13.2）、装飾（描画帯）とヒット導出（照会帯）の両方へ同じ列を配る。丈は実 font
+            // ハイライト帯／ヒット帯のブロック軸寸と寄せ量を**行ごとに 1 度だけ**決め（**単一の源**）、装飾（描画帯）とヒット導出（照会帯）の両方へ同じ列を配る。丈は実 font
             // metrics の行ボックス丈（descent 込み）を行送りピッチで頭打ちにした値——em ボックス丈で切ると
             // 和文フォントの descent インクが帯の外へ出る（実機不具合「選択肢の文字の下が切れる」の真因）。
-            // 基準の em は**その行に置かれた文字のうち最も大きい em**（行矩形のブロック軸寸・要件 7.9）で、
+            // 基準の em は**その行に置かれた文字のうち最も大きい em**（行矩形のブロック軸寸）で、
             // アクターに 1 つの既定の大きさではない——既定固定だと `[height,40]` の選択肢が表示 42 画素でも
-            // 帯 14 画素になり、文字の上下がクリックできない（要件 11.5）。装飾の無い行では行矩形のブロック軸寸が
+            // 帯 14 画素になり、文字の上下がクリックできない。装飾の無い行では行矩形のブロック軸寸が
             // 既定の大きさに等しいので、従来と 1 画素も変わらない。
             let ranges = choice_ranges(
                 &lines,
@@ -487,7 +483,7 @@ fn present_actor(
         }
     };
     // 見える字の数の観測を見える範囲の決めより**先に**呼ぶ（字が増えたフレームを自動の位置で
-    // 描く・後に呼ぶと 1 フレーム遅れる・`balloon-scroll-arrows` 要件 8.1）。手動の位置が在ればその行から見せる（`balloon-scroll-arrows` 要件 8.5）。
+    // 描く・後に呼ぶと 1 フレーム遅れる）。手動の位置が在ればその行から見せる。
     let scroll_state = runtime.scrolls.entry(place.clone()).or_default();
     if let Some(reason) = scroll_state.observe_visible(visible) {
         scroll::record(place, ScrollChange::Stopped(reason), "提示");
@@ -504,7 +500,6 @@ fn present_actor(
         resolved.markers,
     );
 
-    // 装飾入りの描画の入口（要件 14.2・既定だけの行は従来と同一の呼出列）。
     let changed = render.executor.render_styled(
         &memo.canvas,
         &window,
@@ -514,23 +509,23 @@ fn present_actor(
         &mut render.surface,
         actor_state.styles(),
     )?;
-    // 装着済み actor のグリフ更新は供給面の提示のみで完結（emo-compose 再駆動なし・`areka-P0-emo-text-layer` R9.3）。
+    // 装着済み actor のグリフ更新は供給面の提示のみで完結（emo-compose 再駆動なし）。
     // 変化ありのフレームだけ提示する（`FramePlan::NoChange` は blit も描画も present も省く——
-    // readback は front を読むため観測述語に影響しない・`areka-P0-emo-text-viewbox` R1.1/R3.1）。
+    // readback は front を読むため観測述語に影響しない）。
     if changed {
-        // ── ヒット行スナップショット更新（present 成功時のみ・表示と同一 lines/segments の単一導出・`areka-P0-choice-render` 5.2） ──
+        // ── ヒット行スナップショット更新（present 成功時のみ・表示と同一 lines/segments の単一導出） ──
         // committed は既存 visible_window→executor が確定した面反映済みスクロールをそのまま消費する
-        // （新規のスクロール可視判定は追加しない・同じ spec の 6.3）。NoChange フレームはこの更新を丸ごと省き
+        // （新規のスクロール可視判定は追加しない）。NoChange フレームはこの更新を丸ごと省き
         // 直前スナップショットを不変のまま保つ。
         let committed = render.executor.scroll_state().committed;
         // 帯は装飾（描画）へ渡したのと**同一の行ごとの列**——描画とヒットの
-        // 座標整合（`areka-P0-choice-render` R3.3・`areka-P0-emo2-conformance-e2e` R13.2）。
+        // 座標整合。
         let hit_rows = memo.hit_rows(&resolved.region, resolved.mode);
         // 各ヒット行を配送順序数で対応スパンへ突き合わせ、窓物理 px 矩形＋下流構成材料を同梱する。
         let snapshot: Vec<ChoiceHitRow> = hit_rows
             .iter()
             .filter_map(|row| {
-                // 済んだ選択肢の行は写しに入れない＝押しても当たらない（アンカーの行は残る・areka-P0-balloon-text-bugs 件 1 の要件 1.11）。
+                // 済んだ選択肢の行は写しに入れない＝押しても当たらない（アンカーの行は残る）。
                 spans
                     .iter()
                     .find(|span| span.ordinal == row.ordinal)
@@ -553,7 +548,7 @@ fn present_actor(
             })
             .collect();
         runtime.choice_snapshot.insert(place.clone(), snapshot);
-        // 箱の文字の面は、表示されている字の矩形でポインタを受ける（`areka-P0-shell-balloon` 要件 9.4）。字の矩形は表示と
+        // 箱の文字の面は、表示されている字の矩形でポインタを受ける。字の矩形は表示と
         // 同じ配置の結果（見えている字だけ）と面反映済みのスクロールから作る。
         if matches!(place.place, TextPlace::Box(_)) {
             let cells = glyph_cells(
@@ -574,8 +569,8 @@ fn present_actor(
 }
 
 /// 提示の最後: 出す矢印・絵・置き場・拡大率が前と違うときだけ印の面を描き直す（当たりの写しも
-/// 一緒に作り直す・`balloon-scroll-arrows` 要件 3.8）。印の面は初めて矢印を出すときに、面の画像（箱は箱とシェルの画像の
-/// 重なり）全体の物理寸で文字の面の直前に挿す（`balloon-scroll-arrows` 要件 3.5・audit-emo-text-state-actor 指摘 3）。失敗は失敗源で `error!` 済み
+/// 一緒に作り直す）。印の面は初めて矢印を出すときに、面の画像（箱は箱とシェルの画像の
+/// 重なり）全体の物理寸で文字の面の直前に挿す。失敗は失敗源で `error!` 済み
 /// （その場所の矢印だけが出ない）。上限越えとその寸での作成の失敗は寸を覚え、同じ寸では試さない。
 fn present_markers(
     runtime: &mut TextLayerRuntime,
@@ -704,14 +699,14 @@ fn present_markers(
 /// 同じ（状態・区間の全文・配置の入力・字幅・時刻）なら同じ行の列を返す（`cursor_warn` は縮退の
 /// warn の抑えだけで行の列には効かない）。
 ///
-/// 見える数はいつも届いた内容の表示の時刻から出す（字の表示の時刻を変えない・`areka-P0-budoux-reveal-reflow` 要件 2.4）。文節の
+/// 見える数はいつも届いた内容の表示の時刻から出す（字の表示の時刻を変えない）。文節の
 /// 折り返しで区間の全文があり、届いた内容がその先頭と一致するときは、全文の字の列・区切り・装飾で
-/// 配置する——見えている字の行は見える数だけで決まり、後から届く字で動かない（`areka-P0-budoux-reveal-reflow` 要件 1.1・1.2）。
+/// 配置する——見えている字の行は見える数だけで決まり、後から届く字で動かない。
 ///
 /// 字は台本のタグとタグの間のひと続きごとに、それぞれの時刻に分かれて届くので、届いた内容は
 /// 台詞の途中までのことが多い。区間の全文は、再生の前に知らされた台本の全部を空回しして作る
 /// （持ち主は [`TalkLookahead`]）。全文が無い（先に知らされていない）か、届いた内容が全文の先頭と
-/// 食い違うときは、届いた字の列で区切って配置する修正前の動きで続ける（記録は持ち主が場所・区間
+/// 食い違うときは、届いた字の列で区切って配置する従来の動きで続ける（記録は持ち主が場所・区間
 /// ごとに 1 度だけ出す）。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn arrange_lines(
@@ -727,11 +722,11 @@ pub(super) fn arrange_lines(
     let arrived = state.place_state(place)?;
     let visible = arrived.reveal().visible(talk_time);
     // 配置に使う内容（字の列・装飾）と折返し計画。1 字ずつ（CharByChar）は今の呼び方のまま
-    // 区切りを計算せず、区間の全文にも触れない（`areka-P0-budoux-reveal-reflow` R4.2・要件 3.3）。文節（BudouxWordWrap）は
+    // 区切りを計算せず、区間の全文にも触れない。文節（BudouxWordWrap）は
     // 区間の全文の持ち主に聞き、全文なら全文の側の字の列・区切り・装飾（番号・表）で、そうでなければ
-    // 届いた字で区切る（修正前の動き・warn は持ち主が出す）。字の無い行の丈は今の見た目でなく後ろの字
+    // 届いた字で区切る（warn は持ち主が出す）。字の無い行の丈は今の見た目でなく後ろの字
     // から引く（`Scan::following_glyph_height`・後ろに字が無いときだけ `font_height`）。
-    // 届いた字で区切る腕は、消した回数と項目の数が前と同じなら覚えた区切りを使う（audit-emo-text-state-actor 指摘 8）。
+    // 届いた字で区切る腕は、消した回数と項目の数が前と同じなら覚えた区切りを使う。
     let (content, wrap) = match resolved.wrap {
         WrapMode::CharByChar => (arrived, WrapPlan::CharByChar),
         WrapMode::BudouxWordWrap => match lookahead.basis(place, arrived) {
@@ -742,9 +737,8 @@ pub(super) fn arrange_lines(
             ),
         },
     };
-    // `\_l` の座標解決の縮退（`CursorDegrade`・`areka-P0-cursor-tag-canon` 要件 5.1〜5.3）の warn-once を production で有効化する持続 guard を渡す
+    // `\_l` の座標解決の縮退（`CursorDegrade`）の warn-once を production で有効化する持続 guard を渡す
     // （純挙動は `layout` と完全同一——差は縮退ログの有無のみ）。
-    // 装飾入りの配置の入口（要件 14.1／14.2・番号列が既定だけなら従来と同一の出力）。
     Some(LayoutEngine::layout_styled(
         content.items(),
         visible,
@@ -759,7 +753,7 @@ pub(super) fn arrange_lines(
     ))
 }
 
-/// 届いた字の区切りの覚え（定義は `segment.rs`・後ろだけ区切り直す・spec `emo-text-reveal-incremental` 件 1）。
+/// 届いた字の区切りの覚え（定義は `segment.rs`・後ろだけ区切り直す）。
 pub(super) use crate::segment::BreakMemo;
 
 /// 配置の覚えの鍵のうち数で比べる欄（配置の入力は [`FrameMemo`] が値で持って比べる）。
@@ -781,7 +775,7 @@ struct FrameKey {
     lookahead_rev: u64,
 }
 
-/// 配置の覚え（audit-emo-text-state-actor 指摘 8）: 鍵が前のフレームと同じなら、配置・選択肢の範囲・キャンバス・装飾を
+/// 配置の覚え: 鍵が前のフレームと同じなら、配置・選択肢の範囲・キャンバス・装飾を
 /// 作り直さず、覚えた答え（行・区切り・帯・キャンバス）で描き手を回す。
 ///
 /// **配置が読む値を足したら鍵にも足す**（足し忘れると古い字を見せる）。

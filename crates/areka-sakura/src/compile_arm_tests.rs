@@ -7,9 +7,9 @@ use crate::sysvar::SystemVarSnapshot;
 use areka_parsers::sakura::{NewLineRatio, SurfaceArg};
 
 /// バルーン面切替命令の引数を解釈・変換せず値のまま `BalloonSurface{key}` へ
-/// バイト完全一致で転写する（不透明写像・R3.1）。名前形（非 ASCII）・数値形・非表示
+/// バイト完全一致で転写する（不透明写像）。名前形（非 ASCII）・数値形・非表示
 /// センチネル `-1` のいずれも数値化・alias 解決せず、`Surface`→`Emote` と完全対称に扱う。
-/// `BalloonSurface` が catch-all（M-boot 外タグの無視ログ）へ落ちて破棄されないことの固定。
+/// `BalloonSurface` が無視されず cue になることの固定。
 #[test]
 fn balloon_surface_arg_is_transcribed_opaquely() {
     // 名前形（非 ASCII）: 整数化せず文字列のまま転写。
@@ -46,8 +46,8 @@ fn balloon_surface_arg_is_transcribed_opaquely() {
     }
 }
 
-/// バルーン面切替命令の追加後も、既存のシェル面切替 `Surface`→`Emote` 写像は不変
-/// （additive・R3.1 既存写像非変更）。scope/start_time 転写も従来通り。
+/// シェル面切替 `Surface`→`Emote` の写像は、バルーン面切替と独立に保たれる。
+/// scope/start_time の転写も同じ。
 #[test]
 fn surface_to_emote_mapping_is_unchanged_by_balloon_arm() {
     let compiled = compile(&[
@@ -63,7 +63,7 @@ fn surface_to_emote_mapping_is_unchanged_by_balloon_arm() {
     }
 }
 
-/// 話者スコープ切替で actor が転写され、未指定開始は既定 "0"（R5.1/5.2/5.3）。
+/// 話者スコープ切替で actor が転写され、未指定開始は既定 "0"。
 #[test]
 fn speaker_scope_is_transcribed_to_actor() {
     let compiled = compile(&[
@@ -83,7 +83,7 @@ fn speaker_scope_is_transcribed_to_actor() {
     assert_eq!(cues[0].actor.as_str(), "0");
 }
 
-/// NewLine/Clear の写像（DD-9・R4.2/4.3）。
+/// NewLine/Clear の写像。
 #[test]
 fn newline_and_clear_map_to_commands() {
     let compiled = compile(&[
@@ -100,34 +100,10 @@ fn newline_and_clear_map_to_commands() {
     assert_eq!(command_of(&cues[1]), &CueCommand::Clear);
 }
 
-/// 除外集合の Raw-only 対置換（catch-all の意図的更新の檻・R8.2/8.3・Testing Strategy 項目 6）。
-///
-/// task 4.1（Choice/Cursor）・task 4.2（Move/GenericCommand/SystemVar）で 5 語彙が専用アームへ
-/// **卒業**した結果、compile の catch-all が無視する除外集合は `Raw`＋`#[non_exhaustive]` の未知
-/// variant のみへ縮小された（`Instruction` は別 crate の `#[non_exhaustive]` ゆえ catch-all は
-/// 構造上必須・未知 variant は防御経路だが workspace 内に合成手段がなく直接は載せられない）。
-/// 本檻はその縮小後の除外集合を **Raw-only** で固定し、4.1/4.2 の卒業と決して矛盾させない:
-/// (1) `Raw` は cue を 0 個生成する（無視ログ・非 panic・従来挙動維持・R8.2）、
-/// (2) 卒業した 5 語彙（Choice / Cursor / Move / GenericCommand / SystemVar）は除外集合に
-///     **含まれない**＝各々 cue を生成する（本檻は決してこれらが「無視される」とは主張しない・
-///     R8.3）。各語彙の写像詳細は個別 behavioral 檻が担い、ここでは除外集合の境界のみを固定する。
-///
-/// **2026-09-13 追記**——上の「5 語彙」は 4.1／4.2 時点の歴史的な数で、その後
-/// `areka-P0-text-decoration-canon` の `\f` 転写で `Instruction::Font` が **6 番目に卒業**した
-/// （`compile.rs` の `Instruction::Font` の腕が `Custom("\\f")` の cue を生成する）。除外集合が
-/// Raw-only であるという本檻の主張は変わらない——卒業が 1 つ増えても除外集合は縮む側にしか
-/// 動かないからである。
-///
-/// **2026-10-10 追記**——`areka-P0-anchor-tag-canon` で `Instruction::Anchor`／`AnchorEnd` も
-/// 専用の腕へ卒業した（それまでは catch-all に落ちて捨てられていた）。開きは下の (2) の一覧に
-/// 足してある。閉じは単独だと「開いていないのに閉じ」で合図を出さないが、これは catch-all では
-/// なく専用の腕の決め（警告付き）で、対になった閉じは合図を出す——細目は
-/// `compile_anchor_tests.rs` が担う。除外集合が Raw-only であるという主張は変わらない。
-///
-/// **2026-11-05 追記**（audit-parsers-sakura 指摘 28〜30）——`Move` は消え、`\![move,…]` は
-/// 名前 `move` の `GenericCommand` になった（下の一覧の move はその形）。`#[non_exhaustive]` も
-/// 外れたので catch-all は無く、`Raw` は自分の腕で `raw_ignored` の警告を 1 行残して捨てる
-/// （`raw_is_dropped_with_one_warning`）。合図を作らないという本檻の主張は変わらない。
+/// `Raw` だけが cue を作らず、`Choice`・`Cursor`・`Anchor`・`GenericCommand`（`move` も含む）・
+/// `SystemVar` は各々 cue を作る。無視される側が `Raw` だけであることを、cue を作る側と対にして
+/// 固定する。`Raw` は自分の腕で `raw_ignored` の警告を 1 行残して捨てる
+/// （`raw_is_dropped_with_one_warning`）。各語彙の写像の細目は個別の檻が担う（`Anchor` の閉じは `compile_anchor_tests.rs`）。
 #[test]
 fn catch_all_ignored_set_is_raw_only() {
     use areka_parsers::sakura::{Anchor, Choice};
@@ -147,16 +123,14 @@ fn catch_all_ignored_set_is_raw_only() {
         CueCommand::Text(s) => assert_eq!(s, "hi"),
         other => panic!("expected Text, got {other:?}"),
     }
-    // Raw 単独（後続なし）は空 sheet（内容 cue ゼロゆえ ClearAll 前置もなし・R8.2）。
+    // Raw 単独（後続なし）は空 sheet（内容 cue ゼロゆえ ClearAll 前置もなし）。
     assert!(
         compile(&[Instruction::Raw("\\0".into())]).sheet.is_empty(),
         "Raw のみの台本は空 sheet（除外集合の 0 cue を単独でも固定）"
     );
 
-    // (2) 卒業した 5 語彙は除外集合の外＝各々 cue を生成する（sheet 非空）。ここでこれらが
-    //     「無視される」と主張することは 4.1/4.2 と矛盾するため、本檻は生成側のみを固定する
-    //     （R8.3 対置換）。詳細写像は個別 behavioral 檻（`*_maps_to_*` 等）が担う。
-    //     下の配列の 6 個目（アンカーの開き）は 2026-10-10 の卒業（doc の追記）。
+    // (2) Raw 以外の語彙は各々 cue を生成する（sheet 非空）。詳細写像は個別の檻
+    //     （`*_maps_to_*` 等）が担い、ここでは生成側のみを固定する。
     let graduated: [Instruction; 6] = [
         Instruction::Anchor(Anchor {
             id: "x".into(),
@@ -189,10 +163,9 @@ fn catch_all_ignored_set_is_raw_only() {
     }
 }
 
-/// task 4.2 で Move/SystemVar/GenericCommand は専用アームへ卒業し cue を発行する（R4.1/7.1/8.2）。
-/// catch-all に残る除外は `Raw`（＋未知 variant）のみで、これは従来どおり 0 cue・非 panic
-/// （R8.2/8.3/11.2）。卒業アームと Raw が交錯しても各々の写像・破棄が一貫することを固定する。
-/// 各アームの詳細写像は個別の behavioral 檻（`scoped_move_carrier_*` 他）が担う。
+/// `GenericCommand`（`move` も含む）・`SystemVar` は専用アームで cue を発行し、`Raw` は 0 cue で
+/// panic しない。両者が交錯しても各々の写像・破棄が一貫することを固定する。各アームの詳細写像は
+/// 個別の檻（`scoped_move_carrier_*` 他）が担う。
 #[test]
 fn graduated_arms_emit_while_raw_remains_ignored() {
     let compiled = compile(&[
@@ -237,14 +210,14 @@ fn graduated_arms_emit_while_raw_remains_ignored() {
         CueCommand::Text(s) => assert_eq!(s, "tail", "Raw は破棄され末尾 Text のみ残る"),
         other => panic!("expected Text(\"tail\"), got {other:?}"),
     }
-    // 終端命令を含まないため末尾到達で Ended。
+    // 終端命令を含まないため末尾に着いて Ended。
     assert_eq!(compiled.end, TalkEndReason::Ended);
 }
 
-// ── task 4.1: Cursor アーム写像の behavioral 檻（Choice の写像は下の決定論檻が担う） ──
+// ── Cursor アーム写像の檻（Choice の写像は下の決定論檻が担う） ──
 
 /// `\_l[,]` 相当（x・y 双方空）でも Cursor cue が無条件に発行される（記述の存在を台本から
-/// 失わせない・R3.5）。空は代表形と別物（区別保持）。
+/// 失わせない）。空は代表形と別物（区別保持）。
 #[test]
 fn cursor_double_empty_still_emits() {
     let compiled = compile(&[Instruction::Cursor {
@@ -264,11 +237,11 @@ fn cursor_double_empty_still_emits() {
     assert_eq!(cues[0].duration, 0.0, "Cursor は瞬時（duration 0）");
 }
 
-// ── task 4.2: barrier 発行の behavioral 檻（move・GenericCommand・SystemVar の写像は下の決定論檻が担う） ──
+// ── barrier 発行の檻（move・GenericCommand・SystemVar の写像は下の決定論檻が担う） ──
 
 /// `\q` を 1 個以上含む台本には選択待ち barrier をちょうど 1 個、全 choice cue より後（最終
-/// offset）へ発行する（R2.1/2.2/2.6）。タイムアウトは指定しない（`timeout:None`＝未指定＝
-/// 下流の既定値へ委譲・DD-8）。
+/// offset）へ発行する。タイムアウトは指定しない（`timeout:None`＝未指定＝
+/// 下流の既定値へ委譲）。
 #[test]
 fn talk_with_choice_appends_single_barrier_after_all_choices() {
     use areka_parsers::sakura::Choice;
@@ -288,13 +261,13 @@ fn talk_with_choice_appends_single_barrier_after_all_choices() {
     // 内容: Choice / Choice / Barrier の 3 件（barrier は末尾）。
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(cues.len(), 3, "choice 2 個＋barrier 1 個");
-    // barrier はちょうど 1 個（R2.1）。
+    // barrier はちょうど 1 個。
     let barrier_count = cues
         .iter()
         .filter(|c| matches!(c.payload, CuePayload::Barrier(_)))
         .count();
     assert_eq!(barrier_count, 1, "選択待ち barrier はちょうど 1 個（R2.1）");
-    // barrier は全 choice cue より後（R2.2）。
+    // barrier は全 choice cue より後。
     assert!(
         matches!(command_of(&cues[0]), CueCommand::Choice { .. }),
         "[0] は choice"
@@ -314,7 +287,7 @@ fn talk_with_choice_appends_single_barrier_after_all_choices() {
 }
 
 /// テキスト先行のメニューでも barrier は全 choice cue より後（テキスト再生完了後の最終 offset）へ
-/// 置かれる（R2.2）。`Text("ab") \q[..]` → barrier は text D の位置。
+/// 置かれる。`Text("ab") \q[..]` → barrier は text D の位置。
 #[test]
 fn barrier_is_placed_at_final_offset_after_leading_text() {
     use areka_parsers::sakura::Choice;
@@ -345,7 +318,7 @@ fn barrier_is_placed_at_final_offset_after_leading_text() {
     );
 }
 
-/// `\q` の第 3 引数以降（references）を記述順を保って欠落なく運ぶ（R1.4）。
+/// `\q` の第 3 引数以降（references）を記述順を保って欠落なく運ぶ。
 #[test]
 fn choice_references_are_preserved_in_order() {
     use areka_parsers::sakura::Choice;
@@ -356,14 +329,14 @@ fn choice_references_are_preserved_in_order() {
         references: vec!["r0".into(), "r1".into(), "".into()],
     })]);
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
-    // choice cue 1 件＋末尾に選択待ち barrier 1 件（`\q` を含むため・R2.1）。
+    // choice cue 1 件＋末尾に選択待ち barrier 1 件（`\q` を含むため）。
     assert_eq!(cues.len(), 2, "choice cue 1 件＋末尾 barrier 1 件");
     assert_eq!(
         command_of(&cues[0]),
         &CueCommand::Choice {
             id: "OnYes".into(),
             text: "はい".into(),
-            // 記述順・空トークンを含め欠落なく運ぶ（不透明・ID 解釈なし・R1.4）。
+            // 記述順・空トークンを含め欠落なく運ぶ（不透明・ID 解釈なし）。
             references: vec!["r0".into(), "r1".into(), "".into()],
         },
         "references は記述順を保って欠落なく運ばれる（R1.4）"
@@ -375,11 +348,11 @@ fn choice_references_are_preserved_in_order() {
     );
 }
 
-// ── task 4.4: compile 決定論檻（メニュー・キャリア・sysvar 展開の包括固定・R9.1/9.2/9.3/9.4）──
+// ── compile 決定論檻（メニュー・キャリア・sysvar 展開の包括固定）──
 
 /// fixture `menu.pasta:15` メインメニュー script を parse 済み `Instruction` 列として直入力し、
 /// **完全な順序付き cue 列**（冒頭 ClearAll 前置＋末尾 barrier を含む全 sheet）を期待ベクタと
-/// index ごとに突合する決定論檻（R9.1/9.2）。Choice・NewLine・Cursor の写像（id=target・
+/// index ごとに突合する決定論檻。Choice・NewLine・Cursor の写像（id=target・
 /// text=disp・x/y の不透明転写）も、記述順も、ここで 1 件ずつ固定する。「実 fixture 断片 → 全 sheet」の
 /// end-to-end 固定であり、
 /// - 順序（記述順＋冒頭 ClearAll＋末尾 barrier）、
@@ -519,7 +492,7 @@ fn menu_script_compiles_to_exact_ordered_cue_sheet() {
 }
 
 /// `\q` を 1 つも含まないメニュー系 script（NewLine/Cursor/Text の混在）には barrier を
-/// 一切発行しない（R2.5・既存完了挙動を変えない）。Cursor を含んでも「選択メニュー」でなければ
+/// 一切発行しない（既存の完了挙動を変えない）。Cursor を含んでも「選択メニュー」でなければ
 /// barrier は出ないことを決定論的に固定する（Cursor 単独では barrier 条件を満たさない）。
 #[test]
 fn no_choice_menu_script_emits_no_barrier() {
@@ -543,8 +516,7 @@ fn no_choice_menu_script_emits_no_barrier() {
 
 /// fixture `menu.pasta:65` の `\1\![move,-353,,,0,base,base]` を parse 済みとして直入力し、
 /// `\1` の話者スコープが汎用キャリア cue へ actor "1" として転写されること、`\![move,..]` が
-/// **6 トークン（空 2 個保持）**の `move` キャリアへ写像されることを一括固定する（R9.3・R4.1/4.2/5）。
-/// 既定 scope 0 での写像だけを見る写しの檻は消した（指摘 44）。本檻は
+/// **6 トークン（空 2 個保持）**の `move` キャリアへ写像されることを一括固定する。
 /// `\1` プレフィックスの scope 帰属を明示する（fixture 忠実な end-to-end）。
 #[test]
 fn scoped_move_carrier_transcribes_scope_and_preserves_empty_tokens() {
@@ -579,7 +551,7 @@ fn scoped_move_carrier_transcribes_scope_and_preserves_empty_tokens() {
         "`\\1` の話者スコープがキャリア cue へ actor \"1\" として転写される（R5）"
     );
     assert_eq!(cues[0].duration, 0.0, "汎用キャリアは瞬時（duration 0）");
-    // move は `\q` でないため barrier を伴わない（R2.5）。
+    // move は `\q` でないため barrier を伴わない。
     assert!(
         compiled
             .sheet
@@ -591,7 +563,7 @@ fn scoped_move_carrier_transcribes_scope_and_preserves_empty_tokens() {
 }
 
 /// 未知名 `\![raise,OnBoot]`・単独形 `\![*]`（bare・raw_args 空）のいずれも汎用キャリア cue として
-/// 発行され**無音落ちしない**ことを一括固定する（R9.3・R8.2 卒業）。compile は `\!` 名前空間を
+/// 発行され**無音落ちしない**ことを一括固定する。compile は `\!` 名前空間を
 /// typed variant 化せず単一の不透明キャリアへ載せるため、未知名でも既知名でも扱いは同型
 /// （name 選別は消費側の責務）。
 #[test]
@@ -602,7 +574,7 @@ fn unknown_and_bare_carrier_forms_are_emitted_not_dropped() {
             name: "raise".into(),
             raw_args: vec!["OnBoot".into()],
         },
-        // 単独形 `\![*]`（raw_args 空）＝R8.2 卒業（無音落ちしない）。
+        // 単独形 `\![*]`（raw_args 空）も無音落ちしない。
         Instruction::GenericCommand {
             name: "vanish".into(),
             raw_args: vec![],
@@ -632,10 +604,10 @@ fn unknown_and_bare_carrier_forms_are_emitted_not_dropped() {
     }
 }
 
-/// sysvar スナップショット展開の決定論檻（R9.4・R7.1/7.4/7.5）。実 2 引数 `compile(&instr, &snapshot)`
+/// sysvar スナップショット展開の決定論檻。実 2 引数 `compile(&instr, &snapshot)`
 /// を直呼びし、スナップショット値がテキスト再生層まで実際に流れることを検証する（値あり／値なし
-/// 既定／未対応名の 3 経路を script 直入力から一括固定）。task 4.2 の実装が本檻で初めて
-/// **実時間非依存・script 直入力から**検証可能になる（値源は凍結スナップショット・no I/O）。
+/// 既定／未対応名の 3 経路を script 直入力から一括固定）。値源は凍結スナップショットで
+/// 実時間に依らない（no I/O）。
 #[test]
 fn sysvar_expansion_from_snapshot_is_deterministic() {
     // (1) 値ありスナップショット → その値の Text cue（duration は展開文字列の再生時間）。
@@ -668,7 +640,7 @@ fn sysvar_expansion_from_snapshot_is_deterministic() {
         "SystemVar 由来 D の分だけ後続が遅れる（R7.2）"
     );
 
-    // (2) 値なしスナップショット（`username` 欠落）→ 既定値「ユーザーさん」の Text cue（R7.4）。
+    // (2) 値なしスナップショット（`username` 欠落）→ 既定値「ユーザーさん」の Text cue。
     let compiled = super::compile(
         &[Instruction::SystemVar("username".into())],
         &SystemVarSnapshot::default(),
@@ -685,7 +657,7 @@ fn sysvar_expansion_from_snapshot_is_deterministic() {
         "既定値も通常テキストと同一の再生時間規則（R7.2）"
     );
 
-    // (3) M1 未対応名 `%foo` → 元の `%foo` を Text として素通し（情報を失わない縮退・R7.5）。
+    // (3) 未対応名 `%foo` → 元の `%foo` を Text として素通し（情報を失わない縮退）。
     let compiled = super::compile(
         &[Instruction::SystemVar("foo".into())],
         &SystemVarSnapshot::default(),
@@ -698,8 +670,8 @@ fn sysvar_expansion_from_snapshot_is_deterministic() {
     );
 }
 
-/// 知らないタグの `Raw` は合図を作らず、`raw_ignored` の警告を 1 行だけ残して捨てる
-/// （指摘 29）。欄は綴りの先頭 64 字（`head`）とバイト数（`bytes`）。後ろの台本は今までどおり。
+/// 知らないタグの `Raw` は合図を作らず、`raw_ignored` の警告を 1 行だけ残して捨てる。
+/// 欄は綴りの先頭 64 字（`head`）とバイト数（`bytes`）。後ろの台本は今までどおり。
 #[test]
 fn raw_is_dropped_with_one_warning() {
     // 閉じの無い `[` で残りが 1 つの Raw になった形（65 字・非 ASCII を含む）。

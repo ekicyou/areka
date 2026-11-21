@@ -1,4 +1,4 @@
-//! # surface_nesting_fixture_test — 入れ子の検体が今の読み手で読めること（areka-P0-surface-element-nesting 要件 8.2）
+//! # surface_nesting_fixture_test — 入れ子の検体が今の読み手で読めること
 //!
 //! 検体 `tests/fixtures/surface-nesting/` を、今ある読み手（`parse`・`parse_boxes`）→ 面の表
 //! （`EmoWorld::build_with_images`）→ 箱の畳み込み（`fold_boxes`）へ通し、読み手が検体を
@@ -103,7 +103,6 @@ fn the_fixture_parses_into_the_documented_surfaces() {
         "子を指す element定義の並び（親の出現順・element番号の昇順）"
     );
 
-    // 画像の element定義が指すファイルは、すべてフォルダに在る。
     for surface in &shell.surfaces {
         for element in &surface.elements {
             let path = element.path.as_str();

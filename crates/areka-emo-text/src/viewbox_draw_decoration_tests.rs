@@ -1,25 +1,23 @@
-//! `viewbox_draw_decoration.rs` の兄弟檻（task 6.5・要件 3.5／3.6／5.1／5.2／5.6／5.7／5.8／
-//! 9.8／12.1／13.3／14.2）。
+//! `viewbox_draw_decoration.rs` の兄弟檻。
 //!
-//! 主に固定する述語は次の 5 つ（後ろの節は件 3 の下線の区間とはみ出し・既定の見た目の線と色を固定する）。
+//! 主に固定する述語は次の 5 つ（後ろの節は下線の区間とはみ出し・既定の見た目の線と色を固定する）。
 //!
 //! 1. **区間の切り出し**——連続する同じ番号が 1 つの区間にまとまり、UTF-16 で 2 単位の文字が
 //!    2 と数えられる（`segment_text_range` と同じ数え方）。区間に切らず行全体を 1 つにする誤りは
 //!    区間数と範囲の両方で赤になる。
 //! 2. **既定だけの行**——範囲指定・色の解除・ブラシ生成の**実回数が 0**（保持庫の要素数ではなく
 //!    実際に発行した回数を数える）。描画統計と行レイアウトの生成回数は装飾導入前と同じ字義の値。
-//!    既定の見た目が打ち消し線つきなら、行の全体への 1 件だけ（指摘 6）。
+//!    既定の見た目が打ち消し線つきなら、行の全体への 1 件だけ。
 //! 3. **色の順序**——装飾の色を焼いたあとに重ね表示（hover）の色が勝つ。順序を逆転させると
 //!    hover の範囲に装飾の色が残って赤になる。
 //! 4. **解除の二重化を避ける**——選択肢の行は呼び手が既に全範囲を解除しているので、装飾の色の
 //!    焼き込みは解除を発行しない（非選択肢の行では 1 回発行する）。
 //! 5. **既定だけの行の箱寸**——[`line_styles`] を直接呼び、番号列が空・箱寸が `font_height`
-//!    （行矩形の [`block_extent`] ではない）へ落ちること（要件 14.2／14.1 の丸め非依存）。較正は
+//!    （行矩形の [`block_extent`] ではない）へ落ちること（丸めに依存しない）。較正は
 //!    `default_only` を常に偽にする摂動と `extent` を常に [`block_extent`] にする摂動の 2 つで、
 //!    どちらも [`default_only_line_keeps_font_height_and_empty_style_ids`] が赤になる。
 //!
-//! 較正（「区間に切らず行全体へ焼く」誤りを赤にする）は
-//! [`decorated_run_paints_only_its_own_glyphs`] が担う——装飾の色が自分の区間の外へ出れば赤。
+//! 「区間に切らず行全体へ焼く」誤りは [`decorated_run_paints_only_its_own_glyphs`] が赤にする。
 
 use super::decoration::{RANGE_CALLS, RESET_CALLS, block_extent, line_styles, style_runs};
 use super::test_support::{
@@ -46,7 +44,7 @@ fn triples(glyphs: &[PositionedGlyph]) -> Vec<(u32, u32, u32)> {
         .collect()
 }
 
-/// 要件 3.6: 連続する同じ番号が 1 区間にまとまり、UTF-16 で 2 単位の文字（`𠮷`）が 2 と数えられる。
+/// 連続する同じ番号が 1 区間にまとまり、UTF-16 で 2 単位の文字（`𠮷`）が 2 と数えられる。
 /// 行全体を 1 区間にする誤りは区間数（3）で赤になる。
 #[test]
 fn style_runs_group_consecutive_ids_and_count_utf16_units() {
@@ -64,7 +62,7 @@ fn style_runs_group_consecutive_ids_and_count_utf16_units() {
         "連続する同じ番号は 1 区間・2 単位の文字は長さ 2 として累積する（要件 3.6）"
     );
 
-    // ZWJ 列は 1 グリフで UTF-16 で 8 単位（要件 4.6: 範囲はクラスタの境界に沿う）。
+    // ZWJ 列は 1 グリフで UTF-16 で 8 単位（範囲はクラスタの境界に沿う）。
     let family = glyph("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", one); // 👨‍👩‍👧
     let glyphs = [
         glyph("A", StyleId::DEFAULT),
@@ -78,7 +76,7 @@ fn style_runs_group_consecutive_ids_and_count_utf16_units() {
     );
 }
 
-/// 要件 14.2: 既定しか使われていない行は区間が 1 つ（番号 0）になる。空行は区間 0 個。
+/// 既定しか使われていない行は区間が 1 つ（番号 0）になる。空行は区間 0 個。
 #[test]
 fn style_runs_collapse_to_one_default_run_for_undecorated_line() {
     let glyphs: Vec<PositionedGlyph> = clusters("あいう")
@@ -96,7 +94,7 @@ fn style_runs_collapse_to_one_default_run_for_undecorated_line() {
     );
 }
 
-/// 行の箱のブロック軸寸——横書きは高さ・縦書きは幅（書字方向の写像・要件 12.1）。
+/// 行の箱のブロック軸寸——横書きは高さ・縦書きは幅（書字方向の写像）。
 #[test]
 fn block_extent_takes_the_block_axis_of_the_line_box() {
     assert_eq!(
@@ -116,11 +114,11 @@ fn block_extent_takes_the_block_axis_of_the_line_box() {
     );
 }
 
-/// 要件 14.2／14.1: 既定だけの行の切り出しは「番号列は空・箱寸は `font_height`」へ落ちる。
+/// 既定だけの行の切り出しは「番号列は空・箱寸は `font_height`」へ落ちる。
 ///
 /// 行箱の高さ（37.5）を `font_height`（12.0）と**別の値**にしてあるので、`default_only` の
 /// 分岐を潰す誤り（常に装飾ありとみなす／箱寸を常に [`block_extent`] にする）はここで赤になる。
-/// 要件 14.1 の「1 画素も変えない」を行矩形の引き算の丸めに依存させないための分岐そのものを固定する。
+/// 「1 画素も変えない」を行矩形の引き算の丸めに依存させないための分岐そのものを固定する。
 #[test]
 fn default_only_line_keeps_font_height_and_empty_style_ids() {
     let run = GlyphRunContent {
@@ -214,7 +212,7 @@ fn count_white(bytes: &[u8], w: u32, x0: u32, x1: u32) -> usize {
     count_in_x_band(bytes, w, x0, x1, |px| px[0] > 0 && px[1] > 0 && px[2] > 0)
 }
 
-/// 較正の本体（要件 3.6）: 1 行の中で番号の付いた**先頭グリフだけ**が装飾の色で描かれ、
+/// 較正の本体: 1 行の中で番号の付いた**先頭グリフだけ**が装飾の色で描かれ、
 /// 番号 0 のグリフは既定の色（黒）のまま残る。区間に切らず行全体へ焼く誤りは、2 文字目の帯に
 /// 赤インクが出るので赤になる。
 #[test]
@@ -265,7 +263,7 @@ fn decorated_run_paints_only_its_own_glyphs() {
     );
 }
 
-/// 要件 14.2: 既定だけの行は範囲指定・色の解除・ブラシ生成の**実回数が 0**で、描画統計と
+/// 既定だけの行は範囲指定・色の解除・ブラシ生成の**実回数が 0**で、描画統計と
 /// 行レイアウトの生成回数が装飾導入前の字義の値（2 行＝生成 2・描画 2・blit 0・全消去 0）と一致する。
 ///
 /// 実回数は `RANGE_CALLS`／`RESET_CALLS`（発行のたびに 1 増やす素の勘定）で数える——保持庫の
@@ -283,7 +281,6 @@ fn default_only_lines_issue_no_range_calls_and_keep_legacy_stats() {
     let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
     let contract = ScaleContract::new(1.0, None);
 
-    // 2 行（"あい" / "うえお"）＝GlyphRun 住人 2。初回フレームは全域ダーティ。
     let mut items = glyph_items("あい");
     items.push(crate::state::TextItem::LineBreak { ratio: 1.0 });
     items.extend(glyph_items("うえお"));
@@ -330,7 +327,7 @@ fn default_only_lines_issue_no_range_calls_and_keep_legacy_stats() {
         "既定だけの行は色の解除も発行しない"
     );
 
-    // 既定に打ち消し線のある行（指摘 6）: 行の全体へ打ち消し線を 1 回焼く＝1 行に 1 件。
+    // 既定に打ち消し線のある行: 行の全体へ 1 回焼く＝1 行に 1 件。
     RANGE_CALLS.with(|c| c.set(0));
     let mut struck = font.clone();
     struck.looks.default.strike = true;
@@ -353,7 +350,7 @@ fn default_only_lines_issue_no_range_calls_and_keep_legacy_stats() {
     );
 }
 
-/// 指摘 6: 既定が打ち消し線つきの行で 1 区間だけ打ち消し線を外す（`[strike,0]`）と、範囲指定は
+/// 既定が打ち消し線つきの行で 1 区間だけ打ち消し線を外す（`[strike,0]`）と、範囲指定は
 /// 行の全体への 1 件と、外した区間への `false` の 1 件の計 2 件。
 #[test]
 fn a_default_strike_line_with_one_strike_off_run_issues_two_range_calls() {
@@ -455,7 +452,7 @@ fn choice_canvas(
     })
 }
 
-/// 要件 3.5: 選択肢の文字にも装飾が効くが、hover の文字色は装飾の色より**後に**焼かれて勝つ。
+/// 選択肢の文字にも装飾が効くが、hover の文字色は装飾の色より**後に**焼かれて勝つ。
 /// 順序を逆転させると hover セグメントに装飾の赤が残るので赤になる。
 /// 同じフレームの hover していないグリフには装飾の赤が残る（装飾の色の経路を実際に踏んでいる対照）。
 #[test]
@@ -583,14 +580,14 @@ fn color_reset_is_issued_once_and_not_duplicated_on_choice_lines() {
     );
 }
 
-// ────────────────────────── 件 3（areka-P0-balloon-text-bugs 2.4）: 下線を焼かず区間とはみ出しを用意する
+// ────────────────────────── 下線を焼かず区間とはみ出しを用意する
 
 /// 区間を `(startPosition, length)` の組へ落とす（比較用）。
 fn spans(ranges: &[windows::Win32::Graphics::DirectWrite::DWRITE_TEXT_RANGE]) -> Vec<(u32, u32)> {
     ranges.iter().map(|r| (r.startPosition, r.length)).collect()
 }
 
-/// 下線の区間の選びは、解決した見た目の下線が真の区間（既定の区間も対象・指摘 6）。作者の下線
+/// 下線の区間の選びは、解決した見た目の下線が真の区間（既定の区間も対象）。作者の下線
 /// （`\f[underline,1]`）とアンカーの既定の下線（色つき＋下線）は入り、太字だけの区間・
 /// 既定が下線つきでない番号 0 の区間は入らない。UTF-16 で 2 単位の文字（`𠮷`）は 2 と数える。
 #[test]
@@ -650,7 +647,6 @@ fn underline_ranges_pick_the_runs_that_turned_underline_on() {
         "既定だけの行は下線の区間を持たない"
     );
 
-    // 既定が下線つきなら、既定と同じ下線の区間も選ぶ（指摘 6・既定の区間も対象）。
     let underlined_default = TextLook {
         underline: true,
         ..default.clone()
@@ -741,7 +737,7 @@ fn first_run(canvas: &ContentCanvas) -> GlyphRunContent {
     }
 }
 
-/// 要件 3.6／3.8: 行の TextLayout に下線は焼かない（D2D の `DrawTextLayout` は下線を描かない）。
+/// 行の TextLayout に下線は焼かない（D2D の `DrawTextLayout` は下線を描かない）。
 /// 打ち消し線は今のまま焼く。
 #[test]
 fn underline_is_not_baked_into_the_line_layout_but_strikethrough_still_is() {
@@ -864,7 +860,6 @@ fn an_underlined_line_overhang_covers_its_stroke() {
         },
     );
 
-    // 期待値: 同じ行の線を集めて、行の原点 (0,0) で矩形にし、箱からのはみ出しを測る。
     let run = first_run(&canvas);
     let line = line_styles(&run, font.height, mode, &styles, default);
     assert_eq!(line.extent, EXTENT, "前提: 行の箱は縮めた丈");
@@ -895,7 +890,7 @@ fn an_underlined_line_overhang_covers_its_stroke() {
     );
 }
 
-/// 指摘 6: `font.strike,1` のバルーンでは飾りの無い字にも打ち消し線が出る（行の全体へ 1 回焼く）。
+/// `font.strike,1` のバルーンでは飾りの無い字にも打ち消し線が出る（行の全体へ 1 回焼く）。
 /// 比べる相手は既定のままのバルーンで全部の字に打ち消し線を積んだ行と、線の無い行。
 #[test]
 fn a_default_strikethrough_is_drawn_on_plain_glyphs() {
@@ -911,7 +906,7 @@ fn a_default_strikethrough_is_drawn_on_plain_glyphs() {
     );
 }
 
-/// 再監査 R1-D1: 同じ描き手で、既定の見た目の線や色だけが変わったバルーンへ描き直すと、新しく
+/// 同じ描き手で、既定の見た目の線や色だけが変わったバルーンへ描き直すと、新しく
 /// 作った描き手で描いた絵とバイトで一致する（字の並びは同じでも、古い見た目の行を引き回さない）。
 #[test]
 fn changing_only_the_default_strokes_or_color_redraws_like_a_fresh_executor() {

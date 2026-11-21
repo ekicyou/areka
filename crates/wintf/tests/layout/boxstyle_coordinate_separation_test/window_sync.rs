@@ -1,4 +1,4 @@
-//! Task 7.5: update_arrangements Window offset スキップテスト
+//! update_arrangements Window offset スキップテスト
 
 use bevy_ecs::prelude::*;
 use wintf::ecs::layout::systems::update_arrangements_system;
@@ -43,7 +43,6 @@ fn test_update_arrangements_skips_window_offset() {
     schedule.run(&mut world);
 
     let arr = world.get::<Arrangement>(window_entity).unwrap();
-    // Window entity の offset は taffy の location (50, 60) ではなく、元の (100, 200) を維持
     assert_eq!(
         arr.offset.x, 100.0,
         "Window entity の offset.x は taffy location で上書きされないこと"
@@ -52,7 +51,6 @@ fn test_update_arrangements_skips_window_offset() {
         arr.offset.y, 200.0,
         "Window entity の offset.y は taffy location で上書きされないこと"
     );
-    // サイズは taffy 結果で更新される
     assert_eq!(arr.size.width, 800.0);
     assert_eq!(arr.size.height, 600.0);
 }
@@ -128,7 +126,6 @@ fn test_update_arrangements_window_without_existing_arrangement() {
         arr.offset.y, 0.0,
         "新規 Window Arrangement の offset.y は 0.0 であるべき"
     );
-    // サイズは設定される
     assert_eq!(arr.size.width, 800.0);
     assert_eq!(arr.size.height, 600.0);
 }

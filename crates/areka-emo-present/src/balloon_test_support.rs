@@ -58,7 +58,7 @@ pub(crate) fn size(img: &Option<Arc<MarkerImage>>) -> Option<(u32, u32)> {
 
 pub(crate) use log_capture_kit::CapturedEvent;
 
-/// フィールド値を**引用符抜き**で引く拡張（移行前の `CapturedEvent::field` と同一規則）。
+/// フィールド値を**引用符抜き**で引く拡張。
 ///
 /// `%`（Display）記録は素の文字列・`?`（Debug）記録は引用符付きになり得るため、両表記に
 /// 依存しない比較にする。値は必ず Debug 表現（[`CapturedEvent::field`]）から取る——

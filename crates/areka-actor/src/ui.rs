@@ -1,25 +1,25 @@
 //! UI ブリッジ層: message pump 上で動く UI アクターへ、他スレッドから queue＋wakeup で
-//! メッセージを届け、pump 内で drain させる配送ブリッジ（Req 4）。
+//! メッセージを届け、pump 内で drain させる配送ブリッジ。
 //!
 //! 純粋層（[`crate::spawn`]／[`crate::reply`]＝std のみ）には**コード依存しない**。queue＋wakeup は
 //! [`async_channel`]（unbounded）が一体で担い、drain タスクの pump への投入は
-//! [`wintf_winmsg_executor::spawn_local`] が担う。受信ループの耐障害規約（3.7）は
+//! [`wintf_winmsg_executor::spawn_local`] が担う。受信ループの耐障害規約は
 //! [`crate::spawn::run_inbox`] を呼ばず、本モジュール内で**独立に同一規約**を実装する
-//! （design「受信ループは spawn モジュールへのコード依存を持たない」）。
+//! （spawn モジュールへのコード依存を持たない）。
 //!
 //! # 起床機構（手組みしない）
 //!
 //! `UiSender::send` は unbounded の [`async_channel::Sender::try_send`]＝**Full が存在せず送信は
-//! 決してブロックしない**（失敗経路は Closed のみ・Req 4.2）。起床は async-channel 内部の waker
+//! 決してブロックしない**（失敗経路は Closed のみ）。起床は async-channel 内部の waker
 //! 機構（登録済み drain タスクの waker への wake）→ executor のクロススレッド waker（`PostMessageW`）
 //! が pump を起こす、という既成の経路に委ねる。store→notify／listen-before-work の規律は
-//! async-channel 内部が持つため、本クレートは手組みしない（DD-9）。
+//! async-channel 内部が持つため、本クレートは手組みしない。
 //!
 //! # スレッド構成の不変
 //!
-//! 新スレッドを一切作らない。UI スレッドの MTA・render/window 固定・D2D 単一スレッド前提は不変
-//! （Req 4.4）。搬送する `M` は任意の `Send + 'static`＝emo-present の指令メッセージ・窓移動指令の
-//! 型を下流がそのまま載せられる（Req 4.5・器のみ提供）。
+//! 新スレッドを一切作らない。UI スレッドの MTA・render/window 固定・D2D 単一スレッド前提は不変。
+//! 搬送する `M` は任意の `Send + 'static`＝emo-present の指令メッセージ・窓移動指令の
+//! 型を下流がそのまま載せられる（器のみ提供）。
 
 use std::ops::ControlFlow;
 
@@ -37,19 +37,19 @@ use tracing::Instrument;
 ///
 /// spawn 時に [`tracing::debug!`]（アクター名）を必ず記録する（誤用時の診断文脈を残す・ログ規律）。
 ///
-/// # handler の戻り規約（[`run_inbox`](crate::spawn::run_inbox) と同一・Req 3.7）
+/// # handler の戻り規約（[`run_inbox`](crate::spawn::run_inbox) と同一）
 ///
 /// drain タスクは各メッセージを `handler` へ渡し、戻りで挙動を固定する:
 ///
 /// - `Ok(ControlFlow::Continue(()))` → 次の受信へ。
-/// - `Ok(ControlFlow::Break(()))` → 即時終了（消費者定義の Close variant 受領時・Req 3.2）。
-///   タスク所有の `Receiver` が drop され、queue の積み残しは破棄される（Req 3.3）。積み残しに
-///   同梱された reply Sender も drop され、要求側は切断（`Err`）を観測する（Req 3.6 の UI 側成立）。
+/// - `Ok(ControlFlow::Break(()))` → 即時終了（消費者定義の Close variant 受領時）。
+///   タスク所有の `Receiver` が drop され、queue の積み残しは破棄される。積み残しに
+///   同梱された reply Sender も drop され、要求側は切断（`Err`）を観測する。
 /// - `Err(e)` → [`tracing::error!`]（アクター名＋`%e`）を記録して drain を**継続**する。個別
-///   メッセージの処理失敗はループを殺さない（Req 3.7）。
+///   メッセージの処理失敗はループを殺さない。
 ///
 /// 終了経路はちょうど 2 つ: handler の `Ok(Break)` と、全 [`UiSender`] drop による `recv()` の
-/// `Err(Closed)`（Req 3.5）。**handler の `Err` は終了経路ではない。**
+/// `Err(Closed)`。**handler の `Err` は終了経路ではない。**
 ///
 /// handler は `!Send` 可（UI スレッドに束縛されたリソース——COM ポインタ・D2D デバイス等——を
 /// 握れる。emo-present 適合）。handler は await を跨がず同期実行される（UI スレッド束縛リソースを
@@ -61,12 +61,12 @@ use tracing::Instrument;
 /// Clone・Send な送信端。`JoinHandle` は drain タスクの join ハンドルだが、**drop してもタスクは
 /// 停止しない**（executor 仕様＝detach。停止は Close／全 `UiSender` drop の 2 経路のみ）。
 ///
-/// # Risks（誤用時挙動・log-first / 安易な panic 禁止・開発者指示 2026-07-04）
+/// # Risks（誤用時挙動・log-first / 安易な panic 禁止）
 ///
 /// UI スレッド外から呼んだ場合の素の挙動: executor 0.0.5 の `spawn_local` は呼び出しスレッドの
 /// thread-local executor 窓を**その場で生成**し、runnable をそこへ `PostMessageW` する。当該スレッド
 /// で pump が回らなければメッセージは配送されず、**drain タスクは静かに走らないまま**になる
-/// （panic もエラーも起きない＝case (c) の silent failure）。これを `Err` へ引き上げる健全性確認は、
+/// （panic もエラーも起きない silent failure）。これを `Err` へ引き上げる健全性確認は、
 /// 呼び出し時点で「このスレッドで pump がこれから回るか」を知る術が無い（pump は本関数の**後**に
 /// 呼び出し側が開始する）ため、本クレート単独では不能。よって既知リスクとして本 rustdoc に明記し、
 /// 正用法は toy(b)（実走 pump）で担保する。silent failure に**ログが無い**状態だけは避けるため、
@@ -79,29 +79,22 @@ where
     M: Send + 'static,
     E: std::fmt::Display + 'static,
 {
-    // 誤用時の診断文脈（silent failure にもログを残す・ログ規律）。
     tracing::debug!(actor = %name, "spawn_ui: submitting UI drain task (must be the pump thread)");
 
     let (tx, rx) = async_channel::unbounded::<M>();
     // 区間は poll の間だけ入る（待ちの間に UI スレッドのほかの記録へ漏らさない）。
     let span = tracing::info_span!("actor", actor = %name);
 
-    // drain タスク: recv().await ループ。queue に残があるかぎり await は即 Ready で連続処理し、
-    // 空のときのみ Pending で pump へ制御を返す（Req 4.3）。受信ループの耐障害規約（Req 3.7）は
-    // run_inbox を呼ばず本タスク内で独立に同一実装する（spawn モジュール非依存）。
+    // drain タスク。受信ループの耐障害規約は run_inbox を呼ばず本タスク内で独立に同一実装する
+    // （spawn モジュール非依存）。
     let handle = wintf_winmsg_executor::spawn_local(
         async move {
-            // 終了経路はちょうど 2 つ: handler の Ok(Break) と、recv() の Err(Closed)（全 Sender drop）。
             loop {
                 match rx.recv().await {
-                    // 全 UiSender drop（channel closed）→ 正常終了（Req 3.5）。
                     Err(async_channel::RecvError) => return,
                     Ok(msg) => match handler(msg) {
-                        // 次の受信へ。
                         Ok(ControlFlow::Continue(())) => continue,
-                        // Close 受領＝即時終了。rx は drop され積み残しは破棄（Req 3.2/3.3）。
                         Ok(ControlFlow::Break(())) => return,
-                        // 個別処理失敗はループを殺さない（Req 3.7）。error! 記録して drain 継続。
                         Err(e) => {
                             tracing::error!(
                                 error = %e,
@@ -122,9 +115,9 @@ where
 /// UI アクター宛の送信端（Clone・Send・非ブロック）。
 ///
 /// unbounded な [`async_channel::Sender`] の newtype。任意スレッドから複製・送信でき
-/// （`M: Send`）、[`send`](UiSender::send) は決してブロックしない（unbounded ゆえ Full 無し・
-/// Req 4.2）。全 `UiSender` が drop されると drain タスクの `recv()` が `Err(Closed)` となり
-/// 受信ループは正常終了する（Req 3.5）。
+/// （`M: Send`）、[`send`](UiSender::send) は決してブロックしない（unbounded ゆえ Full 無し）。
+/// 全 `UiSender` が drop されると drain タスクの `recv()` が `Err(Closed)` となり
+/// 受信ループは正常終了する。
 pub struct UiSender<M> {
     tx: async_channel::Sender<M>,
 }
@@ -139,7 +132,7 @@ impl<M> Clone for UiSender<M> {
 
 impl<M: Send> UiSender<M> {
     /// メッセージを queue へ積む（[`try_send`](async_channel::Sender::try_send)・unbounded ゆえ
-    /// 常に即時・ブロックしない）。起床は channel 内部の waker 経由で pump へ伝わる（Req 4.2）。
+    /// 常に即時・ブロックしない）。起床は channel 内部の waker 経由で pump へ伝わる。
     ///
     /// # Errors
     ///
@@ -169,13 +162,12 @@ mod tests {
 
     /// テスト専用: 走行中の pump（`spawn_local`）を要さずに `UiSender` を構築するための
     /// 内部シーム。同期部分（queue 格納・Closed 変換）だけを pump 非依存で検証する。
-    /// 実走 pump 上の drain 挙動は toy(b)（task 4.2・integration test）で検証する。
+    /// 実走 pump 上の drain 挙動は toy(b)（integration test）で検証する。
     fn ui_sender_for_test<M>() -> (UiSender<M>, async_channel::Receiver<M>) {
         let (tx, rx) = async_channel::unbounded::<M>();
         (UiSender { tx }, rx)
     }
 
-    // queue 格納（Req 4.2・同期観測部）: send した値が queue に積まれ、受信側から取り出せる。
     #[test]
     fn send_stores_message_in_queue() {
         let (sender, rx) = ui_sender_for_test::<&'static str>();
@@ -186,18 +178,15 @@ mod tests {
             .send("cmd-2")
             .expect("send to a live inbox must succeed");
 
-        // unbounded ゆえ pump 非稼働でも queue に滞留し FIFO で取り出せる。
         assert_eq!(rx.try_recv().expect("first message queued"), "cmd-1");
         assert_eq!(rx.try_recv().expect("second message queued"), "cmd-2");
         assert!(rx.try_recv().is_err(), "queue should be drained now");
     }
 
-    // 停止後の送信エラー（3.5 隣接・send 側）: drain 側（Receiver）が drop されると channel は
-    // closed になり、send は未達メッセージを同梱した Err(UiSendError) を返す。
     #[test]
     fn send_after_receiver_dropped_returns_undelivered_message() {
         let (sender, rx) = ui_sender_for_test::<String>();
-        drop(rx); // UI アクター停止相当（drain タスク終了＝Receiver drop）。
+        drop(rx);
 
         match sender.send("late-cmd".to_owned()) {
             Err(UiSendError(msg)) => {
@@ -207,7 +196,6 @@ mod tests {
         }
     }
 
-    // Clone した送信端も同一 inbox を指す（複数 worker からの送信・4.5 の器）。
     #[test]
     fn cloned_sender_targets_same_inbox() {
         let (sender, rx) = ui_sender_for_test::<u32>();

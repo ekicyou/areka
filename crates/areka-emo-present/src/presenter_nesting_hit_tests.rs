@@ -1,12 +1,11 @@
 //! 当たり判定の入口が、子から持ち込んだ領域の列で判定することの檻
-//! （spec: areka-P0-surface-element-nesting・タスク 6.2・要件 2.8・4.1・4.2）。
 //!
 //! 入れ子の検体（`areka-emo-compose/tests/fixtures/surface-nesting/`）の親 B（surface1）は自分の
 //! 領域を持たず、子 10 を (90,50) に置く。子 10 の Head（0,0〜20,10）と Eye（5,0〜15,10・後ろ＝手前）は
 //! 親の (90,50)〜(110,60) と (95,50)〜(105,60) へ持ち込まれる。転記のままの列（`SurfaceMaster.collisions`）
 //! で判定していれば、親 B ではどの点も `None` になる。
 //!
-//! 親 A（surface0）は Eye が親の Head の下に隠れるので点の確かめには使わない（tasks.md 5.2 の覚え書き）。
+//! 親 A（surface0）は Eye が親の Head の下に隠れるので点の確かめには使わない。
 //! 実 GPU の World で親 B を実際に表示して判定する。
 
 use super::super::test_support::{

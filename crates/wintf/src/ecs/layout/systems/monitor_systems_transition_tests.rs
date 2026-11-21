@@ -6,12 +6,12 @@
 //!   レコードが 1 行出て、新旧の DPI と作業領域が復元できること。既存の `debug` 行・
 //!   窓の拡大率再導出（`redrive`）はそのまま残ること。
 //! - **無変化では記録しない**——値が動いていないモニタでは 1 行も出ないこと。
-//! - **刻印の出所（design D1）**——`detect_display_change_system` は `Update` に載り、
+//! - **刻印の出所**——`detect_display_change_system` は `Update` に載り、
 //!   `Update` は**既定の多スレッド実行器**で回る。ワーカースレッドからはスレッド局所
 //!   ミラーが見えないため、刻印は World 資源（`FrameCount`＋`TickStart`）から組まねば
 //!   ならない。
 //!
-//! # 多スレッド実行の相ではログ捕捉を根拠にしない（要件 7.6）
+//! # 多スレッド実行の相ではログ捕捉を根拠にしない
 //!
 //! `capture_under_filter` は `tracing::subscriber::with_default`＝**スレッド局所**の
 //! 差替であり、bevy の既定実行器がシステムをワーカースレッドへ載せると 1 行も届かない。
@@ -76,7 +76,7 @@ fn lines_of_kind<'a>(captured: &'a str, kind: &str) -> Vec<&'a str> {
 }
 
 // ---------------------------------------------------------------------------
-// 探針のモニタ（識別子は不変・値だけが変わる＝S4 と同型・足場は `monitor_systems_tests.rs`）
+// 探針のモニタ（識別子は不変・値だけが変わる・足場は `monitor_systems_tests.rs`）
 // ---------------------------------------------------------------------------
 
 /// 作業領域**だけ**が変わったモニタ（DPI は据え置き）。
@@ -136,7 +136,6 @@ fn a_value_change_update_is_recorded_with_the_supplied_stamp() {
         "新旧の作業領域が同一行から復元できない: {line}"
     );
 
-    // 既存の挙動は不変——`debug` 行も表の更新もそのまま。
     assert!(
         captured.contains("[detect_display_change_system] Updating Monitor entity"),
         "既存の更新ログが失われている: {captured}"
@@ -189,7 +188,7 @@ fn the_monitor_record_is_silent_under_the_default_directives() {
 }
 
 // ---------------------------------------------------------------------------
-// 窓の拡大率の起点（`kind=windpi`）——モニタ表更新から窓へ引き直す経路（task 8.3）
+// 窓の拡大率の起点（`kind=windpi`）——モニタ表更新から窓へ引き直す経路
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -223,7 +222,6 @@ fn redriving_a_window_dpi_records_the_window_origin() {
         "新旧の表示 DPI が同一行から復元できない: {line}"
     );
 
-    // 既存の挙動は不変——`debug` 行も component の書き換えもそのまま。
     assert!(
         captured.contains("[detect_display_change_system] Redriving window DPI"),
         "既存の再導出ログが失われている: {captured}"
@@ -235,7 +233,7 @@ fn redriving_a_window_dpi_records_the_window_origin() {
     );
 }
 
-/// **書き換えが起きなかった経路からは発行しない**（task 8.3 の完了条件）。
+/// **書き換えが起きなかった経路からは発行しない**。
 ///
 /// モニタ表は更新されるので再導出は走るが、窓の DPI が同値なので早期に抜ける。
 /// 同じ捕捉窓に `kind=monitor` が出ていることが、捕捉が生きている証拠である。
@@ -287,7 +285,7 @@ fn the_window_origin_is_silent_under_the_default_directives() {
 }
 
 // ---------------------------------------------------------------------------
-// 多スレッド実行器のままの相（データで見る・要件 7.6）
+// 多スレッド実行器のままの相（データで見る）
 // ---------------------------------------------------------------------------
 
 /// 観測点が 1 回の実行で使った刻印。
@@ -318,7 +316,7 @@ fn observe_monitor_stamp(
     injected: Res<InjectedMonitors>,
     out: Res<ObservedMonitorStamps>,
 ) {
-    // D1: World を借りられる観測点は資源から組む（`transition_diag::stamp()` は退行）。
+    // World を借りられる観測点は資源から組む（`transition_diag::stamp()` は退行）。
     let stamp = transition_diag::stamp_from_world(&frame, &tick_start);
     out.0
         .lock()
@@ -360,11 +358,9 @@ fn observe_monitor_stamp(
 fn monitor_stamps_match_frame_count_under_the_default_multi_threaded_executor() {
     let mut ecs = EcsWorld::new();
 
-    // 実在モニタ（`EcsWorld::new` の `initialize_layout_root` が列挙済み）をそのまま写す。
     let mut query = ecs.world_mut().query::<&Monitor>();
     let mut injected: Vec<Monitor> = query.iter(ecs.world()).cloned().collect();
 
-    // 探針を 1 台足し、注入表にはその「変化後」を入れる。
     let probe_entity = ecs.world_mut().spawn(probe_monitor_before()).id();
     injected.push(probe_monitor_after());
 
@@ -428,7 +424,7 @@ fn monitor_stamps_match_frame_count_under_the_default_multi_threaded_executor() 
 }
 
 // ---------------------------------------------------------------------------
-// 刻印の出所を構造で固定する（D1）
+// 刻印の出所を構造で固定する
 // ---------------------------------------------------------------------------
 
 /// 説明文（`//` で始まる行）を落とし、コードだけの本文を返す。
@@ -466,7 +462,7 @@ fn the_monitor_record_builds_its_stamp_from_world_resources_only() {
         "World を借りられる観測点がスレッド局所ミラーを読んでいる（D1 違反）"
     );
     // 記録を組む点は 2 つ（モニタ表の値変化＝`kind=monitor`・窓の拡大率再導出＝
-    // `kind=windpi`・task 8.3）。どちらも刻印は**呼出側が渡した値**を使うので、
+    // `kind=windpi`）。どちらも刻印は**呼出側が渡した値**を使うので、
     // 上の `stamp()` 0 件の主張は 2 点まとめて見張っている。
     assert_eq!(
         code.matches("transition_diag::is_enabled()").count(),

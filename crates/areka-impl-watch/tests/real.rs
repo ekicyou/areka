@@ -1,4 +1,4 @@
-//! 本物の実行ファイルを子プロセスで立てて、机の往復を実時間で通す実機テスト（要件 13.4・13.5・`#[ignore]`）。
+//! 本物の実行ファイルを子プロセスで立てて、机の往復を実時間で通す実機テスト（`#[ignore]`）。
 //!
 //! 実行: `cargo test -p areka-impl-watch --test real -- --ignored --nocapture`（約 30 秒）
 //! 短い形: `cargo test -p areka-impl-watch --test real -- --ignored --nocapture --skip a_waiter_reclaims`
@@ -56,7 +56,7 @@ const SHARE_WRITE: u32 = 2;
 
 /// 流れ ①②: 見張りを立て、マージの待ちが番で終わる。「済んだ」で見張りが 3 で終わる。
 /// 待っている間、同じ識別・同じ種類の 2 つ目は 1 で、状態を変えない。識別は小文字に寄る:
-/// 大文字で渡した `A` と小文字の `a` は、記録・居る印・出力のどこでも同じ参加者（要件 2.6）。
+/// 大文字で渡した `A` と小文字の `a` は、記録・居る印・出力のどこでも同じ参加者。
 #[test]
 #[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
 fn a_merge_wait_ends_by_its_turn_and_merged_ends_the_watch() {
@@ -113,7 +113,7 @@ fn a_merge_wait_ends_by_its_turn_and_merged_ends_the_watch() {
     assert_eq!(merged, ok("merged repo=areka\n"));
     assert_eq!(watch_b.end(), gone("removed"));
 
-    // 正常に終わった待ち・見張りは記録を残さない（要件 6.7）。
+    // 正常に終わった待ち・見張りは記録を残さない。
     let state = desk.state();
     assert_eq!(count(&state["waits"]), 0, "{state}");
     assert_eq!(state["participants"], json!({}), "{state}");
@@ -247,7 +247,7 @@ fn a_sole_request_stops_the_others_and_return_resumes_them() {
     desk.assert_logged("return", "Resumed { id: \"b\", why: \"no-sole\" }");
 }
 
-/// 要件 13.4: 2 つの子プロセスが排他テストの机を待ちつきで取り合うと、1 つだけが番で終わり、
+/// 2 つの子プロセスが排他テストの机を待ちつきで取り合うと、1 つだけが番で終わり、
 /// もう 1 つは黙って待ち続ける。勝った方が返すと、もう 1 つが番で終わる。
 #[test]
 #[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
@@ -362,7 +362,7 @@ fn a_killed_watch_is_reclaimed_by_the_next_call() {
     assert_eq!(watch_c.end(), gone("removed"));
 }
 
-/// 要件 7.4: 記録に載っているプロセス番号が生きている別のプロセスのものでも、見張りの印
+/// 記録に載っているプロセス番号が生きている別のプロセスのものでも、見張りの印
 /// （ロック）が無ければ「居る」と見なさない。
 #[test]
 #[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
@@ -462,7 +462,7 @@ fn clear_ends_every_running_wait_and_watch_with_3() {
     assert!(summary.starts_with(first), "{summary}");
 }
 
-/// 要件 8.1: 同時に始まった 8 本の見張りの登録が、1 本も失われない。
+/// 同時に始まった 8 本の見張りの登録が、1 本も失われない。
 #[test]
 #[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
 fn simultaneous_changes_are_all_kept() {
@@ -485,7 +485,7 @@ fn simultaneous_changes_are_all_kept() {
     desk.assert_no_temp_files();
 }
 
-/// 流れ ⑥（要件 8.3）: 別のプロセス（このテスト）が状態ファイルを開いたままでも置き換え書きが
+/// 流れ ⑥: 別のプロセス（このテスト）が状態ファイルを開いたままでも置き換え書きが
 /// 通り、読む側は書きかけを見ない。
 #[test]
 #[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
@@ -556,7 +556,7 @@ fn replacing_goes_through_while_another_process_holds_the_state_file_open() {
     desk.assert_no_temp_files();
 }
 
-/// 流れ ⑦（要件 10.1〜10.3）: 置き場所の下のログに、出来事の行（コマンド・識別・変化）と失敗の
+/// 流れ ⑦: 置き場所の下のログに、出来事の行（コマンド・識別・変化）と失敗の
 /// 行が、プロセスをまたいで追記される。色の制御文字は無い。
 #[test]
 #[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
@@ -621,7 +621,7 @@ fn the_log_keeps_event_lines_and_failure_lines_across_processes() {
     let set_aside =
         "[store] state file was broken; set aside command=\"tick\" event=Recovered { backup: Some(";
     assert_eq!(desk.log_lines("WARN", set_aside), 1, "{}", desk.log());
-    // 退避の行には壊れた訳（JSON として読めない位置）が載る（要件 1.6）。
+    // 退避の行には壊れた訳（JSON として読めない位置）が載る。
     let damage = "damage: Some(NotJson { line: 1, column: ";
     assert_eq!(desk.log_lines("WARN", damage), 1, "{}", desk.log());
     let reading = read(&desk.file("status.md"));
@@ -645,7 +645,7 @@ fn the_log_keeps_event_lines_and_failure_lines_across_processes() {
 }
 
 /// 読み物（`status.md`）が書けなくても、状態を変える 1 回・状態の確認・全部消すのどれも、結果と
-/// 終了コードを変えずに、ログへ警告を 1 行ずつ残す（要件 10.2 の例外。正本は状態ファイル）。
+/// 終了コードを変えずに、ログへ警告を 1 行ずつ残す（正本は状態ファイル）。
 #[test]
 #[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
 fn an_unwritable_status_md_changes_no_result_and_leaves_a_warning() {
@@ -679,8 +679,8 @@ fn an_unwritable_status_md_changes_no_result_and_leaves_a_warning() {
     desk.assert_no_temp_files();
 }
 
-/// 置き場所の環境変数が無い・空・絶対パスでないなら、警告を出して 1 で終わり、何も作らない
-/// （要件 1.3・1.6）。使い方の誤り（2）と `--help`（0）も置き場所に触らない。
+/// 置き場所の環境変数が無い・空・絶対パスでないなら、警告を出して 1 で終わり、何も作らない。
+/// 使い方の誤り（2）と `--help`（0）も置き場所に触らない。
 #[test]
 #[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
 fn nothing_is_created_without_a_home_or_for_a_usage_error() {

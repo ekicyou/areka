@@ -1,4 +1,4 @@
-//! cursorブレスの転記（`parse_cursor_braces`）の単体テスト（要件 1.1・1.5）。
+//! cursorブレスの転記（`parse_cursor_braces`）の単体テスト。
 //!
 //! 検体ファイルは読まず、テストの中に surfaces.txt の文面を持つ。
 
@@ -70,7 +70,7 @@ size,200,100
 }
 ";
 
-/// 3 つの見出しと本体の行を原文のまま登場順に拾い、他のブレスは拾わない（要件 1.1）。
+/// 3 つの見出しと本体の行を原文のまま登場順に拾い、他のブレスは拾わない。
 #[test]
 fn transcribes_three_headings_and_lines_verbatim() {
     assert_eq!(
@@ -115,7 +115,7 @@ fn unclosed_brace_is_not_picked() {
     );
 }
 
-/// cursorブレスを足しても面・当たり判定・element定義・アニメーションの読み取りは同じ（要件 1.5）。
+/// cursorブレスを足しても面・当たり判定・element定義・アニメーションの読み取りは同じ。
 #[test]
 fn image_reader_ignores_cursor_braces() {
     let with = parse(WITH_CURSORS);

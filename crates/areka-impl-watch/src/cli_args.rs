@@ -243,7 +243,7 @@ impl Spec {
     }
 }
 
-/// コマンドの表（設計の「コマンドの表」と同じ 14 行・同じ並び）。
+/// コマンドの表（14 行）。
 pub(crate) static COMMANDS: [Spec; 14] = [
     Spec {
         name: "watch",

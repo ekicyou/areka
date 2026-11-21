@@ -1,16 +1,11 @@
 //! packing 座標算出（`rectangle-pack` 結線・padding ラップ・複数頁・決定性）。
 //!
-//! 設計決定 **D7**（要件 **R5**）。
-//!
 //! トリム済み矩形群を `rectangle-pack` へ渡して静的・決定的・複数頁（bin）に配置する。
 //! padding=1px は非内蔵ゆえ矩形を全周 +1px 拡張して渡す自前ラップ（UV は非包含）。
 //! 頁サイズ 2048。余白込みで頁に入らない矩形は、普通の頁の後ろに ElementId の昇順で 1 つずつ
-//! その矩形＋余白の大きさの自頁に載せる。golden 入力ソート順＝正規化パス昇順で決定性を固定。
-//! 本段は座標を算出するのみで画素は焼かない（焼付は [`crate::bake`]）。
-//!
-//! Critical Issue 3（packing と焼付の分離）: 本 `Packer` は **座標のみ**（`page`/`uv_rect`）
-//! を返し、頁バッファの確保も画素 blit も一切行わない（`Trimmed.pbgra` を読まない）。
-//! 焼付は Baker の責務。
+//! その矩形＋余白の大きさの自頁に載せる。入力ソート順＝正規化パス昇順で決定性を固定。
+//! 座標（`page`/`uv_rect`）を算出するのみで、頁バッファの確保も画素 blit もしない（`Trimmed.pbgra` を読まない）。
+//! 焼付は [`crate::bake`] の Baker の責務。
 
 use rectangle_pack::{
     GroupedRectsToPlace, RectToInsert, TargetBin, contains_smallest_box, pack_rects,
@@ -21,17 +16,16 @@ use std::collections::BTreeMap;
 use crate::table::{ElementId, Rect, Size};
 use crate::trim::Trimmed;
 
-/// packing 設定（頁サイズ・全周 padding）。既定は D7（2048 / 1px）。
+/// packing 設定（頁サイズ・全周 padding）。既定は 2048 / 1px。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PackConfig {
-    /// 正方頁の一辺（px）。既定 2048（D7）。
+    /// 正方頁の一辺（px）。既定 2048。
     pub page_size: u32,
-    /// 各矩形の全周に確保する余白（px）。既定 1（D7・bleed 防止）。
+    /// 各矩形の全周に確保する余白（px）。既定 1（bleed 防止）。
     pub padding: u32,
 }
 
 impl Default for PackConfig {
-    /// D7 既定: 頁サイズ 2048・padding 1px。
     fn default() -> Self {
         Self {
             page_size: 2048,
@@ -42,14 +36,14 @@ impl Default for PackConfig {
 
 /// 1 矩形の配置結果（座標のみ・画素なし）。
 ///
-/// `uv_rect` は **padding 非包含**の実トリム矩形（5.3）。
+/// `uv_rect` は **padding 非包含**の実トリム矩形。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct PackedEntry {
     /// 対象 element。
     pub(crate) id: ElementId,
-    /// 配置頁番号（0-based・密・6.1）。
+    /// 配置頁番号（0-based・密）。
     pub(crate) page: u32,
-    /// 頁内 UV（padding 非包含の実矩形・5.3）。
+    /// 頁内 UV（padding 非包含の実矩形）。
     pub(crate) uv_rect: Rect,
 }
 
@@ -69,17 +63,15 @@ impl Packer {
     /// トリム矩形群を頁へ決定的に配置し、座標（page/uv_rect）のみを返す。
     ///
     /// - `items` はマニフェスト採番順（ElementId 昇順）で渡す想定だが、防御的に内部でも
-    ///   ElementId 昇順へソートしてから配置する（決定性・5.5/D7）。
+    ///   ElementId 昇順へソートしてから配置する（決定性）。
     /// - padding は矩形を全周 +`cfg.padding` 拡張して packer へ登録し、配置後の UV から
-    ///   padding を差し引く（UV は非包含＝実トリム矩形・5.2/5.3/D7）。
-    /// - 全矩形が単頁に収まらなければ bin（頁）を増やして再試行し複数頁へ分割する（5.4）。
+    ///   padding を差し引く（UV は非包含＝実トリム矩形）。
+    /// - 全矩形が単頁に収まらなければ bin（頁）を増やして再試行し複数頁へ分割する。
     /// - 余白込みで頁に入らない矩形は、普通の頁の後ろに ElementId の昇順で 1 つずつ自頁へ載せる。
-    /// - 各入力 ElementId は正確に 1 エントリを得る（5.6・重複排除は上流マニフェスト）。
+    /// - 各入力 ElementId は正確に 1 エントリを得る（重複排除は上流マニフェスト）。
     ///
-    /// **座標のみ**を返し、頁バッファ確保も画素 blit も行わない（Critical Issue 3）。
     /// `Trimmed.pbgra` は読まない（`size` のみ使用）。
     pub(crate) fn pack(&self, items: &[(ElementId, Trimmed)], cfg: PackConfig) -> PackOutput {
-        // 防御的決定性: ElementId 昇順へソートし、id→実寸（padding 非包含）を控える。
         let mut sorted: Vec<(ElementId, Size)> =
             items.iter().map(|(id, t)| (*id, t.size)).collect();
         sorted.sort_by_key(|(id, _)| id.0);
@@ -92,7 +84,6 @@ impl Packer {
                 && sz.h.saturating_add(2 * padding) <= cfg.page_size
         });
 
-        // id→実寸マップ（配置後に UV を実寸で復元するため）。
         let size_of: BTreeMap<u32, Size> = placeable.iter().map(|(id, sz)| (id.0, *sz)).collect();
 
         // padding を全周に足した寸で packer へ登録（RectId = ElementId.0・depth=1 の 2D）。
@@ -103,8 +94,8 @@ impl Packer {
             grouped.push_rect(id.0, None, RectToInsert::new(pw, ph, 1));
         }
 
-        // bin（頁）数を面積の下限から増やしながら all-or-nothing の pack_rects を再試行（5.4）。
-        // 下限より少ない頁には面積で入りきらないので、出力は 1 から試すのと変わらない（指摘 12）。
+        // bin（頁）数を面積の下限から増やしながら all-or-nothing の pack_rects を再試行。
+        // 下限より少ない頁には面積で入りきらないので、出力は 1 から試すのと変わらない。
         // cap = placeable.len()（最悪 1 矩形 1 頁）で無限ループを封じる。
         let cap = placeable.len();
         // 頁に入る矩形が 0 なら普通の頁も 0（自頁だけ）。
@@ -121,7 +112,6 @@ impl Packer {
                 &contains_smallest_box,
             ) {
                 Ok(ok) => {
-                    // (RectId=ElementId.0) → (BinId, PackedLocation) を自前構造へ写す。
                     let placed: Vec<(u32, usize, u32, u32)> = ok
                         .packed_locations()
                         .iter()
@@ -165,7 +155,6 @@ impl Packer {
         };
         let mut pages = vec![page; used_bins.len()];
 
-        // UV は padding を差し引いた実矩形で復元（5.3）。
         let mut entries: Vec<PackedEntry> = placed
             .into_iter()
             .map(|(rect_id, bin, lx, ly)| {
@@ -202,7 +191,6 @@ impl Packer {
             });
         }
 
-        // 出力は ElementId 昇順（golden 安定・7）。
         entries.sort_by_key(|e| e.id.0);
 
         PackOutput { pages, entries }
@@ -265,7 +253,7 @@ mod tests {
         }
     }
 
-    /// 5.1: 単頁に収まる複数矩形は互いに重ならない。
+    /// 単頁に収まる複数矩形は互いに重ならない。
     #[test]
     fn no_overlap_on_single_page() {
         let cfg = PackConfig {
@@ -281,7 +269,6 @@ mod tests {
         for e in &out.entries {
             assert!((e.page as usize) < out.pages.len());
         }
-        // 同一頁内で総当り非重複（5.1）。
         for i in 0..out.entries.len() {
             for j in (i + 1)..out.entries.len() {
                 let a = &out.entries[i];
@@ -298,7 +285,7 @@ mod tests {
         }
     }
 
-    /// 5.2: padding 分離（bleed-free）。UV を padding で全周拡張しても同一頁内で非重複。
+    /// padding 分離（bleed-free）。UV を padding で全周拡張しても同一頁内で非重複。
     #[test]
     fn padded_boxes_do_not_overlap() {
         let pad = 1u32;
@@ -334,7 +321,7 @@ mod tests {
         }
     }
 
-    /// 5.3: UV は padding を含まず実トリム寸に一致する。
+    /// UV は padding を含まず実トリム寸に一致する。
     #[test]
     fn uv_excludes_padding() {
         let cfg = PackConfig {
@@ -354,7 +341,7 @@ mod tests {
         }
     }
 
-    /// 5.4: 単頁に収まらない多数矩形は複数頁へ分割され、全 id が有効頁を持つ。
+    /// 単頁に収まらない多数矩形は複数頁へ分割され、全 id が有効頁を持つ。
     #[test]
     fn multi_page_split() {
         let cfg = PackConfig {
@@ -377,7 +364,7 @@ mod tests {
         assert_eq!(out.pages, vec![Size { w: 64, h: 64 }; 4]);
     }
 
-    /// 5.5: 決定性。同一入力二回で同一 PackOutput。
+    /// 決定性。同一入力二回で同一 PackOutput。
     #[test]
     fn deterministic_same_input() {
         let cfg = PackConfig {
@@ -396,7 +383,7 @@ mod tests {
         assert_eq!(out1, out2, "same input → identical output");
     }
 
-    /// 5.5: 入力順が違っても（Packer が内部で ElementId ソート）同一結果。
+    /// 入力順が違っても（Packer が内部で ElementId ソート）同一結果。
     #[test]
     fn deterministic_regardless_of_input_order() {
         let cfg = PackConfig {
@@ -413,7 +400,7 @@ mod tests {
         );
     }
 
-    /// 5.6: 各入力 ElementId は正確に 1 エントリ（重複なし・欠落なし）。
+    /// 各入力 ElementId は正確に 1 エントリ（重複なし・欠落なし）。
     #[test]
     fn one_entry_per_id() {
         let cfg = PackConfig {
@@ -430,7 +417,6 @@ mod tests {
             vec![0, 2, 5, 9],
             "exactly the input ids, sorted, no dup/missing"
         );
-        // 出力は ElementId 昇順（7）。
         let out_ids: Vec<u32> = out.entries.iter().map(|e| e.id.0).collect();
         assert_eq!(
             out_ids,
@@ -439,7 +425,7 @@ mod tests {
         );
     }
 
-    /// 7（空入力）: 頁ゼロ・エントリ空。
+    /// 空入力: 頁ゼロ・エントリ空。
     #[test]
     fn empty_input() {
         let out = Packer.pack(&[], PackConfig::default());
@@ -447,7 +433,7 @@ mod tests {
         assert!(out.entries.is_empty());
     }
 
-    /// 8（既定値）: PackConfig::default() は D7 の 2048 / 1。
+    /// 既定値: PackConfig::default() は 2048 / 1。
     #[test]
     fn default_config_is_d7() {
         let cfg = PackConfig::default();
@@ -479,7 +465,7 @@ mod tests {
         }
     }
 
-    /// 指摘 3: 余白込みで頁に入らない矩形は、普通の頁の後ろに ElementId の昇順で 1 つずつ
+    /// 余白込みで頁に入らない矩形は、普通の頁の後ろに ElementId の昇順で 1 つずつ
     /// その矩形＋余白の大きさの自頁に載る（uv は余白を含まない）。
     #[test]
     fn oversized_rects_get_own_pages_after_normal_pages() {
@@ -532,7 +518,7 @@ mod tests {
         );
     }
 
-    /// 指摘 12: 試す頁の数の下限＝余白込みの面積の合計 ÷ 頁の面積の切り上げ（1 以上・矩形の数以下）。
+    /// 試す頁の数の下限＝余白込みの面積の合計 ÷ 頁の面積の切り上げ（1 以上・矩形の数以下）。
     #[test]
     fn first_bins_is_area_lower_bound() {
         let cfg = PackConfig {
@@ -559,7 +545,7 @@ mod tests {
         assert_eq!(first_bins(&many, big_cfg), 300);
     }
 
-    /// 指摘 3: 頁に入る矩形が無ければ普通の頁は 0 枚で、自頁だけになる。
+    /// 頁に入る矩形が無ければ普通の頁は 0 枚で、自頁だけになる。
     #[test]
     fn only_oversized_rects_make_only_own_pages() {
         let cfg = PackConfig {

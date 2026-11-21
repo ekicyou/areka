@@ -62,8 +62,8 @@ pub(super) fn bump_balloon_window_dpi(harness: &mut SpineHarness, scope: usize) 
 /// キャラ（シェル）窓の `DPI` を**現在値と必ず異なる値**へ差し替え、その新 DPI を返す
 /// （[`bump_balloon_window_dpi`] のシェル版・非空虚性の担保は同一）。
 ///
-/// SERIKO ループが載るのは**シェル**の表示スロットゆえ、ループ継続の檻（areka-P0-emo-dpi-scaling 要件 4.3 の
-/// 「進行中挙動の喪失なし」）はシェル窓側の DPI を動かさなければ空虚になる。
+/// SERIKO ループが載るのは**シェル**の表示スロットゆえ、ループ継続の檻はシェル窓側の DPI を動かさなければ
+/// 空虚になる。
 pub(super) fn bump_char_window_dpi(harness: &mut SpineHarness, scope: usize) -> u16 {
     let window = harness
         .world

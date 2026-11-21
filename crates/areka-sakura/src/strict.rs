@@ -1,4 +1,4 @@
-//! strict の語彙（spec: mcp-strict-errors）。検出点の列挙・種類と文面の定数・判定の差し込み口・
+//! strict の語彙。検出点の列挙・種類と文面の定数・判定の差し込み口・
 //! 位置の数え方・記録 1 件の書き方を置く。
 //!
 //! 文面の定数は `check_script`（`areka` の `mcp/check_script_judge.rs`）と共用する正本の置き場で、
@@ -34,8 +34,8 @@ pub const MSG_ANCHOR_STRAY_CLOSE: &str = "no anchor is open; playback ignores th
 pub const MSG_CHAR_CODE_DROPPED: &str =
     "areka cannot show this character number; playback drops it";
 
-/// 再生の側で strict の記録を書く分岐の全部（設計「検出点の表」）。予約の種類
-/// （`missing_animation`・`unknown_entity`）の点は持たない（要件 2.8）。
+/// 再生の側で strict の記録を書く分岐の全部。予約の種類
+/// （`missing_animation`・`unknown_entity`）の点は持たない。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DetectionPoint {
     ReadUnknownTag,
@@ -57,7 +57,7 @@ pub enum DetectionPoint {
 }
 
 impl DetectionPoint {
-    /// 表の順の 16 個。
+    /// 16 個すべて。
     pub const ALL: [DetectionPoint; 16] = {
         use DetectionPoint::*;
         [

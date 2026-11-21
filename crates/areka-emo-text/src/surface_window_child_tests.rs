@@ -1,8 +1,6 @@
-//! 箱の文字の面（シェルの窓の直接の子）の装着と片付けの檻（要件 1.6・3.6・3.7・9.4）。
+//! 箱の文字の面（シェルの窓の直接の子）の装着と片付けの檻。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
-//!
-//! GPU/WUC は headless 実資源（`GraphicsCore::new()`・`surface.rs` の既存テストと同じ方針）。
+//! GPU/WUC は headless 実資源（`GraphicsCore::new`・`surface.rs` の既存テストと同じ方針）。
 
 use super::*;
 
@@ -50,7 +48,6 @@ fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanu
         .window_child()
         .expect("窓の子の面は自分の entity を持つ");
 
-    // --- 並び: 差し込み口 → 箱 → 絵（箱は絵より手前・要件 3.7） ---
     assert_eq!(
         window_children(&world, window),
         vec![slot, child, picture],
@@ -62,7 +59,6 @@ fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanu
         "窓の直接の子（差し込み口の下の子ではない・要件 3.6）"
     );
 
-    // --- 当たり判定は字の矩形のマスクで、装着の時は 0 個（何も受けない・要件 9.4） ---
     assert_eq!(
         world.get::<HitTest>(child).copied(),
         Some(HitTest::alpha_mask()),
@@ -82,7 +78,6 @@ fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanu
         "装着の時は字が無いので何も受けない"
     );
 
-    // --- 物理 px の位置と大きさ・自前 brush・wintf の描画経路は使わない ---
     let arr = world.get::<Arrangement>(child).expect("Arrangement がある");
     assert_eq!((arr.size.width, arr.size.height), (5.0, 4.0));
     assert_eq!((arr.offset.x, arr.offset.y), (12.0, 7.0));
@@ -97,12 +92,10 @@ fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanu
         "GraphicsCommandList は持たない（背景の絵を描かない）"
     );
 
-    // --- 透明で始まる（背景の絵を描かない・要件 1.6） ---
     let bytes = surface.read_back().expect("read_back 失敗");
     assert_eq!(bytes.len(), 5 * 4 * 4);
     assert!(bytes.iter().all(|&b| b == 0), "窓の子の面は透明で始まる");
 
-    // --- 片付け: entity を消し、窓の子の並びから外れる ---
     surface.despawn_window_child(&mut world);
     assert!(
         world.get_entity(child).is_err(),

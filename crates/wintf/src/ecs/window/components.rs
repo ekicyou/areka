@@ -119,8 +119,7 @@ impl Default for Window {
 // 健全性: 親 HWND は不透明なウィンドウ識別子（値渡しで所有権・解放責務を伴わない）
 // であり、`Window` は ECS コンポーネントとしてメインスレッドのシステム・フックから
 // のみ参照される。`title: String` はプレーンデータで自動的に Send+Sync。
-// `drag/context.rs` の `WindowDragContext` と
-// 同じ crate 標準の HWND 取り扱い方針。
+// `drag/context.rs` の `WindowDragContext` と同じ HWND の扱い。
 unsafe impl Send for Window {}
 unsafe impl Sync for Window {}
 
@@ -224,18 +223,15 @@ impl Default for WindowStyle {
 fn on_window_add(mut world: DeferredWorld, context: HookContext) {
     let entity = context.entity;
 
-    // LayoutRootの子として設定
     world
         .commands()
         .queue(SetWindowParentToLayoutRoot { entity });
 
-    // Visual自動挿入（既に存在する場合はスキップ）
     if world.get::<Visual>(entity).is_none() {
         world.commands().entity(entity).insert(Visual::default());
     }
 
-    // WindowPos自動挿入（既に存在する場合はスキップ）
-    // CreateWindow実行前にWindowPosが存在する必要があるため、on_window_addで追加
+    // CreateWindow 実行前に WindowPos が存在する必要がある。
     if world.get::<WindowPos>(entity).is_none() {
         world.commands().entity(entity).insert(WindowPos::default());
         debug!(
@@ -244,10 +240,9 @@ fn on_window_add(mut world: DeferredWorld, context: HookContext) {
         );
     }
 
-    // DPI事前セット: CreateWindowExW前にシステムDPIで初期化
-    // これにより、最初のレイアウト計算からDPIスケーリングが有効になり、
-    // Frame 2でのサイズジャンプ（800x700 → 1000x875等）を防ぐ。
-    // ウィンドウ作成後にon_window_handle_addで実際のGetDpiForWindow()値に更新される。
+    // CreateWindowExW 前にシステム DPI で初期化する。最初のレイアウト計算から DPI
+    // スケーリングを効かせ、Frame 2 でのサイズジャンプ（800x700 → 1000x875 等）を防ぐ。
+    // 窓作成後に on_window_handle_add が GetDpiForWindow() の値へ更新する。
     if world.get::<DPI>(entity).is_none() {
         let system_dpi = unsafe { GetDpiForSystem() } as u16;
         let dpi = if system_dpi > 0 {
@@ -269,7 +264,7 @@ fn on_window_add(mut world: DeferredWorld, context: HookContext) {
 mod tests {
     use super::*;
 
-    // ===== unsafe impl Send/Sync の不変条件（W7a-V） =====
+    // ===== unsafe impl Send/Sync の不変条件 =====
 
     /// `Window` は `parent: Option<HWND>`（HWND は `*mut c_void` newtype・非 Send/Sync）
     /// を内包するため手動 `unsafe impl Send/Sync` で Send+Sync を表明している。本テストは
@@ -303,14 +298,12 @@ mod tests {
 
     #[test]
     fn test_window_style_default_does_not_use_overlappedwindow() {
-        // WS_OVERLAPPEDWINDOW を含まないこと（ドラッグ時サイズ縮小バグ回避のコメント根拠）
         let style = WindowStyle::default();
         assert_eq!(
             style.style & WS_OVERLAPPEDWINDOW,
             WS_POPUP & WS_OVERLAPPEDWINDOW,
             "既定スタイルは WS_OVERLAPPEDWINDOW のキャプション/ボーダービットを含まない"
         );
-        // 念のため WS_CAPTION（タイトルバー）が立っていないことを確認
         assert_eq!(style.style & WS_CAPTION, WINDOW_STYLE(0));
     }
 
@@ -345,7 +338,6 @@ mod tests {
 
     #[test]
     fn test_dpi_change_context_take_returns_none_when_unset() {
-        // set していない状態（または直前 take 済み）では None
         // 同一テストスレッドで set しない限り空。先に drain して前提を揃える。
         let _ = DpiChangeContext::take();
         assert!(DpiChangeContext::take().is_none());
@@ -353,7 +345,6 @@ mod tests {
 
     #[test]
     fn test_dpi_change_context_set_then_take_consumes() {
-        // 前提を揃えるため先に drain
         let _ = DpiChangeContext::take();
 
         let dpi = DPI::from_dpi(120, 120);
@@ -365,12 +356,10 @@ mod tests {
         };
         DpiChangeContext::set(DpiChangeContext::new(dpi, rect));
 
-        // 1回目の take は設定値を返す
         let taken = DpiChangeContext::take().expect("context should be present after set");
         assert_eq!(taken.new_dpi, dpi);
         assert_eq!(taken.suggested_rect.right, 110);
 
-        // 2回目の take は消費済みで None
         assert!(
             DpiChangeContext::take().is_none(),
             "take は消費的（take 後は None に戻る）"

@@ -16,17 +16,14 @@ fn kanade_and_shiori_msgs_are_send_static() {
     assert_send_static::<KanadeConfig>();
     assert_send_static::<CloseReason>();
     assert_send_static::<MonotonicMs>();
-    // マウス入力契約型（DD-IE 系）も Send + 'static な所有データのみ。
     assert_send_static::<MouseInput>();
     assert_send_static::<MouseEventKind>();
     assert_send_static::<MouseButton>();
-    // 送出イベント ID の出所カテゴリ型（DD-1）も同様。
     assert_send_static::<EventId>();
-    // 選択確定入力も Send + 'static な所有データのみ。
     assert_send_static::<ChoiceInput>();
 }
 
-/// wire 形（SHIORI へ渡る文字列）は出所カテゴリに依らず逐語であること（DD-1・Req2.6/3.6）。
+/// wire 形（SHIORI へ渡る文字列）は出所カテゴリに依らず逐語であること。
 ///
 /// `EventId` はチョークポイントが出所別の受理規則を適用するためだけの区別であり、
 /// SHIORI へ出る文字列は `as_str()`（および `Display`）が与える逐語表現のみである。
@@ -37,7 +34,6 @@ fn event_id_as_str_is_verbatim_wire_form_for_every_category() {
         EventId::Static("basewareversion").as_str(),
         "basewareversion"
     );
-    // 選択起源は任意名を逐語で運ぶ（事前登録不要・Req2.6）。
     assert_eq!(
         EventId::Choice("OnMenuBack".to_string()).as_str(),
         "OnMenuBack"
@@ -53,17 +49,14 @@ fn event_id_as_str_is_verbatim_wire_form_for_every_category() {
         EventId::Choice("OnMenuBack".to_string()).to_string(),
         "OnMenuBack"
     );
-    // 外から頼まれた任意の名前も逐語（On 接頭を要さない）。
     assert_eq!(
         EventId::Sstp("UserDefined".to_string()).as_str(),
         "UserDefined"
     );
-    // `\![get,property]` の返しのイベントも逐語（`On` で始まらなくてよい）。
     assert_eq!(
         EventId::Property("PastaShellScale".to_string()).as_str(),
         "PastaShellScale"
     );
-    // 翻訳の要求は出どころに依らず `OnTranslate`。
     assert_eq!(
         EventId::Translate(crate::request_origin::RequestOrigin::MCP_SEND_TRANSLATE).as_str(),
         "OnTranslate"
@@ -78,11 +71,10 @@ fn close_reason_maps_to_onclose_ref0() {
 
 /// `KanadeConfig::new`（既定構築経路）が入れる既定値をまとめて固定する。
 ///
-/// 選択肢タイムアウトの既定 30_000 ms は裁定 5（Req 7.8・DD-8）。正典（ukadoc）は数値を
+/// 選択肢タイムアウトの既定 30_000 ms 。正典（ukadoc）は数値を
 /// 規定していないため areka 裁量で単一の値を定め、対応表へ記録する。追加の欄の既定
-/// （true / 0 / 空）は既存の起動の檻を意味論無改変で緑に保つ（design C8）。
-/// 起動の由来はふつうの起動・シェルのフォルダ名はシェル名の写し
-/// （areka-P0-ghost-shell-balloon-switch 要件 2.1・4.1・11.7）。
+/// （true / 0 / 空）は既存の起動の檻を意味論無改変で緑に保つ。
+/// 起動の由来はふつうの起動・シェルのフォルダ名はシェル名の写し。
 #[test]
 fn kanade_config_new_supplies_documented_defaults() {
     let config = KanadeConfig::new("master", "1.0.0");

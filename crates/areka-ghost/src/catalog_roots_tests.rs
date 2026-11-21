@@ -1,5 +1,5 @@
-//! `catalog_roots` の判断の檻（task 1.1: フォルダ名の比べ方・同じ根の比べ方・今見つかる根／
-//! task 1.2: 和・隠れ・引き当て・入れる根）。
+//! `catalog_roots` の判断の檻（フォルダ名の比べ方・同じ根の比べ方・今見つかる根・
+//! 和・隠れ・引き当て・入れる根）。
 //!
 //! 一時フォルダは `temp-path-kit` の `under_target` の下だけに組む。
 
@@ -14,7 +14,7 @@ use super::{
 use crate::catalog::test_support::{put_balloon, put_ghost_in, two_roots};
 use crate::catalog::{BasewareRoot, GhostEntry, scan_balloons, scan_ghosts};
 
-/// ASCII・全角英字・ギリシアは大文字小文字を区別しない（要件 2.8）。
+/// ASCII・全角英字・ギリシアは大文字小文字を区別しない。
 #[test]
 fn folder_names_fold_ascii_fullwidth_greek() {
     assert!(same_folder_name("Emo2", "emo2"));
@@ -31,7 +31,7 @@ fn multi_char_uppercase_is_left_as_is() {
     assert!(!same_folder_name("straße", "STRASSE"));
 }
 
-/// 末尾の区切りと大文字小文字だけ違う根は同じ根（要件 1.9）。違う根は違う。
+/// 末尾の区切りと大文字小文字だけ違う根は同じ根。違う根は違う。
 #[test]
 fn roots_differing_by_trailing_separator_or_case_are_same() {
     assert!(same_root(
@@ -48,7 +48,7 @@ fn roots_differing_by_trailing_separator_or_case_are_same() {
     ));
 }
 
-/// 見つからない根は「今見つかる根」から外れ、並びには残る。見つかったら呼ぶたびに入り直す（要件 9.3）。
+/// 見つからない根は「今見つかる根」から外れ、並びには残る。見つかったら呼ぶたびに入り直す。
 #[test]
 fn missing_roots_drop_out_of_present_and_come_back() {
     let tmp = TempPath::under_target("catalog-roots-present");
@@ -73,7 +73,7 @@ fn missing_roots_drop_out_of_present_and_come_back() {
     assert_eq!(roots.ghost_stores(), [a.join("ghost"), b.join("ghost")]);
 }
 
-/// 根 1 つの並びと、1 根の走査が項目の `root` を詰めること（要件 3.4）。
+/// 根 1 つの並びと、1 根の走査が項目の `root` を詰めること。
 #[test]
 fn single_root_and_entries_carry_their_root() {
     let tmp = TempPath::under_target("catalog-roots-entry");
@@ -93,7 +93,7 @@ fn ghost_dirs(entries: &[GhostEntry]) -> Vec<PathBuf> {
 }
 
 /// 2 つの根の同じフォルダ名は上だけが見え、下は隠れとして控えられる。ゴーストとバルーンは
-/// 別々に判断し、フォルダ名 `x` のゴーストと `x` のバルーンは互いを隠さない（要件 2.1〜2.4・3.1〜3.3）。
+/// 別々に判断し、フォルダ名 `x` のゴーストと `x` のバルーンは互いを隠さない。
 #[test]
 fn union_hides_lower_same_name_per_kind_and_sorts_by_folder() {
     let (_tmp, a, b, roots) = two_roots("catalog-roots-union");
@@ -138,7 +138,7 @@ fn union_hides_lower_same_name_per_kind_and_sorts_by_folder() {
     assert!(find_ghost(&roots, "none").is_none());
 }
 
-/// descript の無い上の `x` は一覧に出せないので、下の根の `x` を隠さない（要件 2.7）。
+/// descript の無い上の `x` は一覧に出せないので、下の根の `x` を隠さない。
 #[test]
 fn unlistable_upper_folder_does_not_hide_lower() {
     let (_tmp, a, b, roots) = two_roots("catalog-roots-unlistable");
@@ -153,7 +153,7 @@ fn unlistable_upper_folder_does_not_hide_lower() {
 }
 
 /// 大文字小文字だけ違うフォルダ名は同じ名前: 上の `Emo2` が下の `emo2` を隠し、どちらの綴りでも
-/// 上が引ける（要件 2.8）。
+/// 上が引ける。
 #[test]
 fn case_only_difference_hides_and_finds() {
     let (_tmp, a, b, roots) = two_roots("catalog-roots-case");
@@ -175,7 +175,7 @@ fn case_only_difference_hides_and_finds() {
     assert_eq!(find_ghost(&roots, "EMO2").unwrap().dir, upper);
 }
 
-/// 見つからない根は 0 件として読み、下の根のものが見える（要件 9.3・3.1）。
+/// 見つからない根は 0 件として読み、下の根のものが見える。
 #[test]
 fn missing_root_reads_as_zero_items() {
     let tmp = TempPath::under_target("catalog-roots-missing");
@@ -190,7 +190,7 @@ fn missing_root_reads_as_zero_items() {
     assert!(s.hidden.is_empty());
 }
 
-/// 入れる根の 4 つの分岐（要件 5.1・5.2・5.3）。
+/// 入れる根の 4 つの分岐。
 #[test]
 fn install_root_branches() {
     let tmp = TempPath::under_target("catalog-roots-install");
@@ -252,7 +252,7 @@ fn existing_constructors_make_plain_items() {
     assert_eq!(single.user_root(), None);
 }
 
-/// 印の付いた項目（書ける根）は並びのどこにあっても `user_root` で引ける（要件 2.5・10.3）。
+/// 印の付いた項目（書ける根）は並びのどこにあっても `user_root` で引ける。
 #[test]
 fn marked_item_is_found_in_the_list() {
     use crate::catalog::RootMark;

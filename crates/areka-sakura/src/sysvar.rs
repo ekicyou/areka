@@ -1,28 +1,28 @@
-//! システム変数（`%username` 等）展開の消費側契約（R7 の正本）。
+//! システム変数（`%username` 等）展開の消費側契約。
 //!
-//! sakura は**値源を所有しない**。⓪ghost が talk 開始時に手渡す名前→値の凍結
-//! スナップショット [`SystemVarSnapshot`]（プロパティシステム＝`areka-P0-sylphya`
-//! 読み口の凍結像）を**参照するだけ**で、永続化層・SHIORI・OS 環境のいずれも直接
-//! 読まない（R7.3/R7.6）。展開は純関数 [`resolve_system_var`]（no I/O・同一入力→
-//! 同一出力＝決定論）で行い、tracing 記録は副作用のないログに留める。
+//! sakura は**値源を所有しない**。ghost が talk 開始時に手渡す名前→値の凍結
+//! スナップショット [`SystemVarSnapshot`]（プロパティシステム読み口の凍結像）を
+//! **参照するだけ**で、永続化層・SHIORI・OS 環境のいずれも直接読まない。展開は純関数
+//! [`resolve_system_var`]（no I/O・同一入力→同一出力）で行い、tracing 記録は副作用のない
+//! ログに留める。
 //!
-//! 縮退規則（R7.1/R7.4/R7.5）:
+//! 縮退規則:
 //! - スナップショットに当該名の値あり → [`ResolvedVar::Text`]（値・通常テキスト同格）。
 //! - スナップショットに無く、かつ M1 対応語彙（`username` のみ）→ [`ResolvedVar::Text`]
-//!   （既定値 [`DEFAULT_USERNAME`]・決定論定数）。
+//!   （既定値 [`DEFAULT_USERNAME`]）。
 //! - それ以外（M1 未対応名）→ [`ResolvedVar::PassThrough`]（元の `%名前` をそのまま・
 //!   情報を失わない縮退・記録付き）。
 //!
-//! 既定値 [`DEFAULT_USERNAME`] は**唯一の定義点**であり、⓪ghost の暫定 provider は
-//! これを re-use する（`%username` だけの偽ストアを二重定義しない・R7.4）。
+//! 既定値 [`DEFAULT_USERNAME`] は**唯一の定義点**であり、ghost の暫定 provider は
+//! これを re-use する（`%username` だけの偽ストアを二重定義しない）。
 
 use areka_parsers::sakura::{Instruction, parse, substitute_system_vars};
 use std::collections::BTreeMap;
 
-/// 名前→値の凍結スナップショット（プロパティシステム読み口の凍結像・R7.3）。
+/// 名前→値の凍結スナップショット（プロパティシステム読み口の凍結像）。
 ///
-/// `BTreeMap` NewType＝キー順が決定論（走査・デバッグ表示が安定）。供給は ⓪ghost
-/// （W1 暫定 provider→`areka-P0-sylphya` 読み口へ差し替え・sakura 側契約は無改変）。
+/// `BTreeMap` NewType＝キー順が決定論（走査・デバッグ表示が安定）。供給は ghost で、
+/// 供給元が差し替わっても sakura 側の契約は変わらない。
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SystemVarSnapshot(BTreeMap<String, String>);
 
@@ -38,30 +38,29 @@ impl SystemVarSnapshot {
     }
 }
 
-/// `%username` 未解決時の既定値（R7.4・**唯一の定義点**）。
+/// `%username` 未解決時の既定値（**唯一の定義点**）。
 ///
 /// 正典は既定値を規定せず（沈黙）、伺かの伝統的な未指定時デフォルトを採る areka 裁量
-/// （開発者裁定 2026-07-18・設計ディスカッション#2・`doc/COMPAT_ARCHITECTURE.md`
-/// 対応表記録）。決定論定数（同一入力→同一出力を担保）。
+/// （`doc/COMPAT_ARCHITECTURE.md` の対応表に記録）。
 pub const DEFAULT_USERNAME: &str = "ユーザーさん";
 
 /// システム変数展開の結果（compile が Text cue へ写像する）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResolvedVar {
-    /// 展開成立（スナップショット値 or 既定値）＝通常テキスト同格（R7.1/R7.2/R7.4）。
+    /// 展開成立（スナップショット値 or 既定値）＝通常テキスト同格。
     Text(String),
-    /// M1 未対応名の素通し（`%名前` をそのまま・記録付き縮退・R7.5）。
+    /// M1 未対応名の素通し（`%名前` をそのまま・記録付き縮退）。
     PassThrough(String),
 }
 
-/// システム変数名を純粋展開する（no I/O・同一入力→同一出力＝決定論・R7.6）。
+/// システム変数名を純粋展開する（no I/O・同一入力→同一出力）。
 ///
 /// - スナップショットに `name` の値あり → [`ResolvedVar::Text`]（値）。
 /// - スナップショットに無く、かつ M1 対応語彙（`username` のみ）→ [`ResolvedVar::Text`]
 ///   （[`DEFAULT_USERNAME`]）。
 /// - それ以外（M1 未対応名）→ [`ResolvedVar::PassThrough`]（`%{name}` のまま・記録付き）。
 ///
-/// OS のユーザー名などの外部環境を暗黙に読まない（R7.6）。tracing 記録は副作用のない
+/// OS のユーザー名などの外部環境を暗黙に読まない。tracing 記録は副作用のない
 /// ログでありテストの決定論を壊さない。
 pub fn resolve_system_var(name: &str, vars: &SystemVarSnapshot) -> ResolvedVar {
     if let Some(value) = vars.get(name) {
@@ -76,7 +75,6 @@ pub fn resolve_system_var(name: &str, vars: &SystemVarSnapshot) -> ResolvedVar {
         );
         return ResolvedVar::Text(DEFAULT_USERNAME.to_owned());
     }
-    // M1 未対応名: 元の `%名前` をそのまま素通し（情報を失わない縮退・R7.5）。
     tracing::debug!(
         var = %name,
         "unsupported system var; passing through raw `%name` (R7.5)"
@@ -87,13 +85,13 @@ pub fn resolve_system_var(name: &str, vars: &SystemVarSnapshot) -> ResolvedVar {
 /// 台詞の環境変数を、再生時の展開と同じ規則（[`resolve_system_var`]）で展開する。
 ///
 /// 翻訳（`OnTranslate`）の前に使う。`Text` を返す名前（写しの値・`username` の既定値）は
-/// その値に置き換え、`PassThrough` を返す名前は `%名前` の綴りのまま残す（要件 2.3・2.4）。
+/// その値に置き換え、`PassThrough` を返す名前は `%名前` の綴りのまま残す。
 /// 置き換える位置と値のエスケープは [`substitute_system_vars`] が字句解析と同じ規則で決める。
 ///
 /// 埋めた値が直前のタグに飲み込まれる並び（`\w%username` で値が数字始まり等）では読みが
 /// 変わるので、展開した台詞の命令の列が「元の命令の列で置き換えた環境変数を文字にしたもの」と
 /// 等しいかを照合し、違えば `warn!`（`sysvar_expand_fallback`）を残して元の台詞を返す
-/// （再生時の展開が今日どおり働く・要件 2.2・2.5）。
+/// （再生時の展開が従来どおり働く）。
 pub fn expand_system_vars(script: &str, vars: &SystemVarSnapshot) -> String {
     let text_of = |name: &str| match resolve_system_var(name, vars) {
         ResolvedVar::Text(value) => Some(value),
@@ -103,7 +101,6 @@ pub fn expand_system_vars(script: &str, vars: &SystemVarSnapshot) -> String {
     if expanded == script {
         return expanded;
     }
-    // 同値の照合: 置き換えた環境変数を文字にした元の命令の列と、展開した台詞の命令の列。
     let mut replaced: Vec<String> = Vec::new();
     let want = join_texts(parse(script).into_iter().map(|ins| match ins {
         Instruction::SystemVar(name) => match text_of(&name) {
@@ -165,7 +162,6 @@ mod tests {
         assert_eq!(vars.get("username"), None, "未挿入なら None");
         vars.insert("username", "アヒル");
         assert_eq!(vars.get("username"), Some("アヒル"), "挿入値を読み戻せる");
-        // 上書きも往復する。
         vars.insert("username", "カモ");
         assert_eq!(
             vars.get("username"),
@@ -174,7 +170,7 @@ mod tests {
         );
     }
 
-    /// 値ありスナップショット → `Text(その値)`（R7.1）。
+    /// 値ありスナップショット → `Text(その値)`。
     #[test]
     fn value_present_expands_to_snapshot_value() {
         let mut vars = SystemVarSnapshot::default();
@@ -185,7 +181,7 @@ mod tests {
         );
     }
 
-    /// `username` 欠落 → 既定値 `DEFAULT_USERNAME`（R7.4・生の `%username` を露出しない）。
+    /// `username` 欠落 → 既定値 `DEFAULT_USERNAME`（生の `%username` を露出しない）。
     #[test]
     fn username_missing_expands_to_default() {
         let vars = SystemVarSnapshot::default();
@@ -193,11 +189,10 @@ mod tests {
             resolve_system_var("username", &vars),
             ResolvedVar::Text(DEFAULT_USERNAME.to_owned())
         );
-        // 既定値の実体は「ユーザーさん」（対応表記録・唯一の定義点）。
         assert_eq!(DEFAULT_USERNAME, "ユーザーさん");
     }
 
-    /// M1 未対応名 → 素通し `%名前`（R7.5・情報を失わない縮退）。
+    /// M1 未対応名 → 素通し `%名前`（情報を失わない縮退）。
     #[test]
     fn unsupported_name_passes_through_raw() {
         let vars = SystemVarSnapshot::default();

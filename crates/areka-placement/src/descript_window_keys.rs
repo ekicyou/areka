@@ -1,9 +1,9 @@
-//! descript の既定の面（`*.seriko.defaultsurface`）の読みと、戻り先の候補の並び
-//! （descript-window-keys 要件 1・2.6）と、バルーンの動かせない指定（`*.balloon.dontmove`）の読み（要件 4）と、
-//! バルーンの倍率をシェルに連動させる指定（`*.balloon.syncscale`）の読み（shell-scale-linkage 要件 6）。
+//! descript の既定の面（`*.seriko.defaultsurface`）の読みと戻り先の候補の並び、
+//! バルーンの動かせない指定（`*.balloon.dontmove`）の読み、
+//! バルーンの倍率をシェルに連動させる指定（`*.balloon.syncscale`）の読み。
 //!
 //! 組み込みの既定の面（本体側 0・それ以外 10）を持つのはこのモジュールだけ。
-//! 既定の面はゴーストの descript だけから読む（シェルの KV を引数に持たない＝要件 1.6 を型で守る）。
+//! 既定の面はゴーストの descript だけから読む（シェルの KV を引数に持たない＝型で守る）。
 //! I/O を持たない（`config` だけを `super::config` で引く）。
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -126,7 +126,7 @@ pub fn read_balloon_dontmove(
         .get(BALLOON_DONTMOVE)
         .and_then(|raw| read_flag("all", BALLOON_DONTMOVE, raw));
     for &scope in scopes {
-        // 読めない段は書かれていないものとして次の段へ進む（要件 4.5）。
+        // 読めない段は書かれていないものとして次の段へ進む。
         let shell = scoped_entry(shell_kv, scope, BALLOON_DONTMOVE)
             .and_then(|(key, raw)| read_flag(scope, &key, raw));
         // 収まらない番号の窓は在り得ないので、集合には入れない（`read_balloon_syncscale` と同じ）。
@@ -158,7 +158,7 @@ fn read_flag(scope: impl std::fmt::Display, key: &str, raw: &str) -> Option<bool
     }
 }
 
-/// 値を `u32` として読めれば入れ、読めなければ組み込みの面のまま記録を 1 件残す（要件 1.5）。
+/// 値を `u32` として読めれば入れ、読めなければ組み込みの面のまま記録を 1 件残す。
 fn insert_readable(written: &mut BTreeMap<usize, u32>, scope: usize, key: &str, raw: &str) {
     match raw.trim().parse::<u32>() {
         Ok(id) => {
@@ -183,7 +183,7 @@ fn insert_readable(written: &mut BTreeMap<usize, u32>, scope: usize, key: &str, 
 /// バルーンの倍率をシェルに連動させる指定のキーのスコープの後ろの綴り（ゴーストの段はこの綴りそのもの）。
 const BALLOON_SYNCSCALE: &str = "balloon.syncscale";
 
-/// `balloon.syncscale` の指定（shell-scale-linkage 要件 6）: ゴーストの段の真偽と、シェルの段で連動するスコープ。
+/// `balloon.syncscale` の指定: ゴーストの段の真偽と、シェルの段で連動するスコープ。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BalloonSyncScale {
     ghost: bool,
@@ -191,15 +191,14 @@ pub struct BalloonSyncScale {
 }
 
 impl BalloonSyncScale {
-    /// スコープのバルーンの倍率をシェルに連動させるか（ゴーストの段かシェルの段のどちらかが `true`・要件 6.3）。
-    // 本番で読む下流は shell-balloon-scale-setting（shell-scale-linkage は持つだけ・要件 6.6）。
+    /// スコープのバルーンの倍率をシェルに連動させるか（ゴーストの段かシェルの段のどちらかが `true`）。
     pub fn is_synced(&self, scope: u32) -> bool {
         self.ghost || self.shell_scopes.contains(&scope)
     }
 }
 
 /// ゴーストの `balloon.syncscale` と、シェルの `sakura.`＞`char0.`・`kero.`＞`char1.`・`char<n>.`（n≥2）の
-/// `balloon.syncscale` を読む。値は前後の空白を除き、大文字小文字を問わず `true` のときだけ有効（要件 6.1〜6.4）。
+/// `balloon.syncscale` を読む。値は前後の空白を除き、大文字小文字を問わず `true` のときだけ有効。
 pub fn read_balloon_syncscale(
     ghost_kv: &BTreeMap<String, String>,
     shell_kv: &BTreeMap<String, String>,
@@ -232,7 +231,7 @@ pub fn read_balloon_syncscale(
     }
 }
 
-/// 連動の指定の値を読み、鍵ごとに警告より下の段の記録を 1 件残す（`true` 以外は指定なし・要件 6.4・6.7）。
+/// 連動の指定の値を読み、鍵ごとに警告より下の段の記録を 1 件残す（`true` 以外は指定なし）。
 /// 大文字小文字は問わない（`TRUE` も `true`・`balloon.dontmove` と同じ決まり）。
 fn read_syncscale(scope: impl std::fmt::Display, key: &str, raw: &str) -> bool {
     let synced = raw.trim().eq_ignore_ascii_case("true");

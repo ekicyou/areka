@@ -1,4 +1,4 @@
-//! `UpdateCueSink` と `parse_update_command` の決定論テスト（要件 1.5〜1.8・9.4・10.8）。
+//! `UpdateCueSink` と `parse_update_command` の決定論テスト。
 //!
 //! 確かめること: 入口の 4 つの形（`updatebymyself`・`update,all`・`update,shell+balloon`・
 //! `updateother,--balloon=B,--shell=S`）が台本の文字列から期待の生の要求 1 件になること・
@@ -133,8 +133,7 @@ fn other(pairs: &[(TargetKind, &str)]) -> RawUpdateRequest {
 
 // ---------------------------------------------------------------- 入口の 4 つの形
 
-/// 4 つの入口の形が、台本の文字列から期待の生の要求 1 件になり、警告を残さない
-/// （要件 1.5・1.6・1.7・9.4）。
+/// 4 つの入口の形が、台本の文字列から期待の生の要求 1 件になり、警告を残さない。
 #[test]
 fn four_entry_forms_become_the_expected_request() {
     let cases = [
@@ -162,7 +161,7 @@ fn four_entry_forms_become_the_expected_request() {
     }
 }
 
-/// `update` の対象は並んだ順（逆順・1 つだけも）で運び、重複はそのまま・`all` は 3 つに開く（要件 1.6）。
+/// `update` の対象は並んだ順（逆順・1 つだけも）で運び、重複はそのまま・`all` は 3 つに開く。
 #[test]
 fn update_targets_keep_their_order() {
     let cases: [(&[&str], Vec<TargetKind>); 4] = [
@@ -185,7 +184,7 @@ fn update_targets_keep_their_order() {
 
 // ---------------------------------------------------------------- 読み飛ばし
 
-/// `--shell=S,--plugin=P` は `P` を `warn!` 1 件で読み飛ばし、`S` だけの要求になる（要件 1.7・9.4）。
+/// `--shell=S,--plugin=P` は `P` を `warn!` 1 件で読み飛ばし、`S` だけの要求になる。
 #[test]
 fn unknown_selector_is_skipped_with_one_warning() {
     let (sent, events) = play_script(r"\![updateother,--shell=S,--plugin=P]\e");
@@ -202,8 +201,7 @@ fn unknown_selector_is_skipped_with_one_warning() {
 
 // ---------------------------------------------------------------- 断る
 
-/// オプション付き・`platform`・`--plugin=` だけ・`--option=` 混じりは要求 0 と `warn!` 1 件
-/// （要件 1.8・9.4・10.8）。
+/// オプション付き・`platform`・`--plugin=` だけ・`--option=` 混じりは要求 0 と `warn!` 1 件になる。
 #[test]
 fn refused_forms_send_nothing_and_warn_once() {
     let scripts = [
@@ -324,7 +322,7 @@ fn dropped_receiver_is_logged_and_does_not_panic() {
 // ---------------------------------------------------------------- 窓口まで
 
 /// 台本の文字列から受け口 → 窓口の取り出し → 受付まで通すと、出どころ「台本」の依頼がちょうど
-/// 1 件受け付けられ、警告は無い（要件 1.1・1.5・1.6）。
+/// 1 件受け付けられ、警告は無い。
 ///
 /// 背景スレッドへ渡した依頼の中身は `update` の外から読めないので、受付が渡したときに残す
 /// `info!(update_order_started)`（出どころと対象の名前）で判定する。
@@ -352,7 +350,7 @@ fn script_string_reaches_the_desk_and_is_accepted() {
     assert!(on_path_warns.is_empty(), "断りも警告もない: {events:?}");
 }
 
-/// 断りの形は窓口まで通しても依頼 0 件・`warn!` 1 件（受け口の断りだけ・要件 1.8・9.4）。
+/// 断りの形は窓口まで通しても依頼 0 件・`warn!` 1 件（受け口の断りだけ）。
 #[test]
 fn refused_form_reaches_no_order() {
     let events = play_to_desk(r"\![updatebymyself,checkonly]\e");

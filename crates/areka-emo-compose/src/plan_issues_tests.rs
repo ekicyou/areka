@@ -1,5 +1,4 @@
-//! 形の誤りを集める関数 [`shape_issues`] と、面を組むたびの知らせが warn にならないことの試験
-//! （areka-P0-offline-surface-dump 要件 7.5・design ShapeIssuesOnce）。
+//! 形の誤りを集める関数 [`shape_issues`] と、面を組むたびの知らせが warn にならないことの試験。
 
 use std::path::Path;
 
@@ -53,7 +52,7 @@ fn collects_cycle_and_undrawn_pattern_once_each() {
 }
 
 /// 1 つの pattern が循環と描かないメソッドの両方に当たる（面 10 の `replace` が自分を指す）と、`Cycle`
-/// が先（指摘 124）。
+/// が先。
 #[test]
 fn cycle_comes_before_undrawn_for_the_same_pattern() {
     let world = EmoWorld::build(&parse(

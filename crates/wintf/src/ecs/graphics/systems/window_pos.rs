@@ -41,8 +41,7 @@ pub fn apply_window_pos_changes(
         let position = window_pos.position.unwrap_or_default();
         let size = window_pos.size.unwrap_or_default();
 
-        // CW_USEDEFAULTが設定されている場合はスキップ（ウィンドウ作成時の初期値）
-        // 座標変換をスキップし、ウィンドウ作成時の初期配置を優先
+        // CW_USEDEFAULT は窓作成時の初期値: 座標変換せず初期配置を優先する
         if position.x == windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT
             || size.width == windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT
         {
@@ -57,11 +56,9 @@ pub fn apply_window_pos_changes(
             continue;
         }
 
-        // クライアント領域座標をウィンドウ全体座標に変換
         let (x, y, width, height) = match window_pos.to_window_coords(window_handle) {
             Ok(coords) => coords,
             Err(e) => {
-                // 変換失敗時はフォールバック：元の座標を使用
                 warn!(
                     entity = %entity_name(),
                     error = %e,
@@ -71,12 +68,10 @@ pub fn apply_window_pos_changes(
             }
         };
 
-        // SetWindowPosコマンドを生成してキューに追加
-        // 直接SetWindowPosを呼び出さない（World借用競合防止）
+        // 直接 SetWindowPos を呼ばない（World 借用競合防止）
         let mut flags = window_pos.build_flags_for_system();
         let hwnd_insert_after = window_pos.get_hwnd_insert_after();
 
-        // ドラッグ中は SWP_NOMOVE を強制: サイズのみ変更
         if is_dragging {
             flags |= SWP_NOMOVE;
         }

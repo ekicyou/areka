@@ -67,7 +67,6 @@ pub fn window_pos_sync_system(
         let size_changed = window_pos.size != Some(new_size);
 
         if is_dragging {
-            // ドラッグ中: サイズのみ更新（位置はドラッグ操作が管理）
             if size_changed {
                 debug!(
                     frame = frame_count.0,
@@ -79,7 +78,6 @@ pub fn window_pos_sync_system(
                 window_pos.size = Some(new_size);
             }
         } else {
-            // 通常時: 位置とサイズの両方を更新
             let new_position = Point {
                 x: global_arr.bounds.left as i32,
                 y: global_arr.bounds.top as i32,
@@ -118,11 +116,6 @@ pub fn window_pos_sync_system(
 /// これにより GlobalArrangement.bounds が正しいスクリーン座標を持つようになり、
 /// hit_test が正しく動作する。
 ///
-/// `Changed<WindowPos>` フィルタにより、WindowPos が変更されたエンティティのみ処理する。
-/// 変更がない場合は何もしない。
-///
-/// `Without<WindowDragging>` フィルタにより、ドラッグ中のウィンドウはスキップする。
-///
 /// # 座標系
 /// Window エンティティは LayoutRoot (scale=1.0) の子であり、
 /// `GlobalArrangement.bounds.left = parent.bounds.left + offset × parent_scale = offset` となる。
@@ -148,14 +141,12 @@ pub fn sync_window_arrangement_from_window_pos(
             continue;
         }
 
-        // WindowPos.position は物理ピクセル座標
         // Window は LayoutRoot (scale=1.0) の子なので offset = position（DPI除算不要）
         let new_offset = Offset {
             x: position.x as f32,
             y: position.y as f32,
         };
 
-        // 変更があった場合のみ更新
         if arrangement.offset != new_offset {
             debug!(
                 entity = %format_entity_name(entity, name),

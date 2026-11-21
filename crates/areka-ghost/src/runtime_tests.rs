@@ -29,27 +29,22 @@ fn mount_variant_is_a_std_error() {
         expected: PathBuf::from("ghost/master/shell/master"),
     });
 
-    // 呼び出し側が `Box<dyn std::error::Error>` 等で一律に扱えることの確認。
     let as_std_error: &dyn std::error::Error = &err;
     assert!(as_std_error.source().is_none());
 }
 
-// ---- boot 統合テスト（task 3.1） ----
+// ---- boot 統合テスト ----
 
 use areka_kanade::MonotonicMs;
 
-/// シナリオ2（mount 失敗の短絡）: `ghost_root` に `ghost/master/descript.txt` が
-/// 存在しない場合、`boot` は `Err(GhostBootError::Mount(_))` を返す。`shiori`
-/// フィールドの connect closure は「呼ばれたら panic する」ものを故意に仕込み、
-/// もし実装がマウント失敗より後にも connect を評価してしまうバグがあればこの
-/// テスト自体が panic で失敗する——マウント解決失敗時に他のいかなるコンポーネント
-/// も spawn されない（短絡する）ことの直接証跡になる（要件 2.5）。
+/// `ghost_root` に `ghost/master/descript.txt` が無いと `boot` は
+/// `Err(GhostBootError::Mount(_))` を返す。connect closure は呼ばれたら panic するものを仕込み、
+/// マウント失敗より後に connect を評価する実装ならこのテスト自体が失敗する。
 #[test]
 fn boot_returns_mount_error_and_short_circuits_before_touching_shiori_wiring() {
     let temp = TempPath::new(
         "ghost-runtime-boot-returns-mount-error-and-short-circuits-before-touching-shiori-wiring",
     );
-    // 空のフォルダ＝ghost/master/descript.txt が無い。
     let options = GhostBootOptions {
         shiori: ShioriWiring::Custom(Box::new(|| -> Result<Box<dyn ShioriBackend>, String> {
             panic!(
@@ -69,15 +64,12 @@ fn boot_returns_mount_error_and_short_circuits_before_touching_shiori_wiring() {
     }
 }
 
-// ---- boot→shutdown 統合テスト（task 3.2） ----
+// ---- boot→shutdown 統合テスト ----
 
-/// シナリオ3（happy path・task 3.2）: 解決可能な `ghost_root` で `boot` した
-/// `GhostRuntime` に対し `shutdown(CloseReason::System)` を呼ぶと、`ForceQuit` →
-/// kanade join → `DispatcherMsg::Close` → dispatcher join → shiori join → relay
-/// 2 本の join という全段が完走し `Ok(())` を返す（要件 6.1/6.4）。`TickerMode::Disabled`
-/// で組むため ticker 段は完全にスキップされる。`shutdown` 呼出自体を別スレッドへ
-/// 逃がし有界 `recv_timeout` で観測する（本テストの完了条件そのものが「正常な
-/// 起動〜終了の一連の流れ」の直接証跡になる）。
+/// 解決可能な `ghost_root` で `boot` した `GhostRuntime` を `shutdown(CloseReason::System)` すると、
+/// ForceQuit → kanade join → `DispatcherMsg::Close` → dispatcher join → shiori join →
+/// relay 2 本の join の全段が完走し `Ok(())` を返す。`TickerMode::Disabled` なので ticker 段は
+/// 飛ばされる。`shutdown` は別スレッドで呼び、有界 `recv_timeout` で観測する。
 #[test]
 fn boot_then_shutdown_joins_everything_and_returns_ok() {
     let temp = TempPath::new("ghost-runtime-boot-then-shutdown-joins-everything-and-returns-ok");
@@ -90,13 +82,9 @@ fn boot_then_shutdown_joins_everything_and_returns_ok() {
     shutdown_bounded(runtime);
 }
 
-/// シナリオ4（`into_parts` 構造分解・task 3.2）: `boot` した `GhostRuntime` から
-/// `into_parts()` で `GhostParts` を取り出すと、`kanade`／`dispatcher` の投函端が
-/// 生きており（send 成功で確認）、`TickerMode::Disabled` に対応して `ticker` は
-/// `None`、`handles` に全 `ActorHandle` が揃っている。取り出した部品だけを使って
-/// `shutdown()` と同等の手順（ForceQuit→kanade join→Close→dispatcher join→
-/// shiori join→relay 2 本 join）を手作業で駆動できることを示す——`into_parts` が
-/// S6 全断線シナリオ等の分解結線に必要な全てを過不足なく提供している直接証跡。
+/// `into_parts()` で取り出した `GhostParts` は、`kanade`／`dispatcher` の投函端が生きており、
+/// `TickerMode::Disabled` なので `ticker` は `None`、`handles` に全 `ActorHandle` が揃う。
+/// 取り出した部品だけで `shutdown()` と同等の手順を手作業で駆動できる。
 #[test]
 fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
     let temp = TempPath::new(
@@ -109,7 +97,6 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
         boot(fake_options(root)).expect("boot should succeed for a resolvable ghost_root");
     let parts = runtime.into_parts();
 
-    // ticker は TickerMode::Disabled に対応して None（送出端・handle 両方）。
     assert!(
         parts.ticker.is_none(),
         "ticker sender must be None when TickerMode::Disabled was used"
@@ -119,7 +106,6 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
         "ticker handle must be None when TickerMode::Disabled was used"
     );
 
-    // kanade/dispatcher の投函端が生きていることの直接証跡（send 成功）。
     parts
         .kanade
         .send(KanadeMsg::Tick {
@@ -156,8 +142,7 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
         "choice_wake_relay must be None when TickerMode::Disabled was used"
     );
 
-    // shutdown() と同等の手順を手作業で駆動する（ForceQuit→join→Close→join→
-    // shiori/relay join・design.md「終了（shutdown）シーケンス」）。
+    // shutdown() と同等の手順を手作業で駆動する。
     run_bounded(
         "manual teardown driven from into_parts",
         std::time::Duration::from_secs(10),
@@ -188,7 +173,7 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
                 .join()
                 .expect("down-relay should terminate normally (natural disconnect)");
 
-            // sylphya 供給者停止＋join（shutdown() 最終段の手作業ミラー・design「shutdown」step 10）。
+            // sylphya 供給者停止＋join（shutdown() 最終段の手作業ミラー）。
             sylphya.close();
             sylphya_handle
                 .join()
@@ -197,18 +182,11 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
     );
 }
 
-// ---- sylphya_publisher() アクセサ（task 3.1・position-persist） ----
+// ---- sylphya_publisher() アクセサ ----
 
-/// シナリオ（task 3.1・position-persist）: `boot` した `GhostRuntime` から
-/// [`GhostRuntime::sylphya_publisher`] で sylphya 供給端の参照を取得し、その参照経由で
-/// `persist_put`（永続 put の投函）が呼び出せることを確認する（requirements.md 6.2・
-/// design.md「C5 GhostRuntime 増分」——main が `PersistWiring` を組むために公開する
-/// `kanade()`／`dispatcher()` と同型の additive アクセサ）。
-///
-/// アクセサが返すのは boot が据えた生きた sylphya アクターの供給端であることを、
-/// `persist_put` 投函後に `barrier()` が `Ok(())` を返す（＝アクターが投函を処理して
-/// 反映を完了できた）ことで観測する（fire-and-forget な `persist_put` 自体は戻り値を
-/// 持たないため、直後の反映フェンスで生存を証拠づける）。
+/// [`GhostRuntime::sylphya_publisher`] が返す供給端は boot が据えた生きた sylphya アクターのもので、
+/// `persist_put` の投函後に `barrier()` が `Ok(())` を返す（アクターが投函を処理した）ことで観測する。
+/// `persist_put` 自体は戻り値を持たないので、直後の反映フェンスで生存を確かめる。
 #[test]
 fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
     let temp = TempPath::new(
@@ -220,15 +198,13 @@ fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
     let runtime =
         boot(fake_options(root)).expect("boot should succeed for a resolvable ghost_root");
 
-    // アクセサ経由で取得した供給端で persist_put が呼び出せる（requirements.md 6.2）。
     let publisher: &areka_sylphya::SylphyaPublisher = runtime.sylphya_publisher();
     publisher.persist_put(
         areka_sylphya::PersistScope::Ghost,
         vec![(areka_sylphya::PersistKey::BootCount, "1".into())],
     );
 
-    // 反映フェンスで、アクセサが返したのが生きた供給端であることを観測する
-    // （投函が処理され反映が完了 → sylphya アクター生存）。宙吊り防止に有界化。
+    // 反映フェンスで、アクセサが返したのが生きた供給端であることを観測する。宙吊り防止に有界化。
     run_bounded(
         "barrier after persist_put via sylphya_publisher()",
         std::time::Duration::from_secs(10),
@@ -237,7 +213,6 @@ fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
                 .sylphya_publisher()
                 .barrier()
                 .expect("sylphya actor should process the persist_put and reflect it");
-            // アクター後片付け（宙吊りスレッド回避のため clean shutdown）。
             runtime
                 .shutdown(areka_kanade::CloseReason::System)
                 .expect("clean shutdown");
@@ -245,20 +220,16 @@ fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
     );
 }
 
-// ---- shutdown() の barrier() 明示フラッシュ確認（task 3.2・position-persist） ----
+// ---- shutdown() の barrier() 明示フラッシュ確認 ----
 
-/// シナリオ（task 3.2・position-persist）: `boot` した `GhostRuntime` を
-/// `shutdown(CloseReason::System)` すると、sylphya `close()`（step 10）の**直前**に
-/// `barrier()` が呼ばれ、成功時に固定 info ログ `persist flush confirmed`
-/// （target `ghost-shutdown`）を発行する（requirements.md 1.2・design.md「C5 GhostRuntime
-/// 増分」step 10 直前・Monitoring「persist flush confirmed（C5 info）」）。
+/// `boot` した `GhostRuntime` を `shutdown(CloseReason::System)` すると、sylphya `close()` の**直前**に
+/// `barrier()` が呼ばれ、成功時に固定 info ログ `persist flush confirmed`（target `ghost-shutdown`）を出す。
 ///
-/// write-through（FIFO close＝E1）が保証の正本で、この `barrier()` は best-effort な
-/// 終了時フラッシュ安全網（E2-lite）。ログ発行は「barrier が Ok を返し、その位置が close の
-/// 直前である」ことの直接証跡になる（barrier→info→close のコード配置で順序が担保される）。
+/// write-through（FIFO close）が保証の正本で、この `barrier()` は best-effort な終了時フラッシュの安全網。
+/// ログは「barrier が Ok を返し、その位置が close の直前である」ことの証跡になる。
 ///
 /// `capture` はスレッドローカルに subscriber を差すため、`shutdown` を走らせる同一スレッド
-/// （`run_bounded` の spawn 先）で発行された info ログを捕捉する。join の宙吊りに備え有界化する。
+/// （`run_bounded` の spawn 先）で出た info ログを捕捉する。join の宙吊りに備え有界化する。
 #[test]
 fn shutdown_confirms_persist_flush_via_barrier_before_close() {
     use crate::test_log_capture::{assert_logged, capture};
@@ -277,14 +248,13 @@ fn shutdown_confirms_persist_flush_via_barrier_before_close() {
         move || {
             let events = capture(|| {
                 let result = runtime.shutdown(areka_kanade::CloseReason::System);
-                // Err パス（barrier がアクター既死で Err）でも panic せず続行するのが正で、
-                // 生きた sylphya アクターに対する本 happy path は必ず Ok を返す（要件 6.1/6.4）。
+                // barrier がアクター既死で Err でも panic せず続行するのが正で、
+                // 生きた sylphya アクターに対するこの経路は必ず Ok を返す。
                 assert!(
                     result.is_ok(),
                     "shutdown should return Ok(()) with a live sylphya actor, got {result:?}"
                 );
             });
-            // barrier() が Ok を返し、その確認ログが close() の直前で発行されたことの直接証跡。
             assert_logged(
                 &events,
                 tracing::Level::INFO,
@@ -295,27 +265,19 @@ fn shutdown_confirms_persist_flush_via_barrier_before_close() {
     );
 }
 
-// ---- InProc 結線の生成〜駆動〜終了 統合テスト（task 2.4） ----
+// ---- InProc 結線の生成〜駆動〜終了 統合テスト ----
 
 use std::sync::Arc;
 
-/// シナリオ5（task 2.4・第 3 の結線 `ShioriWiring::InProc` の生成〜駆動〜終了 一気通貫）:
-/// 実ビルド済み x64 テスト DLL（`shiori4_testdll.dll`）を fixture の `ghost/master/` へ配置し、
-/// `ShioriWiring::InProc`（他 2 方式＝`Helper`／`Custom` と同列に選べる第 3 の正規結線・
-/// 要件 1.1/3.1/7.1）で boot する。boot が内部送出する `KanadeMsg::Boot` を起点に、実 DLL の
-/// OnBoot 応答（挨拶 Value）が kanade→start-relay→dispatcher→sakura→`RecordingSink` へ届く
-/// までを Tick 注入のみ（sleep 不使用・要件 7.3——注入時刻のみで前進）で駆動し、`RecordingSink`
-/// に少なくとも 1 件の `TalkCue` が捕捉されること（＝実 InProc DLL 境界を横断して挨拶が sink まで
-/// 到達した＝生成〜駆動）を確認する。続いて `shutdown(CloseReason::System)` が `Ok(())` を返す
-/// こと（＝正規 clean close・終了）を有界待機で確認する。本番 main 結線・機種自動判別（要件
-/// 7.2/7.3）には一切触れない——`boot()` の match へ `InProc` arm を 1 本足すのみ。
+/// 実ビルド済み x64 テスト DLL（`shiori4_testdll.dll`）を fixture の `ghost/master/` へ置き、
+/// `ShioriWiring::InProc` で boot する。boot が送る `KanadeMsg::Boot` を起点に、実 DLL の OnBoot 応答
+/// （挨拶 Value）が kanade→start-relay→dispatcher→sakura→`RecordingSink` へ届くまでを Tick 注入のみ
+/// （sleep 不使用・注入時刻のみで前進）で駆動し、`RecordingSink` に `TalkCue` が 1 件以上捕捉されることと、
+/// `shutdown(CloseReason::System)` が `Ok(())` を返すことを有界待機で確認する。
 ///
-/// 本テストは**結線 smoke**（第 3 arm の end-to-end 成立の証明）に留める。OnBoot cue 列の
-/// 全順序照合＋ドリフト検出の厳密 e2e は task 5.1 の担当であり、ここでは「≥1 cue 捕捉＋clean
-/// shutdown」で足りる（重複させない）。
+/// 結線の smoke に留める。OnBoot cue 列の全順序照合は別のテストが受け持つ。
 #[test]
 fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
-    // `TempPath` の下にテストの DLL を写したゴースト（探しと写しは `shiori_inproc_tests` の 1 つ）。
     let temp = crate::shiori_inproc::tests::dll_ghost("ghost-runtime-inproc-wiring");
     let root = temp.path().to_path_buf();
 
@@ -331,17 +293,11 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
     let runtime = boot(options).expect("boot should succeed through ShioriWiring::InProc");
 
     // 駆動: dispatcher へ Tick を注入し続け、`RecordingSink` が挨拶 cue を捕捉するまで待つ
-    // （sleep 不使用・単調増加 `now` の注入と `yield_now` のみ・S1 spine 技法）。boot が内部で
-    // 送った `KanadeMsg::Boot` により OnBoot GET が発火し、StartTalk が
-    // start-relay→dispatcher の別スレッド 2 hop を渡り active slot に載った直後の Tick で
-    // 挨拶が全 broadcast される。
+    // （sleep 不使用・単調増加 `now` の注入と `yield_now` のみ）。
     //
-    // 反復回数ではなく**壁時計デッドライン**で括る点が S1 と異なる（S1 の scripted backend は
-    // 即応するが、本 InProc 経路は最初の SHIORI 呼出が shiori アクタースレッド上で実 DLL の
-    // `LoadLibraryExW`＋`CreateInstance` を初めて走らせ、これに数十 ms を要する）。デッドラインは
-    // `run_bounded` の `recv_timeout` と同じく**宙吊り防止の上限**にすぎず、シミュレーション時刻の
-    // 前進は依然として注入 Tick のみ（sleep で talk timeline を進めない・要件 7.3）。DLL ロード
-    // 完了後は最初の Tick で挨拶が必ず発火するため結果は決定論的。
+    // 反復回数でなく壁時計デッドラインで括る: 最初の SHIORI 呼出が shiori アクタースレッド上で
+    // 実 DLL の `LoadLibraryExW`＋`CreateInstance` を初めて走らせ、数十 ms を要するため。
+    // デッドラインは宙吊り防止の上限にすぎず、時刻の前進は注入 Tick のみ。
     let mut now: u64 = 1;
     let mut fired = false;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -365,18 +321,15 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
          生成〜駆動が成立していない"
     );
 
-    // 終了: shutdown が clean に完走し `Ok(())` を返すこと（正規 close・有界待機で宙吊り防止）。
     shutdown_bounded(runtime);
 
-    // ≥1 cue 捕捉の最終 assert（挨拶が実 InProc DLL 境界を越えて sink に届いた・task 2.4 の
-    // 観測可能な完了条件）。
     assert!(
         !records.lock().expect("records mutex poisoned").is_empty(),
         "RecordingSink には少なくとも 1 件の TalkCue が捕捉されているべき（挨拶が InProc 境界を越えた）"
     );
 }
 
-// ---- apply_boot_record_gate 単体（task 7.1・position-persist・design「C5 GhostRuntime 増分」step 1-3） ----
+// ---- apply_boot_record_gate 単体 ----
 
 use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
@@ -384,10 +337,7 @@ use areka_sylphya::{
 };
 
 /// Ghost スコープへ `seed` を事前保存した実 sylphya を起動し、`(parts, ghost_asker)` を返す。
-///
-/// spawn 時の `build_initial_image` が seed を初期鏡像の大域点付き区画（正準 key）へ投影するため、
-/// `parts.reader` は無待機で `resolve_dotted_str` により seed 値を観測できる（本番 boot と同型の
-/// 「起動時に永続をロード」経路）。seed が空なら不在ケース（記録なし）を表す。
+/// `parts.reader` は無待機で `resolve_dotted_str` により seed 値を観測できる。seed が空なら記録なしのケース。
 fn spawn_reader_seeded(seed: Vec<(PersistKey, String)>) -> (SylphyaParts, AskerId) {
     let shared = Arc::new(FakePersistIo::new());
     let roots = ScopeRoots {
@@ -411,8 +361,7 @@ fn base_config() -> KanadeConfig {
 }
 
 /// step 1＋3（記録なし）: `areka.boot.count` 不在 → `first_boot=true` かつ
-/// `first_boot_epilogue` に `areka.prop.set`/`areka.boot.count`/"1" が 1 件添付される
-/// （design C5-1/C5-3・要件 3.1/3.4）。
+/// `first_boot_epilogue` に `areka.prop.set`/`areka.boot.count`/"1" が 1 件添付される。
 #[test]
 fn gate_absent_boot_record_marks_first_boot_and_injects_set_epilogue() {
     let (parts, asker) = spawn_reader_seeded(vec![]);
@@ -437,7 +386,7 @@ fn gate_absent_boot_record_marks_first_boot_and_injects_set_epilogue() {
 }
 
 /// step 1＋3（記録あり）: `areka.boot.count` 存在 → `first_boot=false` かつ epilogue 非添付
-/// （2 回目以降起動・design C5-1/C5-3・要件 3.4）。
+/// （2 回目以降起動）。
 #[test]
 fn gate_present_boot_record_marks_returning_and_no_epilogue() {
     let (parts, asker) = spawn_reader_seeded(vec![(PersistKey::BootCount, "1".into())]);
@@ -458,7 +407,7 @@ fn gate_present_boot_record_marks_returning_and_no_epilogue() {
 }
 
 /// step 1（存在ゲートは数値解釈しない）: `areka.boot.count="0"` でも「存在」ゆえ
-/// `first_boot=false`（値の中身を問わない存在判定・design C5-1「数値解釈しない」）。
+/// `first_boot=false`（値の中身を問わない存在判定）。
 #[test]
 fn gate_boot_record_is_existence_not_value() {
     let (parts, asker) = spawn_reader_seeded(vec![(PersistKey::BootCount, "0".into())]);
@@ -475,7 +424,7 @@ fn gate_boot_record_is_existence_not_value() {
     parts.handle.join().expect("clean close joins");
 }
 
-/// step 2（vanish 数値 present）: `areka.vanish.count="7"` → `vanish_count==7`（要件 4.1）。
+/// step 2（vanish 数値 present）: `areka.vanish.count="7"` → `vanish_count==7`。
 #[test]
 fn gate_vanish_count_present_numeric_is_parsed() {
     let (parts, asker) = spawn_reader_seeded(vec![
@@ -494,7 +443,7 @@ fn gate_vanish_count_present_numeric_is_parsed() {
     parts.handle.join().expect("clean close joins");
 }
 
-/// step 2（vanish 不在）: `areka.vanish.count` 不在 → `vanish_count==0`（既定縮退・要件 4.2）。
+/// step 2（vanish 不在）: `areka.vanish.count` 不在 → `vanish_count==0`（既定縮退）。
 #[test]
 fn gate_vanish_count_absent_defaults_zero() {
     let (parts, asker) = spawn_reader_seeded(vec![]);
@@ -508,7 +457,7 @@ fn gate_vanish_count_absent_defaults_zero() {
 }
 
 /// step 2（vanish 非数値）: `areka.vanish.count="abc"` → `vanish_count==0`（寛容縮退・panic せず
-/// 起動を止めない・要件 4.2/6.3）。
+/// 起動を止めない）。
 #[test]
 fn gate_vanish_count_non_numeric_degrades_zero() {
     let (parts, asker) = spawn_reader_seeded(vec![
@@ -527,32 +476,24 @@ fn gate_vanish_count_non_numeric_degrades_zero() {
     parts.handle.join().expect("clean close joins");
 }
 
-// ---- 終了時フラッシュの統合檻（task 8.4・position-persist・design Testing Strategy「Integration
-//      Tests §3」・要件 1.2/8.1・design 軸E: E1 write-through＋mpsc FIFO close／E2-lite 越境フェンス） ----
+// ---- 終了時フラッシュの統合檻 ----
 
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{Axis, load_scope};
 
-/// シナリオ（task 8.4・position-persist）: 実 `FsPersistIo`（temp dir）上の実 sylphya アクターへ、
-/// **`PersistWiring` の clone 送信端**（UI スレッド常駐端の代役）から `barrier` を挟まずに複数回
-/// `persist_put` を投函し（n×DragEnd 相当・同一 scope の last-write-wins）、その後 **runtime 側の
-/// publisher** から `barrier()`→`close()`→アクター `join` の終了系列（design「shutdown」step 10・
-/// E2-lite）を駆動する。join 後にファイル（`<ghost root>/sylphya.toml`）を `load_scope` で読み戻し、
-/// clone 投函の**最終値**が反映されていることを確認する。
+/// 実 `FsPersistIo`（temp dir）上の実 sylphya アクターへ、`PersistWiring` の clone 送信端（UI スレッド
+/// 常駐端の代役）から `barrier` を挟まずに複数回 `persist_put` を投函し（同一 scope の last-write-wins）、
+/// その後 runtime 側 publisher から `barrier()`→`close()`→アクター `join` を駆動する。join 後に
+/// `<ghost root>/sylphya.toml` を `load_scope` で読み戻し、clone 投函の最終値が反映されていることを確認する。
 ///
-/// これは要件 1.2（正常終了時フラッシュ＝ドラッグ確定時 write-through への安全網）と 8.1（往復値
-/// 等価の決定論檻）の統合檻であり、design 軸E の二重証明を兼ねる:
-/// - **E1**（write-through＋mpsc FIFO close）: clone と runtime 側 publisher は同一 mpsc 送信端を
-///   共有する（`PersistWiring` は `{ publisher: SylphyaPublisher }` ゆえ clone した publisher が
-///   同一 FIFO）。clone が投函した put は、後続の `Close` 処理（Stop で積み残し破棄）より FIFO 順で
-///   **先に**処理されるため、close→join を経ればファイルへ確実に反映される。
-/// - **E2-lite（越境フェンス）**: runtime 側 publisher から呼ぶ `barrier()` が、**別送信端**（clone）
-///   経由で enqueue 済みの put も被覆する（単一 FIFO・shutdown 時点で UI 送信は静止済み・design
-///   「軸E」バリデーション Issue 2 対応）。
+/// - write-through＋mpsc FIFO close: clone と runtime 側 publisher は同一 mpsc 送信端を共有するので、
+///   clone が投函した put は後続の `Close`（Stop で積み残し破棄）より先に処理され、close→join を経れば
+///   ファイルへ確実に反映される。
+/// - 越境フェンス: runtime 側 publisher の `barrier()` は別送信端（clone）経由で enqueue 済みの put も被覆する
+///   （単一 FIFO・shutdown 時点で UI 送信は静止済み）。
 ///
-/// 判別性: 投函値は非 96 倍数の一意値（1234→1777・841→907）とし、最終値のみがファイルに現れる
-/// （中間値 1234/841 は上書き消滅）ことを確認する——ファイルの最終値が観測できるのは、終了系列が
-/// enqueue 済み put を処理したからに他ならない（barrier なしの clone put が確かにフラッシュされた証跡）。
+/// 投函値は非 96 倍数の一意値（1234→1777・841→907）で、ファイルに最終値だけが現れる（中間値 1234/841 は
+/// 上書き消滅）ことが、barrier なしの clone put がフラッシュされた証跡になる。
 ///
 /// `barrier`/`join` の宙吊りに備え `run_bounded` で有界化する。
 #[test]
@@ -567,14 +508,12 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
         ..ScopeRoots::default()
     };
 
-    // runtime 側 sylphya（実 FsPersistIo・実アクター・本番 boot と同一の spawn 経路）。
     let parts = crate::sylphya_wiring::spawn_ghost_sylphya(roots.clone(), None);
 
-    // `PersistWiring` の clone 送信端（UI スレッド常駐端の代役）。PersistWiring は
-    // `{ publisher: SylphyaPublisher }` ゆえ、clone した publisher が同一 mpsc 送信端＝同一 FIFO。
+    // `PersistWiring` の clone 送信端（UI スレッド常駐端の代役）。clone した publisher は同一 mpsc 送信端＝同一 FIFO。
     let ui_send_end = parts.publisher.clone();
 
-    // n×DragEnd 相当の barrier なし put（同一 scope 0・last-write-wins・非 96 倍数の判別値）。
+    // barrier なし put（同一 scope 0・last-write-wins・非 96 倍数の判別値）。
     ui_send_end.persist_put(
         PersistScope::Ghost,
         vec![
@@ -613,10 +552,9 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
             ),
         ],
     );
-    // clone 送信端では barrier を一切呼ばない（＝終了時フラッシュ安全網に委ねる・要件 1.2）。
+    // clone 送信端では barrier を一切呼ばない（終了時フラッシュの安全網に委ねる）。
     drop(ui_send_end);
 
-    // runtime 側 shutdown フェンス（design「shutdown」step 10 の barrier→close→join を同型で駆動）。
     let SylphyaParts {
         reader: _,
         publisher,
@@ -626,7 +564,6 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
         "runtime-side barrier -> close -> join (exit flush fence)",
         std::time::Duration::from_secs(10),
         move || {
-            // 越境フェンス: 別送信端（clone）経由で enqueue 済みの put も被覆する（単一 FIFO）。
             publisher
                 .barrier()
                 .expect("runtime-side barrier must reflect clone-enqueued puts (live actor)");
@@ -637,8 +574,7 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
         },
     );
 
-    // アクター join 後、ファイルの最終値が clone 投函の last-write-wins と値等価であること
-    // （barrier なし clone put が終了系列で確実にフラッシュされた・要件 1.2/8.1・E1＋E2-lite）。
+    // ファイルの最終値が clone 投函の last-write-wins と等しい。
     let loaded = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
     assert!(
         loaded.contains(&(
@@ -660,8 +596,7 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
         )),
         "終了フラッシュ後、scope 0 の Y はファイルへ clone 投函の最終値 907 で反映されるべき: {loaded:?}"
     );
-    // 中間値が残っていないこと（last-write-wins の確認＝最終値のみが観測できるのは終了系列が
-    // enqueue 済み put を処理したから）。
+    // 中間値が残っていない。
     assert!(
         !loaded.iter().any(|(k, v)| matches!(
             k,
@@ -674,7 +609,7 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
     );
 }
 
-// ---- 起こしの中継（audit-kanade #7・要件 9.5・5.3） ----
+// ---- 起こしの中継 ----
 
 /// 刻み役が本物のときだけ起こしの中継が起き、`into_parts` の束に `Some` で載る（`Disabled` で
 /// `None` なのは `into_parts_exposes_live_senders_and_all_handles_for_manual_teardown` が見る）。

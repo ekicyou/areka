@@ -1,4 +1,4 @@
-//! 失敗の閉じた語彙・段・取得の失敗・警告（要件 7.3・7.4・8.2）。
+//! 失敗の閉じた語彙・段・取得の失敗・警告。
 //!
 //! ここではログを出さない。記録は `lib.rs` が `Err` を返す直前に 1 回だけ出す。
 //! そのため各変種の表示は、その 1 行だけで診断できる情報（どのファイルか・
@@ -16,7 +16,7 @@ macro_rules! fail_reasons {
         $(#[$variant_attr:meta])*
         $variant:ident { $( $(#[$field_attr:meta])* $field:ident : $ty:ty ),* $(,)? }
     ),* $(,)?) => {
-        /// 一周を失敗にした理由。11 変種で閉じる（7.4 の 10 に `EscapesTarget` を足した）。
+        /// 一周を失敗にした理由。11 変種で閉じる。
         ///
         /// `std::io::Error` を持つので `Clone`／`PartialEq` は導出しない。比べるときは `kind()`。
         #[derive(Debug, thiserror::Error)]
@@ -41,7 +41,7 @@ macro_rules! fail_reasons {
     };
 }
 
-/// どの段まで進んだか（7.3）。削除の段は一周を失敗にしないので（6.6）ここに無い。
+/// どの段まで進んだか。削除の段は一周を失敗にしないのでここに無い。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
     Entry,
@@ -123,7 +123,7 @@ fail_reasons! {
     CommitWrite { path: PathBuf, source: std::io::Error },
 
     /// 戻せなかった。`path`／`source` は確定を止めた失敗。表示は両方の一覧を名前で持つ
-    /// （error の記録の `detail` がこの表示＝5.5）。
+    /// （error の記録の `detail` がこの表示）。
     #[error("確定で書けず、戻せなかった: {path}: {source}（戻せた {restored:?}・戻せなかった {stuck:?}）")]
     RollbackFailed {
         path: PathBuf,
@@ -140,7 +140,7 @@ pub struct Stuck {
     pub source: std::io::Error,
 }
 
-/// 一周の失敗（7.3）。
+/// 一周の失敗。
 #[derive(Debug, thiserror::Error)]
 #[error("{homeurl} → {target}: {stage:?} で失敗: {reason}")]
 pub struct UpdateError {
@@ -151,7 +151,7 @@ pub struct UpdateError {
     pub leftovers: Vec<PathBuf>,
     /// 戻せなかったときだけ。元の内容が残る作業場所。
     pub work: Option<PathBuf>,
-    // 要取得の一覧は持たない: 差分の段を越えた失敗なら `Progress::DiffDecided` で既に渡している（2.6）。
+    // 要取得の一覧は持たない: 差分の段を越えた失敗なら `Progress::DiffDecided` で既に渡している。
 }
 
 impl UpdateError {
@@ -201,7 +201,7 @@ impl UpdateError {
     }
 }
 
-/// 拒否ではないが黙って通さないもの（8.2）。`run` が 1 件 1 行の `warn!` に写す。
+/// 拒否ではないが黙って通さないもの。`run` が 1 件 1 行の `warn!` に写す。
 /// 取り除けなかった物と残骸は結果の一覧（`undeletable`・`leftovers`）が正本で、
 /// `run` がそこから直接 `warn!` に写す（`io::Error` は `Clone` できないので 2 か所に持たない）。
 #[derive(Debug)]
@@ -223,20 +223,20 @@ pub enum UpdateWarning {
         line: usize,
         why: DeleteWhy,
     },
-    /// 行の種別（ファイル／フォルダ）と実体の種別が違う → 取り除かない（6.4・両方向）。
+    /// 行の種別（ファイル／フォルダ）と実体の種別が違う → 取り除かない（両方向）。
     DeleteKindMismatch {
         file: String,
         line: usize,
         path: PathBuf,
     },
-    /// `delete.txt`／`delete<N>.txt` が読めない → そのファイルを飛ばす（6.6）。
+    /// `delete.txt`／`delete<N>.txt` が読めない → そのファイルを飛ばす。
     DeleteFileUnreadable {
         file: String,
         source: std::io::Error,
     },
 }
 
-/// 定義ファイルのエントリを無効として捨てた理由（1.11・1.12）。
+/// 定義ファイルのエントリを無効として捨てた理由。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InvalidWhy {
     NoMd5,
@@ -250,7 +250,7 @@ pub enum InvalidWhy {
     InsideWorkArea,
 }
 
-/// `delete.txt` の行を無視した理由（6.3）。
+/// `delete.txt` の行を無視した理由。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeleteWhy {
     Absolute,

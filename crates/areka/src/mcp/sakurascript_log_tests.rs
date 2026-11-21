@@ -1,4 +1,4 @@
-//! script 種別のログが `get_log` で読めることの決定論テスト（design Testing Strategy 要件 7.3）。
+//! script 種別のログが `get_log` で読めることの決定論テスト。
 //!
 //! kanade の公開の出し口 [`areka_kanade::script_log::emit`] を 3 つの表示の語で呼び、捕まえた出来事を
 //! ログの履歴の下書き（[`crate::log_history::draft`]）に通して、種別・名・表示の語・本文が取れることを見る。

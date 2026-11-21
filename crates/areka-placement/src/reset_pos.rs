@@ -1,11 +1,10 @@
-//! 既定の位置への並べ直し（areka-P0-move-canon 要件 8.6・8.8・8.9・9.2・design ResetPos）。
+//! 既定の位置への並べ直し。
 //!
 //! `\![execute,resetwindowpos]`・右クリックのメニューの「シェル位置初期化」・位置初期化の近道
 //! （メニューと同じ `OnResetWindowPos` の往復を通る）の 3 つの入口が呼ぶ。位置の記憶が
 //! 無いときに起動で並べるのと同じ配置の規則（[`resolve_placement`]）を、**今表示している窓の
 //! 大きさ**で 1 度解き、全スコープのキャラクターの窓をその位置へ書く。拡大率の値は読まない——
-//! 今の大きさがすでに今の拡大率で描いた大きさなので、DPI でも将来の倍率でも構造的に追従する
-//! （areka-P0-move-canon の research §13 議題 1）。
+//! 今の大きさがすでに今の拡大率で描いた大きさなので、DPI でも将来の倍率でも構造的に追従する。
 //!
 //! 書込は起動の連鎖の確定と同じ 3 手——[`move_window_to`]（`MoveCue`・バルーンは今のずらしで
 //! 付いて動く）→ 既定の位置を自分で記し、台本の印 `ScriptPlaced` を外す →
@@ -30,10 +29,9 @@ use super::source::DescriptSource;
 use super::spawn::GhostWindows;
 use super::{primary_monitor, square_dpi, work_area_px};
 
-/// 標準の位置の材料——窓の組の descript の値と走っているバルーンの配置の値
-/// （design ResetPos State Management・areka-P0-window-link-directives 設計の決め 7）。
+/// 標準の位置の材料——窓の組の descript の値と走っているバルーンの配置の値。
 ///
-/// 窓の組ごとに 1 つ。起動の準備とシェルの切り替えの後始末が同じ形で置き（要件 7.4）、バルーンの
+/// 窓の組ごとに 1 つ。起動の準備とシェルの切り替えの後始末が同じ形で置き、バルーンの
 /// 面が変わると面の `windowposition` の置き直し（`face_windowposition`）がその面の値へ入れ替える。
 /// バルーンの切り替えは、作者の DPI が替わるとき新しいバルーンの値を入れる（本体の `finish_balloon`）。
 /// 並べ直し（[`reset_window_positions`]）は descript の値から配置の設定を組んで読む。
@@ -117,7 +115,7 @@ pub fn reset_window_positions(world: &mut World) -> bool {
         }
         // 既定へ戻した窓は台本の置いた窓ではない（起動の確定と記憶の判定が印を読む）。
         world.entity_mut(char_window).remove::<ScriptPlaced>();
-        // ただし台本の指示で置いた窓なので、拡大率の後の詰め直しはこの窓を寄せない（要件 3.1）。
+        // ただし台本の指示で置いた窓なので、拡大率の後の詰め直しはこの窓を寄せない。
         note_script_moved(world, char_window);
         info!(
             event = "reset_window_pos",
@@ -130,7 +128,7 @@ pub fn reset_window_positions(world: &mut World) -> bool {
         );
         moved = true;
     }
-    // 先に書いたスコープのバルーンは後から書いた窓を知らずに判定したので、全窓を書き終えた今の位置で判定し直す（要件 2.10）。
+    // 先に書いたスコープのバルーンは後から書いた窓を知らずに判定したので、全窓を書き終えた今の位置で判定し直す。
     rejudge_all_balloons(world);
     persist_unremembered_char_positions(world);
     moved

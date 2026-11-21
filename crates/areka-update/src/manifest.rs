@@ -1,4 +1,4 @@
-//! `updates2.dau`／`updates.txt` の読み手（純関数・要件 1.5〜1.10）。
+//! `updates2.dau`／`updates.txt` の読み手（純関数）。
 
 use crate::error::{InvalidWhy, UpdateWarning};
 use crate::outcome::ManifestName;
@@ -6,12 +6,12 @@ use crate::paths::{is_in_work_area, normalize_separators, unsafe_component};
 use crate::urlpath;
 use std::collections::HashMap;
 
-/// 既定の文字コード（1.9）。
+/// 既定の文字コード。
 pub(crate) const DEFAULT_CHARSET: &encoding_rs::Encoding = encoding_rs::SHIFT_JIS;
 
 pub(crate) struct Manifest {
     pub name: ManifestName,
-    /// 解決した文字コード（`delete.txt` へ引き継ぐ＝6.2）。
+    /// 解決した文字コード（`delete.txt` へ引き継ぐ）。
     pub charset: &'static encoding_rs::Encoding,
     /// 有効なエントリ（定義の順・重複は後勝ち）。
     pub entries: Vec<Entry>,
@@ -19,11 +19,11 @@ pub(crate) struct Manifest {
 
 pub(crate) struct Entry {
     pub line: usize,
-    /// ローカルパス。`/` 区切り・復号済み（1.15）。
+    /// ローカルパス。`/` 区切り・復号済み。
     pub local: String,
-    /// URL のパス部分。符号化済み・`/` は区切りのまま（1.15）。
+    /// URL のパス部分。符号化済み・`/` は区切りのまま。
     pub url_path: String,
-    /// 小文字 32 桁（2.2）。
+    /// 小文字 32 桁。
     pub md5: String,
 }
 
@@ -44,13 +44,13 @@ pub(crate) fn parse(name: ManifestName, bytes: &[u8]) -> (Manifest, Vec<UpdateWa
         }
         let body = match name {
             ManifestName::Updates2Dau => line,
-            // `charset,` 行は先読みで済んでいる。どちらでもない行は無視（1.6）。
+            // `charset,` 行は先読みで済んでいる。どちらでもない行は無視。
             ManifestName::UpdatesTxt => match line.strip_prefix("file,") {
                 Some(rest) => rest,
                 None => continue,
             },
         };
-        // 位置 0＝パス・位置 1＝MD5・位置 2 以降の拡張欄は読み飛ばす（1.7）。
+        // 位置 0＝パス・位置 1＝MD5・位置 2 以降の拡張欄は読み飛ばす。
         let mut fields = body.split('\x01');
         let path = normalize_separators(fields.next().unwrap_or_default());
         let md5 = fields.next().unwrap_or_default();
@@ -67,7 +67,7 @@ pub(crate) fn parse(name: ManifestName, bytes: &[u8]) -> (Manifest, Vec<UpdateWa
         }
     }
 
-    // 符号化の判定は有効な全エントリで 1 回（1.15）。
+    // 符号化の判定は有効な全エントリで 1 回。
     let all_encoded = valid.iter().all(|(_, path, _)| urlpath::is_encoded(path));
     let mut slots: Vec<Option<Entry>> = Vec::with_capacity(valid.len());
     let mut seen: HashMap<String, usize> = HashMap::new();
@@ -92,7 +92,7 @@ pub(crate) fn parse(name: ManifestName, bytes: &[u8]) -> (Manifest, Vec<UpdateWa
             let url_path = urlpath::encode(&path);
             (path, url_path)
         };
-        // 重複は小文字の鍵で後勝ち（1.14）。
+        // 重複は小文字の鍵で後勝ち。
         if let Some(old) = seen.insert(local.to_lowercase(), slots.len())
             && let Some(old) = slots[old].take()
         {
@@ -117,7 +117,7 @@ pub(crate) fn parse(name: ManifestName, bytes: &[u8]) -> (Manifest, Vec<UpdateWa
     (manifest, warnings)
 }
 
-/// パスの無効（1.11・1.12）。`\` は `/` に揃え済み。MD5 の 2 種の後を、定めた順に検査する。
+/// パスの無効。`\` は `/` に揃え済み。MD5 の 2 種の後を、定めた順に検査する。
 fn invalid_path(path: &str, name: ManifestName) -> Option<InvalidWhy> {
     let why = if path.contains('\0') {
         InvalidWhy::Nul
@@ -141,7 +141,7 @@ fn invalid_path(path: &str, name: ManifestName) -> Option<InvalidWhy> {
     Some(why)
 }
 
-/// 文字コードの指定を生のバイト列から先読みする（1.8）。指定が無ければ `None`。
+/// 文字コードの指定を生のバイト列から先読みする。指定が無ければ `None`。
 ///
 /// 区切り（`\n`・`\x01`）は Shift_JIS の 2 バイト目に現れないので、復号前に分けてよい。
 fn prescan_charset(name: ManifestName, bytes: &[u8]) -> Option<&[u8]> {
@@ -161,7 +161,7 @@ fn prescan_charset(name: ManifestName, bytes: &[u8]) -> Option<&[u8]> {
     }
 }
 
-/// 名前を解決する。無指定は既定、解決できなければ警告して既定（1.9・1.10）。OS のロケールは読まない。
+/// 名前を解決する。無指定は既定、解決できなければ警告して既定。OS のロケールは読まない。
 fn resolve_charset(
     label: Option<&[u8]>,
     warnings: &mut Vec<UpdateWarning>,

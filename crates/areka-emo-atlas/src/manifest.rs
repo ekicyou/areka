@@ -1,7 +1,5 @@
 //! マニフェスト導出（列挙・重複排除）。
 //!
-//! 設計決定 **D6**（要件 **R1.1–1.6, 5.6**）。
-//!
 //! shell モデル（`areka-parsers::shell::Shell`）と surface 表現された balloon から、
 //! 全部の面の element 画像パスを直に数える。`Pattern.surface_id` の参照先も同じセットの面なので、
 //! 参照をたどらなくても数え漏れは無い（負の番号・無い番号の参照は面を足さない）。
@@ -14,21 +12,19 @@ use std::collections::HashMap;
 use crate::normalize::AlphaParams;
 use crate::table::{AtlasKey, SetId};
 
-/// 出所単位の自己完結な入力束（shell で 1 個・balloon で 1 個…複数可・D1）。
+/// 出所単位の自己完結な入力束（shell で 1 個・balloon で 1 個…複数可）。
 ///
-/// surface 群・基準 dir・透過設定が出所ごとに束で対応する（ディスカッション #1）。
-/// shell と balloon は基準 dir も descript も別ゆえ**セットを分けて**渡す（1.4）。
+/// shell と balloon は基準 dir も descript も別ゆえ**セットを分けて**渡す。
 pub struct SurfaceSet<'a> {
     /// element 相対パス＋bind pattern を持つ surface 群（ソース語彙・読み取り専用）。
     pub surfaces: &'a [areka_parsers::shell::Surface],
-    /// このセットの基準 dir（shell dir / balloon dir）。derive は join しない
-    /// （実パス化はデコード段の一度きり・1.5）。
+    /// このセットの基準 dir（shell dir / balloon dir）。derive は join しない（実パス化はデコード段）。
     pub base_dir: &'a std::path::Path,
-    /// このセットの descript 由来透過設定（derive は運ぶのみで読まない・3.6）。
+    /// このセットの descript 由来透過設定（derive は運ぶのみで読まない）。
     pub alpha_params: AlphaParams,
 }
 
-/// マニフェスト＝`ElementId` 順に整列した `AtlasKey` 一覧（採番の正本・D3/D7）。
+/// マニフェスト＝`ElementId` 順に整列した `AtlasKey` 一覧（採番の正本）。
 pub(crate) struct Manifest {
     /// index == `ElementId.0`（密・決定的：(SetId 昇順, rel_path 昇順)）。
     pub(crate) keys: Vec<AtlasKey>,
@@ -38,26 +34,21 @@ pub(crate) struct Manifest {
 pub(crate) struct ManifestDeriver;
 
 impl ManifestDeriver {
-    /// 全セットの全部の面の element パスを直に数えて重複なく導出し（参照先も同じセットの面なので
-    /// 数え漏れは無い）、(SetId 昇順, 相対パス昇順) で `ElementId` を決定的に採番する（D7・golden 安定）。
-    ///
-    /// 入力は読み取り専用（改変しない）。実パスは生成しない（実パス化はデコード段・一度きり）。
+    /// 全セットの全部の面の element パスを重複なく列挙し、(SetId 昇順, 相対パス昇順) で
+    /// `ElementId` を決定的に採番する（golden 安定）。実パスは生成しない（実パス化はデコード段）。
     pub(crate) fn derive(&self, sets: &[SurfaceSet<'_>]) -> Manifest {
-        // 重複排除キー＝(SetId, rel_path)。BTreeSet で挿入と同時に (set, path) 昇順整列。
         let mut keys: BTreeSet<(u32, String)> = BTreeSet::new();
 
         for (set_index, set) in sets.iter().enumerate() {
             let set_id = set_index as u32;
 
             for surface in set.surfaces {
-                // 直接 element の列挙（1.1/1.2・base 自己参照も通常 element 扱い）。
                 for element in &surface.elements {
                     keys.insert((set_id, element.path.as_str().to_string()));
                 }
             }
         }
 
-        // (SetId 昇順, rel_path 昇順) で ElementId を採番（BTreeSet が既に整列済み）。
         let keys = keys
             .into_iter()
             .map(|(set, rel_path)| AtlasKey {
@@ -70,8 +61,7 @@ impl ManifestDeriver {
     }
 }
 
-/// 着せ替え（`bind`）のアニメーションのパターンからだけ参照される面の絵の集合を求める
-/// （real-run-log-noise 要件 3.7）。
+/// 着せ替え（`bind`）のアニメーションのパターンからだけ参照される面の絵の集合を求める。
 ///
 /// 鍵は (セットの番号, 相対パス)。マニフェストの鍵と同じ綴り（`element.path.as_str()`）。
 /// 絵が入るのは、その絵を持つ面（持ち主）がどれも、同じセットのどこかのパターンから参照され、
@@ -80,7 +70,7 @@ impl ManifestDeriver {
 /// （迷ったら警告の側）。負の番号・無い番号の参照と、欄 2 が面の番号でないメソッド
 /// （`start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・
 /// `insert`・`move`）のパターンは数えない。抜き色の道か・α を持つかは見ない。
-/// 下流の emo-compose の `is_bind_interval` は使わず、同じ判定をここで持つ。純粋・決定的。
+/// 下流の emo-compose の `is_bind_interval` は使わず、同じ判定をここで持つ。
 pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)> {
     let mut out = BTreeSet::new();
     for (set_index, set) in sets.iter().enumerate() {
@@ -106,7 +96,7 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
         // 絵 → 持ち主がどれも bind だけから参照されているか。
         let mut paths: BTreeMap<&str, bool> = BTreeMap::new();
         for surface in set.surfaces {
-            // 多 id のブレスは全部の番号が bind だけから参照されるときだけ（spec: audit-parsers-sakura 指摘 38・番号の無いブレスは入れない）。
+            // 多 id のブレスは全部の番号が bind だけから参照されるときだけ。
             let owner_ids = surface_ids(surface);
             let owner_ok = !owner_ids.is_empty()
                 && owner_ids
@@ -183,7 +173,7 @@ mod tests {
             .collect()
     }
 
-    /// 1.1/1.2: 2 surface・複数 element の直接列挙（base 自己参照も通常 element 扱い）。
+    /// 2 surface・複数 element の直接列挙（base 自己参照も通常 element 扱い）。
     #[test]
     fn direct_enumeration_all_elements() {
         let base = Path::new("shell/master");
@@ -200,7 +190,7 @@ mod tests {
         assert_eq!(got.len(), 3, "3 distinct element paths enumerated");
     }
 
-    /// 1.3: 面 0 → 1 → … → 49,999 を `overlay` の参照の鎖でつないだ 5 万面のセットを、
+    /// 面 0 → 1 → … → 49,999 を `overlay` の参照の鎖でつないだ 5 万面のセットを、
     /// スタック 256 KiB のスレッドで数え終え、絵を 1 度ずつ（鍵 5 万個）数える
     /// （参照をたどる再帰があるとスタックがあふれて落ちる）。
     #[test]
@@ -225,7 +215,7 @@ mod tests {
         assert_eq!(count, N as usize);
     }
 
-    /// 1.5: サブディレクトリ入りパスは無改変で AtlasKey.rel_path に保持される。
+    /// サブディレクトリ入りパスは無改変で AtlasKey.rel_path に保持される。
     #[test]
     fn subdirectory_path_unchanged() {
         let base = Path::new("shell/master");
@@ -236,7 +226,7 @@ mod tests {
         assert_eq!(got, vec![(0, "purple/2/a.png".to_string())]);
     }
 
-    /// 1.6/5.6: 同一 set 内で 2 surface が同じ rel_path を参照 → 単一キーへ重複排除。
+    /// 同一 set 内で 2 surface が同じ rel_path を参照 → 単一キーへ重複排除。
     #[test]
     fn dedup_same_path_same_set() {
         let base = Path::new("shell/master");
@@ -250,7 +240,7 @@ mod tests {
         assert_eq!(got, vec![(0, "shared.png".to_string())], "single dedup key");
     }
 
-    /// 1.4/D3: shell set と balloon set が同名 rel_path を持つ → SetId 別の 2 キー。
+    /// shell set と balloon set が同名 rel_path を持つ → SetId 別の 2 キー。
     #[test]
     fn set_scoped_keys_two_sets() {
         let shell_base = Path::new("shell/master");
@@ -260,13 +250,13 @@ mod tests {
         let sets = [set(&shell, shell_base), set(&balloon, balloon_base)];
         let m = ManifestDeriver.derive(&sets);
         let got = keys_of(&m);
-        // 同名だが SetId 0 と 1 の 2 キー（balloon も同一機構・1.4／dedup は (set, rel_path)）
+        // 同名だが SetId 0 と 1 の 2 キー（balloon も同一機構・dedup は (set, rel_path)）
         assert!(got.contains(&(0, "surface0.png".to_string())));
         assert!(got.contains(&(1, "surface0.png".to_string())));
         assert_eq!(got.len(), 2);
     }
 
-    /// D3/D7: keys が (SetId 昇順, rel_path 昇順) で整列・derive は決定的（2 回一致）。
+    /// keys が (SetId 昇順, rel_path 昇順) で整列・derive は決定的（2 回一致）。
     #[test]
     fn deterministic_sorted_numbering() {
         let shell_base = Path::new("shell/master");
@@ -286,7 +276,6 @@ mod tests {
             ],
             "sorted by (SetId asc, rel_path asc)"
         );
-        // ElementId == index 対応の確認
         assert_eq!(
             m.keys[0],
             AtlasKey {
@@ -302,12 +291,11 @@ mod tests {
             }
         );
 
-        // 決定性: 2 回目も同一
         let m2 = ManifestDeriver.derive(&sets);
         assert_eq!(keys_of(&m), keys_of(&m2));
     }
 
-    // ---- 檻 T8: 着せ替え（bind）のアニメーションからだけ参照される面の絵（要件 3.7）----
+    // ---- 檻 T8: 着せ替え（bind）のアニメーションからだけ参照される面の絵----
 
     /// 指定の interval を持つ単一 pattern のアニメーション（参照先は `ref_surface_id`）。
     fn anim_with(anim_id: u32, interval: Interval, ref_surface_id: i64) -> Animation {
@@ -404,7 +392,7 @@ mod tests {
     /// T8 ⑺: 負の番号・無い番号の参照は数えない（`bind` の参照としても、持ち主を作る参照としても）。
     #[test]
     fn bind_only_paths_ignores_negative_and_missing_refs() {
-        // 負の番号・無い番号は bind でないアニメーションからでも ⑴ を崩さない。
+        // 負の番号・無い番号は bind でないアニメーションからでも、bind だけから参照される絵が入ることを崩さない。
         let got = bind_only_of(
             vec![
                 bind_anim(0, 3000),
@@ -444,8 +432,7 @@ mod tests {
         }
     }
 
-    /// T8 ⑼: 多 id のブレス（`surface1-3`）の絵は、ブレスの全部の番号が `bind` だけから参照されるときだけ入る
-    /// （先頭の番号 1 だけが参照されても 2・3 は参照されないので入らない・spec: audit-parsers-sakura 指摘 38）。
+    /// T8 ⑼: 多 id のブレス（`surface1-3`）の絵は、ブレスの全部の番号が `bind` だけから参照されるときだけ入る。
     #[test]
     fn bind_only_paths_requires_every_id_of_range_brace() {
         let mut eye = surface(1, vec![elem(0, "eye.png")]);

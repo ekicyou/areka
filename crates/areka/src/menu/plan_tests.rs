@@ -1,4 +1,4 @@
-//! 計画の組み立て（[`build`]）の決定論テスト（要件 9.1）。
+//! 計画の組み立て（[`build`]）の決定論テスト。
 //!
 //! 確かめること: 12 枠の並び・未登記の枠が出ないこと・区切り線の位置・サブメニューの子の順と
 //! チェック位置・無効の写し・識別子の一意性と逆引き・アクセラレータ記法 `&` の 2 系統。
@@ -70,9 +70,9 @@ fn run(plan: &MenuPlan, id: u32) -> (Frame, Vec<&'static str>) {
 }
 
 /// 12 枠すべてが登記されているとき、並びは ①〜⑫で、群 {①②③④⑤}{⑥⑦⑧⑨⑩}{⑪}{⑫} の間に
-/// 区切り線が 1 本ずつ入る（要件 2.1・2.6・置き場の 3 枠はインストールと同じ群・「シェル位置初期化」は
-/// バルーンと同じ群＝areka-P0-move-canon 要件 8.1・「バルーン位置初期化」は「シェル位置初期化」と
-/// 同じ群＝areka-P0-window-link-directives 要件 7.5）。先頭と末尾には入らない。
+/// 区切り線が 1 本ずつ入る（置き場の 3 枠はインストールと同じ群・「シェル位置初期化」は
+/// バルーンと同じ群・「バルーン位置初期化」は「シェル位置初期化」と
+/// 同じ群）。先頭と末尾には入らない。
 #[test]
 fn all_twelve_frames_follow_the_declared_order_with_three_separators() {
     let snapshot = vec![
@@ -118,7 +118,7 @@ fn all_twelve_frames_follow_the_declared_order_with_three_separators() {
     assert_eq!(plan.item_count(), 12);
 }
 
-/// 本仕様が登記する 2 枠だけのとき（第 1 スライスの既定の姿）: 説明書・区切り・終了。
+/// 説明書・終了の 2 枠だけのとき: 説明書・区切り・終了。
 #[test]
 fn readme_and_close_only_are_separated_by_one_line() {
     let snapshot = vec![
@@ -134,7 +134,7 @@ fn readme_and_close_only_are_separated_by_one_line() {
     );
 }
 
-/// 間の群が空でも区切り線は重ならない（要件 2.3 の「出さない」が区切りに漏れない）。
+/// 間の群が空でも区切り線は重ならない。
 /// ①と⑫の間は群が 2 つ飛ぶが、入る区切りは 1 本。
 #[test]
 fn empty_groups_in_between_do_not_double_the_separator() {
@@ -151,7 +151,7 @@ fn empty_groups_in_between_do_not_double_the_separator() {
     );
 }
 
-/// 同じ群の中には区切り線を入れない。登記の無い枠（ここでは②）は現れない（要件 2.3）。
+/// 同じ群の中には区切り線を入れない。登記の無い枠（ここでは②）は現れない。
 #[test]
 fn frames_in_the_same_group_have_no_separator_and_unregistered_frames_are_absent() {
     let snapshot = vec![
@@ -177,7 +177,7 @@ fn empty_snapshot_makes_an_empty_plan() {
 }
 
 /// サブメニューは見出し＋子項目の列になり、子は登記された順に並び、チェックは
-/// 「現在」と示された子だけに付く（要件 2.4）。見出しは識別子を持たない。
+/// 「現在」と示された子だけに付く。見出しは識別子を持たない。
 #[test]
 fn submenu_keeps_child_order_and_marks_only_the_checked_child() {
     let mut current = leaf("さくら", "sakura");
@@ -211,7 +211,7 @@ fn submenu_keeps_child_order_and_marks_only_the_checked_child() {
     assert_eq!(plan.item_count(), 3, "見出しは選べる項目に数えない");
 }
 
-/// 「無効」は葉にもサブメニューの見出しにも子項目にもそのまま写る（要件 2.5）。
+/// 「無効」は葉にもサブメニューの見出しにも子項目にもそのまま写る。
 #[test]
 fn disabled_is_copied_for_leaf_header_and_child() {
     let mut readme = leaf("説明書", "readme");
@@ -249,7 +249,7 @@ fn disabled_is_copied_for_leaf_header_and_child() {
 }
 
 /// 識別子は 1 から深さ優先の出現順に払い出され、重複しない。逆引きは項目ごとに違う動作を
-/// 返す（同じ動作を配り回していないことを、World に残る名札で見分ける・要件 2.7）。
+/// 返す（同じ動作を配り回していないことを、World に残る名札で見分ける）。
 #[test]
 fn ids_are_unique_depth_first_and_map_back_to_each_own_action() {
     let snapshot = vec![
@@ -277,7 +277,7 @@ fn ids_are_unique_depth_first_and_map_back_to_each_own_action() {
 }
 
 /// リソース由来の文言は素通し（`&` はアクセラレータ記法のまま）、登記者由来の既定名は
-/// `&` を `&&` へ写す（要件 3.5）。表に無い／空のリソース名は既定名へ落ちる。
+/// `&` を `&&` へ写す。表に無い／空のリソース名は既定名へ落ちる。
 #[test]
 fn ampersand_passes_through_from_resource_but_is_escaped_in_registered_labels() {
     let mut from_resource = leaf("説明書", "readme");

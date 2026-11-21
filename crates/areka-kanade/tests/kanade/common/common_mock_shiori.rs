@@ -116,7 +116,7 @@ fn spawn_mock_shiori_loop(
 ///
 /// [`ShioriFailure`] 自体は `Clone` を実装しないため（かつ `Fixture` は `Clone` 派生ゆえ
 /// 中に持てない）、fixture 側にはこの Copy な種別のみを持たせ、実 `ShioriFailure` は mock の
-/// 受信の輪の中でその都度 fresh に構築する（設計「Error Categories」の 5 語彙）。
+/// 受信の輪の中でその都度 fresh に構築する。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FailKind {
     /// [`ShioriFailure::Handshake`]（接続確立失敗）。
@@ -127,7 +127,7 @@ pub enum FailKind {
     Ipc,
     /// [`ShioriFailure::Shiori`]（SHIORI エラー応答）。
     Shiori,
-    /// [`ShioriFailure::Internal`]（kanade 内部規律違反・境界写像では生成されない・DD-IT-11）。
+    /// [`ShioriFailure::Internal`]（kanade 内部規律違反・境界写像では生成されない）。
     Internal,
 }
 
@@ -184,9 +184,9 @@ impl FailOn {
 
     /// `OnInitialize`（boot 最初の NOTIFY）を指定語彙で落とす記述子を返す。
     ///
-    /// boot 系列の最初の呼出（`OnInitialize` NOTIFY・Req 1.1）を対象にすることで、Boot 駆動が
+    /// boot 系列の最初の呼出（`OnInitialize` NOTIFY）を対象にすることで、Boot 駆動が
     /// 確実にこの呼出へ到達し、失敗が boot 応答待ち（`awaits_reply`）で受領され Unloading{Fault}
-    /// へ倒れる経路を確実に踏む（設計「Error Categories」ShioriFailure 行）。
+    /// へ倒れる経路を確実に踏む。
     pub fn on_initialize(kind: FailKind) -> Self {
         Self::new("OnInitialize", kind)
     }
@@ -203,7 +203,7 @@ impl FailOn {
 /// [`ShioriOutcome::Failed`]（`fail_on.kind` に対応する fresh な [`ShioriFailure`]）を返す。
 /// 呼出の記録・[`ShioriMsg::Unload`]／[`ShioriMsg::Close`] の扱いは [`spawn_mock_shiori`] と同一
 /// （Unload は best-effort で `Unloaded` を返し記録する）。これにより「区別語彙ごとの呼出失敗
-/// → 観測可能な終了（Unloading{Fault}→Unload→Stopped）」を統合層で観測できる（Req 6.1）。
+/// → 観測可能な終了（Unloading{Fault}→Unload→Stopped）」を統合層で観測できる。
 pub fn spawn_mock_shiori_failing(fixture: Fixture, fail_on: FailOn) -> MockShiori {
     spawn_mock_shiori_loop(fixture, Some(fail_on), None)
 }

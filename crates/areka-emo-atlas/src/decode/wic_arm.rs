@@ -1,13 +1,7 @@
 //! 既定デコード腕＝WIC（COM 隔離・`windows` の WIC 型を直接利用）。
 //!
-//! 設計決定 **D4**（要件 **R2.1, R2.2**）。
-//!
-//! `ElementDecoder` の既定実装。`windows` クレートの WIC 経路
-//! （`CreateDecoderFromFilename → GetFrame(0) → IWICFormatConverter で
-//! GUID_WICPixelFormat32bppPBGRA へ変換 → CopyPixels`）で PBGRA raw バッファを
-//! 抽出する（wintf の `load_bitmap_source` 相当・本層は wintf 本体へ依存せず
-//! `windows` を直接利用）。COM 依存は本モジュールに隔離し、MTA/COM 規律に従う。
-//! 変換前フレームのピクセルフォーマット（WIC の形式の情報）由来とパレット由来の α 有無を `DecodedImage` へ確定する。
+//! `ElementDecoder` の既定実装。WIC で 1 枚目のコマを PBGRA（または BGRA）へ変換して読み、
+//! 変換前の形式の情報とパレットから α 有無を `DecodedImage` へ確定する。COM 依存は本モジュールに隔離する。
 
 use std::fs::File;
 use std::io::BufReader;
@@ -30,7 +24,7 @@ use crate::decode::{
     sniff,
 };
 
-/// 既定デコード腕（WIC 経由）。COM/unsafe をこの腕へ隔離する（D4）。
+/// 既定デコード腕（WIC 経由）。COM/unsafe をこの腕へ隔離する。
 ///
 /// COM は呼び出しスレッドで**呼び出し側が**初期化済みであること（`CoInitializeEx`）が前提。
 /// factory は構築時に一度生成して保持する。
@@ -55,8 +49,8 @@ impl WicDecoderArm {
     /// 画素は読まない（寸法の確かめと写しは `copy_checked`）。
     ///
     /// wintf `com/wic.rs::load_bitmap_source` の手順を raw COM で再現する。
-    /// `has_alpha` は **変換前**フレームの `GetPixelFormat`（Critical Issue 1）由来と、
-    /// 番号つきの形式ならパレット由来の α 有無から取る。
+    /// `has_alpha` は **変換前**フレームの `GetPixelFormat` と、
+    /// 番号つきの形式ならパレットの α 有無から取る。
     fn open_source(
         &self,
         path: &Path,
@@ -65,7 +59,6 @@ impl WicDecoderArm {
         // UTF-16 のまま渡す（`to_string_lossy` は対のないサロゲートを U+FFFD に化かし別の名を開く）
         let path_hstring = HSTRING::from(path);
 
-        // デコーダー作成
         let decoder = unsafe {
             self.factory.CreateDecoderFromFilename(
                 &path_hstring,
@@ -75,11 +68,9 @@ impl WicDecoderArm {
             )?
         };
 
-        // 最初のフレーム
         let frame = unsafe { decoder.GetFrame(0)? };
 
-        // 変換前フォーマットから α 有無を確定（Critical Issue 1）。
-        // PBGRA 変換後は必ず α 付きになり判別不能になるため、変換前にここで取る。
+        // PBGRA 変換後は必ず α 付きになり判別不能になるため、変換前の形式から α 有無を取る。
         let pre_format = unsafe { frame.GetPixelFormat()? };
         // 番号つきの形式は形式の GUID に α が出ないので、パレットの透明度で決める。
         let has_alpha = if INDEXED_FORMATS.contains(&pre_format) {
@@ -105,13 +96,11 @@ impl WicDecoderArm {
 
     /// `decode` と `decode_unmultiplied` の共通の道（変換先の形式だけが違う）。
     fn read(&self, path: &Path, target: &GUID) -> Result<DecodedImage, DecodeError> {
-        // 不在は診断可能な NotFound として返す（panic しない）。
         if !path.exists() {
             return Err(DecodeError::NotFound {
                 path: path.to_path_buf(),
             });
         }
-        // 在るが復号不能（破損等）は Decode として返す（panic しない）。
         let (source, has_alpha) =
             self.open_source(path, target)
                 .map_err(|e| DecodeError::Decode {
@@ -162,7 +151,7 @@ impl ElementDecoder for WicDecoderArm {
 
     fn probe_animation(&self, path: &Path) -> Option<AnimationInfo> {
         // 開けなければ無し（続く `decode` が `NotFound` を返す）。見出しだけを読むので静止画の
-        // 全体の復号は増えない（要件 1.5）。チャンクごとに seek と小さい読みをするので BufReader で包む。
+        // 全体の復号は増えない。チャンクごとに seek と小さい読みをするので BufReader で包む。
         let file = File::open(path).ok()?;
         sniff::sniff(&mut BufReader::new(file))
     }
@@ -236,7 +225,7 @@ mod tests {
         crate::sample_test_support::emo2_balloon_root().join(rel)
     }
 
-    /// 2.1: 実 emo2 element PNG（α 付き）を復号し、契約（寸法・stride・長さ・has_alpha）を確認。
+    /// 実 emo2 element PNG（α 付き）を復号し、契約（寸法・stride・長さ・has_alpha）を確認。
     #[test]
     fn decode_real_emo2_png_satisfies_contract() {
         with_arm(|arm| {
@@ -246,14 +235,13 @@ mod tests {
             let img = arm.decode(&png).expect("real emo2 PNG decodes");
             assert!(img.width > 0 && img.height > 0, "non-empty dimensions");
             assert_eq!(img.stride, img.width * 4, "PBGRA stride == width*4");
-            // Postcondition: bgra.len() == stride * height。
             assert_eq!(img.bgra.len(), (img.stride * img.height) as usize);
             // emo2 は use_self_alpha=1 かつ α 付き PNG（color type 6）→ has_alpha=true。
             assert!(img.has_alpha, "emo2 online0.png is RGBA → has_alpha");
         });
     }
 
-    /// 2.2: 不在パスは NotFound（パス付き）で返す（panic しない）。
+    /// 不在パスは NotFound（パス付き）で返す（panic しない）。
     #[test]
     fn missing_path_yields_not_found() {
         with_arm(|arm| {
@@ -266,7 +254,7 @@ mod tests {
         });
     }
 
-    /// 2.2: 実在するが画像でないファイルは Decode（パス＋source 付き）で返す（panic しない）。
+    /// 実在するが画像でないファイルは Decode（パス＋source 付き）で返す（panic しない）。
     #[test]
     fn non_image_file_yields_decode_error() {
         with_arm(|arm| {
@@ -286,13 +274,12 @@ mod tests {
         });
     }
 
-    /// D5/emo2: emo2 の PNG には `.pna` 兄弟が無いため probe_pna は false。
+    /// emo2 の PNG には `.pna` 兄弟が無いため probe_pna は false。
     #[test]
     fn probe_pna_false_for_emo2() {
         with_arm(|arm| {
             let png = balloon_path("online0.png");
             assert!(png.exists());
-            // `online0.pna` は存在しない。
             assert!(!balloon_path("online0.pna").exists());
             assert!(!arm.probe_pna(&png), "emo2 has no sibling .pna");
         });

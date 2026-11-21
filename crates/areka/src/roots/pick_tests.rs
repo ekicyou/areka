@@ -1,4 +1,4 @@
-//! フォルダ選びの指定の選び分け（design「FolderPickerReadonly」・要件 8.6・11.6）。
+//! フォルダ選びの指定の選び分け。
 
 use windows::Win32::UI::Shell::{FOS_DONTADDTORECENT, FOS_PICKFOLDERS};
 

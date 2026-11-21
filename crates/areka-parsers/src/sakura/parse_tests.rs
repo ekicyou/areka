@@ -1,10 +1,10 @@
-//! `parse` 公開 facade の単体テスト（タスク 5・lexer→decode 結線）。
+//! `parse` 公開 facade の単体テスト（lexer→decode 結線）。
 //!
 //! 検証対象は公開エントリ `areka_parsers::sakura::parse`（`pub fn parse(&str) -> Vec<Instruction>`）:
-//! - 空入力 → 空命令列（要件 1.5）。
-//! - タグ＋テキスト混在 → 入力順保持の型付き命令列（要件 1.1/1.3/9.2）。
-//! - 命令を実行・解釈しない／エラーを送出しない（要件 1.4/10.2）。
-//! - 不正トークン前後の正常命令を欠落させない（要件 10.3）。
+//! - 空入力 → 空命令列。
+//! - タグ＋テキスト混在 → 入力順保持の型付き命令列。
+//! - 命令を実行・解釈しない／エラーを送出しない。
+//! - 不正トークン前後の正常命令を欠落させない。
 //!
 //! parse は lexer→decode の結線にすぎないため、ここでは個々の値正規化の境界値ではなく
 //! 「結線が順序保持で正しく行われること」を固定する（境界値は decode_tests の領分）。
@@ -13,14 +13,14 @@ use super::model::{Choice, Instruction, NewLineRatio};
 use super::parse::parse;
 use std::time::Duration;
 
-/// 空入力 → 空 `Vec`（要件 1.5）。命令を一切産まない。
+/// 空入力 → 空 `Vec`。命令を一切産まない。
 #[test]
 fn empty_input_yields_empty_vec() {
     assert_eq!(parse(""), Vec::<Instruction>::new());
     assert!(parse("").is_empty());
 }
 
-/// タグ＋テキスト混在が入力順を保持して型付き命令列になる（要件 1.1/1.3/9.2）。
+/// タグ＋テキスト混在が入力順を保持して型付き命令列になる。
 /// `\s[0]テキスト\n\e` → Surface, Text, NewLine, End の順。
 #[test]
 fn mixed_tags_and_text_preserve_input_order() {
@@ -34,7 +34,7 @@ fn mixed_tags_and_text_preserve_input_order() {
     assert_eq!(got, want);
 }
 
-/// 複数タグ＋テキストの長めの混在でも順序が保たれる（要件 1.3）。
+/// 複数タグ＋テキストの長めの混在でも順序が保たれる。
 /// `\p[0]\s[10]はい\_w[100]\q[ok,id0]いいえ` の順序を固定。
 #[test]
 fn longer_mixed_sequence_preserves_order() {
@@ -54,7 +54,7 @@ fn longer_mixed_sequence_preserves_order() {
     assert_eq!(got, want);
 }
 
-/// 純粋テキストのみ（タグ無し）→ 単一 `Text`（要件 9.1）。
+/// 純粋テキストのみ（タグ無し）→ 単一 `Text`。
 #[test]
 fn plain_text_only_yields_single_text() {
     assert_eq!(
@@ -63,7 +63,7 @@ fn plain_text_only_yields_single_text() {
     );
 }
 
-/// 不正トークン（未閉じ `[`）の前にある正常命令は欠落しない（要件 10.3/10.2）。
+/// 不正トークン（未閉じ `[`）の前にある正常命令は欠落しない。
 /// `\e\i[` → End ＋ 未閉じ吸収の `Raw`（エラーを送出せず継続）。
 #[test]
 fn malformed_token_does_not_drop_preceding_instruction() {
@@ -73,7 +73,7 @@ fn malformed_token_does_not_drop_preceding_instruction() {
     assert!(matches!(got[1], Instruction::Raw(_)));
 }
 
-/// システム変数 `%keyword` は展開せずトークン保持（要件 8.1）。混在順も保持。
+/// システム変数 `%keyword` は展開せずトークン保持。混在順も保持。
 #[test]
 fn system_var_kept_as_token_in_order() {
     let got = parse("hi %username !");

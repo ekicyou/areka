@@ -1,7 +1,4 @@
 //! ループ統括器（`LoopRuntime`）の抽選・進行・発行の決定論テスト。
-//!
-//! 番号の出どころ: 無印の要件と D-7 は areka-P0-seriko-loop（バルーンの表の要件 5.6 は
-//! areka-P0-kero-balloon）、「bindopt」と D9-2 は areka-P0-bindoption-exclusivity。
 
 use super::*;
 use crate::resolve::SurfaceTarget;
@@ -86,7 +83,7 @@ pub(crate) struct RngProbe {
 }
 
 /// 指定した値列を順に返し、呼ばれた回数を計数する rng を作る（尽きたら 1 を返す＝非発火）。
-/// 返す `Arc` から消費回数を照合できる（bind OFF での**非消費**の檻・要件 3.1）。
+/// 返す `Arc` から消費回数を照合できる（bind OFF での**非消費**の檻）。
 pub(crate) fn counting_rng(values: &[u32]) -> (LoopRng, Arc<Mutex<RngProbe>>) {
     let probe = Arc::new(Mutex::new(RngProbe {
         calls: 0,
@@ -144,8 +141,7 @@ pub(crate) fn part_clock(
 
 // ── 抽選ゲート: 表示中×非再生中×bind ゲート ───────────────────────────────
 
-/// bind OFF（BindRandom で bindgroup が current_binds に無い）→ **乱数を消費しない**・発火しない
-/// （要件 3.1・CRITICAL）。表示中でも境界を跨いでも rng は 1 度も呼ばれない。
+/// bind OFF（BindRandom で bindgroup が current_binds に無い）→ **乱数を消費しない**・発火しない。表示中でも境界を跨いでも rng は 1 度も呼ばれない。
 #[test]
 fn bindrandom_off_does_not_consume_rng() {
     // BindRandom{4}・anim id 7・bind ゲート id は 7。binds は空 ⇒ OFF。
@@ -154,12 +150,10 @@ fn bindrandom_off_does_not_consume_rng() {
     let mut rt = LoopRuntime::new(cfg(table, rng));
     let (mut states, _scope) = shown_shell(10); // binds 空 ⇒ id 7 は OFF
 
-    // 起動 tick（遅延初期化・非跨ぎ）→ 境界を跨ぐ tick。
     assert!(rt.on_tick(0, &mut states).is_empty(), "起動 tick は無発行");
-    let cmds = rt.on_tick(1000, &mut states); // 境界跨ぎ
+    let cmds = rt.on_tick(1000, &mut states);
     assert!(cmds.is_empty(), "bind OFF は発火しない＝無発行");
 
-    // 乱数は 1 度も消費されていない（ゲート不通過で should_fire 未呼出・要件 3.1）。
     assert_eq!(
         probe.lock().unwrap().calls,
         0,
@@ -167,8 +161,7 @@ fn bindrandom_off_does_not_consume_rng() {
     );
 }
 
-/// bind ON（bindgroup が current_binds に在る）＋境界跨ぎ＋発火 rng → 発火し先頭コマを発行する
-/// （要件 3.2/2.2）。rng は 1 回だけ消費される。
+/// bind ON（bindgroup が current_binds に在る）＋境界跨ぎ＋発火 rng → 発火し先頭コマを発行する。rng は 1 回だけ消費される。
 #[test]
 fn bindrandom_on_fires_and_consumes_rng_once() {
     let table = table_single(
@@ -202,7 +195,7 @@ fn bindrandom_on_fires_and_consumes_rng_once() {
     }
 }
 
-/// Random は無条件ゲート（bind に依らず発火する・要件 3.2）。
+/// Random は無条件ゲート（bind に依らず発火する）。
 #[test]
 fn random_fires_unconditionally() {
     let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0)]);
@@ -220,7 +213,7 @@ fn random_fires_unconditionally() {
     }
 }
 
-/// 非表示 slot は評価対象ゼロ＝抽選も進行も走らず乱数も消費しない（要件 2.1 の表示中ゲート）。
+/// 非表示 slot は評価対象ゼロ＝抽選も進行も走らず乱数も消費しない（表示中ゲート）。
 #[test]
 fn hidden_slot_consumes_no_rng() {
     let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0)]);
@@ -239,7 +232,7 @@ fn hidden_slot_consumes_no_rng() {
     );
 }
 
-/// 再生中アニメは再抽選対象外＝次の境界跨ぎで乱数を消費しない（要件 2.3）。
+/// 再生中アニメは再抽選対象外＝次の境界跨ぎで乱数を消費しない。
 #[test]
 fn playing_anim_is_not_relotteried() {
     // 次の境界を越えて続く残留アニメ（末尾非負・1500ms 継続）。
@@ -261,8 +254,7 @@ fn playing_anim_is_not_relotteried() {
 
 // ── 終端意味論: Stopped（ベース復帰）／FinishedResidual（残留・再抽選可） ────
 
-/// kero 型（末尾 `-1`）: `-1` 到達でコマ除去＋playback 除去＝ベース復帰し、以降の境界で再抽選できる
-/// （rng 再消費・要件 4.3/2.3）。
+/// kero 型（末尾 `-1`）: `-1` 到達でコマ除去＋playback 除去＝ベース復帰し、以降の境界で再抽選できる（rng 再消費）。
 #[test]
 fn kero_negative_tail_restores_base_and_is_relotteriable() {
     // 2106(w0)/2110(w40)/-1(w80) ⇒ t=[0,40,120]。
@@ -298,7 +290,7 @@ fn kero_negative_tail_restores_base_and_is_relotteriable() {
 }
 
 /// sakura 型（末尾非負）: 末尾到達で最終コマを残したまま playback 除去＝IdleResidual。残留は保たれ、
-/// 次の境界で再抽選できる（要件 4.4/2.3）。
+/// 次の境界で再抽選できる。
 #[test]
 fn sakura_residual_keeps_frame_and_is_relotteriable() {
     // 1412(w0)/1411(w150)/1410(w22) ⇒ t=[0,150,172]。末尾非負。
@@ -329,7 +321,7 @@ fn sakura_residual_keeps_frame_and_is_relotteriable() {
         "残留は恒久＝無発行（要件 6.2）"
     );
 
-    // 次の境界 2000 で再抽選できる（IdleResidual は抽選対象・要件 2.3/9.4）。
+    // 次の境界 2000 で再抽選できる（IdleResidual は抽選対象）。
     rt.on_tick(2000, &mut states);
     assert_eq!(
         probe.lock().unwrap().calls,
@@ -374,10 +366,10 @@ fn residual_is_immediately_cleared_on_refire() {
     );
 }
 
-// ── 固定消費順（scope 昇順→Shell→Balloon→id 昇順・D-7） ─────────────────
+// ── 固定消費順（scope 昇順→Shell→Balloon→id 昇順） ─────────────────
 
 /// 同一 surface に複数アニメ（id 昇順で消費）。注入列 [1,0] で id 昇順の 2 本目のみ発火することを示し、
-/// 消費順が animation id 昇順であることを檻に入れる（要件 2.4・D-7）。
+/// 消費順が animation id 昇順であることを檻に入れる。
 #[test]
 fn lottery_consumes_in_animation_id_order() {
     // 同 surface 10 に anim id 5 と anim id 2（宣言順は 5→2＝id 昇順ではない）。
@@ -419,7 +411,7 @@ fn lottery_consumes_in_animation_id_order() {
     );
 }
 
-/// scope 昇順で消費する（D-7）。scope "0"→"1" の順で乱数を消費し、注入列 [1,0] で scope1 のみ発火。
+/// scope 昇順で消費する。scope "0"→"1" の順で乱数を消費し、注入列 [1,0] で scope1 のみ発火。
 #[test]
 fn lottery_consumes_in_scope_ascending_order() {
     // 同一 shell_table 上に surface10（scope0 表示）と surface11（scope1 表示）。
@@ -465,7 +457,7 @@ fn lottery_consumes_in_scope_ascending_order() {
     }
 }
 
-/// Shell を Balloon より先に消費する（同一 scope・D-7）。注入列 [0,1] で Shell が発火・Balloon が非発火。
+/// Shell を Balloon より先に消費する（同一 scope）。注入列 [0,1] で Shell が発火・Balloon が非発火。
 #[test]
 fn lottery_consumes_shell_before_balloon() {
     let shell_t = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0)]);
@@ -480,8 +472,8 @@ fn lottery_consumes_shell_before_balloon() {
         pick_rng: crate::seeded_rng(0),
     });
     let mut states = crate::test_support::empty_states();
-    states.apply(&scope, SurfaceTarget::Show(10)); // Shell shown surface 10
-    states.apply_balloon(&scope, SurfaceTarget::Show(20)); // Balloon shown surface 20
+    states.apply(&scope, SurfaceTarget::Show(10));
+    states.apply_balloon(&scope, SurfaceTarget::Show(20));
 
     rt.on_tick(0, &mut states);
     let cmds = rt.on_tick(1000, &mut states);
@@ -493,9 +485,9 @@ fn lottery_consumes_shell_before_balloon() {
     );
 }
 
-// ── scope キー表引き（バルーン表・要件 5.6） ──────────────────────
+// ── scope キー表引き（バルーン表） ──────────────────────
 
-/// バルーン表は scope ごとに独立に引かれる（要件 5.6）。同一 surface id・同一 animation id でも、
+/// バルーン表は scope ごとに独立に引かれる。同一 surface id・同一 animation id でも、
 /// scope 0 は自 scope の表のコマ、scope 1 は自 scope の表のコマで駆動される
 /// （ある scope が別 scope の系列由来の定義で駆動されないことの反証）。
 #[test]
@@ -546,8 +538,7 @@ fn balloon_tables_are_looked_up_per_scope() {
     }
 }
 
-/// 表を持たない scope のバルーンは**空表意味論＝不活性**（抽選対象ゼロ・**乱数非消費**・panic なし・
-/// 要件 5.6）。他 scope が表を持っていても、その表が不在 scope へ流用されることはない。
+/// 表を持たない scope のバルーンは**空表意味論＝不活性**（抽選対象ゼロ・**乱数非消費**・panic なし）。他 scope が表を持っていても、その表が不在 scope へ流用されることはない。
 #[test]
 fn absent_scope_balloon_table_is_inert() {
     // 表は scope "0" だけが持ち、表示するのは表を持たない scope "1" のバルーンのみ。
@@ -580,7 +571,7 @@ fn absent_scope_balloon_table_is_inert() {
 
 // ── on_surface_changed / 単調性ガード ──────────────────────────────────
 
-/// `on_surface_changed` は当該 slot の playback を全除去する（surface 従属・要件 2.3）。
+/// `on_surface_changed` は当該 slot の playback を全除去する（surface 従属）。
 /// 除去後は再抽選対象へ戻る（rng が再消費される）。
 #[test]
 fn on_surface_changed_removes_playback() {
@@ -591,7 +582,6 @@ fn on_surface_changed_removes_playback() {
 
     rt.on_tick(0, &mut states);
     rt.on_tick(1000, &mut states); // 発火・再生中（rng 1 回）
-    // surface 切替連動で playback 除去。
     rt.on_surface_changed(&scope, Slot::Shell);
     // 次の境界で再抽選できる（playback が消えたので Idle）＝rng 再消費。
     rt.on_tick(2000, &mut states);
@@ -602,7 +592,7 @@ fn on_surface_changed_removes_playback() {
     );
 }
 
-/// 非単調 tick（now < 前回）は無視され、状態を変えず空を返す（防御・要件 1.2）。
+/// 非単調 tick（now < 前回）は無視され、状態を変えず空を返す（防御）。
 /// コマが替わった後に時刻が戻っても、前のコマへ巻き戻る指令を出さず、番人の時刻も戻さない。
 #[test]
 fn non_monotonic_tick_is_ignored() {
@@ -665,7 +655,7 @@ fn disabled_config_is_inert() {
     assert!(rt.on_tick(5000, &mut states).is_empty());
 }
 
-/// 変化なし tick は無発行（冪等・要件 6.2）: 再生中でも同一コマが続く間は指令を返さない。
+/// 変化なし tick は無発行（冪等）: 再生中でも同一コマが続く間は指令を返さない。
 #[test]
 fn unchanged_tick_emits_nothing() {
     // 先頭コマが長く続く（w0 の 2106 が 150ms 継続）。
@@ -684,12 +674,11 @@ fn unchanged_tick_emits_nothing() {
     assert!(rt.on_tick(1100, &mut states).is_empty());
 }
 
-// ── 進行相の bind 判定（再生中に外れた ID の停止・bindopt 7.3/7.4/7.5・D9-2） ──
+// ── 進行相の bind 判定（再生中に外れた ID の停止） ──
 
-/// 再生**途中**（末尾未到達）に bind から外した ID は、次の評価でコマも再生も消え、以後**復活しない**
-/// （bindopt 7.3・D9-2）。
+/// 再生**途中**（末尾未到達）に bind から外した ID は、次の評価でコマも再生も消え、以後**復活しない**。
 ///
-/// 実機の固着そのものの機構: 状態側の除去（`commit_bind` の `drop_residual_frames`・bindopt 7.1）だけでは
+/// 実機の固着そのものの機構: 状態側の除去（`commit_bind` の `drop_residual_frames`）だけでは
 /// 「再生中に外れた」場合を塞げない——playback が残る限り次 tick の進行相が `frame_at` の結果でコマを
 /// 置き直すため。進行相にも bind 判定が要る。
 #[test]
@@ -713,7 +702,7 @@ fn playing_bind_anim_removed_from_binds_stops_and_does_not_revive() {
         "再生中の先頭コマ"
     );
 
-    // 再生途中で bind から外す（状態側 bindopt 7.1 が保持コマをここで取り除く）。
+    // 再生途中で bind から外す（状態側の除去が保持コマをここで取り除く）。
     states.apply_bind(&scope, 7, false);
     assert!(
         states.current_pattern(&scope, Slot::Shell).get(7).is_none(),
@@ -740,7 +729,7 @@ fn playing_bind_anim_removed_from_binds_stops_and_does_not_revive() {
     // bind を戻すと次の境界で再び抽選の対象になる（2000 では経過 1000 で末尾を過ぎるので、
     // 再生が残っていても引く。再生を捨てたことは上の確かめが見る）。
     states.apply_bind(&scope, 7, true);
-    rt.on_tick(2000, &mut states); // 境界跨ぎ
+    rt.on_tick(2000, &mut states);
     assert_eq!(
         probe.lock().unwrap().calls,
         2,
@@ -748,7 +737,7 @@ fn playing_bind_anim_removed_from_binds_stops_and_does_not_revive() {
     );
 }
 
-/// bind 種でないアニメ（純 `Random`）は進行相の bind 判定の影響を受けない（bindopt 7.4）。
+/// bind 種でないアニメ（純 `Random`）は進行相の bind 判定の影響を受けない。
 ///
 /// 同一 surface に bind 種（id 7・BindRandom）と非 bind 種（id 9000・Random）を並べ、id 7 だけを
 /// bind から外す。id 7 は停止するが、id 9000 は再生を続け末尾残留コマまで到達する。
@@ -797,7 +786,7 @@ fn non_bind_anim_is_unaffected_by_progress_phase_bind_check() {
         "bind 非所属アニメは進行相の bind 判定に影響されない（bindopt 7.4）"
     );
 
-    // さらに時間が進んでも id 9000 の残留は保たれる（末尾非負＝IdleResidual・要件 4.4）。
+    // さらに時間が進んでも id 9000 の残留は保たれる（末尾非負＝IdleResidual）。
     assert!(
         rt.on_tick(1500, &mut states).is_empty(),
         "残留は恒久＝無発行"
@@ -813,7 +802,7 @@ fn non_bind_anim_is_unaffected_by_progress_phase_bind_check() {
     );
 }
 
-/// 進行相の停止は `info!` で痕跡を残す（bindopt 7.5・無言の状態変更を作らない）。文言と水準を固定する。
+/// 進行相の停止は `info!` で痕跡を残す（無言の状態変更を作らない）。文言と水準を固定する。
 #[test]
 fn progress_phase_bind_drop_emits_info_marker() {
     let table = table_single(
@@ -844,7 +833,7 @@ fn progress_phase_bind_drop_emits_info_marker() {
     );
 }
 
-/// bind 種でも bind 集合に属したまま再生が続く間は停止しない（誤検出の不在・bindopt 7.3 の裏側）。
+/// bind 種でも bind 集合に属したまま再生が続く間は停止しない（誤検出の不在）。
 ///
 /// **不在主張には同一捕捉内の陽性対照を併置する**（`actor_dispatch_tests` と同じ形）。捕捉区間に
 /// 抽選境界を跨ぐ tick を含め、健全系では `loop 抽選発火` の痕跡が**必ず出る**ことを同時に主張する
@@ -902,7 +891,7 @@ pub(crate) fn pattern_of(cmd: &DisplayCommand) -> &PatternState {
     }
 }
 
-// ── 件 26（spec: animated-surface-log-flood 要件 9.1・9.3）: `-1` で止まった重ね絵は指令に残らない ──
+// ── `-1` で止まった重ね絵は指令に残らない ──
 
 /// ぱすたの animation1400 と同じ並び（bind+random・1410 を 0ms・1411 を 120ms・`-1` を 50ms）を
 /// 16ms の刻みで進めると、閉じる → 半目 → 外す の順に指令が出て、止まった後の指令に 1400 の欄が無い

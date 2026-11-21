@@ -231,7 +231,7 @@ fn serve(text: &'static str) -> areka_mcp::McpServer {
     areka_mcp::start(&[0], registry, None)
 }
 
-/// audit-test-kits 指摘 28: つないだ後に受け口が落ち、子は生きている＝輸送の失敗の猶予の後に `Unreachable`。
+/// つないだ後に受け口が落ち、子は生きている＝輸送の失敗の猶予の後に `Unreachable`。
 /// 猶予は締切を越えない（猶予を締切より長くして確かめる）。
 #[test]
 fn a_dropped_server_with_a_living_child_is_unreachable_within_the_grace() {
@@ -267,7 +267,7 @@ fn a_dropped_server_with_a_living_child_is_unreachable_within_the_grace() {
     );
 }
 
-/// audit-test-kits 指摘 3（audit-test-kits 決め D1）: JSON-RPC の誤りの答えは `Refused` で、輸送の失敗の猶予を待たずに返る（猶予 30 秒・
+/// JSON-RPC の誤りの答えは `Refused` で、輸送の失敗の猶予を待たずに返る（猶予 30 秒・
 /// 締切 10 秒にして、猶予の道へ落ちれば締切まで待って `Unreachable` になる形で確かめる）。
 #[test]
 fn an_mcp_error_reply_is_refused_without_waiting_for_the_grace() {
@@ -299,7 +299,7 @@ fn an_mcp_error_reply_is_refused_without_waiting_for_the_grace() {
     assert!(took < Duration::from_secs(5), "猶予を待った: {took:?}");
 }
 
-/// D-10: 答え（成功も JSON-RPC の誤りも）の後はつなぎを持ち続け、次の呼び出しが使い回す。
+/// 答え（成功も JSON-RPC の誤りも）の後はつなぎを持ち続け、次の呼び出しが使い回す。
 #[test]
 fn the_link_is_kept_after_a_reply_and_after_a_refusal() {
     let server = serve("答え");
@@ -327,7 +327,7 @@ fn the_link_is_kept_after_a_reply_and_after_a_refusal() {
     drop(server);
 }
 
-/// audit-test-kits 指摘 28: 名乗りの確かめで別の相手だけが答えたら、その番号と名乗りを訳に書く。
+/// 名乗りの確かめで別の相手だけが答えたら、その番号と名乗りを訳に書く。
 #[test]
 fn another_server_answering_is_named_in_the_reason() {
     let reason = not_found_reason(&[(9801, "ssp-mcp".to_string())]);

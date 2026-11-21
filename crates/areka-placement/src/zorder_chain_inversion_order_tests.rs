@@ -1,8 +1,8 @@
 //! ぱすたと同じ指定 `\![reset,zorder]\![set,zorder,s0,b0,s1]` から、**台帳 → 合成（areka）→
 //! 受け口 → 確立系・維持系・鎖の適用系（wintf・確定段から帯の適用系を除いた並び）→ 実窓の重なり**を 1 本に
-//! 繋いで測るテスト（`areka-P0-zorder-scope-inversion` 要件 1.2・3.3・4.5・6.1・6.2・6.4・8.4）。
+//! 繋いで測るテスト。
 //!
-//! 兄弟の wintf 側の実窓の檻（`zorder_chain_order_inversion_tests.rs`）は計画を手で組む。
+//! 兄弟の wintf 側の実窓のテスト（`zorder_chain_order_inversion_tests.rs`）は計画を手で組む。
 //! 本ファイルは計画を**本番の台帳と合成**に組ませる——補い（`s0,b0,s1` → `s0,b0,b1,s1`）と
 //! 繋ぎの導出が抜ければ、実窓の並びが崩れて赤くなる。
 //!
@@ -134,7 +134,7 @@ impl Rig {
             .expect("最初の指定は受理される");
     }
 
-    /// 合成して、内容が違うときだけ受け口へ置く（本番の [`publish_chain_plan`]）。
+    /// 合成して、内容が違うときだけ受け口へ置く。
     fn publish(&mut self) {
         let world = &self.world;
         let entities = self.entities;
@@ -207,8 +207,7 @@ impl Drop for Rig {
 // テスト
 // ===========================================================================
 
-/// ぱすたと同じ指定から、台帳が `b1` を補い、合成と確定段のうち 3 本が前 3 枚を成り立たせる
-/// （要件 1.2・3.3・8.4 の前段）。続く解除で各スコープが組へ戻る（要件 4.5）。
+/// ぱすたと同じ指定から、台帳が `b1` を補い、合成と確定段のうち 3 本が前 3 枚を成り立たせる。続く解除で各スコープが組へ戻る。
 #[test]
 fn the_pasta_directive_lands_s0_b0_b1_s1_on_real_windows() {
     let mut rig = Rig::new(&[]);
@@ -240,7 +239,7 @@ fn the_pasta_directive_lands_s0_b0_b1_s1_on_real_windows() {
     assert_eq!(rig.released_marks(), 0, "解除の後も組を外した印が残る");
 }
 
-/// 指定の後に初めて `b0` の窓が現れても、組を張らずに書かれた位置へ入る（要件 6.1）。
+/// 指定の後に初めて `b0` の窓が現れても、組を張らずに書かれた位置へ入る。
 #[test]
 fn a_balloon_that_appears_after_the_directive_joins_in_written_order() {
     let mut rig = Rig::new(&[B0]);
@@ -261,7 +260,7 @@ fn a_balloon_that_appears_after_the_directive_joins_in_written_order() {
     assert_eq!(rig.released_marks(), 1, "b0 の組は外したままのはず");
 }
 
-/// `b0` の窓が破棄され、後に再び現れても書かれた位置へ戻る（要件 6.2）。破棄の間も
+/// `b0` の窓が破棄され、後に再び現れても書かれた位置へ戻る。破棄の間も
 /// 残る窓は書かれた順を保ち、壊した窓が他の窓を道連れにしない。
 #[test]
 fn a_balloon_destroyed_and_recreated_returns_to_its_written_place() {
@@ -296,7 +295,7 @@ fn a_balloon_destroyed_and_recreated_returns_to_its_written_place() {
 }
 
 /// キャラクター `s0` の窓が破棄されても、残りは書かれた順のまま繋ぎ直され、他のスコープの
-/// 窓は道連れにならない。相手の居ない組は印だけを外す（要件 6.4）。
+/// 窓は道連れにならない。相手の居ない組は印だけを外す。
 #[test]
 fn a_destroyed_character_leaves_the_rest_in_written_order() {
     let mut rig = Rig::new(&[]);

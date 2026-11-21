@@ -1,4 +1,4 @@
-//! 着せ替えの描く手順の資源（要件 5.5・6.5・6.7・6.8）。
+//! 着せ替えの描く手順の資源。
 
 use areka_parsers::shell::parse;
 
@@ -46,7 +46,7 @@ fn world() -> EmoWorld {
     EmoWorld::build(&parse(SHELL))
 }
 
-/// 3 コマの A は 後ろ・`insert,B`・前 を番号の昇順に並べ、各コマの座標を持つ（6.7・6.8）。
+/// 3 コマの A は 後ろ・`insert,B`・前 を番号の昇順に並べ、各コマの座標を持つ。
 #[test]
 fn pure_bind_walks_all_patterns_in_index_order() {
     let w = world();
@@ -76,13 +76,13 @@ fn pure_bind_walks_all_patterns_in_index_order() {
     );
 }
 
-/// `bind+random` は手順を持たない（コマがあるときだけ描く・件 26。pattern0 も insert も入らない）。
+/// `bind+random` は手順を持たない（コマがあるときだけ描く。pattern0 も insert も入らない）。
 #[test]
 fn bind_random_has_no_steps() {
     assert!(world().bind_steps(0, 3).is_empty());
 }
 
-/// 相手が無い・`bind` でない（`random` も `bind+random` も）・読めない `insert`、負の番号、8 語、描かない語は手順に入らない（6.5）。
+/// 相手が無い・`bind` でない（`random` も `bind+random` も）・読めない `insert`、負の番号、8 語、描かない語は手順に入らない。
 #[test]
 fn unusable_patterns_are_left_out() {
     assert_eq!(
@@ -104,7 +104,7 @@ fn non_bind_and_missing_animations_are_empty() {
     assert!(w.bind_steps(7, 1).is_empty());
 }
 
-/// 手順を作るときに記録は 1 本も出さない（5.5）。
+/// 手順を作るときに記録は 1 本も出さない。
 #[test]
 fn building_steps_logs_nothing() {
     let w = world();

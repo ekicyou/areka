@@ -1,13 +1,13 @@
-//! 自動で上げた持ち主の画素の一致（WARP・要件 2.7, 3.2, 8.3・研究 R-e）。
+//! 自動で上げた持ち主の画素の一致（WARP）。
 //!
 //! 節の部分木を、親の描画面の中で描いた絵と、部分の列で原点を引いて自分の描画面に描き
 //! WUC の重ねの写しで整数の位置へ重ねた絵とで比べる。
 //!
-//! R-e の答え: 小数の位置（10.3, 7.6）の候補も拡大 1.0・1.25・1.5 で ±1 に揃う。ただし原点は物理ピクセルで引く
+//! 小数の位置（10.3, 7.6）の候補も拡大 1.0・1.25・1.5 で ±1 に揃う。ただし原点は物理ピクセルで引く
 //! （`TreeFrame::Segment` が拡大を掛けてから整数を引く）。DIP で `px / 拡大` を引いた形は、割り切れない原点で
 //! 位置が 1e-7 ずれ、被覆の標本にちょうど乗る端数（12.875）で楕円の縁が 1 チャネル 16 ほど違った。
 //!
-//! 上げ下げのフレーム（要件 3.1・5.4）: 本物の 1 回の判断（`run_round`）を回の列で回し、各回の画面
+//! 上げ下げのフレーム: 本物の 1 回の判断（`run_round`）を回の列で回し、各回の画面
 //! （親の列と、上げた持ち主の描画面を WUC の重ねの写しで重ねた絵）を、本番の合成の道（`compose_planned`
 //! と `replay_transform` の根の変換の選び）で描いて、全部を節にした絵と比べる。
 
@@ -184,7 +184,7 @@ fn fractional_bitmap_interpolation_subtree_matches_when_promoted() {
 
 #[test]
 fn fractional_downscaled_cubic_bitmap_subtree_matches_when_promoted() {
-    // 縮める HIGH_QUALITY_CUBIC（diff.rs の R1・描く範囲で答えが変わる件）。
+    // 縮める HIGH_QUALITY_CUBIC（diff.rs の `downscaling_hqc`・描く範囲で答えが変わる件）。
     assert_promotion_matches(
         "ビットマップ（縮める CUBIC）",
         bitmap(D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC, 32),

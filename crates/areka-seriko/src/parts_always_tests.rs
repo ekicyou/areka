@@ -1,5 +1,4 @@
-//! 部品の `always` の時計の檻（spec: areka-P0-animated-image-playback 要件 3.1・4.4・4.5・4.7・7.4・
-//! tasks.md 3.3）。
+//! 部品の `always` の時計の檻。
 //!
 //! 表は `surfaces.txt` の本文から解析 → 畳み込み → [`AnimationTable::from_world`] の実経路で組む。
 //! 時刻は `advance`／`refresh` の時刻、乱数は呼ばれた回数を数える注入列で、どちらも決定論。
@@ -59,7 +58,7 @@ const ALWAYS: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
     surface101\n{\n}\nsurface102\n{\n}\nsurface103\n{\n}\n";
 
 /// 見えた刻みの時刻で乱数を引かずに時計が生まれる。経過 0 と同じコマは欄に載らず、`-1` の間は
-/// 「消えている」、周の頭へ戻ると再び載らない（要件 3.1・4.1・4.5・7.4）。
+/// 「消えている」、周の頭へ戻ると再び載らない。
 #[test]
 fn always_part_is_born_without_rng_and_rest_frame_is_not_written() {
     let table = table_of(ALWAYS);
@@ -92,7 +91,7 @@ fn always_part_is_born_without_rng_and_rest_frame_is_not_written() {
 }
 
 /// 親が替わっても（同じ子を置く別のサーフェス・置かないサーフェスを挟んで戻る）子の `always` は
-/// 巻き戻らない（要件 4.4）。
+/// 巻き戻らない。
 #[test]
 fn always_in_child_does_not_rewind_when_parent_switches() {
     let table = table_of(ALWAYS);
@@ -123,7 +122,7 @@ fn always_in_child_does_not_rewind_when_parent_switches() {
 }
 
 /// 出来事の直後の `refresh` は、見えている `always` の時計が無ければ出来事の時刻で作り（経過 0＝欄に
-/// 載せない）、在れば今のコマを書く。時刻が分からない（`None`）ときは作らない（tasks.md 3.4）。
+/// 載せない）、在れば今のコマを書く。時刻が分からない（`None`）ときは作らない。
 #[test]
 fn refresh_creates_always_clock_at_event_time() {
     let table = table_of(ALWAYS);
@@ -148,7 +147,7 @@ fn refresh_creates_always_clock_at_event_time() {
     assert_eq!(probe.lock().unwrap().calls, 0, "乱数を引かない");
 }
 
-/// 同じ部品の `random` の抽選は、`always` が在っても同じ回数だけ乱数を引く（要件 4.7）。
+/// 同じ部品の `random` の抽選は、`always` が在っても同じ回数だけ乱数を引く。
 #[test]
 fn always_beside_random_does_not_change_the_draws() {
     let with = "surface0\n{\nelement0,overlay,100,0,0\n}\n\

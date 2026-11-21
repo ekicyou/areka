@@ -1,5 +1,4 @@
-//! 読み取りだけの走りのインストールの断りの決定論テスト（readonly-mode・design「InstallRefusal」・
-//! 要件 7.1・7.4・7.5・7.6・7.7・10.4・11.3）。
+//! 読み取りだけの走りのインストールの断りの決定論テスト。
 //!
 //! 確かめること: World に [`ReadOnlyRun`] が在れば、窓への投げ込み・台本の `path`（窓口の取り出し
 //! → 受付）・メニューの出どころのどの依頼も `ReadOnly` で断られ、待ち行列は空・窓口は忙しくない・
@@ -43,7 +42,6 @@ fn readonly_refuses_every_origin_before_queueing() {
                 origin: InstallOrigin::WindowDrop,
             },
         );
-        // 台本の `path` は生の要求として窓口へ届き、取り出しが受付へ渡す。
         desk::raw_sender(&world)
             .send(RawInstallRequest {
                 path: PathBuf::from("C:/script.nar"),

@@ -1,7 +1,7 @@
 //! クリック透過機構の監視対象レジストリ。
 //!
 //! 監視対象ウィンドウ（window Entity ＋ 対応 HWND）と、その適用済み透過状態
-//! （`last_applied`）を保持する。差分ガード（同一状態は再適用しない・R3.2）の
+//! （`last_applied`）を保持する。差分ガード（同一状態は再適用しない）の
 //! 状態基盤であり、初期 `last_applied` は不透過（`Opaque`）。
 //!
 //! UI スレッド単独所有（`&World` と同居）を前提とし、ワーカスレッドとは共有しない。
@@ -32,10 +32,10 @@ pub(crate) struct ClickThroughTarget {
     pub(crate) hwnd: HWND,
     /// 直近に適用済みの透過状態（差分ガードの基準・初期 `Opaque`）。
     pub(crate) last_applied: DesiredState,
-    /// `WS_EX_LAYERED` 同伴フラグを適用済みか（初期 `false`・pilot 必須条件）。
+    /// `WS_EX_LAYERED` 同伴フラグを適用済みか（初期 `false`）。
     ///
     /// DComp 窓は factory（`compute_ex_style`）が生成時に LAYERED を除去するため、
-    /// `WS_EX_TRANSPARENT` 単独ではマウス透過が効かない（pilot REPORT 実証）。機構が
+    /// `WS_EX_TRANSPARENT` 単独ではマウス透過が効かない。機構が
     /// 登録窓の初回評価時に `apply_layered_companion` で 1 回立て、成功時に真へ倒す。
     pub(crate) layered_applied: bool,
 }
@@ -127,7 +127,7 @@ impl ClickThroughRegistry {
         self.targets.iter()
     }
 
-    /// 述語が `false` を返す対象を一括除去する（窓破棄追随のバルク版・R7.2 非破壊）。
+    /// 述語が `false` を返す対象を一括除去する（窓破棄追随）。
     ///
     /// wintf の窓（`Window` と、登録の HWND と同じ `WindowHandle` を持つもの）でない対象を
     /// まとめて刈り取る（`prune_dead_targets` が World 参照で述語を与える）。除去件数を返す。
@@ -189,7 +189,6 @@ mod tests {
         reg.register(e, hwnd(2));
 
         assert_eq!(reg.len(), 1);
-        // 再登録は HWND を更新し last_applied を Opaque へ・layered_applied を false へリセットする。
         assert_eq!(reg.last_applied(e), Some(DesiredState::Opaque));
         assert_eq!(reg.iter().next().map(|t| t.hwnd), Some(hwnd(2)));
         assert_eq!(
@@ -214,7 +213,6 @@ mod tests {
         assert!(reg.mark_layered_applied(e));
         assert_eq!(reg.iter().next().map(|t| t.layered_applied), Some(true));
 
-        // 未登録 Entity への mark は false。
         let other = world.spawn_empty().id();
         assert!(!reg.mark_layered_applied(other));
     }
@@ -229,7 +227,6 @@ mod tests {
         assert!(reg.set_last_applied(e, DesiredState::Transparent));
         assert_eq!(reg.last_applied(e), Some(DesiredState::Transparent));
 
-        // 未登録 Entity への更新は false。
         let other = world.spawn_empty().id();
         assert!(!reg.set_last_applied(other, DesiredState::Transparent));
     }

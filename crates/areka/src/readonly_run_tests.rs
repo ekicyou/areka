@@ -1,5 +1,4 @@
-//! 起動から終わりまでを読み取りだけで通し、根の木の前後を比べる（readonly-mode 要件 2.2・2.3・2.4・
-//! 3.2・4.1・4.3・4.4・7.1・7.3・7.6・8.1・8.2・8.4・8.5・10.2・10.5）。
+//! 起動から終わりまでを読み取りだけで通し、根の木の前後を比べる。
 //!
 //! 1 つの根（`SwitchRig` の検体の根＝`target\` の下の exe の隣の形）の中に、まだ無い利用者ごとの
 //! 置き場の場所を置き、前の木を取る。読み取りだけの道（置き場を決める → 記憶の置き場を選ぶ →
@@ -168,7 +167,7 @@ fn readonly_run_leaves_the_tree_as_it_was() {
         let layout = establish_readonly_from(&signals, Some(&root));
         check(layout.user_root.is_none(), "まだ無い書ける根を使う形にした");
         // 初回の起動の形（隣の形・書ける根はまだ無い）: 記憶の置き場は exe の隣の `profile\areka` で、
-        // 書ける根の下ではない（要件 4.3）。
+        // 書ける根の下ではない。
         let chosen = readonly_app_profile_dir(None, &layout, Some(&root));
         let beside = root.join("profile").join("areka");
         check(
@@ -208,7 +207,6 @@ fn readonly_run_leaves_the_tree_as_it_was() {
         crate::roots::add_root(&mut rig.world, picked.clone());
         publisher.barrier().expect("記憶の書き手は生きている");
 
-        // 走りの途中: 変えた値が読み返せる。
         let roots_memory = crate::roots::encode_memory(
             &rig.world.resource::<BootContext>().roots,
             crate::roots::user_root::exe_dir().as_deref(),
@@ -288,7 +286,6 @@ fn readonly_run_leaves_the_tree_as_it_was() {
     });
     drop(guard);
 
-    // SHIORI が受けた要求: OnInstall* は 0 件・OnUpdate* は Ex → Result だけ。
     let all: Vec<String> = ["A", "B"]
         .into_iter()
         .flat_map(|folder| ids(&rig.calls(folder)))

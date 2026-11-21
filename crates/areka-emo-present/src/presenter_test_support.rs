@@ -3,7 +3,7 @@
 //! **期待値はすべて原寸（native）である。** 表示の拡大縮小は wintf の描画経路（`Arrangement.scale`
 //! ＝D2D 変換行列）が持つので、presenter が抱えるバイト列は k に依らず `Composer::compose` の
 //! 出力そのものになった。ゆえに本 module の golden 生成は拡大率を引数に取らず、CPU リサンプラを
-//! 一切呼ばない（spec: areka-P0-present-gpu-transform-scale・要件 6.1／6.3・設計 付録 A′ #8）。
+//! 一切呼ばない。
 
 use super::*;
 
@@ -52,11 +52,10 @@ pub(super) fn make_world_with_gpu() -> World {
     world
 }
 
-/// 窓 entity を **`DPI` component 付き**で作る（design「Testing Strategy > Integration Tests」の
-/// テスト World 前提）。
+/// 窓 entity を **`DPI` component 付き**で作る（テスト World 前提）。
 ///
 /// 本番の窓生成は必ず `DPI` を付与する（wintf が `GetDpiForWindow` の実値で補正する）。テストで
-/// component を省くと要件 1.4 の縮退（error! ＋ k=1.0）が「正常系のふり」で緑になってしまうため、
+/// component を省くと縮退（error! ＋ k=1.0）が「正常系のふり」で緑になってしまうため、
 /// **明示挿入を規律とする**。96 挿入＝恒等 k、192 挿入＝k=2/1。縮退分岐そのものは
 /// `show_surface_without_dpi_component_degrades_to_identity`（DPI 不在専用テスト）で檻に入れる。
 pub(super) fn spawn_window_with_dpi(world: &mut World, dpi: u16) -> Entity {
@@ -264,7 +263,7 @@ pub(super) fn mask_bit_counts(mask: &AlphaMask) -> (usize, usize) {
 /// 表示成立点の行の固定文言（`show.rs` の `info!`・実機サインオフ契約）。
 pub(super) const INFO_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
 
-/// 重ね直しの範囲の行の固定文言（`show.rs`・要件 3.5）。
+/// 重ね直しの範囲の行の固定文言（`show.rs`）。
 pub(super) const RANGE_LINE_MESSAGE: &str = "apply(ShowSurface): 重ね直しの範囲";
 
 // ── ComposedSurface 生成補助 ────────────────────────────────────────────────────────────
@@ -416,7 +415,7 @@ pub(super) fn build_assets_with_valid_and_empty(
 /// 両面とも α=255（全不透明）ゆえ α=0 除外トリムは全域を残し、合成外形は両面とも正確に `w×h`
 /// （＝同寸）。ゆえに外形変化の経路を踏まずに「同寸・異 id 再 Show」だけを固定できる。
 /// golden は presenter が内部で辿るのと同一 world/atlas から作るため readback とのバイト一致が
-/// 二重に決定論的。2 面の golden が別物であることを fixture 自身が assert する（R6.1 の回帰檻前提）。
+/// 二重に決定論的。2 面の golden が別物であることを fixture 自身が assert する（回帰檻の前提）。
 pub(super) fn build_two_face_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable, Vec<u8>, Vec<u8>) {
     let (world, atlas) = bake_world(
         shell_of(vec![
@@ -519,7 +518,7 @@ pub(super) fn bind_overlay_surface(x: i64, y: i64) -> Surface {
     }
 }
 
-// ── hit_region_client の配線と縮退の檻（要件 1.4-1.7・DD-5）─────────────────
+// ── hit_region_client の配線と縮退の檻─────────────────
 //
 // 未表示・未登録の縮退は `attach_target` だけで足りる（World にも GPU にも触れない）。
 // 表示中の判定は、実 GPU の World で不透明な絵を持つ面を実際に表示して作る。
@@ -881,9 +880,8 @@ pub(super) use super::hit_test_support::{
 // ── ログ捕捉ハーネス（presenter 系テストモジュール共有）────────────────────────────────
 //
 // 捕捉窓そのものは本 module に持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する
-// （spec: areka-P0-test-cage-determinism・要件 1.5／2.2）。ここに在った最小 subscriber
-// （`CaptureSubscriber`）と visitor は撤去した——同型が本 crate の `scale.rs`・`balloon.rs`・
-// `presenter/timing.rs` の檻にも写し取られており、写し損ねた側だけが静かに嘘をつく形だった。
+// 最小 subscriber を各 crate へ写し取ると、写し損ねた側だけが静かに嘘をつくため、
+// 本 module では持たない。
 //
 // # 「スレッドローカルゆえ安全」は誤り（起きるのは混入ではなく取りこぼし）
 //
@@ -904,7 +902,7 @@ pub(super) use super::hit_test_support::{
 // 大域の据え付けは使わない。機序の逐条解説は `log_capture_kit` の crate doc と同 crate の
 // `src/probe.rs` にある。
 //
-// presenter 系の複数テストモジュールが同じ道具を要するため、steering `structure.md` の
+// presenter 系の複数テストモジュールが同じ道具を要するため、リポジトリの
 // 「テーマ間で共有するヘルパは `<stem>_test_support.rs` へ集約する」に従い、引き口をここへ
 // 1 本化する（`field_names()` は正準型の `field_names_sorted()` が同じ列を返す）。
 

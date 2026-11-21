@@ -1,5 +1,5 @@
 //! 選択待ちの起こしを kanade → 起こしの中継 → 本物の刻み役 → `KanadeMsg::ChoiceTimeoutDue` と
-//! 1 本で追うテスト（audit-kanade #7・要件 9.5）。
+//! 1 本で追うテスト。
 //!
 //! 刻み役の時刻は注入した値だけで、毎秒の `Tick` の周期は試験中に届かないほど長くする。だから
 //! `OnChoiceTimeout` が出るのは起こしの中継が刻み役へ頼みを渡したときだけ。待ちは SHIORI が
@@ -50,11 +50,8 @@ impl ShioriBackend for ChoiceShiori {
 /// 時刻を 1 回に進める幅（既定の選択の期限 30 秒より長い＝頼みの後の 1 歩で期限を越える）。
 const STEP_MS: u64 = 60_000;
 
-/// **起こしの中継が刻み役へ頼みを渡すと、時刻を進めるだけで `OnChoiceTimeout` が出る**。
-///
-/// # 弁別
-/// - 起こしの中継をつながない（線を作らない・頼みを刻み役へ渡さない）と、`Tick` が来ないので
-///   `OnChoiceTimeout` は出ず、期限で落ちる。
+/// 起こしの中継が刻み役へ頼みを渡すと、時刻を進めるだけで `OnChoiceTimeout` が出る。
+/// 中継をつながないと `Tick` が来ず、`OnChoiceTimeout` は出ないまま期限で落ちる。
 #[test]
 fn choice_timeout_reaches_kanade_through_the_relay_and_the_real_ticker() {
     let temp = TempPath::new("ghost-runtime-choice-timeout-through-the-relay");

@@ -1,4 +1,4 @@
-//! 普通のバルーンの窓のホイールの系の檻（balloon-scroll-arrows 要件 6.1・6.2・6.3・6.5・6.7・11.1）。
+//! 普通のバルーンの窓のホイールの系の檻。
 //!
 //! 手動の位置（自動の先頭行の 1 行上）にいる文字の層を実 GPU の提示で作り（`manual_balloon_runtime`）、
 //! 偽のバルーン窓の子に `PointerState` を載せて系を回す。OS の行数は数える偽で差し替える。
@@ -79,7 +79,7 @@ fn newer_by_one(runtime: &RefCell<TextLayerRuntime>) -> ScrollChange {
     )
 }
 
-/// 上へ（向こう側・正の回転）回すと古い側へ送る（要件 6.1・6.3）。
+/// 上へ（向こう側・正の回転）回すと古い側へ送る。
 #[test]
 fn wheel_up_scrolls_to_older_lines() {
     let (_permit, mut world, runtime) = rig(120, 0);
@@ -95,7 +95,7 @@ fn wheel_up_scrolls_to_older_lines() {
     );
 }
 
-/// 下へ（手前・負の回転）回すと新しい側へ送る（要件 6.2）。自動の 1 行上から 1 行で自動へ戻る。
+/// 下へ（手前・負の回転）回すと新しい側へ送る。自動の 1 行上から 1 行で自動へ戻る。
 #[test]
 fn wheel_down_scrolls_to_newer_lines() {
     let (_permit, mut world, runtime) = rig(-120, 0);
@@ -106,7 +106,7 @@ fn wheel_down_scrolls_to_newer_lines() {
     );
 }
 
-/// 横の回転と回転なしは読まない（OS の行数も読まない・要件 6.7）。
+/// 横の回転と回転なしは読まない（OS の行数も読まない）。
 #[test]
 fn horizontal_or_no_rotation_is_ignored() {
     for (vertical, horizontal) in [(0, 120), (0, 0)] {
@@ -119,7 +119,7 @@ fn horizontal_or_no_rotation_is_ignored() {
     }
 }
 
-/// 120 に満たない回転は持ち越し、合わせて 1 目盛りで送る（要件 6.3）。
+/// 120 に満たない回転は持ち越し、合わせて 1 目盛りで送る。
 #[test]
 fn partial_rotations_carry_over() {
     let (_permit, mut world, runtime) = rig(60, 0);
@@ -128,7 +128,7 @@ fn partial_rotations_carry_over() {
     assert_eq!(newer_by_one(&runtime), ScrollChange::Moved);
 }
 
-/// キャラ窓の見張りと同じ段で回しても、バルーンの窓の回転は `OnMouseWheel` にならない（要件 6.7）。
+/// キャラ窓の見張りと同じ段で回しても、バルーンの窓の回転は `OnMouseWheel` にならない。
 #[test]
 fn balloon_wheel_does_not_queue_on_mouse_wheel() {
     fn mock(scope: u32, x: i64, y: i64) -> HitRegion {

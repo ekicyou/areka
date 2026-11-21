@@ -1,8 +1,7 @@
-//! 新 runtime レイヤ。UI スレッド基盤の owner となる公開 facade `WinApp` を提供する。
+//! runtime レイヤ。UI スレッド基盤の owner となる公開 facade `WinApp` を提供する。
 //!
-//! `WinApp` は旧 `WinThreadMgr` を置換する新公開 facade であり、プロセス初期化
-//! （`CoInitializeEx(COINIT_MULTITHREADED)`・DPI awareness 設定）と `EcsWorld`
-//! （`Rc<RefCell<EcsWorld>>`）生成を統括する。クラス登録はライブラリ
+//! `WinApp` はプロセス初期化（`CoInitializeEx(COINIT_MULTITHREADED)`・DPI awareness 設定）と
+//! `EcsWorld`（`Rc<RefCell<EcsWorld>>`）生成を統括する。クラス登録はライブラリ
 //! （`wintf-winmsg-executor`）が担うため、本層では行わない。
 //!
 //! 依存方向は COM→ECS→Runtime。runtime は ecs に依存してよいが、ecs は runtime に
@@ -55,7 +54,7 @@ mod wndproc_bridge;
 /// 保持する NonSend リソース `WindowRegistry` と、`Window` コンポーネント破棄を検知して
 /// 該当要素を drop（`DestroyWindow`）するリコンサイル `reconcile_window_registry` を提供する。
 ///
-/// `pub(crate)`: `WinApp::run`（task 4.3）が `reconcile_window_registry` を schedule へ
+/// `pub(crate)`: `WinApp::run` が `reconcile_window_registry` を schedule へ
 /// 登録する（runtime→World）ため、クレート内から参照可能にする。
 pub(crate) mod window_registry;
 
@@ -64,7 +63,7 @@ pub(crate) mod window_registry;
 /// 生成後に style/pos/title を反映して `WindowRegistry` へ格納する `EcsWindowFactory` を提供する。
 ///
 /// `pub(crate)`: `create_windows`（ECS 層）が `EcsWindowFactory::create_window` を呼ぶ
-/// 設計公認の単一上向きエッジ（ecs→runtime）のため、クレート内から参照可能にする。
+/// 唯一の上向きエッジ（ecs→runtime）のため、クレート内から参照可能にする。
 pub(crate) mod window_factory;
 
 /// 構築時に選ぶ「窓の数が 0 になったら終了するか」（[`WinApp::with_exit_policy`]）。
@@ -91,11 +90,8 @@ pub fn ensure_process_dpi_awareness() {
         // DPI awareness をスレッドセーフに設定する。既に設定済み／不可の場合はエラーを
         // 返すが、レガシー同様にプロセス起動は止めない（致命的ではない）。
         //
-        // Req 7.4: **戻り値を握り潰さない**。旧実装は `let _ =` で捨てていたため、
-        // per-monitor v2 の設定が失敗していても観測できず、`WM_DPICHANGED` が
-        // 実機で 0 件だった機序（診断レポート §2.7）の切り分けができなかった。
-        // 成否のどちらも必ず 1 行残す——「点灯しない観測点を『発生 0 回』の根拠に
-        // 用いない」（Req 1.5）の直接適用である。
+        // 戻り値は握り潰さず、成否のどちらも 1 行残す。残さないと per-monitor v2 の設定失敗が
+        // 観測できず、`WM_DPICHANGED` が来ない原因の切り分けができない。
         unsafe {
             match SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) {
                 Ok(()) => info!(
@@ -114,9 +110,9 @@ pub fn ensure_process_dpi_awareness() {
 
 /// UI スレッドの COM を MTA で初期化する。
 ///
-/// 同じ部屋で初期化済み（`S_FALSE`）は黙って `Ok`。別の部屋で初期化済み
-/// （`RPC_E_CHANGED_MODE`）なら `warn!` を 1 行残して `Ok`（WUC と D2D の物はその部屋の上で
-/// 作られる）。ほかの失敗は `Err`。
+/// 同じアパートメントで初期化済み（`S_FALSE`）は黙って `Ok`。別のアパートメントで初期化済み
+/// （`RPC_E_CHANGED_MODE`）なら `warn!` を 1 行残して `Ok`（WUC と D2D の物はそのアパートメントの
+/// 上で作られる）。ほかの失敗は `Err`。
 fn init_ui_com() -> Result<()> {
     // SAFETY: Win32 境界。CoInitializeEx は呼び出しスレッドの COM を初期化するのみで、
     // 引数 None・COINIT_MULTITHREADED は定数。
@@ -134,7 +130,7 @@ fn init_ui_com() -> Result<()> {
 #[path = "ui_com_init_tests.rs"]
 mod ui_com_init_tests;
 
-/// UI スレッド基盤の owner。旧 `WinThreadMgr` を置換する新公開 facade。
+/// UI スレッド基盤の owner（公開 facade）。
 ///
 /// COM 初期化・DPI awareness 設定・`EcsWorld` 生成を統括し、共有 World ハンドルの
 /// 唯一の strong 所有者となる。VSync スレッド・メッセージループの駆動は [`WinApp::run`] が持つ。
@@ -143,7 +139,7 @@ pub struct WinApp {
     world: Rc<RefCell<EcsWorld>>,
     /// 終了の指示の受け口（「指示済み」の 1 ビット＋終了シグナル・**runtime=WinApp 所有**）。
     ///
-    /// `WindowRegistry`/`reconcile_window_registry` は runtime 配置（task 3.3 決定）ゆえ、
+    /// `WindowRegistry`/`reconcile_window_registry` は runtime 配置ゆえ、
     /// 空遷移 hook からの指示も runtime→runtime で完結し上向き依存が生じない。
     ///
     /// `with_exit_policy()` で生成し、clone を World へ NonSend として据え、既定の選択なら
@@ -164,20 +160,20 @@ impl WinApp {
     ///
     /// 選択は構築時に消費し、以後は参照しない（実行中に変える口は無い）。
     ///
-    /// COM は `COINIT_MULTITHREADED` で初期化する。初期化済みの場合は成功扱いで、別の部屋
-    /// （`RPC_E_CHANGED_MODE`）なら `warn!` を 1 行残す（`init_ui_com`）。DPI awareness は
+    /// COM は `COINIT_MULTITHREADED` で初期化する。初期化済みの場合は成功扱いで、別の
+    /// アパートメント（`RPC_E_CHANGED_MODE`）なら `warn!` を 1 行残す（`init_ui_com`）。DPI awareness は
     /// per-monitor v2 を設定する。
     ///
-    /// NOTE(W1-V): CoInitializeEx の成功に対し Drop で CoUninitialize を呼ばない現行方針
-    /// （P30）を維持する。プロセス常駐の単一インスタンス運用では実害なし。
+    /// NOTE: CoInitializeEx の成功に対し Drop で CoUninitialize を呼ばない。
+    /// プロセス常駐の単一インスタンス運用では実害なし。
     pub fn with_exit_policy(policy: ExitPolicy) -> Result<Self> {
         init_ui_com()?;
 
         ensure_process_dpi_awareness();
 
-        // 呼び出しスレッド＝UI スレッド（メッセージループを回す本体）である。ここで 1 度だけ
-        // 役割を宣言してスレッド名簿へ載せる（要件 2.3）。COM/DPI の初期化を済ませた後・
-        // World 生成の前に置くのは、`new()` が返る前に必ず 1 度通る点として最も早いため。
+        // 呼び出しスレッド＝UI スレッド（メッセージループを回す本体）の役割をここで 1 度だけ
+        // 宣言してスレッド名簿へ載せる。COM/DPI の初期化の後・World 生成の前に置くのは、
+        // `new()` が返る前に必ず 1 度通る点として最も早いため。
         // 失敗しても起動は止めない——このスレッドの CPU が `unregistered_rest` へ回るだけで、
         // 観測の道具の不調が観測対象を止める理由にはならない。
         if let Err(e) = crate::ecs::world::thread_registry::register_current_thread(
@@ -188,12 +184,8 @@ impl WinApp {
 
         let world = Rc::new(RefCell::new(EcsWorld::new()));
 
-        // 終了の指示の受け口を生成（runtime=WinApp 所有・上向き依存なし）。
         let exit = AppExit::new();
 
-        // WindowRegistry と受け口（NonSend）を World へ確保し、既定の選択なら空遷移で終了を
-        // 指示する hook を **facade から下向きに注入**する。reconcile が最後の窓を除去して
-        // registry が空になると hook が発火し、`run()` が待つ shutdown future を完了させる。
         Self::wire_shutdown_hook(&world, &exit, policy);
 
         debug!(
@@ -208,7 +200,7 @@ impl WinApp {
     /// 空遷移 hook に終了の指示を注入する。
     ///
     /// 本番型 `WindowRegistry<Window<WndState>>`（`runtime/window_registry.rs` 既定）が未挿入
-    /// なら default を挿入し（`create_windows`(4.3) より前でも安全）、受け口の clone を World へ
+    /// なら default を挿入し（`create_windows` より前でも安全）、受け口の clone を World へ
     /// 据える（**両方の選択で**・利用側が `&mut World` から明示の指示を出す口）。
     /// [`ExitPolicy::OnLastWindowClose`] のときだけ shutdown hook に `exit.request_exit()` を
     /// 呼ぶクロージャを仕込む（既定の「最後の窓が閉じたら終了」も明示の指示と同じ口を通る＝
@@ -229,19 +221,18 @@ impl WinApp {
             .get_non_send_mut::<ProdWindowRegistry>()
             .expect("WindowRegistry was just ensured present");
         reg.set_shutdown_hook(move || {
-            // 最後の窓が消えた瞬間に終了を指示する（shutdown future を完了させる）。
             on_empty.request_exit();
         });
     }
 
-    /// 共有 ECS world ハンドルを返す（旧 `WinThreadMgr::world` 相当）。
+    /// 共有 ECS world ハンドルを返す。
     ///
     /// 返す `Rc` は単一 World（複数ウィンドウで共有）への strong clone。
     pub fn world(&self) -> Rc<RefCell<EcsWorld>> {
         Rc::clone(&self.world)
     }
 
-    /// 新経路の結線（self-ref 注入 + reconcile 登録）を World へ施す（task 4.3）。
+    /// 新経路の結線（self-ref 注入 + reconcile 登録）を World へ施す。
     ///
     /// `run()` 開始時に 1 度呼ぶ（冪等ではない・下の「重複登録について」）:
     /// - `EcsWorldSelfRef`（外側 `Weak<RefCell<EcsWorld>>`）を NonSend リソースとして
@@ -250,10 +241,9 @@ impl WinApp {
     /// - `reconcile_window_registry::<Window<WndState>>`（本番単相化）を **遅め schedule**
     ///   `FrameFinalize` へ登録する。
     ///
-    /// # reconcile を `FrameFinalize` に置く理由（task 4.3 解釈 (3)）
+    /// # reconcile を `FrameFinalize` に置く理由
     /// `try_tick_world`（`ecs/world/mod.rs`）は 13 本スケジュールを `Input … FrameFinalize`
-    /// の順で回し、本クレートは `clear_trackers`/`clear_all` を **どこでも呼ばない**
-    /// （grep 済み・確認）。bevy の `RemovedComponents<Window>` は `clear_trackers` まで
+    /// の順で回し、本クレートは `clear_trackers`/`clear_all` を **どこでも呼ばない**。bevy の `RemovedComponents<Window>` は `clear_trackers` まで
     /// バッファに残り、各登録システムは自分の read カーソルで「各除去を一度だけ」観測する。
     /// よって配置による取りこぼしは構造的に起きないが、WM_CLOSE の despawn が
     /// `UISetup`（create と同じ）等の前段で起きても **同一 tick の最終段**で確実に
@@ -268,38 +258,29 @@ impl WinApp {
         let weak = Rc::downgrade(&self.world);
         let mut ecs = self.world.borrow_mut();
         let w = ecs.world_mut();
-        // self-ref（外側 Weak）を注入（create_windows の新経路分岐スイッチ）。
         w.insert_non_send(EcsWorldSelfRef(weak));
         drop(ecs);
 
-        // reconcile を遅め schedule（FrameFinalize）へ登録（runtime→World・上向き依存なし）。
-        // 本番単相化 `Window<WndState>` で turbofish して登録する。
         self.world.borrow_mut().add_systems(
             FrameFinalize,
             reconcile_window_registry::<crate::executor::util::Window<WndState>>,
         );
     }
 
-    /// クリック透過機構を起動し、登録面（NonSend リソース）を World へ据える（task 3.2）。
+    /// クリック透過機構（ワーカ＋判定ループ）を起動し、登録面（NonSend リソース）を World へ据える。
     ///
-    /// `run()` の結線点（既存 tick/vsync 結線に相乗り）から呼ぶ、テスト可能な最小フック。
-    /// `wire_new_path` がフル `run()` ループと分離してテストされるのと同じ方針で、本結線も
-    /// メッセージループ非実行下（headless）で単体検証できるよう **ヘルパーに切り出す**。
+    /// `run()` の結線点から呼ぶ。`wire_new_path` と同じく、メッセージループ非実行下（headless）で
+    /// 単体検証できるよう **ヘルパーに切り出す**。
     ///
-    /// 手順:
-    /// 1. 共有レジストリ `Rc<RefCell<ClickThroughRegistry>>` と **専用** wake `Arc<Event>` を生成。
-    /// 2. [`start_click_through`] を呼び、ワーカ＋判定ループを起動（`self.world` の
-    ///    `Weak` を渡す＝shutdown で `upgrade()` None → ループ終了、ワーカは返り値 handle drop で
-    ///    stop/join）。返る [`ClickThroughHandle`] は `run()` がローカル保持し、`run()` 復帰
-    ///    （＝shutdown）で drop される（`bridge`/`_tick` と同じ寿命規律）。
-    /// 3. 共有レジストリを [`ClickThroughRegistryHandle`]（`pub` NonSend リソース）に包んで World へ
-    ///    挿入する。areka の `run_setup`（task 4.1・`&mut World` を持つ）が
-    ///    `get_non_send::<ClickThroughRegistryHandle>()` で取得し 2 窓を登録する登録面。
+    /// [`start_click_through`] には `self.world` の `Weak` を渡す（shutdown で `upgrade()` が
+    /// None になりループ終了、ワーカは返り値 [`ClickThroughHandle`] の drop で stop/join）。
+    /// 登録面は [`ClickThroughRegistryHandle`]（`pub` NonSend リソース）で、areka の `run_setup` が
+    /// `get_non_send::<ClickThroughRegistryHandle>()` で取得して 2 窓を登録する。
     ///
     /// # wake event を VSync とは別に専用化する理由（起床契機・post-tick）
     /// 機構は二重起床する: (a) カーソル移動 notify（ワーカが `start` 内で `wake_event` を叩く）、
-    /// (b) VSync tick 毎の再評価（静止カーソルでも表示更新＝αマスク変化に追随／R2.4、`JustEnded`
-    /// 再収束／R5.2）。ここで wake_event を **VSync event とは別 `Arc`** に保ち、VSync 起床は
+    /// (b) VSync tick 毎の再評価（静止カーソルでも表示更新＝αマスク変化に追随、`JustEnded`
+    /// 再収束）。ここで wake_event を **VSync event とは別 `Arc`** に保ち、VSync 起床は
     /// [`Self::run`] の relay タスクが「vblank を待って `wake_event.notify`」する形で中継する
     /// （下記 relay 参照）。こうすることで既存 tick cadence を一切変えない（カーソル移動 notify が
     /// tick のタスクを余計に起こして ECS tick を増やすことがない＝入力と描画 cadence を非結合）。
@@ -308,7 +289,7 @@ impl WinApp {
     /// UI 全体が単一スレッドで、判定コア（`evaluate_targets`）は `&World` を **同期借用**する
     /// （await を跨がず、tick が `borrow_mut` を保持する間は借用しない）。よって評価は常に
     /// settled な World（tick 途中の中間状態ではない）を読む。起床順序に関わらず最悪でも
-    /// 1 フレーム遅延に留まり、これが design「post-tick 評価」の構造的裏付けである。
+    /// 1 フレーム遅延に留まる。
     ///
     /// 戻り値: `(handle, wake_event)`。`handle` は `run()` がローカル保持（drop=停止/join）、
     /// `wake_event` は VSync relay タスクの結線に使う。
@@ -316,11 +297,9 @@ impl WinApp {
         &self,
         running: Rc<std::cell::Cell<bool>>,
     ) -> (ClickThroughHandle, std::sync::Arc<event_listener::Event>) {
-        // 1. 共有レジストリ（UI スレッド単独所有・`!Send`）と専用 wake event。
         let registry = Rc::new(RefCell::new(ClickThroughRegistry::new()));
         let wake_event = std::sync::Arc::new(event_listener::Event::new());
 
-        // 2. 機構起動（ワーカ生成・event 共有・async ループ spawn_local）。
         let handle = start_click_through(
             Rc::downgrade(&self.world),
             Rc::clone(&registry),
@@ -328,7 +307,6 @@ impl WinApp {
             running,
         );
 
-        // 3. 登録面（NonSend リソース）を World へ据える（areka task 4.1 が取得・登録）。
         {
             let mut ecs = self.world.borrow_mut();
             ecs.world_mut()
@@ -339,25 +317,20 @@ impl WinApp {
         (handle, wake_event)
     }
 
-    /// UI スレッドのメッセージループを開始する（旧 `WinThreadMgr::run` 相当・task 4.3 全結線）。
+    /// UI スレッドのメッセージループを開始する。
     ///
-    /// 最小フロー `WinApp::new → world → run` でメッセージループ・tick・終了が一体動作する
-    /// 心臓部。手順:
-    /// 1. 新経路を結線（[`wire_new_path`](Self::wire_new_path)・self-ref 注入 + reconcile 登録）。
-    /// 2. `VsyncEventBridge` をローカルに生成（`run` の間 `WinApp` 相当で所有・Drop で
-    ///    VSync スレッド stop→join）。
-    /// 3. `spawn_local(run_async_tick(..))` で vblank 駆動の tick ループを UI スレッドへ投入
-    ///    （JoinHandle は `run` の間ローカル保持・World は `Weak`）。
-    /// 4. `block_on(ShutdownPolicy::shutdown_future(self.exit.clone()))`
-    ///    で、終了の指示（利用側の [`AppExit::request_exit`]、または registry 空遷移 hook）まで
-    ///    OS メッセージループを駆動する。ループ開始前に出た指示でもただちに戻る。future 完了でループが **先行 quit せず** 正常復帰する
-    ///    （"received unexpected quit message" panic を構造的に回避）。戻った直後に「ループは
-    ///    まだ回っているか」の旗を下ろす（4.1）。以後に残っていた起床が配られても、tick タスク・
-    ///    VSync 中継・クリック透過の判定ループはフレームも判定も回さずに終わる。
-    /// 4.5. 窓の登録表を World から取り出して破棄し、残っていた窓を壊す（残っていたときだけ
-    ///    `info!` を 1 行残す）。
-    /// 5. 復帰時、ローカルの `VsyncEventBridge` が drop（VSync stop→join）し、tick の
-    ///    `JoinHandle` も drop される。
+    /// 新経路の結線（[`wire_new_path`](Self::wire_new_path)）・`VsyncEventBridge` と vblank 駆動の
+    /// tick ループの起動・クリック透過機構の起動を済ませ、
+    /// `block_on(ShutdownPolicy::shutdown_future(self.exit.clone()))` で、終了の指示
+    /// （利用側の [`AppExit::request_exit`]、または registry 空遷移 hook）まで OS メッセージループを
+    /// 駆動する。ループ開始前に出た指示でもただちに戻る。future 完了でループが **先行 quit せず**
+    /// 正常復帰する（"received unexpected quit message" panic を構造的に回避）。
+    ///
+    /// 戻った直後に「ループはまだ回っているか」の旗を下ろす。以後に残っていた起床が配られても、
+    /// tick タスク・VSync 中継・クリック透過の判定ループはフレームも判定も回さずに終わる。
+    /// 続けて窓の登録表を World から取り出して破棄し、残っていた窓を壊す（残っていたときだけ
+    /// `info!` を 1 行残す）。ローカルの `VsyncEventBridge`（VSync スレッド stop→join）と tick の
+    /// `JoinHandle` は復帰時に drop される。
     ///
     /// # 契約: 指示で戻るとき
     /// 終了の指示で戻るときは、登録表に残っていた窓を壊してから戻る。戻った後の `run()` は
@@ -368,16 +341,13 @@ impl WinApp {
     /// # 戻り値
     /// 正常終了時 `Ok(())`。COM/DPI は `new()` で初期化済み。
     pub fn run(&self) -> Result<()> {
-        // 0. このスレッドを UI スレッドとして控える（ほかのスレッドの窓の書き込みは捨てる）。
+        // このスレッドを UI スレッドとして控える（ほかのスレッドの窓の書き込みは捨てる）。
         crate::ecs::window::record_ui_thread();
-        // 1. 新経路結線（self-ref 注入 + reconcile 登録）。
         self.wire_new_path();
 
-        // 2. VSync ブリッジを run の間ローカル所有（Drop で stop→join）。
         let bridge = VsyncEventBridge::new();
 
-        // 3. vblank 駆動の tick ループを UI スレッドへ投入（周期は画面の更新周期・World は Weak）。
-        //    `running` は block_on から戻った直後（4.1）に下ろす旗。
+        // `running` は block_on から戻った直後に下ろす旗。
         let running = Rc::new(std::cell::Cell::new(true));
         let _tick = crate::executor::spawn_local(run_async_tick(
             bridge.event().clone(),
@@ -385,13 +355,12 @@ impl WinApp {
             Rc::clone(&running),
         ));
 
-        // 3.5. クリック透過機構を起動（ワーカ＋判定ループ）＋登録面を World へ据える（task 3.2）。
-        //      `_click_through` を run の間ローカル保持し、run 復帰（shutdown）で drop
-        //      （ワーカ stop/join・判定ループは `running` が下りた後の起床で終了）。
+        // `_click_through` は run の間ローカル保持し、run 復帰（shutdown）で drop する
+        // （ワーカ stop/join・判定ループは `running` が下りた後の起床で終了）。
         let (_click_through, click_wake) = self.wire_click_through(Rc::clone(&running));
 
-        // 3.6. vblank 毎に click_wake を notify する中継（静止カーソル時も post-tick 再評価を
-        //      起こす・R2.4／R5.2）。JoinHandle は捨てても executor 上で走り続ける。
+        // vblank 毎に click_wake を notify する中継（静止カーソル時も post-tick 再評価を起こす）。
+        // JoinHandle は捨てても executor 上で走り続ける。
         let _relay = crate::executor::spawn_local(crate::runtime::tick_bridge::relay_vblank(
             bridge.event().clone(),
             Rc::downgrade(&self.world),
@@ -399,19 +368,17 @@ impl WinApp {
             Rc::clone(&running),
         ));
 
-        // 4. shutdown future が完了するまでメッセージループを駆動（先行 quit せず復帰）。
         crate::executor::block_on(ShutdownPolicy::shutdown_future(self.exit.clone()));
 
-        // 4.1. 以後の起床ではフレームを回さない。戻った後に利用側のモーダルなダイアログ等が
-        //      残っていた起床のメッセージを配っても、次の 4.5 で登録表を抜いた World を回さない
-        //      （クリック透過の判定も同じ・areka-P0-shiori-fault-notice task 7.2）。登録表を
-        //      取り除く前に下ろすこと。
+        // 以後の起床ではフレームを回さない。戻った後に利用側のモーダルなダイアログ等が
+        // 残っていた起床のメッセージを配っても、登録表を抜いた World を回さない
+        // （クリック透過の判定も同じ）。登録表を取り除く前に下ろすこと。
         running.set(false);
 
-        // 4.5. 残存窓の破棄。tick の外で指示が出ると、reconcile より先にここへ来て窓が
-        //      残り得る。登録表ごと取り出して drop し、`Window<WndState>` の drop で
-        //      `DestroyWindow` を呼ぶ。World を借りたまま壊すのは reconcile と同じ条件で、
-        //      ウィンドウ手続きは `try_borrow` 失敗で読み飛ばす。
+        // 残存窓の破棄。tick の外で指示が出ると、reconcile より先にここへ来て窓が
+        // 残り得る。登録表ごと取り出して drop し、`Window<WndState>` の drop で
+        // `DestroyWindow` を呼ぶ。World を借りたまま壊すのは reconcile と同じ条件で、
+        // ウィンドウ手続きは `try_borrow` 失敗で読み飛ばす。
         {
             let mut ecs = self.world.borrow_mut();
             if let Some(registry) = ecs.world_mut().remove_non_send::<ProdWindowRegistry>()
@@ -424,7 +391,6 @@ impl WinApp {
             }
         }
 
-        // bridge / _tick はここで drop（VSync stop→join・tick JoinHandle 破棄）。
         Ok(())
     }
 }
@@ -443,8 +409,7 @@ mod tests {
         }
     }
 
-    /// `WinApp::new()` は呼び出しスレッド（＝UI スレッド）を役割名 `ui` で名簿へ登録する
-    /// （要件 2.3）。
+    /// `WinApp::new()` は呼び出しスレッド（＝UI スレッド）を役割名 `ui` で名簿へ登録する。
     ///
     /// 登録は同期的で、対象は自分自身のスレッド——待ちも件数の当てにも要らない。
     #[test]
@@ -470,15 +435,13 @@ mod tests {
         drop(app);
     }
 
-    /// `WinApp::new()` の shutdown 結線（task 4.2・要件 1.3/1.4/1.5）:
+    /// `WinApp::new()` の shutdown 結線:
     /// 1. `WindowRegistry`（NonSend）が World に確保される。
     /// 2. その shutdown hook が発火すると WinApp 所有の終了シグナル `Event` が notify され、
-    ///    `listen()` した待機が起床する（= run()(4.3) が待つ shutdown future が完了する経路）。
+    ///    `listen()` した待機が起床する（= run() が待つ shutdown future が完了する経路）。
     ///
-    /// 「最後の窓が消えた瞬間に hook 発火→Event notify」を hook を直接発火して検証する
-    /// （本番型 `Window<WndState>` は実 HWND が要るため headless では reconcile を直接駆動
-    /// せず hook 発火 seam で wiring を実証する）。full close→destroy→reconcile→hook→
-    /// future 完了→block_on 復帰の E2E は 4.3/5.3 の領分。
+    /// 本番型 `Window<WndState>` は実 HWND が要るため、headless では reconcile を直接駆動せず
+    /// hook を直接発火して結線を確かめる。
     #[test]
     fn new_wires_registry_shutdown_hook_to_notify_event() {
         let app = WinApp::new().expect("WinApp::new should succeed headless");
@@ -486,7 +449,6 @@ mod tests {
         // 終了シグナルへ先に listen() を arm（hook 発火 notify を取りこぼさない）。
         let listener = app.exit.signal().listen();
 
-        // World 内の WindowRegistry を取得し、注入済み hook を発火（= 空遷移相当）。
         {
             let world = app.world();
             let ecs = world.borrow();
@@ -497,8 +459,6 @@ mod tests {
             reg.fire_shutdown_hook();
         }
 
-        // hook が WinApp 所有の Event を notify したので arm 済み listener が起床する
-        // （起床する = shutdown future が完了する経路が結線されている）。
         assert!(
             listener
                 .wait_timeout(std::time::Duration::from_secs(5))
@@ -507,14 +467,13 @@ mod tests {
         );
     }
 
-    /// task 4.3: `wire_new_path` 後の World 状態を検証する（headless）。
+    /// `wire_new_path` 後の World 状態を検証する（headless）。
     /// 1. `EcsWorldSelfRef`（NonSend・外側 Weak）が World に注入される（create_windows の
     ///    新経路分岐スイッチ）。その Weak は WinApp の strong World を upgrade できる。
     /// 2. `reconcile_window_registry` が `FrameFinalize` へ登録され、空 World の 1 tick が
     ///    panic せず回る（reconcile 登録が schedule を壊さない＝結線が健全）。
     ///
-    /// 実 block_on ループ（実窓 + close イベント要）は回さない。full new→world→run の E2E は
-    /// 4.4（examples 切替）+ 5.3（手動）の領分。
+    /// 実 block_on ループ（実窓 + close イベント要）は回さない。
     #[test]
     fn wire_new_path_injects_self_ref_and_schedules_reconcile() {
         let app = WinApp::new().expect("WinApp::new should succeed headless");
@@ -523,7 +482,6 @@ mod tests {
         {
             let world = app.world();
             let ecs = app.world.borrow();
-            // (1) EcsWorldSelfRef が注入され、外側 World を upgrade できる。
             let self_ref = ecs
                 .world()
                 .get_non_send::<EcsWorldSelfRef>()
@@ -536,22 +494,20 @@ mod tests {
             let _ = world; // strong clone（self-ref upgrade の生存保証は self.world）。
         }
 
-        // (2) reconcile 登録後、空 World で 1 tick 回しても panic しない（schedule 健全）。
         app.world.borrow_mut().try_tick_world();
     }
 
-    /// 統合テスト（task 5.2・要件 1.3/1.5/2.1）: **close→reconcile→shutdown チェーン end-to-end**。
+    /// 統合テスト: **close→reconcile→shutdown チェーン end-to-end**。
     ///
     /// `new_wires_registry_shutdown_hook_to_notify_event` は hook を直接発火する seam テスト。
     /// 本テストは実 `Window<WndState>`（実 HWND）を WinApp の World へ生成し、その `Window`
     /// コンポーネントを除去 → 実 `reconcile_window_registry`（schedule 駆動）が registry を
     /// 空へ遷移させ → 注入済み shutdown hook が WinApp 所有 `Event` を notify し → arm 済み
     /// listener が **ハングせず** 起床する、という close→shutdown の本番チェーンを実 reconcile
-    /// で貫通検証する（要件 1.3「終了要求で清掃終了」/ 1.5「ハング・panic なし」）。
+    /// で貫通検証する。
     ///
-    /// これは `run()` の `block_on(shutdown_future)` が最後の窓クローズで **先行 quit せず**
-    /// future 完了で正常復帰する経路の核（最後の窓 close → Event notify）を結線実証する。
-    /// full `run()` の block_on 復帰（メッセージループ実駆動＋OS close イベント）は E2E 5.3。
+    /// `run()` の `block_on(shutdown_future)` が最後の窓クローズで **先行 quit せず**
+    /// future 完了で正常復帰する経路の核（最後の窓 close → Event notify）の結線を確かめる。
     ///
     /// 実 HWND の生成は窓を出す（`create_window` は `ShowWindow(SW_SHOW)` を呼ぶ）ので、
     /// 作った直後に `SW_HIDE` で隠す。メッセージループは回さず reconcile を直接 schedule 実行する。
@@ -564,8 +520,6 @@ mod tests {
         use windows::Win32::UI::WindowsAndMessaging::{WS_EX_LAYERED, WS_POPUP};
 
         let app = WinApp::new().expect("WinApp::new should succeed headless");
-        // 新経路結線（self-ref 注入 + reconcile を FrameFinalize へ登録 + shutdown hook は
-        // new() で既に WinApp 所有 Event へ結線済み）。
         app.wire_new_path();
 
         // 終了シグナルへ先に listen() を arm（reconcile 空遷移の notify を取りこぼさない）。
@@ -573,12 +527,10 @@ mod tests {
 
         let weak = Rc::downgrade(&app.world);
 
-        // 実 Window<WndState>（実 HWND）を 1 枚生成し registry へ格納し、すぐ隠す。
         let entity = {
             let world = app.world();
             let mut ecs = world.borrow_mut();
             let w = ecs.world_mut();
-            // self-ref は wire_new_path で注入済みだが、明示確認（factory 分岐の前提）。
             assert!(
                 w.get_non_send::<EcsWorldSelfRef>().is_some(),
                 "wire_new_path が EcsWorldSelfRef を注入しているべき"
@@ -597,7 +549,6 @@ mod tests {
                 .id();
             EcsWindowFactory::create_window(w, entity, weak.clone());
             hide_created_window(w, entity);
-            // 生成済み・registry 非空・ハンドル付与を確認（最後の窓が在る状態）。
             assert!(
                 w.get::<WindowHandle>(entity).is_some(),
                 "factory 生成後に WindowHandle が付与されるべき"
@@ -609,20 +560,17 @@ mod tests {
             entity
         };
 
-        // 最後の窓を close 相当（`Window` コンポーネント除去）→ 実 reconcile を 1 周。
+        // 最後の窓を close 相当（`Window` コンポーネント除去）にして、実 reconcile を 1 周回す。
         {
             let world = app.world();
             let mut ecs = world.borrow_mut();
             let w = ecs.world_mut();
             w.entity_mut(entity).remove::<Window>();
 
-            // 本番 reconcile（`Window<WndState>` 単相）を schedule 実行（FrameFinalize 相当）。
-            // registry が空へ遷移し、注入済み hook が WinApp 所有 Event を notify する。
             let mut sched = Schedule::default();
             sched.add_systems(reconcile_window_registry::<crate::executor::util::Window<WndState>>);
             sched.run(w);
 
-            // 空遷移を確認（最後の窓が消えた）。
             let reg = w
                 .get_non_send::<ProdWindowRegistry>()
                 .expect("ProdWindowRegistry が存在するべき");
@@ -632,8 +580,6 @@ mod tests {
             );
         }
 
-        // 空遷移 hook が WinApp 所有 Event を notify したので arm 済み listener が起床する。
-        // 起床する = run() の shutdown future が完了して block_on が正常復帰できる経路。
         assert!(
             listener
                 .wait_timeout(std::time::Duration::from_secs(5))
@@ -642,7 +588,7 @@ mod tests {
         );
     }
 
-    /// 「明示の指示でだけ終了」の選択（要件 1.1・2.4・5.1）: 最後の窓が閉じても終了しない。
+    /// 「明示の指示でだけ終了」の選択: 最後の窓が閉じても終了しない。
     ///
     /// `close_to_reconcile_to_shutdown_chain_wakes_listener` と同じ構築（実 HWND を 1 枚 →
     /// `Window` 除去 → 実 `reconcile_window_registry`）で、選択だけを `Explicit` に変える。
@@ -661,7 +607,6 @@ mod tests {
             .expect("WinApp::with_exit_policy should succeed headless");
         app.wire_new_path();
 
-        // 受け口は選択によらず World に据わっている（利用側が明示の指示を出す口）。
         assert!(
             app.world
                 .borrow()
@@ -699,7 +644,6 @@ mod tests {
             entity
         };
 
-        // 最後の窓を開いて閉じ、実 reconcile を 1 周（空遷移）。
         let entity = spawn_window("ExplicitFirst");
         {
             let world = app.world();
@@ -729,7 +673,6 @@ mod tests {
             "Explicit では最後の窓が閉じても終了を指示されないべき"
         );
 
-        // 窓 0 の後でも新しい窓を開ける（要件 2.4）。
         let reopened = spawn_window("ExplicitReopened");
         let world = app.world();
         let ecs = world.borrow();
@@ -741,15 +684,14 @@ mod tests {
         assert!(ecs.world().get::<WindowHandle>(reopened).is_some());
     }
 
-    /// task 3.2: `wire_click_through` の結線を headless で検証する。
+    /// `wire_click_through` の結線を headless で検証する。
     /// 1. クリック透過機構が起動し（ワーカ＋判定ループ）、返る `ClickThroughHandle` を得る。
-    /// 2. 登録面 `ClickThroughRegistryHandle`（NonSend リソース）が World へ挿入される
-    ///    （areka task 4.1 が `get_non_send` で取得し窓登録する登録面）。
+    /// 2. 登録面 `ClickThroughRegistryHandle`（NonSend リソース）が World へ挿入される。
     /// 3. 登録面経由の register が反映される（共有レジストリ）。
     /// 4. `ClickThroughHandle` を drop するとワーカが stop/join されハングしない（RAII）。
     ///
-    /// フル `run()` のメッセージループ（実 vblank relay 駆動）は回さず、`wire_new_path` と同様に
-    /// 結線ヘルパーを単体検証する（executor 非駆動でも spawn_local タスクは投入されるだけで安全）。
+    /// フル `run()` のメッセージループ（実 vblank relay 駆動）は回さない（executor 非駆動でも
+    /// spawn_local タスクは投入されるだけで安全）。
     #[test]
     fn wire_click_through_starts_and_inserts_registry_handle() {
         use crate::ecs::clickthrough::ClickThroughRegistryHandle;
@@ -760,7 +702,6 @@ mod tests {
         // ダミー window Entity（登録面の反映確認用・World 生存は問わない）。
         let e = bevy_ecs::entity::Entity::from_raw_u32(1).expect("valid test entity index");
 
-        // 登録面が NonSend リソースとして World に据えられていること。
         {
             let world = app.world();
             let ecs = world.borrow();
@@ -770,26 +711,21 @@ mod tests {
                 .expect("wire_click_through は ClickThroughRegistryHandle を World へ挿入すべき");
             assert!(reg_handle.is_empty(), "初期の登録面は空");
 
-            // 登録面経由の register が共有レジストリへ反映される（areka 4.1 の登録経路）。
             reg_handle.register(e, windows::Win32::Foundation::HWND::default());
             assert_eq!(reg_handle.len(), 1, "登録面 register が反映される");
         }
 
-        // handle drop でワーカ stop/join。ハングせず復帰すれば RAII 健全。
         drop(handle);
     }
 
-    /// task 3.2: `run()` の結線が既存 tick/vsync/shutdown チェーンを壊さないことの回帰確認。
-    /// `wire_click_through` を呼んだ後でも空 World の 1 tick が panic せず回る（schedule 健全）。
-    /// `wire_new_path`（reconcile 登録）と `wire_click_through`（登録面挿入）を併用しても
-    /// World の tick が健全であること＝既存機能の非破壊（R7.2）。
+    /// `wire_new_path`（reconcile 登録）と `wire_click_through`（登録面挿入）を併用しても、
+    /// 空 World の 1 tick が panic せず回る。
     #[test]
     fn wire_click_through_does_not_break_tick() {
         let app = WinApp::new().expect("WinApp::new should succeed headless");
         app.wire_new_path();
         let (handle, _wake) = app.wire_click_through(Rc::new(std::cell::Cell::new(true)));
 
-        // 併用後も空 World の 1 tick が panic しない（既存 schedule 非破壊）。
         app.world.borrow_mut().try_tick_world();
 
         drop(handle);
@@ -804,7 +740,6 @@ mod tests {
             !app.exit.is_requested(),
             "構築直後は終了を指示されていないべき"
         );
-        // まだ hook 未発火なら notify されていない。新規 listener は即起床しないはず。
         let listener = app.exit.signal().listen();
         assert!(
             listener

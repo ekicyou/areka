@@ -1,5 +1,5 @@
 // =============================================================================
-// 実表示寸での連鎖再解決の檻（areka-P0-scope-chain-gap 要件 7.1/7.2/7.3・design C6）
+// 実表示寸での連鎖再解決の檻
 //
 // 判定は純関数ゆえ GPU も World も要さない。物理 px を直接与える。規則の網羅
 // （組ごとの決め・基準・非正寸・空入力・極端な値）は chain_finalize_resolve_tests.rs が持ち、
@@ -8,7 +8,7 @@
 
 use super::*;
 
-/// 未接触スコープを組む補助（現在位置＝既定位置）。
+/// 未接触スコープ（現在位置＝既定位置）。
 fn untouched(scope: usize, x: i32, w: i32) -> ScopeChainState {
     ScopeChainState {
         scope,
@@ -18,7 +18,7 @@ fn untouched(scope: usize, x: i32, w: i32) -> ScopeChainState {
     }
 }
 
-/// 明示的に再配置されたスコープを組む補助（現在位置≠既定位置）。
+/// 明示的に再配置されたスコープ（現在位置≠既定位置）。
 fn repositioned(scope: usize, current_x: i32, w: i32, default_x: i32) -> ScopeChainState {
     ScopeChainState {
         scope,
@@ -28,8 +28,7 @@ fn repositioned(scope: usize, current_x: i32, w: i32, default_x: i32) -> ScopeCh
     }
 }
 
-/// 起動の並べ直しを印なしで通す（台本の印・組・覚えた印が無い形の
-/// `finalize_chain_once_with` と同じ順: [`boot_pair_decision`] → [`resolve_chain`]）。
+/// 起動の並べ直しを印なしで通す（`finalize_chain_once_with` と同じ順: [`boot_pair_decision`] → [`resolve_chain`]）。
 fn boot_chain(states: &[ScopeChainState]) -> Vec<ChainMove> {
     let slots: Vec<ChainSlot> = states
         .iter()
@@ -43,7 +42,7 @@ fn boot_chain(states: &[ScopeChainState]) -> Vec<ChainMove> {
     resolve_chain(&slots)
 }
 
-/// 指示を適用した後の X 列を作る（事後条件の検証用）。
+/// 指示を適用した後の X 列（事後条件の検証用）。
 fn apply(states: &[ScopeChainState], moves: &[ChainMove]) -> Vec<i32> {
     states
         .iter()
@@ -57,15 +56,15 @@ fn apply(states: &[ScopeChainState], moves: &[ChainMove]) -> Vec<i32> {
 }
 
 // -----------------------------------------------------------------------------
-// 本丸: 実機で観測した機序をそのまま檻へ入れる
+// 実機で観測した機序
 // -----------------------------------------------------------------------------
 
 /// 実機再現（emo2・拡大率 200%）: scope0 が起動面 868 で配置された後、実表示面 764 へ
 /// 縮んで下端中央固定で再アンカーされ左端が 2012→2064 へ 52 右寄りする。連鎖が
-/// 再計算されないと scope1 との間に 52px の隙間が残る——本檻はその隙間を 0 へ戻す
+/// 再計算されないと scope1 との間に 52px の隙間が残る。本檻はその隙間を 0 へ戻す
 /// 指示が出ることを固定する。
 ///
-/// scope0 は連鎖の起点ゆえ**動かさない**（接地点は正しい・7.2）。動くのは scope1 だけ。
+/// scope0 は連鎖の起点ゆえ**動かさない**（接地点は正しい）。動くのは scope1 だけ。
 #[test]
 fn emo2_surface_swap_gap_is_closed_by_moving_the_follower_only() {
     let states = [
@@ -122,13 +121,13 @@ fn applying_twice_is_a_no_op_the_second_time() {
 }
 
 // -----------------------------------------------------------------------------
-// 確定が見送られ続けたときの一発診断（areka-P0-scope-chain-gap 6.5）
+// 確定が見送られ続けたときの一発診断
 // -----------------------------------------------------------------------------
 
 /// 有界の待ちを超えた**ちょうど 1 回**だけ報告し、それ以前も以後も黙る。
 ///
-/// 「毎フレームの見送りは無音・停滞し続けても出力は 1 行」という 6.5 の核をここで固定する
-/// （結線側の檻は同じ性質を実ログ捕捉で確かめる）。
+/// 毎フレームの見送りは無音、停滞し続けても出力は 1 行。
+/// 結線側の檻は同じ性質を実ログ捕捉で確かめる。
 #[test]
 fn chain_deferral_reports_exactly_once_at_the_bounded_wait() {
     let mut stall = ChainFinalizeStall::default();
@@ -163,7 +162,7 @@ fn chain_deferral_reports_exactly_once_at_the_bounded_wait() {
     );
 }
 
-/// 診断の本文が「どのスコープが」「どの条件で」を名指しする（無内容な一行にしない・6.5）。
+/// 診断の本文が「どのスコープが」「どの条件で」を名指しする（無内容な一行にしない）。
 #[test]
 fn defer_reason_names_the_scope_and_the_condition() {
     let landing = ChainDeferReason::ResnapNotLanded {
@@ -223,8 +222,7 @@ const ALL_REASONS: [ChainDeferReason; 9] = [
     ChainDeferReason::DpiSyncHeld { scope: 0 },
 ];
 
-/// 見送り理由の**固定語**（観測レコードの `reason=`）が全理由そろい、互いに異なる
-/// （`areka-P0-dpi-transition-atomicity` 設計 Data Models の `chain` 行）。
+/// 見送り理由の**固定語**（観測レコードの `reason=`）が全理由そろい、互いに異なる。
 ///
 /// [`ALL_REASONS`] の番号が 0〜N−1 をちょうど 1 度ずつ埋め（列の位置＝[`expected`] の番号）、
 /// 各理由の語とスコープの有無が表と等しいことを確かめる。本文（[`std::fmt::Display`]）は
@@ -260,8 +258,7 @@ fn every_defer_reason_has_a_distinct_machine_word() {
     }
 }
 
-/// 停滞診断の初期化で、**2 度目の待ちでも警告が一度は出る**ようになる
-/// （`areka-P0-dpi-transition-atomicity` 要件 6.3）。
+/// 停滞診断の初期化で、**2 度目の待ちでも警告が一度は出る**ようになる。
 ///
 /// 初期化しないと `reported` が立ったままで、2 度目以降の遷移で見送りが続いても無音になる
 /// ——「見送り続けている」という一番知りたい事実がログから消える。

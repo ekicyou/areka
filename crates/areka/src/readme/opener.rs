@@ -1,6 +1,4 @@
-//! 開く処理の 1 か所（areka-P0-open-external-tags task 3.1・要件 1.1〜1.4・2.1〜2.4・3.1・
-//! 4.1〜4.6・4.8・5.1・5.3・6.1・6.2・10.2・task 3.2・task 3.3＝要件 2.5・3.3・5.4・6.4・7.2〜7.4・
-//! 7.6・7.8・10.5・task 3.4＝要件 7.1・7.5・10.1）。
+//! 開く処理の 1 か所。
 //!
 //! 行き先（[`Destination`]）と文脈（[`OpenContext`]）から OS への 1 回分の呼び出し（[`OsCall`]）を
 //! 作る [`resolve`] を置く。fs は読むが OS は呼ばない（呼ぶのは開く専用のスレッドの実行だけ）。
@@ -63,9 +61,9 @@ pub(crate) struct OpenJob {
     pub context: OpenContext,
 }
 
-/// 1 件を解決して記録し OS へ渡す。失敗の経路は必ず `error!` 1 行を残す（要件 7.2〜7.4）。
+/// 1 件を解決して記録し OS へ渡す。失敗の経路は必ず `error!` 1 行を残す。
 ///
-/// メッセージボックスは出さない（要件 7.6）。
+/// メッセージボックスは出さない。
 pub(crate) fn execute(port: &mut dyn OsPort, job: OpenJob) {
     let OpenJob {
         destination: dest,
@@ -124,14 +122,14 @@ pub(crate) fn execute(port: &mut dyn OsPort, job: OpenJob) {
     }
 }
 
-/// 受信端が閉じるまで 1 件ずつ [`execute`] する（開く専用のスレッドの中身・要件 7.8）。
+/// 受信端が閉じるまで 1 件ずつ [`execute`] する（開く専用のスレッドの中身）。
 pub(crate) fn serve(rx: Receiver<OpenJob>, port: &mut dyn OsPort) {
     for job in rx {
         execute(port, job);
     }
 }
 
-/// 開く専用のスレッドへの送信端（World の持ち物・task 3.4・要件 7.1・7.5・10.1）。
+/// 開く専用のスレッドへの送信端（World の持ち物）。
 ///
 /// World を落とすと送信端が落ちて受信が終わり、スレッドは自然に終わる。
 #[derive(bevy_ecs::prelude::Resource)]
@@ -243,7 +241,7 @@ pub(crate) fn resolve(
             let expanded = expand_env(s, port);
             match existing(ctx, &expanded) {
                 Ok(path) => Ok(open_file(path)),
-                // 名前だけ（区切りを含まない）なら OS のパス探索に任せる（要件 2.4）。
+                // 名前だけ（区切りを含まない）なら OS のパス探索に任せる。
                 Err(_) if !expanded.contains(['\\', '/', ':']) => {
                     Ok(call(Verb::Open, expanded, None, None))
                 }
@@ -255,7 +253,7 @@ pub(crate) fn resolve(
             if path.is_dir() {
                 Ok(call(Verb::Open, path, None, None))
             } else {
-                // ファイルは選んだ状態でフォルダを開く（要件 4.2）。
+                // ファイルは選んだ状態でフォルダを開く。
                 let mut params = OsString::from("/select,\"");
                 params.push(&path);
                 params.push("\"");
@@ -277,7 +275,7 @@ pub(crate) fn resolve(
     }
 }
 
-/// `\![open,explorer,種類,名前]` の名前を目録で引く（要件 4.4〜4.6）。
+/// `\![open,explorer,種類,名前]` の名前を目録で引く。
 ///
 /// 並び（`ctx.baseware`）の和で引く（バルーンは今のゴーストの中が先）。ゴーストは `\![change,ghost,名前]` と同じ引き方、シェル・バルーンは descript の `name` →
 /// フォルダ名の順に引く（`name` は区別・フォルダ名は `same_folder_name`）。`random` などの特別な名前は解かない（名指しだけ）。

@@ -1,4 +1,4 @@
-//! ログ発火経路の決定論的檻（要件 1.4/3.3/4.3/7.3/8.4/10.5 が義務づける記録の行）。
+//! ログ発火経路の決定論的檻（失敗経路が義務づける記録の行）。
 //!
 //! [`crate::log_capture::capture_logs`] で各失敗経路のログを捕捉し、(a) 決定論的入力で経路を起こし、
 //! (b) 捕捉テキストに **level（DEBUG/WARN/ERROR）＋ target（`areka_emo_compose`）＋ discriminating
@@ -33,13 +33,13 @@ fn one_line(logs: &str, needles: &[&str]) -> bool {
     logs.lines().any(|l| needles.iter().all(|n| l.contains(n)))
 }
 
-// ── 7.3: 循環検出 debug（ops 経路・flatten_surface）───────────────────────────────────
+// ── 循環検出 debug（ops 経路・flatten_surface）───────────────────────────────────
 
-/// 要件 7.3: 自己参照 surface の合成で循環の知らせが surface_id つきで発火する（＋部分結果は非パニック）。
-/// 組むたびの知らせなので DEBUG（warn は読み込みが 1 度だけ・offline-surface-dump 要件 7.5）。
+/// 自己参照 surface の合成で循環の知らせが surface_id つきで発火する（＋部分結果は非パニック）。
+/// 組むたびの知らせなので DEBUG（warn は読み込みが 1 度だけ）。
 ///
 /// surface 1000 が自身の bind pattern0 で 1000 を参照する（自己参照）。build_plan（→derive_ops→
-/// flatten_surface）は循環枝を打ち切り DEBUG を出す。要件 7.3 はこのログが本体。
+/// flatten_surface）は循環枝を打ち切り DEBUG を出す。このログが本体。
 #[test]
 fn cycle_detection_debug_fires_with_surface_id() {
     let base = Path::new("shell/master");
@@ -76,16 +76,16 @@ fn cycle_detection_debug_fires_with_surface_id() {
         ops_cycle_line.is_some(),
         "ops 経路（flatten_surface）の循環 DEBUG（外形算出を含まない）が発火する: {logs}",
     );
-    // 組むたびの知らせは debug（warn は読み込みが 1 度だけ・offline-surface-dump 要件 7.5）。
+    // 組むたびの知らせは debug（warn は読み込みが 1 度だけ）。
     assert!(
         !logs.contains("level=WARN"),
         "合成は循環で WARN を出さない: {logs}"
     );
 }
 
-/// 要件 7.3: 外形算出経路（`compute_extent_limited`）の循環の知らせ（DEBUG）も surface_id つきで発火する。
+/// 外形算出経路（`compute_extent_limited`）の循環の知らせ（DEBUG）も surface_id つきで発火する。
 ///
-/// 外形は束縛のとき（`bind_atlas` の最後・指摘 8）に表へ求めるので、外形の走査の循環の知らせ（メッセージに
+/// 外形は束縛のとき（`bind_atlas` の最後）に表へ求めるので、外形の走査の循環の知らせ（メッセージに
 /// 「外形算出」を含む）はそこで出て、合成（build_plan）では出ない。extent 経路の循環ログを個別に固定する。
 #[test]
 fn extent_cycle_debug_fires_with_surface_id() {
@@ -129,7 +129,7 @@ fn extent_cycle_debug_fires_with_surface_id() {
 
 // ── コマの無い有効な bind+random の良性 skip DEBUG（命令列の経路・push_direct）──────
 
-/// 要件 9.1/9.3: コマの無い有効な `bind+random` は **DEBUG**（surface_id＋animation_id つき）を
+/// コマの無い有効な `bind+random` は **DEBUG**（surface_id＋animation_id つき）を
 /// 出して skip する（非パニック・WARN/ERROR は出さない）。まばたき等 `interval,bind+random` 再生
 /// アニメの静的不活性。
 ///
@@ -156,7 +156,7 @@ fn frameless_bind_random_skip_fires_debug_and_no_warn_error() {
         ops = planned;
     });
 
-    // 副作用: コマの無い bind+random は静的合成へ寄与しない＝描画命令ゼロ（要件 9.1）。
+    // 副作用: コマの無い bind+random は静的合成へ寄与しない＝描画命令ゼロ。
     assert!(
         ops.is_empty(),
         "コマの無い bind+random は描画命令に現れない（要件 9.1）"
@@ -182,7 +182,7 @@ fn frameless_bind_random_skip_fires_debug_and_no_warn_error() {
         debug_count, 1,
         "コマの無い bind+random の skip の DEBUG は 1 本のみ: {logs}"
     );
-    // 良性 skip ゆえ WARN/ERROR は出さない（要件 9.3）。
+    // 良性 skip ゆえ WARN/ERROR は出さない。
     assert!(
         !logs.contains("level=WARN"),
         "良性 skip は WARN を出さない: {logs}"
@@ -193,9 +193,9 @@ fn frameless_bind_random_skip_fires_debug_and_no_warn_error() {
     );
 }
 
-// ── 8.4: 未実装メソッド debug（blit.rs execute）───────────────────────────────────────
+// ── 未実装メソッド debug（blit.rs execute）───────────────────────────────────────
 
-/// 要件 8.4: 未実装メソッド命令（Replace/Base/Blend）は DEBUG（method＋element つき）を出して skip する。
+/// 未実装メソッド命令（Replace/Base/Blend）は DEBUG（method＋element つき）を出して skip する。
 ///
 /// blit::execute へ未実装メソッド命令を渡すと、method の Debug 値と element id を載せた DEBUG が
 /// 発火し、その命令は合成へ寄与しない（skip）。3 種の未実装メソッドで method フィールドの判別も突く。
@@ -257,9 +257,9 @@ fn unimplemented_method_debug_fires_with_method_and_element() {
     }
 }
 
-/// 要件 1.4（防御ログ）: 破損アトラス（placement.page が範囲外）は WARN（element＋page つき）で skip。
+/// 破損アトラス（placement.page が範囲外）は WARN（element＋page つき）で skip。
 ///
-/// design「Error Handling」表の頁欠落 warn を檻に入れる（cheap にトリガ可能ゆえ併せて固定）。
+/// 頁欠落の warn を檻に入れる（cheap にトリガ可能ゆえ併せて固定）。
 #[test]
 fn missing_page_warn_fires_with_element_and_page() {
     let keys = vec![AtlasKey {
@@ -309,9 +309,9 @@ fn missing_page_warn_fires_with_element_and_page() {
     );
 }
 
-// ── 3.3: 未解決 alias warn（world.rs resolve_alias）─────────────────────────────────
+// ── 未解決 alias warn（world.rs resolve_alias）─────────────────────────────────
 
-/// 要件 3.3: 未解決 alias キーの解決で WARN（key つき）が発火し、返り値は None。
+/// 未解決 alias キーの解決で WARN（key つき）が発火し、返り値は None。
 #[test]
 fn unresolved_alias_warn_fires_with_key() {
     let world = EmoWorld::build(&shell_of(Vec::new()));
@@ -321,7 +321,7 @@ fn unresolved_alias_warn_fires_with_key() {
         result = world.resolve_alias("nope");
     });
 
-    // 副作用: 未解決は None（非パニック・要件 3.3）。
+    // 副作用: 未解決は None（非パニック）。
     assert_eq!(result, None, "未解決 alias は None");
     // ログ: WARN・target・key を同じ 1 行で突く。
     assert!(
@@ -333,11 +333,11 @@ fn unresolved_alias_warn_fires_with_key() {
     );
 }
 
-// ── 10.5: SurfaceNotFound / EmptyComposition / ExtentTooLarge error（Composer::compose）──
+// ── SurfaceNotFound / EmptyComposition / ExtentTooLarge error（Composer::compose）──
 
-/// 合成の失敗の `error!`（6 回目の指摘 2）: 表示の側は失敗をコマ替えのたびに呼び直すので、同じ合成器では
+/// 合成の失敗の `error!`: 表示の側は失敗をコマ替えのたびに呼び直すので、同じ合成器では
 /// 面ごとに初めの 1 度だけ ERROR・2 度目からは DEBUG（予算の `reported`・画素の `pixels_reported` と同じ形）。
-/// 新しい合成器は同じ面でも初めの 1 度に ERROR を出す（要件 10.5: ERROR は level・target・surface_id・分類名を同じ 1 行に載せる）。
+/// 新しい合成器は同じ面でも初めの 1 度に ERROR を出す（ERROR は level・target・surface_id・分類名を同じ 1 行に載せる）。
 #[test]
 fn compose_failure_errors_once_per_surface_per_composer() {
     let text = "charset,UTF-8\nsurface0\n{\nelement0,overlay,1,16383,0\n}\n\
@@ -398,13 +398,13 @@ fn compose_failure_errors_once_per_surface_per_composer() {
     }
 }
 
-// ── 1.4: fold の重なりの記録（fold.rs fold_plain_surface / fold_append）────────────────────
+// ── fold の重なりの記録（fold.rs fold_plain_surface / fold_append）────────────────────
 
-/// 要件 2.1（areka-P0-emily-ghost-verification が上書き）: surface id 重複は前の定義へ足す
+/// surface id 重複は前の定義へ足す
 /// 定めた振る舞いなので DEBUG（id つき）で残す。WARN は同じ element番号が重なった 1 行だけ。
 ///
 /// 同一 id を 2 度 plain 定義すると、同じ layer の行は両方（前の行が先・SSP 2.9.29 と同じ）・
-/// 違う layer の行も足される（spec: audit-emo-compose 設計の議題 7 案 A）。
+/// 違う layer の行も足される。
 #[test]
 fn duplicate_surface_id_merge_logs_debug_not_warn() {
     let first = surface(7, vec![elem(0, "old.png", 0, 0), elem(1, "keep.png", 0, 0)]);
@@ -442,7 +442,7 @@ fn duplicate_surface_id_merge_logs_debug_not_warn() {
     );
 }
 
-/// 要件 1.4/2.2: append 対象 id が未存在なら WARN（id つき）が発火し、新設しない（存在条件付き）。
+/// append 対象 id が未存在なら WARN（id つき）が発火し、新設しない（存在条件付き）。
 #[test]
 fn nonexistent_append_target_warn_fires_with_id() {
     // 事前 surface は id=10 のみ。append は 10（存在）と 999（未存在）を狙う。
@@ -478,9 +478,9 @@ fn nonexistent_append_target_warn_fires_with_id() {
     );
 }
 
-// ── 4.3: 未束縛 element debug（atlas_bind.rs bind_atlas）───────────────────────────────
+// ── 未束縛 element debug（atlas_bind.rs bind_atlas）───────────────────────────────
 
-/// 要件 4.3: atlas に無い element path を bind すると DEBUG（path つき）が発火し、AtlasBinding は None。
+/// atlas に無い element path を bind すると DEBUG（path つき）が発火し、AtlasBinding は None。
 /// 脱落の知らせは読み込みの入口の error が 1 度出すので、ここは warn にしない（1 誤り 1 行）。
 #[test]
 fn unbound_element_debug_fires_with_path() {
@@ -498,7 +498,7 @@ fn unbound_element_debug_fires_with_path() {
         world.bind_atlas(&atlas, SetId(0));
     });
 
-    // 副作用: 未知 path は None（非パニック・要件 4.3）。
+    // 副作用: 未知 path は None（非パニック）。
     let master = world.surface(1000).expect("surface1000 常駐");
     let binding =
         crate::plan_test_support::component_of::<crate::world::AtlasBinding>(world.world(), 1000)

@@ -1,4 +1,4 @@
-//! メニューの項目名と表示可否の照会（areka-P0-popup-menu-minimal）。
+//! メニューの項目名と表示可否の照会。
 //!
 //! 枠ごとの SHIORI リソース名の表、1 回の表示で問い合わせる名前の列挙、kanade への
 //! 照会の送出、返り値から項目名への写し、`popupmenu.visible` による表示可否の判定を置く。
@@ -7,10 +7,9 @@
 //! （待つと右クリックの処理が返らず画面が止まる）、返事を覗くのは毎 tick 動く仕掛け
 //! （[`super::trigger`]）で、集まった返り値を [`interpret`] が項目名と表示可否へ写す。
 //!
-//! 値は持ち越さない。メニューを出すたびに全部引き直す（要件 3.2）。
+//! 値は持ち越さない。メニューを出すたびに全部引き直す。
 //!
-//! 新しい名前が引けない項目名は、[`LEGACY_CAPTION_RESOURCES`] の古い名前の値に落とす
-//! （popup-menu-extra-resources）。
+//! 新しい名前が引けない項目名は、[`LEGACY_CAPTION_RESOURCES`] の古い名前の値に落とす。
 
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
@@ -22,11 +21,11 @@ use areka_kanade::resources::ResourceOutcome;
 
 use super::{Frame, ItemBody, MenuItem};
 
-/// 枠と SHIORI リソース名と既定名の対応（要件 3.1）。
+/// 枠と SHIORI リソース名と既定名の対応。
 ///
 /// 並びは [`Frame::ORDER`] と同じで、判別値がそのまま添字になる（[`resource_for`]・
 /// [`default_label`] はその前提で引く。並びが崩れたら兄弟テストが赤になる）。
-/// 既定名は正典が定めていないので本仕様の裁定である。置き場の 2 枠（areka-P0-baseware-root-list）は
+/// 既定名は正典が定めていないので areka の裁定である。置き場の 3 枠は
 /// SSP に当たる SHIORI のリソース名が無いので `None` で、いつも既定名で出る。
 ///
 /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html
@@ -65,27 +64,28 @@ pub(crate) const FRAME_CAPTIONS: &[(Option<&str>, Frame, &str)] = &[
     (Some("closebutton.caption"), Frame::Close, "終了"),
 ];
 
-/// 本体側（スコープ 0）の窓でメニューを出してよいかを尋ねる名前（要件 3.6）。
+/// 本体側（スコープ 0）の窓でメニューを出してよいかを尋ねる名前。
 ///
 /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#sakura.popupmenu.visible:1
 pub(crate) const SAKURA_POPUPMENU_VISIBLE: &str = "sakura.popupmenu.visible";
 
-/// 相方側（スコープ 1）の窓でメニューを出してよいかを尋ねる名前（要件 3.6）。
+/// 相方側（スコープ 1）の窓でメニューを出してよいかを尋ねる名前。
 ///
 /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#kero.popupmenu.visible:1
 pub(crate) const KERO_POPUPMENU_VISIBLE: &str = "kero.popupmenu.visible";
 
-/// 正典にはあるが本仕様が**問い合わせない**名前（要件 3.6・3.8）。
+/// 正典にはあるが areka が**問い合わせない**名前。
 ///
-/// `char*.popupmenu.visible` は 3 人目以降の窓が無いので尋ね先が無い（引受先 `extra-character-windows`）。
+/// `char*.popupmenu.visible` は 3 人目以降の窓が無いので尋ね先が無い。
 /// `*.popupmenu.type` の 3 名は、値 `1`（省略メニュー）の中身を正典が定めていないので作り分けず、
-/// どの値でも同じメニューを出す（`popup-menu-residue` の裁定・見直す条件は網羅台帳の備考）。
+/// どの値でも同じメニューを出す。
 ///
 /// この表は運行（kanade）の許可表に 1 つも入っていないこと（＝実際に送られないこと）を
 /// 兄弟テストが確かめる。
 ///
 /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html
 // 「問い合わせない」ことの記録なので、本番に読み手は無い。読むのは上の兄弟テストだけである。
+// TODO: 3 人目以降の窓ができたら `char*.popupmenu.visible` を尋ねる側へ移す。
 #[allow(dead_code)]
 pub(crate) const UNQUERIED_POPUPMENU_RESOURCES: &[&str] = &[
     "char*.popupmenu.visible",
@@ -95,13 +95,13 @@ pub(crate) const UNQUERIED_POPUPMENU_RESOURCES: &[&str] = &[
 ];
 
 /// 項目名の資源の新しい名前と古い名前の組（新しい名前, 古い名前）。
-/// 新しい名前が引けないとき、古い名前の値をその項目名に使う（popup-menu-extra-resources）。
+/// 新しい名前が引けないとき、古い名前の値をその項目名に使う。
 /// 正典は 2 つを別の項目として同じ説明で載せる:
 /// <https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#updatebuttoncaption>
 pub(crate) const LEGACY_CAPTION_RESOURCES: &[(&str, &str)] =
     &[("updatebutton.caption", "updatebuttoncaption")];
 
-/// 返事を待つ上限。超えたら全件を既定名にしてメニューを出す（要件 3.4）。
+/// 返事を待つ上限。超えたら全件を既定名にしてメニューを出す。
 pub(crate) const QUERY_TIMEOUT: Duration = Duration::from_millis(1000);
 
 /// 枠の項目名に使う SHIORI リソース名。持たない枠は `None`。
@@ -121,11 +121,11 @@ fn row(frame: Frame) -> &'static (Option<&'static str>, Frame, &'static str) {
     row
 }
 
-/// スコープ n の窓が使う表示可否のリソース名（要件 3.6）。
+/// スコープ n の窓が使う表示可否のリソース名。
 ///
 /// α のキャラクター窓はスコープ 0 と 1 だけ（`char_scope` と同じ前提）なので n≧2 は来ない。
 /// 万一 release ビルドで n≧2 が来たら相方側の名前を返す（新しい問い合わせ先は作らない）。
-/// 多キャラクターの窓を作る spec は、`char*.popupmenu.visible` の扱いと合わせてここを見直すこと。
+/// 多キャラクターの窓を作るときは、`char*.popupmenu.visible` の扱いと合わせてここを見直すこと。
 pub(crate) fn visible_resource_for(scope: u32) -> &'static str {
     debug_assert!(scope <= 1, "α のキャラクター窓はスコープ 0 と 1 だけ");
     if scope == 0 {
@@ -135,7 +135,7 @@ pub(crate) fn visible_resource_for(scope: u32) -> &'static str {
     }
 }
 
-/// 1 回の表示で問い合わせる名前を並べる（要件 3.2・3.6）。
+/// 1 回の表示で問い合わせる名前を並べる。
 ///
 /// 先頭が表示可否の名前、続いて写しに現れた `caption_resource` を出た順に並べる
 /// （サブメニューの子も辿る）。同じ名前は 1 つに潰す——往復を無駄に増やさないためで、
@@ -175,7 +175,7 @@ fn collect_caption_resources(item: &MenuItem, ids: &mut Vec<&'static str>) {
 pub(crate) struct CaptionMap(HashMap<&'static str, String>);
 
 impl CaptionMap {
-    /// リソース名に対応する文言を足す。空文字列は入れない（要件 3.3）。
+    /// リソース名に対応する文言を足す。空文字列は入れない。
     pub(crate) fn insert(&mut self, id: &'static str, caption: String) {
         if !caption.is_empty() {
             self.0.insert(id, caption);
@@ -188,7 +188,7 @@ impl CaptionMap {
     }
 }
 
-/// メニューを出すかどうか（要件 3.7）。
+/// メニューを出すかどうか。
 #[derive(Debug)]
 pub(crate) enum Visibility {
     /// 出す。
@@ -230,13 +230,13 @@ impl QueryFailure {
 /// 照会の返り値（問い合わせた名前と、その結果の組）。
 pub(crate) type QueryReply = Vec<(&'static str, ResourceOutcome)>;
 
-/// 運行（kanade）へ照会を送る。**送るだけで返事は待たない**（要件 3.2）。
+/// 運行（kanade）へ照会を送る。**送るだけで返事は待たない**。
 ///
 /// 待つと右クリックの処理がその場で止まり、画面が固まる。返事を覗くのは毎 tick 動く
 /// [`super::trigger`] 側で、上限は [`QUERY_TIMEOUT`]。
 ///
 /// 送れなかったときの記録は残さない——呼び手はこの失敗をそのまま [`interpret`] へ渡し、
-/// そこで「全件既定名」の警告 1 行にまとまる（要件 3.4 の「1 回」）。
+/// そこで「全件既定名」の警告 1 行にまとまる。
 pub(crate) fn send_query(
     kanade: &Sender<KanadeMsg>,
     ids: Vec<&'static str>,
@@ -248,17 +248,17 @@ pub(crate) fn send_query(
     Ok(receiver)
 }
 
-/// 照会の返り値を項目名と表示可否へ写す（要件 3.3・3.4・3.7）。
+/// 照会の返り値を項目名と表示可否へ写す。
 ///
 /// 1 件ずつの写し方は ⑴ 非空の値＝その文言をそのまま使う、⑵ 空文字列または値なし＝既定名に
 /// 落とし `debug!` に名前を載せる、⑶ 失敗＝既定名に落とし `warn!` に名前と理由を載せる。
-/// ⑵⑶ の記録はどちらも **1 回の表示につき 1 行**にまとめる（要件 3.4）。返事そのものが
+/// ⑵⑶ の記録はどちらも **1 回の表示につき 1 行**にまとめる。返事そのものが
 /// 得られなかったとき（`Err`）は全件が ⑶ と同じ扱いで、警告 1 行に理由を載せる。
 ///
 /// 表示可否（`visible_id`）は値が **ちょうど `0`** のときだけ「出さない」。前後に空白のある
 /// ` 0 ` や `00` は別の値なので出す——正典が書いているのは `0` という値であり、綴りを
 /// 揺らして解釈すると作者の意図しない抑止が起きるからである。値なし・空・失敗・返事なしも
-/// すべて「出す」（要件 3.7）。この名前は項目名ではないので文言の表には入れない。
+/// すべて「出す」。この名前は項目名ではないので文言の表には入れない。
 pub(crate) fn interpret(
     result: Result<QueryReply, QueryFailure>,
     visible_id: &'static str,

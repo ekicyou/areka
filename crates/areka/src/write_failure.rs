@@ -1,4 +1,4 @@
-//! 致命の机（areka-P0-write-failure-notice・design「致命の机 write_failure.rs」）。
+//! 致命の机。
 //!
 //! 記憶を書けなかった失敗を 1 つの道へ集める。ゴーストの書き手（sylphya のアクター）は
 //! 投函の書き込みの失敗を受け口 [`WriteFailureTx`] へ送り、UI スレッドの汲み出しの系
@@ -103,7 +103,7 @@ pub(crate) fn stop_boot(failure: PersistFailure) -> windows::core::Error {
     stop_boot_with(failure, alert::suppressed())
 }
 
-/// [`stop_boot`] の中身。抑止でも失敗を返す（画面だけを抑える・要件 2.6）。
+/// [`stop_boot`] の中身。抑止でも失敗を返す（画面だけを抑える）。
 pub(crate) fn stop_boot_with(failure: PersistFailure, suppressed: bool) -> windows::core::Error {
     log_failure(&failure, WriteMoment::Boot);
     alert::raise(
@@ -137,7 +137,7 @@ pub(crate) fn probe_dir(dir: &Path) -> std::io::Result<()> {
     areka_user_data::open_dir_for_add(found)
 }
 
-/// 起動の前の確かめの入口（readonly-mode 要件 5.1・5.2・6.4）。`readonly` なら何も開かず
+/// 起動の前の確かめの入口。`readonly` なら何も開かず
 /// 作らずに通す（info 1 件）。そうでなければ今の [`check_boot_dirs`]。
 pub(crate) fn check_boot(
     readonly: bool,
@@ -187,7 +187,7 @@ pub(crate) fn take_receiver(world: &mut World) -> Option<Receiver<PersistFailure
 }
 
 /// OS のセッションの終了の中の後始末: 印を消せなかった失敗と、受け手に残っていた失敗を
-/// `memory_write_failed` で 1 件ずつ記録するだけ（告知は出さない・要件 2.3 の例外）。
+/// `memory_write_failed` で 1 件ずつ記録するだけ（告知は出さない）。
 pub(crate) fn log_only(world: &mut World, clear_failed: Option<PersistFailure>) {
     if let Some(failure) = &clear_failed {
         log_failure(failure, WriteMoment::Running);

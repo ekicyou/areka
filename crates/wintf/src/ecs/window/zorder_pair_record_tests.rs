@@ -2,20 +2,20 @@
 //!
 //! 本ファイルが固定するのは 3 つである。
 //!
-//! - **行の組立**——各記録が design.md「診断ログ語彙（要件 6）」のレコード表どおりの
+//! - **行の組立**——各記録が診断ログ語彙のレコード表どおりの
 //!   名前と必須フィールドを持ち、値が復元できる形で 1 行に載ること。
-//! - **水準と出力先**——失敗と検証不一致が error 水準であること（要件 6.2）、
-//!   調整・見送り・沈降観測が診断手順の水準（debug）で点灯すること（要件 6.1／6.3）、
+//! - **水準と出力先**——失敗と検証不一致が error 水準であること、
+//!   調整・見送り・沈降観測が診断手順の水準（debug）で点灯すること、
 //!   そしてすべてが組のモジュールの出力先（`wintf::ecs::window::zorder_pair`）へ出ること。
 //! - **記録の入口の振る舞い**——判断結果を記録の入口（`record_decision`）へ渡すと、
 //!   見送りは必ず理由つきの記録になったうえで適用対象としては返らず、是正の腕は
-//!   記録を足さずにそのまま返ること（要件 6.3）。
+//!   記録を足さずにそのまま返ること。
 //!
 //! なお「記録の無い見送りが起きない」は**規約**であって構造保証ではない——
 //! `decide_pair_fix` の結果は記録の入口を通さずにも握り潰せる（理由と、型で塞ぐ案を
 //! 採らない裁定は `record_decision` の doc に書いてある）。本ファイルが固定できるのは
 //! 「入口を通したときの振る舞い」までであり、入口を通すこと自体は維持系の実装
-//! （タスク 2.2）とそのレビューが守る。
+//! とそのレビューが守る。
 //!
 //! # 記録捕捉のテストで「出ないこと」を主張するときの作法
 //!
@@ -169,10 +169,10 @@ fn owner_established_line_carries_both_handles_and_the_measurement() {
     assert!(unmeasured.contains("measured_prev=-"), "{unmeasured}");
 }
 
-/// 是正の記録は、出した指令とその後の実測を**同じ 1 行**に載せる（要件 6.1）。
+/// 是正の記録は、出した指令とその後の実測を**同じ 1 行**に載せる。
 ///
-/// 「指令行」と「実測行」に分けないのは design.md「Implementation Notes > Validation」の
-/// 裁定である——2 行に分かれると「指令は出たが効かなかった」を突合で復元する羽目になる。
+/// 「指令行」と「実測行」に分けないのは、
+/// 2 行に分かれると「指令は出たが効かなかった」を突合で復元する羽目になる。
 #[test]
 fn fix_line_carries_the_command_and_the_measurement_on_one_line() {
     let (balloon_entity, char_entity) = pair_entities();
@@ -230,7 +230,7 @@ fn fix_line_carries_the_command_and_the_measurement_on_one_line() {
     );
 }
 
-/// 見送りの記録は必ず理由を名乗り、6 種の理由が互いに区別できる（要件 6.3・areka-P0-zorder-scope-inversion で `ReleasedByChain` が加わった）。
+/// 見送りの記録は必ず理由を名乗り、6 種の理由が互いに区別できる。
 #[test]
 fn skip_line_names_a_distinct_reason_for_every_skip() {
     let (balloon_entity, char_entity) = pair_entities();
@@ -261,7 +261,7 @@ fn skip_line_names_a_distinct_reason_for_every_skip() {
     );
 }
 
-/// 検証不一致の記録は、期待した隣接と実測を同じ行へ載せる（要件 6.2）。
+/// 検証不一致の記録は、期待した隣接と実測を同じ行へ載せる。
 #[test]
 fn verify_failed_line_carries_expected_adjacency_and_measurement() {
     let (balloon_entity, char_entity) = pair_entities();
@@ -288,7 +288,7 @@ fn verify_failed_line_carries_expected_adjacency_and_measurement() {
     assert!(none_measured.contains("measured=-"), "{none_measured}");
 }
 
-/// owner 確立失敗の記録は失敗の内容を載せる（要件 6.2・ゲート FAIL の材料）。
+/// owner 確立失敗の記録は失敗の内容を載せる。
 #[test]
 fn owner_establish_failed_line_carries_the_error() {
     let (balloon_entity, _) = pair_entities();
@@ -309,7 +309,7 @@ fn owner_establish_failed_line_carries_the_error() {
     );
 }
 
-/// 沈降観測の記録は、隣接の維持と前面窓との相対を載せる（要件 4.4／7.5）。
+/// 沈降観測の記録は、隣接の維持と前面窓との相対を載せる。
 #[test]
 fn sink_observed_line_carries_adjacency_and_foreground_relation() {
     let (balloon_entity, _) = pair_entities();
@@ -337,7 +337,7 @@ fn sink_observed_line_carries_adjacency_and_foreground_relation() {
     assert!(negative.contains("adjacency_ok=false"), "{negative}");
     assert!(negative.contains("foreground=-"), "{negative}");
     assert!(negative.contains("behind_foreground=false"), "{negative}");
-    // 帯に居るあいだの `behind_foreground=false` は正しい動き（要件 6.6）——欄で読み分けられる
+    // 帯に居るあいだの `behind_foreground=false` は正しい動き——欄で読み分けられる
     assert!(negative.contains("in_band=true"), "{negative}");
 
     // 前面窓との相対・帯の所属が取れなかった場合は番兵（偽と混同しない）
@@ -406,7 +406,7 @@ fn diagnostic_records_are_silent_at_default_level_while_failures_still_speak() {
     }
 }
 
-/// 失敗と検証不一致は error 水準（要件 6.2）。対照として他の記録の水準も同時に固定する。
+/// 失敗と検証不一致は error 水準。対照として他の記録の水準も同時に固定する。
 #[test]
 fn failures_and_verification_mismatch_are_recorded_at_error_level() {
     let out = capture_under_filter(SIGNOFF_DIRECTIVES, emit_every_record);
@@ -440,7 +440,7 @@ fn failures_and_verification_mismatch_are_recorded_at_error_level() {
             "`{tag}` は診断水準（debug）で出す: {line}"
         );
     }
-    // 帯の欄を足しても沈降観測の水準は debug のまま（要件 6.6）
+    // 帯の欄を足しても沈降観測の水準は debug のまま
     let sink = only_line_with(&out, "[zorder-pair] sink-observed");
     assert!(
         sink.contains("in_band=false"),
@@ -449,7 +449,7 @@ fn failures_and_verification_mismatch_are_recorded_at_error_level() {
 }
 
 // -------------------------------------------------------------------------
-// 記録の入口（`record_decision`）の振る舞い（要件 6.3）
+// 記録の入口（`record_decision`）の振る舞い
 // -------------------------------------------------------------------------
 
 /// 判断の記録の入口は、見送りを必ず理由つきの記録にしたうえで**適用対象を返さない**。

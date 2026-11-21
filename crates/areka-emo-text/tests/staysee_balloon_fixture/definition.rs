@@ -1,8 +1,4 @@
 //! 定義ファイル（`descript.txt`・`install.txt`）の復号と読み取りを固定する。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **3.3**／**7.1**・設計 **C2** の B 行）。
 
 use std::collections::BTreeMap;
 
@@ -11,9 +7,9 @@ use areka_parsers::kv::parse_kv;
 
 use super::test_support::{read_decoded, staysee_model};
 
-// ── 定義の読み取りの期待値（要件 3.3・7.1）──────────────────────────────────────
+// ── 定義の読み取りの期待値──────────────────────────────────────
 
-/// 既定バルーンの id。`descript.txt` の `id` と `install.txt` の `directory` の両方（要件 7.1）。
+/// 既定バルーンの id。`descript.txt` の `id` と `install.txt` の `directory` の両方。
 const EXPECTED_ID: &str = "StayseeBalloon";
 /// `descript.txt`／`install.txt` の `name`。
 const EXPECTED_NAME: &str = "Balloon for Staysee Syncfield";
@@ -24,7 +20,7 @@ const EXPECTED_TYPE: &str = "balloon";
 
 /// `validrect.left`／`top`／`right`／`bottom` の**宣言された生値**（負値は反対辺基準）。
 const EXPECTED_VALIDRECT: (i32, i32, i32, i32) = (22, 20, -26, -47);
-/// `font.height`。`font.name` が無いので書体は ukadoc 既定へ縮退する（要件 1.3）。
+/// `font.height`。`font.name` が無いので書体は ukadoc 既定へ縮退する。
 const EXPECTED_FONT_HEIGHT: u32 = 12;
 /// `font.color.r`／`g`／`b`。
 const EXPECTED_FONT_COLOR: (u8, u8, u8) = (0, 40, 100);
@@ -66,7 +62,7 @@ fn descript_identity_keys_are_read_as_declared() {
     }
 }
 
-/// `install.txt` の `directory` が `descript.txt` の `id` と同綴りである（要件 7.1）。
+/// `install.txt` の `directory` が `descript.txt` の `id` と同綴りである。
 ///
 /// 下流（`baseware-root-layout` の既定 id 定数・`nar-install` の畳み込み先・
 /// `alpha-package` の zip の中の綴り）はこの事実を写す。片方だけ変わったら赤になる。

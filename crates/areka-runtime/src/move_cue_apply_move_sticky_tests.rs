@@ -1,8 +1,7 @@
-//! `\![move]` での組の連れ動きと `ignore-sticky-window` の檻（areka-P0-window-link-directives
-//! task 4・要件 5.1〜5.5・5.7・9.3・9.4・設計「sticky_follow」の `\![move]`）。
+//! `\![move]` での組の連れ動きと `ignore-sticky-window` の檻。
 //!
 //! 窓は本番と同じ `spawn_ghost_windows` で組み（兄弟の `move_cue_apply_move_tests.rs` の
-//! `move_world`）、帳簿は 2.1 の `seed_sticky_descript`／`apply_set_sticky` で据える。
+//! `move_world`）、帳簿は `seed_sticky_descript`／`apply_set_sticky` で据える。
 //! 動かすのはスコープ 1（基準はスコープ 0 の窓）、組の相手はスコープ 0。
 
 use std::collections::HashMap;
@@ -27,7 +26,7 @@ use areka_placement::sticky_group_ledger::{
 };
 use log_capture_kit::{CapturedEvent, capture};
 
-/// 帳簿を据え、台本の組 `members` を作る（2.1 の関数）。
+/// 帳簿を据え、台本の組 `members` を作る。
 fn group(world: &mut World, members: &[&str]) {
     seed_sticky_descript(world, None);
     let tokens: Vec<String> = members.iter().map(|m| m.to_string()).collect();
@@ -80,7 +79,7 @@ fn pair(gw: &GhostWindows) -> Pair {
     }
 }
 
-/// 5.1・5.4・9.3: 相手は動かした窓が実際に動いた量だけ動き、バルーンも付いて動く。
+/// 相手は動かした窓が実際に動いた量だけ動き、バルーンも付いて動く。
 /// `sticky_follow`（move）を 1 行記録する。
 #[test]
 fn partner_follows_by_the_amount_the_target_actually_moved() {
@@ -118,7 +117,7 @@ fn partner_follows_by_the_amount_the_target_actually_moved() {
     finish(world);
 }
 
-/// 5.2: 下に吸着した相手は横にだけ動く（吸着の軸の量は乗らない）。
+/// 下に吸着した相手は横にだけ動く（吸着の軸の量は乗らない）。
 #[test]
 fn bottom_partner_takes_only_the_horizontal_amount() {
     let (mut world, gw) = move_world();
@@ -145,7 +144,7 @@ fn bottom_partner_takes_only_the_horizontal_amount() {
     finish(world);
 }
 
-/// 5.3・9.4: `ignore-sticky-window` では相手が動かず組は残り、記録が出る。その後の
+/// `ignore-sticky-window` では相手が動かず組は残り、記録が出る。その後の
 /// `\![move]` では新しい位置の関係のまま組で動く。
 #[test]
 fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relation() {
@@ -208,7 +207,7 @@ impl PersistIo for SharedFakeIo {
     }
 }
 
-/// 5.4: 連れ動いた相手の位置を記憶に書かない。
+/// 連れ動いた相手の位置を記憶に書かない。
 #[test]
 fn partner_position_is_not_persisted() {
     let shared = Arc::new(FakePersistIo::new());
@@ -257,7 +256,7 @@ fn partner_position_is_not_persisted() {
     finish(world);
 }
 
-/// 5.5: 時間つきの `\![move]` でも相手は最終の位置へすぐ置かれる。
+/// 時間つきの `\![move]` でも相手は最終の位置へすぐ置かれる。
 #[test]
 fn timed_move_places_the_partner_at_once() {
     let (mut world, gw) = move_world();
@@ -276,7 +275,7 @@ fn timed_move_places_the_partner_at_once() {
     finish(world);
 }
 
-/// 5.7: 組に入っていない窓への `\![move]` は今のまま（ほかの窓は動かず、連れ動きの記録も無い）。
+/// 組に入っていない窓への `\![move]` は今のまま（ほかの窓は動かず、連れ動きの記録も無い）。
 /// 帳簿が無いときも同じ。
 #[test]
 fn ungrouped_window_moves_alone_as_before() {
@@ -306,7 +305,7 @@ fn ungrouped_window_moves_alone_as_before() {
     }
 }
 
-/// 3.6: 窓の無い相手は `sticky_member_absent`（when=move）で外し、窓のある相手は動かす。
+/// 窓の無い相手は `sticky_member_absent`（when=move）で外し、窓のある相手は動かす。
 #[test]
 fn absent_member_is_logged_and_left_out() {
     let (mut world, gw) = move_world();

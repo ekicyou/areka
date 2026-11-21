@@ -10,10 +10,10 @@ use std::sync::LazyLock;
 pub(super) const SHELL_INITIAL_X: i32 = 400;
 pub(super) const SHELL_INITIAL_Y: i32 = 200;
 
-/// まばたき開閉の周期（秒）。この周期で目開き ⇄ 目閉じ を surface1000 上でトグルする（R6.4 の切替観測）。
+/// まばたき開閉の周期（秒）。この周期で目開き ⇄ 目閉じ を surface1000 上でトグルする。
 pub(super) const CYCLE_INTERVAL_SECS: f64 = 2.5;
 
-/// 本 example が両 target へ与える**作者基準 DPI**（ukadoc 正典既定の 96・D1）。
+/// 本 example が両 target へ与える**作者基準 DPI**（ukadoc 正典既定の 96）。
 ///
 /// 本番アプリは descript の実値（shell `seriko.dpi`／balloon `dpi`）を `attach_target` へ渡すが、
 /// 本 example は fixture を直接読むため正典既定を固定で与える。`assert_startup_golden` が golden へ

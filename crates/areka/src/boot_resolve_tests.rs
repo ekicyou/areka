@@ -1,4 +1,4 @@
-//! 起動解決の純粋な判断の決定論テスト（要件 4.9・5.10・8.3）。
+//! 起動解決の純粋な判断の決定論テスト。
 //!
 //! 確かめること: ゴースト 6 分岐（argv／記憶／唯一／既定／無作為／0 体）・バルーン 7 分岐
 //! （argv／記憶／同梱／唯一／既定／無作為／0）と、記憶の指す先が無い 2 通り・同梱の指す先が
@@ -59,7 +59,6 @@ fn ghost(
     listed: &[String],
     pick: impl FnOnce(usize) -> usize,
 ) -> (Result<GhostDecision, NoGhost>, Vec<CapturedEvent>) {
-    // フォルダ名の列を根 1 つの和の項目へ直す。
     let listed: Vec<GhostEntry> = listed
         .iter()
         .map(|folder| GhostEntry {
@@ -131,10 +130,10 @@ fn balloon_at(root: &BasewareRoot, route: BalloonRoute, folder: &str) -> Balloon
     }
 }
 
-// ---------------------------------------------------------------- ゴースト 6 分岐（要件 4.1〜4.7）
+// ---------------------------------------------------------------- ゴースト 6 分岐
 
 /// argv: 渡されたパスそのもの・名前は持たない。記憶の指す先が無くても列挙が 0 でも見ない
-/// （`warn!` も出ない）（要件 4.1）。
+/// （`warn!` も出ない）。
 #[test]
 fn ghost_argv_wins_without_looking_at_memory_or_listing() {
     let root = root();
@@ -153,7 +152,7 @@ fn ghost_argv_wins_without_looking_at_memory_or_listing() {
     }
 }
 
-/// 記憶: 列挙に在れば記憶のゴースト（唯一・既定より先）（要件 4.2）。
+/// 記憶: 列挙に在れば記憶のゴースト（唯一・既定より先）。
 #[test]
 fn ghost_memory_listed_wins_over_default() {
     let root = root();
@@ -163,7 +162,7 @@ fn ghost_memory_listed_wins_over_default() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// 唯一: 記憶が無く列挙が 1 体（要件 4.3）。
+/// 唯一: 記憶が無く列挙が 1 体。
 #[test]
 fn ghost_only_one_listed() {
     let root = root();
@@ -171,7 +170,7 @@ fn ghost_only_one_listed() {
     assert_eq!(got, Ok(ghost_at(&root, GhostRoute::Only, "solo")));
 }
 
-/// 唯一は既定より先: 列挙が `emo2` 1 体だけなら経路は `Only`（要件 4.3・4.4 は 2 体以上）。
+/// 唯一は既定より先: 列挙が `emo2` 1 体だけなら経路は `Only`（既定の段は 2 体以上のとき）。
 #[test]
 fn ghost_only_emo2_is_only_not_default() {
     let root = root();
@@ -179,7 +178,7 @@ fn ghost_only_emo2_is_only_not_default() {
     assert_eq!(got, Ok(ghost_at(&root, GhostRoute::Only, "emo2")));
 }
 
-/// 既定: 2 体以上で `emo2` が列挙される（要件 4.4）。
+/// 既定: 2 体以上で `emo2` が列挙される。
 #[test]
 fn ghost_default_emo2_when_listed_among_many() {
     let root = root();
@@ -187,7 +186,7 @@ fn ghost_default_emo2_when_listed_among_many() {
     assert_eq!(got, Ok(ghost_at(&root, GhostRoute::Default, "emo2")));
 }
 
-/// 無作為: 2 体以上で `emo2` が無い。注入した添字の候補が選ばれ、info を 1 件残す（要件 4.5）。
+/// 無作為: 2 体以上で `emo2` が無い。注入した添字の候補が選ばれ、info を 1 件残す。
 #[test]
 fn ghost_random_picks_from_listing_and_logs_info() {
     let root = root();
@@ -202,7 +201,7 @@ fn ghost_random_picks_from_listing_and_logs_info() {
     assert_one_event(&events, "ghost_picked_randomly", tracing::Level::INFO);
 }
 
-/// 0 体: ゴーストの格納フォルダを載せて返す（要件 4.7）。
+/// 0 体: ゴーストの格納フォルダを載せて返す。
 #[test]
 fn ghost_none_listed_returns_store() {
     let root = root();
@@ -215,7 +214,7 @@ fn ghost_none_listed_returns_store() {
     );
 }
 
-/// 記憶の指す先が無い: `warn!` を 1 件残して次の段（ここでは唯一）へ（要件 4.6）。
+/// 記憶の指す先が無い: `warn!` を 1 件残して次の段（ここでは唯一）へ。
 #[test]
 fn ghost_memory_not_listed_warns_then_falls_through() {
     let root = root();
@@ -224,9 +223,9 @@ fn ghost_memory_not_listed_warns_then_falls_through() {
     assert_one_event(&events, "last_ghost_not_found", tracing::Level::WARN);
 }
 
-// ---------------------------------------------------------------- バルーン 7 分岐（要件 5.1〜5.8）
+// ---------------------------------------------------------------- バルーン 7 分岐
 
-/// argv: 渡されたパスそのもの。記憶・同梱の指す先が無くても列挙が 0 でも見ない（要件 5.1）。
+/// argv: 渡されたパスそのもの。記憶・同梱の指す先が無くても列挙が 0 でも見ない。
 #[test]
 fn balloon_argv_wins_without_looking_at_anything_else() {
     let root = root();
@@ -252,7 +251,7 @@ fn balloon_argv_wins_without_looking_at_anything_else() {
     }
 }
 
-/// 記憶: 列挙に在れば同梱より先（裁定 4・要件 5.2）。
+/// 記憶: 列挙に在れば同梱より先。
 #[test]
 fn balloon_memory_wins_over_companion() {
     let root = root();
@@ -262,7 +261,7 @@ fn balloon_memory_wins_over_companion() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// 同梱: 記憶が無く、`install.txt` の名が列挙に在る（唯一・既定より先）（要件 5.3）。
+/// 同梱: 記憶が無く、`install.txt` の名が列挙に在る（唯一・既定より先）。
 #[test]
 fn balloon_companion_wins_over_default() {
     let root = root();
@@ -274,7 +273,7 @@ fn balloon_companion_wins_over_default() {
     );
 }
 
-/// 唯一: 記憶・同梱が無く列挙が 1 つ（要件 5.4）。
+/// 唯一: 記憶・同梱が無く列挙が 1 つ。
 #[test]
 fn balloon_only_one_listed() {
     let root = root();
@@ -282,7 +281,7 @@ fn balloon_only_one_listed() {
     assert_eq!(got, Ok(balloon_at(&root, BalloonRoute::Only, "solo")));
 }
 
-/// 唯一は既定より先: 列挙が既定の名前 1 つだけなら経路は `Only`（要件 5.4・5.5）。
+/// 唯一は既定より先: 列挙が既定の名前 1 つだけなら経路は `Only`。
 #[test]
 fn balloon_only_default_name_is_only_not_default() {
     let root = root();
@@ -304,7 +303,7 @@ fn balloon_only_default_name_is_only_not_default() {
     );
 }
 
-/// 既定: 2 つ以上で `areka-balloon` が列挙される（要件 5.5）。既定の名前を文字で比べるのは
+/// 既定: 2 つ以上で `areka-balloon` が列挙される。既定の名前を文字で比べるのは
 /// このテストだけ（ほかは定数を参照するので、定数の値を誤ったときに赤になるのはここ）。
 #[test]
 fn balloon_default_areka_balloon_when_listed_among_many() {
@@ -318,7 +317,7 @@ fn balloon_default_areka_balloon_when_listed_among_many() {
 }
 
 /// 既定を替えた後も、記憶が `StayseeBalloon`（2026-10 までの既定）の利用者は記憶の段で
-/// `StayseeBalloon` に決まり、新しい既定へ移らない（記録 0 件）（default-balloon-selfmade 要件 11.6）。
+/// `StayseeBalloon` に決まり、新しい既定へ移らない（記録 0 件）。
 #[test]
 fn balloon_memory_of_old_default_wins_over_new_default() {
     let root = root();
@@ -331,7 +330,7 @@ fn balloon_memory_of_old_default_wins_over_new_default() {
     assert!(events.is_empty(), "{events:?}");
 }
 
-/// 無作為: 2 つ以上で既定が無い。注入した添字の候補が選ばれ、info を 1 件残す（要件 5.6）。
+/// 無作為: 2 つ以上で既定が無い。注入した添字の候補が選ばれ、info を 1 件残す。
 #[test]
 fn balloon_random_picks_from_listing_and_logs_info() {
     let root = root();
@@ -346,7 +345,7 @@ fn balloon_random_picks_from_listing_and_logs_info() {
     assert_one_event(&events, "balloon_picked_randomly", tracing::Level::INFO);
 }
 
-/// 0: バルーンの格納フォルダを載せて返す（要件 5.8）。
+/// 0: バルーンの格納フォルダを載せて返す。
 #[test]
 fn balloon_none_listed_returns_store() {
     let root = root();
@@ -359,7 +358,7 @@ fn balloon_none_listed_returns_store() {
     );
 }
 
-/// 記憶の指す先が無い: `warn!` を 1 件残して次の段（同梱）へ（要件 5.7）。
+/// 記憶の指す先が無い: `warn!` を 1 件残して次の段（同梱）へ。
 #[test]
 fn balloon_memory_not_listed_warns_then_companion() {
     let root = root();
@@ -373,7 +372,7 @@ fn balloon_memory_not_listed_warns_then_companion() {
     assert_eq!(count_event(&events, "companion_balloon_not_found"), 0);
 }
 
-/// 同梱の指す先が無い: `warn!` を 1 件残して次の段（既定）へ（要件 5.7）。
+/// 同梱の指す先が無い: `warn!` を 1 件残して次の段（既定）へ。
 #[test]
 fn balloon_companion_not_listed_warns_then_default() {
     let root = root();
@@ -393,7 +392,7 @@ fn balloon_companion_not_listed_warns_then_default() {
 
 // ---------------------------------------------------------------- 本番の添字
 
-/// `pick_index` は候補の範囲 `0..n` に収まる（質は問わない＝design の Risks）。
+/// `pick_index` は候補の範囲 `0..n` に収まる（質は問わない）。
 #[test]
 fn pick_index_stays_in_range() {
     for n in 2..=7 {
@@ -488,7 +487,7 @@ mod last_used {
         (key, value.to_owned())
     }
 
-    /// argv 以外: App に ghost、Ghost に balloon と shell（要件 3.2・3.3・3.4）。
+    /// argv 以外: App に ghost、Ghost に balloon と shell。
     #[test]
     fn record_non_argv_writes_all_three() {
         let root = root();
@@ -507,7 +506,7 @@ mod last_used {
         assert_eq!(count_event(&events, "last_used_skipped_argv"), 0);
     }
 
-    /// argv のゴースト: App に書かれない・Ghost の balloon と shell は書かれる（要件 3.5・裁定 5）。
+    /// argv のゴースト: App に書かれない・Ghost の balloon と shell は書かれる。
     #[test]
     fn record_argv_ghost_skips_app_keeps_shell() {
         let root = root();
@@ -536,7 +535,7 @@ mod last_used {
         assert_one_event(&events, "last_used_skipped_argv", tracing::Level::INFO);
     }
 
-    /// 両方 argv: shell だけ書かれる（要件 3.4 は argv の有無によらない）。
+    /// 両方 argv: shell だけ書かれる。
     #[test]
     fn record_both_argv_writes_shell_only() {
         let (app, ghost_scope, events) = record_and_load(&ghost_argv(), &balloon_argv(), "master");
@@ -546,7 +545,7 @@ mod last_used {
     }
 
     /// 直読みは boot と同じ場所を見る: 実 fs へ record したものを `read_last_*` で拾える。
-    /// 書かれていなければ無し（要件 4.2・5.2）。
+    /// 書かれていなければ無し。
     #[test]
     fn read_last_sees_what_record_wrote_on_real_fs() {
         let tmp = TempPath::new("boot-resolve-last-used");
@@ -582,7 +581,7 @@ mod last_used {
         );
     }
 
-    /// 切替で決まったゴーストは記憶を書く経路（要件 4.6）: App に書かれ argv の skip は出ない。
+    /// 切替で決まったゴーストは記憶を書く経路: App に書かれ argv の skip は出ない。
     #[test]
     fn record_switched_writes_last_ghost() {
         let root = root();
@@ -593,7 +592,7 @@ mod last_used {
         assert_eq!(count_event(&events, "last_used_skipped_argv"), 0);
     }
 
-    /// 起動中の印の往復（要件 12.1・12.2）: 書く → 読む → 消す（空文字＝無し）。最後のゴーストには触れない。
+    /// 起動中の印の往復: 書く → 読む → 消す（空文字＝無し）。最後のゴーストには触れない。
     #[test]
     fn session_mark_round_trip_and_clear() {
         let tmp = TempPath::new("boot-resolve-session-mark");
@@ -618,7 +617,7 @@ mod last_used {
         assert_one_event(&cleared, "session_mark_cleared", tracing::Level::INFO);
     }
 
-    /// 切替の降ろした直後（要件 12.6）: 1 回の書き込みで最後のゴースト＝既定・印＝切替先。
+    /// 切替の降ろした直後: 1 回の書き込みで最後のゴースト＝既定・印＝切替先。
     /// 印を渡さない（argv で始まったプロセス）なら最後のゴーストだけで、前から在った印は残る。
     #[test]
     fn switch_drop_writes_default_and_mark_at_once() {
@@ -696,7 +695,7 @@ mod last_used {
         }
     }
 
-    /// 印に書く名前（要件 12.1）: 目録の同じフォルダの descript の `name`、無ければフォルダ名。
+    /// 印に書く名前: 目録の同じフォルダの descript の `name`、無ければフォルダ名。
     #[test]
     fn running_name_prefers_descript_name_then_folder() {
         let tmp = TempPath::new("boot-resolve-running-name");
@@ -724,7 +723,7 @@ mod last_used {
         );
     }
 
-    // ------------------------------------------------ 1 つだけ書く書き手と起動のシェル（要件 6.1〜6.3）
+    // ------------------------------------------------ 1 つだけ書く書き手と起動のシェル
 
     /// 前から在った Ghost スコープの 2 つの鍵を fake の置き場へ置いてから `write` を投函し、
     /// barrier 後に App・Ghost を読み戻す。
@@ -758,7 +757,7 @@ mod last_used {
         (app, ghost_scope, events)
     }
 
-    /// シェルの差し替えは `LastShell` だけ、バルーンの差し替えは `LastBalloon` だけを書く（要件 6.1）。
+    /// シェルの差し替えは `LastShell` だけ、バルーンの差し替えは `LastBalloon` だけを書く。
     /// 他方の鍵と App スコープには触れない。
     #[test]
     fn single_key_writers_touch_only_their_key() {
@@ -810,7 +809,7 @@ mod last_used {
         std::fs::write(dir.join("descript.txt"), body).unwrap();
     }
 
-    /// 起動のシェル（要件 6.2・6.3）: 記憶なし → 既定（`None`・警告なし）・記憶の名の
+    /// 起動のシェル: 記憶なし → 既定（`None`・警告なし）・記憶の名の
     /// `shell/<名>/descript.txt` が在る（隠しでも）→ その名・先が無い／descript が無い →
     /// `warn!` 1 件で既定。
     #[test]
@@ -824,19 +823,16 @@ mod last_used {
         );
         std::fs::create_dir_all(ghost_dir.join("shell").join("nodesc")).unwrap();
 
-        // 記憶なし。
         let (none, events) = capture(|| decide_boot_shell(&ghost_dir));
         assert_eq!((read_last_shell(&ghost_dir), none), (None, None));
         assert_eq!(count_event(&events, "boot_shell_missing"), 0);
 
-        // 記憶の名が在る（menu,hidden でも）。
         remember_shell(&ghost_dir, "second");
         let (found, events) = capture(|| decide_boot_shell(&ghost_dir));
         assert_eq!(read_last_shell(&ghost_dir).as_deref(), Some("second"));
         assert_eq!(found.as_deref(), Some("second"));
         assert_eq!(count_event(&events, "boot_shell_missing"), 0);
 
-        // 先が無い・descript が無い。
         for gone in ["gone", "nodesc"] {
             remember_shell(&ghost_dir, gone);
             let (missing, events) = capture(|| decide_boot_shell(&ghost_dir));

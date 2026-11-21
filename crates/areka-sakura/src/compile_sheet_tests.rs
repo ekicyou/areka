@@ -4,7 +4,7 @@ use crate::duration::{ms_to_secs, text_playback_duration};
 use areka_parsers::sakura::SurfaceArg;
 use std::time::Duration;
 
-/// 先頭に待ち命令がある場合でもその待ち時間が 0 へ潰れず保存される（R2.4）。
+/// 先頭に待ち命令がある場合でもその待ち時間が 0 へ潰れず保存される。
 /// min 正規化（先頭待ちを 0 へ食う旧実装）を使っていないことの固定。第一級化後は、先頭待ちが
 /// `duration` 付き Wait cue（`start_time=0.0`）として台本に残り、後続 Text はその分だけ遅れる。
 #[test]
@@ -34,8 +34,8 @@ fn leading_wait_is_preserved_not_collapsed() {
     assert_ne!(cues[1].start_time, 0.0);
 }
 
-/// 暗黙 per-char D と明示ウェイトの累積で発火時刻が単調に進む（R2.2/2.4/4.4）。
-/// テキスト D 焼き込み・Wait 第一級化の後も、明示ウェイト累積が退行しない（4.4 非退行）。
+/// 暗黙 per-char D と明示ウェイトの累積で発火時刻が単調に進む。
+/// テキスト D 焼き込み・Wait 第一級化の後も、明示ウェイト累積が退行しない。
 /// duration の期待値は SAME `text_playback_duration`/`ms_to_secs`、開始時刻は ms の格子で計算する。
 #[test]
 fn wait_accumulation_is_monotonic() {
@@ -55,7 +55,7 @@ fn wait_accumulation_is_monotonic() {
     let d_b = text_playback_duration("b");
     let w100 = ms_to_secs(100);
 
-    // 開始時刻は整数 ms で積んでから秒にした値（秒の足し算ではない・指摘 8）。
+    // 開始時刻は整数 ms で積んでから秒にした値（秒の足し算ではない）。
     let t_text_a = 0.0_f64;
     let t_wait1 = 50.0 / 1000.0; // Text("a") の再生完了後（50 ms）
     let t_text_b = 100.0 / 1000.0; // 明示 \_w[50] の累積
@@ -89,7 +89,7 @@ fn wait_accumulation_is_monotonic() {
     }
 }
 
-/// 開始時刻は整数 ms を積んでから 1 回だけ秒にする（指摘 8・要件 7.1）。`a\s[0]b\s[0]c\s[1]` の
+/// 開始時刻は整数 ms を積んでから 1 回だけ秒にする。`a\s[0]b\s[0]c\s[1]` の
 /// 面の合図は、秒の足し算（0.05+0.05+0.05＝0.15000000000000002）でなく、Tick の式と同じ
 /// `ms as f64 / 1000.0` のビットに乗る。
 #[test]
@@ -120,7 +120,7 @@ fn start_times_sit_on_the_millisecond_grid() {
 }
 
 /// `End` 検出で終端理由 `Ended` を確定し、以降の命令を発火列へ含めず破棄する
-/// （終端切詰め・R6.1/6.5）。ukadoc `\e` = この後のスクリプトは実行・表示されない。
+/// （終端切詰め）。ukadoc `\e` = この後のスクリプトは実行・表示されない。
 #[test]
 fn end_truncates_following_instructions() {
     let compiled = compile(&[
@@ -138,7 +138,7 @@ fn end_truncates_following_instructions() {
     assert_eq!(compiled.end, TalkEndReason::Ended);
 }
 
-/// `Quit` 検出で終端理由 `Quit` を確定し、以降の命令を破棄する（終端切詰め・R6.2/6.5）。
+/// `Quit` 検出で終端理由 `Quit` を確定し、以降の命令を破棄する（終端切詰め）。
 #[test]
 fn quit_truncates_following_instructions_and_sets_quit() {
     let compiled = compile(&[
@@ -155,7 +155,7 @@ fn quit_truncates_following_instructions_and_sets_quit() {
     assert_eq!(compiled.end, TalkEndReason::Quit);
 }
 
-/// 終端命令なしで末尾まで到達した列は全命令が発火し end=Ended（末尾到達・R6.3）。
+/// 終端命令なしで末尾まで到達した列は全命令が発火し end=Ended（末尾に到達）。
 #[test]
 fn no_terminal_keeps_all_instructions_and_ends() {
     let compiled = compile(&[Instruction::Text("a".into()), Instruction::Text("b".into())]);
@@ -166,7 +166,7 @@ fn no_terminal_keeps_all_instructions_and_ends() {
     assert_ne!(compiled.end, TalkEndReason::Quit);
 }
 
-/// 不変条件（純粋コンパイル層 Postconditions/Invariants・NaN 放電）:
+/// 不変条件（NaN 放電）:
 /// 生成される全 `start_time` は有限・非負であり、`sheet.cues()` 順に非減少
 /// （`Duration` 由来の構成的保証）。待ちの無い連続 cue は同一時刻を共有し（非減少・非狭義増加）、
 /// 待ちを挟む cue で時刻が増加することで `<=` の固定が意味を持つ。
@@ -217,9 +217,9 @@ fn compiled_start_times_are_finite_non_negative_non_decreasing() {
     assert_eq!(cues[2].start_time, cues[3].start_time);
 }
 
-// ── task 5.2: D 焼き込み・Wait 第一級化・ClearAll 前置の behavioral 檻 ──
+// ── D 焼き込み・Wait 第一級化・ClearAll 前置の檻 ──
 
-/// テキスト cue は算出した再生時間 D を envelope duration として保持する（N>0 で D>0・R4.1）。
+/// テキスト cue は算出した再生時間 D を envelope duration として保持する（N>0 で D>0）。
 /// 期待値は同一の `text_playback_duration` で導出（10 進直書きの表現誤差を排除）。
 #[test]
 fn text_cue_carries_playback_duration() {
@@ -240,7 +240,7 @@ fn text_cue_carries_playback_duration() {
 }
 
 /// テキスト cue の直後に別の cue が続くと、後続 cue はテキスト再生完了後（`text_start + D`）へ
-/// 焼き込まれる（R4.2）。`Text("ab") Surface("7")` → Emote は 2×50ms 後に発火する。
+/// 焼き込まれる。`Text("ab") Surface("7")` → Emote は 2×50ms 後に発火する。
 #[test]
 fn cue_after_text_fires_after_text_playback_completes() {
     let compiled = compile(&[
@@ -257,7 +257,7 @@ fn cue_after_text_fires_after_text_playback_completes() {
     }
     assert_eq!(cues[0].start_time, 0.0);
     assert_eq!(cues[0].duration, d);
-    // [1] Emote@D（テキスト再生完了後に発火・R4.2）。
+    // [1] Emote@D（テキスト再生完了後に発火）。
     match command_of(&cues[1]) {
         CueCommand::Emote { key } => assert_eq!(key, "7"),
         other => panic!("expected Emote, got {other:?}"),
@@ -270,8 +270,8 @@ fn cue_after_text_fires_after_text_playback_completes() {
 }
 
 /// 明示ウェイトは offset へ吸収して消すのでなく、action を持たず duration のみを持つ第一級
-/// `CueCommand::Wait` cue として台本に残る（R5.1）。かつ後続 Text はその待ち時間分だけ遅れる
-/// （`D_text1 + wait`・R4.4）。
+/// `CueCommand::Wait` cue として台本に残る。かつ後続 Text はその待ち時間分だけ遅れる
+/// （`D_text1 + wait`）。
 #[test]
 fn explicit_wait_between_texts_is_first_class_and_delays_following_text() {
     let compiled = compile(&[
@@ -297,7 +297,7 @@ fn explicit_wait_between_texts_is_first_class_and_delays_following_text() {
         cues[1].duration, w,
         "待ち時間は envelope duration が担う（action なし）"
     );
-    // [2] 2 つ目 Text は D_text1 + wait 分だけ遅れる（R4.4）。
+    // [2] 2 つ目 Text は D_text1 + wait 分だけ遅れる。
     match command_of(&cues[2]) {
         CueCommand::Text(s) => assert_eq!(s, "bb"),
         other => panic!("expected Text, got {other:?}"),
@@ -310,7 +310,7 @@ fn explicit_wait_between_texts_is_first_class_and_delays_following_text() {
 }
 
 /// 末尾（単独）の明示ウェイトも offset へ吸収されず Wait cue として台本に残り、台本のみから
-/// talk の全時間範囲（`max(start_time + duration)`）が復元可能である（自己完結した楽譜・R5.3）。
+/// talk の全時間範囲（`max(start_time + duration)`）が復元可能である（自己完結した楽譜）。
 #[test]
 fn trailing_explicit_wait_remains_in_sheet_and_extends_extent() {
     let compiled = compile(&[
@@ -321,7 +321,7 @@ fn trailing_explicit_wait_remains_in_sheet_and_extends_extent() {
     assert_eq!(cues.len(), 2, "内容は Text と末尾 Wait の 2 件");
     let d = text_playback_duration("abc"); // 0.15s
     let w = ms_to_secs(800); // 0.8s
-    // 末尾 Wait cue が吸収されず台本に残る（R5.3）。
+    // 末尾 Wait cue が吸収されず台本に残る。
     assert_eq!(
         command_of(&cues[1]),
         &CueCommand::Wait,
@@ -338,8 +338,8 @@ fn trailing_explicit_wait_remains_in_sheet_and_extends_extent() {
 }
 
 /// 内容 cue を生成しない台本（リテラル空・裸の終端・無視タグのみ）は空 sheet のままで
-/// ClearAll を前置しない——drive の `is_empty()` 即時 TalkDone 契約を保ち、ドライブ配線
-/// （task 7.x）を本 task で先取りしない（消すべき前 talk のテキストも存在しない）。
+/// ClearAll を前置しない——drive の `is_empty()` 即時 TalkDone 契約を保つ
+/// （消すべき前 talk のテキストも存在しない）。
 #[test]
 fn empty_content_talk_gets_no_clear_all_prepended() {
     let empty = compile(&[]);
@@ -348,7 +348,7 @@ fn empty_content_talk_gets_no_clear_all_prepended() {
         "リテラル空 script は空 sheet（ClearAll 前置なし）"
     );
     assert_eq!(empty.end, TalkEndReason::Ended, "末尾到達は Ended（R6.3）");
-    // 空 sheet でも Quit は Ended と判別できる（下流 R6.2 の区別根拠）。
+    // 空 sheet でも Quit は Ended と判別できる。
     let bare_quit = compile(&[Instruction::Quit]);
     assert!(
         bare_quit.sheet.is_empty(),
@@ -370,12 +370,11 @@ fn empty_content_talk_gets_no_clear_all_prepended() {
     );
 }
 
-// ── task 4.2: append_epilogue（末尾 carrier cue 付加・純関数）の behavioral 檻 ──
-// （design C12・Testing Strategy §5・R3.4）
+// ── append_epilogue（末尾 carrier cue 付加・純関数）の檻 ──
 
 use areka_talk::EpilogueCommand;
 
-/// 空 epilogue は恒等: 台本を一切変えない（既存経路完全不変・R3.4）。
+/// 空 epilogue は恒等: 台本を一切変えない（既存経路は完全に不変）。
 /// cue 数・各 cue のフィールド等価を固定し、`epilogue.is_empty()` が perfect no-op であることを保証する。
 #[test]
 fn append_epilogue_empty_is_identity() {
@@ -400,7 +399,7 @@ fn append_epilogue_empty_is_identity() {
 }
 
 /// 空 sheet＋単一 epilogue: `start_time=0.0`・`duration=0.0`・`actor="0"` の carrier cue 1 個
-/// （空 sheet の horizon は 0.0・design C12）。
+/// （空 sheet の horizon は 0.0）。
 #[test]
 fn append_epilogue_on_empty_sheet_yields_single_cue_at_zero() {
     let empty = CueSheet::new(Vec::new());
@@ -423,7 +422,7 @@ fn append_epilogue_on_empty_sheet_yields_single_cue_at_zero() {
 }
 
 /// 非空 epilogue: 末尾 offset（`max(start_time+duration)`）へ carrier cue が付加される。
-/// `duration=0.0` かつ horizon が延長されない（zero-duration ゆえ・design C12）。
+/// `duration=0.0` かつ horizon が延長されない（zero-duration ゆえ）。
 #[test]
 fn append_epilogue_appends_carrier_at_tail_horizon_without_extending() {
     let compiled = compile(&[
@@ -465,7 +464,7 @@ fn append_epilogue_appends_carrier_at_tail_horizon_without_extending() {
 
 /// 同時刻（horizon と同じ `start_time`）の既存末尾要素（選択待ち barrier 等）に対し、
 /// carrier cue は **安定ソート FIFO** で **後ろ** に並ぶ＝barrier 解決後・horizon 到達 tick で
-/// 発火する（design C12・R3.4）。同一 `at` で既存要素が先・epilogue が後を固定する。
+/// 発火する。同一 `at` で既存要素が先・epilogue が後を固定する。
 #[test]
 fn append_epilogue_stable_sorts_after_same_time_barrier() {
     // horizon=1.0 の台本を直接構築する: Text@0.0(duration 1.0) と barrier@1.0(duration 0.0)。
@@ -513,7 +512,7 @@ fn append_epilogue_stable_sorts_after_same_time_barrier() {
 }
 
 /// 複数 epilogue コマンドは各々 1 carrier cue へ写像され、全て同一の末尾 horizon へ付加される
-/// （記述順を保つ・design C12）。
+/// （記述順を保つ）。
 #[test]
 fn append_epilogue_maps_each_command_to_one_carrier_cue() {
     let compiled = compile(&[Instruction::Text("x".into())]);

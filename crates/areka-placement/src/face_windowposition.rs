@@ -1,5 +1,5 @@
 //! バルーンの面の `windowposition` を配置の材料へ入れ、標準の位置にあるバルーンだけを新しい面の
-//! 標準の位置へ置き直す（balloon-scroll-arrows 要件 1.7・design「FaceWindowPosition」）。
+//! 標準の位置へ置き直す。
 //!
 //! 標準の位置は、シェルの切り替えの入れ直し（[`super::reseed::apply_shell_descript`]）・
 //! バルーン位置初期化と同じ [`resolve_standard_scopes`] で解き、同じ [`reinstall_balloon`] で

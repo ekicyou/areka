@@ -64,7 +64,6 @@ fn a_char_window_without_position_or_size_is_left_out_of_the_snapshot() {
     // 陽性の対: 全員が揃っていれば、全員がキャラ窓の今の矩形で控えに入る。
     assert_eq!(snapshot_char_rects(&harness.world), expected);
 
-    // 位置の無いキャラ窓（scope 0）は控えに入らず、ほかのスコープは入ったまま。
     let char0 = harness.char_window(0);
     let char0_position = pos_of(&harness.world, char0);
     harness
@@ -78,7 +77,6 @@ fn a_char_window_without_position_or_size_is_left_out_of_the_snapshot() {
         "位置の無いキャラ窓が控えに入った（変わる直前の位置を発明してはならない）"
     );
 
-    // 大きさの無いキャラ窓（scope 1）も控えに入らない。
     let char1 = harness.char_window(1);
     harness
         .world
@@ -279,7 +277,6 @@ fn a_script_move_after_resolution_is_not_overwritten() {
     let (mut harness, mut source) = booted();
     lower_the_scale(&mut harness, &mut source);
     harness.run_chain_realign(&low_sizes());
-    // 陽性の対: 解決では組が詰まる。
     assert!(
         is_tight(&harness),
         "陽性の対が成立していない（解決で詰まっていない）"

@@ -1,10 +1,8 @@
-//! ゴースト／シェル／バルーン／追加ファイルの `.nar` を入れる手続き（spec: areka-P0-ghost-install）。
+//! ゴースト／シェル／バルーン／追加ファイルの `.nar` を入れる手続き。
 //!
 //! メニュー・台本・窓への投げ込み（`file_drop.rs`）は受付 [`submit`] へ依頼を渡す（別のスレッドの入口は
 //! [`RawInstallRequest`] を窓口 [`desk`] へ送る）。系の登録は [`register`]（プロセスに 1 回）。
-//! 書庫の読み取り・検査・展開は `areka-nar` に任せる。子のモジュール（判断・利用条件・手続き・
-//! 背景のスレッド・UI 側の窓口・ファイルを選ぶ画面・置換語の値）は、それを作るタスクが
-//! 宣言を 1 行ずつ足す。
+//! 書庫の読み取り・検査・展開は `areka-nar` に任せる。
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -22,7 +20,7 @@ mod destination;
 pub(crate) mod fetch_url;
 #[cfg(test)]
 pub(crate) mod fetch_url_test_support;
-/// `\![execute,install,…]` の受け口（runtime-module-untangle 2.2 で持ち主へ移した）。
+/// `\![execute,install,…]` の受け口。
 pub(crate) mod install_cue;
 pub(crate) mod judge;
 pub(crate) mod names;
@@ -32,7 +30,7 @@ pub(crate) mod startup;
 mod terms;
 mod worker;
 
-/// インストールの依頼（書庫のパスを 1 本以上・並んだ順に扱う＝要件 9.1）。
+/// インストールの依頼（書庫のパスを 1 本以上・並んだ順に扱う）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct InstallOrder {
     pub archives: Vec<PathBuf>,
@@ -44,11 +42,11 @@ pub(crate) struct InstallOrder {
 pub(crate) enum InstallOrigin {
     Menu,
     Script,
-    /// 窓への投げ込み（areka-P0-file-drop）。
+    /// 窓への投げ込み。
     WindowDrop,
-    /// 起動の引数 `--install`（startup-install-option）。
+    /// 起動の引数 `--install`。
     StartupArgs,
-    /// exe の隣の `initial_install.nar`（startup-install-option）。
+    /// exe の隣の `initial_install.nar`。
     InitialInstall,
 }
 
@@ -73,9 +71,9 @@ pub(crate) struct RawInstallRequest {
     pub origin: InstallOrigin,
 }
 
-/// 依頼を手続きへ渡す唯一の口（UI スレッド・要件 1.1・1.9）。受けたら窓口の待ち行列の末尾に
+/// 依頼を手続きへ渡す唯一の口（UI スレッド）。受けたら窓口の待ち行列の末尾に
 /// 積んで `info!(install_order_queued)`、断ったら `warn!(install_order_refused)` を 1 件残す。
-/// 読み取りだけの走りなら積む前に断り、`info!(readonly_refused)` だけを 1 件残す（readonly-mode 要件 7.1・7.4〜7.7）。
+/// 読み取りだけの走りなら積む前に断り、`info!(readonly_refused)` だけを 1 件残す。
 pub(crate) fn submit(world: &mut World, order: InstallOrder) -> SubmitVerdict {
     let count = order.archives.len();
     let origin = order.origin;
@@ -111,7 +109,7 @@ pub(crate) fn submit(world: &mut World, order: InstallOrder) -> SubmitVerdict {
     verdict
 }
 
-/// 読み取りだけの断りの記録（窓口の `submit` と起動の前の道の共通・readonly-mode 要件 7.1・7.2）。
+/// 読み取りだけの断りの記録（窓口の `submit` と起動の前の道の共通）。
 pub(crate) fn record_readonly_refused(origin: InstallOrigin, count: usize) {
     tracing::info!(
         event = "readonly_refused",

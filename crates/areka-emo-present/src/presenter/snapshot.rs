@@ -1,11 +1,10 @@
-//! 画面を変えずに読む口 3 本（MCP の `dump_surface`／`dump_balloon` が使う・spec
-//! `areka-P0-mcp-dump-images`）——最後に表示した絵・生の surface ID の有無・単体の合成。
+//! 画面を変えずに読む口 3 本（MCP の `dump_surface`／`dump_balloon` が使う）——最後に表示した絵・生の
+//! surface ID の有無・単体の合成。
 //!
-//! 加えて、別名の表と生の surface ID の集合の写し 2 本（MCP の台本の検査 `check_script` が使う・
-//! spec `areka-P0-mcp-author-tools`）。
+//! 加えて、別名の表と生の surface ID の集合の写し 2 本（MCP の台本の検査 `check_script` が使う）。
 //!
 //! どれも `&self` で、合成メモ・表示の状態・World を変えず、`tracing` の記録を自分では出さない
-//! （失敗の判断と記録は呼び手のツールが持つ）。戻り値は既存の公開の型と標準の型だけで、新しい公開の型は無い。
+//! （失敗の判断と記録は呼び手のツールが持つ）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -29,8 +28,7 @@ impl EmoPresenter {
 
     /// target の別名の表（`surface.alias`）の写し。未登録の target は `None`。記録を出さない。
     ///
-    /// target の `EmoWorld::alias_snapshot` をそのまま返す（再生の `SurfaceResolver` と同じ材料・
-    /// spec `areka-P0-mcp-author-tools` の台本の検査が使う）。
+    /// target の `EmoWorld::alias_snapshot` をそのまま返す（再生の `SurfaceResolver` と同じ材料）。
     pub fn alias_snapshot(&self, target: TargetId) -> Option<BTreeMap<String, Vec<u32>>> {
         Some(self.targets.get(&target)?.emo_world.alias_snapshot())
     }
@@ -59,7 +57,7 @@ impl EmoPresenter {
     /// 最後に表示が成立したときの着せ替えの集合（静的な既定＋動的な着せ替え）。未登録・一度も表示して
     /// いない → `None`。`last_show` は `Hide` で消えないので、隠していても `Some`。記録を出さない。
     ///
-    /// ゴーストの読み直しで着せ替えを作り直した窓へ持ち越すのに使う（areka-P0-mcp-reload 要件 3.8）。
+    /// ゴーストの読み直しで着せ替えを作り直した窓へ持ち越すのに使う。
     pub fn last_binds(&self, target: TargetId) -> Option<&BindSet> {
         let (_, binds, _) = self.targets.get(&target)?.last_show.as_ref()?;
         Some(binds)

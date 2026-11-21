@@ -1,49 +1,49 @@
 //! # wrap — budoux_newline 宣言の折返しモード解釈（純粋層）
 //!
 //! balloon descript の `budoux_newline` 転記値（2層マージ後勝ち解決済み・生文字列）を
-//! `WrapMode`（`CharByChar`／`BudouxWordWrap`）へ解決する。討議 #1 決定（2026-07-18）で
+//! `WrapMode`（`CharByChar`／`BudouxWordWrap`）へ解決する。
 //! 受理値は bool 2 値（ON＝`1`/`true`・OFF＝`0`/`false`）に閉じるが、解決結果型は将来の
 //! ワードラップ戦略名（禁則強化・欧文ハイフネーション等）を variant 追加で第一級化しうる
 //! enum シームとする。
 //!
-//! `writing.rs` の `WritingMode::resolve` と同一姿勢: 欠落/OFF は正常系（ログなし・R1.3）、
-//! 未知値は値を含む `warn!` ＋ OFF フォールバック（縮退継続・R1.4・log-first）。
+//! `writing.rs` の `WritingMode::resolve` と同一姿勢: 欠落/OFF は正常系（ログなし）、
+//! 未知値は値を含む `warn!` ＋ OFF フォールバック（縮退継続・log-first）。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。
 
 use areka_parsers::balloon::BalloonModel;
 
-/// `budoux_newline` の ON 受理値（`1`・R1.2）。
+/// `budoux_newline` の ON 受理値（`1`）。
 const VALUE_ON_ONE: &str = "1";
-/// `budoux_newline` の ON 受理値（`true`・R1.2）。
+/// `budoux_newline` の ON 受理値（`true`）。
 const VALUE_ON_TRUE: &str = "true";
-/// `budoux_newline` の OFF 受理値（`0`・R1.3）。
+/// `budoux_newline` の OFF 受理値（`0`）。
 const VALUE_OFF_ZERO: &str = "0";
-/// `budoux_newline` の OFF 受理値（`false`・R1.3）。
+/// `budoux_newline` の OFF 受理値（`false`）。
 const VALUE_OFF_FALSE: &str = "false";
 
-/// `budoux_newline` 宣言の解決結果（折返しモード・将来の戦略名第一級化シーム・討議 #1）。
+/// `budoux_newline` 宣言の解決結果（折返しモード・将来の戦略名第一級化シーム）。
 ///
-/// 本 spec の受理語彙は bool 2 値だが、型は将来のワードラップ戦略名（禁則強化・欧文
+/// 受理語彙は bool 2 値だが、型は将来のワードラップ戦略名（禁則強化・欧文
 /// ハイフネーション等）を variant 追加で第一級化しうる enum とする。折返し計画
 /// （`WrapPlan`）への写像は layout 層の領分。
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum WrapMode {
-    /// 従来の文字単位折返し（既定・キー無し/`0`/`false`/未知値フォールバック・R1.3）。
+    /// 従来の文字単位折返し（既定・キー無し/`0`/`false`/未知値フォールバック）。
     #[default]
     CharByChar,
-    /// budoux 分かち書き境界ワードラップ（`1`/`true`・R1.2）。
+    /// budoux 分かち書き境界ワードラップ（`1`/`true`）。
     BudouxWordWrap,
 }
 
 impl WrapMode {
-    /// `BalloonModel` の転記値（2層マージ後勝ち解決済み・R1.1）から有効値を解釈する。
+    /// `BalloonModel` の転記値（2層マージ後勝ち解決済み）から有効値を解釈する。
     ///
     /// - マーカー無し（`None`）／`0`／`false` → [`CharByChar`](Self::CharByChar)
-    ///   （正常系につきログなし・R1.3）。
-    /// - `1`／`true` → [`BudouxWordWrap`](Self::BudouxWordWrap)（R1.2）。
+    ///   （正常系につきログなし）。
+    /// - `1`／`true` → [`BudouxWordWrap`](Self::BudouxWordWrap)。
     /// - 未知の値 → `warn!`（値を含む）＋ [`CharByChar`](Self::CharByChar) へ
-    ///   フォールバック（縮退継続・R1.4）。
+    ///   フォールバック（縮退継続）。
     /// - 語彙は完全一致（trim は parser の kv 層で済んでいる前提）。`TRUE`／`on`／
     ///   空文字等は未知値扱い。
     pub fn resolve(model: &BalloonModel) -> WrapMode {
@@ -94,7 +94,7 @@ mod tests {
         (mode, counts.warn)
     }
 
-    // ── R1.2: 1/true → ON（分かち書きワードラップ）・warn なし ──
+    // ── 1/true → ON（分かち書きワードラップ）・warn なし ──
 
     #[test]
     fn one_resolves_to_budoux_word_wrap() {
@@ -110,13 +110,13 @@ mod tests {
         assert_eq!(warns, 0, "`true` は warn なしで ON 受理される");
     }
 
-    // ── R1.3: 欠落/0/false → OFF（文字単位折返し・正常系・ログなし） ──
+    // ── 欠落/0/false → OFF（文字単位折返し・正常系・ログなし） ──
 
     #[test]
     fn missing_marker_defaults_to_char_by_char() {
         let (mode, warns) = resolve_counting_warns(None);
         assert_eq!(mode, WrapMode::CharByChar);
-        // 未指定は正常系（既存ゴースト無害・R1.3/R1.5）——warn は記録しない。
+        // 未指定は正常系（既存ゴースト無害）——warn は記録しない。
         assert_eq!(warns, 0);
     }
 
@@ -134,7 +134,7 @@ mod tests {
         assert_eq!(warns, 0, "`false` は明示 OFF・正常系につき warn なし");
     }
 
-    // ── R1.4: 受理語彙以外 → warn ログ 1 回＋OFF フォールバック ──
+    // ── 受理語彙以外 → warn ログ 1 回＋OFF フォールバック ──
 
     /// 完全一致のみ受理（trim は kv 層済み）——大文字形・別綴り・空白・空文字は未知値扱い。
     #[test]
@@ -152,13 +152,13 @@ mod tests {
 
     // ── 型の Default・決定論 ──
 
-    /// 型の Default も文字単位折返し（design.md の #[default] 正準と一致）。
+    /// 型の Default も文字単位折返し（`#[default]` と一致）。
     #[test]
     fn wrap_mode_default_is_char_by_char() {
         assert_eq!(WrapMode::default(), WrapMode::CharByChar);
     }
 
-    // ── R1.1: 2層マージ後の転記値を読むだけ（マージ済み単一値で解決） ──
+    // ── 2層マージ後の転記値を読むだけ（マージ済み単一値で解決） ──
 
     /// 2層マージは balloon-parse 側で解決済み——本層は `parse` が転記した後勝ち単一値を
     /// 読むだけで、画像別上書きの結果がそのまま有効値になる。

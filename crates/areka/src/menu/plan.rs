@@ -1,4 +1,4 @@
-//! メニューの計画（areka-P0-popup-menu-minimal）。
+//! メニューの計画。
 //!
 //! 登記の写し（枠と項目の列）と、照会で決まった項目名から、表示するメニューの構造
 //! ——枠の並び順・区切り線・1 回の表示の中で一意な識別子・アクセスキー `&` の写し——
@@ -9,10 +9,10 @@ use std::collections::HashMap;
 use super::captions::CaptionMap;
 use super::{Frame, ItemBody, MenuAction, MenuItem};
 
-/// 表示するメニューの 1 要素（要件 2.1・2.4〜2.6）。閉包を持たないので値として比べられる。
+/// 表示するメニューの 1 要素。閉包を持たないので値として比べられる。
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum PlanEntry {
-    /// 選べる項目。`id` は 1 回の表示の中で一意（要件 2.7）。
+    /// 選べる項目。`id` は 1 回の表示の中で一意。
     Item {
         id: u32,
         label: String,
@@ -36,7 +36,7 @@ pub(crate) struct MenuPlan {
 }
 
 impl MenuPlan {
-    /// 選ばれた識別子から、その項目を登記した枠と動作を引く（要件 2.7）。
+    /// 選ばれた識別子から、その項目を登記した枠と動作を引く。
     /// `Submenu` の見出しや区切り線、知らない識別子には `None`。
     pub(crate) fn action(&self, id: u32) -> Option<(Frame, MenuAction)> {
         self.actions
@@ -45,7 +45,7 @@ impl MenuPlan {
     }
 
     /// 選べる項目（[`PlanEntry::Item`]）の総数。サブメニューの子項目は数え、見出しと
-    /// 区切り線は数えない。表示を記録する行の `items=`（要件 8.1）に使う。
+    /// 区切り線は数えない。表示を記録する行の `items=`に使う。
     pub(crate) fn item_count(&self) -> usize {
         self.actions.len()
     }
@@ -71,8 +71,8 @@ pub(crate) fn build(snapshot: Vec<(Frame, MenuItem)>, captions: &CaptionMap) -> 
     plan
 }
 
-/// 区切り線のための群。{①②③④⑤}{⑥⑦⑧⑨⑩}{⑪}{⑫} の隣り合う非空の群の間に 1 本入れる
-/// （要件 2.6 の設計裁定）。空の群は間にあっても区切りを増やさない。
+/// 区切り線のための群。{①②③④⑤}{⑥⑦⑧⑨⑩}{⑪}{⑫} の隣り合う非空の群の間に 1 本入れる。
+/// 空の群は間にあっても区切りを増やさない。
 fn group_of(frame: Frame) -> u8 {
     match frame {
         Frame::Ghost
@@ -120,7 +120,7 @@ fn convert(
 }
 
 /// 項目の文言を決める。リソースの値が非空ならそのまま（`&` はアクセラレータ記法として
-/// 素通し・要件 3.5）、それ以外は登記された既定名をアクセラレータ用に写す。子項目も同じ。
+/// 素通し）、それ以外は登記された既定名をアクセラレータ用に写す。子項目も同じ。
 fn caption_for(item: &MenuItem, captions: &CaptionMap) -> String {
     item.caption_resource
         .and_then(|id| captions.get(id))

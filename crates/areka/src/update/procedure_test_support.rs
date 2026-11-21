@@ -1,4 +1,4 @@
-//! 手続きのテストの支え（design「Testing Strategy / 手続き」）。
+//! 手続きのテストの支え。
 //!
 //! 偽の口 [`FakePorts`] は、口への呼び出しを順に記録し、台本どおりに応える。`run_engine` は
 //! 固定の `Progress` の列を観測の閉包へ流してから固定の結果を返す（エンジンは呼ばない）。
@@ -160,7 +160,7 @@ pub(super) fn order(
     }
 }
 
-// 4 経路の台本（design「Testing Strategy / 手続き」）。
+// 4 経路の台本。
 
 /// 差分 0＝`none`。
 pub(super) fn script_none() -> EngineScript {
@@ -256,7 +256,7 @@ pub(super) fn script_md5_mismatch(target: &Path) -> EngineScript {
     }
 }
 
-/// 成功したが、消せなかった物 1 件と片付けられなかった作業場所 1 件が残った（要件 4.8）。
+/// 成功したが、消せなかった物 1 件と片付けられなかった作業場所 1 件が残った。
 pub(super) fn script_updated_with_leftovers(undeletable: &Path, leftover: &Path) -> EngineScript {
     EngineScript {
         progress: vec![
@@ -279,7 +279,7 @@ pub(super) fn script_updated_with_leftovers(undeletable: &Path, leftover: &Path)
     }
 }
 
-/// 確定で書けず、戻せなかった（作業場所 `work` に元の内容が残る・要件 4.5・4.6）。
+/// 確定で書けず、戻せなかった（作業場所 `work` に元の内容が残る）。
 pub(super) fn script_rollback_failed(target: &Path, work: &Path) -> EngineScript {
     let mut err = error(
         target,

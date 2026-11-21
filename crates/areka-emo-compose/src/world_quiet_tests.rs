@@ -1,4 +1,4 @@
-//! 記録を出さない組み方の入口の檻（spec: emo-bake-log-overlap 要件 2.1・2.3・3.2・3.4）。
+//! 記録を出さない組み方の入口の檻。
 //!
 //! 追記の相手の面が無い・既に在るアニメーションの番号を追記で書き直す・同じ番号の面を 2 度書く・
 //! 範囲の見出しで写す行の数が畳み込みの上限を越える、を持つシェルを [`EmoWorld::build_with_images`] と [`EmoWorld::build_with_images_quiet`] で組む。
@@ -102,11 +102,9 @@ fn quiet_build_emits_no_fold_records_and_same_table() {
     let quiet_logs =
         capture_logs(|| quiet = Some(EmoWorld::build_with_images_quiet(&shell, &images)));
 
-    // 対照: 出す入口は 5 件を 1 行ずつ出す。
     for text in [DUPLICATE, REDEFINE, MISSING, COPY_LIMIT, COLLISION_TWICE] {
         assert_eq!(count(&emit_logs, text), 1, "出す入口の {text}: {emit_logs}");
     }
-    // 出さない入口は、面の表を組む段の記録の文言がどれも 0 行。
     for text in ALL_TEXTS {
         assert_eq!(
             count(&quiet_logs, text),

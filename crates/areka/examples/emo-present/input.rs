@@ -7,9 +7,9 @@ use super::{
 // Event Handlers
 // ---------------------------------------------------------------------------
 
-/// OnPointerPressed ハンドラ: 不透明域クリックの捕捉ログ（task 5.2）＋ダブルクリック（左）終了。
+/// OnPointerPressed ハンドラ: 不透明域クリックの捕捉ログ＋ダブルクリック（左）終了。
 ///
-/// **不透明域クリック捕捉の観測シーム（task 5.2・R2.2/R2.3/R6.3）**: クリック透過機構は αマスク
+/// **不透明域クリック捕捉の観測シーム**: クリック透過機構は αマスク
 /// （`AlphaMask::is_hit`）に従って `WS_EX_TRANSPARENT` を動的トグルするため、pointer-pressed
 /// イベントが本窓へ到達したこと自体が「クリックが不透明（αマスク有効）域へ着地した」証拠である
 /// （透明域のクリックは背後プロセスへ透過し本ハンドラには**到達しない**）。ゆえに毎押下（単クリック
@@ -26,7 +26,6 @@ pub(super) fn on_shell_pressed(
     match ev {
         Phase::Tunnel(_) => false,
         Phase::Bubble(state) => {
-            // 不透明域クリック捕捉ログ（task 5.2 の観測シーム・毎押下 1 行）。到達＝不透明域着地の証拠。
             tracing::info!(
                 client_x = state.client_point.x,
                 client_y = state.client_point.y,

@@ -1,22 +1,22 @@
 // =============================================================================
-// 判断中核 `decide` の決定論テスト（task 3.1・コンテンツ駆動の表示・非表示）
+// 判断中核 `decide` の決定論テスト
 //
-// design.md「Testing Strategy → Unit Tests ①」のうち、本タスクが所有する系統:
-//   ⑴ 可視コンテンツ判定（グリフあり／改行・カーソル移動・待機・消去のみ）— Requirement 2.3
-//   ⑵ scope 別の表示と無発話 scope の非表示 — Requirements 2.1 / 2.2 / 2.4 / 2.7 / 3.3
-//   ⑶ 表示指令を再発行しない — Requirement 2.5
-//   ⑷ ゼロへの下降に伴う全非表示と、その直後の再出現 — Requirements 3.1 / 3.2 / 3.6 / 4.7
-//   ⑸ 遷移の無いフレームは 1 件もログを生成しない — Requirement 8.6
-//   ⑹ 同一の観測列は同一の遷移列を返す（走査順に依存しない） — Requirement 9.1 の前提
+// コンテンツ駆動の表示・非表示:
+//   ⑴ 可視コンテンツ判定（グリフあり／改行・カーソル移動・待機・消去のみ）
+//   ⑵ scope 別の表示と無発話 scope の非表示
+//   ⑶ 表示指令を再発行しない
+//   ⑷ ゼロへの下降に伴う全非表示と、その直後の再出現
+//   ⑸ 遷移の無いフレームは 1 件もログを生成しない
+//   ⑹ 同一の観測列は同一の遷移列を返す（走査順に依存しない）
 //
-// タイムアウト計測・抑止（task 3.2）の系統:
-//   ⑺ 満了予定の起点＝占有終端／満了境界の直前・直後 — Requirements 4.1 / 4.3 / 4.6
-//   ⑻ 抑止の成立・解除・解除後の取り直し・抑止中の超過の保留 — Requirements 5.1〜5.3 / 5.6
-//   ⑼ 抑止の観測不能は非抑止扱い — Requirement 5.5
-//   ⑽ 会話開始・占有終端の引き上げによる計測破棄 — Requirements 4.5 / 8.2
-//   ⑾ 表示終了信号が無い間は計測を始めない — Requirement 4.8
+// タイムアウト計測・抑止:
+//   ⑺ 満了予定の起点＝占有終端／満了境界の直前・直後
+//   ⑻ 抑止の成立・解除・解除後の取り直し・抑止中の超過の保留
+//   ⑼ 抑止の観測不能は非抑止扱い
+//   ⑽ 会話開始・占有終端の引き上げによる計測破棄
+//   ⑾ 表示終了信号が無い間は計測を始めない
 //
-// 実時間の待機・反復回数のみによる有界化は一切用いない（Requirement 9.2 / 9.3）。時刻は
+// 実時間の待機・反復回数のみによる有界化は一切用いない。時刻は
 // 観測したい時点そのものだけを注入し、そこで頭打ちにする。
 // =============================================================================
 
@@ -75,7 +75,7 @@ fn timed_out_log(scope: u32) -> VisibilityLogEvent {
 // ⑵ scope 別の表示
 // ---------------------------------------------------------------------------
 
-/// 最初の可視コンテンツが置かれた scope **だけ**が表示される（Requirement 2.1 / 2.2）。
+/// 最初の可視コンテンツが置かれた scope **だけ**が表示される。
 #[test]
 fn first_visible_content_shows_only_that_scope() {
     let mut state = BalloonVisibilityState::default();
@@ -91,8 +91,7 @@ fn first_visible_content_shows_only_that_scope() {
     assert_eq!(d.logs, vec![shown_log(0)]);
 }
 
-/// 会話中に発話 scope が切り替わっても、先に表示済みの scope は非表示へ戻らない
-/// （Requirement 2.4）。切替後も喋らない scope は最後まで出ない（Requirement 2.7 / 3.3）。
+/// 会話中に発話 scope が切り替わっても、先に表示済みの scope は非表示へ戻らない。切替後も喋らない scope は最後まで出ない。
 #[test]
 fn scope_switch_adds_show_without_touching_the_shown_scope() {
     let mut state = BalloonVisibilityState::default();
@@ -115,8 +114,7 @@ fn scope_switch_adds_show_without_touching_the_shown_scope() {
     assert_eq!(d1.logs, vec![shown_log(1)]);
 }
 
-/// 同一 scope へ 2 つ目以降の可視コンテンツが置かれても表示指令を再発行しない
-/// （Requirement 2.5）。既に可視である以上、増加エッジだけでは契機にならない。
+/// 同一 scope へ 2 つ目以降の可視コンテンツが置かれても表示指令を再発行しない。既に可視である以上、増加エッジだけでは契機にならない。
 #[test]
 fn additional_content_on_a_visible_scope_does_not_reissue_show() {
     let mut state = BalloonVisibilityState::default();
@@ -143,7 +141,7 @@ fn additional_content_on_a_visible_scope_does_not_reissue_show() {
 // ---------------------------------------------------------------------------
 
 /// 可視グリフ数が据え置きのフレームは表示の契機にならない。改行・カーソル移動・待機・
-/// 内容消去だけの観測列は可視グリフ数を動かさないため、この規則が Requirement 2.3 を成す。
+/// 内容消去だけの観測列は可視グリフ数を動かさない。
 #[test]
 fn flat_glyph_count_is_never_a_show_trigger() {
     let mut state = BalloonVisibilityState::default();
@@ -182,8 +180,7 @@ fn partial_decrease_is_not_a_hide_trigger() {
 // ⑷ ゼロへの下降と再出現
 // ---------------------------------------------------------------------------
 
-/// 会話冒頭の全消去で、表示中の全 scope が 1 つの行動へまとめて畳まれる
-/// （Requirement 3.1）。どの scope から会話が始まるかを知らずに導ける（Requirement 3.6）。
+/// 会話冒頭の全消去で、表示中の全 scope が 1 つの行動へまとめて畳まれる。どの scope から会話が始まるかを知らずに導ける。
 #[test]
 fn descent_to_zero_hides_every_visible_scope() {
     let mut state = BalloonVisibilityState::default();
@@ -195,8 +192,7 @@ fn descent_to_zero_hides_every_visible_scope() {
     assert_eq!(d.logs, vec![hidden_log(0), hidden_log(1)]);
 }
 
-/// 既に不可視の scope がゼロへ下降しても遷移ではない——行動もログも生成しない
-/// （Requirement 8.6）。
+/// 既に不可視の scope がゼロへ下降しても遷移ではない——行動もログも生成しない。
 #[test]
 fn descent_to_zero_on_an_invisible_scope_is_silent() {
     let mut state = BalloonVisibilityState::default();
@@ -208,8 +204,7 @@ fn descent_to_zero_on_an_invisible_scope_is_silent() {
     assert!(d.logs.is_empty(), "遷移が無いのにログが出た");
 }
 
-/// 全非表示の直後に置かれた可視コンテンツは、表示と同一の規則でそのまま出直す
-/// （Requirement 3.2）。タイムアウト非表示のあとの再表示も同じ規則である（Requirement 4.7）。
+/// 全非表示の直後に置かれた可視コンテンツは、表示と同一の規則でそのまま出直す。タイムアウト非表示のあとの再表示も同じ規則である。
 #[test]
 fn content_after_a_hide_shows_again_by_the_same_rule() {
     let mut state = BalloonVisibilityState::default();
@@ -262,7 +257,7 @@ fn output_order_is_scope_ascending_regardless_of_input_order() {
     assert_eq!(d.logs, vec![shown_log(0), shown_log(1), shown_log(2)]);
 }
 
-/// 同一の観測列に対して常に同一の遷移列を返す（Requirement 9.1 の前提）。
+/// 同一の観測列に対して常に同一の遷移列を返す。
 #[test]
 fn identical_observation_sequences_yield_identical_decisions() {
     let frames: [&[(u32, ScopeObservation)]; 5] = [
@@ -304,7 +299,7 @@ fn identical_observation_sequences_yield_identical_decisions() {
 
 /// 前フレームの実可視は、本判断が同じフレームで発行した遷移を反映して持ち越す。
 /// これを観測値のまま覚えると、自分が出した表示が次フレームで「外から表示された」と
-/// 誤検出される（消費は task 4.4）。
+/// 誤検出される。
 #[test]
 fn prev_visible_reflects_the_transitions_this_frame_issued() {
     let mut state = BalloonVisibilityState::default();
@@ -353,8 +348,7 @@ fn conversation_scoped_state_is_untouched_by_content_decisions() {
 
 /// 会話の占有終端（talk 相対秒）。
 const DISPLAY_END: f64 = 10.0;
-/// タイムアウト時間（秒）。既定値の唯一の定義箇所から引く（Requirement 4.2——同じ数値を
-/// 複数箇所へ散らさない）。各フレームへは [`Frame::timeout`] で明示に渡す。
+/// タイムアウト時間（秒）。既定値の唯一の定義箇所から引く（同じ数値を複数箇所へ散らさない）。各フレームへは [`Frame::timeout`] で明示に渡す。
 const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
 
 /// scope 0 が可視・scope 1 は無発話のまま、満了予定 30.0 の計測が立っている状態を作る
@@ -389,10 +383,10 @@ fn armed_state() -> BalloonVisibilityState {
 }
 
 /// 満了予定の起点は**占有終端**であって、計測が成り立った最初のフレームの現在時刻ではない
-/// （Requirement 4.1 の正典起点「スクリプトの表示が終わってから」）。観測はフレーム単位で
+/// （正典の起点は「スクリプトの表示が終わってから」）。観測はフレーム単位で
 /// 飛び飛びに入るため、現在時刻を起点に採ると観測の遅れの分だけ満了がずれる。
 ///
-/// 中断による終了（Requirement 4.6）も起点は同じ占有終端である——計測の起点が 1 つしかない
+/// 中断による終了も起点は同じ占有終端である——計測の起点が 1 つしかない
 /// ことを、この期待値が押さえる。利用者のダブルクリックによる中断だけは計測を経ずに隠すが、
 /// それは `decide` の別の段の仕事で、ここで固定している起点には関わらない
 /// （`balloon_visibility_user_break_tests.rs`）。
@@ -444,7 +438,7 @@ fn deadline_is_anchored_on_display_end_not_on_the_first_eligible_frame() {
     assert_eq!(expired.logs, vec![timed_out_log(0)]);
     assert_eq!(state.deadline, None, "満了後も計測が残っている");
 
-    // 満了後のフレームは無音（同じ非表示を撃ち直さない・Requirement 8.6）。
+    // 満了後のフレームは無音（同じ非表示を撃ち直さない）。
     let after = Frame::new(&[(0, seen(3, false))])
         .at(DISPLAY_END + TIMEOUT + 1.0)
         .timeout(TIMEOUT)
@@ -454,7 +448,7 @@ fn deadline_is_anchored_on_display_end_not_on_the_first_eligible_frame() {
 }
 
 /// タイムアウトの非表示は、その時点で可視の scope すべてを 1 つの行動へ畳む。無発話のまま
-/// 不可視の scope は対象に含めない（Requirement 4.3）。
+/// 不可視の scope は対象に含めない。
 #[test]
 fn timeout_hides_every_visible_scope_and_leaves_the_silent_ones() {
     let mut state = BalloonVisibilityState::default();
@@ -499,9 +493,9 @@ fn a_scope_shown_in_the_same_frame_is_not_hidden_by_the_expired_deadline() {
 // ⑻ 抑止の成立・解除・取り直し
 // ---------------------------------------------------------------------------
 
-/// 抑止が成立している間は満了予定を過ぎても非表示を保留し（Requirement 5.6）、解除された
-/// 時点から既定時間を改めて計り直す（Requirement 5.3——抑止前の残り時間を再開しない）。
-/// 抑止のログは 1 回の抑止につき 1 件だけ出す（Requirement 8.3）。
+/// 抑止が成立している間は満了予定を過ぎても非表示を保留し、解除された
+/// 時点から既定時間を改めて計り直す（抑止前の残り時間を再開しない）。
+/// 抑止のログは 1 回の抑止につき 1 件だけ出す。
 #[test]
 fn suppression_holds_the_expired_deadline_and_release_restarts_the_measurement() {
     let mut state = armed_state();
@@ -566,10 +560,9 @@ fn suppression_holds_the_expired_deadline_and_release_restarts_the_measurement()
     assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
 }
 
-/// ドラッグ中は抑止になる（Requirement 5.1）。一方、**不可視**の scope へのポインタ滞在は抑止に
-/// しない——不可視の間は離脱の通知が届かず、滞在の記録が残ったままだと恒久的な抑止に固着するため
-/// （Requirement 5.5 の向き）。選択肢の表示中は抑止に数えない（areka-P0-balloon-text-bugs 要件 1.5・
-/// 選択を待つ間はトークの終わりが届かないので計測の手前で止まる）。
+/// ドラッグ中は抑止になる。一方、**不可視**の scope へのポインタ滞在は抑止に
+/// しない——不可視の間は離脱の通知が届かず、滞在の記録が残ったままだと恒久的な抑止に固着するため。選択肢の表示中は抑止に数えない
+/// （選択を待つ間はトークの終わりが届かないので計測の手前で止まる）。
 #[test]
 fn drag_suppresses_but_hover_on_an_invisible_scope_does_not() {
     let mut dragged = armed_state();
@@ -610,8 +603,7 @@ fn drag_suppresses_but_hover_on_an_invisible_scope_does_not() {
 // ⑼ 抑止の観測不能
 // ---------------------------------------------------------------------------
 
-/// 抑止条件の観測が取れないフレームは、抑止されていないものとして満了させる
-/// （Requirement 5.5——消えないまま固着する側へ倒さない）。
+/// 抑止条件の観測が取れないフレームは、抑止されていないものとして満了させる（消えないまま固着する側へ倒さない）。
 #[test]
 fn unobservable_suppression_inputs_are_treated_as_not_suppressed() {
     let mut state = armed_state();
@@ -631,8 +623,8 @@ fn unobservable_suppression_inputs_are_treated_as_not_suppressed() {
 // ⑽ 計測の破棄
 // ---------------------------------------------------------------------------
 
-/// 会話開始の通知で計測を破棄する（Requirement 4.5）。グリフ数の履歴は残すため、直後の
-/// 全消去がゼロへの下降エッジとして成立する（design の Data Models）。
+/// 会話開始の通知で計測を破棄する。グリフ数の履歴は残すため、直後の
+/// 全消去がゼロへの下降エッジとして成立する。
 #[test]
 fn talk_started_discards_the_measurement_and_keeps_the_glyph_history() {
     let mut state = armed_state();
@@ -742,7 +734,7 @@ fn clearing_every_balloon_discards_the_measurement() {
     );
     assert_eq!(state.deadline, None);
 
-    // 破棄は 1 回だけ（不可視のまま時が進んでもログは出ない・Requirement 8.6）。
+    // 破棄は 1 回だけ（不可視のまま時が進んでもログは出ない）。
     let quiet = Frame::new(&[(0, seen(0, false)), (1, seen(0, false))])
         .at(3.0)
         .timeout(TIMEOUT)
@@ -755,7 +747,7 @@ fn clearing_every_balloon_discards_the_measurement() {
 // ---------------------------------------------------------------------------
 
 /// 会話の表示終了信号が届かない間は計測を始めず、バルーンを表示したまま保つ。信号が無いまま
-/// 可視コンテンツが現れた事実は記録に残すが、会話につき 1 回に留める（Requirement 4.8）。
+/// 可視コンテンツが現れた事実は記録に残すが、会話につき 1 回に留める。
 #[test]
 fn no_measurement_starts_while_the_end_of_talk_signal_is_absent() {
     let mut state = BalloonVisibilityState::default();
@@ -896,7 +888,7 @@ fn a_non_number_current_time_never_expires_the_measurement() {
     assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
 }
 
-/// 同一の観測列（時刻・信号・抑止を含む）は同一の遷移列を返す（Requirement 9.1 の前提）。
+/// 同一の観測列（時刻・信号・抑止を含む）は同一の遷移列を返す。
 #[test]
 fn identical_timed_observation_sequences_yield_identical_decisions() {
     let run = || {

@@ -1,8 +1,8 @@
-//! 控える範囲と重ね書きの控えの檻（要件 2.1・2.3・2.4・10.5）。
+//! 控える範囲と重ね書きの控えのテスト。
 //!
 //! このモジュールはファイルシステムに触れないので、表だけの試験の根は実在しない架空のパスで
-//! 足りる（本物の置き場は読みも書きもしない＝要件 10.5）。`FsPersistIo` と `save_scope` を通す
-//! 試験（要件 2.1・2.5・2.6）は木が変わらないことを見るので、`TempPath` の根を使う。
+//! 足りる（本物の置き場は読みも書きもしない）。`FsPersistIo` と `save_scope` を通す
+//! 試験は木が変わらないことを見るので、`TempPath` の根を使う。
 //! プロセスに 1 つの状態を並んだ試験と分け合うため、根は試験ごとに別の名前にし、
 //! `withhold_everything` は呼ばない。
 
@@ -155,7 +155,7 @@ fn save_scope_inside_returns_withheld_and_logs_it() {
             .any(|e| e.message().contains("persist commit failed")),
         "保存の失敗の記録は出ない: {events:?}"
     );
-    // 同じ走りの中では書けたときと同じ値を読み返せる（要件 2.3）。
+    // 同じ走りの中では書けたときと同じ値を読み返せる。
     let loaded = crate::persist::load_scope(PersistScope::App, &roots, &FsPersistIo);
     assert_eq!(loaded, vec![(PersistKey::LastGhost, "emo2".to_owned())]);
 }

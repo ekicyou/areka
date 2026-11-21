@@ -32,17 +32,17 @@ pub(crate) fn write_minimal_ghost_descript(root: &Path) {
 }
 
 // ------------------------------------------------------------------
-// T-I5: emo2 fixture からの end-to-end 読込（統合）
+// emo2 fixture からの end-to-end 読込（統合）
 // ------------------------------------------------------------------
 
-/// T-I5: emo2 fixture から `load_descript_source` を呼び、`shell_kv` に
-/// 実測キー（`seriko.alignmenttodesktop=bottom` 等・正典表検証行）が含まれる。
+/// emo2 fixture から `load_descript_source` を呼び、`shell_kv` に
+/// 実測キー（`seriko.alignmenttodesktop=bottom` 等）が含まれる。
 #[test]
 fn t_i5_emo2_fixture_loads_descript_source() {
     let src =
         load_descript_source(&emo2_root()).expect("emo2 fixture は Ok(DescriptSource) を返す");
 
-    // shell descript 実測キー（正典表「emo2 実測値による検証行」）
+    // shell descript の実測キー
     assert_eq!(
         src.shell_kv
             .get("seriko.alignmenttodesktop")
@@ -84,7 +84,7 @@ fn t_i5_emo2_fixture_loads_descript_source() {
     assert_eq!(src.shell_dir, emo2_root().join("shell").join("master"));
 }
 
-/// T-I5 補: emo2 の `GhostTitles` は `sakura.name`/`kero.name` を写像し、
+/// emo2 の `GhostTitles` は `sakura.name`/`kero.name` を写像し、
 /// 未定義スコープは既定 `"areka"` を返す（パニックしない）。
 #[test]
 fn t_i5_emo2_titles_from_names() {
@@ -185,7 +185,7 @@ fn read_kv_lenient_missing_returns_empty() {
 }
 
 // ------------------------------------------------------------------
-// author_dpi 読取（areka-P0-emo-dpi-scaling task 2.1・要件 1.1・design D1）
+// author_dpi 読取
 // 無宣言=96 / 宣言あり=その値 / 不正=warn+96 / 0=warn+96 の全パターン
 // ------------------------------------------------------------------
 
@@ -272,20 +272,15 @@ fn load_balloon_author_dpi_emo2_fixture_is_default_96() {
 }
 
 // ------------------------------------------------------------------
-// author_dpi 縮退ログの発火（steering `logging.md` の
-// 「ログ無し失敗経路の禁止」）
+// author_dpi 縮退ログの発火
 //
 // 無宣言=debug・不正/0=warn という縮退梯子のレベル分離と、`source` フィールドによる
 // shell/balloon 帰属（[`load_balloon_author_dpi`] の doc が主張している契約）を、返り値と
 // あわせて確かめる。
 //
-// 捕捉は `log_capture_kit::capture` を使う。
-// **素朴な `with_default` 捕捉は非決定的に取りこぼす**——`tracing` の callsite interest
-// キャッシュはプロセス大域かつ「最初に踏んだスレッドが勝つ」ため、subscriber を持たない
-// 他テスト（`read_kv_lenient_missing_returns_empty` 等）が同じ callsite を先に踏むと
-// `Interest::never()` が焼き付き、捕捉窓の内側でもイベントが捨てられる。
-// 機構と対策（probe dispatcher 常駐による `has_just_one` 恒久偽化）は `log_capture_kit` の
-// crate doc を参照。
+// 捕捉は `log_capture_kit::capture` を使う。素朴な `with_default` 捕捉は、subscriber を持たない
+// 他テストが同じ callsite を先に踏むと `tracing` の interest キャッシュに `Interest::never()` が
+// 焼き付き、捕捉窓の内側でもイベントが捨てられる（機構は `log_capture_kit` の crate doc）。
 // ------------------------------------------------------------------
 
 /// 無宣言（キー不在）は既定 96（ukadoc: 何も指定しなければ Windows 標準の 96 固定）で、
@@ -426,8 +421,8 @@ fn author_dpi_log_source_field_attributes_shell_vs_balloon() {
 /// 読取失敗の文言は**帰属中立**である（[`read_kv_lenient`] は ghost/balloon 共有の読取器）。
 ///
 /// ファイルが無かったのか宣言が無かったのかを実機ログで弁別できることが縮退の観測条件。
-/// 加えて、共有読取器の文言を ghost 固定に戻す変異（バルーン起因を ghost 起因に見せる
-/// 帰属誤り・R6.3 の `RUST_LOG` grep を誤らせる）を「ghost を含まない」主張で殺す。
+/// 加えて、共有読取器の文言を ghost 固定に戻す変異（バルーン起因を ghost 起因に見せ、
+/// `RUST_LOG` の grep を誤らせる）を「ghost を含まない」主張で殺す。
 #[test]
 fn load_balloon_author_dpi_missing_file_logs_read_warn_and_absent_debug() {
     let temp = unique_temp_dir("balloon-dpi-missing-file-log");

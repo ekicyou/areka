@@ -1,8 +1,8 @@
 //! 統括ハブの器と指令ディスパッチ（`EmoPresenter` 本体・target 登録・`Hide`／`InvalidateCache`）。
 //!
 //! `EmoPresenter` の定義と、指令の入口 [`EmoPresenter::apply`] からの分岐を持つ。`ShowSurface` の適用は
-//! `super::show`、`ReplaceTarget`（装着の置き換え）は `super::replace`、DPI 再スケールは `super::refresh`、照会系は `super::read`、当たり判定は `super::hit` に
-//! 分かれる（いずれも同一型 `EmoPresenter` の別 `impl` ブロック）。
+//! `super::show`、`ReplaceTarget` は `super::replace`、DPI 再スケールは `super::refresh`、照会系は
+//! `super::read`、当たり判定は `super::hit` に分かれる（いずれも同一型の別 `impl` ブロック）。
 
 use crate::hit_shapes::HitMasks;
 
@@ -19,14 +19,14 @@ use super::{
 /// 指令適用の統括ハブ（合成・キャッシュ・表示・マスクの一点結線・UI スレッド専有）。
 ///
 /// target を [`Self::attach_target`] で登録し、[`Self::apply`] で [`PresentCommand`] を適用する。
-/// COM/GPU 資源を内包するため `!Send`（`PhantomData<*const ()>` で型強制・R7.1）。`unsafe impl Send`
+/// COM/GPU 資源を内包するため `!Send`（`PhantomData<*const ()>` で型強制）。`unsafe impl Send`
 /// は置かない。
 pub struct EmoPresenter {
     /// target 識別子 → 表示コンテキスト。
     pub(super) targets: HashMap<TargetId, PresentTarget>,
     /// 表示成立点で積んだ倍率の記録（取り出すまで積んだ順に持つ・[`Self::take_scale_changes`]）。
     pub(super) scale_changes: Vec<ScaleChange>,
-    /// `!Send`/`!Sync` を型で担保するマーカー（UI スレッドアフィニティの構造的強制・R7.1）。
+    /// `!Send`/`!Sync` を型で担保するマーカー（UI スレッドアフィニティの構造的強制）。
     _not_send: PhantomData<*const ()>,
 }
 
@@ -40,21 +40,20 @@ impl EmoPresenter {
         }
     }
 
-    /// target を登録し、窓 Entity を装着先として記録する（窓生成は呼び手＝placement/example の責務）。
+    /// target を登録し、窓 Entity を装着先として記録する（窓生成は呼び手の責務）。
     ///
-    /// 装着（`VisualMount`）は**初回 `ShowSurface` で原寸が確定してから遅延生成**するため、本メソッドは
-    /// skeleton（`mount=None`/`visible=false`）を組んで登録するのみで World には触れない。既存 id への
-    /// 再登録は登録の値を差し替えるだけで、前の装着（窓の子の Visual）は窓に残る——差し替えは
-    /// `ReplaceTarget` を使う（外から取り外す公開の口は無い）。
+    /// 装着（`VisualMount`）は初回 `ShowSurface` で原寸が確定してから遅延生成するので、本メソッドは
+    /// skeleton（`mount=None`/`visible=false`）を登録するのみで World には触れない。既存 id への
+    /// 再登録は値の差し替えだけで、前の装着（窓の子の Visual）は窓に残る。差し替えには
+    /// `ReplaceTarget` を使う。
     ///
-    /// # `author_dpi`（作者基準 DPI・要件 1.1/1.5）
+    /// # `author_dpi`（作者基準 DPI）
     ///
     /// k の分母となる作者宣言値（shell `seriko.dpi`／balloon `dpi`・既定 [`DEFAULT_AUTHOR_DPI`]）を
-    /// target の拡大政策 [`ScalePolicy`] として確定する。**k そのものはここで導出しない**——k は窓 DPI に
-    /// 依存し、窓 DPI は時間で変わる（モニタ跨ぎ移動・表示スケール変更）ため、導出は `ShowSurface` 適用
-    /// ごとに行う（design Flow 1）。政策は target（＝窓）ごとに保持されるため、DPI の異なるモニタ上の
-    /// 複数窓がそれぞれ自窓の k で表示される（要件 1.5）。`0` は [`ScalePolicy::new`] が既定 96 へ
-    /// 正規化する（分母ゼロで表示を失わない・log-first）。
+    /// target の拡大政策 [`ScalePolicy`] として確定する。k そのものはここで導出しない: 窓 DPI は時間で
+    /// 変わる（モニタ跨ぎ移動・表示スケール変更）ので、導出は `ShowSurface` 適用ごとに行う。政策は
+    /// target（窓）ごとに持つので、DPI の異なるモニタ上の複数窓がそれぞれ自窓の k で表示される。
+    /// `0` は [`ScalePolicy::new`] が既定 96 へ正規化する（分母ゼロで表示を失わない）。
     ///
     /// [`DEFAULT_AUTHOR_DPI`]: crate::scale::DEFAULT_AUTHOR_DPI
     pub fn attach_target(
@@ -71,20 +70,19 @@ impl EmoPresenter {
                 emo_world,
                 atlas,
                 composer: Composer::new(),
-                // 確保計数は target と同じ寿命で始まる（累積の起点＝この target の登録時）。
                 budget: FrameBudget::new(),
                 cache: ComposeCache::new(),
                 window,
                 mount: None,
                 visible: false,
-                // 可視性の所有者は常に既定（従来挙動）で登録する。バルーン窓のような外部所有は
-                // 結線側が `set_visibility_ownership` で明示する（attach に判断を持ち込まない）。
+                // 可視性の所有者は既定で登録する。バルーン窓のような外部所有は結線側が
+                // `set_visibility_ownership` で明示する。
                 ownership: VisibilityOwnership::default(),
                 current_surface_id: None,
-                // アプリ管理拡大率は本仕様では ONE 固定の縮退シーム（要件 1.6）。
+                // アプリ管理拡大率は ONE 固定の縮退シーム。
                 policy: ScalePolicy::new(author_dpi, ScaleRatio::ONE),
                 applied: None,
-                // 起点は装着ごと（差し替えもここを通るので空から始まる・要件 5.7）。
+                // 起点は装着ごと（差し替えもここを通るので空から始まる）。
                 scale_baseline: None,
                 native_size: None,
                 last_show: None,
@@ -152,8 +150,8 @@ impl EmoPresenter {
     }
 
     /// 合図 `StageAck` の適用: 追い付いた世代を「今の値と受けた番号の大きい方」にするだけ（合成・
-    /// 可視性には触らない・応答なし・`animated-image-playback` 要件 2.3）。出番の世代より大きい
-    /// 番号・未装着の対象（ゴーストの入れ替えの継ぎ目）は `debug!` を出して捨てる。
+    /// 可視性には触らない・応答なし）。出番の世代より大きい番号・未装着の対象（ゴーストの入れ替えの
+    /// 継ぎ目）は `debug!` を出して捨てる。
     fn apply_stage_ack(&mut self, target_id: TargetId, generation: u64) {
         let Some(t) = self.targets.get_mut(&target_id) else {
             tracing::debug!(
@@ -178,18 +176,18 @@ impl EmoPresenter {
     }
 
     /// 外からの `ShowSurface` の入口: 隠れている外から所有される対象へのコマだけが違う指令は預かる
-    /// だけにし（合成 0 回・`animated-image-playback` 要件 6.4・3.7）、それ以外は `apply_show` へ通す。
+    /// だけにし（合成 0 回）、それ以外は `apply_show` へ通す。
     ///
     /// 預かるのは、外から所有され・見えておらず・表示が一度成立していて（`last_show` が在る）・指令の
     /// 面の番号と着せ替えが `last_show` と同じで・コマが `last_show` と違う、の 5 つが揃うときだけ。
-    /// 面の比べ先は `current_surface_id` でなく `last_show` なので、`Hide`（今の面を消す）の直後の
-    /// コマだけの指令も預かる。応答は成功を 1 回返す。コマまで同じ指令は今までどおり通す（引き当てが
-    /// 当たるので合成しない・隠れている間の DPI の変化も今までどおり拾う＝静止画だけのバルーンは
-    /// 本 spec の前と同じ・要件 6.5）。通した指令で表示が成立したら預かったコマは捨てる（最後の
-    /// 指令が勝つ）。失敗したら残す。
-    /// その判定の前に、外から所有され・合図が出番の世代に追い付いていない対象なら、指令のコマから
-    /// 回数つきの子の欄を外す（`strip_finite_films`・`show_target` と同じ関数）。
-    /// `show_target`・`refresh_scale`・差し替えは `apply_show` を直接呼ぶので、ここを通らない。
+    /// 面の比べ先は `current_surface_id` でなく `last_show` なので、`Hide` の直後のコマだけの指令も
+    /// 預かる。応答は成功を 1 回返す。コマまで同じ指令は通す（引き当てが当たるので合成しない・隠れて
+    /// いる間の DPI の変化も拾う）。通した指令で表示が成立したら預かったコマは捨て（最後の指令が勝つ）、
+    /// 失敗したら残す。
+    ///
+    /// その判定の前に、外から所有され・合図が出番の世代に追い付いていない対象なら、指令のコマから回数
+    /// つきの子の欄を外す（`strip_finite_films`・`show_target` と同じ関数）。`show_target`・
+    /// `refresh_scale`・差し替えは `apply_show` を直接呼ぶので、ここを通らない。
     fn show_or_hold(
         &mut self,
         world: &mut World,
@@ -200,7 +198,7 @@ impl EmoPresenter {
         reply: Option<ReplySender<PresentOutcome>>,
     ) {
         // 合図が今の出番の世代に追い付くまでは、出し直しの前に決めたコマかもしれないので回数つきの
-        // 子の欄を外す（指令そのものは捨てない・預かるかの判定より前・要件 2.3）。
+        // 子の欄を外す（指令そのものは捨てない・預かるかの判定より前）。
         if let Some(t) = self.targets.get(&target_id)
             && t.ownership == VisibilityOwnership::External
             && t.acked_generation < t.stage_generation
@@ -230,7 +228,7 @@ impl EmoPresenter {
         Self::reply(reply, outcome);
     }
 
-    /// `Hide`（`\s[-1]` 相当）の適用: visual 非表示＋当たり判定停止。装着・キャッシュは保持する（R3.3）。
+    /// `Hide`（`\s[-1]` 相当）の適用: visual 非表示＋当たり判定停止。装着・キャッシュは保持する。
     fn apply_hide(
         &mut self,
         world: &mut World,
@@ -252,12 +250,12 @@ impl EmoPresenter {
             "apply(Hide): 非表示へ"
         );
         target.visible = false;
-        // Hide（`\s[-1]` 相当）は表示していない＝現サーフェス無し（R3.2/4.4・Key decisions (a)）。
+        // Hide（`\s[-1]` 相当）は表示していない＝現サーフェス無し。
         target.current_surface_id = None;
         Self::reply(reply, Ok(()));
     }
 
-    /// `InvalidateCache` の適用: 合成キャッシュ全破棄（R4.3）。表示中バッファ/マスクは反映済みゆえ表示は継続。
+    /// `InvalidateCache` の適用: 合成キャッシュ全破棄。表示中バッファ/マスクは反映済みゆえ表示は継続。
     fn apply_invalidate(
         &mut self,
         target_id: TargetId,
@@ -269,13 +267,11 @@ impl EmoPresenter {
             return;
         };
 
-        // エントリを全て捨てる。原寸はエントリの中に在るので、対を崩さないために別途落とす
-        // フィールドは無い（要件 7.1・容量 3 で `cached_native` はエントリへ移った）。表示中の
-        // `native_size` は触らない——表が空でも画面には前回の絵が残っており、照会契約はその絵の
-        // 原寸を返し続けるのが正しい（R4.3: キャッシュ無効化は表示を変えない）。以後は必ずミス＝
-        // 再合成が走り、対が再構築される。
+        // 原寸はエントリの中に在るので、対を崩さないために別途落とすフィールドは無い。`native_size` は
+        // 触らない: 表が空でも画面には前回の絵が残っており、照会契約はその絵の原寸を返し続けるのが
+        // 正しい。以後は必ずミス＝再合成が走り、対が再構築される。
         target.cache.invalidate_all();
-        // 控えの前の絵が無くなったので、次の外れはいちから合成する（要件 3.1・4.2）。
+        // 控えの前の絵が無くなったので、次の外れはいちから合成する。
         target.partial_base = false;
         tracing::debug!(
             ?target_id,

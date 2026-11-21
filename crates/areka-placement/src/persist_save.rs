@@ -1,6 +1,6 @@
 //! 記憶への送り口（[`PersistWiring`]・[`persist_entries`]・[`forget_entries`]）と、送る束へ足す
 //! 隣り合いの印・並べ終えた時点の保存（[`persist_unremembered_char_positions`]）。
-//! `persist.rs` の 1,000 行を越えないように分けた兄弟のファイルで、公開の道は `persist::` のまま。
+//! `persist.rs` から分けた兄弟のファイルで、公開の道は `persist::` のまま。
 
 use std::collections::BTreeSet;
 
@@ -22,15 +22,13 @@ use super::{
 };
 
 // ---------------------------------------------------------------------------
-// State Management（PersistWiring）＋保存投函ヘルパ（design C1・
-// Req1.1 ドラッグ確定即時書込／1.9 発火規律／6.2 保存失敗縮退／7.1 Ghost スコープ固定）
+// State Management（PersistWiring）＋保存投函ヘルパ
 // ---------------------------------------------------------------------------
 
 /// UI スレッド常駐の保存投函口（**NonSend** リソース・`MouseWiring`／`RuntimeWiring` 先例）。
 ///
 /// [`SylphyaPublisher`] は `Clone + Send`（内部 `std::sync::mpsc::Sender`）だが `Sync` を仮定せず、
-/// UI スレッド専有の規律とも一致するため **NonSend** リソースとして World に持たせる（design C1
-/// State Management・軸B）。書く呼び手 3 か所（`persist` のモジュールの doc に並べる。2 か所は [`persist_entries`]、
+/// UI スレッド専有の規律とも一致するため **NonSend** リソースとして World に持たせる。書く呼び手 3 か所（`persist` のモジュールの doc に並べる。2 か所は [`persist_entries`]、
 /// 並べ終えた時点の保存はその本体 `send_entries`）が、この publisher の clone 送信端から保存 entries を
 /// 投函する（[`forget_entries`] も同じ）。
 pub struct PersistWiring {
@@ -38,18 +36,16 @@ pub struct PersistWiring {
     pub publisher: SylphyaPublisher,
 }
 
-/// 保存 entries を Ghost 永続スコープへ write-through 投函するフック用ヘルパ（design C1・
-/// Req1.1/7.1/6.2）。
+/// 保存 entries を Ghost 永続スコープへ write-through 投函するフック用ヘルパ。
 ///
 /// World から [`PersistWiring`] NonSend リソースを引き、存在すれば
 /// [`SylphyaPublisher::persist_put`]`(PersistScope::Ghost, entries)` を呼ぶ（**Ghost スコープ固定**＝
-/// 当該ゴーストスコープのみ・Req7.1）。`persist_put` は fire-and-forget（reply なし）で**非ブロッキング**
+/// 当該ゴーストスコープのみ）。`persist_put` は fire-and-forget（reply なし）で**非ブロッキング**
 /// ——UI スレッドに同期 IO を持ち込まない（write-through の実 IO 確定は sylphya アクタースレッドの領分・
-/// commit 失敗は sylphya が `error!`＋`Degraded` に縮退し旧状態を破壊しない・design「persist_put 先の
-/// commit 失敗」）。
+/// commit 失敗は sylphya が `error!`＋`Degraded` に縮退し旧状態を破壊しない）。
 ///
 /// [`PersistWiring`] 不在（例: fallback boot 経路が挿入しなかった場合）は `debug!` ＋ **no-op**で、
-/// **panic しない**（6.2 系縮退・無音失敗なし）。`world` は共有参照で足りる（NonSend の読取のみ）——
+/// **panic しない**。`world` は共有参照で足りる（NonSend の読取のみ）——
 /// DragEnd フックは `&mut World` を保持するが `&World` へ暗黙 reborrow して渡せる。
 pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
     send_entries(world, entries, &BTreeSet::new(), None);
@@ -65,14 +61,13 @@ fn send_entries(
     chain: Option<&ChainRule>,
 ) {
     let Some(wiring) = world.get_non_send::<PersistWiring>() else {
-        // fallback 未挿入等で PersistWiring が無い → debug!＋no-op（起動を止めない・6.2）。
         debug!(
             entry_count = entries.len(),
             "PersistWiring 不在: 保存投函を no-op（fallback boot 経路の縮退・6.2）"
         );
         return;
     };
-    // 位置を書く束には触れる組の隣り合いの印を足す（書く時機は足さない・dpi-realign-remembered-chain 6.2）。
+    // 位置を書く束には触れる組の隣り合いの印を足す（書く時機は足さない）。
     let skip = clamped_old_memory(world, &entries);
     let mut entries = adjacency_marks_with(world, entries, chain);
     let mut dropped = BTreeSet::new();
@@ -91,12 +86,11 @@ fn send_entries(
             "記憶の位置を寄せて表示した起動なので、古い記憶へ隣り合いの印を書き足さない"
         );
     }
-    // Ghost スコープ固定（7.1）。fire-and-forget＝UI スレッド非ブロッキング（同期 IO を持ち込まない）。
     wiring.publisher.persist_put(PersistScope::Ghost, entries);
 }
 
 /// 記憶の位置を寄せて表示した起動（[`RestoredPositionsClamped`]）で、印の無い古い記憶のスコープの
-/// うち `entries` が位置を書かないもの（window-work-area-clamp 要件 4.6）。並びは寄せた矩形なので、
+/// うち `entries` が位置を書かないもの。並びは寄せた矩形なので、
 /// [`persist_entries`] はこのスコープの印を束から外す。寄せずに起動した回は空。
 // shortcut: 古い記憶かは起動の時点の台帳で決めるので、この起動でドラッグして印を書いたスコープも、
 // 後で隣の窓を動かしたときは印を書き直さない。困る例が出たら、書いたスコープを台帳から外す。
@@ -118,7 +112,7 @@ fn clamped_old_memory(world: &World, entries: &[(PersistKey, String)]) -> BTreeS
         .collect()
 }
 
-/// 記憶から戻したスコープ 1 以上で、覚えた印が無いもの＝印の無い古い記憶（dpi-realign-remembered-chain 6.5）。
+/// 記憶から戻したスコープ 1 以上で、覚えた印が無いもの＝印の無い古い記憶。
 fn is_unmarked_old_memory(ghost_windows: &GhostWindows, scope: usize) -> bool {
     scope >= 1
         && ghost_windows.default_char_pos(scope).is_none()
@@ -141,8 +135,7 @@ pub fn forget_entries(world: &World, keys: Vec<PersistKey>) {
 }
 
 /// 送る束に窓の位置の鍵（[`PersistKey::WindowPos`]）があれば、触れる組（スコープ k の組と、k より
-/// 上の番号で鎖に入る一番近いスコープの組）の隣り合いの印をスコープ n（組の後ろ側）の鍵で束の後ろへ足す
-/// （dpi-realign-remembered-chain 要件 6.2・6.4・design AdjacencyPersist）。束の中身（位置の値を
+/// 上の番号で鎖に入る一番近いスコープの組）の隣り合いの印をスコープ n（組の後ろ側）の鍵で束の後ろへ足す。束の中身（位置の値を
 /// 含む）は変えない。
 ///
 /// 印は書く時点の画面の並び（各キャラ窓の [`WindowPos`]）で、鎖の規則（`chain_rule`）で決める:
@@ -155,7 +148,7 @@ pub fn forget_entries(world: &World, keys: Vec<PersistKey>) {
 /// `debug!` を出す。束にもう有る印の鍵は足さない（同じ画面の並びから決めるので値は同じ・1 つにまとめる）。
 ///
 /// `chain` は呼び手がもう組んだ鎖の見方で、`None` なら位置の鍵があるときだけここで組む（1 回の
-/// 保存で descript の読めない値の `warn!` を重ねない・502）。
+/// 保存で descript の読めない値の `warn!` を重ねない）。
 fn adjacency_marks_with(
     world: &World,
     mut entries: Vec<(PersistKey, String)>,
@@ -252,7 +245,7 @@ fn push_adjacency_marks(
         {
             AdjacencyMark::Separate
         } else {
-            // 鎖の前の窓（鎖の規則 ⑴）。無ければ n は鎖の頭で、印を持たない。
+            // 鎖の前の窓。無ければ n は鎖の頭で、印を持たない。
             // shortcut: 辺のスコープの隣に付けた窓の並びは印に残らない（印は鎖の前の窓との組だけ）。
             // 覚えるなら、印に相手のスコープを書き足す（保存の形と sylphya の読みが変わる）。
             let Some(p) = chain.prev(ChainView::Saved, n) else {
@@ -276,32 +269,32 @@ fn push_adjacency_marks(
     added
 }
 
-/// 並べ終えた時点の保存（areka-P0-char-position-save-on-exit 要件 1.1・1.2・1.4・1.5・1.7・
-/// 4.1〜4.3・design FinalizeSave）。
+/// 並べ終えた時点の保存。
 ///
 /// 起動の最後の並べ直しが済んだ直後と、既定の位置への並べ直し（`reset_pos` の
-/// `reset_window_positions`）の後に呼ばれ、記憶に位置が無いキャラクター窓の位置を記憶へ送る。[`GhostWindows`] に居る全スコープを昇順に回り（数を決め打ちしない・1.4）、
+/// `reset_window_positions`）の後に呼ばれ、記憶に位置が無いキャラクター窓の位置を記憶へ送る。
+/// [`GhostWindows`] に居る全スコープを昇順に回り（数を決め打ちしない）、
 /// 書くのは次の 3 つを満たすスコープだけ:
 ///
 /// - 既定の位置 [`GhostWindows::default_char_pos`] が `Some`＝記憶に位置が無い。`None` は
-///   記憶から戻したスコープで、位置は書き換えない（寄せ直して表示している場合を含む・1.2）。
+///   記憶から戻したスコープで、位置は書き換えない（寄せ直して表示している場合を含む）。
 ///   ただし印の無い古い記憶には、画面の並びから決めた隣り合いの印だけを足す
-///   （dpi-realign-remembered-chain 6.5・寄せた起動では足さない）。
+///   （寄せた起動では足さない）。
 /// - 今の位置（x・y）が既定の位置と同じ。違うのは並べ終える前にドラッグされた窓（ドラッグの
-///   確定が書く）か、SHIORI の移動の指示で動いた窓（その回かぎり・1.7）で、どちらも書かない。
+///   確定が書く）か、SHIORI の移動の指示で動いた窓（その回かぎり）で、どちらも書かない。
 ///   台本が縦にだけ動かした窓も見逃さないよう x・y の両方で比べる。システムの置き直しは既定の
 ///   位置を x・y とも一緒に運ぶので（`follow::window_move` の既定の位置の追随）、ふだんの流れで
 ///   書き漏れは起きない。
 /// - 台本の印（`chain_finalize::ScriptPlaced`）が無い。台本の `\![move]` がちょうど既定の位置へ
-///   置いた窓は位置では見分けられないので、並べ直しと同じく印で外す（1.7）。
+///   置いた窓は位置では見分けられないので、並べ直しと同じく印で外す。
 ///
 /// 位置は [`WindowPos`] の位置と大きさから読み、ドラッグの確定と同じ [`char_pos_to_origin_x`]
-/// で下端の中央の x へ直す。送る鍵は [`PersistKey::WindowPos`] の x・y（1.5）と、[`persist_entries`] が
-/// 足す触れる組の隣り合いの印（dpi-realign-remembered-chain 6.2・寄せた起動の古い記憶の鍵は除く）と、
+/// で下端の中央の x へ直す。送る鍵は [`PersistKey::WindowPos`] の x・y と、[`persist_entries`] が
+/// 足す触れる組の隣り合いの印（寄せた起動の古い記憶の鍵は除く）と、
 /// 上の古い記憶の印で、
 /// 全スコープの分を 1 つの束にして [`persist_entries`] の本体で 1 回送る（待たない。書き込みの失敗は送った先が
-/// 記録し、UI の側へは戻らない＝起動は続く・4.1）。読めない窓は `warn!` を出して飛ばし、
-/// 残りを書く（4.2）。書いた・書かなかったは target `areka::persist::save` に残す（4.3）。
+/// 記録し、UI の側へは戻らない＝起動は続く）。読めない窓は `warn!` を出して飛ばし、
+/// 残りを書く。書いた・書かなかったは target `areka::persist::save` に残す。
 ///
 /// World は変えず（`&World`）、panic しない。戻す側の [`apply_restored_placements`] は
 /// 純関数で World を持たないので、ここへは届かない（寄せ直した位置を書き戻さない構造を保つ）。
@@ -380,7 +373,7 @@ pub fn persist_unremembered_char_positions(world: &World) {
             skip("大きさ");
             continue;
         };
-        // 形は次の起動の読み戻しと同じ descript の向きで決める（要件 4.8）。
+        // 形は次の起動の読み戻しと同じ descript の向きで決める。
         let Some(anchor) = saved_form_anchor(world, entity) else {
             skip("揃え方");
             continue;
@@ -403,7 +396,7 @@ pub fn persist_unremembered_char_positions(world: &World) {
         );
         entries.extend(char_pos_entries(scope as u32, saved));
     }
-    // 記憶の位置を寄せて表示した起動の並びは記憶の並びと違うので、印を決めない（window-work-area-clamp 4.6）。
+    // 記憶の位置を寄せて表示した起動の並びは記憶の並びと違うので、印を決めない。
     // 隣の窓の位置を書く束が足す印からは、送り口の本体が外す（ここで記録した組は重ねて記録しない）。
     let mut logged = BTreeSet::new();
     if !unmarked.is_empty()
@@ -421,9 +414,9 @@ pub fn persist_unremembered_char_positions(world: &World) {
     if entries.is_empty() && unmarked.is_empty() {
         return;
     }
-    // 鎖の見方は 1 回の保存で 1 度だけ組み、送り口の本体へも渡す（読めない値の warn! を重ねない・502）。
+    // 鎖の見方は 1 回の保存で 1 度だけ組み、送り口の本体へも渡す（読めない値の warn! を重ねない）。
     let chain = saved_chain(world);
-    // 古い記憶には位置を書かず、画面の並びから決めた印だけを同じ束へ足す（6.5）。
+    // 古い記憶には位置を書かず、画面の並びから決めた印だけを同じ束へ足す。
     for (scope, mark) in push_adjacency_marks(world, &mut entries, unmarked, &chain) {
         info!(
             target: "areka::persist::save",

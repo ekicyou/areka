@@ -1,25 +1,20 @@
-//! SHIORI/3.0 リクエスト解析と応答分類の純粋ロジック（task 1.2）。
+//! SHIORI/3.0 リクエスト解析と応答分類の純粋ロジック。
 //!
-//! 本モジュールは `IShiori::Get` が駆動する 2 段の純関数を提供する（design.md
-//! "ReplayBrain・ReplayFactory" の `Get` 責務・i686 `shiori-host32-testdll` の
+//! `IShiori::Get` が駆動する 2 段の純関数（i686 `shiori-host32-testdll` の
 //! `parse_request`／`select_response` の x64/COM 版）:
 //!
 //! 1. [`parse_request`] — 受領 SHIORI/3.0 テキストから **request line の別（GET/NOTIFY/その他）**と
-//!    **`ID:` ヘッダ値**のみを取り出す（design.md D-4「content 解析範囲: ID 行のみ読む」・
-//!    References は不参照）。
+//!    **`ID:` ヘッダ値**のみを取り出す（References は読まない）。
 //! 2. [`select_response`] — 解析結果を **収載（Snapshot）／未知（NoContent=204 相当）／
-//!    構造不整合（BadRequest=400 相当）**の 3 分岐へ分類する（要件 2.2／2.3／2.4）。
-//!    収載 ID → 凍結応答の解決は task 1.3 の責務ゆえ、`lookup` クロージャで注入する（脱結合）。
+//!    構造不整合（BadRequest=400 相当）**の 3 分岐へ分類する。収載 ID → 凍結応答の解決は
+//!    `lookup` クロージャで注入する（脱結合）。
 //!
 //! いずれも panic しない総和的な純関数であり、malformed 入力は panic でなく
-//! [`Selection::BadRequest`]（400 相当）として fail-visible に扱う（要件 2.4）。
+//! [`Selection::BadRequest`]（400 相当）として fail-visible に扱う。
 //!
-//! 本モジュールの項目は crate 内消費（`pub(crate)`）。task 1.4 で `lib.rs` の `ReplayBrain::Get`
-//! が [`parse_request`]→[`select_response`]→[`response_text`] を呼び、`lookup` に task 1.3 の
-//! `snapshot::snapshot_for` を無改修で差し込む（結線済み）。判定分岐は単体テストで全網羅する
-//! （下記 `#[cfg(test)]`）。
+//! 呼び手は `lib.rs` の `ReplayBrain` の `Get`。
 
-/// SHIORI/3.0 request line の種別（design.md D-4: GET/NOTIFY の別を読む）。
+/// SHIORI/3.0 request line の種別。
 ///
 /// request line 先頭トークン（メソッド名）で分類する。`GET`／`NOTIFY` 以外（空行・
 /// garbage 先頭行・未知メソッド）は [`RequestLine::Other`]＝構造不整合の面。
@@ -33,9 +28,9 @@ pub(crate) enum RequestLine {
     Other,
 }
 
-/// [`parse_request`] の結果（design.md D-4 の解析範囲＝request line の別＋`ID:` のみ）。
+/// [`parse_request`] の結果（request line の別＋`ID:` のみ）。
 ///
-/// References／その他ヘッダは保持しない（不透明搬送・要件 2.5／D-4）。
+/// References／その他ヘッダは保持しない（不透明搬送）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ParsedRequest {
     /// request line の種別。
@@ -44,42 +39,40 @@ pub(crate) struct ParsedRequest {
     pub(crate) id: Option<String>,
 }
 
-/// [`select_response`] の 3 分岐判定（要件 2.2／2.3／2.4）。
+/// [`select_response`] の 3 分岐判定。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Selection {
-    /// 収載 ID → `lookup` が解決した凍結応答全文（要件 2.2）。task 1.3 のスナップショットデータ由来。
+    /// 収載 ID → `lookup` が解決した凍結応答全文。
     Snapshot(&'static str),
-    /// 未知・未収載 ID → 204 相当（silent success でなく明示的 No Content・要件 2.3）。
+    /// 未知・未収載 ID → 204 相当（silent success でなく明示的 No Content）。
     NoContent,
-    /// 構造不整合（GET request line 不在・ID 欠落等）→ 400 相当（fail-visible・panic しない・要件 2.4）。
+    /// 構造不整合（GET request line 不在・ID 欠落等）→ 400 相当（fail-visible・panic しない）。
     BadRequest,
 }
 
-/// 未知・未収載 ID への合成 204 応答 envelope（要件 2.3）。
+/// 未知・未収載 ID への合成 204 応答 envelope。
 ///
-/// これは判定応答であって**スナップショットではない**（凍結応答は task 1.3 の `SnapshotTable` 所有）。
+/// これは判定応答であって**スナップショットではない**（凍結応答は `snapshot` が持つ）。
 pub(crate) const RESP_204_NO_CONTENT: &str = "SHIORI/3.0 204 No Content\r\n\r\n";
 
-/// 構造不整合への合成 400 応答 envelope（要件 2.4）。
+/// 構造不整合への合成 400 応答 envelope。
 ///
-/// これは判定応答であって**スナップショットではない**（凍結応答は task 1.3 の `SnapshotTable` 所有）。
+/// これは判定応答であって**スナップショットではない**（凍結応答は `snapshot` が持つ）。
 pub(crate) const RESP_400_BAD_REQUEST: &str = "SHIORI/3.0 400 Bad Request\r\n\r\n";
 
-/// 受領 SHIORI/3.0 テキストから request line の別と `ID:` ヘッダ値を取り出す純関数（design.md D-4）。
+/// 受領 SHIORI/3.0 テキストから request line の別と `ID:` ヘッダ値を取り出す純関数。
 ///
 /// - 行区切りは CRLF／LF いずれも許容（`\r` 除去→`\n` 分割・i686 testdll と同型）。
 /// - request line 種別は先頭行の第 1 トークン（メソッド名）で分類（`GET`／`NOTIFY`／その他）。
 /// - ヘッダ名照合は case-insensitive（`ID`／`id`／`Id` を同一視）。
 /// - 空行（ヘッダ部終端）以降は走査しない（空行より後の `ID` は無視）。
-/// - References／その他ヘッダは読まない（不透明搬送・要件 2.5／D-4）。
+/// - References／その他ヘッダは読まない（不透明搬送）。
 ///
 /// panic しない純関数。
 pub(crate) fn parse_request(input: &str) -> ParsedRequest {
-    // CRLF/LF 両対応: \r を除去してから \n 分割する（i686 testdll と同型）。
     let normalized = input.replace('\r', "");
     let mut lines = normalized.split('\n');
 
-    // request line = 先頭行。第 1 トークン（メソッド名）で種別を分類する。
     let request_line = lines.next().unwrap_or("").trim();
     let method = request_line.split_whitespace().next().unwrap_or("");
     let line = match method {
@@ -88,11 +81,9 @@ pub(crate) fn parse_request(input: &str) -> ParsedRequest {
         _ => RequestLine::Other,
     };
 
-    // ヘッダ部から `ID` を case-insensitive に拾う。空行（終端）以降は走査しない。
     let mut id: Option<String> = None;
     for header in lines {
         if header.is_empty() {
-            // ヘッダ部終端。以降は走査しない。
             break;
         }
         if let Some((name, value)) = header.split_once(':')
@@ -110,20 +101,18 @@ pub(crate) fn parse_request(input: &str) -> ParsedRequest {
     ParsedRequest { line, id }
 }
 
-/// 解析結果を収載／未知／構造不整合の 3 分岐へ分類する純関数（要件 2.2／2.3／2.4）。
+/// 解析結果を収載／未知／構造不整合の 3 分岐へ分類する純関数。
 ///
-/// `lookup` は収載 ID → 凍結応答全文を返す注入関数（task 1.3 の `snapshot::snapshot_for` を
-/// 無改修で差し込めるよう脱結合する）。
+/// `lookup` は収載 ID → 凍結応答全文を返す注入関数（`snapshot::snapshot_for` を差し込めるよう脱結合する）。
 ///
 /// GET 経路（`IShiori::Get` が駆動）の判定規則:
-/// - request line が GET かつ `ID` 有り かつ `lookup(id) == Some(resp)` → [`Selection::Snapshot`]（収載・2.2）
-/// - request line が GET かつ `ID` 有り かつ `lookup(id) == None` → [`Selection::NoContent`]（未知/未収載・2.3）
-/// - request line が GET だが `ID` 欠落 → [`Selection::BadRequest`]（構造不整合・2.4）
-/// - request line が GET でない（NOTIFY／Other／空）→ [`Selection::BadRequest`]（2.4）
+/// - request line が GET かつ `ID` 有り かつ `lookup(id) == Some(resp)` → [`Selection::Snapshot`]（収載）
+/// - request line が GET かつ `ID` 有り かつ `lookup(id) == None` → [`Selection::NoContent`]（未知/未収載）
+/// - request line が GET だが `ID` 欠落 → [`Selection::BadRequest`]（構造不整合）
+/// - request line が GET でない（NOTIFY／Other／空）→ [`Selection::BadRequest`]
 ///
-/// NOTIFY line が本 GET 経路 selector へ到達した場合は構造不整合（BadRequest）として扱う。
-/// 正典の NOTIFY 受領（204）は別メソッド `IShiori::Notify`（task 1.4）が担う（design.md
-/// SnapshotTable narrowing）ため、本 GET 経路に NOTIFY は想定されない。
+/// 正典の NOTIFY 受領（204）は別メソッド `IShiori::Notify` が担うため、この GET 経路に NOTIFY は
+/// 想定されない（到達したら構造不整合として扱う）。
 ///
 /// panic しない純関数。
 pub(crate) fn select_response(
@@ -131,15 +120,11 @@ pub(crate) fn select_response(
     lookup: impl Fn(&str) -> Option<&'static str>,
 ) -> Selection {
     match (parsed.line, parsed.id.as_deref()) {
-        // GET かつ ID 有り: lookup で収載（Snapshot）／未知（204）を分岐する。
         (RequestLine::Get, Some(id)) => match lookup(id) {
             Some(response) => Selection::Snapshot(response),
             None => Selection::NoContent,
         },
-        // GET だが ID 欠落＝構造不整合（正典イベント要求になり得ない・要件 2.4）。
         (RequestLine::Get, None) => Selection::BadRequest,
-        // 非 GET（NOTIFY／Other／空）は GET 経路 selector では構造不整合（要件 2.4）。
-        // 正典 NOTIFY 受領（204）は別メソッド Notify（task 1.4）が担う。
         (RequestLine::Notify, _) | (RequestLine::Other, _) => Selection::BadRequest,
     }
 }
@@ -159,7 +144,7 @@ pub(crate) fn response_text(selection: &Selection) -> &'static str {
 mod tests {
     use super::*;
 
-    // ---- parse_request の解析檻（design.md D-4） -------------------------------------------------
+    // ---- parse_request の解析檻 ----
 
     #[test]
     fn parse_get_request_line_and_id() {
@@ -195,7 +180,6 @@ mod tests {
 
     #[test]
     fn parse_ignores_id_after_blank_header_terminator() {
-        // 空行以降の ID: 行は走査しない（ヘッダ部終端）。
         let req = "GET SHIORI/3.0\r\n\r\nID: OnBoot\r\n";
         let parsed = parse_request(req);
         assert_eq!(parsed.line, RequestLine::Get);
@@ -217,13 +201,12 @@ mod tests {
 
     #[test]
     fn parse_does_not_read_references() {
-        // References ヘッダは解析対象外（D-4・要件 2.5）。ID のみ拾う。
         let req = "GET SHIORI/3.0\r\nReference0: foo\r\nReference1: bar\r\nID: OnBoot\r\n\r\n";
         let parsed = parse_request(req);
         assert_eq!(parsed.id.as_deref(), Some("OnBoot"));
     }
 
-    // ---- select_response の 3 分岐檻（要件 2.2／2.3／2.4・fake lookup で脱結合） -----------------
+    // ---- select_response の 3 分岐檻（fake lookup で脱結合） ----
 
     /// 収載 GET id（fake lookup が Some を返す）→ Snapshot（凍結応答全文をそのまま搬送）。
     #[test]
@@ -250,7 +233,7 @@ mod tests {
         );
     }
 
-    /// 未知/未収載 GET id（fake lookup が None）→ NoContent（204 相当・要件 2.3）。
+    /// 未知/未収載 GET id（fake lookup が None）→ NoContent（204 相当）。
     #[test]
     fn select_unknown_get_id_returns_204() {
         let parsed = ParsedRequest {
@@ -263,7 +246,7 @@ mod tests {
         assert!(response_text(&sel).starts_with("SHIORI/3.0 204 No Content"));
     }
 
-    /// GET だが ID 欠落 → 構造不整合 400（要件 2.4）。lookup は呼ばれても None を返さない fake で
+    /// GET だが ID 欠落 → 構造不整合 400。lookup は呼ばれても None を返さない fake で
     /// 誤って Snapshot にならないことを確認。
     #[test]
     fn select_get_without_id_is_bad_request() {
@@ -276,7 +259,7 @@ mod tests {
         assert_eq!(response_text(&sel), RESP_400_BAD_REQUEST);
     }
 
-    /// 空入力由来（Other・ID なし）→ 400（要件 2.4）。
+    /// 空入力由来（Other・ID なし）→ 400。
     #[test]
     fn select_empty_input_is_bad_request() {
         let parsed = parse_request("");
@@ -285,7 +268,7 @@ mod tests {
         assert!(response_text(&sel).starts_with("SHIORI/3.0 400 Bad Request"));
     }
 
-    /// garbage 先頭行（Other）→ 400（要件 2.4）。ID が既知でも request line が非 GET なら不整合。
+    /// garbage 先頭行（Other）→ 400。ID が既知でも request line が非 GET なら不整合。
     #[test]
     fn select_garbage_request_line_is_bad_request() {
         let parsed = parse_request("BOGUS LINE\r\nID: OnBoot\r\n\r\n");
@@ -293,7 +276,7 @@ mod tests {
         assert_eq!(sel, Selection::BadRequest);
     }
 
-    /// NOTIFY line が GET 経路 selector へ到達 → 400（正典 NOTIFY 受領は task 1.4 の Notify メソッド）。
+    /// NOTIFY line が GET 経路 selector へ到達 → 400（正典 NOTIFY 受領は Notify メソッド）。
     #[test]
     fn select_notify_line_on_get_path_is_bad_request() {
         let parsed = parse_request("NOTIFY SHIORI/3.0\r\nID: OnInitialize\r\n\r\n");
@@ -302,7 +285,7 @@ mod tests {
         assert_eq!(sel, Selection::BadRequest);
     }
 
-    /// malformed 入力群で何も panic しないこと（fail-visible via BadRequest・要件 2.4）。
+    /// malformed 入力群で何も panic しないこと（fail-visible via BadRequest）。
     #[test]
     fn malformed_inputs_never_panic() {
         for raw in [
@@ -316,7 +299,6 @@ mod tests {
             "GET SHIORI/3.0\r\nGarbageHeaderNoColon\r\n\r\n",
         ] {
             let parsed = parse_request(raw);
-            // どんな入力でも 3 分岐のいずれかへ総和的に落ち、panic しない。
             let _ = select_response(&parsed, |_| None);
         }
     }

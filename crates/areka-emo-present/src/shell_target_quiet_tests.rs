@@ -1,5 +1,4 @@
-//! 記録を出さない入口 [`load_shell_target_quiet`] の檻（spec: placement-measure-bake-once
-//! 要件 3.1・3.4・3.5・3.6）。
+//! 記録を出さない入口 [`load_shell_target_quiet`] の檻。
 //!
 //! 見ているのは 3 つ——⑴ 読み込みの記録を出す検体（重複・入れ子・箱・相手の無いコマ・`.pna`・
 //! 画像だけ・descript が読めない）で、出す入口はその記録を出し、出さない入口は読み込みの記録
@@ -7,7 +6,7 @@
 //! ⑶ 読み込みを `Err` で終える 3 つの失敗は、出さない入口でも `error!` を 1 行だけ出す。
 //!
 //! 出す入口の記録の中身（文言・欄・数）は `shell_target_load_tests.rs`・
-//! `shell_target_nesting_tests.rs`・`shell_target_boxes_tests.rs` ほかが今のまま持つ。
+//! `shell_target_nesting_tests.rs`・`shell_target_boxes_tests.rs` ほかが持つ。
 
 use super::*;
 
@@ -148,7 +147,7 @@ fn image_only_and_no_descript_are_silent_and_equal() {
 }
 
 /// 出さない入口で読み、`Err` が返ることと、読み込みの記録が `needle` を含む `error!` 1 行だけで
-/// あることを確かめる（要件 3.6）。
+/// あることを確かめる。
 fn assert_quiet_failure(dir: &Path, needle: &str) -> ShellLoadError {
     let dec = MemoryDecoder::new();
     let (result, events) = capture(|| load_shell_target_quiet(dir, &dec));
@@ -191,7 +190,7 @@ const ZERO_SIZED: &str = "bake: element の元画像が 0 寸です";
 /// 畳み込み（`areka_emo_compose`）の追記の相手の無い面の記録の文言。
 const APPEND_NO_TARGET: &str = "surface.append 対象 id が未存在";
 
-/// spec: emo-bake-log-overlap 要件 1.1・2.1・3.3: 出す読み込みは焼く段と畳み込みの記録を 1 行ずつ
+/// 出す読み込みは焼く段と畳み込みの記録を 1 行ずつ
 /// 出し、出さない読み込みはその文言が 0 行・戻り値は等しい。
 #[test]
 fn quiet_load_silences_bake_and_fold_records() {
@@ -249,8 +248,8 @@ fn count_level(events: &[CapturedEvent], level: tracing::Level, needle: &str) ->
         .count()
 }
 
-/// spec: audit-parsers-sakura 指摘 6・34: 範囲の上限を越える記述子は `error!` 1 行、終わりで
-/// 閉じていないブレスは `warn!` 1 行を出す入口だけが出す。
+/// 範囲の上限を越える記述子は `error!` 1 行、終わりで閉じていないブレスは `warn!` 1 行を、
+/// 出す入口だけが出す。
 #[test]
 fn shell_issues_are_recorded_by_severity() {
     let dir = TempPath::new("shell-quiet-shell-issues");

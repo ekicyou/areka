@@ -1,17 +1,14 @@
-//! Task 7.2: TaffyComputedLayout→Arrangement変換テスト
+//! TaffyComputedLayout→Arrangement変換テスト
 use bevy_ecs::prelude::*;
 use wintf::ecs::layout::Arrangement;
 use wintf::ecs::layout::systems::update_arrangements_system;
 use wintf::ecs::layout::taffy::{TaffyComputedLayout, TaffyLayoutResource, TaffyStyle};
-
-// ===== Task 7.2: TaffyComputedLayout→Arrangement変換テスト =====
 
 #[test]
 fn test_computed_layout_position_to_arrangement_offset() {
     let mut world = World::new();
     world.init_resource::<TaffyLayoutResource>();
 
-    // 位置とサイズを持つTaffyComputedLayoutを作成
     let layout = taffy::Layout {
         location: taffy::Point { x: 10.0, y: 20.0 },
         size: taffy::Size {
@@ -24,12 +21,10 @@ fn test_computed_layout_position_to_arrangement_offset() {
 
     let entity = world.spawn((TaffyStyle::default(), computed)).id();
 
-    // システム実行
     let mut schedule = Schedule::default();
     schedule.add_systems(update_arrangements_system);
     schedule.run(&mut world);
 
-    // Arrangementの値を検証
     let arrangement = world.get::<Arrangement>(entity).unwrap();
     assert_eq!(arrangement.offset.x, 10.0);
     assert_eq!(arrangement.offset.y, 20.0);
@@ -42,7 +37,6 @@ fn test_arrangement_coordinate_system_consistency() {
     let mut world = World::new();
     world.init_resource::<TaffyLayoutResource>();
 
-    // 複数のエンティティで座標変換の一貫性を検証
     let layouts = vec![
         (0.0, 0.0, 100.0, 100.0),
         (50.0, 50.0, 200.0, 150.0),

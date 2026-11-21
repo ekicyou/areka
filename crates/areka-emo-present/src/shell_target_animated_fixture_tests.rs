@@ -1,5 +1,4 @@
-//! 動く絵の再生の検体が今の読み手で読めること（spec: areka-P0-animated-image-playback
-//! task 1.2・要件 9.4）。
+//! 動く絵の再生の検体が本物の読み手で読めること。
 //!
 //! 検体 `areka-emo-compose/tests/fixtures/animated-playback/`（中身は同じフォルダの README）の
 //! シェルを本物の読み手 [`WicDecoderArm`] と [`load_shell_target`] で、バルーンの面を
@@ -120,7 +119,7 @@ fn the_balloon_faces_resolve_and_bake_as_films() {
     });
 }
 
-/// task 2.3（要件 1.1〜1.4・3.4）: 検体のシェルを読むと、動く絵の element が子を置く element に
+/// 検体のシェルを読むと、動く絵の element が子を置く element に
 /// 替わり（番号・X,Y はそのまま）、どの `element*` からも子の定義が引ける。`element0` が在る面 2 は
 /// 土台を使わないので子を持たない。
 #[test]

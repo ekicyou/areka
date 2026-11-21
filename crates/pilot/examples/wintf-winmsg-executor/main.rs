@@ -1,6 +1,5 @@
 //! 先進坑: wintf-winmsg-executor
 //!
-//! 対応本坑 spec: `.kiro/specs/completed/wintf-winmsg-executor/brief.md`
 //! 一次記録（動機・概要・検証結果）は隣の README.md（3 幕）を正本とする。
 //!
 //! 実行法: `cargo run -p pilot --example wintf-winmsg-executor`
@@ -20,7 +19,7 @@
 //!     画面に出ない（DComp 描画が要る）。criterion 3 の NOREDIRECTIONBITMAP 生成・dispatch は
 //!     headless 実行で実証済み。本ファイルの可視窓は GDI を見せるため ex_style=0（redirected）。
 //!
-//! 使い捨て前提・品質基準は緩くてよい（二坑モデル要件 5.4）。ただし葉ノード隔離は厳守。
+//! 使い捨て前提・品質基準は緩くてよい。ただし葉ノード隔離は厳守。
 
 use std::cell::{Cell, RefCell};
 use std::pin::Pin;
@@ -227,7 +226,7 @@ fn main() {
     let done = Arc::new(AtomicBool::new(false));
     let notify_count = Arc::new(AtomicU64::new(0));
 
-    // 3 窓 ＋ 3 共有状態を生成・表示。Window ハンドルは block_on 後まで生かす（drop で破棄）。
+    // Window は block_on の後まで生かす（drop で窓が壊れる）。
     let shareds: Vec<Rc<Shared>> = (0..3).map(|i| Rc::new(Shared::new(i))).collect();
     let _wins: Vec<Window<Rc<Shared>>> = shareds.iter().map(|s| make_window(s.clone())).collect();
     println!("3 visible windows shown @ x={BASE_X}, y={BASE_Y}.. (each {WIN_W}x{WIN_H}, topmost)");

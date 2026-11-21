@@ -235,7 +235,6 @@ pub(crate) fn apply_with(world: &mut World, effects: Vec<Effect>, now: Instant, 
             Effect::Hide { token, reason } => hide(&mut session, tip, token, reason),
             Effect::TurnStarted { .. } | Effect::TurnEnded { .. } => {}
         }
-        // 知らせの関数は始まりに写したもの（窓が壊れていても終わりを知らせられる）。
         let Some(n) = notice(e) else { continue };
         let token = match n {
             TooltipNotice::TurnStarted(t) => t.token,

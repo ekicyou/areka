@@ -1,5 +1,4 @@
-//! シェル名つきの資産づくり（`build_boot_assets_with_shell`）のテスト
-//! （spec: areka-P0-shell-balloon-switch 要件 4.4・6.4・8.8）。
+//! シェル名つきの資産づくり（`build_boot_assets_with_shell`）のテスト。
 
 // bake の WIC デコードに要る COM は、テストのプロセスの寿命の MTA（`crash_report_test_support`）が持つ。
 use super::*;
@@ -75,8 +74,7 @@ fn named_shell_builds_assets_from_that_shells_pictures() {
 }
 
 /// 面が 1 つも無いシェルの失敗は、場所（シェルのフォルダ）をそのまま運び、利用者に出る文言が
-/// 「シェルに面が 1 つも無い」になる（spec: areka-P0-self-alpha-declaration 要件 6.5・
-/// `surfaces.txt` が無い場合があるので、そのファイルの話にしない）。
+/// 「シェルに面が 1 つも無い」になる（`surfaces.txt` が無い場合があるので、そのファイルの話にしない）。
 #[test]
 fn shell_without_any_surface_maps_to_shell_empty_with_folder_wording() {
     use areka_emo_present::shell_target::ShellLoadError;

@@ -1,5 +1,4 @@
-//! 定義の差し替え（`rebase_shell`／`rebase_balloon`）の決定論テスト（spec: areka-P0-shell-balloon-switch
-//! 要件 2.6・3.5）。
+//! 定義の差し替え（`rebase_shell`／`rebase_balloon`）の決定論テスト。
 
 use super::test_support::*;
 use super::*;
@@ -22,7 +21,7 @@ fn loaded_states() -> ScopeStates {
 }
 
 /// シェルの差し替え: 今の面は保ち、静的な着せ替えを新しい既定へ替え、動的な着せ替えと
-/// シェル側のパターンの進行を消す。バルーン側は触らない（要件 2.6）。
+/// シェル側のパターンの進行を消す。バルーン側は触らない。
 #[test]
 fn rebase_shell_keeps_surfaces_and_resets_binds_and_shell_patterns() {
     let mut states = loaded_states();
@@ -38,18 +37,15 @@ fn rebase_shell_keeps_surfaces_and_resets_binds_and_shell_patterns() {
     let new_default = BindSet::from_ids([2001]);
     states.rebase_shell(crate::DefaultBinds::uniform(new_default.clone()));
 
-    // 今の面は保たれる。
     assert_eq!(states.scopes.get(&s0), Some(&ScopeState::Shown(5)));
     assert_eq!(states.scopes.get(&s1), Some(&ScopeState::Hidden));
     assert_eq!(states.balloon.get(&s0), Some(&ScopeState::Shown(2)));
-    // 着せ替えは新しい既定へ戻る（動的な着せ替えは消える）。
     assert_eq!(
         states.binds(),
         &crate::DefaultBinds::uniform(new_default.clone())
     );
     assert_eq!(states.current_binds(&s0), &new_default);
     assert_eq!(states.current_binds(&s1), &new_default);
-    // シェル側のパターンの進行は消え、バルーン側は残る。
     assert!(states.current_pattern(&s0, Slot::Shell).is_empty());
     assert_eq!(
         states.current_pattern(&s0, Slot::Balloon),
@@ -58,7 +54,7 @@ fn rebase_shell_keeps_surfaces_and_resets_binds_and_shell_patterns() {
 }
 
 /// バルーンの差し替え: バルーン側のパターンの進行だけを消す。面・着せ替え・シェル側の
-/// パターンは不変（要件 3.5）。
+/// パターンは不変。
 #[test]
 fn rebase_balloon_clears_only_balloon_patterns() {
     let mut states = loaded_states();

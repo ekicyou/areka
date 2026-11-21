@@ -1,5 +1,4 @@
 //! Validation tests for V7, V10-V13 (transition constraints, object type, value range, type mismatch)
-//! Tasks 7.6, 8.6
 
 use dola::*;
 use std::collections::BTreeMap;

@@ -1,4 +1,4 @@
-//! 「シェル」枠の決定論テスト（areka-P0-shell-balloon-switch task 10・要件 7.1・7.2・7.4・11.9）。
+//! 「シェル」枠の決定論テスト。
 //!
 //! 確かめること: 目録（隠しを除く列挙）の並びのまま子が並び、ラベルは `name`（無ければフォルダ名）で
 //! あること・メニューを出すたびに目録を読み直すこと・1 つだけでも枠が出ること・置き場のゴーストが
@@ -66,7 +66,7 @@ fn shell_shape(world: &World) -> Option<FrameShape> {
 // ---------------------------------------------------------------- 列挙
 
 /// 目録の並び（フォルダ名の昇順）のまま、隠しを除いて子が並ぶ。ラベルは `name`（無ければ
-/// フォルダ名）。今のシェルが分からなければ印はどれにも付かない（要件 7.1・7.4）。
+/// フォルダ名）。今のシェルが分からなければ印はどれにも付かない。
 #[test]
 fn shells_listed_in_catalog_order_without_hidden() {
     let tmp = TempPath::new("shell-frame-list");
@@ -90,7 +90,7 @@ fn shells_listed_in_catalog_order_without_hidden() {
     );
 }
 
-/// シェルが 1 つだけでも枠は出て、子を 1 つ選べる（要件 7.1）。
+/// シェルが 1 つだけでも枠は出て、子を 1 つ選べる。
 #[test]
 fn a_single_shell_still_shows_the_frame() {
     let tmp = TempPath::new("shell-frame-single");
@@ -155,7 +155,7 @@ fn without_ghost_only_a_disabled_shell_frame_is_shown() {
 // ---------------------------------------------------------------- 登記のやり直し
 
 /// 結線をやり直すと登記は新品: 1 周目の余分な登記は消え、「シェル」「バルーン」枠は置き換えの
-/// 記録なしに登記し直される（要件 11.9）。
+/// 記録なしに登記し直される。
 #[test]
 fn rewiring_gives_a_fresh_registration_with_shell_and_balloon_frames() {
     let tmp = TempPath::new("shell-frame-rewire");

@@ -6,7 +6,6 @@ use super::super::*;
 
 #[test]
 fn test_color_map_data_hit_test_mapped_color() {
-    // 2x2 のテストデータを直接構築
     let data = ColorMapData {
         index_map: vec![1, 0, 0, 2], // (0,0)=頭, (1,0)=無名, (0,1)=無名, (1,1)=手
         region_names: vec!["head".to_string(), "hand".to_string()],
@@ -27,7 +26,6 @@ fn test_color_map_data_hit_test_unmapped_color() {
         height: 2,
     };
 
-    // マッピング外 → None
     assert_eq!(data.hit_test(1, 0), None);
 }
 
@@ -40,7 +38,6 @@ fn test_color_map_data_hit_test_out_of_bounds() {
         height: 2,
     };
 
-    // 範囲外座標 → None
     assert_eq!(data.hit_test(5, 5), None);
 }
 
@@ -123,14 +120,11 @@ fn test_color_map_hit_test_region_unmapped_via_interface() {
         width: 100.0,
         height: 100.0,
     };
-    // 中央 → "center"
     assert_eq!(
         map.hit_test_region(0.375, 0.375, &entity_size),
         Some("center")
     );
-    // 左上隅 (0,0) → 未マッピング → None
     assert_eq!(map.hit_test_region(0.0, 0.0, &entity_size), None);
-    // 右下隅 (3,3) → 未マッピング → None
     assert_eq!(map.hit_test_region(0.875, 0.875, &entity_size), None);
 }
 
@@ -215,7 +209,7 @@ fn test_color_map_hit_test_region_four_quadrants() {
 }
 
 // ========================================================================
-// 整数境界・極値座標の特性化テスト（W4b-V）— ColorMap 分岐
+// 整数境界・極値座標の特性化テスト— ColorMap 分岐
 //
 // hit_test_region の ColorMap 分岐は正規化座標を `(rel * width as f32) as u32` で
 // ピクセル座標へ変換する。Rust の浮動小数 → 整数キャストは飽和的（負値→0、
@@ -287,7 +281,7 @@ fn test_color_map_nan_rel_does_not_panic() {
 }
 
 // ========================================================================
-// ColorMapData::from_image の読み込み（design の Testing Strategy 15・17・18 番）
+// ColorMapData::from_image の読み込み
 //
 // PNG はワークツリーの target/hit_region_color_map_test/ に image で書く。
 // 透明の扱い: α=0 の画素はどの領域にも属さない。α が 1 以上の画素は、
@@ -328,7 +322,7 @@ fn with_sta<R>(f: impl FnOnce() -> R) -> R {
     r
 }
 
-/// 18 番: 各画素の名前（白は対応外で名前なし）と寸法が画像のとおりになる。
+/// 各画素の名前（白は対応外で名前なし）と寸法が画像のとおりになる。
 #[test]
 fn from_image_reads_each_pixel_name_and_size() {
     let path = write_rgbw_png("rgbw.png".as_ref());
@@ -361,7 +355,7 @@ fn from_image_maps_transparent_pixel_to_no_region_and_alpha_pixels_by_unmultipli
     assert_eq!(data.hit_test(2, 0), Some("blue"));
 }
 
-/// 15 番: 対応が 255 個を越えると番号が 1 バイトに収まらないので失敗を返す。
+/// 対応が 255 個を越えると番号が 1 バイトに収まらないので失敗を返す。
 #[test]
 fn from_image_rejects_more_than_255_colors() {
     let path = write_rgbw_png("rgbw_256.png".as_ref());
@@ -377,7 +371,7 @@ fn from_image_rejects_more_than_255_colors() {
     );
 }
 
-/// 15 番の境目: ちょうど 255 個は読める。
+/// 境目: ちょうど 255 個は読める。
 #[test]
 fn from_image_accepts_255_colors() {
     let path = write_rgbw_png("rgbw_255.png".as_ref());
@@ -420,7 +414,7 @@ fn from_image_returns_err_for_oversize_image() {
     );
 }
 
-/// 17 番: 対のないサロゲートを含む名の PNG を読める（名を UTF-8 に化かさない）。
+/// 対のないサロゲートを含む名の PNG を読める（名を UTF-8 に化かさない）。
 #[test]
 fn from_image_opens_name_with_lone_surrogate() {
     use std::os::windows::ffi::OsStringExt;

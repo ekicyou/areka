@@ -68,7 +68,6 @@ pub fn compile_storyboard(
     storyboard_name: &str,
     start_time: f64,
 ) -> Result<CompiledStoryboard, Vec<DolaError>> {
-    // Step 1: バリデーション (Task 3.1)
     // doc は外部入力（JSON/TOML）か Builder の由来だが、どの経路でも compile_validated の前に
     // ここか compile_all で必ず validate() を通る（数値の規則を含む。tests/compile/boundary_test.rs が縛る）。
     // ネスト深度の制限は各フォーマットのパーサの責務。本モジュールも validate() の
@@ -100,7 +99,6 @@ pub(crate) fn compile_validated(
     storyboard_name: &str,
     start_time: f64,
 ) -> Result<CompiledStoryboard, Vec<DolaError>> {
-    // Step 2: ストーリーボード検索
     let sb = doc.storyboard.get(storyboard_name).ok_or_else(|| {
         vec![DolaError::CompileError {
             storyboard: storyboard_name.to_string(),
@@ -111,7 +109,6 @@ pub(crate) fn compile_validated(
 
     let mut errors: Vec<DolaError> = Vec::new();
 
-    // Step 3: 依存グラフ構築 & 循環検出 & トポソート (Task 4)
     let graph = build_dependency_graph(sb);
 
     let sorted_indices = match topological_sort(&graph, sb.entry.len()) {
@@ -125,7 +122,6 @@ pub(crate) fn compile_validated(
         }
     };
 
-    // Step 4: エントリ処理 (Task 5)
     // keyframe_name → resolved time
     let mut keyframe_times: HashMap<String, f64> = HashMap::new();
     keyframe_times.insert("start".to_string(), start_time);
@@ -138,7 +134,6 @@ pub(crate) fn compile_validated(
     let mut entry_segment_end: HashMap<usize, f64> = HashMap::new();
     // entry_index → keyframe_time (for pure KF "at なし" fallback)
     let mut entry_keyframe_time: HashMap<usize, f64> = HashMap::new();
-    // compiled triggers
     let mut triggers: Vec<CompiledTrigger> = Vec::new();
 
     // SAFETY: topological_sort の成功時 result は 0..entry_count（= sb.entry.len()）の
@@ -151,7 +146,6 @@ pub(crate) fn compile_validated(
         let kf_name = entry_keyframe_name(entry, entry_idx);
 
         if let Some(ref target_storyboard) = entry.trigger_storyboard {
-            // Trigger entry: resolve fire_time using same logic as pure KF
             let fire_time = resolve_pure_keyframe_time(
                 storyboard_name,
                 entry_idx,
@@ -163,11 +157,9 @@ pub(crate) fn compile_validated(
             );
             if let Some(t) = fire_time {
                 push_if_overflowed(&mut errors, storyboard_name, entry_idx, "fire_time", t);
-                // Register keyframe at fire_time (0-second completion)
                 keyframe_times.insert(kf_name, t);
                 entry_keyframe_time.insert(entry_idx, t);
 
-                // Create CompiledTrigger
                 triggers.push(CompiledTrigger {
                     fire_time: t,
                     target_storyboard: target_storyboard.clone(),
@@ -178,9 +170,7 @@ pub(crate) fn compile_validated(
             continue;
         }
 
-        // Pure keyframe entry (no variable/transition; trigger は上で処理済み)
         if entry.variable.is_none() && entry.transition.is_none() {
-            // Pure Keyframe (Task 5.4)
             let kf_time = resolve_pure_keyframe_time(
                 storyboard_name,
                 entry_idx,
@@ -211,12 +201,11 @@ pub(crate) fn compile_validated(
             continue;
         };
 
-        // 連結の遷移は処理の順で最後に解いた分でなく、同じ変数の配列上の直前のエントリに続く（要件 11.7）
+        // 連結の遷移は処理の順で最後に解いた分でなく、同じ変数の配列上の直前のエントリに続く
         let sequential = entry.at.is_none() && entry.between.is_none();
         let prev_entry = graph.prev_same_var.get(&entry_idx).copied();
         let last_end_time = prev_entry.and_then(|p| entry_segment_end.get(&p)).copied();
 
-        // Resolve timing (Task 5.1-5.3)
         let timing = resolve_entry_timing(
             storyboard_name,
             entry_idx,
@@ -241,7 +230,6 @@ pub(crate) fn compile_validated(
             segment_end,
         );
 
-        // Register keyframe time
         keyframe_times.insert(kf_name, kf_time);
         entry_keyframe_time.insert(entry_idx, kf_time);
 
@@ -264,11 +252,9 @@ pub(crate) fn compile_validated(
         return Err(errors);
     }
 
-    // Step 5: Finalization (Task 6)
     let mut timelines: BTreeMap<String, CompiledVariableTimeline> = BTreeMap::new();
 
     for (var_name, (var_def, mut segments)) in var_segments {
-        // Sort by start_time (Task 6.1)
         // 比べは −0.0 を +0.0 にそろえた全順序（NaN は符号で両端に分かれる）。
         // 同じ始まりは配列の順（連結の直前のエントリは配列で先）
         segments.sort_by(|a, b| {
@@ -277,9 +263,8 @@ pub(crate) fn compile_validated(
                 .then(a.entry_idx.cmp(&b.entry_idx))
         });
 
-        // from/to を時刻の順に埋める（Task 5.7・5.8）。from を省いたとき、連結の遷移は配列上の
-        // 直前のエントリ（要件 11.7）、at・between は時刻の上で直前のセグメント（完了
-        // dola-compiled-transition 要件 4.2）の to を取る。どちらもこの並びで先に埋まっている
+        // from/to を時刻の順に埋める。from を省いたとき、連結の遷移は配列上の直前のエントリ、
+        // at・between は時刻の上で直前のセグメントの to を取る。どちらもこの並びで先に埋まっている
         let mut entry_to: HashMap<usize, TransitionValue> = HashMap::new();
         let mut compiled: Vec<(usize, CompiledSegment)> = Vec::with_capacity(segments.len());
         for pending in &segments {
@@ -293,7 +278,7 @@ pub(crate) fn compile_validated(
             let to_value = resolve_to_value(trans_def, &from_value);
             let entry_idx = pending.entry_idx;
 
-            // 値域の検証は書かれた from/to だけを見るので、relative_to の結果はここで比べる（要件 11.11）
+            // 値域の検証は書かれた from/to だけを見るので、relative_to の結果はここで比べる
             if let TransitionValue::Scalar(v) = to_value {
                 let (min, max) = extract_min_max(var_def);
                 let (min, max) = (
@@ -320,7 +305,6 @@ pub(crate) fn compile_validated(
                 }
             }
 
-            // Build segment (Task 5.9)
             let easing = if matches!(var_def, AnimationVariableDef::Object { .. }) {
                 None
             } else {
@@ -339,7 +323,7 @@ pub(crate) fn compile_validated(
             ));
         }
 
-        // Overlap check (Task 6.2)。重なった後ろのセグメントのエントリを指す
+        // 重なった後ろのセグメントのエントリを指す
         for pair in compiled.windows(2) {
             let ((_, prev), (entry_index, next)) = (&pair[0], &pair[1]);
             if prev.end_time > next.start_time {
@@ -355,9 +339,8 @@ pub(crate) fn compile_validated(
         }
         let segments: Vec<CompiledSegment> = compiled.into_iter().map(|(_, s)| s).collect();
 
-        // Build CompiledVariableTimeline (Task 6.3)
         // 長さはコンパイルの起点から数える（先頭の遅れを含む）。
-        // 最後のセグメントより後のトリガーは長さに足さない（dola-nested-storyboard 3.3）。
+        // 最後のセグメントより後のトリガーは長さに足さない。
         let base_duration = segments
             .last()
             .map_or(0.0, |last| last.end_time - start_time);
@@ -381,7 +364,6 @@ pub(crate) fn compile_validated(
         return Err(errors);
     }
 
-    // Build CompiledStoryboard (Task 6.4)
     let total_base_duration = timelines
         .values()
         .map(|tl| tl.base_duration)
@@ -397,7 +379,6 @@ pub(crate) fn compile_validated(
         }]);
     }
 
-    // Sort triggers by fire_time (stable sort preserves entry index order for same fire_time)
     triggers.sort_by(|a, b| {
         (a.fire_time + 0.0)
             .total_cmp(&(b.fire_time + 0.0))

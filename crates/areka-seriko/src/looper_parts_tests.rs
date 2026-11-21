@@ -1,5 +1,4 @@
-//! 刻みと表の差し替えに部品の時計をつなぐ檻（spec: areka-P0-surface-element-nesting 要件 5.6・5.8・
-//! 7.2・7.3・8.3・tasks.md 7.4）。
+//! 刻みと表の差し替えに部品の時計をつなぐ檻。
 //!
 //! 表は `surfaces.txt` の本文から解析 → 畳み込み → [`AnimationTable::from_world`] の実経路で組む。
 //! 刻みは `on_tick(now_ms)`、乱数は注入列で、どちらも決定論。
@@ -47,7 +46,7 @@ const CHILD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
     surface102\n{\n}\n";
 
 /// シェルの表の差し替えで部品の時計を捨てる。面の切り替え（一番上の再生を捨てる口）は
-/// 部品の時計に触らない（要件 5.8・5.9）。
+/// 部品の時計に触らない。
 #[test]
 fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
     let mut rt = LoopRuntime::new(cfg(table_of(CHILD), always_fire()));
@@ -78,7 +77,7 @@ fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
 
 /// `refresh`: 抽選の animation の時計は書き換えず（働きのコマが始めた・止めた時計を除く）、直前の刻みの
 /// 時刻の部品のコマを載せた `Show` を返す。
-/// 刻みが 1 度も来ていない・シェル面が表示中でない・子を置いていない面では何も返さない（要件 5.6）。
+/// 刻みが 1 度も来ていない・シェル面が表示中でない・子を置いていない面では何も返さない。
 #[test]
 fn refresh_reloads_part_frames_at_last_tick_time() {
     let (rng, probe) = counting_rng(&[0]);
@@ -131,7 +130,7 @@ fn refresh_reloads_part_frames_at_last_tick_time() {
 }
 
 /// 入れ子も動く部品も無い表: 刻みと切り替えを回しても部品の時計は空・部品の欄は空・乱数は一番上の
-/// 抽選の分だけ（要件 7.2・7.3）。
+/// 抽選の分だけ。
 #[test]
 fn table_without_animated_parts_never_enters_part_path() {
     // 一番上のコマが指す 100 は自分の animation を持たない。
@@ -177,7 +176,7 @@ fn table_without_animated_parts_never_enters_part_path() {
 }
 
 /// 部品の抽選は、一番上の抽選を全スコープぶん引き終えた後に、スコープの昇順 → 繰り返しの回 →
-/// 部品の番号の昇順 → animation の番号の昇順で引かれる（tasks.md 7.4・design.md「抽選の消費順」）。
+/// 部品の番号の昇順 → animation の番号の昇順で引かれる。
 ///
 /// K の値で誰が引いたかを見分ける: 一番上 2・部品 100 の animation1 が 3・animation2 が 4・
 /// 部品 50（100 のコマが指して 2 回目の回で見える）が 5。50 は 100 より番号が小さくても後に引かれる。
@@ -222,7 +221,7 @@ fn part_draws_follow_all_top_draws_in_fixed_order() {
 }
 
 /// 面が隠れた（`\s[-1]`）ら、部品の 3 語の時計も引き金の状態も捨てる。面が戻ると、見えた部品の
-/// `runonce` はその時刻でもう 1 回鳴る（spec: areka-P0-seriko-trigger-intervals 要件 2.6・5.4・5.9）。
+/// `runonce` はその時刻でもう 1 回鳴る。
 /// 面の切り替えはアクターと同じ順（状態の更新 → ずれと印を戻す → 再生の破棄 → `refresh`）で踏む。
 #[test]
 fn hidden_surface_lets_the_part_runonce_fire_again_on_return() {
@@ -256,8 +255,7 @@ fn hidden_surface_lets_the_part_runonce_fire_again_on_return() {
 }
 
 /// 面の切り替えをまたいで見え続けた部品は引き金の状態を保ち、`runonce` を鳴らし直さない。見えなく
-/// なった部品は時計も引き金の状態も捨てる（部品は「見えたら生まれ、見えなくなったら消える」・
-/// spec: areka-P0-seriko-trigger-intervals 要件 5.9）。
+/// なった部品は時計も引き金の状態も捨てる（部品は「見えたら生まれ、見えなくなったら消える」）。
 #[test]
 fn part_visible_across_a_surface_switch_keeps_its_runonce_used() {
     // 子 100 は一番上 0 と 1 の両方、子 101 は 0 だけが置く。どちらの `runonce` も 300ms で `-1`。

@@ -1,5 +1,4 @@
-//! OS のセッションの終了（シャットダウン・再起動・ログオフ）の受け手
-//! （areka-P0-ghost-shell-balloon-switch 要件 12.9〜12.11・design「SessionEnd」・Flow 7）。
+//! OS のセッションの終了（シャットダウン・再起動・ログオフ）の受け手。
 //!
 //! `WM_ENDSESSION`（wParam が真）から戻った直後にプロセスは終了させられうるので、`run()` の後の
 //! 後始末に頼らず、窓の手続きの中（wintf の `OnSessionEnd` に差した [`on_os_session_end`]）で
@@ -32,17 +31,14 @@ pub(crate) struct SessionEnded;
 
 /// wintf の `OnSessionEnd` に差す関数（`app_exit::attach_os_close_request` が差す）。
 ///
-/// 手順（要件 12.9）: ① 済みの印が在れば `debug!(os_session_end_again)` で戻る ② 切替の予約を
-/// 下ろす（後から届く停止通知が切替として切替先を起こさない）②' 受け口の未処理の運行の通知を
-/// 終了の相で今日の規則どおり捌く（予約は外した後なので停止は今日どおり終了へ＝先に届いていた
-/// SHIORI の失敗が最初の出所として勝つ）③ 出所「OS のセッションの終了」で全窓を閉じて終了を
-/// 指示する ④ 置き場のゴーストの倒れた旗を読んでから `CloseReason::System` で同期に、SHIORI を
-/// 待つ合計を [`SESSION_END_SHIORI_LIMIT`] に収めて降ろす（kanade の強制終了が `OnClose` を
-/// Ref0＝`system` の NOTIFY で送ってから SHIORI を降ろし、記憶を書き出す・上限に達したら見張りが
-/// 補助プロセスを終わらせて待ちを解く）⑤ きれいな終わりの判定で印を消すか残すか（倒れた旗と
-/// 打ち切りの有無も材料）⑥ 所要 ms と打ち切りの有無を記録する。
+/// 切替の予約を先に下ろすので、後から届く停止通知が切替先を起こさない。未処理の運行の通知は
+/// 予約を外した後に終了の相で捌くので、先に届いていた SHIORI の失敗が最初の出所として勝つ。
+/// ゴーストは `CloseReason::System` で同期に降ろし（kanade の強制終了が `OnClose` を Ref0＝`system` の
+/// NOTIFY で送ってから SHIORI を降ろし、記憶を書き出す）、SHIORI を待つ合計を
+/// [`SESSION_END_SHIORI_LIMIT`] に収める（上限に達したら見張りが補助プロセスを終わらせて待ちを解く）。
+/// 起動中の印は、きれいな終わりの判定（倒れた旗と打ち切りの有無も材料）で消すか残すか決める。
 ///
-/// # join と同期の送信（要件 5.4・`research.md` §6）
+/// # join と同期の送信
 /// 降ろす処理の join は UI スレッド（この関数を呼ぶ窓の手続きのスレッド）を塞ぎ、その間は
 /// 送られてきたメッセージを配らない。それでも止まらない理由:
 /// - areka のどのスレッドも UI スレッドの窓へ同期に送らない。ゴーストの実行系（kanade・shiori・
@@ -65,7 +61,7 @@ pub(crate) fn on_os_session_end(world: &mut World, _entity: Entity) {
     end_session_within(world, SESSION_END_SHIORI_LIMIT)
 }
 
-/// OS のセッションの終了で SHIORI を待つ合計の上限（2026-09-27 開発者の確定・要件 1.2・8.1）。
+/// OS のセッションの終了で SHIORI を待つ合計の上限。
 /// 後始末に入った時点から数える。
 pub(crate) const SESSION_END_SHIORI_LIMIT: Duration = Duration::from_secs(3);
 
@@ -163,11 +159,10 @@ pub(crate) fn end_session_from(world: &mut World, budget: WaitBudget) {
             None
         }
     };
-    // 印を消せなかった失敗と降ろす途中の失敗は記録だけ（告知は OS の終了を塞ぐので出さない・要件 2.3 の例外）。
+    // 印を消せなかった失敗と降ろす途中の失敗は記録だけ（告知は OS の終了を塞ぐので出さない）。
     write_failure::log_only(world, clear_failed);
 
-    // 書いている最中の背景の仕事を、降ろす待ちと同じ出発点・同じ上限で待つ（足し算にしない・
-    // ghost-install 要件 8.2）。印の始末の後なので、待つ間に終わらされても印は済んでいる。
+    // 書いている最中の背景の仕事を、降ろす待ちと同じ出発点・同じ上限で待つ（足し算にしない）。印の始末の後なので、待つ間に終わらされても印は済んでいる。
     closing.wait(WaitBudget { started, limit });
 
     tracing::info!(

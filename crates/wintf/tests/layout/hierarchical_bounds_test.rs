@@ -1,4 +1,4 @@
-// Task 7.1: 階層的バウンディングボックス計算の統合テスト
+// 階層的バウンディングボックス計算の統合テスト
 
 use wintf::ecs::{Arrangement, GlobalArrangement, LayoutScale, Offset, Size};
 
@@ -30,7 +30,6 @@ fn test_hierarchical_bounds_calculation() {
     };
     let child_global = parent_global * child_arr;
 
-    // 子のbounds検証（親の変換適用後）
     // 子のoffsetに親のスケールを適用。親の無い根のずらしは自分の倍率で伸ばさない
     // parent.bounds.left = 10・top = 20（offset のまま）
     // child.offset = (5, 10), parent.scale = (2, 2)
@@ -57,7 +56,7 @@ fn test_hierarchical_bounds_calculation() {
     let grandchild_global = child_global * grandchild_arr;
 
     // 孫のbounds検証（親と子の累積変換適用後）
-    // 新ロジック: 孫のoffsetに親（child）のスケールを適用
+    // 孫のoffsetに親（child）のスケールを適用
     // child.bounds.left = 20・top = 40
     // child.transform.M11 = 2 (累積スケール)
     // grandchild.offset = (2, 3)
@@ -132,7 +131,7 @@ fn test_complex_scale_hierarchy() {
     };
     let level1_global = root_global * level1;
 
-    // 新ロジック: offsetに親スケールを適用
+    // offsetに親スケールを適用
     // root: offset=0, scale=2, bounds = (0, 0, 200, 200)
     // level1.offset = (10, 10), parent_scale = 2
     // scaled_offset = (20, 20)
@@ -166,7 +165,7 @@ fn test_complex_scale_hierarchy() {
     assert_eq!(level2_global.bounds.bottom, 65.0);
 }
 
-/// LayoutRoot → Window のDPIスケール適用テスト (Task 6 検証)
+/// LayoutRoot → Window のDPIスケール適用テスト
 ///
 /// LayoutRoot は物理ピクセル座標系（スケール 1.0）
 /// Window は DIP 座標で offset を指定し、自身の scale で DPI スケールを表現

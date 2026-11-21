@@ -1,4 +1,4 @@
-//! ログの履歴（areka-P0-mcp-log-history）。
+//! ログの履歴。
 //!
 //! ログの出来事を SSP の 5 種別（error・script・network・update・status）へ振り分ける。
 //! 規則は [`RULES`] の 1 表だけに書き、[`classify`] が判定の順に当てる。
@@ -131,8 +131,8 @@ pub(crate) const RULES: &[Rule] = &[
     rule("areka::readme", Kind::Status, false),
 ];
 
-/// [`RULES`] を当てる前に引く「残さない出所」（完全一致）。`install_cue` は runtime から
-/// `areka::install` の下へ移したが、その info は移す前と同じく残さない（決まり `areka::install` に当てない）。
+/// [`RULES`] を当てる前に引く「残さない出所」（完全一致）。`areka::install` の下にあっても
+/// `install_cue` の info は残さない。
 pub(crate) const UNKEPT_TARGETS: &[&str] = &["areka::install::install_cue"];
 
 /// 出来事のレベルと target から種別を決める。どれにも当たらなければ None（残さない）。
@@ -360,7 +360,7 @@ pub(crate) fn wants(is_event: bool, level: Level, target: &str) -> bool {
 ///
 /// 層ごとのフィルタは断るたびに「断った」印をスレッドに書き、直後の `on_event` で消す。
 /// 出来事でない問い合わせを断ると印が残り、同じスレッドの次の出来事を履歴の層だけが
-/// 1 件飛ばす（design-validation.md 指摘 1）。
+/// 1 件飛ばす。
 pub(crate) fn passes(is_event: bool, level: Level, target: &str) -> bool {
     !is_event || classify(level, target).is_some()
 }
@@ -425,14 +425,14 @@ impl<S: Subscriber> Layer<S> for HistoryLayer {
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
         let fields = Fields::of(event);
         let meta = event.metadata();
-        // `log` から橋渡しされた行はここへ target `log` で届く。info 以下は下書きが None で捨てる。
+        // `log` から橋渡しされた行は target `log` で届く。info 以下は下書きが None で捨てる。
         if let Some(d) = draft(*meta.level(), meta.target(), fields.texts()) {
             record(local_now(), d);
         }
     }
 }
 
-/// 写しの窓（areka-P0-offline-surface-dump）の時刻（現地時刻・秒まで）。
+/// 写しの窓の時刻（現地時刻・秒まで）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Hms {
     pub hour: u8,

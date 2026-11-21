@@ -31,7 +31,7 @@ fn all_families() -> Vec<PersistKey> {
     ]
 }
 
-// --- 正準 key 往復（Task 3.2 の申し送り: to_canonical_string と一致・読み口 1 本化の要石）---
+// --- 正準 key 往復（to_canonical_string と一致）---
 
 #[test]
 fn canonical_key_round_trips_with_to_canonical_string() {
@@ -75,7 +75,7 @@ fn canonical_key_exact_strings() {
     );
 }
 
-// --- 4 key 族 put→load 往復（R6.6・完了条件）---
+// --- 4 key 族 put→load 往復 ---
 
 #[test]
 fn four_family_put_load_value_round_trip() {
@@ -213,14 +213,13 @@ fn toml_mapping_places_families_under_expected_tables() {
         serialized.contains("format-version = 1"),
         "serialized=\n{serialized}"
     );
-    // 値の配置も確認（x は window 表下・count は boot/vanish 表下）。
     assert!(
         serialized.contains("x = \"1024\""),
         "serialized=\n{serialized}"
     );
 }
 
-// --- マージが無関係 key を温存（read-modify-write・clobber なし）---
+// --- マージが無関係 key を温存 ---
 
 #[test]
 fn merge_preserves_unrelated_keys() {
@@ -294,7 +293,7 @@ fn overwrite_same_key_updates_value() {
     );
 }
 
-// --- スコープ分離（R6.5・別 root は非混同）---
+// --- スコープ分離（別 root は非混同）---
 
 #[test]
 fn scope_isolation_distinct_ghost_roots_do_not_cross() {
@@ -326,7 +325,6 @@ fn scope_isolation_distinct_ghost_roots_do_not_cross() {
 
 #[test]
 fn scope_isolation_different_scopes_use_different_files() {
-    // App と Ghost が別ルート → 別ファイル → 非混同。
     let io = FakePersistIo::new();
     let roots = ScopeRoots {
         app: Some(PathBuf::from("/app")),
@@ -345,7 +343,7 @@ fn scope_isolation_different_scopes_use_different_files() {
     );
 }
 
-// --- root None → 寛容（R6.7・panic なし）---
+// --- root None → 寛容（panic なし）---
 
 #[test]
 fn none_root_load_is_empty() {
@@ -353,16 +351,13 @@ fn none_root_load_is_empty() {
     assert!(load_scope(PersistScope::Ghost, &ScopeRoots::default(), &io).is_empty());
 }
 
-// === Task 4.4 ログ表明檻（criteria 明示要求の「警告」「error ログ」を capture 経由で檻へ）===
+// === ログ表明 ===
 //
-// criteria は寛容読取（Criterion 2）で **警告発火** を、commit 中断（Criterion 3）で **error
-// ログ** を明示的に要求する。format 層の縮退 warn は `format.rs` 側で檻済みだが、load/save
-// orchestration（本モジュール）の縮退アーム——load の read 障害段（R6.3「読み取れない」）と
-// save の commit 失敗段（R6.2/R8.1）——は outcome のみ檻済みでログ未表明だった。ここを共有
-// ヘルパ [`crate::test_log_capture`]（共有 crate `log-capture-kit` へ委譲して並列決定論化）
-// 経由で檻へ入れる（bare `with_default` は使わない）。
+// format 層の縮退 warn は `format.rs` 側で確かめる。ここは load の read 障害段と save の
+// commit 失敗段のログを、共有ヘルパ [`crate::test_log_capture`]（`log-capture-kit` へ委譲して
+// 並列でも決定論）経由で確かめる（bare `with_default` は使わない）。
 
-// --- Criterion 2 (R6.3/R6.7): load_scope の read 障害段——warn ＋ 空縮退 ＋ 起動継続 ---
+// --- load_scope の read 障害段: warn ＋ 空縮退 ＋ 起動継続 ---
 #[test]
 fn load_read_failure_emits_warn_and_degrades() {
     let io = FakePersistIo::new();
@@ -378,16 +373,13 @@ fn load_read_failure_emits_warn_and_degrades() {
     );
     io.fail_next_read();
     let events = capture(|| {
-        // 読み取れない → 空縮退（panic なし＝起動継続）。
         let loaded = load_scope(PersistScope::Ghost, &roots, &io);
         assert!(loaded.is_empty(), "read 障害は空縮退（起動継続）");
     });
-    // 縮退アームが LOG_TARGET・WARN で「persist read failed」を発火（無音失敗なし・R6.7/R8.1）。
-    // ログ削除・語彙変更・レベル降格で赤になる。
     assert_logged(&events, Level::WARN, LOG_TARGET, "persist read failed");
 }
 
-// --- Criterion 3 (R6.2/R8.1): save_scope の commit 失敗段——既存無傷 ＋ error ログ ---
+// --- save_scope の commit 失敗段: 既存無傷 ＋ error ログ ---
 #[test]
 fn save_commit_failure_emits_error_log() {
     let io = FakePersistIo::new();
@@ -414,9 +406,7 @@ fn save_commit_failure_emits_error_log() {
             "commit 失敗は Degraded 縮退（panic なし）"
         );
     });
-    // commit 失敗アームが LOG_TARGET・ERROR で「persist commit failed」を発火（R8.1 無音失敗禁止）。
     assert_logged(&events, Level::ERROR, LOG_TARGET, "persist commit failed");
-    // 既存内容は無傷（temp→rename の原子的確定・R6.2）——1 のまま。
     assert!(
         load_scope(PersistScope::Ghost, &roots, &io).contains(&(PersistKey::BootCount, "1".into())),
         "commit 中断後も既存内容が無傷であること"
@@ -433,14 +423,12 @@ fn non_numeric_scope_id_in_file_is_skipped() {
         ghost: Some(PathBuf::from("/g")),
         ..ScopeRoots::default()
     };
-    // 手書き TOML: window の ID が非数値 "main" ＋ 正常な boot。
     io.commit(
         &path,
         "format-version = 1\n[window.\"main\"]\nx = \"5\"\n[boot]\ncount = \"1\"\n",
     )
     .unwrap();
     let loaded = load_scope(PersistScope::Ghost, &roots, &io);
-    // 非数値 window は skip、boot は載る（panic なし）。
     assert!(loaded.contains(&(PersistKey::BootCount, "1".into())));
     assert!(
         loaded
@@ -459,7 +447,7 @@ fn absent_file_loads_empty() {
     assert!(load_scope(PersistScope::Ghost, &roots, &io).is_empty());
 }
 
-// === 族 [last]（areka-P0-baseware-root-layout 要件 3.1・3.6・3.7）===
+// === 族 [last] ===
 
 #[test]
 fn last_family_canonical_key_exact_strings() {
@@ -591,7 +579,6 @@ fn saving_only_last_preserves_other_tables() {
         loaded.contains(&(PersistKey::BootCount, "2".into())),
         "[last] の保存で [boot] が消えた: {loaded:?}"
     );
-    // 既存族のあとに last が並ぶ（window → boot → last）。
     assert_eq!(
         loaded,
         vec![
@@ -623,7 +610,7 @@ fn last_table_hand_written_is_read_and_type_mismatch_is_absent() {
     );
 }
 
-// === 起動中の印（areka-P0-ghost-shell-balloon-switch 要件 12・2026-09-27 に halted から改名）===
+// === 起動中の印 ===
 
 // --- 書く → 読む（表 [last] の running・返り順は ghost のあと）→ 空文字を書くと消える ---
 #[test]
@@ -656,7 +643,6 @@ fn last_running_round_trip_and_empty_string_clears() {
         ]
     );
 
-    // 空文字を書く＝消す。ほかの鍵は残る。
     save_scope(
         PersistScope::App,
         &roots,
@@ -683,7 +669,7 @@ fn last_running_hand_written_empty_is_absent() {
     assert!(load_scope(PersistScope::App, &roots, &io).is_empty());
 }
 
-// === 根の並び（areka-P0-baseware-root-list 要件 1.4・1.11〜1.13・8.1）===
+// === 根の並び ===
 
 #[test]
 fn baseware_roots_canonical_key_exact_string() {
@@ -719,7 +705,6 @@ fn baseware_roots_round_trip_and_empty_string_stays_empty() {
         vec![(PersistKey::BasewareRoots, r"<exe>|D:\ssp".to_string())]
     );
 
-    // 短い並びで丸ごと置き換わる（前の項目が残らない）。
     save_scope(
         PersistScope::App,
         &roots,
@@ -731,7 +716,6 @@ fn baseware_roots_round_trip_and_empty_string_stays_empty() {
         vec![(PersistKey::BasewareRoots, "<exe>".to_string())]
     );
 
-    // 空文字を書く＝0 項目。読み戻しても空文字のまま。
     save_scope(
         PersistScope::App,
         &roots,

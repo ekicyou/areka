@@ -1,5 +1,5 @@
 //! `launch` の兄弟のテスト。子を起こさずに、組んだ `Command` の環境と引数を値で確かめる
-//! （開発者の環境変数を試験のプロセスに置かずに 1.5 を確かめる）。
+//! （開発者の環境変数を試験のプロセスに置かずに確かめる）。
 
 use super::*;
 use std::collections::HashMap;
@@ -38,7 +38,7 @@ fn plain(exe: &str) -> Command {
 fn removes_the_user_root_and_sets_the_kit_defaults() {
     let cmd = plain("areka.exe");
     let e = envs(&cmd);
-    // 書ける根は外したまま（1.5）。ほかの変数は窓口の既定で上書き（受け継がない）。
+    // 書ける根は外したまま。ほかの変数は窓口の既定で上書き（受け継がない）。
     assert_eq!(e.get("AREKA_USER_ROOT"), Some(&None));
     assert_eq!(
         set(&e, "AREKA_ROOT"),
@@ -81,7 +81,7 @@ fn logical_settings_then_caller_env_wins_last() {
     assert_eq!(set(&e, "EXTRA"), "x");
 }
 
-/// audit-test-kits 指摘 10: 最後に積まれた `AREKA_MCP_PORT` が番号として読めなければ、`.mcp_port(n)` を案内して落ちる。
+/// 最後に積まれた `AREKA_MCP_PORT` が番号として読めなければ、`.mcp_port(n)` を案内して落ちる。
 #[test]
 #[should_panic(expected = "`.mcp_port(n)`")]
 fn an_unreadable_mcp_port_override_panics_with_the_mcp_port_hint() {
@@ -127,7 +127,7 @@ fn relative_paths_become_absolute_without_verbatim_prefix() {
     }
 }
 
-/// 位置の引数と根の決まり方（1.1・1.4）。検体は本物の写しを取る。
+/// 位置の引数と根の決まり方。検体は本物の写しを取る。
 #[test]
 fn launch_variants_resolve_positional_args_and_root() {
     let dirs = RunDirs::create(Some("emo2"));
@@ -200,7 +200,7 @@ fn i686_target_is_two_levels_above_areka_exe() {
     assert_eq!(i686_target(&exe), abs(Path::new(r"t\i686-pc-windows-msvc")));
 }
 
-/// 記録の段の足し方の表（D-4・4.4）。
+/// 記録の段の足し方の表。
 #[test]
 fn compose_rust_log_table() {
     const S: &str = ",areka_mcp::server=info";
@@ -265,7 +265,7 @@ fn compose_rust_log_table() {
     }
 }
 
-/// audit-test-kits 指摘 26・audit-test-kits 決め D2: `RELIED_TARGETS` の各項が、窓口の頼る行を本物に出しているモジュールのファイルを名指す。
+/// `RELIED_TARGETS` の各項が、窓口の頼る行を本物に出しているモジュールのファイルを名指す。
 /// `<crate>::<段…>` を `crates/<crate の _ を - に>/src/<段>.rs`（無ければ `<段>/mod.rs`）へ写し、
 /// ファイルが在る・頼る行の語が在る・`target:` の上書きが無い、を読むだけで確かめる（本物は起こさない）。
 /// 順は `RELIED_TARGETS` と同じ（項を書き換えても照らす語は付いてくる）。
@@ -322,7 +322,7 @@ fn missing_exe() -> PathBuf {
         .join("../../target/real-run-kit-missing-exe/debug/no-such-areka.exe")
 }
 
-// 1.10: 仲介を揃える前に、実行ファイルの場所と理由で失敗させる。
+// 仲介を揃える前に、実行ファイルの場所と理由で失敗させる。
 #[test]
 #[should_panic(expected = "no-such-areka.exe（ファイルが無い）")]
 fn missing_exe_panics_with_path_and_reason_before_helper() {

@@ -1,26 +1,26 @@
 //! 帰属（`linkage.md`）× 順位（`briefing.md`）× 台帳 → 機械で決まる値。
 //!
-//! ここは純粋層で、ファイルにもスナップショットにも触らない（設計「境界」）。
-//! 導出の実体を 1 か所に置くのは、`priority` の書き戻し（要件 7.1）と「台帳が文書
-//! どおりか」の判定 ⑷-c が**同じ計算**を見るためである（設計 D-4）。2 か所に書くと
+//! ここは純粋層で、ファイルにもスナップショットにも触らない。
+//! 導出の実体を 1 か所に置くのは、`priority` の書き戻しと「台帳が文書
+//! どおりか」の判定が**同じ計算**を見るためである。2 か所に書くと
 //! 第二段の組み直しで片方だけが古びる。
 //!
 //! # 何が機械で決まるか
 //!
 //! 束ごとの値のうち 4 つは人が決めない——束の欄の `themes`・`domains` と、順位の行の
 //! `assets`・`shared`（[`Derived`]）。文書にはその値が**書いてある**が、正しさの正本は
-//! ここの計算で、判定 ⑷-d と ⑶-e が数え直して突き合わせる。
+//! ここの計算で、文書の検査が数え直して突き合わせる。
 //!
 //! # 4 つの根拠の序列は入れ替えない
 //!
 //! 順位は [`axis_key`] の降順で、序列は 壊れ方 ＞ テーマ数 ＞ 資産の広さ ＞ 基盤
-//! 共有度に固定する（要件 6.1・設計 D-9）。テーマは集合なので比べられる値として
+//! 共有度に固定する。テーマは集合なので比べられる値として
 //! **個数**を使う。
 //!
 //! # 繕わない
 //!
 //! どの束にも属さない対象項目・順位表に無い束・帰属に無い束名は、黙って既定値を
-//! 置かずに落とす（要件 11.5 の向き）。落とす本文には **id（または束名）と文書名**
+//! 置かずに落とす。落とす本文には **id（または束名）と文書名**
 //! を添える。
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -31,16 +31,16 @@ use crate::error::SurveyError;
 use crate::ledger::{Ledger, ledger_file};
 use crate::model::{Domain, EntryId, Status};
 
-/// 束ごとの、機械で決まる値（設計 `documents::derive`）。
+/// 束ごとの、機械で決まる値。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Derived {
-    /// 構成 id の `values` の和集合（要件 4.1 ⑻・6.4）。
+    /// 構成 id の `values` の和集合。
     pub themes: BTreeSet<String>,
-    /// 構成 id を持つ台帳のドメイン（要件 4.1 ⑷）。
+    /// 構成 id を持つ台帳のドメイン。
     pub domains: BTreeSet<Domain>,
-    /// 構成 id ∩ テンプレート辞書の語彙の件数（要件 6.3）。
+    /// 構成 id ∩ テンプレート辞書の語彙の件数。
     pub assets: usize,
-    /// 同じ `foundation` を持つ束の数（自分を含む・要件 6.5）。
+    /// 同じ `foundation` を持つ束の数（自分を含む）。
     pub shared: usize,
 }
 
@@ -50,7 +50,7 @@ pub struct Derived {
 /// 比べる」だけになって、写し違えを 1 件も捕まえられない。台帳とテンプレート辞書と
 /// 帰属の 3 つだけから数える。
 ///
-/// 台帳に無い構成 id は何も足さない（束と台帳の食い違いは判定 ⑶ の持ち場）。
+/// 台帳に無い構成 id は何も足さない（束と台帳の食い違いは別の検査の持ち場）。
 pub fn derive_bundle(
     bundle: &NamedBundle,
     linkage: &Linkage,
@@ -87,7 +87,7 @@ pub fn derive_bundle(
     }
 }
 
-/// 基盤共有度（要件 6.5）。同じ `foundation` の束の数で、自分を含む。
+/// 基盤共有度。同じ `foundation` の束の数で、自分を含む。
 ///
 /// `foundation` を持たない束——単独項目がそうで、読み手が欄そのものを禁じている——は
 /// **0** とする。空文字どうしを数え合わせると「基盤を書いていない」が「同じ基盤を
@@ -105,8 +105,8 @@ fn shared_of(bundle: &NamedBundle, linkage: &Linkage) -> usize {
 
 /// 4 つの根拠の比較鍵（大きいほど先）。壊れ方 ＞ テーマ数 ＞ 資産の広さ ＞ 基盤共有度。
 ///
-/// 序列は要件 6.1 が凍結しているので、欄を足すときも**末尾**にしか置けない。
-/// テーマは集合なので、比べられる値として個数を使う（設計 D-9）。
+/// 序列は凍結してあるので、欄を足すときも**末尾**にしか置けない。
+/// テーマは集合なので、比べられる値として個数を使う。
 pub fn axis_key(
     breakage: Breakage,
     themes: usize,
@@ -116,7 +116,7 @@ pub fn axis_key(
     (breakage_weight(breakage), themes, assets, shared)
 }
 
-/// 壊れ方の重み（設計 D-9）。[`Breakage::ALL`] は悪いほうから並ぶので、後ろから
+/// 壊れ方の重み。[`Breakage::ALL`] は悪いほうから並ぶので、後ろから
 /// 数えた位置を重みにする——序列を持つのは `ALL` の並び 1 か所だけである。
 fn breakage_weight(breakage: Breakage) -> u8 {
     Breakage::ALL
@@ -127,11 +127,11 @@ fn breakage_weight(breakage: Breakage) -> u8 {
         .expect("Breakage::ALL は語彙をすべて持つ")
 }
 
-/// 全項目の `priority`（要件 7.1・7.2）。
+/// 全項目の `priority`。
 ///
 /// 鍵は渡された台帳の全 id。値は対象 4 状態なら「段階 1 文字＋段階内の順位」、
 /// `alias`・`not-applicable` なら空文字。順位の数は `[[rank]]` に書かれたものを
-/// **そのまま**写す——密な順位（1,2,2,3）を主張するのは判定 ⑷-e の持ち場で、
+/// **そのまま**写す——密な順位（1,2,2,3）を主張するのは別の検査の持ち場で、
 /// ここで振り直すと文書と台帳が二重の正本になる。
 ///
 /// 次のいずれかがあれば落ちる（id か束名と文書名を添える）。
@@ -141,7 +141,7 @@ fn breakage_weight(breakage: Breakage) -> u8 {
 /// - `[[rank]]` が帰属に無い束名を指す
 /// - `bundle` が単独項目を指す／`singles` に名前付き束が混ざる
 /// - 同じ id が 2 つの束に属する
-/// - 状態が `unclassified`（要件 7.1 も 7.2 も行き先を決めていない）
+/// - 状態が `unclassified`
 pub fn priorities(
     linkage: &Linkage,
     briefing: &Briefing,
@@ -154,7 +154,7 @@ pub fn priorities(
     for ledger in ledgers {
         for (id, entry) in &ledger.entries {
             let value = match entry.status {
-                // 束の構成から除いてある（要件 4.3）ので、帰属が無くても落とさない。
+                // 束の構成から除いてあるので、帰属が無くても落とさない。
                 Status::Alias | Status::NotApplicable => String::new(),
                 Status::Implemented
                 | Status::VocabularyOnly

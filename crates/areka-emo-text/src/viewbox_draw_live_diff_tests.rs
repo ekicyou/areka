@@ -10,8 +10,7 @@ use crate::state::{TextLayerConfig, TextLayerState};
 use crate::writing::WritingMode;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
-// ════ live-diff pixel 等価主檻（task 10・R4.5/R6.1/R6.2/R6.3/R6.5/R8.1・design Testing
-//      Strategy「Integration Tests #1」） ════
+// ════ live-diff pixel 等価主檻 ════
 //
 // 同一プロセス・同一ターゲット型（headless World＋Compositor＋GraphicsCore）で、同一 cue 列・
 // 同一注入時刻列を比較専用オラクル（DrawExecutor 全域再描画・#[cfg(test)]）と新実行部
@@ -52,12 +51,12 @@ impl LiveDiffRig {
     }
 
     /// 合成スケール k を明示して装着する（k≠1.0＝byte 完全一致でなく ≤0.5px 許容の受け入れ
-    /// 基準・G2）。フォントは既定 ＭＳ ゴシック 10px。
+    /// 基準）。フォントは既定 ＭＳ ゴシック 10px。
     fn new_scaled(mode: WritingMode, image: (u32, u32), k: f32) -> LiveDiffRig {
         Self::new_full(mode, image, k, None, 10)
     }
 
-    /// フォント名・高さ・k を明示して装着する（G4——非 default フォント/大サイズで AA こぼれ
+    /// フォント名・高さ・k を明示して装着する（非 default フォント/大サイズで AA こぼれ
     /// ガードの実効性を byte 等価検証）。両面とも物理寸＝ceil(image × k)・region は image px。
     /// レイアウトは FixedMetrics（font 非依存の決定論位置）ゆえ font 名は AA ラスタライズ
     /// （描画）にのみ効く——両方式が同一 font ゆえガードが十分なら byte 等価が保たれる。
@@ -96,7 +95,6 @@ impl LiveDiffRig {
         self.state.apply_cue(cue);
     }
 
-    /// Text cue（追記）を適用する。
     fn apply_text(&mut self, at: f64, s: &str) {
         let cue = TalkCue {
             at,
@@ -107,7 +105,7 @@ impl LiveDiffRig {
         self.apply(&cue);
     }
 
-    /// NewLine cue（改行マーカー・ratio 1.0）を適用する。
+    /// 改行マーカー（ratio 1.0）の cue を適用する。
     fn apply_newline(&mut self, at: f64) {
         let cue = TalkCue {
             at,
@@ -118,7 +116,6 @@ impl LiveDiffRig {
         self.apply(&cue);
     }
 
-    /// Clear cue（全消去）を適用する。
     fn apply_clear(&mut self, at: f64) {
         let cue = TalkCue {
             at,
@@ -133,8 +130,6 @@ impl LiveDiffRig {
     /// viewbox を**同一入力**で描いて read_back を byte 比較する。`expect_opaque` で content
     /// フレーム（非透明 > 0）／Clear フレーム（全域透明）を区別し、空面同士の vacuous な一致を排除する。
     fn checkpoint(&mut self, label: &str, t: f64, expect_opaque: bool) -> VisibleWindow {
-        // state → 可視 prefix → 純粋レイアウト（FixedMetrics で決定論・両方式は同一 canvas を受ける）。
-        // オラクル（全域再描画・front）と viewbox（ダーティ描画・back→flip）を同一入力で描く。
         let (_, _, canvas, window) = state_frame(
             &self.state,
             &self.actor,
@@ -153,7 +148,6 @@ impl LiveDiffRig {
             &self.contract,
         );
 
-        // 非退化担保: content フレームはオラクル面に非透明ピクセルがある（空面比較=vacuous を排除）。
         if expect_opaque {
             assert!(
                 opaque_count(&ob) > 0,
@@ -167,7 +161,6 @@ impl LiveDiffRig {
             );
         }
 
-        // 主檻: k=1.0 で byte 完全一致（受け入れ基準——甘くしない）。
         assert_eq!(
             ob, vb,
             "{label}: k=1.0 で オラクル（全域再描画）と viewbox（ダーティスクロール）の read_back が byte 完全一致する"
@@ -175,7 +168,7 @@ impl LiveDiffRig {
         window
     }
 
-    /// k≠1.0 用の許容差チェックポイント（G2・R6.4）: byte 完全一致でなく、オラクル（真位置で
+    /// k≠1.0 用の許容差チェックポイント: byte 完全一致でなく、オラクル（真位置で
     /// 全域再描画）と viewbox（確定 content は whole-pixel blit で量子化位置・ダーティは真位置で
     /// 再描画）の read_back の**ブロック軸インク範囲**の差が `tol` 物理 px 以内であることを檻化する
     /// （小数アキュムレータで |committed − pos| ≤ 0.5 ⇒ 確定 content 位置差 ≤ ceil(0.5×k)）。
@@ -202,7 +195,6 @@ impl LiveDiffRig {
         );
 
         let (w, h) = self.pair.oracle_surface.size();
-        // 非退化担保（空面同士の vacuous な一致を排除）。
         assert!(
             opaque_count(&ob) > 0,
             "{label}: オラクル面に非透明ピクセルがある"
@@ -272,7 +264,7 @@ fn run_live_diff_scenario(mode: WritingMode, image: (u32, u32)) {
 }
 
 /// 構築済みリグに対し 5 チェックポイント（あふれ前→スクロール発火→連続→Clear→再追記）を
-/// byte 完全一致で檻化する（font/サイズを変えたリグで再利用——G4 の AA ガード実効性検証）。
+/// byte 完全一致で檻化する（font/サイズを変えたリグで再利用して AA ガードの実効性を検証する）。
 ///
 /// 本シナリオは全 cue を `at=0.0` で発行し、各 checkpoint 時点までに追記済み content が完全
 /// リビールされる（＝末尾/部分の保留改行が残らない）。ゆえ各改行は次のグリフを伴って実体化し、
@@ -334,34 +326,34 @@ fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
     );
 }
 
-/// 観測可能な完了状態（前半・横書き）: 横書きの全シナリオでオラクルと viewbox の read_back が
-/// k=1.0 で byte 完全一致する（R6.1/R6.2/R6.5/R4.5/R8.1）。
+/// 横書きの全シナリオでオラクルと viewbox の read_back が
+/// k=1.0 で byte 完全一致する。
 #[test]
 fn live_diff_horizontal_matches_oracle_byte_for_byte() {
     run_live_diff_scenario(WritingMode::HorizontalTb, (80, 40));
 }
 
-/// 観測可能な完了状態（前半・縦書き vertical_rl）: 縦書きの全シナリオでも byte 完全一致する
-/// （R6.3——横/縦 両 mode パラメタライズ）。
+/// 縦書きの全シナリオでも byte 完全一致する
+/// （横/縦 両 mode パラメタライズ）。
 #[test]
 fn live_diff_vertical_rl_matches_oracle_byte_for_byte() {
     run_live_diff_scenario(WritingMode::VerticalRl, (40, 80));
 }
 
-/// 観測可能な完了状態（前半・縦書き vertical_lr）: 縦書き左送り（列が左→右へ流れ、あふれ時は
-/// content が**左へ** blit・露出帯＝**右端**）でも全シナリオで byte 完全一致する（R5.2/R6.3——
-/// スクロール軸は横（x）・vertical_rl と同一の x 軸だが符号が逆＝blit 左方向。純粋層の軸写像
-/// unit 檻（task 3.2）だけでなく、実 GPU 描画 readback で oracle↔viewbox の byte 等価を証明する）。
+/// 縦書き左送り（列が左→右へ流れ、あふれ時は
+/// content が**左へ** blit・露出帯＝**右端**）でも全シナリオで byte 完全一致する
+/// （スクロール軸は横（x）・vertical_rl と同一の x 軸だが符号が逆＝blit 左方向。純粋層の軸写像
+/// unit 檻だけでなく、実 GPU 描画 readback で oracle↔viewbox の byte 等価を証明する）。
 #[test]
 fn live_diff_vertical_lr_matches_oracle_byte_for_byte() {
     run_live_diff_scenario(WritingMode::VerticalLr, (40, 80));
 }
 
-/// k≠1.0（非96DPI）のスクロール実描画を許容差で檻化する（G2・R6.4）。あふれ→スクロールの
+/// k≠1.0（非96DPI）のスクロール実描画を許容差で檻化する。あふれ→スクロールの
 /// 各段で、オラクル（真位置・全域再描画）と viewbox（確定 content は whole-pixel blit で量子化・
 /// ダーティは真位置）の read_back のブロック軸インク範囲が `tol` 物理 px 以内に収まることを実 GPU
 /// 描画で確認する（小数アキュムレータ→whole-pixel blit→実描画→readback の経路を実走）。
-/// byte 完全一致は k=1.0 に scope（design）ゆえ k≠1.0 は ≤0.5px 相当（ceil(0.5×k)＋AA 余白）の許容差。
+/// byte 完全一致は k=1.0 に限る。k≠1.0 は ≤0.5px 相当（ceil(0.5×k)＋AA 余白）の許容差。
 fn run_live_diff_nonunit_scale(mode: WritingMode, image: (u32, u32), k: f32, tol: u32) {
     let mut ld = LiveDiffRig::new_scaled(mode, image, k);
 
@@ -395,7 +387,7 @@ fn run_live_diff_nonunit_scale(mode: WritingMode, image: (u32, u32), k: f32, tol
 }
 
 /// 横書き k=1.25: あふれ→スクロール実描画で viewbox が oracle とブロック軸 ≤2px（≈ceil(0.5×1.25)
-/// ＋AA 余白）に収まる（R6.4——小数アキュムレータの実 GPU 経路検証）。
+/// ＋AA 余白）に収まる（小数アキュムレータの実 GPU 経路検証）。
 #[test]
 fn live_diff_nonunit_scale_horizontal_within_tolerance() {
     run_live_diff_nonunit_scale(WritingMode::HorizontalTb, (80, 40), 1.25, 2);
@@ -413,7 +405,7 @@ fn live_diff_nonunit_scale_vertical_lr_within_tolerance() {
     run_live_diff_nonunit_scale(WritingMode::VerticalLr, (40, 80), 1.25, 2);
 }
 
-/// G4: 大サイズフォント（20px・既定 ＭＳ ゴシック）でも全シナリオで oracle↔viewbox byte
+/// 大サイズフォント（20px・既定 ＭＳ ゴシック）でも全シナリオで oracle↔viewbox byte
 /// 完全一致する——AA こぼれが `DIRTY_GUARD_IMG_PX`(=1 image px) を超えず、ダーティ矩形が
 /// AA を取りこぼさないことを実描画 byte 等価で確認（ほかの live-diff の場面は既定の 10px）。
 /// image 寸は `2P+F ≤ block ≤ 3P+F`（P=20+2=22・F=20 ゆえ 64 ≤ 80 ≤ 86）を満たし
@@ -436,7 +428,7 @@ fn live_diff_larger_font_matches_oracle_byte_for_byte() {
     ));
 }
 
-/// G4: プロポーショナルフォント（ＭＳ Ｐゴシック・可変幅）でも byte 完全一致する——font 種別
+/// プロポーショナルフォント（ＭＳ Ｐゴシック・可変幅）でも byte 完全一致する——font 種別
 /// を変えても両方式が同一 format ゆえ AA ラスタライズが一致し、ガードが十分なら byte 等価が
 /// 保たれることを確認（P=12+2=14・F=12 ゆえ `2P+F ≤ block ≤ 3P+F` は 40 ≤ 50 ≤ 54・
 /// 行送りが 15 から 14 へ縮んでも 50 は範囲内ゆえ面寸は据え置き）。
@@ -458,7 +450,7 @@ fn live_diff_proportional_font_matches_oracle_byte_for_byte() {
     ));
 }
 
-/// 絵文字を含む台詞（要件 6.5）: 1 行目「あ」・2 行目「今日は家族👨‍👩‍👧と😀」と置いて描き、
+/// 絵文字を含む台詞: 1 行目「あ」・2 行目「今日は家族👨‍👩‍👧と😀」と置いて描き、
 /// あと 2 行足してあふれさせる。可視窓は 3 行ゆえ送りは 1 行だけで、絵文字の行が先頭可視行に
 /// 残ったまま blit される。送りの前後とも、オラクルと viewbox の読み戻しがバイト等価であることを
 /// 判定する。ZWJ 列（5 スカラーで 1 クラスタ）と 😀 は代替フォント（Segoe UI Emoji）の色つきの
@@ -499,7 +491,7 @@ fn assert_emoji_colored(ld: &LiveDiffRig, label: &str) {
     );
 }
 
-/// 絵文字を含む台詞でも、横書き・縦書き 2 方式の計 3 方式でバイト等価（要件 6.5）。
+/// 絵文字を含む台詞でも、横書き・縦書き 2 方式の計 3 方式でバイト等価。
 #[test]
 fn live_diff_emoji_matches_oracle_byte_for_byte() {
     run_live_diff_emoji_scenario(WritingMode::HorizontalTb, (80, 40));
@@ -507,7 +499,7 @@ fn live_diff_emoji_matches_oracle_byte_for_byte() {
     run_live_diff_emoji_scenario(WritingMode::VerticalLr, (40, 80));
 }
 
-/// 回帰檻（実機の行下端欠け・D2）: **実 fixture の実フォント Yu Gothic UI** を使い、typewriter
+/// 回帰檻（実機の行下端欠け）: **実 fixture の実フォント Yu Gothic UI** を使い、typewriter
 /// 前進＋あふれスクロールの全フレームで oracle（全域再描画）と viewbox（ダーティスクロール）の
 /// read_back が byte 完全一致することを檻化する。
 ///
@@ -515,7 +507,7 @@ fn live_diff_emoji_matches_oracle_byte_for_byte() {
 /// ゴシック（はみ出さない字）では出ず、`diag_line_boundary_dropout_vs_oracle`（ＭＳゴシック）が
 /// 見逃していた。Yu Gothic UI は descent 側へインクがこぼれるため、行ごとに実測したインクのはみ出し
 /// （[`crate::viewbox::LineOverhang`]・`GetOverhangMetrics`）でダーティを広げないと diverge する。Yu Gothic UI が
-/// 無い機械では代替フォントへ縮退して素通りしてしまうので、前提として赤にする（再監査 R2-D5）。実 example の cue `at`
+/// 無い機械では代替フォントへ縮退して素通りしてしまうので、前提として赤にする。実 example の cue `at`
 /// スケジュール（LINE1 0.0／LINE2 0.5／LINE3 1.2／あふれ 2.0）を忠実再現する。
 #[test]
 fn yugothic_real_fixture_matches_oracle_byte_for_byte() {

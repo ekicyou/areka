@@ -1,12 +1,11 @@
-//! 台本と差し替え（design §SwapDriver）。World を書く唯一の書き手。
+//! 台本と差し替え。World を書く唯一の書き手。
 //!
 //! 同じ system を `Update`（配置が決まる前）と `FrameFinalize`（画面への反映の後・tick の記録より前）の
 //! 2 段に登録し、台本がどの tick のどの段で動くかを決める。
 //!
 //! 観測の前には必ず「用意」（観測しない）を置き、窓の `emo-*` 子を全部消して出発の面だけを装着し直し、
-//! 最新のフレームの絵と直前の tick の当たり判定・矩形が出発の面に揃うまで待つ。design は「各観測の後に
-//! A へ戻す」だが、B→A と A2→A0 は出発が A でないので、戻し先を観測の出発の面にした（戻しと同じ手で
-//! B0・A2 へ用意する）。
+//! 最新のフレームの絵と直前の tick の当たり判定・矩形が出発の面に揃うまで待つ。B→A と A2→A0 は出発が
+//! A でないので、戻し先は A でなく観測の出発の面（B0・A2）にする。
 
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
@@ -24,11 +23,11 @@ use crate::observe::{self, Class, Kind, Observer, PAIR_ASSET, PAIR_FACE};
 
 /// 用意の後、揃ったと見るまでに最低限待つ tick 数（用意の tick の絵が取り込みに届くまで・約 40 ms）。
 const PREP_MIN_TICKS: u32 = 5;
-/// 用意が揃うのを待つ上限（design §SwapDriver の 60 tick）。
+/// 用意が揃うのを待つ上限。
 const PREP_GIVE_UP_TICKS: u32 = 60;
 /// 用意と差し替えの基準の版が使う表示先 id。
 const BASE_TARGET: TargetId = TargetId(1);
-/// 較正の混在・古い絵の残りが B を装着する表示先 id（design §SwapDriver 較正の作り方）。
+/// 較正の混在・古い絵の残りが B を装着する表示先 id。
 const CALIB_TARGET: TargetId = TargetId(2);
 /// 較正の混在: 当たり判定を B にしておく tick 数（その後 A に戻して揃わせ、観測を閉じられるようにする）。
 const MIXED_TICKS: u32 = 10;
@@ -85,7 +84,7 @@ impl Face {
     }
 }
 
-/// 差し替えの 3 版（5.1・5.2・5.3）。
+/// 差し替えの 3 版。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Method {
     Reattach,
@@ -123,7 +122,7 @@ impl Stage {
 pub enum Step {
     /// GPU 資源を待って最初の表示（A0）をし、揃うのを待つ。
     Boot,
-    /// わざと崩したフレームを実際の窓に出す較正（4.1〜4.6・`Update` だけ）。
+    /// わざと崩したフレームを実際の窓に出す較正（`Update` だけ）。
     Calib(Calib),
     /// 観測しない用意（戻し）: 子を全部消して `face` を装着し、`pair` で揃うのを待つ。
     Prep { face: Face, pair: usize },
@@ -139,7 +138,7 @@ pub enum Step {
     Done,
 }
 
-/// 較正の順（design §System Flows 台本）。
+/// 較正の順。
 const CALIBS: [Calib; 5] = [
     Calib::Static,
     Calib::Empty,
@@ -148,7 +147,7 @@ const CALIBS: [Calib; 5] = [
     Calib::Size,
 ];
 
-/// 固定の台本（較正 5 項を先頭に置く・5.4: 基準の結果に依らず全版を観測する）。
+/// 固定の台本（較正 5 項を先頭に置く・基準の結果に依らず全版を観測する）。
 pub fn script() -> Vec<Step> {
     let mut steps = vec![Step::Boot];
     for c in CALIBS {
@@ -198,7 +197,7 @@ pub fn script() -> Vec<Step> {
     steps
 }
 
-/// 観測の行の名前（design §Data Models）。観測しない段は `None`。
+/// 観測の行の名前。観測しない段は `None`。
 pub fn obs_name(step: Step) -> Option<String> {
     match step {
         Step::Swap {
@@ -228,7 +227,7 @@ pub fn obs_name(step: Step) -> Option<String> {
 
 /// 観測する段の（判別対, 出発, 到達）。観測しない段は `None`。
 ///
-/// 較正（design §SwapDriver 較正の作り方）: 静止と混在は A のまま（混在は当たり判定を B にした後 A へ戻して
+/// 較正: 静止と混在は A のまま（混在は当たり判定を B にした後 A へ戻して
 /// 揃わせる）、空は「どちらでもない」に揃う、古い絵の残りは B に揃った後に A を出す、大きさは面の切り替えと
 /// 同じ対で A2 に揃う（窓寸は A0 のまま）。
 pub fn observed(step: Step) -> Option<(usize, Class, Class)> {
@@ -409,7 +408,7 @@ impl Driver {
     }
 
     /// 用意が揃った: 最新のフレームの絵・直前の tick の当たり判定が `face`・矩形が原寸。
-    /// 同じ絵へ戻る用意では新しいフレームが来ないことがあるので「最新のフレーム」で見る（design）。
+    /// 同じ絵へ戻る用意では新しいフレームが来ないことがあるので「最新のフレーム」で見る。
     fn prep_settled(&self, world: &World, face: Face, pair: usize, since: u32, now: u32) -> bool {
         if now < since + PREP_MIN_TICKS {
             return false;
@@ -455,11 +454,11 @@ impl Driver {
     ) {
         let name = open(world, step, Kind::Swap, method.name(), stage, now);
         let r = match method {
-            // 基準（5.1）: 同じ id へ再登録するだけ（古い子は残る）。
+            // 基準: 同じ id へ再登録するだけ（古い子は残る）。
             Method::Reattach => self
                 .attach(self.current_id, to)
                 .and_then(|()| self.show(world, self.current_id, 0)),
-            // 本命（5.2）: 窓のバルーンの子を名前で探して消し、同じ呼び出しの中で再登録・表示（5.7）。
+            // 本命: 窓のバルーンの子を名前で探して消し、同じ呼び出しの中で再登録・表示する。
             Method::RemoveThenAttach => {
                 let removed = despawn_mounts(world, self.window);
                 self.attach(self.current_id, to)
@@ -469,7 +468,7 @@ impl Driver {
                         n => Err(format!("消した子が 2 でなく {n}")),
                     })
             }
-            // 隠すだけ（5.3）: 別の id で装着・表示し、古い id を隠す。
+            // 隠すだけ: 別の id で装着・表示し、古い id を隠す。
             Method::AttachNewHideOld => {
                 let (old, new) = (self.current_id, TargetId(self.next_id));
                 self.next_id += 1;
@@ -505,8 +504,7 @@ impl Driver {
         }
     }
 
-    /// 較正の要求（design §SwapDriver 較正の作り方）。本番と同じ観測の経路（取り込み・tick の記録・
-    /// 同じ規則）で数える。混在は当たり判定しか変えず画面が更新されないので、静止の較正と同じ 1px の
+    /// 較正の要求。本番と同じ観測の経路（取り込み・tick の記録・同じ規則）で数える。混在は当たり判定しか変えず画面が更新されないので、静止の較正と同じ 1px の
     /// 移動を足してフレームを出させる（移動そのものが崩れを生まないことは静止の較正が示す）。
     fn calib(&mut self, world: &mut World, step: Step, c: Calib, now: u32) {
         let name = open(
@@ -519,17 +517,16 @@ impl Driver {
         );
         self.followed = false;
         let r = match c {
-            // 静止（4.6）: 窓を 1px 動かし、次の tick で戻す。絵は変えない。
+            // 静止: 窓を 1px 動かし、次の tick で戻す。絵は変えない。
             Calib::Static => {
                 self.nudge(world, 1);
                 Ok(())
             }
-            // 空（4.3）: A を隠す。
             Calib::Empty => {
                 self.hide(world, BASE_TARGET);
                 Ok(())
             }
-            // 混在（4.2）: 見えない・当たらない B の子を仕込み、A の面の当たり判定を止めて B の面に付け替える
+            // 混在: 見えない・当たらない B の子を仕込み、A の面の当たり判定を止めて B の面に付け替える
             // （`Visual` は触らない）。
             Calib::Mixed => {
                 self.calib_a = mounts(world, self.window);
@@ -555,7 +552,7 @@ impl Driver {
                         }
                     })
             }
-            // 古い絵の残り（4.4）: A を隠して B を別の id で出す。揃った 10 tick 後に A を見える状態へ戻す。
+            // 古い絵の残り: A を隠して B を別の id で出す。揃った 10 tick 後に A を見える状態へ戻す。
             Calib::Stale => {
                 self.calib_a = mounts(world, self.window);
                 self.hide(world, BASE_TARGET);
@@ -570,7 +567,7 @@ impl Driver {
                     n => Err(format!("A の子が 2 でなく {n}")),
                 })
             }
-            // 大きさの食い違い（4.5）: 面 2 を出し、窓寸合わせを 1 回捨てる（`WindowPos` を書かない）。
+            // 大きさの食い違い: 面 2 を出し、窓寸合わせを 1 回捨てる（`WindowPos` を書かない）。
             Calib::Size => {
                 let r = self.show(world, BASE_TARGET, Face::A2.surface());
                 let dropped = self.presenter.take_pending_resize(BASE_TARGET);
@@ -635,7 +632,7 @@ impl Driver {
         }
     }
 
-    /// 台本の終わり（6.4）: 最終の並べ出し → 終了の理由 → 窓を消す（`run()` が戻る）。
+    /// 台本の終わり: 最終の並べ出しをして窓を消す（`run()` が戻る）。
     fn done(&mut self, world: &mut World, now: u32) {
         let verdict = world.resource_mut::<Observer>().summarize(false, now);
         let reason = crate::completed_reason(&verdict);
@@ -648,7 +645,7 @@ impl Driver {
         self.cursor += 1;
     }
 
-    /// 差し替えの直後の今の面と物理寸を、到達先の原寸と比べる（design §SwapDriver Validation）。
+    /// 差し替えの直後の今の面と物理寸を、到達先の原寸と比べる。
     fn after_change(&self, name: &str, to: Face) {
         let id = self.current_id;
         let surface = self.presenter.current_surface_id(id);
@@ -782,7 +779,7 @@ fn set_hit(world: &mut World, e: Entity, mode: HitTest) {
 
 /// 窓の子のうち present の装着を消す。消した数を返す。
 ///
-/// presenter の内部の物を外から消している（5.7）。本坑では present に正規の片付けの口が要る。
+/// presenter の内部の物を外から消している。本坑では present に正規の片付けの口が要る。
 fn despawn_mounts(world: &mut World, window: Entity) -> usize {
     let mounts = mounts(world, window);
     for &e in &mounts {

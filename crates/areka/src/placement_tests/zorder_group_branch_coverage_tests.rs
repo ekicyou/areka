@@ -1,8 +1,8 @@
-//! 要件 10.2 が名指しする 11 分岐と、それを覆う「実際に実行されるテスト」の対応表。
+//! 11 分岐と、それを覆う「実際に実行されるテスト」の対応表。
 //!
 //! # なぜ表を置くか
 //!
-//! 要件 10.2 は分岐の名前を 11 個並べているが、どの分岐がどのテストで覆われているかは
+//! 分岐の名前を 11 個並べても、どの分岐がどのテストで覆われているかは
 //! テスト名の綴りを人が読み解くしかない。分岐の 1 つを覆っていた唯一のテストが消えても、
 //! 残りが全部緑なら誰も気づかない——「網羅している」という主張が、どこにも書かれて
 //! いないために検査できない状態になる。
@@ -12,8 +12,7 @@
 //! ただ名前を並べただけの表は、現実からずれても赤にならない（`tick_wake.rs` の散文名簿が
 //! 実際にずれ、見つけたのは人の目でテストではなかった）。そこで表の各行を機械で検査する。
 //! 検査の中身は兄弟の `zorder_branch_coverage_test_support.rs`（`check_table`）に 1 つだけ書いて
-//! あり、`areka-P0-scope-zorder-pinning` の表（本ファイル）と `areka-P0-zorder-scope-inversion`
-//! の表（`zorder_inversion_branch_coverage_tests.rs`）が共に通す。改名・削除・宣言外しのいずれも
+//! あり、本ファイルの表と `zorder_inversion_branch_coverage_tests.rs` の表が共に通す。改名・削除・宣言外しのいずれも
 //! この場で赤になる。
 //!
 //! # 範囲
@@ -29,17 +28,8 @@
 use super::zorder_branch_coverage_test_support::check_table;
 use crate::crate_source_test_support::crate_source;
 
-/// 要件 10.2 が名指しする 11 分岐。並びも語も要件本文の逐語である。
-///
-/// 9 番目を tasks.md は「shell 設定の適用」と言い換えているが、ここは要件の字面
-/// （「descript 適用」）を採る——対応表が名指すべきは要件の分岐そのものだからである。
-///
-/// 11 番目は改訂第 2 版で足された分岐である。要件本文の末尾は
-/// 「…・解釈失敗・窓の出現・破棄に伴う繋ぎ直しの導出の各分岐」と続く。ここで区切りの
-/// 中黒を素朴に数えると 12 個に読めるが、「窓の出現・破棄」は 1 つの並立複合語であり
-/// （design.md も一貫して「窓の出現・破棄は spawn／despawn」と対で扱う）、
-/// 「窓の出現」だけ／「破棄に伴う繋ぎ直しの導出」だけを分岐名とすると後者が文の断片になる。
-/// よって 1 分岐として数え、全体を 11 とする。
+/// 11 分岐。「窓の出現・破棄に伴う繋ぎ直しの導出」は並立複合語として 1 分岐に数える
+/// （「窓の出現」だけ・「破棄に伴う繋ぎ直しの導出」だけを分岐名にすると後者が文の断片になる）。
 const BRANCHES: [&str; 11] = [
     "数値モード",
     "明示モード",
@@ -112,7 +102,7 @@ const TEST_FILES: [(&str, &str, &str); 8] = [
 /// 1 分岐に複数行あってよい。解釈の段（台帳の純関数）・台帳の状態遷移・取り出しの段の
 /// 記録・起動時適用と、同じ分岐を別の高さで覆う行が並ぶ。
 const COVERAGE: [(&str, &str, &str); 50] = [
-    // ── 数値モード（要件 1.1・1.2）
+    // ── 数値モード
     (
         "数値モード",
         "areka-placement/zorder_group_ledger_tests.rs",
@@ -134,7 +124,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "areka-placement/zorder_chain_compose_tests.rs",
         "t_zcc01_numeric_mode_puts_left_scope_in_front_as_a_block",
     ),
-    // ── 明示モード（要件 2.1・2.2）
+    // ── 明示モード
     (
         "明示モード",
         "areka-placement/zorder_group_ledger_tests.rs",
@@ -160,7 +150,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "areka-placement/zorder_chain_compose_tests.rs",
         "t_zcc02_explicit_mode_matches_the_numeric_shape",
     ),
-    // ── モード混在の拒否（要件 2.3）
+    // ── モード混在の拒否
     (
         "モード混在の拒否",
         "areka-placement/zorder_group_ledger_tests.rs",
@@ -171,7 +161,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "areka-placement/zorder_group_ledger_tests.rs",
         "t_zgp12_mode_mixed_takes_precedence_over_duplicate",
     ),
-    // ── タグ内重複要素の拒否（要件 3.4・3.5）
+    // ── タグ内重複要素の拒否
     (
         "タグ内重複要素の拒否",
         "areka-placement/zorder_group_ledger_tests.rs",
@@ -182,7 +172,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "areka-placement/zorder_group_ledger_tests.rs",
         "t_zgp4_balloon_and_char_of_same_scope_are_distinct_windows",
     ),
-    // ── グループをまたぐ再指定の拒否（要件 3.2・3.3・5.5）
+    // ── グループをまたぐ再指定の拒否
     (
         "グループをまたぐ再指定の拒否",
         "areka-placement/zorder_group_ledger_state_tests.rs",
@@ -208,7 +198,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "areka-runtime/frame/zorder_descript_tests.rs",
         "t_zdb10_the_seated_base_takes_part_in_the_redesignation_refusal",
     ),
-    // ── 要素 2 個未満の無視（要件 1.6）
+    // ── 要素 2 個未満の無視
     (
         "要素 2 個未満の無視",
         "areka-placement/zorder_group_ledger_tests.rs",
@@ -224,9 +214,9 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "areka-runtime/frame/zorder_descript_tests.rs",
         "t_zdb06_short_and_empty_settings_are_rejected_with_a_reason",
     ),
-    // ── スコープ内隣接との矛盾の調停（要件 2.4）
-    // `areka-P0-zorder-scope-inversion` が調停の答えを「書かれた順を採る」へ覆した。
-    // 分岐そのもの（逆転・非隣接・隣り合いの見分け）は残るので、新しい解釈の檻へ指し直す。
+    // ── スコープ内隣接との矛盾の調停
+    // 調停の答えは「書かれた順を採る」。
+    // 分岐そのもの（逆転・非隣接・隣り合いの見分け）は残るので、その解釈の檻を指す。
     (
         "スコープ内隣接との矛盾の調停",
         "areka-placement/zorder_group_ledger_written_order_tests.rs",
@@ -247,7 +237,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "areka-placement/zorder_group_ledger_written_order_tests.rs",
         "t_zwo01_pasta_inversion_keeps_written_order_and_fills_b1_before_s1",
     ),
-    // 片方の窓だけが指名された形も同じ調停の一部である（相棒窓の畳み込み・要件 2.6）。
+    // 片方の窓だけが指名された形も同じ調停の一部である（相棒窓の畳み込み）。
     (
         "スコープ内隣接との矛盾の調停",
         "areka-placement/zorder_group_ledger_tests.rs",
@@ -278,7 +268,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "areka-placement/zorder_chain_compose_tests.rs",
         "t_zcc03_folded_partial_specification_yields_full_scope_blocks",
     ),
-    // ── 解除（要件 4.1〜4.3）
+    // ── 解除
     (
         "解除",
         "areka-placement/zorder_group_ledger_state_tests.rs",
@@ -304,7 +294,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "areka-runtime/frame/zorder_drain_tests.rs",
         "t_zdr08_reset_falls_back_to_the_descript_base_and_records_the_result",
     ),
-    // ── descript 適用（要件 5.1〜5.3）
+    // ── descript 適用
     (
         "descript 適用",
         "areka-runtime/frame/zorder_descript_tests.rs",
@@ -325,7 +315,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "areka-placement/zorder_group_ledger_state_tests.rs",
         "t_zgl8_at_most_one_descript_base_is_kept",
     ),
-    // ── 解釈失敗（要件 8.1・5.4）
+    // ── 解釈失敗
     (
         "解釈失敗",
         "areka-placement/zorder_group_ledger_tests.rs",
@@ -346,7 +336,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "areka-runtime/frame/zorder_descript_tests.rs",
         "t_zdb05_an_unreadable_setting_seats_nothing_and_records_value_and_reason",
     ),
-    // ── 窓の出現・破棄に伴う繋ぎ直しの導出（要件 7.1・7.2・15.3。改訂第 2 版で追加）
+    // ── 窓の出現・破棄に伴う繋ぎ直しの導出
     // 在庫が動いた巡に鎖の中身が動くこと（導出）と、動いていない巡には動かないこと（対照）は
     // drain 相が受け持ち、在庫の欠けを鎖へどう射影するかは合成の段が受け持つ。
     (

@@ -1,6 +1,6 @@
-//! 並び・見つからない根・隠れの記録（design.md「RootsReport」・要件 1.15・2.5・8.3・9.1）。
+//! 並び・見つからない根・隠れの記録。
 //!
-//! 記録は起動と並びの変更のときだけ残す（要件 9.3）。判断の関数は失敗を値で返し、
+//! 記録は起動と並びの変更のときだけ残す。判断の関数は失敗を値で返し、
 //! 記録はここで残す（起動が失敗した値からも控えと「既定へ倒した」を warn に出す）。
 
 use areka_ghost::{Hidden, RootMark, StoreKind};
@@ -31,7 +31,7 @@ fn origin_str(origin: RootsOrigin) -> &'static str {
     }
 }
 
-/// 書ける根の出どころ（項目の印だけから・要件 3.6）。印なしは空。
+/// 書ける根の出どころ（項目の印だけから）。印なしは空。
 fn user_root_str(mark: RootMark) -> &'static str {
     match mark {
         RootMark::Plain => "",
@@ -70,7 +70,7 @@ pub(crate) fn log_roots(resolved: &ResolvedRoots, occasion: ReportOccasion) {
     log_notes(&resolved.skipped, resolved.memory_fell_back, occasion);
 }
 
-/// 並びが決まらなかった値から、控えと「既定へ倒した」を warn に出す（要件 1.7・1.9・1.12・1.13）。
+/// 並びが決まらなかった値から、控えと「既定へ倒した」を warn に出す。
 /// 失敗そのものの告知は呼び手が残す。
 pub(crate) fn log_root_error(err: &RootError, occasion: ReportOccasion) {
     let (RootError::ExeLocationUnavailable {
@@ -127,7 +127,7 @@ fn log_notes(skipped: &[RootSkip], memory_fell_back: bool, occasion: ReportOccas
     }
 }
 
-/// 隠れを 1 件 1 行で info（種類・フォルダ名・隠れた場所・隠した場所）＋件数を info（0 件も・要件 2.5）。
+/// 隠れを 1 件 1 行で info（種類・フォルダ名・隠れた場所・隠した場所）＋件数を info（0 件も）。
 pub(crate) fn log_hidden(hidden: &[Hidden], occasion: ReportOccasion) {
     let occ = occasion.as_str();
     for h in hidden {

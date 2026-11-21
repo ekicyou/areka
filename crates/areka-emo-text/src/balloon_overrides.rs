@@ -8,7 +8,9 @@
 //! - 基底の飾り 5 本（`font.bold`／`italic`／`outline`／`strike`／`underline`）→ `font`。
 //! - `disable.font.*` の飾り 5 本・`name`・`height`・`color` → `disable`。
 //! - 影の 4 キー（`font.shadowcolor.*`／`font.shadowstyle`・無効表示の同名）は**渡さない**
-//!   ——語彙の形と `none` の扱いは影まわりの仕様（`text-align-shadow-canon`）が決める。
+//!   ——語彙の形と `none` の扱いは本モジュールで決めない。
+
+// TODO: 影の描画が入ったら影の 4 キー（基底と無効表示）を写し、`look.rs` の `UNOWNED_KEYS` から外す。
 
 use areka_parsers::balloon::{BalloonModel, FontDecorationRaw};
 use tracing::warn;
@@ -58,7 +60,7 @@ pub fn overrides(model: &BalloonModel) -> BalloonOverrides {
         (None, None, None) => {}
         (r, g, b) => {
             // 解き直し 1 回に 1 件。入力が前と同じフレームは呼び手が解き直さない
-            // （spec real-run-log-noise 要件 1.7）ので、出るのは装着と入力が変わったときだけ。
+            // ので、出るのは装着と入力が変わったときだけ。
             let part = |c: Option<u8>| c.map_or(String::new(), |v| v.to_string());
             warn!(
                 key = "disable.font.color",

@@ -1,25 +1,21 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-cursor-tag-canon` のもの（別の spec のものはその場で名を書く）。
-
 use super::*;
 
 // ══ `\_l` 座標語彙のパース（parse_cursor_coord・語彙全形の網羅） ══
 //
-// 不透明転写文字列 → `CursorCoord`。全入力で値を返す純粋・全域関数（パニック／`Result`
-// なし）。後段の解決層（`cursor_tag.rs`）が解決表どおりに分岐できる語彙への忠実転写である
-// （`areka-P0-cursor-tag-canon` design.md「語彙 `CursorCoord`」・R1.1/4.1/4.2）。負の裸数値は
-// Absolute、`%` は `unit: Percent` の Absolute、`@` 接頭は Relative variant で保持する——
-// いずれも解決層が「基点＋値×係数」で**実導出**する形であって縮退ではない。`centerx`／
-// `centery` は生文字列の小文字完全一致だけを該当させ、**軸の情報は持たない**（軸取り違えの
-// 判定は解決層の責務）。
+// 不透明転写文字列 → `CursorCoord`。全入力で値を返す純粋・全域関数（パニック／`Result` なし）。
+// 負の裸数値は Absolute、`%` は `unit: Percent` の Absolute、`@` 接頭は Relative で保持する——
+// いずれも解決層（`cursor_tag.rs`）が「基点＋値×係数」で実導出する形であって縮退ではない。
+// `centerx`／`centery` は生文字列の小文字完全一致だけを該当させ、軸の情報は持たない
+// （軸取り違えの判定は解決層の責務）。
 
-// ── 空文字列＝当該軸省略（Omitted・正典 付録 A「(省略): 移動しない」・R1.6/5.5） ──
+// ── 空文字列＝当該軸省略（Omitted・移動しない） ──
 
 #[test]
 fn parse_empty_is_omitted() {
     assert_eq!(parse_cursor_coord(""), CursorCoord::Omitted);
 }
 
-// ── 裸数値＝image px（Absolute Px・単位の意味は R1.3・基点は文字描画開始点＝R2.1） ──
+// ── 裸数値＝image px（Absolute Px・基点は文字描画開始点） ──
 
 #[test]
 fn parse_bare_number_is_absolute_px() {
@@ -56,7 +52,7 @@ fn parse_negative_bare_number_is_absolute_px_preserving_sign() {
     );
 }
 
-// ── `Nem` / `Nlh`＝Absolute Em/Lh（1em＝文字高さ・1lh＝行送り・R1.3） ──
+// ── `Nem` / `Nlh`＝Absolute Em/Lh（1em＝文字高さ・1lh＝行送り） ──
 
 #[test]
 fn parse_em_suffix_is_absolute_em() {
@@ -80,7 +76,7 @@ fn parse_lh_suffix_is_absolute_lh() {
     );
 }
 
-// ── `N%`＝Absolute Percent（100%＝文字高さ 1 個ぶん・解決層が実導出・R1.3） ──
+// ── `N%`＝Absolute Percent（100%＝文字高さ 1 個ぶん・解決層が実導出） ──
 
 #[test]
 fn parse_percent_suffix_is_absolute_percent() {
@@ -93,7 +89,7 @@ fn parse_percent_suffix_is_absolute_percent() {
     );
 }
 
-// ── `@N`＝Relative（`@` 接頭＝現在の文字描画位置が基点・解決層が実導出・R3.1） ──
+// ── `@N`＝Relative（`@` 接頭＝現在の文字描画位置が基点・解決層が実導出） ──
 
 #[test]
 fn parse_at_prefix_bare_is_relative_px() {
@@ -128,8 +124,7 @@ fn parse_at_prefix_percent_is_relative_percent() {
     );
 }
 
-/// 語彙全形の網羅: Relative × Lh。他の `@` 単位テスト（Px/Em/Percent）と合わせて
-/// Absolute×{Px,Em,Lh,Percent}／Relative×{Px,Em,Lh,Percent} の完全マトリクスになる。
+/// Relative × Lh。他の単位のテストと合わせて Absolute／Relative × {Px,Em,Lh,Percent} が揃う。
 #[test]
 fn parse_at_prefix_lh_is_relative_lh() {
     assert_eq!(
@@ -153,13 +148,11 @@ fn parse_at_prefix_negative_is_relative_px_preserving_sign() {
     );
 }
 
-// ── `centerx` / `centery`＝バルーン画像中央（正典 付録 A・R4.1/4.2） ──
+// ── `centerx` / `centery`＝バルーン画像中央 ──
 //
-// 正典逐語（requirements.md 付録 A・SSP 2.8.83）: 「Xにcenterx、Yにcenteryと書くと、
-// バルーン画像の中央（幅／高さの半分）に移動する。これだけは文字描画開始点ではなく
-// バルーン画像そのものが基準。」
-// 語彙層は**軸を知らない**——`centerx` が Y 軸に書かれた取り違えの判定は解決層
-// （`cursor_tag.rs`）の責務ゆえ、本層はどちらの軸に書かれていても同じ variant を返す。
+// `centerx`／`centery` はバルーン画像の中央（幅／高さの半分）で、基準は文字描画開始点ではなく
+// バルーン画像そのもの。`centerx` が Y 軸に書かれた取り違えの判定は解決層の責務で、
+// 本層はどちらの軸に書かれていても同じ variant を返す。
 
 #[test]
 fn parse_centerx_is_center_x() {
@@ -171,19 +164,15 @@ fn parse_centery_is_center_y() {
     assert_eq!(parse_cursor_coord("centery"), CursorCoord::CenterY);
 }
 
-/// `@` 接頭は「現在の文字描画位置からの相対座標」＝数値本体を要求する書式であり、正典に
-/// `@centerx` という形は無い。中央指定の判定を `@` 剥離の**前**に置くので `@centerx` は
-/// 該当せず、`@` を剥がした本体が数値でないため Invalid へ落ちる（spec `areka-P0-cursor-tag-canon` の design.md「語彙
-/// `CursorCoord`」事後条件 `parse_cursor_coord("@centerx") == Invalid`）。
+/// `@` 接頭は数値本体を要求する相対座標の書式で、`@centerx` という形は無い。
+/// 中央指定の判定を `@` 剥離の前に置くので `@centerx` は該当せず、剥がした本体が数値でないため Invalid へ落ちる。
 #[test]
 fn parse_at_prefixed_center_is_invalid() {
     assert_eq!(parse_cursor_coord("@centerx"), CursorCoord::Invalid);
     assert_eq!(parse_cursor_coord("@centery"), CursorCoord::Invalid);
 }
 
-/// 正典は `centerx`／`centery` を小文字で記す。大小文字の扱いは正典沈黙ゆえ
-/// `doc/COMPAT_ARCHITECTURE.md` §8 の「小文字の完全一致のみ」の先例に揃える
-/// （spec `areka-P0-cursor-tag-canon` の design.md 事後条件 `parse_cursor_coord("CENTERX") == Invalid`）。
+/// 大小文字の扱いは `doc/COMPAT_ARCHITECTURE.md` の「小文字の完全一致のみ」の先例に揃える。
 #[test]
 fn parse_uppercase_center_is_invalid() {
     assert_eq!(parse_cursor_coord("CENTERX"), CursorCoord::Invalid);
@@ -202,7 +191,7 @@ fn parse_center_partial_match_is_invalid() {
     assert_eq!(parse_cursor_coord("centerx "), CursorCoord::Invalid);
 }
 
-// ── パース不能＝Invalid（R1.5・当該軸不動の源） ──
+// ── パース不能＝Invalid（当該軸不動の源） ──
 
 #[test]
 fn parse_non_numeric_is_invalid() {
@@ -211,7 +200,6 @@ fn parse_non_numeric_is_invalid() {
 
 #[test]
 fn parse_bare_unit_without_number_is_invalid() {
-    // 数値のない裸単位（"em"／"lh"／"%"）はパース不能。
     assert_eq!(parse_cursor_coord("em"), CursorCoord::Invalid);
     assert_eq!(parse_cursor_coord("lh"), CursorCoord::Invalid);
     assert_eq!(parse_cursor_coord("%"), CursorCoord::Invalid);
@@ -219,13 +207,11 @@ fn parse_bare_unit_without_number_is_invalid() {
 
 #[test]
 fn parse_lone_at_is_invalid() {
-    // `@` のみ（数値本体が空）はパース不能。
     assert_eq!(parse_cursor_coord("@"), CursorCoord::Invalid);
 }
 
 #[test]
 fn parse_trailing_garbage_is_invalid() {
-    // 数値＋未知サフィックス（"5xx"）はパース不能。
     assert_eq!(parse_cursor_coord("5xx"), CursorCoord::Invalid);
 }
 

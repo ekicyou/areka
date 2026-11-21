@@ -1,7 +1,6 @@
-//! 面の `move` のずれを窓の位置へ当てる口の檻（seriko-pattern-calls・task 6.1・要件 7.1・7.3・
-//! 7.5・7.8・8.1）。
+//! 面の `move` のずれを窓の位置へ当てる口の檻。
 //!
-//! 作業領域は 1 枚 `0..1920 × 0..1043`、キャラ窓は 200×300。窓の寸は書かない（7.5）ので、
+//! 作業領域は 1 枚 `0..1920 × 0..1043`、キャラ窓は 200×300。窓の寸は書かないので、
 //! どの件でも寸は変わらないことを見る。
 
 use areka_emo_compose::ScaleRatio;
@@ -62,7 +61,7 @@ fn the_shift_is_multiplied_by_the_scale() {
     );
 }
 
-/// 下揃えでは y が揃いに負ける（下へのずれは見えない・M4 の付記 2）。x は動く。
+/// 下揃えでは y が揃いに負ける（下へのずれは見えない）。x は動く。
 #[test]
 fn bottom_aligned_y_loses_to_the_alignment() {
     let (mut world, window) = char_world(Anchor::Bottom, 100, BOTTOM_Y);
@@ -125,7 +124,7 @@ fn a_huge_shift_is_pulled_into_the_work_area_and_zero_returns_to_base() {
 }
 
 /// 作業領域の右端からはみ出して置いた窓（x=1820・幅 200）は、寄せる先が作業領域と元の矩形を
-/// 合わせた範囲なので、ずれ (5,0) でも (0,0) でも中へ引き寄せられない（`audit-placement-follow` 監査の指摘 5）。
+/// 合わせた範囲なので、ずれ (5,0) でも (0,0) でも中へ引き寄せられない。
 #[test]
 fn an_edge_window_is_not_pulled_inward_by_a_shift() {
     let (mut world, window) = char_world(Anchor::Free, 1820, 100);
@@ -156,7 +155,7 @@ fn an_edge_window_is_not_pulled_inward_by_a_shift() {
 }
 
 /// 作者の大きなずれを自分の寄せで作業領域へ戻すのは意図どおりで、勝手に飛んだ窓ではない。
-/// 揃えの有無を問わず `[visibility-guard] OffscreenPull` を出さない（`seriko-pattern-calls` task 8.3 の実機で見つけた件・要件 9.4）。
+/// 揃えの有無を問わず `[visibility-guard] OffscreenPull` を出さない。
 #[test]
 fn a_huge_shift_pulled_back_by_our_own_clamp_does_not_warn_offscreen_pull() {
     for anchor in [Anchor::Bottom, Anchor::Free] {
@@ -272,7 +271,7 @@ fn missing_inputs_do_not_apply() {
         ScaleRatio::ONE
     ));
 
-    // 書けない（`WindowHandle` が無い）: 当てた分の記録を書かない（`audit-placement-follow` 指摘 11 ⑷）。
+    // 書けない（`WindowHandle` が無い）: 当てた分の記録を書かない。
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
     let refused = world.spawn(window_pos_sized(100, 100, W, H)).id();
@@ -282,7 +281,7 @@ fn missing_inputs_do_not_apply() {
     assert!(world.get::<MoveShiftApplied>(refused).is_none());
     assert_skipped(&events, "write_refused");
 
-    // 持ち主のキャラ窓が無いバルーン: 記録を書かない（`audit-placement-follow` 指摘 11 ⑷）。
+    // 持ち主のキャラ窓が無いバルーン: 記録を書かない。
     let mut world = World::new();
     let orphan = world
         .spawn((fake_handle(0x2000), window_pos_sized(0, 0, 150, 100)))
@@ -431,8 +430,7 @@ fn extreme_balloon_shift_does_not_overflow() {
     );
 }
 
-/// キャラ窓のドラッグの終わりで当てた分は 0 になり、利用者が置いた所が新しい元の位置になる
-/// （`seriko-pattern-calls` task 6.2・要件 7.5）。
+/// キャラ窓のドラッグの終わりで当てた分は 0 になり、利用者が置いた所が新しい元の位置になる。
 #[test]
 fn char_drag_end_resets_the_applied_shift() {
     let (mut world, window) = char_world(Anchor::Free, 100, 100);
@@ -462,8 +460,7 @@ fn char_drag_end_resets_the_applied_shift() {
     let _residue = drain_window_pos_commands();
 }
 
-/// バルーン窓のドラッグの終わりで当てた分は 0 になり、追い直してもずれを二重に足さない
-/// （`seriko-pattern-calls` task 6.2・設計の検証の指摘 2）。
+/// バルーン窓のドラッグの終わりで当てた分は 0 になり、追い直してもずれを二重に足さない。
 #[test]
 fn balloon_drag_end_resets_the_shift_without_double_counting() {
     let (mut world, window) = char_world(Anchor::Free, 600, 500);
@@ -541,7 +538,7 @@ fn held_after_absolute_x_move() -> (World, Entity) {
 }
 
 /// 札のある窓で絶対の軸を当て直しても書かず（監視が鳴らない）、「今の値」は偽で残る。札を外すと
-/// 当て直しが当たる（`audit-placement-follow` 監査の指摘 1・要件 3.1）。
+/// 当て直しが当たる。
 #[test]
 fn rebase_on_a_held_window_waits_and_reapplies_after_the_hold_lifts() {
     let (mut world, window) = held_after_absolute_x_move();
@@ -578,8 +575,7 @@ fn rebase_that_cannot_write_is_not_current() {
     let _residue = drain_window_pos_commands();
 }
 
-/// 当て直し待ちの窓を利用者がドラッグで離すと置いた所が元の位置になり、毎フレームの相は書かない
-/// （完了した `seriko-pattern-calls` の task 6.2 を壊さない）。
+/// 当て直し待ちの窓を利用者がドラッグで離すと置いた所が元の位置になり、毎フレームの相は書かない。
 #[test]
 fn drag_end_clears_the_awaiting_reapply_mark() {
     let (mut world, window) = held_after_absolute_x_move();
@@ -605,7 +601,7 @@ fn drag_end_clears_the_awaiting_reapply_mark() {
 }
 
 // -------------------------------------------------------------------------
-// 位置が未確定の印（`CW_USEDEFAULT`）・ドラッグ中の窓へは当てない（audit のかけ直し 2 回目 A3・A4）
+// 位置が未確定の印（`CW_USEDEFAULT`）・ドラッグ中の窓へは当てない
 // -------------------------------------------------------------------------
 
 /// 位置が `CW_USEDEFAULT` の印（窓生成前）のキャラ窓へは当てず、位置が無いのと同じ理由で
@@ -683,7 +679,7 @@ fn a_dragged_window_is_not_shifted_until_the_drag_ends() {
 }
 
 /// 多窓のとき dispatch が DragEnd の前に `DraggingState` を落としても、ドラッグの控え
-/// （`CharDragSession`）が残る窓はドラッグ中と見て当てない（ずれを記憶に焼き付けない・`seriko-pattern-calls` 要件 7.8）。
+/// （`CharDragSession`）が残る窓はドラッグ中と見て当てない（ずれを記憶に焼き付けない）。
 #[test]
 fn a_dragged_window_whose_dragging_state_was_dropped_is_still_deferred() {
     let (mut world, window) = char_world(Anchor::Free, 100, 100);

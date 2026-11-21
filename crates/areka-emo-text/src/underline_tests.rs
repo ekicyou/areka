@@ -1,4 +1,4 @@
-//! 下線の幾何の檻（決定論・GPU なし・要件 3.3・3.4・3.10・3.11・4.3）。
+//! 下線の幾何の檻（決定論・GPU なし）。
 
 use super::{ReadingAxis, StrokeRect, UnderlineRaw, pull_inside, stroke_overhang, stroke_rect};
 use crate::viewbox::LineOverhang;
@@ -45,7 +45,7 @@ fn horizontal_rtl_top_sits_on_the_baseline_and_runs_left() {
     assert_eq!(r, rect(20.0, 124.0, 100.0, 126.0));
 }
 
-/// 横書きは offset の値に依らず同じ位置（行ごとに決め方を変えない・要件 3.10）。
+/// 横書きは offset の値に依らず同じ位置（行ごとに決め方を変えない）。
 #[test]
 fn horizontal_ignores_offset_for_every_line() {
     for offset in [-4.0, 0.0, 2.25, 7.0] {
@@ -60,7 +60,7 @@ fn horizontal_ignores_offset_for_every_line() {
 
 /// 縦書き（上から下）: D2D の既定の描き方と同じく時計回りに 90 度回す。
 /// 横書きの [offset, offset+太さ] の「下」が縦書きでは [x−offset−太さ, x−offset] の「左」へ、
-/// 幅は原点から下へ伸びる。offset は使う（位置は DirectWrite のまま・要件 3.4）。
+/// 幅は原点から下へ伸びる。offset は使う（位置は DirectWrite のまま）。
 #[test]
 fn vertical_rotates_dwrite_geometry_clockwise() {
     let r = stroke_rect(
@@ -117,7 +117,7 @@ fn pull_inside_horizontal_moves_overflowing_stroke_up_keeping_thickness() {
     );
 }
 
-/// 縦書き: 行送りの軸は x。左右どちらの端も内側へ寄り、行内の軸（y）は動かない（端の列・要件 3.4）。
+/// 縦書き: 行送りの軸は x。左右どちらの端も内側へ寄り、行内の軸（y）は動かない（端の列）。
 #[test]
 fn pull_inside_vertical_moves_along_x_only() {
     let left = rect(-1.0, 5.0, 1.0, 85.0);
@@ -151,8 +151,8 @@ fn pull_inside_thicker_than_bound_aligns_to_zero() {
     );
 }
 
-/// 横書き: 行の箱が面にかかる最下行の線は丸ごと面の外でも寄せ（要件 3.11 の形・面 119・行の箱
-/// 90〜118）、行の箱が丸ごと面の外の行の線は寄せない（指摘 14）。行の箱が面の端にちょうど接する行も外。
+/// 横書き: 行の箱が面にかかる最下行の線は丸ごと面の外でも寄せ（面 119・行の箱
+/// 90〜118）、行の箱が丸ごと面の外の行の線は寄せない。行の箱が面の端にちょうど接する行も外。
 #[test]
 fn pull_inside_horizontal_leaves_strokes_of_rows_wholly_outside() {
     let bound = (240.0, 119.0);
@@ -179,7 +179,7 @@ fn pull_inside_horizontal_leaves_strokes_of_rows_wholly_outside() {
     }
 }
 
-/// 縦書き（右から左）: 面の左端にかかる列の線は寄せ、丸ごと面の左の外の列の線は x＝0 へ寄せない（指摘 14）。
+/// 縦書き（右から左）: 面の左端にかかる列の線は寄せ、丸ごと面の左の外の列の線は x＝0 へ寄せない。
 #[test]
 fn pull_inside_vertical_leaves_strokes_of_columns_wholly_outside() {
     let bound = (118.0, 200.0);

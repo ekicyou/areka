@@ -1,5 +1,3 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
-
 use super::{
     ActorKey, AtlasTable, BalloonModel, DWriteMetrics, EmoPresenter, EmoTextSink, EmoWorld, Entity,
     Observations, Rc, RefCell, ResolvedBalloonText, TextLayerConfig, TextLayerRuntime, World,
@@ -64,7 +62,7 @@ pub(super) struct Demo {
     pub(super) watchdog_logged: bool,
 }
 
-/// sakura/kero の ActorKey（結線側が所有する actor→target 対応の鍵・R9.5）。
+/// sakura/kero の ActorKey（結線側が所有する actor→target 対応の鍵）。
 pub(super) fn actor0() -> ActorKey {
     ActorKey::from("0")
 }

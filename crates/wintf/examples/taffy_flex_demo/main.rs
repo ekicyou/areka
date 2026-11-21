@@ -113,9 +113,7 @@ pub(crate) fn window_label(world: &World, entity: Entity) -> String {
 fn main() -> Result<()> {
     human_panic::setup_panic!();
 
-    // tracing-subscriber 初期化
-    // RUST_LOG環境変数で制御: 例 RUST_LOG=wintf=debug,info
-    // 環境変数未設定時はデフォルトでinfoレベル
+    // 例: RUST_LOG=wintf=debug,info
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -125,7 +123,6 @@ fn main() -> Result<()> {
     let mgr = WinApp::new()?;
     let world = mgr.world();
 
-    // 非同期タスクでFlexboxデモを実行
     world.borrow().spawn(|tx| async move {
         run_demo(tx).await;
     });
@@ -142,7 +139,6 @@ fn main() -> Result<()> {
     println!("\n2秒後、プライマリ以外のモニターがあれば Window 1 をそこへ移動します。");
     println!("約64秒後に自動的にWindowを閉じてアプリ終了します。");
 
-    // メッセージループを開始
     mgr.run()?;
 
     Ok(())
@@ -198,11 +194,8 @@ fn find_non_primary_monitor_point(frac: f32) -> Option<windows::Win32::Foundatio
     })
 }
 
-/// 非同期デモ実行
-///
 /// タイムライン: 0s→create → 1s→dump① → 2s→change_layout → 3s→dump② → 64s→close
 async fn run_demo(tx: CommandSender) {
-    // === 0秒: ウィンドウ作成（2つ） ===
     info!("[Async] 0s: Creating Flexbox demo windows (multi-window)");
     let _ = tx.send(Box::new(|world: &mut World| {
         setup::create_flexbox_window(
@@ -219,42 +212,33 @@ async fn run_demo(tx: CommandSender) {
         );
     }));
 
-    // === 1秒待機（DPI確定＋レイアウト安定のため） ===
+    // DPI の確定とレイアウトの安定を待つ
     async_io::Timer::after(Duration::from_secs(1)).await;
 
-    // === 1秒: dump① — 初期レイアウト状態の DPI/GA/BoxStyle ダンプ ===
     info!("[Async] 1s: Running DPI layout dump ① (initial)");
     let _ = tx.send(Box::new(diagnostics::dump_all_windows_dpi));
 
-    // === 1秒待機 ===
     async_io::Timer::after(Duration::from_secs(1)).await;
 
-    // === 2秒: レイアウトパラメーター変更 ===
     info!("[Async] 2s: Changing layout parameters");
     let _ = tx.send(Box::new(change_layout_parameters));
 
-    // === 1秒待機 ===
     async_io::Timer::after(Duration::from_secs(1)).await;
 
-    // === 3秒: dump② — 変更後レイアウト状態の DPI/GA/BoxStyle ダンプ ===
     info!("[Async] 3s: Running DPI layout dump ② (after change)");
     let _ = tx.send(Box::new(diagnostics::dump_all_windows_dpi));
 
-    // === 1秒待機 ===
     async_io::Timer::after(Duration::from_secs(1)).await;
 
-    // === 64秒: 終了（手で操作する時間を残す） ===
+    // 手で操作する時間を残す
     async_io::Timer::after(Duration::from_secs(60)).await;
     info!("[Async] 64s: Closing windows");
     let _ = tx.send(Box::new(close_window));
 }
 
-/// レイアウトパラメーターを変更
 fn change_layout_parameters(world: &mut World) {
-    // WindowPos.position を変更してウィンドウを別モニターへ移動（サイズ・内部レイアウトは維持）
-    // NOTE: BoxStyle.size および子要素のレイアウトパラメーターは一切変更しない。
-    // ウィンドウの論理サイズと内部レイアウトを保持したままモニター間移動することで、
-    // DPIスケーリング動作を正しく検証できる。
+    // BoxStyle.size と子のレイアウトは変えず位置だけを動かす。論理サイズを保ったままモニターを
+    // またがせないと DPI スケーリングを検証できない。
     let Some(target) = find_non_primary_monitor_point(0.5).map(Point::from) else {
         info!("[Test] No non-primary monitor; Window 1 stays where it is");
         return;
@@ -273,7 +257,6 @@ fn change_layout_parameters(world: &mut World) {
     }
 }
 
-/// ウィンドウを閉じる
 fn close_window(world: &mut World) {
     let mut query = world.query_filtered::<Entity, With<FlexDemoWindow>>();
     let windows: Vec<Entity> = query.iter(world).collect();

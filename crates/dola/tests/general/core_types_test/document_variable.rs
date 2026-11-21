@@ -1,10 +1,9 @@
 //! core_types: DolaDocument / AnimationVariableDef serde round-trip
-//! Tasks 2.5, 3.4
 
 use super::*;
 
 // =============================================================
-// Task 2.5: DolaDocument / AnimationVariableDef / DynamicValue serde round-trip
+// DolaDocument / AnimationVariableDef / DynamicValue serde round-trip
 // =============================================================
 
 mod document_tests {

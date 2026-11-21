@@ -1,10 +1,10 @@
-//! 切替先を起こす・既定へ戻す・致命で終える判断の決定論テスト（areka-P0-ghost-shell-balloon-switch task 8.2）。
+//! 切替先を起こす・既定へ戻す・致命で終える判断の決定論テスト。
 //!
 //! 確かめること: 既定ゴーストが目録に無い根で既定へ戻すと、終了が指示され最初の出所が
-//! 「既定ゴーストへ戻せなかった」になり告知（`event="alert"`）は出ず予約が消える（要件 6.4・6.5）／
+//! 「既定ゴーストへ戻せなかった」になり告知（`event="alert"`）は出ず予約が消える／
 //! 起動入力の作り口が無い World で切替先を起こすと `error!(ghost_switch_no_context)` 1 件と
 //! `error!(ghost_switch_boot_failed)` の上で既定へ戻す経路に入る（切替先が既定でない）か、
-//! 切替先が既定なら既定へ戻さず致命で終える（要件 6.1・6.5）。実ゴーストは起こさない。
+//! 切替先が既定なら既定へ戻さず致命で終える。実ゴーストは起こさない。
 
 use areka_ghost::BasewareRoot;
 use areka_kanade::{ChangeHandoff, ShioriFaultKind};
@@ -133,7 +133,7 @@ fn switch_to_default_without_default_ghost_is_fatal() {
 
 /// 作り口の無い World で切替先（既定でない）を起こす → `no_context`・`boot_failed` の上で既定へ戻す
 /// 経路へ入り、既定も同じ理由で起こせず致命。既定へ戻す試みはちょうど 1 回（窓を閉じるのも
-/// 切替先と既定の 2 回）で、致命の理由には落ちたゴーストの名前が載る（要件 6.1・6.2・6.5）。
+/// 切替先と既定の 2 回）で、致命の理由には落ちたゴーストの名前が載る。
 /// 降ろした所要 ms は置き場に居た 1 体の分だけ残る。
 #[test]
 fn switch_to_without_inputs_source_falls_back_to_default() {
@@ -192,9 +192,9 @@ fn switch_to_default_ghost_failure_is_fatal_without_retry() {
     assert_fatal(&world, &events);
 }
 
-/// 降ろした直後の記憶（task 11.2・要件 12.6〜12.8）: 前のゴーストを降ろし終えた直後に 1 回だけ
+/// 降ろした直後の記憶: 前のゴーストを降ろし終えた直後に 1 回だけ
 /// 最後のゴースト＝既定・印＝切替先を書き、既定への戻しと致命はそれに触れない（印は切替先のまま）。
-/// argv で始まったプロセスでは最後のゴーストだけ書き、前から在った印はそのまま残る（要件 12.5）。
+/// argv で始まったプロセスでは最後のゴーストだけ書き、前から在った印はそのまま残る。
 #[test]
 fn switch_to_records_drop_once_and_fallback_keeps_it() {
     let run = |argv_session: bool| {

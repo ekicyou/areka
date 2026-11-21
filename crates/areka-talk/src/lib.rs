@@ -4,15 +4,11 @@
 //! kanade（③運行）と sakura（④再生）の間で交わす talk 起動〜完了契約の唯一の物理定義。
 //! 依存ゼロ・`std` のみに依存する（`areka-actor` 型・host32 型・エンジン知識を持ち込まない）。
 //!
-//! # 対応する Requirements
-//! - 1.1: talk 授受契約を kanade 正本の単一定義へ一本化する。
-//! - 1.2: 中断理由（[`TalkEndReason`]）を通常終了・quit・中断の 3 値で提供する。
-//! - 1.7: 変換アダプタによる二重定義を作らず、物理的に単一の型定義として実現する。
-//! - 5.1 / 5.6: 選択待ちバリアの解決指示を[`TalkCommand`]（再生層の正規入力経路）で運ぶ。
-//! - 7.1: 選択待ち成立の事実と表示完了時刻を[`ChoiceWaiting`]で再生層から返す。
+//! 中断理由（[`TalkEndReason`]）は通常終了・quit・中断の 3 値。選択待ちバリアの解決指示は
+//! [`TalkCommand`]（再生層の正規入力経路）で運び、選択待ち成立の事実と表示完了時刻は
+//! [`ChoiceWaiting`] で再生層から返す。変換アダプタによる二重定義は作らない。
 //!
-//! 台本とイベントの出どころの語彙（[`ScriptOrigin`] ほか）も依存ゼロのここに置く
-//! （areka-P0-script-security-level 1.8, 2.7, 3.2, 3.3）。
+//! 台本とイベントの出どころの語彙（[`ScriptOrigin`] ほか）も依存ゼロのここに置く。
 
 mod origin;
 
@@ -38,10 +34,10 @@ pub struct EpilogueCommand {
 /// スクリプト文字列末尾への追記ではないため、`\e` による End 切詰めでも脱落しない。
 ///
 /// `origin` は台本 1 つの出どころと実効のレベル。kanade が送った後は誰も書き換えず、
-/// 再生の層は運ぶだけで解釈しない（areka-P0-script-security-level 1.4）。
+/// 再生の層は運ぶだけで解釈しない。
 ///
 /// `strict` は MCP の `strict` 真で受け付けた台本の印。真のとき再生の層は
-/// 落とした所・直した所を 1 件ずつ記録する（mcp-strict-errors 3.1・3.8）。
+/// 落とした所・直した所を 1 件ずつ記録する。
 #[derive(Debug, Clone)]
 pub struct StartTalk {
     pub talk_id: TalkId,
@@ -52,7 +48,7 @@ pub struct StartTalk {
 }
 
 impl StartTalk {
-    /// epilogue なし・出どころはゴースト自身・strict は偽の従来形コンストラクタ（構築点の機械的追随を最小化）。
+    /// epilogue なし・出どころはゴースト自身・strict は偽の従来形コンストラクタ。
     pub fn new(talk_id: TalkId, script: impl Into<String>) -> Self {
         Self {
             talk_id,
@@ -64,7 +60,7 @@ impl StartTalk {
     }
 }
 
-/// kanade → talk 再生系への指示（`Sender<StartTalk>` の後継・**順序保存が契約**）。
+/// kanade → talk 再生系への指示（**順序保存が契約**）。
 ///
 /// # 順序保存（Ordering / delivery）
 /// 3 形は**単一型**であるため単一チャンネルを流れ、送出側が投函した順序が
@@ -76,7 +72,7 @@ impl StartTalk {
 /// 解決系と起動系を別チャンネルへ分離してはならない（順序保存が壊れる）。
 #[derive(Debug, Clone)]
 pub enum TalkCommand {
-    /// talk 起動（従来の [`StartTalk`] 素送りの包み・情報無損失）。
+    /// talk 起動。
     Start(StartTalk),
     /// 選択待ちバリアの解決指示。
     ///
@@ -113,7 +109,7 @@ pub struct ChoiceWaiting {
     pub timeout_directive_secs: Option<f64>,
 }
 
-/// 終端理由 3 値（旧 kanade quit:bool を置換）。
+/// 終端理由 3 値。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TalkEndReason {
     /// `\e`／末尾到達／空列。

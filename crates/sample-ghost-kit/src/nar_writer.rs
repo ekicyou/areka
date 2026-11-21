@@ -1,12 +1,8 @@
-//! 決定論テストの固定入力になる最小の `.nar`（zip）書き手（spec: `areka-P0-nar-install`
-//! 要件 9.3・9.4）。
+//! 決定論テストの固定入力になる最小の `.nar`（zip）書き手。
 //!
 //! # なぜ本 crate に住むか
 //!
-//! `areka-nar` の `#[cfg(test)]` に置くとテストバイナリの内側にしか存在せず、
-//! `areka` の `[dev-dependencies]` から届かない。ここに置けば `areka-nar` 自身の
-//! テストも `areka` のテストも `[dev-dependencies] sample-ghost-kit` の 1 行で
-//! 同じ入力を得る。
+//! `areka-nar` の `#[cfg(test)]` に置くと `areka` の `[dev-dependencies]` から届かない。
 //!
 //! # 書けるもの
 //!
@@ -74,7 +70,6 @@ pub enum Damage {
     CentralOffsetOutOfRange,
 }
 
-/// 組み立て中のエントリ 1 件。
 #[derive(Clone, Debug)]
 struct Entry {
     name_raw: Vec<u8>,
@@ -310,7 +305,7 @@ pub fn install_txt(lines: &[&str]) -> Vec<u8> {
         .collect()
 }
 
-/// フォルダの木を走査して 1 本の書庫に畳む（段 ③ の検体の畳み込みが使う入口）。
+/// フォルダの木を走査して 1 本の書庫に畳む。
 ///
 /// 区切りは `/` 固定・名前は印つきの UTF-8・**中身は無変換**（改行も文字コードも
 /// 触らない）。フォルダも 1 件ずつエントリにする。走査の順は名前順に固定するので、
@@ -324,7 +319,6 @@ pub fn fold_tree(root: &Path) -> std::io::Result<NarBuilder> {
     Ok(builder)
 }
 
-/// `dir` の直下を名前順に辿り、`prefix` を冠した名前で `builder` へ足す。
 fn fold_into(builder: &mut NarBuilder, dir: &Path, prefix: &str) -> std::io::Result<()> {
     let mut children: Vec<_> = std::fs::read_dir(dir)
         .and_then(|entries| entries.collect::<std::io::Result<Vec<_>>>())

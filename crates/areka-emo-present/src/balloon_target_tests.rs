@@ -5,12 +5,9 @@ use crate::shell_target::test_support::insert_solid;
 use areka_emo_atlas::{AnimationInfo, DecodedImage, ElementId, MemoryDecoder};
 use areka_parsers::shell::{AppendTarget, parse};
 
-/// R5.1/R5.3 転記一致（観測完了基準）: synthetic surfaces.txt → `shell::parse` の往復で、
-/// 各面の surface id（`{ID}`）と element path（採用面の**実ファイル名**）が転記一致する。
-///
-/// 系列が scope 別になったため、転記される element path は接頭辞固定ではない——ここでは
-/// 相方側系列の面（`balloonk0.png`）が採用面としてそのまま転記されることを併せて固定する。
-/// これはファイルシステム/デコードを一切要さない純粋な転記層の檻。
+/// 転記一致: synthetic surfaces.txt → `shell::parse` の往復で、各面の surface id（`{ID}`）と
+/// element path（採用面の実ファイル名）が転記一致する。相方側系列の面（`balloonk0.png`）が採用面として
+/// そのまま転記されることを併せて固定する（ファイルシステム/デコードを要さない純粋な転記層の檻）。
 #[test]
 fn synthetic_text_transcribes_face_id_and_path() {
     let faces = vec![
@@ -51,20 +48,17 @@ fn synthetic_text_transcribes_face_id_and_path() {
     }
 }
 
-/// R5.5 多面バルーン fixture（偶数 id・正典準拠）: TempDir へ `balloons0.png`＋`balloons2.png`
-/// の 2 枚（偶数 id 0/2）を置き、`build_balloon_target` が **surface 0 と surface 2 の両面**を
-/// 列挙・構築した world を返すことを固定する。面 id が飛び番（1 を欠く 0/2）でも各面が id=N でそのまま常駐することを実演する。
-/// MemoryDecoder ゆえ実 PNG 不要で決定論（既存流儀踏襲）。
+/// 多面バルーン fixture（偶数 id）: TempDir へ `balloons0.png`＋`balloons2.png` の 2 枚を置き、
+/// `build_balloon_target` が surface 0 と surface 2 の両面を列挙・構築した world を返すことを固定する。
+/// 面 id が飛び番（1 を欠く 0/2）でも各面が id=N でそのまま常駐する。MemoryDecoder なので実 PNG は不要。
 #[test]
 fn build_balloon_target_enumerates_multiple_even_id_faces() {
     let dir = TempDir::new();
     // 1 色・全画素不透明の絵が宣言なしの決まりで抜かれないよう、今までの扱い（`1`）を宣言する。
     dir.write(DESCRIPT_TXT, "use_self_alpha,1\n");
-    // 偶数 id の面 2 枚（1 を欠く飛び番）を test-local fixture として自前用意（R5.5）。
     dir.touch("balloons0.png");
     dir.touch("balloons2.png");
 
-    // 両面をデコーダへ登録（MemoryDecoder 経路・実 PNG 不要）。
     let mut dec = MemoryDecoder::new();
     insert_solid(
         &mut dec,
@@ -96,7 +90,7 @@ fn build_balloon_target_enumerates_multiple_even_id_faces() {
     }
     assert_eq!(table.len(), 2, "生存エントリは偶数 id 面 2 枚のみ");
 
-    // 多面列挙の要（本タスクの主張）: surface 0 と surface 2 の **両面** が world に常駐する。
+    // 多面列挙の要: surface 0 と surface 2 の **両面** が world に常駐する。
     assert!(
         world.surface(0).is_some(),
         "surface id 0（balloons0）が World にある"
@@ -110,7 +104,7 @@ fn build_balloon_target_enumerates_multiple_even_id_faces() {
 }
 
 /// 面が 1 枚も解決できなければ log-first で `NoFace0` を返す
-/// （施行点は [`resolve_balloon_faces`] の面 0 必在契約＝R1.7）。
+/// （施行点は [`resolve_balloon_faces`] の面 0 必在契約）。
 #[test]
 fn no_frames_returns_no_face0() {
     let dir = TempDir::new();
@@ -127,7 +121,7 @@ fn no_frames_returns_no_face0() {
     }
 }
 
-/// 指摘 20: 空の採用面列を渡すと `error!` を 1 行出して `Empty` を返す（面 0 必在の契約を
+/// 空の採用面列を渡すと `error!` を 1 行出して `Empty` を返す（面 0 必在の契約を
 /// 破った呼び手でも panic せず、空のバルーンを組まない）。
 #[test]
 fn empty_faces_return_empty_with_one_error() {
@@ -149,12 +143,11 @@ fn empty_faces_return_empty_with_one_error() {
     );
 }
 
-/// 要件 5.4・5.5・6.6（animated-image-decode tasks 5.2）: 面の絵が「全コマを読むと失敗する
-/// 動く絵」でも、バルーンの組み立ては成功し、面には動きの 1 枚目（段 1）が出る。
+/// 面の絵が「全コマを読むと失敗する動く絵」でも、バルーンの組み立ては成功し、面には動きの 1 枚目が出る。
 ///
-/// 縮める理由を上限でなく全コマの読み込みの失敗にするので、上限の環境変数に頼らない
-/// （上限で先に縮んでも同じ段 1 を通る）。今までの 1 枚読み（`decode`・段 2）には 1 枚目と
-/// 違う色を登録し、出た色で段 1 が使われたことを見分ける。
+/// 縮める理由を上限でなく全コマの読み込みの失敗にするので、上限の環境変数に頼らない（上限で先に縮んでも
+/// 同じ 1 枚目を通る）。1 枚読み（`decode`）には動きの 1 枚目と違う色を登録し、出た色で動きの 1 枚目が
+/// 使われたことを見分ける。
 #[test]
 fn shrunk_animated_face_builds_and_shows_first_frame() {
     let dir = Path::new("balloon_dir");
@@ -211,21 +204,17 @@ fn shrunk_animated_face_builds_and_shows_first_frame() {
     );
 }
 
-// ── 後方互換の非回帰（R1.4/R5.4/R5.5・tasks 5.1）──────────────────────────────────
+// ── 固定接頭辞 `balloons` の列挙との一致 ──────────────────
 //
-// 「本仕様適用前」とは merge-base（969a9b3）の実装を指す——面の列挙は**固定接頭辞
-// `balloons`** で `{接頭辞}{数字}.png`（大小無視）だけを採り、surface id 昇順で返していた
-// （`FRAME_PREFIX` / `frame_id` / `enumerate_frames`）。適用前のバイナリは手元に残らないが、
-// 規則そのものは数行で再現できるため test-local な**神託**として持ち、適用後の解決結果を
-// 直接突き合わせる。これにより「同一に保つ」という主張が、手書き期待値ではなく
-// **適用前の規則そのもの**に対して固定される。
+// 系列解決より前の列挙規則（固定接頭辞 `balloons` で `{接頭辞}{数字}.png`（大小無視）だけを採り、surface id
+// 昇順で返す）は数行で再現できるので、test-local な神託として持ち、解決結果を直接突き合わせる。「同一に保つ」
+// という主張を、手書き期待値ではなく規則そのものに対して固定するため。
 
-/// 本仕様適用前の固定接頭辞列挙を再現する神託（`(面 ID, 実ファイル名)` の surface id 昇順）。
+/// 固定接頭辞列挙を再現する神託（`(面 ID, 実ファイル名)` の surface id 昇順）。
 ///
-/// 適用前の判定は `strip_prefix("balloons")` → `strip_suffix(".png")` →
-/// `parse::<u32>()` の 3 段であった（現行の全数字明示検査より 1 段緩く、`balloons+0.png` の
-/// ような符号付き病的名を受理し得た点だけが異なる。正典の面 ID 表記は符号を持たず、
-/// 実資産にそのような名は現れないため面集合の同一性には影響しない）。
+/// 判定は `strip_prefix("balloons")` → `strip_suffix(".png")` → `parse::<u32>()` の 3 段（現行の全数字明示検査より
+/// 1 段緩く、`balloons+0.png` のような符号付き病的名を受理し得る点だけが異なる。正典の面 ID 表記は符号を持たず、
+/// 実資産にそのような名は現れないので面集合の同一性には影響しない）。
 fn pre_spec_faces(dir: &Path) -> Vec<(u32, String)> {
     let mut faces: Vec<(u32, String)> = std::fs::read_dir(dir)
         .expect("神託: バルーンディレクトリは走査できる")
@@ -246,7 +235,7 @@ fn pre_spec_faces(dir: &Path) -> Vec<(u32, String)> {
 /// 要約は 3 点——(1) 面集合 `(面 ID, 実ファイル名)`、(2) World に常駐する surface id、
 /// (3) アトラスの中身 `(相対パス, 原寸, placement 有無)`。tier は連鎖上の**地位**ゆえ
 /// scope で異なるのが正しく（scope 0 は Own・scope≧1 は Default）、同一性の主張には
-/// 含めない——R1.4/R5.4 の主張は「解決される面集合と表示物が同じ」ことである。
+/// 含めない——この主張は「解決される面集合と表示物が同じ」ことである。
 fn scope_digest(
     dir: &Path,
     dec: &MemoryDecoder,
@@ -283,13 +272,11 @@ fn scope_digest(
     (face_set, resident, atlas)
 }
 
-/// R1.4/R5.4（tasks 5.1）: 相方側系列（`balloonk*`）を 1 枚も持たないバルーンでは、
-/// **解決される面集合も構築される World／アトラスの中身も** scope に依らず同一であり、
-/// かつ本仕様適用前の固定接頭辞列挙（神託 [`pre_spec_faces`]）と一致する。
+/// 相方側系列（`balloonk*`）を 1 枚も持たないバルーンでは、解決される面集合も構築される World／アトラスの
+/// 中身も scope に依らず同一で、固定接頭辞列挙の神託 [`pre_spec_faces`] とも一致する。
 ///
-/// 既存檻 `select_faces_converges_to_legacy_series_for_all_scopes` は純核（ファイル名リスト）
-/// までを固定していた。本檻は同じ主張を**実ディレクトリ走査＋実 bake／World 構築**の全経路で
-/// 固定する——R5.4 が要求する非回帰は「面集合」だけでなく「表示」にも及ぶため。
+/// 純核の檻 `select_faces_converges_to_legacy_series_for_all_scopes` と同じ主張を、実ディレクトリ走査＋
+/// 実 bake／World 構築の全経路で固定する（非回帰は面集合だけでなく表示にも及ぶため）。
 ///
 /// 面ごとに別寸（面 0=12×7・面 1=5×3・面 2=9×4）の画像を与えているので、
 /// もしある scope が別の面を採ればアトラス要約の寸で露見する。
@@ -315,7 +302,7 @@ fn balloonk_absent_converges_to_pre_spec_faces_and_target_for_all_scopes() {
         insert_solid(&mut dec, dir.path(), name, (w, h), [10, 20, 30, 255]);
     }
 
-    // 神託（適用前の固定接頭辞列挙）。
+    // 神託（固定接頭辞列挙）。
     let oracle = pre_spec_faces(dir.path());
     assert_eq!(
         oracle,
@@ -349,15 +336,13 @@ fn balloonk_absent_converges_to_pre_spec_faces_and_target_for_all_scopes() {
     }
 }
 
-/// R5.5（tasks 5.1）: 相方側系列を**持つ**実 fixture でも、本体側 scope（scope 0）の
-/// 面集合と表示物は本仕様適用前と同一である。
+/// 相方側系列を持つ実 fixture でも、本体側 scope（scope 0）の面集合と表示物は固定接頭辞列挙と同一である。
 ///
-/// 適用後の scope 0 の連鎖は `balloonp0def` → `balloons` であり、emo2-kakukaku は
-/// `balloonp0def*` を 1 枚も持たないため、実質的に適用前の固定接頭辞 `balloons` と
-/// 同じ探索になる——この等価性を神託との突合で固定する（手書き期待値ではなく規則同士の突合）。
+/// scope 0 の連鎖は `balloonp0def` → `balloons` で、emo2-kakukaku は `balloonp0def*` を 1 枚も持たないので、
+/// 実質的に固定接頭辞 `balloons` と同じ探索になる。この等価性を神託との突合で固定する。
 ///
-/// 判別力: 同一ディレクトリの scope 1 は相方側系列を採るため要約が異なる。もし scope 0 の
-/// 連鎖に `balloonk` が紛れ込めば（あるいは全 scope が 1 本へ畳み戻れば）本檻が落ちる。
+/// 判別力: 同一ディレクトリの scope 1 は相方側系列を採るので要約が異なる。scope 0 の連鎖に `balloonk` が
+/// 紛れ込めば（あるいは全 scope が 1 本へ畳み戻れば）本檻が落ちる。
 #[test]
 fn scope0_faces_and_target_match_pre_spec_enumeration_on_emo2_fixture() {
     let dir = emo2_balloon_root();

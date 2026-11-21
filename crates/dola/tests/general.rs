@@ -1,4 +1,4 @@
-// tests/general.rs — dola general domain test entry point
+// dola の general 領域のテストの入口
 #[path = "general/builder_test.rs"]
 mod builder_test;
 #[path = "general/core_types_test/mod.rs"]

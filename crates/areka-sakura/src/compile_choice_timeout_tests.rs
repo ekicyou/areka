@@ -1,11 +1,11 @@
-//! `\![set,choicetimeout,時間]` の時間の欄の読み取りの檻（要件 1.4/1.5/2.1〜2.3/6.1/8.1/8.2）。
+//! `\![set,choicetimeout,時間]` の時間の欄の読み取りの檻。
 //!
 //! 固定するのは 4 点:
 //!
-//! 1. 設計の読み方の表の**全行**（欄なし・空欄→既定、整数→秒、前後の空白・`+`・余分な欄、
+//! 1. 読み取りの表の**全行**（欄なし・空欄→既定、整数→秒、前後の空白・`+`・余分な欄、
 //!    正負の桁あふれ→飽和、それ以外→読めない）。結果の秒は常に有限。
 //! 2. 整数 N のミリ秒を秒にして 1000 倍して丸めると N に戻る（往復で端数の誤差がない）。
-//! 3. 台本の文字列から、選択待ちの区切りに入る値（要件 9.1 の各場合・位置と回数・終わりのタグ）。
+//! 3. 台本の文字列から、選択待ちの区切りに入る値（各場合・位置と回数・終わりのタグ）。
 //! 4. 指定の有無と値（読めない値を含む）で、区切りの値以外の cue の内容と時刻が変わらないこと
 //!    （選択肢の無い台本では区切りも出ない・転記はそのまま）。
 
@@ -35,13 +35,13 @@ fn parse(fields: &[&str]) -> ChoiceTimeoutDirective {
 fn reading_table_every_row() {
     use ChoiceTimeoutDirective::{Default, Secs, Unreadable};
     let rows: &[(&[&str], ChoiceTimeoutDirective)] = &[
-        // 欄なし・空欄 → 既定（2.3）
+        // 欄なし・空欄 → 既定
         (&[], Default),
         (&[""], Default),
         (&[" "], Default),
-        // 正の値 → 秒（1.1・1.4）
+        // 正の値 → 秒
         (&["500"], Secs(500.0 / 1000.0)),
-        // 0・負 → そのままの秒（無期限の判定は kanade・正規化しない・2.1）
+        // 0・負 → そのままの秒（無期限の判定は kanade・正規化しない）
         (&["0"], Secs(0.0)),
         (&["-1"], Secs(-1.0 / 1000.0)),
         (&["-5"], Secs(-5.0 / 1000.0)),
@@ -49,10 +49,10 @@ fn reading_table_every_row() {
         (&[" 500 "], Secs(500.0 / 1000.0)),
         (&["+500"], Secs(500.0 / 1000.0)),
         (&["500", "x"], Secs(500.0 / 1000.0)),
-        // 桁あふれ → 飽和（1.5・2.2）
+        // 桁あふれ → 飽和
         (&["99999999999999999999"], Secs(i64::MAX as f64 / 1000.0)),
         (&["-99999999999999999999"], Secs(i64::MIN as f64 / 1000.0)),
-        // 整数として読めない（6.1）
+        // 整数として読めない
         (&["abc"], Unreadable),
         (&["1.5"], Unreadable),
         (&["500ms"], Unreadable),
@@ -74,7 +74,7 @@ fn integer_ms_round_trips_through_secs() {
     }
 }
 
-// ── 台本の文字列 → 選択待ちの区切りの値（要件 9.1） ──
+// ── 台本の文字列 → 選択待ちの区切りの値 ──
 
 /// 選択肢 2 つ（区切りを出させるための共通の部品）。
 const CHOICES: &str = r"\q[はい,a]\q[いいえ,b]";
@@ -120,7 +120,7 @@ fn carrier_payload(v: &str) -> CuePayload {
     ))
 }
 
-/// 転記がちょうど 1 cue で、欄をそのまま運んでいることを確かめる（7.1）。
+/// 転記がちょうど 1 cue で、欄をそのまま運んでいることを確かめる。
 fn assert_single_verbatim_carrier(cues: &[Cue], v: &str, script: &str) {
     let carriers: Vec<&Cue> = cues
         .iter()
@@ -151,21 +151,21 @@ fn without_directive(cues: &[Cue]) -> Vec<Cue> {
         .collect()
 }
 
-/// 台本の文字列 → 区切りの値の表（9.1・2.4・3.1〜3.3・6.1・6.2・1.5・2.2）。
+/// 台本の文字列 → 区切りの値の表。
 #[test]
 fn script_directive_sets_choice_barrier_timeout() {
     let set = |v: &str| format!(r"\![set,choicetimeout,{v}]");
     let omitted = r"\![set,choicetimeout]";
     let rows: Vec<(String, Option<f64>, &str)> = vec![
-        // 指定なし → 未指定（2.4・9.6 の既存の檻と同じ値）
+        // 指定なし → 未指定
         (format!(r"{CHOICES}\e"), None, "指定なし"),
-        // 正の値 → 秒（1.1・1.4）
+        // 正の値 → 秒
         (
             format!(r"{}{CHOICES}\e", set("500")),
             Some(500.0 / 1000.0),
             "500",
         ),
-        // 0・-1・他の負 → そのままの秒（無期限の判定は kanade・2.1・2.2）
+        // 0・-1・他の負 → そのままの秒（無期限の判定は kanade）
         (format!(r"{}{CHOICES}\e", set("0")), Some(0.0), "0"),
         (
             format!(r"{}{CHOICES}\e", set("-1")),
@@ -177,16 +177,16 @@ fn script_directive_sets_choice_barrier_timeout() {
             Some(-5.0 / 1000.0),
             "-5",
         ),
-        // 省略・空欄 → 既定（2.3）
+        // 省略・空欄 → 既定
         (format!(r"{omitted}{CHOICES}\e"), None, "省略"),
         (format!(r"{}{CHOICES}\e", set("")), None, "空欄"),
-        // 選択肢の後ろ → 前に書いたときと同じ（3.1）
+        // 選択肢の後ろ → 前に書いたときと同じ
         (
             format!(r"{CHOICES}{}\e", set("700")),
             Some(700.0 / 1000.0),
             "選択肢の後ろ",
         ),
-        // 複数回 → 最後が勝つ・最後が省略なら既定（3.2）
+        // 複数回 → 最後が勝つ・最後が省略なら既定
         (
             format!(r"{}{CHOICES}{}\e", set("500"), set("700")),
             Some(700.0 / 1000.0),
@@ -197,7 +197,7 @@ fn script_directive_sets_choice_barrier_timeout() {
             None,
             "500→省略",
         ),
-        // 終わりのタグの後ろは数えない（3.3）
+        // 終わりのタグの後ろは数えない
         (
             format!(r"{CHOICES}\e{}", set("500")),
             None,
@@ -213,17 +213,17 @@ fn script_directive_sets_choice_barrier_timeout() {
             Some(500.0 / 1000.0),
             r"\e の前 500・後ろ 700",
         ),
-        // 読めない値 → 既定（6.1）
+        // 読めない値 → 既定
         (format!(r"{}{CHOICES}\e", set("abc")), None, "abc"),
         (format!(r"{}{CHOICES}\e", set("1.5")), None, "1.5"),
         (format!(r"{}{CHOICES}\e", set("500ms")), None, "500ms"),
-        // 読めない → 読める（6.2）
+        // 読めない → 読める
         (
             format!(r"{}{CHOICES}{}\e", set("abc"), set("700")),
             Some(700.0 / 1000.0),
             "abc→700",
         ),
-        // 正負の桁あふれ → 飽和（1.5・2.2）
+        // 正負の桁あふれ → 飽和
         (
             format!(r"{}{CHOICES}\e", set("99999999999999999999")),
             Some(i64::MAX as f64 / 1000.0),
@@ -241,7 +241,7 @@ fn script_directive_sets_choice_barrier_timeout() {
 }
 
 /// 選択肢の無い台本では、指定があっても区切りは出ず、転記の 1 cue を除けば全 cue が
-/// 指定の無い台本と同一（3.4・6.3・7.1）。
+/// 指定の無い台本と同一。
 #[test]
 fn directive_without_choices_changes_nothing() {
     let plain = cues_of(r"\s[0]こんにちは\w9\s[1]またね\e");
@@ -256,7 +256,7 @@ fn directive_without_choices_changes_nothing() {
 }
 
 /// 選択肢を含む台本で、指定なし・読める値・読めない値のどれでも、区切りの値と転記の
-/// cue を除いた cue の内容と時刻が同一（6.3・7.1・7.2）。転記は欄をそのまま運ぶ。
+/// cue を除いた cue の内容と時刻が同一。転記は欄をそのまま運ぶ。
 #[test]
 fn directive_value_changes_only_the_barrier_timeout() {
     let script = |v: Option<&str>| {
@@ -270,7 +270,7 @@ fn directive_value_changes_only_the_barrier_timeout() {
         assert_single_verbatim_carrier(&cues, v, &s);
         assert_cues_eq(&without_directive(&cues), &plain, &s);
     }
-    // 読めない値の台本と読める値の台本も、比べる形では同一（6.3）。
+    // 読めない値の台本と読める値の台本も、比べる形では同一。
     assert_cues_eq(
         &without_directive(&cues_of(&script(Some("abc")))),
         &without_directive(&cues_of(&script(Some("700")))),
@@ -278,8 +278,8 @@ fn directive_value_changes_only_the_barrier_timeout() {
     );
 }
 
-/// 検査（`areka-P0-mcp-author-tools` の `check_script`）が再生と同じ読み取りを引けるよう、
-/// 読み取りの関数と結果の型はクレートの根から届く（要件 3.4）。
+/// 検査（`check_script`）が再生と同じ読み取りを引けるよう、
+/// 読み取りの関数と結果の型はクレートの根から届く。
 #[test]
 fn reader_is_reachable_from_the_crate_root() {
     use crate::{ChoiceTimeoutDirective as Root, parse_choice_timeout as root_parse};
@@ -288,7 +288,7 @@ fn reader_is_reachable_from_the_crate_root() {
     assert_eq!(root_parse(&args(&["500"])), Root::Secs(0.5));
 }
 
-/// **警告（要件 7.11(a)）**: 読めない時間の欄は compile の中で WARN `choice_timeout_unreadable` を
+/// **警告**: 読めない時間の欄は compile の中で WARN `choice_timeout_unreadable` を
 /// ちょうど 1 行（元の綴りを `raw` に）残し、読める値では 0 行。
 #[test]
 fn unreadable_choice_timeout_warns_once_readable_none() {

@@ -2,7 +2,7 @@
 //! 時刻と生死は引数で渡し、眠らない。
 //!
 //! 負荷テストは「排他テストの机とひとり占めを並べた申し込み（`test,sole`）」で、済んだら名指し
-//! なしで返す。今の負荷テストの机と同じ答えになることを確かめる（要件 5.1〜5.5）。
+//! なしで返す。今の負荷テストの机と同じ答えになることを確かめる。
 
 use super::test_support::{
     PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, cancelled,
@@ -385,7 +385,7 @@ fn while_the_running_mark_is_on_nobody_is_asked_to_stop_and_no_merge_grant_comes
 
 #[test]
 fn a_merge_waiter_recording_a_running_load_test_changes_nothing() {
-    // 机が両方空いていても、マージの机を待つ者は記録しない（要件 5.7）。A が areka の
+    // 机が両方空いていても、マージの机を待つ者は記録しない。A が areka の
     // マージの机を持ち、B がその後ろで待つ。
     let mut before = state_with(&["A", "B"]);
     hold_merge(&mut before, "areka", "A");
@@ -400,7 +400,7 @@ fn a_merge_waiter_recording_a_running_load_test_changes_nothing() {
         "a merge request is waiting; record the running load after the merge desk is granted";
     assert_eq!(got.verdict, super::Verdict::NotApplied(text));
 
-    // マージの机の持ち主（A）は、机が両方空いていれば今どおり記録できる（要件 5.5）。
+    // マージの机の持ち主（A）は、机が両方空いていれば今どおり記録できる。
     let got = run(&mut state, &load_running("A"), Some("A"), T0 + 9);
 
     assert_eq!(got, applied(true, vec![recorded_running("A")]));

@@ -1,7 +1,7 @@
-//! `content.rs` の在中テスト——**ソースの正典 URL と証拠**（要件 6.5・6.6・6.10・6.13）。
+//! `content.rs` の在中テスト——**ソースの正典 URL と証拠**。
 //!
-//! 関連・別名・版の側は姉妹モジュール `content_link_tests` が持つ
-//! （要件 6.7）。共用の道具は `check::test_support` にある。
+//! 関連・別名・版の側は姉妹モジュール `content_link_tests` が持つ。共用の道具は
+//! `check::test_support` にある。
 //!
 //! # 主張はすべて入口を通す
 //!
@@ -20,17 +20,16 @@
 //! # 「全部を挙げる」は違反 2 件でしか守れない
 //!
 //! 違反を 1 件だけ置いた見本では「全部挙げる」と「最初の 1 件だけ挙げる」を区別
-//! できない。`SourceUrlNotInCatalog` と
-//! `ImplementedWithoutEvidence` には、違反 2 件の**間に正しい項目を挟んだ**見本を
-//! 置いてある（「最初の違反で止まる」と「最初の正しい項目で止まる」の両方を捕まえる）。
+//! できない。`SourceUrlNotInCatalog` と `ImplementedWithoutEvidence` には、違反 2 件の
+//! **間に正しい項目を挟んだ**見本を置いてある（「最初の違反で止まる」と「最初の正しい
+//! 項目で止まる」の両方を捕まえる）。
 //!
 //! # 証拠のファイルパスは所見にしない
 //!
-//! 要件 2.3・5.5 は「証拠は台帳に書かず、検査の出力に id ごとのファイルパスとして
-//! 列挙する」と言う。その列挙を作るのは**入口の実行ファイル**（所見の本文と、id ごとの
-//! 証拠のファイルパスを並べて出す）であって、この判定ではない。
-//! ここが作るのは食い違いだけで、証拠のある項目については 1 件も所見を出さない
-//! ——出すと「所見が空なら緑」（設計 check 節の事後条件）が成り立たなくなる。
+//! 証拠は台帳に書かず、検査の出力に id ごとのファイルパスとして列挙する。その列挙を
+//! 作るのは**入口の実行ファイル**であって、この判定ではない。ここが作るのは食い違い
+//! だけで、証拠のある項目については 1 件も所見を出さない（出すと「所見が空なら緑」が
+//! 成り立たなくなる）。
 
 use super::super::test_support::{
     EVENTS_PATH, TAG_PATH, VOCAB_PATH, details, entry_mut, id, ids, kinds, ledger_place, only_one,
@@ -47,14 +46,13 @@ use crate::model::{Domain, EntryId, Status};
 /// 内容の 5 判定それぞれに、見るべき材料が見本にあることを肯定の側から数える。
 ///
 /// 台帳が空・証拠が空・関連が空の入力なら「所見 0 件」は無条件に真になる。判定が
-/// 実際に何かを走査している土台をここで固定する（要件 6.13 の「検査対象が 0 件で
-/// ない」側）。
+/// 実際に何かを走査している土台をここで固定する。
 #[test]
 fn the_sample_world_holds_material_for_every_content_judgement() {
     let world = World::normal();
     let input = world.input();
 
-    // 証拠の側（要件 6.5・6.6）。
+    // 証拠の側。
     assert!(
         input.evidence.unresolved.is_empty(),
         "正常な見本に解決できない URL があってはならない"
@@ -68,7 +66,7 @@ fn the_sample_world_holds_material_for_every_content_judgement() {
         .count();
     assert_eq!(implemented, 3, "実装済みの項目が無ければ 6.6 は空回りする");
 
-    // 関連の側（要件 6.7）。
+    // 関連の側。
     let links: usize = input
         .ledgers
         .iter()
@@ -91,7 +89,7 @@ fn the_sample_world_holds_material_for_every_content_judgement() {
     assert_eq!(aliases, 1, "別名の行");
     assert_eq!(supersedes, 1, "後継の参照");
 
-    // 版の側（要件 6.7）。
+    // 版の側。
     let introduced = input
         .ledgers
         .iter()
@@ -109,15 +107,14 @@ fn the_sample_world_holds_material_for_every_content_judgement() {
 }
 
 // ---------------------------------------------------------------------------
-// ソースの正典 URL がカタログに実在するか（要件 6.5・6.10・設計 D-4）
+// ソースの正典 URL がカタログに実在するか
 // ---------------------------------------------------------------------------
 
 /// ソースの URL を 1 文字変えると `SourceUrlNotInCatalog` が出る。
 ///
 /// **`ImplementedWithoutEvidence` が道連れになる**。すり替えた URL は実装済みの項目
-/// `\s[ID]` の唯一の証拠なので、綴りが変われば同時にその項目の証拠が消える（要件 6.5
-/// と 6.6 が同じ 1 行に載っている見本ではどうやっても分けられない）。2 種類を明示して
-/// 主張し、次のテストで URL の側だけを 1 種類に切り出す。
+/// `\s[ID]` の唯一の証拠なので、綴りが変われば同時にその項目の証拠が消える。2 種類を
+/// 明示して主張し、次のテストで URL の側だけを 1 種類に切り出す。
 #[test]
 fn a_one_character_change_in_a_source_url_is_a_finding() {
     let mut world = World::normal();
@@ -155,7 +152,7 @@ fn a_one_character_change_in_a_source_url_is_a_finding() {
 
 /// 実装済みでない項目の行に誤った URL を置くと、URL の所見だけが 1 件出る。
 ///
-/// `OnClose` の状態は `absent` なので証拠を求められない（要件 5.7）。ここだけが
+/// `OnClose` の状態は `absent` なので証拠を求められない。ここだけが
 /// `SourceUrlNotInCatalog` を単独で見せられる形である。
 #[test]
 fn a_bad_url_beside_an_unimplemented_item_is_only_a_url_finding() {
@@ -183,7 +180,7 @@ fn a_bad_url_beside_an_unimplemented_item_is_only_a_url_finding() {
 
 /// 1 本のソースに誤った URL が 2 つあれば、**2 件とも**所見になる。
 ///
-/// 要件 6.5 は「ソース中の正典 URL が**すべて**カタログに実在すること」を求める。
+/// ソース中の正典 URL は**すべて**カタログに実在しなければならない。
 /// 2 つの誤りの**間に正しい URL を 1 本挟んである**ので、「最初の誤りで打ち切る」も
 /// 「最初の正しい URL で打ち切る」も、どちらもここで赤になる。正しい URL を残して
 /// あるから実装済みの項目の証拠は消えず、種類は 1 つに保たれる。
@@ -220,7 +217,7 @@ fn every_unresolved_url_is_reported_not_just_the_first() {
 }
 
 // ---------------------------------------------------------------------------
-// 実装済みには証拠が要る（要件 6.6・2.3・5.5）
+// 実装済みには証拠が要る
 // ---------------------------------------------------------------------------
 
 /// 実装済みの項目から証拠の行を消すと `ImplementedWithoutEvidence` が 1 件だけ出る。
@@ -253,10 +250,10 @@ fn removing_the_evidence_line_of_an_implemented_entry_is_a_finding() {
 
 /// 語彙表の目印の URL を 1 文字変えると、その表から生えていた証拠がまとめて消える。
 ///
-/// `system.year` の証拠は URL の直書きではなく**名前の突き合わせ**で付いている
-/// （設計 D-5）。目印だけを壊せば、直書きの証拠を 1 つも触らずに 6.6 の経路を試せる。
+/// `system.year` の証拠は URL の直書きではなく**名前の突き合わせ**で付いている。
+/// 目印だけを壊せば、直書きの証拠を 1 つも触らずに証拠の無い経路を試せる。
 /// 同じ表から証拠を得ていた `currentghost.name` は `vocabulary-only` なので所見に
-/// ならない（要件 5.7）。
+/// ならない。
 #[test]
 fn breaking_the_vocabulary_marker_url_costs_the_implemented_entry_its_evidence() {
     let mut world = World::normal();
@@ -334,7 +331,7 @@ fn every_implemented_entry_without_evidence_is_reported_not_just_the_first() {
     );
 }
 
-/// 実装済みでない項目に証拠が無くても所見にならない（要件 5.7）。
+/// 実装済みでない項目に証拠が無くても所見にならない。
 ///
 /// 「証拠の無い項目」をすべて赤にする実装はここで赤になる。見本には証拠の無い項目が
 /// 8 つある。

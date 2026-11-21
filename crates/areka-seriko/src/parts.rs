@@ -1,39 +1,36 @@
-//! parts: 部品の時計（spec: areka-P0-surface-element-nesting 要件 5.1〜5.8・5.11〜5.14・8.3）。
+//! parts: 部品の時計。
 //!
 //! 部品＝element定義で置かれた子と、pattern定義が指して今の絵に出ているサーフェス。部品の
 //! animation は、そのサーフェスを一番上に表示したときと同じ列（[`AnimationTable::animations`]）を
 //! 同じ規則（境界の抽選・[`frame_at`] の進行・`-1` の停止・末尾の保持）で動かす。
 //!
-//! 時計の入れ物の鍵は (スコープ, 面の種類)、中の鍵は ([`PartKey`], animation の番号)（spec:
-//! areka-P0-animated-image-playback 要件 3.5・6.6）。element定義の子も pattern定義の先も同じ鍵を
-//! 使うので、同じ番号は 1 つの時計で揃って動く（要件 5.3・5.4・5.14）。評価する部品は見える部品と、
+//! 時計の入れ物の鍵は (スコープ, 面の種類)、中の鍵は ([`PartKey`], animation の番号)。element定義の子も
+//! pattern定義の先も同じ鍵を使うので、同じ番号は 1 つの時計で揃って動く。評価する部品は見える部品と、
 //! 一番上と見える部品に置かれた動く絵の子（[`areka_emo_compose::NestTable::visible_films`]）。見えない
-//! 部品には触らない（抽選・進行・欄への書き込みのどれもしない・要件 5.11）。`Playing` は開始の時刻を
-//! 持ち続けるので、見えなかった間も進んでいた扱いになり、戻った刻みに経過から今のコマが決まる（要件 5.7）。
+//! 部品には触らない（抽選・進行・欄への書き込みのどれもしない）。`Playing` は開始の時刻を
+//! 持ち続けるので、見えなかった間も進んでいた扱いになり、戻った刻みに経過から今のコマが決まる。
 //!
-//! `always`（手書きと動く絵の子・spec: areka-P0-animated-image-playback 要件 2.3・2.7・2.8・3.1〜3.5・
-//! 4.4・7.4）は抽選せず乱数も引かない。時計が無ければ評価の時刻で生まれ、[`always_at`] の答えを欄へ
-//! 書く（経過 0 と同じなら載せない）。回数つき（`laps` が在る）の時計は、評価のとき見えていなければ
-//! 捨てる（次に見えたら頭から）。面が隠れたときは [`PartClocks::drop_hidden`] で入れ物 1 つの回数つきの
-//! 時計を全部捨てる。終わりなしの時計は捨てない。
+//! `always`（手書きと動く絵の子）は抽選せず乱数も引かない。時計が無ければ評価の時刻で生まれ、
+//! [`always_at`] の答えを欄へ書く（経過 0 と同じなら載せない）。回数つき（`laps` が在る）の時計は、
+//! 評価のとき見えていなければ捨てる（次に見えたら頭から）。面が隠れたときは
+//! [`PartClocks::drop_hidden`] で入れ物 1 つの回数つきの時計を全部捨てる。終わりなしの時計は捨てない。
 //!
-//! `runonce`・`periodic`・`talk`（spec: areka-P0-seriko-trigger-intervals 要件 5.4・5.6・5.7・5.9・8.1）も
-//! 抽選せず乱数も引かない。評価は 2 段: 2 段目が「見えると決まった部品」に引き金の状態（[`Armed`]）を
-//! 構えて判定し、構えてあった（前の評価の終わりに見えていた）部品は 1 段目が、働きのコマと開始の時刻の
-//! 順に揃えて判定する（[`fire_part_triggers`]・遅れた刻みでも止めや周を落とさない・一番上と同じ形）。
-//! 鳴った再生のコマが別の部品を見せたら 1 段目へ戻り、同じ刻みのうちに子のコマまで出す。見えなく
-//! なった部品の 3 語の時計と引き金の状態は捨てる（再び見えた刻みが新しい起点で、途中のコマから
-//! 始まらない）。窓が閉じたら 3 語の時計を捨てて引き金の状態を隠す。表に 3 語が無ければ 2 段目は
-//! 呼ばず、引き金の状態は生まれない。部品は文字の数えを持たない: `talk` は、刻みが渡す面の文字の窓を
-//! 一番上と同じ判定に掛けて鳴る（要件 4.1。後から見えた部品も数え直さない）。
+//! `runonce`・`periodic`・`talk` も抽選せず乱数も引かない。評価は 2 段: 2 段目が「見えると決まった
+//! 部品」に引き金の状態（[`Armed`]）を構えて判定し、構えてあった（前の評価の終わりに見えていた）
+//! 部品は 1 段目が、働きのコマと開始の時刻の順に揃えて判定する（[`fire_part_triggers`]・遅れた
+//! 刻みでも止めや周を落とさない・一番上と同じ形）。鳴った再生のコマが別の部品を見せたら 1 段目へ
+//! 戻り、同じ刻みのうちに子のコマまで出す。見えなくなった部品の 3 語の時計と引き金の状態は捨てる
+//! （再び見えた刻みが新しい起点で、途中のコマから始まらない）。窓が閉じたら 3 語の時計を捨てて
+//! 引き金の状態を隠す。表に 3 語が無ければ 2 段目は呼ばず、引き金の状態は生まれない。部品は文字の
+//! 数えを持たない: `talk` は、刻みが渡す面の文字の窓を一番上と同じ判定に掛けて鳴る（後から見えた
+//! 部品も数え直さない）。
 //!
-//! 抽選の時計を動かすのは刻み（[`PartClocks::advance`]・以下 `advance`）だけ（働きのコマが始めた・止めた
-//! 時計を除く）。面の切り替え・
-//! 着せ替えの変化の直後は [`PartClocks::refresh`] が抽選せずに今のコマを求める（要件 5.6）。`refresh` が
-//! 書き換えるのは `always` の時計（出来事の時刻で生まれる・回数つきの見えなくなったものを捨てる）と、
-//! 3 語の時計（出来事の時刻までの 3 語を刻みと同じに判定する・見えなくなった部品のものを捨てる）だけ
-//! （働きのコマが始めた・止めた時計を除く）。
-//! 時計は [`PartClocks::clear`]（その面の種類の表の差し替え）で捨てる（要件 5.8）。抽選の発火・停止・
+//! 抽選の時計を動かすのは刻み（[`PartClocks::advance`]・以下 `advance`）だけ（働きのコマが始めた・
+//! 止めた時計を除く）。面の切り替え・着せ替えの変化の直後は [`PartClocks::refresh`] が抽選せずに
+//! 今のコマを求める。`refresh` が書き換えるのは `always` の時計（出来事の時刻で生まれる・回数つきの
+//! 見えなくなったものを捨てる）と、3 語の時計（出来事の時刻までの 3 語を刻みと同じに判定する・
+//! 見えなくなった部品のものを捨てる）だけ（働きのコマが始めた・止めた時計を除く）。
+//! 時計は [`PartClocks::clear`]（その面の種類の表の差し替え）で捨てる。抽選の発火・停止・
 //! 末尾での保持の記録は `advance` だけが出す。`always` の時計の誕生と破棄は、生まれた・捨てたところで出す。
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -52,16 +49,13 @@ use crate::timeline::{
 };
 use crate::trigger::{Armed, TalkWindow};
 
-// 部品の引き金の配線（2 段目: 構える・判定して時計を作る）。
 #[path = "parts_trigger.rs"]
 mod part_trigger;
 use part_trigger::{fire_part_triggers, judge_part};
 
-// 面の切り替え・着せ替えの変化の直後の作り直し（`refresh`）。
 #[path = "parts_refresh.rs"]
 mod part_refresh;
 
-// 部品の働きのコマの配線（spec: seriko-pattern-calls 要件 3.8）。
 #[path = "parts_calls.rs"]
 mod part_calls;
 use part_calls::{place, run_part_calls};
@@ -72,7 +66,7 @@ pub(crate) enum PartAnim {
     /// 再生中（開始の時刻）。今のコマは `frame_at(経過)` で求める。
     Playing {
         started_at_ms: u64,
-        /// 働きのコマを当て終えた時刻（まだなら `None`・spec: seriko-pattern-calls）。
+        /// 働きのコマを当て終えた時刻（まだなら `None`）。
         acts_through: Option<u64>,
     },
     /// `-1` の無い末尾まで進んで、最後のコマを保っている（抽選の対象）。
@@ -87,10 +81,10 @@ type ClockKey = (PartKey, u32);
 struct Container {
     /// (部品, animation の番号) → 時計。
     clocks: BTreeMap<ClockKey, PartAnim>,
-    /// 見えている部品 → 引き金の状態（spec: areka-P0-seriko-trigger-intervals 要件 5.9）。`runonce`・
+    /// 見えている部品 → 引き金の状態。`runonce`・
     /// `periodic`・`talk` を持つ部品が見えている間だけ在る（部品は文字の数えを持たない）。
     armed: BTreeMap<PartKey, Armed>,
-    /// 呼び出しで止めた `always`（面を出すまで始め直さない・spec: seriko-pattern-calls 4.5・3.8）。
+    /// 呼び出しで止めた `always`（面を出すまで始め直さない）。
     stopped: BTreeSet<ClockKey>,
 }
 
@@ -165,12 +159,11 @@ enum Gate {
     Lottery(u32),
     /// `always`（抽選しない・乱数を引かない）。
     Always { laps: Option<NonZeroU32> },
-    /// `runonce`・`periodic`・`talk`（抽選しない・乱数を引かない・着せ替えに依らない・spec:
-    /// areka-P0-seriko-trigger-intervals 要件 5.7）。始めるかは引き金の判定（構えてあれば 1 段目・
+    /// `runonce`・`periodic`・`talk`（抽選しない・乱数を引かない・着せ替えに依らない）。始めるかは引き金の判定（構えてあれば 1 段目・
     /// 新しく見えたなら 2 段目）が決める。呼ばれるだけ（`CallOnly`）もここ: 判定は選ばないので自分では
-    /// 始めず、呼ばれて在る時計だけを着せ替えに依らず進める（spec: seriko-pattern-calls 要件 11.1）。
+    /// 始めず、呼ばれて在る時計だけを着せ替えに依らず進める。
     Trigger,
-    /// 対象外（`bind+random` で `binds` に無い・要件 5.12）。
+    /// 対象外（`bind+random` で `binds` に無い）。
     Off,
 }
 
@@ -226,7 +219,7 @@ fn drop_transient_where(
     });
 }
 
-/// `always` の経過 `elapsed_ms` の答えを欄へ書く: 経過 0 のコマと同じなら載せない（要件 7.4）／
+/// `always` の経過 `elapsed_ms` の答えを欄へ書く: 経過 0 のコマと同じなら載せない／
 /// コマならコマ（絵を指すなら子の欄）／何も出さないなら、経過 0 のコマが在るときだけ「消えている」。
 fn write_always(
     pattern: &mut PatternState,
@@ -236,7 +229,7 @@ fn write_always(
     laps: Option<NonZeroU32>,
     elapsed_ms: u64,
 ) {
-    // 働きのコマは前の描くコマを残す（spec: seriko-pattern-calls 1.3・7.7）。`None` は欄に置かない。
+    // 働きのコマは前の描くコマを残す。`None` は欄に置かない。
     let rest = always_visible(&anim.frames, period_ms, laps, 0);
     match always_visible(&anim.frames, period_ms, laps, elapsed_ms) {
         now if now == rest => {}
@@ -284,8 +277,8 @@ fn always_start(
 }
 
 /// 回数つきの時計と 3 語の時計のうち、今の絵（見える部品 `visible`・見える子 `films`）に見えていない
-/// ものを捨てる（次に見えたら頭から・要件 2.3・2.7）。見えなくなった部品の引き金の状態も捨てる
-/// （再び見えた刻みが新しい起点・spec: areka-P0-seriko-trigger-intervals 要件 5.6・5.9）。
+/// ものを捨てる（次に見えたら頭から）。見えなくなった部品の引き金の状態も捨てる
+/// （再び見えた刻みが新しい起点）。
 fn drop_unseen_transient(
     container: &mut Container,
     table: &AnimationTable,
@@ -305,9 +298,8 @@ fn drop_unseen_transient(
 }
 
 /// 窓が閉じた: 回数つきの時計と 3 語の時計を全部捨て、引き金の状態を隠す（閉じている間は回数つきの
-/// 時計が無く、欄は経過 0 へ戻る・spec: areka-P0-animated-image-playback 要件 2.3・6.1。3 語は
-/// 閉じている間は鳴らず、開いた時刻が `periodic` の新しい起点になる。`runonce` の 1 回は使い済みの
-/// まま・spec: areka-P0-seriko-trigger-intervals 要件 5.5）。
+/// 時計が無く、欄は経過 0 へ戻る。3 語は閉じている間は鳴らず、開いた時刻が `periodic` の新しい起点に
+/// なる。`runonce` の 1 回は使い済みのまま）。
 fn close(container: &mut Container, table: &AnimationTable, scope: &ActorKey, slot: Slot) {
     drop_transient_where(&mut container.clocks, table, scope, slot, |_| true);
     container.armed.values_mut().for_each(Armed::hide);
@@ -327,7 +319,7 @@ enum Phase {
     /// 動く絵の子に 1 回ずつ）。
     Evaluate,
     /// 2 段目: 見えると決まった部品を構え、`runonce`・`periodic`・`talk` を判定する（新しく見えた
-    /// 部品だけ・spec: areka-P0-seriko-trigger-intervals 要件 5.6・5.9）。再生が始まったら真。
+    /// 部品だけ）。再生が始まったら真。
     Trigger,
 }
 
@@ -366,8 +358,7 @@ fn retain_cells(pattern: &mut PatternState, keep: impl Fn(PartKey, u32) -> bool)
 /// 部品の欄を空にし、見える部品が増えなくなるまで［求める → 未評価を番号の昇順に 1 段目の `step`］を
 /// 回す。評価済みの集合は増えるだけなので必ず止まる。
 ///
-/// 表に `runonce`・`periodic`・`talk` が在るときだけ、ここで 2 段目へ進む（spec:
-/// areka-P0-seriko-trigger-intervals 要件 5.6・5.9・8.1）: 見えると決まった部品のうち、この評価で
+/// 表に `runonce`・`periodic`・`talk` が在るときだけ、ここで 2 段目へ進む: 見えると決まった部品のうち、この評価で
 /// まだ判定していないものに 2 段目の `step` を回す。再生が始まったら（そのコマが別の部品を見せうる
 /// ので）1 段目へ戻り、新しく見えた部品を評価してから、その部品を判定する＝同じ評価のうちに子まで
 /// 出る。部品 1 つを 2 度判定しない（判定済みの集合も増えるだけなので必ず止まる）。1 段目の評価を
@@ -375,7 +366,7 @@ fn retain_cells(pattern: &mut PatternState, keep: impl Fn(PartKey, u32) -> bool)
 ///
 /// 次に、同じ刻みの後の回で見えなくなった部品（着せ替えのコマが pattern0 を置き換えた先など）の
 /// コマを欄から外す。見えない部品の辺は `visible_parts` がたどらないので、外しても `visible` は
-/// 変わらない（部品の欄の番号は `visible` に含まれる・design.md「Data Models」）。最後に、一番上と
+/// 変わらない（部品の欄の番号は `visible` に含まれる）。最後に、一番上と
 /// 見える部品に置かれた動く絵の子を番号の昇順に 1 段目の `step` へ渡す（子は element を持たないので
 /// 見える部品を増やさない）。終わったとき `visible`・`films` は今の絵の見える部品・見える子。
 #[allow(clippy::too_many_arguments)]
@@ -461,9 +452,9 @@ fn progress(
     let key = (part, anim.id);
     let label = Label(part);
     // `talk` の再生は文字の到着ごとに起きうるので、終わりの記録は `debug!`（ほかは `info!`・文言は
-    // 同じ・spec: areka-P0-seriko-trigger-intervals 要件 7.3）。
+    // 同じ）。
     let is_talk = matches!(anim.trigger, LoopTrigger::Talk { .. });
-    // 進行: 開始からの経過で今のコマを決める（見えなかった間も進んでいた扱い・要件 5.7）。
+    // 開始からの経過で今のコマを決める（見えなかった間も進んでいた扱い）。
     match look(anim, clocks.get(&key).copied(), now_ms) {
         Look::Nothing => false,
         Look::Frame(i) => {
@@ -507,7 +498,7 @@ fn progress(
 }
 
 /// コマ `i` を部品 `part` の欄へ書く（絵を指すコマは動く絵の子の欄へ）。働きのコマなら `i` 以下で
-/// 最後の描くコマを書き、無ければ欄を外す（spec: seriko-pattern-calls 1.3）。
+/// 最後の描くコマを書き、無ければ欄を外す。
 fn write(pattern: &mut PatternState, part: PartKey, anim: &LoopAnimation, i: usize) {
     let Some(f) = visible_frame(&anim.frames, i).and_then(|d| anim.frames.get(d)) else {
         unwrite(pattern, part, anim.id);
@@ -527,13 +518,12 @@ impl PartClocks {
     /// 刻み 1 回。`scope` の `slot` の面の見える部品を抽選（境界を跨いだ刻みだけ）・進行させ、
     /// `pattern` の部品の欄を今の絵の分で作り直す。`open` が偽（バルーンの窓が閉じている）なら
     /// 時計を作らず（抽選もしない）、今ある抽選の再生と終わりなしの `always` は進み、回数つきの時計と
-    /// 3 語の時計は捨て、引き金の状態は隠す（spec: areka-P0-animated-image-playback 要件 6.1）。
+    /// 3 語の時計は捨て、引き金の状態は隠す。
     ///
     /// `talk` はこの面の文字の窓（一番上の配線が刻み 1 回につき 1 つ作る。表に `talk` が無い面・
     /// 窓が閉じている面では `None`）。見えると決まった部品の `talk` は、この窓を一番上と同じ判定に
     /// 掛けて鳴る＝部品は文字の数えを持たず、面の数えを借りる（後から見えた部品も数え直さない・
-    /// 見えなかった間に越えた区切りは後から鳴らない・spec: areka-P0-seriko-trigger-intervals
-    /// 要件 4.1・5.4・5.6）。数えを進めるのは呼び手（全部の面が窓を読み終えた刻みの最後）。
+    /// 見えなかった間に越えた区切りは後から鳴らない）。数えを進めるのは呼び手（全部の面が窓を読み終えた刻みの最後）。
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn advance(
         &mut self,
@@ -575,9 +565,8 @@ impl PartClocks {
         // 見える部品の働きのコマの結果（時刻が後の move が勝つ・一番上と合わせるのは呼び手）。
         let mut shift = CallOutcome::default();
 
-        // 部品 1 つの評価（animation の番号の昇順・design.md「部品 1 つの評価」）。引き金 → 働きのコマ →
-        // 始まり（抽選・`always`）→ その頭の働きのコマ → コマを置く、の順（時刻の順・spec:
-        // seriko-pattern-calls 3.1・3.8）。
+        // 部品 1 つの評価（animation の番号の昇順）。引き金 → 働きのコマ →
+        // 始まり（抽選・`always`）→ その頭の働きのコマ → コマを置く、の順（時刻の順）。
         let step = |phase: Phase, part: PartKey, pattern: &mut PatternState| {
             let anims = table.part_animations(part);
             if let Phase::Trigger = phase {
@@ -619,7 +608,7 @@ impl PartClocks {
                 return true;
             }
             sort_by_id(anims, order);
-            // 着せ替えの種類で有効でないものは抽選せず、時計を消す（要件 5.12）。
+            // 着せ替えの種類で有効でないものは抽選せず、時計を消す。
             for &i in order.iter() {
                 let anim = &anims[i];
                 if matches!(gate(anim, binds), Gate::Off)
@@ -634,7 +623,7 @@ impl PartClocks {
                 }
             }
             // 構えてあった部品の 3 語は、ここで開始の時刻の順に働きのコマと揃えて判定する（呼び出しが
-            // 止めた・始めた再生を見て決める・一番上と同じ順・spec: seriko-pattern-calls 要件 3.1）。
+            // 止めた・始めた再生を見て決める・一番上と同じ順）。
             if let Some(state) = armed.get_mut(&part) {
                 state.follow(open, now_ms, None);
                 let (_, early, _) = fire_part_triggers(
@@ -664,7 +653,7 @@ impl PartClocks {
                 let k = match gate(anim, binds) {
                     Gate::Lottery(k) => k,
                     Gate::Off => continue,
-                    // `always`: 乱数を引かず、時計が無ければこの時刻で作る（要件 3.1・4.1・4.4）。
+                    // `always`: 乱数を引かず、時計が無ければこの時刻で作る。
                     // 窓が閉じている間と、呼び出しで止めた間は作らない（無ければ経過 0）。
                     Gate::Always { laps } => {
                         if !stopped.contains(&key) {
@@ -731,9 +720,9 @@ impl PartClocks {
     }
 
     /// 一番上の再生が無い刻みで部品の経路を通すか: `pattern` の絵に見える部品か見える動く絵の子に、
-    /// 動く animation を持つものが在るか（作業用の列を使い回す・design.md「Performance & Scalability」）。
+    /// 動く animation を持つものが在るか（作業用の列を使い回す）。
     ///
-    /// 保持している部品の欄に載る番号は見える部品に含まれ（design.md「Data Models」の不変条件）、
+    /// 保持している部品の欄に載る番号は見える部品に含まれ（不変条件）、
     /// 欄のコマはその部品の animation のコマなので、「部品の欄が空でない」もこの判定に含まれる。
     pub(crate) fn moving_visible(
         &mut self,
@@ -758,10 +747,9 @@ impl PartClocks {
             .any(|&f| !table.part_animations(PartKey::Film(f)).is_empty())
     }
 
-    /// `scope` の `slot` の面の回数つきの時計を全部捨てる（終わりなしは残す・要件 2.3）。3 語の時計も
+    /// `scope` の `slot` の面の回数つきの時計を全部捨てる（終わりなしは残す）。3 語の時計も
     /// 捨て、引き金の状態は隠す（窓が閉じたのと同じ扱い＝開いた時刻が `periodic` の新しい起点・
-    /// `runonce` の 1 回は使い済みのまま・spec: areka-P0-seriko-trigger-intervals 要件 5.5）。呼ぶのは
-    /// 窓の新しい出番。
+    /// `runonce` の 1 回は使い済みのまま）。呼ぶのは窓の新しい出番。
     pub(crate) fn drop_finite(&mut self, scope: &ActorKey, slot: Slot, table: &AnimationTable) {
         if let Some(container) = self.clocks.get_mut(scope).and_then(|c| c.get_mut(&slot)) {
             close(container, table, scope, slot);
@@ -770,7 +758,7 @@ impl PartClocks {
 
     /// 面が隠れた（`\s[-1]`・`\b[-1]`）: `scope` の `slot` の面の回数つきの時計と 3 語の時計を全部捨て、
     /// 引き金の状態も捨てる（面が戻ったら、見えた部品はその時刻から数え直し、`runonce` はもう 1 回
-    /// 鳴る・spec: areka-P0-seriko-trigger-intervals 要件 2.6・5.9）。抽選の時計と終わりなしの時計は
+    /// 鳴る）。抽選の時計と終わりなしの時計は
     /// 残す。呼ぶのは面が隠れた後の `LoopRuntime::refresh`。
     pub(crate) fn drop_hidden(&mut self, scope: &ActorKey, slot: Slot, table: &AnimationTable) {
         if let Some(container) = self.clocks.get_mut(scope).and_then(|c| c.get_mut(&slot)) {
@@ -780,7 +768,7 @@ impl PartClocks {
     }
 
     /// 全スコープの `slot` の面の時計と、その面の負の番号の `warn!` の記録を捨てる（その面の種類の
-    /// 表の差し替え・要件 5.8・spec: areka-P0-animated-image-playback 要件 3.6）。空になったスコープの
+    /// 表の差し替え）。空になったスコープの
     /// 入れ物も残さない。
     pub(crate) fn clear(&mut self, slot: Slot) {
         self.clocks.retain(|_, slots| {

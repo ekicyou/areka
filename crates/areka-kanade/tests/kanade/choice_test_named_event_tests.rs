@@ -8,22 +8,17 @@ use super::{
 };
 
 // ============================================================================
-// 群 1: Req9.2(a) — `On` 始まり ID は任意名イベント 1 段のみ
+// 群 1: `On` 始まり ID は任意名イベント 1 段のみ
 // ============================================================================
 
 /// `On` 始まり選択肢 ID の確定が **任意名イベントだけ**を発行し、その Value 応答から
-/// `ResolveChoice`→`Start`（新 talk_id）が起きる（Req9.2(a)・2.1・3.3・4.1・4.6・5.1・裁定 1）。
-///
-/// # 駆動（決定的・sleep なし）
-/// active talk 窓（id=1・保留）で `ChoiceWaiting{candidates:[NAMED_CHOICE_ID]}` → `Choice{NAMED}`。
-/// mock は任意名 id へ script を注入済みゆえ Value を返し、カスケードは 1 段で短絡する。選択由来
-/// talk（id=2）は quit:true で終了系列を駆動し、kanade の期限付き join が全記録の確定点になる。
+/// `ResolveChoice`→`Start`（新 talk_id）が起きる。
 ///
 /// # 非空虚性・discriminative 性
 /// - 任意名 GET が **events 表導出と完全一致**（id＝選択肢 ID 逐語・Ref0 以降＝付随参照列のみ・
 ///   ラベルと ID を Reference に載せない・Status: `talking,choosing`）で 1 件だけ記録される。
 /// - `OnChoiceSelectEx`／`OnChoiceSelect` が記録列に**一切現れない**ことを明示検証する——先行段を
-///   発行する退行（裁定 1 の破れ）はここで落ちる。
+///   発行する退行はここで落ちる。
 /// - `TalkCommand` 到着順が `Start(1)`→`Resolve(1,NAMED)`→`Start(2)` である。解決が起動より後に
 ///   なる／解決が落ちる／起動が旧 id を再利用する、のいずれの退行でもタグ列が食い違って落ちる。
 #[test]
@@ -52,14 +47,14 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
         ..
     } = harness.finish("kanade named-choice join");
 
-    // (1) 段列は任意名 1 段のみ（Ex／無印は一切発行されない・裁定 1）。
+    // (1) 段列は任意名 1 段のみ（Ex／無印は一切発行されない）。
     assert_eq!(
         choice_get_ids(&recorded),
         vec![NAMED_CHOICE_ID],
         "`On` 始まり ID は任意名イベント 1 段のみを発行するはず（Ex／無印の先行なし・裁定 1）: {recorded:?}"
     );
 
-    // (2) 任意名 GET の layout が events 表導出と完全一致する（Ref0 以降＝付随参照列のみ・Req3.3）。
+    // (2) 任意名 GET の layout が events 表導出と完全一致する（Ref0 以降＝付随参照列のみ）。
     let expected_named = expected_call(events::on_choice_named(
         NAMED_CHOICE_ID.to_string(),
         &choice_references(),
@@ -81,7 +76,7 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
         "カスケード段の GET は選択待ち継続中の複合 Status を帯びる（Req3.6・6.1・裁定 6）"
     );
 
-    // (3) 応答から解決と起動がこの順で起きる（DD-4・Req5.1／4.1／4.6）。
+    // (3) 応答から解決と起動がこの順で起きる。
     assert_eq!(
         command_tags(&commands),
         vec![
@@ -92,7 +87,7 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
         "解決指示は起動指示の直前に、同一チャンネルの FIFO 順で届くはず: {commands:?}"
     );
 
-    // (4) 起動は新 talk_id・選択由来スクリプト（旧 id を再利用しない・Req4.1）。
+    // (4) 起動は新 talk_id・選択由来スクリプト（旧 id を再利用しない）。
     assert_eq!(
         started[0].script, FIXED_STEADY_SCRIPT,
         "1 本目は steady talk"
@@ -102,7 +97,6 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
         "2 本目は選択由来の応答スクリプト（既存の起動棚に載った）"
     );
 
-    // (5) 終了系列を完走した（末尾 Unload）＝選択処理後も状態整合を保っている。
     assert_eq!(
         recorded.last().expect("記録列は空でない"),
         &expected_unload(),

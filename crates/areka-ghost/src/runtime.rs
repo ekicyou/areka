@@ -2,7 +2,7 @@
 //!
 //! 起動は `boot`／`boot_with_kanade_stop`／`boot_with_origin`、動作中の差し替えは
 //! `set_shell_dir`（シェルのフォルダ）と `set_names`（名前）、終了は `shutdown`／
-//! `shutdown_within`／`into_parts`（design.md「終了（shutdown）シーケンス」）。
+//! `shutdown_within`／`into_parts`。
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -30,127 +30,107 @@ use crate::relay::spawn_relay;
 use crate::sink::BootCueSink;
 use crate::ticker::{TickerConfig, TickerMsg, spawn_ticker};
 
-/// 起動失敗（design.md「Error Categories and Responses」）。
+/// 起動失敗。
 ///
-/// マウント解決の失敗（起点不在／読取不能／shell 不在・`MountError` の各
-/// variant）を包む。呼び出し側（areka main）はこれを非致命として扱い、
-/// 先に開いた本物の起動窓（キャラ窓＋バルーン窓）・smoke ゲート等を保ったまま、ゴーストの
-/// 実行環境なしで起動を継続する（要件 2.5・8.2）。e2e は
-/// 明示 fail として扱う（design.md 該当節）。
+/// マウント解決の失敗（起点不在／読取不能／shell 不在・`MountError` の各 variant）を包む。
+/// 呼び出し側（areka main）は非致命として扱い、開いた起動窓を保ったままゴーストの実行環境なしで
+/// 起動を続ける。e2e は明示の失敗として扱う。
 ///
-/// 後続タスクで新たな起動失敗種別が増える可能性に備え `#[non_exhaustive]`
-/// を付す。
+/// 起動失敗の種別が増えうるので `#[non_exhaustive]`。
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum GhostBootError {
-    /// descript.txt 起点のマウント解決が失敗した（要件 2.1・2.5）。
+    /// descript.txt 起点のマウント解決が失敗した。
     ///
-    /// `MountError` 自体は `areka-parsers` 側の純粋なデータ型（`Display`／
-    /// `std::error::Error` 未実装）であるため、`Debug` 表現をメッセージへ
-    /// 埋め込む。
+    /// `MountError` は `Display`／`std::error::Error` を実装しないので、`Debug` 表現を
+    /// メッセージへ埋め込む。
     #[error("ghost mount resolution failed: {0:?}")]
     Mount(MountError),
 }
 
-/// SHIORI 結線方式（design.md「ghost::runtime」Service Interface）。
+/// SHIORI 結線方式。
 pub enum ShioriWiring {
-    /// 実 helper 結線（本番・env ゲート追験）。
+    /// 実 helper 結線（本番）。
     Helper {
         /// 32bit SHIORI helper 実行ファイルのパス。
         helper_exe: PathBuf,
     },
-    /// 任意 backend 注入（spine e2e＝scripted fake）。connect closure は
-    /// shiori アクタースレッド上で一度だけ実行される（要件 3.1）。
+    /// 任意 backend の注入（scripted fake）。connect closure は shiori アクタースレッド上で
+    /// 一度だけ実行される。
     Custom(Box<dyn FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send>),
-    /// 正規 in-proc x64 SHIORI4 ロード結線（第 3 の正規結線・要件 1.1/3.1/7.1）。
+    /// 同じプロセスに x64 SHIORI4 DLL を読む結線。
     ///
-    /// `Helper`（別プロセス 32bit helper）／`Custom`（closure 注入 fake）と**同列**に選べる
-    /// 第 3 の SHIORI 結線方式。`mount.shiori.dir.join(file)` で解決した x64 DLL を in-proc に
-    /// ロードし、SHIORI4 生成入口（`shiori_factory`）→ `IShiori` → `ShioriBackend` へ
-    /// [`crate::shiori_inproc::inproc_connect`] が写像する（要件 3.1）。ユニット variant であり
-    /// テスト専用パラメータを持たない——DLL パスはマウント解決結果から本番同型に導出される
-    /// （design.md D-1）。α 後の native x64 SHIORI4 がそのまま本番消費者として再利用する正規
-    /// シームである（要件 7.1・第一級の布石）。
+    /// `mount.shiori.dir.join(file)` で解決した DLL をロードし、SHIORI4 生成入口
+    /// （`shiori_factory`）→ `IShiori` → `ShioriBackend` へ
+    /// [`crate::shiori_inproc::inproc_connect`] が写す。DLL パスはマウント解決結果から導く。
     InProc,
 }
 
-/// per-talk に呼ばれ、システム変数の凍結スナップショットを返す供給シーム
-/// （design.md「GhostBootOptions S-3＋provider」・R7.3）。
+/// per-talk に呼ばれ、システム変数の凍結スナップショットを返す供給シーム。
 ///
-/// dispatcher が talk 起動ごとに一度だけ呼び出し、返ったスナップショットを per-talk の
-/// `spawn_talk` へ手渡す（**凍結像の刻印点**＝talk ごと凍結の意味論・sylphya の per-talk
-/// 凍結と同形）。task 8.2 で本番既定は sylphya 読み口由来（[`SystemVarWiring::FromSylphya`]）へ
-/// 移行したが、sakura 側の契約（[`SystemVarSnapshot`]）は無改変のまま——変わるのはスナップショットの
-/// **源**（sylphya 鏡像）だけ（R7.1/R2.2）。テスト・特殊用途は [`SystemVarWiring::Custom`] で
-/// 従来どおりこのクロージャを直接注入する。
+/// dispatcher が talk 起動ごとに一度だけ呼び、返ったスナップショットを per-talk の
+/// `spawn_talk` へ渡す（talk ごとに凍結する）。本番既定は sylphya 読み口由来
+/// （[`SystemVarWiring::FromSylphya`]）。テスト・特殊用途は [`SystemVarWiring::Custom`] で
+/// このクロージャを直接注入する。
 pub type SystemVarSource = Box<dyn Fn() -> SystemVarSnapshot + Send>;
 
-/// システム変数 provider の結線方式（design「ghost（結線・provider 差替）」Service Interface・R7.1）。
+/// システム変数 provider の結線方式。
 ///
-/// dispatcher の刻印点（[`SystemVarSource`]）は無改変のまま、その **源** を選ぶ:
-/// - [`FromSylphya`](SystemVarWiring::FromSylphya): 本番既定。boot が内部で据えた sylphya
-///   reader ＋自 `AskerId` を捕捉し、`talk_snapshot` を [`SystemVarSnapshot`] へ写像する provider を
-///   構築する（[`crate::sylphya_wiring::from_sylphya_provider`]）。
-/// - [`Custom`](SystemVarWiring::Custom): テスト・特殊用途の直接注入（従来の [`SystemVarSource`]）。
+/// [`SystemVarSource`] の源を選ぶ。
+/// - [`FromSylphya`](SystemVarWiring::FromSylphya): 本番既定。boot が据えた sylphya reader と
+///   自 `AskerId` から、`talk_snapshot` を [`SystemVarSnapshot`] へ写す provider を構築する
+///   （[`crate::sylphya_wiring::from_sylphya_provider`]）。
+/// - [`Custom`](SystemVarWiring::Custom): テスト・特殊用途の直接注入。
 ///
-/// いずれの場合も boot は sylphya アクターを起動して静的構成／username を publish する——`Custom`
-/// でも sylphya は生きており、provider の源だけが差し替わる（8.3/8.4 のテストは `Custom` を使う）。
+/// どちらでも boot は sylphya アクターを起動して静的構成／username を publish する。
 pub enum SystemVarWiring {
-    /// 本番既定: boot が内部で据えた sylphya reader からスナップショットを生成する（R7.1）。
+    /// 本番既定: boot が据えた sylphya reader からスナップショットを生成する。
     FromSylphya,
-    /// テスト・特殊用途の注入（型は従来の [`SystemVarSource`]）。
+    /// テスト・特殊用途の注入。
     Custom(SystemVarSource),
 }
 
-/// ticker 起動方式（design.md「ghost::runtime」Service Interface）。
+/// ticker 起動方式。
 pub enum TickerMode {
     /// 実クロック駆動（本番）。
     Real(TickerConfig),
-    /// ticker を起動しない（決定論テスト＝Tick は外部注入・要件 5.4）。
+    /// ticker を起動しない（Tick は外部から注入する）。
     Disabled,
 }
 
-/// `boot` の入力一式（design.md「ghost::runtime」Service Interface・「GhostBootOptions S-3」）。
+/// `boot` の入力一式。
 pub struct GhostBootOptions {
     /// descript.txt 起点のマウント解決対象ディレクトリ。
     pub ghost_root: PathBuf,
-    /// charset 未宣言時の既定エンコーディング（既定 Ansi・SSP 準拠・記憶
-    /// areka-descript-encoding）。
+    /// charset 未宣言時の既定エンコーディング（既定 Ansi・SSP 準拠）。
     pub default_encoding: DefaultEncoding,
     /// SHIORI 結線方式。
     pub shiori: ShioriWiring,
-    /// 構築時注入の可変長 sink 列（S-3・要件 4.6/8.5）。登録順＝broadcast 順（決定論）。
-    ///
-    /// 旧「2 固定スロット（`surface_sink`/`text_sink`）」の意図的更新——演者数に依らない
-    /// 可変長 [`BootCueSink`] 列とし、dispatcher が talk 起動ごとに各要素を `clone_box` して
-    /// per-talk の `spawn_talk` へ手渡す。診断既定は `vec![LogSink, DiscardSink]` 相当
-    /// （cue ごと 1 回ログの既存性質を維持・design.md「GhostBootOptions S-3」）。
+    /// 構築時に注入する sink 列。登録順が broadcast 順。dispatcher が talk 起動ごとに各要素を
+    /// `clone_box` して per-talk の `spawn_talk` へ渡す。診断の既定は `vec![LogSink, DiscardSink]` 相当。
     pub sinks: Vec<Box<dyn BootCueSink>>,
-    /// システム変数 provider の結線方式（S-3・R7.1/7.3）。本番は
-    /// [`SystemVarWiring::FromSylphya`]（boot が据えた sylphya reader 由来）、テストは
-    /// [`SystemVarWiring::Custom`]（従来の [`SystemVarSource`] 直接注入）。dispatcher の刻印点は
-    /// 無改変で、選ぶのはスナップショットの源だけ（R7.1/R2.2）。
+    /// システム変数 provider の結線方式。本番は [`SystemVarWiring::FromSylphya`]、
+    /// テストは [`SystemVarWiring::Custom`]。
     pub system_vars: SystemVarWiring,
-    /// App スコープの永続 root（sylphya の App 層 profile フォルダ・bin が供給・R6.5）。
+    /// App スコープの永続 root（sylphya の App 層 profile フォルダ・bin が供給）。
     ///
-    /// `None` は App スコープ利用不可（不在縮退）。ghost／shell スコープは mount 解決結果から
-    /// 導く（`<shiori.dir>/profile/areka/`・`<shell.dir>/profile/areka/`）が、App スコープは
-    /// マウントに現れないため呼び出し側（bin）が供給する（既定＝実行ファイル隣接 `profile/areka/`・
-    /// env `AREKA_PROFILE_DIR` で上書き可・R8.2）。
+    /// `None` は App スコープ利用不可。ghost／shell スコープは mount 解決結果から導く
+    /// （`<shiori.dir>/profile/areka/`・`<shell.dir>/profile/areka/`）が、App スコープは
+    /// マウントに現れないので呼び出し側（bin）が供給する（既定は実行ファイル隣接の `profile/areka/`・
+    /// env `AREKA_PROFILE_DIR` で上書き可）。
     pub app_profile_dir: Option<PathBuf>,
     /// ticker 起動方式。
     pub ticker: TickerMode,
-    /// strict の記録の判定の差し込み（spec mcp-strict-errors）。`boot` がゴースト名と束ねて配り口へ渡す。
+    /// strict の記録の判定の差し込み。`boot` がゴースト名と束ねて配り口へ渡す。
     /// `None` は差し込みの無い構築で、strict の台本も記録せずに再生する。
     pub strict_judges: Option<Arc<dyn StrictJudges>>,
 }
 
 /// ghost 結線層が起動した全コンポーネントの所有者。
 ///
-/// [`GhostRuntime::kanade`]／[`GhostRuntime::dispatcher`]（テスト駆動・Tick 注入点）に
-/// 加え、終了統括の [`GhostRuntime::shutdown`] と分解結線用の [`GhostRuntime::into_parts`]
-/// を提供する（task 3.2・design.md「ghost::runtime」）。`mount` は [`GhostRuntime::mount`]
-/// 経由で読める保持物（design.md「保持物」節・popup-menu-minimal task 1.3）。
+/// テスト駆動・Tick 注入点の [`GhostRuntime::kanade`]／[`GhostRuntime::dispatcher`]、終了統括の
+/// [`GhostRuntime::shutdown`]、分解用の [`GhostRuntime::into_parts`] を提供する。
+/// `mount` は [`GhostRuntime::mount`] で読める。
 pub struct GhostRuntime {
     kanade_tx: Sender<KanadeMsg>,
     dispatcher_tx: Sender<DispatcherMsg>,
@@ -160,12 +140,12 @@ pub struct GhostRuntime {
     shiori_handle: ActorHandle,
     start_relay_handle: ActorHandle,
     down_relay_handle: ActorHandle,
-    /// 選択待ちの起こしの中継（kanade → 刻み役・`TickerMode::Real` 時のみ `Some`・#7）。
+    /// 選択待ちの起こしの中継（kanade → 刻み役・`TickerMode::Real` 時のみ `Some`）。
     choice_wake_relay_handle: Option<ActorHandle>,
     ticker_handle: Option<ActorHandle>,
     /// sylphya（統一プロパティシステム）供給端。shutdown の `Close` 送出に使う。
     sylphya_publisher: SylphyaPublisher,
-    /// sylphya 読み口（provider が捕捉するのと同一鏡像を共有・test 検証／後続用途で保持）。
+    /// sylphya 読み口（provider と同じ鏡像を共有する）。
     sylphya_reader: SylphyaReader,
     /// sylphya アクターの join ハンドル。shutdown の最終段で join して panic を観測する。
     sylphya_handle: ActorHandle,
@@ -174,9 +154,7 @@ pub struct GhostRuntime {
     shiori_probe: ShioriProbe,
 }
 
-/// `into_parts` が返す全 `ActorHandle`（design.md「アクター別の停止経路（正本）」・
-/// 「ghost::runtime」Service Interface）。S6 全断線シナリオ等、`shutdown` を経ずに
-/// 手動でハンドルを join したい上級用途・テスト向け。
+/// `into_parts` が返す全 `ActorHandle`。`shutdown` を経ずに手動で join したいテスト向け。
 pub struct GhostHandles {
     pub kanade: ActorHandle,
     pub dispatcher: ActorHandle,
@@ -188,37 +166,35 @@ pub struct GhostHandles {
     pub choice_wake_relay: Option<ActorHandle>,
     /// `TickerMode::Real` 時のみ `Some`。
     pub ticker: Option<ActorHandle>,
-    /// sylphya アクターの join ハンドル（掲示板供給者・shutdown 最終段で join）。
+    /// sylphya アクターの join ハンドル（shutdown の最終段で join する）。
     pub sylphya: ActorHandle,
 }
 
-/// `into_parts` の分解結果（S6 段階的解体の駆動口・design.md「ghost::runtime」）。
+/// `into_parts` の分解結果。
 ///
-/// shiori への投函端は**存在しない**（`GhostRuntime` は `shiori_tx` を保持しない——
-/// 「アクター別の停止経路（正本）」表の前提。shiori の停止は kanade 終了系列の
-/// `ShioriMsg::Close` が正経路、kanade panic 時は shiori_tx drop による切断が
-/// フォールバックとして機能する）。
+/// shiori への投函端は無い（`GhostRuntime` は `shiori_tx` を保持しない）。shiori は kanade の
+/// 終了系列の `ShioriMsg::Close` で止まり、kanade が panic したときは `shiori_tx` の drop による
+/// 切断で止まる。
 pub struct GhostParts {
-    /// S6②の Close 送出・S3/S5 の Tick 注入。
+    /// Close 送出・Tick 注入。
     pub kanade: Sender<KanadeMsg>,
-    /// S6①の Close 送出・Tick 注入。
+    /// Close 送出・Tick 注入。
     pub dispatcher: Sender<DispatcherMsg>,
     /// `TickerMode::Real` 時のみ `Some`。
     pub ticker: Option<Sender<TickerMsg>>,
-    /// sylphya 供給端（`Close` 送出・手動解体で掲示板を畳む）。
+    /// sylphya 供給端（`Close` 送出）。
     pub sylphya: SylphyaPublisher,
-    /// sylphya 読み口（手動解体時の値検証・provider と同一鏡像を共有）。
+    /// sylphya 読み口（provider と同じ鏡像を共有する）。
     pub sylphya_reader: SylphyaReader,
-    /// kanade／dispatcher／shiori／start-relay／down-relay／choice-wake-relay(Option)／ticker(Option)／sylphya の全 `ActorHandle`。
+    /// 全 `ActorHandle`。
     pub handles: GhostHandles,
 }
 
-/// 終了統括の失敗（design.md「Error Categories and Responses」・要件 6.5）。
+/// 終了統括の失敗。
 ///
 /// 各段の join で観測された panic（[`areka_actor::ActorError`]）を段名つきで収集する。
-/// best-effort 完走の結果、失敗集合が非空だった場合にのみ構築される（全段成功なら
-/// `shutdown` は `Ok(())` を返す）。単一の不透明文字列へ潰さず、どの段が・なぜ失敗
-/// したかを個別に保持する（silent failure なしの精神）。
+/// 最後まで走らせた結果、失敗が 1 つでもあったときだけ構築される。どの段がなぜ失敗したかを
+/// 個別に保持する。
 #[derive(Debug, thiserror::Error)]
 #[error("ghost shutdown failed in stage(s): {failures:?}")]
 pub struct GhostShutdownError {
@@ -227,7 +203,7 @@ pub struct GhostShutdownError {
 }
 
 impl GhostRuntime {
-    /// kanade inbox への投函端（テスト駆動・後続 input-events の結線点）。
+    /// kanade inbox への投函端。
     pub fn kanade(&self) -> &Sender<KanadeMsg> {
         &self.kanade_tx
     }
@@ -237,21 +213,18 @@ impl GhostRuntime {
         &self.dispatcher_tx
     }
 
-    /// sylphya（統一プロパティシステム）供給端への参照（design.md「C5 GhostRuntime 増分」・
-    /// requirements.md 6.2）。`kanade()`／`dispatcher()` と同型の additive アクセサで、main が
-    /// この clone を捕捉して `PersistWiring`（位置永続の write-through 端）を組む。
+    /// sylphya（統一プロパティシステム）供給端への参照。main がこの clone を捕捉して
+    /// `PersistWiring`（位置永続の書込端）を組む。
     pub fn sylphya_publisher(&self) -> &SylphyaPublisher {
         &self.sylphya_publisher
     }
 
-    /// sylphya（統一プロパティシステム）の読み手への参照。`sylphya_publisher()` と同じ形の読み口。
+    /// sylphya（統一プロパティシステム）の読み口への参照。
     pub fn sylphya_reader(&self) -> &SylphyaReader {
         &self.sylphya_reader
     }
 
-    /// 解決済みマウントモデルへの参照（`readme` キー転記の読み出し口・
-    /// popup-menu-minimal task 1.3・要件 4.1/9.4/10.4）。`kanade()`／
-    /// `sylphya_publisher()` と同型の additive アクセサ。
+    /// 解決済みマウントモデルへの参照（`readme` キー転記の読み出し口）。
     pub fn mount(&self) -> &MountModel {
         &self.mount
     }
@@ -261,9 +234,9 @@ impl GhostRuntime {
         &self.shiori_probe
     }
 
-    /// 今のシェルのフォルダ（`mount().shell.dir`）だけを書き換える（要件 6.5）。
+    /// 今のシェルのフォルダ（`mount.shell.dir`）だけを書き換える。
     ///
-    /// シェルの差し替えの後に呼び、`mount().shell.dir` の読み手を差し替え後のシェルへ向ける。
+    /// シェルの差し替えの後に呼び、`mount.shell.dir` の読み手を差し替え後のシェルへ向ける。
     /// bindgroup の転記と sylphya の Shell スコープの根は起動時のシェルのまま（bindgroup は
     /// 差し替えの資産づくりが新しいシェルから読み直す・Shell スコープへ書く本番の呼び手は無い）。
     pub fn set_shell_dir(&mut self, dir: PathBuf) {
@@ -276,8 +249,8 @@ impl GhostRuntime {
         self.mount.shell.dir = dir;
     }
 
-    /// 動作中のゴーストの名前（`mount().names`）を替え、静的プロパティ（`selfname` ほか・
-    /// `baseware.*`）を新しい名前で出し直す（mcp-reload 要件 7.3・descript の読み直し）。
+    /// 動作中のゴーストの名前（`mount.names`）を替え、静的プロパティ（`selfname` ほか・
+    /// `baseware.*`）を新しい名前で出し直す（descript の読み直し）。
     /// 新しい名前が定義しない静的な名前は先に鏡像から消す（新しい descript で起動したのと同じ状態）。
     pub fn set_names(&mut self, names: GhostNames) {
         tracing::info!(
@@ -288,7 +261,7 @@ impl GhostRuntime {
         );
         self.mount.names = names;
         let asker = crate::sylphya_wiring::ghost_asker_id(&self.mount.shiori.dir);
-        // 新しい名前に無い静的名は消す（起動時に積まないのと同じ＝素通し縮退・要件 9.15 ⑵）。
+        // 新しい名前に無い静的名は消す（起動時に積まないのと同じ）。
         self.sylphya_publisher.remove_flat(
             asker.clone(),
             crate::sylphya_wiring::absent_flat_statics(&self.mount.names),
@@ -314,21 +287,18 @@ impl GhostRuntime {
         (result, guard.finish())
     }
 
-    /// 終了統括（design.md「終了（shutdown）シーケンス」・要件 6.1/6.4/6.5）。
+    /// 終了統括。
     ///
     /// 手順: `KanadeMsg::ForceQuit(reason)` 送出 → kanade join → `DispatcherMsg::Close`
-    /// 送出 → dispatcher join → shiori join（明示送出なし。kanade 終了系列が既に
-    /// `ShioriMsg::Close` を送出済み） → start-relay join → down-relay join →（ticker 起動時のみ）
-    /// choice-wake-relay join → `TickerMsg::Close` 送出 → ticker join（relay は明示 Close を持たず
-    /// 上流停止に連動する自然終了・「アクター別の停止経路」表参照）。起こしの中継は刻み役の送り端を
-    /// 持つが、kanade の停止で上流が落ちて先に終わるので、刻み役の Close の前に join しても詰まらない
-    /// （audit-kanade #7・要件 5.3）。
+    /// 送出 → dispatcher join → shiori join（kanade の終了系列が `ShioriMsg::Close` を送出済みなので
+    /// 明示送出なし） → start-relay join → down-relay join →（ticker 起動時のみ）
+    /// choice-wake-relay join → `TickerMsg::Close` 送出 → ticker join。relay は明示 Close を持たず
+    /// 上流の停止で自然に終わる。起こしの中継は刻み役の送り端を持つが、kanade の停止で上流が先に
+    /// 落ちるので、刻み役の Close の前に join しても詰まらない。
     ///
-    /// 冪等: 各段の送出失敗（対象が既に自発停止済み——例えば quit talk 経由の kanade
-    /// 自己終了）は `debug!` の上で次段へ進む（正常系）。join の `Err`（panic 観測）は
-    /// `error!` の上で失敗集合へ収集し、**処理を継続する**（abort-on-first-failure では
-    /// ない・best-effort 完走）。全段完了後、失敗集合が空なら `Ok(())`、非空なら
-    /// [`GhostShutdownError`] を返す。
+    /// 冪等: 各段の送出失敗（対象が既に自発停止済み。例えば quit talk 経由の kanade 自己終了）は
+    /// `debug!` の上で次段へ進む。join の `Err`（panic）は `error!` の上で失敗集合へ収集し、
+    /// 最後まで続ける。失敗集合が空なら `Ok()`、非空なら [`GhostShutdownError`] を返す。
     pub fn shutdown(self, reason: areka_kanade::CloseReason) -> Result<(), GhostShutdownError> {
         let GhostRuntime {
             kanade_tx,
@@ -350,7 +320,6 @@ impl GhostRuntime {
 
         let mut failures: Vec<(&'static str, areka_actor::ActorError)> = Vec::new();
 
-        // 1. kanade へ ForceQuit（既に自発停止済みなら送出失敗＝冪等・debug!）。
         if kanade_tx.send(KanadeMsg::ForceQuit { reason }).is_err() {
             tracing::debug!(
                 target: "ghost-shutdown",
@@ -359,13 +328,11 @@ impl GhostRuntime {
             );
         }
 
-        // 2. kanade join（上流から・design.md「join の順序は『上流から』」）。
         if let Err(err) = kanade_handle.join() {
             tracing::error!(target: "ghost-shutdown", stage = "kanade", error = %err, "kanade actor join failed");
             failures.push(("kanade", err));
         }
 
-        // 3. dispatcher へ Close。
         if dispatcher_tx.send(DispatcherMsg::Close).is_err() {
             tracing::debug!(
                 target: "ghost-shutdown",
@@ -373,33 +340,30 @@ impl GhostRuntime {
             );
         }
 
-        // 4. dispatcher join。
         if let Err(err) = dispatcher_handle.join() {
             tracing::error!(target: "ghost-shutdown", stage = "dispatcher", error = %err, "dispatcher actor join failed");
             failures.push(("dispatcher", err));
         }
 
-        // 7. shiori join（送出なし。kanade 終了系列が ShioriMsg::Close を既に送出済み・
-        //    「アクター別の停止経路」表参照。GhostRuntime は shiori_tx を保持しない）。
+        // shiori は join だけ（`GhostRuntime` は `shiori_tx` を保持しない）。
         if let Err(err) = shiori_handle.join() {
             tracing::error!(target: "ghost-shutdown", stage = "shiori", error = %err, "shiori actor join failed");
             failures.push(("shiori", err));
         }
 
-        // 8. start-relay join（自然終了: kanade 停止による start_tx drop で上流切断）。
+        // relay は自然終了する。start-relay は kanade 停止による start_tx の drop で、down-relay は
+        // shiori 停止による down_tx の drop で、上流が切れる。
         if let Err(err) = start_relay_handle.join() {
             tracing::error!(target: "ghost-shutdown", stage = "start-relay", error = %err, "start-relay actor join failed");
             failures.push(("start-relay", err));
         }
 
-        // 9. down-relay join（自然終了: shiori 停止による down_tx drop で上流切断）。
         if let Err(err) = down_relay_handle.join() {
             tracing::error!(target: "ghost-shutdown", stage = "down-relay", error = %err, "down-relay actor join failed");
             failures.push(("down-relay", err));
         }
 
-        // 9b. choice-wake-relay join（`TickerMode::Real` 時のみ・自然終了: kanade 停止で起こしの線の
-        //     送り端が落ちる。刻み役の Close より前・#7）。
+        // 起こしの中継は `TickerMode::Real` 時のみ。kanade 停止で起こしの線の送り端が落ちて終わる。
         if let Some(handle) = choice_wake_relay_handle
             && let Err(err) = handle.join()
         {
@@ -407,7 +371,7 @@ impl GhostRuntime {
             failures.push(("choice-wake-relay", err));
         }
 
-        // 9c・9d. ticker（`TickerMode::Real` 時のみ起動されている・両方 no-op で完全スキップ）。
+        // ticker は `TickerMode::Real` 時のみ起動されている。
         if let Some(ticker_tx) = ticker_tx
             && ticker_tx.send(TickerMsg::Close).is_err()
         {
@@ -423,16 +387,12 @@ impl GhostRuntime {
             failures.push(("ticker", err));
         }
 
-        // 10. sylphya Close＋join（既存段の後・供給者停止後に掲示板を畳む・design「shutdown」）。
-        //     供給者（ghost 静的 publish は boot 済み・kanade は上流で既に停止）が全て止まった後に
-        //     掲示板を畳む。既に停止済みへの再送は SylphyaPublisher が warn＋縮退（冪等・非 panic）。
+        // 供給者が全て止まった後に sylphya を畳む。停止済みへの再送は SylphyaPublisher が warn して
+        // 縮退する。
         //
-        // close() の直前に barrier() で終了時フラッシュを明示確認する（requirements.md 1.2・
-        // design.md「C5 GhostRuntime 増分」step 10 直前・E2-lite の安全網）。DragEnd write-through は
-        // 既に FIFO で投函済み（E1＝FIFO close が保証の正本）だが、close() の前に反映フェンスを 1 枚置く
-        // ことで「終了直前までに投函された永続 put が確実に反映されてからストアが畳まれる」ことを保証する。
-        // Ok なら確認 info・Err（アクター既死等）なら warn の上で**続行**する——早期 return も panic も
-        // しない（write-through 済みが正本・design「Error Handling」shutdown barrier() Err 行）。
+        // DragEnd の永続書込は FIFO で投函済みで、FIFO の close がそれを保証する。それでも close の
+        // 前に barrier を置き、終了直前までの永続 put が反映されてからストアを畳む。失敗しても
+        // warn して続行する。
         match sylphya_publisher.barrier() {
             Ok(()) => {
                 tracing::info!(target: "ghost-shutdown", "persist flush confirmed");
@@ -460,10 +420,9 @@ impl GhostRuntime {
         }
     }
 
-    /// 全断線シナリオ等の分解結線用（design.md「ghost::runtime」・S6 段階的解体の
-    /// 駆動口）。通常は [`GhostRuntime::shutdown`] を使う。メッセージ送出・join は
-    /// 一切行わず、保持している全 `Sender`／`ActorHandle` を呼び出し側へ構造的に
-    /// 移譲するのみ（`mount` は後続用途がないため破棄する）。
+    /// 分解結線用（テストが手動で解体する）。通常は [`GhostRuntime::shutdown`] を使う。
+    /// メッセージ送出・join は行わず、保持している全 `Sender`／`ActorHandle` を呼び出し側へ渡す
+    /// （`mount` は破棄する）。
     pub fn into_parts(self) -> GhostParts {
         let GhostRuntime {
             kanade_tx,
@@ -503,24 +462,18 @@ impl GhostRuntime {
     }
 }
 
-/// 起動記録ゲート（design.md「C5 GhostRuntime 増分」boot() step 1-3・要件 3.1/3.4/4.1/4.2/6.3）。
+/// 起動記録ゲート。
 ///
-/// boot が据えた sylphya 読み口（`reader`）と ghost 自身の `ghost_asker` から永続鏡像を引き、
-/// [`KanadeConfig`] の初回起動系フィールドを解決して返す純ロジック（テスト単体で駆動可能なよう
-/// `boot()` から切り出す・記憶知見「判断分岐のみ檻に入れる」）。read のみ・**決して panic しない**
-/// （reader は panic-free・全不在は既定へ寛容縮退・要件 6.3「永続読取失敗は起動を止めない」）。
+/// sylphya 読み口（`reader`）と ghost 自身の `ghost_asker` から永続鏡像を引き、[`KanadeConfig`] の
+/// 初回起動系フィールドを解決して返す。読むだけで、panic しない。
 ///
-/// 手順:
-/// 1. **存在ゲート**（要件 3.1/3.4）: `areka.boot.count`（正準文字列は
-///    [`PersistKey::BootCount`] から取得＝単一権威）が鏡像に**存在**すれば `first_boot=false`
-///    （2 回目以降起動）、不在なら `true`（初回起動）。値の**数値解釈はしない**——存在の有無のみを
-///    見る（過剰実装回避・design C5-1）。
-/// 2. **vanish 寛容 parse**（要件 4.1/4.2）: `areka.vanish.count` を u32 として寛容 parse し
-///    `config.vanish_count` へ。不在→0・**非数値 present は warn の上 0**（起動は止めない・6.3）。
-/// 3. **初回起動記録 epilogue 注入**（要件 3.4）: `first_boot==true` のとき、初回挨拶トーク
-///    再生完走時に起動記録を書く汎用プロパティ SET キュー 1 件を `config.first_boot_epilogue` へ
-///    据える（`[PROP_SET_CUE_NAME, [BootCount 正準 key, "1"]]`）。kanade は正準 key を**不透明搬送**
-///    するのみで sylphya へは依存しない（依存方向規律の担保・design C5-3）。
+/// 1. `areka.boot.count`（正準文字列は [`PersistKey::BootCount`]）が鏡像に存在すれば
+///    `first_boot=false`、なければ `true`。値は数値として読まず、存在だけを見る。
+/// 2. `areka.vanish.count` を u32 として読んで `config.vanish_count` へ。不在は 0、非数値は
+///    warn して 0（起動は止めない）。
+/// 3. `first_boot` のとき、初回挨拶トークの完走時に起動記録を書く汎用プロパティ SET キュー 1 件
+///    （`[PROP_SET_CUE_NAME, [BootCount 正準 key, "1"]]`）を `config.first_boot_epilogue` へ据える。
+///    kanade は正準 key をそのまま運ぶだけで、sylphya に依存しない。
 fn apply_boot_record_gate(
     mut config: KanadeConfig,
     reader: &SylphyaReader,
@@ -530,16 +483,12 @@ fn apply_boot_record_gate(
         asker: ghost_asker.clone(),
     };
 
-    // step 1: 起動記録の**存在**ゲート（値は数値解釈しない・design C5-1・要件 3.1/3.4）。
     let boot_count_key = PersistKey::BootCount.to_canonical_key();
     config.first_boot = match reader.resolve_dotted_str(&ctx, &boot_count_key) {
-        // 記録あり（値の中身は問わない）→ 2 回目以降起動。
         DottedResolution::Value(_) => false,
-        // 記録なし → 初回起動（既定挙動）。
         DottedResolution::NotFound => true,
     };
 
-    // step 2: vanish 回数の寛容 parse（不在→0・非数値→0＋warn・design C5-2・要件 4.1/4.2/6.3）。
     let vanish_count_key = PersistKey::VanishCount.to_canonical_key();
     config.vanish_count = match reader.resolve_dotted_str(&ctx, &vanish_count_key) {
         DottedResolution::Value(raw) => raw.parse::<u32>().unwrap_or_else(|_| {
@@ -554,7 +503,6 @@ fn apply_boot_record_gate(
         DottedResolution::NotFound => 0,
     };
 
-    // step 3: 初回起動なら起動記録書込 epilogue を据える（正準 key を不透明搬送・design C5-3・要件 3.4）。
     if config.first_boot {
         config.first_boot_epilogue = vec![EpilogueCommand {
             name: PROP_SET_CUE_NAME.to_string(),
@@ -565,32 +513,25 @@ fn apply_boot_record_gate(
     config
 }
 
-/// descript.txt 起点で全エンジンを起動順に結線する（design.md「ghost::runtime」
-/// Responsibilities & Constraints・「起動（boot）シーケンス」）。
+/// descript.txt 起点で全エンジンを起動順に結線する。
 ///
-/// 手順（要件 2.2 の順序）: マウント解決 → 運行設定解決 → shiori actor →
-/// kanade → sakura dispatcher（＋start/down relay）→ ticker（`TickerMode::Real`
-/// 時のみ）→ `KanadeMsg::Boot` 送出。
+/// 手順: マウント解決 → 運行設定解決 → shiori actor → kanade → sakura dispatcher
+/// （＋start/down relay）→ ticker（`TickerMode::Real` 時のみ）→ `KanadeMsg::Boot` 送出。
 ///
-/// マウント解決が失敗した場合、他のいかなるコンポーネントも spawn される前に
-/// `error!` の上で `Err(GhostBootError::Mount(_))` を返す（要件 2.5・後片付け
-/// 不要——何も起動していない）。
+/// マウント解決が失敗したら、何も spawn しないうちに `error!` の上で
+/// `Err(GhostBootError::Mount(_))` を返す。
 pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
     boot_with_kanade_stop(options, None)
 }
 
-/// kanade の停止通知の投函端つきで ghost を起動する（R15.3・design D15 の 3）。
+/// kanade の停止通知の投函端つきで ghost を起動する。
 ///
-/// 引数は [`boot`] と同一で、末尾に `kanade_stop` が 1 つ増えるだけの派生である（[`boot`] は
-/// `None` を渡す薄い包み＝**既存の構築点は 1 つも変わらない**）。設計は当初これを
-/// `GhostBootOptions` の新フィールドとして書いていたが、[`GhostBootOptions`] は struct
-/// リテラルで組まれる型であり（本 crate と `areka` の多くの箇所）、フィールドを増やすと
-/// 全構築点の書き換えを強いる——設計自身が置いた「既存の構築点は不変」という条件と両立しない。
-/// そこで [`areka_kanade::spawn_kanade_with_stop_sink`] と**同じ形の派生関数**を採る。
+/// [`boot`] の末尾に `kanade_stop` が 1 つ増えるだけの派生（[`boot`] は `None` を渡す）。
+/// [`GhostBootOptions`] は struct リテラルで組まれ、フィールドを増やすと全構築点の書き換えに
+/// なるので、[`areka_kanade::spawn_kanade_with_stop_sink`] と同じく派生関数にしている。
 ///
-/// `Some` を渡すと、kanade の終了系列が完了した時点で運行の通知の「停止」
-/// （[`KanadeNotice::Stopped`]）が 1 件届く。受け手
-/// （UI の毎フレーム結線）はそれを合図に全ゴースト窓を閉じる。`None` なら通知は出ない。
+/// `Some` を渡すと、kanade の終了系列が完了した時点で [`KanadeNotice::Stopped`] が 1 件届く。
+/// 受け手（UI の毎フレーム結線）はそれを合図に全ゴースト窓を閉じる。`None` なら通知は出ない。
 pub fn boot_with_kanade_stop(
     options: GhostBootOptions,
     kanade_stop: Option<Sender<KanadeNotice>>,
@@ -598,19 +539,19 @@ pub fn boot_with_kanade_stop(
     boot_with_origin(options, kanade_stop, BootOrigin::Plain, None, None)
 }
 
-/// 起動の由来つきで ghost を起動する（要件 4.1・8.6）。
+/// 起動の由来つきで ghost を起動する。
 ///
 /// [`boot_with_kanade_stop`] の末尾に `origin` が 1 つ増えるだけの派生（[`GhostBootOptions`] に
-/// 欄を足さない＝既存の構築点は変わらない）。起動記録の判定の後で、kanade の設定へ由来と
+/// 欄を足さない）。起動記録の判定の後で、kanade の設定へ由来と
 /// シェルのフォルダ名（マウントしたシェルのフォルダの末尾・取れなければシェル名のまま）を
 /// 詰めてから kanade を起こす。切替で来たなら `OnGhostChanged`（Ref7＝シェルのフォルダ名）、
 /// 前回落ちたなら `OnBoot` の Ref6/Ref7 に現れる。
 ///
-/// `shell` は起動するシェルのフォルダ名（要件 6.4）。`Some(名)` なら `shell/<名>/` をマウントし、
-/// `OnBoot` の Ref0 もそのシェルの名前になる。`None` は今日の規則
-/// （`seriko.defaultsurfacedirectoryname`、無ければ `master`）。[`GhostBootOptions`] に欄は足さない。
+/// `shell` は起動するシェルのフォルダ名。`Some(名)` なら `shell/<名>/` をマウントし、
+/// `OnBoot` の Ref0 もそのシェルの名前になる。`None` は `seriko.defaultsurfacedirectoryname`、
+/// 無ければ `master`。
 ///
-/// `persist_failures` はゴーストの記憶の書き手の失敗の受け口（要件 1.3）。`Some` なら、書き手が
+/// `persist_failures` はゴーストの記憶の書き手の失敗の受け口。`Some` なら、書き手が
 /// 保存に失敗するたびに書けなかった中身（[`areka_sylphya::PersistFailure`]）が 1 件届く。
 /// 書き手を起こすときに渡すので、起動のトークの最中の書き込みも取りこぼさない。`None` なら送らない。
 pub fn boot_with_origin(
@@ -620,7 +561,6 @@ pub fn boot_with_origin(
     shell: Option<&str>,
     persist_failures: Option<Sender<areka_sylphya::PersistFailure>>,
 ) -> Result<GhostRuntime, GhostBootError> {
-    // 1. マウント解決（失敗は即座に打ち切り・要件 2.1/2.5）。シェル名つき（要件 6.4）。
     let mount = match resolve_with_shell(&options.ghost_root, options.default_encoding, shell) {
         Ok(mount) => mount,
         Err(err) => {
@@ -635,14 +575,12 @@ pub fn boot_with_origin(
         }
     };
 
-    // 2. 運行設定の値源解決（task 2.3）。
     let config = resolve_kanade_config(&mount, options.default_encoding);
-    //    strict の記録の束ね（名は kanade の `script` の記録と同じ作り・spec mcp-strict-errors 要件 2.2）。
+    // strict の記録の束ね（名は kanade の `script` の記録と同じ作り）。
     let strict = crate::config::strict_hooks(&mount, options.strict_judges.take());
 
-    // 2b. sylphya（統一プロパティシステム）起動＋静的構成 publish（task 8.2・design「boot 系列」）。
-    //     層別 profile root: ghost＝`<shiori.dir>/profile/areka/`・shell＝`<shell.dir>/profile/areka/`・
-    //     app＝bin 供給（`options.app_profile_dir`）・balloon＝None。起動時に全スコープを寛容ロード。
+    // 層別の profile root: ghost＝`<shiori.dir>/profile/areka/`・shell＝`<shell.dir>/profile/areka/`・
+    // app＝bin 供給（`options.app_profile_dir`）・balloon＝None。
     let scope_roots = areka_sylphya::ScopeRoots {
         app: options.app_profile_dir.clone(),
         ghost: Some(crate::sylphya_wiring::profile_areka_root(&mount.shiori.dir)),
@@ -650,13 +588,9 @@ pub fn boot_with_origin(
         balloon: None,
     };
 
-    // 永続書込先ディレクトリの即時保証（実機初回起動サインオフで判明した恒久修正・要件 6.3）:
-    // position-persist は M1 初の永続書込を導入した——sylphya は「M1 本番経路に永続書込呼出は無い」
-    // read-only 前提で完了しており、ghost profile root（`<shiori.dir>/profile/areka/`）を作る責任者が
-    // 結線とストアの狭間に落ちていた。新規ゴーストでこの dir が無いと初回の全 Ghost スコープ commit が
-    // os error 3（NotFound）で Degraded に倒れ、位置・起動記録が保存されない。ここで先に作る
-    // （`FsPersistIo::commit` も commit 時に `create_dir_all` する二重の安全網）。失敗しても boot は
-    // 止めない（warn＋継続・log-first・6.3——FsPersistIo が commit 時に再試行する）。
+    // 新規ゴーストでは ghost profile root が無く、初回の Ghost スコープ commit が
+    // os error 3（NotFound）で Degraded に倒れ、位置・起動記録が保存されない。先に作る
+    // （`FsPersistIo::commit` も commit 時に `create_dir_all` する）。失敗しても boot は止めない。
     if let Some(ghost_root) = scope_roots.ghost.as_ref()
         && let Err(err) = areka_sylphya::persist::FsPersistIo::ensure_root_dir(ghost_root)
     {
@@ -674,16 +608,13 @@ pub fn boot_with_origin(
         handle: sylphya_handle,
     } = crate::sylphya_wiring::spawn_ghost_sylphya(scope_roots, persist_failures);
 
-    // ghost 自身の AskerId（MountModel.shiori.dir 由来の正準文字列・provider／prefetch sink が共有）。
+    // ghost 自身の AskerId（`mount.shiori.dir` 由来・provider／prefetch sink が共有）。
     let ghost_asker = crate::sylphya_wiring::ghost_asker_id(&mount.shiori.dir);
 
-    // 2c. 起動記録ゲート（design「C5 GhostRuntime 増分」boot() step 1-3・要件 3.1/3.4/4.1/4.2/6.3）。
-    //     sylphya reader＋ghost_asker が揃った直後に永続鏡像を引き、初回起動ゲート・vanish 回数・
-    //     初回起動記録 epilogue を解決した config へ差し替える（read のみ・panic なし・不在は既定縮退）。
     let mut config = apply_boot_record_gate(config, &sylphya_reader, &ghost_asker);
 
-    //    選択待ちの起こしの線（#7・要件 9.5）。刻み役が本物のときだけ作る（`Disabled` は毎秒の
-    //    Tick を外から注入する決定論のテストなので `None` のまま）。
+    // 選択待ちの起こしの線。刻み役が本物のときだけ作る（`Disabled` は毎秒の Tick を外から
+    // 注入するテストなので `None` のまま）。
     let choice_wake_rx = match options.ticker {
         TickerMode::Real(_) => {
             let (wake_tx, wake_rx) = mpsc::channel::<areka_kanade::MonotonicMs>();
@@ -693,15 +624,14 @@ pub fn boot_with_origin(
         TickerMode::Disabled => None,
     };
 
-    // 2d. 起動の由来とシェルのフォルダ名（要件 4.1）。フォルダ名が取れなければ
-    //     `KanadeConfig::new` が写したシェル名のまま。
+    // フォルダ名が取れなければ `KanadeConfig::new` が写したシェル名のまま。
     config.boot_origin = origin;
     if let Some(folder) = mount.shell.dir.file_name() {
         config.shell_folder = folder.to_string_lossy().into_owned();
     }
 
-    // 静的構成層 publish: フラット（selfname 系＝derive_flat_statics）＋大域点付き（baseware 2 項・
-    // version＝areka-ghost の CARGO_PKG_VERSION・R5.1）。投函のみ（反映は prefetch sink の barrier で担保）。
+    // 静的構成の publish（selfname 系と baseware 2 項。version は areka-ghost の CARGO_PKG_VERSION）。
+    // 投函のみで、反映は prefetch sink の barrier が待つ。
     crate::sylphya_wiring::publish_ghost_statics(
         &sylphya_publisher,
         ghost_asker.clone(),
@@ -709,15 +639,11 @@ pub fn boot_with_origin(
         env!("CARGO_PKG_VERSION"),
     );
 
-    // 3. 循環解消用の素の中継チャンネル（design.md「結線トポロジの要点」）。
-    //    kanade → talk 再生系は [`TalkCommand`] の**単一チャンネル**（DD-5）——起動・選択解決・
-    //    選択解除の 3 形が同一チャンネル＋単一 relay ＋ dispatcher 単一 inbox を流れることで
-    //    FIFO 順序が保存される（`areka-talk` の `TalkCommand` doc に契約として明記）。
-    //    結線トポロジ自体は不変（relay は従来どおり 1 本）。
+    // kanade → talk 再生系は [`TalkCommand`] の単一チャンネル。起動・選択解決・選択解除の 3 形が
+    // 同じチャンネル・単一 relay・dispatcher の単一 inbox を流れるので、FIFO 順が保たれる。
     let (start_tx, start_rx) = mpsc::channel::<areka_kanade::TalkCommand>();
     let (down_tx, down_rx) = mpsc::channel::<KanadeMsg>();
 
-    // 4. connect closure の構成（Helper＝本番・Custom＝spine e2e 等の注入）。
     let connect: Box<dyn FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send> =
         match options.shiori {
             ShioriWiring::Helper { helper_exe } => Box::new(crate::shiori_wiring::real_connect(
@@ -726,29 +652,24 @@ pub fn boot_with_origin(
                 options.default_encoding,
             )),
             ShioriWiring::Custom(connect) => connect,
-            // 第 3 の正規結線（要件 1.1/3.1/7.1）: `Helper` arm と同型に、mount 解決済みの
-            // `ShioriMount` を渡して in-proc x64 DLL ロード connect closure を構成する。
             ShioriWiring::InProc => {
                 Box::new(crate::shiori_inproc::inproc_connect(mount.shiori.clone()))
             }
         };
 
-    // 5. shiori actor。
-    //    見張り部品は実行系に持たせる（`shutdown_within` が張る）。
+    // 見張り部品は実行系に持たせる（`shutdown_within` が張る）。
     let (shiori_tx, shiori_handle, shiori_probe) = spawn_shiori_actor(connect, down_tx);
 
-    // 6. kanade（start_tx を「自身の」sakura Sender として渡す）。
-    //    task 8.2: prefetch 段（username GET）の応答を sylphya へ反映する実 `ResourceSink` を注入する。
-    //    sink は publish_shiori（Value→Some／204・失敗→None）投函後に barrier で反映完了を待って返る
-    //    （初回 talk 前の反映順序を決定論化・R4.1/R4.2）。
+    // prefetch（username GET）の応答を sylphya へ反映する `ResourceSink`。publish_shiori
+    // （Value→Some／204・失敗→None）の投函後に barrier で反映を待って返るので、初回 talk の前に
+    // 反映が済む。
     let resource_sink = crate::sylphya_wiring::make_username_resource_sink(
         sylphya_publisher.clone(),
         ghost_asker.clone(),
     );
-    //    写しの源は kanade の起動の前に解決し、翻訳用と再生用の 2 つに分ける（spec
-    //    `areka-P0-translate-pipeline` 要件 2.3）。FromSylphya＝同じ reader＋自 asker から 1 つずつ
-    //    （翻訳用は再生用の固定の記録を出さない）／Custom＝注入された 1 つの源を `split_source` で分ける。
-    //    再生用は dispatcher が talk 起動ごとに呼ぶ（刻印点＝無改変・R7.1・design「provider 差替」）。
+    // 写しの源は kanade の起動の前に翻訳用と再生用の 2 つに分ける。FromSylphya は同じ reader と
+    // 自 asker から 1 つずつ（翻訳用は再生用の固定の記録を出さない）、Custom は注入された 1 つを
+    // `split_source` で分ける。再生用は dispatcher が talk 起動ごとに呼ぶ。
     let (translate_source, system_var_source) = match options.system_vars {
         SystemVarWiring::FromSylphya => (
             crate::sylphya_wiring::translate_snapshot_source(
@@ -762,12 +683,11 @@ pub fn boot_with_origin(
         ),
         SystemVarWiring::Custom(src) => crate::translate_wiring::split_source(src),
     };
-    //    翻訳の口: 展開は写しの源から組み、MAKOTO は素通し（要件 7.2）。
+    // 展開は写しの源から組み、MAKOTO は素通し。
     let seams = TranslateSeams {
         expand: crate::translate_wiring::make_script_expander(translate_source),
         makoto: TranslateSeams::passthrough().makoto,
     };
-    //    R15.3: 終了系列完了の通知端をそのまま kanade へ渡す（`None` なら通知は出ない＝従来どおり）。
     let (kanade_tx, kanade_handle) = spawn_kanade_translating(
         config,
         shiori_tx,
@@ -777,16 +697,12 @@ pub fn boot_with_origin(
         seams,
     );
 
-    // 7. sakura dispatcher（可変長 sink 列＋system_vars provider を構築時注入・S-3・
-    //    要件 4.6/8.5/7.1）。provider は dispatcher が talk 起動ごとに呼び出す（刻印点＝無改変）。
-    // 起動記録 SET sink 登録（design「C5 GhostRuntime 増分」boot() step 4・要件 3.4/6.2/7.1）。
-    //     `spawn_dispatcher` 直前の単一登録点——wired／fallback 両ブート経路が本 1 点を通るため
-    //     自動被覆する（per-path 登録にしない・`areka-runtime` 不触）。以後 dispatcher が talk ごとに
-    //     clone して broadcast し、`areka.prop.set`／カウンタ key を名前自己選別して write-through する。
+    // 起動記録 SET sink の登録点。`spawn_dispatcher` の直前の 1 か所なので、wired／fallback の
+    // 両ブート経路がここを通る。
     options
         .sinks
         .push(Box::new(PropSetCueSink::new(sylphya_publisher.clone())));
-    //     `\![get,property]` の受け口も同じ 1 点で足す（shell-scale-linkage 要件 1.1・MCP と同じ問い手）。
+    // `\![get,property]` の受け口も同じ所で足す（MCP と同じ問い手）。
     options.sinks.push(Box::new(PropGetCueSink::new(
         sylphya_reader.clone(),
         ghost_asker.clone(),
@@ -795,7 +711,6 @@ pub fn boot_with_origin(
     let (dispatcher_tx, dispatcher_handle) =
         spawn_dispatcher(kanade_tx.clone(), options.sinks, system_var_source, strict);
 
-    // 8. relay 2 本（循環解消・design.md 参照）。
     let start_relay_handle = spawn_relay::<areka_kanade::TalkCommand, DispatcherMsg>(
         "start-relay",
         start_rx,
@@ -804,7 +719,6 @@ pub fn boot_with_origin(
     let down_relay_handle =
         spawn_relay::<KanadeMsg, KanadeMsg>("down-relay", down_rx, kanade_tx.clone());
 
-    // 9. ticker（`TickerMode::Real` 時のみ起動・要件 5.3）。
     let (ticker_tx, ticker_handle) = match options.ticker {
         TickerMode::Real(cfg) => {
             let (tx, handle) = spawn_ticker(cfg, kanade_tx.clone(), dispatcher_tx.clone());
@@ -812,13 +726,12 @@ pub fn boot_with_origin(
         }
         TickerMode::Disabled => (None, None),
     };
-    //    起こしの中継（kanade の頼み → `TickerMsg::WakeKanadeAt`・#7）は刻み役の起動の後につなぐ。
+    // 起こしの中継（kanade の頼み → `TickerMsg::WakeKanadeAt`）は刻み役の起動の後につなぐ。
     let choice_wake_relay_handle = choice_wake_rx.zip(ticker_tx.clone()).map(|(rx, tx)| {
         spawn_relay::<areka_kanade::MonotonicMs, TickerMsg>("choice-wake-relay", rx, tx)
     });
 
-    // 10. boot 起点の起動指示（要件 2.4）。kanade は直前に spawn したばかりで
-    //     常に生存しているはずだが、万一の送出失敗は panic せず観測のみに留める。
+    // kanade は直前に spawn したばかりなので生きているはずだが、送出に失敗しても panic せず記録だけ残す。
     if kanade_tx.send(KanadeMsg::Boot).is_err() {
         tracing::error!(
             target: "ghost-boot",
@@ -828,7 +741,6 @@ pub fn boot_with_origin(
 
     tracing::info!(target: "ghost-boot", "ghost boot sequence completed");
 
-    // 11. 全ハンドル・Sender・MountModel を保持して返す（design.md「保持物」）。
     Ok(GhostRuntime {
         kanade_tx,
         dispatcher_tx,

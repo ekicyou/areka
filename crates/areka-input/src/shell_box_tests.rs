@@ -1,4 +1,4 @@
-//! 箱の上のポインタの判断（純関数）の檻（areka-P0-shell-balloon task 9）。
+//! 箱の上のポインタの判断（純関数）の檻。
 //!
 //! 箱の名前は公開の構築口を持たないので、テストの中に持つ surfaces.txt の文面を
 //! `parse_boxes` → `fold_boxes` で畳んで名前を取る（検体は読まない）。座標はシェルの窓の物理 px。
@@ -81,10 +81,10 @@ fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHi
 }
 
 // ---------------------------------------------------------------------------
-// box_under_point（9.5・3.9）
+// box_under_point
 // ---------------------------------------------------------------------------
 
-/// 重なる位置では手前（element番号の大きい）の箱を 1 つだけ選ぶ（3.9）。
+/// 重なる位置では手前（element番号の大きい）の箱を 1 つだけ選ぶ。
 #[test]
 fn overlapping_boxes_pick_the_front_one() {
     let boxes = shown();
@@ -103,7 +103,7 @@ fn back_box_alone_is_picked() {
     );
 }
 
-/// 四角の外・文字の出ている箱が無いときは無し（9.2・9.3）。右辺と下辺は含まない（半開区間）。
+/// 四角の外・文字の出ている箱が無いときは無し。右辺と下辺は含まない（半開区間）。
 #[test]
 fn outside_every_rect_is_none() {
     let boxes = shown();
@@ -118,10 +118,10 @@ fn outside_every_rect_is_none() {
 }
 
 // ---------------------------------------------------------------------------
-// judge_box_press（6 つの分岐・9.1・9.6・9.7・8.5）
+// judge_box_press（6 つの分岐）
 // ---------------------------------------------------------------------------
 
-/// ⑴ この押下が選択の確定 → 処理した（シェルへは送らない・8.5）。単押しでも同じ。
+/// ⑴ この押下が選択の確定 → 処理した（シェルへは送らない）。単押しでも同じ。
 #[test]
 fn press_selected_now_is_consumed() {
     for dc in [DoubleClick::None, DoubleClick::Left] {
@@ -132,7 +132,7 @@ fn press_selected_now_is_consumed() {
     }
 }
 
-/// ⑵ 左ダブルクリックでない → シェルへの操作（9.1・9.7）。話している最中でも同じ。
+/// ⑵ 左ダブルクリックでない → シェルへの操作。話している最中でも同じ。
 #[test]
 fn press_not_left_double_is_shell_op() {
     for dc in [DoubleClick::None, DoubleClick::Right, DoubleClick::Middle] {
@@ -152,7 +152,7 @@ fn press_after_selection_is_consumed() {
     );
 }
 
-/// ⑷ 話していない → シェルへのダブルクリック（9.1）。
+/// ⑷ 話していない → シェルへのダブルクリック。
 #[test]
 fn press_not_talking_is_shell_op() {
     assert_eq!(
@@ -161,7 +161,7 @@ fn press_not_talking_is_shell_op() {
     );
 }
 
-/// ⑸ 中断を禁じる区間 → 止めず、シェルへも送らない（9.6）。
+/// ⑸ 中断を禁じる区間 → 止めず、シェルへも送らない。
 #[test]
 fn press_in_no_user_break_is_disabled() {
     assert_eq!(
@@ -170,7 +170,7 @@ fn press_in_no_user_break_is_disabled() {
     );
 }
 
-/// ⑹ それ以外 → 台詞を中断する（9.6）。
+/// ⑹ それ以外 → 台詞を中断する。
 #[test]
 fn press_while_talking_breaks() {
     assert_eq!(
@@ -180,7 +180,7 @@ fn press_while_talking_breaks() {
 }
 
 // ---------------------------------------------------------------------------
-// judge_box_move（3 つの結論・8.2・9.1・9.2）
+// judge_box_move（3 つの結論）
 // ---------------------------------------------------------------------------
 
 /// 四角の外 → 既存の道へ。
@@ -242,7 +242,6 @@ fn overlap_looks_only_at_front_box_rows() {
         judge_box_move(hit, &front_rows, 70.0, 30.0),
         BoxMove::OverBody { name: name("b") }
     );
-    // 手前の箱の行の上なら手前の箱の行として結論する。
     assert_eq!(
         judge_box_move(hit, &front_rows, 70.0, 45.0),
         BoxMove::OverChoice {
@@ -253,7 +252,7 @@ fn overlap_looks_only_at_front_box_rows() {
 }
 
 // ---------------------------------------------------------------------------
-// judge_box_click（8.3・8.5）
+// judge_box_click
 // ---------------------------------------------------------------------------
 
 /// 行の上の左押下: 普通のバルーンの確定と同じ中身（スコープ・ID・表示・参照）が 1 つ返る。
@@ -311,7 +310,7 @@ fn click_without_row_box_or_choices_is_none() {
 }
 
 // ---------------------------------------------------------------------------
-// 箱のアンカー（areka-P0-anchor-tag-canon 要件 3.1・3.3〜3.5・3.7）
+// 箱のアンカー
 // ---------------------------------------------------------------------------
 
 fn anchor_row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
@@ -388,7 +387,7 @@ fn anchor_in_box_is_hovered_and_choice_comes_first() {
 }
 
 // ---------------------------------------------------------------------------
-// next_box_hover（6.11・8.2）
+// next_box_hover
 // ---------------------------------------------------------------------------
 
 /// 外から箱へ入る: 記録は入った箱・外す強調は無し。
@@ -466,7 +465,7 @@ fn hover_leave_box() {
 }
 
 // ---------------------------------------------------------------------------
-// settle_box_hover・ShellBoxHover（6.11）
+// settle_box_hover・ShellBoxHover
 // ---------------------------------------------------------------------------
 
 /// 滞在している箱が `shown_boxes` から消えたら無し・残っていればそのまま・もともと無しなら無し。
@@ -491,7 +490,6 @@ fn hover_mark_does_not_survive_vanished_text_or_window_leave() {
     let mut hover = ShellBoxHover::default();
     let boxes = shown();
 
-    // 箱 a へ入る（スコープ 0）・箱 b へ入る（スコープ 1）。
     let mv = judge_box_move(box_under_point(&boxes, 10.0, 10.0), &[], 10.0, 10.0);
     let (next, _) = next_box_hover(hover.get(0), &mv);
     hover.set(0, next);
@@ -501,19 +499,17 @@ fn hover_mark_does_not_survive_vanished_text_or_window_leave() {
     assert_eq!(hover.get(0), Some(&name("a")));
     assert!(hover.get(1).is_some());
 
-    // スコープ 0 の箱の文字が消える（`shown_boxes` が空）→ 毎フレームの整え。
     let settled = settle_box_hover(hover.get(0), &[]);
     hover.set(0, settled);
     assert!(hover.get(0).is_none(), "時間切れの観測の hover は偽");
     assert_eq!(hover.get(1), Some(&name("b")), "他のスコープはそのまま");
 
-    // シェルの窓から出る → 無し。
     hover.set(1, None);
     assert!(hover.get(1).is_none());
 }
 
 // ---------------------------------------------------------------------------
-// fold_talking（9.1・9.6・9.7・9.8）
+// fold_talking
 // ---------------------------------------------------------------------------
 
 /// 台詞の始まりで真・終わりで偽。中断を禁じる区間の出入りは「話している最中か」を変えない。

@@ -1,5 +1,5 @@
-//! element定義の描画メソッド `base` を、権威の核 [`build_shell_target`] から合成まで通して
-//! 外形と画素で確かめる檻（要件 4.1・1.1・1.2・1.3・1.7・2.4・2.5・3.2・3.4）。
+//! element定義の描画メソッド `base` を、核 [`build_shell_target`] から合成まで通して外形と画素で
+//! 確かめる檻。
 //!
 //! 読み手（`areka-parsers` の `is_image_element_method`）が `base` を値にすることは
 //! `decode_tests_method_matrix_tests.rs` が固定する。ここで見るのは、その値が焼く絵の一覧・
@@ -8,19 +8,19 @@
 //! - ⑴ `base` の土台に `overlay` を重ねたサーフェス: 外形が土台の絵の実寸・土台と部品の両方の
 //!   画素・同じ番号の `surface*.png` は使われない。読み手の判定を `overlay` だけに戻すと赤になる
 //!   （`element0` が値にならず、`surface26.png` が土台に敷かれて外形も色も動く）。
-//! - ⑵〜⑷ 今の見え方の不変: 比べる合成結果そのものは判定を戻しても等しい（戻した側でも同じ絵に
-//!   なる文面を比べているため）。この 3 本は「`base` を値にしたことで見え方が変わっていない」を
-//!   固定する。判定を戻すと ⑵ は前提（`shadowed` の内訳）で、⑷ は脱落の記録の件数で赤になり、
+//! - ⑵〜⑷ 見え方の不変: 比べる合成結果そのものは判定を戻しても等しい（戻した側でも同じ絵に
+//!   なる文面を比べているため）。この 3 本は「`base` を値にしたことで見え方が変わらない」を固定する。
+//!   判定を戻すと ⑵ は前提（`shadowed` の内訳）で、⑷ は脱落の記録の件数で赤になり、
 //!   ⑶ は `base` を含まないので緑のままである。
 //!
 //! ⑴〜⑷ は fs に触れない。画像はメモリ上の復号器（[`MemoryDecoder`]）に実寸と色で登録し、
-//! シェルのフォルダは実在しないパスでよい（`shell_target_base_image_tests.rs` と同じ形）。
+//! シェルのフォルダは実在しないパスでよい。
 //!
 //! 続く 3 本は入口 [`load_shell_target`] の警告（描けない行 1 行につき `warn!` 1 行・読み込み
 //! 1 回につき 1 度）を見る。こちらは surfaces.txt を `TempPath` に置いて読ませる。
 //!
-//! 最後の 1 本は不具合の実物——無改変のクローディア（`claudia` 検体）を実際の画像の復号で読み、
-//! `base` を使う surface6・11・26 の外形を固定する（要件 4.3）。
+//! 最後の 1 本は実物の検体——無改変のクローディア（`claudia`）を実際の画像の復号で読み、
+//! `base` を使う surface6・11・26 の外形を固定する。
 
 use super::*;
 
@@ -102,7 +102,7 @@ fn bake_errors(target: &ShellTarget) -> Vec<String> {
     target.bake_errors().iter().map(|e| e.to_string()).collect()
 }
 
-/// ⑴（要件 4.1・1.1・1.2・1.3）: `base` の土台に `overlay` の部品を重ねると、外形は土台の絵の
+/// ⑴: `base` の土台に `overlay` の部品を重ねると、外形は土台の絵の
 /// 実寸になり、土台と部品の両方の画素が出て、同じ番号の `surface26.png` は使われない。
 ///
 /// 較正: `surface26.png` を大きさも色も違う絵にしてある。読み手の判定を `overlay` だけに戻すと
@@ -158,8 +158,8 @@ fn base_element_zero_underlays_the_overlay_part() {
     );
 }
 
-/// ⑵（要件 3.2）: `element0,base,surfaceN.png,0,0` を持つ文面と、そのブレスごと除いた文面
-/// （`surface*.png` が土台に敷かれる今の経路）とで、合成した外形と画素が等しい。
+/// ⑵: `element0,base,surfaceN.png,0,0` を持つ文面と、そのブレスごと除いた文面
+/// （`surface*.png` が土台に敷かれる経路）とで、合成した外形と画素が等しい。
 ///
 /// 合成結果の等しさは、読み手の判定を `overlay` だけに戻しても成り立つ。2 つの文面が本当に
 /// 別の経路を通っていること（`shadowed` と `used` の内訳の違い）を前提として確かめる
@@ -194,7 +194,7 @@ fn base_pointing_at_own_surface_image_looks_the_same_as_the_image_alone() {
     );
 }
 
-/// ⑶（要件 2.4・2.5・3.4）: 描けない `element0,replace,x.png` を持つサーフェスの合成結果は、
+/// ⑶: 描けない `element0,replace,x.png` を持つサーフェスの合成結果は、
 /// その行を除いた文面と等しく、`x.png` は焼かれていない（面の画像が土台に敷かれたまま）。
 ///
 /// 不変の檻なので、読み手の判定を `overlay` だけに戻しても緑のままである。`x.png` は復号器に
@@ -237,7 +237,7 @@ fn undrawable_element_zero_leaves_the_surface_as_without_the_line() {
     );
 }
 
-/// ⑷（要件 1.7）: 読み込めない `element0,base,missing.png` は、`,overlay,` に書き替えた文面と
+/// ⑷: 読み込めない `element0,base,missing.png` は、`,overlay,` に書き替えた文面と
 /// 同じ脱落の記録（`missing.png` を名指す 1 件）を残し、同じ面の部品は描かれ、合成結果も等しい。
 ///
 /// 記録の `error!` はこの `bake_errors` を `load_shell_target` が出すので、中身の一致で足りる。
@@ -293,13 +293,13 @@ fn unreadable_base_image_is_recorded_like_overlay_and_the_part_is_drawn() {
     );
 }
 
-// ── 入口の警告（要件 2.1・2.2・2.3・2.6・4.2）──────────────────────────────────────
+// ── 入口の警告──────────────────────────────────────
 //
 // ここから先は `load_shell_target` を通すので fs に触れる。surfaces.txt は `TempPath` に置き、
 // 描ける行が指す絵（`body.png`・`face.png`）はすべて復号器に入れる——焼く段の脱落の `error!` が
-// 混ざると、本 spec の警告の数が数えられなくなるためである。
+// 混ざると、描けない行の警告の数が数えられなくなるためである。
 
-/// 本 spec の警告の本文。
+/// 描けない行の警告の本文。
 const UNDRAWN_WARN: &str = "shell: areka が描けない描画メソッドの element定義を描かない";
 
 /// 描ける語の行だけの文面（`balloon` の行には正しい `balloon.*`ブレスを添え、箱の警告を出さない）。
@@ -341,7 +341,7 @@ fn load_events(text: &str, times: usize) -> Vec<CapturedEvent> {
     events
 }
 
-/// 本 spec の警告の件数。
+/// 描けない行の警告の件数。
 fn undrawn_count(events: &[CapturedEvent]) -> usize {
     events
         .iter()
@@ -349,7 +349,7 @@ fn undrawn_count(events: &[CapturedEvent]) -> usize {
         .count()
 }
 
-/// 要件 2.1・2.2・2.3: 複数の番号の見出しの下の描けない行 1 行は、見出しの原文・element番号・
+/// 複数の番号の見出しの下の描けない行 1 行は、見出しの原文・element番号・
 /// 語を持つ `warn!` 1 行だけになる（展開した番号の数だけ出ない・ほかの `warn` 以上は 0 行）。
 #[test]
 fn undrawable_line_warns_once_with_heading_element_and_method() {
@@ -362,14 +362,14 @@ fn undrawable_line_warns_once_with_heading_element_and_method() {
     );
 }
 
-/// 要件 2.6: 描ける語（`overlay`・`base`・`balloon`）だけの文面では `warn` 以上が 0 行。
+/// 描ける語（`overlay`・`base`・`balloon`）だけの文面では `warn` 以上が 0 行。
 #[test]
 fn drawable_only_shell_warns_nothing() {
     let events = load_events(DRAWABLE_ONLY, 1);
     assert_eq!(warn_lines(&events), Vec::<String>::new());
 }
 
-/// 要件 4.2: 警告は読み込み 1 回につき 1 行 1 件——2 回読むとちょうど 2 倍になる。
+/// 警告は読み込み 1 回につき 1 行 1 件——2 回読むとちょうど 2 倍になる。
 #[test]
 fn undrawable_warning_repeats_once_per_load() {
     let once = undrawn_count(&load_events(WITH_UNDRAWN, 1));
@@ -378,12 +378,12 @@ fn undrawable_warning_repeats_once_per_load() {
     assert_eq!(twice, 2 * once, "読み込み 2 回でちょうど 2 倍");
 }
 
-// ── 無改変のクローディア（要件 4.3・2.6・3.2）────────────────────────────────────
+// ── 無改変のクローディア────────────────────────────────────
 
 /// クローディアの surface6・11・26 の外形（土台の絵 `surface0.png`／`surface10.png` の実寸）。
 const CLAUDIA_EXTENT: (u32, u32) = (333, 500);
 
-/// 要件 4.3・2.6・3.2・4.7: 無改変の `claudia` を DLL なしで実際の画像の復号で読むと、
+/// 無改変の `claudia` を DLL なしで実際の画像の復号で読むと、
 /// `element0,base` の土台に顔の部品を重ねる surface6・11・26 の外形が 333×500 になり、
 /// 描けない部品の警告は 0 件（`overlay`・`base` だけで書かれている）。警告以上の行は、
 /// surface28 の pattern 3 行だけで、同じ collision番号の重なりの警告は無い。`base` の pattern を
@@ -418,8 +418,8 @@ fn claudia_base_surfaces_are_full_size_and_records_are_fixed() {
         );
         assert_eq!(undrawn_count(&events), 0, "claudia に描けない行は無い");
         // 警告以上は、surface28 の animation100 の `base` の pattern 3 行
-        // （`draw-methods-canon` が持つ警告。`base` の pattern を描けるようにするとき、その spec がこの期待を更新する）
-        // だけ。同じ collision番号の重なりの警告は 0 行。
+        // だけ。`base` の pattern を描けるようにするときは、この期待を更新すること。
+        // 同じ collision番号の重なりの警告は 0 行。
         assert_eq!(
             warn_lines(&events),
             (0..3)

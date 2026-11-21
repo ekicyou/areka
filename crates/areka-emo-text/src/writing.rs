@@ -17,7 +17,7 @@
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない。`lib.rs` の構造檻
 //! `pure_layer_modules_have_no_windows_imports` が本ファイル（`PURE_SOURCES`）を走査して強制する。
 //!
-//! ## 2 キーの共存規則（要件 2・裁定 1）
+//! ## 2 キーの共存規則
 //!
 //! | 有効な宣言 | 採用する方向 | 記録 |
 //! |---|---|---|
@@ -28,33 +28,33 @@
 //! | 両方・異なる方向 | **拡張キー** `writing_mode` | `debug!` ちょうど 1 件 |
 //!
 //! 拡張キーが勝つのは、`vertical_lr` という正典キーでは表現できない値を持つ＝表現力で
-//! 上位だからである（要件の裁定 1）。値が壊れている宣言（`vertical` が `0`／`1` 以外か空・
-//! `writing_mode` が受理語彙外）は `warn!` のうえ「**指定なし**」として上表へ合流する
-//! （設計 DD6）。表の記録は解決の中では出さず、登録口（普通のバルーンの装着・再追従と
+//! 上位だからである。値が壊れている宣言（`vertical` が `0`／`1` 以外か空・
+//! `writing_mode` が受理語彙外）は `warn!` のうえ「**指定なし**」として上表へ合流する。
+//! 表の記録は解決の中では出さず、登録口（普通のバルーンの装着・再追従と
 //! 箱の表の受け取り）が `note_direction_declarations` で書く。
 //!
-//! ## 予約キー（記録のみ・実装しない・R5.7）
+//! ## 予約キー（記録のみ・実装しない）
 //!
-//! CSS 借用の snake_case 予約キー名を定数として記録するに留め、M1 では実挙動を
+//! CSS 借用の snake_case 予約キー名を定数として記録するに留め、実挙動は
 //! 一切実装しない:
 //!
 //! - [`RESERVED_KEY_TEXT_ORIENTATION`]（`text_orientation`・欧文の向き）
 //! - [`RESERVED_KEY_TEXT_COMBINE_UPRIGHT`]（`text_combine_upright`・縦中横）
 use areka_parsers::balloon::BalloonModel;
 
-/// `writing_mode` の CSS 語彙 `horizontal_tb` に対応する受理値（R5.1）。
+/// `writing_mode` の CSS 語彙 `horizontal_tb` に対応する受理値。
 const VALUE_HORIZONTAL_TB: &str = "horizontal_tb";
-/// `writing_mode` の CSS 語彙 `vertical_rl` に対応する受理値（R5.1）。
+/// `writing_mode` の CSS 語彙 `vertical_rl` に対応する受理値。
 const VALUE_VERTICAL_RL: &str = "vertical_rl";
-/// `writing_mode` の CSS 語彙 `vertical_lr` に対応する受理値（R5.1）。
+/// `writing_mode` の CSS 語彙 `vertical_lr` に対応する受理値。
 const VALUE_VERTICAL_LR: &str = "vertical_lr";
 
-/// 予約キー: 欧文の向き `text_orientation`（記録のみ・実装しない・R5.7）。
+/// 予約キー: 欧文の向き `text_orientation`（記録のみ・実装しない）。
 pub const RESERVED_KEY_TEXT_ORIENTATION: &str = "text_orientation";
-/// 予約キー: 縦中横 `text_combine_upright`（記録のみ・実装しない・R5.7）。
+/// 予約キー: 縦中横 `text_combine_upright`（記録のみ・実装しない）。
 pub const RESERVED_KEY_TEXT_COMBINE_UPRIGHT: &str = "text_combine_upright";
 
-/// `writing_mode` 宣言の解決結果（3 語彙→3 方向の 1:1 写像・R5.1/R5.5）。
+/// `writing_mode` 宣言の解決結果（3 語彙→3 方向の 1:1 写像）。
 ///
 /// 語彙（snake_case・CSS `writing-mode` 借用）と方向の対応は 1:1:
 ///
@@ -64,12 +64,12 @@ pub const RESERVED_KEY_TEXT_COMBINE_UPRIGHT: &str = "text_combine_upright";
 /// | `vertical_rl` | [`VerticalRl`](Self::VerticalRl) | 上→下／右→左 |
 /// | `vertical_lr` | [`VerticalLr`](Self::VerticalLr) | 上→下／左→右 |
 ///
-/// 軸読み替え（折返し軸・スクロール軸・書字開始角）の適用は layout 層の領分
-/// （design.md「軸読み替え正準表」）。DirectWrite への設定写像
+/// 軸読み替え（折返し軸・スクロール軸・書字開始角）の適用は layout 層の領分。
+/// DirectWrite への設定写像
 /// （ReadingDirection／FlowDirection）は COM 層 draw.rs が本型を消費して行う。
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum WritingMode {
-    /// 横書き（行内 左→右・行送り 上→下）。SSP 互換の既定（マーカー無し・R5.3）。
+    /// 横書き（行内 左→右・行送り 上→下）。SSP 互換の既定（マーカー無し）。
     #[default]
     HorizontalTb,
     /// 日本語縦書き（行内 上→下・行送り 右→左）。
@@ -89,16 +89,16 @@ impl WritingMode {
     }
 }
 
-/// SSP 正典キー `vertical` の「横書き」を表す受理値（R1.2）。
+/// SSP 正典キー `vertical` の「横書き」を表す受理値。
 const VALUE_VERTICAL_OFF: &str = "0";
-/// SSP 正典キー `vertical` の「縦書き」を表す受理値（R1.1）。
+/// SSP 正典キー `vertical` の「縦書き」を表す受理値。
 const VALUE_VERTICAL_ON: &str = "1";
 
 /// 正典キー `vertical` の宣言の分類（未宣言・不正値を潰さない）。
 ///
 /// 未宣言（[`Undeclared`](Self::Undeclared)）と `0` の宣言（[`Horizontal`](Self::Horizontal)）を
-/// 区別して保つのは、共存規則の裁定に**宣言の有無**が要るためである（R1.4）。
-/// 表示結果としては両者とも横書きで同一になる（R1.3）。
+/// 区別して保つのは、共存規則の裁定に**宣言の有無**が要るためである。
+/// 表示結果としては両者とも横書きで同一になる。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum VerticalDecl {
     /// キーが無い。
@@ -114,9 +114,9 @@ pub enum VerticalDecl {
 impl VerticalDecl {
     /// 有効な宣言であれば、それが意味する書字方向を返す。
     ///
-    /// `1` は日本語縦書き＝右から左へ列送り（[`WritingMode::VerticalRl`]）へ写す（R2.2）。
+    /// `1` は日本語縦書き＝右から左へ列送り（[`WritingMode::VerticalRl`]）へ写す。
     /// [`Invalid`](Self::Invalid) は [`Undeclared`](Self::Undeclared) と同じく `None`——
-    /// 壊れた値は「指定なし」として共存規則へ合流する（設計 DD6）。
+    /// 壊れた値は「指定なし」として共存規則へ合流する。
     fn declared_mode(self) -> Option<WritingMode> {
         match self {
             VerticalDecl::Horizontal => Some(WritingMode::HorizontalTb),
@@ -133,7 +133,7 @@ pub enum WritingModeDecl {
     Undeclared,
     /// 受理語彙 3 種のいずれかの宣言。
     Declared(WritingMode),
-    /// 受理語彙外（警告済み・「指定なし」として扱う・要件 2.7）。
+    /// 受理語彙外（警告済み・「指定なし」として扱う）。
     Unknown,
 }
 
@@ -141,7 +141,7 @@ impl WritingModeDecl {
     /// 有効な宣言であれば、それが意味する書字方向を返す。
     ///
     /// [`Unknown`](Self::Unknown) は [`Undeclared`](Self::Undeclared) と同じく `None`
-    /// （要件 2.7・[`VerticalDecl::Invalid`] と対称）。
+    /// （[`VerticalDecl::Invalid`] と対称）。
     fn declared_mode(self) -> Option<WritingMode> {
         match self {
             WritingModeDecl::Declared(mode) => Some(mode),
@@ -161,7 +161,7 @@ pub enum DirectionSource {
     ///
     /// 両キーが有効に宣言されているときは**常に**本出所になる（併記が同じ方向を意味する
     /// 場合も含む）——優先順位は方向の一致・不一致に依らず一定であり、一致・不一致は
-    /// 記録の有無だけを変える（要件 2.4／2.5）。
+    /// 記録の有無だけを変える。
     ExtensionKey,
 }
 
@@ -172,8 +172,7 @@ pub enum DirectionSource {
 /// 生の宣言文字列は持たない（[`Copy`] を保つため）。解決は記録を出さない——
 /// 記録は登録口が `note_direction_declarations` で書く。
 ///
-/// 本型は `ResolvedBalloonText` へ配線していない（現時点で消費者が居ないため・
-/// design.md C2 Responsibilities）。
+/// 本型は `ResolvedBalloonText` へ配線していない（現時点で消費者が居ないため）。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct WritingDirectionDecision {
     mode: WritingMode,
@@ -186,14 +185,13 @@ pub struct WritingDirectionDecision {
 impl WritingDirectionDecision {
     /// 2 層マージ済み `BalloonModel` から解決する（副作用なし・記録は出さない）。
     ///
-    /// 記録は登録口が `note_direction_declarations` で書く（記録水準は design.md
-    /// 「記録水準の割当」が正本）:
+    /// 記録は登録口が `note_direction_declarations` で書く:
     ///
-    /// - `vertical` が `0`／`1` 以外または空 → `warn!` 1 件（R1.6／R1.7）
-    /// - `writing_mode` が受理語彙外 → `warn!` 1 件（現行の文言のまま・R2.7）
+    /// - `vertical` が `0`／`1` 以外または空 → `warn!` 1 件
+    /// - `writing_mode` が受理語彙外 → `warn!` 1 件（現行の文言のまま）
     /// - 両キーが有効宣言かつ**異なる**方向 → `debug!` 1 件（両キーの生値を構造化
-    ///   フィールドで記録・R2.5）
-    /// - 両キーが有効宣言かつ同じ方向／両キーとも宣言なし → **記録しない**（R2.4／R1.3）
+    ///   フィールドで記録）
+    /// - 両キーが有効宣言かつ同じ方向／両キーとも宣言なし → **記録しない**
     pub fn resolve(model: &BalloonModel) -> WritingDirectionDecision {
         let vertical_declaration = classify_vertical(model.vertical_raw());
         let writing_mode_declaration = classify_writing_mode(model.writing_mode());
@@ -210,9 +208,9 @@ impl WritingDirectionDecision {
             ),
             // 正典キー単独。
             (Some(canon), None) => (canon, DirectionSource::CanonKey, false),
-            // 拡張キー単独（`writing_mode` 単独指定時の結果は現行と 1 ビットも変わらない・R2.3）。
+            // 拡張キー単独（`writing_mode` 単独指定時の結果は現行と 1 ビットも変わらない）。
             (None, Some(extension)) => (extension, DirectionSource::ExtensionKey, false),
-            // 併記——優先順位は拡張キー（要件の裁定 1）。方向が異なるときだけ矛盾とする。
+            // 併記——優先順位は拡張キー。方向が異なるときだけ矛盾とする。
             (Some(canon), Some(extension)) => {
                 (extension, DirectionSource::ExtensionKey, canon != extension)
             }
@@ -257,14 +255,12 @@ impl WritingDirectionDecision {
         self.conflicting
     }
 
-    /// 正典プロパティ `currentghost.balloon.scope(ID).vertical` の導出規則（要件 7.1・**語彙**）。
+    /// 正典プロパティ `currentghost.balloon.scope(ID).vertical` の導出規則（**語彙**）。
     ///
     /// 当該スコープに実際に適用されている書字方向（[`mode`](Self::mode)）から一意に定まる:
     /// 縦書きで `1`・横書きで `0`。**`vertical_lr`（areka 拡張の縦書き左送り）も `1`** である
     /// ——正典の語彙は縦横 2 値であり、列送りの向きを区別しない。
-    ///
-    /// 本仕様はこの値を publish しない（語彙表登録も照会経路の新設も行わない）。
-    /// プロパティの実導出は追跡 spec `currentghost-property-tree` が所有する（DD7）。
+    // TODO: この値を正典プロパティとして照会できるようにする（語彙表への登録と照会の経路がまだ無い）。
     pub fn vertical_property_value(&self) -> u8 {
         match self.mode {
             WritingMode::HorizontalTb => 0,
@@ -273,7 +269,7 @@ impl WritingDirectionDecision {
     }
 }
 
-/// 書字方向の宣言の生の値（前の装着・再追従の宣言と比べるため・要件 3.3）。
+/// 書字方向の宣言の生の値（前の装着・再追従の宣言と比べるため）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct DirectionDecl {
     vertical: Option<String>,
@@ -290,7 +286,7 @@ impl DirectionDecl {
     }
 }
 
-/// 宣言の誤りと矛盾併記を記録する（解決は記録しない・要件 3.1）。
+/// 宣言の誤りと矛盾併記を記録する（解決は記録しない）。
 ///
 /// `previous` は前の装着・再追従の宣言（装着と箱の表の受け取りは `None`＝必ず 1 回目）。
 /// キーごとに「前が無いか、生の値が前と違う」ときだけ、そのキーの警告を書く。
@@ -330,7 +326,7 @@ pub(crate) fn note_direction_declarations(model: &BalloonModel, previous: Option
     }
 }
 
-/// 正典キー `vertical` の生値を分類する（記録しない・不正値の `warn!` は [`note_direction_declarations`] が書く・R1.6／R1.7）。
+/// 正典キー `vertical` の生値を分類する（記録しない・不正値の `warn!` は [`note_direction_declarations`] が書く）。
 fn classify_vertical(raw: Option<&str>) -> VerticalDecl {
     match raw {
         None => VerticalDecl::Undeclared,
@@ -340,9 +336,9 @@ fn classify_vertical(raw: Option<&str>) -> VerticalDecl {
     }
 }
 
-/// 拡張キー `writing_mode` の生値を分類する（記録しない・未知値の `warn!` は [`note_direction_declarations`] が書く・R5.4／R2.7）。
+/// 拡張キー `writing_mode` の生値を分類する（記録しない・未知値の `warn!` は [`note_direction_declarations`] が書く）。
 ///
-/// 語彙は snake_case 完全一致（trim は parser の kv 層で済んでいる前提・R5.1）。
+/// 語彙は snake_case 完全一致（trim は parser の kv 層で済んでいる前提）。
 /// 警告の文言は実挙動どおり「指定なしとして扱う」（`vertical` の宣言と合流する）。
 fn classify_writing_mode(raw: Option<&str>) -> WritingModeDecl {
     match raw {
@@ -377,16 +373,16 @@ mod tests {
         })
     }
 
-    // 3 語彙の受理・写像 1:1・既知語彙の無警告・宣言なし→横書き（R5.1/R5.3/R5.5）は
+    // 3 語彙の受理・写像 1:1・既知語彙の無警告・宣言なし→横書きは
     // `writing_decision_tests.rs` の単独宣言・宣言なしのテストが持つ。
 
-    /// 型の Default も横書き（design.md の #[default] 正準と一致）。
+    /// 型の Default も横書き（`#[default]` と一致）。
     #[test]
     fn writing_mode_default_is_horizontal_tb() {
         assert_eq!(WritingMode::default(), WritingMode::HorizontalTb);
     }
 
-    // ── R5.4: 未知値→横書き（解決は記録しない・記録は登録口が書く） ──
+    // ── 未知値→横書き（解決は記録しない・記録は登録口が書く） ──
 
     /// 未知値は横書きになり、解決そのものは記録を出さない。値は parsers 側の未知値素通し
     /// テストと同じ diagonal_bt。警告の件数と文言は登録口を通して
@@ -399,7 +395,7 @@ mod tests {
         assert_eq!(counts.warn, 0, "解決は warn を出さない");
     }
 
-    /// 語彙は snake_case 完全一致（R5.1）——ハイフン形（CSS 原表記）や大文字・空白は未知値扱い。
+    /// 語彙は snake_case 完全一致——ハイフン形（CSS 原表記）や大文字・空白は未知値扱い。
     #[test]
     fn near_miss_values_are_unknown_and_fall_back() {
         for value in ["vertical-rl", "VERTICAL_RL", "vertical_rl ", ""] {
@@ -414,7 +410,7 @@ mod tests {
         }
     }
 
-    /// 記録の関数はキーごとに「前が無いか、生の値が前と違う」ときだけ書く（要件 3.2・3.3・3.5）。
+    /// 記録の関数はキーごとに「前が無いか、生の値が前と違う」ときだけ書く。
     #[test]
     fn note_compares_raw_values_per_key_with_previous() {
         let model = |vertical: Option<&str>, writing_mode: Option<&str>| {
@@ -458,7 +454,7 @@ mod tests {
         assert_eq!((agreeing.error, agreeing.warn, agreeing.debug), (1, 0, 0));
     }
 
-    // ── R5.2: 2層マージ後の転記値を読むだけ（マージ済み単一値で解決） ──
+    // ── 2層マージ後の転記値を読むだけ（マージ済み単一値で解決） ──
 
     /// 2層マージは balloon-parse 側で解決済み——本層は `parse` が転記した後勝ち単一値を
     /// 読むだけで、画像別上書きの結果がそのまま有効値になる。

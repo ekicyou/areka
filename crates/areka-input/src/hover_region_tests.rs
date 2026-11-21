@@ -1,4 +1,4 @@
-//! 出入りの純関数の檻（mouse-click-wheel-events 要件 7.1〜7.5・7.11〜7.13・11.3・design「HoverRegion」の 7 行の表）。
+//! 出入りの純関数の檻。
 
 use areka_kanade::HoverEdge;
 
@@ -30,7 +30,7 @@ fn s(edge: HoverEdge, region: Option<&str>, surface: (i64, i64)) -> HoverSend {
     }
 }
 
-/// 表 1 行目: 表に無い→Over(r) は EnterAll(r)→Enter(r)（要件 7.11・7.13）。
+/// 表 1 行目: 表に無い→Over(r) は EnterAll(r)→Enter(r)。
 #[test]
 fn enter_window_onto_region_sends_enter_all_then_enter() {
     let (next, sends) = plan_hover(None, over(Some("Head"), (10, 20)));
@@ -44,7 +44,7 @@ fn enter_window_onto_region_sends_enter_all_then_enter() {
     );
 }
 
-/// 表 1 行目（r が無い）: EnterAll だけ・Ref4 は空（要件 7.11）。
+/// 表 1 行目（r が無い）: EnterAll だけ・Ref4 は空。
 #[test]
 fn enter_window_onto_nothing_sends_enter_all_with_empty_region() {
     let (next, sends) = plan_hover(None, over(None, (3, 4)));
@@ -61,7 +61,7 @@ fn staying_on_same_region_sends_nothing_and_updates_position() {
     assert!(sends.is_empty());
 }
 
-/// 表 3 行目: Over(無し)→Over(B) は Enter(B)（要件 7.1）。
+/// 表 3 行目: Over(無し)→Over(B) は Enter(B)。
 #[test]
 fn nothing_to_region_sends_enter() {
     let prev = state(None, (1, 1));
@@ -70,7 +70,7 @@ fn nothing_to_region_sends_enter() {
     assert_eq!(sends, vec![s(HoverEdge::Enter, Some("Bust"), (5, 6))]);
 }
 
-/// 表 4 行目: Over(A)→Over(無し) は Leave(A)・座標は今の位置（要件 7.2）。
+/// 表 4 行目: Over(A)→Over(無し) は Leave(A)・座標は今の位置。
 #[test]
 fn region_to_nothing_sends_leave_at_current_position() {
     let prev = state(Some("Head"), (10, 20));
@@ -79,7 +79,7 @@ fn region_to_nothing_sends_leave_at_current_position() {
     assert_eq!(sends, vec![s(HoverEdge::Leave, Some("Head"), (30, 40))]);
 }
 
-/// 表 5 行目: Over(A)→Over(B) は Leave(A)→Enter(B)・どちらも今の位置（要件 7.3）。
+/// 表 5 行目: Over(A)→Over(B) は Leave(A)→Enter(B)・どちらも今の位置。
 #[test]
 fn region_to_region_sends_leave_then_enter() {
     let prev = state(Some("Head"), (10, 20));
@@ -94,7 +94,7 @@ fn region_to_region_sends_leave_then_enter() {
     );
 }
 
-/// 表 6 行目: Over(A)→Away は Leave(A)→LeaveAll(A)・座標は窓の中で最後に見た位置（要件 7.4・7.12・7.13）。
+/// 表 6 行目: Over(A)→Away は Leave(A)→LeaveAll(A)・座標は窓の中で最後に見た位置。
 #[test]
 fn leaving_window_from_region_sends_leave_then_leave_all_at_last_seen() {
     let prev = state(Some("Head"), (10, 20));
@@ -109,7 +109,7 @@ fn leaving_window_from_region_sends_leave_then_leave_all_at_last_seen() {
     );
 }
 
-/// 表 6 行目（r が無い）: LeaveAll だけ・Ref4 は空・最後に見た位置（要件 7.12）。
+/// 表 6 行目（r が無い）: LeaveAll だけ・Ref4 は空・最後に見た位置。
 #[test]
 fn leaving_window_from_nothing_sends_leave_all_only() {
     let prev = state(None, (7, 8));

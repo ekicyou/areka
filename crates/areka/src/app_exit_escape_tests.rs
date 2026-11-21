@@ -5,7 +5,7 @@ use areka_runtime::hit_region::HitRegion;
 use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::DoubleClick;
 
-/// 強制退避の檻（R15.2）: **Ctrl+Shift**+左ダブルクリックは従来どおり全窓を despawn し、
+/// 強制退避の檻: **Ctrl+Shift**+左ダブルクリックは従来どおり全窓を despawn し、
 /// kanade へは何も送らない（起動後でも効く脱出口）。
 ///
 /// # 非空虚性
@@ -44,7 +44,7 @@ fn handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sendi
     assert!(rx.try_recv().is_err(), "強制退避は kanade へ何も送らない");
 }
 
-/// 起動失敗時の脱出（R15.2・旧 DD-IE-7）: `MouseWiring` 不在なら Ctrl+左で全窓 despawn。
+/// 起動失敗時の脱出: `MouseWiring` 不在なら Ctrl+左で全窓 despawn。
 ///
 /// 結線前（ghost boot 失敗・boot 前）は終了指示の送り先が無いため、従来どおりの強制退避で
 /// 窓を閉じて抜ける。この経路が残っていることが、終了指示を正規の握手へ配線しても
@@ -66,8 +66,7 @@ fn escape_works_without_mouse_wiring() {
     assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓 despawn");
 }
 
-/// 「強制退避操作でのみ全窓終了が起きる」統合檻（6.1/6.2/6.3・DD-IE-7・task 4.4 NEW）:
-/// 移動・中ボタンダブルクリック・単発クリック・Ctrl なし左ダブルクリック・結線済みの
+/// 「強制退避操作でのみ全窓終了が起きる」統合檻:
 /// Ctrl+左ダブルクリックの**いずれも** `GhostWindowMarker` 窓を despawn しない（非退避操作）。
 /// Ctrl+Shift+左ダブルクリック**のみ**が全窓を despawn する。「でのみ」の排他性を単一
 /// pass/fail で固定する（plain-left 単独の
@@ -84,7 +83,6 @@ fn only_escape_terminates_ghost_windows() {
         stepping_clock(1000, 1000),
     );
     crate::app_exit::install_input_hooks(&mut world);
-    // 実キャラ窓は GhostWindowMarker かつ CharWindowMarker（ハンドラが scope を読める）。
     let w = world
         .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
         .id();
@@ -92,7 +90,6 @@ fn only_escape_terminates_ghost_windows() {
     world.spawn(GhostWindowMarker);
     assert_eq!(ghost_count(&mut world), 3);
 
-    // 非退避操作はいずれも despawn しない。
     let non_escape = [
         bubble_pointer(10, 20, DoubleClick::None, false), // 移動（None）
         bubble_pointer(10, 21, DoubleClick::Middle, false), // 中ボタン dblclick
@@ -100,7 +97,6 @@ fn only_escape_terminates_ghost_windows() {
         bubble_pointer(10, 23, DoubleClick::None, false), // 単発クリック
         bubble_pointer(10, 24, DoubleClick::Left, false), // Ctrl なし左 dblclick
     ];
-    // 移動は on_char_pointer_moved、他は on_char_pointer_pressed。
     assert!(on_char_pointer_moved(&mut world, w, w, &non_escape[0]));
     for ev in &non_escape[1..] {
         on_char_pointer_pressed(&mut world, w, w, ev);
@@ -111,7 +107,7 @@ fn only_escape_terminates_ghost_windows() {
         "非退避操作（移動/中/拡張/単発/Ctrl なし左）は 1 つも despawn しない"
     );
 
-    // 結線済みの Ctrl+左は退避ではない——Ctrl は無視され、窓は 1 枚も減らない（要件 5.3）。
+    // 結線済みの Ctrl+左は退避ではない——Ctrl は無視され、窓は 1 枚も減らない。
     let wired_ctrl_left = bubble_pointer(10, 20, DoubleClick::Left, true);
     assert!(on_char_pointer_pressed(&mut world, w, w, &wired_ctrl_left));
     assert_eq!(
@@ -120,7 +116,7 @@ fn only_escape_terminates_ghost_windows() {
         "結線済みの Ctrl+左は左ダブルクリックとして扱われ、窓を閉じない（要件 5.3）"
     );
 
-    // 強制退避操作（Ctrl+Shift+左）のみが全窓を despawn する（R15.2）。
+    // 強制退避操作（Ctrl+Shift+左）のみが全窓を despawn する。
     let escape = bubble_pointer_mods(10, 20, DoubleClick::Left, true, true);
     assert!(on_char_pointer_pressed(&mut world, w, w, &escape));
     assert_eq!(

@@ -12,30 +12,28 @@
 //! 1. **surface entity**: `Visual` ＋ [`logical_arrangement`] ＋ `GraphicsCommandList` ＋
 //!    [`HitTest::alpha_mask`] ＋ [`AlphaMaskResource`]。`GlobalArrangement.bounds`（＝原寸 × k・物理寸）
 //!    が AlphaMask 座標の基準になり、wintf の `alpha_mask_hit` が境界に対する比例写像で ÷k を
-//!    1 回だけ掛けて原寸マスクを読む（要件 4.2）。
+//!    1 回だけ掛けて原寸マスクを読む。
 //! 2. **text-layer slot**: surface entity の**兄弟・上位 z**（描画で上）に置く空 entity
-//!    （`Name("emo-text-layer-slot")` ＋ `Visual` ＋ `HitTest`・内容（brush）なし）。M1 の独立レイヤ
-//!    描画／α 後の合成パス内レイヤ化の双方を「この entity の差し替え」で吸収する seam
+//!    （`Name("emo-text-layer-slot")` ＋ `Visual` ＋ `HitTest`・内容（brush）なし）。独立レイヤ描画／
+//!    α 後の合成パス内レイヤ化の双方を「この entity の差し替え」で吸収する seam
 //!    （emo-text-layer が消費）。`HitTest` を明示付与するのは非表示時にポインタ透過させるため
 //!    （未付与は既定 `Bounds` 扱いで、`Bounds` の合成 α は `is_visible` を見ない）。
 //!
 //! # 非表示の契約（両 entity）
 //!
-//! 「バルーンを非表示にする」は**枠の面と文字層の双方が見えず・触れない**ことを意味する
-//! （`areka-P0-balloon-visibility` Requirement 1.7/1.8）。[`VisualMount::set_visible`] は両 entity の
+//! 「バルーンを非表示にする」は**枠の面と文字層の双方が見えず・触れない**ことを意味する。
+//! [`VisualMount::set_visible`] は両 entity の
 //! `Visual` と `HitTest` を同時に切り替え、[`VisualMount::attach`] の `initially_visible=false` は
-//! 両 entity を最初から不可視で spawn する（可視状態を一度も経由しない＝同 Requirement 1.2）。
+//! 両 entity を最初から不可視で spawn する（可視状態を一度も経由しない＝同）。
 //!
-//! # wintf `Visual::on_add` に乗る（`areka-P0-present-gpu-transform-scale` 裁定 D）
+//! # wintf `Visual::on_add` に乗る
 //!
 //! wintf の `Visual` の `on_add` フック（`graphics/visual.rs` `on_visual_add`）は owner Window 配下でのみ
 //! `VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty` を、常に `BrushInherit` を連鎖挿入する。
 //! 本型は surface entity へ **`VisualGraphics` を入れない**——既定値が連鎖挿入され、
 //! `visual_resource_management_system` が SpriteVisual を、`deferred_surface_creation_system` が
 //! `GraphicsCommandList` と `GlobalArrangement` から面・brush・`SetSize` を、`render_surface` が
-//! `SetTransform(GlobalArrangement のスケール)` → `DrawImage(記録)` の描画を担う。かつての
-//! 「自前 `VisualGraphics::new(sprite)` で `on_add` の既定挿入を避け、`GraphicsCommandList` を入れずに
-//! 面生成を発火させない」形（自前 swap chain 供給面）は**正反対**であり、撤去された。
+//! `SetTransform(GlobalArrangement のスケール)` → `DrawImage(記録)` の描画を担う。
 //!
 //! # z 順（描画順）の典拠
 //!
@@ -55,10 +53,9 @@ use wintf::ecs::{
 /// 原寸 `native` と拡大率 `k` から surface entity 用 [`Arrangement`] を作る
 /// （**原点 0・寸＝原寸（論理 px）・スケール＝k の係数**）。
 ///
-/// `BoxStyle`/taffy を経由せず直接与える。`size` は表示中エントリの原寸、`scale` は実適用 k で、
-/// wintf が `GlobalArrangement.bounds`＝`原寸 × k`（物理・f32）を導き、`render_surface` が
-/// `SetTransform` で同じ係数を描画に掛ける。`k.as_f32()` は「変換行列の係数」であって寸法演算では
-/// ない（`ScaleRatio::as_f32` の裁定済み消費者）——物理寸の照会値は従来どおり
+/// `size` は表示中エントリの原寸、`scale` は実適用 k。wintf が `GlobalArrangement.bounds`＝`原寸 × k`
+/// （物理・f32）を導き、`render_surface` が `SetTransform` で同じ係数を描画に掛ける。`k.as_f32()` は
+/// 変換行列の係数であって寸法演算ではない（`ScaleRatio::as_f32` の裁定済み消費者）。物理寸の照会値は
 /// `ScaleRatio::scaled_extent`（丸め権威）が返す。
 ///
 /// # 不変条件: `offset` は 0 でなければならない
@@ -83,8 +80,7 @@ pub(crate) fn logical_arrangement(native: (u32, u32), k: ScaleRatio) -> Arrangem
 
 /// 窓 Entity へ装着した最小 visual 構成（surface entity ＋ text-layer slot）のハンドル。
 ///
-/// `pub(crate)`（公開 API ではない）。`EmoPresenter` が target ごとに保持し、apply/hide で本型の
-/// メソッドを呼ぶ。装着そのもの（純 ECS の spawn）は [`Self::attach`] が担う。
+/// `pub(crate)`（公開 API ではない）。`EmoPresenter` が target ごとに保持する。
 pub(crate) struct VisualMount {
     /// `Visual` ＋ `Arrangement` ＋ `GraphicsCommandList` ＋ `HitTest` ＋ `AlphaMaskResource` を持つ
     /// 表示 entity（窓の子）。
@@ -114,11 +110,10 @@ impl VisualMount {
 
     /// text-layer slot の `HitTest`: 可視＝矩形判定・不可視＝判定停止（ポインタ透過）。
     ///
-    /// 可視時に `bounds()` を**明示**付与するのは、component 未付与が wintf 側で既定
-    /// `HitTestMode::Bounds` と扱われる（`hit_test/mod.rs`）ため従来挙動と同値だからである。
-    /// 明示付与にしておくことで不可視時に `none()` へ差し替えられる——`Bounds` 判定の合成 α は
-    /// `Visual::clamped_opacity()`（`visual.rs`）で決まり `is_visible` を見ないため、
-    /// `Visual` を不可視にするだけでは文字層のポインタ透過が成立しない。
+    /// 可視時に `bounds()` を**明示**付与するのは、不可視時に `none()` へ差し替えるため。component 未付与は
+    /// wintf 側で既定 `HitTestMode::Bounds` と扱われ（`hit_test/mod.rs`）、`Bounds` 判定の合成 α は
+    /// `Visual::clamped_opacity()`（`visual.rs`）で決まり `is_visible` を見ないため、`Visual` を不可視に
+    /// するだけでは文字層のポインタ透過が成立しない。
     fn slot_hit_test(visible: bool) -> HitTest {
         if visible {
             HitTest::bounds()
@@ -161,16 +156,12 @@ impl VisualMount {
     /// 窓 `window` の子として surface entity と text-layer slot を装着する（純 ECS・失敗経路なし）。
     ///
     /// `native` は表示中エントリの原寸、`k` は実適用の拡大率（[`logical_arrangement`] へ渡す）、
-    /// `display` はエントリの表示記録（`GraphicsCommandList`・clone して同梱する）。`VisualGraphics` は
-    /// 入れない——`Visual::on_add` の連鎖挿入に委ねる（本モジュール冒頭 §wintf `Visual::on_add` に乗る）。
+    /// `display` はエントリの表示記録（clone して同梱する）。`VisualGraphics` は入れない——
+    /// `Visual::on_add` の連鎖挿入に委ねる。
     ///
-    /// z 順（描画）: text-layer slot を surface entity **より先**に子へ追加し、`Children` 先頭
-    /// ＝最上（surface の上に描画）とする。
-    ///
-    /// `initially_visible` は装着直後の可視性。`false` の場合は surface entity・text-layer slot の
-    /// **双方**を最初から不可視（`Visual{is_visible:false}` ＋ `HitTest::none()`）で spawn する。
-    /// 「可視で spawn してから消す」経路を持たないことで、可視状態を一度も経由しないことを
-    /// 構造的に保証する（Requirement 1.2——フレーム遅延や合成のタイミングに成否を委ねない）。
+    /// `initially_visible` が `false` なら surface entity・text-layer slot の**双方**を最初から不可視
+    /// （`Visual{is_visible:false}` ＋ `HitTest::none()`）で spawn する。可視で spawn してから消す経路を
+    /// 持たないので、可視状態を一度も経由しない。
     pub(crate) fn attach(
         world: &mut World,
         window: Entity,
@@ -179,7 +170,7 @@ impl VisualMount {
         display: &GraphicsCommandList,
         initially_visible: bool,
     ) -> Self {
-        // 1. text-layer slot（兄弟・上位 z）を **先に** 追加 → Children 先頭 ＝ 最上（描画で前面）。
+        // text-layer slot を先に追加する: Children 先頭 ＝ 最上（描画で前面）。
         let text_slot = world
             .spawn((
                 Name::new("emo-text-layer-slot"),
@@ -189,7 +180,6 @@ impl VisualMount {
             ))
             .id();
 
-        // 2. surface entity（論理配置 ＋ 表示記録 ＋ αマスクヒットテスト）。
         let surface_entity = world
             .spawn((
                 Name::new("emo-surface"),
@@ -202,7 +192,6 @@ impl VisualMount {
             ))
             .id();
 
-        // ChildOf のリレーション反映（親の Children 更新）と on_add 連鎖の遅延コマンドを確定させる。
         world.flush();
 
         Self {
@@ -213,9 +202,8 @@ impl VisualMount {
 
     /// surface entity の配置を原寸 `native`・拡大率 `k` へ合わせる（[`logical_arrangement`]）。
     ///
-    /// **現値と同値なら書かない**——`Changed<Arrangement>` → `GlobalArrangement` → 面の寸合わせ・
-    /// 全面再描画の連鎖を、変化のない適用で毎コマ起こさないためである。bounds の伝播は既存
-    /// `propagate_global_arrangements` に委ねる。
+    /// **現値と同値なら書かない**——変化のない適用で `Changed<Arrangement>` → `GlobalArrangement` →
+    /// 面の寸合わせ・全面再描画の連鎖を毎コマ起こさないため。
     pub(crate) fn set_layout(&self, world: &mut World, native: (u32, u32), k: ScaleRatio) {
         let next = logical_arrangement(native, k);
         match world.get_mut::<Arrangement>(self.surface_entity) {
@@ -251,19 +239,17 @@ impl VisualMount {
         }
     }
 
-    /// 非表示／再表示の切替（R3.3・balloon-visibility Requirement 1.7/1.8）。
+    /// 非表示／再表示の切替。
     ///
     /// **surface entity と text-layer slot の双方**へ同時に及ぶ。`false`: 両者の
-    /// `Visual::set_visible(false)` ＋ 当たり判定停止（surface・slot とも `HitTest::none()`）。
-    /// `true`: 両者を可視へ戻し、surface は `HitTest::alpha_mask()`、slot は `HitTest::bounds()`
-    /// （＝component 未付与時の既定挙動と同値）へ復帰する。
+    /// `Visual::set_visible(false)` ＋ `HitTest::none()`。`true`: 両者を可視へ戻し、surface は
+    /// `HitTest::alpha_mask()`、slot は `HitTest::bounds()` へ復帰する。
     ///
     /// 枠の面だけを不可視にすると文字層が画面に残り、さらにスロットは既定 `Bounds` 判定のまま
-    /// ポインタを受け続ける（`Bounds` の合成 α は `is_visible` を見ない）。両 entity を同時に
-    /// 切り替えることで「非表示＝枠と文字の双方が見えず・触れず」の契約が成立する。
+    /// ポインタを受け続けるため、両 entity を同時に切り替える。
     ///
-    /// 表示記録・キャッシュは呼び手が保持するため再表示は再描画不要で復帰する。
-    /// 窓自体の show/hide は所有しない（placement/ghost 領分）。
+    /// 表示記録・キャッシュは呼び手が保持するため再表示は再描画不要。窓自体の show/hide は所有しない
+    /// （placement/ghost 領分）。
     pub(crate) fn set_visible(&self, world: &mut World, visible: bool) {
         Self::apply_visibility(
             world,
@@ -281,12 +267,11 @@ impl VisualMount {
         );
     }
 
-    /// 装着の子 2 つ（surface entity と text-layer slot）を窓から消す（シェル・バルーンの差し替えの
-    /// 片付け・`areka-P0-shell-balloon-switch` 要件 4.6）。
+    /// 装着の子 2 つ（surface entity と text-layer slot）を窓から消す（シェル・バルーンの差し替えの片付け）。
     ///
-    /// `self` を消費するので、消した後のハンドルは残らない。`ChildOf` のリレーションにより窓の
-    /// `Children` からも同時に外れる。窓そのものは消さない（窓の寿命は placement/ghost 領分）。
-    /// 既に居ない entity は装着契約の破綻ゆえ warn で記録する。
+    /// `self` を消費するので消した後のハンドルは残らない。`ChildOf` により窓の `Children` からも同時に
+    /// 外れる。窓そのものは消さない（窓の寿命は placement/ghost 領分）。既に居ない entity は装着契約の
+    /// 破綻ゆえ warn で記録する。
     pub(crate) fn despawn(self, world: &mut World) {
         for (entity, role) in [
             (self.text_slot, "text-layer-slot"),

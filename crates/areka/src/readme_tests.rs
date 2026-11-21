@@ -1,11 +1,7 @@
-//! 説明書のファイルの決め方と在否の決定論テスト（要件 9.4）。
-//!
-//! 確かめること: `readme` キーがあるときと無いときのパス・ファイルを置く／置かないで
-//! 在否が変わること・「無い」の記録が初回だけであること・要求の取り出しが溜まった要求を
-//! 届いた順に残さず返すこと・持ち物が無いときに黙って済ませないこと。
+//! 説明書のファイルの決め方と在否の決定論テスト。
 //!
 //! 開く処理へは差し込んだ送り先（`Opener::from_sender`）で「何を渡したか」だけを見る。
-//! 本物の OS を呼ぶテストは置かない（areka-P0-open-external-tags 要件 7.1・10.1）。
+//! 本物の OS を呼ぶテストは置かない。
 
 use std::sync::mpsc::{self, Receiver, Sender};
 
@@ -67,7 +63,7 @@ fn input_systems_len(world: &World) -> usize {
 }
 
 // -------------------------------------------------------------------------
-// 登録と結線（areka-P0-ghost-restart-unit 要件 2.1）
+// 登録と結線
 // -------------------------------------------------------------------------
 
 /// 登録専用の関数は単独で呼べ、入力の段へ取り出しの system をちょうど 1 つ足す。
@@ -89,7 +85,7 @@ fn register_readme_drain_alone_adds_one_system_to_the_input_schedule() {
     );
 }
 
-/// 開く専用のスレッドの持ち物が既に在れば起こし直さない（1 度だけ・要件 7.5）。
+/// 開く専用のスレッドの持ち物が既に在れば起こし直さない（1 度だけ）。
 #[test]
 fn register_readme_drain_keeps_an_existing_opener() {
     let mut world = World::new();
@@ -108,7 +104,7 @@ fn register_readme_drain_keeps_an_existing_opener() {
     );
 }
 
-/// 結線は持ち物を置くだけで、系は登録しない（登録は `ghost_session::register_systems`・要件 2.1）。
+/// 結線は持ち物を置くだけで、系は登録しない（登録は `ghost_session::register_systems`）。
 #[test]
 fn wire_readme_inserts_the_wiring_without_registering() {
     let mut world = World::new();
@@ -125,10 +121,10 @@ fn wire_readme_inserts_the_wiring_without_registering() {
 }
 
 // -------------------------------------------------------------------------
-// resolve_path（要件 4.1）
+// resolve_path
 // -------------------------------------------------------------------------
 
-/// `readme` キーがあれば、その値をゴーストのフォルダの根の直下で解決する（要件 4.1 ⑴）。
+/// `readme` キーがあれば、その値をゴーストのフォルダの根の直下で解決する。
 #[test]
 fn resolve_path_uses_the_readme_key_when_present() {
     let root = Path::new("C:\\ghosts\\sample");
@@ -140,7 +136,7 @@ fn resolve_path_uses_the_readme_key_when_present() {
     );
 }
 
-/// キーが無ければ正典の既定名 `readme.txt` を使う（要件 4.1 ⑵）。
+/// キーが無ければ正典の既定名 `readme.txt` を使う。
 #[test]
 fn resolve_path_falls_back_to_the_canonical_default_name() {
     let root = Path::new("C:\\ghosts\\sample");
@@ -154,7 +150,7 @@ fn resolve_path_falls_back_to_the_canonical_default_name() {
 }
 
 // -------------------------------------------------------------------------
-// is_available（要件 4.3・11.4）
+// is_available
 // -------------------------------------------------------------------------
 
 /// 持ち物が無ければ「無い」扱い（結線前でも判断を止めない）。
@@ -168,7 +164,7 @@ fn is_available_is_false_without_wiring() {
     );
 }
 
-/// ファイルが無ければ無効で、記録は初回だけ。置けば有効に変わる（要件 4.3・11.4）。
+/// ファイルが無ければ無効で、記録は初回だけ。置けば有効に変わる。
 #[test]
 fn is_available_follows_the_file_and_records_the_absence_only_once() {
     let dir = TempPath::new("readme-availability");
@@ -208,7 +204,7 @@ fn is_available_follows_the_file_and_records_the_absence_only_once() {
 }
 
 // -------------------------------------------------------------------------
-// 要求の取り出し（要件 4.5 の受け口・areka-P0-open-external-tags 要件 7.1）
+// 要求の取り出し
 // -------------------------------------------------------------------------
 
 /// 持ち物が無ければ取り出しは 0 件で、黙って済ませない。
@@ -235,7 +231,7 @@ fn take_pending_is_empty_when_nothing_is_queued() {
     assert!(take_pending(&world).is_empty(), "要求が無ければ 0 件");
 }
 
-/// 溜まった要求は全件取り出され、受け口に 1 件も残らない（要件 4.5）。
+/// 溜まった要求は全件取り出され、受け口に 1 件も残らない。
 #[test]
 fn take_pending_returns_every_queued_request_and_leaves_none() {
     let mut world = World::new();
@@ -256,7 +252,7 @@ fn take_pending_returns_every_queued_request_and_leaves_none() {
     );
 }
 
-/// 取り出しは説明書と開く系を届いた順に開く処理へ渡す（説明書は台本の綴り・要件 7.1）。
+/// 取り出しは説明書と開く系を届いた順に開く処理へ渡す（説明書は台本の綴り）。
 #[test]
 fn drain_hands_readme_and_open_requests_over_in_arrival_order() {
     let dir = TempPath::new("readme-drain-order");
@@ -300,7 +296,7 @@ fn drain_hands_readme_and_open_requests_over_in_arrival_order() {
 }
 
 // -------------------------------------------------------------------------
-// open_from_world（要件 4.2 の入口・持ち物不在）
+// open_from_world（持ち物不在）
 // -------------------------------------------------------------------------
 
 /// 持ち物が無ければ開かずに `warn!` で記録する（無記録の失敗経路を作らない）。
@@ -322,7 +318,7 @@ fn open_from_world_warns_without_wiring() {
     );
 }
 
-/// 説明書が在れば、絶対パスの行き先と綴りを開く処理へ 1 件渡す（OS は直接呼ばない・要件 7.1）。
+/// 説明書が在れば、絶対パスの行き先と綴りを開く処理へ 1 件渡す（OS は直接呼ばない）。
 #[test]
 fn open_from_world_hands_the_absolute_readme_path_to_the_opener() {
     let dir = TempPath::new("readme-open-present");
@@ -345,7 +341,7 @@ fn open_from_world_hands_the_absolute_readme_path_to_the_opener() {
     assert!(jobs.try_recv().is_err(), "ちょうど 1 件");
 }
 
-/// 説明書のファイルが無ければ開く処理へ渡さず、パスを添えて `warn!` で 1 行記録する（要件 5.1・5.5）。
+/// 説明書のファイルが無ければ開く処理へ渡さず、パスを添えて `warn!` で 1 行記録する。
 #[test]
 fn open_from_world_skips_a_missing_file_with_a_warning_and_no_submit() {
     let dir = TempPath::new("readme-open-missing");
@@ -372,12 +368,12 @@ fn open_from_world_skips_a_missing_file_with_a_warning_and_no_submit() {
 }
 
 // -------------------------------------------------------------------------
-// 見張り（areka-P0-open-external-tags 要件 7.1）
+// 見張り
 // -------------------------------------------------------------------------
 
 /// 本体（`crates/areka/src`）・`crates/areka-runtime/src`・`crates/areka-input/src` の 3 つの木の下で OS の「開く」関数
 /// （Shell と Execute を繋いだ名）を綴るのは OS の境界のファイルだけ（分ける前に本体の `src` が
-/// 覆っていた範囲を歩く。runtime-crate-split 要件 5.4）。
+/// 覆っていた範囲を歩く）。
 ///
 /// 針は連結で組み、このファイルには繋いだ綴りを書かない（見張り自身を数えないように）。
 #[test]
@@ -431,7 +427,7 @@ fn only_the_os_port_spells_shell_execute() {
 }
 
 // -------------------------------------------------------------------------
-// set_path（areka-P0-mcp-reload 要件 7.3・descript の読み直しで替える値）
+// set_path（descript の読み直しで替える値）
 // -------------------------------------------------------------------------
 
 /// 置き場を差し替えた後の取り出しは、新しい置き場を開く処理へ渡す（受信端はそのまま使う）。

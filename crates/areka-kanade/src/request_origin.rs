@@ -42,13 +42,13 @@ pub struct OriginWire {
 }
 
 impl RequestOrigin {
-    /// 外からの台本（MCP の `sakurascript`）の `OnTranslate` の出どころ（要件 2.4）。
+    /// 外からの台本（MCP の `sakurascript`）の `OnTranslate` の出どころ。
     pub const MCP_SEND_TRANSLATE: RequestOrigin = RequestOrigin {
         sender: SenderName::Mcp,
         origin: ScriptOrigin::MCP_SEND,
     };
 
-    /// 送るイベントの要求の出どころ（要件 2.2・2.3・2.4〜2.6）。
+    /// 送るイベントの要求の出どころ。
     pub fn of_event(id: &EventId) -> RequestOrigin {
         // 既定の腕を置かない（カテゴリが増えたらコンパイラに求めさせる）。
         match id {
@@ -61,7 +61,7 @@ impl RequestOrigin {
                 origin: ScriptOrigin::MCP_NOTIFY,
             },
             EventId::Translate(origin) => *origin,
-            // `\![get,property]` の返しのイベント（shell-scale-linkage 要件 1.3）。
+            // `\![get,property]` の返しのイベント。
             EventId::Property(_) => RequestOrigin {
                 sender: SenderName::Areka,
                 origin: ScriptOrigin::PROPERTY,
@@ -69,13 +69,13 @@ impl RequestOrigin {
         }
     }
 
-    /// そのイベントへの応答の台本の基本の出どころ（要件 1.1・1.3・1.7）。
+    /// そのイベントへの応答の台本の基本の出どころ。
     pub fn base_of(id: &EventId) -> ScriptOrigin {
         Self::of_event(id).origin
     }
 
     /// SHIORI の応答の台本の `OnTranslate` の出どころ: 送り手は areka、出どころは元のイベントの
-    /// 応答の台本の基本の出どころ（要件 2.5・2.6）。
+    /// 応答の台本の基本の出どころ。
     pub fn for_translated(source: &EventId) -> RequestOrigin {
         RequestOrigin {
             sender: SenderName::Areka,
@@ -94,7 +94,7 @@ impl RequestOrigin {
     }
 }
 
-/// 応答の `SecurityLevel` の生の値を読む（要件 3.3・3.4）。
+/// 応答の `SecurityLevel` の生の値を読む。
 ///
 /// 無い → `Local`（下げない）／`local`・`external`（大小無視）→ その値／それ以外 → イベントの ID と
 /// 値を warn に残して `Local`。

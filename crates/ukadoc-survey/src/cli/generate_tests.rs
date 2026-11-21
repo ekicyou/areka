@@ -1,5 +1,4 @@
-//! 生成の副手続きが持つ「判断」と「順番」を釘付けする（設計「入口 / cli」・
-//! 要件 3.1・3.2・3.5・3.3・3.3a・1.8）。
+//! 生成の副手続きが持つ「判断」と「順番」を釘付けする。
 //!
 //! カタログ再生成はスナップショットが要るので、ここでは走らせない（完了条件は
 //! 実データでの通し確認の側にある）。台帳の初期化は取り寄せと書き手を引数で受けるので、
@@ -7,10 +6,10 @@
 //! このファイルが確かめるのは次の箇条で、はじめの 2 つは入出力に 1 度も触れずに決まる。
 //!
 //! - どの id をどの台帳へ入れるか（[`select_ids_by_domain`]）
-//! - 既存の台帳の本文を差し込みへ渡しているか（[`plan_ledger_init`]・要件 3.3a）
-//! - 既存の台帳を実際に取り寄せられるか（[`read_if_present`]・要件 3.3a）
-//! - repo の台帳 4 本が再実行で 1 バイトも変わらないか（[`ledger_init_with`]・要件 3.3a）
-//! - 4 本の本文が全部決まるまで 1 本も書き始めないか（[`ledger_init_with`]・要件 1.8）
+//! - 既存の台帳の本文を差し込みへ渡しているか（[`plan_ledger_init`]）
+//! - 既存の台帳を実際に取り寄せられるか（[`read_if_present`]）
+//! - repo の台帳 4 本が再実行で 1 バイトも変わらないか（[`ledger_init_with`]）
+//! - 4 本の本文が全部決まるまで 1 本も書き始めないか（[`ledger_init_with`]）
 //! - 書き手の失敗を握り潰さず、そのまま返すか（[`ledger_init_with`]）
 //! - 4 本を全部書き終えてから告げるか（[`ledger_init_with`]）
 //!
@@ -21,12 +20,12 @@
 //!
 //! # 作らない。ただし repo の追跡ファイルは読む
 //!
-//! ファイルを 1 つも作らず、一時ディレクトリも使わない（設計 File Structure Plan。
-//! 禁じてあるのは**作ること**である）。スナップショットも読まない。
+//! ファイルを 1 つも作らず、一時ディレクトリも使わない（禁じてあるのは**作ること**である）。
+//! スナップショットも読まない。
 //!
-//! **repo に追跡されているファイルを読むことは禁じられていない。** 要件 6.2 は
-//! 「スナップショットがその環境に無くても整合検査は赤にならない（repo 内のカタログを
-//! 正本として検査する）」であって、repo のファイルを読むことをむしろ前提にしている。
+//! **repo に追跡されているファイルを読むことは禁じられていない。** スナップショットが
+//! その環境に無くても整合検査は赤にならない（repo 内のカタログを正本として検査する）
+//! ので、repo のファイルを読むことをむしろ前提にしている。
 //! 在中テストが repo の追跡ファイルを読む前例も既にある（`io/files_tests.rs` が
 //! `Cargo.toml` を読む）。3 つ目から後の主張はこの読みだけを使う。
 
@@ -109,7 +108,7 @@ fn each_sample_id_lands_in_the_ledger_that_owns_its_page() {
 
 #[test]
 fn a_domain_that_owns_no_entry_still_gets_a_bucket() {
-    // 台帳は 4 本と決まっている（要件 3.1）。項目 0 件のドメインの鍵が消えると、
+    // 台帳は 4 本と決まっている。項目 0 件のドメインの鍵が消えると、
     // その台帳だけが書き出されずに黙って欠ける。
     let mut catalog = lib_test_support::catalog();
     catalog
@@ -134,8 +133,7 @@ fn a_domain_that_owns_no_entry_still_gets_a_bucket() {
 
 #[test]
 fn an_entry_whose_page_belongs_to_no_ledger_is_named_and_refused() {
-    // 割り当ての無いページの id を黙って落とすと、件数が減るだけで何も言わない
-    // （要件 3.5・設計 Error Handling）。
+    // 割り当ての無いページの id を黙って落とすと、件数が減るだけで何も言わない。
     let mut catalog: Catalog = lib_test_support::catalog();
     let stray = EntryId::parse("ukadoc:list_no_such_page:thing:1").expect("2 形のはず");
     catalog.entries.insert(
@@ -165,7 +163,7 @@ fn an_entry_whose_page_belongs_to_no_ledger_is_named_and_refused() {
 }
 
 // ---------------------------------------------------------------------------
-// 既存本文を渡している配線（要件 3.3a）
+// 既存本文を渡している配線
 // ---------------------------------------------------------------------------
 //
 // 既存本文を渡し忘れると、手で書き込んだ状態・担当・優先度を次の `ledger-init` が
@@ -174,7 +172,7 @@ fn an_entry_whose_page_belongs_to_no_ledger_is_named_and_refused() {
 //
 // そこで [`plan_ledger_init`] は既存本文の取り寄せを引数で受ける。ここでは手で
 // 書いた本文を渡し、その綴りが返る本文に生き残ることを確かめる。ファイルは
-// 1 つも作らず、一時ディレクトリも使わない（設計 File Structure Plan）。
+// 1 つも作らず、一時ディレクトリも使わない。
 
 /// 台帳の置き場（実装の `io::paths` を引かず、独立した綴りで書く）。
 const LEDGER_FILES: [&str; 4] = [
@@ -342,7 +340,7 @@ fn the_plan_asks_for_each_ledger_at_its_own_place_and_writes_back_there() {
 
 #[test]
 fn a_hand_written_ledger_survives_the_plan_byte_for_byte() {
-    // 要件 3.3a の本体。既存本文を渡し忘れると、repo の台帳の中身に関わらずこの
+    // 既存本文を渡し忘れると、repo の台帳の中身に関わらずこの
     // 主張が赤くなる。
     let (plans, _) = plan_with(&[
         (LEDGER_FILES[3], HAND_PROPERTY),
@@ -372,7 +370,7 @@ fn a_hand_written_ledger_survives_the_plan_byte_for_byte() {
 
 #[test]
 fn a_ledger_with_no_existing_body_gets_the_generated_prologue() {
-    // 既存が無いドメインは新規に組み立てる（要件 3.3）。前置きの担当ページを
+    // 既存が無いドメインは新規に組み立てる。前置きの担当ページを
     // 渡し忘れる壊し方をここで捕まえる。
     let (plans, _) = plan_with(&[(LEDGER_FILES[3], HAND_PROPERTY)]);
 
@@ -396,7 +394,7 @@ fn a_ledger_with_no_existing_body_gets_the_generated_prologue() {
 }
 
 // ---------------------------------------------------------------------------
-// 取り寄せそのもの（要件 3.3a）
+// 取り寄せそのもの
 // ---------------------------------------------------------------------------
 //
 // 上の一群は「呼び手が渡した取り寄せの結果を差し込みへ回しているか」を見る。渡す中身
@@ -404,7 +402,7 @@ fn a_ledger_with_no_existing_body_gets_the_generated_prologue() {
 //
 // ここは判断の分岐なので釘付けする。`Ok(true)` の枝を `Ok(None)` へ潰すと、実在する
 // 台帳に「無い」と答えるようになり、次の `ledger-init` が既存の記入をすべて初期値へ
-// 戻す（要件 3.3a が禁じる形そのもの）。
+// 戻す。
 //
 // repo に追跡されている台帳を **読むだけ** である。ファイルは作らず、一時ディレクトリも
 // 使わない。
@@ -454,7 +452,7 @@ fn read_if_present_returns_the_committed_ledger_and_none_for_a_missing_sibling()
 }
 
 // ---------------------------------------------------------------------------
-// 4 本を決めてから書く（要件 3.3・3.3a・1.8）
+// 4 本を決めてから書く
 // ---------------------------------------------------------------------------
 //
 // ここまでの一群が見るのは計画の中身だけである。残るのは [`ledger_init_with`] が持つ
@@ -467,7 +465,7 @@ fn read_if_present_returns_the_committed_ledger_and_none_for_a_missing_sibling()
 
 #[test]
 fn re_running_the_init_writes_the_committed_ledgers_with_the_very_same_bytes() {
-    // 不動点（要件 3.3a）。`ledger-init` を今もう一度走らせても、repo にある台帳は
+    // 不動点。`ledger-init` を今もう一度走らせても、repo にある台帳は
     // 1 バイトも変わらない。実際のカタログと実際の取り寄せを使い、書き手だけを
     // 「控えるだけ」に差し替える。ファイルは 1 つも作らない。
     //
@@ -525,8 +523,8 @@ fn re_running_the_init_writes_the_committed_ledgers_with_the_very_same_bytes() {
 #[test]
 fn a_failure_on_the_fourth_ledger_leaves_the_first_three_unwritten() {
     // 4 本目（property）の取り寄せで落ちたとき、先に本文が決まっている 3 本を
-    // 書いてしまうと、走行は失敗したのに repo の台帳だけが書き換わって残る
-    // （要件 1.8）。取り寄せに聞かれた場所を控えて、「3 本ぶんは決まっていた」と
+    // 書いてしまうと、走行は失敗したのに repo の台帳だけが書き換わって残る。
+    // 取り寄せに聞かれた場所を控えて、「3 本ぶんは決まっていた」と
     // 「それでも 1 本も書いていない」を対で書く。
     let asked: RefCell<Vec<String>> = RefCell::new(Vec::new());
     let read = |path: &Path| -> Result<Option<String>, SurveyError> {
@@ -566,7 +564,7 @@ fn a_failure_on_the_fourth_ledger_leaves_the_first_three_unwritten() {
 #[test]
 fn a_failure_from_the_writer_comes_back_unchanged() {
     // 書き手の失敗を握り潰して次の台帳へ進むと、書けなかった台帳があることを
-    // 誰も知らないまま終了コード 0 で終わる（設計 Error Handling）。
+    // 誰も知らないまま終了コード 0 で終わる。
     const MARKER: &str = "書き手をここで落とした";
 
     let mut attempts: Vec<String> = Vec::new();

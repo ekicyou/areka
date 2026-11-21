@@ -1,8 +1,8 @@
-//! 窓の矩形の読み手（spec mcp-scope-rect-property 要件 1〜5）。
+//! 窓の矩形の読み手。
 //!
 //! `currentghost.scope(ID).rect`・`currentghost.balloon.scope(ID).rect` は、読まれた時に
 //! スコープ → 窓の印の表で窓を引き、OS に 1 回だけ今の矩形を聞いて「左,上,右,下」で答える。
-//! 値は写しにも保存にも載せない（プル）。画面に出ているかは見ない（要件 1.8・2.4）。
+//! 値は写しにも保存にも載せない（プル）。画面に出ているかは見ない。
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
@@ -190,7 +190,7 @@ pub(crate) enum ScopeSelector {
     Negative,
 }
 
-/// 区切り「scope」の選択子を読む。`None` は書式の誤り（`x`・空・`+1` など・要件 3.6）。
+/// 区切り「scope」の選択子を読む。`None` は書式の誤り（`x`・空・`+1` など）。
 pub(crate) fn scope_selector(path: &PropPath) -> Option<ScopeSelector> {
     let seg = path.segs.iter().find(|seg| seg.name == "scope")?;
     match seg.selector.as_ref()? {
@@ -242,7 +242,7 @@ pub(crate) fn rect_text(rect: ScreenRect) -> String {
 /// 窓の印から OS の今の窓の矩形を 1 回で読む（本物・読み手の既定の読み取り）。
 ///
 /// `GetWindowRect` は呼んだスレッドの DPI の扱いで値が変わるので、呼ぶ間だけ
-/// モニタごとの v2 にして物理の画素で読む（要件 1.3）。窓のスレッドは待たない（要件 5.1）。
+/// モニタごとの v2 にして物理の画素で読む。窓のスレッドは待たない。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#currentghost.scope_28ID_29.rect:1
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#currentghost.balloon.scope_28ID_29.rect:1
 pub(crate) fn os_window_rect(key: WindowKey) -> Option<ScreenRect> {

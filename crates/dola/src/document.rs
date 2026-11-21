@@ -51,8 +51,9 @@ impl DolaDocument {
 mod tests {
     use super::*;
 
+    // フルラウンドトリップは `tests/general/core_types_test/document_variable.rs` が確かめる。
+
     // #[serde(default)] による省略フィールドの空コレクション化
-    // （フルラウンドトリップは tests/general/core_types_test/document_variable.rs が担う）
 
     #[test]
     fn deserialize_with_only_schema_version_defaults_to_empty_maps() {

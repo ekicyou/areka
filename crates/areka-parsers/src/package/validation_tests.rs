@@ -1,18 +1,13 @@
-//! 横断バリデーション単体テスト（タスク 4.2）。
+//! 横断バリデーション単体テスト。
 //!
-//! 本ファイルは spec の**統合／バリデーション層**として、公開エントリ
+//! 本ファイルは**統合／バリデーション層**として、公開エントリ
 //! `super::resolve_with_shell`（`pub fn resolve_with_shell(&Path, DefaultEncoding, Option<&str>) -> Result<MountModel, MountError>`・ここでは `None`）
 //! を、**実フィクスチャ emo2** を入力に end-to-end で解決させ、観測可能挙動を固定する。
 //!
 //! resolve_tests.rs は合成 tempdir によるユニット網羅（存在確認・フォールバック・
-//! 失敗型）を担うのに対し、本ファイルは別クレート（`pilot`）配下の実配布形フィクスチャ
-//! `検体 emo2` を「そのまま」入力にした
-//! クレート跨ぎの回帰固定を担う。foundation 経由の charset デコード（UTF-8）・既定
+//! 失敗型）を担うのに対し、本ファイルは実配布形フィクスチャ `検体 emo2` を「そのまま」
+//! 入力にした回帰固定を担う。foundation 経由の charset デコード（UTF-8）・既定
 //! フォールバック（shell=master）・未使用フィールドの無影響を、実バイト列で確認する。
-//!
-//! フィクスチャ所在: `env!("CARGO_MANIFEST_DIR")`（= `.../crates/areka-parsers`）から
-//! `..` で `crates/` へ上がり `pilot/...` へ降りて合成する（design「Implementation
-//! Notes → Validation」準拠・絶対パス埋め込みやフィクスチャ複製をしない）。
 
 use crate::charset::DefaultEncoding;
 
@@ -29,7 +24,7 @@ fn emo2_root() -> PathBuf {
 /// 既定エンコーディングは `Utf8` を渡すが、emo2 の descript.txt は先頭で
 /// `charset,UTF-8` を宣言するため、foundation の prescan が既定に関わらず UTF-8 を
 /// 選ぶ（＝結果は default_encoding に不変）。ここで `Utf8` を渡すのは宣言と一致させ
-/// 意図を明示するためで、`Ansi` を渡しても同一結果になる（宣言優先・メモ参照）。
+/// 意図を明示するためで、`Ansi` を渡しても同一結果になる（宣言優先）。
 fn resolve_emo2() -> MountModel {
     let root = emo2_root();
     match resolve_with_shell(&root, DefaultEncoding::Utf8, None) {
@@ -39,14 +34,14 @@ fn resolve_emo2() -> MountModel {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// レイアウト解決（要件 4.1/4.3/5.2）
+// レイアウト解決
 //
 // 採取元: 検体 emo2
 //   - ghost/master/descript.txt L7: `shiori,pasta.dll` → shiori.file = "pasta.dll"
 //   - ghost/master/                → shiori.dir = <root>/ghost/master（起点の親）
 //   - shell/master/（実在）        → shell.dir = <root>/shell/master
 //     （descript.txt に `seriko.defaultsurfacedirectoryname` 不在 → 既定 master
-//      へフォールバック・要件 3.1/3.2）
+//      へフォールバック）
 // ───────────────────────────────────────────────────────────────────
 
 /// emo2 レイアウトが 2 点マウント（SHIORI / shell）へ正しく解決される。
@@ -70,7 +65,7 @@ fn emo2_resolves_shiori_and_shell_layout() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// 名前情報の UTF-8 取得（要件 1.4/1.5）
+// 名前情報の UTF-8 取得
 //
 // 採取元: 検体 emo2 の ghost/master/descript.txt
 //   L1: `charset,UTF-8`
@@ -93,7 +88,7 @@ fn emo2_names_decoded_as_utf8() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// 未使用フィールド・未使用ファイルの無影響（要件 5.2/5.3）
+// 未使用フィールド・未使用ファイルの無影響
 //
 // emo2 は結果に写らない要素を多数含む。これらが解決結果へ一切漏れないことを、
 // 「クリーンなレイアウト＋名前アサーションが緑であること」を証拠として固定する。
@@ -133,7 +128,7 @@ fn emo2_unused_fields_and_files_do_not_leak() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// 既定エンコーディング不変（要件 1.5・宣言優先）
+// 既定エンコーディング不変（宣言優先）
 // ───────────────────────────────────────────────────────────────────
 
 /// emo2 は `charset,UTF-8` を宣言するため、既定エンコーディングを `Ansi` に変えても
@@ -152,7 +147,7 @@ fn emo2_result_invariant_to_default_encoding() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// bindgroup default 保持（要件 4.5）
+// bindgroup default 保持
 //
 // bindgroup default（`sakura.bindgroup*.default,数値`／`kero.*`）は ukadoc の
 // カテゴリ `descript_shell` に属し、**shell の descript.txt**（= <root>/shell/master/
@@ -177,7 +172,7 @@ fn emo2_bindgroup_defaults_are_transcribed() {
     let model = resolve_emo2();
 
     // 本体スコープ: default,1 の bindgroup 番号集合が emo2 実測と一致する。
-    // 保持は転記順ゆえ、順不同の集合として照合する（design「昇順不問・保持は転記順」）。
+    // 保持は転記順ゆえ、順不同の集合として照合する。
     let sakura: std::collections::BTreeSet<u32> =
         model.bindgroups[&0].default_on.iter().copied().collect();
     let expected: std::collections::BTreeSet<u32> =

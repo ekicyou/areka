@@ -1,11 +1,10 @@
 // -------------------------------------------------------------------------
-// clear_balloon_hover_on_leave 排他システム檻（task 5・design「clear_balloon_hover_on_leave」／
-// R1.3/3.4）
+// clear_balloon_hover_on_leave 排他システム檻
 //
 // bare World で `PointerLeave` マーカー保持 entity を組み、(a) バルーン所有 leave のみ hover を
 // 解除する（親チェーン→`BalloonWindowMarker`）、(b) 非バルーン窓の leave は無視、(c) マーカー不在は
 // 完全 no-op、(d) RuntimeWiring 不在は DEBUG 縮退（hover 不変）を決定的に檻へ入れる。判断分岐そのもの
-// （active×hit=None×last の全組合せ）は hover_action 純関数檻（task 3.2）が網羅済み。`PointerLeave`
+// （active×hit=None×last の全組合せ）は hover_action 純関数檻が網羅済み。`PointerLeave`
 // の除去は本システムの責務外（FrameFinalize の機構不変）ゆえ検証しない。
 // -------------------------------------------------------------------------
 
@@ -39,7 +38,7 @@ fn insert_wiring_with_hover(world: &mut World, scope: usize, ordinal: Option<usi
     world.insert_non_send(BalloonHover::default());
 }
 
-/// バルーン所有 leave→hover 解除（Inject(None) アーム・R1.3）: choice 表示中・現行 hit=None
+/// バルーン所有 leave→hover 解除（Inject(None) アーム）: choice 表示中・現行 hit=None
 /// （窓外離脱ゆえエッジ非採取）・前回注入 Some(2) → `inject_choice_hover(actor, None)`＋自前状態
 /// `BalloonWiring.hover[scope]` を None 更新＋`choice_hover_inject` を DEBUG 発火する。
 #[test]
@@ -73,8 +72,8 @@ fn leave_balloon_owned_clears_hover_via_inject_none() {
     );
 }
 
-/// アンカーだけのバルーンでも、窓の外へ出たら強調を外す注入をする（areka-P0-anchor-tag-canon
-/// 要件 3.2）。選択肢が無いので、選択肢の有無で見ていれば注入の腕に入らない。
+/// アンカーだけのバルーンでも、窓の外へ出たら強調を外す注入をする。
+/// 選択肢が無いので、選択肢の有無で見ていれば注入の腕に入らない。
 #[test]
 fn leave_anchor_only_balloon_clears_hover_via_inject_none() {
     let mut world = World::new();
@@ -99,7 +98,7 @@ fn leave_anchor_only_balloon_clears_hover_via_inject_none() {
     );
 }
 
-/// バルーン所有 leave・非表示（ResetOwnState アーム・R3.4）: choice 非表示・前回注入 Some(3) →
+/// バルーン所有 leave・非表示（ResetOwnState アーム）: choice 非表示・前回注入 Some(3) →
 /// 自前状態のみ None 整合し、**inject はしない**（上流原子性が正本＝choice_hover_inject を出さない）。
 #[test]
 fn leave_balloon_owned_inactive_resets_own_state_without_inject() {
@@ -155,8 +154,8 @@ fn leave_non_balloon_window_is_ignored() {
     );
 }
 
-/// マーカー不在は完全 no-op（R1.4 の離脱版）: `PointerLeave` を一切持たない World では hover を
-/// 触らず、RuntimeWiring にも触れずに即 return する（design Risks: 完全 no-op）。
+/// マーカー不在は完全 no-op: `PointerLeave` を一切持たない World では hover を
+/// 触らず、RuntimeWiring にも触れずに即 return する（完全 no-op）。
 #[test]
 fn leave_no_marker_is_full_noop() {
     let mut world = World::new();
@@ -176,7 +175,7 @@ fn leave_no_marker_is_full_noop() {
     );
 }
 
-/// RuntimeWiring 不在＝正常縮退（R4.1・donor presenter=None 同型）: バルーン所有 leave があっても
+/// RuntimeWiring 不在＝正常縮退（donor presenter=None 同型）: バルーン所有 leave があっても
 /// **DEBUG** で no-op・hover 不変（`event=choice_leave_no_runtime`・ERROR は出さない）。
 #[test]
 fn leave_runtime_absent_degrades_with_debug_and_leaves_hover() {

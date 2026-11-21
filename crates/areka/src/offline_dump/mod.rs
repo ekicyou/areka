@@ -1,10 +1,9 @@
-//! オフラインの書き出し（`--offline-dump`）の走り（spec: areka-P0-offline-surface-dump）。
+//! オフラインの書き出し（`--offline-dump`）の走り。
 //!
 //! ゴーストを起こさず、窓も出さずに、指定のシェルの面を PNG のファイルへ書き出し、その間の
-//! 記録を CSV に残して終了コードを返す。使ってよい部品は design.md の許す依存の一覧だけで、
-//! areka の記憶・置き場・MCP・窓の部品は呼ばない（要件 9 の構造の上の担保）。
+//! 記録を CSV に残して終了コードを返す。areka の記憶・置き場・MCP・窓の部品は呼ばない。
 //!
-//! 順番（design「OfflineDumpRun」）: 始めの info → ゴーストの名前 → 写しの窓を開ける → スコープ →
+//! 順番: 始めの info → ゴーストの名前 → 写しの窓を開ける → スコープ →
 //! `--dump-shell` → シェルの解決 → COM → シェルの読み込み → 面の段 → 写しの窓を閉じる →
 //! 終了コード → CSV → 終わりの info。途中の失敗はどれも窓を閉じる段へ流れる。
 
@@ -61,7 +60,7 @@ pub(crate) fn run(req: &OfflineDumpRequest) -> i32 {
         error_log = ?req.error_log,
         "[offline_dump] 書き出しを始めます"
     );
-    // ゴーストの読み込みの失敗は窓を開けずに 0（CSV も作らない＝2.6・8.4）。
+    // ゴーストの読み込みの失敗は窓を開けずに 0（CSV も作らない）。
     let (code, tally, worst) = match read_ghost(req.ghost_dir.as_deref()) {
         Some((root, ghost_name)) => dump(req, &root, &ghost_name),
         None => (0, DumpTally::default(), None),
@@ -93,7 +92,7 @@ fn dump(
     let code = report::exit_code(&records);
     if let Some(raw) = req.error_log.as_deref() {
         match std::path::absolute(raw) {
-            // 書けなければ write_csv が error! を出す（終了コードは変えない＝7.7）。
+            // 書けなければ write_csv が error! を出す（終了コードは変えない）。
             Ok(path) => {
                 let _ = report::write_csv(&path, ghost_name, &records);
             }
@@ -109,7 +108,7 @@ fn dump(
 }
 
 /// ゴーストのフォルダを今のフォルダから絶対にし、descript.txt の `name` を読む（無ければ空）。
-/// 値なし・読めないときは error! を出して None（2.1・2.2・2.6・1.8）。
+/// 値なし・読めないときは error! を出して None。
 fn read_ghost(raw: Option<&str>) -> Option<(PathBuf, String)> {
     let Some(raw) = raw else {
         tracing::error!(
@@ -133,7 +132,7 @@ fn read_ghost(raw: Option<&str>) -> Option<(PathBuf, String)> {
     Some((root, names.name.unwrap_or_default()))
 }
 
-/// `--dump-scope` の値。無ければ 0、0 以上の整数として読めなければ 0 と warn!（3.8・3.10）。
+/// `--dump-scope` の値。無ければ 0、0 以上の整数として読めなければ 0 と warn!。
 fn read_scope(raw: Option<&str>) -> u32 {
     let Some(raw) = raw else { return 0 };
     raw.parse().unwrap_or_else(|_| {
@@ -146,11 +145,11 @@ fn read_scope(raw: Option<&str>) -> u32 {
     })
 }
 
-/// `--dump-shell` を探してシェルを解決し、COM（MTA）を初期化して読み込む（2.3〜2.5・2.7）。
+/// `--dump-shell` を探してシェルを解決し、COM（MTA）を初期化して読み込む。
 /// 見つからない・フォルダが無い・COM の失敗は error! を出して None、読み込みの失敗は下の層の
 /// error! だけで None（1 つの誤りは 1 行）。
 fn load_shell(root: &Path, want: Option<&str>) -> Option<LoadedShell> {
-    // 値なしは既定のシェル（利用者の記憶は読まない＝2.3）。random・lastinstalled はただの名前（2.4）。
+    // 値なしは既定のシェル（利用者の記憶は読まない）。random・lastinstalled はただの名前。
     let folder = match want {
         None => None,
         Some(want) => {
@@ -176,7 +175,7 @@ fn load_shell(root: &Path, want: Option<&str>) -> Option<LoadedShell> {
         })
         .ok()?;
     // SAFETY: このスレッドの COM 初期化（MTA・WIC のデコーダの前提）。既に MTA なら S_FALSE で続ける。
-    // プロセスはすぐ終わるので対の解除は呼ばない（design「OfflineDumpRun」）。
+    // プロセスはすぐ終わるので対の解除は呼ばない。
     let decoder = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }
         .ok()
         .and_then(|()| WicDecoderArm::new())
@@ -205,15 +204,15 @@ fn load_shell(root: &Path, want: Option<&str>) -> Option<LoadedShell> {
 }
 
 /// 面の段。シェルを読めた走りで、写しの窓を閉じる前に 1 度だけ呼ぶ。面の指定が無ければ表と下地を
-/// 作るだけで閉じる（`--dump-bind` も読まない＝3.6）。着せ替えは画面と同じ決め方のそのスコープの初めの組に
-/// `--dump-bind` を当てたもの（利用者の記憶は読まない＝3.9・4.2・14.3）。失敗した面は飛ばす（4.8）。
+/// 作るだけで閉じる（`--dump-bind` も読まない）。着せ替えは画面と同じ決め方のそのスコープの初めの組に
+/// `--dump-bind` を当てたもの（利用者の記憶は読まない）。失敗した面は飛ばす。
 fn surface_stage(req: &OfflineDumpRequest, scope: u32, shell: LoadedShell) -> DumpTally {
     let LoadedShell {
         bindgroups,
         target,
         world,
     } = shell;
-    // 表と下地は面の指定の有無に関わらず 1 度だけ作る（表の warn を CSV に残す＝design の順）。
+    // 表と下地は面の指定の有無に関わらず 1 度だけ作る（表の warn を CSV に残すため）。
     let table = AnimationTable::from_world(&world);
     let canvas = render::Canvas::from_bounds(shell_bounds(&world, target.atlas()));
     let Some(list) = req.surface_list.as_deref() else {
@@ -247,7 +246,7 @@ fn surface_stage(req: &OfflineDumpRequest, scope: u32, shell: LoadedShell) -> Du
             };
         }
     };
-    // 値なしは既定の頭の文字列（png_path は空の頭の文字列で `0.png` を返すため＝6.1）。
+    // 値なしは既定の頭の文字列（png_path は空の頭の文字列で `0.png` を返すため）。
     let prefix = req
         .output_prefix
         .as_deref()

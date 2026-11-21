@@ -1,4 +1,4 @@
-//! DolaAnimator ECS Component テスト (Task 9.2)
+//! DolaAnimator ECS Component テスト。
 //!
 //! - spawn → tick → last_result 読み取りの一連フロー
 //! - tick_dola_animators System による全エンティティ一括 tick
@@ -89,10 +89,8 @@ fn default_animator_has_empty_result() {
 fn tick_dola_animators_system_updates_all_entities() {
     let mut world = World::new();
 
-    // FrameTime for the system
     world.insert_resource(FrameTime(0.5));
 
-    // Spawn two animators
     let mut rt1 = make_runtime_with_animation();
     rt1.start("fade_in", 0.0).unwrap();
     let a1 = DolaAnimator::with_runtime(rt1);
@@ -109,7 +107,6 @@ fn tick_dola_animators_system_updates_all_entities() {
     schedule.add_systems(tick_dola_animators);
     schedule.run(&mut world);
 
-    // Both should have changes
     let mut a1_ref = world.get_mut::<DolaAnimator>(e1).unwrap();
     assert!(
         !a1_ref.last_result().changes.is_empty(),

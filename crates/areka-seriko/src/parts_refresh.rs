@@ -1,6 +1,4 @@
-//! parts の子: 面の切り替え・着せ替えの変化の直後の作り直し（[`PartClocks::refresh`]・spec:
-//! areka-P0-surface-element-nesting 要件 5.6・areka-P0-animated-image-playback 要件 3.1・4.1・
-//! areka-P0-seriko-trigger-intervals 要件 3.1・5.9・6.1）。
+//! parts の子: 面の切り替え・着せ替えの変化の直後の作り直し（[`PartClocks::refresh`]）。
 
 use std::collections::BTreeMap;
 
@@ -21,13 +19,13 @@ use crate::trigger::TalkWindow;
 
 impl PartClocks {
     /// 面の切り替え・着せ替えの変化の直後（出来事の時刻 `at_ms`）に、抽選せずに `pattern` の部品の欄を
-    /// 作り直す（要件 5.6・spec: areka-P0-animated-image-playback 要件 3.1・4.1）。見える部品の求め方は
-    /// `advance` と同じ。見えている `always` の時計が無ければ `at_ms` で作り、見えなくなった部品の回数
+    /// 作り直す。見える部品の求め方は `advance` と同じ。見えている `always` の時計が無ければ `at_ms` で
+    /// 作り、見えなくなった部品の回数
     /// つきの時計と 3 語の時計（と引き金の状態）を捨てる。3 語は刻みと同じ形（`talk` は面の文字の窓
     /// `talk`）で `at_ms` まで判定する（新しく見えた部品の `runonce` は `at_ms` で鳴る）。抽選の animation の
     /// 時計は書き換えない（働きのコマが始めた・止めた時計を除く。末尾に着いたコマ・負の番号のコマも、時計を
     /// 移さず・消さずに、出す・出さないだけを決める）。`bind+random` で `binds` に無い animation の
-    /// コマは書かない（時計を消すのは次の `advance`・要件 5.12）。`at_ms` が無い（刻みが 1 度も来て
+    /// コマは書かない（時計を消すのは次の `advance`）。`at_ms` が無い（刻みが 1 度も来て
     /// いない）ときは時計を作らず、経過 0 の時刻で読む。`open` が偽なら `advance` と同じく時計を
     /// 作らず、回数つきの時計と 3 語の時計を全部捨てて、引き金の状態を隠す。
     #[allow(clippy::too_many_arguments)]
@@ -126,7 +124,7 @@ impl PartClocks {
             sort_by_id(anims, order);
             // 構えてあった部品の 3 語も刻みと同じく、出来事の時刻まで働きのコマと時刻の順に揃えて判定し、
             // 働きのコマを出来事の時刻まで当ててから `always` を始める（出来事の時刻に始まる再生に、
-            // それより前の呼び出しを当てない・spec: seriko-pattern-calls 3.1・3.8）。
+            // それより前の呼び出しを当てない）。
             if let Some(at) = at_ms {
                 if let Some(state) = armed.get_mut(&part) {
                     state.follow(open, at, None);

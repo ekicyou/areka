@@ -1,8 +1,6 @@
-//! 起動の指定（RealRun）と、子へ渡す形の組み立て・子の起こし方
-//! （要件 1.1〜1.7・1.9・1.10・2.1・2.5・3.1・4.1・4.4・8.1〜8.3・9.1）。
+//! 起動の指定（RealRun）と、子へ渡す形の組み立て・子の起こし方。
 //!
-//! 子へ伝える形（環境変数の名前・位置の引数の並べ方）を組むのは `child_command` の 1 か所だけ
-//! （8.2・8.3）。起動オプションへ移すときはここを替える。MCP の番号の環境変数の名前だけは、呼び手の
+//! 子へ伝える形（環境変数の名前・位置の引数の並べ方）を組むのは `child_command` の 1 か所だけ。起動オプションへ移すときはここを替える。MCP の番号の環境変数の名前だけは、呼び手の
 //! `env` から同じ名前を探す `port` も使うので、どちらも `areka_mcp::PORT_ENV` を引く。
 
 use std::ffi::{OsStr, OsString};
@@ -18,7 +16,7 @@ use crate::i686::{self, I686Spec};
 use crate::mcp::McpChannel;
 use crate::run::{Limits, Run};
 
-/// 起動するもの（1.1）。既定は `Empty`。
+/// 起動するもの。既定は `Empty`。
 #[derive(Debug, Clone, Default)]
 pub enum Launch {
     /// ⑴ 検体の名前。写しのゴーストのフォルダ（と同梱バルーンのフォルダ名）を位置の引数で渡す。
@@ -53,7 +51,7 @@ pub struct RealRun {
 }
 
 impl RealRun {
-    /// `areka_exe` は呼び手が `env!("CARGO_BIN_EXE_areka")` で渡す（D-8）。
+    /// `areka_exe` は呼び手が `env!("CARGO_BIN_EXE_areka")` で渡す。
     /// `<target>\<profile>\areka.exe` の形（`<target>` を 2 つ上として仲介の元を探す）。
     pub fn new(areka_exe: impl AsRef<Path>) -> RealRun {
         RealRun {
@@ -76,26 +74,26 @@ impl RealRun {
         self
     }
 
-    /// 子を起こす前に 1 度だけ呼ぶ（写しの書き換え・試験用の DLL を揃える＝1.3・2.5）。
+    /// 子を起こす前に 1 度だけ呼ぶ（写しの書き換え・試験用の DLL を揃える）。
     pub fn before_spawn(mut self, f: impl FnOnce(&Staged<'_>) + 'static) -> RealRun {
         self.before_spawn = Some(Box::new(f));
         self
     }
 
-    /// 記憶の置き場（既定は `<回>\profile`・普通のファイルも可＝1.6）。
+    /// 記憶の置き場（既定は `<回>\profile`・普通のファイルも可）。
     pub fn profile_dir(mut self, path: impl AsRef<Path>) -> RealRun {
         self.profile_dir = Some(path.as_ref().to_path_buf());
         self
     }
 
-    /// MCP の番号（既定は空いた番号＝4.1）。`env` で `AREKA_MCP_PORT` を積むとそちらが勝つ。
+    /// MCP の番号（既定は空いた番号）。`env` で `AREKA_MCP_PORT` を積むとそちらが勝つ。
     pub fn mcp_port(mut self, port: u16) -> RealRun {
         self.mcp_port = Some(port);
         self
     }
 
     /// 記録の段（既定は `info`）。全体の段が info より絞られていて、窓口が頼る行の出所を名指す指定が
-    /// 無いときは、その出所に info を足す（4.4）。名指す指定があれば、その段が何であっても足さない。
+    /// 無いときは、その出所に info を足す。名指す指定があれば、その段が何であっても足さない。
     pub fn rust_log(mut self, filter: &str) -> RealRun {
         self.rust_log = Some(filter.to_owned());
         self
@@ -107,13 +105,13 @@ impl RealRun {
         self
     }
 
-    /// どの待ちにも使う締切（3.3・既定は `run.rs` の `Limits::default`）。
+    /// どの待ちにも使う締切（既定は `run.rs` の `Limits::default`）。
     pub fn deadline(mut self, limit: Duration) -> RealRun {
         self.limits.deadline = limit;
         self
     }
 
-    /// 任意の環境変数。窓口の既定と論理の指定より後に置く＝何でも上書きできる（1.6）。
+    /// 任意の環境変数。窓口の既定と論理の指定より後に置く＝何でも上書きできる。
     /// `AREKA_MCP_PORT` を積んだときは、最後の値が子の待ち受ける番号で窓口が話す番号
     /// （番号として読めなければ `spawn` が落ちる）。
     pub fn env(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> RealRun {
@@ -122,13 +120,13 @@ impl RealRun {
         self
     }
 
-    /// 任意の引数。位置の引数（ゴースト・バルーンのフォルダ）の後ろに足す（1.6）。
+    /// 任意の引数。位置の引数（ゴースト・バルーンのフォルダ）の後ろに足す。
     pub fn arg(mut self, arg: impl AsRef<OsStr>) -> RealRun {
         self.args.push(arg.as_ref().to_owned());
         self
     }
 
-    /// 子が areka でない（窓口自身の試験の偽の子）ときだけ使う。32bit の仲介を揃えない（D-18）。
+    /// 子が areka でない（窓口自身の試験の偽の子）ときだけ使う。32bit の仲介を揃えない。
     pub fn without_host32_helper(mut self) -> RealRun {
         self.host32_helper = false;
         self
@@ -138,12 +136,12 @@ impl RealRun {
     ///
     /// # Panics
     ///
-    /// 仲介が揃わない（2.3・2.4）・検体を取れない・子を起こせない（実行ファイルの場所と理由＝1.10）。
-    /// 回の置き場を作り終えた後に落ちたときだけ、置き場は panic の途中で破棄されて落ちた回として残る（6.1）。
+    /// 仲介が揃わない・検体を取れない・子を起こせない（実行ファイルの場所と理由）。
+    /// 回の置き場を作り終えた後に落ちたときだけ、置き場は panic の途中で破棄されて落ちた回として残る。
     /// それより前（実行ファイル・仲介・置き場と検体の写し）で落ちた回は残らない。
     pub fn spawn(mut self) -> Run {
         let exe = abs(&self.areka_exe);
-        // 仲介は exe の隣を見るので、先に exe を確かめて場所と理由で落とす（1.10）。
+        // 仲介は exe の隣を見るので、先に exe を確かめて場所と理由で落とす。
         assert!(
             exe.is_file(),
             "子を起こせませんでした: {}（ファイルが無い）",
@@ -213,11 +211,11 @@ impl RealRun {
         }
     }
 
-    /// 子へ渡す形を組む。起動の約束の綴りはここだけが書く（8.2・8.3。MCP の番号の名前は
+    /// 子へ渡す形を組む。起動の約束の綴りはここだけが書く（MCP の番号の名前は
     /// `areka_mcp::PORT_ENV` を引く）。順は
-    /// ⑴ 開発者の書ける根を外す（1.5）→ ⑵ 窓口の既定 → ⑶ 呼び手の論理の指定 → ⑷ 呼び手の `env`（1.6）。
+    /// ⑴ 開発者の書ける根を外す → ⑵ 窓口の既定 → ⑶ 呼び手の論理の指定 → ⑷ 呼び手の `env`。
     /// ⑵⑶ は値が決まった後の 1 回の指定にまとめて書く（開発者のほかの変数はここで上書きされる）。
-    /// パスはどれも絶対（`\\?\` なし＝1.9）。
+    /// パスはどれも絶対（`\\?\` なし）。
     fn child_command(
         &self,
         positional: &[&Path],
@@ -267,7 +265,7 @@ impl Staged<'_> {
         self.root
     }
 
-    /// 試験用の 32bit の成果物を `dest_dir` へ揃えてそのパスを返す（2.5）。規則は仲介と同じ。
+    /// 試験用の 32bit の成果物を `dest_dir` へ揃えてそのパスを返す。規則は仲介と同じ。
     ///
     /// # Panics
     ///
@@ -304,7 +302,7 @@ fn sample_name(what: &Launch) -> Option<&str> {
     }
 }
 
-/// 位置の引数で起こす回にも空の根を渡す（1.4）。根を選ぶのは `SampleRoot`・`Root` だけ。
+/// 位置の引数で起こす回にも空の根を渡す。根を選ぶのは `SampleRoot`・`Root` だけ。
 fn resolve(what: &Launch, dirs: &RunDirs) -> Resolved {
     let empty = dirs.root().to_path_buf();
     let sample = || dirs.sample().expect("検体の名前で置き場を作ったはず");
@@ -340,7 +338,7 @@ fn resolve(what: &Launch, dirs: &RunDirs) -> Resolved {
     }
 }
 
-/// Windows の形の絶対パス（`canonicalize` の `\\?\` は使わない＝1.9）。
+/// Windows の形の絶対パス（`canonicalize` の `\\?\` は使わない）。
 fn abs(path: &Path) -> PathBuf {
     std::path::absolute(path)
         .unwrap_or_else(|err| panic!("絶対パスにできません: {} ({err})", path.display()))
@@ -357,7 +355,7 @@ fn i686_target(exe: &Path) -> PathBuf {
     target.join("i686-pc-windows-msvc")
 }
 
-/// 空いた番号を束ねて得て放す（4.1）。子が束ねるまでに取られたら子の記録で分かる（9.2）。
+/// 空いた番号を束ねて得て放す。子が束ねるまでに取られたら子の記録で分かる。
 fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0")
         .and_then(|l| l.local_addr())
@@ -374,7 +372,7 @@ fn log_file(path: &Path) -> File {
 const RELIED_TARGETS: [&str; 2] = ["areka_mcp::server", "areka::app_exit"];
 
 /// 全体の段が info より絞られていて、窓口が頼る出所を名指す指定が無いときだけ、その出所に
-/// `,<出所>=info` を足す（D-4・4.4）。
+/// `,<出所>=info` を足す。
 ///
 /// ⑴ 全体の段が info・debug・trace（数字の 3〜5）なら、どの出所にも足さない ⑵ 全体の段が warn・
 /// error・off（数字の 0〜2・指定なし＝off）なら、出所ごとに、名指す指定が無いものにだけ足す

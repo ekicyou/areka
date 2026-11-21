@@ -9,7 +9,7 @@ use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};
 
 /// 預かっている右ダブルクリックを取り出して送る（メニュー側が「送る」と決めたときの操作）。
 ///
-/// 押下ハンドラは右ダブルクリックを送らずに預かる（areka-P0-popup-menu-minimal 要件 1.10）。
+/// 押下ハンドラは右ダブルクリックを送らずに預かる。
 /// 配信されるメッセージの形を見るテストは、この操作で送出まで進めてから受信側を見る。
 fn send_pending_right_double_click(world: &mut World) {
     let mut wiring = world
@@ -21,7 +21,7 @@ fn send_pending_right_double_click(world: &mut World) {
     wiring.send_pending_right_double_click(pending);
 }
 
-/// RED（mock-seam send・1.5）: Mock resolver＋注入 clock で単体から配信し、受信側で内容を観測する。
+/// RED（mock-seam send）: Mock resolver＋注入 clock で単体から配信し、受信側で内容を観測する。
 #[test]
 fn mock_seam_plan_and_send_move_observed() {
     let (tx, rx) = mpsc::channel::<KanadeMsg>();
@@ -61,7 +61,7 @@ fn mock_seam_plan_and_send_move_observed() {
     assert!(rx.try_recv().is_err(), "1 件のみ送出されるべき");
 }
 
-/// 間引き統合（5.1）: 同一 pos 再送は hover 抑制で送出されない（moved=false）。
+/// 間引き統合: 同一 pos 再送は hover 抑制で送出されない（moved=false）。
 #[test]
 fn throttle_suppresses_same_position_hover() {
     let (tx, rx) = mpsc::channel::<KanadeMsg>();
@@ -88,7 +88,7 @@ fn throttle_suppresses_same_position_hover() {
     assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
 }
 
-/// 間引き統合（5.1）: 移動＋同一 region＋間隔未経過は抑制され、何も送出されない。
+/// 間引き統合: 移動＋同一 region＋間隔未経過は抑制され、何も送出されない。
 #[test]
 fn throttle_suppresses_move_same_region_within_interval() {
     let (tx, rx) = mpsc::channel::<KanadeMsg>();
@@ -115,7 +115,7 @@ fn throttle_suppresses_move_same_region_within_interval() {
     assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
 }
 
-/// 左ダブルクリックは間引きなしで無条件送出され、内容（kind=DoubleClick{Left}）が観測できる（1.2/3.3）。
+/// 左ダブルクリックは間引きなしで無条件送出され、内容（kind=DoubleClick{Left}）が観測できる。
 #[test]
 fn double_click_left_sends_unconditionally() {
     let (tx, rx) = mpsc::channel::<KanadeMsg>();
@@ -151,7 +151,7 @@ fn double_click_left_sends_unconditionally() {
     assert!(rx.try_recv().is_ok(), "クリックは間引かれず 2 回目も届く");
 }
 
-/// 送出ヘルパは右ボタンでも同じ形で送り、button=Right が観測できる（3.3）。
+/// 送出ヘルパは右ボタンでも同じ形で送り、button=Right が観測できる。
 /// 押下ハンドラが右ダブルクリックを即送出しないことは `input_events_menu_tests.rs` が見る。
 #[test]
 fn double_click_right_sends_with_right_button() {
@@ -184,9 +184,8 @@ fn double_click_right_sends_with_right_button() {
     }
 }
 
-/// 配線挿入檻（3.1・DD-IE-9）: `wire_mouse_input` は fresh World へ `MouseWiring`
-/// を NonSend 挿入する（Presenter region source・proven-wiring ゆえ存在確認で足る・
-/// [[test-only-decision-branches-not-proven-wiring]]・窓ハンドラ登録は task 3.2）。
+/// 配線挿入檻: `wire_mouse_input` は fresh World へ `MouseWiring`
+/// を NonSend 挿入する（Presenter region source・結線は存在確認で足る）。
 #[test]
 fn wire_mouse_input_inserts_mouse_wiring_non_send() {
     let (tx, _rx) = mpsc::channel::<KanadeMsg>();
@@ -202,12 +201,12 @@ fn wire_mouse_input_inserts_mouse_wiring_non_send() {
     );
 }
 
-/// presenter 不在の正常縮退（1.3・DD-IE-9）: `RegionSource::Presenter` で presenter=None なら
+/// presenter 不在の正常縮退: `RegionSource::Presenter` で presenter=None なら
 /// `region: None` を返し panic しない。
 ///
-/// DPI追従（areka-P0-collision-dpi-hittest）以後は `surface_point` も併せて固定する——presenter が
+/// `surface_point` も併せて固定する——presenter が
 /// 居なければ実適用 k を知る術が無いため等倍相当（縮約は恒等）で縮退し、受領した client 物理 px
-/// がそのまま配信空間の値になる（要件 1.6 と同じ縮退規約）。
+/// がそのまま配信空間の値になる。
 #[test]
 fn presenter_absent_degrades_to_region_none() {
     let (tx, _rx) = mpsc::channel::<KanadeMsg>();
@@ -226,13 +225,13 @@ fn presenter_absent_degrades_to_region_none() {
 }
 
 // -------------------------------------------------------------------------
-// ポインタハンドラ檻（task 2.7・design Testing Strategy「配線存在檻/送出集合檻/暫定退避檻」）
+// ポインタハンドラ檻（配線存在檻/送出集合檻/暫定退避檻）
 //
 // 合成 `PointerState`／`Phase` でハンドラを直接呼び、mpsc で送出／非送出を観測する
 // （GPU/実窓不要・単一 pass/fail・[[areka-bin-crate-internal-tests-in-crate]]）。
 // -------------------------------------------------------------------------
 
-/// 配線存在檻（1.1・5.1）: Bubble 移動＋Mock region Some("Head")＋間引き通過で
+/// 配線存在檻: Bubble 移動＋Mock region Some("Head")＋間引き通過で
 /// `KanadeMsg::Mouse(Move)` を観測。同一位置の再移動は hover 抑制で送出されない。
 #[test]
 fn handler_move_sends_then_suppresses_same_position() {
@@ -272,7 +271,7 @@ fn handler_move_sends_then_suppresses_same_position() {
     assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
 }
 
-/// 送出集合檻（1.2・3.3）: 左ダブルクリック（Ctrl なし）は当たり判定を解決して即
+/// 送出集合檻: 左ダブルクリック（Ctrl なし）は当たり判定を解決して即
 /// `KanadeMsg::Mouse(DoubleClick{Left})` を送出する。右ダブルクリックは押下の時点では送らずに
 /// 預かり、預かりを送ると `DoubleClick{Right}` が同じ形（スコープ・座標・当たり判定名）で届く。
 #[test]
@@ -326,7 +325,7 @@ fn handler_double_click_left_and_right_send() {
     }
 }
 
-/// 送出集合檻（7.1・7.3）: 中／拡張ボタンのダブルクリックと単発クリックはいずれも
+/// 送出集合檻: 中／拡張ボタンのダブルクリックと単発クリックはいずれも
 /// 送出せず false を返す（OnMouseDoubleClickEx は α 後・OnMouseClick 単発は不送出）。
 #[test]
 fn handler_middle_xbutton_and_single_click_do_not_send() {
@@ -355,13 +354,11 @@ fn handler_middle_xbutton_and_single_click_do_not_send() {
     assert!(rx.try_recv().is_err(), "中/拡張/単発は何も送出しない");
 }
 
-/// 隠しの終了操作を取り除いた檻（要件 5.3・開発者裁定 2026-09-19）: **結線済み**で Shift を
+/// 隠しの終了操作が無いことの檻: **結線済み**で Shift を
 /// 伴わない Ctrl+左ダブルクリックは終了指示を 1 件も送らず、窓も閉じず、Ctrl の無い左
 /// ダブルクリックと同じ `DoubleClick{Left}` をちょうど 1 件送る。
 ///
-/// 以前（タスク 6.1 まで）はここが `CloseRequest{User}` を送る隠し操作だった。実機で
-/// メニューの「終了」が働くことを確かめたので、同じ役目の入口を取り除いた——利用者起因の
-/// 終了指示を送る本番の呼び手はメニューの「終了」（`menu::request_close`）だけになる。
+/// 利用者起因の終了指示を送る本番の呼び手はメニューの「終了」（`menu::request_close`）だけである。
 /// 強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。
 ///
 /// # 非空虚性
@@ -416,7 +413,7 @@ fn handler_wired_ctrl_left_double_click_sends_no_close_request_and_delivers_the_
     assert!(world.get_entity(other).is_ok(), "無関係 entity は残る");
 }
 
-/// 暫定退避檻（6.1）: Ctrl なしの左ダブルクリックは窓を despawn せず、
+/// 暫定退避檻: Ctrl なしの左ダブルクリックは窓を despawn せず、
 /// 代わりに `DoubleClick` を送出する（退避と送出の分岐が排他であること）。
 #[test]
 fn handler_left_double_click_without_ctrl_does_not_despawn_and_sends() {
@@ -444,7 +441,7 @@ fn handler_left_double_click_without_ctrl_does_not_despawn_and_sends() {
     );
 }
 
-/// self-gating（DD-IE-9）: `MouseWiring` 不在なら送出系ハンドラは no-op false。
+/// self-gating: `MouseWiring` 不在なら送出系ハンドラは no-op false。
 #[test]
 fn handlers_self_gate_when_mouse_wiring_absent() {
     let mut world = World::new();
@@ -458,7 +455,7 @@ fn handlers_self_gate_when_mouse_wiring_absent() {
     assert!(!on_char_pointer_pressed(&mut world, e, e, &mid));
 }
 
-/// 配線層 per-scope 独立檻（5.x・DD-IE-5／DD-IE-9・task 4.4 NEW）: 1 つの `MouseWiring`
+/// 配線層 per-scope 独立檻: 1 つの `MouseWiring`
 /// （`HashMap<u32, MouseMoveThrottle>` per-scope 保持）を通し、scope 0 が間引きで抑制されている
 /// 最中でも scope 1 の初回移動は独立に送出される。scope の間引き状態が `HashMap` で別キーに
 /// 保持されている（共有でない）ことの配線層証拠——throttle.rs の純関数 per-scope 檻
@@ -512,7 +509,7 @@ fn wiring_throttles_scopes_independently_via_hashmap() {
 }
 
 // -------------------------------------------------------------------------
-// 配信座標の空間切替檻（task 4.2・DD-4・design Testing Strategy「Unit Tests（areka bin）」項目 2）
+// 配信座標の空間切替檻
 //
 // 恒等 mock（`surface_point: (x, y)`）では配信値が client 点と**数値的に区別できず**、切替の
 // 前後で同じ色のままになる＝何も証明しない。ゆえに以下 2 本は **非恒等 mock**
@@ -521,7 +518,7 @@ fn wiring_throttles_scopes_independently_via_hashmap() {
 // -------------------------------------------------------------------------
 
 /// 非恒等 mock で (i) 配信 `MouseInput{x,y}` が `surface_point` 値であること (ii) throttle が
-/// 縮約前 client px を比較していることを同時に固定する（1.8・6.8・DD-4）。
+/// 縮約前 client px を比較していることを同時に固定する。
 ///
 /// 写像は `surface = client / 2`。client (10,20) と (11,20) は**同一の** surface (5,10) へ潰れる:
 /// - 配信が client px のままなら (i) の期待値 (5,10) が外れる。
@@ -585,7 +582,7 @@ fn move_delivers_surface_point_while_throttle_compares_client_px() {
     assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
 }
 
-/// 非恒等 mock で double-click の配信座標も `surface_point` であることを固定する（1.8・DD-4）。
+/// 非恒等 mock で double-click の配信座標も `surface_point` であることを固定する。
 ///
 /// クリック経路は throttle を通らない＝この経路に client px は現れない。
 #[test]
@@ -621,11 +618,11 @@ fn double_click_delivers_surface_point() {
     }
 }
 
-/// no-op 保存檻（1.9）: k=1.0 相当（恒等 mock）では move／double-click の配信値が
+/// no-op 保存檻: k=1.0 相当（恒等 mock）では move／double-click の配信値が
 /// 受領 client px と完全に一致する＝DPI追従導入前の配信値を変更しない。
 ///
 /// 上 2 本（非恒等 mock）が「空間が切り替わったこと」を固定するのに対し、本檻は
-/// 「等倍では何も変わらないこと」を固定する対（両者が揃って初めて R1.8/R1.9 が閉じる）。
+/// 「等倍では何も変わらないこと」を固定する対（両者が揃って初めて空間切替が閉じる）。
 #[test]
 fn identity_scale_delivers_unchanged_client_coords() {
     let (mut world, rx) = world_with_wiring(

@@ -1,7 +1,4 @@
 //! 「戻す操作」の公開・装着時の 2 層の差し込み・記録の 1 度化の決定論テスト
-//! （要件 10.2／10.3／10.4／10.5／10.7・4.1・6.3・13.1／13.4／13.5）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! [`super`]（`state_decoration_tests.rs`）の子モジュールとして接続してあり、台本を組む
 //! 補助（`font`・`text`・`st`・`look_of`）を共有する。1 ファイル 1,000 行の見張りに余裕を
@@ -14,16 +11,6 @@
 use super::*;
 
 // ══════════════════════ 戻す操作の公開・記録の 1 度化 ══════════════════════
-//
-// | § | 内容 | 要件 |
-// |---|---|---|
-// | §8 | 「戻す操作」を 1 つの関数として公開（スコープ指定・全スコープ） | 10.3, 10.5 |
-// | §9 | 装着時に 2 層を差し込む口（明示の無い項目は新しい既定になる） | 4.1 |
-// | §10 | 記録は「キーと値」ごとに 1 台詞 1 度・台本の先頭で数え直す | 13.1, 13.4 |
-// | §11 | 上下付きが有効なまま文字が追記されたときの記録 | 6.3 |
-// | §12 | `\f[disable]` も一括の戻し（`\f[default]` との対称） | 10.2, 10.4 |
-// | §13 | 記録なしで失敗を飲み込む経路が無いことの字面検査 | 13.5 |
-// | §14 | **本番の**一括の戻しが項目を列挙しないことの字面検査 | 10.4 |
 
 use log_capture_kit::{CapturedEvent, capture};
 
@@ -59,7 +46,7 @@ fn attached_layers() -> LookLayers {
     )
 }
 
-// ------------------------------------ §8 「戻す操作」の公開（R10.3／R10.5）
+// ------------------------------------ 「戻す操作」の公開
 
 /// 一括の戻し（`\f[default]`）と戻す操作（`reset_decoration`）が同じ結果になる。
 #[test]
@@ -89,7 +76,7 @@ fn the_bulk_reset_and_the_reset_operation_agree() {
     );
 }
 
-/// 全スコープの戻しは 1 回の呼び出しで両方のスコープを戻す（R10.5）。
+/// 全スコープの戻しは 1 回の呼び出しで両方のスコープを戻す。
 #[test]
 fn the_reset_operation_covers_every_scope_in_one_call() {
     let mut state = TextLayerState::default();
@@ -102,7 +89,7 @@ fn the_reset_operation_covers_every_scope_in_one_call() {
     assert!(!st(&state, "1").current_look().italic);
 }
 
-/// 戻す操作は既に追記済みの文字の見た目を変えない（R10.7）。
+/// 戻す操作は既に追記済みの文字の見た目を変えない。
 #[test]
 fn the_reset_operation_does_not_touch_glyphs_already_placed() {
     let mut state = state_with_bold_then_text();
@@ -115,7 +102,7 @@ fn the_reset_operation_does_not_touch_glyphs_already_placed() {
     );
 }
 
-/// 台本の先頭（全消去）も同じ戻す操作を通る——見た目の結果が一致する（R10.3）。
+/// 台本の先頭（全消去）も同じ戻す操作を通る——見た目の結果が一致する。
 #[test]
 fn the_talk_start_reaches_the_same_reset_result() {
     let mut by_clear_all = state_with_look_and_unowned();
@@ -141,7 +128,7 @@ fn the_talk_start_reaches_the_same_reset_result() {
     );
 }
 
-// ------------------------------------------- §9 装着時の 2 層の差し込み（R4.1）
+// ------------------------------------------- 装着時の 2 層の差し込み
 
 /// 装着は見た目を新しい土台から引き直す（`set_look_layers`）ので、明示の無い見た目は新しい既定になる。
 #[test]
@@ -157,7 +144,7 @@ fn attaching_layers_moves_an_untouched_look_to_the_new_default() {
     assert_eq!(actor.current_look().color, (255, 0, 0));
 }
 
-/// **装着より先に `\f` が届いても、バルーン定義の既定はその台詞に届く**（`areka-P0-text-decoration-canon` の開発者裁定）。
+/// **装着より先に `\f` が届いても、バルーン定義の既定はその台詞に届く**。
 ///
 /// cue のドレインは非同期で、`text_slot_view` が `None` の間は装着が次フレームへ委ねられる
 /// （`crates/areka-runtime/src/frame/attach.rs::connect_balloon_text` の `None` の腕）。
@@ -243,7 +230,7 @@ fn the_reset_operation_uses_the_attached_layers() {
     assert!(!st(&state, "0").current_look().bold);
 }
 
-// ------------------------------- §10 記録は「キーと値」ごとに 1 台詞 1 度（R13.1／R13.4）
+// ------------------------------- 記録は「キーと値」ごとに 1 台詞 1 度
 
 /// 同じ不正な値を 3 度繰り返しても記録は 1 件。
 #[test]
@@ -301,7 +288,7 @@ fn the_record_returns_after_the_talk_starts_again() {
     );
 }
 
-/// 語彙のみの項目・スタイルシートの語・アンカー色も同じ 1 度化を通る（R13.1）。
+/// 語彙のみの項目・スタイルシートの語・アンカー色も同じ 1 度化を通る。
 #[test]
 fn the_vocabulary_only_records_are_also_capped_at_one() {
     let ((), events) = capture(|| {
@@ -316,7 +303,7 @@ fn the_vocabulary_only_records_are_also_capped_at_one() {
     assert_eq!(warns(&events, "\\f の指定を適用できない"), 3);
 }
 
-// ----------------------------------- §11 上下付きが有効なまま文字が追記された（R6.3）
+// ----------------------------------- 上下付きが有効なまま文字が追記された
 
 /// 下付きが有効な間に文字を 3 度追記しても記録は 1 件。
 #[test]
@@ -415,7 +402,7 @@ fn assert_only_control_records(events: &[CapturedEvent]) {
     );
 }
 
-/// 2 種類の記録は互いに素な鍵空間を持つ——一方が他方を無記録で飲み込まない（R13.5）。
+/// 2 種類の記録は互いに素な鍵空間を持つ——一方が他方を無記録で飲み込まない。
 ///
 /// `\f[sub,追記]` は値が正しい真偽の語でないので「`\f` の指定を適用できない」側の記録を作り、
 /// その綴りは追記点の記録が使うキー（`sub`）と字面で近い。鍵空間を共有していた形
@@ -442,7 +429,7 @@ fn the_two_record_kinds_do_not_share_a_key_space() {
     );
 }
 
-/// 同じ種別の中でも、鍵は（キー, 値）の組であって 1 本の綴りではない（R13.4／R13.5）。
+/// 同じ種別の中でも、鍵は（キー, 値）の組であって 1 本の綴りではない。
 ///
 /// `\f[a=b,c]`（キーは `a=b`）と `\f[a,b=c]`（キーは `a`）は別々の失敗だが、鍵を
 /// `format!("{key}={value}")` へ平坦化すると**どちらも `"a=b=c"`** になり、2 件目が無記録で
@@ -473,7 +460,7 @@ fn a_record_key_is_the_pair_not_a_flattened_spelling() {
     );
 }
 
-/// 鍵の第 3 要素は値の**列**であって、カンマで繋いだ 1 本の綴りではない（R13.4／R13.5）。
+/// 鍵の第 3 要素は値の**列**であって、カンマで繋いだ 1 本の綴りではない。
 ///
 /// 引用符はトークンの中のカンマを守る（`areka-parsers` の
 /// `lexer_tests.rs::quoted_and_unquoted_args_mixed` が `\![raise,"a,b",c]` → 引数 `["raise","a,b","c"]` を固定して
@@ -506,10 +493,10 @@ fn a_record_key_keeps_the_value_list_not_a_joined_spelling() {
     );
 }
 
-// ------------------------------------- §12 `\f[disable]` も一括の戻し（R10.2／R10.4）
+// ------------------------------------- `\f[disable]` も一括の戻し
 
 /// `\f[disable]` は無効表示の見た目へ丸ごと合わせ、所有外キーの保持も空にする
-/// （`\f[default]` との対称・要件 10.2／10.4）。
+/// （`\f[default]` との対称）。
 #[test]
 fn the_disable_tag_is_a_bulk_reset_too() {
     let mut state = TextLayerState::default();
@@ -531,9 +518,9 @@ fn the_disable_tag_is_a_bulk_reset_too() {
     );
 }
 
-// ---------------------------------------------------- §13 記録なしの失敗経路が無い（R13.5）
+// ---------------------------------------------------- 記録なしの失敗経路が無い
 
-/// 失敗の分類（spec `areka-P0-text-decoration-canon` の design.md「Error Handling」の分類表）と実装の腕を字面で突き合わせる。
+/// 失敗の分類（分類表）と実装の腕を字面で突き合わせる。
 ///
 /// 値の比較では「記録なしで飲み込む経路」を見張れない——記録を落としても値は同じだからである。
 /// ゆえに `apply_font_args` の `match` の腕を 1 つずつ数え、各腕が記録へ落ちることを固定する。
@@ -564,8 +551,6 @@ fn no_failure_path_is_swallowed_without_a_record() {
         ),
         ("Err(issue) =>", Some("self.warn_once(")),
     ];
-    // `ARMS` の長さは配列型が固定しているので実行時に数え直す意味は無い（コンパイル時に
-    // 恒真）。分類表との対応は、下の走査が各綴りを実装から引けることで担保する。
 
     let src = include_str!("state_decoration.rs");
     // 走査面は `apply_font_args` の `match` 1 つ——次の私有メソッドの手前で切る
@@ -615,7 +600,7 @@ fn no_failure_path_is_swallowed_without_a_record() {
     );
 }
 
-// -------------------------- §14 本番の一括の戻しは項目を列挙しない（R10.4）
+// -------------------------- 本番の一括の戻しは項目を列挙しない
 
 /// 本番の「一括の戻し」の実体（`ActorTextState::reset_look_to`）が見た目を**丸ごと**
 /// 置き換えていることを字面で固定する。
@@ -623,7 +608,7 @@ fn no_failure_path_is_swallowed_without_a_record() {
 /// **`look.rs` 側の字面検査では本番を見張れない**——`look_font_tag_tests.rs::the_bulk_reset_replaces_the_look_as_a_whole_without_listing_items`
 /// が走査する `look.rs::apply_font_tag` の `key == "default"`／`"disable"` の 2 腕は、
 /// `apply_font_args` が先に掴んで戻す操作へ回すため**本番経路から到達しない**
-/// （`apply_font_args` の doc・要件 10.2／10.4）。本番の実体は本ファイルの
+/// （`apply_font_args` の doc）。本番の実体は本ファイルの
 /// `reset_look_to` であり、そこを項目の列挙へ書き換えても向こうの検査は緑のままになる。
 ///
 /// 値の比較でも見張れない——今日の [`crate::look::TextLook`] の項目集合では、列挙形と

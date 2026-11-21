@@ -10,20 +10,20 @@ use super::test_support::{
     surface, tamper_face_1000_slot,
 };
 
-// ── DPI 追従（k 適用の単一漏斗）: タスク 3.2／3.3 の檻 ────────────────────────────────────
+// ── DPI 追従（k 適用の単一漏斗）: の檻 ────────────────────────────────────
 // k は「target ごとの政策（author_dpi）× 窓ごとの実 DPI」から **show 適用ごと**に導出される。
 // 檻は (a) 政策が窓単位で保たれること、(b) 導出 k が実際に**配置の係数**として表示へ届くこと、
 // (c) k が引き当てに関与しないこと（k だけの変化はヒット）、(d) DPI 不在が縮退分岐として独立に
 // 成立すること。
 //
-// **表示の作り方が変わった（`areka-P0-present-gpu-transform-scale` 裁定 D）**: 提示段が抱える絵は
+// **表示の作り方**: 提示段が抱える絵は
 // 常に native 原寸で、拡大は wintf の描画経路（`render_surface` の `SetTransform`）が
 // `Arrangement.scale`＝k で掛ける。ゆえに本ファイルの期待値は「配置の寸＝原寸・配置の係数＝k・
 // 照会値＝丸め権威 `scaled_extent`」の 3 点で書く。物理寸そのもの（`GlobalArrangement.bounds`）は
 // wintf の伝播段（`PostLayout`）が導くため
 // 本ファイルでは走らせず、丸めの一致は `display_tests.rs` の T-N3 が表で固定する。
 
-/// タスク 3.2・要件 1.5 観測完了（窓ごとの k 基底）: `attach_target` は target ごとに拡大政策を
+/// 窓ごとの k 基底: `attach_target` は target ごとに拡大政策を
 /// 保持し、**別窓・別 author_dpi の 2 target が互いの政策を汚さない**。同一の窓 DPI（192）を与えて
 /// も政策が異なれば導出 k が異なる＝政策が k の基底として実際に効いている。
 ///
@@ -42,7 +42,7 @@ fn attach_target_keeps_scale_policy_per_window() {
 
     let p0 = presenter.targets.get(&TargetId(0)).unwrap().policy;
     let p1 = presenter.targets.get(&TargetId(1)).unwrap().policy;
-    // 欄は私有ゆえ、政策の全体を「正規の入口で作った値」と比べる（アプリ管理拡大率は ONE 固定シーム・要件 1.6）。
+    // 欄は私有ゆえ、政策の全体を「正規の入口で作った値」と比べる（アプリ管理拡大率は ONE 固定シーム）。
     assert_eq!(
         p0,
         ScalePolicy::new(96, ScaleRatio::ONE),
@@ -59,7 +59,7 @@ fn attach_target_keeps_scale_policy_per_window() {
         "政策は target＝窓の対応ごとに保たれる"
     );
 
-    // 同一の窓 DPI を与えても政策が違えば k が違う（政策が k の基底＝要件 1.5 の窓ごと k）。
+    // 同一の窓 DPI を与えても政策が違えば k が違う（政策が k の基底＝窓ごと k）。
     assert_eq!(
         derive_scale(p0, Some((192, 192))),
         ScaleRatio::new(2, 1).unwrap()
@@ -82,14 +82,14 @@ fn attach_target_keeps_scale_policy_per_window() {
     }
 }
 
-/// タスク 3.3 の名指し受け入れ基準・要件 2.1/2.2 観測完了（k=2/1 の表示の作り方）: 窓 `DPI`=192・
+/// k=2/1 の表示の作り方: 窓 `DPI`=192・
 /// author_dpi=96（k=2/1）でキャッシュミスの `ShowSurface` を適用すると——(a) 配置の寸が **native
 /// 原寸**・係数が **k**、(b) 照会物理寸が丸め権威 `scaled_extent(2/1, native)` と一致し native とは
 /// 弁別でき、(c) `read_back` が **native 合成**の独立再現と全バイト一致し画素数も原寸のまま、
 /// (d) 表示記録（描画命令）が 1 枚だけ載る。
 ///
 /// k が表示へ届いていない実装（係数 1.0 のまま）なら (a) の係数と (b) の照会値が同時に落ちる。
-/// 逆に CPU で画素を拡大する実装が戻れば (c) の画素数で落ちる（要件 1.1・6.2）。
+/// 逆に CPU で画素を拡大する実装が戻れば (c) の画素数で落ちる。
 #[test]
 fn show_surface_scales_display_to_scaled_extent_at_k2() {
     let mut world = make_world_with_gpu();
@@ -126,7 +126,7 @@ fn show_surface_scales_display_to_scaled_extent_at_k2() {
         "照会物理寸が scaled_extent(k, native) と一致しない"
     );
 
-    // (c) 読み戻しは **原寸の合成バイトそのもの**（k に依らない・要件 6.2）。
+    // (c) 読み戻しは **原寸の合成バイトそのもの**（k に依らない）。
     let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
     assert_eq!(
         rb.len(),
@@ -162,7 +162,7 @@ fn show_surface_scales_display_to_scaled_extent_at_k2() {
     );
 }
 
-/// 要件 3.1（窓 client 物理寸の照会・消費点の単一口）: `EmoPresenter::target_physical_size` は
+/// 窓 client 物理寸の照会（消費点の単一口）: `EmoPresenter::target_physical_size` は
 /// 丸め権威 `scaled_extent` を通した物理寸を返し、`TextSlotView::physical_size()` とも実際の配置
 /// （原寸の寸・k の係数）とも整合する。未登録・表示成立前は `None`。
 ///
@@ -176,7 +176,6 @@ fn target_physical_size_uses_rounding_authority_and_matches_view_and_arrangement
     let (emo_world, atlas, _golden) = build_target_assets(27, 27, 0x6C);
 
     let mut presenter = EmoPresenter::new();
-    // 未登録 target は None（「まだ何も適用していない」を原寸で塗り潰さない）。
     assert_eq!(
         presenter.target_physical_size(TargetId(0)),
         None,
@@ -184,7 +183,6 @@ fn target_physical_size_uses_rounding_authority_and_matches_view_and_arrangement
     );
 
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-    // 装着済みでも表示成立前（applied/native_size 未確定）は None。
     assert_eq!(
         presenter.target_physical_size(TargetId(0)),
         None,
@@ -216,7 +214,7 @@ fn target_physical_size_uses_rounding_authority_and_matches_view_and_arrangement
         "2 つの物理寸照会口が食い違う（同一の applied/native から同一権威で導くはず）"
     );
 
-    // (c) 実際の配置とも整合する（照会値＝実表示・要件 4.2）。表示は「原寸の絵 × k の係数」で
+    // (c) 実際の配置とも整合する（照会値＝実表示）。表示は「原寸の絵 × k の係数」で
     //     作られるので、照会物理寸はその 2 つを丸め権威に通した値でなければならない。
     let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
     let (arr_size, arr_scale) = arrangement_of(&world, surface_entity);
@@ -245,7 +243,7 @@ fn target_physical_size_uses_rounding_authority_and_matches_view_and_arrangement
     );
 }
 
-/// 要件 1.4 観測完了（DPI 取得不能の縮退・専用檻）: 窓 entity に `DPI` component が**無い**target
+/// DPI 取得不能の縮退・専用檻: 窓 entity に `DPI` component が**無い**target
 /// でも表示は成立し、k は 1.0 へ縮退する（表示を失わない）。
 ///
 /// # `author_dpi` に **192**（非 96）を使う理由＝縮退の**帰属可能性**
@@ -257,7 +255,7 @@ fn target_physical_size_uses_rounding_authority_and_matches_view_and_arrangement
 /// 適用 k・照会物理寸（`scaled_extent(1/2, (4,3)) = (2,2)`）・配置の係数（0.5）・`scale()` の
 /// 4 つがすべて外れる。したがって本テストの緑は「縮退分岐を通った」ことに帰属する。
 ///
-/// **読み戻しは弁別に使えない**（`areka-P0-present-gpu-transform-scale` 裁定 D）——提示段が抱える
+/// **読み戻しは弁別に使えない**——提示段が抱える
 /// 絵は k に依らず原寸だからである。ゆえに捏造の弁別は上の 4 つが担い、読み戻しは「縮退しても
 /// 絵は等倍の native 合成そのもの」という別の主張として残す。`scale()` は 1.0 を返す。
 /// 他テストは `DPI` を明示挿入する規律ゆえ、表示の適用でこの分岐を踏むのは本テストだけである
@@ -298,7 +296,7 @@ fn show_surface_without_dpi_component_degrades_to_identity() {
         1.0,
         "縮退時の照会値も実適用 k（1.0）"
     );
-    // 捏造の弁別（doc §帰属可能性）: 96 捏造なら k=1/2 ゆえ照会物理寸が 2×2・配置の係数が 0.5。
+    // 捏造の弁別: 96 捏造なら k=1/2 ゆえ照会物理寸が 2×2・配置の係数が 0.5。
     assert_eq!(
         presenter.target_physical_size(TargetId(0)),
         Some((4, 3)),
@@ -312,7 +310,7 @@ fn show_surface_without_dpi_component_degrades_to_identity() {
     );
 }
 
-/// 要件 5.2/5.3 観測完了（**k はキーに参加しない**）: 同一合成入力の再 show はキャッシュヒットで
+/// **k はキーに参加しない**: 同一合成入力の再 show はキャッシュヒットで
 /// あり、**窓 DPI が変わって k だけが変わった適用もヒットする**（再合成しない）。k 変化で変わるのは
 /// 配置の係数と照会物理寸だけで、絵・表示記録は原寸のまま据え置かれる。
 ///
@@ -320,7 +318,7 @@ fn show_surface_without_dpi_component_degrades_to_identity() {
 /// のまま別の絵（面 3000 の native 合成）で上書きし、再 show の表示がその絵になるなら presenter は
 /// 確かにキャッシュを引いた（再合成していれば面 1000 の絵に戻る）。続けて窓 DPI を 192→96 へ変えても
 /// **改竄した絵のまま**であることが「k 変化がミスを起こさない」ことの直接の証拠である——k がキー
-/// 要素だった旧仕様（完了 spec `emo-dpi-scaling` 設計 D6）なら、ここで面 1000 の絵へ戻っていた。
+/// 要素だった旧仕様なら、ここで面 1000 の絵へ戻っていた。
 #[test]
 fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
     let mut world = make_world_with_gpu();
@@ -338,7 +336,6 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // 1 回目（ミス→合成）。絵は原寸のまま・k は配置の係数として載る。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
@@ -376,7 +373,6 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
         display_before.clone(),
     );
 
-    // 2 回目（同一入力・同一 k）: ヒットゆえ再合成せず、改竄された絵がそのまま表示される。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
@@ -394,7 +390,6 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
         "k が変わっただけでミスして再合成している（k がキー要素に残っている・要件 5.2/5.3）"
     );
 
-    // 変わるのは配置の係数と照会物理寸だけ。
     assert_eq!(
         arrangement_of(&world, surface_entity),
         (native_size, (1.0, 1.0)),
@@ -422,7 +417,7 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
         Some(native_size),
         "native 原寸は k に依らず不変"
     );
-    // エントリは k をまたいで 1 つのまま（k 別のエントリが生えない・要件 5.1/5.6）。改竄した絵が
+    // エントリは k をまたいで 1 つのまま（k 別のエントリが生えない）。改竄した絵が
     // 残っていることが「新 k で上書きされていない」ことの証拠である。
     let entry = t
         .cache
@@ -459,7 +454,7 @@ fn build_two_sized_face_assets(w1: u32, h1: u32, w2: u32, h2: u32) -> (EmoWorld,
     )
 }
 
-/// 要件 1.2/4.4/5.3 観測完了（**キャッシュヒットで成立した表示でも照会契約が正しい**）: 別の面を
+/// **キャッシュヒットで成立した表示でも照会契約が正しい**: 別の面を
 /// 挟んでから元の面へ戻ると、その回は合成せずヒットで表示が成立する。このとき native 原寸を
 /// 供給できなければ、確立済みの表示に対して照会値が前の面のまま（あるいは `None`）になる。
 ///
@@ -470,13 +465,11 @@ fn build_two_sized_face_assets(w1: u32, h1: u32, w2: u32, h2: u32) -> (EmoWorld,
 ///
 /// [`CacheEntry::composed`]: crate::cache::CacheEntry::composed
 ///
-/// # かつての形（`insert` 済みのまま失敗 → 後からヒットで成立）は経路ごと消えた
+/// # 「`insert` 済みのまま失敗」の状態は作れない
 ///
-/// 旧実装は「合成して `insert` した後、供給面の生成で失敗する」経路を持っており、本テストは
-/// `WucGraphicsResource` を一時的に外してそれを再現していた。裁定 D
-/// （`areka-P0-present-gpu-transform-scale`）で失敗し得る GPU 呼び出しは**メモへの挿入より手前**
-/// （表示の記録）へ集約され、装着は純 ECS（失敗経路なし）になったため、「insert 済みのまま失敗」
-/// という状態は構造的に作れない。ゆえに前提を「別の面を挟んでからのヒット」へ置き換えた——
+/// 失敗し得る GPU 呼び出しは**メモへの挿入より手前**
+/// （表示の記録）へ集約され、装着は純 ECS（失敗経路なし）なので、「insert 済みのまま失敗」
+/// という状態は構造的に作れない。ゆえに前提を「別の面を挟んでからのヒット」としている——
 /// 固定している性質（ヒット回の照会契約）はそのまま残る。失敗時の前状態維持そのものは
 /// `presenter_display_failure_tests.rs`（4 注入点）が担う。
 #[test]
@@ -490,9 +483,7 @@ fn native_size_is_supplied_on_a_cache_hit_established_show() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // 1 回目（ミス）: 面 1000 を確立する。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    // 2 回目（ミス）: 別原寸の面 3000 を挟む——照会値をここで 6×5 へ動かしておく。
     show_ok(&mut presenter, &mut world, TargetId(0), 3000);
     assert_eq!(
         presenter.targets.get(&TargetId(0)).unwrap().native_size,
@@ -500,7 +491,6 @@ fn native_size_is_supplied_on_a_cache_hit_established_show() {
         "前提: 直前の表示は別原寸の面（書き忘れがあればこの値が残る）"
     );
 
-    // 3 回目: 面 1000 へ戻る。1 回目のエントリが表に残っている＝**合成しないヒット**である。
     {
         let t = presenter.targets.get(&TargetId(0)).unwrap();
         let entry = t
@@ -540,7 +530,7 @@ fn native_size_is_supplied_on_a_cache_hit_established_show() {
     );
 }
 
-/// 要件 1.2 観測完了（照会 native 原寸は**表示中の面**を指す）: native 原寸の異なる 2 面を切り替え
+/// 照会 native 原寸は**表示中の面**を指す: native 原寸の異なる 2 面を切り替え
 /// ながら表示すると、`surface_size()` は常に**いま画面に出ている面**の原寸を返し、
 /// `scaled_extent(scale(), surface_size()) == 照会物理寸` と「配置の寸＝その面の原寸」が各時点で
 /// 成立する。

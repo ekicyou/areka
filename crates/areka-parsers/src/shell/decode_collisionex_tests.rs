@@ -1,5 +1,4 @@
-//! `collisionex` の記録の型の檻（重さと文言・要件 4.7・4.9）。`decode.rs` の末尾から差し込む。
-//! task 4.1 の読み手の檻もこの同じファイルへ足す（差し込みはもうある）。
+//! `collisionex` の記録の型の檻（重さと文言）。`decode.rs` の末尾から差し込む。
 
 use crate::shell::{
     Collision, CollisionBounds, CollisionExFault, CollisionName, CollisionRegion, CollisionShape,
@@ -70,7 +69,7 @@ fn collisionex_arms_are_warn_and_name_heading_line_and_reason() {
     );
 }
 
-/// クローディアのように collisionex と collision を混ぜると、5 つの形が書いた順に並ぶ（1.1〜1.8・5.1）。
+/// クローディアのように collisionex と collision を混ぜると、5 つの形が書いた順に並ぶ。
 #[test]
 fn claudia_like_collisionex_rows_enter_the_list_in_written_order() {
     let (list, issues) = surface0(
@@ -129,8 +128,8 @@ fn claudia_like_collisionex_rows_enter_the_list_in_written_order() {
     assert!(issues.is_empty(), "{issues:?}");
 }
 
-/// 使わない行は並びに入らず 1 件の記録、欄が多い行だけは前から使って 1 件の記録（4.1〜4.6・4.10）。
-/// 理由が 2 つ当てはまる行は System Flows の図で先の理由 1 つだけ（未知の形→数→奇数→整数／region→欄が多い）。
+/// 使わない行は並びに入らず 1 件の記録、欄が多い行だけは前から使って 1 件の記録。
+/// 理由が 2 つ当てはまる行は先の理由 1 つだけ（未知の形→数→奇数→整数／region→欄が多い）。
 #[test]
 fn faults_record_once_and_only_extra_fields_enter_the_list() {
     let cases: [(&str, Option<CollisionExFault>, bool); 18] = [
@@ -237,7 +236,7 @@ collision9,0,0,1,1,next"
     }
 }
 
-/// 番号が読めない行は collision* と同じ記録で、欄を `,` で繋いだ行を運ぶ（4.8・4.9）。
+/// 番号が読めない行は collision* と同じ記録で、欄を `,` で繋いだ行を運ぶ。
 #[test]
 fn unreadable_collisionex_number_records_the_joined_row() {
     let (list, issues) = surface0(
@@ -296,7 +295,7 @@ fn region(file: &str, rgb: (u8, u8, u8), invert: bool) -> CollisionShape {
     })
 }
 
-/// 5 つの形の欄が型へ運ばれる。形の名前は大小文字を区別せず、名前は空も大小文字もそのまま（1.1〜1.7・1.10）。
+/// 5 つの形の欄が型へ運ばれる。形の名前は大小文字を区別せず、名前は空も大小文字もそのまま。
 #[test]
 fn each_shape_carries_its_fields_and_names_stay_verbatim() {
     let (list, _) = surface0(
@@ -340,7 +339,7 @@ collisionex4,File,Region,Dir/A.png,0,128,255",
     );
 }
 
-/// 領域反転は大小文字を区別せず、省略は false（1.7）。
+/// 領域反転は大小文字を区別せず、省略は false。
 #[test]
 fn region_invert_is_case_insensitive_and_defaults_to_false() {
     let (list, issues) = surface0(
@@ -361,7 +360,7 @@ collisionex4,e,region,f.png,1,2,3,false,",
     assert!(issues.is_empty(), "{issues:?}");
 }
 
-/// 読めない行の後の行が読まれ続け、collision* と交互に書いた並びが書いた順（1.8・4.8）。
+/// 読めない行の後の行が読まれ続け、collision* と交互に書いた並びが書いた順。
 #[test]
 fn rows_after_unreadable_rows_keep_being_read_in_written_order() {
     let (list, issues) = surface0(
@@ -396,7 +395,7 @@ collisionex5,f,rect,7,7,8,8",
     );
 }
 
-/// `surface.append*` の中でも同じに読み、記録の見出しは append の見出し（1.8・4.9）。
+/// `surface.append*` の中でも同じに読み、記録の見出しは append の見出し。
 #[test]
 fn rows_inside_surface_append_are_read_and_recorded_under_its_heading() {
     let text = parse_all(

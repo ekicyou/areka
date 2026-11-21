@@ -60,9 +60,9 @@ pub(super) fn handshakes(fake: &FakeServer) -> usize {
     fake.requests_of("notifications/initialized").len()
 }
 
-/// 結果は areka の答えのまま返り、`id` は数でも文字列でも要求のまま（要件 1.2）。`isError: true` の
+/// 結果は areka の答えのまま返り、`id` は数でも文字列でも要求のまま。`isError: true` の
 /// ツールの結果もエラーに作り替えない。先に居る別の相手に届くのは最初の探索の確かめ 1 つだけで、
-/// 決めた後は候補を先頭から当たり直さない（要件 2.2）。
+/// 決めた後は候補を先頭から当たり直さない。
 #[tokio::test]
 async fn results_come_back_unchanged_under_the_request_id() {
     let failed = json!({"content": [{"type": "text", "text": "boom"}], "isError": true});
@@ -86,8 +86,8 @@ async fn results_come_back_unchanged_under_the_request_id() {
     assert_eq!(ssp.requests().len(), 1, "{:?}", ssp.requests());
 }
 
-/// `initialize`・`server/discover` は areka へ送らず、つないだときに得た areka の情報で答える
-/// （要件 3.9）。版は、要求の版が `initialize` を持つ 4 版のどれかならその版、ほかは `2025-11-25`。
+/// `initialize`・`server/discover` は areka へ送らず、つないだときに得た areka の情報で答える。
+/// 版は、要求の版が `initialize` を持つ 4 版のどれかならその版、ほかは `2025-11-25`。
 #[tokio::test]
 async fn first_inquiries_are_answered_from_the_info_areka_gave() {
     let fake = FakeServer::start(Script::areka());
@@ -126,7 +126,7 @@ async fn first_inquiries_are_answered_from_the_info_areka_gave() {
     assert_eq!(handshakes(&fake), 1, "{sent:?}");
 }
 
-/// 見つけた areka のサーバーの情報と、`tools/list` のエラーでない結果を控えに取る（要件 3.1・3.2）。
+/// 見つけた areka のサーバーの情報と、`tools/list` のエラーでない結果を控えに取る。
 /// エラーの応答は控えに取らない（前の控えのまま）。
 #[tokio::test]
 async fn server_info_and_the_tool_list_are_cached_but_errors_are_not() {
@@ -153,7 +153,7 @@ async fn server_info_and_the_tool_list_are_cached_but_errors_are_not() {
     desk.close().await;
 }
 
-/// areka の JSON-RPC のエラーは、番号・文・データを同じにして返す（要件 4.3）。HTTP の状態が 400 でも、
+/// areka の JSON-RPC のエラーは、番号・文・データを同じにして返す。HTTP の状態が 400 でも、
 /// 中継が型を知らない方法でも同じ（知らない方法も中身のまま届ける）。
 #[tokio::test]
 async fn areka_errors_come_back_with_the_same_code_message_and_data() {
@@ -183,7 +183,7 @@ async fn areka_errors_come_back_with_the_same_code_message_and_data() {
     assert_eq!(custom.body["params"]["k"], json!([1]), "{custom:?}");
 }
 
-/// 通知は `notifications/initialized` 以外を届け、標準出力には何も書かない（要件 1.3）。つなぐ先が
+/// 通知は `notifications/initialized` 以外を届け、標準出力には何も書かない。つなぐ先が
 /// まだ無いときの通知は何もしない（探さない）。
 #[tokio::test]
 async fn notifications_reach_areka_without_any_output() {
@@ -244,7 +244,7 @@ async fn a_cancel_notification_is_not_forwarded_and_fails_no_request_in_flight()
     assert!(cancels.is_empty(), "{cancels:?}");
 }
 
-/// 長い要求の間も次の要求は待たない（設計 D-13）。最初に同時に届いた 2 つの要求は、探索と
+/// 長い要求の間も次の要求は待たない。最初に同時に届いた 2 つの要求は、探索と
 /// つなぎ先を 1 つだけ作る。長い要求は門で止めるので、`ping` が先に終わるのは負荷によらない。
 #[tokio::test]
 async fn a_slow_request_does_not_hold_back_the_next_and_the_first_two_share_one_link() {
@@ -268,7 +268,7 @@ async fn a_slow_request_does_not_hold_back_the_next_and_the_first_two_share_one_
     assert_eq!(handshakes(&fake), 1, "{:?}", fake.requests());
 }
 
-/// `2026-07-28` で話す Desktop でも、新しいつなぎ先の最初の長い要求の間に次の要求は待たない（設計 D-13 の例外を
+/// `2026-07-28` で話す Desktop でも、新しいつなぎ先の最初の長い要求の間に次の要求は待たない（止める間を
 /// 短い `server/discover` へ移す）。
 /// 版の札の付いた要求は、つないだときの版（`2025-11-25`）と違う間は rmcp が他の要求を止めて送る。
 /// `server/discover` の答えは、本番の areka の形（結果）と、偽の受け口の既定（エラー）の両方で確かめる。
@@ -313,7 +313,7 @@ async fn a_slow_stateless_request_first_on_a_link_does_not_hold_back_the_next() 
     }
 }
 
-/// 要求の `_meta` は areka へそのまま届く（要件 1.10）。`2026-07-28` で話す Desktop の要求は、
+/// 要求の `_meta` は areka へそのまま届く。`2026-07-28` で話す Desktop の要求は、
 /// areka にもその版の要求として届く（版の札と本文の `_meta`）。
 #[tokio::test]
 async fn request_meta_reaches_areka_so_a_stateless_request_stays_stateless() {
@@ -337,7 +337,7 @@ async fn request_meta_reaches_areka_so_a_stateless_request_stays_stateless() {
     }
 }
 
-// ---- areka が居ないとき・待ち受けない設定のとき（要件 2.6・3.4〜3.9） ----
+// ---- areka が居ないとき・待ち受けない設定のとき ----
 
 /// 中継が自分で作る「居ない」エラーの行（番号 `-1`・`Server not available` で始まる文）。
 pub(super) fn unavailable(id: Value, reason: &str) -> Value {
@@ -464,9 +464,8 @@ async fn answered(desk: &mut Desk, reason: &str) -> [By; 4] {
     got
 }
 
-/// areka が居ない（候補に居るのは別の名乗りの相手だけ）ときの、控えがある場合の答え（設計「areka が
-/// 居ないときの答え」の表・要件 3.4・3.6〜3.8）。最初の問い合わせと `tools/list` は控えで、`ping` は
-/// 自分で答え、ほかはエラー。一覧の形は、控えを書いたときの話し方でなく、要求の話し方に合わせる。
+/// areka が居ない（候補に居るのは別の名乗りの相手だけ）ときの、控えがある場合の答え。最初の問い合わせと `tools/list` は控えで、
+/// `ping` は自分で答え、ほかはエラー。一覧の形は、控えを書いたときの話し方でなく、要求の話し方に合わせる。
 #[tokio::test]
 async fn without_areka_the_cache_answers_the_first_inquiries_and_the_tool_list() {
     let ssp = FakeServer::start(Script::named("ssp-mcp-server"));
@@ -524,9 +523,9 @@ async fn without_areka_the_cache_answers_the_first_inquiries_and_the_tool_list()
     assert!(sent.iter().all(checks), "{sent:?}");
 }
 
-/// 当たる控えが無い問い合わせには、エラーでなく組み込みの答え（要件 3.5・設計 D-18）。控えは種類ごとに
-/// 見る（要件 3.4）: サーバーの情報だけ・一覧だけがあるときは、ある側は控えで、無い側は組み込みの答えで
-/// 答える。`tools/call` はどの場合も「居ない」エラー。`ping` は控えが無くても自分で答える（要件 3.7）。
+/// 当たる控えが無い問い合わせには、エラーでなく組み込みの答え。控えは種類ごとに
+/// 見る: サーバーの情報だけ・一覧だけがあるときは、ある側は控えで、無い側は組み込みの答えで
+/// 答える。`tools/call` はどの場合も「居ない」エラー。`ping` は控えが無くても自分で答える。
 #[tokio::test]
 async fn without_areka_an_inquiry_with_no_cache_of_its_kind_gets_the_built_in_answer() {
     use By::{BuiltIn, Cache, Error};
@@ -555,9 +554,9 @@ async fn without_areka_an_inquiry_with_no_cache_of_its_kind_gets_the_built_in_an
     desk.close().await;
 }
 
-/// areka も控えも無いときの組み込みの答えの形（設計 D-18）: 控えの答えと同じ整えを通る。`initialize` の
+/// areka も控えも無いときの組み込みの答えの形: 控えの答えと同じ整えを通る。`initialize` の
 /// 版は要求から決まり、`2026-07-28` の `tools/list` には 3 欄が付き、旧式には付かない。そのときも
-/// `ping` は空の結果、ほかの要求は「居ない」エラーのまま（要件 3.6・3.7）。組み込みの答えは控えに
+/// `ping` は空の結果、ほかの要求は「居ない」エラーのまま。組み込みの答えは控えに
 /// 書かない（答えた後も、置き場にファイルが無い）。
 #[tokio::test]
 async fn without_areka_or_a_cache_the_built_in_answers_take_the_dialect_of_the_request() {
@@ -596,8 +595,8 @@ async fn without_areka_or_a_cache_the_built_in_answers_take_the_dialect_of_the_r
     assert_eq!(left, 0, "控えの置き場 {dir:?} にファイルができている");
 }
 
-/// 読めない控え・名乗りの無いサーバーの情報の控えは、無いものとして組み込みの答えへ進む（要件 3.10・
-/// 3.5）。組み込みの答えで控えを書き直さない（置き場のファイルは置いたときのまま）。
+/// 読めない控え・名乗りの無いサーバーの情報の控えは、無いものとして組み込みの答えへ進む。
+/// 組み込みの答えで控えを書き直さない（置き場のファイルは置いたときのまま）。
 #[tokio::test]
 async fn an_unreadable_or_nameless_cache_falls_through_to_the_built_in_answer() {
     use By::{BuiltIn, Error};
@@ -636,7 +635,7 @@ async fn an_unreadable_or_nameless_cache_falls_through_to_the_built_in_answer() 
 }
 
 /// 組み込みの答えで `initialize` と `tools/list` に答えた後で areka が現れると、次の `tools/call` は
-/// areka へ届いて結果が返り、以降は areka の今の答えで応える（要件 3.12・3.9: 居ないと答えた後も、
+/// areka へ届いて結果が返り、以降は areka の今の答えで応える（居ないと答えた後も、
 /// 要求のたびに探す）。
 #[tokio::test]
 async fn after_built_in_answers_the_next_tool_call_reaches_areka_once_it_appears() {
@@ -666,8 +665,8 @@ async fn after_built_in_answers_the_next_tool_call_reaches_areka_once_it_appears
     assert_eq!(handshakes(&fake), 1, "{sent:?}");
 }
 
-/// 「居ない」エラーの文（設計 D-9）: 候補の番号を候補の順に並べ、areka でない名乗りが応えた番号と名乗りを
-/// 続ける（要件 3.6）。誰も応えなければ続きは無い。名乗りは相手が書いた字なので、64 字で切って `...` を
+/// 「居ない」エラーの文: 候補の番号を候補の順に並べ、areka でない名乗りが応えた番号と名乗りを
+/// 続ける。誰も応えなければ続きは無い。名乗りは相手が書いた字なので、64 字で切って `...` を
 /// 付け、制御文字を `?` に替える（長い文・行の分かれた文を Desktop と記録に流し込ませない）。
 #[tokio::test]
 async fn the_not_found_error_names_the_candidates_and_who_answered_instead() {
@@ -693,8 +692,8 @@ async fn the_not_found_error_names_the_candidates_and_who_answered_instead() {
 }
 
 /// `AREKA_MCP_PORT=0`（候補が空）: 探さず、控えが無くても組み込みの答えを使わず、置き場に控えがあっても
-/// 使わず、`id` を持つ全部（`ping` も）に「待ち受けない設定」のエラー（要件 2.6）。通知には何も出さず、
-/// エラーの後も次の行に答える（要件 4.6）。
+/// 使わず、`id` を持つ全部（`ping` も）に「待ち受けない設定」のエラー。通知には何も出さず、
+/// エラーの後も次の行に答える。
 #[tokio::test]
 async fn port_zero_answers_every_request_with_the_disabled_error() {
     let mut desk = Desk::start(Vec::new());
@@ -725,8 +724,8 @@ async fn port_zero_answers_every_request_with_the_disabled_error() {
     desk.close().await;
 }
 
-/// 控えは中継を起動し直しても残る（要件 3.3）: 前の中継が areka から受け取った答えで、後から起こした
-/// 中継が、`initialize` で始める Desktop にも `server/discover` で始める Desktop にも答える（要件 3.4）。
+/// 控えは中継を起動し直しても残る: 前の中継が areka から受け取った答えで、後から起こした
+/// 中継が、`initialize` で始める Desktop にも `server/discover` で始める Desktop にも答える。
 #[tokio::test]
 async fn a_bridge_started_later_answers_from_the_cache_an_earlier_one_left() {
     let fake = FakeServer::start(Script::areka().on("tools/list", Reply::Result(tools())));
@@ -764,8 +763,7 @@ async fn a_bridge_started_later_answers_from_the_cache_an_earlier_one_left() {
     assert_eq!(handshakes(&fake), 1, "{:?}", fake.requests());
 }
 
-/// 居ないと答えた後で areka が見つかれば、以降は areka の今の答えで応え、控えが新しい中身に置き換わる
-/// （要件 3.9・3.1・3.2）。
+/// 居ないと答えた後で areka が見つかれば、以降は areka の今の答えで応え、控えが新しい中身に置き換わる。
 #[tokio::test]
 async fn once_areka_is_found_its_answers_replace_the_cache() {
     let fake = FakeServer::start(Script::named("ssp-mcp-server"));

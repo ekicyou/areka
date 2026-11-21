@@ -1,5 +1,4 @@
-//! 記憶から戻した組の寄せの檻（window-work-area-clamp・task 1.4・要件 4.1〜4.4・7.1・7.2・7.4・
-//! 9.1・9.2・10.1 ⑷⑸⑹）。
+//! 記憶から戻した組の寄せの檻。
 //!
 //! 数値は開発者の机の形の合成: 主の画面の作業領域 `0..2880 × 0..1704`。記憶の位置は
 //! 右に外したモニタ（x=5000 から）で、今のどのモニタとも交わらない。`shown` は窓ごとの判定が
@@ -73,12 +72,12 @@ fn placed(windows: &[RestoredWindow], shifts: &[GroupShift]) -> Vec<PointPx> {
         .collect()
 }
 
-/// ⑷ 全員が外の、隣り合っていた組（印 right）と重なっていた組（印 none）は、寄せた後も互いの
-/// 差が同じで、和の矩形が作業領域に入る（`window-work-area-clamp` 要件 4.1・4.2・7.1）。`Clamp`（how=shifted）が残る。
+/// 全員が外の、隣り合っていた組（印 right）と重なっていた組（印 none）は、寄せた後も互いの
+/// 差が同じで、和の矩形が作業領域に入る。`Clamp`（how=shifted）が残る。
 #[test]
 fn groups_all_outside_shift_together() {
     let cases = [
-        // 隣り合っていた組（印 right・記憶の矩形も右に隣り合う）。
+        // 隣り合っていた組（印 right・記憶の矩形も右に隣り合う）
         [
             win(0, point(5000, 864), point(2240, 864), None),
             win(
@@ -88,7 +87,7 @@ fn groups_all_outside_shift_together() {
                 Some(AdjacencyMark::Right),
             ),
         ],
-        // 重なっていた組（印 none・記憶の矩形が重なる）。
+        // 重なっていた組（印 none・記憶の矩形が重なる）
         [
             win(0, point(5000, 864), point(2240, 864), None),
             win(
@@ -124,7 +123,7 @@ fn groups_all_outside_shift_together() {
 }
 
 /// 見えている窓のある組は見えている窓を動かさず、外の窓は窓ごとの結果のまま
-/// （`window-work-area-clamp` 要件 4.1 の改め・`Keep` reason=partner-visible）。
+/// （`Keep` reason=partner-visible）。
 #[test]
 fn visible_member_keeps_group_per_window() {
     let windows = [
@@ -144,9 +143,9 @@ fn visible_member_keeps_group_per_window() {
     assert_eq!(keep.expect_field("scope"), "1");
 }
 
-/// ⑷ 離れていた組は組にしない。0・1・2 が鎖に入り 1 が記憶に無いと、2 の印 `right` は鎖の前の
+/// 離れていた組は組にしない。0・1・2 が鎖に入り 1 が記憶に無いと、2 の印 `right` は鎖の前の
 /// 窓 1（既定の位置のまま・起動の確定が付け直す）との組の印なので、記憶の矩形が隣り合っていても
-/// 0 と 2 を組にしない（窓ごとの結果のまま・`audit-placement-follow-residue` 要件 1.1・`window-work-area-clamp` 要件 4.4）。記録もしない。
+/// 0 と 2 を組にしない（窓ごとの結果のまま）。記録もしない。
 #[test]
 fn apart_pair_or_pair_with_missing_chain_partner_is_not_grouped() {
     let apart = [
@@ -181,8 +180,8 @@ fn apart_pair_or_pair_with_missing_chain_partner_is_not_grouped() {
     );
 }
 
-/// ⑴ T8: 中のスコープが無い（0 と 2 だけ）ゴーストで 2 の印が `right` なら、鎖の前の窓 0 と 2 を
-/// 1 つの組として同じ量だけ寄せる（`audit-placement-follow-residue` 要件 1.3）。
+/// 中のスコープが無い（0 と 2 だけ）ゴーストで 2 の印が `right` なら、鎖の前の窓 0 と 2 を
+/// 1 つの組として同じ量だけ寄せる。
 #[test]
 fn missing_middle_scope_groups_chain_neighbours() {
     let windows = [
@@ -202,8 +201,8 @@ fn missing_middle_scope_groups_chain_neighbours() {
     );
 }
 
-/// ⑵ T6 ⑴: 0 下端・1 右の辺・2 下端で 2 の印が `right` なら、辺を飛ばした鎖の前の窓 0 と 2 を
-/// 組にし、辺のスコープ 1 と 2 を組にしない（1 は窓ごとの結果のまま・`audit-placement-follow-residue` 要件 1.2・1.4）。
+/// 0 下端・1 右の辺・2 下端で 2 の印が `right` なら、辺を飛ばした鎖の前の窓 0 と 2 を
+/// 組にし、辺のスコープ 1 と 2 を組にしない（1 は窓ごとの結果のまま）。
 #[test]
 fn edge_scope_is_skipped_for_the_mark_partner() {
     let windows = [
@@ -229,8 +228,8 @@ fn edge_scope_is_skipped_for_the_mark_partner() {
     );
 }
 
-/// ⑶ T6 ⑵: 1 が右の辺で記憶の矩形が 2 と離れていれば、2 の印が `right` でも 1 と 2 を組にしない
-/// （印は鎖の前の窓 0 との組の印・0 は記憶に無い・`audit-placement-follow-residue` 要件 1.2・1.4）。
+/// 1 が右の辺で記憶の矩形が 2 と離れていれば、2 の印が `right` でも 1 と 2 を組にしない
+/// （印は鎖の前の窓 0 との組の印・0 は記憶に無い）。
 #[test]
 fn edge_scope_apart_from_next_is_not_grouped_by_mark() {
     let windows = [
@@ -257,7 +256,7 @@ fn edge_scope_apart_from_next_is_not_grouped_by_mark() {
 }
 
 /// 辺のスコープ 1（右の辺・鎖に入らない）が印 `right` を持っていても、印の線で鎖の前の窓 0 と
-/// 組にしない（印の線は n が鎖に入るときだけ・記憶の矩形も離れている・`audit-placement-follow-residue` 要件 1.4）。記録もしない。
+/// 組にしない（印の線は n が鎖に入るときだけ・記憶の矩形も離れている）。記録もしない。
 #[test]
 fn edge_scope_mark_does_not_group_with_chain_prev() {
     let windows = [
@@ -278,8 +277,8 @@ fn edge_scope_mark_does_not_group_with_chain_prev() {
     );
 }
 
-/// ⑸ T5: 0 が右の辺でも、番号の続く 1 と記憶の矩形が重なっていれば矩形で組にする（矩形の組は
-/// 辺のスコープにも当たる・`audit-placement-follow-residue` 要件 1.4）。
+/// 0 が右の辺でも、番号の続く 1 と記憶の矩形が重なっていれば矩形で組にする（矩形の組は
+/// 辺のスコープにも当たる）。
 #[test]
 fn edge_scope_overlapping_next_is_grouped_by_rect() {
     let windows = [
@@ -299,7 +298,7 @@ fn edge_scope_overlapping_next_is_grouped_by_rect() {
     );
 }
 
-/// どれも見えている組は動かさず `Keep`（reason=remembered-visible）を残す（`window-work-area-clamp` 要件 4.3）。
+/// どれも見えている組は動かさず `Keep`（reason=remembered-visible）を残す。
 #[test]
 fn all_visible_group_is_kept() {
     let windows = [
@@ -317,7 +316,7 @@ fn all_visible_group_is_kept() {
     assert_eq!(keep.expect_field("reason"), "\"remembered-visible\"");
 }
 
-/// ⑸ 和の矩形が作業領域より大きいと左辺と上辺が合い、互いの差は保たれる（`window-work-area-clamp` 要件 7.2）。
+/// 和の矩形が作業領域より大きいと左辺と上辺が合い、互いの差は保たれる。
 #[test]
 fn oversized_union_aligns_left_and_top() {
     let small = MonitorSnapshot {
@@ -336,7 +335,7 @@ fn oversized_union_aligns_left_and_top() {
     assert_eq!(placed(&windows, &shifts), vec![point(0, 0), point(640, 0)]);
 }
 
-/// ⑹ モニタの写しが空だと返さず `Unresolved` の warn が出る（`window-work-area-clamp` 要件 7.4）。対照: 同じ捕捉窓で
+/// モニタの写しが空だと返さず `Unresolved` の warn が出る。対照: 同じ捕捉窓で
 /// 写しの有る呼び出しは `Clamp` を出す。
 #[test]
 fn missing_snapshot_warns_unresolved_with_contrast() {
@@ -365,8 +364,8 @@ fn missing_snapshot_warns_unresolved_with_contrast() {
     expect_one(&events, WORK_AREA_CLAMP_TAG);
 }
 
-/// `audit-placement-follow` 指摘 11 ⑸ 記憶の矩形が離れていても（隙間 60）印が `right` なら組として繋がり、同じ量だけ
-/// 寄せられる（`window-work-area-clamp` 要件 4.1・4.2）。印の腕が無いと窓ごとの結果のまま 2 枚が重なる。
+/// 記憶の矩形が離れていても（隙間 60）印が `right` なら組として繋がり、同じ量だけ
+/// 寄せられる。印の腕が無いと窓ごとの結果のまま 2 枚が重なる。
 #[test]
 fn separated_rects_joined_by_right_mark_shift_together() {
     let windows = [
@@ -386,7 +385,7 @@ fn separated_rects_joined_by_right_mark_shift_together() {
     );
 }
 
-/// `audit-placement-follow` 指摘 11 ⑸ 印が `left`（n が鎖の前の窓の左）で記憶の矩形が離れていても同じく組になる。
+/// 印が `left`（n が鎖の前の窓の左）で記憶の矩形が離れていても同じく組になる。
 #[test]
 fn separated_rects_joined_by_left_mark_shift_together() {
     let windows = [

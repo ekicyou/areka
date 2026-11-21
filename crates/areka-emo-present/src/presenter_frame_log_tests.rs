@@ -1,4 +1,4 @@
-//! 表示の行の水準の出し分け（`animated-surface-log-flood` 要件 1.1〜1.5・2.1〜2.3・8.1・8.2）。
+//! 表示の行の水準の出し分け。
 //!
 //! 最初の表示と状態の替わり（面の番号・着せ替え・拡大率・窓の大きさ・付け直し・隠した後の出し直し）は
 //! INFO、コマ送りだけの適用は DEBUG で、文言と欄は同じ。どの成立した適用にも表示の行がちょうど 1 行
@@ -89,7 +89,7 @@ fn levels(lines: &[(Level, String)]) -> Vec<Level> {
     lines.iter().map(|(l, _)| *l).collect()
 }
 
-/// 要件 1.1・1.4・2.1・8.2: 最初の表示が INFO、続くコマ送りだけ（違うコマ・控えに当たる同じコマ・
+/// 最初の表示が INFO、続くコマ送りだけ（違うコマ・控えに当たる同じコマ・
 /// 同じ中身の繰り返し）が DEBUG で、それぞれ 1 適用 1 行出る。
 #[test]
 fn first_show_is_info_and_following_frame_steps_are_debug() {
@@ -138,7 +138,7 @@ fn first_show_is_info_and_following_frame_steps_are_debug() {
     );
 }
 
-/// 要件 1.2・1.3・1.5・8.1: 面の番号・着せ替え・拡大率・窓の大きさの替わりと、シェルを隠した後の
+/// 面の番号・着せ替え・拡大率・窓の大きさの替わりと、シェルを隠した後の
 /// 同じ面・同じコマの出し直しは INFO。あいだのコマ送りだけが DEBUG（対照）。
 #[test]
 fn state_changes_and_reshow_after_hide_are_info_on_the_shell() {
@@ -215,7 +215,7 @@ fn state_changes_and_reshow_after_hide_are_info_on_the_shell() {
     );
 }
 
-/// 要件 1.4: 付け直し（`ReplaceTarget`）の後の最初の表示は、前と同じ面・拡大率でも INFO。続く同じ
+/// 付け直し（`ReplaceTarget`）の後の最初の表示は、前と同じ面・拡大率でも INFO。続く同じ
 /// 適用は DEBUG（対照）。
 #[test]
 fn first_show_after_replace_is_info() {
@@ -264,7 +264,7 @@ fn first_show_after_replace_is_info() {
     assert_eq!(levels(&show_lines(&events)), [Level::INFO, Level::DEBUG]);
 }
 
-/// 要件 1.5・8.1: バルーン（外から所有）は、最初の表示と `show_target` による出し直しが INFO。
+/// バルーン（外から所有）は、最初の表示と `show_target` による出し直しが INFO。
 /// 見えているあいだのコマ送りと、隠れているあいだに届いた同じコマの指令（`show_target` を通らない）は
 /// DEBUG。
 #[test]

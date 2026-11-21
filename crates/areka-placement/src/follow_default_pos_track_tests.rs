@@ -1,12 +1,11 @@
-//! 既定位置の追跡規則（design D9／D16・`areka-P0-dpi-transition-atomicity` 要件 6.2）の決定論テスト。
+//! 既定位置の追跡規則の決定論テスト。
 //!
-//! # ここが押さえる是正
+//! # ここが押さえること
 //!
 //! 連鎖の再解決は「現在位置が既定位置と一致するか」で**明示的に再配置されたスコープ**を
-//! 除外する（`areka-P0-scope-chain-gap` 要件 7.3）。拡大率が変わると全スコープの位置がシステム側の都合で
+//! 除外する。拡大率が変わると全スコープの位置がシステム側の都合で
 //! 動くため、既定位置を据え置いたままだと全件が「明示的に動かされた」へ倒れ、遷移後の
-//! 解き直しが丸ごと空振りする。`areka-P0-dpi-transition-atomicity` 要件 6.2 はこれを名指しで禁じており、D9／D16 が
-//! **単一の窓書込口で既定位置を追随させる**規則を定めた。
+//! 解き直しが丸ごと空振りする。そこで**単一の窓書込口で既定位置を追随させる**。
 //!
 //! 本ファイルはその規則そのもの——3 つの条件（route がシステム由来・対象がキャラ窓・
 //! 書込前の位置が既定位置と一致）の**各条件が実際に効いていること**を、条件ごとに 1 つずつ
@@ -104,14 +103,13 @@ fn write_at(world: &mut World, window: Entity, to: PointPx, route: Option<Placem
 }
 
 // ---------------------------------------------------------------------------
-// 追随する側（`areka-P0-dpi-transition-atomicity` 要件 6.2・D9 の 3 条件がすべて揃う形）
+// 追随する側（3 条件がすべて揃う形）
 // ---------------------------------------------------------------------------
 
-/// **是正前は赤・是正後は緑**: システム由来の再アンカーが、一致していた既定位置を書込先へ
-/// 連れて行く。
+/// システム由来の再アンカーが、一致していた既定位置を書込先へ連れて行く。
 ///
-/// 是正前は既定位置が `DEFAULT_POS` に据え置かれ、現在位置（`REANCHORED`）と食い違う
-/// ——連鎖の除外判定がこの食い違いを「明示的に動かされた」と読むのが`areka-P0-dpi-transition-atomicity` 要件 6.2 の欠陥である。
+/// 既定位置が `DEFAULT_POS` に据え置かれると現在位置（`REANCHORED`）と食い違い、
+/// 連鎖の除外判定がこの食い違いを「明示的に動かされた」と読んでしまう。
 #[test]
 fn a_system_reanchor_carries_the_default_position_to_the_written_spot() {
     let (mut world, char_window, _balloon) = world_with_one_scope();
@@ -140,7 +138,7 @@ fn a_system_reanchor_carries_the_default_position_to_the_written_spot() {
     );
 }
 
-/// **システム由来の 7 経路（D9 の 6 経路＋面の `move` のずれ＝`PatternMove`）すべて**で追随する（1 経路だけ配線した実装を弾く）。
+/// **システム由来の 7 経路（6 経路＋面の `move` のずれ＝`PatternMove`）すべて**で追随する（1 経路だけ配線した実装を弾く）。
 #[test]
 fn every_system_route_carries_the_default_position() {
     for route in PlacementRoute::ALL
@@ -164,7 +162,7 @@ fn every_system_route_carries_the_default_position() {
 /// 条件 3 を外す: ドラッグで動かした後（現在位置 ≠ 既定位置）はシステム由来でも追随しない。
 ///
 /// 追随させてしまうと「利用者が動かした」という事実そのものが消え、連鎖が明示配置の窓を
-/// 既定位置へ引き戻す（`scope-chain-gap` 7.3 の破壊）。
+/// 既定位置へ引き戻す。
 #[test]
 fn a_dragged_window_keeps_its_default_position_untouched() {
     let (mut world, char_window, _balloon) = world_with_one_scope();
@@ -273,8 +271,7 @@ fn a_balloon_window_write_never_touches_the_scope_default_position() {
 
 /// 既定位置 `None`（保存位置が復元されたスコープ）は `None` のままである。
 ///
-/// `None` は「そもそも既定配置ではない」を表す**標**であって位置の欠落ではない
-/// （`scope-chain-gap` 7.3）。位置で塗り潰すと、復元スコープが連鎖の対象へ復活してしまう。
+/// `None` は「そもそも既定配置ではない」を表す**標**であって位置の欠落ではない。位置で塗り潰すと、復元スコープが連鎖の対象へ復活してしまう。
 #[test]
 fn a_restored_scope_stays_marked_as_not_default_placed() {
     let (mut world, char_window, _balloon) = world_with_one_scope();
@@ -306,7 +303,7 @@ fn a_restored_scope_stays_marked_as_not_default_placed() {
 // 区分そのもの（定義元が 1 本であること）
 // ---------------------------------------------------------------------------
 
-/// システム由来の再アンカーは D9 が挙げる 6 経路と、面の `move` のずれ（PatternMove）**ちょうど**である。
+/// システム由来の再アンカーは 6 経路と、面の `move` のずれ（PatternMove）**ちょうど**である。
 #[test]
 fn the_system_reanchor_partition_is_exactly_the_six_routes_named_by_d9_and_pattern_move() {
     let system: Vec<PlacementRoute> = PlacementRoute::ALL
@@ -322,17 +319,17 @@ fn the_system_reanchor_partition_is_exactly_the_six_routes_named_by_d9_and_patte
             PlacementRoute::ReportedSizeReconcile,
             PlacementRoute::WorkAreaResnap,
             PlacementRoute::ChainRealign,
-            // 面の `move` のずれ（表示の側の置き直し・seriko-pattern-calls 設計 MoveShiftPlacement）。
+            // 面の `move` のずれ（表示の側の置き直し）。
             PlacementRoute::PatternMove,
         ],
         "システム由来の経路集合が D9 の 6 経路＋PatternMove と食い違う"
     );
 }
 
-/// 可視性の遷移ガードの発火条件は、既定位置の追跡と**同一の区分**である（設計の明言）。
+/// 可視性の遷移ガードの発火条件は、既定位置の追跡と**同一の区分**である。
 ///
 /// 委譲を解いて列を 2 本に戻した実装を弾く檻である。意図的に割る日が来たら、この檻を
-/// 落としたうえで理由を設計へ登記すること。
+/// 落としたうえで理由を残すこと。
 #[test]
 fn the_visibility_guard_reads_the_same_partition() {
     for route in PlacementRoute::ALL {

@@ -1,13 +1,13 @@
 //! 本物の受け口（`areka_mcp::start`）を相手にした通しのテスト。
 //!
 //! ツールを 1 本登録した受け口を空きポートに起こし、5 つの版それぞれで、同じ要求を「HTTP で直接
-//! 送った答え」と「中継ごしの答え」で比べる（要件 1.2・1.10）。比べるのは応答の全体（`jsonrpc`・`id`・
+//! 送った答え」と「中継ごしの答え」で比べる。比べるのは応答の全体（`jsonrpc`・`id`・
 //! `result`／`error`）を `serde_json::Value` にしたもので、欄の順と空白だけを問わない。
 //!
 //! 受け口のパスと名乗りは `areka_mcp` の定数を読む。受け口が名乗る値と中継が見なす値が食い違えば、
-//! 中継が受け口を飛ばして「居ない」エラーを返すので、どの比較も赤になる（要件 8.2）。
+//! 中継が受け口を飛ばして「居ない」エラーを返すので、どの比較も赤になる。
 //!
-//! 最後の 1 本は、組み込みの答えの見張り（要件 8.6）: 本番のツールを全部登録した受け口が直接返す答えと、
+//! 最後の 1 本は、組み込みの答えの見張り: 本番のツールを全部登録した受け口が直接返す答えと、
 //! areka も控えも無い中継が自分で持っている答えを、同じ 5 つの版で比べる。
 //! 机の 9801〜9830 へはつながない（候補は、起こした受け口の番号か、誰も待ち受けていない番号だけ）。
 
@@ -142,7 +142,7 @@ async fn compare(version: &str) {
     let name = areka_mcp::SERVER_NAME;
 
     // 最初の問い合わせ: 旧式の版は `initialize`（続けて通知）、`2026-07-28` は `server/discover`
-    // （旧式の話し方の `server/discover` は比べない＝設計 D-8）。
+    // （旧式の話し方の `server/discover` は比べない）。
     // `ping` は、旧式の版では空の結果、`2026-07-28` では areka の `-32601`（その版に `ping` は無い）。
     let (first, ping_at, ping_is) = if stateless {
         let at = "/result/_meta/io.modelcontextprotocol~1serverInfo/name";
@@ -170,14 +170,14 @@ async fn compare(version: &str) {
         {"id": 7, "method": "tools/call", "params": {"name": "no_such_tool", "arguments": {}},
             "at": "/error/code", "is": -32602},
         {"id": 8, "method": "tools/call", "params": {"name": 7}, "at": "/error/code", "is": -32602},
-        // `params` がオブジェクトでない要求（spec: mcp-strict-errors 要件 6.5〜6.7）: 受け口は rmcp の
+        // `params` がオブジェクトでない要求: 受け口は rmcp の
         // 415 の後に、中継は受け口へ送らずに、同じ `request_shape_error` で `id` 付きの答えを返す。
         // 数・文字列・真偽値は `-32600`、配列は `-32602`（知らない名前のメソッドでも同じ）。
         {"id": 9, "method": "tools/list", "params": 7, "at": "/error/code", "is": -32600},
         {"id": "s10", "method": "nope/unknown", "params": "x", "at": "/error/code", "is": -32600},
         {"id": 11, "method": "tools/list", "params": true, "at": "/error/code", "is": -32600},
         {"id": 12, "method": "tools/call", "params": [1], "at": "/error/code", "is": -32602},
-        // 答えた後の要求はいつもどおり（要件 6.6）。
+        // 答えた後の要求はいつもどおり。
         {"id": 13, "method": "tools/list", "at": "/result/tools/0/name", "is": TOOL},
     ]);
 
@@ -235,7 +235,7 @@ async fn v2024_11_05_bridged_answers_equal_direct_answers() {
     compare("2024-11-05").await;
 }
 
-/// 組み込みの答えの見張り（要件 8.6・設計 D-18）: 本番のツールを全部登録した受け口が、最初の問い合わせと
+/// 組み込みの答えの見張り: 本番のツールを全部登録した受け口が、最初の問い合わせと
 /// `tools/list` に直接返す答えと、areka も控えも無い中継の答え（中継が自分で持っている答え）が、5 つの
 /// 版のどれでも応答の全体で等しい。受け口の最初の答えか一覧と、中継の組み込みの答えの、片方だけが
 /// 変われば赤になる。ツールの本数は数で固定しない。
@@ -257,7 +257,6 @@ async fn built_in_answers_equal_the_answers_of_the_real_receiver_in_all_five_ver
         "2025-03-26",
         "2024-11-05",
     ] {
-        // 中継は版ごとに新しく起こす（控えの置き場は空）。
         let mut desk = Desk::start(vec![nobody]);
         let first = if version == STATELESS {
             let at = "/result/_meta/io.modelcontextprotocol~1serverInfo/name";
@@ -284,7 +283,7 @@ async fn built_in_answers_equal_the_answers_of_the_real_receiver_in_all_five_ver
             assert_eq!(direct.pointer(at), Some(&case["is"]), "{version}: {direct}");
             if case["id"] == 1 {
                 // 組み込みの最初の答えの案内文は受け口と同じ定数（その定数に「まだのツール」の 1 文が
-                // 無いことは areka-mcp の側が縛る＝spec: mcp-strict-errors 要件 5.2）。
+                // 無いことは areka-mcp の側が縛る）。
                 let instructions = built_in["result"]["instructions"].as_str();
                 assert_eq!(instructions, Some(areka_mcp::INSTRUCTIONS), "{version}");
             }

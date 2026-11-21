@@ -1,4 +1,4 @@
-//! 文字の番号の埋め込み `\_u[…]`・`\_m[…]` の組み立ての檻（spec: script-small-tags 要件 1.5〜1.8・2.1〜2.4・2.6・2.7）。
+//! 文字の番号の埋め込み `\_u[…]`・`\_m[…]` の組み立ての檻。
 //!
 //! 1. 埋め込みの台本を組み立てた合図の列は、同じ字を直に書いた台本の合図の列と等しい。
 //! 2. 捨てた番号は理由ごとに警告を 1 行だけ残し、合図を作らず、後ろの台本は今どおり組み上がる。
@@ -13,7 +13,7 @@ fn assert_same_cues(a: &CompiledTalk, b: &CompiledTalk, what: &str) {
     assert_cues_eq(a.sheet.cues(), b.sheet.cues(), what);
 }
 
-/// 埋め込みと直書きの合図の列が等しい（1.5〜1.8）。全角の空白だけの台本と、ぱすたの起動の形
+/// 埋め込みと直書きの合図の列が等しい。全角の空白だけの台本と、ぱすたの起動の形
 /// （`\_u[0x3000]` → 重なりの指令 → `\c`）を含む。
 #[test]
 fn embedded_script_compiles_like_the_direct_one() {
@@ -35,7 +35,7 @@ fn embedded_script_compiles_like_the_direct_one() {
         assert_same_cues(&a, &b, &format!("{embedded} と {direct}"));
         assert_eq!(a.end, b.end, "{embedded}");
     }
-    // 全角の空白だけの台本は本文の合図を 1 つ持つ（バルーンを開く・1.6）。
+    // 全角の空白だけの台本は本文の合図を 1 つ持つ（バルーンを開く）。
     let compiled = compile(&parse("\\_u[0x3000]"));
     assert_eq!(
         command_of(&compiled.sheet.cues()[1]),
@@ -44,7 +44,7 @@ fn embedded_script_compiles_like_the_direct_one() {
 }
 
 /// 捨てた番号は理由ごとに `char_code_dropped` の警告が 1 行（元の綴り・理由つき）、合図は 0、
-/// 後ろの台本は捨てた番号が無いときと同じに組み上がる（2.1〜2.4・2.6・2.7）。
+/// 後ろの台本は捨てた番号が無いときと同じに組み上がる。
 #[test]
 fn dropped_char_code_warns_once_and_emits_nothing() {
     let cases = [

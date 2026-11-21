@@ -1,16 +1,16 @@
-//! stay-on-top-directives タスク 7.1 の実機の確かめ（要件 8.1・8.2・8.4・既定 OFF）。
+//! 常に手前の指示（stay-on-top）の実機の確かめ（既定 OFF を含む）。
 //!
 //! 検体 emo2 を `real-run-kit` で起こし、試験のプロセスが出す「他のアプリの窓」（全面を覆う普通の窓）を
 //! 前に出してから（`HWND_TOP` に続けて、ゴーストの窓の外の点を `SendInput` でクリックする）台本を送り、常に手前のオン・オフ・`\v`・後から出たバルーン・`\![set,zorder]` の組・
 //! シェルの切り替え・ドラッグ・ゴーストの切り替えの後の重なりを、窓の重なりの順（`GetTopWindow` から
-//! `GW_HWNDNEXT` で辿った順位）と `WS_EX_TOPMOST` を読んで判定する。R1（持ち主だけを帯へ上げると
-//! 持たれる窓も上がるか）は、試験のプロセスから areka のキャラクターの窓へ `HWND_TOPMOST` を 1 回だけ
+//! `GW_HWNDNEXT` で辿った順位）と `WS_EX_TOPMOST` を読んで判定する。「持ち主だけを帯へ上げると
+//! 持たれる窓も上がるか」は、試験のプロセスから areka のキャラクターの窓へ `HWND_TOPMOST` を 1 回だけ
 //! 当てて測り、すぐに戻す。
 //!
 //! 本物の窓を出し、ドラッグを `SendInput` で送るので、排他テストの机を持ち、画面のロックが無いときだけ回す。
 //! 有効にするのは環境変数 `AREKA_STAY_ON_TOP_REAL_RUN`（空でない値）。未設定なら即 return する。
 //! 画面が使えない（スクリーンセーバー・入力先の窓が無い）ときは areka を起こす前に、オンの前に他のアプリの
-//! 窓がゴーストの窓より手前に来ない（8.1b）ときはその場で、無効な走りとして止める。
+//! 窓がゴーストの窓より手前に来ないときはその場で、無効な走りとして止める。
 //! 先に要るもの: 32bit の仲介 `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`。
 //!
 //! 根・記憶の置き場・記録はすべて `target\sot-signoff\` の下。根は emo2 の複製に、シェルの写し `copy`
@@ -441,8 +441,8 @@ fn balloon_counts(run: &Run, trigger: &str, visible: bool) -> [usize; 2] {
     [0, 1].map(|sc| lines_with(run, &balloon_line(sc, trigger, visible)).len())
 }
 
-/// R1 の測り: `root` だけへ `HWND_TOPMOST` を当て、`root` から持たれる鎖の全部の帯の印を読み、
-/// 鎖の全部を `HWND_NOTOPMOST` で戻す。答えは合否でない（設計はどちらの答えでも正しく動く形）。
+/// 持ち主だけを帯へ上げたときの測り: `root` だけへ `HWND_TOPMOST` を当て、`root` から持たれる鎖の全部の帯の印を読み、
+/// 鎖の全部を `HWND_NOTOPMOST` で戻す。答えは合否でない。
 fn measure_r1(n: &mut Notes, label: &str, root: isize) {
     let all = zorder();
     let mut chain = vec![root];
@@ -541,7 +541,7 @@ fn stay_on_top_directives_on_emo2() {
     {
         return;
     }
-    // 画面が使えない走りは無効（3 回目はスクリーンセーバーの間に走った）。areka を起こす前に止める。
+    // 画面が使えない走りは無効。areka を起こす前に止める。
     if let Some(why) = screen_unavailable() {
         panic!("無効な走り: {why}。画面のロックとスクリーンセーバーが無い間に回す");
     }
@@ -608,7 +608,7 @@ fn stay_on_top_directives_on_emo2() {
     let other = spawn_other_window(rect);
     sleep(Duration::from_millis(500));
     // 利用者と同じく、ゴーストの窓の外の点をクリックして前に出す（裏のプロセスの `HWND_TOP` だけでは
-    // OS が並びを変えないことがある・4 回目）。点は左の縁の中ほど（ゴーストの窓の和より 40 px 外側）。
+    // OS が並びを変えないことがある）。点は左の縁の中ほど（ゴーストの窓の和より 40 px 外側）。
     // 他のアプリの窓は `DefWindowProcW` だけなので、クリックは活性になる以外に何も起こさない。
     let click_at = (rect[0] + 20, (rect[1] + rect[3]) / 2);
     let raise_other = |n: &mut Notes, label: &str| {
@@ -640,7 +640,7 @@ fn stay_on_top_directives_on_emo2() {
         format!("chars={} balloons={}", s0.chars.len(), s0.balloons.len()),
     );
 
-    // ---- 8.1 オフのあいだの \v（areka は裏のプロセス） ----
+    // ---- オフのあいだの \v（areka は裏のプロセス） ----
     let fg = foreground_pid();
     let c = lines_with(&run, "ゴーストの窓を今いる帯の最上へ出す").len();
     send(&mut run, &mut n, r"\v\e");
@@ -673,7 +673,7 @@ fn stay_on_top_directives_on_emo2() {
         String::new(),
     );
     if !s2.vs_other(false) {
-        // 直したことは、オンが他のアプリの奥から始まるときだけ示せる（2 回目の赤の形）。
+        // 直したことは、オンが他のアプリの奥から始まるときだけ示せる。
         let _ = run.close();
         let _ = std::fs::write(base.join("run.log"), run.output());
         let _ = std::fs::write(base.join("steps.txt"), &n.steps);
@@ -684,7 +684,7 @@ fn stay_on_top_directives_on_emo2() {
         );
     }
 
-    // ---- 8.1 オン ----
+    // ---- オン ----
     // 後から出るバルーンを見分けるため、同じ台本でバルーンを閉じてからオンにする（emo2 のバルーンは
     // 自分では閉じず、独り言でまた開くので、時間で待たない）。閉じたかは記録の行で控える。
     let closed = balloon_counts(&run, "clear", false);
@@ -720,7 +720,7 @@ fn stay_on_top_directives_on_emo2() {
         String::new(),
     );
 
-    // ---- 8.1 後から出たバルーン・8.2 すぐ手前 ----
+    // ---- 後から出たバルーン・すぐ手前 ----
     let shown = balloon_counts(&run, "content", true);
     send(
         &mut run,
@@ -773,7 +773,7 @@ fn stay_on_top_directives_on_emo2() {
         d,
     );
 
-    // ---- 8.2 \![set,zorder] の組の並び ----
+    // ---- \![set,zorder] の組の並び ----
     send(&mut run, &mut n, r"\![set,zorder,1,0]\e");
     sleep(Duration::from_secs(1));
     let s6 = snap(&run, other);
@@ -788,7 +788,7 @@ fn stay_on_top_directives_on_emo2() {
         format!("kero_front={:?}", kero_front(&s6)),
     );
 
-    // ---- 8.4・R2 シェルの切り替え ----
+    // ---- シェルの切り替え ----
     let c = lines_with(&run, "skin_switch_done").len();
     send(&mut run, &mut n, r"\![change,shell,copy]\e");
     let line = wait_new(&run, "skin_switch_done", c, 30);
@@ -806,7 +806,7 @@ fn stay_on_top_directives_on_emo2() {
     let (ok, d) = s7.balloons_just_in_front();
     n.note(format!("shell switched balloons_just_in_front ok={ok} {d}"));
 
-    // ---- R2 組み替え ----
+    // ---- 組み替え ----
     send(&mut run, &mut n, r"\![reset,zorder]\![set,zorder,0,1]\e");
     sleep(Duration::from_secs(1));
     let s8 = snap(&run, other);
@@ -817,7 +817,7 @@ fn stay_on_top_directives_on_emo2() {
         format!("kero_front={:?}", kero_front(&s8)),
     );
 
-    // ---- R2 ドラッグ（SendInput） ----
+    // ---- ドラッグ（SendInput） ----
     match s8.char_titled(SAKURA).and_then(hit_point) {
         Some((x, y)) => {
             n.note(format!("drag from {x},{y}"));
@@ -861,7 +861,7 @@ fn stay_on_top_directives_on_emo2() {
         format!("before={:x?} after={:x?}", before.order(), s10.order()),
     );
 
-    // ---- 8.1 オフ ----
+    // ---- オフ ----
     let line = send_state(&mut run, &mut n, r"\![set,windowstate,!stayontop]\e");
     let s11 = snap(&run, other);
     n.record("s11_off", &s11);
@@ -877,8 +877,8 @@ fn stay_on_top_directives_on_emo2() {
         ),
     );
 
-    // ---- R1 持ち主だけを帯へ上げると持たれる窓も上がるか（試験から 1 回だけ当てて戻す） ----
-    // ⑴ 鎖の根（持ち主の無い窓）へ当てる＝問いそのもの。⑵ 鎖の途中の窓（自分も持たれる）へ当てる＝1 回目の形。
+    // ---- 持ち主だけを帯へ上げると持たれる窓も上がるか（試験から 1 回だけ当てて戻す） ----
+    // ⑴ 鎖の根（持ち主の無い窓）へ当てる＝問いそのもの。⑵ 鎖の途中の窓（自分も持たれる）へ当てる。
     let root = s12
         .targets()
         .into_iter()
@@ -905,7 +905,7 @@ fn stay_on_top_directives_on_emo2() {
         back.all_topmost(false)
     ));
 
-    // ---- 8.1 ゴーストの切り替えの後 ----
+    // ---- ゴーストの切り替えの後 ----
     let line = send_state(&mut run, &mut n, r"\![set,windowstate,stayontop]\e");
     let s13 = snap(&run, other);
     n.record("s13_on_again", &s13);

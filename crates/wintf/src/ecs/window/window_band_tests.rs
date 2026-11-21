@@ -1,5 +1,4 @@
-//! 帯の働きの純関数の全分岐（要件 2.4・2.5・2.10・7.3）と、偽の OS で回す確定段の帯の系の
-//! 分岐（要件 2.1・2.3・2.6・2.9・3.1・6.1・6.3・7.3）。
+//! 帯の働きの純関数の全分岐と、偽の OS で回す確定段の帯の系の分岐。
 
 use super::*;
 use bevy_ecs::schedule::Schedule;
@@ -193,8 +192,8 @@ pub(super) mod double {
 
 use double::{Script, with_script};
 
-// 持ち主の並べ直しを止める（SWP_NOOWNERZORDER）: 実機（task 7.1 の 2 回目）で持ち主の書き込みが
-// OS の持ち主と持たれ窓の並べ直しに落とされ、持たれ窓だけが帯へ上がった。
+// 持ち主の並べ直しを止める（SWP_NOOWNERZORDER）: 持ち主の書き込みは OS の持ち主と持たれ窓の
+// 並べ直しに落とされ、持たれ窓だけが帯へ上がった。
 const FLAGS: SET_WINDOW_POS_FLAGS =
     SET_WINDOW_POS_FLAGS(SWP_NOMOVE.0 | SWP_NOSIZE.0 | SWP_NOACTIVATE.0 | SWP_NOOWNERZORDER.0);
 const TOPMOST: isize = -1;
@@ -443,7 +442,7 @@ fn band_mismatch_after_enter_and_leave_is_warned_but_raise_is_not_checked() {
 }
 
 /// 手前へ出すは、全部の窓を奥から帯の最上へ上げ、当てる前に帯の外だった窓だけを奥から
-/// 帯の外の最上へ戻す（案 A・裏のプロセスでも入力先の窓の手前へ出る）。帯の中の窓は 1 回だけ。
+/// 帯の外の最上へ戻す（裏のプロセスでも入力先の窓の手前へ出る）。帯の中の窓は 1 回だけ。
 /// 戻した窓は帯の外のまま、帯の中の窓は帯のままで、帯の食い違いの `warn!` は出ない。
 #[test]
 fn raise_lifts_all_and_returns_only_windows_that_were_outside_the_band() {

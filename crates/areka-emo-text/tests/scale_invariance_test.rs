@@ -1,23 +1,17 @@
-//! # scale_invariance_test — DPI/スケールの写像と画像座標空間のレイアウトの絶対値（R4.6/R10.4/R11.9）
+//! # scale_invariance_test — DPI/スケールの写像と画像座標空間のレイアウトの絶対値
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+//! 合成スケール k による写像（物理寸＝`ceil(寸 × k)`・オフセット＝`原点 × k`）と、画像座標空間で解いたレイアウト決定
+//! （折返し・行送り・スクロール発火）の絶対値を、実描画なし（DirectWrite/D2D/COM/GPU 不使用・[`FixedMetrics`] 注入）の
+//! headless テストで固定する。実 DPI の実描画観測は example `emo-text-layer` の領分。
 //!
-//! 合成スケール k による**写像**（物理寸＝`ceil(寸 × k)`・オフセット＝`原点 × k`）と、
-//! 画像座標空間で解いた**レイアウト決定**（折返し・行送り・スクロール発火）の絶対値を、
-//! 実描画なし（DirectWrite/D2D/COM/GPU 不使用・[`FixedMetrics`] 注入）の headless テストで固定する
-//! （design.md「Testing Strategy > Unit Tests」6. スケール写像 が正典）。
-//!
-//! - **R4.6**: レイアウトは画像座標空間（前半）・物理化は合成スケール共有点 k の一点適用（後半）。
-//! - **R10.4**: 画像/物理の 2 空間のみ（論理 px 不在）・変換は [`ScaleContract`] の一点定義。
-//! - **R11.9**: レイアウト決定部（折返し・行送り・スクロール発火・validrect 整合）の値を固定する
-//!   （実 DPI の実描画観測は example `emo-text-layer` の領分）。
+//! - レイアウトは画像座標空間（前半）・物理化は合成スケール共有点 k の一点適用（後半）。
+//! - 画像/物理の 2 空間のみ（論理 px 不在）・変換は [`ScaleContract`] の一点定義。
 //!
 //! k ごとにレイアウトを解き直して比べる形は置かない。テストが自分で画像の寸法を解決へ渡すと
 //! k は入力に入らず、同じ純関数を同じ値で呼び直すだけになる（本番が物理寸を渡す形に変わっても
 //! 緑のまま）。本番が画像の寸法を渡す向きは `tests/attach_wiring_test.rs` が実の presenter で守る。
 //!
-//! 端数檻の方針: round/ceil の正準式は割り切れる値
-//! だけでなく端数ケースで檻化し、floor/ceil/round の取り違え変異を殺す値を選ぶ
+//! 端数檻の方針: round/ceil の正準式は割り切れる値だけでなく端数ケースで固定し、floor/ceil/round の取り違え変異を殺す値を選ぶ
 //! （例 321×1.25=401.25→402 は round 変異を殺す）。
 
 #[path = "support/mod.rs"]
@@ -46,8 +40,7 @@ fn model(
     support::geometry_model(origin, wordwrap, validrect, None, writing_mode)
 }
 
-/// reveal 間隔（0.25＝2 の冪・正確表現）。reveal は配送 duration 由来（`interval = duration / N`）
-/// ゆえ Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.25 の決定論的リビール時刻列を得る
+/// reveal 間隔（0.25＝2 の冪・正確表現）。Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.25 の決定論的リビール時刻列を得る
 /// （pipeline_test.rs と同方針）。
 const REVEAL_INTERVAL: f64 = 0.25;
 
@@ -56,14 +49,13 @@ fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
     support::cue(actor, at, command, REVEAL_INTERVAL)
 }
 
-// ══ 物理寸・オフセット写像: 物理寸=ceil(寸×k)・オフセット=画像×k（R4.6/R10.4） ══
+// ══ 物理寸・オフセット写像: 物理寸=ceil(寸×k)・オフセット=画像×k ══
 
-/// present_frame と同一の導出（物理寸＝`ceil(validrect 寸 × k)`・オフセット＝
-/// `validrect 原点 × k`）を k=1.0/1.25/2.0 で檻化する。fixture 実測 validrect
-/// （(36,46)-(356,168)＝幅 320・高さ 122）に対する期待値は手計算の絶対値。
+/// present_frame と同一の導出（物理寸＝`ceil(validrect 寸 × k)`・オフセット＝`validrect 原点 × k`）を k=1.0/1.25/2.0 で固定する。
+/// fixture 実測 validrect（(36,46)-(356,168)＝幅 320・高さ 122）に対する期待値は手計算の絶対値。
 ///
-/// 端数檻: 122×1.25=152.5→**153**（floor 変異=152 を殺す）。round 変異は次テストの
-/// 401.25 が殺す（152.5 は round half away でも 153 になり round を殺せないため）。
+/// 端数檻: 122×1.25=152.5→**153**（floor 変異=152 を殺す）。round 変異は次テストの 401.25 が殺す
+/// （152.5 は round half away でも 153 になり round を殺せないため）。
 #[test]
 fn physical_size_and_offset_map_from_region_at_each_scale() {
     let m = model(
@@ -87,7 +79,6 @@ fn physical_size_and_offset_map_from_region_at_each_scale() {
         "validrect 解決は画像座標空間のまま"
     );
     for (k, want_size, want_offset) in expected {
-        // 物理化は ScaleContract の一点変換のみ（present_frame と同一の導出式）。
         let contract = ScaleContract::new(k, None);
         let physical_size = (
             contract.physical_extent(ImagePx(region.right() - region.left())),
@@ -105,7 +96,6 @@ fn physical_size_and_offset_map_from_region_at_each_scale() {
             physical_offset, want_offset,
             "k={k}: 物理オフセット = validrect 原点 × k"
         );
-        // 物理→画像の逆写像が原値へ戻る（2 空間の往復整合）。
         assert_eq!(
             contract.to_image(PhysicalPx(physical_offset.0)),
             ImagePx(region.left()),
@@ -147,14 +137,11 @@ fn physical_extent_ceils_fractional_values_killing_round_and_floor() {
     );
 }
 
-// ══ R11.9 構造側: 画像座標空間のレイアウト決定（横書き・同一 cue 通し） ══
+// ══ 構造側: 画像座標空間のレイアウト決定（横書き・同一 cue 通し） ══
 
-/// 画像座標空間で解いたレイアウト決定の絶対値: 自動折返し（閾値 351・font 40 で
-/// 7 グリフ/行）・明示改行・3 行あふれ→縦スクロール（first_visible_line=1・
-/// block_offset=−42）まで通しで効いていること。
-///
-/// 幾何は fixture 実測値（負値=反対辺基準・wordwrappoint.x,-49／validrect right,-44 等）を
-/// 使う——負値の解決は画像原寸に依存する。
+/// 画像座標空間で解いたレイアウト決定の絶対値: 自動折返し（閾値 351・font 40 で 7 グリフ/行）・明示改行・
+/// 3 行あふれ→縦スクロール（first_visible_line=1・block_offset=−42）まで通しで効いていること。
+/// 幾何は fixture 実測値（負値=反対辺基準・wordwrappoint.x,-49／validrect right,-44 等）を使う——負値の解決は画像原寸に依存する。
 #[test]
 fn horizontal_layout_decision_in_image_space() {
     // fixture 実測: validrect (36,46)-(356,168)・折返し閾値 400-49=351・
@@ -181,7 +168,6 @@ fn horizontal_layout_decision_in_image_space() {
         .actor_state(&actor)
         .map(|s| s.items().to_vec())
         .unwrap_or_default();
-    // t=10.0 は全量リビール済みの時刻。
     let visible = state.visible_glyphs(&actor, 10.0);
     let lines = LayoutEngine::layout(
         &items,
@@ -194,7 +180,6 @@ fn horizontal_layout_decision_in_image_space() {
     );
     let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
 
-    // 折返し（7＋3）＋明示改行で 3 行・あふれ発火。
     assert_eq!(visible, 12, "全 12 グリフがリビール済み");
     assert_eq!(lines.len(), 3, "自動折返し＋明示改行で 3 行");
     assert_eq!(
@@ -216,13 +201,11 @@ fn horizontal_layout_decision_in_image_space() {
     );
 }
 
-// ══ R11.9 構造側（縦書き）: vertical_rl／vertical_lr の可視窓決定 ══
+// ══ 構造側（縦書き）: vertical_rl／vertical_lr の可視窓決定 ══
 
-/// 縦書き両方向のレイアウト決定（列送り・横スクロール可視窓）の絶対値。
-/// あふれ境界の辺は**負値（反対辺基準）**で与える（rl: left,-40→360・lr: right,-360→40）。
-/// font 10 → 列送り 10+2=12: vertical_rl は最新列の左端 400−10−3×12=354
-/// < validrect.left 360 で内容が右（+12）へ、vertical_lr は最新列の右端 10+3×12=46 >
-/// validrect.right 40 で内容が左（−12）へ
+/// 縦書き両方向のレイアウト決定（列送り・横スクロール可視窓）の絶対値。あふれ境界の辺は負値（反対辺基準）で与える
+/// （rl: left,-40→360・lr: right,-360→40）。font 10 → 列送り 12: vertical_rl は最新列の左端 400−10−3×12=354 < validrect.left 360 で
+/// 内容が右（+12）へ、vertical_lr は最新列の右端 10+3×12=46 > validrect.right 40 で内容が左（−12）へ
 /// （layout.rs の檻と同一の解決後幾何・軸読み替え正準表）。
 #[test]
 fn vertical_layout_decision_in_image_space() {

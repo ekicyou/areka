@@ -1,5 +1,4 @@
-//! バルーンの矢印（スクロールの印）の鍵の型と、マージ済みの表からの読み
-//! （balloon-scroll-arrows 要件 1.1〜1.6・4.2・7.1・設計「areka-parsers / ArrowKeys」）。
+//! バルーンの矢印（スクロールの印）の鍵の型と、マージ済みの表からの読み。
 //!
 //! 鍵は完全一致で引く（`arrow0.x`・`arrow0.y`・`arrow1.x`・`arrow1.y`・`arrow.filename`）。
 //! 面ごとの上書きは `parse` の 2 層の後勝ちのまま。読み手は記録を出さない寛容な写像であり、
@@ -101,8 +100,7 @@ pub(super) fn read_arrow_keys(merged: &BTreeMap<String, String>) -> ArrowKeys {
     }
 }
 
-/// マージ済みの表から印の絵の名前 `marker.filename` を生の値のまま読む（拡張子なし・空は無いのと同じ・
-/// script-small-tags 要件 5.2）。
+/// マージ済みの表から印の絵の名前 `marker.filename` を生の値のまま読む（拡張子なし・空は無いのと同じ）。
 pub(super) fn read_marker_filename(merged: &BTreeMap<String, String>) -> Option<String> {
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#marker.filename_2c_30d5_30a1_30a4_30eb_540d:1
     merged

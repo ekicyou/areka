@@ -1,18 +1,17 @@
 //! 追随レコード（`kind=offset`）の**機械判定器**——遷移ごとの切り出しと 4 つの判定
 //! （純関数・I/O 無し・`#[cfg(test)]`）。
 //!
-//! design.md「供給層・観測・判定（要約）」の `transition_judge_offset` が正本である。
 //! [`super::transition_judge`] が解析した観測行の時系列を受け取り、`kind=monitor`／
 //! `kind=windpi` の拡大率変化を起点に切り出した遷移（起点規約は
 //! [`super::transition_judge::split_transitions`]——同じ変化を指す起点は 1 本へ畳む）ごとに
 //! `kind=offset` 行を集計して、次の 4 点を判定する。
 //!
-//! | # | 要件 | 判定 |
-//! |---|---|---|
-//! | ⑴ | `areka-P0-balloon-offset-dpi` 要件 8.2 | 往復の前後で反映後の値（`new_offset`）が **bit 同一**に戻ること |
-//! | ⑵ | `areka-P0-balloon-offset-dpi` 要件 8.3 | 遷移ごとに判定語が**期待の腕**であること |
-//! | ⑶ | `areka-P0-balloon-offset-dpi` 要件 8.4 | **低い拡大率側**で追随の判定語が出ていること |
-//! | ⑷ | `areka-P0-balloon-offset-dpi` 要件 8.5 | キーワード指定スコープの**揃えの残差**が許容量以内であること |
+//! | # | 判定 |
+//! |---|---|
+//! | ⑴ | 往復の前後で反映後の値（`new_offset`）が **bit 同一**に戻ること |
+//! | ⑵ | 遷移ごとに判定語が**期待の腕**であること |
+//! | ⑶ | **低い拡大率側**で追随の判定語が出ていること |
+//! | ⑷ | キーワード指定スコープの**揃えの残差**が許容量以内であること |
 //!
 //! # 判定語のリテラルを書かない
 //!
@@ -23,7 +22,7 @@
 //! # ⑴ を判定語の並びで見ない（**この判定器の核**）
 //!
 //! 往復を「判定語の並び」で見分けてはならない。恒等比の腕は**現在値を据え置くのではなく
-//! 基準から引き直す**（design D4・`balloon_offset_follow.rs` の `OffsetRescale::Unchanged`
+//! 基準から引き直す**（`balloon_offset_follow.rs` の `OffsetRescale::Unchanged`
 //! 腕）ため、往復は `rescaled → rescaled` を出す——`rescaled → unchanged` ではない。加えて
 //! `rescaled` は「値が動いた」を意味しない（丸めで等しく留まり得る）。よって ⑴ は
 //! **値の欄だけ**を鍵にする: 同じ基準対（`base_offset`＋`base_dpi`）が生きているあいだ、
@@ -41,7 +40,7 @@
 //!
 //! # 受容された残余を「壊れている」と読まない
 //!
-//! 素材未消費のまま寸据え置きの遷移を迎えた腕（design D7・2026-08-27 の開発者裁定）は
+//! 素材未消費のまま寸据え置きの遷移を迎えた腕（2026-08-27 の開発者裁定）は
 //! `verdict=keyword-pending` かつ前後の値が bit 同一という形で現れる。これは**正しい記録**
 //! であって違反ではない。ゆえに ⑶ は、キーワード指定スコープについては**素材が消費された
 //! 後の遷移**だけを数える（消費前の遷移を数えると偽の赤が出る）。
@@ -50,8 +49,8 @@
 //!
 //! 「違反 0 件」は「判定できなかった」を含んではならない。追随レコードが 1 行も無い・往復が
 //! 1 度も観測されていない・低い拡大率側の遷移が 1 本も無い・キーワード指定スコープの揃えを
-//! 1 度も測れていない——いずれも**違反**として立てる（`areka-P0-balloon-offset-dpi` 要件 8.3 の「合否は記録の機械判定で
-//! 決める」は、材料が無いことを合格と読まないことを含む）。
+//! 1 度も測れていない——いずれも**違反**として立てる（合否は記録の機械判定で決めるので、材料が無いことを
+//! 合格と読まない）。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -68,7 +67,7 @@ use areka_placement::transition_diag::{
     OFFSET_VERDICT_UNRESOLVED,
 };
 
-/// 揃えの残差の許容量（1 軸あたりの px・design D8）。
+/// 揃えの残差の許容量（1 軸あたりの px）。
 ///
 /// 決定論の全数列挙（`follow_offset_residual_tests.rs`）が実測した最大は 2px であるが、
 /// 合否の基準に採るのは**契約の上限である 3px** の側である——実測値を基準にすると、
@@ -125,7 +124,7 @@ pub struct OffsetTransition {
 }
 
 impl OffsetTransition {
-    /// 低い拡大率の側へ移った遷移か（`areka-P0-balloon-offset-dpi` 要件 8.4 の「低い拡大率側」）。
+    /// 低い拡大率の側へ移った遷移か。
     fn to_lower_scale(&self) -> bool {
         self.new_dpi < self.old_dpi
     }
@@ -135,7 +134,7 @@ impl OffsetTransition {
 // 違反
 // ---------------------------------------------------------------------------
 
-/// 判定が立てた違反（行に紐づくものはすべて遷移番号とスコープを名指しする・`areka-P0-balloon-offset-dpi` 要件 8.3）。
+/// 判定が立てた違反（行に紐づくものはすべて遷移番号とスコープを名指しする）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OffsetViolation {
     /// 追随レコードが 1 行も無い。
@@ -161,7 +160,7 @@ pub enum OffsetViolation {
         /// 読めた字面。
         verdict: String,
     },
-    /// 判定語が期待の腕でない（`areka-P0-balloon-offset-dpi` 要件 8.3）。
+    /// 判定語が期待の腕でない。
     UnexpectedVerdict {
         /// 遷移番号。
         transition: usize,
@@ -194,7 +193,7 @@ pub enum OffsetViolation {
         /// 運んでいた値。
         new_dpi: u32,
     },
-    /// 往復して同じ表示 DPI へ戻ったのに値が bit 同一でない（`areka-P0-balloon-offset-dpi` 要件 8.2）。
+    /// 往復して同じ表示 DPI へ戻ったのに値が bit 同一でない。
     RoundTripDrift {
         /// スコープ。
         scope: Option<u32>,
@@ -211,12 +210,12 @@ pub enum OffsetViolation {
     },
     /// 往復が 1 度も観測されていない（判定できていないことを合格と読まない）。
     NoRoundTripObserved,
-    /// 低い拡大率側で追随の判定語が 1 度も出ていない（`areka-P0-balloon-offset-dpi` 要件 8.4）。
+    /// 低い拡大率側で追随の判定語が 1 度も出ていない。
     NoLowScaleRescale {
         /// 低い拡大率側へ移った遷移の本数（0 なら往復そのものが行われていない）。
         low_side_transitions: usize,
     },
-    /// 揃えの残差が許容量を超えた（`areka-P0-balloon-offset-dpi` 要件 8.5・design D8）。
+    /// 揃えの残差が許容量を超えた。
     AlignmentResidual {
         /// 遷移番号。
         transition: usize,
@@ -229,11 +228,11 @@ pub enum OffsetViolation {
         /// 許容量（px）。
         max_px: i64,
     },
-    /// キーワード指定スコープの揃えを 1 度も測れていない（`areka-P0-balloon-offset-dpi` 要件 8.5）。母数（門の判定語を出した
+    /// キーワード指定スコープの揃えを 1 度も測れていない。母数（門の判定語を出した
     /// スコープ）が空のときだけ立つ（母数があれば測れていないスコープごとに
     /// [`Self::KeywordScopeUnmeasured`] が立つ）。
     NoKeywordAlignmentMeasured,
-    /// 母数に入ったキーワード指定スコープのうち、揃えを 1 度も測れていないものがある（`areka-P0-balloon-offset-dpi` 要件 8.5）。
+    /// 母数に入ったキーワード指定スコープのうち、揃えを 1 度も測れていないものがある。
     KeywordScopeUnmeasured {
         /// 測れていないスコープ。
         scope: Option<u32>,
@@ -527,7 +526,7 @@ fn point_field(record: &TransitionRecord, name: &str) -> Result<(i32, i32), Stri
 }
 
 // ---------------------------------------------------------------------------
-// ⑵ 判定語が期待の腕であること（`areka-P0-balloon-offset-dpi` 要件 8.3）
+// ⑵ 判定語が期待の腕であること
 // ---------------------------------------------------------------------------
 
 /// 行の欄から期待できる腕（逃げの 2 腕＝門・縮退は行そのものの不変条件だけを見る）。
@@ -542,7 +541,7 @@ fn expected_verdicts(row: &OffsetRow) -> Option<&'static [&'static str]> {
         // 未係留＝保存値の腕。値を動かさずに現在の表示 DPI を刻む。
         None => &[OFFSET_VERDICT_ANCHORED],
         // 恒等比の腕。**基準から引き直す**ので、現在値が基準から離れていれば値が動く
-        // ＝`rescaled` が正しい（`unchanged` と記録したら語が嘘になる・design D4）。
+        // ＝`rescaled` が正しい（`unchanged` と記録したら語が嘘になる）。
         Some(base_dpi) if base_dpi == row.new_dpi => {
             if row.base_offset == row.old_offset {
                 &[OFFSET_VERDICT_UNCHANGED]
@@ -595,7 +594,7 @@ fn check_verdict_arms(transitions: &[OffsetTransition], violations: &mut Vec<Off
 }
 
 // ---------------------------------------------------------------------------
-// ⑴ 往復の前後で bit 同一（`areka-P0-balloon-offset-dpi` 要件 8.2）
+// ⑴ 往復の前後で bit 同一
 // ---------------------------------------------------------------------------
 
 /// 往復の突合の鍵——スコープ・基準対（値と DPI）・戻ってきた表示 DPI。
@@ -648,7 +647,7 @@ fn check_round_trip(transitions: &[OffsetTransition], violations: &mut Vec<Offse
 }
 
 // ---------------------------------------------------------------------------
-// ⑶ 低い拡大率側で追随が出ていること（`areka-P0-balloon-offset-dpi` 要件 8.4）
+// ⑶ 低い拡大率側で追随が出ていること
 // ---------------------------------------------------------------------------
 
 /// スコープごとに、門の判定語を最後に出した遷移番号（＝素材が消費された境目）。
@@ -693,7 +692,7 @@ fn check_low_scale_rescale(
 }
 
 // ---------------------------------------------------------------------------
-// ⑷ キーワード指定スコープの揃えの残差（`areka-P0-balloon-offset-dpi` 要件 8.5・design D8）
+// ⑷ キーワード指定スコープの揃えの残差
 // ---------------------------------------------------------------------------
 
 /// 揃えの残差を測れる行か（比を持つ追随の行だけ）。測れるなら基準 DPI を返す。

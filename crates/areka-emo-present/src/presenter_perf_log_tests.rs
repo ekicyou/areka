@@ -1,27 +1,26 @@
-//! 計時ログ較正檻（design.md §Testing Strategy「Integration Tests（presenter 経由）」項目 3）。
+//! 計時ログ較正檻（presenter 経由）。
 //!
 //! 本ファイルは **`apply_show` を実際に駆動して出た行そのもの**を検査する。`timing_tests.rs` は
 //! `FrameTiming` を注入時刻シームで単体検査するだけで、**配線（mark の設置位置・emit の回数・
-//! 成立点との対）を 1 つも固定していない**（tasks.md「1.3 → 1.4 への申し送り（最重要）」——
-//! `timing.mark(Stage::Upload)` を削除しても全件が緑のままだったことがレビューの変異検査で
-//! 判明している）。本ファイルがその穴を塞ぐ。
+//! 成立点との対）を 1 つも固定していない**。
+//! `timing.mark(Stage::Upload)` を削除しても全件が緑のままになる。本ファイルがその穴を塞ぐ。
 //!
 //! 固定する契約は 4 つである。
 //!
-//! 1. **perf サマリ行のスキーマ**（Requirement 1.1/1.3/1.4・design.md §Data Models）:
+//! 1. **perf サマリ行のスキーマ**:
 //!    固定文言 [`PERF_LINE_MESSAGE`]・debug 水準・13 フィールド **ちょうど**（時間 5（段 4＋合計）・
 //!    確保 2 ＋ 同定 3 ＋ `key_hash`・`frame`・`message`）。撤去した段（`t_resample_us`）・撤去した発生点
 //!    （`alloc_resample_dst`／`alloc_xmap`）が行に**現れない**ことは、この「ちょうど」が固定する
-//! 2. **既存の表示成立点の行の不変性**（design.md §Boundary Commitments「Out of Boundary」——
+//! 2. **既存の表示成立点の行の不変性**（
 //!    実機サインオフ契約ゆえ文言・水準・フィールドとも不変）: 文言・info 水準・全フィールド
 //!    **ちょうど**。本ファイルはこの契約の防波堤であり、表示成立点の行を 1 文字でも触ると RED になる
-//! 3. **mark の設置位置**（Requirement 1.4）: 段が実行される入力では非 0、実行されない入力では
+//! 3. **mark の設置位置**: 段が実行される入力では非 0、実行されない入力では
 //!    **厳密に 0**。どの段が 0 になるかは mark をどの分岐へ置いたかの構造的帰結であり、
 //!    測定マシンの速度では変わらない
-//! 4. **1 適用 1 行・成立点の対**（Requirement 1.1）: 表示が成立した適用は 表示成立点の行と perf 行を
+//! 4. **1 適用 1 行・成立点の対**: 表示が成立した適用は 表示成立点の行と perf 行を
 //!    **隣接する対**として各 1 本出し、早期復帰した適用は **1 本も出さない**
 //!
-//! # 実時間を合否条件に使わない（Requirement 6.2）
+//! # 実時間を合否条件に使わない
 //!
 //! `sleep`・スピン・経過ミリ秒の閾値は 1 つも使わない。非 0 を主張するのは
 //! **入力の大きさが決めている段**だけである——合成・マスク生成・表示の記録は
@@ -75,7 +74,7 @@ use crate::display::DisplayFault;
 
 /// 表示成立点の行のフィールド集合（show.rs の `info!` から逐語で写した**全項目**）。
 ///
-/// design.md §Boundary Commitments「Out of Boundary」が「文言・水準・フィールドとも不変」と
+/// 「文言・水準・フィールドとも不変」と
 /// 定めた契約の正本である。**ちょうど**で照合するため、削除・改名だけでなく**追加**も RED。
 const INFO_LINE_FIELDS: [&str; 13] = [
     "author_dpi",
@@ -93,8 +92,8 @@ const INFO_LINE_FIELDS: [&str; 13] = [
     "window_dpi",
 ];
 
-/// perf サマリ行のフィールド集合（design.md §Data Models「perf サマリ行スキーマ」の 11 項目
-/// ＋ `areka-P0-dpi-transition-atomicity` D12 が末尾へ足した `frame` ＋ `message`）。
+/// perf サマリ行のフィールド集合（11 項目
+/// ＋ 末尾の `frame` ＋ `message`）。
 /// 判定スクリプト `tools/perf/judge-perf.py` との唯一のデータ契約である。
 ///
 /// **ちょうど**で照合するため、拡大を wintf の変換行列へ移して消えた段・発生点
@@ -153,7 +152,7 @@ fn stage_us(ev: &CapturedEvent, name: &str) -> u64 {
 /// 表示成立点の行と perf 行が **同一適用の隣接する対**として各 1 本ずつ出ていることを
 /// 確認し、`(info 行, perf 行)` を返す。
 ///
-/// 隣接（perf の位置 == info の位置 + 1）まで見るのは、design.md §Data Models の
+/// 隣接（perf の位置 == info の位置 + 1）まで見るのは、
 /// 「両者は同一 apply の対として隣接 emit される」が契約だからである。emit を成立点から
 /// 引き剥がして別経路（フレーム末尾等）へ移す改変はここで RED になる。
 fn expect_single_adjacent_pair(events: &[CapturedEvent]) -> (CapturedEvent, CapturedEvent) {
@@ -183,7 +182,7 @@ fn expect_single_adjacent_pair(events: &[CapturedEvent]) -> (CapturedEvent, Capt
 
 /// 表示成立点の行の**文言・水準・全フィールド**が不変であることを固定する。
 ///
-/// design.md §Boundary Commitments「Out of Boundary」の実機サインオフ契約の防波堤。
+/// 実機サインオフ契約の防波堤。
 /// `info!` を `debug!` へ落とす／フィールドを 1 つ改名する／1 つ足す、のいずれも RED。
 fn assert_info_line_contract(ev: &CapturedEvent) {
     assert_eq!(
@@ -219,7 +218,7 @@ fn assert_perf_line_contract(ev: &CapturedEvent) {
 /// 段の非 0 を入力の大きさで担保するための native 外形（240×180＝172,800 バイト）。
 ///
 /// 合成・マスク生成・表示の記録はいずれもこの画素数を舐めるため、µs 分解能の
-/// 1 目盛りに対して 1 桁以上の余裕がある（Requirement 6.2: 閾値ではなく入力で決める）。
+/// 1 目盛りに対して 1 桁以上の余裕がある（閾値ではなく入力で決める）。
 /// 拡大は wintf の変換行列が掛けるので、舐める量は k に依らない。
 const NATIVE_W: u32 = 240;
 const NATIVE_H: u32 = 180;
@@ -271,7 +270,7 @@ fn attach(
 
 // ── 檻 ────────────────────────────────────────────────────────────────────────────────
 
-/// Requirement 1.1／1.3／1.4 観測完了（**配線の檻・ミス経路**）: 実際の `apply_show` が
+/// **配線の檻・ミス経路**: 実際の `apply_show` が
 /// 表示成立点の行と perf 行を**隣接する対**として各 1 本出し、perf 行が固定文言・
 /// debug 水準・13 フィールドちょうどを備え、照会段を除く 3 段と合計に mark が効いていて、`alloc_*` が
 /// 実 `FrameBudget` の値（発生点 2）で埋まる。
@@ -325,7 +324,7 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_stages_and_alloc_wired() {
     assert_eq!(field(&perf, "surface_id"), field(&info, "surface_id"));
     assert_eq!(field(&perf, "cache_hit"), field(&info, "cache_hit"));
 
-    // key_hash は檻が独立に再計算した値と一致する（Requirement 7.2 の裁定材料の帰属可能性）。
+    // key_hash は檻が独立に再計算した値と一致する（裁定材料の帰属可能性）。
     let expected_hash = compose_key_hash(1000, &BindSet::default(), &PatternState::default());
     assert_eq!(
         field(&perf, "key_hash"),
@@ -363,7 +362,7 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_stages_and_alloc_wired() {
     );
 }
 
-/// Requirement 1.1／1.3／1.4 観測完了（**配線の檻・ヒット経路**）: 引き当てが成立した適用では
+/// **配線の檻・ヒット経路**: 引き当てが成立した適用では
 /// 合成・マスク生成・表示の記録の 3 段が**厳密に 0**で出て、確保計数も全て 0 になる。
 /// ヒット経路は GPU 呼び出しを 1 つも持たない（記録はエントリが束ねている）ため、
 /// `t_upload_us` も 0 側である——実行される段は照会段だけである。
@@ -382,7 +381,6 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
     attach(&mut presenter, &mut world, TargetId(0), 192, 0xA2);
 
     let ((), events) = capture(|| {
-        // 1 回目＝ミス（スロットを埋める）、2 回目＝完全一致ヒット。
         show_with_ok(
             &mut presenter,
             &mut world,
@@ -422,7 +420,7 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
     );
 
     // 1 適用目（最初の表示）は INFO。2 適用目は同じ入力のコマ送りだけゆえ DEBUG で、欄の集合は同じ
-    // （`animated-surface-log-flood` 要件 1.1・2.1・2.2）。
+    //
     assert_info_line_contract(&events[infos[0]]);
     assert_eq!(
         events[infos[1]].level,
@@ -481,7 +479,7 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
     }
 }
 
-/// Requirement 1.1／1.4 観測完了（**早期復帰では 1 行も出ない・陽性と陰性の対観測**）:
+/// **早期復帰では 1 行も出ない・陽性と陰性の対観測**:
 /// 合成前後で早期復帰する 3 経路（未装着 target・合成失敗・全透明退化）は 表示成立点の行も perf 行も
 /// 1 本も出さない。
 ///
@@ -606,7 +604,7 @@ fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
     );
 }
 
-/// Requirement 1.1／1.4 観測完了（**表示記録前の早期復帰でも 1 行も出ない**）: 表示の記録に
+/// **表示記録前の早期復帰でも 1 行も出ない**: 表示の記録に
 /// 必要な資源が World に無い経路（`GraphicsCore` 不在）と、記録そのものが失敗した経路
 /// （`record_display` の失敗注入）でも 表示成立点の行・perf 行はいずれも出ない。
 ///
@@ -720,7 +718,7 @@ fn early_returns_before_the_display_record_emit_neither_info_nor_perf_line() {
     );
 }
 
-/// Requirement 1.5 観測完了（design.md D5・**表示結果はログ設定に依らない**）: 捕捉 subscriber の
+/// **表示結果はログ設定に依らない**: 捕捉 subscriber の
 /// 下で適用した target と、subscriber を一切設置せずに適用した target が、**同一の表示バイト・
 /// 同一の実適用 k・同一の窓寸 reconcile 要求**を与える。
 ///
@@ -751,7 +749,7 @@ fn display_result_is_independent_of_log_configuration() {
 
     let bytes_a = presenter.read_back(TargetId(0)).expect("read_back 失敗");
     let bytes_b = presenter.read_back(TargetId(1)).expect("read_back 失敗");
-    // 非空性ガード（design.md Integration Test 1 と同じ規律）: 両方とも真っ黒／空だと
+    // 非空性ガード: 両方とも真っ黒／空だと
     // 「一致した」が空虚に成立してしまうため、実際に絵が載っていることを先に確かめる。
     assert!(
         !bytes_a.is_empty() && bytes_a.iter().any(|&b| b != 0),

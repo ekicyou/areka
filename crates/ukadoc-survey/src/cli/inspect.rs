@@ -1,7 +1,7 @@
 //! 調べる副手続き（`check`・`evidence`・`candidates`・`diff`）。
 //!
 //! 生成側（[`super::generate`]）と違い、ここはファイルを 1 つも書かない。読んで、
-//! 純粋層へ渡し、結果を標準出力へ並べるだけである（設計「入口 / cli」の表）。
+//! 純粋層へ渡し、結果を標準出力へ並べるだけである。
 //!
 //! # 標準出力に出るのは結果だけ
 //!
@@ -18,17 +18,17 @@
 //!   （標準エラー）は件数を告げる 1 行に留める。
 //! - `evidence`・`candidates`・`diff` — **並べるだけで判じない**ので、読み書きに
 //!   失敗しない限り 0 で終わる。証拠が 0 件でも候補が 0 件でも差分が空でも、それは
-//!   「食い違い」ではない（要件 5.9 のとおり、判定は人手に委ねる）。
+//!   「食い違い」ではない。
 //!
-//! # テーマ名の出どころ（要件 6.8）
+//! # テーマ名の出どころ
 //!
 //! 整合検査へ渡すテーマ名は [`crate::model::THEMES`] を使う。テーマ定義の正本は
-//! `doc/ukadoc-coverage/values.md`（要件 6.8）だが、**ここでその見出しを読まない**
+//! `doc/ukadoc-coverage/values.md`だが、**ここでその見出しを読まない**
 //! のには理由が 2 つある。
 //!
 //! - ドメイン別報告は `report` の副手続きが `THEMES` で組み立てて書き出す
 //!   （[`super::generate::report`]）。検査側だけが `values.md` を読むと、両者が
-//!   食い違ったときに `DomainReportStale`（要件 7.4）が**別の理由で**赤くなる。
+//!   食い違ったときに `DomainReportStale`が**別の理由で**赤くなる。
 //!   突き合わせの両側は同じ出どころでなければならない。
 //! - `values.md` の見出しと `THEMES` が順序まで一致することは、
 //!   `tests/consistency/values_md.rs` が守る（`model.rs` の注記）。定数はその写しで
@@ -50,10 +50,10 @@ use crate::io::{files, paths, snapshot, sources};
 use crate::ledger::Ledger;
 use crate::model::{Domain, EntryId, THEMES};
 
-/// 台帳と正典とソースの食い違いを調べる（要件 5.5・6.3〜6.12・7.4）。
+/// 台帳と正典とソースの食い違いを調べる。
 ///
 /// repo のカタログ・台帳 4 本・ソース・ドメイン別報告 4 本・全体報告を読み、純粋層の
-/// 判定へ渡す。スナップショットには触れない（設計「入口 / cli」の表・要件 6.2）。
+/// 判定へ渡す。スナップショットには触れない。
 ///
 /// 標準出力へ出すのは所見の本文と、id ごとの証拠のファイルパスである。終了の仕方は
 /// [`verdict`] が所見の件数だけから決める。
@@ -103,7 +103,7 @@ pub(crate) fn examine(input: &CheckInput) -> (String, usize) {
     )
 }
 
-/// 項目ごとの証拠を並べる（要件 5.5）。
+/// 項目ごとの証拠を並べる。
 ///
 /// 検査は走らせない。読むのはカタログとソースだけで、台帳も報告も要らない。
 pub fn evidence() -> Result<(), SurveyError> {
@@ -112,7 +112,7 @@ pub fn evidence() -> Result<(), SurveyError> {
     write_stdout(&mut std::io::stdout().lock(), &render_evidence(&index))
 }
 
-/// 手掛かりの候補を並べる（要件 5.8・5.9）。
+/// 手掛かりの候補を並べる。
 ///
 /// 読むのはソースだけである。カタログも台帳も要らないので、`doc/ukadoc-coverage/` が
 /// まだ無い作業ツリーでも走る。
@@ -121,9 +121,9 @@ pub fn candidates() -> Result<(), SurveyError> {
     write_stdout(&mut std::io::stdout().lock(), &render_candidates(&found))
 }
 
-/// 今のカタログと新しいスナップショットの差を並べる（要件 8.1〜8.3）。
+/// 今のカタログと新しいスナップショットの差を並べる。
 ///
-/// 4 つの副手続きの中でこれだけがスナップショットを要る（設計「入口 / cli」の表・D-7）。
+/// 4 つの副手続きの中でこれだけがスナップショットを要る。
 /// 比べる前に 2 つのカタログが同じ形かを見て、違えば注意を先に出す（[`comparability_notice`]）。
 pub fn diff() -> Result<(), SurveyError> {
     let current = load_catalog()?;
@@ -142,7 +142,7 @@ pub fn diff() -> Result<(), SurveyError> {
 ///
 /// `diff` の本体から読む段だけを外した形で、[`examine`] と同じ役割である。**この形に
 /// してあるのは檻のため**——`diff` を丸ごと走らせるにはスナップショットが要るので、
-/// 常時走るテストからは走らせられない（要件 8.4）。比べる向き・注意を出すかどうか・
+/// 常時走るテストからは走らせられない。比べる向き・注意を出すかどうか・
 /// 版面の 3 つをここへ集めれば、在中テストが手で組んだカタログで配線ごと確かめられる
 /// （部品を釘付けしても、入口がその部品を呼んでいるかは別に守らなければならない）。
 ///
@@ -158,7 +158,7 @@ pub(crate) fn compare(current: &Catalog, next: &Catalog, ledgers: &[Ledger]) -> 
     render_diff(&delta, notice.as_deref())
 }
 
-/// 所見の件数から終了の仕方を決める（完了条件・設計「Error Handling / 見張り」）。
+/// 所見の件数から終了の仕方を決める。
 ///
 /// 0 件なら成功（終了コード 0）、1 件でもあれば失敗（終了コード 1）。**本文はここに
 /// 載せない**——所見の本文は既に標準出力へ出ているので、標準エラーへ同じものを
@@ -190,7 +190,7 @@ pub(crate) fn render_check(findings: &[Finding], evidence: &EvidenceIndex) -> St
     out
 }
 
-/// id ごとの証拠のファイルパス（要件 5.5・設計 D-4）。
+/// id ごとの証拠のファイルパス。
 ///
 /// 並びは `BTreeMap` の鍵の順＝id の byte 昇順、その中はファイルパスの名前順
 /// （[`EvidenceIndex::by_id`] が既にそう並べている）。
@@ -208,8 +208,8 @@ pub(crate) fn render_evidence_by_id(by_id: &BTreeMap<EntryId, Vec<String>>) -> S
 /// 証拠の報告（`evidence` の副手続きの標準出力）。
 ///
 /// [`EvidenceIndex`] の 3 欄をそれぞれ別の塊にする。証拠は [`EvidenceIndex::by_id`]
-/// だけで、残る 2 つは「証拠にできなかったもの」の置き場である（要件 5.9 のとおり
-/// どちらへ寄せるかは人が決める）。手掛かりの候補（[`Candidate`]）はここに 1 件も
+/// だけで、残る 2 つは「証拠にできなかったもの」の置き場である（どちらへ寄せるかは
+/// 人が決める）。手掛かりの候補（[`Candidate`]）はここに 1 件も
 /// 入らない——あれは別の副手続きの持ち物である。
 pub(crate) fn render_evidence(index: &EvidenceIndex) -> String {
     let mut out = render_evidence_by_id(&index.by_id);
@@ -238,7 +238,7 @@ pub(crate) fn render_evidence(index: &EvidenceIndex) -> String {
     out
 }
 
-/// 名前が証拠にならなかった理由の綴り（設計 D-5 の 3 つ）。
+/// 名前が証拠にならなかった理由の綴り。
 ///
 /// 既定の腕を置かない。理由を増やしたら綴りを書き足すまでコンパイルが通らない。
 fn reason_text(reason: &NameMatchFailure) -> String {
@@ -249,7 +249,7 @@ fn reason_text(reason: &NameMatchFailure) -> String {
     }
 }
 
-/// 手掛かりの候補（要件 5.8）。**証拠ではない**（要件 5.9）ので、証拠の本文とは
+/// 手掛かりの候補。**証拠ではない**ので、証拠の本文とは
 /// 別の副手続きの、別の塊として出す。
 ///
 /// 塊は種類ごとで、並びは [`CandidateKind`] の宣言順（`BTreeMap` の鍵の順）。
@@ -294,7 +294,7 @@ fn kind_key(kind: CandidateKind) -> &'static str {
     }
 }
 
-/// 2 つのカタログが比べられる形かを見る（設計 diff 節の申し送り）。
+/// 2 つのカタログが比べられる形かを見る。
 ///
 /// [`CatalogDiff`] は 4 つの一覧しか持たない形に凍結してあり、[`diff_catalogs`] は
 /// 失敗もしない。だから「算法が違うので比べられない」を告げるのは**呼び出し側の
@@ -335,7 +335,7 @@ pub(crate) fn comparability_notice(current: &SnapshotMeta, next: &SnapshotMeta) 
     Some(out)
 }
 
-/// 差分の標準出力（要件 8.1・8.3）。
+/// 差分の標準出力。
 ///
 /// 4 つの一覧はいずれも件数の見出しを持ち、**0 件でも見出しを落とさない**。落とすと
 /// 読み手は「無かった」と「見ていない」を見分けられない。

@@ -1,6 +1,4 @@
-//! 投げ込みの装着と受け手のテスト（design「Testing Strategy / areka `file_drop_wiring_tests.rs`」
-//! テスト 13〜20・要件 1.1〜1.4・1.6・1.8・2.4・2.5・3.1〜3.3・4.1〜4.6・5.1・6.1〜6.5・7.2・8.1・
-//! 9.2・9.4〜9.6）。
+//! 投げ込みの装着と受け手のテスト。
 //!
 //! 受け手は本物の `on_ghost_files_dropped` を印つきの entity へ直に呼ぶ（wintf の腕から受け手までは
 //! `drop_files_tests.rs` が固定済み）。依頼は `install::queued_orders` で待ち行列の中身と順を読む。
@@ -43,7 +41,7 @@ fn has_receiver(world: &World, e: bevy_ecs::entity::Entity) -> bool {
         .is_some_and(|c| std::ptr::fn_addr_eq(c.0, on_ghost_files_dropped as Receiver))
 }
 
-/// テスト 13（要件 1.1〜1.3・9.2）: 印つきのキャラクター窓とバルーン窓に受け手が差さり、印なしの窓には
+/// 印つきのキャラクター窓とバルーン窓に受け手が差さり、印なしの窓には
 /// 差さらない。窓を足してもう 1 度呼ぶ（起こし直しの形）と新しい窓にも差さる。
 #[test]
 fn receivers_go_on_ghost_windows_only_and_again_on_reopened_ones() {
@@ -76,7 +74,7 @@ fn receivers_go_on_ghost_windows_only_and_again_on_reopened_ones() {
     );
 }
 
-/// テスト 16（要件 1.6・1.8）: 0 件の投げ込みは受け取りの記録 `count=0` の 1 行だけで、kanade へ
+/// 0 件の投げ込みは受け取りの記録 `count=0` の 1 行だけで、kanade へ
 /// 送らず依頼も 0 件。
 #[test]
 fn empty_drop_writes_one_reception_line_and_nothing_else() {
@@ -114,7 +112,7 @@ fn empty_drop_writes_one_reception_line_and_nothing_else() {
     assert_eq!(install::queued_orders(&world), Vec::<InstallOrder>::new());
 }
 
-/// テスト 18（要件 1.4・8.1）: 印の無い窓へ届いたら `file_drop_unknown_window` 1 件で戻り、受け取りの
+/// 印の無い窓へ届いたら `file_drop_unknown_window` 1 件で戻り、受け取りの
 /// 記録も送出も依頼も無い。
 #[test]
 fn window_without_marker_warns_once_and_does_nothing() {
@@ -140,7 +138,7 @@ fn window_without_marker_warns_once_and_does_nothing() {
     assert_eq!(install::queued_orders(&world), Vec::<InstallOrder>::new());
 }
 
-/// 要件 3.1・3.3: `install.txt` を持つ書庫をバルーン窓へ落とすと、出どころ「窓への投げ込み」の依頼が
+/// `install.txt` を持つ書庫をバルーン窓へ落とすと、出どころ「窓への投げ込み」の依頼が
 /// ちょうど 1 つ積まれ、受け取りの記録は `installs=1`・スコープはバルーンの印の番号。
 #[test]
 fn installable_archive_becomes_one_window_drop_order() {
@@ -181,7 +179,7 @@ fn installable_archive_becomes_one_window_drop_order() {
 }
 
 /// 受信端に届いた `RaiseEvent` を届いた順に (id, references) で読む。`method = Get`・`reply = None`
-/// でない物が来たら落とす（要件 4.1・5.1）。
+/// でない物が来たら落とす。
 fn raised(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<(String, Vec<String>)> {
     rx.try_iter()
         .map(|msg| match msg {
@@ -237,7 +235,7 @@ fn put_archive(dir: &Path, name: &str, install: bool) -> PathBuf {
     p
 }
 
-/// テスト 14（要件 1.4・4.3）: バルーン窓へ落とすと、`OnFileDrop2` の Reference1 はバルーンの印の番号。
+/// バルーン窓へ落とすと、`OnFileDrop2` の Reference1 はバルーンの印の番号。
 #[test]
 fn drop_on_balloon_window_carries_its_scope() {
     let dir = TempPath::new("file-drop-scope");
@@ -255,7 +253,7 @@ fn drop_on_balloon_window_carries_its_scope() {
     assert_eq!(sent[0].1[1], "1", "Reference1 はバルーンの印のスコープ番号");
 }
 
-/// テスト 15（要件 2.6・3.1・3.3・4.1〜4.6・5.1・5.3・6.1・6.2・6.5・8.1・9.4・9.5）: ファイル 2・フォルダ 2・
+/// ファイル 2・フォルダ 2・
 /// 書庫 2 を混ぜて落とすと、`OnFileDrop2` 1 回 → `OnDirectoryDrop` を落とされた順に 1 つずつ → 依頼 1 つ。
 /// `install.txt` の無い書庫は `OnFileDrop2` に `application/zip` で載る。
 #[test]
@@ -332,7 +330,7 @@ fn mixed_drop_sends_files_then_dirs_then_one_order() {
             .to_vec(),
         "送ったイベント 1 件につき info 1 行"
     );
-    // 依頼は知らせの後（要件 6.2）: 記録の並びで、送った最後の行より後に依頼の受付が来る。
+    // 依頼は知らせの後: 記録の並びで、送った最後の行より後に依頼の受付が来る。
     let last_of = |name: &str| {
         events
             .iter()
@@ -342,8 +340,8 @@ fn mixed_drop_sends_files_then_dirs_then_one_order() {
     assert!(last_of("file_drop_event_sent") < last_of("install_order_queued"));
 }
 
-/// テスト 17（要件 6.3・8.1・9.6）: 送り口が無い（置き場にゴーストが居ない）と、イベント 1 件につき
-/// `file_drop_no_kanade` の warn 1 件で送らず、インストール対象の依頼は渡す（要件 3.8）。
+/// 送り口が無い（置き場にゴーストが居ない）と、イベント 1 件につき
+/// `file_drop_no_kanade` の warn 1 件で送らず、インストール対象の依頼は渡す。
 #[test]
 fn no_kanade_warns_once_per_event_and_still_hands_the_order() {
     let dir = TempPath::new("file-drop-no-kanade");
@@ -375,7 +373,7 @@ fn no_kanade_warns_once_per_event_and_still_hands_the_order() {
     assert_eq!(install::queued_orders(&world).len(), 1, "依頼は渡す");
 }
 
-/// テスト 17b（要件 6.3・8.1）: kanade が止まっている（受信端が落ちている）と、イベント 1 件につき
+/// kanade が止まっている（受信端が落ちている）と、イベント 1 件につき
 /// `file_drop_send_failed` の warn 1 件。送り口なしの記録は出ず、依頼は渡す。
 #[test]
 fn stopped_kanade_warns_send_failed_once_per_event() {
@@ -401,7 +399,7 @@ fn stopped_kanade_warns_send_failed_once_per_event() {
     assert_eq!(install::queued_orders(&world).len(), 1, "依頼は渡す");
 }
 
-/// テスト 19（要件 2.4・2.5・8.1）: 存在しない `x.nar` はフォルダかどうかを問えず
+/// 存在しない `x.nar` はフォルダかどうかを問えず
 /// （`file_drop_probe_failed`）、目次も読めず（`file_drop_archive_unreadable`・理由は `Io`）、
 /// インストール対象でないファイルとして `OnFileDrop2` に載る。
 #[test]
@@ -436,7 +434,7 @@ fn missing_archive_is_recorded_and_goes_to_file_drop2() {
     assert_eq!(install::queued_orders(&world), Vec::<InstallOrder>::new());
 }
 
-/// テスト 20（要件 7.1・7.2）: 本番の 2 ファイルに、送らない正典の 15 語が引用符つきの文字列リテラルで
+/// 本番の 2 ファイルに、送らない正典の 15 語が引用符つきの文字列リテラルで
 /// 0 件。較正として送る 2 語はちょうど 1 件ずつ在る（0 件の主張が空振りでない）。テストのファイルは
 /// 読まない（2 語の字面を持つ）。
 #[test]

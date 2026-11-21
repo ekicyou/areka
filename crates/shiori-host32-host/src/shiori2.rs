@@ -1,6 +1,6 @@
 //! SHIORI/2.x の書き方（版の型・確かめの要求と判定・組み替えの表と要求の組み立て・答えの読み）。純粋・決定的（記録は呼び手が出す）。
 //!
-//! 版の決め方は SSP の測り（研究記録 10.1 節）に合わせ、`GET Version` の答えの
+//! 版の決め方は SSP の測りに合わせ、`GET Version` の答えの
 //! 先頭の行の版の字だけで決める（状態の番号は見ない）。
 
 use crate::charset::{Charset, CharsetPolicy};
@@ -91,7 +91,7 @@ enum Route {
     Translate,
 }
 
-/// 組み替えの表のコードの 1 か所（研究記録 10.2 節）。`None` は「2.x の相手へは送らない」。
+/// 組み替えの表のコードの 1 か所。`None` は「2.x の相手へは送らない」。
 ///
 /// 資源かどうかは名前の形でなく、呼び手（kanade の正本の一覧）が付けた印で決める。
 fn route(method: Method, id: &str, is_resource: bool) -> Option<Route> {
@@ -99,7 +99,7 @@ fn route(method: Method, id: &str, is_resource: bool) -> Option<Route> {
         Method::Get if id == "OnTranslate" => Some(Route::Translate),
         Method::Get if is_resource => Some(Route::String),
         Method::Get => Some(Route::Sentence),
-        // SSP も 2.x の相手へ送らなかった（測 5）。
+        // SSP も 2.x の相手へ送らなかった。
         Method::Notify if id == "basewareversion" => None,
         Method::Notify => Some(Route::Sentence),
     }
@@ -108,8 +108,7 @@ fn route(method: Method, id: &str, is_resource: bool) -> Option<Route> {
 /// 3.0 の要求の材料から 2.x の要求を組む。None は「2.x の相手へは送らない」。
 /// is_resource は呼び手（kanade の正本の一覧）が決めた「資源の問い合わせか」。
 ///
-/// 見出しの並びは設計の「2.x の要求の形」のとおり。`SenderType` はどの要求にも書かない
-/// （SSP も書かない・測 6）。全文を `req.charset` の 1 本の経路で符号化する（3.0 と同じ）。
+/// `SenderType` はどの要求にも書かない（SSP も書かない）。全文を `req.charset` の 1 本の経路で符号化する（3.0 と同じ）。
 #[must_use]
 pub fn build_request(req: &ShioriRequest<'_>, is_resource: bool) -> Option<EncodedRequest> {
     let route = route(req.method, req.id, is_resource)?;
@@ -127,7 +126,7 @@ pub fn build_request(req: &ShioriRequest<'_>, is_resource: bool) -> Option<Encod
     };
     line("Charset", req.charset.name());
     line("SecurityLevel", h.security_level);
-    // `SecurityOrigin` は `GET String`・`TRANSLATE` にだけ付く（測 6）。
+    // `SecurityOrigin` は `GET String`・`TRANSLATE` にだけ付く。
     if route != Route::Sentence {
         line("SecurityOrigin", h.security_origin);
     }

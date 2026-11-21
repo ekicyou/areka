@@ -1,4 +1,4 @@
-//! トークの完了の後の判断（表 B）の檻（areka-P0-balloon-lifecycle-events）。
+//! トークの完了の後の判断（表 B）の檻。
 //!
 //! 表 B の全行と、表 A の各腕（完了の振り分け）から表 B への到達を、最上位の `step` を直接駆動して
 //! 固定する。時刻は `Tick` で注入する。B2 の「終了の要求を保留している」は完了の振り分けからは
@@ -97,7 +97,7 @@ fn steady_broken(scope: u32) -> (State, TalkId) {
 // --- B3: 中断で止まって定常へ戻ったら OnBalloonBreak ---
 
 /// 定常のトークを中断して止まり終えたら、定常へ戻った同じ `step` で `OnBalloonBreak` を 1 本送る
-/// （Reference0＝翻訳の後の最終の台本・Reference1＝scope・Reference2＝空。要件 1.1〜1.5・7.1）。
+/// （Reference0＝翻訳の後の最終の台本・Reference1＝scope・Reference2＝空）。
 #[test]
 fn b3_break_then_steady_sends_balloon_break() {
     let (mut s, talk) = steady_broken(1);
@@ -133,7 +133,7 @@ fn b3_break_then_steady_sends_balloon_break() {
     assert_not_logged(&ev, "balloon_event_not_sent");
 }
 
-/// 応答が台本なら翻訳を通って新しいトークが始まり、204 なら定常のまま何もしない（要件 4.2・4.3）。
+/// 応答が台本なら翻訳を通って新しいトークが始まり、204 なら定常のまま何もしない。
 #[test]
 fn b3_reply_script_is_translated_and_204_stays_steady() {
     let (mut s, talk) = steady_broken(0);
@@ -169,10 +169,10 @@ fn b3_reply_script_is_translated_and_204_stays_steady() {
     );
 }
 
-// --- B4: 中断を出したがトークが自分で最後まで流れていた（設計 D7） ---
+// --- B4: 中断を出したがトークが自分で最後まで流れていた ---
 
 /// 中断の控えがあって `Ended` で終わったら `OnBalloonClose`（Reference0＝控えの台本）を 1 本送り、
-/// 送り済みの印を立てる。印が既に立っていれば送らず理由を記録する（要件 3.1 の補足・4.5）。
+/// 送り済みの印を立てる。印が既に立っていれば送らず理由を記録する。
 #[test]
 fn b4_break_but_ended_sends_balloon_close_once() {
     let (mut s, talk) = steady_broken(0);
@@ -196,7 +196,7 @@ fn b4_break_but_ended_sends_balloon_close_once() {
 // --- B5: 預かった時間切れの知らせ ---
 
 /// 預かりがあれば完了で `OnBalloonTimeout`（Reference1＝`0`）を 1 本送り、送り済みの印を立てて
-/// 預かりを下ろす。送り済みなら送らず理由を記録する（要件 2.1〜2.3・4.5）。
+/// 預かりを下ろす。送り済みなら送らず理由を記録する。
 #[test]
 fn b5_pending_timeout_is_sent_on_completion_once() {
     let mut s = steady_none();
@@ -258,7 +258,7 @@ fn b1_plain_completion_does_nothing() {
 }
 
 /// 選択肢の時間切れの解除で終わったトークは中断の控えが無いので B1 に落ち、`OnBalloonBreak` は
-/// 出ない（要件 2.7・設計の行き違いの表）。
+/// 出ない。
 #[test]
 fn b1_choice_timeout_release_sends_no_balloon_break() {
     let mut s = steady_none();
@@ -334,7 +334,7 @@ fn assert_cancelled_then_break(s: &mut State, talk: TalkId, scope: u32) {
 }
 
 /// ゴーストの切替の送り出しの台詞（`OnGhostChanging`）を中断したら、切替を中止して定常へ戻り
-/// `OnBalloonBreak` を送る（終了の予約は切替の相では効かない。要件 1.1・設計 E）。
+/// `OnBalloonBreak` を送る（終了の予約は切替の相では効かない）。
 #[test]
 fn a4_ghost_changing_talk_break_sends_after_cancel_notice() {
     let mut s = steady_none();
@@ -344,7 +344,7 @@ fn a4_ghost_changing_talk_break_sends_after_cancel_notice() {
     assert_cancelled_then_break(&mut s, talk, 0);
 }
 
-/// 切替の `OnClose` の別れの台詞を中断しても、切替の中止で定常へ戻るので送る（要件 1.6 の後段）。
+/// 切替の `OnClose` の別れの台詞を中断しても、切替の中止で定常へ戻るので送る。
 #[test]
 fn a4_change_farewell_talk_break_sends_after_cancel_notice() {
     let mut s = steady_none();
@@ -362,7 +362,7 @@ fn a4_change_farewell_talk_break_sends_after_cancel_notice() {
 }
 
 /// シェルの切替の台詞（`OnShellChanging`）の中断は、終了の予約があっても定常へ戻るので送る
-/// （A2 は印の中断で外れる。要件 1.1）。
+/// （A2 は印の中断で外れる）。
 #[test]
 fn a4_shell_changing_talk_break_sends() {
     let mut s = steady_none();
@@ -397,7 +397,7 @@ fn a4_shell_changing_talk_break_sends() {
 
 // --- 表 A の各腕から: 送らない（理由が残る） ---
 
-/// 止めた台本が終了を予約していたら終了へ進み、送らない（A2・要件 1.6）。
+/// 止めた台本が終了を予約していたら終了へ進み、送らない（A2）。
 #[test]
 fn a2_break_quit_sends_nothing_and_records_why() {
     let (mut s, talk) = steady_broken(0);
@@ -406,7 +406,7 @@ fn a2_break_quit_sends_nothing_and_records_why() {
     assert_not_sent(&ev, "OnBalloonBreak", "not_steady", "Unloading");
 }
 
-/// 終了の握手の別れの台詞を中断したら終了へ進み、送らない（要件 1.6）。
+/// 終了の握手の別れの台詞を中断したら終了へ進み、送らない。
 #[test]
 fn a4_close_farewell_break_sends_nothing() {
     let mut s = steady_none();
@@ -430,7 +430,7 @@ fn a4_close_farewell_break_sends_nothing() {
     assert_not_sent(&ev, "OnBalloonBreak", "not_steady", "Unloading");
 }
 
-/// 保留の終了があれば終了の握手へ進み、送らない（要件 1.6）。
+/// 保留の終了があれば終了の握手へ進み、送らない。
 #[test]
 fn a4_pending_close_sends_nothing() {
     let (mut s, talk) = steady_broken(0);
@@ -445,7 +445,7 @@ fn a4_pending_close_sends_nothing() {
     assert_not_sent(&ev, "OnBalloonBreak", "not_steady", "ClosePending");
 }
 
-/// 保留の切替があれば切替を始め、送らない（A3・要件 1.6）。
+/// 保留の切替があれば切替を始め、送らない（A3）。
 #[test]
 fn a3_pending_change_sends_nothing() {
     let (mut s, talk) = steady_broken(0);
@@ -456,7 +456,7 @@ fn a3_pending_change_sends_nothing() {
     assert_not_sent(&ev, "OnBalloonBreak", "not_steady", "ChangePending");
 }
 
-/// 起動の途中の相のまま挨拶の完了が届いたら起動の途中のままで、送らない（守りの腕・要件 4.4）。
+/// 起動の途中の相のまま挨拶の完了が届いたら起動の途中のままで、送らない（守りの腕）。
 #[test]
 fn a4_boot_greeting_break_sends_nothing() {
     let mut s = State {
@@ -491,7 +491,7 @@ fn a4_boot_greeting_break_sends_nothing() {
     assert_not_sent(&ev, "OnBalloonBreak", "not_steady", "BootVersion");
 }
 
-/// B2 の後段: 完了の後が再生中のトークの無い定常でも、終了の要求を保留していれば送らない（設計 D8）。
+/// B2 の後段: 完了の後が再生中のトークの無い定常でも、終了の要求を保留していれば送らない。
 /// 完了の振り分けからは届かない組なので、判断の入口を直に呼ぶ。きっかけごとに理由を残す。
 #[test]
 fn b2_close_pending_sends_nothing_for_each_cause() {
@@ -537,7 +537,7 @@ fn b2_close_pending_sends_nothing_for_each_cause() {
     );
 }
 
-// --- 控えが無い・番号が食い違う（構造上は起きない・設計 D9） ---
+// --- 控えが無い・番号が食い違う（構造上は起きない） ---
 
 /// 控えが無ければ Reference0 を空で送り、警告を残す。番号が食い違えば同じく空で送り、誤りを残す。
 #[test]
@@ -609,8 +609,7 @@ fn b4_wins_over_b5_and_drops_the_pending_timeout() {
     assert!(!shown.timeout_pending && !shown.timeout_sent && shown.close_sent);
 }
 
-/// 同じトークへの 2 回目の中断の合図は控えを増やさず、完了で `OnBalloonBreak` は 1 本だけ
-/// （要件 1.7・1.8）。
+/// 同じトークへの 2 回目の中断の合図は控えを増やさず、完了で `OnBalloonBreak` は 1 本だけ。
 #[test]
 fn second_break_signal_still_sends_one_balloon_break() {
     let (mut s, talk) = steady_broken(1);
@@ -643,7 +642,7 @@ fn second_break_signal_still_sends_one_balloon_break() {
 }
 
 /// 中断を出したがトークが `\-` に辿り着いて終わった（`Quit`）なら、終了へ進むので送らない。
-/// 中断で止まったのではないので、記録のイベント名は `OnBalloonClose` 側に載る（要件 1.6・7.2）。
+/// 中断で止まったのではないので、記録のイベント名は `OnBalloonClose` 側に載る。
 #[test]
 fn break_note_with_quit_completion_sends_nothing() {
     let (mut s, talk) = steady_broken(0);

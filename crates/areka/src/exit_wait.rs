@@ -1,11 +1,11 @@
-//! 終了の後始末が、背景で書いている仕事の終わりを上限つきで待つ口（design「areka / 終了 / exit_wait」）。
+//! 終了の後始末が、背景で書いている仕事の終わりを上限つきで待つ口。
 //!
 //! 背景の仕事は 1 本ごとに門 [`WorkGate`] を持ち、[`register_gate`] で World へ登記する。
 //! 終了が始まったら [`begin_close`] が全部の門を閉じ、登記された片付けを UI スレッドで呼ぶ。
 //! 書く前の段に居た仕事は待たずに記録を残し、書いている最中の仕事だけを
 //! [`ClosingWaits::wait`] が予算の残りの時間だけ待つ。
 //!
-//! この部品は `install` も `update` も知らない。どちらの背景の仕事も同じ口で待ち（要件 8.10）、
+//! この部品は `install` も `update` も知らない。どちらの背景の仕事も同じ口で待ち、
 //! 書きかけの場所は門の `label`（書庫 → 根／更新先 → 対象）が運ぶ。
 
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use areka_kanade::WaitBudget;
 use bevy_ecs::prelude::*;
 
-/// 展開の終わりを待つ上限（要件 8.1・裁定 4）。
+/// 展開の終わりを待つ上限。
 pub(crate) const EXIT_WAIT_LIMIT: Duration = Duration::from_secs(3);
 
 /// 門の状態。3 つを 1 つの鍵の下で持つので、終了が始まった後に書く段へ入ることはない。
@@ -156,7 +156,7 @@ impl ClosingWaits {
     /// 書いている最中の門だけを、`budget` の残りの時間だけ待つ。
     ///
     /// 期限は `budget.started + budget.limit`（今から数え直さない）。前の段と同じ出発点を渡せば、
-    /// 合わせて上限を超えない（要件 8.2）。
+    /// 合わせて上限を超えない。
     pub(crate) fn wait(self, budget: WaitBudget) {
         let deadline = budget.started + budget.limit;
         let waited_from = Instant::now();

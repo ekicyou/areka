@@ -1,5 +1,5 @@
 //! 今の側: 借りた `areka-emo-text`（`windows` 0.62）の公開の API だけで縦書きの 1 列を描き、
-//! 供給面の premultiplied BGRA を読み戻す（問い 7・要件 8.1・8.2・13.5）。
+//! 供給面の premultiplied BGRA を読み戻す（問い 7）。
 //!
 //! 絵の大きさ・原点・バルーン定義は本線の縦書きの試験
 //! `crates/areka-emo-text/tests/decoration_readback/vertical.rs` の `shoot_column`

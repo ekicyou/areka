@@ -1,4 +1,4 @@
-//! 依頼の型の綴り（Reference に載る語）の兄弟テスト（areka-P0-network-update）。
+//! 依頼の型の綴り（Reference に載る語）の兄弟テスト。
 
 use super::{TargetKind, UpdateReason};
 

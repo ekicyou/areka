@@ -1,9 +1,9 @@
-//! 各終了戦略の統合テスト（research.md §R3: termination_strategy シーム）
+//! 各終了戦略の統合テスト
 
 use super::*;
 
 // =========================================================================
-// 6.2 各終了戦略の統合テスト
+// 各終了戦略の統合テスト
 // =========================================================================
 mod cancel_strategy {
     use super::super::*;
@@ -35,7 +35,6 @@ mod cancel_strategy {
         let y_id = rt.subscribe("y");
         rt.load_document(doc).unwrap();
 
-        // Start sb_a (Cancel policy, operates x and y)
         let r1 = rt.start("sb_a", 0.0).unwrap();
         assert!(r1.affected_group_ids.is_empty());
 
@@ -106,7 +105,6 @@ mod conclude_strategy {
 
         let r1 = rt.start("fade", 0.0).unwrap();
         let r2 = rt.start("fade", 0.5).unwrap();
-        // Default Conclude → affected
         assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
     }
 }
@@ -173,15 +171,11 @@ mod edge_cases {
         let x_val = changes.iter().find(|(id, _)| *id == x_id);
         assert!(x_val.is_some());
 
-        // Start sb_y (different variable) → no conflict, no side effects
         let r = rt.start("sb_y", 1.0).unwrap();
         assert!(r.affected_group_ids.is_empty());
 
-        // Both should still work
         rt.tick(1.5);
         let changes = rt.last_result().changes.clone();
-        // x should still be updating (from sb_x)
-        // y should be updating (from sb_y)
         let x_change = changes.iter().find(|(id, _)| *id == x_id);
         let y_change = changes.iter().find(|(id, _)| *id == y_id);
         assert!(
@@ -198,9 +192,7 @@ mod edge_cases {
         let _y_id = rt.subscribe("y");
         rt.load_document(doc).unwrap();
 
-        // Start sb_a (Cancel, x+y) at t=0.0
         let r1 = rt.start("sb_a", 0.0).unwrap();
-        // Start sb_b (Conclude, x) at t=0.0
         let r2 = rt.start("sb_b", 0.0).unwrap();
 
         // sb_b conflicts with sb_a on x → sb_a was Cancel'd

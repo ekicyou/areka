@@ -1,4 +1,4 @@
-// 下線の位置を集める描き手（6.2）。元の viewbox_draw_underline.rs は写さず新しく書いた。
+// 下線の位置を集める描き手。
 // `_Impl` のメソッド名は COM の PascalCase のまま。
 #![allow(non_snake_case)]
 

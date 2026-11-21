@@ -22,15 +22,14 @@ use std::rc::Rc;
 
 use crate::ecs::world::{EcsWorld, tick_wake};
 
-/// Windows メッセージを Entity 配送する純関数（要件 2.4・設計 EntityWndprocBridge）。
+/// Windows メッセージを Entity 配送する純関数。
 ///
 /// `world`/`entity` を引数で受け取り、各ハンドラへ統一シグネチャ
 /// `(world, entity, hwnd, wparam, lparam)` で配送する。`None` 返却時は呼び出し側
 /// （`runtime::wndproc_bridge` のライブラリ wndproc クロージャ）が `DefWindowProcW` へ委譲する。
 ///
-/// 本表は `WM_NCCREATE`／`WM_NCDESTROY`（エンティティ確立／後始末のライフサイクル特例）を
-/// 含まない。新経路ではウィンドウ生成・破棄をライブラリ／`WindowRegistry` の drop 駆動が
-/// 所管する（NCCREATE/NCDESTROY の自前処理は撤去済み・task 4.5）。
+/// 本表は `WM_NCCREATE`／`WM_NCDESTROY` を含まない。ウィンドウ生成・破棄はライブラリ／
+/// `WindowRegistry` の drop 駆動が所管する。
 pub(crate) fn dispatch_window_message(
     world: &Rc<RefCell<EcsWorld>>,
     entity: Entity,
@@ -124,7 +123,7 @@ mod tests {
     }
 
     /// `dispatch_window_message` は代表メッセージ `WM_ERASEBKGND` を `Some(LRESULT(1))` に
-    /// ルーティングする（移行後も `lifecycle::WM_ERASEBKGND` の挙動が不変・要件 2.4）。
+    /// ルーティングする（`lifecycle::WM_ERASEBKGND` の挙動が不変）。
     /// ヘッドレス: 実 HWND / メッセージループ不要。
     #[test]
     fn dispatch_routes_erasebkgnd_to_some_lresult_1() {
@@ -140,7 +139,7 @@ mod tests {
     }
 
     /// `dispatch_window_message` は配送表に無いメッセージ（`WM_USER`）を `None` にする
-    /// （既定手続き委譲・要件 2.4）。
+    /// （既定手続き委譲）。
     #[test]
     fn dispatch_returns_none_for_unhandled_message() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
@@ -154,7 +153,7 @@ mod tests {
     }
 
     /// `dispatch_window_message` は `WM_DISPLAYCHANGE` を `lifecycle::WM_DISPLAYCHANGE` に
-    /// 配送し、`App` リソースの display change フラグを立てる（業務ロジック不変・要件 2.4/5.2）。
+    /// 配送し、`App` リソースの display change フラグを立てる（業務ロジック不変）。
     /// `None` 返却（DefWindowProcW 委譲）も併せて確認する。ヘッドレス: World への直接操作のみ。
     #[test]
     fn dispatch_displaychange_marks_app_display_change() {
@@ -165,7 +164,6 @@ mod tests {
             w.world_mut().spawn(()).id()
         };
 
-        // 事前条件: フラグ未設定。
         assert!(
             !world
                 .borrow()
@@ -177,10 +175,8 @@ mod tests {
 
         let ret = dispatch_window_message(&world, entity, &msg(WM_DISPLAYCHANGE));
 
-        // WM_DISPLAYCHANGE は DefWindowProcW 委譲（None）。
         assert!(ret.is_none(), "WM_DISPLAYCHANGE は None を返すべき");
 
-        // 業務ロジック: App の display change フラグが立つ。
         assert!(
             world
                 .borrow()
@@ -191,11 +187,10 @@ mod tests {
         );
     }
 
-    /// 代表メッセージ ① ダブルクリック `WM_LBUTTONDBLCLK`（要件 2.4・設計 Testing Strategy）。
+    /// 代表メッセージ ① ダブルクリック `WM_LBUTTONDBLCLK`。
     /// `dispatch_window_message` は `mouse_dblclick_wheel::WM_LBUTTONDBLCLK` へ配送する。
     /// ヘッドレス: hit 領域を持たない最小 World（bare entity）では hit_test がターゲット
-    /// 無しを返し、何も挿入せず `Some(LRESULT(0))` を返す（旧 `ecs_wndproc` 同等）。
-    /// 実 HWND / hit 領域を要する深い検証（PointerState 挿入）は 5.2/5.3 へ委譲する。
+    /// 無しを返し、何も挿入せず `Some(LRESULT(0))` を返す。
     #[test]
     fn dispatch_routes_lbuttondblclk_to_some_lresult_0() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
@@ -210,11 +205,11 @@ mod tests {
         );
     }
 
-    /// 代表メッセージ ② `WM_WINDOWPOSCHANGED`（要件 2.4・設計 Testing Strategy）。
+    /// 代表メッセージ ② `WM_WINDOWPOSCHANGED`。
     /// `dispatch_window_message` は `window_pos::WM_WINDOWPOSCHANGED` へ配送する。
     /// 非 null の `WINDOWPOS` ポインタを `lparam` に設定するが、`WindowHandle` コンポーネント
     /// 不在のため `client_coords` が `None` となり座標更新はスキップされる。最終的に
-    /// `None`（DefWindowProcW 委譲）を返す（旧 `ecs_wndproc` 同等）。ヘッドレス: 実 HWND 不要。
+    /// `None`（DefWindowProcW 委譲）を返す。ヘッドレス: 実 HWND 不要。
     #[test]
     fn dispatch_routes_windowposchanged_to_none() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
@@ -245,11 +240,11 @@ mod tests {
         );
     }
 
-    /// 代表メッセージ ③ `WM_DPICHANGED`（要件 2.4・設計 Testing Strategy）。
+    /// 代表メッセージ ③ `WM_DPICHANGED`。
     /// `dispatch_window_message` は `window_pos::WM_DPICHANGED` へ配送する。
     /// `DPI` コンポーネント不在のため DPI 更新はスキップされ、`guarded_set_window_pos` は
     /// null HWND で `Err`（warn ログのみ・panic 無し）となるが、ハンドラは常に
-    /// `Some(LRESULT(0))` を返す（旧 `ecs_wndproc` 同等）。ヘッドレス: 実 HWND 不要。
+    /// `Some(LRESULT(0))` を返す。ヘッドレス: 実 HWND 不要。
     #[test]
     fn dispatch_routes_dpichanged_to_some_lresult_0() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
@@ -273,7 +268,7 @@ mod tests {
 
     /// 代表メッセージ ④ 非活性化 `WM_ACTIVATE`（`WA_INACTIVE`）。
     /// `dispatch_window_message` は `keyboard::WM_ACTIVATE` へ配送し、ゴースト窓ペアの
-    /// 当事者には沈降観測の目印が付く（要件 4.4／7.5）。返り値は `None`（DefWindowProcW 委譲）
+    /// 当事者には沈降観測の目印が付く。返り値は `None`（DefWindowProcW 委譲）
     /// のままであり、**窓の挙動は変わらない**。重なりの実測と記録はこの巡では行わない
     /// （遅延 1 巡の分業は `zorder_pair_sink` の兄弟テストが固定する）。
     /// ヘッドレス: 実 HWND / メッセージループ不要。
@@ -334,12 +329,9 @@ mod tests {
         );
     }
 
-    /// 代表メッセージ ⑤ 非クライアント破棄 `WM_NCDESTROY`（要件 2.4・設計 Testing Strategy）。
-    /// `WM_NCDESTROY` は配送表からライフサイクル特例として除外されており（タスク 3.2／旧
-    /// `ecs_wndproc` シムが直接処理）、新経路 `dispatch_window_message` では表に無いため
-    /// `None`（DefWindowProcW 委譲）を返すのが設計どおりの「旧手続きと同等」結果である。
-    /// 新経路でのウィンドウ破棄は WindowRegistry の drop 駆動（タスク 4.1）であり、本配送
-    /// 純関数の所管外であることをここで固定する。ヘッドレス: 実 HWND 不要。
+    /// 代表メッセージ ⑤ 非クライアント破棄 `WM_NCDESTROY`。
+    /// 配送表に無いので `None`（DefWindowProcW 委譲）を返す。ウィンドウ破棄は WindowRegistry の
+    /// drop 駆動で、本配送純関数の所管外であることを固定する。ヘッドレス: 実 HWND 不要。
     #[test]
     fn dispatch_returns_none_for_ncdestroy_excluded_from_table() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));

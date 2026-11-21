@@ -1,4 +1,4 @@
-//! 同じフォルダ名のゴーストが別の根から見えても、今のゴーストとして扱う（areka-P0-baseware-root-list・要件 8.4・8.7）。
+//! 同じフォルダ名のゴーストが別の根から見えても、今のゴーストとして扱う。
 
 use areka_ghost::same_folder_name;
 

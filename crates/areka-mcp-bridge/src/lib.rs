@@ -1,4 +1,4 @@
-//! Claude Desktop 向けの中継（spec: areka-P0-mcp-stdio-bridge）。
+//! Claude Desktop 向けの中継。
 //!
 //! 標準入出力の 1 行 1 要求を、`127.0.0.1` で待ち受ける areka の MCP の受け口へ届ける。
 
@@ -6,7 +6,7 @@ pub mod cache;
 pub mod config;
 pub mod errors;
 pub mod http;
-// 箱の見立て（spec: bridge-store-user-root）。クレートの中だけ（呼び手は `config::Config::from_env`）。
+// 箱の見立て。クレートの中だけ（呼び手は `config::Config::from_env`）。
 mod redirect;
 pub mod scan;
 pub mod service;

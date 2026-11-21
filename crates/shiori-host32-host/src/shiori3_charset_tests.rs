@@ -1,14 +1,12 @@
-//! codec を 3 系統以上の文字コードで固定する決定論テスト
-//! （タスク 2.3・要件 9.1/9.2/9.3/9.6/9.7/9.8/12.1）。
+//! codec を 3 系統以上の文字コードで固定する決定論テスト。
 //!
 //! 窓も I/O も持たない純関数の入出力だけで成立する——32bit 成果物・実 SHIORI・実機を
-//! 一切要さない（要件 9.8。`tests/` ではなく `src/` の兄弟ファイルに置く理由がこれ）。
+//! 一切要さない（`tests/` ではなく `src/` の兄弟ファイルに置く理由がこれ）。
 //!
 //! ## 期待値の出どころ
-//! 参照値のバイト列も `Charset` ヘッダの綴りも、**符号化器から導かず定数として**持つ
-//! （要件 9.1）。`Charset::encode`／`Charset::name` の出力を期待値に使うと、符号化が
-//! どう退化しても両辺が同じだけずれて緑のままになる（恒真）。定数の出所は
-//! design.md §Supporting References。
+//! 参照値のバイト列も `Charset` ヘッダの綴りも、**符号化器から導かず定数として**持つ。
+//! `Charset::encode`／`Charset::name` の出力を期待値に使うと、符号化が
+//! どう退化しても両辺が同じだけずれて緑のままになる（恒真）。
 
 use super::*;
 use crate::charset::CharsetNegotiator;
@@ -19,7 +17,7 @@ use crate::charset::CharsetNegotiator;
 const A_UTF_8: &[u8] = &[0xE3, 0x81, 0x82];
 /// 「あ」の Shift_JIS バイト列。
 const A_SHIFT_JIS: &[u8] = &[0x82, 0xA0];
-/// 「あ」の EUC-JP バイト列（Shift_JIS だけを特別扱いする実装では通らない系統・要件 9.7）。
+/// 「あ」の EUC-JP バイト列（Shift_JIS だけを特別扱いする実装では通らない系統）。
 const A_EUC_JP: &[u8] = &[0xA4, 0xA2];
 /// 「あ」の ISO-2022-JP バイト列（漢字集合へのエスケープと ASCII への復帰を含む）。
 const A_ISO_2022_JP: &[u8] = &[0x1B, 0x24, 0x42, 0x24, 0x22, 0x1B, 0x28, 0x42];
@@ -27,8 +25,8 @@ const A_ISO_2022_JP: &[u8] = &[0x1B, 0x24, 0x42, 0x24, 0x22, 0x1B, 0x28, 0x42];
 /// 4 系統の（ラベル, `Charset` ヘッダに出るべき正規名, 「あ」のバイト列）。
 ///
 /// 正規名も期待バイト列も逐語の定数であり、`Charset::name()`／`Charset::encode()` から
-/// 導かない（要件 9.1）。ラベル解決だけは本番の `Charset::for_label` を通す——ここが
-/// 2 値表へ退化すれば EUC-JP と ISO-2022-JP の行が解決できずに赤になる（要件 9.7）。
+/// 導かない。ラベル解決だけは本番の `Charset::for_label` を通す——ここが
+/// 2 値表へ退化すれば EUC-JP と ISO-2022-JP の行が解決できずに赤になる。
 const FAMILIES: &[(&str, &str, &[u8])] = &[
     ("utf-8", "UTF-8", A_UTF_8),
     ("shift_jis", "Shift_JIS", A_SHIFT_JIS),
@@ -36,17 +34,13 @@ const FAMILIES: &[(&str, &str, &[u8])] = &[
     ("iso-2022-jp", "ISO-2022-JP", A_ISO_2022_JP),
 ];
 
-/// 本仕様適用前の `build_request` が emo2 相当の GET に対して産んだバイト列の逐語写し
-/// （要件 9.6・12.1）。
+/// 従来の `build_request` が emo2 相当の GET に対して産んだバイト列の逐語写し。
 ///
-/// 出所: 当時のコミット `4db516fe` の `crates/shiori-host32-host/src/shiori3.rs` の `build_request`
-/// （そのコミットは squash で消え、今の履歴からは `git show` で引けない）
-/// ——組み立てた `String` をそのまま `out.into_bytes()` して返す版（`Charset` ヘッダ値は
-/// `header_value()` ＝ `"UTF-8"` 固定）。その組立順に従って書き下したものであり、
+/// 組み立てた `String` をそのまま `out.into_bytes()` して返す版（`Charset` ヘッダ値は
+/// `"UTF-8"` 固定）の組立順に従って書き下したものであり、
 /// **今日の符号化器を 1 度も通していない**（非 ASCII は UTF-8 のバイトを `\x` 表記で直書き）。
-/// ヘッダの並びだけは areka-P0-script-security-level 要件 2.1 で書き換えた（`SecurityLevel`・
-/// `SecurityOrigin`・`Sender`・`SenderType` を `Charset` の直後へ・末尾の `SecurityLevel` は削除）。
-/// `Reference0` のバイト列には手を付けていない。
+/// ヘッダの並びは現行（`SecurityLevel`・`SecurityOrigin`・`Sender`・`SenderType` を
+/// `Charset` の直後）に合わせてあり、`Reference0` のバイト列には手を付けていない。
 ///
 /// 要求の形は emo2 の OnBoot GET と同形にした——`sender` は `Shiori3Client` の既定
 /// `DEFAULT_SENDER`（`client.rs` の既定 sender の定義行）、`Reference0` は
@@ -117,10 +111,10 @@ fn charset(label: &str) -> Charset {
     })
 }
 
-// ---- ⑴ 要求の符号化（要件 9.1・9.7）----------------------------------------
+// ---- ⑴ 要求の符号化 --------------------------------------------------------
 
 /// ⑴ 4 系統で組んだ要求の `Charset` ヘッダの綴りと `Reference0` のバイト列が、
-/// 符号化器から導かない定数と一致する（要件 9.1・3.1〜3.3・9.7）。
+/// 符号化器から導かない定数と一致する。
 #[test]
 fn request_bytes_and_charset_header_match_the_constants_in_four_families() {
     for &(label, canonical_name, expected_a) in FAMILIES {
@@ -140,7 +134,7 @@ fn request_bytes_and_charset_header_match_the_constants_in_four_families() {
     }
 }
 
-/// ⑼ `Charset` は request line の直後の最初のヘッダ行である（要件 3.3）。
+/// ⑼ `Charset` は request line の直後の最初のヘッダ行である。
 ///
 /// 非 ASCII を含み得る行より前に置く、という正典の要請をバイト列の位置で固定する。
 #[test]
@@ -163,8 +157,8 @@ fn charset_is_the_first_header_line_in_every_family() {
     }
 }
 
-/// ⑹ 現在の文字コードで表せない文字は 10 進の数値文字参照になり、置換数が返る
-/// （要件 3.5・10.1）。Shift_JIS だけの性質ではないことを EUC-JP でも固定する。
+/// ⑹ 現在の文字コードで表せない文字は 10 進の数値文字参照になり、置換数が返る。
+/// Shift_JIS だけの性質ではないことを EUC-JP でも固定する。
 #[test]
 fn unmappable_char_becomes_a_numeric_character_reference_in_the_request() {
     for label in ["shift_jis", "euc-jp"] {
@@ -187,8 +181,7 @@ fn unmappable_char_becomes_a_numeric_character_reference_in_the_request() {
     }
 }
 
-/// ⑻ UTF-8 で組んだ要求が、本仕様適用前のバイト列と 1 バイトも違わない
-/// （要件 9.6・12.1・3.4）。
+/// ⑻ UTF-8 で組んだ要求が、従来のバイト列と 1 バイトも違わない。
 #[test]
 fn utf8_request_equals_the_pre_spec_byte_stream() {
     let references = vec!["「コンフィズリー」＆「City-Pop'n」".to_owned()];
@@ -208,9 +201,9 @@ fn utf8_request_equals_the_pre_spec_byte_stream() {
     assert_eq!(encoded.replaced, 0);
 }
 
-// ---- ⑵〜⑸⑺ 応答の復号（要件 9.2・9.3・4.x）--------------------------------
+// ---- ⑵〜⑸⑺ 応答の復号 -----------------------------------------------------
 
-/// ⑵ 4 系統の応答が、宣言した文字コードで復号されて `Value` が正しく読める（要件 9.2・4.2）。
+/// ⑵ 4 系統の応答が、宣言した文字コードで復号されて `Value` が正しく読める。
 ///
 /// 方針の中の文字コードは UTF-8 に固定しているので、ヘッダの宣言を見ずに復号する実装
 /// （あるいは Shift_JIS だけを見る実装）では EUC-JP・ISO-2022-JP・Shift_JIS の行が赤になる。
@@ -238,8 +231,8 @@ fn responses_in_four_families_decode_by_their_declared_charset() {
     }
 }
 
-/// ⑶ `Charset` ヘッダ省略時は方針の中の文字コード（＝要求に用いた文字コード）を継承する
-/// （要件 4.3・9.3）。既定の 2 つ以外でも同じ規則であることを EUC-JP で固定する。
+/// ⑶ `Charset` ヘッダ省略時は方針の中の文字コード（＝要求に用いた文字コード）を継承する。
+/// 既定の 2 つ以外でも同じ規則であることを EUC-JP で固定する。
 #[test]
 fn omitted_charset_header_inherits_the_policy_charset() {
     for (inherited, a_bytes) in [
@@ -260,8 +253,7 @@ fn omitted_charset_header_inherits_the_policy_charset() {
     }
 }
 
-/// ⑷ 解決できないラベルでは方針の中の文字コードで復号を続け、生の綴りをそのまま返す
-/// （要件 4.4・10.3・9.3）。
+/// ⑷ 解決できないラベルでは方針の中の文字コードで復号を続け、生の綴りをそのまま返す。
 ///
 /// 「Encoding Standard に無いラベル」と「通信では使えない既知の限界（UTF-16 系）」の
 /// 双方を同じ経路で通す。採用しない判断は `CharsetNegotiator` の側にあり、codec は
@@ -288,7 +280,7 @@ fn unresolvable_labels_fall_back_to_the_policy_charset() {
     }
 }
 
-/// ⑸ 強制方針では応答の `Charset` ヘッダを復号に用いない（要件 4.5・5.4）。
+/// ⑸ 強制方針では応答の `Charset` ヘッダを復号に用いない。
 ///
 /// 本体は強制した文字コードのバイト列で、ヘッダは別の文字コードを名乗る。ヘッダを
 /// 見て復号する実装なら「あ」が読めずに赤になる。
@@ -315,8 +307,8 @@ fn forced_policy_ignores_the_response_header() {
     }
 }
 
-/// ⑺ 宣言された文字コードとして不正な並びは代替文字で吸収し、置換ありを報告する
-/// （要件 4.7・10.2）。解析は失敗しない。
+/// ⑺ 宣言された文字コードとして不正な並びは代替文字で吸収し、置換ありを報告する。
+/// 解析は失敗しない。
 #[test]
 fn invalid_byte_sequence_is_absorbed_and_reported() {
     // 各文字コードの 2 バイト文字の先行バイトだけを置いて並びを壊す。
@@ -335,9 +327,7 @@ fn invalid_byte_sequence_is_absorbed_and_reported() {
     }
 }
 
-/// 文字コードヘッダ名の一致は大文字小文字を問わず、名前の前後の空白も許容する
-/// （要件 4.1。タスク 2.2 の申し送り——`scan_charset_header` のこの 2 つの寛容さに
-/// テストが無かった）。
+/// 文字コードヘッダ名の一致は大文字小文字を問わず、名前の前後の空白も許容する。
 ///
 /// 綴りを変えても実際に復号へ効くことまで見る（拾えなければ UTF-8 のまま読むので
 /// 「あ」が読めずに赤になる）。
@@ -373,10 +363,9 @@ fn charset_header_name_matches_case_insensitively_and_tolerates_spacing() {
     }
 }
 
-// ---- ⑽ 採用が次の要求に現れる連鎖（要件 9.3・9.7 の要）---------------------
+// ---- ⑽ 採用が次の要求に現れる連鎖 ------------------------------------------
 
-/// ⑽ 応答で採用した文字コードが、**次の要求**の `Charset` ヘッダと参照値のバイト列に現れる
-/// （要件 9.3・4.2・4.6）。
+/// ⑽ 応答で採用した文字コードが、**次の要求**の `Charset` ヘッダと参照値のバイト列に現れる。
 ///
 /// 交渉状態と符号化の連続呼出だけで成り立つ（窓も I/O も無い）。`current()` が変わること
 /// （`charset_tests.rs` が固定）と「次の要求のバイト列が変わること」は単位の違う主張なので、

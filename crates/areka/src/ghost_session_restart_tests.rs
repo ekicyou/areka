@@ -1,4 +1,4 @@
-//! 起こし直しの単位（`ghost_session`）の決定論テスト（areka-P0-ghost-restart-unit）。
+//! 起こし直しの単位（`ghost_session`）の決定論テスト。
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -24,8 +24,7 @@ use areka_runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching,
 use log_capture_kit::capture;
 
 /// 作業プール（`WintfTaskPool`）の無い素の World では、窓を作る関数は配置の準備に入らず
-/// `TaskPoolMissing` で失敗し、`task_pool_missing` を error で残す（design Testing Strategy
-/// 新規テスト 3・log-first の新しい判断分岐）。閉じた証を受ける `reopen_ghost_windows` も
+/// `TaskPoolMissing` で失敗し、`task_pool_missing` を error で残す。閉じた証を受ける `reopen_ghost_windows` も
 /// 同じ関数へ委譲するので同じ失敗になる。
 ///
 /// ゴーストの根は実在しない経路にしてある——有無の確認が準備より後ろへずれると
@@ -67,7 +66,7 @@ fn open_ghost_windows_without_task_pool_fails_before_preparing() {
 
 /// 作業プールの閉包を回す `Input` 段を、`done` が真になるまで回す。
 /// 閉包は作業プールの別スレッドから届くので、届くまで待つ。打ち切りは進みの目印（`Input` 段に届いた
-/// 閉包の数・[`drain_counting`] が数える・areka-test-binary-stability 要件 7.3 でテストの側に足した口）で
+/// 閉包の数・[`drain_counting`] が数える）で
 /// 決め、相手が 30 秒進まなければ［止まった］。打ち切ったら、呼び出しの場所を添えた文言を標準エラーへ
 /// 1 行出して `false`。
 #[track_caller]
@@ -121,7 +120,7 @@ fn ghost_window_count(world: &mut World) -> usize {
 #[derive(bevy_ecs::resource::Resource)]
 struct SentinelArrived;
 
-/// 窓を作る手順は「準備」と「投函」に分かれる（要件 4.10・6.1・design「ghost_session.rs」）。
+/// 窓を作る手順は「準備」と「投函」に分かれる。
 ///
 /// 準備（[`prepare_ghost_windows`]）だけでは窓は 1 枚も生えない——準備の後に作業プールへ
 /// 投げた目印の閉包が `Input` 段で届いても、窓は 0 枚のまま。投函
@@ -172,7 +171,7 @@ fn prepare_spawns_no_window_until_commit() {
 
 /// 投函した窓の閉包が `Input` 段に着く前に全窓を閉じたら、着いた閉包は窓を 1 枚も作らない
 /// （切替先の非同期の失敗が窓の生成より先に届き既定へ戻す形＝壊れた切替先の窓が孤児として
-/// 生えない・要件 6.1・4.10）。閉包の後ろに目印を継ぎ、着いたことを確かめてから数える。
+/// 生えない）。閉包の後ろに目印を継ぎ、着いたことを確かめてから数える。
 #[test]
 fn close_before_commit_arrives_spawns_no_window() {
     // SAFETY: 資産の採寸（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
@@ -239,7 +238,7 @@ fn boot_windows_with_sticky_line(line: &str) -> (World, Vec<log_capture_kit::Cap
     (world, events)
 }
 
-/// 起動で descript の組が帳簿に入る（areka-P0-window-link-directives 要件 3.8・6.1）: 窓を作る閉包が
+/// 起動で descript の組が帳簿に入る: 窓を作る閉包が
 /// `GhostWindows` と一緒に帳簿を据え、シェルの `seriko.sticky-window` の組を入れる。
 #[test]
 fn boot_seeds_the_sticky_ledger_with_the_descript_group() {
@@ -264,7 +263,7 @@ fn boot_seeds_the_sticky_ledger_with_the_descript_group() {
     );
 }
 
-/// 起動で descript の段が動かせない指定の帳簿に入る（descript-window-keys 要件 4.1）: 窓を作る閉包が
+/// 起動で descript の段が動かせない指定の帳簿に入る: 窓を作る閉包が
 /// 窓を作った後に帳簿を据えるので、シェルの `kero.balloon.dontmove` のスコープ 1 のバルーンの窓だけが
 /// 動かせない（据える前に作った窓へ書き手が届く）。
 #[test]
@@ -298,7 +297,7 @@ fn boot_seeds_the_balloon_lock_ledger_with_the_descript_tier() {
     assert_eq!(movable, vec![(0, true), (1, false)], "(スコープ, 動かせる)");
 }
 
-/// 捨てる書き方（ID が 1 つ）なら組を作らずに記録し、起動は続く（要件 3.9・窓は 4 枚・帳簿は空で据わる）。
+/// 捨てる書き方（ID が 1 つ）なら組を作らずに記録し、起動は続く（窓は 4 枚・帳簿は空で据わる）。
 #[test]
 fn boot_with_a_rejected_sticky_value_logs_and_keeps_booting() {
     use areka_placement::sticky_group_ledger::StickyGroupLedger;
@@ -322,7 +321,7 @@ fn boot_with_a_rejected_sticky_value_logs_and_keeps_booting() {
 }
 
 /// 投函の時点で作業プールが無ければ、閉包を捨てた上で `task_pool_missing` を error で残す
-/// （黙って捨てない・log-first の判断分岐）。
+/// （黙って捨てない）。
 #[test]
 fn commit_without_task_pool_logs_error() {
     let mut world = World::new();
@@ -381,7 +380,7 @@ fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
         .to_path_buf()
 }
 
-/// 1 周分の結線（argv で決まった体の決定を合成する・design 議題 7）。
+/// 1 周分の結線（argv で決まった体の決定を合成する）。
 fn boot_round(
     world: &mut World,
     sample: &SampleRoot,
@@ -428,7 +427,7 @@ fn systems_lens(world: &World) -> [usize; 3] {
     ]
 }
 
-/// 同じプロセスで 2 周する（design Testing Strategy 新規テスト 1・要件 6.1・3.2・1.6・2.2〜2.4）。
+/// 同じプロセスで 2 周する。
 ///
 /// 1 周目を降ろして全窓を閉じ、2 周目を結線した後に、⑴ 系が二重に登録されていない
 /// ⑵ 状態が 2 周目のものへ載せ替わっている（説明書の経路が 2 周目の根の下・メニューの登記が

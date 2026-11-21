@@ -1,4 +1,4 @@
-//! 矢印の鍵の読み（`marker.rs`）のテスト（balloon-scroll-arrows 要件 1.1〜1.6・4.2・7.1）。
+//! 矢印の鍵の読み（`marker.rs`）のテスト。
 //! 公開の入口 `parse_str` を通して、2 層の後勝ちに乗っていることごと固定する。
 
 use super::parse_str;

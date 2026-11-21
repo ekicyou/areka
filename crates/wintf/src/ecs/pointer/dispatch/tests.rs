@@ -153,7 +153,6 @@ fn test_dispatch_tunnel_order_is_root_to_sender() {
 
     dispatch_pointer_events(&mut world);
 
-    // Tunnel は root(0) → child(1) の順
     assert_eq!(
         *ORDER.lock().unwrap(),
         vec![0, 1],
@@ -164,7 +163,7 @@ fn test_dispatch_tunnel_order_is_root_to_sender() {
 #[test]
 fn test_dispatch_pressed_fires_for_every_button() {
     // OnPointerPressed は left/right/middle/XButton1/XButton2 のいずれかが down のとき発火する
-    // （拡張ボタン 1・2 だけの押下でも届く・mouse-click-wheel-events 要件 2.1）。
+    // （拡張ボタン 1・2 だけの押下でも届く）。
     // どのボタンも down でなければ発火しない。
     use std::sync::atomic::{AtomicU32, Ordering};
     static PRESSED_COUNT: AtomicU32 = AtomicU32::new(0);
@@ -454,7 +453,7 @@ fn test_dispatch_released_handler_receives_tunnel_then_bubble() {
 #[test]
 fn test_dispatch_event_for_handler_guards_deleted_entity() {
     // path 内のエンティティが存在しない場合、dispatch_event_for_handler は
-    // パニックせず静かに終了する（存在チェック、dispatch/mod.rs:165/181）。
+    // パニックせず静かに終了する（存在チェック）。
     use std::sync::atomic::{AtomicU32, Ordering};
     static CALL: AtomicU32 = AtomicU32::new(0);
 

@@ -1,8 +1,6 @@
-//! `sakurascript` の処理（spec: areka-P0-mcp-kanade-tools）。
+//! `sakurascript` の処理。kanade へ台本（`SstpSend`）を送り、返事は `super::later` で後から答える。
 //!
-//! 置き場のゴーストの kanade へ外からの台本（`SstpSend`）を送り、返事を後から答える口
-//! （`super::later`）で毎フレーム覗く。`raise_event` と使う部品（`script_target`・文言の定数）も
-//! ここに置く（振り分けのファイルに宣言を足さないため）。
+//! `raise_event` と使う部品（`script_target`・文言の定数）もここに置く。
 
 use std::sync::mpsc::Sender;
 
@@ -16,16 +14,16 @@ use bevy_ecs::world::World;
 use super::resolve::{self, ActiveGhost, NOT_ACTIVE, Omitted, listed_value};
 use crate::ghost_session::GhostSlot;
 
-/// 起動・終了・切替の手順の途中で受け付けなかったときの本文（SSP の実測の文言・要件 3.6）。
+/// 起動・終了・切替の手順の途中で受け付けなかったときの本文（SSP の実測の文言）。
 pub(super) const NOT_NOW: &str = "the ghost cannot accept a script now";
 
 /// 置き場に kanade の送り口が無いときの本文（areka 独自・本番では起きない内部の食い違い）。
 pub(super) const UNAVAILABLE: &str = "Script is not available";
 
-/// strict 真の答えに足す文の `<n>` の前まで（`sakurascript` と `raise_event` で共用・要件 1.1・3.10）。
+/// strict 真の答えに足す文の `<n>` の前まで（`sakurascript` と `raise_event` で共用）。
 const STRICT_NOTE_HEAD: &str = "strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
 
-/// strict 真の答えに足す文（`OK:` は付けない）。`since_id` は送る前に読んだ最後の通し番号（要件 1.2）。
+/// strict 真の答えに足す文（`OK:` は付けない）。`since_id` は送る前に読んだ最後の通し番号。
 pub(super) fn strict_note(since_id: u64) -> String {
     format!("{STRICT_NOTE_HEAD}{since_id})")
 }
@@ -38,7 +36,7 @@ pub(super) fn since_id_if_strict(strict: Option<bool>) -> Option<u64> {
 /// 宛先の kanade の送り口と、答える前に降りたときの文言。
 pub(super) struct ScriptTarget {
     pub kanade: Option<Sender<KanadeMsg>>,
-    /// 起動中のゴースト無しで解決したときの失敗の理由（`get_status` と同じ求め方・要件 3.5）。
+    /// 起動中のゴースト無しで解決したときの失敗の理由（`get_status` と同じ求め方）。
     pub gone: &'static str,
 }
 
@@ -55,11 +53,11 @@ pub(super) fn script_target(world: &World, ghost_name: Option<&str>) -> ScriptTa
     ScriptTarget { kanade, gone }
 }
 
-/// 台本を 1 通送り、返事は待たずに `later` へ預ける（要件 1.1・1.3〜1.7・3.5・3.6・3.9・6.4・6.5）。
+/// 台本を 1 通送り、返事は待たずに `later` へ預ける。
 ///
 /// `ghost` は送り口が無いときの `warn!` の欄にだけ使う。成功の枝では記録を出さない（橋が `debug!` を残す）。
 pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: ReplyTo) {
-    // 空文字だけを空と数える（空白だけの台本は送る・要件 1.4）。
+    // 空文字だけを空と数える（空白だけの台本は送る）。
     if args.script.is_empty() {
         reply.send(outcome::ng("script is empty"));
         return;

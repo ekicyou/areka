@@ -1,21 +1,21 @@
 //! 「色指定」の解析（[`super::parse_color`]）と無効表示の混色（[`super::mix_disabled`]）の
-//! 決定論テスト（タスク 3.1・要件 8.1〜8.4／8.9／8.10・4.6・15.3）。
+//! 決定論テスト。
 //!
 //! ## 章立て
 //!
-//! | § | 内容 | 要件 |
-//! |---|---|---|
-//! | §1 | 10 進 3 成分（境界・範囲外・非数・符号・書式の混在・成分数） | 8.1, 8.2, 8.9 |
-//! | §2 | 百分率 3 成分（0〜255 への写像・境界・範囲外） | 8.2, 8.9 |
-//! | §3 | 16 進 3 桁と 6 桁（各桁 2 倍・両者の一致・桁数違い） | 8.3, 8.9 |
-//! | §4 | 色名表（母数・整列・全行の引き当て・実値の抜き取り・大文字は失敗） | 8.4, 8.9 |
-//! | §5 | 戻し先を表す語彙 8 語（既定／素の既定／無効表示／選択肢／アンカー 3 種） | 8.5〜8.8 |
-//! | §6 | 無効表示の混色（黒文字 × 白背景＝中間の灰・成分ごとの独立・端点） | 4.6 |
-//! | §7 | 較正——過去の壊れ方を再現すると赤になる述語 | 15.3 |
+//! | § | 内容 |
+//! |---|---|
+//! | §1 | 10 進 3 成分（境界・範囲外・非数・符号・書式の混在・成分数） |
+//! | §2 | 百分率 3 成分（0〜255 への写像・境界・範囲外） |
+//! | §3 | 16 進 3 桁と 6 桁（各桁 2 倍・両者の一致・桁数違い） |
+//! | §4 | 色名表（母数・整列・全行の引き当て・実値の抜き取り・大文字は失敗） |
+//! | §5 | 戻し先を表す語彙 8 語（既定／素の既定／無効表示／選択肢／アンカー 3 種） |
+//! | §6 | 無効表示の混色（黒文字 × 白背景＝中間の灰・成分ごとの独立・端点） |
+//! | §7 | 較正——過去の壊れ方を再現すると赤になる述語 |
 //!
 //! **期待値は正典の式から書く**——実装が返した値を書き写さない。百分率は
 //! `round(v * 255 / 100)`、16 進 3 桁は各桁を 2 倍（`#f0a` → `#ff00aa`）が正典の定め
-//! （requirements.md 付録 A「色指定（※）」）。
+//! （ukadoc「色指定（※）」）。
 //!
 //! 色名表を回すテストは、先に [`CSS_COLOR_NAMES`] の母数を固定してから回す——表が空の
 //! ままだとループが恒真で緑になるため（§4）。また表を引き当てるだけのループは表の値が
@@ -41,7 +41,7 @@ fn reason(args: &[&str]) -> &'static str {
 
 // ---------------------------------------------------------------- §1 10 進 3 成分
 
-/// 10 進 3 成分は 0〜255 をそのまま色にする（R8.1・正典の記述例 `\f[color,100,150,200]`）。
+/// 10 進 3 成分は 0〜255 をそのまま色にする（正典の記述例 `\f[color,100,150,200]`）。
 #[test]
 fn decimal_triple_is_taken_as_is() {
     assert_eq!(rgb(&["100", "150", "200"]), (100, 150, 200));
@@ -51,7 +51,7 @@ fn decimal_triple_is_taken_as_is() {
     assert_eq!(rgb(&["1", "2", "3"]), (1, 2, 3));
 }
 
-/// 256 以上は範囲外として失敗し、色を決めない（R8.9）。
+/// 256 以上は範囲外として失敗し、色を決めない。
 #[test]
 fn decimal_out_of_range_is_rejected() {
     assert_eq!(reason(&["256", "0", "0"]), REASON_OUT_OF_RANGE);
@@ -60,7 +60,7 @@ fn decimal_out_of_range_is_rejected() {
     assert_eq!(reason(&["1000", "1000", "1000"]), REASON_OUT_OF_RANGE);
 }
 
-/// 非数（負値・小数・空・字）は失敗する（R8.9）。
+/// 非数（負値・小数・空・字）は失敗する。
 #[test]
 fn decimal_non_numeric_is_rejected() {
     assert_eq!(reason(&["-1", "0", "0"]), REASON_NOT_A_NUMBER);
@@ -69,10 +69,10 @@ fn decimal_non_numeric_is_rejected() {
     assert_eq!(reason(&["0", "x", "0"]), REASON_NOT_A_NUMBER);
 }
 
-/// 符号付きの数は 10 進でも百分率でも受けない（R8.1／R8.2 は符号を許していない・R8.9）。
+/// 符号付きの数は 10 進でも百分率でも受けない（正典は符号を許していない）。
 ///
 /// `-1` だけを見ると「負だから範囲外で落ちた」に見えるが、`+1` を隣に置くと符号そのものを
-/// 受けないことが字面で分かる。本仕様は `\f[height,+3]`（R7.2）で先頭の `+` に
+/// 受けないことが字面で分かる。ukadoc は `\f[height,+3]` で先頭の `+` に
 /// 「相対指定」という別の意味を与えているので、色指定が黙って吸収してはならない。
 #[test]
 fn decimal_leading_plus_is_rejected() {
@@ -88,8 +88,8 @@ fn decimal_leading_zero_is_accepted() {
     assert_eq!(rgb(&["0255", "007", "0"]), (255, 7, 0));
 }
 
-/// 3 成分は 10 進か百分率のどちらかに揃っていなければならない（R8.1／R8.2 のいずれでもない
-/// 形は R8.9 の「上記のいずれの書式でもない」に落ちる）。どちら向きの混ざり方も受けない。
+/// 3 成分は 10 進か百分率のどちらかに揃っていなければならない（正典のどの書式でもない形は失敗に落ちる）。
+/// どちら向きの混ざり方も受けない。
 #[test]
 fn mixed_decimal_and_percent_is_rejected() {
     assert_eq!(reason(&["100", "50%", "200"]), REASON_MIXED_NOTATION);
@@ -98,7 +98,7 @@ fn mixed_decimal_and_percent_is_rejected() {
     assert_eq!(reason(&["50%", "90%", "20"]), REASON_MIXED_NOTATION);
 }
 
-/// 成分数が 1 でも 3 でもないときは失敗する（R8.9・「成分が足りない」）。
+/// 成分数が 1 でも 3 でもないときは失敗する。
 #[test]
 fn wrong_component_count_is_rejected() {
     assert_eq!(reason(&[]), REASON_COMPONENT_COUNT);
@@ -108,7 +108,7 @@ fn wrong_component_count_is_rejected() {
 
 // ---------------------------------------------------------------- §2 百分率 3 成分
 
-/// 百分率は 0〜100 を 0〜255 へ写す（R8.2・`round(v * 255 / 100)`）。
+/// 百分率は 0〜100 を 0〜255 へ写す（`round(v * 255 / 100)`）。
 #[test]
 fn percent_triple_maps_to_0_255() {
     assert_eq!(rgb(&["0%", "0%", "0%"]), (0, 0, 0));
@@ -120,14 +120,14 @@ fn percent_triple_maps_to_0_255() {
     assert_eq!(rgb(&["50%", "90%", "20%"]), (128, 230, 51));
 }
 
-/// 100% を超える百分率は範囲外として失敗する（R8.9）。
+/// 100% を超える百分率は範囲外として失敗する。
 #[test]
 fn percent_out_of_range_is_rejected() {
     assert_eq!(reason(&["101%", "0%", "0%"]), REASON_OUT_OF_RANGE);
     assert_eq!(reason(&["0%", "255%", "0%"]), REASON_OUT_OF_RANGE);
 }
 
-/// 百分率の記号だけ・非数の百分率は失敗する（R8.9）。
+/// 百分率の記号だけ・非数の百分率は失敗する。
 #[test]
 fn percent_non_numeric_is_rejected() {
     assert_eq!(reason(&["%", "0%", "0%"]), REASON_NOT_A_NUMBER);
@@ -136,7 +136,7 @@ fn percent_non_numeric_is_rejected() {
 
 // ---------------------------------------------------------------- §3 16 進
 
-/// 6 桁の 16 進は 2 桁ずつ 1 成分（R8.3）。大文字小文字は問わない。
+/// 6 桁の 16 進は 2 桁ずつ 1 成分。大文字小文字は問わない。
 #[test]
 fn hex6_is_two_digits_per_component() {
     assert_eq!(rgb(&["#ff00aa"]), (0xff, 0x00, 0xaa));
@@ -145,7 +145,7 @@ fn hex6_is_two_digits_per_component() {
     assert_eq!(rgb(&["#010203"]), (1, 2, 3));
 }
 
-/// 3 桁の 16 進は各桁を 2 倍にする（R8.3）。6 桁の対応形と一致する。
+/// 3 桁の 16 進は各桁を 2 倍にする。6 桁の対応形と一致する。
 #[test]
 fn hex3_doubles_each_digit_and_matches_hex6() {
     assert_eq!(rgb(&["#f0a"]), (0xff, 0x00, 0xaa));
@@ -155,7 +155,7 @@ fn hex3_doubles_each_digit_and_matches_hex6() {
     assert_eq!(rgb(&["#123"]), (0x11, 0x22, 0x33));
 }
 
-/// 3 桁 6 桁以外の桁数・16 進でない字は失敗する（R8.9）。
+/// 3 桁 6 桁以外の桁数・16 進でない字は失敗する。
 #[test]
 fn hex_with_other_length_or_bad_digit_is_rejected() {
     assert_eq!(reason(&["#"]), REASON_BAD_HEX);
@@ -168,7 +168,7 @@ fn hex_with_other_length_or_bad_digit_is_rejected() {
     assert_eq!(reason(&["#ａａａ"]), REASON_BAD_HEX);
 }
 
-/// 記録の理由の文は実際と合う（指摘 32）——`#gggggg` は 6 字なので「桁数が違う」とは言わず、
+/// 記録の理由の文は実際と合う——`#gggggg` は 6 字なので「桁数が違う」とは言わず、
 /// u32 を越える 10 進（`4294967296`）は「数でない」でなく「範囲外」と言う。定数でなく字面で固定する。
 #[test]
 fn reason_text_matches_what_actually_failed() {
@@ -177,7 +177,7 @@ fn reason_text_matches_what_actually_failed() {
     assert_eq!(reason(&["4294967296%", "0%", "0%"]), "色指定の成分が範囲外");
 }
 
-/// 16 進は 1 成分の書式なので、3 成分に並べても受けない（R8.9）。
+/// 16 進は 1 成分の書式なので、3 成分に並べても受けない。
 #[test]
 fn hex_in_triple_form_is_rejected() {
     assert_eq!(
@@ -208,7 +208,7 @@ fn color_name_table_is_strictly_sorted() {
     }
 }
 
-/// 表のすべての名前が引き当てられ、表の値と一致する（R8.4）。
+/// 表のすべての名前が引き当てられ、表の値と一致する。
 #[test]
 fn every_table_name_resolves_to_its_entry() {
     for (name, (r, g, b)) in CSS_COLOR_NAMES {
@@ -244,7 +244,7 @@ fn well_known_color_names_have_canonical_values() {
 }
 
 /// 色名は小文字の完全一致のみ——大文字混じりは失敗する
-/// （R8.4「色名を表すキーワード(全て小文字)で指定可能」・R8.9）。
+/// （正典は「色名を表すキーワード(全て小文字)で指定可能」）。
 #[test]
 fn uppercase_color_name_is_rejected() {
     assert_eq!(reason(&["Red"]), REASON_UNKNOWN_TOKEN);
@@ -253,7 +253,7 @@ fn uppercase_color_name_is_rejected() {
     assert_eq!(reason(&["DarkGray"]), REASON_UNKNOWN_TOKEN);
 }
 
-/// 表に無い語は失敗する（R8.9）。空の 1 成分も同じ。
+/// 表に無い語は失敗する。空の 1 成分も同じ。
 #[test]
 fn unknown_word_is_rejected() {
     assert_eq!(reason(&["notacolor"]), REASON_UNKNOWN_TOKEN);
@@ -264,7 +264,7 @@ fn unknown_word_is_rejected() {
 
 // ---------------------------------------------------------------- §5 戻し先の語彙
 
-/// 戻し先を表す 8 語は色でなく語彙として返る（R8.5〜8.8）。解決は上位層の担当。
+/// 戻し先を表す 8 語は色でなく語彙として返る。解決は上位層の担当。
 #[test]
 fn restore_target_words_are_vocabulary_not_colors() {
     assert_eq!(parse_color(&["default"]), Ok(ColorSpec::Default));
@@ -292,7 +292,7 @@ fn restore_target_words_are_vocabulary_not_colors() {
     );
 }
 
-/// 語彙も小文字の完全一致のみ（R8.9）。
+/// 語彙も小文字の完全一致のみ。
 #[test]
 fn restore_target_words_are_lowercase_only() {
     assert_eq!(reason(&["Default"]), REASON_UNKNOWN_TOKEN);
@@ -304,7 +304,7 @@ fn restore_target_words_are_lowercase_only() {
 
 // ---------------------------------------------------------------- §6 無効表示の混色
 
-/// 黒文字 × 白背景の混色は中間の灰になる（R4.6・`(255 + 0 * 2) / 3 = 85`）。
+/// 黒文字 × 白背景の混色は中間の灰になる（`(255 + 0 * 2) / 3 = 85`）。
 #[test]
 fn mix_disabled_black_text_on_white_background_is_mid_gray() {
     assert_eq!(mix_disabled((0, 0, 0), (255, 255, 255)), (85, 85, 85));
@@ -347,7 +347,7 @@ fn mix_disabled_truncates_by_integer_division() {
 
 // ---------------------------------------------------------------- §7 較正
 
-/// 較正: 百分率を 0〜255 へ写さず素通しする誤り（R15.3・タスク 3.1 名指し）。
+/// 較正: 百分率を 0〜255 へ写さず素通しする誤り。
 #[test]
 fn calibration_percent_must_not_pass_through_raw() {
     assert_ne!(
@@ -382,7 +382,7 @@ fn calibration_uppercase_name_must_not_be_folded() {
 }
 
 /// 較正: 3 成分を成分ごとに独立解釈し、10 進と百分率の混在を黙って受けてしまう誤り
-/// （正典は「3 成分とも 10 進」か「3 成分とも百分率」しか定めていない・R8.1／R8.2／R8.9）。
+/// （正典は「3 成分とも 10 進」か「3 成分とも百分率」しか定めていない）。
 ///
 /// 成分ごとに独立して読む実装では `["100","50%","200"]` が `Rgb(100,128,200)` として通る。
 #[test]

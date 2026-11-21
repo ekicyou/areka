@@ -1,4 +1,4 @@
-//! 動く絵の 3 つの上限・環境変数・判定（spec: areka-P0-animated-image-decode 要件 6.1・6.2・6.9〜6.11）。
+//! 動く絵の 3 つの上限・環境変数・判定。
 //!
 //! 上限は外から渡せる値（[`AnimationLimits`]）で持ち、設定ファイルが無いあいだは `AREKA_` の
 //! 環境変数で変える。名前と欄の割り当て・読めない値の扱いは純粋な [`AnimationLimits::from_lookup`]
@@ -10,21 +10,21 @@ use std::sync::OnceLock;
 use crate::decode::AnimationInfo;
 use crate::pack::PackConfig;
 
-/// ㋐ 動く絵 1 つのコマの枚数の上限。
+/// 動く絵 1 つのコマの枚数の上限。
 pub(crate) const MAX_FRAMES_ENV: &str = "AREKA_ANIMATED_IMAGE_MAX_FRAMES";
-/// ㋑ 動く絵 1 つの全コマの画素の量（枚数 × 幅 × 高さ）の上限。
+/// 動く絵 1 つの全コマの画素の量（枚数 × 幅 × 高さ）の上限。
 pub(crate) const MAX_PIXELS_ENV: &str = "AREKA_ANIMATED_IMAGE_MAX_PIXELS";
-/// ㋒ `bake` 1 回の、動く絵の全コマの画素の量の合計の上限。
+/// `bake` 1 回の、動く絵の全コマの画素の量の合計の上限。
 pub(crate) const MAX_TOTAL_PIXELS_ENV: &str = "AREKA_ANIMATED_IMAGE_MAX_TOTAL_PIXELS";
 
-/// 動く絵の 3 つの上限（要件 6.1・6.9）。
+/// 動く絵の 3 つの上限。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AnimationLimits {
-    /// ㋐ 既定 1,024 枚。
+    /// 既定 1,024 枚。
     pub max_frames: u64,
-    /// ㋑ 既定 67,108,864 画素（1 画素 4 バイトで 256 MiB）。
+    /// 既定 67,108,864 画素（1 画素 4 バイトで 256 MiB）。
     pub max_pixels: u64,
-    /// ㋒ 既定 268,435,456 画素（同 1 GiB）。
+    /// 既定 268,435,456 画素（同 1 GiB）。
     pub max_total_pixels: u64,
 }
 
@@ -90,7 +90,7 @@ impl AnimationLimits {
     }
 }
 
-/// 1 項目を決める純粋な関数（要件 6.11）。未設定なら既定（記録なし）。
+/// 1 項目を決める純粋な関数。未設定なら既定（記録なし）。
 /// 1 以上の整数でなければ（数でない・0・負・UTF-8 でない）既定と `LimitWarning` を返す。
 pub(crate) fn resolve_limit(
     name: &'static str,
@@ -117,7 +117,7 @@ pub(crate) enum Exceeded {
     PageSide,
 }
 
-/// 絵 1 つを判定する（要件 6.2）。収まれば、この絵が使う画素の量を返す。
+/// 絵 1 つを判定する。収まれば、この絵が使う画素の量を返す。
 /// `used` はこの `bake` で既に載せた動く絵の合計。順は 枚数 → 画素 → ページの一辺 → 合計で、
 /// 掛け算・足し算のあふれは上限超えとして扱う。
 pub(crate) fn judge(

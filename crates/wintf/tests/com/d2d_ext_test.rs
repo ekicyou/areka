@@ -1,7 +1,5 @@
-//! com/d2d/mod.rs — D2D Ext トレイト群のテスト
+//! `src/com/d2d/mod.rs` の D2D Ext トレイト群のテスト。
 //!
-//! デバイス生成は既存テストの前例（GraphicsCore::new() を用いる
-//! tests/graphics 配下のテストがヘッドレスで合格）に従う。
 //! 描画コマンドは ID2D1CommandList に記録して閉じる。
 
 use windows::Win32::Graphics::Direct2D::Common::*;
@@ -85,10 +83,8 @@ fn device_context_wrappers_record_into_command_list_without_d2d_error() {
         let geometry =
             unsafe { dc_factory.CreateRoundedRectangleGeometry(&rounded) }.expect("geometry");
 
-        // WIC 画像から D2D ビットマップを生成
         let bitmap = load_test_bitmap(&dc);
 
-        // DWrite フォーマット/レイアウト
         let format = dwrite
             .create_text_format(
                 w!("Segoe UI"),
@@ -106,7 +102,6 @@ fn device_context_wrappers_record_into_command_list_without_d2d_error() {
 
         unsafe { dc.BeginDraw() };
 
-        // --- 各ラッパーで記録 ---
         let identity = windows_numerics::Matrix3x2::identity();
         dc.set_transform(&identity);
         dc.clear(Some(&red()));

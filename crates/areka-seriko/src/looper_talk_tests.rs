@@ -1,6 +1,4 @@
-//! 一番上の面の `talk` の檻（spec: areka-P0-seriko-trigger-intervals 要件 4.1・4.3〜4.5・4.8〜4.10・
-//! 5.5・6.4・7.3・8.1・9.4・9.6・tasks.md 4.2）と、その面の文字の窓を借りる部品の `talk` の檻
-//! （要件 5.4・5.6・9.5・tasks.md 5.2・ファイルの後ろ）。
+//! 一番上の面の `talk` の檻と、その面の文字の窓を借りる部品の `talk` の檻（ファイルの後ろ）。
 //!
 //! 文字の到着は `observe_cue` の直呼び（偽の文字の到着）、刻みは `on_tick(now_ms)`、面の切り替えは
 //! アクターと同じ順で踏む。時計は手で進める偽物で、どの呼び出しもその直前に時計を合わせる（観測を
@@ -108,7 +106,7 @@ fn nine_glyphs_from_1000() -> Stage {
 }
 
 /// 3 文字目・6 文字目・9 文字目が現れた刻みで口が動く。開始は刻みの時刻でなく文字が現れた時刻で、
-/// 同じ刻みのうちに経過の分のコマが出る。口は 1 回流れて `-1` で消える（要件 4.1・4.5・5.1・5.2）。
+/// 同じ刻みのうちに経過の分のコマが出る。口は 1 回流れて `-1` で消える。
 #[test]
 fn mouth_starts_at_every_third_glyph_from_its_reveal_time() {
     let mut st = nine_glyphs_from_1000();
@@ -145,7 +143,7 @@ fn mouth_starts_at_every_third_glyph_from_its_reveal_time() {
 }
 
 /// 文字の数は待ちと塊をまたいで積み上がる: 2 文字 → 待ち → 2 文字 なら、通算 3 文字目（後ろの塊の
-/// 1 文字目）で口が動く（要件 4.3）。
+/// 1 文字目）で口が動く。
 #[test]
 fn glyph_count_accumulates_across_a_wait_and_chunks() {
     let mut st = Stage::shell(MOUTH);
@@ -164,7 +162,7 @@ fn glyph_count_accumulates_across_a_wait_and_chunks() {
     assert_eq!(st.mouth(), Some(601));
 }
 
-/// 面が切り替わると、その時点で現れていた文字の次から数え直す（要件 4.4）。
+/// 面が切り替わると、その時点で現れていた文字の次から数え直す。
 #[test]
 fn glyph_count_restarts_when_the_surface_changes() {
     let mut st = nine_glyphs_from_1000();
@@ -184,7 +182,7 @@ fn glyph_count_restarts_when_the_surface_changes() {
     );
 }
 
-/// `\0` の文字で `\1` の口は動かない（要件 4.8）。
+/// `\0` の文字で `\1` の口は動かない。
 #[test]
 fn text_of_one_scope_does_not_move_another_scope() {
     let mut st = nine_glyphs_from_1000();
@@ -208,7 +206,7 @@ fn text_of_one_scope_does_not_move_another_scope() {
 }
 
 /// 面が非表示のスコープでは、文字が届いても状態も記録も増えない。戻ったら、その時点で現れていた
-/// 文字の次から数える（要件 4.4・4.9）。
+/// 文字の次から数える。
 #[test]
 fn hidden_scope_keeps_no_state_and_counts_from_its_return() {
     let mut st = Stage::shell(MOUTH);
@@ -247,7 +245,7 @@ fn note(st: &mut Stage, open: bool, ms: u64) {
 }
 
 /// バルーンの面の `talk`: 窓が閉じている間は数えも再生も持たず、文字の列も溜めない。開いたら
-/// その時点で現れていた文字の次から数える（要件 4.9・5.5）。
+/// その時点で現れていた文字の次から数える。
 #[test]
 fn closed_balloon_window_counts_nothing_and_recounts_on_open() {
     let (rng, _probe) = counting_rng(&[]);
@@ -288,8 +286,7 @@ const NO_TALK: &str = "surface0\n{\n\
     surface601\n{\n}\n";
 
 /// 表に `talk` が無ければ、届いた cue は何も変えない（起点も文字の列も数えも生まれない）。`talk` の
-/// 在る表では同じ cue で起点と列が生まれる。どちらでも cue を写すこと自体は記録を出さない
-/// （要件 4.9・7.3・8.1）。
+/// 在る表では同じ cue で起点と列が生まれる。どちらでも cue を写すこと自体は記録を出さない。
 #[test]
 fn cues_change_nothing_when_the_table_has_no_talk() {
     let run = |table: &str| {
@@ -359,7 +356,7 @@ fn surface_armed_before_any_cue_counts_from_the_first_glyph() {
     );
 }
 
-/// 選択肢の文字は数える。改行・待ち・`\!` のコマンドは数えない（要件 4.10）。
+/// 選択肢の文字は数える。改行・待ち・`\!` のコマンドは数えない。
 #[test]
 fn choice_text_counts_and_non_text_cues_do_not() {
     let mut st = Stage::shell(MOUTH);
@@ -392,8 +389,7 @@ fn choice_text_counts_and_non_text_cues_do_not() {
     assert_eq!(st.started(), Some(1200), "選択肢の 2 文字目が通算 3 文字目");
 }
 
-/// 台詞の途中の消去: 現れなかった文字は数えず、消去の後の文字はそれまでに現れた文字に続けて数える
-/// （要件 4.3・4.10）。
+/// 台詞の途中の消去: 現れなかった文字は数えず、消去の後の文字はそれまでに現れた文字に続けて数える。
 #[test]
 fn clear_in_mid_talk_drops_unrevealed_glyphs_and_keeps_counting() {
     let mut st = Stage::shell(MOUTH);
@@ -510,7 +506,7 @@ const TWO_MOUTHS: &str = "surface0\n{\n\
     surface601\n{\n}\nsurface611\n{\n}\nsurface612\n{\n}\n";
 
 /// `talk` の開始・停止・末尾の記録は `debug!` で、区切りごとに 1 件ずつ。文字ごと・刻みごとの記録は
-/// 無い（30 文字・約 100 刻みで、区切り 10 回分の記録だけ・要件 7.3）。
+/// 無い（30 文字・約 100 刻みで、区切り 10 回分の記録だけ）。
 #[test]
 fn talk_records_are_debug_and_bounded_by_boundaries() {
     let mut st = Stage::shell(TWO_MOUTHS);
@@ -555,8 +551,7 @@ const EXACT_MOUTH: &str = "surface0\n{\n\
     animation0.pattern2,overlay,-1,75,0,0\n}\n\
     surface601\n{\n}\nsurface602\n{\n}\n";
 
-/// 長さが区切りの間隔ちょうどの口は、区切りごとに毎回動く（前の再生は区切りの時刻には終えている・
-/// 要件 4.1・4.7）。
+/// 長さが区切りの間隔ちょうどの口は、区切りごとに毎回動く（前の再生は区切りの時刻には終えている）。
 #[test]
 fn mouth_as_long_as_the_boundary_gap_moves_at_every_boundary() {
     let mut st = Stage::shell(EXACT_MOUTH);
@@ -579,7 +574,7 @@ fn mouth_as_long_as_the_boundary_gap_moves_at_every_boundary() {
     assert_eq!(starts, [1100, 1250, 1400, 1550]);
 }
 
-// ── 部品の `talk`（tasks.md 5.2）: 部品は文字の数えを持たず、面の文字の窓を借りる ──────────────
+// ── 部品の `talk`: 部品は文字の数えを持たず、面の文字の窓を借りる ──────────────
 
 /// `\0` のシェルの面の部品 100 の欄（animation の番号, 絵）。
 fn part_cells(st: &Stage) -> Vec<(u32, u32)> {
@@ -594,7 +589,7 @@ fn hear_nine_from_1000(st: &mut Stage) {
 
 /// 一番上に 3 語が 1 つも無く部品にだけ `talk` が在る面でも、届いた文字で部品の口が動く（面の窓を
 /// 借りる）。開始は区切りの文字が現れた時刻で、同じ刻みのうちに経過の分のコマを出す。一番上では
-/// 何も始まらない（要件 4.1・4.5・5.4）。
+/// 何も始まらない。
 #[test]
 fn part_mouth_moves_on_a_surface_whose_top_has_none_of_the_three_words() {
     let mut st = Stage::shell(MOUTH_ON_PART);
@@ -647,8 +642,7 @@ const MOUTH_ON_TOP_AND_PART: &str = "surface0\n{\nelement0,overlay,100,0,0\n\
     surface601\n{\n}\nsurface611\n{\n}\n";
 
 /// 一番上と部品の両方に `talk` が在る面では、同じ刻みで両方が同じ文字の窓を読み、同じ文字が現れた
-/// 時刻に両方の口が動く。面の数えは両方が読み終えてから進むので、次の区切りでも両方が動く
-/// （要件 4.1・5.4）。
+/// 時刻に両方の口が動く。面の数えは両方が読み終えてから進むので、次の区切りでも両方が動く。
 #[test]
 fn top_mouth_and_part_mouth_on_one_surface_move_at_the_same_glyph() {
     let mut st = Stage::shell(MOUTH_ON_TOP_AND_PART);
@@ -699,7 +693,7 @@ const MOUTH_ON_SHARED_PART: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
     surface601\n{\n}\n";
 
 /// 面が切り替わると面の数えが数え直され、見え続けた部品の口もその数えに従う（部品は自分の数えを
-/// 持たない・要件 4.4・5.4）。
+/// 持たない）。
 #[test]
 fn part_mouth_follows_the_recount_when_the_surface_changes() {
     let mut st = Stage::shell(MOUTH_ON_SHARED_PART);
@@ -727,7 +721,7 @@ fn part_mouth_follows_the_recount_when_the_surface_changes() {
 }
 
 /// 面が非表示のスコープでは、文字が届いても部品の時計も引き金の状態も記録も生まれない。面が出たら、
-/// その時点で現れていた文字の次から数えた区切りで部品の口が動く（要件 4.9・5.6）。
+/// その時点で現れていた文字の次から数えた区切りで部品の口が動く。
 #[test]
 fn part_mouth_on_a_hidden_surface_stays_silent_and_counts_from_its_return() {
     let mut st = Stage::shell(MOUTH_ON_PART);
@@ -754,8 +748,7 @@ fn part_mouth_on_a_hidden_surface_stays_silent_and_counts_from_its_return() {
 }
 
 /// バルーンの面の部品の `talk`: 窓が閉じている間は文字の窓が無く、部品の口は動かない。開いたら
-/// その時点で現れていた文字の次から数えた区切りで動き、閉じたら再生中の口の時計を捨てる
-/// （要件 4.9・5.5）。
+/// その時点で現れていた文字の次から数えた区切りで動き、閉じたら再生中の口の時計を捨てる。
 #[test]
 fn part_mouth_is_silent_while_the_balloon_window_is_closed() {
     let (rng, _probe) = counting_rng(&[]);
@@ -809,7 +802,7 @@ const TWO_MOUTHS_ON_PART: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
     surface601\n{\n}\nsurface611\n{\n}\nsurface612\n{\n}\n";
 
 /// 部品の `talk` の開始・停止・末尾の記録は `debug!` で、区切りごとに 1 件ずつ。文字ごと・刻みごとの
-/// 記録は無い（30 文字・約 100 刻みで、構えた 2 件と区切り 10 回分の記録だけ・要件 7.3）。
+/// 記録は無い（30 文字・約 100 刻みで、構えた 2 件と区切り 10 回分の記録だけ）。
 #[test]
 fn part_talk_records_are_debug_and_bounded_by_boundaries() {
     let mut st = Stage::shell(TWO_MOUTHS_ON_PART);
@@ -851,7 +844,7 @@ fn part_talk_records_are_debug_and_bounded_by_boundaries() {
 }
 
 /// 合図の更新（着せ替えなど・1120）も `talk` を判定する: 3 文字目（1100）の区切りでその場で口が動き、
-/// 数えを進めるので次の刻みは同じ区切りで鳴り直さない（要件 4.1・4.5・4.7・6.1）。
+/// 数えを進めるので次の刻みは同じ区切りで鳴り直さない。
 #[test]
 fn refresh_judges_talk_and_advances_the_count() {
     let mut st = nine_glyphs_from_1000();

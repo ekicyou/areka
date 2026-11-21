@@ -1,4 +1,4 @@
-//! helper の標準エラーを記録へ回すテスト（audit-shiori-host32 U5・指摘 4・要件 5.2・5.4・10.12）。
+//! helper の標準エラーを記録へ回すテスト。
 //!
 //! 行の読み（[`forward_helper_stderr`]）と記録の形（[`log_helper_line`]）は同じスレッドで確かめ、
 //! 実の i686 helper の行が読み手のスレッドから sink へ届くことを 1 本で縛る。
@@ -22,7 +22,7 @@ fn forwarded(bytes: &[u8]) -> Vec<String> {
     lines
 }
 
-/// LF で切り、行末の CR を落とし、UTF-8 でない行は ANSI コードページで読む（要件 5.4）。
+/// LF で切り、行末の CR を落とし、UTF-8 でない行は ANSI コードページで読む。
 #[test]
 fn forward_lines_reads_utf8_and_ansi_lines() {
     // SJIS の「あ」（0x82 0xA0）は UTF-8 として読めない。
@@ -58,7 +58,7 @@ fn forward_lines_reads_utf8_and_ansi_lines() {
     );
 }
 
-/// 1 行が `warn`・宛名 `shiori-host32`・`event = "helper_stderr"`・`pid` で、文がそのまま書かれる（要件 10.12）。
+/// 1 行が `warn`・宛名 `shiori-host32`・`event = "helper_stderr"`・`pid` で、文がそのまま書かれる。
 #[test]
 fn a_helper_line_is_logged_verbatim_at_warn() {
     let line = r#"[helper] 窓生成/HELLO 失敗: "quoted" back\slash {braces}"#;
@@ -76,7 +76,7 @@ fn a_helper_line_is_logged_verbatim_at_warn() {
 }
 
 /// 実の i686 helper が書く `[helper]` の行が、`helper_command` の管と読み手のスレッドを通って
-/// sink へ届く（親の窓 0 で HELLO に失敗して終わる道）。成果物が無ければ panic（要件 4.4）。
+/// sink へ届く（親の窓 0 で HELLO に失敗して終わる道）。成果物が無ければ panic。
 #[test]
 fn real_helper_stderr_reaches_the_sink() {
     let root = common::TestRoot::new("stderr");

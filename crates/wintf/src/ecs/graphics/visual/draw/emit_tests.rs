@@ -1,4 +1,4 @@
-//! 画素の答え（WARP・要件 1.1, 1.7, 1.10, 2.1, 2.3〜2.8, 3.1, 6.1〜6.4）。比べる点は塗りの境界から 2 画素以上離す。
+//! 画素の答え（WARP）。比べる点は塗りの境界から 2 画素以上離す。
 
 use super::super::*;
 use super::emit_test_support::*;
@@ -79,7 +79,6 @@ fn painter_order_later_sibling_is_on_top() {
 fn same_tree_twice_is_bit_identical() {
     let mut world = World::new();
     let root = red_then_blue(&mut world);
-    // 図形の切り抜き（層）の道も通す: 回転した矩形の切り抜きの下に青。
     let g = world
         .spawn((
             Visual {
@@ -208,7 +207,6 @@ fn negative_scale_swaps_left_and_right() {
 
 #[test]
 fn single_node_matches_surface_without_tree() {
-    // 同じ命令の列を、木を持たない描画面の道（根の変換で 1 度 DrawImage）と、節 1 つに置いた道で。
     let content = solid(rect(3.0, 5.0, 11.0, 9.0), RED);
     let list = content.command_list.clone();
     let mut world = World::new();
@@ -438,7 +436,6 @@ fn invisible_node_is_skipped() {
     let root = red_then_blue(&mut world);
     let blue = *world.get::<Children>(root).unwrap().last().unwrap();
     world.get_mut::<Visual>(blue).unwrap().is_visible = false;
-    // 見えない親の下の見える子も塗られない。
     let g = world
         .spawn((
             Visual {

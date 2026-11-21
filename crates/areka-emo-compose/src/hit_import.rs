@@ -1,15 +1,15 @@
-//! 子のサーフェスの当たり判定の領域を親へ持ち込む（surface-element-nesting 要件 4.1〜4.10）。
+//! 子のサーフェスの当たり判定の領域を親へ持ち込む。
 //!
 //! サーフェス S の持ち込み済みの列＝［子から持ち込む分（S の element定義の番号の昇順）］→
 //! ［S に直接書かれた領域（転記の並び）］。当たり判定は列を後ろから見るので、S に直接書いた領域が
-//! 最前・番号の大きい element定義の子が次になる（要件 4.3・4.5）。
+//! 最前・番号の大きい element定義の子が次になる。
 //!
 //! 子 C から持ち込む分は、C の持ち込み済みの列のうち S に直接書かれた領域と同じ名前でないものを、
-//! element定義の X,Y だけずらした写し（要件 4.1・4.8）。C の列の並びは変えない（要件 4.4）。C の列は
-//! C 自身の名前で孫の分を落とした結果なので、落とし方は段ごとに当てはまる（要件 4.9）。
+//! element定義の X,Y だけずらした写し。C の列の並びは変えない。C の列は
+//! C 自身の名前で孫の分を落とした結果なので、落とし方は段ごとに当てはまる。
 //!
 //! たどるのは element定義の辺だけで、合成（`plan.rs`）が飛ばす辺——面の表に無い番号・範囲を超える数・
-//! 先祖へ戻る辺——からは持ち込まない（要件 4.6）。pattern定義の先からも持ち込まない（要件 4.7）。
+//! 先祖へ戻る辺——からは持ち込まない。pattern定義の先からも持ち込まない。
 //! 記録は出さない（無い番号と循環は [`crate::nesting::NestReport`] が報告する・広がりの予算が尽きたときと、
 //! 根をまたいで持ち込む領域の数が [`IMPORT_BUDGET`] を越えたときの `error!` だけ出す）。
 
@@ -38,7 +38,7 @@ pub(crate) fn attach_hit_regions(emo: &mut EmoWorld, records: Records) {
     attach_hit_regions_limited(emo, records, IMPORT_BUDGET)
 }
 
-/// シェル全体で面に持ち込んで持ち続ける領域の数の上限（指摘 79）。根ごとの広がりの予算は 1 つの根の
+/// シェル全体で面に持ち込んで持ち続ける領域の数の上限。根ごとの広がりの予算は 1 つの根の
 /// 仕事を抑えるだけで、面の数だけ同じ長さの列を持ち続ける。仮の値で、測り直しの候補。
 pub(crate) const IMPORT_BUDGET: usize = 1 << 20;
 
@@ -68,7 +68,7 @@ pub(crate) fn attach_hit_regions_limited(emo: &mut EmoWorld, records: Records, l
         // 列は［持ち込み］→［直接］なので、長さが違えば持ち込みが在る（根は領域を切り詰めない）。
         let imported = list.len() - master.collisions.len();
         if imported > left {
-            // 収まらない根だけを飛ばし、後ろの小さな根は残りで持ち込む（7 回目の指摘 6）。記録は初めの 1 度だけ `error!`。
+            // 収まらない根だけを飛ばし、後ろの小さな根は残りで持ち込む。記録は初めの 1 度だけ `error!`。
             if !records.emits() {
                 continue;
             }
@@ -112,7 +112,7 @@ pub(crate) fn attach_hit_regions_limited(emo: &mut EmoWorld, records: Records, l
 /// 持ち込み済みの列。きれいに終わった面の下に循環は無いので、どの経路から入っても答えは同じ。
 ///
 /// 覚えた列は根をまたいで持ち続けるので、覚えに入れる列の長さの合計を根をまたぐ 1 つの予算 `left` から引き、
-/// 足りなくなったら以後は何も覚えない（覚えが無いときと同じく入り直すだけ＝答えと記録は変わらない・指摘 6）。
+/// 足りなくなったら以後は何も覚えない（覚えが無いときと同じく入り直すだけ＝答えと記録は変わらない）。
 pub(crate) struct HitMemo {
     pub(crate) map: HashMap<u32, (usize, Vec<Collision>)>,
     left: usize,
@@ -142,7 +142,7 @@ impl HitMemo {
 /// きれいに終わるかと、この面に入る分（入る 1 ＋面の行）と段の下で予算に数えた数。
 struct Level<'a> {
     master: &'a SurfaceMaster,
-    /// `master` に直接書かれた領域の名前（段ごとに 1 度だけ作り、持ち込む 1 本ごとに引く・指摘 80）。
+    /// `master` に直接書かれた領域の名前（段ごとに 1 度だけ作り、持ち込む 1 本ごとに引く）。
     names: HashSet<&'a str>,
     next: usize,
     out: Vec<Collision>,
@@ -154,9 +154,9 @@ struct Level<'a> {
 
 /// `master` を根にした持ち込み済みの列。段のスタックで回し（先祖の確かめは経路の集合）、子の段が終わったら
 /// 親に直接書かれた領域と同じ名前を除き、element定義の X,Y を飽和で足して親の列へ足す。予算は入る面 1 つに
-/// 「入る 1 ＋面の行の全部（[`surface_rows`]）」（足りなければ入らない・指摘 130）と、子の段から親へ渡す列の
+/// 「入る 1 ＋面の行の全部（[`surface_rows`]）」（足りなければ入らない）と、子の段から親へ渡す列の
 /// 長さ（名前で除く前）を数える。渡す列を予算で切るときは奥（列の前＝持ち込みの奥）から落とし、直接の領域
-/// （いちばん手前）を残す（指摘 137）。
+/// （いちばん手前）を残す。
 ///
 /// `memo` が在れば、きれいに終わった面の答えを覚え、後で同じ面に入るとき予算の残りが「入る分＋下で数えた
 /// 数＋覚えた列の長さ」以上ならそれだけ一度に引いて覚えた答えを使う（足りなければ今どおり入る＝答えと記録は
@@ -225,7 +225,7 @@ pub(crate) fn regions_of(
             break;
         };
         on_path.remove(&done.master.id);
-        // 根でなければ親へ渡す領域の数も予算から引き、足りない分は渡さない（指摘 22）。
+        // 根でなければ親へ渡す領域の数も予算から引き、足りない分は渡さない。
         let own = &done.master.collisions;
         let total = done.out.len() + own.len();
         let carried = if levels.is_empty() {
@@ -234,7 +234,7 @@ pub(crate) fn regions_of(
             budget.take_up_to(total, "hit_import", root)
         };
         done.clean &= carried == total;
-        // 列は［持ち込み（奥）］→［直接（手前）］。切るときは奥から落とす（指摘 137）。
+        // 列は［持ち込み（奥）］→［直接（手前）］。切るときは奥から落とす。
         done.out.extend(own.iter().cloned());
         done.out.drain(..total - carried);
         if done.clean

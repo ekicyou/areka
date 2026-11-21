@@ -1,10 +1,10 @@
-//! `check_script` の処理（spec: areka-P0-mcp-author-tools）——事実を写し取り、別のスレッドで判断して答える。
+//! `check_script` の処理——事実を写し取り、別のスレッドで判断して答える。
 //!
 //! 入口は `dump_surface` の [`start`] をそのまま使う（装着の相がまだ → [`super::later`] へ預けて、装着の
 //! 後のフレームで答える・スレッドを起こせなければ `error!` を残して `NG:` で答える）。UI スレッドでするのは
 //! 事実の写し取り（シェルとバルーンの面の ID の集合・scope 0 の別名の表）までで、量はシェルの大きさで
 //! 決まり台本の長さに依らない。読む段・`\!` の表・判断・結果の組み立ては別のスレッドで行う。
-//! World は読むだけで、SHIORI・再生・表示・ファイル・ネットへ進む呼び出しを持たない（要件 2.4）。
+//! World は読むだけで、SHIORI・再生・表示・ファイル・ネットへ進む呼び出しを持たない。
 
 use std::time::Instant;
 
@@ -25,7 +25,7 @@ use areka_runtime::skin_facts_copy;
 
 const TOOL: &str = "check_script";
 
-/// 写しまで済んだら別のスレッドで判断して答え、装着の相がまだなら `later` に預けて答える（要件 2.5・3.1）。
+/// 写しまで済んだら別のスレッドで判断して答え、装着の相がまだなら `later` に預けて答える。
 pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: ReplyTo) {
     // 台本は写さずに 1 度だけ仕事へ移す（UI スレッドの仕事を台本の長さに依らせない）。
     let mut script = args.script;

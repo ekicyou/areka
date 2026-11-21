@@ -1,23 +1,16 @@
 //! # areka_balloon_fixture_test — 自作のバルーン `areka-balloon` の中身を固定する
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `default-balloon-selfmade` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `default-balloon-selfmade`（要件 **12.1**〜**12.5**・設計「Testing Strategy」の
-//! 「中身のテスト」）。
-//!
 //! ## このテストが塞ぐ穴
 //!
 //! `areka-balloon` は絵の道具（`areka-emo-atlas/examples/gen_default_balloon/`）が書いた
 //! 書庫である。道具と書庫のずれは別の見張り（`areka-emo-atlas/tests/default_balloon_drift_test.rs`）
-//! が見るが、それは「保管物が道具の今の出力か」しか言わない。本テストは「保管物が要件どおりか」を
-//! 要件の数値から**手で書いた**期待値で見る（道具のコードは参照しない）。
+//! が見るが、それは「保管物が道具の今の出力か」しか言わない。本テストは「保管物が期待どおりか」を
+//! **手で書いた**期待値で見る（道具のコードは参照しない）。
 //!
-//! ## 検体は窓口から名前で引く（要件 12.1）
+//! ## 検体は窓口から名前で引く
 //!
 //! 検体は窓口 `sample-ghost-kit` から `areka-balloon` の名前で引く。在処の綴りは本ファイルにも
 //! テーマ別ファイルにも持たない。取り方は `test_support.rs` の `balloon_root()` の本体だけにある。
-//!
-//! ## 決定論
 //!
 //! 実 GPU と実窓は使わない。動く絵と面 0 の絵は WIC の読み手（COM を MTA で張る・`online`・
 //! `bake`）で読む。

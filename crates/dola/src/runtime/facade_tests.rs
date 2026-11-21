@@ -99,7 +99,7 @@ fn fade_x(from: f64, to: f64, duration: f64) -> StoryboardEntry {
     }
 }
 
-/// 競合で終わったインスタンスのトリガーの記録は残らない（#35）
+/// 競合で終わったインスタンスのトリガーの記録は残らない
 #[test]
 fn conflict_termination_drops_trigger_store() {
     use crate::builder::{DolaDocumentBuilder, StoryboardBuilder};
@@ -150,7 +150,7 @@ fn conflict_termination_drops_trigger_store() {
     );
 }
 
-/// Never と競合して拒まれた新しいインスタンスは表に残らない（#43 の 3 本目）
+/// Never と競合して拒まれた新しいインスタンスは表に残らない
 #[test]
 fn never_conflict_removes_new_instance() {
     use crate::builder::{DolaDocumentBuilder, StoryboardBuilder};

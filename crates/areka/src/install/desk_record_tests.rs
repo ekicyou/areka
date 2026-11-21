@@ -1,5 +1,4 @@
-//! 入れた後の記録の決定論テスト（design「areka / install / desk」の入れた後の記録・設計で決めたこと
-//! 14・要件 6.1・6.4・6.6・6.7・6.8・12.14）。
+//! 入れた後の記録の決定論テスト。
 //!
 //! 確かめること: ゴーストなら受け皿へ目録の綴りのフォルダ名が書かれる・バルーンだけなら今のゴーストの
 //! 「最後に使ったバルーン」の記憶が目録の綴りへ替わる・シェルは記録だけで表示を替えない・置換語の
@@ -84,7 +83,7 @@ fn count(events: &[CapturedEvent], name: &str, level: Level) -> usize {
 }
 
 /// ゴーストを入れた: 受け皿へ目録の綴りのフォルダ名（書庫の `directory` と大文字小文字だけが違う）、
-/// 置換語は目録の `name` と `install.txt` の `name`。バルーンの記憶は替わらない（要件 6.1・6.8）。
+/// 置換語は目録の `name` と `install.txt` の `name`。バルーンの記憶は替わらない。
 #[test]
 fn a_ghost_goes_to_last_installed_in_the_catalog_spelling() {
     let mut rig = rig();
@@ -117,7 +116,7 @@ fn a_ghost_goes_to_last_installed_in_the_catalog_spelling() {
     assert!(rig.shutdown());
 }
 
-/// 1 回の依頼で 2 体入れたら、受け皿は最後のゴースト（要件 6.4）。
+/// 1 回の依頼で 2 体入れたら、受け皿は最後のゴースト。
 #[test]
 fn several_ghosts_leave_the_last_in_last_installed() {
     let mut rig = rig();
@@ -141,7 +140,7 @@ fn several_ghosts_leave_the_last_in_last_installed() {
 }
 
 /// バルーンだけを入れた: 今のゴーストの「最後に使ったバルーン」の記憶が目録の綴りへ替わり、
-/// `info!(install_balloon_remembered)` が 1 件。受け皿は書かず、切り替えない（要件 6.6・12.14）。
+/// `info!(install_balloon_remembered)` が 1 件。受け皿は書かず、切り替えない。
 #[test]
 fn a_balloon_only_install_rewrites_the_running_ghosts_balloon_memory() {
     let mut rig = rig();
@@ -186,8 +185,7 @@ fn a_balloon_only_install_rewrites_the_running_ghosts_balloon_memory() {
 }
 
 /// シェルを入れた: 記録（置換語）とシェルの `lastinstalled` の控えだけで、受け皿もバルーンの記憶も
-/// 替えず、切り替えもしない。`%lastghostname` は宛先のゴーストの目録の `name`（要件 6.7・6.8・
-/// shell-balloon-switch 要件 1.10）。
+/// 替えず、切り替えもしない。`%lastghostname` は宛先のゴーストの目録の `name`。
 #[test]
 fn a_shell_install_only_records_names() {
     let mut rig = rig();
@@ -242,7 +240,7 @@ fn record_fluffy(rig: &mut SwitchRig) -> Vec<CapturedEvent> {
 
 /// バルーンだけの書庫は根へ入り、今のゴーストの中に同じフォルダ名（大文字小文字違い）が在れば
 /// info `installed_balloon_hidden_by_ghost` が 1 件（`installed`＝根の場所・`by`＝ゴーストの中の場所）。
-/// 控えと記憶の書き方は今どおり（areka-P0-ghost-inner-balloon 要件 3.5・7.4）。
+/// 控えと記憶の書き方は今どおり。
 #[test]
 fn a_balloon_hidden_by_the_running_ghost_is_recorded_once() {
     let mut rig = rig();
@@ -279,7 +277,7 @@ fn a_balloon_hidden_by_the_running_ghost_is_recorded_once() {
     assert!(rig.shutdown());
 }
 
-/// 今のゴーストの中に同じフォルダ名が無ければ記録 0 件（要件 3.5）。
+/// 今のゴーストの中に同じフォルダ名が無ければ記録 0 件。
 #[test]
 fn a_balloon_not_hidden_by_the_running_ghost_is_not_recorded() {
     let mut rig = rig();

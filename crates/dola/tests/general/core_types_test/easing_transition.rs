@@ -1,10 +1,9 @@
 //! core_types: Easing / Transition serde round-trip
-//! Tasks 3.4, 4.4
 
 use super::*;
 
 // =============================================================
-// Task 3.4: EasingFunction/EasingName/ParametricEasing serde round-trip
+// EasingFunction/EasingName/ParametricEasing serde round-trip
 // =============================================================
 
 mod easing_tests {
@@ -115,7 +114,7 @@ mod easing_tests {
 }
 
 // =============================================================
-// Task 4.4: TransitionValue/TransitionDef/TransitionRef serde round-trip
+// TransitionValue/TransitionDef/TransitionRef serde round-trip
 // =============================================================
 
 mod transition_tests {

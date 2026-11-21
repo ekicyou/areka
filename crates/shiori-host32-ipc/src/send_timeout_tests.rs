@@ -48,7 +48,7 @@ unsafe extern "system" fn sleepy_wnd_proc(
     }
 }
 
-/// 眠る窓を別スレッドに建て、その HWND（数値）と終わりの知らせを返す。
+/// 眠る窓を別スレッドに建て、その HWND と終わりの知らせを返す。
 fn spawn_sleepy_window() -> (HWND, mpsc::Receiver<()>, JoinHandle<()>) {
     static REGISTER: Once = Once::new();
     REGISTER.call_once(|| {

@@ -1,15 +1,15 @@
-//! 差分配信（research.md §R3: diff_delivery シーム）
+//! 差分配信
 //!
 //! 指示書差し替えによる値の引き継ぎと、購読 API（unsubscribe /
 //! Default）経由の差分配信を束ねる。
 
 // =========================================================================
-// 8.3 指示書差し替えテスト
+// 指示書差し替えテスト
 // =========================================================================
 mod document_replacement {
     use super::super::*;
 
-    /// 差し替えは配信の記録を消さない: 2 枚目を読んだ後、start せずに tick しても差分 0（#43）
+    /// 差し替えは配信の記録を消さない: 2 枚目を読んだ後、start せずに tick しても差分 0
     #[test]
     fn same_variable_carries_over_value() {
         let mut rt = DolaRuntime::new();
@@ -31,7 +31,7 @@ mod document_replacement {
         );
     }
 
-    /// 差し替えの後も動いている Object の値は同じ Rc のまま: 偽の差分を出さない（#62）
+    /// 差し替えの後も動いている Object の値は同じ Rc のまま: 偽の差分を出さない
     #[test]
     fn reload_keeps_animating_object_value_without_spurious_diff() {
         use dola::DynamicValue;
@@ -71,7 +71,7 @@ mod document_replacement {
         );
     }
 
-    /// Object の最終値は intern を通る: "a"→"b" を終えるのが 2 回目以降なら差分 0（#37）
+    /// Object の最終値は intern を通る: "a"→"b" を終えるのが 2 回目以降なら差分 0
     ///
     /// 自然終了（全体の最終値）と競合の Conclude（今のセグメントの最終値）の両方を通す。
     #[test]
@@ -132,7 +132,7 @@ mod document_replacement {
         );
     }
 
-    /// 検証で拒んだ文書は前の文書を消さない（#43）
+    /// 検証で拒んだ文書は前の文書を消さない
     #[test]
     fn invalid_document_preserves_existing() {
         let mut rt = DolaRuntime::new();
@@ -233,7 +233,7 @@ mod tick_last_result {
 }
 
 // =========================================================================
-// 差分の並び（9.2→10.3）
+// 差分の並び
 // =========================================================================
 mod change_order {
     use super::super::*;

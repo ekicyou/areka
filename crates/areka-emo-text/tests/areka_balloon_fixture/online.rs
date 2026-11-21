@@ -1,10 +1,6 @@
 //! 取り出した `online0.webp` を areka の動く絵の読み手で読み戻し、コマと灯る点の α を固定する。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `default-balloon-selfmade` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `default-balloon-selfmade`（要件 **8.9**・**3.2**・**3.3**）。
-//!
-//! 期待値は設計「絵柄の値」の表から手で書く: 77×36・中心 (26,18)・(38.5,18)・(51,18)・半径 4 の
+//! 期待値は手で書く: 77×36・中心 (26,18)・(38.5,18)・(51,18)・半径 4 の
 //! 点 3 つ・コマ k で点 k が α 1、ほかが α 0.25・3 コマ・各 300 ミリ秒・繰り返し無限。
 
 use areka_emo_atlas::{ElementDecoder, LoopCount, WicDecoderArm};
@@ -27,12 +23,11 @@ const LIT_ALPHA: u8 = 255;
 /// 灯らない点の α（0.25 × 255 = 63.75 を最も近い整数へ丸めて 64）。
 const UNLIT_ALPHA: u8 = 64;
 
-/// コマの枚数と各コマの待ち時間（要件 3.3）。
+/// コマの枚数と各コマの待ち時間。
 const FRAME_COUNT: u32 = 3;
 const FRAME_DELAY_MS: u32 = 300;
 
-/// `online0.webp` が WebP の 77×36・3 コマ・各 300 ミリ秒・無限・α ありで、コマ k で点 k だけが灯る
-/// （要件 8.9・3.2・3.3・4.1）。
+/// `online0.webp` が WebP の 77×36・3 コマ・各 300 ミリ秒・無限・α ありで、コマ k で点 k だけが灯る。
 #[test]
 fn online_marker_frames_light_dots_in_turn() {
     init_com_for_this_thread();

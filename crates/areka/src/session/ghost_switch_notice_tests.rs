@@ -1,11 +1,10 @@
-//! 停止通知と運行の通知を切替の段で振り分ける判断の決定論テスト（areka-P0-ghost-shell-balloon-switch
-//! task 8.3）。
+//! 停止通知と運行の通知を切替の段で振り分ける判断の決定論テスト。
 //!
-//! 確かめること: 中止の通知で予約が消え `info!` 1 件（要件 5.2）／迎え入れ（既定）で失敗が届くと
-//! 終了が指示され最初の出所が SHIORI の失敗（要件 6.4 の今日の失敗の経路）／定常到達で迎え入れの
-//! 予約が消え、送り出しの段の予約は残る（要件 3.5）／送り出しの握手の途中の失敗でも中身があれば
-//! 切替を続ける（要件 2.8）／迎え入れ（切替先）の失敗は既定へ戻す経路へ入る（要件 6.6）／
-//! 迎え入れで失敗以外の停止は今日どおり終了（要件 3.5）。実ゴーストは起こさない。
+//! 確かめること: 中止の通知で予約が消え `info!` 1 件／迎え入れ（既定）で失敗が届くと
+//! 終了が指示され最初の出所が SHIORI の失敗（告知と終了コード 1 の経路）／定常到達で迎え入れの
+//! 予約が消え、送り出しの段の予約は残る／送り出しの握手の途中の失敗でも中身があれば
+//! 切替を続ける／迎え入れ（切替先）の失敗は既定へ戻す経路へ入る／
+//! 迎え入れで失敗以外の停止は終了。実ゴーストは起こさない。
 
 use areka_kanade::{
     CancelReason, ChangeHandoff, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault,
@@ -43,7 +42,7 @@ fn level_of(events: &[log_capture_kit::CapturedEvent], event: &str) -> Vec<traci
         .collect()
 }
 
-/// 中止の通知 → 予約が消え `info!(ghost_switch_cancelled)` 1 件・終了は指示しない（要件 5.2）。
+/// 中止の通知 → 予約が消え `info!(ghost_switch_cancelled)` 1 件・終了は指示しない。
 /// 予約が無いときの同じ通知は `warn!` 1 件。
 #[test]
 fn cancel_notice_clears_reservation_with_one_info() {
@@ -75,7 +74,7 @@ fn cancel_notice_clears_reservation_with_one_info() {
 }
 
 /// 迎え入れ（既定）で失敗の停止 → 予約が消え、終了が指示され最初の出所が SHIORI の失敗
-/// （今日の失敗の経路＝告知と終了コード 1・要件 6.4・6.5）。既定へ戻す試みはもうしない。
+/// （告知と終了コード 1 の経路）。既定へ戻す試みはもうしない。
 #[test]
 fn default_welcome_fault_quits_with_shiori_fault_origin() {
     let tmp = TempPath::new("ghost-switch-default-fault");
@@ -112,7 +111,7 @@ fn default_welcome_fault_quits_with_shiori_fault_origin() {
     );
 }
 
-/// 定常到達: 迎え入れの予約は消え `info!(ghost_switch_done)` 1 件（要件 3.5）。送り出しの段の
+/// 定常到達: 迎え入れの予約は消え `info!(ghost_switch_done)` 1 件。送り出しの段の
 /// 予約は残る（まだ握手の途中＝前のゴーストの起動の定常到達が遅れて届いた形）。予約が無ければ
 /// `debug!` だけ。
 #[test]
@@ -152,8 +151,8 @@ fn steady_clears_welcoming_reservation_only() {
     );
 }
 
-/// 送り出しの握手の途中の失敗でも中身があれば切替を続ける（要件 2.8）: 前のゴーストを降ろし
-/// （所要 ms 1 件）、今日の失敗の経路（出所 `KanadeStopped(Fault)`）へは流さない。作り口が無いので
+/// 送り出しの握手の途中の失敗でも中身があれば切替を続ける: 前のゴーストを降ろし
+/// （所要 ms 1 件）、SHIORI の失敗の経路（出所 `KanadeStopped(Fault)`）へは流さない。作り口が無いので
 /// 切替先も既定も起こせず致命で終える（出所は「既定ゴーストへ戻せなかった」）。
 #[test]
 fn send_off_fault_with_handoff_continues_switch() {
@@ -180,8 +179,8 @@ fn send_off_fault_with_handoff_continues_switch() {
     );
 }
 
-/// 迎え入れ（切替先）で失敗 → `error!(ghost_switch_target_fault)` 1 件の上で既定へ戻す経路へ入る
-/// （要件 6.6）。既定が目録に無い根なので致命で終わる（今日の失敗の経路へは流れない）。
+/// 迎え入れ（切替先）で失敗 → `error!(ghost_switch_target_fault)` 1 件の上で既定へ戻す経路へ入る。
+/// 既定が目録に無い根なので致命で終わる（SHIORI の失敗の経路へは流れない）。
 #[test]
 fn target_welcome_fault_falls_back_to_default() {
     let tmp = TempPath::new("ghost-switch-target-fault");
@@ -212,8 +211,8 @@ fn target_welcome_fault_falls_back_to_default() {
     );
 }
 
-/// 切替先が既定ゴーストで迎え入れ中に失敗 → 既定へ戻さず（降ろさない）今日の失敗の経路で終了
-/// （戻す試みは 1 回だけ・壊れた切替先が既定なら即時終了・要件 6.5）。
+/// 切替先が既定ゴーストで迎え入れ中に失敗 → 既定へ戻さず（降ろさない）SHIORI の失敗の経路で終了
+/// （戻す試みは 1 回だけ・壊れた切替先が既定なら即時終了）。
 #[test]
 fn default_as_target_fault_quits_without_retry() {
     let tmp = TempPath::new("ghost-switch-target-is-default");
@@ -244,7 +243,7 @@ fn default_as_target_fault_quits_without_retry() {
     );
 }
 
-/// 迎え入れで失敗以外の停止（切替先が終了を望んだ）→ `info!` の上で予約を下ろし今日どおり終了。
+/// 迎え入れで失敗以外の停止（切替先が終了を望んだ）→ `info!` の上で予約を下ろして終了。
 #[test]
 fn welcoming_non_fault_stop_quits_as_today() {
     let tmp = TempPath::new("ghost-switch-target-quit");
@@ -276,7 +275,7 @@ fn welcoming_non_fault_stop_quits_as_today() {
 }
 
 /// 定常到達の記憶の書き手が無い（置き場が無い World）→ `warn!(steady_memory_not_recorded)` 1 件で
-/// 続け、迎え入れの予約は下りる（task 11.2・要件 12.6・design Error Handling）。
+/// 続け、迎え入れの予約は下りる。
 #[test]
 fn steady_without_slot_warns_once_and_clears_reservation() {
     let tmp = TempPath::new("ghost-switch-steady-no-slot");

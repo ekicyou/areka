@@ -1,5 +1,5 @@
 // =============================================================================
-// 隣り合いの判定と記憶の印の語の檻（dpi-realign-remembered-chain 要件 1.2・2.1・2.2）
+// 隣り合いの判定と記憶の印の語の檻
 //
 // 判定は World を持たない純関数ゆえ、物理 px の矩形を直接与える。
 // 前の窓（n−1）を x=1000・幅 400 に固定し、後の窓（n）の位置で隙間を作る。
@@ -75,7 +75,7 @@ fn overlap_beyond_tolerance_is_overlapped() {
     );
 }
 
-/// ぱすたの形（組の窓が同じ左上）は重なり（2.2）。幅が同じでも違っても横に並べない。
+/// ぱすたの形（組の窓が同じ左上）は重なり。幅が同じでも違っても横に並べない。
 #[test]
 fn same_top_left_is_overlapped() {
     let same = ChainRect { ..PREV };
@@ -90,7 +90,7 @@ fn same_top_left_is_overlapped() {
     ));
 }
 
-/// 縦の範囲（[y, y+h)）が重ならない組は、横の隙間が 0 でも離れ（1.2）。
+/// 縦の範囲（[y, y+h)）が重ならない組は、横の隙間が 0 でも離れ。
 #[test]
 fn vertically_disjoint_pair_is_apart() {
     let below = ChainRect {
@@ -176,7 +176,7 @@ fn mark_from_adjacency() {
 }
 
 /// 鎖の規則 ⑵: 左の組は `defaultx` の隙間（±2）も隣り合いで、決めはその隙間で付ける。右の組と
-/// 縦に重ならない組は `defaultx` を見ない（audit-placement-core 494）。
+/// 縦に重ならない組は `defaultx` を見ない。
 #[test]
 fn chain_adjacency_accepts_the_defaultx_gap_on_the_left_only() {
     for (cur, expected) in [
@@ -217,7 +217,7 @@ fn chain_adjacency_accepts_the_defaultx_gap_on_the_left_only() {
 }
 
 /// 鎖の規則 ⑵: `defaultx` が負で、n の中心が前の窓の中心より右へ来ても、左の隙間が `defaultx`
-/// なら左の組（起動の確定が `x(prev) − w(n) − defaultx` へ置いた形・audit-placement-core 513）。
+/// なら左の組（起動の確定が `x(prev) − w(n) − defaultx` へ置いた形）。
 #[test]
 fn a_negative_defaultx_gap_past_the_centre_is_still_left() {
     let prev = ChainRect {
@@ -240,7 +240,7 @@ fn a_negative_defaultx_gap_past_the_centre_is_still_left() {
 }
 
 /// `defaultx` が許す幅（±2）の内でも、隙間が `defaultx` に近ければその隙間で付ける
-/// （0 に丸めない・audit-placement-core 514）。
+/// （0 に丸めない）。
 #[test]
 fn a_small_defaultx_gap_is_kept_not_rounded_to_zero() {
     assert_eq!(

@@ -1,7 +1,5 @@
-//! com/d3d11.rs — D3D11 ラッパーのテスト
+//! `src/com/d3d11.rs` の D3D11 ラッパーのテスト。
 //!
-//! 実デバイス生成は既存テストの前例（GraphicsCore::new() を用いる
-//! tests/graphics 配下の多数のテストがヘッドレスで合格）に従う。
 //! 生成パラメータは src/ecs/graphics/core.rs::create_device_3d を踏襲する。
 
 use windows::Win32::Foundation::HMODULE;

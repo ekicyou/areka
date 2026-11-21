@@ -1,5 +1,4 @@
-//! キーワード由来のバルーン基本位置の一度きりの再導出
-//! （[`rederive_keyword_balloon_offset`]・areka-P0-windowposition-limit 要件 4.2/4.3/4.7）。
+//! キーワード由来のバルーン基本位置の一度きりの再導出（[`rederive_keyword_balloon_offset`]）。
 
 use bevy_ecs::prelude::*;
 use tracing::{info, warn};
@@ -12,7 +11,6 @@ use super::{
 
 // =============================================================================
 // キーワード基本位置の一度きりの再導出
-// （areka-P0-windowposition-limit 要件 4.2/4.3/4.7・2026-08-14 実機サインオフ是正）
 // =============================================================================
 
 /// 再導出が成立したときの記録タグ（実機ログの grep 判定語）。
@@ -20,27 +18,26 @@ pub(super) const KEYWORD_REDERIVE_TAG: &str = "[balloon-keyword] Rederive";
 /// 再導出に必要な入力を解決できなかったときの記録タグ（log-first の縮退シーム）。
 pub(super) const KEYWORD_UNRESOLVED_TAG: &str = "[balloon-keyword] Unresolved";
 /// 再導出は成立したが基準 DPI を読めず**未係留**で確立したときの記録タグ
-/// （areka-P0-balloon-offset-dpi・要件 5.2／9.4。offset 自体は導出値で正しい）。
+/// （offset 自体は導出値で正しい）。
 const KEYWORD_BASE_UNPINNED_TAG: &str = "[balloon-keyword] BaseUnpinned";
 
 /// キーワード由来のバルーン基本位置を**実表示寸**から導出し直し、素材を消費する
-/// （[`resize_window_to`] 手順 5a 専用・areka-P0-windowposition-limit 要件 4.2/4.3/4.4/4.7）。
+/// （[`resize_window_to`] 手順 5a 専用）。
 ///
-/// # なぜ必要なのか（実機で確認された欠陥）
+/// # なぜ必要なのか
 ///
 /// キーワードの中央揃えは `(char_w − balloon_w) / 2` であり、`char_w` が**採寸した寸**の
 /// ままだと、実際に表示される寸と食い違ったぶんの半分だけバルーンが横へずれる。
-/// 2026-08-14 の実機サインオフでは採寸 434 に対し実表示 382 で 26px ずれ、右端で
-/// 作業領域を越えて limit の関門のクランプまで誘発した（見た目には大きく偏った）。
-/// 決定論檻がこれを取り逃したのは、どの檻も**ひと組の寸法**で配置を組んでいたためである
-/// ——「採寸寸 ≠ 実表示寸」という状態がどこにも作られていなかった。
+/// 実機では採寸 434 に対し実表示 382 で 26px ずれ、右端で作業領域を越えて limit の関門の
+/// クランプまで誘発した。決定論檻がこれを取り逃したのは、どの檻も**ひと組の寸法**で
+/// 配置を組んでいたためである——「採寸寸 ≠ 実表示寸」という状態がどこにも作られていなかった。
 ///
-/// # 一度きりであること（4.7）と、その発火条件
+/// # 一度きりであることと、その発火条件
 ///
-/// areka-P0-windowposition-limit 要件 4.7 はキーワードの適用を「初期既定位置の供給」にとどめると定める。ゆえに
+/// キーワードの適用は「初期既定位置の供給」にとどめる。ゆえに
 /// **キャラ窓の寸が最初に変わった一度だけ**発火して [`BalloonKeywordBase`] を消費し、
 /// 以後の寸法変化では中央へ揃え直さない——`Side` と同じ配置時確定の静的 offset として
-/// 振る舞う（4.4 の現行契約）。
+/// 振る舞う。
 ///
 /// 発火条件を route ではなく**寸の変化**に置いているのは、どの route が最初に実表示寸を
 /// 運ぶかが frame の相順に依存するからである（`DpiReproject`／`ReportedSizeReconcile`／
@@ -56,7 +53,7 @@ const KEYWORD_BASE_UNPINNED_TAG: &str = "[balloon-keyword] BaseUnpinned";
 /// （`balloon_pos − char_pos` の定義そのもの）——確定位置を足してから引き直すより
 /// 飽和演算の影響を受けず、`BalloonFollow.offset` の単位とも一致する。
 ///
-/// # 縮退（log-first・areka-P0-windowposition-limit 要件 6.3 の流儀）
+/// # 縮退（log-first）
 ///
 /// [`BalloonFollow`] 不在・バルーン entity 破棄済み・バルーンの現寸が未確定（`None` と
 /// `CW_USEDEFAULT` センチネルの双方）のいずれでも [`KEYWORD_UNRESOLVED_TAG`] の `warn!` を
@@ -73,14 +70,10 @@ pub(super) fn rederive_keyword_balloon_offset(
         return;
     };
 
-    // **寸が変わらない書込では消費しない**（発火条件は route ではなく寸の変化）。
-    //
-    // `resize_window_to` は複数の上流から呼ばれ、そのうち寸を伴わない再配置
-    // （[`PlacementRoute::AnchorChange`]＝現在の表示寸で射影 T を引き直すだけ）も
-    // 同じ口を通る。route で絞ると、どの route が最初に**実表示寸**を運ぶかという
-    // 呼出順の知識を本関数が持つことになり、frame の相順が変わるたびに静かに壊れる。
-    // 寸が変わらないうちは配置時の offset がその寸に対して正しいままなので、
-    // 直すべきものが無い＝素材を残して次の機会へ譲るのが正しい。
+    // 寸が変わらない書込では消費しない（発火条件は route ではなく寸の変化）。
+    // `resize_window_to` は寸を伴わない再配置（[`PlacementRoute::AnchorChange`]）も通る。
+    // route で絞ると、どの route が最初に実表示寸を運ぶかという呼出順の知識を
+    // 本関数が持つことになり、frame の相順が変わるたびに静かに壊れる。
     if old_size == Some(new_size) {
         return;
     }
@@ -105,9 +98,8 @@ pub(super) fn rederive_keyword_balloon_offset(
         return;
     };
 
-    // 判定寸＝バルーンの現寸。未確定表現は `Option::None` **だけではない**——
-    // `WindowPos::default()` は `CW_USEDEFAULT`（`i32::MIN` センチネル）を寸に持つ
-    // （`guard_balloon_position`／runtime 関門と同型のガード）。entity 破棄済みも
+    // 未確定表現は `Option::None` **だけではない**——`WindowPos::default()` は
+    // `CW_USEDEFAULT`（`i32::MIN` センチネル）を寸に持つ。entity 破棄済みも
     // `world.get` が `None` を返してこの腕へ合流する。
     let balloon_size = world
         .get::<WindowPos>(follow.balloon)
@@ -145,7 +137,7 @@ pub(super) fn rederive_keyword_balloon_offset(
     };
 
     let old_offset = follow.offset();
-    // **確立点**——再導出した基本位置を新しい基準として焼き直す（design D14・areka-P0-balloon-offset-dpi 要件 3.3）。
+    // 再導出した基本位置を新しい基準として焼き直す。
     // 追従 Component を借りる前に表示 DPI を読む（同時借用を避ける順序）。
     let current_dpi = world.get::<DPI>(char_window).copied();
     if let Some(mut f) = world.get_mut::<BalloonFollow>(char_window) {
@@ -153,8 +145,8 @@ pub(super) fn rederive_keyword_balloon_offset(
             Some(dpi) => f.reestablish(new_offset, dpi),
             None => {
                 // 表示 DPI を読めない窓。値は確定しているが属する空間が分からないので
-                // 永続値の腕と同じ**未係留**で確立する（最初の観測で値を変えずに係留・
-                // areka-P0-balloon-offset-dpi 要件 5.2／5.4）。基準 DPI を発明すると次の遷移で二重に拡大する。
+                // 永続値の腕と同じ**未係留**で確立する（最初の観測で値を変えずに係留）。
+                // 基準 DPI を発明すると次の遷移で二重に拡大する。
                 let balloon = f.balloon;
                 *f = BalloonFollow::new(balloon, OffsetBase::unpinned(new_offset));
                 // 再導出そのものは**成立している**ので [`KEYWORD_UNRESOLVED_TAG`] は
@@ -166,7 +158,7 @@ pub(super) fn rederive_keyword_balloon_offset(
             }
         }
     }
-    // 一度きり（4.7）: 素材を消費して除去する。これ以降のリサイズは `Side` と同じく
+    // 素材を消費して除去する。これ以降のリサイズは `Side` と同じく
     // 配置時確定の静的 offset として振る舞う。
     world.entity_mut(char_window).remove::<BalloonKeywordBase>();
 

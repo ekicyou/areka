@@ -1,20 +1,19 @@
 // =============================================================================
-// 隠れたバルーンの再表示の決定論テスト（areka-P0-balloon-reappear-short-talk・task 2.1）
+// 隠れたバルーンの再表示の決定論テスト。
 //
-// design.md「ReappearPhaseTests」。本物の文字の層（`TextLayerRuntime`）へ本物の cue
+// 本物の文字の層（`TextLayerRuntime`）へ本物の cue
 // （`ClearAll`・`Clear`・`Text`）を流し、本物の観測の収集（`collect_observations`）で観測を作り、
 // 本物の判定（`decide`）へ渡して、場面ごとに各フレームの行動と遷移の記録を確かめる。
 //
-// 修正の前から在る口（観測の収集・判定・切替の忘れ・文字の層への cue の投函・表示の合図）だけを
-// 使い、観測の中身は `visible` 以外に触れない。だから修正の前の HEAD でもコンパイルが通り、
-// 赤の 7 本は「期待した表示が無い」で失敗する。修正の後はこのファイルを変えずに通る。
+// 使う口は観測の収集・判定・切替の忘れ・文字の層への cue の投函・表示の合図だけで、
+// 観測の中身は `visible` 以外に触れない。
 //
 // 可視の扱い: headless の表示層は表示が一度も確立していないので可視にできない。そこで観測の
 // `visible` は、前のフレームの行動（`Show` で真・`HideScopes` で偽・`\b[-1]` にあたる外からの
 // 非表示はテストが偽にする）からテストが決めて書き込む。文字の側は本番の経路のまま。
 //
 // 時刻は引数で注入し（`Some(t)`・時刻の無いフレームは `None`）、待ち時間は短い固定値を渡す。
-// 実時間の待機は使わない（要件 3.4）。前の台詞は scope 0 に 5 文字を残す。
+// 実時間の待機は使わない。前の台詞は scope 0 に 5 文字を残す。
 // =============================================================================
 
 use crate::input_events::balloon::BalloonWiring;
@@ -80,7 +79,7 @@ impl Rig {
         self.step(now, signals, cues, false);
     }
 
-    /// 文字の層を借りたまま 1 フレーム回す（観測なしのフレーム・要件 1.4 のただし書き）。
+    /// 文字の層を借りたまま 1 フレーム回す（観測なしのフレーム）。
     fn frame_unobservable(
         &mut self,
         now: Option<f64>,
@@ -234,9 +233,8 @@ fn shown_then_timed_out(rig: &mut Rig) -> Vec<FrameOutcome> {
         &talk_started(PREV_END),
         &[clear_all(), text(0, 0.0, PREV_TEXT, PREV_END)],
     );
-    // 5 文字が見え、トークの終わりが届いて計測が始まる
     rig.frame(Some(PREV_END), &[ended(PREV_END)], &[]);
-    rig.frame(Some(PREV_END + TIMEOUT), &[], &[]); // 満了
+    rig.frame(Some(PREV_END + TIMEOUT), &[], &[]);
     rig.frame(Some(4.0), &[], &[]);
     rig.frame(Some(5.0), &[], &[]);
     vec![
@@ -267,10 +265,10 @@ fn shown_then_broken(rig: &mut Rig) -> Vec<FrameOutcome> {
 }
 
 // ---------------------------------------------------------------------------
-// 赤（修正の前に失敗する 7 本）
+// 再表示が現れる場面
 // ---------------------------------------------------------------------------
 
-/// 時間切れの後の 1 文字は、全消去と同じフレームで現れる（要件 1.1・1.3・1.6・2.3・3.1）。
+/// 時間切れの後の 1 文字は、全消去と同じフレームで現れる。
 #[test]
 fn one_glyph_talk_reappears_after_timeout() {
     let mut rig = Rig::new(&[0]);
@@ -278,7 +276,7 @@ fn one_glyph_talk_reappears_after_timeout() {
 
     rig.frame(Some(0.0), &talk_started(0.25), &new_talk("ん", 0.25));
     rig.frame(Some(0.25), &[], &[]);
-    expected.extend([shown(0), quiet()]); // 新しい台詞の最初の文字のフレームで表示
+    expected.extend([shown(0), quiet()]);
 
     assert_eq!(
         rig.outcomes, expected,
@@ -286,7 +284,7 @@ fn one_glyph_talk_reappears_after_timeout() {
     );
 }
 
-/// 利用者の中断の後の 1 文字は、次の台詞の最初のフレームで現れる（要件 1.3・2.2・3.1）。
+/// 利用者の中断の後の 1 文字は、次の台詞の最初のフレームで現れる。
 #[test]
 fn one_glyph_talk_reappears_after_user_break() {
     let mut rig = Rig::new(&[0]);
@@ -294,7 +292,7 @@ fn one_glyph_talk_reappears_after_user_break() {
 
     rig.frame(Some(0.0), &talk_started(0.25), &new_talk("ん", 0.25));
     rig.frame(Some(0.25), &[], &[]);
-    expected.extend([shown(0), quiet()]); // 新しい台詞の最初の文字のフレームで表示
+    expected.extend([shown(0), quiet()]);
 
     assert_eq!(
         rig.outcomes, expected,
@@ -302,7 +300,7 @@ fn one_glyph_talk_reappears_after_user_break() {
     );
 }
 
-/// バルーンの切替の後の 1 文字は、次の台詞の最初のフレームで現れる（要件 1.3・2.1・3.1）。
+/// バルーンの切替の後の 1 文字は、次の台詞の最初のフレームで現れる。
 #[test]
 fn one_glyph_talk_reappears_after_balloon_switch() {
     let mut rig = Rig::new(&[0]);
@@ -318,21 +316,14 @@ fn one_glyph_talk_reappears_after_balloon_switch() {
     rig.frame(Some(0.0), &talk_started(0.25), &new_talk("ん", 0.25));
     rig.frame(Some(0.25), &[], &[]);
 
-    let expected = vec![
-        shown(0),
-        quiet(),
-        quiet(),
-        quiet(),
-        shown(0), // 新しい台詞の最初の文字のフレームで表示
-        quiet(),
-    ];
+    let expected = vec![shown(0), quiet(), quiet(), quiet(), shown(0), quiet()];
     assert_eq!(
         rig.outcomes, expected,
         "フレームごとの (行動, 遷移の記録): 前の台詞の表示・切替の後は隠れたまま・新しい台詞の表示・その後"
     );
 }
 
-/// 最初のフレームで全文が一度に見える短い台詞（2 文字 ≦ 前の残り 5 文字）も現れる（要件 1.2・3.2）。
+/// 最初のフレームで全文が一度に見える短い台詞（2 文字 ≦ 前の残り 5 文字）も現れる。
 #[test]
 fn instant_short_talk_reappears_after_timeout() {
     let mut rig = Rig::new(&[0]);
@@ -340,7 +331,7 @@ fn instant_short_talk_reappears_after_timeout() {
 
     rig.frame(Some(0.0), &talk_started(0.0), &new_talk("はい", 0.0));
     rig.frame(Some(0.25), &[], &[]);
-    expected.extend([shown(0), quiet()]); // 新しい台詞の最初の文字のフレームで表示
+    expected.extend([shown(0), quiet()]);
 
     assert_eq!(
         rig.outcomes, expected,
@@ -348,8 +339,8 @@ fn instant_short_talk_reappears_after_timeout() {
     );
 }
 
-/// 台詞の途中の `\c` とその後の文字が同じフレームに届くと、隠れていた scope だけが現れる
-/// （要件 1.5・3.2）。scope 1 は見えたまま何も出ない。
+/// 台詞の途中の `\c` とその後の文字が同じフレームに届くと、隠れていた scope だけが現れる。
+/// scope 1 は見えたまま何も出ない。
 #[test]
 fn mid_talk_clear_and_glyph_reappear_hidden_scope() {
     let mut rig = Rig::new(&[0, 1]);
@@ -363,7 +354,7 @@ fn mid_talk_clear_and_glyph_reappear_hidden_scope() {
         &[TalkLifecycleSignal::DisplayEndAt(2.0)],
         &[text(1, 1.25, "かきく", 0.75)],
     );
-    rig.hide_externally(0); // `\b[-1]` にあたる
+    rig.hide_externally(0);
     rig.frame(Some(1.75), &[], &[]);
     rig.frame(
         Some(2.0),
@@ -375,13 +366,7 @@ fn mid_talk_clear_and_glyph_reappear_hidden_scope() {
     );
     rig.frame(Some(2.25), &[], &[]);
 
-    let expected = vec![
-        shown(0),
-        shown(1),
-        quiet(),
-        shown(0), // 新しい台詞の最初の文字のフレームで表示
-        quiet(),
-    ];
+    let expected = vec![shown(0), shown(1), quiet(), shown(0), quiet()];
     assert_eq!(
         rig.outcomes, expected,
         "フレームごとの (行動, 遷移の記録): scope 0 の表示・scope 1 の表示・scope 0 が外から隠れる・\\c と文字で scope 0 だけ表示・その後"
@@ -389,7 +374,7 @@ fn mid_talk_clear_and_glyph_reappear_hidden_scope() {
 }
 
 /// 文字の層を観測できないフレームと時刻の無いフレームを挟むと、次に観測できたフレームで
-/// 現れる（要件 1.4 のただし書き・3.3）。観測なしのフレームは何も出さない。
+/// 現れる。観測なしのフレームは何も出さない。
 #[test]
 fn reappears_on_next_observed_frame_after_unobservable_frames() {
     let mut rig = Rig::new(&[0]);
@@ -399,7 +384,7 @@ fn reappears_on_next_observed_frame_after_unobservable_frames() {
     rig.frame(None, &[], &[]);
     rig.frame(Some(0.1), &[], &[]);
     rig.frame(Some(0.25), &[], &[]);
-    expected.extend([quiet(), quiet(), shown(0), quiet()]); // 新しい台詞の最初の文字のフレームで表示
+    expected.extend([quiet(), quiet(), shown(0), quiet()]);
 
     assert_eq!(
         rig.outcomes, expected,
@@ -408,7 +393,7 @@ fn reappears_on_next_observed_frame_after_unobservable_frames() {
 }
 
 /// 会話開始の合図が先のフレームに取り出され、全消去と文字が次のフレームに入る並びでも、
-/// 最初の文字が見えたフレームで現れる（要件 1.3・1.4・3.3）。
+/// 最初の文字が見えたフレームで現れる。
 ///
 /// 合図のフレームでは会話の時刻が 0 へ戻り、前の台詞の文字は最初の 1 文字だけが見える数へ
 /// 減る。次のフレームの新しい 1 文字と同じ数なので、前の数との比較では増加にならない。
@@ -424,7 +409,7 @@ fn reappears_when_talk_started_signal_precedes_clear_frame() {
         &new_talk("ん", 0.25),
     );
     rig.frame(Some(0.25), &[], &[]);
-    expected.extend([quiet(), shown(0), quiet()]); // 新しい台詞の最初の文字のフレームで表示
+    expected.extend([quiet(), shown(0), quiet()]);
 
     assert_eq!(
         rig.outcomes, expected,
@@ -433,11 +418,11 @@ fn reappears_when_talk_started_signal_precedes_clear_frame() {
 }
 
 // ---------------------------------------------------------------------------
-// 守り（修正の前から通る 3 本）
+// 守りの場面（出し直さない・隠れたまま保つ）
 // ---------------------------------------------------------------------------
 
 /// 中断の後、全消去だけが先に文字の層へ入る（合図はまだ・掛け金は掛かったまま）並びでは、
-/// 全消去のフレームでは出ず、最初の文字が見えたフレームで現れる（要件 1.3・1.4・2.2・3.3）。
+/// 全消去のフレームでは出ず、最初の文字が見えたフレームで現れる。
 #[test]
 fn clear_before_signal_after_user_break_reappears_on_first_glyph() {
     let mut rig = Rig::new(&[0]);
@@ -454,8 +439,7 @@ fn clear_before_signal_after_user_break_reappears_on_first_glyph() {
     );
 }
 
-/// 見えているバルーンへ全消去と最初の文字が同じフレームに届いても、隠して出し直さない
-/// （要件 2.4・3.3）。
+/// 見えているバルーンへ全消去と最初の文字が同じフレームに届いても、隠して出し直さない。
 #[test]
 fn visible_balloon_keeps_showing_through_clear_and_glyph() {
     let mut rig = Rig::new(&[0]);
@@ -476,7 +460,7 @@ fn visible_balloon_keeps_showing_through_clear_and_glyph() {
 }
 
 /// 全消去の後に scope 0 へ文字が来ない台詞では、見えていた scope 0 を全消去で 1 回だけ隠し、
-/// 台詞の間ずっと隠れたまま保つ。scope 1 は見えたまま（要件 2.5・3.3）。
+/// 台詞の間ずっと隠れたまま保つ。scope 1 は見えたまま。
 #[test]
 fn scope_without_glyph_after_clear_stays_hidden() {
     let mut rig = Rig::new(&[0, 1]);

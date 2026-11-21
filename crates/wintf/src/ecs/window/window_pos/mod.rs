@@ -230,22 +230,19 @@ impl WindowPos {
     }
 
     /// bool の欄から `SetWindowPos` のフラグを組む
-    /// 呼び手: `apply_window_pos_changes`（graphics/systems/window_pos.rs）、
-    /// `nudge_command`（zorder_chain.rs）、`pair_fix_command`（zorder_pair_maintain.rs）
+    ///
+    /// 呼び手は `apply_window_pos_changes`・`nudge_command`・`pair_fix_command`。
     pub fn build_flags_for_system(&self) -> SET_WINDOW_POS_FLAGS {
         let mut flags = SET_WINDOW_POS_FLAGS(0);
 
-        // 自動判定: position が None なら SWP_NOMOVE
         if self.position.is_none() {
             flags |= SWP_NOMOVE;
         }
 
-        // 自動判定: size が None なら SWP_NOSIZE
         if self.size.is_none() {
             flags |= SWP_NOSIZE;
         }
 
-        // 自動判定: zorder が NoChange なら SWP_NOZORDER
         if self.zorder == ZOrder::NoChange {
             flags |= SWP_NOZORDER;
         }
@@ -285,8 +282,8 @@ impl WindowPos {
     }
 
     /// ZOrder から `SetWindowPos` の hwnd_insert_after を得る
-    /// 呼び手: `apply_window_pos_changes`（graphics/systems/window_pos.rs）、
-    /// `nudge_command`（zorder_chain.rs）、`pair_fix_command`（zorder_pair_maintain.rs）
+    ///
+    /// 呼び手は `apply_window_pos_changes`・`nudge_command`・`pair_fix_command`。
     pub fn get_hwnd_insert_after(&self) -> Option<HWND> {
         match self.zorder {
             ZOrder::NoChange => None,
@@ -314,7 +311,6 @@ impl WindowPos {
         &self,
         window_handle: &WindowHandle,
     ) -> Result<(i32, i32, i32, i32), String> {
-        // position/sizeがNoneの場合はデフォルト値(0, 0)を使用
         let position = self.position.unwrap_or(Point { x: 0, y: 0 });
         let size = self.size.unwrap_or(SizeI {
             width: 0,
@@ -400,12 +396,10 @@ impl Command for SetWindowParentToLayoutRoot {
     type Out = ();
 
     fn apply(self, world: &mut World) {
-        // LayoutRootを検索
         let mut query = world.query_filtered::<Entity, With<LayoutRoot>>();
         let layout_root = query.iter(world).next();
 
         if let Some(root) = layout_root {
-            // Windowエンティティがまだ親を持っていない場合のみChildOfを設定
             if let Ok(mut entity_mut) = world.get_entity_mut(self.entity) {
                 if !entity_mut.contains::<ChildOf>() {
                     debug!(

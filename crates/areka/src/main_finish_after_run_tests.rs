@@ -1,4 +1,4 @@
-//! `finish_after_run`（task 4.1・要件 3.1・3.2・3.4・6.3・7.6）の単体テスト。
+//! `finish_after_run`の単体テスト。
 //!
 //! `run()` の成否・Fault の有無・後始末の成否の組み合わせで、後始末がちょうど 1 回走ること
 //! と、どれか 1 つでも失敗があれば `Err`（終了コード 1）になることを固定する。
@@ -30,7 +30,7 @@ fn all_clear_is_ok_and_cleans_up_once() {
     assert_eq!(calls, 1);
 }
 
-/// `run()` が失敗で戻っても後始末は 1 回通り、結果は失敗（要件 3.2・6.3）。
+/// `run()` が失敗で戻っても後始末は 1 回通り、結果は失敗。
 #[test]
 fn run_failure_still_cleans_up_once_and_fails() {
     let (out, calls) = drive(fail(), false, Ok(()));
@@ -38,7 +38,7 @@ fn run_failure_still_cleans_up_once_and_fails() {
     assert_eq!(calls, 1);
 }
 
-/// Fault で終わったら後始末を通したうえで失敗（要件 3.1）。
+/// Fault で終わったら後始末を通したうえで失敗。
 #[test]
 fn fault_cleans_up_once_and_fails() {
     let (out, calls) = drive(Ok(()), true, Ok(()));
@@ -46,7 +46,7 @@ fn fault_cleans_up_once_and_fails() {
     assert_eq!(calls, 1);
 }
 
-/// 後始末の失敗は失敗（要件 3.2）。
+/// 後始末の失敗は失敗。
 #[test]
 fn cleanup_failure_fails() {
     let (out, calls) = drive(Ok(()), false, fail());

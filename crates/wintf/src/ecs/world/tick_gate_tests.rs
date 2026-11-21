@@ -1,7 +1,7 @@
 //! `tick_gate` の決定論テスト。
 //!
 //! 見るのは純関数 [`should_run`] ただ 1 つで、時計も乱数も共有状態も使わない
-//! （実時間の閾値は 1 つも登場しない＝要件 6.5）。
+//! （実時間の閾値は 1 つも登場しない）。
 //!
 //! 主軸は 2 本立てである。
 //!
@@ -156,11 +156,9 @@ fn disabled_outranks_every_other_reason() {
     let i = inputs(FORCE.bits(), true, u32::MAX, 0, false);
     assert_eq!(should_run(&i), TickDecision::Run(RunReason::Disabled));
 
-    // 起動直後を抜けていても同じ。
     let i = inputs(POINTER.bits(), true, u32::MAX, u32::MAX, false);
     assert_eq!(should_run(&i), TickDecision::Run(RunReason::Disabled));
 
-    // 回す理由が 1 つも無くても、門が無効なら省略にはならない。
     let i = inputs(0, false, 0, u32::MAX, false);
     assert_eq!(should_run(&i), TickDecision::Run(RunReason::Disabled));
 }
@@ -170,7 +168,6 @@ fn warmup_outranks_wake_deadline_and_heartbeat() {
     let i = inputs(PRESENT.bits(), true, u32::MAX, 0, true);
     assert_eq!(should_run(&i), TickDecision::Run(RunReason::Warmup));
 
-    // 旗も期限も心拍も無くても、起動直後というだけで回る。
     let i = inputs(0, false, 0, 599, true);
     assert_eq!(should_run(&i), TickDecision::Run(RunReason::Warmup));
 }
@@ -448,17 +445,15 @@ fn window_proc_dispatch_maps_the_message_to_bits() {
 // ============================================ 生産者一覧の完全性（現物の木から照合する）
 
 // 上の 2 本は「表に載っている行が現に旗を立てるか」を見る。それだけでは**表から落ちた
-// 生産者**を捕まえられない——行を回すだけの検査は、載っていないファイルについては何も
-// 言わないからである（実際 `zorder_group_maintain.rs` は一度落ちたまま緑で通っていた）。
-// ここから下は逆向き、すなわち「木の中で旗を立てているファイルが全部表に載っているか」を
-// 見る。両向きが揃って初めて名簿は名簿として働く。
+// 生産者**を捕まえられない（載っていないファイルについては何も言わない）ので、
+// ここから下は逆向き、「木の中で旗を立てているファイルが全部表に載っているか」を見る。
+// 両向きが揃って初めて名簿は名簿として働く。
 //
 // 見るのは 2 つの書き方である——`tick_wake::mark` とパスで書いた参照と、
-// `tick_wake::` を含む `use` 行が `mark` を名指している形（`use …tick_wake::{ZORDER, mark};`）である。
-// 呼出の字面 `tick_wake::mark(` だけを見ていたときは、**表に載せていない新設の生産者が
-// `use` 形だと両向とも緑で抜けた**（表の側の検査は表に在る行しか見ないので助けに
-// ならない）。なおモジュールごと別名にする形（`use …tick_wake as tw;`）までは見ていない
-// ——その形が要るときは [`uses_tick_wake_name`] を広げること。
+// `tick_wake::` を含む `use` 行が `mark` を名指している形（`use …tick_wake::{ZORDER, mark};`）。
+// 呼出の字面 `tick_wake::mark(` だけだと、`use` 形の新設の生産者が表の側の検査にも
+// 映らず抜ける。モジュールごと別名にする形（`use …tick_wake as tw;`）は見ていないので、
+// その形が要るときは [`uses_tick_wake_name`] を広げること。
 
 use std::path::{Path, PathBuf};
 
@@ -581,8 +576,7 @@ fn the_wintf_table_lists_every_file_that_marks_the_wake() {
 /// `tick_wake.rs` 冒頭の散文名簿の `ZORDER` の行は、旗を立てている wintf のファイルを
 /// 1 つ残らずファイル名で名指ししている。
 ///
-/// この行は一度実際にずれた（`zorder_group_maintain.rs` と `window_pos.rs` が落ちたまま）。
-/// 見つけたのは人の目であってテストではない。以後は機械が見る。
+/// 名簿の行は人が書くので、生産者が増えたときに置いていかれやすい。
 #[test]
 fn the_module_roster_names_every_wintf_zorder_producer() {
     let bullet = zorder_bullet();

@@ -9,13 +9,11 @@
 //!
 //! # 表現の選択（BlendMode）
 //!
-//! design の enum スケッチは `Blend(BlendMode)`＋「各 `fast: bool` を保持」とだけ規定する。
-//! 本実装は `BlendMode { kind: BlendKind, fast: bool }` の構造体表現を採る。理由:
+//! `BlendMode { kind: BlendKind, fast: bool }` の構造体表現を採る。理由:
 //! ブレンド種別（`BlendKind`・19 種の Photoshop 相当合成）と `-fast` 変調フラグは
 //! 直交する二軸であり、`Multiply` と `Multiply-fast` を別 variant にすると列挙が 2 倍に
 //! 膨らみ網羅 match が冗長化する。種別軸のみを `#[non_exhaustive] enum BlendKind` として
-//! 列挙し、`fast` は直交フラグとして構造体に持たせることで、写像表（design
-//! 「合成メソッド写像表」）の全ブレンドモードを最小の列挙で忠実に表現する。
+//! 列挙し、`fast` は直交フラグとして構造体に持たせることで、写像表の全ブレンドモードを最小の列挙で忠実に表現する。
 
 use areka_parsers::shell::{canonical_method_name, same_canonical};
 use tracing::debug;
@@ -45,7 +43,7 @@ pub enum ComposeMethod {
     /// ベース完全置換・XY 無視（先頭層以外は overlay 読替）。シーム。
     ///
     /// 「XY 無視」は pattern定義の話。element定義の `base` はこの値を通らず、読み込み時に
-    /// [`ComposeMethod::Overlay`] で置かれて X,Y を位置として使う（areka-P0-element-base-method 要件 4.4）。
+    /// [`ComposeMethod::Overlay`] で置かれて X,Y を位置として使う。
     Base,
     /// 不透明度の乗算（切り抜き・RGB 無視・範囲外は消去）。シーム。
     Reduce,
@@ -81,7 +79,7 @@ impl BlendMode {
 }
 
 /// Photoshop 相当ブレンド種別の列挙（SSP 2.8.35〜2.8.40 のうち 19 種。soft-light〔2.8.39〕と
-/// linear-burn・linear-light・pin-light・subtract・vivid-light〔2.8.40〕はまだ無い＝`draw-methods-blend` が足す）。
+/// linear-burn・linear-light・pin-light・subtract・vivid-light〔2.8.40〕はまだ無い）。
 ///
 /// `#[non_exhaustive]` により将来のモード追加に対する後方互換シームを保つ。
 #[non_exhaustive]
@@ -180,7 +178,7 @@ const OVERLAY_WORDS: [&str; 3] = ["overlay", "add", "bind"];
 /// 記録を出さずに「この描画メソッドの語が描かれるか」を答える
 /// （`ComposeMethod::from_name(name).is_implemented()` と同じ答え・未知の語で `debug!` を出さない）。
 /// 実装済みは `Overlay` だけ（[`ComposeMethod::is_implemented`]）なので、その語と比べる。合成のたびに引かれる
-/// ので確保しない（大文字や `-`・`_` の入った語でも・7 回目の指摘 4）。
+/// ので確保しない（大文字や `-`・`_` の入った語でも）。
 pub(crate) fn is_implemented_name(name: &str) -> bool {
     OVERLAY_WORDS.iter().any(|w| same_canonical(name, w))
 }
@@ -236,7 +234,7 @@ fn parse_blend(canon: &str) -> Option<BlendMode> {
 mod tests {
     use super::*;
 
-    /// 網羅 match ガード（Req 8.1）: `ComposeMethod` の全 variant を名指しする。
+    /// 網羅 match ガード: `ComposeMethod` の全 variant を名指しする。
     ///
     /// `#[non_exhaustive]` はクレート外の網羅 match のみを禁じるため、クレート内の本テストは
     /// 全 variant を列挙できる。variant を追加／削除するとこの match が壊れ、写像表の
@@ -261,7 +259,7 @@ mod tests {
         let _ = name;
     }
 
-    /// 網羅 match ガード（Req 8.1）: `BlendKind` の全 19 種を名指しする。
+    /// 網羅 match ガード: `BlendKind` の全 19 種を名指しする。
     #[test]
     fn blend_kind_is_fully_enumerated() {
         fn name(k: BlendKind) -> &'static str {
@@ -290,7 +288,7 @@ mod tests {
         let _ = name;
     }
 
-    /// Req 8.2/8.3: `Overlay` のみ実装済み・他はすべて型シーム（未実装）。
+    /// `Overlay` のみ実装済み・他はすべて型シーム（未実装）。
     #[test]
     fn only_overlay_is_implemented() {
         assert!(ComposeMethod::Overlay.is_implemented());

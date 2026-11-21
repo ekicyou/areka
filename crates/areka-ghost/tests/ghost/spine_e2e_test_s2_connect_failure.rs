@@ -1,13 +1,11 @@
-// ===================== S2: 接続失敗シナリオ（task 4.3） =====================
+// ===================== S2: 接続失敗シナリオ =====================
 //
-// design.md「spine e2e（決定論・純 x64）」の「シナリオ網羅（要件 7.5）」節・S2:
-// 「接続失敗: connect が Err→ShioriDown→Unloading{Fault}→全 join（有界）。」を、
-// 起動から実 ghost スタック（shiori actor→down_tx→down-relay→kanade_tx の実結線
-// 一式）を通して駆動する。Tick 注入は一切不要。kanade が Fault へ入る入口は 2 つある:
-// ① `KanadeMsg::ShioriDown`（`run_inbox` が受領のたびに step へ即座に投入する横断
-// メッセージ）、② 起動の `Boot` が先に届いたときの最初の要求への答え（接続失敗後の
-// shiori actor は要求に `Handshake` で答える・real.rs `answer_after_connect_failure`）。
-// どちらが先でも種類は「接続できなかった」になる（要件 2.2・2.4）。
+// 接続失敗: connect が Err→ShioriDown→Unloading{Fault}→全 join（有界）。起動から実 ghost スタック
+// （shiori actor→down_tx→down-relay→kanade_tx の実結線一式）を通して駆動する。Tick 注入は一切不要。
+// kanade が Fault へ入る入口は 2 つある: ① `KanadeMsg::ShioriDown`（`run_inbox` が受領のたびに step へ即座に
+// 投入する横断メッセージ）、② 起動の `Boot` が先に届いたときの最初の要求への答え（接続失敗後の shiori actor は
+// 要求に `Handshake` で答える・real.rs `answer_after_connect_failure`）。どちらが先でも種類は
+// 「接続できなかった」になる。
 
 use super::*;
 
@@ -22,13 +20,12 @@ use areka_parsers::charset::DefaultEncoding;
 /// S2: 接続失敗——connect が即 `Err` を返しても `boot()` 自体は成功する
 /// （connect 失敗は shiori アクタースレッド**内部**で非同期に起こるため、`boot()`
 /// 自身の同期的な返り値には影響しない。`GhostBootError::Mount` のみが `boot` を
-/// 失敗させる・design「起動（boot）シーケンス」）。その後、接続の失敗が（`ShioriDown`
+/// 失敗させる）。その後、接続の失敗が（`ShioriDown`
 /// か、最初の要求への `Handshake` の答えとして）kanade へ届き、
 /// kanade は本テストから一切 `Close`/`ForceQuit` を送られることなく自律的に
 /// Unloading{Fault}→best-effort Unload→Stopped→StopSelf へ倒れて終了する
-/// （`into_parts()` で得た `handles.kanade` を直接 join して確認・design「S2 接続
-/// 失敗」）。加えて残る全コンポーネント（shiori／dispatcher／両 relay）も有界時間内に
-/// 後始末されることを確認する（design「全 join（有界）」の文字どおりの意味）。
+/// （`into_parts()` で得た `handles.kanade` を直接 join して確認）。加えて残る全コンポーネント
+/// （shiori／dispatcher／両 relay）も有界時間内に後始末されることを確認する。
 #[test]
 fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
     let temp = write_ghost_fixture("S2TestGhost", "S2TestShell");
@@ -48,7 +45,7 @@ fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
         ticker: TickerMode::Disabled,
     };
 
-    // 停止通知の投函端つきで起動する（要件 2.4・7.5）。
+    // 停止通知の投函端つきで起動する。
     let (stop_tx, stop_rx) = std::sync::mpsc::channel::<KanadeNotice>();
     // boot() 自体は connect の成否と無関係に成功する——connect 失敗は非同期に
     // shiori アクタースレッド内部で起こるため、これは「接続失敗は boot 失敗では
@@ -88,8 +85,8 @@ fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
          trigger should be necessary",
     );
 
-    // 停止通知は「接続できなかった」の種類と、接続失敗の理由を運ぶ（要件 2.4・7.5）。
-    // 理由は届いた入口の `error!` と同じ文言（要件 2.1）: `Boot` が先（ほぼ常に）なら
+    // 停止通知は「接続できなかった」の種類と、接続失敗の理由を運ぶ。
+    // 理由は届いた入口の `error!` と同じ文言: `Boot` が先（ほぼ常に）なら
     // "shiori handshake failure: simulated connect failure"、`ShioriDown` が先なら
     // "simulated connect failure"。どちらでも接続失敗の理由を含む。
     let stopped = stop_rx
@@ -120,7 +117,7 @@ fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
     )
     .expect("shiori actor should finish once kanade has stopped and sent Close");
 
-    // ---- 副観測: 残る全コンポーネントも有界時間内に後始末される（design「全 join」）----
+    // ---- 副観測: 残る全コンポーネントも有界時間内に後始末される----
     // dispatcher は自身の Sender を保持し自然終了しない（「アクター別の停止経路」表）
     // ため、明示的に Close を送出する。
     let _ = dispatcher.send(DispatcherMsg::Close);

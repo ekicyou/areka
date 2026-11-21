@@ -1,7 +1,7 @@
 //! areka モックシェル example（退避）
 //!
 //! wintfフレームワークを使用したデスクトップマスコット「ぱすたさん」の最小動作実装。
-//! 本番アプリ骨格（`main.rs`）から挙動不変で退避したモック UI 資産。
+//! 本番アプリ骨格（`main.rs`）から退避したモック UI 資産。
 //! - シェルウィンドウ: キャラクター画像（320×420px）の透過表示
 //! - バルーンウィンドウ: 縦書きテキスト表示
 //! - ドラッグ移動: シェルをドラッグするとバルーンが追従
@@ -79,9 +79,7 @@ pub struct BalloonWindowMarker;
 // ---------------------------------------------------------------------------
 
 fn main() -> Result<()> {
-    // tracing-subscriber 初期化（RUST_LOG環境変数対応、デフォルト info）
-    // 外部入力の扱い（A1-V）: RUST_LOG が未設定・非UTF-8・不正な構文の場合は
-    // try_from_default_env() が Err を返し "info" へフォールバックする（panic 経路なし）。
+    // RUST_LOG が未設定・非UTF-8・不正な構文の場合は try_from_default_env() が Err を返し "info" へフォールバックする。
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -91,18 +89,15 @@ fn main() -> Result<()> {
     let mgr = WinApp::new()?;
     let world = mgr.world();
 
-    // 非同期タスクでUI構築
     world.borrow().spawn(|tx| async move {
         run_setup(tx).await;
     });
 
-    // クリック透過機構への窓登録システムを結線。UISetup の create_windows が
-    // WindowHandle を付与した後の FrameFinalize で走らせ、同一 tick 内で Added を捉える。
+    // UISetup の create_windows が WindowHandle を付与した後の FrameFinalize で走らせ、同一 tick 内で Added を捉える。
     world
         .borrow_mut()
         .add_systems(FrameFinalize, register_click_through_windows);
 
-    // 操作ガイド出力
     println!();
     println!("areka モック実装 — ぱすたさん");
     println!("================================");
@@ -110,7 +105,6 @@ fn main() -> Result<()> {
     println!("  終了:         シェル画像をダブルクリック");
     println!();
 
-    // ブロッキングメッセージループ
     mgr.run()?;
 
     Ok(())
@@ -123,16 +117,12 @@ fn main() -> Result<()> {
 /// クリック透過機構への窓登録システム。
 ///
 /// WUC 化により ULW の自動 α ヒットテストが失われるため、機構が α を評価できるよう
-/// shell/balloon の 2 窓を明示登録する。`WindowHandle` は `create_windows`（UISetup）が
-/// HWND 生成後に付与するため `Added<WindowHandle>` で「HWND が付いた瞬間」を捉え、各窓を
-/// 厳密に 1 回登録する（`register` は同一 Entity 再登録を dedupe するため冪等でもある）。
+/// shell/balloon の 2 窓を明示登録する。`Added<WindowHandle>` で HWND が付いた瞬間を捉え、各窓を
+/// 1 回登録する。
 ///
-/// `ClickThroughRegistryHandle` は `WinApp::run` の結線で World へ NonSend リソースとして
-/// 挿入される。本システムは `mgr.run()` 前に登録されるが tick は `run()` 開始後に回るため
-/// 通常は存在する。ごく初期の tick で未挿入の可能性に備え `Option<NonSend<..>>` で防御し、
-/// 未挿入なら no-op する（`Added` は次 tick で再度観測されるため取りこぼさない）。
-/// `register` は `&self`（内部可変は `Rc<RefCell<..>>`）ゆえ `NonSend` で足りる。
-/// 窓破棄時の除去は機構内 `prune_dead_targets`（`Window` を持ち、`WindowHandle` の HWND が登録と同じ Entity だけを残す）が担うため明示 remove は不要。
+/// `ClickThroughRegistryHandle` は `WinApp::run` の結線で挿入されるため、ごく初期の tick の
+/// 未挿入に `Option<NonSend<..>>` で備え、未挿入なら no-op する（`Added` は次 tick で再度観測される）。
+/// 窓破棄時の除去は機構内 `prune_dead_targets` が担うため明示 remove は不要。
 fn register_click_through_windows(
     new_windows: Query<
         (Entity, &WindowHandle),
@@ -152,7 +142,6 @@ fn register_click_through_windows(
     }
 }
 
-/// 非同期タスクでシェル＋バルーンウィンドウを生成
 async fn run_setup(tx: CommandSender) {
     let _ = tx.send(Box::new(|world: &mut World| {
         create_shell_window(world);
@@ -166,11 +155,6 @@ async fn run_setup(tx: CommandSender) {
 // ---------------------------------------------------------------------------
 
 /// シェルウィンドウEntity構築
-///
-/// - WS_POPUP透過ウィンドウ（タイトルバーなし）
-/// - BitmapSourceでキャラクター画像表示
-/// - DragConfigでネイティブドラッグ有効化
-/// - OnDrag / OnPointerPressedでインタラクション
 fn create_shell_window(world: &mut World) -> Entity {
     let shell_entity = world
         .spawn((
@@ -178,14 +162,12 @@ fn create_shell_window(world: &mut World) -> Entity {
             ShellWindowMarker,
             Window {
                 title: "areka shell".to_string(),
-                // WUC 合成に固定化された。factory の compute_ex_style は合成モード選択を持たず、
-                // 常に WS_EX_LAYERED を外し WS_EX_NOREDIRECTIONBITMAP を付与するため WindowStyle
-                // の ex_style は据え置きでよい（下の WS_EX_LAYERED は factory が剥がす）。
+                // factory の compute_ex_style が WS_EX_LAYERED を剥がし WS_EX_NOREDIRECTIONBITMAP を付与するため
+                // ex_style は据え置きでよい。
                 ..Default::default()
             },
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,
-                // ex_style は factory が固定計算する（compute_ex_style が WS_EX_LAYERED を剥がす）。
                 ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {
@@ -211,7 +193,6 @@ fn create_shell_window(world: &mut World) -> Entity {
         ))
         .id();
 
-    // キャラクター画像 子Entity
     world.spawn((
         Name::new("Shell-Image"),
         BitmapSource::new(SHELL_IMAGE_PATH),
@@ -235,10 +216,6 @@ fn create_shell_window(world: &mut World) -> Entity {
 // ---------------------------------------------------------------------------
 
 /// バルーンウィンドウEntity構築
-///
-/// - WS_POPUP透過ウィンドウ
-/// - シェル右側に配置（+335px, +0px）
-/// - 半透明クリーム色背景 + 縦書きTypewriterテキスト
 fn create_balloon_window(world: &mut World) -> Entity {
     let balloon_entity = world
         .spawn((
@@ -246,13 +223,12 @@ fn create_balloon_window(world: &mut World) -> Entity {
             BalloonWindowMarker,
             Window {
                 title: "areka balloon".to_string(),
-                // WUC 合成に固定化された。factory の compute_ex_style は合成モード選択を持たず、
-                // 常に WS_EX_LAYERED を外し WS_EX_NOREDIRECTIONBITMAP を付与するため据え置きでよい。
+                // factory の compute_ex_style が WS_EX_LAYERED を剥がし WS_EX_NOREDIRECTIONBITMAP を付与するため
+                // ex_style は据え置きでよい。
                 ..Default::default()
             },
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,
-                // ex_style は factory が固定計算する（compute_ex_style が WS_EX_LAYERED を剥がす）。
                 ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {
@@ -273,7 +249,6 @@ fn create_balloon_window(world: &mut World) -> Entity {
         ))
         .id();
 
-    // バルーン背景矩形（薄いクリーム色、半透明）
     let background = world
         .spawn((
             Name::new("Balloon-Background"),
@@ -292,7 +267,6 @@ fn create_balloon_window(world: &mut World) -> Entity {
         ))
         .id();
 
-    // 縦書き Typewriter テキスト
     let current_time = world
         .get_resource::<FrameTime>()
         .map(|ft| ft.0)
@@ -348,12 +322,10 @@ fn build_typewriter_tokens(text: &str) -> Vec<TypewriterToken> {
     let mut tokens = Vec::new();
 
     for (i, line) in text.split('\n').enumerate() {
-        // 2行目以降は前の行との間に改行を挿入
         if i > 0 {
             tokens.push(TypewriterToken::Text("\n".to_string()));
         }
         if line.is_empty() {
-            // 空行 → 段落間ポーズ
             tokens.push(TypewriterToken::Wait(0.3));
         } else {
             tokens.push(TypewriterToken::Text(line.to_string()));
@@ -369,9 +341,7 @@ fn build_typewriter_tokens(text: &str) -> Vec<TypewriterToken> {
 
 /// OnDrag ハンドラ: シェルドラッグ時にバルーンを追従移動させる
 ///
-/// DragConfig { move_window: true } によりシェルウィンドウ自体は
-/// wndprocレベルで自動的に移動される。このハンドラではバルーンの
-/// 位置をシェルに合わせて更新する。
+/// `DragConfig { move_window: true }` によりシェルウィンドウ自体は wndproc レベルで自動的に移動される。
 fn on_shell_drag(
     world: &mut World,
     _sender: Entity,
@@ -381,16 +351,13 @@ fn on_shell_drag(
     match ev {
         Phase::Tunnel(_) => false,
         Phase::Bubble(_) => {
-            // シェルの現在位置を取得（wndprocレベルで既に更新済み）
             let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
                 return false;
             };
 
-            // バルーンのHWNDを取得してSetWindowPosCommandを発行
             let mut query = world.query_filtered::<&WindowHandle, With<BalloonWindowMarker>>();
             if let Some(handle) = query.iter(world).next() {
-                // 不変条件（A1-V）: pos は wndproc が実ウィンドウ位置から更新する
-                // 論理座標であり、Windows の仮想スクリーン座標範囲に収まるため、
+                // pos は wndproc が実ウィンドウ位置から更新する論理座標で、仮想スクリーン座標範囲に収まるため
                 // オフセット加算が i32 を溢れることはない（溢れは入力源の異常）。
                 debug_assert!(
                     pos.x.checked_add(BALLOON_OFFSET_X).is_some()
@@ -418,8 +385,6 @@ fn on_shell_drag(
 
 /// OnPointerPressed ハンドラ: ダブルクリックで全ウィンドウを終了する
 ///
-/// Phase::Bubble で DoubleClick::Left を検出し、
-/// ShellWindowMarker / BalloonWindowMarker を持つ全エンティティを despawn する。
 /// despawn → reconcile_window_registry が DestroyWindow → WindowRegistry 空遷移 → run() 復帰
 fn on_shell_pressed(
     world: &mut World,
@@ -433,8 +398,6 @@ fn on_shell_pressed(
             if state.double_click == DoubleClick::Left {
                 tracing::info!("ダブルクリック検出 — アプリケーションを終了します");
 
-                // 全ウィンドウエンティティを収集して despawn
-                // （reconcile_window_registry → DestroyWindow → WindowRegistry 空遷移）
                 let windows: Vec<Entity> = world
                     .query_filtered::<Entity, Or<(With<ShellWindowMarker>, With<BalloonWindowMarker>)>>()
                     .iter(world)
@@ -451,15 +414,10 @@ fn on_shell_pressed(
 }
 
 // ---------------------------------------------------------------------------
-// Tests（挙動不変で src/tests.rs から同居退避）
+// Tests
 // ---------------------------------------------------------------------------
 
-/// GUI 非依存の純粋ロジックテスト
-///
-/// 対象: トークン構築（純関数）、Entity 構築（bevy_ecs World のみで完結）、
-/// イベントハンドラの分岐ロジック。
-/// 実ウィンドウ生成（CreateWindowExW）・COM 初期化・メッセージループは
-/// wintf のシステム実行時にのみ発生するため、ここでは headless World で検証する。
+/// GUI 非依存の純粋ロジックテスト（実ウィンドウ生成・COM 初期化・メッセージループは headless World では起きない）
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -467,7 +425,6 @@ mod tests {
     use std::time::Instant;
     use windows::Win32::Foundation::HWND;
 
-    /// 即時完了する Future を 1 回の poll で駆動する（run_setup 用）
     fn poll_ready<F: Future>(fut: F) -> F::Output {
         let mut fut = std::pin::pin!(fut);
         let waker = std::task::Waker::noop();
@@ -590,7 +547,6 @@ mod tests {
             })
         );
 
-        // インタラクション用コンポーネント
         assert!(world.get::<DragConfig>(shell).is_some());
         assert!(world.get::<OnDrag>(shell).is_some());
         assert!(world.get::<OnPointerPressed>(shell).is_some());
@@ -651,7 +607,6 @@ mod tests {
         create_shell_window(&mut world);
         let balloon = create_balloon_window(&mut world);
 
-        // 背景矩形はバルーンウィンドウの子
         let mut bg_query = world.query::<(Entity, &Rectangle, &ChildOf)>();
         let backgrounds: Vec<_> = bg_query
             .iter(&world)
@@ -661,14 +616,12 @@ mod tests {
         assert_eq!(backgrounds.len(), 1);
         let background = backgrounds[0];
 
-        // Typewriter は背景矩形の子
         let mut tw_query = world.query::<(&Typewriter, &ChildOf)>();
         let typewriters: Vec<_> = tw_query.iter(&world).collect();
         assert_eq!(typewriters.len(), 1);
         let (typewriter, child_of) = typewriters[0];
         assert_eq!(child_of.parent(), background);
 
-        // Typewriter 設定（縦書き・メイリオ 16px・0.08 秒/文字）
         assert_eq!(typewriter.font_family, "メイリオ");
         assert_eq!(typewriter.font_size, 16.0);
         assert_eq!(typewriter.direction, TextDirection::VerticalRightToLeft);
@@ -710,7 +663,6 @@ mod tests {
         poll_ready(run_setup(tx));
 
         let cmd = rx.try_recv().expect("run_setup should send one command");
-        // 追加コマンドは送信されない
         assert!(rx.try_recv().is_err());
 
         let mut world = World::new();
@@ -754,7 +706,6 @@ mod tests {
         assert!(world.get_entity(shell).is_err());
         assert!(world.get_entity(shell2).is_err());
         assert!(world.get_entity(balloon).is_err());
-        // マーカーを持たないエンティティは残る
         assert!(world.get_entity(other).is_ok());
     }
 
@@ -842,7 +793,6 @@ mod tests {
                 },
             ))
             .id();
-        // バルーンは存在するが WindowHandle 未付与（ウィンドウ未作成相当）
         world.spawn(BalloonWindowMarker);
 
         let ev = Phase::Bubble(drag_event(shell));

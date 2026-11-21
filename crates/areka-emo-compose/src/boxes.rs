@@ -1,5 +1,4 @@
-//! 箱（element定義の描画メソッド `balloon` で置かれたシェル内バルーンの文字の場所）の型
-//! （spec: areka-P0-shell-balloon）。
+//! 箱（element定義の描画メソッド `balloon` で置かれたシェル内バルーンの文字の場所）の型。
 //!
 //! 「箱の定義の表」（`balloon.*`ブレス・名前で引く・シェルに 1 つ）と「サーフェス番号ごとの
 //! 箱の置き場所の表」（element定義・番号ごと）を [`BoxLayout`] に持ち、畳み込みで読み捨てた
@@ -94,29 +93,29 @@ pub struct BoxReport {
 /// 報告の種類。すべて原因と対象を欄に持つ（欄の文字列は原文のまま）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BoxIssue {
-    /// `balloon.` の後ろが空のブレス。採らない（要件 10.1）。
+    /// `balloon.` の後ろが空のブレス。採らない。
     BraceEmptyName { heading: String },
-    /// `size` の無いブレス。採らない（要件 1.4）。
+    /// `size` の無いブレス。採らない。
     BraceMissingSize { name: String },
-    /// `size` が正の整数として読めないブレス。採らない（要件 1.4）。
+    /// `size` が正の整数として読めないブレス。採らない。
     BraceBadSize { name: String, value: String },
-    /// 名前が整数として読めるブレス。採らない（要件 1.9）。
+    /// 名前が整数として読めるブレス。採らない。
     BraceNumericName { name: String },
-    /// 同じ名前のブレスを後のもので置き換えた（要件 1.8）。
+    /// 同じ名前のブレスを後のもので置き換えた。
     BraceReplaced { name: String },
-    /// 箱に当てはまらないキーを読み捨てた（要件 1.5）。
+    /// 箱に当てはまらないキーを読み捨てた。
     BraceKeyIgnored { name: String, key: String },
-    /// `font.follow` の値が不正。ブレスは採り、`scope` として扱う（要件 3.18）。
+    /// `font.follow` の値が不正。ブレスは採り、`scope` として扱う。
     BraceBadFollow { name: String, value: String },
-    /// element番号が読めない element定義を読み捨てた（要件 10.1）。
+    /// element番号が読めない element定義を読み捨てた。
     ElementBadNumber { surface: u32, element: String },
-    /// 名前のブレスが無い（採られなかった）element定義を読み捨てた（要件 2.5）。
+    /// 名前のブレスが無い（採られなかった）element定義を読み捨てた。
     ElementUnknownBrace {
         surface: u32,
         element: u32,
         name: String,
     },
-    /// X・Y が整数として読めない element定義を読み捨てた（要件 2.6）。
+    /// X・Y が整数として読めない element定義を読み捨てた。
     ElementBadPosition {
         surface: u32,
         element: u32,
@@ -124,25 +123,25 @@ pub enum BoxIssue {
         x: String,
         y: String,
     },
-    /// 同じ名前の element定義のうち element番号が最小でないものを読み捨てた（要件 2.7）。
+    /// 同じ名前の element定義のうち element番号が最小でないものを読み捨てた。
     ElementDuplicateName {
         surface: u32,
         element: u32,
         name: String,
         kept: u32,
     },
-    /// 画像の element番号より小さい番号の箱（採ったうえで断る・要件 3.8）。
+    /// 画像の element番号より小さい番号の箱（採ったうえで断る）。
     ElementBelowImage {
         surface: u32,
         element: u32,
         name: String,
         image_element: u32,
     },
-    /// `surface.append*`ブレスの対象のサーフェスがその時点で無い（要件 2.2・10.1）。番号ごとに 1 件で、
+    /// `surface.append*`ブレスの対象のサーフェスがその時点で無い。番号ごとに 1 件で、
     /// `name` はそのブレスの最初の箱の名前。
     AppendTargetMissing { surface: u32, name: String },
-    /// element定義で子として置かれたサーフェスが箱を持つ。箱は親の中に置かない
-    /// （spec: areka-P0-surface-element-nesting 要件 6.1・8.1）。辺 (親, 子) ごとに 1 件で、`name` は子の
+    /// element定義で子として置かれたサーフェスが箱を持つ。箱は親の中に置かない。
+    /// 辺 (親, 子) ごとに 1 件で、`name` は子の
     /// 最初の箱の名前（子の箱の数を掛けると、子を置く親の数×箱の数まで増えるため）。
     InChildSurface {
         parent: u32,
@@ -155,7 +154,7 @@ pub enum BoxIssue {
 ///
 /// `images`（面の画像だけで在る番号）は `surface.append*`ブレスの存在の条件に、`world`（画像の
 /// element番号）は箱が画像より下に書かれたかの判定に使う。本関数は fs に触れず、記録は
-/// 入口が決める（範囲の見出しで写す行が上限を越えたときの `error!` と知らない記述子の記録だけはここで出す・指摘 78。
+/// 入口が決める（範囲の見出しで写す行が上限を越えたときの `error!` と知らない記述子の記録だけはここで出す。
 /// どちらも `world` を組んだときの出し分けに従い、黙らせる組み方の面の表なら出さない）。
 pub fn fold_boxes(
     boxes: &[BoxDefinition],
@@ -178,9 +177,9 @@ pub fn fold_boxes(
     (layout, BoxReport { issues })
 }
 
-/// element定義で子として置かれたサーフェスの箱を、辺 (親, 子) ごとに 1 件（子の最初の箱の名前で）載せる
-/// （spec: areka-P0-surface-element-nesting 要件 6.1・8.1）。置き場所の表は変えない（子の箱は親の中に
-/// 置かれず、子を一番上に表示したときは今までどおり置かれる・要件 6.2〜6.4）。
+/// element定義で子として置かれたサーフェスの箱を、辺 (親, 子) ごとに 1 件（子の最初の箱の名前で）載せる。
+/// 置き場所の表は変えない（子の箱は親の中に
+/// 置かれず、子を一番上に表示したときは今までどおり置かれる）。
 ///
 /// 辺は面の表の入れ子の表（[`EmoWorld::nest_table`] の `children`＝面の表に在る子だけ）から取る。
 /// 面の表に無い番号は子として描かれず、無い番号の報告（`NestIssue::MissingTarget`）が受け持つので
@@ -208,12 +207,11 @@ fn report_child_boxes(layout: &BoxLayout, world: &EmoWorld, issues: &mut Vec<Box
     }
 }
 
-/// 箱の element定義の行を、画像の element と同じ規則でサーフェス番号へ配る（要件 2.1・2.2）。
+/// 箱の element定義の行を、画像の element と同じ規則でサーフェス番号へ配る。
 ///
 /// 見出しの展開は `fold.rs` と共用。`surface*`ブレスはその番号の前の行へ足し、`surface.append*`ブレスは
 /// 「その時点で既にある番号（面の画像だけで在る番号を含む）」にだけ足す。どちらも同じ element番号の
-/// 前の行を残して両方を足す（面の `fold.rs` の `add_lines` と同じ規則・spec: audit-emo-compose
-/// 設計の議題 7 案 A）。無い番号への追記は番号ごとに 1 件、最初の箱の名前で報告へ載せる（箱の行の数を掛けない）。
+/// 前の行を残して両方を足す（面の `fold.rs` の `add_lines` と同じ規則）。無い番号への追記は番号ごとに 1 件、最初の箱の名前で報告へ載せる（箱の行の数を掛けない）。
 fn distribute<'a>(
     boxes: &'a [BoxDefinition],
     images: &BTreeMap<u32, String>,
@@ -222,13 +220,13 @@ fn distribute<'a>(
 ) -> BTreeMap<u32, Vec<&'a BoxElementLine>> {
     let mut existing: BTreeSet<u32> = images.keys().copied().collect();
     let mut lines: BTreeMap<u32, Vec<&BoxElementLine>> = BTreeMap::new();
-    // 番号ごとに写す行の合計は面の畳み込みと同じ上限（指摘 78）。越えた記述子は記録して捨てる。
+    // 番号ごとに写す行の合計は面の畳み込みと同じ上限。越えた記述子は記録して捨てる。
     let mut copied = Copied::default();
     for definition in boxes {
         match definition {
             BoxDefinition::Surface(surface) => {
                 let ids = expand_targets_with(&surface.targets, records);
-                // 上限で捨てる記述子の番号も在る番号に数える（後の追記を「無い番号」と報告しない・7 回目の指摘 24）。
+                // 上限で捨てる記述子の番号も在る番号に数える（後の追記を「無い番号」と報告しない）。
                 existing.extend(ids.iter().copied());
                 if !may_copy(&mut copied, "boxes", &ids, surface.elements.len(), records) {
                     continue;
@@ -260,7 +258,7 @@ fn distribute<'a>(
     lines
 }
 
-/// 1 つの番号の行を置き場所の列にする（要件 2.5〜2.7・3.8・10.1）。
+/// 1 つの番号の行を置き場所の列にする。
 ///
 /// element番号の読み取り → 名前の解決 → X・Y の読み取り → 同じ名前の重複の整理（element番号が
 /// 一番小さいものを採る）→ element番号の昇順。捨てた行だけを報告へ載せる。画像の element の
@@ -346,7 +344,7 @@ fn place(
     placements
 }
 
-/// `balloon.*`ブレスを登場順に定義の表へ畳む（同じ名前は後のもので丸ごと置き換え・要件 1.8）。
+/// `balloon.*`ブレスを登場順に定義の表へ畳む（同じ名前は後のもので丸ごと置き換え）。
 ///
 /// 置き換えたブレスが採られなければ、その名前の定義は無くなる（前の定義へは戻さない）。
 fn fold_braces(boxes: &[BoxDefinition], issues: &mut Vec<BoxIssue>) -> BTreeMap<BoxName, BoxDef> {
@@ -362,7 +360,7 @@ fn fold_braces(boxes: &[BoxDefinition], issues: &mut Vec<BoxIssue>) -> BTreeMap<
             });
             continue;
         }
-        // `\b[ID番号]` と見分けがつかない名前（seriko の `resolve_balloon_key` と同じ基準・要件 1.9）。
+        // `\b[ID番号]` と見分けがつかない名前（seriko の `resolve_balloon_key` と同じ基準）。
         if name.parse::<i64>().is_ok() {
             issues.push(BoxIssue::BraceNumericName { name: name.clone() });
             continue;
@@ -393,8 +391,8 @@ type SplitBrace = (BTreeMap<String, String>, (u32, u32), FontFollow);
 /// ブレスの本体を descript.txt の読み手へ渡す表と `size`・`font.follow` に分ける。
 ///
 /// 本体の各行を「先頭の欄＝キー・残りを `,` でつないだもの＝値・同じキーは後勝ち」の表へ写し、
-/// `size`・`font.follow`（areka 独自のキー）と当てはまらないキー（要件 1.5）を抜く。
-/// `size` が無い・正の整数 2 つとして読めなければ `None`（要件 1.4）。
+/// `size`・`font.follow`（areka 独自のキー）と当てはまらないキーを抜く。
+/// `size` が無い・正の整数 2 つとして読めなければ `None`。
 fn split_brace(
     name: &str,
     lines: &[Vec<String>],

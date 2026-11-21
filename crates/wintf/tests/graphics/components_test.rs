@@ -1,15 +1,10 @@
-//! W3a-T: graphics コンポーネント（components.rs）のギャップテスト
+//! graphics コンポーネント（components.rs）のテスト
 //!
 //! - VisualGraphics: Default / new_with_parent / set_parent_visual / invalidate / Debug /
 //!   on_remove フック（親 Visual からのデタッチ）
 //! - SurfaceGraphics: set_surface / clear（実 WUC CompositionDrawingSurface + SurfaceBrush 使用）
 //!
-//! Note: WindowGraphics は DesktopWindowTarget（実 HWND 必須）を要するため
-//! ヘッドレスでは構築不能。W3a-T 断片の R2.8 所見として記録。
-//!
-//! WUC 移行: DComp の create_visual/add_visual/remove_visual/create_surface は
-//! それぞれ WUC の SpriteVisual・ContainerVisual.Children().Insert/Remove・
-//! CompositionDrawingSurface へ対応する。
+//! WindowGraphics は DesktopWindowTarget（実 HWND 必須）を要するためヘッドレスでは構築不能。
 
 use bevy_ecs::prelude::*;
 use windows::Foundation::Size;
@@ -34,7 +29,6 @@ fn make_visual(resource: &WucGraphicsResource) -> Visual {
         .expect("cast to Visual")
 }
 
-/// WUC 移行: DComp add_visual 相当。
 fn add_child(parent: &Visual, child: &Visual) -> Result<()> {
     parent
         .cast::<ContainerVisual>()?
@@ -43,7 +37,6 @@ fn add_child(parent: &Visual, child: &Visual) -> Result<()> {
     Ok(())
 }
 
-/// WUC 移行: DComp remove_visual 相当。
 fn remove_child(parent: &Visual, child: &Visual) -> Result<()> {
     parent
         .cast::<ContainerVisual>()?
@@ -164,7 +157,6 @@ fn visual_graphics_on_remove_detaches_from_parent_visual() {
         let parent = make_visual(&resource);
         let child = make_visual(&resource);
 
-        // 親子関係を構築（compositor 階層同期と同じ子挿入経路）
         add_child(&parent, &child).expect("add_child");
 
         let mut world = World::new();

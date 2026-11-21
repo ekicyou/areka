@@ -1,6 +1,6 @@
-//! 翻訳の経路のテスト（areka-P0-translate-pipeline 要件 1.2〜1.5・3.1・4.6・5.5・6.1・6.2・8.1）。
+//! 翻訳の経路のテスト。
 //!
-//! SHIORI の台詞で再生を始める 8 か所の腕（design「Existing Architecture Analysis」の表）を 1 本ずつ、
+//! SHIORI の台詞で再生を始める 8 か所の腕を 1 本ずつ、
 //! 前提の状態まで実際の入力で `step` を進めてから、元のイベントの台詞の応答を最上位の [`step`] に入れる。
 //! どの経路も ⑴ 一括が翻訳の行動 1 つだけになり ⑵ 翻訳の結果で預けた一括が順序どおり最終の台詞で返り
 //! ⑶ 翻訳の結果が元の台詞と同じなら、状態と一括が最終の台詞で返したときと台詞のほかは同じ
@@ -14,7 +14,7 @@
 //!
 //! あわせて、翻訳しない台詞（areka が作る起動の記録だけの台詞・0 文字の台詞・外から頼まれた
 //! `OnTranslate` の応答）、印のイベントの台詞の見張り、控えの書き換え（`OnChoiceTimeout` の
-//! Reference0・停止通知の切替の中身の源）、選択の連鎖の後の翻訳の輸送路の失敗（論点 10）を固定する。
+//! Reference0・停止通知の切替の中身の源）、選択の連鎖の後の翻訳の輸送路の失敗を固定する。
 
 use super::events::SourceEvent;
 use super::log_capture::{assert_not_logged, capture, logged_once};
@@ -29,9 +29,7 @@ use crate::status::ExecutionStatus;
 use crate::talk::EpilogueCommand;
 use tracing::Level;
 
-/// SHIORI が返す元の台詞。
 const ORIGINAL: &str = "\\0元の台詞\\e";
-/// 翻訳の結果（最終の台詞）。
 const FINAL: &str = "\\0最終の台詞\\e";
 /// 前提づくりで始めたトークの最終の台詞（選択待ちの台詞・置き換えられる台詞）。
 const SHOWN: &str = "\\0表示した選択肢の台詞\\e";
@@ -231,7 +229,7 @@ fn started(actions: &[Action]) -> &StartTalk {
 /// 経路の前提（元のイベントの GET を送り、その応答を待っている）と、応答に付く出所。
 type Prepare = fn() -> (Drive, &'static str);
 
-/// 経路 1 本の通過を確かめる（design Testing Strategy の `translate_path_tests.rs` の 1・3 行目）。
+/// 経路 1 本の通過を確かめる。
 ///
 /// ⑴ 元のイベントの台詞の応答で、一括が翻訳の行動 1 つだけになり、依頼に元の台詞・元のイベント
 /// （応答を待っていた GET）・捕まえた時点の Status が載る ⑵ 翻訳の結果で、預けた一括が `expected`
@@ -280,7 +278,7 @@ fn assert_path(prepare: Prepare, expected: &[&str]) -> (Drive, Vec<Action>) {
         );
     }
 
-    // ⑶ 元の台詞のまま返る翻訳は、⑵ と台詞のほかは同じ状態と一括になる（要件 5.5）。
+    // ⑶ 元の台詞のまま返る翻訳は、⑵ と台詞のほかは同じ状態と一括になる。
     let (mut t, origin) = prepare();
     t.reply(
         ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
@@ -433,14 +431,14 @@ fn marked_shell_changing() -> (Drive, &'static str) {
 }
 
 // ============================================================
-// 8 か所の腕を 1 本ずつ（要件 1.2・1.5・3.1・5.5）
+// 8 か所の腕を 1 本ずつ
 // ============================================================
 
 #[test]
 fn path_boot_greeting_returns_start_then_version_notice() {
     let (d, resumed) = assert_path(boot_first, &["StartTalk", "Notify:basewareversion"]);
     assert!(matches!(d.s.phase, Phase::BootVersion { talk: Some(_) }));
-    // areka が足す起動の記録は翻訳に渡さず、最終の台詞の後ろにそのまま付く（要件 1.4）。
+    // areka が足す起動の記録は翻訳に渡さず、最終の台詞の後ろにそのまま付く。
     assert_eq!(
         started(&resumed).epilogue,
         epilogue(),
@@ -520,7 +518,7 @@ fn path_choice_timeout() {
 }
 
 // ============================================================
-// 翻訳しない台詞（要件 1.3・3.1・4.6）
+// 翻訳しない台詞
 // ============================================================
 
 #[test]
@@ -586,7 +584,7 @@ fn reply_to_on_translate_asked_through_the_talk_gap_is_not_translated() {
 }
 
 // ============================================================
-// 見張りと控え（要件 5.5・6.1・6.2）
+// 見張りと控え
 // ============================================================
 
 #[test]
@@ -627,7 +625,7 @@ fn choice_timeout_reference0_is_the_final_script() {
 }
 
 // ============================================================
-// 選択の連鎖の後の輸送路の失敗（論点 10・要件 4.5）
+// 選択の連鎖の後の輸送路の失敗
 // ============================================================
 
 #[test]

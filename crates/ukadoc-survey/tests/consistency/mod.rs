@@ -1,4 +1,4 @@
-//! repo の実データを読み込む共通処理（設計「入口 / tests/consistency」）。
+//! repo の実データを読み込む共通処理。
 //!
 //! 読むのは 6 種類——カタログ 1 本・台帳 4 本・テーマ定義 1 本・ソース全域・
 //! ドメイン別報告 4 本・全体報告 1 本である。読んだ値をそのまま [`CheckInput`] へ束ね、
@@ -12,7 +12,7 @@
 //! （写しを壊すテストは `.clone()` してから壊す）ので、並行に走るテストが 1 つの値を
 //! 共有してよい。
 //!
-//! # スナップショットには構造として届かない（要件 6.2・設計 Testing Strategy 19）
+//! # スナップショットには構造として届かない
 //!
 //! この一群は統合テストで、ライブラリとは別のクレートである。スナップショットを読む
 //! `io::snapshot` は crate 内公開なので、ここからは名前を書いても解決しない——
@@ -26,12 +26,12 @@
 //!
 //! # ファイルを 1 つも作らない
 //!
-//! 読むだけである。書き出しも一時ディレクトリも使わない（設計 File Structure Plan）。
+//! 読むだけである。書き出しも一時ディレクトリも使わない。
 //!
-//! # テーマ名の出どころは `model::THEMES`（要件 6.8）
+//! # テーマ名の出どころは `model::THEMES`
 //!
 //! テーマ定義の正本は `doc/ukadoc-coverage/values.md` だが、**検査へ渡すのは
-//! [`THEMES`] である**。理由は新しさの検査（要件 7.4）が本文をバイトで比べることに
+//! [`THEMES`] である**。理由は新しさの検査が本文をバイトで比べることに
 //! ある——repo にあるドメイン別報告は `report` の副手続きが [`THEMES`] で組み立てて
 //! 書き出したものなので、突き合わせ相手を `values.md` の見出しから作ると、`values.md`
 //! を書き換えただけで `DomainReportStale`（「報告を作り直せ」）が**誤った理由で**赤く
@@ -39,34 +39,27 @@
 //!
 //! `values.md` の本文は [`RepoData::values`] として持つ（[`values_md`] が見出しと
 //! [`THEMES`] の順序まで一致することを釘付けする）。台帳のテーマ名が定義に実在する
-//! ことは、⑴ 台帳のテーマ名が [`THEMES`] にあること（要件 6.8。`ledger::read` の `parse_theme`）と
+//! ことは、⑴ 台帳のテーマ名が [`THEMES`] にあること（`ledger::read` の `parse_theme`）と
 //! ⑵ [`THEMES`] が `values.md` の見出しと一致すること（[`values_md`]）の 2 つで守る。
 //!
 //! # テストの本体はこのディレクトリの兄弟に置く
 //!
 //! 3 文書（`linkage.md`・`briefing.md`・`roadmap-draft.md`）と spec ディレクトリの
-//! 一覧を読む道具は [`documents`]（`documents.rs`）にあり、そこにもテストの本体は
-//! 1 つも無い。3 文書まわりの母数の下限は
-//! [`documents_non_vacuity`]（`documents_non_vacuity.rs`）にあり、その器と壊す道具の
-//! 較正は [`documents_tools`]（`documents_tools.rs`）にある。判定 6 種そのものは
-//! [`documents_checks`]（`documents_checks.rs`・⑴ ⑵ ⑹）と
-//! [`linkage_checks`]（`linkage_checks.rs`・⑶）と
-//! [`briefing_checks`]（`briefing_checks.rs`・⑷）と
-//! [`spec_checks`]（`spec_checks.rs`・⑸）が持つ。⑷ の腕そのものは
-//! [`briefing_arms`]（`briefing_arms.rs`）にあり、そこにはテストの本体を 1 つも
-//! 置かない。判定を 1 ファイルにまとめず分けてあるのは、1 ファイル 1,000 行の目安
-//! （`structure.md`）を守るためである。3 文書の判定が使う所見の見方と 3 文書の綴りも
-//! [`documents`] に 1 つずつ置く。
+//! 一覧を読む道具は [`documents`] にあり、そこにテストの本体は 1 つも無い。母数の下限は
+//! [`documents_non_vacuity`] に、その器と壊す道具の較正は [`documents_tools`] にある。
+//! 判定 6 種そのものは [`documents_checks`]（⑴ ⑵ ⑹）・[`linkage_checks`]（⑶）・
+//! [`briefing_checks`]（⑷）・[`spec_checks`]（⑸）が持ち、⑷ の腕そのものは
+//! [`briefing_arms`] にある（テストの本体は置かない）。判定を分けてあるのは、
+//! 1 ファイル 1,000 行の目安（`structure.md`）を守るためである。3 文書の判定が使う
+//! 所見の見方と 3 文書の綴りも [`documents`] に置く。
 //!
-//! 実データへの主張は [`checks`]（`checks.rs`）に、検査の対象が 0 件でないことの主張は
-//! [`non_vacuity`]（`non_vacuity.rs`）に、自前の道具の較正は [`values_md`]
-//! （`values_md.rs`）に、要件と README の記入例が実データに実在することの主張は
-//! [`examples`]（`examples.rs`）にある。[`checks`] の摂動が使う道具（実データの壊して
-//! よい写しの型と、所見の見方）は [`perturb`]（`perturb.rs`）にあり、そこには
-//! テストの本体を 1 つも置かない。どれも同じディレクトリの兄弟で、宣言は
-//! このファイルへ下の `mod checks;` と同じく素の `mod` で置ける（`#[path]` で
-//! 読み込まれたファイルの子モジュールは、そのファイル自身のディレクトリを基準に
-//! 解決される——`structure.md`）。
+//! 実データへの主張は [`checks`] に、検査の対象が 0 件でないことの主張は
+//! [`non_vacuity`] に、自前の道具の較正は [`values_md`] に、要件と README の記入例が
+//! 実データに実在することの主張は [`examples`] にある。[`checks`] の摂動が使う道具
+//! （実データの壊してよい写しの型と、所見の見方）は [`perturb`] にあり、そこには
+//! テストの本体を 1 つも置かない。どれも同じディレクトリの兄弟で、宣言は素の `mod` で
+//! 置ける（`#[path]` で読み込まれたファイルの子モジュールは、そのファイル自身の
+//! ディレクトリを基準に解決される——`structure.md`）。
 
 mod briefing_arms;
 mod briefing_checks;
@@ -112,7 +105,7 @@ pub struct RepoData {
     pub assignment: PageAssignment,
     /// ソース全域から集めた証拠の索引。
     pub evidence: EvidenceIndex,
-    /// ドメイン別報告 4 本の本文（復帰文字を落としたもの・設計 D-6）。
+    /// ドメイン別報告 4 本の本文（復帰文字を落としたもの）。
     pub domain_reports: BTreeMap<Domain, String>,
     /// 全体報告 `report/summary.md` の本文（復帰文字を落としたもの）。
     pub summary_report: String,
@@ -126,7 +119,7 @@ impl RepoData {
     /// repo の実データ（1 回の走行で 1 度だけ読み、全部のテストが同じものを借りる）。
     ///
     /// 読めないファイルが 1 つでもあれば、**どの呼び出しも**探した絶対パスと理由を
-    /// 添えた同じ文で止まる（要件 6.12。黙って飛ばすと、その 1 本を見なかった検査が
+    /// 添えた同じ文で止まる（黙って飛ばすと、その 1 本を見なかった検査が
     /// 緑になる）。読みの中では panic させないので、1 本目の失敗が [`LazyLock`] を
     /// 毒にして 2 本目から別の文になることもない。
     pub fn load() -> &'static Self {
@@ -194,9 +187,9 @@ impl RepoData {
     }
 }
 
-/// 1 本読む。復帰文字は入出力層が落とす（設計 D-6）。
+/// 1 本読む。復帰文字は入出力層が落とす。
 ///
-/// 失敗したら `io::files` の本文をそのまま返す（要件 6.12）。その本文には既に
+/// 失敗したら `io::files` の本文をそのまま返す。その本文には既に
 /// 探した絶対パスと理由が入っており、パスの末尾（`catalog.toml`・`ledger/<ドメイン>.toml`・
 /// `report/<ドメイン>.md`・`values.md`・3 文書・`summary.md`）がそのまま役目を名指すので、
 /// ここで包み直しても同じパスを 2 度書くだけになる。だから包まない。

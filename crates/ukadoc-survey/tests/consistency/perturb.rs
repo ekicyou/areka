@@ -1,4 +1,4 @@
-//! 実データの壊してよい写しと、壊した結果の見方の道具（設計 File Structure Plan）。
+//! 実データの壊してよい写しと、壊した結果の見方の道具。
 //!
 //! テストの本体はここに 1 つも無い。壊す相手（[`Perturbed`]）と、壊した結果の見方
 //! （[`expect_exactly`]）と、摂動で持ち込む綴りの定数だけを置く。使う側は
@@ -7,7 +7,7 @@
 //! # repo のファイルには 1 バイトも触れない
 //!
 //! 手を入れるのは読み込んだ値のメモリ上の写しだけで、テストが終われば消える。書き出しも
-//! 一時ディレクトリも使わない（設計 File Structure Plan）。
+//! 一時ディレクトリも使わない。
 
 use std::collections::BTreeMap;
 
@@ -29,10 +29,7 @@ use super::RepoData;
 /// `a_ledger_id_that_left_the_catalog_turns_red`）。
 /// 錨をカタログから抜くと、**その id を関連の相手に書いている台帳の行がもう 1 件
 /// 赤くなる**（`LinkEndpointMissing`）ので、指されている id を錨にすると期待が 1 件
-/// では足りなくなる。実際、以前の錨 `ukadoc:list_shiori_event:OnBoot:1` は
-/// さくらスクリプトの調査が `\![update,platform]` から `triggers` を張った時点で
-/// この形に落ちた（台帳の側は正しい。正典本文がそのイベント名を固定名で名指して
-/// いる）。
+/// では足りなくなる。
 ///
 /// **選び直すときの条件**——4 つの台帳（shiori・assets・sakura-script・property）の
 /// `links[].to`・`alias_of`・`supersedes` の**どこからも一度も指されていない** id で
@@ -142,7 +139,7 @@ pub(super) fn id_of(raw: &str) -> EntryId {
 
 /// カタログに足す作り物の項目。
 ///
-/// 版番号は空にする——空なら登場版の判定が見ないので（要件 6.7 の番人）、摂動の
+/// 版番号は空にする——空なら登場版の判定が見ないので、摂動の
 /// 巻き添えが 1 つ減る。
 pub(super) fn fabricated_entry(id: &EntryId) -> CatalogEntry {
     CatalogEntry {
@@ -176,8 +173,7 @@ fn seen(findings: &[Finding]) -> Vec<(String, String, String)> {
     rows
 }
 
-/// 所見の顔ぶれが**ちょうど**これであることと、本文が id と場所を名指すこと
-/// （要件 6.10・6.12）。
+/// 所見の顔ぶれが**ちょうど**これであることと、本文が id と場所を名指すこと。
 ///
 /// 「含む」ではなく「ちょうど」で見る——巻き添えの所見が増えたことに気づけないと、
 /// 摂動が何を起こしたのかを読み違える。id を持たない所見は空文字で書く。
@@ -218,7 +214,7 @@ pub(super) fn expect_exactly(findings: &[Finding], expected: &[(FindingKind, Opt
 /// ソースの写しに 1 行だけ入れて、証拠の索引を作り直す。
 ///
 /// `at` は入れる位置（行番号）で、`checks.rs` の `the_check_survives_lines_moving` が
-/// ここを動かして要件 6.11 を確かめる。repo のファイルには触れない。
+/// ここを動かして行番号が動いても判定が変わらないことを確かめる。repo のファイルには触れない。
 pub(super) fn evidence_with_source_line(
     data: &RepoData,
     path: &str,

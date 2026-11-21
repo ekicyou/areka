@@ -1,5 +1,4 @@
-//! アンカーの受理と 2 段の送出を、最上位の `step` から通すテスト
-//! （areka-P0-anchor-tag-canon 要件 4.1〜4.6・4.8〜4.11・8.3）。
+//! アンカーの受理と 2 段の送出を、最上位の `step` から通すテスト。
 //!
 //! 知らせ（`Input::Anchor`）を 1 件入れ、返った GET に模擬の応答（`Input::ShioriReply`）を順に
 //! 入れ直して、送った GET の列と始めた台詞を数える。実 SHIORI は使わない。期待はすべて手書き。
@@ -111,7 +110,7 @@ fn choice_ledger_kept(state: &State) -> bool {
 
 // --- イベントの列と Reference ---
 
-/// 要件 4.1・4.2・4.6・4.9: `On` で始まらない ID は `OnAnchorSelectEx`（文字・ID・引数の順）→ 204 →
+/// `On` で始まらない ID は `OnAnchorSelectEx`（文字・ID・引数の順）→ 204 →
 /// `OnAnchorSelect`（ID だけ）→ 204 で何も起きない。引数が無ければ Reference1 より後ろの位置は無い。
 #[test]
 fn canonical_id_sends_select_ex_then_select_and_then_nothing() {
@@ -145,7 +144,7 @@ fn canonical_id_sends_select_ex_then_select_and_then_nothing() {
     );
 }
 
-/// 要件 4.4〜4.6: `On` で始まる ID はその名前のイベント 1 本だけ。Reference は引数だけで、範囲の
+/// `On` で始まる ID はその名前のイベント 1 本だけ。Reference は引数だけで、範囲の
 /// 文字も ID も載らない。`OnAnchorSelectEx`／`OnAnchorSelect` は列のどこにも無い。
 #[test]
 fn on_prefixed_id_sends_only_the_event_of_that_name() {
@@ -165,7 +164,7 @@ fn on_prefixed_id_sends_only_the_event_of_that_name() {
     }
 }
 
-/// 要件 4.3・4.11: 1 回の知らせで送るイベントの列は 1 本、台詞の起動は高々 1 回。台本が返った段で
+/// 1 回の知らせで送るイベントの列は 1 本、台詞の起動は高々 1 回。台本が返った段で
 /// 列は終わる（`OnAnchorSelectEx` に台本なら `OnAnchorSelect` を送らない）。
 #[test]
 fn one_notification_makes_one_event_chain_and_at_most_one_talk() {
@@ -215,7 +214,7 @@ fn one_notification_makes_one_event_chain_and_at_most_one_talk() {
 
 // --- 話している最中 ---
 
-/// 要件 4.8: 話している最中に台本が返ると、どの段の応答でも新しい番号の台詞に置き換わり、
+/// 話している最中に台本が返ると、どの段の応答でも新しい番号の台詞に置き換わり、
 /// 選択待ちの帳簿はその置き換えで消える。
 #[test]
 fn script_reply_while_talking_replaces_the_talk_and_clears_the_choice_ledger() {
@@ -250,7 +249,7 @@ fn script_reply_while_talking_replaces_the_talk_and_clears_the_choice_ledger() {
     }
 }
 
-/// 要件 4.9: 話している最中に何も返らなければ、再生中の台詞も選択待ちの帳簿もそのまま。
+/// 話している最中に何も返らなければ、再生中の台詞も選択待ちの帳簿もそのまま。
 #[test]
 fn no_content_while_talking_leaves_the_talk_and_the_choice_ledger() {
     let cases = [
@@ -276,7 +275,7 @@ fn no_content_while_talking_leaves_the_talk_and_the_choice_ledger() {
 
 // --- 送信の失敗 ---
 
-/// 要件 4.10: 送信の失敗は、どの段でも 204 と同じに進む。記録は `anchor_shiori_failed_as_204` が
+/// 送信の失敗は、どの段でも 204 と同じに進む。記録は `anchor_shiori_failed_as_204` が
 /// ちょうど 1 件で、横断の `shiori_failed` は出ず、終了へ倒れない（台詞も帳簿もそのまま）。
 #[test]
 fn send_failure_advances_like_no_content_with_one_error_and_no_fault() {

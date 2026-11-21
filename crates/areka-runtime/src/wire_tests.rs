@@ -2,7 +2,7 @@ use super::*;
 use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 use temp_path_kit::TempPath;
 
-/// 選びの種は抽選の種と別に引く（spec: seriko-pattern-calls 要件 3.6）: `wire_runtime` が使う
+/// 選びの種は抽選の種と別に引く: `wire_runtime` が使う
 /// 2 つの種が違う（同じ種だと選びと抽選が同じ列を引き、別にした意味が無い）。
 #[test]
 fn pick_and_draw_seeds_differ() {
@@ -10,7 +10,7 @@ fn pick_and_draw_seeds_differ() {
     assert_ne!(draw, pick);
 }
 
-/// 取り違え防止の檻（areka-P0-emo-dpi-scaling 要件 1.1）: `build_boot_assets` への隣接 `u16` 2 引数
+/// 取り違え防止の檻: `build_boot_assets` への隣接 `u16` 2 引数
 /// （`shell_author_dpi`／`balloon_author_dpi`）が [`AuthorDpi`] の各フィールドと
 /// **正しく対応**していることを、意図的に**異なる 2 値**で固定する。
 ///
@@ -43,8 +43,7 @@ fn build_boot_assets_for_pairs_shell_and_balloon_author_dpi() {
     );
 }
 
-/// 存在しない ghost_root に対し `wire_runtime` は `wired=false`（帰結は呼び手が決める・
-/// areka-P0-emo2-boot 要件 7.3）を返し、
+/// 存在しない ghost_root に対し `wire_runtime` は `wired=false`（帰結は呼び手が決める）を返し、
 /// ghost／seriko ハンドルは `None` となる（実 sink 結線を成立させない決定分岐の檻）。
 ///
 /// 素の `World::new()` で足りる。`build_boot_assets` が `resolve` 起点不在で早期 `Err` を返すため、

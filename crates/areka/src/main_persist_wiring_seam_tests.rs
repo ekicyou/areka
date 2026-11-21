@@ -20,12 +20,11 @@ impl PersistIo for SharedFakeIo {
     }
 }
 
-/// 挿入シーム檻（3.1／1.9／C4/C5）: `insert_persist_wiring` で headless World へ実 publisher を
+/// 挿入シーム檻: `insert_persist_wiring` で headless World へ実 publisher を
 /// 挿入すると、(a) NonSend `PersistWiring` が存在し、(b) その World 越しの `persist_entries` 投函が
 /// Ghost スコープへ write-through され、barrier 後に別ハンドルの `load_scope` で読み戻せる。
 #[test]
 fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
-    // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す）。
     let shared = Arc::new(FakePersistIo::new());
     let roots = ScopeRoots {
         ghost: Some(std::path::PathBuf::from("/g")),
@@ -37,17 +36,14 @@ fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
         runtime_sink: None,
     });
 
-    // wired／fallback 両経路が使う本物の挿入ヘルパで World へ結線する。
     let mut world = World::new();
     insert_persist_wiring(&mut world, parts.publisher.clone());
 
-    // (a) NonSend リソース PersistWiring が World に存在する。
     assert!(
         world.get_non_send::<PersistWiring>().is_some(),
         "insert_persist_wiring 後、World に PersistWiring が挿入されているべき（C4/C5）"
     );
 
-    // (b) その World 越しの persist_entries 投函がストアへ到達する（DragEnd→file の World シーム）。
     let entries = char_pos_entries(0, PointPx { x: 1486, y: 353 });
     persist_entries(&world, entries);
 
@@ -80,14 +76,13 @@ fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
         "World 導管越しの persist_entries が Ghost へ write-through していない（WindowPos.y）: {loaded:?}"
     );
 
-    // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
     parts.publisher.close();
     let _ = parts.handle.join();
 }
 
-/// 起動の呼び出しが返った時点の記憶（task 11.2・要件 4.6・12.6）: 経路が切替なら書かず
+/// 起動の呼び出しが返った時点の記憶: 経路が切替なら書かず
 /// `debug!(last_used_deferred)` 1 件（定常到達で書く）、それ以外の経路（初回の起動の記憶・既定への
-/// 戻し）は今日どおり最後のゴースト（App）とシェル（Ghost）を書く。
+/// 戻し）は最後のゴースト（App）とシェル（Ghost）を書く。
 #[test]
 fn last_used_is_deferred_only_for_the_switch_route() {
     use boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};

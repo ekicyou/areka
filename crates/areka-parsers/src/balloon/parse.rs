@@ -1,23 +1,20 @@
 //! balloon 公開 facade（2 層マージ＋KV マップ → バルーンモデル写像）。
 //!
 //! フラット KV マップの 2 層（descript 既定層＋画像別上書き層・任意）を後勝ち `insert` で
-//! 1 マップへマージし（D4）、そのマージ済み 1 マップから各モデル化キーを完全一致で引いて
+//! 1 マップへマージし、そのマージ済み 1 マップから各モデル化キーを完全一致で引いて
 //! `i32`/`u32`/`u8` へ整数パースし、幾何＋フォント subset の `BalloonModel` を構築する。
 //!
-//! 契約（design.md「Parser Layer / balloon::parse」）:
-//! - `Result` を返さず panic しない寛容写像（キー不在・非数値・範囲外は当該スカラを `None`・
-//!   R1.2/R1.4/R2.6/R3.4）。未知キー・非モデル化キーは完全一致引きゆえ自然に無視（R1.3/R2.7）。
-//! - 2 層マージ（D4）で 3 段優先度（画像別 ＞ descript ＞ 未指定＝`None`）を単一機構で満たす
-//!   （同一キー画像別優先・R3.2／画像別欠落時 descript 継承・R3.3／descript のみ・R3.5）。
-//! - 負値は符号付き `i32` のまま保持しピクセル解決は行わない（R4.1/R4.4/R4.5）。
-//! - `font.color.{r,g,b}` の 3 キーを個別に引き `FontColor` へ束ねる（部分欠落は個別 `None`・R2.6）。
-//! - 上流 `kv::parse_kv` のフラット KV 出力を消費し、KV 化を再実装しない（R1.5・foundation 所有）。
-//! - `windowposition.x`/`.limit` は数値写像とは別枠で生文字列を忠実転記する（解釈も警告もしない
-//!   転記層契約・windowposition-limit 要件 1.1/4.1。既存の数値写像は無改変＝同要件 5.1）。
+//! 契約:
+//! - `Result` を返さず panic しない寛容写像（キー不在・非数値・範囲外は当該スカラを `None`）。
+//!   未知キー・非モデル化キーは完全一致引きゆえ自然に無視する。
+//! - 2 層マージで 3 段優先度（画像別 ＞ descript ＞ 未指定＝`None`）を単一機構で満たす。
+//! - 負値は符号付き `i32` のまま保持しピクセル解決は行わない。
+//! - `font.color.{r,g,b}` の 3 キーを個別に引き `FontColor` へ束ねる（部分欠落は個別 `None`）。
+//! - KV 化は上流 `kv::parse_kv` に任せ、再実装しない。
+//! - `windowposition.x`/`.limit` は数値写像とは別枠で生文字列を忠実転記する（解釈も警告もしない）。
 //! - `font.{bold,italic,outline,strike,underline}`／`font.shadowcolor.{r,g,b}`／`font.shadowstyle`
 //!   の 9 本は生文字列のまま転記し、`disable.font.*` 14 本は基底と同じ形（書体名・大きさ・色は
-//!   既存 5 本と同じ縮退規則）で別の層へ束ねる（解釈も警告もしない・balloon-font-descript-keys
-//!   要件 2.1〜2.9/4.1〜4.6。既存 5 本の写像は無改変＝同要件 5.1）。
+//!   既存 5 本と同じ縮退規則）で別の層へ束ねる（解釈も警告もしない）。
 //!
 //! 依存方向は `model ← parse`。KV 化は `crate::kv::parse_kv` に委譲する。
 
@@ -34,19 +31,17 @@ use super::model::{
 
 /// 主入口: 既に KV マップ化済みの 2 層（descript 既定層＋画像別上書き層・任意）を写像する。
 ///
-/// 2 層マージ（D4）で 3 段優先度を単一機構で満たす: descript 基層を複製し、画像別層があれば
-/// その各エントリを後勝ち `insert` で重ね合わせた「マージ済み 1 マップ」を作り、その 1 マップから
-/// 1 回だけ写像する。画像別層 `None` なら descript 基層のみを写像する（R3.5）。
+/// descript 基層を複製し、画像別層があればその各エントリを後勝ち `insert` で重ねた
+/// 「マージ済み 1 マップ」から 1 回だけ写像する。画像別層 `None` なら descript 基層のみを写像する。
 ///
 /// - Preconditions: 入力はデコード済み（charset は上流責務）。
-/// - Postconditions: 常に `BalloonModel` を返す（`Result` 無し・R1.2）。存在キーは型付き・符号保持で
-///   反映、不在/非数値/範囲外キーは当該スカラ `None`（R2.6/R3.4/R1.4）。
-/// - 未知キー・非モデル化キーは完全一致引きで自然に無視（R1.3/R2.7）。panic しない。
+/// - Postconditions: 常に `BalloonModel` を返す（`Result` 無し）。存在キーは型付き・符号保持で
+///   反映、不在/非数値/範囲外キーは当該スカラ `None`。
+/// - 未知キー・非モデル化キーは完全一致引きで自然に無視する。panic しない。
 pub fn parse(
     descript: &BTreeMap<String, String>,
     image: Option<&BTreeMap<String, String>>,
 ) -> BalloonModel {
-    // 2 層マージ（D4）: 画像別層があるときだけ descript 基層を複製し、後勝ちで重ねる（R3.2/R3.3/R3.5）。
     match image {
         Some(image_map) => {
             let mut merged = descript.clone();
@@ -57,10 +52,9 @@ pub fn parse(
     }
 }
 
-/// 便宜入口: デコード済み文字列 2 層を内部で `kv::parse_kv` して `parse` へ委譲する（R1.1/R1.5）。
+/// 便宜入口: デコード済み文字列 2 層を内部で `kv::parse_kv` して `parse` へ委譲する。
 ///
-/// KV 化（行分割・後勝ち・trim）は foundation の `kv::parse_kv` が所有するため再実装しない（R1.5）。
-/// 画像別層 `None` は descript 文字列のみを写像する（R3.5）。
+/// 画像別層 `None` は descript 文字列のみを写像する。
 pub fn parse_str(descript: &str, image: Option<&str>) -> BalloonModel {
     let mut merged = parse_kv(descript);
     if let Some(image) = image {
@@ -69,7 +63,7 @@ pub fn parse_str(descript: &str, image: Option<&str>) -> BalloonModel {
     map_merged(&merged)
 }
 
-/// マージ済み 1 マップから各モデル化キーを完全一致で引き `BalloonModel` を構築する（R2/R4）。
+/// マージ済み 1 マップから各モデル化キーを完全一致で引き `BalloonModel` を構築する。
 fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     let mut issues = Vec::new();
     let windowposition = WindowPosition::new(
@@ -77,10 +71,8 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
         merged.get("windowposition.x").and_then(|v| v.parse().ok()),
         get_scalar::<i32>(merged, &mut issues, "windowposition.y"),
     );
-    // windowposition.x/.limit の生文字列転記（windowposition-limit 要件 1.1/4.1）。
-    // 上の数値写像とは別枠であり、数値化できないキーワード（center/top/bottom）や limit の 0/1 を
-    // 解釈せず・警告せずそのまま持ち上げる。trim は kv 層（`kv::parse_kv`）で済んでいる。
-    // 0/1 検証・キーワード判別・語彙外値の警告付き縮退は下流（配置層）の責務。
+    // `windowposition.x`/`.limit` は数値化せず生文字列のまま持ち上げる（数値化できない
+    // center/top/bottom や limit の 0/1 を含む）。検証・判別・警告付き縮退は配置層の責務。
     let windowposition_raw = WindowPositionRaw::new(
         get_raw(merged, "windowposition.x"),
         get_raw(merged, "windowposition.limit"),
@@ -116,33 +108,25 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
         get_scalar::<u8>(merged, &mut issues, "font.color.b"),
     );
     let font = Font::new(
-        // font.name は文字列値（数値化しない・R2.5）。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.name_2c_30d5_30a9_30f3_30c8_540d:1
         get_raw(merged, "font.name"),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.height_2c_6570_5024:1
         get_scalar::<u32>(merged, &mut issues, "font.height"),
         color,
     );
-    // writing_mode は生文字列の転記のみ（trim は kv 層済み・値の検証・語彙判定・fallback は
-    // 下流 emo テキスト層の責務・emo-text-layer 要件 5.6）。
+    // writing_mode は生文字列の転記のみ（値の検証・語彙判定・fallback は下流のテキスト層の責務）。
     let writing_mode = get_raw(merged, "writing_mode");
-    // budoux_newline も生文字列の転記のみ（writing_mode と同一規律・値の検証・語彙判定・
-    // fallback は下流 emo テキスト層の責務・budoux-newline 要件 1.1）。
+    // budoux_newline も writing_mode と同じく生文字列の転記のみ。
     let budoux_newline = get_raw(merged, "budoux_newline");
-    // vertical も生文字列の転記のみ。上 2 者と異なりこれは areka 拡張キーではなく SSP 正典キー
-    // （SSP 2.8.80 が確立・`0`／`1`）であり、正典側の既定は横書きである。ただし転記層の扱いは
-    // 同一で、未宣言（None）と宣言（Some・空文字列を含む）を潰さずそのまま持ち上げる。
-    // `0`/`1` の検証・語彙外値の警告付き縮退・`writing_mode` との共存裁定は、いずれも下流の
-    // 書字方向の解決層の責務である（balloon-vertical-canon 要件 1.4/1.6/1.7）。
+    // vertical も生文字列の転記のみ。上 2 者と異なり areka 拡張キーではなく SSP 正典キー
+    // （`0`／`1`・既定は横書き）。未宣言（None）と宣言（Some・空文字列を含む）を潰さず持ち上げ、
+    // `0`/`1` の検証・語彙外値の縮退・`writing_mode` との共存裁定は書字方向の解決層の責務。
     let vertical = get_raw(merged, "vertical");
 
-    // cursor.* スタイルモデル（additive・要件 4.2/6.2）。既存の完全一致引き＋2 層後勝ちマージに
-    // 相乗りする。style/blendmethod は生文字列転記（語彙判定は下流）。brush/pen/font の各色成分は
-    // `font.color.*` と同型に個別 u8 パース（部分欠落は個別 None）。未モデル化サブキー
-    // （cursor.shadowcolor.* / cursor.shadowstyle 等）は完全一致引きゆえ自然に非採用＝KV 層が
-    // 語彙を落とさない寛容パス素通しのまま（6.2 の語彙シーム）。
+    // style/blendmethod は生文字列転記（語彙判定は下流）。brush/pen/font の各色成分は
+    // `font.color.*` と同型に個別 u8 パースする（部分欠落は個別 None）。未モデル化サブキー
+    // （cursor.shadowcolor.* / cursor.shadowstyle 等）は完全一致引きゆえ採らない。
     let cursor = BalloonCursor::new(
-        // style は文字列値（数値化しない・要件 4.2/6.5）。
         get_raw(merged, "cursor.style"),
         CursorColor::new(
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.brush.color.r_2c_6570_5024:1
@@ -165,15 +149,12 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.font.color.b_2c_6570_5024:1
             get_scalar::<u8>(merged, &mut issues, "cursor.font.color.b"),
         ),
-        // blendmethod は不透明転写（数値化しない・要件 6.5）。
         get_raw(merged, "cursor.blendmethod"),
     );
 
-    // 書体 5 本・影 4 本（基底）と `disable.font.*` 14 本（無効表示）の転記
-    // （balloon-font-descript-keys 要件 2.1〜2.9・設計 DD3/DD9）。書体・影は生文字列のまま保つ
-    // （`get_scalar` で数値化すると語彙外の値・無効化の語 `none`・宣言された `0` が消える）。
-    // 無効表示の書体名・大きさ・色は基底 5 本と同じ式で引き、既存の縮退規則をそのまま継ぐ。
-    // 接頭辞付きキーは完全一致引きゆえ基底と無効表示が互いに混ざらない（要件 4.1〜4.6）。
+    // 書体・影は生文字列のまま保つ（`get_scalar` で数値化すると語彙外の値・無効化の語 `none`・
+    // 宣言された `0` が消える）。`disable.font.*` の書体名・大きさ・色は基底と同じ式で引き、
+    // 既存の縮退規則を継ぐ。接頭辞付きキーは完全一致引きゆえ基底と無効表示は混ざらない。
     let font_decoration_raw = FontDecorationRaw::new(
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.bold_2c0_2f1:1
         get_raw(merged, "font.bold"),
@@ -237,9 +218,8 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     .with_font_decoration_raw(font_decoration_raw)
     .with_font_shadow_raw(font_shadow_raw)
     .with_disable_font(disable_font)
-    // 矢印の鍵（balloon-scroll-arrows 要件 1.1〜1.6）。同じマージ済みの表から読む＝面の後勝ちに乗る。
+    // 矢印の鍵と印の絵の名前は同じマージ済みの表から読むので、面の後勝ちに乗る。
     .with_arrow_keys(read_arrow_keys(merged))
-    // 印の絵の名前（script-small-tags 要件 5.2）。矢印と同じに面の後勝ちに乗る。
     .with_marker_filename(read_marker_filename(merged))
     .with_key_issues(issues)
 }
@@ -249,10 +229,10 @@ fn get_raw(merged: &BTreeMap<String, String>, key: &str) -> Option<String> {
     merged.get(key).map(|v| v.to_owned())
 }
 
-/// マージ済みマップから `key` を完全一致で引き、値を `T` へ整数パースする寛容ヘルパ（R1.4/R2.6）。
+/// マージ済みマップから `key` を完全一致で引き、値を `T` へ整数パースする寛容ヘルパ。
 ///
-/// 完全一致引き（`get`）ゆえ distractor キー（`anchor.font.color.r` 等）を巻き込まない（R2.7）。
-/// キー不在・非数値・範囲外（`parse` が `Err`）はいずれも `None` へ降格し panic しない（R1.4/R3.4）。
+/// 完全一致引き（`get`）ゆえ distractor キー（`anchor.font.color.r` 等）を巻き込まない。
+/// キー不在・非数値・範囲外（`parse` が `Err`）はいずれも `None` へ降格し panic しない。
 /// 鍵が在って読めないとき（空の値を含む）は `issues` に 1 件積む（記録は読み込む側）。
 fn get_scalar<T: FromStr>(
     merged: &BTreeMap<String, String>,

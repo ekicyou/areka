@@ -219,7 +219,7 @@ fn a_version_1_file_is_refused_byte_for_byte_and_clear_still_goes_through() {
     );
     assert_eq!(fs::read(home.state_path()).expect("読める"), old.as_bytes());
 
-    // `clear` は版を見ずに退避して通る（7.5）。退避したファイルも 1 バイトも変わらない。
+    // `clear` は版を見ずに退避して通る。退避したファイルも 1 バイトも変わらない。
     let backup = store_in(&root).clear().expect("消せる").expect("退避した");
     assert_eq!(fs::read(&backup).expect("在る"), old.as_bytes());
     assert_eq!(read_state(&home.dir), State::cleared(T0, &backup));

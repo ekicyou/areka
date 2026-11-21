@@ -26,7 +26,7 @@ fn send_wm_close(world: &Rc<RefCell<EcsWorld>>, entity: Entity) -> Option<LRESUL
     )
 }
 
-/// 要件 2.10・2.11: `OnCloseRequest` を差した窓は `WM_CLOSE` で消えずに関数が 1 回呼ばれ、
+/// `OnCloseRequest` を差した窓は `WM_CLOSE` で消えずに関数が 1 回呼ばれ、
 /// 差さない窓は従来どおり消える。戻り値（既定手続きの `DestroyWindow` 抑止）は両方同じ。
 #[test]
 fn wm_close_calls_on_close_request_instead_of_despawning() {
@@ -116,7 +116,7 @@ fn events_named(events: &[log_capture_kit::CapturedEvent], name: &str) -> Vec<tr
         .collect()
 }
 
-/// 要件 12.9・12.10: `WM_ENDSESSION`（wParam 真）は部品を差した entity の関数を 1 回呼び、
+/// `WM_ENDSESSION`（wParam 真）は部品を差した entity の関数を 1 回呼び、
 /// 0 を返す（処理した）。部品を差さない entity では呼ばず 0 を返す。
 #[test]
 fn wm_endsession_true_calls_on_session_end_once() {
@@ -142,7 +142,7 @@ fn wm_endsession_true_calls_on_session_end_once() {
     );
 }
 
-/// 要件 12.10: 取りやめ（wParam 偽）では呼ばず、0 を返す。
+/// 取りやめ（wParam 偽）では呼ばず、0 を返す。
 #[test]
 fn wm_endsession_false_is_cancelled_without_call() {
     let (world, hooked, _) = session_end_world();
@@ -160,7 +160,7 @@ fn wm_endsession_false_is_cancelled_without_call() {
     );
 }
 
-/// 要件 12.10: 最初の受け手が全ゴースト窓の entity を破棄した後に残りの窓へ届いた
+/// 最初の受け手が全ゴースト窓の entity を破棄した後に残りの窓へ届いた
 /// 2 通目以降は、破棄済みの打ち切り（debug!）で止まり、呼ばず panic もしない。
 #[test]
 fn wm_endsession_on_despawned_entity_skips() {
@@ -187,7 +187,7 @@ fn wm_endsession_on_despawned_entity_skips() {
     );
 }
 
-/// 要件 12.10: World の借用中に届いたら呼べない。黙らず帰結を書いた warn! を 1 件残し、0 を返す。
+/// World の借用中に届いたら呼べない。黙らず帰結を書いた warn! を 1 件残し、0 を返す。
 #[test]
 fn wm_endsession_while_world_borrowed_warns_without_call() {
     let (world, hooked, _) = session_end_world();
@@ -207,7 +207,7 @@ fn wm_endsession_while_world_borrowed_warns_without_call() {
     );
 }
 
-/// 要件 12.10: `WM_QUERYENDSESSION` は配送表に腕を持たず既定の手続き（終了を許す）へ委ねる。
+/// `WM_QUERYENDSESSION` は配送表に腕を持たず既定の手続き（終了を許す）へ委ねる。
 #[test]
 fn wm_queryendsession_is_left_to_default_procedure() {
     let (world, hooked, _) = session_end_world();

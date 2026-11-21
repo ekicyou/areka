@@ -13,7 +13,7 @@ use areka_emo_atlas::{AtlasPage, AtlasTable, Rect};
 use crate::composed::ComposedSurface;
 use crate::plan::{BlitOp, Extent};
 
-/// premultiplied SourceOver の整数丸め除算（決定6・`div255(v) = (v + 127) / 255`）。
+/// premultiplied SourceOver の整数丸め除算（`div255(v) = (v + 127) / 255`）。
 ///
 /// 浮動小数を用いず u32 整数演算で `v / 255` を四捨五入する。`v` は最大
 /// `255 * 255 = 65025`（`dst_c * (255 - src_a)`）ゆえ u32 で桁溢れしない。
@@ -22,7 +22,7 @@ fn div255(v: u32) -> u32 {
     (v + 127) / 255
 }
 
-/// premultiplied SourceOver 1 チャンネル（決定6・`dst_c' = src_c + div255(dst_c × (255 − src_a))`）。
+/// premultiplied SourceOver 1 チャンネル（`dst_c' = src_c + div255(dst_c × (255 − src_a))`）。
 ///
 /// `src_c`/`dst_c` は premultiplied 済みチャンネル値、`inv_src_a = 255 - src_a`。α にも同一式を
 /// 適用する（`out_a = src_a + div255(dst_a × (255 − src_a))`）。結果は常に 0..=255 に収まる
@@ -98,13 +98,13 @@ pub(crate) fn op_area(op: &BlitOp, atlas: &AtlasTable) -> Area {
     }
 }
 
-/// 合成 1 回で重ねてよい画素の数の、外形の面積に対する倍率（指摘 77・`MAX_AREA` の外形で 2^31 画素）。
+/// 合成 1 回で重ねてよい画素の数の、外形の面積に対する倍率（`MAX_AREA` の外形で 2^31 画素）。
 /// 仮の値（重ね塗り 64 枚分）で、測り直しの候補。
 pub(crate) const PIXEL_FACTOR: u64 = 64;
 
 /// 命令列 `ops` を、外形 `extent` の中で重ねる画素の合計が面積×[`PIXEL_FACTOR`] に収まる頭の部分だけに
 /// 切り詰める（いちからの合成も矩形の重ね直しも、この命令列より多くは重ねない）。描かない描画メソッドの命令は
-/// 重ねないので 0 画素に数える（指摘 134）。捨てた命令の数を返す。
+/// 重ねないので 0 画素に数える。捨てた命令の数を返す。
 pub(crate) fn cap_pixels(ops: &mut Vec<BlitOp>, extent: Extent, atlas: &AtlasTable) -> usize {
     let canvas = Area {
         x0: 0,
@@ -186,7 +186,6 @@ pub(crate) fn overlay_op(
     for (i, dy) in (area.y0..area.y1).enumerate() {
         let s = (src_y + i) * src_stride + src_x;
         let d = dy as usize * stride + area.x0 as usize * 4;
-        // premultiplied BGRA: [B, G, R, A] へ決定6の式を各 ch＋α に同式適用。
         let (src_px, _) = page.bytes[s..s + n].as_chunks::<4>();
         let (dst_px, _) = dst[d..d + n].as_chunks_mut::<4>();
         for (s, d) in src_px.iter().zip(dst_px) {
@@ -201,24 +200,24 @@ pub(crate) fn overlay_op(
 
 /// 命令列をアトラス頁から合成先バッファ `out` へ premultiplied SourceOver 整数演算で転写する。
 ///
-/// design「BlitExecutor（blit.rs）」の契約に厳密に従う:
+/// 契約:
 ///
 /// 1. `out` を `extent`（`w×h`・`stride = w*4`）へ [`ComposedSurface::resize_and_clear`] で
 ///    再確保し、全画素 0（全透明）へクリアする。既存 `Vec<u8>` 容量を再利用し、必要バイト数が
-///    現容量以下なら再割り当てしない（要件 10.3・毎フレーム経路のゼロアロケーション）。
+///    現容量以下なら再割り当てしない（毎フレーム経路のゼロアロケーション）。
 /// 2. `ops` を順に、合成先の全体を矩形として [`overlay_op`] で重ねる。置き場を先に合成先で
-///    切るので、画面の外の画素は回らない（負座標・はみ出しのクリップ・要件 6.2）。
+///    切るので、画面の外の画素は回らない（負座標・はみ出しのクリップ）。
 ///
 /// 各命令は合成前に [`crate::method::ComposeMethod::is_implemented`] で dispatch する。M1 の実装対象は
 /// [`crate::method::ComposeMethod::Overlay`]（＝SourceOver）のみゆえ、`is_implemented() == false` の
 /// 未実装メソッド命令はパニックせず `debug!`（メソッド名・element id 付き）を発してその命令のみ
-/// skip し、処理を継続する（要件 8.4・design「Method Registry」Postcondition／Error Handling 表）。
+/// skip し、処理を継続する。
 ///
-/// # 整数専用（要件 10.2）
+/// # 整数専用
 ///
 /// 座標は i64、画素演算は u8/u32 のみ。浮動小数（f32/f64）を経路に一切持ち込まない（決定性）。
 ///
-/// # 非パニック（要件 1.4）
+/// # 非パニック
 ///
 /// placement None・頁欠落・頁をはみ出す uv・境界外座標はすべて skip／クリップで吸収し、`panic!` しない。
 ///
@@ -232,7 +231,6 @@ pub(crate) fn execute(
     ops: &[BlitOp],
     atlas: &AtlasTable,
 ) {
-    // (1) 合成先を extent へ再確保＋全透明クリア（容量再利用・要件 10.3）。
     out.resize_and_clear(extent.w, extent.h);
 
     let canvas = Area {
@@ -244,11 +242,10 @@ pub(crate) fn execute(
     let stride = out.stride() as usize;
     let dst = out.bytes_mut();
 
-    // (2) 命令を順に転写（画家のアルゴリズム・下層から上層）。
     for op in ops {
-        // 未実装メソッド命令はパニックせず debug＋skip して処理を継続する（要件 8.4。組むたびの
-        // 知らせなので debug・areka-P0-offline-surface-dump design ShapeIssuesOnce）。M1 の実装対象は
-        // `Overlay`（SourceOver）のみ。`BlitOp` は surface id を保持しない（design Contracts）ため、
+        // 未実装メソッド命令はパニックせず debug＋skip して処理を継続する（組むたびの
+        // 知らせなので debug）。M1 の実装対象は
+        // `Overlay`（SourceOver）のみ。`BlitOp` は surface id を保持しないため、
         // 命令化されている行動可能フィールド＝method（＋element id）をログに載せる。
         if !op.method.is_implemented() {
             tracing::debug!(
@@ -283,7 +280,7 @@ mod tests {
         }
     }
 
-    /// div255 の丸めが四捨五入であること（決定6）。
+    /// div255 の丸めが四捨五入であること。
     #[test]
     fn div255_rounds_to_nearest() {
         assert_eq!(div255(0), 0);
@@ -293,7 +290,7 @@ mod tests {
         assert_eq!(div255(255 * 255), 255);
     }
 
-    /// テスト①（受入基準・要件 6.4/10.2）: 既知画素ペアの SourceOver がバイト等価。
+    /// 既知画素ペアの SourceOver がバイト等価。
     ///
     /// 部分透明 src（α=128）を不透明 dst の上へ overlay 転写し、`dst_c' = src_c + div255(dst_c×127)`
     /// を手計算した期待値とバイト一致することを固定する（div255 の丸めを突く）。
@@ -306,7 +303,6 @@ mod tests {
     ///   out_A = 128 + div255(255×127=32385) = 128 + (32512/255=127) = 255
     #[test]
     fn known_pixel_pair_source_over_byte_exact() {
-        // dst 背景を先に置くため、下層＝不透明 dst / 上層＝部分透明 src の 2 命令で組む。
         // 下層 dst 用エントリ（ElementId(0)）・上層 src 用エントリ（ElementId(1)）を持つ table。
         let dst_page = page_1px(200, 100, 50, 255);
         let src_page = page_1px(20, 40, 60, 128);
@@ -330,10 +326,9 @@ mod tests {
         );
     }
 
-    /// テスト②（要件 6.4）: 完全不透明 src（α=255）は dst を置換する（255−255=0 → out == src）。
+    /// 完全不透明 src（α=255）は dst を置換する（255−255=0 → out == src）。
     #[test]
     fn opaque_src_replaces_dst() {
-        // 下層に別色不透明 dst、上層に不透明 src を重ねる。
         let dst_page = page_1px(11, 22, 33, 255);
         let src_page = page_1px(200, 150, 100, 255);
         let atlas = two_entry_table(dst_page, src_page);
@@ -354,7 +349,7 @@ mod tests {
         );
     }
 
-    /// テスト③（要件 6.4）: 完全透明 src（α=0・premultiplied ゆえ色も 0）は dst を残す。
+    /// 完全透明 src（α=0・premultiplied ゆえ色も 0）は dst を残す。
     #[test]
     fn transparent_src_leaves_dst() {
         let dst_page = page_1px(70, 80, 90, 255);
@@ -378,7 +373,7 @@ mod tests {
         );
     }
 
-    /// テスト④（要件 6.2）: trim_offset が転写先へ加算され、素の配置位置には現れない。
+    /// trim_offset が転写先へ加算され、素の配置位置には現れない。
     ///
     /// 配置 (2,1)＋trim (1,2)＝(3,3) に不透明画素が着弾し、(2,1) は全透明のまま。
     #[test]
@@ -407,12 +402,11 @@ mod tests {
         assert_eq!(px(&out, 2, 1), [0, 0, 0, 0], "素の配置 (2,1) には現れない");
     }
 
-    /// テスト⑤（要件 6.2）: 負座標・はみ出しはクリップされ、範囲内のみ転写・非パニック。
+    /// 負座標・はみ出しはクリップされ、範囲内のみ転写・非パニック。
     ///
     /// 2×2 の不透明頁を (−1,−1) へ配置。範囲内に落ちるのは 1 画素 (0,0) のみ（左上角）。
     #[test]
     fn negative_and_overflow_coords_are_clipped() {
-        // 2×2 premultiplied 頁（4 画素それぞれ別色・不透明）。
         let bytes = vec![
             1, 2, 3, 255, // (0,0)
             4, 5, 6, 255, // (1,0)
@@ -449,7 +443,7 @@ mod tests {
         );
     }
 
-    /// テスト⑥（要件 10.3）: 同一 out・同一 extent で 2 回 execute → 容量不変・内容は上書き。
+    /// 同一 out・同一 extent で 2 回 execute → 容量不変・内容は上書き。
     #[test]
     fn buffer_is_reused_and_cleared_between_calls() {
         let page = page_1px(100, 110, 120, 255);
@@ -472,7 +466,6 @@ mod tests {
         assert_eq!(px(&out, 0, 0), [100, 110, 120, 255]);
         assert_eq!(px(&out, 1, 1), [0, 0, 0, 0], "他画素は全透明");
 
-        // 2 回目: 同一 extent・同一命令。バッファ長不変・再割り当てなし・内容は上書き（累積しない）。
         execute(&mut out, Extent { w: 2, h: 2 }, &ops, &atlas);
         let len2 = out.bytes().len();
         let cap2 = out.bytes().as_ptr();
@@ -490,7 +483,7 @@ mod tests {
         assert_eq!(px(&out, 1, 1), [0, 0, 0, 0]);
     }
 
-    /// テスト⑦（要件 6.3）: stride が width*4 を超える padding 付き頁でも正しい行位置を読む。
+    /// stride が width*4 を超える padding 付き頁でも正しい行位置を読む。
     ///
     /// 2×2 論理・stride=12（各行 4 バイト padding）。uv(0,0,2,2) を (0,0) へ転写し、
     /// 行 1 の画素が padding をまたいで正しく読まれることを確認する。
@@ -530,7 +523,6 @@ mod tests {
 
         assert_eq!(px(&out, 0, 0), [11, 12, 13, 255], "行0 px0");
         assert_eq!(px(&out, 1, 0), [21, 22, 23, 255], "行0 px1");
-        // 行 1 は stride=12 で正しくオフセットされて読まれる（padding を跨がずに px を拾う）。
         assert_eq!(
             px(&out, 0, 1),
             [31, 32, 33, 255],
@@ -539,7 +531,7 @@ mod tests {
         assert_eq!(px(&out, 1, 1), [41, 42, 43, 255], "行1 px1");
     }
 
-    /// placement None エントリは防御的に skip される（要件 6.3・非パニック）。
+    /// placement None エントリは防御的に skip される（非パニック）。
     #[test]
     fn placement_none_op_is_skipped() {
         let keys = vec![AtlasKey {
@@ -555,7 +547,6 @@ mod tests {
 
         let mut out = ComposedSurface::new(0, 0);
         execute(&mut out, Extent { w: 2, h: 2 }, &ops, &atlas);
-        // 何も転写されず全透明のまま（パニックしない）。
         assert!(
             out.bytes().iter().all(|&b| b == 0),
             "placement None は転写されない"
@@ -571,7 +562,7 @@ mod tests {
         }
     }
 
-    /// テスト（受入基準・要件 8.4）: 非実装メソッド命令はスキップされ、実装済み overlay 命令のみ合成される。
+    /// 非実装メソッド命令はスキップされ、実装済み overlay 命令のみ合成される。
     ///
     /// overlay 命令 1 本＋非実装 `Replace` 命令 1 本を混在させて execute し、
     /// 「overlay 命令のみを含む ops」の結果とバイト等価になることで skip を証明する（非パニック）。
@@ -599,7 +590,6 @@ mod tests {
         let mut out_mixed = ComposedSurface::new(0, 0);
         execute(&mut out_mixed, Extent { w: 2, h: 1 }, &mixed, &atlas);
 
-        // overlay のみの ops を別に execute し、バイト等価であることで「Replace が合成に寄与しない」を証明。
         let only_overlay = vec![op_at(0, 0)];
         let mut out_only = ComposedSurface::new(0, 0);
         execute(&mut out_only, Extent { w: 2, h: 1 }, &only_overlay, &atlas);
@@ -609,13 +599,11 @@ mod tests {
             out_only.bytes(),
             "未実装 Replace は合成に寄与せず overlay のみと同一結果（skip・8.4）"
         );
-        // 実装済み overlay の画素は確かに合成されている（skip が overlay まで巻き込まないことの確認）。
         assert_eq!(
             px(&out_mixed, 0, 0),
             [100, 110, 120, 255],
             "overlay 命令は合成される"
         );
-        // 未実装 Replace の狙った (1,0) は全透明のまま（skip の直接証拠）。
         assert_eq!(
             px(&out_mixed, 1, 0),
             [0, 0, 0, 0],
@@ -623,7 +611,7 @@ mod tests {
         );
     }
 
-    /// テスト（要件 8.4）: 全命令が非実装メソッドなら全 skip → クリア済み（全 0）バッファ・非パニック。
+    /// 全命令が非実装メソッドなら全 skip → クリア済み（全 0）バッファ・非パニック。
     #[test]
     fn all_non_implemented_ops_produce_cleared_buffer() {
         let page = page_1px(200, 150, 100, 255);
@@ -638,7 +626,6 @@ mod tests {
             Point { x: 0, y: 0 },
         );
 
-        // 非実装メソッドのみ（Replace / Blend / Base）。どれも is_implemented()==false。
         let ops = vec![
             op_with_method(0, 0, ComposeMethod::Replace),
             op_with_method(

@@ -1,9 +1,9 @@
-//! areka window-placement 実 DPI 受け入れ example（areka-P0-window-placement task 7.1）
+//! areka window-placement 実 DPI 受け入れ example
 //!
 //! placement パイプライン（`prepare_ghost_windows` → `spawn_ghost_windows`）で本番ゴースト
 //! （emo2 fixture）の 2 スコープ×（キャラ窓＋バルーン窓）＝4 窓を配置・生成し、emo-present
 //! donor（`crates/areka/examples/emo-present.rs`）と**同型の装着経路**（`EmoPresenter::attach_target` →
-//! `apply(ShowSurface)`）で以下を装着する（要件 3.1/3.5/4.1/4.2/4.3/4.5）:
+//! `apply(ShowSurface)`）で以下を装着する:
 //!
 //! - **scope0 キャラ窓**: emo2 `surface0`（むらさき・原寸 434×687）
 //! - **scope1 キャラ窓**: emo2 `surface10`（エモ・原寸 336×400・ukadoc 正典の相方既定サーフェス）
@@ -14,15 +14,14 @@
 //! 原寸は作者基準 DPI 96（emo2 は宣言なし＝正典既定）での物理 px。窓と絵はモニタ DPI ÷ 96 倍の
 //! 物理 px になる（dpi=120 なら scope0 のキャラ窓は 543×859）。
 //!
-//! # 層境界（6.3）
+//! # 層境界
 //!
 //! 配置の crate（`crates/areka-placement/src/`）は `EmoPresenter` を **import しない**。装着コードは全て
-//! 本 example 内にある。配置は crate の公開面（`areka_placement::…`）で使う
-//! （spec: placement-crate-split 要件 4.1）。
+//! 本 example 内にある。配置は crate の公開面（`areka_placement::…`）で使う。
 //!
 //! # TargetId 対応（example の裁量）
 //!
-//! placement は scope→`TargetId` の写像を規定しない（design「Data Models」）ため、本 example は
+//! placement は scope→`TargetId` の写像を規定しないため、本 example は
 //! `char(scope) = TargetId(2*scope)`／`balloon(scope) = TargetId(2*scope+1)` を採る。
 //!
 //! # 使い方
@@ -38,7 +37,7 @@
 //!   env ゲート（本体の `crates/areka/src/smoke_exit.rs` のゲートと同名。hands-off のビルド/起動確認用。
 //!   例: `AREKA_APP_SMOKE_EXIT_MS=5000 cargo run -p areka-placement --example window-placement`）
 //!
-//! # 手動観測プロトコル（3.1/3.5/4.1〜4.5・design「examples/window-placement.rs（実 DPI 受け入れ）」）
+//! # 手動観測プロトコル
 //!
 //! 本プロトコルは開発者が手動で行う実 DPI 受け入れ検証（headless では代替不能・emo-present の
 //! 実 DPI 手順の先行例に倣う）。以下 ①〜⑤ を実施し記録する:
@@ -56,19 +55,18 @@
 //!    ドラッグでき、対応するバルーン窓が配置時の相対 offset を保って追従する。
 //! 4. **④ モニタ境界を跨ぐドラッグで消失しない**: マルチモニタ環境で（DPI の異なる）モニタ
 //!    境界を跨いでドラッグしても、窓が消失・吹き飛び・誤クランプしない
-//!    （07-05 の DragConstraint 誤釘付け欠陥の再発檻）。
+//!    （DragConstraint の誤釘付け欠陥の再発を防ぐ檻）。
 //! 5. **⑤ 結果と実 DPI 値を記録する**: ②〜④ の pass/fail と使用した実 DPI 値
-//!    （例 dpi=120/144/192）を記録する。**dpi=96 のみの確認は不合格**（3.5・
-//!    dpi=96 では単位混在バグが自己整合して隠れるため、非 96 DPI の実走記録をもって
-//!    受け入れとする）。
+//!    （例 dpi=120/144/192）を記録する。**dpi=96 のみの確認は不合格**（dpi=96 では単位混在バグが
+//!    自己整合して隠れるため、非 96 DPI の実走記録をもって受け入れとする）。
 //!
-//! # 観測注記（受け入れ判定の対象外・areka-P0-window-placement の設計討議 議題 1 で確定）
+//! # 観測注記（受け入れ判定の対象外）
 //!
 //! - **scope1 バルーンが scope0 キャラ窓に重なって出現するのは正常**: emo2 実測値
-//!   （`kero.balloon.alignment,right`・両スコープ `defaultx,0`）では P2・P5 の幾何により
+//!   （`kero.balloon.alignment,right`・両スコープ `defaultx,0`）では配置の幾何により
 //!   `char_x(1) = char_x(0) − w1`・`balloon_x(1) = char_x(1) + w1 = char_x(0)` となり、
-//!   scope1 のバルーンが scope0 キャラ窓に重畳する。これは暫定規則（2.9 重なり回避なし・4.4 暫定 offset）の**正常挙動**であり
-//!   配置破綻ではない。正式なバルーン配置規則は balloon 表示系の後続 spec が所有する。
+//!   scope1 のバルーンが scope0 キャラ窓に重畳する。これは暫定規則（重なり回避なし・暫定 offset）の**正常挙動**であり
+//!   配置破綻ではない。正式なバルーン配置規則は balloon 表示系が所有する。
 //! - **重畳域でバルーンが先に掴まれるのも正常**: 重畳域ではバルーン
 //!   （scope1 のバルーンの絵 balloonk0.png）の不透明部が αマスクで先にヒットするため、scope0 キャラでなく
 //!   バルーンが掴まれる。
@@ -80,7 +78,7 @@
 //!
 //! 窓のクライアント領域は、surface の原寸を k 倍した物理 px に一致する（k＝DPI ÷ 作者基準 DPI。
 //! 窓の大きさは採寸が primary モニタの DPI で、絵は presenter が窓の DPI で k を導く）。
-//! placement パイプラインは座標・寸法を**物理 px 単一通貨**で運び（design U1〜U5）、
+//! placement パイプラインは座標・寸法を**物理 px 単一通貨**で運び、
 //! `BoxStyle`（論理 DIP）・`DragConstraint` を一切使わない。
 
 use bevy_ecs::prelude::*;
@@ -159,7 +157,6 @@ struct PlacementBoot {
 // ---------------------------------------------------------------------------
 
 fn main() -> Result<()> {
-    // tracing-subscriber 初期化（RUST_LOG 対応・既定 info・不正構文は info へフォールバック）。
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -175,20 +172,16 @@ fn main() -> Result<()> {
         run_setup(tx).await;
     });
 
-    // clickthrough 登録 system（placement 本体の一般化 system・donor と同じ FrameFinalize 結線）。
     world
         .borrow_mut()
         .add_systems(FrameFinalize, register_ghost_windows_click_through);
 
-    // GPU 資源到達フレームで attach_target→apply を駆動する起動 system（donor と同作法）。
     world
         .borrow_mut()
         .add_systems(FrameFinalize, boot_present_system);
 
-    // env ゲート付き smoke 自動 close（hands-off のビルド/起動確認用・本体の `smoke_exit.rs` と同名 env）。
     install_smoke_exit(&mgr);
 
-    // 操作ガイド出力。
     println!();
     println!("areka window-placement 実 DPI 受け入れ example");
     println!("=================================================");
@@ -225,7 +218,6 @@ fn build_and_spawn(world: &mut World) {
     let ghost_root = emo2_root();
     let balloon_dir = balloon_root();
 
-    // placement 本体の準備パイプライン（load→config→measure→primary work area→resolve）。
     let prepared = match areka_placement::prepare_ghost_windows(&ghost_root, &balloon_dir) {
         Ok(p) => p,
         Err(e) => {
@@ -248,17 +240,13 @@ fn build_and_spawn(world: &mut World) {
         );
     }
 
-    // MonitorSnapshot（DD15 基盤）: 実モニタ work area 集合を忠実転写した
-    // Resource を挿入（bottom 吸着ドラッグ（4.7）の消費用・セッション内固定）。
+    // 実モニタ work area 集合を忠実転写した MonitorSnapshot を挿入する（bottom 吸着ドラッグの消費用・セッション内固定）。
     world.insert_resource(areka_placement::follow::MonitorSnapshot::from_monitors(
         &wintf::ecs::window::monitor::enumerate_monitors(),
     ));
 
-    // placement 本体の窓組立（markers・WindowPos・DragConfig・BalloonFollow）。
     let windows = spawn_ghost_windows(world, &prepared.placements, &prepared.titles);
 
-    // ここから先は example 側の装着アセット構築（6.3: placement 本体は EmoPresenter 非依存）。
-    // 実 WIC デコーダ（COM 初期化済み UI スレッドで生成・donor と同型）。
     let decoder = match WicDecoderArm::new() {
         Ok(d) => d,
         Err(e) => {
@@ -270,7 +258,7 @@ fn build_and_spawn(world: &mut World) {
     // シェルの読み込みは一度だけ行う。`EmoWorld` は Clone 不可・`attach_target` が move 消費する
     // ため、target ごとに `ShellTarget::build_world` で組み直す（`AtlasTable` は Arc 共有ゆえ
     // clone は安価）。
-    let shell_dir = ghost_root.join("shell/master"); // emo2 の shell dir（donor と同一）
+    let shell_dir = ghost_root.join("shell/master");
     let Some(shell_target) = build_shell_material(&shell_dir, &decoder) else {
         tracing::error!(
             "window-placement: shell アセット素材の構築に失敗 — 装着を中止（窓は配置済み）"
@@ -288,7 +276,6 @@ fn build_and_spawn(world: &mut World) {
             );
             continue;
         };
-        // キャラ窓 target（TargetId = 2*scope）。
         if let Some(char_e) = windows.char_window(scope) {
             let emo_world = shell_target.build_world();
             // 初期 surface id: 測りと同じ答え（窓寸法と表示 surface の原寸が一致する）。
@@ -305,7 +292,6 @@ fn build_and_spawn(world: &mut World) {
             });
         }
 
-        // バルーン窓 target（TargetId = 2*scope+1・そのスコープのバルーンの面 0）。
         if let Some(balloon_e) = windows.balloon_window(scope) {
             match build_balloon_target(&balloon_dir, &decoder, scope_u32) {
                 Ok((b_world, b_table)) => pending.push(PendingTarget {
@@ -379,13 +365,11 @@ fn target_scope(scope: usize) -> Option<u32> {
 /// 起動 system（donor `boot_present_system` と同作法: `&mut World` 排他・remove→駆動→insert・
 /// GPU 資源（`GraphicsCore`/`WucGraphicsResource`）が揃うまで保留し次 tick で再試行）。
 fn boot_present_system(world: &mut World) {
-    // 未挿入 or 装着済みなら何もしない（装着後の remove/insert churn を避ける）。
     match world.get_non_send::<PlacementBoot>() {
         Some(b) if !b.attached => {}
         _ => return,
     }
 
-    // GPU 資源の準備待ち（未準備なら PlacementBoot を保持したまま次 tick へ）。
     let ready = world.get_resource::<GraphicsCore>().is_some()
         && world
             .get_resource::<WucGraphicsResource>()

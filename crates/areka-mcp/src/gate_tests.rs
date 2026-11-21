@@ -1,11 +1,11 @@
-//! `gate` の決定論テスト（要件 4.5 の 8 値＋`Host` の表）。
+//! `gate` の決定論テスト（`Origin` の 8 値＋`Host` の表）。
 
 use super::{Reject, check};
 
 /// 正規の `Host`（Origin の表で Host 側を通しておくための値）。
 const GOOD_HOST: Option<&str> = Some("127.0.0.1:1");
 
-/// (要件 4.1, 4.2, 4.3, 4.5) 要件 4.5 の 8 値: `Origin` → 通す／拒む。
+/// `Origin` の 8 値: `Origin` → 通す／拒む。
 #[test]
 fn gate_origin_table() {
     let table: [(Option<&str>, bool); 8] = [
@@ -28,7 +28,7 @@ fn gate_origin_table() {
     }
 }
 
-/// (要件 4.4) `Host`: ループバック 3 種は通す・それ以外と無しは拒む。
+/// `Host`: ループバック 3 種は通す・それ以外と無しは拒む。
 #[test]
 fn gate_host_table() {
     let table: [(Option<&str>, bool); 5] = [
@@ -48,7 +48,7 @@ fn gate_host_table() {
     }
 }
 
-/// (要件 4.2) 大文字小文字・ポートの有無と番号・`[::1]` を問わずループバックの `Origin` は通す。
+/// 大文字小文字・ポートの有無と番号・`[::1]` を問わずループバックの `Origin` は通す。
 #[test]
 fn gate_origin_loopback_variants_pass() {
     for origin in [
@@ -64,7 +64,7 @@ fn gate_origin_loopback_variants_pass() {
     }
 }
 
-/// (要件 4.3) 他の scheme・host の無い値・紛らわしい綴り・読めない値は拒む。
+/// 他の scheme・host の無い値・紛らわしい綴り・読めない値は拒む。
 #[test]
 fn gate_origin_tricks_are_rejected() {
     for origin in [
@@ -108,7 +108,7 @@ fn gate_origin_tricks_are_rejected() {
     }
 }
 
-/// (要件 4.4) `Host` も大文字小文字・ポートの有無を問わず、紛らわしい綴りは拒む。
+/// `Host` も大文字小文字・ポートの有無を問わず、紛らわしい綴りは拒む。
 #[test]
 fn gate_host_variants() {
     for host in [
@@ -145,7 +145,7 @@ fn gate_host_variants() {
     }
 }
 
-/// (要件 4.3, 4.4) 両方悪いときは `Origin` を名指す（ブラウザからの悪用の方を先に記録する）。
+/// 両方悪いときは `Origin` を名指す（ブラウザからの悪用の方を先に記録する）。
 #[test]
 fn gate_bad_origin_wins_over_bad_host() {
     assert_eq!(

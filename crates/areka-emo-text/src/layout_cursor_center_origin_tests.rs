@@ -1,31 +1,30 @@
 //! バルーン画像中央の指定（`centerx`／`centery`）と、**宣言された文字描画開始点**を基点とする
-//! 絶対座標を、**3 書字方向すべて**で固定するテスト（タスク 5.2・検証表 V6・V7）。
+//! 絶対座標を、**3 書字方向すべて**で固定するテスト。
 //!
 //! # 兄弟ファイルとの分担（重複させない）
 //!
 //! - `layout_cursor_tests.rs` — 横書きの行区切り・軸上書き・末尾蒸発・両軸 no-op・縮退 warn-once、
-//!   および軸ごと合成（H2）と実効位置（H3）。
-//! - `layout_cursor_order_tests.rs` — 書かれた順（H3b・H3c）。
-//! - `layout_cursor_wiring_tests.rs` — 横書きの配線（H1・H4・H5・H6・範囲外記録の肯定側）。
+//!   および軸ごと合成と実効位置。
+//! - `layout_cursor_order_tests.rs` — 書かれた順。
+//! - `layout_cursor_wiring_tests.rs` — 横書きの配線（範囲外記録の肯定側）。
 //!   同ファイルの `declared_origin_moves_the_absolute_basis_off_the_write_start_corner` は
-//!   **横書き 1 方向だけの対照**（H1 の弁別用）として置かれており、V7（3 方向）は本ファイルの
-//!   所管である旨が同ファイルの doc に明記されている。本ファイルは横書きぶんを対照の
+//!   **横書き 1 方向だけの対照**で、3 方向は本ファイルの所管。本ファイルは横書きぶんを対照の
 //!   繰り返しに終わらせず、**3 方向を 1 本の主張に束ねる**形で書く。
 //! - `layout_cursor_vertical_tests.rs`／`layout_cursor_vertical_canon_tests.rs` — 縦書き 2 方向の
-//!   着地値と正典の記述例（V1〜V5）。中央指定・宣言 `origin` はどちらも扱っていない。
+//!   着地値と正典の記述例。中央指定・宣言 `origin` はどちらも扱っていない。
 //! - `cursor_tag_tests.rs`／`cursor_tag_resolve_tests.rs` — 解決そのもの（純関数）。**配線を
 //!   通した経路**は本ファイルが初めて見る（純関数の檻は `CursorBasis` を手で組むので、
 //!   配線が `image_size` に何を渡しているかを一切主張しない）。
 //!
 //! # 期待値の出どころ
 //!
-//! すべて design.md の検証表と正典逐語（requirements.md 付録 A）から**式で**導く。実装の
+//! すべて正典の逐語から**式で**導く。実装の
 //! 戻り値は書き写さない。
 //!
 //! - V6: `\_l[centerx,centery]あ` → 3 方向とも **X = 200・Y = 112**（＝バルーン画像原寸
-//!   `(400, 224)` の幅／高さの半分。方向に依らない・Requirement 4.4／4.5）。
+//!   `(400, 224)` の幅／高さの半分。方向に依らない）。
 //! - V7: 宣言 `origin (50, 20)` で `\_l[0,0]あ` → 横書き `(50, 20)`・`vertical_rl` は
-//!   **列右端 50**・`vertical_lr` は **列左端 50**（Requirement 2.9／9.6）。
+//!   **列右端 50**・`vertical_lr` は **列左端 50**。
 //!
 //! # 共通前提（**弁別 fixture**・既定の共通前提を使ってはならない理由）
 //!
@@ -39,8 +38,8 @@
 //! validrect の辺と取り違えた実装（配線の `image_size: region.image_size()` を
 //! `(region.right(), region.bottom())` にした実装）が素通りする。**
 //!
-//! 画像原寸は既定と同じ `(400, 224)` に保ち、validrect だけをずらしてあるので、design.md の
-//! V6 が定める literal（X = 200・Y = 112）はそのまま使える。**ただし validrect の中央
+//! 画像原寸は既定と同じ `(400, 224)` に保ち、validrect だけをずらしてあるので、
+//! V6 の literal（X = 200・Y = 112）はそのまま使える。**ただし validrect の中央
 //! `((30 + 350) / 2, (8 + 210) / 2) = (190, 109)` のように、X だけが偶然一致する候補が生じうる
 //! 選び方もある**——本ファイルの矩形は、下の前提の檻が列挙する取り違え候補すべてが
 //! **両軸とも**画像中央と相異なるように選んである。
@@ -64,10 +63,10 @@ const PITCH: f32 = 12.0;
 /// 弁別 fixture の validrect（`left` / `top` / `right` / `bottom`・image px）。
 const VALID: (f32, f32, f32, f32) = (30.0, 8.0, 350.0, 210.0);
 
-/// design.md 検証表 V6 の期待値そのもの（バルーン画像原寸 `(400, 224)` の半分）。
+/// V6 の期待値そのもの（バルーン画像原寸 `(400, 224)` の半分）。
 const IMAGE_CENTER: (f32, f32) = (200.0, 112.0);
 
-/// design.md 検証表 V7 の宣言された文字描画開始点。
+/// V7 の宣言された文字描画開始点。
 const DECLARED_ORIGIN: (f32, f32) = (50.0, 20.0);
 
 /// 3 書字方向（テストの反復用）。
@@ -174,19 +173,19 @@ fn cursor_center_both() -> TextItem {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// 前提の檻（3.3 の二段構えと同型・4.4 の Suggestion「弁別性の前提そのものを檻に入れる」）
+// 前提の檻（弁別性の前提そのものを檻に入れる）
 // ─────────────────────────────────────────────────────────────────────
 
 /// 弁別 fixture が「基点の取り違えを弁別できる」形を保っていることを、**性質として**固定する。
 ///
 /// 以降の V6・V7 はすべて「基準を取り違えた実装が赤になる」ことに依存している。その依存の
 /// 土台（候補が互いに相異なること）が黙って崩れると、値の逐語は緑のまま主張だけが空洞に
-/// なる——3.3 が `centerx` の弁別性を定数 1 行で失った事例と同型である。
+/// なる。
 ///
 /// 檻に入れる性質は 2 つ:
 ///
 /// 1. **画像中央 (200, 112) が、取り違えうる候補のどれとも両軸で相異なる。** 列挙した候補は
-///    ⑴ validrect の遠辺の半分 `(right/2, bottom/2)`＝**4.1／4.4 が名指しした摂動そのもの**
+///    ⑴ validrect の遠辺の半分 `(right/2, bottom/2)`＝**最も起きやすい取り違えそのもの**
 ///    ⑵ validrect の近辺の半分 `(left/2, top/2)` ⑶ validrect の**寸法**の半分
 ///    `((right−left)/2, (bottom−top)/2)` ⑷ validrect の**中央** `((left+right)/2, (top+bottom)/2)`
 ///    ⑸ validrect の 4 隅 ⑹ 画像の左上 `(0, 0)` ⑺ 3 方向の書字開始角 ⑻ 宣言された `origin`。
@@ -278,7 +277,7 @@ fn the_center_and_origin_fixture_keeps_every_basepoint_candidate_apart() {
     }
 
     // ⑸ 宣言値 (50, 20) は validrect（x は 30〜350・y は 8〜210）の範囲内なので、
-    //    3 方向とも start() が宣言値そのものになる（R2.9）。
+    //    3 方向とも start() が宣言値そのものになる。
     for mode in MODES {
         assert_eq!(
             region_declared(mode).start(),
@@ -293,8 +292,7 @@ fn the_center_and_origin_fixture_keeps_every_basepoint_candidate_apart() {
 // ─────────────────────────────────────────────────────────────────────
 
 /// **V6**: `\_l[centerx,centery]ああ` は 3 書字方向とも画像座標 **(200, 112)** へ着く
-/// （Requirement 4.1〜4.4・design.md 解決表「`centerx` on X → `image_size.0 / 2`」
-/// 「`centery` on Y → `image_size.1 / 2`」）。
+/// （解決表「`centerx` on X → `image_size.0 / 2`」「`centery` on Y → `image_size.1 / 2`」）。
 ///
 /// 手計算（弁別 fixture・画像原寸 `(400, 224)`・font 10・advance 10）:
 /// - X ＝ `image_size.0 / 2 = 400 / 2 = 200`（**validrect の右辺 350 の半分 175 ではない**）
@@ -308,8 +306,7 @@ fn the_center_and_origin_fixture_keeps_every_basepoint_candidate_apart() {
 /// - `vertical_lr`: 行内＝y・行送り＝x・列矩形は `[block, block+font]` → `(200, 112, 210, 132)`
 ///
 /// 3 方向で行矩形は**異なる**（方向が本当に別の regime であることの証跡）のに、逆写像した
-/// 画像座標は**同一**である——これが「方向に依らない」の観測点そのものである
-/// （Requirement 4.4）。
+/// 画像座標は**同一**である——これが「方向に依らない」の観測点そのものである。
 #[test]
 fn center_resolves_to_half_the_balloon_image_in_all_three_writing_modes() {
     let items = [cursor_center_both(), glyph(), glyph()];
@@ -337,13 +334,13 @@ fn center_resolves_to_half_the_balloon_image_in_all_three_writing_modes() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Requirement 4.5: 両軸に異なる書式が混在するとき、軸ごとに独立に解決される
+// 両軸に異なる書式が混在するとき、軸ごとに独立に解決される
 // ─────────────────────────────────────────────────────────────────────
 
-/// **軸ごと独立の解決（Requirement 4.5・2.2）**: 中央指定と他の書式を両軸に混ぜても、
+/// **軸ごと独立の解決**: 中央指定と他の書式を両軸に混ぜても、
 /// 各軸がそれぞれの基準（画像／文字描画開始点／実効位置）で独立に解決される。
 ///
-/// 3 つの混在形を 3 方向で見る。手計算はいずれも design.md 解決表の
+/// 3 つの混在形を 3 方向で見る。手計算はいずれも 解決表の
 /// `基点 + 値 × 係数` から:
 ///
 /// **⒜ `[あ, \_l[centerx,@1em], あ]`**（X ＝画像・Y ＝実効位置からの相対）
@@ -481,19 +478,16 @@ fn mixed_formats_on_the_two_axes_resolve_independently_in_all_three_writing_mode
 // ─────────────────────────────────────────────────────────────────────
 
 /// **V7**: 文字描画開始点を角と異なる位置 `(50, 20)` に**宣言**したバルーンでは、`\_l[0,0]` が
-/// 3 書字方向とも**宣言値から**測られる（Requirement 2.9・design.md 原点表「宣言された
-/// `origin` 成分はそのまま原点になる」）。
+/// （宣言された `origin` 成分はそのまま原点になる）。
 ///
-/// 引用元は完了済みの仕様 `.kiro/specs/completed/areka-P0-cursor-tag-canon/design.md` で、
-/// その一文は `areka-P0-balloon-origin-outside-validrect` が上書きしている——validrect の範囲内
-/// （両端を含む）に収まる宣言だけがそのまま原点になり、範囲の外へ解決された宣言は未宣言の
-/// 成分と同じく書字開始角へ落ちる。本検査の宣言値 `(50, 20)` は validrect（x は 30〜350・
-/// y は 8〜210）の範囲内なので、宣言値から測られる。
+/// ただし validrect の範囲内（両端を含む）に収まる宣言だけがそのまま原点になり、範囲の外へ
+/// 解決された宣言は未宣言の成分と同じく書字開始角へ落ちる。本検査の宣言値 `(50, 20)` は
+/// validrect（x は 30〜350・y は 8〜210）の範囲内なので、宣言値から測られる。
 ///
 /// 手計算（宣言 `origin (50, 20)`・validrect `left 30 / top 8 / right 350 / bottom 210`・font 10）:
 /// - `horizontal_tb`: 着地 `(50 + 0, 20 + 0) = (50, 20)` → 行矩形 `(50, 20, 60, 30)`
 /// - `vertical_rl`: 行送り軸＝x なので `block_pos = 50`。列矩形は `[block − font, block]`
-///   ＝ `[40, 50]`＝**列右端 50**（design.md V7 の逐語）。行内軸＝y は `20` から下へ 10。
+///   ＝ `[40, 50]`＝**列右端 50**。行内軸＝y は `20` から下へ 10。
 ///   → 行矩形 `(40, 20, 50, 30)`
 /// - `vertical_lr`: 列矩形は `[block, block + font]` ＝ `[50, 60]`＝**列左端 50**（同上）。
 ///   → 行矩形 `(50, 20, 60, 30)`
@@ -509,11 +503,11 @@ fn declared_origin_is_the_absolute_basis_in_all_three_writing_modes() {
     let items = [cursor_px(0.0, 0.0), glyph()];
 
     for (mode, expected_rect) in [
-        // 横書きは旧正典（ukadoc 2.8.80「文字描画範囲左上」）の (30, 8) から動いた＝正典追随（R9.6）。
+        // 横書きは未宣言の角 (30, 8) ではなく宣言値 (50, 20) から測る。
         (WritingMode::HorizontalTb, (50.0, 20.0, 60.0, 30.0)),
-        // 列の**右端** right = 50 が宣言 origin.x（V7 の逐語「vertical_rl は列右端 50」）。
+        // 列の**右端** right = 50 が宣言 origin.x。
         (WritingMode::VerticalRl, (40.0, 20.0, 50.0, 30.0)),
-        // 列の**左端** left = 50 が宣言 origin.x（同「vertical_lr は列左端 50」）。
+        // 列の**左端** left = 50 が宣言 origin.x。
         (WritingMode::VerticalLr, (50.0, 20.0, 60.0, 30.0)),
     ] {
         let region = region_declared(mode);

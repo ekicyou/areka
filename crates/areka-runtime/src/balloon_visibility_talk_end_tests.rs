@@ -1,9 +1,9 @@
 // =============================================================================
-// トークの終わりから計る時間切れの判断中核の檻（areka-P0-balloon-lifecycle-events）
+// トークの終わりから計る時間切れの判断中核の檻
 //
-// 計測はトークの終わりの合図が届いてから立ち、起点は占有区間の終端と止まった時刻の早い方
-// （決定 D6・要件 5.1）。待ち時間はトークごとの指定で差し替わり、時間切れで隠したフレームに
-// だけトークの番号の知らせが立つ（要件 2.1・9.1〜9.3・9.6）。時刻はすべて注入する。
+// 計測はトークの終わりの合図が届いてから立ち、起点は占有区間の終端と止まった時刻の早い方。
+// 待ち時間はトークごとの指定で差し替わり、時間切れで隠したフレームに
+// だけトークの番号の知らせが立つ。時刻はすべて注入する。
 // =============================================================================
 
 use super::test_support::*;
@@ -18,7 +18,7 @@ fn hide_timed_out(scopes: &[u32]) -> VisibilityAction {
 }
 
 /// 占有終端に達してもトークの終わりが届くまでは計測が立たず、届いたフレームに「止まった時刻」を
-/// 起点に立つ。満了のフレームにだけ番号の知らせが載る（要件 2.1・5.1・7.3）。
+/// 起点に立つ。満了のフレームにだけ番号の知らせが載る。
 #[test]
 fn measurement_waits_for_talk_end_and_anchors_on_the_earlier_stop_time() {
     let mut state = BalloonVisibilityState::default();
@@ -63,7 +63,7 @@ fn measurement_waits_for_talk_end_and_anchors_on_the_earlier_stop_time() {
 }
 
 /// トークの待ち時間の指定はミリ秒を 1,000 で割った秒に写し、「なし」なら計測しない。次の会話の
-/// 開始で既定へ戻る（要件 9.1〜9.3・9.6）。
+/// 開始で既定へ戻る。
 #[test]
 fn talk_timeout_replaces_the_wait_until_the_next_talk() {
     let mut state = BalloonVisibilityState::default();
@@ -123,7 +123,7 @@ fn shown_and_ended(end: f64) -> BalloonVisibilityState {
 }
 
 // ---------------------------------------------------------------------------
-// 起点の採り方（要件 5.1・5.3・5.6・7.3・7.4）
+// 起点の採り方
 // ---------------------------------------------------------------------------
 
 /// 止まった時刻が終端より前なら止まった時刻、終端とちょうど同じか後なら終端を起点に採る。
@@ -182,7 +182,7 @@ fn origin_is_the_stop_time_only_when_it_precedes_the_display_end() {
     }
 }
 
-/// トークの終わりに時刻が無ければ終端を起点にし、そのことを起点の記録に残す（要件 5.6・7.3）。
+/// トークの終わりに時刻が無ければ終端を起点にし、そのことを起点の記録に残す。
 #[test]
 fn missing_stop_time_falls_back_to_the_display_end_and_is_recorded() {
     let mut state = BalloonVisibilityState::default();
@@ -217,11 +217,11 @@ fn missing_stop_time_falls_back_to_the_display_end_and_is_recorded() {
 }
 
 // ---------------------------------------------------------------------------
-// トークごとの待ち時間（要件 9.1・9.2・9.5・9.7）
+// トークごとの待ち時間
 // ---------------------------------------------------------------------------
 
 /// 正の待ち時間では、表示の終わりからその時間で隠れる——直前では隠れず、ちょうどで隠れる。
-/// 隠れたスコープの数によらず知らせは 1 つで、満了のフレームの後には立たない（要件 2.1・9.1）。
+/// 隠れたスコープの数によらず知らせは 1 つで、満了のフレームの後には立たない。
 #[test]
 fn positive_talk_timeout_hides_exactly_at_its_own_deadline() {
     let both = |a: bool| [(0, seen(3, a)), (1, seen(2, a))];
@@ -253,7 +253,7 @@ fn positive_talk_timeout_hides_exactly_at_its_own_deadline() {
 }
 
 /// 同じトークで最後に届いた「なし」が勝ち、そのトークは既定の満了のちょうどを過ぎても
-/// 隠れず、計測の記録も知らせも出ない（要件 9.2・9.5）。
+/// 隠れず、計測の記録も知らせも出ない。
 #[test]
 fn never_given_last_keeps_the_balloon_and_raises_no_notice() {
     let mut state = BalloonVisibilityState::default();
@@ -286,7 +286,7 @@ fn never_given_last_keeps_the_balloon_and_raises_no_notice() {
 }
 
 /// 抑止が解けた後の計り直しは、そのトークで差し替えた待ち時間を使う（既定の 30 秒ではない）。
-/// 抑止の間は知らせが立たず、解けて隠れたフレームに立つ（要件 2.4・5.5・9.7）。
+/// 抑止の間は知らせが立たず、解けて隠れたフレームに立つ。
 #[test]
 fn restart_after_suppression_uses_the_talk_timeout() {
     let mut state = BalloonVisibilityState::default();
@@ -328,11 +328,11 @@ fn restart_after_suppression_uses_the_talk_timeout() {
 }
 
 // ---------------------------------------------------------------------------
-// 知らせ（要件 2.1・2.5）
+// 知らせ
 // ---------------------------------------------------------------------------
 
 /// 満了のちょうどのフレームでも、利用者の中断・内容の消去・次のトークの開始で隠れた（あるいは
-/// 計測を捨てた）なら知らせは立たない（要件 2.5）。
+/// 計測を捨てた）なら知らせは立たない。
 #[test]
 fn notice_is_not_raised_when_the_balloon_goes_for_another_reason() {
     let deadline = 2.0 + DEFAULT_BALLOON_TIMEOUT_SECS;
@@ -381,7 +381,7 @@ fn notice_is_not_raised_when_the_balloon_goes_for_another_reason() {
 }
 
 /// 番号の無いトークが時間切れで隠れると、隠す行動はそのままで知らせは立たず、警告の事象が
-/// 出る。次のトークの番号が届けば、知らせはその番号で立つ（要件 2.1）。
+/// 出る。次のトークの番号が届けば、知らせはその番号で立つ。
 #[test]
 fn notice_carries_the_current_talk_id_and_is_withheld_without_one() {
     let mut state = BalloonVisibilityState::default();
@@ -434,8 +434,7 @@ fn notice_carries_the_current_talk_id_and_is_withheld_without_one() {
     );
 }
 
-/// 「このトークで選択肢を出した」は `ChoiceShown` で立ち、次の会話の開始で戻る
-/// （areka-P0-balloon-text-bugs task 3.1・要件 1.2〜1.4・1.7）。
+/// 「このトークで選択肢を出した」は `ChoiceShown` で立ち、次の会話の開始で戻る。
 #[test]
 fn choice_shown_marks_the_talk_until_the_next_talk_starts() {
     let mut state = BalloonVisibilityState::default();

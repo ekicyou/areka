@@ -1,4 +1,4 @@
-//! 面を出す合図で止めた `always` の印を消す配線のテスト（spec: seriko-pattern-calls 要件 3.5・M2）。
+//! 面を出す合図で止めた `always` の印を消す配線のテスト。
 
 use super::test_support::*;
 use super::*;
@@ -58,8 +58,7 @@ fn shift(x: i64, y: i64) -> DisplayCommand {
     }
 }
 
-/// 面を出す合図で鳴った `move` は同じ合図の `Show` の後に出て、同じ面の出し直しでは (0, 0) が出る
-/// （spec: seriko-pattern-calls 7.1・7.6・M3）。
+/// 面を出す合図で鳴った `move` は同じ合図の `Show` の後に出て、同じ面の出し直しでは (0, 0) が出る。
 #[test]
 fn surface_cue_emits_the_shift_after_the_show_and_reshow_resets_it() {
     let (rng, _probe) = counting_rng(&[]);
@@ -82,8 +81,7 @@ fn surface_cue_emits_the_shift_after_the_show_and_reshow_resets_it() {
     assert_eq!(rig.hear(300, emote_cue(0.3, "0", "0")), vec![shift(0, 0)]);
 }
 
-/// シェルの差し替え（`Rebased`）も面を出す合図: 全スコープのずれを 0 へ戻し、合図の後に (0, 0) を出す
-/// （spec: seriko-pattern-calls 3.5・7.6）。
+/// シェルの差し替え（`Rebased`）も面を出す合図: 全スコープのずれを 0 へ戻し、合図の後に (0, 0) を出す。
 #[test]
 fn shell_replace_resets_the_shift_after_the_rebased() {
     const MOVE: &str = "surface0\n{\n\

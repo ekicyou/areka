@@ -19,7 +19,7 @@
 //! 2. 返す文字列から番兵の宛先を含む行を取り除く。取り除けなければ panic する
 //!    （空の結果を静かに返して縮退しない）。
 //!
-//! 結果として、呼出側から見える文字列は番兵を導入する前と 1 バイトも変わらない。
+//! 結果として、呼出側から見える文字列に番兵は現れない。
 //!
 //! # 決定性の土台
 //!
@@ -111,7 +111,6 @@ pub fn capture_under_filter(directives: &str, f: impl FnOnce()) -> String {
     // 行うが、probe 常駐前に焼かれた `never` の掃き残しを窓の内側でもう一度潰す。
     tracing::subscriber::with_default(subscriber, || {
         tracing::callsite::rebuild_interest_cache();
-        // 対照イベント（番兵）。窓が本当に生きているかを、同じ窓の内側で示す。
         tracing::trace!(target: SENTINEL_TARGET, "capture window is live");
         f();
     });

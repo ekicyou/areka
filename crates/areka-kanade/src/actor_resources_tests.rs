@@ -83,7 +83,7 @@ fn state_in(phase: Phase) -> State {
     state
 }
 
-/// 会話できる状態（`Steady`）だけが照会できる（要件 3.10・終了中は既定名）。
+/// 会話できる状態（`Steady`）だけが照会できる（終了中は既定名）。
 #[test]
 fn only_steady_is_queryable() {
     for phase in &all_phases() {
@@ -105,7 +105,7 @@ fn shiori_outcome_maps_onto_resource_outcome() {
         ),
         ResourceOutcome::Value("x".into())
     );
-    // 空文字の 200 は値のまま返す（既定名へ倒すのは受け手の解釈・要件 3.3）。
+    // 空文字の 200 は値のまま返す（既定名へ倒すのは受け手の解釈）。
     assert_eq!(
         outcome_of(
             "readmebutton.caption",
@@ -123,7 +123,6 @@ fn shiori_outcome_maps_onto_resource_outcome() {
         outcome_of("readmebutton.caption", ShioriOutcome::Failed(failure)),
         ResourceOutcome::Failed(reason)
     );
-    // GET の応答としてあり得ない完了語彙は失敗へ倒す（panic しない）。
     for unexpected in [ShioriOutcome::Notified, ShioriOutcome::Unloaded] {
         assert_eq!(
             outcome_of("readmebutton.caption", unexpected),
@@ -132,7 +131,7 @@ fn shiori_outcome_maps_onto_resource_outcome() {
     }
 }
 
-/// 会話できない状態では SHIORI へ 1 通も送らず、全件「値なし」を同順・同長で 1 回返す（要件 3.10）。
+/// 会話できない状態では SHIORI へ 1 通も送らず、全件「値なし」を同順・同長で 1 回返す。
 #[test]
 fn non_queryable_phase_answers_no_content_without_touching_shiori() {
     for phase in all_phases().into_iter().filter(|p| !expected_queryable(p)) {
@@ -163,7 +162,6 @@ fn non_queryable_phase_answers_no_content_without_touching_shiori() {
 #[test]
 fn steady_round_trips_each_id_and_rejects_only_the_disallowed_one() {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
-    // 届いた GET の id をそのまま値にして返すだけの偽 SHIORI。
     let fake = thread::spawn(move || {
         let mut seen = Vec::new();
         while let Ok(ShioriMsg::Request { call, reply }) = shiori_rx.recv() {
@@ -221,7 +219,7 @@ fn steady_round_trips_each_id_and_rejects_only_the_disallowed_one() {
 }
 
 /// ゴーストが「バルーン位置初期化」の項目名を返したとき、その名前が引ける
-/// （許可表の 14 名目・areka-P0-window-link-directives 要件 7.6）。
+/// （許可表の 14 名目）。
 #[test]
 fn reset_balloon_position_caption_is_looked_up_from_the_ghost() {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
@@ -274,7 +272,7 @@ fn dropped_reply_receiver_does_not_panic() {
 }
 
 /// 照会の道で SHIORI の口が閉じていても、往復の失敗の記録は終了へ進むと書かない
-/// （照会は失敗を返すだけ・popup-menu-residue 要件 6.1・6.3・6.4）。
+/// （照会は失敗を返すだけ）。
 #[test]
 fn a_failed_round_trip_on_the_query_path_does_not_claim_termination() {
     use crate::schedule::log_capture::{capture, logged_once};
@@ -306,7 +304,7 @@ fn a_failed_round_trip_on_the_query_path_does_not_claim_termination() {
 }
 
 /// リソース許可表に無い id は、イベント許可表にあっても（`OnBoot`）SHIORI へ出さず、
-/// その id だけが失敗になる（`error!` を 1 件・要件 3.2）。
+/// その id だけが失敗になる（`error!` を 1 件）。
 #[test]
 fn an_event_id_is_refused_as_a_resource_without_a_round_trip() {
     use crate::schedule::log_capture::{capture, logged_once};

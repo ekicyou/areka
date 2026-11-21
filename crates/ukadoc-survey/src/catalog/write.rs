@@ -1,34 +1,32 @@
 //! カタログ → `catalog.toml` の本文。
 //!
-//! ここは純粋層である。**ファイルには触らない**——本文を組み立てて文字列で返すだけで、
-//! どこへ書くかは入出力層（`io::files::write_lf`）と生成の副手続きの仕事である
-//! （要件 6.2・設計 Architecture）。
+//! 純粋層で、**ファイルには触らない**。本文を組み立てて文字列で返すだけで、どこへ書くかは
+//! 入出力層（`io::files::write_lf`）と生成の副手続きの仕事である。
 //!
-//! 形は設計「Data Models」の逐語で、次の 4 つの塊が必ずこの順で並ぶ。
+//! 次の 4 つの塊が必ずこの順で並ぶ。
 //!
 //! 1. 手で編集しないことと再生成の仕方を告げる注意書き 2 行。
-//! 2. `[snapshot]` と冒頭の情報 8 欄（要件 1.6・設計 D-9）。
+//! 2. `[snapshot]` と冒頭の情報 8 欄。
 //! 3. `[entry]`。
-//! 4. 項目 1 件につきちょうど 1 行のインラインテーブル（要件 1.1）、id の byte 昇順。
+//! 4. 項目 1 件につきちょうど 1 行のインラインテーブル、id の byte 昇順。
 //!
-//! # 1 バイトの安定（要件 1.5）
+//! # 1 バイトの安定
 //!
 //! 並びも区切りの空白も欄の順もここで決め打ちする。並びは `Catalog::entries` が
-//! `BTreeMap` なので id の byte 昇順に定まり（設計 D-9。実データの id はすべて ASCII）、
-//! 欄の順は [`ENTRY_COLUMNS`] の 1 か所だけが決める。同じカタログを 2 回書き出せば
-//! 同じ本文になる——分岐も並べ替えも通らないからである。
+//! `BTreeMap` なので id の byte 昇順に定まり（実データの id はすべて ASCII）、欄の順は
+//! [`ENTRY_COLUMNS`] の 1 か所だけが決める。同じカタログを 2 回書き出せば同じ本文に
+//! なる。分岐も並べ替えも通らないからである。
 //!
 //! # 逃がし
 //!
-//! 値はすべて [`crate::tomlout`] を通す。`toml` の書き出しは使わない（設計
-//! 「境界の要点」1 つ目。`toml` は逆斜線を含む文字列を単引用符の素の文字列で書き、
-//! 要件付録 A.3 が凍結した書き方と一致しない）。
+//! 値はすべて [`crate::tomlout`] を通す。`toml` の書き出しは使わない。`toml` は逆斜線を
+//! 含む文字列を単引用符の素の文字列で書き、凍結した書き方と一致しない。
 
 use super::{Catalog, CatalogEntry, ENTRY_COLUMNS, SNAPSHOT_FIELDS, SnapshotMeta};
 use crate::model::EntryId;
 use crate::tomlout::{basic_string, inline_table, string_array};
 
-/// 冒頭の注意書き（設計「Data Models」の逐語）。
+/// 冒頭の注意書き。
 const HEADER_LINES: [&str; 2] = [
     "# 機械生成。手で編集しない。再生成: cargo run -p ukadoc-survey -- catalog",
     "# 形式の正本: .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/design.md",
@@ -40,10 +38,10 @@ const SNAPSHOT_HEADER: &str = "[snapshot]";
 /// 項目を置く表の見出し。
 const ENTRY_HEADER: &str = "[entry]";
 
-/// カタログを `catalog.toml` の本文にする（要件 1.1・1.5・1.6）。
+/// カタログを `catalog.toml` の本文にする。
 ///
-/// 返る本文は改行だけで区切られ、必ず改行で終わる（設計 D-6）。同じカタログを
-/// 2 回渡せば 1 バイトも違わない本文が返る。
+/// 返る本文は改行だけで区切られ、必ず改行で終わる。同じカタログを 2 回渡せば
+/// 1 バイトも違わない本文が返る。
 pub fn write(catalog: &Catalog) -> String {
     let mut out = String::new();
     for line in HEADER_LINES {
@@ -70,11 +68,11 @@ fn push_line(out: &mut String, line: &str) {
     out.push('\n');
 }
 
-/// 冒頭の情報 8 欄を書く（要件 1.6・設計 D-9）。
+/// 冒頭の情報 8 欄を書く。
 ///
-/// 欄の名前と並びは [`SNAPSHOT_FIELDS`] の 1 か所だけが決める。[`SnapshotMeta::total_entries`]
-/// （出典を問わない全件数）と [`SnapshotMeta::ukadoc_entries`]（うち正典の件数）は別の欄で、
-/// 入れ替えても TOML としては読めてしまうので、逐語テストがこの並びを守る。
+/// 欄の名前と並びは [`SNAPSHOT_FIELDS`] の 1 か所だけが決める。
+/// [`SnapshotMeta::total_entries`] と [`SnapshotMeta::ukadoc_entries`] は入れ替えても
+/// TOML としては読めてしまうので、逐語テストがこの並びを守る。
 fn push_snapshot(out: &mut String, meta: &SnapshotMeta) {
     let values = [
         basic_string(&meta.package),
@@ -98,9 +96,9 @@ fn push_field(out: &mut String, key: &str, value: &str) {
     push_line(out, value);
 }
 
-/// 項目 1 件の 1 行（要件 1.1）。
+/// 項目 1 件の 1 行。
 ///
-/// 列は [`ENTRY_COLUMNS`] の順に並ぶ。`versions` は与えられた順のまま書く——昇順に
+/// 列は [`ENTRY_COLUMNS`] の順に並ぶ。`versions` は与えられた順のまま書く。昇順に
 /// 整えるのは組み立て（`catalog::build`）の仕事で、ここで並べ替えると読み戻した
 /// カタログを書き戻したときに本文が動く。
 fn entry_line(id: &EntryId, entry: &CatalogEntry) -> String {

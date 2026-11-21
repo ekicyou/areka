@@ -1,4 +1,4 @@
-//! helper の見出しの判定と記録の兄弟テスト（dev-helper-x64-clobber タスク 2.1・要件 3.1/3.2/3.4/3.5）。
+//! helper の見出しの判定と記録の兄弟テスト。
 //!
 //! 判定（[`classify_helper_image`]）は合成したバイト列で、記録（[`report_helper_image`]）は
 //! 結果を直接渡して確かめる。ファイルを作らない。ログは `log_capture_kit::capture` で観測する
@@ -89,7 +89,7 @@ fn classify_empty_is_not_pe() {
     assert_eq!(classify_helper_image(&[]), HelperImage::NotPe);
 }
 
-/// 要件 3.4: i686 のときは記録 0 行。
+/// i686 のときは記録 0 行。
 #[test]
 fn report_i686_logs_nothing() {
     let ((), events) =
@@ -97,7 +97,7 @@ fn report_i686_logs_nothing() {
     assert_eq!(host32_events(&events).len(), 0, "{events:?}");
 }
 
-/// 要件 3.1・3.2: ほかの機械の種類はエラーの 1 行（パス・機械の種類の 16 進・直し方）。
+/// ほかの機械の種類はエラーの 1 行（パス・機械の種類の 16 進・直し方）。
 #[test]
 fn report_other_machine_logs_one_error_with_path_machine_and_fix() {
     let ((), events) = log_capture_kit::capture(|| {
@@ -118,7 +118,7 @@ fn report_other_machine_logs_one_error_with_path_machine_and_fix() {
     );
 }
 
-/// 要件 3.5: PE でないときは警告の 1 行（パス・理由）。
+/// PE でないときは警告の 1 行（パス・理由）。
 #[test]
 fn report_not_pe_logs_one_warning_with_path_and_reason() {
     let ((), events) =
@@ -132,7 +132,7 @@ fn report_not_pe_logs_one_warning_with_path_and_reason() {
     assert_eq!(e.field_str("reason"), Some("not a PE image"));
 }
 
-/// 要件 3.5: 読めないときは警告の 1 行（パス・誤り）。
+/// 読めないときは警告の 1 行（パス・誤り）。
 #[test]
 fn report_unreadable_logs_one_warning_with_path_and_error() {
     let ((), events) = log_capture_kit::capture(|| {
@@ -150,7 +150,7 @@ fn report_unreadable_logs_one_warning_with_path_and_error() {
     assert!(e.field("error").is_some(), "{e:?}");
 }
 
-/// 要件 3.1: 実ファイル（テストの実行体そのもの＝x64 か arm64）を読むとエラーの 1 行。
+/// 実ファイル（テストの実行体そのもの＝x64 か arm64）を読むとエラーの 1 行。
 #[test]
 fn check_real_non_i686_exe_logs_one_error() {
     let exe = std::env::current_exe().expect("テストの実行体のパス");
@@ -161,7 +161,7 @@ fn check_real_non_i686_exe_logs_one_error() {
     assert_eq!(logged[0].field_str("event"), Some("helper_not_i686"));
 }
 
-/// 要件 3.5: 無いパスを読むと警告の 1 行。
+/// 無いパスを読むと警告の 1 行。
 #[test]
 fn check_missing_path_logs_one_warning() {
     let missing = Path::new("this_helper_exe_does_not_exist_areka_host32.exe");
@@ -175,7 +175,7 @@ fn check_missing_path_logs_one_warning() {
     );
 }
 
-/// 要件 3.1・3.3・3.5: `spawn` は起こす前に判定を 1 回呼び、起こし方（無い helper は
+/// `spawn` は起こす前に判定を 1 回呼び、起こし方（無い helper は
 /// `SpawnError::Spawn`）は変えない。
 #[test]
 fn spawn_checks_helper_image_once_and_keeps_spawn_result() {

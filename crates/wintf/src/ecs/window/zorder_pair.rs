@@ -1,7 +1,7 @@
 //! ゴースト窓ペアの重なり関係——宣言・再断行要求・確立記録・実行時ストラテジ
 //!
-//! 「同一スコープにおいてバルーン窓は自分のキャラ窓のすぐ手前に居る」という不変条件
-//! （要件 1.1）を、**entity 参照だけの宣言**として持つ層である。宣言する側（areka）は
+//! 「同一スコープにおいてバルーン窓は自分のキャラ窓のすぐ手前に居る」という不変条件を、
+//! **entity 参照だけの宣言**として持つ層である。宣言する側（areka）は
 //! scope を知る唯一の層であり、HWND も Win32 も知らない。反映する側（wintf）は HWND と
 //! Win32 を知る唯一の層である——この責務分界ゆえ、宣言は wintf 側に住み、`Entity` を
 //! 取る（wintf → areka の import は禁止ゆえ scope 型は受け取れない）。
@@ -17,7 +17,7 @@
 //!
 //! 確立系は兄弟モジュール [`super::zorder_pair_establish`]、維持系は
 //! [`super::zorder_pair_maintain`]、記録の**行を組む純関数**は
-//! [`super::zorder_pair_diag`] にある（本ファイルが 1,000 行の上限に迫るため分割した）。
+//! [`super::zorder_pair_diag`] にある。
 //! **記録を出すマクロは本ファイル内に置くこと**——出力先は組のモジュール 1 つに揃える（読み手の
 //! 絞り込みは前方一致なので漏れはしないが、記録の関数を 1 つのファイルに集めて固定する）。
 
@@ -41,8 +41,8 @@ use crate::api::{get_window_above, get_window_below, is_window_always_on_top, is
 ///
 /// 付与するのは scope を知る層（areka の spawn）。宣言は片側（手前に居るべき窓＝
 /// バルーン窓）にのみ付き、対になる窓は `peer` で指す。スコープ間には宣言を張らない
-/// ——これが「スコープ間の上下関係を固定の規則で決めない」（要件 3.1）と「是正時に
-/// 当該スコープの 2 窓しか動かさない」（要件 3.4）の構造的な根拠である。
+/// ——これが「スコープ間の上下関係を固定の規則で決めない」と「是正時に
+/// 当該スコープの 2 窓しか動かさない」の構造的な根拠である。
 ///
 /// 望む鎖（[`ChainPlan`](super::ChainPlan)）が組の 2 枚を連続させない間は、鎖の適用系が
 /// 結び目を外す（宣言は残る）。その間、組の系は確立・再断行・沈降の観測のどれも行わず
@@ -62,10 +62,10 @@ pub struct KeepDirectlyAbove {
 /// （バルーンを手前へ／キャラを直後へ）はどちらも最終的にこの同一の隣接へ収束するため、
 /// 期待値はこの 1 形で足りる。照合は `measure_window_below(above) == Some(below)`
 /// （`GW_HWNDNEXT` を辿り、不可視の窓を読み飛ばした**最も近い可視の背後**）で行い、
-/// 不一致なら `verify-failed` を `error!` で記録する（要件 6.2）。同レコードの `expected` が
+/// 不一致なら `verify-failed` を `error!` で記録する。同レコードの `expected` が
 /// この値、`measured` が実測値である。
 ///
-/// 座標・寸法のフィールドは**持たない**——是正は表示順のみを動かす（要件 1.6）。
+/// 座標・寸法のフィールドは**持たない**——是正は表示順のみを動かす。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExpectedOrder {
     /// 手前側に居るべき窓（通常はバルーン窓）
@@ -87,19 +87,19 @@ unsafe impl Send for ExpectedOrder {}
 unsafe impl Sync for ExpectedOrder {}
 
 /// 重なりの再断行の一時要求（one-shot）。本番で挿すのは `establish_owner_links`
-/// （owner を張った巡の初期隣接の確定）だけで、要件 2.6 の再表示の口と z の変化の検知は
+/// （owner を張った巡の初期隣接の確定）だけで、再表示の口と z の変化の検知は
 /// 挿す側が無い（下記）。維持系が消費し、適用→検証の完了で remove する。
 ///
 /// 段階は `pending_verify` が表す——`None` は「挿入済み・未適用」、`Some(_)` は
 /// 「適用済みで実測検証待ち」。検証を次巡へ遅らせるのは、適用（`SetWindowPosCommand`）の
 /// flush が tick 後であり、同巡の実測では指令が反映されていないためである。
-/// この 2 段階が「指令は出したが効かなかった」を切り分ける（要件 6.2）。
+/// この 2 段階が「指令は出したが効かなかった」を切り分ける。
 ///
-/// 他クレートからも挿せるよう公開到達性を持つ（要件 2.6 の口。今は挿す呼び手が無い）。
+/// 他クレートからも挿せるよう公開到達性を持つ（今は挿す呼び手が無い）。
 ///
-/// # 要件 2.6 の再表示の口——決定論的テストのみで受け入れる（要件 7.6）
+/// # 再表示の口——決定論的テストのみで受け入れる
 ///
-/// 非表示から表示へ戻った窓を隣へ戻す経路（要件 2.6）は、**決定論的テストによる判断
+/// 非表示から表示へ戻った窓を隣へ戻す経路は、**決定論的テストによる判断
 /// ロジックの検証をもって受け入れる**。実機での重なりの確認は行わない——areka の
 /// 表示の切り替えはこの要求を挿さず、発火経路が存在しないためである。
 ///
@@ -114,9 +114,8 @@ unsafe impl Sync for ExpectedOrder {}
 ///
 /// # z の変化を知らせる仕組みは無い
 ///
-/// z 変化検知は案 B ／補助浮上のための設計だったが、実機ゲート（判定表
-/// `verification/plan-a-gate.md`・G1〜G8 全 PASS）が案 A・補助浮上なしを確定させ、
-/// 作らないと決まった——**どの案を選んでもこの供給者は存在しない**。よって「重なりが
+/// z 変化検知は案 B ／補助浮上のための設計だったが、実機ゲートが案 A・補助浮上なしを
+/// 確定させ、作らないと決まった——**どの案を選んでもこの供給者は存在しない**。よって「重なりが
 /// 動いた通知を受けて要求を挿すかどうか」の配送は、実装されていない分岐であり固定すべき配送も無い。
 /// [`decide_pair_fix`] 側の `RaisedAbove`／`RaisedBelow` は純関数の分岐として全ストラテジ分
 /// テストで固定してあり（供給者の有無とは独立に検査できる）、案 A・補助浮上なしでは
@@ -137,7 +136,7 @@ pub struct ReassertZOrder {
 /// 案 A の owner 確立済み記録（バルーン窓へ付与・切離しに使う）。
 ///
 /// `set_window_owner` が成功した事実そのものであり、再確立の抑止（冪等性）と、
-/// 破棄経路での `clear_window_owner` 呼出に使う（要件 5.9）。owner を張れなかった
+/// 破棄経路での `clear_window_owner` 呼出に使う。owner を張れなかった
 /// ペアにはこの記録が付かない——「張った」と「張っていない」がここで区別される。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OwnerLink {
@@ -160,8 +159,8 @@ unsafe impl Sync for OwnerLink {}
 /// 実行時ストラテジ（`areka_placement::spawn::wire_zorder_pair` が挿入。既定は
 /// `OwnerLink { raise_assist: false }`）。
 ///
-/// 案 A（Win32 owner の OS 保証）を本線とし、実機ゲートで要件 5.1〜5.5 の毀損が
-/// 判明した場合のみ案 B へ切り替える（要件 5.6）。宣言の付与コードは両案で同一であり、
+/// 案 A（Win32 owner の OS 保証）を本線とし、実機ゲートで OS 保証の毀損が
+/// 判明した場合のみ案 B へ切り替える。宣言の付与コードは両案で同一であり、
 /// 切り替わるのは wintf 側の反映手段だけである。ただし z の変化を知らせる仕組みは無い
 /// （[`ReassertZOrder`]）ので、案 B と `raise_assist` が効くのは判断の表の上だけである。
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,7 +172,7 @@ pub enum ZOrderPairStrategy {
 }
 
 impl Default for ZOrderPairStrategy {
-    /// 既定は案 A・raise assist 無効（design.md「State（コンポーネント契約）」）。
+    /// 既定は案 A・raise assist 無効。
     ///
     /// バリアントがフィールドを持つため `#[derive(Default)]` の `#[default]` 属性は
     /// 使えず、手書きの impl とする。
@@ -190,17 +189,15 @@ impl Default for ZOrderPairStrategy {
 
 /// 判断を起こしたトリガの種別。
 ///
-/// z 変化の 2 種は**どちらの窓の重なりが動いたか**で分ける（design.md
-/// 「WM_WINDOWPOSCHANGED z 変化検知」の正準定義）。動いた窓が手前側（バルーン）なら
+/// z 変化の 2 種は**どちらの窓の重なりが動いたか**で分ける。動いた窓が手前側（バルーン）なら
 /// [`PairTrigger::RaisedAbove`]、背後側（キャラ）なら [`PairTrigger::RaisedBelow`] である
-/// ——同じ「z が動いた」でも要件 1.3 と要件 1.2 のどちらの腕かが変わるため、
-/// ここを 1 種へ潰してはならない。
+/// ——同じ「z が動いた」でも是正の腕が変わるため、ここを 1 種へ潰してはならない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// 本番で組み立てているのは維持系の `Reassert` だけ。z の変化の 2 種は案 B の語彙で、完了 spec
-// `areka-P0-ghost-window-zorder` の要件 5.6 の案の切り替えを残す 2026-11-14 の討議の決め 2 で残す。挿す側は無い。
+// 本番で組み立てているのは維持系の `Reassert` だけ。z の変化の 2 種は案 B の語彙で、
+// 案の切り替えを残すために残してある。挿す側は無い。
 #[allow(dead_code)]
 pub(crate) enum PairTrigger {
-    /// 一回限りの再断行要求（[`ReassertZOrder`]・要件 2.6 のシームを含む）
+    /// 一回限りの再断行要求（[`ReassertZOrder`]）
     Reassert,
     /// 手前側（バルーン窓）の重なりが動いた
     RaisedAbove,
@@ -208,12 +205,12 @@ pub(crate) enum PairTrigger {
     RaisedBelow,
 }
 
-/// 是正を見送った理由（要件 6.3——理由の無い見送りを型として作らせない）。
+/// 是正を見送った理由（理由の無い見送りを型として作らせない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SkipReason {
     /// 既にバルーンがキャラのすぐ手前に居る（収束の同値ガード）
     AlreadyAdjacent,
-    /// ペアの一方が既に存在しない（要件 1.5——残る窓には一切書き込まない）
+    /// ペアの一方が既に存在しない（残る窓には一切書き込まない）
     PeerMissing,
     /// 両窓とも生きているが、まだ OS のハンドルが付いていない
     HandleMissing,
@@ -229,7 +226,7 @@ pub(crate) enum SkipReason {
 /// 是正判断の入力。実測値は呼出側（維持系）が同一巡で採取したものを渡す。
 ///
 /// 本構造体は Win32 を呼ばない——「いま何が起きていて、実際の重なりはどうだったか」の
-/// 写しだけを持つ。これが判断を実機不要の決定論的テストで固定できる根拠である（要件 7.1）。
+/// 写しだけを持つ。これが判断を実機不要の決定論的テストで固定できる根拠である。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PairObservation {
     /// 判断を起こしたトリガ種別
@@ -261,7 +258,7 @@ pub(crate) struct PairObservation {
     /// 一群を必ず手前に置く。`SetWindowPos` の `hWndInsertAfter` に帯の中の窓を渡すと、
     /// 対象窓にも `WS_EX_TOPMOST` が付いて帯へ移ってしまう——キャラ窓が可視の通常窓のうち
     /// 最前面に居るとき、キャラ窓の最も近い可視の手前は他アプリの常時最前面窓になるため、
-    /// そのまま挿入位置にするとバルーン窓が黙って常時最前面になる（要件 8.1 の毀損）。
+    /// そのまま挿入位置にするとバルーン窓が黙って常時最前面になる。
     ///
     /// 判断が Win32 を呼ばずにこの分岐を選べるよう、帯の所属は**実測層が測って観測に載せる**
     /// （[`measure_window_is_always_on_top`]）。窓が居ない（`measured_above_of_below` が
@@ -270,7 +267,7 @@ pub(crate) struct PairObservation {
     /// 背後側（キャラ窓）**自身**が常時最前面の帯に居るかの実測。
     ///
     /// キャラも帯に居るなら、手前の帯の窓のすぐ背後へ入れても帯の中ですぐ手前に並ぶだけで
-    /// あり、避ける理由が無い（stay-on-top-directives 要件 2.4）。測るのは実測層
+    /// あり、避ける理由が無い。測るのは実測層
     /// （[`measure_below_is_always_on_top`]）で、測れないときは偽（帯の外＝今の避け方へ倒す）。
     pub measured_below_is_always_on_top: bool,
 }
@@ -282,7 +279,7 @@ pub(crate) struct PairObservation {
 /// その窓が居ない（キャラより手前に可視の窓が無い）縁だけが [`InsertSpec::TopEdge`] になる。
 ///
 /// バリアントは 3 つで尽きており、**常時最前面（`ZOrder::TopMost`）を表す値は無い**
-/// ——要件 4.3／8.1 はこの型の形そのもので満たされる。3 つめの
+/// ——常時最前面を指さないことはこの型の形そのもので保証される。3 つめの
 /// [`InsertSpec::TopOfNormalBand`] は「帯の中の窓を挿入位置にしない」ための逃げ道であり、
 /// 写像先は [`InsertSpec::TopEdge`] と同じ `ZOrder::Top` である（常時最前面ではない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -295,9 +292,9 @@ pub(crate) enum InsertSpec {
     ///
     /// 実測した挿入位置が**常時最前面の窓**で、キャラ窓が帯の外に居るときに選ぶ（キャラも
     /// 帯に居れば帯の中ですぐ手前に置けるので [`InsertSpec::After`] になる）。その窓のすぐ
-    /// 背後へ入れると対象窓まで帯へ引き込まれてしまうため（要件 8.1 の毀損）、帯の中の窓は指さずに
+    /// 背後へ入れると対象窓まで帯へ引き込まれてしまうため、帯の中の窓は指さずに
     /// 通常帯の最上——すなわち帯のすぐ背後——へ置く。キャラ窓が通常帯の最上に居るのが
-    /// この分岐の起きる形なので、結果としてバルーンはキャラのすぐ手前に入る（要件 1.2）。
+    /// この分岐の起きる形なので、結果としてバルーンはキャラのすぐ手前に入る。
     ///
     /// [`InsertSpec::TopEdge`] と写像先は同じだが**別のバリアントにしてある**——記録を読む
     /// 者が「キャラより手前に可視の窓が無かった」のか「手前の窓が常時最前面だった」のかを
@@ -307,16 +304,16 @@ pub(crate) enum InsertSpec {
 
 /// 是正判断の結果。
 ///
-/// 座標・寸法のフィールドを**一切持たない**——是正は表示順のみを動かすという要件 1.6 を、
+/// 座標・寸法のフィールドを**一切持たない**——是正は表示順のみを動かすことを、
 /// 実行時の判定ではなく型の形で保証する。動かす窓も宣言ペアの 2 枚のいずれか 1 枚に
-/// 限られる（腕の種別がそのまま対象を決め、第三の窓を指す余地が無い＝要件 3.4）。
+/// 限られる（腕の種別がそのまま対象を決め、第三の窓を指す余地が無い）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PairFixDecision {
-    /// 何もしない（理由必須・要件 6.3）
+    /// 何もしない（理由必須）
     Skip(SkipReason),
-    /// バルーンをキャラのすぐ手前へ（動かすのは `above_hwnd`・要件 1.2）
+    /// バルーンをキャラのすぐ手前へ（動かすのは `above_hwnd`）
     PlaceAboveOverBelow { insert_after: InsertSpec },
-    /// キャラをバルーンのすぐ背後へ（動かすのは `below_hwnd`・要件 1.3）
+    /// キャラをバルーンのすぐ背後へ（動かすのは `below_hwnd`）
     PlaceBelowUnderAbove { insert_after: HWND },
 }
 
@@ -324,7 +321,7 @@ pub(crate) enum PairFixDecision {
 ///
 /// 判定は次の順で行う——先に置いた歯止めほど強い。
 ///
-/// 1. **生存**: 一方でも欠けていれば [`SkipReason::PeerMissing`]。残る窓には触れない（要件 1.5）。
+/// 1. **生存**: 一方でも欠けていれば [`SkipReason::PeerMissing`]。残る窓には触れない。
 /// 2. **ハンドル**: 生きていても HWND 未付与なら [`SkipReason::HandleMissing`]。
 /// 3. **隣接**: 既に隣接していれば必ず [`SkipReason::AlreadyAdjacent`]。適用が誘発する
 ///    z 変化で再是正が走る往復を断つ同値ガードであり、トリガ種別より優先する。
@@ -333,11 +330,11 @@ pub(crate) enum PairFixDecision {
 /// | トリガ | 案 A（raise assist 無効） | 案 A（有効） | 案 B |
 /// |---|---|---|---|
 /// | `Reassert` | 手前へ | 手前へ | 手前へ |
-/// | `RaisedAbove` | `StrategyDisabled` | 背後へ（要件 1.3） | 背後へ |
-/// | `RaisedBelow` | `StrategyDisabled` | `EchoOrIrrelevant` | 手前へ（要件 1.2） |
+/// | `RaisedAbove` | `StrategyDisabled` | 背後へ | 背後へ |
+/// | `RaisedBelow` | `StrategyDisabled` | `EchoOrIrrelevant` | 手前へ |
 ///
 /// 案 A で `RaisedBelow` を見送るのは、キャラ（owner）の浮上には OS が被 owner の
-/// バルーンを連れて上がるためである（ゲート G6 の保証）——是正は要らない。
+/// バルーンを連れて上がるためである——是正は要らない。
 /// z 変化検知はどの案でも結線されていない（[`ReassertZOrder`]）が、万一トリガが届いても
 /// 判断側で止まる形にしておく（供給者の有無に判断の正しさを依存させない）。
 //
@@ -350,7 +347,7 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
         return PairFixDecision::Skip(SkipReason::HandleMissing);
     };
 
-    // 同値ガード。正準の判定は「手前側の最も近い可視の背後が背後側か」（design.md Invariants）だが、
+    // 同値ガード。正準の判定は「手前側の最も近い可視の背後が背後側か」だが、
     // 逆向きの実測が隣接を示す場合も併せて止める——そちらだけが隣接を示すのは 2 つの実測が
     // 食い違った異常であり、そのまま是正へ流すと挿入位置が動かす窓自身になってしまう。
     if obs.measured_below_of_above == Some(below) || obs.measured_above_of_below == Some(above) {
@@ -365,9 +362,9 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
     // （OS が owner の直上に置く補助窓）より**手前**に入る。
     //
     // ただしその窓が常時最前面の帯に居て、キャラが帯の外に居る場合だけは、指すと対象まで
-    // 帯へ引き込まれる（要件 8.1 の毀損）。帯の中の窓は指さず、帯のすぐ背後＝通常帯の最上へ置く。
-    // キャラも帯に居るなら、その帯の窓のすぐ背後が帯の中でのキャラのすぐ手前である
-    // （stay-on-top-directives 要件 2.4）。帯の窓の手前の窓は必ず帯の窓なので、`After` が
+    // 帯へ引き込まれる。帯の中の窓は指さず、帯のすぐ背後＝通常帯の最上へ置く。
+    // キャラも帯に居るなら、その帯の窓のすぐ背後が帯の中でのキャラのすぐ手前である。
+    // 帯の窓の手前の窓は必ず帯の窓なので、`After` が
     // 帯の外の窓を帯へ引き込むことは無く、返り値に帯へ入れる指定は要らない。
     let place_above = PairFixDecision::PlaceAboveOverBelow {
         insert_after: match obs.measured_above_of_below {
@@ -407,13 +404,12 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
 }
 
 // ============================================================================
-// 診断記録の語彙（要件 6）
+// 診断記録の語彙
 // ============================================================================
 //
-// design.md「診断ログ語彙（要件 6）」のレコード表が正本である。本節はその表を
-// そのまま写した 6 種の記録を出す手段を提供する（呼ぶのは確立系・維持系）。
+// 本節は 6 種の記録を出す手段を提供する（呼ぶのは確立系・維持系）。
 //
-// # レコード表のうち `declared` が本節に無い理由
+// # `declared` が本節に無い理由
 //
 // `declared` の必須フィールドは scope・キャラ窓・バルーン窓であり、scope を知る層は
 // areka だけである（wintf → areka の import は禁止ゆえ scope 型を受け取る口も作れない）。
@@ -428,13 +424,12 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
 // `log_*`／`record_*` はその戻り値をそのまま本文にする（組立を二重に持たない）。
 // その純関数群は兄弟の [`zorder_pair_diag`](super::zorder_pair_diag) にある——
 // マクロを 1 つも含まない文字列組立だけをあちらへ置き、**マクロを呼ぶ側は本ファイルに
-// 残す**（出力先は組のモジュール 1 つに揃える。読み手の絞り込みは前方一致なので漏れはしないが、
-// 記録の関数を 1 つのファイルに集めて固定する）。
+// 残す**（出力先は組のモジュール 1 つに揃える）。
 //
 // # 出力先と水準
 //
 // target は module path 既定（`wintf::ecs::window::zorder_pair`）——サインオフの
-// `RUST_LOG` はこの名前で点灯させる。水準はレコード表どおりで、失敗と検証不一致だけが
+// `RUST_LOG` はこの名前で点灯させる。水準は失敗と検証不一致だけが
 // error、確立成功が info、残りは診断専用の debug（既定運転では無音）である。
 
 impl PairFixDecision {
@@ -446,7 +441,7 @@ impl PairFixDecision {
     /// # 何のための射影か
     ///
     /// 是正の記録（[`record_verification`] の一致側）は「出した指令」として挿入位置を
-    /// 載せるが、その記録が出るのは適用の**次巡**である。よって維持系（タスク 2.2）は
+    /// 載せるが、その記録が出るのは適用の**次巡**である。よって維持系は
     /// 適用時に判断からこの値を取り出して持ち越し、次巡の検証で
     /// [`record_verification`] の `insert_after` 引数へ渡す——本メソッドはその
     /// 「判断 → 記録に載る指令」の射影であり、記録側が判断の型を知らずに済む境界でもある。
@@ -466,7 +461,7 @@ impl PairFixDecision {
 /// ペアの相手が失われた形（切離しの記録に載る）。
 ///
 /// 実体ごと消えたのか、実体は残ってハンドルだけが外れたのかを分けるのは、破棄経路の
-/// どの段階で切離しが走ったのかが事後に読めるようにするためである（design.md「破棄経路」）。
+/// どの段階で切離しが走ったのかが事後に読めるようにするためである。
 /// 1 語へ潰すと、この 2 つが記録の上で見分けられなくなる。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PeerLoss {
@@ -488,9 +483,9 @@ pub(crate) enum PeerLoss {
 // その内部順序は我々の制御外である。ゆえに `GetWindow` を 1 歩だけ辿る測り方では、
 // **配置が正しくても隣接判定が落ちる**（実機で毎回 `verify-failed` が出ていた形）。
 //
-// 要件 1.2 の趣旨は Introduction の「会話が読める」＝**可視の遮蔽**であり、可視の窓だけを
-// 見ればバルーンはキャラのすぐ手前に居る。よって走査は不可視の窓を読み飛ばし、
-// **最も近い可視の隣**を返す（測り方の裁定は requirements.md 受入基準 1.2 の但し書き）。
+// 狙いは「会話が読める」＝**可視の遮蔽**であり、可視の窓だけを見ればバルーンは
+// キャラのすぐ手前に居る。よって走査は不可視の窓を読み飛ばし、
+// **最も近い可視の隣**を返す。
 
 /// 兄弟列を辿る向き（実測層の内部語彙）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -532,13 +527,11 @@ const SIBLING_SCAN_LIMIT: usize = 512;
 /// 記録に載る実測値の型は `Option<HWND>` であり、「その向きに可視の窓が居ない」と
 /// 「走査に失敗した／上限に達した」はどちらも不在（記録では番兵 `-`）になる。値として
 /// この 2 つを分けないのは、載せる先のフィールドが 1 つだからである——**代わりに失敗と
-/// 打切りそのものを必ず記録へ残す**ことで、番兵が出た理由が事後に読めるようにする
-/// （[areka-log-first-no-silent-failure]）。
+/// 打切りそのものを必ず記録へ残す**ことで、番兵が出た理由が事後に読めるようにする。
 ///
 /// 失敗の記録に `[zorder-pair] ...` のタグを付けないのは、サインオフの grep 判定語が
-/// design.md「診断ログ語彙（要件 6）」のレコード表で閉じているためである（判定語を
-/// 勝手に増やさない）。出力先は本モジュール既定のままで、水準は warn——
-/// 走査が失敗しても是正そのものは続行でき、利用者の操作は妨げられない（要件 6.4）。
+/// 閉じた集合であるため（判定語を勝手に増やさない）。出力先は本モジュール既定のままで、
+/// 水準は warn——走査が失敗しても是正そのものは続行でき、利用者の操作は妨げられない。
 fn measure_nearest_visible(hwnd: HWND, side: NeighborSide) -> Option<HWND> {
     let mut cursor = hwnd;
     for _ in 0..SIBLING_SCAN_LIMIT {
@@ -588,8 +581,8 @@ pub(crate) fn measure_window_above(hwnd: HWND) -> Option<HWND> {
 /// 向きが逆であることを除けば [`measure_window_above`] と同じ約束である。
 ///
 /// こちらは**適用後の検証**が使う向きである——「手前側の最も近い可視の背後が背後側の窓か」が
-/// 隣接の正準判定であり（design.md Invariants）、[`record_verification`] の
-/// `measured_below_of_above` に入るのがこの値である。
+/// 隣接の正準判定であり、[`record_verification`] の `measured_below_of_above` に入るのが
+/// この値である。
 pub(crate) fn measure_window_below(hwnd: HWND) -> Option<HWND> {
     measure_nearest_visible(hwnd, NeighborSide::Below)
 }
@@ -598,15 +591,15 @@ pub(crate) fn measure_window_below(hwnd: HWND) -> Option<HWND> {
 ///
 /// 挿入位置に選ぼうとしている窓の帯の所属は、指令を出す**前**に知らなければならない
 /// ——帯の中の窓を `SetWindowPos` の `hWndInsertAfter` に渡すと、対象窓にも
-/// `WS_EX_TOPMOST` が付いて帯へ移ってしまうためである（要件 8.1 の毀損）。
+/// `WS_EX_TOPMOST` が付いて帯へ移ってしまうためである。
 /// 判断（[`decide_pair_fix`]）は Win32 を呼ばないので、測るのはこの実測層であり、
 /// 結果は [`PairObservation::measured_above_of_below_is_always_on_top`] に載る。
 ///
 /// 読み取りに失敗した場合は**帯に居るものとして扱う**（`true` へ倒す）。`false` へ倒すと
-/// 「帯の中の窓を挿入位置に指す」経路が復活し、要件 8.1 を毀損しうる側へ倒れるからである。
+/// 「帯の中の窓を挿入位置に指す」経路が復活し、バルーンが帯へ引き込まれうる側へ倒れるからである。
 /// `true` へ倒れた場合に起きるのは「通常帯の最上へ置いたが、そこがキャラのすぐ手前では
 /// なかった」であり、次巡の実測照合が不一致として記録するだけで済む。
-/// 失敗そのものは黙って落とさず warn で残す（[areka-log-first-no-silent-failure]）。
+/// 失敗そのものは黙って落とさず warn で残す。
 pub(crate) fn measure_window_is_always_on_top(hwnd: HWND) -> bool {
     match is_window_always_on_top(hwnd) {
         Ok(is_top) => is_top,
@@ -627,7 +620,7 @@ pub(crate) fn measure_window_is_always_on_top(hwnd: HWND) -> bool {
 /// 結果は [`PairObservation::measured_below_is_always_on_top`] に載る。読み取りに失敗した
 /// 場合は**帯の外として扱う**（`false` へ倒す）——[`measure_window_is_always_on_top`] と逆向き
 /// なのは、こちらの真が「帯の窓を挿入位置に指してよい」を開くためである。偽へ倒せば判断は
-/// 今の避け方（通常帯の最上）に留まり、帯の外のキャラのバルーンを帯へ引き込まない（要件 3.3）。
+/// 今の避け方（通常帯の最上）に留まり、帯の外のキャラのバルーンを帯へ引き込まない。
 pub(crate) fn measure_below_is_always_on_top(hwnd: HWND) -> bool {
     match is_window_always_on_top(hwnd) {
         Ok(is_top) => is_top,
@@ -715,7 +708,7 @@ pub(crate) fn measure_windows_in_front(hwnd: HWND) -> FrontScan {
     }
 }
 
-/// owner 確立の記録を出す（info・要件 6.1）。
+/// owner 確立の記録を出す（info）。
 pub(crate) fn log_owner_established(
     entity: Entity,
     peer: Entity,
@@ -729,10 +722,10 @@ pub(crate) fn log_owner_established(
     );
 }
 
-/// owner 確立失敗の記録を出す（error・要件 6.2）。
+/// owner 確立失敗の記録を出す（error）。
 ///
 /// 記録するだけで再試行はしない——同じハンドルでの再試行は同じ失敗を繰り返し、
-/// 記録を二重化するだけである（design.md「Error Strategy」）。再試行を抑える印は
+/// 記録を二重化するだけである。再試行を抑える印は
 /// 呼び出し側（確立系）が付ける（[`OwnerEstablishFailed`](super::OwnerEstablishFailed)）。
 pub(crate) fn log_owner_establish_failed(entity: Entity, error: &windows::core::Error) {
     error!("{}", owner_establish_failed_line(entity, error));
@@ -740,9 +733,9 @@ pub(crate) fn log_owner_establish_failed(entity: Entity, error: &windows::core::
 
 /// owner 切離しの記録を出す（debug・破棄経路）。
 ///
-/// `[zorder-pair] ...` のタグを付けないのは、サインオフの grep 判定語が design.md
-/// 「診断ログ語彙（要件 6）」のレコード表で閉じているためである（判定語を勝手に増やさない）。
-/// 切離しは表示順の調整ではなく破棄の後始末であり、レコード表のどの行にも当たらない。
+/// `[zorder-pair] ...` のタグを付けないのは、サインオフの grep 判定語が閉じた集合である
+/// ためである（判定語を勝手に増やさない）。
+/// 切離しは表示順の調整ではなく破棄の後始末であり、既存の判定語のどれにも当たらない。
 /// 水準が debug なのは、ゴーストの終了ごとに必ず起きる正常な出来事だからである
 /// （既定運転では無音・サインオフの `RUST_LOG` では見える）。
 pub(crate) fn log_owner_detached(
@@ -760,10 +753,10 @@ pub(crate) fn log_owner_detached(
 
 /// owner 切離し失敗の記録を出す（error）。
 ///
-/// 切離せなければ OS の破棄カスケードが残り、要件 5.9 を構造的に満たせなくなる
-/// ——沈黙させてはならない失敗である（[areka-log-first-no-silent-failure]）。
+/// 切離せなければ OS の破棄カスケードが残り、重複した破棄での異常終了を防げなくなる
+/// ——沈黙させてはならない失敗である。
 /// それでも `Err` を伝播させず記録に留めるのは、破棄の途中で利用者の操作を止めないため
-/// である（要件 6.4）。タグを付けない理由は [`log_owner_detached`] と同じ。
+/// である。タグを付けない理由は [`log_owner_detached`] と同じ。
 pub(crate) fn log_owner_detach_failed(
     entity: Entity,
     peer: Entity,
@@ -777,7 +770,7 @@ pub(crate) fn log_owner_detach_failed(
     );
 }
 
-/// 沈降観測の記録を出す（debug・要件 4.4／7.5）。
+/// 沈降観測の記録を出す（debug）。
 ///
 /// 出すのは非活性化の**次の巡**であり、出す主体は維持系
 /// （[`observe_marked_pair_sinks`](super::zorder_pair_sink::observe_marked_pair_sinks)）である。
@@ -796,7 +789,7 @@ pub(crate) fn log_sink_observed(
     );
 }
 
-/// 判断結果を記録し、**適用すべき是正だけ**を返す（要件 6.3）。
+/// 判断結果を記録し、**適用すべき是正だけ**を返す。
 ///
 /// 見送りはこの関数の中で必ず理由つきの記録になり、返り値としては何も返らない。
 /// 返るのは常に是正の腕であり、見送りは決して返らない。
@@ -805,19 +798,17 @@ pub(crate) fn log_sink_observed(
 ///
 /// [`decide_pair_fix`] は `pub(crate)` で [`PairFixDecision::Skip`] をそのまま返すため、
 /// 本関数を通さずに判断結果を握り潰す書き方は**言語上は可能**である。`pub(crate)` は
-/// クレート内のどのモジュールからも呼べる可視性であり、維持系（タスク 2.2）を別ファイルへ
+/// クレート内のどのモジュールからも呼べる可視性であり、維持系を別ファイルへ
 /// 置いても塞げない——狭めるには戻り値の型を変えるしかない（下記）。したがってここにあるのは
 /// **「判断結果を適用へ渡すときは必ず本関数を経由する」という規約**であり、
-/// 記録の無い見送りが起きないことは 2.2 がこの規約を守ることに依存している。
+/// 記録の無い見送りが起きないことは維持系がこの規約を守ることに依存している。
 ///
 /// # 型で塞ぐ案を採らない理由
 ///
 /// [`decide_pair_fix`] の戻り値を「本関数でしか開けない型」（下位モジュールに置いた
-/// フィールド非公開の包み）で返せば構造保証になるが、採らない。design.md
-/// 「Service Interface（純関数）」は当該関数の署名を
-/// `fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision` と明記しており、
-/// この形はタスク 1.3 でレビュー承認済みである。診断語彙の都合で承認済みの判断関数の
-/// 署名を変えるのは、変更の理由と場所が食い違う。規約側で守り、逸脱はテスト
+/// フィールド非公開の包み）で返せば構造保証になるが、採らない。判断関数の署名
+/// `fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision` を、診断語彙の都合で
+/// 変えるのは、変更の理由と場所が食い違う。規約側で守り、逸脱はテスト
 /// （見送り 6 種が理由つきで記録されること）とレビューで検出する。
 ///
 /// 確立系（[`establish_owner_links`](super::establish_owner_links)）も見送りをここへ通す
@@ -842,11 +833,11 @@ pub(crate) fn record_decision(
 ///
 /// [`ReassertZOrder`] は他クレートから挿入される公開の契約点であり、宣言の無い窓へ
 /// 付けることも言語上は可能である。そのまま読み飛ばすと、要求が entity に残り続けて
-/// 毎巡黙って無視される——**記録の無い見送り**になる（要件 6.3 が禁じる形）。
+/// 毎巡黙って無視される——**記録の無い見送り**になる。
 /// よって記録して落とす。
 ///
-/// `[zorder-pair] ...` のタグを付けないのは、サインオフの grep 判定語が design.md
-/// 「診断ログ語彙（要件 6）」のレコード表で閉じているためである（判定語を勝手に増やさない）。
+/// `[zorder-pair] ...` のタグを付けないのは、サインオフの grep 判定語が閉じた集合である
+/// ためである（判定語を勝手に増やさない）。
 /// 水準が warn なのは、挿入元の誤りであって表示順そのものは壊れていないからである。
 pub(crate) fn log_orphan_request_dropped(entity: Entity) {
     warn!(
@@ -857,7 +848,7 @@ pub(crate) fn log_orphan_request_dropped(entity: Entity) {
 /// 是正の腕なのに適用計画が組めなかった要求を落としたことを記録する（debug）。
 ///
 /// 維持系は是正の腕でハンドルが揃っていることを確かめてから計画を組むため、ここへは
-/// 届かない。届いても panic は作らず、記録して指令を出さずに落とす（要件 6.4）。
+/// 届かない。届いても panic は作らず、記録して指令を出さずに落とす。
 /// タグを付けない理由は [`log_orphan_request_dropped`] と同じ。
 pub(crate) fn log_pair_fix_unplanned(entity: Entity, peer: Entity) {
     debug!(
@@ -871,7 +862,7 @@ pub(crate) fn log_pair_fix_unplanned(entity: Entity, peer: Entity) {
 ///
 /// 目印は宣言を持つ窓にしか付かないが、付いてから次の巡までに宣言が外れる余地はある。
 /// そのまま読み飛ばすと目印が entity に残り続けて毎巡黙って無視される——**記録の無い
-/// 見送り**になる（要件 6.3 が禁じる形）。よって記録して落とす。タグを付けない理由は
+/// 見送り**になる。よって記録して落とす。タグを付けない理由は
 /// [`log_orphan_request_dropped`] と同じ（サインオフの grep 判定語を増やさない）。
 pub(crate) fn log_orphan_sink_mark_dropped(entity: Entity) {
     warn!(
@@ -894,7 +885,7 @@ pub(crate) fn log_unbacked_verification_dropped(entity: Entity, expected: Expect
     );
 }
 
-/// 適用後の実測照合を記録し、期待どおりだったかを返す（要件 6.1／6.2）。
+/// 適用後の実測照合を記録し、期待どおりだったかを返す。
 ///
 /// - 一致: 是正の記録（debug）——出した指令 `insert_after` と実測を同じ行に載せる。
 /// - 不一致: 検証不一致の記録（error）。実測が取れなかった場合も一致とは扱わない。

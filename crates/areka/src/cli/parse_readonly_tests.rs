@@ -1,4 +1,4 @@
-//! `--option readonly` の語（readonly-mode 要件 1.1〜1.5・10.3）。
+//! `--option readonly` の語。
 
 use super::*;
 use crate::cli::ModulePolicy;
@@ -37,7 +37,7 @@ fn pending_words(parsed: &Parsed) -> Vec<&str> {
         .collect()
 }
 
-/// 1.1・1.2: 大小・カンマの並び・`--option` の重ねのどれでも真になり、効く語に 1 つだけ載り、まだ扱わない記録は出ない。
+/// 大小・カンマの並び・`--option` の重ねのどれでも真になり、効く語に 1 つだけ載り、まだ扱わない記録は出ない。
 #[test]
 fn readonly_word_is_effective_once() {
     let rows: Vec<Vec<&str>> = vec![
@@ -64,7 +64,7 @@ fn readonly_word_is_effective_once() {
     assert!(!run(&["--option", "nobootcheck"]).options.readonly);
 }
 
-/// 1.4: `kiosk,readonly` では `kiosk` だけがまだ扱わない語。
+/// `kiosk,readonly` では `kiosk` だけがまだ扱わない語。
 #[test]
 fn kiosk_stays_pending_beside_readonly() {
     let parsed = run(&["--option", "kiosk,readonly"]);
@@ -75,7 +75,7 @@ fn kiosk_stays_pending_beside_readonly() {
     assert_eq!(ignored, &[s("kiosk")]);
 }
 
-/// 1.5: `--offline-dump` と一緒なら `option` が効かなかった記録が出て、`readonly` は無視の側へ回る。
+/// `--offline-dump` と一緒なら `option` が効かなかった記録が出て、`readonly` は無視の側へ回る。
 #[test]
 fn readonly_with_offline_dump_is_ignored() {
     let parsed = run(&["--offline-dump", "g", "--option", "readonly"]);
@@ -90,7 +90,7 @@ fn readonly_with_offline_dump_is_ignored() {
     assert!(ignored.contains(&s("readonly")), "{ignored:?}");
 }
 
-/// 1.3: `readonly` でも `bootunlock` でも起動の求めは同じ（任せ先を変えない）。
+/// `readonly` でも `bootunlock` でも起動の求めは同じ（任せ先を変えない）。
 #[test]
 fn readonly_boot_request_matches_bootunlock() {
     let with = run(&["--option", "readonly", "--ghost", "a"]);
@@ -99,7 +99,7 @@ fn readonly_boot_request_matches_bootunlock() {
     assert_eq!(with.options.modules, unlock.options.modules);
 }
 
-/// 1.4: `nobootcheck`・`dontloadmodule` と組んでも、それぞれの効き目は変わらない。
+/// `nobootcheck`・`dontloadmodule` と組んでも、それぞれの効き目は変わらない。
 #[test]
 fn readonly_keeps_other_words_effects() {
     let alone = run(&["--option", "nobootcheck,dontloadmodule"]);

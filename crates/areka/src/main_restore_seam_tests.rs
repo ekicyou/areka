@@ -49,14 +49,14 @@ fn synthetic_placement(default_char_pos: PointPx) -> ScopePlacement {
         balloon_size: BSZ,
         balloon_offset,
         balloon_offset_base: OffsetBase::unpinned(balloon_offset),
-        // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
+        // limit は既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Free,
         balloon_keyword_base: None,
     }
 }
 
-/// 1.4: 植えた保存位置が既定位置に優先して merge 済み placement の char_pos へ載る
+/// 植えた保存位置が既定位置に優先して merge 済み placement の char_pos へ載る
 /// （load→apply シームが実際に結線されている証明＝spawn される窓の初期位置が保存位置）。
 /// saved 窓を完全に覆う work area ゆえ `project_restore` は恒等＝保存値素通し。
 #[test]
@@ -89,9 +89,8 @@ fn restore_seam_prefers_saved_position_over_default() {
     let (out, restored, _) = restore_merged_placements(&root, placements, &snapshot);
 
     assert_eq!(out.len(), 1);
-    // 保存位置が採用された scope は「既定配置ではない」として報告される（areka-P0-scope-chain-gap 7.3）。
-    // これを受けて起動シームが台帳の既定位置を落とし、起動の並べ直しは覚えた印で決める
-    // （dpi-realign-remembered-chain 要件 6.3）。
+    // 保存位置が採用された scope は「既定配置ではない」として報告される。これを受けて起動シームが
+    // 台帳の既定位置を落とし、起動の並べ直しは覚えた印で決める。
     assert_eq!(
         restored.keys().copied().collect::<Vec<_>>(),
         vec![0usize],
@@ -102,7 +101,7 @@ fn restore_seam_prefers_saved_position_over_default() {
         PointPx { x: 800, y: 300 },
         "植えた保存位置が既定(100,100)に優先して spawn 前 placements へ載る（1.4）"
     );
-    // 事後条件（design C1）: 寸法・anchor は不変。
+    // 事後条件: 寸法・anchor は不変。
     assert_eq!(out[0].char_size, CSZ);
     assert_eq!(out[0].balloon_size, BSZ);
     assert_eq!(out[0].anchor, Anchor::Free);
@@ -110,7 +109,7 @@ fn restore_seam_prefers_saved_position_over_default() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// 1.5: 永続不在（sylphya.toml を植えない）→ merge は既定 placement に完全恒等
+/// 永続不在（sylphya.toml を植えない）→ merge は既定 placement に完全恒等
 /// （保存位置が無ければ従来の既定位置解決のまま）。
 #[test]
 fn restore_seam_without_persist_is_identity_default() {
@@ -144,7 +143,6 @@ fn restore_seam_without_persist_is_identity_default() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// char-position-save-on-exit 2.6・5.2（design RestoredScopes・テスト 7）:
 /// 記憶の位置が既定の位置と**同じ値**でも、そのスコープは「記憶から戻した」集合に入る
 /// （値の違いでなく記憶の有無で決める）。値の比較で決めていたら集合は空になり赤になる。
 #[test]
@@ -185,16 +183,15 @@ fn restore_seam_reports_saved_scope_even_when_equal_to_default() {
     );
 }
 
-/// areka-P0-windowposition-limit 2.2/4.7/6.1・design C6/DD6:
 /// **起動時関門が復元合流シームに実際に結線されている**ことの証明。
 ///
-/// 植えた保存位置が優先されて（＝合流順序は不変・要件 4.7）そのキャラ位置から導いた
+/// 植えた保存位置が優先されて（＝合流順序は不変）そのキャラ位置から導いた
 /// バルーン表示位置が作業領域の外へ出るとき、シームの出力では
 /// - `balloon_pos`（表示位置）が作業領域内へ補正され、
 /// - `balloon_offset`（論理相対位置＝保存値・作者指定の系譜）は**生値のまま**残り、
-/// - `[balloon-limit] Clamp` が当該 scope で記録される（要件 6.1）。
+/// - `[balloon-limit] Clamp` が当該 scope で記録される。
 ///
-/// 補正が `balloon_offset` へ焼き付いていたら（DD6 違反）3 番目の assert が赤になる。
+/// 補正が `balloon_offset` へ焼き付いていたら 3 番目の assert が赤になる。
 #[test]
 fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
     let temp = unique_temp_dir("balloon-limit-gate");
@@ -246,7 +243,7 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
         PointPx { x: -50, y: 10 },
         "論理相対位置は生値のまま＝補正を焼き付けない（DD6・要件 3.1(d)）"
     );
-    // キャラ窓は limit 補正で動かない（要件 2.8）。
+    // キャラ窓は limit 補正で動かない。
     assert_eq!(out[0].char_size, CSZ);
     assert_eq!(out[0].balloon_size, BSZ);
     assert_eq!(out[0].anchor, Anchor::Free);
@@ -261,7 +258,7 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// 5.1・5.2: 2 つ目の戻り値は「記憶に位置があるスコープ → 覚えた印」の一覧。印の鍵はあれば
+/// 2 つ目の戻り値は「記憶に位置があるスコープ → 覚えた印」の一覧。印の鍵はあれば
 /// その語の印、無ければ `None`（印の無い古い記憶）で、窓を作る閉包がこの一覧を窓の一式へ据える。
 #[test]
 fn restore_seam_returns_remembered_adjacency_marks_per_restored_scope() {

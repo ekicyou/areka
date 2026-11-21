@@ -6,12 +6,11 @@ use super::{
 };
 
 // ===========================================================================
-// 足場のスモークテスト（areka-P0-emo2-boot 要件 8）
+// 足場のスモークテスト
 // ===========================================================================
 
 /// 観測可能な完了条件: ハーネスが scripted ghost を boot させ、Tick 注入に
-/// より attach 準備状態まで **panic なく** 到達することをスモークレベルで固定する
-/// （areka-P0-emo2-boot 要件 8.1・8.3・8.4・8.6）。
+/// より attach 準備状態まで **panic なく** 到達することをスモークレベルで固定する。
 ///
 /// 檻に入れる判断分岐:
 /// - **scripted boot 発火**: boot 系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion）が
@@ -71,7 +70,7 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     harness.inject_dispatcher_tick(1);
 
     // ── 実 ClockedTextSink<EmoTextSink> の UI ドレインが headless に pump できることを裏付ける
-    //    （pending なし／ありに関わらず panic しない・areka-P0-emo2-boot 要件 8 の実 sink 経路の疎通確認）。 ──
+    //    （pending なし／ありに関わらず panic しない）。 ──
     harness.pump_text();
 
     // ── (3) attach 到達: run_attach_phase を GPU World＋合成 GhostWindows 上で駆動し、
@@ -90,10 +89,10 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
 }
 
 // ===========================================================================
-// areka-P0-budoux-reveal-reflow: 先渡しが本番の鎖を通って文字の層へ届く
+// 先渡しが本番の鎖を通って文字の層へ届く
 // ===========================================================================
 
-/// 観測可能な完了条件（areka-P0-budoux-reveal-reflow 要件 2.1）: 本番の鎖（トークごとの写し →
+/// 観測可能な完了条件: 本番の鎖（トークごとの写し →
 /// 時刻の受け手の飾り `ClockedTextSink` → 文字の層の受け手 `EmoTextSink`）を通ったトークで、
 /// 文字の層が先渡しを受け取った `debug!` 行が 1 件以上あり、「先渡しが無い」の warn が 0 件である。
 ///

@@ -139,7 +139,7 @@ const GRAY: [u8; 4] = [128, 128, 128, 255];
 const RED: [u8; 4] = [0, 0, 255, 255];
 const BLUE: [u8; 4] = [255, 0, 0, 255];
 
-/// 下地の画素は、同じ面・同じ着せ替え・同じ状態で合成した絵を `(-left,-top)` に置いたものと同じ（4.5）。
+/// 下地の画素は、同じ面・同じ着せ替え・同じ状態で合成した絵を `(-left,-top)` に置いたものと同じ。
 #[test]
 fn pixels_are_the_screen_composition_placed_at_minus_left_top() {
     let shell = load("offline-render-pixels");
@@ -155,7 +155,7 @@ fn pixels_are_the_screen_composition_placed_at_minus_left_top() {
     }
 }
 
-/// 下地の大きさと位置はシェルで 1 つで、どの面も同じ（4.3）。土台の原点は下地の (2,2)。
+/// 下地の大きさと位置はシェルで 1 つで、どの面も同じ。土台の原点は下地の (2,2)。
 #[test]
 fn canvas_size_and_position_are_the_same_for_every_surface() {
     let shell = load("offline-render-canvas");
@@ -176,8 +176,8 @@ fn canvas_size_and_position_are_the_same_for_every_surface() {
             assert_eq!(shell.pixel(&got, 5, 5), GRAY, "面 {id} の土台の位置");
         }
     }
-    // 合成は負の座標の部分を切る（design の Risks）ので、下地の左上の余白は透明で、絵の残りが
-    // 土台の原点 (2,2) に重なる（画面の絵と同じ・4.5）。
+    // 合成は負の座標の部分を切るので、下地の左上の余白は透明で、絵の残りが
+    // 土台の原点 (2,2) に重なる（画面の絵と同じ）。
     let corner = shell.render(&default_binds(), fixture::NEGATIVE).unwrap();
     assert_eq!(shell.pixel(&corner, 0, 0), [0, 0, 0, 0]);
     assert_ne!(
@@ -188,7 +188,7 @@ fn canvas_size_and_position_are_the_same_for_every_surface() {
     assert_eq!(shell.pixel(&corner, 4, 4), GRAY);
 }
 
-/// 絵の無い画素は `(0,0,0,0)`（4.4）。
+/// 絵の無い画素は `(0,0,0,0)`。
 #[test]
 fn uncovered_pixels_are_transparent_zero() {
     let shell = load("offline-render-transparent");
@@ -199,7 +199,7 @@ fn uncovered_pixels_are_transparent_zero() {
     }
 }
 
-/// PNG は MCP と同じ `png_image::encode_png` から出る（4.6）。
+/// PNG は MCP と同じ `png_image::encode_png` から出る。
 #[test]
 fn png_comes_from_the_function_mcp_uses() {
     let shell = load("offline-render-png");
@@ -210,7 +210,7 @@ fn png_comes_from_the_function_mcp_uses() {
     }
 }
 
-/// runonce の面は 1 周の最後のコマ（102＝青）で出る（4.1）。
+/// runonce の面は 1 周の最後のコマ（102＝青）で出る。
 #[test]
 fn runonce_shows_its_last_frame() {
     let shell = load("offline-render-runonce");
@@ -221,7 +221,7 @@ fn runonce_shows_its_last_frame() {
 }
 
 /// always の面は時点 T（runonce が無いので 0）のコマで出る。コマ 0 は待ち 50 の後なので T=0 では
-/// 何も出ない（SSP 2.9.23 の測り・research.md §10「always だけ」は灰だけ・4.7）。
+/// 何も出ない（SSP 2.9.23 の測り）。
 #[test]
 fn always_shows_the_frame_at_t() {
     let shell = load("offline-render-always");
@@ -234,7 +234,7 @@ fn always_shows_the_frame_at_t() {
     );
 }
 
-/// random は抽選されず、土台だけで出る（4.7・4.9）。
+/// random は抽選されず、土台だけで出る。
 #[test]
 fn random_never_appears() {
     let shell = load("offline-render-random");
@@ -242,7 +242,7 @@ fn random_never_appears() {
     assert_eq!(shell.pixel(&got, 10, 2), GRAY, "random の 8,0 は土台のまま");
 }
 
-/// periodic は T まで進む・この面は runonce が無く T=0 なのでまだ出ない（research §10.1 の面 4・4.7）。
+/// periodic は T まで進む・この面は runonce が無く T=0 なのでまだ出ない。
 #[test]
 fn periodic_advances_to_t_and_has_not_fired_at_zero() {
     let shell = load("offline-render-periodic");
@@ -255,7 +255,7 @@ fn periodic_advances_to_t_and_has_not_fired_at_zero() {
     );
 }
 
-/// 2 度描くと同じバイト列（4.9）。
+/// 2 度描くと同じバイト列。
 #[test]
 fn rendering_twice_gives_the_same_bytes() {
     let shell = load("offline-render-twice");
@@ -268,7 +268,7 @@ fn rendering_twice_gives_the_same_bytes() {
     }
 }
 
-/// 合成の失敗は合成の error 1 行に info を足すだけで、`RenderError::Compose`（4.8）。
+/// 合成の失敗は合成の error 1 行に info を足すだけで、`RenderError::Compose`。
 #[test]
 fn compose_failure_adds_only_info() {
     let shell = load("offline-render-compose-failure");
@@ -312,7 +312,7 @@ fn overflow_is_an_error() {
 /// 書き出しの試験で書く面（赤の部品）。
 const WRITTEN: u32 = fixture::PARTS[0];
 
-/// 既定の名前は `surface<番号>.png` で、中身は `render_png` の PNG（6.1・6.3）。
+/// 既定の名前は `surface<番号>.png` で、中身は `render_png` の PNG。
 #[test]
 fn default_name_is_surface_and_number() {
     let shell = load("offline-write-default");
@@ -329,7 +329,7 @@ fn default_name_is_surface_and_number() {
     );
 }
 
-/// 頭の文字列は既定を置き換える（付け足さない・6.2）。
+/// 頭の文字列は既定を置き換える（付け足さない）。
 #[test]
 fn prefix_replaces_the_default() {
     let shell = load("offline-write-prefix");
@@ -340,7 +340,7 @@ fn prefix_replaces_the_default() {
     assert!(!out.child(&format!("x_surface{WRITTEN}.png")).exists());
 }
 
-/// 無い出力先は書く前に作る（深い道も・6.4）。
+/// 無い出力先は書く前に作る（深い道も）。
 #[test]
 fn missing_output_dir_is_created() {
     let shell = load("offline-write-mkdir");
@@ -353,7 +353,7 @@ fn missing_output_dir_is_created() {
     assert!(got.is_file());
 }
 
-/// 同じ名前のファイルは書いた絵で置き換える（6.5）。
+/// 同じ名前のファイルは書いた絵で置き換える。
 #[test]
 fn same_name_is_replaced() {
     let shell = load("offline-write-replace");
@@ -369,7 +369,7 @@ fn same_name_is_replaced() {
     );
 }
 
-/// 頭の文字列の `\`・`/` は出力先からの相対の道で、在るフォルダへは書ける（6.8）。
+/// 頭の文字列の `\`・`/` は出力先からの相対の道で、在るフォルダへは書ける。
 #[test]
 fn prefix_with_separators_writes_into_existing_subfolder() {
     let shell = load("offline-write-subdir");
@@ -406,7 +406,7 @@ fn assert_write_failed(shell: &Loaded, dir: &Path, prefix: &str) {
     );
 }
 
-/// 頭の文字列の下の無いフォルダは作らず、書けなかった error（6.8・6.6）。
+/// 頭の文字列の下の無いフォルダは作らず、書けなかった error。
 #[test]
 fn prefix_with_missing_subfolder_fails_without_creating_it() {
     let shell = load("offline-write-nosub");
@@ -415,7 +415,7 @@ fn prefix_with_missing_subfolder_fails_without_creating_it() {
     assert!(!out.child("none").exists(), "その下のフォルダは作らない");
 }
 
-/// 名前にファイル名として使えない文字が入ると書けなかった error（6.6）。
+/// 名前にファイル名として使えない文字が入ると書けなかった error。
 #[test]
 fn invalid_file_name_fails() {
     let shell = load("offline-write-invalid");
@@ -423,7 +423,7 @@ fn invalid_file_name_fails() {
     assert_write_failed(&shell, out.path(), "a?");
 }
 
-/// スコープの番号は名前に入らない（6.7）。
+/// スコープの番号は名前に入らない。
 #[test]
 fn scope_is_not_in_the_name() {
     let shell = load("offline-write-scope");

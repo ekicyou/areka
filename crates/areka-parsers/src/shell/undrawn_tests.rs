@@ -1,5 +1,4 @@
-//! 描けない行の転記（`parse_undrawn_elements`）の単体テスト
-//! （areka-P0-element-base-method 要件 2.1・2.2・2.6・4.2）。
+//! 描けない行の転記（`parse_undrawn_elements`）の単体テスト。
 //!
 //! 検体ファイルは読まず、テストの中に surfaces.txt の文面を持つ。
 
@@ -97,7 +96,7 @@ element,replace,z.png,0,0
     );
 }
 
-/// 描ける語（`overlay`・`base`・`balloon`）だけの文面では空（要件 2.6）。
+/// 描ける語（`overlay`・`base`・`balloon`）だけの文面では空。
 #[test]
 fn drawable_words_only_give_nothing() {
     let text = "\

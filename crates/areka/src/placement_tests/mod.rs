@@ -1,6 +1,5 @@
-//! 配置と本体のほかの部分をまたぐテストの置き場（spec: placement-crate-split 要件 3.7・3.9・3.10）。
-//! 遷移の観測ログの判定器は `areka-runtime` の `src/placement_tests/` へ移った（spec:
-//! runtime-crate-split）。
+//! 配置と本体のほかの部分をまたぐテストの置き場。
+//! 遷移の観測ログの判定器は `areka-runtime` の `src/placement_tests/` にある。
 //!
 //! 配置の crate（`areka-placement`）は本体（`areka`）に依存できないので、本体の部品
 //! （`sample_test_support`・`crate_source_test_support`）や `areka-runtime` も使うテストは上の crate であるここに置く。

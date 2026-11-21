@@ -1,4 +1,4 @@
-//! 鎖の規則の檻（audit-placement-core 494・495・開発者の裁定 2026-11-15）。
+//! 鎖の規則の檻。
 //!
 //! 起動の並べ直し・隣り合いの印の保存・拡大率の後の詰め直しの 3 か所が、同じ規則で組を作る:
 //! ⑴ 鎖の前の窓は、自分より下の番号で、左右の辺に揃えない一番近いスコープ。⑵ 左の組は隙間 0 か
@@ -200,7 +200,7 @@ fn realign_skips_a_boot_script_side_edge_scope_as_the_chain_base() {
     );
 }
 
-// ── 鎖の規則の総括（audit-placement-core research 18.10 の場合の表・本体の道） ──────────────
+// ── 鎖の規則の総括（本体の道） ──────────────
 
 /// スコープのキャラ窓の x を書き換える（利用者がドラッグで置いた形）。
 fn put_x(world: &mut World, scope: usize, x: i32) {
@@ -222,10 +222,10 @@ fn width_of(world: &World, scope: usize) -> i32 {
         .width
 }
 
-/// 表 T24〜T26（指摘 515）: descript が左右の辺のスコープは、台本が最初の確定より前に揃え方を
+/// descript が左右の辺のスコープは、台本が最初の確定より前に揃え方を
 /// 変えても起動の鎖の外。辺の窓は動かさず、次の記憶の無いスコープの基準は resolver と同じ本体の
-/// まま。行: T24 下端・free へ揃え直しただけ（x は辺のまま）／T25 free にして台本の移動で辺から
-/// 離した／T26 記憶から戻した窓を下端へ揃え直した。
+/// まま。行: 下端・free へ揃え直しただけ（x は辺のまま）／free にして台本の移動で辺から
+/// 離した／記憶から戻した窓を下端へ揃え直した。
 #[test]
 fn a_descript_side_edge_scope_realigned_by_the_boot_script_is_not_the_chain_base() {
     let kero = |world: &World| {
@@ -339,7 +339,7 @@ fn off_the_edge(world: &World, row: EdgeRow) -> i32 {
     x_of(world, row.4) - beside_edge(world, row)
 }
 
-/// 表 T32（指摘 520）: 利用者が左右の辺のスコープの隣へ付けた窓は、拡大率が変わっても辺のスコープの
+/// 利用者が左右の辺のスコープの隣へ付けた窓は、拡大率が変わっても辺のスコープの
 /// 隣に付いたまま。
 #[test]
 fn a_window_attached_to_a_side_edge_scope_stays_attached_after_100_to_200() {
@@ -361,7 +361,7 @@ fn a_window_attached_to_a_side_edge_scope_stays_attached_after_100_to_200() {
     );
 }
 
-/// 表 T33: 辺のスコープの隣に付いていても、鎖の前の窓の隣にも付いていた窓は、鎖の前の窓（本体）へ
+/// 辺のスコープの隣に付いていても、鎖の前の窓の隣にも付いていた窓は、鎖の前の窓（本体）へ
 /// 付け直す（鎖の組が先）。
 #[test]
 fn a_window_beside_both_follows_the_previous_chain_window() {
@@ -382,7 +382,7 @@ fn a_window_beside_both_follows_the_previous_chain_window() {
     assert_eq!(left_gap(&world, 0, 2), 0, "scope 2 は本体の左に付く");
 }
 
-/// 表 T34: 辺のスコープの隣に付いた窓も、詰め直しの「動かさない」の決まり（窓の組・ドラッグの最中・
+/// 辺のスコープの隣に付いた窓も、詰め直しの「動かさない」の決まり（窓の組・ドラッグの最中・
 /// 武装の後の台本）に当たれば動かさない。辺のスコープがドラッグの最中のときも付け直さない。
 #[test]
 fn a_window_attached_to_a_side_edge_scope_is_kept_by_the_exclusions() {
@@ -424,9 +424,9 @@ fn a_window_attached_to_a_side_edge_scope_is_kept_by_the_exclusions() {
     );
 }
 
-/// 表 T27（残す限り）: descript が鎖の本体を、台本が最初の確定より前に右の辺へ揃えると、本体は
+/// descript が鎖の本体を、台本が最初の確定より前に右の辺へ揃えると、本体は
 /// 起動の鎖から外れ、次のスコープが鎖の頭になる（頭は動かさない）。辺の本体と次のスコープは、
-/// descript で辺に揃えたとき（表 T7）と同じく鎖の組にならない。
+/// descript で辺に揃えたときと同じく鎖の組にならない。
 #[test]
 fn a_main_window_aligned_to_a_side_edge_by_the_boot_script_leaves_the_chain() {
     let shown = sizes(&[(500, 687), SPAWN[1]]);
@@ -445,7 +445,7 @@ fn a_main_window_aligned_to_a_side_edge_by_the_boot_script_leaves_the_chain() {
     assert_eq!(x_of(&world, 1), x1, "次のスコープは鎖の頭で、動かさない");
 }
 
-/// 表 T35（残す限り）: 辺のスコープの隣へ、番号の小さい側の窓（本体）を付けたときは、拡大率が
+/// 辺のスコープの隣へ、番号の小さい側の窓（本体）を付けたときは、拡大率が
 /// 変わってもどちらも動かさない（番号の小さい側は動かさない・辺の窓は辺のまま）。
 #[test]
 fn a_lower_scope_attached_to_a_side_edge_scope_is_not_moved() {
@@ -470,7 +470,7 @@ fn a_lower_scope_attached_to_a_side_edge_scope_is_not_moved() {
     );
 }
 
-/// 表 T1・T9〜T12 を本番の道で通す: `defaultx` ごとに、起動の確定（出ている幅が準備と違う）→
+/// 本番の道で通す: `defaultx` ごとに、起動の確定（出ている幅が準備と違う）→
 /// 並べ終えた時点の保存 → 拡大率の後の詰め直し → 覚えた印 `left` での次の起動の確定が、どれも
 /// 鎖の前の窓の左に `defaultx` の隙間で置く。本体は右の辺から 1000 空けて置く（負の `defaultx` が
 /// 作業領域の端で切られないように）。
@@ -527,7 +527,7 @@ fn every_world_path_keeps_the_defaultx_gap() {
     );
 }
 
-/// 表 T8・T21: 中のスコープが無い（0 と 2 だけ）とき、鎖の前の窓は下の一番近いスコープ。覚えた印を
+/// 中のスコープが無い（0 と 2 だけ）とき、鎖の前の窓は下の一番近いスコープ。覚えた印を
 /// 「辺のスコープを飛ばした組として読む」記録は出さない（飛ばしたときに出ることは
 /// `chain_finalize_align_tests` の同じ組で見る）。
 #[test]

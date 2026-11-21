@@ -1,7 +1,6 @@
 //! 見本のゴーストの入口（配置のテストだけ・`sample-ghost-kit` はここからだけ引く）。
 //!
-//! 本体の側の同じ働きの入口は`crates/areka/src/sample_test_support.rs` と `crates/areka-runtime/src/sample_test_support.rs`（crate ごとに 1 つ・
-//! spec: placement-crate-split 要件 3.2）。
+//! 本体の側の同じ働きの入口は`crates/areka/src/sample_test_support.rs` と `crates/areka-runtime/src/sample_test_support.rs`（crate ごとに 1 つ）。
 
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -37,7 +36,7 @@ pub(crate) const BALLOON0_H: i32 = 224;
 pub(crate) const BALLOON1_W: i32 = 288;
 pub(crate) const BALLOON1_H: i32 = 203;
 
-/// 里々の標準テンプレート `R_POST_and_KOMAINU` 検体（spec: areka-P0-shell-implicit-surface 要件 7.11）。
+/// 里々の標準テンプレート `R_POST_and_KOMAINU` 検体。
 static R_POST_AND_KOMAINU: LazyLock<SampleRoot> = LazyLock::new(|| {
     SampleRoot::acquire("R_POST_and_KOMAINU").expect("R_POST_and_KOMAINU は登記済みの検体")
 });

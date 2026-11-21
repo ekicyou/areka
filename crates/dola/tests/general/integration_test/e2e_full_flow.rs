@@ -1,8 +1,7 @@
-//! E2E full-flow integration tests
-//! Task 12.1
+//! E2E の全配置パターン統合テスト
 
 // =============================================================
-// Task 12.1: E2E — 全配置パターン統合
+// E2E — 全配置パターン統合
 // =============================================================
 
 mod e2e_tests {
@@ -14,7 +13,6 @@ mod e2e_tests {
         let doc = build_complete_document();
         let json = serde_json::to_string(&doc).unwrap();
         let deserialized: DolaDocument = serde_json::from_str(&json).unwrap();
-        // Re-validate
         assert!(deserialized.validate().is_ok());
         assert_eq!(doc, deserialized);
     }

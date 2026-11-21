@@ -1,4 +1,4 @@
-//! 切替の相のテスト（areka-P0-ghost-shell-balloon-switch 要件 2.1〜2.6・5.5・7.5・10.2・10.3・11.6）。
+//! 切替の相のテスト。
 //!
 //! 受理と `OnGhostChanging` の Reference・受理しない場面・送り出しの握手（台本／204 → `OnClose`）と、
 //! 台詞が最後まで流れる・`\-` で終わる・期限を超える、のいずれでも降ろす相へ進み、切替の帳簿
@@ -372,7 +372,7 @@ fn deadline_is_armed_on_first_tick_when_entered_without_time() {
     ));
 }
 
-// ---- 再生中に届いた切替の保留（要件 2.6・5.5・10.3・11.6） ----
+// ---- 再生中に届いた切替の保留 ----
 
 /// 定常でトーク（talk_id 4）を再生している状態。
 fn playing() -> State {

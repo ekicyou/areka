@@ -1,4 +1,4 @@
-//! MCP サーバの受け口（spec: areka-P0-mcp-server-core）。
+//! MCP サーバの受け口。
 //!
 //! `127.0.0.1` の 1 つのポートで MCP の Streamable HTTP を待ち受け、JSON-RPC の
 //! 解釈は公式 SDK（rmcp）に任せる。areka が持つのは待受・`Origin`／`Host` の検査・

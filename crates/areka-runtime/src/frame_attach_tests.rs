@@ -11,18 +11,17 @@ use super::test_support::{
 };
 use super::*;
 
-/// DD-12 完全一致: `window_scopes == 資産 scope` → 計画件数＝窓数・missing/unused 空。
+/// `window_scopes == 資産 scope` → 計画件数＝窓数・missing/unused 空。
 ///
-/// 各項目の shell/balloon target（DD-3 採番）と初期面（DD-9: scope0→0／scope1→10）・添字も検証する。
+/// 各項目の shell/balloon target と初期面（scope0→0／scope1→10）・添字も検証する。
 #[test]
 fn plan_attachments_exact_match_plans_all_windows() {
-    // 資産 scope [0,1]（DD-9: scope0→初期 surface 0／scope1→初期 surface 10）。
+    // 資産 scope [0,1]（scope0→初期 surface 0／scope1→初期 surface 10）。
     let assets = synth_assets(&[(0, 0), (1, 10)]);
     let window_scopes = [0usize, 1];
 
     let plan = plan_attachments(&window_scopes, &assets);
 
-    // 計画件数＝窓数（DD-12 の積極 assert・完全一致の核）。
     assert_eq!(
         plan.items.len(),
         window_scopes.len(),
@@ -31,7 +30,6 @@ fn plan_attachments_exact_match_plans_all_windows() {
     assert!(plan.missing_assets.is_empty(), "窓あり資産なしは無い");
     assert!(plan.unused_assets.is_empty(), "資産あり窓なしは無い");
 
-    // scope0 の項目: shell=TargetId(0)・balloon=TargetId(1)・初期面 0（DD-9）。
     assert_eq!(plan.items[0].scope, 0);
     assert_eq!(plan.items[0].shell_target, shell_target(0));
     assert_eq!(plan.items[0].balloon_target, balloon_target(0));
@@ -42,7 +40,6 @@ fn plan_attachments_exact_match_plans_all_windows() {
     assert_eq!(plan.items[0].shell_index, 0);
     assert_eq!(plan.items[0].balloon_index, Some(0));
 
-    // scope1 の項目: shell=TargetId(2)・balloon=TargetId(3)・初期面 10（DD-9）。
     assert_eq!(plan.items[1].scope, 1);
     assert_eq!(plan.items[1].shell_target, shell_target(1));
     assert_eq!(plan.items[1].balloon_target, balloon_target(1));
@@ -54,7 +51,7 @@ fn plan_attachments_exact_match_plans_all_windows() {
     assert_eq!(plan.items[1].balloon_index, Some(1));
 }
 
-/// DD-12 窓あり資産なし: 窓 scope に対応資産が無ければ `missing_assets` へ（`items` には載らない）。
+/// 窓あり資産なし: 窓 scope に対応資産が無ければ `missing_assets` へ（`items` には載らない）。
 #[test]
 fn plan_attachments_window_without_asset_goes_to_missing() {
     // 資産 [0,1]・窓 [0,1,2] → 窓 scope 2 は資産なし。
@@ -76,7 +73,7 @@ fn plan_attachments_window_without_asset_goes_to_missing() {
     assert!(plan.unused_assets.is_empty(), "全資産に窓がある");
 }
 
-/// DD-12 資産あり窓なし: 窓を持たない資産 scope は `unused_assets`（`u32`）へ（`items` には載らない）。
+/// 資産あり窓なし: 窓を持たない資産 scope は `unused_assets`（`u32`）へ（`items` には載らない）。
 #[test]
 fn plan_attachments_asset_without_window_goes_to_unused() {
     // 資産 [0,1]・窓 [0] のみ → 資産 scope 1 は窓なし。
@@ -95,12 +92,11 @@ fn plan_attachments_asset_without_window_goes_to_unused() {
     assert!(plan.missing_assets.is_empty(), "全窓に資産がある");
 }
 
-/// DD-12 `usize`→`u32` 変換境界: 小 usize scope は u32 資産 scope と一致・`u32::MAX` 超過は missing。
+/// `usize`→`u32` 変換境界: 小 usize scope は u32 資産 scope と一致・`u32::MAX` 超過は missing。
 #[test]
 fn plan_attachments_usize_to_u32_conversion_boundary() {
     let assets = synth_assets(&[(0, 0), (1, 10)]);
 
-    // 小さい usize scope (0,1) は u32 資産 scope と正しく一致する。
     let plan = plan_attachments(&[0usize, 1], &assets);
     assert_eq!(plan.items.len(), 2, "小 usize scope は u32 資産と一致");
     assert_eq!(plan.items[0].scope, 0);
@@ -109,7 +105,7 @@ fn plan_attachments_usize_to_u32_conversion_boundary() {
     // usize > u32::MAX は如何なる u32 資産 scope とも一致し得ず missing 分類（64bit 環境でのみ表現可能）。
     #[cfg(target_pointer_width = "64")]
     {
-        let overflow = (u32::MAX as usize) + 1; // u32 に収まらない境界超過値
+        let overflow = (u32::MAX as usize) + 1;
         let plan = plan_attachments(&[0usize, overflow], &assets);
         assert_eq!(plan.items.len(), 1, "overflow scope は装着計画に載らない");
         assert_eq!(plan.items[0].scope, 0, "収まる 0 のみ計画に載る");
@@ -147,7 +143,6 @@ fn plan_attachments_marks_missing_balloon_index_none() {
 /// `None` を `connect_balloon_text` に与え、接続が起きない（`false`）ことを GPU 不要で檻に入れる。
 #[test]
 fn connect_balloon_text_skips_when_view_none() {
-    // 初回 ShowSurface 前の presenter は text_slot_view が None（遅延化を実源で再現）。
     let presenter = EmoPresenter::new();
     let view = presenter.text_slot_view(TargetId(1));
     assert!(
@@ -160,7 +155,6 @@ fn connect_balloon_text_skips_when_view_none() {
     )));
     let model = areka_parsers::balloon::parse_str("", None);
 
-    // None 経路: 文字層を接続せず false（次フレーム再試行へ委ねる）。panic しない。
     let mut registered = true;
     let logs = capture_logs(|| {
         registered =
@@ -213,14 +207,13 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
         "ゲート不成立では per-scope BalloonModel も記憶しない（attach 相の副作用ゼロ・D11-3）"
     );
 
-    // 冪等: 再試行してもゲート不成立なら未装着のまま・panic しない・資産も保持する。
     run_attach_phase(&mut wiring, &mut world);
     assert!(!wiring.attached, "再試行でもゲート不成立なら未装着");
     assert!(wiring.assets.is_some(), "再試行でも assets を保持");
 }
 
-/// 装着の門は装置の有無でなく有効性を見る: 窓と
-/// WUC が揃っていても、失った（無効な）`GraphicsCore` では装着せず資産も消費しない。
+/// 装着の門は装置の有無でなく有効性を見る: 窓と WUC が揃っていても、失った（無効な）
+/// `GraphicsCore` では装着せず資産も消費しない。
 #[test]
 fn run_attach_phase_with_an_invalid_core_does_not_attach() {
     let (_gpu, mut world, _gw) = gpu_attach_world();
@@ -447,7 +440,7 @@ fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
     use areka_sakura::sysvar::SystemVarSnapshot;
     use dola::cue::CuePlayer;
 
-    // wire_runtime 手順4/5 と同型: 単一 channel の送出端を sink へ、受信端を RuntimeWiring へ。
+    // wire_runtime と同型: 単一 channel の送出端を sink へ、受信端を RuntimeWiring へ。
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let mut wiring = wiring_with(
         synth_assets(&[(0, 0)]),
@@ -484,7 +477,6 @@ fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
         player.tick(at);
     }
 
-    // フレーム側の受信端から取り出す（本番は可視性相が同じ口を drain する）。
     let signals = wiring.drain_lifecycle_signals();
     assert_eq!(
         signals.first(),
@@ -599,8 +591,8 @@ const ACTOR_SCAN_SITES: &[&str] = &[
 /// `entry().or_default()` で発話前のスコープの器を作るため、この絞りが無いと一度も発話して
 /// いないスコープにまで供給面が割り当てられる（＝幽霊が提示層へ載る）。
 ///
-/// 絞りそのものは `present_frame` の兄弟テストが判定しているが、**新しい走査点が増えたこと**は
-/// 誰も見張っていなかった。ここでは走査点の集合と本数を実ファイルから数え直して固定する
+/// 絞りそのものは `present_frame` の兄弟テストが判定している。ここでは走査点の集合と本数を
+/// 実ファイルから数え直して固定する
 /// ——4 本目を足した人に「その走査は供給面を割り当てるか」を必ず考えさせるための躓き石である。
 ///
 /// 走査点を足すのが正しい変更なら、本表に 1 行足したうえで、その走査が供給面を作らない
@@ -721,14 +713,12 @@ fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
     run_attach_phase(&mut wiring, &mut world);
     assert!(wiring.attached, "前提: ゲート成立で attach が走る");
 
-    // 探す場所の順。
     assert_eq!(
         runtime.borrow().box_font_dirs(),
         [shell_dir, rpost.folder().join("ghost").join("master")],
         "箱のフォントを探す場所はシェルのフォルダ → ゴーストのフォルダ"
     );
 
-    // `\s[0]` で行き先が箱へ。
     let actor = ActorKey::from("0");
     runtime.borrow_mut().apply_cue(&TalkCue {
         at: 0.0,
@@ -742,7 +732,6 @@ fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
         "箱のある面 0 では行き先が箱 talk になる: {destination:?}"
     );
 
-    // 普通のバルーンの警告の名前の欄。
     let view = wiring
         .presenter
         .text_slot_view(balloon_target(0))

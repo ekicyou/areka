@@ -1,8 +1,8 @@
-//! コンパイルパイプライン統合 + E2E 統合（Task 6.4 で分割）
+//! コンパイルパイプライン統合 + E2E 統合
 use super::*;
 
 // =============================================================
-// Task 2.2: コンパイルパイプライン統合テスト
+// コンパイルパイプライン統合テスト
 // =============================================================
 
 mod compile_integration_tests {
@@ -68,7 +68,7 @@ mod compile_integration_tests {
 }
 
 // =============================================================
-// Task 4.1 + 6.1 + 6.2: E2E 統合テスト
+// E2E 統合テスト
 // =============================================================
 
 mod e2e_tests {
@@ -231,7 +231,7 @@ mod e2e_tests {
 
     #[test]
     fn e2e_pause_during_delay_preserves_timing() {
-        // Task 4.1: Pause during delay period
+        // Pause during delay period
         let doc = loop_offset_doc(
             "blink",
             -1,
@@ -259,7 +259,7 @@ mod e2e_tests {
 
     #[test]
     fn e2e_cancel_during_delay() {
-        // Task 4.1: Cancel during delay period → immediate stop
+        // Cancel during delay period → immediate stop
         let doc = loop_offset_doc(
             "blink",
             -1,

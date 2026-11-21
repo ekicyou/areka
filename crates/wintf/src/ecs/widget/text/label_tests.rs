@@ -1,4 +1,4 @@
-//! 向きの設定（19 番）: 4 つの向きの組み合わせと、その書式で配置が作れること（DirectWrite だけ）
+//! 向きの設定: 4 つの向きの組み合わせと、その書式で配置が作れること（DirectWrite だけ）
 
 use super::*;
 use crate::com::dwrite::{DWriteFactoryExt, dwrite_create_factory};
@@ -94,7 +94,7 @@ fn test_draw_labels_records_command_list_for_all_directions() {
     }
 }
 
-/// 配置が作れない文字（大きさ 0）は、骨組みの道で空の列が入り、毎回やり直さない（7.1 二度目の見直し N2・実 GPU）
+/// 配置が作れない文字（大きさ 0）は、骨組みの道で空の列が入り、毎回やり直さない（実 GPU）
 #[test]
 fn label_whose_layout_cannot_be_built_gets_empty_list() {
     let mut world = World::new();

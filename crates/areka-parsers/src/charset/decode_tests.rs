@@ -1,13 +1,13 @@
 //! decode 単体テスト（宣言あり/なし/未対応/不正並び/BOM/決定性）。
 //!
-//! 公開 facade `charset::decode` の契約（R2/R3/R5.2/R6）を Observable に固定する。
-//! フローは design「System Flows」の decode 図に対応:
+//! 公開 facade `charset::decode` の契約を Observable に固定する。
+//! 流れは次のとおり:
 //! プリスキャン → for_label → 宣言 or 既定 → 全体デコード → had_errors 寛容 → String。
 
 use super::decode;
 use super::model::DefaultEncoding;
 
-/// R2.5: 未対応（解釈不能）ラベルは呼び出し側指定の既定へ寛容フォールバックする。
+/// 未対応（解釈不能）ラベルは呼び出し側指定の既定へ寛容フォールバックする。
 ///
 /// 中身を SJIS にして既定 `Ansi` で読む。落ち先が UTF-8 などに変わると「かくかく」が化けて赤になる。
 #[test]
@@ -60,7 +60,7 @@ fn non_ascii_compatible_labels_fall_back() {
     );
 }
 
-/// R2.4: 宣言なし・既定 Utf8 → UTF-8 としてデコードする。
+/// 宣言なし・既定 Utf8 → UTF-8 としてデコードする。
 #[test]
 fn no_declaration_uses_utf8_default() {
     let bytes = "windowposition.x,266\nname,かきくけこ\n".as_bytes();
@@ -71,7 +71,7 @@ fn no_declaration_uses_utf8_default() {
     );
 }
 
-/// R2.4: 宣言なし・既定 Ansi（CP932）→ SJIS バイト列が正しく復元される。
+/// 宣言なし・既定 Ansi（CP932）→ SJIS バイト列が正しく復元される。
 #[test]
 fn no_declaration_uses_ansi_default_as_shift_jis() {
     let (bytes, _, _) = encoding_rs::SHIFT_JIS.encode("name,さしすせそ\r\n");
@@ -82,7 +82,7 @@ fn no_declaration_uses_ansi_default_as_shift_jis() {
     );
 }
 
-/// R2.6: 宣言エンコードとして不正な並びを代替文字で吸収し、破棄も panic もしない。
+/// 宣言エンコードとして不正な並びを代替文字で吸収し、破棄も panic もしない。
 ///
 /// 宣言 UTF-8 のあとに単独の不正 UTF-8 バイト（`0xFF`）を含める。プリスキャンは
 /// 読めない字を代替文字にして宣言 `charset,UTF-8` を検出するため、最終
@@ -101,7 +101,7 @@ fn malformed_bytes_absorbed_without_panic() {
     );
 }
 
-/// R5.2: 先頭 UTF-8 BOM 付き `charset,UTF-8` を宣言検出し、結果に BOM を残さない。
+/// 先頭 UTF-8 BOM 付き `charset,UTF-8` を宣言検出し、結果に BOM を残さない。
 #[test]
 fn bom_is_tolerated_and_not_leaked() {
     let bytes = b"\xEF\xBB\xBFcharset,UTF-8\nname,x\n";
@@ -133,7 +133,7 @@ fn malformed_bytes_warn_names_the_encoding_actually_used() {
     assert_eq!(warn.field_str("encoding"), Some("UTF-8"), "{events:?}");
 }
 
-/// R6.1/R5.3 相当: 空入力でも panic せず空文字列相当を返す。
+/// 空入力でも panic せず空文字列相当を返す。
 #[test]
 fn empty_input_does_not_panic() {
     let out = decode(b"", DefaultEncoding::Utf8);

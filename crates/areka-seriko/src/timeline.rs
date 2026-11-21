@@ -1,23 +1,23 @@
-//! timeline: 抽選境界・1/N 判定・経過時刻→現在コマの決定論純関数コア（要件 2.1/2.4/4.1/4.3/4.4/4.5/7.1/9.4）。
+//! timeline: 抽選境界・1/N 判定・経過時刻→現在コマの決定論純関数コア。
 //!
 //! 全関数が純粋（引数のみに依存・I/O なし・スレッド／GPU／実時間非依存）。時刻と乱数は注入シーム
-//! （`LoopRng`・`u64` 経過時刻）で受け取り、実 entropy 源・実クロックを評価経路から排除する（7.1）。
+//! （`LoopRng`・`u64` 経過時刻）で受け取り、実 entropy 源・実クロックを評価経路から排除する。
 //! これにより注入 tick＋注入乱数で全分岐を決定論的にテストできる。
 //!
 //! # 構成
 //!
-//! - [`seeded_rng`]／[`should_fire`] — SplitMix64 の純粋 PRNG と 1/N 抽選（2.1/2.4）。
+//! - [`seeded_rng`]／[`should_fire`] — SplitMix64 の純粋 PRNG と 1/N 抽選。
 //! - [`LotteryBoundary`] — 1000ms 絶対グリッドの跨ぎ検出（毎秒抽選の写像・catch-up 1 回）。
 //!   ghost [`crate`] 外の `BoundarySchedule` と同じ「1 回だけ発火・次境界へスナップ」政策。
 //! - [`frame_at`]／[`FrameStatus`] — 再生開始からの経過 `elapsed_ms` に対する現在コマ判定
-//!   （累積 wait デッドライン列・`-1` 停止・末尾残留のデファクト 2 点を焼き込む・4.1–4.4/9.4）。
+//!   （累積 wait デッドライン列・`-1` 停止・末尾残留のデファクト 2 点を焼き込む）。
 //! - [`lap_of`]／[`always_at`]／[`AlwaysView`] — `always`（手書きと動く絵の子）の繰り返しの計算
-//!   （spec: areka-P0-animated-image-playback・経過を周期で割る・丸めない）。
+//!   （経過を周期で割る・丸めない）。
 
 use crate::table::{FrameAct, LoopFrame};
 use std::num::{NonZeroU32, NonZeroU64};
 
-/// 乱数注入シーム（クロック注入と同型・7.1）。`[0, bound)` の一様整数を返す。
+/// 乱数注入シーム（クロック注入と同型）。`[0, bound)` の一様整数を返す。
 pub type LoopRng = Box<dyn FnMut(u32) -> u32 + Send>;
 
 /// 決定論 PRNG（SplitMix64）。テストでも本番でも使える純粋構築子（同一シード→同一系列）。
@@ -39,7 +39,7 @@ pub fn seeded_rng(seed: u64) -> LoopRng {
     })
 }
 
-/// 1/N 抽選（2.1/2.4）。`rng(k) == 0` で発火（確率 1/k）。呼び手は `k >= 1` を保証（表構築ガード）。
+/// 1/N 抽選。`rng(k) == 0` で発火（確率 1/k）。呼び手は `k >= 1` を保証（表構築ガード）。
 pub fn should_fire(k: u32, rng: &mut LoopRng) -> bool {
     rng(k) == 0
 }
@@ -81,27 +81,27 @@ impl LotteryBoundary {
     }
 }
 
-/// 経過時刻に対する現在コマ判定（4.1–4.4・9.4）。
+/// 経過時刻に対する現在コマ判定。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameStatus {
     /// 先頭コマのデッドライン未到達（まだ何も出さない）。
     Pending,
-    /// `frames[i]` が現在コマ（4.2 現在コマ 1 枚）。
+    /// `frames[i]` が現在コマ。
     Active(usize),
-    /// `i` 以下に surface_id が負（`-1` 等）の描くコマが在る → 停止・ベース復帰（4.3）。
+    /// `i` 以下に surface_id が負（`-1` 等）の描くコマが在る → 停止・ベース復帰。
     Stopped,
-    /// `-1` なし末尾到達 → `frames[i]`（最終コマ）残留・終了状態（4.4/9.4）。
+    /// `-1` なし末尾到達 → `frames[i]`（最終コマ）残留・終了状態。
     FinishedResidual(usize),
 }
 
-/// 経過時刻 `elapsed_ms` に対する現在コマを判定する（累積 wait デッドライン列・4.1–4.4/9.4）。
+/// 経過時刻 `elapsed_ms` に対する現在コマを判定する（累積 wait デッドライン列）。
 ///
 /// コマ k のデッドライン `t_k = Σ_{j<=k} wait_ms[j]`（`wait_k` は前コマからコマ k へ切り替わる遅延）。
 /// 現在 index は `t_k <= elapsed_ms` を満たす最大の k。誰も満たさない（`elapsed < t_0`）なら
 /// [`FrameStatus::Pending`]。i 以下に負の描くコマ（[`stop_frame`]）が在れば [`FrameStatus::Stopped`]
-/// （`-1` の後に待ち 0 のコマが続いても、刻みが `-1` の短い窓を飛び越えても止まる・method/x/y 無視・
-/// 4.3。`-1` と他負値の区別＋warn! は LoopRuntime 責務）。末尾かつ非負なら [`FrameStatus::FinishedResidual`]
-/// （末尾残留・恒久・4.4/9.4）、それ以外は [`FrameStatus::Active`]。デッドラインは単調非減少ゆえ、超過時点で
+/// （`-1` の後に待ち 0 のコマが続いても、刻みが `-1` の短い窓を飛び越えても止まる・method/x/y 無視。
+/// `-1` と他負値の区別＋warn! は LoopRuntime 責務）。末尾かつ非負なら [`FrameStatus::FinishedResidual`]
+/// （末尾残留・恒久）、それ以外は [`FrameStatus::Active`]。デッドラインは単調非減少ゆえ、超過時点で
 /// 走査を打ち切れる（`wait == 0` 連鎖は同一デッドラインを共有し末尾 index が現在コマになる）。
 pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus {
     match current_frame_index(frames, elapsed_ms) {
@@ -142,7 +142,7 @@ pub(crate) fn current_frame_index(frames: &[LoopFrame], elapsed_ms: u64) -> Opti
 }
 
 /// `i` 以下で最初の負の番号の描くコマ（`-1` 等・再生はそこで止まる・無ければ `None`）。`always` は
-/// 通らない（途中の `-1` の先へ進む・4.5）。
+/// 通らない（途中の `-1` の先へ進む）。
 pub(crate) fn stop_frame(frames: &[LoopFrame], i: usize) -> Option<usize> {
     let end = frames.len().min(i.saturating_add(1));
     frames[..end]
@@ -150,7 +150,7 @@ pub(crate) fn stop_frame(frames: &[LoopFrame], i: usize) -> Option<usize> {
         .position(|f| f.act == FrameAct::Draw && f.surface_id < 0)
 }
 
-/// `i` 以下で最後の描くコマ（無ければ `None`＝欄を外す・spec: seriko-pattern-calls 1.3/7.7）。
+/// `i` 以下で最後の描くコマ（無ければ `None`＝欄を外す）。
 ///
 /// 働きのコマは絵を重ねないので、今のコマが働きのコマでも前の絵（`base` のコマを含む）を残す。
 /// 一番上と部品の再生が共有する。
@@ -168,7 +168,7 @@ pub(crate) enum AlwaysView {
     Frame(usize),
 }
 
-/// `always` の今のコマ（要件 1.5・1.6・2.1・2.2・2.4・2.6・2.9・4.2・4.5）。
+/// 経過 `elapsed_ms` における `always` の今のコマ。
 ///
 /// `period_ms` は 1 周の長さ、`laps` は合計の回数（`None` は終わりなし）。手書きの `always` と動く絵の
 /// 子は同じこの関数を通り、違いは表が渡す値だけ。開始からの経過だけで決まる（状態・乱数・丸めなし）。
@@ -206,7 +206,7 @@ pub(crate) fn always_at(
 
 /// `always` の経過 `elapsed_ms` で欄に出す答え（[`always_at`] の今のコマが働きのコマなら、その周の
 /// 最後の描くコマ。周の頭から働きのコマなら前の周の最後の描くコマ）。`None` は描くコマがまだ無い
-/// （1 周目の頭から働きのコマ）＝欄を外す。一番上と部品が共有する（spec: seriko-pattern-calls 1.3・7.7）。
+/// （1 周目の頭から働きのコマ）＝欄を外す。一番上と部品が共有する。
 pub(crate) fn always_visible(
     frames: &[LoopFrame],
     period_ms: NonZeroU64,
@@ -327,7 +327,6 @@ mod tests {
     /// `starting_at` は now より厳密に未来の次境界（1000 の倍数）を起点にする。
     #[test]
     fn starting_at_sets_strictly_future_boundary() {
-        // 非境界起点。
         let mut b = LotteryBoundary::starting_at(2347);
         assert!(!b.poll(2999), "3000 未満は非跨ぎ");
         assert!(b.poll(3000), "3000 到達で跨ぎ");
@@ -346,11 +345,9 @@ mod tests {
     #[test]
     fn poll_fires_once_on_boundary_and_snaps() {
         let mut b = LotteryBoundary::starting_at(0);
-        // 起点 0 の次境界は 1000。
         assert!(!b.poll(0), "0 は非跨ぎ");
         assert!(!b.poll(999), "999 は非跨ぎ");
         assert!(b.poll(1000), "1000 ちょうどで発火");
-        // スナップ後は次境界 2000 まで非跨ぎ。
         assert!(
             !b.poll(1000),
             "同一時刻の再 poll は再発火しない（スナップ済み）"
@@ -413,7 +410,6 @@ mod tests {
         // waits 10/20/30 → t = [10, 30, 60]。全て非負・末尾は FinishedResidual。
         let frames = vec![frame(1, 10), frame(2, 20), frame(3, 30)];
 
-        // t_0 = 10 前後。
         assert_eq!(
             frame_at(&frames, 9),
             FrameStatus::Pending,
@@ -430,7 +426,6 @@ mod tests {
             "t_0+1 は Active(0)"
         );
 
-        // t_1 = 30 前後。
         assert_eq!(
             frame_at(&frames, 29),
             FrameStatus::Active(0),
@@ -447,7 +442,6 @@ mod tests {
             "t_1+1 は Active(1)"
         );
 
-        // t_2 = 60 前後（末尾＝FinishedResidual）。
         assert_eq!(
             frame_at(&frames, 59),
             FrameStatus::Active(1),
@@ -467,7 +461,7 @@ mod tests {
 
     // ── frame_at: 終端意味論（Stopped / FinishedResidual 恒久） ──────────────────
 
-    /// `-1` 末尾コマ到達 → `Stopped`（method/x/y 無視・4.3）＝ kero 実測列 0/40/80。
+    /// `-1` 末尾コマ到達 → `Stopped`（method/x/y 無視）＝ kero 実測列 0/40/80。
     #[test]
     fn frame_at_kero_real_sequence_stops_on_negative_tail() {
         // emo2 kero 実測: frames 2106(wait0)/2110(wait40)/-1(wait80)。t = [0, 40, 120]。
@@ -476,13 +470,11 @@ mod tests {
         assert_eq!(frame_at(&frames, 39), FrameStatus::Active(0));
         assert_eq!(frame_at(&frames, 40), FrameStatus::Active(1), "40 で 2110");
         assert_eq!(frame_at(&frames, 119), FrameStatus::Active(1));
-        // t_2 = 120: -1 コマ → Stopped。
         assert_eq!(
             frame_at(&frames, 120),
             FrameStatus::Stopped,
             "120 で -1 → 停止"
         );
-        // 恒久: さらに時間が進んでも Stopped のまま。
         assert_eq!(
             frame_at(&frames, 100_000),
             FrameStatus::Stopped,
@@ -490,7 +482,7 @@ mod tests {
         );
     }
 
-    /// `-1` なし末尾 → `FinishedResidual(last)` 恒久（4.4/9.4）＝ sakura 実測列 0/150/22。
+    /// `-1` なし末尾 → `FinishedResidual(last)` 恒久＝ sakura 実測列 0/150/22。
     #[test]
     fn frame_at_sakura_real_sequence_finishes_residual_permanently() {
         // emo2 sakura 実測: frames 1412(wait0)/1411(wait150)/1410(wait22)。t = [0, 150, 172]。全て非負。
@@ -509,7 +501,7 @@ mod tests {
             FrameStatus::FinishedResidual(2),
             "172 で最終コマ 1410 残留"
         );
-        // 恒久: 任意に大きな経過でも FinishedResidual(2) のまま（残留・9.4）。
+        // 恒久: 任意に大きな経過でも FinishedResidual(2) のまま（残留）。
         assert_eq!(
             frame_at(&frames, u64::MAX),
             FrameStatus::FinishedResidual(2),

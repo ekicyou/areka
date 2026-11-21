@@ -1,11 +1,11 @@
 //! parse の単体テスト。
 //!
 //! 公開 facade `parse`（lexer→decode 結線）の契約を検証する:
-//! - 空入力で空 `Shell`（要件 2.2）。
-//! - 同一入力 → 同一出力の純粋・決定的（要件 2.4）。
+//! - 空入力で空 `Shell`。
+//! - 同一入力 → 同一出力の純粋・決定的。
 //! - facade 結線（surface/element/collision/animation・append・alias が
-//!   `parse()` 経由で期待モデルへ写像される・要件 2.1）。
-//! - subset 外/不正断片でもパニックせず部分認識を返す（要件 9.3）。
+//!   `parse()` 経由で期待モデルへ写像される）。
+//! - subset 外/不正断片でもパニックせず部分認識を返す。
 
 use super::model::{
     Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
@@ -14,7 +14,7 @@ use super::model::{
 };
 use super::{ShellIssue, parse, parse_all};
 
-/// 空白・ヘッダのみの入力も空 `Shell` を返す（寛容スキップ・要件 2.2/9.3）。
+/// 空白・ヘッダのみの入力も空 `Shell` を返す（寛容スキップ）。
 #[test]
 fn header_only_input_yields_empty_shell() {
     let shell = parse("charset,UTF-8\ndescript\n{\n}\n");
@@ -23,7 +23,7 @@ fn header_only_input_yields_empty_shell() {
     assert_eq!(shell.aliases, vec![]);
 }
 
-/// 同一の非自明入力を2回パースすると等価な `Shell` を返す（純粋・決定的・要件 2.4）。
+/// 同一の非自明入力を2回パースすると等価な `Shell` を返す（純粋・決定的）。
 #[test]
 fn parse_is_deterministic() {
     let input = "\
@@ -51,7 +51,7 @@ smile,[0,1,2]
 }
 
 /// facade 結線: surface（element/collision/animation）・append・alias が
-/// `parse()` 経由で期待モデルへ写像される（lex→decode 結線の証明・要件 2.1）。
+/// `parse()` 経由で期待モデルへ写像される（lex→decode 結線の証明）。
 #[test]
 fn facade_wires_lex_and_decode() {
     let input = "\
@@ -99,7 +99,7 @@ smile,[0,1,2]
                 interval: Interval::Bind,
                 patterns: vec![Pattern {
                     index: 0,
-                    // task 1.2: overlay 行の method を忠実転記（field[1]＝"overlay"）。
+                    // overlay 行の method は原文のまま（field[1]＝"overlay"）。
                     method: DrawMethod::new("overlay".to_string()),
                     surface_id: 100,
                     target: "100".into(),
@@ -130,7 +130,7 @@ smile,[0,1,2]
         }],
         animation_sort: None,
         collision_sort: None,
-        // 登場順ストリーム: surface0 → surface.append0 → kero.surface.alias（要件 12.5(d)）。
+        // 登場順ストリーム: surface0 → surface.append0 → kero.surface.alias。
         definitions: vec![DefRef::Surface(0), DefRef::Append(0), DefRef::Alias(0)],
     };
 
@@ -138,7 +138,7 @@ smile,[0,1,2]
 }
 
 /// subset 外/不正断片を含む入力でもパニックせず、認識可能部分は保持する
-/// （局所吸収・全域継続・部分認識・要件 9.3）。
+/// （局所吸収・全域継続・部分認識）。
 #[test]
 fn malformed_fragment_does_not_panic_and_keeps_partial() {
     // 壊れた行を含むが、正常な surface と element は認識される。
@@ -157,7 +157,7 @@ this_is_a_garbage_line_without_meaning
 }
 
 /// 終わりで閉じていないブレスは中身を今どおり落とし（Shell・箱・描けない行のどれにも入らない）、
-/// `parse_all` が見出しと行の番号を `UnclosedAtEnd` として返す。前のブレスは読む（指摘 34）。
+/// `parse_all` が見出しと行の番号を `UnclosedAtEnd` として返す。前のブレスは読む。
 #[test]
 fn parse_all_reports_unclosed_final_brace() {
     let input = "\

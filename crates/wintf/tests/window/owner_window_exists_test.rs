@@ -36,7 +36,7 @@ fn test_child_entity_traverses_to_ancestor_window() {
 fn test_grandchild_traverses_through_chain() {
     let mut world = World::new();
     let window_entity = world.spawn(Window::default()).id();
-    // 2 ホップの ChildOf チェーン（W3b-V 多段経路カバレッジ）
+    // 2 ホップの ChildOf チェーン
     let child = world.spawn(ChildOf(window_entity)).id();
     let grandchild = world.spawn(ChildOf(child)).id();
     assert!(gets_visual_graphics(&mut world, grandchild));

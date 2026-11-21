@@ -1,5 +1,4 @@
-//! 本番の道筋の兄弟テスト（design「Testing Strategy / 背景スレッドの口」の本番の道筋・「要求 1 件の
-//! 一周」・要件 2.3・5.1・5.2・5.3・5.5・9.9・10.1）。
+//! 本番の道筋の兄弟テスト（背景スレッドの口の本番の道筋・要求 1 件の一周）。
 //!
 //! 切替の土台（[`SwitchRig`]）の上で、本物の窓口（`Input` の段の取り出しの系）→ 背景スレッド
 //! `update` → 本物の口 → kanade → 偽の SHIORI を通す。取得口だけを偽物（[`FakeFetch`]）に差し替え、
@@ -8,7 +7,7 @@
 //! 最後の進捗の返事の台詞が終わってから同じゴーストが `OnGhostChanging` 無しに起き直り、新しい
 //! ゴーストに起動の知らせ `OnUpdateComplete`（`OnGhostChanged`・`OnBoot` の代わり）→ `OnUpdateResult`
 //! が届く／`none` の一周では切替の要求が 0 件で、最後に `OnUpdateComplete` → `OnUpdateResult`
-//! （後送りの列・決めたこと 21・24・要件 2.3・2.16・3.1・5.5）。
+//! （後送りの列）。
 //!
 //! 実時間に依らない: 進みは偽の SHIORI の記録・窓口の段・kanade の返信端の受け取りで揃える。
 
@@ -182,7 +181,7 @@ const REBOOTED: [&str; 5] = [
 /// 保留され（照会の往復で確かめる）、台詞を進めて終わると A が `OnGhostChanging`・`OnClose`・
 /// `OnGhostChanged`・`OnBoot` 無しに起き直り、起動の知らせ `OnUpdateComplete`（`changed`・置いた
 /// ファイル）→ `OnUpdateResult`（`ghost\x01OK\x011`）を受ける。読み直しの切替が終わった後、
-/// `.update-work` に印つきの残りは無い（エンジンの後に置いた残りも、切替を終える時点で消える・要件 5.9）。
+/// `.update-work` に印つきの残りは無い（エンジンの後に置いた残りも、切替を終える時点で消える）。
 ///
 /// # 非空虚性
 /// 手続きの読み直しの頼み（`request_reload`）を外すと切替の予約が立たず期限切れで赤、写しの順を

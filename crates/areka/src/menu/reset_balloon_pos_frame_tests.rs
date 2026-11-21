@@ -1,4 +1,4 @@
-//! 「バルーン位置初期化」の葉の檻（areka-P0-window-link-directives 要件 7.5〜7.7）。
+//! 「バルーン位置初期化」の葉の檻。
 //!
 //! 初期化を呼んだかは [`reset_balloon_positions`] の記録で見る: 材料の無い World では
 //! `balloon_pos_reset_skipped` がきっかけつきで必ず 1 行出るので、その行の有無が「呼んだか」になる。

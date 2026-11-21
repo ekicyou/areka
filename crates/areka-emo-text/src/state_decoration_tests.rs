@@ -1,27 +1,13 @@
-//! スコープの装飾状態と番号の配管（[`super::Decoration`]・`state.rs` の腕）の決定論テスト
-//! （要件 3.1／3.2／3.3／3.4／3.5／3.7／3.8／3.9・2.5・10.7・15.3）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
-//!
-//! ## 章立て
-//!
-//! | § | 内容 | 要件 |
-//! |---|---|---|
-//! | §1 | スコープごとに独立した装飾状態（本体側の指定が相方側に効かない） | 3.1 |
-//! | §2 | 以降の文字にだけ効く（追記済みの文字は変わらない・リビール中も同じ） | 3.2, 3.4, 10.7 |
-//! | §3 | 番号列は追記点 2 か所（文字・選択肢）で glyph 序数と 1 対 1・0 文字は表を汚さない | 3.3, 3.5 |
-//! | §4 | 内容の消去・改行・カーソル移動では装飾が戻らない | 3.7 |
-//! | §5 | 台本の先頭（全消去）で装飾が既定へ戻る | 3.8 |
-//! | §6 | 所有外のキーは値を保持し表示を変えない・キャリア名の自己選別 | 2.5 |
+//! スコープの装飾状態と番号の配管（[`super::Decoration`]・`state.rs` の腕）の決定論テスト。
 //!
 //! 「戻す操作」の公開・装着時の 2 層の差し込み・記録の 1 度化は
 //! 子モジュール [`reset`]（`state_decoration_reset_tests.rs`）が担う——1 ファイル
 //! 1,000 行の見張りに余裕を残すためのファイル分けで、本ファイルの補助を共有する。
 //!
 //! **零は明示的に書く**——「改行では戻らない」「カーソル移動では戻らない」「内容の消去では
-//! 戻らない」は互いに独立した事実なので、1 本の試験にまとめず別々に断言する（§4）。
+//! 戻らない」は互いに独立した事実なので、1 本の試験にまとめず別々に断言する。
 //!
-//! 装飾は描画に触れずに観測する（要件 3.9）——番号列 [`super::ActorTextState::glyph_styles`] を
+//! 装飾は描画に触れずに観測する——番号列 [`super::ActorTextState::glyph_styles`] を
 //! 装飾の表 [`super::ActorTextState::styles`] で引き直した [`crate::look::TextLook`] が観測点で、
 //! DirectWrite も GPU も要らない。
 
@@ -54,7 +40,7 @@ fn state_with_bold_then_text() -> TextLayerState {
     state
 }
 
-// ------------------------------------------------- §1 スコープごとに独立（R3.1）
+// ------------------------------------------------- スコープごとに独立
 
 /// 本体側（`\0`）の `\f[bold,1]` は相方側（`\1`）の装飾状態に効かない。
 #[test]
@@ -98,7 +84,7 @@ fn font_tag_creates_scope_lazily() {
     );
 }
 
-// ------------------------------- §2 以降の文字にだけ効く（R3.2／R3.4／R10.7）
+// ------------------------------- 以降の文字にだけ効く
 
 /// 指定より前に追記済みの文字は既定のまま、後の文字だけが太字になる。
 #[test]
@@ -121,7 +107,7 @@ fn font_tag_applies_only_to_glyphs_appended_after_it() {
     assert!(look_of(&state, "0", 1).bold, "指定後の文字だけが太字");
 }
 
-/// 戻す指定（`\f[default]`）も同じく以降の文字にだけ効く（R10.7）。
+/// 戻す指定（`\f[default]`）も同じく以降の文字にだけ効く。
 #[test]
 fn reset_applies_only_to_glyphs_appended_after_it() {
     let mut state = state_with_bold_then_text();
@@ -134,7 +120,7 @@ fn reset_applies_only_to_glyphs_appended_after_it() {
     assert_eq!(st(&state, "0").glyph_styles()[2], StyleId::DEFAULT);
 }
 
-/// リビール中（文字が 1 文字ずつ現れる途中）に届いた `\f` も、リビール時刻を変えない（R3.4）。
+/// リビール中（文字が 1 文字ずつ現れる途中）に届いた `\f` も、リビール時刻を変えない。
 #[test]
 fn font_tag_does_not_change_reveal_times() {
     let mut baseline = TextLayerState::default();
@@ -168,7 +154,7 @@ fn same_look_folds_into_one_style_number() {
     assert_ne!(ids[0], StyleId::DEFAULT);
 }
 
-// ------------------------------------- §3 番号列とグリフ序数の 1 対 1（R3.3／R3.5）
+// ------------------------------------- 番号列とグリフ序数の 1 対 1
 
 /// 番号列の長さは items のグリフ数に等しい（改行・カーソル移動は序数を消費しない）。
 #[test]
@@ -195,7 +181,7 @@ fn glyph_style_count_matches_glyph_count() {
     assert_eq!(st(&state, "0").glyph_styles().len(), glyphs);
 }
 
-/// 選択肢（`\q`）の表示文字列にも、そのときの装飾状態が与えられる（R3.5）。
+/// 選択肢（`\q`）の表示文字列にも、そのときの装飾状態が与えられる。
 #[test]
 fn choice_glyphs_carry_current_decoration() {
     let mut state = TextLayerState::default();
@@ -277,7 +263,7 @@ fn empty_choice_appends_no_style_number() {
     );
 }
 
-// ----------------------------------------- §4 消去・改行・カーソルで戻らない（R3.7）
+// ----------------------------------------- 消去・改行・カーソルで戻らない
 
 /// 内容の消去（`\c`）は内容だけを消し、装飾状態を保つ。
 #[test]
@@ -346,7 +332,7 @@ fn content_clear_keeps_unowned_vocabulary() {
     );
 }
 
-// --------------------------------------------- §5 台本の先頭で戻る（R3.8）
+// --------------------------------------------- 台本の先頭で戻る
 
 /// 台本の先頭の全消去（`ClearAll`）は内容を消したうえで装飾も既定へ戻す。
 #[test]
@@ -396,7 +382,7 @@ fn font_default_resets_look_without_clearing_content() {
     assert_eq!(actor.items().len(), 2, "内容は消えない");
 }
 
-// --------------------------------------- §6 所有外キーと自己選別（R2.5／R2.4）
+// --------------------------------------- 所有外キーと自己選別
 
 /// 所有外のキー（寄せ・影・選択肢マーカー・アンカー）は値を保持し、表示を変えない。
 #[test]
@@ -468,10 +454,10 @@ fn malformed_font_tag_leaves_the_look_unchanged() {
     assert_eq!(st(&state, "0").current_look(), &before);
 }
 
-// ------------------------------- §7 系列の印と試験だけの数え（spec `emo-text-reveal-incremental`）
+// ------------------------------- 系列の印と試験だけの数え
 
 /// 系列の印は場所が生まれるたび（2 つの作り口）と一括の戻しのたびに新しい番号になり、
-/// 比べには入らない（作りたてと同じかの判定を変えない・要件 2.6）。
+/// 比べには入らない（作りたてと同じかの判定を変えない）。
 #[test]
 fn lineage_is_fresh_per_birth_and_reset_and_ignored_by_equality() {
     let a = super::Decoration::default();
@@ -499,7 +485,7 @@ fn lineage_is_fresh_per_birth_and_reset_and_ignored_by_equality() {
     );
 }
 
-/// 写しで当てた指定と当て直しで当てた指定を別々に数える（要件 2.7・試験の作りだけ・要件 4.8）。
+/// 写しで当てた指定と当て直しで当てた指定を別々に数える（試験の作りだけ）。
 #[test]
 fn copy_and_rebase_count_applied_specs() {
     use super::{COPIED_SPECS, REBASED_SPECS, REPLAY_ALL};
@@ -511,12 +497,12 @@ fn copy_and_rebase_count_applied_specs() {
     state.apply_cue(&font("0", &["italic", "1"]));
     let actor = ActorKey::from("0");
 
-    // 同じ値の 2 層は当て直さない（spec `emo-text-reveal-incremental` task 3.3）ので違う値を差す。
+    // 同じ値の 2 層は当て直さないので違う値を差す。
     state.set_look_layers(&actor, other_layers());
     assert_eq!(REBASED_SPECS.with(|c| c.get()), 2, "当て直しは指定 2 件");
     assert_eq!(COPIED_SPECS.with(|c| c.get()), 0);
 
-    // 写しの先はまだ無い箱の場所（同じ場所への写しは差分が 0 件になる・task 3.2）。
+    // 写しの先はまだ無い箱の場所（同じ場所への写しは差分が 0 件になる）。
     use crate::actor::test_support::{box_in, box_index, box_layout};
     let layout =
         box_layout("balloon.a\n{\nsize,10,10\n}\nsurface0\n{\nelement1,balloon,a,0,0\n}\n");
@@ -561,8 +547,7 @@ fn box_traits_of(
     [(name.clone(), super::BoxTraits { looks, follow })].into()
 }
 
-/// 2 層の差し込み 2 か所は、値が同じなら当て直さず、違えば指定の数だけ当て直す
-/// （spec `emo-text-reveal-incremental` 要件 2.2・2.3・2.4）。
+/// 2 層の差し込み 2 か所は、値が同じなら当て直さず、違えば指定の数だけ当て直す。
 #[test]
 fn same_layers_skip_rebase_different_layers_rebase() {
     use super::REBASED_SPECS;
@@ -586,7 +571,7 @@ fn same_layers_skip_rebase_different_layers_rebase() {
     assert_eq!(rebased(), 4, "箱: 2 度目の同じ値では増えない");
 }
 
-/// 試験だけの切り替えが真なら、2 層の差し込みは値に依らず当て直す（前の作り・要件 2.8）。
+/// 試験だけの切り替えが真なら、2 層の差し込みは値に依らず当て直す。
 #[test]
 fn replay_all_rebases_same_layers() {
     use super::{REBASED_SPECS, REPLAY_ALL};

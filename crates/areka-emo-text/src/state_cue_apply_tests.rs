@@ -1,5 +1,3 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-line-height-canon` のもの（別の spec のものはその場で名を書く）。
-
 use log_capture_kit::count_levels;
 use tracing::Level;
 
@@ -7,7 +5,7 @@ use super::test_support::{REVEAL_INTERVAL, cue, cue_dur, items_of, reveal_times_
 use super::*;
 use crate::actor::test_support::{capture_checked, level_count};
 
-// ── `areka-P0-emo-text-layer` R2.1: Text 追記 ──
+// ── Text 追記 ──
 
 #[test]
 fn text_cue_appends_glyphs_in_order() {
@@ -39,7 +37,7 @@ fn consecutive_text_cues_append() {
     );
 }
 
-// ── `areka-P0-emo-text-layer` R2.2: NewLine 改行（ratio 転写） ──
+// ── NewLine 改行（ratio 転写） ──
 
 #[test]
 fn newline_cue_appends_line_break_marker_with_ratio() {
@@ -59,7 +57,7 @@ fn newline_cue_appends_line_break_marker_with_ratio() {
     );
 }
 
-// ── `areka-P0-emo-text-layer` R2.3: Clear 全消去（未リビール分含む・schedule ごと初期化） ──
+// ── Clear 全消去（未リビール分含む・schedule ごと初期化） ──
 
 #[test]
 fn clear_resets_actor_state_to_initial() {
@@ -98,11 +96,9 @@ fn clear_all_erases_every_actor_scope_unlike_clear() {
     state.apply_cue(&cue("0", 0.0, CueCommand::Text("さくら".into())));
     state.apply_cue(&cue("1", 0.0, CueCommand::Text("けろ".into())));
 
-    // 対象スコープのみの Clear では他スコープが残る（対比）。
     state.apply_cue(&cue("0", 0.5, CueCommand::Clear));
     assert!(!items_of(&state, "1").is_empty());
 
-    // ClearAll は cue の actor に関わらず全スコープを消す。
     state.apply_cue(&cue("0", 1.0, CueCommand::ClearAll));
     assert!(items_of(&state, "0").is_empty());
     assert!(
@@ -130,7 +126,7 @@ fn wait_cue_leaves_text_state_untouched() {
     assert_eq!(&before, after, "Wait は状態を変えない（action なし）");
 }
 
-// ── `areka-P0-emo-text-layer` R1.6: actor 別振り分け・独立状態・lazily 生成 ──
+// ── actor 別振り分け・独立状態・lazily 生成 ──
 
 #[test]
 fn cues_route_to_independent_actor_states() {
@@ -166,7 +162,7 @@ fn actors_iterate_in_deterministic_key_order() {
     assert_eq!(keys, vec![&ActorKey::from("0"), &ActorKey::from("1")]);
 }
 
-// ── `areka-P0-emo-text-layer` R10.5: 上書きガードなし・後出し優先の忠実適用 ──
+// ── 上書きガードなし・後出し優先の忠実適用 ──
 
 #[test]
 fn later_cues_apply_immediately_without_overwrite_guard() {
@@ -180,7 +176,7 @@ fn later_cues_apply_immediately_without_overwrite_guard() {
     assert_eq!(items_of(&state, "0"), expected.as_slice());
 }
 
-// ── Choice/Cursor 実消費（areka-P0-choice-render タスク 1.2） ──
+// ── Choice/Cursor 実消費 ──
 
 /// actor の choices を取得する（未生成なら panic ＝テスト失敗として扱う）。
 fn choices_of<'a>(state: &'a TextLayerState, actor: &str) -> &'a [ChoiceSpan] {
@@ -206,7 +202,7 @@ fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&str]) -> Talk
     )
 }
 
-// ── `areka-P0-choice-render` R1.1/R1.2: Choice 実消費——グリフ追記＋非空 ChoiceSpan 記録 ──
+// ── Choice 実消費——グリフ追記＋非空 ChoiceSpan 記録 ──
 
 /// 非空 `text` の Choice cue はグリフを items へ追記し（Text と同一）、非空
 /// `glyph_range` を持つ `ChoiceSpan` を記録する（ordinal=0・id/label/references 忠実転写）。
@@ -215,12 +211,10 @@ fn choice_cue_appends_glyphs_and_records_nonempty_span() {
     let mut state = TextLayerState::default();
     state.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0", "r1"]));
 
-    // グリフは items へ追記される（Text cue と同一経路）。
     assert_eq!(
         items_of(&state, "0"),
         &[TextItem::glyph("は"), TextItem::glyph("い")]
     );
-    // 非空 glyph_range のスパンが記録される。
     assert_eq!(
         choices_of(&state, "0"),
         &[ChoiceSpan {
@@ -236,14 +230,12 @@ fn choice_cue_appends_glyphs_and_records_nonempty_span() {
     assert_eq!(reveal_times_of(&state, "0"), vec![0.0, 0.25]);
 }
 
-/// 配送順スパン記録（`areka-P0-choice-render` R1.2）: 3 つ以上の Choice を、間に Text／NewLine を挟んで配送しても、
-/// `ChoiceSpan` は**配送順**に並び（label が配送順に一致）・`ordinal` は **0,1,2 と厳密に
-/// 単調増加**し（spec `areka-P0-choice-render` の design.md「不変条件 1」の順序）・`glyph_range` は互いに素かつ追記順単調。
+/// 3 つ以上の Choice を、間に Text／NewLine を挟んで配送しても、`ChoiceSpan` は配送順に並び
+/// （label が配送順に一致）、`ordinal` は 0,1,2 と厳密に単調増加し、`glyph_range` は互いに素かつ追記順単調。
 /// 序数空間はグリフのみ（挟んだ改行等の非グリフ item を数えない）。
 #[test]
 fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
     let mut state = TextLayerState::default();
-    // 選択肢の間に通常テキスト・改行を interleave して配送する。
     state.apply_cue(&cue("0", 0.0, CueCommand::Text("どれ".into()))); // グリフ 0..2
     state.apply_cue(&choice_cue("0", 0.1, "q0", "はい", &["a"])); // グリフ 2..4
     state.apply_cue(&cue("0", 0.2, CueCommand::Text("か".into()))); // グリフ 4..5（間テキスト）
@@ -254,11 +246,9 @@ fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
     let spans = choices_of(&state, "0");
     assert_eq!(spans.len(), 3);
 
-    // ordinal は 0,1,2 と厳密単調増加。
     let ordinals: Vec<usize> = spans.iter().map(|s| s.ordinal).collect();
     assert_eq!(ordinals, vec![0, 1, 2]);
 
-    // 配送順が保存される（label／id が配送順に一致）。
     assert_eq!(
         spans.iter().map(|s| s.label.as_str()).collect::<Vec<_>>(),
         vec!["はい", "いいえ", "たぶん"]
@@ -268,14 +258,13 @@ fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
         vec!["q0", "q1", "q2"]
     );
 
-    // glyph_range は間テキストを跨いで正しく（グリフ序数空間・非グリフを数えない）。
     assert_eq!(spans[0].glyph_range, 2..4);
     assert_eq!(spans[1].glyph_range, 5..8);
     assert_eq!(spans[2].glyph_range, 8..11);
 }
 
-/// `areka-P0-choice-render` R1.5 縮退（同じ spec の design.md 縮退表 Choice text 空 row）: 空 `text` は warn!＋空範囲スパン記録・
-/// グリフ追記なし・reveal 不変。空 Choice は届くたびに warn する（1 回で黙らせない）。
+/// 空 `text` の Choice は warn!＋空範囲スパン記録・グリフ追記なし・reveal 不変。
+/// 空 Choice は届くたびに warn する（1 回で黙らせない）。
 #[test]
 fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
     let (state, counts) = count_levels(|| {
@@ -285,7 +274,6 @@ fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
         state
     });
 
-    // グリフは追記されない（既存 "あ" のみ）・reveal 不変。
     assert_eq!(items_of(&state, "0"), &[TextItem::glyph("あ")]);
     assert_eq!(reveal_times_of(&state, "0"), vec![0.0]);
     // 空範囲スパンが記録される（start==end==1＝現グリフ末尾）。
@@ -300,7 +288,6 @@ fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
             glyph_range: 1..1,
         }]
     );
-    // 空 text は warn する（`areka-P0-choice-render` R1.5）。
     assert_eq!(counts.warn, 1);
 }
 
@@ -321,7 +308,7 @@ fn repeated_nonempty_choice_cues_do_not_warn() {
     );
 }
 
-// ── `areka-P0-choice-render` R2.1: Cursor 実消費——CursorMove 追記・グリフ/リビール不変 ──
+// ── Cursor 実消費——CursorMove 追記・グリフ/リビール不変 ──
 
 /// Cursor cue は各軸を parse_cursor_coord で語彙化した `CursorMove` を items へ追記し、
 /// グリフ／リビール状態は変えない（非グリフ item・reveal 対象外）。警告も出さない。
@@ -338,7 +325,6 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
                 y: "2lh".into(),
             },
         ));
-        // 反復しても warn 無し。
         state.apply_cue(&cue(
             "0",
             0.2,
@@ -350,7 +336,6 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
         state
     });
 
-    // items: グリフ 1＋CursorMove 2（追記順）。
     assert_eq!(
         items_of(&state, "0"),
         &[
@@ -374,12 +359,9 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
             },
         ]
     );
-    // グリフ／リビール状態は不変（CursorMove は reveal 枠を消費しない）。
     assert_eq!(reveal_times_of(&state, "0"), vec![0.0]);
     assert_eq!(state.visible_glyphs(&ActorKey::from("0"), 100.0), 1);
-    // Cursor は choices を作らない。
     assert!(choices_of(&state, "0").is_empty());
-    // 警告は発火しない。
     assert_eq!(level_count(&events, Level::WARN), 0);
 }
 
@@ -389,7 +371,6 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
 /// Cursor cue の有無で完全に一致し、可視グリフ数も全時刻で一致する。
 #[test]
 fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
-    // 対照: Cursor cue なし。
     let mut control = TextLayerState::default();
     control.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
     control.apply_cue(&cue("0", 0.5, CueCommand::Text("うえ".into())));
@@ -415,7 +396,6 @@ fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
         },
     ));
 
-    // グリフ列（Glyph のみ抽出）はバイト等価。
     let glyphs = |s: &TextLayerState| -> Vec<TextItem> {
         items_of(s, "0")
             .iter()
@@ -429,14 +409,12 @@ fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
         "Cursor cue はグリフ列を変えない"
     );
 
-    // reveal 時刻列もバイト等価（CursorMove は reveal 枠を消費しない）。
     assert_eq!(
         reveal_times_of(&experiment, "0"),
         reveal_times_of(&control, "0"),
         "Cursor cue は reveal 時刻列を変えない"
     );
 
-    // 全時刻で可視グリフ数が一致（reveal 進行が Cursor に非依存）。
     let actor = ActorKey::from("0");
     for i in 0..30 {
         let t = i as f64 * 0.05;
@@ -448,9 +426,9 @@ fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
     }
 }
 
-// ── `areka-P0-choice-render` R5.1/R5.3/R9.5: choices は items と同一ライフサイクル（Clear/ClearAll で同時初期化） ──
+// ── choices は items と同一ライフサイクル（Clear/ClearAll で同時初期化） ──
 
-/// `Clear` は対象 actor の choices を items と同時に初期化する（データ形で `areka-P0-choice-render` 5.1/5.3 を保証）。
+/// `Clear` は対象 actor の choices を items と同時に初期化する（データ形で保証）。
 #[test]
 fn clear_resets_choices_alongside_items() {
     let mut state = TextLayerState::default();
@@ -469,7 +447,7 @@ fn clear_resets_choices_alongside_items() {
     );
 }
 
-/// `ClearAll` は全 actor スコープの choices を items と同時に初期化する（`areka-P0-choice-render` R5.3）。
+/// `ClearAll` は全 actor スコープの choices を items と同時に初期化する。
 #[test]
 fn clear_all_resets_choices_of_every_actor_scope() {
     let mut state = TextLayerState::default();
@@ -500,8 +478,7 @@ fn non_balloon_commands_do_not_disturb_state() {
             key: "smile".into(),
         },
     ));
-    // BalloonSurface（バルーン面切替）は表示系の消費対象＝文字状態機械へは配送しない（`areka-P0-balloon-face-cue` R3.2）。
-    // 適用しても文字状態（items／reveal／visible_glyphs）は完全に不変。
+    // BalloonSurface は表示系の消費対象で、文字状態（items／reveal／visible_glyphs）は完全に不変。
     state.apply_cue(&cue(
         "0",
         0.3,
@@ -510,18 +487,17 @@ fn non_balloon_commands_do_not_disturb_state() {
     assert_eq!(state, before);
 }
 
-// ── TextLayerConfig 既定値（spec `areka-P0-emo-text-line-height-canon` の design.md 正準: 行間 line_gap=2） ──
+// ── TextLayerConfig 既定値（行間 line_gap=2） ──
 
 #[test]
 fn config_defaults_match_design_canon() {
     let config = TextLayerConfig::default();
-    // reveal は配送 duration 由来——config は line_gap のみ。
     assert_eq!(config.line_gap, 2.0);
 }
 
-// ── 行送りの式（spec `areka-P0-emo-text-line-height-canon` の design.md §4.1 正典表・R1.2/R3.1/R3.5/R1.6） ──
+// ── 行送りの式 ──
 
-/// 行送り＝フォント高さ＋行間（切り上げなし）。正典表の 3 例をそのまま固定する。
+/// 行送り＝フォント高さ＋行間（切り上げなし）。3 例をそのまま固定する。
 #[test]
 fn line_pitch_adds_line_gap_without_ceiling() {
     let config = TextLayerConfig::default();
@@ -535,7 +511,7 @@ fn line_pitch_adds_line_gap_without_ceiling() {
     // 旧式（切り上げつきの係数倍）なら 35／15／13 になる——差が出る値を選んである。
 }
 
-/// 行間を変えると行送りがそのぶんだけ動く（行間は `TextLayerConfig` で可変・R1.6）。
+/// 行間を変えると行送りがそのぶんだけ動く（行間は `TextLayerConfig` で可変）。
 #[test]
 fn line_pitch_follows_non_default_line_gap() {
     let config = TextLayerConfig { line_gap: 5.0 };
@@ -543,7 +519,7 @@ fn line_pitch_follows_non_default_line_gap() {
     assert_eq!(TextLayerConfig { line_gap: 0.0 }.line_pitch(10.0), 10.0);
 }
 
-/// 決定論の代役（`FixedMetrics`）は自前の足し算を持たず config の式を呼ぶ（R3.5）。
+/// 決定論の代役（`FixedMetrics`）は自前の足し算を持たず config の式を呼ぶ。
 #[test]
 fn fixed_metrics_line_pitch_delegates_to_config() {
     use crate::layout::{FixedMetrics, GlyphMetrics};
@@ -558,7 +534,7 @@ fn fixed_metrics_line_pitch_delegates_to_config() {
     }
 }
 
-/// 非有限の行間は警告 1 件つきで 0 へ縮退する（log-first・R1.6）。
+/// 非有限の行間は警告 1 件つきで 0 へ縮退する（log-first）。
 #[test]
 fn normalized_degrades_nonfinite_line_gap_to_zero_with_warning() {
     let (config, counts) = count_levels(|| TextLayerConfig { line_gap: f32::NAN }.normalized());

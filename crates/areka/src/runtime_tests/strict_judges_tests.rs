@@ -1,6 +1,6 @@
-//! `ArekaStrictJudges` の答えが `check_script` と同じ物差しの写しであること（spec: mcp-strict-errors 要件 2.7）。
+//! `ArekaStrictJudges` の答えが `check_script` と同じ物差しの写しであること。
 
-// ---- 文書を読む通しの檻（spec: mcp-strict-errors 要件 2.2・2.4・2.7・4.5・7.1・7.2・7.6） ----
+// ---- 文書を読む通しの檻 ----
 //
 // 実の走査（`parse_noted` → `compile_strict`）・覆い（`StrictTap`）・事実を入れた表情の受け口
 // （`SerikoSink`）・areka の判定・文字の層の受け手（`EmoTextSink`）を、`talk_handler` でテストの
@@ -221,13 +221,13 @@ element1,balloon,a,0,0
             .collect()
     }
 
-    /// 記録の target はエラーログの target（`get_log` の `log_type=error` で読める・mcp-strict-errors 要件 2.2）。
+    /// 記録の target はエラーログの target（`get_log` の `log_type=error` で読める）。
     #[test]
     fn record_target_is_the_error_log_target() {
         assert_eq!(RECORD_TARGET, TARGET_ERROR);
     }
 
-    /// ⑶ の 17 行: 「出る台本」で文書の種類と文面の記録が 1 件残り、「出ない台本」で残らない（mcp-strict-errors 要件 7.1・2.4）。
+    /// ⑶ の 17 行: 「出る台本」で文書の種類と文面の記録が 1 件残り、「出ない台本」で残らない。
     #[test]
     fn diagnostic_rows_replay_as_the_document_says() {
         // （種類, 場合, 文面）。
@@ -295,7 +295,7 @@ element1,balloon,a,0,0
         assert_eq!(rows.len(), 17, "⑶ の行数");
     }
 
-    /// 誤りを複数含む台本で、記録の種類・位置・綴り・文面・順が `check_script` の診断と同じ（mcp-strict-errors 要件 7.2・2.7）。
+    /// 誤りを複数含む台本で、記録の種類・位置・綴り・文面・順が `check_script` の診断と同じ。
     #[test]
     fn records_match_check_script_diagnostics() {
         let script = r"\s[99999]あ\x\![nosuch]\b[99]\f[sub,1]\_w[abc]い\_u[0]\s[-2]\_a[x]う\_a[y]え\_a\![set,choicetimeout,abc]\f[colour,red]\_a";
@@ -325,7 +325,7 @@ element1,balloon,a,0,0
     }
 
     /// 検出点の表: 列挙の名前の集まりと「点」の列が同じで数も同じ。各行の赤の台本でその点の記録が
-    /// ちょうど 1 件、緑の台本で 0 件（mcp-strict-errors 要件 4.5・7.6）。
+    /// ちょうど 1 件、緑の台本で 0 件。
     #[test]
     fn detection_point_table_matches_the_enumeration() {
         let rows = table("strict-points");

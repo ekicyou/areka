@@ -1,4 +1,4 @@
-//! 【主観測】boot→pump→close 完走の単一 pass/fail（Req 7.1–7.3）。
+//! 【主観測】boot→pump→close 完走の単一 pass/fail。
 //!
 //! mock shiori＋mock sakura sink を kanade に結線し（`super::common` のハーネス）、
 //! 起動指示から毎秒 Tick 数回・close 指示・終了完了までの運行全体を単一の `#[test]` で
@@ -9,7 +9,7 @@
 //! - (b) スクリプト受領から再生起動要求が宛先（mock sakura sink）に到達したこと。
 //! - (c) close 指示から再生完了通知を待って終了系列（Unload→停止 join）が完走したこと。
 //!
-//! 決定性（Req 7.3）を担保するため、シナリオ全体を [`drive_full_run`] に閉じ込め、
+//! 決定性を担保するため、シナリオ全体を [`drive_full_run`] に閉じ込め、
 //! 単一 `#[test]` の中で 5 回連続して通ることを確かめる（各反復は新規ハーネスを spawn する）。
 
 use areka_kanade::{
@@ -42,7 +42,6 @@ fn drive_full_run() {
 
     // --- 運行全体を注入で駆動する（実時間 sleep なし・時刻は Tick のみ） ---
 
-    // 起動指示。
     send(&harness, KanadeMsg::Boot);
 
     // 毎秒 Tick を数回（定常運転の pump を駆動）。OnSecondChange は 204 基調ゆえ talk なし。
@@ -70,9 +69,9 @@ fn drive_full_run() {
     // ========================================================================
     // (a) 起動系列が正典順序で発火（NOTIFY／GET の別・Reference 構成込み）
     // ========================================================================
-    // 期待値は events 表から導出する（ハーネスに Reference をハードコードしない・Req 7.1）。
+    // 期待値は events 表から導出する（ハーネスに Reference をハードコードしない）。
     // boot 系列前段は INACTIVE（Status 行なし）・basewareversion は挨拶追跡後の talk_active=true
-    // （Status: talking・DD-IT-12）。挨拶の台詞は再生の前に OnTranslate へかける（偽の shiori は 204）。
+    // （Status: talking）。挨拶の台詞は再生の前に OnTranslate へかける（偽の shiori は 204）。
     let talking = ExecutionSnapshot {
         talk_active: true,
         choice_active: false,
@@ -86,7 +85,7 @@ fn drive_full_run() {
         expected_call(resources::resource_get(
             "username",
             &ExecutionSnapshot::INACTIVE,
-        )), // GET（prefetch・R4.1）→204
+        )), // GET（prefetch）→204
         expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0)), // GET →204
         expected_call(on_boot),                                             // GET →Value
         boot_translate,                                                     // GET（挨拶の翻訳）→204
@@ -178,7 +177,7 @@ fn drive_full_run() {
 }
 
 /// 主観測: boot→pump→close→終了の運行全体を単一の合否として検証し、新規ハーネスで 5 回連続して
-/// 通ることを確かめる（Req 7.1・7.2・7.3）。
+/// 通ることを確かめる。
 ///
 /// 各反復は新規ハーネスを spawn し、実時間 sleep を用いず注入 Tick のみで運行を進める。
 #[test]

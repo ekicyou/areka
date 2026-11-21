@@ -1,6 +1,6 @@
-//! 共有 GPU オーナースレッド fixture（C4 SharedGpuFixture・Path B）
+//! 共有 GPU オーナースレッド fixture
 //!
-//! # 根本原因（research.md「根本原因記録」節が正本）
+//! # 根本原因
 //! 本開発機（Intel Arc / Win 26200）では「**同一プロセス内で、別スレッド上に 2 個目の
 //! MTA 束縛 `Compositor`（`DQTAT_COM_NONE`）を生成する**」と `STATUS_ACCESS_VIOLATION`。
 //! 一方 **同一スレッド上の逐次再生成（生成→drop→再生成）は安全**（統制実験・
@@ -11,7 +11,7 @@
 //! WUC(Compositor) の**生成・操作・破棄をプロセス内で単一の専用オーナースレッドに集約**する。
 //! テストはクロージャを marshal してオーナースレッド上で実行するため、「別スレッド上の 2 個目
 //! Compositor」が構造的に発生しない（同一スレッド逐次再生成のみに帰着＝安全）。GPU テストは
-//! 自然に直列化される（design.md C4）。
+//! 自然に直列化される。
 //!
 //! # 適用範囲
 //! **Compositor を生成するテストのみ**をラップする。`GraphicsCore` 単体（D3D/D2D・Compositor
@@ -50,7 +50,6 @@ fn owner_sender() -> &'static Sender<Job> {
                 // `_resident` はスレッド生存期間（＝プロセス終了まで）保持する。
                 let _resident = create_dispatcher_queue_controller(DQTAT_COM_NONE)
                     .expect("常駐 DispatcherQueueController の生成失敗（オーナースレッド）");
-                // 全ジョブを逐次実行（GPU/WUC 操作は常にこの単一スレッド上）。
                 while let Ok(job) = rx.recv() {
                     job();
                 }
@@ -67,7 +66,7 @@ fn owner_sender() -> &'static Sender<Job> {
 /// `STATUS_ACCESS_VIOLATION` を構造的に排除できる。
 ///
 /// クロージャ内の `panic!`（テストアサーション失敗を含む）は捕捉してテストスレッドへ**転送**し、
-/// テスト失敗として観測させる（サイレント成功なし・Requirement 5.3）。
+/// テスト失敗として観測させる（サイレント成功なし）。
 ///
 /// # Panics
 /// `f` が panic した場合、その payload をテストスレッド上で `resume_unwind` する
@@ -107,7 +106,6 @@ mod fixture_self_tests {
     #[test]
     fn owner_thread_returns_value() {
         let n = on_gpu_owner_thread(|| {
-            // 常駐 DispatcherQueue を使って Compositor を生成（新規 controller は作らない）。
             let _c = Compositor::new().expect("Compositor::new");
             42usize
         });

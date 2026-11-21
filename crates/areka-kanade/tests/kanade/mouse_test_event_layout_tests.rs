@@ -8,9 +8,6 @@ use super::{
 /// Boot（挨拶なし＝`Steady{None}` 直行）→ 各 Mouse を FIFO 注入 → CloseRequest → 終了完走まで駆動し
 /// 記録を確定する（cage 1〜3 の共通ドライバ）。
 ///
-/// 応答表は `Fixture::quitting().without_boot_greeting()`（挨拶なし・quit close）。挨拶なし boot は
-/// StartTalk を生まないため、Boot は同期完走後 `Steady{None}` にあり、続く各 Mouse は
-/// `Steady{None}` で処理される（同期往復ゆえ mouse GET は reply まで畳んでから次メッセージへ進む）。
 /// close talk が唯一の StartTalk（挨拶なし・204 マウス）なので、index 0 を quit:true にして終了系列を
 /// 駆動する。
 fn drive_mouse_steady_none(mouse: Vec<MouseInput>) -> Driven {
@@ -35,13 +32,13 @@ fn drive_mouse_steady_none(mouse: Vec<MouseInput>) -> Driven {
 }
 
 // ============================================================================
-// Cage 1: (a) OnMouseMove layout（Ref0..6 正典・Status 行なし）＋ (d) 204 → StartTalk 不発
+// Cage 1: OnMouseMove layout（Ref0..6・Status 行なし）＋ 204 → StartTalk 不発
 // ============================================================================
 
 /// `Steady{None}` の Move 注入が正典 Reference layout の `OnMouseMove` GET を発行し、記録が
-/// events 表導出の期待値と Ref0..6・Status まで完全一致する（Req8.1(a)・2.1〜2.5）。
+/// events 表導出の期待値と Ref0..6・Status まで完全一致する。
 ///
-/// 設計 #4（Req8.1(d)・2.3）も本 cage が見る: マウス GET は 204（未注入の既定＝明示の NoContent と同値）
+/// 204 の扱いもここで見る: マウス GET は 204（未注入の既定＝明示の NoContent と同値）
 /// ゆえ StartTalk を生まず、`Steady{None}` は維持され、以降の close 握手が正常完走する（末尾 Unload）。
 ///
 /// # 非空虚性
@@ -59,7 +56,6 @@ fn onmousemove_layout_matches_events_table() {
         Some("Head"),
     )]);
 
-    // events 表から期待 GET を導出（Steady{None}＝INACTIVE・Status 行なし・ハードコードしない）。
     let expected = expected_call(events::on_mouse_move(
         x,
         y,
@@ -68,7 +64,6 @@ fn onmousemove_layout_matches_events_table() {
         &ExecutionSnapshot::INACTIVE,
     ));
 
-    // 記録された OnMouseMove GET はちょうど 1 件で、期待値と完全一致する。
     let gets = mouse_gets(&driven.recorded);
     assert_eq!(
         gets.len(),
@@ -83,7 +78,6 @@ fn onmousemove_layout_matches_events_table() {
         driven.recorded
     );
 
-    // 204 ゆえマウス由来 talk は起きない: 到達 StartTalk は close talk のみ（Req8.1(a) の副次確認）。
     assert_eq!(
         driven.started.len(),
         1,
@@ -95,7 +89,6 @@ fn onmousemove_layout_matches_events_table() {
         "唯一到達する StartTalk は close talk（別れのスクリプト）"
     );
 
-    // 終了系列は正常完走（末尾 Unload）＝マウス 204 が運行を乱していない（設計 #4）。
     assert_eq!(
         driven.recorded.last().expect("記録列は空でない"),
         &expected_unload(),
@@ -104,10 +97,10 @@ fn onmousemove_layout_matches_events_table() {
 }
 
 // ============================================================================
-// Cage 2: (a') Ref4 None → 空文字転写（references 長は 7）
+// Cage 2: Ref4 None → 空文字転写（references 長は 7）
 // ============================================================================
 
-/// `region=None` のとき Ref4 が空文字 `""` へ転写され、references 長は 7 のまま（Req8.1(a')・2.3・DD-IE-6）。
+/// `region=None` のとき Ref4 が空文字 `""` へ転写され、references 長は 7 のまま。
 ///
 /// 記録が events 表導出（region=None）と完全一致することで、「ヘッダ枠は存在・値のみ空」という
 /// 実 SSP wire（Reference4 空値）を固定する。
@@ -141,10 +134,10 @@ fn onmousemove_region_none_ref4_empty() {
 }
 
 // ============================================================================
-// Cage 3: (b) Ref5 左右ボタン識別
+// Cage 3: Ref5 左右ボタン識別
 // ============================================================================
 
-/// DoubleClick の左右ボタンが Ref5 で識別される（左 "0"／右 "1"・Req8.1(b)・3.3）。
+/// DoubleClick の左右ボタンが Ref5 で識別される（左 "0"／右 "1"）。
 ///
 /// 同一 run に Left・Right の 2 つの DoubleClick を注入し、両 `OnMouseDoubleClick` GET が
 /// events 表導出（`on_mouse_double_click`）と完全一致することを検証する。Ref2 は正典で常に "0"、
@@ -190,7 +183,6 @@ fn double_click_ref5_left_right() {
         &ExecutionSnapshot::INACTIVE,
     ));
 
-    // 記録された 2 件の OnMouseDoubleClick GET が左→右の順で期待値と一致する。
     let gets = mouse_gets(&driven.recorded);
     assert_eq!(
         gets.len(),
@@ -201,7 +193,6 @@ fn double_click_ref5_left_right() {
     assert_eq!(*gets[0], expected_left, "1 件目は左（Ref5=\"0\"）と一致");
     assert_eq!(*gets[1], expected_right, "2 件目は右（Ref5=\"1\"）と一致");
 
-    // 204 ゆえマウス由来 talk なし: 到達は close talk のみ。
     assert_eq!(
         driven.started.len(),
         1,

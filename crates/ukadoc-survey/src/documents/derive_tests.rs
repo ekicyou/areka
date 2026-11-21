@@ -1,8 +1,8 @@
 //! [`super`]（機械で決まる値の導出）の在中テスト。
 //!
 //! 相手にするのは**テストの中で組み立てた値だけ**である。`doc/ukadoc-coverage/` の
-//! 実ファイルは 1 行も読まない——実データを相手にする判定は統合テストの担当で
-//! （設計 D-3）、ここで読むと文書の書きかけがそのまま純粋層のテストを赤くする。
+//! 実ファイルは 1 行も読まない——実データを相手にする判定は統合テストの担当で、
+//! ここで読むと文書の書きかけがそのまま純粋層のテストを赤くする。
 //!
 //! 骨組みも [`super::super::parse`] を通さずに直に組む。読み手を通すと、読み手が
 //! まだ落としていない形（単独項目を `bundle` で指す等）を試せない。
@@ -66,7 +66,7 @@ fn single_of(raw: &str, breakage: Breakage) -> (String, NamedBundle) {
     (raw.to_owned(), bundle)
 }
 
-/// `[tally]` は導出が読まない。数え直しは判定 ⑶-f の担当なので 0 で埋める。
+/// `[tally]` は導出が読まない。数え直しは別の検査の担当なので 0 で埋める。
 fn linkage_of(bundles: Vec<(String, NamedBundle)>) -> Linkage {
     Linkage {
         bundles: bundles.into_iter().collect(),
@@ -270,7 +270,7 @@ fn the_keys_match_every_id_in_the_ledgers_and_the_values_are_the_stage_and_the_r
     );
 }
 
-/// `alias`・`not-applicable` は空文字（要件 7.2）。束に属さないことは失敗にしない。
+/// `alias`・`not-applicable` は空文字。束に属さないことは失敗にしない。
 #[test]
 fn alias_and_not_applicable_are_blank_without_belonging_to_a_bundle() {
     let derived = priorities(&linkage(), &briefing(), &ledgers()).expect("見本は導けるはず");
@@ -349,8 +349,7 @@ fn a_rank_row_naming_a_bundle_absent_from_the_linkage_fails() {
 }
 
 /// 単独項目を `bundle` で指すことも、名前付き束を `singles` に混ぜることも落とす
-/// （設計 `documents::parse`「読み取り時の形の検査」のうち、`linkage.md` を要する
-/// 跨ぎの 1 項目。読み手は単独で判定できないのでここが引き受ける）。
+/// （`linkage.md` を要する跨ぎの検査。読み手は単独で判定できないのでここが引き受ける）。
 #[test]
 fn the_rank_row_must_name_a_named_bundle_in_bundle_and_singles_in_singles() {
     let as_bundle = briefing_of(
@@ -443,8 +442,8 @@ fn an_item_in_two_bundles_fails() {
     );
 }
 
-/// `unclassified` は段階も空文字も持てないので落ちる。要件 7.1 は対象 4 状態、
-/// 7.2 は別名と対象外しか決めておらず、7 つ目の状態には行き先が無い。
+/// `unclassified` は段階も空文字も持てないので落ちる。
+/// 対象 4 状態にも別名・対象外にも当たらず、行き先が無い。
 #[test]
 fn an_unclassified_item_fails_naming_the_ledger() {
     let mut ledgers = ledgers();
@@ -554,7 +553,7 @@ fn the_shared_count_includes_the_bundle_itself() {
 // axis_key
 // ---------------------------------------------------------------------------
 
-/// 序列は 壊れ方 ＞ テーマ数 ＞ 資産 ＞ 共有度（要件 6.1）。
+/// 序列は 壊れ方 ＞ テーマ数 ＞ 資産 ＞ 共有度。
 /// 上位の根拠が下位の根拠をすべて押し切ることを 1 段ずつ見る。
 #[test]
 fn the_axis_key_ranks_breakage_over_themes_over_assets_over_shared() {
@@ -576,7 +575,7 @@ fn the_axis_key_ranks_breakage_over_themes_over_assets_over_shared() {
     );
 }
 
-/// 壊れ方の重みは 黙って壊れる ＞ 明示エラー ＞ 見た目の差 ＞ 該当なし（設計 D-9）。
+/// 壊れ方の重みは 黙って壊れる ＞ 明示エラー ＞ 見た目の差 ＞ 該当なし。
 #[test]
 fn the_breakage_weight_follows_the_declared_order() {
     let key = |breakage| axis_key(breakage, 0, 0, 0);

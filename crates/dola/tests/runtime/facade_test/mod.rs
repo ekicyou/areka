@@ -1,9 +1,9 @@
 //! DolaRuntime Facade 統合テスト
 //!
-//! Task 8.1〜8.5: load → start → update → 各終了フロー → 差分配信の
+//! load → start → update → 各終了フロー → 差分配信の
 //! エンドツーエンド検証。
 //!
-//! このモジュールは挙動を変えずに研究シーム（research.md §R3）ごとに分割されている:
+//! このモジュールは次の観点ごとに分割されている:
 //! - `load_start` … load/start（成功・エラー・time_scale 境界）
 //! - `update_flow` … update ループ挙動（pause/resume・同時再生）
 //! - `termination` … conclude/cancel/finish フロー

@@ -11,10 +11,6 @@ pub type D2DRect = Rect;
 /// Direct2D APIの`D2D_RECT_F`に便利メソッドを追加するトレイトです。
 /// 矩形の構築、取得、設定、判定、演算メソッドを提供します。
 ///
-/// # パフォーマンス特性
-/// - すべてのメソッドはO(1)の計算量
-/// - インライン化により実質的なオーバーヘッドなし
-///
 /// # 使用例
 /// ```
 /// use wintf::ecs::{D2DRect, D2DRectExt, Offset, Size};
@@ -169,10 +165,6 @@ impl D2DRectExt for Rect {
 /// # 戻り値
 /// 変換後の軸平行矩形（ワールド座標系）
 ///
-/// # パフォーマンス
-/// - 2点変換: O(2) の計算量（通常の4点変換はO(4)）
-/// - 軸平行変換の場合、左上と右下の2点だけで完全な矩形を再構築可能
-///
 /// # 制約
 /// - **軸平行変換のみサポート**: 回転・スキュー変換には対応していません
 /// - 回転・スキュー変換が含まれる場合、正しくない結果を返す可能性があります
@@ -189,7 +181,6 @@ impl D2DRectExt for Rect {
 /// assert_eq!(transformed.top, 5.0);
 /// ```
 pub fn transform_rect_axis_aligned(rect: &Rect, matrix: &Matrix3x2) -> Rect {
-    // 左上と右下の2点を変換
     // Matrix3x2での点変換: x' = M11*x + M21*y + M31, y' = M12*x + M22*y + M32
     let top_left_x = matrix.M11 * rect.left + matrix.M21 * rect.top + matrix.M31;
     let top_left_y = matrix.M12 * rect.left + matrix.M22 * rect.top + matrix.M32;
@@ -197,7 +188,6 @@ pub fn transform_rect_axis_aligned(rect: &Rect, matrix: &Matrix3x2) -> Rect {
     let bottom_right_x = matrix.M11 * rect.right + matrix.M21 * rect.bottom + matrix.M31;
     let bottom_right_y = matrix.M12 * rect.right + matrix.M22 * rect.bottom + matrix.M32;
 
-    // min/maxで新しい軸平行矩形を構築
     Rect {
         left: top_left_x.min(bottom_right_x),
         top: top_left_y.min(bottom_right_y),

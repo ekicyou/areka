@@ -1,26 +1,26 @@
-//! くり返しの試験（areka-P0-emo2-real-run-stability 要件 4.1〜4.4・4.6〜4.8・5.1〜5.3・6.1）。
+//! くり返しの試験。
 //!
 //! 新しい写しからの emo2 の最初の起動を N 回回し、成功・LOAD の失敗・ほかの失敗を数える。1 回の走りは
-//! 件 1 の試験と同じ共通の手続き（`emo2_real_run/common.rs` の `spawn_emo2`＋`boot_and_close`）。
+//! `emo2_real_run` の試験と同じ共通の手続き（`emo2_real_run/common.rs` の `spawn_emo2`＋`boot_and_close`）。
 //!
-//! ## 門（要件 4.2）
+//! ## 門
 //! `AREKA_EMO2_REPEAT` が無い・空・空白だけなら子を起こさず素通り。数でない・0・UTF-8 でない値と、
 //! `AREKA_EMO2_REPEAT_DROP` の知らない値は、子を起こさずに理由を書いて赤。
 //!
-//! ## 比べの条件（`AREKA_EMO2_REPEAT_DROP`・要件 4.4・6.1）
+//! ## 比べの条件（`AREKA_EMO2_REPEAT_DROP`）
 //! - 無い・空: 基本。写した直後に起こし、前の回の直後に次を起こし、待つ間に MCP で面とバルーンを読む。
 //! - `gap`: 前の回の終わりから次の起動まで 10 秒あける。
 //! - `copy-wait`: 写しを取った後 10 秒待ってから起こす。
 //! - `no-mcp`: 待つ間の MCP の呼び出しを止める。
 //!
-//! ## 出力（ASCII・標準エラー・要件 4.6・5.2）
+//! ## 出力（ASCII・標準エラー）
 //!
 //!     emo2_first_load_repeat run=1/20 outcome=ok: wire_ms=812 attach_ms=1540 ...
 //!     emo2_first_load_repeat run=2/20 outcome=load_failed: kept=C:\...\target\test-roots\areka-rr-1234-2
 //!     emo2_first_load_repeat: condition=basic runs=20 ok=19 load_failed=1 other_failed=0
 //!
-//! 落ちた回の置き場（写しと出力）は窓口が残し、成功の回は消える（要件 5.1・5.3）。落ちた回が 1 回でも
-//! あれば、全部の回の後にまとめと落ちた回の一覧で赤（要件 4.8）。
+//! 落ちた回の置き場（写しと出力）は窓口が残し、成功の回は消える。落ちた回が 1 回でも
+//! あれば、全部の回の後にまとめと落ちた回の一覧で赤。
 //!
 //! ## 回し方
 //! 排他テストの机を借りてから（`doc/impl-watch.md`）:
@@ -28,7 +28,7 @@
 //!     $env:AREKA_EMO2_REPEAT="20"; cargo test -p areka --test emo2_first_load_repeat -- --nocapture
 //!     $env:AREKA_EMO2_REPEAT="20"; $env:AREKA_EMO2_REPEAT_DROP="gap"; cargo test -p areka --test emo2_first_load_repeat -- --nocapture
 
-// 件 1 の試験だけが使う残りの警告を抑える。
+// `emo2_real_run` だけが使う残りの警告を抑える。
 #[allow(dead_code)]
 #[path = "emo2_real_run/common.rs"]
 mod common;

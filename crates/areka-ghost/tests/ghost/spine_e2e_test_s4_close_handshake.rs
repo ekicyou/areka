@@ -1,30 +1,22 @@
-// ===================== S4: close 握手シナリオ（task 4.5） =====================
+// ===================== S4: close 握手シナリオ =====================
 //
-// design.md「spine e2e（決定論・純 x64）」の「シナリオ網羅（要件 7.5）」節・S4:
-// 「close 握手: `CloseRequest`→`OnClose` GET が close talk（`\-` 終端）→
-// `TalkDone{Quit}`→`Unload` が呼ばれ scripted `Ok(ExitKind::Clean)`→`Unloaded` 観測
-// →`StopSelf`→shutdown で全スレッド join（要件 7.3）。」を、S1（boot→Steady 到達確認の
-// retry ループ技法）を踏まえたうえで、初めて「正規（canonical）の終了要求」（S2/S3 の
-// Fault 駆動終了とは異なる、成功する close talk 駆動の Quit 経路）を駆動する。
+// close 握手: `CloseRequest`→`OnClose` GET が close talk（`\-` 終端）→`TalkDone{Quit}`→`Unload` が呼ばれ
+// scripted `Ok(ExitKind::Clean)`→`Unloaded` 観測→`StopSelf`→shutdown で全スレッド join。S1（boot→Steady 到達確認の
+// retry ループ技法）を踏まえ、初めて正規の終了要求（S2/S3 の Fault 駆動終了とは異なる、成功する close talk 駆動の
+// Quit 経路）を駆動する。
 //
-// close talk の script は `\-`（先行 cue のない bare quit タグ）にする——
-// `areka_sakura::drive` の `quit_only_script_ends_immediately_with_quit_not_ended` が
-// 示すとおり、これは空 CueSheet＋`TalkEndReason::Quit` へ即時（Tick 不要）コンパイルされる
-// （空 sheet 高速経路）。ゆえに close talk 自体の完了確認に Tick 注入は要らない——ただし
-// OnClose GET（kanade↔shiori の同期往復）・StartTalk（start_tx→start-relay→dispatcher_tx
-// の 2 hop）・TalkDone（dispatcher 自身の inbox 経由で kanade へ転送）は依然として実スレッド
-// 境界を跨ぐため、dispatcher へ Tick を注入しつつ有界スピンで待ち（sleep なし）、
-// `handle.calls()` に `Unload` が現れるのを確認する。
+// close talk の script は `\-`（先行 cue のない bare quit タグ）にする——`areka_sakura::drive` の
+// `quit_only_script_ends_immediately_with_quit_not_ended` が示すとおり、これは空 CueSheet＋`TalkEndReason::Quit` へ
+// 即時（Tick 不要）コンパイルされる（空 sheet 高速経路）。ただし OnClose GET（kanade↔shiori の同期往復）・
+// StartTalk（start_tx→start-relay→dispatcher_tx の 2 hop）・TalkDone（dispatcher 自身の inbox 経由で kanade へ転送）は
+// 実スレッド境界を跨ぐため、dispatcher へ Tick を注入しつつ有界スピンで待ち（sleep なし）、`handle.calls()` に
+// `Unload` が現れるのを確認する。
 //
-// `handle.calls()` に `Unload` が現れた時点で、kanade 自身の thread は
-// `round_trip_unload`（`areka-kanade/src/actor.rs`）内の `reply_rx.recv()` にまだ
-// ブロック中か、既にその応答を消化して `Stopped`＋`StopSelf`（shiori へ `Close` を送り
-// break）へ進んでいる——いずれの場合も kanade は「次のメッセージを inbox から取り出す」
-// 前に完結するため、この時点より後で送る `runtime.shutdown()` の `ForceQuit` は
-// （a) まだ処理されず thread 終了と共に破棄されるか、(b) 送出自体が失敗する
-// （既に停止済み＝冪等）のいずれかであり、`unload()` が二度目に呼ばれることはない
-// （`ScriptedShioriBackend::unload` は `Option::take()` で一度きり消費するため、二重呼出は
-// 即座に panic するはずだが、上記の理由からこの経路には到達しない）。
+// `Unload` が現れた時点で kanade は `round_trip_unload`（`areka-kanade/src/actor.rs`）内の `reply_rx.recv()` に
+// まだブロック中か、既に `Stopped`＋`StopSelf`（shiori へ `Close` を送り break）へ進んでいる——いずれも「次のメッセージを
+// inbox から取り出す」前に完結するため、以後の `runtime.shutdown()` の `ForceQuit` は (a) 処理されず thread 終了と共に
+// 破棄されるか、(b) 送出自体が失敗する（既に停止済み＝冪等）かのいずれかで、`unload()` が二度目に呼ばれることはない
+// （`ScriptedShioriBackend::unload` は `Option::take()` で一度きり消費するため、二重呼出は即座に panic する）。
 
 use super::*;
 
@@ -36,8 +28,7 @@ use areka_parsers::charset::DefaultEncoding;
 /// （bare quit `\-`）が close talk として再生起動され、空 sheet 高速経路で即座に
 /// `TalkDone{Quit}` へ終端し、kanade が横断アームで `Unloading{Quit}`→
 /// scripted `Ok(ExitKind::Clean)` の `Unload`→`Unloaded` 観測→`StopSelf` へ完走する
-/// ことを、`runtime.shutdown()` の全スレッド join 成功をもって確認する（design「S4
-/// close 握手」・要件 7.3/7.4/7.5/7.6）。
+/// ことを、`runtime.shutdown()` の全スレッド join 成功をもって確認する。
 #[test]
 fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
     const SHELL_NAME: &str = "S4CloseShell";
@@ -80,7 +71,7 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
     // 確かめる。cue の到達は起動系列の完了を**含意しない**（S1/S3 と同じ: `StartTalk` は
     // basewareversion より先に積まれ、別スレッドの競走になる）。起動系列の途中で届いた
     // CloseRequest は pending_close として持ち越され、握手は Steady 到達の後に始まる
-    // （DD-IT-12）ので、cue を待ってから送れば握手の完走を下の有界待ちで確かめられる。
+    // ので、cue を待ってから送れば握手の完走を下の有界待ちで確かめられる。
     let mut now: u64 = 1;
     super::spin_pumping_ticks(
         "S4: surface cue never fired after repeated Tick — boot talk did not reach \
@@ -111,12 +102,10 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
     // （kanade↔shiori 同期往復・start-relay・dispatcher・per-talk spawn_talk スレッド・
     // dispatcher 自身の inbox 経由の kanade 転送）を跨ぐため有界スピンで待つ。
     //
-    // **dispatcher への Tick 注入を続けること**（2026-07-30 是正）: CloseRequest 受領時に
-    // 挨拶 talk（`hello`＝0.25s）がまだ active なら kanade は DD-IT-12 により即握手せず
-    // `pending_close` を記録して `Steady{Some}` を維持し、挨拶 talk の `TalkDone` 受領時に
-    // 初めて握手を開始する。その `TalkDone` は仮想時刻が horizon を越えて初めて出るため、
-    // Tick を止めて yield だけで待つ旧実装は「引き渡しが速く `now` が 0.25s 未満で止まった
-    // 実行」で永久に握手へ進めず 60s 安全弁まで空転していた（実測フレーキー）。
+    // **dispatcher への Tick 注入を続けること**: CloseRequest 受領時に挨拶 talk（`hello`＝0.25s）がまだ active なら kanade は
+    // 即握手せず `pending_close` を記録して `Steady{Some}` を維持し、挨拶 talk の `TalkDone` 受領時に初めて握手を開始する。
+    // その `TalkDone` は仮想時刻が horizon を越えて初めて出るため、Tick を止めて yield だけで待つと「引き渡しが速く `now` が
+    // 0.25s 未満で止まった実行」で永久に握手へ進めず 60s 安全弁まで空転する。
     // kanade ではなく **dispatcher** へ送るのが要点（kanade 宛 Tick は `Steady` pump として
     // 消費され台本外の `OnSecondChange` NOTIFY を誘発する）。
     super::spin_pumping_ticks(
@@ -159,7 +148,7 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
          OnClose→OnTranslate→Unload）が正典順序で発火していない"
     );
 
-    // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する（要件 7.3) ----
+    // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する ----
     // close 握手は既に Unload まで完走済み（上の有界待機で確認済み）。ここでの
     // `ForceQuit` が kanade へ届く道と、kanade が既に止まっていて送出が失敗する冪等の道
     // （`shutdown()` の「kanade already stopped before ForceQuit send」分岐）のどちらを

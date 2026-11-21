@@ -13,11 +13,6 @@ use windows::core::Interface;
 
 /// エンティティ名をログ用にフォーマットする
 ///
-/// # Arguments
-/// * `entity` - エンティティID
-/// * `name` - Nameコンポーネント（オプション）
-///
-/// # Returns
 /// Nameがあれば名前をそのまま返し、なければ`Entity(0v1)`形式でEntity IDを返す
 pub fn format_entity_name(entity: Entity, name: Option<&Name>) -> String {
     match name {
@@ -26,26 +21,17 @@ pub fn format_entity_name(entity: Entity, name: Option<&Name>) -> String {
     }
 }
 
-/// GlobalArrangementの境界から物理ピクセルサイズを計算する
-///
-/// # Arguments
-/// * `global_arrangement` - GlobalArrangementコンポーネント
+/// GlobalArrangementの境界から物理ピクセルサイズを計算する（スケール適用後・小数点切り上げ）
 ///
 /// # Returns
 /// * `Some((width, height))` - 有効なサイズ（幅と高さが両方1以上）
 /// * `None` - 無効なサイズ（幅または高さが0以下）
-///
-/// # Requirements
-/// - Req 3.1: GlobalArrangement.boundsから計算（物理ピクセルサイズ）
-/// - Req 3.2: スケール適用後のサイズ（小数点切り上げ）
-/// - Req 3.3: サイズ0の場合はNone
 pub fn calculate_surface_size_from_global_arrangement(
     global_arrangement: &GlobalArrangement,
 ) -> Option<(u32, u32)> {
     let width = global_arrangement.bounds.right - global_arrangement.bounds.left;
     let height = global_arrangement.bounds.bottom - global_arrangement.bounds.top;
 
-    // サイズが0以下の場合はNone
     // NOTE(W3a-V): 幅・高さが NaN の場合この比較は false となり素通りするが、
     // 後段の `NaN.ceil() as u32 == 0`（float→int の飽和キャスト）により
     // width_px == 0 ガードで None に収束する。+inf は u32::MAX へ飽和して
@@ -55,11 +41,9 @@ pub fn calculate_surface_size_from_global_arrangement(
         return None;
     }
 
-    // 小数点以下を切り上げて物理ピクセルサイズを計算
     let width_px = width.ceil() as u32;
     let height_px = height.ceil() as u32;
 
-    // 最低1ピクセルを保証
     if width_px == 0 || height_px == 0 {
         return None;
     }
@@ -88,7 +72,7 @@ fn create_window_graphics_for_hwnd(
     Ok(WindowGraphics::new(target, generation))
 }
 
-// ========== 新しい再初期化システム ==========
+// ========== 再初期化システム ==========
 
 /// 装置が在って有効か（装置を要る係の実行の条件）。
 pub(crate) fn graphics_core_ready(gc: Option<Res<GraphicsCore>>) -> bool {
@@ -116,7 +100,7 @@ pub fn init_graphics_core(
         return;
     }
     // 描画基盤が無効・未挿入の間は、次の画面更新でも必ず回して再試行する
-    // （設計 C16 の `GRAPHICS`）。命令で入れた巡は使えるのが次の巡なので、その 1 回も省かせない。
+    // `GRAPHICS` の旗を立てる。命令で入れた巡は使えるのが次の巡なので、その 1 回も省かせない。
     crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
 
     info!(
@@ -182,7 +166,7 @@ pub fn init_wuc_resource(
                 error = ?e,
                 "[init_wuc_resource] WucGraphicsResource initialization failed"
             );
-            // 次の画面更新でも必ず回して試し直す（39 番）
+            // 次の画面更新でも必ず回して試し直す
             crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
         }
     }
@@ -203,7 +187,7 @@ type WindowGraphicsData = (
 /// 係を自分で登録したときの守り。
 ///
 /// 毎回すべての窓を見て、的が無いか無効な窓だけを作る（有効な窓は可変で触らない）。
-/// 変化の印で絞らないのは、作り直しに一度失敗した窓を次の回で試し直すため（39 番）。
+/// 変化の印で絞らないのは、作り直しに一度失敗した窓を次の回で試し直すため。
 /// 失敗したら `GRAPHICS` の旗を立て、次の画面更新を必ず回す。
 pub fn init_window_graphics(
     graphics: Option<Res<GraphicsCore>>,

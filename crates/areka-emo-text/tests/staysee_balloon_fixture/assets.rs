@@ -1,17 +1,12 @@
 //! 保管フォルダの名前集合と枠画像の原寸を固定する。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **2.2**／**5.4**・設計 **C2** の A 行）。
 
 use super::test_support::{EXPECTED_FRAME_SIZES, staysee_root};
 use crate::support::fixture::png_native_size;
 
 /// 上流 `ponapalt/StayseeBalloon` `fe1b02f3` の配布物に含まれる全 29 ファイル。
 ///
-/// areka が読まないファイル（`thumbnail.pnr`・`online*`・`marker.png`・`sstp.png`・
-/// `balloonc*`・`arrow*`・`install.txt`）も削らず、告知ファイルを足しもしない
-/// （要件 2.2・5.4）。並びは `verification/provenance.md` §3 のハッシュ一覧と同じ昇順。
+/// areka が読まないファイル（`thumbnail.pnr`・`online*`・`marker.png`・`sstp.png`・`balloonc*`・`arrow*`・`install.txt`）も
+/// 削らず、告知ファイルを足しもしない。並びはハッシュ一覧と同じ昇順。
 const EXPECTED_FILE_NAMES: [&str; 29] = [
     "LICENSE",
     "arrow0.png",
@@ -105,10 +100,8 @@ fn stored_folder_holds_exactly_the_upstream_29_files() {
     );
 }
 
-/// 枠として焼き込む 6 枚の原寸が実 PNG の IHDR と一致する。
-///
-/// 原寸をハードコードしつつ実ファイルと突合するのは、PNG が差し替わったときに期待値が
-/// 黙って追従して「テストが自分で期待値を作る」形になるのを防ぐためである。
+/// 枠として焼き込む 6 枚の原寸が実 PNG の IHDR と一致する。原寸をハードコードしつつ実ファイルと突合するのは、
+/// PNG が差し替わったときに期待値が黙って追従して「テストが自分で期待値を作る」形になるのを防ぐため。
 #[test]
 fn frame_png_native_sizes_are_pinned() {
     let root = staysee_root();

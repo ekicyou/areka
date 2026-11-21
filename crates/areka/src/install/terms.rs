@@ -1,4 +1,4 @@
-//! 利用条件の本文を用意する（design「areka / install / terms」）。
+//! 利用条件の本文を用意する。
 //!
 //! 純粋: 書庫が持つ伸長済みの中身を引いて復号し、画面に収まる上限で切るだけ。
 //! 何も書かず、記録も出さない（出すのは呼び手）。
@@ -6,12 +6,12 @@
 use areka_nar::NarArchive;
 use areka_parsers::charset::{DefaultEncoding, decode};
 
-/// 正典の利用条件のファイル名（並びが優先順・要件 4.2）。
+/// 正典の利用条件のファイル名（並びが優先順）。
 const TERMS_FILES: [&str; 2] = ["terms.txt", "terms.md"];
 
-/// 本文の上限の行数（設計で決めたこと 12）。
+/// 本文の上限の行数。
 pub(crate) const TERMS_MAX_LINES: usize = 25;
-/// 本文の上限の文字数（設計で決めたこと 12）。
+/// 本文の上限の文字数。
 pub(crate) const TERMS_MAX_CHARS: usize = 1200;
 
 /// 出す利用条件（ファイル名と、復号して上限で切った本文）。
@@ -27,7 +27,7 @@ pub(crate) fn find_terms(archive: &NarArchive) -> Option<TermsNotice> {
     let (file, bytes) = TERMS_FILES
         .into_iter()
         .find_map(|file| archive.entry_bytes(file).map(|bytes| (file, bytes)))?;
-    // `install.txt` と同じ読み方（`charset` の行か BOM に従い、無ければ Shift_JIS・要件 4.3）。
+    // `install.txt` と同じ読み方（`charset` の行か BOM に従い、無ければ Shift_JIS）。
     let text = decode(bytes, DefaultEncoding::Ansi);
     let mut lines: Vec<&str> = text.lines().collect();
     // 1 行目の `charset,` の指定は本文ではない（読み方の鍵は `decode` の先読みと同じ）。

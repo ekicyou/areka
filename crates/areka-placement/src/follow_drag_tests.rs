@@ -22,7 +22,7 @@ use crate::resolver::SizePx;
 use log_capture_kit::{ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
-// on_char_drag（4.2/4.3/4.4・U4）
+// on_char_drag
 // -------------------------------------------------------------------------
 
 /// Tunnel フェーズは無視する（donor on_shell_drag と同じ規約）。
@@ -47,7 +47,7 @@ fn on_char_drag_tunnel_phase_is_ignored() {
 
 /// Bubble フェーズ: キャラ窓の WindowPos（wndproc 更新済み想定・物理 px）に
 /// offset を加算した位置へバルーンが追従する。再スケールなしの檻として
-/// 96 の倍数を避けた座標で完全一致を要求する（U4・3.3）。
+/// 96 の倍数を避けた座標で完全一致を要求する。
 #[test]
 fn on_char_drag_bubble_moves_balloon_by_offset() {
     let mut world = World::new();
@@ -110,10 +110,10 @@ fn on_char_drag_without_balloon_follow_is_noop() {
     assert!(drain_window_pos_commands().is_empty(), "窓へ書いた");
 }
 
-/// (a)(b) 単一ライター・振動なし: 連続 DragEvent の**各適用直後**に WindowPos が
+/// 単一ライター・振動なし: 連続 DragEvent の**各適用直後**に WindowPos が
 /// 「X=生ドラッグ X・Y=釘付け Y」を示し、非釘付け Y が一度も現れない
 /// （v1 の事後補正振動に対する最強の檻——反映段階で既に正しい座標のみが書かれる）。
-/// X はカーソル差分の素通し（物理 px・再スケールなし・4.7）。
+/// X はカーソル差分の素通し（物理 px・再スケールなし）。
 #[test]
 fn on_char_drag_writes_only_policy_applied_positions() {
     let mut world = World::new();
@@ -144,8 +144,8 @@ fn on_char_drag_writes_only_policy_applied_positions() {
     }
 }
 
-/// (b') 非 Bottom アンカーの drag 配線存在チェック（`areka-P0-surface-resize-resnap` Req1.6・design Integration
-/// Tests #8 末尾・判定の枝の檻は配線を証明しないので配線の存在を一度だけ確かめる）:
+/// 非 Bottom アンカーの drag 配線存在チェック（判定の枝の檻は配線を証明しないので
+/// 配線の存在を一度だけ確かめる）:
 /// `Anchored(Left)` 窓のドラッグで X=`wa.left` 固定・Y 保持（縦自由）になる。
 ///
 /// これは `on_char_drag` の drag 配線が**実 `Anchored.0`（Left）を `project_anchor`
@@ -185,8 +185,8 @@ fn on_char_drag_left_anchor_pins_left_edge_and_keeps_y() {
     );
 }
 
-/// (c) モニタ跨ぎ: 生ドラッグ位置の窓中心が隣モニタへ移ったら、跨いだ先の
-/// work area 下端へ再吸着し、戻れば元モニタの下端へ戻る（live 算出・4.7）。
+/// モニタ跨ぎ: 生ドラッグ位置の窓中心が隣モニタへ移ったら、跨いだ先の
+/// work area 下端へ再吸着し、戻れば元モニタの下端へ戻る（live 算出）。
 #[test]
 fn on_char_drag_resnaps_to_crossed_monitor_bottom() {
     let mut world = World::new();
@@ -229,9 +229,9 @@ fn on_char_drag_resnaps_to_crossed_monitor_bottom() {
     );
 }
 
-/// (d) Free 窓（`Anchored(Free)`＝move_window=true）は wndproc 委譲のまま:
+/// Free 窓（`Anchored(Free)`＝move_window=true）は wndproc 委譲のまま:
 /// ハンドラはキャラ窓を書かず、DraggingState があってもポリシー写像を使わない
-/// （wndproc 更新済み WindowPos 基準でバルーン追従のみ・挙動不変・`areka-P0-window-placement` 要件 4.7・`areka-P0-surface-resize-resnap` 要件 1.6）。
+/// （wndproc 更新済み WindowPos 基準でバルーン追従のみ・挙動不変）。
 #[test]
 fn on_char_drag_free_window_stays_wndproc_delegated() {
     let mut world = World::new();
@@ -243,7 +243,7 @@ fn on_char_drag_free_window_stays_wndproc_delegated() {
             fake_handle(0x1000),
             window_pos_sized(1207, 217, 434, 687), // wndproc がドラッグ中に更新した位置
             Anchored(Anchor::Free),
-            // 書き手の分かれ目は向きでなく move_window（組に無い吸着なしの窓＝wintf が書く・設計の決め 12）
+            // 書き手の分かれ目は向きでなく move_window（組に無い吸着なしの窓＝wintf が書く）
             DragConfig {
                 move_window: true,
                 ..Default::default()
@@ -268,9 +268,9 @@ fn on_char_drag_free_window_stays_wndproc_delegated() {
     );
 }
 
-/// (d') `Anchored` 不在（安全側フォールバック・`areka-P0-surface-resize-resnap` task 2.7 の新規判断分岐）: marker が
+/// `Anchored` 不在（安全側フォールバック）: marker が
 /// 一切無い窓は Free と同じく wndproc 委譲へ倒す——DraggingState が居ても単一ライター
-/// 写像を走らせず、キャラ窓を書かない（旧「marker 無し＝Free」意味論の保存・`areka-P0-surface-resize-resnap` Req1.6）。
+/// 写像を走らせず、キャラ窓を書かない（旧「marker 無し＝Free」意味論の保存）。
 #[test]
 fn on_char_drag_without_anchored_stays_wndproc_delegated() {
     let mut world = World::new();
@@ -302,8 +302,8 @@ fn on_char_drag_without_anchored_stays_wndproc_delegated() {
     );
 }
 
-/// (e) バルーン追従はポリシー**適用後**座標＋offset 基準
-/// （生ドラッグ座標基準だと Y がずれる檻・4.2/4.7）。
+/// バルーン追従はポリシー**適用後**座標＋offset 基準
+/// （生ドラッグ座標基準だと Y がずれる檻）。
 #[test]
 fn on_char_drag_balloon_follows_policy_applied_position() {
     let mut world = World::new();
@@ -336,8 +336,8 @@ fn on_char_drag_balloon_follows_policy_applied_position() {
     );
 }
 
-/// (164) 始めの位置が分からない（`initial_window_pos: None`）ドラッグは、吸着した組の窓でも
-/// ドラッグした窓・バルーン・組の相手のどれも動かさず、札の `debug!` を 1 行残す（2.2・2.3・9.6）。
+/// 始めの位置が分からない（`initial_window_pos: None`）ドラッグは、吸着した組の窓でも
+/// ドラッグした窓・バルーン・組の相手のどれも動かさず、札の `debug!` を 1 行残す。
 /// `None` を `(0,0)` で写すと窓が左上へ飛んで落ちる。
 #[test]
 fn on_char_drag_with_unknown_origin_moves_nothing_and_logs_once() {
@@ -388,9 +388,8 @@ fn on_char_drag_with_unknown_origin_moves_nothing_and_logs_once() {
     let _residue = drain_window_pos_commands();
 }
 
-/// (f) DragEnd: 最終カーソル位置へ同写像を適用する（accumulator の
-/// `current_dragging_entity` 先行クリアで最終 DragEvent が欠落する穴の埋め・
-/// DD15 v2 (3)）。バルーンも適用後座標基準で追従する。
+/// DragEnd: 最終カーソル位置へ同写像を適用する（accumulator の
+/// `current_dragging_entity` 先行クリアで最終 DragEvent が欠落する穴の埋め）。バルーンも適用後座標基準で追従する。
 #[test]
 fn on_char_drag_end_applies_policy_at_final_cursor() {
     let mut world = World::new();
@@ -425,7 +424,7 @@ fn on_char_drag_end_applies_policy_at_final_cursor() {
     );
 }
 
-/// (f) 補: DragEnd の Tunnel フェーズは無視する（他ハンドラと同じ規約）。
+/// DragEnd の Tunnel フェーズは無視する（他ハンドラと同じ規約）。
 #[test]
 fn on_char_drag_end_tunnel_phase_is_ignored() {
     let mut world = World::new();
@@ -445,7 +444,7 @@ fn on_char_drag_end_tunnel_phase_is_ignored() {
     assert_eq!(position_of(&world, window), Point { x: 1250, y: 356 });
 }
 
-/// `areka-P0-position-persist` Task 2.2 保存フック（Req1.1/1.9・design C2）: 非 Free アンカーのキャラ窓の
+/// 保存フック: 非 Free アンカーのキャラ窓の
 /// DragEnd で、確定位置 `mapped` が当該スコープの `WindowPos` entries として Ghost
 /// 永続スコープへ write-through される。`barrier` 後に別ハンドルの `load_scope` で
 /// 読み戻し、保存 x/y が `mapped` 位置に等しいことを固定する（persist_io_wiring_tests.rs の
@@ -464,7 +463,7 @@ fn on_char_drag_end_persists_char_pos_for_scope() {
     world.insert_resource(single_monitor_snapshot()); // 下端 1043・釘付け Y=1043−687=356
 
     let start = (1400, 600);
-    // scope=1 の非 Free（Bottom）キャラ窓。値は (f) 檻と同一＝mapped=(1408, 356) が既知。
+    // scope=1 の非 Free（Bottom）キャラ窓。値は上の DragEnd の檻と同一＝mapped=(1408, 356) が既知。
     let window = world
         .spawn((
             fake_handle(0x1000),
@@ -510,14 +509,13 @@ fn on_char_drag_end_persists_char_pos_for_scope() {
     rig.close();
 }
 
-/// `areka-P0-position-persist` Task 8.1 偽 Free アンカー DragEnd→保存値等価の檻（Req1.1・design C2/C3・
-/// Testing Strategy Unit §7）: `Anchored(Anchor::Free)` のキャラ窓を headless World に
+/// 偽 Free アンカー DragEnd→保存値等価の檻: `Anchored(Anchor::Free)` のキャラ窓を headless World に
 /// 合成し、DragEnd 駆動→`project_anchor` の Free identity 腕を素通しした確定位置が、
 /// **アンカー種別を問わず**そのまま `WindowPos` entries 化されて Ghost 永続スコープへ
 /// write-through されることを決定論固定する。
 ///
 /// なぜこの檻が正本か: 保存はドラッグ中の吸着制約（Bottom 等）ではなく DragEnd の
-/// 確定位置を書く（`areka-P0-position-persist` Req1.1）。Free は wndproc（move_window=true）が動かし切った位置を
+/// 確定位置を書く。Free は wndproc（move_window=true）が動かし切った位置を
 /// `project_anchor` が identity で無害通過させ、本ハンドラが**保存専用アーム**として
 /// 働く——実 emo2 は全スコープ Bottom（実機で Free の保存経路を一度も踏まない）ゆえ、
 /// この偽 Free 檻だけがその等価性の source of truth となる。
@@ -567,7 +565,7 @@ fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
     );
 
     // 別ハンドルの load_scope で scope2 の WindowPos を読み戻す（実 IO 通過＝投函の証明）。
-    // Free アンカーでも保存値は確定 raw と value-equal（アンカー種別を問わない・`areka-P0-position-persist` Req1.1）。
+    // Free アンカーでも保存値は確定 raw と value-equal（アンカー種別を問わない）。
     let loaded = rig.saved();
     assert!(
         loaded.contains(&(
@@ -595,7 +593,7 @@ fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
     rig.close();
 }
 
-/// `areka-P0-position-persist` Task 8.3 発火規律の統合檻（Req1.9・8.4・design C2/C3・Testing Strategy Integration §2）:
+/// 発火規律の統合檻:
 /// 永続の窓位置を書くのは **ドラッグの確定と、起動の最後に並べ終えた時点の 2 つ**（バルーン相対
 /// オフセットはドラッグの確定だけ）で、自動再射影（`resize_window_to`）・`\![move]` 消費経路（`move_window_to`）・復元時再射影（`apply_restored_placements`・純関数）・**連続ドラッグ**（`on_char_drag`）は
 /// 永続ストアを一切書き換えないことを、ストア内容のバイト等価で決定論固定する。
@@ -610,8 +608,7 @@ fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
 ///
 /// もし駆動した操作のいずれかが `persist_put` を投函すれば、scope1 の WindowPos／
 /// BalloonOffset entries が変化して seed スナップショットと乖離し、本 assert が落ちる
-/// （RED 検証: 駆動ブロックへ一時的に `persist_entries` を差し込むと本檻が実際に落ちることを
-/// 確認済み——発火規律が破れれば必ず検出する）。emo2 は全スコープ Bottom＝実機で Free の
+/// （発火規律が破れれば必ず検出する）。emo2 は全スコープ Bottom＝実機で Free の
 /// 保存経路を踏まないのと同様、自動再射影が永続へ漏れないことは決定論檻でのみ観測できる。
 #[test]
 fn non_dragend_operations_leave_persist_store_byte_invariant() {
@@ -683,7 +680,7 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
         balloon_size: SizePx { w: 200, h: 300 },
         balloon_offset: PointPx { x: -549, y: 27 },
         balloon_offset_base: OffsetBase::unpinned(PointPx { x: -549, y: 27 }),
-        // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
+        // 正典既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Bottom,
         balloon_keyword_base: None,
@@ -707,9 +704,9 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
     rig.close();
 }
 
-/// (g) target==自 entity ガード: 他 entity 宛イベントの Bubble を受けても
+/// target==自 entity ガード: 他 entity 宛イベントの Bubble を受けても
 /// on_char_drag／on_char_drag_end／on_balloon_drag／on_balloon_drag_end はすべて no-op。
-/// on_balloon_drag_end は `Tunnel` も無視する（`audit-placement-follow` 指摘 11 ⑶）。
+/// on_balloon_drag_end は `Tunnel` も無視する。
 #[test]
 fn drag_handlers_ignore_events_targeting_other_entities() {
     use super::on_balloon_drag_end;
@@ -770,7 +767,7 @@ fn drag_handlers_ignore_events_targeting_other_entities() {
     }
 }
 
-/// (+) MonitorSnapshot 不在（未挿入）: ポリシーは identity
+/// MonitorSnapshot 不在（未挿入）: ポリシーは identity
 /// へ縮退し、窓は生ドラッグ座標のまま単一ライターで移動する（move_window=false
 /// でもドラッグ追従が生きる縮退・吸着なし・panic なし）。
 #[test]
@@ -803,7 +800,7 @@ fn on_char_drag_without_snapshot_moves_to_raw_position() {
     );
 }
 
-/// (+) WindowPos.size 不在／`WindowPos::default()` の CW_USEDEFAULT センチネル:
+/// WindowPos.size 不在／`WindowPos::default()` の CW_USEDEFAULT センチネル:
 /// 非正寸法として identity 縮退＝生ドラッグ座標のまま移動（暴走・panic なし）。
 #[test]
 fn on_char_drag_with_invalid_size_degrades_to_identity() {
@@ -840,7 +837,7 @@ fn on_char_drag_with_invalid_size_degrades_to_identity() {
     assert_eq!(position_of(&world, sentinel), Point { x: 1257, y: 106 });
 }
 
-/// (+) DraggingState 不在の BottomSnap 窓（実 flow では dispatch が DragEvent
+/// DraggingState 不在の BottomSnap 窓（実 flow では dispatch が DragEvent
 /// より先に挿入する）: 生座標を復元できないため書き込みなし（panic なし・
 /// バルーンも不動）。
 #[test]

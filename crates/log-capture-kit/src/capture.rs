@@ -1,8 +1,6 @@
 //! 捕捉窓。呼出スレッドで同期的に発火したイベントを集め、窓が実際に生きていたことを
 //! 番兵イベントで自己検査する。
 //!
-//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
-//!
 //! 窓の決定性は 3 つの仕掛けの合成で成り立つ（機序の詳細は [`crate::probe`] の doc）。
 //!
 //! 1. **常駐 probe**（[`ensure_interest_probes`]）— 他スレッドの先着で発行点の interest に
@@ -30,7 +28,7 @@ pub(crate) const SENTINEL_TARGET: &str = "log_capture_kit::sentinel";
 
 /// イベントを溜めるだけの最小 subscriber。
 ///
-/// `enabled` は常に真＝**TRACE を含む全レベル**が捕捉対象（要件 3.5）。span は使わないので
+/// `enabled` は常に真＝**TRACE を含む全レベル**が捕捉対象。span は使わないので
 /// `new_span` は固定 id を返す。
 #[derive(Clone, Default)]
 pub(crate) struct CaptureSubscriber(pub(crate) Arc<Mutex<Vec<CapturedEvent>>>);
@@ -126,7 +124,7 @@ impl Drop for CloseOnDrop {
 /// 「番兵検査が本当に赤にできる」ことを自己テストで較正するためである
 /// （検査が赤にできないなら、その検査は何も証明していない）。
 ///
-/// 手順は Flow 1 の図のとおり: probe 常駐（冪等）→ 窓を開く → 窓内で interest 再計算 →
+/// 手順: probe 常駐（冪等）→ 窓を開く → 窓内で interest 再計算 →
 /// 番兵発火 → `f` 実行 → **窓を抜けてから**結果を取り出す → 番兵の存在を検査して除去。
 pub(crate) fn run_with_subscriber<S, R>(
     subscriber: S,
@@ -142,7 +140,6 @@ where
         // probe 常駐前（プロセス起動〜初回の窓）に焼かれた `never` の掃き残しを、
         // 窓が開いた**後**の時点で確定的に潰す。
         tracing::callsite::rebuild_interest_cache();
-        // 対照イベント（番兵）。窓が本当に生きているかを、同じ窓の内側で示す。
         tracing::trace!(target: SENTINEL_TARGET, "capture window is live");
         f()
     });
@@ -167,13 +164,13 @@ where
 /// 既定の捕捉 API。`f` の実行中に**現在のスレッド**で同期的に発火したイベントを、
 /// `f` の戻り値と共に返す。
 ///
-/// - TRACE を含む全レベルが対象（要件 3.5）。
-/// - 窓の外・他スレッドで発火したイベントは混入しない（要件 3.6）。例外は窓の中で起こした
+/// - TRACE を含む全レベルが対象。
+/// - 窓の外・他スレッドで発火したイベントは混入しない。例外は窓の中で起こした
 ///   アクター（`areka-actor` の `spawn_actor`）のスレッドとその子孫で、窓の受け手を引き継ぐので
 ///   その記録も入る。入れたいなら、アクターの記録が済んだことを確かめてから窓を閉じる。
 ///   窓を閉じた後にそれらが出した記録は捨てられ、後から開いたほかの窓には入らない。
 ///   それ以外の別スレッドで発火するログを捕える必要がある場合は、別名の全スレッド捕捉 API を使う。
-/// - 戻り値に番兵イベントは含まれない（要件 3.3・6.3）。捕捉が働いていなければ panic する。
+/// - 戻り値に番兵イベントは含まれない。捕捉が働いていなければ panic する。
 pub fn capture<R>(f: impl FnOnce() -> R) -> (R, Vec<CapturedEvent>) {
     let open = Arc::new(AtomicBool::new(true));
     // 最初の束縛＝関数の終わり（結果を取り出した後）に最後に落ちて窓を閉じる。

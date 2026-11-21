@@ -1,5 +1,4 @@
 //! 起動・作り直しの並べ直しが、記憶から戻した組を覚えた印で今の幅で隣り合わせる檻
-//! （`dpi-realign-remembered-chain` 要件 5.1・5.2・6.1・6.3・6.4・6.6・7.1・8.6・design BootRemembered）。
 //!
 //! # ここが押さえるもの
 //!
@@ -67,7 +66,7 @@ fn window_pos_keys(saved: &std::collections::HashMap<PersistKey, String>) -> Vec
         .collect()
 }
 
-/// ⑴ 実行中に 200% → 100% で詰めた後、記憶へ送られた束に位置が無い（6.1）。
+/// ⑴ 実行中に 200% → 100% で詰めた後、記憶へ送られた束に位置が無い。
 #[test]
 fn realign_after_200_to_100_writes_no_position() {
     let mut harness = FrameHarness::new();
@@ -96,7 +95,7 @@ fn realign_after_200_to_100_writes_no_position() {
 }
 
 /// ⑵ 200% で `left` と覚えた組を 100% の幅で起動すると隣り合って立ち、位置は記憶に書かない。
-/// 窓の一式を閉じて作り直しても同じ（読み直し・切り替えは同じ閉包を通る・5.1・5.2・6.3・6.6・7.1）。
+/// 窓の一式を閉じて作り直しても同じ（読み直し・切り替えは同じ閉包を通る）。
 #[test]
 fn remembered_left_pair_stands_adjacent_at_current_widths() {
     let mut world = persist_world();
@@ -145,8 +144,7 @@ fn remembered_left_pair_stands_adjacent_at_current_widths() {
 
 /// ⑹ 隣り合っていた組（印 `left`）で、本体が作業領域の左端に見えていて相方が作業領域の外に
 /// 戻った形。相方は見えている本体の隣へ付け直され、左の隣は作業領域の外なので右の隣へ並べ替えて
-/// 作業領域の中に立つ。本体は動かず、隣り合わせた位置は記憶に書かない（window-work-area-clamp
-/// 要件 2.2・2.4・design Testing Strategy ⑵）。
+/// 作業領域の中に立つ。本体は動かず、隣り合わせた位置は記憶に書かない。
 #[test]
 fn remembered_left_partner_outside_rejoins_inside_work_area() {
     let mut world = persist_world();

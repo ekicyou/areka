@@ -1,16 +1,14 @@
 //! `build.rs` の在中テスト。
 //!
-//! 守るのは 7 つ。⑴ 正典以外の出典が落ち、全件数と正典の件数が別々に記録されること
-//! （要件 1.4・1.6）。⑵ 版番号の抽出規則が逐語どおりで、2 つ以上あっても 1 つに
-//! 絞られないこと（要件 1.2）。⑶ 本文がカタログのどこにも残らず、印はハッシュだけで
-//! あること（要件 1.3・9.4）。⑷ id の 2 形が同じ形で収まること（要件 1.9）。
-//! ⑸ 割り当ての無いページがページ名付きで失敗すること（要件 3.5）。⑹ 冒頭の情報が
-//! スナップショットから素通しで写ること（要件 1.6）。⑺ 同じ id・同じ URL・同じページ
+//! 守るのは 7 つ。⑴ 正典以外の出典が落ち、全件数と正典の件数が別々に記録されること。
+//! ⑵ 版番号の抽出規則が逐語どおりで、2 つ以上あっても 1 つに絞られないこと。
+//! ⑶ 本文がカタログのどこにも残らず、印はハッシュだけであること。
+//! ⑷ id の 2 形が同じ形で収まること。⑸ 割り当ての無いページがページ名付きで失敗すること。
+//! ⑹ 冒頭の情報がスナップショットから素通しで写ること。⑺ 同じ id・同じ URL・同じページ
 //! URL の 2 項目が黙って畳まれずに失敗すること。
 //!
 //! **スナップショットのファイルは 1 度も読まない。環境変数も読まないし書かない。
-//! ファイルも一時ディレクトリも作らない**（要件 6.2・設計 File Structure Plan）。
-//! 見本は [`SnapshotDoc`] を手で組み立てて作る。
+//! ファイルも一時ディレクトリも作らない**。見本は [`SnapshotDoc`] を手で組み立てて作る。
 
 use super::*;
 
@@ -76,7 +74,7 @@ fn only(catalog: &Catalog) -> &CatalogEntry {
         .expect("1 項目あるので取り出せる")
 }
 
-// ---- 出典によるふるい分け（要件 1.4・1.6）----
+// ---- 出典によるふるい分け ----
 
 #[test]
 fn entries_from_other_sources_are_dropped() {
@@ -111,8 +109,7 @@ fn entries_from_other_sources_are_dropped() {
 #[test]
 fn a_well_formed_id_from_another_source_is_still_dropped() {
     // 出典違いの entry が正典と同じ形の id を持ち、ページも割り当て済みでも落とす。
-    // ふるい分けを外しても id の形では気付けない見本なので、件数と id の並びだけが
-    // 食い違いを告げる（要件 1.4・1.6）。
+    // id の形では気付けない見本なので、件数と id の並びだけが食い違いを告げる。
     let catalog = built(vec![
         ukadoc("ukadoc:dev_bind", "本文"),
         raw("ukadoc:dev_shell", "yaya", "本文"),
@@ -126,7 +123,7 @@ fn a_well_formed_id_from_another_source_is_still_dropped() {
 #[test]
 fn other_sources_are_dropped_before_the_assignment_is_checked() {
     // 出典違いの entry は id の形も割り当ても問われない。ふるい分けが先に来る
-    // ことの証拠になる（要件 1.4）。
+    // ことの証拠になる。
     let catalog = built(vec![
         ukadoc("ukadoc:dev_bind", "本文"),
         raw("これは id の形をしていない", "yaya", "本文"),
@@ -138,12 +135,11 @@ fn other_sources_are_dropped_before_the_assignment_is_checked() {
     assert_eq!(catalog.snapshot.ukadoc_entries, 1);
 }
 
-// ---- 版番号の抽出（要件 1.2）----
+// ---- 版番号の抽出 ----
 
 #[test]
 fn several_versions_are_all_kept() {
-    // 課題の完了条件そのもの。2 つ以上あっても 1 つに絞らない。
-    // 見本の本文は順が入れ替わっていて重複もある。
+    // 2 つ以上あっても 1 つに絞らない。見本の本文は順が入れ替わっていて重複もある。
     let catalog = built(vec![ukadoc(
         "ukadoc:dev_bind",
         "2.8.80 で変更。2.3.53 以降で使える。2.8.80 も参照。2.4.09 で追加。",
@@ -158,8 +154,7 @@ fn several_versions_are_all_kept() {
 
 #[test]
 fn versions_are_sorted_as_strings_not_as_numbers() {
-    // 「文字列として昇順」（設計 版番号の抽出規則）。数として並べると
-    // 2.9.0 が先に来るので、ここで規則の取り違えが露見する。
+    // 数として並べると 2.9.0 が先に来るので、ここで規則の取り違えが露見する。
     let catalog = built(vec![ukadoc("ukadoc:dev_bind", "2.9.0 と 2.10.0 の話。")]);
 
     assert_eq!(only(&catalog).versions, vec!["2.10.0", "2.9.0"]);
@@ -174,9 +169,8 @@ fn content_without_a_version_yields_an_empty_list() {
 
 #[test]
 fn a_version_is_taken_only_when_neither_side_is_a_digit_or_a_dot() {
-    // 規則は「前後が数字でも小数点でもない `数字+.数字+.数字+`」（設計 版番号の
-    // 抽出規則）。境界を見ない取り出し方も、語の境界で切る取り出し方も、ここで
-    // 赤くなる。
+    // 規則は「前後が数字でも小数点でもない `数字+.数字+.数字+`」。境界を見ない
+    // 取り出し方も、語の境界で切る取り出し方も、ここで赤くなる。
     let cases: [(&str, Vec<&str>); 10] = [
         // 前後が空白なら拾う。
         ("SSP 2.3.53 以降", vec!["2.3.53"]),
@@ -211,7 +205,7 @@ fn a_version_is_taken_only_when_neither_side_is_a_digit_or_a_dot() {
     }
 }
 
-// ---- 本文は残さない（要件 1.3・9.4）----
+// ---- 本文は残さない ----
 
 #[test]
 fn the_content_is_hashed_and_then_discarded() {
@@ -244,7 +238,7 @@ fn the_content_is_hashed_and_then_discarded() {
     }
 }
 
-// ---- id の 2 形（要件 1.9）----
+// ---- id の 2 形 ----
 
 #[test]
 fn both_id_forms_are_held_the_same_way() {
@@ -265,7 +259,7 @@ fn both_id_forms_are_held_the_same_way() {
         .expect("アンカー付きの id も入るはず");
     assert_eq!(anchored.page.as_str(), "list_propertysystem");
 
-    // 2 形は同じ表に、id の byte 昇順で並ぶ（設計 D-9）。
+    // 2 形は同じ表に、id の byte 昇順で並ぶ。
     assert_eq!(
         ids(&catalog),
         vec![
@@ -291,8 +285,7 @@ fn a_malformed_id_fails_and_names_the_spelling() {
 
 #[test]
 fn the_same_id_twice_fails_instead_of_being_folded() {
-    // 表に畳むと 1 件が黙って消え、正典の件数だけが減る（要件 1.8 の、壊れた
-    // スナップショットで失敗する）。
+    // 表に畳むと 1 件が黙って消え、正典の件数だけが減る。
     let err = build_error(vec![
         ukadoc("ukadoc:dev_bind", "本文"),
         ukadoc("ukadoc:dev_bind", "別の本文"),
@@ -351,7 +344,7 @@ fn two_pages_folding_onto_one_page_url_fail_and_name_both() {
     }
 }
 
-// ---- 割り当ての無いページ（要件 3.5）----
+// ---- 割り当ての無いページ ----
 
 #[test]
 fn an_unassigned_page_fails_and_names_the_page() {
@@ -392,7 +385,7 @@ fn every_unassigned_page_is_named_once_in_name_order() {
     }
 }
 
-// ---- 冒頭のスナップショット情報（要件 1.6）----
+// ---- 冒頭のスナップショット情報 ----
 
 #[test]
 fn the_snapshot_information_is_carried_through_unchanged() {
@@ -415,7 +408,7 @@ fn the_snapshot_information_is_carried_through_unchanged() {
     assert_eq!(catalog.snapshot.hash_algorithm, "fnv1a64");
 }
 
-// ---- 列の内容（要件 1.2）----
+// ---- 列の内容 ----
 
 #[test]
 fn each_column_comes_from_the_matching_field() {

@@ -1,4 +1,4 @@
-//! `fill_world_visuals` の節の不透明度のテスト（装置なし・`World` だけ・要件 2.2, 2.6, 2.7, 2.8）。
+//! `fill_world_visuals` の節の不透明度のテスト（装置なし・`World` だけ）。
 
 use super::draw_content_test_support::solid_rect_content;
 use super::world_visual_tests::{Filler, kids, rect4, version};
@@ -54,7 +54,7 @@ fn zero_opacity_node_and_descendants_are_not_visited_but_versions_follow() {
         "隠れている間も版を追う"
     );
 
-    // 不透明度の変化も描き直しになる（2.7）。
+    // 不透明度の変化も描き直しになる。
     let v_n = version(&world, n);
     world.get_mut::<Visual>(n).unwrap().opacity = 0.5;
     let (changed, visited) = filler.run_with(&mut world, root, false, &top, false);

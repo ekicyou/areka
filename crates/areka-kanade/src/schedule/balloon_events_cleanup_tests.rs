@@ -1,10 +1,10 @@
-//! 完了を通らずに相が変わる経路での控えの後始末の檻（areka-P0-balloon-lifecycle-events）。
+//! 完了を通らずに相が変わる経路での控えの後始末の檻。
 //!
 //! 中断の控え（`State.user_break_talk`）・預かった時間切れの知らせ（`ShownTalk.timeout_pending`）を
 //! 持ったまま、完了の知らせより先に強制の終了・SHIORI の故障・切替の送り出しの台詞の期限切れ・翻訳の
 //! 輸送路の失敗・別の応答による置き換えが来たら、相は表 B を通らずに進む。どの経路でも `step` の
 //! 出口の掃除（`settle` の ⑴）が控えを捨て、捨てた控えごとに理由 `talk_gone` を 1 行記録し、3 つの
-//! イベントはその後の相の終わりまで 1 本も送られないことを固定する（要件 1.5・1.6・2.6・4.4・7.2）。
+//! イベントはその後の相の終わりまで 1 本も送られないことを固定する。
 //! 経路ごとに新しい分岐は無く、掃除の条件「控えの相手が現行トークでない」1 つで効く。
 //!
 //! 預かりを持てない経路（切替の送り出しの台詞の間・翻訳へ預けている間）は、その入口で時間切れの
@@ -183,7 +183,7 @@ fn finish_unloading(s: &mut State, talk: TalkId, at: &str) {
 type Case = (&'static str, fn() -> Input);
 
 /// 強制の終了・SHIORI の故障: 控えを持ったまま終了系列へ直行すると、その `step` の出口で捨てて
-/// 記録し、遅れて届く完了・降ろし終えた応答まで 3 つのイベントを送らない（要件 1.6・4.4・7.2）。
+/// 記録し、遅れて届く完了・降ろし終えた応答まで 3 つのイベントを送らない。
 #[test]
 fn force_quit_and_shiori_down_drop_held_notes_with_one_talk_gone_line_each() {
     let cases: [Case; 2] = [
@@ -246,7 +246,7 @@ fn change_talking(closing: bool) -> (State, TalkId) {
 }
 
 /// 切替の送り出しの台詞の期限切れ: 中断の控えを持ったまま期限を過ぎて降ろすと、その `step` の出口
-/// で捨てて記録し、遅れて届く中断の完了・降ろし終えた応答まで送らない（要件 1.5・1.6・7.2）。
+/// で捨てて記録し、遅れて届く中断の完了・降ろし終えた応答まで送らない。
 /// この相では時間切れの知らせは定常でないとして断られ（表 D の D1）、預かりは持てない。
 #[test]
 fn change_talk_deadline_drops_the_break_note_with_one_talk_gone_line() {
@@ -294,7 +294,7 @@ fn change_talk_deadline_drops_the_break_note_with_one_talk_gone_line() {
 }
 
 /// 翻訳の輸送路の失敗: 次のトークの台本を翻訳へ預けている間（相は次のトークを再生中）に受け入れた
-/// 中断の控えは、失敗で終了系列へ進んだ `step` の出口で捨てて記録する（要件 1.6・7.2）。
+/// 中断の控えは、失敗で終了系列へ進んだ `step` の出口で捨てて記録する。
 /// この間の時間切れの知らせは表 D の D2 で断られ、預かりは持てない。
 #[test]
 fn translate_transport_failure_drops_the_break_note_with_one_talk_gone_line() {
@@ -355,7 +355,7 @@ fn translate_transport_failure_drops_the_break_note_with_one_talk_gone_line() {
 
 /// 別の応答による置き換え: 控えを持ったまま再生中のダブルクリックの応答がトークを置き換えると、
 /// 置き換えの `step` の出口で捨てて記録する。その後に翻訳が通って次のトークが最後まで流れても、
-/// 翻訳の輸送路が失敗して降ろしても、3 つのイベントは送らない（要件 1.5・2.6・7.2）。
+/// 翻訳の輸送路が失敗して降ろしても、3 つのイベントは送らない。
 #[test]
 fn replacement_drops_held_notes_then_neither_translation_outcome_sends() {
     for translated in [true, false] {

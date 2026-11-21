@@ -1,9 +1,9 @@
 // =============================================================================
-// 判断中核 `decide` の「箱を数に入れた中断と時間切れ」の決定論テスト（areka-P0-shell-balloon 10.1）
+// 判断中核 `decide` の「箱を数に入れた中断と時間切れ」の決定論テスト
 // =============================================================================
 //
 // 箱（シェル内バルーン）にだけ文字が出ている scope が、利用者の中断と時間切れの対象になること、
-// 隠す発行が箱に届くかの振り分け（`hide_reaches_boxes`）を固定する（要件 6.10・6.11）。
+// 隠す発行が箱に届くかの振り分け（`hide_reaches_boxes`）を固定する。
 // 箱に文字が出ていない入力（`box_showing` が偽）の期待値は既存のテスト群が持つ。
 
 use super::decision::hide_reaches_boxes;
@@ -115,7 +115,7 @@ fn a_break_released_in_the_same_frame_does_not_reach_boxes() {
     ));
 }
 
-/// 箱だけに文字が出ている scope でも、台詞の後の待ち時間を計り、満了で隠す（要件 6.10）。
+/// 箱だけに文字が出ている scope でも、台詞の後の待ち時間を計り、満了で隠す。
 #[test]
 fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
     let mut state = BalloonVisibilityState::default();
@@ -158,8 +158,7 @@ fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
     }
 }
 
-/// 文字の出ている箱の上にポインタが居るあいだは、普通のバルーンと同じ規則で満了を保留する
-/// （要件 6.11）。
+/// 文字の出ている箱の上にポインタが居るあいだは、普通のバルーンと同じ規則で満了を保留する。
 #[test]
 fn hover_on_a_box_holds_the_expired_deadline() {
     let mut state = BalloonVisibilityState::default();
@@ -188,7 +187,7 @@ fn hover_on_a_box_holds_the_expired_deadline() {
 }
 
 /// 窓の文字が 0 に落ちて窓を隠しても、箱に文字が出ていれば計測は続き、満了で隠す
-/// （箱のあるサーフェスへ切り替えた形・要件 5.1 と 6.10）。
+/// （箱のあるサーフェスへ切り替えた形）。
 #[test]
 fn clearing_the_window_keeps_the_measurement_while_boxes_show() {
     let mut state = BalloonVisibilityState::default();

@@ -1,9 +1,8 @@
-//! 面の `move` のずれを窓の位置へ当てる口（seriko-pattern-calls「MoveShiftPlacement」・
-//! seriko-pattern-calls 要件 7.1・7.3・7.5・7.8）。
+//! 面の `move` のずれを窓の位置へ当てる口。
 //!
 //! 提示が覚えたずれ（作者基準）に倍率をかけ、元の位置（今の位置 − 当てた分）へ足してから、
 //! 今の置き方の決まり（吸い付き・作業領域の中への寄せ・見える範囲の守り）を後から当てる。
-//! 書くのは位置だけで、窓の寸は変えない（7.5）。補わずに一度で当てる（7.3）。
+//! 書くのは位置だけで、窓の寸は変えない。補わずに一度で当てる。
 //! 呼び手は毎フレームのずれの相（`runtime::frame::move_shift`）。
 
 use areka_emo_compose::ScaleRatio;
@@ -56,7 +55,7 @@ pub(super) fn balloon_shift(world: &World, balloon: Entity) -> PointPx {
 
 /// 保存の側が引くための元の位置（`pos` − 当てた分・記録が無ければ `pos` のまま）。
 ///
-/// 記憶にずれを焼き付けない（起動のたびに積もらない・seriko-pattern-calls 要件 7.8）。
+/// 記憶にずれを焼き付けない（起動のたびに積もらない）。
 pub(crate) fn origin_position(world: &World, window: Entity, pos: PointPx) -> PointPx {
     let applied = world
         .get::<MoveShiftApplied>(window)
@@ -210,7 +209,7 @@ pub fn apply_char_shift(
     let Some(area) = snapshot.and_then(|s| work_area_for_window(s, rect_at(raw, size))) else {
         return skipped("no_work_area");
     };
-    // 置き方の決まりを後から当てる（7.8）: 吸い付き → 作業領域の中への寄せ → 見える範囲の守り。
+    // 置き方の決まりを後から当てる: 吸い付き → 作業領域の中への寄せ → 見える範囲の守り。
     let anchor = world.get::<Anchored>(window).map_or(Anchor::Free, |a| a.0);
     let anchored = project_anchor(anchor, raw, size, snapshot);
     // 寄せる先は作業領域と元の矩形を両方含む範囲（端に置いた窓をずれのたびに中へ引き寄せない）。

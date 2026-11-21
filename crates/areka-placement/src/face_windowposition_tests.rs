@@ -1,5 +1,4 @@
-//! 面の `windowposition` の置き直し（[`apply_face_windowposition`]・balloon-scroll-arrows 要件 1.7・
-//! 11.1）の決定論テスト。
+//! 面の `windowposition` の置き直し（[`apply_face_windowposition`]）の決定論テスト。
 //!
 //! 窓の一式は起動の準備（`prepare_ghost_windows_with_work_area`）が解いた配置を本番と同じ
 //! `spawn_ghost_windows` で組み、材料は準備が運んだ [`DefaultPlacementBasis`] を置く

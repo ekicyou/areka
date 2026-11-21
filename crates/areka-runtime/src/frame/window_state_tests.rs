@@ -52,7 +52,7 @@ fn decide_transition_covers_all_six_pairs() {
     );
 }
 
-/// 既定の状態はオフ・受信端なし（要件 3.4）。
+/// 既定の状態はオフ・受信端なし。
 #[test]
 fn default_state_is_off_without_receiver() {
     let state = StayOnTopState::default();
@@ -105,7 +105,7 @@ fn holds_while_registry_absent_then_applies_in_arrival_order() {
     assert!(all.iter().all(|e| !marked(&world, *e)));
 }
 
-/// オフ→オンで全スコープのキャラクターとバルーンに印が付き、列に `Enter` が 1 件（要件 2.1）。
+/// オフ→オンで全スコープのキャラクターとバルーンに印が付き、列に `Enter` が 1 件。
 /// 帯の指令の列の資源が無ければ入れてから積む。
 #[test]
 fn turning_on_marks_every_ghost_window_and_queues_enter() {
@@ -124,7 +124,7 @@ fn turning_on_marks_every_ghost_window_and_queues_enter() {
     );
 }
 
-/// オン→オフで印が外れ、列に `Leave` が 1 件（要件 3.1）。
+/// オン→オフで印が外れ、列に `Leave` が 1 件。
 #[test]
 fn turning_off_unmarks_every_ghost_window_and_queues_leave() {
     let (mut state, tx) = state_with_channel();
@@ -144,7 +144,7 @@ fn turning_off_unmarks_every_ghost_window_and_queues_leave() {
     );
 }
 
-/// 重ね（オンにオン・オフにオフ）では列が空で印も動かない（要件 2.8・3.2）。
+/// 重ね（オンにオン・オフにオフ）では列が空で印も動かない。
 #[test]
 fn repeated_directives_queue_nothing() {
     let (mut state, tx) = state_with_channel();
@@ -167,7 +167,7 @@ fn repeated_directives_queue_nothing() {
     assert!(all.iter().all(|e| marked(&world, *e)));
 }
 
-/// `\v` は状態も印も変えず、列に `Raise` を積む（オフでもオンでも・要件 1.1・2.9）。
+/// `\v` は状態も印も変えず、列に `Raise` を積む（オフでもオンでも）。
 #[test]
 fn raise_keeps_state_and_marks() {
     let (mut state, tx) = state_with_channel();
@@ -195,7 +195,7 @@ fn raise_keeps_state_and_marks() {
     );
 }
 
-/// 正本の外の entity（別のゴースト・メニューなど）には印が付かず、列にも載らない（要件 2.7）。
+/// 正本の外の entity（別のゴースト・メニューなど）には印が付かず、列にも載らない。
 #[test]
 fn entities_outside_registry_are_untouched() {
     let (mut state, tx) = state_with_channel();
@@ -212,7 +212,7 @@ fn entities_outside_registry_are_untouched() {
 }
 
 // ---------------------------------------------------------------------------
-// 台本の再生から状態まで（task 5.1・要件 1.1〜1.4）
+// 台本の再生から状態まで
 // ---------------------------------------------------------------------------
 
 /// 台本を本番と同じ解析と組み立てで cue にし、受け口を登録した再生器を返す（`end` は台本の終わり）。
@@ -241,7 +241,7 @@ fn play_to_end(
     run_window_state_phase(state, world);
 }
 
-/// 台本のオン・`\v`・オフが受け口から線を通って状態を動かす（要件 1.1〜1.3）。
+/// 台本のオン・`\v`・オフが受け口から線を通って状態を動かす。
 #[test]
 fn script_playback_turns_on_raises_and_turns_off() {
     let (mut state, tx) = state_with_channel();
@@ -276,7 +276,7 @@ fn script_playback_turns_on_raises_and_turns_off() {
     assert!(all.iter().all(|e| !marked(&world, *e)));
 }
 
-/// 指令の所へ来る前に中断した台本では状態が変わらない（要件 1.4）。止めずに最後まで流した
+/// 指令の所へ来る前に中断した台本では状態が変わらない。止めずに最後まで流した
 /// 同じ台本がオンにすることを対照に置く（待ちが実際に指令を後ろへずらしている）。
 #[test]
 fn script_stopped_before_the_directive_leaves_the_state() {

@@ -1,24 +1,24 @@
-//! 実プロセス LOAD E2E（task 7.1・design.md「#### LoadE2E」／System Flows WS-A LOAD）。
+//! 実プロセス LOAD E2E。
 //!
 //! **実 i686 helper プロセス**を spawn し、**実 i686 testdll（`shiori.dll`）**を
 //! `LoadLibraryExW` させて **LOAD の成否 ack を跨プロセスで観測**する。3 ケースを 1 つの
 //! `#[test]` 関数に集約し、各ケースで親 message-only 窓を新規 `create()`→使用→明示 `drop` する。
 //!
-//! 検証系列（design.md「検証系列」①〜④）:
-//! - ① 成功 ack `[1]`（testdll を `load_dir\shiori.dll` へコピー・cwd=load_dir 慣習）→ R5.3/7.3
-//! - ② env `HOST32_TESTDLL_LOAD_FAIL=1` 強制失敗 ack `[0]`（testdll の `load`→false）→ R6.3/7.3
-//! - ③ DLL 不在（空 load_dir）ack `[0]`（`LoadLibraryExW` 失敗）→ R6.1
-//! - ④ 各失敗後の helper 生存（`poll_exit_kind`→`None`）→ R6.4
+//! 検証系列:
+//! - ① 成功 ack `[1]`（testdll を `load_dir\shiori.dll` へコピー・cwd=load_dir 慣習）
+//! - ② env `HOST32_TESTDLL_LOAD_FAIL=1` 強制失敗 ack `[0]`（testdll の `load`→false）
+//! - ③ DLL 不在（空 load_dir）ack `[0]`（`LoadLibraryExW` 失敗）
+//! - ④ 各失敗後の helper 生存（`poll_exit_kind`→`None`）
 //!
-//! LOAD ack 待機は推奨既定 timeout `LOAD_ACK_TIMEOUT`（親 per-call・凍結 timeout 機構は不変・R5.4）。
+//! LOAD ack 待機は推奨既定 timeout `LOAD_ACK_TIMEOUT`（親 per-call・凍結 timeout 機構は不変）。
 //!
 //! ## 実 pasta 追験（⑤・任意）
 //! env `HOST32_PASTA_DLL`（DLL フルパス）が設定されている場合のみ、実 pasta を追加検証する
-//! （load_dir=親 dir・shiori_name=ファイル名・**指定 DLL 不在なら明示 fail**・R7.4/7.5）。
-//! 未設定なら silent に skip（CI 必須ゲートにしない・R7.6）。testdll/helper とは扱いが異なる
+//! （load_dir=親 dir・shiori_name=ファイル名・**指定 DLL 不在なら明示 fail**）。
+//! 未設定なら silent に skip（CI 必須ゲートにしない）。testdll/helper とは扱いが異なる
 //! （testdll/helper 不在は panic、pasta env 未設定は任意ゆえ skip）。
 //!
-//! ## testdll / helper の所在解決（無言スキップで緑を偽装しない・R13.2）
+//! ## testdll / helper の所在解決（無言スキップで緑を偽装しない）
 //! env override 最優先 → `CARGO_MANIFEST_DIR` から `target/i686-pc-windows-msvc/{debug,release}/`
 //! を探索 → 不在は**明確な panic**（i686 未ビルドの指摘）。
 //!
@@ -44,17 +44,12 @@ use common::{TestRoot, handshake, resolve_helper_exe, resolve_testdll};
 /// - `shiori_name`: 解決する DLL 名（成功/env 失敗は `"shiori.dll"`・不在ケースも同名で不在）。
 /// - `set_load_fail`: `true` なら spawn 前に env `HOST32_TESTDLL_LOAD_FAIL=1` を set し、
 ///   spawn 後に即 remove する（子は生成時 env スナップショットを継承・親 global env 汚染を最小化）。
-///
-/// 手順: `ParentMessageWindow::create` → `spawn` → HELLO pump → `send_request(Load, LOAD_ACK_TIMEOUT)`
-/// → **失敗後の helper 生存を `poll_exit_kind`→`None` で観測** → handle/parent を明示 drop。
-/// ack バイト列を返す。
 fn run_load_case(
     helper_exe: &Path,
     load_dir: &Path,
     shiori_name: &str,
     set_load_fail: bool,
 ) -> Vec<u8> {
-    // --- 親 message-only 窓（使用後に明示 drop）---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
@@ -80,38 +75,34 @@ fn run_load_case(
         }
     }
 
-    // --- HELLO 受領で helper HWND 確定＝ハンドシェイク完了 ---
     let helper_hwnd = handshake(&parent, handle.pid());
     assert!(
         helper_hwnd.is_some(),
         "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"
     );
 
-    // --- LOAD トリガ → ack（1 byte）を推奨既定 timeout で待機（R5.3/5.4）---
     let ack = parent
         .send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)
         .expect("LOAD の send_request が失敗（ack 未達・要件 5.2/5.3）");
 
-    // --- LOAD 後（成功・失敗いずれも）helper は生存継続（R6.4・no-crash）---
+    // --- LOAD 後（成功・失敗いずれも）helper は生存継続（no-crash）---
     assert!(
         poll_exit_kind(&mut handle).is_none(),
         "LOAD 後も helper は稼働中である（クラッシュしていない・要件 6.4）"
     );
 
-    // ケースの終わりに明示 drop（helper も terminate）。
     drop(handle);
     drop(parent);
 
     ack
 }
 
-/// 実プロセス LOAD E2E: 成功 ack[1]／env 強制失敗 ack[0]／DLL 不在 ack[0]＋各失敗後の生存
-/// （design.md「#### LoadE2E」検証系列①〜④・System Flows WS-A LOAD・確定設計判断 (d)）。
+/// 実プロセス LOAD E2E: 成功 ack[1]／env 強制失敗 ack[0]／DLL 不在 ack[0]＋各失敗後の生存。
 ///
 /// PRIMARY 構造: 3 ケースを 1 関数内で逐次実行し、各ケースで親窓を新規 create→使用→明示 drop する。
 ///
 /// bounded: pump は HANDSHAKE_TIMEOUT、send_request は LOAD_ACK_TIMEOUT＋SMTO_ABORTIFHUNG で
-/// 必ず有限復帰するため、テスト全体もハングしない（要件 4.4）。
+/// 必ず有限復帰するため、テスト全体もハングしない。
 #[test]
 fn load_e2e_success_fail_survival() {
     let helper_exe = resolve_helper_exe();
@@ -166,12 +157,12 @@ fn load_e2e_success_fail_survival() {
 /// ⑤ 実 pasta 追験（任意・env `HOST32_PASTA_DLL` 設定時のみ）。
 ///
 /// env 値＝DLL フルパス・load_dir＝その親 dir・shiori_name＝ファイル名で実 pasta を LOAD し、
-/// ack `[1]` を検証する。**指定 DLL が不在なら明示 fail**（R7.4/7.5）。env 未設定なら silent skip
-/// （CI 必須ゲートにしない・R7.6）。testdll/helper 不在は panic だが、pasta は任意ゆえ skip で扱いが異なる。
+/// ack `[1]` を検証する。**指定 DLL が不在なら明示 fail**。env 未設定なら silent skip
+/// （CI 必須ゲートにしない）。testdll/helper 不在は panic だが、pasta は任意ゆえ skip で扱いが異なる。
 #[test]
 fn load_e2e_real_pasta_optional() {
     let Ok(pasta_dll) = std::env::var("HOST32_PASTA_DLL") else {
-        // 未設定＝任意 gate ゆえ skip（silent・R7.6）。testdll/helper とは扱いが異なる。
+        // 未設定＝任意 gate ゆえ skip（silent）。testdll/helper とは扱いが異なる。
         eprintln!(
             "HOST32_PASTA_DLL 未設定のため実 pasta 追験を skip（任意 gate・R7.6）。\
              実 pasta を検証するには env に pasta DLL のフルパスを設定してください。"

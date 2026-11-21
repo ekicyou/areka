@@ -1,4 +1,4 @@
-//! parts の子: 部品の引き金の配線（spec: areka-P0-seriko-trigger-intervals 要件 5.4・5.6・5.7・5.9）。
+//! parts の子: 部品の引き金の配線。
 //!
 //! [`PartClocks`](super::PartClocks) の評価が部品 1 つごとに呼ぶ [`arm_part`]（構える）と
 //! [`fire_part_triggers`]（判定して時計を作る）を置く。「いつ始めるか」の判定は `trigger.rs`、始まった
@@ -18,8 +18,7 @@ use crate::timeline::{FrameStatus, LoopRng, frame_at};
 use crate::trigger::{Armed, TalkWindow, log_fired};
 
 /// `runonce`・`periodic`・`talk` を持つ部品なら引き金の状態を返す（無ければ `at_ms` を見え始めの時刻と
-/// して構える。呼び手は構えてある部品を先に外す）。3 語を持たない部品は `None`＝状態も記録も生まれない
-/// （spec: areka-P0-seriko-trigger-intervals 要件 5.4・5.6・5.9・8.1）。
+/// して構える。呼び手は構えてある部品を先に外す）。3 語を持たない部品は `None`＝状態も記録も生まれない。
 pub(super) fn arm_part<'s>(
     armed: &'s mut BTreeMap<PartKey, Armed>,
     anims: &[LoopAnimation],
@@ -47,19 +46,18 @@ pub(super) fn arm_part<'s>(
 /// 部品 `part` の 3 語の animation を開始の時刻の順（同じ時刻は番号の順）に、その時刻までの部品の
 /// 働きのコマを当ててから判定し、始まるものの時計を判定が返した開始の時刻（`runonce` は見え始め・
 /// `periodic` は周の境目・`talk` は区切りの文字が現れた時刻で、`at_ms` ではない）で作る。一番上の
-/// `fire_top_triggers` と同じ形（spec: areka-P0-seriko-trigger-intervals 要件 3.1・3.3・5.4・6.1・
-/// seriko-pattern-calls 要件 3.1・3.8）。始まった animation・働きのコマの結果・呼び出しで始まった
+/// `fire_top_triggers` と同じ形。始まった animation・働きのコマの結果・呼び出しで始まった
 /// animation の番号を返す（`at_ms` までのコマを置くのは呼び手）。
 ///
 /// 「再生中か」は、開始の時刻までの働きのコマを当てた後の時計で、開始の時刻に測る: 時計がその時刻に
-/// まだ終わり（負の番号で停止・末尾）でなければ再生中（要件 3.3・5.3）。呼び出しが止めた再生は再生中で
-/// なく、呼び出しがちょうど開始の時刻に始めた再生は鳴らした扱いで入れ替えない（seriko-pattern-calls
-/// 要件 5.2）。開始の時刻には終えていて、まだ片付けていない再生は、その時刻まで進めて片付けてから
+/// まだ終わり（負の番号で停止・末尾）でなければ再生中。呼び出しが止めた再生は再生中で
+/// なく、呼び出しがちょうど開始の時刻に始めた再生は鳴らした扱いで入れ替えない。
+/// 開始の時刻には終えていて、まだ片付けていない再生は、その時刻まで進めて片付けてから
 /// （終わりの記録は 1 件）入れ替える。
 ///
-/// `talk` はこの面の文字の窓（部品は文字の数えを持たず、面の数えを借りる・要件 4.1・4.5・5.6）。
+/// `talk` はこの面の文字の窓（部品は文字の数えを持たず、面の数えを借りる）。
 /// 刻みと出来事の直後の評価で同じに判定する。乱数は引かない。始めない経路（隠れている・再生中・
-/// 境目の前）は記録しない（要件 5.7・7.5）。
+/// 境目の前）は記録しない。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn fire_part_triggers<'a>(
     state: &mut Armed,

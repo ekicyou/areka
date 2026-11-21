@@ -3,7 +3,7 @@ use bevy_ecs::prelude::*;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
 
-/// 描く中身 1 つの混ぜ方。重ね方とブレンドを同時には持てない（1.5）。
+/// 描く中身 1 つの混ぜ方。重ね方とブレンドを同時には持てない。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MixMode {
     /// `DrawImage` の重ね方（13 種）。既定は `SOURCE_OVER`。

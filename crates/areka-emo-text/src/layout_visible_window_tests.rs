@@ -25,7 +25,7 @@ fn horizontal_within_region_does_not_scroll() {
     );
 }
 
-/// 横書きのあふれは縦スクロール（R7.2）: 1 行超過で先頭可視行が 1 行進み、
+/// 横書きのあふれは縦スクロール: 1 行超過で先頭可視行が 1 行進み、
 /// 内容は上（−y）へ pitch 分オフセットする。行単位＝オフセットは行位置差そのもの。
 #[test]
 fn horizontal_overflow_scrolls_vertically_by_whole_lines() {
@@ -56,7 +56,7 @@ fn horizontal_overflow_scrolls_vertically_by_whole_lines() {
     );
 }
 
-/// vertical_rl のあふれは横スクロール（R7.2）: 最新列の左端 < validrect.left で発火し、
+/// vertical_rl のあふれは横スクロール: 最新列の左端 < validrect.left で発火し、
 /// 内容は右（+x）へオフセットする（古い列が右端から消える——正準表）。
 #[test]
 fn vertical_rl_overflow_scrolls_content_rightward() {
@@ -182,8 +182,8 @@ fn fractional_ratio_feed_scrolls_by_fractional_line_distance() {
     );
 }
 
-/// 末尾の保留改行はあふれ判定に参加しない（内容ビューボックスを増やさない・
-/// R3.1/5.3/7.3 前段）。満杯 3 行（ちょうど収まる）＋trailing `\n` → 保留のまま
+/// 末尾の保留改行はあふれ判定に参加しない（内容ビューボックスを増やさない）。
+/// 満杯 3 行（ちょうど収まる）＋trailing `\n` → 保留のまま
 /// 蒸発しあふれ不発火（`first_visible_line=0`）。`layout_wrap_tests.rs` の
 /// `materialized_newline_near_full_triggers_overflow`（実体化後発火）と対を成す。
 #[test]
@@ -208,12 +208,12 @@ fn trailing_pending_newline_does_not_trigger_overflow() {
     );
 }
 
-/// 送り量の原点は**描画範囲の開始側**であり、最初の行の開始側ではない（R17.1/17.2・症状 F）。
+/// 送り量の原点は描画範囲の開始側であり、最初の行の開始側ではない。
 ///
 /// 相方側バルーンと同じ幾何（上端 40・下端 133＝丈 93・`font_height` 28 → 行送り 30）で
-/// 2 つの入力を並べる。先に置く対照は**冒頭に空きが無い**入力で、原点の直しの前後で値が
-/// 動かないこと（既存の期待値が 1 つも動かないこと）を同じ檻の中で示す。後に置くのが
-/// 症状 F の再現——台詞冒頭の `\n[150]`（＝`LineBreak { ratio: 1.5 }`）で 45 の空きが先に立つ。
+/// 2 つの入力を並べる。先に置く対照は冒頭に空きが無い入力で、原点をどちらに取っても同じ値に
+/// なる。後に置くのが台詞冒頭の `\n[150]`（＝`LineBreak { ratio: 1.5 }`）で 45 の空きが先に
+/// 立つ入力。
 #[test]
 fn leading_gap_scrolls_from_region_start_not_from_first_line() {
     let region = TextRegion::resolve(
@@ -225,7 +225,7 @@ fn leading_gap_scrolls_from_region_start_not_from_first_line() {
         WritingMode::HorizontalTb,
     );
     assert_eq!(region.start(), (0.0, 40.0));
-    // 対照（原点の直しで動かない側）: 空きは 1 行目と 2 行目の間に在る。1 行目 40..68・
+    // 対照: 空きは 1 行目と 2 行目の間に在る。1 行目 40..68・
     // 2 行目 85..113・3 行目 115..143——最新行の下端 143 > 133 であふれ、1 行スキップで
     // 143 − 45 = 98 ≤ 133。`near(lines[0])` が描画範囲の開始側 40 と一致するため、
     // 原点をどちらに取っても同じ値になる。
@@ -245,7 +245,7 @@ fn leading_gap_scrolls_from_region_start_not_from_first_line() {
         },
         "冒頭の空きが無い入力は従来どおりの値（原点の直しで動かない）"
     );
-    // 症状 F の再現: 冒頭の空き 1.5 行（45）＋明示改行で 3 行（折返しは本題でないので
+    // 冒頭の空き 1.5 行（45）＋明示改行で 3 行（折返しは本題でないので
     // 明示改行で足りる）。1 行目 85..113・2 行目 115..143・3 行目 145..173——最新行の
     // 下端 173 > 133 であふれる。原点を描画範囲の開始側 40 に取ると 0 行スキップ・
     // オフセット −45（空きだけを送る）で 3 行とも 40／70／100..130 に収まる。原点が
@@ -269,7 +269,7 @@ fn leading_gap_scrolls_from_region_start_not_from_first_line() {
     );
 }
 
-/// vertical_rl でも原点は描画範囲の開始側（＝右辺）——原点の符号の檻（R17.4）。
+/// vertical_rl でも原点は描画範囲の開始側（＝右辺）——原点の符号の檻。
 ///
 /// 正規化ブロック座標（行送り方向が正）は `−x` ゆえ、描画範囲の開始側は `−region.start().0`。
 /// 横書きの檻と同じ寸法を右辺基準へ写す: 開始側 x=400（＝正規化 −400）・
@@ -305,7 +305,7 @@ fn vertical_rl_leading_gap_scrolls_from_region_start() {
 }
 
 /// 位置が有限でなくなる保留の改行（`\n[3e38]`×10＋字・`\n[-3e38]`×20＋字）でも、
-/// 見える窓の `block_offset` は有限（指摘 1・送りを捨てた行は書き始めの位置に残る）。
+/// 見える窓の `block_offset` は有限（送りを捨てた行は書き始めの位置に残る）。
 #[test]
 fn non_finite_pending_newline_keeps_block_offset_finite() {
     let region = TextRegion::resolve(

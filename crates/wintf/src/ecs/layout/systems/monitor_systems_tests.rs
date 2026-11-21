@@ -24,7 +24,7 @@ fn synthetic_monitor() -> Monitor {
     }
 }
 
-/// 要件 1.1: モニタ列挙行は `handle`（識別子）と `work_area`（作業領域矩形）を含む。
+/// モニタ列挙行は `handle`（識別子）と `work_area`（作業領域矩形）を含む。
 ///
 /// フィールド名は areka `placement::diag` と**共有語彙**（`handle`・`work_area`）である
 /// ことが契約——別名（`hmonitor`・`wa` 等）へ変えると診断手順書の grep 突合が壊れる。
@@ -50,7 +50,7 @@ fn enumerated_monitor_line_carries_handle_and_work_area() {
     );
 }
 
-/// 要件 1.1: `work_area` は bounds と**別の実値**として復元できる（l,t,r,b 4 成分）。
+/// `work_area` は bounds と**別の実値**として復元できる（l,t,r,b 4 成分）。
 ///
 /// bounds を流用した表示なら赤になる（work area の下端 1160 が現れない）。
 #[test]
@@ -68,7 +68,6 @@ fn enumerated_monitor_work_area_reconstructs_all_four_edges() {
         out.contains("handle=305419896"),
         "handle の実値が復元できない: {out}"
     );
-    // bounds 側は従来どおり残っている（既存フィールドの非退行）。
     assert!(
         out.contains("bounds_bottom=1200"),
         "既存の bounds フィールドが失われている: {out}"
@@ -76,8 +75,7 @@ fn enumerated_monitor_work_area_reconstructs_all_four_edges() {
 }
 
 // ======================================================================
-// S4（診断レポート §2.7・Req 7.1/7.2/7.3/7.5）
-//   「識別子が不変で値だけが変わる」表示構成変更でモニタ表が更新されること
+// 識別子が不変で値だけが変わる表示構成変更で、モニタ表が更新されること
 //
 // 以下の檻の足場（注入表・探針のモニタ・窓・実行）は
 // `monitor_systems_transition_tests.rs` も同じものを使う。
@@ -131,7 +129,7 @@ fn redrive_count(world: &World) -> Option<usize> {
     world.resource::<RedriveCount>().0
 }
 
-/// 実機セッション②（診断レポート §2.7）と同型の探針: primary モニタの拡大率を
+/// 実機と同型の探針: primary モニタの拡大率を
 /// 125%（dpi=120）→ 200%（dpi=192）へ変更した状態。
 ///
 /// - `handle` は不変（拡大率変更でモニタ識別子は変わらない）
@@ -170,10 +168,10 @@ pub(super) fn probe_monitor_after() -> Monitor {
     }
 }
 
-/// 探針が**不動点でない**ことを檻自身が検査する（[[2.2 の教訓]]・[[3.2 の教訓]]）。
+/// 探針が**不動点でない**ことを檻自身が検査する。
 ///
 /// 「更新される」を主張する檻は、探針の前後が本当に違う値でなければ空虚になる。
-/// さらに「`PartialEq` では等価に見える」ことも同時に固定する——これが S4 の
+/// さらに「`PartialEq` では等価に見える」ことも同時に固定する——これが
 /// 意味論ギャップそのものであり、探針がその穴を確かに踏んでいる証拠になる。
 fn assert_probe_is_not_a_fixed_point(before: &Monitor, after: &Monitor) {
     assert_eq!(
@@ -233,14 +231,11 @@ pub(super) fn spawn_probe_window(world: &mut World, x: i32, y: i32, dpi: u32) ->
 
 // ---------------------------------------------------------------- 赤証跡
 
-/// **S4 赤証跡（Req 7.5）**: 識別子が不変で値だけが変わったモニタ構成に対して
+/// 識別子が不変で値だけが変わったモニタ構成に対して
 /// モニタ表が更新されること。
 ///
-/// 是正未投入（`existing_monitor != new_monitor` を更新判定に使う版）では
+/// 更新判定に `existing_monitor != new_monitor` を使うと、
 /// `PartialEq` が `handle` しか見ないため更新分岐が恒偽になり、**赤**になる。
-///
-/// 是正（`differs_in_value`）投入後は常時走る回帰檻である（タスク 7.1 でゲート解除済み。
-/// 赤の実行出力は `diagnosis-report.md` §3.3 に保存してある）。
 #[test]
 fn s4_red_monitor_table_updates_when_only_values_change() {
     let before = probe_monitor_before();
@@ -273,7 +268,7 @@ fn s4_red_monitor_table_updates_when_only_values_change() {
     );
 }
 
-/// 0 台の列挙（列挙の失敗を含む）では表を変えない（audit-wintf-window 15 番）。
+/// 0 台の列挙（列挙の失敗を含む）では表を変えない。
 ///
 /// 空の一覧で全部の `Monitor` を消すと、次の構成の変わり目まで表が空のままになる。
 /// 0 台の判定を外せば `Some(0)` が返り `Monitor` が消えて赤になる。
@@ -292,13 +287,8 @@ fn empty_snapshot_keeps_monitor_table_and_returns_none() {
     );
 }
 
-/// **S4 赤証跡（Req 7.3/7.5）**: モニタ表が更新されたとき、当該モニタ上の窓の
+/// モニタ表が更新されたとき、当該モニタ上の窓の
 /// `DPI` が `WM_DPICHANGED` 抜きで再導出されること。
-///
-/// 是正未投入では上流（モニタ表の更新）が恒偽なので当然ここも駆動されず、**赤**になる。
-///
-/// 是正（`differs_in_value`）投入後は常時走る回帰檻である（タスク 7.1 でゲート解除済み。
-/// 赤の実行出力は `diagnosis-report.md` §3.3 に保存してある）。
 #[test]
 fn s4_red_window_dpi_redriven_without_wm_dpichanged() {
     assert_probe_is_not_a_fixed_point(&probe_monitor_before(), &probe_monitor_after());
@@ -319,7 +309,7 @@ fn s4_red_window_dpi_redriven_without_wm_dpichanged() {
 
 // ------------------------------------------------------ 常時走る随伴檻
 
-/// Req 7.1/7.2 + Req 1.1: 更新が実際に起き、**何が変わったか**がログから読める。
+/// 更新が実際に起き、**何が変わったか**がログから読める。
 ///
 /// 更新後の実値（`work_area` 下端・`dpi`）を component とログの両方で固定する。
 /// 述語を恒偽に変異させれば component 側が、ログのフィールドを削れば出力側が赤になる。
@@ -354,7 +344,7 @@ fn value_only_change_updates_monitor_and_reports_old_and_new() {
     );
 }
 
-/// Req 7.3: 更新されたモニタ上の窓は `WM_DPICHANGED` 抜きで DPI が揃う。
+/// 更新されたモニタ上の窓は `WM_DPICHANGED` 抜きで DPI が揃う。
 ///
 /// 駆動を消せば赤になる（`redrive_window_dpi_for_updated_monitors` の呼出削除・
 /// `updated_monitors` への push 削除のいずれでも）。

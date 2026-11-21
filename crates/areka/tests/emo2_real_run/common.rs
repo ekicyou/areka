@@ -1,4 +1,4 @@
-//! emo2 の 1 回の走りの共通の手続き（件 1 の試験とくり返しの試験が `#[path]` で引く）。
+//! emo2 の 1 回の走りの共通の手続き（`emo2_real_run` の試験とくり返しの試験が `#[path]` で引く）。
 //!
 //! 印の綴り・保険の自動終了と締切の値・`RUST_LOG`・LOAD の失敗の綴り・時間の 1 行・失敗の分けの規則は
 //! このファイルだけが持つ。純粋な関数の試験は `common_tests.rs`。
@@ -6,12 +6,12 @@
 use real_run_kit::{Ended, EndedBy, Launch, McpError, RealRun, Run, ToolReply};
 use std::time::{Duration, Instant};
 
-/// 保険の自動終了（1.5）。測った「wrap の最大 8.7 秒＋閉じるまでの最大 24.6 秒」＝33.3 秒が 35 秒の線の内側なので
-/// 45 秒のまま（余りは 1.7 秒と小さい。spec の verification.md の保険の自動終了の節）。
+/// 保険の自動終了。測った「wrap の最大 8.7 秒＋閉じるまでの最大 24.6 秒」＝33.3 秒が 35 秒の線の内側なので
+/// 45 秒のまま（余りは 1.7 秒と小さい）。
 pub const SAFETY_EXIT: Duration = Duration::from_secs(45);
 /// 締切（待ちごと）。
 pub const DEADLINE: Duration = Duration::from_secs(120);
-// 保険の自動終了が締切より先に来ないと、締切がハングの判定で先に働く（1.5）。
+// 保険の自動終了が締切より先に来ないと、締切がハングの判定で先に働く。
 const _: () = assert!(SAFETY_EXIT.as_secs() < DEADLINE.as_secs());
 
 pub const WIRE: &str = "runtime: 実 sink 結線が成立しました（wire 成立）";

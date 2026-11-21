@@ -1,4 +1,4 @@
-//! `wic` の非公開の判定の失敗の道（要件 4.2）。パレットを持たない絵で
+//! `wic` の非公開の判定の失敗の道。パレットを持たない絵で
 //! `palette_has_alpha` が推測の既定値へ落ちず WIC のエラーを返すことを確かめる。
 
 use super::*;
@@ -26,8 +26,8 @@ fn palette_has_alpha_fails_without_palette() {
     unsafe { CoUninitialize() };
 }
 
-/// 15 番: 番号つきでない形式の α の有無は WIC の形式の情報で決まる。
-/// 手書きの 12 の一覧に無かった α つきの形式（5551・RGBAHalf・CMYKAlpha）も「有り」と答える。
+/// 番号つきでない形式の α の有無は WIC の形式の情報で決まる。
+/// α つきの形式（5551・RGBAHalf・CMYKAlpha）も「有り」と答える。
 #[test]
 fn pixel_format_has_alpha_asks_wic() {
     unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().unwrap() };
@@ -70,7 +70,7 @@ fn pixel_format_has_alpha_asks_wic() {
     unsafe { CoUninitialize() };
 }
 
-/// 125 番: 対のないサロゲートを含む名のファイルも開ける（名を UTF-8 へ化かさず UTF-16 のまま渡す）。
+/// 対のないサロゲートを含む名のファイルも開ける（名を UTF-8 へ化かさず UTF-16 のまま渡す）。
 /// 置き場はワークツリーの `target` の下。
 #[test]
 fn load_bitmap_source_opens_name_with_lone_surrogate() {

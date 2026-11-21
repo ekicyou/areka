@@ -1,19 +1,18 @@
 //! 実プロセス・実ソケットの MCP の試験を、emo2 の起動 1 回の上でまとめて行う。
 //!
-//! 以前は 3 本の試験が別々に emo2 の新しい写しを起こし、全体テストで初回起動のトークが 3 回流れていた。
-//! 起動は 1 回にし、次の 3 つを順に確かめる（確かめごとの中身は前と同じ）。
+//! 起動は 1 回にし、次の 3 つを順に確かめる。
 //!
-//! 1. `get_log`（spec: areka-P0-mcp-log-history task 5.1・要件 1.1・1.7・1.8・4.6・4.7・6.3）:
+//! 1. `get_log`:
 //!    標準出力から消えた info が履歴に残る・履歴の本文が標準出力の同じ行と 1 字も違わない
 //!    （逆斜線入りのパスと二重引用符が JSON を通って戻る）・各行の頭の形と番号の昇順。
-//! 2. 出どころ（spec: areka-P0-script-security-level task 7.2・要件 1.2・1.3・2.2・2.3・2.4・2.8・4.3）:
+//! 2. 出どころ:
 //!    `kanade=trace` の `shiori_request` と `areka_input::user_break` の debug の記録を標準出力から読む。
 //!    ⑴ MCP の `raise_event` は `sender=MCP`・`sender_type=external,sstp`・`security_level=local`
 //!    ⑵ MCP の `sakurascript` の `OnTranslate` は `sender=MCP`・`sender_type=internal`
 //!    ⑶ 起動の道のゴースト自身のイベントは `sender=areka`・`sender_type=internal`
 //!    ⑷ MCP の `sakurascript` で流した `\![enter,nouserbreakmode]` は今どおり区間に入る（MCP は `local`）。
 //!    決定論のテスト（偽の SHIORI の檻）の代わりではない。両方を置く。
-//! 3. strict（spec: mcp-strict-errors task 9.4・要件 7.9）: 誤りを 2 つ含む台本を `strict` 真で流し、
+//! 3. strict: 誤りを 2 つ含む台本を `strict` 真で流し、
 //!    答えの `since_id` で `get_log(log_type=error, ghost_name=…)` を読むと 2 件が台本の順に読める。
 //!
 //! 記録の段は 3 つの和にする。`areka::ghost_session` の info（`本物のゴースト窓を開きました`）は
@@ -241,7 +240,7 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
             run.output()
         )
     };
-    // 利用者と同じ閉じ方で終わった（窓口の綴りの本物の檻・D-19）。
+    // 利用者と同じ閉じ方で終わった（窓口の綴りの本物の檻）。
     assert_eq!(
         ended.by,
         EndedBy::UserClose,
@@ -249,7 +248,7 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
         ctx()
     );
 
-    // 1-1: 標準出力から消えた info が履歴に残る（要件 1.7・6.3）。
+    // 1-1: 標準出力から消えた info が履歴に残る。
     assert!(
         !stdout.contains(REAL_WINDOWS),
         "RUST_LOG に areka::ghost_session が無いのに標準出力に「{REAL_WINDOWS}」がある。\n{}",
@@ -269,7 +268,7 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
         }
         records.push(parsed);
     }
-    // 1-2: ghost_resolved の本文が標準出力の同じ行と 1 字も違わない（要件 1.8・4.6・4.7）。
+    // 1-2: ghost_resolved の本文が標準出力の同じ行と 1 字も違わない。
     let in_history: Vec<&str> = records
         .iter()
         .map(|(_, body)| *body)
@@ -301,7 +300,7 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
         ctx()
     );
 
-    // 2⑴ raise_event の要求（要件 1.3・2.3）。
+    // 2⑴ raise_event の要求。
     let probe = requests(&stdout, PROBE_EVENT);
     assert_eq!(
         probe.len(),
@@ -316,7 +315,7 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
         probe[0],
         ctx()
     );
-    // 2⑵ sakurascript の OnTranslate（要件 1.2・2.4・2.8）。
+    // 2⑵ sakurascript の OnTranslate。
     let mcp_translate = (Some("\"MCP\""), Some("internal"), Some("\"local\""));
     assert!(
         requests(&after_send, "OnTranslate")
@@ -326,7 +325,7 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
          送られていない。\n{}",
         ctx()
     );
-    // 2⑶ 起動の道の要求は全部ゴースト自身（要件 2.2）。起動のイベントが 1 本は在ること。
+    // 2⑶ 起動の道の要求は全部ゴースト自身。起動のイベントが 1 本は在ること。
     let boot_requests: Vec<&str> = boot
         .lines()
         .filter(|l| l.contains(SHIORI_REQUEST))
@@ -346,14 +345,14 @@ fn emo2_mcp_get_log_origin_and_strict_over_one_real_boot() {
             ctx()
         );
     }
-    // 2⑷ MCP の台本は local なので止めない（要件 4.3）。区間に入った記録は上で待った。
+    // 2⑷ MCP の台本は local なので止めない。区間に入った記録は上で待った。
     assert!(
         !after_send.contains(REFUSED),
         "MCP の台本でタグが止められた。\n{}",
         ctx()
     );
 
-    // 3: 2 件・台本の順・種類と位置と綴り（要件 7.9・2.3・2.5）。
+    // 3: 2 件・台本の順・種類と位置と綴り。
     let bodies: Vec<&str> = error_log.split("\r\n").filter_map(body).collect();
     assert_eq!(bodies.len(), 2, "strict の記録が 2 件でない。\n{}", ctx());
     for (got, (kind, range, text)) in bodies.iter().zip([

@@ -1,4 +1,4 @@
-//! strict の talk の配り口の覆いの檻（spec: mcp-strict-errors 要件 2.5・2.9・3.5・3.6・3.7・3.11・4.3）。
+//! strict の talk の配り口の覆いの檻。
 //!
 //! 記録は talk スレッドの上で書かれる。捕捉の窓はスレッドごとなので、多くの檻は駆動の状態機械
 //! （[`TalkDriver`]）をテストのスレッドの上で直に回す（`spawn_talk` の本体と同じ `handle`）。
@@ -109,8 +109,8 @@ fn sequence(events: &[CapturedEvent]) -> Vec<String> {
 const MIDDLE_AND_TAIL: &str = "\\![nosuch]あ\\w9\\x";
 
 /// 合図の順で記録する: 命令の誤りはその命令の後の最初の合図の直前に、最後の合図より後ろの
-/// 誤りは自然な終わりで、終わりの知らせの前に（2.5・3.7）。窓の無いゴーストの組では台本の
-/// 解釈の誤りだけが残る（4.3）。
+/// 誤りは自然な終わりで、終わりの知らせの前に。窓の無いゴーストの組では台本の
+/// 解釈の誤りだけが残る。
 #[test]
 fn records_in_cue_order_and_tail_at_natural_end() {
     let (mut driver, rx) = driver(windowless(), Some(hooks()));
@@ -155,7 +155,7 @@ fn records_in_cue_order_and_tail_at_natural_end() {
     assert_eq!(dones(&rx).len(), 1);
 }
 
-/// 打ち切りでは配った合図より後ろの控えを記録しない。記録済みの分は残る（3.6・3.7）。
+/// 打ち切りでは配った合図より後ろの控えを記録しない。記録済みの分は残る。
 #[test]
 fn interrupt_drops_the_rest() {
     let (mut driver, rx) = driver(windowless(), Some(hooks()));
@@ -182,7 +182,7 @@ fn interrupt_before_first_tick_records_nothing() {
     assert!(records(&events).is_empty());
 }
 
-/// 選択肢で終わる台本は選択待ちの始まりで残りを記録し、その後に閉じても落ちない（3.7）。
+/// 選択肢で終わる台本は選択待ちの始まりで残りを記録し、その後に閉じても落ちない。
 #[test]
 fn choice_wait_records_the_rest_and_close_keeps_it() {
     let (mut driver, rx) = driver(windowless(), Some(hooks()));
@@ -198,7 +198,6 @@ fn choice_wait_records_the_rest_and_close_keeps_it() {
     let recs = records(&events);
     assert_eq!(recs.len(), 1);
     assert_eq!(recs[0].0, "ReadUnknownTag");
-    // 閉じても記録は増えも消えもしない。
     let ((), events) = log_capture_kit::capture(|| {
         assert!(driver.handle(SakuraMsg::Close).is_break());
     });
@@ -217,7 +216,7 @@ fn empty_sheet_records_before_done() {
     assert_eq!(dones(&rx).len(), 1);
 }
 
-/// strict 偽（束ねが在っても）と、束ねの無い strict 真は今の道: 記録 0・知らせの口も添えない（3.5）。
+/// strict 偽（束ねが在っても）と、束ねの無い strict 真は今の道: 記録 0・知らせの口も添えない。
 #[test]
 fn not_strict_keeps_the_current_path() {
     for (strict, hooks) in [(false, Some(hooks())), (true, None)] {
@@ -238,7 +237,7 @@ fn not_strict_keeps_the_current_path() {
 }
 
 /// 位置の在る合図だけ知らせの口が添えられ、talk スレッドの上の知らせはその合図の位置で記録される。
-/// 位置は再生した台本（翻訳で書き換えた後の `StartTalk::script`）の文字の数（2.5・3.3）。
+/// 位置は再生した台本（翻訳で書き換えた後の `StartTalk::script`）の文字の数。
 #[test]
 fn probe_records_at_the_cue_place_of_the_played_script() {
     let sink = SurfaceProbeSink::default();
@@ -265,7 +264,7 @@ fn probe_records_at_the_cue_place_of_the_played_script() {
 }
 
 /// 別のスレッドから後で届く知らせ（talk も覆いも終わった後）は、talk スレッドの上で数えた位置で
-/// 記録 1 件を書くだけ（知らせる側で台本を数えない・要件 3.11）。
+/// 記録 1 件を書くだけ（知らせる側で台本を数えない）。
 #[test]
 fn late_report_records_the_place_computed_on_the_talk_thread() {
     let keep = Arc::new(Mutex::new(None));

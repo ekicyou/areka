@@ -1,68 +1,52 @@
-//! `areka.prop.set`（汎用プロパティ SET キュー）の名前自己選別消費 sink（design C7・R3.4/6.2/7.1）。
+//! `areka.prop.set`（汎用プロパティ SET キュー）の受け口。
 //!
-//! 統一プロパティシステム（sylphya）の**書込側対応物**——broadcast された全 cue のうち、
-//! キャリア正準形（`Custom` の String Array）であり自らのコマンド名リテラル
-//! [`PROP_SET_CUE_NAME`] を運ぶものだけを名前自己選別し、**カウンタ key 族限定**の書込 key 統制を
-//! 通したうえで `SylphyaPublisher::persist_put`（fire-and-forget・talk スレッドをブロックしない）へ
-//! 落とす（design C7 Event Contract）。
-//!
-//! 消費先例は `MoveCueSink`（`areka-runtime` の `move_cue.rs`・名前自己選別・非担当は記録付き良性スキップ）と
-//! `make_username_resource_sink`（sylphya_wiring.rs・publisher 捕獲 sink）——本 sink は両者の合成同型。
+//! broadcast された全 cue のうち [`PROP_SET_CUE_NAME`] のキャリアだけを選び、カウンタ key 族に
+//! 限った書込 key 統制を通して `SylphyaPublisher::persist_put`（待たない）へ落とす。
+//! `areka-runtime` の `MoveCueSink`（名前で自分の分を選ぶ）と `sylphya_wiring.rs` の
+//! `make_username_resource_sink`（publisher を捕まえる sink）を合わせた形。
 
 use areka_sakura::contract::{CueCommand, CueSink, TalkCue};
 use areka_sylphya::{PersistKey, PersistScope, SylphyaPublisher};
 use tracing::{debug, info, warn};
 
-/// 汎用プロパティ SET キューのコマンド名リテラル（design C7・`areka.` 接頭辞＝baseware 内部キュー
-/// 名前空間ゆえ ukadoc 正典コマンド名（裸単語）と構造的に非衝突）。
+/// 汎用プロパティ SET キューのコマンド名（`areka.` 接頭辞で ukadoc 正典のコマンド名と衝突しない）。
 ///
-/// 増分語彙 `areka.prop.inc` は名前のみ将来予約であり M1 は不実装（本 sink は assignment のみ）。
+/// 代入だけで、増分の `areka.prop.inc` は名前だけ予約して未実装。
 pub const PROP_SET_CUE_NAME: &str = "areka.prop.set";
 
-/// `areka.prop.set` キューの talk スレッド側消費 sink（design C7「Event Contract」・R3.4）。
+/// `areka.prop.set` キューの talk スレッド側の受け口。
 ///
-/// broadcast された全 cue のうち、キャリア正準形（`Custom` の String Array）であり自らのコマンド名
-/// リテラル [`PROP_SET_CUE_NAME`] を運ぶものだけを名前自己選別し、**カウンタ key 族限定**の書込 key
-/// 統制（[`PersistKey::BootCount`]／[`PersistKey::VanishCount`] のみ受理）を通したうえで
-/// `SylphyaPublisher::persist_put`（fire-and-forget）へ落とす。それ以外（非キャリア・担当外
-/// コマンド名・key 統制外・引数不足）は**記録付き良性スキップ**へ縮退する——無音破棄でも panic でも
-/// ない（R6.2・log-first）。
+/// [`PROP_SET_CUE_NAME`] のキャリアだけを選び、書込 key 統制（[`PersistKey::BootCount`]／
+/// [`PersistKey::VanishCount`] のみ受理）を通して `SylphyaPublisher::persist_put` へ落とす。
+/// 非キャリア・担当外のコマンド名・key 統制外・引数不足は、記録を残して読み飛ばす。
 ///
-/// # 書込 key 統制（design C7 step 3・research §4-8 (ii) 決着）
+/// # 書込 key 統制
 ///
-/// 位置 key（`WindowPos`／`BalloonOffset`）は cue 側から**書けない**（warn スキップ）——位置の永続
-/// ライターをユーザードラッグ 2 点に限る 1.9 の単一ライター規律を cue 側から侵食させない。受理は
-/// カウンタ key 族（`BootCount`／`VanishCount`）のみ。
+/// 位置 key（`WindowPos`／`BalloonOffset`）は cue 側から書けない。位置を永続へ書くのは
+/// ユーザーのドラッグ 2 点だけに限る。
 ///
-/// # Clone + Send（boot 型境界）
+/// # Clone + Send
 ///
-/// dispatcher は talk ごとに sink を clone する（`GhostBootOptions.sinks` は
-/// `CueSink + Clone + Send + 'static`＝[`crate::sink::BootCueSink`]）。内側 [`SylphyaPublisher`] は
-/// `Clone + Send` ゆえ `#[derive(Clone)]` がそのまま成立し、全 clone は同一アクター送信端＝配送意味は
-/// 同一（掲示板モデルの単一鏡像へ収斂）。
+/// dispatcher が talk ごとに clone する（[`crate::sink::BootCueSink`]）。全 clone は同じ
+/// アクター送信端を指す。
 #[derive(Clone)]
 pub struct PropSetCueSink {
-    /// sylphya アクターへの投函端（Clone 可・全 clone は同一鏡像へ収斂）。
     publisher: SylphyaPublisher,
 }
 
 impl PropSetCueSink {
-    /// sylphya publisher（`boot()` が保持する送信端・task 7.1 が生成）から sink を構築する。
+    /// sylphya publisher（`boot` が保持する送信端）から sink を構築する。
     pub fn new(publisher: SylphyaPublisher) -> Self {
         Self { publisher }
     }
 }
 
-/// 演者非依存の単一出力契約 [`areka_sakura::contract::CueSink`]（＝`dola::cue::CueSink`）を実装する
-/// （`GhostBootOptions.sinks` の broadcast 登録先が要求する形・task 7.1 が登録）。broadcast 下では
-/// 担当外 cue（`Text`／`Emote`／他コマンド名のキャリア等）も本 sink へ届くが、名前選別で
-/// [`PROP_SET_CUE_NAME`] 以外は記録付き良性スキップへ縮退する（duration honor には触れない・R6.2）。
+/// broadcast では担当外の cue（`Text`／`Emote`／他のコマンド名のキャリア）も届くので、
+/// 名前で選び、[`PROP_SET_CUE_NAME`] 以外は記録を残して読み飛ばす。
 impl CueSink for PropSetCueSink {
     fn emit(&mut self, cue: TalkCue) {
-        // 1) キャリア抽出。非キャリア（Text/Emote 等の担当外 broadcast）は良性スキップ。
-        //    Custom なのに非正準 params のときの severity は**宛名規律**で分ける: 宛名
-        //    （`Custom{command}` フィールド・params 非正準でも読める）が自分宛の壊れ物ゆえ warn・
-        //    他人宛/未知名＝担当外ゆえ debug（報告責任は宛名の担当者）。
+        // `Custom` で params が非正準のときは宛名で重さを分ける。自分宛の壊れ物は warn、
+        // 他人宛・未知名は担当外なので debug。
         let Some((name, tokens)) = cue.command.as_command_carrier() else {
             match &cue.command {
                 CueCommand::Custom { command, .. } if command == PROP_SET_CUE_NAME => warn!(
@@ -81,9 +65,6 @@ impl CueSink for PropSetCueSink {
             return;
         };
 
-        // 2) 名前自己選別（消費者自身のコマンド名リテラル）。PROP_SET_CUE_NAME のみ解釈する
-        //    （duration honor には触れない）。dola は名前語彙を持たず、一意性は名前空間接頭辞規約
-        //    ＋本 sink 檻（名前リテラル固定）が担保する（W4 中は台帳登記後送・design）。
         if name != PROP_SET_CUE_NAME {
             debug!(
                 name,
@@ -92,7 +73,6 @@ impl CueSink for PropSetCueSink {
             return;
         }
 
-        // 3) 引数不足（tokens < 2）は warn スキップ（assignment 形＝[key, value] を要する）。
         if tokens.len() < 2 {
             warn!(
                 token_count = tokens.len(),
@@ -103,9 +83,7 @@ impl CueSink for PropSetCueSink {
         let key_token = tokens[0];
         let value = tokens[1];
 
-        // 4) 書込 key 統制（design C7 step 3）: カウンタ key 族（BootCount／VanishCount）のみ受理。
-        //    位置 key（WindowPos／BalloonOffset）・未知 key は warn スキップ——位置の永続ライターを
-        //    ユーザードラッグ 2 点に限る 1.9 の単一ライター規律を cue 側から侵食させない。
+        // カウンタ key 族だけ受理する。位置 key・未知 key は書かせない。
         let key = if key_token == PersistKey::BootCount.to_canonical_key() {
             PersistKey::BootCount
         } else if key_token == PersistKey::VanishCount.to_canonical_key() {
@@ -118,8 +96,7 @@ impl CueSink for PropSetCueSink {
             return;
         };
 
-        // 5) 受理: Ghost スコープへ fire-and-forget で write-through（talk スレッドをブロックしない）。
-        //    実機 grep 証跡の info を 1 本出す（design Monitoring: `prop_set_cue applied`）。
+        // talk スレッドを止めないよう、Ghost スコープへ待たずに書く。
         self.publisher
             .persist_put(PersistScope::Ghost, vec![(key, value.to_string())]);
         info!(key = key_token, value, "prop_set_cue applied");
@@ -137,7 +114,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
-    /// `\![name,tokens...]` 汎用キャリア cue を組む（正準形＝`Custom` の String Array）。
+    /// `\![name,tokens...]` 汎用キャリア cue（正準形）。
     fn carrier_cue(actor: &str, name: &str, tokens: &[&str]) -> TalkCue {
         let toks: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
         TalkCue {
@@ -148,7 +125,7 @@ mod tests {
         }
     }
 
-    /// ghost root 付きの共有 FakeIo sylphya を起動する（write-through を別ハンドルで観測するため）。
+    /// ghost root 付きの共有 FakeIo の sylphya（書込を別ハンドルで観測する）。
     fn spawn_with_shared_io() -> (areka_sylphya::SylphyaParts, ScopeRoots, Arc<FakePersistIo>) {
         let shared = Arc::new(FakePersistIo::new());
         let roots = ScopeRoots {
@@ -163,8 +140,7 @@ mod tests {
         (parts, roots, shared)
     }
 
-    /// 受理: `areka.prop.set` + カウンタ key（`areka.boot.count`,"1"）は Ghost スコープへ
-    /// write-through され、別ハンドルの `load_scope` が `BootCount="1"` を観測する（design Testing §6）。
+    /// カウンタ key（`areka.boot.count`,"1"）は Ghost スコープへ書かれ、`load_scope` が `BootCount="1"` を観測する。
     #[test]
     fn boot_count_carrier_is_persisted() {
         let (parts, roots, shared) = spawn_with_shared_io();
@@ -190,7 +166,7 @@ mod tests {
         parts.handle.join().expect("clean close joins");
     }
 
-    /// 受理: `areka.vanish.count` もカウンタ key 族ゆえ受理される（VanishCount）。
+    /// `areka.vanish.count` もカウンタ key 族として受理される。
     #[test]
     fn vanish_count_carrier_is_persisted() {
         let (parts, roots, shared) = spawn_with_shared_io();
@@ -213,14 +189,13 @@ mod tests {
         parts.handle.join().expect("clean close joins");
     }
 
-    /// 書込 key 統制: 位置 key（`areka.window.scope(0).x`）は**拒否**＝warn スキップ・何も書かない
-    /// （1.9 単一ライター規律を cue 側から侵食させない・design C7 step 3）。
+    /// 位置 key（`areka.window.scope.x`）は拒否し、何も書かない。
     #[test]
     fn window_pos_key_is_rejected_no_write() {
         let (parts, roots, shared) = spawn_with_shared_io();
         let mut sink = PropSetCueSink::new(parts.publisher.clone());
 
-        // 位置 key の正準文字列（2 トークンで引数不足ゲートは通過し、key 統制で弾かれる）。
+        // 2 トークンなので引数不足は通り、key 統制で弾かれる。
         let pos_key = PersistKey::WindowPos {
             scope: 0,
             axis: areka_sylphya::Axis::X,
@@ -239,7 +214,7 @@ mod tests {
         parts.handle.join().expect("clean close joins");
     }
 
-    /// 名前自己選別: 担当外コマンド名（`move`/`bind`/未知名）は debug 良性スキップ＝何も書かない。
+    /// 担当外のコマンド名（`move`/`bind`/未知名）は何も書かない。
     #[test]
     fn foreign_command_name_is_skipped_no_write() {
         for name in ["move", "bind", "unknownfoo"] {
@@ -260,13 +235,12 @@ mod tests {
         }
     }
 
-    /// 引数不足（tokens < 2）は warn スキップ＝何も書かない。
+    /// 引数不足（tokens < 2）は何も書かない。
     #[test]
     fn insufficient_args_is_skipped_no_write() {
         let (parts, roots, shared) = spawn_with_shared_io();
         let mut sink = PropSetCueSink::new(parts.publisher.clone());
 
-        // key のみ（値トークン欠落）＝引数不足。
         sink.emit(carrier_cue("0", PROP_SET_CUE_NAME, &["areka.boot.count"]));
         parts.publisher.barrier().expect("barrier");
 
@@ -280,7 +254,7 @@ mod tests {
         parts.handle.join().expect("clean close joins");
     }
 
-    /// 非キャリア cue（`Text` 等の担当外 broadcast）も良性スキップ＝何も書かない。
+    /// 非キャリア cue（`Text` 等）も何も書かない。
     #[test]
     fn non_carrier_cue_is_skipped_no_write() {
         let (parts, roots, shared) = spawn_with_shared_io();
@@ -301,31 +275,21 @@ mod tests {
         parts.handle.join().expect("clean close joins");
     }
 
-    /// `PropSetCueSink` は `BootCueSink`（`CueSink + Clone + Send + 'static`）境界を充足する
-    /// （task 7.1 が `Vec<Box<dyn BootCueSink>>` へ登録できることの compile 檻）。
+    /// `PropSetCueSink` が `BootCueSink` の境界を満たす（`Vec<Box<dyn BootCueSink>>` へ登録できる）。
     #[test]
     fn satisfies_boot_sink_bounds() {
         fn require_boot_sink<T: crate::sink::BootCueSink>() {}
         require_boot_sink::<PropSetCueSink>();
     }
 
-    /// 完走時のみ記録の**統合檻**（task 8.5・要件 3.4／design Testing §4・System Flow「初回ゲートと
-    /// 起動記録」・C7/C12）。
+    /// 起動記録は完走した時だけ書かれることの通しのテスト。
     ///
-    /// 上流の単体檻（`boot_count_carrier_is_persisted` 他）は `PropSetCueSink` へ**直接** carrier cue を
-    /// `emit` して書込を確認する。本檻はその一段上——**実 sakura 再生**（`spawn_talk`・注入時刻 Tick）で
-    /// 初回挨拶台本の末尾 epilogue（`areka.prop.set` / `areka.boot.count` / "1"）を CueSheet horizon へ
-    /// 付加した楽譜を駆動し、`PropSetCueSink` を broadcast sink として実 sylphya（`spawn_sylphya`＋共有
-    /// `FakePersistIo`）へ結線して、**完走した時のみ**起動記録が書かれることを end-to-end で固定する:
+    /// 実の sakura 再生（`spawn_talk`・注入時刻 Tick）で、初回挨拶台本の末尾に付く epilogue
+    /// （`areka.prop.set` / `areka.boot.count` / "1"）を駆動し、`PropSetCueSink` を実 sylphya へ結線する。
+    /// - 完走すると末尾の SET cue が発火し、`BootCount="1"` が書かれる。
+    /// - horizon 前に `Close` すると残 cue ごと捨てられ、SET は発火せず何も書かれない（次回も初回扱い）。
     ///
-    /// - **完走 → 記録あり**: horizon を跨ぐ Tick まで再生 → 末尾 SET cue が発火 → sink が受理 →
-    ///   別ハンドル `load_scope` が `BootCount="1"` を観測する。
-    /// - **horizon 前 `Close` → 記録なし**: 初回 Tick 後・horizon 到達前に `Close` を送ると
-    ///   上流が player を捨て、残 cue（末尾 SET）も一緒に捨てられる → SET は発火せず sink へ届かない → ストア不変
-    ///   （`BootCount` 不在＝次回起動も初回扱いのまま・要件 3.4「初回挨拶が一度は完走することの保証」）。
-    ///
-    /// broadcast された cue 列を横で観測する記録 sink も併置し、**cue レベル**でも「完走時のみ SET が
-    /// 発火し中断時は発火しない」ことを直接固定する（ストアレベルの `load_scope` と二重に押さえる）。
+    /// 記録だけの sink も並べ、cue の発火そのものも固定する。
     mod completion_only_records_integration {
         use super::*;
         use areka_sakura::contract::{
@@ -338,13 +302,10 @@ mod tests {
         use std::sync::mpsc;
         use std::time::Duration;
 
-        /// `spawn_talk` の done ポート境界（`D: From<TalkDone> + From<ChoiceWaiting>`）を満たす
-        /// test-local な合流 enum。両通知は同一ポートを流れる（DD-6）が、本檻の台本に選択肢
-        /// （`\q`）は無く `ChoiceWaiting` は発生しない——境界充足のためだけの受け皿である。
+        /// `spawn_talk` の done ポートの境界（`From<TalkDone> + From<ChoiceWaiting>`）を満たす合流 enum。
+        /// 台本に選択肢（`\q`）は無く `ChoiceWaiting` は発生しない。
         enum TalkNotice {
             Done(TalkDone),
-            /// 本 e2e は選択待ち通知を観測しないが、`spawn_talk` の `D` 境界
-            /// （`From<TalkDone> + From<ChoiceWaiting>`）を満たすため受け口だけ用意する。
             #[allow(dead_code)]
             ChoiceWaiting(ChoiceWaiting),
         }
@@ -359,7 +320,7 @@ mod tests {
             }
         }
 
-        /// broadcast で届いた全 cue を蓄積する観測 sink（cue レベルの弁別に使う・`Clone` で観測ハンドル取得）。
+        /// broadcast で届いた全 cue を蓄積する観測 sink。
         #[derive(Clone)]
         struct ObservingSink {
             records: Arc<Mutex<Vec<TalkCue>>>,
@@ -384,7 +345,7 @@ mod tests {
             }
         }
 
-        /// 観測 sink の記録から carrier コマンド名の列を抽出する（SET cue が発火したかを名前で判定する）。
+        /// 記録から carrier のコマンド名の列を取り出す。
         fn carrier_names(records: &Arc<Mutex<Vec<TalkCue>>>) -> Vec<String> {
             records
                 .lock()
@@ -394,14 +355,13 @@ mod tests {
                 .collect()
         }
 
-        /// 初回挨拶台本（stand-in グリーティング `hi\e`）＋起動記録 epilogue を組む。台本の占有 horizon
-        /// （`hi` 再生完了＝0.1s）末尾へ `areka.prop.set` / `areka.boot.count` / "1" が duration 0 で付く。
+        /// 初回挨拶台本（`hi\e`）に起動記録の epilogue を付けたもの。horizon（`hi` の再生完了＝0.1s）の
+        /// 末尾に `areka.prop.set` / `areka.boot.count` / "1" が duration 0 で付く。
         fn first_boot_start() -> StartTalk {
             StartTalk {
                 talk_id: TalkId(8005),
-                // `\e` 終端の最小挨拶。ClearAll@0 / Text("hi")@0(d=0.1)。horizon=0.1。
                 script: r"hi\e".to_string(),
-                // ⓪ghost の apply_boot_record_gate が初回起動で据える epilogue と同一形（runtime.rs）。
+                // `apply_boot_record_gate` が初回起動で据える epilogue と同じ形。
                 epilogue: vec![EpilogueCommand {
                     name: PROP_SET_CUE_NAME.to_string(),
                     tokens: vec![PersistKey::BootCount.to_canonical_key(), "1".to_string()],
@@ -411,9 +371,7 @@ mod tests {
             }
         }
 
-        /// **完走 → 記録あり**（要件 3.4・design Testing §4「epilogue 付き台本の完走→sink 受理」）。
-        /// horizon(0.1) を跨ぐ Tick(1.0) まで実再生 → 末尾 SET cue が発火 → `PropSetCueSink` が受理 →
-        /// 別ハンドル `load_scope` が `BootCount="1"` を観測する。cue レベルでも SET 発火を固定する。
+        /// 完走すると末尾の SET cue が発火し、`BootCount="1"` が書かれる。
         #[test]
         fn completion_fires_tail_set_cue_and_records_boot_count() {
             let (parts, roots, shared) = spawn_with_shared_io();
@@ -430,9 +388,9 @@ mod tests {
                 None,
             );
 
-            // 初回 Tick(0.0) でアンカー刻印（挨拶 cue は due・末尾 SET(0.1) は未 due で保留）。
+            // 初回 Tick で時刻を刻む。挨拶 cue は出て、末尾の SET は保留。
             handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-            // horizon(0.1) を跨ぐ Tick で末尾 SET cue が発火し占有 horizon 到達＝自然終端（完走）。
+            // horizon を跨ぐ Tick で末尾の SET が発火し、完走する。
             handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
             let TalkNotice::Done(done) = done_rx
@@ -448,7 +406,7 @@ mod tests {
             );
             handle.actor.join().expect("body は正常終了する");
 
-            // fire-and-forget の write-through を barrier で確定してから別ハンドルで観測する。
+            // 待たない書込を barrier で確定してから観測する。
             parts
                 .publisher
                 .barrier()
@@ -459,7 +417,6 @@ mod tests {
                 "完走時は末尾 SET cue が発火し BootCount=\"1\" が記録される: {loaded:?}"
             );
 
-            // cue レベルの弁別: 完走再生では SET cue（areka.prop.set キャリア）が broadcast されている。
             assert!(
                 carrier_names(&observed).contains(&PROP_SET_CUE_NAME.to_string()),
                 "完走では末尾 SET cue が実際に発火・broadcast される: {:?}",
@@ -470,12 +427,8 @@ mod tests {
             parts.handle.join().expect("clean close joins");
         }
 
-        /// **horizon 前 `Close` → 記録なし**（要件 3.4・design System Flow の中断・Testing §4「horizon 前
-        /// Close で SET 不発火・ストア不変」。中断は上流が player を捨てる形）。
-        /// 初回 Tick(0.0) で Driving 入り（挨拶 cue は発火・末尾 SET(0.1) は保留）した直後に `Close` を
-        /// 送ると上流が player を捨て、残 cue（SET）も一緒に捨てられる → SET は発火せず sink へ届かない →
-        /// ストアは不変（`BootCount` 不在）＝次回起動も初回扱いのまま。inbox は FIFO・単一スレッド処理
-        /// ゆえ Tick(0.0) は Close より前に処理される（決定的）。
+        /// horizon 前に `Close` すると、残 cue（SET）も捨てられ、何も書かれない（次回も初回扱い）。
+        /// inbox は FIFO で単一スレッド処理なので、Tick は Close より前に処理される。
         #[test]
         fn interrupt_before_horizon_drops_set_cue_and_records_nothing() {
             let (parts, roots, shared) = spawn_with_shared_io();
@@ -492,9 +445,7 @@ mod tests {
                 None,
             );
 
-            // 初回 Tick(0.0): Driving 入り・挨拶 cue は due で発火するが末尾 SET(0.1) は未 due で保留。
             handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-            // horizon 到達前に Close: 上流が player を捨て、残 cue（保留中の SET）も一緒に捨てられる。
             handle.inbox.send(SakuraMsg::Close).unwrap();
 
             let TalkNotice::Done(done) = done_rx
@@ -510,7 +461,7 @@ mod tests {
             );
             handle.actor.join().expect("body は正常終了する");
 
-            // barrier で（あれば）write-through を確定させたうえでストア不変を観測する。
+            // 書込があれば barrier で確定させてから、ストアが不変なことを見る。
             parts
                 .publisher
                 .barrier()
@@ -521,7 +472,6 @@ mod tests {
                 "horizon 前中断では SET cue が発火せずストアは不変（次回も初回扱い）: {loaded:?}"
             );
 
-            // cue レベルの弁別: 中断再生では SET cue（areka.prop.set キャリア）は一度も broadcast されない。
             assert!(
                 !carrier_names(&observed).contains(&PROP_SET_CUE_NAME.to_string()),
                 "中断では上流が player を捨て、末尾 SET cue も一緒に捨てられて発火しない: {:?}",

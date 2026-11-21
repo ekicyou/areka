@@ -1,4 +1,4 @@
-//! 読み取りだけの走りの、起動中の印の 3 つの書き手と後始末の記録（readonly-mode 要件 2.6・3.1・3.2・6.1・6.3・11.1・11.4）。
+//! 読み取りだけの走りの、起動中の印の 3 つの書き手と後始末の記録。
 //!
 //! プロセスに 1 つの状態は `withhold_everything` を呼ばず、試験ごとの根に立てた
 //! `WithholdGuard` だけで控える。根はワークツリーの `target\` の下だけ。
@@ -34,7 +34,7 @@ fn tree(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
 }
 
 /// 根の取っ手の下で、印の 3 関数は成功を返し、書いたときの記録を出さず、控えたときの記録を出し、
-/// 置き場に何も作らない（要件 2.6・3.1・6.1・11.4）。
+/// 置き場に何も作らない。
 #[test]
 fn three_mark_writers_withhold_under_the_guard() {
     let tmp = TempPath::under_target("mark-readonly-writers");
@@ -77,8 +77,7 @@ fn three_mark_writers_withhold_under_the_guard() {
     assert!(!app.exists(), "置き場は作られない");
 }
 
-/// 前のふつうの走りの印を植えると、読み手がその印を読み、後始末の後もファイルの印が同じ
-/// （要件 3.1・3.2・11.1）。
+/// 前のふつうの走りの印を植えると、読み手がその印を読み、後始末の後もファイルの印が同じ。
 #[test]
 fn planted_mark_is_read_and_file_stays_after_cleanup() {
     let tmp = TempPath::under_target("mark-readonly-planted");
@@ -99,7 +98,7 @@ fn planted_mark_is_read_and_file_stays_after_cleanup() {
 }
 
 /// きれいに終わらなかった後始末は、読み取りだけの文を `readonly = true` で 1 件だけ出し、
-/// 控えの印で次の起動を予告しない（要件 6.3）。
+/// 控えの印で次の起動を予告しない。
 #[test]
 fn keep_mark_says_readonly_without_foretelling() {
     let tmp = TempPath::under_target("mark-readonly-keep");

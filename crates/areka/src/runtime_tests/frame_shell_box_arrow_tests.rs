@@ -1,5 +1,5 @@
 // =============================================================================
-// 箱の矢印の押下と箱の上のホイール（balloon-scroll-arrows task 6.3・要件 7.4〜7.6・11.1・11.2）
+// 箱の矢印の押下と箱の上のホイール
 //
 // 親（`frame_shell_box_integration_tests.rs`）の `Cage`——実 emo2 fixture ＋ 実 GPU で本番の
 // `frame_system` を回す檻——で箱 `talk` にあふれる行を流し、矢印を出す。箱の四角の写し
@@ -237,7 +237,7 @@ impl Cage {
 }
 
 /// 話し終えた後の箱の矢印の押下は箱を送って消費し（クリックにも中断にもしない）、矢印の外の
-/// 押下は今までどおり箱の押下の判断へ流れる（要件 7.4）。
+/// 押下は今までどおり箱の押下の判断へ流れる。
 #[test]
 fn finished_box_arrow_press_scrolls_and_is_not_a_click() {
     let mut cage = talk_lines(8);
@@ -307,8 +307,7 @@ fn talking_box_arrow_press_flows_to_the_usual_box_press() {
     assert!(cage.box_unmoved(), "話している最中は矢印として扱わない");
 }
 
-/// 隠れた行のある箱の上のホイールは箱を送り、`OnMouseWheel` にしない。OS の行数は 1 回だけ読む
-/// （要件 7.5）。
+/// 隠れた行のある箱の上のホイールは箱を送り、`OnMouseWheel` にしない。OS の行数は 1 回だけ読む。
 #[test]
 fn wheel_over_a_box_with_hidden_lines_scrolls_the_box_not_on_mouse_wheel() {
     let mut cage = talk_lines(8);
@@ -326,7 +325,7 @@ fn wheel_over_a_box_with_hidden_lines_scrolls_the_box_not_on_mouse_wheel() {
     );
 }
 
-/// 隠れた行の無い箱の上のホイールは今までどおり `OnMouseWheel` になる（要件 7.6）。
+/// 隠れた行の無い箱の上のホイールは今までどおり `OnMouseWheel` になる。
 #[test]
 fn wheel_over_a_box_without_hidden_lines_is_on_mouse_wheel_as_before() {
     let mut cage = talk_lines(1);

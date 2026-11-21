@@ -7,7 +7,7 @@ use areka_kanade::KanadeMsg;
 use areka_runtime::frame::status_report::*;
 use areka_runtime::target_map::balloon_target;
 use bevy_ecs::world::World;
-// 中で記録を出す私有の関数は渡し口から同じ名前で引く（設計 D3 ⑷）。
+// 中で記録を出す私有の関数は渡し口から同じ名前で引く。
 use areka_runtime::frame::status_report::test_support::report_observed;
 
 #[cfg(test)]

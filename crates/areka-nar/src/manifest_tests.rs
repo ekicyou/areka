@@ -1,7 +1,7 @@
 //! `manifest` の兄弟テスト——最上位の `install.txt` 探し・文字コード・キーの引き方・
-//! 種別・`name`／`directory`／`accept`（要件 3.1〜3.11）。
+//! 種別・`name`／`directory`／`accept`。
 //!
-//! 同時インストールと再インストールの規則（要件 3.12〜3.16）は
+//! 同時インストールと再インストールの規則は
 //! [`companion`] の側に置く。1 ファイルが 1,000 行を超えると読めなくなるので
 //! 固定入力を削らずに分けた。助手はこの側に置き、`companion` は `use super::*`
 //! で借りる。
@@ -88,9 +88,9 @@ fn missing_top_level(builder: NarBuilder) -> Vec<String> {
 
 // ---- 検体の実物と同じ綴り ----
 //
-// 実ファイルを `include_bytes!` で読まないのは、タスク 9 が展開形の置き場
-// （`vendors/sample_ghost/` の下と pilot の fixtures）を消して `.nar` だけに
-// するため。消える道を焼き付けると、後のタスクが本タスクのテストごと壊す。
+// 実ファイルを `include_bytes!` で読まないのは、展開形の置き場
+// （`vendors/sample_ghost/` の下と pilot の fixtures）が消えて `.nar` だけに
+// なり得るため。消える道を焼き付けない。
 // 代わりにバイト列を書き写し、下の較正が符号化器で写しの正しさを確かめる。
 
 /// `検体 emo2 の install.txt` の実物。
@@ -148,9 +148,9 @@ fn the_transcribed_sample_bytes_really_spell_the_sample_names() {
     );
 }
 
-/// 検体 4 つの実物が、1 件の拒否も 1 件の警告も出さずにそのまま通る（要件 3.1〜3.16）。
+/// 検体 4 つの実物が、1 件の拒否も 1 件の警告も出さずにそのまま通る。
 ///
-/// 通らない実物が 1 つでもあれば、この spec の出口が実在の配布物を撥ねる。
+/// 通らない実物が 1 つでもあれば、`install.txt` の解釈が実在の配布物を撥ねる。
 #[test]
 fn every_real_sample_install_txt_is_accepted_verbatim_without_a_single_warning() {
     let emo2 = parse_manifest(EMO2_GHOST).expect("emo2 の実物が拒否された");
@@ -192,9 +192,9 @@ fn every_real_sample_install_txt_is_accepted_verbatim_without_a_single_warning()
     assert_eq!(pasta.warnings, vec![]);
 }
 
-// ---- 最上位の `install.txt` 探し（要件 3.1・3.2） ----
+// ---- 最上位の `install.txt` 探し ----
 
-/// 最上位のファイルとして置かれた `install.txt` を見つける（要件 3.1）。
+/// 最上位のファイルとして置かれた `install.txt` を見つける。
 #[test]
 fn finds_install_txt_at_the_top_level() {
     let archive = NarBuilder::new()
@@ -205,14 +205,14 @@ fn finds_install_txt_at_the_top_level() {
     assert_eq!(located(archive).expect("最上位にある"), "install.txt");
 }
 
-/// ファイル名の ASCII 大小は区別しない（Windows のファイルシステムに合わせる＝要件 3.1）。
+/// ファイル名の ASCII 大小は区別しない（Windows のファイルシステムに合わせる）。
 #[test]
 fn finds_install_txt_whose_name_differs_only_in_case() {
     let archive = NarBuilder::new().file("INSTALL.TXT", b"x").done();
     assert_eq!(located(archive).expect("大小は区別しない"), "INSTALL.TXT");
 }
 
-/// 深いところの `install.txt` は最上位ではない。包みフォルダを黙って剥がさない（要件 3.2）。
+/// 深いところの `install.txt` は最上位ではない。包みフォルダを黙って剥がさない。
 #[test]
 fn refuses_when_install_txt_only_sits_inside_a_wrapper_folder() {
     let archive = NarBuilder::new()
@@ -222,7 +222,7 @@ fn refuses_when_install_txt_only_sits_inside_a_wrapper_folder() {
     assert_eq!(missing_top_level(archive), vec!["emo2/".to_owned()]);
 }
 
-/// フォルダのエントリを 1 つも持たない書庫でも、包みフォルダの名前を一覧に出す（要件 3.2）。
+/// フォルダのエントリを 1 つも持たない書庫でも、包みフォルダの名前を一覧に出す。
 ///
 /// 実在の配布物 `hello-pasta.nar` はフォルダのエントリを持たない。エントリの名前を
 /// そのまま並べるだけだと一覧が空になり、「何が入っているのか」を利用者に返せない。
@@ -242,7 +242,7 @@ fn lists_implied_top_level_folders_when_the_archive_has_no_folder_entries() {
     );
 }
 
-/// 何も入っていない書庫でも拒否の理由は組める。一覧は空（要件 3.2）。
+/// 何も入っていない書庫でも拒否の理由は組める。一覧は空。
 #[test]
 fn refuses_an_empty_archive_with_an_empty_top_level_list() {
     assert_eq!(missing_top_level(NarBuilder::new()), Vec::<String>::new());
@@ -263,7 +263,7 @@ fn lists_only_the_first_eight_top_level_names_and_the_total() {
     assert_eq!(missing_top_level(with(9)), nine);
 }
 
-/// `install.txt` という名前の**フォルダ**は読む対象ではない（要件 3.1）。
+/// `install.txt` という名前の**フォルダ**は読む対象ではない。
 #[test]
 fn does_not_take_a_top_level_folder_named_install_txt() {
     let archive = NarBuilder::new()
@@ -273,23 +273,23 @@ fn does_not_take_a_top_level_folder_named_install_txt() {
     assert_eq!(missing_top_level(archive), vec!["install.txt/".to_owned()]);
 }
 
-// ---- 文字コード（要件 3.3） ----
+// ---- 文字コード ----
 
-/// `Charset` が大文字でも読む。検体 emo2 の綴り（要件 3.3）。
+/// `Charset` が大文字でも読む。検体 emo2 の綴り。
 #[test]
 fn reads_the_uppercase_charset_key_like_the_emo2_sample() {
     let manifest = parse_manifest(EMO2_GHOST).expect("受理される");
     assert_eq!(manifest.name, EMO2_GHOST_NAME, "UTF-8 として読めている");
 }
 
-/// 値の前の空白は無視する。検体 R_POST_and_KOMAINU の綴り（要件 3.3）。
+/// 値の前の空白は無視する。検体 R_POST_and_KOMAINU の綴り。
 #[test]
 fn reads_the_charset_value_with_a_leading_space_like_the_r_post_sample() {
     let manifest = parse_manifest(R_POST).expect("受理される");
     assert_eq!(manifest.name, R_POST_NAME, "Shift_JIS として読めている");
 }
 
-/// `charset` 行が無ければ既存層の ANSI 既定（＝CP932）で読む（要件 3.3）。
+/// `charset` 行が無ければ既存層の ANSI 既定（＝CP932）で読む。
 #[test]
 fn falls_back_to_the_ansi_default_when_no_charset_line_is_present() {
     let (sjis, _, _) = encoding_rs::SHIFT_JIS.encode("狛犬");
@@ -301,8 +301,7 @@ fn falls_back_to_the_ansi_default_when_no_charset_line_is_present() {
     assert_eq!(manifest.name, "狛犬", "宣言が無ければ Shift_JIS で読む");
 }
 
-/// `charset` 行より前に非 ASCII の行があっても、宣言は使われる（7.11(b)・
-/// `audit-parsers-sakura` が既存層の先読みを位置を問わない読みに直した）。
+/// `charset` 行より前に非 ASCII の行があっても、宣言は使われる。
 ///
 /// 1 行目の名を UTF-8 で書き、後ろの `charset,UTF-8` が効いて正しく読めることで、
 /// ANSI 既定でなく宣言で読まれたことを確かめる。
@@ -319,9 +318,9 @@ fn a_charset_line_after_a_non_ascii_line_is_used() {
     );
 }
 
-// ---- キーの引き方（要件 3.4） ----
+// ---- キーの引き方 ----
 
-/// 全てのキーを ASCII 大小を区別せずに引く（要件 3.4）。
+/// 全てのキーを ASCII 大小を区別せずに引く。
 #[test]
 fn looks_up_every_key_ignoring_ascii_case() {
     let manifest = parsed(&[
@@ -340,7 +339,7 @@ fn looks_up_every_key_ignoring_ascii_case() {
     assert_eq!(manifest.warnings, vec![], "大小違いは知らないキーではない");
 }
 
-/// 大小だけが違う同じキーが 2 度あれば、ファイルの後の行が勝つ（要件 3.4）。
+/// 大小だけが違う同じキーが 2 度あれば、ファイルの後の行が勝つ。
 ///
 /// 鍵の表の順（`Directory` が `directory` より前）なら小文字のほうが勝つ並びにして、
 /// 行の順で畳んでいることを見る。
@@ -363,14 +362,14 @@ fn the_later_companion_directory_row_wins_across_case() {
     assert_eq!(manifest.companions[0].directory, "x");
 }
 
-/// カンマの無い行は既存層と同じく読み飛ばす。知らないキーにも数えない（要件 3.4）。
+/// カンマの無い行は既存層と同じく読み飛ばす。知らないキーにも数えない。
 #[test]
 fn skips_lines_without_a_comma() {
     let manifest = parsed(&["type,ghost", "name,えも", "directory,emo2", "これは注記"]);
     assert_eq!(manifest.warnings, vec![]);
 }
 
-/// 値の中のカンマは最初の 1 つでだけ分ける（要件 3.4）。
+/// 値の中のカンマは最初の 1 つでだけ分ける。
 #[test]
 fn splits_on_the_first_comma_only() {
     assert_eq!(
@@ -379,9 +378,9 @@ fn splits_on_the_first_comma_only() {
     );
 }
 
-// ---- 種別（要件 3.5・3.6） ----
+// ---- 種別 ----
 
-/// 4 種はそのまま受理する（要件 3.5）。
+/// 4 種はそのまま受理する。
 #[test]
 fn accepts_the_four_supported_types() {
     for (value, expected) in [
@@ -395,7 +394,7 @@ fn accepts_the_four_supported_types() {
     }
 }
 
-/// 扱わない種別は読み取った値つきで拒否する（要件 3.6）。
+/// 扱わない種別は読み取った値つきで拒否する。
 #[test]
 fn refuses_every_unsupported_type_with_the_value_it_read() {
     for value in [
@@ -419,7 +418,7 @@ fn refuses_every_unsupported_type_with_the_value_it_read() {
     }
 }
 
-/// `type` 行が無い／値が空なら「指定なし」として拒否する（要件 3.6）。
+/// `type` 行が無い／値が空なら「指定なし」として拒否する。
 #[test]
 fn refuses_a_missing_or_empty_type_as_unspecified() {
     for lines in [
@@ -434,7 +433,7 @@ fn refuses_a_missing_or_empty_type_as_unspecified() {
     }
 }
 
-/// 値の大小は区別する。大小を無視するのはキーだけ（要件 3.4・3.6）。
+/// 値の大小は区別する。大小を無視するのはキーだけ。
 #[test]
 fn refuses_a_type_value_whose_case_differs() {
     assert_eq!(
@@ -445,9 +444,9 @@ fn refuses_a_type_value_whose_case_differs() {
     );
 }
 
-// ---- `name`・`directory`・`accept`（要件 3.7〜3.11） ----
+// ---- `name`・`directory`・`accept` ----
 
-/// `name` が無い／空なら拒否する（要件 3.8）。
+/// `name` が無い／空なら拒否する。
 #[test]
 fn refuses_a_missing_or_empty_name() {
     for lines in [
@@ -462,7 +461,7 @@ fn refuses_a_missing_or_empty_name() {
     }
 }
 
-/// `directory` が無い／空なら拒否する（要件 3.7）。
+/// `directory` が無い／空なら拒否する。
 #[test]
 fn refuses_a_missing_or_empty_directory() {
     for lines in [
@@ -500,7 +499,7 @@ fn reports_the_type_then_the_name_then_the_directory() {
     );
 }
 
-/// `name` の値をそのまま返す（要件 3.10）。前後の空白だけは既存層が落とす。
+/// `name` の値をそのまま返す。前後の空白だけは既存層が落とす。
 #[test]
 fn returns_the_name_verbatim() {
     assert_eq!(
@@ -509,7 +508,7 @@ fn returns_the_name_verbatim() {
     );
 }
 
-/// `accept` の値をそのまま返し、照合はしない（要件 3.11）。
+/// `accept` の値をそのまま返し、照合はしない。
 #[test]
 fn returns_accept_without_matching_it() {
     assert_eq!(
@@ -525,14 +524,14 @@ fn returns_accept_without_matching_it() {
     );
 }
 
-/// 空の `accept` は行が無いのと同じ「指定なし」（要件 3.11・検体 hello-pasta）。
+/// 空の `accept` は行が無いのと同じ「指定なし」（検体 hello-pasta）。
 #[test]
 fn treats_an_empty_accept_like_a_missing_line() {
     assert_eq!(parsed_ghost(&["accept,"]).accept, None);
     assert_eq!(parsed_ghost(&[]).accept, None);
 }
 
-/// `directory` は 1 階層の名前でなければならない（要件 3.9）。
+/// `directory` は 1 階層の名前でなければならない。
 ///
 /// 区切り・`..`・絶対の形・NUL・Windows で使えない名前をひと通り渡す。
 #[test]
@@ -564,7 +563,7 @@ fn accepts_an_ordinary_one_level_directory_name() {
     }
 }
 
-// ---- 本体が書き込みの手段を持たない（要件 4.1） ----
+// ---- 本体が書き込みの手段を持たない ----
 
 /// `manifest` の本体が、ファイルシステムにも別プロセスにも触る綴りを 1 つも持たない。
 ///

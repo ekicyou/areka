@@ -1,6 +1,6 @@
 //! `parse_noted`（位置と印つきの入口）の単体テスト。
 //!
-//! 公開の道（`crate::sakura::…`）から引き、次を固定する（mcp-author-tools 要件 3.1・3.11）:
+//! 公開の道（`crate::sakura::…`）から引き、次を固定する:
 //! - `parse(s)` と `parse_noted(s)` の命令の列が等しい（経路は 1 本）。
 //! - `span` は入力の順に並び、重ならず、文字の境界に在り、`&input[span]` が該当の綴り。
 //! - 隣り合うトークンを畳んだ命令（旧い 2 連の `\q[ID][題]`）の
@@ -96,7 +96,7 @@ fn lone_marker_span_is_marker_only() {
     assert_eq!(slices(s, &parse_noted(s)), [r"\![*]", "単独"]);
 }
 
-/// `%*` の範囲は `%` と `*` の 2 字（要件 4.3）。
+/// `%*` の範囲は `%` と `*` の 2 字。
 #[test]
 fn percent_star_span_is_two_chars() {
     let s = r"前%*\![*]後";
@@ -106,7 +106,7 @@ fn percent_star_span_is_two_chars() {
 #[test]
 fn folded_legacy_q_span_covers_both_brackets() {
     for (s, folded) in [
-        // 閉じた題 `[...]` は、後ろが次のタグでも地の文でも畳まれる（指摘 25）。
+        // 閉じた題 `[...]` は、後ろが次のタグでも地の文でも畳まれる。
         (r"\q[ID][題]\e", r"\q[ID][題]"),
         (r"\q[ID][題]です", r"\q[ID][題]"),
         (r"前\q*[ID][題]", r"\q*[ID][題]"),
@@ -128,7 +128,7 @@ fn notes_are_read_notes() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// 印（mcp-author-tools 要件 3.2・3.4・3.10・3.11）
+// 印
 //
 // 印は読む段が自分で下した扱いだけを言う。各テストは「印の付いた命令の綴りと印」の
 // 全部を比べる（付くべき命令にだけ付き、他の命令には付かない）。
@@ -163,7 +163,7 @@ fn unknown_tag_is_noted_on_spellings_without_an_arm() {
         // 素通しのタグ（角括弧つき）。
         (r"\i[5]", r"\i[5]"),
         (r"\&[amp]", r"\&[amp]"),
-        // `\w` の後の `[2]` は字（かけ直しの R18）。
+        // `\w` の後の `[2]` は字。
         (r"\w[2]", r"\w"),
         (r"\q*[ID]", r"\q*[ID]"),
         // 旧い 2 連の `\q`（畳んだ全部に 1 つ）。
@@ -220,7 +220,7 @@ fn argument_defaulted_is_noted_where_reading_falls_back() {
         // 改行の比: 引数が在って `half` でも数でもない。
         r"\n[abc]",
         r#"\n[""]"#,
-        // 改行の比: 数として読めても有限でない（指摘 3）。
+        // 改行の比: 数として読めても有限でない。
         r"\n[NaN]",
         r"\n[inf]",
         r"\n[1e40]",
@@ -250,7 +250,7 @@ fn argument_defaulted_is_not_noted_when_read_or_carried_downstream() {
 }
 
 /// 印は「無視した」の扱いを持たない: 単独でも `\q` の前でも `%*` でも印の命令に印は付かず、
-/// 直後の `\q` の引数が足りないときの既定へ落とした印は `\q` の命令にだけ付く（要件 4.4）。
+/// 直後の `\q` の引数が足りないときの既定へ落とした印は `\q` の命令にだけ付く。
 #[test]
 fn marker_carries_no_note() {
     assert_no_notes(&[

@@ -69,7 +69,6 @@ impl Trio {
             create_hidden_test_child(parent, w!("intruder"))
         };
         let character = create_test_child(parent, w!("character"));
-        // 「バルーン／割り込み／キャラ」の順（手前 → 背後）を明示的に作る。
         insert_after(intruder, balloon);
         insert_after(character, intruder);
 

@@ -1,9 +1,9 @@
 //! 正準 key モデル: `PropPath` / `PathSeg` / `Selector` と点付き key パーサ（セレクタ 5 形）。
 //!
 //! 点付き key 文字列を [`PropPath`] へ完全解釈する（解釈の成否と解決の成否は分離——
-//! 文法は全形受理、値は backing 次第）。design §「key モデル＋語彙台帳」Service Interface に従う。
+//! 文法は全形受理、値は backing 次第）。
 //!
-//! ## セレクタ 5 形の写像（design §key.rs コメント）
+//! ## セレクタ 5 形の写像
 //!
 //! | 形 | 例 | 表現 |
 //! |----|----|------|
@@ -17,10 +17,10 @@
 //!
 //! `.` で分割し、各セグメントは末尾に `(...)` を 1 つ持ち得る。括弧内容が全て数字なら
 //! [`Selector::ByIndex`]、そうでなければ [`Selector::ByName`]。ただし名 `index` のセグメントは
-//! 括弧内容が数値必須（非数値 → [`KeyParseError::BadIndex`]・タスク「非数値 index」を可観測にする
-//! design §key.rs 裁定）。括弧内に `.` を含む名前は非対応（分割規則が優先・design 明記の単純分割）。
+//! 括弧内容が数値必須（非数値 → [`KeyParseError::BadIndex`]）。括弧内に `.` を含む名前は
+//! 非対応（単純分割が優先）。
 
-/// 点付き key の正準表現（セレクタ 5 形を完全収容・R1.3）。
+/// 点付き key の正準表現（セレクタ 5 形を完全収容）。
 ///
 /// 名前（[`PathSeg::name`] と [`Selector::ByName`] の中身）の半角の英字は小文字
 /// （[`parse_dotted`] が畳む）。手で組むときも小文字で組む。
@@ -77,7 +77,7 @@ impl std::fmt::Display for PropPath {
 
 /// 括弧セレクタ。名選択（`ByName`）と数値選択（`ByIndex`）の 2 形。
 ///
-/// `.current` / `.count` はセレクタ無しの名前セグメントとして表現する（design §key.rs）。
+/// `.current` / `.count` はセレクタ無しの名前セグメントとして表現する。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Selector {
     /// ①括弧名選択 例: `ghostlist(名前)`。
@@ -106,7 +106,7 @@ pub enum KeyParseError {
     BadIndex { at: usize },
 }
 
-/// 点付き key 文字列 → [`PropPath`]。純粋・no I/O・同一入力→同一 Ok/Err（決定論・R2.5）。
+/// 点付き key 文字列 → [`PropPath`]。純粋・no I/O・同一入力→同一 Ok/Err（決定論）。
 ///
 /// 名前の半角の英字だけを小文字へ畳む（全角の英字・かな・空白はそのまま・前後の空白も削らない）。
 /// `index` の見分けも畳んだ名前で行うので、大文字だけが違う入力は同じ Ok か同じ Err になる。
@@ -135,20 +135,18 @@ fn parse_seg(seg: &str, at: usize) -> Result<PathSeg, KeyParseError> {
                 });
             }
             let name = seg[..open].to_ascii_lowercase();
-            // open の '(' と末尾の ')' を除いた内容。
             let inner = seg[open + 1..seg.len() - 1].to_ascii_lowercase();
             if name.is_empty() {
                 return Err(KeyParseError::EmptySegment { at });
             }
             let is_numeric = !inner.is_empty() && inner.bytes().all(|b| b.is_ascii_digit());
             let selector = if is_numeric {
-                // 数値括弧 → ByIndex。u32 に収まらなければ BadIndex。
                 match inner.parse::<u32>() {
                     Ok(n) => Selector::ByIndex(n),
                     Err(_) => return Err(KeyParseError::BadIndex { at }),
                 }
             } else if name == "index" {
-                // index(...) は数値必須（非数値 index → BadIndex・design §key.rs 裁定）。
+                // index(...) は数値必須（非数値 index → BadIndex）。
                 return Err(KeyParseError::BadIndex { at });
             } else {
                 Selector::ByName(inner)
@@ -178,11 +176,10 @@ mod case_fold_tests;
 mod tests {
     use super::*;
 
-    // --- セレクタ 5 形（design §key.rs のコメント写像）---
+    // --- セレクタ 5 形---
 
     #[test]
     fn form1_bracket_name_selection() {
-        // ①括弧名選択: ghostlist(名前) → ByName("名前")
         let p = parse_dotted("ghostlist(名前)").unwrap();
         assert_eq!(p.segs.len(), 1);
         assert_eq!(p.segs[0].name, "ghostlist");
@@ -194,7 +191,6 @@ mod tests {
 
     #[test]
     fn form2_index_id() {
-        // ②.index(ID) → segment name="index" + ByIndex(ID)
         let p = parse_dotted("activeghostlist(foo).index(3)").unwrap();
         assert_eq!(p.segs.len(), 2);
         assert_eq!(p.segs[1].name, "index");
@@ -203,7 +199,6 @@ mod tests {
 
     #[test]
     fn form3_current() {
-        // ③.current → name="current", selector=None
         let p = parse_dotted("currentghost.current").unwrap();
         assert_eq!(p.segs.len(), 2);
         assert_eq!(p.segs[1].name, "current");
@@ -212,7 +207,6 @@ mod tests {
 
     #[test]
     fn form4_count() {
-        // ④.count → name="count", selector=None
         let p = parse_dotted("ghostlist.count").unwrap();
         assert_eq!(p.segs.len(), 2);
         assert_eq!(p.segs[1].name, "count");
@@ -221,7 +215,6 @@ mod tests {
 
     #[test]
     fn form5_numeric_bracket() {
-        // ⑤数値括弧: scope(0) → name="scope", selector=ByIndex(0)
         let p = parse_dotted("areka.window.scope(0).x").unwrap();
         assert_eq!(p.segs.len(), 4);
         assert_eq!(p.segs[0].name, "areka");
@@ -339,7 +332,6 @@ mod tests {
 
     #[test]
     fn err_bad_index_non_numeric() {
-        // index(...) は数値必須（非数値 index → BadIndex・design §key.rs 裁定）
         assert_eq!(
             parse_dotted("index(abc)"),
             Err(KeyParseError::BadIndex { at: 0 })
@@ -348,7 +340,6 @@ mod tests {
 
     #[test]
     fn err_bad_index_overflow() {
-        // 数値括弧が u32 に収まらない → BadIndex
         assert_eq!(
             parse_dotted("scope(99999999999999)"),
             Err(KeyParseError::BadIndex { at: 0 })
@@ -363,7 +354,7 @@ mod tests {
         );
     }
 
-    // --- 非 index 名の非数値括弧は ByName（design 写像）---
+    // --- 非 index 名の非数値括弧は ByName---
 
     #[test]
     fn non_index_non_numeric_paren_is_byname() {

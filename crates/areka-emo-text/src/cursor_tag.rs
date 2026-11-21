@@ -1,5 +1,4 @@
-//! `\_l` 座標の**解決の意味論**（純粋層・`areka-P0-cursor-tag-canon` design.md
-//! 「解決 `cursor_tag`」正本）。
+//! `\_l` 座標の**解決の意味論**（純粋層）。
 //!
 //! 語彙層（[`crate::state::CursorCoord`]）が忠実転写した 1 軸ぶんの書式を、式 1 本
 //!
@@ -17,7 +16,7 @@
 //!   （行内／行送り）の写像は呼び手
 //!   （配線層 `layout.rs`）の領分で、本モジュールは image 軸（X 正＝右・Y 正＝下）だけを見る。
 //!   正典が「座標軸はバルーン画像そのまま」と定めるので、3 書字方向で式は同一になる
-//!   （原点の位置だけが書字方向で変わり、それは呼び手が `TextRegion::start()` で解決済みの値を
+//!   （原点の位置だけが書字方向で変わり、それは呼び手が `TextRegion::start` で解決済みの値を
 //!   [`CursorBasis::origin`] に渡すことで表現される）。
 //! - **配線**（`layout.rs`）——依存方向は `state` → `cursor_tag` → `layout` → `actor`／`canvas`
 //!   の一方向であり、本モジュールから `layout.rs` を参照しない。
@@ -26,12 +25,12 @@
 //!
 //! 解決は全入力で値を返す全域関数である（panic せず、`error!` も使わない）。縮退は値で表す——
 //! `Ok(None)` が「省略＝動かさない・無音」、`Err(`[`CursorDegrade`]`)` が「解釈不能・軸取り違え
-//! ＝動かさない・警告対象」であって、いずれも**失敗ではない**（R5.1）。記録は本モジュールの
+//! ＝動かさない・警告対象」であって、いずれも**失敗ではない**。記録は本モジュールの
 //! 別の 2 口——[`warn_cursor_degrade`]（縮退の `warn!`・キャラクターと分岐ごとに初回 1 回）と
 //! [`note_out_of_range`]（範囲外の `debug!`・一回化しない）——が担う。こちらも全域で、
 //! `error!`／panic を持たない。
 //!
-//! 解決値は**そのまま返す**——負値・小数・文字描画範囲の外の値を内側へ寄せない（R2.6 の
+//! 解決値は**そのまま返す**——負値・小数・文字描画範囲の外の値を内側へ寄せない（正典は
 //! 「字義どおり用い、内側への自動的な寄せを行わない」）。
 
 use crate::region::TextRegion;
@@ -42,7 +41,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// `\_l` の軸（image 軸・X 正＝右・Y 正＝下）。
 ///
 /// 書字方向による行内／行送りの読み替えは呼び手（配線層）が行う。本モジュールは
-/// 「バルーン画像そのままの座標軸」だけを扱う（R2.1）。
+/// 「バルーン画像そのままの座標軸」だけを扱う。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CursorAxis {
     /// 画像の横方向（正＝右）。
@@ -79,30 +78,30 @@ impl CursorAxis {
 /// あって、器の側で書式を判断しない。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CursorBasis {
-    /// 絶対座標の原点＝解決後の文字描画開始点（`TextRegion::start()`）。範囲内の `origin`
-    /// 宣言は宣言どおり・範囲外の宣言と未宣言成分は書字開始角へ縮退した後の値である（R2.1〜2.4/2.9）。
+    /// 絶対座標の原点＝解決後の文字描画開始点（`TextRegion::start`）。範囲内の `origin`
+    /// 宣言は宣言どおり・範囲外の宣言と未宣言成分は書字開始角へ縮退した後の値である。
     pub origin: (f32, f32),
-    /// `@` 相対の基点＝現在の文字描画位置（実効位置。次の文字が置かれる位置・R3.1/3.5）。
+    /// `@` 相対の基点＝現在の文字描画位置（実効位置。次の文字が置かれる位置）。
     pub current: (f32, f32),
-    /// `centerx`／`centery` の基準＝バルーン画像の原寸（`TextRegion::image_size()`）。
-    /// **文字描画開始点でも文字描画範囲でもない**（正典 付録 A・R4.3）。
+    /// `centerx`／`centery` の基準＝バルーン画像の原寸（`TextRegion::image_size`）。
+    /// **文字描画開始点でも文字描画範囲でもない**。
     pub image_size: (f32, f32),
-    /// `em`（および `%`）の係数の源＝その場所の既定の文字高さ（スコープの既定の見た目の大きさ・
-    /// R1.3）。`\f[height,…]` で変えた大きさは使わない（完了 spec `areka-P0-text-decoration-canon`
-    /// の design.md の決め「`\_l` の単位の係数は既定の見た目の大きさのまま・装飾で変えない」）。
+    /// `em`（および `%`）の係数の源＝その場所の既定の文字高さ（スコープの既定の見た目の大きさ）。
+    /// `\f[height,…]` で変えた大きさは使わない（`\_l` の単位の係数は既定の見た目の大きさのまま・
+    /// 装飾で変えない）。
     pub font_height: f32,
     /// `lh` の係数の源＝行送り（1em＋行間）。metrics が返す値をそのまま受け取り、
     /// 本モジュールでは算出しない。
     pub line_pitch: f32,
 }
 
-/// 縮退の分類（design.md 縮退表の 2 分岐と、有限でない結果）。
+/// 縮退の分類（解決表の 2 分岐と、有限でない結果）。
 ///
-/// キャラクターごと・分岐ごとの警告一回化（R5.3）の鍵になるので、`BTreeMap` のキーとして
+/// キャラクターごと・分岐ごとの警告一回化の鍵になるので、`BTreeMap` のキーとして
 /// 使えるよう全順序を導出している。
 ///
 /// 負値絶対・`%`・`@` 相対はいずれも「基点＋値×係数」で**実導出**する形であって、本分類には
-/// 含まれない（R5.2）。
+/// 含まれない。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CursorDegrade {
     /// 数値として解釈できない形（[`CursorCoord::Invalid`]）。読んだ数が有限でないものは
@@ -115,12 +114,12 @@ pub enum CursorDegrade {
     NonFinite,
 }
 
-/// 単位の係数（**軸に依らないスカラー**・R1.3/1.4）。
+/// 単位の係数（**軸に依らないスカラー**）。
 ///
-/// 正典（design.md 解決表）どおり `Px` ＝ 1（裸数値＝image px 恒等）・`Em` ＝ 文字高さ・
+/// 正典どおり `Px` ＝ 1（裸数値＝image px 恒等）・`Em` ＝ 文字高さ・
 /// `Lh` ＝ 行送り・`Percent` ＝ 文字高さ / 100（100%＝文字高さ 1 個ぶん）。
 ///
-/// 引数に軸を取らないことが「書字方向や適用軸に応じた単位の再写像・拒否を行わない」（R1.4）の
+/// 引数に軸を取らないことが「書字方向や適用軸に応じた単位の再写像・拒否を行わない」の
 /// 型レベルの表現である。
 pub fn unit_coefficient(unit: CursorUnit, font_height: f32, line_pitch: f32) -> f32 {
     match unit {
@@ -131,7 +130,7 @@ pub fn unit_coefficient(unit: CursorUnit, font_height: f32, line_pitch: f32) -> 
     }
 }
 
-/// 1 軸ぶんの解決（純粋・全域・design.md 解決表の実体）。
+/// 1 軸ぶんの解決（純粋・全域・解決表の実体）。
 ///
 /// | 語彙 | 基点 | 係数 | 結果 |
 /// |---|---|---|---|
@@ -147,27 +146,25 @@ pub fn unit_coefficient(unit: CursorUnit, font_height: f32, line_pitch: f32) -> 
 /// 事前条件: `basis` の各値は image px（呼び手が軸読み替え・metrics 解決済みで渡す）。
 ///
 /// 不変条件: 同一入力 → 同一出力。負値・小数・文字描画範囲の外の値をそのまま返す（内側へ
-/// 寄せない・R2.6）。panic しない。`Err` は縮退の表現であって失敗経路ではない（R5.1）。
+/// 寄せない）。
 pub fn resolve_cursor_axis(
     coord: CursorCoord,
     axis: CursorAxis,
     basis: &CursorBasis,
 ) -> Result<Option<f32>, CursorDegrade> {
     match coord {
-        // 省略＝当該軸不動。正典の正常形なので警告対象ではない（R1.6/5.5）。
+        // 省略＝当該軸不動。正典の正常形なので警告対象ではない。
         CursorCoord::Omitted => Ok(None),
-        // 絶対＝文字描画開始点が基点（R2.1）。
         CursorCoord::Absolute { value, unit } => finite(
             axis.component(basis.origin)
                 + value * unit_coefficient(unit, basis.font_height, basis.line_pitch),
         ),
-        // `@` 相対＝現在の文字描画位置が基点（R3.1）。単位との共存も同じ式で通る（R3.2）。
+        // `@` 相対＝現在の文字描画位置が基点。
         CursorCoord::Relative { value, unit } => finite(
             axis.component(basis.current)
                 + value * unit_coefficient(unit, basis.font_height, basis.line_pitch),
         ),
-        // 中央指定は基準がバルーン画像そのもの（R4.1〜4.3）。書字方向に依らない（R4.4）。
-        // 軸に対応しない側に書かれたときだけ縮退する（軸の判定は解決層の責務）。
+        // 中央指定の基準はバルーン画像そのもので、書字方向に依らない。軸に対応しない側に書かれたときだけ縮退する。
         CursorCoord::CenterX => match axis {
             CursorAxis::X => Ok(Some(basis.image_size.0 / 2.0)),
             CursorAxis::Y => Err(CursorDegrade::CenterAxisMismatch),
@@ -191,13 +188,13 @@ fn finite(value: f32) -> Result<Option<f32>, CursorDegrade> {
 }
 
 /// 解決値（**点**）が文字描画範囲（validrect）の当該軸範囲 `[min, max]`（**閉区間**）の外に
-/// あるとき、`debug!` を 1 件記録する（R2.6）。
+/// あるとき、`debug!` を 1 件記録する。
 ///
 /// **位置は動かさない**——本関数は記録だけを行い、値を返さない。呼び手が解決値を範囲の内側へ
-/// 寄せることは正典違反である（R2.6「字義どおり用い、内側への自動的な寄せを行わない」）。
+/// 寄せることは正典違反である（正典は「字義どおり用い、内側への自動的な寄せを行わない」）。
 ///
 /// 閉区間である（`== min`／`== max` は範囲内＝記録しない）ことは、正典の `vertical_rl` の
-/// `\_l[0,0]`（X ＝ `region.right()`）が沈黙するための規定である。
+/// `\_l[0,0]`（X ＝ `region.right`）が沈黙するための規定である。
 ///
 /// 検査するのは**点**であって、その点に置かれるグリフの矩形ではない。`x = left` の列矩形
 /// `[left − font_height, left]` が範囲の外へはみ出しても記録しない——矩形の可視性は描画側の
@@ -206,11 +203,10 @@ fn finite(value: f32) -> Result<Option<f32>, CursorDegrade> {
 /// **一回化しない**（同じ位置を 2 度渡せば 2 件残る）。一回化するのは
 /// [`warn_cursor_degrade`] だけである（縮退表）。
 ///
-/// 構造化フィールドは `axis`・`value`・`range_min`・`range_max`（design.md「Monitoring」）。
+/// 構造化フィールドは `axis`・`value`・`range_min`・`range_max`。
 pub fn note_out_of_range(axis: CursorAxis, value: f32, region: &TextRegion) {
     let (min, max) = axis.range(region);
     if value >= min && value <= max {
-        // 閉区間の内側（境界上を含む）＝正常。記録しない。
         return;
     }
     tracing::debug!(
@@ -222,11 +218,10 @@ pub fn note_out_of_range(axis: CursorAxis, value: f32, region: &TextRegion) {
     );
 }
 
-/// `\_l` の縮退警告を**キャラクターごと・分岐ごとに初回 1 回だけ**にする持続 guard（R5.3）。
+/// `\_l` の縮退警告を**キャラクターごと・分岐ごとに初回 1 回だけ**にする持続 guard。
 ///
 /// 鍵は `(`[`ActorKey`]`, `[`CursorDegrade`]`)` で、**軸は鍵に含まれない**——同一キャラクターで
-/// `\_l[centery,centerx]` のように両軸が同じ分岐へ縮退しても警告は 1 件になる
-/// （design.md 検証表 H5）。
+/// `\_l[centery,centerx]` のように両軸が同じ分岐へ縮退しても警告は 1 件になる。
 ///
 /// 走査（レイアウト呼出）を跨いで持続する必要があるのでランタイム（`actor.rs` の
 /// `TextLayerRuntime`）が所有し、レイアウトへ `&mut` で渡す。決定的な行出力には影響しない
@@ -252,15 +247,13 @@ impl CursorWarnGuard {
 }
 
 /// 分類済みの縮退（[`resolve_cursor_axis`] が返した `Err`）を受け取り、キャラクターごと・
-/// 分岐ごとに初回のみ `warn!` する（R5.1/5.3）。
+/// 分岐ごとに初回のみ `warn!` する。
 ///
 /// 呼び手は `Err` のときだけ本関数を呼ぶ——[`CursorCoord::Omitted`]（軸省略）と実導出
-/// （負値絶対・`%`・`@` 相対・正しい軸の中央指定）は正典の正常形なので 0 件である（R5.2/5.5）。
+/// （負値絶対・`%`・`@` 相対・正しい軸の中央指定）は正典の正常形なので 0 件である。
 /// 分類そのものを本関数は行わない（分類は解決表の領分）。
 ///
-/// 縮退は**失敗ではない**（当該軸を動かさないだけ）。`error!`／panic は使わない（R5.1）。
-///
-/// 構造化フィールドは `actor`・`axis`・`coord`・`degrade`（design.md「Monitoring」）。`axis` は
+/// 構造化フィールドは `actor`・`axis`・`coord`・`degrade`。`axis` は
 /// 原因の特定に要るのでログには載せるが、一回化の鍵ではない（[`CursorWarnGuard`] 参照）。
 pub fn warn_cursor_degrade(
     actor: &ActorKey,
@@ -270,7 +263,6 @@ pub fn warn_cursor_degrade(
     guard: &mut CursorWarnGuard,
 ) {
     if !guard.should_warn(actor, degrade) {
-        // 同一 (キャラクター, 分岐) の 2 回目以降＝沈黙（走査ごとの重複警告を抑える）。
         return;
     }
     tracing::warn!(

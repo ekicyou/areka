@@ -1,29 +1,25 @@
 //! 純粋コンパイル層（compile）— `Instruction` 列 → cue ドメインの発火列＋確定終端理由。
 //!
-//! [`compile`] は clock・sink・talk_id・アクターを知らない**純粋関数**（決定的・no I/O）。
-//! 上流 [`areka_parsers::sakura::parse`] の出力 `Instruction` 列を走査し、
+//! [`compile`] は clock・sink・talk_id・アクターを知らない純粋関数（決定的・no I/O）。
+//! 上流 [`areka_parsers::sakura::parse`] の出力 `Instruction` 列を走査し、発火時刻付きの
+//! [`CueSheet`] を構築する。
 //!
-//! - `Text` に対し [`crate::duration::text_playback_duration`] で暗黙 per-char 再生時間 D を
-//!   算出して当該テキスト cue の envelope `duration` へ焼き込み、直後 offset を D の整数 ms だけ
-//!   進めて後続 cue の発火時刻をテキスト再生完了後へ確定させる（R4.1/4.2/4.3）、
-//! - `Wait(Duration)` を offset へ吸収して消さず、**action を持たず duration のみを持つ第一級
-//!   `CueCommand::Wait` cue** として当該 offset へ発行し、直後 offset を整数 ms で進めて
-//!   後続整列を進める（`\w`×50ms を再導出せず上流正規化済み `Duration` を唯一の真実とし、末尾・
-//!   単独の待ちも台本に残る自己完結した楽譜・R5.1/5.3/4.4・D3）、
-//! - 話者スコープ `SpeakerScope{n}` を現在 scope として保持し各 `Cue::actor` へ転写（R5）、
-//! - `Text`/`Surface`/`BalloonSurface`/`NewLine`/`Clear` を対応する [`CueCommand`] へ写像（R3/R4）、
-//! - 内容 cue を持つ台本の先頭へ **`ClearAll` cue を単一前置**（`start_time=0.0`・`duration=0.0`）し、
-//!   新 talk が全バルーン空から始まるようにする（#6・R6.1/6.2）、
+//! - `Text` は [`crate::duration::text_playback_duration`] の再生時間 D を cue の `duration` へ
+//!   入れ、直後 offset を D の整数 ms だけ進める。
+//! - `Wait(Duration)` は offset へ吸収せず、duration だけを持つ `CueCommand::Wait` cue として
+//!   発行し、直後 offset を進める。末尾・単独の待ちも台本に残る。
+//! - 話者スコープ `SpeakerScope{n}` を現在 scope として持ち、各 `Cue::actor` へ転写する。
+//! - 内容 cue を持つ台本の先頭へ `ClearAll` cue を 1 つ前置し（`start_time=0.0`・`duration=0.0`）、
+//!   新しい talk が全バルーン空から始まるようにする。
 //!
-//! して発火時刻付きの [`CueSheet`] を構築する。offset は整数 ms で積み、各命令の頭で 1 回だけ
-//! Tick と同じ式 `ms as f64 / 1000.0` で秒にする（秒の足し算は ms の格子から外れる・指摘 8）。
+//! offset は整数 ms で積み、各命令の頭で 1 回だけ Tick と同じ式 `ms as f64 / 1000.0` で秒にする
+//! （秒の足し算は ms の格子から外れる）。
 //!
-//! # 先頭待ちの保存（R2.4）
+//! # 先頭待ちの保存
 //!
-//! 本関数は 0 起点相対秒（`offset` を 0.0 から累積）をそのまま `start_time` とし、min 正規化を
-//! 行わない（min 正規化は**先頭に待ち命令がある script でその待ち時間を 0 へ潰す**ため）。下流の
-//! canonical 変換 [`dola::cue::to_talk_schedule`] も相対 `start_time` を保存するため、先頭待ちは
-//! 台本〜スケジュールを通して保存される。
+//! 0 起点相対秒をそのまま `start_time` とし、min 正規化を行わない（min 正規化は先頭の待ちを 0 へ
+//! 潰す）。下流の [`dola::cue::to_talk_schedule`] も相対 `start_time` を保存するので、先頭待ちは
+//! 台本からスケジュールまで保存される。
 
 use crate::anchor_pair::{AnchorIssue, pair_anchors};
 use crate::contract::{
@@ -38,24 +34,24 @@ use std::ops::Range;
 
 /// 純粋コンパイル: `Instruction` 列 → cue ドメインの発火列＋確定終端理由（決定的・no I/O）。
 ///
-/// 事前条件: `instructions` は [`areka_parsers::sakura::parse`] の出力（再パースしない・R1.2）。
+/// 事前条件: `instructions` は [`areka_parsers::sakura::parse`] の出力（再パースしない）。
 ///
 /// 事後条件: `sheet` 内の `start_time` は有限・非負・非減少（`Duration` 由来の構成的保証）。
 /// 各テキスト cue は `duration = text_playback_duration(text)`（N>0 で正）、各 Wait cue は明示待ちの
 /// `duration`、他の瞬時 cue は `duration=0.0` を持つ。内容 cue を持つ台本は先頭に単一 `ClearAll`
 /// （`start_time=0.0`・`duration=0.0`）を持ち、台本のみから talk 全時間範囲
-/// （`max(start_time + duration)`）が復元可能。同一入力に対し同一出力（決定的・R2.5）。
+/// （`max(start_time + duration)`）が復元可能。同一入力に対し同一出力（決定的）。
 /// 各 `Cue::actor` はその発火時点の有効 scope の転写。
 ///
-/// `vars` は ⓪ghost が talk 開始時に手渡す名前→値の凍結スナップショット（`%username` 等の
-/// システム変数展開の値源・R7）。本関数は参照するのみで OS 環境・SHIORI・永続化層を直接
-/// 読まない（純粋・決定論を保つ）。SystemVar アーム（task 4.2）が `resolve_system_var` で
+/// `vars` は ghost が talk 開始時に手渡す名前→値の凍結スナップショット（`%username` 等の
+/// システム変数展開の値源）。本関数は参照するのみで OS 環境・SHIORI・永続化層を直接
+/// 読まない（純粋・決定論を保つ）。SystemVar アームが `resolve_system_var` で
 /// これを純粋展開し、展開文字列を Text cue へ写像する。
 pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> CompiledTalk {
     scan(instructions.iter(), vars, None)
 }
 
-/// strict の台本の [`compile`]（mcp-strict-errors 要件 2.5・2.7・3.6・3.9）。`compile` と同じ走査で
+/// strict の台本の [`compile`]。`compile` と同じ走査で
 /// 同じ [`CompiledTalk`] を作り、台本の解釈で分かる誤りを命令ごとに控える。
 ///
 /// 控えの順は `check_script` の診断と同じ（命令の順に、読みの印 → 命令の腕 → アンカー）。
@@ -137,17 +133,17 @@ fn scan<'a>(
     vars: &SystemVarSnapshot,
     mut tracer: Option<&mut Tracer<'_>>,
 ) -> CompiledTalk {
-    // 開始時刻は整数 ms で積み、各命令の頭で 1 回だけ秒にする（秒の足し算は ms の格子から外れる・指摘 8）。
+    // 開始時刻は整数 ms で積み、各命令の頭で 1 回だけ秒にする（秒の足し算は ms の格子から外れる）。
     let mut offset_ms: u64 = 0;
     let mut scope: u32 = 0;
     let mut cues: Vec<Cue> = Vec::new();
-    // 終端命令なしで末尾到達なら通常終了（R6.3）。End/Quit 検出で確定・走査打切り。
+    // 終端命令なしで末尾に着いたら通常終了。End/Quit で確定して走査を打ち切る。
     let mut end = TalkEndReason::Ended;
     // `\![set,choicetimeout,時間]` の最後の値（`None`＝未指定）。読むたびに上書きし、走査後の
-    // 選択待ちの区切りへ 1 回だけ入れる（要件 3.1/3.2/6.2）。関数の外に状態を持たない（4.1/4.2）。
+    // 選択待ちの区切りへ 1 回だけ入れる。
     let mut last_choice_timeout: Option<f64> = None;
     // アンカーの開き `\_a[…]` と閉じ `\_a` の対応の崩れ（位置の昇順）。走査の前に 1 回だけ判定し、
-    // 開きと閉じの腕が自分の位置の分を先頭から順に取り出す（anchor-tag-canon 要件 1.8〜1.10）。
+    // 開きと閉じの腕が自分の位置の分を先頭から順に取り出す。
     // 判定も走査も `\e`・`\-` で止まるので、崩れの位置は必ずどちらかの腕を通る。
     let anchor_findings = pair_anchors(instructions.clone());
     let mut anchor_findings = anchor_findings.iter().peekable();
@@ -158,7 +154,7 @@ fn scan<'a>(
     };
     // 閉じの無い開きがある（走査の終わりで閉じを補う）。
     let mut anchor_unclosed = false;
-    // 選択肢の合図を 1 つでも出した（走査の後で選択待ちの区切りを出す・指摘 91）。
+    // 選択肢の合図を 1 つでも出した（走査の後で選択待ちの区切りを出す）。
     let mut has_choice = false;
 
     for (index, instruction) in instructions.enumerate() {
@@ -167,9 +163,8 @@ fn scan<'a>(
             t.head(index, cues.len());
         }
         match instruction {
-            // 明示ウェイトを offset へ吸収せず、action を持たず duration のみを持つ第一級 Wait cue
-            // として当該 offset へ発行し、直後 offset を進める（末尾・単独でも台本に残る・R5.1/4.4・D3）。
-            // 時間は envelope duration が担い、コマンドは action の種別のみを表す。
+            // 明示ウェイトは offset へ吸収せず、duration だけを持つ Wait cue として発行する
+            // （末尾・単独でも台本に残る）。時間は envelope duration が担い、コマンドは種別のみを表す。
             Instruction::Wait(duration) => {
                 // shortcut: 待ちは整数 ms（parser が from_millis で作る）、1 ms 未満の Duration は切り捨て、そういう待ちを足すときに見直す
                 let ms = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
@@ -178,18 +173,18 @@ fn scan<'a>(
                 cues.push(emit(scope, offset, d, CueCommand::Wait));
                 offset_ms = offset_ms.saturating_add(ms);
             }
-            // scope 状態更新（cue を生成しない・R5.1）。転写のみ。
+            // scope の更新だけで cue は作らない。
             Instruction::SpeakerScope { n } => {
                 scope = *n;
             }
-            // テキスト表示（→Balloon・R4.1）。暗黙 per-char 再生時間 D を envelope duration へ焼き込み、
-            // 直後 offset を D の整数 ms だけ進めて後続 cue をテキスト再生完了後へ整列する（R4.1/4.2/4.3）。
+            // 暗黙の再生時間 D を duration へ入れ、直後 offset を D の整数 ms だけ進めて、
+            // 後続 cue をテキスト再生完了後へ整列する。
             Instruction::Text(text) => {
                 let d = crate::duration::text_playback_duration(text);
                 cues.push(emit(scope, offset, d, CueCommand::Text(text.clone())));
                 offset_ms = offset_ms.saturating_add(crate::duration::text_playback_ms(text));
             }
-            // サーフェス切替（不透明転写・→Shell・R3.1/3.2）。引数を解釈・変換しない。瞬時（duration 0）。
+            // サーフェス切替。引数は解釈・変換せず不透明に転写する。瞬時（duration 0）。
             Instruction::Surface(arg) => {
                 cues.push(emit(
                     scope,
@@ -200,8 +195,8 @@ fn scan<'a>(
                     },
                 ));
             }
-            // バルーン面切替（不透明転写・→Shell・R3.1）。引数を解釈・変換しない（Surface と同型）。
-            // 数値化・範囲展開・alias 解決はしない（バイト完全一致）。数値化は下流 seriko の責務。瞬時。
+            // バルーン面切替。引数は Surface と同じく不透明に転写する（バイト完全一致。数値化・範囲展開・
+            // alias 解決はしない。数値化は下流 seriko の責務）。瞬時。
             Instruction::BalloonSurface(arg) => {
                 cues.push(emit(
                     scope,
@@ -212,7 +207,7 @@ fn scan<'a>(
                     },
                 ));
             }
-            // 改行（比率・DD-9・→Balloon・R4.2）。瞬時（duration 0）。
+            // 改行（比率つき）。瞬時（duration 0）。
             Instruction::NewLine(ratio) => {
                 cues.push(emit(
                     scope,
@@ -223,16 +218,13 @@ fn scan<'a>(
                     },
                 ));
             }
-            // クリア（対象スコープのみ・→Balloon・R4.3）。瞬時（duration 0）。
+            // 対象スコープのみのクリア。瞬時（duration 0）。
             Instruction::Clear => {
                 cues.push(emit(scope, offset, 0.0, CueCommand::Clear));
             }
-            // 選択肢 `\q[disp,target,refs...]`（→Balloon・R1.1/1.2/1.4/1.5/1.6）。
-            // `id = target`（選択 ID・第 2 引数）・`text = disp`（表示ラベル・第 1 引数）・
-            // `references`（第 3 引数以降）を欠落なく不透明転写する（ID 解釈・整数化なし）。
-            // 台本内順序＝記述順（emit が現在 scope・offset を転写・瞬時 duration 0）。
-            // 選択待ち barrier（choice ⩾1 の台本へ最終 offset に 1 個）は走査終了後に append する
-            // （下記 `has_choice` 分岐・R2.1/2.2）。
+            // 選択肢 `\q[disp,target,refs...]`。`id = target`（選択 ID・第 2 引数）・`text = disp`
+            // （表示ラベル・第 1 引数）・`references`（第 3 引数以降）を欠落なく不透明に転写する
+            // （ID の解釈・整数化なし）。瞬時。選択待ちの区切りは走査の後で足す（下の `has_choice`）。
             Instruction::Choice(choice) => {
                 has_choice = true;
                 cues.push(emit(
@@ -246,10 +238,9 @@ fn scan<'a>(
                     },
                 ));
             }
-            // カーソル絶対位置 `\_l[x,y]`（→Balloon・R3.1/3.3/3.4/3.5）。x・y は記述通りの
-            // 不透明文字列で転写する（単位付き `5em`/`2lh`・裸数値・`@` 相対・空の区別を失わない・
-            // 単位換算/座標解決は消費側の責務）。双方が空でも無条件に発行する（記述の存在を台本から
-            // 失わせない・R3.5）。emit が現在 scope・offset を転写・瞬時 duration 0。
+            // カーソル絶対位置 `\_l[x,y]`。x・y は記述通りの不透明文字列で転写する（単位付き
+            // `5em`/`2lh`・裸数値・`@` 相対・空の区別を失わない。単位換算・座標解決は消費側の責務）。
+            // 双方が空でも無条件に発行する（記述の存在を台本から失わせない）。瞬時。
             Instruction::Cursor { x, y } => {
                 cues.push(emit(
                     scope,
@@ -261,24 +252,24 @@ fn scan<'a>(
                     },
                 ));
             }
-            // 終端 `\e`（R6.1/6.5）: 終端理由 Ended を確定し以降を切り詰める。
+            // 終端 `\e`: 終端理由 Ended を確定し以降を切り詰める。
             // ukadoc `\e` = この後に書かれたスクリプトは実行・表示されない。
             Instruction::End => {
                 end = TalkEndReason::Ended;
                 break;
             }
-            // 終了 `\-`（R6.2/6.5）: 終端理由 Quit を確定し以降を切り詰める。
+            // 終了 `\-`: 終端理由 Quit を確定し以降を切り詰める。
             Instruction::Quit => {
                 end = TalkEndReason::Quit;
                 break;
             }
-            // 汎用 `\!` コマンド（`move` も含む・→汎用キャリア・R4.1/4.2/8.2）。name＋raw_args を
-            // 解釈せず同一キャリアへ載せる（`\![*]` 単独形＝raw_args 空も第一級で台本に載る＝
-            // R8.2 卒業）。空トークン・`--key=value` 形も素通し。消費はコマンド名レベル選別（R4.5）。瞬時。
+            // 汎用 `\!` コマンド（`move` も含む）。name と raw_args を解釈せず同一キャリアへ載せる
+            // （`\![*]` 単独形＝raw_args 空も台本に載る。空トークン・`--key=value` 形も素通し）。
+            // 消費側はコマンド名で選別する。瞬時。
             //
             // 転記の**後**に、`set,choicetimeout`（綴りは逐語）だけは時間の欄を読み、最後の値を
-            // 上書きする（要件 7.1〜7.3: 転記はそのまま・offset も cue も増やさない・他の名前は
-            // 読まない）。読めない値は既定として扱い、警告を 1 行残す（6.1）。
+            // 上書きする（転記はそのまま・offset も cue も増やさない・他の名前は読まない）。
+            // 読めない値は既定として扱い、警告を 1 行残す。
             Instruction::GenericCommand { name, raw_args } => {
                 cues.push(emit(
                     scope,
@@ -305,11 +296,10 @@ fn scan<'a>(
                     };
                 }
             }
-            // システム変数 `%username` 等（→Text・R7.1/7.2/7.4/7.5）。値源は所有せず、talk 起動時
-            // 手渡しの凍結スナップショット `vars` を純粋展開（`resolve_system_var`・no I/O）。展開値
-            // （スナップショット値／既定値／未対応名の素通し `%名前`）はいずれも通常テキストと同格の
-            // Text cue へ写像し、`duration = text_playback_duration(展開文字列)` を焼き込み offset を
-            // D の整数 ms だけ進めて後続を整列する。独立 cue とし隣接 Text と併合しない（純粋走査・観測同一）。
+            // システム変数 `%username` 等。値源は所有せず、talk 起動時に手渡された凍結スナップショット
+            // `vars` を純粋展開する（`resolve_system_var`・no I/O）。展開値（スナップショット値／
+            // 既定値／未対応名の素通し `%名前`）はいずれも通常テキストと同格の Text cue にし、
+            // 再生時間を焼き込んで offset を進める。独立 cue とし、隣接 Text と併合しない。
             Instruction::SystemVar(name) => {
                 let expanded = match crate::sysvar::resolve_system_var(name, vars) {
                     crate::sysvar::ResolvedVar::Text(s) => s,
@@ -319,7 +309,7 @@ fn scan<'a>(
                 offset_ms = offset_ms.saturating_add(crate::duration::text_playback_ms(&expanded));
                 cues.push(emit(scope, offset, d, CueCommand::Text(expanded)));
             }
-            // 文字装飾 `\f[key,args...]`（→汎用キャリア・R2.3/2.4/14.4）。キーごとに typed variant を
+            // 文字装飾 `\f[key,args...]`。キーごとに typed variant を
             // 新設せず、`\!` と同じ 1 本の汎用キャリア（名前 `FONT_TAG_CARRIER`）へ載せる。引数
             // （空トークン含む）は記述順のまま無変形で運び、意味付けは消費側（文字レンダリング層）
             // がキーで自己選別して行う。**再生時間 0**（`\f` の有無で台本の時刻列を変えない）で、
@@ -337,7 +327,7 @@ fn scan<'a>(
                     t.find(point);
                 }
             }
-            // アンカーの開き `\_a[ID,…]`（→Balloon・anchor-tag-canon 要件 1.7〜1.9）。ID と引数の列を
+            // アンカーの開き `\_a[ID,…]`。ID と引数の列を
             // 解釈せずに運ぶ 0 秒の合図（`Choice` と同じ）。ここから閉じまでに流れる文字が押せる範囲に
             // なる。同じ位置に重なりと閉じ無しの 2 件が付くことがあるので、両方を見る（判定が返す順）。
             Instruction::Anchor(anchor) => {
@@ -377,7 +367,7 @@ fn scan<'a>(
                     },
                 ));
             }
-            // アンカーの閉じ（角括弧の無い `\_a`・→Balloon・要件 1.7/1.10）。0 秒の合図。開いて
+            // アンカーの閉じ（角括弧の無い `\_a`）。0 秒の合図。開いて
             // いないのに閉じなら合図を出さず、警告を残して表示を続ける。
             Instruction::AnchorEnd => {
                 if anchor_issue_at(index, AnchorIssue::StrayClose) {
@@ -393,8 +383,8 @@ fn scan<'a>(
                     cues.push(emit(scope, offset, 0.0, CueCommand::AnchorEnd));
                 }
             }
-            // 出せない・読めない文字の番号（`\_u[…]`・`\_m[…]`・script-small-tags 要件 2）。合図を作らず
-            // 警告を 1 行残して続ける（代わりの字は出さない・2.7）。strict では「読めない引数」（6.3）。
+            // 出せない・読めない文字の番号（`\_u[…]`・`\_m[…]`）。合図を作らず
+            // 警告を 1 行残して続ける（代わりの字は出さない）。strict では「読めない引数」。
             Instruction::CharCodeDropped { raw, reason } => {
                 tracing::warn!(
                     event = "char_code_dropped",
@@ -407,7 +397,7 @@ fn scan<'a>(
                 }
             }
             // 知らないタグ・閉じの無い `[` の残り（`Raw`）は合図を作らず、警告を 1 行残して続ける
-            // （寛容・非 panic・R8.2/8.3/R11.2・指摘 29）。綴りは長いことがあるので先頭 64 字とバイト数だけ。
+            // （寛容・panic しない）。綴りは長いことがあるので先頭 64 字とバイト数だけ。
             Instruction::Raw(raw) => {
                 let head: String = raw.chars().take(64).collect();
                 tracing::warn!(
@@ -426,9 +416,9 @@ fn scan<'a>(
     }
 
     let offset = crate::duration::ms_to_secs(offset_ms);
-    // 閉じの無いアンカーは走査の終わり（`\e`・`\-`・末尾）で閉じる（anchor-tag-canon 要件 1.8）。
+    // 閉じの無いアンカーは走査の終わり（`\e`・`\-`・末尾）で閉じる。
     // 選択待ちの区切りを出す台本でも、閉じはその前に並ぶ。アンカーは下の区切りの判定に関わらない
-    // （`Choice` だけを数える・要件 2.5）。
+    // （`Choice` だけを数える）。
     if anchor_unclosed {
         cues.push(emit(scope, offset, 0.0, CueCommand::AnchorEnd));
     }
@@ -437,13 +427,11 @@ fn scan<'a>(
         t.spans_up_to(cues.len(), None);
     }
 
-    // 選択待ち barrier 発行（R2.1/2.2/2.5/2.6）: 走査終了（End/Quit 切詰め後の出力）に対し、choice
-    // cue が 1 個以上あれば選択待ち barrier `WaitForChoice{timeout:last_choice_timeout}`（走査で
-    // 最後に読んだ `\![set,choicetimeout,時間]` の秒。指定なし・省略・空欄・読めない値は `None`
-    // ＝未指定＝下流の既定値へ委譲する・DD-8。値の解釈は kanade だけが行う）を最終 offset へ
-    // ちょうど 1 個 append する。選択肢が無ければ barrier を出さず、読んだ値は捨てる（要件 3.4）。
-    // 同一 at の FIFO 挿入により全 cue より後に配送される（全 choice cue の後・R2.2）。`\q` の無い台本は barrier を発行せず既存完了挙動を変えない（R2.5）。barrier は
-    // presentation でないので duration は 0。
+    // 選択待ちの区切り: choice cue が 1 個以上あれば `WaitForChoice{timeout:last_choice_timeout}`
+    // （走査で最後に読んだ `\![set,choicetimeout,時間]` の秒。指定なし・省略・空欄・読めない値は
+    // `None`＝未指定＝下流の既定値へ委譲し、値の解釈は kanade だけが行う）を最終 offset へちょうど
+    // 1 個足す。選択肢が無ければ出さず、読んだ値は捨てる。同一 at の FIFO 挿入で全 cue より後に
+    // 配送される。presentation でないので duration は 0。
     if has_choice {
         cues.push(emit(
             scope,
@@ -455,12 +443,11 @@ fn scan<'a>(
         ));
     }
 
-    // 冒頭 ClearAll 前置（#6・R6.1/6.2）: 内容 cue を持つ台本の先頭へ全スコープ消去 `ClearAll` を
-    // 単一前置する（`start_time=0.0`・`duration=0.0`）。compile は残存スコープを列挙できないため
-    // per-scope Clear でなく全消し `ClearAll`（自己完結）で表現し、書き込むスコープ数に依らず 1 件。
-    // `CueSheet::new` の安定ソート＋同一 `at` FIFO により先頭配送される（index 0 挿入で 0.0 群の先頭）。
-    // 内容 cue を持たない台本（リテラル空・裸終端・無視タグのみ）は空 sheet のままとし、drive の
-    // `is_empty()` 即時 TalkDone 契約を保つ（消すべき前 talk のテキストも無い・ドライブ配線は task 7.x）。
+    // 内容 cue を持つ台本の先頭へ全スコープ消去 `ClearAll` を 1 つ前置する。残存スコープを列挙
+    // できないので per-scope Clear でなく全消しで表し、書き込むスコープ数に依らず 1 件。
+    // `CueSheet::new` の安定ソートと同一 `at` の FIFO で先頭に配送される。内容 cue を持たない台本
+    // （リテラル空・裸終端・無視タグのみ）は空 sheet のままにし、drive の `is_empty()` 即時
+    // TalkDone を保つ。
     if !cues.is_empty() {
         cues.insert(0, emit(0, 0.0, 0.0, CueCommand::ClearAll));
         // 全消しは位置なしの順番 0。命令の合図と控えの順番はみな 1 つ後ろへずれる。
@@ -479,9 +466,9 @@ fn scan<'a>(
 }
 
 /// 現在 scope・発火時刻・再生時間 duration・中身（演出コマンドか区切り）から 1 発火 [`Cue`] を
-/// 構築する。合図を組むのはここ 1 か所だけ（指摘 87）。
+/// 構築する。合図を組むのはここ 1 か所だけ。
 ///
-/// `actor` はその発火時点の有効 scope の転写（`ActorKey::from(n.to_string())`・既定 "0"・R5.2/5.3）。
+/// `actor` はその発火時点の有効 scope の転写（`ActorKey::from(n.to_string())`・既定 "0"）。
 /// `duration` は当該 cue の presentation 占有時間（テキストは D、Wait は明示待ち、ほかの瞬時の
 /// 合図と区切りは 0.0）。
 fn emit(scope: u32, start: f64, duration: f64, payload: impl Into<CuePayload>) -> Cue {
@@ -499,7 +486,7 @@ pub fn choice_timeout_of(name: &str, raw_args: &[String]) -> Option<ChoiceTimeou
         .then(|| parse_choice_timeout(raw_args))
 }
 
-/// `\![set,choicetimeout,時間]` の時間の欄の読み取りの結果（design `parse_choice_timeout`）。
+/// `\![set,choicetimeout,時間]` の時間の欄の読み取りの結果。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ChoiceTimeoutDirective {
     /// 欄なし・空欄 → 既定へ戻す（区切りには `None` を書く）。
@@ -511,7 +498,7 @@ pub enum ChoiceTimeoutDirective {
 }
 
 /// `set,choicetimeout` の `raw_args` から、選択待ちの区切りへ入れる秒の指令を決める純関数
-/// （no I/O・記録を出さない・要件 1.4/1.5/2.1〜2.3/6.1/8.1）。
+/// （no I/O・記録を出さない）。
 ///
 /// `raw_args[0] == "choicetimeout"` は呼び手が確かめる。時間の欄は `raw_args[1]` だけを読み、
 /// 3 欄目以降は見ない。前後の空白は落としてから `i64` として読む（`+500` も受ける）。
@@ -538,7 +525,7 @@ pub fn parse_choice_timeout(raw_args: &[String]) -> ChoiceTimeoutDirective {
 }
 
 /// [`compile`] 済み [`CueSheet`] の末尾へ epilogue を汎用キャリア cue として付加する
-/// （決定論・no I/O・design C12・R3.4）。
+/// （決定論・no I/O）。
 ///
 /// 各 `EpilogueCommand` は 1 個の carrier cue（`actor="0"`・`duration=0.0`・
 /// `payload=command_carrier(name, tokens)`）へ写像され、`start_time` は既存 cues の
@@ -551,17 +538,15 @@ pub fn parse_choice_timeout(raw_args: &[String]) -> ChoiceTimeoutDirective {
 ///
 /// `epilogue` が空なら**恒等**（`sheet` をそのまま返す）＝既存経路は完全に不変。
 pub(crate) fn append_epilogue(sheet: CueSheet, epilogue: &[EpilogueCommand]) -> CueSheet {
-    // 空 epilogue は恒等（アンカー刻印状態も含め sheet を一切変えない・既存経路完全不変）。
+    // 空 epilogue は恒等（アンカー刻印状態も含め sheet を変えない）。
     if epilogue.is_empty() {
         return sheet;
     }
 
-    // 既存 cues の占有 horizon（max(start_time + duration)・空 sheet は 0.0）を末尾 offset とする。
-    // 呼び手（drive）はアンカーを刻む前に呼ぶので、絶対の終わりは相対の horizon と同じ（指摘 88）。
+    // 末尾 offset は既存 cues の占有 horizon。呼び手（drive）はアンカーを刻む前に呼ぶので、
+    // 絶対の終わりは相対の horizon と同じ。
     let horizon = sheet.absolute_end_time();
 
-    // 既存 cues を保ったまま epilogue を末尾へ push し、CueSheet::new の安定ソートで再構築する
-    // （同一 at の既存末尾要素より後に並ぶ＝FIFO）。zero-duration ゆえ horizon は不変。
     let mut cues: Vec<Cue> = sheet.cues().to_vec();
     for command in epilogue {
         cues.push(emit(

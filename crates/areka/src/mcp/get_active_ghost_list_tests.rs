@@ -1,7 +1,7 @@
 //! `get_active_ghost_list` の決定論テスト。
 //!
 //! 名前あり → その名前・`name` 無し → フルパス（末尾の区切りなし）・0 体 → 空の本文。
-//! どれも 1 行・末尾の改行なし・isError: false（要件 4.1・4.2・4.3・4.5）。
+//! どれも 1 行・末尾の改行なし・isError: false。
 
 use std::path::PathBuf;
 

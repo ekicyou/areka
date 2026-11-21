@@ -1,4 +1,4 @@
-//! 表が動く絵の子の行を採る檻（spec: areka-P0-animated-image-playback 要件 2.5・4.1・8.1・8.3・8.4）。
+//! 表が動く絵の子の行を採る檻。
 //!
 //! seriko は読み込みの側（アトラス）に依存しないので、子の定義は分解（`EmoWorld::bind_atlas`）が
 //! 作る値と同じ形を手で組み、[`AnimationTable::from_world_and_films`] へ渡す（`from_world` は
@@ -96,7 +96,7 @@ fn film_rows_carry_period_laps_and_picture_frames() {
     );
 }
 
-/// 子の行と作者のサーフェスの行は鍵の種類が違うので混ざらない（要件 1.12）。
+/// 子の行と作者のサーフェスの行は鍵の種類が違うので混ざらない。
 #[test]
 fn film_rows_do_not_collide_with_surface_numbers() {
     let world = fixture_world();
@@ -154,7 +154,7 @@ fn film_only_table_is_continuous() {
     assert!(warns(&logs).is_empty(), "{logs:?}");
 }
 
-/// 分解しなかった絵 1 件ごとに、相対パスと理由を `warn!` でちょうど 1 回出す（要件 2.5・8.4）。
+/// 分解しなかった絵 1 件ごとに、相対パスと理由を `warn!` でちょうど 1 回出す。
 #[test]
 fn film_skips_warn_once_per_cause() {
     let world = EmoWorld::build(&areka_parsers::shell::parse("surface0\n{\n}\n"));

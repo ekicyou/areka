@@ -14,7 +14,6 @@ use crate::talk::TalkId;
 fn full_boot_sequence_carries_greeting_talk_into_steady() {
     let cfg = config();
 
-    // 1. Idle + Boot → OnInitialize NOTIFY / BootInit（Req 1.1）。
     let (s, actions) = step(State::initial(), Input::Boot, &cfg);
     assert!(matches!(s.phase, Phase::BootInit));
     assert_eq!(actions.len(), 1);
@@ -23,7 +22,6 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
         &events::on_initialize(&ExecutionSnapshot::INACTIVE),
     );
 
-    // 2. BootInit + Notified → username リソース照会（prefetch）GET / BootPrefetch（R4.1）。
     let (s, actions) = step(
         s,
         Input::ShioriReply {
@@ -39,7 +37,6 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
         &resources::resource_get("username", &ExecutionSnapshot::INACTIVE),
     );
 
-    // 2b. BootPrefetch + NoContent(204) → [ResourceOutcome, OnFirstBoot GET] / BootType（R4.1）。
     let (s, actions) = step(
         s,
         Input::ShioriReply {
@@ -59,7 +56,6 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
         &events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0),
     );
 
-    // 3. BootType + NoContent(204) → OnBoot GET / BootMain（Req 1.3）。
     let (s, actions) = step(
         s,
         Input::ShioriReply {
@@ -75,8 +71,6 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
         &events::on_boot(&cfg, &ExecutionSnapshot::INACTIVE),
     );
 
-    // 4. BootMain + Value("greeting") → StartTalk(id=1) + basewareversion NOTIFY /
-    //    BootVersion{talk: Some(挨拶)}（DD-IT-12: 挨拶を正規追跡）。
     let (s, actions) = pass_translate(
         step(
             s,
@@ -119,10 +113,8 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
         &actions[1],
         &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE),
     );
-    // 採番カウンタが進む。
     assert_eq!(s.next_talk_id, 2);
 
-    // 5. BootVersion{Some} + Notified → Steady{talk: Some(挨拶)}（DD-IT-12: 挨拶を引き継ぐ）。
     let (s, actions) = step(
         s,
         Input::ShioriReply {
@@ -158,11 +150,9 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
 #[test]
 fn boot_type_value_skips_onboot_and_starts_talk() {
     let cfg = config();
-    // BootType へ進める（prefetch の username 照会に 204 を返して OnFirstBoot GET まで）。
     let s = reply(drive_to_prefetch(&cfg), ShioriOutcome::NoContent, &cfg).0;
     assert!(matches!(s.phase, Phase::BootType));
 
-    // BootType + Value("earlygreet") → StartTalk + basewareversion NOTIFY / BootVersion。
     let (s, actions) = reply(
         s,
         ShioriOutcome::Value("earlygreet".to_string(), areka_talk::SecurityLevel::Local),
@@ -196,7 +186,7 @@ fn boot_type_value_skips_onboot_and_starts_talk() {
     );
 }
 
-// --- BootMain + NoContent → no StartTalk（Req 2.3） ---
+// --- BootMain + NoContent → no StartTalk ---
 
 #[test]
 fn boot_main_no_content_emits_no_talk() {
@@ -217,13 +207,11 @@ fn boot_main_no_content_emits_no_talk() {
         matches!(s.phase, Phase::BootVersion { talk: None }),
         "204 は挨拶を追跡せず BootVersion{{talk: None}}（Req 2.3）"
     );
-    // basewareversion NOTIFY のみ（StartTalk なし）。
     assert_eq!(actions.len(), 1);
     assert_notify(
         &actions[0],
         &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE),
     );
-    // 採番カウンタは動かない。
     assert_eq!(s.next_talk_id, 1);
 }
 
@@ -232,7 +220,6 @@ fn boot_main_no_content_emits_no_talk() {
 #[test]
 fn boot_talk_ids_are_unique_and_monotonic() {
     let cfg = config();
-    // BootMain + Value → id=1。
     let (s1, actions1) = reply(
         drive_to_main(&cfg),
         ShioriOutcome::Value("a".to_string(), areka_talk::SecurityLevel::Local),
@@ -322,7 +309,6 @@ fn pending_close_survives_boot_completion() {
     );
     assert!(matches!(s.phase, Phase::BootInit));
     assert!(matches!(s.pending_close, Some(CloseReason::System)));
-    // BootInit→BootPrefetch→BootType→BootMain→BootVersion（204・挨拶なし）→Steady{None} を進める。
     let mut s = s;
     for outcome in [
         ShioriOutcome::Notified,
@@ -340,17 +326,16 @@ fn pending_close_survives_boot_completion() {
     );
 }
 
-// --- DD-IT-12 追加檻: baseware_version の Status が挨拶追跡を反映する ---
+// --- baseware_version の Status が挨拶追跡を反映する ---
 
-/// Testing Strategy「DD-IT-12 追加檻（Unit）」: 挨拶（Value）経路の `baseware_version` は
+/// 挨拶（Value）経路の `baseware_version` は
 /// `Status: talking`（フェーズ更新後スナップショット＝`BootVersion{Some}`）、204 経路は
 /// Status 行なし（`None`）を運ぶ。events.rs の status 檻の boot 版であり、`baseware_version`
-/// 送出値が phase 更新の**後**に撮られること（DD-IT-4）を wire 値で担保する。
+/// 送出値が phase 更新の**後**に撮られることを wire 値で担保する。
 #[test]
 fn baseware_version_status_reflects_greeting_tracking() {
     let cfg = config();
 
-    // 送出された basewareversion NOTIFY の Status wire 値（`None` ⇔ ヘッダ行なし）を取り出す。
     fn baseware_status(actions: &[Action]) -> Option<Option<String>> {
         actions.iter().find_map(|a| match a {
             Action::ShioriRequest(crate::msg::ShioriCall::Notify { id, status, .. })
@@ -394,9 +379,9 @@ fn baseware_version_status_reflects_greeting_tracking() {
     );
 }
 
-// --- DD-IT-12 追加檻: 挨拶 TalkDone が slot と照合され unknown_talk_done ERROR が出ない ---
+// --- 挨拶 TalkDone が slot と照合され unknown_talk_done ERROR が出ない ---
 
-/// Testing Strategy「DD-IT-12 追加檻」の相関節を in-source で実現する（Req 1.5/2.4・DD-IT-12）:
+/// 挨拶 talk の相関を固定する:
 /// boot 挨拶（Value）で `Steady{talk: Some(挨拶, id=1)}` へ到達させ、その挨拶 talk の
 /// `TalkDone{id=1, Ended}` が slot と照合されて (a) `Steady{talk: None}` へ復帰し、かつ
 /// (b) `unknown_talk_done` ERROR が**発火しない**ことを検証する。
@@ -416,7 +401,6 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
 
     let cfg = config();
 
-    // boot を Idle→…→`Steady{talk: Some(挨拶, id=1)}` まで駆動する（挨拶 Value 経路・DD-IT-12）。
     let s = boot_until_version_with_greeting(&cfg, None);
     let (s, _) = reply(s, ShioriOutcome::Notified, &cfg); // BootVersion{Some}→Steady{talk: Some(id=1)}
     assert!(
@@ -432,7 +416,7 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
         "boot 挨拶を Steady{{talk: Some(id=1)}} で正規追跡しているはず（DD-IT-12）"
     );
 
-    // 挨拶 talk の TalkDone{id=1, Ended} を捕捉付きで投入する（相関ロジックは mod.rs の横断アーム）。
+    // 相関の判定は `mod.rs` の横断の腕にある。
     let mut phase_is_none = false;
     let mut actions_empty = false;
     let events = capture(|| {
@@ -456,7 +440,7 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
     );
     assert!(actions_empty, "定常復帰（挨拶 talk 完了）は副作用なし");
 
-    // (b) `unknown_talk_done` ERROR が発火していない（照合成立＝未知 talk 扱いされていない・DD-IT-12）。
+    // (b) `unknown_talk_done` ERROR が発火していない（照合成立＝未知 talk 扱いされていない）。
     assert_not_logged(&events, "unknown_talk_done");
 }
 
@@ -517,7 +501,6 @@ fn run_boot_version_talkdone_then_close(reason: crate::talk::TalkEndReason) {
     let s = super::test_support::boot_until_version_with_greeting(&cfg, None);
     let s = assert_boot_version_talkdone_accepted(s, reason, &cfg);
 
-    // 通知完了 → 枠が空の定常運転へ（挨拶を引き継がない）。
     let (s, actions) = step(
         s,
         Input::ShioriReply {
@@ -538,7 +521,6 @@ fn run_boot_version_talkdone_then_close(reason: crate::talk::TalkEndReason) {
         "boot 完了は定常到達の通知 1 件だけを返す"
     );
 
-    // close 指示 → 待つべき talk が無いので即握手（OnClose GET・ClosePending）。
     let (s, actions) = step(
         s,
         Input::CloseRequest {
@@ -577,7 +559,6 @@ fn boot_version_talkdone_keeps_pending_close_until_steady_tick() {
         "受理は保留中の close 指示に触れないはず"
     );
 
-    // 通知完了 → Steady{None}。保留はまだ消化されない（握手は次の Tick）。
     let (s, actions) = step(
         s,
         Input::ShioriReply {
@@ -593,7 +574,6 @@ fn boot_version_talkdone_keeps_pending_close_until_steady_tick() {
     ));
     assert_eq!(s.pending_close.map(CloseReason::as_ref_str), Some("system"));
 
-    // 次の Tick → 保留を消化して OnClose GET・ClosePending。
     let (s, actions) = step(
         s,
         Input::Tick {

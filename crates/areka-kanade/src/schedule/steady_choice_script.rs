@@ -47,7 +47,7 @@ pub(in crate::schedule) fn begin(
         );
         return None;
     }
-    // 元のトークの出どころを引き継ぐ（要件 1.6）。
+    // 元のトークの出どころを引き継ぐ。
     let origin = of_shown(state, prev_talk_id);
     let (talk_id, action) = start_talk(state, "choice_script", script.to_string(), origin);
     tracing::info!(

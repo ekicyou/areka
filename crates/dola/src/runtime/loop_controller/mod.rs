@@ -1,6 +1,4 @@
-//! ループ再生の周回判定・進行・タイムテーブル再利用のためのオフセット調整。
-//!
-//! 純粋関数群として実装。全状態は `StoryboardInstance` に保持される。
+//! ループ再生の周回判定・進行・待ち（ループオフセット）の調整。全状態は `StoryboardInstance` に保持される。
 
 use rand::Rng;
 use rand::RngExt;
@@ -27,11 +25,8 @@ pub(crate) fn should_continue_loop(instance: &StoryboardInstance) -> bool {
     if instance.loop_count == -1 {
         return true;
     }
-    // 整数変換の安全性: loop_count は validate の数値の規則が
-    // 「-1 または 1 以上」に限る（それ以外は load_document が InvalidNumber で拒む）。
-    // -1 は上の早期 return で処理済みのため、ここでの `as u64` は常に正値の
-    // 無損失変換であり、負値の wrap（例: -2 → 約 1.8e19 ≒ 実質無限ループ化）は
-    // 発火しない。
+    // loop_count は validate が「-1 または 1 以上」に限る（load_document が InvalidNumber で拒む）。
+    // -1 は上で返しているので `as u64` は正値の無損失変換で、負値の wrap（-2 → 約 1.8e19）は起きない。
     debug_assert!(
         instance.loop_count >= 1,
         "loop_count invariant violated: {}",
@@ -42,8 +37,8 @@ pub(crate) fn should_continue_loop(instance: &StoryboardInstance) -> bool {
 
 /// ランダム遅延生成。
 ///
-/// uniform `[0,1]` → easing → `[0,1]` へクランプ → `[min, max]` mapping。
-/// `min == max` の場合は early return で固定遅延を返す。
+/// uniform `[0,1]` → easing → `[0,1]` へクランプ → `[min, max]` へ写す。
+/// `min == max` の場合は固定遅延を返す。
 pub(crate) fn generate_delay(
     min: f64,
     max: f64,
@@ -82,7 +77,7 @@ pub(crate) fn advance_loop(instance: &mut StoryboardInstance, rng: &mut impl Rng
     instance.loop_start_time = instance.end_time + delay - instance.pause_accumulated;
     instance.end_time += instance.loop_duration + delay;
 
-    // トリガー状態リセット（周回ごとに再発火可能にする）
+    // 周回ごとに再発火できるようにする
     for ts in &mut instance.trigger_states {
         ts.fired = false;
     }
@@ -108,22 +103,18 @@ pub(crate) fn process_loops(
     current_time: f64,
     rng: &mut impl Rng,
 ) -> LoopAction {
-    // 周回内であれば何もしない
     if current_time < instance.end_time {
         return LoopAction::Continue;
     }
 
-    // loop_count=1 の場合はループ不要 → 即座に Conclude
     if instance.loop_count == 1 {
         return LoopAction::Conclude;
     }
 
-    // while ループで全終了済み周回を処理
-    // 時刻境界の注意: 反復回数は (current_time - end_time) / 周回長 に比例する。
-    // 無限ループ（loop_count == -1）は MIN_LOOP_DURATION（0.1s）が周回長の下限のため
-    // 停止性は保証されるが、巨大な時刻ジャンプ（壁時計補正等）では反復が膨大になり得る。
-    // 反復上限キャップや剰余スキップの導入は外部観測可能な挙動
-    // （loops_completed / loop_start_time / 乱数消費）を変えるため入れない
+    // 反復回数は (current_time - end_time) / 周回長 に比例する。無限ループ（loop_count == -1）は
+    // MIN_LOOP_DURATION（0.1s）が周回長の下限なので停止はするが、巨大な時刻ジャンプ（壁時計補正等）では
+    // 反復が膨大になり得る。上限キャップや剰余スキップは外部から観測できる挙動
+    // （loops_completed / loop_start_time / 乱数消費）を変えるため入れない。
     // トリガーなしの無限のループは出来事に入らず、1 周は数を足すだけ（0.1s の周回で 8 時間飛んでも約 29 万回の軽い反復）。
     // shortcut: トリガーなしの有限のループは周回の終わりごとに tick の出来事になり、1 周ごとに全部のインスタンスを見る
     // （0.01s × 100 万周を一度に飛ばすと約 75ms・ほかに無限のループが 10 個あると約 0.16 秒。直しの前は約 1.2ms）。

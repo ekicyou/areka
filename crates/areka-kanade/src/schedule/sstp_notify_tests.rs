@@ -84,8 +84,8 @@ fn assert_playing_notify_talk(state: &State, talk_id: u64) {
     }
 }
 
-/// ⑸ 許可の表に無い名前が渡された Reference のまま出て、返った台本で新しいトークが始まる
-/// （要件 2.1・2.3・4.5・5.1）。翻訳は元のイベントの出どころ（`EventId::Sstp`）で預けられる。
+/// 許可の表に無い名前が渡された Reference のまま出て、返った台本で新しいトークが始まる。
+/// 翻訳は元のイベントの出どころ（`EventId::Sstp`）で預けられる。
 #[test]
 fn unlisted_name_goes_out_verbatim_and_its_script_starts_a_talk() {
     let mut out = None;
@@ -130,7 +130,7 @@ fn unlisted_name_goes_out_verbatim_and_its_script_starts_a_talk() {
     ));
 }
 
-/// ⑵ 再生中は返った台本が次の番号で差し替わる（中断の無効化モードでも同じ・要件 3.2・3.4）。
+/// 再生中は返った台本が次の番号で差し替わる（中断の無効化モードでも同じ）。
 #[test]
 fn returned_script_during_playback_replaces_with_the_next_id_even_with_no_user_break() {
     for no_user_break in [false, true] {
@@ -158,7 +158,7 @@ fn returned_script_during_playback_replaces_with_the_next_id_even_with_no_user_b
 }
 
 /// ⑹ 返り値なし・空（エラー応答は殻が 204 に写す）は一括が空で、今のトークと
-/// 選択肢が残り、talk は始まらない（要件 2.4・3.2・3.4）。
+/// 選択肢が残り、talk は始まらない。
 #[test]
 fn no_value_or_empty_keeps_the_current_talk() {
     let outcomes = [
@@ -220,7 +220,7 @@ fn whitespace_only_answer_starts_a_talk() {
     assert_eq!(translate_request(&actions).script, " \t\r\n　");
 }
 
-/// ⑶ 選択肢の最中に台本が返ると帳簿が消え、その後の時間切れ・選択のイベントは 0 回（要件 3.3）。
+/// 選択肢の最中に台本が返ると帳簿が消え、その後の時間切れ・選択のイベントは 0 回。
 #[test]
 fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow() {
     let mut state = steady(active(9, "OnMouseDoubleClick"));
@@ -252,8 +252,8 @@ fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow()
     assert_no_choice_events_follow(state, &cfg);
 }
 
-/// ⑷ 起動前・起動の手順・起動の挨拶の最中・終了と切替の手順・保留の終了では受け付けず、
-/// SHIORI へ送らない（空の一括・状態不変・warn 以上 0 件・要件 3.6・3.9）。
+/// 起動前・起動の手順・起動の挨拶の最中・終了と切替の手順・保留の終了では受け付けず、
+/// SHIORI へ送らない（空の一括・状態不変・warn 以上 0 件）。
 #[test]
 fn notify_is_not_accepted_outside_the_steady_state() {
     let mut states = non_steady_states();
@@ -282,7 +282,7 @@ fn notify_is_not_accepted_outside_the_steady_state() {
     }
 }
 
-/// 起動の挨拶の `TalkDone` の後は外から頼まれたイベントを受け付け、GET を 1 つ送る（要件 3.6）。
+/// 起動の挨拶の `TalkDone` の後は外から頼まれたイベントを受け付け、GET を 1 つ送る。
 #[test]
 fn notify_is_accepted_after_the_boot_greeting() {
     let cfg = config();
@@ -350,7 +350,7 @@ fn failed_reply_takes_the_note_and_goes_to_on_shiori_reply() {
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
 }
 
-/// ⑼ 返った台本の翻訳の Reference（要件 4.5）。殻の組み立てを依頼の出どころに当てて、送る
+/// ⑼ 返った台本の翻訳の Reference。殻の組み立てを依頼の出どころに当てて、送る
 /// Reference の列を確かめる（外からの台本の Reference は `sstp_tests.rs` の
 /// `on_translate_sstp_has_reference0_and_reference1_only` で縛る）。
 #[test]
@@ -387,7 +387,7 @@ fn translate_references_for_returned_script() {
 }
 
 /// ⑼ strict が真・偽・省略の 3 通りで、返った台本のトークの再生の開始に真のときだけ印が立ち、
-/// 翻訳の後も残る（要件 3.2・3.3・5.1・5.3）。
+/// 翻訳の後も残る。
 #[test]
 fn strict_is_marked_on_the_returned_talk_and_survives_translate() {
     for strict in [Some(true), Some(false), None] {

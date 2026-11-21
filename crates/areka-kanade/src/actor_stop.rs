@@ -9,11 +9,11 @@ use crate::change::{ChangeHandoff, KanadeNotice};
 use crate::msg::{KanadeStopCause, KanadeStopped, ShioriFault};
 use crate::schedule::{Phase, State, TermCause};
 
-/// 運行状態が終了系列（`Unloading{cause}`）に居るなら、その原因を公開語彙へ写す（R15.3）。
+/// 運行状態が終了系列（`Unloading{cause}`）に居るなら、その原因を公開語彙へ写す。
 /// 運行状態は手放さないので、原因は clone して写す（Fault は種類と理由ごと）。
 ///
 /// 写すのはここ 1 箇所だけである——内部の `TermCause` は `pub(crate)` に閉じたままで、公開面へ
-/// 出るのは [`KanadeStopCause`] の 5 値だけになる（DD-9 の露出規律）。終了系列でなければ `None`。
+/// 出るのは [`KanadeStopCause`] の 5 値だけになる。終了系列でなければ `None`。
 ///
 /// wildcard を置かないため、`TermCause` に値が増えたときは本表での判断がコンパイル時に要求される。
 pub(crate) fn stop_cause_of(state: &State) -> Option<KanadeStopCause> {
@@ -40,11 +40,11 @@ pub(crate) fn handoff_of(state: &State) -> Option<ChangeHandoff> {
     })
 }
 
-/// 停止通知を投函する（R15.3・design D15 の 2）。
+/// 停止通知を投函する。
 ///
 /// `sink` が `None` なら何もしない（通知端を結線していない構成。本番の起動は `Some` を渡す）。
 /// 送出失敗は受信端（UI）が既に落ちていることを意味するだけで異常ではないが、**沈黙で捨てる
-/// 経路を作らない**（steering: areka-log-first-no-silent-failure）ため `warn!` を 1 件残す。
+/// 経路を作らない**ため `warn!` を 1 件残す。
 /// panic はしない——ここで落ちると終了系列そのものが完走しなくなる。
 ///
 /// `cause` が `None` になるのは、`Unloading` を経ずに `StopSelf` が現れた場合だけである

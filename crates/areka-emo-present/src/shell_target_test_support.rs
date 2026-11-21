@@ -1,17 +1,11 @@
 //! `shell_target` の檻が共有する受け口（検体・COM 初期化・復号器と記録の手伝い）。
 //!
-//! 檻は `shell_target_*_tests.rs` と `presenter_keycolor_clickthrough_tests.rs` に分かれるが、
+//! 檻は `shell_target_*_tests.rs` と `presenter_keycolor_clickthrough_tests.rs` に分かれる。
 //! 検体の複製と COM の初期化は**テストバイナリに 1 つ**で足りる。各ファイルが自前で持つと、その数だけ
-//! 検体の木が複製される（`areka-seriko` の `sample_test_support.rs` と同じ理由）。
-//! `presenter` の配下の檻と `balloon` の檻からも引くので、本モジュールと、そこから引く受け口は
-//! クレート内公開にしている。
+//! 検体の木が複製される。`presenter` の配下の檻と `balloon` の檻からも引くので、クレート内公開にしている。
 //!
-//! # 一時フォルダをここに置かない理由
-//!
-//! テスト用の一時フォルダは共有窓口 [`temp_path_kit::TempPath`] をその場で呼ぶ。本ファイルへ
-//! 写し取った独自の型は置かない——窓口を迂回する新設は
-//! `crates/log-capture-kit/tests/temp_path_guard_test.rs` が例外表への明示的な編集を求めて
-//! 拒むためであり、迂回しない限り包み直す理由が無い。ログの捕捉は
+//! 一時フォルダは共有窓口 [`temp_path_kit::TempPath`] をその場で呼び、ここには置かない（窓口を迂回する
+//! 新設は `crates/log-capture-kit/tests/temp_path_guard_test.rs` が拒む）。ログの捕捉は
 //! [`log_capture_kit::capture`] を各檻がそのまま呼ぶ。
 
 use std::path::{Path, PathBuf};
@@ -39,8 +33,8 @@ pub(crate) fn with_com_initialized<F: FnOnce()>(f: F) {
     }
 }
 
-/// 一時フォルダのシェルに `seriko.use_self_alpha,1` の descript.txt を置く（今までの `On` 固定と
-/// 同じ条件・descript.txt が読めない `warn!` も出ない・spec: areka-P0-self-alpha-declaration）。
+/// 一時フォルダのシェルに `seriko.use_self_alpha,1` の descript.txt を置く（descript.txt が
+/// 読めない `warn!` も出ない）。
 pub(super) fn write_descript(dir: &std::path::Path) {
     std::fs::write(
         dir.join("descript.txt"),
@@ -195,9 +189,9 @@ pub(super) fn boxes_fixture_dir() -> PathBuf {
 pub(super) const BOXES_FIXTURE_IMAGES: [&str; 4] =
     ["body0.png", "body1.png", "body2.png", "body3.png"];
 
-// ── 検体（`sample_ghost_kit::SampleRoot::acquire` 経由のみ・要件 7.11）────────────────
+// ── 検体（`sample_ghost_kit::SampleRoot::acquire` 経由のみ）────────────────
 //
-// 段 ③ で `Drop` が展開した複製を消すため、一時値にせずプロセス寿命で保持する。
+// `Drop` が展開した複製を消すため、一時値にせずプロセス寿命で保持する。
 // `vendors/sample_ghost/<検体名>/` の直パスは 1 か所も綴らない。
 
 /// `emo2` 検体（`areka` の実ゴースト・既存の期待値の出どころ）。

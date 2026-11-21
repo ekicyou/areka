@@ -27,7 +27,7 @@ fn draft_of(kind: Kind, body: &str) -> Draft {
 }
 
 // ---------------------------------------------------------------------------
-// 置き場と番号の口（要件 6.2・6.4）
+// 置き場と番号の口
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -55,7 +55,6 @@ fn a_record_after_reading_last_id_is_in_the_snapshot_after_that_id() {
     assert_eq!(r.label, "Info");
     assert_eq!(r.name, "[SYSTEM]");
 
-    // 他の種別の写しには入らない。
     assert!(snapshot(Kind::Status).iter().all(|r| r.id != id));
 }
 
@@ -70,7 +69,7 @@ fn local_now_is_a_plausible_local_time() {
 }
 
 // ---------------------------------------------------------------------------
-// 並行（要件 1.9）
+// 並行
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -101,7 +100,6 @@ fn eight_threads_of_500_get_ids_1_to_4000_exactly_once() {
     ids.sort_unstable();
     let expected: Vec<u64> = (1..=(THREADS * EACH) as u64).collect();
     assert_eq!(ids, expected, "番号 1〜4,000 がちょうど 1 回ずつ");
-    // どの列も番号の昇順。
     for k in Kind::ALL {
         let row: Vec<u64> = h.rows(k).map(|r| r.id).collect();
         assert!(row.windows(2).all(|w| w[0] < w[1]), "{k:?} の列が昇順");
@@ -109,7 +107,7 @@ fn eight_threads_of_500_get_ids_1_to_4000_exactly_once() {
 }
 
 // ---------------------------------------------------------------------------
-// 毒された排他（要件 1.10）
+// 毒された排他
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -136,7 +134,7 @@ fn a_poisoned_store_still_accepts_records() {
 }
 
 // ---------------------------------------------------------------------------
-// 規則のフィルタの答え（要件 1.7・1.9・6.3）
+// 規則のフィルタの答え
 // ---------------------------------------------------------------------------
 
 const LEVELS: [Level; 5] = [
@@ -163,7 +161,7 @@ const TARGETS: [&str; 9] = [
 #[test]
 fn a_query_that_is_not_an_event_always_passes_and_is_never_wanted() {
     // `tracing::enabled!` とスパンは出来事でない。断ると「断った」印がスレッドに残り、
-    // 次の出来事を履歴の層だけが飛ばす（design-validation.md 指摘 1）。
+    // 次の出来事を履歴の層だけが飛ばす。
     for level in LEVELS {
         for target in TARGETS {
             assert!(
@@ -206,7 +204,6 @@ fn an_event_is_wanted_and_passes_exactly_when_classify_hits() {
             "passes {level:?} {target:?}"
         );
     }
-    // 全組み合わせで振り分けの当たり外れと一致する。
     for level in LEVELS {
         for target in TARGETS {
             let hit = classify(level, target).is_some();
@@ -233,7 +230,7 @@ fn the_filter_hints_info_as_the_most_verbose_level() {
 }
 
 // ---------------------------------------------------------------------------
-// 取り決めの文書との一致（要件 7.3）
+// 取り決めの文書との一致
 // ---------------------------------------------------------------------------
 
 /// 取り決めの文書（`CARGO_MANIFEST_DIR` からの相対）。
@@ -311,11 +308,11 @@ fn the_convention_doc_table_equals_the_rules_and_the_two_convention_targets() {
 }
 
 // ---------------------------------------------------------------------------
-// 名指ししたモジュールの実在（要件 2.12）
+// 名指ししたモジュールの実在
 // ---------------------------------------------------------------------------
 
 /// target の先頭のクレート名から（クレートの `src`・根のファイル）を引く。知らないクレートは None。
-/// 本体は相対で、下の crate は読み口で引く（spec: placement-crate-split 要件 5.4）。
+/// 本体は相対で、下の crate は読み口で引く。
 fn crate_of(name: &str) -> Option<(std::path::PathBuf, &'static str)> {
     match name {
         "areka" => Some((
@@ -339,7 +336,6 @@ fn locate(target: &str) -> Result<(), String> {
             return Err(format!("{target}: クレート `{head}` のフォルダを導けない"));
         }
         // `::` を含まない明示の target はゴーストの実行時のファイルに字面がある。
-        // ゴーストの実行時のファイル（`::` を含まない target の字面を探す先）。
         let path = crate::crate_source_test_support::crate_path("areka-ghost", "src/runtime.rs");
         let text = std::fs::read_to_string(&path)
             .map_err(|e| format!("{target}: {} を読めない: {e}", path.display()))?;
@@ -398,7 +394,7 @@ fn locate_turns_red_for_missing_and_underivable_targets() {
 }
 
 // ---------------------------------------------------------------------------
-// 本物のマクロの形（要件 6.1・6.4）
+// 本物のマクロの形
 // ---------------------------------------------------------------------------
 
 /// 捕捉した出来事を欄の 2 つの形へ写して下書きに通す。
@@ -416,7 +412,7 @@ fn draft_of_captured(ev: &log_capture_kit::CapturedEvent) -> Option<Draft> {
 
 #[test]
 fn real_macros_with_the_convention_targets_draft_kind_name_label_and_body() {
-    // 出す側は本 spec の型も定数も使わず、取り決めどおりの字面だけで書く。
+    // 出す側は `Kind` も `TARGET_*` も使わず、取り決めどおりの字面だけで書く。
     let ghost = "emo2";
     let ((), events) = log_capture_kit::capture(|| {
         tracing::info!(target: "areka::log::script", ghost = %ghost, label = "Talk", r"\0こんにちは\e");

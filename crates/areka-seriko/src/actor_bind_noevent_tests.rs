@@ -1,10 +1,10 @@
 //! `\![bind-noevent,…]` が `\![bind,…]` と同じ結果・同じ水準の記録になり、記録の `name` の欄だけで
-//! 分かれることの檻（spec: script-small-tags 要件 3.1〜3.3・3.5・3.6・3.8・3.9・8.1）。
+//! 分かれることの檻。
 //!
 //! 同じ初めの状態から 2 つの名前で同じ引数を当て、着せ替えの集合・出た表示の指令・記録（`name` の
-//! 欄を除く）が等しいことを見る。出力の先は表示の指令の受け口だけ（SHIORI への道は無い・3.6）。
+//! 欄を除く）が等しいことを見る。出力の先は表示の指令の受け口だけ（SHIORI への道は無い）。
 //! 名前が `bind`・`bind-noevent` のどちらでもない運び物（他人宛）を debug で読み飛ばし何も出さない檻と、
-//! 宛名が自分で中身の壊れた運び物の warn の檻（areka-P0-mayuna-compose D8④）もここに置く。
+//! 宛名が自分で中身の壊れた運び物の warn の檻もここに置く。
 
 use super::test_support::*;
 use super::*;
@@ -87,9 +87,9 @@ type Case = (
 );
 
 const CASES: &[Case] = &[
-    // 3.1: パーツ名つきの 1。
+    // パーツ名つきの 1。
     (&[], &["ボール", "妹", "1"], "level=INFO", &[10, 20], 1),
-    // 3.2: パーツ名つきの 0。
+    // パーツ名つきの 0。
     (
         &[&["ボール", "妹", "1"]],
         &["ボール", "妹", "0"],
@@ -97,7 +97,7 @@ const CASES: &[Case] = &[
         &[20],
         1,
     ),
-    // 3.9: トグル形（脱いでいれば着る・着ていれば脱ぐ）。
+    // トグル形（脱いでいれば着る・着ていれば脱ぐ）。
     (&[], &["ボール", "妹"], "level=INFO", &[10, 20], 1),
     (
         &[&["ボール", "妹", "1"]],
@@ -106,7 +106,7 @@ const CASES: &[Case] = &[
         &[20],
         1,
     ),
-    // 3.8: カテゴリ単位の 0 は全部脱がせる。
+    // カテゴリ単位の 0 は全部脱がせる。
     (
         &[&["ボール", "男の子", "1"]],
         &["ボール", "", "0"],
@@ -124,7 +124,7 @@ const CASES: &[Case] = &[
         &[10, 20],
         1,
     ),
-    // 3.8 ただし書き: mustselect の `,,0` は脱がない（パーツ名つきの 0 と同じ warn）。
+    // mustselect の `,,0` は脱がない（パーツ名つきの 0 と同じ warn）。
     (&[], &["目", "", "0"], "level=WARN", &[20], 0),
     (&[], &["目", "ノーマル", "0"], "level=WARN", &[20], 0),
     // 名前の解決の失敗・名前の無いカテゴリへのカテゴリ単位形。
@@ -135,7 +135,7 @@ const CASES: &[Case] = &[
     (&[], &["ボール", "妹", "2"], "level=ERROR", &[20], 0),
 ];
 
-/// 3.1〜3.3・3.8・3.9: どの形も 2 つの名前で同じ集合・同じ指令・同じ記録（`name` の欄を除く）。
+/// どの形も 2 つの名前で同じ集合・同じ指令・同じ記録（`name` の欄を除く）。
 #[test]
 fn bind_noevent_matches_bind_for_every_form() {
     for (before, tokens, level, binds, shown) in CASES {
@@ -160,7 +160,7 @@ fn bind_noevent_matches_bind_for_every_form() {
     }
 }
 
-/// 3.5: 着せ替えの道の記録の全行に `name` の欄があり、2 つの名前が分かれる。
+/// 着せ替えの道の記録の全行に `name` の欄があり、2 つの名前が分かれる。
 #[test]
 fn every_bind_log_line_carries_its_name() {
     for (before, tokens, _, _, _) in CASES {
@@ -182,7 +182,7 @@ fn every_bind_log_line_carries_its_name() {
     }
 }
 
-/// 実機の目印: 適用の行に `name=bind-noevent` が乗る（design「記録の形」）。
+/// 実機の目印: 適用の行に `name=bind-noevent` が乗る。
 #[test]
 fn applied_marker_names_bind_noevent() {
     let outcome = run("0", &[], BIND_NOEVENT_COMMAND, &["ボール", "妹", "1"]);
@@ -195,7 +195,7 @@ fn applied_marker_names_bind_noevent() {
     assert!(marker[0].contains("name=\"bind-noevent\""), "{}", marker[0]);
 }
 
-/// 3.6: 出力は表示の指令だけ（seriko は SHIORI への受け口を持たない）。カテゴリ単位の 1 は途中の姿を出さず 1 件。
+/// 出力は表示の指令だけ（seriko は SHIORI への受け口を持たない）。カテゴリ単位の 1 は途中の姿を出さず 1 件。
 #[test]
 fn bind_noevent_outputs_only_one_display_command() {
     let outcome = run("0", &[], BIND_NOEVENT_COMMAND, &["ボール", "", "1"]);
@@ -215,7 +215,7 @@ fn bind_noevent_outputs_only_one_display_command() {
     }
 }
 
-/// 数でないスコープは 2 つの名前とも同じ warn（areka-P0-mayuna-compose D7）。
+/// 数でないスコープは 2 つの名前とも同じ warn。
 #[test]
 fn bind_noevent_unmapped_scope_warns_like_bind() {
     let [bind, noevent] = NAMES.map(|name| run("x", &[], name, &["ボール", "妹", "1"]));
@@ -254,7 +254,7 @@ fn prefix_alike_name_is_not_bind() {
     assert_eq!(skipped, 1, "{:?}", outcome.logs);
 }
 
-/// 宛名 `bind-noevent` の壊れた運び物は `bind` と同じ warn（自分宛の壊れ物・D8④）。
+/// 宛名 `bind-noevent` の壊れた運び物は `bind` と同じ warn（自分宛の壊れ物）。
 #[test]
 fn noncanonical_bind_noevent_warns_like_bind() {
     for name in NAMES {
@@ -279,7 +279,7 @@ fn noncanonical_bind_noevent_warns_like_bind() {
     }
 }
 
-/// 宛名が他人（"noexist"）の壊れた運び物は warn! を出さず debug! で素通しし、発行しない（D8④）。
+/// 宛名が他人（"noexist"）の壊れた運び物は warn! を出さず debug! で素通しし、発行しない。
 #[test]
 fn noncanonical_custom_for_another_name_is_debug_only() {
     let bind_resolver = arm_bind_resolver();

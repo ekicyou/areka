@@ -1,19 +1,19 @@
-//! 窓ごとの整合ゲート（設計 C5・要件 5.8／4.1／4.6／10.7）。
+//! 窓ごとの整合ゲート。
 //!
 //! 窓の拡大率（`DPI` component）と、その窓が属するモニタの**表**（[`MonitorDpiTable`]）の
 //! 拡大率が揃うまで、当該窓への**窓書込**を見送る。見送りの札は [`DpiSyncHold`] であり、
 //! 付け外しは拡大率の相が一元的に行う。
 //!
-//! # なぜ要るか（要件 5.8）
+//! # なぜ要るか
 //!
 //! Windows は `WM_DPICHANGED`（窓の拡大率）と `WM_DISPLAYCHANGE`（モニタ表）の到着順を
 //! 保証しない。拡大率通知が先に届く順序では、窓は新しい拡大率を持つのに作業領域源は旧水準の
 //! ままである。そのまま再射影すると「**新しい寸のまま旧作業領域下端へ接地した**」中間矩形が
-//! 1 度書かれ、表が追いついたフレームでもう 1 度書き直される——要件 5.8 が名指しで禁じる
-//! 2 段書込である。実機の 12 遷移では表更新が先だった（確定台帳 L2＝経路 (a) は本採取では
+//! 1 度書かれ、表が追いついたフレームでもう 1 度書き直される——避けるべき
+//! 2 段書込である。実機の 12 遷移では表更新が先だった（経路 (a) は本採取では
 //! 未発火）ので、この経路を押さえるのは決定論テストだけである。
 //!
-//! # 見送るのは窓書込であって描画ではない（areka-P0-dpi-transition-atomicity の設計討議 議題 1）
+//! # 見送るのは窓書込であって描画ではない
 //!
 //! 待ち札のある窓でも `apply_show`（描画）は止めない——発話もアニメも遅らせない。止めるのは
 //! 窓の矩形を書く 5 点だけである: 拡大率の相・報告寸の突合・**実表示寸の**再スナップ・
@@ -21,10 +21,9 @@
 //!
 //! 「再スナップ」は日本語の同じ語が別々の 2 関数を指す——`resnap_shell_targets`（表示側の
 //! 物理寸が窓寸と食い違う窓を書き直す）と `resnap_for_work_area_change`（作業領域源が
-//! 差し替わったフレームに現寸のまま接地点を引き直す）である。設計 C5 の当初の列挙は前者だけを
-//! 指しており、後者が守備範囲の外に落ちていた（後から 4 点目として加えた）。
+//! 差し替わったフレームに現寸のまま接地点を引き直す）である。
 //!
-//! # 有界（要件 4.4）
+//! # 有界
 //!
 //! 窓の中心が属するモニタと OS が拡大率を決めるモニタが食い違う縁の配置では、表が永遠に
 //! 追いつかない。ゆえに待ちは [`DPI_SYNC_HOLD_MAX_FRAMES`] フレームで打ち切り、警告の上で
@@ -51,13 +50,13 @@ pub(crate) use test_open::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncDecision, DpiSyncOut
 mod test_open {
     use super::*;
 
-    /// 整合待ちの上限フレーム数（設計 C5・C7）。
+    /// 整合待ちの上限フレーム数。
     ///
     /// 判定器の許容（`transition_judge_verdict::HOLD_FRAME_ALLOWANCE`）はこの定数を参照する
     /// ——待ちの上限は本番の挙動そのものであり、判定語と同じく定義元は 1 つでなければならない。
     pub const DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30;
 
-    /// 整合ゲートの判定（設計 C5）。
+    /// 整合ゲートの判定。
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum DpiSyncDecision {
         /// 表と一致した（または表を引けない）ので、そのまま処理する。
@@ -143,7 +142,7 @@ pub enum HoldSite {
     /// [`Resnap`](HoldSite::Resnap) と別の語を持つ——「再スナップ」という日本語が別々の
     /// 2 関数を指しており、同じ語にするとログ上でどちらが見送ったのか判らないからである。
     WorkAreaResnap,
-    /// 面の `move` のずれの相（`crates/areka-runtime/src/frame/move_shift.rs`・seriko-pattern-calls）。
+    /// 面の `move` のずれの相（`crates/areka-runtime/src/frame/move_shift.rs`）。
     ///
     /// 台本の `\![move]` が絶対の位置へ書いた軸のずれを当て直す所
     /// （`follow::move_shift::rebase_shift_axes`）も同じ語で見送る。
@@ -163,7 +162,7 @@ impl HoldSite {
     }
 }
 
-/// 整合ゲートの純判定（World も時刻も読まない・設計 C5）。
+/// 整合ゲートの純判定（World も時刻も読まない）。
 ///
 /// - `table_dpi` が `None`（表なし・どのモニタにも属さない）→ [`Proceed`](DpiSyncDecision::Proceed)。
 ///   表を引けない窓を待たせると、縁に置かれた窓が毎回上限まで待つ。
@@ -219,7 +218,7 @@ fn owning_table_dpi(world: &World, window: Entity) -> Option<u32> {
 /// 拡大率の相のゲート適用——判定し、札を付け外しし、記録を 1 行出す。
 ///
 /// 戻り値は**当該窓の処理を進めてよいか**（`false`＝本フレームは窓書込も再導出も行わない）。
-/// 札の付け外しを行うのは本関数だけである（設計 C5「解除は dpi 相が一元的に行う」）。
+/// 札の付け外しを行うのは本関数だけである。
 ///
 /// 上限超過は `warn!` を出したうえで**進む**——待ち続けると窓が旧寸のまま取り残されるので、
 /// 現在の源で 1 回書く方が安全である（ログ無し失敗経路の禁止）。
@@ -274,7 +273,7 @@ pub fn apply_dpi_phase_gate(world: &mut World, window: Entity, now: u32) -> bool
 /// 解除フレームには当該窓が必ず対象に入り、`reproject_char_window_at_current_size` が
 /// **差し替え済みの作業領域源**（同期段は札に関係なく毎フレーム源を差し替える）で接地点を
 /// 引き直す。ゆえに見送りは「作業領域の変化を捨てる」のではなく「反映を解除フレームの
-/// 1 本へ合流させる」ことになる（要件 5.8 の一度書きそのもの）。
+/// 1 本へ合流させる」ことになる（一度書きそのもの）。
 pub fn defers_window_write(world: &World, window: Entity, site: HoldSite) -> bool {
     let Some(hold) = world.get::<DpiSyncHold>(window) else {
         return false;
@@ -294,7 +293,7 @@ pub fn defers_window_write(world: &World, window: Entity, site: HoldSite) -> boo
 /// 整合待ちの記録を 1 行出す（既定 OFF・前置ガードは本関数が持つ）。
 ///
 /// レコードを**組む**より外側でガードするのは、既定運転で確保を 1 バイトも増やさないため
-/// である（要件 10.4）。
+/// である。
 fn log_hold(world: &World, window: Entity, outcome: &DpiSyncOutcome, site: HoldSite) {
     if !transition_diag::is_enabled() {
         return;

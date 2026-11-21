@@ -1,5 +1,4 @@
-//! バルーンの面で部品と `always` を回す檻（spec: areka-P0-animated-image-playback 要件 6.1・6.3・
-//! 6.6・6.7・tasks.md 3.6）。
+//! バルーンの面で部品と `always` を回す檻。
 //!
 //! バルーンの表もシェルと同じ `parts_film_tests` の表（0 と 1 は終わりなしの子 `ENDLESS` を置き、
 //! 1 は合計 1 回の子 `ONCE` も置く）。窓の知らせは `note_stage` で直に覚えさせる。
@@ -66,7 +65,7 @@ fn open_window_births_child_clock_on_noted_face() {
 }
 
 /// 窓が閉じている間は評価しても時計が生まれない。開くと生まれ、閉じると回数つきが捨てられて
-/// 終わりなしだけが進む。もう 1 度開くと回数つきは頭から（要件 2.3・6.1）。
+/// 終わりなしだけが進む。もう 1 度開くと回数つきは頭から。
 #[test]
 fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
     let mut rt = runtime(AnimationTable::empty());
@@ -156,7 +155,7 @@ fn balloon_hide_cue_drops_finite_clocks() {
     assert_eq!(clock(&rt, Slot::Balloon, ENDLESS), playing(100));
 }
 
-/// シェルとバルーンが同じ子を置いても時計は混ざらない（要件 6.6）。
+/// シェルとバルーンが同じ子を置いても時計は混ざらない。
 #[test]
 fn shell_and_balloon_clocks_do_not_mix() {
     let mut rt = runtime(film_table());
@@ -203,7 +202,7 @@ const BALLOON_TOP_ALWAYS: &str = "surface0\n{\nanimation0.interval,always\n\
     surface101\n{\n}\nsurface102\n{\n}\nsurface103\n{\n}\n";
 
 /// 窓が閉じている間は、刻みでも出来事の直後の評価でも一番上の `always` の再生が生まれない。
-/// 開いた後は、評価の時刻（刻みの時刻・出来事の時刻）で生まれる（要件 6.1）。
+/// 開いた後は、評価の時刻（刻みの時刻・出来事の時刻）で生まれる。
 #[test]
 fn closed_window_births_no_top_always_playback() {
     let (rng, _probe) = counting_rng(&[]);
@@ -251,7 +250,7 @@ const BALLOON_PART_RANDOM: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
     surface101\n{\n}\n";
 
 /// 窓が閉じている間は、抽選の境を跨いでも部品の抽選をせず（乱数を引かず）時計が生まれない。
-/// 開いた後の境で初めて引いて生まれる（要件 6.1）。
+/// 開いた後の境で初めて引いて生まれる。
 #[test]
 fn closed_window_draws_no_part_lottery() {
     let (rng, probe) = counting_rng(&[0]);

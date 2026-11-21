@@ -1,4 +1,4 @@
-//! 追加のヘッダの入れ物と要求の文の並び（areka-P0-script-security-level 要件 2.1・2.9）。
+//! 追加のヘッダの入れ物と要求の文の並び。
 
 use super::{RequestHeaders, request_of};
 use crate::charset::{Charset, CharsetPolicy};
@@ -33,7 +33,7 @@ fn build(status: Option<&str>, headers: RequestHeaders<'_>) -> String {
 }
 
 /// 並びは「要求行・Charset・SecurityLevel・SecurityOrigin・Sender・SenderType・Status・ID・
-/// Reference*」。末尾の `SecurityLevel: local` は無い（要件 2.1）。
+/// Reference*」。末尾の `SecurityLevel: local` は無い。
 #[test]
 fn headers_precede_status_and_id() {
     let headers = RequestHeaders {
@@ -57,7 +57,7 @@ fn headers_precede_status_and_id() {
     );
 }
 
-/// `Status` が無くても `SecurityLevel` は `ID` より前に 1 行だけ出る（要件 2.1）。
+/// `Status` が無くても `SecurityLevel` は `ID` より前に 1 行だけ出る。
 #[test]
 fn security_level_precedes_id_without_status() {
     let s = build(None, RequestHeaders::internal("areka"));
@@ -76,7 +76,7 @@ fn security_level_precedes_id_without_status() {
     assert_eq!(s.matches("SecurityLevel:").count(), 1, "{s}");
 }
 
-/// `Status` が在っても `SecurityLevel` は `ID` より前・1 行だけ（要件 2.1）。
+/// `Status` が在っても `SecurityLevel` は `ID` より前・1 行だけ。
 #[test]
 fn security_level_precedes_id_with_status() {
     let s = build(Some("talking"), RequestHeaders::internal("areka"));
@@ -87,7 +87,7 @@ fn security_level_precedes_id_with_status() {
     assert_eq!(s.matches("SecurityLevel:").count(), 1, "{s}");
 }
 
-/// 共通の組み立ての手から組んだ要求は、同じ値を手で並べた要求とバイト列まで同じ（要件 2.8）。
+/// 共通の組み立ての手から組んだ要求は、同じ値を手で並べた要求とバイト列まで同じ。
 #[test]
 fn request_of_builds_the_same_bytes_as_the_hand_built_request() {
     let references = ["0".to_owned(), "x".to_owned()];
@@ -134,7 +134,7 @@ fn parse(resp: &str) -> ParsedResponse {
     parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8)).expect("well-formed")
 }
 
-/// 応答の `SecurityLevel` は頭の名前の大文字小文字を無視し、前後の空白を落とした生の値（要件 3.5）。
+/// 応答の `SecurityLevel` は頭の名前の大文字小文字を無視し、前後の空白を落とした生の値。
 #[test]
 fn response_security_level_is_the_trimmed_raw_value_case_insensitive() {
     for (line, expected) in [
@@ -151,14 +151,14 @@ fn response_security_level_is_the_trimmed_raw_value_case_insensitive() {
     }
 }
 
-/// 応答に `SecurityLevel` が無いときは無し（要件 3.5）。
+/// 応答に `SecurityLevel` が無いときは無し。
 #[test]
 fn response_without_security_level_is_none() {
     let resp = "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: hi\r\n\r\n";
     assert_eq!(parse(resp).security_level, None);
 }
 
-/// `SecurityLevel` が並んでも `Value`・`ErrorLevel`・`ErrorDescription` の読みは今のまま（要件 3.5）。
+/// `SecurityLevel` が並んでも `Value`・`ErrorLevel`・`ErrorDescription` の読みは今のまま。
 #[test]
 fn security_level_does_not_change_value_or_error_level_reading() {
     let resp = "SHIORI/3.0 500 Internal Server Error\r\nCharset: UTF-8\r\n\

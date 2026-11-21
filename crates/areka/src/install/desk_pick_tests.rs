@@ -1,5 +1,4 @@
-//! 選ぶ画面を起こす動作と「出ている」旗の決定論テスト（要件 1.3・1.4・11.6・design「Testing
-//! Strategy / 窓口と入口」のメニューの箇条）。
+//! 選ぶ画面を起こす動作と「出ている」旗の決定論テスト。
 //!
 //! 確かめること: 選ぶ画面は `install-pick` という名のスレッドで出て、出ている間は「インストール…」が
 //! 選べず 2 度目の起動は無視されること・スレッドが終わると旗が降りて選べるようになること・抑止の
@@ -75,7 +74,7 @@ fn warns_and_errors(events: &[CapturedEvent]) -> Vec<(Level, Option<&str>)> {
 
 /// メニューの側（選ぶ画面のスレッドが選ばれたパスを生の要求として流す）と台本の側（受け口と同じ
 /// `script_request` を通した出どころ「台本」の生の要求）は、取り出しの後に出どころだけが違う同じ
-/// 依頼になる（要件 1.1・9.3・11.6）。
+/// 依頼になる。
 #[test]
 fn menu_order_is_the_script_order_with_only_the_origin_changed() {
     let (mut world, orders) = rig();
@@ -136,7 +135,7 @@ fn menu_order_is_the_script_order_with_only_the_origin_changed() {
 // ---------------------------------------------------------------- 出ている間
 
 /// 選ぶ画面は `install-pick` のスレッドで出て、出ている間は「インストール…」が選べず、2 度目の
-/// 起動は `debug!` を残して無視される。スレッドが終わると旗が降り、また選べる（要件 1.3）。
+/// 起動は `debug!` を残して無視される。スレッドが終わると旗が降り、また選べる。
 #[test]
 fn picking_disables_the_item_until_the_thread_ends() {
     let (mut world, _orders) = rig();
@@ -242,7 +241,7 @@ fn suppressed_pick_starts_no_thread_and_queues_nothing() {
 // ---------------------------------------------------------------- 選ぶ画面の結果
 
 /// 取り消しは `info!(install_pick_cancelled)`、出せなければ `error!(install_pick_failed)` で、
-/// どちらも生の要求 0 件。選ばれたら出どころ「メニュー」の生の要求 1 件（要件 1.3・1.4）。
+/// どちらも生の要求 0 件。選ばれたら出どころ「メニュー」の生の要求 1 件。
 #[test]
 fn pick_results_are_logged_and_only_a_choice_is_sent() {
     let cases: [(

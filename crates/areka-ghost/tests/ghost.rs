@@ -1,10 +1,9 @@
 // tests/ghost.rs — ghost 統合テストのエントリポイント（#[path] mod 束ねのみ）。
 //
-// 設計「File Structure Plan」に従う（テスト命名規約）。本ファイルにテストロジックは
-// 置かず、実体は `tests/ghost/` 配下の各 `*_test.rs` に持つ。
+// 本ファイルにテストロジックは置かず、実体は `tests/ghost/` 配下の各 `*_test.rs` に持つ。
 //
-// `spine_e2e_test.rs`（task 4.1 が `ScriptedShioriBackend`/`RecordingSink` を定義し、
-// boot〜close の各シナリオ（S1〜S7）の `#[test]` は子モジュール `spine_e2e_test_s*.rs` に置く）。`real_pasta_test.rs`（task 4.8・env ゲート実 pasta 追験）は
+// `spine_e2e_test.rs` は `ScriptedShioriBackend`/`RecordingSink` を定義し、boot〜close の各シナリオ（S1〜S7）の
+// `#[test]` は子モジュール `spine_e2e_test_s*.rs` に置く。`real_pasta_test.rs`（env ゲート実 pasta 追験）は
 // `spine_e2e_test` の `RecordingSink` を再利用する（`crate::spine_e2e_test::RecordingSink`）。
 // `common` はテスト支援モジュール（i686 helper の解決 `resolve_helper_exe`・有界実行
 // `run_bounded`／`run_bounded_shutdown`・システム変数 `test_system_vars`）。
@@ -27,15 +26,15 @@ mod inproc_fixture;
 // 交信列を凍結スナップショット由来の期待列と全順序照合し（ドリフト検出込み）、ロード失敗の態様も確かめる。
 #[path = "ghost/inproc_e2e_test.rs"]
 mod inproc_e2e_test;
-// `snapshot_capture_test`（task 6.1・env-gate 採取ハーネス）は `recorder` の `ExchangeRecord`／
+// `snapshot_capture_test`（env-gate 採取ハーネス）は `recorder` の `ExchangeRecord`／
 // `ExchangeOutcome` を消費し、出力形式生成ロジック（`reconstruct_envelope`／
 // `collect_first_get_snapshots`）を純関数として単体テストする。実採取は
 // `HOST32_PASTA_DLL`＋`AREKA_SNAPSHOT_OUT` 両設定時のみ動作（欠落は silent skip）。
 #[path = "ghost/snapshot_capture_test.rs"]
 mod snapshot_capture_test;
-// `sylphya_integration_test`（task 8.4・sylphya × ghost 結線 end-to-end）は
+// `sylphya_integration_test`（sylphya × ghost 結線 end-to-end）は
 // `spine_e2e_test::RecordingSink` を再利用し、実 boot（mock shiori backend）を駆動して
 // (1) boot 後の reader 実値解決（selfname 系／baseware）・(2) shutdown 全段成功（sylphya 段含む）・
-// (3) username=Value → 初回 talk スナップショット包含（barrier フェンス・レース非依存）を檻化する。
+// (3) username=Value → 初回 talk スナップショット包含（barrier フェンス・レース非依存）を確かめる。
 #[path = "ghost/sylphya_integration_test.rs"]
 mod sylphya_integration_test;

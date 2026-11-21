@@ -1,6 +1,5 @@
 //! 読み込みで組んだ面の表を 1 度だけ渡す口（[`ShellTarget::take_world`]）と、形の誤りを読み込みの
-//! ときに 1 件 1 行の `warn!` で出すことの檻（areka-P0-offline-surface-dump 要件 7.5・design
-//! ShellWorldOnce・ShapeIssuesOnce）。
+//! ときに 1 件 1 行の `warn!` で出すことの檻。
 
 use super::*;
 

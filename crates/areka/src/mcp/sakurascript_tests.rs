@@ -1,4 +1,4 @@
-//! `sakurascript` の決定論テスト（design Testing Strategy 要件 7.2）。
+//! `sakurascript` の決定論テスト。
 //!
 //! 置き場に偽の kanade の送り口（`mpsc` の送出端）を置き、受信端で外からの台本の知らせを受け取って
 //! 返信端へ結果を送る（または落とす）。答えは後から答える置き場（`later`）を `drain` で覗いて取る。
@@ -106,7 +106,7 @@ fn answer_with(ghost_name: Option<&str>, result: SstpSendOutcome) -> (ToolOutcom
     )
 }
 
-/// 受け付けた → `OK`・isError: false・warn 以上 0 件（要件 1.1・6.5）。
+/// 受け付けた → `OK`・isError: false・warn 以上 0 件。
 #[test]
 fn accepted_is_ok() {
     let (outcome, warns) = answer_with(Some("Emily/Phase4.5"), SstpSendOutcome::Accepted);
@@ -115,7 +115,7 @@ fn accepted_is_ok() {
     assert_eq!(warns, 0);
 }
 
-/// 受け付けなかった → `NG:the ghost cannot accept a script now`・warn 以上 0 件（要件 3.6・3.9）。
+/// 受け付けなかった → `NG:the ghost cannot accept a script now`・warn 以上 0 件。
 #[test]
 fn not_accepted_is_cannot_accept_now() {
     let (outcome, warns) = answer_with(None, SstpSendOutcome::NotAccepted);
@@ -128,7 +128,7 @@ fn not_accepted_is_cannot_accept_now() {
 }
 
 /// 失敗・返信端の落ち・送れなかった → `ghost_name` の有無で宛先が居ないときの 2 通りの `NG:`・
-/// warn 以上 0 件（要件 1.7・3.5・3.9・6.4）。
+/// warn 以上 0 件。
 #[test]
 fn failed_dropped_and_unsendable_read_as_the_resolve_failure() {
     for (ghost_name, expected) in [(Some("Emily/Phase4.5"), CANNOT_FIND), (None, NOT_ACTIVE)] {
@@ -168,7 +168,7 @@ fn failed_dropped_and_unsendable_read_as_the_resolve_failure() {
     }
 }
 
-/// 台本と strict の真・偽・省略がそのまま知らせに載る（要件 1.3・1.5）。
+/// 台本と strict の真・偽・省略がそのまま知らせに載る。
 #[test]
 fn script_and_strict_are_carried_verbatim() {
     for strict in [Some(true), Some(false), None] {
@@ -181,7 +181,7 @@ fn script_and_strict_are_carried_verbatim() {
     }
 }
 
-/// 空文字の台本 → kanade へ何も送らず `NG:script is empty`（要件 1.4）。空白だけは空と数えない。
+/// 空文字の台本 → kanade へ何も送らず `NG:script is empty`。空白だけは空と数えない。
 #[test]
 fn empty_script_sends_nothing() {
     let (mut world, rx) = rig();
@@ -198,7 +198,7 @@ fn empty_script_sends_nothing() {
     assert_eq!(take_send(&rx).0, " ", "空白だけは送る");
 }
 
-/// 返事が呼んだ直後（最初の覗きの前）に届いていても、何フレームか後に届いても答えになる（要件 6.4）。
+/// 返事が呼んだ直後（最初の覗きの前）に届いていても、何フレームか後に届いても答えになる。
 #[test]
 fn answer_may_be_ready_at_once_or_arrive_later() {
     // その場で返る（最初の覗きで答える）。
@@ -259,7 +259,7 @@ fn script_target_reads_the_sender_and_the_gone_wording() {
     assert_eq!(target.gone, NOT_ACTIVE);
 }
 
-/// strict の答えの文の前後（`<n>` を挟む・要件 1.1）。
+/// strict の答えの文の前後（`<n>` を挟む）。
 const STRICT_HEAD: &str = "OK:strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
 
 /// 送った後・返事の前に記録を 1 件積み、その番号を返す（答えの `<n>` が送る前の値かを測る）。
@@ -281,7 +281,7 @@ fn record_one() -> u64 {
     )
 }
 
-/// strict 真で受け付けた → strict の文・`<n>` は送る前に読んだ最後の番号（要件 1.1・1.2・7.4）。
+/// strict 真で受け付けた → strict の文・`<n>` は送る前に読んだ最後の番号。
 ///
 /// 置き場はプロセスに 1 つで他のテストも積むので、`<n>` は「呼ぶ前の番号以上・送った後に積んだ番号未満」で測る。
 #[test]
@@ -312,7 +312,7 @@ fn strict_true_answer_carries_the_id_read_before_sending() {
     );
 }
 
-/// strict 偽・省略で受け付けた → `OK` のまま（要件 1.4）。
+/// strict 偽・省略で受け付けた → `OK` のまま。
 #[test]
 fn strict_false_or_omitted_answer_is_plain_ok() {
     for strict in [Some(false), None] {
@@ -327,7 +327,7 @@ fn strict_false_or_omitted_answer_is_plain_ok() {
     }
 }
 
-/// strict 真でも NG の 4 つ（空・受け付けない・失敗・返信端の落ち）は今の答えのまま（要件 1.5）。
+/// strict 真でも NG の 4 つ（空・受け付けない・失敗・返信端の落ち）は今の答えのまま。
 #[test]
 fn strict_true_ng_answers_are_unchanged() {
     let (mut world, _rx) = rig();
@@ -386,7 +386,7 @@ fn error_log_ids_since(since_id: u64) -> Vec<u64> {
 }
 
 /// 答えの `<n>` で `get_log(log_type=error, since_id=<n>)` を読むと、送った後に積んだ記録が全部読め、
-/// 呼ぶ前に積んだ記録は読めない（要件 1.3・7.4）。
+/// 呼ぶ前に積んだ記録は読めない。
 ///
 /// 置き場はプロセスに 1 つで他のテストも積むので、読めた番号の集まりに含まれるか・含まれないかで測る。
 #[test]
@@ -417,7 +417,7 @@ fn since_id_of_the_answer_reads_every_record_after_sending() {
 }
 
 /// NG の 4 つ（空・受け付けない・居ない・降りた）を strict 真で、受け付けたのを strict 偽・省略で
-/// → エラーログに strict の記録が増えない（要件 1.5・3.5・7.5）。記録は呼んだ・回したスレッドで拾う。
+/// → エラーログに strict の記録が増えない。記録は呼んだ・回したスレッドで拾う。
 #[test]
 fn no_strict_records_for_ng_answers_or_strict_false() {
     let (mut world, _rx) = rig();

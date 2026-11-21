@@ -1,4 +1,4 @@
-//! 要件 9.1・9.5・11.2: emo2 まばたき bind+random の静的不活性テーマ。
+//! emo2 まばたき bind+random の静的不活性テーマ。
 
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
 use super::{AtlasTable, BindSet, MemoryDecoder, Path, PatternState, SetId, Shell};
@@ -6,13 +6,13 @@ use crate::plan_test_support::{bound_world, opaque_wxh, plan_of};
 use areka_parsers::shell::AppendTarget;
 
 // ============================================================================
-// emo2 まばたき bind+random（1400・pattern0 なし）の静的不活性回帰檻（要件 **9.1**・**9.5**・11.2）。
+// emo2 まばたき bind+random（1400・pattern0 なし）の静的不活性回帰檻。
 //
 // 実機サインオフ#2: むらさきの目が常時閉じている。まばたき animation 1400（`interval,bind+random`・
 // pattern1/2/3）の閉じ目フレーム（surface 1412）が静的土台に積まれ、ベースの目（1302）を覆っていた。
 // 実 pasta はまばたきを on-repeat で bind するため BindSet に残る。`bind+random` はコマのあるときだけ
 // 描く（コマは seriko が再生する）ので、静的土台には寄与しない。純 `bind` の 1403（pattern2＝1414 の
-// null）は有効なら全部のコマを重ねる（seriko-pattern-calls 6.8・M6）。
+// null）は有効なら全部のコマを重ねる（SSP の測りに合わせる）。
 //
 // 本檻: emo2 surface1000 を [1302,1403] と [1302,1400,1403]（＋まばたき）で build_plan し、生成描画
 // 命令列（BlitOp）が**同一**であることを固定する＝「常時閉じ目」退行を直接ガードする。
@@ -21,7 +21,7 @@ use areka_parsers::shell::AppendTarget;
 // 小さい pattern を静的に描く実装なら 1400→surface1412 が積まれて命令列が伸び、assert が破れる。
 // ============================================================================
 
-/// まばたき檻用の `AtlasTable` を構築する（COM/WIC 非依存・要件 11.4）。
+/// まばたき檻用の `AtlasTable` を構築する（COM/WIC 非依存）。
 ///
 /// [`build_atlas_for_surface1000`] と異なり、目/通常（1302→purple/4/normal.png）に加えて **閉じ目
 /// パーツ**の画像（surface1412 の eyebase/toji・surface1414 の null）も MemoryDecoder へ挿入する。
@@ -44,7 +44,7 @@ fn build_atlas_for_blink_cage(shell: &Shell, base: &Path) -> AtlasTable {
     bake_emo2(shell, base, &dec)
 }
 
-/// 要件 9.1・9.5・11.2: emo2 まばたき bind+random（1400・pattern0 なし）は静的合成へ寄与しない＝
+/// emo2 まばたき bind+random（1400・pattern0 なし）は静的合成へ寄与しない＝
 /// BindSet に足しても BlitOp 列が [1302,1403] のときと**同一**。純 `bind` の 1403 は全部のコマを重ねる。
 ///
 /// 「むらさきの目が常時閉じている」実機第2欠陥の直接回帰檻。まばたき（閉じ目）フレームが静的
@@ -92,8 +92,7 @@ fn emo2_blink_binds_are_statically_inactive() {
         ops_pure, ops_blink,
         "まばたき bind+random を足しても BlitOp 列は不変（pattern0 なしは静的不活性・要件 9.1/9.5）",
     );
-    // 純 `bind` の 1403 は有効なら全部のコマ（pattern2＝1414 の null）を重ねる（seriko-pattern-calls
-    // 6.8・SSP の測り M6 で期待を直した）。閉じ目（1412）は `bind+random` 側なので目は覆われない。
+    // 純 `bind` の 1403 は有効なら全部のコマ（pattern2＝1414 の null）を重ねる（SSP の測りに合わせる）。閉じ目（1412）は `bind+random` 側なので目は覆われない。
     assert_eq!(ops_pure[..1], ops_base[..], "土台の 1302 はそのまま");
     assert_eq!(
         ops_pure.len(),

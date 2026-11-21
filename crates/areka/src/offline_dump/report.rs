@@ -1,4 +1,4 @@
-//! 写した記録から CSV の中身・終了コード・CSV のファイルを作る（要件 7.1・7.2・7.4〜7.8・8.1〜8.3）。
+//! 写した記録から CSV の中身・終了コード・CSV のファイルを作る。
 
 use std::path::Path;
 
@@ -6,7 +6,7 @@ use tracing::Level;
 
 use crate::log_history::CapturedRecord;
 
-/// 写しが空なら 0・warn だけなら 1・error があれば 2（8.1）。CSV の有無に関わらない（8.2）。
+/// 写しが空なら 0・warn だけなら 1・error があれば 2。CSV の有無に関わらない。
 pub(crate) fn exit_code(records: &[CapturedRecord]) -> i32 {
     match worst(records) {
         None => 0,
@@ -21,7 +21,7 @@ pub(crate) fn worst(records: &[CapturedRecord]) -> Option<&'static str> {
     records.iter().map(|r| r.level).min().map(level_word)
 }
 
-/// 写しは warn と error だけ（info は窓に入らない＝7.4・8.3）。
+/// 写しは warn と error だけ（info は窓に入らない）。
 fn level_word(level: Level) -> &'static str {
     if level == Level::ERROR {
         "Error"
@@ -30,7 +30,7 @@ fn level_word(level: Level) -> &'static str {
     }
 }
 
-/// BOM 付き UTF-8・CRLF・`"時刻","ゴースト名","レベル","内容"` の 4 列（7.1・7.2・7.5）。
+/// BOM 付き UTF-8・CRLF・`"時刻","ゴースト名","レベル","内容"` の 4 列。
 pub(crate) fn csv_bytes(ghost_name: &str, records: &[CapturedRecord]) -> Vec<u8> {
     let quote = |s: &str| s.replace('"', "\"\"");
     let ghost = quote(ghost_name);
@@ -48,7 +48,7 @@ pub(crate) fn csv_bytes(ghost_name: &str, records: &[CapturedRecord]) -> Vec<u8>
     text.into_bytes()
 }
 
-/// records が空なら何もしない（作らず、在るファイルに触れない＝7.6）。書けなければ error! を出して Err（7.7）。
+/// records が空なら何もしない（作らず、在るファイルに触れない）。書けなければ error! を出して Err。
 pub(crate) fn write_csv(
     path: &Path,
     ghost_name: &str,

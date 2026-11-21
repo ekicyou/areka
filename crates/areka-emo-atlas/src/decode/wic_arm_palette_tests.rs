@@ -1,7 +1,7 @@
-//! `WicDecoderArm` のパレットの絵の兄弟テスト（spec: emo-atlas-palette-alpha 要件 1・2・5）。
+//! `WicDecoderArm` のパレットの絵の兄弟テスト。
 //!
 //! 検体（`testdata/palette/`・中身は同じフォルダの README）を本番の読み手で読み、
-//! `Normalizer` に通した後の画素（設計の Data Models の 2 つの表）と、画素を見ない 1・2 ビットの
+//! `Normalizer` に通した後の画素と、画素を見ない 1・2 ビットの
 //! 検体の `has_alpha` を見る。
 
 use crate::decode::ElementDecoder;
@@ -43,7 +43,7 @@ const MIXED: [[u8; 4]; 4] = [RED, RED, CLEAR, SEMI_BLUE];
 /// 透明度を持たない絵を `On` で通した後（左上の赤が抜ける・下の行は緑）。
 const PLAIN_KEYED: [[u8; 4]; 4] = [CLEAR, CLEAR, GREEN, GREEN];
 
-// 判定の表（要件 1.1・1.5・1.6・2.1・2.2）: 画素を見ない 1・2 ビットの 2 本だけを `has_alpha` で見る
+// 判定の表: 画素を見ない 1・2 ビットの 2 本だけを `has_alpha` で見る
 // （`INDEXED_FORMATS` の 1・2 ビットの項の檻）。ほかの検体は `has_alpha` を取り違えると下の画素のテストが赤になる。
 
 #[test]
@@ -56,7 +56,7 @@ fn has_alpha_idx1_trns() {
     assert_has_alpha("idx1_trns.png", true);
 }
 
-// `On`（`1`／`true`）は出る画素のまま（要件 1.2・1.4・5.1・5.4・5.8）。
+// `On`（`1`／`true`）は出る画素のまま。
 
 #[test]
 fn on_keeps_idx8_mixed() {
@@ -85,7 +85,7 @@ fn on_keeps_trans_gif() {
     assert_baked("trans.gif", UseSelfAlpha::On, [RED, RED, CLEAR, blue]);
 }
 
-// `Full` は透明と半透明の番号を不透明にしない（要件 1.3・1.4・5.2）。
+// `Full` は透明と半透明の番号を不透明にしない。
 
 #[test]
 fn full_keeps_idx8_mixed() {
@@ -97,7 +97,7 @@ fn full_keeps_idx4_mixed() {
     assert_baked("idx4_mixed.png", UseSelfAlpha::Full, MIXED);
 }
 
-// 透明度を持たないパレットの絵は今のまま左上の色を抜く（要件 2.1・2.2・5.3）。
+// 透明度を持たないパレットの絵は今のまま左上の色を抜く。
 
 #[test]
 fn on_keys_idx8_plain() {
@@ -109,7 +109,7 @@ fn on_keys_idx8_opaque_trns() {
     assert_baked("idx8_opaque_trns.png", UseSelfAlpha::On, PLAIN_KEYED);
 }
 
-// 失敗の道（要件 4.1）: 番号つきでない絵でパレットを読むと偽を推測せず WIC のエラーを返す。
+// 失敗の道: 番号つきでない絵でパレットを読むと偽を推測せず WIC のエラーを返す。
 
 #[test]
 fn palette_has_alpha_fails_on_non_indexed_image() {

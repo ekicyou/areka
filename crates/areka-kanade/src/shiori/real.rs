@@ -1,10 +1,10 @@
-//! real shiori アクター（`src/shiori/real.rs`）: 既存 SHIORI 出口 API
+//! real shiori アクター: 既存 SHIORI 出口 API
 //! （`shiori-host32-host` の [`Shiori3Client`]）を専有スレッドで包む。
 //!
 //! **本ファイルは areka-kanade 内で host32 型（[`Shiori3Client`] / [`RequestError`] /
-//! [`ParentMessageWindow`] / [`HelperLifecycle`]）を import してよい唯一の場所である**
-//! （Boundary Commitment）。呼出結果と区別失敗語彙は既存 API の戻り値をそのまま機械的に
-//! 写像して [`ShioriOutcome`] へ載せる（status 判定・区別語彙の再実装をしない・Req 5.3/6.1）。
+//! [`ParentMessageWindow`] / [`HelperLifecycle`]）を import してよい唯一の場所である**。
+//! 呼出結果と区別失敗語彙は既存 API の戻り値をそのまま機械的に
+//! 写像して [`ShioriOutcome`] へ載せる（status 判定・区別語彙の再実装をしない）。
 //!
 //! # 構造（backend 抽象）
 //!
@@ -42,7 +42,7 @@ pub use shiori_host32_host::shiori3::ABSENT_REFERENCE;
 ///
 /// `window`（[`ParentMessageWindow`]・`!Send`）と `helper`（[`HelperLifecycle`]）を所有し、
 /// アクタースレッド終了時（Close／全 Sender drop）の drop で RAII teardown される。
-/// # 文字コードの交渉状態（areka-P0-charset-canon 要件 5.1）
+/// # 文字コードの交渉状態
 /// [`CharsetNegotiator`] は**接続の持ち物**である。[`Shiori3Client`] は 1 往復ごとに作り捨て
 /// られるため、そちらに置くと採用結果がイベントをまたいで保たれない。接続 1 つ（＝SHIORI の
 /// load から unload まで）につき交渉状態は 1 つで、応答待ちのイベント（GET）と片道のイベント
@@ -53,10 +53,10 @@ pub struct ShioriConnection {
     pub window: ParentMessageWindow,
     /// helper ライフサイクル監視の器（正規 clean shutdown／死活監視を担う）。
     pub helper: HelperLifecycle,
-    /// 文字コードの交渉状態（接続と同寿命・GET/NOTIFY 共通・要件 5.1）。
+    /// 文字コードの交渉状態（接続と同寿命・GET/NOTIFY 共通）。
     pub negotiator: CharsetNegotiator,
     /// 読み込みの直後に結線が確かめて決めた SHIORI の版（接続と同寿命・要求のたびに確かめ
-    /// 直さない・shiori2-protocol 要件 2.2）。読み直しは新しい接続を作るので前の版は残らない。
+    /// 直さない）。読み直しは新しい接続を作るので前の版は残らない。
     pub version: ShioriVersion,
 }
 
@@ -67,8 +67,8 @@ pub struct ShioriConnection {
 pub trait ShioriBackend {
     /// 応答を要するイベント（GET）。`Ok(Some)`＝Value・`Ok(None)`＝204・`Err`＝失敗。
     ///
-    /// `status` は `ExecutionStatus::render()` 済みの wire 値（`None`＝`Status` ヘッダ行なし・Req 2.3）。
-    /// 語彙は kanade が所有し、backend は解釈せず host32 へそのまま転記する（DD-IT-1 語彙非漏洩・Req 2.2）。
+    /// `status` は `ExecutionStatus::render()` 済みの wire 値（`None`＝`Status` ヘッダ行なし）。
+    /// 語彙は kanade が所有し、backend は解釈せず host32 へそのまま転記する。
     fn get(
         &mut self,
         id: &str,
@@ -78,14 +78,14 @@ pub trait ShioriBackend {
     /// 片道イベント（NOTIFY）。`Ok(())`＝完了・`Err`＝失敗。
     ///
     /// `status` は GET と同じく render 済みの wire 値（`None`＝ヘッダ行なし）——backend は解釈せず
-    /// host32 へそのまま転記する（DD-IT-1 語彙非漏洩・Req 2.2/2.3）。
+    /// host32 へそのまま転記する。
     fn notify(
         &mut self,
         id: &str,
         references: &[String],
         status: Option<&str>,
     ) -> Result<(), RequestError>;
-    /// ヘッダつきの GET（追加のヘッダを渡し、応答の `SecurityLevel` の生の値を受け取る・要件 2.1・3.1）。
+    /// ヘッダつきの GET（追加のヘッダを渡し、応答の `SecurityLevel` の生の値を受け取る）。
     ///
     /// 既定はヘッダを使わず [`Self::get`] を呼び、応答のレベルは無し（テストの偽物・中身なしの
     /// 受け手は既定のまま今と同じに動く）。ヘッダを線へ載せる受け手だけが上書きする。
@@ -101,7 +101,7 @@ pub trait ShioriBackend {
             security_level: None,
         }))
     }
-    /// ヘッダつきの NOTIFY（要件 2.1）。既定はヘッダを使わず [`Self::notify`] を呼ぶ。
+    /// ヘッダつきの NOTIFY。既定はヘッダを使わず [`Self::notify`] を呼ぶ。
     fn notify_with_headers(
         &mut self,
         id: &str,
@@ -145,11 +145,11 @@ impl ShioriConnection {
     /// 限り資源の印を付ける。版と印をここ 1 か所で決めるので、手ごとに食い違わない。
     fn client(&mut self, id: &str, resource: bool) -> Shiori3Client<'_> {
         // フィールド別借用（窓は共有・交渉状態は可変で、別フィールドゆえ同時に借りられる）。
-        // GET と NOTIFY に同じ交渉状態を渡す——双方のイベントが同じ文字コードで送る（要件 5.1）。
+        // GET と NOTIFY に同じ交渉状態を渡す——双方のイベントが同じ文字コードで送る。
         // 文字コードの規則は結線側が持ち、本層には書かない。
         let client =
             Shiori3Client::new(&self.window, &mut self.negotiator).with_version(self.version);
-        // 資源かどうかは送出の関門と同じ正本の一覧で決める（名前の形では決めない・要件 3.7）。
+        // 資源かどうかは送出の関門と同じ正本の一覧で決める（名前の形では決めない）。
         if resource && is_allowed_resource_id(id) {
             client.for_resource()
         } else {
@@ -185,7 +185,7 @@ impl ShioriBackend for ShioriConnection {
         status: Option<&str>,
         headers: &RequestHeaders<'_>,
     ) -> Result<Option<ValueReply>, RequestError> {
-        // ヘッダを線へ渡し、応答のレベルは解釈せず生のまま返す（判定は kanade・要件 3.5）。
+        // ヘッダを線へ渡し、応答のレベルは解釈せず生のまま返す（判定は kanade）。
         self.client(id, true)
             .get_with_headers(id, references, status, headers)
     }
@@ -233,10 +233,10 @@ impl ShioriBackend for ShioriConnection {
     }
 }
 
-/// [`RequestError`] を区別語彙を保った [`ShioriFailure`] へ**機械的に写像**する純関数（Req 6.1）。
+/// [`RequestError`] を区別語彙を保った [`ShioriFailure`] へ**機械的に写像**する純関数。
 ///
 /// host32 の status 分類（`map_send_error`／`map_get_result`）は再実装せず、戻り値の variant を
-/// そのまま写す（Req 5.3）。詳細文字列は各エラーの [`std::fmt::Display`] を carry する
+/// そのまま写す。詳細文字列は各エラーの [`std::fmt::Display`] を carry する
 /// （host32 型は境界を跨がない——`String` へ落とす）。
 ///
 /// - [`RequestError::Handshake`] → [`ShioriFailure::Handshake`]（接続確立失敗）
@@ -265,15 +265,15 @@ fn headers_of(wire: &OriginWire) -> RequestHeaders<'_> {
 /// 1 件の [`ShioriCall`] を backend へ dispatch し [`ShioriOutcome`] へ写す（本番・テスト共通）。
 ///
 /// GET・NOTIFY とも要求の出どころの規則（[`RequestOrigin::of_event`]）から入れ物を作り、
-/// ヘッダつきのメソッドだけを呼ぶ（要件 2.1〜2.6）。
+/// ヘッダつきのメソッドだけを呼ぶ。
 ///
-/// GET: `Ok(Some)`→`Value`（応答の生のレベルを [`read_response_level`] で読んで載せる・要件
-/// 3.1・3.4）・`Ok(None)`→`NoContent`・`Err`→`Failed(map_error(..))`。
+/// GET: `Ok(Some)`→`Value`（応答の生のレベルを [`read_response_level`] で読んで載せる）
+/// ・`Ok(None)`→`NoContent`・`Err`→`Failed(map_error(..))`。
 /// NOTIFY: `Ok(())`→`Notified`・`Err`→`Failed(map_error(..))`（NOTIFY は Value を運ばない）。
 ///
 /// `status`（[`crate::status::ExecutionStatus`]）は呼出直前に `render()` して wire 値
 /// （`Option<&str>`・`None`＝ヘッダ行なし）へ落とし、そのまま backend へ渡す
-/// （語彙は kanade 所有・Req 2.2/2.3・DD-IT-1）。
+/// （語彙は kanade 所有）。
 fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutcome {
     match call {
         ShioriCall::Get {
@@ -283,7 +283,7 @@ fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutco
         } => {
             let status_wire = status.render();
             let wire = RequestOrigin::of_event(&id).wire();
-            // wire 形（`as_str()`）のみを backend へ渡す——出所カテゴリは境界を跨がない（DD-1）。
+            // wire 形（`as_str()`）のみを backend へ渡す——出所カテゴリは境界を跨がない。
             match backend.get_with_headers(
                 id.as_str(),
                 &references,
@@ -305,7 +305,7 @@ fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutco
         } => {
             let status_wire = status.render();
             let wire = RequestOrigin::of_event(&id).wire();
-            // GET と同じく wire 形のみを渡す（DD-1）。応答は今どおり読まない。
+            // GET と同じく wire 形のみを渡す。応答は今どおり読まない。
             match backend.notify_with_headers(
                 id.as_str(),
                 &references,
@@ -360,7 +360,7 @@ fn report_exit_once(
 /// [`ShioriBackend::on_idle`] を呼び、続けて死活監視を行ってから待ち直す。ログは出さない。
 /// 手空きの処理は待ちの腕の中だけで行い、往復（`get`／`notify`／`unload`）の内側からは呼ばない。
 ///
-/// # 死活監視（設計ディスカッション #2）
+/// # 死活監視
 /// メッセージ到達のたびに冒頭で、また手空きのたびに `backend.status()` を確認する。
 /// `Exited(kind)` を初回観測したら `error!`＋`on_down` へ `ShioriDown` を**一度だけ**送る
 /// （sticky）。unload 成功後（`unloaded` フラグ確定後）は死活報告を発火しない（正規終了は
@@ -384,7 +384,6 @@ fn run_shiori_loop(
         let msg = match rx.recv_timeout(idle_interval) {
             Ok(msg) => msg,
             Err(RecvTimeoutError::Timeout) => {
-                // 手空き: 保守の機会 → 死活監視 → 待ち直す（ログは出さない・往復の外でだけ呼ぶ）。
                 backend.on_idle();
                 report_exit_once(backend.as_mut(), unloaded, &mut down_reported, &on_down);
                 continue;
@@ -467,7 +466,7 @@ fn run_shiori_loop(
 /// 死活報告（`ShioriDown`）より先に kanade が要求を送ることがある（起動の `Boot` が先に届く
 /// ときがそう）。受信端を捨てると、その要求は「通信が切れた」に化けて接続の失敗が消える。
 /// そこで要求には同じ理由の [`ShioriFailure::Handshake`]（＝「接続できなかった」）で答え、
-/// どちらが先に届いても停止通知の種類が変わらないようにする（要件 2.2・2.4）。
+/// どちらが先に届いても停止通知の種類が変わらないようにする。
 /// `Unload` は何も読み込んでいないので `Unloaded` で答える。`Close` か全送信端の drop で終わる。
 fn answer_after_connect_failure(rx: Receiver<ShioriMsg>, reason: &str) {
     while let Ok(msg) = rx.recv() {
@@ -491,16 +490,15 @@ fn answer_after_connect_failure(rx: Receiver<ShioriMsg>, reason: &str) {
 /// のため spawn 前に実行できない）。接続確立に失敗した場合
 /// （`connect` が `Err(reason)`）は [`KanadeMsg::ShioriDown`] を `on_down` へ送って死活報告と
 /// し、`on_down` を手放したうえで、以後の要求に同じ理由の接続の失敗
-/// （[`ShioriFailure::Handshake`]）で答える。`Close` 受領か全送信端の drop で終わる
-/// （Req 5.3/6.1・要件 2.2・2.4）。
+/// （[`ShioriFailure::Handshake`]）で答える。`Close` 受領か全送信端の drop で終わる。
 ///
 /// `on_down`（kanade inbox の送信端）は接続確立成功後も**受信ループの生存期間中保持する**
-/// （死活監視の届け先・Req 3.4）。この保持は kanade→shiori→on_down の Sender 環を作るが、
+/// （死活監視の届け先）。この保持は kanade→shiori→on_down の Sender 環を作るが、
 /// ループは Close 受領または全 `Sender<ShioriMsg>` drop で終了し、その時点で `on_down` は
-/// 自然に drop される（「アクター別の停止経路」マトリクス参照）。
+/// 自然に drop される。
 ///
 /// `connect` は本番では実 [`ShioriConnection`] を返すが、純 x64 の偽装注入シームとして
-/// `Box<dyn ShioriBackend>` へ一般化されている（Req 7.1/7.6）。
+/// `Box<dyn ShioriBackend>` へ一般化されている。
 ///
 /// inbox の送信端（[`Sender<ShioriMsg>`]）・[`ActorHandle`]・[`ShioriProbe`] を返す。
 /// [`ShioriProbe`] にはアクターが今の呼び出しを書き、接続の成功後に backend の解く手
@@ -517,7 +515,7 @@ pub fn spawn_shiori_actor(
             Ok(backend) => {
                 // 外から待ちを解く手は接続の成功後に一度だけ据える（受信ループより前）。
                 actor_probe.install_unblock(backend.unblock_handle());
-                // on_down は受信ループの生存期間中保持する（死活報告の届け先・Req 3.4）。
+                // on_down は受信ループの生存期間中保持する（死活報告の届け先）。
                 run_shiori_loop(rx, backend, on_down, actor_probe, IDLE_INTERVAL);
             }
             Err(reason) => {

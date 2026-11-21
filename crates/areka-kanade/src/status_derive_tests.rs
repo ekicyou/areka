@@ -1,8 +1,8 @@
-//! 導出表の全組み合わせを決定論で固定する兄弟テスト（要件 8.1）。
+//! 導出表の全組み合わせを決定論で固定する兄弟テスト。
 //!
 //! talk × choice × nouserbreak × online × balloon{なし・1 キャラクター・2 キャラクター} の
 //! 48 通りについて、期待する `render()` の値（または行なし＝`None`）を**表に逐語で**持つ。
-//! 期待値は導出のロジックで計算せず、正典の語彙順（要件 1.1）どおりの文字列を手で書く。
+//! 期待値は導出のロジックで計算せず、正典の語彙順どおりの文字列を手で書く。
 
 use super::*;
 
@@ -91,7 +91,7 @@ fn render(snapshot: &ExecutionSnapshot) -> Option<String> {
     ExecutionStatus::derive(snapshot).render()
 }
 
-/// 要件 8.1/1.1/1.2/6.1: 48 通りすべてで `render()` が表の逐語の値と一致する
+/// 48 通りすべてで `render()` が表の逐語の値と一致する
 /// （正典順の連結・何も無ければ行なし・出どころの無い 5 状態は決して現れない）。
 #[test]
 fn derive_matches_the_verbatim_table_for_all_48_combinations() {
@@ -125,7 +125,7 @@ fn table_covers_each_input_exactly_once() {
     assert_eq!(inputs.len(), 48);
 }
 
-/// 要件 4.3/1.3: 逆順に与えた組は昇順の `balloon(0=2/1=0)` になり、同じキャラクターの
+/// 逆順に与えた組は昇順の `balloon(0=2/1=0)` になり、同じキャラクターの
 /// 重複は先頭だけが残る（`balloon` は 1 つだけ）。
 #[test]
 fn reversed_and_duplicated_bindings_render_ascending_once() {

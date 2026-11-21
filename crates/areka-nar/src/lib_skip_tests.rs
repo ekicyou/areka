@@ -1,11 +1,11 @@
 //! 取り出し元の無い同梱のバルーンを飛ばす振る舞いを、公開の入口（`open` → `install`）で
-//! 通して確かめる兄弟テスト（areka-P0-emily-ghost-verification 要件 1.1〜1.6・1.8・7.1・7.2）。
+//! 通して確かめる兄弟テスト。
 //!
-//! 要件 7.1 の 6 場面（無印・番号付き・2 つのうち片方・フォルダのエントリだけ・シェルの
+//! 6 場面（無印・番号付き・2 つのうち片方・フォルダのエントリだけ・シェルの
 //! `.nar`・全部在る）ごとに、入った物・`<ゴースト>/balloon/<置き場>/` が無いこと・成功・
 //! 飛ばした列の中身・警告の記録の件数と欄を判定する。あわせて、`*.source.directory` を
-//! 書かない同梱の鍵と値（要件 1.4）と、飛ばした同梱の置き場に先に在った中身が変わらない
-//! こと（要件 1.6）を見る。
+//! 書かない同梱の鍵と値と、飛ばした同梱の置き場に先に在った中身が変わらない
+//! ことを見る。
 //!
 //! 記録は `log-capture-kit` で捕まえる。根と書庫の置き場は [`WorkDir`]（ワークツリーの
 //! `target\` の下）が配る。
@@ -16,7 +16,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::{NarBuilder, WorkDir, install_txt};
 use std::fs;
 
-/// 飛ばした 1 件ごとに出る警告の文言（設計「書庫の入口の記録」の逐語）。
+/// 飛ばした 1 件ごとに出る警告の文言。
 const SKIPPED: &str =
     "[areka_nar] companion balloon skipped: its source folder is not in the archive";
 /// 成功の記録の文言。
@@ -150,7 +150,7 @@ fn body_files() -> Vec<String> {
     ]
 }
 
-// ---- 6 場面（要件 7.1） ----
+// ---- 6 場面 ----
 
 /// ⑴ 無印の同梱の取り出し元が無い → ゴーストだけが入り、バルーンは置かれず、警告 1 件。
 #[test]
@@ -205,7 +205,7 @@ fn a_numbered_companion_without_its_source_is_skipped_and_warned() {
     run.assert_skip_records(&expected);
 }
 
-/// ⑶ 同梱が 2 つで片方だけ取り出し元が無い → 在るほうは今どおり置かれ、警告 1 件。
+/// ⑶ 同梱が 2 つで片方だけ取り出し元が無い → 在るほうは置かれ、警告 1 件。
 #[test]
 fn only_the_companion_without_its_source_is_skipped() {
     let (shelf, work) = (WorkDir::new().unwrap(), WorkDir::new().unwrap());
@@ -243,7 +243,7 @@ fn only_the_companion_without_its_source_is_skipped() {
     run.assert_skip_records(&expected);
 }
 
-/// ⑷ 取り出し元のフォルダのエントリだけが在り配下が空 → 無いのと同じ扱い（要件 1.2）。
+/// ⑷ 取り出し元のフォルダのエントリだけが在り配下が空 → 無いのと同じ扱い。
 #[test]
 fn a_source_with_only_its_folder_entry_is_skipped_like_an_absent_one() {
     let (shelf, work) = (WorkDir::new().unwrap(), WorkDir::new().unwrap());
@@ -309,7 +309,7 @@ fn a_shell_with_a_missing_companion_source_installs_the_shell() {
     run.assert_skip_records(&expected);
 }
 
-/// ⑹ 取り出し元が全部在る → 置き方・結果・記録が今と同じ（飛ばした列は空・警告 0 件・
+/// ⑹ 取り出し元が全部在る → 置き方・結果・記録が飛ばさない場合のとおり（飛ばした列は空・警告 0 件・
 /// 成功の記録の飛ばした件数 0）。
 #[test]
 fn companions_with_all_sources_install_as_before_with_no_skip_record() {
@@ -349,7 +349,7 @@ fn companions_with_all_sources_install_as_before_with_no_skip_record() {
 // ---- あわせて見る 2 つ ----
 
 /// `*.source.directory` を書かない同梱で取り出し元が無い → 鍵は `balloon.directory`・
-/// 値は置き場の名前（要件 1.4）。
+/// 値は置き場の名前。
 #[test]
 fn without_a_source_key_the_directory_key_and_name_are_recorded() {
     let (shelf, work) = (WorkDir::new().unwrap(), WorkDir::new().unwrap());
@@ -363,7 +363,7 @@ fn without_a_source_key_the_directory_key_and_name_are_recorded() {
     run.assert_skip_records(&expected);
 }
 
-/// 飛ばした同梱の置き場に先に在った中身は、入れた後も 1 バイトも変わらない（要件 1.6）。
+/// 飛ばした同梱の置き場に先に在った中身は、入れた後も 1 バイトも変わらない。
 #[test]
 fn an_existing_folder_at_a_skipped_home_is_left_byte_identical() {
     let (shelf, work) = (WorkDir::new().unwrap(), WorkDir::new().unwrap());

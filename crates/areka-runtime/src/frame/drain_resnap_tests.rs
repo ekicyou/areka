@@ -1,8 +1,7 @@
-//! drain フェーズ（[`drain_present_commands`]）の檻（areka-P0-pasta-in-windows-verification
-//! task 5.6・要件 6.1）。
+//! drain フェーズ（[`drain_present_commands`]）の檻。
 //!
-//! rerun2（2026-10-23）で、送り手（seriko の ShowSurface・動く WebP で毎秒約 14 件）が送り続ける
-//! あいだ drain が尽きず、1 フレームが終わらずに areka が答えなくなった。その再発を止める。
+//! 送り手（seriko の ShowSurface・動く WebP で毎秒約 14 件）が送り続けるあいだ drain が尽きず、
+//! 1 フレームが終わらずに areka が答えなくなる不具合の再発を止める。
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -76,7 +75,7 @@ fn record(cmd: &PresentCommand) -> Applied {
 
 /// ① 送り手が適用より速く送り続けても、drain は戻る（フレームが必ず終わる）。
 ///
-/// 旧実装（`try_iter` を回しながら適用）は、適用 1 回が送りの間隔より長いと尽きずに戻らない。
+/// `try_iter` を回しながら適用する実装は、適用 1 回が送りの間隔より長いと尽きずに戻らない。
 /// 走者を別スレッドに置き、有限の待ちで「戻らない」を失敗として観測する（テストを固めない）。
 #[test]
 fn drain_returns_while_the_sender_keeps_sending() {

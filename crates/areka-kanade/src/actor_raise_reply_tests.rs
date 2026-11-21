@@ -1,4 +1,4 @@
-//! 汎用の通知の入口の返事（[`RaiseOutcome`]）の檻（areka-P0-ghost-install 要件 2.6・2.7・11.5・12.6）。
+//! 汎用の通知の入口の返事（[`RaiseOutcome`]）の檻。
 //!
 //! 本物の殻（[`spawn_kanade_with_stop_sink`]）を偽の shiori のスレッドにつなぎ、`KanadeMsg::RaiseEvent`
 //! に付けた返信端へ 5 値が 1 つずつ返ることを見る: 台本・空白だけの台本・空の台本・204・NOTIFY の完了・
@@ -147,7 +147,6 @@ fn script_reply_is_script_after_the_talk_is_started() {
     boot_to_steady(&rig);
 
     assert_eq!(raise(&rig, RAISED, ShioriMethod::Get), RaiseOutcome::Script);
-    // 台詞の再生の前に OnTranslate を 1 回送る（偽の shiori は既定の 204）。
     assert_eq!(
         drain(&rig.calls),
         vec![format!("GET {RAISED}"), "GET OnTranslate".to_string()]
@@ -279,7 +278,6 @@ fn close_talk_wait_is_not_steady_and_nothing_is_sent() {
         raise(&rig, RAISED, ShioriMethod::Get),
         RaiseOutcome::NotSteady
     );
-    // 終了の挨拶は送られて再生が始まり、依頼のイベントは送られていない。
     assert_eq!(
         drain(&rig.calls),
         vec!["GET OnClose".to_string(), "GET OnTranslate".to_string()]

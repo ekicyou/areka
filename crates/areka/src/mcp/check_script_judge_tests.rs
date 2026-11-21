@@ -1,4 +1,4 @@
-//! 判断の決定論テスト（要件 3.2〜3.4・3.8・3.10・3.12・3.13）。事実は手書きの表で与え、
+//! 判断の決定論テスト。事実は手書きの表で与え、
 //! 台本は再生と同じ `parse_noted` で読む。種類の表（`doc/ssp-mcp/areka-tools.md` ⑶）の 17 行それぞれに「出る台本」「出ない台本」を置く。
 
 use std::collections::BTreeMap;
@@ -62,7 +62,7 @@ fn check(script: &str) -> Vec<Diagnostic> {
     check_with(script, Some(&ghost()))
 }
 
-/// タグ 1 つの台本が、そのタグ全体を指す診断をちょうど 1 件返す（要件 3.13）。
+/// タグ 1 つの台本が、そのタグ全体を指す診断をちょうど 1 件返す。
 fn fires(script: &str, kind: Kind, message: &str) {
     let got = check(script);
     assert_eq!(got.len(), 1, "{script}: {got:?}");
@@ -111,7 +111,7 @@ fn row05_bang_first_argument_nobody_handles() {
     silent(r"\![set,zorder,0,1]");
 }
 
-/// 読み直しの 7 綴りは表に担当があり、`makoto`・`aigraph` は誰も拾わない（areka-P0-mcp-reload 要件 11.3）。
+/// 読み直しの 7 綴りは表に担当があり、`makoto`・`aigraph` は誰も拾わない。
 #[test]
 fn row05_reload_spellings_are_known_but_makoto_and_aigraph_are_not() {
     for script in [
@@ -137,15 +137,13 @@ fn row05_reload_spellings_are_known_but_makoto_and_aigraph_are_not() {
     );
 }
 
-/// 常に手前の指令の 3 つは表に担当があり、`unknown_tag`・`unknown_command` を出さない
-/// （stay-on-top-directives 要件 1.8）。
+/// 常に手前の指令の 3 つは表に担当があり、`unknown_tag`・`unknown_command` を出さない。
 #[test]
 fn row05_window_state_directives_are_known() {
     silent(r"\![set,windowstate,stayontop]\![set,windowstate,!stayontop]\v");
 }
 
-/// プロパティの読みは表に担当があり、受け手の無い命令として報告しない
-/// （shell-scale-linkage 要件 1.8）。
+/// プロパティの読みは表に担当があり、受け手の無い命令として報告しない。
 #[test]
 fn row05_property_read_is_known() {
     silent(r"\![get,property,OnX,currentghost.scope(0).scaling]");
@@ -201,7 +199,7 @@ fn row11_unreadable_choice_timeout() {
     silent(r"\![set,choicetimeout,5000]");
 }
 
-/// 印 `\![*]`・`%*` は「無視した」とも「知らない命令」とも言わない（script-small-tags 要件 4.4・6.5）。
+/// 印 `\![*]`・`%*` は「無視した」とも「知らない命令」とも言わない。
 #[test]
 fn markers_are_neither_ignored_nor_unknown() {
     for script in [
@@ -232,7 +230,7 @@ fn row13_unknown_or_missing_font_key() {
     silent(r"\f[bold,abc]");
 }
 
-// ---- アンカー `\_a`（anchor-tag-canon 要件 6.1〜6.3）: 表の 14〜16 行目 ----
+// ---- アンカー `\_a`: 表の 14〜16 行目 ----
 
 /// 種類・位置・綴り・文言の並び（アンカーの診断の見比べ用）。
 fn rows(script: &str) -> Vec<(Kind, usize, usize, String, &'static str)> {
@@ -276,7 +274,7 @@ fn row16_close_without_an_open_anchor() {
     silent(r"\_a[x]あ\_a");
 }
 
-// ---- 文字の番号の埋め込み（script-small-tags 要件 6.1・6.2・6.6）: 表の 17 行目 ----
+// ---- 文字の番号の埋め込み: 表の 17 行目 ----
 
 /// 捨てる番号（0・制御の文字・片割れ・範囲の外）と読めない番号は、埋め込みの綴りを「読めない引数」で指す。
 #[test]
@@ -302,7 +300,7 @@ fn row17_dropped_character_number() {
 }
 
 /// 出せる番号は本文の字になるので何も診ない。SSP に合わせて受け付ける綴り（`0X`・前後の空白・
-/// 2 つ目の引数）と `\_m` の ASCII の外・組になるサロゲートも誤りでない（要件 6.1・6.6）。
+/// 2 つ目の引数）と `\_m` の ASCII の外・組になるサロゲートも誤りでない。
 #[test]
 fn printable_character_numbers_are_not_reported() {
     for script in [
@@ -438,7 +436,7 @@ fn positions_are_counted_in_characters() {
     );
 }
 
-/// 印の直後の `\q` は畳まれないので、引数の足りない `\q` の診断は `\q` だけを指す（要件 4.1・4.4）。
+/// 印の直後の `\q` は畳まれないので、引数の足りない `\q` の診断は `\q` だけを指す。
 #[test]
 fn marker_before_a_short_choice_leaves_only_the_choice_diagnostic() {
     assert_eq!(

@@ -1,4 +1,4 @@
-//! 確定と逆順の戻し（要件 2.3・5.2・5.4〜5.7・9.4）。
+//! 確定と逆順の戻し。
 //! 注入（保持・削除を拒む仕掛け・ジャンクション）は `commit` を呼ぶ前に仕込む。
 
 use super::*;
@@ -82,7 +82,7 @@ fn places_files_in_order_and_retires_existing_leaving_others_alone() {
     assert_eq!(fs::read(fx.area.retired("a.txt")).unwrap(), b"old");
 }
 
-/// ⑴ 宛先の保持で退避が失敗 → 木がバイト単位で同一（9.4・5.7）。
+/// ⑴ 宛先の保持で退避が失敗 → 木がバイト単位で同一。
 #[test]
 fn held_destination_fails_retire_and_tree_is_identical() {
     let fx = fixture();
@@ -104,7 +104,7 @@ fn held_destination_fails_retire_and_tree_is_identical() {
     assert_eq!(visible(&fx.target), before);
 }
 
-/// ⑵ 無い親の下に置いた 1 件目が 2 件目の失敗で親ごと消える（5.4）。
+/// ⑵ 無い親の下に置いた 1 件目が 2 件目の失敗で親ごと消える。
 #[test]
 fn second_failure_removes_first_and_the_parents_it_created() {
     let fx = fixture();
@@ -176,7 +176,7 @@ fn second_failure_keeps_parents_that_already_existed() {
     }
 }
 
-/// 削除も復元も失敗したファイルは、戻せなかった一覧に 1 件だけ載る（5.5）。
+/// 削除も復元も失敗したファイルは、戻せなかった一覧に 1 件だけ載る。
 #[test]
 fn file_whose_remove_and_restore_both_fail_is_stuck_once() {
     let fx = fixture();
@@ -212,7 +212,7 @@ fn file_whose_remove_and_restore_both_fail_is_stuck_once() {
     drop(pinned);
 }
 
-/// ⑶ 削除を拒む注入で戻せなかった一覧が返る。戻しは途中の失敗で止まらない（5.5）。
+/// ⑶ 削除を拒む注入で戻せなかった一覧が返る。戻しは途中の失敗で止まらない。
 #[test]
 fn refused_removal_reports_stuck_and_keeps_unwinding() {
     let fx = fixture();
@@ -252,7 +252,7 @@ fn refused_removal_reports_stuck_and_keeps_unwinding() {
 }
 
 /// 作った親の下に戻せないファイルが残ると、親は空でないので消さず、戻せなかった一覧には
-/// ファイルだけが載る（親を二重に数えない・5.5）。
+/// ファイルだけが載る（親を二重に数えない）。
 #[test]
 fn stuck_file_keeps_its_created_parent_without_listing_it() {
     let fx = fixture();
@@ -280,7 +280,7 @@ fn stuck_file_keeps_its_created_parent_without_listing_it() {
     drop(pinned);
 }
 
-/// ⑷ ジャンクションに置き換えた親で外側に何も作られず 1 件目が戻る（5.6）。
+/// ⑷ ジャンクションに置き換えた親で外側に何も作られず 1 件目が戻る。
 #[test]
 fn junctioned_parent_escapes_creates_nothing_outside_and_restores_first() {
     let fx = fixture();
@@ -312,7 +312,7 @@ fn junctioned_parent_escapes_creates_nothing_outside_and_restores_first() {
     assert_eq!(visible(&fx.target), before, "1 件目は戻された");
 }
 
-/// ⑷ の後に戻せなかった物が残る → 全部戻せた `Escapes` でなく `RollbackFailed`（5.5・5.6）。
+/// ⑷ の後に戻せなかった物が残る → 全部戻せた `Escapes` でなく `RollbackFailed`。
 #[test]
 fn an_escape_after_a_stuck_file_is_rollback_failed() {
     let fx = fixture();

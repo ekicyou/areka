@@ -23,9 +23,9 @@ fn not_searched(key: &str) -> ManifestWarning {
     }
 }
 
-/// 欠番で打ち切る。`balloon0` と `balloon2` だけなら入るのは `balloon0` だけ（要件 1.3）。
+/// 欠番で打ち切る。`balloon0` と `balloon2` だけなら入るのは `balloon0` だけ。
 ///
-/// 打ち切りの後ろの番号は、鍵ごとに 1 件「探索で読まなかった」を記録する（要件 6.3・6.5）。
+/// 打ち切りの後ろの番号は、鍵ごとに 1 件「探索で読まなかった」を記録する。
 #[test]
 fn stops_the_search_at_the_first_missing_number() {
     let manifest = parsed_ghost(&[
@@ -43,7 +43,7 @@ fn stops_the_search_at_the_first_missing_number() {
     );
 }
 
-/// 無印が無くても打ち切らず、`balloon0` から続ける（要件 1.4・6.8）。
+/// 無印が無くても打ち切らず、`balloon0` から続ける。
 #[test]
 fn continues_from_balloon0_when_the_plain_balloon_is_absent() {
     let manifest = parsed_ghost(&["balloon1.directory,one", "balloon0.directory,zero"]);
@@ -51,7 +51,7 @@ fn continues_from_balloon0_when_the_plain_balloon_is_absent() {
     assert_eq!(manifest.warnings, vec![]);
 }
 
-/// 無印と `balloon0` は別のバルーンとして両方入る（要件 1.5）。
+/// 無印と `balloon0` は別のバルーンとして両方入る。
 #[test]
 fn reads_the_plain_balloon_and_balloon0_as_two_companions() {
     let manifest = parsed_ghost(&["balloon0.directory,zero", "balloon.directory,plain"]);
@@ -67,7 +67,7 @@ fn reads_the_plain_balloon_and_balloon0_as_two_companions() {
     assert_eq!(manifest.warnings, vec![]);
 }
 
-/// 並びは数の順。`balloon2` は `balloon10` より前に来る（要件 1.1・1.7）。
+/// 並びは数の順。`balloon2` は `balloon10` より前に来る。
 ///
 /// 鍵の名前順なら `balloon10` が先に来る。入力の行も名前順と逆の向きに書いておく。
 #[test]
@@ -86,7 +86,7 @@ fn orders_balloon2_before_balloon10() {
     assert_eq!(manifest.warnings, vec![]);
 }
 
-/// 先頭に 0 を付けた番号は数えない（要件 1.6・6.3）。
+/// 先頭に 0 を付けた番号は数えない。
 ///
 /// `balloon01` は `balloon1` の綴りではないので、`balloon0` の次で打ち切られる。
 /// `balloon00` だけなら `balloon0` が無いので 1 件も入らない。どちらも
@@ -102,9 +102,9 @@ fn does_not_count_a_number_written_with_leading_zeros() {
     assert_eq!(manifest.warnings, vec![not_searched("balloon00.directory")]);
 }
 
-/// `*.directory` の行が無い番号は見つからなかった扱いで、そこで打ち切る（要件 1.9・6.4）。
+/// `*.directory` の行が無い番号は見つからなかった扱いで、そこで打ち切る。
 ///
-/// 断片（`balloon1.source.directory` だけ）は今どおり知らない鍵として記録する。
+/// 断片（`balloon1.source.directory` だけ）は知らない鍵として記録する。
 /// 打ち切りの後ろの `balloon2.directory` は「探索で読まなかった」になる。
 #[test]
 fn a_numbered_fragment_without_its_directory_stops_the_search() {
@@ -125,7 +125,7 @@ fn a_numbered_fragment_without_its_directory_stops_the_search() {
     );
 }
 
-/// 無印の断片では打ち切らず、`balloon0` を読む（要件 1.4・1.9・6.4）。
+/// 無印の断片では打ち切らず、`balloon0` を読む。
 #[test]
 fn a_plain_fragment_without_its_directory_does_not_stop_the_search() {
     let manifest = parsed_ghost(&[
@@ -141,7 +141,7 @@ fn a_plain_fragment_without_its_directory_does_not_stop_the_search() {
     );
 }
 
-/// 打ち切りの後ろの鍵は値を見ない。壊れた値でも断らずに記録して続ける（要件 6.3）。
+/// 打ち切りの後ろの鍵は値を見ない。壊れた値でも断らずに記録して続ける。
 #[test]
 fn a_broken_value_after_the_search_stops_is_recorded_not_refused() {
     let manifest = parsed_ghost(&[
@@ -185,7 +185,7 @@ fn invalid_source(written: &str) -> RefuseReason {
     }
 }
 
-/// `\` と `/` のどちらで区切っても `/` 区切りの同じ値になり、記録は出ない（要件 2.1・6.2）。
+/// `\` と `/` のどちらで区切っても `/` 区切りの同じ値になり、記録は出ない。
 #[test]
 fn reads_a_source_directory_split_by_either_separator() {
     for written in ["extra\\bal1", "extra/bal1"] {
@@ -198,7 +198,7 @@ fn reads_a_source_directory_split_by_either_separator() {
     }
 }
 
-/// `..` と空の段を取り除き、鍵ごとに 1 件だけ記録する（要件 3.1〜3.3・6.1）。
+/// `..` と空の段を取り除き、鍵ごとに 1 件だけ記録する。
 ///
 /// `..` は手前の段を打ち消さない。`extra/../bal1` は `bal1` ではなく `extra/bal1`。
 #[test]
@@ -226,7 +226,7 @@ fn removes_dot_dot_and_empty_segments_and_records_it_once() {
     }
 }
 
-/// 同梱ごとに探索の順で、取り除きの記録 → マスクの記録の順に並ぶ（要件 6.1・6.5）。
+/// 同梱ごとに探索の順で、取り除きの記録 → マスクの記録の順に並ぶ。
 #[test]
 fn records_the_removal_per_companion_before_its_mask() {
     let manifest = parsed_ghost(&[
@@ -264,7 +264,7 @@ fn records_the_removal_per_companion_before_its_mask() {
     );
 }
 
-/// 取り除いた後に段が 1 つも残らなければ、書かれていた値で断る（要件 3.4）。
+/// 取り除いた後に段が 1 つも残らなければ、書かれていた値で断る。
 #[test]
 fn refuses_a_source_directory_with_no_segment_left() {
     for written in ["..", "/", "../..", "\\..\\"] {
@@ -276,7 +276,7 @@ fn refuses_a_source_directory_with_no_segment_left() {
     }
 }
 
-/// 取り除いた後の各段にも 1 階層の名前の検査を掛け、書かれていた値で断る（要件 5.3・5.4）。
+/// 取り除いた後の各段にも 1 階層の名前の検査を掛け、書かれていた値で断る。
 #[test]
 fn refuses_a_source_directory_whose_remaining_segment_is_not_a_one_level_name() {
     for written in [
@@ -296,7 +296,7 @@ fn refuses_a_source_directory_whose_remaining_segment_is_not_a_one_level_name() 
     }
 }
 
-/// 取り除いた後の全体の長さを測る。ちょうど 200 単位は通り、201 単位は断る（要件 5.3・5.4）。
+/// 取り除いた後の全体の長さを測る。ちょうど 200 単位は通り、201 単位は断る。
 ///
 /// 書かれていた値は `../` の分だけ長いので、取り除く前に測ると 200 単位でも断ってしまう。
 #[test]
@@ -310,8 +310,8 @@ fn measures_the_length_of_the_source_directory_after_removal() {
     assert_eq!(refused_source(&over), invalid_source(&over));
 }
 
-/// 同梱の `*.directory` は今どおり 1 階層の名前でなければ断る。空の名前も 1 階層の名前では
-/// ない（要件 3.9・4.1・4.2・5.1・5.2）。
+/// 同梱の `*.directory` は 1 階層の名前でなければ断る。空の名前も 1 階層の名前では
+/// ない。
 #[test]
 fn still_refuses_a_separator_in_the_companion_directory() {
     for written in ["extra\\bal1", "../escape", ""] {
@@ -328,7 +328,7 @@ fn still_refuses_a_separator_in_the_companion_directory() {
 
 // ---- 書かれていた値（`source_written`） ----
 
-/// `*.source.directory` が書かれていれば、その値をそのまま持つ（設計 `Companion.source_written`）。
+/// `*.source.directory` が書かれていれば、その値をそのまま持つ。
 #[test]
 fn keeps_the_written_source_directory_value() {
     let manifest = read_source("extra\\bal1");

@@ -1,7 +1,7 @@
-//! 段の駆動器（design D6）の受け入れ確認（areka-P0-emo2-conformance-e2e・R2.10・R3.2）。
+//! 段の駆動器の受け入れ確認。
 //!
-//! `spine_conformance_support.rs` は 1 ファイル 1,000 行の分量規律（areka-P0-emo2-conformance-e2e の R2.11・
-//! `.kiro/steering/structure.md`）に収まらないため、**主題単位に分けて接続する**——駆動器は
+//! `spine_conformance_support.rs` は 1 ファイル 1,000 行の分量規律に収まらないため、
+//! **主題単位に分けて接続する**——駆動器は
 //! 支援層に残し、駆動器を縛る檻と進行状態の記録の檻を本ファイルへ分けた（進行状態の記録の取り出し口の本体は `areka-runtime` の `spine`）。
 //! 檻は支援層の子として置く。
 //!
@@ -38,7 +38,7 @@ fn injection_kind(injection: &Injection) -> &'static str {
     }
 }
 
-// 段の駆動器の受け入れ確認（areka-P0-emo2-conformance-e2e の R2.10・R3.2）
+// 段の駆動器の受け入れ確認
 // ===========================================================================
 
 /// 檻用の段宣言を組む（区間の逐語は `spine_conformance_script.rs` の領分ゆえ、檻は自前で宣言する）。
@@ -85,7 +85,7 @@ impl FakeStageSink {
     }
 
     /// 目印を持たない投函先。`［進みは不明］` の形そのものを確かめる檻だけが使う（目印を持つと
-    /// 打ち切りが `［止まった］` になり、確かめたい形を踏めない・areka-test-binary-stability 要件 7.3 の例外・`load-repro.md` の ⑵）。
+    /// 打ち切りが `［止まった］` になり、確かめたい形を踏めない・`load-repro.md` の ⑵）。
     fn silent_unmarked() -> Self {
         FakeStageSink {
             injections: None,
@@ -138,7 +138,7 @@ impl StageSink for FakeStageSink {
     }
 }
 
-/// 完了条件が成立しないまま有界時間が尽きたら、**段名を名指しした失敗を呼び手へ返す**（areka-P0-emo2-conformance-e2e の R1.6）。
+/// 完了条件が成立しないまま有界時間が尽きたら、**段名を名指しした失敗を呼び手へ返す**。
 ///
 /// 檻に入れる判断分岐:
 /// - **素通りさせないこと**: 尽きた結果を「観測なし」の成功として返さない。`Ok` で返ると、後段の
@@ -199,7 +199,7 @@ fn stage_driver_returns_named_timeout_instead_of_silent_success() {
     );
 }
 
-/// 注入時刻が段の上限に達したら**以後は注入せず観測だけを待つ**（areka-P0-emo2-conformance-e2e の design D6 の不変条件）。
+/// 注入時刻が段の上限に達したら**以後は注入せず観測だけを待つ**。
 ///
 /// 檻に入れる判断分岐:
 /// - **頭打ちで注入が止まること**: 投函の時刻列が上限の手前で終わる。止まらないと注入時刻が観測を
@@ -246,7 +246,7 @@ fn stage_driver_stops_injecting_at_the_limit_and_keeps_observing() {
     );
 }
 
-/// 注入時刻は走行を通じて単調増加し、各段の上限を超えない（areka-P0-emo2-conformance-e2e の design D6 の不変条件）。
+/// 注入時刻は走行を通じて単調増加し、各段の上限を超えない。
 ///
 /// 檻に入れる判断分岐: ⑴ 2 段ぶんの注入時刻を 1 本に並べて非減少である ⑵ 各段の幅は刻み
 /// （1,000ms）の整数倍ではない（1,500ms）ので、上限で止めていなければ注入時刻が段の外へ出て次段の
@@ -405,7 +405,7 @@ fn stage_driver_refuses_a_plan_that_cannot_fit_in_the_stage_interval() {
     assert!(sink.injected.is_empty(), "断る前に注入してしまっている");
 }
 
-/// 採取時の注入時刻が段の宣言区間の外なら、**製品の退行と区別できる形**で失敗する（areka-P0-emo2-conformance-e2e の design D3）。
+/// 採取時の注入時刻が段の宣言区間の外なら、**製品の退行と区別できる形**で失敗する。
 ///
 /// 檻に入れる判断分岐: ⑴ 区間が逆転した段宣言（下限 > 上限）で駆動すると最初の採取で検査が落ちる
 /// ——落ちなければ採取が黙って続き、後段の段名の食い違いとして**製品の退行に化ける** ⑵ 失敗が
@@ -446,7 +446,7 @@ fn stage_driver_self_check_names_a_collection_outside_the_declared_interval() {
     );
 }
 
-/// 投函先が既に閉じていたことを握り潰さず、完了条件と成果の両方へ渡す（areka-P0-emo2-conformance-e2e の design D1 の終了段）。
+/// 投函先が既に閉じていたことを握り潰さず、完了条件と成果の両方へ渡す。
 /// 檻に入れる判断分岐: 終了段の完了条件は kanade の自己終了の観測を含む——投函の `Err` を捨てると
 /// その観測点が消え、代わりに panic させると段名が消える。どちらでもない形で運ぶ。
 #[test]
@@ -478,15 +478,15 @@ fn stage_driver_reports_a_closed_inbox_without_swallowing_or_panicking() {
     assert_eq!(sink.injected, vec![("close-request", 1_000)]);
 }
 
-/// 毎秒の変化通知は **kanade の送信端へ直接**投函され、待ちの繰り返しは 1 件も増やさない（areka-P0-emo2-conformance-e2e の R3.2）。
+/// 毎秒の変化通知は **kanade の送信端へ直接**投函され、待ちの繰り返しは 1 件も増やさない。
 ///
 /// 檻に入れる判断分岐:
 /// - **投函先が kanade であり本数が 1 対 1 であること**: kanade Tick を 1 本投函すると
 ///   `OnSecondChange` がちょうど 1 件現れる（`schedule/steady.rs`）。dispatcher 側へ投げて
 ///   いたら 0 件のままである（`spine.rs` の標準台本が `OnSecondChange` を持たないのはこのため）。
 /// - **待ちが増やさないこと**: 完了条件が成立しない段を有界待ち切れまで回しても件数が 1 のまま
-///   ＝繰り返す注入（再生側）が SHIORI 呼出を 1 件も起こしていない。交信の列は等値照合ゆえ
-///   （areka-P0-emo2-conformance-e2e の R2.3）、待ちの最中に 1 本でも増えると期待列が満たせなくなる。
+///   ＝繰り返す注入（再生側）が SHIORI 呼出を 1 件も起こしていない。交信の列は等値照合ゆえ、
+///   待ちの最中に 1 本でも増えると期待列が満たせなくなる。
 #[test]
 fn kanade_tick_raises_one_second_change_where_the_waiting_injection_raises_none() {
     let (backend, handle) = ScriptedShioriBackend::builder()
@@ -604,7 +604,7 @@ pub(super) fn second_change_calls(handle: &ScriptedShioriHandle) -> usize {
 }
 
 // ===========================================================================
-// 据え置きの門の受け入れ確認（areka-P0-emo2-conformance-e2e の design D6 の危険欄・R2.10）
+// 据え置きの門の受け入れ確認
 // ===========================================================================
 
 /// 据え置きの門だけを検査する投函先（起動を伴わずに駆動器の時刻の進め方を見る）。
@@ -648,7 +648,7 @@ impl StageSink for HoldingSink {
 ///
 /// 檻に入れる判断分岐:
 /// - **据え置き中も投函は続くこと**: 再生側 Tick が止まると、待っている会話は永久に起動しない
-///   （駆動器が注入をやめると再生が凍る＝areka-P0-emo2-conformance-e2e の design D6 の危険欄）。
+///   （駆動器が注入をやめると再生が凍る）。
 /// - **据え置き中は時刻が 1 ミリ秒も動かないこと**: 動くと予算が減り、着地が遅いと上限へ達して
 ///   同じ凍り方をする。実測ではこれが高負荷で装着段・選択確定段を赤くしていた。
 /// - **門が開いたら刻みどおり進むこと**: 据え置きが解けない実装は再生を進める相へ進めない。
@@ -704,10 +704,10 @@ fn stage_driver_holds_the_injection_clock_until_the_landing_is_observed() {
 }
 
 // ===========================================================================
-// 進行状態の記録（第 2 系統）の受け入れ確認（areka-P0-emo2-conformance-e2e の R3.8）
+// 進行状態の記録（第 2 系統）の受け入れ確認
 // ===========================================================================
 
-/// 進行状態の記録が**選択待ちを会話中と区別して**読めることを固定する（areka-P0-emo2-conformance-e2e の R3.8）。
+/// 進行状態の記録が**選択待ちを会話中と区別して**読めることを固定する。
 ///
 /// 檻に入れる判断分岐:
 /// - **付随参照だけでは足りないこと**: 会話中のみと会話中かつ選択待ちの 2 つのスナップショットから
@@ -733,7 +733,7 @@ fn status_ledger_reads_choosing_where_references_cannot() {
         ..ExecutionSnapshot::INACTIVE
     };
 
-    // ── (1) 付随参照は会話中と選択待ちを区別しない（＝記録の第 2 系統が要る理由・areka-P0-emo2-conformance-e2e の R3.8） ──
+    // ── (1) 付随参照は会話中と選択待ちを区別しない（＝記録の第 2 系統が要る理由） ──
     let talking_call = areka_kanade::events::on_second_change(MonotonicMs(0), &talking);
     let choosing_call = areka_kanade::events::on_second_change(MonotonicMs(0), &choosing);
     assert_eq!(

@@ -254,12 +254,12 @@ pub fn apply(
             spec,
             bug,
         } => 'merge: {
-            // 排他テストの机かひとり占めを持つ者は、返してから申し込む（要件 4.7）。断るときは
+            // 排他テストの机かひとり占めを持つ者は、返してから申し込む。断るときは
             // 状態を変えない（参加もさせない）ので、見るのは `join` より先。
             if held(state, id).is_some() {
                 break 'merge Verdict::NotApplied("return the test and sole desks before merge");
             }
-            // 机の申し込みを待つ者もマージの待ち行列に入れない（要件 2.8。2026-10-18 の裁定）。
+            // 机の申し込みを待つ者もマージの待ち行列に入れない。
             if state.requests.iter().any(|request| request.id == *id) {
                 break 'merge Verdict::NotApplied(
                     "a desk request is waiting; merge after it is granted and returned",
@@ -340,7 +340,7 @@ pub fn apply(
                 participant.status = ParticipantStatus::Stopped;
                 participant.since = now;
                 events.push(Event::Stopped { id: id.clone() });
-                // 止まった者は排他テストの机を持ち続けない（要件 6.2）。
+                // 止まった者は排他テストの机を持ち続けない。
                 if state.test.as_ref().is_some_and(|holder| holder.id == *id) {
                     free_test(state, "stopped", now, &mut events);
                 }

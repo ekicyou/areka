@@ -1,4 +1,4 @@
-//! `raise_event` の処理（spec: areka-P0-mcp-kanade-tools）。
+//! `raise_event` の処理。
 //!
 //! 引数を検査し、置き場のゴーストの kanade へ外から頼まれたイベント（`SstpNotify`）を送り、返事を
 //! 後から答える口（`super::later`）で毎フレーム覗く。宛先と文言の部品は `super::sakurascript` のもの。
@@ -15,20 +15,20 @@ use super::sakurascript::{
     NOT_NOW, ScriptTarget, UNAVAILABLE, script_target, since_id_if_strict, strict_note,
 };
 
-/// 台本が返ったときの 1 行目（SSP の実測の文言・要件 2.3）。
+/// 台本が返ったときの 1 行目（SSP の実測の文言）。
 const SCRIPT_RETURNED: &str = "OK:the ghost returned a script and it is being played.";
 
-/// 1 行目と `Script: ` の行の区切り（SSP 2.9.05 の生の本文で確かめた字・要件 2.3）。
+/// 1 行目と `Script: ` の行の区切り（SSP 2.9.05 の生の本文で確かめた字）。
 const SCRIPT_LINE_BREAK: &str = "\r\n";
 
-/// 台本が返らなかったときの付言（要件 2.4）。
+/// 台本が返らなかったときの付言。
 const NO_SCRIPT: &str = "the ghost returned no script.";
 
-/// イベントを 1 通送り、返事は待たずに `later` へ預ける（要件 2.1・2.3〜2.9・3.5・3.6・3.9・5.1）。
+/// イベントを 1 通送り、返事は待たずに `later` へ預ける。
 ///
 /// `ghost` は送り口が無いときの `warn!` の欄にだけ使う。成功の枝では記録を出さない（橋が `debug!` を残す）。
 pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: ReplyTo) {
-    // 検査を破ったものは SHIORI を呼ばない（kanade へ送らない・要件 2.6・2.7）。
+    // 検査を破ったものは SHIORI を呼ばない（kanade へ送らない）。
     if let Err(e) = validate_notify(&args.event, &args.references) {
         reply.send(outcome::ng(match e {
             NotifyArgError::EmptyEvent => "event is empty",
@@ -65,7 +65,7 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
     super::later(world, reply, move |_| match rx.try_recv() {
         Ok(None) => None,
         Ok(Some(SstpNotifyOutcome::Script(script))) => {
-            // strict 真のときだけ 1 行目の末尾に strict の文を足す（SSP の実測・要件 3.10）。
+            // strict 真のときだけ 1 行目の末尾に strict の文を足す（SSP の実測）。
             let note = since_id.map(|n| format!(" {}", strict_note(n)));
             Some(outcome::value(format!(
                 "{SCRIPT_RETURNED}{}{SCRIPT_LINE_BREAK}Script: {script}",

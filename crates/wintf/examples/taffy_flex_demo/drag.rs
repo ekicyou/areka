@@ -1,9 +1,9 @@
 use super::*;
 
-/// FlexContainer の OnPointerPressed ハンドラ（拡張版）
+/// FlexContainer の OnPointerPressed ハンドラ
 ///
 /// **Tunnelフェーズ**: Ctrl+左クリックでキャプチャ（条件付き前処理の例）
-/// **Bubbleフェーズ**: 右クリックで色変更（既存）
+/// **Bubbleフェーズ**: 右クリックで色変更
 ///
 /// # パラメータ
 /// - `sender`: イベント発生元エンティティ（e.OriginalSource相当）
@@ -22,7 +22,6 @@ pub(crate) fn on_container_pressed(
     let wlabel = window_label(world, entity);
     match ev {
         Phase::Tunnel(state) => {
-            // Ctrl+左クリックでイベントを停止
             if state.ctrl_down && state.left_down {
                 info!(
                     "[Tunnel] FlexContainer: Event stopped at Container (Ctrl+Left), sender={:?}, entity={:?}, {}, client=({:.1},{:.1}), local=({:.1},{:.1})",
@@ -35,7 +34,6 @@ pub(crate) fn on_container_pressed(
                     state.local_point.y,
                 );
 
-                // コンテナの色をピンクに変更
                 if let Some(mut brushes) = world.get_mut::<Brushes>(entity) {
                     brushes.foreground = wintf::ecs::widget::brushes::Brush::Solid(D2D1_COLOR_F {
                         r: 1.0,
@@ -55,7 +53,6 @@ pub(crate) fn on_container_pressed(
             false
         }
         Phase::Bubble(state) => {
-            // 右クリック検出
             if state.right_down {
                 info!(
                     "[Bubble] FlexContainer: Right-click detected! sender={:?}, entity={:?}, {}, client=({:.1},{:.1}), local=({:.1},{:.1})",
@@ -68,7 +65,6 @@ pub(crate) fn on_container_pressed(
                     state.local_point.y,
                 );
 
-                // コンテナの色をピンクに変更
                 if let Some(mut brushes) = world.get_mut::<Brushes>(entity) {
                     brushes.foreground = wintf::ecs::widget::brushes::Brush::Solid(D2D1_COLOR_F {
                         r: 1.0,
@@ -119,9 +115,8 @@ pub(crate) fn on_container_drag_start(
 
 /// FlexContainer の OnDrag ハンドラ
 ///
-/// ドラッグ中のログ出力を行う。
-/// ウィンドウ位置の更新はフレームワークのWndProcレベル直接SetWindowPosが
-/// 自動的に処理する（DragConfig.move_window = true）。
+/// ウィンドウの位置はフレームワークが WndProc で直接 SetWindowPos して動かす
+/// （DragConfig.move_window = true）。
 pub(crate) fn on_container_drag(
     world: &mut World,
     sender: Entity,
@@ -140,7 +135,6 @@ pub(crate) fn on_container_drag(
                 .map(|n| n.as_str())
                 .unwrap_or("unknown");
 
-            // start_positionとpositionから移動量を計算（ログ出力用）
             let delta_x = event.position.x - event.start_position.x;
             let delta_y = event.position.y - event.start_position.y;
 

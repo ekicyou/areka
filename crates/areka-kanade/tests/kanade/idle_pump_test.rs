@@ -1,4 +1,4 @@
-//! 窓を作る決定論テスト（要件 1.2・1.3・4.1〜4.6・4.8・4.9・4.11）。
+//! 待機中のホスト窓のメッセージを shiori アクターが取り出し続けるかの決定論テスト。
 //!
 //! 本番の shiori アクター（実 [`areka_kanade::ShioriConnection`]＋即終了する x64 の stand-in
 //! helper）を [`spawn_window_actor`] で起こし、要求の無い待機中のホスト窓へ別スレッド（テスト
@@ -40,7 +40,7 @@ fn uptime() -> Duration {
 
 /// 待機中のホスト窓へ同期送出すると上限内に成功復帰し、即終了した stand-in の死活報告が
 /// 手空きの初回に届く（全体 5 秒以内）。2 通目が来ないことは短い期限では主張しない
-/// （要件 4.8）——手空きが回った証拠つきで `real_idle_tests.rs` の `helper_exit_during_idle_reports_shiori_down_once` が見張る。
+/// （`real_idle_tests.rs` の `helper_exit_during_idle_reports_shiori_down_once` が見張る）。
 #[test]
 fn sync_send_to_idle_window_returns_within_bound() {
     let _ = uptime();
@@ -48,14 +48,14 @@ fn sync_send_to_idle_window_returns_within_bound() {
     let actor = spawn_window_actor();
     let host = hwnd_from_u32(actor.hwnd);
 
-    // 送出元にも自窓を渡す。アクターは要求を 1 通も受けておらず握手もしていないので、受け手は
-    // この RESPONSE を記録して捨てる（指摘 38）。的は「上限内に届いて返る」ことで、受け皿ではない。
+    // アクターは要求も握手も受けていないので、受け手はこの RESPONSE を記録して捨てる。
+    // 的は「上限内に届いて返る」ことで、受け皿ではない。
     let send_started = Instant::now();
     let result = send_copydata_response(host, host, MsgTag::Response, b"idle-pump", SEND_BOUND);
     let elapsed = send_started.elapsed();
     let uptime_at_send = uptime();
 
-    // 死活報告は起動から DEFAULT_TIMEOUT の内に届くはず（手空きの初回は IDLE_INTERVAL 後）。
+    // 手空きの初回は IDLE_INTERVAL 後。
     let deadline = started + DEFAULT_TIMEOUT;
     let first_down = down_before(&actor.down_rx, deadline);
 
@@ -90,7 +90,7 @@ const SLOW_SEND_BOUND: Duration = Duration::from_secs(5);
 const SLOW_CAGE_BOUND: Duration = Duration::from_secs(90);
 
 /// 要求の無い待機中のホスト窓へ、相手が応答なしなら待たずに打ち切る送り方（`SMTO_ABORTIFHUNG`）で
-/// 20 秒待ち → 送出① → 20 秒待ち → 送出② と送り、どちらも届くこと（要件 1.3・4.4・4.5）。
+/// 20 秒待ち → 送出① → 20 秒待ち → 送出② と送り、どちらも届くこと。
 ///
 /// OS の打ち切りは「プロセスが起きてから概ね 20〜30 秒を過ぎた」かつ「宛先の窓のスレッドが 14 秒
 /// 以上メッセージを取り出していない」ときに起きる。送出②の時点ではプロセスの生存は 40 秒を超え、
@@ -167,7 +167,7 @@ fn down_before(rx: &std::sync::mpsc::Receiver<KanadeMsg>, deadline: Instant) -> 
 }
 
 /// 本番の接続（[`ShioriConnection`]）が差し出す解く手は、別スレッドから呼ぶと補助プロセスを
-/// 終わらせる（areka-P0-session-mark-residue 要件 1.3・2.4）。2 度目も成功する（冪等）。
+/// 終わらせる。2 度目も成功する（冪等）。
 ///
 /// 補助プロセスの代わりに長命の x64 の子（`ping.exe` を直接起こす）を置き、終わったことは
 /// 接続の死活の問い合わせで締切内に確かめる。アクターが解く手を据えることは

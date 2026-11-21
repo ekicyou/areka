@@ -1,4 +1,4 @@
-//! キャラクターの窓の形の問い合わせへの答えと、その登録（shell-mouse-cursor・design.md「CursorAnswer」）。
+//! キャラクターの窓の形の問い合わせへの答えと、その登録。
 //!
 //! wintf の窓の手続きが `CursorQuery` の関数を呼ぶ。キャラクターの窓だけ受け持ち、当たり判定は
 //! 見張り（`char_watch`）と同じ解決の関数で引き、形は CursorPick の純関数で選ぶ。
@@ -23,13 +23,13 @@ use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::shell_cursor_assets::ShellCursorAssets;
 use areka_runtime::shell_cursor_table::{CursorRows, GhostCursorKeys, Shape, SystemCursor};
 
-/// 同梱の手の形（要件 6.2）。番号は控えの鍵。
+/// 同梱の手の形。番号は控えの鍵。
 const BUNDLED: [(SystemCursor, &[u8]); 2] = [
     (SystemCursor::Hand, include_bytes!("../cursor/hand.cur")),
     (SystemCursor::Grip, include_bytes!("../cursor/grip.cur")),
 ];
 
-/// OS の標準の形（要件 6.1）。
+/// OS の標準の形。
 const STOCK: [SystemCursor; 8] = [
     SystemCursor::Arrow,
     SystemCursor::Cross,
@@ -162,7 +162,7 @@ pub(crate) fn answer_char_cursor(
         resolve,
     );
 
-    // 作れなかったファイルはその場面の既定へ落とす（ブレス → descript → 既定・要件 6.5）。
+    // 作れなかったファイルはその場面の既定へ落とす（ブレス → descript → 既定）。
     let size = cursor_size_for_dpi(ask.dpi);
     let (no_rows, no_ghost) = (CursorRows::default(), GhostCursorKeys::default());
     let tiers = [

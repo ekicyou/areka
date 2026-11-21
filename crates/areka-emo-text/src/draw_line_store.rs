@@ -4,18 +4,18 @@
 //! 比較専用オラクル（親ファサードの `DrawExecutor`）と本番 `ViewboxExecutor` が**同一経路**で
 //! 行レイアウトを得るための型（親ファサード `draw.rs` の子）。生成規則と再利用の鍵は次のとおり。
 //!
-//! - 再利用の鍵は**内容文字列＋装飾番号列**（要件 11.4——装飾だけが変わった行を古い見た目の
+//! - 再利用の鍵は**内容文字列＋装飾番号列**（装飾だけが変わった行を古い見た目の
 //!   まま再利用しない）。
 //! - 生成の工程に **`decorate`**（生成時 1 度だけのフォント系範囲指定）が挟まり、順序は
 //!   「生成 → `decorate` → はみ出し実測」になる。装飾はインクの張り出しを変えるので、
 //!   はみ出しは焼いた後の行から測る。
-//! - 下線は行に焼かず areka が塗る（areka-P0-balloon-text-bugs 件 3）。下線のある行は
+//! - 下線は行に焼かず areka が塗る。下線のある行は
 //!   [`line_layout_with_strokes`](LineLayoutStore::line_layout_with_strokes) の `decorate` が
 //!   線の行の箱からのはみ出しを返し、実測のはみ出しと欄ごとの大きい方で合わせて持つ。
 //! - 行送り軸の箱寸は呼び手が渡す `block_extent`。**既定だけの行は `font_height`**
 //!   （`ViewboxExecutor::line_layout_for` が [`line_layout`](LineLayoutStore::line_layout) へ
 //!   落とす）で、装飾のある行だけが行内最大 em（`viewbox_draw_decoration::block_extent`）に
-//!   なる——装飾のない台本の生成物は生成口を直に呼んで組んだ行と 1 ビットも違わない（要件 14.2）。
+//!   なる——装飾のない台本の生成物は生成口を直に呼んで組んだ行と 1 ビットも違わない。
 //!
 //! **層規律**: COM 層——UI スレッド専有。失敗は log-first（`tracing::error!`＋`Err`）で
 //! 扱い panic しない。
@@ -39,9 +39,9 @@ use crate::writing::WritingMode;
 /// キャッシュ済みの行 TextLayout（行内容の正本文字列＋行内の装飾番号列＋実測インクはみ出しと
 /// 対で保持・**文字列と番号列がどちらも同じとき**だけ再利用）。`overhang` は生成時に一度だけ
 /// [`DWriteTextLayoutExt::get_overhang_metrics`] で実測（確定行は再計測しない）——
-/// ViewboxExecutor のダーティ矩形が em ボックス下端はみ出しを取りこぼさないための実測値（D2）。
+/// ViewboxExecutor のダーティ矩形が em ボックス下端はみ出しを取りこぼさないための実測値。
 ///
-/// 番号列（`styles`）を鍵に含めるのは要件 11.4——装飾だけが変わった行を古い見た目のまま
+/// 番号列（`styles`）を鍵に含めるのは、装飾だけが変わった行を古い見た目のまま
 /// 再利用しないため。装飾を焼くのは生成時 1 度だけなので、焼いた後の見た目は番号列で一意に
 /// 定まる（同じ番号列＝同じ見た目）。
 struct CachedLineLayout {
@@ -52,16 +52,16 @@ struct CachedLineLayout {
 }
 
 /// 行 TextLayout の生成・キャッシュを担う共有ストア（複数の描画実行が**同一経路**で
-/// 行レイアウトを得るための抽出型・design.md「draw.rs の再編（LineLayoutStore 抽出）」）。
+/// 行レイアウトを得るための抽出型）。
 ///
 /// 生成規則（[`create_line_layout`] で作る＝行内軸＝[`PROBE_MAX_EXTENT`](super::PROBE_MAX_EXTENT)・
 /// 行送り軸＝呼び手が渡す行の箱寸・縦書きは列のレシピ・同一 format・
 /// 生成直後に `decorate` を 1 度）・キー（canvas 行 index）・破棄規律
 /// （[`clear`](Self::clear) が全破棄・[`forget`](Self::forget) が 1 行）を両描画実行で共有する——TextLayout 生成経路の完全共有に
-/// より **byte 等価**を構造化する（RN5）。装飾を使わない呼び出し
+/// より **byte 等価**を構造化する。装飾を使わない呼び出し
 /// （[`line_layout`](Self::line_layout)・行の箱寸は `font_height`・`decorate` は何もしない）の
-/// 生成物は生成口を直に呼んで組んだ行と同一。再利用の判定は内容文字列と装飾番号列の一致
-/// （要件 11.4）。UI スレッド専有（COM 層規律）。
+/// 生成物は生成口を直に呼んで組んだ行と同一。再利用の判定は内容文字列と装飾番号列の一致。
+/// UI スレッド専有（COM 層規律）。
 ///
 /// `pub(crate)`: [`DrawExecutor`]（front へ全域再描画）と `ViewboxExecutor`
 /// （back へダーティ描画・viewbox_draw.rs）が**同一経路**で行レイアウトを得るため
@@ -72,8 +72,8 @@ pub(crate) struct LineLayoutStore {
     /// 行 TextLayout キャッシュ（key＝canvas 行 index。追記単調ゆえ確定行の index/内容は
     /// 不変——リビール中＝最終行のみ内容が変わり都度更新される）。
     cache: HashMap<usize, CachedLineLayout>,
-    /// 行 TextLayout の累計生成回数（**常時コンパイル**・後続 task の `DrawStats` へ集計する
-    /// ため `#[cfg(test)]` にしない・design「Modified Files」）。
+    /// 行 TextLayout の累計生成回数（**常時コンパイル**・後続の `DrawStats` へ集計する
+    /// ため `#[cfg(test)]` にしない）。
     creations: u64,
 }
 
@@ -107,7 +107,7 @@ impl LineLayoutStore {
         self.line_layout_decorated(index, text, format, font_height, mode, &[], |_| Ok(()))
     }
 
-    /// 行 TextLayout の取得（装飾込み・要件 11.4／3.6）。
+    /// 行 TextLayout の取得（装飾込み）。
     ///
     /// 再利用の鍵は **内容文字列と装飾番号列の両方**——どちらかが違えば作り直す（装飾だけが
     /// 変わった行を古い見た目のまま再利用しない）。`decorate` は**生成時に 1 度だけ**呼ぶ
@@ -132,7 +132,7 @@ impl LineLayoutStore {
         })
     }
 
-    /// 行 TextLayout の取得（装飾込み・`decorate` が線のはみ出しも返す形・areka-P0-balloon-text-bugs 件 3）。
+    /// 行 TextLayout の取得（装飾込み・`decorate` が線のはみ出しも返す形）。
     ///
     /// [`line_layout_decorated`](Self::line_layout_decorated) と同じ生成・再利用の規則で、
     /// `decorate` は焼いた後に areka が塗る線（下線）の行の箱からのはみ出しを返す。下線は
@@ -193,7 +193,7 @@ impl LineLayoutStore {
     }
 
     /// 1 行だけ捨てる（次に引くとき作り直す）。焼いた後の状態を戻せなかった行を掴ませない口
-    /// （下線を集めた後に戻すのが失敗した行・再監査 R2-D4）。
+    /// （下線を集めた後に戻すのが失敗した行）。
     pub(crate) fn forget(&mut self, index: usize) {
         self.cache.remove(&index);
     }

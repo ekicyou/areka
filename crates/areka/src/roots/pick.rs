@@ -1,5 +1,5 @@
-//! 置き場にするフォルダを選ぶ画面（design「RootsPick」・要件 6.2・6.9・11.5）。
-//! 読み取りだけの走りでは「最近使った所に足さない」を足して開く（design「FolderPickerReadonly」・要件 8.6・11.6）。
+//! 置き場にするフォルダを選ぶ画面。
+//! 読み取りだけの走りでは「最近使った所に足さない」を足して開く。
 //!
 //! OS 標準のフォルダ選択（`IFileOpenDialog`＋`FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM |
 //! FOS_PATHMUSTEXIST`）を持ち主の窓なしで出し、選ばれたフォルダのパスを返す。呼んだスレッドを

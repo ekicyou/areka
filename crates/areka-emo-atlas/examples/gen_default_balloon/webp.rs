@@ -1,4 +1,4 @@
-//! 動く WebP の組み立て（spec: default-balloon-selfmade 要件 3.2・3.3・3.4）。
+//! 動く WebP の組み立て。
 //!
 //! `image` の可逆の書き手で 1 コマずつ `VP8L` を作り、`VP8X`・`ANIM`・`ANMF` に包む。
 

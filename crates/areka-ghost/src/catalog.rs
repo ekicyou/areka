@@ -1,21 +1,19 @@
-//! ベースウェアの根の目録（design.md「areka-ghost: catalog」）。
+//! ベースウェアの根の目録。
 //!
 //! 根の直下 `ghost/`・`balloon/` と、ゴーストの `shell/`・`balloon/` を**直下 1 段だけ**走査し、
-//! ゴースト・シェル・バルーンを素性（要件 2.4 の 7 項目）付きで返す。同梱バルーン名
+//! ゴースト・シェル・バルーンを素性（7 項目）付きで返す。同梱バルーン名
 //! （`install.txt` の同梱の最初の 1 個＝無印 → `balloon0` の `*.directory`）・ゴーストの descript の
 //! 標準のバルーンの指定（`default.balloon.path`・`balloon`）と「そのフォルダはゴーストか」の判定も持つ。
 //!
 //! - descript は `charset::decode`（既定 `Ansi`）＋`kv::parse_kv_lowercased` で読み、鍵は ASCII
 //!   小文字化して引く（空の値は無い・大小の違う同じ鍵は後の行が勝つ）。`menu`／`type` の
-//!   **値**は trim＋ASCII 小文字化して比べる（R5）。
-//!   素性の値は無加工。
-//! - 1 体のゴーストの解決（`package::resolve_with_shell`）とは別の読み手で、それを呼ばない（要件 2.10）。
+//!   値は trim＋ASCII 小文字化して比べ、素性の値は無加工。
+//! - 1 体のゴーストの解決（`package::resolve_with_shell`）とは別の読み手で、それを呼ばない。
 //! - 記憶・解決順・既定の定数は知らない（`areka-sylphya`・`areka-nar` に依存しない）。
 //! - 失敗は縮退（`warn!`＋除外）で、列挙は `Result` を返さない。格納フォルダが無いのは 0 件。
-//! - 並びはフォルダ名のバイト順（`String::cmp`）。`recommended.*` は使わない（要件 2.5）。
+//! - 並びはフォルダ名のバイト順（`String::cmp`）。`recommended.*` は使わない。
 //! - 1 根の走査（`scan_ghosts`・`scan_balloons`）とゴーストの中の走査（`scan_ghost_balloons`）は
-//!   crate の中だけ。外から一覧と引き当てを得る口は和の部品（`catalog_roots`）だけ
-//!   （areka-P0-baseware-root-list 要件 2.6）。
+//!   crate の中だけ。外から一覧と引き当てを得る口は和の部品（`catalog_roots`）だけ。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -30,7 +28,7 @@ const DEFAULT_README: &str = "readme.txt";
 /// サムネイルのファイル名（有無だけを見る）。
 const THUMBNAIL_FILE: &str = "thumbnail.png";
 
-/// 並びの項目の印（areka-P0-user-data-root 要件 2.5・10.3）。
+/// 並びの項目の印。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum RootMark {
     #[default]
@@ -41,7 +39,7 @@ pub enum RootMark {
     Temporary,
 }
 
-/// ベースウェアの根（直下に ghost/ と balloon/）。値型・パスの解釈と印だけを持つ。
+/// ベースウェアの根（直下に ghost/ と balloon）。値型・パスの解釈と印だけを持つ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BasewareRoot {
     dir: PathBuf,
@@ -110,10 +108,10 @@ impl BasewareRoot {
     }
 }
 
-/// 素性（要件 2.4 の 7 項目）。「無し」は None／false。7 項目以外は足さない（要件 2.9）。
+/// 素性（7 項目）。「無し」は None／false。7 項目以外は足さない。
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Identity {
-    /// フォルダ名（UTF-8。非 UTF-8 名は `warn!` で除外＝R6）。
+    /// フォルダ名（UTF-8。非 UTF-8 名は `warn!` で除外）。
     pub folder: String,
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#name_2c_30b4_30fc_30b9_30c8_540d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#name_2c_30d0_30eb_30fc_30f3_540d:1
@@ -141,7 +139,7 @@ pub struct Identity {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GhostEntry {
     pub dir: PathBuf,
-    /// 走査した根（要件 3.4: 項目からどの根の下にあるかを引く）。
+    /// 走査した根（項目からどの根の下にあるかを引く）。
     pub root: PathBuf,
     pub identity: Identity,
 }
@@ -184,8 +182,8 @@ pub fn list_shells(ghost_dir: &Path) -> Vec<ShellEntry> {
     scan_shells(ghost_dir, false)
 }
 
-/// `list_shells` と同じ走査で、`menu,hidden` のシェルも除かない列挙（shell-balloon-switch
-/// 要件 1.6: 隠しシェルも名指しなら切り替えられる）。素性の型は同じ `ShellEntry`（要件 8.4）。
+/// `list_shells` と同じ走査で、`menu,hidden` のシェルも除かない列挙（隠しシェルも名指しなら
+/// 切り替えられる）。素性の型は同じ `ShellEntry`。
 pub fn list_all_shells(ghost_dir: &Path) -> Vec<ShellEntry> {
     scan_shells(ghost_dir, true)
 }
@@ -207,17 +205,16 @@ fn scan_shells(ghost_dir: &Path, include_hidden: bool) -> Vec<ShellEntry> {
 }
 
 /// `<根>/balloon/` の直下で descript.txt を持ち、`type` が無いか `balloon` のフォルダ。
-/// `type` が他の値なら `warn!`＋除外（要件 2.3）。
+/// `type` が他の値なら `warn!`＋除外。
 pub(crate) fn scan_balloons(root: &BasewareRoot) -> Vec<BalloonEntry> {
-    // 一時の置き場はゴーストだけの置き場なので `balloon\` を探さない。
     if root.is_temporary() {
         return Vec::new();
     }
     scan_balloon_store(&root.balloon_store(), root.dir())
 }
 
-/// `<ゴースト>/balloon/` の直下を根の `balloon/` と同じ判定で走査する（areka-P0-ghost-inner-balloon
-/// 要件 1.1〜1.3）。項目の `root` はそのゴーストのフォルダ。一時の置き場の印は見ない。
+/// `<ゴースト>/balloon/` の直下を根の `balloon/` と同じ判定で走査する。項目の `root` はそのゴーストのフォルダ。
+/// 一時の置き場の印は見ない。
 pub(crate) fn scan_ghost_balloons(ghost_dir: &Path) -> Vec<BalloonEntry> {
     scan_balloon_store(&ghost_dir.join("balloon"), ghost_dir)
 }
@@ -254,7 +251,7 @@ fn scan_balloon_store(store: &Path, base: &Path) -> Vec<BalloonEntry> {
 /// 数え、その先へは進まない）。`balloon0` が無ければ `balloon1` 以降は最初の 1 個になり得ない
 /// （探索は最初に無い番号で止まる）ので、引く鍵はこの 2 つだけ。先頭に 0 を付けた綴りは引かない。
 /// 値が空 → None。無い／読めない → None（読めないときは `warn!`）。探索の順は ukadoc「Install設定」
-/// と完了 `areka-P0-install-companion-reading` に依る。
+/// に依る。
 pub fn companion_balloon(ghost_dir: &Path) -> Option<String> {
     let path = ghost_dir.join("install.txt");
     let bytes = match std::fs::read(&path) {
@@ -271,7 +268,7 @@ pub fn companion_balloon(ghost_dir: &Path) -> Option<String> {
         }
     };
     let text = decode(&bytes, DefaultEncoding::Ansi);
-    // 行の有無は空の値を落とさずに見る（`parse_kv_lowercased` は空の値の鍵を落とすので使えない）。
+    // `parse_kv_lowercased` は空の値の鍵を落とすので、行の有無は `parse_kv` で見る。
     let lines: BTreeSet<String> = parse_kv(&text)
         .keys()
         .map(|key| key.to_ascii_lowercase())
@@ -293,7 +290,7 @@ pub struct StandardBalloonKeys {
 }
 
 /// `<ゴースト>/ghost/master/descript.txt` を 1 回だけ読み、`default.balloon.path` と `balloon` を返す。
-/// 無い → 2 欄とも None・読めない → `warn!` 1 件＋2 欄とも None（要件 5.4）。`recommended.*` は引かない。
+/// 無い → 2 欄とも None・読めない → `warn!` 1 件＋2 欄とも None。`recommended.*` は引かない。
 pub fn standard_balloon_keys(ghost_dir: &Path) -> StandardBalloonKeys {
     let mut keys = master_descript_keys(ghost_dir).unwrap_or_default();
     StandardBalloonKeys {
@@ -302,14 +299,14 @@ pub fn standard_balloon_keys(ghost_dir: &Path) -> StandardBalloonKeys {
     }
 }
 
-/// `<ゴースト>/ghost/master/descript.txt` の `sakura.name`（切替先の本体側の名前・要件 8.7）。
+/// `<ゴースト>/ghost/master/descript.txt` の `sakura.name`（切替先の本体側の名前）。
 /// `companion_balloon` と同型: 無い → None・読めない → `warn!`＋None。素性（`Identity`）には載せない。
 /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#sakura.name_2c_540d_524d:1
 pub fn sakura_name(ghost_dir: &Path) -> Option<String> {
     master_descript_keys(ghost_dir)?.remove("sakura.name")
 }
 
-/// `<ゴースト>/ghost/master/descript.txt` の `install.accept`（受け手の名乗り・要件 3.1）を
+/// `<ゴースト>/ghost/master/descript.txt` の `install.accept`（受け手の名乗り）を
 /// カンマで分け、前後の空白を落とした名前の列。空の名前は落とす。`sakura_name` と同じ読み方で、
 /// 無い → 空の列・読めない → `warn!`＋空の列。素性（`Identity`）には載せない。
 /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#install.accept_2c_540d_524d1_2c_540d_524d2_2c_540d_524d3...:1
@@ -352,7 +349,7 @@ pub(crate) fn descript_name_in(
     Ok(read_descript_in(&descript_dir.join(DESCRIPT_FILE), encoding)?.remove("name"))
 }
 
-/// `<dir>/ghost/master/descript.txt` が実在するか（argv のゴーストの検査＝要件 4.8）。
+/// `<dir>/ghost/master/descript.txt` が実在するか（argv のゴーストの検査）。
 pub fn is_ghost_dir(dir: &Path) -> bool {
     master_descript(dir).is_file()
 }
@@ -368,7 +365,7 @@ fn master_descript(ghost_dir: &Path) -> PathBuf {
 }
 
 /// 格納フォルダの直下 1 段のフォルダを（フォルダ名, パス）でバイト順に返す。
-/// 格納フォルダが無ければ 0 件。非 UTF-8 のフォルダ名は `warn!`＋除外（R6）。
+/// 格納フォルダが無ければ 0 件。非 UTF-8 のフォルダ名は `warn!`＋除外。
 fn subdirs(store: &Path) -> Vec<(String, PathBuf)> {
     let entries = match std::fs::read_dir(store) {
         Ok(entries) => entries,
@@ -416,7 +413,7 @@ fn subdirs(store: &Path) -> Vec<(String, PathBuf)> {
 }
 
 /// descript を読み、鍵を ASCII 小文字化した表を返す。無ければ黙って None（その項目ではない）、
-/// 読めなければ `warn!`＋None（要件 2.7）。
+/// 読めなければ `warn!`＋None。
 fn read_descript(path: &Path) -> Option<BTreeMap<String, String>> {
     unreadable_is_none(path, read_descript_in(path, DefaultEncoding::Ansi))
 }
@@ -432,7 +429,7 @@ fn read_descript_in(
     )))
 }
 
-/// descript の読みの結果を一覧の扱いへ: 無い → 黙って None、読めない → `warn!`＋None（要件 2.7）。
+/// descript の読みの結果を一覧の扱いへ: 無い → 黙って None、読めない → `warn!`＋None。
 fn unreadable_is_none<T>(path: &Path, read: std::io::Result<T>) -> Option<T> {
     match read {
         Ok(value) => Some(value),
@@ -449,7 +446,7 @@ fn unreadable_is_none<T>(path: &Path, read: std::io::Result<T>) -> Option<T> {
     }
 }
 
-/// 比べるための値（trim＋ASCII 小文字化・R5）。
+/// 比べるための値（trim＋ASCII 小文字化）。
 fn folded(descript: &BTreeMap<String, String>, key: &str) -> Option<String> {
     descript.get(key).map(|v| v.trim().to_ascii_lowercase())
 }

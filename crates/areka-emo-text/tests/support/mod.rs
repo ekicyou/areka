@@ -1,20 +1,7 @@
-//! # support/mod.rs — `tests/` の実 GPU・presenter・読み戻しの共有の部品
+//! `tests/` の実 GPU・presenter・読み戻しの共有の部品。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo2-conformance-e2e` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 各テストは `#[path = "support/mod.rs"] mod support;` で引く（`tests/` の直下に置くと
-//! テストの実行ファイルになるので、子のフォルダに置く）。中身:
-//!
-//! 1. **実 GPU の World と予約スロット**——`GraphicsCore`＋`WucGraphicsResource` を載せた
-//!    headless の World（本番の UI スレッドと同じ MTA）と、emo-present `VisualMount` の
-//!    予約スロットを写した最小の形（本物が持つ `HitTest` は持たせない）。
-//! 2. **presenter の検体**——surface 1000 ＝ 絵 1 枚の `(EmoWorld, AtlasTable)` と `ShowSurface`。
-//! 3. **幾何だけのバルーン定義**——origin・wordwrappoint・validrect・書体の高さ・書字方向だけの
-//!    `BalloonModel`。
-//! 4. **指令とポンプ**——間隔つきの cue と、積んだメッセージを処理し切って抜ける pump。
-//! 5. **読み戻しと画素の数え上げ**——供給面の読み戻し・不透明の数・矩形の中の数え上げ・
-//!    選択肢の強調の帯の確かめ・白背景へ合成した PNG の書き出し。
-//! 6. **検体・フォント・バルーンの検体の組**——子の [`fixture`]（`support/fixture.rs`）。
+//! 各テストは `#[path = "support/mod.rs"] mod support;` で引く（`tests/` の直下に置くとテストの
+//! 実行ファイルになるので、子のフォルダに置く）。検体・フォント・バルーンの検体の組は子の [`fixture`]。
 
 // テストの実行ファイルごとに使う部品が違い、使わない部品が dead_code になるため。
 #![allow(dead_code)]
@@ -48,7 +35,7 @@ use wintf_winmsg_executor::{FilterResult, MessageLoop};
 // ══ 実 GPU の World と予約スロット ═══════════════════════════════════════════════════════
 
 /// GraphicsCore ＋ WucGraphicsResource を実資源として載せた wintf World を組む。
-/// 本番 UI スレッドは MTA（areka の WUC は MTA のスレッドで動く）。
+/// WUC は MTA のスレッドで動かす（本番 UI スレッドと同じ）。
 pub fn make_world_with_gpu() -> World {
     fixture::init_com_for_this_thread();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
@@ -75,7 +62,7 @@ pub fn spawn_reserved_slot(world: &mut World) -> (Entity, Entity) {
     (window, slot)
 }
 
-// ══ presenter の検体（上流の公開 API で本物を組む） ═══════════════════════════════════════
+// ══ presenter の検体 ═══════════════════════════════════════
 
 fn elem(path: &str, x: i64, y: i64) -> Element {
     Element {
@@ -351,7 +338,7 @@ pub fn to_canvas_local(r: &ChoiceHitRow, ox: f32, oy: f32) -> (f32, f32, f32, f3
 /// 走査窓を hover 行の帯の**上下**へ伸ばす画素数（上端・下端どちらの判定も窓で切らないため）。
 const SCAN_MARGIN: u32 = 4;
 /// ハイライト矩形の下端から hover 文字のインクがはみ出してよい上限（画素）＝ **0**。
-/// `areka-P0-emo2-conformance-e2e` の裁定（第 2 回・R13.3）——**緩めてはならない**（R12.2）。
+/// **緩めてはならない**（開発者の裁定）。
 const BAND_OVERHANG_MAX: u32 = 0;
 
 /// 強調の帯の期待値（hover 行の行矩形の上端・帯の丈・行ボックスの中央へ寄せる量）。
@@ -364,9 +351,9 @@ pub struct Band {
 /// hover 行（`row`・canvas-local）の強調の帯を確かめる。走査窓は「hover 行の block 起点−余白
 /// 〜 次の行（`next_row`）の block 起点＋余白」＝帯寸に依存しない独立の窓。
 ///
-/// 確かめること: 帯の丈が `band.height`・塗りの行がひと続き・帯の位置が `line_top + offset` から・読み戻した塗りの
-/// 上端がヒット矩形の上端と一致（描画とヒットの単一導出・R13.2）・窓の中に白文字が在り、
-/// 窓の上下端に接しない・字の上端は帯の内・下端のはみ出しは [`BAND_OVERHANG_MAX`]。
+/// 確かめること: 帯の丈が `band.height`・塗りがひと続き・帯が `line_top + offset` から・塗りの上端が
+/// ヒット矩形の上端と一致（描画とヒットの単一導出）・窓の中に白文字が在って窓の上下端に接しない・
+/// 字の上端は帯の内・下端のはみ出しは [`BAND_OVERHANG_MAX`]。
 pub fn assert_hover_band(
     tag: &str,
     hover: &[u8],
@@ -394,7 +381,7 @@ pub fn assert_hover_band(
         fill_span.0,
         fill_span.1
     );
-    // 丈は塗りの最小と最大の y で測るので、途中に塗りの無い行があっても合ってしまう。
+    // 丈は塗りの最小と最大の y で測るので、途中の欠けは別に調べる。
     let gap = (fill_span.0..=fill_span.1)
         .find(|&y| y_span_where(hover, w, x0, x1, y, y + 1, is_fill).is_none());
     assert_eq!(
@@ -402,7 +389,6 @@ pub fn assert_hover_band(
         "[{tag}] ハイライト帯の塗りがひと続きでない（塗りの無い行がある）: 帯 y{}..{}",
         fill_span.0, fill_span.1
     );
-    // 帯の**絶対位置**（R13.1）: 行矩形の上端から行ボックスの中央へ offset だけ寄る。
     let top = band.line_top + band.offset;
     assert_eq!(
         (fill_span.0, fill_span.1),
@@ -437,8 +423,7 @@ pub fn assert_hover_band(
          疑いがあり、はみ出しの測定が信用できない（窓を深くすること）",
         ink_span.1
     );
-    // 上端側の対の門。これが在って初めて、下の「字の上端が帯の内」が窓の取り方ではなく描画結果を
-    // 見た判定になる（字が上へずれたら、まず窓の上端に届いてここが赤くなる）。
+    // 上端側の対の門。これが無いと、下の「字の上端が帯の内」が窓の取り方に左右される。
     assert!(
         ink_span.0 > y0,
         "[{tag}] hover 文字のインク上端 y{} が走査窓の上端 y{y0} に接している——窓が上端を切っている\
@@ -475,7 +460,7 @@ pub fn assert_hover_band(
     );
 }
 
-// ══ PNG の書き出し（依存追加なし・`src/viewbox_draw_png_dump_tests.rs` の診断ダンプと同一アルゴリズム） ══════
+// ══ PNG の書き出し（依存追加なし・`src/viewbox_draw_png_dump_tests.rs` の診断ダンプと同じ手順） ══════
 
 /// read_back（premultiplied BGRA）を白背景へ合成した PNG を `AREKA_DIAG_OUT`（無指定は
 /// `CARGO_TARGET_TMPDIR`＝crate 専用 tmp）の `name` へ保存し、そのパスを返す。

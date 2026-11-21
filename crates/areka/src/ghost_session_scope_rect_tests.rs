@@ -101,7 +101,7 @@ fn malformed_selector_has_no_value() {
     }
 }
 
-/// 主の画面より左上の画面（`-2560,195`）の `-782,201` から幅 831・高さ 1026 の窓（要件 1.3〜1.5・8.2）。
+/// 主の画面より左上の画面（`-2560,195`）の `-782,201` から幅 831・高さ 1026 の窓。
 #[test]
 fn left_upper_screen_window_answers_left_top_right_bottom() {
     let rect = rect_of(-782, 201, 831, 1026);
@@ -118,7 +118,7 @@ fn left_upper_screen_window_answers_left_top_right_bottom() {
     }
 }
 
-/// 表に無い番号・印の無い窓・OS の失敗・負の番号は窓が無い答え（要件 3.1〜3.3・3.5）。
+/// 表に無い番号・印の無い窓・OS の失敗・負の番号は窓が無い答え。
 #[test]
 fn scope_without_window_is_zero_for_character_and_none_for_balloon() {
     let map = BTreeMap::from([
@@ -149,7 +149,7 @@ fn scope_without_window_is_zero_for_character_and_none_for_balloon() {
     );
 }
 
-/// 1 回の読みは OS へ 1 回だけ聞き、答えはその 1 回の矩形そのもの（要件 4.7・8.4）。
+/// 1 回の読みは OS へ 1 回だけ聞き、答えはその 1 回の矩形そのもの。
 #[test]
 fn one_read_asks_the_os_once_and_answers_that_rect() {
     use std::sync::atomic::{AtomicI32, Ordering};
@@ -175,7 +175,7 @@ fn one_read_asks_the_os_once_and_answers_that_rect() {
     }
 }
 
-/// 偽の OS の矩形を替えた後の読みは新しい矩形。重なった窓は同じ数・3 人目も同じ形（要件 1.7・2.3・4.1〜4.6）。
+/// 偽の OS の矩形を替えた後の読みは新しい矩形。重なった窓は同じ数・3 人目も同じ形。
 #[test]
 fn reads_after_the_window_moved_answer_the_new_rect() {
     use std::sync::Mutex;
@@ -256,7 +256,7 @@ fn reads_after_the_window_moved_answer_the_new_rect() {
     );
 }
 
-/// 壊れた窓の印（0）は値なしで、呼んだスレッドの DPI の扱いは呼ぶ前と同じに戻る（要件 4.4・1.3）。
+/// 壊れた窓の印（0）は値なしで、呼んだスレッドの DPI の扱いは呼ぶ前と同じに戻る。
 #[test]
 fn os_window_rect_invalid_handle_is_none_and_restores_dpi_context() {
     use windows::Win32::UI::HiDpi::{AreDpiAwarenessContextsEqual, GetThreadDpiAwarenessContext};
@@ -267,7 +267,7 @@ fn os_window_rect_invalid_handle_is_none_and_restores_dpi_context() {
 }
 
 /// 実の窓 1 枚の矩形を、DPI 非対応のスレッドから呼んでも物理の画素で返し、
-/// 呼んだスレッドの扱いを非対応へ戻す（要件 1.3・1.6・8.5）。拡大率 100% より大きい画面が要る。
+/// 呼んだスレッドの扱いを非対応へ戻す。拡大率 100% より大きい画面が要る。
 #[test]
 #[ignore = "real window: needs a monitor scaled above 100%"]
 fn os_window_rect_real_window_answers_physical_pixels_from_unaware_thread() {
@@ -438,7 +438,7 @@ mod wiring {
         reader.resolve_dotted_str(&asker, name)
     }
 
-    /// 表は窓の一式のスコープごとに窓の印を引き、印の無い窓は空にする（要件 3.3）。
+    /// 表は窓の一式のスコープごとに窓の印を引き、印の無い窓は空にする。
     #[test]
     fn wire_builds_the_table_from_ghost_windows_and_handles() {
         let (mut world, _) = world_with_character_handle();
@@ -446,7 +446,7 @@ mod wiring {
         assert_eq!(table(&world).0.get(&0), Some(&keys(Some(0x10), None)));
     }
 
-    /// 結線は差し替え口の読み取りで 2 つの形へ読み手を登録する（要件 3.5・7.6）。
+    /// 結線は差し替え口の読み取りで 2 つの形へ読み手を登録する。
     #[test]
     fn wire_registers_both_shapes_with_the_seam() {
         let (mut world, _) = world_with_character_handle();
@@ -464,7 +464,7 @@ mod wiring {
         );
     }
 
-    /// 系は窓の印が付いた時だけ表を組み直し、変わらないフレームでは触らない（要件 6.1・6.2・7.7）。
+    /// 系は窓の印が付いた時だけ表を組み直し、変わらないフレームでは触らない。
     #[test]
     fn sync_rebuilds_only_when_handles_or_windows_change() {
         let (mut world, gw) = world_with_character_handle();
@@ -521,7 +521,7 @@ mod wiring {
     }
 
     /// 印が付く前は窓が無い答え・付いた後のフレームで矩形・entity を消したフレームで窓が無い答え。
-    /// 可視の変化では表が替わらず、隠れていても矩形を答える（要件 1.8・2.4・3.3・3.5）。
+    /// 可視の変化では表が替わらず、隠れていても矩形を答える。
     #[test]
     fn table_follows_handles_and_despawn_but_not_visibility() {
         let (mut world, gw) = world_without_handles();
@@ -581,8 +581,7 @@ mod wiring {
         assert_eq!(table(&world).0.get(&0), Some(&keys(None, None)));
     }
 
-    /// 窓の位置を毎フレーム書き換える間、表の仕事は 0 件。読みを繰り返しても WARN 以上は 0 件
-    /// （要件 5.4・5.5）。
+    /// 窓の位置を毎フレーム書き換える間、表の仕事は 0 件。読みを繰り返しても WARN 以上は 0 件。
     #[test]
     fn moving_windows_does_no_table_work_and_reads_never_warn() {
         let (mut world, gw) = world_with_character_handle();

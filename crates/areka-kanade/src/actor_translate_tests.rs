@@ -1,4 +1,4 @@
-//! 殻が翻訳の依頼を実行する関数（[`run_translate`]）の檻（要件 2.1・2.2・4.1・4.4・4.5・7.3・8.1）。
+//! 殻が翻訳の依頼を実行する関数（[`run_translate`]）の檻。
 //!
 //! 依頼を直接渡し、1 件の Request を受けて控える偽の SHIORI と、呼ばれた引数を控える MAKOTO の口で
 //! 確かめる: 展開の後の台詞が `OnTranslate` の Reference0 に届くこと・Status は依頼に載った値で
@@ -278,7 +278,7 @@ fn absent_marker_from_outside_is_replaced_on_existing_send_path() {
 
 /// 外からの台本（SSTP SEND）の依頼は `on_translate_sstp` で組み立てる: Reference0＝展開の後の台詞・
 /// Reference1＝`sstp-send,owned`・Reference2 以降なし。MAKOTO の口の 2 つ目は空文字、記録の欄は
-/// `sstp-send`（要件 4.4）。イベントの出どころの依頼は上のテストのとおり（要件 4.6）。
+/// `sstp-send`。イベントの出どころの依頼は上のテストのとおり。
 #[test]
 fn sstp_send_source_uses_sstp_send_owned_reference1() {
     let observed = run_from(

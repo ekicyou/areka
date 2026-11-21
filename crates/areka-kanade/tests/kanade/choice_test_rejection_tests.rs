@@ -7,7 +7,7 @@ use super::{
     expected_unload, send, spawn_harness_gated,
 };
 
-/// 選択待ちの候補集合に**含めない** ID（群 6 の候補照合の観測面・Req1.4）。
+/// 選択待ちの候補集合に**含めない** ID（群 6 の候補照合の観測面）。
 ///
 /// 正典形（`On` 始まりでない）を選ぶ——受理されてしまう退行では `OnChoiceSelectEx` が発行され、
 /// [`choice_get_ids`] の突合で直ちに落ちる（任意名形だと GET の id が檻の抽出述語から外れ、
@@ -15,10 +15,10 @@ use super::{
 const OUT_OF_CANDIDATE_CHOICE_ID: &str = "候補外選択肢";
 
 // ============================================================================
-// 群 6: Req9.2(e) — 一回性と棄却（統合経路でしか観測できない分）
+// 群 6: 一回性と棄却（統合経路でしか観測できない分）
 // ============================================================================
 //
-// # 本群が担う範囲と、担わない範囲（設計 Testing Strategy 「(e) 補足（in-flight 分岐の檻方式）」）
+// # 本群が担う範囲と、担わない範囲
 // カスケードは kanade drive ループの同期往復で **1 メッセージ処理内に完結する**。したがって
 // `ChoicePhase::Cascading`／`TimeoutInFlight` の最中に別の選択確定を**注入して**割り込ませることは
 // 統合経路では構造上できない——段の進行中の二重確定棄却（`choice_rejected_busy`）と 1 世代 stale
@@ -32,7 +32,7 @@ const OUT_OF_CANDIDATE_CHOICE_ID: &str = "候補外選択肢";
 // GET・`ResolveChoice`・`StartTalk` の実数）と、解決で帳簿が消えた**後**に到着した注入が
 // 配送経路のどこからも副作用を出さないこと。
 //
-// # 決定性（Req9.1）——注入順序の確定と、記録読み出しの同期
+// # 決定性——注入順序の確定と、記録読み出しの同期
 // 決定性は**二つ**の面で要る。片方だけでは非決定が残る。
 //
 // **(i) 注入順序**: 群 1〜5 と違い、本群は `hold_indices=[0, 1]`（steady talk と選択由来 talk の
@@ -54,8 +54,7 @@ const OUT_OF_CANDIDATE_CHOICE_ID: &str = "候補外選択肢";
 // **起動される talk の本数そのものが変わる**ため、`QuitPolicy::PerTalk` の index と quit フラグの
 // 対応がずれて終了が駆動されず、檻が「期限付き join の失敗」（＝どの表明が破れたか分からない形）で
 // しか落ちなくなる（実測で確認済み）。`ForceQuit` は quit ゲートを迂回して終了系列へ直行する
-// （**close spec の DD-10**＝本 spec の DD-10（`ActiveTalk.script`→`OnChoiceTimeout` Ref0）とは
-// 別物・`close_test.rs` の既存イディオム）ので、talk の本数に関わらず必ず join が成功し、
+// （`close_test.rs` の既存イディオム）ので、talk の本数に関わらず必ず join が成功し、
 // **段列と `TalkCommand` の突合そのものが退行を名指しする**。ただしこの「名指しする」性質は
 // 上記 (ii) の読み出し同期が前提である——同期を欠くと突合は退行と無関係な空列を報告し得る。
 //
@@ -63,13 +62,7 @@ const OUT_OF_CANDIDATE_CHOICE_ID: &str = "候補外選択肢";
 // kanade 停止後は `recv_closed` 安全弁が park を捨て先の無い送りとして片づける（送出は no-op）。
 
 /// 1 回の選択確定が **高々 1 カスケード・高々 1 選択解決・高々 1 起動要求**しか起こさず、解決後に
-/// 到着した遅延注入が何も起こさない（Req9.2(e)・1.1・1.3・4.6・5.4・C4 規則 1／7）。
-///
-/// # 駆動（決定的・sleep なし）
-/// active talk 窓（id=1・保留）で `ChoiceWaiting{candidates:[NAMED]}` を確立し、同じ ID を **3 回**
-/// 注入する。1 本目だけが受理されて任意名 1 段のカスケード（Value）→ `ResolveChoice`→`Start(2)` を
-/// 起こし、2・3 本目は帳簿が消えた後に到着する遅延通知として棄却される。選択由来 talk（id=2）も
-/// park するため、この 3 本は必ずこの順で連続処理される。終了は `ForceQuit` で駆動する。
+/// 到着した遅延注入が何も起こさない。
 ///
 /// # 非空虚性・discriminative 性
 /// - 選択由来 GET が **ちょうど 1 件**であること。遅延注入を受理する退行（帳簿の消去漏れ・
@@ -77,8 +70,8 @@ const OUT_OF_CANDIDATE_CHOICE_ID: &str = "候補外選択肢";
 ///   実測: `on_cascade_reply` の Value 分岐で帳簿を消さず新 talk_id へ引き継ぐ変異を入れると、
 ///   段列が `[NAMED, NAMED, NAMED]` になって本表明が落ちる（もう一方の群 6 檻は緑のまま）。
 /// - `TalkCommand` 到着順が `Start(1)`→`Resolve(1,NAMED)`→`Start(2)` であること。`ResolveChoice`
-///   が 2 件以上になる（解決の重複発行・Req5.4 の破れ）／`CancelChoice` が混じる／選択由来
-///   `StartTalk` が 2 本になる（Req4.6 の破れ）のいずれの退行でもタグ列が食い違って落ちる。
+///   が 2 件以上になる（解決の重複発行）／`CancelChoice` が混じる／選択由来
+///   `StartTalk` が 2 本になる、いずれの退行でもタグ列が食い違って落ちる。
 /// - 到達 `StartTalk` が steady と選択由来の 2 本ちょうどであること＝遅延注入が追加の talk を
 ///   起こしていないこと。
 #[test]
@@ -101,7 +94,7 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
     establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID], None);
     // 1 本目——受理される唯一の注入。
     send(&harness, KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)));
-    // 2・3 本目——解決で帳簿が消えた後に届く遅延通知（いずれも棄却されるはず・Req1.3）。
+    // 2・3 本目——解決で帳簿が消えた後に届く遅延通知（いずれも棄却されるはず）。
     for _ in 0..2 {
         send(&harness, KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)));
     }
@@ -119,14 +112,14 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
         ..
     } = harness.finish("kanade choice-once join");
 
-    // (1) カスケードは高々 1 回（3 注入でも段列は任意名 1 件のみ・Req1.1）。
+    // (1) カスケードは高々 1 回（3 注入でも段列は任意名 1 件のみ）。
     assert_eq!(
         choice_get_ids(&recorded),
         vec![NAMED_CHOICE_ID],
         "3 回の同一注入でカスケードは 1 回だけ走るはず（解決後の遅延注入は棄却）: {recorded:?}"
     );
 
-    // (2) 解決も起動も高々 1 つ（順序込み・Req5.4／4.6）。
+    // (2) 解決も起動も高々 1 つ（順序込み）。
     assert_eq!(
         command_tags(&commands),
         vec![
@@ -147,7 +140,6 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
         "2 本目は選択由来の応答スクリプト"
     );
 
-    // (4) 終了系列を完走した（末尾 Unload）＝遅延注入の棄却後も状態整合を保っている。
     assert_eq!(
         recorded.last().expect("記録列は空でない"),
         &expected_unload(),
@@ -155,11 +147,7 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
     );
 }
 
-/// 候補集合に無い ID の注入は何も起こさず、**選択待ちを閉じない**（Req9.2(e) 後段・1.4・C4 規則 1）。
-///
-/// # 駆動（決定的・sleep なし）
-/// [`one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejected`] と同じ保留構成で、
-/// 候補集合 `[NAMED]` に対し **候補外 ID → 候補内 ID** の順に注入する。
+/// 候補集合に無い ID の注入は何も起こさず、**選択待ちを閉じない**。
 ///
 /// # 非空虚性・discriminative 性
 /// - 候補外 ID の注入が **段を 1 つも発行しない**こと。受理する退行では正典形カスケードの
@@ -167,7 +155,7 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
 ///   加えて記録列全体に当該 ID の呼び出しが無いことも直接表明する。実測: `on_choice` の候補照合を
 ///   無効化する変異を入れると段列が `[OnChoiceSelectEx, OnChoiceSelect]` になって落ちる
 ///   （もう一方の群 6 檻は緑のまま）。
-/// - 続く**候補内 ID が正常に受理される**こと＝棄却が選択待ちを閉じていない（Req1.4「選択待ち状態を
+/// - 続く**候補内 ID が正常に受理される**こと＝棄却が選択待ちを閉じていない（「選択待ち状態を
 ///   変更しない」の観測面）。棄却のついでに帳簿を落とす退行では段列が空になり、`Resolve` も消えて落ちる。
 ///   件数を数えるだけの檻ではこの「閉じてしまう」退行を弁別できない——後続注入の成功が要る。
 #[test]
@@ -186,7 +174,7 @@ fn choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open() {
     );
 
     establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID], None);
-    // (1) 候補外 ID——棄却されるはず（Req1.4）。
+    // (1) 候補外 ID——棄却されるはず。
     send(
         &harness,
         KanadeMsg::Choice(choice_input(OUT_OF_CANDIDATE_CHOICE_ID)),
@@ -215,7 +203,7 @@ fn choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open() {
         "候補外 ID を任意名イベントとして発火する退行はここで落ちる: {recorded:?}"
     );
 
-    // (2) 棄却は選択待ちを閉じていない——後続の候補内 ID が解決・起動まで到達している（Req1.4）。
+    // (2) 棄却は選択待ちを閉じていない——後続の候補内 ID が解決・起動まで到達している。
     assert_eq!(
         command_tags(&commands),
         vec![
@@ -226,7 +214,6 @@ fn choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open() {
         "候補外 ID の棄却後も選択待ちは生きており、候補内 ID が解決と起動を起こすはず: {commands:?}"
     );
 
-    // (3) 終了系列を完走した（末尾 Unload）。
     assert_eq!(
         recorded.last().expect("記録列は空でない"),
         &expected_unload(),

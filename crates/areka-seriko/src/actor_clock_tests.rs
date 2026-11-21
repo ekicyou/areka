@@ -1,5 +1,4 @@
-//! 時計つきの起動（spec: areka-P0-animated-image-playback 要件 1.6・2.9・3.1・tasks.md 3.5・
-//! design「時計の開始の時刻（`SerikoClock`）」）。
+//! 時計つきの起動（`SerikoClock`）。
 //!
 //! 台本の合図（`\s`・`\b`・着せ替え）を処理したときに注入の時計を読み、その時刻で `always` の時計が
 //! 始まることを、刻みの時刻と区別できる値で確かめる。刻みは注入の絶対時刻・乱数は使わない。
@@ -48,7 +47,7 @@ fn top(pattern: &PatternState) -> Option<u32> {
 }
 
 /// `\s` の時計の開始は合図を処理した時刻（時計 1030）で、直前の刻み（0）でも合図の後に時計が
-/// 進んだ値（刻みの 1100）でもない（要件 1.6・3.1）。
+/// 進んだ値（刻みの 1100）でもない。
 #[test]
 fn surface_cue_starts_always_at_the_clock_time_of_processing() {
     let mut rig = rig(cfg(table_of(TOP_ALWAYS), always_fire()));
@@ -70,7 +69,7 @@ fn surface_cue_starts_always_at_the_clock_time_of_processing() {
     );
 }
 
-/// 刻みの時刻が開始の時刻より僅かに前でも経過は負にならず 0 で止まる（design「時計の開始の時刻」）。
+/// 刻みの時刻が開始の時刻より僅かに前でも経過は負にならず 0 で止まる。
 #[test]
 fn tick_slightly_before_the_start_clamps_elapsed_to_zero() {
     let mut rig = rig(cfg(table_of(TOP_ALWAYS), always_fire()));
@@ -94,7 +93,7 @@ fn tick_slightly_before_the_start_clamps_elapsed_to_zero() {
     );
 }
 
-/// `\b` の時計の開始も合図を処理した時刻（要件 3.1）。
+/// `\b` の時計の開始も合図を処理した時刻。
 #[test]
 fn balloon_cue_starts_always_at_the_clock_time_of_processing() {
     let config = SerikoLoopConfig {
@@ -125,7 +124,7 @@ fn balloon_cue_starts_always_at_the_clock_time_of_processing() {
     assert_eq!(top(single_pattern(&cmds)), Some(102), "1030 から 100ms");
 }
 
-/// 着せ替えで見えた部品の `always` の時計も合図を処理した時刻で始まる（要件 3.1）。
+/// 着せ替えで見えた部品の `always` の時計も合図を処理した時刻で始まる。
 #[test]
 fn bind_cue_starts_part_always_at_the_clock_time_of_processing() {
     let table = table_of(BIND_ALWAYS);

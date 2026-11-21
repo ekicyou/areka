@@ -1,5 +1,4 @@
-//! Compile integration tests
-//! Task 9.6
+//! compile の統合テスト
 
 use dola::*;
 

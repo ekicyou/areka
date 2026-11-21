@@ -1,17 +1,12 @@
 //! 可視性遷移ガード [`guard_visibility`] の純関数檻。
 //!
-//! # 前提（`areka-P0-windowposition-limit` 要件 7.3・2.1）
-//!
-//! 本檻が固定するのは**ガード自体の規則**（完全不可視への遷移だけを X clamp で救い、
-//! 部分的なはみ出しには手を出さない）であり、`windowposition.limit` の導入でこの規則は
-//! 1 bit も変わっていない。ただしバルーン窓については、limit が有効なときに**部分的な
-//! はみ出しを別途作業領域内へ補正する**のは下流の関門
-//! （`follow::window_move::enqueue_window_set_pos` の runtime 関門・起動時
-//! `balloon_limit::apply_balloon_limit`）である。すなわち limit 有効時の最終表示位置は
-//! 本檻の期待値と一致しないことがあるが、それはガードの退行ではなく関門の仕事であり、
-//! `follow_balloon_limit_tests.rs`／`balloon_limit_gate_tests.rs` が所有する。
-//! 本檻は [`guard_visibility`] を矩形で直接呼ぶ純関数檻であり、関門が読む
-//! `BalloonLimit` Component も ECS World もここには登場しない＝関門は走らない。
+//! 固定するのはガード自体の規則（完全不可視への遷移だけを X clamp で救い、
+//! 部分的なはみ出しには手を出さない）。`windowposition.limit` が有効なバルーン窓の
+//! 部分的なはみ出しを作業領域内へ補正するのは下流の関門
+//! （`follow::window_move::enqueue_window_set_pos`・起動時 `balloon_limit::apply_balloon_limit`）で、
+//! limit 有効時の最終表示位置が本檻の期待値と違ってもガードの退行ではない
+//! （`follow_balloon_limit_tests.rs`／`balloon_limit_gate_tests.rs` が所有）。
+//! 本檻は矩形で直接呼ぶので `BalloonLimit` も ECS World も登場せず、関門は走らない。
 
 use super::MonitorSnapshot;
 use super::test_support::{
@@ -33,7 +28,6 @@ fn guard_keeps_position_while_still_intersecting() {
         let wa = right_wa(dpi);
         let old = win(point(px(800, dpi), grounded_y(wa, size)), size);
 
-        // 右モニタ内の別位置（交差維持）
         let proposed = point(px(1200, dpi), grounded_y(wa, size));
         assert_eq!(
             guard_visibility(Some(old), proposed, size, wa, &snapshot),
@@ -41,7 +35,6 @@ fn guard_keeps_position_while_still_intersecting() {
             "dpi={dpi}: 交差維持は素通し"
         );
 
-        // 右端から半分はみ出した位置（部分可視＝交差あり）でも素通し
         let half_out = point(wa.right - size.w / 2, grounded_y(wa, size));
         assert!(overlaps(win(half_out, size), wa), "前提: 部分可視である");
         assert_eq!(
@@ -105,7 +98,6 @@ fn guard_clamps_x_on_transition_to_invisible() {
 }
 
 /// 旧矩形も非交差だった（ユーザーが自ら画面外へ留置した窓）＝尊重して素通し。
-/// 本 spec の Out of scope「明示ドラッグでの画面外運搬」を型で守る腕。
 #[test]
 fn guard_respects_window_already_parked_off_screen() {
     for dpi in DPIS {
@@ -200,40 +192,30 @@ fn guard_empty_snapshot_keeps_position() {
     }
 }
 
-// --- guard_visibility: バルーン矩形（S3′・`areka-P0-dpi-window-vanish` 要件 3.4） -----------------------
+// --- guard_visibility: バルーン矩形 -----------------------
 //
-// バルーンは**別規則を持たない**——キャラ窓とまったく同一の純関数・同一の
-// 遷移規則へ、バルーン矩形（`char_pos + offset` と バルーン寸）を渡すだけ。
-// `guard_visibility` は窓の種類を持たないので、バルーンの寸は下の横断檻が
-// キャラ窓の寸と並べて全部の腕へ通す（寸だけを変えた写しは置かない）。
-//
-// 前提（`areka-P0-windowposition-limit` 要件 7.3）: 「部分的なはみ出しには触らない」
-// 「画面外へ留置されたものは引き戻さない」はガードの規則としていまも真である。
-// `windowposition.limit` が有効なバルーンについては、この後に走る関門が別途
-// 作業領域内へ補正する——ガード自体は不変で、限界の面倒を見るのは関門である。
+// バルーンは別規則を持たず、キャラ窓と同じ純関数・同じ遷移規則へバルーン矩形
+// （`char_pos + offset` とバルーン寸）を渡すだけ。寸の違いは下の横断檻が
+// キャラ窓の寸と並べて全部の腕へ通す。
+// `windowposition.limit` が有効なバルーンの補正は、この後に走る関門の仕事。
 
 /// Y 不変の横断檻: 全分岐・キャラ／バルーン両寸で `position().y == proposed.y`
-/// （Y は射影 T の所有・D6）。分岐の識別（Keep か ClampX か）も同時に固定する。
+/// （Y は射影 T の所有）。分岐の識別（Keep か ClampX か）も同時に固定する。
 ///
-/// # 檻の非空虚性の要（レビュー #1・2026-07-31 の指摘に対する是正）
-///
-/// 提案 Y に射影 T 由来の接地値（`wa.bottom − h`）だけを与えると、その Y は
-/// **work area の Y clamp の不動点**であるため「ガードが Y も clamp する」という
-/// 実在しやすい退行（`y: proposed.y.min(wa.bottom − h).max(wa.top)`）と正しい実装が
-/// 区別できず、檻が空虚になる。よって各分岐へ
-/// `[clamp_wa.top, clamp_wa.bottom − h]` の**範囲外**の Y を必ず通す。
-///
-/// 範囲外 Y の投入は契約上も正当である——`guard_visibility` の前提条件は正寸のみ
-/// であり（design.md:425）、Y の値域は射影 T の関心であってガードの前提ではない。
+/// 提案 Y が射影 T 由来の接地値（`wa.bottom − h`）だけだと、その Y は work area の
+/// Y clamp の不動点なので、「ガードが Y も clamp する」退行
+/// （`y: proposed.y.min(wa.bottom − h).max(wa.top)`）と正しい実装を区別できず檻が空虚になる。
+/// そのため各分岐へ `[clamp_wa.top, clamp_wa.bottom − h]` の範囲外の Y を必ず通す。
+/// `guard_visibility` の前提は正寸のみで、Y の値域は射影 T の関心なので、範囲外 Y の投入は契約上も正当。
 #[test]
 fn guard_never_modifies_y_in_any_branch() {
     for dpi in DPIS {
         let snapshot = mixed_layout(dpi);
         let wa = right_wa(dpi);
         for size in [char_size(dpi), balloon_size(dpi)] {
-            // Y clamp の**不動点**（射影 T が出す接地 Y）＝従来の網羅を維持する側
+            // Y clamp の不動点（射影 T が出す接地 Y）
             let y_fixed = grounded_y(wa, size);
-            // Y clamp の不動点**ではない** Y ＝ clamp が入れば必ず動く側
+            // Y clamp の不動点ではない Y（clamp が入れば必ず動く）
             let y_above = wa.top - px(300, dpi); // 上端より上
             let y_below = wa.bottom + px(200, dpi); // 下端より下
             let y_partial = wa.top - size.h / 2; // 上端を跨ぐ（水平内なら交差は保つ）

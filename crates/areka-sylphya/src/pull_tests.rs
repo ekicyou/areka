@@ -1,4 +1,4 @@
-//! 形と登録の表の単体の檻（spec mcp-scope-rect-property タスク 1.1・要件 7.1・7.4）。
+//! 形と登録の表の単体のテスト。
 
 use super::*;
 use crate::key::parse_dotted;
@@ -13,7 +13,6 @@ impl PullSource for Fixed {
 
 #[test]
 fn selector_folds_to_star_and_case_folds() {
-    // 選択子の中身・英字の大小が違っても同じ形になる。
     let want = "currentghost.scope(*).rect";
     for name in [
         "currentghost.scope(0).rect",
@@ -72,7 +71,6 @@ fn registry_is_shared_by_clones_and_reregister_replaces() {
         Some("second")
     );
 
-    // 選択子の無い名前は別の形なので引けない。
     assert!(
         reg.find(&parse_dotted("currentghost.scope.rect").unwrap())
             .is_none()
@@ -109,18 +107,15 @@ fn reader_asks_registry_only_when_mirror_lacks_name() {
         .or_default()
         .insert("x.s(0)".into(), "MIRROR".into());
     let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
-    // 複製へ登録しても元の読み口から引ける（表は共有）。
     reader
         .clone()
         .register_pull(PullShape::parse("x.s(*)").unwrap(), Arc::new(Fixed("PULL")));
     let ctx = AskerContext { asker: a };
 
-    // 写しに在る名前は写しの値（読み手を引かない）。
     assert_eq!(
         reader.resolve_dotted_str(&ctx, "x.s(0)"),
         DottedResolution::Value("MIRROR".into())
     );
-    // 写しに無い名前は読み手の答え（文字・読んだ名前の両方の入口）。
     assert_eq!(
         reader.resolve_dotted_str(&ctx, "x.s(1)"),
         DottedResolution::Value("PULL".into())
@@ -129,14 +124,13 @@ fn reader_asks_registry_only_when_mirror_lacks_name() {
         reader.resolve_dotted(&ctx, &parse_dotted("x.s(2)").unwrap()),
         DottedResolution::Value("PULL".into())
     );
-    // 形の合わない名前は今までどおり NotFound。
     assert_eq!(
         reader.resolve_dotted_str(&ctx, "x.t(1)"),
         DottedResolution::NotFound
     );
 }
 
-// ---- 読み口を通した檻（タスク 1.3・要件 1.9・3.6・5.2・6.3・6.4・6.6・7.4・7.5） ----
+// ---- 読み口を通したテスト ----
 
 mod via_reader {
     use super::*;
@@ -232,12 +226,10 @@ mod via_reader {
 
         reader.register_pull(PullShape::parse(RECT).unwrap(), Arc::new(Fixed("PULL")));
 
-        // 写しの大域の区画に在る名前は読み手を引かない。
         assert_eq!(
             reader.resolve_dotted_str(&ctx(), "currentghost.scope(0).rect"),
             val("GLOBAL")
         );
-        // 写しに無い同じ形の名前だけが読み手に届く。
         assert_eq!(
             reader.resolve_dotted_str(&ctx(), "currentghost.scope(1).rect"),
             val("PULL")
@@ -266,7 +258,6 @@ mod via_reader {
         reader.register_pull(PullShape::parse(RECT).unwrap(), Arc::new(Fixed("first")));
         assert_eq!(early.resolve_dotted_str(&ctx(), name), val("first"));
 
-        // 実行系の作り直しで同じ形に登録し直すと、どの複製でも新しい読み手が答える。
         reader.register_pull(PullShape::parse(RECT).unwrap(), Arc::new(Fixed("second")));
         assert_eq!(early.resolve_dotted_str(&ctx(), name), val("second"));
         assert_eq!(reader.resolve_dotted_str(&ctx(), name), val("second"));
@@ -309,7 +300,6 @@ mod via_reader {
             .expect("読み手の中からの読み直しで止まった");
         assert_eq!(got, val(r#"Value("M")/Value("P")"#));
 
-        // 読み手の答えは写しに書かない（世代も中身も読む前のまま）。
         let after = shared.load();
         assert_eq!(after.epoch, before.epoch);
         assert!(Arc::ptr_eq(&after, &before));

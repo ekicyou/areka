@@ -1,6 +1,4 @@
-//! 引き金の判定（`runonce`・`periodic`・`talk`）の決定論テスト
-//! （spec: areka-P0-seriko-trigger-intervals 要件 2.1・2.2・3.1〜3.5・4.1・4.5〜4.7・5.3・5.9・6.1・
-//! 9.3・9.4）。
+//! 引き金の判定（`runonce`・`periodic`・`talk`）の決定論テスト。
 //!
 //! 時刻は全部ただの数（ms）。判定はコマ列を読まないので、animation のコマ列は空で組む。
 //! 文字が現れる時刻は、序数から壁時刻への偽の写し（閉包）で渡す。
@@ -114,7 +112,7 @@ fn runonce_fires_once_and_starts_at_visible_since() {
 }
 
 /// 見え始めの時刻に再生中だった回は見送り、印を付ける（再生が終わった後に、過ぎた見え始めの時刻で
-/// 鳴り直さない・`periodic` が見送った周を後から鳴らさないのと同じ・要件 2.1・5.3）。
+/// 鳴り直さない・`periodic` が見送った周を後から鳴らさないのと同じ）。
 #[test]
 fn runonce_polled_while_playing_is_skipped_for_good() {
     let mut armed = armed_at(100);

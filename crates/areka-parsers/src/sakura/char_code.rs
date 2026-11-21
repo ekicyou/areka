@@ -1,5 +1,4 @@
-//! `\_u`・`\_m` の引数を文字の番号として読む純粋な関数（script-small-tags 要件 1.1〜1.4・2.1・
-//! 2.2・2.4・2.6・6.6）。
+//! `\_u`・`\_m` の引数を文字の番号として読む純粋な関数。
 //!
 //! 読み手の中だけで使う。記録は出さず、失敗もしない（捨てる理由を返す）。
 
@@ -35,7 +34,6 @@ pub(crate) fn read_char_code(arg: Option<&str>) -> CharCodeRead {
     if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
         return CharCodeRead::Drop(CharCodeDrop::Unreadable);
     }
-    // 桁は正しいので、失敗は 32 ビットに入らない桁あふれだけ。
     let Ok(code) = u32::from_str_radix(digits, radix) else {
         return CharCodeRead::Drop(CharCodeDrop::OutOfRange);
     };
@@ -45,7 +43,6 @@ pub(crate) fn read_char_code(arg: Option<&str>) -> CharCodeRead {
         0x11_0000.. => CharCodeRead::Drop(CharCodeDrop::OutOfRange),
         0xD800..=0xDBFF => CharCodeRead::HighSurrogate(code as u16),
         0xDC00..=0xDFFF => CharCodeRead::LowSurrogate(code as u16),
-        // 上の腕で 0・サロゲート・範囲の外を除いたので必ず字になる。
         _ => CharCodeRead::Char(char::from_u32(code).expect("サロゲートと範囲の外は除いた")),
     }
 }

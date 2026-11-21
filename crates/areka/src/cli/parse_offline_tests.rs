@@ -1,4 +1,4 @@
-//! オフラインの書き出しの欄（areka-P0-offline-surface-dump 要件 1.8・2.2・10.1〜10.4・12.1）。
+//! オフラインの書き出しの欄。
 
 use super::*;
 use crate::cli::OfflineDumpRequest;
@@ -50,7 +50,7 @@ fn ghost(dir: &str) -> OfflineDumpRequest {
 
 const NONE: &[ParseNote] = &[];
 
-/// 1.8: `--offline-dump` は値の有無に関わらず欄が在り、値なしは記録しない（error は走りが出す）。
+/// `--offline-dump` は値の有無に関わらず欄が在り、値なしは記録しない（error は走りが出す）。
 #[test]
 fn offline_dump_present_with_or_without_value() {
     let cases: Vec<(Vec<&str>, OfflineDumpRequest)> = vec![
@@ -158,7 +158,7 @@ fn empty_dump_value_is_missing() {
             missing("dump-bind"),
         ]
     );
-    // `--offline-dump` が無ければ値なしの記録は出さず、効かない記録だけ（10.4）
+    // `--offline-dump` が無ければ値なしの記録は出さず、効かない記録だけ
     assert_eq!(
         notes(&run(&["--dump-scope"])),
         &[without_offline("dump-scope")]
@@ -198,7 +198,7 @@ fn dump_scope_negative_reads_as_name() {
     assert_eq!(parsed.options.offline.unwrap().scope, Some(s("-1")));
 }
 
-/// 2.2 の前提: 相対パスは生のまま運ぶ（基準のフォルダは走りが決める）。
+/// 相対パスは生のまま運ぶ（基準のフォルダは走りが決める）。
 #[test]
 fn relative_paths_carried_raw() {
     let parsed = run(&[
@@ -215,7 +215,7 @@ fn relative_paths_carried_raw() {
     assert_eq!(o.error_log.as_deref(), Some("log/x.csv"));
 }
 
-/// 10.2: `--help` は効く側に残る（説明書を開いて終わる）。
+/// `--help` は効く側に残る（説明書を開いて終わる）。
 #[test]
 fn help_with_offline_stays_effective() {
     let parsed = run(&["--offline-dump", "G", "--help"]);
@@ -225,7 +225,7 @@ fn help_with_offline_stays_effective() {
     assert_eq!(effective, &vec![s("offline-dump"), s("help")]);
 }
 
-/// 10.2: `--help` と一緒なら両方が立つ（どちらを行うかは main が決める）。
+/// `--help` と一緒なら両方が立つ（どちらを行うかは main が決める）。
 #[test]
 fn help_and_offline_both_set() {
     for args in [
@@ -250,7 +250,7 @@ fn dump_pending_and_other_dump_names() {
     ]);
     assert_eq!(parsed.options.offline, Some(ghost("G")));
     assert_eq!(parsed.options.boot.positional_ghost, None);
-    // 10.3: 1 件ずつ・扱わない名前の記録にはしない
+    // 1 件ずつ・扱わない名前の記録にはしない
     assert_eq!(
         notes(&parsed),
         &[pending("dump-surface-option"), pending("dump-animation")]
@@ -285,7 +285,7 @@ fn summary_lists_offline_names() {
     assert_eq!(ignored, &vec![s("dump-animation")]);
 }
 
-/// 10.1: `--offline-dump` と一緒の起動オプションは効かせなかった記録を 1 件ずつ。`--option` の語の記録はそのまま。
+/// `--offline-dump` と一緒の起動オプションは効かせなかった記録を 1 件ずつ。`--option` の語の記録はそのまま。
 #[test]
 fn other_options_with_offline_not_applied() {
     let parsed = run(&[
@@ -340,7 +340,7 @@ fn other_options_with_offline_not_applied() {
     );
 }
 
-/// 10.4: `--offline-dump` なしの `--dump-*`（まだ扱わない 2 つを含む）は 1 件ずつ・まとめでは無視の側。
+/// `--offline-dump` なしの `--dump-*`（まだ扱わない 2 つを含む）は 1 件ずつ・まとめでは無視の側。
 #[test]
 fn dump_without_offline_noted_each() {
     let parsed = run(&[

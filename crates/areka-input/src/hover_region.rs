@@ -1,7 +1,7 @@
-//! 窓ごとの当たり判定の出入りの状態と、出入りを決める純関数（mouse-click-wheel-events 要件 7・design「HoverRegion」）。
+//! 窓ごとの当たり判定の出入りの状態と、出入りを決める純関数。
 //!
-//! 状態の置き場所は `MouseWiring.hover`（鍵＝窓の entity）。後の `shell-mouse-cursor`・`shell-tooltip`・
-//! `shell-hover-animation` は [`HoverState`] を読む口を足して使う。結線は `char_watch`（task 3.5）。
+//! 状態の置き場所は `MouseWiring.hover`（鍵＝窓の entity）。後から足すマウスカーソル・ツールチップ・
+//! ホバーアニメーションは [`HoverState`] を読む口を足して使う。結線は `char_watch`。
 
 use areka_kanade::HoverEdge;
 
@@ -44,7 +44,7 @@ fn send(edge: HoverEdge, surface: (i64, i64), region: Option<String>) -> HoverSe
     }
 }
 
-/// 前の状態と今の見え方から、次の状態と送る出入り（送る順）を返す（design の 7 行の表）。
+/// 前の状態と今の見え方から、次の状態と送る出入り（送る順）を返す（7 行の表）。
 pub(super) fn plan_hover(
     prev: Option<&HoverState>,
     now: HoverSighting,
@@ -54,7 +54,7 @@ pub(super) fn plan_hover(
             let Some(p) = prev else {
                 return (None, Vec::new());
             };
-            // 座標は窓の中で最後に見た位置（要件 7.5・7.12）。
+            // 座標は窓の中で最後に見た位置。
             let mut sends = Vec::new();
             if p.region.is_some() {
                 sends.push(send(HoverEdge::Leave, p.surface, p.region.clone()));

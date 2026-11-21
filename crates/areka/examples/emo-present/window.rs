@@ -23,6 +23,7 @@ pub(super) fn create_shell_window(world: &mut World, x: i32, y: i32, w: u32, h: 
                 title: "areka emo shell".to_string(),
                 // WUC 合成固定。factory の compute_ex_style が WS_EX_LAYERED を剥がし
                 // WS_EX_NOREDIRECTIONBITMAP を付与するため ex_style は据え置きでよい。
+                // WS_EX_NOREDIRECTIONBITMAP を付与するため ex_style は据え置きでよい。
                 ..Default::default()
             },
             WindowStyle {
@@ -31,7 +32,6 @@ pub(super) fn create_shell_window(world: &mut World, x: i32, y: i32, w: u32, h: 
             },
             WindowPos {
                 position: Some(Point { x, y }),
-                // 窓クライアント寸 ≔ surface 原寸（物理 px）。
                 size: Some(SizeI {
                     width: w as i32,
                     height: h as i32,
@@ -40,7 +40,6 @@ pub(super) fn create_shell_window(world: &mut World, x: i32, y: i32, w: u32, h: 
             },
             // 窓自身はヒット対象外（全面ヒットで透過を殺さない）。当たりは emo-surface 子（αマスク）が担う。
             HitTest::none(),
-            // ダブルクリックで全窓を閉じて終了（手動観測の利便）。
             OnPointerPressed(on_shell_pressed),
         ))
         .id()

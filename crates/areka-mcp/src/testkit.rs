@@ -2,7 +2,7 @@
 //!
 //! クライアントは `areka-update` の `winhttp_real_tests::answer` の逆向き: 要求 1 本を
 //! `Connection: close` で送り、サーバが閉じるまで読んでから状態・ヘッダ・本文に分ける。
-//! ネットへは出ない（`127.0.0.1` の空きポートだけ＝要件 9.1）。
+//! ネットへは出ない（`127.0.0.1` の空きポートだけ）。
 
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpStream};
@@ -18,11 +18,11 @@ use crate::{McpServer, ToolRegistry, start};
 pub(crate) const MCP_V1: &str = "/api/mcp/v1";
 /// help のパス。
 pub(crate) const HELP: &str = "/api/mcp/help";
-/// rmcp が `POST` に求める `Accept`（両方が無いと 406＝設計 B-8）。
+/// rmcp が `POST` に求める `Accept`（両方が無いと 406）。
 pub(crate) const RPC_ACCEPT: &str = "application/json, text/event-stream";
 /// 無状態版の版。
 pub(crate) const STATELESS: &str = "2026-07-28";
-/// 保存した SSP の定義（テストだけが読む。本番はクレートの外のファイルを読まない＝spec: areka-P0-mcp-tool-entrances 要件 7.6）。
+/// 保存した SSP の定義（テストだけが読む。本番はクレートの外のファイルを読まない）。
 const SAVED_LIST: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../doc/ssp-mcp/tools-list-ssp-2.9.05.json"

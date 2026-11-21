@@ -48,7 +48,7 @@ fn emo2_surfaces_txt() -> std::path::PathBuf {
 ///
 /// 検体の在処は窓口から得るので、テストの CWD に依存しない（絶対パス）。
 /// emo-compose の world.rs テストと同一 fixture・同一経路（parse→`EmoWorld::build`→
-/// `alias_snapshot`）で、要件 7.3 の「alias 実データ追験」を満たす。
+/// `alias_snapshot`）の実データで alias を追験する。
 pub fn emo2_resolver() -> SurfaceResolver {
     let path = emo2_surfaces_txt();
     let content = std::fs::read_to_string(&path)
@@ -174,7 +174,7 @@ pub fn run_core(
 }
 
 /// `spawn_talk` の done ポート境界（`D: From<TalkDone> + From<ChoiceWaiting>`）を満たす
-/// test-local な合流 enum。両通知は同一ポートを流れる（areka-P0-choice-select-events DD-6）が、
+/// test-local な合流 enum。両通知は同一ポートを流れるが、
 /// 本 E2E の fixture に選択肢（`\q`）は無く `ChoiceWaiting` は発生しない——境界充足のためだけの
 /// 受け皿である。
 pub enum TalkNotice {

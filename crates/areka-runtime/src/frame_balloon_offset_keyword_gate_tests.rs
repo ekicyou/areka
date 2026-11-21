@@ -104,9 +104,7 @@ fn the_gate_holds_the_offset_and_the_base_pair_bit_identical() {
     harness.run_placement_phases(&mut source);
     let writes = harness.drain_writes();
 
-    // 揃えが**実際に動いたか**を先に問う——門を外すと収束がバルーンを 1 度書き、
-    // その 1 行がここで見える。値の主張より前に置くのは、摂動したときに「動いた」証跡が
-    // 先に出るようにするためである。
+    // 値の主張より前に、揃えが実際に動いたか（門を外すと収束がバルーンを 1 度書く）を問う。
     assert!(
         writes.is_empty(),
         "見送った遷移で窓書込が出ている（追随が動いて収束が走った＝揃えが動いた）: {writes:?}"

@@ -1,5 +1,4 @@
-//! 取り寄せの置き場と照合の兄弟テスト（spec: `areka-P0-sample-url-fetch` 要件 1.5・1.6・
-//! 3.3〜3.6・3.9・4.1・4.2）。
+//! 取り寄せの置き場と照合の兄弟テスト。
 //!
 //! 照合は私有の名前空間（[`crate::WorkDir`]）に置いたただのバイトで回し（照合は書庫を開かない）、
 //! 期待値の SHA-256 は [`crate::sha256::sha256_hex`] で求める。通信しない。
@@ -293,7 +292,7 @@ fn archive_path_of_rows() {
     assert_eq!(sum, path.with_file_name("x.nar.sha256"));
 }
 
-/// ハッシュのファイルのパスがフォルダなら、NotFound ではない読みの誤りとして `Io`（audit-test-kits 指摘 69）。
+/// ハッシュのファイルのパスがフォルダなら、NotFound ではない読みの誤りとして `Io`。
 #[test]
 fn a_checksum_path_that_is_a_folder_is_an_io_error() {
     let ns = WorkDir::new().expect("私有の名前空間");
@@ -308,7 +307,7 @@ fn a_checksum_path_that_is_a_folder_is_an_io_error() {
     );
 }
 
-/// Windows PowerShell の `>` が書く UTF-16 のハッシュのファイルは UTF-8 でないので不正（audit-test-kits 指摘 69）。
+/// Windows PowerShell の `>` が書く UTF-16 のハッシュのファイルは UTF-8 でないので不正。
 #[test]
 fn a_utf16_checksum_file_is_invalid() {
     let ns = WorkDir::new().expect("私有の名前空間");

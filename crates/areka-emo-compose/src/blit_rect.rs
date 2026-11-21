@@ -95,7 +95,6 @@ pub(crate) fn execute_reusing(
         dst[row + area.x0 as usize * 4..row + area.x1 as usize * 4].fill(0);
     }
 
-    // 全命令を矩形で切って順に重ねる（画家のアルゴリズム・下層から上層）。
     for op in ops {
         overlay_op(dst, stride, area, op, atlas);
     }

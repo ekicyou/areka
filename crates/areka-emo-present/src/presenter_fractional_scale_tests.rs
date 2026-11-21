@@ -17,12 +17,12 @@ use super::test_support::{
 // ここで足すのは (A) 端数を伴う k での**配置（原寸＋係数）と照会物理寸**、(B) **αマスクの由来**、
 // (C) **縮小方向**の `refresh_scale`——の 3 点。
 //
-// **表示の作り方が変わった（`areka-P0-present-gpu-transform-scale` 裁定 D）**: 絵もマスクも常に
+// **表示の作り方**: 絵もマスクも常に
 // native 原寸で、拡大は wintf の描画経路（`render_surface` の `SetTransform`）が `Arrangement.scale`
 // ＝k で掛ける。ゆえに (A) は「配置の寸＝原寸・係数＝k・照会値＝丸め権威」の形、(B) は
 // 「マスクは**原寸バイト**由来」（旧 canon の正反対）、(C) は「縮小では係数と照会値だけが変わり、
 // 絵・マスク・表示記録は据え置かれる」の形になる。k≠1 の画素そのものは GPU 補間の出力ゆえ
-// 決定論 golden に取らない（要件 6.6・見た目は実機 2 水準サインオフが担う）。
+// 決定論 golden に取らない（見た目は実機 2 水準サインオフが担う）。
 
 /// surface 1000 ＝ **α が画素ごとに変わる** `w×h` element の `(EmoWorld, AtlasTable)`。
 ///
@@ -46,7 +46,7 @@ fn build_alpha_varying_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable
     )
 }
 
-/// タスク 6.3 の名指し受け入れ基準・要件 2.1/2.5/3.1/3.2 観測完了（**端数を伴う k=5/4 の表示の
+/// （**端数を伴う k=5/4 の表示の
 /// 作り方**）: 窓 `DPI`=120（125%）・author_dpi=96 で `ShowSurface` を適用すると——(a) 配置の寸が
 /// native 原寸・係数が 1.25、(b) `read_back` が **native 合成**の独立再現と全バイト一致（k に
 /// 依らない）、(c) αマスクが **原寸**で供給される、(d) 照会物理寸が `scaled_extent(5/4, native)`、
@@ -87,7 +87,7 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
         "配置が「原寸 6×5・係数 1.25」になっていない（端数 k が表示へ届いていない）"
     );
 
-    // (b) 読み戻しは原寸の合成バイトそのもの（k に依らない・要件 6.2）。
+    // (b) 読み戻しは原寸の合成バイトそのもの（k に依らない）。
     let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
     assert_eq!(
         rb.len(),
@@ -99,7 +99,7 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
         "読み戻しが native 合成の独立再現と一致しない（k が画素へ混ざっている）"
     );
 
-    // (c) αマスクは **原寸**で供給される（k 適用後の寸で作る旧 canon はここで落ちる・要件 4.1）。
+    // (c) αマスクは **原寸**で供給される（k 適用後の寸で作る旧 canon はここで落ちる）。
     assert_eq!(
         mask_dims(&world, surface_entity),
         Some(native_size),
@@ -120,15 +120,14 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
     );
 }
 
-/// 要件 2.1/2.5/4.1 観測完了（**αマスクは原寸バイト由来**）: α が画素ごとに変わる surface を
+/// **αマスクは原寸バイト由来**: α が画素ごとに変わる surface を
 /// k=5/4 で表示すると、表示器へ供給される `AlphaMask` は——(a) 寸法が **native 原寸**（k 適用後の
 /// 物理寸ではない）、(b) **全ビットが「原寸の合成バイト列から独立に組んだマスク」と一致**する。
 ///
-/// # 旧 canon の正反対である
+/// # マスクは原寸バイト由来である
 ///
-/// かつてここは「マスクは k 適用後バイト由来」を固定していた。裁定 D
-/// （`areka-P0-present-gpu-transform-scale`）でマスクは原寸に戻り、÷k は wintf の `alpha_mask_hit`
-/// が物理寸の境界に対する比例写像として 1 回だけ掛ける（要件 4.2）。ゆえに主張も名も反転した。
+/// マスクは原寸で供給され、÷k は wintf の `alpha_mask_hit`
+/// が物理寸の境界に対する比例写像として 1 回だけ掛ける。
 ///
 /// # なぜ寸法だけでは足りないのか
 ///
@@ -137,8 +136,8 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
 /// 本テストは α に 0xFF（hit）と 0x20（閾値 128 未満＝非 hit）を市松に置き、hit/非 hit が
 /// **両方存在すること**を前提として明示検査したうえでビット全走査する。
 ///
-/// マスクの**座標契約**（点÷k・ヒット規約）は本 spec の領分ではない（R7.9・W5
-/// `areka-P0-collision-dpi-hittest`）。ここで固定するのは「表示に渡した原寸バイトと同一・同寸の
+/// マスクの**座標契約**（点÷k・ヒット規約）は本 crate の領分ではない（
+/// 当たり判定の側が決める）。ここで固定するのは「表示に渡した原寸バイトと同一・同寸の
 /// マスクが供給される」という emo-present 側の生成契約だけである。
 #[test]
 fn alpha_mask_bits_come_from_native_bytes() {
@@ -219,7 +218,7 @@ fn alpha_mask_bits_come_from_native_bytes() {
     );
 }
 
-/// タスク 6.3 の名指し受け入れ基準・要件 4.1/4.2/5.3 観測完了（**DPI 差替 → `refresh_scale` は
+/// （**DPI 差替 → `refresh_scale` は
 /// 係数だけを変える**）: k=2/1 で表示を確立したのち窓 `DPI` を 192→120（k=2/1→5/4）へ差し替えて
 /// `refresh_scale` を呼ぶと、**変わるのは配置の係数と照会物理寸・報告値だけ**で、絵・αマスク・
 /// 表示記録は原寸のまま据え置かれる（k はキーに参加しないゆえ再合成もしない）。
@@ -284,14 +283,13 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
         "縮小方向の DPI 変化で新物理寸が返らない（再導出・再表示が走っていない）"
     );
 
-    // 変わるのは配置の係数だけ（寸は原寸のまま）。
     assert_eq!(
         arrangement_of(&world, surface_entity),
         (native_size, (1.25, 1.25)),
         "refresh_scale 後の配置の係数が旧 k のまま（余白が残る）"
     );
 
-    // 絵・マスク・表示記録は据え置き（k はキーに参加せず再合成も再記録も起きない・要件 5.3）。
+    // 絵・マスク・表示記録は据え置き（k はキーに参加せず再合成も再記録も起きない）。
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
         golden,
@@ -308,7 +306,6 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
         "k が変わっただけで表示記録を作り直している（記録は k を含まない）"
     );
 
-    // 照会契約と drain 契約。
     assert_eq!(presenter.applied_scale(TargetId(0)), Some(1.25));
     assert_eq!(presenter.target_physical_size(TargetId(0)), Some(shrunk));
     assert_eq!(
@@ -318,11 +315,11 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
     );
 }
 
-// ── 要件 2.3（多層コンテンツの単一 k 一貫拡大）の実表示檻 ──────────────────────────────
+// ── 多層コンテンツの単一 k 一貫拡大の実表示檻 ──────────────────────────────
 //
 // 既存の k≠1 檻は全て**単一 element** の fixture を駆動しており、「ベース surface・SERIKO アニメ
 // パターン・mayuna 着せ替えパーツを単一の k で一貫拡大し、要素間の相対配置・重なりが等倍時と
-// 同一の見た目関係を保つ」（要件 2.3）は *3 層を 1 枚へ合成 → その 1 枚に係数 1 対を掛ける* という
+// 同一の見た目関係を保つ」は *3 層を 1 枚へ合成 → その 1 枚に係数 1 対を掛ける* という
 // 構造からの帰結であって、**一度も観測されていなかった**。実 emo2 ゴーストの表情は bind part の重ねで作られる
 // ため、未観測の構成こそが本番の構成である。以下の fixture／テストがその空白を閉じる。
 
@@ -368,7 +365,7 @@ fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
     )
 }
 
-/// 要件 2.3 観測完了（**多層コンテンツの単一 k**・k=3/2）: ベース surface ＋ mayuna 着せ替え相当の
+/// **多層コンテンツの単一 k**・k=3/2: ベース surface ＋ mayuna 着せ替え相当の
 /// bind part ＋ SERIKO アニメパターン相当の現在コマ part を**非対称・相互重なり**で載せた面を
 /// k≠1 で表示すると——(a) 配置の寸が native 原寸・**係数が 1 対**（x と y が同一の k）、
 /// (b) `read_back` が **同一 `(binds, pattern)` で合成した native** の独立再現と全バイト一致し、
@@ -384,10 +381,9 @@ fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
 /// 未観測の構成が本番の構成そのものだった。(b) の非空虚性は下の「層なし／bind のみ／
 /// pattern のみ」との弁別で明示検査する。
 ///
-/// # k≠1 の画素そのものは檻に入れない（要件 6.6）
+/// # k≠1 の画素そのものは檻に入れない
 ///
-/// かつてここには「k 適用後の part 内部画素が native の対応画素と厳密同値」という座標突合が
-/// あった。拡大が GPU の変換行列へ移った今、k 適用後の画素は wintf の `render_surface` が描く
+/// 拡大が GPU の変換行列へ移っているので、k 適用後の画素は wintf の `render_surface` が描く
 /// 出力であり決定論 golden の対象外である（見た目は実機 2 水準サインオフが担う）。層が k 経路で
 /// 落ちる変異は (b) が原寸のまま捕まえる——`apply_show` が k≠1 のとき `binds`／`pattern` を既定へ
 /// 落とせば、原寸の読み戻しが「層なし」の golden と一致してしまい (b) が赤になる。

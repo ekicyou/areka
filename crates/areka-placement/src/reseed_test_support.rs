@@ -1,5 +1,5 @@
 //! `reseed` のテストの補助のうち、本体のテストも使う 3 つ（`booted_world`・`new_shell`・
-//! `char_positions`）と、それらが中で使う補助（spec: placement-crate-split 設計 TestSupportFeature）。
+//! `char_positions`）と、それらが中で使う補助。
 //! テストだけが使う補助は `reseed_tests.rs` に残す。
 
 use std::path::PathBuf;
@@ -87,8 +87,7 @@ pub(crate) fn world_from(placements: &[ScopePlacement], dpi: u16) -> (World, Gho
 }
 
 /// 新しいシェル: 揃え方は free・sakura のバルーンは右で (30,40)・kero は (-7,9)。
-/// `char2.` のキーを持つが、設定にスコープ 2 は現れない（spec: areka-P0-emily-ghost-verification
-/// 要件 4.7・6.7——`char{n}.`（n≥2）からは scope を足さない）。
+/// `char2.` のキーを持つが、設定にスコープ 2 は現れない（`char{n}.`（n≥2）からは scope を足さない）。
 pub fn new_shell(extra: &[(&str, &str)]) -> DescriptSource {
     let mut shell_kv = kv(&[
         ("seriko.alignmenttodesktop", "free"),

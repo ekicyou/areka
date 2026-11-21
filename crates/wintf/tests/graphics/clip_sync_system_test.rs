@@ -1,4 +1,4 @@
-//! W3a-T: clip_sync_system（WUC モードのクリップ同期）のヘッドレステスト
+//! clip_sync_system（WUC モードのクリップ同期）のヘッドレステスト
 //!
 //! 実 WUC デバイスを用いて clip_sync_system を Schedule 経由で実行する。
 //! 切り抜きの中身（図形）は読み戻さず、各分岐（3 バリアント適用・クリップ解除）で
@@ -114,7 +114,6 @@ fn clip_sync_applies_all_clip_shape_variants() {
             50.0,
         );
 
-        // 3 バリアントすべてが角丸の図形の切り抜き → SetClip まで失敗なく通る
         run_without_error(&mut schedule, &mut world);
         for entity in [rect, rounded, individual] {
             assert!(has_clip(&world, entity), "切り抜きが当たっていない");
@@ -138,11 +137,9 @@ fn clip_sync_clears_clip_when_clip_is_none() {
             50.0,
         );
 
-        // 1回目: クリップ適用
         run_without_error(&mut schedule, &mut world);
         assert!(has_clip(&world, entity), "切り抜きが当たっていない");
 
-        // clip = None に変更 → クリップ解除（SetClip(None)）経路
         world.get_mut::<Visual>(entity).unwrap().clip = None;
         run_without_error(&mut schedule, &mut world);
         assert!(
@@ -158,7 +155,6 @@ fn clip_sync_clears_clip_when_size_is_zero() {
         let mut world = setup_world();
         let mut schedule = clip_schedule();
 
-        // いったん切り抜きを当ててから、clip はあるがサイズ (0, 0) → クリップ解除経路に分岐する
         let entity = spawn_clip_entity(
             &mut world,
             Visual {
@@ -181,7 +177,7 @@ fn clip_sync_clears_clip_when_size_is_zero() {
 }
 
 /// 位置だけ変えても切り抜きは同じ物のまま・大きさを変えると作り直す・
-/// 見た目を作り直した部品には新しい見た目へ当て直す（11 番・6 番）
+/// 見た目を作り直した部品には新しい見た目へ当て直す
 #[test]
 fn clip_sync_keeps_clip_on_move_and_reapplies_to_recreated_visual() {
     crate::common::on_gpu_owner_thread(move || {
@@ -214,7 +210,6 @@ fn clip_sync_keeps_clip_on_move_and_reapplies_to_recreated_visual() {
         schedule.run(&mut world);
         let first = visual(&world).Clip().expect("切り抜きが当たっていない");
 
-        // 位置だけ変える
         world
             .get_mut::<GlobalArrangement>(entity)
             .unwrap()

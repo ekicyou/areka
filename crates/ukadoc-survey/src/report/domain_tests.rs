@@ -1,7 +1,6 @@
 //! `domain.rs` の在中テスト。
 //!
-//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない
-//! （要件 6.2・設計 File Structure Plan）。
+//! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない。
 //!
 //! 期待値は実装側の定数を参照せず**逐語の文字列**で書く。実装の表を実装の表自身と
 //! 比べるだけのテストは、綴りの取り違えも並べ替えも 1 件も捕まえない。
@@ -80,17 +79,17 @@ fn ledger_of(domain: Domain, pages: &[&str], rows: &[Row]) -> Ledger {
     }
 }
 
-/// 見本の台帳。要件 7.1 の 5 項目すべてに中身が出るように組んである。
+/// 見本の台帳。報告の 5 項目すべてに中身が出るように組んである。
 ///
 /// - **2 ページ**を id の昇順とは逆の順で渡す（並びを主張する見本は 2 要素以上・かつ
 ///   非整列であること）。
 /// - **未分類はページごとに違う件数**（`page_one` 2 件・`page_two` 1 件）。件数が同じ
-///   だと、ページ別の表と合計 1 行の区別が付かない（要件 6.9）。
+///   だと、ページ別の表と合計 1 行の区別が付かない。
 /// - `introduced` は世代の名前順が**版番号の数値順とも本文の順とも食い違う**ように
 ///   混ぜてある（`2.10` が `2.9` より前・空文字が最後）。
 /// - `echo` は**1 つの id から 2 本の関連**を出す（元 id ごとに 1 本の入れ物で集めると
 ///   2 本目以降が黙って落ちる）。
-/// - `golf` の関連は**この台帳に無い id** へ伸びる（設計 D-11 の絞り込みの負の対照）。
+/// - `golf` の関連は**この台帳に無い id** へ伸びる（絞り込みの負の対照）。
 fn sample() -> Ledger {
     ledger_of(
         Domain::Property,
@@ -127,7 +126,7 @@ fn sample() -> Ledger {
 /// 見本の本文の逐語の期待値。
 ///
 /// テストファイルの改行が復帰文字に化けても期待値が変わらないよう、行の列を `\n` で
-/// 繋いで組む（本文は改行だけ・設計 D-6）。
+/// 繋いで組む（本文は改行だけ）。
 fn expected_body() -> String {
     let lines = [
         "# property の網羅状況",
@@ -211,15 +210,15 @@ fn section_body(body: &str, heading: &str) -> String {
     }
 }
 
-// ---- 版面の逐語の釘（要件 7.3・7.4） ----
+// ---- 版面の逐語の釘 ----
 
 #[test]
 fn the_body_is_pinned_verbatim() {
-    // 版面そのものが契約である（新しさの検査はバイト単位で比べる・要件 7.4）。
+    // 版面そのものが契約である（新しさの検査はバイト単位で比べる）。
     assert_eq!(render_domain(&sample(), &THEMES), expected_body());
 }
 
-// ---- 完了条件の後半: 未分類がどのページに何件あるか（要件 6.9） ----
+// ---- 完了条件の後半: 未分類がどのページに何件あるか ----
 
 #[test]
 fn the_page_table_is_in_name_order_even_when_id_order_disagrees() {
@@ -291,11 +290,11 @@ fn an_empty_alias_list_says_there_is_none() {
     assert!(!section.contains("| --- |"), "{section}");
 }
 
-// ---- ⑷ テーマ別の状態分布（要件 4.4 の 8 テーマ） ----
+// ---- ⑷ テーマ別の状態分布（8 テーマ） ----
 
 #[test]
 fn a_theme_name_that_only_the_argument_carries_still_gets_a_row() {
-    // テーマ名は引数から来る（設計 D-11「入力はその台帳 1 本とテーマ名だけ」）。
+    // テーマ名は引数から来る。
     // 引数を無視して定数だけを見る実装をここで捕まえる。
     let ledger = ledger_of(
         Domain::Property,
@@ -311,7 +310,7 @@ fn a_theme_name_that_only_the_argument_carries_still_gets_a_row() {
     );
 }
 
-// ---- ⑸ ドメイン内で関連が閉じている束（設計 D-11） ----
+// ---- ⑸ ドメイン内で関連が閉じている束 ----
 
 #[test]
 fn several_links_leaving_the_same_id_all_become_edges() {
@@ -371,7 +370,7 @@ fn an_empty_bundle_list_says_there_is_none() {
 
 #[test]
 fn alias_of_alone_does_not_make_a_bundle() {
-    // 束は `links` だけで作る（設計 D-11）。`alias_of` は ⑶ の一覧が受け持つ。
+    // 束は `links` だけで作る。`alias_of` は ⑶ の一覧が受け持つ。
     let ledger = ledger_of(
         Domain::Property,
         &["page_one"],

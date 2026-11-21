@@ -20,7 +20,7 @@ pub struct FieldValue {
 /// 捕捉した 1 イベント。
 ///
 /// `fields` は [`tracing::Event::record`] の**訪問順**（＝マクロでの記述順）を保持する。
-/// 行整形が移行前の文字列形を 1 バイトも違わずに再現するために順序が要る。
+/// 行整形の byte 一致に順序が要る。
 #[derive(Debug, Clone)]
 pub struct CapturedEvent {
     /// イベントのレベル（`error!`／`warn!`／`info!`／`debug!`／`trace!` の別）。
@@ -78,16 +78,14 @@ impl CapturedEvent {
     /// メッセージ本文（`message` フィールドの Debug 表現）。無ければ空文字を返す。
     ///
     /// `message` の値は `fmt::Arguments` で渡るため、その `{:?}` は整形済みの本文
-    /// そのもの（引用符なし）になる。移行元の `placement::LogEvent::message`／
-    /// `emo-present::CapturedEvent::message` と同じく、欠落は panic ではなく `""`。
+    /// そのもの（引用符なし）になる。欠落は panic ではなく `""`。
     pub fn message(&self) -> &str {
         self.field("message").unwrap_or("")
     }
 
     /// フィールドの **Debug 表現**（文字列値なら引用符つき）。無ければ `None`。
     ///
-    /// 行整形に載るのと同じ文字列で、移行前の `placement::LogEvent::field` が返していたのと
-    /// 同じ値を返す（違ったのは欠落時に panic したかどうかだけで、その判定はアダプタ側に委ねる）。
+    /// 行整形に載るのと同じ文字列。欠落時に panic するかどうかはアダプタ側が決める。
     pub fn field(&self, name: &str) -> Option<&str> {
         self.last(name).map(|v| v.debug.as_str())
     }
@@ -105,16 +103,14 @@ impl CapturedEvent {
 
     /// フィールド名の昇順・重複なしの一覧（`message` を含む）。
     ///
-    /// 移行前の `emo-present` の `CapturedEvent::field_names()`（`HashMap` の鍵を `sort_unstable`）
-    /// が返していたのと同じ列を返す。「フィールド集合をちょうどで固定する」判定に使う。
+    /// 「フィールド集合をちょうどで固定する」判定に使う。
     pub fn field_names_sorted(&self) -> Vec<&str> {
         self.fields_map().into_keys().collect()
     }
 
     /// フィールド名 → Debug 表現の写像（`message` を含む）。
     ///
-    /// 移行前の `placement` の `LogEvent.fields`（`BTreeMap<String, String>` を `insert` で
-    /// 組んでいた）と同じ内容。同名が 2 度現れた場合は**後勝ち**で、これも移行前と同じ。
+    /// 同名が 2 度現れた場合は**後勝ち**。
     pub fn fields_map(&self) -> BTreeMap<&str, &str> {
         self.fields
             .iter()
@@ -122,8 +118,7 @@ impl CapturedEvent {
             .collect()
     }
 
-    /// 同名フィールドの**最後**の出現。移行元がいずれも写像（`insert` は後勝ち）で
-    /// 組んでいるため、取り出し系はすべてこれに揃える（行整形だけは訪問順どおり全件出す）。
+    /// 同名フィールドの**最後**の出現。取り出し系はすべて後勝ちに揃える（行整形だけは訪問順どおり全件出す）。
     fn last(&self, name: &str) -> Option<&FieldValue> {
         self.fields
             .iter()
@@ -133,7 +128,7 @@ impl CapturedEvent {
     }
 }
 
-/// 行整形の 2 形。移行の前に対象 crate が出していた文字列を 1 バイトも違わずに再現する。
+/// 行整形の 2 形。各 crate が出す文字列を 1 バイトも違わずに再現する。
 ///
 /// どちらも「先頭の固定部 ＋ フィールドを訪問順で ` {name}={value:?}` として連結」であり、
 /// フィールドが 1 個も無ければ固定部だけ（末尾に空白は付かない）。レベルは `Display`
@@ -159,7 +154,6 @@ pub fn format_line(ev: &CapturedEvent, fmt: LineFormat) -> String {
         LineFormat::LevelFields => format!("level={}", ev.level),
     };
     for (name, value) in &ev.fields {
-        // 移行元は ` {}={:?}` と書いており、`{:?}` の結果は `FieldValue::debug` に入っている。
         let _ = write!(line, " {}={}", name, value.debug);
     }
     line
@@ -167,8 +161,7 @@ pub fn format_line(ev: &CapturedEvent, fmt: LineFormat) -> String {
 
 /// [`crate::capture`] の結果をその場で行へ整形して返す。
 ///
-/// 移行前の `capture_logs` は「行の `Vec`」か「改行連結した 1 本の `String`」を返して
-/// いた。前者はこれをそのまま、後者は `.join("\n")` を被せて置き換えた。
+/// 改行連結した 1 本の `String` が要る呼出側は `.join("\n")` を被せる。
 pub fn capture_lines<R>(fmt: LineFormat, f: impl FnOnce() -> R) -> (R, Vec<String>) {
     let (out, events) = crate::capture::capture(f);
     let lines = events.iter().map(|e| format_line(e, fmt)).collect();

@@ -1,22 +1,21 @@
-//! 語彙分類純関数（design C1）の決定論檻（要件 1.1／1.2／1.3／4.1／4.6／7.2）。
+//! `windowposition.x`／`.limit` の語彙分類純関数の決定論テスト。
 //!
 //! 行列:
 //! - [`classify_x_vocab`]: 数値 × キーワード 3 種（`center`／`top`／`bottom`）×
 //!   不正値 × 未指定 × 大文字混在（→ 小文字と同じ語）。
 //! - [`classify_limit_vocab`]: `"0"` × `"1"` × 未指定 × 不正値。
-//! - 不変量「`x_num` があれば常に `Numeric`」（design C1 Invariants・要件 5.1 の同一性を
-//!   型と構造で保証する回帰境界）。
-//! - 未指定（`Numeric(None)`／`Value(true)`）と不正値（`Invalid`）の**区別**（要件 7.2）。
+//! - 不変量「`x_num` があれば常に `Numeric`」（数値経路の回帰境界）。
+//! - 未指定（`Numeric(None)`／`Value(true)`）と不正値（`Invalid`）の**区別**。
 //!
 //! 本層は分類だけを持ち、警告の発行は呼び出し側（`merge_scope_windowpositions`・
-//! scope 文脈付き）が所有する（design C1 Invariants）。ゆえに本檻は
+//! scope 文脈付き）が所有する。ゆえに本テストは
 //! `warn` の有無を主張せず、`Invalid` という**警告可能な戻り値**が出ることだけを固定する。
 
 use super::*;
 
 /// 実運用で `x_raw`／`limit_raw` に載りうる「生値」の代表列。
 ///
-/// 数値経路の不変量檻（[`classify_x_vocab_never_consults_raw_when_numeric_parsed`]）が
+/// 数値経路の不変量テスト（[`classify_x_vocab_never_consults_raw_when_numeric_parsed`]）が
 /// 生値の全種類を舐めるために使う——キーワード・不正値・未指定のどれであっても
 /// 数値が読めていれば結果は `Numeric` でなければならない。
 const RAW_SAMPLES: [Option<&str>; 7] = [
@@ -33,7 +32,7 @@ const RAW_SAMPLES: [Option<&str>; 7] = [
 // classify_x_vocab
 // ---------------------------------------------------------------------------
 
-/// キーワード 3 種の小文字完全一致（要件 4.1・DD8）。
+/// キーワード 3 種の小文字完全一致。
 /// `top` は `center` と同義＝どちらも中央上 [`BalloonXMode::CenterTop`] へ解決する。
 #[test]
 fn classify_x_vocab_accepts_lowercase_keywords() {
@@ -51,8 +50,8 @@ fn classify_x_vocab_accepts_lowercase_keywords() {
     );
 }
 
-/// 大文字小文字は問わない（descript の語は読む所で 1 度だけ小文字にする・`audit-placement-core` の
-/// 裁定 2026-11-15。`alignmenttodesktop` と同じ決まり）。
+/// 大文字小文字は問わない（descript の語は読む所で 1 度だけ小文字にする。
+/// `alignmenttodesktop` と同じ決まり）。
 #[test]
 fn classify_x_vocab_ignores_case() {
     for (raw, mode) in [
@@ -71,14 +70,14 @@ fn classify_x_vocab_ignores_case() {
 }
 
 /// 未指定は `Numeric(None)`＝「調整なし」（既存 [`to_screen_adjust`] の入力語彙そのまま）。
-/// 生値そのものが無い状態であり、警告の対象ではない（要件 1.2 の x 側対応物）。
-/// 不正値（`Invalid`・下の檻）とは別の値になる＝未指定と不正値を区別する（要件 7.2）。
+/// 生値そのものが無い状態であり、警告の対象ではない。
+/// 不正値（`Invalid`・下のテスト）とは別の値になる。
 #[test]
 fn classify_x_vocab_unspecified_is_numeric_none() {
     assert_eq!(classify_x_vocab(None, None), XVocab::Numeric(None));
 }
 
-/// 数値でもキーワードでもない値は `Invalid`（要件 4.6）。
+/// 数値でもキーワードでもない値は `Invalid`。
 /// 空文字（`windowposition.x,` のような値なし行が kv 層で作る）も不正値である
 /// ——「キーが在るのに読めない」ことと「キーが無い」ことは別事象。
 #[test]
@@ -102,10 +101,7 @@ fn classify_x_vocab_classifies_non_numeric_non_keyword_as_invalid() {
     }
 }
 
-/// 不変量（design C1 Invariants）: `x_num.is_some()` なら**常に** `Numeric`。
-///
-/// 数値経路は生文字列を一切参照しない——これが areka-P0-windowposition-limit の要件 5.1
-/// （数値指定の変換を、キーワード語彙を足す前後で同一に保つ）を型と構造で保証する回帰境界である。
+/// 不変量: `x_num.is_some()` なら**常に** `Numeric`。数値経路は生文字列を一切参照しない。
 /// 生値がキーワードでも大文字混在でも不正値でも空でも、数値が読めていれば結果は数値そのものでなければならない。
 #[test]
 fn classify_x_vocab_never_consults_raw_when_numeric_parsed() {
@@ -122,7 +118,7 @@ fn classify_x_vocab_never_consults_raw_when_numeric_parsed() {
 
 /// 生値の前後空白は上流 kv 層（`kv::parse_kv`）で既に除かれている（`parse.rs` の転記層契約）。
 /// 本層の `trim` はその冗長化であり、**実際に届く値（trim 済み）に対しては恒等**である
-/// ——同じ語彙が空白の有無で別の分類へ落ちない（DD8「trim 済み文字列との完全一致」）。
+/// ——同じ語彙が空白の有無で別の分類へ落ちない。
 #[test]
 fn classify_x_vocab_trim_is_identity_for_kv_trimmed_values() {
     for raw in ["center", "top", "bottom", "centre", ""] {
@@ -140,21 +136,21 @@ fn classify_x_vocab_trim_is_identity_for_kv_trimmed_values() {
 // classify_limit_vocab
 // ---------------------------------------------------------------------------
 
-/// 値域 0/1 の受理（要件 1.1）。`"0"`＝無効・`"1"`＝有効。
+/// 値域 0/1 の受理。`"0"`＝無効・`"1"`＝有効。
 #[test]
 fn classify_limit_vocab_accepts_zero_and_one() {
     assert_eq!(classify_limit_vocab(Some("0")), LimitVocab::Value(false));
     assert_eq!(classify_limit_vocab(Some("1")), LimitVocab::Value(true));
 }
 
-/// 未指定は正典既定 1（有効）へ（要件 1.2）。警告の対象ではない。
-/// 不正値（`Invalid`・下の檻）とは別の値になる＝未指定と不正値を区別する（要件 7.2）。
+/// 未指定は正典既定 1（有効）へ。警告の対象ではない。
+/// 不正値（`Invalid`・下のテスト）とは別の値になる。
 #[test]
 fn classify_limit_vocab_unspecified_is_canonical_default_enabled() {
     assert_eq!(classify_limit_vocab(None), LimitVocab::Value(true));
 }
 
-/// 0/1 以外は `Invalid`（要件 1.3: 呼び出し側が警告のうえ既定 1 へ縮退する）。
+/// 0/1 以外は `Invalid`（呼び出し側が警告のうえ既定 1 へ縮退する）。
 /// 数値として読める `"2"`／`"-1"`／`"01"` も値域外ゆえ不正値であり、
 /// 「数値なら通す」という緩い受理を作らない。
 #[test]
@@ -170,7 +166,7 @@ fn classify_limit_vocab_classifies_out_of_domain_as_invalid() {
     }
 }
 
-/// x 側と同じく、kv 層 trim 済みの値に対して本層の `trim` は恒等（DD8）。
+/// x 側と同じく、kv 層 trim 済みの値に対して本層の `trim` は恒等。
 /// 空白のみの値は trim 後に空文字と同値＝不正値。
 #[test]
 fn classify_limit_vocab_trim_is_identity_for_kv_trimmed_values() {

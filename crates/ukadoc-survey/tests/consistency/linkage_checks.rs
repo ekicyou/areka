@@ -1,5 +1,4 @@
-//! 判定 ⑶（帰属の分割・`linkage.md`）
-//! （要件 11.1 ⑶・11.3・11.4・4.2・設計「入口 / `tests/consistency`」→「判定の一覧」）。
+//! 判定 ⑶（帰属の分割・`linkage.md`）。
 //!
 //! # ⑶ が主張すること
 //!
@@ -9,7 +8,7 @@
 //! - **a 互いに素**: 同じ構成 id が 2 つの束に属さない。
 //! - **b 過不足なし**: 構成 id の和集合が、状態が `implemented`・`vocabulary-only`・
 //!   `degraded`・`absent` である台帳の全項目とちょうど一致する。`alias`・
-//!   `not-applicable` の id が構成に現れないこと（要件 4.3）も、ここで「対象 4 状態の
+//!   `not-applicable` の id が構成に現れないことも、ここで「対象 4 状態の
 //!   項目でない」として見る。
 //! - **c 由来**: `members ∖ hand`（機械由来と名乗る id。`hand` が `members` の部分集合
 //!   であることは読み手が先に確かめて止まる）が、その束が引用した機械の束の構成 id の
@@ -25,7 +24,7 @@
 //! 「ちょうど 1 件」を確かめる。判定そのもの（実データが緑であること）は
 //! [`the_attribution_of_every_target_item_splits_across_the_bundles`] が 6 つまとめて見る。
 //!
-//! # 導出は二重に実装しない（設計 D-4）
+//! # 導出は二重に実装しない
 //!
 //! 腕 e が突き合わせる相手は `documents::derive::derive_bundle` の戻り値そのもので、
 //! ここでテーマの和集合や跨ぐドメインを数え直しはしない。2 か所に書くと、第二段の
@@ -58,7 +57,7 @@ use super::documents::{
 };
 use super::documents_checks::machine_bundle_members;
 
-/// 束の構成に入れる対象の 4 状態（要件 4.2）。
+/// 束の構成に入れる対象の 4 状態。
 const TARGET_STATUSES: [Status; 4] = [
     Status::Implemented,
     Status::VocabularyOnly,
@@ -192,7 +191,7 @@ fn coverage_findings(linkage: &Linkage, facts: &LedgerFacts) -> Vec<String> {
 ///
 /// 単独項目は `machine`・`hand` を持てない（読み手が欄そのものを禁じている）ので
 /// 相手にしない。`[tally]` の `from_machine`・`by_hand` が単独でない束だけを合算する
-/// のと同じ切り分けである（設計 D-2）。
+/// のと同じ切り分けである。
 fn provenance_findings(
     linkage: &Linkage,
     machine: &BTreeMap<String, BTreeSet<String>>,
@@ -287,7 +286,7 @@ impl Recount {
     /// 帰属と台帳から数え直す。
     ///
     /// `from_machine`・`by_hand` は `single = true` でない束だけを合算し、`singles` は
-    /// 単独項目の数とする（設計 D-2 の数え方）。単独項目の id が台帳のどのドメインにも
+    /// 単独項目の数とする。単独項目の id が台帳のどのドメインにも
     /// 無ければ、ドメイン別の内訳には足さない——その食い違いは腕 b が名指す。
     fn of(linkage: &Linkage, facts: &LedgerFacts) -> Self {
         let mut singles_by_domain: BTreeMap<Domain, usize> =
@@ -429,7 +428,7 @@ fn attribution_findings(
 }
 
 // ---------------------------------------------------------------------------
-// 実データで緑（要件 11.1 ⑶）
+// 実データで緑
 // ---------------------------------------------------------------------------
 
 /// ⑶ 対象 4 状態の全項目がちょうど 1 つの束に属し、由来・除外・導出・合計が揃う。
@@ -451,7 +450,7 @@ fn the_attribution_of_every_target_item_splits_across_the_bundles() {
 }
 
 // ---------------------------------------------------------------------------
-// 摂動（1 か所壊すと赤・要件 11.3）
+// 摂動（1 か所壊すと赤）
 // ---------------------------------------------------------------------------
 
 /// 摂動 1: 構成 id を 1 つ抜くと、腕 b が**ちょうどその 1 件**を名指して赤になる。
@@ -480,7 +479,7 @@ fn dropping_one_member_turns_the_coverage_arm_red() {
 }
 
 /// 摂動 1 の裏: alias か not-applicable の id を名前付き束の構成に混ぜると、腕 b の
-/// 「対象 4 状態の項目でない」が**ちょうどその 1 件**を名指して赤になる（要件 4.3）。
+/// 「対象 4 状態の項目でない」が**ちょうどその 1 件**を名指して赤になる。
 #[test]
 fn smuggling_one_excluded_id_into_a_bundle_turns_the_coverage_arm_red() {
     let repo = RepoData::load();
@@ -562,7 +561,7 @@ fn shifting_the_tally_by_one_turns_the_tally_arm_red() {
 }
 
 // ---------------------------------------------------------------------------
-// 残る腕の較正（1 件混ぜると赤・要件 11.3）
+// 残る腕の較正（1 件混ぜると赤）
 // ---------------------------------------------------------------------------
 
 /// 腕 c: `hand` の印を 1 つ外すと、その id が「機械由来と名乗るのに機械の束に無い」で

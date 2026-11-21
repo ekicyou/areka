@@ -1,4 +1,4 @@
-//! 実行系の側の起動（`boot_runtime`）の決定論テスト（areka-P0-mcp-reload 要件 4.2・13.4）。
+//! 実行系の側の起動（`boot_runtime`）の決定論テスト。
 //!
 //! 確かめること: 束から sink が今の並び（`runtime_sinks`）で組まれ、最後から 2 本目が読み直しの
 //! 受け口・最後が常に手前の受け口（線へ届く）であること・
@@ -141,7 +141,7 @@ fn sinks_are_thirteen_with_reload_then_window_state_last() {
 }
 
 /// SHIORI だけの読み直しで受け口を組み直しても、常に手前の指令は窓の側の同じ線に届く
-/// （送出端は束が持つ・stay-on-top-directives 要件 4.3）。
+/// （送出端は束が持つ）。
 #[test]
 fn rebuilt_window_state_sink_reaches_the_same_line() {
     let rig = rig();
@@ -150,7 +150,6 @@ fn rebuilt_window_state_sink_reaches_the_same_line() {
 
     let (mut first, _) = runtime_sinks(&world, &rig.sources);
     first.last_mut().expect("最後の受け口").emit(on());
-    // 読み直し: 前の受け口を落とし、同じ束から組み直す。
     drop(first);
     let (mut rebuilt, _) = runtime_sinks(&world, &rig.sources);
     rebuilt.last_mut().expect("最後の受け口").emit(on());
@@ -163,7 +162,7 @@ fn rebuilt_window_state_sink_reaches_the_same_line() {
 }
 
 /// 窓の在るゴーストの起動の選択肢（本番と spine が共に使う）には strict の判定が入る
-/// （無いと strict の記録が無言で 0 件になる・spec mcp-strict-errors 要件 2.7）。
+/// （無いと strict の記録が無言で 0 件になる）。
 #[test]
 fn runtime_boot_options_carry_strict_judges() {
     let options = runtime_boot_options(
@@ -196,7 +195,6 @@ fn failed_boot_leaves_world_unchanged() {
 
     let result = boot_runtime(&mut world, inputs, &rig.sources, mpsc::channel().0, None);
 
-    // 無いフォルダはマウントで落ちる（失敗の種類まで見る）。
     assert!(matches!(result, Err(GhostBootError::Mount(_))));
     assert_eq!(installed(&world), 0, "失敗では受信端を据えない");
 }
@@ -245,9 +243,9 @@ fn shut_down(what: &str, runtime: GhostRuntime, handle: ScriptedShioriHandle) {
     });
 }
 
-/// 足場は `TickerMode::Disabled` なので、台詞の時計は dispatcher へ合成の Tick を注入して進める。
-/// Tick の幅と間引き（実時間で [`TICK_EVERY`] に 1 つまで）は切替の足場 `SwitchRig` の定数を借り、中断の線の合図を `Leave` が届くまで読んで返す
-/// （同じ読みで後ろの合図まで入ることがある）。子の通しのテスト 2 本が使う。
+/// 中断の線の合図を `Leave` が届くまで読んで返す（同じ読みで後ろの合図まで入ることがある）。
+/// 足場は `TickerMode::Disabled` なので、台詞の時計は dispatcher へ合成の Tick を注入して進める
+/// （幅と間引きは `SwitchRig` の定数を借りる）。子の通しのテスト 2 本が使う。
 fn signals_until_leave(world: &World, runtime: &GhostRuntime) -> Vec<NoUserBreakSignal> {
     let wiring = world
         .get_non_send::<UserBreakWiring>()
@@ -273,10 +271,10 @@ fn signals_until_leave(world: &World, runtime: &GhostRuntime) -> Vec<NoUserBreak
     signals
 }
 
-// 台本の出どころを起動の道で通すテスト（areka-P0-script-security-level・同じ組み方を借りる）。
+// 台本の出どころを起動の道で通すテスト（同じ組み方を借りる）。
 #[path = "script_security_e2e_tests.rs"]
 mod script_security_e2e;
 
-// 台本の `\![open,readme]` を起動の道で偽の OS まで通すテスト（popup-menu-residue 件 3）。
+// 台本の `\![open,readme]` を起動の道で偽の OS まで通すテスト。
 #[path = "readme_script_e2e_tests.rs"]
 mod readme_script_e2e;

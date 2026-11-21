@@ -1,5 +1,4 @@
-//! 一周の入口・定義ファイル・差分 0・n 件の更新・確定の途中失敗・戻せなかった経路
-//! （要件 1.1〜1.4・1.16・1.17・2.5・2.6・4.2〜4.8・5.1・5.3・5.5・5.8・6.1・6.7・7.1・8.1〜8.4・9.3・9.4）。
+//! 一周の入口・定義ファイル・差分 0・n 件の更新・確定の途中失敗・戻せなかった経路。
 //! 残りの失敗の経路は `run_fail_tests.rs`。一周の道具（`fixture`・`go`・`Ran`・
 //! `three_ending_with_existing`・`pin_a_dll_when_b_is_fetched` ほか）はここに 1 か所で、
 //! `run_fail_tests.rs` と `lib_tests.rs` が使う。
@@ -53,7 +52,7 @@ impl Ran {
         self.records.iter().filter(|e| e.level == level).count()
     }
 
-    /// 観測者が受けた進捗の列と、記録の件数 `[info, warn, error]` を同時に判定する（7.1・8.4）。
+    /// 観測者が受けた進捗の列と、記録の件数 `[info, warn, error]` を同時に判定する。
     /// 失敗 1 回につき error 1 件・警告 1 件につき warn 1 件を、呼び手が件数で書く。
     fn expect(&self, seen: &[Progress], [info, warn, error]: [usize; 3]) {
         assert_eq!(self.seen, seen, "進捗の列");
@@ -67,7 +66,7 @@ impl Ran {
     }
 
     /// 失敗を取り出し、error の記録がちょうど 1 件で、その欄（更新先・対象・段・理由・
-    /// 原因のファイル・戻せたか・作業場所）が戻り値と一致することも判定する（8.1）。
+    /// 原因のファイル・戻せたか・作業場所）が戻り値と一致することも判定する。
     pub(super) fn failed(&self) -> &UpdateError {
         let err = self.result.as_ref().expect_err("失敗のはず");
         let errors: Vec<&CapturedEvent> = self
@@ -168,7 +167,7 @@ fn tree_of(entries: &[(&str, &[u8])]) -> BTreeMap<String, Vec<u8>> {
 fn no_difference_writes_nothing_and_does_not_read_delete_txt() {
     let f = fixture();
     fs::write(f.target.join("a.txt"), b"abc").unwrap();
-    // 差分 0 の周は delete.txt を読まない＝在っても何も消えない（2.5・6.1）。
+    // 差分 0 の周は delete.txt を読まない＝在っても何も消えない。
     fs::write(f.target.join("delete.txt"), b"a.txt\r\n").unwrap();
     let before = tree(&f.target);
     let fetch = FakeFetch::new().serve(&url("updates2.dau"), &dau(&[&["a.txt", MD5_ABC]], true));
@@ -195,7 +194,7 @@ fn no_difference_writes_nothing_and_does_not_read_delete_txt() {
     ran.expect(&head(&[]), [2, 0, 0]);
 }
 
-/// 前の成功した走行が消せずに印を置いた残りは、差分なしの走行でも黙って消える（5.9・9.10）。
+/// 前の成功した走行が消せずに印を置いた残りは、差分なしの走行でも黙って消える。
 #[test]
 fn unchanged_run_purges_committed_leftover_without_warning() {
     let f = fixture();
@@ -222,7 +221,7 @@ fn unchanged_run_purges_committed_leftover_without_warning() {
 fn zero_valid_entries_is_unchanged_and_each_invalid_entry_is_warned_once() {
     let f = fixture();
     let before = tree(&f.target);
-    // 2 行とも無効（MD5 が無い・`..`）＝有効 0 件（1.16）。
+    // 2 行とも無効（MD5 が無い・`..`）＝有効 0 件。
     let fetch = FakeFetch::new().serve(
         &url("updates2.dau"),
         &dau(&[&["a.txt"], &["../x.txt", MD5_ABC]], true),
@@ -473,7 +472,7 @@ fn missing_trailing_slash_is_appended_and_warned_once() {
 
 #[test]
 fn run_does_not_spawn_a_thread() {
-    // 3.7: 観測者は呼び出しスレッドで同期に呼ばれる。
+    // 観測者は呼び出しスレッドで同期に呼ばれる。
     let f = fixture();
     let fetch = FakeFetch::new().serve(&url("updates2.dau"), b"");
     let caller = std::thread::current().id();
@@ -499,7 +498,7 @@ fn n_files_are_committed_in_definition_order_then_delete_txt_is_applied() {
     fs::write(f.target.join("c.txt"), b"abc").unwrap();
     fs::write(f.target.join("old.txt"), b"stale").unwrap();
     let jp = "日本/a b.txt";
-    // delete.txt は更新で届く＝確定の後に適用しないと `old.txt` は消えない（6.1）。
+    // delete.txt は更新で届く＝確定の後に適用しないと `old.txt` は消えない。
     let files: [(&str, &[u8]); 4] = [
         ("a.txt", b"A"),
         (jp, b"JP"),
@@ -632,7 +631,7 @@ fn failure_mid_commit_rolls_back_and_cleans_up_the_work_area() {
     let f = fixture();
     let (fetch, _) = three_ending_with_existing(&f, b"A");
     let before = tree(&f.target);
-    // 退避の `rename` が拒まれる＝3 件目で確定が止まる（5.2・5.4）。
+    // 退避の `rename` が拒まれる＝3 件目で確定が止まる。
     let held = hold(&f.target.join("b.txt"));
 
     let ran = go(HOME, &f.target, &fetch);
@@ -661,7 +660,7 @@ fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
     let (fetch, manifest) = three_ending_with_existing(&f, &pe);
     let before = tree(&f.target);
     let shelf = f.target.join(WORK_DIR);
-    // 戻せなかった他の走行の元の内容＝残したまま報告する残骸（4.8・5.5）。
+    // 戻せなかった他の走行の元の内容＝残したまま報告する残骸。
     let other = shelf.join("9-9");
     fs::create_dir_all(other.join("old")).unwrap();
     fs::write(other.join("old/b.txt"), b"b").unwrap();
@@ -680,13 +679,13 @@ fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
     else {
         panic!("{err}");
     };
-    // 定義ファイルは最後の 1 件＝止まった時点ではまだ置いていない（5.3）。
+    // 定義ファイルは最後の 1 件＝止まった時点ではまだ置いていない。
     assert_eq!(restored, &["sub/x.txt"]);
     assert_eq!(
         stuck.iter().map(|s| s.file.as_str()).collect::<Vec<_>>(),
         ["a.dll"]
     );
-    // 戻せた一覧と戻せなかった一覧は error の記録にも載る（5.5）。
+    // 戻せた一覧と戻せなかった一覧は error の記録にも載る。
     let record = ran
         .records
         .iter()
@@ -725,7 +724,7 @@ fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
 }
 
 /// 1 回の成功した周で警告の 7 種と、取り除けなかった物・残骸を全て出し、種ごとに
-/// warn がちょうど 1 行で理由の欄を持つことを判定する（8.2）。
+/// warn がちょうど 1 行で理由の欄を持つことを判定する。
 #[test]
 fn every_warning_kind_is_recorded_once() {
     let f = fixture();
@@ -733,7 +732,7 @@ fn every_warning_kind_is_recorded_once() {
     fs::write(f.target.join("held.txt"), b"held").unwrap();
     fs::create_dir(f.target.join("dir.txt")).unwrap();
     fs::create_dir(f.target.join("delete2.txt")).unwrap();
-    // 戻せなかった他の走行の元の内容＝棚に残す残骸（4.8・5.5）。
+    // 戻せなかった他の走行の元の内容＝棚に残す残骸。
     let other = f.target.join(WORK_DIR).join("9-9");
     fs::create_dir_all(other.join("old")).unwrap();
     fs::write(other.join("old/b.txt"), b"b").unwrap();

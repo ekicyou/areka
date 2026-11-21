@@ -1,7 +1,7 @@
-//! `list_all_shells` の兄弟テスト（shell-balloon-switch 要件 1.6・8.4）。
+//! `list_all_shells` の兄弟テスト。
 //!
-//! 隠しシェル（`menu,hidden`）は名指しの切替の候補に入る（要件 1.6）が、今の列挙
-//! `list_shells` は除いたまま（`updateother` が除外に依る）。素性の型に欄は足さない（要件 8.4）。
+//! 隠しシェル（`menu,hidden`）は名指しの切替の候補に入るが、今の列挙
+//! `list_shells` は除いたまま（`updateother` が除外に依る）。素性の型に欄は足さない。
 
 use super::test_support::put;
 use super::*;

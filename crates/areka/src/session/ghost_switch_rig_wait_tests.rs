@@ -1,8 +1,9 @@
-//! 切替の足場の待ちの檻（areka-P0-ghost-session-test-load-flake タスク 3.2・要件 2.1・3.1・3.2）。
+//! 切替の足場の待ちの檻。
 //!
-//! 檻 9: 足場の待ちが届かないとき、文言の元（[`WaitFailure`]）が「何を」に呼び出しの場所を持つ。
-//! 檻 10: 足場の進みの目印は、偽の SHIORI の状態の問い合わせでは増えず、接続に失敗する作り口の回でも 1 つ増える。
-//! どちらも実時間を待たない（檻 9 は偽の時計を渡し、檻 10 はゴーストを起こさず作り口を直に呼ぶ）。
+//! - 足場の待ちが届かないとき、文言の元（[`WaitFailure`]）が「何を」に呼び出しの場所を持つ。
+//! - 足場の進みの目印は、偽の SHIORI の状態の問い合わせでは増えず、接続に失敗する作り口の回でも 1 つ増える。
+//!
+//! どちらも実時間を待たない（前者は偽の時計を渡し、後者はゴーストを起こさず作り口を直に呼ぶ）。
 
 use std::cell::Cell;
 use std::time::{Duration, Instant};
@@ -21,7 +22,7 @@ fn call_factory(rig: &SwitchRig, folder: &str) -> ShioriWiring {
     inputs.wiring.shiori
 }
 
-/// 檻 9: 決して真にならない条件で `pump_until` の芯を、1 回ごとに 1 秒進む偽の時計で回す。
+/// 決して真にならない条件で `pump_until` の芯を、1 回ごとに 1 秒進む偽の時計で回す。
 /// ゴーストを起こしていないので目印は増えず、偽の時計で `SPIN_WAIT` を越えた所で `［止まった］` になる。
 /// その「何を」が、この檻の呼び出しの場所（ファイルと行）であること。
 #[test]
@@ -44,7 +45,7 @@ fn a_rig_wait_that_never_arrives_names_the_callers_place() {
     }
 }
 
-/// 檻 10: 状態の問い合わせでは目印が増えず、呼び出しでは増える。接続に失敗する回も作り口の 1 回に数える。
+/// 状態の問い合わせでは目印が増えず、呼び出しでは増える。接続に失敗する回も作り口の 1 回に数える。
 #[test]
 fn the_rig_progress_ignores_status_and_counts_every_factory_call() {
     let rig = SwitchRig::new(vec![

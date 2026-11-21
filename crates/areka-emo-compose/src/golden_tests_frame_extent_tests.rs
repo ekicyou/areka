@@ -1,18 +1,17 @@
-//! 要件 5.4: 採録まばたきコマがベース surface の外形内に収まることの実測テーマ。
+//! 採録まばたきコマがベース surface の外形内に収まることの実測テーマ。
 
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
 use super::{AtlasTable, EmoWorld, MemoryDecoder, Path, Shell};
 use crate::plan_test_support::{bound_world, opaque_wxh, png_size};
 
 // ============================================================================
-// 外形前提の実測檻（要件 **5.4**・design「合成合流と method ゲート」の
-// `compute_extent` 外形前提）。
+// 外形前提の実測檻（`compute_extent` 外形前提）。
 //
-// design 決定（design.md「合成合流」）: 外形（束縛のときの表・`EmoWorld::extent`）は `random` の transient コマを
+// 外形（束縛のときの表・`EmoWorld::extent`）は `random` の transient コマを
 // 寄与させず（`bind+random` は番号の最も小さい 1 つの pattern だけを数える）、
 // 「まばたきコマ（1410-1412/2106-2110）はベース外形内に収まる前提」を維持する。コマがベース外形を
 // 越えると越えた分がクリップされる（許容劣化）。**この前提を宣言に留めず emo2 fixture の実測で裏取り
-// する**（design「Testing Strategy / Integration Tests item 3: emo-compose golden」）。
+// する**。
 //
 // 本檻は emo2 の採録まばたきアニメ 2 系統——
 //   - kero: `animation0`（`interval,random,4`・`surface.append10,2100`）→ フレーム surface 2106/2110、
@@ -49,7 +48,6 @@ fn build_atlas_real_sizes(shell: &Shell, base: &Path) -> AtlasTable {
                 continue; // 同一 PNG を複数 surface が参照する（eyebase 等）: 一度だけ挿入。
             }
             let (w, h) = png_size(&abs);
-            // 全不透明→ original=(w,h)・placement full。
             let (w, h, stride, bgra, premul) = opaque_wxh(w, h, 255, 255, 255);
             dec.insert(abs, w, h, stride, bgra, premul);
         }
@@ -142,7 +140,7 @@ fn assert_frames_fit_base(
     (base_extent, measured)
 }
 
-/// 要件 5.4・design compute_extent 外形前提: kero まばたき（`animation0`・
+/// kero まばたき（`animation0`・
 /// フレーム 2106/2110）の全コマが原寸＋(x,y) で base surface2100 の Extent 内に収まる。
 ///
 /// kero の採録まばたき（`surface.append10,2100` の `animation0.interval,random,4`）は立ち絵ベース
@@ -165,7 +163,6 @@ fn kero_blink_frames_fit_within_base_extent() {
         (336, 400),
         "kero base surface2100（CityPop\\surface0100.png）の外形は実原寸 336×400"
     );
-    // 採録コマは 2106/2110 の 2 枚（-1 センチネルは除外済み）。
     let ids: Vec<u32> = measured.iter().map(|(id, _, _, _)| *id).collect();
     assert_eq!(
         ids,
@@ -181,7 +178,7 @@ fn kero_blink_frames_fit_within_base_extent() {
     }
 }
 
-/// 要件 5.4: sakura まばたき（`animation1400`・フレーム 1410/1411/1412）の全コマが
+/// sakura まばたき（`animation1400`・フレーム 1410/1411/1412）の全コマが
 /// 原寸＋(x,y) で base surface1000 の Extent 内に収まる。
 ///
 /// sakura の採録まばたき（surface1000 内 `animation1400.interval,bind+random,4`）はフレーム
@@ -190,7 +187,7 @@ fn kero_blink_frames_fit_within_base_extent() {
 /// base surface1000（全パーツ MAYUNA bind の本体・外形は全部の bind の描くコマの原寸の和集合）は 382×547 を
 /// 含むため、各コマはオフセット (0,0) で base 外形内に収まる（越境クリップは発生しない）。
 /// `bind+random` の外形は番号の最も小さい pattern（pattern1 の 1412）を数えるので 1412 は規則で必ず
-/// 収まり、確かめになるのは外形に数えない 1411・1410（指摘 99）。
+/// 収まり、確かめになるのは外形に数えない 1411・1410。
 #[test]
 fn sakura_blink_frames_fit_within_base_extent() {
     let shell = parse_emo2_shell();
@@ -208,7 +205,6 @@ fn sakura_blink_frames_fit_within_base_extent() {
         base_extent.w,
         base_extent.h
     );
-    // 採録コマは 1412/1411/1410 の 3 枚（pattern1/2/3・pattern0 なしの再生専用アニメ）。
     let ids: Vec<u32> = measured.iter().map(|(id, _, _, _)| *id).collect();
     assert_eq!(
         ids,

@@ -92,8 +92,7 @@ fn integer_rounding() {
     let seg = make_segment(0.0, 10.0, None);
     let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, 0.25);
-    // 0.0 + (10.0 - 0.0) * 0.25 = 2.5 → round → 3 (banker's or standard)
-    // standard round: 2.5 → 3
+    // 2.5 → 3（f64::round は 0 から遠い方向へ丸める）
     assert_eq!(result, EvaluatedValue::Integer(3));
 }
 
@@ -115,7 +114,7 @@ fn object_before_end() {
         easing: None,
     };
     let result = Interpolator::interpolate(&seg, &VariableTypeHint::Object, 0.5);
-    // Rc::ptr_eq は異なるアロケーションなので内容で比較
+    // 別のアロケーションなので内容で比較する
     match &result {
         EvaluatedValue::Object(rc) => assert_eq!(**rc, DynamicValue::String("a".to_string())),
         _ => panic!("expected Object variant"),
@@ -146,7 +145,7 @@ fn quadratic_in_easing() {
         Some(EasingFunction::Named(EasingName::QuadraticIn)),
     );
     let result = Interpolator::interpolate(&seg, &VariableTypeHint::Float, 0.5);
-    // QuadraticIn: t^2, so 0.5^2 = 0.25 → lerp(0, 100, 0.25) = 25.0
+    // 0.5^2 = 0.25 → 25.0
     assert_eq!(result, EvaluatedValue::Float(25.0));
 }
 
@@ -162,7 +161,6 @@ fn cubic_bezier_easing() {
             x3: 1.0,
         })),
     );
-    // cub_bez(0, 0, 1, 1, 0.5) should give ~0.5 for this symmetric curve (linear-like)
     let result = Interpolator::interpolate(&seg, &VariableTypeHint::Float, 0.5);
     if let EvaluatedValue::Float(v) = result {
         assert!((v - 50.0).abs() < 1.0, "expected ~50.0, got {v}");
@@ -184,7 +182,6 @@ fn quadratic_bezier_easing() {
             },
         )),
     );
-    // quad_bez(0, 0.5, 1, 0.5) should give ~0.5
     let result = Interpolator::interpolate(&seg, &VariableTypeHint::Float, 0.5);
     if let EvaluatedValue::Float(v) = result {
         assert!((v - 50.0).abs() < 1.0, "expected ~50.0, got {v}");
@@ -194,7 +191,7 @@ fn quadratic_bezier_easing() {
 }
 
 // =========================================================================
-// ObjectInternPool（intern の同一性保証）
+// ObjectInternPool
 // =========================================================================
 
 #[test]
@@ -237,7 +234,6 @@ fn interpolate_with_pool_shares_rc_across_calls() {
         Interpolator::interpolate_with_pool(&seg, &VariableTypeHint::Object, 0.5, Some(&mut pool));
     match (&r1, &r2) {
         (EvaluatedValue::Object(a), EvaluatedValue::Object(b)) => {
-            // 同一 pool 経由なら同一内容（from_value）は同一 Rc → EvaluatedValue も等しい
             assert!(Rc::ptr_eq(a, b), "pool must dedupe equal Object values");
             assert_eq!(r1, r2, "EvaluatedValue PartialEq must hold via ptr_eq");
         }
@@ -247,7 +243,7 @@ fn interpolate_with_pool_shares_rc_across_calls() {
 
 #[test]
 fn nan_object_value_is_interned_once() {
-    // NaN 入りの Object を 2 回評価しても表は 1 件（#28: 等しさとハッシュが同じ鍵）
+    // NaN 入りの Object を 2 回評価しても表は 1 件（等しさとハッシュが同じ鍵）
     let nan_obj = DynamicValue::Map(BTreeMap::from([(
         "v".to_string(),
         DynamicValue::Float(f64::NAN),
@@ -280,7 +276,7 @@ fn interpolate_without_pool_allocates_fresh_rc() {
     let r2 = Interpolator::interpolate(&seg, &VariableTypeHint::Object, 0.0);
     match (&r1, &r2) {
         (EvaluatedValue::Object(a), EvaluatedValue::Object(b)) => {
-            // pool なしでは毎回新規 Rc → 内容が同じでも ptr_eq は false
+            // pool なしでは毎回新規 Rc
             assert!(!Rc::ptr_eq(a, b), "no pool means fresh Rc per call");
             assert_ne!(r1, r2, "EvaluatedValue PartialEq is pointer-based");
         }
@@ -294,7 +290,6 @@ fn interpolate_without_pool_allocates_fresh_rc() {
 
 #[test]
 fn float_interpolation_from_dynamic_float_and_integer() {
-    // Dynamic(Float) / Dynamic(Integer) は scalar_value で f64 へ変換される
     let seg = CompiledSegment {
         start_time: 0.0,
         end_time: 1.0,
@@ -308,7 +303,7 @@ fn float_interpolation_from_dynamic_float_and_integer() {
 
 #[test]
 fn float_interpolation_non_numeric_dynamic_falls_back_to_zero() {
-    // 非数値 Dynamic（String 等）は scalar_value で 0.0 にフォールバック
+    // 非数値 Dynamic は 0.0 にフォールバックする
     let seg = CompiledSegment {
         start_time: 0.0,
         end_time: 1.0,
@@ -322,7 +317,6 @@ fn float_interpolation_non_numeric_dynamic_falls_back_to_zero() {
 
 #[test]
 fn object_with_scalar_values_converts_to_dynamic_float() {
-    // Object 型変数で Scalar 値が来た場合は DynamicValue::Float に包んで返す
     let seg = make_segment(1.5, 2.5, None);
     let before = Interpolator::interpolate(&seg, &VariableTypeHint::Object, 0.5);
     match &before {
@@ -342,7 +336,7 @@ fn object_with_scalar_values_converts_to_dynamic_float() {
 
 #[test]
 fn integer_negative_interpolation_rounds_away_from_zero() {
-    // 0→-10 の t=0.25 → -2.5 → f64::round は 0 から遠い方向へ丸める → -3
+    // -2.5 は 0 から遠い方向へ丸められて -3
     let seg = make_segment(0.0, -10.0, None);
     let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, 0.25);
@@ -351,7 +345,7 @@ fn integer_negative_interpolation_rounds_away_from_zero() {
 
 #[test]
 fn integer_interpolation_with_easing() {
-    // QuadraticIn: 0.5^2 = 0.25 → lerp(0, 100, 0.25) = 25 → Integer(25)
+    // 0.5^2 = 0.25 → 25
     let seg = make_segment(
         0.0,
         100.0,
@@ -363,7 +357,7 @@ fn integer_interpolation_with_easing() {
 }
 
 // =========================================================================
-// 数値境界の特性化（NaN / inf / 飽和キャスト / オーバーシュート）
+// 数値境界（NaN / inf / 飽和キャスト / オーバーシュート）
 // =========================================================================
 
 /// NaN progress_t: clamp は NaN を素通りさせ、Float 補間結果は NaN になる（panic しない）
@@ -523,7 +517,7 @@ fn parametric_easing_nan_control_points_propagate_without_panic() {
     }
 }
 
-/// ベジェ出力は [0,1] にクランプされず from/to を超える外挿が起きる（許容挙動の特性化）
+/// ベジェ出力は [0,1] にクランプされず from/to を超える外挿が起きる（許容された挙動）
 #[test]
 fn parametric_easing_overshoots_beyond_endpoints() {
     // quad_bez(0, 2, 1, 0.5) = lerp(lerp(0,2,.5), lerp(2,1,.5), .5) = lerp(1, 1.5, .5) = 1.25

@@ -1,12 +1,10 @@
-//! # 本番と同じ経路を歩く検査の続き（台本の形・中断・後から届く `\f`・起動直後の順・要件 1・2・4）
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-budoux-reveal-reflow` のもの（別の spec のものはその場で名を書く）。
+//! # 本番と同じ経路を歩く検査の続き（台本の形・中断・後から届く `\f`・起動直後の順）
 //!
 //! 経路の土台（[`Rig`]・[`Talk`]）と判定の関数（[`reveal_violations`]）は
-//! `actor_lookahead_tests.rs` のものをそのまま使う（検査 1〜8 と同じ経路・同じ判定）。
-//! ここでは検査 1 の形を、書字方向・改行・選択肢・2 つの場所に広げ（検査 12）、トークの中断と
-//! 次のトーク（検査 9）、字の無い行の後の字と後から届く `\f[height,…]`（検査 10）、
-//! 先渡しがバルーンの装着・箱の束より先に届く起動直後の順（検査 11）を見る。
+//! `actor_lookahead_tests.rs` のものをそのまま使う（同じ経路・同じ判定）。
+//! ここでは初回起動トークの形を、書字方向・改行・選択肢・2 つの場所に広げ、トークの中断と
+//! 次のトーク、字の無い行の後の字と後から届く `\f[height,…]`、
+//! 先渡しがバルーンの装着・箱の束より先に届く起動直後の順を見る。
 
 use areka_sakura::contract::{ActorKey, FONT_TAG_CARRIER};
 use dola::cue::{CueCommand, CuePayload};
@@ -44,9 +42,9 @@ fn balloons(actors: &[&str]) -> Vec<PlaceKey> {
         .collect()
 }
 
-// ── 検査 12: 縦書き・改行・選択肢・2 つの場所 ──
+// ── 縦書き・改行・選択肢・2 つの場所 ──
 
-/// 検査 12 の台本の形 1 つ。
+/// 台本の形 1 つ。
 struct Shape {
     name: &'static str,
     script: &'static str,
@@ -121,10 +119,9 @@ fn walk_shape(shape: &Shape, delivery: Delivery) -> Vec<Vec<Stage>> {
     walk_places(&rig, &mut talk, &balloons(shape.actors))
 }
 
-/// 検査 12: 検査 1 の形を、縦書きのバルーン・`\n`（割合付きを含む）を挟む台本・`\q` の選択肢を
+/// 初回起動トークの形を、縦書きのバルーン・`\n`（割合付きを含む）を挟む台本・`\q` の選択肢を
 /// 含む台本・本体側と相方側が交互に話す台本で流し、スコープごとに同じ判定の関数にかける。
-/// どの形も、先渡しを落とした対照では「動いた」と判定される（＝形が折り返しの付け替えを踏んでいる）
-/// （要件 1.1・1.2・1.6・1.7・4.4・4.5）。
+/// どの形も、先渡しを落とした対照では「動いた」と判定される（＝形が折り返しの付け替えを踏んでいる）。
 #[test]
 fn every_shape_reveals_without_moving_glyphs() {
     let mut failures = Vec::new();
@@ -158,10 +155,9 @@ fn every_shape_reveals_without_moving_glyphs() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// 検査 12 の選択肢: 各段階で、選択肢の強調の範囲とクリックの範囲を、判定にかけたのと同じ行の列から
-/// 本番の提示と同じ関数（`choice_ranges`）で出し、強調の範囲が
-/// 覆う字が行の列に見えている選択肢の字と同じで、クリックの範囲が強調と同じ行内の範囲であること
-/// （要件 4.4）。
+/// 選択肢の形: 各段階で、選択肢の強調の範囲とクリックの範囲を、判定にかけたのと同じ行の列から
+/// 本番の提示と同じ関数（`choice_ranges`）で出し、強調の範囲が覆う字が行の列に見えている
+/// 選択肢の字と同じで、クリックの範囲が強調と同じ行内の範囲であることを固定する。
 #[test]
 fn choice_highlight_and_click_ranges_come_from_the_judged_rows() {
     let shape = &SHAPES[3];
@@ -233,19 +229,19 @@ fn choice_highlight_and_click_ranges_come_from_the_judged_rows() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-// ── 検査 9: 中断と次のトーク ──
+// ── 中断と次のトーク ──
 
-/// 検査 9 の 2 本目の台本（検査 1 と同じ分かれ方で、字が違う）。
+/// 2 本目の台本（初回起動トークと同じ分かれ方で、字が違う）。
 const NEXT_TALK: &str = "\\1イイジャン？\\_w[450]‥\\_w[150]‥\\_w[150]ええと。";
 /// 2 本目のトークの刻印（1 本目の後）。
 const NEXT_ANCHOR: f64 = ANCHOR + 50.0;
 /// 中断の後に「時刻だけ進めた」とする時刻（1 本目の台本がとうに出終わっている時刻）。
 const LATER: f64 = 10.0;
 
-/// 検査 9: 検査 1 の台本を最初の「‥」が出終わったところで止める（以後 1 本目は `tick` しない）。
+/// 初回起動トークを最初の「‥」が出終わったところで止める（以後 1 本目は `tick` しない）。
 /// 止めるまでの行の列は通しと同じで、時刻だけ進めても変わらず、2 本目の再生機を登録だけして
 /// （先渡しだけが届く）も変わらない。2 本目を `tick` した後は、2 本目の字だけの台本と各段階で
-/// 同じ行の列（要件 2.6）。
+/// 同じ行の列。
 #[test]
 fn an_interrupted_talk_keeps_its_rows_and_the_next_talk_lays_out_on_its_own() {
     let place = PlaceKey::balloon(&ActorKey::from("1"));
@@ -294,14 +290,13 @@ fn an_interrupted_talk_keeps_its_rows_and_the_next_talk_lays_out_on_its_own() {
     );
 }
 
-// ── 検査 10: 字の無い行の後の字と、後から届く `\f[height,…]` ──
+// ── 字の無い行の後の字と、後から届く `\f[height,…]` ──
 
-/// 検査 10 の台本: 区間の頭が「改行 → 相対の `\_l` → 字 → 待ち → `\f[height,…]` → 字」。
+/// 区間の頭が「改行 → 相対の `\_l` → 字 → 待ち → `\f[height,…]` → 字」。
 const LATE_HEIGHT_TALK: &str =
     "\\1\\n\\_l[@10,@1em]イイジャン！\\_w[450]\\f[height,30]‥\\_w[150]ええと、";
 
-/// 検査 10: 最初の字の行内の位置と行の上下の位置が、`\f` の合図が届く前と後で同じで、出終わったとき
-/// とも同じ（要件 1.1・1.2）。
+/// 最初の字の行内の位置と行の上下の位置が、`\f` の合図が届く前と後で同じで、出終わったときとも同じ。
 #[test]
 fn a_late_font_height_does_not_move_the_first_glyph() {
     let place = PlaceKey::balloon(&ActorKey::from("1"));
@@ -352,7 +347,7 @@ fn a_late_font_height_does_not_move_the_first_glyph() {
     );
 }
 
-// ── 検査 11: 起動直後の順 ──
+// ── 起動直後の順 ──
 
 /// 空回しの出発点が、先渡しの後に合図と無関係に変わる 3 か所。
 #[derive(Clone, Copy, Debug)]
@@ -365,16 +360,16 @@ enum LateStart {
     Resolver,
 }
 
-/// `\f` を含む検査 1 の形の台本（相方側）。
+/// `\f` を含む初回起動トークの形の台本（相方側）。
 const BOLD_BOOT_TALK: &str = "\\1イイジャン！\\_w[450]‥\\_w[150]\\f[bold,1]‥\\_w[150]ええと、";
 /// 頭で `\s[0]` の箱 a へ字を出してから、箱の無い `\s[4]` で普通のバルーンへ戻る台本（本体側）。
 /// 解決の閉包か箱の表が無い空回しでは、箱 a の字が普通のバルーンの全文に混ざる。
 const BOXED_BOOT_TALK: &str =
     "\\0\\s[0]ね\\_w[150]\\s[4]イイジャン！\\_w[450]‥\\_w[150]\\f[bold,1]‥\\_w[150]ええと、";
 
-/// 検査 11: 再生機の登録（先渡しが届く）→ 汲み出し → 空回しの出発点を変える口（装着の登録・箱の束・
-/// 解決の閉包）→ `tick` の順で、`\f` を含む検査 1 の形の台本を流す。どの順でも各段階で判定の関数が
-/// 通り、出終わった行の列が検査 1 と同じで、warn が 0 件（`areka-P0-budoux-reveal-reflow` 要件 1.1・2.2・同じ spec の設計の討議 1）。
+/// 再生機の登録（先渡しが届く）→ 汲み出し → 空回しの出発点を変える口（装着の登録・箱の束・
+/// 解決の閉包）→ `tick` の順で、`\f` を含む初回起動トークの形の台本を流す。どの順でも各段階で
+/// 判定の関数が通り、出終わった行の列が初回起動トークと同じで、warn が 0 件。
 #[test]
 fn a_preview_before_attaching_still_lays_out_on_the_full_text() {
     let mut failures = Vec::new();

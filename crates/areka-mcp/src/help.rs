@@ -6,23 +6,21 @@ use crate::dispatch::MCP_PATH;
 use crate::port::{DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV, candidates_from_env_value};
 use crate::tools::{OWN_TABLE, spec_from_definition};
 
-/// 中継（Claude Desktop 向けの stdio の橋）の exe のファイル名。areka.exe の隣に置かれる
-/// （spec: areka-P0-mcp-stdio-bridge）。
+/// 中継（Claude Desktop 向けの stdio の橋）の exe のファイル名。areka.exe の隣に置かれる。
 pub const BRIDGE_EXE_FILE_NAME: &str = "areka-mcp-bridge.exe";
 
-/// 登録手順の日本語 HTML を実際の番号 `port` で組む（spec: areka-P0-mcp-server-core 要件 6.1・6.2）。
+/// 登録手順の日本語 HTML を実際の番号 `port` で組む。
 ///
 /// 5 項目: ⑴ 待ち受けている URL、⑵ Claude Code の登録コマンド、⑶ Cursor の
 /// `mcpServers` の断片、⑷ ポートの決まり方と変え方（既定の順・早い者勝ち・隣への退避・
 /// `AREKA_MCP_PORT` で 1 つを指定・`0` で待ち受けない）、⑸ Claude Desktop は中継を通す
 /// （`claude_desktop_config.json` の設定例。`command` は中継の置き場 `bridge_exe`・無ければ
 /// ファイル名だけにして絶対パスへの置き換えを頼む。`env` は `port` が既定の候補の外のときだけ
-/// 載せる。書いた後の起動し直しには、窓を閉じるだけでは終了しない旨を添える
-/// ＝spec: areka-P0-mcp-stdio-bridge）。
+/// 載せる。書いた後の起動し直しには、窓を閉じるだけでは終了しない旨を添える）。
 /// URL とコマンド例の番号は引数から取り、既定の順の説明は [`DEFAULT_PORTS`]・[`FALLBACK_STEPS`]
 /// から組む（数を手で書かない）。
 /// 続けて「areka 独自のツール」の節に [`OWN_TABLE`] の各行を `<code>名前</code> — 1 行` で並べる
-/// （名前は登録と同じ定義から読む・spec: areka-P0-mcp-author-tools）。
+/// （名前は登録と同じ定義から読む）。
 /// 埋め込む値のうち数と定数（名前と 1 行は `<`・`>`・`&` を含まない）は HTML のエスケープが要らない。
 /// 中継のパスだけは JSON と HTML の 2 段で置き換える（貼れば正しい JSON になる）。
 pub fn help_html(port: u16, bridge_exe: Option<&Path>) -> String {

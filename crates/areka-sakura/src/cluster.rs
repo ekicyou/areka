@@ -28,7 +28,7 @@ pub fn cluster_count(text: &str) -> usize {
 mod tests {
     use super::*;
 
-    /// 要件 2.2 の 6 形は、それぞれ 1 クラスタ。
+    /// 複数スカラー値の 6 形は、それぞれ 1 クラスタ。
     #[test]
     fn six_multi_scalar_forms_are_one_cluster_each() {
         for text in [
@@ -45,7 +45,7 @@ mod tests {
         }
     }
 
-    /// 1 スカラー値の文字は今日の `chars()` と同じ列（要件 2.3）。
+    /// 1 スカラー値の文字は `chars()` と同じ列。
     #[test]
     fn single_scalar_chars_split_like_chars() {
         assert_eq!(clusters("aあ🦆").collect::<Vec<_>>(), ["a", "あ", "🦆"]);

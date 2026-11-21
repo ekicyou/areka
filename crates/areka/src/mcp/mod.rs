@@ -1,4 +1,4 @@
-//! MCP のツールの要求を UI スレッドで汲んで振り分ける口（spec: areka-P0-mcp-tool-entrances）。
+//! MCP のツールの要求を UI スレッドで汲んで振り分ける口。
 //!
 //! 受け口（`McpInbox`）・据え付け・系の登録・終了の途中の始末・汲む系・振り分けを置く。
 //! 各ツールの処理はツールごとのファイルに持ち、テストの接続もそのファイル自身に書く。
@@ -39,7 +39,7 @@ type Poll = Box<dyn FnMut(&mut World) -> Option<ToolOutcome>>;
 pub(crate) struct McpLater(Vec<(Poll, ReplyTo)>);
 
 /// 受け口と後から答える置き場を World に置く（`fn main()` が `register_systems` の後に 1 度呼ぶ）。
-/// 置く前に届いた要求は受け口に溜まっていて、最初の汲みで答えられる（要件 6.5）。
+/// 置く前に届いた要求は受け口に溜まっていて、最初の汲みで答えられる。
 pub(crate) fn install(world: &mut World, inbox: Receiver<ToolRequest>) {
     world.insert_non_send(McpInbox(inbox));
     world.insert_non_send(McpLater(Vec::new()));
@@ -53,14 +53,14 @@ pub(crate) fn register(world: &mut World) {
 }
 
 /// 終了を始めた所で受け口と置き場を外す。溜まった要求・預かった組の `ReplyTo` が落ちて
-/// 即座に "shutting down" になり、以後の送りも失敗する（要件 6.4）。
+/// 即座に "shutting down" になり、以後の送りも失敗する。
 pub(crate) fn close(world: &mut World) {
     world.remove_non_send::<McpInbox>();
     world.remove_non_send::<McpLater>();
 }
 
 /// 溜まった要求を全件取り出して振り分け、その後で預かった組を全件覗く（Input の系）。
-/// 受け口が無ければ無操作。UI スレッドで待つ所は無い（要件 6.1・6.6）。
+/// 受け口が無ければ無操作。UI スレッドで待つ所は無い。
 pub(crate) fn drain(world: &mut World) {
     let Some(inbox) = world.get_non_send::<McpInbox>() else {
         return;
@@ -75,10 +75,10 @@ pub(crate) fn drain(world: &mut World) {
     poll_later(world);
 }
 
-/// 1 件を振り分ける（この `match` がツールごとの `ghost_name` の扱いの正本・要件 3.1・3.4・3.5・3.7）。
+/// 1 件を振り分ける（この `match` がツールごとの `ghost_name` の扱いの正本）。
 pub(crate) fn dispatch(world: &mut World, active: Option<&ActiveGhost>, request: ToolRequest) {
     let ToolRequest { call, reply } = request;
-    // 解決してから処理へ。失敗は `NG:` で終えて処理を呼ばない。成功はゴーストの名前を記録に添える。
+    // 失敗は `NG:` で終えて処理を呼ばない。成功はゴーストの名前を記録に添える。
     macro_rules! resolved {
         ($tool:ident, $args:expr, $omitted:expr) => {{
             let args = $args;
@@ -103,9 +103,9 @@ pub(crate) fn dispatch(world: &mut World, active: Option<&ActiveGhost>, request:
         ToolCall::Reload(args) => resolved!(reload, args, Omitted::UseActive),
         ToolCall::DumpSurface(args) => resolved!(dump_surface, args, Omitted::UseActive),
         ToolCall::DumpBalloon(args) => resolved!(dump_balloon, args, Omitted::UseActive),
-        // areka 独自のツール（spec: areka-P0-mcp-author-tools）。解決の規則は 10 本と同じ。
+        // areka 独自のツール。解決の規則は 10 本と同じ。
         ToolCall::CheckScript(args) => resolved!(check_script, args, Omitted::UseActive),
-        // `get_log` は解決しない（要件 3.7）。
+        // `get_log` は解決しない。
         ToolCall::GetLog(args) => get_log::handle(world, args, reply),
     }
 }

@@ -1,5 +1,4 @@
-//! 記録を出さない入口 [`resolve_balloon_faces_quiet`]・[`load_balloon_use_self_alpha_quiet`] の檻
-//! （spec: placement-measure-bake-once 要件 3.2・3.4・3.5・3.6）。
+//! 記録を出さない入口 [`resolve_balloon_faces_quiet`]・[`load_balloon_use_self_alpha_quiet`] の檻。
 //!
 //! 見ているのは 3 つ——⑴ 読み込みの記録を出す検体（相方側の系列を持たず縮退するバルーン・
 //! `.pna` を持つバルーン・descript が読めないバルーン）で、出す入口はその記録を出し、出さない
@@ -8,7 +7,7 @@
 //! 1 行だけ出す。
 //!
 //! 出す入口の記録の中身（文言・欄・数）は `balloon_series_tests.rs`・`balloon_alpha_tests.rs` が
-//! 今のまま持つ。
+//! 持つ。
 
 use super::*;
 
@@ -96,7 +95,7 @@ fn unreadable_descript_alpha_is_silent_and_equal() {
     assert_alpha_quiet_matches_emit(dir.path(), "descript.txt");
 }
 
-/// 出さない入口の読み込みの記録が `needle` を含む `error!` 1 行だけであることを確かめる（要件 3.6）。
+/// 出さない入口の読み込みの記録が `needle` を含む `error!` 1 行だけであることを確かめる。
 fn assert_single_error(events: &[CapturedEvent], needle: &str) {
     let records = load_records(events);
     assert_eq!(records.len(), 1, "失敗の記録だけが 1 行: {records:?}");
@@ -153,7 +152,7 @@ fn target_fingerprint((world, table): &(EmoWorld, AtlasTable)) -> String {
     format!("{entries:?}|{surfaces:?}")
 }
 
-/// spec: emo-bake-log-overlap 要件 1.4・6.4: 抜き色の面 0 で、出す入口は抜き色の記録を 1 行出し、
+/// 抜き色の面 0 で、出す入口は抜き色の記録を 1 行出し、
 /// 出さない入口はその文言が 0 行・戻り値は等しい。
 #[test]
 fn quiet_faces_build_silences_key_color_and_is_equal() {
@@ -193,7 +192,7 @@ fn quiet_faces_build_silences_key_color_and_is_equal() {
     );
 }
 
-/// spec: emo-bake-log-overlap 要件 3.5・6.4: 面 0 を読めない絵にすると、出さない入口でも
+/// 面 0 を読めない絵にすると、出さない入口でも
 /// 「面画像の bake に失敗」の `error!` が 1 行出て `Err` を返す。
 #[test]
 fn quiet_faces_build_still_records_the_bake_failure() {

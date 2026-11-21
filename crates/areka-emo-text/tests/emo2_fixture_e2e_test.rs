@@ -1,13 +1,10 @@
-//! # emo2_fixture_e2e_test — 実 emo2 fixture のメニュー cue 列 headless 統合（R6.1/6.2/6.3）
+//! # emo2_fixture_e2e_test — 実 emo2 fixture のメニュー cue 列 headless 統合
 //!
-//! 出典 spec: `areka-P0-choice-render`（断りの無い要件の番号と design.md の参照はこの spec のもの・別の spec のものはその場で名を書く）。
-//!
-//! design.md「Testing Strategy > E2E/実機 item 1（runtime 統合）」の正典述語を張る:
-//! **実 emo2 fixture ＋ menu.pasta 経路でメニュー cue 列 →選択肢描画〔headless readback〕**。
+//! **実 emo2 fixture ＋ menu.pasta 経路でメニュー cue 列 →選択肢描画**（headless readback）を検証する。
 //!
 //! `choice_fixture_test.rs` は tests 配下の **test-local** 最小 fixture で parse→resolve と
 //! 実フォント render を固定する。本ファイルは **リポジトリに実在する emo2 fixture**
-//! （`検体 emo2 の同梱バルーン emo2-kakukaku`）の実 descript／実 menu.pasta を
+//! （検体 emo2 の同梱バルーン `emo2-kakukaku`）の実 descript／実 menu.pasta を
 //! 用い、cue 配送 →選択肢描画をエンドツーエンドで検証する（実窓は起動しない・headless readback のみ）。
 //!
 //! ## 実 fixture の実態（2 層バルーン descript ＋ pasta メニュー台本）
@@ -36,8 +33,8 @@
 //!    ordinal 1（先頭でない行）の hover が実 fixture の SquareFill ハイライト（塗り(105,25,25)＋白文字）を
 //!    当該行にのみ出すことを固定する。
 //!
-//! これが 6.1（E2E 証明）を実 fixture 内容で満たし、型／語彙シーム（6.2・Cursor/references/barrier の
-//! 保持）を保ち、スクロール完全対応は追わない（6.3・短メニュー＝領域内に収まる）。
+//! 短メニュー＝領域内に収まるのでスクロール完全対応は追わない。型／語彙シーム
+//! （Cursor/references/barrier の保持）は保つ。
 
 #[path = "support/mod.rs"]
 mod support;
@@ -85,7 +82,7 @@ const EXPECTED_MENU: &[(&str, &str)] = &[
 
 // ══ テスト 1: 実 fixture の cursor.* が実 parse で SquareFill へ解決される（GPU 不要） ══════════
 
-/// Observable（R6.1/6.2）: 実 emo2 `descript.txt`＋`balloons0s.txt` を**実 balloon パーサ**で 2 層
+/// Observable: 実 emo2 `descript.txt`＋`balloons0s.txt` を**実 balloon パーサ**で 2 層
 /// マージすると、(a) 実 `cursor.*` が `SquareFill{fill:(105,25,25), text:(255,255,255)}` へ解決され、
 /// (b) 実フォント `Yu Gothic UI`／`font.height,28` を持ち、(c) validrect が非退化領域
 /// (36,46)-(356,168) へ解決される（基層のみでは退化・画像別層マージで成立）。
@@ -128,7 +125,7 @@ fn real_emo2_fixture_descript_resolves_square_fill_style() {
 
 // ══ テスト 2: 実 menu.pasta を実 sakura パイプラインで cue 列へコンパイルする（GPU 不要） ══════
 
-/// Observable（R6.2）: 実 `menu.pasta` の メインメニュー本文（`\q…\n\q…\_l[5em,2lh]\q…`）を
+/// Observable: 実 `menu.pasta` の メインメニュー本文（`\q…\n\q…\_l[5em,2lh]\q…`）を
 /// **実 sakura パイプライン**（`parse`→`compile`）へ通すと、(a) 3 つの `Choice` cue が id=target・
 /// label=disp を欠落なく転写し、(b) `\_l[5em,2lh]` が `Cursor{x:"5em", y:"2lh"}` cue へ（不透明転写・
 /// 字下げシーム）、(c) `\n` が `NewLine` cue へ、(d) `\q` 存在ゆえ末尾に `WaitForChoice` barrier が
@@ -167,7 +164,7 @@ fn real_menu_pasta_compiles_to_choice_cursor_cue_sequence() {
         "実 menu.pasta の Choice cue は id=target・label=disp を順序どおり転写する"
     );
 
-    // (b) \_l[5em,2lh] → Cursor cue（不透明転写・字下げシーム・6.2）。
+    // (b) \_l[5em,2lh] → Cursor cue（不透明転写・字下げシーム）。
     let cursor = cues.iter().find_map(|c| match &c.payload {
         CuePayload::Command(CueCommand::Cursor { x, y }) => Some((x.as_str(), y.as_str())),
         _ => None,
@@ -206,13 +203,13 @@ fn real_menu_pasta_compiles_to_choice_cursor_cue_sequence() {
 
 // ══ テスト 3: 実 fixture ＋ 実 cue 列を headless 描画し readback で検証する（GPU・headless） ══════
 
-/// Observable（R6.1/6.2/6.3）: 実 emo2 fixture（実 descript の SquareFill＋実 validrect）へ、
+/// Observable: 実 emo2 fixture（実 descript の SquareFill＋実 validrect）へ、
 /// 実 menu.pasta 由来の cue 列（Choice/NewLine/Cursor）を通し経路
 /// （`register_actor`→`apply_cue`→`present_frame`→`inject_choice_hover`→`read_back`）で描くと、
 /// (a) 3 選択肢が描かれ（非退化インク）ヒット行が実台本の id／label を反映し、(b) `\_l[5em,2lh]`
 /// 由来で最終項目（ordinal 2）が字下げされ（rect.left が先頭項目より右）、(c) ordinal 1 の hover が
 /// 実 fixture の SquareFill ハイライト（塗り(105,25,25)＋白文字）を当該行にのみ出す（非 hover 行は塗らない）。
-/// 短メニュー＝領域内に収まりスクロールを要さない（6.3）。
+/// 短メニュー＝領域内に収まりスクロールを要さない。
 ///
 /// 診断 PNG（実ジオメトリの実フォント出力）を `AREKA_DIAG_OUT`（無指定は `CARGO_TARGET_TMPDIR`）へ保存する。
 #[test]
@@ -280,9 +277,9 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
 
     // ── (c) ordinal 1（「エモの位置調整」）を hover 注入 → 再提示 → read_back ──
     //
-    // ホバーするのを**先頭でない行**にするのは、帯を行ボックスの中央へ寄せる量（先頭行の帯は
-    // 面の縁より 4 画素下の y4 から）が行送りの先の行にも効くことを、下の縦範囲の検査で
-    // 確かめるためである。ordinal 1 の帯の上端は行送り 1 つぶんとその寄せの分だけ下にあり、
+    // hover は先頭でない行にする。先頭行の帯は面の縁より 4 画素下の y4 から始まり、走査窓を上へ
+    // 開けないので、帯を行ボックスの中央へ寄せる量が行送りの先の行にも効くことは ordinal 1 でないと
+    // 縦範囲の検査で確かめられない。ordinal 1 の帯の上端は行送り 1 つぶんと寄せの分だけ下にあり、
     // 窓はその 4 画素上から見られる。
     rt.inject_choice_hover(&actor, Some(1));
     present_frame(&mut rt, &mut world, 100.0).expect("hover 提示");
@@ -312,43 +309,36 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
         "非 hover 行には SquareFill 塗り色画素が載らない: canvas-local {row0_cl:?}"
     );
 
-    // ── (d) 実機不具合の回帰検査: hover 行のインクがハイライト矩形から**縦にほぼはみ出さない** ──
+    // ── (d) 実機不具合の回帰検査: hover 行のインクがハイライト矩形から縦にほぼはみ出さない ──
     //
-    // 実機サインオフで「hover 中の選択肢の文字の下が切れる」が出た。真因は帯（ハイライト矩形／
-    // ヒット矩形のブロック軸寸）が em ボックス丈（font.height=28）だったこと——DirectWrite は行を
-    // ascent+descent（Yu Gothic UI 実測 1.3301em＝37.24px）で描くため descent のインクが帯の外に落ち、
-    // 白背景バルーン＋白 hover 文字では「下が消えた」ように見える。
+    // 「hover 中の選択肢の文字の下が切れる」の真因は、帯（ハイライト矩形／ヒット矩形のブロック軸寸）が
+    // em ボックス丈（font.height=28）だったこと。DirectWrite は行を ascent+descent（Yu Gothic UI
+    // 実測 1.3301em＝37.24px）で描くので descent のインクが帯の外に落ち、白背景バルーン＋白 hover
+    // 文字では「下が消えた」ように見える。
     //
     // 検査: hover セグメント（ordinal 1）の x 帯 × 「この行のヒット矩形の上端−余白 4 〜 次行
-    // （ordinal 2）のヒット矩形の上端＋余白 4」（帯寸に依存しない独立の y 窓）を走査し、
-    // **帯の丈が行送り 30 ちょうど**で、**帯が行ボックスの中央へ 4 画素寄って置かれ**、
-    // **文字のインクの上端が塗り（fill 色）の上端の内側**にあり、**下端のはみ出しが 0** で
-    // あることを要求する。帯を font.height に戻すと丈が 28 になって赤くなり、寄せを 0 へ戻すと
-    // 帯の位置が y30..59 へ上がって（はみ出し 2 画素）やはり赤くなる。
+    // （ordinal 2）のヒット矩形の上端＋余白 4」（帯寸に依存しない独立の y 窓）を走査し、帯の丈が
+    // 行送り 30 ちょうど・帯が行ボックスの中央へ 4 画素寄って置かれ・文字のインクの上端が塗り
+    // （fill 色）の上端の内側・下端のはみ出しが 0 であることを要求する。帯を font.height に戻すと
+    // 丈が 28 になって赤くなり、寄せを 0 へ戻すと帯が y30..59 へ上がって（はみ出し 2 画素）やはり
+    // 赤くなる。
     //
-    // 窓を帯の上下へ 4 画素ずつ開けるのは、窓を帯とぴったり同じにすると帯からはみ出したインクが
-    // 窓の外へ落ち、**測れないまま緑になる**からである。これは上端にも同じく効く——窓の上端を帯の
-    // 上端と揃えると「字の上端は帯の上端以上」が窓の取り方だけで必ず成り立ち、字が上へずれても
-    // 緑のままになる。上の行（ordinal 0）の字は黒（premultiplied の青チャネルは 0）ゆえ白文字の
-    // 述語に当たらず、塗り色 (25,25,105,255) でもないので窓へ入っても数えられない。次行
-    // （ordinal 2）の字も hover していないので黒く、窓の下端へ入っても同じ理由で数えられない。
+    // 窓を帯の上下へ 4 画素ずつ開けるのは、帯とぴったり同じにすると帯からはみ出したインクが窓の外へ
+    // 落ちて測れないまま緑になり、上端も窓の取り方だけで「字の上端は帯の上端以上」が成り立って
+    // しまうため。上の行・次行の字は hover していないので黒く、白文字の述語にも塗り色
+    // (25,25,105,255) にも当たらず、窓へ入っても数えられない。
     //
-    // インクは**文字だけ**を色で拾う（[`is_hover_text`]）。α だけで拾うと不透明な塗り帯そのものに
-    // 当たり、返る縦範囲が帯の縦範囲になって「インクは帯の内」が字の有無に関わらず成り立つ。
+    // インクは文字だけを色で拾う（[`is_hover_text`]）。α だけで拾うと不透明な塗り帯そのものに当たり、
+    // 「インクは帯の内」が字の有無に関わらず成り立つ。
     //
-    // **裁定 2026-09-06（第 2 回・`areka-P0-emo2-conformance-e2e` 要件 13）**: 行送りが正典
-    // （`font.height` ＋ 行間 2）へ確定した後、実フォントの読み戻しで帯の下端から文字のインクが
-    // 下へ出た。同日の第 1 の裁定は「2 画素のはみ出しを許容する」だったが、開発者は実機の目視で
-    // これを覆した——**帯を行ボックスの中央へ寄せる**のがあるべき姿である。本 fixture
-    // （font.height 28・ordinal 1「エモの位置調整」）の実測は、寄せる前が 帯 y30..59（丈 30）に
-    // 対し白文字 y37..61 ＝ 上の余白 7・はみ出し 2 画素、寄せた後が 帯 y34..63 に対し同じ白文字
-    // y37..61 ＝ 上の余白 3・はみ出し **0** である（丈は変えていない）。
-    // **帯を広げてはならない**（隣接行の帯と重なり、どの選択肢を指しているかの一意性が壊れる）。
-    // **はみ出しが出た場合は許容幅を上げず、画素数を添えて改めて開発者の裁定を仰ぐこと（`areka-P0-emo2-conformance-e2e` R12.2）。**
+    // 本 fixture（font.height 28・ordinal 1）の実測は、帯を寄せる前が 帯 y30..59（丈 30）に対し
+    // 白文字 y37..61＝上の余白 7・はみ出し 2 画素、寄せた後が 帯 y34..63 に対し同じ白文字＝上の余白 3・
+    // はみ出し 0。帯を広げてはならない（隣接行の帯と重なり、どの選択肢を指しているかの一意性が壊れる）。
+    // はみ出しが出た場合は許容幅を上げず、画素数を添えて改めて開発者の裁定を仰ぐこと。
     /// ハイライト帯の丈＝行送り（`font.height` 28 ＋ 行間 2）。
     const BAND_HEIGHT: u32 = 30;
     /// 帯を行ボックスの中央へ寄せる量（画素・`font.height,28` の Yu Gothic UI）。
-    /// `round(max(0, 37.24 − 30) / 2) = round(3.62) = 4`（`areka-P0-emo2-conformance-e2e` 要件 13.1）。
+    /// `round(max(0, 37.24 − 30) / 2) = round(3.62) = 4`。
     const BAND_OFFSET: u32 = 4;
 
     assert_hover_band(

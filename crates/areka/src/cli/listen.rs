@@ -1,4 +1,4 @@
-//! `--sstp-listen` の値を MCP の待受の候補にする（要件 8）。
+//! `--sstp-listen` の値を MCP の待受の候補にする。
 
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
@@ -6,23 +6,23 @@ use std::path::PathBuf;
 /// MCP の待受の計画。
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) enum ListenPlan {
-    /// `--sstp-listen` が渡されていない（今までどおり `AREKA_MCP_PORT` か既定・8.8）。
+    /// `--sstp-listen` が渡されていない（今までどおり `AREKA_MCP_PORT` か既定）。
     #[default]
     NotGiven,
-    /// `none` か値なし（8.4）。
+    /// `none` か値なし。
     Off,
-    /// 書いた順の番号（127.0.0.1 で試す・8.1〜8.3）。
+    /// 書いた順の番号（127.0.0.1 で試す）。
     Ports(Vec<u16>),
-    /// 待ち受け先はあったが全部はねた（8.7）。
+    /// 待ち受け先はあったが全部はねた。
     AllRejected,
 }
 
 /// はねた待ち受け先（記録の材料）。
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum ListenNote {
-    /// 書式の誤り（8.5）。`reason` は `"port"`（番号が 1〜65535 でない・読めない）か `"format"`。
+    /// 書式の誤り。`reason` は `"port"`（番号が 1〜65535 でない・読めない）か `"format"`。
     Rejected { item: String, reason: &'static str },
-    /// 127.0.0.1 以外のアドレス（8.6）。
+    /// 127.0.0.1 以外のアドレス。
     NotLoopback { item: String },
 }
 
@@ -118,7 +118,7 @@ pub(crate) fn ports_to_try(
     }
 }
 
-/// MCP の待受を立てる。`Off` は info・`AllRejected` は error を出して何も立てない（8.4・8.7）。
+/// MCP の待受を立てる。`Off` は info・`AllRejected` は error を出して何も立てない。
 pub(crate) fn start_mcp(
     plan: &ListenPlan,
     tools: areka_mcp::ToolRegistry,

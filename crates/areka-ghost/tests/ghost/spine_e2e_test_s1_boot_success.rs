@@ -1,10 +1,9 @@
-// ===================== S1: boot 成功シナリオ（task 4.2） =====================
+// ===================== S1: boot 成功シナリオ =====================
 //
-// design.md「spine e2e（決定論・純 x64）」の「シナリオ網羅（要件 7.5）」節・S1:
-// 「Boot→OnBoot GET が Value→StartTalk→sakura 再生→RecordingSink の発火列（at 昇順・
-// 内容一致）」を、起動から実 ghost スタック（kanade→start-relay→dispatcher→sakura の
-// 実アクター一式）を通して駆動し、時刻注入（Tick）のみで確認する（sleep 不使用・要件
-// 7.2/7.4/7.6・純 x64）。TalkDone{Ended} の kanade への転送はここでは見ない（末尾の注記）。
+// Boot→OnBoot GET が Value→StartTalk→sakura 再生→RecordingSink の発火列（at 昇順・内容一致）を、
+// 起動から実 ghost スタック（kanade→start-relay→dispatcher→sakura の実アクター一式）を通して駆動し、
+// 時刻注入（Tick）のみで確認する（sleep 不使用・純 x64）。TalkDone{Ended} の kanade への転送は
+// ここでは見ない（末尾の注記）。
 
 use super::*;
 
@@ -13,7 +12,7 @@ use areka_kanade::KanadeConfig;
 use areka_parsers::charset::DefaultEncoding;
 
 /// S1: boot 成功——boot→OnBoot(Value)→StartTalk→sakura 再生→RecordingSink の発火列
-/// （at 昇順・内容一致）を、Tick 注入のみで決定論的に確認する（要件 7.2/7.4/7.6）。
+/// （at 昇順・内容一致）を、Tick 注入のみで決定論的に確認する。
 #[test]
 fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     const SHELL_NAME: &str = "S1BootShell";
@@ -21,8 +20,8 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     let temp = write_ghost_fixture("S1TestGhost", SHELL_NAME);
     let root = temp.path().to_path_buf();
 
-    // events 表と同一パラメタで期待値導出用 config を構築する（`resolve_kanade_config` が
-    // 実際に組み立てる値と shell_name/baseware_version が一致する・task 4.2 参照材料 4）。
+    // events 表と同一パラメタで期待値導出用 config を構築する（`resolve_kanade_config` が実際に組み立てる値と
+    // shell_name/baseware_version が一致する）。
     let config = KanadeConfig::new(SHELL_NAME, env!("CARGO_PKG_VERSION"));
 
     // boot 系列一式のみを台本化する（OnSecondChange は kanade へ Tick を一切送らないため
@@ -52,16 +51,12 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
 
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
 
-    // boot() は内部で KanadeMsg::Boot を既に送出済み——boot 系列は kanade アクタースレッド
-    // 上で同期往復（oneshot round trip）のみで完走するため、この時点で OnInitialize〜
-    // basewareversion の起動系列はスケジューリング次第で既に発火し終えて**いることもある**
-    // （⚠ 発火し終えている保証は無い。cue の発火は起動系列の完了を含意しない——理由と
-    // 対処は下の有界待ちの注記を読むこと。task 5.6・要件 9.2）。しかし
-    // StartTalk は start_tx→start-relay→dispatcher_tx の 2 hop（別スレッド）を経るため、
-    // dispatcher の active slot に talk が実際に載るタイミングはスレッドスケジューリング
-    // 依存であり、単一の Tick 送出が必ず間に合う保証はない。sleep は使わず、Tick を送る
-    // たびに RecordingSink を確認する再送ループ（実時間待機なし・単調増加する `now` の
-    // 注入のみ・`yield_now` で他スレッドに実行機会を譲るだけ）でこの橋渡しをする。
+    // boot() は内部で KanadeMsg::Boot を送出済みで、起動系列は kanade アクタースレッド上の同期往復のみで完走するが、
+    // この時点で発火し終えている保証は無い（cue の発火は起動系列の完了を含意しない。下の有界待ちの注記を参照）。
+    // StartTalk は start_tx→start-relay→dispatcher_tx の 2 hop（別スレッド）を経るため、talk が dispatcher の
+    // active slot に載るタイミングはスケジューリング依存で、単一の Tick 送出が間に合う保証はない。sleep は使わず、
+    // Tick を送るたびに RecordingSink を確認する再送ループ（単調増加する `now` の注入と `yield_now` のみ）で
+    // 橋渡しする。
     let mut now: u64 = 1;
     super::spin_pumping_ticks(
         "S1: surface cue never fired after repeated Tick — boot talk did not reach \
@@ -83,13 +78,12 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     // 順序判定はこの死活監視ノイズと無関係なので除外して比較する。
     let expected_boot_prefix = expected_boot_prefix(&config);
 
-    // **数える前に起動系列の到達そのものを有界に待つ**（task 5.6・要件 9.2〔2026-09-04 の
-    // 開発者裁定で S1 まで対象を広げた改訂版〕）。上の `spin_pumping_ticks` が抜ける条件は
-    // 「surface cue が 1 件でも載ったこと」だけで、起動系列の完了を**含意しない**——
-    // `to_baseware_version`（`crates/areka-kanade/src/schedule/boot.rs`）は `Action::StartTalk` を
-    // `basewareversion` の `Action::ShioriRequest` より**先に**積むので、cue（start-relay→dispatcher の
-    // 2 hop）と最後の記録（shiori アクタースレッドの 1 hop）は別スレッドの競走になる。待ちの脱出条件は
-    // 「期待の長さ以上」だが、直後の等値照合が上限も保つので 1 件多く来れば赤になる。
+    // **数える前に起動系列の到達そのものを有界に待つ**。上の `spin_pumping_ticks` が抜ける条件は
+    // 「surface cue が 1 件でも載ったこと」だけで、起動系列の完了を**含意しない**——`to_baseware_version`
+    // （`crates/areka-kanade/src/schedule/boot.rs`）は `Action::StartTalk` を `basewareversion` の
+    // `Action::ShioriRequest` より**先に**積むので、cue（start-relay→dispatcher の 2 hop）と最後の記録
+    // （shiori アクタースレッドの 1 hop）は別スレッドの競走になる。待ちの脱出条件は「期待の長さ以上」だが、
+    // 直後の等値照合が上限も保つので 1 件多く来れば赤になる。
     wait_until(
         "S1: boot 系列（OnInitialize/username/OnFirstBoot/OnBoot/OnTranslate/basewareversion）が揃わなかった",
         || non_status_calls(&handle).len() >= expected_boot_prefix.len(),
@@ -101,19 +95,17 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     );
 
     // ---- (b)(c) RecordingSink の発火列（broadcast・at 昇順・内容一致）----
-    // broadcast ゆえ surface/text の両 sink が**同一の全 cue** を受ける（中央振り分け廃止・
-    // どの action を演じるかは演者側 relevance の責務）。`\s[0]hello\e` の期待 broadcast 列:
-    //   ClearAll@0（#6 全消去・task 5.2 冒頭前置）/ Emote{0}@0（\s[0]）/ Text(hello)@0 /
+    // broadcast ゆえ surface/text の両 sink が**同一の全 cue** を受ける（どの action を演じるかは演者側
+    // relevance の責務）。`\s[0]hello\e` の期待 broadcast 列:
+    //   ClearAll@0 / Emote{0}@0（\s[0]）/ Text(hello)@0 /
     //   **初回起動 epilogue**（`areka.prop.set` [BootCount 正準 key, "1"]）@`hello` の再生完了時刻。
     //
-    // 4 件目は「初回起動なら起動記録を書く」epilogue（`runtime.rs` step 3・要件 3.4）であり、
-    // 本 fixture は永続ファイルを持たない＝毎回 `first_boot=true` ゆえ**常に台本に載る**。
-    // 期待値（cue 名・key・at）は本番権威から導出し、定数の直書きを避ける——`at` は
-    // `text_playback_duration("hello")`（= 5 文字 × CHAR_NOMINAL_MS）そのものである。
+    // 4 件目は「初回起動なら起動記録を書く」epilogue（`runtime.rs`）で、本 fixture は永続ファイルを持たない
+    // ＝毎回 `first_boot=true` ゆえ**常に台本に載る**。期待値（cue 名・key・at）は本番権威から導出し、
+    // 定数の直書きを避ける——`at` は `text_playback_duration("hello")`（= 5 文字 × CHAR_NOMINAL_MS）そのもの。
     //
-    // 整定は `spin_pumping_ticks` で行う——4 件目は仮想時刻が `hello` の horizon を越えて
-    // 初めて発火するため、**Tick を注入し続けなければ永久に届かない**（旧実装は yield のみで
-    // 待ち、horizon を越えるか否かがスケジューラ依存だった＝17.5% 偽赤の直接原因）。
+    // 整定は `spin_pumping_ticks` で行う——4 件目は仮想時刻が `hello` の horizon を越えて初めて発火するため、
+    // **Tick を注入し続けなければ届かない**（yield のみで待つと越えるか否かがスケジューラ依存になる）。
     let expected: Vec<(f64, CueCommand)> = vec![
         (0.0, CueCommand::ClearAll),
         (

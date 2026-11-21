@@ -250,7 +250,7 @@ fn ended_then_started_in_one_flush_keeps_order() {
     assert_eq!(result.current_dragging_entity, Some(second));
 }
 
-/// 要件 7.2: 控えの無いスレッドで終了の種を積むと「積めなかった」（false）が返り、
+/// 控えの無いスレッドで終了の種を積むと「積めなかった」（false）が返り、
 /// `drag_end_seed_unreachable` の `warn!` がちょうど 1 件出る。
 /// 控えはスレッドごとなので、新しいスレッドで走らせて「控えが無い」を作る。
 #[test]

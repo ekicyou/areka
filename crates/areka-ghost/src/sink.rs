@@ -1,28 +1,25 @@
 //! `LogSink`／`DiscardSink` — 診断既定の記録先コンポーネント（単一出力契約 [`areka_sakura::contract::CueSink`]（＝`dola::cue::CueSink`））。
 //!
 //! `LogSink` は発火内容を `tracing` へ構造化出力するだけの、複製可能（`Clone`）な診断既定実装。
-//! M-boot 統合はこの位置に seriko／emo-text-layer の実 sink を挿す（design.md「ghost::sink」）。
-//! 旧 sakura の `MockSink`（テスト用・無限蓄積）を本番へ置かないための最小実装——蓄積フィールドを
-//! 一切持たない unit 相当構造体。
+//! 蓄積フィールドを一切持たない unit 相当構造体で、旧 sakura の `MockSink`（テスト用・無限蓄積）を
+//! 本番へ置かないための最小実装。
 //!
-//! `boot` は可変長 sink（`Vec<Box<dyn BootCueSink>>`・S-3）を持つが、診断既定では登録列の
-//! **先頭だけ**を `LogSink` で記録し、残りは破棄専用の `DiscardSink` で埋める。broadcast（D4）で
-//! 全 cue は登録された全 sink へ配られるため、複数スロットを `LogSink` にすると 1 cue が複数回
-//! ログされてしまう（二重ログ）。`LogSink`＋`DiscardSink` の対（診断既定 `vec![LogSink, DiscardSink]`
-//! 相当）で **cue ごと 1 回ログ**へ正す（設計 D4「挙動保存の唯一の破れ」Topic 2）。
+//! `boot` は可変長 sink（`Vec<Box<dyn BootCueSink>>`）を持つが、診断既定では登録列の**先頭だけ**を
+//! `LogSink` で記録し、残りは破棄専用の `DiscardSink` で埋める。broadcast で全 cue が登録された全 sink へ
+//! 配られるため、複数スロットを `LogSink` にすると 1 cue が複数回ログされる（二重ログ）。
+//! `LogSink`＋`DiscardSink` の対（診断既定 `vec![LogSink, DiscardSink]` 相当）で **cue ごと 1 回ログ**にする。
 //!
-//! # `BootCueSink`（S-3 可変長 sink の boot 契約）
+//! # `BootCueSink`（可変長 sink の boot 契約）
 //!
-//! `boot` が受け取る sink は演者数に依らない可変長 `Vec<Box<dyn BootCueSink>>` である
-//! （旧「2 固定スロット（surface/text）」の意図的更新）。[`BootCueSink`] は
-//! `CueSink + Clone + Send + 'static` へ blanket impl されるため、`LogSink`／`DiscardSink` 等の
-//! 既存 sink は**無改変で適合**する。dispatcher は talk 起動ごとに [`BootCueSink::clone_box`] で
-//! 各 sink の独立インスタンスを取得し、per-talk の `spawn_talk` へ `Vec<Box<dyn CueSink + Send>>`
-//! として手渡す（登録順＝broadcast 順＝決定論・design.md「GhostBootOptions S-3」）。
+//! `boot` が受け取る sink は演者数に依らない可変長 `Vec<Box<dyn BootCueSink>>` である。
+//! [`BootCueSink`] は `CueSink + Clone + Send + 'static` へ blanket impl されるため、`LogSink`／`DiscardSink` 等の
+//! 既存 sink は**無改変で適合**する。dispatcher は talk 起動ごとに [`BootCueSink::clone_box`] で各 sink の
+//! 独立インスタンスを取得し、per-talk の `spawn_talk` へ `Vec<Box<dyn CueSink + Send>>` として手渡す
+//! （登録順＝broadcast 順＝決定論）。
 
 use areka_sakura::contract::{CueCommand, CueSink, ScriptOrigin, TalkCue, TalkId};
 
-/// `boot` が要求する複製可能 sink（design.md「GhostBootOptions S-3＋provider」）。
+/// `boot` が要求する複製可能 sink。
 ///
 /// `CueSink + Clone + Send + 'static` を満たす全ての型へ blanket impl されるため、
 /// 既存の [`LogSink`]／[`DiscardSink`] や演者 sink（seriko／emo-text）は本 trait を
@@ -33,14 +30,12 @@ use areka_sakura::contract::{CueCommand, CueSink, ScriptOrigin, TalkCue, TalkId}
 /// 上位境界 `CueSink + Send` を持つため、`Box<dyn BootCueSink>` は
 /// `Box<dyn CueSink + Send>` へ trait upcast できる（per-talk 手渡し時の型合わせ）。
 pub trait BootCueSink: CueSink + Send {
-    /// 自身の複製を trait object として返す（per-talk 複製の口・`dyn` 化のため
-    /// `Clone` を直接 supertrait に置けないための clone シム）。
+    /// 自身の複製を trait object として返す（per-talk 複製の口。`Clone` を直接 supertrait に置けないための clone シム）。
     fn clone_box(&self) -> Box<dyn BootCueSink>;
 
     /// この複製が受け持つトークの番号と出どころ（`StartTalk::origin`）。dispatcher がトークの
-    /// 起動ごとに、複製の直後に 1 回だけ呼ぶ（要件 2.6・1.4・design.md「begin_talk の出どころ」）。
-    /// 既定は何もしない——一括の実装に乗る既存の受け口は振る舞いが変わらない。番号や出どころが
-    /// 要る受け口は `Clone` を持たずに本 trait を自分で実装して上書きする。
+    /// 起動ごとに、複製の直後に 1 回だけ呼ぶ。既定は何もしない——一括の実装に乗る既存の受け口は
+    /// 振る舞いが変わらない。番号や出どころが要る受け口は `Clone` を持たずに本 trait を自分で実装して上書きする。
     fn begin_talk(&mut self, _talk_id: TalkId, _origin: ScriptOrigin) {}
 }
 
@@ -57,9 +52,8 @@ where
 /// `at`（発火時刻）・`actor`（話者スコープ）・`command_kind`（コマンド種別）を
 /// 構造化出力するだけで、状態を一切蓄積しない（無限に稼働し続けても安全）。
 ///
-/// 演者非依存の**単一の出力契約** [`areka_sakura::contract::CueSink`]（＝`dola::cue::CueSink`）を実装する（`boot` の broadcast 登録先が
-/// 要求する形・R11.3/R11.6）。旧 `SurfaceSink`/`TextSink` の 2 分割は broadcast＋演者側 relevance
-/// ゆえ廃した。broadcast された全 cue を構造化ログへ落とすだけの診断既定 sink。
+/// 演者非依存の**単一の出力契約** [`areka_sakura::contract::CueSink`]（＝`dola::cue::CueSink`）を実装する
+/// （`boot` の broadcast 登録先が要求する形）。broadcast された全 cue を構造化ログへ落とすだけ。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct LogSink;
 
@@ -83,13 +77,11 @@ impl CueSink for LogSink {
     }
 }
 
-/// 破棄専用の診断 sink（演者非依存の単一出力契約 [`areka_sakura::contract::CueSink`]（＝`dola::cue::CueSink`）を実装する）。
+/// 破棄専用の診断 sink（単一出力契約 [`areka_sakura::contract::CueSink`] を実装する）。
 ///
-/// `boot` の可変長 sink 列（`Vec<Box<dyn BootCueSink>>`・S-3）のうち、診断既定の非記録スロットを
-/// 埋めるための no-op sink。broadcast された cue を受け取っても何もしない（記録も出力もしない・
-/// 状態を持たない）。診断既定 boot は `vec![LogSink, DiscardSink]` 相当で結線し、`LogSink` を単一の
-/// 記録先とすることで **cue ごと 1 回ログ**を成立させる（複数スロットを `LogSink` にした場合の二重ログを
-/// 避ける・設計 D4 Topic 2）。本番の実 sink 差込（seriko/emo-text）では別オブジェクトゆえ元々無関係。
+/// `boot` の可変長 sink 列のうち、診断既定の非記録スロットを埋める no-op sink。診断既定 boot は
+/// `vec![LogSink, DiscardSink]` 相当で結線し、`LogSink` を単一の記録先として **cue ごと 1 回ログ**を成立させる
+/// （複数スロットを `LogSink` にすると二重ログになる）。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DiscardSink;
 
@@ -101,9 +93,7 @@ impl DiscardSink {
 }
 
 impl CueSink for DiscardSink {
-    fn emit(&mut self, _cue: TalkCue) {
-        // 破棄のみ（診断既定 boot の非記録スロットを埋める・記録も出力もしない）。
-    }
+    fn emit(&mut self, _cue: TalkCue) {}
 }
 
 /// `CueCommand` の variant 名を返す（ログの `command_kind` フィールド用）。
@@ -137,14 +127,11 @@ mod tests {
     use crate::test_log_capture::label_of;
     use tracing::Level;
 
-    // ---- テスト専用ログ捕捉ヘルパ（捕捉窓は crate 内の唯一の窓口
-    // `crate::test_log_capture::capture_events` へ寄せ、そこから共有 crate `log-capture-kit`
-    // へ委譲する。以前ここにあった自前の `with_default` 捕捉は硬化を持たず、別スレッドが
-    // 先に発行点を踏むと callsite の interest が `never` へ焼き付いて捕捉 0 件になり得た
-    // ——存在の主張は確率的に赤、不在の主張は静かに緑になる形である。機序は
-    // `log_capture_kit` の crate doc を参照）。----
+    // ---- テスト専用ログ捕捉ヘルパ ----
+    // 捕捉窓は crate 内の唯一の窓口 `crate::test_log_capture::capture_events` へ寄せ、共有 crate
+    // `log-capture-kit` へ委譲する。自前の `with_default` 捕捉は、別スレッドが先に発行点を踏むと callsite の
+    // interest が `never` へ焼き付いて捕捉 0 件になり得る（機序は `log_capture_kit` の crate doc）。
 
-    /// 捕捉した 1 イベント（本テストが照合する構造化フィールドのみ保持する）。
     #[derive(Debug, Clone)]
     struct CapturedEvent {
         target: String,
@@ -155,11 +142,10 @@ mod tests {
     }
 
     impl CapturedEvent {
-        /// 共有機構の正準イベントから、本檻が照合する形へ変換する。
+        /// 共有機構の正準イベントから、本テストが照合する形へ変換する。
         ///
-        /// `at` は `f64` 値ゆえ `Visit` の既定実装で `record_debug` へ落ち、その `{:?}` は
-        /// `1.5`／`3.25` のような十進表記になる。移行前の `record_f64` と同じ値を得るために
-        /// ここで `f64` へ戻す（数値でない値が載っていれば `None` になり、檻は移行前どおり落ちる）。
+        /// `at` は `f64` 値ゆえ `Visit` の既定実装で `record_debug` へ落ち、その `{:?}` は `1.5`／`3.25` のような
+        /// 十進表記になる。ここで `f64` へ戻す（数値でない値が載っていれば `None` になり、テストは落ちる）。
         fn from_canonical(ev: &CanonicalEvent) -> Self {
             Self {
                 target: ev.target.clone(),
@@ -188,9 +174,7 @@ mod tests {
         }
     }
 
-    /// `CueSink::emit` が構造化ログを 1 件発火し、`at`／`actor`／`command_kind` が
-    /// 期待どおり載ることを検証する（診断既定実装が「発火のたびに構造化ログが
-    /// 出力される」ことの直接証跡・単一の出力契約 [`areka_sakura::contract::CueSink`]（＝`dola::cue::CueSink`））。
+    /// `CueSink::emit` が構造化ログを 1 件発火し、`at`／`actor`／`command_kind` が期待どおり載ることを検証する。
     #[test]
     fn emit_logs_structured_event_with_at_actor_and_command_kind() {
         let mut sink = LogSink::new();
@@ -227,8 +211,7 @@ mod tests {
         assert_eq!(event.command_kind.as_deref(), Some("NewLine"));
     }
 
-    /// 全 `CueCommand` variant が期待どおりの `command_kind` へ写ることを確認する
-    /// （`contract::cue_target_of` の全 variant テストと同じ流儀）。本体の `command_kind` は
+    /// 全 `CueCommand` variant が期待どおりの `command_kind` へ写ることを確認する。本体の `command_kind` は
     /// catch-all を持たないので、variant が増えるとコンパイラが直しを迫る。このテストへの追加は手で行う。
     #[test]
     fn command_kind_covers_every_cue_command_variant() {

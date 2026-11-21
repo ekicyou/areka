@@ -1,4 +1,4 @@
-//! 外形に動く絵の子と `always` を数える（要件 1.2・1.7・6.2・7.1）。
+//! 外形に動く絵の子と `always` を数える。
 //!
 //! 動く絵の子は画像の element と同じ 1 行で原寸を数え、`always` は全部の pattern の先を着せ替えの
 //! pattern0 と同じやり方で数える。外形はコマ（[`PatternState`]）に依らない静的な量のまま。
@@ -51,7 +51,7 @@ fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
     bake_films_and_bind(&dec, Path::new(BASE), rels, text, images)
 }
 
-/// 要件 1.7・6.2: 動く絵を置いたサーフェスの外形は、同じ寸法の静止画を置いたときと同じ。
+/// 動く絵を置いたサーフェスの外形は、同じ寸法の静止画を置いたときと同じ。
 #[test]
 fn film_element_extent_equals_same_sized_still() {
     let text = |rel: &str| {
@@ -66,7 +66,7 @@ fn film_element_extent_equals_same_sized_still() {
     assert_eq!(film, Extent { w: 30, h: 20 });
 }
 
-/// 要件 1.2: 動く `surface<数字>.png` だけで建つサーフェスの外形は 0×0 にならず、合成できる。
+/// 動く `surface<数字>.png` だけで建つサーフェスの外形は 0×0 にならず、合成できる。
 #[test]
 fn animated_base_image_only_surface_is_not_empty() {
     let (world, atlas) = build_with(
@@ -98,7 +98,7 @@ const ALWAYS: &str = "surface0\n{\nelement0,overlay,body.png,0,0\n\
                       surface31\n{\nelement0,overlay,tall.png,0,0\n}\n\
                       surface99\n{\nelement0,overlay,big.png,0,0\n}\n";
 
-/// design b-2・議題の裁定 1: 手書きの `always` の外形は全部の pattern の先の和集合。負の番号と、
+/// 手書きの `always` の外形は全部の pattern の先の和集合。負の番号と、
 /// 欄 2 が animation の番号になる語の先は数えない。
 #[test]
 fn hand_written_always_extent_is_union_of_all_patterns() {
@@ -107,7 +107,7 @@ fn hand_written_always_extent_is_union_of_all_patterns() {
     assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
 }
 
-/// seriko-pattern-calls 6.8・M6: 純 `bind` は `always` と同じく全部の pattern の先を数える（負の番号と
+/// 純 `bind` は `always` と同じく全部の pattern の先を数える（負の番号と
 /// 8 語の欄 2 は数えない）。`bind+random` は今のまま番号の最も小さい 1 つだけ（pattern0 の tall を (0,10) に
 /// 数え、pattern1 の big は数えない）。
 #[test]
@@ -130,8 +130,8 @@ fn pure_bind_extent_is_union_of_all_patterns() {
     assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 60 });
 }
 
-/// 要件 1.7: コマの欄を替えても外形は同じ（`always` のコマ）。外形は束縛のときの表を引くだけでコマを
-/// 受け取らないので、替えた計画 1 回で足りる（指摘 118）。動く絵の子のコマは、ここの検体では
+/// コマの欄を替えても外形は同じ（`always` のコマ）。外形は束縛のときの表を引くだけでコマを
+/// 受け取らないので、替えた計画 1 回で足りる。動く絵の子のコマは、ここの検体では
 /// 替えても命令が外形の内に収まり確かめにならないので外した。
 #[test]
 fn cells_do_not_change_extent() {

@@ -4,12 +4,12 @@ use super::{ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, C
 use crate::test_support::{barrier, logged_commands, recording_sink, text, wait};
 use std::rc::Rc;
 
-/// **観測可能な完了条件（Task 4.3・前段）**: 1 つの台本を複数の登録済み sink へ流すと、
-/// 全 sink が**同一の cue 列を同一絶対時刻で**受信する（broadcast fan-out・R2.1/R1.4）。
+/// **観測可能な完了条件**: 1 つの台本を複数の登録済み sink へ流すと、
+/// 全 sink が**同一の cue 列を同一絶対時刻で**受信する（broadcast fan-out）。
 ///
 /// `TalkCue.at` は相対 offset（canonical 変換が `cue.start_time` を無変形複写）、絶対発火時刻は
 /// アンカー `absolute_start_time` ＋ `at`。全 sink が同一 `at` を受け、アンカーが共有ゆえ、
-/// 各 sink が独立に算出する絶対時刻も同一になる（配送時に別時刻を導出しない・R1.3）。
+/// 各 sink が独立に算出する絶対時刻も同一になる（配送時に別時刻を導出しない）。
 #[test]
 fn broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time() {
     let actor = ActorKey::from("0");
@@ -46,7 +46,6 @@ fn broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time() {
     let b = log_b.borrow().clone();
     let c = log_c.borrow().clone();
 
-    // 全 sink は同一の cue 列を受信する（broadcast＝全員が全 cue を受ける）。
     assert_eq!(a, b, "sink A と B は同一 cue 列を受信する");
     assert_eq!(b, c, "sink B と C は同一 cue 列を受信する");
 
@@ -106,7 +105,6 @@ fn broadcast_stops_at_barrier_and_resumes_delivery_after_resolve() {
     player.tick(20.0);
     assert_eq!(log.borrow().len(), 1, "待機中は after を配送しない");
 
-    // 外部解決で再開し、残り cue が配送される。
     player.resolve_click();
     player.tick(20.0);
     assert_eq!(
@@ -145,9 +143,9 @@ fn broadcast_delivers_each_cue_once_even_when_ticked_repeatedly() {
     );
 }
 
-/// **観測可能な完了条件（Task 4.3・後段）**: 末尾に待ちを持つ台本では、全 cue の**配送完了**
+/// **観測可能な完了条件**: 末尾に待ちを持つ台本では、全 cue の**配送完了**
 /// （entry 枯渇）時点では `is_completed()` が false で、占有 horizon（最終 Wait の duration 端）
-/// 到達で初めて true になる（配送 ≠ 再生完了・早期終了しない・R2.5/D6 の caller-facing 固定）。
+/// 到達で初めて true になる（配送 ≠ 再生完了・早期終了しない）。
 #[test]
 fn is_completed_is_gated_by_occupancy_horizon_for_trailing_wait() {
     let d = 0.15_f64;
@@ -157,7 +155,6 @@ fn is_completed_is_gated_by_occupancy_horizon_for_trailing_wait() {
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
-    // 全 entry を配り終える時刻（末尾 Wait の発火時刻＝d）まで進める。
     player.tick(d);
     assert_eq!(
         logged_commands(&log),
@@ -169,7 +166,6 @@ fn is_completed_is_gated_by_occupancy_horizon_for_trailing_wait() {
         "配送完了（entry 枯渇）時点では占有 horizon 未到達ゆえ未完了（早期終了しない・R2.5）"
     );
 
-    // 占有 horizon 直前も未完了。
     player.tick(sheet.absolute_end_time() - 0.01);
     assert!(!player.is_completed(), "horizon 直前は未完了");
 
@@ -182,7 +178,7 @@ fn is_completed_is_gated_by_occupancy_horizon_for_trailing_wait() {
 }
 
 /// 待ちを持たない末尾テキストのみの台本でも、テキストの再生時間（duration）端＝占有 horizon
-/// 到達まで `is_completed()` は false（最終 Text の duration を終端で落とさない・R2.5）。
+/// 到達まで `is_completed()` は false（最終 Text の duration を終端で落とさない）。
 #[test]
 fn is_completed_is_gated_by_final_text_duration() {
     let d = 0.5_f64;
@@ -203,7 +199,6 @@ fn is_completed_is_gated_by_final_text_duration() {
         "最終 Text の配送時点では duration 端未到達ゆえ未完了"
     );
 
-    // duration 端（占有 horizon）到達で完了。
     player.tick(sheet.absolute_end_time());
     assert!(
         player.is_completed(),

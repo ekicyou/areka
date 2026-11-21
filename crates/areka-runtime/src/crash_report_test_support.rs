@@ -1,16 +1,16 @@
 //! 写しの相手: crates/wintf/src/test_crash_report.rs・crates/areka-placement/src/test_crash_report.rs（どちらも許可の持ち手の表を持たない写し）
 //!
-//! テストのプロセスの落ちの報告（areka-test-binary-stability 設計「CrashReport」・要件 1.1・1.10）。
+//! テストのプロセスの落ちの報告。
 //!
 //! プロセスの読み込みの初め（libtest の main より前）に `.CRT$XCU` の初期化子から、最初の受け手（AV）と
 //! 最後の受け手（それ以外）を据える。AV は最初の受け手で書く（途中の枠の受け手がプロセスを終わらせたり、枠を
-//! 巻き戻せずに最後の受け手まで届かなかったりする落ちがあった・2026-11-01 の測り）。それ以外の捕まえられなかった
+//! 巻き戻せずに最後の受け手まで届かなかったりする落ちがあった）。それ以外の捕まえられなかった
 //! 例外は最後の受け手で書く。書く中身は、例外のコード・番地・落ちたスレッドの名前とモジュール・GPU の装置の
 //! 許可の持ち手・生きているスレッドの一覧・積み上げを、決めた行の形で標準エラーの OS のハンドルへ直に書き
 //! （libtest の捕まえも `std` の標準エラーの錠も通らない）、次の受け手へ回す。ふだんの緑の走行では何も書かない。
 //!
 //! 同じ初期化子で、プロセスの寿命の MTA を立てる（`CoIncrementMTAUsage`）。テストのスレッドが
-//! 足場ごとに入って出る一時的な MTA が解体され、放された DLL を後から呼んで落ちるのを防ぐ（2026-11-01 の対照の
+//! 足場ごとに入って出る一時的な MTA が解体され、放された DLL を後から呼んで落ちるのを防ぐ。
 //! 走行で候補 B と決めた）。そのため、COM を初期化していないテストのスレッドも暗黙の MTA に居る。
 //!
 //! 書く順は割り当ての無い行から先に。後ろの段（スレッドの名前の取り出し・積み上げ）で錠やヒープが壊れて
@@ -37,8 +37,7 @@ use windows::Win32::System::Threading::{
 use windows::core::PCWSTR;
 
 // ---------------------------------------------------------------------------
-// 今の `windows` の機能（Win32_System_Diagnostics_* が無い）に無い kernel32 の関数と構造体（areka-test-binary-stability の設計の議題 2・
-// `Cargo.toml` は触らない）。
+// 今の `windows` の機能（Win32_System_Diagnostics_* が無い）に無い kernel32 の関数と構造体。
 // ---------------------------------------------------------------------------
 
 #[repr(C)]
@@ -124,7 +123,7 @@ unsafe extern "system" {
 // 据え付け
 // ---------------------------------------------------------------------------
 
-/// テストの実行ファイルの根のクレートの中に置くので、リンクで落ちない（較正で確かめる・`main.rs` は触らない）。
+/// テストの実行ファイルの根のクレートの中に置くので、リンクで落ちない。
 #[cfg(test)]
 #[used]
 #[unsafe(link_section = ".CRT$XCU")]
@@ -286,7 +285,6 @@ unsafe fn write_report(info: *const EXCEPTION_POINTERS) {
     let out: &mut File = &mut out;
     let mut line = Line::new();
 
-    // ⑴ 1 行目。
     // SAFETY: 呼び手の約束。
     let (code, addr) = unsafe { code_and_address(info) };
     // SAFETY: 引数の無い呼び出し。
@@ -297,7 +295,6 @@ unsafe fn write_report(info: *const EXCEPTION_POINTERS) {
     );
     line.emit(out);
 
-    // ⑵ 落ちた番地のモジュールと、落ちたスレッドの名前。
     let mut path = [0u16; 520];
     let mut module = HMODULE::default();
     // SAFETY: FROM_ADDRESS の形では名前の引数を番地として読む。参照の数は変えない。
@@ -329,7 +326,7 @@ unsafe fn write_report(info: *const EXCEPTION_POINTERS) {
         line.emit(out);
     }
 
-    // ⑶ 許可の持ち手の表（錠が取れなければ取らずに busy と書く）。
+    // 許可の持ち手の表（錠が取れなければ取らずに busy と書く）。
     let rows = match HOLDERS.try_lock() {
         Ok(rows) => Some(rows),
         Err(TryLockError::Poisoned(e)) => Some(e.into_inner()),
@@ -354,10 +351,9 @@ unsafe fn write_report(info: *const EXCEPTION_POINTERS) {
         line.emit(out);
     }
 
-    // ⑷ 生きているスレッドの一覧。
     write_live_threads(out, &mut line);
 
-    // ⑸ 積み上げ（ここから割り当てる）。
+    // 積み上げ（ここから割り当てる）。
     let stack = std::backtrace::Backtrace::force_capture().to_string();
     for frame in stack.lines() {
         let _ = write!(line, "AREKA-CRASH-STACK {frame}");
@@ -573,7 +569,7 @@ fn line_cuts_an_overlong_line_at_a_char_boundary_with_a_mark() {
     assert!(!text.contains("tail"), "切った後の書き足しは捨てる");
 }
 
-/// 較正（areka-test-binary-stability 要件 1.2）: 許可を取り `GraphicsCore` を作った後（GPU の DLL を読み込んだ後も受け手が生きていることを
+/// 較正: 許可を取り `GraphicsCore` を作った後（GPU の DLL を読み込んだ後も受け手が生きていることを
 /// 見るため）、名前の無いスレッドで例外を起こす。出力に落ちたスレッド（名前なし）・持ち手の行のこのテストの名前・
 /// 生きているスレッドの一覧が出ることを `load-flake.ps1` の summary で見る。
 #[test]

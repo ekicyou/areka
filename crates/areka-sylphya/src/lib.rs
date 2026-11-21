@@ -51,7 +51,7 @@ pub mod vocab;
 #[cfg(test)]
 mod test_log_capture;
 
-// --- 公開面 re-export（後続タスクが素直に使えるよう主要型を crate 直下へ）---
+// --- 公開面 re-export ---
 pub use actor::{
     Effect, RuntimeCommandSink, SetClass, SylphyaCore, SylphyaInit, SylphyaMsg, SylphyaParts,
     SylphyaPublisher, classify_set, spawn_sylphya, spawn_sylphya_with_failures,

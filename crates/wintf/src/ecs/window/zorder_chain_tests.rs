@@ -1,13 +1,11 @@
 //! 鎖の差分の純判断・後押しの選定・記録の出口——決定論的テスト
-//! （要件 4.1／7.1／7.2／8.2／10.1／11.1／14.4／14.5）。
 //!
-//! 実機も実ディスプレイも World の巡回も要らない（要件 10.1）。`HWND` は Win32 へ 1 度も
+//! 実機も実ディスプレイも World の巡回も要らない。`HWND` は Win32 へ 1 度も
 //! 渡さない偽の値であり、`Entity` は空の `World` から順に採るだけの値である。
 //!
 //! # 「自分の窓以外は現れない」をどう機械で固定するか
 //!
-//! 後押しが動かす窓は 1 つに絞ってある——**鎖の根**（初版の「先頭を 2 番目の直後へ」は
-//! `research.md` §13.2 で**撤回**された）。挿入位置は錨か先頭の 2 択である。禁じ手
+//! 後押しが動かす窓は 1 つに絞ってある——**鎖の根**。挿入位置は錨か先頭の 2 択である。禁じ手
 //! （`GW_HWNDPREV` で拾った他プロセスの窓を挿入位置に渡す形・`HWND_TOP` などの絶対帯指定）は
 //! いずれも「指令に現れる窓ハンドルが `members` の外から来る」という 1 つの形で現れる。
 //! よって指令に現れる**すべての窓ハンドルを列挙し、`members` の部分集合であること**を
@@ -122,7 +120,7 @@ fn hwnds_named_by(cmd: &SetWindowPosCommand) -> Vec<HWND> {
     named
 }
 
-/// 撤去がすべて付与より前に並んでいること（§12.4 の実測手順そのもの）。
+/// 撤去がすべて付与より前に並んでいること。
 fn assert_every_detach_precedes_every_attach(ops: &[ChainOp]) {
     let last_detach = ops
         .iter()
@@ -166,7 +164,7 @@ fn adding_edges_to_an_empty_ledger_yields_attaches_in_the_declared_order() {
     assert_every_detach_precedes_every_attach(&ops);
 }
 
-/// ② 撤去のみ——望む鎖が空になれば、帳簿の全件が解除として外れる（要件 4.1／15.4）。
+/// ② 撤去のみ——望む鎖が空になれば、帳簿の全件が解除として外れる。
 #[test]
 fn dropping_the_whole_chain_tears_down_every_recorded_edge() {
     let e = entities(3);
@@ -190,7 +188,7 @@ fn dropping_the_whole_chain_tears_down_every_recorded_edge() {
     assert_every_detach_precedes_every_attach(&ops);
 }
 
-/// ③ 張り替え——同じ窓の相手が変わるとき、撤去は必ず付与より前に出る（要件 7.1）。
+/// ③ 張り替え——同じ窓の相手が変わるとき、撤去は必ず付与より前に出る。
 #[test]
 fn rechaining_one_window_detaches_before_it_attaches() {
     let e = entities(3);
@@ -215,7 +213,7 @@ fn rechaining_one_window_detaches_before_it_attaches() {
     assert_every_detach_precedes_every_attach(&ops);
 }
 
-/// ④ 変化なし——望みと現況が同じなら操作は 1 つも出ない（要件 6.4・空振りの巡を作らない）。
+/// ④ 変化なし——望みと現況が同じなら操作は 1 つも出ない（空振りの巡を作らない）。
 #[test]
 fn a_chain_that_already_matches_yields_no_operation_at_all() {
     let e = entities(3);
@@ -312,7 +310,7 @@ fn an_unchanged_edge_is_left_alone_while_its_neighbour_is_rechained() {
     );
 }
 
-/// 出力に、同じ被所有側への付与が 2 本現れない（要件 14.4——星形・分岐を作らない）。
+/// 出力に、同じ被所有側への付与が 2 本現れない（星形・分岐を作らない）。
 ///
 /// 望む列に同じ窓が 2 度現れたら、鎖の**先頭に近い方**だけを採る。2 本出せば同じ窓に
 /// 2 つの所有者を主張することになり、鎖が一直線でなくなる。
@@ -348,7 +346,7 @@ fn no_window_is_ever_attached_twice_in_one_plan() {
 // 後押しの選定——自分の窓 2 枚だけ
 // ===========================================================================
 
-/// 錨の直後が根でない巡は、**根を錨（1 つ手前の窓）の直後へ**差し直す（§13 実測 10）。
+/// 錨の直後が根でない巡は、**根を錨（1 つ手前の窓）の直後へ**差し直す。
 ///
 /// 動かすのが根であることが要点である——鎖の中で他の窓を所有しているのは根であり、
 /// 所有側が動いたときにだけ Windows は被所有側を引き連れて並べ直す。先頭は誰も
@@ -384,12 +382,12 @@ fn a_missing_raw_neighbour_still_takes_the_plain_shape() {
     );
 }
 
-/// 錨の直後が既に根なら、**挿入位置を先頭へ**切り替える（空振りを塞ぐ・要件 1.1／1.2）。
+/// 錨の直後が既に根なら、**挿入位置を先頭へ**切り替える（空振りを塞ぐ）。
 ///
 /// 素直な形は「根を錨の直後へ」だが、根が既に錨の生の直後に居ると、その要求は現在位置と
 /// 同じであり `SetWindowPos` は重なりを 1 ミリも動かさない＝完全な空振りになる。適用系は
 /// 後押しの前に印を降ろし再試行経路を持たないので、1 度空振りすると鎖は収まらないまま
-/// 固まる（2026-08-30 に実窓検証で掘り当てた本番欠陥）。
+/// 固まる。
 #[test]
 fn a_redundant_insert_position_switches_to_the_head_of_the_chain() {
     let members = [fake_hwnd(0x10), fake_hwnd(0x20), fake_hwnd(0x30)];
@@ -407,7 +405,7 @@ fn a_redundant_insert_position_switches_to_the_head_of_the_chain() {
 
 /// 2 つの形が同時に空振りすることはない（＝どちらか一方は必ず本物の位置変更である）。
 ///
-/// これが本 task の是正の要である。「Windows は隣接なら省略する」という**未文書の性質**に
+/// これが空振り対策の要である。「Windows は隣接なら省略する」という**未文書の性質**に
 /// 賭けるのではなく、「要求位置が現在位置と違えば Z は動く」という `SetWindowPos` の基本の
 /// 性質だけに乗る。根の生の 1 つ手前は高々 1 枚なので、錨と先頭が別の窓である限り
 /// 2 つの要求が同時に「現在位置と同じ」にはならない。
@@ -567,7 +565,7 @@ fn the_same_check_actually_catches_the_forbidden_nudge_shapes() {
     );
 }
 
-/// 後押しは重なりだけを動かす——位置・寸法・活性化を伴わない（要件 11.1）。
+/// 後押しは重なりだけを動かす——位置・寸法・活性化を伴わない。
 ///
 /// **2 択のどちらの枝でも**同じであること（切り替えた先が窓を動かす形になっていない）。
 #[test]
@@ -577,7 +575,7 @@ fn the_nudge_moves_only_the_zorder() {
     for (label, anchor_next) in [("素直な枝", None), ("切り替えた枝", Some(members[2]))] {
         let cmd = nudge_command(&members, anchor_next).expect("窓が 2 枚以上あれば後押しが出る");
 
-        // Z を触らない指令（`SWP_NOZORDER`）では収まらない＝§12.2 実測 7（全一致がそれも含む）。
+        // Z を触らない指令（`SWP_NOZORDER`）では収まらない。
         assert_eq!(
             cmd.flags,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
@@ -592,7 +590,7 @@ fn the_nudge_moves_only_the_zorder() {
     }
 }
 
-/// 後押しは遅延キューへ積まず、追加の起床も要求しない（要件 14.5／14.2）。
+/// 後押しは遅延キューへ積まず、追加の起床も要求しない。
 ///
 /// 積む経路（`SetWindowPosCommand::enqueue`）は内部で起床の印を立てる。後押しをそこへ
 /// 通すと「書いたあとに次の巡を促す」形になり、退役した反復是正の機構が裏口から戻る。
@@ -681,7 +679,7 @@ fn every_chain_record_leaves_from_this_module_not_from_the_line_builders() {
 /// 直上のテストは「行組立の層から出ていない」を主張するので、`DIAG_TARGET` の針が
 /// そもそも当たらない綴りでも緑になる。ここで**実際に当たる**側を併置して較正する。
 /// あわせて、`…::zorder_chain=debug` という 1 本の指定が前方一致で
-/// `…::zorder_chain_diag` も点けることを固定する（要件 9.5 の保全が割れない根拠）。
+/// `…::zorder_chain_diag` も点けることを固定する（保全が割れない根拠）。
 #[test]
 fn the_preserved_group_records_still_leave_from_the_line_builder_module() {
     let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {

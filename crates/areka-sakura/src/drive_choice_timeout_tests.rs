@@ -4,10 +4,10 @@ use crate::contract::TalkId;
 use std::sync::mpsc;
 use std::time::Duration;
 
-// ── task 3.1: 時計を一度に進めても選択待ちに入る（R5.1/5.2/5.3/9.3） ──
+// ── 時計を一度に進めても選択待ちに入る ──
 //
 // 台本 `\s[10]hello\_w[100]\q[選択A,targetA]\![set,choicetimeout,X]\e`（区切り＝占有 horizon 0.35）を
-// `Tick(0.0)` の次に `Tick(50.0)` で駆動し、**区切りと指定の時間を一度に越える**。再生層の時刻表が
+// `Tick` の次に `Tick` で駆動し、**区切りと指定の時間を一度に越える**。再生層の時刻表が
 // 指定の値で区切りを飛ばすなら、選択待ちの知らせは届かず台本が終わってしまう（この檻が落ちる）。
 
 /// 1 つの指定で台本を流し、時計を一度に進めて、選択待ちの知らせと終わらないことを確かめる。
@@ -22,11 +22,11 @@ fn assert_one_step_enters_choice_wait(directive: &str, expected: Option<f64>, ta
         None,
     );
 
-    // アンカー 0.0 を刻印し、区切り(0.35)＋指定の時間を遥かに越える 50.0 まで一度に進める（R9.3）。
+    // アンカー 0.0 を刻印し、区切り＋指定の時間を遥かに越える 50.0 まで一度に進める。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
 
-    // 1 通目は選択待ちの知らせ（値に依らず選択待ちに入る・R5.1/5.2）。
+    // 1 通目は選択待ちの知らせ（値に依らず選択待ちに入る）。
     let notice = done_rx
         .recv_timeout(Duration::from_secs(5))
         .unwrap_or_else(|e| panic!("{directive:?}: 選択待ちの知らせが届くべき（{e:?}）"));
@@ -41,7 +41,7 @@ fn assert_one_step_enters_choice_wait(directive: &str, expected: Option<f64>, ta
         "{directive:?}: 表示の終わりは区切りの時刻（tick 時刻 50.0 ではない）・指令は指定どおり"
     );
 
-    // さらに進めても台本は終わらず、知らせの 2 通目も来ない（区切りを自分で解かない・R5.3）。
+    // さらに進めても台本は終わらず、知らせの 2 通目も来ない（区切りを自分で解かない）。
     handle.inbox.send(SakuraMsg::Tick(100.0)).unwrap();
     assert!(
         done_rx.recv_timeout(NEG_WINDOW).is_err(),
@@ -59,8 +59,8 @@ fn assert_one_step_enters_choice_wait(directive: &str, expected: Option<f64>, ta
     handle.actor.join().expect("body は正常終了する");
 }
 
-/// **R5.1/5.2/5.3/9.3**: 指定 `500`・`0`・`-1`・時間の省略のどれでも、時計を一度に進めて
-/// 選択待ちに入り、知らせは 1 通だけ・指令はそれぞれ `Some(0.5)`・`Some(0.0)`・`Some(-0.001)`・`None`。
+/// 指定 `500`・`0`・`-1`・時間の省略のどれでも、時計を一度に進めて
+/// 選択待ちに入り、知らせは 1 通だけ・指令はそれぞれ `Some`・`Some`・`Some`・`None`。
 #[test]
 fn one_step_clock_jump_enters_choice_wait_for_each_directive() {
     let cases: [(&str, Option<f64>, u64); 4] = [

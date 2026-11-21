@@ -1,19 +1,18 @@
-//! 採寸と表示が同じ結果になることの檻（spec: areka-P0-shell-implicit-surface task 5.3・
-//! 要件 3.6／7.6／7.12）。
+//! 採寸と表示が同じ結果になることの檻。
 //!
-//! 本ファイルが留めるのは 2 つである。
+//! 本ファイルが留めるのは 2 つ。
 //!
-//! 1. **外形の一致**: 里々の標準テンプレート `R_POST_and_KOMAINU` と YAYA の標準テンプレート
+//! 1. 外形の一致: 里々の標準テンプレート `R_POST_and_KOMAINU` と YAYA の標準テンプレート
 //!    `konnoyayame` について、採寸経路（[`build_shell_assets`] → [`compose_size`]）と
 //!    表示経路（`load_shell_target` → `ShellTarget::take_world` → `Composer::compose`）の
-//!    外形が、面 0・面 10 のどちらでも同じ値になること。期待値は要件 3.1 が挙げる実測
+//!    外形が、面 0・面 10 のどちらでも同じ値になること。期待値は実測
 //!    （`R_POST_and_KOMAINU` は 236×462／140×160・`konnoyayame` は 260×390／200×200）。
-//! 2. **複製が戻っていないこと**: `measure.rs` と `crates/areka-runtime/src/assets.rs` の本文が、シェルの
+//! 2. 複製が戻っていないこと: `measure.rs` と `crates/areka-runtime/src/assets.rs` の本文が、シェルの
 //!    読み込みを自前でやり直していないこと。両者が `load_shell_target` へ寄っており、
 //!    どちらか一方だけが自前の読み込みへ戻ると (1) の一致はその場では緑のまま、
-//!    実機でだけ「採寸した窓の大きさと表示された絵の外形が食い違う」形で現れる（要件 3.6）。
+//!    実機でだけ「採寸した窓の大きさと表示された絵の外形が食い違う」形で現れる。
 //!
-//! # 2 つの片割れ（spec: placement-crate-split 要件 5.2・5.3）
+//! # 2 つの片割れ
 //!
 //! 本ファイルは配置の crate の片割れで、(1) と、配置のファイル（`measure.rs`・
 //! `measure_first_frame.rs`・`examples/window-placement.rs`）の走査を持つ。本体のファイル
@@ -22,9 +21,8 @@
 //! 共に使う [`crate::test_support::measure_template`] に 1 つだけあり、どちらの片割れも自分の
 //! crate の実物で走査器を較正する。
 //!
-//! 本ファイルは `measure_tests.rs` の兄弟として置く（要件 7.12）。検体は見本のゴーストの
-//! 受け口（`sample_test_support.rs`）経由でのみ受け、
-//! `vendors/sample_ghost/` の直パスは書かない（要件 7.11）。
+//! 検体は見本のゴーストの受け口（`sample_test_support.rs`）経由でのみ受け、
+//! `vendors/sample_ghost/` の直パスは書かない。
 
 use std::path::PathBuf;
 
@@ -42,7 +40,7 @@ use crate::test_support::measure_template::{
 use crate::test_support::with_com_initialized;
 
 // ---------------------------------------------------------------------------
-// (1) 採寸経路と表示経路の外形の一致
+// 採寸経路と表示経路の外形の一致
 // ---------------------------------------------------------------------------
 
 /// 検体 1 体ぶんの入力と期待値。
@@ -61,7 +59,7 @@ struct Template {
 ///
 /// [`compose_size`] と同じ入力（bind なし・空 pattern）で合成し、外形だけを取り出す。
 /// 採寸側の関数を流用せず `Composer::compose` を直に呼ぶのは、一致の検査が「同じ関数を 2 度
-/// 呼んだだけ」に退化しないようにするためである。
+/// 呼んだだけ」に退化しないようにするため。
 fn present_extent(
     composer: &mut Composer,
     world: &EmoWorld,
@@ -87,7 +85,7 @@ fn assert_both_paths_agree(template: &Template) {
         let decoder = WicDecoderArm::new().expect("WicDecoderArm（COM 初期化済みスレッド）");
         let mut composer = Composer::new();
 
-        // A: 採寸経路（`measure.rs` が本番で通る 2 段と、1 枚目だけで読む本番の読み手）。
+        // 採寸経路（`measure.rs` が本番で通る 2 段と、1 枚目だけで読む本番の読み手）
         let reader = FirstFrameDecoder::new(&decoder);
         let (measure_world, measure_atlas) = build_shell_assets(&template.shell_dir, &reader)
             .unwrap_or_else(|e| panic!("{}: 採寸経路の資産構築に失敗: {e}", template.name));
@@ -102,7 +100,7 @@ fn assert_both_paths_agree(template: &Template) {
         // 相方側の初期面（組み込みの既定の面＝10）。
         let measured10 = measured(builtin_default_surface(1), &mut composer);
 
-        // B: 表示経路（起動時の資産組立 `runtime::assets::build_shell_assets` が通る 2 段と同じ形）。
+        // 表示経路（起動時の資産組立 `runtime::assets::build_shell_assets` が通る 2 段と同じ形）
         let mut target = load_shell_target(&template.shell_dir, &decoder)
             .unwrap_or_else(|e| panic!("{}: 表示経路のシェル読み込みに失敗: {e}", template.name));
         let present_world = target.take_world();
@@ -121,8 +119,7 @@ fn assert_both_paths_agree(template: &Template) {
             template.name,
         );
 
-        // 要件 3.1 の実測値そのもの（採寸側・表示側の双方で判定する＝2 経路が揃って
-        // ずれた場合も赤になる）。
+        // 実測値そのもの（採寸側・表示側の双方で判定するので、2 経路が揃ってずれた場合も赤になる）。
         assert_eq!(
             measured0, template.surface0,
             "{}: 採寸経路の面 0 の外形が要件 3.1 の実測と違う",
@@ -133,7 +130,7 @@ fn assert_both_paths_agree(template: &Template) {
             "{}: 採寸経路の面 10 の外形が要件 3.1 の実測と違う",
             template.name
         );
-        // 要件 3.6: 採寸した窓の大きさと表示された絵の外形が食い違わない。
+        // 採寸した窓の大きさと表示された絵の外形が食い違わない。
         assert_eq!(
             presented0, measured0,
             "{}: 面 0 の外形が採寸経路と表示経路で食い違う",
@@ -147,10 +144,10 @@ fn assert_both_paths_agree(template: &Template) {
     });
 }
 
-/// 要件 3.6／7.6: 里々の標準テンプレートで、採寸と表示が同じ外形になる。
+/// 里々の標準テンプレートで、採寸と表示が同じ外形になる。
 ///
-/// 面 10 はこの検体では `surfaces.txt` に宣言が無く、ファイル名の慣習だけで存在する面である
-/// （要件 3.2）。宣言のある面 0 と並べて判定することで、「宣言のある面だけ 2 経路が揃う」形の
+/// 面 10 はこの検体では `surfaces.txt` に宣言が無く、ファイル名の慣習だけで存在する面。
+/// 宣言のある面 0 と並べて判定することで、「宣言のある面だけ 2 経路が揃う」形の
 /// 退行も赤にできる。
 #[test]
 fn measure_and_present_agree_on_r_post_and_komainu() {
@@ -162,7 +159,7 @@ fn measure_and_present_agree_on_r_post_and_komainu() {
     });
 }
 
-/// 要件 3.6／7.6: YAYA の標準テンプレートで、採寸と表示が同じ外形になる。
+/// YAYA の標準テンプレートで、採寸と表示が同じ外形になる。
 #[test]
 fn measure_and_present_agree_on_konnoyayame() {
     assert_both_paths_agree(&Template {
@@ -174,12 +171,12 @@ fn measure_and_present_agree_on_konnoyayame() {
 }
 
 // ---------------------------------------------------------------------------
-// (2) 本文走査（読み込みの複製が戻ったら赤になる）
+// 本文走査（読み込みの複製が戻ったら赤になる）
 // ---------------------------------------------------------------------------
 
 /// 較正（当たり）: 本文の中の実際の呼び出しを [`code_only`] が落とさない。
 ///
-/// 当たりは合成せず、この crate の実物から採る——`measure_tests.rs` は
+/// 当たりは合成せず、この crate の実物から採る。`measure_tests.rs` は
 /// `areka_parsers::shell::parse(&before)` を本文で呼んでおり、この綴りが説明文の中ではなく
 /// 関数の本体に在ることが対照の要点である。
 #[test]
@@ -193,7 +190,7 @@ fn the_source_scan_still_sees_a_real_call() {
 
 /// 較正（外れ）: 説明文の中にしか無い綴りを [`code_only`] が落とす。
 ///
-/// これも実物から採る——`measure_tests.rs` は本文の呼び出しのほかに、説明文の中にもこの綴りを
+/// これも実物から採る。`measure_tests.rs` は本文の呼び出しのほかに、説明文の中にもこの綴りを
 /// 持つ。本文だけにすると、説明文の行にある綴りの数だけちょうど減ることを確かめる。
 #[test]
 fn the_source_scan_drops_a_spelling_that_only_lives_in_a_comment() {
@@ -234,7 +231,7 @@ fn the_blind_spot_guard_rejects_every_form_the_scanner_cannot_read() {
     assert_no_blind_spot_literals(r#"let bar = "x"; let q = '\'';"#, "較正");
 }
 
-/// 要件 3.6／7.6: 採寸側がシェルの読み込みを自前でやり直していない。
+/// 採寸側がシェルの読み込みを自前でやり直していない。
 ///
 /// `build_shell_assets` は `load_shell_target_quiet`（`load_shell_target` の記録を出さない兄弟）を
 /// 呼ぶだけで、一覧・`surfaces.txt` の読取と解析・
@@ -243,7 +240,7 @@ fn the_blind_spot_guard_rejects_every_form_the_scanner_cannot_read() {
 /// その場では緑のまま通り抜けるので、本文の側でも見張る。
 #[test]
 fn the_measure_side_does_not_parse_the_shell_itself() {
-    // 採寸の読み手（measure_first_frame.rs）も採寸側の本文として見張る（placement-measure-bake-once D6）。
+    // 採寸の読み手（measure_first_frame.rs）も採寸側の本文として見張る。
     let files = [
         ("measure.rs", include_str!("measure.rs")),
         (
@@ -261,10 +258,10 @@ fn the_measure_side_does_not_parse_the_shell_itself() {
     }
 }
 
-/// 要件 3.2: `load_shell_target` を呼ぶ examples 3 本も自前でやり直していない（この crate の 1 本。
+/// `load_shell_target` を呼ぶ examples 3 本も自前でやり直していない（この crate の 1 本。
 /// 本体の 2 本は本体の片割れが見る）。
 ///
-/// examples は製品と同じ入口で絵を読むことが前提の手元確認の道具であり、ここで自前の解析へ
+/// examples は製品と同じ入口で絵を読むことが前提の手元確認の道具で、ここで自前の解析へ
 /// 戻ると、目視で見た絵と製品の絵が静かに別物になる。
 #[test]
 fn the_examples_do_not_parse_the_shell_themselves() {

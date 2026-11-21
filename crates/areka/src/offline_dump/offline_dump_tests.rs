@@ -1,5 +1,5 @@
 //! 書き出しの走り（`offline_dump::run`）の分岐の試験と、その試験が使う検体の部品
-//! （`offline_dump_test_support`）の確かめ（spec: areka-P0-offline-surface-dump 要件 12.6）。
+//! （`offline_dump_test_support`）の確かめ。
 //!
 //! 部品で組んだゴーストを、書き出しの走りが使うのと同じ今のシェルの読み込み
 //! （`load_shell_target`）で、窓を出さずに読む。
@@ -22,7 +22,7 @@ fn com_init() {
     }
 }
 
-/// research.md §10 の形を 1 つのシェルに持つ検体が、今のシェルの読み込みで窓なしに読める。
+/// 全部の面の形を 1 つのシェルに持つ検体が、今のシェルの読み込みで窓なしに読める。
 /// 絵の欠けの面はほかの層で組め、中身の無い面は読み込みに残って合成だけが error 1 行で失敗する。
 #[test]
 fn the_variety_ghost_loads_with_the_current_shell_loader_without_a_window() {
@@ -179,7 +179,7 @@ fn finished(events: &[CapturedEvent]) -> &CapturedEvent {
 }
 
 /// ゴーストの読み込みの失敗（フォルダが無い・descript.txt が無い・値なし）は error を出し、
-/// シェルを読まず、CSV を作らずに 0 を返す（2.6・1.8・8.4）。
+/// シェルを読まず、CSV を作らずに 0 を返す。
 #[test]
 fn ghost_failures_return_zero_without_reading_a_shell_or_writing_csv() {
     let root = fixture::build_ghost(
@@ -225,7 +225,7 @@ fn ghost_failures_return_zero_without_reading_a_shell_or_writing_csv() {
     }
 }
 
-/// ゴーストのフォルダの末尾の `\` の有無で同じ（既定の）シェルを読む（2.1・2.3）。
+/// ゴーストのフォルダの末尾の `\` の有無で同じ（既定の）シェルを読む。
 #[test]
 fn a_trailing_backslash_on_the_ghost_folder_reads_the_same_shell() {
     let root = fixture::build_ghost(
@@ -248,7 +248,7 @@ fn a_trailing_backslash_on_the_ghost_folder_reads_the_same_shell() {
 }
 
 /// `--dump-shell` は名前でもフォルダ名でも見つかり、`random` はただの名前として探す。見つからなければ
-/// Error を 1 件残してシェルを読まない（2.4・2.5）。
+/// Error を 1 件残してシェルを読まない。
 #[test]
 fn dump_shell_is_found_by_name_or_folder_and_a_miss_is_one_error() {
     let second = ShellSpec {
@@ -291,7 +291,7 @@ fn dump_shell_is_found_by_name_or_folder_and_a_miss_is_one_error() {
     }
 }
 
-/// 既定のシェルのフォルダが無ければ走りが Error を 1 件残す（2.7）。
+/// 既定のシェルのフォルダが無ければ走りが Error を 1 件残す。
 #[test]
 fn a_missing_shell_folder_is_one_error() {
     let root = fixture::build_ghost("offline-run-no-shell", Some(&["name,g"]), &[]);
@@ -308,7 +308,7 @@ fn a_missing_shell_folder_is_one_error() {
     assert_eq!(loaded_shell_dir(&events), None);
 }
 
-/// スコープは無ければ 0、0 以上の整数として読めなければ 0 と Warning（3.8・3.10）。
+/// スコープは無ければ 0、0 以上の整数として読めなければ 0 と Warning。
 #[test]
 fn the_scope_defaults_to_zero_and_an_unreadable_value_warns() {
     let (zero, events) = capture(|| read_scope(None));
@@ -330,7 +330,7 @@ fn the_scope_defaults_to_zero_and_an_unreadable_value_warns() {
     }
 }
 
-/// スコープの読みは窓を開けた直後・`--dump-shell` の前（CSV の行の順が design と同じ）。
+/// スコープの読みは窓を開けた直後・`--dump-shell` の前（CSV の行の順）。
 #[test]
 fn the_scope_warning_comes_before_the_dump_shell_error() {
     let root = fixture::build_ghost(
@@ -368,7 +368,7 @@ fn png_pixel(path: &std::path::Path, x: u32, y: u32) -> [u8; 4] {
 }
 
 /// スコープ 0・1・2・3 の書き出しの組は、`--dump-bind` が無ければ画面の状態の初めの組と同じで、
-/// `--dump-bind` があればそのスコープの名前の表で当てた組になる（3.9・4.2・14.3・14.4）。
+/// `--dump-bind` があればそのスコープの名前の表で当てた組になる。
 #[test]
 fn each_scope_dumps_its_own_default_binds_and_dump_bind() {
     use crate::scope_bind_fixture_test_support::{
@@ -439,7 +439,7 @@ fn each_scope_dumps_its_own_default_binds_and_dump_bind() {
     }
 }
 
-/// 面の指定が無ければシェルの読み込みまでで閉じ、面を書かず、`--dump-bind` も読まない（3.6）。
+/// 面の指定が無ければシェルの読み込みまでで閉じ、面を書かず、`--dump-bind` も読まない。
 #[test]
 fn without_a_surface_list_nothing_is_written_and_dump_bind_is_not_read() {
     let root = fixture::build_ghost(
@@ -463,7 +463,7 @@ fn without_a_surface_list_nothing_is_written_and_dump_bind_is_not_read() {
     assert!(!out.exists(), "出力先を作らない");
 }
 
-/// 中身の無い面の合成の失敗は飛ばして、残りの面を昇順に書く（4.8・3.9）。
+/// 中身の無い面の合成の失敗は飛ばして、残りの面を昇順に書く。
 #[test]
 fn a_failed_surface_is_skipped_and_the_rest_are_written() {
     let root = fixture::build_ghost(
@@ -520,7 +520,7 @@ fn the_animation_table_warns_even_without_a_surface_list() {
     assert!(warned, "表の k==0 の warn: {events:?}");
 }
 
-/// `--dump-bind` の warn は面の指定の warn より先に出る（design の順）。
+/// `--dump-bind` の warn は面の指定の warn より先に出る。
 #[test]
 fn dump_bind_warnings_come_before_surface_list_warnings() {
     let root = fixture::build_ghost(

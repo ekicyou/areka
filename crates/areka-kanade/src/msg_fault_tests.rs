@@ -1,5 +1,5 @@
 //! 失敗の種類への写し（[`ShioriFault::from_failure`]／[`ShioriFault::from_down`]／
-//! [`ShioriFault::unknown`]）のテスト（areka-P0-shiori-fault-notice 要件 1.4・2.2・7.3）。
+//! [`ShioriFault::unknown`]）のテスト。
 //!
 //! 入口ごとに種類と理由が決まることを固定する。理由は呼出失敗なら `Display` の文言、
 //! 死活報告なら受け取った理由そのもの。エラー応答（`ShioriFailure::Shiori`）の腕は

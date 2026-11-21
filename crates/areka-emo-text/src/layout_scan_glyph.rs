@@ -1,5 +1,4 @@
 //! 文字の配置の腕（`layout::scan` の子）: 可視の打ち切り→保留の実体化→折り返し判定→遠辺の判定→配置。
-//! 足す予定の spec: `text-typesetting`（禁則・縦中横）・`text-ruby`（親文字の単位）。
 
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -16,13 +15,13 @@ impl Scan<'_, '_> {
     /// 呼び手 `layout_inner` は親 `scan` にあるので `pub(super)`（メソッドの私有は
     /// `impl` を書いたモジュールとその子孫にしか見えない）。
     pub(super) fn glyph(&mut self, text: &Arc<str>) -> ControlFlow<()> {
-        // ゲート順序の契約（DD-3）: ①可視 prefix 打切り → ②保留フラッシュ →
+        // ゲート順序の契約: ①可視 prefix 打切り → ②保留フラッシュ →
         // ③折返し判定 → ④配置。①を先頭に置くことで、リビールカーソルが
-        // 改行を通過済みでも次の可視グリフが無い限り行送りは起きない（R4.2）。
+        // 改行を通過済みでも次の可視グリフが無い限り行送りは起きない。
         if self.placed == self.visible_count {
             return ControlFlow::Break(());
         }
-        // 装飾番号と送り幅（R3.3／R7.10）。番号列が無い経路・既定の番号の文字は
+        // 装飾番号と送り幅。番号列が無い経路・既定の番号の文字は
         // 従来どおり `advance(text, font_height)`——既定の見た目の高さが
         // `font_height` と食い違う登録前の一瞬でも、装飾なしの出力を動かさない。
         let (style, advance, glyph_height) = glyph_style_advance(
@@ -32,20 +31,20 @@ impl Scan<'_, '_> {
             self.metrics,
             self.styles.as_ref(),
         );
-        // ② 保留フラッシュ（次の可視コンテンツ配置の直前・R2.1/2.3）。保留改行と
-        // pending-cursor は同一フラッシュに混在しうるため順序が意味を持つ（design
-        // 「ゲート②の直後に②'として挿入」）。厳密順序:
-        //   (1) 現在行が非空なら確定（改行・`\_l` とも行区切り＝RN-3・先頭フラッシュは
-        //       current 空ゆえ空行を作らない・DD-2）。
+        // ② 保留フラッシュ（次の可視コンテンツ配置の直前）。保留改行と
+        // pending-cursor は同一フラッシュに混在しうるため順序が意味を持つ。
+        // 厳密順序:
+        //   (1) 現在行が非空なら確定（改行・`\_l` とも行区切り・先頭フラッシュは
+        //       current 空ゆえ空行を作らない）。
         //   (2) 保留改行 Σratio を block へ適用し行内を先頭へ戻す（newline-defer 既存規則）。
         //   (3) pending-cursor の指定軸で inline/block を上書き（絶対 image px・不動軸は
         //       据え置き）。
         // ②' が (2) の改行送り/行内リセットに後勝ちするのは **`\n` → `\_l` の順で
-        // 書かれたときだけ**である（書かれた順の適用・DD-11）。逆順 `\_l` → `\n` では
+        // 書かれたときだけ**である（書かれた順の適用）。逆順 `\_l` → `\n` では
         // 改行の到着時点で 3 段が走り済みで、ここへ来る `pending_cursor` は空だから
         // 改行が後勝ちする（`LineBreak` 腕を参照）。
         if self.pending.is_some() || self.pending_cursor.is_some() {
-            // 閉じる行の丈（要件 7.9）。文字の無い行（改行だけの行）はここで
+            // 閉じる行の丈。文字の無い行（改行だけの行）はここで
             // 手元にある**次に置く文字**の大きさ＝そのとき効いている大きさになる。
             let closing = self.heights.close(Some(glyph_height));
             finish_pending_line(
@@ -74,7 +73,7 @@ impl Scan<'_, '_> {
                 &mut self.block_pos,
             );
         }
-        // ③ 折返し判定（WrapPlan で分岐・design System Flows「ゲート③」）。
+        // ③ 折返し判定（WrapPlan で分岐）。
         // feed＝この可視グリフの配置前に行送りするか。ゲート①②④・行頭 1 グリフ
         // 配置（無限折返し回避）・行矩形規約は分岐に依らず不変。
         // 直前にフラッシュした場合 current は空ゆえ二重前進しない。
@@ -87,13 +86,13 @@ impl Scan<'_, '_> {
             }
             WrapPlan::Segmented(plan) => {
                 if self.seg_remaining > 0 {
-                    // 塊内: 先決済み＝追加判定なしで配置（浮動丸めでの途中分割排除・2.1/2.3）。
+                    // 塊内: 先決済み＝追加判定なしで配置（浮動丸めでの途中分割排除）。
                     self.seg_remaining -= 1;
                     false
                 } else if let Some(seg) = plan.segment_starting_at(self.placed) {
                     // 塊先頭: 塊全体の遠端を渡された items の plan から左畳み込みで先決
-                    // （visible_count 非依存＝INV-1/7.1）。今の字（番号 `placed`）の位置からの列を
-                    // 渡すので、列の先頭から数える（全文の頭から数え直さない・指摘 9）。見た目は通し番号
+                    // （visible_count 非依存）。今の字（番号 `placed`）の位置からの列を
+                    // 渡すので、列の先頭から数える（全文の頭から数え直さない）。見た目は通し番号
                     // `placed` から引く。
                     // 塊の収まり判定の基準は soft と hard の近い方（塊は
                     // どちらも超えられない）。2 つの値は畳まずに持ったまま、
@@ -113,32 +112,32 @@ impl Scan<'_, '_> {
                         )
                     };
                     if far_end_from(self.inline_pos) <= limit {
-                        // 現在行に収まる → 分割せず継続配置（2.1/2.3）。
+                        // 現在行に収まる → 分割せず継続配置。
                         self.seg_remaining = seg.len - 1;
                         false
                     } else if !self.current.is_empty() && far_end_from(self.inline_start) <= limit {
-                        // 収まらないが行頭からなら収まる → 塊の前で行送り（2.2）。
-                        // 行が空なら送らない（INV-3＝空行を作らない）: `\_l` の直後は行が空でも
+                        // 収まらないが行頭からなら収まる → 塊の前で行送り。
+                        // 行が空なら送らない（空行を作らない）: `\_l` の直後は行が空でも
                         // inline_pos が行頭でないため、行頭からなら収まる塊がありうる。その場合は
                         // 下の長大塊の枝（char 規則）へ落ち、`\_l` の位置から 1 字ずつ折れる。
                         self.seg_remaining = seg.len - 1;
                         true
                     } else {
                         // 長大塊（行頭からでも収まらない）: 当該塊のみ既存 char 規則へ
-                        // 委譲（3.1/3.2）。seg_remaining は設定せず＝続くグリフは非被覆
-                        // として char 規則で処理され、次の塊先頭で通常判定を再開する（3.3）。
+                        // 委譲。seg_remaining は設定せず＝続くグリフは非被覆
+                        // として char 規則で処理され、次の塊先頭で通常判定を再開する。
                         !self.current.is_empty() && self.inline_pos + advance > self.soft
                     }
                 } else {
                     // plan 非被覆（不整合／長大塊の継続）: 既存 char 規則で配置
-                    // （優しい縮退・4.2・design Error Handling「plan と items の不整合」）。
+                    // （優しい縮退）。
                     !self.current.is_empty() && self.inline_pos + advance > self.soft
                 }
             }
         };
         // ③' 描画範囲の遠辺（hard）の判定。分岐（CharByChar／塊内／塊先頭／
         // 非被覆）に依らず**配置の直前に必ず**通す——これが「描画範囲の外へ
-        // 文字を置かない」（R6.2）を構造で保つ最後の門である。行頭の 1 グリフ
+        // 文字を置かない」を構造で保つ最後の門である。行頭の 1 グリフ
         // （`current` が空）は soft と同じく例外で、超えても置く（無限折返しの排除）。
         let over_hard = !self.current.is_empty() && self.inline_pos + advance > self.hard;
         if over_hard && in_segment {
@@ -147,7 +146,7 @@ impl Scan<'_, '_> {
             // あるので、送りを積むだけではここへ届かない——`\_l`（[`TextItem::CursorMove`]）が
             // 塊の途中で行内位置を跳ばしたときにだけ発火する。本番の区切り（`segment.rs`）は
             // `\_l` で塊を切るので、届くのは `\_l` をまたぐ手組みの区切りを渡すときだけである。
-            // 判断の理由が読める形で 1 件残す（design.md 縮退表・R6.6）。
+            // 判断の理由が読める形で 1 件残す。
             tracing::debug!(
                 inline_pos = self.inline_pos,
                 advance,
@@ -165,7 +164,7 @@ impl Scan<'_, '_> {
                 self.block_pos,
                 closing,
             ));
-            // 行送りが 1e38 にもなりうる（`\f[height,N]` に上限を置かない・指摘 20）。
+            // 行送りが 1e38 にもなりうる（`\f[height,N]` に上限を置かない）。
             if !try_advance(
                 &mut self.block_pos,
                 self.block_dir * line_pitch_of(self.metrics, closing),

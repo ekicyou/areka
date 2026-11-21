@@ -1,5 +1,4 @@
-//! 記憶へ書く形（[`saved_form_anchor`]）のテスト（areka-P0-window-link-directives 要件 4.8・
-//! 設計の決め 6・design Testing Strategy「`saved_form_anchor` と書く形」）。
+//! 記憶へ書く形（[`saved_form_anchor`]）のテスト。
 //!
 //! 次の起動は窓を descript の向きで読み戻すので、台本で向きを変えた窓も descript の向きの形で
 //! 書けば、読み戻しで x が書いた位置に戻る。
@@ -36,7 +35,7 @@ fn saved_form_falls_back_to_anchored_then_none() {
     assert_eq!(saved_form_anchor(&world, bare), None);
 }
 
-/// 設計の例: descript が下・台本で `free` にした窓（幅 200）を左上 (100, 300) で書くと、次の
+/// 例: descript が下・台本で `free` にした窓（幅 200）を左上 (100, 300) で書くと、次の
 /// 起動の読み戻し（下の向き）で x が 100 に戻る（今の向きの形で書くと 0 へずれる）。
 #[test]
 fn descript_bottom_free_window_restores_to_saved_x_on_next_boot() {

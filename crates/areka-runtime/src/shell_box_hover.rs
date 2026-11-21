@@ -1,14 +1,14 @@
 //! 箱の上の滞在（`ShellBoxHover`）と毎フレームの整え（`settle_box_hover`）。
 //!
 //! 可視性の相（`balloon_visibility_phase`）が読み、入力の側（`areka_input::shell_box`）が書く。
-//! 入力の側は `pub(crate) use` で出し直す（runtime-module-untangle・中身は `crates/areka-input/src/shell_box.rs` から移したまま）。
+//! 入力の側は `pub(crate) use` で出し直す。
 
 use std::collections::HashMap;
 
 use areka_emo_compose::BoxName;
 use areka_emo_text::actor::ShownBox;
 
-/// 毎フレームの整え: 滞在している箱が `shown_boxes` に無ければ `None` へ戻す（要件 6.11）。
+/// 毎フレームの整え: 滞在している箱が `shown_boxes` に無ければ `None` へ戻す。
 pub fn settle_box_hover(prev: Option<&BoxName>, shown: &[ShownBox]) -> Option<BoxName> {
     prev.filter(|p| shown.iter().any(|b| &b.name == *p))
         .cloned()

@@ -32,11 +32,7 @@ pub fn get_virtual_desktop_bounds() -> (i32, i32, i32, i32) {
 
 /// モニタ列挙 1 台分のログを出力する。
 ///
-/// 実モニタ列挙に依存せず檻に入れられるよう、`initialize_layout_root` の列挙ループから
-/// 切り出した出力点（挙動不変の抽出）。
-///
-/// `handle`（モニタ識別子）と `work_area`（作業領域矩形）は要件 1.1 の必須項目であり、
-/// **フィールド名は areka `placement::diag` の共有語彙**（`handle`・`work_area`）に一致させる
+/// フィールド名 `handle`・`work_area` は areka `placement::diag` の共有語彙に一致させる
 /// ——診断手順書の grep 突合が両側のログを同じ語で引けることが契約。
 fn log_enumerated_monitor(monitor: &crate::ecs::Monitor) {
     debug!(
@@ -61,7 +57,6 @@ fn log_enumerated_monitor(monitor: &crate::ecs::Monitor) {
 /// LayoutRootとMonitor階層をワールド初期化時に作成する
 /// world.rsのEcsWorld::new()から直接呼び出される
 pub fn initialize_layout_root(world: &mut World) {
-    // 既にLayoutRootが存在する場合はスキップ
     let existing = world
         .query_filtered::<Entity, With<LayoutRoot>>()
         .iter(world)
@@ -72,7 +67,6 @@ pub fn initialize_layout_root(world: &mut World) {
 
     info!("[initialize_layout_root] Creating LayoutRoot singleton");
 
-    // 仮想デスクトップの矩形を取得
     let (vx, vy, vw, vh) = get_virtual_desktop_bounds();
     debug!(
         x = vx,
@@ -82,7 +76,6 @@ pub fn initialize_layout_root(world: &mut World) {
         "[initialize_layout_root] Virtual desktop bounds"
     );
 
-    // LayoutRootエンティティを作成（仮想デスクトップ矩形を設定）
     // Note: Arrangement/GlobalArrangementはLayoutRoot::on_addフックで自動挿入される
     let layout_root = world
         .spawn((
@@ -104,14 +97,12 @@ pub fn initialize_layout_root(world: &mut World) {
         ))
         .id();
 
-    // 全モニターを列挙
     let monitors = crate::ecs::window::monitor::enumerate_monitors();
     debug!(
         count = monitors.len(),
         "[initialize_layout_root] Enumerated monitors"
     );
 
-    // 各Monitorエンティティを生成
     for monitor in monitors {
         log_enumerated_monitor(&monitor);
 
@@ -165,9 +156,8 @@ fn monitor_box_style(monitor: &crate::ecs::Monitor) -> BoxStyle {
 
 /// ディスプレイ構成変更を検知し、Monitorエンティティを更新
 ///
-/// 構成の変化のときの実モニタ列挙（`try_enumerate_monitors`）はこの入口だけが行い、反映そのものは
-/// [`apply_monitor_snapshot`] が担う（合成モニタ表を注入して檻に入れられるようにするための
-/// 挙動不変の抽出・S4 是正の前提）。
+/// 構成の変化のときの実モニタ列挙（`try_enumerate_monitors`）はこの入口だけが行い、反映は
+/// [`apply_monitor_snapshot`] が担う。
 ///
 /// # 0 台の列挙
 ///
@@ -176,7 +166,7 @@ fn monitor_box_style(monitor: &crate::ecs::Monitor) -> BoxStyle {
 /// `zero_streak` で覚え、`warn!`（0 台）と頭の `info!`（構成の変化）と列挙・情報取得の失敗の
 /// `error!`（[`monitors_or_log_failure`]）は続きの最初の 1 回だけ出す。
 ///
-/// # 遷移観測の刻印は World 資源から組む（design D1）
+/// # 遷移観測の刻印は World 資源から組む
 ///
 /// 本システムは `Update` に登録されており、`Update` は**既定の多スレッド実行器**で回る。
 /// ワーカースレッドからは `transition_diag` のスレッド局所ミラーが見えない（`frame=0` の
@@ -194,7 +184,6 @@ pub fn detect_display_change_system(
     tick_start: Res<TickStart>,
     mut zero_streak: Local<bool>,
 ) {
-    // ディスプレイ構成変更フラグをチェック
     if !app.display_configuration_changed() {
         return;
     }
@@ -203,7 +192,6 @@ pub fn detect_display_change_system(
         info!("[detect_display_change_system] Display configuration changed, updating monitors");
     }
 
-    // LayoutRootを取得
     let Ok(root_entity) = layout_root.single() else {
         warn!("[detect_display_change_system] LayoutRoot not found, skipping");
         app.reset_display_change();
@@ -211,7 +199,6 @@ pub fn detect_display_change_system(
         return;
     };
 
-    // 新しいモニターリストを取得
     let new_monitors = monitors_or_log_failure(
         crate::ecs::window::monitor::try_enumerate_monitors(),
         *zero_streak,
@@ -244,7 +231,6 @@ pub fn detect_display_change_system(
         "[detect_display_change_system] Display configuration change applied"
     );
 
-    // フラグをリセット
     app.reset_display_change();
 }
 
@@ -278,12 +264,11 @@ fn monitors_or_log_failure(
 
 /// モニタ列挙結果（実列挙でも合成でもよい）をモニタ表へ反映する。
 ///
-/// 実 OS 列挙から切り離してあるのは、「識別子が不変で値だけが変わるモニタ構成」を
-/// 決定論的に注入して檻に入れるため（Req 7.5）。実モニタを持ち出さずに更新分岐の
-/// 到達性を実行検証できることが本抽出の目的である。
+/// 実 OS 列挙から切り離してあるのは、識別子が不変で値だけが変わるモニタ構成を
+/// 決定論的に注入できるようにするため。
 ///
 /// 反映後は [`redrive_window_dpi_for_updated_monitors`] が窓の `DPI` を再導出し、
-/// `WM_DPICHANGED` の受理有無に依存しない追従駆動路を成立させる（Req 7.3・D14 帰結⑷）。
+/// `WM_DPICHANGED` の受理有無に依存しない追従駆動路を成立させる。
 ///
 /// # 戻り値
 /// `DPI` を実際に書き換えた窓の数（＝再導出を駆動した窓の数）。呼出点の観測値であり、
@@ -294,7 +279,7 @@ fn monitors_or_log_failure(
 ///
 /// # `stamp`
 /// 値変化更新の `monitor` レコードと、窓の拡大率再導出の `windpi` レコードに載せる刻印。
-/// **呼出側が World 資源から組んで渡す**（design D1）——本関数は多スレッド実行器で
+/// **呼出側が World 資源から組んで渡す**——本関数は多スレッド実行器で
 /// ワーカースレッドに載り得るため、自分でスレッド局所ミラーを読んではならない。
 pub(crate) fn apply_monitor_snapshot(
     commands: &mut Commands,
@@ -308,7 +293,6 @@ pub(crate) fn apply_monitor_snapshot(
         return None;
     }
 
-    // 既存のMonitorエンティティをマップに変換（handle → entity）
     let mut existing_map: std::collections::HashMap<isize, (Entity, crate::ecs::Monitor)> =
         existing_monitors
             .iter()
@@ -318,14 +302,11 @@ pub(crate) fn apply_monitor_snapshot(
     // 値が実際に更新されたモニタ（新しい値）。窓 DPI の再導出駆動に用いる。
     let mut updated_monitors: Vec<crate::ecs::Monitor> = Vec::new();
 
-    // 新規・更新Monitorの処理
     for new_monitor in new_monitors {
         if let Some((entity, existing_monitor)) = existing_map.remove(&new_monitor.handle) {
-            // 既存Monitorの更新
-            //
             // 判定は **値の変化**（`differs_in_value`）で行う。`!=`（`PartialEq`）は
-            // `handle` のみを見る**同一性**の意味論であり、ここは同一 handle で引いた
-            // 相手を比べている以上、恒偽になる（診断レポート §2.7 の欠陥 S4・Req 7.2）。
+            // `handle` のみを見る**同一性**の意味論であり、同一 handle で引いた
+            // 相手を比べる以上、恒偽になる。
             if existing_monitor.differs_in_value(&new_monitor) {
                 debug!(
                     entity = ?entity,
@@ -368,10 +349,8 @@ pub(crate) fn apply_monitor_snapshot(
                     *monitor = new_monitor.clone();
                 }
 
-                // 遷移観測（要件 2.3）。上の `debug` 行と同じ事実を、1 回の遷移の
-                // 時系列へ並べられる形（刻印つき・単一 target）で出す。既定 OFF ゆえ
-                // 前置ガードの内側でだけ組む。刻印は呼出側が World 資源から組んで
-                // 渡した値をそのまま使う（D1・本関数は時刻を読まない）。
+                // 上の `debug` 行と同じ事実を、遷移の時系列へ並べられる形で出す。既定 OFF ゆえ
+                // 前置ガードの内側でだけ組む。刻印は呼出側が渡した値を使う（本関数は時刻を読まない）。
                 if transition_diag::is_enabled() {
                     transition_diag::emit_line(&transition_diag::monitor_line(&MonitorRecord {
                         stamp,
@@ -386,7 +365,6 @@ pub(crate) fn apply_monitor_snapshot(
                 updated_monitors.push(new_monitor);
             }
         } else {
-            // 新規Monitorの追加
             debug!(
                 handle = new_monitor.handle,
                 "[detect_display_change_system] Adding new Monitor"
@@ -398,7 +376,6 @@ pub(crate) fn apply_monitor_snapshot(
         }
     }
 
-    // 削除されたMonitorの処理
     for (entity, monitor) in existing_map.values() {
         debug!(
             entity = ?entity,
@@ -437,7 +414,7 @@ pub(crate) fn apply_monitor_snapshot(
 /// `layout/systems/window_pos_systems.rs` の `sync_window_arrangement_from_window_pos`・
 /// `window_pos/mod.rs` の `to_window_rect`）と揃えてある。
 ///
-/// # クレート外へ開いてある理由（areka-P0-dpi-transition-atomicity C5・task 5.4）
+/// # クレート外へ開いてある理由
 ///
 /// 上位クレートの整合ゲート（配置側が「窓の拡大率と帰属モニタの表が揃ったか」を判定する
 /// 点）も、帰属を決めるには**同じ中心**を要る。素直に `position + size / 2` と書くと
@@ -447,7 +424,6 @@ pub fn window_center(pos: &crate::ecs::WindowPos) -> Option<(i32, i32)> {
     let position = pos.position?;
     let size = pos.size?;
 
-    // CW_USEDEFAULT が含まれる場合は「未確定」（ウィンドウ作成時の初期値）。
     if position.x == CW_USEDEFAULT || size.width == CW_USEDEFAULT {
         return None;
     }
@@ -474,7 +450,7 @@ impl MonitorBounds for crate::ecs::Monitor {
 
 /// 中心点を含むモニタを返す（境界矩形は左上を含み右下を含まない半開区間・昇順先勝ち）。
 ///
-/// # クレート外へ開いてある理由（areka-P0-dpi-transition-atomicity C5・task 5.4）
+/// # クレート外へ開いてある理由
 ///
 /// 本関数は表示基盤側の DPI 再導出（[`redrive_window_dpi_for_updated_monitors`]）が使う
 /// 帰属規則そのものである。上位クレートの整合ゲートは「窓の拡大率と、窓が属するモニタの
@@ -490,17 +466,17 @@ pub fn monitor_containing<M: MonitorBounds>(monitors: &[M], center: (i32, i32)) 
     })
 }
 
-/// 更新されたモニタ上の窓の `DPI` component を、そのモニタの新しい DPI へ揃える（Req 7.3）。
+/// 更新されたモニタ上の窓の `DPI` component を、そのモニタの新しい DPI へ揃える。
 ///
-/// **これが `WM_DPICHANGED` に依存しない追従駆動路の本体である**（D14 帰結⑷）。
+/// **これが `WM_DPICHANGED` に依存しない追従駆動路の本体である。**
 /// `DPI` が変わると `Changed<DPI>` が発火し、下流（wintf の arrangement 更新／areka の
 /// DPI 相）が窓寸と位置を再導出する。`WM_DPICHANGED` が 1 件も届かない実機環境
-/// （診断レポート §2.7 の実測）でも、モニタ表の更新さえ起きればここから追従が始まる。
+/// （実機では 1 件も届かないことがある）でも、モニタ表の更新さえ起きればここから追従が始まる。
 ///
 /// `WM_DPICHANGED` が届く環境では同じ値が既に入っているため差分ゼロ＝書込なしで抜ける
 /// （二重駆動しない）。
 ///
-/// # 観測（task 8.3）
+/// # 観測
 ///
 /// `DPI` を**実際に書き換えた**窓ごとに `kind=windpi` の起点行を出す。同値で早期に
 /// 抜けた窓からは 1 行も出ない——出すと「拡大率が変わっていないのに遷移が始まった」
@@ -527,7 +503,7 @@ fn redrive_window_dpi_for_updated_monitors(
             continue;
         };
         let Some(monitor) = monitor_containing(updated_monitors, center) else {
-            // 更新されたモニタの上に無い窓は対象外（正常系・毎回出ると煩いので trace 相当は置かない）
+            // 更新されたモニタの上に無い窓は対象外（正常系。毎回出ると煩いのでログは置かない）
             continue;
         };
 
@@ -539,10 +515,8 @@ fn redrive_window_dpi_for_updated_monitors(
         let old_dpi = *dpi;
         *dpi = new_dpi;
         rewritten += 1;
-        // 窓の拡大率が変わったことを表す**起点**（task 8.3）。上の `if *dpi == new_dpi`
-        // で抜けた窓（＝書き換えが起きなかった経路）からは 1 行も出ない。
-        // 刻印は呼出側が World 資源から組んで渡した値をそのまま使う（D1・本関数は
-        // 多スレッド実行器でワーカースレッドに載り得るので時刻を自分で読まない）。
+        // 窓の拡大率が変わった**起点**。上の `if *dpi == new_dpi` で抜けた窓（書き換えが
+        // 起きなかった窓）からは出さない。刻印は呼出側が渡した値を使う（本関数は時刻を読まない）。
         if transition_diag::is_enabled() {
             transition_diag::emit_line(&transition_diag::windpi_line(&WindowDpiRecord {
                 stamp,

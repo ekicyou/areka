@@ -146,7 +146,7 @@ impl HitTest {
 /// # 座標契約
 /// マスクは合成の**原寸**（native px）で、`GlobalArrangement.bounds` は表示の
 /// **物理寸**（原寸 × 拡大率 k）である。bounds 相対の比例写像がその ÷k を 1 度だけ与え、
-/// 任意 DPI でクリック座標が一致する（design DPI 表示契約・R2.5）。
+/// 任意 DPI でクリック座標が一致する。
 ///
 /// # 命名
 /// wintf の CPU リソース命名規約（`XxxResource`・`BitmapSourceResource` 等）に準拠。
@@ -179,7 +179,7 @@ impl AlphaMaskResource {
     ///
     /// [`set`](Self::set) と観測結果は同一だが、呼び出し側が既に `Arc` で持っている
     /// マスクをそのまま渡せる。表示バッファと当たり判定マスクを同一の確保で共有し、
-    /// 毎コマ適用でのマスク複製を無くすための口（要件 3.1）。
+    /// 毎コマ適用でのマスク複製を無くすための口。
     pub fn set_shared(&mut self, mask: Arc<AlphaMask>) {
         self.mask = Some(mask);
     }
@@ -205,7 +205,7 @@ impl AlphaMaskResource {
 /// # 前提
 /// 呼び出し側で bounds 内判定（早期リターン）済みであること。本ヘルパは bounds 相対
 /// 比例→マスク座標変換のみを行い、変換ロジックは従来と同一（emo-present では
-/// bounds＝物理寸・マスク＝原寸ゆえ、この比例写像が ÷k を 1 度だけ与える＝R2.5 の成立根拠）。
+/// bounds＝物理寸・マスク＝原寸ゆえ、この比例写像が ÷k を 1 度だけ与える）。
 ///
 /// # Returns
 /// - `true`: 当該座標のマスクピクセルがヒット（α ≧ 128）／フォールバック（供給者不在）
@@ -225,11 +225,9 @@ fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PointF
         });
 
     let Some(alpha_mask) = mask else {
-        // 供給者不在／マスク未生成 → 矩形判定にフォールバック
         return true;
     };
 
-    // スクリーン座標 → マスク座標への変換（従来ロジックと同一）
     let bounds_width = bounds.right - bounds.left;
     let bounds_height = bounds.bottom - bounds.top;
 
@@ -237,7 +235,6 @@ fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PointF
         return true; // サイズが0以下の場合はフォールバック
     }
 
-    // 相対座標を計算（0.0〜1.0）
     let rel_x = (point.x - bounds.left) / bounds_width;
     let rel_y = (point.y - bounds.top) / bounds_height;
 
@@ -245,7 +242,6 @@ fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PointF
     let mask_x = (rel_x * alpha_mask.width() as f32) as u32;
     let mask_y = (rel_y * alpha_mask.height() as f32) as u32;
 
-    // αマスクで判定
     alpha_mask.is_hit(mask_x, mask_y)
 }
 
@@ -316,28 +312,23 @@ pub(crate) enum RegionHit {
 /// - `RegionHit::Hit(None)`: エンティティにヒット（無名）
 /// - `RegionHit::Miss`: ヒットしない
 pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PointF) -> RegionHit {
-    // HitTest コンポーネントを取得（なければデフォルト = Bounds）
     let mode = world
         .get::<HitTest>(entity)
         .map(|h| h.mode)
         .unwrap_or(HitTestMode::Bounds);
 
-    // HitTestMode::None の場合はヒットしない
     if mode == HitTestMode::None {
         return RegionHit::Miss;
     }
 
-    // GlobalArrangement を取得（なければヒットしない）
     let Some(global) = world.get::<GlobalArrangement>(entity) else {
         return RegionHit::Miss;
     };
 
-    // まず矩形判定（全モード共通の早期リターン）
     if !global.bounds.contains(point.x, point.y) {
         return RegionHit::Miss;
     }
 
-    // モード別判定
     match mode {
         HitTestMode::None => unreachable!(),
         HitTestMode::Bounds => {
@@ -364,7 +355,6 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PointF) -
             }
         }
         HitTestMode::AlphaMask => {
-            // αマスクを読み取り（AlphaMaskResource 最優先 → BitmapSourceResource → 矩形）
             if alpha_mask_hit(world, entity, &global.bounds, point) {
                 RegionHit::Hit(None)
             } else {
@@ -374,7 +364,7 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PointF) -
         HitTestMode::NamedRegions => {
             // αマスクは見ない（矩形の中なら当たり・領域の名前は表から引く）
             let Some(region_map) = world.get::<HitRegionMap>(entity) else {
-                // HitRegionMap 不在時は Bounds フォールバック（1.3）。&World しか持たず印を書けないので debug!
+                // HitRegionMap 不在時は Bounds フォールバック。&World しか持たず印を書けないので debug!
                 debug!(
                     entity = ?entity,
                     "NamedRegions モードですが HitRegionMap がありません。Bounds にフォールバックします"
@@ -382,7 +372,6 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PointF) -
                 return RegionHit::Hit(None);
             };
 
-            // 正規化座標を計算
             let bounds = &global.bounds;
             let bounds_width = bounds.right - bounds.left;
             let bounds_height = bounds.bottom - bounds.top;
@@ -405,7 +394,6 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PointF) -
                         height: bounds_height,
                     });
 
-            // HitRegionMap で判定
             let region_name = region_map.hit_test_region(rel_x, rel_y, &entity_size);
 
             RegionHit::Hit(region_name.map(|s| s.to_string()))
@@ -502,7 +490,6 @@ pub fn hit_test_in_window_ex(
     window: Entity,
     client_point: PointF,
 ) -> Option<HitTestResult> {
-    // WindowPos か position が無ければ None
     let window_pos = world.get::<WindowPos>(window)?;
     let position = window_pos.position?;
 
@@ -528,7 +515,7 @@ mod tests;
 #[cfg(test)]
 mod tests_ex;
 
-/// `AlphaMaskResource::set_shared` の檻（structure.md のテスト分離規約）
+/// `AlphaMaskResource::set_shared` の檻
 #[cfg(test)]
 #[path = "hit_test_shared_mask_tests.rs"]
 mod shared_mask_tests;

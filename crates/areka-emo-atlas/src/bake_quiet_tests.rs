@@ -1,4 +1,4 @@
-//! 記録を出さない焼きの入口 [`bake_quiet`] の檻（spec: emo-bake-log-overlap 要件 1.1〜1.3・1.6・1.7・3.2・3.4）。
+//! 記録を出さない焼きの入口 [`bake_quiet`] の檻。
 //!
 //! 0 寸・全透明・着せ替えの「無し」・抜き色の絵を持つ 1 つの検体を両入口で焼き、
 //! 出す入口（[`bake`]）は 4 種を絵ごとに 1 行ずつ出し（対照）、出さない入口はその 4 種の文言が
@@ -95,7 +95,7 @@ fn bake_quiet_emits_none_of_the_quieted_records_and_same_result() {
     assert_eq!(fingerprint(&quiet), fingerprint(&loud), "戻り値は等しい");
 }
 
-/// 指摘 6⑴: 動く絵の記録は黙らせない。全コマも 1 枚目も読めず 1 枚読みも無い動く絵を焼き、
+/// 動く絵の記録は黙らせない。全コマも 1 枚目も読めず 1 枚読みも無い動く絵を焼き、
 /// 「bake: 動く絵」の `WARN` の行が両入口で同じで 1 行以上（どの行かは比べないので、環境の上限に依らない）。
 #[test]
 fn bake_quiet_keeps_the_animation_warnings() {

@@ -9,14 +9,12 @@ use crate::method::ComposeMethod;
 use crate::nesting::ElementKind;
 use bevy_ecs::component::Component;
 
-/// 2D 変換（M1 実挙動は恒等＋平行移動のみ。回転・拡縮は予約の口）。
+/// 2D 変換（今は恒等＋平行移動のみ。回転・拡縮は予約の口）。
 ///
-/// 2x2 線形部を整数で保持する。M1 では 2x2 部は常に単位行列に固定され、
-/// 平行移動成分 `tx`/`ty` のみが有効値を持つ（転記 x,y の行列表現）。
-/// 回転・拡縮のシームは 2x2 部として存在するが M1 では不活性（常に単位）。
+/// 2x2 線形部を整数で保持する。今は 2x2 部が常に単位行列で、平行移動成分 `tx`/`ty` だけが値を持つ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Transform {
-    /// 2x2 線形部（行優先: [[a, b], [c, d]]）。M1 は単位固定 [[1,0],[0,1]]。
+    /// 2x2 線形部（行優先: [[a, b], [c, d]]）。今は単位固定 [[1,0],[0,1]]。
     linear: [[i64; 2]; 2],
     /// 平行移動 X。
     tx: i64,
@@ -25,7 +23,7 @@ pub struct Transform {
 }
 
 impl Transform {
-    /// M1 の単位 2x2 部（恒等線形変換）。
+    /// 単位 2x2 部（恒等線形変換）。
     const IDENTITY_LINEAR: [[i64; 2]; 2] = [[1, 0], [0, 1]];
 
     /// 恒等変換（平行移動なし＝`translate(0, 0)`）。
@@ -42,7 +40,7 @@ impl Transform {
         }
     }
 
-    /// 純平行移動（2x2 部が単位）か。M1 では常に `true`。
+    /// 純平行移動（2x2 部が単位）か。今は常に `true`。
     pub fn is_translation(&self) -> bool {
         self.linear == Self::IDENTITY_LINEAR
     }
@@ -62,12 +60,12 @@ impl Default for Transform {
 /// 正規化 Surface 定義（公開形・collisions/animations 保持・下流はこれを唯一の正とする）。
 ///
 /// `elements` は layer 昇順・同 layer は登場順（下流が保つ前提）。`animations` は転記層の
-/// [`Animation`] を interval/pattern ごとそのまま保持し、seriko が再利用する（1.2/1.3）。
+/// [`Animation`] を interval/pattern ごとそのまま保持し、seriko が再利用する。
 ///
 /// [`Animation`]: areka_parsers::shell::Animation
 ///
 /// `EmoWorld` の per-ghost `bevy_ecs` World では surface 1件＝entity 1件の component として
-/// 常駐する（design「Domain Model」）。`surface(id)` は本型を `&SurfaceMaster` として直接返す。
+/// 常駐する。`surface(id)` は本型を `&SurfaceMaster` として直接返す。
 #[derive(Debug, Clone, PartialEq, Component)]
 pub struct SurfaceMaster {
     /// surface id。
@@ -92,9 +90,9 @@ pub struct NormalizedElement {
     pub layer: u32,
     /// 画像パス（atlas resolve キー・デバッグ）。
     pub path: areka_parsers::shell::ElementPath,
-    /// 転記 x,y の行列表現（4.2）。
+    /// 転記 x,y の行列表現。
     pub transform: Transform,
-    /// 合成メソッド。M1 は常に [`Overlay`]（転記契約による）。
+    /// 合成メソッド。今は常に [`Overlay`]（転記契約による）。
     ///
     /// [`Overlay`]: crate::method::ComposeMethod::Overlay
     pub method: ComposeMethod,
@@ -108,7 +106,7 @@ pub struct NormalizedElement {
 mod tests {
     use super::*;
 
-    /// `translate` は平行移動成分を保持し、M1 では純平行移動と判定される。
+    /// `translate` は平行移動成分を保持し、純平行移動と判定される。
     #[test]
     fn translate_offset_and_is_translation() {
         let t = Transform::translate(3, -4);

@@ -1,5 +1,5 @@
 // =============================================================================
-// 組ごとの決めからの解きと記憶の印の決めの檻（dpi-realign-remembered-chain 要件 1.3・1.5・6.3・6.4・8.4）
+// 組ごとの決めからの解きと記憶の印の決めの檻
 //
 // 解きは World を持たない純関数ゆえ、スコープ昇順の入力を直接与える。
 // =============================================================================
@@ -27,7 +27,7 @@ fn apply(slots: &[ChainSlot], moves: &[ChainMove]) -> Vec<i32> {
     xs
 }
 
-/// 左へ付ける: new_x = 前の x − 自分の幅（1.3）。
+/// 左へ付ける: new_x = 前の x − 自分の幅。
 #[test]
 fn join_left_places_flush_on_the_left() {
     let slots = [
@@ -44,7 +44,7 @@ fn join_left_places_flush_on_the_left() {
     );
 }
 
-/// 右へ付ける: new_x = 前の x + 前の幅（1.3・左右を保つ）。
+/// 右へ付ける: new_x = 前の x + 前の幅（左右を保つ）。
 #[test]
 fn join_right_places_flush_on_the_right() {
     let slots = [
@@ -61,7 +61,7 @@ fn join_right_places_flush_on_the_right() {
     );
 }
 
-/// 既に隣り合っていれば指示を出さない（6.4 の後段）。
+/// 既に隣り合っていれば指示を出さない。
 #[test]
 fn already_flush_yields_no_moves() {
     let slots = [
@@ -77,7 +77,7 @@ fn already_flush_yields_no_moves() {
     assert!(resolve_chain(&slots).is_empty());
 }
 
-/// 3 体の鎖: 2 の基準は 1 の解いた後の x（1.5・8.4）。
+/// 3 体の鎖: 2 の基準は 1 の解いた後の x。
 #[test]
 fn three_chain_uses_previous_solved_x_as_base() {
     let slots = [
@@ -142,7 +142,7 @@ fn join_right_with_non_positive_previous_width_is_kept() {
     assert!(resolve_chain(&slots).is_empty());
 }
 
-/// 式が使う幅が非正の組だけ決めの語が "non-positive-width" に改まり、解きは変わらない（7.1）。
+/// 式が使う幅が非正の組だけ決めの語が "non-positive-width" に改まり、解きは変わらない。
 #[test]
 fn mark_non_positive_widths_rewrites_only_unusable_joins() {
     let mut slots = [
@@ -184,7 +184,7 @@ fn empty_single_and_extremes() {
     assert_eq!(moves[0].new_x, i32::MIN, "飽和して下限に張り付く");
 }
 
-/// 動かさない理由の固定語（ログの語・7.1 の判別に使う）。
+/// 動かさない理由の固定語（ログの語・判別に使う）。
 #[test]
 fn keep_reason_fixed_words() {
     let cases = [
@@ -206,7 +206,7 @@ fn keep_reason_fixed_words() {
     }
 }
 
-/// 判断の語: 右に付ける組の固定語（7.1）。左に付ける組の語と、動かさないが理由の語になることは
+/// 判断の語: 右に付ける組の固定語。左に付ける組の語と、動かさないが理由の語になることは
 /// `mark_non_positive_widths_rewrites_only_unusable_joins` が確かめる。
 #[test]
 fn pair_decision_words() {
@@ -218,7 +218,7 @@ fn pair_decision_words() {
 }
 
 // -----------------------------------------------------------------------------
-// 起動の並べ直しの組ごとの決め（design BootRemembered の 5 行・要件 6.3〜6.5）
+// 起動の並べ直しの組ごとの決め
 // -----------------------------------------------------------------------------
 
 fn state(default_x: Option<i32>) -> ScopeChainState {
@@ -237,7 +237,7 @@ const MARKS: [Option<AdjacencyMark>; 4] = [
     None,
 ];
 
-/// 記憶に位置が無く既定のままなら左へ付ける。組・覚えた印は読まない（1 行目）。
+/// 記憶に位置が無く既定のままなら左へ付ける。組・覚えた印は読まない。
 #[test]
 fn boot_untouched_scope_joins_left() {
     for mark in MARKS {
@@ -250,7 +250,7 @@ fn boot_untouched_scope_joins_left() {
     }
 }
 
-/// 記憶に位置が無く、既定から動かされたか台本の印があれば動かさない（2 行目）。
+/// 記憶に位置が無く、既定から動かされたか台本の印があれば動かさない。
 #[test]
 fn boot_moved_or_script_placed_scope_without_memory_is_kept() {
     let explicit = PairDecision::Keep(KeepReason::ExplicitlyPlaced);
@@ -270,7 +270,7 @@ fn boot_moved_or_script_placed_scope_without_memory_is_kept() {
     }
 }
 
-/// 記憶から戻した窓に台本の印があれば、組や印より先に動かさない（3 行目）。
+/// 記憶から戻した窓に台本の印があれば、組や印より先に動かさない。
 #[test]
 fn boot_restored_scope_with_script_marker_is_explicitly_placed() {
     for mark in MARKS {
@@ -283,7 +283,7 @@ fn boot_restored_scope_with_script_marker_is_explicitly_placed() {
     }
 }
 
-/// 記憶から戻した窓が組に入っていれば、印より先に動かさない（4 行目）。
+/// 記憶から戻した窓が組に入っていれば、印より先に動かさない。
 #[test]
 fn boot_restored_scope_in_sticky_group_is_kept() {
     for mark in MARKS {
@@ -294,7 +294,7 @@ fn boot_restored_scope_in_sticky_group_is_kept() {
     }
 }
 
-/// 記憶から戻した、上のどれでもない窓は覚えた印で決める（5 行目）。
+/// 記憶から戻した、上のどれでもない窓は覚えた印で決める。
 #[test]
 fn boot_restored_scope_follows_the_remembered_mark() {
     let cases = [
@@ -314,7 +314,7 @@ fn boot_restored_scope_follows_the_remembered_mark() {
     }
 }
 
-/// `defaultx` だけ空けて左へ置く: new_x = 前の x − 自分の幅 − offset（resolver の P2）。
+/// `defaultx` だけ空けて左へ置く: new_x = 前の x − 自分の幅 − offset。
 /// 幅が非正なら動かさず、語は "non-positive-width" に改まる。
 #[test]
 fn join_left_offset_keeps_the_defaultx_gap() {

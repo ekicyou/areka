@@ -1,4 +1,4 @@
-//! ワークスペース根と `doc/ukadoc-coverage/` 配下の場所（設計「入出力層」）。
+//! ワークスペース根と `doc/ukadoc-coverage/` 配下の場所。
 //!
 //! 判断は持たない。どの関数も引数（あればドメイン）だけから場所を組み立てて返す。
 //! ファイルが実在するかどうかは見ない——生成の前は無いのが普通だからである。
@@ -11,8 +11,8 @@
 //!
 //! ここで使うのは**コンパイル時に埋め込まれる `env!`** であって、実行時の環境変数
 //! ではない。実行時に読むと、テストがどのディレクトリから起動されたかで答えが変わり、
-//! 常時走るテストが決定的でなくなる（要件 6.1）。実行時の環境変数はこの層では
-//! 1 つも読まない（要件 9.7 が定める `AREKA_` 冠の変数を使うのはスナップショットの
+//! 常時走るテストが決定的でなくなる。実行時の環境変数はこの層では
+//! 1 つも読まない（`AREKA_` 冠の変数を使うのはスナップショットの
 //! 場所を決める `io::snapshot` だけである）。
 //!
 //! # 場所の綴り
@@ -49,7 +49,7 @@ pub const CATALOG_FILE: &str = concat!(coverage_dir!(), "/catalog.toml");
 ///
 /// `crates/<クレート>/` の 2 段上。2 段上が取れないのは manifest の置き場が
 /// `crates/` の下から動いたときだけで、それはこの crate の構造そのものの破壊なので
-/// 起動時に止める（要件 9.6 の配置が前提）。
+/// 起動時に止める。
 pub fn workspace_root() -> PathBuf {
     let manifest = Path::new(MANIFEST_DIR);
     match manifest.parent().and_then(Path::parent) {
@@ -77,7 +77,7 @@ pub fn ledger_path(domain: Domain) -> PathBuf {
         .join(format!("{}.toml", domain.as_key()))
 }
 
-/// ドメイン別報告（`doc/ukadoc-coverage/report/<ドメイン>.md`）。要件 7.4 の突き合わせ対象。
+/// ドメイン別報告（`doc/ukadoc-coverage/report/<ドメイン>.md`）。
 pub fn domain_report_path(domain: Domain) -> PathBuf {
     coverage_dir()
         .join("report")
@@ -94,22 +94,22 @@ pub fn summary_report_path() -> PathBuf {
     coverage_dir().join("report").join("summary.md")
 }
 
-/// 伺からしさのテーマ定義（`doc/ukadoc-coverage/values.md`）。要件 4.4 の 8 テーマの正本。
+/// 伺からしさのテーマ定義（`doc/ukadoc-coverage/values.md`）。伺からしさの 8 テーマの正本。
 pub fn values_path() -> PathBuf {
     coverage_dir().join("values.md")
 }
 
-/// 束の名付けと帰属（`doc/ukadoc-coverage/linkage.md`）。帰属の正本（要件 4）。
+/// 束の名付けと帰属（`doc/ukadoc-coverage/linkage.md`）。帰属の正本。
 pub fn linkage_path() -> PathBuf {
     coverage_dir().join("linkage.md")
 }
 
-/// 段階と順位の統合ブリーフィング（`doc/ukadoc-coverage/briefing.md`）。要件 5・6・8。
+/// 段階と順位の統合ブリーフィング（`doc/ukadoc-coverage/briefing.md`）。
 pub fn briefing_path() -> PathBuf {
     coverage_dir().join("briefing.md")
 }
 
-/// 網羅ロードマップ草案（`doc/ukadoc-coverage/roadmap-draft.md`）。要件 10。
+/// 網羅ロードマップ草案（`doc/ukadoc-coverage/roadmap-draft.md`）。
 pub fn roadmap_draft_path() -> PathBuf {
     coverage_dir().join("roadmap-draft.md")
 }

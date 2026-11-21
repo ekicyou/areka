@@ -1,6 +1,4 @@
-//! 箱の文字の面の当たり判定＝表示されている字の矩形の集まり の檻（要件 9.4）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//! 箱の文字の面の当たり判定＝表示されている字の矩形の集まり の檻。
 //!
 //! GPU を使わない: 面の entity が装着の時に持つ当たり判定（[`box_hit_components`]）と、提示が
 //! 字の矩形を入れ替える口（[`set_child_hit_cells`]）を、窓・絵・箱の 3 entity を手で組んだ World に
@@ -68,7 +66,7 @@ fn freshly_attached_box_receives_nothing() {
 }
 
 /// 字の矩形の内は、絵が透明でも受ける。字の間・字の無い所で絵が透明なら通す。絵が不透明なら
-/// 今までどおり受ける（要件 9.4）。字の矩形を空にすると（`\c` など）、また通す。
+/// 今までどおり受ける。字の矩形を空にすると（`\c` など）、また通す。
 #[test]
 fn glyph_cells_receive_over_transparent_picture_and_gaps_pass_through() {
     let (mut world, window, box_entity, picture) = shell_with_box();
@@ -137,7 +135,7 @@ fn mask_rounds_cells_outward_and_clips_to_surface() {
     }
 }
 
-/// マスクの覚え（audit-emo-text-state-actor 指摘 9）: 同じ字の矩形なら焼き直さず、変われば前に退いた予備のマスクを焼き直して
+/// マスクの覚え: 同じ字の矩形なら焼き直さず、変われば前に退いた予備のマスクを焼き直して
 /// 使い回す（2 枚を入れ替える）。当たりの答えは焼き直しのたびに新しい矩形に従う。
 #[test]
 fn hit_mask_cache_skips_same_cells_and_reuses_the_spare() {

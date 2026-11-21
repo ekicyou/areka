@@ -2,9 +2,9 @@
 //!
 //! ukadoc（SSP 公式仕様書）の項目について「正典の写し（カタログ）」と
 //! 「areka の判定（台帳）」を建て、その整合を常時走るテストで守る道具である。
-//! areka の実行時コードは 1 行も参照しない（要件 9.1）。
+//! areka の実行時コードは 1 行も参照しない。
 //!
-//! 中身は 2 層に分かれる（設計「Architecture Pattern & Boundary Map」）。
+//! 中身は 2 層に分かれる。
 //!
 //! - 純粋層 — ファイルにもスナップショットにも触らない。文字列と値だけを受け取り、
 //!   文字列と値だけを返す（[`model`]・[`assignment`]・[`hash`]・[`tomlout`]・
@@ -32,9 +32,8 @@ pub mod tomlout;
 
 pub use error::SurveyError;
 
-// 見本データは全モジュールのテストが共用する（設計 File Structure Plan）。
-// 別ディレクトリのテストからも `crate::lib_test_support` で引けるよう、
-// 接続はここに 1 つだけ置く。
+// 見本データは全モジュールのテストが共用する。別ディレクトリのテストからも
+// `crate::lib_test_support` で引けるよう、接続はここに 1 つだけ置く。
 #[cfg(test)]
 #[path = "lib_test_support.rs"]
 pub(crate) mod lib_test_support;

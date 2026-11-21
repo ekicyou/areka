@@ -7,7 +7,6 @@
 ///
 /// `QueryPerformanceCounter` の戻り値（カウント）を
 /// `QueryPerformanceFrequency` で除算して秒に変換。
-/// ハードウェアレベルの高精度タイマーを使用し、マイクロ秒級の精度を提供。
 ///
 /// アニメーションエンジンのフレーム間時間差計測に使用する想定。
 /// 利用者は本関数の戻り値を `DolaRuntime::tick(time)` に渡す。
@@ -41,7 +40,7 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
-    /// 単調増加テスト: 連続2回の now() 呼び出しで t2 >= t1 (Req 6.1)
+    /// 単調増加テスト: 連続2回の now() 呼び出しで t2 >= t1
     #[test]
     fn now_is_monotonically_increasing() {
         let t1 = now();
@@ -52,7 +51,7 @@ mod tests {
         );
     }
 
-    /// 正の有限値テスト: 戻り値が 0.0 より大きく有限であること (Req 6.2)
+    /// 正の有限値テスト: 戻り値が 0.0 より大きく有限であること
     #[test]
     fn now_returns_positive_finite_value() {
         let value = now();
@@ -63,7 +62,7 @@ mod tests {
         );
     }
 
-    /// ms 精度テスト: 1ms sleep 後の差分が 0 より大きいこと (Req 6.3)
+    /// ms 精度テスト: 1ms sleep 後の差分が 0 より大きいこと
     #[test]
     fn now_has_millisecond_precision() {
         let t1 = now();

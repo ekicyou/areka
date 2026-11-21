@@ -1,4 +1,4 @@
-//! 窓 1 つの形の状態の遷移と、出す形とその出どころを決める純関数（shell-mouse-cursor・design.md「CursorPick」）。
+//! 窓 1 つの形の状態の遷移と、出す形とその出どころを決める純関数。
 //!
 //! 状態の置き場所と結線は CursorAnswer（`cursor_answer.rs`）。当たり判定はここでは引かず、
 //! 引くときだけ渡された `resolve` を呼ぶ。
@@ -78,7 +78,7 @@ fn shown_of(c: &WindowCursor) -> Shown {
     }
 }
 
-/// 前の状態と引き金から、次の状態と出す場面を決める（design の 13 行の表）。resolve は当たり判定を引くとき
+/// 前の状態と引き金から、次の状態と出す場面を決める（13 行の表）。resolve は当たり判定を引くとき
 /// （位置が変わった・初めて・押した・放した・ホイール・前の状態が無い）だけ呼ぶ。
 pub(crate) fn plan_cursor(
     prev: Option<&WindowCursor>,
@@ -168,7 +168,7 @@ pub(crate) fn pick_shape<F: Clone>(
         Shown::Pass => None,
         Shown::Arrow => Some(fallback(&ghost.arrow, SystemCursor::Arrow)),
         Shown::Region { scene, region } => {
-            // 止まった・ホイールに行が無ければ、同じ当たり判定の乗る形のまま（SSP の測り・要件 4.1・4.3）。
+            // 止まった・ホイールに行が無ければ、同じ当たり判定の乗る形のまま（SSP の測り）。
             let base = match scene {
                 CursorScene::Hover | CursorScene::Wheel => CursorScene::Up,
                 s => *s,

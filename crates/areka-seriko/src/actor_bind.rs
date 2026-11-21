@@ -1,7 +1,7 @@
-//! 着せ替えの腕（`\![bind,…]`・`\![bind-noevent,…]` の読み・当て・記録・spec: script-small-tags 要件 3.1〜3.9）。
+//! 着せ替えの腕（`\![bind,…]`・`\![bind-noevent,…]` の読み・当て・記録）。
 //!
 //! [`super::dispatch_message`] が名前で選んだ正準キャリアだけがここへ来る。2 つの名前は同じに当て、
-//! 記録の `name` の欄だけで分かれる。SHIORI へ送る道は持たない（要件 3.6）。
+//! 記録の `name` の欄だけで分かれる。SHIORI へ送る道は持たない。
 
 use areka_sakura::TalkCue;
 
@@ -23,7 +23,7 @@ pub(super) fn on_bind<O: SurfaceOutput>(
 ) {
     let directive = crate::bind::parse_bind_directive(tokens);
     if directive == BindDirective::Malformed {
-        // カテゴリ欠落・on/off 値破損＝破損入力（D8③）。
+        // カテゴリ欠落・on/off 値破損＝破損入力。
         tracing::error!(
             name,
             command = ?cue.command,
@@ -38,7 +38,7 @@ pub(super) fn on_bind<O: SurfaceOutput>(
         let (category, part, on) = (&applied.category, &applied.part, applied.on);
         match applied.result {
             NamedBindResult::NoNamespace => {
-                // 写像なし（数でない scope・D7・D8⑤）。
+                // 写像なし（数でない scope）。
                 tracing::warn!(
                     name,
                     scope = %cue.actor,
@@ -71,7 +71,7 @@ pub(super) fn on_bind<O: SurfaceOutput>(
                 outcome: BindApplyOutcome::Changed(command),
             } => {
                 last_changed = Some(command);
-                // 実機サインオフの grep マーカー（R7.1・`name="bind-noevent"` も目印）。
+                // 実機サインオフの grep マーカー（`name="bind-noevent"` も目印）。
                 tracing::info!(
                     name,
                     scope = %cue.actor,
@@ -82,7 +82,7 @@ pub(super) fn on_bind<O: SurfaceOutput>(
                     "seriko: bind 適用"
                 );
             }
-            // 非表示/未知 scope（StateOnly）または同値（Unchanged）は発行しない（D5）。
+            // 非表示/未知 scope（StateOnly）または同値（Unchanged）は発行しない。
             NamedBindResult::Applied { id, .. } => {
                 tracing::debug!(
                     name,
@@ -98,12 +98,11 @@ pub(super) fn on_bind<O: SurfaceOutput>(
     }
 
     if let Some(command) = last_changed {
-        // 途中の姿は出さず、最後の集合で 1 件だけ。部品のコマを載せ直した Show があればそれを出す
-        // （spec: areka-P0-surface-element-nesting 要件 5.12・areka-P0-animated-image-playback 要件 3.1）。
+        // 途中の姿は出さず、最後の集合で 1 件だけ。部品のコマを載せ直した Show があればそれを出す。
         let at_ms = loop_runtime.event_ms();
         let command = loop_runtime
             .refresh(&cue.actor, Slot::Shell, at_ms, states)
             .unwrap_or(command);
-        emit_display(out, command); // 単一発行点（R3.5）
+        emit_display(out, command);
     }
 }

@@ -46,7 +46,6 @@ pub struct CompletionReceiver;
 fn main() -> Result<()> {
     human_panic::setup_panic!();
 
-    // tracing-subscriber 初期化
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -56,7 +55,6 @@ fn main() -> Result<()> {
     let mgr = WinApp::new()?;
     let world = mgr.world();
 
-    // 非同期タスクでデモを実行
     world.borrow().spawn(|tx| async move {
         run_demo(tx).await;
     });
@@ -71,55 +69,41 @@ fn main() -> Result<()> {
     println!("     横書きは最後まで進み、約9秒で完了イベントがログに出る");
     println!("  7. 10秒後: ウィンドウ終了");
 
-    // メッセージループを開始
     mgr.run()?;
 
     Ok(())
 }
 
-/// 非同期デモ実行
 async fn run_demo(tx: CommandSender) {
-    // === 0秒: ウィンドウ作成 ===
     println!("[Async] 0s: Creating typewriter demo window");
     let _ = tx.send(Box::new(create_typewriter_demo_window));
 
-    // === 1秒待機 ===
     async_io::Timer::after(Duration::from_secs(1)).await;
 
-    // === 1秒: Typewriter トークを開始 ===
     println!("[Async] 1s: Starting typewriter talk");
     let _ = tx.send(Box::new(start_typewriter_talk));
 
-    // === 2秒待機 ===
     async_io::Timer::after(Duration::from_secs(2)).await;
 
-    // === 3秒: 一時停止 ===
     println!("[Async] 3s: Pausing typewriter");
     let _ = tx.send(Box::new(pause_typewriter));
 
-    // === 2秒待機 ===
     async_io::Timer::after(Duration::from_secs(2)).await;
 
-    // === 5秒: 再開 ===
     println!("[Async] 5s: Resuming typewriter");
     let _ = tx.send(Box::new(resume_typewriter));
 
-    // === 1秒待機 ===
     async_io::Timer::after(Duration::from_secs(1)).await;
 
-    // === 6秒: スキップ ===
     println!("[Async] 6s: Skipping to end");
     let _ = tx.send(Box::new(skip_typewriter));
 
-    // === 4秒待機 ===
     async_io::Timer::after(Duration::from_secs(4)).await;
 
-    // === 10秒: ウィンドウ終了 ===
     println!("[Async] 10s: Closing window");
     let _ = tx.send(Box::new(close_window));
 }
 
-/// ウィンドウを閉じる
 fn close_window(world: &mut World) {
     let mut query = world.query_filtered::<Entity, With<TypewriterDemoWindow>>();
     if let Some(window) = query.iter(world).next() {
@@ -128,9 +112,7 @@ fn close_window(world: &mut World) {
     }
 }
 
-/// Typewriterデモウィンドウを作成
 fn create_typewriter_demo_window(world: &mut World) {
-    // Window Entity (ルート)
     let window_entity = world
         .spawn((
             Name::new("TypewriterDemo-Window"),
@@ -154,7 +136,6 @@ fn create_typewriter_demo_window(world: &mut World) {
         ))
         .id();
 
-    // 背景矩形（灰色）
     let background = world
         .spawn((
             Name::new("Background"),
@@ -209,7 +190,6 @@ fn create_typewriter_demo_window(world: &mut World) {
         ))
         .id();
 
-    // 横書き Typewriter エンティティ
     // NOTE: Typewriterは描画コンテンツサイズを自己申告しないため、
     // flex_grow で親の残りを埋める
     world.spawn((
@@ -264,9 +244,9 @@ fn create_typewriter_demo_window(world: &mut World) {
             BoxStyle {
                 size: Some(BoxSize {
                     width: Some(Dimension::Px(80.0)),
-                    height: None, // 高さは flex_grow で自動調整
+                    height: None,
                 }),
-                flex_grow: Some(1.0), // 残りの空間を埋める
+                flex_grow: Some(1.0),
                 margin: Some(BoxMargin(wintf::ecs::layout::Rect {
                     left: LengthPercentageAuto::Px(10.0),
                     right: LengthPercentageAuto::Px(10.0),
@@ -280,7 +260,6 @@ fn create_typewriter_demo_window(world: &mut World) {
         ))
         .id();
 
-    // 縦書き Typewriter エンティティ
     // NOTE: Typewriterは描画コンテンツサイズを自己申告しないため、
     // 幅は 85px に決め、高さは flex_grow で親の残りを埋める
     // NOTE: 空のTypewriterTalkを初期設定することで、会話開始前も背景が描画される
@@ -308,7 +287,7 @@ fn create_typewriter_demo_window(world: &mut World) {
                 a: 1.0,
             },
         ),
-        TypewriterTalk::new(vec![], 0.0), // 空のトークで初期化（背景描画用）
+        TypewriterTalk::new(vec![], 0.0),
         BoxStyle {
             // size 100% + margin は親をはみ出すため、flex_grow を使用
             size: Some(BoxSize {
@@ -327,7 +306,6 @@ fn create_typewriter_demo_window(world: &mut World) {
         ChildOf(vertical_box),
     ));
 
-    // 完了イベント受信用エンティティ
     world.spawn((
         Name::new("CompletionReceiver"),
         CompletionReceiver,
@@ -346,14 +324,12 @@ fn create_typewriter_demo_window(world: &mut World) {
 
 /// 両方のTypewriterにトークを開始
 fn start_typewriter_talk(world: &mut World) {
-    // 完了イベント受信用エンティティを取得
     let mut receiver_query = world.query_filtered::<Entity, With<CompletionReceiver>>();
     let Some(receiver_entity) = receiver_query.iter(world).next() else {
         println!("[Error] CompletionReceiver entity not found");
         return;
     };
 
-    // FrameTime から現在時刻を取得
     let current_time = {
         let Some(frame_time) = world.get_resource::<FrameTime>() else {
             println!("[Error] FrameTime not found");
@@ -362,7 +338,6 @@ fn start_typewriter_talk(world: &mut World) {
         frame_time.0
     };
 
-    // Stage 1 IR トークン列を作成
     let tokens = vec![
         TypewriterToken::Text("こんにちは、".to_string()),
         TypewriterToken::Wait(0.3),
@@ -375,7 +350,6 @@ fn start_typewriter_talk(world: &mut World) {
         },
     ];
 
-    // 横書きTypewriterにTalkを挿入
     let mut h_query = world.query_filtered::<Entity, With<HorizontalTypewriter>>();
     if let Some(entity) = h_query.iter(world).next() {
         let talk = TypewriterTalk::new(tokens.clone(), current_time);
@@ -383,7 +357,6 @@ fn start_typewriter_talk(world: &mut World) {
         println!("[Test] HorizontalTypewriter talk started");
     }
 
-    // 縦書きTypewriterにTalkを挿入
     let mut v_query = world.query_filtered::<Entity, With<VerticalTypewriter>>();
     if let Some(entity) = v_query.iter(world).next() {
         let talk = TypewriterTalk::new(tokens, current_time);
@@ -397,7 +370,6 @@ fn start_typewriter_talk(world: &mut World) {
     );
 }
 
-/// Typewriter を一時停止
 fn pause_typewriter(world: &mut World) {
     let Some(frame_time) = world.get_resource::<FrameTime>() else {
         println!("[Error] FrameTime not found");
@@ -416,7 +388,6 @@ fn pause_typewriter(world: &mut World) {
     }
 }
 
-/// Typewriter を再開
 fn resume_typewriter(world: &mut World) {
     let Some(frame_time) = world.get_resource::<FrameTime>() else {
         println!("[Error] FrameTime not found");

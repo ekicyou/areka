@@ -1,9 +1,8 @@
 //! 遷移観測ログの**判定器**——観測行の解析・遷移の切り出し・判定量の集計（純関数・I/O 無し）。
 //!
-//! design.md の C7（`transition_judge`）が正本である。4 crate（wintf・areka-emo-present・areka-placement・
-//! areka）が同一の target・同一の接頭語で出した観測行を 1 本の時系列として読み、`kind=monitor`／
-//! `kind=windpi` の拡大率変化を起点に**遷移**へ切り分け（起点規約は
-//! [`split_transitions`]）、遷移ごとの判定量（[`TransitionSummary`]）を出す。
+//! 4 crate（wintf・areka-emo-present・areka-placement・areka）が同一の target・同一の接頭語で出した
+//! 観測行を 1 本の時系列として読み、`kind=monitor`／`kind=windpi` の拡大率変化を起点に**遷移**へ
+//! 切り分け（起点規約は [`split_transitions`]）、遷移ごとの判定量（[`TransitionSummary`]）を出す。
 //!
 //! # 判定語を二重定義しない
 //!
@@ -32,23 +31,21 @@
 //! 数えない**。逆に、タグを含む行は壊れていても `Some` を返す——壊れた行を黙って落とすと
 //! 「判定語を壊した」ことが 0 件として合格に見えるためである（負例は `transition_judge_negative_tests.rs` が使う）。
 //!
-//! # フレーム番号は差分でしか扱わない（D14）
+//! # フレーム番号は差分でしか扱わない
 //!
 //! `frame` は `u32` で周回する。本モジュールの比較はすべて `wrapping_sub` の差分であり、
 //! 絶対値の大小比較を判定に用いない。加えて、系列の `frame` が**一様に 0** の場合は
 //! 「1 フレームで完了した」と読まず [`TransitionSummary::frames_indeterminate`] を立てる——
 //! `frame=0` は tick 前の World（`FrameCount` 既定値・`TickStart` 未挿入）が返す縮退値であり、
-//! `areka-P0-dpi-transition-atomicity` 要件 8.5 に従い「発生 0 回」「有界フレーム数以内」の根拠に用いてはならない。
+//! 「発生 0 回」「有界フレーム数以内」の根拠に用いてはならない。
 //!
 //! # 本番バイナリには含まれない（`#[cfg(test)]`）
 //!
 //! 判定器の消費者は決定論テスト（この下の姉妹と `crates/areka-runtime/src/frame_transition_*`）と
-//! 実機ログのサインオフランナー（`#[ignore]` テスト）だけであり、本番の実行経路からは 1 度も
-//! 呼ばれない。本番ビルドへ置くと本番の lib にテスト専用の項目が入り、
-//! 使われない項目として
-//! 残ってしまう。そこで、`areka-runtime` の `lib.rs` が
-//! `#[cfg(test)] mod placement_tests;` で宣言する、ここへ置く。純関数であることは変わらないので、決定論テストと
-//! 実機サインオフが**同一実装**を回すという C7 の要件（I/O を持たない単一実装）は満たす。
+//! 実機ログのサインオフランナー（`#[ignore]` テスト）だけで、本番の実行経路からは呼ばれない。
+//! 本番ビルドへ置くと使われない項目が残るので、`areka-runtime` の `lib.rs` が
+//! `#[cfg(test)] mod placement_tests;` で宣言する、ここへ置く。純関数なので、決定論テストと
+//! 実機サインオフは**同一実装**を回す。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -81,8 +78,7 @@ use areka_placement::transition_diag::{
 /// 観測行 1 本が語彙の規約を破っている点。
 ///
 /// 「解析できなかった」を `None` へ潰さず値として持つのは、**判定語を壊した入力が沈黙で
-/// 合格になる**ことを防ぐためである（`areka-P0-dpi-transition-atomicity` 要件 7.4 の負例・design「Error Handling」の
-/// 「沈黙を PASS にしない」）。
+/// 合格になる**ことを防ぐためである。
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RecordDefect {
     /// 同じフィールド名が 1 行に 2 度以上現れた（後勝ちで飲み込まない）。
@@ -234,7 +230,7 @@ pub struct TransitionOrigin {
     pub new_dpi: u32,
 }
 
-/// 参考値（実時間）。**判定語ではない**（`areka-P0-dpi-transition-atomicity` 要件 7.1＝判定は回数・フレーム数・順序・接地点）。
+/// 参考値（実時間）。**判定語ではない**（判定は回数・フレーム数・順序・接地点）。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct WallClock {
     /// 最初の窓書込の `t_us`。
@@ -245,7 +241,7 @@ pub struct WallClock {
     pub sum_call_us: u64,
 }
 
-/// 遷移 1 回ぶんの判定量（C7）。
+/// 遷移 1 回ぶんの判定量。
 ///
 /// `judge` はこの構造体と上限（`Bounds`）だけを見て合否を出す。本構造体は
 /// **量を持つだけ**で合否の語を持たない。
@@ -257,7 +253,7 @@ pub struct TransitionSummary {
     pub records: usize,
     /// 語彙の規約を破っていた行と、`diff`・`total_us` が数として読めない行の本数。
     pub malformed_records: u32,
-    /// フレーム差が判定不能であること（`areka-P0-dpi-transition-atomicity` 要件 8.5）。
+    /// フレーム差が判定不能であること。
     ///
     /// 立つのは「読めた `frame` が 1 つも 0 以外にならなかった」とき——`frame=0` の縮退値
     /// しか無い系列と、`frame` の値が全部壊れていて 1 つも読めなかった系列の**両方**を含む。
@@ -277,9 +273,8 @@ pub struct TransitionSummary {
     /// 随伴の同一フレーム性（キャラ窓の書込フレームと、同一 scope のバルーンの**位置**指令が
     /// 着地したフレームが一致するか）。
     ///
-    /// 比べる相手が「最後の書込」ではなく `origin=BalloonFollow` の**位置指令**であることが
-    /// 要点である——バルーンの寸書込（`KeepPositionResize`）は `areka-P0-dpi-transition-atomicity` 要件 4.6 が先送りを許す別の
-    /// 義務なので、混ぜると先送りが随伴の遅れに化ける
+    /// 比べる相手は「最後の書込」ではなく `origin=BalloonFollow` の**位置指令**。バルーンの寸書込
+    /// （`KeepPositionResize`）は先送りが許される別の義務なので、混ぜると先送りが随伴の遅れに化ける
     /// （[`TransitionSummary::balloon_follow_windows`]）。
     pub balloon_same_frame: bool,
     /// 上を実際に検査できたスコープ数（0 なら `balloon_same_frame` は空虚な真）。
@@ -287,11 +282,11 @@ pub struct TransitionSummary {
     /// 随伴の位置指令（`origin=BalloonFollow`）が 1 度でも**書込へ着地した**窓。
     ///
     /// 判定側が「対を検査できるはずか」を独立に数え直すために持つ。寸だけが届いて位置が
-    /// 1 度も来ていない窓は、`areka-P0-dpi-transition-atomicity` 要件 4.3 を**満たした**のではなく検査できていない。
+    /// 1 度も来ていない窓は、検査できていない。
     ///
     /// 着地は 2 通りで見つかる（[`summarize`] の当該箇所）——⑴ `kind=write` が
     /// `origin=BalloonFollow` を名乗る（畳まれなかった指令）、⑵ `kind=enqueue` の
-    /// `merged_into_seq` が指す先の書込（合流された指令。C2 の合流は先着の経路語を残すので、
+    /// `merged_into_seq` が指す先の書込（合流された指令。合流は先着の経路語を残すので、
     /// 畳まれた側の経路語は書込の行から消える）。**指令が積まれただけで書込に届かなかった
     /// 窓はどちらにも入らない**。
     pub balloon_follow_windows: BTreeSet<WindowKey>,
@@ -305,7 +300,7 @@ pub struct TransitionSummary {
     pub ground_diff_max: Option<i32>,
     /// 接地点を測れなかった行（`diff=-`・作業領域の下端が不明）があった＝その scope を黙って通さない。
     pub ground_diff_unmeasured: bool,
-    /// **不可視ゆえ**再表示を見送られた窓（`areka-P0-dpi-transition-atomicity` 要件 4.6 で合否から除外する）。
+    /// **不可視ゆえ**再表示を見送られた窓（合否から除外する）。
     ///
     /// 見送りの理由は 2 語あるが、除外へ数えるのは
     /// [`areka_emo_present::presenter::SURFACE_REASON_INVISIBLE`] だけである（理由の選り分けは
@@ -362,7 +357,7 @@ impl TransitionSummary {
 /// 必須（[`required_fields`]）と分けるのは、**フィールドが後から増えるから**である。
 /// `kind=write` の `in_batch`（バッチ化と同時に増えた）を必須にすると、
 /// それ以前に採取した実機ログの書込行が軒並み `MissingField` として
-/// `malformed_records` に載り、確定済みの証跡（`mechanism-ledger.md` §3・§10）を
+/// `malformed_records` に載り、確定済みの証跡を
 /// 判定器が後から否定してしまう。読む側は欠けていても受け入れ、**書く側が必ず載せる**
 /// ことは発行側の逐語テスト（`transition_diag_tests::write_line_is_verbatim`）が固定する。
 ///
@@ -533,10 +528,9 @@ fn read_prefix_number<T: std::str::FromStr + Default>(
 /// この行が遷移の**起点候補**か（`kind=monitor`／`kind=windpi` のうち拡大率が変わっている行）。
 ///
 /// 起点は 2 種別の**和集合**である。`monitor` が出るのはモニタ表そのものが
-/// 変わったとき——表示設定の変更——だけで、ゴーストをモニタ間で移す往復（`areka-P0-balloon-offset-dpi` 要件 8.2 が
-/// 指示する操作）では 1 行も出ない。窓の表示 DPI が書き換わったことを表す `windpi` を
-/// 起点へ加えて初めて、往復のログから遷移が切り出せる（実測は
-/// `.kiro/specs/completed/areka-P0-balloon-offset-dpi/real-run-attempt-2026-08-28.md` の検出 2b）。
+/// 変わったとき——表示設定の変更——だけで、ゴーストをモニタ間で移す往復では
+/// 1 行も出ない。窓の表示 DPI が書き換わったことを表す `windpi` を
+/// 起点へ加えて初めて、往復のログから遷移が切り出せる。
 ///
 /// **拡大率が実際に変わっている行だけを起点にする**規約は 2 種別に等しく効く。作業領域
 /// だけが変わったモニタ表更新も、`WM_DPICHANGED` が同値の DPI を運んで
@@ -566,7 +560,7 @@ impl TransitionOrigin {
 
     /// 開いている遷移の起点と**同じ変化**を指すか（畳み込みの規約）。
     ///
-    /// 条件は ⑴ `old_dpi`→`new_dpi` の対が同一 ⑵ 同一フレーム（差が 0・D14 に従い
+    /// 条件は ⑴ `old_dpi`→`new_dpi` の対が同一 ⑵ 同一フレーム（差が 0・
     /// `wrapping_sub` で取り、絶対値の大小比較をしない）の連言である。
     fn is_same_change_as(&self, open: &Self) -> bool {
         self.old_dpi == open.old_dpi
@@ -601,8 +595,7 @@ impl TransitionOrigin {
 /// 発行側の性質（どちらの経路も 1 つの刻印で出す）に拠り、緩めると往復を繰り返したログが
 /// 1 本へ潰れて「往復が 1 度も観測されていない」の偽の赤になる。**畳み足りない側**——同じ
 /// 変化の起点がフレームをまたいで届けば 2 本に分かれる。合否への影響は判定ごとに違う
-/// （遷移番号を合否に使うのは ⑶ の 1 箇所だけ）——内訳と裏取りは design.md の
-/// 「起点規約」（`areka-P0-balloon-offset-dpi`）。
+/// （遷移番号を合否に使うのは ⑶ の 1 箇所だけ）。
 pub fn split_transitions(records: &[TransitionRecord]) -> Vec<Vec<&TransitionRecord>> {
     let mut transitions: Vec<Vec<&TransitionRecord>> = Vec::new();
     let mut open: Option<TransitionOrigin> = None;
@@ -634,7 +627,7 @@ pub fn split_transitions(records: &[TransitionRecord]) -> Vec<Vec<&TransitionRec
 /// 遷移 1 回ぶんの判定量を集計する。
 ///
 /// 入力は [`split_transitions`] が返す 1 区間（先頭が起点）。フレーム差はすべて
-/// `wrapping_sub`（D14）で取り、絶対値の大小比較は 1 箇所も行わない。
+/// `wrapping_sub` で取り、絶対値の大小比較は 1 箇所も行わない。
 pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
     let origin = transition
         .first()
@@ -644,22 +637,19 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
 
     // 見送り窓は以後の除外に使うので先に集める。
     //
-    // # 除外に使えるのは `reason=invisible` **だけ**である
+    // 除外に使えるのは `reason=invisible` **だけ**である。発行側（`areka-emo-present` の
+    // `refresh_scale`）の見送りの理由は 2 語ある:
     //
-    // 発行側の見送りには理由が 2 語ある（`areka-emo-present` の `refresh_scale`）:
-    //
-    // - `invisible`——対象が不可視（Hide／全透明退化）。**`areka-P0-dpi-transition-atomicity` 要件 4.6 が意図した除外**である。
-    //   遷移時点で見えていない窓は「位置と寸を変更せずに現状を維持」が正しい振舞いであり、
-    //   後から表示された時点の書込はその遷移の続きではない。
-    // - `k-unchanged`——再導出した拡大率が前回適用値と等しい。これは**定常状態の空振り**で
-    //   あって現状維持の対象ではない。遷移が落ち着いた次フレームから、拡大率が変わらない
-    //   限り全窓が毎フレーム出し続ける。
+    // - `invisible`——対象が不可視（Hide／全透明退化）。遷移時点で見えていない窓は位置と寸を
+    //   変更せず現状維持が正しく、後から表示された時点の書込はその遷移の続きではない。
+    // - `k-unchanged`——再導出した拡大率が前回適用値と等しい**定常状態の空振り**。遷移が
+    //   落ち着いた次フレームから、拡大率が変わらない限り全窓が毎フレーム出し続ける。
     //
     // 遷移の区間は**次の起点まで伸びる**（[`split_transitions`]）ので、`k-unchanged` を除外の
     // 理由にすると遷移ごとに全窓が除外側へ入り、[`TransitionSummary::frames_to_last_write`]・
     // [`TransitionSummary::mismatch_frames_per_window`]・
-    // [`TransitionSummary::visualize_to_write_us`] の 3 つが**静かに空になる**。`areka-P0-dpi-transition-atomicity` のタスク 4.2 の実機
-    // ログ（12 遷移・`k-unchanged` 49 件／`invisible` 4 件）が実際にそうなり、可視化から書込
+    // [`TransitionSummary::visualize_to_write_us`] の 3 つが**静かに空になる**。実機ログ
+    // （12 遷移・`k-unchanged` 49 件／`invisible` 4 件）では実際にそうなり、可視化から書込
     // まで 20 万µs 級の隔たりが 1 件も違反として立たなかった。
     for record in transition {
         if record.kind == KIND_SURFACE
@@ -676,19 +666,18 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
     // 窓ごとの「随伴の位置指令（`origin=BalloonFollow`）が着地した書込」——観測順で最後の
     // 1 件（書込の観測位置とそのフレーム）。
     //
-    // バルーン窓の 2 本の指令は**別の義務**を果たす——位置（`BalloonFollow`）は `areka-P0-dpi-transition-atomicity` 要件 4.3 が
-    // キャラ窓と同一フレームで求め、寸（`KeepPositionResize`）は `areka-P0-dpi-transition-atomicity` 要件 4.6 が先送りを許す。
-    // 経路語で選り分けずに「最後の書込」で測ると、見送られた寸が後のフレームで届いただけの
-    // 遷移（再観測 §3.2 の遷移 2＝レポートが「欠陥ではない」と明記した形）が随伴の遅れに
+    // バルーン窓の 2 本の指令は**別の義務**を果たす: 位置（`BalloonFollow`）はキャラ窓と同一
+    // フレームで求め、寸（`KeepPositionResize`）は先送りが許される。経路語で選り分けずに
+    // 「最後の書込」で測ると、見送られた寸が後のフレームで届いただけの遷移が随伴の遅れに
     // 化ける。
     let mut follow_landing_per_window: BTreeMap<WindowKey, (usize, u32)> = BTreeMap::new();
     // 合流された随伴の指令（窓・合流先の通し番号・当該 `enqueue` の観測位置）。
     //
-    // 合流（C2）を通ると後着の指令は**先着の枠へ畳まれ**、合流後の 1 本は先着の経路語を
+    // 合流を通ると後着の指令は**先着の枠へ畳まれ**、合流後の 1 本は先着の経路語を
     // 名乗る（`command.rs` の `merge_into`＝「タグは先着の値を保つ」）。バルーン窓は寸の
     // 指令が先に積まれるので、随伴の位置指令の経路語は `kind=write` から消える。ここを
-    // 数えないと、合流が効いている遷移では `areka-P0-dpi-transition-atomicity` 要件 4.3 が**未測定**として落ちる。
-    // 2026-08-21 の実機再採取で 7 遷移中 5 遷移がこの形だった。
+    // 数えないと、合流が効いている遷移では随伴が**未測定**として落ちる。
+    // 実機の再採取では 7 遷移中 5 遷移がこの形だった。
     let mut merged_follow_commands: Vec<(WindowKey, u32, usize)> = Vec::new();
     // 観測順の窓書込（観測位置・窓・通し番号・フレーム）。合流先の引き当てに使う。
     let mut writes_in_order: Vec<(usize, WindowKey, Option<u32>, u32)> = Vec::new();
@@ -731,15 +720,12 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
                         record.stamp.frame,
                     );
                 }
-                // 遷移の所要（`areka-P0-dpi-transition-atomicity` 要件 4.4 の「全ゴースト窓の遷移」）には**見送り窓への書込を
-                // 数えない**。`areka-P0-dpi-transition-atomicity` 要件 4.6 は当該窓を「位置と寸を変更せずに現状を維持」させる
-                // 規定であり、後から表示された時点の書込はその遷移の続きではない。事例は
-                // 再観測 §3.2 の遷移 2 の +660ms で、レポートはその窓を
-                // 「遷移時点で不可視（`refresh_scale: 不可視ゆえ再表示しない`）だったため
-                // 見送られ」と書く＝**`reason=invisible` の側**である（`k-unchanged` では
-                // ない。だからこそ集計の入口で理由を選り分けている）。数えると、レポートが
-                // 非欠陥と明記した遷移がフレーム上限で不合格になる。見送り窓でも**随伴の
-                // 位置**は `balloon_same_frame` が見張り続けるので、抜け穴にはならない。
+                // 遷移の所要には**見送り窓への書込を数えない**。見送られた窓は位置と寸を変更せず
+                // 現状維持が正しく、後から表示された時点の書込はその遷移の続きではない。除外するのは
+                // `reason=invisible` の側だけ（`k-unchanged` ではない。だからこそ集計の入口で理由を
+                // 選り分けている）。数えると、遷移時点で不可視だった窓の遅れた書込がフレーム上限で
+                // 不合格になる。見送り窓でも**随伴の位置**は `balloon_same_frame` が見張り続けるので、
+                // 抜け穴にはならない。
                 if !summary.skipped_windows.contains(&window) {
                     last_write_frame = Some(record.stamp.frame);
                 }
@@ -850,9 +836,8 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
         summary.frames_to_last_write = Some(last.wrapping_sub(origin.stamp.frame));
     }
 
-    // 可視化と書込の食い違い（見送り窓は `areka-P0-dpi-transition-atomicity` 要件 4.6 で除外する）。フレーム差は**最後の**
-    // 可視化と**最後の**書込＝着地どうしの比較で採る（`areka-P0-dpi-transition-atomicity` 要件 4.3 の「遷移後の寸法・位置で
-    // 可視化されるとき」が問うのは着地のフレームだから）。
+    // 可視化と書込の食い違い（見送り窓は除外する）。フレーム差は**最後の**可視化と**最後の**書込
+    // ＝着地どうしの比較で採る（問うのは着地のフレームだから）。
     for (window, visualizes) in &visualizes_per_window {
         if summary.skipped_windows.contains(window) {
             continue;
@@ -877,7 +862,7 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
         let widest = visualizes
             .iter()
             .filter_map(|(frame, visualize_us)| {
-                // 同一フレームに当該窓の書込がある可視化だけが対象（C7）。
+                // 同一フレームに当該窓の書込がある可視化だけが対象。
                 last_write_us_per_window_frame
                     .get(&(window.clone(), *frame))
                     .map(|write_us| write_us.saturating_sub(*visualize_us))
@@ -891,18 +876,16 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
     // 随伴の同一フレーム性（キャラ窓の書込フレームと、同一 scope のバルーン窓の**位置**書込
     // フレーム）。
     //
-    // 除外はキャラ窓側だけである。`areka-P0-dpi-transition-atomicity` 要件 4.3 の When 節は「キャラ窓が遷移後の寸法・位置で
-    // **可視化されるとき**」であり、キャラ窓の再表示が見送られていれば引き金そのものが
-    // 立たない。逆に**バルーン側の見送りでは降りない**——見送りは「サーフェスの再表示を
-    // しなかった」という事実であって、随伴の窓書込（`BalloonFollow`）は不可視のバルーンにも
-    // 出る（再観測 §3.1 の実ログがそう）。実機サインオフの手順（発話させず拡大率だけ変える）
-    // ではバルーンはほぼ常に不可視＝`stage=skipped reason=invisible` なので、ここで降りると
-    // `areka-P0-dpi-transition-atomicity` 要件 4.3 が**定常の形で 1 度も検査されない**まま合格になる。
+    // 除外はキャラ窓側だけである。検査の引き金は「キャラ窓が遷移後の寸法・位置で**可視化される
+    // とき**」なので、キャラ窓の再表示が見送られていれば引き金が立たない。逆に**バルーン側の
+    // 見送りでは降りない**——見送りは「サーフェスの再表示をしなかった」という事実であって、
+    // 随伴の窓書込（`BalloonFollow`）は不可視のバルーンにも出る。実機サインオフの手順（発話させず
+    // 拡大率だけ変える）ではバルーンはほぼ常に不可視＝`stage=skipped reason=invisible` なので、
+    // ここで降りると随伴が定常の形で 1 度も検査されないまま合格になる。
     //
     // 比べるのは `follow_landing_per_window`＝**位置の指令が着地した書込だけ**であって
-    // 「最後の書込」ではない。バルーンの寸書込（`KeepPositionResize`）は `areka-P0-dpi-transition-atomicity` 要件 4.6 が先送りを
-    // 許す別の義務であり、混ぜると再観測 §3.2 の遷移 2（位置は定刻・寸だけ +660ms）が
-    // 随伴の遅れに化ける。
+    // 「最後の書込」ではない。バルーンの寸書込（`KeepPositionResize`）は先送りが許される別の
+    // 義務であり、混ぜると位置は定刻で寸だけ遅れた遷移が随伴の遅れに化ける。
     for (window, char_frame) in &last_write_frame_per_window {
         if !window.is_char() || summary.skipped_windows.contains(window) {
             continue;

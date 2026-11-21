@@ -9,11 +9,11 @@ use super::{
 use crate::mouse_test::test_support::mouse_input;
 
 // ============================================================================
-// 群 3: Req4.5・DD-12 — 選択起因の失敗は終了系列へ倒れない
+// 群 3: 選択起因の失敗は終了系列へ倒れない
 // ============================================================================
 
 /// カスケード段 GET の `Failed` が `Unloading{Fault}` へ**倒れず**、204 と同じ扱いで次段へ前進し
-/// 解決まで到達する（Req4.5・DD-12・C4 規則 8）。終了は後から駆動した close によってのみ起きる。
+/// 解決まで到達する。終了は後から駆動した close によってのみ起きる。
 ///
 /// # 駆動（決定的・sleep なし）
 /// 失敗注入 mock（`FailOn{ id: "OnChoiceSelectEx", kind: Ipc }`）が **最初の** Ex GET だけを落とし、
@@ -21,7 +21,7 @@ use crate::mouse_test::test_support::mouse_input;
 /// 返事なしに写されるので、ここで見たい「選択肢の往復中の失敗は 204 扱い」の分岐を踏まない。選択待ち窓は保留 sakura で維持する（`spawn_harness_gated_failing`）。
 /// 選択処理の後に `CloseRequest` を積み、保留解放で `TalkDone{Ended}` を着弾させて close 握手を走らせる。
 ///
-/// # 非空虚性・discriminative 性（DD-12 先行アームが無ければ全て落ちる）
+/// # 非空虚性・discriminative 性（選択起因の失敗を 204 扱いにする先行アームが無ければ全て落ちる）
 /// - `Failed` が横断アームで `Unloading{Fault}` へ倒れていれば、その時点で終了系列（Unload）へ入り
 ///   **`OnChoiceSelect` は発行されない**。本檻は段列が `[Ex, OnChoiceSelect]` であることを固定する。
 /// - 同様に、Fault 終了なら `ResolveChoice` は届かず、close 握手（`OnClose`）も走らない。本檻は解決が
@@ -65,7 +65,7 @@ fn choice_stage_failure_continues_as_204_without_fault_termination() {
         "段 GET の Failed は 204 と同じ扱いで次段へ前進するはず（DD-12）: {recorded:?}"
     );
 
-    // (2) 会話は止まらず選択は解決された（Req5.3）——解決はちょうど 1 件。
+    // (2) 会話は止まらず選択は解決された——解決はちょうど 1 件。
     let resolves = commands
         .iter()
         .filter(|c| matches!(c, TalkCommand::ResolveChoice { .. }))
@@ -104,7 +104,7 @@ fn choice_stage_failure_continues_as_204_without_fault_termination() {
 }
 
 /// 同じ選択待ち窓でも、**choice 起源でない** GET の `Failed` は従来どおり `Unloading{Fault}` へ
-/// 倒れる（DD-12 免除の境界固定・Req6.1 の終了規律が非 choice 経路で不変であることの直接証拠）。
+/// 倒れる（選択起因の免除の境界固定・終了規律が非 choice 経路で不変であることの直接証拠）。
 ///
 /// mod.rs の免除条件は「`Steady` **かつ** 選択帳簿が in-flight（`Cascading`／`TimeoutInFlight`）」で
 /// あり、選択待ち（`Waiting`）中に届く失敗は免除の対象外である。本檻はその境界を統合層で固定する

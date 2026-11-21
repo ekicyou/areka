@@ -121,7 +121,7 @@ fn the_debug(events: &[CapturedEvent]) -> &CapturedEvent {
     debugs[0]
 }
 
-/// (要件 6.8) `call` のフューチャは `Send`（登録表の処理の約束）。
+/// `call` のフューチャは `Send`（登録表の処理の約束）。
 #[test]
 fn call_future_is_send() {
     fn assert_send<T: Send>(_: &T) {}
@@ -130,7 +130,7 @@ fn call_future_is_send() {
     assert_send(&future);
 }
 
-/// ⑹ (要件 6.2) 本番の上限の文言。
+/// ⑹ 本番の上限の文言。
 #[test]
 fn timeout_text_of_reply_wait() {
     assert_eq!(
@@ -139,7 +139,7 @@ fn timeout_text_of_reply_wait() {
     );
 }
 
-/// ⑴ (要件 6.2, 6.7, 6.8) 返事をしない受け手・上限 50 ms → 上限の `NG:`・warn! 1 件・debug! 1 件。
+/// ⑴ 返事をしない受け手・上限 50 ms → 上限の `NG:`・warn! 1 件・debug! 1 件。
 #[test]
 fn no_reply_times_out_with_one_warn_and_one_debug() {
     let limit = Duration::from_millis(50);
@@ -162,7 +162,7 @@ fn no_reply_times_out_with_one_warn_and_one_debug() {
     assert_eq!(events.len(), 2, "{events:?}");
 }
 
-/// ⑵ (要件 6.4, 6.8) 受け口を落としてから呼ぶ → 上限を待たずに shutting down・warn! 1 件。
+/// ⑵ 受け口を落としてから呼ぶ → 上限を待たずに shutting down・warn! 1 件。
 #[test]
 fn closed_inbox_answers_shutting_down_without_waiting() {
     let (tx, rx) = mpsc::channel();
@@ -176,7 +176,7 @@ fn closed_inbox_answers_shutting_down_without_waiting() {
     assert_eq!(events.len(), 2, "{events:?}");
 }
 
-/// ⑶ (要件 6.4, 6.8) 受けた要求を答えずに落とす → 上限を待たずに shutting down・warn! 1 件。
+/// ⑶ 受けた要求を答えずに落とす → 上限を待たずに shutting down・warn! 1 件。
 #[test]
 fn dropped_request_answers_shutting_down_without_waiting() {
     let (tx, rx) = mpsc::channel::<ToolRequest>();
@@ -193,7 +193,7 @@ fn dropped_request_answers_shutting_down_without_waiting() {
     assert_eq!(events.len(), 2, "{events:?}");
 }
 
-/// ⑷ (要件 6.1, 6.7) 返事あり → その結果・warn! 0 件・debug! にゴーストの名前。
+/// ⑷ 返事あり → その結果・warn! 0 件・debug! にゴーストの名前。
 #[test]
 fn answer_is_returned_with_ghost_in_debug() {
     let (tx, rx) = mpsc::channel::<ToolRequest>();
@@ -215,7 +215,7 @@ fn answer_is_returned_with_ghost_in_debug() {
     assert_eq!(events.len(), 1, "{events:?}");
 }
 
-/// ⑷' (要件 6.7) 返事が失敗なら debug! の text に失敗の本文が載る。
+/// ⑷' 返事が失敗なら debug! の text に失敗の本文が載る。
 #[test]
 fn failed_answer_puts_text_in_debug() {
     let (tx, rx) = mpsc::channel::<ToolRequest>();
@@ -238,14 +238,13 @@ fn failed_answer_puts_text_in_debug() {
     assert_eq!(count(&events, Level::WARN), 0, "{events:?}");
 }
 
-/// ⑸ (要件 6.2) 上限の後の送りは何も起こさない（待つ側はもう居ない・panic しない）。
+/// ⑸ 上限の後の送りは何も起こさない（待つ側はもう居ない・panic しない）。
 #[test]
 fn send_after_timeout_does_nothing() {
     let limit = Duration::from_millis(50);
     let (tx, rx) = mpsc::channel::<ToolRequest>();
     let (got, _, _) = run(tx, limit);
     assert_eq!(got, outcome::ng(timeout_text(limit)));
-    // 要求は受け口に溜まったまま。上限の後に取り出して答える。
     let request = rx.try_recv().expect("要求は届いている");
     assert!(request.reply.is_abandoned());
     request.reply.for_ghost("emo").send(outcome::value("late"));

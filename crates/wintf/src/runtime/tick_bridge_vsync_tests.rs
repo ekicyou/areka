@@ -1,8 +1,8 @@
-//! vblank のスレッドの 1 周（2）・待ち合わせ（8）・クリック透過の中継（11）。
+//! vblank のスレッドの 1 周・待ち合わせ・クリック透過の中継。
 //!
 //! 時刻・`DwmFlush`・眠り方を差し込んで、`DwmFlush` の結果と待った長さの 3 通りで
 //! notify がちょうど 1 回届くこと、補いの境、panic のスレッドの記録、`run` の後の中継の
-//! 終わり方を確かめる。実 DWM は使わない（実機の確かめはタスク 8.2）。
+//! 終わり方を確かめる。実 DWM は使わない。
 
 use super::*;
 use event_listener::Listener;
@@ -109,7 +109,6 @@ fn relay_stops_without_waking_once_the_loop_has_returned() {
         "ループが回っている間は中継するはず"
     );
 
-    // ループが戻った後の vblank。
     running.set(false);
     let after_return = wake.listen();
     vblank.notify(usize::MAX);

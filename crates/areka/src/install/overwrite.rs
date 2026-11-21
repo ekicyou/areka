@@ -1,9 +1,9 @@
-//! 起動中のゴーストへ入れる一周（窓口の子・design「System Flows／起動中のゴーストへ入れる一周」）。
+//! 起動中のゴーストへ入れる一周（窓口の子）。
 //!
 //! 背景のスレッドから預かった書庫（高々 1 件）を段で進める: 預かった → 切替を頼んだ → 展開した。
 //! 預かったら既存の切替の入口へ「同じフォルダ・知らせなし・出どころ＝自動」で頼む（再生中の台詞の
-//! 終わりは kanade の保留が待つ・設計で決めたこと 4）。`switch_to` が全窓を閉じた直後・起こす前に
-//! 呼ぶ [`run_between`] が UI スレッドで同期に展開し（設計で決めたこと 3）、定常到達 [`on_steady`] で
+//! 終わりは kanade の保留が待つ）。`switch_to` が全窓を閉じた直後・起こす前に
+//! 呼ぶ [`run_between`] が UI スレッドで同期に展開し、定常到達 [`on_steady`] で
 //! 結果を背景のスレッドへ返す。展開の成否によらず、切替の道筋は今日のまま進む。
 
 use std::time::Instant;
@@ -146,7 +146,7 @@ pub(super) fn run_between(world: &mut World) {
     let target = world
         .get_non_send::<SwitchInFlight>()
         .map(|f| f.target.folder.clone());
-    // 並びと、起動中のゴーストの場所（根の下のゴーストのときだけ・要件 8.7）。
+    // 並びと、起動中のゴーストの場所（根の下のゴーストのときだけ）。
     let roots = world.get_resource::<BootContext>().map(|ctx| {
         let ghost = &ctx.current.ghost;
         let running = ghost.folder.as_ref().map(|_| ghost.dir.clone());

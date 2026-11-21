@@ -1,4 +1,4 @@
-//! parts の子: 部品の働きのコマの配線（spec: seriko-pattern-calls 要件 3.8・4.5・11.2）。
+//! parts の子: 部品の働きのコマの配線。
 //!
 //! 部品 1 つの時計（入れ物の clocks）と部品の欄を一緒に [`CallPlays`] として貸し、[`run_calls`] で
 //! 当てる（相手は同じ部品の面の animation）。呼ぶのは引き金の後と、抽選・`always` の始まりの後の 2 回、
@@ -20,7 +20,7 @@ use crate::timeline::LoopRng;
 /// 部品 1 つの時計と欄を Calls へ貸す口。
 struct PartPlays<'a> {
     clocks: &'a mut BTreeMap<ClockKey, PartAnim>,
-    /// 止めた `always`（面を出すまで始め直さない・4.5）。
+    /// 止めた `always`（面を出すまで始め直さない）。
     stopped: &'a mut BTreeSet<ClockKey>,
     pattern: &'a mut PatternState,
     part: PartKey,
@@ -168,7 +168,7 @@ pub(super) fn place(
 }
 
 impl PartClocks {
-    /// 面を出した（spec: seriko-pattern-calls 4.5・3.8）: `scope` の `slot` の面の、呼び出しで止めた
+    /// 面を出した: `scope` の `slot` の面の、呼び出しで止めた
     /// `always` の印を消す。消したら真。
     pub(crate) fn on_surface_shown(&mut self, scope: &ActorKey, slot: Slot) -> bool {
         self.clocks

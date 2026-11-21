@@ -1,10 +1,9 @@
 //! `ViewboxExecutor::render_styled` の**フレーム計画の判定群**（`viewbox_draw.rs` の子モジュール）。
 //!
-//! [`viewbox_draw`](crate::viewbox_draw) の巨大化を避けるため、計画そのものを組み替える 2 つの純粋
-//! 関数——エラー縮退規律（[`degrade_if_needed`]・縮退先は計画者の全域の道
-//! [`ScrollPlanner::full_domain_plan`]）・想定外不整合の検知（[`plan_inconsistency`]）——をここへ集めた。
-//! 2 つとも `pub(super)` で親（`viewbox_draw`）とその子からだけ見える。描画の子（`render`）と
-//! 兄弟檻（`viewbox_draw_frame_render_tests.rs`）は `super::plan::..` で引く。
+//! 計画を組み替える 2 つの純粋関数——エラー縮退規律（[`degrade_if_needed`]・縮退先は計画者の
+//! 全域の道 [`ScrollPlanner::full_domain_plan`]）・想定外不整合の検知（[`plan_inconsistency`]）。
+//! どちらも `pub(super)` で、描画の子（`render`）と `viewbox_draw_frame_render_tests.rs` が
+//! `super::plan::..` で引く。
 
 use crate::canvas::ContentCanvas;
 use crate::layout::VisibleWindow;
@@ -12,13 +11,13 @@ use crate::region::ScaleContract;
 use crate::viewbox::{DirtyRect, FramePlan, LineOverhang, ScrollPlanner};
 use crate::writing::WritingMode;
 
-/// エラー縮退規律の適用（Error Handling）——`plan` を必要なら**全域ダーティ Update** へ縮退する。
+/// エラー縮退規律の適用——`plan` を必要なら**全域ダーティ Update** へ縮退する。
 ///
 /// トリガは**想定外不整合**（[`plan_inconsistency`] が理由を返す）: `plan` の `Update` が canvas/面寸と
 /// 矛盾（draw_lines 範囲外・dirty 面寸超過・矩形の行が draw_lines の部分集合でない、の 3 つ）する場合
 /// `warn!`＋全域ダーティへ縮退（記録の無い縮退を作らない・透明フラッシュを起こす FullClear ではない）。
 /// 既定の見た目/方向の変更（`ensure_format` の組み直し）はここでは見ない——組み直しが計画者に前の行を
-/// 忘れさせるので、計画が commit の成功まで元から全域の道を通る（再監査 R2-D1）。
+/// 忘れさせるので、計画が commit の成功まで元から全域の道を通る。
 ///
 /// [`FramePlan::FullClear`]・[`FramePlan::NoChange`] はそのまま返す。
 pub(super) fn degrade_if_needed(
@@ -70,7 +69,7 @@ pub(super) fn plan_inconsistency(
     {
         return Some("dirty 矩形が面寸を超える");
     }
-    // 各矩形の行は描画対象行の部分集合（Phase 1 が draw_lines の資源しか組まないため、外れた
+    // 各矩形の行は描画対象行の部分集合（描画資源は draw_lines の行しか組まないため、外れた
     // index はその矩形で描かれず復元が欠ける）。draw_lines は昇順（計画者の不変条件）ゆえ二分探索。
     if dirty
         .iter()

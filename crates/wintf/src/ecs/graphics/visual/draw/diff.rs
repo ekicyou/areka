@@ -1,4 +1,4 @@
-//! 描く列の比べの項（`wintf-visual-damage-redraw`）。描く列と描画面の拡大から COM を持たない項の列を作り、
+//! 描く列の比べの項。描く列と描画面の拡大から COM を持たない項の列を作り、
 //! 前と今の列を比べる。項は描く列の Pop 以外の命令と 1 対 1（同じ順）。
 
 use super::super::MixMode;
@@ -72,7 +72,7 @@ impl PxRect {
 }
 
 /// 項の種類。`Draw { unbounded }` は重ね方が `SOURCE_OVER` でない件（絵を切り抜きまで広げて合成する）と、
-/// 縮める `HIGH_QUALITY_CUBIC` の件（答えが描く範囲で変わる・R1）。どちらも範囲は矩形の切り抜きか全面。
+/// 縮める `HIGH_QUALITY_CUBIC` の件（答えが描く範囲で変わる）。どちらも範囲は矩形の切り抜きか全面。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EntryKind {
     Draw { unbounded: bool },
@@ -149,7 +149,7 @@ const TAG_CLIP_GEOMETRY: u8 = 2;
 const TAG_OPACITY: u8 = 3;
 
 fn hasher(tag: u8) -> DefaultHasher {
-    // `DefaultHasher::new()` は鍵が固定なので回をまたいで同じ値になる（1.6）。
+    // `DefaultHasher::new()` は鍵が固定なので回をまたいで同じ値になる。
     let mut h = DefaultHasher::new();
     tag.hash(&mut h);
     h
@@ -202,8 +202,8 @@ fn unbounded(mix: MixMode) -> bool {
     matches!(draw_method(mix, true), DrawMethod::Image(c) if c != D2D1_COMPOSITE_MODE_SOURCE_OVER)
 }
 
-/// 縮める `HIGH_QUALITY_CUBIC` の件（D2D は先に縮めた絵を作り、その答えが描く範囲で変わる・WARP で測った・
-/// R1）。`linear` の小さい方の特異値が 1 未満。拡大 1 の回転を縮めない扱いにするため 1e-4 の幅を取る。
+/// 縮める `HIGH_QUALITY_CUBIC` の件（D2D は先に縮めた絵を作り、その答えが描く範囲で変わる・WARP で測った）。
+/// `linear` の小さい方の特異値が 1 未満。拡大 1 の回転を縮めない扱いにするため 1e-4 の幅を取る。
 fn downscaling_hqc(linear: [f32; 4], interpolation: D2D1_INTERPOLATION_MODE) -> bool {
     if interpolation != D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC {
         return false;
@@ -215,7 +215,7 @@ fn downscaling_hqc(linear: [f32; 4], interpolation: D2D1_INTERPOLATION_MODE) -> 
     min_sq.sqrt() < 1.0 - 1e-4
 }
 
-/// 件が画素を変えうる範囲（物理・整数・外向き・2.1）。有限でない値・`i32` に収まらない値は `None`。
+/// 件が画素を変えうる範囲（物理・整数・外向き）。有限でない値・`i32` に収まらない値は `None`。
 ///
 /// - `SOURCE_OVER` で描く件: `exact` を外向きに丸め、補間が最近傍でなければ各辺に `ceil(2 × s)`
 ///   （`s`＝`linear` の列の長さの大きい方・1 未満なら 1）を足し、親の鎖の切り抜きで切る。
@@ -260,7 +260,7 @@ pub(crate) fn item_bounds(
 }
 
 /// 件 1 つの項。`id` は `hash` と親の `id`、`shape` は実体・版・補間・混ぜ方と親の `shape`
-/// （位置と大きさを含めない・5.3）。値が決められなければ `None`（3.3）。
+/// （位置と大きさを含めない）。値が決められなければ `None`。
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn item_entry(
     hash: u64,
@@ -359,8 +359,8 @@ pub(crate) fn layer_entry(
 }
 
 /// 描く列 `commands`（`build` の出した列）と描画面の拡大・大きさから比べの項の列を作る。
-/// 項は Pop 以外の命令と 1 対 1（同じ順）。決められない値が 1 つでもあれば `None`（3.3）。
-/// 同じ入力からはいつも同じ列（1.6）。COM を呼ばない。
+/// 項は Pop 以外の命令と 1 対 1（同じ順）。決められない値が 1 つでもあれば `None`。
+/// 同じ入力からはいつも同じ列。COM を呼ばない。
 pub(crate) fn entries(
     commands: &[DrawCommand],
     scale: (f32, f32),
@@ -416,7 +416,7 @@ pub(crate) fn entries(
     stack.is_empty().then_some(out)
 }
 
-/// 前と今の項の列の比べ（1.2・1.3）。番号はどれも昇順。
+/// 前と今の項の列の比べ。番号はどれも昇順。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Diff {
     /// 前の番号。
@@ -439,7 +439,7 @@ impl Diff {
 
 /// 前と今の項の列を `id` で比べる。同じ `id` が何度も在るときは前の k 番目と今の k 番目を対にし、
 /// 余りを消えた・足されたにする。対の取れた今の項の前の番号の列（今の順）の最長増加部分列に
-/// 入らない項が動いた（1.3）。表は引くだけに使い、答えは列の番号の順（1.6）。
+/// 入らない項が動いた。表は引くだけに使い、答えは列の番号の順。
 pub(crate) fn diff(prev: &[DamageEntry], now: &[DamageEntry]) -> Diff {
     // 番号は `entries` が u32 に収まる長さしか作らない
     let mut by_id: HashMap<u64, VecDeque<u32>> = HashMap::new();

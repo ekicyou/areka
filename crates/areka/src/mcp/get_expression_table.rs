@@ -1,4 +1,4 @@
-//! `get_expression_table` の本物の処理（spec: areka-P0-mcp-expression-table）。
+//! `get_expression_table` の本物の処理。
 //! 今のシェルのフォルダの `surfacetable.txt` を読み、SSP の日本語の既定の名前と重ねた表を素の値で答える。
 
 use std::collections::HashSet;
@@ -13,7 +13,7 @@ use bevy_ecs::world::World;
 use super::resolve::ActiveGhost;
 use crate::ghost_session::GhostSlot;
 
-/// 既定の名前（SSP の日本語の表と同じ 15 件・ID の昇順）。言語の設定は読まない（要件 3.1・3.6）。
+/// 既定の名前（SSP の日本語の表と同じ 15 件・ID の昇順）。言語の設定は読まない。
 const DEFAULT_NAMES: [(u32, &str); 15] = [
     (0, "素"),
     (1, "照れ"),
@@ -37,8 +37,7 @@ const DEFAULT_NAMES: [(u32, &str); 15] = [
 /// 書かれた ID の集合は全行（`__disabled`・`__parts`・名前の省略・スコープを問わない）から作り、
 /// 既定はその集合に無い ID にだけ（スコープ 0・キャラクタ名は空で）載せる。シェルの行は
 /// `__disabled` と `__parts` を除いて載せ、既定と 1 本にして（スコープ, ID）で安定に並べる
-/// （同じ（スコープ, ID）は書かれた順のまま両方）。どの行も `\r\n` で終える
-/// （要件 1.1〜1.5・2.7〜2.9・2.11・3.2〜3.4・3.7・4.1〜4.4・5.9・5.10）。
+/// （同じ（スコープ, ID）は書かれた順のまま両方）。どの行も `\r\n` で終える。
 fn render(table: &SurfaceTable) -> String {
     let written: HashSet<u32> = table.rows.iter().map(|row| row.id).collect();
     let mut rows: Vec<(u32, &str, &str, u32)> = table
@@ -71,8 +70,7 @@ fn render(table: &SurfaceTable) -> String {
 
 /// シェルのフォルダの `surfacetable.txt` だけを読んで転記を返す（`surfaces.txt`・画像・
 /// `descript.txt` は読まない）。`charset` を見て読み、無ければ Shift_JIS。無ければ記録せず空の転記、
-/// 開けなければ `warn!` して空の転記、読めない行があれば行番号の列を持つ `warn!` を 1 回だけ出す
-/// （要件 1.6・2.10・2.12・3.5・5.1・5.2・5.7・5.8）。
+/// 開けなければ `warn!` して空の転記、読めない行があれば行番号の列を持つ `warn!` を 1 回だけ出す。
 fn load(shell_dir: &Path) -> SurfaceTable {
     let path = shell_dir.join("surfacetable.txt");
     let bytes = match std::fs::read(&path) {
@@ -102,7 +100,7 @@ fn load(shell_dir: &Path) -> SurfaceTable {
 /// 呼ばれるたびに稼働中のゴーストの今のシェルのフォルダを引き、表を素の値で 1 回だけ答える。
 /// 引けなければ（置き場が空・実行系が無い）`warn!` して既定の 15 件で答える。World は読むだけで、
 /// 送り口・SHIORI・サーフェスに触れず、ファイルを書かない。`ghost`・`args` は入口で解決済みなので
-/// 使わない（要件 1.7・3.5・5.9・6.1・6.2）。
+/// 使わない。
 pub(super) fn handle(world: &mut World, _ghost: &ActiveGhost, _args: Args, reply: ReplyTo) {
     let shell_dir = world
         .get_non_send::<GhostSlot>()

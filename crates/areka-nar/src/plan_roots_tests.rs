@@ -1,5 +1,5 @@
 //! `plan` の兄弟テストの続き——宛先の根は本体の配置を組むとき 1 回だけ尋ね、同梱は本体の根に
-//! 置く（バルーンの根は尋ねない）こと（要件 5.4・5.5）。
+//! 置く（バルーンの根は尋ねない）こと。
 //!
 //! 助手は [`super`]（`plan_tests.rs`）から借りる。根はフォルダ名ごとに決めた `WorkDir` を答える
 //! 口を使い、尋ねられた順と回数を記録して突き合わせる。
@@ -53,7 +53,7 @@ fn two_companions_archive() -> NarBuilder {
 }
 
 /// 同梱のバルーンが複数あっても、同梱はゴーストの中へ入り、根は本体の根のまま。
-/// バルーンの根は 1 度も尋ねない（要件 6.4・7.1・7.3・8.2）。尋ねるのは本体の 1 回だけ。
+/// バルーンの根は 1 度も尋ねない。尋ねるのは本体の 1 回だけ。
 #[test]
 fn companions_go_inside_the_ghost_under_the_body_root_without_asking_balloon_roots() {
     let ghost_root = WorkDir::new().expect("根を取れる");
@@ -112,8 +112,8 @@ fn companions_go_inside_the_ghost_under_the_body_root_without_asking_balloon_roo
     );
 }
 
-/// シェルの書庫の同梱は、宛先のゴーストの中の `balloon\<dir>` へ入り、根はそのゴーストの根
-/// （要件 7.8）。シェルは入れ子にならないので外す場所は無く、同梱は今の確定のまま。
+/// シェルの書庫の同梱は、宛先のゴーストの中の `balloon\<dir>` へ入り、根はそのゴーストの根。
+/// シェルは入れ子にならないので外す場所は無い。
 #[test]
 fn a_shell_companion_goes_inside_the_target_ghost() {
     let holder = root_with_ghost("test-ghost");
@@ -158,7 +158,7 @@ fn a_shell_companion_goes_inside_the_target_ghost() {
     assert_eq!(*roots.asked.borrow(), vec!["ghost:test-ghost"]);
 }
 
-/// バルーンだけの書庫は今どおりバルーンの根を尋ねる（要件 7.4）。
+/// バルーンだけの書庫はバルーンの根を尋ねる。
 #[test]
 fn a_balloon_only_archive_still_asks_the_balloon_root() {
     let free = WorkDir::new().expect("根を取れる");
@@ -182,7 +182,7 @@ fn a_balloon_only_archive_still_asks_the_balloon_root() {
     assert_eq!(*roots.asked.borrow(), vec!["balloon:test-balloon"]);
 }
 
-// ---- 名指しされた同梱と書庫の `balloon\<名>\`（要件 7.5） ----
+// ---- 名指しされた同梱と書庫の `balloon\<名>\` ----
 
 /// ゴースト本体 `test-ghost` に `companion_lines` を足し、`extra` のファイルを並べた書庫。
 fn ghost_with(companion_lines: &[&str], extra: &[&str]) -> NarBuilder {
@@ -236,7 +236,7 @@ fn an_archive_folder_at_a_companion_home_is_dropped_from_the_body_with_one_warni
     assert_eq!(relative_files(&plan[1]), vec!["descript.txt"]);
 }
 
-/// 取り出し元がその `balloon/<dir>/` 自身なら、項目は今の決まりで同梱へ渡るので警告しない。
+/// 取り出し元がその `balloon/<dir>/` 自身なら、項目は同梱へ渡るので警告しない。
 #[test]
 fn a_companion_taken_from_its_own_home_folder_is_not_warned() {
     let root = root_with_ghost("other");
@@ -275,7 +275,7 @@ fn a_companion_taken_from_its_own_home_folder_is_not_warned() {
 }
 
 /// 全角の大小だけ違う綴りでも、取り出し元は同梱として見つかり、`balloon/<dir>/` は
-/// 本体から除かれる（#64）。
+/// 本体から除かれる。
 #[test]
 fn a_full_width_companion_folder_is_carved_out_case_insensitively() {
     let root = root_with_ghost("other");
@@ -331,7 +331,7 @@ fn a_skipped_companion_leaves_the_archive_folder_in_the_body() {
     );
 }
 
-/// シェル・サプリメントは宛先ゴーストの根を尋ね、在否もその答えの根の下で見る（要件 5.4）。
+/// シェル・サプリメントは宛先ゴーストの根を尋ね、在否もその答えの根の下で見る。
 #[test]
 fn the_target_ghost_is_looked_up_under_the_answered_root() {
     let holder = root_with_ghost("test-ghost");

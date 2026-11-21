@@ -1,4 +1,4 @@
-//! アクタースレッドの役割名を宣言する 1 箇所（areka-P0-draw-load-parity 要件 2.3）。
+//! アクタースレッドの役割名を宣言する 1 箇所。
 //!
 //! # 何をするか
 //!
@@ -11,14 +11,13 @@
 //!
 //! 役割名の写像は「アクター名 → wintf の固定語彙」であり、両側を知る者にしか書けない。
 //! ところが `areka-actor` も `areka-ghost` も wintf に依存しておらず、依存を足すこともでき
-//! ない（`Cargo.toml` 非接触＝要件 8.6）。実行体 `areka` は wintf と `areka-actor` の双方に
+//! ない。実行体 `areka` は wintf と `areka-actor` の双方に
 //! 依存する唯一の場所なので、宣言はここに 1 箇所だけ置く。`areka-actor` 側は「呼ばれ口」
 //! （`ThreadStartHook`）を持つだけで相手を知らないままである。
 //!
-//! この形の副作用として、**ティッカーの生成点（`areka-ghost/src/ticker.rs`）には手を入れて
-//! いない**。2 系統ともアクター名（`ticker`／`loop-ticker`）で `spawn_actor` を通るため、
-//! ここの写像だけで役割名が決まる。名前が変われば `thread_roles_tests.rs` の実物起動テスト
-//! が落ちる（黙って `actor:` へ落ちない）。
+//! ティッカーの生成点（`areka-ghost/src/ticker.rs`）は 2 系統ともアクター名（`ticker`／
+//! `loop-ticker`）で `spawn_actor` を通るため、ここの写像だけで役割名が決まる。名前が変われば
+//! `thread_roles_tests.rs` の実物起動テストが落ちる（黙って `actor:` へ落ちない）。
 //!
 //! # 費用
 //!

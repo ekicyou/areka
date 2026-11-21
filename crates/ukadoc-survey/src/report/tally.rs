@@ -1,36 +1,36 @@
-//! 台帳の集計——状態の分布（全体・ページ別）・世代別・テーマ別（要件 7.1・7.8）。
+//! 台帳の集計——状態の分布（全体・ページ別）・世代別・テーマ別。
 //!
-//! ここは純粋層で、ファイルにもスナップショットにも触らない（要件 6.2）。台帳 1 本を
+//! ここは純粋層で、ファイルにもスナップショットにも触らない。台帳 1 本を
 //! 受け取り、件数だけを返す。**本文は作らない**——見出しや表への組み立ては
-//! `report::domain`（要件 7.1）と `report::summary`（要件 7.2）の担当で、ここは数を
+//! `report::domain` と `report::summary`の担当で、ここは数を
 //! 数えるところまでを受け持つ。
 //!
-//! # 入力はその台帳 1 本だけ（設計 D-11）
+//! # 入力はその台帳 1 本だけ
 //!
 //! カタログも証拠も要らない。ページ名は項目 id の 2 番目の区切りから取れるので
 //! （[`crate::model::EntryId::page`]）、ページ別の分布にカタログは不要である。4 本の台帳を独立して
-//! 編集できること（要件 3.4）は、ドメイン別報告がその台帳だけから決まることに載って
+//! 編集できることは、ドメイン別報告がその台帳だけから決まることに載って
 //! いる。
 //!
-//! # 並びは 2 通りに決め打つ（要件 7.3）
+//! # 並びは 2 通りに決め打つ
 //!
 //! 同じ入力なら 2 回続けて同じ答えになるよう、表はすべて [`BTreeMap`] で持ち、
 //! 順序の定まらない入れ物は 1 つも使わない。
 //!
-//! - **状態**は要件 2.2 の語彙の順（[`Status::ALL`] の並び）。
-//! - **ページ・世代・テーマ**は名前順（設計 report 節の事後条件）。
+//! - **状態**は状態の語彙の順（[`Status::ALL`] の並び）。
+//! - **ページ・世代・テーマ**は名前順。
 //!
 //! # 0 件の欄を消さない
 //!
 //! 状態の分布は 7 語彙すべてを、件数 0 のものも欠かさず持つ。欄ごと消すと「0 件
 //! だった」と「そもそも数えていない」が読み手には区別できない。ページ別の未分類 0 件が
-//! 見えることは要件 6.9 が要る形でもある（未分類の件数は台帳側に宣言値を持たせず、
+//! 見えることも要る形である（未分類の件数は台帳側に宣言値を持たせず、
 //! この分布を正とする）。テーマ別は台帳が使った名前だけを持つ。1 件も使われていない
 //! テーマの 0 件の行は、報告の側が引数のテーマ名から並べる（[`theme_names`]）。
 //!
 //! # 呼び名は 1 か所でしか綴らない
 //!
-//! 報告に出す平易な日本語（要件 7.8）は [`Status::as_japanese`] が正本で、ここでは
+//! 報告に出す平易な日本語は [`Status::as_japanese`] が正本で、ここでは
 //! 綴り直さない（[`StatusCounts::japanese_rows`] がそこから引く）。同じ語彙を 2 か所に
 //! 綴ると、片方を並べ替える誤りが往復のテストを素通りする。
 //!
@@ -46,13 +46,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::ledger::{Ledger, LedgerEntry};
 use crate::model::{PageName, Status};
 
-/// `introduced` が空のときの世代の名前（設計 report 節）。
+/// `introduced` が空のときの世代の名前。
 ///
-/// 空文字は「最古」ではなく「分からない」である（要件 4.2）。だから最古の世代へ
+/// 空文字は「最古」ではなく「分からない」である。だから最古の世代へ
 /// 混ぜず、専用の欄に集める。
 pub const UNKNOWN_GENERATION: &str = "世代不明";
 
-/// 状態の分布。要件 2.2 の 7 語彙を、件数 0 のものも欠かさず同じ並びで持つ。
+/// 状態の分布。7 語彙を、件数 0 のものも欠かさず同じ並びで持つ。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusCounts {
     /// 常に [`Status::ALL`] と同じ並び・同じ長さ。
@@ -106,12 +106,12 @@ impl StatusCounts {
         }
     }
 
-    /// 要件 2.2 の順に並んだ「状態・件数」。
+    /// 状態の語彙の順に並んだ「状態・件数」。
     pub fn rows(&self) -> &[(Status, usize)] {
         &self.rows
     }
 
-    /// 要件 2.2 の順に並んだ「平易な日本語の呼び名・件数」（要件 7.8）。
+    /// 状態の語彙の順に並んだ「平易な日本語の呼び名・件数」。
     ///
     /// 呼び名は [`Status::as_japanese`] から引く。報告の本文はこれをそのまま使えば
     /// よく、呼び名を 2 か所で綴らずに済む。
@@ -123,7 +123,7 @@ impl StatusCounts {
     }
 }
 
-/// 台帳 1 本の集計（要件 7.1 の ⑴ ⑵ ⑷）。
+/// 台帳 1 本の集計（ドメイン別報告の ⑴ ⑵ ⑷）。
 ///
 /// 残る ⑶ 別名の一覧と ⑸ 束の一覧はここに含めない。前者は台帳の行をそのまま並べる
 /// だけで数えるものが無く、後者は [`super::bundle`] の担当である。
@@ -139,7 +139,7 @@ pub struct Tally {
     pub by_theme: BTreeMap<String, StatusCounts>,
 }
 
-/// 台帳 1 本を集計する（要件 7.1・設計 D-11）。
+/// 台帳 1 本を集計する。
 pub fn tally(ledger: &Ledger) -> Tally {
     let overall = status_counts(ledger.entries.values());
 
@@ -148,7 +148,7 @@ pub fn tally(ledger: &Ledger) -> Tally {
     let mut by_theme: BTreeMap<String, StatusCounts> = BTreeMap::new();
 
     for entry in ledger.entries.values() {
-        // ページは id から取る。前置きの `pages` は見ない（設計 D-11。前置きと id の
+        // ページは id から取る。前置きの `pages` は見ない（前置きと id の
         // 食い違いは整合検査の担当で、ここが黙って埋めると食い違いが見えなくなる）。
         by_page
             .entry(entry.id.page())
@@ -160,7 +160,7 @@ pub fn tally(ledger: &Ledger) -> Tally {
             .or_default()
             .add(entry.status);
 
-        // 台帳の `values` は `ledger::read` が 8 テーマに限っている（要件 6.10）。
+        // 台帳の `values` は `ledger::read` が 8 テーマに限っている。
         // 知らない綴りも黙って捨てず、自分の欄を持たせる——捨てると手で組んだ台帳で
         // 件数だけが合わなくなる。
         for value in &entry.values {
@@ -178,7 +178,7 @@ pub fn tally(ledger: &Ledger) -> Tally {
 
 /// 項目の列の状態の分布を数える。
 ///
-/// 台帳 1 本より細かい単位（全体報告のドメイン別・要件 7.2 など）でも使えるよう、
+/// 台帳 1 本より細かい単位（全体報告のドメイン別など）でも使えるよう、
 /// [`Ledger`] ではなく項目の列を受け取る。
 pub fn status_counts<'a>(entries: impl Iterator<Item = &'a LedgerEntry>) -> StatusCounts {
     let mut counts = StatusCounts::new();
@@ -191,7 +191,7 @@ pub fn status_counts<'a>(entries: impl Iterator<Item = &'a LedgerEntry>) -> Stat
 /// 7 語彙を列に並べた表の見出しを書く。
 ///
 /// 列の名前は [`Status::as_japanese`] から引き、[`Status::ALL`] の順に並べる
-/// （要件 2.2 の語彙の順・要件 7.8 の呼び名）。ここで綴り直さない。
+/// （状態の語彙の順・平易な呼び名）。ここで綴り直さない。
 pub(super) fn push_status_header(out: &mut String, first: &str) {
     out.push_str(&format!("| {first}"));
     for status in Status::ALL {
@@ -252,11 +252,11 @@ fn theme_names<'a>(
     names.into_iter().collect()
 }
 
-/// 登場した版から世代を取る（設計 report 節）。
+/// 登場した版から世代を取る。
 ///
 /// 先頭 2 節を点で繋いだものが世代である（`2.3.53` → `2.3`）。節が 1 つしか無ければ
 /// それをそのまま使い、空文字なら [`UNKNOWN_GENERATION`]。版番号として正しいかは
-/// ここでは見ない——カタログの版番号との突き合わせは整合検査（要件 6.7）の担当で、
+/// ここでは見ない——カタログの版番号との突き合わせは整合検査の担当で、
 /// ここで独自に弾くと同じ判定が 2 か所に散る。
 pub fn generation_of(introduced: &str) -> String {
     if introduced.is_empty() {

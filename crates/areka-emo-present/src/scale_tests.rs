@@ -1,6 +1,6 @@
 use super::*;
 
-/// 本仕様の既定政策（作者基準 DPI 96・アプリ管理拡大率 1/1 固定シーム）。
+/// 既定政策（作者基準 DPI 96・アプリ管理拡大率 1/1 固定シーム）。
 fn policy_96() -> ScalePolicy {
     ScalePolicy::new(DEFAULT_AUTHOR_DPI, ScaleRatio::ONE)
 }
@@ -13,9 +13,9 @@ fn assert_no_degradation(d: ScaleDecision) {
     );
 }
 
-/// 要件 1.1: 正常経路は `窓 DPI ÷ author_dpi` の既約有理数を返す（DPI 対照表・連続 k）。
+/// 正常経路は `窓 DPI ÷ author_dpi` の既約有理数を返す（DPI 対照表・連続 k）。
 ///
-/// 125%（120/96＝5/4）が段階丸めで潰れないことが要件 2.2 の前提であるため、
+/// 125%（120/96＝5/4）が段階丸めで潰れないことが前提であるため、
 /// 非整数倍の水準を対照表へ含める。
 #[test]
 fn derive_scale_follows_dpi_table() {
@@ -35,14 +35,14 @@ fn derive_scale_follows_dpi_table() {
         );
         assert_no_degradation(classify(policy_96(), Some((dpi, dpi))));
     }
-    // 隣接水準が同一 k へ潰れない（整数段階量子化の不在＝要件 2.2 の連続性）。
+    // 隣接水準が同一 k へ潰れない（整数段階量子化の不在＝連続性）。
     assert_ne!(
         derive_scale(policy_96(), Some((120, 120))),
         derive_scale(policy_96(), Some((144, 144)))
     );
 }
 
-/// 要件 1.1: author_dpi は k の分母として実際に効く（96 ハードコードでない証拠）。
+/// author_dpi は k の分母として実際に効く（96 ハードコードでない証拠）。
 #[test]
 fn derive_scale_uses_declared_author_dpi_as_denominator() {
     let p = ScalePolicy::new(120, ScaleRatio::ONE);
@@ -58,7 +58,7 @@ fn derive_scale_uses_declared_author_dpi_as_denominator() {
     );
 }
 
-/// 要件 1.3: 窓 DPI ＝ author_dpi かつ app_scale=ONE のとき恒等（k=1.0・等倍表示と同一）。
+/// 窓 DPI ＝ author_dpi かつ app_scale=ONE のとき恒等（k=1.0・等倍表示と同一）。
 #[test]
 fn derive_scale_is_identity_when_window_dpi_equals_author_dpi() {
     assert!(derive_scale(policy_96(), Some((96, 96))).is_identity());
@@ -69,7 +69,7 @@ fn derive_scale_is_identity_when_window_dpi_equals_author_dpi() {
     assert!(!derive_scale(policy_96(), Some((192, 192))).is_identity());
 }
 
-/// 要件 1.4: DPI 不在（`DPI` component 取得不能）は `app_scale × 1/1` へ縮退する。
+/// DPI 不在（`DPI` component 取得不能）は `app_scale × 1/1` へ縮退する。
 ///
 /// アプリ管理拡大率が非 ONE でも「DPI 由来 k のみ 1/1 になる」ことまで固定する
 /// （app_scale ごと捨てる実装との差を検出する）。
@@ -94,7 +94,7 @@ fn derive_scale_without_dpi_degrades_to_app_scale() {
     assert!(!classify(policy_96(), Some((96, 96))).dpi_missing);
 }
 
-/// 設計 D2: `dpi_x != dpi_y` は dpi_x を採用する（単一スカラー規約）。
+/// `dpi_x != dpi_y` は dpi_x を採用する（単一スカラー規約）。
 ///
 /// 「パニックしない」ではなく**採用軸そのもの**を固定する——dpi_y 採用や平均採用なら落ちる。
 #[test]
@@ -124,7 +124,7 @@ fn derive_scale_adopts_dpi_x_when_axes_differ() {
     );
 }
 
-/// 要件 1.1/1.4: `author_dpi == 0` は正規の入口 [`ScalePolicy::new`] の 1 か所で 96 へ正規化される
+/// `author_dpi == 0` は正規の入口 [`ScalePolicy::new`] の 1 か所で 96 へ正規化される
 /// （分母ゼロで表示を失わない）。欄は私有ゆえ、正規化を迂回した政策は作れない。
 #[test]
 fn derive_scale_normalizes_zero_author_dpi() {
@@ -141,7 +141,7 @@ fn derive_scale_normalizes_zero_author_dpi() {
     }
 }
 
-/// 要件 1.4: 窓 DPI が 0（不正値）でも比を構築せず `app_scale × 1/1` へ縮退する。
+/// 窓 DPI が 0（不正値）でも比を構築せず `app_scale × 1/1` へ縮退する。
 #[test]
 fn derive_scale_degrades_on_zero_window_dpi() {
     assert_eq!(derive_scale(policy_96(), Some((0, 0))), ScaleRatio::ONE);
@@ -161,10 +161,10 @@ fn derive_scale_degrades_on_zero_window_dpi() {
     );
 }
 
-/// 要件 1.6: 最終拡大率＝アプリ管理拡大率 × DPI 由来 k（2 因子乗算が実在する証拠）。
+/// 最終拡大率＝アプリ管理拡大率 × DPI 由来 k（2 因子乗算が実在する証拠）。
 ///
-/// 本仕様の本番値は `app_scale == ONE` 固定だが、非 ONE が正しく乗るかを固定しておかないと
-/// 「シームがある」という主張は空虚になる（将来 spec が導入した瞬間に壊れる）。
+/// 本番値は `app_scale == ONE` 固定だが、非 ONE が正しく乗るかを固定しておかないと
+/// 「シームがある」という主張は空虚になる（導入した瞬間に壊れる）。
 #[test]
 fn derive_scale_multiplies_app_scale_seam() {
     let app2 = ScaleRatio::new(2, 1).unwrap();
@@ -236,11 +236,10 @@ fn derive_scale_never_panics_and_always_yields_usable_scale() {
     }
 }
 
-// ── 縮退ログ発火の檻（task 6.2・task 1.4 申し送りの回収）─────────────────────────
+// ── 縮退ログ発火の檻─────────────────────────────
 //
-// task 1.4 時点で檻に入っていたのは私有 `ScaleDecision` の**分岐選択**だけであり、
-// `error!`／`warn!` が実際に発火するかは無検査だった（steering `logging.md` の
-// 「ログ無し失敗経路の禁止」＝縮退の唯一の観測点が空証明のまま）。ここで実行テストへ落とす。
+// 私有 `ScaleDecision` の分岐選択とは別に、`error!`／`warn!` が実際に発火することを
+// 実行テストで固定する（縮退の唯一の観測点を空証明にしない）。
 //
 // 捕捉は共有 crate の [`log_capture_kit::capture`] をそのまま使う（硬化の機序は同 crate の
 // crate doc にあり、ここには写さない）。
@@ -248,7 +247,7 @@ fn derive_scale_never_panics_and_always_yields_usable_scale() {
 use crate::balloon::test_support::count_message;
 use log_capture_kit::{capture, expect_one};
 
-/// 要件 1.4／設計「Error Handling」: DPI 不在縮退は **`error!`** を発火する。
+/// DPI 不在縮退は **`error!`** を発火する。
 ///
 /// レベル（error）とメッセージ識別子・構造化フィールド（`author_dpi`/`app_scale`/`k`）を
 /// 契約として固定する。`k` フィールドには**実適用値**が載る（app_scale 非 ONE で `1.0` 固定
@@ -283,7 +282,7 @@ fn derive_scale_missing_dpi_emits_error_log() {
     assert_eq!(ev2.field("app_scale"), Some("2.0"));
 }
 
-/// 要件 1.4／設計「Error Handling」: 窓 DPI 不正（0）縮退は **`error!`** を発火し、
+/// 窓 DPI 不正（0）縮退は **`error!`** を発火し、
 /// DPI 不在とは**別メッセージ**（別分岐であることがログから判別できる）。
 #[test]
 fn derive_scale_zero_window_dpi_emits_error_log() {
@@ -310,9 +309,9 @@ fn derive_scale_zero_window_dpi_emits_error_log() {
     assert_eq!(events.len(), 1, "1 分岐 1 ログ: {events:?}");
 }
 
-/// 設計 D2: 異軸 DPI（`dpi_x != dpi_y`）は **`warn!`**＋採用軸の実値を残す。
+/// 異軸 DPI（`dpi_x != dpi_y`）は **`warn!`**＋採用軸の実値を残す。
 ///
-/// 「無言で dpi_y を捨てた」痕跡が必ず残ることが D2 の観測条件であり、
+/// 「無言で dpi_y を捨てた」痕跡が必ず残ることが観測条件であり、
 /// `dpi_x`/`dpi_y` 両方がフィールドに載ることまで契約に含める。
 #[test]
 fn derive_scale_anisotropic_dpi_emits_warn_log() {
@@ -331,7 +330,7 @@ fn derive_scale_anisotropic_dpi_emits_warn_log() {
     assert_eq!(events.len(), 1, "1 分岐 1 ログ: {events:?}");
 }
 
-/// 要件 1.1/1.4: 正規の入口 [`ScalePolicy::new`] の 0 正規化も **`warn!`**（無言正規化の禁止）。
+/// 正規の入口 [`ScalePolicy::new`] の 0 正規化も **`warn!`**（無言正規化の禁止）。
 ///
 /// 正規化はこの 1 か所だけ（[`derive_scale`] は分母を正規化し直さない）。
 #[test]
@@ -379,7 +378,7 @@ fn derive_scale_emits_each_degradation_log_independently() {
     assert_eq!(events.len(), 2, "{events:?}");
 }
 
-/// Invariants（設計 D2 の実装時是正）: 縮退ログは**毎回**出る。
+/// Invariants: 縮退ログは**毎回**出る。
 ///
 /// 「初回のみ警告」の抑止状態を持てば純関数性が壊れる、というのが 1.4 レビューの裁定であり、
 /// その裁定は「同じ入力を反復したときログ件数が呼出回数に比例する」ことでしか観測できない

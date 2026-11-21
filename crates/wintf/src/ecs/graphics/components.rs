@@ -54,7 +54,7 @@ impl WindowGraphics {
     }
 }
 
-/// ウィンドウのルートビジュアルノード (R9: parent_visualキャッシュ方式)
+/// ウィンドウのルートビジュアルノード
 #[derive(Component)]
 #[component(on_remove = on_visual_graphics_remove)]
 pub struct VisualGraphics {
@@ -63,7 +63,7 @@ pub struct VisualGraphics {
     /// 階層同期時に子挿入と同時に設定される
     parent_visual: Option<Visual>,
     /// 最後に当てた切り抜きの鍵（物理の幅・高さ・拡大率・形）。同じなら作り直さない。
-    /// 見た目を作り直すと空に戻り、新しい見た目へ当て直す（11 番・6 番）
+    /// 見た目を作り直すと空に戻り、新しい見た目へ当て直す
     clip_key: Option<ClipKey>,
 }
 
@@ -90,7 +90,7 @@ fn on_visual_graphics_remove(world: DeferredWorld, hook: HookContext) {
         && let (Some(parent), Some(visual)) = (&vg.parent_visual, &vg.inner)
     {
         use windows::core::Interface;
-        // フックには Err を返す先が無いので記録だけ。親が先に消えた場合があるので debug!（10 番）
+        // フックには Err を返す先が無いので記録だけ。親が先に消えた場合があるので debug!
         if let Err(e) = parent
             .cast::<windows::UI::Composition::ContainerVisual>()
             .and_then(|cv| cv.Children())
@@ -181,19 +181,18 @@ impl VisualGraphics {
 
 /// ウィンドウの描画サーフェス
 ///
-/// Note: 旧on_add/on_replaceフックは廃止され、
-/// mark_dirty_surfacesシステムでAdded<SurfaceGraphics>として検出される
+/// `Added<SurfaceGraphics>` は mark_dirty_surfaces システムが検出する。
 #[derive(Component, Debug, Default)]
 pub struct SurfaceGraphics {
     inner: Option<CompositionDrawingSurface>,
-    /// surface を束ねる SurfaceBrush（要件 6.3）。
+    /// surface を束ねる SurfaceBrush。
     /// DComp は visual.SetContent(surface) 一段だったが、WUC は brush が一段挟まる。
     /// brush を保持し損ねると surface が解放され黒画像化するため、寿命をここで固定する。
     brush: Option<CompositionSurfaceBrush>,
     pub size: (u32, u32),
-    /// 描画面ごとの入れ物（要件 4.3）。描画面の入れ替えと放しで一緒に放す（4.5）。
+    /// 描画面ごとの入れ物。描画面の入れ替えと放しで一緒に放す。
     composite: Option<SurfaceComposite>,
-    /// 入れ物を持ったことがあるか（全部の理由の「初めて」と「作り直し」の見分け・3.4）。
+    /// 入れ物を持ったことがあるか（全部の理由の「初めて」と「作り直し」の見分け）。
     /// 入れ物を捨てても `set_surface`・`clear` でも戻さない。
     composed_before: bool,
 }
@@ -220,7 +219,7 @@ impl SurfaceGraphics {
         }
     }
 
-    /// 入れ物を作る回に呼ぶ: 初めてなら `First`、前に持ったことがあれば `Recreated`（3.1）
+    /// 入れ物を作る回に呼ぶ: 初めてなら `First`、前に持ったことがあれば `Recreated`
     pub(crate) fn note_composite_created(&mut self) -> FullReason {
         let before = std::mem::replace(&mut self.composed_before, true);
         if before {
@@ -285,7 +284,6 @@ impl SurfaceGraphics {
 
 /// SurfaceGraphicsがダーティ（再描画が必要）であることを示すコンポーネント
 ///
-/// マーカーコンポーネント `SurfaceUpdateRequested` の置き換え。
 /// `Changed<SurfaceGraphicsDirty>` パターンにより、アーキタイプ変更を排除し、
 /// 同一スケジュール内での即時伝搬を実現する。
 ///
@@ -307,9 +305,6 @@ pub struct SurfaceGraphicsDirty {
 ///
 /// Surface生成の最適化状況を把握するための統計情報を収集する。
 /// 開発者がパフォーマンスチューニングやデバッグを行う際に使用。
-///
-/// # Requirements
-/// - Req 5.3: デバッグビルド時のSurface生成統計
 ///
 /// # Usage
 /// ```ignore

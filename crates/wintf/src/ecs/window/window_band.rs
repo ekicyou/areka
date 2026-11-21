@@ -1,13 +1,13 @@
 //! 帯の働き——ゴーストの窓を、今の並びを保ったまま常に手前の窓の重なり（帯）へ入れる・
-//! 帯から出す・今いる帯の最上へ 1 回出す（`stay-on-top-directives` 要件 2.4・2.5・2.10・7.3）。
+//! 帯から出す・今いる帯の最上へ 1 回出す。
 //!
-//! design.md「WindowBand（`window_band.rs`）」が正本である。状態（オン・オフ）は areka が
-//! 持ち、ここは窓の印 [`StayOnTop`] と帯の指令の列 [`WindowBandQueue`] だけを受け取る。
+//! 状態（オン・オフ）は areka が持ち、ここは窓の印 [`StayOnTop`] と帯の指令の列
+//! [`WindowBandQueue`] だけを受け取る。
 //!
 //! wintf の本番で `HWND_TOPMOST`・`HWND_NOTOPMOST` を書く所は、このファイルのほかに 2 つある:
 //! ツールチップ（`tooltip/os.rs`）と、`ZOrder::TopMost`・`ZOrder::NoTopMost` を写す
-//! `WindowPos::get_hwnd_insert_after`（`window_pos/mod.rs`。この 2 値を積む本番の呼び手は今は無い）。`zorder_*` の本番ファイルに帯の語が無いことは
-//! `zorder_pair_deferred_vocabulary_tests.rs`（守り G1）が見張る。
+//! `WindowPos::get_hwnd_insert_after`（`window_pos/mod.rs`。この 2 値を積む本番の呼び手は今は無い）。
+//! `zorder_*` の本番ファイルに帯の語が無いことは `zorder_pair_deferred_vocabulary_tests.rs` が見張る。
 //!
 //! # 帯を当てる手順
 //!
@@ -50,7 +50,6 @@ pub enum BandOp {
 /// 帯の指令の列。同じ巡のうちに積まれ、確定段の帯の系が積まれた順に当てて空にする。
 #[derive(Resource, Debug, Default)]
 pub struct WindowBandQueue {
-    // 読むのは確定段の帯の系（同じファイル）だけ。
     ops: Vec<(BandOp, Vec<Entity>)>,
 }
 
@@ -83,7 +82,7 @@ pub(crate) fn back_to_front(
 /// 純関数：指令 → 1 回目の挿入位置（Enter・Raise = `HWND_TOPMOST`・Leave = `HWND_NOTOPMOST`）。
 ///
 /// Raise は当てる前に帯の外だった窓を、続けて `HWND_NOTOPMOST` で帯の外の最上へ戻す
-/// （[`apply_op`]・帯は変えない＝要件 2.10）。
+/// （[`apply_op`]・帯は変えない）。
 pub(crate) fn band_insert_after(op: BandOp) -> HWND {
     match op {
         BandOp::Enter | BandOp::Raise => HWND_TOPMOST,
@@ -104,11 +103,10 @@ pub(crate) fn expected_band(op: BandOp) -> Option<bool> {
 const RANK_WALK_LIMIT: usize = 4096;
 
 /// 確定段の系：列の指令を積まれた順に当て、この巡に HWND が付いた印のある窓を帯へ入れ、
-/// 列を空にする（要件 2.1・2.3・2.6・2.9・3.1・6.1・6.3・7.3）。
+/// 列を空にする。
 ///
 /// 排他の系なので UI スレッド（スケジュールを回すスレッド）で走る。
 pub fn apply_window_band(world: &mut World) {
-    // 取り出した時点で列は空になる（⑶）。
     let ops = world
         .get_resource_mut::<WindowBandQueue>()
         .map(|mut queue| std::mem::take(&mut queue.ops))
@@ -117,7 +115,7 @@ pub fn apply_window_band(world: &mut World) {
         apply_op(world, op, &entities);
     }
 
-    // ⑵ 作る時点で帯に入り損ねた窓の保険。帯に居る窓には書かない。
+    // 作る時点で帯に入り損ねた窓の保険。帯に居る窓には書かない。
     let mut fresh =
         world.query_filtered::<(Entity, &WindowHandle), (Added<WindowHandle>, With<StayOnTop>)>();
     let outside: Vec<Entity> = fresh
@@ -160,8 +158,8 @@ fn apply_op(world: &World, op: BandOp, entities: &[Entity]) {
     }
     let ordered = back_to_front(&targets, |hwnd| ranks.get(&key(hwnd)).copied());
 
-    // 裏のプロセスは HWND_TOP では入力先の窓の手前へ出られない（SetWindowPos の注記・7.1 の 5 回目）。
-    // Raise は帯の最上へ上げてから、当てる前に帯の外だった窓を帯の外の最上へ戻す（案 A）。
+    // 裏のプロセスは HWND_TOP では入力先の窓の手前へ出られない（SetWindowPos の注記）。
+    // Raise は帯の最上へ上げてから、当てる前に帯の外だった窓を帯の外の最上へ戻す。
     let back_out: Vec<HWND> = match op {
         BandOp::Raise => ordered
             .iter()
@@ -185,7 +183,6 @@ fn apply_op(world: &World, op: BandOp, entities: &[Entity]) {
     for hwnd in &back_out {
         write(*hwnd, HWND_NOTOPMOST);
     }
-    // 当てた数＝全部の書き込みが通った窓の数。
     let applied = ordered
         .iter()
         .filter(|(_, hwnd)| !failed.contains(&key(*hwnd)))
@@ -267,10 +264,10 @@ fn os_in_band(hwnd: HWND) -> Option<bool> {
         .map(|style| style as u32 & WS_EX_TOPMOST.0 != 0)
 }
 
-/// 帯を直に書く（位置・大きさ・活性を変えない＝要件 2.6）。
+/// 帯を直に書く（位置・大きさ・活性を変えない）。
 fn os_write(hwnd: HWND, insert_after: HWND) -> windows::core::Result<()> {
-    // 持ち主の並べ直しを止める: 実機（task 7.1 の 2 回目）で持ち主の 1 回の書き込みが OS の
-    // 持ち主と持たれ窓の並べ直しに落とされ、持たれ窓だけが帯へ上がった。窓は 1 枚ずつ自分で書く。
+    // 持ち主の並べ直しを止める: 持ち主の 1 回の書き込みは OS の持ち主と持たれ窓の並べ直しに
+    // 落とされ、持たれ窓だけが帯へ上がった。窓は 1 枚ずつ自分で書く。
     let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER;
     #[cfg(test)]
     if let Some(scripted) = tests::double::write(hwnd, insert_after, flags) {

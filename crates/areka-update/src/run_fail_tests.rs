@@ -1,4 +1,4 @@
-//! 一周の残りの失敗の経路（要件 4.1・4.5・5.6・8.1・8.4・9.3・9.4・9.6）: 取得失敗・MD5 不一致・
+//! 一周の残りの失敗の経路: 取得失敗・MD5 不一致・
 //! 作業場所を作れない・差分の段と確定の段で配下の外。道具は親の `run_tests.rs`。
 //!
 //! `tree` はジャンクションをフォルダとして辿らずファイルとして読むので panic する（`testkit::walk`）。
@@ -69,7 +69,7 @@ fn md5_mismatch_is_notified_before_failing_and_stops_fetching() {
         vec![url("updates2.dau"), url("a.dll"), url("sub/x.txt")]
     );
     assert_eq!(tree(&f.target), before);
-    // 不一致でも照合の結果を知らせてから失敗する（7.1）。
+    // 不一致でも照合の結果を知らせてから失敗する。
     let mut seen = head(&["a.dll", "sub/x.txt", "b.txt"]);
     seen.extend(fetched("a.dll", b"A", 0, 3));
     seen.push(Progress::DownloadBegin {
@@ -90,7 +90,7 @@ fn md5_mismatch_is_notified_before_failing_and_stops_fetching() {
 fn work_area_blocked_by_a_file_of_the_same_name_fails_before_fetching_files() {
     let f = fixture();
     let (fetch, _) = three_ending_with_existing(&f, b"A");
-    // 棚の名前を同名のファイルで塞ぐ（棚を読めず、作れない＝4.1）。
+    // 棚の名前を同名のファイルで塞ぐ（棚を読めず、作れない）。
     let shelf = f.target.join(WORK_DIR);
     fs::write(&shelf, b"blocker").unwrap();
     let before = tree(&f.target);
@@ -184,7 +184,7 @@ fn junction_out_of_the_target_fails_at_the_diff_stage() {
 fn parent_swapped_for_a_junction_after_the_diff_fails_at_commit_and_rolls_back() {
     let f = fixture();
     fs::write(f.target.join("a.txt"), b"old a").unwrap();
-    // 差分の時点では配下の実在するフォルダ（5.6＝確定の前にも確かめる）。
+    // 差分の時点では配下の実在するフォルダ（確定の前にも確かめる）。
     let sub = f.target.join("sub");
     fs::create_dir(&sub).unwrap();
     let outside = f.outside();
@@ -268,7 +268,7 @@ fn updates_txt_failing_for_another_reason_is_a_manifest_fetch_failure() {
 fn a_failed_run_reports_another_runs_residue() {
     let f = fixture();
     let (fetch, _) = three_ending_with_existing(&f, b"A");
-    // 戻せなかった他の走行の元の内容＝棚に残す残骸（4.8・5.5）。
+    // 戻せなかった他の走行の元の内容＝棚に残す残骸。
     let other = f.target.join(WORK_DIR).join("9-9");
     fs::create_dir_all(other.join("old")).unwrap();
     fs::write(other.join("old/b.txt"), b"b").unwrap();

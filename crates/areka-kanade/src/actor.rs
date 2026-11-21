@@ -5,23 +5,23 @@
 //! 写像して [`step`](crate::schedule::step) を呼び、返った [`Action`](crate::schedule::Action)
 //! を実行する（SHIORI 往復・再生起動要求送出・停止）。SHIORI 呼出は handler 内で
 //! oneshot 往復（`reply_channel`）を閉じ、結果を `Input::ShioriReply` として即座に状態機械へ
-//! 再投入する（DD-2・同時進行 ≤ 1）。
+//! 再投入する（同時進行 ≤ 1）。
 //!
-//! # 駆動モデル（DD-2 同期往復ループ・execute-batch/reinject-last）
+//! # 駆動モデル（同期往復ループ・execute-batch/reinject-last）
 //! `step` が返す Action バッチを**先頭から順に全て実行**し、その中で発生した SHIORI 往復の
 //! **最後の応答**のみを `Input::ShioriReply` として再投入して `step` を再度呼ぶ（Actions が
 //! 尽きるまで反復）。通常バッチは shiori Action を高々 1 本しか含まないため in-flight ≤ 1 が
-//! 保たれる。唯一の例外は `ForceQuit` の `[OnClose NOTIFY, Unload]`（DD-10 best-effort）で、
+//! 保たれる。唯一の例外は `ForceQuit` の `[OnClose NOTIFY, Unload]`（best-effort）で、
 //! 「バッチ全実行→最後（Unload）の応答のみ再投入」により OnClose 一報→Unload→StopSelf の
 //! 正しい順序が成立する（先頭 NOTIFY の応答を即再投入すると Unloading{Forced} が unload 完了と
 //! 誤認し実 Unload を飛ばす）。
 //!
-//! # 停止・切断（Req 4.8/4.9）
+//! # 停止・切断
 //! `KanadeMsg::Close` は step を経ず即時 Break（停止規約）。`Action::StopSelf` は shiori へ
 //! `ShioriMsg::Close` を送り Break。全 `Sender<KanadeMsg>` drop（結線側・sakura の切断）で inbox が
 //! 切断され受信ループが正常終了する——本体は自身の inbox Sender を保持しない構造でこれを担保する。
 //!
-//! # 失敗経路のログ規律（steering: areka-log-first-no-silent-failure）
+//! # 失敗経路のログ規律
 //! SHIORI 送出失敗・応答 oneshot 切断は `error!` の上で `ShioriOutcome::Failed(Ipc)` へ写像し
 //! 再投入する（→ Unloading{Fault}・宙吊りなし）。talk 指示（[`TalkCommand`]）の送出失敗は
 //! `error!` の上で運行を継続する（当該指示は不成立・TalkDone は来ない）。
@@ -54,21 +54,21 @@ use crate::translate::TranslateSeams;
 /// inbox の送信端（[`Sender<KanadeMsg>`]）と [`ActorHandle`] を返す。body は独立スレッド上で
 /// [`State::initial`] から運行状態機械を駆動する。`shiori`／`sakura` は**送出先**の送信端であり
 /// （body が保持するのは outbound のみ・自身の inbox Sender は保持しない）、これらと結線側が
-/// 全て drop されると inbox が切断され body は正常終了する（Req 4.9）。
+/// 全て drop されると inbox が切断され body は正常終了する。
 ///
-/// # talk 再生系への送出口（DD-5・design C6・Req 5.6）
+/// # talk 再生系への送出口
 /// `sakura` は [`TalkCommand`]（`Start` / `ResolveChoice` / `CancelChoice`）の単一チャンネルである。
 /// 起動系と選択解決系を別チャンネルへ分けないことが順序保存の契約であり（`areka-talk` の
-/// [`TalkCommand`] doc・DD-4 の前提）、kanade が投函した順序が relay ＋ dispatcher 単一 inbox を
+/// [`TalkCommand`] doc の前提）、kanade が投函した順序が relay ＋ dispatcher 単一 inbox を
 /// 経て FIFO で下流へ届く。選択待ちの解決を再生層の正規入力経路で行う（kanade 側にバリア状態・
-/// 再生状態を持たない）という Req 5.6 は、この単一送出口によって構造的に成立する。
+/// 再生状態を持たない）という性質は、この単一送出口によって構造的に成立する。
 ///
-/// # 運用規約（デッドロック注意・Req 4.8）
+/// # 運用規約（デッドロック注意）
 /// 停止は `KanadeMsg::Close` 送信・`Action::StopSelf`（終了系列完了）・全 `Sender<KanadeMsg>` drop の
 /// いずれかで駆動する。`Sender<KanadeMsg>` を握ったまま停止も送らずに [`ActorHandle::join`] すると
 /// body は受信待ちのままデッドロックし得る（結線側は drop→join 順を厳守すること）。
 ///
-/// # リソース照会シンク（R4.1）
+/// # リソース照会シンク
 /// `resource_sink` は boot 系列の username prefetch（OnInitialize 後・OnFirstBoot 前）が受け取る
 /// [`ResourceOutcome`](crate::schedule::resources::ResourceOutcome) を**同期的に**受ける注入クロージャ
 /// （kanade は sylphya へ依存しない疎結合シーム）。sink が返るまで boot は次段へ進まない。結果を使わない
@@ -82,7 +82,7 @@ pub fn spawn_kanade(
     spawn_kanade_with_stop_sink(config, shiori, sakura, resource_sink, None)
 }
 
-/// 停止通知の投函端つきで kanade アクターを起動する（R15.3・design D15 の 2）。
+/// 停止通知の投函端つきで kanade アクターを起動する。
 ///
 /// 引数は [`spawn_kanade`] と同一で、末尾に `stop_sink` が 1 つ増えるだけの派生である
 /// （[`spawn_kanade`] は `None` を渡す薄い包み）。
@@ -97,7 +97,7 @@ pub fn spawn_kanade(
 ///
 /// 本番は UI スレッドの毎フレーム結線（`areka_runtime::frame`）が受信端を持ち、通知 1 件で
 /// 全ゴースト窓を閉じる。ゴーストの終了挨拶が終わってから窓が消えるという順序は、この通知が
-/// **終了系列の完了後**に出ることで成立する（R15.4）。
+/// **終了系列の完了後**に出ることで成立する。
 ///
 /// 翻訳の口は素通し（[`TranslateSeams::passthrough`]）を渡す（[`spawn_kanade_translating`] の薄い包み）。
 pub fn spawn_kanade_with_stop_sink(
@@ -133,13 +133,10 @@ pub fn spawn_kanade_translating(
         // 台詞の切れ目の口の返信端。結果が出るまでメッセージをまたいで 1 本だけ持つ。
         let mut gap_reply: Option<ReplySender<TalkGap>> = None;
         run_inbox::<KanadeMsg, Infallible>(rx, move |msg| {
-            // 汎用の通知の入口の返信端と、返事の材料（名前・許可表に在るか）。運行表へ渡す前に控える。
             let mut raise_reply: Option<(ReplySender<RaiseOutcome>, String, bool)> = None;
-            // SSTP の 2 つの入口の返信端と受け付けの判定。これも運行表へ渡す前に控える。
             let mut sstp_reply: Option<SstpReply> = None;
-            // 通信中の数はどのメッセージの処理よりも先に写す（新しい kanade も Boot の前に読む＝要件 2.6・5.1）。
+            // 通信中の数はどのメッセージの処理よりも先に写す（新しい kanade も Boot の前に読む）。
             sync_online(config.online, &mut state);
-            // 停止規約: Close は step を経ず即時 Break（積み残しは rx drop で破棄）。
             let input = match msg {
                 KanadeMsg::Close => {
                     tracing::info!(target: "kanade", event = "close", "停止指示（Close）を受領——即時停止");
@@ -151,7 +148,6 @@ pub fn spawn_kanade_translating(
                     crate::actor_resources::answer(&state, &shiori, ids, reply);
                     return Ok(ControlFlow::Continue(()));
                 }
-                // 実行の状態の問い合わせも step を経ずその場で答える（運行は 1 歩も進めない）。
                 KanadeMsg::StatusQuery { reply } => {
                     answer_status(&state, reply);
                     return Ok(ControlFlow::Continue(()));
@@ -164,7 +160,7 @@ pub fn spawn_kanade_translating(
                 KanadeMsg::ForceQuit { reason } => Input::ForceQuit { reason },
                 KanadeMsg::ShioriDown { kind, reason } => Input::ShioriDown { kind, reason },
                 KanadeMsg::Mouse(m) => Input::Mouse(m),
-                // 選択系 2 入力（additive・Req 4.4）。境界型をそのまま状態機械の入力へ写す
+                // 選択系 2 入力（additive）。境界型をそのまま状態機械の入力へ写す
                 // （シェルは判断しない——受領検証・帳簿確立は schedule 層の責務）。
                 KanadeMsg::Choice(c) => Input::Choice(c),
                 KanadeMsg::Anchor(a) => Input::Anchor(a),
@@ -187,7 +183,6 @@ pub fn spawn_kanade_translating(
                     method,
                     reply,
                 } => {
-                    // 許可表の照合は運行表（`on_raise_event`）と同じ関数で行う。
                     raise_reply = reply.map(|tx| {
                         let allowed = crate::schedule::events::allowed_static(&id).is_some();
                         (tx, id.clone(), allowed)
@@ -204,7 +199,6 @@ pub fn spawn_kanade_translating(
                 }
                 KanadeMsg::ExecutionState(update) => Input::ExecutionState(update),
                 KanadeMsg::BalloonTimeout { talk_id } => Input::BalloonTimeout { talk_id },
-                // SSTP の 2 つの入口: 受け付けの判定は運行表の腕と同じ関数で、渡す前の状態で控える。
                 KanadeMsg::SstpSend {
                     script,
                     strict,
@@ -232,7 +226,6 @@ pub fn spawn_kanade_translating(
                     Input::PropertyEvent { id, references }
                 }
             };
-            // 最初の往復の写し（台本の複製）は返事を待つ入口が在るときだけ作る。
             let wants_first = raise_reply.is_some() || sstp_reply.is_some();
             let (flow, first_reply) = drive_translating(
                 &mut state,
@@ -302,7 +295,7 @@ fn drive(
     (flow, first.map(|f| f.raise_outcome()))
 }
 
-/// DD-2 同期往復ループ: `step` の Action バッチを全実行し、最後の往復の結果のみを再投入して
+/// 同期往復ループ: `step` の Action バッチを全実行し、最後の往復の結果のみを再投入して
 /// Actions が尽きるまで反復する（execute-batch/reinject-last）。入れ直すものが SHIORI の応答なら
 /// `Input::ShioriReply`、翻訳の結果なら `Input::TranslateDone` を入れる。
 ///
@@ -320,13 +313,12 @@ fn drive_translating(
     seams: &TranslateSeams,
     wants_first: bool,
 ) -> (Drive, Option<FirstReply>) {
-    // 終了原因の受け渡し（R15.3）: [`Action::StopSelf`] は必ず `Unloading{cause}` からの遷移で
+    // 終了原因の受け渡し: [`Action::StopSelf`] は必ず `Unloading{cause}` からの遷移で
     // 生まれる（発行点は `schedule::unloading_reply` の 1 箇所だけで、そこへ入れるのは
     // `Phase::Unloading` の先行アームだけ）。その遷移で `Phase` は `Stopped` へ書き換わり原因が
     // 消えるため、**step へ渡す直前**の運行状態から原因を控えておき、StopSelf の実行点で通知へ載せる。
     // 切替の中身（帳簿の `change`）も同じ時点で控える（原因と中身が別の時点の状態を指さない）。
     let mut term = (stop_cause_of(state), handoff_of(state));
-    // 初回 step。以降は state を差し替えつつ actions を回す。
     let (mut st, mut actions) = step(std::mem::replace(state, State::initial()), input, config);
     let mut first_batch = true;
     let mut first_reply = None;
@@ -355,17 +347,14 @@ fn drive_translating(
             *state = st;
             return (Drive::Stop, first_reply);
         }
-        // 往復の結果を再投入して次の遷移を得る（Actions が尽きるまで反復）。origin を転記する。
         let input = match (last_reply, translated) {
             (Some((outcome, origin)), _) => Input::ShioriReply { outcome, origin },
             (None, Some(result)) => Input::TranslateDone(result),
-            // バッチに往復が無い＝この入力の処理は完了。
             (None, None) => {
                 *state = st;
                 return (Drive::Continue, first_reply);
             }
         };
-        // 停止の原因と切替の中身は、どちらの再投入でも step へ渡す直前の状態から控える。
         term = (stop_cause_of(&st), handoff_of(&st));
         let (s, a) = step(st, input, config);
         st = s;
@@ -373,7 +362,7 @@ fn drive_translating(
     }
 }
 
-/// 通信中の数を読み、運行状態の写しと違えば写す（運行表はグローバルを読まない・殻の 1 か所＝要件 2.5・2.6・5.2）。
+/// 通信中の数を読み、運行状態の写しと違えば写す（運行表はグローバルを読まない・殻の 1 か所）。
 fn sync_online(online: &OnlineCounter, state: &mut State) {
     let online = online.is_online();
     if state.external.online != online {
@@ -451,7 +440,7 @@ fn send_gap_reply(reply: Option<ReplySender<TalkGap>>, outcome: TalkGap) {
 /// Action バッチ 1 回分の実行結果（[`drive_translating`] の反復条件）。
 struct BatchResult {
     /// バッチ中で最後に発生した SHIORI 往復の応答と、その応答が由来する呼出イベント ID
-    /// （origin・DD-IE-3）。`None` はバッチに SHIORI 往復が無かったこと（＝再投入しない）を表す。
+    /// （origin）。`None` はバッチに SHIORI 往復が無かったこと（＝再投入しない）を表す。
     last_reply: Option<(ShioriOutcome, &'static str)>,
     /// バッチの最後の往復が翻訳の依頼（[`Action::Translate`]）だったときの結果。`last_reply` とは
     /// 同時に `Some` にならない（後に実行した往復の方だけを残す）。
@@ -463,17 +452,17 @@ struct BatchResult {
 /// Action バッチを**先頭から順に全て実行**する（execute-batch/reinject-last の execute 側）。
 ///
 /// [`drive_translating`] の反復本体から切り出してあるのは、[`Action`] → [`TalkCommand`] 写像を発行点
-/// （選択調停・タイムアウト解除）と切り離して実行で檻に入れられるようにするためである（design C6）。
+/// （選択調停・タイムアウト解除）と切り離して実行で檻に入れられるようにするためである。
 ///
-/// # talk 指示 3 形の写像（design C6・DD-5・Req 5.6）
+/// # talk 指示 3 形の写像
 /// [`Action::StartTalk`]／[`Action::ResolveChoice`]／[`Action::CancelChoice`] はそれぞれ
 /// [`TalkCommand::Start`]／[`TalkCommand::ResolveChoice`]／[`TalkCommand::CancelChoice`] へ
 /// **そのまま包んで**同一チャンネルへ送出する（値の解釈・書き換えをしない）。起動系と解決系を
 /// 別チャンネルへ分けないことが順序保存の契約であり、状態機械が 1 バッチで並べた順序が
 /// そのまま下流で観測される。送出失敗は [`send_talk_command`] が `error!` を残し**運行は継続**
-/// する——バッチも中断しない（design「Error Strategy」: 選択・再生の失敗でゴーストを終了させない）。
+/// する——バッチも中断しない（選択・再生の失敗でゴーストを終了させない）。
 ///
-/// # 停止通知（R15.3・design D15 の 2）
+/// # 停止通知
 /// `stop_sink` が `Some` のとき、[`Action::StopSelf`] の実行点で [`KanadeNotice::Stopped`] を
 /// 1 度だけ送る。[`Action::Notice`] はそのままの値で同じ送出端へ流す（[`send_notice`]）。
 /// `term` は呼び手（[`drive_translating`]）が step へ渡す直前の運行状態から控えた（原因, 切替の中身）である。
@@ -514,7 +503,7 @@ fn execute_batch(
             }
             Action::ShioriRequest(call) => {
                 // 送出前に call のイベント ID を控える（round_trip_request が call を消費するため）。
-                // origin は `&'static str` 契約を維持する（DD-1）: スケジューラ起源は固定 ID を
+                // origin は `&'static str` 契約を維持する: スケジューラ起源は固定 ID を
                 // そのまま転記し、選択起源（任意名・`&'static` にできない）は固定ラベル
                 // `"OnChoiceEvent"` を載せる（ログ／防御用。選択応答のルーティングは帳簿照合が正）。
                 let origin = match &call {
@@ -536,7 +525,7 @@ fn execute_batch(
                 last_reply = None;
             }
             Action::ResourceOutcome { id, outcome } => {
-                // リソース照会結果を注入クロージャへ**同期的に**渡す（返るまで次段へ進まない・R4.1）。
+                // リソース照会結果を注入クロージャへ**同期的に**渡す（返るまで次段へ進まない）。
                 // 副作用は sink 内部（ghost の publish＋barrier）——talk は生成しない（Invariant）。
                 // last_reply は変えない（SHIORI 往復ではないため再投入対象にならない）。
                 resource_sink(id, outcome);
@@ -549,9 +538,8 @@ fn execute_batch(
             }
             Action::Notice(notice) => send_notice(stop_sink, notice),
             Action::StopSelf => {
-                // 終了系列完了: shiori へ Close を送り自身も停止する。
                 let _ = shiori.send(ShioriMsg::Close);
-                // 終了系列の完了を UI へ 1 度だけ知らせる（R15.3）。shiori を畳んだ**後**に置く
+                // 終了系列の完了を UI へ 1 度だけ知らせる。shiori を畳んだ**後**に置く
                 // ——受け手はこの通知で窓を閉じるので、通知が先に出ると解放より先に窓が消え得る。
                 notify_stop(stop_sink, term.0, term.1);
                 return BatchResult {
@@ -592,30 +580,29 @@ fn execute_actions(
     )
 }
 
-/// GET／NOTIFY の同期往復。SHIORI へ出る**唯一の実行点**であり（本番・mock 双方が必ず通る・
-/// DD-IT-7）、送出前に送出イベント ID が**出所カテゴリごとの受理規則**を満たすことを検証する
-/// egress チョークポイントである（Req2.6／2.9／3.1・design C6・DD-2）。
+/// GET／NOTIFY の同期往復。SHIORI へ出る**唯一の実行点**であり（本番・mock 双方が必ず通る）。
+/// 送出前に送出イベント ID が**出所カテゴリごとの受理規則**を満たすことを検証する
+/// egress チョークポイントである。
 ///
-/// - 受理されない ID（スケジューラ起源の `OnTalk`／`OnHour` 等・Req3.2、選択起源の `On` 非接頭・
-///   Req2.6）: SHIORI へ**送出せず** `error!`（event=`event_id_not_allowed`）を残し、内部規律違反の
-///   失敗語彙 `ShioriOutcome::Failed(ShioriFailure::Internal(..))` を返す（DD-IT-11・状態機械は
+/// - 受理されない ID（スケジューラ起源の `OnTalk`／`OnHour` 等、選択起源の `On` 非接頭）:
+///   SHIORI へ**送出せず** `error!`（event=`event_id_not_allowed`）を残し、内部規律違反の
+///   失敗語彙 `ShioriOutcome::Failed(ShioriFailure::Internal(..))` を返す（状態機械は
 ///   既存の fault 経路で処理＝檻専用の応答を発明しない・panic しない・宙吊りにしない）。
 /// - 許可集合内: 送出前に Method・イベント ID・参照値・実行状態の wire 証跡を `trace!`（event=
-///   `shiori_request`）で残して送出する（Req6.2）。往復失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
+///   `shiori_request`）で残して送出する。往復失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
 /// - SHIORI のエラー応答（`Failed(ShioriFailure::Shiori)`）は、GET なら `NoContent`、NOTIFY なら
 ///   `Notified` に写して返し、`warn!`（event=`shiori_error_response`）を 1 件残す（会話を続ける）。
 ///
 /// 検査と送出は [`round_trip_raw`] が受け持ち、ここはエラー応答の写しだけを足す。
 pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome {
-    // エラー応答の記録に載せるため、call を渡す前に種別と ID を控える（固定 ID なら複製は無料）。
     let (method, event_id) = match &call {
         ShioriCall::Get { id, .. } => ("GET", id.clone()),
         ShioriCall::Notify { id, .. } => ("NOTIFY", id.clone()),
     };
     let outcome = round_trip_raw(shiori, call);
 
-    // エラー応答（400・500 など）は致命の失敗にせず「返事なし」に写す（shiori-fault-notice
-    // 要件 6.1・裁定 3）: GET は 204 相当の NoContent、NOTIFY は Notified として再投入する。
+    // エラー応答（400・500 など）は致命の失敗にせず「返事なし」に写す。
+    // GET は 204 相当の NoContent、NOTIFY は Notified として再投入する。
     // 運行表は応答が GET か NOTIFY かを知らないので、種別を知るここで写す。回数の閾値は置かない。
     // 他の 4 種（接続・期限切れ・通信・内部）は Failed のまま（Fault の判断は運行表のまま）。
     match outcome {
@@ -651,8 +638,7 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
         return refused;
     }
     clean_references(&mut call);
-    // 送出しようとしているイベントの Method／ID（出所カテゴリ込み）／参照値／実行状態を取り出す。
-    // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
+    // `status.render()` は `None` ⇔ Status ヘッダ行なし。
     let (method, event_id, references, status_wire) = match &call {
         ShioriCall::Get {
             id,
@@ -665,11 +651,10 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
             status,
         } => ("NOTIFY", id, references, status.render()),
     };
-    // ログ証跡は wire 形（[`EventId::as_str`]）で残す——出所カテゴリは表現を変えない（DD-1）。
+    // ログ証跡は wire 形（[`EventId::as_str`]）で残す——出所カテゴリは表現を変えない。
     let id = event_id.as_str();
 
-    // 送出前の wire 証跡（Req6.2）。status=None は Status ヘッダ欠落として観測可能（DD-IT-5）。
-    // 出どころの 3 項目は SHIORI の回り役が入れ物を作るのと同じ規則から導く（要件 2.1〜2.6）。
+    // 出どころの 3 項目は SHIORI の回り役が入れ物を作るのと同じ規則から導く。
     let origin_wire = crate::request_origin::RequestOrigin::of_event(event_id).wire();
     tracing::trace!(
         target: "kanade",
@@ -695,16 +680,16 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
     )
 }
 
-/// ID 受理檻（Req2.6/2.9/3.1/3.2/4.1・design C6・DD-2・DD-IT-7/DD-IT-11）: 受理されない ID は
+/// ID 受理檻: 受理されない ID は
 /// 送出せず内部規律違反として `Some(Failed(Internal))` を返す。送出可否は**出所カテゴリ別**に判定する。
 ///
 /// - どの出所でも、ID の綴りに CR・LF・NUL があれば断る（頭書きの行を切らない・名前は変えない）。
 /// - スケジューラ起源（`Static`）: 従来どおり「イベント許可 ∨ リソース許可」の論理和——固定表
 ///   （`ALLOWED_EVENT_IDS`）と別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`）。
-///   `OnTalk`／`OnHour` の恒久禁止（自発生成との二重駆動）はこちら側で**不変**（Req3.2）。
+///   `OnTalk`／`OnHour` の恒久禁止（自発生成との二重駆動）はこちら側で**不変**。
 /// - 選択起源（`Choice`）: `is_allowed_choice_event`（`On` 接頭のみ）。作者が `\q` の ID に書いた
 ///   名前を事前登録なしに逐語で発火するため固定表を要求せず、スケジューラ起源の恒久禁止も
-///   適用しない（Req2.9・裁定 8＝両禁止規則は非交差）。
+///   適用しない（両禁止規則は非交差）。
 fn refuse_unless_allowed(call: &ShioriCall) -> Option<ShioriOutcome> {
     let (ShioriCall::Get {
         id: event_id,
@@ -730,7 +715,6 @@ fn refuse_unless_allowed(call: &ShioriCall) -> Option<ShioriOutcome> {
             EventId::Sstp(name) | EventId::Property(name) => {
                 crate::sstp::validate_notify(name, references).is_ok()
             }
-            // 翻訳の要求: 今の `Static("OnTranslate")` と同じ（許可表の `OnTranslate`）。
             EventId::Translate(_) => crate::schedule::events::is_allowed_event_id("OnTranslate"),
         };
     if allowed {
@@ -789,7 +773,7 @@ fn round_trip_unload(shiori: &Sender<ShioriMsg>) -> ShioriOutcome {
 }
 
 /// 送出＋応答受領の共通往復。shiori 切断（送出 Err）・応答 oneshot 切断（`ReplyError::Dropped`）を
-/// いずれも error!＋`ShioriOutcome::Failed(ShioriFailure::Ipc)` へ写像する（Req 6.2/6.3・宙吊りなし）。
+/// いずれも error!＋`ShioriOutcome::Failed(ShioriFailure::Ipc)` へ写像する（宙吊りなし）。
 /// 失敗の後どうするかは呼び手が決める（例: 会話の道は再投入した Failed で状態機械を Unloading{Fault}
 /// へ倒し、照会の道は `ResourceOutcome::Failed` として返すだけ）。
 fn round_trip(
@@ -818,15 +802,14 @@ fn round_trip(
     }
 }
 
-/// talk 再生系へ [`TalkCommand`] を送出する**唯一の実行点**（design C6・Req 5.6）。
+/// talk 再生系へ [`TalkCommand`] を送出する**唯一の実行点**。
 ///
 /// 送出失敗（sakura／中継の切断）は `error!`（event=`talk_command_send_failed`）を残したうえで
 /// **運行を継続する**——当該指示は不成立（起動なら talk が起きず TalkDone も来ない・解決なら
 /// バリアが解けない）だが、選択・再生の失敗でゴーストを終了させないという既存の起動失敗規律と
-/// 同一の扱いである（design「Error Strategy」・steering: areka-log-first-no-silent-failure）。
+/// 同一の扱いである。
 /// 種別は `kind` フィールドで区別でき、沈黙の失敗経路は持たない。
 fn send_talk_command(sakura: &Sender<TalkCommand>, command: TalkCommand) {
-    // ログ用の種別ラベル（送出で command が消費されるため先に取り出す）。
     let (kind, talk_id) = match &command {
         TalkCommand::Start(start) => ("start", start.talk_id.0),
         TalkCommand::ResolveChoice { talk_id, .. } => ("resolve_choice", talk_id.0),
@@ -847,44 +830,44 @@ fn send_talk_command(sakura: &Sender<TalkCommand>, command: TalkCommand) {
 #[path = "actor_tests.rs"]
 pub(crate) mod tests;
 
-// 停止通知の発行点そのものの檻（areka-P0-emo2-conformance-e2e R15.3）。
+// 停止通知の発行点そのものの檻。
 // 発行は呼出スレッドで同期に走る素の関数ゆえ、スレッドローカルの捕捉窓で観測できる
 // （アクタースレッドを跨がない＝全スレッド捕捉の窓口を要さない）。
 #[cfg(test)]
 #[path = "actor_stop_notify_tests.rs"]
 mod stop_notify_tests;
 
-// エラー応答の写しの檻（shiori-fault-notice 要件 6.1・7.3）。
+// エラー応答の写しの檻。
 #[cfg(test)]
 #[path = "actor_error_response_tests.rs"]
 mod error_response_tests;
 
-// 送る点の頭書きの守りの檻（要件 9.2）。
+// 送る点の頭書きの守りの檻。
 #[cfg(test)]
 #[path = "actor_header_guard_tests.rs"]
 mod header_guard_tests;
 
-// 汎用の通知の入口の返事の檻（areka-P0-ghost-install 要件 2.6・2.7・11.5・12.6）。
+// 汎用の通知の入口の返事の檻。
 #[cfg(test)]
 #[path = "actor_raise_reply_tests.rs"]
 mod raise_reply_tests;
 
-// 台詞の切れ目の口の返信端の檻（areka-P0-shell-balloon-switch 要件 1.14・2.3・5.7・8.11）。
+// 台詞の切れ目の口の返信端の檻。
 #[cfg(test)]
 #[path = "actor_talk_gap_tests.rs"]
 mod talk_gap_tests;
 
-// SSTP の 2 つの入口の返事の檻（areka-P0-mcp-kanade-tools 要件 1.3・2.3・3.6）。
+// SSTP の 2 つの入口の返事の檻。
 #[cfg(test)]
 #[path = "actor_sstp_tests.rs"]
 mod sstp_tests;
 
-// 殻が通信中の数を毎メッセージ読んで写しへ渡すことの檻（areka-P0-status-execution-states 要件 2.5・2.6・5.1）。
+// 殻が通信中の数を毎メッセージ読んで写しへ渡すことの檻。
 #[cfg(test)]
 #[path = "actor_online_tests.rs"]
 mod online_tests;
 
-// バッチ実行の翻訳の腕が入れ直すものを決めることの檻（areka-P0-translate-pipeline）。
+// バッチ実行の翻訳の腕が入れ直すものを決めることの檻。
 #[cfg(test)]
 #[path = "actor_translate_batch_tests.rs"]
 mod translate_batch_tests;

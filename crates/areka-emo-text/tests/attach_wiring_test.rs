@@ -1,16 +1,13 @@
-//! # attach_wiring_test — 予約スロットへの装着配線の統合テスト（R9.1/R9.2/R9.5）
-//!
-//! 出典 spec: `areka-P0-emo-text-layer`（断りの無い要件の番号と design.md の参照はこの spec のもの・別の spec のものはその場で名を書く）。
+//! # attach_wiring_test — 予約スロットへの装着配線の統合テスト
 //!
 //! 2 つの target（sakura/kero 相当）を実 `EmoPresenter` に登録して表示を確立し、
-//! `text_slot_view(target)`（emo-present の読み取り専用 additive 増分・R9.1/R9.2）で得た
-//! view を結線 API（`register_actor_view`——view → `TextSlotBinding` → routing 登録）で
-//! actor（\0／\1）へ振り分け（R9.5）、各 actor のテキストが対応するバルーンの予約スロット
-//! へ**独立に**描画されることを readback で検証する。
+//! `text_slot_view(target)` で得た view を結線 API（`register_actor_view`——view →
+//! `TextSlotBinding` → routing 登録）で actor（\0／\1）へ振り分け、各 actor のテキストが
+//! 対応するバルーンの予約スロットへ**独立に**描画されることを readback で検証する。
 //!
-//! - emo-present は読み取り消費のみ（TextSlotView 経由）——本テストは emo-present を改変しない。
-//! - GPU/WUC は headless 実資源（`GraphicsCore::new()`・presenter.rs テストと同一方針）。
-//! - 時刻は常に注入（`talk_time`）・実時間 sleep 不使用（決定論）。
+//! - emo-present は読み取り消費のみ（TextSlotView 経由）で改変しない。
+//! - GPU/WUC は headless 実資源（`GraphicsCore::new()`）。
+//! - 時刻は常に注入（`talk_time`）・実時間 sleep 不使用。
 
 #[path = "support/mod.rs"]
 mod support;
@@ -33,19 +30,18 @@ use bevy_ecs::prelude::World;
 use log_capture_kit::{ExpectField, capture, expect_one};
 use wintf::ecs::{DPI, GraphicsCommandList, VisualGraphics};
 
-/// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
+/// テスト用 cue（共有の間隔つき cue へ本ファイルの間隔を渡す）。
 fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
     support::cue(actor, at, command, 0.0)
 }
 
-// ── 合成入力の生成補助（presenter.rs テストと同技法・上流公開 API で本物を組む） ─────────
+// ── 合成入力の生成補助（上流公開 API で本物を組む） ─────────
 
 /// sakura/kero 相当の 2 target（原寸が異なる 2 バルーン）を表示確立まで組む。
 /// 返り値: (presenter, window0, window1)。原寸は target0=(140,80)・target1=(120,60)。
 fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
-    // 窓 entity には `DPI` component を**明示的に**載せる（areka-P0-emo-dpi-scaling task 3.2）。
-    // component 不在は `derive_scale` の縮退分岐（error! ＋ k=1.0）を通るため、不在に頼ると
-    // 縮退が正常経路になりすまして観測できない。作者基準 DPI 96 と揃えて k=1.0 を成立させる。
+    // 窓 entity には `DPI` component を明示的に載せる。不在だと `derive_scale` の縮退分岐
+    // （error! ＋ k=1.0）を通り、縮退が正常経路になりすまして観測できない。
     let window0 = world.spawn(DPI::from_dpi(96, 96)).id();
     let window1 = world.spawn(DPI::from_dpi(96, 96)).id();
 
@@ -54,8 +50,7 @@ fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
 
     let mut presenter = EmoPresenter::new();
     presenter
-        // 作者基準 DPI は正典既定の 96（ukadoc・`areka-P0-emo-dpi-scaling` design D1）。本番は boot が descript の実値を
-        // 供給する（本テストは窓 DPI 96 と揃えて k=1.0＝従来と同一の表示寸・描画結果）。
+        // 作者基準 DPI は正典既定の 96（ukadoc）。本番は boot が descript の実値を供給する。
         .attach_target(TargetId(0), window0, emo_world0, atlas0, 96);
     presenter.attach_target(TargetId(1), window1, emo_world1, atlas1, 96);
     show_surface(&mut presenter, world, TargetId(0));
@@ -63,35 +58,27 @@ fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
     (presenter, window0, window1)
 }
 
-// ── k≠1 の単一 target フィクスチャ（`areka-P0-emo-dpi-scaling` R8.2 の `from_view` 檻用） ─────────────────
+// ── k≠1 の単一 target フィクスチャ（`from_view` 檻用） ─────────────────
 
 /// k>1 檻の native 原寸（作者画像空間・k 不変であるべき寸）。
 ///
-/// 140/80 とも偶数ゆえ k=2 では `scaled_extent` が端数を作らない——本檻が問うのは丸めではなく
-/// 「**どちらの寸を読むか**」の向きゆえ、端数を混ぜて論点をぼかさない。
-/// 丸めそのもの（k<1 の衝突）の檻は [`SUB_UNITY_NATIVE`] 側が所有する。
+/// 140/80 とも偶数ゆえ k=2 では `scaled_extent` が端数を作らない。本檻が問うのは丸めでなく
+/// 「どちらの寸を読むか」の向きで、丸めは [`SUB_UNITY_NATIVE`] 側の檻が持つ。
 const SCALED_NATIVE: (u32, u32) = (140, 80);
 
 /// k<1 檻の native 原寸。
 ///
-/// # なぜこの値か——k<1 では順写像が**単射でない**
-///
-/// 丸め権威 `scale_len` は k=4/5 で `142 → round(113.6) = 114` と `143 → round(114.4) = 114`
-/// を返す。**異なる 2 つの原寸が同一の物理寸へ潰れる**のだから、物理寸から原寸を復元する
-/// 逆写像は原理的に存在し得ない——逆写像の導出はどちらか一方で必ず間違える。同様に 77 と 78 は
-/// ともに 62 へ潰れる。
-///
-/// k>1 でこれが起きないのは、順写像が拡大写像で異なる原寸が異なる物理寸へ分離されるからである
-/// （縮小写像である k<1 のみ鳩ノ巣で衝突する）。ゆえに「k≥1 で緑」は k<1 の証拠にならない。
-///
-/// 逆写像の導出に戻すと、この (142, 77) は (143, 78) を返して落ちる。
+/// k<1 の順写像は単射でない。丸め権威 `scale_len` は k=4/5 で `142 → round(113.6) = 114` と
+/// `143 → round(114.4) = 114` を返し（77 と 78 もともに 62）、異なる原寸が同じ物理寸へ潰れる。
+/// 物理寸から原寸を復元する逆写像は原理的に存在せず、逆写像で導くと (142, 77) は (143, 78)
+/// を返して落ちる。k>1 は拡大写像で原寸が分離するので衝突せず、「k≥1 で緑」は k<1 の証拠にならない。
 const SUB_UNITY_NATIVE: (u32, u32) = (142, 77);
 
 /// 窓 DPI を指定して balloon 相当の単一 target（native 原寸 [`SCALED_NATIVE`]）を表示確立まで組む。
 ///
-/// 作者基準 DPI は正典既定の 96（ukadoc・`areka-P0-emo-dpi-scaling` design D1）ゆえ **k = window_dpi / 96**（192 → k=2）。
-/// `setup_two_targets` は k=1.0 に固定されており、k=1 では `surface_size()` と `physical_size()`
-/// が恒等で**取り違えが数値的に観測できない**——本フィクスチャはその盲点を潰すためにある。
+/// 作者基準 DPI は正典既定の 96（ukadoc）ゆえ **k = window_dpi / 96**（192 → k=2）。
+/// `setup_two_targets` は k=1.0 固定で、k=1 では `surface_size()` と `physical_size()` が恒等に
+/// なり取り違えが観測できない。本フィクスチャはその盲点を潰す。
 fn setup_scaled_target(world: &mut World, window_dpi: u16) -> (EmoPresenter, Entity) {
     setup_target_with_dpis(world, window_dpi, 96, SCALED_NATIVE)
 }
@@ -115,20 +102,12 @@ fn setup_target_with_dpis(
     (presenter, window)
 }
 
-// ── ログ捕捉（`areka-P0-emo-dpi-scaling` R8.7 の観測・共有機構 `log-capture-kit` を統合テストからそのまま引く） ──
+// ── ログ捕捉（共有機構 `log-capture-kit` を統合テストからそのまま引く） ──
 //
-// 捕捉窓・常駐の仕掛け・空振り検出はすべて `log_capture_kit::capture` が持つ。統合テスト
-// （`tests/`）は消費 crate の外側から `use` する別 crate だが、引き方は in-crate テストと
-// 同一で、`[dev-dependencies]` に kit を 1 行足すだけでよい（本ファイルがその実例である）。
-//
-// **素朴な `tracing::subscriber::with_default` だけでは非決定的に取りこぼす**（本ファイルの
-// 旧ハーネスで再現率 12%）。`with_default` が差し替えるのはスレッドローカルの既定 dispatcher
-// だけで、「そのログを評価するか」を決める callsite の**有効判定（interest）キャッシュは
-// プロセス全体で 1 つ**しかなく、最初に踏んだスレッドの判定が焼き付く——捕捉窓を持たない
-// 別テストが当該発行点を先に踏むと `NoSubscriber` → `never` が大域へ焼き付き、以後は自分の
-// スレッドへ捕捉先を差していてもイベントが捨てられる。kit は ⑴ probe の常駐 ⑵ 窓の内側での
-// 有効判定の再計算 ⑶ 番兵イベントによる空振り検出、の 3 点でこれを塞ぐ（機序の逐条解説は
-// `log_capture_kit` の crate doc と同 crate の `src/probe.rs`）。
+// 素朴な `tracing::subscriber::with_default` だけではログを非決定的に取りこぼす。callsite の
+// 有効判定（interest）キャッシュはプロセス全体で 1 つで、捕捉窓を持たない別テストが先に踏むと
+// `never` が焼き付くため。kit が probe の常駐・窓内での再計算・番兵イベントによる空振り検出で
+// 塞ぐ（詳細は `log_capture_kit` の crate doc）。
 
 // ── 共通補助 ─────────────────────────────────────────────────────────────────────────
 
@@ -143,19 +122,19 @@ fn geo_model() -> BalloonModel {
     )
 }
 
-// ══ 観測可能な完了状態: 2 target 結線シナリオで actor 別バルーンへ独立描画（R9.5） ══
+// ══ 2 target 結線シナリオで actor 別バルーンへ独立描画 ══
 
 /// \0/\1 の 2 actor を sakura/kero 相当の 2 target へ振り分けて装着し、
 /// (1) 実 sink→UI ドレイン→状態→フレーム提示の通し結線で両バルーンにインクが載る、
 /// (2) 各 actor の供給面が対応 target のバルーン原寸（validrect 全域）に一致する、
-/// (3) 両スロットに有効 brush が装着され GraphicsCommandList は不挿入（R9.1/R9.3 構造）、
+/// (3) 両スロットに有効 brush が装着され GraphicsCommandList は不挿入（構造）、
 /// (4) \0 への後続 cue が \1 の描画へ一切波及しない（独立性・バイト同一）——を檻化する。
 #[test]
 fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
     let mut world = make_world_with_gpu();
     let (presenter, window0, window1) = setup_two_targets(&mut world);
 
-    // ── R9.1/R9.2: 公開経路（text_slot_view）で予約スロットへ到達する ──
+    // ── 公開経路（text_slot_view）で予約スロットへ到達する ──
     let view0 = presenter
         .text_slot_view(TargetId(0))
         .expect("表示確立後の text_slot_view(0) は Some");
@@ -172,7 +151,7 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
     assert_eq!(view0.surface_size(), (140, 80));
     assert_eq!(view1.surface_size(), (120, 60));
 
-    // ── R9.5: 結線（actor→target 対応は結線側所有・view→binding→routing 登録） ──
+    // ── 結線（actor→target 対応は結線側所有・view→binding→routing 登録） ──
     let sakura = ActorKey::from("0");
     let kero = ActorKey::from("1");
     let model = geo_model();
@@ -227,7 +206,7 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
     assert!(ink0 > 0, "\\0 のテキストが対応バルーンへ描画される");
     assert!(ink1 > 0, "\\1 のテキストが対応バルーンへ描画される");
 
-    // 装着の構造契約（R9.1/R9.3）: 両スロットに有効 brush・GraphicsCommandList 不挿入。
+    // 装着の構造契約: 両スロットに有効 brush・GraphicsCommandList 不挿入。
     for (name, slot) in [("slot0", view0.slot()), ("slot1", view1.slot())] {
         let vg = world
             .get::<VisualGraphics>(slot)
@@ -348,30 +327,24 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
     );
 }
 
-// ══ `TextSlotBinding::from_view` は **物理寸**を読む（native ではない・`areka-P0-emo-dpi-scaling` R8.2） ══
+// ══ `TextSlotBinding::from_view` は **物理寸**を読む（native ではない） ══
 
 /// **production 契約の檻**（`from_view` が物理寸を読むことを確かめる正本）。
 ///
-/// # なぜ in-crate では檻に入らないのか
-///
-/// [`TextSlotBinding::from_view`] の入力 `TextSlotView` は emo-present の**私有フィールド型**で
+/// [`TextSlotBinding::from_view`] の入力 `TextSlotView` は emo-present の私有フィールド型で
 /// 公開コンストラクタを持たず、唯一の構築点が `EmoPresenter::text_slot_view`（実 GPU 表示確立が
-/// 前提）である。ゆえに `surface_size()`（native）を渡す**旧実装へ戻す変異**は
-/// `cargo test -p areka-emo-text` の全 in-crate ターゲットで誰にも殺されない。
-/// 本ケースは実 presenter から得た本物の view でその向きを固定する。
+/// 前提）である。ゆえに `surface_size()`（native）を渡す旧実装へ戻す変異は in-crate のテストでは
+/// 殺されない。本ケースは実 presenter から得た本物の view でその向きを固定する。
 ///
-/// # なぜ k=2（窓 DPI 192／author 96）でなければならないのか
-///
-/// k=1 では `surface_size() == physical_size()` が**恒等**であり、正しい実装と旧実装が
-/// 数値的に区別できない（＝檻が空虚になる）。既存の `setup_two_targets` は k=1.0 固定ゆえ
-/// この盲点をそのまま踏んでいた。
+/// k=2（窓 DPI 192／author 96）にするのは、k=1 では `surface_size() == physical_size()` が
+/// 恒等で正しい実装と旧実装を区別できず、檻が空虚になるため。
 ///
 /// 檻の内容は 3 点:
 /// 1. `binding.surface_size == view.physical_size()`（物理原寸を保持する）、
 /// 2. `binding.image_size == view.surface_size()`（image px 原寸＝作者画像空間は **k 不変**）、
-/// 3. 供給面の実寸が `ceil(validrect 寸 × k)`＝native の k 倍（`areka-P0-emo-dpi-scaling` R8.2 の可観測な帰結）。
+/// 3. 供給面の実寸が `ceil(validrect 寸 × k)`＝native の k 倍（可観測な帰結）。
 ///    旧実装では image 空間が 1/k へ縮み、供給面が k に依らずほぼ一定になる——「k を変えても
-///    文字が拡大されない」静かな欠陥（`areka-P0-emo-dpi-scaling` の実機走行で見つかった症状）そのもの。
+///    文字が拡大されない」静かな欠陥（実機走行で見つかった症状）そのもの。
 #[test]
 fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
     let mut world = make_world_with_gpu();
@@ -403,7 +376,7 @@ fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
         "image px 原寸は view の native をそのまま透過する（作者画像空間＝k 不変）"
     );
 
-    // ── 檻 (3): 供給面の実寸が k 倍で伸びる（`areka-P0-emo-dpi-scaling` R8.2 の可観測な帰結） ──
+    // ── 檻 (3): 供給面の実寸が k 倍で伸びる（可観測な帰結） ──
     let model = geo_model();
     let sakura = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -423,28 +396,21 @@ fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
 
 /// **k<1 の 1px 往復欠陥の回帰檻**（実 presenter 経路）。
 ///
-/// # 何を守っているか
+/// 旧実装は image px 原寸を `round(physical_size / k)` と逆写像で復元していた。k<1 の順写像は
+/// 縮小写像で単射でなく（[`SUB_UNITY_NATIVE`] の doc 参照）、潰れた情報は割り算で戻せないため、
+/// どちらか一方の原寸で必ず 1px 間違える。
 ///
-/// 旧実装は image px 原寸を `round(physical_size / k)` と**逆写像で復元**していた。しかし
-/// k<1 の順写像は**縮小写像＝単射でない**（[`SUB_UNITY_NATIVE`] の doc 参照: 142 と 143 が
-/// ともに物理 114 へ潰れる）。潰れた情報を割り算で取り戻すことはできず、旧実装はどちらか
-/// 一方の原寸で必ず 1px 間違える。k>1 で表面化しないのは拡大写像が原寸を分離するからにすぎない。
+/// 作者 DPI 120／窓 DPI 96（k=4/5）で native [`SUB_UNITY_NATIVE`]=(142,77) を通し、
+/// `binding.image_size` が (142,77) のままであることを固定する。逆写像を復活させると (143,78)
+/// になり落ちる。
 ///
-/// 本ケースは作者 DPI 120／窓 DPI 96（k=4/5）で native [`SUB_UNITY_NATIVE`]=(142,77) を通し、
-/// `binding.image_size` が **(142,77) のまま**であることを実 presenter 経由で固定する。
-/// 逆写像を復活させると (143,78) になり落ちる（＝逆写像の実装への排他キル）。
+/// k>1 の兄弟檻 `from_view_reads_physical_size_so_image_space_stays_k_invariant` では足りない。
+/// k≥1 は逆写像でも厳密に復元するので丸めの破れが起きない。k<1 は実機サインオフ
+/// （125%/200%＝k>1）も通らず、休眠していたのは同梱 emo2 fixture が DPI を宣言しない（＝96）
+/// データ上の偶然にすぎなかった。
 ///
-/// # なぜ k>1 の兄弟檻では足りなかったか
-///
-/// `from_view_reads_physical_size_so_image_space_stays_k_invariant` は k=2 で「どちらの寸を
-/// 読むか」の**向き**を固定するが、k≥1 では逆写像も厳密に復元するため**丸めの破れは起きない**。
-/// k<1 は `areka-P0-emo-dpi-scaling` のどの檻も実機サインオフ（125%/200%＝k>1）も通っておらず、休眠していたのは
-/// 同梱 emo2 fixture が DPI を宣言しない（＝96）という**データ上の偶然**にすぎなかった。
-///
-/// # 本番到達性
-///
-/// `parse_author_dpi` は宣言値を素通しする（対照表外の任意値も切り捨てない）。ゆえに
-/// `dpi,120` を宣言したサードパーティ製ゴーストを 100% 表示のモニタに出せば k=4/5 になる。
+/// `parse_author_dpi` は宣言値を素通しするので、`dpi,120` を宣言したゴーストを 100% 表示の
+/// モニタに出せば k=4/5 は本番でも到達する。
 #[test]
 fn from_view_keeps_image_size_exact_at_sub_unity_scale() {
     let mut world = make_world_with_gpu();
@@ -481,9 +447,9 @@ fn from_view_keeps_image_size_exact_at_sub_unity_scale() {
     );
 }
 
-// ══ k 再追従の**ログ観測契約**（`areka-P0-emo-dpi-scaling` R8.7・実機サインオフの判定源） ══
+// ══ k 再追従の**ログ観測契約**（実機サインオフの判定源） ══
 
-/// 再追従が決定論的に**ログで観測できる**ことを固定する（`areka-P0-emo-dpi-scaling` R8.7）。
+/// 再追従が決定論的に**ログで観測できる**ことを固定する。
 ///
 /// 実機サインオフは、これらのフィールドを grep して判定する:
 /// - 再追従 `info!`: `actor` ／ `k_old` ／ `k_new`（k の遷移そのもの）、
@@ -533,7 +499,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     let view2 = presenter.text_slot_view(TargetId(0)).expect("view（k=2）");
     assert_eq!(view2.scale(), 2.0, "前提: 再表示で適用 k が 2.0 へ跳ぶ");
 
-    // ── 再追従ログ: actor ／ k_old ／ k_new（`areka-P0-emo-dpi-scaling` R8.7 の本体） ──
+    // ── 再追従ログ: actor ／ k_old ／ k_new ──
     let (refreshed, refresh_events) = capture(|| rt.refresh_actor_scale(&sakura, &view2, &model));
     assert!(refreshed, "k 変化の再追従は true");
     let refresh_log = expect_one(&refresh_events, "文字層の再追従");

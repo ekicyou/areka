@@ -1,6 +1,4 @@
-//! 箱の束の受け取りと、箱を隠す印（要件 3.10・6.8）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//! 箱の束の受け取りと、箱を隠す印。
 //!
 //! 箱の束はテストの中に持つ surfaces.txt の文面を `parse_boxes` → `fold_boxes` で畳んで作る
 //! （検体は読まない）。箱の面の登録と装着は `actor_box_sync_tests.rs` が見るので、ここの `World` は
@@ -73,7 +71,7 @@ fn place(actor: &str, place: TextPlace) -> PlaceKey {
 }
 
 /// 箱の束を差し替えた直後: 箱の場所の文字は空、各スコープの今のサーフェス番号は保たれ、
-/// 行き先は新しい表での既定。普通のバルーンの場所には触れない（要件 6.8）。
+/// 行き先は新しい表での既定。普通のバルーンの場所には触れない。
 #[test]
 fn replacing_the_bundle_drops_box_text_keeps_surface_and_resets_destination() {
     let mut world = World::new();
@@ -180,7 +178,7 @@ fn hide_flag_is_per_scope_and_cleared_at_the_head_of_a_talk() {
     assert!(!rt.hidden_boxes.contains(&zero), "台詞の頭で下ろす");
 }
 
-/// フォントを探す場所の順は受け取った順のまま外から読める（要件 3.10）。差し替えると入れ替わる。
+/// フォントを探す場所の順は受け取った順のまま外から読める。差し替えると入れ替わる。
 #[test]
 fn font_search_dirs_are_readable_in_the_given_order() {
     let mut world = World::new();
@@ -205,15 +203,15 @@ fn font_search_dirs_are_readable_in_the_given_order() {
     assert_eq!(rt.box_font_dirs(), [PathBuf::from("other")].as_slice());
 }
 
-/// 箱 a（100×50）を `(x, y)` に置くシェルの文面（audit-emo-text-state-actor 指摘 1・要件 7）。
+/// 箱 a（100×50）を `(x, y)` に置くシェルの文面。
 fn shell_with_box_at(x: i64, y: i64) -> String {
     format!("balloon.a\n{{\nsize,100,50\n}}\nsurface0\n{{\nelement1,balloon,a,{x},{y}\n}}\n")
 }
 
 /// 置き場所に `i64::MAX` を含む箱でも、位置に大きさを足す 4 つの足し算（当たりの矩形の右と下・
-/// はみ出しの判断の x と y）は上限で止まる（`audit-emo-text-state-actor` 要件 7.1・7.2）: はみ出しの警告は 2 度の同期でちょうど
+/// はみ出しの判断の x と y）は上限で止まる: はみ出しの警告は 2 度の同期でちょうど
 /// 1 回出て、当たりの矩形は裏返らない。x だけ・y だけが上限の置き場所も並べるので、どの足し算を
-/// ただの足し算に戻しても、試験の作りではあふれて落ちる（`audit-emo-text-state-actor` 要件 7.3・y だけの置き場所は x 側が
+/// ただの足し算に戻しても、試験の作りではあふれて落ちる（y だけの置き場所は x 側が
 /// 収まるので `||` が y の足し算まで届く）。
 #[test]
 fn box_at_the_integer_max_site_warns_once_and_keeps_its_hit_rect_upright() {

@@ -1,4 +1,4 @@
-//! `BalloonSyncScaleState` の檻（shell-scale-linkage 要件 6.5・7.4）: 基準を入れ直すと前の指定が消え、
+//! `BalloonSyncScaleState` の檻: 基準を入れ直すと前の指定が消え、
 //! 入れ直さない巡は読まない。
 
 use std::collections::BTreeMap;

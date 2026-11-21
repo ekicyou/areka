@@ -1,9 +1,7 @@
-//! シェル・バルーンの切替の型（spec: areka-P0-shell-balloon-switch・runtime-module-untangle
-//! design「SkinSwitchTypes」）。
+//! シェル・バルーンの切替の型。
 //!
-//! 要求の入口（`shell_balloon_switch.rs`）から、本体を引かない型と Reference の組み立ての規則
-//! （[`skin_ref_name`]・[`skin_ref_path`]）だけを下ろした。`runtime` の中はここを直に引き、
-//! 入口は呼び手のために出し直す。
+//! 本体を引かない型と Reference の組み立ての規則（[`skin_ref_name`]・[`skin_ref_path`]）を置く。
+//! `runtime` の中はここを直に引き、要求の入口（`shell_balloon_switch.rs`）は呼び手のために出し直す。
 
 use std::path::Path;
 use std::sync::mpsc::Receiver;
@@ -34,7 +32,7 @@ pub enum SkinKind {
 /// 台本の `\![change,shell,名(,--option=raise-event)]`・`\![change,balloon,名]` から届く切替要求
 /// （受け口 `SwitchCueSink` が talk スレッドから送る）。名前は台本の字面のまま（無変形）。
 ///
-/// `raise_event` はシェルでだけ真になりうる（バルーンに「切り替え前」のイベントは無い・要件 1.4）。
+/// `raise_event` はシェルでだけ真になりうる（バルーンに「切り替え前」のイベントは無い）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkinRequestRaw {
     pub kind: SkinKind,
@@ -56,7 +54,7 @@ pub enum SkinOrigin {
     Menu,
 }
 
-/// 入口へ渡す切替要求（要件 1.1: 台本もメニューもこの 1 本を通る）。
+/// 入口へ渡す切替要求（台本もメニューもこの 1 本を通る）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkinRequest {
     pub kind: SkinKind,
@@ -68,19 +66,19 @@ pub struct SkinRequest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkinVerdict {
     Accepted,
-    /// シェル・バルーンの切替が進行中（重ねない・要件 1.12）。
+    /// シェル・バルーンの切替が進行中（重ねない）。
     Busy,
-    /// ゴースト切替が進行中（要件 1.12）。
+    /// ゴースト切替が進行中。
     GhostSwitching,
-    /// ネットワーク更新の実行中（要件 1.13）。
+    /// ネットワーク更新の実行中。
     Updating,
-    /// 切替先が決まらない（要件 1.7）。
+    /// 切替先が決まらない。
     NotFound,
     /// 起動の文脈・置き場のゴースト・結線・seriko の送り手のどれかが無い（kanade へ送れないときも）。
     NoContext,
 }
 
-/// 切替の進行中の印（World の NonSend・高々 1 つ）。在れば次の切替要求は断る（要件 1.12）。
+/// 切替の進行中の印（World の NonSend・高々 1 つ）。在れば次の切替要求は断る。
 ///
 /// 置くのは受理のときだけ。消すのは差し替えの相（完了・中止・取りやめ・失敗）と終了の片付け
 /// （本体の側の `session::shell_balloon_switch::discard_for_exit`）。
@@ -121,7 +119,6 @@ pub enum SkinSwitchStage {
 
 /// 資産のうち、荷物（scope ごとの `EmoWorld`・アトラス）と seriko の定義に入らず、完了の後始末で
 /// 使う残り。
-// 要件 2.5: 公開の `SkinSwitchStage` が名指すので開ける
 pub enum SwapFinish {
     /// シェル: 新しいシェルの配置の値・走っているバルーンの配置の値・位置の記憶・箱の束・カーソル。
     Shell {
@@ -138,7 +135,7 @@ pub enum SwapFinish {
     },
 }
 
-/// Reference の名前（`descript.txt` の `name`、無ければフォルダ名・要件 2.1・2.4・3.2）。
+/// Reference の名前（`descript.txt` の `name`、無ければフォルダ名）。
 pub fn skin_ref_name(candidate: &SkinCandidate) -> String {
     candidate
         .name
@@ -146,7 +143,7 @@ pub fn skin_ref_name(candidate: &SkinCandidate) -> String {
         .unwrap_or_else(|| candidate.folder.clone())
 }
 
-/// Reference のパス（絶対パスの文字列・絶対化できなければそのまま・要件 2.1・2.4・3.2）。
+/// Reference のパス（絶対パスの文字列・絶対化できなければそのまま）。
 pub fn skin_ref_path(dir: &Path) -> String {
     std::path::absolute(dir)
         .unwrap_or_else(|_| dir.to_path_buf())

@@ -1,5 +1,4 @@
-//! Compile module error handling tests
-//! Task 9.5
+//! compile のエラー処理のテスト
 
 use dola::*;
 use std::collections::BTreeMap;
@@ -8,7 +7,6 @@ use super::common::{float_var, make_doc_with_storyboard};
 
 #[test]
 fn validate_failure_passthrough() {
-    // Bad schema version should fail validation
     let doc = DolaDocument {
         schema_version: "0.1".to_string(),
         variable: BTreeMap::new(),
@@ -44,7 +42,6 @@ fn undefined_storyboard_error() {
 
 #[test]
 fn keyframe_cycle_detection() {
-    // Create a cycle: entry0 (at kf1) -> entry1 (at kf0)
     let doc = make_doc_with_storyboard(
         vec![("x", float_var()), ("y", float_var())],
         vec![],
@@ -145,7 +142,6 @@ fn between_delay_exceeds_interval() {
 
 #[test]
 fn segment_overlap_detected() {
-    // Create overlapping segments for the same variable using 'at' to force overlap
     let doc = make_doc_with_storyboard(
         vec![("x", float_var())],
         vec![],
@@ -288,7 +284,7 @@ fn multiple_errors_accumulated_with_unresolvable_downstream_keyframe() {
     )));
 }
 
-/// 前のエントリが解けないと、at の無い次の純粋なキーフレームも連鎖して解けない（#32）
+/// 前のエントリが解けないと、at の無い次の純粋なキーフレームも連鎖して解けない
 #[test]
 fn unresolved_previous_entry_cascades_to_next_pure_keyframe() {
     let doc = make_doc_with_storyboard(
@@ -323,7 +319,7 @@ fn unresolved_previous_entry_cascades_to_next_pure_keyframe() {
     ));
 }
 
-/// relative_to で出した終わりの値も値域と比べて拒む（#33・要件 11.11）
+/// relative_to で出した終わりの値も値域と比べて拒む
 #[test]
 fn relative_to_out_of_range_is_rejected() {
     let doc = make_doc_with_storyboard(
@@ -361,7 +357,7 @@ fn relative_to_out_of_range_is_rejected() {
     );
 }
 
-/// 閉路の先にあるだけの節（c at a）は閉路の報告に入らない（#68）
+/// 閉路の先にあるだけの節（c at a）は閉路の報告に入らない
 #[test]
 fn keyframe_cycle_lists_only_cycle_members() {
     let kf = |name: &str, at: &str| StoryboardEntry {
@@ -390,7 +386,7 @@ fn keyframe_cycle_lists_only_cycle_members() {
     );
 }
 
-/// 重なりのエラーは変数の名前の順に並び、後から重なったエントリを指す（#69）
+/// 重なりのエラーは変数の名前の順に並び、後から重なったエントリを指す
 #[test]
 fn overlap_error_points_to_offending_entry_in_name_order() {
     let float = float_var();

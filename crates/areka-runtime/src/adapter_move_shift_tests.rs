@@ -1,5 +1,4 @@
-//! ずれの命令をシェル／バルーンの対象の提示の命令へ写す橋渡しの兄弟テスト
-//! （spec: seriko-pattern-calls 要件 7.1・7.6・3.8）。
+//! ずれの命令をシェル／バルーンの対象の提示の命令へ写す橋渡しの兄弟テスト。
 
 use areka_emo_present::PresentCommand;
 use areka_sakura::ActorKey;
@@ -31,7 +30,7 @@ fn move_shift_maps_to_the_shell_and_balloon_targets_with_the_same_values() {
     );
 }
 
-/// 数値でないスコープは写せず `None`（呼び手が `warn!` で捨てる・今の写し方と同じ）。
+/// 数値でないスコープは写せず `None`（呼び手が `warn!` で捨てる）。
 #[test]
 fn move_shift_with_non_numeric_scope_is_not_mapped() {
     for cmd in [

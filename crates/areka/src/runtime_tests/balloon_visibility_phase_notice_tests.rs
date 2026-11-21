@@ -1,9 +1,9 @@
 // =============================================================================
-// 可視性の相が時間切れの知らせを kanade へ送る配線の檻（areka-P0-balloon-lifecycle-events task 5.1）
+// 可視性の相が時間切れの知らせを kanade へ送る配線の檻
 //
 // 判断（`decide`）は親の観測表の道具（`Frame`）で 1 フレームずつ進め、相と同じく判断の後に
 // [`notify_timeout`] へ知らせを渡す。送り先は置き場（`GhostSlot`）のゴーストの kanade で、
-// 檻はその受け端を直に読む（要件 2.1・7.2・design「VisibilityPhase の送出」）。
+// 檻はその受け端を直に読む。
 //
 // headless の表示層は表示が一度も確立しないので、相そのものでは時間切れに至らない
 // （`balloon_visibility_phase_reappear_tests.rs` と同じ事情）。可視は観測表に書き込む。
@@ -88,7 +88,7 @@ fn notice_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 }
 
 /// 時間切れで隠したフレームにだけ、置き場のゴーストの kanade へ知らせが 1 通届き、番号つきで
-/// 1 行記録される。満了の前後のフレームでは送らない（要件 2.1・design の Error Strategy）。
+/// 1 行記録される。満了の前後のフレームでは送らない。
 #[test]
 fn timeout_frame_sends_one_notice_to_the_ghost_in_the_slot() {
     let (tx, rx) = mpsc::channel();
@@ -118,7 +118,7 @@ fn timeout_frame_sends_one_notice_to_the_ghost_in_the_slot() {
 }
 
 /// 置き場にゴーストが無い（置き場そのものが無い・空・kanade への送出端が無い）ときは送らず、
-/// 送れなかった理由を番号つきで警告 1 行に残す（要件 7.2）。
+/// 送れなかった理由を番号つきで警告 1 行に残す。
 #[test]
 fn notice_without_a_ghost_in_the_slot_is_not_sent_and_logged() {
     let mut no_slot = World::new();
@@ -147,7 +147,7 @@ fn notice_without_a_ghost_in_the_slot_is_not_sent_and_logged() {
     }
 }
 
-/// 受け手（kanade）が消えていれば送れず、理由を誤り 1 行に残す（要件 7.2）。
+/// 受け手（kanade）が消えていれば送れず、理由を誤り 1 行に残す。
 #[test]
 fn notice_to_a_gone_receiver_is_logged_as_an_error() {
     let (tx, rx) = mpsc::channel();

@@ -1,4 +1,4 @@
-//! `Aabb`: 空の判定・交わり・和・変形（5.6, 5.7, 6.6）
+//! `Aabb`: 空の判定・交わり・和・変形
 
 use super::*;
 
@@ -70,7 +70,6 @@ fn transform_axis_aligned_and_flip_orders_corners() {
     let a = r(1.0, 2.0, 3.0, 5.0);
     let m = Matrix3x2::translation(10.0, 20.0);
     assert_rect(a.transform(m), r(11.0, 22.0, 13.0, 25.0));
-    // 反転（負の拡大）でも左上右下が揃う
     let flip = Matrix3x2 {
         M11: -1.0,
         M12: 0.0,
@@ -95,7 +94,6 @@ fn transform_rotation_gives_bounding_box() {
         M32: 0.0,
     };
     assert_rect(a.transform(rot90), r(-2.0, 0.0, 0.0, 4.0));
-    // 45 度: 4 角の外接矩形
     let (s, c) = 45f32.to_radians().sin_cos();
     let rot45 = Matrix3x2 {
         M11: c,

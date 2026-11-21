@@ -9,7 +9,7 @@ use crate::state::{TextLayerConfig, TextLayerState};
 use crate::writing::WritingMode;
 use areka_sakura::contract::ActorKey;
 
-/// D1 診断（実機で行間の文字欠けを観測）: example の共有 fixture（font 28px・行送り
+/// 診断（実機で行間の文字欠けを観測）: example の共有 fixture（font 28px・行送り
 /// pitch 30px＝字の丈 28 ＋ 行間 2・validrect 320×122・**実 DWriteMetrics**・
 /// 行1「おっはよー！」行2「めっちゃええ朝やん！」）を
 /// oracle（全域再描画）と viewbox（ダーティスクロール）の両方で typewriter 進行させ read_back を
@@ -30,7 +30,6 @@ fn diag_line_boundary_dropout_vs_oracle() {
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
     let metrics = DWriteMetrics::new(&factory, &font, mode, &config).expect("DWriteMetrics");
 
-    // 要件 7.4「参照描画との画素等価比較が両側とも同じ寸法で動く」の確認点はここ。
     // 参照描画（oracle）と実描画（viewbox）は同一寸の面へ描き、read_back を byte 比較する。
     // 面寸 320×122 は本体側バルーンの描画範囲そのもの（`balloons0s.txt` の validrect
     // (36,46)-(356,168)）で、行送り 30px では行 i の下端 = 30i + 28 ゆえ
@@ -51,7 +50,7 @@ fn diag_line_boundary_dropout_vs_oracle() {
 
     // reveal は配送 duration 由来（interval = duration / N）。全 cue at=0.0 ゆえ、
     // Text へ N×REVEAL_INTERVAL を焼き込むと reveal が連続 typewriter 進行する
-    // （旧 char_wait=0.05 と機能等価・注入時刻はこの間隔で刻む）。
+    // （注入時刻はこの間隔で刻む）。
     // example の共有 fixture フル シナリオ（行1/2/3＋あふれ誘発の短行 9 本でスクロール発火）。
     const REVEAL_INTERVAL: f64 = 0.05;
     apply_fixture_script(&mut state, &actor, [0.0; 4], REVEAL_INTERVAL);
@@ -84,7 +83,7 @@ fn diag_line_boundary_dropout_vs_oracle() {
         scrolled_frames > 0,
         "前方の進行でスクロールが 1 度も起きていない（名前のスクロールを確かめていない）"
     );
-    // 前方進行では全フレーム byte 一致。次に**後方時刻ジャンプ**（example の C8 検分が
+    // 前方進行では全フレーム byte 一致。次に**後方時刻ジャンプ**（example の検分が
     // present_at(earlier t_mid) で行うパターン）を検証する: 大 t（スクロール済み）から
     // 小 t（未スクロール）へ戻したとき、viewbox が un-scroll を正しく扱い oracle と一致するか。
     // viewbox は前方スクロール前提ゆえ、後方でスクロールアウト行の再露出を取りこぼすと diverge。
@@ -116,11 +115,11 @@ fn diag_line_boundary_dropout_vs_oracle() {
     }
 }
 
-/// DD-9: 改行を一切含まない行内縮小（visible=6「おっはよー！」→ visible=2「おっ」）で
+/// 改行を一切含まない行内縮小（visible=6「おっはよー！」→ visible=2「おっ」）で
 /// oracle（全域再描画）と viewbox（ダーティスクロール）の read_back が byte 一致する。
 /// `diag_line_boundary_dropout_vs_oracle` の後方ジャンプ検分が捕えた退避インク未クリア欠陥が
 /// **改行非依存**（改行の遅延と直交・後方時刻ジャンプ/un-reveal で単一行が縮む任意
-/// アクセスで再現）であることを恒久固定する。guard 拡張（viewbox.rs DD-9）で緑になる。
+/// アクセスで再現）であることを恒久固定する。ダーティ矩形のガード拡張で緑になる。
 #[test]
 fn within_line_shrink_no_newline_stays_byte_equal_to_oracle() {
     let mut rig = Rig::new();
@@ -161,7 +160,7 @@ fn within_line_shrink_no_newline_stays_byte_equal_to_oracle() {
     );
 }
 
-/// 指摘 31: 字送りのフレームごとに既定の文字色のブラシと描き先の bitmap を作らない。
+/// 字送りのフレームごとに既定の文字色のブラシと描き先の bitmap を作らない。
 /// ブラシは台詞のあいだ 1 つ（`request_clear` で捨てて次の台詞で 1 つ作る）、描き先は
 /// front/back の 2 枚だけ。見本と画素が一致することも毎フレーム確かめる（振る舞いは変えない）。
 #[test]

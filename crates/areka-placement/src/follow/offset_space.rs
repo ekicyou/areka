@@ -1,8 +1,6 @@
-//! バルーン位置オフセットの**単位空間契約の定義元**と、その契約の上で働く変換規則
-//! （areka-P0-balloon-offset-dpi・design C1／D1〜D5・要件 1.1〜1.5／2.1〜2.5／3.1／3.3／
-//! 4.2／4.4／5.3／9.3）。
+//! バルーン位置オフセットの**単位空間契約の定義元**と、その契約の上で働く変換規則。
 //!
-//! # 単位空間契約（唯一の権威・areka-P0-balloon-offset-dpi 要件 1.1／1.3）
+//! # 単位空間契約（唯一の権威）
 //!
 //! **実行時の合流欄と追従オフセットが保持する値は「現在の表示 DPI における物理 px」である。**
 //!
@@ -10,41 +8,40 @@
 //! 追従 Component が持つオフセットの 3 つで、すべて同じ空間の値として合流する。
 //! 作者空間（作者基準 DPI で意味を持つ生値）を持つ供給元は、**合流の前に**本モジュールの
 //! [`scale_author_offset`] を通って物理 px へ換算される——換算前の値と換算後の値が同じ欄へ
-//! 混ざることは無い（areka-P0-balloon-offset-dpi 要件 1.2）。「単位空間の混在は意図的な暫定」という従来の記述は本契約が
-//! 置き換える。
+//! 混ざることは無い。
 //!
-//! # 供給元ごとの換算軸の割り当て（areka-P0-balloon-offset-dpi 要件 1.4）
+//! # 供給元ごとの換算軸の割り当て
 //!
 //! 作者基準 DPI はシェル（`seriko.dpi`）とバルーン（`dpi`）で別々に宣言され得るため、
 //! 拡大率は 1 つではなく 2 つある。どちらで換算するかは供給元ごとに一意に定める。
 //!
 //! | 供給元 | 換算軸 | 出所 |
 //! |---|---|---|
-//! | `descript` の `balloon.offsetx`／`offsety` | **シェル軸**（`MeasureScaling::shell`） | 語彙がゴースト／シェルの `descript.txt`＝シェル作者の空間（design D2・本仕様の決定） |
-//! | `windowposition` 由来の調整量 | **バルーン軸** | バルーン作者の空間（既存確定・本仕様は温存して記録するだけ） |
-//! | 移動台本 `\![move]` の `dx`／`dy` | **シェル軸** | 既存確定（互換記録へ登記済み）・本仕様は温存して記録するだけ |
+//! | `descript` の `balloon.offsetx`／`offsety` | **シェル軸**（`MeasureScaling::shell`） | 語彙がゴースト／シェルの `descript.txt`＝シェル作者の空間 |
+//! | `windowposition` 由来の調整量 | **バルーン軸** | バルーン作者の空間 |
+//! | 移動台本 `\![move]` の `dx`／`dy` | **シェル軸** | 既存の互換記録どおり |
 //!
-//! **遷移の追随には軸の選択が生じない**（design D5・areka-P0-balloon-offset-dpi 要件 4.4）。
+//! **遷移の追随には軸の選択が生じない**。
 //! `k_axis(d) = app_scale × (d ÷ author_dpi_axis)` ゆえ
 //! `k_axis(d₁) ÷ k_axis(d₀) = d₁ ÷ d₀` となり、作者基準 DPI が約分で消えるからである。
 //! [`rescale_follow_offset`] は表示 DPI の整数 2 つから比を直に組む。
 //!
-//! # 永続値は契約の明示の例外（areka-P0-balloon-offset-dpi 要件 5.1／5.3）
+//! # 永続値は契約の明示の例外
 //!
 //! 永続化されるバルーンオフセットは物理 px の生値のみで、**保存時の表示 DPI を記録しない**。
-//! 保存値は換算せずそのまま採用する（拡大率をまたぐ保存位置の追従はしない・開発者裁定の踏襲）。
+//! 保存値は換算せずそのまま採用する（拡大率をまたぐ保存位置の追従はしない）。
 //! この「どの表示 DPI に属するか分からない」状態は [`OffsetBase::dpi`] の `None`＝**未係留**
 //! として表現する。未係留の基準は最初の観測で**値を変えずに**その時の表示 DPI へ係留され、
-//! 以後は通常の追随規則が効く（areka-P0-balloon-offset-dpi 要件 5.4）。
+//! 以後は通常の追随規則が効く。
 //!
 //! # 丸めと記録の規律
 //!
-//! 本モジュールは**新しい丸め規約を 1 つも導入しない**（areka-P0-balloon-offset-dpi 要件 9.3）——大きさの丸めは
+//! 本モジュールは**新しい丸め規約を 1 つも導入しない**——大きさの丸めは
 //! `ScaleRatio::scale_len`（round half away from zero・非ゼロ長は最小 1px・恒等は素通し）へ、
 //! 符号の保存は [`scale_signed`] へ委譲する。
 //!
 //! また `World`・`Entity`・ログ機構のいずれにも触れない。縮退・飽和は**判定結果の値**として
-//! 返し、警告の発行は呼び手の責務である（areka-P0-balloon-offset-dpi 要件 1.5／2.5／3.6／9.4 の記録は呼び手が出す）。
+//! 返し、警告の発行は呼び手の責務である。
 
 // 許可の属性は置かない。配置は lib の crate で、公開の項目の呼び手は追随相
 // （`runtime::…` の `balloon_offset_follow`）。結線が減って私有の項目が未使用になったら、
@@ -57,11 +54,11 @@ use wintf::ecs::DPI;
 use crate::resolver::{OffsetBase, PointPx};
 use crate::scale_signed;
 
-/// キャラ窓に付与するバルーン追従 Component（4.2/4.4/4.8）。
+/// キャラ窓に付与するバルーン追従 Component。
 ///
 /// 現在のオフセットと、その値が導かれた**基準対**（[`OffsetBase`]）を 1 つに持つ。
 /// どちらも**私有**であり、読取は [`BalloonFollow::offset`]／[`BalloonFollow::base`] に、
-/// 書込は次の 4 本だけに閉じる（areka-P0-balloon-offset-dpi・design D14・要件 3.3／3.5）。
+/// 書込は次の 4 本だけに閉じる。
 ///
 /// | 種別 | メソッド | 基準対の扱い |
 /// |---|---|---|
@@ -72,16 +69,13 @@ use crate::scale_signed;
 ///
 /// 欄を私有にする目的は、「基準対の書き手を 1 つでも取りこぼすと基準が古いまま残り、
 /// 次の遷移で静かにずれる」危険を**型で潰す**ことである——定義モジュールの外から欄へ
-/// 直接代入すると、実行時にずれる代わりにコンパイルエラーになる（design D14）。
+/// 直接代入すると、実行時にずれる代わりにコンパイルエラーになる。
 ///
 /// `offset` の初期値は配置時に確定する暫定 offset（物理 px・
-/// `ScopePlacement.balloon_offset` の転写＝P5 幾何の暫定規則。正式な配置規則は
-/// balloon 表示系の後続が所有する・4.4）。バルーン単独ドラッグでユーザーが
+/// `ScopePlacement.balloon_offset` の転写）。バルーン単独ドラッグでユーザーが
 /// ずらすと [`super::on_balloon_drag`] が `balloon_pos − char_pos` へ**記憶更新**し、
 /// 以後のキャラ窓ドラッグ・[`super::move_window_to`] は調整後 offset で追従する
-/// （4.8・離したときに `on_balloon_drag_end` が ghost.dat へ保存する。
-/// 旧挙動「次のキャラ窓ドラッグで初期 offset へスナップバック」は
-/// 2026-07-11 areka-P0-window-placement 要件 4.8 により仕様退役）。
+/// （離したときに `on_balloon_drag_end` が ghost.dat へ保存する）。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BalloonFollow {
     /// 追従して動かすバルーン窓 entity。
@@ -105,7 +99,7 @@ impl BalloonFollow {
         }
     }
 
-    /// 現在の相対位置（キャラ窓左上相対・物理 px・読取専用・areka-P0-balloon-offset-dpi 要件 9.1）。
+    /// 現在の相対位置（キャラ窓左上相対・物理 px・読取専用）。
     pub fn offset(&self) -> PointPx {
         self.offset
     }
@@ -119,7 +113,7 @@ impl BalloonFollow {
     ///
     /// 現在値と基準値の双方が `offset` になり、基準 DPI はその時点の表示 DPI へ
     /// **係留済み**（`Some(dpi)`）になる。利用者のドラッグ由来にも作者指定と同一の
-    /// 追随規則が効くのは、この 1 本が基準を確立するからである（areka-P0-balloon-offset-dpi 要件 3.5）。
+    /// 追随規則が効くのは、この 1 本が基準を確立するからである。
     pub fn reestablish(&mut self, offset: PointPx, dpi: DPI) {
         self.offset = offset;
         self.base = OffsetBase {
@@ -128,15 +122,15 @@ impl BalloonFollow {
         };
     }
 
-    /// **係留**——未係留の基準へ現在の表示 DPI を刻む（areka-P0-balloon-offset-dpi 要件 5.2）。
+    /// **係留**——未係留の基準へ現在の表示 DPI を刻む。
     ///
     /// 基準値も現在値も **1 bit も変えない**。永続値の腕が「どの表示 DPI に属するか
-    /// 分からない」状態から通常の追随規則へ入る唯一の口である（areka-P0-balloon-offset-dpi 要件 5.4）。
+    /// 分からない」状態から通常の追随規則へ入る唯一の口である。
     pub fn anchor_base_dpi(&mut self, dpi: DPI) {
         self.base.dpi = Some(dpi);
     }
 
-    /// **追随**——基準から引き直した値を反映する（areka-P0-balloon-offset-dpi 要件 3.1）。
+    /// **追随**——基準から引き直した値を反映する。
     ///
     /// **基準対は変えない**。出力を入力へ戻さないので誤差が連鎖せず、拡大率が往復して
     /// 元へ戻れば同じ値へ戻る（[`rescale_follow_offset`] の純関数性がここで守られる）。
@@ -145,7 +139,7 @@ impl BalloonFollow {
     }
 }
 
-/// 換算の 1 軸ぶんの結果（飽和したかを呼び手へ伝える・areka-P0-balloon-offset-dpi 要件 2.5）。
+/// 換算の 1 軸ぶんの結果（飽和したかを呼び手へ伝える）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScaledAxis {
     /// 換算後の値（物理 px・飽和時は `±i32::MAX`）。
@@ -154,7 +148,7 @@ pub struct ScaledAxis {
     pub saturated: bool,
 }
 
-/// 拡大率を解決できなかった理由（areka-P0-balloon-offset-dpi 要件 9.4: 縮退は必ず語を持つ）。
+/// 拡大率を解決できなかった理由（縮退は必ず語を持つ）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnresolvedScale {
     /// 基準 DPI が 0（構築子を通れば起きないが、発明せず縮退する）。
@@ -166,45 +160,45 @@ pub enum UnresolvedScale {
 /// 追随の判定結果。呼び手はこの 4 腕を網羅して書込と記録を決める。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OffsetRescale {
-    /// 未係留の基準を現在の DPI へ係留した——**値は変えない**（areka-P0-balloon-offset-dpi 要件 5.2）。
+    /// 未係留の基準を現在の DPI へ係留した——**値は変えない**。
     Anchored {
         /// 係留した表示 DPI（＝観測した現在値）。
         base_dpi: DPI,
     },
     /// 基準 DPI と現在 DPI が同一——比が恒等。呼び手は [`BalloonFollow::apply_rescaled`] で
-    /// `base.offset` を書き戻す（144→192→144 で高い DPI の値が残らないように・areka-P0-balloon-offset-dpi 要件 3.3）。
+    /// `base.offset` を書き戻す（144→192→144 で高い DPI の値が残らないように）。
     Unchanged,
     /// 追随した。
     Rescaled {
         /// 追随後のオフセット（物理 px）。
         offset: PointPx,
-        /// いずれかの軸が飽和したか（areka-P0-balloon-offset-dpi 要件 2.5 と同型）。
+        /// いずれかの軸が飽和したか。
         saturated: bool,
     },
-    /// 拡大率を解決できない——値も基準も変えない（areka-P0-balloon-offset-dpi 要件 3.6）。
+    /// 拡大率を解決できない——値も基準も変えない。
     Unresolved {
         /// 解決できなかった理由。
         reason: UnresolvedScale,
     },
 }
 
-/// 遷移時の唯一の変換規則（純関数・areka-P0-balloon-offset-dpi 要件 3.1／3.3／4.2／4.4）。
+/// 遷移時の唯一の変換規則（純関数）。
 ///
 /// 入力は**基準対と現在の表示 DPI だけ**であり、前回の結果を入力にしない。出力が入力へ
 /// 戻らないため誤差が連鎖せず、一度訪れた表示 DPI へ戻れば常に同じ値になる（往復無誤差）。
 ///
 /// 比は表示 DPI の整数 2 つから直接組む——`k(d) = app_scale × (d ÷ author_dpi)` ゆえ
 /// `k(d₁) ÷ k(d₀) = d₁ ÷ d₀` で作者基準 DPI が約分で消え、シェル軸／バルーン軸の選択が
-/// 生じない（areka-P0-balloon-offset-dpi 要件 4.4 の「どちらを用いるか」への答え）。
+/// 生じない。
 ///
 /// `base` は変更しない（純関数）。基準が変わるのは確立点と係留だけである。
 pub fn rescale_follow_offset(base: OffsetBase, current: DPI) -> OffsetRescale {
     let Some(base_dpi) = base.dpi else {
-        // 未係留＝保存値の腕。値を 1 bit も動かさずに現在の表示 DPI へ係留する（areka-P0-balloon-offset-dpi 要件 5.2）。
+        // 未係留＝保存値の腕。値を 1 bit も動かさずに現在の表示 DPI へ係留する。
         return OffsetRescale::Anchored { base_dpi: current };
     };
     if base_dpi == current {
-        // 比が恒等。呼び手は `apply_rescaled` で `base.offset` を書き戻す（areka-P0-balloon-offset-dpi 要件 2.2／3.3）。
+        // 比が恒等。呼び手は `apply_rescaled` で `base.offset` を書き戻す。
         return OffsetRescale::Unchanged;
     }
     if base_dpi.dpi_x == 0 || base_dpi.dpi_y == 0 {
@@ -218,7 +212,7 @@ pub fn rescale_follow_offset(base: OffsetBase, current: DPI) -> OffsetRescale {
         };
     }
     // 0 は上で弾いたので `ScaleRatio::new` は必ず `Some`——それでも `unwrap` せず、
-    // 万一の縮退にも語を与える（記録の無い縮退経路を作らない・areka-P0-balloon-offset-dpi 要件 9.4）。
+    // 万一の縮退にも語を与える（記録の無い縮退経路を作らない）。
     let (Some(kx), Some(ky)) = (
         ScaleRatio::new(current.dpi_x as u32, base_dpi.dpi_x as u32),
         ScaleRatio::new(current.dpi_y as u32, base_dpi.dpi_y as u32),
@@ -238,13 +232,13 @@ pub fn rescale_follow_offset(base: OffsetBase, current: DPI) -> OffsetRescale {
     }
 }
 
-/// 作者空間のオフセットを合流欄の空間（物理 px）へ換算する（areka-P0-balloon-offset-dpi 要件 2.1／2.4／2.5）。
+/// 作者空間のオフセットを合流欄の空間（物理 px）へ換算する。
 ///
 /// `k` は供給元の作者空間に対応する軸の表示スケール。`balloon.offsetx`／`offsety` は
 /// シェル作者の空間ゆえ [`MeasureScaling::shell`](crate::measure::MeasureScaling)
-/// を渡す（design D2・上表「供給元ごとの換算軸の割り当て」）。
+/// を渡す（上表「供給元ごとの換算軸の割り当て」）。
 ///
-/// 恒等比（`ScaleRatio::ONE`）では生値がそのまま返る（areka-P0-balloon-offset-dpi 要件 2.2）。
+/// 恒等比（`ScaleRatio::ONE`）では生値がそのまま返る。
 pub fn scale_author_offset(raw: (i32, i32), k: ScaleRatio) -> (ScaledAxis, ScaledAxis) {
     (scale_axis(raw.0, k), scale_axis(raw.1, k))
 }

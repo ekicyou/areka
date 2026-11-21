@@ -1,4 +1,4 @@
-//! `bind_spec.rs` の試験（research.md §10.4 の 13 通りとスコープごとの名前の表）。
+//! `bind_spec.rs` の試験（13 通りとスコープごとの名前の表）。
 
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::resolve_with_shell;
@@ -23,7 +23,7 @@ const RIBBON: u32 = 5;
 const A: u32 = 6;
 const B: u32 = 7;
 
-/// research.md §10.4 の `g_bind` のシェル（cloth＝排他・head＝mustselect・acc＝multiple）。
+/// `g_bind` のシェル（cloth＝排他・head＝mustselect・acc＝multiple）。
 const G_BIND_DESCRIPT: &[&str] = &[
     "sakura.bindgroup1.name,cloth,uniform",
     "sakura.bindgroup1.default,1",
@@ -98,7 +98,7 @@ fn pair(c: &str, p: &str) -> (String, String) {
     (c.to_owned(), p.to_owned())
 }
 
-/// research.md §10.4 の 13 通り（指定 → スコープ 0 の着ているもの・無い名前の warn）。
+/// 13 通り（指定 → スコープ 0 の着ているもの・無い名前の warn）。
 #[test]
 fn research_10_4_thirteen_cases() {
     let ghost = g_bind("offline-bind-spec");
@@ -152,7 +152,7 @@ fn research_10_4_thirteen_cases() {
     }
 }
 
-/// mustselect の OFF は外さず info を 1 パーツに 1 件（warn ではない＝書き出しの記録に入らない・5.4）。
+/// mustselect の OFF は外さず info を 1 パーツに 1 件（warn ではない＝書き出しの記録に入らない）。
 #[test]
 fn mustselect_off_is_kept_with_info_per_part() {
     let ghost = g_bind("offline-bind-spec-kept");
@@ -168,7 +168,7 @@ fn mustselect_off_is_kept_with_info_per_part() {
     );
 }
 
-/// 中身の空の区切りは黙って飛ばし、欄の数か ON/OFF が読めない指定はその指定だけ warn で飛ばす（5.7）。
+/// 中身の空の区切りは黙って飛ばし、欄の数か ON/OFF が読めない指定はその指定だけ warn で飛ばす。
 #[test]
 fn unreadable_specs_warn_and_empty_separators_are_skipped() {
     let ghost = g_bind("offline-bind-spec-unreadable");
@@ -188,7 +188,7 @@ fn unreadable_specs_warn_and_empty_separators_are_skipped() {
     assert_eq!(warn_count(&events), 4, "{events:?}");
 }
 
-/// スコープ 0・1・2 の名前の表: 指定のスコープだけに、そのスコープの名前で当たる（5.8・5.9）。
+/// スコープ 0・1・2 の名前の表: 指定のスコープだけに、そのスコープの名前で当たる。
 #[test]
 fn applies_only_to_the_given_scope_with_its_own_names() {
     let ghost = scope_bind_ghost();

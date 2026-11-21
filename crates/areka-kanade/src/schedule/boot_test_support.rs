@@ -84,13 +84,12 @@ pub(super) fn reply(s: State, outcome: ShioriOutcome, c: &KanadeConfig) -> (Stat
 
 /// Idle→Boot→（OnInitialize 完了）まで進め、`BootPrefetch`（username GET 発行済み）へ着かせる。
 pub(super) fn drive_to_prefetch(c: &KanadeConfig) -> State {
-    let (s, _) = step(State::initial(), Input::Boot, c); // Idle→BootInit（OnInitialize NOTIFY）
-    let (s, actions) = reply(s, ShioriOutcome::Notified, c); // BootInit→BootPrefetch（username GET）
+    let (s, _) = step(State::initial(), Input::Boot, c);
+    let (s, actions) = reply(s, ShioriOutcome::Notified, c);
     assert!(
         matches!(s.phase, Phase::BootPrefetch),
         "OnInitialize 完了後は BootPrefetch（username 照会待ち）であるべき"
     );
-    // BootInit の応答は username GET を 1 件だけ発行する（OnFirstBoot ではない）。
     assert_eq!(actions.len(), 1, "prefetch は GET を 1 件だけ発行する");
     assert_get(
         &actions[0],
@@ -121,18 +120,18 @@ pub(super) fn boot_until_version_with_greeting(
     cfg: &KanadeConfig,
     pending: Option<CloseReason>,
 ) -> State {
-    let (mut s, _) = step(State::initial(), Input::Boot, cfg); // Idle→BootInit（OnInitialize NOTIFY）
+    let (mut s, _) = step(State::initial(), Input::Boot, cfg);
     if let Some(reason) = pending {
-        s = step(s, Input::CloseRequest { reason }, cfg).0; // BootInit のまま close を保留記録
+        s = step(s, Input::CloseRequest { reason }, cfg).0;
     }
-    let s = reply(s, ShioriOutcome::Notified, cfg).0; // BootInit→BootPrefetch（username GET）
-    let s = reply(s, ShioriOutcome::NoContent, cfg).0; // BootPrefetch→BootType（初回起動＝OnFirstBoot GET）
+    let s = reply(s, ShioriOutcome::Notified, cfg).0;
+    let s = reply(s, ShioriOutcome::NoContent, cfg).0;
     let s = reply(
         s,
         ShioriOutcome::Value("greeting".to_string(), areka_talk::SecurityLevel::Local),
         cfg,
     )
-    .0; // BootType(Value)→翻訳→BootVersion{talk: Some(id=1)}（OnBoot を飛ばす）
+    .0;
 
     assert!(
         matches!(

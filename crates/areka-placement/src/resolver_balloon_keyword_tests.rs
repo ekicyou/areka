@@ -1,17 +1,17 @@
-//! P5 キーワード幾何の決定論檻（areka-P0-windowposition-limit・task 2.3）。
+//! P5 キーワード幾何の決定論檻。
 //!
 //! 対象は `windowposition.x` のキーワード語彙が定めるバルーン**基本位置**
-//! （`BalloonXMode::CenterTop`／`CenterBottom`・要件 4.2/4.3）と、その周辺の
-//! 回帰境界（`Side`＝数値指定・未指定の bit 同一維持・要件 4.5/5.2）である。
+//! （`BalloonXMode::CenterTop`／`CenterBottom`）と、その周辺の
+//! 回帰境界（`Side`＝数値指定・未指定の bit 同一維持）である。
 //!
-//! `Side` の全表は `resolver_resolve_balloon_tests.rs` の T-R8 群が持つ（要件 5.2 の主檻）。
+//! `Side` の全表は `resolver_resolve_balloon_tests.rs` の T-R8 群が持つ（主檻）。
 //! 本ファイルが `Side` について確かめるのは、既定が `Side` であることと未収載のスコープの
 //! 位置（T-K6）、`limit` が位置を変えないこと（T-K7 補）、再導出の素材を持たないことと
 //! キーワードの式が `Side` で位置を返さないこと（T-K9）である。
 //!
 //! DPI パラメタ化（`DPIS`＝100%/125%/150%/200%）は既存 resolver 檻の流儀を踏襲する
 //! ——resolver は物理 px しか見ないので、同じ論理形状を各水準の物理値で与えたとき
-//! 期待値も同一の物理式から出る（隠れた `/96` があれば 96 以外で崩れる・要件 4.8）。
+//! 期待値も同一の物理式から出る（隠れた `/96` があれば 96 以外で崩れる）。
 
 use super::resolve_test_support::{cfg_of, offset_work_area};
 use super::test_support::{DPIS, px, work_area};
@@ -86,7 +86,7 @@ fn resolve_one(
 }
 
 // ------------------------------------------------------------------
-// T-K1: CenterTop の基本位置（要件 4.2）
+// T-K1: CenterTop の基本位置
 // ------------------------------------------------------------------
 
 /// T-K1: `center`/`top`＝シェル画像の中央上。
@@ -126,7 +126,7 @@ fn t_k1_center_top_places_above_shell_center() {
 }
 
 // ------------------------------------------------------------------
-// T-K2: CenterBottom の基本位置（要件 4.3）
+// T-K2: CenterBottom の基本位置
 // ------------------------------------------------------------------
 
 /// T-K2: `bottom`＝シェル画像の中央下。水平は CenterTop と同一式、垂直は
@@ -155,12 +155,12 @@ fn t_k2_center_bottom_places_below_shell_center() {
 }
 
 // ------------------------------------------------------------------
-// T-K3: `y` の数値調整量（要件 4.4）
+// T-K3: `y` の数値調整量
 // ------------------------------------------------------------------
 
 /// T-K3: キーワード指定時も `windowposition.y` の数値は**基本位置への調整量**として
 /// 加算される（正負とも）。供給経路は `ScopeConfig.balloon_offset` の `(0, dy)`
-/// （キーワード時は数値 x が存在しないため dx=0・design C3(d)）。
+/// （キーワード時は数値 x が存在しないため dx=0）。
 #[test]
 fn t_k3_numeric_y_is_added_to_keyword_base_position() {
     for dpi in DPIS {
@@ -194,7 +194,7 @@ fn t_k3_numeric_y_is_added_to_keyword_base_position() {
 
 /// T-K3 補: descript の `balloon.offsetx`/`offsety` もキーワード時に従来どおり
 /// 加算される（キーワード指定でも offset 加算を継続するのは正典沈黙箇所の
-/// areka 裁定・DD8）。x 成分も効く（`(0, dy)` 専用の経路ではない）。
+/// areka 裁定）。x 成分も効く（`(0, dy)` 専用の経路ではない）。
 #[test]
 fn t_k3_descript_balloon_offset_also_applies_under_keyword() {
     for dpi in DPIS {
@@ -217,7 +217,7 @@ fn t_k3_descript_balloon_offset_also_applies_under_keyword() {
 }
 
 // ------------------------------------------------------------------
-// T-K4: キーワードは `balloon.alignment` に依存しない（要件 4.2/4.3）
+// T-K4: キーワードは `balloon.alignment` に依存しない
 // ------------------------------------------------------------------
 
 /// T-K4: キーワード指定の基本位置は `balloon.alignment`（left/right）に依存しない
@@ -240,11 +240,11 @@ fn t_k4_keyword_geometry_ignores_balloon_side() {
 }
 
 // ------------------------------------------------------------------
-// T-K5: 中点は整数除算・0 方向切り捨て（DD8）
+// T-K5: 中点は整数除算・0 方向切り捨て
 // ------------------------------------------------------------------
 
 /// T-K5: `(char_w − balloon_w) / 2` は Rust の整数除算（0 方向切り捨て）であり、
-/// 新しい丸め規約ではない（要件 4.8・DD8）。差が奇数の正負両方で固定する。
+/// 新しい丸め規約ではない。差が奇数の正負両方で固定する。
 ///
 /// 物理 px の直値で組む（奇数寸は `px()` の厳密整除条件を満たさないため——
 /// 検定対象は幾何の中点規則であって DPI 変換ではない）。
@@ -287,11 +287,11 @@ fn t_k5_center_midpoint_is_integer_division_toward_zero() {
 }
 
 // ------------------------------------------------------------------
-// T-K6: `Side`（数値指定・未指定）の回帰境界（要件 4.5・5.2）
+// T-K6: `Side`（数値指定・未指定）の回帰境界
 // ------------------------------------------------------------------
 
 /// T-K6: `ScopeConfig` の既定（＝バルーン定義が読めない scope・未収載 scope）は
-/// `Side` であり、キーワード幾何は既定では一切発火しない（要件 4.5 の入口側）。
+/// `Side` であり、キーワード幾何は既定では一切発火しない。
 #[test]
 fn t_k6_default_mode_is_side_and_missing_scope_uses_it() {
     assert_eq!(
@@ -303,7 +303,6 @@ fn t_k6_default_mode_is_side_and_missing_scope_uses_it() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let (cs, bs) = sizes(dpi);
-        // scopes マップが空 → scope0 は既定 ScopeConfig で解決される
         let out = resolve_placement(&cfg_of(vec![]), wa, &[input(0, cs, bs)], MEASURE_DPI);
         assert_eq!(out.len(), 1, "dpi={dpi}: 空虚一致封じ");
 
@@ -320,7 +319,7 @@ fn t_k6_default_mode_is_side_and_missing_scope_uses_it() {
 }
 
 // ------------------------------------------------------------------
-// T-K7: limit の転記（要件 5.1 の運搬部・design C4）
+// T-K7: limit の転記
 // ------------------------------------------------------------------
 
 /// T-K7: `ScopeConfig.balloon_limit` は `ScopePlacement.balloon_limit` へ**そのまま**
@@ -410,14 +409,14 @@ fn t_k7_balloon_limit_value_does_not_affect_geometry() {
 }
 
 // ------------------------------------------------------------------
-// T-K9: 実表示寸確定時の再導出の素材（要件 4.7・2026-08-14 実機是正）
+// T-K9: 実表示寸確定時の再導出の素材
 // ------------------------------------------------------------------
 
 /// T-K9: `balloon_keyword_base` は「キーワード指定か否か」を**そのまま**運ぶ。
 ///
-/// `Side` は `None`（数値指定・未指定の scope では再導出が構造的に起きない＝4.5/5.2）、
+/// `Side` は `None`（数値指定・未指定の scope では再導出が構造的に起きない）、
 /// キーワードは `Some((mode, adjust))`（`adjust` は `windowposition.y` の数値と
-/// `balloon.offsetx/offsety` が合流した作者指定の調整量・4.4）。
+/// `balloon.offsetx/offsety` が合流した作者指定の調整量）。
 #[test]
 fn t_k9_keyword_base_carries_mode_and_adjust_only_for_keyword_modes() {
     for dpi in DPIS {

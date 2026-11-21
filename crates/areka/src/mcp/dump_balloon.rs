@@ -1,12 +1,12 @@
-//! `dump_balloon` の処理（spec: areka-P0-mcp-dump-images）——バルーンの背景と文字を重ねて PNG で返す。
+//! `dump_balloon` の処理——バルーンの背景と文字を重ねて PNG で返す。
 //!
 //! 入口は `dump_surface` と同じ（結線状態が無い → 窓が無い答え・装着の相がまだ → [`super::later`]）。
 //! 背景はバルーンの対象の最後に表示した絵（隠していても残る）、文字は普通のバルーンの文字の面の写し、
-//! その上に矢印が出ていれば印の面の写し（spec: balloon-scroll-arrows・要件 3.6）。
+//! その上に矢印が出ていれば印の面の写し。
 //! 背景の写しと文字の面の写しの積み込みは UI スレッドで、写しの読み出しは後のフレームで待たずに覗き
-//! （GPU の終わりを待たない・要件 1.2）、重ね合わせ・PNG・base64 は別のスレッドで行う。
-//! シェルの絵の中の箱の文字の面は読まない（要件 3.6）。読むだけで、表示・隠れている状態・台詞を
-//! 変えない（要件 3.8・6.1・6.2）。
+//! （GPU の終わりを待たない）、重ね合わせ・PNG・base64 は別のスレッドで行う。
+//! シェルの絵の中の箱の文字の面は読まない。読むだけで、表示・隠れている状態・台詞を
+//! 変えない。
 
 use std::time::Instant;
 
@@ -31,7 +31,7 @@ mod overlay;
 
 const TOOL: &str = "dump_balloon";
 
-/// 今答えられればその場で（成功は別のスレッドから）、装着の相がまだなら `later` に預けて答える（要件 6.1）。
+/// 今答えられればその場で（成功は別のスレッドから）、装着の相がまだなら `later` に預けて答える。
 pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: ReplyTo) {
     start(world, TOOL, ghost, reply, move |w| answer(w, &args));
 }
@@ -62,7 +62,7 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
     }
     let canvas = pic.bytes().to_vec();
 
-    // 文字の面が在るときだけ重ねる。無ければ背景だけで成功する（要件 3.9）。
+    // 文字の面が在るときだけ重ねる。無ければ背景だけで成功する。
     let runtime = wiring.runtime().borrow();
     let text = presenter
         .text_slot_view(target)
@@ -79,12 +79,12 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
     if view.surface_size() != (width, height) {
         return failed("picture size mismatch");
     }
-    // 呼び出しを受けた時点の文字の面の写しを積む（要件 1.3）。読み出しは後のフレームで覗く。
+    // 呼び出しを受けた時点の文字の面の写しを積む。読み出しは後のフレームで覗く。
     let pending = match surface.begin_read_back() {
         Ok(pending) => pending,
         Err(e) => return failed(&e.to_string()),
     };
-    // 矢印が出ていれば印の面（バルーンの絵全体の物理寸・窓の原点）の写しも同じ時点で積む（要件 3.6）。
+    // 矢印が出ていれば印の面（バルーンの絵全体の物理寸・窓の原点）の写しも同じ時点で積む。
     let marker = match runtime
         .marker_surface(&ActorKey::from(scope.to_string()))
         .map(|m| m.begin_read_back().map(|p| (p, m.size())))
@@ -108,7 +108,7 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
     ))
 }
 
-/// 覗かれるたびに待たずに読む口（要件 1.2・1.5）。文字の面と（あれば）印の面が読めたら大きさを
+/// 覗かれるたびに待たずに読む口。文字の面と（あれば）印の面が読めたら大きさを
 /// 確かめ、重ねる仕事を返す。先に読めた方は持っておき、もう片方を待つ。
 fn reader(
     scope: u32,
@@ -187,7 +187,7 @@ fn balloon_job(
         let started = Instant::now();
         if let Some((physical, bytes, text_size, offset)) = layer {
             overlay::overlay_text(&mut canvas, size, physical, &bytes, text_size, offset);
-            // 印の面は文字より手前（画面と同じ重なり）。ずらしは無い（要件 3.6）。
+            // 印の面は文字より手前（画面と同じ重なり）。ずらしは無い。
             if let Some((bytes, marker_size)) = marker {
                 overlay::overlay_text(&mut canvas, size, physical, &bytes, marker_size, (0.0, 0.0));
             }

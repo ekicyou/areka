@@ -1,7 +1,7 @@
 use wintf::ecs::Visual;
 
 // ========================================================================
-// Visual API unit tests (Task 1.2)
+// Visual API unit tests
 // ========================================================================
 
 #[test]
@@ -48,7 +48,7 @@ fn test_visual_clamped_opacity_clamps_to_unit_range() {
     }
 }
 
-/// 要件 2.8: `set_opacity(NaN)` は 1.0（不透明）を入れる。
+/// `set_opacity(NaN)` は 1.0（不透明）を入れる。
 #[test]
 fn test_visual_set_opacity_nan_stores_one() {
     let mut visual = Visual::default();
@@ -57,7 +57,7 @@ fn test_visual_set_opacity_nan_stores_one() {
     assert_eq!(visual.opacity, 1.0);
 }
 
-/// 要件 2.8: 欄へ直に書かれた NaN を `clamped_opacity` は 1.0 として返す。
+/// 欄へ直に書かれた NaN を `clamped_opacity` は 1.0 として返す。
 #[test]
 fn test_visual_clamped_opacity_nan_returns_one() {
     let visual = Visual {

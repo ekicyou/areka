@@ -1,6 +1,6 @@
 use super::*;
 
-// -- 自動 close ゲート `smoke_exit_ms_from`（純粋・env 非依存・task 2.3・R4.1） --
+// -- 自動 close ゲート `smoke_exit_ms_from`（純粋・env 非依存） --
 
 /// env 未設定（`None`）ではゲート発火なし（`None`）＝タスク不投入。
 #[test]

@@ -1,4 +1,4 @@
-//! `request_shape_error` と `shape_error_status` の決定論テスト（spec: mcp-strict-errors 要件 6.1・6.2・6.4）。
+//! `request_shape_error` と `shape_error_status` の決定論テスト。
 
 use hyper::StatusCode;
 use rmcp::model::{ErrorCode, NumberOrString};

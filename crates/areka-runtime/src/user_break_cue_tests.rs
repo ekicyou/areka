@@ -1,13 +1,12 @@
 // =============================================================================
-// 中断を禁じる区間の受け口の決定論テスト（areka-P0-balloon-break）
+// 中断を禁じる区間の受け口の決定論テスト
 // =============================================================================
 //
 // 担当のコマンドだけを拾う自己選別と、トークの始まりの自己検出をここで固定する。
 //
 // 確かめること: `\![enter,nouserbreakmode]`／`\![leave,nouserbreakmode]` の 2 組だけを拾う
 // こと・第 1 引数が違う `onlinemode` は拾わないこと・複製ごとに「トークが始まった」が
-// 先頭に 1 回だけ出ること・受信端が落ちていても台本を殺さず記録すること（areka-P0-balloon-break 要件 5.1・5.2・
-// 5.4・7.3）。
+// 先頭に 1 回だけ出ること・受信端が落ちていても台本を殺さず記録すること。
 
 use super::*;
 use crate::consumer_ledger::test_support::{broken_custom_cue, carrier_cue};
@@ -31,7 +30,7 @@ fn drain(rx: &Receiver<NoUserBreakSignal>) -> Vec<NoUserBreakSignal> {
 
 // ---------------------------------------------------------------- 受理
 
-/// `\![enter,nouserbreakmode]` は「トークが始まった」に続いて「入る」を送る（areka-P0-balloon-break 要件 5.1）。
+/// `\![enter,nouserbreakmode]` は「トークが始まった」に続いて「入る」を送る。
 #[test]
 fn enter_no_user_break_mode_sends_enter() {
     let (mut sink, rx) = sink();
@@ -43,7 +42,7 @@ fn enter_no_user_break_mode_sends_enter() {
     );
 }
 
-/// `\![leave,nouserbreakmode]` は「出る」を送る（areka-P0-balloon-break 要件 5.2）。
+/// `\![leave,nouserbreakmode]` は「出る」を送る。
 #[test]
 fn leave_no_user_break_mode_sends_leave() {
     let (mut sink, rx) = sink();
@@ -74,8 +73,8 @@ fn signals_follow_the_script_order() {
 
 // ---------------------------------------------------------------- 担当外
 
-/// 同じ `enter`／`leave` でも第 1 引数が `onlinemode` なら担当外——旗の合図は 1 件も出ない
-/// （areka-P0-balloon-break 要件 8.2）。**両側から挟む**ため `enter` と `leave` の両方を通す。
+/// 同じ `enter`／`leave` でも第 1 引数が `onlinemode` なら担当外——旗の合図は 1 件も出ない。
+/// **両側から挟む**ため `enter` と `leave` の両方を通す。
 #[test]
 fn online_mode_is_benign_skip() {
     let (mut sink, rx) = sink();
@@ -132,7 +131,7 @@ fn non_carrier_cue_is_benign_skip() {
 
 // ---------------------------------------------------------------- トークの境界
 
-/// 複製ごとに「トークが始まった」が**先頭に 1 回だけ**出る（areka-P0-balloon-break 要件 5.4・旗の順序）。
+/// 複製ごとに「トークが始まった」が**先頭に 1 回だけ**出る。
 ///
 /// 複製＝トークの境界なので、複製した受け口は前のトークの状態を引き継がない。同じ受け口を
 /// 何度 `emit` しても TalkStarted は増えず、新しい複製では必ずもう一度先頭に出る。
@@ -173,7 +172,7 @@ fn talk_started_is_sent_once_per_clone_and_comes_first() {
 }
 
 /// 担当外の指示しか配られないトークでも、「トークが始まった」は出る（閉じ忘れた旗を解く
-/// 契機は担当のコマンドではなく最初の指示である・areka-P0-balloon-break 要件 5.4）。
+/// 契機は担当のコマンドではなく最初の指示である）。
 #[test]
 fn talk_started_comes_from_any_first_cue() {
     let (mut sink, rx) = sink();
@@ -192,7 +191,7 @@ fn talk_started_comes_from_any_first_cue() {
 
 // ---------------------------------------------------------------- 送出の失敗
 
-/// 受信端が落ちていても落ちず、送れなかったことを記録する（黙って諦めない・areka-P0-balloon-break 要件 6）。
+/// 受信端が落ちていても落ちず、送れなかったことを記録する（黙って諦めない）。
 #[test]
 fn dropped_receiver_is_logged_and_does_not_panic() {
     let (mut sink, rx) = sink();
@@ -207,8 +206,7 @@ fn dropped_receiver_is_logged_and_does_not_panic() {
 
 // ---------------------------------------------------------------- トークの終わり
 
-/// 合図を送った複製（＝そのトークの受け口）を落とすと、最後に「トークが終わった」が 1 回届く
-/// （areka-P0-status-execution-states 要件 3.3・3.4）。
+/// 合図を送った複製（＝そのトークの受け口）を落とすと、最後に「トークが終わった」が 1 回届く。
 #[test]
 fn dropping_a_clone_that_sent_delivers_talk_ended() {
     let (registered, rx) = sink();

@@ -1,4 +1,4 @@
-//! 本体の口の束（runtime-module-untangle design「SessionHooks」）。
+//! 本体の口の束（`SessionHooks`）。
 //!
 //! `runtime` は本体の状態（置き場のゴースト・起動の文脈・切替と読み直しの予約）を名指さず、
 //! 本体が据えた関数のポインタの束を通して同期で読み書きする（前例 `wintf::ecs::cursor::CursorQuery`）。

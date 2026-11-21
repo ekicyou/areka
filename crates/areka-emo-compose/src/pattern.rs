@@ -1,36 +1,35 @@
 //! `PatternState` / `PatternFrame`: pattern 進行状態の合成入力第一級表現（公開型正本）。
 //!
-//! seriko（⑤）が pattern タイムライン評価から生産し、emo-compose（⑥合成）／emo-present（⑥提示）が
-//! 消費する。animation id → 現在コマ 1 枚（要件 4.2）の写像を `BTreeMap` で保持し、正準（昇順）順序で
+//! seriko が pattern タイムライン評価から生産し、emo-compose（合成）／emo-present（提示）が
+//! 消費する。animation id → 現在コマ 1 枚の写像を `BTreeMap` で保持し、正準（昇順）順序で
 //! `Eq`／ハッシュを安定させる。この順序安定性は後段で `PatternState` が `ComposeKey`（emo-present の
-//! 合成メモ化キー）の一部となるため、キャッシュ等価判定の決定論に直結する（要件 5.2/5.4）。
+//! 合成メモ化キー）の一部となるため、キャッシュ等価判定の決定論に直結する。
 //!
 //! `Default` は空＝「pattern 寄与なし」。空の `PatternState` を渡した合成・キャッシュは従来（拡張前）と
-//! 観測等価（要件 5.4）。`Send + 'static` 所有でスレッド越え受け渡しに耐える。
+//! 観測等価。`Send + 'static` 所有でスレッド越え受け渡しに耐える。
 
 use std::collections::BTreeMap;
 
 use crate::method::ComposeMethod;
 use crate::nesting::{FilmId, PartKey};
 
-/// pattern 進行状態: animation id → 現在コマ 1 枚（要件 4.2）。
+/// pattern 進行状態: animation id → 現在コマ 1 枚。
 ///
-/// 欄の意味は 3 つ（要件 1.10, 4.5, 7.4）: **載っていない＝経過 0**／**コマ**（サーフェスを指す
+/// 欄の意味は 3 つ: **載っていない＝経過 0**／**コマ**（サーフェスを指す
 /// [`PatternFrame`]、または動く絵の子の絵の番号）／**消えている**（`always` の途中の終わりのコマの後）。
 /// 読みは [`cell`](Self::cell) が [`Cell`] で返す。seriko は経過 0 と同じコマを載せないので、空の
 /// `PatternState` は「全部が経過 0」と同じ意味になる。
 ///
 /// 内部表現は昇順の表（opaque）。`BTreeMap` の正準（キー昇順）順序により、
 /// 挿入順に依存せず [`Eq`] が安定する。これは `PatternState` が emo-present の `ComposeKey` に
-/// 組み込まれてキャッシュ等価判定に用いられるため決定論上必須である（要件 5.2/5.4）。
+/// 組み込まれてキャッシュ等価判定に用いられるため決定論上必須である。
 ///
-/// [`Default`] は空マップ＝「pattern 寄与なし」で、空を渡した合成・キャッシュは拡張前と観測等価
-/// （要件 5.4）。`Send + 'static` 所有。
+/// [`Default`] は空マップ＝「pattern 寄与なし」で、空を渡した合成・キャッシュは拡張前と観測等価。`Send + 'static` 所有。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PatternState {
-    /// animation id → 現在コマか「消えている」。各アニメは同時に最大 1 コマ（4.2「現在コマ 1 枚」）。
+    /// animation id → 現在コマか「消えている」。各アニメは同時に最大 1 コマ（現在コマ 1 枚）。
     frames: BTreeMap<u32, Slot>,
-    /// 部品のサーフェス番号 → animation id → 現在コマか「消えている」（要件 5.3, 5.4, 5.10）。
+    /// 部品のサーフェス番号 → animation id → 現在コマか「消えている」。
     /// 一番上の欄とは別。
     ///
     /// どれも昇順の表で、空の内側の表は持たない（入れた順・消した後に依らず [`Eq`] を安定させる）。
@@ -63,7 +62,7 @@ impl Slot {
     }
 }
 
-/// 欄 1 つの読み（要件 1.10, 4.5）。
+/// 欄 1 つの読み。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Cell<'a> {
     /// 載っていない（`always` なら経過 0 のコマを定義から描く）。
@@ -79,13 +78,13 @@ pub enum Cell<'a> {
 /// pattern の現在コマ 1 枚。表示中 surface のアニメに属する transient な合成寄与。
 ///
 /// `surface_id` は常に 0 以上（負値センチネル `-1` 等は評価器が停止／非駆動として解決済みで、
-/// コマとしてはここへ載らない）。`method` は完全語彙（要件 8.4）を保持し、合成の実駆動は
+/// コマとしてはここへ載らない）。`method` は完全語彙を保持し、合成の実駆動は
 /// `Overlay` のみ（下流 plan の method ゲートが `is_implemented()` で選別する）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PatternFrame {
     /// コマの surface_id（0 以上のみ・センチネルは評価器が解決済み）。
     pub surface_id: u32,
-    /// 描画メソッド（完全語彙・要件 8.4）。合成は `Overlay` のみ駆動、それ以外は非駆動シーム。
+    /// 描画メソッド（完全語彙）。合成は `Overlay` のみ駆動、それ以外は非駆動シーム。
     pub method: ComposeMethod,
     /// コマの X 累積オフセット。
     pub x: i64,
@@ -100,13 +99,12 @@ impl PatternState {
         self.frames.is_empty() && self.parts.is_empty() && self.films.is_empty()
     }
 
-    /// 指定 animation id の現在コマを設定する（同 id の既存コマ・「消えている」は置換＝現在コマ 1 枚・
-    /// 要件 4.2）。
+    /// 指定 animation id の現在コマを設定する（同 id の既存コマ・「消えている」は置換＝現在コマ 1 枚）。
     pub fn set(&mut self, animation_id: u32, frame: PatternFrame) {
         self.frames.insert(animation_id, Slot::Frame(frame));
     }
 
-    /// 一番上の animation を「消えている」にする（同 id のコマは置換・要件 4.5）。
+    /// 一番上の animation を「消えている」にする（同 id のコマは置換）。
     pub fn set_blank(&mut self, animation_id: u32) {
         self.frames.insert(animation_id, Slot::Blank);
     }
@@ -132,7 +130,7 @@ impl PatternState {
     /// 部品 `surface_id` の animation `animation_id` の今のコマを置く（同じ鍵の既存コマは置換）。
     ///
     /// 一番上の欄（[`set`](Self::set)）とは別の欄なので、同じ番号のサーフェスが一番上と部品の両方で
-    /// 出ても混ざらない（要件 5.10）。同じ部品を何か所に置いても欄は 1 つ（要件 5.4）。
+    /// 出ても混ざらない。同じ部品を何か所に置いても欄は 1 つ。
     pub fn set_part(&mut self, surface_id: u32, animation_id: u32, frame: PatternFrame) {
         self.parts
             .entry(surface_id)
@@ -140,7 +138,7 @@ impl PatternState {
             .insert(animation_id, Slot::Frame(frame));
     }
 
-    /// 部品 `part` の animation を「消えている」にする（同じ鍵のコマは置換・要件 4.5）。
+    /// 部品 `part` の animation を「消えている」にする（同じ鍵のコマは置換）。
     pub fn set_part_blank(&mut self, part: u32, animation_id: u32) {
         self.parts
             .entry(part)
@@ -255,14 +253,13 @@ mod tests {
         assert_eq!(state.get(8), None);
     }
 
-    /// 同一 id への二度目の `set` は置換する（現在コマ 1 枚・要件 4.2）。
+    /// 同一 id への二度目の `set` は置換する（現在コマ 1 枚）。
     #[test]
     fn set_twice_same_id_replaces() {
         let mut state = PatternState::default();
         state.set(3, frame(100, 0, 0));
         state.set(3, frame(200, 0, 0));
         assert_eq!(state.get(3).map(|f| f.surface_id), Some(200));
-        // 単一エントリのまま（コマは 1 枚）。
         assert_eq!(state.iter().count(), 1);
     }
 

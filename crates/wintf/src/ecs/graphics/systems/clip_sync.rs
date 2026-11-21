@@ -192,8 +192,6 @@ pub fn clip_sync_system(
                 }
             }
             _ => {
-                // clip == None または size が (0, 0) → クリップ解除
-                // WUC: SetClip(None) で解除（DComp の SetClip(None) と等価）。
                 if let Err(e) = visual_com.SetClip(None::<&CompositionClip>) {
                     error!(
                         entity = ?entity,
@@ -223,7 +221,7 @@ pub(crate) const AUTO_OWNER_KEY: ClipKey = (0.0, 0.0, 0.0, None, None, true);
 /// 切り抜きの鍵（物理の幅・高さ・拡大率・形）を作る。大きさ 0 か形なしは解除の鍵。
 ///
 /// 任意の図形は WUC での実現が範囲外なので「切り抜きなし」と読み替え、鍵が `prev` から
-/// 変わる回（＝図形へ変わった回）にだけ実体名つきの `warn!` を 1 度残す（3.8）。
+/// 変わる回（＝図形へ変わった回）にだけ実体名つきの `warn!` を 1 度残す。
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn clip_key_for(
     entity: Entity,
@@ -349,8 +347,7 @@ fn build_placed_clip(
 ///   `CompositionPathGeometry` + `CompositionPath` を要するが、`CompositionPath::Create`
 ///   は `IGeometrySource2D`（Win2D 由来）を必須とし、`windows` 0.62.2 単体では
 ///   構築経路が存在しない（registry 確認済み・`Graphics` feature でも Win2D なしでは不可）。
-///   areka 本体は個別半径を使わず（design.md「例外は example/ULW guard のみ」）、ビルド・
-///   挙動等価目的の全変種対応として、**4 角の最大半径による均一角丸矩形へ縮約**して
+///   areka 本体は個別半径を使わないが、全変種を受けるため、**4 角の最大半径による均一角丸矩形へ縮約**して
 ///   `RoundedRectangleGeometry` で写す（均一角丸ケース＝全角同値では厳密一致）。非均一時の
 ///   角差は WUC clip 単体 API の制約による近似であることを警告ログで明示する。
 fn build_clip(
@@ -362,13 +359,10 @@ fn build_clip(
 ) -> windows::core::Result<CompositionClip> {
     match clip_shape {
         ClipShape::Rectangle => {
-            // 角張った矩形クリップ。DComp 版は RectangleClip に明示的な矩形
-            // (0,0,physical_width,physical_height) を設定していた（＝Visual 自身のサイズに
-            // 依存しない絶対矩形）。WUC の InsetClip は Visual 自身のサイズを基準に inset する
-            // ため、Visual に SetSize していない本パイプラインでは等価にならない
-            // （visual_property_sync は offset/opacity のみ設定）。よって半径 0 の
-            // RoundedRectangleGeometry（明示サイズ）→ GeometricClip で「絶対サイズの矩形クリップ」
-            // として写像し、DComp の矩形範囲と等価にする。
+            // 角張った矩形クリップ。WUC の InsetClip は Visual 自身のサイズを基準に inset するが、
+            // この経路は Visual に SetSize しない（visual_property_sync は offset/opacity のみ設定）ので
+            // 等価にならない。半径 0 の RoundedRectangleGeometry（明示サイズ）→ GeometricClip で
+            // 絶対サイズの矩形クリップにする。
             build_rounded_geometric_clip(compositor, physical_width, physical_height, 0.0)
         }
         ClipShape::RoundedRectangle { radius } => {

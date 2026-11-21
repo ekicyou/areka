@@ -1,4 +1,4 @@
-//! taffy の木のつなぎのテスト（audit-wintf-layout-widget の 1・2 番）
+//! taffy の木のつなぎのテスト
 //!
 //! 配置の 5 つの係を本番と同じ順（`ecs/world/mod.rs` の `Layout`）に `.chain()` で並べて回す。
 
@@ -62,7 +62,7 @@ fn computed(world: &World, entity: Entity) -> taffy::Layout {
         .0
 }
 
-/// 1 番: 木に入った後で子へ `BoxStyle` を付けると、付けた大きさで配置される。
+/// 木に入った後で子へ `BoxStyle` を付けると、付けた大きさで配置される。
 #[test]
 fn box_style_added_to_child_later_is_laid_out() {
     let mut world = new_world();
@@ -84,7 +84,7 @@ fn box_style_added_to_child_later_is_laid_out() {
     assert_eq!(arrangement.size.width, 50.0);
 }
 
-/// 1 番: 親へ後から `BoxStyle` を付けても、親が根につながり、前から居る子も親につながる。
+/// 親へ後から `BoxStyle` を付けても、親が根につながり、前から居る子も親につながる。
 #[test]
 fn box_style_added_to_parent_later_links_parent_and_children() {
     let mut world = new_world();
@@ -123,7 +123,7 @@ fn box_style_added_to_parent_later_links_parent_and_children() {
     );
 }
 
-/// 1 番: 根でない部品の `BoxStyle` を外すと `TaffyStyle` が外れ、残った兄弟がその回のうちに詰まる。
+/// 根でない部品の `BoxStyle` を外すと `TaffyStyle` が外れ、残った兄弟がその回のうちに詰まる。
 /// `Arrangement` は最後の値のまま残る。
 #[test]
 fn box_style_removed_detaches_node_and_siblings_close_up() {
@@ -155,7 +155,7 @@ fn box_style_removed_detaches_node_and_siblings_close_up() {
     );
 }
 
-/// 1 番: 根の `BoxStyle` を外すと、`TaffyStyle` は既定のスタイルへ戻る（`LayoutRoot` だけの部品と同じ）。
+/// 根の `BoxStyle` を外すと、`TaffyStyle` は既定のスタイルへ戻る（`LayoutRoot` だけの部品と同じ）。
 #[test]
 fn box_style_removed_from_root_resets_to_default_style() {
     let mut world = new_world();
@@ -172,7 +172,7 @@ fn box_style_removed_from_root_resets_to_default_style() {
     assert_eq!(style.0, taffy::Style::default());
 }
 
-/// 2 番: 横に 3 つ並べた真ん中を消すと、その回のうちに 3 つ目が詰まる。
+/// 横に 3 つ並べた真ん中を消すと、その回のうちに 3 つ目が詰まる。
 /// 消した後の次の回は計算しない（消えた記録の読み位置が進む）。
 #[test]
 fn despawned_middle_child_closes_up_once_then_no_recompute() {
@@ -212,7 +212,7 @@ fn despawned_middle_child_closes_up_once_then_no_recompute() {
 const ORPHAN_PARENT_WARN: &str = "Parent has no taffy node";
 const ORPHAN_CHILDREN_WARN: &str = "BoxStyle removed while children still have BoxStyle";
 
-/// 38 番: 中ほどの部品から `BoxStyle` を外すと、`BoxStyle` を持つ子が配置から外れる。
+/// 中ほどの部品から `BoxStyle` を外すと、`BoxStyle` を持つ子が配置から外れる。
 /// 配置の振る舞いは変えず、外した回に一度だけ実体名つきで warn を出す。
 #[test]
 fn box_style_removed_from_container_with_styled_children_warns_once() {
@@ -238,7 +238,7 @@ fn box_style_removed_from_container_with_styled_children_warns_once() {
     assert!(log.contains("orphan-container"), "実体名が要る: {log}");
 }
 
-/// 55 番: `BoxStyle` を外した回に `BoxStyle` 付きの子を足すと、その子もまだ `TaffyStyle` が無いが
+/// `BoxStyle` を外した回に `BoxStyle` 付きの子を足すと、その子もまだ `TaffyStyle` が無いが
 /// 配置から外れるので warn を一度出す。
 #[test]
 fn box_style_removed_while_new_styled_child_spawned_warns_once() {
@@ -264,7 +264,7 @@ fn box_style_removed_while_new_styled_child_spawned_warns_once() {
     assert!(log.contains("orphan-container"), "実体名が要る: {log}");
 }
 
-/// 55 番: 部品と子の両方から同じ回に `BoxStyle` を外したら、配置から外れる子は居ないので warn は出ない。
+/// 部品と子の両方から同じ回に `BoxStyle` を外したら、配置から外れる子は居ないので warn は出ない。
 #[test]
 fn box_style_removed_from_container_and_child_together_does_not_warn() {
     let mut world = new_world();
@@ -280,7 +280,7 @@ fn box_style_removed_from_container_and_child_together_does_not_warn() {
     assert_eq!(log.matches(ORPHAN_CHILDREN_WARN).count(), 0, "{log}");
 }
 
-/// 38 番: 子の居ない部品から `BoxStyle` を外しても warn は出ない。
+/// 子の居ない部品から `BoxStyle` を外しても warn は出ない。
 #[test]
 fn box_style_removed_from_leaf_does_not_warn() {
     let mut world = new_world();
@@ -294,7 +294,7 @@ fn box_style_removed_from_leaf_does_not_warn() {
     assert_eq!(log.matches(ORPHAN_CHILDREN_WARN).count(), 0, "{log}");
 }
 
-/// 38 番: `BoxStyle` の無い親の下に置いた部品は配置されない。節を作った回に一度だけ warn を出す。
+/// `BoxStyle` の無い親の下に置いた部品は配置されない。節を作った回に一度だけ warn を出す。
 /// 親も同じ回に節を作るなら（根と子を一度に作る）出さない。
 #[test]
 fn node_under_parent_without_taffy_node_warns_once() {

@@ -1,9 +1,4 @@
-//! # actor_region_collapse_present_tests — 潰れた場所は提示で描かず、描いた後に潰れたら前の字を片付ける（areka-P0-balloon-text-bugs 件 2・実 GPU）
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-text-bugs` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **2.1**・**2.2**・**2.4**・**2.6**〜**2.9**・**4.2**、
-//! design「潰れた描画範囲（areka-P0-balloon-text-bugs 件 2）」・テストの方針「結合 7」）。
+//! # actor_region_collapse_present_tests — 潰れた場所は提示で描かず、描いた後に潰れたら前の字を片付ける（実 GPU）
 //!
 //! 提示（`present_frame`）は、描画範囲の潰れた場所を装着せず描かず（供給面を作らない）、記録も
 //! 出さない。描画資源が残っていれば（描いた後の再追従で潰れた）その提示で `TextSurface::release` で
@@ -28,7 +23,7 @@ use super::test_support::{
 use super::{TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::TextLayerConfig;
 
-/// 装着の記録の文（要件 2.8・1 文字も変えない）。
+/// 装着の記録の文（1 文字も変えない）。
 const ATTACHED: &str =
     "テキスト供給面を予約スロットへ装着した（ActorRender 不在時のみ・以降は Present のみ）";
 
@@ -36,7 +31,7 @@ const ATTACHED: &str =
 const FRAMES: usize = 40;
 
 /// 捕捉窓の中で `f` を走らせ、全部の記録を返す。対照の `error!` 1 件だけが ERROR で、WARN が 0 件で
-/// あることを確かめる（要件 2.2）。
+/// あることを確かめる。
 fn quiet(f: impl FnOnce()) -> Vec<CapturedEvent> {
     let ((), events) = capture_checked(f);
     let warns = events
@@ -58,7 +53,7 @@ fn frames(rt: &mut TextLayerRuntime, world: &mut World) {
 }
 
 /// 潰れたスコープ 1 に文字があっても、数十フレームで ERROR・WARN 0 行・面は作られず差し込み口に
-/// 文字の部品が付かない。隣のスコープ 0 は描かれる（要件 2.1・2.2・2.6）。
+/// 文字の部品が付かない。隣のスコープ 0 は描かれる。
 #[test]
 fn a_collapsed_balloon_is_never_attached_and_the_neighbour_is_drawn() {
     let (mut world, window, slot0) = com_world();
@@ -95,8 +90,8 @@ fn a_collapsed_balloon_is_never_attached_and_the_neighbour_is_drawn() {
     assert_eq!(attach_messages(&events), 1, "装着は隣のスコープの 1 回だけ");
 }
 
-/// 描いた後に潰れると、次の提示で差し込み口から文字の部品が外れ当たり行が空になる（要件 2.9）。
-/// 戻すと次のフレームで装着し、記録の文は同じで、差し込み口は枠の面より手前に居る（要件 2.4・2.8）。
+/// 描いた後に潰れると、次の提示で差し込み口から文字の部品が外れ当たり行が空になる。
+/// 戻すと次のフレームで装着し、記録の文は同じで、差し込み口は枠の面より手前に居る。
 #[test]
 fn collapsing_after_drawing_releases_the_surface_and_recovery_reattaches() {
     let (mut world, window, slot) = com_world();
@@ -146,7 +141,7 @@ fn collapsing_after_drawing_releases_the_surface_and_recovery_reattaches() {
     );
 }
 
-/// 箱でも同じ（要件 2.7）: 描いた箱の束を潰れた定義へ差し替えると面が外れ、数十フレームで ERROR・
+/// 箱でも同じ: 描いた箱の束を潰れた定義へ差し替えると面が外れ、数十フレームで ERROR・
 /// WARN 0 行・面は作られず写しに載らない。隣のスコープは描かれる。戻すと次のフレームで装着する。
 #[test]
 fn a_collapsed_box_is_not_drawn_nor_shown_and_recovery_reattaches() {

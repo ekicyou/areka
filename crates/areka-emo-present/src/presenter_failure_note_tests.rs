@@ -1,4 +1,4 @@
-//! 同じ原因の装置の失敗を、対象ごとに 1 回にまとめる（`animated-surface-log-flood` 要件 1.6・4.3・8.5）。
+//! 同じ原因の装置の失敗を、対象ごとに 1 回にまとめる。
 //!
 //! 同じ対象で、成立をはさまずに同じ原因（文脈＋HRESULT）の装置の失敗が続くあいだ、最初の 1 回だけ
 //! `error!`、2 回目からは同じ文言・同じ欄の `debug!` で残る。成立の後は `error!` に戻る。面が替わった
@@ -80,7 +80,7 @@ fn levels_of(events: &[CapturedEvent], message: &str) -> Vec<tracing::Level> {
         .collect()
 }
 
-/// 同じ原因の失敗を 3 回続けて注入すると ERROR 1 本と DEBUG 2 本（要件 4.3）。
+/// 同じ原因の失敗を 3 回続けて注入すると ERROR 1 本と DEBUG 2 本。
 #[test]
 fn same_cause_three_times_is_one_error_then_two_debug() {
     let mut world = make_world_with_gpu();

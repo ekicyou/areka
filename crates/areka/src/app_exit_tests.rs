@@ -1,8 +1,4 @@
-//! `app_exit` の決定論テスト（areka-P0-app-lifetime-separation）。
-//!
-//! 全窓破棄の私有部品 `despawn_app_windows` の 3 本は旧 `main.rs` シームの
-//! smoke 用の全窓破棄関数のテストから移した（task 3.1）。判断は不変で、対象の関数名と
-//! 打ち切り行の相名（`[quit_app]`）だけを追随させた。
+//! `app_exit` の決定論テスト。
 
 use super::*;
 
@@ -37,7 +33,7 @@ fn despawn_app_windows_empty_world_is_noop() {
     assert!(world.get_entity(other).is_ok());
 }
 
-/// **Req 6.2/6.3（despawn の呼出点そのもの・task 7.3）**: 標的の一部が**ループ実行中に**
+/// **despawn の呼出点そのもの**: 標的の一部が**ループ実行中に**
 /// 破棄済みへ変わっても、`World::despawn` の `Could not despawn entity`（`bevy_ecs::world`
 /// の `warn!`）を 1 件も出さず、正常終了系（`debug!`）として打ち切って**残りの標的を
 /// 処理し切る**。
@@ -61,9 +57,8 @@ fn despawn_app_windows_empty_world_is_noop() {
 ///
 /// 本番ツリーの窓 entity 同士に現在この連鎖は**無い**（`spawn_ghost_windows` はキャラ窓・
 /// バルーン窓を top-level で spawn し、リポジトリ内にカスタム関係型も無い）。それでも
-/// 呼出点に存在確認が無いこと自体が構造的な穴であり（3.2 の消費側 4 入口は呼出点を
-/// 覆っていない）、本檻はその穴を塞いだことを固定する——将来の到達に対する保険という
-/// 位置づけは task 6.3 の 3 檻と同じである。
+/// 呼出点に存在確認が無いこと自体が構造的な穴であり、本檻はその穴を塞いだことを固定する——
+/// 将来の到達に対する保険という位置づけである。
 ///
 /// # 「警告ゼロ」を tracing 捕捉だけで主張してはならない（本檻の対照アームの理由）
 ///
@@ -160,7 +155,7 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
         "打ち切りは後続の標的を止めない（Req 6.3「他の scope の処理を継続」）"
     );
     // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE ゆえ
-    // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現（follow.rs 3.2 檻と同型）。
+    // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現。
     // ここが見ているのは areka 自身の出力である（bevy の `log` 経由 warn は対照アーム担当）。
     assert!(
         events.iter().all(|e| e.level > tracing::Level::INFO),
@@ -179,7 +174,7 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
     );
 }
 
-/// **要件 3.9・3.10（OS の閉鎖要求・ゴースト窓）**: 送り口付きの World でスコープ 1 の
+/// **OS の閉鎖要求（ゴースト窓）**: 送り口付きの World でスコープ 1 の
 /// キャラ窓へ受け手を呼ぶと、メニューの「終了」と同じ `CloseReason::User { scope: 1 }` の
 /// 終了要求が kanade へちょうど 1 件届き、窓は消えない（閉じるのは終了の握手の完了後）。
 /// 対照アーム: 送り口の無い World（kanade 未結線の起動）では窓を閉じて終了を指示する。
@@ -229,7 +224,7 @@ fn ghost_os_close_sends_close_request_with_the_window_scope() {
         "結線済みでは受け手は終了を指示しない（指示は終了系列の完了後）"
     );
 
-    // 対照アーム（要件 3.10）: 送り口の無い World（kanade 未結線の起動）では、別れの台詞を
+    // 対照アーム: 送り口の無い World（kanade 未結線の起動）では、別れの台詞を
     // 流す相手がいないので全窓を閉じて終了を指示する——標準の道具で閉じられるアプリのまま。
     let mut bare = World::new();
     bare.insert_non_send(AppExit::new());
@@ -251,10 +246,10 @@ fn connect_failed() -> areka_kanade::ShioriFault {
     }
 }
 
-/// **要件 1.7・1.8・3.3（判定の表・要件 7.2）**: 失敗の中身を返すのは「kanade の停止で原因が
-/// Fault」と「既定ゴーストへ戻せなかった」（areka-P0-ghost-shell-balloon-switch 要件 6.4）の
+/// **判定の表**: 失敗の中身を返すのは「kanade の停止で原因が
+/// Fault」と「既定ゴーストへ戻せなかった」の
 /// 2 行だけ。他の停止原因 4 値・強制退避・smoke の自動終了・OS の閉鎖要求・OS のセッションの
-/// 終了（同 要件 12.9）の 8 行は何も返さない（告知なし・終了コード 0）。
+/// 終了の 8 行は何も返さない（告知なし・終了コード 0）。
 #[test]
 fn fault_of_returns_the_fault_only_for_fault_origins() {
     let fault = connect_failed();
@@ -293,7 +288,7 @@ fn memory_write_failed() -> areka_sylphya::PersistFailure {
     }
 }
 
-/// **areka-P0-write-failure-notice 要件 2.2**: 記憶を書けなかった出所は SHIORI の告知を選ばず
+/// **記憶の書き込みの失敗**: 記憶を書けなかった出所は SHIORI の告知を選ばず
 /// （`fault_of` は `None`）、`write_failure_of` だけが中身を返す。他の 10 行は `None`。
 #[test]
 fn write_failure_of_returns_the_failure_only_for_memory_write_failed() {
@@ -319,7 +314,7 @@ fn write_failure_of_returns_the_failure_only_for_memory_write_failed() {
     }
 }
 
-/// **要件 1.12・4.5・2.5（最初が勝つ・要件 7.2）**: `quit_app` を 2 度呼んでも `FirstExit` は
+/// **最初が勝つ**: `quit_app` を 2 度呼んでも `FirstExit` は
 /// 最初の出所のまま。2 度目は debug の `app_exit_again` がちょうど 1 件で、上書きはしない。
 /// 最初の `app_exit` の出所には失敗の種類と理由が載る。
 /// 対照アーム: 受け口（`AppExit`）の無い World でも最初の出所は残す。
@@ -373,7 +368,7 @@ fn quit_app_keeps_the_first_origin_and_logs_the_second_as_again() {
     );
 }
 
-/// **要件 6.2・4.2・4.3**: 起こし直しのために全窓を閉じても終了は指示しない。
+/// **起こし直しは終了を指示しない**: 起こし直しのために全窓を閉じても終了は指示しない。
 ///
 /// ゴースト窓 3 枚＋印の無い entity 1 つ＋受け口（`AppExit`）の World で
 /// `close_windows_for_restart` を呼び、⑴ ゴースト窓 0 枚 ⑵ 印の無い entity は残る
@@ -417,7 +412,7 @@ fn close_windows_for_restart_closes_all_windows_without_requesting_exit() {
     );
 }
 
-/// **areka-P0-ghost-shell-balloon-switch 要件 3.1・3.2・3.9**: 起こし直しのために全窓を閉じたら、
+/// 起こし直しのために全窓を閉じたら、
 /// 窓の束（`GhostWindows` 資源）も外す（消した窓の `Entity` を装着の相のゲートに見せない）。
 /// 終了の指示は出さない。
 ///
@@ -472,7 +467,7 @@ fn close_windows_for_restart_removes_ghost_windows_resource() {
     );
 }
 
-/// **areka-P0-window-link-directives 要件 6.2**: 起こし直しのために全窓を閉じたら、窓の組の帳簿と
+/// 起こし直しのために全窓を閉じたら、窓の組の帳簿と
 /// ドラッグの控えも外す（次の一式は起動と同じく descript の組から始まる）。
 #[test]
 fn close_windows_for_restart_removes_sticky_ledger_and_drag_session() {
@@ -527,7 +522,7 @@ fn close_windows_for_restart_removes_sticky_ledger_and_drag_session() {
     );
 }
 
-/// 起こし直しで動かせない指定の帳簿が無くなる（descript-window-keys 要件 5.5）: 窓を閉じて起こし直す所が
+/// 起こし直しで動かせない指定の帳簿が無くなる: 窓を閉じて起こし直す所が
 /// descript の段も台本の lock も外す（次に起きた窓の組は起動で据え直す）。
 #[test]
 fn close_windows_for_restart_removes_the_balloon_lock_ledger() {
@@ -552,7 +547,7 @@ fn close_windows_for_restart_removes_the_balloon_lock_ledger() {
     );
 }
 
-/// **areka-P0-ghost-shell-balloon-switch 要件 12.9**: HWND が付いたゴースト窓へ、OS の閉鎖要求の
+/// HWND が付いたゴースト窓へ、OS の閉鎖要求の
 /// 受け手と並べて OS のセッションの終了の受け手も差す（系は増やさない）。印の無い窓には差さない。
 #[test]
 fn attach_os_close_request_puts_both_receivers_on_ghost_windows() {

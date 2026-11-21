@@ -1,6 +1,5 @@
 // =============================================================================
 // 中断を禁じる区間の受け口が出どころで enter を止める決定論テスト
-// （areka-P0-script-security-level 要件 4.2〜4.5）
 // =============================================================================
 //
 // 配送と同じく `clone_box` の直後に `begin_talk` で出どころを渡し、外部扱いのトークでは
@@ -56,7 +55,7 @@ const NOT_OWNED_SSTP: ScriptOrigin = ScriptOrigin {
     ..ScriptOrigin::MCP_NOTIFY
 };
 
-/// 外部扱いのトークでは `Enter` を送らず warn が 1 件。始まり・`Leave`・終わりは今どおり（areka-P0-script-security-level 要件 4.2・4.4・4.5）。
+/// 外部扱いのトークでは `Enter` を送らず warn が 1 件。始まり・`Leave`・終わりは今どおり。
 #[test]
 fn external_treated_talk_refuses_enter_and_keeps_other_signals() {
     for origin in [LOWERED, NOT_OWNED_SSTP] {
@@ -89,7 +88,7 @@ fn external_treated_talk_refuses_enter_and_keeps_other_signals() {
     }
 }
 
-/// ゴースト自身・MCP の SEND・MCP の NOTIFY（いずれも `local`）では今どおり `Enter` が出る（areka-P0-script-security-level 要件 4.3）。
+/// ゴースト自身・MCP の SEND・MCP の NOTIFY（いずれも `local`）では今どおり `Enter` が出る。
 #[test]
 fn local_origins_still_send_enter() {
     for origin in [

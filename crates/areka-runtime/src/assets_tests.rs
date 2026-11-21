@@ -13,15 +13,12 @@ use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 // アクタ鍵 → scope の逆写像正本（`ActorKey` 語彙が既存写像と同一であることの往復検査に使う）。
 use crate::target_map::scope_of;
 
-/// emo2 fixture を渡した統合テストが
-/// `BootAssets` の各フィールドに期待どおりのデータを含んで green で通る。
+/// emo2 fixture を渡すと `BootAssets` の各フィールドが実データで埋まる。
 ///
-/// 既知 scope 集合 `[0, 1]` に対し `build_boot_assets` が populated な `ScopeAssets`
-/// （scope0=surface0／scope1=surface10・areka-P0-emo2-boot 設計 DD-9）・scope ごとの balloon 資産・2 層マージ済み
-/// `BalloonModel`・emo2 alias 由来の `resolver`・DD-8 の `static_binds`
-/// `[1100,1207,1302,1500,1800]` を返すことを固定する。戻り値だけで以後ファイル I/O が
-/// 不要になる（＝全 I/O が本関数内で完結する）ことを、各フィールドが実データで
-/// populated であることの積極 assert で担保する。
+/// 既知 scope 集合 `[0, 1]` に対し `build_boot_assets` が `ScopeAssets`（scope0=surface0／scope1=surface10）・
+/// scope ごとの balloon 資産・2 層マージ済み `BalloonModel`・emo2 alias 由来の `resolver`・`static_binds`
+/// `[1100,1207,1302,1500,1800]` を返すことを固定する。以後ファイル I/O が不要になることは、
+/// 各フィールドが実データで埋まっていることの assert で担保する。
 ///
 /// `bake` は WIC で PNG をデコードするため COM 初期化が要る（GPU は不要・attach なし）。
 #[test]
@@ -30,7 +27,7 @@ fn build_boot_assets_from_emo2_fixture() {
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
-    // --- shells: 要求 scope に 1:1 対応・初期 surface id は areka-P0-emo2-boot 設計 DD-9（scope0=0／scope>=1=10） ---
+    // --- shells: 要求 scope に 1:1 対応・初期 surface id は scope0=0／scope>=1=10 ---
     assert_eq!(boot.shells.len(), 2, "要求 scope 集合 [0,1] に 1:1 対応");
     assert_eq!(boot.shells[0].scope, 0);
     assert_eq!(
@@ -43,8 +40,7 @@ fn build_boot_assets_from_emo2_fixture() {
         "scope>=1 → 初期 surface 10"
     );
 
-    // 各 scope の EmoWorld は FRESH に build 済みで、初期表示 surface を実際に内包する
-    // （scope0=surface0／scope1=surface10）。装着へ手渡す前段の populated 担保。
+    // 各 scope の EmoWorld は初期表示 surface を実際に内包する（scope0=surface0／scope1=surface10）。
     assert!(
         boot.shells[0].emo_world.surface(0).is_some(),
         "scope0 の World は初期 surface 0 を内包する"
@@ -68,7 +64,7 @@ fn build_boot_assets_from_emo2_fixture() {
     assert_eq!(boot.balloons.len(), 2, "balloon 資産も scope ごとに 1:1");
     assert_eq!(boot.balloons[0].scope, 0);
     assert_eq!(boot.balloons[1].scope, 1);
-    // balloon target World は面 0（初期表示・areka-P0-emo2-boot 設計 DD-9）を内包する（構築が実枠を組んだ担保）。
+    // balloon target World は面 0（初期表示）を内包する。
     assert!(
         boot.balloons[0].emo_world.surface(0).is_some(),
         "balloon target World は初期面 0 を内包する"
@@ -99,7 +95,7 @@ fn build_boot_assets_from_emo2_fixture() {
     assert_eq!(wp0.x(), Some(266), "windowposition は面別層のみ供給");
     assert_eq!(wp0.y(), Some(-129));
 
-    // scope1 は balloonk0.png を採用 → balloonk0s.txt が上書き層（balloons0s.txt ではない・areka-P0-kero-balloon 要件 2.2）。
+    // scope1 は balloonk0.png を採用 → balloonk0s.txt が上書き層（balloons0s.txt ではない）。
     let vr1 = boot.balloons[1].definitions.face0().model.validrect();
     assert_eq!(
         vr1.top(),
@@ -134,7 +130,7 @@ fn build_boot_assets_from_emo2_fixture() {
         "非表示センチネルは alias 非依存"
     );
 
-    // --- static_binds: areka-P0-emo2-boot 設計 DD-8 の emo2 default==1 集合（昇順） ---
+    // --- static_binds: emo2 の default==1 集合（昇順） ---
     assert_eq!(
         boot.static_binds
             .for_scope(&areka_sakura::ActorKey::from("0"))
@@ -143,9 +139,9 @@ fn build_boot_assets_from_emo2_fixture() {
         "shell descript の sakura.bindgroup{{N}}.default==1"
     );
 
-    // --- loop_tables: 既に保持する EmoWorld スナップショットから from_world で構築（面種非依存・areka-P0-seriko-loop の裁定 (a)） ---
-    // 新規ファイル I/O なし＝保持済み World の再利用のみ。boot 内で組んだ表が、同じ retained World
-    // から再構築した表と一致する（is_empty・当該面 surface のアニメ本数）ことを固定し、reuse を担保する。
+    // --- loop_tables: 保持済みの EmoWorld スナップショットから from_world で構築（面種非依存） ---
+    // boot 内で組んだ表が、同じ retained World から再構築した表と一致する（is_empty・当該面 surface の
+    // アニメ本数）ことを固定する。
     let shell_rebuilt = AnimationTable::from_world(&boot.shells[0].emo_world);
     assert_eq!(
         boot.loop_tables.shell.is_empty(),
@@ -157,7 +153,7 @@ fn build_boot_assets_from_emo2_fixture() {
         shell_rebuilt.animations(0).len(),
         "shell 表は保持 World と同一エントリ（新規 I/O なし・面種非依存）"
     );
-    // balloon 表は **scope 別**（キー＝scope 番号・areka-P0-kero-balloon 要件 5.6）。各 scope の表が、その scope が
+    // balloon 表は **scope 別**（キー＝scope 番号）。各 scope の表が、その scope が
     // 保持する World から再構築した表と一致する（＝別 scope の World 由来ではない・新規 I/O なし）。
     for balloon_assets in &boot.balloons {
         let rebuilt = AnimationTable::from_world(&balloon_assets.emo_world);
@@ -181,18 +177,16 @@ fn build_boot_assets_from_emo2_fixture() {
     }
 }
 
-/// （areka-P0-kero-balloon 要件 5.6）バルーンのループ表が **scope 別の写像**
-/// として導出され、そのキー集合が scope 集合と一致する。
+/// バルーンのループ表が **scope 別の写像**として導出され、そのキー集合が `BootAssets.balloons` の
+/// scope 集合と一致する。
 ///
-/// 「先頭 scope の資産から 1 本組めば全 scope に足りる」という旧前提の実装（＝写像が単一
-/// エントリ `{0}` に縮む形）はこの檻で落ちる。またキー集合が `BootAssets.balloons` の scope
-/// 集合と一致することを固定する。
+/// 「先頭 scope の資産から 1 本組めば全 scope に足りる」実装（写像が単一エントリ `{0}` に縮む形）は
+/// ここで落ちる。
 ///
-/// 内容についての注記（データ事実・観測等価）: emo2 のバルーン面は `areka-emo-present` の
-/// 合成 `surfaces.txt` から build され、そこに `animation*` 行が一切無いため **全 scope とも
-/// 空表**になる。したがって areka-P0-kero-balloon が変えた観測は表の中身ではなく **どの World から何本の表を
-/// 導出するか**であり、この檻はキー集合（と導出元 World の scope 一致）を固定する。表内容の
-/// 一致は `build_boot_assets_from_emo2_fixture` が scope ごとの再構築突合で担保する。
+/// emo2 のバルーン面は `areka-emo-present` の合成 `surfaces.txt` から build され、そこに `animation*` 行が
+/// 一切無いため **全 scope とも空表**になる。この檻が固定するのは表の中身ではなく、どの World から何本の
+/// 表を導出するか（キー集合と導出元 World の scope 一致）である。表内容の一致は
+/// `build_boot_assets_from_emo2_fixture` が scope ごとの再構築突合で担保する。
 #[test]
 fn build_boot_assets_derives_balloon_loop_tables_per_scope() {
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
@@ -210,8 +204,8 @@ fn build_boot_assets_derives_balloon_loop_tables_per_scope() {
         "バルーン表のキー集合は balloons の scope 集合と一致する"
     );
 
-    // データ事実（合成 surfaces.txt に animation 行が無い）ゆえ emo2 は全 scope 空表。
-    // 中身が観測等価でも、駆動される表が scope ごとに別実体であることが areka-P0-kero-balloon の是正点。
+    // 合成 surfaces.txt に animation 行が無いので emo2 は全 scope 空表。中身が同じでも、
+    // 駆動される表が scope ごとに別実体であることが要点。
     for (scope, table) in &boot.loop_tables.balloon {
         assert!(
             table.is_empty(),
@@ -220,7 +214,7 @@ fn build_boot_assets_derives_balloon_loop_tables_per_scope() {
     }
 }
 
-/// （areka-P0-kero-balloon 要件 5.6）起動シームの転送が **全 scope** を
+/// 起動シームの転送が **全 scope** を
 /// アクタ鍵語彙へ写して seriko へ渡す（単一エントリ暫定でない）。
 ///
 /// `wire_runtime`（lib.rs）と spine ハーネス（本体の `crates/areka/src/runtime_tests/spine.rs`）が共有する転送
@@ -287,7 +281,7 @@ fn actor_keyed_balloon_tables_maps_every_scope() {
     );
 }
 
-/// 空の scope 集合では balloon 表の写像も空になる（縮退・areka-P0-kero-balloon 設計の不変条件 (c) の degenerate 端）。
+/// 空の scope 集合では balloon 表の写像も空になる（縮退）。
 ///
 /// seriko 側は不在 scope を**空表意味論**（抽選対象ゼロ・乱数非消費・panic なし）で扱うため、
 /// 空写像はループ完全不活性と等価である。
@@ -307,20 +301,20 @@ fn build_boot_assets_yields_empty_balloon_table_map_for_no_scopes() {
     );
 }
 
-/// （areka-P0-kero-balloon 要件 2.1／7.2）起動時資産が **scope ごとに
+/// 起動時資産が **scope ごとに
 /// 異なる**バルーン定義を保持する（共有 1 本ではない）。
 ///
 /// emo2-kakukaku fixture では scope0 が `balloons0.png`（→ `balloons0s.txt`）を、scope1 が
 /// `balloonk0.png`（→ `balloonk0s.txt`）を採用する。両 scope の `windowposition` /
 /// `validrect` が**互いに異なる**こと、および `wordwrappoint.x` が
 /// **scope0 は面別層で -49 に上書き・scope1 は面別層に宣言が無いため descript 基層の -34 を継承**
-/// することを固定する（areka-P0-kero-balloon 要件 2.1／2.2／2.5）。共有 1 本のモデルを全 scope へ配る実装はこの檻で落ちる。
+/// することを固定する。共有 1 本のモデルを全 scope へ配る実装はこの檻で落ちる。
 #[test]
 fn build_boot_assets_holds_per_scope_balloon_models() {
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
-    // balloons の scope 集合＝shells の scope 集合（areka-P0-kero-balloon 設計の不変条件 (a)）。
+    // balloons の scope 集合＝shells の scope 集合。
     let balloon_scopes: Vec<u32> = boot.balloons.iter().map(|b| b.scope).collect();
     let shell_scopes: Vec<u32> = boot.shells.iter().map(|s| s.scope).collect();
     assert_eq!(
@@ -363,7 +357,7 @@ fn build_boot_assets_holds_per_scope_balloon_models() {
     );
 
     // wordwrappoint.x: scope0 は面別層が -49 で後勝ち上書き・scope1 は面別層に宣言が無く
-    // descript 基層の -34 を継承する（上書き／継承の対照＝areka-P0-kero-balloon 要件 2.5）。
+    // descript 基層の -34 を継承する（上書き／継承の対照）。
     assert_eq!(
         scope0.wordwrappoint().x(),
         Some(-49),
@@ -376,7 +370,7 @@ fn build_boot_assets_holds_per_scope_balloon_models() {
     );
 }
 
-/// areka-P0-text-decoration-canon 要件 4.6: 起動時資産が **面 0 の焼き込み済み画像の原点画素**からバルーンの背景色を導く。
+/// 起動時資産が **面 0 の焼き込み済み画像の原点画素**からバルーンの背景色を導く。
 ///
 /// 兄弟テスト（`balloon_background_tests.rs`）は導出規則そのものを合成画像で固定するが、
 /// `build_boot_assets` の中で規則が**実際に呼ばれている**ことはそこでは映らない。ここが実
@@ -439,16 +433,15 @@ const EMO2_BACKGROUND_SCOPE0: (u8, u8, u8) = (255, 255, 255);
 /// emo2 相方側バルーン（面 0）の背景色（2026-09-12 実測・同上）。
 const EMO2_BACKGROUND_SCOPE1: (u8, u8, u8) = (255, 255, 255);
 
-/// areka-P0-kero-balloon の適用**前**の 2 層マージを再現する神託（同 spec の要件 5.5）。
+/// バルーン定義を scope 別にする改修の**前**の 2 層マージを再現する神託。
 ///
-/// merge-base（969a9b3）の `build_balloon_model` は **固定名** `descript.txt`（基層）＋
-/// `balloons0s.txt`（面別上書き層）を `areka_parsers::balloon::parse_str` へ渡すだけの
-/// 関数であり、その結果を単一の [`BalloonModel`] として全 scope で共有していた
-/// （`BALLOON_FACE0_TXT` 定数）。読取は `decode(bytes, DefaultEncoding::Ansi)`・
+/// 改修前の `build_balloon_model` は **固定名** `descript.txt`（基層）＋`balloons0s.txt`（面別上書き層）を
+/// `areka_parsers::balloon::parse_str` へ渡すだけの関数で、その結果を単一の [`BalloonModel`] として
+/// 全 scope で共有していた（`BALLOON_FACE0_TXT` 定数）。読取は `decode(bytes, DefaultEncoding::Ansi)`・
 /// 読取失敗は空層で継続——現行 `load_scope_balloon_model` の層構成と同じ規約である。
 ///
-/// 適用前のバイナリは手元に残らないが、規則は数行で再現できる。手書き期待値ではなく
-/// **適用前の規則そのもの**と突き合わせることで、非回帰の主張を規則同士の等式として固定する。
+/// 改修前のバイナリは手元に残らないが、規則は数行で再現できる。手書き期待値ではなく**改修前の規則そのもの**と
+/// 突き合わせて、非回帰を規則同士の等式として固定する。
 fn pre_spec_balloon_model(balloon_root: &Path) -> BalloonModel {
     let read = |name: &str| {
         std::fs::read(balloon_root.join(name))
@@ -460,25 +453,25 @@ fn pre_spec_balloon_model(balloon_root: &Path) -> BalloonModel {
     areka_parsers::balloon::parse_str(&descript, face0.as_deref())
 }
 
-/// 本体側 scope の非回帰（areka-P0-kero-balloon 要件 5.5）: 本体側 scope（scope 0）の**バルーン定義**と、
-/// そこから解決される**文字描画領域**が areka-P0-kero-balloon の適用前と同一である。
+/// 本体側 scope の非回帰: 本体側 scope（scope 0）の**バルーン定義**と、
+/// そこから解決される**文字描画領域**が改修前と同一である。
 ///
-/// 成立の理由（適用前後の経路が同じ 2 ファイルへ落ちること）:
-/// - 適用前は固定名 `balloons0s.txt` を上書き層として読んでいた。
-/// - 適用後の scope 0 の連鎖は `balloonp0def` → `balloons` であり、emo2-kakukaku は
+/// 成立の理由（改修前後の経路が同じ 2 ファイルへ落ちること）:
+/// - 改修前は固定名 `balloons0s.txt` を上書き層として読んでいた。
+/// - 改修後の scope 0 の連鎖は `balloonp0def` → `balloons` であり、emo2-kakukaku は
 ///   `balloonp0def*` を持たないため面 0 は `balloons0.png` へ解決し、対応する上書き層は
 ///   `balloons0s.txt` になる。
 ///
 /// ゆえに両者は**同一の 2 層**をマージしており、モデルは bit 同値でなければならない。
 /// 文字描画領域は [`ResolvedBalloonText::resolve`] にモデルと**バルーン面の image px 原寸**
-/// （scope 0 は `balloons0.png` の 400×224＝適用前の固定名採寸が返していた値そのもの）を
+/// （scope 0 は `balloons0.png` の 400×224＝改修前の固定名採寸が返していた値そのもの）を
 /// 与えて解決する——`validrect` 由来の領域・折返し閾値・描画開始点までを含む同一性の檻。
 ///
 /// 判別力: scope 1 の定義（`balloonk0s.txt` 由来）から解決した領域は別値になる。もし
 /// 全 scope が 1 本のモデルへ畳み戻れば、あるいは scope 0 の上書き層が相方側へずれれば落ちる。
 #[test]
 fn scope0_balloon_model_and_text_region_match_pre_spec_fixed_name_merge() {
-    /// scope 0 のバルーン面 0（`balloons0.png`）の image px 原寸——適用前の固定名採寸が
+    /// scope 0 のバルーン面 0（`balloons0.png`）の image px 原寸——改修前の固定名採寸が
     /// 返していた値と同一（`areka_placement::measure` テストの `BALLOON0_W`/`BALLOON0_H`）。
     const SAKURA_FACE0: (u32, u32) = (400, 224);
 
@@ -526,7 +519,7 @@ fn scope0_balloon_model_and_text_region_match_pre_spec_fixed_name_merge() {
 ///
 /// emo2 shell descript の `sakura.bindgroup1100.name,腕,伸び` 由来で
 /// `resolve(Sakura, "腕", "伸び") == Some(1100)`（`emo2_declared_names_all_resolve`
-/// で存在確認済みの (カテゴリ, パーツ)→id 対）。未宣言の組は `None`（捏造しない・areka-P0-mayuna-compose 要件 3.7）。
+/// で存在確認済みの (カテゴリ, パーツ)→id 対）。未宣言の組は `None`（捏造しない）。
 #[test]
 fn build_boot_assets_bind_resolver_resolves_emo2_names() {
     // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96）。
@@ -584,7 +577,7 @@ fn build_boot_assets_bind_resolver_carries_mustselect() {
     );
 }
 
-/// （areka-P0-emo-dpi-scaling 要件 1.1）呼び手が渡した作者基準 DPI が
+/// 呼び手が渡した作者基準 DPI が
 /// `BootAssets` の `shell_author_dpi`／`balloon_author_dpi` へそのまま搬送される。
 ///
 /// shell=192／balloon=144 という **互いに異なる非 96 値**を渡し、両フィールドが宣言値
@@ -606,7 +599,7 @@ fn build_boot_assets_carries_supplied_author_dpi() {
     );
 }
 
-// ── 起動経路の surfaces.txt 復号（areka-P0-charset-canon 要件 6.1）──
+// ── 起動経路の surfaces.txt 復号──
 
 /// `root` の下に ghost／shell／balloon の最小の検体を組み、balloon のフォルダを返す。
 ///
@@ -650,10 +643,10 @@ fn synth_ghost(root: &Path, shell_descript: &str, surfaces: &[u8]) -> PathBuf {
 /// `charset,Shift_JIS` を宣言し、alias の値に Shift_JIS の「通常」を持つ surfaces.txt。
 ///
 /// UTF-8 として不正なバイト並びであることが本質（`92 CA 8F ED` は UTF-8 の妥当な並びでは
-/// ない）。適用前の `read_to_string` はここで読取失敗になる。
+/// ない）。`read_to_string` で読む実装はここで読取失敗になる。
 const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0,overlay,surface0.png,0,0\n}\nsurface10\n{\nelement0,overlay,surface10.png,0,0\n}\nsakura.surface.alias\n{\n\x92\xCA\x8F\xED,[0]\n}\n";
 
-/// areka-P0-charset-canon 要件 6.1: **起動時**の surfaces.txt 読取が、そのファイル自身の `charset` 宣言に従う。
+/// **起動時**の surfaces.txt 読取が、そのファイル自身の `charset` 宣言に従う。
 ///
 /// `build_boot_assets` はシェル dir でなく ghost ルートを取り、マウント解決を経て
 /// shell dir へ辿り着く。ゆえに検体は `(ghost_root, balloon_root)` の対を組む必要があるが、
@@ -667,12 +660,11 @@ const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0
 /// 本検査は、その権威を通った起動経路（`build_boot_assets`）が宣言どおりの文字コードで読めることを
 /// 固定する。パーサ層の検査（`charset::decode` と `shell::parse` の等値）は権威への配線までは
 /// 見ないため、配線が `read_to_string` へ戻ってもパーサ層の検査は緑のまま通り抜ける。
-/// 配置採寸側の同種の検査は `crates/areka-placement/src/measure_tests.rs` にあり、起動側は読取点ごとに
-/// 兄弟のテストファイルへ 1 本ずつ置く形にしている。
+/// 配置採寸側の同種の検査は `crates/areka-placement/src/measure_tests.rs` にある。
 ///
 /// 本検査が主張するのは「読取が失敗しないこと」までで、復号後の文字列そのものは見ない
 /// （Shift_JIS を別の 8bit 文字コードとして復号する退化はここを素通りする）。文字コード
-/// ごとの解析結果の等値はパーサ層（areka-P0-charset-canon）が担当する分業。
+/// ごとの解析結果の等値はパーサ層が担当する分業。
 ///
 /// `bake` は WIC で PNG をデコードするため COM 初期化が要る（本ファイルの既存檻と同じ）。
 #[test]
@@ -680,7 +672,7 @@ fn boot_read_honours_the_files_own_charset_declaration() {
     // 一時パスは共通窓口 `temp-path-kit` から受け取る（プロセス間で一意・Drop で中身ごと消える）。
     // 自前に組むと `std::env::temp_dir` の迂回を見張る番人が赤になる。
     let root = TempPath::new("areka-boot-assets-charset");
-    // シェル定義ファイルだけを Shift_JIS で置く（他ファイルの宣言は持ち込まれない・areka-P0-charset-canon 要件 6.2）。
+    // シェル定義ファイルだけを Shift_JIS で置く（他ファイルの宣言は持ち込まれない）。
     let balloon_dir = synth_ghost(
         root.path(),
         "charset,UTF-8\nseriko.dpi,96\nseriko.use_self_alpha,1\n",

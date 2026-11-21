@@ -1,9 +1,7 @@
-//! # 行送りの後も収まる行は全部見える（症状 F・再生の相の追試・R17.1〜17.4）
+//! # 行送りの後も収まる行は全部見える（症状 F）
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo2-conformance-e2e` のもの（別の spec のものはその場で名を書く）。
-//!
-//! [`crate::viewbox_draw`] の兄弟檻（`viewbox_draw_scroll_retain_tests.rs`）が純粋レイアウト
-//! （`FixedMetrics`）で組んだ入力を扱うのに対し、本檻は**本番の提示経路**
+//! [`crate::viewbox_draw`] の兄弟檻（`viewbox_draw_scroll_retain_tests.rs`）は純粋レイアウト
+//! （`FixedMetrics`）の入力を扱う。本檻は**本番の提示経路**
 //! （[`present_frame`] → `present_actor` → 実フォントの `DWriteMetrics` → `ViewboxExecutor`）を
 //! 実物の相方側バルーン幾何（`emo2-kakukaku` の `balloonk0s.txt` 由来・288×203 の面に
 //! 文字描画範囲 (24,40)-(240,133)＝幅 216・高さ 93・折返し基準 254＝描画範囲の外・
@@ -18,15 +16,14 @@
 //! 檻であり、症状 F は描画側では再現しない。較正は viewbox 側と同じで、描画対象から先頭可視行を
 //! 1 つ落とす欠陥を注入すると本檻も赤になる。
 //!
-//! **症状 F を再現するのは `leading_gap_cues` の 2 本**である（R17.3）。
+//! **症状 F を再現するのは `leading_gap_cues` の 2 本**である。
 //! 実機の相方側 scope は、pasta が話者切替の前に前の scope へ出す `\n[150]` を**空のまま**
 //! 受け取るため、台本の先頭に `NewLine { ratio: 1.5 }` が立つ。この空き 45 は、送り量の原点が
 //! 最初の行の開始側だと永久に送られず、最新の 1 行だけが描画範囲の上から 1.5 行ぶん下に残る。
 //!
-//! **拡大率**は 1.0 と 2.0 の両方で回す。症状 F を観測した実機走行は 192 dpi（k=2.0・生ログの
-//! `apply(ShowSurface)` 行が `k_ratio=ScaleRatio { num: 2, den: 1 }`）で、k=1.0 だけの檻では
-//! 実機の量子化・blit 量を通らない。拡大率が整数なので真位置と確定位置が一致し、k=2.0 でも
-//! byte 等価を受け入れ基準に保てる。
+//! **拡大率**は 1.0 と 2.0 の両方で回す。症状 F を観測した実機走行は 192 dpi（k=2.0）で、
+//! k=1.0 だけの檻では実機の量子化・blit 量を通らない。拡大率が整数なので真位置と確定位置が
+//! 一致し、k=2.0 でも byte 等価を受け入れ基準に保てる。
 
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
@@ -129,8 +126,8 @@ fn drive_lap(k: f32, frame_period: f64, cues: &[TalkCue], t_end: f64) -> Vec<u8>
         ResolvedBalloonText::resolve(&kero_model(), IMAGE),
     );
 
-    // 供給面の寸＝ceil(文字描画範囲 × k)。先頭可視行の帯は上端 0 から字の丈 × k ぶん
-    // （送りの式より先頭可視行は常に描画面の上端 0 に来る）。
+    // 供給面の寸＝ceil(文字描画範囲 × k)。先頭可視行は常に描画面の上端 0 に来るので、
+    // その帯は上端 0 から字の丈 × k ぶん。
     let (w, h) = physical(REGION_SIZE, k);
     let head_band = (FONT_HEIGHT as f32 * k).round() as u32;
     let steps = ((t_end / frame_period).ceil() as usize) + 2;
@@ -202,14 +199,14 @@ fn present_actor_scroll_keeps_first_visible_line_ink_coarse_cadence() {
     drive_scroll_lap(1.0, 0.078);
 }
 
-/// 冒頭に `\n[150]` が立つ台本を拡大率 1.0 で駆動する（症状 F の再現・R17.3）。
+/// 冒頭に `\n[150]` が立つ台本を拡大率 1.0 で駆動する（症状 F の再現）。
 ///
 /// 送りが起きた後の最終フレームで ⑴ 先頭可視行の帯（面の上端 0 から字の丈 × k）にインクが
 /// 在ること（[`drive_lap`] の最後の確かめ）⑵ その下にもインクが在ること＝見えている行が 2 つ以上
 /// あること、を主張する。
-/// 最新行は縮退規則（最新行への飽和）で常に可視ゆえ、⑵ が成り立つのは「最新行より前の行も
-/// 見えている」ときだけである。送り量の原点を最初の行の開始側に置くと最新の 1 行だけが面の上から 1.5 行ぶん下に
-/// 残るため ⑴ が 0 画素で赤になる。全域再描画のオラクルとのバイト等価は [`drive_lap`] が持つ。
+/// 最新行は縮退規則（最新行への飽和）で常に可視ゆえ、⑵ は最新行より前の行も見えているときだけ
+/// 成り立つ。送り量の原点を最初の行の開始側に置くと最新の 1 行だけが面の上から 1.5 行ぶん下に
+/// 残り、⑴ が 0 画素で赤になる。
 #[test]
 fn present_actor_leading_gap_keeps_earlier_lines_visible_k1() {
     assert_leading_gap_lap(1.0);

@@ -1,4 +1,4 @@
-//! 実ソケットのテスト: `Origin`／`Host`・help・404／405・登録 1 本の往復（spec: areka-P0-mcp-server-core 要件 4・6・7）。
+//! 実ソケットのテスト: `Origin`／`Host`・help・404／405・登録 1 本の往復。
 //!
 //! 拒否の `warn!` は mcp スレッドで出るが、`capture` の窓の中で起こしたサーバのスレッドは窓を受け継ぐので、
 //! 起こしてから畳むまでを窓に入れて数える。
@@ -38,7 +38,7 @@ fn rejects(events: &[CapturedEvent], key: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// (要件 4.3・6.3) 悪い `Origin` は `initialize`・`ping`・help のどれも 403（MCP の処理に入らない）。
+/// 悪い `Origin` は `initialize`・`ping`・help のどれも 403（MCP の処理に入らない）。
 /// 拒んだ要求ごとに `warn!` 1 件（`origin` と `path` つき）。
 #[test]
 fn bad_origin_is_403_before_mcp() {
@@ -62,7 +62,7 @@ fn bad_origin_is_403_before_mcp() {
     assert_eq!(rejects(&events, "origin"), want, "{events:?}");
 }
 
-/// (要件 4.4) ループバックでない `Host` は 403。受け口では rmcp の `allowed_hosts` も
+/// ループバックでない `Host` は 403。受け口では rmcp の `allowed_hosts` も
 /// 同じく拒むので、rmcp を通らない help でも確かめて `gate` の検査を踏む。
 /// 拒んだ要求ごとに `warn!` 1 件（`host` と `path` つき）。
 #[test]
@@ -99,7 +99,7 @@ fn raw_post(addr: SocketAddr, extra: &[u8], length: usize, body: &[u8]) -> Vec<u
     raw
 }
 
-/// (要件 4.3・4.4) UTF-8 でない `Origin`／`Host` は「無し」へ倒さず 403（置換文字入りの値として拒む）。
+/// UTF-8 でない `Origin`／`Host` は「無し」へ倒さず 403（置換文字入りの値として拒む）。
 /// hyper は値の中の 0x80〜0xFF を通すので、要求は受け口の検査まで届く。
 #[test]
 fn non_utf8_origin_and_host_are_refused() {
@@ -141,7 +141,7 @@ fn a_body_shorter_than_its_length_is_400() {
     assert_eq!(String::from_utf8_lossy(&response.body), "Bad Request");
 }
 
-/// (spec: areka-P0-mcp-server-core 要件 6.1・6.2) help は 200・`text/html; charset=utf-8`・本文の URL は実番号。
+/// help は 200・`text/html; charset=utf-8`・本文の URL は実番号。
 #[test]
 fn help_is_200_html_with_actual_port() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -167,7 +167,7 @@ fn help_is_200_html_with_actual_port() {
     }
 }
 
-/// (spec: areka-P0-mcp-stdio-bridge 要件 6.1) 中継の置き場を渡して起こした受け口の help は、
+/// 中継の置き場を渡して起こした受け口の help は、
 /// Claude Desktop の設定例の `command` にそのパスを載せる（`start` → `State` → help の受け渡し）。
 #[test]
 fn help_carries_the_bridge_path_given_to_start() {
@@ -184,7 +184,7 @@ fn help_carries_the_bridge_path_given_to_start() {
     );
 }
 
-/// (要件 6.4) 受け口と help 以外のパスは 404。
+/// 受け口と help 以外のパスは 404。
 #[test]
 fn unknown_path_is_404() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -194,7 +194,7 @@ fn unknown_path_is_404() {
     }
 }
 
-/// (要件 6.5) help への `POST` は 405・`Allow: GET`・ページを返さない。
+/// help への `POST` は 405・`Allow: GET`・ページを返さない。
 #[test]
 fn help_post_is_405() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -248,7 +248,7 @@ fn echo_registry() -> ToolRegistry {
     registry
 }
 
-/// (要件 7.1・7.2・7.4) 1 本登録 → `tools/list` に逐語で出る → `tools/call` が実装へ
+/// 1 本登録 → `tools/list` に逐語で出る → `tools/call` が実装へ
 /// `arguments` を届け、実装の `content`／`isError` をそのまま返す。
 #[test]
 fn registered_tool_roundtrip() {
@@ -298,7 +298,7 @@ fn registered_tool_roundtrip() {
     }
 }
 
-/// (要件 7.3) 登録済みのサーバでも、登録した名前以外の `tools/call` は `-32602`。
+/// 登録済みのサーバでも、登録した名前以外の `tools/call` は `-32602`。
 #[test]
 fn unregistered_name_is_invalid_params() {
     let (_server, addr) = serve(echo_registry());

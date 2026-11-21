@@ -1,7 +1,4 @@
-//! Unit tests for core data types: DolaDocument, AnimationVariableDef, DynamicValue, DolaError
-//! Tasks 2.5, 3.4, 4.4, 5.7, 6.3
-//!
-//! Split into cohesion-based sub-files (research §R3 seam); test leaf names preserved.
+//! コア型（DolaDocument・AnimationVariableDef・DynamicValue・DolaError）のユニットテスト。
 
 use dola::*;
 use std::collections::BTreeMap;

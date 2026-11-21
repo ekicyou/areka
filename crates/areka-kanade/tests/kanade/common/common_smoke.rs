@@ -1,6 +1,6 @@
 //! 疎通テスト（観測可能な完了条件）。
 //!
-//! 1 テストモジュール＝1 テストファイル（設計判断 #2）。モジュール名は `smoke`。
+//! 1 テストモジュール＝1 テストファイル。モジュール名は `smoke`。
 
 use areka_actor::reply_channel;
 use areka_kanade::{
@@ -22,7 +22,7 @@ fn mock_shiori_replies_and_records_onboot() {
     let shiori = spawn_mock_shiori(Fixture::default());
 
     // events 表から GET OnBoot の呼出を導出して送る（ハードコードしない）。boot 系列は
-    // talk 非アクティブ（INACTIVE スナップショット・DD-IT-4）ゆえ Status ヘッダは出ない。
+    // talk 非アクティブ（INACTIVE スナップショット）ゆえ Status ヘッダは出ない。
     let call = events::on_boot(&config, &ExecutionSnapshot::INACTIVE);
     let expected = expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE));
 
@@ -105,10 +105,10 @@ fn mock_sakura_records_and_returns_talkdone() {
     let _ = sakura.join_bounded_then_commands("mock-sakura join", DEFAULT_TIMEOUT);
 }
 
-/// design Testing Strategy 冒頭・C7 Ordering / delivery: mock sakura sink が
+/// mock sakura sink が
 /// [`TalkCommand`] 3 形の**到着順**を記録する。
 ///
-/// `TalkCommand` は単一チャンネルを流れることで FIFO 順序保存が契約（DD-4 の前提）であり、
+/// `TalkCommand` は単一チャンネルを流れることで FIFO 順序保存が契約であり、
 /// その観測面が本記録列である。ここでは Start→Resolve→Cancel→Start を投函し、記録列が
 /// **投函順そのまま**であること（＝解決系と起動系が別扱いされず 1 本の順序に載ること）を固定する。
 /// `started()` が `TalkCommand::Start` の射影であることも併せて確認する。

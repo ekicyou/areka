@@ -1,5 +1,4 @@
-//! ループの表の差し替え（`replace_shell_table`／`replace_balloon_tables`）の決定論テスト
-//! （spec: areka-P0-shell-balloon-switch 要件 2.8・3.5）。
+//! ループの表の差し替え（`replace_shell_table`／`replace_balloon_tables`）の決定論テスト。
 
 use super::tests::{always_fire, cfg, pattern_of, table_single};
 use super::*;
@@ -8,7 +7,7 @@ use areka_emo_compose::BindSet;
 use areka_parsers::shell::Interval;
 
 /// シェルの表の差し替え: 再生中のループを捨て、古い表のコマは以後 0 件。次の抽選から
-/// 新しい表で始め直す（要件 2.8）。
+/// 新しい表で始め直す。
 #[test]
 fn replace_shell_table_drops_playing_loop_and_restarts_from_new_table() {
     // 古い表: 2106 → 150ms 後に 2110（再生が続く）。
@@ -27,19 +26,17 @@ fn replace_shell_table_drops_playing_loop_and_restarts_from_new_table() {
     let new = table_single(10, 0, Interval::Random { k: 4 }, &[(3000, 0)]);
     rt.replace_shell_table(new);
 
-    // 古い表なら 2110 が出る時刻でも、何も出ない。
     assert!(
         rt.on_tick(1200, &mut states).is_empty(),
         "古い表のループの指令は差し替えの後に 0 件"
     );
-    // 次の境界で新しい表から始め直す。
     let c2 = rt.on_tick(2000, &mut states);
     assert_eq!(c2.len(), 1, "新しい表で発火");
     let p = pattern_of(&c2[0]);
     assert_eq!(p.get(0).unwrap().surface_id, 3000, "新しい表のコマ");
 }
 
-/// バルーンの表の差し替え: バルーン側の再生だけを捨て、シェル側のループは続く（要件 3.5）。
+/// バルーンの表の差し替え: バルーン側の再生だけを捨て、シェル側のループは続く。
 #[test]
 fn replace_balloon_tables_keeps_shell_loop() {
     let shell = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 150)]);

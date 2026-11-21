@@ -1,4 +1,4 @@
-//! 最上位の `install.txt` を見つけ、[`InstallManifest`] へ写す（要件 3.1〜3.16）。
+//! 最上位の `install.txt` を見つけ、[`InstallManifest`] へ写す。
 //!
 //! 製品側のインストーラが書くのは判断（`accept` の照合・イベント送出）だけで
 //! 済むように、`install.txt` の解釈はここ 1 か所に閉じる。
@@ -11,7 +11,7 @@
 //! 持っている。`descript.txt` 等と共有する層なので、ここからは変えない。
 //!
 //! 既存層はキーの大小を保つので、引く前に **ASCII 小文字化した写しを作り直し**、
-//! 以降はその写しだけを引く（要件 3.4）。同じキーが大小違いで 2 度あれば、ファイルの
+//! 以降はその写しだけを引く。同じキーが大小違いで 2 度あれば、ファイルの
 //! 後の行が勝つ（descript の `parse_kv_lowercased` と同じ勝者）。空の値は落とさない
 //! （拒否と警告が使うので、空の値を落とす `parse_kv_lowercased` とはここが違う）。
 //!
@@ -50,7 +50,7 @@ const BALLOON_PREFIX: &str = "balloon";
 /// 探す同梱のバルーンの上限。鍵を何万も並べた install.txt で取り出しの比べが膨らまないように。
 pub(crate) const MAX_COMPANIONS: usize = 64;
 
-/// 正典にはあるが areka が扱わない同時インストールの接頭辞（要件 3.13）。
+/// 正典にはあるが areka が扱わない同時インストールの接頭辞。
 ///
 /// それぞれ後ろに数字列が付いた形（`headline0` など）も同じ扱い。
 const UNSUPPORTED_COMPANION_PREFIXES: &[&str] =
@@ -89,7 +89,7 @@ const KNOWN_KEYS: &[&str] = &[
     "refreshundeletemask",
 ];
 
-/// アーカイブの種別（要件 3.5）。
+/// アーカイブの種別。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InstallKind {
     Ghost,
@@ -98,7 +98,7 @@ pub enum InstallKind {
     Balloon,
 }
 
-/// 既に同じ宛先が在るときの扱い（要件 3.15・Requirement 6 へ渡す）。
+/// 既に同じ宛先が在るときの扱い。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExistingPolicy {
     /// `refresh` が `1` でない: 既存を残し、同名だけ上書きする。
@@ -107,7 +107,7 @@ pub enum ExistingPolicy {
     Replace { keep: Vec<String> },
 }
 
-/// 同時にインストールするバルーン 1 件（要件 3.12）。
+/// 同時にインストールするバルーン 1 件。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Companion {
     /// `balloon` / `balloon0` … の接頭辞そのもの。
@@ -123,14 +123,14 @@ pub struct Companion {
     pub source_written: Option<String>,
 }
 
-/// `install.txt` の解釈の結果（要件 3.5〜3.16）。
+/// `install.txt` の解釈の結果。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstallManifest {
     pub kind: InstallKind,
     /// `OnInstallComplete` の Reference1 に使う表示名。
     pub name: String,
     pub directory: String,
-    /// `accept` の値。照合はしない（`ghost-install` の責務）。空値は `None`。
+    /// `accept` の値。照合はしない（呼び出し側が行う）。空値は `None`。
     pub accept: Option<String>,
     pub existing: ExistingPolicy,
     /// `kind` が `Ghost`／`Shell` のときだけ非空。探索の順（無印 → 0 → 1…）に並ぶ。
@@ -138,7 +138,7 @@ pub struct InstallManifest {
     pub warnings: Vec<ManifestWarning>,
 }
 
-/// 最上位の `install.txt` を 1 つ選ぶ（要件 3.1・3.2）。
+/// 最上位の `install.txt` を 1 つ選ぶ。
 ///
 /// 最上位＝階層が 1 つのファイルのエントリ。[`EntryName::path`] は区切りを正規化
 /// してあるので、**丸ごと `install.txt` に等しい**という一言が「最上位にある」と
@@ -186,9 +186,9 @@ fn top_level_names(entries: &[EntryName]) -> Vec<String> {
     listed
 }
 
-/// `install.txt` の中身を解釈する（要件 3.3〜3.16）。
+/// `install.txt` の中身を解釈する。
 pub(crate) fn parse_manifest(bytes: &[u8]) -> Result<InstallManifest, RefuseReason> {
-    // 文字コードの判定は既存層に任せる。`charset` 行が無ければ ANSI 既定（要件 3.3）。
+    // 文字コードの判定は既存層に任せる。`charset` 行が無ければ ANSI 既定。
     let keys = lowercased_keys(&decode(bytes, DefaultEncoding::Ansi));
     let mut warnings = Vec::new();
 
@@ -213,7 +213,7 @@ pub(crate) fn parse_manifest(bytes: &[u8]) -> Result<InstallManifest, RefuseReas
     })
 }
 
-/// 既存層の結果をキーだけ ASCII 小文字化して写し直す（要件 3.4）。
+/// 既存層の結果をキーだけ ASCII 小文字化して写し直す。
 ///
 /// `parse_kv` は行の順を返さないので 1 行ずつ渡し、大小違いの同じ鍵は後の行で上書きする。
 fn lowercased_keys(text: &str) -> BTreeMap<String, String> {
@@ -228,9 +228,9 @@ fn non_empty(keys: &BTreeMap<String, String>, key: &str) -> Option<String> {
     keys.get(key).filter(|value| !value.is_empty()).cloned()
 }
 
-/// `type` を [`InstallKind`] にする（要件 3.5・3.6）。
+/// `type` を [`InstallKind`] にする。
 ///
-/// 大小を区別しないのはキーだけで、**値はそのまま比べる**（要件 3.4）。
+/// 大小を区別しないのはキーだけで、**値はそのまま比べる**。
 /// 値が空の行は行が無いのと同じ「指定なし」として理由に載せる。
 fn parse_kind(keys: &BTreeMap<String, String>) -> Result<InstallKind, RefuseReason> {
     match non_empty(keys, "type").as_deref() {
@@ -245,12 +245,12 @@ fn parse_kind(keys: &BTreeMap<String, String>) -> Result<InstallKind, RefuseReas
     }
 }
 
-/// 省略できないキーを取り出す。無い・空はどちらも拒否（要件 3.7・3.8）。
+/// 省略できないキーを取り出す。無い・空はどちらも拒否。
 fn required(keys: &BTreeMap<String, String>, key: &'static str) -> Result<String, RefuseReason> {
     non_empty(keys, key).ok_or(RefuseReason::MissingRequiredKey { key })
 }
 
-/// フォルダ名が 1 階層の名前であることを確かめる（要件 3.9）。
+/// フォルダ名が 1 階層の名前であることを確かめる。
 fn check_one_level(key: &str, value: &str) -> Result<(), RefuseReason> {
     if is_valid_one_level_name(value) {
         Ok(())
@@ -262,11 +262,11 @@ fn check_one_level(key: &str, value: &str) -> Result<(), RefuseReason> {
     }
 }
 
-/// 本体の再インストールの扱いを決める（要件 3.15）。
+/// 本体の再インストールの扱いを決める。
 ///
 /// `supplement` だけは `refresh` を読まない。重ね置き先がゴースト本体なので、
 /// 全消去は本体ごと消しかねない。正典はこの組み合わせに沈黙しているので、
-/// 安全側（重ね置き）へ倒す——**本設計の決定**であり、正典に反する実装ではない。
+/// 安全側（重ね置き）へ倒す。
 /// 読まなかったことは、`refresh` とマスクのどちらが書かれていても記録に残す。
 fn body_existing(
     kind: InstallKind,
@@ -282,7 +282,7 @@ fn body_existing(
     existing_policy(keys, "", warnings)
 }
 
-/// `<prefix>refresh` と `<prefix>refreshundeletemask` から扱いを決める（要件 3.15）。
+/// `<prefix>refresh` と `<prefix>refreshundeletemask` から扱いを決める。
 ///
 /// `prefix` は本体なら空、同時インストールなら `balloon0.` のような接頭辞。
 /// 値が `1` のときだけ全消去にする。`1` でなければマスクは読まない——使わない値の
@@ -302,7 +302,7 @@ fn existing_policy(
     ExistingPolicy::Replace { keep }
 }
 
-/// 除外マスクをコロンで分ける（要件 3.15）。
+/// 除外マスクをコロンで分ける。
 ///
 /// 前後の空白を落とし、空の要素は捨て、1 階層のファイル名でない要素は
 /// 記録して読み飛ばす（マスクはパス指定ができない）。
@@ -335,7 +335,6 @@ enum KeyRole<'a> {
     Unknown,
 }
 
-/// キーを 3 つに分ける。
 fn classify(key: &str) -> KeyRole<'_> {
     if KNOWN_KEYS.contains(&key) {
         return KeyRole::Known;
@@ -377,7 +376,7 @@ fn numbered(prefix: &str, base: &str) -> bool {
         .is_some_and(|rest| rest.chars().all(|ch| ch.is_ascii_digit()))
 }
 
-/// 探索で見つかった同梱のバルーンの接頭辞を、探索の順に返す（要件 1.1〜1.6・1.9）。
+/// 探索で見つかった同梱のバルーンの接頭辞を、探索の順に返す。
 ///
 /// 無印（`balloon`）→ `balloon0` → `balloon1` … の順に `<接頭辞>.directory` の鍵を引く。
 /// 値が空でも行が在れば見つかったとする。無印は無くても続け、番号は最初に無かった所で
@@ -398,7 +397,7 @@ fn search_balloons(keys: &BTreeMap<String, String>) -> Vec<String> {
         .collect()
 }
 
-/// 同時インストールのバルーンを組み、読み飛ばした指定を記録する（要件 1.1〜1.10・6.3〜6.5）。
+/// 同時インストールのバルーンを組み、読み飛ばした指定を記録する。
 ///
 /// 3 つの段で進む。⑴ 探索の順に接頭辞を見つける。⑵ 鍵の名前順に読み飛ばしを
 /// 記録する。⑶ 探索の順に値を検査して組む。値を見るのは ⑶ だけなので、打ち切りの
@@ -459,7 +458,7 @@ fn collect_companions(
         let key = format!("{prefix}.directory");
         let directory = keys[&key].clone();
         check_one_level(&key, &directory)?;
-        // 大小だけ違う同じ宛先の 2 つ目は、片方の中身を黙って潰すので書庫ごと断る（#7）。
+        // 大小だけ違う同じ宛先の 2 つ目は、片方の中身を黙って潰すので書庫ごと断る。
         if !destinations.insert(fold(&directory)) {
             return Err(RefuseReason::InvalidDirectoryName {
                 key,
@@ -486,8 +485,7 @@ fn collect_companions(
     Ok(companions)
 }
 
-/// `*.source.directory` に書かれていた値を、書庫の中の `/` 区切りの相対パスへ読む
-/// （要件 2.1・3.1〜3.4・5.3・5.4・6.1・6.2）。
+/// `*.source.directory` に書かれていた値を、書庫の中の `/` 区切りの相対パスへ読む。
 ///
 /// `written` は空でない値（空と行なしは呼び手が宛先の名前に倒す）。`\` と `/` の
 /// どちらでも分け、空の段と `..` の段を落とす。`..` は手前の段を打ち消さない

@@ -1,6 +1,6 @@
-//! `image-webp` を固定コミットから取り込んでいることの検査（spec: areka-P0-animated-image-decode 要件 7.6）。
+//! `image-webp` を固定コミットから取り込んでいることの検査。
 //!
-//! `[patch.crates-io]` を足しただけでは cargo は警告だけ出して公開版を使い続ける（`research.md` 9 節の実測）。
+//! `[patch.crates-io]` を足しただけでは cargo は警告だけ出して公開版を使い続ける（実測済み）。
 //! そこで根の `Cargo.lock` と `Cargo.toml` の文を読んで判定する。ネットは使わない。
 //! 外す条件: `image-webp` 0.2.5 以上が crates.io に出たら、このファイルごと外す（`tech.md` の登記）。
 
@@ -88,7 +88,7 @@ fn calibration_public_source_is_red() {
 
 #[test]
 fn calibration_patch_unused_is_red() {
-    // `[patch.crates-io]` を足しただけで `cargo update` をしなかった状態の実物（`research.md` 9 節）:
+    // `[patch.crates-io]` を足しただけで `cargo update` をしなかった状態の実物:
     // 項目は公開版のまま、末尾に `[[patch.unused]]` が付く。
     let unused = format!(
         "\n[[patch.unused]]\nname = \"image-webp\"\nversion = \"0.2.5\"\nsource = \"git+https://github.com/image-rs/image-webp?rev={PINNED}#{PINNED}\"\n"

@@ -71,29 +71,24 @@ fn main() -> Result<()> {
 }
 
 async fn run_test(tx: wintf::ecs::widget::bitmap_source::CommandSender) {
-    // 0秒: ウィンドウ作成
     info!("[Test] 0s: Creating test window");
     let _ = tx.send(Box::new(create_test_window));
 
-    // 2秒: 初回表示を確認してからクリック注入
     async_io::Timer::after(Duration::from_secs(2)).await;
 
     info!("[Test] 2s: Injecting PostMessage WM_LBUTTONDOWN at (50, 50)");
     let _ = tx.send(Box::new(inject_click));
 
-    // 4秒: もう一度クリック注入（黄→赤に戻るはず）
     async_io::Timer::after(Duration::from_secs(2)).await;
 
     info!("[Test] 4s: Injecting second PostMessage WM_LBUTTONDOWN at (50, 50)");
     let _ = tx.send(Box::new(inject_click));
 
-    // 10秒: 終了
     async_io::Timer::after(Duration::from_secs(6)).await;
     info!("[Test] 10s: Closing window");
     let _ = tx.send(Box::new(close_window));
 }
 
-/// テストウィンドウ作成
 fn create_test_window(world: &mut World) {
     let window_entity = world
         .spawn((
@@ -146,9 +141,7 @@ fn create_test_window(world: &mut World) {
     );
 }
 
-/// PostMessage でクリックを注入
 fn inject_click(world: &mut World) {
-    // WindowHandle を持つ TestWindow エンティティを検索
     let mut query = world.query_filtered::<&WindowHandle, With<TestWindow>>();
     let Some(window_handle) = query.iter(world).next() else {
         info!("[Test] Window not found, skipping click injection");
@@ -156,11 +149,9 @@ fn inject_click(world: &mut World) {
     };
     let hwnd = window_handle.hwnd;
 
-    // クリック前の状態をログ
     dump_click_target_state(world, "BEFORE click");
 
-    // クライアント座標 (50, 50) にクリックを投入
-    // MAKELPARAM(50, 50) = (50 | (50 << 16))
+    // クライアント座標 (50, 50) の MAKELPARAM
     let lparam = LPARAM((50i32 | (50i32 << 16)) as isize);
     let wparam = WPARAM(0x0001); // MK_LBUTTON
 
@@ -172,7 +163,6 @@ fn inject_click(world: &mut World) {
         let _ = PostMessageW(Some(hwnd), WM_LBUTTONDOWN, wparam, lparam);
     }
 
-    // WM_LBUTTONUP も投入（次フレーム処理用）
     let wparam_up = WPARAM(0);
     info!("[Test] PostMessageW WM_LBUTTONUP to {:?} at (50,50)", hwnd);
     unsafe {
@@ -180,7 +170,6 @@ fn inject_click(world: &mut World) {
     }
 }
 
-/// クリック対象の現在状態をダンプ
 fn dump_click_target_state(world: &mut World, label: &str) {
     let mut query =
         world.query_filtered::<(Entity, &Brushes, Option<&GlobalArrangement>), With<ClickTarget>>();
@@ -262,7 +251,6 @@ fn on_click_target_pressed(
     true
 }
 
-/// ウィンドウ終了
 fn close_window(world: &mut World) {
     let mut query = world.query_filtered::<Entity, With<TestWindow>>();
     let windows: Vec<Entity> = query.iter(world).collect();

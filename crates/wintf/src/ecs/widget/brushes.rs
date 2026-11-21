@@ -13,7 +13,6 @@ use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 /// ブラシ値
 ///
 /// 継承マーカー（Inherit）と単色（Solid）の2バリアントを持つ。
-/// 将来的にグラデーションブラシへの拡張が可能な設計。
 #[derive(Clone, Debug, PartialEq, Default)]
 pub enum Brush {
     /// 親から継承（描画前に解決される）

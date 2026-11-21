@@ -1,7 +1,6 @@
-//! ゴーストの中の `balloon\` の走査と根の和との合わせ方（areka-P0-ghost-inner-balloon
-//! 要件 1.1〜1.3・1.5・2.2・2.5・3.1・3.4・6.1・6.2・6.4・8.4・10.1〜10.3）。
+//! ゴーストの中の `balloon\` の走査と根の和との合わせ方。
 //!
-//! 一時フォルダは `temp-path-kit` の `under_target` の下だけに組む（要件 10.2）。
+//! 一時フォルダは `temp-path-kit` の `under_target` の下だけに組む。
 
 use std::path::PathBuf;
 
@@ -16,7 +15,7 @@ use crate::test_log_capture::capture;
 
 /// `balloon\` の直下の `type` 無し・`type,balloon` は数え、`root` はゴーストのフォルダ・`dir` は
 /// `<ゴースト>\balloon\<名>`。ゴーストの直下・`balloon\` そのもの・さらに下は数えない。
-/// `type,shell` は除いて `catalog_type_not_balloon` を 1 件だけ残す（要件 1.1〜1.3）。
+/// `type,shell` は除いて `catalog_type_not_balloon` を 1 件だけ残す。
 #[test]
 fn ghost_balloon_dir_counts_direct_children_by_root_rules() {
     let tmp = TempPath::under_target("ghost-inner-balloon-scan");
@@ -51,7 +50,7 @@ fn ghost_balloon_dir_counts_direct_children_by_root_rules() {
     assert_eq!(catalog_warns(&events), ["catalog_type_not_balloon"]);
 }
 
-/// `balloon\` が無ければ 0 件で記録も 0 件（要件 1.1・10.3）。
+/// `balloon\` が無ければ 0 件で記録も 0 件。
 #[test]
 fn ghost_without_balloon_dir_lists_zero_silently() {
     let tmp = TempPath::under_target("ghost-inner-balloon-none");
@@ -77,7 +76,7 @@ fn dirs(entries: &[BalloonEntry]) -> Vec<PathBuf> {
 
 /// ゴーストの中だけ・根だけ・両方に同じフォルダ名（大文字小文字だけ違う綴りを含む）。
 /// `listed` はゴーストの中（フォルダ名のバイト順）が先、根の残りが後。`hidden` はゴーストの中が
-/// 隠した根の項目だけで、どちらも記録を残さない（要件 1.5・2.2・2.5・3.1・3.4）。
+/// 隠した根の項目だけで、どちらも記録を残さない。
 #[test]
 fn ghost_inner_comes_first_and_hides_same_folder_in_root() {
     let tmp = TempPath::under_target("ghost-inner-balloon-for");
@@ -124,7 +123,7 @@ fn ghost_inner_comes_first_and_hides_same_folder_in_root() {
 
 /// ゴーストの中が 0 件なら `listed` は根の和と同じで `hidden` は空。根どうしの隠れの答え
 /// （`survey`）は変わらず、`hidden` へは入らない。以前に根へ入れた同名でないバルーンは根の
-/// 項目のまま出る（要件 6.1・6.2・6.4・8.4）。
+/// 項目のまま出る。
 #[test]
 fn ghost_without_inner_matches_root_union_and_keeps_root_hiding() {
     let (tmp, a, b, roots) = two_roots("ghost-inner-balloon-for-none");
@@ -145,7 +144,7 @@ fn ghost_without_inner_matches_root_union_and_keeps_root_hiding() {
 }
 
 /// 2 つのゴーストで呼び分けると他方の中は出ず、他方が隠した根のものは出る。ゴーストの
-/// フォルダを消した後は、その中のものは出ない（呼ぶたびに今のファイルから作る・要件 1.5・3.4）。
+/// フォルダを消した後は、その中のものは出ない（呼ぶたびに今のファイルから作る）。
 #[test]
 fn each_ghost_sees_only_its_own_inner_and_deleted_ghost_drops_out() {
     let tmp = TempPath::under_target("ghost-inner-balloon-for-two");

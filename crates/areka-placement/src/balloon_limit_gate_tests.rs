@@ -1,16 +1,14 @@
-//! 起動時関門 [`apply_balloon_limit`] の決定論檻
-//! （areka-P0-windowposition-limit task 2.4・design「Testing Strategy / Unit Tests 5」・
-//! 要件 2.2／4.7／4.9／5.5／6.1）。
+//! 起動時関門 [`apply_balloon_limit`] の決定論檻。
 //!
 //! クランプ**式**そのものの行列（4 辺 × k=1/k≠1 × 逆転区間 × 冪等）は
 //! `balloon_limit_tests.rs` が持つ。本ファイルが固定するのはその 1 段上——
 //! **関門の判断分岐**である:
 //!
-//! - `balloon_limit` の有効判定（要件 2.7 の関門側の腕）
-//! - 基準モニタが**キャラ窓**の帰属モニタであること（要件 5.5。バルーン窓ではない）
-//! - 補正が `balloon_pos` だけに作用し `balloon_offset` を 1 ビットも動かさないこと（DD6）
-//! - 作業領域が決まらない scope の警告付き素通し（design Error Handling）
-//! - 補正したときだけ `[balloon-limit] Clamp` を出すこと（要件 6.1）
+//! - `balloon_limit` の有効判定
+//! - 基準モニタが**キャラ窓**の帰属モニタであること（バルーン窓ではない）
+//! - 補正が `balloon_pos` だけに作用し `balloon_offset` を 1 ビットも動かさないこと
+//! - 作業領域が決まらない scope の警告付き素通し
+//! - 補正したときだけ `[balloon-limit] Clamp` を出すこと
 //!
 //! # ログ檻の非空虚性
 //!
@@ -55,7 +53,7 @@ pub(super) fn snapshot(areas: &[RectPx]) -> MonitorSnapshot {
 ///
 /// `balloon_pos` は檻側で `char_pos + balloon_offset` から作る——resolver 出力時点の
 /// 事後条件を満たした値だけを関門へ渡し、「関門通過**後**に恒等式が崩れる」ことを
-/// 各テストが観測できるようにする（DD6 の再スコープ）。
+/// 各テストが観測できるようにする。
 fn placement(
     scope: usize,
     char_pos: PointPx,
@@ -73,7 +71,7 @@ fn char_overflowing(mut p: ScopePlacement) -> ScopePlacement {
     p
 }
 
-/// `balloon_pos` 以外の全フィールドが入力と同一であることを主張する（DD6 の中核）。
+/// `balloon_pos` 以外の全フィールドが入力と同一であることを主張する。
 fn assert_only_balloon_pos_may_differ(before: &ScopePlacement, after: &ScopePlacement) {
     assert_eq!(after.scope, before.scope, "scope は不変");
     assert_eq!(
@@ -97,12 +95,12 @@ fn assert_only_balloon_pos_may_differ(before: &ScopePlacement, after: &ScopePlac
 }
 
 // ---------------------------------------------------------------------------
-// 補正の本体（要件 2.2・6.1・DD6）
+// 補正の本体
 // ---------------------------------------------------------------------------
 
-/// 保存位置が画面外相当のとき、表示位置は補正済み・相対位置は生値のまま（要件 2.2・DD6）。
+/// 保存位置が画面外相当のとき、表示位置は補正済み・相対位置は生値のまま。
 ///
-/// 併せて補正ログ（要件 6.1: scope・補正前後・契機）を固定する。
+/// 併せて補正ログを固定する。
 #[test]
 fn boot_gate_clamps_display_position_and_keeps_offset_raw() {
     // キャラ窓は作業領域の左寄り（中心は域内）。バルーンは左辺を 50px はみ出す。
@@ -122,7 +120,7 @@ fn boot_gate_clamps_display_position_and_keeps_offset_raw() {
         "表示位置は作業領域の左辺へ補正される（要件 2.2）"
     );
     // 表示位置だけが動き、相対位置はそのまま＝関門の後は
-    // balloon_offset ≡ balloon_pos − char_pos が成り立たない。それが正しい（DD6 の再スコープ）。
+    // balloon_offset ≡ balloon_pos − char_pos が成り立たない。それが正しい。
     assert_only_balloon_pos_may_differ(&before, &out[0]);
 
     let hit = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
@@ -150,7 +148,7 @@ fn boot_gate_clamps_display_position_and_keeps_offset_raw() {
     );
 }
 
-/// 作業領域内に収まっている scope は補正もログも起こさない（要件 6.1「実際に動かしたとき」）。
+/// 作業領域内に収まっている scope は補正もログも起こさない。
 ///
 /// 空虚化を避けるため、**同じ呼び出しの中に補正される scope 1 を混ぜる**——捕捉が
 /// 生きていること（Clamp が 1 件出ること）を先に証明したうえで、その 1 件が scope 1 の
@@ -178,7 +176,7 @@ fn boot_gate_logs_only_for_scopes_it_actually_moved() {
     );
 }
 
-/// `limit=0` の scope は画面外でも補正しない（要件 2.7 の関門側の腕）。
+/// `limit=0` の scope は画面外でも補正しない。
 ///
 /// 捕捉が生きていることは同じ呼び出しの scope 1（limit 有効・同じはみ出し量）の
 /// Clamp 1 件で証明する。
@@ -210,7 +208,7 @@ fn boot_gate_skips_scopes_with_limit_disabled() {
 }
 
 // ---------------------------------------------------------------------------
-// 縮退（design Error Handling「起動時関門で work area 解決不能（snapshot 空）」）
+// 縮退（起動時関門で work area を解決できない＝snapshot 空）
 // ---------------------------------------------------------------------------
 
 /// モニタ情報が空のときは警告のうえ素通しし、書き込みを阻害しない。
@@ -243,10 +241,10 @@ fn boot_gate_warns_and_passes_through_when_snapshot_is_empty() {
 }
 
 // ---------------------------------------------------------------------------
-// 基準モニタ（要件 5.5）
+// 基準モニタ
 // ---------------------------------------------------------------------------
 
-/// 複数モニタでは**キャラ窓**が属する側の作業領域が基準になる（要件 5.5）。
+/// 複数モニタでは**キャラ窓**が属する側の作業領域が基準になる。
 ///
 /// 入力は「バルーン窓の矩形は左モニタに完全に収まるが、キャラ窓は右モニタに属する」
 /// という配置——基準をバルーン窓（あるいは先頭モニタ）から引く実装なら補正が起きず
@@ -262,7 +260,7 @@ fn boot_gate_uses_work_area_of_monitor_owning_char_window() {
     };
     // キャラ窓 (1950,300)-(2350,1100)・中心 (2150,700) → 右モニタへ帰属。
     // バルーン (1700,310)-(1900,610) は左モニタに完全に収まる。
-    // キャラ窓は右モニタの下辺からはみ出させ、押し込みの経路で基準モニタを問う（要件 5.6）。
+    // キャラ窓は右モニタの下辺からはみ出させ、押し込みの経路で基準モニタを問う。
     let before = char_overflowing(placement(0, point(1950, 300), point(-250, 10), true));
     assert_eq!(before.balloon_pos, point(1700, 310));
     assert_eq!(
@@ -282,10 +280,10 @@ fn boot_gate_uses_work_area_of_monitor_owning_char_window() {
 }
 
 // ---------------------------------------------------------------------------
-// キーワード由来の初期位置（要件 4.9）
+// キーワード由来の初期位置
 // ---------------------------------------------------------------------------
 
-/// `windowposition.x` キーワード由来の初期既定位置にも同一規則が掛かる（要件 4.9）。
+/// `windowposition.x` キーワード由来の初期既定位置にも同一規則が掛かる。
 ///
 /// 檻の入力を手で組まず **resolver P5 の実出力**（`CenterTop`）を関門へ流すことで、
 /// 「キーワード経路も同じ合流点を通る」ことを構造として固定する。`CenterTop` は
@@ -336,10 +334,10 @@ fn boot_gate_clamps_keyword_derived_initial_position() {
 }
 
 // ---------------------------------------------------------------------------
-// 4 辺 × 4 隅で論理相対位置が 1 ビットも動かない（DD6）
+// 4 辺 × 4 隅で論理相対位置が 1 ビットも動かない
 // ---------------------------------------------------------------------------
 
-/// はみ出しの辺・隅の組み合わせによらず、補正は `balloon_pos` だけに作用する（DD6・要件 2.3）。
+/// はみ出しの辺・隅の組み合わせによらず、補正は `balloon_pos` だけに作用する。
 #[test]
 fn boot_gate_never_touches_balloon_offset_on_any_edge() {
     // キャラ窓は常に作業領域の中央付近（中心 (900,700) → 帰属は WA 固定）。
@@ -364,24 +362,21 @@ fn boot_gate_never_touches_balloon_offset_on_any_edge() {
             out[0].balloon_pos, expected,
             "{what}: 表示位置は作業領域内へ補正される"
         );
-        // 論理相対位置（balloon_offset）を含め、ほかの欄は 1 ビットも変わらない（DD6）。
+        // 論理相対位置（balloon_offset）を含め、ほかの欄は 1 ビットも変わらない。
         assert_only_balloon_pos_may_differ(&before, &out[0]);
     }
 }
 
 // ---------------------------------------------------------------------------
-// limit {0,1} × はみ出し 4 辺（＋4 隅）× k=1／k≠1 の全交差（要件 7.1）
+// limit {0,1} × はみ出し 4 辺（＋4 隅）× k=1／k≠1 の全交差
 // ---------------------------------------------------------------------------
 
-/// 要件 7.1 の行列を**関門の層で**閉じる: `limit {0,1}` × はみ出し方向 4 辺（単独）と
+/// 行列を**関門の層で**閉じる: `limit {0,1}` × はみ出し方向 4 辺（単独）と
 /// 4 隅（複合）× k=1（dpi=96）および k≠1（120/144/192）の全交差。
 ///
 /// クランプ**式**の 4 辺 × k 行列は `balloon_limit_tests.rs` が持つが、そこには
-/// `limit` の分岐が無い（design C5「limit=0 は呼び出し側で skip」＝有効判定は関門の
-/// 責務）。一方これまでの関門檻は `limit=0` を**1 辺・1 水準ずつ**しか通していなかった
-/// （[`boot_gate_skips_scopes_with_limit_disabled`] は左辺・96 のみ）。ゆえに
-/// 「limit=0 × 上辺」「limit=0 × k≠1」といった交差セルがどの檻にも無かった。本檻が
-/// その交差を 1 本で埋める。
+/// `limit` の分岐が無い（有効判定は関門の責務）。本檻は `limit=0` の素通しを
+/// 辺・隅・DPI 水準の全交差で固定する。
 ///
 /// 各セルは **limit=0 と limit=1 を同じ呼び出しへ同時に**入れる——同一の入力に対して
 /// 一方は完全恒等・他方は補正、という対比が同じ捕捉集合の中で成立することが、
@@ -435,12 +430,12 @@ fn boot_gate_limit_arms_cover_every_edge_at_every_dpi_level() {
             let (out, events) =
                 capture(|| apply_balloon_limit(vec![disabled, enabled], &snapshot(&[area])));
 
-            // limit=0 の腕: 辺・隅・DPI 水準によらず入力へ完全恒等（要件 2.7・5.2）。
+            // limit=0 の腕: 辺・隅・DPI 水準によらず入力へ完全恒等。
             assert_eq!(
                 out[0], disabled,
                 "dpi={dpi} {what}: limit=0 の scope が補正された（現行挙動が変わっている）"
             );
-            // limit=1 の腕: 同じ入力が作業領域内へ補正される（要件 2.3）。
+            // limit=1 の腕: 同じ入力が作業領域内へ補正される。
             assert_eq!(
                 out[1].balloon_pos, expected,
                 "dpi={dpi} {what}: limit=1 の表示位置が期待の補正値でない"

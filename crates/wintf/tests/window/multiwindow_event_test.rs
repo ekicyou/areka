@@ -10,7 +10,7 @@ use wintf::ecs::pointer::build_bubble_path;
 use wintf::ecs::window::{Window, find_owner_window};
 
 // ============================================================================
-// Task 1.2: find_owner_window ユニットテスト
+// find_owner_window ユニットテスト
 // ============================================================================
 
 /// 2つの Window エンティティとそれぞれの子ウィジェットを構築し、
@@ -19,7 +19,6 @@ use wintf::ecs::window::{Window, find_owner_window};
 fn test_find_owner_window_basic() {
     let mut world = World::new();
 
-    // Window A とその子
     let window_a = world
         .spawn(Window {
             title: "Window A".to_string(),
@@ -30,7 +29,6 @@ fn test_find_owner_window_basic() {
     let container_a = world.spawn(ChildOf(window_a)).id();
     let widget_a = world.spawn(ChildOf(container_a)).id();
 
-    // Window B とその子
     let window_b = world
         .spawn(Window {
             title: "Window B".to_string(),
@@ -40,7 +38,6 @@ fn test_find_owner_window_basic() {
 
     let widget_b = world.spawn(ChildOf(window_b)).id();
 
-    // 検証: Window A の子孫は Window A を返す
     assert_eq!(
         find_owner_window(&world, widget_a),
         Some(window_a),
@@ -52,14 +49,12 @@ fn test_find_owner_window_basic() {
         "container_a は Window A に属する"
     );
 
-    // 検証: Window B の子孫は Window B を返す
     assert_eq!(
         find_owner_window(&world, widget_b),
         Some(window_b),
         "widget_b は Window B に属する"
     );
 
-    // 検証: Window 自身は自身を返す
     assert_eq!(
         find_owner_window(&world, window_a),
         Some(window_a),
@@ -80,10 +75,8 @@ fn test_find_owner_window_no_window() {
     // LayoutRoot 相当（Window を持たないルートエンティティ）
     let layout_root = world.spawn_empty().id();
 
-    // LayoutRoot 直下のエンティティ
     let orphan = world.spawn(ChildOf(layout_root)).id();
 
-    // LayoutRoot 自身も Window ではない
     assert_eq!(
         find_owner_window(&world, layout_root),
         None,
@@ -110,7 +103,7 @@ fn test_find_owner_window_isolated_entity() {
 }
 
 // ============================================================================
-// Task 2.2: build_bubble_path の Window 境界停止テスト
+// build_bubble_path の Window 境界停止テスト
 // ============================================================================
 
 /// LayoutRoot → Window → Container → Widget の階層で、
@@ -119,7 +112,6 @@ fn test_find_owner_window_isolated_entity() {
 fn test_build_bubble_path_stops_at_window() {
     let mut world = World::new();
 
-    // LayoutRoot → Window → Container → Widget
     let layout_root = world.spawn_empty().id();
     let window = world
         .spawn((

@@ -7,7 +7,6 @@
 //! dola cue ドメインの `CueSheet` へ**純粋コンパイル**し、`TimedSchedule` を注入時刻で
 //! 駆動して 2 系統——`CueTarget::Shell`→seriko（⑤）／`CueTarget::Balloon`→emo
 //! text-layer（⑥）——へ発火を届け、終端で `TalkDone` を kanade（③）へ返す。
-//! 「emo2 が喋る」の "喋る" を成立させる装置である。
 //!
 //! ## 二層構成（compile / drive）
 //!
@@ -15,10 +14,10 @@
 //!   clock・sink・talk_id・アクターを知らない決定的な写像層。
 //! - **drive**（per-talk transient アクター駆動）: 刻印済み `CueSheet` から dola の受動ランタイム
 //!   [`dola::cue::CuePlayer`] を構築し、注入時刻（`Tick(f64)`）で駆動して全 cue を演者 sink 群へ
-//!   **broadcast** し、`TalkDone` を返す。配送・状態機械・完了判定は dola へ委譲する（D7・R11.4）。
+//!   **broadcast** し、`TalkDone` を返す。配送・状態機械・完了判定は dola へ委譲する。
 //!
 //! 出力契約は演者非依存の**単一トレイト** [`dola::cue::CueSink`]（`contract` が re-export）で、
-//! 旧 `SurfaceSink`/`TextSink` の 2 分割は broadcast＋演者側 relevance ゆえ廃した（R11.3/R11.6）。
+//! 演者側が relevance を判定するため、`SurfaceSink`/`TextSink` の 2 分割は持たない。
 //!
 //! 依存方向（左が上流・右向き import のみ許可）: `contract` → `compile` → `drive`。
 //!
@@ -45,5 +44,5 @@ pub use compile::{ChoiceTimeoutDirective, CompiledTalk, compile, parse_choice_ti
 pub use drive::{spawn_talk, talk_handler};
 pub use sysvar::expand_system_vars;
 
-// 下流の import パス安定化（DD-1: 下流は `areka_sakura::contract::*` 経由で参照）。
+// 下流は `areka_sakura::contract::*` 経由で参照する。
 pub use contract::*;

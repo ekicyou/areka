@@ -1,5 +1,4 @@
-//! 差し替えの相の読み直しの分かれ目の決定論テスト（areka-P0-mcp-reload task 7.4・要件 5.2・5.3・
-//! 5.4・6.2・6.3・6.4・8.4・design「SkinSwitch の口」・Flow 4）。
+//! 差し替えの相の読み直しの分かれ目の決定論テスト。
 //!
 //! 土台は親（`switch_finish_tests.rs`）の頼んだ段の組み立てをそのまま使い、読み直しの窓口の印
 //! （`ReloadInFlight` の `Skins` の段・列は空・予約は相の鍵）を直に置く。印が無いときの今までどおりの
@@ -58,8 +57,8 @@ fn failed(reason: &str) -> Vec<(String, Option<String>)> {
 }
 
 /// 読み直しの差し替えが済んだら、記憶（`LastShell`・`LastBalloon`）も知らせ（`OnShellChanged`・
-/// `OnBalloonChange`）もバルーンの決め方も替えず、相の終わりで `reload_done` を 1 件残して印を下ろす
-/// （要件 5.2・5.3・6.2・6.3・8.4）。差し替えの相の完了の記録はそのまま残る。
+/// `OnBalloonChange`）もバルーンの決め方も替えず、相の終わりで `reload_done` を 1 件残して印を下ろす。
+/// 差し替えの相の完了の記録はそのまま残る。
 #[test]
 fn reload_mark_skips_memory_and_events_and_ends_done() {
     let mut got = Vec::new();
@@ -96,7 +95,7 @@ fn reload_mark_skips_memory_and_events_and_ends_done() {
 }
 
 /// 差し替えが済まずに相が終わったら（頼んだ段の失敗・待ちの段の中止）、元のまま記憶も知らせも 0 で、
-/// 窓口は `reload_failed(skin_failed)` を 1 度だけ残して印を下ろす（要件 5.4・6.4）。
+/// 窓口は `reload_failed(skin_failed)` を 1 度だけ残して印を下ろす。
 #[test]
 fn phase_end_without_swap_fails_the_reload_once() {
     let mut got = Vec::new();

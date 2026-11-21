@@ -1,5 +1,4 @@
-//! 今の定義の唯一の書き手のテスト（balloon-scroll-arrows task 5.3・要件 1.6・1.7・8.6・
-//! design「面の切り替え（`balloon_face_tests.rs`）」）。
+//! 今の定義の唯一の書き手のテスト。
 //!
 //! 面 0 → 2 → 0 で今の定義（モデル）と矢印の絵が替わり手動が捨てられること、動く絵のコマ（同じ
 //! 面の番号）では差し替えないことを固定する。束は一時フォルダ（ワークツリーの `target\` の下）の
@@ -92,7 +91,7 @@ fn markers_up(events: &[CapturedEvent]) -> Vec<bool> {
         .collect()
 }
 
-/// 面 0 → 2 → 0 で今の定義と矢印の絵が替わり、面が替わるたびに手動が捨てられる（要件 1.7・8.6）。
+/// 面 0 → 2 → 0 で今の定義と矢印の絵が替わり、面が替わるたびに手動が捨てられる。
 /// 装着（前の面が無い）は手動を捨てない。
 #[test]
 fn face_0_2_0_replaces_the_definition_and_markers_and_forgets_manual() {
@@ -135,7 +134,7 @@ fn face_0_2_0_replaces_the_definition_and_markers_and_forgets_manual() {
 }
 
 /// 書き手が面の行の中の印の絵を文字の層へ入れる: 印の絵のある面 2 は絵、無い面 0 は `None`
-/// （＝既定の丸・script-small-tags 要件 5.1・5.2）。面 2 → 0 で絵を外す。
+/// （＝既定の丸）。面 2 → 0 で絵を外す。
 #[test]
 fn face_switch_hands_the_inline_marker_of_the_face() {
     let (_permit, mut world, mut wiring, _) = rig();

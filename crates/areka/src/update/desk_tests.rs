@@ -1,5 +1,4 @@
-//! 受付と窓口の段の兄弟テスト（design「窓口と入口」の二重起動・預かり・定常でない・要件 1.1・1.14・
-//! 1.15・1.17・9.6・9.7）。
+//! 受付と窓口の段の兄弟テスト。
 //!
 //! 背景スレッドは起こさない: 窓口の仕事の送出端を受信端に差し替え、背景スレッドの頼みは窓口の頼みの
 //! 送出端へ直接入れる。kanade の代わりは置き場の中身に持たせた送出端の受信端。取り出しの系は `drain`
@@ -241,7 +240,7 @@ fn refusals_leave_one_warning_each_and_send_nothing() {
 }
 
 /// 二重起動: 走っている間の要求は `Executing`。kanade へ `OnUpdateFailure(executing)` が返事なしで
-/// 1 件だけ届き、総括は無く、背景スレッドへは渡らない（要件 1.15・9.7）。
+/// 1 件だけ届き、総括は無く、背景スレッドへは渡らない。
 #[test]
 fn a_request_while_running_sends_one_executing_and_no_summary() {
     let mut rig = Rig::new("areka-update-desk-running");
@@ -265,7 +264,7 @@ fn a_request_while_running_sends_one_executing_and_no_summary() {
     assert_eq!(rig.stage(), Stage::Running);
 }
 
-/// 切替の予約が在れば `NotSteady` で断り、イベント 0 件・`warn!` 1 件（要件 1.17・9.7）。
+/// 切替の予約が在れば `NotSteady` で断り、イベント 0 件・`warn!` 1 件。
 #[test]
 fn a_switch_reservation_refuses_with_no_event_and_one_warning() {
     let mut rig = Rig::new("areka-update-desk-switching");
@@ -429,7 +428,7 @@ fn a_gone_worker_is_reported_and_dropped_and_the_stage_stays_idle() {
 }
 
 /// 最初の依頼で起こす背景スレッドへ窓口の通信中の数を渡す: 標準の手続きの照会の返事待ちの間、
-/// 差し替えた数が立っている（要件 2.1・プロセスの数には触れない）。
+/// 差し替えた数が立っている（プロセスの数には触れない）。
 #[test]
 fn the_spawned_worker_counts_on_the_desk_online() {
     static ONLINE: OnlineCounter = OnlineCounter::new();
@@ -468,8 +467,7 @@ fn a_double_start_led_by_a_shell_reports_shell() {
     assert!(!with_reply);
 }
 
-/// 更新の実行中か: 段が `Idle` でない間と、読み直しの切替の後送りを持つ間だけ真（窓口が無ければ偽・
-/// shell-balloon-switch 要件 1.13）。
+/// 更新の実行中か: 段が `Idle` でない間と、読み直しの切替の後送りを持つ間だけ真（窓口が無ければ偽）。
 #[test]
 fn is_busy_while_running_or_holding_the_after_switch() {
     assert!(!is_busy(&World::new()), "窓口が無ければ偽");

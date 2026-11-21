@@ -3,13 +3,6 @@
 //! SHIORI が返した台詞は、再生の前に `OnTranslate` で 1 回だけ翻訳にかける。そのための
 //! 運行表の側の部品をここに置く。外から渡す口の型（展開と MAKOTO の口）は別のモジュール
 //! [`crate::translate`] で、`crate::change` と `schedule::change` と同じ分け方をとる。
-//!
-//! - [`TranslateWait`]・[`TranslateRequest`]・[`TranslateResult`]: 翻訳の待ちの帳簿・殻への依頼・
-//!   殻が戻す結果。
-//! - [`before`]・[`after`]: [`step`](super::step) の入口と出口。応答を待っている GET の元の
-//!   イベント（[`State::reply_source`](super::State)）を控え、応答の入力で 1 回だけ取り出す。
-//! - [`read_reply`]: `OnTranslate` の生の結果を読む（殻が呼ぶ）。
-//! - [`on_done`]: 翻訳の結果の入力（`Input::TranslateDone`）の腕。預けた一括を返すか故障へ倒す。
 
 use super::events::SourceEvent;
 use super::{Action, Input, Phase, State};
@@ -119,7 +112,7 @@ impl Replied {
     }
 
     /// 台詞の応答で元のイベントが分かるときだけ、元のイベントの基本の出どころを応答のレベルで
-    /// 下げた値（要件 1.1・1.3・3.1）。
+    /// 下げた値。
     pub(super) fn reply_origin(&self) -> Option<ScriptOrigin> {
         self.script.as_ref()?;
         let source = self.source.as_ref()?;
@@ -272,7 +265,7 @@ pub(crate) fn read_reply(
 ///
 /// - `Ok(Translated { script, level })`: 預けた一括の再生の開始の台詞だけを `script` に差し替えて
 ///   返す（起動の記録の後ろ書き＝`epilogue` は触らない）。同じ所で出どころを `level` で下げる
-///   （上げない・要件 1.5・3.1・3.2）。控え（再生中の台詞・切替の台詞）も書き換える
+///   （上げない）。控え（再生中の台詞・切替の台詞）も書き換える
 ///   （[`rewrite_notes`]）。
 /// - `Err`（輸送路の失敗）: `translate_failed` を残して預けた一括を捨て、既存の故障の遷移へ。
 ///   切替の送り出しの台詞なら、表示しなかった台詞を次のゴーストへ渡さないよう切替の台詞を空にする。

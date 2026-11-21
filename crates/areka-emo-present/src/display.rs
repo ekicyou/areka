@@ -3,16 +3,16 @@
 //! 合成結果 [`ComposedSurface`]（**native 原寸**・premultiplied BGRA）を 1 度だけ GPU へ上げ、
 //! 論理 px の宛先矩形 `(0, 0, w, h)` で描く命令を、閉じた [`GraphicsCommandList`] として返す。
 //! 拡大縮小は wintf の描画経路（`render_surface` の `SetTransform`）が担うため、本モジュールは
-//! **拡大率 k を引数に持たず**、記録内容も k に依らない（要件 1.1／1.2／1.3）。
+//! **拡大率 k を引数に持たず**、記録内容も k に依らない。
 //!
 //! 手順は wintf の `BitmapSource`（`ecs/widget/bitmap_source/systems.rs` の `draw_bitmap_sources`／
 //! `create_d2d_bitmap`）の逐語 lift であり、差分は「WIC 由来 bitmap → メモリからの
 //! `ID2D1DeviceContext::CreateBitmap`」の 1 点だけである。補間は bilinear 相当の
-//! `D2D1_INTERPOLATION_MODE_LINEAR`（要件 2.6）。
+//! `D2D1_INTERPOLATION_MODE_LINEAR`。
 //!
 //! 失敗し得る 4 点（bitmap 生成・コマンドリスト生成・描画終了・閉じる）はすべて
 //! [`crate::command::device_err`] を通し、`error!` を残してから [`PresentError::Device`] を返す
-//! （パニックしない・要件 7.1／7.2／7.4）。
+//! （パニックしない）。
 
 use std::mem::ManuallyDrop;
 
@@ -215,7 +215,6 @@ pub(crate) fn record_display(
         right,
         bottom,
     };
-    // 共有 DC のワールド変換をリセットする（前の記録の残留変換を持ち込まない）。
     dc.set_transform(&Matrix3x2::identity());
     // SAFETY: Windows API 境界。`BeginDraw`／`EndDraw` は同一関数内で対になる。
     unsafe { dc.BeginDraw() };

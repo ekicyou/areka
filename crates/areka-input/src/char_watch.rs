@@ -1,9 +1,8 @@
-//! 毎 tick の窓の見張りの系（mouse-click-wheel-events 要件 3.3・6・7・design「CharWatch」）。
+//! 毎 tick の窓の見張りの系。
 //!
 //! キャラ窓ごとに出入り（`OnMouseEnter`／`Leave`／`EnterAll`／`LeaveAll`）とホイール
-//! （`OnMouseWheel`）を見張って kanade へ送る排他の系。処理の順は design「System Flows」の
-//! 「毎 tick の見張り」の 1〜7（出る窓を入る窓より先・出入りをホイールより先）。
-//! 出入りは移動の間引きを通さない（要件 7.6）。横のホイールは読まない（要件 6.7）。
+//! （`OnMouseWheel`）を見張って kanade へ送る排他の系。処理の順は、出る窓を入る窓より先・出入りをホイールより先。
+//! 出入りは移動の間引きを通さない。横のホイールは読まない。
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -29,7 +28,7 @@ use super::{MouseWiring, char_scope, resolve_hit_owned};
 use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::frame::RuntimeWiring;
 
-/// 窓の外へ出たときに捨てる押下の控え（左は捕捉で持ち主が残るので含めない・要件 3.3）。
+/// 窓の外へ出たときに捨てる押下の控え（左は捕捉で持ち主が残るので含めない）。
 const UNCAPTURED_BUTTONS: [ClickButton; 4] = [
     ClickButton::Right,
     ClickButton::Middle,
@@ -51,7 +50,7 @@ struct Over {
     window: Entity,
     scope: u32,
     client: (i64, i64),
-    /// 持ち主が窓の entity そのもの（絵の透けた所の上・要件 6.10）。
+    /// 持ち主が窓の entity そのもの（絵の透けた所の上）。
     transparent: bool,
     wheel: i16,
 }
@@ -85,7 +84,7 @@ pub fn char_watch_with(world: &mut World, mut read_lines: impl FnMut() -> WheelL
         return;
     };
 
-    // 2. 消えた窓（entity が無い・CharWindowMarker が無い）の覚えを黙って捨てる（要件 7.10・7.14）。
+    // 2. 消えた窓（entity が無い・CharWindowMarker が無い）の覚えを黙って捨てる。
     let known: HashSet<Entity> = wiring
         .hover
         .keys()
@@ -190,8 +189,8 @@ pub fn char_watch_with(world: &mut World, mut read_lines: impl FnMut() -> WheelL
         if o.wheel == 0 {
             continue;
         }
-        // 隠れた行のある箱の上の回転は箱の送りに使い、`OnMouseWheel` へ積まない（balloon-scroll-arrows
-        // 要件 7.5・7.6）。透けた所の判断より前（箱の文字の上は絵が透けていても箱の上）。
+        // 隠れた行のある箱の上の回転は箱の送りに使い、`OnMouseWheel` へ積まない。
+        // 透けた所の判断より前（箱の文字の上は絵が透けていても箱の上）。
         if runtime
             .as_ref()
             .is_some_and(|rt| wheel_box(rt, o.scope, o.client, o.wheel, &mut read_lines))

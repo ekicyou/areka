@@ -163,7 +163,6 @@ impl TurnMachine {
     ) -> Vec<Effect> {
         let mut fx = Vec::new();
         let moved = input.cursor.is_some() && input.cursor != self.last_cursor;
-        // ① 追っている範囲を照らす（終われば何もない・押したので休み、へ）。
         self.state = match std::mem::take(&mut self.state) {
             State::Waiting {
                 window,
@@ -173,7 +172,7 @@ impl TurnMachine {
             State::Active(turn) => self.check_active(input, moved, turn, &mut fx),
             other => other,
         };
-        // ② 押して休んでいる範囲から出たら、休みを解く（位置が分からない回は出たとみなさない）。
+        // 位置が分からない回は、押した範囲から出たとみなさない。
         if let State::Suppressed { range } = self.state
             && input.cursor.is_some()
             && input.over.map(|o| o.range) != Some(range)
@@ -181,7 +180,7 @@ impl TurnMachine {
             trace!(range = ?range, "[tooltip_turn] 押した範囲から出た");
             self.state = State::Idle;
         }
-        // ③ 何もなければ足元の範囲に入る（終わったその回のうちに別の範囲の待ちまで進める）。
+        // 終わったその回のうちに、足元の別の範囲の待ちまで進める。
         if let (State::Idle, Some(over)) = (&self.state, input.over) {
             self.state = if input.button_down {
                 trace!(range = ?over.range, "[tooltip_turn] 押したまま入った（数えない）");
@@ -377,7 +376,7 @@ impl TurnMachine {
                 self.state = self.end_turn(turn, TooltipEndReason::RangeUnregistered, now, &mut fx);
             }
             State::Waiting { range, .. } if range == id => {
-                // 待ちから外れるだけなので知らせは出さない（状態は何もない、のまま）。
+                // 待ちから外れるだけなので知らせは出さない。
                 trace!(range = ?range, "[tooltip_turn] 来なかった（登録の取り消し）");
             }
             other => self.state = other,

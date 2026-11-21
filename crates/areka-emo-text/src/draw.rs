@@ -16,7 +16,7 @@
 //! **層規律**: COM 層——UI スレッド専有。`windows`（DirectWrite/D2D）を触るのは
 //! 本モジュール群と surface のみ。失敗は log-first（`tracing::error!`＋`Err`）で扱い panic しない。
 //!
-//! ## フォント解決＋方向レシピ（R4.1/R4.2/R10.3）
+//! ## フォント解決＋方向レシピ
 //!
 //! - [`ResolvedFont`]: balloon 定義（[`BalloonModel`] の `Font`）から描画・レイアウト生成に
 //!   必要な設定一式を解決する。欠落は ukadoc 既定へフォールバック
@@ -24,25 +24,21 @@
 //! - [`DirectionRecipe`]: `writing_mode` の解釈結果 [`WritingMode`] から DirectWrite の
 //!   方向設定 4 点（Reading/Flow/Text/Paragraph）を一意に導出する。レシピは
 //!   wintf `typewriter_layout.rs` 実証済みレシピの **lift（複製）**——wintf の
-//!   テキスト widget system へは依存しない（決めは完了 spec `areka-P0-emo-text-layer` の
-//!   design.md の依存の節）。
+//!   テキスト widget system へは依存しない。
 //! - [`create_text_format`]: 上記 2 つを実 `IDWriteTextFormat` へ焼き込む
-//!   （生成失敗は `error!`＋`Device` エラー・既定の書体で作り直さない＝指摘 35）。
+//!   （生成失敗は `error!`＋`Device` エラー・既定の書体で作り直さない）。
 //! - 無効表示の層（`disable.font.*`）は [`ResolvedFont::looks`] で**実体化済み**
-//!   （要件 4.4——`\f[disable]` の戻し先）。行単位の文字装飾（[`TextEffects`]）だけが
+//!   （`\f[disable]` の戻し先）。行単位の文字装飾（[`TextEffects`]）だけが
 //!   **型シームのみ・実挙動なし**のまま残る（予約）。
-//! - 縦書きの寄せと下線の写像は確定済み（spec `areka-P0-balloon-vertical-canon`
-//!   要件 5.1〜5.3・5.7：`align` は `left`＝上寄せ／`right`＝下寄せ／`center`＝縦中央、
+//! - 縦書きの寄せと下線の写像は確定済み（`align` は `left`＝上寄せ／`right`＝下寄せ／`center`＝縦中央、
 //!   `valign` は `top`＝右寄せ／`bottom`＝左寄せ、下線は列の右側）。正典 2 ページで
-//!   `valign` の写像が逆である事実（疑義 SC1）と areka が採る側の理由は
-//!   `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が正本で、寄せの追跡先は
-//!   `text-align-shadow-canon`。
+//!   `valign` の写像が逆である事実と areka が採る側の理由は `doc/COMPAT_ARCHITECTURE.md` の
+//!   該当行が正本。
 //!
-//! ## 計測専用 probe layout（R4.5・probe 規約）
+//! ## 計測専用 probe layout（probe 規約）
 //!
 //! [`DWriteMetrics`]: **未折返しの測定専用 probe TextLayout** の cluster metrics から
-//! [`GlyphMetrics`] を実装し、純粋層 `LayoutEngine` へ実測送り幅を注入する
-//! （design discussion #1 裁定の probe 規約）:
+//! [`GlyphMetrics`] を実装し、純粋層 `LayoutEngine` へ実測送り幅を注入する:
 //!
 //! - probe は**折返し決定より前**に生成する（計測→折返しの一方向＝鶏卵の構造的切断）。
 //! - probe の format は描画と**同一の [`create_text_format`] 経路**
@@ -53,13 +49,13 @@
 //!   既定の鍵以外の表と、既定の鍵の測れなかった字・複数のスカラーの字（クラスタ）は台詞の切れ目で
 //!   捨てる（[`DWriteMetrics`] の `sync_talk`）。
 //!
-//! ## 全域再描画オラクル（R3.1/R7.3・`#[cfg(test)]`）
+//! ## 全域再描画オラクル（`#[cfg(test)]`）
 //!
 //! [`DrawExecutor`]: **比較専用の独立オラクル**（本番の描き手は `ViewboxExecutor`）。
 //! 可視窓の行を毎更新オフスクリーン D2D ターゲット（TextSurface の front＝`front_tex`）へ
 //! 透明 clear→全域再描画する（差分描画なし・SSP 忠実の確定裁定）:
 //!
-//! - **可視窓決定（純粋・layout.rs）と描画実行（本型）の分離**（R7.4 のシーム下半分）。
+//! - **可視窓決定（純粋・layout.rs）と描画実行（本型）の分離**（シームの下半分）。
 //!   [`VisibleWindow`] の `first_visible_line`＋`block_offset` を消費するだけで、
 //!   スクロール判定は持たない。
 //! - **行 TextLayout キャッシュ**: 行内容が不変（確定行＝リビール完了行）なら再利用し、
@@ -68,14 +64,14 @@
 //! - **スケール一点適用**: 描画ターゲットへの `SetTransform(scale(k))` 一点のみ
 //!   （k＝`ScaleContract::scale`）。レイアウト・行 TextLayout は image px（96 DPI 名目
 //!   ＝DIP と同一視）のままで、DPI API との二重適用は構造的に存在しない。
-//! - Image/Surface 住人（M1 型シーム）は `warn!`（executor ごと初回のみ）＋skip（R8.5）。
+//! - Image/Surface 住人（M1 型シーム）は `warn!`（executor ごと初回のみ）＋skip。
 //!
-//! ## probe/描画 一致 invariant（R4.5/R6.1–6.3/R7.5）
+//! ## probe/描画 一致 invariant
 //!
 //! probe（1 文字＝クラスタ 1 つごとの計測）と描画行 TextLayout の cluster advance の**同値** invariant は
 //! 本モジュールの統合テスト（`probe_advances_match_drawn_line_advances_per_cluster`／
 //! `advance_divergence_would_surface_as_wrap_position_drift`）が檻化する——乖離は
-//! クリップに隠れず折返し位置のズレとして赤くなる（design Testing Strategy #5）。
+//! クリップに隠れず折返し位置のズレとして赤くなる。
 
 use areka_parsers::balloon::BalloonModel;
 use tracing::warn;
@@ -139,11 +135,6 @@ use wintf::ecs::GraphicsCore;
 // ---------------------------------------------------------------------------
 // 子モジュール（役割ごとの兄弟ファイル）と再輸出
 // ---------------------------------------------------------------------------
-//
-// 本ファイルはファサードで、計測（`draw_metrics.rs`）・行レイアウトの記憶
-// （`draw_line_store.rs`）・書体の候補列の解決（`draw_catalog.rs`）は子モジュールが持つ。
-// 子は `super::` で本ファイルの定数・型・ヘルパを辿る。再輸出により crate 内から見た入口は
-// `crate::draw::DWriteMetrics`／`crate::draw::LineLayoutStore`／`crate::draw::FontCatalog` の形になる。
 
 #[path = "draw_metrics.rs"]
 mod metrics;
@@ -160,10 +151,10 @@ pub use metrics::DWriteMetrics;
 #[cfg(test)]
 pub(crate) use metrics::measure_font_metrics;
 
-/// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。見た目の側の正典の別名（1 か所に書く）。
+/// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定）。見た目の側の正典の別名（1 か所に書く）。
 pub const DEFAULT_FONT_NAME: &str = crate::look::UKADOC_DEFAULT_FONT_NAME;
 
-/// 既定フォント高さ 12（**image px**・「単位はピクセル：ポイントではない」・ukadoc 既定・R4.1/R4.2）。
+/// 既定フォント高さ 12（**image px**・「単位はピクセル：ポイントではない」・ukadoc 既定）。
 /// 見た目の側の正典の別名。
 pub const DEFAULT_FONT_HEIGHT: f32 = crate::look::UKADOC_DEFAULT_FONT_HEIGHT;
 
@@ -175,7 +166,7 @@ pub const DEFAULT_FONT_HEIGHT: f32 = crate::look::UKADOC_DEFAULT_FONT_HEIGHT;
 /// 単色は OS に任せる（フォントの差し替えの規則・代替の表・自前の描き手は持たない）。
 /// 色つきの字形を持たない文字の画素はこのオプションで変わらない。
 ///
-/// 影の複製はこの定数を使わず、単色の塗りで描く（`text-align-shadow-canon`）。
+/// 影を描くときは、複製にこの定数を使わず単色の塗りで描く。
 pub(crate) const TEXT_DRAW_OPTIONS: D2D1_DRAW_TEXT_OPTIONS =
     D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT;
 
@@ -184,17 +175,17 @@ const LOCALE_JA_JP: &str = "ja-JP";
 
 /// probe layout と行 TextLayout の折返し無効寸（image px）。行内軸へ与え（行送り軸は
 /// `block_extent`・[`create_line_layout`]）、DirectWrite に**折り返させない**（probe 規約）。
-/// 字の大きさに上限は無い（`\f[height,N]`・指摘 20）ので 1e6 より長い行もありうるが、それでも
+/// 字の大きさに上限は無い（`\f[height,N]`）ので 1e6 より長い行もありうるが、それでも
 /// 折り返らない: 描画範囲（image px で高々数百）より長い行は純粋層の折返し（`layout_scan_glyph.rs`
 /// の ③'）で字が 1 つだけになり、DirectWrite は 1 つのクラスタの中では折り返さない。
 pub const PROBE_MAX_EXTENT: f32 = 1.0e6;
 
-/// バルーン背景色の既定（白）——無効表示の混色の相手がまだ分からないときに使う
-/// （要件 4.6）。実の背景（バルーン画像の原点画素）を知っている呼び手は
+/// バルーン背景色の既定（白）——無効表示の混色の相手がまだ分からないときに使う。
+/// 実の背景（バルーン画像の原点画素）を知っている呼び手は
 /// [`ResolvedFont::resolve_with_background`] へそれを渡す。
 pub const DEFAULT_BALLOON_BACKGROUND: (u8, u8, u8) = (255, 255, 255);
 
-/// 解決済みフォント一式（`DrawExecutor::render` の `font` 引数・design.md「DrawExecutor（draw.rs）」）。
+/// 解決済みフォント一式（`DrawExecutor::render` の `font` 引数）。
 ///
 /// balloon 定義の欠落成分を ukadoc 既定で埋めた「レイアウト生成に必要な設定一式」。
 /// [`resolve`](Self::resolve) だけが生成口（テストを除く）で、`height` は常に正値。
@@ -213,23 +204,23 @@ pub struct ResolvedFont {
     pub color: (u8, u8, u8),
     /// 行単位の文字装飾の予約シーム（実挙動なし）。
     pub effects: TextEffects,
-    /// 既定／無効表示の 2 層＋選択肢文字色（要件 4.1／4.4／4.5）。
+    /// 既定／無効表示の 2 層＋選択肢文字色。
     ///
     /// `\f[default]`／`\f[disable]` の戻し先で、本型が唯一の構築点。
     /// `looks.default` の `name`（＝[`name`](Self::name) ＋ [`fallback_chain`](Self::fallback_chain)）・
     /// `height`・`color` が同名のフィールドと一致することは、構築が
     /// [`resolve_with_background`](Self::resolve_with_background) の 1 か所だけであることが保証する。
     pub looks: LookLayers,
-    /// 採用した顔（家族名・太さ・幅・斜体・要件 3.2／3.10）。組み立ては [`name`](Self::name) の
+    /// 採用した顔（家族名・太さ・幅・斜体）。組み立ては [`name`](Self::name) の
     /// 未解決の Regular の顔で、[`FontCatalog::pick`] が解決した顔へ差し替える。
     pub face: FontFace,
-    /// 行の中の印（`\![*]`・`%*`）の見た目（要件 5.1）。解決は既定の丸を入れ、runtime が
+    /// 行の中の印（`\![*]`・`%*`）の見た目。解決は既定の丸を入れ、runtime が
     /// アクターごとに覚えた印の絵を解いた直後に押す（`actor_decoration.rs` の `resolve_stamped`）。
     pub inline_marker: InlineMarkerLook,
 }
 
 impl ResolvedFont {
-    /// balloon 定義からフォント設定一式を解決する（R4.1/R4.2）。
+    /// balloon 定義からフォント設定一式を解決する。
     ///
     /// - `font.name` 欠落 → [`DEFAULT_FONT_NAME`]（ukadoc 既定＝正常系・ログなし）。
     ///   カンマ区切り複数指定は先頭名を `name`、残余を [`fallback_chain`](Self::fallback_chain)
@@ -242,7 +233,7 @@ impl ResolvedFont {
         ResolvedFont::resolve_with_background(model, DEFAULT_BALLOON_BACKGROUND)
     }
 
-    /// [`resolve`](Self::resolve) にバルーンの**背景色**を与えた形（要件 4.4／4.5／4.6）。
+    /// [`resolve`](Self::resolve) にバルーンの**背景色**を与えた形。
     ///
     /// 背景色は無効表示の色を導くためだけに使う（混色の式は
     /// [`crate::color::mix_disabled`] が唯一の実装点）。背景を知らない呼び手は
@@ -250,10 +241,8 @@ impl ResolvedFont {
     ///
     /// バルーン定義の飾り 5 本（`font.bold` ほか）と `disable.font.*` は、
     /// [`crate::balloon_overrides::overrides`] がトークン列へ写し、
-    /// [`LookLayers::from_balloon`] の 2 引数へ渡す（読み取りの所有は
-    /// `areka-P0-balloon-font-descript-keys`）。宣言が無ければ列は空になる。
-    /// 影の 4 キー（`font.shadowcolor.*`／`font.shadowstyle`）は渡さない——所有は
-    /// `text-align-shadow-canon`。
+    /// [`LookLayers::from_balloon`] の 2 引数へ渡す。宣言が無ければ列は空になる。
+    /// 影の 4 キー（`font.shadowcolor.*`／`font.shadowstyle`）はまだ渡さない。
     pub fn resolve_with_background(model: &BalloonModel, background: (u8, u8, u8)) -> ResolvedFont {
         let font = model.font();
 
@@ -328,7 +317,7 @@ impl ResolvedFont {
 /// DirectWrite 方向設定レシピ——`writing_mode` の解釈結果から**一意に導出**される 4 点セット。
 ///
 /// wintf `typewriter_layout.rs` 実証済みレシピの lift（複製・wintf 非依存）。
-/// design.md 写像表:
+/// 写像表:
 ///
 /// | [`WritingMode`] | Reading | Flow |
 /// |---|---|---|
@@ -350,7 +339,7 @@ pub struct DirectionRecipe {
 }
 
 impl DirectionRecipe {
-    /// [`WritingMode`] から方向レシピを一意に導出する（3 方向→3 レシピの単射・R5.5 消費側）。
+    /// [`WritingMode`] から方向レシピを一意に導出する（3 方向→3 レシピの単射）。
     pub fn for_mode(mode: WritingMode) -> DirectionRecipe {
         let (reading, flow) = match mode {
             WritingMode::HorizontalTb => (
@@ -397,10 +386,10 @@ impl DirectionRecipe {
 /// 解決済みフォント＋方向レシピから描画/計測共用の `IDWriteTextFormat` を生成する。
 ///
 /// 顔は `font.face`（[`FontCatalog::pick`] が解決した顔）、太字・斜体は既定の見た目
-/// （バルーン定義の `font.bold`／`font.italic`）を [`FontFace`] の規則で重ねる（要件 4.8／4.9）。
+/// （バルーン定義の `font.bold`／`font.italic`）を [`FontFace`] の規則で重ねる。
 ///
 /// フォント生成失敗（Error Categories）: `error!`＋[`TextLayerError::Device`] を 1 件（panic しない・
-/// 既定の書体での作り直しはしない＝指摘 35）。
+/// 既定の書体での作り直しはしない）。
 /// 計測専用 probe layout（[`DWriteMetrics`]）も**同一のこの format 生成経路**を用いる前提
 /// （probe 規約: 描画と同一 TextFormat）。
 pub fn create_text_format(
@@ -409,7 +398,7 @@ pub fn create_text_format(
     mode: WritingMode,
 ) -> Result<IDWriteTextFormat, TextLayerError> {
     let (bold, italic) = (font.looks.default.bold, font.looks.default.italic);
-    // 作り直しはしない（指摘 35）: CreateTextFormat は書体の在る無しを確かめず、顔は pick が
+    // 作り直しはしない: CreateTextFormat は書体の在る無しを確かめず、顔は pick が
     // 解いてある。断られるのは大きさが不正なときだけで、同じ大きさで作り直しても断られる。
     let format =
         try_create_format(factory, &font.face, bold, italic, font.height).map_err(|e| {
@@ -450,7 +439,7 @@ pub(super) fn try_create_format(
 }
 
 /// 縦書きの TextLayout に明示する機能の組（DirectWrite の既定の組から `vpal` 相当を外したもの・
-/// 既定と同じ結果になる 10 個を測りで選んだ・research.md §10.1）。`vert` は入れない
+/// 既定と同じ結果になる 10 個を測りで選んだ）。`vert` は入れない
 /// （DirectWrite が立てる並びにだけ自分で当てる＝明示すると横倒しの並びまで縦の字形になる）。
 /// `vkrn` も入れない（手本 HarfBuzz の縦書きの既定に無い）。
 const VERTICAL_FEATURES: [DWRITE_FONT_FEATURE_TAG; 10] = [
@@ -478,11 +467,11 @@ const fn feature_tag(name: &[u8; 4]) -> DWRITE_FONT_FEATURE_TAG {
 /// 縦書きだけ列のレシピを当てる:
 ///
 /// 1. 行間を UNIFORM・`block_extent`・その半分にする（列の箱の幅を行の箱の幅に揃え、列の基線を
-///    その真ん中に置く＝em の箱が行の矩形の真ん中に来る・要件 5.1）。
+///    その真ん中に置く＝em の箱が行の矩形の真ん中に来る）。
 /// 2. [`VERTICAL_FEATURES`] を値 1 で全文字範囲に当てる（既定の組の `vpal` 相当の位置の調整を外す
-///    ＝開き括弧類が em の下半分に来る・要件 1.1／2.2）。
+///    ＝開き括弧類が em の下半分に来る）。
 ///
-/// 横書きには何もしない（要件 1.7／5.5）。書式の言語・方向レシピは変えない（要件 2.5）。
+/// 横書きには何もしない。書式の言語・方向レシピは変えない。
 /// 装飾の範囲指定は生成の後に焼くので、区間の家族名・大きさを変えても機能の組と行間は保たれる。
 pub(crate) fn create_line_layout(
     factory: &IDWriteFactory2,
@@ -545,11 +534,11 @@ type FormatKey = (crate::look::FontKey, WritingMode);
 /// バイト比較するために全域再描画方式を `#[cfg(test)]` で持つ。render のロジック・origin 式は
 /// viewbox 都合で一切変えない——変えれば比較の意味を失う（オラクルの独立性）。
 ///
-/// ContentCanvas の可視窓を DirectWrite/D2D で全域再描画する実行部（R3.1/R7.3）。
+/// ContentCanvas の可視窓を DirectWrite/D2D で全域再描画する実行部。
 ///
 /// 毎更新、TextSurface の front（`front_tex`・オフスクリーン D2D ターゲット）を透明 clear→
 /// 可視窓の行を描画する（差分描画なし）。スクロールも同経路（可視窓決定は純粋層の
-/// [`VisibleWindow`] が済ませている——R7.4 分離シームの描画実行側）。
+/// [`VisibleWindow`] が済ませている）。
 ///
 /// - **行 TextLayout キャッシュ**: 確定行（内容不変）は再生成しない・リビール中の行のみ
 ///   都度更新・全破棄は [`clear_cache`](Self::clear_cache)（Clear cue 適用点）と書式の組み直し
@@ -568,11 +557,11 @@ pub struct DrawExecutor {
     /// 描画/計測共用 format（[`create_text_format`] 経路・FormatKey 不変なら再利用）。
     format: Option<(FormatKey, IDWriteTextFormat)>,
     /// 行 TextLayout の生成・キャッシュストア（[`LineLayoutStore`]・両描画実行が同一経路で
-    /// 行レイアウトを得るための共有資産＝byte 等価の構造前提・RN5）。
+    /// 行レイアウトを得るための共有資産＝byte 等価の構造前提）。
     line_store: LineLayoutStore,
-    /// 書体の台帳（本番の `ViewboxExecutor::ensure_format` と同じく `pick` で解いてから作る・指摘 34）。
+    /// 書体の台帳（本番の `ViewboxExecutor::ensure_format` と同じく `pick` で解いてから作る）。
     fonts: FontCatalog,
-    /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・R8.5）。
+    /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ）。
     seam_warned: bool,
 }
 
@@ -607,7 +596,7 @@ impl DrawExecutor {
     }
 
     /// Clear cue の適用点: 行 TextLayout キャッシュを全破棄する
-    /// （design「確定行は再生成しない・**Clear で全破棄**」——破棄はこの口だけ・
+    /// （破棄はこの口だけ・
     /// 共有ストア [`LineLayoutStore::clear`] へ委譲）。
     pub fn clear_cache(&mut self) {
         self.line_store.clear();
@@ -644,10 +633,10 @@ impl DrawExecutor {
             let run = match &resident.content {
                 ResidentContent::GlyphRun(run) => run,
                 // Choice 住人は内包 run を GlyphRun と同一の素描画で描く（比較オラクルは
-                // ハイライトを持たない＝byte 等価 golden が不変に保たれる・R9.5）。
+                // ハイライトを持たない＝byte 等価 golden が不変に保たれる）。
                 ResidentContent::Choice(choice) => &choice.run,
                 seam @ (ResidentContent::Image(_) | ResidentContent::Surface(_)) => {
-                    // M1 型シーム（Image/Surface）: warn（executor ごと初回のみ）＋skip（R8.5）。
+                    // M1 型シーム（Image/Surface）: warn（executor ごと初回のみ）＋skip。
                     if !self.seam_warned {
                         self.seam_warned = true;
                         warn!(
@@ -662,7 +651,7 @@ impl DrawExecutor {
                 continue;
             }
             let text = crate::inline_marker::line_text(&run.glyphs);
-            // 内容不変なら再利用・変化時のみ生成（規則は共有ストアに一元化・両描画実行の byte 等価前提・RN5）。
+            // 内容不変なら再利用・変化時のみ生成（規則は共有ストアに一元化・両描画実行の byte 等価前提）。
             let layout = self
                 .line_store
                 .line_layout(index, &text, &format, font.height, mode)?;
@@ -699,7 +688,6 @@ impl DrawExecutor {
         // 失敗は EndDraw に集約される。SetTarget は成否によらず必ず解除する。 ──
         unsafe { self.dc.SetTarget(&target) };
         unsafe { self.dc.BeginDraw() };
-        // 透明 clear（premultiplied 全 0）＝差分描画なしの構造（R7.3）。
         self.dc.clear(None);
         // スケール一点適用: k はここ（描画ターゲットの変換）だけ。レイアウト座標は image px。
         self.dc.set_transform(&Matrix3x2 {
@@ -758,7 +746,7 @@ impl DrawExecutor {
 /// テクスチャは SHADER_RESOURCE bind を持たないため CANNOT_DRAW を併記する）。
 ///
 /// [`DrawExecutor`]（front を巻く）と `ViewboxExecutor`（back を巻く・viewbox_draw.rs）が
-/// **同一 props** でターゲット bitmap を得ることで byte 等価の構造前提を共有する（RN5）。
+/// **同一 props** でターゲット bitmap を得ることで byte 等価の構造前提を共有する。
 pub(crate) fn create_d2d_target_bitmap(
     dc: &ID2D1DeviceContext,
     tex: &ID3D11Texture2D,

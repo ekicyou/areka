@@ -1,16 +1,15 @@
-//! バルーン面切替の決定論的エンドツーエンド観測（spec: areka-P0-balloon-face-cue
-//! 要件 5.1/5.2/5.3/5.4）。
+//! バルーン面切替の決定論的エンドツーエンド観測。
 //!
 //! fixture のさくらスクリプトを **直接入力**し、`parse → compile → cue → seriko → 表示指令発行`
 //! までの貫通経路を、注入した `SakuraMsg::Tick` のみで（sleep/polling を一切用いず）決定論的に
 //! 観測する統合テスト。公開 API のみで組む。
 //!
-//! 同期は `common::run_core` のとおり（sleep/polling なし・要件 5.3）。
+//! 同期は `common::run_core` のとおり（sleep/polling なし）。
 //!
 //! # 経路の要所
 //!
 //! - `BalloonSurface`（`\b`）は `cue_target_of` が `Some(CueTarget::Shell)` へ分類する＝
-//!   表示系（seriko）が action する（テキスト状態機械へは行かない・要件 3.2）。broadcast ゆえ
+//!   表示系（seriko）が action する（テキスト状態機械へは行かない）。broadcast ゆえ
 //!   全 cue は両 sink へ届くが、text 系は本 E2E の観測対象外——破棄専用の [`NullTextSink`] で足りる。
 //! - 解決テーブルは空 alias 表（`BTreeMap::new()`）で足りる。数値 key（`"0"`/`"2"`/`"-1"`）は
 //!   alias を引かず数値枝で解決できる（`resolve` / `resolve_balloon_key` の数値枝）。
@@ -37,7 +36,7 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
     )
 }
 
-/// シナリオ1（要件 5.1）: `\b[ID]` を含む fixture script 直入力で「面切替指令（ID 指定）」を
+/// シナリオ1: `\b[ID]` を含む fixture script 直入力で「面切替指令（ID 指定）」を
 /// mock 表示 sink 上に観測する。
 ///
 /// `\b[2]\e` → seriko が `ShowBalloon{scope:"0", surface_id:2}` をちょうど 1 件発行する
@@ -56,7 +55,7 @@ fn balloon_show_is_observed_end_to_end() {
     );
 }
 
-/// シナリオ2（要件 5.2）: `\b[-1]`（非表示センチネル）を含む fixture script 直入力で
+/// シナリオ2: `\b[-1]`（非表示センチネル）を含む fixture script 直入力で
 /// 「非表示指令」を mock 表示 sink 上に観測する。`\w1`（=50ms）を跨ぐ Tick 時刻で駆動する。
 ///
 /// `\b[2]\w1\b[-1]\e` → Tick(0.0) で `ShowBalloon{2}`、Tick(0.05) で `HideBalloon` を順に観測。
@@ -83,7 +82,7 @@ fn balloon_hide_is_observed_end_to_end() {
     );
 }
 
-/// シナリオ3（要件 1.2 の E2E 面）: レガシー裸形 `\bN` がブラケット形 `\b[N]` と**同一**の
+/// シナリオ3: レガシー裸形 `\bN` がブラケット形 `\b[N]` と**同一**の
 /// 表示指令を観測させる。
 ///
 /// `\b2\e` → `ShowBalloon{2}`。ブラケット形 `\b[2]\e`（シナリオ1）と同じ字面の観測列に固め、
@@ -102,7 +101,7 @@ fn bare_balloon_matches_bracket_form_end_to_end() {
     );
 }
 
-/// シナリオ4（要件 4.3）: 同一面への冪等な再指定は表示指令を再発行しない。
+/// シナリオ4: 同一面への冪等な再指定は表示指令を再発行しない。
 ///
 /// `\b[2]\b[2]\e`（両 cue とも at=0.0）→ Tick(0.0) で両 cue が発火するが、2 件目は per-scope
 /// 状態不変ゆえ発行が抑止され、`ShowBalloon{2}` はちょうど 1 件のみ観測される（per-scope の冪等ガード）。
@@ -120,7 +119,7 @@ fn same_balloon_twice_emits_once_end_to_end() {
     );
 }
 
-/// シナリオ5（要件 4.6）: シェル面切替とバルーン面切替の混在で、双方が独立に記録される。
+/// シナリオ5: シェル面切替とバルーン面切替の混在で、双方が独立に記録される。
 ///
 /// `\s[0]\b[2]\e`（両 cue とも at=0.0・記述順 FIFO）→ Tick(0.0) で `\s[0]`（シェル面＝seriko の
 /// `Emote` 経路・数値 "0"→Show(0)）と `\b[2]`（バルーン面＝`BalloonSurface` 早期分岐）が順に

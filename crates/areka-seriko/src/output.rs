@@ -1,54 +1,54 @@
 //! 合成入力発行モジュール（発行層）。
 //!
 //! per-scope surface 状態の確定結果を emo（⑥）への **表示指令** [`DisplayCommand`] へ写し、
-//! 発行先抽象 [`SurfaceOutput`] へ送る層。指令は `Send` 所有データ（要件 5.4）で、他スレッド
+//! 発行先抽象 [`SurfaceOutput`] へ送る層。指令は `Send` 所有データで、他スレッド
 //! ／emo-present へ安全に受け渡せる。本番の発行先は `areka` クレートの `PresentBridge`
-//! （`areka_runtime::adapter`）で、観測用 [`MockSurfaceOutput`] を発行先にすれば単体観測が閉じる（要件 5.5）。
+//! （`areka_runtime::adapter`）で、観測用 [`MockSurfaceOutput`] を発行先にすれば単体観測が閉じる。
 
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::ActorKey;
 use std::sync::{Arc, Mutex};
 
-/// emo（⑥）への表示指令（`Send` 所有データ・要件 5.4）。
+/// emo（⑥）への表示指令（`Send` 所有データ）。
 ///
-/// - [`DisplayCommand::Show`]: あるスコープの surface 状態が表示 surface へ確定した（要件 5.1）。
+/// - [`DisplayCommand::Show`]: あるスコープの surface 状態が表示 surface へ確定した。
 ///   解決済み `surface_id` と現在の bind 集合 `binds` を伴う。
-/// - [`DisplayCommand::Hide`]: あるスコープの状態が非表示へ遷移した（要件 5.2・DD5）。
-/// - [`DisplayCommand::ShowBalloon`]: あるバルーンスコープの面が表示面へ確定した（要件 4.1）。
+/// - [`DisplayCommand::Hide`]: あるスコープの状態が非表示へ遷移した。
+/// - [`DisplayCommand::ShowBalloon`]: あるバルーンスコープの面が表示面へ確定した。
 ///   シェルの [`DisplayCommand::Show`] と異なり `binds` を持たない（バルーンに着せ替えは
 ///   無い＝adapter 側で `PresentCommand::ShowSurface{binds: BindSet::default()}` を組む）。
-/// - [`DisplayCommand::HideBalloon`]: あるバルーンスコープが非表示へ遷移した（`\b[-1]` 相当・要件 4.2）。
+/// - [`DisplayCommand::HideBalloon`]: あるバルーンスコープが非表示へ遷移した（`\b[-1]` 相当）。
 ///
 /// `ActorKey`（`String` 内包）・`u32`・`BindSet`（`Vec<u32>` 内包）はいずれも `Send` ゆえ、
-/// `DisplayCommand` は自動的に `Send`（test の `_assert_send` でコンパイル時固定・要件 5.4）。
+/// `DisplayCommand` は自動的に `Send`（test の `_assert_send` でコンパイル時固定）。
 ///
 /// `#[non_exhaustive]` は付けない（workspace 内部契約・variant 追加時にコンパイラが下流 match の
 /// 追随を強制する文化を維持する）。
 #[derive(Clone, Debug, PartialEq)]
 pub enum DisplayCommand {
-    /// 表示: 解決済み surface id・現在の bind 集合・pattern 進行状態を伴う（要件 5.1）。
-    /// `pattern` は「1 面の完全な合成入力」の第一級要素（PatternState・要件 5.1）。cue 由来の
-    /// Show は空 pattern（`PatternState::default()`）を載せる＝ループ不活性時は pattern を何も足さない（要件 5.4）。
+    /// 表示: 解決済み surface id・現在の bind 集合・pattern 進行状態を伴う。
+    /// `pattern` は「1 面の完全な合成入力」の第一級要素（PatternState）。cue 由来の
+    /// Show は空 pattern（`PatternState::default()`）を載せる＝ループ不活性時は pattern を何も足さない。
     Show {
         scope: ActorKey,
         surface_id: u32,
         binds: BindSet,
         pattern: PatternState,
     },
-    /// 非表示遷移（要件 5.2）。
+    /// 非表示遷移。
     Hide { scope: ActorKey },
-    /// バルーン面表示（要件 4.1）。`binds` なし＝バルーンに着せ替えは無い
+    /// バルーン面表示。`binds` なし＝バルーンに着せ替えは無い
     /// （adapter は `PresentCommand::ShowSurface{binds: BindSet::default()}` を組む）。`pattern` は
-    /// シェル面 [`DisplayCommand::Show`] と同様の第一級要素（要件 5.1）。バルーン面 pattern アニメも
-    /// surface 非依存に一様適用され得る（統一グラフィック思想）。cue 由来は空 pattern（要件 5.4）。
+    /// シェル面 [`DisplayCommand::Show`] と同様の第一級要素。バルーン面 pattern アニメも
+    /// surface 非依存に一様適用され得る（統一グラフィック思想）。cue 由来は空 pattern。
     ShowBalloon {
         scope: ActorKey,
         surface_id: u32,
         pattern: PatternState,
     },
-    /// バルーン非表示（`\b[-1]` 相当・要件 4.2）。
+    /// バルーン非表示（`\b[-1]` 相当）。
     HideBalloon { scope: ActorKey },
-    /// 定義を替えた合図（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。
+    /// 定義を替えた合図。
     ///
     /// seriko が定義を差し替えた点に 1 件並ぶ（同じ流れの FIFO ゆえ、前の指令は前に・後の指令は
     /// 後に届く）。`epoch` は差し替えの依頼の世代、`shows` はスコープごとの今の面と着せ替え
@@ -58,16 +58,15 @@ pub enum DisplayCommand {
         kind: RebaseKind,
         shows: Vec<RebasedShow>,
     },
-    /// 出番の世代を知った合図（spec: areka-P0-animated-image-playback 要件 2.3・6.1・design
-    /// 「出し直しの前に出た指令を見分ける」）。
+    /// 出番の世代を知った合図。
     ///
     /// seriko が `scope` のバルーンの新しい出番（`generation`）の知らせを受けた点に 1 件並ぶ。同じ
     /// 流れの FIFO ゆえ、前の指令はその出番を知る前に、後の指令は知った後に決めたコマである。
     StageAck { scope: ActorKey, generation: u64 },
-    /// キャラクターのずれ（spec: seriko-pattern-calls 要件 7.1・7.6）: 面の画素・元の表示位置からの
+    /// キャラクターのずれ: 面の画素・元の表示位置からの
     /// 絶対値で、`(0, 0)` は元へ戻す。値が変わったときだけ、同じ刻みの `Show` の後に出る。
     MoveShift { scope: ActorKey, x: i64, y: i64 },
-    /// バルーンのずれ（[`DisplayCommand::MoveShift`] と同じ意味・要件 3.8）。
+    /// バルーンのずれ（[`DisplayCommand::MoveShift`] と同じ意味）。
     MoveShiftBalloon { scope: ActorKey, x: i64, y: i64 },
 }
 
@@ -91,7 +90,7 @@ pub struct RebasedShow {
     pub binds: BindSet,
 }
 
-/// emo への表示指令の発行先抽象（要件 5.5）。
+/// emo への表示指令の発行先抽象。
 ///
 /// 本番の発行先は `areka` クレートの `PresentBridge`（`areka_runtime::adapter`・emo-present へ非ブロック
 /// 送出）。seriko の中では単体観測用に [`MockSurfaceOutput`] を実装として用いる。`send` は
@@ -101,7 +100,7 @@ pub trait SurfaceOutput {
     fn send(&mut self, command: DisplayCommand);
 }
 
-/// 観測用 mock 出力先（`MockSink` 流儀・要件 5.5/7.1）。
+/// 観測用 mock 出力先（`MockSink` 流儀）。
 ///
 /// 発行を `Arc<Mutex<Vec<DisplayCommand>>>` の共有蓄積へ FIFO push し、[`records`] が返す
 /// Arc クローンを通じて、アクタースレッドへ move した後でもテスト側が発行列を照合できる。
@@ -148,14 +147,13 @@ mod tests {
     use areka_emo_compose::BindSet;
     use areka_sakura::ActorKey;
 
-    /// `DisplayCommand` が `Send` 所有データであること（要件 5.4）をコンパイル時に固定する。
+    /// `DisplayCommand` が `Send` 所有データであることをコンパイル時に固定する。
     fn _assert_send<T: Send>() {}
 
     /// 観測用出力先へ表示指令列（`Show`/`Hide`/`ShowBalloon`/`HideBalloon` 混在）を送ると、記録が
-    /// 送信順どおりに一致する（要件 4.1/4.2/5.1/5.2/5.5・observable: 発行列が送信順と一致）。
+    /// 送信順どおりに一致する。
     #[test]
     fn mock_records_display_commands_in_send_order() {
-        // 5.4: Send 所有データであることを固定。
         _assert_send::<DisplayCommand>();
 
         let mut out = MockSurfaceOutput::new();

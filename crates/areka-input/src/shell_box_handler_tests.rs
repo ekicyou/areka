@@ -1,12 +1,12 @@
 // =============================================================================
-// シェルの窓のハンドラの箱の前段（areka-P0-shell-balloon task 11.2）
+// シェルの窓のハンドラの箱の前段
 //
 // 箱の四角（`shown_boxes`）と箱の選択肢の当たり行（`choice_hit_rows_at`）は提示（GPU）でしか
 // 埋まらないので、箱の中の操作は前段の本体（`move_with_point`・`press_with_point`）へ作った写しを
 // 渡して確かめる。シェルへ届く通知は、`mod.rs` のハンドラと同じ並び（前段が「処理した」なら
 // 落とさない）で既存の道を続けて呼んで数える（`Fixture::moved`・`Fixture::pressed`）。このとき
 // world に `RuntimeWiring` を置かないので、ハンドラの中の本物の前段は何もしない（写しを 2 度当てない）。
-// 箱の外は `RuntimeWiring` を置いた本物のハンドラ（写しが空の文字の層）で、本 spec の前と同じ通知に
+// 箱の外は `RuntimeWiring` を置いた本物のハンドラ（写しが空の文字の層）で、箱が無いときと同じ通知に
 // なることを確かめる。
 // =============================================================================
 
@@ -263,7 +263,7 @@ fn register_box_leave_system_adds_one_input_system() {
 // ---------------------------------------------------------------- 押下
 
 /// 箱の選択肢のクリックは、普通のバルーンと同じ中身の選択のイベントが 1 件届き、シェルへは
-/// 何も届かない（要件 8.3・8.5）。
+/// 何も届かない。
 #[test]
 fn box_choice_click_sends_one_selection_and_nothing_to_the_shell() {
     let mut f = Fixture::new();
@@ -273,7 +273,7 @@ fn box_choice_click_sends_one_selection_and_nothing_to_the_shell() {
     assert!(f.shell().is_empty(), "シェルへのクリックは 0 件");
 }
 
-/// 選択の確定に続くダブルクリックの 2 打目もシェルのダブルクリックにしない（要件 8.5）。
+/// 選択の確定に続くダブルクリックの 2 打目もシェルのダブルクリックにしない。
 #[test]
 fn double_click_on_box_choice_is_not_a_shell_double_click() {
     let mut f = Fixture::new().talking();
@@ -284,7 +284,7 @@ fn double_click_on_box_choice_is_not_a_shell_double_click() {
     assert!(f.break_rx.try_iter().next().is_none(), "中断もしない");
 }
 
-/// 話している最中の箱の左ダブルクリックは中断になり、シェルへのダブルクリックは 0 件（要件 9.6）。
+/// 話している最中の箱の左ダブルクリックは中断になり、シェルへのダブルクリックは 0 件。
 #[test]
 fn talking_left_double_click_on_box_breaks_without_a_shell_double_click() {
     let mut f = Fixture::new().talking();
@@ -304,7 +304,7 @@ fn talking_left_double_click_on_box_breaks_without_a_shell_double_click() {
 }
 
 /// 箱の中の行の上でない単押しはシェルへの操作のまま（今までどおり何も送らない）。
-/// 話していないあいだの左ダブルクリックはシェルのダブルクリックになる（要件 9.1）。
+/// 話していないあいだの左ダブルクリックはシェルのダブルクリックになる。
 #[test]
 fn not_talking_left_double_click_on_box_reaches_the_shell() {
     let mut f = Fixture::new();
@@ -320,8 +320,7 @@ fn not_talking_left_double_click_on_box_reaches_the_shell() {
     assert!(f.break_rx.try_iter().next().is_none());
 }
 
-/// 箱の外の押下は、話している最中でも本 spec の前と同じ（本物のハンドラ・写しが空の文字の層・
-/// 要件 9.2・9.8）。
+/// 箱の外の押下は、話している最中でも箱が無いときと同じ（本物のハンドラ・写しが空の文字の層）。
 #[test]
 fn press_outside_boxes_is_unchanged() {
     let mut f = Fixture::new().with_runtime().talking();
@@ -349,7 +348,7 @@ fn press_outside_boxes_is_unchanged() {
 
 // ---------------------------------------------------------------- 移動
 
-/// 選択肢の行の上の移動は強調だけで、シェルへは送らない。同じ行の上の 2 度目は注入しない（要件 8.2）。
+/// 選択肢の行の上の移動は強調だけで、シェルへは送らない。同じ行の上の 2 度目は注入しない。
 #[test]
 fn move_over_box_choice_highlights_once_without_sending_to_the_shell() {
     let mut f = Fixture::new();
@@ -364,7 +363,7 @@ fn move_over_box_choice_highlights_once_without_sending_to_the_shell() {
     assert!(f.shell().is_empty(), "シェルへの移動は 0 件");
 }
 
-/// 箱の中で行の上でない移動は滞在を記録してからシェルへ送る（要件 9.1・9.7）。行から外れたら
+/// 箱の中で行の上でない移動は滞在を記録してからシェルへ送る。行から外れたら
 /// 強調を 1 度だけ外し、行の上でない移動を続けても注入しない（Keep）。
 #[test]
 fn move_over_box_body_records_hover_and_reaches_the_shell() {
@@ -384,7 +383,7 @@ fn move_over_box_body_records_hover_and_reaches_the_shell() {
     assert!(moves >= 1, "行の上でない移動はシェルへ届く");
 }
 
-/// 別の箱へ移ると前の箱の強調を外し、箱の外へ出ると滞在を無しにする（要件 6.11・8.2）。
+/// 別の箱へ移ると前の箱の強調を外し、箱の外へ出ると滞在を無しにする。
 #[test]
 fn move_to_another_box_and_outside() {
     let mut f = Fixture::new();
@@ -396,7 +395,7 @@ fn move_to_another_box_and_outside() {
     assert_eq!(f.hover(), (None, None));
 }
 
-/// 箱の外の移動は本 spec の前と同じ（本物のハンドラ・写しが空の文字の層・要件 9.2）。
+/// 箱の外の移動は箱が無いときと同じ（本物のハンドラ・写しが空の文字の層）。
 #[test]
 fn move_outside_boxes_is_unchanged() {
     let mut f = Fixture::new().with_runtime();
@@ -411,7 +410,7 @@ fn move_outside_boxes_is_unchanged() {
 
 // ---------------------------------------------------------------- 離脱
 
-/// シェルの窓から出ると滞在を無しにし、強調も外す（`balloon_exit.rs` と同じ後始末・要件 6.11）。
+/// シェルの窓から出ると滞在を無しにし、強調も外す（`balloon_exit.rs` と同じ後始末）。
 #[test]
 fn leaving_the_shell_window_clears_hover_and_highlight() {
     let mut f = Fixture::new();
@@ -441,7 +440,7 @@ fn leaving_the_shell_window_clears_hover_and_highlight() {
     assert_eq!(hover_injections(&events), 1, "強調を外す: {events:?}");
 }
 
-// ---------------------------------------------------------------- アンカー（areka-P0-anchor-tag-canon）
+// ---------------------------------------------------------------- アンカー
 
 /// 箱 a の行を、選択肢でなくアンカーの範囲にした写し。
 fn anchor_on_a() -> BoxPoint {
@@ -465,7 +464,7 @@ fn with_anchor_only(f: Fixture) -> Fixture {
 }
 
 /// 話している最中の箱のアンカーの単押しは、アンカーの知らせが 1 件届き、シェルへも中断へも
-/// 届かない。続く 2 打目（左ダブルクリック・範囲の外）も中断にしない（要件 3.3・3.4・3.7）。
+/// 届かない。続く 2 打目（左ダブルクリック・範囲の外）も中断にしない。
 #[test]
 fn box_anchor_click_while_talking_selects_without_breaking() {
     let mut f = Fixture::new().talking();
@@ -480,7 +479,7 @@ fn box_anchor_click_while_talking_selects_without_breaking() {
     assert!(f.lifecycle_rx.try_iter().next().is_none(), "隠しもしない");
 }
 
-/// 右ボタンの押下は、箱のアンカーの上でも選択にしない（要件 3.8）。
+/// 右ボタンの押下は、箱のアンカーの上でも選択にしない。
 #[test]
 fn right_press_on_box_anchor_is_not_a_selection() {
     let mut f = Fixture::new();
@@ -493,7 +492,7 @@ fn right_press_on_box_anchor_is_not_a_selection() {
     assert!(f.selections().is_empty());
 }
 
-/// 座標の写しの「押せる範囲があるか」は、アンカーだけでも真（要件 3.7）。
+/// 座標の写しの「押せる範囲があるか」は、アンカーだけでも真。
 #[test]
 fn read_point_is_active_with_only_an_anchor() {
     let f = with_anchor_only(Fixture::new());
@@ -501,7 +500,7 @@ fn read_point_is_active_with_only_an_anchor() {
     assert!(point.active);
 }
 
-/// シェルの窓から出ると、箱のアンカーの強調も外す（要件 3.2・3.7）。
+/// シェルの窓から出ると、箱のアンカーの強調も外す。
 #[test]
 fn leaving_the_shell_window_clears_an_anchor_highlight() {
     let mut f = Fixture::new();
@@ -534,7 +533,7 @@ fn snapshot_borrow_failures(events: &[log_capture_kit::CapturedEvent]) -> usize 
 
 /// 本物のハンドラが前段を呼ぶ: 文字の層を借りたままにすると、前段は写しを取れずに記録を 1 行
 /// 残して素通りする。移動はそのままシェルへ届き、押下は単押しでも前段を通る（単押しの早期の
-/// 戻りより前に前段がある＝箱の選択肢の単押しでの確定が届く・要件 8.3・8.5）。
+/// 戻りより前に前段がある＝箱の選択肢の単押しでの確定が届く）。
 #[test]
 fn real_handlers_call_the_prelude_before_the_existing_path() {
     let mut f = Fixture::new().with_runtime();
@@ -647,8 +646,7 @@ fn fields_of(event: &log_capture_kit::CapturedEvent) -> BTreeMap<&str, String> {
 }
 
 /// 箱のアンカーの押下は `anchor_selected` を 1 行だけ残し（箱の印つき）、`choice_selected` は
-/// 残さない。知らせはアンカーの伝言として kanade へ届き、中身は当たった行のまま
-/// （areka-P0-anchor-tag-canon 要件 4.11・4.12）。
+/// 残さない。知らせはアンカーの伝言として kanade へ届き、中身は当たった行のまま。
 #[test]
 fn box_anchor_press_records_anchor_selected_and_reaches_kanade_as_an_anchor() {
     let (events, msgs) = press_row_and_drain(anchor_on_a());

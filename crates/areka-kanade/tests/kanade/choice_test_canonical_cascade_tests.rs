@@ -8,18 +8,12 @@ use super::{
 };
 
 // ============================================================================
-// 群 2: Req9.2(b) — 正典形カスケード（Ex 先行 → 無印 → 解決のみ／Ex Value で短絡）
+// 群 2: 正典形カスケード（Ex 先行 → 無印 → 解決のみ／Ex Value で短絡）
 // ============================================================================
 
 /// 正典形 ID の確定が `OnChoiceSelectEx`（Ref0=ラベル／Ref1=ID／Ref2 以降＝付随参照列）を先行
 /// 発行し、204 で `OnChoiceSelect`（Ref0=ID）へ前進し、最終段 204 では `ResolveChoice` のみで
-/// **StartTalk を起こさない**（Req9.2(b)・2.2・2.3・3.1・3.2・4.2・5.3・裁定 2／3）。
-///
-/// # 駆動（決定的・sleep なし）
-/// 選択由来 GET へは何も注入しない（＝両段とも 204）。選択処理後に `CloseRequest` を積み、保留を
-/// 解放して steady talk の `TalkDone{Ended}` を着弾させると `pending_close` が消化されて close 握手が
-/// 走り、別れ talk（quit:true）が終了系列を駆動する。`release_all` は全注入の**後**に呼ぶため、
-/// 保留 TalkDone は必ず CloseRequest の後ろに並ぶ（mpsc FIFO・race なし）。
+/// **StartTalk を起こさない**。
 ///
 /// # 非空虚性・discriminative 性
 /// - 選択由来 GET の id 列が `[OnChoiceSelectEx, OnChoiceSelect]` **この順**であること。順序が逆／
@@ -64,14 +58,14 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
         ..
     } = harness.finish("kanade canonical-choice join");
 
-    // (1) 段列は Ex 先行 → 無印後続（Req2.2／2.3・裁定 2）。
+    // (1) 段列は Ex 先行 → 無印後続。
     assert_eq!(
         choice_get_ids(&recorded),
         vec!["OnChoiceSelectEx", "OnChoiceSelect"],
         "正典形は Ex を先行させ、204 で無印へ前進するはず: {recorded:?}"
     );
 
-    // (2) Ex の Reference 割付（Ref0=ラベル／Ref1=ID／Ref2 以降＝付随参照列・Req3.1）。
+    // (2) Ex の Reference 割付（Ref0=ラベル／Ref1=ID／Ref2 以降＝付随参照列）。
     let gets = choice_gets(&recorded);
     let expected_ex = expected_call(events::on_choice_select_ex(
         CHOICE_LABEL,
@@ -91,7 +85,7 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
         "Ref2 以降＝付随参照列を記述順のまま"
     );
 
-    // (3) 無印の Reference 割付（Ref0=ID のみ・Req3.2）。
+    // (3) 無印の Reference 割付（Ref0=ID のみ）。
     let expected_select = expected_call(events::on_choice_select(
         CANONICAL_CHOICE_ID,
         &cascading_snapshot(),
@@ -106,7 +100,7 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
         "無印の Reference は選択肢 ID 1 個のみ（ラベル・参照列を載せない）"
     );
 
-    // (4) 最終段 204 → 解決のみ・StartTalk なし（Req4.2／5.3・裁定 3）。
+    // (4) 最終段 204 → 解決のみ・StartTalk なし。
     assert_eq!(
         command_tags(&commands),
         vec![
@@ -125,7 +119,6 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
         "2 本目は close talk（別れのスクリプト）＝選択由来 talk ではない"
     );
 
-    // (5) 終了系列を完走した（末尾 Unload）。
     assert_eq!(
         recorded.last().expect("記録列は空でない"),
         &expected_unload(),
@@ -133,8 +126,7 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
     );
 }
 
-/// 正典形の先行段が Value を返したら後続段（無印）を**発行せず**、`ResolveChoice`→`Start` へ短絡する
-/// （Req9.2(b) 後段・2.4・4.6・裁定 2）。
+/// 正典形の先行段が Value を返したら後続段（無印）を**発行せず**、`ResolveChoice`→`Start` へ短絡する。
 ///
 /// # 非空虚性・discriminative 性
 /// [`canonical_choice_cascades_ex_then_select_and_resolves_without_start`] と同じ ID の選択確定で、
@@ -169,14 +161,14 @@ fn canonical_choice_ex_value_short_circuits_select() {
         ..
     } = harness.finish("kanade ex-value join");
 
-    // (1) Value 短絡: 段列は Ex 1 段のみ（無印は発行されない・Req2.4）。
+    // (1) Value 短絡: 段列は Ex 1 段のみ（無印は発行されない）。
     assert_eq!(
         choice_get_ids(&recorded),
         vec!["OnChoiceSelectEx"],
         "先行段が Value を返したら後続段（無印）を発行しないはず: {recorded:?}"
     );
 
-    // (2) 解決→起動（新 talk_id・Req4.6／5.1）。
+    // (2) 解決→起動（新 talk_id）。
     assert_eq!(
         command_tags(&commands),
         vec![

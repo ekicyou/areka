@@ -4,29 +4,29 @@ use crate::contract::{TalkCue, TalkId};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::Duration;
 
-// ── task 5.2: ResolveChoice ハンドラ＋即時 settle の統合檻（R2.3/2.4/9.8） ──
+// ── ResolveChoice ハンドラ＋即時 settle の統合檻 ──
 //
 // 共通 fixture: `\s[10]hello\_w[100]\q[選択A,targetA]\e`。compile 後（アンカー 0）:
-//   ClearAll@0 / Emote{10}@0 / hello@0(D=0.25) / Wait@0.25(0.1) / Choice@0.35(id=targetA) /
-//   Barrier@0.35（選択待ち・R2.1/2.2）。占有 horizon=0.35。barrier が**最終 horizon 要素**（menu
-//   ケース）ゆえ、Tick(0.5) で barrier 到達後に解決すると、既に開始からの経過(0.5) ≥ horizon(0.35)
+//   ClearAll@0 / Emote{10}@0 / hello@0(D=0.25) / Wait@0.25 / Choice@0.35(id=targetA) /
+//   Barrier@0.35（選択待ち）。占有 horizon=0.35。barrier が**最終 horizon 要素**（menu
+//   ケース）ゆえ、Tick で barrier 到達後に解決すると、既に開始からの経過 ≥ horizon
 //   で **その場で** 完了する（次 Tick を待たない・settle_after_tick と同型の後始末を共用）。
 
 const MENU_SCRIPT: &str = r"\s[10]hello\_w[100]\q[選択A,targetA]\e";
 
 /// Choice の着弾（＝barrier 到達）を決定的に観測するため、記録 sink に加えチャンネル sink を挟む
-/// ヘルパ。Tick(0.5) を送り、Choice(id=targetA) cue の着弾を待って返す（この時点で player は
+/// ヘルパ。Tick を送り、Choice(id=targetA) cue の着弾を待って返す（この時点で player は
 /// `WaitingForChoice`・後続 ResolveChoice は inbox FIFO でこの後に処理される）。
 fn drive_menu_to_barrier(handle: &TalkHandle, rx: &mpsc::Receiver<TalkCue>) {
-    // 初回 Tick(0.0) 刻印: ClearAll/Emote/hello を配送（barrier 未到達）。
+    // 初回 Tick 刻印: ClearAll/Emote/hello を配送（barrier 未到達）。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    // Tick(0.5): Wait@0.25・Choice@0.35 を配送し barrier@0.35 到達 → WaitingForChoice。
+    // Tick: Wait@0.25・Choice@0.35 を配送し barrier@0.35 到達 → WaitingForChoice。
     handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
     // Choice cue 着弾を barrier に、barrier 到達（WaitingForChoice 遷移）を決定的に待つ。
     recv_until_choice(rx);
 }
 
-/// **R2.3（barrier-stop）**: 選択待ち barrier で止まった talk は、horizon 越えまで `Tick` を注入
+/// **barrier-stop**: 選択待ち barrier で止まった talk は、horizon 越えまで `Tick` を注入
 /// しても**完了として通知されない**（選択未解決の間 `TalkDone` を出さない）。
 #[test]
 fn menu_barrier_withholds_talkdone_while_choice_unresolved() {
@@ -43,7 +43,7 @@ fn menu_barrier_withholds_talkdone_while_choice_unresolved() {
 
     drive_menu_to_barrier(&handle, &rx);
 
-    // horizon(0.35) を遥かに越える Tick を注入しても、選択未解決ゆえ完了しない（R2.3）。
+    // horizon を遥かに越える Tick を注入しても、選択未解決ゆえ完了しない。
     handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
 
@@ -64,9 +64,9 @@ fn menu_barrier_withholds_talkdone_while_choice_unresolved() {
     handle.actor.join().expect("body は正常終了する");
 }
 
-/// **R2.4/9.8（resolve-resume・即時 settle）**: barrier で止まった talk へ有効な選択 id を
+/// **resolve-resume・即時 settle**: barrier で止まった talk へ有効な選択 id を
 /// `SakuraMsg::ResolveChoice` で投入すると、**追加の `Tick` なしに**再開し `TalkDone{Ended}` へ
-/// 到達する（menu ケース＝barrier が最終 horizon 要素ゆえその場で完了・R-5 の一 tick 遅延を残さない）。
+/// 到達する（menu ケース＝barrier が最終 horizon 要素ゆえその場で完了・一 tick 遅延を残さない）。
 #[test]
 fn resolve_choice_resumes_barrier_stopped_talk_and_settles_immediately() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
@@ -91,7 +91,7 @@ fn resolve_choice_resumes_barrier_stopped_talk_and_settles_immediately() {
         })
         .unwrap();
 
-    // 追加 Tick なしで自然終端へ到達する（barrier 解決で offset(0.5) ≥ horizon(0.35) ＝即完了）。
+    // 追加 Tick なしで自然終端へ到達する（barrier 解決で offset ≥ horizon ＝即完了）。
     let done = recv_done(&done_rx, Duration::from_secs(5)).expect(
         "ResolveChoice で talk が再開し、追加 Tick なしで TalkDone に到達すべき（R2.4/9.8）",
     );
@@ -155,26 +155,24 @@ fn resolve_choice_with_unknown_id_is_noop_and_talk_continues() {
     handle.actor.join().expect("body は正常終了する");
 }
 
-/// **R2.3/2.4/9.8（full-menu 統合檻・Task 10.2）**: `menu.pasta:15` 相当の**実 3 択メニュー**
+/// **full-menu 統合檻**: `menu.pasta:15` 相当の**実 3 択メニュー**
 /// （`\q \n \q \_l[5em,2lh] \q`）を **`spawn_talk` の actor 境界**（内部で parse→compile を通す）へ
 /// 投入し、選択待ち barrier 停止→3 択のうち**実 id の 1 つ**での解決→即時 settle を end-to-end で固定する。
 ///
-/// 5.2 の 3 檻（`menu_barrier_*`/`resolve_choice_*`）は**単一** `\q` の `MENU_SCRIPT` で actor 境界を
-/// 覆い、`compile_broadcast_stream_*` は**3 択実 menu** を覆うが**生 `CuePlayer`**（actor 境界を通らない）。
-/// 本檻はその両者の交差＝「実 3 択 menu × `spawn_talk` × 実 choice id 解決」を単一の統合檻で立証する
-/// （5.2 の単一 `\q` では現れない、複数 Choice がバッグに並ぶ中で**中間 id** を照合して解ける経路）。
+/// 単一 `\q` の `MENU_SCRIPT` の檻（`menu_barrier_*`/`resolve_choice_*`）は actor 境界を覆い、
+/// `compile_broadcast_stream_*` は**3 択実 menu** を覆うが**生 `CuePlayer`**（actor 境界を通らない）。
+/// 本檻はその交差＝「実 3 択 menu × `spawn_talk` × 実 choice id 解決」を覆う
+/// （複数 Choice がバッグに並ぶ中で**中間 id** を照合して解ける経路）。
 ///
 /// 檻は 3 主張を 1 本の actor フローで固定する:
-///  - **R2.3**: barrier 停止後、horizon を遥かに越える `Tick(5.0)/Tick(50.0)` でも `TalkDone` 不送出。
+///  - **barrier-stop**: barrier 停止後、horizon を遥かに越える `Tick/Tick` でも `TalkDone` 不送出。
 ///  - **mismatch**: 未知 id の `ResolveChoice` では状態不変（`TalkDone` 不送出・talk 継続）。
-///  - **R2.4/9.8**: 3 択の**中間**実 id（`Onエモの位置調整メニュー`）で解決すると、**追加 `Tick` なしに**
+///  - **resolve-resume**: 3 択の**中間**実 id（`Onエモの位置調整メニュー`）で解決すると、**追加 `Tick` なしに**
 ///    再開し `TalkDone{Ended}` へ到達する（barrier は最終 horizon 要素＝その場で settle）。
 #[test]
 fn full_menu_via_spawn_talk_barrier_stops_and_middle_choice_id_settles_immediately() {
     // menu.pasta:15 の raw さくらスクリプト断片（3 択＋改行＋カーソル指定）。
-    // `spawn_talk` へ**生 script として**渡し、parse→compile は actor 内部の実経路を通す
-    // （5.2 の単一 `\q` MENU_SCRIPT でも、生 CuePlayer 檻@compile_broadcast_stream_* でもなく、
-    //  実 3 択 menu が actor 境界を貫く経路をここで初めて覆う）。
+    // `spawn_talk` へ**生 script として**渡し、parse→compile は actor 内部の実経路を通す。
     let script = MENU3_SCRIPT;
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let (tx, rx) = mpsc::channel::<TalkCue>();
@@ -188,10 +186,10 @@ fn full_menu_via_spawn_talk_barrier_stops_and_middle_choice_id_settles_immediate
         None,
     );
 
-    // Tick(0.0)/Tick(0.5) で offset 0 群（ClearAll/3 Choice/NewLine/Cursor）を配送し barrier@0 到達を待つ。
+    // Tick/Tick で offset 0 群（ClearAll/3 Choice/NewLine/Cursor）を配送し barrier@0 到達を待つ。
     drive_menu_to_barrier(&handle, &rx);
 
-    // R2.3: horizon(=0) を遥かに越える Tick を注入しても、選択未解決ゆえ完了しない。
+    // barrier-stop: horizon(=0) を遥かに越える Tick を注入しても、選択未解決ゆえ完了しない。
     handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
     assert!(
@@ -219,7 +217,7 @@ fn full_menu_via_spawn_talk_barrier_stops_and_middle_choice_id_settles_immediate
         "不一致 id は barrier を壊さず talk は待機継続する（バッグの他 id は依然解決可能）"
     );
 
-    // R2.4/9.8: 3 択の**中間** id を投入。追加 Tick は**送らない**（即時 settle の弁別）。
+    // resolve-resume: 3 択の**中間** id を投入。追加 Tick は**送らない**（即時 settle の弁別）。
     // 中間 id を選ぶことで「先頭/末尾でなくバッグ内の任意 id を照合して解ける」ことも固定する。
     handle
         .inbox
@@ -277,24 +275,24 @@ fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
     );
 }
 
-// ── task 3.2: 選択待ち成立の通知（`ChoiceWaiting`）檻（R5.2/7.1/7.2・DD-6/DD-7/DD-8） ──
+// ── 選択待ち成立の通知（`ChoiceWaiting`）檻 ──
 //
 // 通知は **talk アクター**（再生層＝真実源）が `WaitingForChoice` 遷移を検出した時点で、
-// `TalkDone` と**同一の done ポート**へ送出する（因果順保存・DD-6）。檻は注入 Tick のみで
+// `TalkDone` と**同一の done ポート**へ送出する（因果順保存）。檻は注入 Tick のみで
 // 駆動し（実時間待機なし）、次の 4 点を固定する:
 //
 //  - **一度きり**: barrier 成立の tick でちょうど 1 通。以降 Tick を打ち続けても 2 通目は来ない。
 //  - **内容**: 候補 id 列（`pending_choices()` 由来・表示順）／`display_end_elapsed_secs`
-//    （占有 horizon＝duration 権威・**tick 時刻ではない**・R7.2）／`timeout_directive_secs`
-//    （compile は `None` を書く＝未指定＝下流の既定値へ委譲・DD-8）。
-//  - **解決後に再通知しない**: 同一バリアが再成立しない限り 2 通目は出ない（R5.2 の完了へ進む）。
+//    （占有 horizon＝duration 権威・**tick 時刻ではない**）／`timeout_directive_secs`
+//    （compile は `None` を書く＝未指定＝下流の既定値へ委譲）。
+//  - **解決後に再通知しない**: 同一バリアが再成立しない限り 2 通目は出ない。
 //  - **送出失敗で運行継続**: done 受信端 drop でも `error!` 記録のみで talk は死なない。
 
-/// **一度きり検出＋通知内容（R7.1/7.2・DD-6/DD-7/DD-8）**: 選択肢を含む台本を注入 Tick で
+/// **一度きり検出＋通知内容**: 選択肢を含む台本を注入 Tick で
 /// 駆動すると、選択待ちバリア成立の tick で `ChoiceWaiting` が**ちょうど 1 回**届き、
 /// 候補 id 列・占有 horizon・タイムアウト指令を同梱する。以降 Tick を打ち続けても再通知されない。
 ///
-/// **弁別**: `display_end_elapsed_secs` は **注入 Tick 時刻（0.5）ではなく** 占有 horizon
+/// **弁別**: `display_end_elapsed_secs` は **注入 Tick 時刻ではなく** 占有 horizon
 /// （0.35＝台本由来の duration 権威）である。tick 時刻を載せる実装ならこの assert が落ちる。
 #[test]
 fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
@@ -310,7 +308,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
         None,
     );
 
-    // Tick(0.0) 刻印（アンカー 0.0）→ Tick(0.5) で barrier@0.35 到達＝WaitingForChoice。
+    // Tick 刻印（アンカー 0.0）→ Tick で barrier@0.35 到達＝WaitingForChoice。
     drive_menu_to_barrier(&handle, &rx);
 
     // 通知は barrier 成立の tick で送出される（**追加 Tick を要さない**）。
@@ -318,7 +316,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
         .recv_timeout(Duration::from_secs(5))
         .expect("選択待ちバリア成立で ChoiceWaiting が done ポートへ届くべき（DD-6・R7.1）");
 
-    // 期待 horizon: 台本由来の占有 horizon（duration 権威）＝アンカー(0.0)＋相対 0.35。
+    // 期待 horizon: 台本由来の占有 horizon（duration 権威）＝アンカー＋相対 0.35。
     let compiled = compile(
         &areka_parsers::sakura::parse(MENU_SCRIPT),
         &SystemVarSnapshot::default(),
@@ -342,7 +340,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
          タイムアウト未指定（compile は `None` を書く＝下流の既定値へ委譲・DD-8）を同梱する"
     );
 
-    // 一度きり: barrier は解けていないため以降の Tick でも 2 通目は出ない（検出フラグ・DD-6）。
+    // 一度きり: barrier は解けていないため以降の Tick でも 2 通目は出ない（検出フラグ）。
     handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
     assert_eq!(
@@ -351,7 +349,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
         "選択待ち継続中に Tick を重ねても ChoiceWaiting は再送されない（一度きり検出）"
     );
 
-    // 通知後の Close: 中断 ACK が**通知の後**に同一ポートを流れる（因果順保存・DD-6）。
+    // 通知後の Close: 中断 ACK が**通知の後**に同一ポートを流れる（因果順保存）。
     handle.inbox.send(SakuraMsg::Close).unwrap();
     let done = recv_done(&done_rx, Duration::from_secs(5))
         .expect("通知後の Close でも中断 ACK（TalkDone{Interrupted}）が返るべき");
@@ -367,13 +365,13 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
     handle.actor.join().expect("body は正常終了する");
 }
 
-/// **候補 id 列は表示順・horizon はアンカー込み（DD-7・R7.2）**: 実 3 択メニューを **0 以外の
-/// アンカー**（7.0）で駆動し、通知が (1) 3 択の id を**表示順のまま**運び、(2)
+/// **候補 id 列は表示順・horizon はアンカー込み**: 実 3 択メニューを **0 以外の
+/// アンカー**で駆動し、通知が (1) 3 択の id を**表示順のまま**運び、(2)
 /// `display_end_elapsed_secs` に**アンカーを含む**占有 horizon を載せることを固定する。
 ///
 /// **弁別**: この台本は全内容が `at=0`（相対 horizon＝0）ゆえ、期待値は **アンカー 7.0 そのもの**。
 /// アンカーを無視して相対 horizon だけを載せる実装なら 0.0 が届いて落ちる。
-/// なお barrier は初回 `Tick(7.0)` で成立するため、本檻では注入 Tick 時刻と horizon が
+/// なお barrier は初回 `Tick` で成立するため、本檻では注入 Tick 時刻と horizon が
 /// 一致し **tick 時刻実装は弁別できない**——その弁別は
 /// `choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout`
 /// （horizon 0.35 vs tick 0.5）が担う。
@@ -434,11 +432,11 @@ fn choice_waiting_carries_candidate_ids_in_display_order_with_anchored_horizon()
     handle.actor.join().expect("body は正常終了する");
 }
 
-/// **解決後に再通知されない（R5.2）**: 通知 → 有効 id の `ResolveChoice` → `TalkDone{Ended}` の
+/// **解決後に再通知されない**: 通知 → 有効 id の `ResolveChoice` → `TalkDone{Ended}` の
 /// **ちょうど 2 通**が同一ポートを因果順で流れ、3 通目は存在しない（ポート disconnect で確定）。
 ///
 /// 既存挙動の保存も同時に固定する: 残台本なしのメニュー形は解決の**その場で** settle し、
-/// 追加 `Tick` なしに `Ended` へ到達する（`on_resolve_choice` の即 settle は無改変）。
+/// 追加 `Tick` なしに `Ended` へ到達する（`on_resolve_choice` の即 settle）。
 #[test]
 fn choice_waiting_is_not_renotified_after_resolve_and_done_follows() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
@@ -470,7 +468,7 @@ fn choice_waiting_is_not_renotified_after_resolve_and_done_follows() {
         "1 通目は選択待ち成立通知（因果順の先）"
     );
 
-    // 有効 id で解決。追加 Tick は**送らない**（即時 settle の保存＝既存挙動無改変）。
+    // 有効 id で解決。追加 Tick は**送らない**（即時 settle の保存）。
     handle
         .inbox
         .send(SakuraMsg::ResolveChoice {
@@ -540,7 +538,7 @@ fn choice_waiting_send_failure_is_tolerated_and_playback_continues() {
         .expect("done 受信端 drop でも body は panic せず正常終了する");
 }
 
-/// **通知の負条件（DD-6・R5.2）**: `\q` を含まない台本は選択待ちへ入らないため
+/// **通知の負条件**: `\q` を含まない台本は選択待ちへ入らないため
 /// `ChoiceWaiting` を**一切**送出せず、done ポートを流れる通知は `TalkDone{Ended}` の
 /// **ちょうど 1 通**である。
 ///
@@ -551,7 +549,7 @@ fn choice_waiting_send_failure_is_tolerated_and_playback_continues() {
 fn script_without_choices_never_notifies_choice_waiting() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let talk_id = TalkId(824);
-    // `\q` 無し（＝compile は選択待ち barrier を発行しない・R2.5）。
+    // `\q` 無し（＝compile は選択待ち barrier を発行しない）。
     let start = StartTalk::new(talk_id, r"\s[10]hello\e".to_string());
     let handle = spawn_talk(
         start,
@@ -561,7 +559,7 @@ fn script_without_choices_never_notifies_choice_waiting() {
         None,
     );
 
-    // Tick(0.0) でアンカー刻印、Tick(1.0) で占有 horizon（hello の D＝0.25）を跨いで自然終端。
+    // Tick でアンカー刻印、Tick で占有 horizon（hello の D＝0.25）を跨いで自然終端。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
@@ -588,9 +586,9 @@ fn script_without_choices_never_notifies_choice_waiting() {
     );
 }
 
-// ── audit-parsers-sakura 指摘 7・39: 解決の後に来ている項目を出し、合わない解決を記録する ──
+// ── 解決の後に来ている項目を出し、合わない解決を記録する ──
 
-/// **指摘 7（形 A）**: 初回起動の後始末（epilogue）は区切りと同じ時刻の後ろに並ぶ。区切りの Tick の後に
+/// **形 A**: 初回起動の後始末（epilogue）は区切りと同じ時刻の後ろに並ぶ。区切りの Tick の後に
 /// Tick を 1 つ挟んでから解決すると、解決の処理の中で後始末が出て `TalkDone{Ended}` が 1 回だけ出る。
 /// kanade が同じ束で続けて送る Close（次のトークの Start が古いトークを閉じる）はもう終わったトークに届く。
 #[test]
@@ -599,7 +597,7 @@ fn resolved_choice_flushes_due_epilogue_before_following_close() {
     assert_resolve_flushes_epilogue(TalkId(830), Some(0.6));
 }
 
-/// **指摘 7（形 B）**: 解決が次の Tick より先に来る（`last_tick` が区切りの時刻のまま）ときも、
+/// **形 B**: 解決が次の Tick より先に来る（`last_tick` が区切りの時刻のまま）ときも、
 /// 解決の処理の中で後始末が出る。dola の `notify_barrier_resolved` が集めを空にするので、
 /// 同じ時刻の `tick` が冪等の守りに止められない。
 #[test]
@@ -607,7 +605,7 @@ fn resolved_choice_before_next_tick_flushes_due_epilogue() {
     assert_resolve_flushes_epilogue(TalkId(832), None);
 }
 
-/// 形 A・B の共通の手順。区切りの Tick(0.5) の後に `tick_before_resolve` があれば送ってから解決する。
+/// 形 A・B の共通の手順。区切りの Tick の後に `tick_before_resolve` があれば送ってから解決する。
 fn assert_resolve_flushes_epilogue(talk_id: TalkId, tick_before_resolve: Option<f64>) {
     let sink = RecordingSink::new();
     let records = sink.records();
@@ -622,7 +620,7 @@ fn assert_resolve_flushes_epilogue(talk_id: TalkId, tick_before_resolve: Option<
 
     assert!(driver.handle(SakuraMsg::Start(start)).is_continue());
     assert!(driver.handle(SakuraMsg::Tick(0.0)).is_continue());
-    // 区切り（0.35）に着いて選択待ち。
+    // 区切りに着いて選択待ち。
     assert!(driver.handle(SakuraMsg::Tick(0.5)).is_continue());
     if let Some(t) = tick_before_resolve {
         assert!(driver.handle(SakuraMsg::Tick(t)).is_continue());
@@ -655,7 +653,7 @@ fn assert_resolve_flushes_epilogue(talk_id: TalkId, tick_before_resolve: Option<
     );
 }
 
-/// **指摘 39**: 合わない `ResolveChoice` はほかの状態の誤投函と同じく `warn!` で残す（区切りは解けない）。
+/// **合わない解決**: 合わない `ResolveChoice` はほかの状態の誤投函と同じく `warn!` で残す（区切りは解けない）。
 #[test]
 fn mismatched_resolve_choice_is_warned() {
     let (mut driver, rx) = driver(one_sink(NoopSink), None);

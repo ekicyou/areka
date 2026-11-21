@@ -1,5 +1,4 @@
-//! 入れ子の部品の刻みと合図で働きのコマを当てる結合のテスト（spec: seriko-pattern-calls 要件 3.8・
-//! 11.2・9.1）。部品の中の `start` と `stop` が一番上と同じ規則で働く。
+//! 入れ子の部品の刻みと合図で働きのコマを当てる結合のテスト。部品の中の `start` と `stop` が一番上と同じ規則で働く。
 //!
 //! 一番上 0 が element定義で部品 100 を置き、1 は何も置かない。刻みは `on_tick(now_ms)`、乱数は
 //! 注入列で、どちらも決定論。
@@ -60,7 +59,7 @@ const ALTERNATIVE: &str = "animation0.interval,never\n\
     animation2.pattern1,alternativestart,(0,1)\n";
 
 /// 部品の中の `alternativestart` も、選んだ相手を呼び出しの予定の時刻に頭から始め、相手の今のコマを
-/// 同じ刻みに載せる。呼んだ側は働きのコマが今のコマでも前の描くコマを残す（3.1・3.3・3.8・11.2）。
+/// 同じ刻みに載せる。呼んだ側は働きのコマが今のコマでも前の描くコマを残す。
 #[test]
 fn alternativestart_inside_a_part_starts_the_pick_at_call_time() {
     for (pick, target, other) in [(0, 0, 1), (1, 1, 0)] {
@@ -81,7 +80,7 @@ fn alternativestart_inside_a_part_starts_the_pick_at_call_time() {
     }
 }
 
-/// 部品の中の `stop` の見え方は `-1` と同じ（相手の欄と時計が外れる・呼んだ側は残る・4.1・3.8）。
+/// 部品の中の `stop` の見え方は `-1` と同じ（相手の欄と時計が外れる・呼んだ側は残る）。
 #[test]
 fn stop_inside_a_part_looks_the_same_as_minus_one() {
     const STOP: &str = "animation0.interval,random,2\n\
@@ -120,7 +119,7 @@ fn part_cell_of(pattern: &areka_emo_compose::PatternState, id: u32) -> Option<u3
 }
 
 /// 部品の中で止めた `always` も、面を出すまで始め直さない。面を出したら印が消え、次の刻みの時刻で
-/// 頭から始まる（4.5・3.8・M2）。
+/// 頭から始まる。
 #[test]
 fn stopped_always_inside_a_part_stays_stopped_until_the_surface_is_shown() {
     const STOP_ALWAYS: &str = "animation0.interval,always\n\
@@ -156,7 +155,7 @@ fn stopped_always_inside_a_part_stays_stopped_until_the_surface_is_shown() {
 }
 
 /// 合図の時刻の更新でも、頭のコマを置く前に部品の働きのコマを当てる（呼ばれた相手の頭のコマが
-/// その評価の絵に載る・3.8）。
+/// その評価の絵に載る）。
 #[test]
 fn refresh_applies_part_calls_at_the_event_time() {
     const CALLER: &str = "animation0.interval,always\n\
@@ -181,7 +180,7 @@ fn refresh_applies_part_calls_at_the_event_time() {
 }
 
 /// 呼ばれるだけ（`never`）の部品の時計は、部品が見えない間も捨てず（抽選で始まった再生と同じ・
-/// 見えなかった間も進んでいた扱い）、また見えた刻みに開始からの経過のコマを出す（11.2・3.5）。
+/// 見えなかった間も進んでいた扱い）、また見えた刻みに開始からの経過のコマを出す。
 #[test]
 fn called_never_clock_survives_while_the_part_is_hidden() {
     const CALLED: &str = "animation0.interval,never\n\
@@ -204,7 +203,7 @@ fn called_never_clock_survives_while_the_part_is_hidden() {
     assert_eq!(part_cell(&states, 0), Some(102));
 }
 
-/// 部品の中の `move` もキャラクター全体のずれになる（シェルのずれの命令・3.8・7.1）。
+/// 部品の中の `move` もキャラクター全体のずれになる（シェルのずれの命令）。
 #[test]
 fn move_inside_a_part_becomes_the_character_shift() {
     const MOVE: &str = "animation0.interval,random,2\n\
@@ -224,8 +223,7 @@ fn move_inside_a_part_becomes_the_character_shift() {
     );
 }
 
-/// 部品の再生が末尾に着く刻みに抽選が当たっても、その刻みまでの働きのコマを先に当てる
-/// （seriko-pattern-calls 要件 3.1・3.8）。
+/// 部品の再生が末尾に着く刻みに抽選が当たっても、その刻みまでの働きのコマを先に当てる。
 #[test]
 fn last_action_frame_in_a_part_on_the_ending_tick_is_not_lost_to_the_lottery() {
     const ENDING: &str = "animation0.interval,random,2\n\
@@ -247,7 +245,7 @@ fn last_action_frame_in_a_part_on_the_ending_tick_is_not_lost_to_the_lottery() {
 }
 
 /// 部品の `periodic` の次の回の時刻と、前の回の終わりの働きのコマが重なっても、前の回のコマを先に
-/// 当ててから同じ時刻に始め直す（回を飛ばさない・一番上と同じ順・seriko-pattern-calls 要件 3.1・3.8）。
+/// 当ててから同じ時刻に始め直す（回を飛ばさない・一番上と同じ順）。
 #[test]
 fn last_action_frame_in_a_part_on_the_periodic_restart_tick_is_not_lost() {
     const PERIODIC: &str = "animation0.interval,periodic,1\n\
@@ -269,8 +267,7 @@ fn last_action_frame_in_a_part_on_the_periodic_restart_tick_is_not_lost() {
 }
 
 /// 遅れた刻みでも、部品の引き金の開始と働きのコマは時刻の順に当たる: 2000 に始まる 1 は 2470 の
-/// `stop,1` で止まり、0 は 3000 に始まる（一番上と同じ・areka-P0-seriko-trigger-intervals 要件 3.1・
-/// seriko-pattern-calls 要件 3.1・3.8）。
+/// `stop,1` で止まり、0 は 3000 に始まる（一番上と同じ）。
 #[test]
 fn part_trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
     const LATE: &str = "animation0.interval,periodic,3\n\
@@ -299,7 +296,7 @@ fn part_trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
 }
 
 /// 部品の引き金の「再生中か」も、開始の時刻までの働きのコマを当てた後で測る（1970 に止められた 0 は
-/// 2000 に再生中でないので鳴る・areka-P0-seriko-trigger-intervals 要件 3.1・3.3）。
+/// 2000 に再生中でないので鳴る）。
 #[test]
 fn part_periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary() {
     const STOPPED: &str = "animation0.interval,periodic,1\n\
@@ -326,8 +323,7 @@ fn part_periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary(
 }
 
 /// 遅れた刻みで鳴った部品の再生の働きのコマも、ほかの再生の後の時刻のコマより先に当たる: 1000 に
-/// 鳴った 0 の `start,1`（1100）の後に 2 の `stop,1`（1300）が当たり、1 は止まっている
-/// （seriko-pattern-calls 要件 3.1・3.8）。
+/// 鳴った 0 の `start,1`（1100）の後に 2 の `stop,1`（1300）が当たり、1 は止まっている。
 #[test]
 fn part_trigger_play_acts_before_later_calls_of_other_plays() {
     const ORDER: &str = "animation0.interval,periodic,1\n\
@@ -348,8 +344,7 @@ fn part_trigger_play_acts_before_later_calls_of_other_plays() {
 }
 
 /// 呼び出しが部品の `runonce` を、ちょうど構えた時刻に始めたら、鳴らした扱いで入れ替えない。終わった
-/// 後に見え始めの時刻でもう 1 回鳴ることも無い（一番上と同じ・seriko-pattern-calls 要件 5.2・
-/// areka-P0-seriko-trigger-intervals 要件 2.1）。
+/// 後に見え始めの時刻でもう 1 回鳴ることも無い（一番上と同じ）。
 #[test]
 fn part_runonce_started_by_a_call_at_its_start_time_fires_once() {
     const AT_ARM: &str = "animation0.interval,runonce\n\
@@ -377,7 +372,7 @@ fn part_runonce_started_by_a_call_at_its_start_time_fires_once() {
 }
 
 /// 部品の抽選も、境目の刻みより前の時刻に `start,1` が始めた 1 を再生中と見て乱数を引かない
-/// （部品の `runonce` 0 が 0 に鳴り、`start,1` は 980・刻みは 1050・seriko-pattern-calls 要件 3.1・3.8）。
+/// （部品の `runonce` 0 が 0 に鳴り、`start,1` は 980・刻みは 1050）。
 #[test]
 fn part_lottery_sees_a_play_started_by_an_earlier_call() {
     const ANIMS: &str = "animation0.interval,runonce\n\
@@ -395,8 +390,7 @@ fn part_lottery_sees_a_play_started_by_an_earlier_call() {
 }
 
 /// 面を出し直して始め直した部品の `always` にも、合図の時刻より前の呼び出しは当たらない（抽選の 1 が
-/// 1000 に始まり、`stop,0` は 1050 と 1150。1170 の出し直しで始め直した 0 は 1300 に 2 枚目・
-/// seriko-pattern-calls 要件 3.1・3.8・4.5）。
+/// 1000 に始まり、`stop,0` は 1050 と 1150。1170 の出し直しで始め直した 0 は 1300 に 2 枚目）。
 #[test]
 fn earlier_stop_does_not_hit_a_part_always_restarted_by_reshow() {
     const ANIMS: &str = "animation0.interval,always\n\
@@ -426,8 +420,7 @@ fn earlier_stop_does_not_hit_a_part_always_restarted_by_reshow() {
 }
 
 /// 部品の合図の更新（1010）も、その時刻までの `periodic` を判定してから呼び出しを当てる: 境目 1000 に
-/// 始まった 1 は、`runonce` 0 の 1005 の `stop,1` で止まる（areka-P0-seriko-trigger-intervals 要件 3.1・
-/// 5.4・6.1）。
+/// 始まった 1 は、`runonce` 0 の 1005 の `stop,1` で止まる。
 #[test]
 fn part_refresh_judges_periodic_before_applying_calls() {
     const ANIMS: &str = "animation0.interval,runonce\n\

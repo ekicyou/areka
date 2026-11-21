@@ -59,7 +59,6 @@ fn dummy_rng() -> SmallRng {
 #[test]
 fn should_continue_loop_basic() {
     let mut inst = make_instance(3, 1.0);
-    // loops_completed=0, loop_count=3 → true
     assert!(should_continue_loop(&inst));
 
     inst.loops_completed = 2;
@@ -81,11 +80,9 @@ fn should_continue_loop_infinite() {
 #[test]
 fn should_continue_loop_single() {
     let mut inst = make_instance(1, 1.0);
-    // loops_completed=0 → true (まだ1周目未完了)
     assert!(should_continue_loop(&inst));
 
     inst.loops_completed = 1;
-    // loops_completed=1 >= loop_count=1 → false
     assert!(!should_continue_loop(&inst));
 }
 
@@ -97,7 +94,6 @@ fn should_continue_loop_single() {
 fn advance_loop_updates_fields() {
     let mut inst = make_instance(3, 2.0);
     let mut rng = dummy_rng();
-    // 初期: loops_completed=0, loop_start_time=0.0, end_time=2.0
     assert_eq!(inst.loops_completed, 0);
     assert_eq!(inst.loop_start_time, 0.0);
     assert_eq!(inst.end_time, 2.0);
@@ -121,7 +117,7 @@ fn advance_loop_updates_fields() {
 
 #[test]
 fn process_loops_within_loop() {
-    // current_time < end_time → Continue, フィールド変化なし
+    // 周回内ならフィールドは変わらない
     let mut inst = make_instance(3, 2.0);
     let mut rng = dummy_rng();
     let action = process_loops(&mut inst, 1.0, &mut rng);
@@ -133,7 +129,6 @@ fn process_loops_within_loop() {
 
 #[test]
 fn process_loops_one_loop_completed_continue() {
-    // loop_count=3, 1周終了 → Continue, loops_completed=1
     let mut inst = make_instance(3, 2.0);
     let mut rng = dummy_rng();
     let action = process_loops(&mut inst, 2.5, &mut rng);
@@ -145,7 +140,6 @@ fn process_loops_one_loop_completed_continue() {
 
 #[test]
 fn process_loops_all_loops_completed() {
-    // loop_count=3, 3周終了 → Conclude
     let mut inst = make_instance(3, 2.0);
     let mut rng = dummy_rng();
     let action = process_loops(&mut inst, 6.5, &mut rng);
@@ -155,7 +149,7 @@ fn process_loops_all_loops_completed() {
 
 #[test]
 fn process_loops_multi_loops_at_once() {
-    // loop_count=5, 3周分一度に終了 → Continue, loops_completed=3
+    // 3周分が一度に終わる
     let mut inst = make_instance(5, 1.0);
     let mut rng = dummy_rng();
     let action = process_loops(&mut inst, 3.5, &mut rng);
@@ -167,7 +161,7 @@ fn process_loops_multi_loops_at_once() {
 
 #[test]
 fn process_loops_all_loops_completed_overshoot() {
-    // loop_count=3, 5周分超過 → Conclude, loops_completed=3
+    // 5周分超過しても loops_completed は loop_count まで
     let mut inst = make_instance(3, 1.0);
     let mut rng = dummy_rng();
     let action = process_loops(&mut inst, 5.5, &mut rng);
@@ -177,7 +171,6 @@ fn process_loops_all_loops_completed_overshoot() {
 
 #[test]
 fn process_loops_infinite_multi_loops() {
-    // loop_count=-1, 5周分 → Continue, loops_completed=5
     let mut inst = make_instance(-1, 1.0);
     let mut rng = dummy_rng();
     let action = process_loops(&mut inst, 5.5, &mut rng);
@@ -189,7 +182,7 @@ fn process_loops_infinite_multi_loops() {
 
 #[test]
 fn process_loops_single_loop_conclude() {
-    // loop_count=1, 終了 → Conclude（whileループに入らず即Conclude）
+    // while ループに入らず即 Conclude
     let mut inst = make_instance(1, 2.0);
     let mut rng = dummy_rng();
     let action = process_loops(&mut inst, 2.5, &mut rng);
@@ -200,7 +193,7 @@ fn process_loops_single_loop_conclude() {
 
 #[test]
 fn process_loops_exact_boundary() {
-    // current_time == end_time → 周回処理が発生する
+    // current_time == end_time でも周回処理が起きる
     let mut inst = make_instance(3, 2.0);
     let mut rng = dummy_rng();
     let action = process_loops(&mut inst, 2.0, &mut rng);
@@ -243,13 +236,13 @@ fn process_loops_huge_end_time_concludes() {
 }
 
 // =======================================================================
-// generate_delay (Task 3.5)
+// generate_delay
 // =======================================================================
 
 #[test]
 fn generate_delay_min_eq_max_returns_fixed() {
     let mut rng = test_rng();
-    // min == max → 常に固定値を返す（rng 不使用）
+    // min == max は rng を使わず固定値を返す
     let d1 = generate_delay(
         3.0,
         3.0,
@@ -287,7 +280,6 @@ fn generate_delay_linear_distribution() {
         sum += generate_delay(0.0, 10.0, &easing, &mut rng);
     }
     let mean = sum / n as f64;
-    // Linear distribution: mean ≈ 5.0 (±0.5 tolerance)
     assert!((mean - 5.0).abs() < 0.5, "mean {mean} too far from 5.0");
 }
 
@@ -306,7 +298,6 @@ fn generate_delay_quadratic_in_skews_low() {
     }
     let mean_lin = sum_lin / n as f64;
     let mean_qin = sum_qin / n as f64;
-    // QuadraticIn skews low → mean should be lower than Linear
     assert!(
         mean_qin < mean_lin,
         "QuadraticIn mean {mean_qin} should < Linear mean {mean_lin}"
@@ -328,7 +319,6 @@ fn generate_delay_quadratic_out_skews_high() {
     }
     let mean_lin = sum_lin / n as f64;
     let mean_qout = sum_qout / n as f64;
-    // QuadraticOut skews high → mean should be higher than Linear
     assert!(
         mean_qout > mean_lin,
         "QuadraticOut mean {mean_qout} should > Linear mean {mean_lin}"
@@ -348,7 +338,7 @@ fn generate_delay_deterministic_with_same_seed() {
 }
 
 // =======================================================================
-// advance_loop with delay (Task 3.6)
+// advance_loop with delay
 // =======================================================================
 
 #[test]
@@ -356,18 +346,16 @@ fn advance_loop_with_offset_adds_delay() {
     let mut inst =
         make_instance_with_offset(-1, 2.0, 1.0, 5.0, EasingFunction::Named(EasingName::Linear));
     let mut rng = test_rng();
-    let end_before = inst.end_time; // 2.0
+    let end_before = inst.end_time;
 
     advance_loop(&mut inst, &mut rng);
 
-    // end_time should be > 2.0 + 2.0 (loop_duration) due to delay
     assert!(
         inst.end_time > end_before + inst.loop_duration,
         "end_time {} should be > {} (loop_duration + old end_time)",
         inst.end_time,
         end_before + inst.loop_duration
     );
-    // delay should be in [1.0, 5.0] → end_time in [5.0, 9.0]
     let delay = inst.end_time - (end_before + inst.loop_duration);
     assert!(
         (1.0..=5.0).contains(&delay),
@@ -380,13 +368,12 @@ fn advance_loop_without_offset_no_delay() {
     let mut inst = make_instance(-1, 2.0);
     let mut rng = test_rng();
     advance_loop(&mut inst, &mut rng);
-    // No offset → end_time = 2.0 + 2.0 = 4.0 exactly
     assert_eq!(inst.end_time, 4.0);
 }
 
 #[test]
 fn process_loops_with_delay_prevents_multi_skip() {
-    // With loop_offset, delay prevents multiple loops from completing at once
+    // delay があると複数周回が一度に終わらない
     let mut inst = make_instance_with_offset(
         -1,
         1.0,
@@ -396,9 +383,7 @@ fn process_loops_with_delay_prevents_multi_skip() {
     );
     let mut rng = test_rng();
 
-    // current_time=1.5 >= end_time=1.0 → advance once
-    // After advance: end_time = 1.0 + 1.0 + 3.0 = 5.0
-    // current_time=1.5 < 5.0 → stop
+    // 1 回進めると end_time = 1.0 + 1.0 + 3.0 = 5.0 で current_time を超える
     let action = process_loops(&mut inst, 1.5, &mut rng);
     assert_eq!(action, LoopAction::Continue);
     assert_eq!(inst.loops_completed, 1);
@@ -407,13 +392,13 @@ fn process_loops_with_delay_prevents_multi_skip() {
 
 #[test]
 fn process_loops_loop_count_1_ignores_offset() {
-    // loop_count=1 → Conclude immediately, offset is never applied
+    // loop_count=1 は即 Conclude で、offset は適用されない
     let mut inst =
         make_instance_with_offset(1, 2.0, 5.0, 5.0, EasingFunction::Named(EasingName::Linear));
     let mut rng = test_rng();
     let action = process_loops(&mut inst, 2.5, &mut rng);
     assert_eq!(action, LoopAction::Conclude);
-    assert_eq!(inst.loops_completed, 0); // Never advanced
+    assert_eq!(inst.loops_completed, 0);
 }
 
 #[test]
@@ -427,9 +412,7 @@ fn process_loops_infinite_with_offset_applies_each_loop() {
     );
     let mut rng = test_rng();
 
-    // Loop 1: end_time=1.0; current_time=4.0 → advance → end_time=1.0+1.0+2.0=4.0
-    // current_time=4.0 >= 4.0 → advance loop 2 → end_time=4.0+1.0+2.0=7.0
-    // current_time=4.0 < 7.0 → stop
+    // 1 周目: end_time 1.0 → 4.0、current_time=4.0 >= 4.0 なので 2 周目: → 7.0
     let action = process_loops(&mut inst, 4.0, &mut rng);
     assert_eq!(action, LoopAction::Continue);
     assert_eq!(inst.loops_completed, 2);

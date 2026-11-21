@@ -25,8 +25,8 @@ use std::sync::LazyLock;
 use windows::UI::Composition::Compositor;
 use wintf::ecs::GraphicsCore;
 
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
-/// 保持を本ファイル 1 か所に束ねてあるので、段 ③ の複製も lib テストバイナリあたり 1 回で済む。
+/// emo2 検体。`Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+/// 保持を本ファイル 1 か所に束ねるので、複製も lib テストバイナリあたり 1 回で済む。
 static EMO2: LazyLock<SampleRoot> =
     LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
 
@@ -92,16 +92,13 @@ pub(crate) fn geo_model(font_height: Option<u32>) -> BalloonModel {
     )
 }
 
-/// フォント名＋高さを明示した live-diff 用 BalloonModel（**origin 未指定**＝mode ごとの書字開始角へ
-/// 寄せる・validrect 全域）。このモデルは validrect を面の全域（左上 (0,0) から右下まで）に
-/// するので、(0,0) は範囲の手前端そのもの＝範囲内である（両端を含む）。そのため origin (0,0)
-/// を明示すれば宣言がそのまま用いられて面の左上から書き始まり、vertical_rl は列送りが −x
-/// ゆえ列が面外（負の x）へ描かれてしまう。
-/// そのため origin は None にして、未宣言時の縮退＝書字開始角
-/// （horizontal_tb/vertical_lr＝validrect 左上・vertical_rl＝右上）へ委ねる
-/// （spec `areka-P0-balloon-vertical-canon` の要件 3.10／3.11）。既定フォントは `name=None`＝
-/// ＭＳ ゴシック（G4——非 default フォント/大サイズで AA こぼれガード `DIRTY_GUARD_IMG_PX` の
-/// 実効性を byte 等価で検証するため）。
+/// フォント名＋高さを明示した live-diff 用 BalloonModel（**origin 未指定**・validrect 全域）。
+/// validrect が面の全域（左上 (0,0) から右下まで）なので (0,0) は範囲内（両端を含む）。origin (0,0) を
+/// 明示すると宣言がそのまま用いられて面の左上から書き始まり、vertical_rl は列送りが −x ゆえ列が面外
+/// （負の x）へ描かれてしまう。そのため origin は None にして、未宣言時の縮退＝書字開始角
+/// （horizontal_tb/vertical_lr＝validrect 左上・vertical_rl＝右上）へ委ねる。
+/// 既定フォントは `name=None`＝ＭＳ ゴシック（非 default フォント/大サイズで AA こぼれガード
+/// `DIRTY_GUARD_IMG_PX` の実効性を byte 等価で検証するため）。
 pub(super) fn live_diff_model_font(name: Option<&str>, font_height: Option<u32>) -> BalloonModel {
     BalloonModel::new(
         WindowPosition::new(None, None),
@@ -149,7 +146,7 @@ pub(super) fn colored_count(bytes: &[u8]) -> usize {
         .count()
 }
 
-/// Segoe UI Emoji が引けなければ理由を添えて失敗にする（飛ばして緑にしない・要件 6.7）。
+/// Segoe UI Emoji が引けなければ理由を添えて失敗にする（飛ばして緑にしない）。
 /// 色の判定は代替フォントの色つきの字形を前提にするので、色を判定するテストの先頭で呼ぶ。
 pub(super) fn require_segoe_ui_emoji(fonts: &FontCatalog) {
     if fonts.family_for(&["Segoe UI Emoji".to_string()]).is_none() {
@@ -162,7 +159,7 @@ pub(super) fn require_segoe_ui_emoji(fonts: &FontCatalog) {
 
 /// ブロック軸（行送り軸）方向のインク範囲 `(near, far)`（物理 px・両端含む・インクなしは `None`）。
 /// horizontal_tb＝y（上端〜下端）・vertical_rl/lr＝x（左端〜右端）——スクロールで content が
-/// 動く軸。k≠1.0 の許容差比較（G2）で oracle と viewbox のインク位置差を測る。
+/// 動く軸。k≠1.0 の許容差比較で oracle と viewbox のインク位置差を測る。
 pub(super) fn block_axis_ink_span(
     bytes: &[u8],
     w: u32,
@@ -449,7 +446,7 @@ pub(super) fn bgra_y_span(bytes: &[u8], w: u32, h: u32, target: [u8; 4]) -> Opti
 
 /// 帯の読み戻しの書体（本番と同じ解決に通す）と、引けるはずの書体の名前（違えば赤）。ぱすたの
 /// `pasta_tategaki` の `font.name` は候補列のまま書き、`FontCatalog::pick` で先頭の「游ゴシック Medium」が
-/// GDI の名前として引け、その家族名「Yu Gothic」になる（emo-text-dwrite-fidelity 要件 3.1・タスク 1.2）。
+/// GDI の名前として引け、その家族名「Yu Gothic」になる。
 pub(super) const R_FONTS: [(&str, &str); 2] = [
     ("Yu Gothic UI", "Yu Gothic UI"),
     (PASTA_FONT_NAMES, "Yu Gothic"),
@@ -481,7 +478,7 @@ pub(super) fn table_with(look: &TextLook, default: &TextLook) -> (StyleTable, St
     (table, id)
 }
 
-/// 線の読み戻しの 3 枚（指摘 6）: ⑴ 既定の見た目に `stroke` を当てたバルーンの飾りの無い行、
+/// 線の読み戻しの 3 枚: ⑴ 既定の見た目に `stroke` を当てたバルーンの飾りの無い行、
 /// ⑵ 既定のままのバルーンで全部の字に同じ線つきの見た目を積んだ行、⑶ 既定のままの飾りの無い行。
 /// 同じ寸の面へ `render_styled` で 1 フレーム描いて読み戻す（実 GPU）。⑴ と ⑵ は同じ線が出て
 /// バイトで一致し、⑶ とは違う（線が出ている）はず。

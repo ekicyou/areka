@@ -1,5 +1,3 @@
-//! # DolaDocument Validation
-//!
 //! ドキュメント構造の整合性を検証する `DolaDocument::validate` の実装。
 
 mod rules;
@@ -17,31 +15,23 @@ impl DolaDocument {
     pub fn validate(&self) -> Result<(), Vec<DolaError>> {
         let mut errors = Vec::new();
 
-        // V1: スキーマバージョン検証
         validate_schema_version(self, &mut errors);
 
-        // V12: 変数初期値の値域検証
         validate_variable_ranges(self, &mut errors);
 
-        // 数値の規則（有限・符号・範囲）
         validate_numbers(self, &mut errors);
 
-        // Storyboard ごとの検証
         for (sb_name, sb) in &self.storyboard {
-            // V2: キーフレーム名重複検出
             validate_duplicate_keyframes(sb_name, sb, &mut errors);
 
-            // V3: 予約キーフレーム名検証
             validate_reserved_keyframe_names(sb_name, sb, &mut errors);
 
-            // V6: キーフレーム参照検証（前方参照許可 + 暗黙的KF追跡）
+            // 前方参照は許可する
             validate_keyframe_references(sb_name, sb, &mut errors);
 
-            // V14-V17: ループオフセットバリデーション
             validate_loop_offset(sb_name, sb, &mut errors);
 
             for (entry_idx, entry) in sb.entry.iter().enumerate() {
-                // V4: 変数参照存在確認
                 if let Some(ref var_name) = entry.variable
                     && !self.variable.contains_key(var_name)
                 {
@@ -52,7 +42,6 @@ impl DolaDocument {
                     });
                 }
 
-                // V5: トランジション名前参照存在確認
                 if let Some(TransitionRef::Named(ref trans_name)) = entry.transition
                     && !self.transition.contains_key(trans_name)
                 {
@@ -63,7 +52,6 @@ impl DolaDocument {
                     });
                 }
 
-                // V7: variable と transition は両方あるか両方無いか
                 let v7 = match (entry.variable.is_some(), entry.transition.is_some()) {
                     (false, true) => Some("transition requires variable"),
                     (true, false) => Some("variable requires transition"),
@@ -86,7 +74,6 @@ impl DolaDocument {
                     });
                 }
 
-                // V8: at と between は排他
                 if entry.at.is_some() && entry.between.is_some() {
                     errors.push(DolaError::InvalidEntry {
                         storyboard: sb_name.clone(),
@@ -95,7 +82,6 @@ impl DolaDocument {
                     });
                 }
 
-                // V9: 純粋KFエントリ（variable/transition なし）→ keyframe または trigger_storyboard 必須
                 if entry.variable.is_none()
                     && entry.transition.is_none()
                     && entry.keyframe.is_none()
@@ -108,9 +94,8 @@ impl DolaDocument {
                     });
                 }
 
-                // V16t / V14t / V18t: トリガーエントリの検証（エラー追加順を保存）
+                // エラーの追加順を保つ: 排他 → 自己参照 → 対象の存在
                 if let Some(ref trigger_target) = entry.trigger_storyboard {
-                    // V16t: trigger_storyboard と variable/transition の排他チェック
                     if entry.variable.is_some() || entry.transition.is_some() {
                         errors.push(DolaError::TriggerExclusiveViolation {
                             storyboard: sb_name.clone(),
@@ -121,13 +106,9 @@ impl DolaDocument {
                         });
                     }
 
-                    // V17t: トランジション固有フィールドの追加チェックは不要。
-                    // TransitionRef にはfrom/to/easing/durationが含まれるため、
-                    // transition自体があればV16tで検出済み。
-                    // betweenはタイミング制御なので許可とも取れるが
-                    // design.mdの記述に従い、betweenはトリガーでも使用可能とする。
+                    // between はタイミング制御なので、トリガーでも使える。
+                    // トランジション固有フィールドは transition ごと上の排他で拒まれている
 
-                    // V14t: トリガー自己参照検出
                     if trigger_target == sb_name {
                         errors.push(DolaError::TriggerSelfReference {
                             storyboard: sb_name.clone(),
@@ -135,7 +116,6 @@ impl DolaDocument {
                         });
                     }
 
-                    // V18t: トリガー対象ストーリーボード存在確認
                     if !self.storyboard.contains_key(trigger_target) {
                         errors.push(DolaError::TriggerTargetNotFound {
                             storyboard: sb_name.clone(),
@@ -145,7 +125,6 @@ impl DolaDocument {
                     }
                 }
 
-                // V10, V11, V13: トランジション内容の検証
                 let resolved_transition = match &entry.transition {
                     Some(TransitionRef::Inline(def)) => Some(def),
                     Some(TransitionRef::Named(name)) => self.transition.get(name),
@@ -153,7 +132,6 @@ impl DolaDocument {
                 };
 
                 if let Some(trans_def) = resolved_transition {
-                    // V11: to と relative_to 排他
                     if trans_def.to.is_some() && trans_def.relative_to.is_some() {
                         errors.push(DolaError::MutuallyExclusive {
                             storyboard: sb_name.clone(),
@@ -161,7 +139,6 @@ impl DolaDocument {
                         });
                     }
 
-                    // V10, V13: 変数型に基づくトランジション制約
                     if let Some(ref var_name) = entry.variable
                         && let Some(var_def) = self.variable.get(var_name)
                     {
@@ -178,7 +155,6 @@ impl DolaDocument {
             }
         }
 
-        // V15t: トリガー循環参照検出（ドキュメントレベル DFS）
         validate_trigger_cycles(self, &mut errors);
 
         if errors.is_empty() {

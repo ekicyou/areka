@@ -226,7 +226,7 @@ fn quiet(fx: &[Effect]) -> bool {
     fx.iter().all(|e| matches!(e, Effect::ArmDeadline(_)))
 }
 
-// ---- 待ち時間（1.1・1.2・1.4・1.6） ----
+// ---- 待ち時間 ----
 
 #[test]
 fn comes_once_at_800ms_not_at_799ms() {
@@ -248,7 +248,7 @@ fn comes_once_at_800ms_not_at_799ms() {
             Effect::ArmDeadline(r.t(900)),
         ]
     );
-    // 続いている間は重ねて来ない（1.7）。
+    // 続いている間は重ねて来ない。
     for ms in [900, 1_000, 5_000] {
         assert!(quiet(&r.at(ms, 50, 50)), "{ms} ミリ秒で知らせが出た");
     }
@@ -313,7 +313,7 @@ fn fallback_setting_comes_at_800ms() {
     assert!(started(&r.at(800, 50, 50)).is_some());
 }
 
-// ---- 待ちの途中の取り消し（2.1・2.2・2.4・2.7・2.9） ----
+// ---- 待ちの途中の取り消し ----
 
 /// 待ちの途中で cancel を起こし、何も出ずに待ちから外れることを見る。
 fn cancel_while_waiting(cancel: impl FnOnce(&mut Rig) -> Vec<Effect>) -> Rig {
@@ -356,7 +356,7 @@ fn not_receiving_without_moving_while_waiting_emits_nothing() {
 #[test]
 fn press_while_waiting_emits_nothing_until_reentry() {
     let mut r = cancel_while_waiting(|r| r.press(500, 50, 50));
-    // 離して範囲の中に居続けても来ない（2.8）。
+    // 離して範囲の中に居続けても来ない。
     for ms in [600, 900, 5_000] {
         assert!(r.at(ms, 60, 60).is_empty(), "{ms} ミリ秒");
     }
@@ -386,7 +386,7 @@ fn entering_with_the_button_down_does_not_count() {
     assert!(r.at(2_000, 50, 50).is_empty());
 }
 
-// ---- 出す番の間（2.5・2.6・2.9・3.13） ----
+// ---- 出す番の間 ----
 
 #[test]
 fn moving_in_the_safe_zone_does_not_end() {
@@ -457,7 +457,7 @@ fn each_end_reason_ends_once_with_hide() {
             |r| r.gone(1_000, 50, 50, Tracked::RangeUnregistered),
             RangeUnregistered,
         ),
-        // 動かないまま受けなくなった（絵や当たり判定が消えた）（2.9）。
+        // 動かないまま受けなくなった（絵や当たり判定が消えた）。
         (|r| r.not_receiving(1_000, 50, 50), WindowHidden),
     ];
     for (end, reason) in cases {
@@ -536,7 +536,7 @@ fn leaving_straight_into_another_range_starts_waiting_in_the_same_step() {
     assert_eq!(range, r.b);
 }
 
-// ---- 出す番の間に別の範囲へ（2.5・2.6・2.10・4.5・1.4） ----
+// ---- 出す番の間に別の範囲へ ----
 
 #[test]
 fn moving_into_the_inner_range_switches_with_the_reshow_wait() {
@@ -555,7 +555,7 @@ fn moving_into_the_inner_range_switches_with_the_reshow_wait() {
                 range: r.a,
                 reason,
             },
-            // 直前のツールチップが同じ回に消えたので、待ちは設定の 1 倍（1.4）。
+            // 直前のツールチップが同じ回に消えたので、待ちは設定の 1 倍。
             Effect::ArmDeadline(r.t(1_000) + SETTING),
         ]
     );
@@ -608,7 +608,7 @@ fn entering_a_range_under_the_corridor_switches() {
 
 #[test]
 fn switching_before_any_tip_was_shown_waits_twice_the_setting() {
-    // 文字がまだ渡されていない（動的）: 消えたツールチップが無いので出し直しではない（1.4）。
+    // 文字がまだ渡されていない（動的）: 消えたツールチップが無いので出し直しではない。
     let (r, token, fx) = end_while_active(false, |r| r.at(1_000, 80, 80));
     assert!(hides(&fx).is_empty());
     assert_eq!(
@@ -623,7 +623,7 @@ fn switching_before_any_tip_was_shown_waits_twice_the_setting() {
 
 #[test]
 fn not_receiving_without_moving_is_window_hidden_even_over_another_range() {
-    // 動かないまま受けなくなり、下の別の範囲（ここでは B とする）が足元になった（2.9 が先）。
+    // 動かないまま受けなくなり、下の別の範囲（ここでは B とする）が足元になった（別の範囲に入ったことより、窓が隠れたことが先に効く）。
     let (r, token, fx) = end_while_active(true, |r| {
         let (over, tracked) = (Some(r.over_of(r.b, 50, 50)), r.present(false));
         r.step(1_000, Some((50, 50)), false, over, tracked)
@@ -671,14 +671,14 @@ fn active_turn_keeps_the_area_it_started_with() {
     assert_eq!(turn.area, area(RECT_A));
 }
 
-// ---- 印の照合（3.12・4.3・4.4・4.7・5.1〜5.5・5.7・5.8・6.7） ----
+// ---- 印の照合 ----
 
 #[test]
 fn supply_on_a_live_token_shows_and_empty_hides() {
     let mut r = Rig::new();
     let token = r.active_on_a();
     assert_eq!(r.m.supply(token, false), SupplyDecision::Show);
-    // 空（""）は出さない・出ていれば消す（3.12）。出す番は続く。
+    // 空（""）は出さない・出ていれば消す。出す番は続く。
     r.m.set_tip(Some(TIP), r.t(850));
     assert_eq!(r.m.supply(token, true), SupplyDecision::HideEmpty);
     r.m.set_tip(None, r.t(860));
@@ -778,7 +778,7 @@ fn after_dismiss_the_turn_continues_and_supplying_shows_again() {
 
 #[test]
 fn after_a_show_failure_ending_detection_continues() {
-    // 表示の失敗は set_tip(None) で渡るだけ（6.7）。
+    // 表示の失敗は set_tip(None) で渡るだけ。
     let mut r = Rig::new();
     let token = r.active_on_a();
     assert_eq!(r.at(900, 50, 50), vec![Effect::ArmDeadline(r.t(1_000))]);

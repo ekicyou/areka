@@ -1,13 +1,11 @@
-//! snapshot_capture_test.rs — 実機からの代表応答を交信記録機構経由で採取するハーネス
-//! （task 6.1・design.md「snapshot 採取ハーネス（env-gate）」・要件 2.6/6.1）。
+//! snapshot_capture_test.rs — 実機からの代表応答を交信記録機構経由で採取するハーネス。
 //!
 //! 本ハーネスは**出力形式生成ロジックを純関数**として切り出し（`reconstruct_envelope`／
-//! `collect_first_get_snapshots`）、実機なしで単体テスト可能にする（観測可能な完了＝
-//! これらが単体テストで green）。実 pasta 越しの実採取は `HOST32_PASTA_DLL`＋
-//! `AREKA_SNAPSHOT_OUT` の**両方**が設定された場合のみ動作し、いずれか欠落（または空文字）時は
-//! 静かにスキップする（既存 env-gate 流儀・`real_pasta_test.rs` を踏襲）。
+//! `collect_first_get_snapshots`）、実機なしで単体テスト可能にする。実 pasta 越しの実採取は
+//! `HOST32_PASTA_DLL`＋`AREKA_SNAPSHOT_OUT` の**両方**が設定された場合のみ動作し、いずれか欠落
+//! （または空文字）時は静かにスキップする（`real_pasta_test.rs` の env-gate 流儀を踏襲）。
 //!
-//! # 採取フロー（design.md 「Batch / Job Contract」）
+//! # 採取フロー
 //! 検体 `emo2` の使い捨ての複製に実 pasta DLL を持ち込み（`real_pasta_test.rs` と同じ形）→
 //! `ShioriWiring::Custom(Recorder(real_connect(helper_exe, mount.shiori, DefaultEncoding::Ansi)))`
 //! で boot→talk→close
@@ -15,7 +13,7 @@
 //! を取り、`Value(s)`→`SHIORI/3.0 200 OK`＋`Charset: UTF-8`＋`Value: <s>` の正準 envelope、
 //! `NoContent`→204 envelope へ再構成し `AREKA_SNAPSHOT_OUT/<ID>.txt` へ書き出す。
 //!
-//! # narrowing（design.md「narrowing（要件 2.2 との対応）」）
+//! # 対象を GET 交信に絞る理由
 //! スナップショット対象は **GET 交信のみ**。NOTIFY／Unload は採取対象外（応答がワイヤ契約上
 //! 破棄される・または unload 結果ゆえ）。GET の `Value`／`NoContent` のみ再構成し、その他の
 //! outcome（`Failed`／`NotifyOk`／`Unloaded`）は `None`（採取不能）として除外する。
@@ -23,8 +21,8 @@
 //! # 出力の正準形式（`crates/shiori4-testdll/snapshots/OnFirstBoot.txt` と一致）
 //! 200: `SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: <s>\r\n\r\n`
 //! 204: `SHIORI/3.0 204 No Content\r\n\r\n`
-//! **`X-Areka-Snapshot: PROVISIONAL` マーカは付けない**（実採取は非 provisional・凍結コミット時に
-//! そのまま `snapshots/` へ drop-in できる正準形。task 6.2 の凍結コミットが差し替え点）。
+//! **`X-Areka-Snapshot: PROVISIONAL` マーカは付けない**（実採取は非 provisional で、凍結コミット時に
+//! そのまま `snapshots/` へ drop-in できる正準形）。
 
 use std::collections::HashSet;
 
@@ -104,7 +102,7 @@ use crate::real_pasta_test::{OBSERVE_TIMEOUT, SHUTDOWN_BOUND, wait_for_a_cue};
 use crate::recorder::{BoxedBackend, Recorder, RecorderHandle};
 use crate::spine_e2e_test::RecordingSink;
 
-/// env-gate 実採取（design.md「snapshot 採取ハーネス（env-gate）」・要件 2.6/6.1）。
+/// env-gate 実採取。
 ///
 /// `HOST32_PASTA_DLL` と `AREKA_SNAPSHOT_OUT` の**両方**が設定（かつ非空）された場合のみ動作し、
 /// いずれか欠落・空文字なら静かにスキップして PASS する（常設 `cargo test --workspace` を
@@ -156,11 +154,11 @@ fn capture_real_pasta_snapshots() {
     let mount = package::resolve_with_shell(&root, DefaultEncoding::Ansi, None)
         .expect("採取フィクスチャは実マウント解決を成功裏に通過すべき（boot 内部と同一契約）");
 
-    // --- 実 backend へ Recorder を合成した Custom wiring（design.md「Batch/Job Contract」）---
+    // --- 実 backend へ Recorder を合成した Custom wiring---
     let handle_slot: Arc<Mutex<Option<RecorderHandle>>> = Arc::new(Mutex::new(None));
     let slot2 = Arc::clone(&handle_slot);
     // SHIORI 通信の既定も**本番と同じ** `Ansi`（＝Shift_JIS）を渡す。ここを UTF-8 にすると
-    // 本番と違う最初の要求を採ってしまう（design §Boundary Commitments）。
+    // 本番と違う最初の要求を採ってしまう。
     let connect = real_connect(helper_exe, mount.shiori, DefaultEncoding::Ansi);
     let wiring = ShioriWiring::Custom(Box::new(move || {
         // 実 pasta backend を確立（shiori アクタースレッド上で helper spawn＋LOAD）。
@@ -190,7 +188,7 @@ fn capture_real_pasta_snapshots() {
     let runtime =
         boot(options).expect("real pasta 越しの boot は DLL/helper 実在確認済みなら成功するはず");
 
-    // --- OnBoot 一周で sink に何らかの発火が観測されるまで有界待機（実時計ポーリング可）---
+    // OnBoot 一周で sink に何らかの発火が観測されるまで有界待機（実時計ポーリング可）。
     // 何も見えないまま 204 の写しを書いて緑にしない。
     assert!(
         wait_for_a_cue(&surface_records, &text_records),

@@ -1,5 +1,4 @@
-//! 合成し直す回数（＝刻みが出す指令の数）を数える檻（spec: areka-P0-animated-image-playback
-//! 要件 7.2・7.4・9.2・9.3・design「テスト」5・tasks.md 6.1）。
+//! 合成し直す回数（＝刻みが出す指令の数）を数える檻。
 //!
 //! 動く絵 1 つ（待ち 100ms のコマ 3 枚・終わりなし）だけの表で、16ms の刻みを与える。時刻は
 //! `on_tick(now_ms)`、乱数は注入列だけで決定論（実際の時計・OS に依らない）。動く絵も `always` も
@@ -41,7 +40,7 @@ fn shown() -> (LoopRuntime, ScopeStates) {
 }
 
 /// 面の表示の指令の直後の最初の刻みは 0 件（経過 0 の絵は表示の指令で出ている）。待ち 100ms の
-/// コマに 16ms の刻みを 7 回与えると、コマが替わる 7 回目（112ms）の 1 件だけ（要件 7.4）。
+/// コマに 16ms の刻みを 7 回与えると、コマが替わる 7 回目（112ms）の 1 件だけ。
 #[test]
 fn hundred_ms_frame_over_seven_16ms_ticks_emits_exactly_one_command() {
     let (mut rt, mut states) = shown();

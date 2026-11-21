@@ -1,4 +1,4 @@
-//! 整合ゲートの純判定と、待ち札の適用範囲の不変条件（設計 C5・Unit Tests 3）。
+//! 整合ゲートの純判定と、待ち札の適用範囲の不変条件。
 
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::{DPI, Point, SizeI, WindowPos};
@@ -275,7 +275,7 @@ fn only_the_scale_phase_gate_puts_and_removes_the_tag() {
     assert!(world.get::<DpiSyncHold>(window).is_none());
 }
 
-/// 上限を超えたら札を外して進む（有界・要件 4.4）。
+/// 上限を超えたら札を外して進む（有界）。
 #[test]
 fn the_gate_gives_up_and_removes_the_tag_at_the_bound() {
     let (mut world, window) =
@@ -313,7 +313,7 @@ fn the_other_sites_only_read_the_tag() {
 }
 
 // ---------------------------------------------------------------------------
-// 待ち札の適用範囲の不変条件（単一の窓書込口での監視・設計 C5）
+// 待ち札の適用範囲の不変条件（単一の窓書込口での監視）
 // ---------------------------------------------------------------------------
 
 /// 窓書込に必要な最小構成（偽ハンドル・位置・GA 境界）を持つ窓 1 枚の World。

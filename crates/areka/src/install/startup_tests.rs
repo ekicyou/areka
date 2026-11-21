@@ -1,4 +1,4 @@
-//! 起動の依頼の持ち物と消す書庫の判断のテスト（design「Testing Strategy / 単体」・要件 3.1・3.2・4.3・4.4・9.6）。
+//! 起動の依頼の持ち物と消す書庫の判断のテスト。
 
 use std::path::PathBuf;
 
@@ -79,7 +79,7 @@ fn same_path_installed_twice_is_deleted_once() {
     assert_eq!(sources_to_delete(&archives, &ends), paths(&[r"C:\a.nar"]));
 }
 
-// ---- 持ち物を作る・出さずに終わる（タスク 3.2） ----
+// ---- 持ち物を作る・出さずに終わる ----
 
 fn args(archives: &[&str]) -> InstallArgs {
     InstallArgs {
@@ -184,7 +184,7 @@ fn startup_events<'a>(
         .collect()
 }
 
-// ---- decide_call_ghost（要件 4.3〜4.6・4.9・7.4・9.5） ----
+// ---- decide_call_ghost ----
 
 fn facts(ends: &[ArchiveEnd]) -> CallGhostFacts<'_> {
     CallGhostFacts {
@@ -388,7 +388,7 @@ fn readonly_and_boot_target_come_before_no_ghost_installed() {
     }
 }
 
-// ---- 起動の前に 1 回だけ入れる（タスク 4.3・要件 1.1〜1.3・1.5・2.6・6.1・6.2・6.4・9.2・9.3） ----
+// ---- 起動の前に 1 回だけ入れる ----
 
 /// `install.txt` の行と足すファイルで書庫を `dir` へ置く。
 fn nar(
@@ -470,7 +470,7 @@ fn warn_or_worse(
 }
 
 /// `initial_install.nar` の依頼が先、`--install` の並びが後で別々の依頼になり、どちらも入る。
-/// 2 回目は何もしない。控えは入れた順（要件 1.1・1.3・6.1・6.2・9.2）。
+/// 2 回目は何もしない。控えは入れた順。
 #[test]
 fn initial_install_goes_first_then_args_and_the_second_call_does_nothing() {
     let root = temp_path_kit::TempPath::under_target("startup-before-boot-root");
@@ -534,7 +534,7 @@ fn initial_install_goes_first_then_args_and_the_second_call_does_nothing() {
 }
 
 /// 在らない・読めない・`accept` 付き・利用条件付き（抑止で拒否）を混ぜても残りが入り、
-/// 書庫ごとの終わり方が記録に並ぶ（要件 2.6・6.4・9.3）。
+/// 書庫ごとの終わり方が記録に並ぶ。
 #[test]
 fn missing_unreadable_accept_and_terms_do_not_stop_the_rest() {
     let root = temp_path_kit::TempPath::under_target("startup-before-boot-root");
@@ -589,7 +589,7 @@ fn missing_unreadable_accept_and_terms_do_not_stop_the_rest() {
     assert_eq!(carried, ["good"]);
 }
 
-/// 入れる物が何も無ければ手続きを呼ばず、warn 以上を残さない（要件 1.5）。
+/// 入れる物が何も無ければ手続きを呼ばず、warn 以上を残さない。
 #[test]
 fn nothing_to_install_calls_nothing_and_warns_nothing() {
     let root = temp_path_kit::TempPath::under_target("startup-before-boot-root");
@@ -605,7 +605,7 @@ fn nothing_to_install_calls_nothing_and_warns_nothing() {
     assert!(!root.path().join("ghost").exists(), "何も入らない");
 }
 
-// ---- 消す・読み取りだけの断り・callghost（タスク 4.4・要件 5.1〜5.7・7.1〜7.4・9.6・9.8） ----
+// ---- 消す・読み取りだけの断り・callghost ----
 
 /// 持ち物を作り、起動の前の道を 1 回走らせて、答えと記録を返す。
 fn run_once(
@@ -638,7 +638,7 @@ fn skipped(events: Vec<log_capture_kit::CapturedEvent>) -> String {
     skipped_reason(&callghost).0
 }
 
-/// `deletesource` で入った写しだけが 1 回消え、失敗・断った写しとフォルダは残る（要件 5.1・5.2・5.4・5.6）。
+/// `deletesource` で入った写しだけが 1 回消え、失敗・断った写しとフォルダは残る。
 #[test]
 fn deletesource_deletes_only_installed_copies_once() {
     let root = temp_path_kit::TempPath::under_target("startup-delete-root");
@@ -672,7 +672,7 @@ fn deletesource_deletes_only_installed_copies_once() {
     assert!(startup_events(&events, "startup_source_delete_failed").is_empty());
 }
 
-/// `deletesource` が無ければ `--install` の写しは入っても残る（要件 5.7）。
+/// `deletesource` が無ければ `--install` の写しは入っても残る。
 #[test]
 fn without_deletesource_installed_args_copy_stays() {
     let root = temp_path_kit::TempPath::under_target("startup-delete-root");
@@ -688,7 +688,7 @@ fn without_deletesource_installed_args_copy_stays() {
     assert!(startup_events(&events, "startup_source_deleted").is_empty());
 }
 
-/// 使われていて消せない写しは warn を残して残り、ほかの写しの消去は続く（要件 5.5）。
+/// 使われていて消せない写しは warn を残して残り、ほかの写しの消去は続く。
 ///
 /// 読み取り専用の属性では試さない: 今の `std::fs::remove_file` は Windows で読み取り専用の
 /// ファイルも消す。読むことだけを許す（消すことを許さない）開き方で握って「使われている」にする。
@@ -724,7 +724,7 @@ fn copy_in_use_is_kept_with_a_warn_and_the_rest_goes_on() {
     );
 }
 
-/// `initial_install.nar` は `deletesource` によらず入ったら消え、入らなければ残る（要件 5.3）。
+/// `initial_install.nar` は `deletesource` によらず入ったら消え、入らなければ残る。
 #[test]
 fn initial_install_is_deleted_only_when_installed() {
     let root = temp_path_kit::TempPath::under_target("startup-delete-root");
@@ -756,7 +756,7 @@ fn initial_install_is_deleted_only_when_installed() {
 }
 
 /// 読み取りだけなら出どころごとに断り、何も入れず何も消さず、callghost を readonly で
-/// 使わない（要件 7.1〜7.4・9.8）。
+/// 使わない。
 #[test]
 fn readonly_refuses_each_origin_and_keeps_every_copy() {
     let root = temp_path_kit::TempPath::under_target("startup-readonly-root");
@@ -804,7 +804,7 @@ fn readonly_refuses_each_origin_and_keeps_every_copy() {
 }
 
 /// `--install` で入ったゴーストを callghost で選び、指定があれば使わず、
-/// `initial_install.nar` の分は判断に渡さない（要件 4.4・4.5・4.9）。
+/// `initial_install.nar` の分は判断に渡さない。
 #[test]
 fn callghost_answers_from_the_install_args_only() {
     let exe = temp_path_kit::TempPath::under_target("startup-callghost-exe");

@@ -1,4 +1,4 @@
-//! `--sstp-listen` の値 → 計画・試す番号の列・待受を立てる口（要件 8.1〜8.8・11.3）。
+//! `--sstp-listen` の値 → 計画・試す番号の列・待受を立てる口。
 
 use super::*;
 use log_capture_kit::capture;
@@ -20,19 +20,19 @@ fn not_loopback(item: &str) -> ListenNote {
 fn plan_table() {
     use ListenPlan::*;
     let rows: Vec<(Option<&str>, ListenPlan, Vec<ListenNote>)> = vec![
-        // 8.1・8.2: ループバックの 3 書式
+        // ループバックの 3 書式
         (Some("9900"), Ports(vec![9900]), vec![]),
         (Some("localhost:9900"), Ports(vec![9900]), vec![]),
         (Some("LocalHost:9900"), Ports(vec![9900]), vec![]),
         (Some("127.0.0.1:9900"), Ports(vec![9900]), vec![]),
-        // 8.3: 書いた順
+        // 書いた順
         (Some("9900,9901"), Ports(vec![9900, 9901]), vec![]),
         (Some("9901, 9900"), Ports(vec![9901, 9900]), vec![]),
-        // 8.4: none（大文字小文字を問わない）・値なし
+        // none（大文字小文字を問わない）・値なし
         (Some("none"), Off, vec![]),
         (Some("NONE"), Off, vec![]),
         (None, Off, vec![]),
-        // 8.5: 書式の誤りはその項目だけ無視
+        // 書式の誤りはその項目だけ無視
         (Some("0"), AllRejected, vec![rejected("0", "port")]),
         (Some("70000"), AllRejected, vec![rejected("70000", "port")]),
         (Some("abc"), AllRejected, vec![rejected("abc", "port")]),
@@ -51,7 +51,7 @@ fn plan_table() {
             AllRejected,
             vec![rejected("host:9900", "format")],
         ),
-        // 8.6: 127.0.0.1 以外
+        // 127.0.0.1 以外
         (
             Some("0.0.0.0:9900"),
             AllRejected,
@@ -67,7 +67,7 @@ fn plan_table() {
             AllRejected,
             vec![not_loopback("[::1]:9900")],
         ),
-        // 8.7: 全部はねる
+        // 全部はねる
         (
             Some("0,[::1]:9900,abc"),
             AllRejected,
@@ -87,19 +87,19 @@ fn plan_table() {
 
 #[test]
 fn ports_to_try_four_branches() {
-    // 8.8: 渡されていない＝今の候補
+    // 渡されていない＝今の候補
     assert_eq!(
         ports_to_try(&ListenPlan::NotGiven, || vec![9801, 9821]),
         Some(vec![9801, 9821])
     );
-    // 8.1・8.3: 列ならその列だけ（今の候補は読まない）
+    // 列ならその列だけ（今の候補は読まない）
     assert_eq!(
         ports_to_try(&ListenPlan::Ports(vec![9900, 9901]), || panic!(
             "今の候補を読んだ"
         )),
         Some(vec![9900, 9901])
     );
-    // 8.4・8.7: 待ち受けない（今の候補へ戻らない）
+    // 待ち受けない（今の候補へ戻らない）
     assert_eq!(
         ports_to_try(&ListenPlan::Off, || panic!("今の候補を読んだ")),
         None

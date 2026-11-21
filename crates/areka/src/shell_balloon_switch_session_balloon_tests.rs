@@ -1,7 +1,6 @@
-//! バルーンの往復の統合テスト（spec: areka-P0-shell-balloon-switch task 11.2・要件 3.1〜3.3・3.5・
-//! 11.2・11.3・design「Integration Tests」・Flow 3）。
+//! バルーンの往復の統合テスト。
 //!
-//! 土台は 11.1 の [`lap_rig`]（偽の SHIORI のゴースト A・窓の一式・GPU 資源・本番の `Input`・`Update` の段）。
+//! 土台は [`lap_rig`]（偽の SHIORI のゴースト A・窓の一式・GPU 資源・本番の `Input`・`Update` の段）。
 //! 根の `balloon/` に既定の `emo2-kakukaku` と並べて、検体 `StayseeBalloon` の複製を 2 つ目の
 //! バルーンとして置く（絵の大きさが違うので、文字の層の結び先の面の大きさで新旧を見分けられる）。
 
@@ -210,7 +209,7 @@ pub(super) fn scope0_text(rig: &SwitchRig) -> String {
         .unwrap_or_default()
 }
 
-/// バルーンの往復（要件 11.2・3.1〜3.3・3.5・11.3）: A（`emo2-kakukaku`）→ 台本の
+/// バルーンの往復: A（`emo2-kakukaku`）→ 台本の
 /// `\![change,balloon,StayseeBalloon]` → 台詞の終わりで差し替え → `OnBalloonChange`（Ref0＝名前・
 /// Ref1＝絶対パス）→ `LastBalloon`＝`StayseeBalloon` → その台詞の `emo2-kakukaku` への切替で逆向きに
 /// 1 周。集めて 1 回で判定: ⑴ 呼出列（「切り替え前」のイベントは 0 件・SHIORI を降ろさない）と
@@ -218,7 +217,7 @@ pub(super) fn scope0_text(rig: &SwitchRig) -> String {
 /// 見えていた（文字を出し終えて時間切れを待つ）・新しい装着は差し替えの直後は隠れている・次の台詞で
 /// 見え、文字の層がその新しいスロットに結ばれる・面の大きさが新しいバルーンのもの・可視性の制御は
 /// 古い装着の消滅を「外から隠された」と読まない ⑷ キャラ窓の見え方（装着の子・窓寸・表示）は
-/// 1 通りのまま（シェルに触れない・要件 3.5）⑸ 終了の指示なし。
+/// 1 通りのまま（シェルに触れない）⑸ 終了の指示なし。
 ///
 /// # 非空虚性
 /// 差し替えの後始末で可視の記憶を忘れないと（`forget_scope` を外す）、可視性の制御が古い装着の
@@ -239,9 +238,8 @@ fn script_balloon_switch_round_trips_and_binds_the_next_talk_to_the_new_slot() {
     let mut looks = LookLog::default();
     let mut balloons = BalloonLog::default();
     let windows = lap.windows.clone();
-    // 台詞の時計は 1 ms ずつ進める。バルーンの時間切れ（既定 30 秒）は UI の時刻（`FrameTime` と
-    // `TalkClock`＝dola の実時間）で数えるので、古いバルーンが差し替えの直前まで見えているかの余裕は
-    // 実時間で 30 秒（この往復は通常 数秒で終わる）。
+    // バルーンの時間切れ（既定 30 秒）は UI の時刻（`FrameTime` と `TalkClock`＝dola の実時間）で
+    // 数えるので、古いバルーンが差し替えの直前まで見えているかの余裕は実時間で 30 秒。
     let ((round_trip, last), events) = capture(|| {
         let round_trip = lap.frames_until(CREEP, |rig| {
             looks.record(look_of(rig, &windows));

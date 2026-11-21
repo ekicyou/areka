@@ -15,7 +15,7 @@ fn pt(x: i32, y: i32) -> PointPx {
     PointPx { x, y }
 }
 
-/// 1920x1080 の作業領域・100x40 のツールチップ・上へ 20・下へ 32 離す。
+/// 上へ 20・下へ 32 離す置き場所の入力。
 fn input(anchor: PointPx, work_area: RectPx, width: i32, height: i32) -> PlaceInput {
     PlaceInput {
         anchor,
@@ -35,7 +35,7 @@ const FHD: RectPx = RectPx {
 
 // ---- 置き場所 ----
 
-/// 真上・左右の中央合わせ・カーソルから上へ離す量（3.1）。
+/// 真上・左右の中央合わせ・カーソルから上へ離す量。
 #[test]
 fn place_directly_above_centred_with_offset() {
     let p = place(&input(pt(500, 500), FHD, 100, 40));
@@ -44,21 +44,21 @@ fn place_directly_above_centred_with_offset() {
     assert_eq!(p.y + 40, 500 - 20);
 }
 
-/// 上に収まらなければ真下へ返す（カーソルの絵の高さぶん離す）（3.5）。
+/// 上に収まらなければ真下へ返す（カーソルの絵の高さぶん離す）。
 #[test]
 fn place_flips_below_when_above_does_not_fit() {
     let p = place(&input(pt(500, 50), FHD, 100, 40));
     assert_eq!(p, pt(450, 50 + 32));
 }
 
-/// 左右の端では作業領域の中へ寄せる（3.5）。
+/// 左右の端では作業領域の中へ寄せる。
 #[test]
 fn place_clamps_left_and_right_edges() {
     assert_eq!(place(&input(pt(10, 500), FHD, 100, 40)), pt(0, 440));
     assert_eq!(place(&input(pt(1910, 500), FHD, 100, 40)), pt(1820, 440));
 }
 
-/// 上にも下にも収まらなければ、広い側に置いて作業領域の中へ寄せる（3.5）。
+/// 上にも下にも収まらなければ、広い側に置いて作業領域の中へ寄せる。
 #[test]
 fn place_neither_side_fits_uses_wider_side() {
     let short = rect(0, 0, 1920, 100);
@@ -78,7 +78,7 @@ fn place_boundaries_prefer_above() {
     assert_eq!(place(&input(pt(500, 44), short, 100, 60)), pt(450, 0));
 }
 
-/// 作業領域より大きければ左上を作業領域の左上に合わせる（3.5）。
+/// 作業領域より大きければ左上を作業領域の左上に合わせる。
 #[test]
 fn place_too_large_aligns_top_left() {
     assert_eq!(place(&input(pt(500, 500), FHD, 2000, 1200)), pt(0, 0));
@@ -91,7 +91,7 @@ fn place_too_large_aligns_top_left() {
     );
 }
 
-/// 負の座標の画面（左や上の画面）でも収まる（3.5）。
+/// 負の座標の画面（左や上の画面）でも収まる。
 #[test]
 fn place_on_screen_with_negative_coordinates() {
     let left_screen = rect(-1920, -200, 0, 880);
@@ -239,7 +239,7 @@ fn force_break_zero_fit_still_advances() {
 
 // ---- 改行の揃え ----
 
-/// LF だけ・CR LF・CR だけが混ざっても CR LF に揃う（3.3）。
+/// LF だけ・CR LF・CR だけが混ざっても CR LF に揃う。
 #[test]
 fn normalize_newlines_to_crlf() {
     assert_eq!(normalize_newlines("a\nb\r\nc\rd"), "a\r\nb\r\nc\r\nd");
@@ -249,7 +249,7 @@ fn normalize_newlines_to_crlf() {
 
 // ---- 最大の幅 ----
 
-/// 320 を DPI で換算し、作業領域の幅を越えない（3.4）。
+/// 320 を DPI で換算し、作業領域の幅を越えない。
 #[test]
 fn max_tip_width_scales_with_dpi_and_caps_at_work_area() {
     assert_eq!(max_tip_width(96, FHD), 320);
@@ -258,7 +258,7 @@ fn max_tip_width_scales_with_dpi_and_caps_at_work_area() {
     assert_eq!(max_tip_width(144, rect(-1920, 0, -1500, 1080)), 420);
 }
 
-/// 版 6 には、窓の DPI の倍率を掛け戻すと物理の最大の幅に収まる幅を渡す（6.3）。
+/// 版 6 には、窓の DPI の倍率を掛け戻すと物理の最大の幅に収まる幅を渡す。
 #[test]
 fn logical_max_width_divides_back_without_exceeding_physical() {
     assert_eq!(logical_max_width(640, 192), 320);

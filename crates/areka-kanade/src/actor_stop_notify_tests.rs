@@ -1,4 +1,4 @@
-//! 停止通知（[`KanadeStopped`]）の発行点の檻（areka-P0-emo2-conformance-e2e R15.3）。
+//! 停止通知（[`KanadeStopped`]）の発行点の檻。
 //!
 //! 検証するのは 4 つである:
 //!
@@ -46,8 +46,8 @@ fn state_in(phase: Phase) -> State {
     state
 }
 
-/// `Unloading{cause}` の 5 値が公開語彙へ 1 対 1 で写る（R15.3 の「原因を問わず」）。
-/// Fault は種類と理由をそのまま運ぶ（要件 2.1）。
+/// `Unloading{cause}` の 5 値が公開語彙へ 1 対 1 で写る（原因を問わず）。
+/// Fault は種類と理由をそのまま運ぶ。
 #[test]
 fn unloading_cause_maps_to_the_public_vocabulary_for_all_five_values() {
     let fault = ShioriFault {
@@ -94,7 +94,7 @@ fn a_state_outside_the_termination_sequence_carries_no_cause() {
     }
 }
 
-/// 通知端が生きていれば `KanadeNotice::Stopped` がちょうど 1 件届き、警告は出ない（R15.3）。
+/// 通知端が生きていれば `KanadeNotice::Stopped` がちょうど 1 件届き、警告は出ない。
 #[test]
 fn notify_stop_delivers_exactly_one_message_and_logs_nothing() {
     let (tx, rx) = mpsc::channel::<KanadeNotice>();
@@ -126,7 +126,7 @@ fn notify_stop_without_a_sink_is_a_silent_no_op() {
 
 /// 受信端が落ちていれば `warn!` 1 件（`event="stop_notify_failed"`・原因つき）を残して返る。
 ///
-/// panic しないことが要点である——ここで落ちると終了系列そのものが完走しなくなる（R15.3）。
+/// panic しないことが要点である——ここで落ちると終了系列そのものが完走しなくなる。
 #[test]
 fn notify_stop_warns_once_when_the_receiver_is_gone_and_does_not_panic() {
     let (tx, rx) = mpsc::channel::<KanadeNotice>();
@@ -142,7 +142,7 @@ fn notify_stop_warns_once_when_the_receiver_is_gone_and_does_not_panic() {
     );
 }
 
-/// 原因を控えられないまま止まったときは、原因不明の Fault を送り `warn!` を 1 件残す（要件 2.2）。
+/// 原因を控えられないまま止まったときは、原因不明の Fault を送り `warn!` を 1 件残す。
 #[test]
 fn notify_stop_without_a_cause_sends_an_unknown_fault() {
     let (tx, rx) = mpsc::channel::<KanadeNotice>();
@@ -220,7 +220,7 @@ fn notice_without_a_sink_is_recorded_at_debug() {
     assert_not_logged(&events, "notice_send_failed");
 }
 
-/// 切替の帳簿を持ったまま終了系列を終えると、停止通知に切替の中身（台本ごと）が載る（要件 3.4）。
+/// 切替の帳簿を持ったまま終了系列を終えると、停止通知に切替の中身（台本ごと）が載る。
 ///
 /// 控えは `drive` が停止原因を控えるのと同じ時点（step の直前）で取る。Unload の応答で
 /// `Stopped` へ移った後の停止の実行点まで、その控えが運ばれることを実際の駆動で確かめる。

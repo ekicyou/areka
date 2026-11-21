@@ -1,5 +1,4 @@
-//! 置き場の追加・外す・先頭へ動かすの判断の決定論テスト（要件 1.5・6.4・6.6〜6.8・7.2・7.3・8.6・12.5、
-//! areka-P0-user-data-root 要件 3.7・10.3）。
+//! 置き場の追加・外す・先頭へ動かすの判断の決定論テスト。
 //!
 //! 実在する根は `TempPath::under_target`（ワークツリーの `target\` の下）に掘る。
 
@@ -120,7 +119,7 @@ fn remove_takes_out_and_keeps_folder() {
             removed: b.clone()
         }
     );
-    // フォルダは消さず動かさない（要件 7.2）。
+    // フォルダは消さず動かさない。
     assert!(b.join("ghost").is_dir());
 }
 
@@ -213,7 +212,7 @@ fn front_not_listed_is_stale() {
     );
 }
 
-/// 書ける根の印は足す・外す・先頭へ動かすの並びの複写で残る（areka-P0-user-data-root 10.3）。
+/// 書ける根の印は足す・外す・先頭へ動かすの並びの複写で残る。
 #[test]
 fn user_root_mark_survives_add_remove_front() {
     use areka_ghost::RootMark;
@@ -256,7 +255,7 @@ fn user_root_mark_survives_add_remove_front() {
     assert!(is_marked(&fronted), "先頭へ動かした後も印が残る");
 }
 
-// ---------------------------------------------------------------- 適用（実行系が居ない経路・要件 8.1〜8.5）
+// ---------------------------------------------------------------- 適用（実行系が居ない経路）
 
 mod apply {
     use super::*;
@@ -332,7 +331,7 @@ mod apply {
             Some("ga"),
             "切り替えない（要件 8.4）"
         );
-        // 記憶を直に読む口で読み戻すと同じ並び（要件 8.1）。
+        // 記憶を直に読む口で読み戻すと同じ並び。
         let value = read_memory(&profile).expect("記憶に並びが書かれる");
         let (decoded, skipped) =
             decode_memory(&value, crate::roots::user_root::exe_dir().as_deref());
@@ -341,7 +340,7 @@ mod apply {
         // 次に引く和に足した根のゴーストが入る。
         let survey = areka_ghost::catalog_roots::survey(&ctx.roots);
         assert!(survey.ghosts.iter().any(|g| g.identity.folder == "gb"));
-        // 変更のときの並びと隠れの記録（要件 8.3）。
+        // 変更のときの並びと隠れの記録。
         let listed = named(&events, "root_listed");
         assert_eq!(listed.len(), 2);
         assert!(

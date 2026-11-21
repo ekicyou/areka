@@ -1,4 +1,4 @@
-//! ネットワーク更新の本番クレート（spec: areka-P0-update-engine）。
+//! ネットワーク更新の本番クレート。
 //!
 //! 更新定義ファイル（`updates2.dau`／`updates.txt`）を読み、手元との差分だけを
 //! 取得・照合して、ファイル単位で確定する。失敗したら逆順に戻す。
@@ -32,7 +32,7 @@
 //! # 記録はここだけが出す
 //!
 //! 下の層は警告も失敗も値で返す。`run` がそれを `warn!` に写し、失敗は `Err` を返す
-//! 直前に `log_failure` で `error!` を 1 回だけ出す（要件 8.1〜8.3）。
+//! 直前に `log_failure` で `error!` を 1 回だけ出す。
 
 use std::fs;
 use std::path::Path;
@@ -71,17 +71,17 @@ pub struct UpdateRequest<'a> {
     pub target: &'a Path,
 }
 
-/// 一周を同期で進める。自らスレッドを起こさない（3.7）。
+/// 一周を同期で進める。自らスレッドを起こさない。
 ///
 /// 成功は `UpdateOutcome`（差分 0 と n 件を型で区別）、失敗は `UpdateError`
 /// （段・閉じた理由・原因のファイル・戻せたか・残骸・元の内容が残る作業場所）。
-/// 失敗の全経路で `tracing::error!` を 1 件だけ出し、同じ内容を戻り値に持つ（8.1）。
+/// 失敗の全経路で `tracing::error!` を 1 件だけ出し、同じ内容を戻り値に持つ。
 /// 同じ `target` への走行を同時に 2 つ起こさない（棚の片付けが相手の作業場所を消し得る）。
 ///
 /// # Errors
 ///
 /// 入口の検査・定義ファイル・差分・取得・照合・確定のいずれかで止まったとき。
-// 失敗の型は設計の公開面そのもの（段・理由・残骸・作業場所を値で持つ）。一周に 1 回しか
+// 失敗の型は公開面で、段・理由・残骸・作業場所を値で持つ。一周に 1 回しか
 // 返らないので箱に入れて小さくする得が無い。
 #[allow(clippy::result_large_err)]
 pub fn run(
@@ -92,7 +92,7 @@ pub fn run(
     let mut homeurl = request.homeurl.to_owned();
     let mut area = None;
     walk(request.target, fetch, observe, &mut homeurl, &mut area).map_err(|(stage, reason)| {
-        // 戻せなかったときだけ作業場所を残す（元の内容がそこに在る＝5.5）。
+        // 戻せなかったときだけ作業場所を残す（元の内容がそこに在る）。
         let (work, leftovers) = match area {
             Some(area) if matches!(reason, FailReason::RollbackFailed { .. }) => {
                 let (dir, residue) = area.keep();
@@ -125,7 +125,7 @@ fn walk(
     homeurl: &mut String,
     slot: &mut Option<WorkArea>,
 ) -> Result<UpdateOutcome, Failed> {
-    // 1. 入口（1.17・1.4）。取得口はまだ呼ばない。
+    // 入口の検査では取得口をまだ呼ばない。
     if !target.is_dir() {
         let path = target.to_path_buf();
         return Err((Stage::Entry, FailReason::TargetMissing { path }));
@@ -143,8 +143,8 @@ fn walk(
         target = %target.display(),
         "[areka_update] update started"
     );
-    // 前の成功した走行の残り（印つき）を差分より先に消す（5.9）。差分なしの周でも消える。
-    // 消せなかった物は次の機会へ回すだけの正常な状態なので警告にしない（要件 5.9「黙って」）。
+    // 前の成功した走行の残り（印つき）を差分より先に消す。差分なしの周でも消える。
+    // 消せなかった物は次の機会へ回すだけの正常な状態なので警告にしない。
     let purge = purge_committed(target);
     if !(purge.removed.is_empty() && purge.held.is_empty()) {
         tracing::debug!(
@@ -155,13 +155,11 @@ fn walk(
         );
     }
 
-    // 2〜3. 定義ファイル（1.1〜1.3）。
     let (name, manifest_bytes) = fetch_manifest(fetch, homeurl)?;
     observe(&Progress::ManifestFetched { name });
     let (manifest, warnings) = manifest::parse(name, &manifest_bytes);
     warnings.iter().for_each(|w| log_warning(homeurl, w));
 
-    // 4. 差分（2.1〜2.6・1.16）。
     let target_real = fs::canonicalize(target).map_err(|source| {
         let path = target.to_path_buf();
         (Stage::Diff, FailReason::LocalUnreadable { path, source })
@@ -189,7 +187,6 @@ fn walk(
         });
     }
 
-    // 5. 作業場所（4.1）。
     let total = files.len();
     let created = WorkArea::create(target).map_err(|(path, source)| {
         let stage = Stage::Download { index: 0, total };
@@ -197,7 +194,7 @@ fn walk(
     })?;
     let area = slot.insert(created);
 
-    // 6. 1 件ずつ取得 → 照合 → 書く（4.2〜4.7）。バイト列は 1 件ごとに手放す。
+    // バイト列は 1 件ごとに手放す。
     for (index, &i) in need.iter().enumerate() {
         let entry = &manifest.entries[i];
         let file = entry.local.clone();
@@ -234,8 +231,7 @@ fn walk(
             .map_err(|(path, source)| (stage, FailReason::WorkArea { path, source }))?;
     }
 
-    // 7〜8. 定義ファイルを最後の 1 件として確定（5.1〜5.7）。
-    // 定義ファイルの書き込みは確定の準備なので、失敗は確定の段に数える。
+    // 定義ファイルを最後の 1 件として確定する。その書き込みは確定の準備なので、失敗は確定の段に数える。
     area.put(manifest.name.file_name(), &manifest_bytes)
         .map_err(|(path, source)| (Stage::Commit, FailReason::WorkArea { path, source }))?;
     let mut to_place = files;
@@ -264,7 +260,7 @@ fn walk(
         placed: placed.clone(),
     });
 
-    // 9. delete.txt（6.1〜6.7）。一周を失敗にしない。
+    // delete.txt は一周を失敗にしない。
     let report = delete::apply(target, &target_real, manifest.charset);
     report.warnings.iter().for_each(|w| log_warning(homeurl, w));
     for u in &report.undeletable {
@@ -280,7 +276,6 @@ fn walk(
         removed: report.removed.clone(),
     });
 
-    // 10. 片付け（4.8）。
     let leftovers = slot.take().map(WorkArea::cleanup).unwrap_or_default();
     leftovers.iter().for_each(|p| warn_leftover(homeurl, p));
     log_finished(
@@ -300,7 +295,7 @@ fn walk(
     })
 }
 
-/// `updates2.dau` → 「無い」ときだけ `updates.txt`（1.1〜1.3）。
+/// `updates2.dau` → 「無い」ときだけ `updates.txt`。
 fn fetch_manifest(fetch: &dyn Fetch, homeurl: &str) -> Result<(ManifestName, Vec<u8>), Failed> {
     for name in [ManifestName::Updates2Dau, ManifestName::UpdatesTxt] {
         match fetch.get(&format!("{homeurl}{}", name.file_name())) {
@@ -314,7 +309,7 @@ fn fetch_manifest(fetch: &dyn Fetch, homeurl: &str) -> Result<(ManifestName, Vec
     Err((Stage::Manifest, FailReason::ManifestMissing {}))
 }
 
-/// 警告 1 件を 1 行の `warn!` に写す（8.2）。`detail` は変種の欄を全部持つ。
+/// 警告 1 件を 1 行の `warn!` に写す。`detail` は変種の欄を全部持つ。
 fn log_warning(homeurl: &str, warning: &UpdateWarning) {
     let kind = match warning {
         UpdateWarning::HomeurlSlashAppended => "HomeurlSlashAppended",
@@ -333,7 +328,7 @@ fn log_warning(homeurl: &str, warning: &UpdateWarning) {
     );
 }
 
-/// 片付けられなかった残骸 1 件（4.8・8.2）。
+/// 片付けられなかった残骸 1 件。
 fn warn_leftover(homeurl: &str, path: &Path) {
     tracing::warn!(
         homeurl = %homeurl,
@@ -343,7 +338,7 @@ fn warn_leftover(homeurl: &str, path: &Path) {
     );
 }
 
-/// 成功の終了（8.3）。
+/// 成功の終了。
 fn log_finished(
     homeurl: &str,
     target: &Path,
@@ -363,8 +358,8 @@ fn log_finished(
     );
 }
 
-/// 失敗の記録を 1 回だけ出し、受け取った失敗をそのまま返す（8.1）。
-/// 失敗の終了はこの 1 行が兼ね、`info!` を重ねない（8.3）。
+/// 失敗の記録を 1 回だけ出し、受け取った失敗をそのまま返す。
+/// 失敗の終了はこの 1 行が兼ね、`info!` を重ねない。
 fn log_failure(err: UpdateError) -> UpdateError {
     tracing::error!(
         homeurl = %err.homeurl,

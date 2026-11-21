@@ -1,6 +1,6 @@
-// ===================== 全スレッド横断ログ捕捉（S7 支援・task 8.6） =====================
+// ===================== 全スレッド横断ログ捕捉（S7 支援） =====================
 //
-// `boot_gate skip_first_boot`（要件 3.3・areka-kanade/src/schedule/boot.rs）は **kanade アクター
+// `boot_gate skip_first_boot`（areka-kanade/src/schedule/boot.rs）は **kanade アクター
 // スレッド**上で発火するため、spine の kanade 統合テストが使う呼出スレッド局所の捕捉窓
 // （areka-ghost/src/test_log_capture.rs は lib 内 `#[cfg(test)]` ゆえ統合テストからは不可視・
 // かつスレッド局所）では捕えられない。本モジュールは共有 crate `log-capture-kit` の全スレッド
@@ -10,8 +10,7 @@
 //
 // フィルタ無しの capture-all ゆえ全 callsite の Interest は always に保たれ（`Never` 焼き付き
 // 不能）、他 e2e シナリオの意味論には一切干渉しない——バッファへ push するだけの観測系である。
-// 自前の `set_global_default` はもう持たない（spec: areka-P0-test-cage-determinism・要件 1.5／
-// 1.6／2.2）。他所が先に全体設定を置いていれば、窓口は黙って縮退せず明示的に panic する。
+// 自前の `set_global_default` は持たない。他所が先に全体設定を置いていれば、窓口は黙って縮退せず明示的に panic する。
 
 use std::sync::{Arc, Mutex};
 

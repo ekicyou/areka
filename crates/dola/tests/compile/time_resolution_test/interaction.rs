@@ -1,4 +1,4 @@
-//! Interaction between sequential and `at` placement, plus segment sorting.
+//! sequential と `at` 配置の相互作用、セグメントの並べ替え
 
 use super::*;
 

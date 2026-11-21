@@ -1,5 +1,4 @@
-//! `\![execute,install,path,パス]`・`\![execute,install,url,URL,nar]` の受け口（design「areka / 入口 /
-//! install_cue」・「`\![execute,install,url]`」・要件 1.5／1.6／1.7・6.1〜6.3）。
+//! `\![execute,install,path,パス]`・`\![execute,install,url,URL,nar]` の受け口。
 //!
 //! 骨格は `change_cue.rs` の受け口と同型。台本の演出は全員へ配られるので、ここで行うのは次の 2 つに
 //! 限る。
@@ -33,7 +32,7 @@ const SELECTOR_INSTALL: &str = "install";
 /// `url` の腕で取得を起こす口（本番は `fetch_url::spawn_download`・テストは偽の取得口を差す）。
 pub(crate) type StartFetch = Arc<dyn Fn(String, Sender<RawInstallRequest>) + Send + Sync>;
 
-/// `\![execute,install,…]` の受け口（design「install_cue」）。
+/// `\![execute,install,…]` の受け口。
 ///
 /// 配送は台本ごとに受け口を複製するため [`Clone`] が要る（どの複製も窓口の単一の受信端へ届く）。
 #[derive(Clone)]
@@ -56,7 +55,7 @@ impl InstallCueSink {
 
 /// 読み取りだけなら断りの記録だけを残す口、そうでなければ本物の取得（`fetch_url::spawn_download`）。
 ///
-/// 断りの口は要求を送らず、スレッドも起こさない＝ネットワークへ行かない（readonly-mode 要件 7.2）。
+/// 断りの口は要求を送らず、スレッドも起こさない＝ネットワークへ行かない。
 fn fetch_for(readonly: bool) -> StartFetch {
     if !readonly {
         return Arc::new(fetch_url::spawn_download);
@@ -73,7 +72,7 @@ fn fetch_for(readonly: bool) -> StartFetch {
 
 impl dola::cue::CueSink for InstallCueSink {
     fn emit(&mut self, cue: TalkCue) {
-        // 1) 開封。開封できない荷物は宛名で水準を分ける（自分宛の壊れ物は警告・他人宛は良性）。
+        // 開封できない荷物は宛名で水準を分ける（自分宛の壊れ物は警告・他人宛は良性）。
         let Some((name, params)) = cue.command.as_command_carrier() else {
             match &cue.command {
                 CueCommand::Custom { command, .. } if command == NAME_EXECUTE => warn!(
@@ -90,7 +89,6 @@ impl dola::cue::CueSink for InstallCueSink {
             return;
         };
 
-        // 2) 自己選別。担当は `("execute", "install")` の 1 組だけ。
         let selector = params.first().copied().unwrap_or_default();
         if (name, selector) != (NAME_EXECUTE, SELECTOR_INSTALL) {
             debug!(
@@ -100,7 +98,6 @@ impl dola::cue::CueSink for InstallCueSink {
             return;
         }
 
-        // 3) 引数の検査。断りはどれも `warn!` 1 件で何もしない。
         let arguments = &params[1..];
         let request = match script_request(arguments) {
             Ok(request) => request,
@@ -138,7 +135,7 @@ impl dola::cue::CueSink for InstallCueSink {
             }
         };
 
-        // 4) 読まない後ろの引数（`path` はパス、`url` は種別より後ろ）を記録する（要求は出す）。
+        // 読まない後ろの引数（`path` はパス、`url` は種別より後ろ）を記録する（要求は出す）。
         let read = match request {
             ScriptRequest::Path(_) => 2,
             ScriptRequest::Url(_) => 3,
@@ -151,7 +148,7 @@ impl dola::cue::CueSink for InstallCueSink {
             );
         }
 
-        // 5) 送り出し。`url` は取得のスレッドが落とし終えてから送る。受信端が閉じていても台本は殺さない。
+        // `url` は取得のスレッドが落とし終えてから送る。受信端が閉じていても台本は殺さない。
         let path = match request {
             ScriptRequest::Path(path) => path,
             ScriptRequest::Url(url) => return (self.start_fetch)(url, self.tx.clone()),

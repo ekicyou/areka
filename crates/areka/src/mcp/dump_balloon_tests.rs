@@ -1,7 +1,7 @@
 //! `dump_balloon` の決定論テスト。
 //!
 //! 結線状態の無い空の World で呼ぶと、その場で `NG:This ghost has no window`（isError: true・
-//! content は本文 1 つ）を返す（要件 4.5・4.8・7.5）。
+//! content は本文 1 つ）を返す。
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -36,7 +36,7 @@ fn answers_no_window_with_an_empty_world() {
 }
 
 /// 文字の層の無い 1×1 の仕事を UI 時間 1,234 µs で符号化のスレッドの体に通すと、成功の記録が 1 件で
-/// `ui_us` が 1234・`encode_us` が数として読める（要件 5.3・7.1）。
+/// `ui_us` が 1234・`encode_us` が数として読める。
 #[test]
 fn success_record_carries_ui_us_and_encode_us() {
     let job = balloon_job(0, vec![0, 0, 0, 0], (1, 1), None, None);

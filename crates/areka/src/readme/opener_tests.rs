@@ -1,5 +1,4 @@
-//! 開く処理の解決のテスト（areka-P0-open-external-tags task 3.1・要件 1.1〜1.4・2.1〜2.4・3.1・
-//! 4.1〜4.3・5.1・5.3・6.1・6.2・10.2）。
+//! 開く処理の解決のテスト。
 //!
 //! 行き先は本物の規則（`classify`）で台本のタグの形から作り、偽の境界と一時フォルダで
 //! 動詞・対象・引数・作業フォルダを判定する。OS は 1 度も呼ばない。
@@ -369,7 +368,7 @@ fn named_without_baseware_root_fails() {
 }
 
 /// 並びの 2 つ目の根のゴースト・バルーンも和で引け、フォルダ名は 1 つの規則（大文字小文字を
-/// 区別しない）で比べる（areka-P0-baseware-root-list 要件 2.6・2.8・3.5）。
+/// 区別しない）で比べる。
 #[test]
 fn named_ghost_and_balloon_from_second_root_match_folder_ignoring_case() {
     let (_tmp, mut ctx) = named_fixture();
@@ -389,8 +388,7 @@ fn named_ghost_and_balloon_from_second_root_match_folder_ignoring_case() {
     );
 }
 
-/// バルーンの名指しは今のゴーストの中も引き、同じ `name`・フォルダ名はゴーストの中が当たる
-/// （areka-P0-ghost-inner-balloon 要件 2.1・3.3・10.1）。
+/// バルーンの名指しは今のゴーストの中も引き、同じ `name`・フォルダ名はゴーストの中が当たる。
 #[test]
 fn named_balloon_finds_the_ghost_inner_first() {
     let (_tmp, ctx) = named_fixture();

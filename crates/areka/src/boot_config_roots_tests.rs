@@ -1,5 +1,4 @@
-//! 起動の鎖を 2 つの根の和の上で踏む（areka-P0-baseware-root-list タスク 3.2・要件 2.1・2.8・
-//! 4.1〜4.5・9.6・9.7・12.3）。
+//! 起動の鎖を 2 つの根の和の上で踏む。
 //!
 //! 確かめること: 既定ゴーストの採用・同梱のバルーンの引き当て・記憶のフォルダ名からの引き当て
 //! （大文字小文字だけ違う綴りでも当たる）・どの根にも無いときの今と同じ次の候補と記録（値は格納
@@ -190,7 +189,7 @@ fn memory_in_no_root_warns_with_store_list_and_falls_through() {
     assert_eq!(warned[0].level, tracing::Level::WARN);
 }
 
-/// 和にゴーストが 0 体 → 告知の場面は各根の `ghost\` の列を持つ（要件 9.6）。
+/// 和にゴーストが 0 体 → 告知の場面は各根の `ghost\` の列を持つ。
 #[test]
 fn no_ghost_in_any_root_carries_every_ghost_store() {
     let tmp = TempPath::under_target("cfg-roots-no-ghost");

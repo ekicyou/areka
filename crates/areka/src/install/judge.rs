@@ -1,4 +1,4 @@
-//! インストールの手続きの判断の分かれ目（design「areka / install / judge」）。
+//! インストールの手続きの判断の分かれ目。
 //!
 //! fs も World も読まない。`accept` の照合・宛先の種類・失敗理由の語・イベントの Reference の
 //! 組み立て・台本の引数の検査を、渡された値だけから決める。記録も出さない（出すのは呼び手）。
@@ -18,7 +18,7 @@ pub(crate) struct GhostFacts {
     pub roots: BasewareRoots,
     /// 根の下のフォルダ名（argv で根の外から起こしたゴーストは None）。
     pub folder: Option<String>,
-    /// 起動中のゴーストの場所（`folder` が在るときだけ・起動中のゴーストへの上書きの宛先・要件 8.7）。
+    /// 起動中のゴーストの場所（`folder` が在るときだけ・起動中のゴーストへの上書きの宛先）。
     pub running_dir: Option<std::path::PathBuf>,
     pub name: String,
     pub sakura_name: Option<String>,
@@ -36,7 +36,7 @@ pub(crate) enum AcceptVerdict {
 }
 
 /// `install.txt` の `accept` を、起動中のゴーストの `sakura.name` と `install.accept` の各名前に
-/// 完全一致（大文字小文字を区別）で照合する（要件 3.1・3.4・3.5・3.6）。
+/// 完全一致（大文字小文字を区別）で照合する。
 pub(crate) fn judge_accept(manifest: &InstallManifest, ghost: &GhostFacts) -> AcceptVerdict {
     let named = matches!(manifest.kind, InstallKind::Shell | InstallKind::Supplement);
     let Some(accept) = &manifest.accept else {
@@ -65,7 +65,7 @@ pub(crate) enum Destination {
     Elsewhere,
 }
 
-/// 宛先が起動中のゴーストのフォルダそのものか（要件 7.1・7.8）。
+/// 宛先が起動中のゴーストのフォルダそのものか。
 pub(crate) fn destination_of(manifest: &InstallManifest, ghost: &GhostFacts) -> Destination {
     let Some(folder) = &ghost.folder else {
         // argv で根の外から起こしたゴーストは根の下に居ない＝降ろして入れる一周へは入らない。
@@ -80,14 +80,14 @@ pub(crate) fn destination_of(manifest: &InstallManifest, ghost: &GhostFacts) -> 
     }
 }
 
-/// 正典の失敗理由の語（要件 5.3 の 3 値と、書けない失敗の `fileio`・write-failure-notice 要件 5.1）。
+/// 正典の失敗理由の語（3 値と、書けない失敗の `fileio`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FailureWord {
     Extraction,
     InvalidType,
     Unsupported,
     /// インストールの失敗理由の一覧に「書けない」の語が無いので、ukadoc の「ネットワーク失敗理由」の
-    /// `fileio` を借りる（`doc/COMPAT_ARCHITECTURE.md` §8）。
+    /// `fileio` を借りる（`doc/COMPAT_ARCHITECTURE.md`）。
     FileIo,
 }
 
@@ -103,7 +103,7 @@ impl FailureWord {
     }
 }
 
-/// `areka-nar` の失敗を正典の失敗理由の語へ写す（要件 5.2 の表）。
+/// `areka-nar` の失敗を正典の失敗理由の語へ写す。
 ///
 /// ワイルドカードの腕を置かない＝`areka-nar` の拒否の種類や読み書きの段が増えたらここでビルドが止まる。
 pub(crate) fn failure_word(error: &NarError) -> FailureWord {
@@ -136,7 +136,7 @@ pub(crate) fn failure_word(error: &NarError) -> FailureWord {
     }
 }
 
-/// 入れた物の識別子（正典の 4 語だけ・要件 2.5）。
+/// 入れた物の識別子（正典の 4 語だけ）。
 pub(crate) fn kind_word(kind: &ElementKind) -> &'static str {
     match kind {
         ElementKind::Ghost => "ghost",
@@ -159,7 +159,7 @@ fn join<'a>(values: impl Iterator<Item = &'a str>) -> String {
     values.collect::<Vec<_>>().join(SEPARATOR)
 }
 
-/// `OnInstallCompleteEx` の Reference0〜2（要件 2.4）。並びは `items` の順（本体が先・同梱バルーンが後）。
+/// `OnInstallCompleteEx` の Reference0〜2。並びは `items` の順（本体が先・同梱バルーンが後）。
 pub(crate) fn complete_ex_refs(items: &[InstalledItem]) -> Vec<String> {
     vec![
         join(items.iter().map(|item| item.kind)),
@@ -168,7 +168,7 @@ pub(crate) fn complete_ex_refs(items: &[InstalledItem]) -> Vec<String> {
     ]
 }
 
-/// `OnInstallComplete` の Reference0〜2（要件 2.6・12.7）。
+/// `OnInstallComplete` の Reference0〜2。
 ///
 /// 正典の旧仕様どおり、同時に入った物のうち先頭の 2 件だけを載せる（byte 値 1 で繋がない）。
 /// Reference0 は先頭の物（書庫の本体）の識別子で、同梱バルーンつきのゴーストでも `ghost`。
@@ -183,7 +183,7 @@ pub(crate) fn complete_legacy_refs(manifest_name: &str, items: &[InstalledItem])
     ]
 }
 
-/// `OnInstallRefuse` の Reference0〜2（`accept` の値・識別子・`install.txt` の `name`＝要件 3.2）。
+/// `OnInstallRefuse` の Reference0〜2（`accept` の値・識別子・`install.txt` の `name`）。
 pub(crate) fn refuse_refs(accept: &str, manifest: &InstallManifest) -> Vec<String> {
     let kind = match manifest.kind {
         InstallKind::Ghost => ElementKind::Ghost,
@@ -219,17 +219,17 @@ pub(crate) enum ScriptRefusal {
     Relative {
         path: String,
     },
-    /// URL が空か `http://`／`https://` で始まらない（要件 6.3）。
+    /// URL が空か `http://`／`https://` で始まらない。
     BadUrl {
         found: String,
     },
-    /// `url` の種別が `nar` でも省略でもない（`feed`・`homeurl`・`ical`・`ssf`・知らない語＝要件 6.2）。
+    /// `url` の種別が `nar` でも省略でもない（`feed`・`homeurl`・`ical`・`ssf`・知らない語）。
     UnsupportedKind {
         found: String,
     },
 }
 
-/// `\![execute,install,…]` の 2 番目以降の引数を `path` か `url` の腕へ分ける（要件 1.5〜1.7・6.1〜6.3）。
+/// `\![execute,install,…]` の 2 番目以降の引数を `path` か `url` の腕へ分ける。
 ///
 /// `path` の腕はパスより後ろ、`url` の腕は種別より後ろの引数を読まない（残っていれば受け口が
 /// 記録する）。`url` は種別を先に見る（種別と URL の両方が悪ければ種別の断り）。

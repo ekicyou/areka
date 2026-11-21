@@ -1,5 +1,4 @@
-//! 計画ができてから動作が終わるまで（[`display`]・[`finish`]・[`run_show`]）の決定論テスト
-//! （要件 1.1・1.4・1.7・1.10・6.5・7.2・7.4・8.1〜8.3・8.5）。
+//! 計画ができてから動作が終わるまで（[`display`]・[`finish`]・[`run_show`]）の決定論テスト。
 //!
 //! OS のメニューは出さない: 表示の関数は引数で差し替えられるので、呼ばれた値を書き留めて
 //! 決めた結果を返すだけの閉包を渡す。外側の World は本番と同じ `Rc<RefCell<EcsWorld>>` を
@@ -383,7 +382,7 @@ fn a_busy_outer_world_is_logged_and_runs_nothing() {
     assert!(f.calls().is_empty());
 }
 
-/// 表示中に届いた預かりは、World を借りられたどの終わり方でも捨てられ、送られない（要件 1.10）。
+/// 表示中に届いた預かりは、World を借りられたどの終わり方でも捨てられ、送られない。
 #[test]
 fn a_double_click_deferred_while_the_menu_was_open_is_dropped_on_every_exit() {
     for (name, outcome, window_gone) in exits() {
@@ -401,7 +400,7 @@ fn a_double_click_deferred_while_the_menu_was_open_is_dropped_on_every_exit() {
 }
 
 /// 表示中の印は表示の間も動作の間も立っていて、どの終わり方でも終わった後に降りている。
-/// 表示の間、外側の World は借りられていない（要件 7.2）。
+/// 表示の間、外側の World は借りられていない。
 #[test]
 fn the_in_flight_flag_covers_display_and_action_and_always_lowers() {
     for (name, outcome, window_gone) in exits() {

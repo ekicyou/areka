@@ -1,5 +1,5 @@
 // =============================================================================
-// ZOrderCueSink の自己選別と指令送出の決定論テスト（areka-P0-scope-zorder-pinning 要件 1.7／4.4／8.3／11.2）
+// ZOrderCueSink の自己選別と指令送出の決定論テスト
 //
 // この層が受け持つのは 2 つだけである——「自分宛のタグだけを拾うこと」と「拾ったものを
 // 解釈せずそのまま送ること」。ゆえに檻も 2 方向から挟む: 受理する 2 組は指令が出ること、
@@ -10,8 +10,7 @@
 // おき**、惜しい組を浴びせた後で受け口の中身がその 1 本ちょうどであることを確かめる形に
 // してある（受け口そのものが壊れていれば先の 1 本が届かず赤くなる）。
 //
-// ログ捕捉は硬化機構の唯一の定義元 `log-capture-kit` の捕捉窓へ委譲する
-// （`move_cue_move_severity_log_tests.rs` と同じ流儀。機序の解説は同ファイル冒頭）。
+// ログ捕捉は `move_cue_move_severity_log_tests.rs` と同じく `log-capture-kit` の捕捉窓へ委譲する。
 // =============================================================================
 
 use super::*;
@@ -105,9 +104,9 @@ fn t_zcs3_tokens_are_forwarded_verbatim_without_interpretation() {
     );
 }
 
-// ---------------------------------------------------------------- areka-P0-scope-zorder-pinning 要件 1.7
+// ---------------------------------------------------------------- 実行スコープを読まない
 
-/// **areka-P0-scope-zorder-pinning 要件 1.7**: タグを実行したスコープを読まない。実行スコープの値を変えても、
+/// タグを実行したスコープを読まない。実行スコープの値を変えても、
 /// 送り出される指令は 1 バイトも変わらない（`MoveCueSink` との意図的な差はここ）。
 #[test]
 fn t_zcs4_executing_scope_does_not_change_the_directive() {
@@ -144,7 +143,7 @@ fn t_zcs4_executing_scope_does_not_change_the_directive() {
     }
 }
 
-/// areka-P0-scope-zorder-pinning 要件 1.7 を字面からも押さえる: 本番コードは実行スコープの欄（`cue.actor`）を読まない。
+/// 実行スコープを読まないことを字面からも押さえる: 本番コードは実行スコープの欄（`cue.actor`）を読まない。
 ///
 /// 振る舞いの檻（`t_zcs4`）だけでは足りない。`let _executing_scope = cue.actor.as_str();`
 /// のように**振る舞いを 1 つも変えない**読み取りを足すと、振る舞い側の檻は全て緑のまま
@@ -173,7 +172,7 @@ fn t_zcs5_production_code_never_reads_the_executing_scope() {
 
 // ---------------------------------------------------------------- 惜しい組
 
-/// **areka-P0-scope-zorder-pinning 要件 4.4／11.2**: 名前が合っていても選別子が違えば担当外——1 本も送らず、
+/// 名前が合っていても選別子が違えば担当外——1 本も送らず、
 /// 受け口の中身は先に流した 1 本のままである（＝重なりの状態を変えていない）。
 #[test]
 fn t_zcs6_near_miss_selectors_send_nothing() {
@@ -204,7 +203,7 @@ fn t_zcs6_near_miss_selectors_send_nothing() {
     );
 }
 
-/// **areka-P0-scope-zorder-pinning 要件 11.2**: 担当外のコマンド名は、第 1 引数が `zorder` であっても読み飛ばす
+/// 担当外のコマンド名は、第 1 引数が `zorder` であっても読み飛ばす
 /// （`\![move,zorder,…]` のような綴りを横取りしない）。
 #[test]
 fn t_zcs7_other_command_names_send_nothing_even_with_the_zorder_selector() {
@@ -323,9 +322,9 @@ fn t_zcs11_addressee_alone_decides_the_severity() {
     );
 }
 
-// ---------------------------------------------------------------- areka-P0-scope-zorder-pinning 要件 8.3
+// ---------------------------------------------------------------- 黙って諦めない
 
-/// **areka-P0-scope-zorder-pinning 要件 8.3**: 読み飛ばすどの経路でも、理由を残さないまま黙って諦めない。
+/// 読み飛ばすどの経路でも、理由を残さないまま黙って諦めない。
 #[test]
 fn t_zcs12_every_skip_leaves_a_record() {
     let mut skipped: Vec<TalkCue> = vec![
@@ -368,7 +367,7 @@ fn t_zcs13_reset_with_trailing_tokens_is_still_reset_and_is_recorded() {
 ///
 /// 旗はプロセスで 1 組しか無く areka のテストは並列に走るので、動的に読むと他のテストの
 /// 巻き添えで揺れる（`tick_gate_config_producers_tests.rs` は「立っていないはず」を主張
-/// しない、と明記している）。テストの独立性（areka-P0-scope-zorder-pinning 要件 10.3）を壊さずに置き場所を固定するため、
+/// しない、と明記している）。テストの独立性を壊さずに置き場所を固定するため、
 /// ここではコメントを除いたソース上の**前後関係**を主張する。
 ///
 /// 「字面が在る」だけでは足りない。旗を `emit` の先頭（自己選別より前）へ持ち上げた実装は、

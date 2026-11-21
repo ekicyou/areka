@@ -1,4 +1,4 @@
-//! 厳格な起動の入口と起動入力の作り口の決定論テスト（areka-P0-ghost-shell-balloon-switch task 6.3）。
+//! 厳格な起動の入口と起動入力の作り口の決定論テスト。
 
 use areka_kanade::{BootOrigin, ChangedFrom};
 
@@ -61,7 +61,7 @@ fn fallback_attempts(events: &[log_capture_kit::CapturedEvent]) -> usize {
         .count()
 }
 
-/// 厳格な入口（要件 6.1）: 結線が成立しなければ `Err` を返し、fallback の骨格を起こさない。
+/// 厳格な入口: 結線が成立しなければ `Err` を返し、fallback の骨格を起こさない。
 ///
 /// 対照として同じ入力を今日どおりの入口（[`boot_ghost`]）へ通すと fallback の腕へ倒れ、
 /// LogSink の起動を試みた記録が 1 件残る——厳格な入口ではそれが 0 件で、結線ありの腕が挿す
@@ -129,14 +129,14 @@ fn strict_boot_returns_err_without_falling_back() {
 }
 
 /// 作り口（[`GhostBootInputsSource`]）に渡した由来が、起動の結線の入力（`RuntimeInputs`）へ
-/// そのまま載る（要件 8.6）。本番の組み立て（[`GhostBootInputs::production`]）を閉じた作り口で、
+/// そのまま載る。本番の組み立て（[`GhostBootInputs::production`]）を閉じた作り口で、
 /// 3 つの由来をそれぞれ通す。
 #[test]
 fn origin_given_to_source_reaches_wiring_inputs() {
     let (kanade_stop, _rx) = mpsc::channel::<KanadeNotice>();
     let helper_exe = PathBuf::from("ghost_session_strict_tests/使わない/helper.exe");
     let source = GhostBootInputsSource(Box::new(move |cfg, origin| {
-        // 置き場は `None`（本物の環境で置き場を決めない・user-data-root 要件 10.6）。
+        // 置き場は `None`（本物の環境で置き場を決めない）。
         GhostBootInputs::production(
             cfg,
             helper_exe.clone(),
@@ -171,7 +171,7 @@ fn origin_given_to_source_reaches_wiring_inputs() {
     assert_eq!(carried, origins, "作り口に渡した由来が結線の入力へ載らない");
 }
 
-/// LogSink へ倒れた旗（要件 4.1・4.2・4.7・4.8）: 旗が立つのは fallback の腕だけで、倒れた先の
+/// LogSink へ倒れた旗: 旗が立つのは fallback の腕だけで、倒れた先の
 /// 起動の成否を問わない。結線ありの腕（切替の経路と同じ `boot_wired`）とテスト用の組み立ては偽。
 ///
 /// 倒れた先が成功する形は、ゴーストの根は本物・バルーンの根だけが無い入力で作る（結線は資産の

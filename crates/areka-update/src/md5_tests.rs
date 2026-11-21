@@ -1,4 +1,4 @@
-//! RFC 1321 A.5 のベクトルで CNG の MD5 を較正する（要件 10.3）。
+//! RFC 1321 A.5 のベクトルで CNG の MD5 を較正する。
 use super::md5_hex;
 
 #[test]

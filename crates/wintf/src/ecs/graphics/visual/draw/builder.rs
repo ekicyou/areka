@@ -41,7 +41,7 @@ pub(crate) enum TreeFrame<'a> {
 /// 世界の値（DIP）を自分の描画面の物理ピクセルへ写す（拡大と平行移動なので軸に沿うかは変わらない）。
 /// 原点は物理で引く: 拡大を掛けた位置から整数を引いた値は（描画面の中の位置なら）f32 で丸まらないので、
 /// 装置の座標が親の描画面の中で描くときのちょうど整数ずれた値になる（DIP で `px / 拡大` を引くと割り切れずに 1e-7 ずれ、被覆の標本に
-/// ちょうど乗る端数で画素が変わる・研究 R-e）。
+/// ちょうど乗る端数で画素が変わる）。
 fn shift_world(w: &WorldVisual, m: Matrix3x2) -> WorldVisual {
     WorldVisual {
         world_mat: w.world_mat * m,
@@ -74,13 +74,13 @@ enum ClipKind {
 /// - `frame`: 組む木の枠（`TreeFrame`）。`Root` の根が自分の `VisualDrawContent` を持てば
 ///   （節から昇格した持ち主）、それを先頭の 1 件として恒等の行列（根の局所の DIP）で出す（子より前・間引かない）。
 ///   `Segment` は根の中身を出さず、`visited` の先頭の自動の持ち主自身から節と同じ命令を出し、
-///   全部の世界の行列と外接矩形を自分の描画面の物理ピクセルへ写す（2.7, 3.2）。`viewport` は自分の描画面の
+///   全部の世界の行列と外接矩形を自分の描画面の物理ピクセルへ写す。`viewport` は自分の描画面の
 ///   矩形（物理・原点から）で、列は根の変換を恒等にして再生する（拡大はもう行列に入っている）。
 ///
 /// 不透明度が 1.0 未満の節は、部分木の世界の外接矩形と外側の有効な矩形の交わりを範囲として
-/// `PushOpacity` を切り抜きより外側に積み、同じ深さで閉じる。範囲が空なら部分木を間引く（2.1, 2.3〜2.5）。
+/// `PushOpacity` を切り抜きより外側に積み、同じ深さで閉じる。範囲が空なら部分木を間引く。
 ///
-/// 切り抜きの図形を作れないか外接矩形を取れない節は `error!`（実体・HRESULT）を残し、子孫ごと飛ばす（5.1, 5.2）。
+/// 切り抜きの図形を作れないか外接矩形を取れない節は `error!`（実体・HRESULT）を残し、子孫ごと飛ばす。
 ///
 /// 間引きは性能のため（D2D の切り抜きが既に正しく切る）。間引いた列は viewport に依る。
 pub(crate) fn build(
@@ -180,7 +180,7 @@ pub(crate) fn build(
             Ok(ClipKind::NoClip) => (None, eff),
             Ok(ClipKind::Clip { push, pop, new_eff }) => (Some((push, pop)), new_eff),
         };
-        // 不透明度の層は切り抜きの外側（根は訪れないので出ない・6.3）。
+        // 不透明度の層は切り抜きの外側（根は訪れないので出ない）。
         let opacity = visual.clamped_opacity();
         if opacity < 1.0 {
             let world_aabb = world.subtree_world_aabb.intersect(eff);
@@ -323,7 +323,7 @@ fn geometry_bounds(g: &ID2D1Geometry, m: &Matrix3x2) -> windows::core::Result<Aa
     Ok(Aabb::new_rect(unsafe { g.GetBounds(Some(m as *const _)) }?))
 }
 
-/// 描く 1 件の同一性（4.5）。実体・見た目の版・補間・混ぜ方（種類と値）・世界の行列から取り、COM の番地は使わない。
+/// 描く 1 件の同一性。実体・見た目の版・補間・混ぜ方（種類と値）・世界の行列から取り、COM の番地は使わない。
 /// 小数は `CalcHash` で正規化する。`DefaultHasher::new()` は鍵が固定なので回をまたいで同じ値になる。
 pub(crate) fn hash_draw(
     entity: Entity,
