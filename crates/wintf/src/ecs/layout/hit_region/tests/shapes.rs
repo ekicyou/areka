@@ -4,7 +4,7 @@ use super::super::*;
 // Shapes 退化サイズ テスト
 // ========================================================================
 
-/// 退化 entity_size（幅0）でも Shapes 判定がパニックせず None を返す（W4b-T）
+/// 退化 entity_size（幅0）でも Shapes 判定がパニックせず None を返す
 ///
 /// `local_x = rel_x * entity_size.width` が 0 に潰れるため、原点を含まない矩形では
 /// 領域ヒットしない。ゼロ除算・パニックを起こさないことを特性化する。
@@ -139,7 +139,6 @@ fn test_shapes_first_match_wins() {
         width: 100.0,
         height: 100.0,
     };
-    // 両方の領域内 → 先に定義された "first" が返る
     assert_eq!(map.hit_test_region(0.5, 0.5, &entity_size), Some("first"));
 }
 
@@ -158,12 +157,10 @@ fn test_shapes_mixed_rect_polygon() {
         width: 100.0,
         height: 100.0,
     };
-    // 矩形内 → "rect_region"
     assert_eq!(
         map.hit_test_region(0.25, 0.25, &entity_size),
         Some("rect_region")
     );
-    // 多角形内 → "poly_region"
     assert_eq!(
         map.hit_test_region(0.75, 0.25, &entity_size),
         Some("poly_region")
@@ -181,7 +178,6 @@ fn test_shapes_no_region_hit() {
         width: 100.0,
         height: 100.0,
     };
-    // すべての領域外
     assert_eq!(map.hit_test_region(0.01, 0.01, &entity_size), None);
 }
 
@@ -213,7 +209,7 @@ fn test_error_display() {
 }
 
 // ========================================================================
-// 整数境界・極値座標の特性化テスト（W4b-V）— Shapes 分岐
+// 整数境界・極値座標の特性化テスト— Shapes 分岐
 // ========================================================================
 
 /// Shapes 分岐の極値正規化座標もパニックしないこと（local 座標が極大/非有限でも
@@ -228,9 +224,7 @@ fn test_shapes_extreme_and_nonfinite_rel_do_not_panic() {
         width: 100.0,
         height: 100.0,
     };
-    // 極大座標 → 矩形外 → None
     assert_eq!(map.hit_test_region(1e10, 1e10, &entity_size), None);
-    // 負座標 → 矩形外 → None
     assert_eq!(map.hit_test_region(-1e10, -1e10, &entity_size), None);
     // NaN → すべての比較が false → None（パニックなし）
     assert_eq!(map.hit_test_region(f32::NAN, f32::NAN, &entity_size), None);

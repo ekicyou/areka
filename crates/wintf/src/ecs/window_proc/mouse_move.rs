@@ -68,29 +68,25 @@ pub(super) fn WM_NCHITTEST(
 ) -> HandlerResult {
     use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 
-    // スクリーン座標を取得（lparam から）
     let x = (lparam.0 & 0xFFFF) as i16 as i32;
     let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
 
-    // クライアント領域判定用に座標変換（クライアント領域外はDefWindowProcWに委譲）
     unsafe {
         use windows::Win32::Graphics::Gdi::ScreenToClient;
         let mut pt = POINT { x, y };
         if !ScreenToClient(hwnd, &mut pt).as_bool() {
-            return None; // DefWindowProcW に委譲
+            return None;
         }
 
-        // クライアント領域外の場合は DefWindowProcW に委譲
         let mut rect = RECT::default();
         if GetClientRect(hwnd, &mut rect).is_err() {
             return None;
         }
         if pt.x < rect.left || pt.x >= rect.right || pt.y < rect.top || pt.y >= rect.bottom {
-            return None; // DefWindowProcW に委譲（非クライアント領域処理）
+            return None;
         }
     }
 
-    // キャッシュ付きヒットテスト実行
     crate::ecs::pointer::nchittest_cache::cached_nchittest(hwnd, (x, y), entity, world)
 }
 
@@ -173,24 +169,20 @@ pub(super) fn WM_MOUSEMOVE(
 
     track_mouse_leave(hwnd);
 
-    // 位置取得（物理ピクセル、クライアント座標）
     let x = (lparam.0 & 0xFFFF) as i16 as i32;
     let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
 
     tracing::trace!("[WM_MOUSEMOVE] Received: x={}, y={}", x, y);
 
-    // 修飾キー状態を抽出
     let wparam_val = wparam.0 as u32;
     let shift = (wparam_val & 0x04) != 0; // MK_SHIFT
     let ctrl = (wparam_val & 0x08) != 0; // MK_CONTROL
 
-    // World借用してhit_testとPointerState管理
     // ドラッグ中のSetWindowPosはWorld借用外で実行する（WM_WINDOWPOSCHANGED同期発火対策）
     let mut deferred_set_window_pos: Option<(HWND, i32, i32)> = None;
 
     {
         if let Ok(mut world_borrow) = world.try_borrow_mut() {
-            // hit_test でヒットしたエンティティを取得
             let hit_entity = hit_test_in_window(
                 world_borrow.world(),
                 window_entity,
@@ -201,8 +193,7 @@ pub(super) fn WM_MOUSEMOVE(
             let (screen_x, screen_y) =
                 super::mouse_click::screen_point(world_borrow.world(), window_entity, x, y);
 
-            // ドラッグ処理（thread_local DragState + DragAccumulatorResource）
-            // ヒットテスト結果に関わらず、Preparing/Dragging状態なら処理を続ける
+            // ヒットテスト結果に関わらず、Preparing/Dragging 状態なら処理を続ける
             let state_snapshot = crate::ecs::drag::snapshot_drag_state();
 
             match state_snapshot {
@@ -221,10 +212,8 @@ pub(super) fn WM_MOUSEMOVE(
 
                             if crate::ecs::drag::check_threshold(current_pos, drag_config.threshold)
                             {
-                                // 閾値到達：Dragging状態に遷移
                                 crate::ecs::drag::start_dragging(current_pos);
 
-                                // DragAccumulatorResourceにStarted遷移を記録
                                 if let Some(accumulator) = world_borrow
                                     .world()
                                     .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
@@ -254,7 +243,6 @@ pub(super) fn WM_MOUSEMOVE(
                 } => {
                     let current_pos = crate::ecs::pointer::PhysicalPoint::new(screen_x, screen_y);
 
-                    // ドラッグ中：デルタを累積
                     let delta = crate::ecs::pointer::PhysicalPoint::new(
                         current_pos.x - prev_pos.x,
                         current_pos.y - prev_pos.y,
@@ -268,7 +256,6 @@ pub(super) fn WM_MOUSEMOVE(
                         current_pos.y
                     );
 
-                    // DragAccumulatorResourceにデルタを累積
                     if let Some(accumulator) = world_borrow
                         .world()
                         .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
@@ -277,15 +264,13 @@ pub(super) fn WM_MOUSEMOVE(
                         accumulator.update_position(current_pos);
                     }
 
-                    // thread_local DragStateのprev_posを更新
                     let ctx_res = world_borrow
                         .world()
                         .get_resource::<crate::ecs::drag::WindowDragContextResource>();
                     crate::ecs::drag::update_dragging(current_pos, ctx_res);
 
-                    // WndProcレベル直接SetWindowPos（ECSパイプラインバイパス）
-                    // NOTE: SetWindowPosはWM_WINDOWPOSCHANGEDを同期発火し、そこで
-                    // World borrowが必要になるため、借用スコープ外に遅延実行する
+                    // ECS パイプラインを通さず直接 SetWindowPos する。SetWindowPos は WM_WINDOWPOSCHANGED を
+                    // 同期発火し、そこで World の借用が要るため、借用スコープの外へ遅らせる
                     if move_window {
                         // 始めの値は ECS の DraggingState が正本（拡大率の変化で掴んだ点を置き直せる）
                         let live = world_borrow
@@ -296,7 +281,6 @@ pub(super) fn WM_MOUSEMOVE(
                         let mut new_x = initial_window_pos.x + (current_pos.x - start_pos.x);
                         let mut new_y = initial_window_pos.y + (current_pos.y - start_pos.y);
 
-                        // DragConstraint 適用
                         if let Some(ref c) = constraint {
                             let (cx, cy) = c.apply(new_x, new_y);
                             new_x = cx;
@@ -353,7 +337,6 @@ pub(super) fn WM_MOUSEMOVE(
                 false
             };
 
-            // PointerStateが存在することを保証した上で、バッファに蓄積
             if target_alive {
                 push_pointer_sample(target_entity, crate::ecs::pointer::PhysicalPoint::new(x, y));
                 set_modifier_state(target_entity, shift, ctrl);
@@ -361,9 +344,7 @@ pub(super) fn WM_MOUSEMOVE(
         }
     }
 
-    // World借用解放後にSetWindowPosを実行
-    // これにより同期発火するWM_WINDOWPOSCHANGEDがWorldを借用でき、
-    // WindowPos.positionが正しく更新される
+    // SetWindowPos が同期発火する WM_WINDOWPOSCHANGED が World を借用できるよう、借用を返した後に実行する
     if let Some((drag_hwnd, new_x, new_y)) = deferred_set_window_pos {
         // SAFETY: Win32 境界。借用を返した後に窓の位置だけを書く。
         if let Err(e) = unsafe {
@@ -440,9 +421,6 @@ mod tests {
     use crate::ecs::window::Window;
     use bevy_ecs::hierarchy::ChildOf;
     use bevy_ecs::prelude::*;
-
-    // collect_entities_to_leave は World ベース（query + find_owner_window）でデバイス非依存。
-    // 当該ウィンドウ所属 / exclude 除外 / 他ウィンドウ保護 / PointerState 不在スキップ を特性化する。
 
     fn spawn_window(world: &mut World, title: &str) -> Entity {
         world

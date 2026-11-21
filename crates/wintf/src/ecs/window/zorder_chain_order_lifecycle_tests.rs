@@ -1,5 +1,5 @@
 //! 所有の鎖の**出入り**を実窓で固定するテスト——解除・スプライス（差し込みと抜去）・
-//! 破棄の非連動（要件 4.1／4.2／6.3／7.1／7.2／11.5／15.4）。
+//! 破棄の非連動。
 //!
 //! 兄弟の [`zorder_chain_order_tests`](super::zorder_chain_order_tests) は
 //! 「鎖が**成立して崩れない**」側を固定する。本ファイルが受け持つのはその反対側
@@ -19,12 +19,12 @@
 //! ```
 //!
 //! - **ペア edge**（`b0 ← s0`）は既存のペア機構（[`establish_owner_links`]）が張る。
-//!   本 spec は 1 本も触らない（design.md「Out of Boundary」）。
-//! - **横断 edge**（`s0 ← b1`）だけが本 spec の担当であり、
+//!   このスコープの鎖は 1 本も触らない。
+//! - **横断 edge**（`s0 ← b1`）だけが鎖の担当であり、
 //!   [`apply_zorder_chain`] が張る。
 //!
 //! したがって本ファイルの schedule は本番の順序（確立系 → 層の適用 → ペア維持 → 鎖の適用系）
-//! のうち**確立系 → 鎖の適用系**の 2 つの本番 system を、同じ前後で回す。ペア機構を替え玉にしないのは、要件 6.3
+//! のうち**確立系 → 鎖の適用系**の 2 つの本番 system を、同じ前後で回す。ペア機構を替え玉にしないのは、
 //! 「バルーンがキャラ窓の直上をグループ指定の有無にかかわらず保つ」が、
 //! **本物のペア edge の上でしか検査できない**主張だからである。
 //!
@@ -37,7 +37,7 @@
 //! **この列の中の位置の差が 1 であること**として言う（[`balloon_offsets`]）。
 //! 生の 1 歩で測ると不可視の隣が偽の失敗を記録する。
 //!
-//! # 刺激には必ず「届いたこと」の自己検査を両側から挟む（兄弟 4.1 の教訓）
+//! # 刺激には必ず「届いたこと」の自己検査を両側から挟む
 //!
 //! 本ファイルの 3 本はいずれも**刺激**（解除する・窓が入って出る・窓を壊す）を中心に置く。
 //! 健全な状態では刺激の前後で**重なりの列が同一**になることがあり、事後の主張だけでは
@@ -53,7 +53,7 @@
 //! # 主張しないこと
 //!
 //! **鎖と、鎖の外に居る窓との前後関係は主張しない。** 鎖は 1 つの塊として動き、鎖の外の窓を
-//! 追い越すことがある（`research.md` §12.5）。鎖から抜けたスコープについて固定するのは
+//! 追い越すことがある。鎖から抜けたスコープについて固定するのは
 //! **所有関係**（ペア edge が無傷であること）だけで、重なりの位置は測らない。
 
 use bevy_ecs::prelude::*;
@@ -157,7 +157,7 @@ fn publish_scope_chain(world: &mut World, order: &[Scope]) -> Vec<Entity> {
     members
 }
 
-/// すべてのグループが解除された状態を公開する（要件 4.1／4.2／15.4）。
+/// すべてのグループが解除された状態を公開する。
 ///
 /// 望む鎖そのものが無くなる＝**既定状態への復帰**である。適用系は帳簿の全件を撤去し、
 /// 鎖が空なので後押しも出さない（＝並べ替えを起こす経路が無い）。
@@ -189,12 +189,12 @@ pub(super) fn scope_chain_schedule() -> Schedule {
 }
 
 // ---------------------------------------------------------------------------
-// 測り方（順序で測る・要件 6.3 の「直上」もこの列の中で言う）
+// 測り方（順序で測る・「直上」もこの列の中で言う）
 // ---------------------------------------------------------------------------
 
 /// 各スコープについて「キャラ窓の位置 − バルーン窓の位置」を返す。
 ///
-/// `Some(1)` が**バルーンがキャラ窓の直上**である（要件 6.3）。どちらかが列に居なければ
+/// `Some(1)` が**バルーンがキャラ窓の直上**である。どちらかが列に居なければ
 /// `None`。列（[`z_shape`]）には不可視の窓が 1 枚も混じらないので、この差はそのまま
 /// 「間に可視の窓が何枚あるか＋1」を意味する（module doc「測り方の但し書き」）。
 pub(super) fn balloon_offsets(shape: &[usize], scope_count: usize) -> Vec<Option<isize>> {
@@ -228,19 +228,18 @@ fn is_window(hwnd: HWND) -> bool {
 
 // ===========================================================================
 // ⑴ 解除——横断 edge の撤去だけで束縛が消え、並べ替えは起きない
-//    （要件 4.1／4.2／6.3／15.4）
 // ===========================================================================
 
-/// 全グループを解除すると、本 spec が張った繋ぎだけが外れ、重なりは 1 枚も動かない。
+/// 全グループを解除すると、鎖が張った繋ぎだけが外れ、重なりは 1 枚も動かない。
 ///
-/// 解除の実測（`research.md` §12.1 の最終行）は「鎖を外しても並べ替えは起きない
+/// 解除の実測は「鎖を外しても並べ替えは起きない
 /// ——束縛が消えるだけ」である。適用系はこのとき後押しを 1 度も出さない（鎖が空なので
 /// 出す相手が居ない）ので、並べ替えを起こす経路そのものが無い。
 ///
 /// # 何を「既定状態の復元」と呼ぶか
 ///
-/// ⑴ 本 spec の帳簿が空になり、⑵ 横断 edge の所有関係が OS 上でも消え、
-/// ⑶ **ペア edge は 1 本も欠けない**（要件 6.3 はグループ指定の有無にかかわらず成立する）、
+/// ⑴ 鎖の帳簿が空になり、⑵ 横断 edge の所有関係が OS 上でも消え、
+/// ⑶ **ペア edge は 1 本も欠けない**（グループ指定の有無にかかわらず成立する）、
 /// ⑷ そのうえで重なりは動かない——の 4 つである。
 ///
 /// # 刺激が届いたことを両側から挟む
@@ -253,9 +252,7 @@ fn is_window(hwnd: HWND) -> bool {
 /// 2. **束縛が本当に消えたこと**——解除の後で最奥のキャラ窓を最前面へ持ち上げると、
 ///    今度は**そのスコープが手前へ出る**。同じ攪乱を鎖が生きている間に当てても順は
 ///    動かない（兄弟テストの中心的主張）ので、この 1 行が「もう縛られていない」ことの
-///    直接の証拠になる。**これは要件の主張ではない**——既定状態が非強制であること
-///    （要件 6.1／6.2）の固定は兄弟 task の担当であり、ここでは刺激の自己検査として
-///    のみ読む。
+///    直接の証拠になる。刺激の自己検査としてのみ読む。
 #[test]
 fn releasing_every_group_drops_only_the_cross_links_and_reorders_nothing() {
     const SCOPES: usize = 2;
@@ -264,7 +261,6 @@ fn releasing_every_group_drops_only_the_cross_links_and_reorders_nothing() {
     let all_visible = set.iter().all(|h| is_visible(*h));
     let mut schedule = scope_chain_schedule();
 
-    // 助走——宣言の逆順から始める（全枚数が動かなければ宣言順へ着かない）。
     arrange_z(&set, &reversed(set.len()));
     let start = z_shape(&set);
 
@@ -276,7 +272,6 @@ fn releasing_every_group_drops_only_the_cross_links_and_reorders_nothing() {
     let ledger_before = ledger_shape(&mut world, &members);
     let pairs_before = balloon_offsets(&landed, SCOPES);
 
-    // 刺激——全グループの解除（descript 由来の基底も無い＝既定状態へ戻る・要件 4.2）。
     publish_released(&mut world);
     schedule.run(&mut world);
 
@@ -333,7 +328,6 @@ fn releasing_every_group_drops_only_the_cross_links_and_reorders_nothing() {
         "解除の前に本 spec の帳簿が横断 edge 1 本を持っていない（この比較の前提）"
     );
 
-    // 解除の結果——横断 edge だけが消え、ペア edge は無傷（要件 4.1／6.3）。
     assert_eq!(
         owners_after,
         vec![Some(1), None, Some(3), None],
@@ -344,13 +338,12 @@ fn releasing_every_group_drops_only_the_cross_links_and_reorders_nothing() {
         "解除の後も本 spec の帳簿に繋ぎが残っている: {ledger_after:?}"
     );
 
-    // 並べ替えは起きない（要件 4.1 の実測・§12.1 最終行）。
     assert_eq!(
         after_release, landed,
         "解除しただけで重なりが動いた（束縛が消えるだけのはずである）: {after_release:?}"
     );
 
-    // バルーンがキャラ窓の直上——解除の前後で保たれる（要件 6.3）。
+    // バルーンがキャラ窓の直上——解除の前後で保たれる。
     assert_eq!(
         pairs_before,
         vec![Some(1); SCOPES],
@@ -381,12 +374,12 @@ fn releasing_every_group_drops_only_the_cross_links_and_reorders_nothing() {
 }
 
 // ===========================================================================
-// ⑵ 出入り——後から現れたスコープが鎖の途中へ入り、抜けると元へ戻る（要件 7.1／6.3）
+// ⑵ 出入り——後から現れたスコープが鎖の途中へ入り、抜けると元へ戻る
 // ===========================================================================
 
 /// 後から現れたスコープが鎖の**途中**へ差し込まれ、取り下げると元の並びへ戻る。
 ///
-/// 手順は実測（`research.md` §12.4）どおり——**切る 1 本 → 張る 2 本 → 後押し 1 回**。
+/// 手順は実測どおり——**切る 1 本 → 張る 2 本 → 後押し 1 回**。
 /// 適用系がこれを差分から自分で導く（撤去がすべて先・付与がすべて後）。
 ///
 /// # 差し込む位置は末尾ではなく「途中」
@@ -402,8 +395,8 @@ fn releasing_every_group_drops_only_the_cross_links_and_reorders_nothing() {
 ///
 /// # 鎖から抜けたスコープについて主張すること／しないこと
 ///
-/// 抜けたスコープには**ペア edge が無傷で残る**ことだけを所有関係で主張する（要件 6.3）。
-/// 鎖の外に居る窓と鎖との重なりの前後は要件が縛っていないので測らない
+/// 抜けたスコープには**ペア edge が無傷で残る**ことだけを所有関係で主張する。
+/// 鎖の外に居る窓と鎖との重なりの前後は縛っていないので測らない
 /// （module doc「主張しないこと」）。
 #[test]
 fn a_late_scope_splices_into_the_middle_of_the_chain_and_leaves_it_unchanged_on_withdrawal() {
@@ -425,14 +418,12 @@ fn a_late_scope_splices_into_the_middle_of_the_chain_and_leaves_it_unchanged_on_
     set.extend_from_slice(&late_set);
     let owners_before_splice = owner_shape(&set);
 
-    // 刺激①——スコープ 0 と 1 の**間**へ差し込む。
     publish_scope_chain(&mut world, &[scopes[0], late_scopes[0], scopes[1]]);
     schedule.run(&mut world);
     let spliced = z_shape(&set);
     let owners_spliced = owner_shape(&set);
     let pairs_spliced = balloon_offsets(&spliced, 3);
 
-    // 刺激②——取り下げ（後から現れたスコープが鎖から抜ける）。
     let members_after = publish_scope_chain(&mut world, &scopes);
     schedule.run(&mut world);
     let chain_set: Vec<HWND> = set[..4].to_vec();
@@ -466,7 +457,6 @@ fn a_late_scope_splices_into_the_middle_of_the_chain_and_leaves_it_unchanged_on_
         "差し込みの前の所有関係が前提どおりでない（新しいスコープはまだ鎖にも居ない）"
     );
 
-    // 差し込みの結果——鎖の途中へ入る（要件 7.1）。
     assert_eq!(
         owners_spliced,
         vec![Some(1), Some(4), Some(3), None, Some(5), Some(2)],
@@ -479,7 +469,7 @@ fn a_late_scope_splices_into_the_middle_of_the_chain_and_leaves_it_unchanged_on_
     );
 
     // 刺激②が届いたことの自己検査を兼ねた結果——`s0` の owner が `b2` から `b1` へ戻り、
-    // 抜けたスコープのペア edge は無傷（要件 6.3）、その横断 edge だけが消える。
+    // 抜けたスコープのペア edge は無傷、その横断 edge だけが消える。
     assert_eq!(
         owners_withdrawn,
         vec![Some(1), Some(2), Some(3), None, Some(5), None],
@@ -496,7 +486,7 @@ fn a_late_scope_splices_into_the_middle_of_the_chain_and_leaves_it_unchanged_on_
         "取り下げの後の帳簿が元の横断 edge 1 本だけになっていない: {ledger_withdrawn:?}"
     );
 
-    // バルーンがキャラ窓の直上——3 つの局面すべてで保たれる（要件 6.3）。
+    // バルーンがキャラ窓の直上——3 つの局面すべてで保たれる。
     assert_eq!(
         pairs_landed,
         vec![Some(1); 2],
@@ -515,20 +505,20 @@ fn a_late_scope_splices_into_the_middle_of_the_chain_and_leaves_it_unchanged_on_
 }
 
 // ===========================================================================
-// ⑶ 破棄の非連動——鎖の窓を壊しても他スコープの窓が生き残る（要件 7.2／11.5）
+// ⑶ 破棄の非連動——鎖の窓を壊しても他スコープの窓が生き残る
 // ===========================================================================
 
 /// 鎖に居るスコープの窓を壊しても、他スコープの窓は 1 枚も道連れにならない。
 ///
 /// OS の破棄カスケードは「**所有する窓を壊すと所有される窓も壊す**」向きに働く
-/// （`research.md` §12.3）。鎖は所有関係の一直線なので、根を壊せば下流が全滅する
+/// 鎖は所有関係の一直線なので、根を壊せば下流が全滅する
 /// ——**先に外しておけば完全に封じられる**。本番でその「先に外す」を担うのが
 /// [`apply_zorder_chain`] の手順 1（去る窓の切離し）であり、それは
 /// **望む鎖の変化の門より前**に置かれている。窓が去ってから鎖が組み直されて公開される
 /// までには少なくとも 1 巡の間があり、その間に破棄が走ると巻き込まれるからである。
 ///
 /// 本テストはその門の位置ごと固定する——去る巡では鎖の内容を**一切公開し直さない**
-/// （`dirty` は立たない）。それでも切離しが走ることが、要件 7.2 が成立する条件である。
+/// （`dirty` は立たない）。それでも切離しが走ることが、破棄が道連れを起こさない条件である。
 ///
 /// # 刺激が届いたことを両側から挟む
 ///
@@ -540,12 +530,6 @@ fn a_late_scope_splices_into_the_middle_of_the_chain_and_leaves_it_unchanged_on_
 /// 4. 壊した後は 2 枚が窓でなくなり、残り 4 枚は窓のままである
 ///
 /// ⑵ を落とすと 3・4 が、⑴ を落とすと 2 が——そして道連れが起きて 4 も——赤になる。
-///
-/// # 要件 11.5 との関係
-///
-/// 要件 11.5 は「グループの指定・解除が窓へ及ぼす利用者に見える変化を重なり順と
-/// その維持だけに限る」と定める。**破棄の連動は「重なり順以外の変化」の代表**であり、
-/// ここで封じられていることがその主張の実窓側の裏づけである。
 #[test]
 fn destroying_a_departing_scope_leaves_the_other_scopes_alive() {
     const SCOPES: usize = 3;
@@ -564,7 +548,7 @@ fn destroying_a_departing_scope_leaves_the_other_scopes_alive() {
     let pairs_landed = balloon_offsets(&landed, SCOPES);
 
     // 刺激①——最奥のスコープ（鎖の根の側）が去る。鎖の内容は**公開し直さない**
-    // ので `dirty` は立たない。それでも切離しは走らなければならない（要件 7.2）。
+    // ので `dirty` は立たない。それでも切離しは走らなければならない。
     world.despawn(scopes[SCOPES - 1].balloon);
     world.despawn(scopes[SCOPES - 1].character);
     schedule.run(&mut world);
@@ -636,7 +620,7 @@ fn destroying_a_departing_scope_leaves_the_other_scopes_alive() {
         "去るスコープの窓が破棄されていない（刺激が届いておらず、以下の比較は空虚である）"
     );
 
-    // 破棄が道連れを起こさない（要件 7.2／11.5）。
+    // 破棄が道連れを起こさない。
     assert!(
         survivors_alive,
         "鎖の窓を壊したら他スコープの窓まで破棄された（要件 7.2）"

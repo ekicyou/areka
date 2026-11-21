@@ -193,14 +193,14 @@ pub(crate) fn force_break(text: &str, fit: &dyn Fn(&str) -> usize) -> String {
     out
 }
 
-/// 改行（LF だけ・CR LF・CR だけ）を、標準のツールチップが行を分ける CR LF に揃える（要件 3.3）。
+/// 改行（LF だけ・CR LF・CR だけ）を、標準のツールチップが行を分ける CR LF に揃える。
 pub(crate) fn normalize_newlines(text: &str) -> String {
     text.replace("\r\n", "\n")
         .replace('\r', "\n")
         .replace('\n', "\r\n")
 }
 
-/// 最大の幅（物理ピクセル）＝ min(320 を dpi で換算した幅, 作業領域の幅)（要件 3.4）。
+/// 最大の幅（物理ピクセル）＝ min(320 を dpi で換算した幅, 作業領域の幅)。
 pub(crate) fn max_tip_width(dpi: u32, work_area: RectPx) -> i32 {
     let scaled = (320 * i64::from(dpi) + 48) / 96;
     let work = i64::from(work_area.right) - i64::from(work_area.left);

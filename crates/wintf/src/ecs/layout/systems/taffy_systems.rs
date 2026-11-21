@@ -12,11 +12,7 @@ use crate::ecs::graphics::format_entity_name;
 use crate::ecs::window::DPI;
 use taffy::prelude::*;
 
-/// BoxStyleからTaffyStyleを構築するシステム（統合後）
-///
-/// # 変更点（BoxStyle統合）
-/// - 旧: 8コンポーネント（BoxSize, BoxMargin, BoxPadding, BoxPosition, BoxInset, FlexContainer, FlexItem, LayoutRoot）
-/// - 新: BoxStyle + LayoutRoot の2コンポーネントのみ
+/// BoxStyleからTaffyStyleを構築するシステム
 ///
 /// # 動作
 /// 1. BoxStyleまたはLayoutRootを持ち、TaffyStyleがないエンティティにTaffyStyleを自動挿入
@@ -26,13 +22,11 @@ use taffy::prelude::*;
 ///    そうでなければTaffyStyleと計算結果を外す（Arrangementは最後の値のまま残す）
 pub fn build_taffy_styles_system(
     mut commands: Commands,
-    // LayoutRootまたはBoxStyleがあるがTaffyStyleがないエンティティ
     // LayoutRootのみの場合はBoxStyle::default()相当のスタイルを適用
     without_style: Query<
         (Entity, Option<&BoxStyle>),
         (Or<(With<LayoutRoot>, With<BoxStyle>)>, Without<TaffyStyle>),
     >,
-    // BoxStyleが変更されたエンティティ
     mut changed: Query<(&BoxStyle, &mut TaffyStyle), Changed<BoxStyle>>,
     // BoxStyleが外れたエンティティ（同じ回に付け直したものは除く）
     mut removed_box_styles: RemovedComponents<BoxStyle>,
@@ -66,9 +60,7 @@ pub fn build_taffy_styles_system(
         }
     }
 
-    // TaffyStyle自動挿入
     for (entity, box_style) in without_style.iter() {
-        // BoxStyleがない場合（LayoutRootのみ）はデフォルトスタイル
         let taffy_style: taffy::Style = box_style.map(|s| s.into()).unwrap_or_default();
         commands.entity(entity).insert((
             TaffyStyle(taffy_style),
@@ -77,7 +69,6 @@ pub fn build_taffy_styles_system(
         ));
     }
 
-    // 変更反映
     for (box_style, mut taffy_style) in changed.iter_mut() {
         taffy_style.0 = box_style.into();
     }
@@ -88,11 +79,8 @@ pub fn sync_taffy_tree_system(
     mut taffy_res: ResMut<TaffyLayoutResource>,
     // TaffyStyleが付いたばかりのエンティティ（ノードが無ければ作る・親子をつなぎ直す）
     new_entities: Query<(Entity, Option<&ChildOf>, Has<Children>), Added<TaffyStyle>>,
-    // TaffyStyleが変更されたエンティティ
     changed_styles: Query<(Entity, &TaffyStyle), Changed<TaffyStyle>>,
-    // 階層が変更されたエンティティ
     changed_hierarchy: Query<&ChildOf, Changed<ChildOf>>,
-    // ChildOfが削除されたエンティティ
     mut removed_hierarchy: RemovedComponents<ChildOf>,
     // TaffyStyleが外れたエンティティ（節を消すのは計算の後の掃除の係）
     mut removed_styles: RemovedComponents<TaffyStyle>,
@@ -130,7 +118,6 @@ pub fn sync_taffy_tree_system(
         }
     }
 
-    // TaffyStyleの変更をtaffyツリーに反映
     for (entity, style) in changed_styles.iter() {
         if let Some(node_id) = taffy_res.get_node(entity) {
             if let Err(e) = taffy_res.taffy_mut().set_style(node_id, style.0.clone()) {
@@ -140,16 +127,13 @@ pub fn sync_taffy_tree_system(
     }
 
     // 階層変更を処理: Children コンポーネントの順序を権威的ソースとして使用
-    // Step 1: changed_hierarchy から影響を受けた親エンティティを収集（重複排除）
     for child_of in changed_hierarchy.iter() {
         affected_parents.insert(child_of.parent());
     }
 
-    // Step 2: 各影響親について Children の順序で taffy 子ノードを一括設定
     for parent_entity in affected_parents {
         if let Some(parent_node) = taffy_res.get_node(parent_entity) {
             if let Ok((Some(children), _)) = hierarchy.get(parent_entity) {
-                // Children.iter() の順序で NodeId リストを構築
                 // taffy ノード未作成のエンティティはスキップ
                 let ordered_node_ids: Vec<taffy::NodeId> = children
                     .iter()
@@ -180,31 +164,25 @@ pub fn sync_taffy_tree_system(
 /// Taffyレイアウト計算を実行
 pub fn compute_taffy_layout_system(
     mut taffy_res: ResMut<TaffyLayoutResource>,
-    // LayoutRootマーカーを持つエンティティをレイアウトルートとして扱う
     roots: Query<(Entity, Option<&BoxStyle>), With<LayoutRoot>>,
-    // 変更検知用
     changed_styles: Query<(), Changed<TaffyStyle>>,
     changed_box_styles: Query<(), Changed<BoxStyle>>,
     changed_hierarchy: Query<(), Changed<ChildOf>>,
     // 削除検知用（係ごとに読み位置を持つので、掃除の係と同じ記録を読める）
     mut removed_hierarchy: RemovedComponents<ChildOf>,
     mut removed_styles: RemovedComponents<TaffyStyle>,
-    // TaffyComputedLayoutを書き込むクエリ
     mut all_taffy_entities: Query<(Entity, &mut TaffyComputedLayout), With<TaffyStyle>>,
 ) {
     // 消えた記録は毎回 2 つとも読み切る（is_empty は読み位置を進めず、次の回もまた計算してしまう）
     let removed = removed_hierarchy.read().count() + removed_styles.read().count();
-    // BoxStyleまたはTaffyStyleの変更、階層の変更・削除のいずれかで再計算
     let has_changes = removed > 0
         || !changed_styles.is_empty()
         || !changed_box_styles.is_empty()
         || !changed_hierarchy.is_empty();
 
-    // Changed検知時にレイアウト計算を実行
     if has_changes {
         for (root_entity, box_style) in roots.iter() {
             if let Some(root_node) = taffy_res.get_node(root_entity) {
-                // LayoutRootのBoxStyleからavailable_spaceを構築
                 // Px指定の軸のみDefinite、それ以外（Percent/Auto/未指定）はMaxContent
                 let to_available = |d: Option<Dimension>| match d {
                     Some(Dimension::Px(px)) => AvailableSpace::Definite(px),
@@ -222,7 +200,6 @@ pub fn compute_taffy_layout_system(
                 {
                     error!(entity = ?root_entity, error = ?e, "[compute_taffy_layout] Taffy compute_layout failed");
                 } else {
-                    // 計算成功時、全エンティティにTaffyComputedLayoutを書き込む
                     for (entity, mut computed) in all_taffy_entities.iter_mut() {
                         if let Some(node_id) = taffy_res.get_node(entity) {
                             match taffy_res.taffy().layout(node_id) {
@@ -281,7 +258,6 @@ pub fn update_arrangements_system(
     for (entity, computed_layout, arrangement, name, dpi, window) in query.iter_mut() {
         let layout = &computed_layout.0;
 
-        // Window エンティティの判定（scale と offset の両方で使用）
         let is_window = window.is_some();
 
         // Window エンティティの場合、Arrangement.scale に DPI スケールを設定する。
@@ -295,13 +271,12 @@ pub fn update_arrangements_system(
                     y: d.scale_y(),
                 }
             } else {
-                LayoutScale::default() // DPI コンポーネントなし → フォールバック
+                LayoutScale::default()
             }
         } else {
-            LayoutScale::default() // 非 Window → (1.0, 1.0)
+            LayoutScale::default()
         };
 
-        // デバッグ: DPI変更検知の確認
         if let Some(ref d) = dpi {
             if d.is_changed() {
                 debug!(
@@ -318,8 +293,6 @@ pub fn update_arrangements_system(
 
         // Window エンティティの場合、offset は sync_window_arrangement_from_window_pos
         // で管理されるため、taffy の layout.location で上書きしない。
-        // サイズとスケールのみ更新する。
-
         let new_offset = if is_window {
             // 既存の offset を維持、まだ存在しない場合は (0,0)
             arrangement

@@ -1,6 +1,6 @@
 use super::*;
 
-// Task 6.1: Size構造体とArrangement.local_bounds()のテスト
+// Size構造体とArrangement.local_bounds()のテスト
 
 #[test]
 fn test_size_default() {
@@ -67,7 +67,7 @@ fn test_arrangement_local_bounds_negative_size() {
     assert_eq!(bounds.bottom, -5.0);
 }
 
-// Task 6.4: GlobalArrangementのtrait実装テスト
+// GlobalArrangementのtrait実装テスト
 
 #[test]
 fn test_global_arrangement_from_arrangement() {
@@ -82,9 +82,8 @@ fn test_global_arrangement_from_arrangement() {
 
     let global: GlobalArrangement = arrangement.into();
 
-    // transform検証
-    assert_eq!(global.transform.M11, 2.0); // scale x
-    assert_eq!(global.transform.M22, 2.0); // scale y
+    assert_eq!(global.transform.M11, 2.0);
+    assert_eq!(global.transform.M22, 2.0);
     // translation * scaleの場合、offsetもscaleされる
     // Matrix3x2の演算では: M31 = offset.x * scale.x = 10 * 2 = 20
     assert_eq!(global.transform.M31, 20.0);
@@ -137,7 +136,7 @@ fn test_global_arrangement_mul_arrangement() {
     assert_eq!(result.bounds.bottom, 47.0);
 }
 
-// ===== W4a ギャップテスト: GlobalArrangement アクセサーと Matrix3x2 変換 =====
+// ===== ギャップテスト: GlobalArrangement アクセサーと Matrix3x2 変換 =====
 
 /// Arrangement::default() は offset/scale/size すべて既定値
 #[test]

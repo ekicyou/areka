@@ -10,7 +10,7 @@ use bevy_ecs::prelude::*;
 use super::PointerState;
 
 // ============================================================================
-// Phase<T> enum (Task 2.1)
+// Phase<T> enum
 // ============================================================================
 
 /// イベント伝播フェーズ（Rust らしい enum 表現）
@@ -48,7 +48,7 @@ impl<T> Phase<T> {
 }
 
 // ============================================================================
-// EventHandler<T> 型エイリアス (Task 2.2)
+// EventHandler<T> 型エイリアス
 // ============================================================================
 
 /// 汎用イベントハンドラ型
@@ -72,7 +72,7 @@ pub type EventHandler<T> =
 pub type PointerEventHandler = EventHandler<PointerState>;
 
 // ============================================================================
-// ハンドラコンポーネント群 (Task 3)
+// ハンドラコンポーネント群
 // ============================================================================
 
 /// ポインター押下ハンドラコンポーネント（WinUI3 OnPointerPressed 相当）
@@ -103,7 +103,7 @@ pub struct OnPointerExited(pub PointerEventHandler);
 pub struct OnPointerMoved(pub PointerEventHandler);
 
 // ============================================================================
-// ディスパッチシステム (Task 4)
+// ディスパッチシステム
 // ============================================================================
 
 /// 親チェーン構築（sender → root の順で格納）
@@ -116,7 +116,6 @@ pub fn build_bubble_path(world: &World, start: Entity) -> Vec<Entity> {
 
     let mut path = vec![start];
 
-    // start 自身が Window の場合はここで停止
     if world.get::<Window>(start).is_some() {
         return path;
     }
@@ -126,7 +125,6 @@ pub fn build_bubble_path(world: &World, start: Entity) -> Vec<Entity> {
         let parent = child_of.parent();
         path.push(parent);
 
-        // Window に到達したら停止（Window はパスに含める）
         if world.get::<Window>(parent).is_some() {
             break;
         }
@@ -161,32 +159,28 @@ pub fn dispatch_event_for_handler<T: Clone, H: Component + Copy>(
 ) {
     // Tunnel フェーズ: root → sender
     for &entity in path.iter().rev() {
-        // エンティティ存在チェック
         if world.get_entity(entity).is_err() {
-            return; // 静かに終了
+            return;
         }
 
-        // ハンドラ取得
         if let Some(handler_comp) = world.get::<H>(entity).copied() {
             let handler = get_handler(&handler_comp);
             if handler(world, sender, entity, &Phase::Tunnel(event.clone())) {
-                return; // handled
+                return;
             }
         }
     }
 
     // Bubble フェーズ: sender → root
     for &entity in path.iter() {
-        // エンティティ存在チェック
         if world.get_entity(entity).is_err() {
-            return; // 静かに終了
+            return;
         }
 
-        // ハンドラ取得
         if let Some(handler_comp) = world.get::<H>(entity).copied() {
             let handler = get_handler(&handler_comp);
             if handler(world, sender, entity, &Phase::Bubble(event.clone())) {
-                return; // handled
+                return;
             }
         }
     }
@@ -207,15 +201,12 @@ pub fn dispatch_event_for_handler<T: Clone, H: Component + Copy>(
 ///    d. 各呼び出し前にエンティティ存在チェック（削除済みなら静かに終了）
 ///    e. ハンドラが `true` を返したら伝播停止
 pub fn dispatch_pointer_events(world: &mut World) {
-    // Pass 1: 全ての PointerState を持つエンティティを収集
     let targets: Vec<(Entity, PointerState)> = {
         let mut query = world.query::<(Entity, &PointerState)>();
         query.iter(world).map(|(e, s)| (e, s.clone())).collect()
     };
 
-    // 各ポインター状態について独立に dispatch
     for (sender, state) in &targets {
-        // 親チェーン構築
         let path = build_bubble_path(world, *sender);
 
         // OnPointerMoved: 常に発火（位置が変わらない tick でも毎 tick 配る）。
@@ -230,7 +221,6 @@ pub fn dispatch_pointer_events(world: &mut World) {
             |h| h.0,
         );
 
-        // OnPointerPressed: ボタンが押されている場合に発火（1フレームのみ）
         // 拡張ボタン 1・2 も含む。今の受け手は左しか見ないので、中ボタンと同じに何もしない。
         if state.left_down
             || state.right_down
@@ -276,7 +266,7 @@ pub fn dispatch_pointer_events(world: &mut World) {
 }
 
 // ============================================================================
-// テスト (Task 5)
+// テスト
 // ============================================================================
 
 #[cfg(test)]

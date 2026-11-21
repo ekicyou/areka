@@ -37,7 +37,6 @@ pub(super) fn handle_button_message(
     use crate::ecs::pointer::{PhysicalPoint, PointerState};
     use crate::ecs::{PointF as HitTestPoint, hit_test_in_window};
 
-    // クリック位置を取得
     let x = (lparam.0 & 0xFFFF) as i16 as i32;
     let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
 
@@ -49,18 +48,15 @@ pub(super) fn handle_button_message(
         y
     );
 
-    // 修飾キー状態を抽出
     let wparam_val = wparam.0 as u32;
     let shift = (wparam_val & 0x04) != 0;
     let ctrl = (wparam_val & 0x08) != 0;
 
-    // スクリーン座標を事前計算（フォールバック処理でも使用）
     let (screen_x, screen_y) = world
         .try_borrow()
         .map(|w| screen_point(w.world(), window_entity, x, y))
         .unwrap_or((x, y));
 
-    // hit_test でターゲットエンティティを特定し、PointerState を確保
     {
         if let Ok(mut world_borrow) = world.try_borrow_mut() {
             if let Some(target_entity) = hit_test_in_window(
@@ -68,7 +64,7 @@ pub(super) fn handle_button_message(
                 window_entity,
                 HitTestPoint::new(x as f32, y as f32),
             ) {
-                // 当たった entity の名前と GlobalArrangement.bounds を記録（文字列は debug が開いているときだけ組む）
+                // 当たった entity の名前と GlobalArrangement.bounds を記録する（文字列は debug が開いているときだけ組む）
                 debug!(
                     target_entity = ?target_entity,
                     entity_name = %world_borrow
@@ -102,7 +98,7 @@ pub(super) fn handle_button_message(
                     crate::ecs::pointer::DoubleClick::None
                 };
 
-                // PointerState がない場合は付与（ボタンの状態は次の tick の溜めの転送が入れる）
+                // ボタンの状態は次の tick の溜めの転送が入れる
                 if let Some(mut ps) = world_borrow
                     .world_mut()
                     .get_mut::<PointerState>(target_entity)
@@ -131,15 +127,11 @@ pub(super) fn handle_button_message(
                     );
                 }
 
-                // 修飾キー状態を記録
                 crate::ecs::pointer::set_modifier_state(target_entity, shift, ctrl);
 
-                // ボタン状態をバッファに記録
                 if is_down {
                     crate::ecs::pointer::record_button_down(target_entity, button);
 
-                    // ドラッグ準備開始（DragConfigがあり、有効な場合）
-                    // target_entity自身または祖先からDragConfigを探索
                     if button == crate::ecs::pointer::PointerButton::Left {
                         let drag_entity = {
                             let w = world_borrow.world();
@@ -165,7 +157,6 @@ pub(super) fn handle_button_message(
                 } else {
                     crate::ecs::pointer::record_button_up(target_entity, button);
 
-                    // ドラッグ終了（HWND ガード付き: 当該ウィンドウのドラッグのみ終了）
                     // 捕捉を取った窓と同じ窓の離しだけを、取り消しの印なしで休ませる。
                     // 開始済みなら終了の種も積む（ここで積むと二重になる）。
                     // 旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
@@ -187,13 +178,11 @@ pub(super) fn handle_button_message(
         }
     }
 
-    // フォールバック: ウィンドウエンティティに記録
     if is_down {
         crate::ecs::pointer::record_button_down(window_entity, button);
     } else {
         crate::ecs::pointer::record_button_up(window_entity, button);
 
-        // ドラッグ終了（hit_test失敗時でもドラッグ中なら終了処理、HWNDガード付き）
         // 当たり判定の枝と同じく、捕捉を取った窓と同じ窓の離しだけを休ませる。
         if button == crate::ecs::pointer::PointerButton::Left
             && crate::ecs::drag::end_dragging_on_release(
@@ -447,9 +436,6 @@ mod tests {
     use bevy_ecs::hierarchy::ChildOf;
     use bevy_ecs::prelude::*;
 
-    // find_ancestor_with_drag_config は World ベースの ChildOf 走査でデバイス非依存。
-    // start 自身 / 祖先 / 不在 / 最近傍優先 の各分岐を特性化する。
-
     #[test]
     fn test_find_drag_config_on_start_entity_itself() {
         // start 自身が DragConfig を持つ → (start, config) を返す
@@ -464,7 +450,7 @@ mod tests {
         let result = find_ancestor_with_drag_config(&world, start);
         let (entity, config) = result.expect("start 自身の DragConfig を返す");
         assert_eq!(entity, start);
-        assert_eq!(config.threshold, 7); // clone されたフィールド値を確認
+        assert_eq!(config.threshold, 7);
     }
 
     #[test]

@@ -1,9 +1,8 @@
-//! 診断記録の**行を組む純関数**だけを集めた層（要件 6）。
+//! 診断記録の**行を組む純関数**だけを集めた層。
 //!
-//! design.md「診断ログ語彙（要件 6）」のレコード表が正本であり、本モジュールはその表を
-//! そのまま写した書式を 1 箇所に閉じ込める。サインオフの grep 判定語と出力書式は 1:1 で
-//! 対応するため、書式が意図せず変われば手順が静かに嘘になる——組立を純関数へ切り出して
-//! テストで語彙を固定し、記録を出す側はその戻り値をそのまま本文にする（組立を二重に持たない）。
+//! サインオフの grep 判定語と出力書式は 1:1 で対応するため、書式が意図せず変われば手順が
+//! 静かに嘘になる——組立を純関数へ切り出してテストで語彙を固定し、記録を出す側はその戻り値を
+//! そのまま本文にする（組立を二重に持たない）。
 //!
 //! # ここに置いてよいもの・置いてはならないもの
 //!
@@ -28,15 +27,15 @@ pub(crate) const UNKNOWN: &str = "-";
 
 /// owner 確立の記録タグ（grep 判定語）。
 const OWNER_ESTABLISHED_TAG: &str = "[zorder-pair] owner-established";
-/// 是正の記録タグ（指令と実測を同一行に載せる・要件 6.1）。
+/// 是正の記録タグ（指令と実測を同一行に載せる）。
 const FIX_TAG: &str = "[zorder-pair] fix";
-/// 見送りの記録タグ（理由必須・要件 6.3）。
+/// 見送りの記録タグ（理由必須）。
 const SKIP_TAG: &str = "[zorder-pair] skip";
-/// 検証不一致の記録タグ（error 水準・要件 6.2）。
+/// 検証不一致の記録タグ（error 水準）。
 const VERIFY_FAILED_TAG: &str = "[zorder-pair] verify-failed";
-/// owner 確立失敗の記録タグ（error 水準・要件 6.2）。
+/// owner 確立失敗の記録タグ（error 水準）。
 const OWNER_ESTABLISH_FAILED_TAG: &str = "[zorder-pair] owner-establish-failed";
-/// 沈降観測の記録タグ（要件 4.4／7.5）。
+/// 沈降観測の記録タグ。
 const SINK_OBSERVED_TAG: &str = "[zorder-pair] sink-observed";
 
 /// HWND をログ用の 16 進表現へ（不在は番兵）。
@@ -64,8 +63,8 @@ pub(crate) fn tristate_field(value: Option<bool>) -> String {
 impl SkipReason {
     /// 記録に載る理由語（サインオフの grep 判定語）。
     ///
-    /// 6 種が互いに異なる語であることがそのまま要件 6.3 の「理由を伴う見送り」の
-    /// 実質になる——1 語へ潰れると記録があっても理由が読めない。
+    /// 6 種が互いに異なる語であることが「理由を伴う見送り」の実質になる——
+    /// 1 語へ潰れると記録があっても理由が読めない。
     pub(crate) fn as_str(&self) -> &'static str {
         match self {
             SkipReason::AlreadyAdjacent => "AlreadyAdjacent",
@@ -107,7 +106,7 @@ impl PeerLoss {
 /// owner 確立の記録行（純関数）。
 ///
 /// `measured_prev` は確立直後に採った「owner（キャラ窓）の最も近い可視の手前」の実測で
-/// あり、ここに被 owner（バルーン窓）が現れることが案 A の中核保証（ゲート G6）の証跡になる。
+/// あり、ここに被 owner（バルーン窓）が現れることが確立の証跡になる。
 pub(crate) fn owner_established_line(
     entity: Entity,
     peer: Entity,
@@ -126,8 +125,7 @@ pub(crate) fn owner_established_line(
 
 /// 是正の記録行（純関数）——**出した指令と、その後の実測を同じ 1 行に載せる**。
 ///
-/// 行を「指令」と「実測」に分けないのは design.md「Implementation Notes > Validation」の
-/// 裁定である。分けると「指令は出したが効かなかった」の判定が 2 行の突合になり、
+/// 行を「指令」と「実測」に分けると、「指令は出したが効かなかった」の判定が 2 行の突合になり、
 /// 過去に同型の誤診を生んでいる。
 pub(crate) fn fix_line(
     entity: Entity,
@@ -219,7 +217,7 @@ pub(crate) fn owner_establish_failed_line(entity: Entity, error: &windows::core:
 ///
 /// `in_band` はバルーンが常に手前の帯に居るか（測れなければ番兵）。帯に居るあいだは
 /// 他のアプリが活性になっても沈まないのが正しい動きで、`behind_foreground=false` を
-/// 失敗でないと読み分けるための欄である（要件 6.6）。
+/// 失敗でないと読み分けるための欄である。
 pub(crate) fn sink_observed_line(
     entity: Entity,
     adjacency_ok: bool,

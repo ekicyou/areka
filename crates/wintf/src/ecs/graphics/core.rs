@@ -155,7 +155,6 @@ impl GraphicsCore {
         // 公開する工場から装置を作る（D2D1CreateDevice は別の工場を新しく作ってしまう）。
         let d2d = unsafe { d2d_factory.CreateDevice(&dxgi)? };
 
-        // グローバル共有DeviceContextを作成
         let d2d_device_context = d2d.create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
         debug!("[GraphicsCore] Global DeviceContext created");
 
@@ -319,11 +318,6 @@ fn create_device_3d_with<T>(
 /// `FrameCount` と同じ設計パターン。ワールド外（`try_tick_world()` 実行前）で
 /// `dola::runtime::clock::now()` を呼び出して値を更新する。
 /// ワールド内の全システムは同じフレームの時刻値（`.0`）を参照する。
-///
-/// 利点:
-/// - フレーム内でタイミングが完全に一貫
-/// - テスト時に任意の時刻を注入可能
-/// - システム実行中に時刻が進まない（安定性向上）
 ///
 /// 時刻基準: `QueryPerformanceCounter / QueryPerformanceFrequency`
 #[derive(Resource, Default, Debug, Clone, Copy)]

@@ -10,12 +10,6 @@
 //! からは中身に触れない。よって `Sync`（`&DolaAnimator` の共有）は中身の共有にならず、
 //! `&mut` は bevy の排他で常に高々 1 スレッドになる。限界: 返す値の中の `Rc` を複製して
 //! 外へ持ち出してはならない（詳細は `unsafe impl` 直前の SAFETY 注記）。
-//!
-//! # balloon06 との関係
-//!
-//! balloon06 の `DolaBridgeResource` 設計を本 `DolaAnimator` Component 設計で上書きする。
-//! `DolaBridgeResource` は `Resource`（ワールドに一つ）であったのに対し、
-//! `DolaAnimator` は `Component`（エンティティごと）で、複数アニメーションの独立管理が可能。
 
 use bevy_ecs::component::Component;
 use bevy_ecs::system::{Query, Res};
@@ -77,9 +71,8 @@ pub struct DolaAnimator {
 }
 
 // SAFETY 条件: DolaRuntime は内部に Rc を含む（timeline_manager の ObjectInternPool
-// = HashMap<DynamicValue, Rc<DynamicValue>>（dola runtime/interpolator/mod.rs:19-20）
-// および UpdateResult.changes 経由の EvaluatedValue::Object(Rc<DynamicValue>)
-// （dola runtime/types.rs:24・144-146）。Rc が !Send + !Sync なので DolaRuntime は
+// = HashMap<DynamicValue, Rc<DynamicValue>>）および UpdateResult.changes 経由の
+// EvaluatedValue::Object(Rc<DynamicValue>)。Rc が !Send + !Sync なので DolaRuntime は
 // 自動では Send/Sync にならない。bevy_ecs の Component は Send + Sync を要求するため、
 // この手動 unsafe impl は必須である。
 //
@@ -172,10 +165,11 @@ impl std::fmt::Debug for DolaAnimator {
 /// app.add_systems(Update, tick_dola_animators);
 /// app.add_systems(Update, my_consumer.after(tick_dola_animators));
 /// ```
+///
 /// # 起床の旗
 ///
 /// この tick で**活性があった**アニメータが 1 つでもあれば `ANIM` を立て、次の画面更新を
-/// 予約する（設計 C16）。活性は、終わっていないインスタンス（一時停止中を含む）が残って
+/// 予約する。活性は、終わっていないインスタンス（一時停止中を含む）が残って
 /// いること（[`DolaRuntime::has_instances`]）か、`tick` が置いた [`UpdateResult`] に変数の
 /// 変化かトリガの発火が 1 件でも載っていること。delay の間のように変化が 0 件でも走って
 /// いれば起こし続け、最後の変化を出した tick の後は旗が止まる。
@@ -214,17 +208,8 @@ pub fn tick_dola_animators(mut query: Query<&mut DolaAnimator>, frame_time: Res<
 
 #[cfg(test)]
 mod tests {
-    //! W8-T2: `DolaAnimator` Component ラッパーと `tick_dola_animators` System の
-    //! ECS 統合契約（dola 統合）を特性化する。
-    //!
-    //! dola ランタイム本体（補間・インスタンス管理・`UpdateResult` 生成）の正当性は
-    //! `dola` クレート側（D1/D2/D3 領域）で検証済み。本 in-source テストは wintf 側の
-    //! 統合点 ＝ (a) Component ラッパーの委譲契約（new/default/with_runtime/tick/
-    //! last_result/runtime/Debug）と (b) `tick_dola_animators` System が `Res<FrameTime>`
-    //! で全エンティティを駆動する配線、をデバイス非依存に固定する。
-    //!
-    //! いずれも bevy `World`/`Schedule` 上の決定論的処理（Win32/GPU 非依存）であり、
-    //! 注入時刻（`FrameTime`）に対して完全に再現可能。
+    //! `DolaAnimator` Component ラッパーと `tick_dola_animators` System の ECS 統合契約のテスト。
+    //! bevy `World`/`Schedule` 上の決定論的処理で Win32/GPU に依存せず、注入時刻（`FrameTime`）で再現できる。
 
     use super::*;
     use bevy_ecs::schedule::Schedule;
@@ -290,7 +275,6 @@ mod tests {
     #[test]
     fn new_animator_has_empty_last_result() {
         // tick 未実行の新規 animator は changes/triggered ともに空
-        // （DolaRuntime::new の last_update_result 初期値が委譲される）。
         let mut animator = DolaAnimator::new();
         let result = animator.last_result();
         assert!(
@@ -319,7 +303,6 @@ mod tests {
         // with_runtime に渡したロード済みランタイムが animator 内部に保持され、
         // runtime() 経由で評価可能であること（購読済み変数が tick で変化する）。
         let animator = started_animator();
-        // 渡したランタイムが保持されている → tick すると opacity の変化が出る。
         let mut animator = animator;
         animator.tick(0.5);
         assert!(
@@ -330,8 +313,6 @@ mod tests {
 
     #[test]
     fn tick_updates_last_result_from_empty_to_changes() {
-        // tick 前は空、tick(0.5) 後は opacity の差分変化が現れる
-        // （tick が runtime.tick へ委譲し last_result を更新する契約）。
         let mut animator = started_animator();
         assert!(
             animator.last_result().changes.is_empty(),
@@ -370,10 +351,8 @@ mod tests {
 
     #[test]
     fn tick_advancing_time_replaces_previous_result() {
-        // last_result は最新 tick の差分へ「置換」される（累積ではない）。
-        // tick(1.0) で opacity=1.0 を配信した後、tick(2.0) では値が 1.0 のまま
-        // （終端で安定）なので差分は空になる。これは前回の非空結果が最新 tick の
-        // 空差分へ置換された証跡（蓄積なら 1.0 の変化が残り続けるはず）。
+        // last_result は最新 tick の差分へ置換される（累積ではない）。tick(1.0) の後の
+        // tick(2.0) は値が 1.0 のままなので差分が空になる。
         // 観測値（probe）: start=0 → t=1.0:[(0,1.0)] / t=2.0:[]。
         let mut animator = started_animator();
 
@@ -393,10 +372,8 @@ mod tests {
 
     #[test]
     fn repeated_tick_at_same_value_yields_empty_diff_after_first_delivery() {
-        // 差分検出は「前回配信値」基準（subscription_manager::diff_and_update）。
-        // 開始前時刻でも初回 tick は初期値 0.0 を「初回配信」として 1 件報告し、
-        // 同一時刻（=同一値）の再 tick は差分ゼロになる。tick が時刻をそのまま
-        // runtime へ渡し last_result が前回配信との差分を反映する契約を固定する。
+        // 差分検出は前回配信値基準（subscription_manager::diff_and_update）。開始前時刻でも
+        // 初回 tick は初期値 0.0 を 1 件報告し、同一時刻の再 tick は差分ゼロになる。
         // 観測値（probe）: start=1 → t=0.5:[(0,0.0)] / 同値再 tick:[]。
         let mut rt = loaded_runtime();
         rt.start("fade_in", 1.0).unwrap(); // 1.0 開始（0.5 はまだ開始前 ＝ 初期値 0.0）
@@ -418,11 +395,8 @@ mod tests {
 
     #[test]
     fn runtime_accessor_returns_inner_runtime_reference() {
-        // runtime() は内部 DolaRuntime への読み取り参照を返す。
-        // 同一インスタンスを指す（last_result の同一性で確認）。
         let mut animator = started_animator();
         let inner: *const UpdateResult = animator.runtime().last_result();
-        // runtime().last_result と animator.last_result は同じ初期状態（空）を指す。
         assert!(
             std::ptr::eq(inner, animator.last_result()),
             "runtime() must expose the same inner runtime backing last_result()"
@@ -431,7 +405,6 @@ mod tests {
 
     #[test]
     fn debug_format_reports_has_runtime_true() {
-        // Debug 実装は型名と has_runtime:true を含む（中身は伏せる固定様式）。
         let animator = DolaAnimator::new();
         let debug = format!("{animator:?}");
         assert!(
@@ -464,7 +437,6 @@ mod tests {
 
         let mut schedule = tick_schedule();
         schedule.run(&mut world); // パニックしないこと自体が契約
-        // 観測可能な状態変化はない（エンティティ不在）。
         assert_eq!(
             world.query::<&DolaAnimator>().iter(&world).count(),
             0,
@@ -474,9 +446,7 @@ mod tests {
 
     #[test]
     fn tick_system_drives_all_animators_from_frame_time() {
-        // 実 tick_dola_animators System が複数エンティティすべてを
-        // Res<FrameTime> の時刻で一括 tick することを特性化する
-        // （既存統合テストは loop を手書きしていたが、本テストは実 System を駆動）。
+        // 実 System が複数エンティティすべてを Res<FrameTime> の時刻で一括 tick する。
         let mut world = World::new();
         world.insert_resource(FrameTime(0.5));
 
@@ -497,10 +467,8 @@ mod tests {
 
     #[test]
     fn tick_system_uses_injected_frame_time_value() {
-        // System が tick へ渡す時刻は Res<FrameTime>.0 そのもの。
-        // start=0 のフェードに対し FrameTime(0.5) を注入すると、配信される
-        // opacity 値は「その注入時刻での補間値」= 0.5 になることで時刻反映を固定する
-        // （別の時刻なら別の値になるため、注入時刻が tick へ流れている証跡）。
+        // System が tick へ渡す時刻は Res<FrameTime>.0 そのもの。start=0 のフェードに FrameTime(0.5) を
+        // 注入すると配信値がその時刻の補間値 0.5 になる。
         // 観測値（probe）: start=0 → t=0.5:[(0, Float(0.5))]。
         let mut world = World::new();
         world.insert_resource(FrameTime(0.5));

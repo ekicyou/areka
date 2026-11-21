@@ -1,4 +1,4 @@
-//! 合成の計画の純粋なテスト（COM 無し・要件 7.2, 7.4）。ここでは全部の合成の理由の綴り（3.4）。
+//! 合成の計画の純粋なテスト（COM 無し）。ここでは全部の合成の理由の綴り。
 
 use super::damage::*;
 
@@ -23,7 +23,7 @@ fn damage_record_target() {
     assert_eq!(DAMAGE_TARGET, "wintf::damage");
 }
 
-// ---- 描画面 1 枚の計画（3.1〜3.4・2.1・2.5・2.8・4.1） ----
+// ---- 描画面 1 枚の計画 ----
 
 use super::visual::{DamageEntry, EntryKind, PxRect};
 
@@ -189,7 +189,7 @@ fn partial_is_bounding_rect_of_removed_prev_and_added_moved_now() {
     let prev = [vec![outside_rect], prev.to_vec(), vec![clip]].concat();
     let p = partial(plan(&input(&prev, &now)));
     // 消えた (2,40)-(8,50)・動いた (10,10)-(20,20)・足された (90,70)-(120,90) を描画面で切り、
-    // 縁にかかる b (30,5)-(40,15) を丸ごと含める（R1）
+    // 縁にかかる b (30,5)-(40,15) を丸ごと含める
     let want = rect(2, 5, 100, 80);
     assert_eq!(p.rects, vec![want]);
     assert!(p.shifts.is_empty());
@@ -246,7 +246,7 @@ fn surface_without_tree_skips_when_same_and_is_full_when_root_scale_or_container
     assert_eq!(plan(&i), ComposePlan::Full(FullReason::Recreated));
 }
 
-// ---- 平行移動の写し（5.1〜5.4・条件 S1〜S9） ----
+// ---- 平行移動の写し ----
 
 /// `id`・`shape`・種類・親・部分木の終わりを決めた項（`exact`・`origin` は `b` から）。
 fn node(
@@ -436,7 +436,7 @@ fn whole_surface_candidate_accepts_shift_without_root_list() {
 
 #[test]
 fn s1_root_list_present_with_change_is_full_undecidable() {
-    // 根の命令の列の中の絵の答えは描く範囲で変わりうるので、写しも範囲だけも使わない（R1）
+    // 根の命令の列の中の絵の答えは描く範囲で変わりうるので、写しも範囲だけも使わない
     let (prev, now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
     let i = PlanInput {
         root_present: true,
@@ -456,7 +456,7 @@ fn s1_root_list_present_with_change_is_full_undecidable() {
     assert_eq!(plan(&i), ComposePlan::PresentOnly);
 }
 
-// ---- 描く矩形を、交わる件の範囲で閉じる（R1） ----
+// ---- 描く矩形を、交わる件の範囲で閉じる ----
 
 #[test]
 fn drawn_rect_grows_by_touching_items_in_a_chain_but_not_by_apart_ones() {

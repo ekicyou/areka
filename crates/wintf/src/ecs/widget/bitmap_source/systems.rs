@@ -37,7 +37,6 @@ pub fn resolve_path(path: &str) -> std::io::Result<PathBuf> {
     if path.is_absolute() {
         Ok(path.to_path_buf())
     } else {
-        // 実行ファイルのディレクトリを基準に解決
         let exe_path = std::env::current_exe()?;
         let exe_dir = exe_path.parent().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::NotFound, "exe directory not found")
@@ -50,9 +49,7 @@ pub fn resolve_path(path: &str) -> std::io::Result<PathBuf> {
 // WIC画像読み込み
 // ============================================================
 
-// `load_bitmap_source` は ECS 非依存の COM 層（`crate::com::wic`）へ移設した
-// （design Decision D2 / Critical Issue 1）。パス互換のため re-export する。
-// 戻り値は `(IWICBitmapSource, has_alpha)` の tuple に拡張されている。
+// `load_bitmap_source` は ECS 非依存の COM 層（`crate::com::wic`）にあり、パス互換のため re-export する。
 pub use crate::com::wic::load_bitmap_source;
 
 /// 画像を読み、裏の作業の中で 1 回だけ解読してメモリの画像にする。
@@ -210,14 +207,12 @@ fn create_d2d_bitmap(
 /// `on_bitmap_source_add`フックが`WintfTaskPool.spawn()`を呼び出すため。
 /// リソースが取り除かれていると、画像読み込みタスクが起動されない。
 pub fn drain_task_pool_commands(world: &mut World) {
-    // まずコマンドをVecに収集（WintfTaskPoolをWorld内に保持したまま）
     let commands: Vec<_> = if let Some(task_pool) = world.get_resource::<WintfTaskPool>() {
         task_pool.drain_commands()
     } else {
         Vec::new()
     };
 
-    // コマンドを実行（WintfTaskPoolはWorld内に存在する）
     for cmd in commands {
         cmd(world);
     }
@@ -274,11 +269,6 @@ impl Command for SetAlphaMaskCommand {
 /// # Trigger
 /// - `Changed<BitmapSourceResource>` か `Changed<HitTest>`（マスクがまだ無いものだけ）
 /// - `HitTestMode::AlphaMask` の場合のみ実行
-///
-/// # Flow
-/// 1. 解読済みのメモリの画像からピクセルデータを写す（UI スレッド・解読はしない）
-/// 2. 非同期タスクでAlphaMask::from_pbgra32() でマスク生成
-/// 3. Command 経由で BitmapSourceResource.alpha_mask に設定
 pub fn generate_alpha_mask_system(
     // 読み込んだ後に当たりを AlphaMask へ替えたときも作る
     query: Query<
@@ -292,12 +282,10 @@ pub fn generate_alpha_mask_system(
     };
 
     for (entity, resource, hit_test) in query.iter() {
-        // HitTestMode::AlphaMask 以外はスキップ
         if hit_test.mode != HitTestMode::AlphaMask {
             continue;
         }
 
-        // 既にαマスクが生成済みの場合はスキップ
         if resource.alpha_mask().is_some() {
             continue;
         }
@@ -307,7 +295,6 @@ pub fn generate_alpha_mask_system(
 
         let source_addr = source.as_raw() as usize;
 
-        // 画像サイズを取得
         let (width, height) = match source.get_size() {
             Ok(size) => size,
             Err(e) => {
@@ -316,7 +303,6 @@ pub fn generate_alpha_mask_system(
             }
         };
 
-        // ピクセルデータを取得
         let Some((stride, buffer_size)) = pbgra32_layout(width, height) else {
             error!(entity = ?entity, width, height, "Bitmap is too large for alpha mask");
             continue;
@@ -328,12 +314,9 @@ pub fn generate_alpha_mask_system(
             continue;
         }
 
-        // 非同期でαマスクを生成（ピクセルデータはSend可能）
         task_pool.spawn(move |tx| async move {
-            // αマスクを生成
             let mask = AlphaMask::from_pbgra32(&buffer, width, height, stride);
 
-            // Commandを送信してBitmapSourceResourceにαマスクを設定
             let cmd: super::task_pool::BoxedCommand = Box::new(move |world: &mut World| {
                 SetAlphaMaskCommand {
                     entity,

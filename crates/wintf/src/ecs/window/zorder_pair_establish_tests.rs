@@ -4,26 +4,26 @@
 //! 本ファイルが固定するのは 3 つである。
 //!
 //! - **確立が 1 回だけ走ること**——両窓に OS のハンドルが揃った巡で owner が張られ、
-//!   以後は何度巡っても二度目が走らないこと（要件 1.1・design.md「案 A の確立フロー」2）。
+//!   以後は何度巡っても二度目が走らないこと。
 //! - **揃わない巡では走らず、見送りが理由つきで記録されること**——片方のハンドルが
 //!   まだ無い／相手の実体が既に無い／当該ストラテジが owner を張らない構成である、の
-//!   3 通り（要件 6.3）。
+//!   3 通り。
 //! - **失敗しても同じハンドルで繰り返さないこと**——失敗は error 水準で 1 度だけ記録され、
-//!   同じハンドルの組では再試行しない（要件 6.2・design.md「Error Strategy」の確立失敗）。
+//!   同じハンドルの組では再試行しない。
 //!
 //! # なぜ本物の窓を作るのか（採った道とその理由）
 //!
 //! 確立系は `set_window_owner`（`SetWindowLongPtrW(GWLP_HWNDPARENT)`）を実際に呼ぶ。
 //! ここを偽の実装へ差し替えると「owner が本当に張られたか」は永久に検査されず、
 //! 検査できるのは自前の帳簿だけになる。一方、**owner 関係そのものは自プロセスが所有する
-//! 2 枚の窓の間で決定論的に成立する**——タスク 1.1 で非決定になったのは
+//! 2 枚の窓の間で決定論的に成立する**——非決定になるのは
 //! 「トップレベル窓どうしの**重なり隣接**」であって、owner の設定と読み戻し
 //! （`GetWindow(GW_OWNER)`）は他プロセスの窓に割り込まれない。よって本ファイルは
 //! 自前の非表示トップレベル窓を実際に 2 枚作り、`GetWindow(GW_OWNER)` で
 //! **OS 側の事実**を確かめる。
 //!
-//! 隣接順（`measured_prev`）は非決定ゆえ**値を検査しない**——記録に載ることだけが要件で
-//! あり、その値の正しさは実機サインオフ（ゲート G6）の担当である。
+//! 隣接順（`measured_prev`）は非決定ゆえ**値を検査しない**——記録に載ることだけを見る。
+//! その値の正しさは実機サインオフの担当である。
 //!
 //! 失敗経路は無効ハンドル（null HWND）で決定論的に作れる（`api.rs` のラッパテストと同型）。
 //!
@@ -81,7 +81,7 @@ fn retrigger_handle(world: &mut World, entity: Entity) {
 ///
 /// 検査するのは自前の帳簿（`OwnerLink`）だけではなく、**OS 側の事実**
 /// （`GetWindow(GW_OWNER)`）も含む。加えて初期隣接を確定させる再断行の要求が
-/// 1 度入ること（design.md「案 A の確立フロー」2）も見る。
+/// 1 度入ることも見る。
 #[test]
 fn establishes_owner_once_and_never_again() {
     let owner_hwnd = create_test_window(w!("wintf-zorder-establish-once-char"));
@@ -186,7 +186,7 @@ fn establishes_on_the_cycle_the_second_handle_arrives() {
 /// ハンドルの付いた窓 2 枚に**後から**組の宣言を付けても、宣言が付いた巡で owner を張る。
 ///
 /// ハンドルの付与の巡は宣言の前に過ぎているので、宣言の付与を見なければ確立系は
-/// 二度と手順へ入らず、記録も出ないまま組が守られない（research.md 3 節の 4）。
+/// 二度と手順へ入らず、記録も出ないまま組が守られない。
 #[test]
 fn establishes_when_the_declaration_is_added_after_the_handles() {
     let owner_hwnd = create_test_window(w!("wintf-zorder-establish-latedecl-char"));
@@ -235,7 +235,7 @@ fn establishes_when_the_declaration_is_added_after_the_handles() {
 /// 捕捉の死によって空虚に成立しないようにするためである。
 ///
 /// 欠けたまま何巡しても見送りの記録は増えない——確立系はハンドルか宣言が付いた巡だけ動き、
-/// 毎フレーム巡回では動かない（design.md「Responsibilities & Constraints」の受動性）。
+/// 毎フレーム巡回では動かない。
 /// 3 巡回すのはこの性質を本数で固定するためである。
 #[test]
 fn skips_handle_missing_pair_while_the_complete_pair_establishes() {
@@ -452,7 +452,7 @@ fn records_failure_once_and_does_not_retry_on_the_same_handles() {
 ///
 /// 失敗の印が抑えるのは「同じハンドルの組での繰り返し」だけで、「二度と試さないこと」
 /// ではない（[`OwnerEstablishFailed`] の約束）。比べを「失敗があるか」だけにすると
-/// ここで張られず赤になる（research.md 3 節の 29）。
+/// ここで張られず赤になる。
 #[test]
 fn retries_and_establishes_once_the_handles_are_replaced() {
     let mut world = World::new();

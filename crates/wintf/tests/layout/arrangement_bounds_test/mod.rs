@@ -1,11 +1,7 @@
-// tests/layout/arrangement_bounds_test/mod.rs — arrangement bounds test entry point
-//
-// Behavior-preserving split of the original `arrangement_bounds_test.rs` into two
-// cohesive sub-modules:
-//   - `rect_ext`      : Rect / D2DRectExt geometry + transform_rect_axis_aligned
-//   - `arrangement`   : Size / Arrangement / GlobalArrangement / Matrix3x2 conversions
-//
-// Shared imports are hoisted here; sub-files pull them in via `use super::*`.
+// 配置の境界のテスト（子モジュールの入口）
+// - `rect_ext`    : Rect / D2DRectExt の幾何と transform_rect_axis_aligned
+// - `arrangement`: Size / Arrangement / GlobalArrangement / Matrix3x2 の変換
+// 共通の use はここに集め、子のファイルは `use super::*` で取り込む。
 
 use windows_numerics::Matrix3x2;
 use wintf::ecs::{

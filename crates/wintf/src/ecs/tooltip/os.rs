@@ -79,7 +79,7 @@ pub(crate) fn sample() -> OsSample {
 /// 読めなかった `warn` を出したか（プロセスで 1 回だけにする）。
 static HOVER_TIME_WARNED: AtomicBool = AtomicBool::new(false);
 
-/// OS のマウスを止めたと見なす待ち時間の設定を読む。読めなければ代わりの値（要件 1.6）。
+/// OS のマウスを止めたと見なす待ち時間の設定を読む。読めなければ代わりの値。
 pub(crate) fn read_hover_time() -> Duration {
     let mut ms: u32 = 0;
     // SAFETY: Win32 境界。SPI_GETMOUSEHOVERTIME は書き込み先の u32 に値を書くだけ。
@@ -185,8 +185,8 @@ impl TipWindow {
 
     /// いつも手前の窓の中の最前へ当て直す（入力先は変えない）。窓が無ければ何もしない。
     ///
-    /// 後から最前面へ当て直された別のいつも手前の窓はツールチップを覆う（最初の試し S7）。
-    /// 出す番の間の見回りのたびに呼んで手前へ戻す（設計の S7 の逃げ道）。
+    /// 後から最前面へ当て直された別のいつも手前の窓はツールチップを覆うので、出す番の間の
+    /// 見回りのたびに呼んで手前へ戻す。
     pub(crate) fn keep_on_top(&self) -> Result<(), TooltipOsError> {
         let Some(hwnd) = self.hwnd else {
             return Ok(());
@@ -216,10 +216,10 @@ impl TipWindow {
             );
             (UNBOUNDED, 96)
         });
-        // ⓪ 窓の DPI を出す画面の DPI に揃える。版 6 は今の窓の DPI で並べ、窓が別の DPI の画面へ
+        // 窓の DPI を出す画面の DPI に揃える。版 6 は今の窓の DPI で並べ、窓が別の DPI の画面へ
         // 動くとその DPI で並べ直す。画面の外 (PARKED) では最後に居た画面の DPI のまま。揃えずに
         // 測ると、出した所で大きさが変わり、置き場所がずれる。隠したまま出す所へ動かすと、窓の DPI
-        // はその画面の DPI になり、画面の外へ移っても保たれる（6.3 の実機）。
+        // はその画面の DPI になり、画面の外へ移っても保たれる（実機で確かめた）。
         // SAFETY: Win32 境界。自分の窓の DPI を読むだけ。
         if unsafe { GetDpiForWindow(hwnd) } != dpi {
             self.hide();
@@ -237,12 +237,11 @@ impl TipWindow {
             }
             .map_err(|_| TooltipOsError::Show { stage: "dpi" })?;
         }
-        // ① 字体（DPI が前回と同じなら作り直さない）。
         let font = self.ensure_font(hwnd, dpi)?;
-        // ② 最大の幅。版 6 には窓の DPI の倍率で割り戻した幅を渡す（OS が掛け戻して物理の幅で折る）。
         let max_width = max_tip_width(dpi, work_area);
         // SAFETY: Win32 境界。自分の窓の DPI を読むだけ。
         let window_dpi = unsafe { GetDpiForWindow(hwnd) };
+        // 版 6 には窓の DPI の倍率で割り戻した幅を渡す（OS が掛け戻して物理の幅で折る）。
         let os_max_width = if self.v6 {
             logical_max_width(max_width, window_dpi)
         } else {
@@ -257,7 +256,6 @@ impl TipWindow {
                 Some(LPARAM(os_max_width as isize)),
             );
         }
-        // ③ CR LF に揃えた文字 → ④ 大きさを測る。
         let mut text = normalize_newlines(text);
         let mut size = set_text_and_measure(hwnd, &text)?;
         // 最大の幅は文字の幅なので、ふちを足した窓の幅と比べる（測った大きさと同じ窓の矩形の単位）。
@@ -266,7 +264,6 @@ impl TipWindow {
             text = break_long_lines(hwnd, font, &text, max_width)?;
             size = set_text_and_measure(hwnd, &text)?;
         }
-        // ⑤ 置き場所。
         // SAFETY: Win32 境界。引数は番号と DPI だけ。
         let cursor_height = unsafe { GetSystemMetricsForDpi(SM_CYCURSOR, dpi) };
         let pos = place(&PlaceInput {
@@ -276,11 +273,8 @@ impl TipWindow {
             offset_above: scale(20, dpi),
             offset_below: cursor_height,
         });
-        // ⑥ 出す（置き場所へ動かす）。
         track_at(hwnd, pos);
-        // ⑦ いつも手前の最前へ。
         self.keep_on_top()?;
-        // ⑧ 実際の矩形。
         window_rect(hwnd)
     }
 
@@ -296,9 +290,9 @@ impl TipWindow {
         // SAFETY: Win32 境界。標準の部品を読み込み、ツールチップの窓の種類を登録させる。
         // 失敗しても次の CreateWindowExW が失敗して誤りになるので、結果は見ない。
         let _ = unsafe { InitCommonControlsEx(&icc) };
-        // 持ち主の窓は付けない。マウスを素通しし、入力先を取らず、タスクバーに出さない。
+        // 持ち主の窓は付けない。
         //
-        // 素通しは WS_EX_LAYERED と WS_EX_TRANSPARENT の組で効かせる（最初の試し S4）。ツールチップは
+        // マウスの素通しは WS_EX_LAYERED と WS_EX_TRANSPARENT の組で効かせる。ツールチップは
         // マウスの当たりの問い合わせに「透明」と答えるが、OS がそれで下へ回すのは同じスレッドの窓だけ
         // で、別のアプリ（メモ帳）の窓への押下は捨てられる。層の窓にして初めて別のプロセスへ素通しする。
         // 標準のツールチップはフェードが有効だと出すたび（TTM_TRACKACTIVATE）に WS_EX_LAYERED を
@@ -360,7 +354,7 @@ impl TipWindow {
         Ok(hwnd)
     }
 
-    /// DPI に合った字体を渡す。前回と同じ DPI なら作り直さない（要件 3.7）。
+    /// DPI に合った字体を渡す。前回と同じ DPI なら作り直さない。
     fn ensure_font(&mut self, hwnd: HWND, dpi: u32) -> Result<HFONT, TooltipOsError> {
         if let Some((font, made_for)) = self.font
             && made_for == dpi
@@ -421,7 +415,7 @@ impl Drop for TipWindow {
 ///
 /// 道具の窓（`hwnd`）はツールチップの窓自身。`TTF_TRANSPARENT` は受けたマウスのメッセージを道具の
 /// 窓へ回すので自分へ回りうるが、層の窓で素通しするため、ツールチップのスレッドへマウスの
-/// メッセージは届かず、その回し先の道は通らない（最初の試し S4 の上での移動で確かめた）。
+/// メッセージは届かず、その回し先の道は通らない（ツールチップの上での移動で確かめた）。
 fn tool_info(hwnd: HWND, text: PWSTR) -> TTTOOLINFOW {
     TTTOOLINFOW {
         // 末尾の lpReserved を含めない大きさにする。含めると、版 6 の申告の無い exe（古い版）で
@@ -457,9 +451,9 @@ fn track_at(hwnd: HWND, pos: PointPx) {
 
 /// 文字を入れ直し、置き場所へ動かす前の窓の大きさを測る。
 ///
-/// 大きさは追跡の始まった窓の `GetWindowRect` で測る（設計の S2 の逃げ道）。`TTM_GETBUBBLESIZE` は
+/// 大きさは追跡の始まった窓の `GetWindowRect` で測る。`TTM_GETBUBBLESIZE` は
 /// 使わない: 古い版（版 5）は追跡を始める前に送るとプロセスごと落ち、新しい版（版 6）は実際の窓より
-/// 幅・高さとも 1 大きい値を返す（最初の試し S2・6.1 の実機）。出ていなければ画面の外で追跡を始めて
+/// 幅・高さとも 1 大きい値を返す（実機で確かめた）。出ていなければ画面の外で追跡を始めて
 /// から測り、置き場所へは後で動かす。出ていればその場で入れ替えて測る（画面の外へ外すと、出ている
 /// ものが一瞬消えうる）。追跡は文字が入ってからでないと始まらないので、文字の後に始める。始まらな
 /// ければ測らずに誤りにする。
@@ -509,7 +503,7 @@ fn window_rect(hwnd: HWND) -> Result<RectPx, TooltipOsError> {
 ///
 /// ふちと余白は `TTM_ADJUSTRECT(TRUE)` で足し、遊びを 2 論理ピクセル足す。OS が並べた窓の幅は、
 /// ADJUSTRECT の答えより版 5 で 0〜1、版 6 で 1〜2 ピクセル広い（版 6 はふちの換算の差、両方とも
-/// 行の終わりの字のはみ出しの分。6.3 の実機の 200%・150%）。遊びが無いと、OS が最大の幅の内で
+/// 行の終わりの字のはみ出しの分。200%・150% の実機で測った）。遊びが無いと、OS が最大の幅の内で
 /// 折り返せた英語の行まで越えたと見て、語の途中で割ってしまう。
 // ponytail: 遊びの分（2 論理ピクセル）だけ最大の幅を越える分けられない語は割らない（窓がその分
 // 広くなるだけ）。ぴったりにするなら、字体を作るたびに 1 行の見本を OS に並べさせてふちを測る。

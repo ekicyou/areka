@@ -8,9 +8,8 @@ use super::handlers::{
 use super::region::{on_normal_hit_box_pressed, on_region_box_moved, on_region_box_pressed};
 use super::*;
 
-/// Flexboxデモウィンドウを作成（パラメータ化）
+/// Flexboxデモウィンドウを作成
 pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Point) -> Entity {
-    // Window Entity (ルート)
     // WindowPos.position でクライアント領域の位置を指定
     let window_entity = world
         .spawn((
@@ -66,9 +65,7 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
                 })),
                 ..Default::default()
             },
-            // イベントハンドラ: 右クリックで色変更
             OnPointerPressed(on_container_pressed),
-            // ドラッグハンドラ: ウィンドウドラッグ移動
             DragConfig::default(),
             OnDragStart(on_container_drag_start),
             OnDrag(on_container_drag),
@@ -99,7 +96,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
                 flex_basis: Some(Dimension::Px(200.0)),
                 ..Default::default()
             },
-            // イベントハンドラ: 左クリックで色トグル（赤 ⇔ 黄）
             OnPointerPressed(on_red_box_pressed),
             ChildOf(flex_container),
         ))
@@ -126,7 +122,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
             })),
             ..Default::default()
         },
-        // イベントハンドラ: 不透明部分クリックでイベント消費（親に伝播しない）
         OnPointerPressed(on_image_pressed),
         ChildOf(red_box),
     ));
@@ -157,9 +152,7 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
                 flex_basis: Some(Dimension::Auto),
                 ..Default::default()
             },
-            // イベントハンドラ: ポインター移動でログ出力
             OnPointerMoved(on_green_box_moved),
-            // イベントハンドラ: ポインター押下でTunnelキャプチャ
             OnPointerPressed(on_green_box_pressed),
             ChildOf(flex_container),
         ))
@@ -186,7 +179,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
             }),
             ..Default::default()
         },
-        // イベントハンドラ: Tunnelキャプチャ検証用
         OnPointerPressed(on_green_child_pressed),
         ChildOf(green_box),
     ));
@@ -215,7 +207,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
             flex_basis: Some(Dimension::Auto),
             ..Default::default()
         },
-        // イベントハンドラ: 左クリックでサイズトグル
         OnPointerPressed(on_blue_box_pressed),
         ChildOf(flex_container),
     ));
@@ -255,7 +246,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
         .id();
 
     // --- 1. 矩形リージョン (Rect) ---
-    // 4分割: top-left / top-right / bottom-left / bottom-right
     let rect_region_map = HitRegionMap::builder()
         .rect("top-left", 0.0, 0.0, 70.0, 75.0)
         .rect("top-right", 70.0, 0.0, 70.0, 75.0)
@@ -288,7 +278,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     ));
 
     // --- 2. 多角形リージョン (Polygon) ---
-    // 4分割を四角形のポリゴンで表現（各象限を 1 つの四角形で）
     let polygon_region_map = HitRegionMap::builder()
         .polygon(
             "top-left",
@@ -333,7 +322,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     ));
 
     // --- 3. 混在リージョン (Mixed) ---
-    // rect(top-left, bottom-right) + polygon(top-right, bottom-left) の混在
     let mixed_region_map = HitRegionMap::builder()
         .rect("top-left", 0.0, 0.0, 70.0, 75.0)
         .polygon(

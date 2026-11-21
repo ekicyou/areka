@@ -1,4 +1,4 @@
-//! 入れ物の答え（WARP・要件 4.1, 4.2, 4.4, 4.8, 7.7）。入れ物へ合成して別の的の整数の offset へ
+//! 入れ物の答え（WARP）。入れ物へ合成して別の的の整数の offset へ
 //! 写した絵が、offset を変換に入れて直接描いた絵（`render_surface` の今の道）とビットで一致する。
 
 use super::composite::{SurfaceComposite, compose_or_drop};
@@ -187,7 +187,7 @@ fn contents_stay_after_copy_and_second_copy_is_identical() {
     assert!(first.bytes == second.bytes, "2 度目の写しが違う");
 }
 
-/// 部分の写し（2.6・2.9）: 写す矩形の外は的の前の画素のまま、中は全面の写しと同じ画素になる。
+/// 部分の写し: 写す矩形の外は的の前の画素のまま、中は全面の写しと同じ画素になる。
 #[test]
 fn copy_rect_to_keeps_outside_and_matches_full_copy_inside() {
     let mut world = World::new();
@@ -271,7 +271,7 @@ fn generation_goes_up_per_compose() {
     );
 }
 
-// ---- 読みの手順（要件 5.1, 5.2, 5.4, 5.9, 7.8）----
+// ---- 読みの手順 ----
 
 /// 根の列と木を拡大 `s` で合成した入れ物と、同じ絵を原点に直接描いた答えの画素。
 fn composed_with_answer(s: f32) -> (SurfaceComposite, Pixels) {

@@ -68,16 +68,6 @@
 //! - **ダーティビット伝播**: 影響を受けるサブツリーのみを更新
 //! - **幅優先探索**: `WorkQueue`を使用した効率的な階層走査
 //! - **不要な伝播の回避**: `Ref<T>::is_changed()`で更新が必要なノードのみ処理
-//!
-//! ## Trait制約
-//!
-//! 型パラメータには以下の制約が必要です：
-//!
-//! - **`L`**: `Component + Copy + Into<G>`
-//! - **`G`**: `Component<Mutability = Mutable> + Copy + PartialEq + Mul<L, Output = G>`
-//! - **`M`**: `Component<Mutability = Mutable> + Copy`
-//!
-//! `Mul<L, Output = G>`により、親のグローバル変換と子のローカル変換を積算できます。
 
 pub(crate) mod ancestors;
 pub mod tree_iter;

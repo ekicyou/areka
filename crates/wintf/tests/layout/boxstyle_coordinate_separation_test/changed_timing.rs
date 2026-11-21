@@ -1,4 +1,4 @@
-//! Task 7.2: Changed<BoxStyle> 発火タイミングテスト
+//! Changed<BoxStyle> 発火タイミングテスト
 
 use bevy_ecs::prelude::*;
 use wintf::ecs::layout::{BoxSize, BoxStyle, Dimension, sync_window_arrangement_from_window_pos};
@@ -40,7 +40,6 @@ fn test_changed_boxstyle_not_fired_on_position_only_change() {
         ))
         .id();
 
-    // Changed<BoxStyle> 検知用システム
     fn detect_boxstyle_change(
         query: Query<Entity, Changed<BoxStyle>>,
         mut changed_count: ResMut<ChangedBoxStyleCount>,
@@ -65,7 +64,6 @@ fn test_changed_boxstyle_not_fired_on_position_only_change() {
     schedule.run(&mut world);
     let initial_count = world.resource::<ChangedBoxStyleCount>().0;
 
-    // WindowPos.position のみ変更（BoxStyle は触らない）
     world.get_mut::<WindowPos>(entity).unwrap().position = Some(Point { x: 500, y: 300 });
     schedule.run(&mut world);
 

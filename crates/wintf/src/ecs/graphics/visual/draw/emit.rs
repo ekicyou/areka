@@ -1,4 +1,4 @@
-//! 描く列を DC へ再生する係（COM を呼ぶのはここだけ）。変換の規則は design の System Flows の表。
+//! 描く列を DC へ再生する係（COM を呼ぶのはここだけ）。
 
 use super::super::MixMode;
 use super::command::*;
@@ -18,7 +18,7 @@ pub(crate) enum DrawMethod {
     Image(D2D1_COMPOSITE_MODE),
     /// `BlendImage` をこのブレンドで。
     Blend(D2D1_BLEND_MODE),
-    /// ブレンドの描き方（`ID2D1DeviceContext6`）が無い。`SOURCE_OVER` で描く（1.7）。
+    /// ブレンドの描き方（`ID2D1DeviceContext6`）が無い。`SOURCE_OVER` で描く。
     BlendUnavailable,
     /// 重ね方 0〜12・ブレンド 0〜25 の外。D2D へ渡さず `SOURCE_OVER` で描く。
     OutOfRange,
@@ -52,15 +52,15 @@ static MIX_OUT_OF_RANGE: AtomicBool = AtomicBool::new(false);
 /// - `root` は描画面の変換（`GlobalArrangement` の拡大＋`BeginDraw` の offset）。DIP→物理。
 /// - `Draw` は `world_mat * root`・軸に沿う切り抜きは `root`（矩形は DIP のまま渡す）・
 ///   図形の切り抜きは DC を恒等にして局所→物理の全部を層の `maskTransform` で渡す。
-/// - ブレンドは世界の変形を効かせたあと `BlendImage` で描き、絵の外を変えない（1.3・1.6）。
+/// - ブレンドは世界の変形を効かせたあと `BlendImage` で描き、絵の外を変えない。
 ///   ブレンドの描き方が無いときと範囲の外の値は、種類ごとにプロセスで 1 度だけ `error!` を残して
-///   `SOURCE_OVER` で描く（1.7）。
+///   `SOURCE_OVER` で描く。
 /// - 層はどれも変換を恒等にし、範囲を物理の整数の矩形へ外向きに丸めて積む。
 /// - 不透明度の層は透明から始まり、降ろすとき `SOURCE_OVER` で不透明度を掛けて重なる。層の中の
-///   重ね方とブレンドは、同じ層の中で先に描いた画素に効く（3.4）。
+///   重ね方とブレンドは、同じ層の中で先に描いた画素に効く。
 /// - 図形の切り抜きの層は背景の写しから始まり（`INITIALIZE_FROM_BACKGROUND`）、積む時点だけ基本の
 ///   混ぜ方を `COPY` にする。降ろすとき覆いの割合で層と的を線形に補間するので、中の重ね方と
-///   ブレンドは切り抜きの形に依らず下の画素に効き、外側は変わらない（3.1〜3.3）。基本の混ぜ方は
+///   ブレンドは切り抜きの形に依らず下の画素に効き、外側は変わらない。基本の混ぜ方は
 ///   積む時点の値が効き、積んだ直後に `SOURCE_OVER` へ戻す（降ろす直前だけ `COPY` にすると誤る）。
 /// - `dc6` はブレンドの描き方（`BlendImage`）を持つ同じ DC。持たない DC なら `None`。
 ///   呼び手が合成の回に 1 度 `dc.cast()` して渡す。
@@ -75,7 +75,7 @@ pub(crate) fn emit(
     play(dc, dc6, root, commands, None);
 }
 
-/// `emit` と同じ再生で、項の `bounds` が描く矩形 `rect` と交わらない件（`Draw`）を飛ばす（2.2）。
+/// `emit` と同じ再生で、項の `bounds` が描く矩形 `rect` と交わらない件（`Draw`）を飛ばす。
 ///
 /// 層の命令は全部そのまま積み降ろし、層の旗は変えない。範囲の外の画素は呼び手の切り抜きが守るので、
 /// 飛ばすのは性能のためだけ。前提: `entries` は同じ `commands` から作った列（Pop 以外の命令と
@@ -111,7 +111,6 @@ fn play(
     within: Option<(&[DamageEntry], PxRect)>,
 ) {
     let identity = Matrix3x2::identity();
-    // 項の番号（Pop 以外の命令を数える）。
     let mut index = 0usize;
     for command in commands {
         let entry = index;
@@ -183,7 +182,7 @@ fn play(
                 DrawCommand::PopClipRect => dc.PopAxisAlignedClip(),
                 DrawCommand::PushClipGeometry(clip) => {
                     dc.SetTransform(&identity);
-                    // 積む時点の基本の混ぜ方が降ろすときに効く（research.md §10.2）。
+                    // 積む時点の基本の混ぜ方が降ろすときに効く。
                     dc.SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_COPY);
                     let params = D2D1_LAYER_PARAMETERS1 {
                         contentBounds: outward_physical(clip.world_aabb, root),

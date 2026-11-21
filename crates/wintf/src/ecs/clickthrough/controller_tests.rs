@@ -5,8 +5,6 @@ use std::time::Instant;
 use windows::Win32::Foundation::HWND;
 
 fn entity(id: u32) -> Entity {
-    // bevy_ecs 0.18: from_raw_u32 は index から Entity を生成する（None は
-    // 予約インデックスのみ）。テスト用ダミーなので unwrap で十分。
     Entity::from_raw_u32(id).expect("valid test entity index")
 }
 
@@ -38,7 +36,7 @@ fn just_ended() -> DragState {
     }
 }
 
-// --- 非ドラッグ写像（R3.3） ---
+// --- 非ドラッグ写像 ---
 
 #[test]
 fn maps_hit_some_to_opaque_when_last_was_transparent() {
@@ -52,7 +50,7 @@ fn maps_hit_none_to_transparent_when_last_was_opaque() {
     assert_eq!(out, Some(DesiredState::Transparent));
 }
 
-// --- 差分ガード（R3.2） ---
+// --- 差分ガード ---
 
 #[test]
 fn diff_guard_hit_some_already_opaque_returns_none() {
@@ -66,25 +64,23 @@ fn diff_guard_hit_none_already_transparent_returns_none() {
     assert_eq!(out, None);
 }
 
-// --- ドラッグ抑止（R5.1/R5.3） ---
+// --- ドラッグ抑止 ---
 
 #[test]
 fn dragging_never_goes_transparent_even_when_hit_none() {
-    // コア R5 アンチフリッカ: 移動中にカーソルがキャラから外れても透過に落とさない。
+    // 移動中にカーソルがキャラから外れても透過に落とさない。
     let out = resolve_transition(None, &dragging(), DesiredState::Opaque);
     assert_eq!(out, None);
 }
 
 #[test]
 fn dragging_forces_opaque_when_last_was_transparent() {
-    // 移動中は強制 Opaque。透過状態から入ったら不透過へ引き戻す（透過にはしない）。
     let out = resolve_transition(None, &dragging(), DesiredState::Transparent);
     assert_eq!(out, Some(DesiredState::Opaque));
 }
 
 #[test]
 fn just_started_also_suppresses_transparent() {
-    // JustStarted（移動開始直後）も抑止対象。
     let just_started = DragState::JustStarted {
         entity: entity(1),
         start_pos: ppoint(),
@@ -97,11 +93,10 @@ fn just_started_also_suppresses_transparent() {
     );
 }
 
-// --- JustEnded 再収束（R5.2） ---
+// --- JustEnded 再収束 ---
 
 #[test]
 fn just_ended_reconverges_to_transparent_when_hit_none() {
-    // 抑止解除後、現在 hit=None なので透過へ再収束する。
     let out = resolve_transition(None, &just_ended(), DesiredState::Opaque);
     assert_eq!(out, Some(DesiredState::Transparent));
 }
@@ -126,7 +121,6 @@ fn preparing_behaves_as_non_drag_mapping() {
         resolve_transition(None, &preparing, DesiredState::Opaque),
         Some(DesiredState::Transparent)
     );
-    // hit=Some → Opaque。
     assert_eq!(
         resolve_transition(Some(entity(2)), &preparing, DesiredState::Transparent),
         Some(DesiredState::Opaque)
@@ -160,8 +154,7 @@ fn global_arrangement(left: f32, top: f32, right: f32, bottom: f32) -> GlobalArr
     }
 }
 
-/// 実所有のテスト HWND（非表示ポップアップ "Static"）を生成する。
-/// task 1.1 の `apply_click_through` テストと同じ生成レシピ。呼び出し側が破棄する。
+/// 実所有のテスト HWND（非表示ポップアップ "Static"）を生成する。呼び出し側が破棄する。
 fn create_test_hwnd() -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::WindowsAndMessaging::{
@@ -207,9 +200,7 @@ fn is_transparent(hwnd: HWND) -> bool {
 /// テスト用 screen→client 変換の模擬。`world_with_hittable_window` が用いる
 /// WindowPos.position=(100,200) を模して `client = cursor - (100,200)` を返す。
 ///
-/// production は `screen_to_client_point`（OS `ScreenToClient`）が実 HWND の実座標で
-/// 変換するが、状態機械テストは実 HWND 座標に依存させず決定的な模擬変換で検証する
-/// （座標変換の正しさは OS ScreenToClient に委ねる＝4.2 実動検証で確認）。
+/// 状態機械テストは実 HWND の座標に依存させず、決定的な模擬変換で検証する。
 fn sim_s2c(cursor: PhysicalPoint) -> impl Fn(HWND) -> Option<PointF> {
     move |_hwnd| {
         Some(PointF::new(
@@ -253,7 +244,6 @@ fn eval_hit_some_from_transparent_becomes_opaque() {
     let window = world_with_hittable_window(&mut world, hwnd);
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        // 前提: TRANSPARENT を立てて last_applied=Transparent の状態から開始。
         apply_click_through(hwnd, true).expect("seed transparent");
         assert!(is_transparent(hwnd), "seed: TRANSPARENT must be set");
 
@@ -356,14 +346,11 @@ fn eval_reregister_same_hwnd_then_hit_clears_transparent() {
         let mut reg = ClickThroughRegistry::new();
         reg.register(window, hwnd);
 
-        // 外れで評価して透過を適用する（last_applied=Transparent）。
         evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(0, 0)));
         assert!(is_transparent(hwnd), "前提: 透過が適用されている");
 
-        // 同じ HWND で登録し直す。
         reg.register(window, hwnd);
 
-        // 当たりの上で評価すると透過が外れる。
         evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(150, 250)));
         assert!(
             !is_transparent(hwnd),
@@ -388,7 +375,6 @@ fn eval_honors_drag_snapshot_just_ended_reconverges() {
     let hwnd = create_test_hwnd();
     let window = world_with_hittable_window(&mut world, hwnd);
 
-    // thread_local を JustEnded に設定（状態は Copy で直接構築可能）。
     update_drag_state(|state| {
         *state = DragState::JustEnded {
             entity: entity(1),
@@ -396,7 +382,6 @@ fn eval_honors_drag_snapshot_just_ended_reconverges() {
             cancelled: false,
         };
     });
-    // 前提確認: スナップショットが JustEnded であること。
     assert!(matches!(snapshot_drag_state(), DragState::JustEnded { .. }));
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -430,7 +415,7 @@ fn is_layered(hwnd: HWND) -> bool {
     ex & EX_LAYERED.0 != 0
 }
 
-/// (e) LAYERED 同伴フラグ: 登録窓は初回評価で `WS_EX_LAYERED` が立ち（pilot 必須条件）、
+/// (e) LAYERED 同伴フラグ: 登録窓は初回評価で `WS_EX_LAYERED` が立ち、
 /// レジストリの `layered_applied` が真へ倒れる。以後の評価で重複適用しない（冪等）。
 #[test]
 fn eval_applies_layered_companion_on_first_pass() {
@@ -454,7 +439,6 @@ fn eval_applies_layered_companion_on_first_pass() {
             "適用成功後に layered_applied が真へ倒れるべき"
         );
 
-        // 2 回目の評価でも LAYERED は保持されたまま（落とさない・冪等）。
         evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(0, 0)));
         assert!(is_layered(hwnd), "以後の評価でも LAYERED は保持される");
     }));
@@ -489,7 +473,6 @@ fn eval_skips_window_without_position() {
 
         evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(10, 10)));
 
-        // position 未確定ゆえ skip・last_applied は初期 Opaque のまま。
         assert_eq!(reg.last_applied(window), Some(DesiredState::Opaque));
     }));
     destroy_test_hwnd(hwnd);
@@ -499,7 +482,7 @@ fn eval_skips_window_without_position() {
 }
 
 // ========================================================================
-// prune_dead_targets（窓破棄追随・R7.2 / Lifecycle）
+// prune_dead_targets（窓破棄追随）
 // ========================================================================
 
 use crate::ecs::window::{Window as WinComp, WindowHandle, WindowStyle};
@@ -544,7 +527,6 @@ fn prune_removes_despawned_window_entity() {
     reg.register(dead, fake_hwnd(2));
     assert_eq!(reg.len(), 2);
 
-    // 1 窓を despawn（破棄相当）。
     world.despawn(dead);
 
     let removed = prune_dead_targets(&world, &mut reg);
@@ -628,7 +610,6 @@ fn eval_skips_apply_for_destroyed_window() {
     let window = world_with_hittable_window(&mut world, hwnd);
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        // seed: TRANSPARENT を立て last_applied=Transparent。
         apply_click_through(hwnd, true).expect("seed transparent");
         assert!(is_transparent(hwnd), "seed: TRANSPARENT set");
 
@@ -639,8 +620,7 @@ fn eval_skips_apply_for_destroyed_window() {
         // 窓破棄相当: Entity を despawn（areka の close パスと同じ正準シグナル）。
         world.despawn(window);
 
-        // 破棄後の評価: prune で対象から外れ、hit=Some でも apply が走らない。
-        // cursor screen (150,250) は本来 hit=Some → Opaque へ動くはずだが、prune 済みゆえ不変。
+        // cursor screen (150,250) は本来 hit=Some → Opaque へ動く位置だが、prune 済みゆえ不変のはず。
         evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(150, 250)));
 
         assert!(reg.is_empty(), "破棄窓は評価前 prune で除去される");
@@ -659,7 +639,7 @@ fn eval_skips_apply_for_destroyed_window() {
 // ClickThroughRegistryHandle（areka 登録面・NonSend リソース）
 // ========================================================================
 
-/// 公開ハンドル経由の register が共有レジストリへ反映される（areka 4.1 の登録面）。
+/// 公開ハンドル経由の register が共有レジストリへ反映される。
 #[test]
 fn registry_handle_register_reflects_shared_registry() {
     let registry = StdRc::new(StdRefCell::new(ClickThroughRegistry::new()));
@@ -699,7 +679,7 @@ fn start_then_drop_joins_worker_without_hanging() {
 
 /// `run()` が戻った後に届いた起床では、判定ループは判定を回さずに終わる。待ちの間は
 /// World とカーソル監視の強参照を握らない（`run()` の終わりで `ClickThroughHandle` を捨てれば、
-/// 唯一の強参照が落ちてワーカが止まる）。areka-P0-shiori-fault-notice task 7.2。
+/// 唯一の強参照が落ちてワーカが止まる）。
 ///
 /// 判定が回ったかは「World に居ない窓の対象がレジストリから刈られたか」で見る（判定の最初の
 /// 手順が `prune_dead_targets`）。`block_on` は届いた順にタスクを回すので、起床の後の

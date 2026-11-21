@@ -18,7 +18,7 @@ impl App {
 
     /// ディスプレイ構成が変更されたことをマーク
     pub fn mark_display_change(&mut self) {
-        // 表示構成が変わった＝幾何をやり直す仕事がある（設計 C16 の `WM_GEOMETRY`）。
+        // 表示構成が変わった＝幾何をやり直す仕事がある。
         crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::WM_GEOMETRY);
         self.display_configuration_changed = true;
         info!("[App] Display configuration changed");
@@ -47,10 +47,8 @@ impl App {
     /// ウィンドウが破棄されたときに呼ばれる
     /// 最後のウィンドウが閉じられた場合はtrueを返す
     ///
-    /// NOTE: 新 `WinApp` 経路のアプリ終了は `WindowRegistry` の空遷移
+    /// アプリ終了はこのメソッドではなく `WindowRegistry` の空遷移
     /// （`reconcile_window_registry` → `AppExit::request_exit`）が駆動する。
-    /// 旧 `WM_LAST_WINDOW_DESTROYED` を message_window へ PostMessage する経路は撤去した
-    /// （task 4.5）。本メソッドは window_count の追跡と「最後のウィンドウか」の判定のみを担う。
     pub fn on_window_destroyed(&mut self, entity: Entity) -> bool {
         self.window_count = self.window_count.saturating_sub(1);
         debug!(
@@ -168,7 +166,6 @@ mod tests {
         assert!(!app.on_window_destroyed(entity(3)));
         assert_eq!(app.window_count(), 2);
 
-        // 破棄途中の再作成で count は再び増える
         app.on_window_created(entity(4));
         assert_eq!(app.window_count(), 3);
 
@@ -176,7 +173,6 @@ mod tests {
         assert!(!app.on_window_destroyed(entity(2)));
         assert_eq!(app.window_count(), 1);
 
-        // 最後の1つの破棄で 0 到達・true
         assert!(app.on_window_destroyed(entity(1)));
         assert_eq!(app.window_count(), 0);
     }

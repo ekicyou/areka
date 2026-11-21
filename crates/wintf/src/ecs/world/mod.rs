@@ -31,7 +31,7 @@ use tracing::{error, info};
 /// WUC オブジェクトに触る schedule を SingleThreaded executor に固定して
 /// 「全 WUC 呼び出し＝UI スレッド」を構造的に保証する。
 ///
-/// 背景（2026-07-02 実測）: DComp は free-threaded で MultiThreaded executor
+/// 背景: DComp は free-threaded で MultiThreaded executor
 /// （worker スレッド実行）でも動作していたが、WUC 移行でこの前提が崩れた。
 /// worker スレッドで CreateDispatcherQueueController(DQTYPE_THREAD_CURRENT) が走ると
 /// DispatcherQueue がポンプの無い worker に紐づき、エラーを一切出さないまま
@@ -48,7 +48,7 @@ pub(crate) fn single_threaded_schedules() -> [InternedScheduleLabel; 6] {
     ]
 }
 
-/// 外側 `Rc<RefCell<EcsWorld>>` への弱参照を保持する NonSend リソース（task 4.3）。
+/// 外側 `Rc<RefCell<EcsWorld>>` への弱参照を保持する NonSend リソース。
 ///
 /// `create_windows`（排他システム）は bevy の `&mut World` しか持たないが、ウィンドウ生成
 /// ファクトリ（runtime 層 `EcsWindowFactory`）は wndproc クロージャの `WndState` 用に
@@ -60,7 +60,7 @@ pub(crate) fn single_threaded_schedules() -> [InternedScheduleLabel; 6] {
 ///
 /// 注入は `WinApp`（runtime）が `new()`/`run()` 開始時に `Rc::downgrade(&self.world)` を
 /// insert する（facade から下向き）。`create_windows` はこのリソースの有無で新経路
-/// （ファクトリ生成）/ 旧 `WinThreadMgr` 経路（no-op）を分岐する（task 4.3 解釈 (1)/(2)）。
+/// （ファクトリ生成）/ 旧 `WinThreadMgr` 経路（no-op）を分岐する。
 pub struct EcsWorldSelfRef(pub Weak<RefCell<EcsWorld>>);
 
 /// ECSワールドのラッパー
@@ -71,7 +71,7 @@ pub struct EcsWorld {
     tick_diag: tick_diag::TickDiag,
     /// tick の門が有効か（既定 **無効**＝門を入れる前と同じ挙動）。
     ///
-    /// 既定値は周 1 の A/B（既定 ON 対 既定 OFF）で決める（設計 C16）。areka は起動時に
+    /// 既定値は周 1 の A/B（既定 ON 対 既定 OFF）で決める。areka は起動時に
     /// `AREKA_TICK_GATE=1|0` を読んで [`set_tick_gate`](Self::set_tick_gate) で上書きできる。
     tick_gate_enabled: bool,
     /// 起動からの画面更新の回数（**省略した回も含む**・起動直後かどうかの物差し）。
@@ -90,15 +90,14 @@ impl EcsWorld {
     pub fn new() -> Self {
         let mut world = World::new();
 
-        // リソースの初期化
         world.insert_resource(crate::ecs::app::App::new());
         world.insert_resource(FrameCount::default());
         world.insert_resource(crate::ecs::layout::taffy::TaffyLayoutResource::default());
-        // Surface生成統計リソース（Req 5.3）
+        // Surface生成統計リソース
         world.insert_resource(crate::ecs::graphics::SurfaceCreationStats::default());
 
         // WicCore初期化（Device Lostの影響を受けない独立リソース）
-        // 生成失敗は無言スキップにせず error! で記録する（Req 9.4・log-first）。
+        // 生成失敗は無言スキップにせず error! で記録する。
         // factory 無しでも縮退継続する（画像デコード不可のまま return しない）。
         match crate::ecs::widget::bitmap_source::WicCore::new() {
             Ok(wic_core) => {
@@ -112,29 +111,25 @@ impl EcsWorld {
             }
         }
 
-        // FrameTime初期化（dola::runtime::clock::now() の値を保持）
         world.insert_resource(crate::ecs::graphics::FrameTime(dola::runtime::clock::now()));
 
-        // TickStart初期化（遷移観測の刻印の時刻基準・D1）
+        // TickStart初期化（遷移観測の刻印の時刻基準）
         // 最初の tick で FrameCount と同じ点から更新されるが、tick 前に World を借りる
         // 観測点が資源を引けるよう構築時に置いておく。
         world.insert_resource(crate::ecs::window::transition_diag::TickStart(
             Instant::now(),
         ));
 
-        // WintfTaskPool初期化（非同期タスク実行基盤）
         world.insert_resource(crate::ecs::widget::bitmap_source::WintfTaskPool::new());
 
         // LayoutRootとMonitor階層を初期化（Window spawnより前に必要）
         crate::ecs::layout::initialize_layout_root(&mut world);
 
-        // ドラッグ累積器の登録
         crate::ecs::drag::install_drag_accumulator(&mut world);
 
         // ドラッグコンテキスト（ECS のシステムから同じ UI スレッドの wndproc へ値を渡す）の登録
         world.insert_resource(crate::ecs::drag::WindowDragContextResource::new());
 
-        // スケジュールの登録
         {
             world.init_resource::<Schedules>();
             let mut schedules = world.resource_mut::<Schedules>();
@@ -164,7 +159,6 @@ impl EcsWorld {
             }
         }
 
-        // デフォルトシステムの登録
         {
             let mut schedules = world.resource_mut::<Schedules>();
 
@@ -181,10 +175,6 @@ impl EcsWorld {
                 crate::ecs::pointer::dispatch_pointer_events
                     .after(crate::ecs::widget::bitmap_source::systems::drain_task_pool_commands),
             );
-
-            // 注: process_pointer_buffersは廃止
-            // WndProcスレッドのthread_localバッファは、try_tick_world()内の
-            // transfer_buffers_to_world()で直接Worldに転送される
 
             // Inputスケジュール: ドラッグイベントディスパッチ
             schedules.add_systems(
@@ -244,8 +234,7 @@ impl EcsWorld {
             );
 
             // PostLayoutスケジュール: 論理計算系（Arrangement伝播まで）
-            // Note: Arrangementは各コンポーネントのon_addフックで自動挿入されるため、
-            //       init_window_arrangementシステムは廃止されました。
+            // Arrangement は各コンポーネントの on_add フックで自動挿入される
             schedules.add_systems(
                 PostLayout,
                 (
@@ -356,9 +345,9 @@ impl EcsWorld {
             );
 
             // CommitComposition: 現状システム無し（空スケジュール）
-            // Note: WUC への合成 commit は暗黙反映のため専用システム不要（要件 7.1）。旧 ULW 画面転送
-            // システムは撤去済み。schedule ラベルと try_run_schedule 呼び出しは tick 構成不変
-            // （要件 4.5 / 13 本固定順）を保つため残置し、zero-system の no-op として回す。
+            // CommitComposition: システム無し（空スケジュール）。WUC への合成 commit は暗黙反映のため
+            // 専用システムは要らない。ラベルと try_run_schedule の呼び出しは 13 本固定順を保つため残し、
+            // zero-system の no-op として回す。
 
             // FrameFinalizeスケジュール: 一時的ポインター状態クリア
             schedules.add_systems(
@@ -437,7 +426,7 @@ impl EcsWorld {
         }
     }
 
-    // ────────────────────────────────────── tick の門（設計 C16・要件 3.2/3.7）
+    // ────────────────────────────────────── tick の門
 
     /// tick の門の有効を切り替える（起動時に 1 度・`AREKA_TICK_GATE` の上書き口）。
     ///
@@ -471,7 +460,7 @@ impl EcsWorld {
     /// 旗の読み取りは原子的な swap（[`tick_wake::take`]）で、**失敗しうる経路が無い**
     /// ——錠を取らず、OS も呼ばず、`Result` も返さない。したがってここに `Err` の腕は
     /// 存在しない。将来ここへ失敗しうる経路（別プロセスからの読み出し・OS 問い合わせ
-    /// など）を足すときは、要件 3.7 に従い **`error!` を残して「回す」側**
+    /// など）を足すときは、**`error!` を残して「回す」側**
     /// （[`TickDecision::Run`](tick_gate::TickDecision::Run)`(`[`RunReason::Disabled`](tick_gate::RunReason::Disabled)`)`）
     /// へ倒すこと——黙って省略へ倒してはならない。作り物の `Result` は返さない。
     pub fn decide_tick(&mut self, now: Instant) -> tick_gate::TickDecision {
@@ -515,7 +504,7 @@ impl EcsWorld {
     /// `FrameCount`／`FrameTime`／`TickStart` は**進めない**し、スケジュールも 1 本も
     /// 回さない。観測が点いているときだけ省略の数を積み、窓が閉じていれば 1 行出す
     /// ——省略が長く続く間も窓は閉じる（`ticks=0` の窓は正当な観測結果である）。
-    /// 観測が消えているときは時刻を 1 度も取らない（要件 3.8）。
+    /// 観測が消えているときは時刻を 1 度も取らない。
     pub fn note_skipped_tick(&mut self) {
         if !tick_diag::is_enabled() {
             return;
@@ -529,29 +518,24 @@ impl EcsWorld {
 
     /// 13 本のスケジュールを 1 回回す（いつも回すので `true` を返す）
     pub fn try_tick_world(&mut self) -> bool {
-        // 相別観測の前置ガード（要件 3.8）。tick 1 回につきここで 1 度だけ評価し、
+        // 相別観測の前置ガード。tick 1 回につきここで 1 度だけ評価し、
         // 以後はこの bool を配る。偽のときこの観測のために時刻を取らず、行も組まない
         // （兄弟テストが「ガードは最初の時刻取得より前」を本文の並びで固定する）。
         let diag_on = tick_diag::is_enabled();
 
-        // FrameCount をインクリメント、FrameTime を更新
+        // 整数境界: FrameCount(u32) は毎 tick +1 で増え、~60Hz では 2^32 到達に約 828 日の連続 tick を要する。
+        // 到達時 debug ビルドは加算オーバーフローで panic、release はラップする。消費は (1) 多数の tracing
+        // ログの `frame=` フィールドと (2) graphics/systems/surface.rs::mark_dirty_surfaces での
+        // `dirty.requested_frame = frame_count.0 as u64`（Changed<SurfaceGraphicsDirty> 検出をトリガー
+        // するための「変化ノンス」用途で、値自体は読まれない）のみ。後者はラップ MAX→0 でも「前回値と
+        // 異なる」性質を満たすため Changed 検出は継続し、いずれも大小比較・配列添字には使われないので、
+        // ラップしてもログ値が 0 に戻るだけで正当性に影響しない。saturating/wrapping_add による堅牢化は
+        // debug の挙動を変えるため行わない。
         //
-        // 整数境界（W7b-V 点検）: FrameCount(u32) は毎 tick +1 で増加し、~60Hz では
-        // 2^32 到達に約828日の連続 tick を要する。到達時 debug ビルドは加算オーバーフローで
-        // panic、release はラップする。FrameCount.0 の消費は (1) 多数の tracing ログの
-        // `frame=` フィールドと (2) graphics/systems/surface.rs::mark_dirty_surfaces での
-        // `dirty.requested_frame = frame_count.0 as u64`（Changed<SurfaceGraphicsDirty>
-        // 検出をトリガーするための「変化ノンス」用途で、値自体は読まれない）のみ。
-        // 後者はラップ MAX→0 でも「前回値と異なる」性質を満たすため Changed 検出は継続し、
-        // いずれの消費も算術上の大小比較・配列添字には用いられないため、ラップしても観測挙動はログ値が 0 に戻るだけで正当性に影響しない。
-        // debug panic 化を避ける堅牢化（saturating/wrapping_add）は debug 挙動を変えるため
-        // P66 として記録。
-        //
-        // 遷移観測の刻印（D1）: フレーム番号の権威はここで進む 1 系列だけである。
+        // 遷移観測の刻印: フレーム番号の権威はここで進む 1 系列だけである。
         // 同一点で Resource `TickStart` を更新し、同じ値をスレッド局所の写しへ配る
         // （`transition_diag::begin_tick`）。World を借りられる観測点は資源から、
         // 借りられない観測点（一括 flush・wndproc）だけが写しから刻印を組む。
-        // スケジュール構成（13 本の順序）はここでは変えない。
         let tick_start = Instant::now();
         let frame = if let Some(mut frame_count) = self.world.get_resource_mut::<FrameCount>() {
             frame_count.0 += 1;
@@ -579,8 +563,8 @@ impl EcsWorld {
             frame_time.0 = dola::runtime::clock::now();
         }
 
-        // WndProcスレッドのthread_localバッファからWorldに直接データを投入
-        // これにより、マルチスレッドで実行されるシステムでもデータにアクセス可能になる
+        // WndProc スレッドの thread_local バッファから World に直接データを投入する
+        // （マルチスレッド実行のシステムからもデータに触れる）
         crate::ecs::pointer::transfer_buffers_to_world(&mut self.world);
 
         // 相別観測（既定 OFF）: 点いているときだけ UI スレッドのハンドルを 1 度確保する。
@@ -588,10 +572,7 @@ impl EcsWorld {
             self.tick_diag.ensure_ui_thread();
         }
 
-        // 各Scheduleを順番に実行
-        //
-        // 13 本の呼び出しと順序は不変（要件 3.4／既存の順序テスト 2 本）。間に挟まる
-        // `phase.lap()` は相別観測の区切りで、OFF のときは何もしない（時刻も取らない）。
+        // `phase.lap()` は相別観測の区切りで、OFF のときは何もしない（時刻も取らない）
         let mut phase = tick_diag::PhaseTimer::start(diag_on);
         let _ = self.world.try_run_schedule(Input);
         phase.lap();
@@ -627,7 +608,7 @@ impl EcsWorld {
         // 読んだら倒す——門を通さない呼び出し（旧経路・テスト）が前回の印を引き継がない。
         let heartbeat = std::mem::take(&mut self.last_run_was_heartbeat);
 
-        // 相別観測の集計と、1 秒窓が閉じたときの 1 行（要件 2.5／2.6）。
+        // 相別観測の集計と、1 秒窓が閉じたときの 1 行。
         if diag_on {
             let ended = Instant::now();
             let wall_us = ended.saturating_duration_since(tick_start).as_micros() as u64;

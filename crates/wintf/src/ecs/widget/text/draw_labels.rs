@@ -93,7 +93,6 @@ fn label_layout(
     dwrite_factory: &IDWriteFactory2,
     label: &Label,
 ) -> windows::core::Result<(IDWriteTextLayout, Vector2)> {
-    // TextFormat作成
     let font_family_hstring = windows::core::HSTRING::from(&label.font_family);
     let locale_hstring = windows::core::HSTRING::from("ja-JP");
     let text_format = dwrite_factory.create_text_format(
@@ -106,16 +105,13 @@ fn label_layout(
         &locale_hstring,
     )?;
 
-    // 縦書き・横書きの設定
     apply_direction(&text_format, label.direction)?;
 
-    // TextLayout作成
     // maxWidth/maxHeightを0にしてNO_WRAPを指定することで、
     // コンテンツサイズに合わせてレイアウトさせる。
     // RTLの場合、maxWidthが無限大だと右端が無限遠になってしまうため。
     let text_hstring = windows::core::HSTRING::from(&label.text);
     let text_layout = dwrite_factory.create_text_layout(&text_hstring, &text_format, 0.0, 0.0)?;
-    // 折り返しなしに設定
     unsafe { text_layout.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP) }?;
 
     // メトリクス取得（描画位置調整のために先に取得）。取れなければ原点 0 のまま描かない

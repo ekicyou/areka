@@ -1,4 +1,4 @@
-//! WARP の足場（要件 6.1・6.2・6.4）: 画面に出さずに木を絵へ描き、CPU へ読み戻す。
+//! WARP の足場: 画面に出さずに木を絵へ描き、CPU へ読み戻す。
 //! 環境変数の門なしで普通のテストとして走る。画素の答えに限って WARP を使う（実 GPU のテストは別に残す）。
 //!
 //! 工場と装置はプロセスで 1 度だけ作り、テストごとに作るのは DC と的のビットマップだけ。
@@ -530,7 +530,7 @@ pub(crate) fn replay_to_pixels(
     replay(commands, w, h, root_transform, true)
 }
 
-/// `replay_to_pixels` と同じだが DC6 を渡さない（ブレンドの描き方が無い Windows の道・1.7）。
+/// `replay_to_pixels` と同じだが DC6 を渡さない（ブレンドの描き方が無い Windows の道）。
 pub(crate) fn replay_to_pixels_without_blend(
     commands: &[DrawCommand],
     w: u32,

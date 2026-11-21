@@ -42,12 +42,10 @@ pub(crate) fn set_window_long_ptr(
 
 /// GetWindow で z オーダー上の隣接窓を得る共通実装。
 ///
-/// 隣接窓が無いこと（z オーダーの端に居る）は**失敗ではなく正常な不在**であり、
-/// `Ok(None)` として返す。`windows` crate の `GetWindow` は戻り値 HWND が NULL の
-/// 時点で一律 `Err(Error::from_thread())` にするため、そのままでは不在と真の失敗を
-/// 区別できない。呼び出し前に `SetLastError(ERROR_SUCCESS)` でスレッドの残留エラーを
-/// 消し、`Err` のコードが `S_OK`（＝API がエラーを立てていない＝隣が無いだけ）なら
-/// `Ok(None)`、それ以外は失敗として `Err` を呼び出し側へ返す（握り潰さない）。
+/// 隣接窓が無いこと（z オーダーの端に居る）は失敗ではなく `Ok(None)`。`windows` crate の
+/// `GetWindow` は NULL を一律 `Err(Error::from_thread())` にするので、先に
+/// `SetLastError(ERROR_SUCCESS)` で残留エラーを消し、コードが `S_OK` なら不在、それ以外は
+/// 失敗として `Err` を返す。
 #[inline(always)]
 fn get_window_relative(hwnd: HWND, ucmd: GET_WINDOW_CMD) -> Result<Option<HWND>> {
     unsafe {
@@ -64,8 +62,8 @@ fn get_window_relative(hwnd: HWND, ucmd: GET_WINDOW_CMD) -> Result<Option<HWND>>
 ///
 /// Win32 の z オーダー語彙では `GW_HWNDPREV` が「前面側の隣」を、`GW_HWNDNEXT` が
 /// 「背面側の隣」を指す（"PREV/NEXT" は列挙順であって前後関係の直感とは逆になる）。
-/// 「バルーンはキャラのすぐ手前」という本フィーチャーの不変条件判定はこの対応関係の
-/// 上に立つため、名前と定数の対応をここで固定する。
+/// 「バルーンはキャラのすぐ手前」の判定はこの対応の上に立つため、名前と定数の対応を
+/// ここで固定する。
 ///
 /// 最前面でこれ以上手前が無い場合は `Ok(None)`。失敗は `Err` で返し、記録は呼び出し側が行う。
 #[inline(always)]
@@ -86,10 +84,9 @@ pub(crate) fn get_window_below(hwnd: HWND) -> Result<Option<HWND>> {
 ///
 /// 前面窓が無い状態——他プロセスが前面を手放した直後や、前面窓が別のデスクトップに居る場合
 /// ——では OS が NULL を返す。これは**失敗ではなく正常な不在**であり `None` になる。
-/// `Result` で包まないのは、`GetForegroundWindow` が失敗そのものを持たない API だからである
-/// （不在と失敗の区別が存在しないため、`Err` を作ると呼び出し側が偽の失敗を見ることになる）。
+/// `Result` で包まないのは、`GetForegroundWindow` が失敗を持たない API だから。
 ///
-/// 読み取り専用であり、前面窓を変えることは決してない（要件 4.1／4.3）。
+/// 読み取り専用であり、前面窓を変えることは決してない。
 #[inline(always)]
 pub(crate) fn get_foreground_window() -> Option<HWND> {
     // SAFETY: Win32 境界。前面窓の識別子を読むだけで、窓の状態は一切変えない。
@@ -103,9 +100,7 @@ pub(crate) fn get_foreground_window() -> Option<HWND> {
 /// （親が隠れていれば子は可視ではない）。窓が画面外に居るか、他の窓に完全に覆われているか、
 /// 幅も高さも 0 かは問わない——**表示状態のスタイルだけ**の判定である。
 ///
-/// `Result` で包まないのは、`GetForegroundWindow` と同じく失敗そのものを持たない API だから
-/// である。無効なハンドルに対しても OS は「可視ではない」（`FALSE`）を返すのであり、
-/// ここで `Err` を作ると呼び出し側が偽の失敗を見ることになる。
+/// `Result` で包まないのは、失敗を持たない API だから（無効なハンドルにも OS は `FALSE` を返す）。
 ///
 /// 読み取り専用であり、窓の表示状態を変えることは決してない。
 #[inline(always)]
@@ -119,12 +114,11 @@ pub(crate) fn is_window_visible(hwnd: HWND) -> bool {
 /// Windows はトップレベル窓を 2 つの帯に分けて重ねる——常時最前面の一群が、そうでない
 /// 一群より必ず手前に来る。`SetWindowPos` の `hWndInsertAfter` に帯の中の窓を渡すと、
 /// 対象窓自身にも `WS_EX_TOPMOST` が**付いて帯へ移る**（実測で確定した OS の性質）。
-/// ゴースト窓を常時最前面にしない（要件 8.1）ためには、挿入位置に選ぼうとしている窓が
-/// 帯の中に居るかを**指令を出す前に**知る必要があり、その読み取りが本関数である。
+/// ゴースト窓を常時最前面にしないには、挿入位置に選ぶ窓が帯の中に居るかを**指令を出す前に**
+/// 知る必要がある。
 ///
-/// `is_window_visible` と違って `Result` を返すのは、`GetWindowLongPtrW` が失敗しうる
-/// （窓が消えた等）一方で、失敗を `false` へ潰すと「帯に居ない」と読めてしまい、
-/// 要件 8.1 を毀損する側へ倒れるためである。倒し方は呼び出し側が決める。
+/// `Result` を返すのは、`GetWindowLongPtrW` の失敗（窓が消えた等）を `false` へ潰すと
+/// 「帯に居ない」と読めて、ゴースト窓を帯へ入れる側へ倒れるため。倒し方は呼び出し側が決める。
 #[inline(always)]
 pub(crate) fn is_window_always_on_top(hwnd: HWND) -> Result<bool> {
     let ex_style = get_window_long_ptr(hwnd, GWL_EXSTYLE)?;
@@ -135,8 +129,8 @@ pub(crate) fn is_window_always_on_top(hwnd: HWND) -> Result<bool> {
 ///
 /// トップレベル窓に対する `GWLP_HWNDPARENT` の書込は親子化（`SetParent`）ではなく
 /// **owner の付け替え**である。owner を張ると OS が owner 窓の浮上にあわせて被 owner 窓を
-/// 前面へ連れて上がる（要件 1.1 の確立手段）。
-/// 失敗は握り潰さず `Err` で返す（記録は呼び出し側・要件 6.2）。
+/// 前面へ連れて上がる。
+/// 失敗は握り潰さず `Err` で返す（記録は呼び出し側）。
 #[inline(always)]
 pub(crate) fn set_window_owner(hwnd: HWND, owner: HWND) -> Result<()> {
     set_window_long_ptr(hwnd, GWLP_HWNDPARENT, owner.0 as isize).map(|_| ())
@@ -145,8 +139,8 @@ pub(crate) fn set_window_owner(hwnd: HWND, owner: HWND) -> Result<()> {
 /// 指定窓の owner を外す（`GWLP_HWNDPARENT` へ 0 を書く）。
 ///
 /// owner を張ったままペアの一方を破棄すると OS の破棄カスケードがもう一方を巻き込み、
-/// 後発の破棄が無効 HWND を撃つ。破棄に先立って本関数で切り離すことで独立破棄の
-/// semantics へ戻し、要件 5.9（破棄が重複しても異常終了しない）を構造的に満たす。
+/// 後発の破棄が無効 HWND を撃つ。破棄に先立って本関数で切り離し、独立の破棄へ戻す
+/// （破棄が重複しても異常終了しない）。
 /// 失敗は握り潰さず `Err` で返す。
 /// owner を持たない窓では OS が偽の失敗を返す。呼ぶ前に owner の有無を読むこと。
 #[inline(always)]
@@ -158,9 +152,8 @@ pub(crate) fn clear_window_owner(hwnd: HWND) -> Result<()> {
 // CPU 時間の読み取り（スレッド名簿 `ecs::world::thread_registry` と
 // スレッド別 CPU 報告器のための Win32 ラッパ）
 //
-// 呼び出せる API は既存 feature（`Win32_Foundation`・`Win32_System_Threading`）の
-// 範囲に限る。スレッドの**列挙**（ToolHelp）は feature が無く `Cargo.toml` 非接触の
-// 制約（要件 8.6）と両立しないため使わない——列挙の代わりに、生成側が自分を名簿へ
+// 呼べる API は有効な feature（`Win32_Foundation`・`Win32_System_Threading`）の範囲に
+// 限る。スレッドの**列挙**（ToolHelp）は feature が無いので使わず、生成側が自分を名簿へ
 // 登録する。
 // ============================================================
 
@@ -168,10 +161,9 @@ pub(crate) fn clear_window_owner(hwnd: HWND) -> Result<()> {
 ///
 /// Win32 の `GetThreadTimes`／`GetProcessTimes` が返す `FILETIME` は「1601 年からの
 /// 絶対時刻」ではなく**経過した CPU 時間そのもの**（100ns 単位の量）である。生成時刻と
-/// 終了時刻は本構造体に持たない——負荷の帰属に使うのはカーネルとユーザーの 2 本だけで、
-/// 持たない値は誤用されないため。
+/// 終了時刻は負荷の帰属に使わないので持たない。
 ///
-/// 壁時計（経過時間）とは別物である（要件 2.6）。待ち時間はここに現れない。
+/// 壁時計（経過時間）とは別物である。待ち時間はここに現れない。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CpuTimes {
     /// カーネルモードで消費した CPU 時間（100ns 単位）。
@@ -350,11 +342,8 @@ pub(crate) fn with_test_window<R>(
 mod tests {
     use super::*;
 
-    // set_window_long_ptr の成功経路は自プロセス所有の実在 HWND を要するため GUI 非依存の
-    // ユニットテストでは検証不能（統合的な検証はウィンドウ生成を伴う examples / 実機動作に
-    // 委ねる）。get_window_long_ptr の成功経路はウィンドウ生成不要の GetDesktopWindow()
-    // （常に実在する読み取り可能な HWND）で検証する。null HWND による決定的なエラー経路
-    // （SetLastError → Error::from_thread のエラー変換ロジック）も併せて固定する。
+    // get_window_long_ptr の成功経路は窓の生成が要らない GetDesktopWindow() で検証する。
+    // null HWND による決定的なエラー経路（SetLastError → Error::from_thread の変換）も固定する。
 
     #[test]
     fn get_window_long_ptr_with_null_hwnd_returns_invalid_window_handle() {
@@ -391,11 +380,9 @@ mod tests {
 
     // ---- z オーダー／owner ラッパー -------------------------------------------------
     //
-    // これらの成功経路は「2 つの実窓の前後関係」そのものが検証対象であり、
-    // GetDesktopWindow() のような単独 HWND では前後関係を作れない。したがって
-    // 自プロセス所有の実窓を 2 枚生成し、SetWindowPos で既知の重なり順を作ってから
-    // 実測する（本リポジトリでは実窓を素の #[test] 内で生成する方式が既定・
-    // `ecs/clickthrough/controller_tests.rs` に先例）。
+    // 成功経路は 2 つの実窓の前後関係そのものが検証対象で、GetDesktopWindow() のような
+    // 単独 HWND では作れない。自プロセス所有の実窓を生成し、SetWindowPos で既知の重なり順を
+    // 作ってから実測する。
     //
     // ただし `GetWindow(GW_HWNDPREV/GW_HWNDNEXT)` が辿るのは**同じ親を持つ兄弟の列**で
     // あり、トップレベル窓の兄弟列はデスクトップ全体で共有される。同一バイナリの他テスト
@@ -420,7 +407,6 @@ mod tests {
         )
     }
 
-    /// テスト HWND を破棄する（後始末）。
     fn destroy_test_hwnd(hwnd: HWND) {
         // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する。
         unsafe {

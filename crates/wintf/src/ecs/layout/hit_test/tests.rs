@@ -32,7 +32,6 @@ pub(super) fn make_global_arrangement(
 fn test_hit_test_entity_hit_inside() {
     let mut world = World::new();
 
-    // GlobalArrangement を直接設定（伝播システムは使用しない）
     let entity = world
         .spawn((
             make_global_arrangement(10.0, 20.0, 110.0, 70.0), // 100x50
@@ -56,7 +55,6 @@ fn test_hit_test_entity_miss_outside() {
         ))
         .id();
 
-    // bounds外の座標
     let point = PointF::new(200.0, 200.0);
     assert!(!hit_test_entity(&world, entity, point));
 }
@@ -73,7 +71,6 @@ fn test_hit_test_entity_skip_none_mode() {
         ))
         .id();
 
-    // bounds内だがHitTestMode::Noneなのでヒットしない
     let point = PointF::new(50.0, 40.0);
     assert!(!hit_test_entity(&world, entity, point));
 }
@@ -87,7 +84,6 @@ fn test_hit_test_entity_no_component_defaults_to_bounds() {
         .spawn(make_global_arrangement(10.0, 20.0, 110.0, 70.0))
         .id();
 
-    // HitTestコンポーネントなしでもBoundsとして扱う
     let point = PointF::new(50.0, 40.0);
     assert!(hit_test_entity(&world, entity, point));
 }
@@ -97,7 +93,6 @@ fn test_hit_test_entity_no_component_defaults_to_bounds() {
 fn test_hit_test_entity_no_global_arrangement() {
     let mut world = World::new();
 
-    // GlobalArrangement なしのエンティティ
     let entity = world.spawn(HitTest::bounds()).id();
 
     let point = PointF::new(50.0, 40.0);
@@ -113,25 +108,20 @@ fn test_hit_test_entity_no_global_arrangement() {
 fn test_hit_test_front_priority() {
     let mut world = World::new();
 
-    // 背面エンティティ
     let back = world
         .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
         .id();
 
-    // 前面エンティティ
     let front = world
         .spawn(make_global_arrangement(20.0, 20.0, 80.0, 80.0))
         .id();
 
-    // ルートエンティティ
     let root = world.spawn_empty().id();
     world.entity_mut(root).add_children(&[back, front]);
 
-    // 両方の bounds 内の座標
     let point = PointF::new(50.0, 50.0);
     let result = hit_test(&world, root, point);
 
-    // 最前面の front がヒットする
     assert_eq!(result, Some(front));
 }
 
@@ -140,25 +130,20 @@ fn test_hit_test_front_priority() {
 fn test_hit_test_back_only() {
     let mut world = World::new();
 
-    // 背面エンティティ
     let back = world
         .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
         .id();
 
-    // 前面エンティティ
     let front = world
         .spawn(make_global_arrangement(50.0, 50.0, 100.0, 100.0))
         .id();
 
-    // ルートエンティティ
     let root = world.spawn_empty().id();
     world.entity_mut(root).add_children(&[back, front]);
 
-    // back のみの bounds 内の座標
     let point = PointF::new(10.0, 10.0);
     let result = hit_test(&world, root, point);
 
-    // back がヒットする
     assert_eq!(result, Some(back));
 }
 
@@ -174,7 +159,6 @@ fn test_hit_test_none() {
     let root = world.spawn_empty().id();
     world.entity_mut(root).add_children(&[entity]);
 
-    // 全ての bounds 外の座標
     let point = PointF::new(200.0, 200.0);
     let result = hit_test(&world, root, point);
 
@@ -186,7 +170,6 @@ fn test_hit_test_none() {
 fn test_hit_test_skip_none_mode() {
     let mut world = World::new();
 
-    // 背面エンティティ
     let back = world
         .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
         .id();
@@ -206,7 +189,6 @@ fn test_hit_test_skip_none_mode() {
     let point = PointF::new(50.0, 50.0);
     let result = hit_test(&world, root, point);
 
-    // overlay はスキップされ、back がヒットする
     assert_eq!(result, Some(back));
 }
 
@@ -215,23 +197,19 @@ fn test_hit_test_skip_none_mode() {
 fn test_hit_test_child_priority_over_parent() {
     let mut world = World::new();
 
-    // 親エンティティ
     let parent = world
         .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
         .id();
 
-    // 子エンティティ
     let child = world
         .spawn(make_global_arrangement(10.0, 10.0, 90.0, 90.0))
         .id();
 
     world.entity_mut(parent).add_children(&[child]);
 
-    // 両方の bounds 内の座標
     let point = PointF::new(50.0, 50.0);
     let result = hit_test(&world, parent, point);
 
-    // 子が親より優先
     assert_eq!(result, Some(child));
 }
 
@@ -244,7 +222,6 @@ fn test_hit_test_child_priority_over_parent() {
 fn test_hit_test_in_window_coordinate_conversion() {
     let mut world = World::new();
 
-    // ウィンドウエンティティ
     let window = world
         .spawn((
             make_global_arrangement(100.0, 200.0, 500.0, 500.0),
@@ -259,7 +236,6 @@ fn test_hit_test_in_window_coordinate_conversion() {
         ))
         .id();
 
-    // ウィンドウ内のウィジェット（スクリーン座標）
     let widget = world
         .spawn(make_global_arrangement(150.0, 250.0, 250.0, 300.0)) // 100x50
         .id();
@@ -278,7 +254,6 @@ fn test_hit_test_in_window_coordinate_conversion() {
 fn test_hit_test_in_window_no_window_pos() {
     let mut world = World::new();
 
-    // WindowPos なしのエンティティ
     let window = world
         .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
         .id();
@@ -311,7 +286,7 @@ fn test_hit_test_in_window_position_none() {
 }
 
 // ========================================================================
-// αのマスクと HitTest の型（14 番）
+// αのマスクと HitTest の型
 // ========================================================================
 
 /// 2x2 PBGRA32 の全透明・全不透明のマスク（`tests_ex` からも使う）

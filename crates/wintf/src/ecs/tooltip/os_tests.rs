@@ -1,7 +1,7 @@
 //! `os` の兄弟テスト。
 //!
-//! 上の 2 つは窓を作らない純粋な部分。下は明示したときだけ走る（`#[ignore]`）実機の最初の試し
-//! S2〜S7（design.md「最初の試し」）。ツールチップを実際に出して確かめる。
+//! 上の 2 つは窓を作らない純粋な部分。下は明示したときだけ走る（`#[ignore]`）実機の試し
+//! S2〜S7。ツールチップを実際に出して確かめる。
 //!
 //! 走らせ方: `cargo test -p wintf --lib tooltip::os -- --ignored --test-threads=1 --nocapture`
 //!
@@ -53,7 +53,7 @@ fn utf16_fit_does_not_split_surrogate_pair() {
     assert_eq!(chars_within_utf16(s, 4), 3);
 }
 
-// ---- 実機の最初の試し（ここから下は `#[ignore]`） ----
+// ---- 実機の試し（ここから下は `#[ignore]`） ----
 
 /// 本番（wintf の実行時）と同じく、画面ごとの DPI を受ける。2 回目以降は失敗するが害は無い。
 fn per_monitor_aware() {
@@ -522,7 +522,6 @@ fn s4_press_on_tooltip_reaches_notepad_beneath_and_hover_does_not_recurse() {
     let mut pid = 0u32;
     // SAFETY: Win32 境界。読むだけ。
     unsafe { GetWindowThreadProcessId(notepad.hwnd, Some(&mut pid)) };
-    // メモ帳を主画面の左上へ置き、重なりの先頭へ（入力先は変えない）。
     // SAFETY: Win32 境界。新しく現れたメモ帳の窓を動かすだけ。
     unsafe {
         SetWindowPos(
@@ -722,7 +721,7 @@ fn s6_font_follows_each_screen_dpi() {
             }
         }
     }
-    // 画面に無い組み合わせも、100% と 150% の字体を作り分けて比を確かめる（設計の基準）。
+    // 画面に無い組み合わせも、100% と 150% の字体を作り分けて比を確かめる。
     let hwnd = tip.hwnd.expect("窓");
     let f96 = tip.ensure_font(hwnd, 96).expect("96");
     let (em96, drawn96) = (em_height(f96), text_height(hwnd, f96, "あ"));
@@ -768,7 +767,7 @@ fn s7_stays_in_front_after_another_topmost_window_is_raised() {
     .expect("最前面へ");
     pump_for(Duration::from_millis(150));
     let covered = is_above(other, hwnd);
-    // 見回りで当て直す（逃げ道）。
+    // 見回りで当て直す。
     tip.keep_on_top().expect("当て直す");
     pump_for(Duration::from_millis(150));
     let in_front = is_above(hwnd, other);

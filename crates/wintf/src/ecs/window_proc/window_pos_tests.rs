@@ -8,7 +8,7 @@ use std::rc::Rc;
 use windows::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::WM_DPICHANGED;
 
-/// 診断手順書が指定する `RUST_LOG`（design.md「診断手順書」・要件 1.4/1.5）。
+/// 診断手順書が指定する `RUST_LOG`。
 /// 観測点がこの directive で点灯することを機械的に固定するため、リテラルを共有する。
 const PROCEDURE_DIRECTIVES: &str =
     "info,wintf::ecs::window_proc=debug,wintf::ecs::drag=debug,areka_placement::diag=debug";
@@ -65,9 +65,9 @@ fn suggested_rect() -> RECT {
     }
 }
 
-/// 要件 1.3: 「提案位置に基づく位置変更を実際に行ったか否か」は、診断手順書の
-/// directive で**必ず**点灯する水準に置かれている（旧 `trace!` は点灯せず、
-/// 2026-07-18 の偽陰性＝「発生 0 回」の誤結論を生んだ）。
+/// 「提案位置に基づく位置変更を実際に行ったか否か」は、診断手順書の
+/// directive で**必ず**点灯する水準に置かれている（`trace!` では点灯せず「発生 0 回」の
+/// 偽陰性を生む）。
 #[test]
 fn suggested_position_decision_is_visible_under_procedure_directive() {
     let out = capture_under_filter(PROCEDURE_DIRECTIVES, || {
@@ -80,7 +80,7 @@ fn suggested_position_decision_is_visible_under_procedure_directive() {
     );
 }
 
-/// 要件 1.3: 実施可否の行は「書いたか否か」と提案 left/top・entity を伴う。
+/// 実施可否の行は「書いたか否か」と提案 left/top・entity を伴う。
 #[test]
 fn suggested_position_decision_carries_applied_flag_and_suggested_origin() {
     let out = capture_under_filter(PROCEDURE_DIRECTIVES, || {
@@ -106,7 +106,7 @@ fn suggested_position_decision_carries_applied_flag_and_suggested_origin() {
     );
 }
 
-/// 要件 1.3: 新旧 DPI も同じ directive で点灯する（受理回数の 2 段 grep 計数の前提）。
+/// 新旧 DPI も同じ directive で点灯する（受理回数の 2 段 grep 計数の前提）。
 #[test]
 fn dpi_acceptance_line_reports_old_and_new_dpi_under_procedure_directive() {
     let out = capture_under_filter(PROCEDURE_DIRECTIVES, || {
@@ -124,7 +124,7 @@ fn dpi_acceptance_line_reports_old_and_new_dpi_under_procedure_directive() {
     );
 }
 
-/// 要件 1.5: 既定水準（`info`）では実施可否の行は出ない。
+/// 既定水準（`info`）では実施可否の行は出ない。
 /// ＝観測点が「手順で有効化される水準」に置かれていることの対偶側の固定。
 #[test]
 fn suggested_position_decision_is_silent_under_default_info_filter() {
@@ -138,8 +138,8 @@ fn suggested_position_decision_is_silent_under_default_info_filter() {
     );
 }
 
-/// 要件 1.3: 実際の窓位置書込を行う共通経路（`guarded_set_window_pos`）の実施ログも
-/// 診断手順が有効化できる水準にある（旧 `trace!` からの是正）。
+/// 実際の窓位置書込を行う共通経路（`guarded_set_window_pos`）の実施ログも
+/// 診断手順が有効化できる水準にある。
 #[test]
 fn window_pos_write_path_is_visible_at_debug() {
     let out = capture_under_filter(WRITE_PATH_DIRECTIVES, || {
@@ -152,7 +152,7 @@ fn window_pos_write_path_is_visible_at_debug() {
     );
 }
 
-/// 要件 1.5: 書込経路の実施ログも既定 `info` では出ない（診断専用のまま）。
+/// 書込経路の実施ログも既定 `info` では出ない（診断専用のまま）。
 #[test]
 fn window_pos_write_path_is_silent_under_default_info_filter() {
     let out = capture_under_filter(DEFAULT_DIRECTIVES, || {
@@ -166,38 +166,26 @@ fn window_pos_write_path_is_silent_under_default_info_filter() {
 }
 
 // ================================================================
-// S1 の赤証跡＝表示基盤ディスパッチ檻（タスク 4.3・Req 5.4／4.3／4.2）
+// 表示基盤ディスパッチ檻（`s1_red_*`）
 //
-// design.md「Testing Strategy > Integration Tests 5」が S1 の赤→緑の
-// **正証跡**と定める檻。是正前の欠陥は wndproc の無条件書込＝実配線に
-// 在るため、`dpi_helpers.rs` の純関数檻（分岐網羅の補助）では
-// 「是正前のコードに対して失敗する」の証明力が足りない。
+// 是正前の欠陥は wndproc の無条件書込＝実配線に在るため、`dpi_helpers.rs` の純関数檻
+// （分岐網羅の補助）では「是正前のコードに対して失敗する」証明力が足りない。ここで実配線を通す。
 //
-// ## 何を主張しているか（是正後の契約＝D3）
+// ## 何を主張しているか
 // - `DpiSuggestedRectPolicy::ExternalAuthority` を宣言した窓:
 //   `DPI` component は更新される／`DpiChangeContext` は **確立されない**／
 //   位置書込も **起きない**（＝最終位置は現接地点のまま残る）
 // - 宣言の無い窓（既定 `ApplyPosition` 相当）: 従来どおり確立され書かれる
-//   （非ゴースト窓の後方互換・design.md「Compatibility」）
+//   （非ゴースト窓の後方互換）
 //
-// ## 是正投入（タスク 5.1）で赤 4 件は緑へ反転し、常時走る回帰檻へ昇格した
-// 4.3 採取時点の `WM_DPICHANGED` は `DpiChangeContext::set` も
-// `guarded_set_window_pos` も **窓ごとの分岐なしに** 実行し、`let applied = true;`
-// の定数がその事実の表示だった（診断レポート §1.1・§3.1 に赤の実行出力を保存）。
-// タスク 5.1 が `dpi_suggested_position_decision`（`window_proc/dpi_helpers.rs:31`）を
-// ハンドラへ配線し、`None` 判定で②③をまとめて飛ばす形（D3）へ組み替えた。
+// ## 無視属性（ignore）は付けない
+// 本ファイルに無視属性が 1 件も残っていないことが条件であり、属性名の grep がゼロ件になる
+// ことで機械的に確認できる（この注記自体が当たると検査が壊れるため、ここでは属性を字面で
+// 書かない）。dpi96 の 1 件も外してあるのは、「96 では緑」が成立する性質であり、外して
+// 初めて 96/120/192 の非対称が回帰檻として保存されるため。名前の `s1_red_` 接頭辞は
+// 赤証跡としての出自であって、現在の色ではない。
 //
-// ## 無視属性（ignore）のゲートは 5.1 で全 4 件とも撤去済み（dpi96 を含む）
-// 赤の採取中だけは常時失敗する檻を通常実行から外していた（`cargo test` を門として
-// 無価値にしないため・`areka-emo-atlas/src/emo2_golden.rs:228` の先例）。是正後は
-// 4 件とも常時走る。**本ファイルに無視属性が 1 件も残っていないこと**が完了条件で
-// あり、属性名の grep がゼロ件になることで機械的に確認できる（この注記自体が当たると
-// 検査が壊れるため、ここでは属性を字面で書かない）。**dpi96 の 1 件も外してある**——
-// 「96 では緑」は是正後も成立する性質であり、外して初めて 96/120/192 の非対称が
-// 回帰檻として保存される。名前の `s1_red_` 接頭辞は赤証跡としての出自を示す履歴で
-// あって、現在の色ではない。
-//
-// ## dpi 水準の非対称（Req 5.1／5.4 の「96 が欠陥を隠す」）
+// ## dpi 水準の非対称
 // 96 では OS 提案原点が現位置と一致するため、提案位置を書いても書かなくても
 // 最終位置が変わらず **政策分岐が観測できない＝赤にならない**。120／192 では
 // 提案原点が現位置から離れるため、無条件書込が接地点を破壊して赤になる。
@@ -210,13 +198,13 @@ use crate::ecs::window::DpiSuggestedRectPolicy;
 /// 「areka が直前に確定した接地点」の代役となる現位置（物理 px）。
 ///
 /// 具体値そのものに意味は無い——判定は下の `suggested_rect_for` が組む
-/// **DPI 水準に対する比**と「現位置が保存されるか」の不変条件で表現する（Req 5.6）。
+/// **DPI 水準に対する比**と「現位置が保存されるか」の不変条件で表現する。
 const CURRENT_ORIGIN: (i32, i32) = (1200, 400);
 
 /// 提案矩形の寸（`SWP_NOSIZE` ゆえ判断には使われない・原点だけが効く）。
 const SUGGESTED_EXTENT: (i32, i32) = (400, 300);
 
-/// モニタ跨ぎ相当の OS 提案矩形を **比** で組む（絶対 px の直書きを避ける・Req 5.6）。
+/// モニタ跨ぎ相当の OS 提案矩形を **比** で組む（絶対 px の直書きを避ける）。
 ///
 /// `dpi=96` では比が 1.0 ゆえ提案原点＝現位置になる（＝欠陥が隠れる水準）。
 fn suggested_rect_for(dpi: u16, current: (i32, i32)) -> RECT {
@@ -258,8 +246,7 @@ impl DpiChangedOutcome {
 
 /// `guarded_set_window_pos` の実施ログ 1 行から書込原点を復元する。
 ///
-/// トークン境界でアンカーする——`x=` は `cx=` の接尾辞であり、部分一致では
-/// 取り違える（申し送り「`w=-` が `w=-12` の接頭辞」と同型の罠）。
+/// トークン境界でアンカーする——`x=` は `cx=` の接尾辞であり、部分一致では取り違える。
 fn parse_write_origin(out: &str) -> Option<(i32, i32)> {
     let line = out
         .lines()
@@ -351,8 +338,8 @@ fn dispatch_dpichanged_observed(
 
 /// 水準を引数に取る S1 赤檻の本体。
 ///
-/// 主張は「`ExternalAuthority` 窓の最終位置＝現接地点」（Req 4.3: OS 推奨位置を
-/// 最終位置としてそのまま残さない／Req 4.2: 最終位置が接地点規約に従う）。
+/// 主張は「`ExternalAuthority` 窓の最終位置＝現接地点」（OS 推奨位置を最終位置としてそのまま
+/// 残さない・最終位置が接地点規約に従う）。
 fn assert_external_authority_preserves_anchor_at(dpi: u16) {
     let suggested = suggested_rect_for(dpi, CURRENT_ORIGIN);
     let outcome = dispatch_dpichanged_observed(
@@ -368,7 +355,7 @@ fn assert_external_authority_preserves_anchor_at(dpi: u16) {
     );
 
     // 探針の自己検査: 96 は提案＝現位置（分岐が観測できない水準）、
-    // 96 以外は提案が現位置から離れている（＝不動点でない・記憶〈2.2 の教訓〉）。
+    // 96 以外は提案が現位置から離れている（＝不動点でない）。
     if dpi == 96 {
         assert_eq!(
             (suggested.left, suggested.top),
@@ -391,13 +378,13 @@ fn assert_external_authority_preserves_anchor_at(dpi: u16) {
 }
 
 /// dpi=96: 提案原点＝現位置ゆえ、是正の有無にかかわらず**通過する**。
-/// この緑が「96 の自己整合が欠陥を隠す」ことの実行証跡である（Req 5.1／5.4）。
+/// この緑が「96 の自己整合が欠陥を隠す」ことの実行証跡である。
 #[test]
 fn s1_red_external_authority_preserves_anchor_at_dpi96() {
     assert_external_authority_preserves_anchor_at(96);
 }
 
-/// dpi=120: 提案原点が現位置から離れる → 是正未投入では失敗していた水準（4.3 の赤）。
+/// dpi=120: 提案原点が現位置から離れる 水準（無条件書込なら接地点を破壊して失敗する）。
 #[test]
 fn s1_red_external_authority_preserves_anchor_at_dpi120() {
     assert_external_authority_preserves_anchor_at(120);
@@ -409,13 +396,12 @@ fn s1_red_external_authority_preserves_anchor_at_dpi192() {
     assert_external_authority_preserves_anchor_at(192);
 }
 
-/// D3 の構造そのもの: `ExternalAuthority` 窓では
+/// 分岐の構造そのもの: `ExternalAuthority` 窓では
 /// **書込コンテキストが確立されず**、**位置書込も起きない**。
 ///
-/// 上の 3 件が「最終位置」という外形で主張するのに対し、こちらは
-/// 是正が置かれた 2 箇所（`DpiChangeContext::set` と
-/// `guarded_set_window_pos`）を名指しで固定する。是正未投入では両方とも
-/// 無条件に走るため 120／192 で失敗していた（4.3 の赤）。
+/// 上の 3 件が「最終位置」という外形で主張するのに対し、こちらは書込コンテキストの確立と
+/// 位置書込の 2 箇所（`DpiChangeContext::set` と `guarded_set_window_pos`）を名指しで固定する。
+/// 無条件に走る実装では両方とも走り、120／192 で失敗する。
 #[test]
 fn s1_red_external_authority_establishes_no_write_context() {
     for dpi in [120_u16, 192] {
@@ -442,12 +428,11 @@ fn s1_red_external_authority_establishes_no_write_context() {
     }
 }
 
-/// 非退行（**是正の前後いずれでも緑**・ゲート外で常時走る）:
+/// 非退行:
 /// 政策未宣言／明示 `ApplyPosition` の窓は従来どおり提案原点を書き、
 /// `DpiChangeContext` も確立する。
 ///
-/// これが崩れると examples・将来の通常窓が Per-Monitor v2 の標準応答を失う
-/// （design.md「Compatibility」）。
+/// これが崩れると examples・将来の通常窓が Per-Monitor v2 の標準応答を失う。
 #[test]
 fn s1_control_default_policy_windows_apply_suggested_origin() {
     for dpi in [96_u16, 120, 192] {
@@ -472,12 +457,10 @@ fn s1_control_default_policy_windows_apply_suggested_origin() {
     }
 }
 
-/// D3 の帰結（2.1 → 5.1 申し送り）: `DpiChangeContext::set` と
-/// `guarded_set_window_pos` は **1 個の `if let Some((x, y))` で束ねて分岐**する。
-/// ゆえに「コンテキスト確立 ⇔ 位置書込」が常に成り立たねばならない。
+/// `DpiChangeContext::set` と `guarded_set_window_pos` は **1 個の `if let Some((x, y))` で
+/// 束ねて分岐**する。ゆえに「コンテキスト確立 ⇔ 位置書込」が常に成り立たねばならない。
 ///
-/// 是正未投入では両者とも恒真なので緑（＝本檻は赤証跡ではない）。5.1 が
-/// 片側だけを分岐させた場合に赤になる**設計上の分割禁止**の固定である。
+/// 片側だけを分岐させた実装で赤になる、分割禁止の固定である。
 #[test]
 fn s1_write_context_and_position_write_are_branched_together() {
     for dpi in [96_u16, 120, 192] {
@@ -499,13 +482,11 @@ fn s1_write_context_and_position_write_are_branched_together() {
 }
 
 // ================================================================
-// 実施可否行のフィールド（タスク 5.1・Req 1.3・design.md:330）
+// 実施可否行のフィールド
 //
-// 1.3 は `applied` を `let applied = true;` の**定数**として置き、`policy`
-// フィールドは未出力のまま 5.1 へ申し送っていた。以下 2 件は対で
-// 「`applied` が実際に分岐すること」と「どちらの政策でそうなったかが
-// 同一行から復元できること」を固定する。片方だけでは定数のままでも
-// 通ってしまう（`applied=true` 固定なら②が、`false` 固定なら①が赤になる）。
+// 以下 2 件は対で「`applied` が実際に分岐すること」と「どちらの政策でそうなったかが
+// 同一行から復元できること」を固定する。片方だけでは定数のままでも通ってしまう
+// （`applied=true` 固定なら②が、`false` 固定なら①が赤になる）。
 // ================================================================
 
 /// `ExternalAuthority` 窓の実施可否行は `applied=false` と政策名を載せる。
@@ -553,7 +534,7 @@ fn s1_decision_line_reports_unset_policy_and_applied_true() {
 /// 明示 `ApplyPosition` は `unset` と**同じ判断**だが**別の語**で報告される。
 ///
 /// 「未付与だったのか、既定を明示宣言した窓だったのか」は実機ログの事後突合で
-/// 別物として読めなければならない（`diagnosis-procedure.md` §3.4 の値語彙表）。
+/// 別物として読めなければならない。
 /// 判断が同じだからといって語を畳むと、政策の付与漏れと明示既定が区別できなくなる。
 #[test]
 fn s1_decision_line_reports_apply_position_as_its_own_label() {
@@ -581,7 +562,7 @@ fn s1_decision_line_reports_apply_position_as_its_own_label() {
 }
 
 /// **政策を読めなかった**場合は `unreachable` で報告し、`unset`（宣言が無かった）と
-/// 混同させない（Req 1.5）。判断自体は従来挙動へフォールバックする（`applied=true`）。
+/// 混同させない。判断自体は従来挙動へフォールバックする（`applied=true`）。
 ///
 /// 到達不能は 2 経路ある——⑴entity が破棄済み（`get_entity_mut` が `Err`）
 /// ⑵World が既に借用されている（再入・`try_borrow_mut` が `Err`）。どちらも
@@ -665,7 +646,7 @@ fn s1_decision_line_reports_unreachable_when_policy_cannot_be_read() {
 }
 
 // ================================================================
-// 源断ちの最外殻: ハンドラの戻り値（タスク 5.1・Req 4.3）
+// 源断ちの最外殻: ハンドラの戻り値
 //
 // `guarded_set_window_pos` を飛ばしただけでは源断ちは完成しない。
 // `None`（未処理）を返すと `DefWindowProcW` が既定の提案矩形適用を行い、

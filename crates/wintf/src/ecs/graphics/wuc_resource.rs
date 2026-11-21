@@ -19,18 +19,18 @@ use crate::com::wuc::{CompositorInteropExt, create_dispatcher_queue_controller};
 /// フィールド宣言順は `compositor` → `graphics_device` → `dq_controller`
 /// （**controller を最後**）で固定する。Rust の宣言順 drop により
 /// DispatcherQueueController が Compositor より**後**に drop され、終了時ドレインが
-/// 成立する（要件 3.3・design.md「Drop 順の不変条件」）。
+/// 成立する。
 struct WucGraphicsResourceInner {
     compositor: Compositor,
     graphics_device: CompositionGraphicsDevice,
     // dq_controller は読み出さず、Compositor より後に drop させるためだけに保持する
-    // （終了時ドレインの前提・要件 3.3）。ゆえに dead_code を許可する。
+    // （終了時ドレインの前提）。ゆえに dead_code を許可する。
     //
     // `Option`: 当該スレッドに既に DispatcherQueue が存在する場合（＝別の所有者が既に
     // controller を持つ・例: 共有 GPU オーナースレッドの常駐 controller）は**新規 controller を
     // 作らず既存 DQ を再利用**し `None` を保持する。`DQTYPE_THREAD_CURRENT` は 1 スレッド 1
     // controller ゆえ、同一スレッド上で controller を作り直すと `0x8001010E`（already created）
-    // で失敗し、かつ生成/破棄の反復がプロセス内にリークする（research.md 根本原因記録）。
+    // で失敗し、かつ生成/破棄の反復がプロセス内にリークする。
     #[allow(dead_code)]
     dq_controller: Option<DispatcherQueueController>,
 }
@@ -65,9 +65,9 @@ impl std::fmt::Debug for WucGraphicsResource {
 impl WucGraphicsResource {
     /// WUC 合成デバイスを初期化する。GraphicsCore の D2D デバイスに依存。
     ///
-    /// # 初期化順序（design.md §State Management）
-    /// 1. `create_dispatcher_queue_controller(DQTAT_COM_NONE)`（Compositor 生成前・要件 3.1）。
-    ///    apartment は `DQTAT_COM_NONE`（R1 スパイク実測確定: 本番 UI スレッドは MTA であり、
+    /// # 初期化順序
+    /// 1. `create_dispatcher_queue_controller(DQTAT_COM_NONE)`（Compositor 生成前）。
+    ///    apartment は `DQTAT_COM_NONE`（実測で確定: 本番 UI スレッドは MTA であり、
     ///    MTA では apartment 不変の NONE が正解。ASTA は MTA で RPC_E_CHANGED_MODE になる）。
     /// 2. `Compositor::new()`。
     /// 3. `compositor.cast::<ICompositorInterop>().CreateGraphicsDevice(d2d_device)`。
@@ -82,10 +82,6 @@ impl WucGraphicsResource {
 
         // (1) DispatcherQueue の確保（Compositor 生成前・apartment は NONE）。
         //     当該スレッドに既に DispatcherQueue があれば**再利用**し、新規 controller を作らない。
-        //     `DQTYPE_THREAD_CURRENT` は 1 スレッド 1 controller のため、既存スレッド DQ 上で
-        //     controller を作り直すと `0x8001010E`（already created）で失敗し、生成/破棄の反復が
-        //     プロセス内にリークする（共有 GPU オーナースレッドでの多重生成・本番の再初期化を
-        //     決定論化するための是正・research.md 根本原因記録／design.md G1「Path A 縮小適用」）。
         let dq_controller = match DispatcherQueue::GetForCurrentThread() {
             Ok(_existing) => {
                 debug!("[WucGraphicsResource] 既存スレッド DispatcherQueue を再利用");
@@ -94,10 +90,8 @@ impl WucGraphicsResource {
             Err(_) => Some(create_dispatcher_queue_controller(DQTAT_COM_NONE)?),
         };
 
-        // (2) Compositor（当該スレッドの DispatcherQueue を使用）。
         let compositor = Compositor::new()?;
 
-        // (3) 既存 D2D デバイスから CompositionGraphicsDevice。
         let interop: windows::Win32::System::WinRT::Composition::ICompositorInterop =
             windows::core::Interface::cast(&compositor)?;
         let graphics_device = interop.create_graphics_device(d2d_device)?;
@@ -154,7 +148,7 @@ mod tests {
     use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
-    /// WucGraphicsResource の遅延ライフサイクル統合テスト（要件 2.2 / 3.3）。
+    /// WucGraphicsResource の遅延ライフサイクル統合テスト。
     ///
     /// 本番同様に COM を MTA 初期化してから `new` を呼ぶ（`new()` は
     /// `DQTAT_COM_NONE` を使うため COM 未初期化スレッドでは失敗する）。
@@ -166,13 +160,11 @@ mod tests {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
 
-        // GraphicsCore から D2D デバイスを得て new。
         let core = GraphicsCore::new().expect("GraphicsCore::new 失敗（HARDWARE デバイス生成）");
         let d2d = core.d2d_device().expect("d2d_device が None");
 
         let resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
 
-        // is_valid / アクセサが Some を返すこと。
         assert!(resource.is_valid(), "new 後は is_valid が true");
         assert!(resource.compositor().is_some(), "compositor() が Some");
         assert!(
@@ -180,7 +172,6 @@ mod tests {
             "graphics_device() が Some"
         );
 
-        // invalidate → 無効化。
         let mut resource = resource;
         resource.invalidate();
         assert!(!resource.is_valid(), "invalidate 後は is_valid が false");
@@ -193,12 +184,11 @@ mod tests {
             "invalidate 後 graphics_device() が None"
         );
 
-        // new_empty は無効。
         let empty = WucGraphicsResource::new_empty();
         assert!(!empty.is_valid(), "new_empty は is_valid が false");
 
         // ドレイン/drop 順の健全性: 生きた Resource を drop してもクラッシュしないこと
-        // （controller 最後 drop の健全性・要件 3.3）。スコープ終了で drop される。
+        // （controller 最後 drop の健全性）。スコープ終了で drop される。
         let live = WucGraphicsResource::new(d2d).expect("再生成失敗");
         assert!(live.is_valid());
         drop(live); // controller が compositor より後に drop される（宣言順）— panic しないこと。

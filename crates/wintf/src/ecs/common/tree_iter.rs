@@ -1,7 +1,5 @@
 //! # Tree Iteration - ECS階層の汎用走査イテレータ
 //!
-//! このモジュールは、ECS階層システムにおける汎用的な走査アルゴリズムを提供します。
-//!
 //! ## 主要機能
 //!
 //! ### DepthFirstReversePostOrder
@@ -51,7 +49,8 @@ use bevy_ecs::prelude::*;
 /// 1. 最後の要素を取り出す
 /// 2. 「子取り出し済みフラグ=ON」なら返却
 /// 3. 自分を「取り出し済み」にして再度スタックに積む
-/// 4. 子供がいたら、子供要素を逆順でスタックに積む（フラグはOFF）
+/// 4. 子供がいたら、子供要素を順方向でスタックに積む（フラグはOFF）。後入れ先出しなので
+///    最後の子（最前面）が最初に取り出される
 /// 5. 1に戻る
 pub struct DepthFirstReversePostOrder {
     /// (Entity, 子取り出し済みフラグ)
@@ -60,50 +59,32 @@ pub struct DepthFirstReversePostOrder {
 
 impl DepthFirstReversePostOrder {
     /// 新しい走査状態を作成
-    ///
-    /// # Arguments
-    /// - `root`: 走査開始エンティティ
     pub fn new(root: Entity) -> Self {
         Self {
             stack: vec![(root, false)],
         }
     }
 
-    /// World を使用して次のエンティティを取得
-    ///
-    /// # Arguments
-    /// - `world`: ECS World 参照
-    ///
-    /// # Returns
-    /// 次のエンティティ、または走査完了時は None
+    /// World を使用して次のエンティティを取得（走査完了時は None）
     pub fn next(&mut self, world: &World) -> Option<Entity> {
         loop {
-            // 1. 最後の要素を取り出す
             let (entity, expanded) = self.stack.pop()?;
 
-            // 2. 「子取り出し済みフラグ=ON」なら返却
             if expanded {
                 return Some(entity);
             }
 
-            // 3. 自分を「取り出し済み」にして再度スタックに積む
             self.stack.push((entity, true));
 
-            // 4. 子供がいたら、子供要素を順方向でスタックに積む（フラグはOFF）
-            //    スタックは後入れ先出しなので、順方向で積むと最後の要素（最前面）が最初に pop される
             if let Some(children) = world.get::<Children>(entity) {
                 for child in children.iter() {
                     self.stack.push((child, false));
                 }
             }
-            // 5. ループ先頭に戻る
         }
     }
 
     /// 走査結果をベクタとして収集
-    ///
-    /// # Arguments
-    /// - `world`: ECS World 参照
     pub fn collect(&mut self, world: &World) -> Vec<Entity> {
         let mut result = Vec::new();
         while let Some(entity) = self.next(world) {
@@ -118,7 +99,7 @@ mod tests {
     use super::*;
     use bevy_ecs::world::World;
 
-    /// テスト用のヘルパー: WorldとQueryを作成し、走査順序を取得
+    /// テスト用のヘルパー: 走査順序を取得
     fn collect_traversal_order(world: &World, root: Entity) -> Vec<Entity> {
         DepthFirstReversePostOrder::new(root).collect(world)
     }
@@ -139,7 +120,6 @@ mod tests {
     fn test_basic_traversal_order() {
         let mut world = World::new();
 
-        // ツリー構築（spawn順: gc1a=0, gc1b=1, gc2a=2, child1=3, child2=4, root=5）
         let gc1a = world.spawn_empty().id();
         let gc1b = world.spawn_empty().id();
         let gc2a = world.spawn_empty().id();
@@ -149,23 +129,12 @@ mod tests {
 
         let root = world.spawn_empty().id();
 
-        // 親子関係を設定
-        // child1 の children: [gc1a, gc1b]
-        // child2 の children: [gc2a]
-        // root の children: [child1, child2] （child2 が最前面）
         world.entity_mut(child1).add_children(&[gc1a, gc1b]);
         world.entity_mut(child2).add_children(&[gc2a]);
         world.entity_mut(root).add_children(&[child1, child2]);
 
-        // 走査実行
         let result = collect_traversal_order(&world, root);
 
-        // 期待される順序:
-        // 1. child2 の子孫（最前面）: gc2a
-        // 2. child2 自身
-        // 3. child1 の子孫（逆順）: gc1b, gc1a
-        // 4. child1 自身
-        // 5. root
         assert_eq!(result, vec![gc2a, child2, gc1b, gc1a, child1, root]);
     }
 
@@ -233,14 +202,8 @@ mod tests {
 
         let result = collect_traversal_order(&world, root);
 
-        // 最前面（C4）から走査
         assert_eq!(result, vec![c4, c3, c2, c1, root]);
     }
-
-    // ===== W7b-T1 ギャップテスト =====
-    // 既存 1〜4 は走査順序（基本/単一/深い/幅広）を固定しているが、`next` の逐次契約、
-    // 走査完了後の None 終端、混在兄弟（子あり/子なしの interleaving）、collect が新規
-    // イテレータで全件返す等価性が未固定だった。
 
     /// 5. `next` の逐次契約と走査完了後の None 終端
     ///
@@ -271,10 +234,8 @@ mod tests {
         world.entity_mut(child).add_children(&[gc]);
         world.entity_mut(root).add_children(&[child]);
 
-        // collect 版
         let expected = DepthFirstReversePostOrder::new(root).collect(&world);
 
-        // next 逐次版
         let mut traversal = DepthFirstReversePostOrder::new(root);
         let mut stepwise = Vec::new();
         while let Some(e) = traversal.next(&world) {

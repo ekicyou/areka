@@ -1,4 +1,4 @@
-//! 描画面 1 枚の合成の計画（`wintf-visual-damage-redraw`）。この回に入れ物をどう描くかと、平行移動の写しを
+//! 描画面 1 枚の合成の計画。この回に入れ物をどう描くかと、平行移動の写しを
 //! 使ってよいかを決める。記録は target `wintf::damage` の debug の 1 行。
 
 use super::visual::{DamageEntry, EntryKind, PxRect, diff};
@@ -8,7 +8,7 @@ use std::ops::Range;
 /// 合成の記録の target（履歴の層の info 以上には入らない）。
 pub(crate) const DAMAGE_TARGET: &str = "wintf::damage";
 
-/// 全部の合成の理由（記録の `reason` の綴り・3.4）。
+/// 全部の合成の理由（記録の `reason` の綴り）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FullReason {
     First,
@@ -67,7 +67,7 @@ pub(crate) struct PartialPlan {
     pub shift_area: u64,
     /// 写しの切り抜きの中で描き直した面積（閉じた後の帯の `rects` の面積の和）。
     pub exposed_area: u64,
-    /// 描画面へ写す矩形＝`rects` と `shifts` の先の外接矩形（2.6）。
+    /// 描画面へ写す矩形＝`rects` と `shifts` の先の外接矩形。
     pub present_rect: PxRect,
 }
 
@@ -89,7 +89,7 @@ pub(crate) struct PlanInput<'a> {
     pub same_root: bool,
     /// 拡大が前の合成とビットで同じ。
     pub same_scale: bool,
-    /// 根の命令の列を持つ（写しの条件 S1）。
+    /// 根の命令の列を持つ（持てば写さない）。
     pub root_present: bool,
     pub prev: Option<&'a [DamageEntry]>,
     pub now: Option<&'a [DamageEntry]>,
@@ -98,7 +98,7 @@ pub(crate) struct PlanInput<'a> {
     pub surface: (u32, u32),
 }
 
-/// 描画面 1 枚の、この回の合成の計画（判定の順は design の「描画面 1 枚の計画」の図）。
+/// 描画面 1 枚の、この回の合成の計画。
 pub(crate) fn plan(input: &PlanInput<'_>) -> ComposePlan {
     if let Some(reason) = input.fresh {
         return ComposePlan::Full(reason);
@@ -126,10 +126,10 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> ComposePlan {
     let mut rects: Vec<PxRect> = Vec::new();
     // `rects` と同じ並び: 写しの帯ならその写しの番号
     let mut band_of: Vec<Option<usize>> = Vec::new();
-    // 写しに取られた部分木の項（普通の範囲に数えない・5.3）
+    // 写しに取られた部分木の項（普通の範囲に数えない）
     let mut taken_prev = vec![false; prev.len()];
     let mut taken_now = vec![false; now.len()];
-    // S1: 根の命令の列を持つ描画面では写さない（下に何が描かれているか決められない）
+    // 根の命令の列を持つ描画面では写さない（下に何が描かれているか決められない）
     if !input.root_present {
         let mut take = |c: &Candidate| {
             let Some((dx, dy, dst)) = scroll_check(prev, now, c, surface) else {
@@ -174,7 +174,7 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> ComposePlan {
         }
     }
 
-    // 普通の範囲は 1 つの外接矩形（決め D5）。項ごとに描画面で切ってから囲む（描画面の外の 2 つの
+    // 普通の範囲は 1 つの外接矩形。項ごとに描画面で切ってから囲む（描画面の外の 2 つの
     // 変化の外接矩形が描画面をまたがないように）
     let mut damage = PxRect::default();
     let changed = d.removed.iter().filter(|&&i| !taken_prev[i as usize]);
@@ -202,11 +202,11 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> ComposePlan {
         };
     }
 
-    // R1: 根の命令の列の中の絵の答えは描く範囲で変わりうる（WARP で測った）ので範囲だけでは描かない
+    // 根の命令の列の中の絵の答えは描く範囲で変わりうる（WARP で測った）ので範囲だけでは描かない
     if input.root_present {
         return ComposePlan::Full(FullReason::Undecidable);
     }
-    // R1: 絵を変形して描く件の答えは描く範囲（件の範囲 ∩ 切り抜き）で 1 段変わりうる（WARP で測った）ので、
+    // 絵を変形して描く件の答えは描く範囲（件の範囲 ∩ 切り抜き）で 1 段変わりうる（WARP で測った）ので、
     // 描く矩形（写しの帯も）を交わる件の範囲で閉じる＝件を丸ごと描く。中身は見えないので全部の件で閉じる
     // shortcut: 1 つの矩形につき最悪 O(n²)、件が多くて重ければ範囲で引ける表にする
     for r in rects.iter_mut() {
@@ -381,14 +381,14 @@ fn covered(target: PxRect, rects: &[PxRect]) -> bool {
     rest.is_empty()
 }
 
-/// 候補を入れ物の中の写しで済ませてよいか（条件 S2〜S9・S1 は呼び手）。よければ `(dx, dy)` と写しの先 `D`。
+/// 候補を入れ物の中の写しで済ませてよいか（根の命令の列の条件は呼び手が見る）。よければ `(dx, dy)` と写しの先 `D`。
 fn scroll_check(
     prev: &[DamageEntry],
     now: &[DamageEntry],
     c: &Candidate,
     surface: PxRect,
 ) -> Option<(i32, i32, PxRect)> {
-    // S2: 親の鎖に図形の切り抜きが無い（E の id が親の鎖を含むので、前の鎖も同じ）
+    // 親の鎖に図形の切り抜きが無い（E の id が親の鎖を含むので、前の鎖も同じ）
     if c.now_chain
         .iter()
         .any(|&k| now[k].kind == EntryKind::ClipGeometry)
@@ -396,12 +396,12 @@ fn scroll_check(
         return None;
     }
     let (sub_prev, sub_now) = (&prev[c.prev.clone()], &now[c.now.clone()]);
-    // S6: `SOURCE_OVER` でない重ね方の件が無い
+    // `SOURCE_OVER` でない重ね方の件が無い
     let unbounded = EntryKind::Draw { unbounded: true };
     if sub_prev.iter().chain(sub_now).any(|e| e.kind == unbounded) {
         return None;
     }
-    // S3: `shape` で k 番目どうしを対にし、対が在って前後の順が同じ
+    // `shape` で k 番目どうしを対にし、対が在って前後の順が同じ
     let mut by_shape: HashMap<u64, VecDeque<usize>> = HashMap::new();
     for (i, e) in sub_prev.iter().enumerate() {
         by_shape.entry(e.shape).or_default().push_back(i);
@@ -421,7 +421,7 @@ fn scroll_check(
     if pairs.is_empty() || pairs.windows(2).any(|w| w[0].0 > w[1].0) {
         return None;
     }
-    // S4・S5: f32 の物理の行列の平行移動の差を f64 で取り（R5）、どの対も同じ整数の差で線形の部分が同じ
+    // f32 の物理の行列の平行移動の差を f64 で取り、どの対も同じ整数の差で線形の部分が同じ
     let (p0, n0) = (&sub_prev[pairs[0].0], &sub_now[pairs[0].1]);
     let dx = n0.origin[0] as f64 - p0.origin[0] as f64;
     let dy = n0.origin[1] as f64 - p0.origin[1] as f64;
@@ -447,7 +447,7 @@ fn scroll_check(
     }
     // |dx| < 幅なので i32 に収まる
     let (dx, dy) = (dx as i32, dy as i32);
-    // S7: 対の取れない前の項は切り抜きの外へ出て、今の項は露出した帯に入っただけ
+    // 対の取れない前の項は切り抜きの外へ出て、今の項は露出した帯に入っただけ
     let hits = |b: PxRect| !b.intersect(c.r_out).is_empty();
     let mut lone_prev = sub_prev.iter().zip(&paired_prev).filter(|(_, p)| !**p);
     if lone_prev.any(|(e, _)| hits(e.bounds.offset(dx, dy)))
@@ -457,7 +457,7 @@ fn scroll_check(
     {
         return None;
     }
-    // S8: 部分木の外で親の鎖でもない項は、下にも上にも重ならない
+    // 部分木の外で親の鎖でもない項は、下にも上にも重ならない
     let outside = |list: &[DamageEntry], sub: &Range<usize>, chain: &[usize]| {
         (0..list.len())
             .filter(|k| !sub.contains(k) && !chain.contains(k))
@@ -466,7 +466,7 @@ fn scroll_check(
     if outside(prev, &c.prev, &c.prev_chain) || outside(now, &c.now, &c.now_chain) {
         return None;
     }
-    // S9: 写しの先が空でない（元も先も描画面の中）
+    // 写しの先が空でない（元も先も描画面の中）
     let r_in = c.r_in.intersect(surface);
     let dst = r_in.intersect(r_in.offset(dx, dy));
     (!dst.is_empty()).then_some((dx, dy, dst))

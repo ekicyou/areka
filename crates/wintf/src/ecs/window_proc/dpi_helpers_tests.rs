@@ -53,7 +53,7 @@ fn test_center_correction_same_size() {
 #[test]
 fn test_center_correction_preserves_center() {
     // 任意のケース: old_center ≈ new_center を数値で検証
-    // 整数除算のため最大 1px の丸め誤差が生じうる（design.md 記載済み）
+    // 整数除算のため最大 1px の丸め誤差が生じうる。
     let old_pos = Point { x: 100, y: 200 };
     let old_size = SizeI {
         width: 800,
@@ -289,42 +289,33 @@ fn test_correct_position_applies_center_preserving_correction() {
 }
 
 // ================================================================
-// `BoxStyle not found` 判定語の literal・水準の固定（task 7.2）
+// `BoxStyle not found` 判定語の literal・水準の固定
 //
-// タスク 5.1 は本 warn の文言を `diagnosis-procedure.md` §6.5（`S1-SOURCE-CUT`）の
-// **判定語**へ昇格させた——実機サインオフの合否は
-// `S1-SOURCE-CUT: PASS (external=N/N, boxstyle_warn=0, x_divergence=0)` で読む。
-// ところが同 literal を固定する in-source 檻はリポジトリ全体で 0 件であり
-// （`grep -rn "BoxStyle not found" crates --include=*.rs` の一致は本ファイルの
-// 定義のみ）、同書のメンテ規約が謳う「出力書式は in-source 檻がリテラル固定して
-// いる」の体裁から外れていた。書式か**水準**が変われば `boxstyle_warn=0` は
-// 「欠陥が無い」ではなく「grep が当たらない」「その水準が手順書の `RUST_LOG` で
-// 有効化されていない」ことの記録に変わり、手順書が静かに嘘になる（Req 1.5 が
-// 名指しで禁じている「手順で有効化されない水準にある観測点を『発生 0 回』の
-// 根拠に用いる」形そのもの）。
+// 実機サインオフの合否は `boxstyle_warn=0` の grep で読む。書式か**水準**が変われば
+// 「欠陥が無い」ではなく「grep が当たらない」「その水準が `RUST_LOG` で有効化されていない」
+// ことの記録に変わり、判定が静かに嘘になる。
 //
-// 本節が固定するのは 2 点だけである:
+// 固定するのは 2 点だけである:
 //   (1) 判定語の literal（本体の文言とは**独立に**ここへ置く）
 //   (2) 水準が `warn!` であること——同関数の兄弟フォールバック
 //       （`BoxStyle.size not Px`／`no size change`）は `trace!` であり、
-//       ここだけが warn である非対称が §6.5 の読み方の前提になっている
+//       ここだけが warn である非対称が読み方の前提になっている
 //
 // 陰性側（`BoxStyle` があるとき／`dpi_context` が無いときは 1 行も出ない）を
 // 対にして置くのは、陽性の 1 行が**当該分岐の成果**であることを示すためである
-// （[[檻の空虚性]]: 常に出るログを「分岐が働いた証拠」と読まない）。
+// （常に出るログを「分岐が働いた証拠」と読まない）。
 // ================================================================
 
 use log_capture_kit::{LineFormat, capture_lines};
 
-/// 手順書 §6.5 の grep 判定語（`boxstyle_warn`）。**本体の文言とは独立の literal**。
+/// 実機サインオフの grep 判定語（`boxstyle_warn`）。**本体の文言とは独立の literal**。
 const BOX_STYLE_NOT_FOUND_TAG: &str =
     "[WM_WINDOWPOSCHANGED] DPI center correction skipped: BoxStyle not found";
 
 // ── 捕捉層は共有機構へ委譲 ───────────────────────────────────────────────
 //
-// 捕捉と行整形の実体はここに持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。
-// 行の形（1 イベント 1 行・`level=…` に続けてフィールドを訪問順で ` name={value:?}`）も
-// 呼出側の判定内容も、移行前と 1 バイト変わらない。
+// 捕捉と行整形の実体はここに持たず、`log-capture-kit` へ委譲する。
+// 行の形は 1 イベント 1 行・`level=…` に続けてフィールドを訪問順で ` name={value:?}`。
 //
 // 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
 // のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
@@ -341,10 +332,10 @@ fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
     lines
 }
 
-/// `BoxStyle` 欠落フォールバックの**判定語と水準**を固定する（task 7.2・Req 1.5/5.1）。
+/// `BoxStyle` 欠落フォールバックの**判定語と水準**を固定する。
 ///
 /// 96 以外の水準（120・192）でも同一の語・同一の水準であることを併せて見る——
-/// §6.5 の合否は混在 DPI の実機セッションで読むため、水準依存の分岐が入り込めば
+/// 合否は混在 DPI の実機セッションで読むため、水準依存の分岐が入り込めば
 /// そこで判定語が消える。
 #[test]
 fn box_style_not_found_fallback_keeps_its_literal_and_warn_level() {
@@ -420,10 +411,10 @@ fn box_style_not_found_fallback_keeps_its_literal_and_warn_level() {
 // ================================================================
 // dpi_suggested_position_decision tests
 //
-// 位置づけ（design.md「Testing Strategy」1.）: **分岐網羅の補助**。
-// S1（OS 提案位置の素通し）の赤→緑の正証跡は `window_proc/window_pos_tests.rs` の
-// dispatch 檻（タスク 4.3）が担う——是正前の欠陥は wndproc の無条件
-// 書込＝実配線に在るため、新設純関数上の模擬では証明力が足りない。
+// 位置づけ: **分岐網羅の補助**。
+// OS 提案位置の素通しの赤→緑の正証跡は `window_proc/window_pos_tests.rs` の
+// dispatch 檻が担う——是正前の欠陥は wndproc の無条件
+// 書込＝実配線に在るため、純関数上の模擬では証明力が足りない。
 // ここで固定するのは「判断関数の 3 分岐が仕様どおりの答えを返すこと」と
 // 「dpi=96 では 3 分岐の区別が消える（＝96 が欠陥を隠す性質）」の 2 点。
 // ================================================================
@@ -511,7 +502,6 @@ fn test_dpi_decision_uses_rect_origin_not_extent() {
 
 #[test]
 fn test_dpi_decision_at_96_hides_the_branch_difference() {
-    // Req 5.1/5.4 の「96 の自己整合が欠陥を隠す」性質を檻として明示する。
     // dpi=96 では提案位置 = 現位置（比 1.0）ゆえ、3 分岐すべてが
     // 現接地点 X を保存してしまい、分岐の区別が観測できない。
     let current = (1200, 400);
@@ -542,7 +532,7 @@ fn test_dpi_decision_at_120_and_192_separates_apply_from_external_authority() {
     // 96 以外の水準（120・192）でモニタ跨ぎ相当の提案シフトを注入すると、
     // 「提案位置を書く」分岐は現接地点 X を破壊し、
     // `ExternalAuthority` だけが現接地点 X を保存する。
-    // 判定は絶対 px ではなく DPI 水準に対する比で表現する（Req 5.6）。
+    // 判定は絶対 px ではなく DPI 水準に対する比で表現する。
     let current = (1200, 400);
 
     for dpi in [120_u16, 192_u16] {

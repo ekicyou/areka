@@ -1,4 +1,4 @@
-//! 描く中身の道具（`draw_content_test_support`）で作った節を `World` に置く（要件 6.7）。
+//! 描く中身の道具（`draw_content_test_support`）で作った節を `World` に置く。
 
 use super::draw_content_test_support::solid_rect_content;
 use super::*;

@@ -24,17 +24,17 @@ use windows::core::{Interface, Result};
 /// `ICompositorInterop` の interop メソッドを安全 wrapper 化する Ext trait。
 ///
 /// 既存の D2D デバイスから `CompositionGraphicsDevice` を生成する
-/// `CreateGraphicsDevice`（要件 2.1）を包む。
+/// `CreateGraphicsDevice` を包む。
 pub trait CompositorInteropExt {
     /// CreateGraphicsDevice — 既存 D2D デバイスから合成グラフィックスデバイスを生成。
     fn create_graphics_device(&self, d2d_device: &ID2D1Device)
     -> Result<CompositionGraphicsDevice>;
 
-    /// CreateCompositionSurfaceForSwapChain — 自前所有 swap chain から合成面を生成（要件 8.1）。
+    /// CreateCompositionSurfaceForSwapChain — 自前所有 swap chain から合成面を生成。
     ///
     /// `com/dxgi::create_composition_swap_chain` が生成した読み戻し可能な供給面を
     /// WUC の `ICompositionSurface`（SpriteVisual＋SurfaceBrush への装着材料）へ包む
-    /// 安全 wrapper。`unsafe` は本メソッドへ隔離する（汎用・emo 非依存）。
+    /// 安全 wrapper（汎用・emo 非依存）。
     fn create_composition_surface_for_swap_chain(
         &self,
         swapchain: &IDXGISwapChain1,
@@ -62,7 +62,7 @@ impl CompositorInteropExt for ICompositorInterop {
 /// `ICompositorDesktopInterop` の interop メソッドを安全 wrapper 化する Ext trait。
 ///
 /// HWND に束縛した `DesktopWindowTarget` を生成する
-/// `CreateDesktopWindowTarget`（要件 4.1）を包む。
+/// `CreateDesktopWindowTarget` を包む。
 pub trait CompositorDesktopInteropExt {
     /// CreateDesktopWindowTarget — HWND への合成出力先ターゲットを生成。
     fn create_desktop_window_target(
@@ -85,7 +85,7 @@ impl CompositorDesktopInteropExt for ICompositorDesktopInterop {
 
 /// `ICompositionDrawingSurfaceInterop` の interop メソッドを安全 wrapper 化する Ext trait。
 ///
-/// D2D 直描き経路（`BeginDraw`→D2D DC 描画→`EndDraw`・要件 6.1/6.2）を包む。
+/// D2D 直描き経路（`BeginDraw`→D2D DC 描画→`EndDraw`）を包む。
 pub trait DrawingSurfaceInteropExt {
     /// BeginDraw — 更新矩形を渡し、`ID2D1DeviceContext3` へ cast した D2D デバイスコンテキストと
     /// atlas offset（描く位置の平行移動）を返す。
@@ -111,9 +111,9 @@ impl DrawingSurfaceInteropExt for ICompositionDrawingSurfaceInterop {
 
 /// DispatcherQueueController を現在スレッド種別（`DQTYPE_THREAD_CURRENT`）で生成する。
 ///
-/// WUC の `Compositor` は同一 UI スレッド上に DispatcherQueue を要求する（要件 3.1）。
+/// WUC の `Compositor` は同一 UI スレッド上に DispatcherQueue を要求する。
 /// `apartment` は呼び出し側の COM 状態に応じて選ぶ（COM 初期化済みなら `DQTAT_COM_NONE`、
-/// 未初期化なら `DQTAT_COM_ASTA`）。後続タスク 2.1（WucGraphicsResource）とテストで再利用する。
+/// 未初期化なら `DQTAT_COM_ASTA`）。
 #[inline(always)]
 pub fn create_dispatcher_queue_controller(
     apartment: DISPATCHERQUEUE_THREAD_APARTMENTTYPE,
@@ -137,29 +137,22 @@ mod tests {
 
     /// BeginDraw wrapper の往復単体テスト（atlas offset 非ゼロケース含む）。
     ///
-    /// 実グラフィックスデバイス（D3D11 HARDWARE）と WUC ランタイムを要する統合的テスト。
-    /// スレッド上で DispatcherQueue → Compositor → CompositionGraphicsDevice →
-    /// CompositionDrawingSurface を組み立て、interop 経由で `begin_draw`/`end_draw` の
-    /// 往復が成立することを検証する。
+    /// 実グラフィックスデバイス（D3D11 HARDWARE）と WUC ランタイムを要する。
     #[test]
     fn begin_draw_roundtrip() {
-        // apartment 種別の実測（要件 10.2）:
-        // cargo test の各テストは専用スレッドで走り、そのスレッドは COM を自分で初期化していない
-        // （CoInitialize/RoInitialize なし・落ちの報告の初期化子がプロセスの寿命の MTA を立てるので暗黙の MTA に居る）。design.md §2.1「未初期化なら DQTAT_COM_ASTA」に
-        // 従い ASTA を第一候補とし、万一失敗したら NONE を試す（本開発機での実測により確定）。
+        // cargo test の各テストスレッドは COM を自分で初期化していない（落ちの報告の初期化子が
+        // プロセスの寿命の MTA を立てるので暗黙の MTA に居る）。よって ASTA を第一候補とし、
+        // 失敗したら NONE を試す。
         let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
             .or_else(|e_asta| {
-                // NONE は COM 初期化済みスレッド向け。ASTA が失敗した場合の保険。
                 create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
             })
             .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
-        // controller は Compositor より長寿命であること（要件 3.3）。テスト末尾まで保持。
+        // controller は Compositor より長寿命でなければならないので、テスト末尾まで保持する。
         let _dq = dq;
 
-        // (2) Compositor 生成。
         let compositor = Compositor::new().expect("Compositor::new 失敗");
 
-        // (3) GraphicsCore から D2D デバイスを得て CreateGraphicsDevice。
         let core = GraphicsCore::new().expect("GraphicsCore::new 失敗（HARDWARE デバイス生成）");
         let d2d_device = core.d2d_device().expect("d2d_device が None");
 
@@ -170,8 +163,7 @@ mod tests {
             .create_graphics_device(d2d_device)
             .expect("create_graphics_device 失敗");
 
-        // (4) 描画サーフェス生成（B8G8R8A8・Premultiplied・要件 6.4）。
-        //     atlas offset 非ゼロを引き出しやすいよう、やや大きめのサーフェスを用意。
+        // atlas offset 非ゼロを引き出しやすいよう、やや大きめにする。
         let size = Size {
             Width: 256.0,
             Height: 256.0,
@@ -188,17 +180,10 @@ mod tests {
             .cast::<ICompositionDrawingSurfaceInterop>()
             .expect("ICompositionDrawingSurfaceInterop へ cast 失敗");
 
-        // 主経路（本番 render_surface と同一）: update_rect = None（全面）で BeginDraw。
-        // WUC は各 CompositionDrawingSurface を内部 atlas テクスチャへ配置するため、
-        // updateoffset には atlas 内配置位置（しばしば非ゼロ）が返る。これが本番コードの
-        // 「offset を SetTransform の平行移動へ適用する」ロジックの入力となる。
-        //
-        // 実測所見（要件 10.2）: WUC の BeginDraw に Some(部分矩形) を渡すと、作りたての描画面では
-        // E_INVALIDARG (0x80070057) で断られ、全面を 1 度描いた後は通る（2026-11-14 実測・本開発機）。
-        // 本番 render_surface は全面を写した後の範囲だけの回にだけ部分矩形を渡す。ここは作りたての
-        // 描画面なので None を主経路の必須 assert とする。
-        // 確かめるのは BeginDraw／EndDraw が通ることだけ。atlas offset は WUC の配置しだいで
-        // 値を主張できないので、観測としてテスト出力へ残すに留める。
+        // WUC の BeginDraw に Some(部分矩形) を渡すと、作りたての描画面では
+        // E_INVALIDARG (0x80070057) で断られ、全面を 1 度描いた後は通る。ここは作りたての
+        // 描画面なので None（全面）で渡す。
+        // atlas offset は WUC の配置しだいで値を主張できないので、観測としてテスト出力へ残すに留める。
         let (_dc, offset) = surface_interop
             .begin_draw(None)
             .expect("begin_draw(None) 失敗");
@@ -212,15 +197,12 @@ mod tests {
 
     /// create_composition_surface_for_swap_chain wrapper の単体テスト。
     ///
-    /// 実グラフィックスデバイス（D3D11 HARDWARE）と WUC ランタイムを要する統合的テスト。
-    /// `create_composition_swap_chain`（com/dxgi・要件 8.1）で自前所有面を生成し、
-    /// `ICompositorInterop::CreateCompositionSurfaceForSwapChain` の安全 wrapper 経由で
-    /// `ICompositionSurface` が取得できることを検証する（要件 6.1 の合成面装着の材料）。
+    /// 実グラフィックスデバイス（D3D11 HARDWARE）と WUC ランタイムを要する。
     #[test]
     fn create_composition_surface_for_swap_chain_roundtrip() {
         use crate::com::dxgi::create_composition_swap_chain;
 
-        // (1) Compositor 用の DispatcherQueue（begin_draw_roundtrip と同一方針）。
+        // DispatcherQueue の作り方は begin_draw_roundtrip と同じ。
         let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
             .or_else(|e_asta| {
                 create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
@@ -228,26 +210,21 @@ mod tests {
             .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
         let _dq = dq;
 
-        // (2) Compositor 生成 → ICompositorInterop へ cast。
         let compositor = Compositor::new().expect("Compositor::new 失敗");
         let interop = compositor
             .cast::<ICompositorInterop>()
             .expect("ICompositorInterop へ cast 失敗");
 
-        // (3) GraphicsCore から d3d/dxgi を得て自前所有の合成 swap chain を生成。
         let core = GraphicsCore::new().expect("GraphicsCore::new 失敗（HARDWARE デバイス生成）");
         let d3d = core.d3d().expect("d3d が None");
         let dxgi = core.dxgi().expect("dxgi が None");
         let swapchain = create_composition_swap_chain(d3d, dxgi, 64, 48)
             .expect("create_composition_swap_chain 失敗");
 
-        // (4) 安全 wrapper 経由で ICompositionSurface を取得（本タスクの検証対象）。
         let surface = interop
             .create_composition_surface_for_swap_chain(&swapchain)
             .expect("create_composition_surface_for_swap_chain 失敗");
 
-        // 取得した ICompositionSurface が有効な COM オブジェクトであることを確認。
-        // SpriteVisual への装着（本番 render 経路）へ渡せる ICompositorInterop 由来の面。
         use windows::UI::Composition::ICompositionSurface;
         let _typed: &ICompositionSurface = &surface;
     }

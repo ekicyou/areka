@@ -1,5 +1,4 @@
 //! 組を外す判定・組の操作列・持ち主の輪の確かめ・組の受け渡しの記録——決定論的テスト
-//! （要件 1.1／2.1／4.1／4.4／4.5／6.4／7.1〜7.4／8.1）。
 //!
 //! 実機も実ディスプレイも World の巡回も要らない。`HWND` は Win32 へ 1 度も渡さない偽の値で
 //! あり、`Entity` は空の `World` から順に採るだけの値である。持ち主を読む口は引数の閉包で
@@ -96,14 +95,14 @@ fn only_line_with<'a>(out: &'a str, tag: &str) -> &'a str {
 // 組を外す判定
 // ===========================================================================
 
-/// 鎖が無ければ、どの組も外さない（要件 4.1——指定が無い間は組の重なりのまま）。
+/// 鎖が無ければ、どの組も外さない（指定が無い間は組の重なりのまま）。
 #[test]
 fn no_chain_releases_no_pair() {
     let e = entities(2);
     assert!(!pair_released_by_chain(None, e[0], e[1]));
 }
 
-/// キャラクターがバルーンのすぐ奥なら外さない（要件 1.6／4.4——組の結び目が受け持つ）。
+/// キャラクターがバルーンのすぐ奥なら外さない（組の結び目が受け持つ）。
 #[test]
 fn a_contiguous_pair_is_kept() {
     let e = entities(4); // b0, s0, b1, s1
@@ -112,18 +111,18 @@ fn a_contiguous_pair_is_kept() {
     assert!(!pair_released_by_chain(Some(&plan), e[2], e[3]));
 }
 
-/// 逆転（キャラクターがバルーンより手前）は外す（要件 1.1）。
+/// 逆転（キャラクターがバルーンより手前）は外す。
 #[test]
 fn an_inverted_pair_is_released() {
     let e = entities(4); // s0, b0, b1, s1 （s0,b0,s1 の補い済み）
     let (s0, b0, b1, s1) = (e[0], e[1], e[2], e[3]);
     let plan = chain(&[s0, b0, b1, s1]);
     assert!(pair_released_by_chain(Some(&plan), b0, s0));
-    // 同じ鎖の中の連続する組は外さない（要件 4.4）
+    // 同じ鎖の中の連続する組は外さない
     assert!(!pair_released_by_chain(Some(&plan), b1, s1));
 }
 
-/// 非隣接（2 枚の間に他の窓が挟まる）は外す（要件 2.1）。
+/// 非隣接（2 枚の間に他の窓が挟まる）は外す。
 #[test]
 fn a_split_pair_is_released() {
     let e = entities(4); // b1, s0, s1, b0
@@ -212,7 +211,7 @@ fn releases_all_come_first_then_restores_each_in_ascending_balloon_order() {
     );
 }
 
-/// 鎖が無くなれば、印の付いた組は全部結び直す（要件 4.5——解除で組の重なりへ戻る）。
+/// 鎖が無くなれば、印の付いた組は全部結び直す（解除で組の重なりへ戻る）。
 #[test]
 fn when_the_chain_goes_away_every_marked_pair_is_restored() {
     let e = entities(6);

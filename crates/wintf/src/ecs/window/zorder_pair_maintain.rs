@@ -1,9 +1,6 @@
 //! ペアの重なりの維持系——再断行の要求を受け、実測して判断し、重なりだけを動かし、
 //! 次の巡で実測と突き合わせる。
 //!
-//! design.md「System Flows > 維持系の判断と適用（共通・1 フレーム 1 巡）」の手順を
-//! そのまま実装したものである。
-//!
 //! ```text
 //! トリガ（ReassertZOrder）→ 観測の組立（ペア解決と GetWindow 実測）
 //!   → decide_pair_fix（純関数）
@@ -16,8 +13,7 @@
 //! # 受動性——トリガ駆動のみ
 //!
 //! 本 system は毎フレーム走るが、[`ReassertZOrder`] を持つ窓が 1 つも無ければ判断そのものを
-//! 行わない。タイマも定期巡回も持たず、自分から窓を前面へ上げることは決してない
-//! （design.md「Responsibilities & Constraints」——これが要件 4.1／4.2 の受動性の実装である）。
+//! 行わない。タイマも定期巡回も持たず、自分から窓を前面へ上げることは決してない。
 //!
 //! 唯一トリガを持たないのが破棄時の owner 切離し
 //! （[`detach_owner_links_for_lost_peers`]）である。破棄には要求を挿してくれる相手が居らず、
@@ -34,15 +30,14 @@
 //! ① 適用は [`SetWindowPosCommand`] の flush 経由であり、誘発される `WM_WINDOWPOSCHANGED` は
 //! [`is_self_initiated`](super::is_self_initiated) でエコーと判定される。
 //! ② [`decide_pair_fix`] は実測が既に隣接なら必ず見送る（同値ガード）。
-//! 加えて検証は一致・不一致のどちらでも要求を消し、**再試行の輪を作らない**
-//! （design.md「Error Strategy」の検証不一致）。
+//! 加えて検証は一致・不一致のどちらでも要求を消し、**再試行の輪を作らない**。
 //!
 //! # 複数ペアが同じ巡で是正を求めたとき——動かすのは高々 1 ペア
 //!
 //! 上の 2 つは 1 つのペアだけを見た停止条件であり、ペアが複数あるときの**観測の陳腐化**は
 //! 塞がない。実測は巡の中で採るが実際の書込はその巡の後の flush であるため、同じ巡で
 //! 2 つの是正を積むと、後から適用される指令の挿入位置は先の適用で既に古い——指した窓の
-//! 隣に別の窓が割り込み、要件 1.1 の「すぐ手前」が成立しない（実機の 2 スコープ起動で
+//! 隣に別の窓が割り込み、「バルーンはキャラのすぐ手前」が成立しない（実機の 2 スコープ起動で
 //! 毎回 `verify-failed` になっていた形）。
 //!
 //! よって **1 巡で実際に指令を出すのは高々 1 ペア**とする。残るペアの要求は消さずに残し、
@@ -56,27 +51,22 @@
 //! **前提は 2 つ**——ペアどうしがキャラ窓を共有しないこと（areka の spawn はスコープごとに
 //! キャラ 1 枚・バルーン 1 枚を作るので成立する）、および**キャラ窓が可視であること**
 //! （隣接を「最も近い可視の隣」で測る以上、この関係が可視窓どうしで対称に成り立つことが
-//! 論証の土台になる）。design.md「維持系の判断と適用」の収束の項と同じ論証である。
+//! 論証の土台になる）。
 //!
 //! # 書き込まないもの
 //!
-//! 位置・寸法・窓スタイル・表示状態には一切書き込まない（要件 1.6／5.x）。指令は必ず
+//! 位置・寸法・窓スタイル・表示状態には一切書き込まない。指令は必ず
 //! [`pair_fix_command`] が組み、そこで `SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE` に固定される。
 //!
-//! # G8 PASS により足さないと決めたもの
-//!
-//! 完了 spec `areka-P0-ghost-window-zorder` の判定表（`verification/plan-a-gate.md`）は
-//! G1〜G8 全 PASS で、tasks.md 5.2〜5.7 は実施しないと決まっている。引き受け手は居ない。
+//! # 足さないもの
 //!
 //! - 切離しの適用時点を早める強化——相手の消滅を検知した巡ではなく、窓の登録が実際に
-//!   取り崩される直前で外す形。G8 で PASS と判定済み（tasks.md 5.2 は不実施）。
+//!   取り崩される直前で外す形。実機ゲートで不要と判定済み。
 //! - 重なりが動いたことの検知（案 B／補助浮上のトリガ供給）。z の変化を知らせる仕組みは
-//!   無い（[`ReassertZOrder`] の説明）。本 system が
-//!   受けるのは維持系の再主張の要求だけである。
+//!   無い（[`ReassertZOrder`] の説明）。本 system が受けるのは維持系の再主張の要求だけである。
 //!
 //! 記録を出すマクロは隣の [`zorder_pair`](super::zorder_pair) に置く（出力先は組のモジュール 1 つに
-//! 揃える。読み手の絞り込みは前方一致なので漏れはしないが、記録の関数を 1 つのファイルに集めて固定する）。
-//! 本モジュールは記録用の関数を呼ぶだけである。
+//! 揃える）。本モジュールは記録用の関数を呼ぶだけである。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::NonSendMarker;
@@ -104,13 +94,13 @@ use crate::api::clear_window_owner;
 
 /// 適用済みの是正が**どの挿入位置を指令したか**の持ち越し（バルーン窓へ付与）。
 ///
-/// 是正の記録（`fix`）は「出した指令」と「その後の実測」を同じ 1 行に載せる（要件 6.1）が、
+/// 是正の記録（`fix`）は「出した指令」と「その後の実測」を同じ 1 行に載せるが、
 /// その行が出るのは適用の**次の巡**である。よって適用時に
 /// [`PairFixDecision::insert_spec`](super::zorder_pair::PairFixDecision) の射影をここへ預け、
 /// 次巡の [`record_verification`] へ渡す。
 ///
 /// [`ReassertZOrder`] に相乗りさせないのは、あちらが**他クレートから挿入される公開の
-/// 契約点**（要件 2.6 のシーム）であり、その形を wintf 内部の都合で変えないためである。
+/// 契約点**であり、その形を wintf 内部の都合で変えないためである。
 /// 預けるのも外すのも本モジュールだけであり、要求が消えるときは必ず一緒に外れる。
 ///
 /// 公開到達性を持つのは、維持系（`pub` な system）の引数に現れるためだけである
@@ -142,7 +132,7 @@ unsafe impl Sync for IssuedPairFix {}
 /// 純関数 [`plan_pair_fix`] が組む。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PairFixPlan {
-    /// 動かす窓（宣言ペアの 2 枚のいずれか 1 枚・要件 3.4）
+    /// 動かす窓（宣言ペアの 2 枚のいずれか 1 枚）
     pub target: HWND,
     /// 挿入位置（記録に載る「出した指令」）
     pub insert_after: InsertSpec,
@@ -152,13 +142,13 @@ pub(crate) struct PairFixPlan {
 
 /// 判断と観測から適用計画を組む（Win32 も World も触らない）。
 ///
-/// 動かす窓は腕が一意に決める——手前へ寄せる腕（要件 1.2）ならバルーン窓、背後へ寄せる腕
-/// （要件 1.3）ならキャラ窓であり、**第三の窓を指す余地が型に無い**（要件 3.4）。
+/// 動かす窓は腕が一意に決める——手前へ寄せる腕ならバルーン窓、背後へ寄せる腕
+/// ならキャラ窓であり、**第三の窓を指す余地が型に無い**。
 /// 期待隣接はどちらの腕でも同じ「バルーンがキャラのすぐ手前」に収束するため 1 形で足りる。
 ///
 /// `None` を返すのは、見送りだった場合と、両窓のハンドルが揃っていない観測だった場合である。
 /// 後者は [`decide_pair_fix`] が先に見送りを返すため実際には届かないが、
-/// **`None` を返せる形にしておくことで適用側に panic 経路を作らせない**（要件 6.4）。
+/// **`None` を返せる形にしておくことで適用側に panic 経路を作らせない**。
 pub(crate) fn plan_pair_fix(obs: &PairObservation, fix: PairFixDecision) -> Option<PairFixPlan> {
     let above = obs.above_hwnd?;
     let below = obs.below_hwnd?;
@@ -180,10 +170,10 @@ pub(crate) fn plan_pair_fix(obs: &PairObservation, fix: PairFixDecision) -> Opti
 /// `SWP_NOSIZE`／`SWP_NOZORDER` の自動判定）と `ZOrder` → `hWndInsertAfter` の写像を
 /// **既存の 1 箇所に委ねる**ためである。ここで二重に持つと、片方だけが変わったときに
 /// 静かに食い違う。結果として常に `SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE` になる
-/// ——位置・寸法は不変（要件 1.6）で、活性化も伴わない。
+/// ——位置・寸法は不変で、活性化も伴わない。
 ///
 /// [`InsertSpec::TopEdge`] は `ZOrder::Top`（最上位）であって `ZOrder::TopMost`
-/// （常時最前面）ではない——本フィーチャーは常時最前面を決して指さない（要件 4.3／8.1）。
+/// （常時最前面）ではない——本フィーチャーは常時最前面を決して指さない。
 ///
 /// [`InsertSpec::TopOfNormalBand`] も同じ `ZOrder::Top`（`HWND_TOP`）へ写像する。実測で
 /// 確かめた 2 つの候補のうち、`HWND_NOTOPMOST` は**既に常時最前面ではない窓には何も
@@ -212,8 +202,8 @@ pub(crate) fn pair_fix_command(hwnd: HWND, insert_after: InsertSpec) -> SetWindo
         pos.get_hwnd_insert_after(),
     )
     // 観測専用の札。どの経路が積んだ書込かを 1 行で見分けるためだけのもので、
-    // 判定・挿入位置・フラグ・適用順のいずれも変わらない（要件 10.3）。
-    // スコープと窓種別は表示基盤側では判らないため番兵のままにする。
+    // 判定・挿入位置・フラグ・適用順のいずれも変わらない。スコープと窓種別は表示基盤側では
+    // 判らないため番兵のままにする。
     .with_tag(WriteTag {
         origin: ORIGIN_ZORDER_PAIR,
         ..WriteTag::UNTAGGED
@@ -241,16 +231,16 @@ type OwnerLinkQuery<'w, 's> = Query<
 /// 沈降観測（[`observe_marked_pair_sinks`]）も同じ形で読むため、型をここで 1 つに保つ。
 pub(crate) type HandleQuery<'w, 's> = Query<'w, 's, Option<&'static WindowHandle>>;
 
-/// 相手を失ったペアの owner を外す（要件 5.7／5.8／5.9・design.md「破棄経路」）。
+/// 相手を失ったペアの owner を外す。
 ///
 /// # なぜ外すのか
 ///
 /// owner を張ったままキャラ窓が `DestroyWindow` されると、OS はその窓が owner である
 /// バルーン窓も一緒に破棄する。すると後から走るバルーン窓側の破棄が、もう無効になった
 /// ハンドルへ `DestroyWindow` を撃つ。同一スコープの 2 窓が対で消えること自体は許容
-/// されている（要件 5.8）——禁じられているのは、その重複した破棄で異常終了することだけ
-/// である（要件 5.9）。相手が消えた時点で owner を外しておけば、両窓は本フィーチャー以前と
-/// 同じ「独立して生成され独立して破棄される 2 枚」に戻り、連鎖そのものが起きない。
+/// されている——禁じられているのは、その重複した破棄で異常終了することだけである。
+/// 相手が消えた時点で owner を外しておけば、両窓は
+/// 独立して生成され独立して破棄される 2 枚のまま扱え、連鎖そのものが起きない。
 ///
 /// # いつ外すのか
 ///
@@ -258,24 +248,22 @@ pub(crate) type HandleQuery<'w, 's> = Query<'w, 's, Option<&'static WindowHandle
 /// 「相手の窓はもう無い／今まさに無くなる」を意味し、owner を残す理由が消えている。
 /// 実体の消滅（despawn）と実際の `DestroyWindow`（登録の取り崩し）の**間**に本処理が入る
 /// のが標準の形であり、その間隔で塞ぎ切れない順序（同一巡で両者が消える・アプリ終了経路）は
-/// 実機ゲート G8 で PASS と判定済み（tasks.md 5.2 は不実施）。
+/// 実機ゲートで問題なしと判定済み。
 ///
 /// # 他スコープへは届かない
 ///
 /// 外す対象は「自分が張った owner」だけであり、その owner は宣言ペア
 /// （[`KeepDirectlyAbove`]）の相手にしか張られていない。**本機構はスコープをまたぐ owner を
-/// 張りも外しもしない**ので、他スコープの窓が切離しにも破棄にも巻き込まれない（要件 5.7）。
+/// 張りも外しもしない**ので、他スコープの窓が切離しにも破棄にも巻き込まれない。
 ///
-/// ⚠ 2026-08-30 訂正: 以前ここには「スコープをまたぐ owner はそもそも存在しない」と書いてあったが、
-/// これは `areka-P0-scope-zorder-pinning` の**所有の鎖**（`zorder_chain_apply.rs` の横断 edge）が
-/// 着地して以降は偽である。跨ぎの owner は実在するが、それを張り外しするのは鎖の側の帳簿
-/// （`CrossOwnerLink`）であって本機構ではない。結論（他スコープを巻き込まない）は変わらない。
+/// 跨ぎの owner 自体は実在する（**所有の鎖**＝`zorder_chain_apply.rs` の横断 edge）が、
+/// それを張り外しするのは鎖の側の帳簿（`CrossOwnerLink`）であって本機構ではない。
 ///
 /// # 失敗しても止まらない
 ///
-/// `clear_window_owner` の失敗は記録するだけで伝播させない（要件 6.4）。いずれの経路でも
+/// `clear_window_owner` の失敗は記録するだけで伝播させない。いずれの経路でも
 /// [`OwnerLink`] は外す——同じハンドルでの再試行は同じ失敗を繰り返し、記録を二重化する
-/// だけだからである（design.md「Error Strategy」の確立失敗と同根）。
+/// だけだからである。
 fn detach_owner_links_for_lost_peers(
     commands: &mut Commands,
     links: &OwnerLinkQuery,
@@ -291,7 +279,7 @@ fn detach_owner_links_for_lost_peers(
         };
 
         // 外した先を記録に残せる形でのみ Win32 を呼ぶ。自分のハンドルが既に無ければ
-        // 外す対象の窓が特定できない——黙って読み飛ばさず理由つきの見送りにする（要件 6.3）。
+        // 外す対象の窓が特定できない——黙って読み飛ばさず理由つきの見送りにする。
         match handle {
             Some(handle) => match clear_window_owner(handle.hwnd) {
                 Ok(()) => log_owner_detached(entity, peer, handle.hwnd, link.owner_hwnd, loss),
@@ -323,29 +311,29 @@ fn detach_owner_links_for_lost_peers(
 ///    見送りなら理由つきの記録を残して要求ごと消える。是正なら指令を積み、
 ///    [`IssuedPairFix`] を預け、`pending_verify` へ期待隣接を入れて検証待ちへ進む。
 /// 2. **検証待ち**（`pending_verify` が `Some`）: 実測を照合し、一致なら是正の記録、
-///    不一致なら error（要件 6.2）。どちらでも要求はここで消える。
+///    不一致なら error。どちらでも要求はここで消える。
 ///
 /// 見送りでも要求を消すのは、一回限りの要求だからである。残せば毎巡同じ判断を繰り返し、
 /// 記録が氾濫して「トリガ駆動のみ」という性質も失われる。取りこぼした是正は次のトリガで
-/// 自然に処理される（再試行の輪を作らない・design.md「Error Strategy」と同根）。
+/// 自然に処理される（再試行の輪を作らない）。
 ///
 /// ただし **1 巡で指令を出すのは高々 1 ペア**であり、同じ巡で是正を要する 2 つめ以降の
 /// ペアは①のまま次巡へ持ち越される（module doc「複数ペアが同じ巡で…」）。持ち越しは
 /// 見送りではない——要求は残り、次巡の新しい実測で必ずやり直される。
 ///
-/// # 鎖が外させる組の要求（要件 5.2・5.5・6.3）
+/// # 鎖が外させる組の要求
 ///
 /// 同じフレームに公開済みの望む鎖を直に読み、`pair_released_by_chain` が真の組に付いた
 /// 要求は、未適用でも検証待ちでも判断・照合をせずに `ReleasedByChain` を記録して落とす
 /// （直上へ直す指令を 1 本も積まない）。沈降の観測にも同じ鎖を渡す。
 ///
-/// # 相手が居ない巡（要件 1.5）
+/// # 相手が居ない巡
 ///
 /// 検証待ちであっても、相手の実体やハンドルが先に消えていれば実測照合へは進まない
 /// ——正常な破棄が error を吐く経路を作らないためである。理由つきの見送りとして記録し、
 /// 残る窓には一切書き込まない。
 ///
-/// # 失敗しても止まらない（要件 6.4）
+/// # 失敗しても止まらない
 ///
 /// `SetWindowPos` の失敗は flush 側が warn で継続し（`command.rs`）、効かなかった事実は
 /// 次巡の検証不一致として error に残る。本 system に panic 経路は無い。
@@ -378,10 +366,9 @@ pub fn apply_zorder_pair_maintenance(
     // （確立系 `establish_owner_links` と同じ形）。
     handles: HandleQuery,
 ) {
-    // 要求が 1 つでも残っている巡は、次の画面更新も回す（設計 C16 の `ZORDER`）。
-    // 是正の指令は tick 後の flush で書かれ、実測照合は**次の巡**で行うため、ここで
-    // 立て直さないと検証待ちの要求が省略された画面更新の向こうで足踏みする。要求が
-    // 尽きれば旗も立たなくなる（自分で立て直す形は `drag` と同じ）。
+    // 要求が 1 つでも残っている巡は、次の画面更新も回す。是正の指令は tick 後の flush で
+    // 書かれ、実測照合は**次の巡**で行うため、ここで立て直さないと検証待ちの要求が省略された
+    // 画面更新の向こうで足踏みする。要求が尽きれば旗も立たなくなる。
     //
     // 見ているのは**この巡の頭**の状態である。同じ巡でこの system より後に挿入された
     // 要求はここには映らず、次に回る画面更新——最悪でも心拍（30 フレーム）——まで待つ。
@@ -391,7 +378,7 @@ pub fn apply_zorder_pair_maintenance(
         crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::ZORDER);
     }
 
-    // ストラテジ未挿入は結線前の状態。既定（案 A）で動く（design.md「State」の既定値）。
+    // ストラテジ未挿入は結線前の状態。既定（案 A）で動く。
     let strategy = strategy.map(|s| *s).unwrap_or_default();
     let chain = chain.as_deref().and_then(|plan| plan.chain.as_ref());
 
@@ -412,7 +399,7 @@ pub fn apply_zorder_pair_maintenance(
     }
 
     // この巡で既に是正の指令を出したか。実際に窓を動かす指令は 1 巡につき 1 本までとし、
-    // 残る要求は次巡の新しい実測で計算し直す（module doc「複数ペアが同じ巡で…」）。
+    // 残る要求は次巡の新しい実測で計算し直す。
     let mut fix_issued_this_pass = false;
 
     for (entity, declaration, mut request, issued) in requests.iter_mut() {
@@ -441,7 +428,7 @@ pub fn apply_zorder_pair_maintenance(
                 .remove::<(ReassertZOrder, IssuedPairFix)>();
 
             if !below_alive {
-                // 指令を出した後・検証の前に相手が消えた。これは要件 1.5 の正常系であり
+                // 指令を出した後・検証の前に相手が消えた。これは正常系であり
                 // 検証不一致の error にしてはならない。
                 record_decision(entity, peer, PairFixDecision::Skip(SkipReason::PeerMissing));
                 continue;
@@ -461,7 +448,7 @@ pub fn apply_zorder_pair_maintenance(
                 continue;
             };
 
-            // 隣接の正準判定は「手前側の最も近い可視の背後が背後側か」（design.md Invariants）。
+            // 隣接の正準判定は「手前側の最も近い可視の背後が背後側か」。
             // 実測が採れなかった場合も一致とは扱わない（`record_verification` の約束）。
             let _verified = record_verification(
                 entity,
@@ -482,14 +469,12 @@ pub fn apply_zorder_pair_maintenance(
             _ => (None, None),
         };
         // 挿入位置の候補が常時最前面の帯に居るかを、指令を出す前に測る。判断は Win32 を
-        // 呼ばないので、この事実は観測に載せて渡す（要件 8.1・design.md Invariants）。
+        // 呼ばないので、この事実は観測に載せて渡す。
         //
         // 判断の結果を待たずに測るのは意図的である。観測は判断へ渡す**巡の写し**であり、
-        // どの腕が選ばれるかを知る前に組み上がっていなければならない——先に判断を覗いて
-        // 測るかどうかを決めると、観測の組立が判断に依存し、決定論的テストで固定している
-        // 「同じ観測なら同じ判断」の関係が崩れる。よって見送りや背後へ寄せる腕になって
-        // 値が読まれない巡でも測る。費用は `GetWindowLongPtrW` 1 回であり、しかも実測を
-        // 採るのは両窓のハンドルが揃った巡だけである。
+        // 測るかどうかを判断に依存させると、決定論的テストで固定している「同じ観測なら
+        // 同じ判断」の関係が崩れる。見送りや背後へ寄せる腕で値が読まれない巡でも測るが、
+        // 費用は `GetWindowLongPtrW` 1 回で、実測を採るのは両窓のハンドルが揃った巡だけである。
         let measured_above_of_below_is_always_on_top = measured_above_of_below
             .map(measure_window_is_always_on_top)
             .unwrap_or(false);
@@ -513,7 +498,7 @@ pub fn apply_zorder_pair_maintenance(
         };
 
         // 判断結果は必ず `record_decision` を通す——見送りはそこで理由つきの記録になり、
-        // 返ってくるのは適用すべき是正だけである（要件 6.3 の規約）。
+        // 返ってくるのは適用すべき是正だけである。
         let Some(fix) = record_decision(entity, peer, decide_pair_fix(&observation)) else {
             // 要求は外から差し替えられる公開の契約点なので、前の持ち越しが残りうる。一緒に外す。
             commands
@@ -531,7 +516,7 @@ pub fn apply_zorder_pair_maintenance(
         let Some(plan) = plan_pair_fix(&observation, fix) else {
             // 是正の腕が返った以上ハンドルは揃っており（`plan_pair_fix` が None を返すのは
             // ハンドルが欠けたときか見送りの腕のときだけ）、ここへは届かない。届いても
-            // panic は作らず、1 行残して指令を出さずに要求と持ち越しを落とす（要件 6.4）。
+            // panic は作らず、1 行残して指令を出さずに要求と持ち越しを落とす。
             log_pair_fix_unplanned(entity, peer);
             commands
                 .entity(entity)

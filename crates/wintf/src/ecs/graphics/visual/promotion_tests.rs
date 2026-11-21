@@ -1,4 +1,4 @@
-//! 上げ下げの判断の純粋な規則の真理値表と時系列（要件 1.1〜1.3, 1.5〜1.7, 2.4, 2.5, 8.1）。
+//! 上げ下げの判断の純粋な規則の真理値表と時系列。
 
 use super::promotion::*;
 use super::promotion_shape::Ineligible;

@@ -1,5 +1,5 @@
 //! 確立系 [`establish_owner_links`](super::establish_owner_links) が、望む鎖が外させる組を
-//! 張らないことのテスト（要件 1.3・4.4・6.1・6.6）。
+//! 張らないことのテスト。
 //!
 //! 起動時から逆転の計画（`s0,b0,b1,s1`）が公開されている状態でハンドルが付いた巡に、
 //! スコープ 0 の組（バルーンのすぐ奥がキャラクターでない）は張らずに `ReleasedByChain` を
@@ -46,14 +46,12 @@ fn a_pair_the_chain_releases_is_not_linked_when_its_handles_arrive() {
     let mut schedule = establish_schedule();
     let out = capture_under_filter(DIRECTIVES, || schedule.run(&mut world));
 
-    // 外す組（スコープ 0）: 張らない・見送り 1 本・印も要求も無い。
     assert_eq!(released_skips(&out, b0), 1, "外す組の見送りは 1 本\n{out}");
     assert_eq!(owner_of(hwnds[1]), None, "外す組の owner は張られない");
     assert!(world.get::<OwnerLink>(b0).is_none());
     assert!(world.get::<OwnerEstablishFailed>(b0).is_none());
     assert!(world.get::<ReassertZOrder>(b0).is_none());
 
-    // 連続する組（スコープ 1）: 今と同じに張る（要件 4.4）。
     assert_eq!(released_skips(&out, b1), 0, "連続する組は見送らない\n{out}");
     assert_eq!(
         out.lines()
@@ -71,7 +69,7 @@ fn a_pair_the_chain_releases_is_not_linked_when_its_handles_arrive() {
     }
 }
 
-/// 鎖が解けた（`None`）後に現れたバルーンは、組の結び目を通常どおり張る（要件 6.6）。
+/// 鎖が解けた（`None`）後に現れたバルーンは、組の結び目を通常どおり張る。
 #[test]
 fn after_the_chain_is_cleared_a_new_balloon_is_linked_as_a_pair() {
     let character_hwnd = create_test_window(w!("wintf-zorder-establish-release"));

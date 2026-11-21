@@ -1,6 +1,6 @@
-//! `tick_diag` の決定論テスト（task 2.2・要件 2.5/2.6/2.12/3.8/6.5/6.8）。
+//! `tick_diag` の決定論テスト。
 //!
-//! 実時間の閾値は 1 つも使わない（要件 6.5）——窓の切れ目は注入した時刻で作り、
+//! 実時間の閾値は 1 つも使わない——窓の切れ目は注入した時刻で作り、
 //! `sleep` も経過待ちも行わない。UI スレッド CPU の読み出しはハンドル未設定の状態
 //! （テスト既定）では引数で与えるので、行の値も決定論的に定まる。
 
@@ -72,7 +72,7 @@ fn sample_snapshot() -> WindowSnapshot {
     }
 }
 
-/// (要件 2.12) 1 行の中に同じフィールド名が 2 度出ない。
+/// 1 行の中に同じフィールド名が 2 度出ない。
 #[test]
 fn format_window_line_has_no_duplicate_field_names() {
     let line = format_window_line(&sample_snapshot());
@@ -91,7 +91,7 @@ fn format_window_line_has_no_duplicate_field_names() {
     );
 }
 
-/// (要件 2.5) 行の頭は `[tick] kind=window`（新設の文言・既存行と衝突しない）。
+/// 行の頭は `[tick] kind=window`（新設の文言・既存行と衝突しない）。
 #[test]
 fn format_window_line_starts_with_the_tick_window_prefix() {
     let line = format_window_line(&sample_snapshot());
@@ -101,7 +101,7 @@ fn format_window_line_starts_with_the_tick_window_prefix() {
     );
 }
 
-/// (要件 2.6) 壁時計（`wall_us`／`max_us`／13 本）と CPU 時間（`ui_cpu_us`）は
+/// 壁時計（`wall_us`／`max_us`／13 本）と CPU 時間（`ui_cpu_us`）は
 /// 別のフィールド名で出る——同じ名前に混ぜない。
 #[test]
 fn wall_clock_and_cpu_time_use_distinct_field_names() {
@@ -116,7 +116,7 @@ fn wall_clock_and_cpu_time_use_distinct_field_names() {
     assert_eq!(field_value(&line, "heartbeat"), Some("3"));
 }
 
-/// (要件 2.5) 13 本のスケジュールは `SCHEDULE_NAMES` の綴りと順序でそのまま並ぶ。
+/// 13 本のスケジュールは `SCHEDULE_NAMES` の綴りと順序でそのまま並ぶ。
 #[test]
 fn format_window_line_lists_thirteen_schedules_in_fixed_order() {
     let snap = sample_snapshot();
@@ -140,7 +140,7 @@ fn format_window_line_lists_thirteen_schedules_in_fixed_order() {
     }
 }
 
-/// (要件 2.5) 綴りの権威は 1 つ——`SCHEDULE_NAMES` は `SCHEDULE_LABELS` の小文字。
+/// 綴りの権威は 1 つ——`SCHEDULE_NAMES` は `SCHEDULE_LABELS` の小文字。
 #[test]
 fn schedule_names_are_the_lowercase_of_the_labels() {
     assert_eq!(SCHEDULE_LABELS.len(), SCHEDULE_NAMES.len());
@@ -153,7 +153,7 @@ fn schedule_names_are_the_lowercase_of_the_labels() {
     }
 }
 
-/// (要件 2.5/3.4) `try_tick_world` が回す 13 本の**並び順**が `SCHEDULE_LABELS` と
+/// `try_tick_world` が回す 13 本の**並び順**が `SCHEDULE_LABELS` と
 /// 一致する（本番本文を読む構造検査）。相別の所要が別のスケジュールの名前で
 /// 出れば順位表が嘘になるので、綴りと順序をここで縛る。
 #[test]
@@ -180,7 +180,7 @@ fn try_tick_world_runs_the_thirteen_labels_in_the_declared_order() {
     );
 }
 
-/// (要件 3.8) 前置ガードは `try_tick_world` の本文で**時刻取得より前**に在る。
+/// 前置ガードは `try_tick_world` の本文で**時刻取得より前**に在る。
 /// OFF の運転で観測のために時刻を取らないことを、本文の並びで固定する。
 #[test]
 fn try_tick_world_evaluates_the_guard_before_taking_any_instant() {
@@ -198,7 +198,7 @@ fn try_tick_world_evaluates_the_guard_before_taking_any_instant() {
     );
 }
 
-/// (要件 3.8) 点灯していなければ、スケジュール 1 本の計時は何も記録しない
+/// 点灯していなければ、スケジュール 1 本の計時は何も記録しない
 /// （`lap` を 13 回叩いても回数も所要も 0 のまま＝時刻取得の経路に入らない）。
 #[test]
 fn phase_timer_records_nothing_when_the_guard_is_off() {
@@ -214,8 +214,8 @@ fn phase_timer_records_nothing_when_the_guard_is_off() {
     );
 }
 
-/// (要件 2.5) 点灯していれば 13 本ぶんの区間が 1 本ずつ記録される
-/// （所要の**値**は実時間なので合否に使わない＝要件 6.5）。
+/// 点灯していれば 13 本ぶんの区間が 1 本ずつ記録される
+/// （所要の**値**は実時間なので合否に使わない）。
 #[test]
 fn phase_timer_records_thirteen_laps_when_the_guard_is_on() {
     let mut timer = PhaseTimer::start(true);
@@ -228,7 +228,7 @@ fn phase_timer_records_thirteen_laps_when_the_guard_is_on() {
     assert_eq!(timer.laps(), SCHEDULE_NAMES.len() + 1);
 }
 
-/// (要件 2.5) 窓は `TICK_DIAG_WINDOW_MS` に満たないうちは閉じない。
+/// 窓は `TICK_DIAG_WINDOW_MS` に満たないうちは閉じない。
 #[test]
 fn window_does_not_close_before_the_window_length() {
     let t0 = Instant::now();
@@ -246,7 +246,7 @@ fn window_does_not_close_before_the_window_length() {
     );
 }
 
-/// (要件 2.5) 窓が閉じたら集計値が出て、次の窓は 0 から数え直す。
+/// 窓が閉じたら集計値が出て、次の窓は 0 から数え直す。
 #[test]
 fn window_close_reports_counters_and_then_resets_them() {
     let t0 = Instant::now();
@@ -272,7 +272,6 @@ fn window_close_reports_counters_and_then_resets_them() {
     assert_eq!(snap.per_schedule_us[0], 2, "13 本は窓内で加算される");
     assert_eq!(snap.per_schedule_us[12], 26);
 
-    // 次の窓は 0 から。まだ 1 秒経っていないので閉じない。
     assert!(
         diag.take_window(closed + Duration::from_millis(999), 0)
             .is_none(),
@@ -290,7 +289,7 @@ fn window_close_reports_counters_and_then_resets_them() {
     assert_eq!(snap2.per_schedule_us, [0; 13], "13 本の合計は持ち越さない");
 }
 
-/// (要件 2.5) 1 度も記録が無いうちは窓が開かず、行も出ない。省略だけでも窓は開く。
+/// 1 度も記録が無いうちは窓が開かず、行も出ない。省略だけでも窓は開く。
 #[test]
 fn window_stays_closed_until_the_first_record() {
     let t0 = Instant::now();
@@ -307,7 +306,7 @@ fn window_stays_closed_until_the_first_record() {
     );
 }
 
-/// (要件 2.5) 観測チャネルの綴りが動かない。
+/// 観測チャネルの綴りが動かない。
 #[test]
 fn tick_target_and_window_length_are_fixed() {
     assert_eq!(TICK_TARGET, "wintf::tick");

@@ -38,9 +38,7 @@ fn main() -> Result<()> {
     let mgr = WinApp::new()?;
     let world = mgr.world();
 
-    // テストシナリオ
     world.borrow().spawn(|tx| async move {
-        // 0秒: ウィンドウを2つ作成
         println!("[Timer] 0s: Creating two windows");
         let _ = tx.send(Box::new(|world: &mut World| {
             world.spawn((
@@ -90,7 +88,6 @@ fn main() -> Result<()> {
             println!("[Test] Two windows spawned");
         }));
 
-        // 3秒: GraphicsCoreを無効化（デバイスロストをシミュレート）
         async_io::Timer::after(Duration::from_secs(3)).await;
         println!("\n[Timer] 3s: Simulating device loss (invalidating GraphicsCore)");
         let _ = tx.send(Box::new(|world: &mut World| {
@@ -106,7 +103,6 @@ fn main() -> Result<()> {
             }
         }));
 
-        // 4秒: 再初期化状態の確認
         async_io::Timer::after(Duration::from_secs(1)).await;
         println!("\n[Timer] 4s: Verifying reinitialization");
         let _ = tx.send(Box::new(|world: &mut World| {
@@ -174,7 +170,6 @@ fn main() -> Result<()> {
             println!("========================================\n");
         }));
 
-        // 7秒: 1つ目のウィンドウからRectangle削除（視覚効果のため）
         async_io::Timer::after(Duration::from_secs(3)).await;
         println!("\n[Timer] 7s: Removing Rectangle from first window (visual effect)");
         let _ = tx.send(Box::new(|world: &mut World| {
@@ -189,7 +184,6 @@ fn main() -> Result<()> {
             }
         }));
 
-        // 10秒: ウィンドウを1つ閉じる
         async_io::Timer::after(Duration::from_secs(3)).await;
         println!("\n[Timer] 10s: Closing one window");
         let _ = tx.send(Box::new(|world: &mut World| {
@@ -205,7 +199,6 @@ fn main() -> Result<()> {
             }
         }));
 
-        // 13秒: 最後のウィンドウを閉じる
         async_io::Timer::after(Duration::from_secs(3)).await;
         println!("\n[Timer] 13s: Closing last window");
         let _ = tx.send(Box::new(|world: &mut World| {

@@ -1,8 +1,6 @@
 //! BoxStyle統合コンポーネントのテスト
-//!
-//! Requirements: 1.1, 1.2, 1.4, 3.2
 
-// タスク1.1: BoxStyle構造体の定義テスト
+// BoxStyle構造体の定義テスト
 
 /// テスト: BoxStyleがデフォルトで全フィールドNoneであること
 #[test]
@@ -11,14 +9,12 @@ fn test_box_style_default_all_none() {
 
     let style = BoxStyle::default();
 
-    // Box系プロパティがNone
     assert!(style.size.is_none());
     assert!(style.margin.is_none());
     assert!(style.padding.is_none());
     assert!(style.position.is_none());
     assert!(style.inset.is_none());
 
-    // Flex系プロパティがNone
     assert!(style.flex_direction.is_none());
     assert!(style.justify_content.is_none());
     assert!(style.align_items.is_none());
@@ -28,7 +24,7 @@ fn test_box_style_default_all_none() {
     assert!(style.align_self.is_none());
 }
 
-// タスク1.3: From変換トレイトテスト
+// From変換トレイトテスト
 
 /// テスト: BoxStyleからtaffy::Styleへの変換（全フィールドNone時）
 #[test]
@@ -108,7 +104,7 @@ fn test_box_style_to_taffy_style_absolute_position() {
     );
 }
 
-// ===== W4a ギャップテスト: BoxStyle → taffy::Style 変換の未カバー分岐 =====
+// ===== ギャップテスト: BoxStyle → taffy::Style 変換の未カバー分岐 =====
 
 /// BoxStyle::new() は Default と等価
 #[test]

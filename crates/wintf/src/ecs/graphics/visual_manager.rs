@@ -22,11 +22,7 @@ fn create_visual_only(entity: Entity, vg: &mut VisualGraphics, compositor: &Comp
         .and_then(|sprite| sprite.cast::<windows::UI::Composition::Visual>());
     match visual_res {
         Ok(v) => {
-            // VisualGraphicsを直接更新（既にVisual.on_addで配置済み）
             *vg = VisualGraphics::new(v.clone());
-
-            // SurfaceGraphicsとSurfaceGraphicsDirtyはVisual.on_addで事前配置済み
-            // 明示的なset_changed()は不要（VisualGraphicsの更新でChanged検知される）
 
             debug!(
                 entity = ?entity,
@@ -41,11 +37,7 @@ fn create_visual_only(entity: Entity, vg: &mut VisualGraphics, compositor: &Comp
 
 /// Visualコンポーネントに基づいてGPUリソースを管理するシステム
 ///
-/// Phase 6: Visualのみを作成し、Surfaceは作成しない。
-/// SurfaceはDrawスケジュールでCommandList存在時に遅延作成される。
-///
-/// Changed: Added<Visual> から Changed<VisualGraphics> + !is_valid() パターンに移行
-/// Visual.on_add で VisualGraphics::default() が挿入され、このシステムがGPUリソースを作成
+/// Visualのみを作成し、Surfaceは作成しない（SurfaceはDrawスケジュールでCommandList存在時に遅延作成される）。
 ///
 /// 本番では装置と WUC の資源が使える回だけ回す（`wuc_ready`・使えない回に印を食べない）。
 /// 装置か WUC の資源が使えなければ戻るのは、使う人が係を直に登録したときの守り。
@@ -68,7 +60,6 @@ pub fn visual_resource_management_system(
     };
 
     for (entity, _visual, mut vg, name) in query.iter_mut() {
-        // VisualGraphicsが無効な場合のみGPUリソースを作成
         if !vg.is_valid() {
             let entity_name = format_entity_name(entity, name);
             trace!(

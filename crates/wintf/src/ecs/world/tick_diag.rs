@@ -12,15 +12,14 @@
 //! # 既定 OFF と前置ガード
 //!
 //! 観測は `RUST_LOG` に `wintf::tick=debug` を足したときだけ点く。点いていないとき、
-//! この観測のために**時刻を 1 度も取らず**、文字列も 1 つも組み立てない
-//! （要件 3.8）。判定は [`is_enabled`] を tick の冒頭で 1 度だけ行い、以後はその
+//! この観測のために**時刻を 1 度も取らず**、文字列も 1 つも組み立てない。判定は [`is_enabled`] を tick の冒頭で 1 度だけ行い、以後はその
 //! `bool` を配る。[`PhaseTimer`] は OFF なら `lap` を叩かれても何もしない。
 //!
 //! # 壁時計と CPU 時間を混ぜない
 //!
 //! 13 本の内訳と `wall_us`／`max_us` は**壁時計**（経過時間）であり、GPU 待ちや
 //! ページフォルトの待ちが混じる。`ui_cpu_us` だけが UI スレッドの**CPU 時間**
-//! （`GetThreadTimes` の差分）である。両者は別のフィールド名で出す（要件 2.6）。
+//! （`GetThreadTimes` の差分）である。両者は別のフィールド名で出す。
 //!
 //! # 行の形
 //!
@@ -29,7 +28,7 @@
 //!        ui_cpu_us=… input_us=… update_us=… …（13 本）… framefinalize_us=…
 //! ```
 //!
-//! 1 行の中に同じフィールド名は 2 度出ない（要件 2.12——判定スクリプトの `parse_fields`
+//! 1 行の中に同じフィールド名は 2 度出ない（判定スクリプトの `parse_fields`
 //! は後勝ちで上書きするため、重複は静かに値を失わせる）。
 
 use std::os::windows::io::OwnedHandle;
@@ -150,7 +149,7 @@ pub fn format_window_line(w: &WindowSnapshot) -> String {
 /// スケジュール 1 本ずつの区間を刻む計時器。
 ///
 /// OFF（`start(false)`）なら [`lap`](Self::lap) は**何もしない**——時刻取得の経路に
-/// 入らないので、既定運転の費用は 0 である（要件 3.8）。ON なら `lap` の呼び出し
+/// 入らないので、既定運転の費用は 0 である。ON なら `lap` の呼び出し
 /// 1 回が 1 本ぶんの区間を閉じ、[`SCHEDULE_NAMES`] の順に配列へ書く。
 #[derive(Debug)]
 pub struct PhaseTimer {
@@ -282,7 +281,7 @@ impl TickDiag {
         }
     }
 
-    /// 省略した tick を 1 件記録する（門が入ってから使う——要件 2.5 の省略率）。
+    /// 省略した tick を 1 件記録する（省略率の元。門が入ってから使う）。
     pub fn record_skipped(&mut self, now: Instant) {
         self.open_window(now);
         self.skipped += 1;
@@ -309,7 +308,6 @@ impl TickDiag {
             ui_cpu_us,
             per_schedule_us: self.per_schedule_us,
         };
-        // 次の窓は「閉じた時刻」から始める（取りこぼしの区間を作らない）。
         // frame は最後に回った番号なので持ち越す（回らない窓でも番号は最新が正）。
         self.t0 = Some(now);
         self.ticks = 0;

@@ -25,7 +25,7 @@ use crate::ecs::world::EcsWorld;
 use crate::executor::util::WindowMessage;
 
 /// 同じ窓へ `WM_MOUSEMOVE` を 2 回配ると、離脱の見張り（`TME_LEAVE`）を 2 回掛ける——
-/// 見張りの行（成功の `trace` か失敗の `debug`）が 2 本残る（6 番）。
+/// 見張りの行（成功の `trace` か失敗の `debug`）が 2 本残る。
 #[test]
 fn every_mouse_move_arms_the_leave_watch() {
     let hwnd = create_test_window();
@@ -65,7 +65,7 @@ fn every_mouse_move_arms_the_leave_watch() {
     assert_eq!(armed, 2, "移動のたびに見張りを掛ける。ログ:\n{log}");
 }
 
-/// `WM_MOUSELEAVE` は届いた窓の部品だけを離脱にする（48 番）——窓 A へ配ると A の子は
+/// `WM_MOUSELEAVE` は届いた窓の部品だけを離脱にする——窓 A へ配ると A の子は
 /// `PointerState` を外して `PointerLeave` が付き、B の子の `PointerState` は残る。続けて B へ
 /// 配ると B の子も離脱になる。
 #[test]
@@ -116,7 +116,7 @@ fn mouse_leave_leaves_only_the_window_it_reached() {
 }
 
 /// 取っ手が空の窓をドラッグで動かす形（`move_window` が真）で `WM_MOUSEMOVE` を配ると、
-/// 窓の移動の書き込みが失敗し、`drag_move_window_failed` の `error` が 1 本残る（44 番）。
+/// 窓の移動の書き込みが失敗し、`drag_move_window_failed` の `error` が 1 本残る。
 #[test]
 fn failed_drag_window_move_is_logged_as_error() {
     // DRAG_STATE は thread_local。前のテストの残りを JustEnded へ落としてから始める。

@@ -17,11 +17,6 @@ pub type CommandSender = mpsc::Sender<BoxedCommand>;
 
 /// 非同期タスク実行用リソース
 ///
-/// # Design
-/// - TaskPoolでバックグラウンド実行
-/// - mpsc channelで`BoxedCommand`（`Box<dyn FnOnce(&mut World) + Send>`）をECSへ送信
-/// - Input scheduleの`drain_task_pool_commands`で適用
-///
 /// # Example
 /// ```ignore
 /// task_pool.spawn(|tx| async move {
@@ -97,7 +92,7 @@ impl Default for WintfTaskPool {
     }
 }
 
-/// `with_threads` の檻（structure.md のテスト分離規約）
+/// `with_threads` の檻
 #[cfg(test)]
 #[path = "task_pool_tests.rs"]
 mod tests;

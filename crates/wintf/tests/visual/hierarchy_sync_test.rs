@@ -1,4 +1,4 @@
-//! Visual階層同期テスト (R6, R7)
+//! Visual階層同期テスト
 //!
 //! ChildOf変更を検知してVisual階層を同期するシステムをテストする。
 
@@ -20,7 +20,6 @@ fn test_childof_addition_syncs_visual_hierarchy() -> Result<()> {
         let mut world = World::new();
         world.insert_resource(graphics);
 
-        // 親エンティティを作成
         let parent_visual = factory.create_visual()?;
         let parent_entity = world
             .spawn((
@@ -29,18 +28,15 @@ fn test_childof_addition_syncs_visual_hierarchy() -> Result<()> {
             ))
             .id();
 
-        // 子エンティティを作成（親なし）
         let child_visual = factory.create_visual()?;
         let child_entity = world
             .spawn((Visual::default(), VisualGraphics::new(child_visual.clone())))
             .id();
 
-        // ChildOf を追加
         world
             .entity_mut(child_entity)
             .insert(ChildOf(parent_entity));
 
-        // 同期システムを実行
         let mut schedule = Schedule::default();
         schedule.add_systems(visual_hierarchy_sync_system);
         schedule.run(&mut world);
@@ -59,7 +55,6 @@ fn test_childof_addition_syncs_visual_hierarchy() -> Result<()> {
 }
 
 /// VisualGraphicsにGPUリソースがないエンティティは階層同期をスキップすることを確認
-/// Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
 #[test]
 fn test_entities_without_visual_graphics_are_skipped() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
@@ -79,7 +74,6 @@ fn test_entities_without_visual_graphics_are_skipped() -> Result<()> {
             .id();
 
         // 子を作成（VisualGraphics::default()を明示追加、GPUリソースなし）
-        // Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
         let child_entity = world
             .spawn((
                 Visual::default(),
@@ -88,7 +82,6 @@ fn test_entities_without_visual_graphics_are_skipped() -> Result<()> {
             ))
             .id();
 
-        // 同期システムを実行（パニックしないことを確認）
         let mut schedule = Schedule::default();
         schedule.add_systems(visual_hierarchy_sync_system);
         schedule.run(&mut world);

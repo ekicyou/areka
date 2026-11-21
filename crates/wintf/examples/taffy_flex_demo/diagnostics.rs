@@ -23,7 +23,6 @@ pub(crate) fn dump_all_windows_dpi(world: &mut World) {
     for (window_entity, window_name) in &windows {
         let window_entity = *window_entity;
 
-        // DPI
         if let Some(dpi) = world.get::<DPI>(window_entity) {
             info!(
                 window = %window_name,
@@ -37,7 +36,6 @@ pub(crate) fn dump_all_windows_dpi(world: &mut World) {
             info!(window = %window_name, "[DPIDump] DPI: None");
         }
 
-        // BoxStyle (論理 px)
         if let Some(bs) = world.get::<BoxStyle>(window_entity) {
             let (w, h) = px_size(bs);
             info!(
@@ -48,7 +46,6 @@ pub(crate) fn dump_all_windows_dpi(world: &mut World) {
             );
         }
 
-        // WindowPos
         if let Some(wp) = world.get::<wintf::ecs::window::WindowPos>(window_entity) {
             info!(
                 window = %window_name,
@@ -58,7 +55,6 @@ pub(crate) fn dump_all_windows_dpi(world: &mut World) {
             );
         }
 
-        // Arrangement (local)
         if let Some(arr) = world.get::<Arrangement>(window_entity) {
             info!(
                 window = %window_name,
@@ -72,7 +68,6 @@ pub(crate) fn dump_all_windows_dpi(world: &mut World) {
             );
         }
 
-        // GlobalArrangement
         if let Some(ga) = world.get::<GlobalArrangement>(window_entity) {
             let ga_width = ga.bounds.right - ga.bounds.left;
             let ga_height = ga.bounds.bottom - ga.bounds.top;
@@ -92,7 +87,6 @@ pub(crate) fn dump_all_windows_dpi(world: &mut World) {
             );
         }
 
-        // 子エンティティをダンプ
         dump_children_dpi(world, window_entity, 1);
     }
 
@@ -115,7 +109,7 @@ pub(crate) fn dump_children_dpi(world: &mut World, entity: Entity, depth: usize)
             .map(|n| n.to_string())
             .unwrap_or_else(|| format!("{:?}", child));
 
-        // BoxStyle (論理 px)
+        // 論理 px
         let bs_str = if let Some(bs) = world.get::<BoxStyle>(child) {
             let (w, h) = px_size(bs);
             format!("box_style=({:.1}x{:.1})", w, h)
@@ -153,7 +147,6 @@ pub(crate) fn dump_children_dpi(world: &mut World, entity: Entity, depth: usize)
             "[DPIDump]{}{}: {} arr=[{}] ga=[{}]",
             indent, name, bs_str, arr_str, ga_str
         );
-        // 再帰（2階層まで）
         if depth < 2 {
             dump_children_dpi(world, child, depth + 1);
         }

@@ -1,4 +1,4 @@
-//! ドラッグイベントディスパッチ統合テスト（W6b-T）
+//! ドラッグイベントディスパッチ統合テスト。
 //!
 //! `dispatch_drag_events`（ECS スレッド側のディスパッチ）の
 //! World 観測可能な挙動を特性化する。これらはデバイス非依存（bevy World 操作）であり、
@@ -94,7 +94,6 @@ fn dispatch_started_inserts_dragging_state_and_marker_and_event() {
         ))
         .id();
     watch(&mut world, window);
-    // ドラッグ対象（Window の子）
     let target = world.spawn(ChildOf(window)).id();
 
     // 累積器に Started 遷移をセット（wndproc が行う操作の代替）
@@ -108,7 +107,6 @@ fn dispatch_started_inserts_dragging_state_and_marker_and_event() {
 
     dispatch_drag_events(&mut world);
 
-    // DraggingState が target に挿入されている
     let ds = world
         .get::<DraggingState>(target)
         .expect("DraggingState が挿入されるべき");
@@ -122,13 +120,11 @@ fn dispatch_started_inserts_dragging_state_and_marker_and_event() {
         .expect("context が読めるべき");
     assert_eq!(ctx.initial_window_pos, Some(Point { x: 100, y: 200 }));
 
-    // WindowDragging マーカーが Window エンティティに付与されている
     assert!(
         world.get::<WindowDragging>(window).is_some(),
         "Window 祖先に WindowDragging が付与されるべき"
     );
 
-    // DragStartEvent が 1 件
     let events = &world.resource::<Seen>().starts;
     assert_eq!(events.len(), 1, "DragStartEvent は 1 件届くべき");
     assert_eq!(events[0].target, target);
@@ -246,17 +242,14 @@ fn dispatch_ended_removes_state_marker_and_syncs_offset() {
 
     dispatch_drag_events(&mut world);
 
-    // DraggingState が削除されている
     assert!(
         world.get::<DraggingState>(target).is_none(),
         "DraggingState は Ended で削除されるべき"
     );
-    // WindowDragging が除去されている
     assert!(
         world.get::<WindowDragging>(window).is_none(),
         "WindowDragging は Ended で除去されるべき"
     );
-    // Arrangement.offset が WindowPos.position(300,400) に同期されている
     let arr = world.get::<Arrangement>(window).unwrap();
     assert_eq!(
         arr.offset,
@@ -264,7 +257,6 @@ fn dispatch_ended_removes_state_marker_and_syncs_offset() {
         "Arrangement.offset は WindowPos.position に同期されるべき"
     );
 
-    // DragEndEvent が 1 件、cancelled=false
     let events = &world.resource::<Seen>().ends;
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].target, target);
@@ -319,7 +311,6 @@ fn dispatch_ended_cancelled_propagates_flag() {
         "cancelled=true が DragEndEvent に伝播するべき"
     );
 
-    // WindowDragContextResource はクリアされている
     let ctx = world
         .resource::<WindowDragContextResource>()
         .get()
@@ -453,7 +444,6 @@ fn dispatch_emits_drag_event_when_delta_nonzero() {
         start_pos: PhysicalPoint::new(100, 100),
         timestamp: Instant::now(),
     });
-    // 位置更新 + デルタ累積
     acc.update_position(PhysicalPoint::new(140, 160));
     acc.accumulate_delta(PhysicalPoint::new(40, 60));
 

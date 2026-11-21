@@ -1,5 +1,5 @@
-//! 不透明度の層の答えの画素（WARP・要件 2.1, 2.2, 2.3, 2.5, 7.2, 7.5）と、切り抜きの形ごとの効き先
-//! （要件 3.1〜3.4, 7.6・後半）。比べる点は塗りの境界から 2 画素以上離す。
+//! 不透明度の層の答えの画素（WARP）と、切り抜きの形ごとの効き先
+//! （後半）。比べる点は塗りの境界から 2 画素以上離す。
 //!
 //! 木を組んで（`fill_world_visuals`→`build`）`emit` で再生する本番の道で描く。
 //! 期待値は α 掛け済みの SOURCE_OVER（out = src + dst×(1−src.a)）と、層の重ね（層の 1 枚×不透明度）から
@@ -203,7 +203,7 @@ fn nested_half_in_half_is_a_quarter() {
     pixel_near(&px, CLEAR, 12, 12);
 }
 
-// ---- 切り抜きの形ごとの効き先（要件 3.1〜3.4, 7.6・research.md §10.2 の形） -------------------
+// ---- 切り抜きの形ごとの効き先 -------------------
 //
 // 的 40×40。下の画素は左半分 (0,0)-(20,40) が不透明の B1、右半分 (20,0)-(40,40) が α 128 の B2
 // （色のある下の画素で、図形の層が背景から始まるか透明から始まるかを見分ける）。絵は (6,6)-(34,34)。
@@ -387,7 +387,7 @@ fn modes_without_clip_match_the_formulas() {
 
 #[test]
 fn every_clip_shape_applies_modes_to_the_under_pixels_and_keeps_outside() {
-    // 3.1〜3.3: 内側は切り抜き無しの答え・外側は描く前の値。形どうしで同じ表の値。
+    // 内側は切り抜き無しの答え・外側は描く前の値。形どうしで同じ表の値。
     for (name, mix, color, on_b1, on_b2) in CLIP_MODES {
         for (shape, push, pop) in all_clips() {
             let mut commands = colored_under();
@@ -498,7 +498,7 @@ fn faded_blue_then(mix: MixMode, clip: Option<(DrawCommand, DrawCommand)>) -> Ve
 
 #[test]
 fn modes_in_an_opacity_layer_apply_to_what_the_layer_drew_first() {
-    // 3.4: 層の中の DESTINATION_OUT は先に描いた青を消し（下の画素は層の不透明度でだけ変わる＝そのまま）、
+    // 層の中の DESTINATION_OUT は先に描いた青を消し（下の画素は層の不透明度でだけ変わる＝そのまま）、
     // MULTIPLY は青に掛かる（F×青 = BGRA (204,0,0) の層×0.5 を下へ重ねる）。切り抜きの外の青は青×0.5 を
     // 重ねた値: over B1 = (127.5,0,0,127.5)+B1×0.5、over B2 = (127.5,0,0,127.5)+B2_PREMUL×0.5。
     let blue_over_b1 = [217, 39, 77, 255];
@@ -542,7 +542,7 @@ fn modes_in_an_opacity_layer_apply_to_what_the_layer_drew_first() {
     }
 }
 
-// ---- 描く矩形 1 つの中だけの再生（`emit_within`・要件 2.2） ------------------------------------
+// ---- 描く矩形 1 つの中だけの再生（`emit_within`） ------------------------------------
 
 fn px(left: i32, top: i32, right: i32, bottom: i32) -> super::diff::PxRect {
     super::diff::PxRect {

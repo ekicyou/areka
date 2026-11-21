@@ -10,13 +10,11 @@
 //! 追従する。消灯・ロック・リモートデスクトップ・DWM の失敗などで `DwmFlush()` が
 //! 待たずに戻った回（呼ぶ前から 1ms 未満）だけ、呼ぶ前から数えて約 16ms になるまで
 //! 眠ってから起こす（空回りで CPU を張り付かせない）。起こしは失敗の回も含めて毎周
-//! 必ず 1 回撃つ（[`vsync_once`]）。旧 `PostMessageW(WM_VSYNC)` 経路は本ブリッジでは
-//! 持たない。
+//! 必ず 1 回撃つ（[`vsync_once`]）。
 //!
 //! # 生存期間（RAII）
 //! 本ユニットは自己完結の RAII で、スレッドの生存期間を `stop_flag → join` の
-//! 順序規律で管理する（旧 `WinThreadMgrInner::drop` の規律を継承）。`Drop` で
-//! stop フラグを立て、スレッドを `join()` する。
+//! 順序規律で管理する。`Drop` で stop フラグを立て、スレッドを `join()` する。
 //!
 //! `WinApp::run` が `run` の間だけローカルに所有し、`run` から戻るときの drop で
 //! スレッドを止めて join する。
@@ -148,13 +146,12 @@ fn vsync_once(
             "[vsync_loop] DwmFlush が待たずに戻ったので補って眠った"
         );
     }
-    // vblank（または補いの周期）ごとに全リスナを起床（データは搬送しない）。
     event.notify(usize::MAX);
 }
 
 /// VSync スレッド本体。`stop` が立つまで [`vsync_once`] を回す。
 fn vsync_loop(event: Arc<event_listener::Event>, stop: Arc<AtomicBool>) {
-    // 走り始めに 1 度だけ、自分の役割を宣言してスレッド名簿へ載せる（要件 2.3）。
+    // 走り始めに 1 度だけ、自分の役割を宣言してスレッド名簿へ載せる。
     // 失敗しても vblank 検出は続ける——このスレッドの CPU が `unregistered_rest` へ
     // 回るだけで、観測の道具の不調が観測対象を止める理由にはならない。
     if let Err(e) = crate::ecs::world::thread_registry::register_current_thread(
@@ -176,7 +173,7 @@ fn vsync_loop(event: Arc<event_listener::Event>, stop: Arc<AtomicBool>) {
     }
 }
 
-/// 1 フレーム分の ECS tick を同期実行する（独立テスト可能なコア・要件 4.3／3.2）。
+/// 1 フレーム分の ECS tick を同期実行する（独立テスト可能なコア）。
 ///
 /// 1. `IS_TICK_FLUSH_IN_PROGRESS` 再入ガードを engage する。既に進行中なら（再入）
 ///    `false` を返して安全側スキップする（二重 tick なし）。
@@ -225,13 +222,11 @@ fn tick_one_frame_with(
     world: &Rc<RefCell<EcsWorld>>,
     decide: impl FnOnce(&mut EcsWorld) -> crate::ecs::world::tick_gate::TickDecision,
 ) -> bool {
-    // ── 再入防止ガード（`flush_window_pos_commands_guarded` と共有・二重防御）─────────
     let Some(_guard) = crate::ecs::world::engage_tick_flush_guard() else {
         trace!("[tick_one_frame] Re-entry blocked by IS_TICK_FLUSH_IN_PROGRESS");
         return false;
     };
 
-    // RefCell 借用を試みる。既に借用中（再入）なら安全側スキップ（false）。
     let processed = match world.try_borrow_mut() {
         Ok(mut world) => {
             // 毎フレームのログはここでは出さない（熱い経路）——省略率は `[tick]` の
@@ -243,19 +238,14 @@ fn tick_one_frame_with(
             }
             true
         }
-        Err(_) => {
-            // 借用失敗（再入時）— 安全にスキップ。エラーではない。
-            false
-        }
+        Err(_) => false,
     };
-    // World 借用スコープ終了後に SetWindowPos コマンドをフラッシュ（省略の回も必ず）。
     crate::ecs::window::flush_window_pos_commands();
 
     processed
-    // _guard drop で IS_TICK_FLUSH_IN_PROGRESS = false に戻る
 }
 
-/// vblank 駆動の UI スレッド async tick タスク（要件 4.2 / 4.3 / 4.5）。
+/// vblank 駆動の UI スレッド async tick タスク。
 ///
 /// `VsyncEventBridge` が共有する `event_listener::Event` の起床通知を待ち、起床ごとに
 /// 1 フレーム分の ECS tick（`try_tick_world` の 13 本スケジュール）を実行して再待機する
@@ -264,10 +254,10 @@ fn tick_one_frame_with(
 /// **固定周期ではない。** 起床は `vsync_loop` の `DwmFlush()`（次 vblank まで待つ）が出す
 /// ので、実効のフレーム周期は**画面の更新周期**である（120Hz の実機なら約 8.3ms）。
 /// `DwmFlush()` が待たずに戻った回（消灯・ロック・失敗など）だけ、呼ぶ前から約 16ms に
-/// なるまで眠ってから起こす（[`vsync_once`]）。この注記は areka-P0-dpi-transition-atomicity task 4.3 が付けた——判定の上限を
-/// 「1 コマ」で置くときに 16.7ms を無条件の値と読む誤りが実際に起きたため。
+/// なるまで眠ってから起こす（[`vsync_once`]）。判定の上限を「1 コマ」で置くとき、
+/// 16.7ms を無条件の値と読んではならない。
 ///
-/// # 再入の二重防御（要件 4.3）
+/// # 再入の二重防御
 /// 本タスクの 1 フレーム実行は [`tick_one_frame`] を通し、`IS_TICK_FLUSH_IN_PROGRESS`
 /// 再入ガード（`crate::ecs::world::engage_tick_flush_guard`）を engage する。これは
 /// ライブラリ側 wndproc 再入防止（`RefCell` の借用チェック）と二重防御になり、
@@ -275,7 +265,7 @@ fn tick_one_frame_with(
 /// `WM_WINDOWPOSCHANGED` の後に呼ばれる）と同一フラグを共有し、流しの中から入れ子で
 /// 届いた tick と、tick の中から入れ子で届いた流しを読み飛ばす（二重 tick を防ぐ）。
 ///
-/// notify 取りこぼし防止規律（設計）: await の **前** に `listener = event.listen()` を
+/// notify 取りこぼし防止規律: await の **前** に `listener = event.listen()` を
 /// arm する。これにより `tick_one_frame` 実行中に届いた notify も次の `listener.await`
 /// で捕捉でき、1 フレームを取りこぼさない。
 ///
@@ -300,7 +290,6 @@ pub(crate) async fn run_async_tick(
         // 先に listen() を arm（処理中に届く notify を落とさない）。
         let listener = event.listen();
 
-        // 起床を待機（次 vblank notify まで UI スレッドを譲る）。
         listener.await;
 
         if !running.get() {
@@ -312,7 +301,6 @@ pub(crate) async fn run_async_tick(
             return;
         };
 
-        // 1 フレーム実行（13 本スケジュール）。再入・借用失敗は安全側スキップ。
         tick_one_frame(&world);
     }
 }
@@ -374,12 +362,7 @@ mod tests {
     ///
     /// 下の 1 本は「500ms 以内に vblank の通知が届く」という壁時計の期限そのものが判定で
     /// ある。機械が混んでいると期限が飢えて赤くなるが、待つ形へ書き換えると判定の意味が
-    /// 変わる（＝根治にあたる）。よって既定の `cargo test` からは外し、狙って走らせる
-    /// ときだけ走る形にした。
-    ///
-    /// **判定そのものは 1 行も変えていない**——期限も期待値も隔離前のままである。根治の
-    /// 引受先は `.kiro/specs/zorder-chain-residue/brief.md` の A-2（壁時計期限の
-    /// 飢餓）である。
+    /// 変わる。よって既定の `cargo test` からは外し、狙って走らせるときだけ走る形にしてある。
     ///
     /// # 門が閉じたまま呼ばれたら緑にしない
     ///
@@ -399,7 +382,7 @@ mod tests {
     /// 名簿に当該役割名の項目が現れるまで待ち、現れた項目を返す（現れなければ `None`）。
     ///
     /// 待ち時間は合否の対象ではなく、登録が起きなかったときに無限に待たないための上限で
-    /// ある（要件 6.5 が禁じる「実時間の閾値による判定」ではない）。
+    /// ある（実時間の閾値による判定ではない）。
     fn wait_for_role(role: &str, limit: Duration) -> Option<ThreadEntry> {
         let deadline = std::time::Instant::now() + limit;
         loop {
@@ -416,7 +399,7 @@ mod tests {
         }
     }
 
-    /// vblank 検出スレッドは走り始めに自分をスレッド名簿へ登録する（役割名 `vblank`・要件 2.3）。
+    /// vblank 検出スレッドは走り始めに自分をスレッド名簿へ登録する（役割名 `vblank`）。
     ///
     /// 名簿はプロセス共有で、テストは並列に走る——**全体の件数は当てにせず**、登録された
     /// 役割名の項目だけを検査する。観測はスレッドを生かしたまま行う（終了した TID が別の
@@ -440,7 +423,7 @@ mod tests {
         drop(bridge);
     }
 
-    /// 完了状態の検証: vblank ごとに Event が notify され、待機リスナを起床できる。
+    /// vblank ごとに Event が notify され、待機リスナを起床できる。
     /// さらに drop でスレッドが clean に join することを確認する（ハングしない）。
     #[test]
     #[ignore = "実 vblank の 500ms 期限が負荷で飢えて間欠的に赤くなる（AREKA_WINTF_VBLANK_DEADLINE を与えて明示実行する）"]
@@ -459,13 +442,10 @@ mod tests {
             "expected a vblank notify within 500ms (is DWM running?)"
         );
 
-        // drop で stop→join。スレッドが clean に終われば本テストはハングせず復帰する。
         drop(bridge);
     }
 
-    // ── tick のタスク (task 2.3) ──────────────────────────────────
-
-    /// 再入安全スキップ（要件 4.3）: World が既に `borrow_mut` 済みのとき
+    /// 再入安全スキップ: World が既に `borrow_mut` 済みのとき
     /// `tick_one_frame` は tick せず `false` を返す（二重 tick なし・panic なし）。
     ///
     /// この経路は World 借用に失敗するため 13 本スケジュールを実行せず、
@@ -477,7 +457,6 @@ mod tests {
 
         let world = Rc::new(RefCell::new(crate::ecs::world::EcsWorld::new()));
 
-        // World を借用したまま tick_one_frame を呼ぶ → try_borrow_mut が失敗。
         let _held = world.borrow_mut();
         let ticked = tick_one_frame(&world);
 
@@ -485,14 +464,11 @@ mod tests {
             !ticked,
             "borrow_mut が握られている間は安全スキップで false を返すべき"
         );
-        // ガードは借用失敗後に確実に解放されていること（リーク無し）。
         assert!(
             !crate::ecs::world::is_tick_flush_in_progress(),
             "安全スキップ後は再入ガードが false に戻っているべき"
         );
     }
-
-    // ── tick の門の結線 (task 3.3) ────────────────────────────────
 
     /// 起動直後の全走ぶんだけ判定を進める（回さずに数だけ進める）。
     fn fast_forward_warmup(world: &Rc<RefCell<crate::ecs::world::EcsWorld>>) {
@@ -506,7 +482,7 @@ mod tests {
         }
     }
 
-    /// (要件 3.2) 門が無効（既定）なら、1 フレームは今までどおり 13 本を回す
+    /// 門が無効（既定）なら、1 フレームは今までどおり 13 本を回す
     /// ——フレーム番号がちょうど 1 進む。
     #[test]
     fn tick_one_frame_ticks_the_world_when_the_gate_is_disabled() {
@@ -533,7 +509,7 @@ mod tests {
         );
     }
 
-    /// (要件 3.2/3.4) 門が有効で回す理由が 1 つも無ければ、1 フレームは 13 本を回さない
+    /// 門が有効で回す理由が 1 つも無ければ、1 フレームは 13 本を回さない
     /// ——フレーム番号は進まないが、関数は「このフレームは処理した」として true を返す。
     ///
     /// # 共有の旗を経由しない理由
@@ -587,7 +563,7 @@ mod tests {
         );
     }
 
-    /// 再入ガードのトグル（要件 4.3）: `engage_tick_flush_guard` のスコープ中は
+    /// 再入ガードのトグル: `engage_tick_flush_guard` のスコープ中は
     /// `IS_TICK_FLUSH_IN_PROGRESS` が true、drop 後に false へ戻る。さらに
     /// 進行中の再 engage は `None`（安全スキップ）になる。
     #[test]
@@ -601,7 +577,6 @@ mod tests {
             "engage スコープ中は true"
         );
 
-        // 再入: 進行中は None を返す（二重 tick 防止）。
         assert!(
             crate::ecs::world::engage_tick_flush_guard().is_none(),
             "進行中の再 engage は None（安全スキップ）であるべき"
@@ -614,13 +589,11 @@ mod tests {
         );
     }
 
-    // ── run() 復帰後に回さない（areka-P0-shiori-fault-notice task 7.2） ──
-
     /// `run()` が戻った後に届いた起床では、tick タスクはフレームを回さずに終わる。
     /// 待ちの間は World の強参照を握らない。
     ///
     /// 本番では `run()` 復帰後に利用側が出したモーダルなダイアログが、残っていた起床の
-    /// メッセージを配り、登録表の抜けた World でフレームが回って panic した（2026-09-25 実機）。
+    /// メッセージを配り、登録表の抜けた World でフレームが回って panic した。
     /// `block_on` は投入順（メッセージの到着順）にタスクを回すので、通知の後の
     /// `block_on(async {})` は「起床したタスクを 1 度回してから戻る」になる。
     #[test]
@@ -652,7 +625,6 @@ mod tests {
             "ループが回っている間の起床は 1 フレーム回すはず"
         );
 
-        // ループが戻った後の起床。
         running.set(false);
         let before = frame();
         event.notify(usize::MAX);

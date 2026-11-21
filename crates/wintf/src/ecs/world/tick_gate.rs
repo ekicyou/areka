@@ -36,7 +36,7 @@
 //! - 門を切れば回す（⒈）。立ち上げ中は回す（⒉）。素性の分からないウィンドウメッセージは
 //!   [`FORCE`](super::tick_wake::FORCE) の旗になって回る（⒊）。旗を立て忘れても心拍が拾う（⒌）。
 //! - 旗の取得や観測の組立に失敗した場合、呼び出し側は `Run(Disabled)` へ倒す
-//!   （黙って省略しない＝要件 3.7）。
+//!   （黙って省略しない）。
 //!
 //! 非対称なのは費用が非対称だからである。余分に 1 回回す損は画面更新 1 回ぶんの CPU に
 //! すぎないが、回すべき回を省略する損は「反応しないアプリ」になって現れる。心拍・
@@ -152,32 +152,26 @@ impl TickDecision {
 /// いずれか 1 つでも成り立てば、必ず [`TickDecision::Run`] を返す。
 #[inline]
 pub fn should_run(i: &TickGateInputs) -> TickDecision {
-    // ⒈ 門を切ってあるなら、判断そのものをしない。
     if !i.gate_enabled {
         return TickDecision::Run(RunReason::Disabled);
     }
 
-    // ⒉ 起動直後は無条件で全走。
     if i.frames_since_boot < TICK_GATE_WARMUP_FRAMES {
         return TickDecision::Run(RunReason::Warmup);
     }
 
-    // ⒊ 誰かが「変わった」と申告している。
     if i.bits != 0 {
         return TickDecision::Run(RunReason::Wake(i.bits));
     }
 
-    // ⒋ 預けた期限が来た。
     if i.deadline_due {
         return TickDecision::Run(RunReason::Deadline);
     }
 
-    // ⒌ 理由は無いが、間が空きすぎたので 1 回回す。
     if i.frames_since_run >= TICK_HEARTBEAT_FRAMES {
         return TickDecision::Run(RunReason::Heartbeat);
     }
 
-    // ここに来るのは 5 つの理由が 1 つも当たらなかったときだけ。
     TickDecision::Skip
 }
 

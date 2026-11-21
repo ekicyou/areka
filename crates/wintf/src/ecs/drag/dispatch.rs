@@ -62,7 +62,6 @@ pub struct OnDragEnd(pub EventHandler<DragEndEvent>);
 ///
 /// DragAccumulatorResourceから累積量をflushしてドラッグイベントを配信する。
 pub fn dispatch_drag_events(world: &mut World) {
-    // DragAccumulatorResourceをflush
     let flush_result = world
         .resource::<crate::ecs::drag::DragAccumulatorResource>()
         .flush();
@@ -71,7 +70,6 @@ pub fn dispatch_drag_events(world: &mut World) {
         return;
     };
 
-    // 状態遷移イベントを積んだ順にすべて処理
     for transition in flush_result.transitions {
         match transition {
             crate::ecs::drag::DragTransition::Started {
@@ -103,7 +101,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                 let mut move_window = false;
                 let mut constraint: Option<crate::ecs::drag::DragConstraint> = None;
 
-                // DragConfig.move_window と DragConstraint を取得（ドラッグ対象エンティティから）
                 if let Some(dc) = world.get::<crate::ecs::drag::DragConfig>(entity) {
                     move_window = dc.move_window;
                 }
@@ -111,7 +108,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                     constraint = Some(*dc);
                 }
 
-                // WindowDragContextResource に書き込み（update_dragging での読み取り用）
                 if let Some(ctx_res) =
                     world.get_resource::<crate::ecs::drag::WindowDragContextResource>()
                 {
@@ -123,7 +119,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                     });
                 }
 
-                // DraggingStateコンポーネント挿入
                 if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
                     entity_mut.insert(crate::ecs::drag::DraggingState {
                         drag_start_pos: start_pos,
@@ -139,7 +134,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                     );
                 }
 
-                // WindowDragging マーカーを Window entity に insert
                 if let Some(we) = window_entity {
                     if let Ok(mut window_mut) = world.get_entity_mut(we) {
                         window_mut.insert(crate::ecs::drag::WindowDragging);
@@ -150,7 +144,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                     }
                 }
 
-                // DragStartEvent送信
                 let event = DragStartEvent {
                     target: entity,
                     position: start_pos,
@@ -174,7 +167,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                 );
 
                 // JustStarted→Dragging遷移（次のWM_MOUSEMOVEでDragEventが発火できるように）。
-                // 前のドラッグの始まりの腕が、次のドラッグの状態を前の控えで進めない（指摘 1 ⑵）。
+                // 前のドラッグの始まりの腕が、次のドラッグの状態を前の控えで進めない。
                 if super::state::read_drag_state(
                     |s| matches!(s, super::DragState::JustStarted { entity: e, .. } if *e == entity),
                 ) {
@@ -189,7 +182,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                 end_pos,
                 cancelled,
             } => {
-                // DragEndEvent送信
                 let event = DragEndEvent {
                     target: entity,
                     position: end_pos,
@@ -214,7 +206,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                     |h| h.0,
                 );
 
-                // DraggingStateコンポーネント削除
                 if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
                     entity_mut.remove::<crate::ecs::drag::DraggingState>();
 
@@ -224,9 +215,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                     );
                 }
 
-                // 持ち主の窓から WindowDragging を remove + Arrangement.offset を同期
                 if let Some(window) = crate::ecs::find_owner_window(world, entity) {
-                    // WindowDragging マーカーを remove
                     if let Ok(mut window_mut) = world.get_entity_mut(window) {
                         window_mut.remove::<crate::ecs::drag::WindowDragging>();
                         tracing::debug!(
@@ -235,19 +224,9 @@ pub fn dispatch_drag_events(world: &mut World) {
                         );
                     }
 
-                    // Arrangement.offset を WindowPos.position から直接同期
-                    //
-                    // 旧方式: wp.set_changed() で Changed<WindowPos> を発火 →
-                    //   sync_window_arrangement_from_window_pos で offset 更新
-                    //   + apply_window_pos_changes で冗長な SetWindowPos 発火
-                    //
-                    // 問題: apply_window_pos_changes が client→window 座標変換を行い
-                    //   SetWindowPos を呼ぶが、変換の丸め誤差やタイミングにより
-                    //   ウィンドウがフレームオフセット分だけジャンプする場合がある。
-                    //
-                    // 新方式: Arrangement.offset を直接更新し、Changed<WindowPos> は
-                    //   発火させない。これにより冗長な SetWindowPos を回避しつつ、
-                    //   hit_test に必要な GA.bounds の整合性を維持する。
+                    // Arrangement.offset を WindowPos.position から直接同期する。Changed<WindowPos> を発火させると
+                    // apply_window_pos_changes が client→window 座標変換で SetWindowPos を呼び、丸め誤差やタイミングで
+                    // 窓が枠オフセット分ジャンプし得る。hit_test に必要な GA.bounds の整合はこの直接更新で保つ。
                     if let Ok(mut window_mut) = world.get_entity_mut(window) {
                         let pos_opt = window_mut
                             .get::<crate::ecs::window::WindowPos>()
@@ -281,7 +260,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                     }
                 }
 
-                // WindowDragContextResource をクリア
                 if let Some(ctx_res) =
                     world.get_resource::<crate::ecs::drag::WindowDragContextResource>()
                 {
@@ -291,16 +269,13 @@ pub fn dispatch_drag_events(world: &mut World) {
         }
     }
 
-    // 累積デルタが非ゼロなら DragEvent 配信
     if let Some(entity) = flush_result.current_dragging_entity {
         if flush_result.delta.x != 0 || flush_result.delta.y != 0 {
-            // DraggingStateからstart_posを取得
             let start_pos = world
                 .get::<crate::ecs::drag::DraggingState>(entity)
                 .map(|ds| ds.drag_start_pos)
                 .unwrap_or(flush_result.current_position);
 
-            // DragEvent送信
             let event = DragEvent {
                 target: entity,
                 start_position: start_pos,

@@ -1,7 +1,6 @@
 //! WindowDragging フィルタ統合テスト
 //!
-//! Task 5.3: `WindowDragging` マーカーにより
-//! ドラッグ中のウィンドウが ECS レイアウトパイプラインをバイパスすることを検証する。
+//! `WindowDragging` マーカーにより、ドラッグ中のウィンドウが ECS レイアウトパイプラインをバイパスすることを検証する。
 //!
 //! - `window_pos_sync_system`: ドラッグ中はサイズのみ更新（位置はスキップ）
 //! - `sync_window_arrangement_from_window_pos`: ドラッグ中は完全スキップ（位置同期のみのため）
@@ -65,7 +64,6 @@ fn window_pos_sync_processes_non_dragging_entity() {
     // 2回目: Changed<GlobalArrangement> で WindowPos を更新
     schedule.run(&mut world);
 
-    // WindowPos が GlobalArrangement.bounds から更新されること
     let wp = world.get::<WindowPos>(entity).unwrap();
     assert_eq!(
         wp.position,
@@ -136,7 +134,6 @@ fn window_pos_sync_resumes_after_dragging_removed() {
         "ドラッグ中でもサイズは更新されるべき"
     );
 
-    // WindowDragging を除去
     world.entity_mut(entity).remove::<WindowDragging>();
     // GlobalArrangement を変更して Changed トリガーを再発火
     world.get_mut::<GlobalArrangement>(entity).unwrap().bounds = wintf::ecs::layout::D2DRect {

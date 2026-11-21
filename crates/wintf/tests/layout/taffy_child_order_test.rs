@@ -2,7 +2,6 @@
 //!
 //! 異なるアーキタイプ（コンポーネント構成）を持つ兄弟エンティティでも、
 //! `Children` コンポーネントの順序どおりに taffy ツリーの子順序が保たれることを検証する。
-//! (Requirements: 3.1, 3.2)
 
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::prelude::*;
@@ -26,7 +25,7 @@ fn run_sync_system(world: &mut World) {
     schedule.run(world);
 }
 
-// ===== Task 3.1: 異なるアーキタイプ兄弟の taffy ツリー順序テスト =====
+// ===== 異なるアーキタイプ兄弟の taffy ツリー順序テスト =====
 
 /// 同一親に異なるコンポーネント構成を持つ3つの子エンティティを spawn し、
 /// `taffy().children(parent_node)` の順序が `Children` コンポーネントの順序と一致することを検証。
@@ -35,7 +34,6 @@ fn test_different_archetype_siblings_maintain_children_order_in_taffy() {
     let mut world = World::new();
     world.init_resource::<TaffyLayoutResource>();
 
-    // 親エンティティ
     let parent = world.spawn(TaffyStyle::default()).id();
 
     // 子エンティティ：それぞれ異なるアーキタイプ
@@ -50,23 +48,19 @@ fn test_different_archetype_siblings_maintain_children_order_in_taffy() {
         .spawn((TaffyStyle::default(), ExtraComponentB, ChildOf(parent)))
         .id();
 
-    // sync_taffy_tree_system を実行
     run_sync_system(&mut world);
 
-    // Children コンポーネントの順序を取得
     let children = world
         .get::<Children>(parent)
         .expect("Parent should have Children");
     let children_order: Vec<Entity> = children.iter().collect();
 
-    // spawn 順序と Children 順序が一致していることを確認
     assert_eq!(
         children_order,
         vec![child_a, child_b, child_c],
         "Children should reflect spawn order"
     );
 
-    // taffy ツリーの子ノード順序を取得
     let taffy_res = world.resource::<TaffyLayoutResource>();
     let parent_node = taffy_res
         .get_node(parent)
@@ -86,7 +80,6 @@ fn test_different_archetype_siblings_maintain_children_order_in_taffy() {
         })
         .collect();
 
-    // taffy ツリーの子順序が Children の順序と一致することを検証
     assert_eq!(
         taffy_children, expected_nodes,
         "Taffy tree child order should match Children component order, \
@@ -96,7 +89,7 @@ fn test_different_archetype_siblings_maintain_children_order_in_taffy() {
     );
 }
 
-// ===== Task 3.2: taffy_flex_demo 相当シナリオテスト =====
+// ===== taffy_flex_demo 相当シナリオテスト =====
 
 /// 3つの FlexColumn 子のうち1つに追加コンポーネントを付与してアーキタイプを変更し、
 /// レイアウト計算後の Y 座標が spawn 順序どおりに配置されていることを検証。
@@ -171,7 +164,6 @@ fn test_flex_demo_scenario_with_different_archetypes() {
         ))
         .id();
 
-    // sync → compute を実行
     let mut schedule = Schedule::default();
     schedule.add_systems((sync_taffy_tree_system, compute_taffy_layout_system).chain());
     schedule.run(&mut world);

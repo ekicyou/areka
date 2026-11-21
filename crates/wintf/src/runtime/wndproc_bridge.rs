@@ -1,34 +1,21 @@
 //! ウィンドウ手続きブリッジ。
 //!
-//! ライブラリ（`wintf-winmsg-executor`）の `Window<S>` は wndproc を
-//! `FnMut(Pin<&S>, WindowMessage) -> Option<LRESULT>` クロージャとして受け取る。
-//! 本ユニットはその状態 `S = WndState` を定め、クロージャを ECS 層の配送純関数
-//! `crate::ecs::dispatch_window_message` へ橋渡しする「メカニズム」を提供する
-//! （配送表本体は ECS 層 `dispatch_window_message` が単一の真実の源として保持する）。
+//! ライブラリ（`wintf-winmsg-executor`）の `Window<S>` が受け取る wndproc クロージャの状態
+//! `S = WndState` を定め、クロージャを ECS 層の配送純関数 `crate::ecs::dispatch_window_message`
+//! （配送表の単一の真実の源）へ橋渡しする。`None` を返すとライブラリ既定手続き
+//! （`DefWindowProcW`）へ委ねられる。
 //!
-//! # 共有状態アクセス（要件 2.3）
-//! 旧経路は `GWLP_USERDATA` への Entity 手詰めとグローバルな弱参照、HWND からの
-//! 自己解決で World/Entity を取得していた（撤去済み・task 4.5）。本ブリッジでは生成時に
-//! 確定した `WndState{ world: Weak<RefCell<EcsWorld>>, entity }` をクロージャが直接
-//! capture する（`GWLP_USERDATA` 手詰めなし・グローバル状態なし）。`Entity` は `Copy`
-//! のため pinned state から直接読める。
+//! World/Entity は生成時に確定した `WndState` をクロージャが直接 capture する
+//! （`GWLP_USERDATA` もグローバル状態も使わない）。
 //!
-//! # Entity 配送（要件 2.4）
-//! クロージャは `WindowMessage` を `dispatch_window_message(world, entity, msg)` へ
-//! 橋渡しする。`None` 返却時はライブラリ既定手続き（`DefWindowProcW`、`Window` 内部の
-//! `unwrap_or_else(DefWindowProcW)`）へ委譲される。
+//! # 安全スキップ
+//! `world.upgrade()`→`None`（破棄中）と World の `try_borrow` 失敗（再入）はいずれも `None` で飛ばす。
 //!
-//! # 安全スキップ規律（要件 4.3）
-//! クロージャは `world.upgrade()`→`None`（破棄中）と World の `try_borrow` 失敗
-//! （再入）をいずれも `None`（既定手続き委譲）で安全スキップする。これは現行ハンドラの
-//! `try_borrow` 規律を踏襲し、ライブラリ側 `RefCell` 再入防止と二重防御になる。
-//!
-//! 【例外・`areka-P0-drag-cancel-borrow-miss`】`try_borrow` 失敗（再入）のときも、ドラッグを
-//! 終える 5 種（ESC の押下〔`WM_KEYDOWN`〕・`WM_CANCELMODE`・非活性化の `WM_ACTIVATE`・
-//! `WM_CAPTURECHANGED`・`WM_LBUTTONUP`）だけは捨てずに、World を使わないドラッグの扱い
-//! （`crate::ecs::drag::handle_message_while_world_busy`）へ渡してから `None` を返す。
-//! 画面更新の途中の非活性化などでドラッグの状態が休まず残るのを防ぐため。5 種以外は今どおり
-//! 何もせずに飛ばす。World の破棄中（`upgrade()`→`None`）は例外なく飛ばす。
+//! 例外として `try_borrow` 失敗（再入）のときも、ドラッグを終える 5 種（ESC の押下〔`WM_KEYDOWN`〕・
+//! `WM_CANCELMODE`・非活性化の `WM_ACTIVATE`・`WM_CAPTURECHANGED`・`WM_LBUTTONUP`）だけは捨てずに、
+//! World を使わないドラッグの扱い（`crate::ecs::drag::handle_message_while_world_busy`）へ渡してから
+//! `None` を返す。画面更新の途中の非活性化などでドラッグの状態が休まず残るのを防ぐため。
+//! World の破棄中は例外なく飛ばす。
 //!
 //! `try_borrow` 失敗（再入）のときに届いた `WM_CLOSE` は、閉じる要求が捨てられたことを
 //! `warn!(wm_close_world_busy)` に残す（ライブラリは `WM_CLOSE` を既定の手続きへ渡さず
@@ -50,49 +37,28 @@ use crate::ecs::world::EcsWorld;
 
 /// wndproc クロージャが生成時に capture する共有状態。
 ///
-/// `world`／`entity` はウィンドウ生成時に確定し、以後不変（`create_windows` が entity を
-/// 知る）。`Weak` で掴むことで registry↔World の自己循環リークを避け、破棄中は
-/// `upgrade()`→`None` で安全にスキップできる（設計 State Management）。
+/// `world`／`entity` はウィンドウ生成時に確定し、以後不変。`Weak` で掴むのは registry↔World の
+/// 自己循環リークを避けるため。
 pub(crate) struct WndState {
     /// 共有 World への弱参照（strong 所有者は `WinApp`）。
     pub world: Weak<RefCell<EcsWorld>>,
-    /// このウィンドウに対応する ECS Entity（`Copy`・生成時確定）。
+    /// このウィンドウに対応する ECS Entity。
     pub entity: Entity,
 }
 
 /// `Window::new_ex` 互換の wndproc クロージャを構築する。
 ///
-/// 返すクロージャのシグネチャは `Fn(Pin<&WndState>, WindowMessage) -> Option<LRESULT>`
-/// で、ライブラリの `new_ex`（RefCell ラップなし＝**wndproc 再入可**）へそのまま渡せる。
-/// `new_checked_ex`（内部 `RefCell` で再入阻止）は採用しない: wintf のドラッグが同期発火する
-/// WM_WINDOWPOSCHANGED への wndproc 再入で WindowPos を echo-bypass 更新する設計に依存する
-/// ため（`window_factory` §再入方針・5.3 実機回帰）。再入安全性は手順 3 の World `try_borrow`
-/// 安全スキップ＋ECS 側 tick ガード（`IS_TICK_FLUSH_IN_PROGRESS`）で担保する。
-/// クロージャは以下の規律で配送する:
-///
-/// 1. pinned state から `entity` を直接読む（`Entity: Copy`）。
-/// 2. `world.upgrade()`→`None` なら `None`（破棄中・安全スキップ）。
-/// 3. World を `try_borrow`。失敗（再入）なら `None`（安全スキップ）。ただし `WM_ENDSESSION`（wParam 真）
-///    だけは受け手を呼べない帰結を `warn!(os_session_end_world_busy)` に残してから飛ばす。
-///    その後、ドラッグを終える 5 種（ESC の押下・`WM_CANCELMODE`・非活性化の `WM_ACTIVATE`・
-///    `WM_CAPTURECHANGED`・`WM_LBUTTONUP`）は `handle_message_while_world_busy(entity, &msg)` で
-///    World を使わずにドラッグの状態を休ませる（戻り値は使わない）。`WM_CLOSE` は捨てたことを
-///    `warn!(wm_close_world_busy)` に残す。どの場合も `None` を返す。
-/// 4. 成功時のみ `dispatch_window_message(&world, entity, &msg)` を呼ぶ。
-//
-// `EcsWindowFactory::create_window`（`create_windows` 経由）がウィンドウ生成時に呼び、
-// 返したクロージャをライブラリの `Window::new_ex` へ渡す（task 4.3 結線済み）。
+/// ライブラリの `new_ex`（wndproc 再入可）へ渡す。再入を阻止する `new_checked_ex` を使わない
+/// 理由は `window_factory` の `create_window` にある。`try_borrow` 失敗時は `WM_ENDSESSION`
+/// （wParam 真）を `warn!(os_session_end_world_busy)` に残してから飛ばす。
 pub(crate) fn make_wndproc() -> impl Fn(Pin<&WndState>, WindowMessage) -> Option<LRESULT> {
     move |state: Pin<&WndState>, msg: WindowMessage| -> Option<LRESULT> {
-        // Entity は Copy のため pinned state から直接読める（手詰めなし・要件 2.3）。
         let entity = state.entity;
 
-        // World への弱参照を upgrade。破棄中（strong 所有者 drop 済み）なら安全スキップ。
         let world = state.world.upgrade()?;
 
-        // World 借用を試みる。借用失敗（再入・別経路が借用中）は安全スキップ（要件 4.3）。
-        // 借用ガード自体は dispatch に渡さない（dispatch は `Rc` を受け取り内部で借用規律を
-        // 適用する純関数）。ここでは「借用可能か」だけを試して即座に解放する。
+        // 借用ガードは dispatch に渡さない（dispatch は `Rc` を受け取り内部で借用する）。
+        // ここでは借用可能かだけを試して即座に解放する。
         if world.try_borrow().is_err() {
             // OS のセッションの終了（wParam 真）だけは、受け手を呼べないことを黙って流さない。
             if msg.msg == WM_ENDSESSION && msg.wparam.0 != 0 {
@@ -111,13 +77,11 @@ pub(crate) fn make_wndproc() -> impl Fn(Pin<&WndState>, WindowMessage) -> Option
                     "[WM_CLOSE] World が借用中で閉じる要求を扱えない → 要求を捨てた（閉じ直せば閉じる）"
                 );
             }
-            // ドラッグを終える 5 種だけは捨てずに、World を使わないドラッグの扱いへ渡す。
             // 戻り値（扱ったか）は使わず、どの場合も既定の手続きへ委ねる。
             handle_message_while_world_busy(entity, &msg);
             return None;
         }
 
-        // 配送表本体は ECS 層の `dispatch_window_message`（単一の真実の源）が担う（要件 2.4）。
         dispatch_window_message(&world, entity, &msg)
     }
 }
@@ -141,7 +105,6 @@ mod tests {
     use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{WM_ERASEBKGND, WM_USER};
 
-    /// テスト用 `WndState` を組み立てる。
     fn make_state(world: &Rc<RefCell<EcsWorld>>) -> WndState {
         let entity = world.borrow_mut().world_mut().spawn(()).id();
         WndState {
@@ -150,7 +113,7 @@ mod tests {
         }
     }
 
-    /// 代表メッセージ用の `WindowMessage` を組む（hwnd 等は配送に無関係）。
+    /// hwnd 等は配送に無関係。
     fn msg(message: u32) -> WindowMessage {
         WindowMessage {
             hwnd: HWND(std::ptr::null_mut()),
@@ -160,15 +123,13 @@ mod tests {
         }
     }
 
-    /// World が drop 済み（`upgrade()`→`None`）のときクロージャは `None` を返し panic しない
-    /// （破棄中の安全スキップ・要件 4.3）。
+    /// World が drop 済み（`upgrade()`→`None`）のときクロージャは `None` を返し panic しない。
     #[test]
     fn closure_safe_skips_when_world_dropped() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
         let state = make_state(&world);
         let wndproc = make_wndproc();
 
-        // strong 所有者を drop → Weak::upgrade が None になる。
         drop(world);
 
         let boxed = Box::pin(state);
@@ -179,15 +140,13 @@ mod tests {
         );
     }
 
-    /// World が借用中（`borrow_mut` 保持）のときクロージャは `None` を返し panic しない
-    /// （再入の安全スキップ・要件 4.3）。
+    /// World が借用中（`borrow_mut` 保持）のときクロージャは `None` を返し panic しない。
     #[test]
     fn closure_safe_skips_when_world_borrowed() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
         let state = make_state(&world);
         let wndproc = make_wndproc();
 
-        // World を借用したままクロージャを呼ぶ → try_borrow 失敗で安全スキップ。
         let _held = world.borrow_mut();
 
         let boxed = Box::pin(state);
@@ -198,9 +157,9 @@ mod tests {
         );
     }
 
-    /// 要件 12.10: World の借用中に `WM_ENDSESSION`（wParam 真）が届いたら、受け手を呼べない
-    /// ことを帰結付きの `warn!` 1 件で残し、戻りは今日どおり既定の手続きへ委ねる（`None`）。
-    /// wParam 偽や他のメッセージでは今日どおり記録しない。
+    /// World の借用中に `WM_ENDSESSION`（wParam 真）が届いたら、受け手を呼べないことを
+    /// 帰結付きの `warn!` 1 件で残し、既定の手続きへ委ねる（`None`）。wParam 偽や他のメッセージでは
+    /// 記録しない。
     #[test]
     fn closure_warns_session_end_only_while_world_borrowed() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
@@ -237,8 +196,7 @@ mod tests {
         );
     }
 
-    /// World の借用中に届いた `WM_CLOSE` は受け手を呼べずに捨てられるので、`warn!(wm_close_world_busy)`
-    /// を 1 件残す（戻りは `None`。ライブラリが `WM_CLOSE` を既定の手続きへ渡さず `LRESULT(0)` を返す）。
+    /// World の借用中に届いた `WM_CLOSE` は捨てられるので `warn!(wm_close_world_busy)` を 1 件残す。
     /// 他のメッセージでは記録しない。
     #[test]
     fn closure_warns_close_while_world_borrowed() {
@@ -267,8 +225,7 @@ mod tests {
         );
     }
 
-    /// 生存・未借用 World で代表メッセージは `Some(LRESULT)`、非対応メッセージは `None`
-    /// （配送純関数の代表ルーティング・要件 2.4）。
+    /// 生存・未借用 World で代表メッセージは `Some(LRESULT)`、非対応メッセージは `None`。
     #[test]
     fn closure_routes_representative_message() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
@@ -277,7 +234,6 @@ mod tests {
 
         let boxed = Box::pin(state);
 
-        // 代表メッセージ → Some。
         let handled = wndproc(boxed.as_ref(), msg(WM_ERASEBKGND));
         assert_eq!(
             handled,
@@ -285,7 +241,6 @@ mod tests {
             "代表メッセージ WM_ERASEBKGND は Some(LRESULT(1)) を返すべき"
         );
 
-        // 非対応メッセージ → None（DefWindowProcW 委譲）。
         let unhandled = wndproc(boxed.as_ref(), msg(WM_USER));
         assert!(
             unhandled.is_none(),

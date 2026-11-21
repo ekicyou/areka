@@ -2,7 +2,6 @@
 //!
 //! 異なるアーキタイプ（コンポーネント構成）を持つ兄弟エンティティでも、
 //! `Children` コンポーネントの順序に基づいて Visual 階層が同期されることを検証する。
-//! (Requirements: 3.3)
 
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::prelude::*;
@@ -32,7 +31,6 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
         let mut world = World::new();
         world.insert_resource(graphics);
 
-        // 親エンティティ（VisualGraphics あり）
         let parent_visual = factory.create_visual()?;
         let parent_entity = world
             .spawn((
@@ -73,12 +71,10 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
             ))
             .id();
 
-        // Visual 同期システムを実行
         let mut schedule = Schedule::default();
         schedule.add_systems(visual_hierarchy_sync_system);
         schedule.run(&mut world);
 
-        // Children の順序を確認（spawn 順であること）
         let children = world
             .get::<Children>(parent_entity)
             .expect("Parent should have Children");
@@ -89,7 +85,6 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
             "Children should reflect spawn order"
         );
 
-        // 全子の parent_visual が親の Visual を指すこと
         for (name, entity) in [
             ("child_a", child_a),
             ("child_b", child_b),
@@ -103,7 +98,6 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
             );
         }
 
-        // WUC の子の並びが Children の順を写すこと
         assert_eq!(
             wuc_children(&parent_visual)?,
             expected_wuc_order(&[&child_a_visual, &child_b_visual, &child_c_visual])
@@ -132,7 +126,6 @@ fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
             ))
             .id();
 
-        // child_a: VisualGraphics あり
         let child_a_visual = factory.create_visual()?;
         let child_a = world
             .spawn((
@@ -145,7 +138,6 @@ fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
         // child_no_vg: VisualGraphics なし（ChildOf のみ。Visual なし → VisualGraphics 自動挿入もなし）
         let _child_no_vg = world.spawn(ChildOf(parent_entity)).id();
 
-        // child_c: VisualGraphics あり
         let child_c_visual = factory.create_visual()?;
         let child_c = world
             .spawn((
@@ -155,12 +147,10 @@ fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
             ))
             .id();
 
-        // パニックせずにシステムが実行できること
         let mut schedule = Schedule::default();
         schedule.add_systems(visual_hierarchy_sync_system);
         schedule.run(&mut world);
 
-        // VisualGraphics を持つ子は正しく同期されていること
         for (name, entity) in [("child_a", child_a), ("child_c", child_c)] {
             let vg = world.get::<VisualGraphics>(entity).unwrap();
             assert_eq!(
@@ -196,7 +186,6 @@ fn test_many_siblings_alternating_archetypes_visual_hierarchy() -> Result<()> {
             ))
             .id();
 
-        // 交互に異なるアーキタイプの子を spawn
         let mut child_entities = Vec::new();
         let mut child_visuals = Vec::new();
         for i in 0..5 {
@@ -227,12 +216,10 @@ fn test_many_siblings_alternating_archetypes_visual_hierarchy() -> Result<()> {
         schedule.add_systems(visual_hierarchy_sync_system);
         schedule.run(&mut world);
 
-        // Children の順序が spawn 順であること
         let children = world.get::<Children>(parent_entity).unwrap();
         let children_order: Vec<Entity> = children.iter().collect();
         assert_eq!(children_order, child_entities);
 
-        // 全子の parent_visual が親の Visual を指すこと
         for (i, entity) in child_entities.iter().enumerate() {
             let vg = world.get::<VisualGraphics>(*entity).unwrap();
             assert_eq!(

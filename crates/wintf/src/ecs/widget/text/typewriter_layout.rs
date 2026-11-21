@@ -85,7 +85,6 @@ pub fn init_typewriter_layout(
             continue;
         }
 
-        // トークン列から全文テキストを結合
         let full_text: String = talk
             .tokens()
             .iter()
@@ -100,7 +99,6 @@ pub fn init_typewriter_layout(
             continue;
         }
 
-        // Arrangementからサイズを取得
         let layout_width = arrangement.size.width;
         let layout_height = arrangement.size.height;
 
@@ -158,7 +156,6 @@ fn build_layout_cache(
     layout_width: f32,
     layout_height: f32,
 ) -> windows::core::Result<TypewriterLayoutCache> {
-    // TextFormat 作成
     let font_family_hstring = windows::core::HSTRING::from(&typewriter.font_family);
     let locale_hstring = windows::core::HSTRING::from("ja-JP");
     let text_format = dwrite_factory.create_text_format(
@@ -171,7 +168,6 @@ fn build_layout_cache(
         &locale_hstring,
     )?;
 
-    // 縦書き・横書きの設定
     apply_direction(&text_format, typewriter.direction)?;
     // 揃え: 右から左の横書きだけ右寄せ、ほかは行の頭へ。段落はどれも上（行の流れの頭）へ
     let text_alignment = match typewriter.direction {
@@ -192,7 +188,6 @@ fn build_layout_cache(
         layout_height,
     )?;
 
-    // Stage 1 → Stage 2 IR 変換
     let timeline = convert_to_timeline(tokens, typewriter, &text_layout, full_text)?;
     Ok(TypewriterLayoutCache::new(text_layout, timeline))
 }

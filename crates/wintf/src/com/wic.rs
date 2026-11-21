@@ -11,13 +11,9 @@ pub fn wic_factory() -> Result<IWICImagingFactory2> {
 /// WIC で画像を読み込み、PBGRA32 形式の `IWICBitmapSource` と、
 /// **変換前フレームの α 有無** (`has_alpha`) を返す。
 ///
-/// この関数は元々 `ecs/widget/bitmap_source/systems.rs` に存在したが、
-/// ECS 非依存の COM 層へ移設した（design Decision D2）。挙動は不変。
-/// `systems.rs` は本関数を re-export して既存のパス互換を維持する。
-///
 /// `has_alpha` は PBGRA32 変換で失われるため（変換は α 無し画像も
 /// 100% 不透明として PBGRA へ埋める）、**変換前フレームの
-/// `GetPixelFormat` の GUID** から判定する（design Critical Issue 1）。
+/// `GetPixelFormat` の GUID** から判定する。
 ///
 /// # Arguments
 /// * `factory` - WIC ファクトリ
@@ -34,7 +30,6 @@ pub fn load_bitmap_source(
     // UTF-16 のまま渡す（`to_string_lossy` は対のないサロゲートを U+FFFD に化かし別の名を開く）
     let path_hstring = HSTRING::from(path);
 
-    // デコーダー作成
     let decoder = factory.create_decoder_from_filename(
         &path_hstring,
         None,
@@ -42,12 +37,8 @@ pub fn load_bitmap_source(
         WICDecodeMetadataCacheOnDemand,
     )?;
 
-    // 最初のフレームを取得
     let frame = decoder.frame(0)?;
 
-    // 変換前フレームのピクセルフォーマットから α 有無を判定（Critical Issue 1）。
-    // PBGRA 変換後は必ず α 付きフォーマットになり判別不能になるため、
-    // 変換前にここで確定させる。
     let pre_format = unsafe { frame.GetPixelFormat()? };
     // 番号つきの形式は形式の GUID に α が出ないので、パレットの透明度で決める。
     let has_alpha = if INDEXED_FORMATS.contains(&pre_format) {
@@ -56,7 +47,6 @@ pub fn load_bitmap_source(
         pixel_format_has_alpha(factory, &pre_format)?
     };
 
-    // PBGRA32 に変換（α チャネルがなくても 100% 不透明として変換）
     let converter = factory.create_format_converter()?;
     converter.init(
         &frame.cast::<IWICBitmapSource>()?,

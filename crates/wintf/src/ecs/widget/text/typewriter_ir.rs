@@ -1,7 +1,7 @@
 //! Typewriter IR (Intermediate Representation) 型定義
 //!
 //! 2段階IR設計:
-//! - Stage 1 IR (TypewriterToken): 外部インターフェース（areka-P0-script-engine と共有）
+//! - Stage 1 IR (TypewriterToken): 外部インターフェース（Script Engine から受け取る形式）
 //! - Stage 2 IR (TimelineItem): 内部タイムライン（グリフ単位に分解済み）
 
 use bevy_ecs::prelude::*;

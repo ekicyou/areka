@@ -12,9 +12,7 @@ const ALPHA_THRESHOLD: u8 = 128;
 /// - 1ビット/ピクセル（8ピクセル/バイト）
 /// - MSBファースト（ビット7 = 最左ピクセル）
 /// - 行ごとに8ピクセル単位でアラインメント
-// `PartialEq` は再生成（`regenerate_from_pbgra32`）と新規生成（`from_pbgra32`）の等価檻の
-// 比較器として derive する（data/width/height の全一致＝マスクの完全同一）。公開挙動への
-// 影響はない（追加の trait 実装のみ）。
+// `PartialEq` は再生成と新規生成の等価比較（data/width/height の全一致）のために derive する。
 #[derive(Debug, Clone, PartialEq)]
 pub struct AlphaMask {
     data: Vec<u8>,
@@ -22,11 +20,7 @@ pub struct AlphaMask {
     height: u32,
 }
 
-/// PBGRA32 の α をビットパック済みバッファへ書き込む（共有本体）
-///
-/// `from_pbgra32`（新規確保）と `regenerate_from_pbgra32`（バッファ再利用）の**唯一の
-/// 実装**。両者の差はバッファの用意の仕方だけであり、ビットパックの意味論はここに一本化
-/// されている（二重実装による乖離を構造で防ぐ）。
+/// PBGRA32 の α をビットパック済みバッファへ書き込む（`from_pbgra32` と `regenerate_from_pbgra32` の共通本体）
 ///
 /// # 前提
 /// `data` は `row_bytes * height` の長さで、**全バイトが 0 に初期化済み**であること
@@ -46,9 +40,7 @@ fn pack_pbgra32_alpha(
             let pixel_offset = row_start + (x as usize * 4);
             let alpha = pixels.get(pixel_offset + 3).copied().unwrap_or(0);
 
-            // 閾値128で2値化
             if alpha >= ALPHA_THRESHOLD {
-                // MSBファースト: ビット7 = 最左ピクセル
                 let byte_index = (y as usize * row_bytes) + (x as usize / 8);
                 let bit_index = 7 - (x % 8);
                 data[byte_index] |= 1 << bit_index;
@@ -69,7 +61,6 @@ impl AlphaMask {
     /// # Returns
     /// 生成されたαマスク
     pub fn from_pbgra32(pixels: &[u8], width: u32, height: u32, stride: u32) -> Self {
-        // 行あたりのバイト数（8ピクセル単位でアラインメント）
         let row_bytes = width.div_ceil(8) as usize;
         let mut data = vec![0u8; row_bytes * height as usize];
 
@@ -87,7 +78,7 @@ impl AlphaMask {
     /// [`from_pbgra32`](Self::from_pbgra32) と**同一入力に対して同一結果**を作るが、
     /// 新しいバッファを確保せず `self.data` を `clear` + `resize` で作り直す
     /// （容量は保持されるため、同寸または縮小方向の再生成では確保が発生しない）。
-    /// 定常状態の毎コマ適用で当たり判定マスクの新規確保を無くすための口（要件 3.1）。
+    /// 毎コマの適用で当たり判定マスクの新規確保を避けるための口。
     ///
     /// `clear` してから 0 で `resize` するため、**寸法が縮む方向でも前の内容は 1 ビットも
     /// 残らない**（`resize` 単独だと保持された前半バイトのビットが生き残る）。
@@ -98,12 +89,10 @@ impl AlphaMask {
     /// - `height`: 画像高さ（ピクセル）
     /// - `stride`: 行あたりのバイト数
     pub fn regenerate_from_pbgra32(&mut self, pixels: &[u8], width: u32, height: u32, stride: u32) {
-        // 行あたりのバイト数（8ピクセル単位でアラインメント）
         let row_bytes = width.div_ceil(8) as usize;
         let len = row_bytes * height as usize;
 
-        // clear → resize(len, 0) で「全バイト 0・長さ len」を作る。容量は保持されるので
-        // len <= capacity の間は確保が起きない。clear を挟むことで縮小方向でも残留しない。
+        // clear してから resize: 縮小方向でも前の内容が残らず、len <= capacity の間は確保も起きない。
         self.data.clear();
         self.data.resize(len, 0);
 
@@ -119,7 +108,6 @@ impl AlphaMask {
     /// - `true`: α ≧ 128 のピクセル（ヒット対象）
     /// - `false`: α < 128 または範囲外
     pub fn is_hit(&self, x: u32, y: u32) -> bool {
-        // 範囲外チェック
         if x >= self.width || y >= self.height {
             return false;
         }
@@ -128,12 +116,8 @@ impl AlphaMask {
         let byte_index = (y as usize * row_bytes) + (x as usize / 8);
         let bit_index = 7 - (x % 8);
 
-        // 不変条件: well-formed な AlphaMask（from_pbgra32 が生成）は
-        // `data.len() == row_bytes * height` を満たし、直前の範囲チェック
-        // （x < width, y < height）と併せて byte_index は常に data 範囲内
-        // （byte_index <= height*row_bytes - 1 < data.len()）。リリースでは
-        // この添字は常に安全。debug_assert は data 長と width/height が乖離した
-        // 不整合な手構築マスクのみを検出する（リリース挙動は不変）。
+        // well-formed なマスクは `data.len() == row_bytes * height` で、上の範囲チェックと併せて添字は常に範囲内。
+        // debug_assert は data 長と width/height が乖離した手構築マスクだけを検出する。
         debug_assert!(
             byte_index < self.data.len(),
             "AlphaMask invariant violated: byte_index {} out of bounds (data.len()={}, width={}, height={})",
@@ -157,28 +141,16 @@ impl AlphaMask {
     }
 
     /// 詰めビット列**そのものの確保量**（`Vec::capacity`・バイト）を取得
-    ///
-    /// [`regenerate_from_pbgra32`] を呼ぶ側が「この再生成で確保が起きたか」を厳密に観測する
-    /// ための口である。再生成は `clear`＋`resize(詰め長, 0)` ゆえ、詰め長が現容量を超えた
-    /// ときにだけ確保が起きる——呼び出しの前後でこの値を読み比べれば、増えた／変わらないが
-    /// そのまま「確保した／していない」になる。`Vec` の容量は再確保でしか増えず、縮小方向の
-    /// 再生成でも縮まないため、過大にも過小にも振れない。
-    ///
-    /// [`width`]／[`height`] から詰め長を推し量る形と違い、**この値はマスクの実体に紐づく**。
-    /// 複数のマスクを入れ替えて使い回す呼び手（当たり判定マスクの輪番）でも、器側で到達済み
-    /// 寸法を覚える必要が無くなる。
+    /// [`regenerate_from_pbgra32`] の前後で読み比べ、再生成で確保が起きたかを観測するための口。
+    /// 値はマスクの実体に紐づくため、複数のマスクを入れ替えて使う呼び手も到達済み寸法を覚えなくてよい。
     ///
     /// [`regenerate_from_pbgra32`]: AlphaMask::regenerate_from_pbgra32
-    /// [`width`]: AlphaMask::width
-    /// [`height`]: AlphaMask::height
     pub fn packed_capacity(&self) -> usize {
         self.data.capacity()
     }
 }
 
-// Send + Sync は自動導出（Vec<u8> と u32 のみ）
-
-/// `regenerate_from_pbgra32` の等価檻とバッファ再利用檻（structure.md のテスト分離規約）
+/// `regenerate_from_pbgra32` の等価檻とバッファ再利用檻
 #[cfg(test)]
 #[path = "alpha_mask_regenerate_tests.rs"]
 mod regenerate_tests;
@@ -287,7 +259,7 @@ mod tests {
         assert!(mask.is_hit(9, 0));
     }
 
-    // === W5b-T 追加: from_pbgra32 / is_hit の境界ロジック特性化 ===
+    // === from_pbgra32 / is_hit の境界ロジック ===
 
     /// width=0 の退化ケース: 空マスクが生成され、いかなる座標もヒットしない
     #[test]
@@ -297,7 +269,6 @@ mod tests {
 
         assert_eq!(mask.width(), 0);
         assert_eq!(mask.height(), 0);
-        // 範囲外チェック（x >= 0 が常に真）により必ず false
         assert!(!mask.is_hit(0, 0));
         assert!(!mask.is_hit(5, 5));
     }
@@ -315,9 +286,6 @@ mod tests {
     }
 
     /// パディング付き stride: 行末パディングを跨いで各行のαが正しく読まれること
-    ///
-    /// stride を width*4 より大きく取り（行末に未使用バイト）、
-    /// pixel_offset = y*stride + x*4 の stride ベース行頭計算を固定する。
     #[test]
     fn test_padded_stride_reads_correct_rows() {
         // 2x2 画像、stride=12（= 行に必要な 8 バイト + 4 バイトのパディング）
@@ -340,9 +308,6 @@ mod tests {
     }
 
     /// バイト境界跨ぎのビットパック: x=7（1バイト目末尾）と x=8（2バイト目先頭）
-    ///
-    /// row_bytes = ceil(width/8)。16px 幅で x=7 と x=8 が別バイト・MSBファースト
-    /// で正しく配置されることを固定する。
     #[test]
     fn test_bit_packing_across_byte_boundary() {
         // 16x1: x=7 と x=8 のみ不透明
@@ -375,18 +340,13 @@ mod tests {
         let mask = AlphaMask::from_pbgra32(&pixels, w, h, stride);
 
         assert!(mask.is_hit(2, 1), "last valid pixel should hit");
-        // 直近の範囲外はヒットしない
         assert!(!mask.is_hit(3, 1), "x == width is out of bounds");
         assert!(!mask.is_hit(2, 2), "y == height is out of bounds");
     }
 
-    // === W5b-V 追加: is_hit 添字不変条件の特性化（debug_assert の保護対象固定） ===
+    // === is_hit の添字不変条件 ===
 
     /// `is_hit` が範囲外座標で添字アクセス手前に return すること（panic 経路なし）
-    ///
-    /// 非バイト境界幅（width=9 → row_bytes=2）で、範囲外座標が `data[byte_index]` に
-    /// 到達せず常に false を返すことを固定する。範囲チェック（x>=width||y>=height）が
-    /// debug_assert / 添字の手前で全ての越境を吸収する安全鎖を特性化する。
     #[test]
     fn test_is_hit_out_of_bounds_returns_before_indexing() {
         // 9x3: row_bytes = ceil(9/8) = 2、data.len() = 6
@@ -406,11 +366,6 @@ mod tests {
     }
 
     /// well-formed マスクの全有効座標で `is_hit` が添字不変条件を満たす（debug_assert 非発火）
-    ///
-    /// 非バイト境界幅（width=17 → row_bytes=3）の最右下を含む全座標を走査し、
-    /// `byte_index < data.len()` が常に成立する（debug ビルドでも panic しない）ことを
-    /// 固定する。これは is_hit に追加した debug_assert が well-formed マスクで決して
-    /// 発火しないこと（＝リリース挙動不変）の回帰検知器となる。
     #[test]
     fn test_is_hit_all_valid_coords_satisfy_index_invariant() {
         // 17x5: row_bytes = ceil(17/8) = 3、data.len() = 15。最右下 (16,4) を含む全走査
@@ -422,7 +377,6 @@ mod tests {
         pixels[((h - 1) * stride + (w - 1) * 4 + 3) as usize] = 255;
         let mask = AlphaMask::from_pbgra32(&pixels, w, h, stride);
 
-        // 全有効座標で is_hit が panic せず評価できる（debug_assert 非発火）
         let mut hit_count = 0u32;
         for y in 0..h {
             for x in 0..w {
@@ -431,7 +385,6 @@ mod tests {
                 }
             }
         }
-        // 最右下のみヒット（不変条件を満たしつつ最大 byte_index が安全に読まれた証拠）
         assert_eq!(hit_count, 1, "only the bottom-right pixel should hit");
         assert!(mask.is_hit(w - 1, h - 1), "max-index pixel should hit");
     }

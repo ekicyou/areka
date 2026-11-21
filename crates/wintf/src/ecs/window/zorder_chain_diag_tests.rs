@@ -1,6 +1,6 @@
-//! 鎖系の記録行を組む純関数——**書式そのもの**を固定する決定論的テスト（要件 8.3／9.1／9.2／9.5）。
+//! 鎖系の記録行を組む純関数——**書式そのもの**を固定する決定論的テスト。
 //!
-//! 実機も実ディスプレイも World も使わない（要件 10.1）。ハンドルは Win32 へ渡さない
+//! 実機も実ディスプレイも World も使わない。ハンドルは Win32 へ渡さない
 //! 偽の `HWND` であり、Entity は空の `World` から採った値である。
 //!
 //! # なぜ「含む」ではなく「1 行まるごと」を突き合わせるのか
@@ -11,7 +11,7 @@
 //!
 //! # 欄の間に他の欄が挟まる形を、連結文字列へ丸めない
 //!
-//! 初版の申し送り 6.3 が記録した罠である——`action=set` と `source=Descript` の間に
+//! 次の罠がある——`action=set` と `source=Descript` の間に
 //! `group_id=N` が挟まる行を「`action=set source=Descript`」と連結して写した手順書は
 //! 1 件も当てられなかった。ここでは**隣り合う欄の対**を実際の字面のまま名指しで固定し、
 //! 間に別の欄が割り込んだ瞬間に赤くなるようにしてある。
@@ -123,9 +123,7 @@ fn the_seven_chain_tags_share_one_prefix_and_are_all_distinct() {
     );
 }
 
-/// 保全語彙 2 語は移設の前後で**字面が 1 字も変わっていない**（要件 9.5）。
-///
-/// 逐語の期待値は退役前の檻（`zorder_group_diag_tests.rs`）が持っていたものと同一である。
+/// 保全語彙 2 語は移設の前後で**字面が 1 字も変わっていない**。
 #[test]
 fn the_two_preserved_group_tags_kept_their_exact_spelling_through_the_move() {
     assert_eq!(
@@ -141,7 +139,7 @@ fn the_two_preserved_group_tags_kept_their_exact_spelling_through_the_move() {
 /// 数えるのはコード本文に現れる文字列リテラルである。
 ///
 /// 鎖の冠を持つ名簿は 2 本ある——既存の 7 語（[`chain_record_tags`]・変えない）と、
-/// `areka-P0-zorder-scope-inversion` が足した組の受け渡しの 3 語（[`pair_handover_tags`]）。
+/// 組の受け渡しの 3 語（[`pair_handover_tags`]）。
 /// 数は 2 本の和と突き合わせる。
 #[test]
 fn no_extra_tag_hides_outside_the_two_rosters() {
@@ -226,10 +224,10 @@ fn production_files_containing(needle: &str) -> Vec<String> {
     found
 }
 
-/// 保全語彙 2 語の住処はクレート全体でただ 1 つ——`zorder_chain_diag.rs` である（要件 9.5）。
+/// 保全語彙 2 語の住処はクレート全体でただ 1 つ——`zorder_chain_diag.rs` である。
 ///
-/// 旧所在（`zorder_group_diag.rs`／`zorder_group.rs`）は task 5.1 で削除済みなので、
-/// 「あちらにもう無い」という形の主張はもう立てられない（対象そのものが実在しない）。
+/// 旧所在（`zorder_group_diag.rs`／`zorder_group.rs`）は削除済みで、
+/// 「あちらにもう無い」という形の主張は立てられない。
 /// 代わりに**クレートの木を歩いて**住処が 1 つであることを直に数える。こちらの方が強い
 /// ——退役した層に限らず、どのファイルへ 2 つ目の定義が生えても赤くなる。
 #[test]
@@ -249,7 +247,7 @@ fn the_preserved_tags_have_exactly_one_home_in_this_crate() {
         vec!["ecs/window/zorder_chain_diag.rs".to_string()],
         "走査そのものが壊れている（既知の鎖タグを見つけられない）"
     );
-    // 対照 ②: 退役した語彙は本番コードのどこにも残っていない（要件 14.2）
+    // 対照 ②: 退役した語彙は本番コードのどこにも残っていない
     for retired in [
         "[zorder-group] fix",
         "[zorder-group] skip",
@@ -289,7 +287,7 @@ fn the_linked_line_carries_segment_both_ends_and_the_position_in_the_chain() {
     );
 }
 
-/// 後方配置の繋ぎは区間が `tail` になる（どのグループにも属さない・要件 15）。
+/// 後方配置の繋ぎは区間が `tail` になる（どのグループにも属さない）。
 #[test]
 fn a_tail_segment_renders_as_the_tail_word_not_a_group_number() {
     let (owned, owner) = two_entities();
@@ -335,7 +333,7 @@ fn a_segmentless_call_still_carries_the_field_filled_with_the_sentinel() {
 
 /// 区間の欄は、繋いだ行の中で **`owned=` の直前**に在る（間に別の欄が割り込まない）。
 ///
-/// 連結文字列へ丸めると欄の割り込みを見逃す（初版 6.3 の罠）。ここでは隣り合う対を
+/// 連結文字列へ丸めると欄の割り込みを見逃す。ここでは隣り合う対を
 /// 実際の字面のまま名指しで固定する。
 #[test]
 fn the_segment_field_sits_immediately_before_the_owned_field() {
@@ -426,9 +424,9 @@ fn the_four_detach_reasons_render_as_four_distinct_words() {
     assert_eq!(seen, ["Teardown", "Rechain", "Departing", "Diverged"]);
 }
 
-/// 収まった行は、**組み替えの宣言と直後の実測を同じ 1 行**に載せる（要件 9.2）。
+/// 収まった行は、**組み替えの宣言と直後の実測を同じ 1 行**に載せる。
 ///
-/// 行を「宣言」と「実測」に分けないのは design.md の裁定である。分けると
+/// 行を「宣言」と「実測」に分けないのは、分けると
 /// 「指令は出したが効かなかった」の判定が 2 行の突合になる。
 #[test]
 fn the_settled_line_carries_the_declaration_and_the_measurement_together() {
@@ -483,7 +481,7 @@ fn an_unnudged_pass_renders_the_sentinel_in_every_settled_field() {
     );
 }
 
-/// 不在の行は、どのグループのどの宣言要素が不在だったかを載せる（要件 1.4／8.4）。
+/// 不在の行は、どのグループのどの宣言要素が不在だったかを載せる。
 #[test]
 fn the_absent_line_names_the_group_and_the_declared_element() {
     assert_eq!(
@@ -492,7 +490,7 @@ fn the_absent_line_names_the_group_and_the_declared_element() {
     );
 }
 
-/// 見送りの行は必ず理由を伴う（要件 8.3——理由の無い見送りを作れない）。
+/// 見送りの行は必ず理由を伴う（理由の無い見送りを作れない）。
 #[test]
 fn the_skipped_line_always_carries_its_reason() {
     assert_eq!(
@@ -516,7 +514,7 @@ fn the_three_skip_reasons_render_as_three_distinct_words() {
     assert_eq!(words, ["TooFewPresent", "NoChange", "HandleMissing"]);
 }
 
-/// 張り失敗の行は、区間・両端の窓ハンドル・失敗値を同じ 1 行に載せる（要件 8.2）。
+/// 張り失敗の行は、区間・両端の窓ハンドル・失敗値を同じ 1 行に載せる。
 #[test]
 fn the_link_failed_line_carries_the_segment_and_both_handles() {
     let line = link_failed_line(
@@ -533,7 +531,7 @@ fn the_link_failed_line_carries_the_segment_and_both_handles() {
     );
 }
 
-/// 外し失敗の行は、被所有側の窓ハンドルと失敗値を載せる（要件 8.2）。
+/// 外し失敗の行は、被所有側の窓ハンドルと失敗値を載せる。
 #[test]
 fn the_unlink_failed_line_carries_the_owned_handle_and_the_error() {
     let line = unlink_failed_line(Some(fake_hwnd(0xC0)), &fake_error());
@@ -545,7 +543,7 @@ fn the_unlink_failed_line_carries_the_owned_handle_and_the_error() {
 }
 
 // ===========================================================================
-// 移設してきた保全語彙 2 語（要件 9.5）——字面も水準も出力先も固定する
+// 移設してきた保全語彙 2 語——字面も水準も出力先も固定する
 // ===========================================================================
 
 /// 受理の行は、台帳が組んだ本文へタグだけを貼る（移設前と 1 字も変わらない）。
@@ -558,7 +556,7 @@ fn the_applied_line_prefixes_the_ledger_text_with_the_tag_and_nothing_else() {
 }
 
 /// 起動由来の受理行の実際の字面——`action=set` と `source=Descript` の**間に**
-/// `group_id=` が挟まる（初版 6.3 の罠を字面のまま固定する）。
+/// `group_id=` が挟まる（字面のまま固定する）。
 #[test]
 fn the_boot_time_applied_line_keeps_group_id_between_action_and_source() {
     let line = applied_line("action=set group_id=7 source=Descript members=b0,s0 normalized=-");
@@ -640,7 +638,7 @@ fn a_rejection_is_recorded_at_warn_level_and_survives_the_default_level() {
 }
 
 // ===========================================================================
-// 既存ペア機構の語彙は不変（要件 9.5）——両側から挟む
+// 既存ペア機構の語彙は不変——両側から挟む
 // ===========================================================================
 
 /// あちらの 6 タグは逐語で残っており、こちらはその語を 1 つも名乗らない。

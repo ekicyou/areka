@@ -60,7 +60,7 @@ fn test_point_in_polygon_insufficient_vertices() {
     assert!(!point_in_polygon(50.0, 0.0, &vertices));
 }
 
-/// 閉じ辺（最終頂点→始点）をまたぐ判定が正しいこと（W4b-T）
+/// 閉じ辺（最終頂点→始点）をまたぐ判定が正しいこと
 ///
 /// ray casting の `j = n-1` 初期化（最終頂点から始点への閉じ辺）が
 /// 正しく評価されることを、始点・終点をまたぐ水平位置の点で特性化する。

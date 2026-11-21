@@ -1,10 +1,10 @@
-//! 回帰檻（C7 RegressionCage・Requirement 5.1/5.2/5.3）
+//! 回帰檻: WUC グラフィックススタックの複数回生成
 //!
 //! 「同一プロセス内で WUC グラフィックススタック（`GraphicsCore` + `WucGraphicsResource`＝
 //! `Compositor`）を 2 回以上生成する」パターンが、クラッシュなく決定論的に完走することを
 //! 恒久監視する。
 //!
-//! # 根本原因と是正（正本: research.md「根本原因記録」節）
+//! # 根本原因と是正
 //! 本環境（Intel Arc / Win 26200）では:
 //! - **別スレッド上の 2 個目 `Compositor` 生成** → `STATUS_ACCESS_VIOLATION`（プロセス死）。
 //! - **同一スレッド上での DispatcherQueueController 再生成の反復** → `0x8001010E`
@@ -13,7 +13,7 @@
 //! 是正 = ①共有 GPU オーナースレッドへ全 WUC 生成を集約（別スレッド 2 個目を排除）＋
 //! ②`WucGraphicsResource::new` が既存スレッド DispatcherQueue を再利用（controller 再生成を排除）。
 //!
-//! # 檻としての検出保証（Requirement 5.3・サイレント成功は構造的に不可能）
+//! # 檻としての検出保証（サイレント成功は構造的に不可能）
 //! 本檻は是正の正準経路（オーナースレッド上での再生成）を通す。是正が退行した場合:
 //! - オーナースレッド集約が壊れる（別スレッドで Compositor 生成に戻る）→ 2 個目で
 //!   `STATUS_ACCESS_VIOLATION`＝**プロセス死でバイナリ全体が失敗**（アサーション不要で検出）。
@@ -38,7 +38,6 @@ fn full_stack_cycle() {
     let wuc =
         WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new（2 個目でも成功すべき）");
 
-    // 最小合成操作: Compositor から SpriteVisual を 1 個生成する（実 WUC 操作を通す）。
     let _visual: WucVisual = wuc
         .compositor()
         .expect("compositor")
@@ -46,8 +45,6 @@ fn full_stack_cycle() {
         .expect("CreateSpriteVisual")
         .cast()
         .expect("cast to Visual");
-
-    // スコープ終端で wuc / core が（オーナースレッド上で）解放される。
 }
 
 /// 形態(i)-A: 独立した 2 `#[test]` の 1 本目。
@@ -66,16 +63,16 @@ fn wuc_stack_b_full_cycle() {
     on_gpu_owner_thread(full_stack_cycle);
 }
 
-/// 形態(ii): 単一 `#[test]` 内で 生成→解放→再生成 を 3 サイクル行う（Requirement 5.1
-/// 「単一テストプロセス内で 2 回以上連続生成」を単独実行でも決定論的に検証）。
+/// 形態(ii): 単一 `#[test]` 内で 生成→解放→再生成 を 3 サイクル行う。
+/// 単一テストプロセス内で 2 回以上連続生成するのを、単独実行でも決定論的に検証する。
 ///
 /// 既存 in-source `wuc_graphics_resource_lifecycle`（同一関数内・1 回再生成）が覆えない
 /// 「完全解放後の複数回再生成」を明示検証する。
 #[test]
 fn wuc_stack_recreate_in_single_test() {
     on_gpu_owner_thread(|| {
-        full_stack_cycle(); // 1 回目
-        full_stack_cycle(); // 2 回目（再生成）
-        full_stack_cycle(); // 3 回目（2 回以上を明示）
+        full_stack_cycle();
+        full_stack_cycle();
+        full_stack_cycle();
     });
 }

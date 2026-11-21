@@ -70,7 +70,7 @@ type ClassData = (
     Option<&'static AutoPromotion>,
 );
 
-/// ECS の ChildOf/Children の木を WUC の見た目の木へ写すシステム (R3, R6, R7)
+/// ECS の ChildOf/Children の木を WUC の見た目の木へ写すシステム
 ///
 /// 未同期の見分けは「控えの親（`parent_visual`）が、いま居るべき親と違う」。居るべき親は
 /// [`wuc_host_of`]（節と用意中の自動の持ち主を通り抜けた、いちばん近い祖先の持ち主）で決め、
@@ -122,7 +122,6 @@ pub fn visual_hierarchy_sync_system(
         }
     };
 
-    // Phase 1: 未同期の子を持つ親と、古い親から外す見た目と、根の印を付ける子を集める
     let mut affected_parents = std::collections::HashSet::new();
     // (古い親の見た目, 子の見た目)
     let mut detach: Vec<(WucVisual, WucVisual)> = Vec::new();
@@ -138,7 +137,7 @@ pub fn visual_hierarchy_sync_system(
                 HostAnswer::Host(h) => {
                     match query.get(h).ok().and_then(|(_, v, _, _)| v.visual()) {
                         Some(v) => v,
-                        None => continue, // 親の見た目がまだ無い: 保留
+                        None => continue,
                     }
                 }
                 HostAnswer::Detached => own,
@@ -176,7 +175,7 @@ pub fn visual_hierarchy_sync_system(
     }
     let depth_of = |e: Entity| ancestors(e, parent_of).count();
 
-    // Phase 2: 付け替えた子を古い親の子から外す（親が先に消えた場合があるので debug!）
+    // 付け替えた子を古い親の子から外す（親が先に消えた場合があるので debug!）
     for (old_parent, child) in &detach {
         if let Err(e) = old_parent
             .cast::<ContainerVisual>()
@@ -187,7 +186,6 @@ pub fn visual_hierarchy_sync_system(
         }
     }
 
-    // 繋ぐ親が無い子: 自分自身の Visual を控えに置いて「根」と印す
     for entity in roots {
         let depth = depth_of(entity);
         let mut child_query = vg_queries.p0();
@@ -208,7 +206,6 @@ pub fn visual_hierarchy_sync_system(
         child_vg.set_parent_visual(Some(child_visual));
     }
 
-    // Phase 3: affected_parents を深さでソート（浅い親が先 → 親→子の順序で処理）
     let mut sorted_parents: Vec<(Entity, usize)> = affected_parents
         .into_iter()
         .map(|e| (e, depth_of(e)))
@@ -227,9 +224,7 @@ pub fn visual_hierarchy_sync_system(
             .unwrap_or_default()
     };
 
-    // Phase 4: 各 affected_parent について節を通り抜けた前順で子 Visual を再配置
     for (parent_entity, parent_depth) in sorted_parents {
-        // 親の Visual と名前（ログ用）を取得。見た目がまだ無ければ保留
         let (parent_visual, parent_name) = {
             let parent_query = vg_queries.p1();
             match parent_query.get(parent_entity) {
@@ -260,7 +255,6 @@ pub fn visual_hierarchy_sync_system(
             }
         };
 
-        // 親の既存 Visual 子をすべて削除して Z-order をリセット
         if let Err(e) = parent_children.RemoveAll() {
             error!(
                 parent = %parent_display,
@@ -270,14 +264,9 @@ pub fn visual_hierarchy_sync_system(
             continue;
         }
 
-        // 子の並びの順で子 Visual を再追加。
-        //
-        // Z順序等価性（要件 5.2）: DComp の `add_visual(insertabove=false, ref=None)` は
-        // 「子リストの先頭（＝全兄弟の下・最初に描画）へ挿入」。Children を [A,B,C] の順に
-        // 反復して毎回この呼び出しを行うと、最終スタック（下→上）は C,B,A（最後に反復した
-        // 子が最下・最初の子が最上）になる。WUC で同一スタックを再現するには、同じ反復順で
-        // `InsertAtBottom` を呼ぶ（InsertAtBottom(A)→[A], InsertAtBottom(B)→[B,A],
-        // InsertAtBottom(C)→[C,B,A]）。ゆえに InsertAtTop ではなく InsertAtBottom を選ぶ。
+        // DComp の `add_visual(insertabove=false, ref=None)` を [A,B,C] の順に繰り返すと
+        // 下から C,B,A に積まれる。同じ積みは InsertAtBottom を同じ順に呼ぶと得られる
+        // （InsertAtTop だと逆順になる）。
         let order = wuc_children_order(parent_entity, children_of, class_of);
         let mut child_query = vg_queries.p0();
         for child_entity in order {
@@ -317,7 +306,7 @@ pub fn visual_hierarchy_sync_system(
     }
 }
 
-/// Visual プロパティ同期システム (R8)
+/// Visual プロパティ同期システム
 ///
 /// 配置・不透明度・変形・置き場・上げ下げの相の変化、置き場か変形の外れ、または見た目の作り直しを
 /// 検知して Visual のプロパティを同期する。写す値は [`owner_props`] が決める。
@@ -361,7 +350,7 @@ pub fn visual_property_sync_system(
         // 名前は失敗の記録のときだけ作る（位置が動くたびに全部の見た目が通る道）
         let entity_name = || format_entity_name(entity, name);
 
-        // 欄へ直に書かれた NaN の記録。持ち主は fill_world_visuals が訪れないのでここで残す（2.8）。
+        // 欄へ直に書かれた NaN の記録。持ち主は fill_world_visuals が訪れないのでここで残す。
         // Visual が変わったときだけ出し、位置が動くたびには繰り返さない。
         if visual_component.is_changed() && visual_component.opacity.is_nan() {
             warn!(

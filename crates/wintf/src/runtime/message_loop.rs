@@ -1,5 +1,5 @@
-//! メッセージループ層。自作 `PeekMessageW` ポンプを撤去し、ライブラリ
-//! （`wintf-winmsg-executor`）の `block_on` / `MessageLoop::run` へ委譲する。
+//! メッセージループ層。ループはライブラリ（`wintf-winmsg-executor`）の
+//! `block_on` / `MessageLoop::run` に任せる。
 //!
 //! 本層は終了の受け口（[`AppExit`]）と、`WinApp::run` がライブラリの [`block_on`](crate::executor::block_on) へ渡す
 //! shutdown future（[`ShutdownPolicy`]）を提供する。OS メッセージはライブラリのループが
@@ -83,7 +83,7 @@ impl Default for AppExit {
     }
 }
 
-/// `block_on` の「loop 先行 quit で panic」を回避する終了規律（設計 ShutdownPolicy）。
+/// `block_on` の「loop 先行 quit で panic」を回避する終了規律。
 ///
 /// 状態を持たない名前空間。終了の指示の受け口（[`AppExit`]・`WinApp` 所有）から
 /// `run()` の `block_on` が待つ shutdown future を組み立てる。
@@ -100,7 +100,7 @@ impl ShutdownPolicy {
     ///
     /// 順序は「待ち受けを立てる（`listen()` を arm）→ 指示済みなら即完了 → 通知を待つ」。
     /// - 通知はリスナ不在だと失われる（`event-listener` の仕様）ので、ループ開始前に出た指示は
-    ///   「指示済み」の 1 ビットで拾う（要件 1.5）。
+    ///   「指示済み」の 1 ビットで拾う。
     /// - arm を確認の **前** に置くので、確認の直後・await 到達前に届いた指示も arm 済みの
     ///   リスナが捕捉する（tick のタスク `run_async_tick` と同じ取りこぼし防止規律）。
     ///
@@ -121,10 +121,6 @@ impl ShutdownPolicy {
 mod tests {
     use super::*;
     use crate::executor::block_on;
-
-    // ── ShutdownPolicy (task 4.2) ─────────────────────────────────
-
-    // ── AppExit（areka-P0-app-lifetime-separation 1.1） ─────────────────
 
     /// 待ちが終わらない壊れ方を「止まったまま」でなく赤で返すための見張り。
     ///
@@ -177,7 +173,7 @@ mod tests {
         }
     }
 
-    /// 要件 5.2・2.6: UI タスクから出した終了の指示で、ループの待ちが終わる。
+    /// UI タスクから出した終了の指示で、ループの待ちが終わる。
     ///
     /// 本番の tick の中・smoke の `spawn_local` と同じく、待ちが立った **後** に指示が届く経路。
     /// 投入済みのタスクは `block_on` の future より先に回るので、タスクは「待ちが立った」の印を
@@ -211,7 +207,7 @@ mod tests {
         );
     }
 
-    /// 要件 1.5: ループの開始より前に出した終了の指示を取りこぼさず、ループはただちに終わる。
+    /// ループの開始より前に出した終了の指示を取りこぼさず、ループはただちに終わる。
     ///
     /// 通知はリスナ不在だと失われる（`event-listener` の仕様）。「指示済み」の確認を待ちの順から
     /// 外すと、この指示は失われて待ちが終わらない。
@@ -226,7 +222,7 @@ mod tests {
         assert!(exit.is_requested());
     }
 
-    /// 要件 1.4: 2 回目の指示は失敗せず流され、指示済みは保たれ、ループの待ちは終わる。
+    /// 2 回目の指示は失敗せず流され、指示済みは保たれ、ループの待ちは終わる。
     #[test]
     fn second_request_is_ignored_and_the_future_still_completes() {
         let _watchdog = LoopWatchdog::arm(WATCHDOG);

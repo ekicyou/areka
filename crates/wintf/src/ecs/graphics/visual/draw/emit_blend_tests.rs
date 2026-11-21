@@ -1,5 +1,5 @@
-//! ブレンドの描き方の判定と 1 度だけの記録（装置なしの純粋なテスト・要件 1.1, 1.2, 1.5, 1.7, 7.9）と、
-//! ブレンドの答えの画素（WARP・要件 1.1〜1.4, 1.6, 1.7, 7.2〜7.4）。比べる点は境界から 2 画素以上離す。
+//! ブレンドの描き方の判定と 1 度だけの記録（装置なしの純粋なテスト）と、
+//! ブレンドの答えの画素（WARP）。比べる点は境界から 2 画素以上離す。
 
 use super::super::{MixMode, VisualDrawContent};
 use super::command::*;
@@ -216,14 +216,14 @@ fn all_26_blends_match_the_formulas_and_keep_outside() {
         near(&px, &what, on_opaque, 10, 10);
         near(&px, &what, on_half, 30, 10);
         for (x, y) in OUTSIDE {
-            near(&px, &what, before.at(x, y), x, y); // 1.3
+            near(&px, &what, before.at(x, y), x, y);
         }
     }
 }
 
 #[test]
 fn composite_mix_is_unchanged() {
-    // 1.4: 既定（SOURCE_OVER）は F が上に乗る。
+    // 既定（SOURCE_OVER）は F が上に乗る。
     let id = Matrix3x2::identity();
     let px = replay_to_pixels(&over_under(MixMode::default()), 40, 20, id);
     pixel_near(&px, F, 10, 10);
@@ -239,7 +239,7 @@ fn composite_mix_is_unchanged() {
 #[test]
 fn blend_without_dc6_or_out_of_range_draws_source_over() {
     let id = Matrix3x2::identity();
-    // 1.7: ブレンドの描き方が無い DC。描き終わり（EndDraw）の成功は足場が確かめる。
+    // ブレンドの描き方が無い DC。描き終わり（EndDraw）の成功は足場が確かめる。
     let mix = MixMode::Blend(D2D1_BLEND_MODE_MULTIPLY);
     let px = replay_to_pixels_without_blend(&over_under(mix), 40, 20, id);
     pixel_near(&px, F, 10, 10);
@@ -269,7 +269,7 @@ fn white_left(h: f32) -> DrawCommand {
 
 #[test]
 fn blend_outline_under_transforms_matches_source_over() {
-    // 1.6・research.md §10.3 の形: 局所 (-10,-6)-(10,6) を 40×40 の的の中央 (20,20) へ置く。
+    // 局所 (-10,-6)-(10,6) を 40×40 の的の中央 (20,20) へ置く。
     let content = solid(r(-10.0, -6.0, 10.0, 6.0), F);
     let center = Matrix3x2::translation(20.0, 20.0);
     let cases = [
@@ -358,7 +358,7 @@ fn blend_under_geometry_clip() {
 
 #[test]
 fn blend_under_geometry_clip_mixes_with_colored_under_pixels() {
-    // 図形の切り抜きの中も矩形の切り抜きと同じく下の画素に効く（3.1）。外は下の画素のまま（3.2）。
+    // 図形の切り抜きの中も矩形の切り抜きと同じく下の画素に効く。外は下の画素のまま。
     let mut commands = under();
     commands.push(push_ellipse_clip());
     commands.push(source(MixMode::Blend(D2D1_BLEND_MODE_MULTIPLY)));

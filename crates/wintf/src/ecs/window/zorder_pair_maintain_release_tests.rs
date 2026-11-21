@@ -1,5 +1,4 @@
-//! 維持系と沈降の観測が、望む鎖が外させる組に触れないことのテスト
-//! （要件 4.4・5.1・5.2・5.4・5.5・6.3）。
+//! 維持系と沈降の観測が、望む鎖が外させる組に触れないことのテスト。
 //!
 //! - 外す組に付いた再断行の要求（未適用＝バルーンの再表示の形・検証待ち）は、指令を積まず
 //!   `ReleasedByChain` を記録して落とす。実窓の重なりは 1 つも動かない。
@@ -56,7 +55,7 @@ fn new_world() -> World {
 }
 
 /// 逆転の計画（キャラがバルーンより手前）の下で、バルーンの再表示が挿す未適用の要求は
-/// 指令を積まずに見送りで落ち、実窓の重なりは動かない（要件 5.2・5.5・6.3）。
+/// 指令を積まずに見送りで落ち、実窓の重なりは動かない。
 #[test]
 fn a_reshow_request_on_a_released_pair_moves_nothing_and_is_dropped() {
     let trio = Trio::create(w!("wintf-zorder-maintain-release"));
@@ -89,7 +88,7 @@ fn a_reshow_request_on_a_released_pair_moves_nothing_and_is_dropped() {
     );
 }
 
-/// 外す組に付いた検証待ちの要求は、照合せずに見送りで落とし、持ち越しも外す（要件 5.5）。
+/// 外す組に付いた検証待ちの要求は、照合せずに見送りで落とし、持ち越しも外す。
 #[test]
 fn a_pending_verification_on_a_released_pair_is_dropped_without_checking() {
     let trio = Trio::create(w!("wintf-zorder-maintain-release"));
@@ -137,7 +136,7 @@ fn a_pending_verification_on_a_released_pair_is_dropped_without_checking() {
     assert!(world.get::<IssuedPairFix>(balloon).is_none());
 }
 
-/// 同じ鎖の下でも、連続する組は今と同じに是正される（要件 4.4）。
+/// 同じ鎖の下でも、連続する組は今と同じに是正される。
 #[test]
 fn a_pair_the_chain_keeps_contiguous_is_still_fixed() {
     let trio = Trio::create(w!("wintf-zorder-maintain-release"));
@@ -168,7 +167,7 @@ fn a_pair_the_chain_keeps_contiguous_is_still_fixed() {
 }
 
 /// 活性化の目印（押す・他のアプリを選ぶ）が外す組に付いても、沈降の観測は測らず、
-/// 指令も要求も生まない。連続する組の目印は今と同じに測られる（要件 5.1・5.4・4.4）。
+/// 指令も要求も生まない。連続する組の目印は今と同じに測られる。
 #[test]
 fn a_sink_mark_on_a_released_pair_is_dropped_unmeasured() {
     let released_trio = Trio::create(w!("wintf-zorder-maintain-release"));

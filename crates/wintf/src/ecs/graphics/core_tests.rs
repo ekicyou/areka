@@ -1,4 +1,4 @@
-//! GraphicsCore: 開発用の旗の作り直し（7 番）・工場の同一性（8 番）・装置の失いの判定（6 番）
+//! GraphicsCore: 開発用の旗の作り直し・工場の同一性・装置の失いの判定
 
 use super::*;
 use std::cell::RefCell;
@@ -155,7 +155,7 @@ fn check_device_removed_leaves_healthy_device_untouched() {
     assert_eq!(gc.last_changed(), before);
 }
 
-/// 失いの判定だけの口は、記録も無効化もしない（読み戻しが使う・要件 5.6）。
+/// 失いの判定だけの口は、記録も無効化もしない（読み戻しが使う）。
 #[test]
 fn is_lost_failure_does_not_invalidate() {
     let core = GraphicsCore::new().expect("GraphicsCore");

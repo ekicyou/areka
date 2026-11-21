@@ -53,7 +53,7 @@ const STAGE_CREATE: &str = "composite create";
 const STAGE_COMPOSE: &str = "composite";
 const STAGE_END_DRAW: &str = "EndDraw";
 
-/// 失いでない失敗の記録の控え（設計討議 議題 1）。描画面ごとに直前の `(段, HRESULT)` を持つ。
+/// 失いでない失敗の記録の控え。描画面ごとに直前の `(段, HRESULT)` を持つ。
 // shortcut: 失敗のまま消えた実体の控えは残る（1 実体 1 件）、実体の数が膨らむなら消えた実体を掃く。
 pub(crate) type FailureLog = HashMap<Entity, (&'static str, HRESULT)>;
 
@@ -73,7 +73,7 @@ pub(crate) fn forget_failures_on_device_lost(log: &mut FailureLog) {
     log.clear();
 }
 
-/// 次の回で描き直す（41 番）。係が自分で立てた変化の印は次の回の自分に見えないので
+/// 次の回で描き直す。係が自分で立てた変化の印は次の回の自分に見えないので
 /// 命令で立てる。部品ごと消えていれば描き直しも要らない。
 fn request_redraw(commands: &mut Commands, entity: Entity) {
     commands
@@ -86,7 +86,7 @@ fn request_redraw(commands: &mut Commands, entity: Entity) {
     crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
 }
 
-/// 入れ物の作成・合成・写しの段の失敗を今の道に乗せる（4.6・4.7）。装置の失いなら true（係を抜ける）。
+/// 入れ物の作成・合成・写しの段の失敗を今の道に乗せる。装置の失いなら true（係を抜ける）。
 fn on_stage_failure(
     graphics_core: &mut ResMut<GraphicsCore>,
     commands: &mut Commands,
@@ -114,7 +114,7 @@ fn on_stage_failure(
     false
 }
 
-/// 描き直しの量の記録の 1 行の欄（実体名と所要を除く・3.4・5.4・6.1・6.2）。
+/// 描き直しの量の記録の 1 行の欄（実体名と所要を除く）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct DamageRecord {
     /// `full`・`partial`・`present`・`skip`。
@@ -179,7 +179,7 @@ pub(crate) fn damage_record(
     }
 }
 
-/// 記録の 1 行（target `wintf::damage` の debug・`[tick]`・`perf(…)` とは別の行・6.4）。
+/// 記録の 1 行（target `wintf::damage` の debug・`[tick]`・`perf(…)` とは別の行）。
 pub(crate) fn log_damage(
     entity: impl Display,
     rec: &DamageRecord,
@@ -208,10 +208,10 @@ fn elapsed_us(start: Option<Instant>) -> u64 {
     start.map_or(0, |t| t.elapsed().as_micros() as u64)
 }
 
-/// Surfaceへの自己描画（Phase 4: 自己描画方式）
+/// Surfaceへの自己描画
 ///
 /// 各Entityが自分の入れ物（`SurfaceComposite`）へ自分のGraphicsCommandListと根の木（DrawTree）を
-/// 合成し、WUC の描画面へ atlas の offset で写す（4.1）。入れ物が無いか大きさが違えばその回に作る（4.5）。
+/// 合成し、WUC の描画面へ atlas の offset で写す。入れ物が無いか大きさが違えばその回に作る。
 /// 子の描画は各子が自分のSurfaceで行い、WUC の見た目（Visual）の木で合成する。
 ///
 /// - Changed<SurfaceGraphicsDirty>を持つEntityが対象
@@ -234,7 +234,7 @@ pub fn render_surface(
     let Some(shared_dc) = graphics_core.device_context().cloned() else {
         return;
     };
-    // 記録の水準は係の頭で 1 度だけ見る。開いているときだけ所要を測る（計画と答えは変えない・6.3）。
+    // 記録の水準は係の頭で 1 度だけ見る。開いているときだけ所要を測る（計画と答えは変えない）。
     let record = tracing::enabled!(target: DAMAGE_TARGET, Level::DEBUG);
     let now = || record.then(Instant::now);
 
@@ -243,7 +243,6 @@ pub fn render_surface(
             continue;
         };
 
-        // WUC: CompositionDrawingSurface を ICompositionDrawingSurfaceInterop へ cast する。
         let surface_interop = match surface_ref.cast::<ICompositionDrawingSurfaceInterop>() {
             Ok(si) => si,
             Err(err) => {
@@ -260,7 +259,7 @@ pub fn render_surface(
         // 入れ物へ合成する（WUC の BeginDraw より前）。変換は拡大だけ（atlas の offset は写しで足す）。
         let size = surface.size;
         let surface = surface.bypass_change_detection();
-        // 入れ物を今作った回の理由（First か Recreated・3.1）。
+        // 入れ物を今作った回の理由（First か Recreated）。
         let mut fresh = None;
         if surface.composite().is_none_or(|c| c.size() != size) {
             let slot = surface.composite_slot();
@@ -293,7 +292,7 @@ pub fn render_surface(
         // 合成の前に読む（合成した回は remember が偽に戻す）。
         let presented_before = slot.as_ref().is_some_and(|c| c.presented());
         let compose_start = now();
-        // 計画を立てて合成する。失敗した入れ物は控えごと捨てる（途中まで描いた絵を読ませない・3.5）。
+        // 計画を立てて合成する。失敗した入れ物は控えごと捨てる（途中まで描いた絵を読ませない）。
         let planned = match compose_planned(
             slot,
             &shared_dc,
@@ -326,7 +325,7 @@ pub fn render_surface(
                 .filter(|c| matches!(c, DrawCommand::Draw(_)))
                 .count() as u32
         };
-        // 描画面へ写す矩形（None＝全面）。範囲だけで前の写しを終えている回だけ狭める（2.6・2.8）。
+        // 描画面へ写す矩形（None＝全面）。範囲だけで前の写しを終えている回だけ狭める。
         let present_rect = match &planned {
             ComposePlan::Skip => {
                 log.remove(&entity);
@@ -377,7 +376,7 @@ pub fn render_surface(
         };
 
         // 写し: 入れ物を atlas の offset（物理ピクセル）へ。失敗は EndDraw に出る。写しに失敗した回は
-        // 控えを残し写し終えた印を付けない（次の回に写すだけで写す・2.8）。
+        // 控えを残し写し終えた印を付けない（次の回に写すだけで写す）。
         match present_rect {
             Some(r) => composite.copy_rect_to(&dc, r, offset),
             None => composite.copy_to(&dc, offset),
@@ -411,8 +410,3 @@ pub fn render_surface(
         }
     }
 }
-
-// Note: DComp の `commit_composition` システムは WUC 移行で削除された（要件 7.1）。
-// WUC は DispatcherQueue 経由で変更が暗黙反映されるため明示的な commit は不要。
-// `CommitComposition` schedule 自体は空スケジュール（no-op）として残置される
-// （ULW present system は wintf-ulw-removal で撤去済み）。

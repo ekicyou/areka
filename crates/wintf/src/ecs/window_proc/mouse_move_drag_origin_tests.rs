@@ -58,7 +58,7 @@ fn live_state_without_initial_pos_falls_back_to_the_snapshot_origin() {
 
 #[test]
 fn same_values_give_the_same_result_as_the_snapshot() {
-    // dispatch.rs が控えと同じ値で入れたまま誰も置き直していない形（4.3）。
+    // dispatch.rs が控えと同じ値で入れたまま誰も置き直していない形。
     let snap_origin = Point { x: -1200, y: 340 };
     let snap_start = PhysicalPoint::new(-1100, 500);
     let state = live((-1100, 500), (-1200.0, 340.0));

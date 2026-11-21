@@ -1,4 +1,4 @@
-//! format_entity_name関数のテスト (Requirement 4.4)
+//! format_entity_name関数のテスト
 
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;

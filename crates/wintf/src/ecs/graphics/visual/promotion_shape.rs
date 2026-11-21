@@ -1,4 +1,4 @@
-//! 自動で上げてよい形の純粋な見分け（設計の PromotionShape）。
+//! 自動で上げてよい形の純粋な見分け。
 //!
 //! 入力は走査の列と候補の添字と拡大と親の描画面の大きさだけ（ECS に触らない）。
 
@@ -22,7 +22,7 @@ pub(crate) enum Ineligible {
     NonSourceOver,
     /// 描く範囲が親の描画面・祖先の矩形の切り抜きに収まらない。
     OutOfBounds,
-    /// 原点の端数が 0 でない（研究 R-e が揃わなかったときだけ使う落とし）。
+    /// 原点の端数が 0 でない（WARP の確かめが揃わなかったときだけ使う落とし）。
     FractionalOrigin,
     /// 見えない（自動の持ち主の即時の戻しに使う）。
     Hidden,
@@ -46,9 +46,9 @@ impl Ineligible {
     }
 }
 
-/// 整数の位置だけを上げる形へ落とすか（研究 R-e が揃わなかったときだけ真にする 1 か所）。
-/// 2.4 の WARP の確かめ（`draw/emit_promotion_tests.rs`）で、原点を物理ピクセルで引く部分の列
-/// （`TreeFrame::Segment`）なら小数の位置でも ±1 に揃ったので偽（設計の案 b）。
+/// 整数の位置だけを上げる形へ落とすか（WARP の確かめが揃わなかったときだけ真にする 1 か所）。
+/// WARP の確かめ（`draw/emit_promotion_tests.rs`）で、原点を物理ピクセルで引く部分の列
+/// （`TreeFrame::Segment`）なら小数の位置でも ±1 に揃ったので偽。
 const INTEGER_POSITION_ONLY: bool = false;
 
 /// 形の見分けの入力。

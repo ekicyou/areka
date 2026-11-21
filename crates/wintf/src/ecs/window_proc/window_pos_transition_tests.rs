@@ -12,11 +12,11 @@
 //!   捕捉窓の中で既存の採否ログ（`applied=`）と並存することを見る。
 //! - **既定 OFF**——観測 target を点けていない運転では 1 行も出ないこと。
 //! - **前置ガード**——`WM_WINDOWPOSCHANGED` はドラッグ中も含めて絶えず走る経路であり
-//!   （要件 10.6）、既定運転で行の組立・時刻読み・矩形の読み戻しを一切行わないこと。
+//!   、既定運転で行の組立・時刻読み・矩形の読み戻しを一切行わないこと。
 //!   これは出力では示せない（`emit_line` の水準を subscriber が濾すため既定では
 //!   どのみち無音になる）ので、本文の構造で固定する。
 //!
-//! # 自発書込カウンタはスレッド局所である（要件 7.7・7.1）
+//! # 自発書込カウンタはスレッド局所である
 //!
 //! `in_swp` の出所である `is_self_initiated()` は `SELF_INITIATED_DEPTH`
 //! （`window/command.rs`）を読む。このカウンタは**スレッドごとに独立**であり、
@@ -25,11 +25,9 @@
 //! 並列に走る別テストの `guarded_set_window_pos` が持ち上げた値はこちらから見えず、値を読む
 //! テストも値を持ち上げるテストも直列化の錠を取らない。
 //!
-//! （共有の `AtomicI32` だった頃は見えてしまい、`in_swp=false` の検査が気まぐれに落ちた
-//! ——是正前の実測: `cargo test -p wintf --lib` 60 周中 11 周が赤。スレッド局所であることの
-//! 本体は `window/command_threadlocal_tests.rs`。）
+//! スレッド局所であることの本体は `window/command_threadlocal_tests.rs`。
 //!
-//! # 実行形態の明示（要件 7.6）
+//! # 実行形態の明示
 //!
 //! 本ファイルの検証はすべて**テストスレッド上の直接呼出**である。wndproc のハンドラは
 //! 呼び出しスレッドで走り、一括書込（`flush`）も同様なので、`tracing` のスレッド局所
@@ -44,8 +42,8 @@
 //! `WM_WINDOWPOSCHANGED` の `in_swp=true`／`since_flush_us` が実際に立つのは
 //! **`SetWindowPos` が同期送達したとき**だけである。これは実窓が要るが、`SetWindowPos`
 //! は同一スレッドの窓へ**同期 send** するのでメッセージポンプは要らない——よって
-//! 実機サインオフではなく決定論テストで再現できる（再観測 §5 の 24/24＝「各窓の最初の
-//! 書込の内側で当該窓のメッセージが同期処理される」に対応する形）。
+//! 実機サインオフではなく決定論テストで再現できる（各窓の最初の書込の内側で当該窓の
+//! メッセージが同期処理される形）。
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -83,7 +81,7 @@ fn emit_control() {
     tracing::info!(target: TRANSITION_TARGET, "{CONTROL_LINE}");
 }
 
-/// テスト冒頭の初期化——キューの残り・刻印の写し・残置コンテキストを落とす（要件 7.7）。
+/// テスト冒頭の初期化——キューの残り・刻印の写し・残置コンテキストを落とす。
 fn clean_slate() {
     let _residue = crate::ecs::window::drain_window_pos_commands();
     let _context = crate::ecs::window::DpiChangeContext::take();
@@ -320,7 +318,7 @@ fn displaychange_receipt_is_recorded_and_still_delegates_to_defwindowproc() {
 }
 
 // ---------------------------------------------------------------------------
-// 窓の拡大率の起点（`kind=windpi`）——メッセージ受理の経路（task 8.3）
+// 窓の拡大率の起点（`kind=windpi`）——メッセージ受理の経路
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -345,7 +343,7 @@ fn dpichanged_records_the_window_origin_when_the_component_is_rewritten() {
     );
 }
 
-/// **書き換えが起きなかった経路からは発行しない**（task 8.3 の完了条件）。
+/// **書き換えが起きなかった経路からは発行しない**。
 ///
 /// `DPI` component を持たない窓では `WM_DPICHANGED` の書き換え腕へ入らない。
 /// 同じ捕捉窓に受理の記録（`kind=msg`）が出ていることが、捕捉が生きている証拠である。
@@ -386,7 +384,7 @@ fn applied_suggested_position_is_recorded_as_a_synchronous_write() {
         None,
     );
 
-    // 採否判定の**既存ログ**と並存すること（design Testing Strategy > Integration Tests 7）。
+    // 採否判定の**既存ログ**と並存すること。
     assert!(
         captured.contains("[WM_DPICHANGED] suggested position write decision")
             && captured.contains("applied=true"),
@@ -456,7 +454,7 @@ fn a_declined_suggested_position_records_the_receipt_but_no_write() {
         Some(DpiSuggestedRectPolicy::ExternalAuthority),
     );
 
-    // 採否判定の既存ログは「書かない」のまま（判定を変えていない・Requirement 10.2）。
+    // 採否判定の既存ログは「書かない」のまま（判定を変えていない）。
     assert!(
         captured.contains("applied=false"),
         "位置権威が外部にある窓の採否判定が変わっている（`dpi-window-vanish` の規約）: {captured}"
@@ -585,8 +583,8 @@ pub(in crate::ecs::window_proc) fn create_test_window() -> HWND {
 
 /// **一括書込の内側での同期受理**が `in_swp=1` と非番兵の `since_flush_us` で残ること。
 ///
-/// これが本仕様が追っている機序そのもの（再観測 §5＝各窓の最初の `SetWindowPos` の
-/// 内側で当該窓の `WM_DPICHANGED` が同期処理される 24/24）の**測り口**である。
+/// これが追っている機序そのもの——各窓の最初の `SetWindowPos` の内側で当該窓の
+/// `WM_DPICHANGED` が同期処理される——の**測り口**である。
 /// 実窓が要るがメッセージポンプは要らない——`SetWindowPos` は同一スレッドの窓へ
 /// 同期 send するため、`flush` の呼出がそのまま handler の呼出になる。
 ///
@@ -701,7 +699,7 @@ fn message_handlers_keep_the_front_guard_so_the_default_run_pays_no_observation_
     let code = code_only(include_str!("window_pos.rs"));
 
     // 記録を組む点は 4 つ（`WM_DPICHANGED` の受理・`WM_WINDOWPOSCHANGED` の受理・
-    // 採用時の同期書込・`WM_DPICHANGED` での窓 DPI 書き換え＝`kind=windpi`・task 8.3）。
+    // 採用時の同期書込・`WM_DPICHANGED` での窓 DPI 書き換え＝`kind=windpi`）。
     // 刻印を読む回数とガードの回数が一致していなければ、どれかがガードの外に出ている。
     assert_eq!(
         code.matches("transition_diag::is_enabled()").count(),

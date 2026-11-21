@@ -1,4 +1,4 @@
-//! 節の下の手動の持ち主と、`VisualTransform` を持つ持ち主の画素の一致（WARP・要件 4.8, 5.1, 5.4, 8.3）。
+//! 節の下の手動の持ち主と、`VisualTransform` を持つ持ち主の画素の一致（WARP）。
 //!
 //! 同じ木を、持ち主を節にした形（全部を親の描画面の中で D2D が描く）と、持ち主の形（親の描画面から
 //! 持ち主が抜け、持ち主の描画面を WUC の写しの値で重ねる）とで描いて比べる。写しの値は本番と同じ道で
@@ -257,7 +257,7 @@ fn assert_owner_matches(name: &str, case: Case, margin: i32) {
             "{name} 拡大 {s}: 比べた赤の画素が {red} 個しかない"
         );
         // 縁の内側だけの比べは 2 画素までの位置のずれを見ない。写りの量と重心は画像全体で、
-        // 線形の写しの揺れ（量 1%・重心 0.25 物理ピクセル）より大きいずれを落とす（要件 5.4）。
+        // 線形の写しの揺れ（量 1%・重心 0.25 物理ピクセル）より大きいずれを落とす。
         let (want_sum, want_x, want_y, want_spread) = red_moments(&want);
         let (got_sum, got_x, got_y, got_spread) = red_moments(&got);
         assert!(
@@ -269,7 +269,7 @@ fn assert_owner_matches(name: &str, case: Case, margin: i32) {
             shift <= 0.25,
             "{name} 拡大 {s}: 赤の重心 ({got_x:.3}, {got_y:.3}) が期待 ({want_x:.3}, {want_y:.3}) から {shift:.3} 物理ピクセルずれる"
         );
-        // 向きと大きさ: 重心まわりの広がりの 3 つの値（要件 5.4）。線形の写しの揺れは 0.1 未満。
+        // 向きと大きさ: 重心まわりの広がりの 3 つの値。線形の写しの揺れは 0.1 未満。
         let spread = (0..3)
             .map(|i| (got_spread[i] - want_spread[i]).abs())
             .fold(0.0, f64::max);
@@ -303,7 +303,7 @@ fn owner_under_node_matches_with_ancestor_opacity_and_rect_clip() {
 
 #[test]
 fn owner_with_translated_visual_transform_matches() {
-    // 位置 (12, 8) は拡大 1.25 でも整数の物理ピクセル（小数の位置の持ち主の線形の写しは縁がにじむ・この spec の外）。
+    // 位置 (12, 8) は拡大 1.25 でも整数の物理ピクセル（小数の位置の持ち主の線形の写しは縁がにじむ）。
     let t = Transform2D {
         offset: windows_numerics::Vector2 { X: 4.0, Y: 1.0 },
         ..Transform2D::identity()
@@ -334,7 +334,7 @@ fn rotated_owner_under_node_matches_with_transformed_clip_inside_edges() {
     assert_owner_matches("節の下の回転", case, 2);
 }
 
-/// 持ち主の `VisualTransform` を変えても持ち主の版は上がらない（要件 5.3・version.rs の約束）。
+/// 持ち主の `VisualTransform` を変えても持ち主の版は上がらない（version.rs の約束）。
 #[test]
 fn owner_visual_transform_change_does_not_bump_its_version() {
     let mut world = World::new();

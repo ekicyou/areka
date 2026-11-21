@@ -11,7 +11,7 @@
 //!
 //! # 周期
 //! `GetCursorPos` はブロックしないため、ループは固定短周期（12ms）で sleep しつつ
-//! 前回座標との差分ガードで無駄な notify を抑える（R3 常時ポーリングの無駄回避方針）。
+//! 前回座標との差分ガードで無駄な notify を抑える。
 //! UI 側でも差分ガードするため二重に安全。sleep で待つため `Drop` の `join()` は最大
 //! 約 1 周期で復帰し、ハングしない。
 //!
@@ -71,13 +71,11 @@ impl CursorMonitorBridge {
     /// カーソル監視ワーカを起動してブリッジを生成する。
     ///
     /// `cursor_event` は UI ループ（[`super::start_click_through`] が回す判定ループの listen 対象）と共有する
-    /// 同一 `Arc`。ワーカは `while !stop { GetCursorPos; if moved { store; notify } }` を
-    /// 固定短周期でループする。
+    /// 同一 `Arc`。
     pub(crate) fn spawn(cursor_event: Arc<event_listener::Event>) -> Self {
         let latest_pos = Arc::new(AtomicI64::new(0));
         let stop_flag = Arc::new(AtomicBool::new(false));
 
-        // Event はそのままワーカスレッドへ move、latest_pos/stop_flag は clone を move して共有する。
         let thread_latest = Arc::clone(&latest_pos);
         let thread_stop = Arc::clone(&stop_flag);
 
@@ -129,7 +127,7 @@ impl Drop for CursorMonitorBridge {
 /// `latest_pos.store` → `cursor_event.notify(usize::MAX)` の順序で UI を起床する。
 /// `stop` が立つまで固定短周期でループする。
 fn cursor_loop(event: Arc<event_listener::Event>, latest: Arc<AtomicI64>, stop: Arc<AtomicBool>) {
-    // 走り始めに 1 度だけ、自分の役割を宣言してスレッド名簿へ載せる（要件 2.3）。
+    // 走り始めに 1 度だけ、自分の役割を宣言してスレッド名簿へ載せる。
     // 失敗しても監視は続ける——このスレッドの CPU が `unregistered_rest` へ回るだけで、
     // 観測の道具の不調が観測対象を止める理由にはならない。
     if let Err(e) = crate::ecs::world::thread_registry::register_current_thread(
@@ -138,7 +136,7 @@ fn cursor_loop(event: Arc<event_listener::Event>, latest: Arc<AtomicI64>, stop: 
         error!(error = %e, "[cursor_loop] スレッド名簿への登録に失敗した（カーソル監視は継続）");
     }
 
-    // 前回座標（差分ガード）。初回は必ず notify するため到達しない番兵で初期化する。
+    // 初回は必ず notify するよう `None` から始める。
     let mut prev: Option<(i32, i32)> = None;
 
     while !stop.load(Ordering::Acquire) {
@@ -146,7 +144,6 @@ fn cursor_loop(event: Arc<event_listener::Event>, latest: Arc<AtomicI64>, stop: 
             event.notify(usize::MAX);
         });
 
-        // 固定短周期で待機（stop 後は最大約 1 周期で join へ復帰）。
         thread::sleep(POLL_INTERVAL);
     }
 }
@@ -155,14 +152,12 @@ fn cursor_loop(event: Arc<event_listener::Event>, latest: Arc<AtomicI64>, stop: 
 fn read_cursor() -> Option<(i32, i32)> {
     let mut pt = POINT::default();
 
-    // SAFETY: Win32 境界。`GetCursorPos` は書き込み先 `POINT` への可変ポインタを
-    // 取り、現在のカーソル位置（screen physical）を書き込んで `Result<()>` を返す。
-    // `pt` は本スレッドローカルなスタック変数で有効な領域を指し、共有状態には
-    // 触れない。
+    // SAFETY: Win32 境界。`pt` は本スレッドのスタック変数で、`GetCursorPos` の書き込み先として
+    // 有効な `POINT` を指す。共有状態には触れない。
     match unsafe { GetCursorPos(&mut pt) } {
         Ok(()) => Some((pt.x, pt.y)),
         Err(_) => {
-            // 稀な失敗。当該反復の notify をスキップして継続する（panic しない）。
+            // 稀な失敗。当該反復の notify を飛ばして継続する。
             trace!("GetCursorPos failed; skipping this iteration");
             None
         }
@@ -183,8 +178,7 @@ fn poll_once(
     if *prev == Some(cur) {
         return false;
     }
-    // 移動検知。順序不変条件: store（Release）→ notify を厳守する。
-    // 逆順だと UI 側が 1 通知分古い座標を読む稀レースが生じる。
+    // 順序不変条件: store（Release）→ notify。逆順だと UI 側が 1 通知分古い座標を読む。
     latest.store(pack(cur.0, cur.1), Ordering::Release);
     notify();
     *prev = Some(cur);
@@ -201,7 +195,7 @@ mod tests {
     /// 名簿に当該役割名の項目が現れるまで待ち、現れた項目を返す（現れなければ `None`）。
     ///
     /// 待ち時間は合否の対象ではなく、登録が起きなかったときに無限に待たないための上限で
-    /// ある（要件 6.5 が禁じる「実時間の閾値による判定」ではない）。
+    /// ある（実時間の閾値による判定ではない）。
     fn wait_for_role(role: &str, limit: Duration) -> Option<ThreadEntry> {
         let deadline = std::time::Instant::now() + limit;
         loop {
@@ -219,7 +213,7 @@ mod tests {
     }
 
     /// カーソル監視ワーカは走り始めに自分をスレッド名簿へ登録する
-    /// （役割名 `cursor_monitor`・要件 2.3）。
+    /// （役割名 `cursor_monitor`）。
     ///
     /// 名簿はプロセス共有で、テストは並列に走る——**全体の件数は当てにせず**、登録された
     /// 役割名の項目だけを検査する。観測はワーカを生かしたまま行う（終了した TID が別の
@@ -261,12 +255,10 @@ mod tests {
         }
     }
 
-    /// 完了状態の中核検証（決定的・`VsyncEventBridge` テスト準拠）:
     /// `spawn`→`drop` でワーカが確実に stop/join され、ハングしないこと。
     #[test]
     fn spawn_then_joins_on_drop() {
         let bridge = CursorMonitorBridge::spawn(Arc::new(Event::new()));
-        // drop で stop→join。ワーカが clean に終われば本テストはハングせず復帰する。
         drop(bridge);
     }
 

@@ -1,5 +1,5 @@
 //! 節の下の持ち主・自動で上げた持ち主の置き場の部品 [`SurfacePlacement`] と、
-//! それを WUC へ写す純粋な補助（設計の PlacementMath）。ECS の係に依らない。
+//! それを WUC へ写す純粋な補助。ECS の係に依らない。
 
 use bevy_ecs::prelude::*;
 use tracing::warn;
@@ -288,7 +288,7 @@ pub(crate) fn wuc_host_of(
             return HostAnswer::Detached;
         };
         match class_of(p) {
-            // AttachedAuto の下に手動の持ち主は居ない（見分けの 2）が、居れば自分の Visual を持つ親として繋ぐ
+            // AttachedAuto の下に手動の持ち主は居ないが、居れば自分の Visual を持つ親として繋ぐ
             ChildClass::Owner | ChildClass::AttachedAuto => return HostAnswer::Host(p),
             ChildClass::Node | ChildClass::DetachedAuto => cur = p,
             ChildClass::Other => return HostAnswer::Detached,
@@ -310,7 +310,6 @@ pub(crate) fn wuc_children_order(
 ) -> Vec<Entity> {
     let mut owners = Vec::new();
     let mut autos = Vec::new();
-    // 前順: 子を逆に積み、最初の子から取り出す
     let mut stack: Vec<Entity> = children_of(host).into_iter().rev().collect();
     while let Some(c) = stack.pop() {
         match class_of(c) {

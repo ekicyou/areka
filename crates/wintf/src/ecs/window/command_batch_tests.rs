@@ -1,15 +1,14 @@
 //! 一括書込の**バッチ投入**（`Begin/Defer/EndDeferWindowPos`）に対する決定論テスト。
 //!
-//! 設計 C8 の候補 B-2b（task 7.1 で採用・実装は task 7.2）の対テストである。固定するのは
-//! 5 つ。
+//! 窓書込指令のバッチ投入の対テストである。固定するのは 5 つ。
 //!
 //! - **1 バッチであること**——1 区間の書込がすべて 1 回の `Begin`／`End` の内側で投入され、
-//!   書込レコードが `in_batch=true` を名乗ること（設計 C8 の「7.3 の対テスト」列の決定論側）。
-//! - **適用順と引数が変わらないこと**（要件 10.3）——Z 専用指令は合流の対象外だが、
+//!   書込レコードが `in_batch=true` を名乗ること。
+//! - **適用順と引数が変わらないこと**——Z 専用指令は合流の対象外だが、
 //!   `DeferWindowPos` の per-window 引数として**同じ並びのまま同居**する。純関数
 //!   [`window_pos_args`](super::window_pos_args) が 7 項目をそのまま運ぶことと、実窓に
 //!   対する Z 指令の並びがバッチでも 1 本ずつでも**同じ最終順序**になることの両方を見る。
-//! - **自発書込の判定が生きること**（要件 10.2）——`EndDeferWindowPos` が同期送達する
+//! - **自発書込の判定が生きること**——`EndDeferWindowPos` が同期送達する
 //!   `WM_WINDOWPOSCHANGED` の内側で `is_self_initiated()` が真であること。偽になると
 //!   `dpi-window-vanish` が確立した位置権威が壊れる。
 //! - **縮退経路**——バッチが使えないときは 1 本ずつの `SetWindowPos` へ落ち、`warn!` と
@@ -141,7 +140,7 @@ fn geometry_command(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> SetWindowPosC
     SetWindowPosCommand::new(hwnd, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE, None)
 }
 
-/// Z のみを動かす指令（合流の対象外・要件 10.3）。
+/// Z のみを動かす指令（合流の対象外）。
 fn zorder_command(hwnd: HWND, after: HWND) -> SetWindowPosCommand {
     SetWindowPosCommand::new(
         hwnd,
@@ -155,7 +154,7 @@ fn zorder_command(hwnd: HWND, after: HWND) -> SetWindowPosCommand {
 }
 
 // ---------------------------------------------------------------------------
-// 引数は 1 つも作り替えない（要件 10.3・純関数）
+// 引数は 1 つも作り替えない（純関数）
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -197,7 +196,7 @@ fn window_pos_args_carries_all_seven_arguments_verbatim() {
     let show = SetWindowPosCommand::new(hwnd, 1, 2, 3, 4, SWP_SHOWWINDOW, None);
     assert_eq!(window_pos_args(&show).flags, SWP_SHOWWINDOW);
 
-    // 観測専用タグは引数へ 1 つも漏れない（design.md D3）。
+    // 観測専用タグは引数へ 1 つも漏れない。
     let tagged = geometry_command(hwnd, 11, 22, 33, 44).with_tag(transition_diag::WriteTag {
         origin: transition_diag::ORIGIN_ZORDER_PAIR,
         scope: Some(3),
@@ -414,8 +413,7 @@ fn write_log_lines<'a>(captured: &'a str, via: Option<&str>) -> Vec<&'a str> {
 /// バッチ経路は積み上げ（`DeferWindowPos`）の時点ではまだ書いていない。積み上げのたびに
 /// 実施ログを出すと、`Defer` が失敗して 1 本ずつへ縮退したときに**破棄されたバッチの指令が
 /// 「書いた」と名乗り**、書き直した本番の行と二重に数えられる。この行の本数は既存 16 本の
-/// 檻と診断手順 O9 が測っている量なので、狂っても実窓の檻は今日は赤にならない——
-/// **静かに壊れる形**であり、本檻がその 1 点を押さえる。
+/// 檻と診断手順 O9 が測っており、狂っても実窓の檻は赤にならないので、本檻が押さえる。
 #[test]
 fn the_write_log_line_is_emitted_once_per_command_on_both_paths() {
     clean_slate();
@@ -438,7 +436,7 @@ fn the_write_log_line_is_emitted_once_per_command_on_both_paths() {
 
     destroy(&[first, second]);
 
-    // ⑶ 積み上げの途中で失敗してバッチが**破棄**される経路（レビューが二重計上を見つけた形）。
+    // ⑶ 積み上げの途中で失敗してバッチが**破棄**される経路。
     let discarded = capture_under_filter(WRITE_LOG_DIRECTIVES, || {
         SetWindowPosCommand::enqueue(geometry_command(fake_hwnd(0x30), 1, 1, 1, 1));
         SetWindowPosCommand::enqueue(geometry_command(fake_hwnd(0x31), 2, 2, 2, 2));
@@ -488,7 +486,7 @@ fn the_write_log_line_is_emitted_once_per_command_on_both_paths() {
 }
 
 // ---------------------------------------------------------------------------
-// 自発書込の判定（要件 10.2）
+// 自発書込の判定
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -534,7 +532,7 @@ fn the_batch_keeps_the_self_initiated_guard_over_the_messages_it_sends() {
 }
 
 // ---------------------------------------------------------------------------
-// Z 順の結果が変わらない（要件 10.3・実窓）
+// Z 順の結果が変わらない（実窓）
 // ---------------------------------------------------------------------------
 
 /// 走査をやり直す上限。観測できないまま無限に回らないためだけに置く。
@@ -545,14 +543,13 @@ const Z_SCAN_ATTEMPTS: usize = 8;
 /// 最前面から `GW_HWNDNEXT` で降りながら、集合に属する窓だけを拾う。**生の 1 歩では
 /// 測らない**——既定の IME 窓のような不可視の隣が間に挟まるので、隣接ではなく順序で見る。
 ///
-/// # なぜ 1 度の走査では足りないのか（2026-08-30 の実測・`research.md` §13.7 の 7 件目）
+/// # なぜ 1 度の走査では足りないのか
 ///
 /// 走査はデスクトップ全体の**生きた**連結リストを 1 歩ずつ辿る。歩いている最中に手前の
 /// 他プロセスの窓が破棄されると `GetWindow(GW_HWNDNEXT)` が `Err` を返して走査がそこで
 /// 打ち切られ、集合の窓へ辿り着く前に切れれば結果は**空**になる（自分の窓は生きているのに
 /// `[]` が返る）。3 プロセス同時走行でこの形の赤を実測した。よって全部拾えるまで有界回数
-/// だけやり直す。使い切ったときはいちばん多く拾えた回を返す＝従来と同じ意味であり、
-/// **主張は弱めない**。
+/// だけやり直す。使い切ったときはいちばん多く拾えた回を返す。
 fn relative_z_order(windows: &[HWND]) -> Vec<HWND> {
     let mut best: Vec<HWND> = Vec::new();
     for _ in 0..Z_SCAN_ATTEMPTS {
@@ -674,7 +671,7 @@ fn a_batched_zorder_list_lands_in_the_same_order_as_one_write_per_command() {
 }
 
 // ---------------------------------------------------------------------------
-// 同じ窓が 2 度入った列（research.md 指摘 7・Q4 の手順 1 の門）
+// 同じ窓が 2 度入った列
 // ---------------------------------------------------------------------------
 
 /// 4 枚の組を 1 本ずつの `guarded_set_window_pos` で並べ、同じ窓 A が 2 度入った Z だけの

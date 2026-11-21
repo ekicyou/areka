@@ -11,22 +11,18 @@ pub(crate) mod nchittest_cache;
 mod systems;
 mod types;
 
-// dispatch re-exports
 pub use dispatch::{
     EventHandler, OnPointerEntered, OnPointerExited, OnPointerMoved, OnPointerPressed,
     OnPointerReleased, Phase, PointerEventHandler, build_bubble_path, dispatch_event_for_handler,
     dispatch_pointer_events,
 };
 
-// types re-exports
 pub use types::*;
 
-// systems re-exports
 pub use systems::{
     clear_transient_pointer_state, debug_pointer_leave, debug_pointer_state_changes,
 };
 
-// pub(crate) buffer helpers
 pub(crate) use buffers::{
     add_wheel_horizontal, add_wheel_vertical, push_pointer_sample, record_button_down,
     record_button_up, set_modifier_state, transfer_buffers_to_world,

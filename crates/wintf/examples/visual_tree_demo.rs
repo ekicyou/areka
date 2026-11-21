@@ -182,7 +182,6 @@ fn create_nodes(world: &mut World) -> bool {
     };
     let src_over = D2D1_COMPOSITE_MODE_SOURCE_OVER;
 
-    // 背景（薄い灰色）
     node(
         "Background",
         record(&dc, 480.0, 320.0, color(0.95, 0.95, 0.95), false, src_over),

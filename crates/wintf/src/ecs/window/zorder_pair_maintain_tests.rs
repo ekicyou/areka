@@ -4,11 +4,11 @@
 //! 本ファイルが固定するのは 4 つである。
 //!
 //! - **要求の一生**——挿入 → 適用（指令発行）→ 検証待ち → 実測照合 → 要求の消滅、という
-//!   状態遷移がひと繋がりで辿れること（design.md「Testing Strategy > Unit Tests」4・要件 7.6）。
+//!   状態遷移がひと繋がりで辿れること。
 //! - **既に隣接しているなら一切の指令が出ないこと**——理由つきの見送りだけが残り、
-//!   `SetWindowPos` は 1 度も呼ばれない（収束の同値ガード・要件 6.3）。
-//! - **検証不一致は error で 1 度だけ記録し、再試行の輪を作らないこと**（要件 6.2）。
-//! - **片割れが消えた巡は error ではなく理由つきの見送りになること**（要件 1.5 の正常系）。
+//!   `SetWindowPos` は 1 度も呼ばれない（収束の同値ガード）。
+//! - **検証不一致は error で 1 度だけ記録し、再試行の輪を作らないこと**。
+//! - **片割れが消えた巡は error ではなく理由つきの見送りになること**（正常系）。
 //!
 //! # なぜ親窓の下の子窓 2〜3 枚で測るのか（採った道とその理由）
 //!
@@ -65,8 +65,8 @@ const UNBACKED_VERIFY_MARK: &str = "検証待ちの要求に、出した指令�
 
 /// 外から挿入された再断行の要求が、適用され、次巡で実測照合され、消える。
 ///
-/// 挿入の形は要件 2.6 のシームそのもの（`ReassertZOrder::default()`）であり、
-/// 本テストが要件 7.6 の受入形——非表示 → 表示の再断行を決定論的テストで受け入れる——に当たる。
+/// 挿入の形は外から再断行を頼む入口そのもの（`ReassertZOrder::default()`）で、
+/// 非表示 → 表示の再断行を決定論的テストで受け入れる形に当たる。
 /// 検査は自前の帳簿だけでなく **OS 側の重なり**（`GetWindow` 実測）まで見る。
 #[test]
 fn reassert_request_is_applied_verified_and_then_disappears() {
@@ -81,7 +81,6 @@ fn reassert_request_is_applied_verified_and_then_disappears() {
 
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
-        // 1 巡目: 判断して指令を積み、検証待ちへ入る（実際の書込は flush 後）。
         schedule.run(&mut world);
         assert_eq!(
             world
@@ -102,7 +101,6 @@ fn reassert_request_is_applied_verified_and_then_disappears() {
         // tick 後の flush（本番と同じ経路）。ここで初めて OS の重なりが動く。
         flush_window_pos_commands();
 
-        // 2 巡目: 実測照合と記録、そして要求の消滅。
         schedule.run(&mut world);
         // 3 巡目: 要求が消えているので何も起きない（毎フレーム巡回では動かない）。
         schedule.run(&mut world);
@@ -303,7 +301,6 @@ fn verification_mismatch_is_recorded_once_without_retry() {
         // 3 巡目以降: 要求は消えており、再試行は起こらない。
         schedule.run(&mut world);
         schedule.run(&mut world);
-        // 溜まっている指令をすべて出し切って本数を数える。
         flush_window_pos_commands();
     });
 
@@ -341,7 +338,7 @@ fn verification_mismatch_is_recorded_once_without_retry() {
 }
 
 // -------------------------------------------------------------------------
-// 片割れの不在（要件 1.5 の正常系——error にしない）
+// 片割れの不在（正常系——error にしない）
 // -------------------------------------------------------------------------
 
 /// 指令を出した後・検証の前に相手が消えた場合、error ではなく理由つきの見送りになる。
@@ -410,7 +407,6 @@ fn peer_losing_only_its_handle_before_verification_skips_with_handle_missing() {
 
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
-        // 1 巡目: 是正を適用し、検証待ちへ進む。
         schedule.run(&mut world);
         flush_window_pos_commands();
         // 実体は残したまま OS のハンドルだけが外れる（切離し側の `HandleRemoved` と同じ状態）。
@@ -679,7 +675,7 @@ fn pending_verification_without_an_issued_command_is_dropped_with_a_record() {
 // 適用の組立（純関数）
 // -------------------------------------------------------------------------
 
-/// 是正の指令は重なりだけを動かす——位置・寸法・活性化を伴わない（要件 1.6）。
+/// 是正の指令は重なりだけを動かす——位置・寸法・活性化を伴わない。
 #[test]
 fn pair_fix_command_moves_only_the_zorder() {
     let target = fake_hwnd(0x0A01);
@@ -699,7 +695,7 @@ fn pair_fix_command_moves_only_the_zorder() {
     let top = pair_fix_command(target, InsertSpec::TopEdge);
     assert_eq!(top.flags, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     assert_eq!(top.hwnd_insert_after, Some(HWND_TOP));
-    // 常時最前面（`HWND_TOPMOST`）は決して指さない（要件 4.3／8.1）。
+    // 常時最前面（`HWND_TOPMOST`）は決して指さない。
     assert_ne!(top.hwnd_insert_after, Some(HWND_TOPMOST));
     assert_eq!(
         top.flags & SWP_NOZORDER,
@@ -708,7 +704,7 @@ fn pair_fix_command_moves_only_the_zorder() {
     );
 }
 
-/// 適用の計画は「動かす窓・挿入位置・期待隣接」を腕から一意に決める（要件 3.4）。
+/// 適用の計画は「動かす窓・挿入位置・期待隣接」を腕から一意に決める。
 #[test]
 fn plan_pair_fix_picks_the_moved_window_per_arm() {
     let above = fake_hwnd(0x0B01);

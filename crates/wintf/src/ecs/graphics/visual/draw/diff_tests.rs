@@ -1,4 +1,4 @@
-//! 比べの項の純粋なテスト（COM 無し・要件 7.1, 7.2）。ここでは物理ピクセルの整数の矩形の演算。
+//! 比べの項の純粋なテスト（COM 無し）。ここでは物理ピクセルの整数の矩形の演算。
 
 use super::diff::*;
 
@@ -59,7 +59,7 @@ fn offset_moves_all_edges() {
     assert_eq!(r(0, 0, 10, 10).offset(-3, 4).offset(3, -4), r(0, 0, 10, 10));
 }
 
-// ---- 項の規則（要件 1.4・1.5・2.1・3.3・5.3）。素の値を受ける関数を COM 無しで確かめる ----
+// ---- 項の規則。素の値を受ける関数を COM 無しで確かめる ----
 
 use super::super::MixMode;
 use super::command::*;
@@ -134,7 +134,7 @@ fn opacity_change_gives_layer_and_inner_items_another_id() {
     let a = item(7, mat, LINEAR, OVER, &root().inner(0, &l1), (1.0, 1.0)).unwrap();
     let b = item(7, mat, LINEAR, OVER, &root().inner(0, &l2), (1.0, 1.0)).unwrap();
     assert_ne!(a.id, b.id);
-    // 同じ材料からは同じ項（1.6）
+    // 同じ材料からは同じ項
     assert_eq!(l1, layer(Layer::Opacity(0.5), aabb, &root()));
 }
 
@@ -192,7 +192,7 @@ fn non_source_over_item_spreads_to_rect_clip_or_whole_surface() {
     assert_eq!(o.bounds, r(5, 5, 15, 15));
 }
 
-/// 縮める `HIGH_QUALITY_CUBIC` の件は先に縮めた絵の答えが描く範囲で変わる（WARP で測った・R1）ので、
+/// 縮める `HIGH_QUALITY_CUBIC` の件は先に縮めた絵の答えが描く範囲で変わる（WARP で測った）ので、
 /// `SOURCE_OVER` でない件と同じく矩形の切り抜きか全面まで広げる。拡大・回転だけの件は自分の範囲。
 #[test]
 fn downscaling_high_quality_cubic_spreads_like_non_source_over() {
@@ -466,7 +466,7 @@ fn entries_undecidable_when_any_value_is_not_finite_or_unbalanced() {
     );
 }
 
-// ---- 前と今の項の列の比べ（要件 1.2・1.3・1.6・7.1） ----
+// ---- 前と今の項の列の比べ ----
 
 /// `id` だけを持つ項（比べは `id` しか見ない）。
 fn e(id: u64) -> DamageEntry {

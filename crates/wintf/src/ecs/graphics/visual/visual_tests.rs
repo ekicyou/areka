@@ -1,4 +1,4 @@
-//! 持ち主か節かの規則（`wants_own_surface`）とフックの確かめ（要件 1.2a〜2c）。
+//! 持ち主か節かの規則（`wants_own_surface`）とフックの確かめ。
 
 use super::draw_content_test_support::solid_rect_content;
 use super::*;
@@ -9,14 +9,14 @@ use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 
 #[test]
 fn wants_own_surface_truth_table() {
-    // (命令の列, 目印, 節) → 持ち主か（自動で上げた持ち主でないとき＝今までの既定・要件 6.1・6.2）
+    // (命令の列, 目印, 節) → 持ち主か（自動で上げた持ち主でないとき＝今までの既定）
     let table = [
-        (false, false, false, true), // 何も持たない Visual は持ち主（1.2b）
-        (false, false, true, false), // 新しい描き方の部品だけ＝節（1.2a）
+        (false, false, false, true), // 何も持たない Visual は持ち主
+        (false, false, true, false), // 新しい描き方の部品だけ＝節
         (false, true, false, true),
-        (false, true, true, true), // 目印で手動の昇格（1.2c）
+        (false, true, true, true), // 目印で手動の昇格
         (true, false, false, true),
-        (true, false, true, true), // 命令の列は持ち主（1.2b）
+        (true, false, true, true), // 命令の列は持ち主
         (true, true, false, true),
         (true, true, true, true),
     ];
@@ -26,7 +26,7 @@ fn wants_own_surface_truth_table() {
             want,
             "command_list={cl} own_surface={own} is_node={node} auto_owner=false"
         );
-        // 自動で上げた持ち主はどの組でも持ち主（要件 2.1）。
+        // 自動で上げた持ち主はどの組でも持ち主。
         assert!(
             wants_own_surface(cl, own, node, true),
             "command_list={cl} own_surface={own} is_node={node} auto_owner=true"

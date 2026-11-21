@@ -15,7 +15,6 @@ use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::world::DeferredWorld;
 use windows::Win32::Graphics::DirectWrite::IDWriteTextLayout;
 
-// re-export TextDirection from label
 pub use crate::ecs::widget::text::label::TextDirection;
 
 // ============================================================
@@ -66,7 +65,7 @@ impl Default for Typewriter {
     }
 }
 
-/// Typewriter追加時のフック: VisualコンポーネントとTyperwriterTalk（空）を自動挿入
+/// Typewriter追加時のフック: VisualコンポーネントとTypewriterTalk（空）を自動挿入
 fn on_typewriter_add(mut world: DeferredWorld, hook: HookContext) {
     let entity = hook.entity;
     let needs_visual = world.get::<Visual>(entity).is_none();
@@ -241,7 +240,6 @@ impl TypewriterTalk {
     ) -> Vec<(bevy_ecs::entity::Entity, TypewriterEventKind)> {
         let mut events_to_fire = Vec::new();
 
-        // タイムラインを走査して表示状態を更新
         while self.next_item_index < timeline.items.len() {
             let item = &timeline.items[self.next_item_index];
             match item {
@@ -275,7 +273,6 @@ impl TypewriterTalk {
             }
         }
 
-        // 進行度を更新
         if timeline.total_cluster_count > 0 {
             self.progress = self.visible_cluster_count as f32 / timeline.total_cluster_count as f32;
         } else {

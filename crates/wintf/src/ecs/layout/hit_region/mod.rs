@@ -154,7 +154,6 @@ impl ColorMapData {
             ));
         }
 
-        // リージョン名リストとカラー→ID マッピングを構築
         let mut region_names = Vec::new();
         let mut color_to_id: HashMap<(u8, u8, u8), u8> = HashMap::new();
 
@@ -164,7 +163,6 @@ impl ColorMapData {
             color_to_id.insert(*color, id);
         }
 
-        // WIC で PNG を読み込む
         let factory = wic_factory()?;
         let decoder = factory.create_decoder_from_filename(
             &HSTRING::from(image_path),
@@ -186,7 +184,6 @@ impl ColorMapData {
         )?;
         let converted: IWICBitmapSource = converter.cast()?;
 
-        // サイズ取得
         let (width, height) = converted.get_size()?;
         let Some((stride, buffer_size)) =
             crate::ecs::widget::bitmap_source::systems::pbgra32_layout(width, height)
@@ -199,10 +196,8 @@ impl ColorMapData {
         };
         let mut buffer = vec![0u8; buffer_size];
 
-        // ピクセルデータをコピー
         converted.copy_pixels(None, stride, &mut buffer)?;
 
-        // インデックスマップ構築（RGB→リージョンID変換）
         let pixel_count = buffer_size / 4;
         let mut index_map = vec![0u8; pixel_count];
 
@@ -219,7 +214,6 @@ impl ColorMapData {
             if let Some(&id) = color_to_id.get(&(r, g, b)) {
                 index_map[i] = id;
             }
-            // マッピング外は 0（無名）のまま
         }
 
         debug!(
@@ -244,8 +238,6 @@ impl ColorMapData {
         }
         let index = (pixel_y * self.width + pixel_x) as usize;
         // 不変条件: index_map.len() == width * height（from_image で確立）。
-        // 上の範囲チェック（pixel_x < width && pixel_y < height）と合わせて
-        // index < index_map.len() が保証され、添字アクセスは常に範囲内。
         // 手構築の ColorMapData で寸法と index_map 長が不整合な場合のみ debug で検出する
         // （リリース挙動は不変）。
         debug_assert!(
@@ -346,7 +338,6 @@ impl HitRegionMap {
     pub fn hit_test_region(&self, rel_x: f32, rel_y: f32, entity_size: &Size) -> Option<&str> {
         match &self.kind {
             RegionKind::Shapes(regions) => {
-                // 正規化座標 → DIPローカル座標に変換
                 let local_x = rel_x * entity_size.width;
                 let local_y = rel_y * entity_size.height;
 
@@ -373,7 +364,6 @@ impl HitRegionMap {
                 None
             }
             RegionKind::ColorMap(data) => {
-                // 正規化座標 → 画像ピクセル座標に変換
                 let pixel_x = (rel_x * data.width() as f32) as u32;
                 let pixel_y = (rel_y * data.height() as f32) as u32;
                 data.hit_test(pixel_x, pixel_y)
@@ -430,7 +420,6 @@ impl HitRegionMapBuilder {
     /// - 矩形: width <= 0 または height <= 0 の場合 `InvalidRectSize`
     /// - 多角形: 頂点数 < 3 の場合 `InsufficientVertices`
     pub fn build(self) -> Result<HitRegionMap, HitRegionError> {
-        // バリデーション
         for region in &self.regions {
             match &region.shape {
                 Shape::Rect { width, height, .. } => {

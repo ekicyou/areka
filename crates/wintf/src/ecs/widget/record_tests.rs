@@ -1,4 +1,4 @@
-//! 描く骨組み: 失敗の後の空の列（10 番）・立ち直りの後の描き直し（実 GPU）
+//! 描く骨組み: 失敗の後の空の列・立ち直りの後の描き直し（実 GPU）
 
 use super::*;
 use crate::com::d2d::D2D1DeviceContextExt;

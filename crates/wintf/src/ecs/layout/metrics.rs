@@ -1,4 +1,3 @@
-// 共通型モジュールから re-export
 pub use crate::ecs::types::{Offset, Size};
 
 /// レイアウトスケール（DPIスケール、ViewBox等）

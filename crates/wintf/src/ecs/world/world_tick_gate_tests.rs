@@ -1,11 +1,10 @@
-//! tick の門を実際の駆動へ組み込んだ部分の決定論テスト（task 3.3・要件 3.2/3.4/3.7/
-//! 4.4/4.5/6.2/6.3）。
+//! tick の門を実際の駆動へ組み込んだ部分の決定論テスト。
 //!
 //! 判断そのもの（純関数 `should_run`）は兄弟の `tick_gate_tests.rs` が全組合せで
 //! 固定している。ここで見るのはその**手前と後始末**——旗を読んで倒し、数を数え、
 //! 省略のときに何を進めないか、である。
 //!
-//! 実時間の閾値は 1 つも使わない（要件 6.5）。旗は原則として引数で注入し、プロセス
+//! 実時間の閾値は 1 つも使わない。旗は原則として引数で注入し、プロセス
 //! 共有の旗を触るのは 1 本だけで、その 1 本は錠 [`TICK_WAKE_TEST_LOCK`] を取ってから
 //! 触る（同じ錠を `runtime/tick_bridge.rs` の兄弟テストも取る）。共有の旗は他のテスト
 //! からも立ちうるので、共有経由の検査は「回る」側しか主張しない。
@@ -85,9 +84,9 @@ fn one_frame(ecs: &mut EcsWorld, snapshot: WakeSnapshot) -> TickDecision {
 
 // ------------------------------------------------------- 既定は「門を切る」
 
-/// (要件 3.2) 門の既定は無効で、判定は何回呼んでも「回す」に倒れる。
+/// 門の既定は無効で、判定は何回呼んでも「回す」に倒れる。
 ///
-/// 周 1 の A/B までは既定 OFF＝門を入れる前と同じ挙動、が仕様である（設計 C16）。
+/// 周 1 の A/B までは既定 OFF＝門を入れる前と同じ挙動、が仕様である。
 #[test]
 fn tick_gate_is_disabled_by_default_and_every_decision_runs() {
     let mut ecs = EcsWorld::new();
@@ -96,7 +95,6 @@ fn tick_gate_is_disabled_by_default_and_every_decision_runs() {
         "門の既定は無効（周 1 の A/B で採否を決めるまで）"
     );
 
-    // 起動直後を抜け、心拍の間隔も跨いでなお「門が無効」の理由で回り続ける。
     for i in 0..(TICK_GATE_WARMUP_FRAMES + TICK_HEARTBEAT_FRAMES + 5) {
         assert_eq!(
             ecs.decide_tick_with(no_wake()),
@@ -106,7 +104,7 @@ fn tick_gate_is_disabled_by_default_and_every_decision_runs() {
     }
 }
 
-/// (要件 3.2) 門の有効は起動時に切り替えられ、読み出せる。
+/// 門の有効は起動時に切り替えられ、読み出せる。
 #[test]
 fn set_tick_gate_toggles_and_reads_back() {
     let mut ecs = EcsWorld::new();
@@ -118,7 +116,7 @@ fn set_tick_gate_toggles_and_reads_back() {
 
 // ------------------------------------------------------------ 数の数え方
 
-/// (要件 3.2) 起動からの回数は省略した回も含めて進み、前回回した tick からの回数は
+/// 起動からの回数は省略した回も含めて進み、前回回した tick からの回数は
 /// 回したときだけ 0 に戻る。
 #[test]
 fn counters_advance_on_every_frame_and_reset_only_on_run() {
@@ -133,7 +131,6 @@ fn counters_advance_on_every_frame_and_reset_only_on_run() {
     );
     assert_eq!(since_run, 0, "全部回ったので前回実行からの回数は 0");
 
-    // 省略が 3 回続くと、起動からの回数も前回実行からの回数も 3 進む。
     for _ in 0..3 {
         assert_eq!(ecs.decide_tick_with(no_wake()), TickDecision::Skip);
     }
@@ -143,7 +140,6 @@ fn counters_advance_on_every_frame_and_reset_only_on_run() {
         "省略でも起動からの回数は進み、前回実行からの回数も積み上がる"
     );
 
-    // 旗が立てば回り、前回実行からの回数だけが 0 に戻る。
     assert!(
         ecs.decide_tick_with(WakeSnapshot {
             bits: PRESENT.bits(),
@@ -158,7 +154,7 @@ fn counters_advance_on_every_frame_and_reset_only_on_run() {
     );
 }
 
-/// (要件 3.2) 起動直後を抜けたあと、旗も期限も無ければ省略になる。
+/// 起動直後を抜けたあと、旗も期限も無ければ省略になる。
 #[test]
 fn gate_skips_after_warmup_when_nothing_asks_for_a_run() {
     let mut ecs = EcsWorld::new();
@@ -172,7 +168,7 @@ fn gate_skips_after_warmup_when_nothing_asks_for_a_run() {
     );
 }
 
-/// (要件 3.2) 旗も期限も無いまま [`TICK_HEARTBEAT_FRAMES`] 回省略したら、次は心拍で回る。
+/// 旗も期限も無いまま [`TICK_HEARTBEAT_FRAMES`] 回省略したら、次は心拍で回る。
 ///
 /// 心拍は「前回**回した** tick からの回数」で測るので、省略が 30 回続いた次
 /// （＝入力の `frames_since_run` が 30 に達した回）が心拍である。
@@ -209,7 +205,7 @@ fn heartbeat_runs_after_the_configured_number_of_skips() {
 
 // --------------------------------------------------- 省略が遅れとして残らない
 
-/// (要件 6.2) 省略 → 表示指令の旗 → 次の判定が回す。
+/// 省略 → 表示指令の旗 → 次の判定が回す。
 #[test]
 fn skip_then_present_flag_makes_the_next_decision_run() {
     let mut ecs = EcsWorld::new();
@@ -229,7 +225,7 @@ fn skip_then_present_flag_makes_the_next_decision_run() {
     );
 }
 
-/// (要件 6.2) プロセス共有の旗を通しても同じことが成り立つ。
+/// プロセス共有の旗を通しても同じことが成り立つ。
 ///
 /// 共有の旗は他のテストからも立ちうるので、主張するのは「回る」側だけである
 /// （「省略になる」は共有経由では主張しない）。
@@ -257,9 +253,9 @@ fn present_flag_through_the_shared_registry_makes_the_decision_run() {
     }
 }
 
-// ------------------------------------------- 省略で何を進めないか（要件 3.2）
+// ------------------------------------------- 省略で何を進めないか
 
-/// (要件 3.2/6.2) 省略の回は `FrameCount`／`FrameTime`／`TickStart` を進めない。
+/// 省略の回は `FrameCount`／`FrameTime`／`TickStart` を進めない。
 /// 省略のあとに回せば、フレーム番号はちょうど 1 だけ進む。
 #[test]
 fn skipped_frames_advance_neither_frame_count_nor_frame_time_nor_tick_start() {
@@ -314,7 +310,7 @@ struct ChangeProbe(u32);
 #[derive(Resource, Default)]
 struct ChangedSeen(Vec<Entity>);
 
-/// (要件 6.2) 省略を挟んでも変化検出は消えない——省略中に書き換えた値は、次に回した
+/// 省略を挟んでも変化検出は消えない——省略中に書き換えた値は、次に回した
 /// tick で `Changed` として拾える。
 ///
 /// 省略の回はどのスケジュールも走らないので bevy の変化の刻みが進まない。したがって
@@ -341,7 +337,6 @@ fn changes_made_during_skipped_frames_are_seen_by_the_next_run() {
     ecs.try_tick_world();
     ecs.world_mut().resource_mut::<ChangedSeen>().0.clear();
 
-    // 省略の最中に値を書き換える。
     ecs.world_mut()
         .get_mut::<ChangeProbe>(entity)
         .expect("印を付けた entity は生きているはず")
@@ -366,7 +361,7 @@ fn changes_made_during_skipped_frames_are_seen_by_the_next_run() {
 
 // ------------------------------------------- 省略経路でも 13 本の順序は不変
 
-/// (要件 3.4/6.3) 省略と全走が交互に来ても、回した tick の 13 本は毎回同じ順序で走る。
+/// 省略と全走が交互に来ても、回した tick の 13 本は毎回同じ順序で走る。
 #[test]
 fn skipped_frames_do_not_disturb_the_thirteen_schedule_order() {
     let mut ecs = EcsWorld::new();

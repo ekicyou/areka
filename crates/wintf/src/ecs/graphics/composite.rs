@@ -1,4 +1,4 @@
-//! 描画面ごとの入れ物（要件 4.1, 4.2, 4.4, 4.8）。描画面 1 枚の合成の結果を持ち、合成と写しの
+//! 描画面ごとの入れ物。描画面 1 枚の合成の結果を持ち、合成と写しの
 //! 手順を持つ（WUC と ECS を知らない）。本番の係（`render_surface`）と WARP のテストが同じ手順を呼ぶ。
 
 use super::damage::{ComposePlan, FullReason, PartialPlan, PlanInput, RegionShift, plan};
@@ -29,7 +29,7 @@ pub(crate) struct SurfaceComposite {
     generation: u64,
     /// 1×1 の写し先と控えを 1 つの錠に入れる（写し・Map・Unmap・控えの更新を錠を持ったまま行う）。
     pixel: Mutex<PixelReadState>,
-    /// GPU から読んだ回数（5.4 のテストの的）。
+    /// GPU から読んだ回数。
     gpu_reads: AtomicU64,
     /// 前の合成の項の列（無い＝比べられない）。入れ物と同じ寿命（捨てれば控えも消える）。
     prev_entries: Option<Vec<DamageEntry>>,
@@ -76,7 +76,7 @@ pub(crate) fn create_bitmap(
 }
 
 /// 置き場の入れ物への描き 1 回（`draw`）を走らせる（置き場が空なら何もしない）。失敗したら入れ物を
-/// 控えごと捨てる（途中まで描いた絵を読ませない＝読みは `Unreadable`・5.5。次の回に作り直す・3.5）。
+/// 控えごと捨てる（途中まで描いた絵を読ませない＝読みは `Unreadable`。次の回に作り直す）。
 pub(crate) fn compose_or_drop(
     slot: &mut Option<SurfaceComposite>,
     draw: impl FnOnce(&mut SurfaceComposite) -> windows::core::Result<()>,
@@ -91,7 +91,7 @@ pub(crate) fn compose_or_drop(
     result
 }
 
-/// 描画面 1 枚の、この回の計画を立てて入れ物へ合成する（1.1・2.5・2.7・3.1・3.3）。`fresh` は入れ物を今
+/// 描画面 1 枚の、この回の計画を立てて入れ物へ合成する。`fresh` は入れ物を今
 /// 作った回の理由。全部・範囲だけは失敗なら入れ物と控えを捨てて `Err`、写すだけ・何もしないは合成しない。
 /// 成功で控えを今の項の列（項にできなければ空）に置き換える。返すのは計画と今の項の列。置き場が空なら
 /// 何もしない（`Skip`）。本番の係と WARP のテストが同じこの関数を呼ぶ。
@@ -195,8 +195,7 @@ impl SurfaceComposite {
         self.presented
     }
 
-    /// 合成か Skip・PresentOnly を終えた回に控えを置き換える。`composed` なら `presented` を偽にする
-    /// （1.1・2.8）。
+    /// 合成か Skip・PresentOnly を終えた回に控えを置き換える。`composed` なら `presented` を偽にする。
     pub(crate) fn remember(
         &mut self,
         entries: Option<Vec<DamageEntry>>,
@@ -212,12 +211,12 @@ impl SurfaceComposite {
         }
     }
 
-    /// 入れ物を描画面へ写し終えた印を付ける（2.8）。
+    /// 入れ物を描画面へ写し終えた印を付ける。
     pub(crate) fn mark_presented(&mut self) {
         self.presented = true;
     }
 
-    /// 入れ物を透明に塗り、根の命令の列を `SOURCE_OVER` で、木の列を `emit` で描く（4.1・4.8）。
+    /// 入れ物を透明に塗り、根の命令の列を `SOURCE_OVER` で、木の列を `emit` で描く。
     /// `scale` は描画面の拡大（`GlobalArrangement` の拡大・offset なし）。成功したら世代を 1 上げる。
     /// 戻るとき `dc` は結果に依らず的なし・変換は恒等。
     pub(crate) fn compose(
@@ -259,8 +258,8 @@ impl SurfaceComposite {
         result
     }
 
-    /// 計画 `plan` の範囲だけを描き直す（2.2・2.3・5.1）。先に各写しを作業用の絵を通して行い（重なる写しを
-    /// 直接しない・決め D6）、描く矩形ごとに軸に沿う切り抜きの中を透明に塗って根の命令の列と `emit_within`
+    /// 計画 `plan` の範囲だけを描き直す。先に各写しを作業用の絵を通して行い（重なる写しを
+    /// 直接しない）、描く矩形ごとに軸に沿う切り抜きの中を透明に塗って根の命令の列と `emit_within`
     /// で描く。`entries` は `tree` から作った列。成功したら世代を 1 上げる。戻るとき `dc` は的なし・変換は
     /// 恒等（写しの失敗では `dc` に触っていない）。
     pub(crate) fn compose_partial(
@@ -350,7 +349,7 @@ impl SurfaceComposite {
     }
 
     /// `dst`（`BeginDraw` の中の DC）を透明に塗り、入れ物を整数の `offset` に `NEAREST_NEIGHBOR`・
-    /// `SOURCE_OVER` で 1 度描く（4.2）。入れ物は読むだけ（4.4）。失敗は `dst` の `EndDraw` に出る。
+    /// `SOURCE_OVER` で 1 度描く。入れ物は読むだけ。失敗は `dst` の `EndDraw` に出る。
     pub(crate) fn copy_to(&self, dst: &ID2D1DeviceContext, offset: POINT) {
         // SAFETY: Windows API 境界。
         unsafe {
@@ -370,7 +369,7 @@ impl SurfaceComposite {
     }
 
     /// `dst`（部分の矩形 `rect` で `BeginDraw` した DC）の `offset` から `rect` の大きさを透明に塗り、
-    /// 入れ物の `rect` を `offset` へ `NEAREST_NEIGHBOR`・`SOURCE_OVER` で 1 度描く（2.6・2.9）。
+    /// 入れ物の `rect` を `offset` へ `NEAREST_NEIGHBOR`・`SOURCE_OVER` で 1 度描く。
     /// `offset` は `rect` の左上が来る位置。入れ物は読むだけ。失敗は `dst` の `EndDraw` に出る。
     pub(crate) fn copy_rect_to(&self, dst: &ID2D1DeviceContext, rect: PxRect, offset: POINT) {
         let (x, y) = (offset.x as f32, offset.y as f32);
@@ -409,7 +408,7 @@ impl SurfaceComposite {
     }
 
     /// 1 画素（座標は呼び手が範囲の内と確かめ済み・世代は 1 以上）。`(x, y, 世代)` が控えと同じなら
-    /// GPU から読まない（5.4）。`Map(READ)` は GPU が合成を終えるまで待つ（5.2）。
+    /// GPU から読まない。`Map(READ)` は GPU が合成を終えるまで待つ。
     pub(crate) fn read_pixel(&self, x: u32, y: u32) -> windows::core::Result<[u8; 4]> {
         // 錠を持ったまま写し・Map・Unmap・控えの更新を行う（2 つの読みが写し先を取り合わない）。
         let mut state = self.pixel.lock().unwrap_or_else(|e| e.into_inner());
@@ -439,7 +438,7 @@ impl SurfaceComposite {
         Ok(value)
     }
 
-    /// 全体（1 行＝幅×4 バイトに詰めた BGRA・5.9）。写し先は `device` の新しい DC で作って捨てる
+    /// 全体（1 行＝幅×4 バイトに詰めた BGRA）。写し先は `device` の新しい DC で作って捨てる
     /// （共有の DC と 1 画素の写し先に触らないので錠を要らない）。
     pub(crate) fn read_all(&self, device: &ID2D1Device) -> windows::core::Result<Vec<u8>> {
         let (width, height) = self.size;
@@ -467,7 +466,7 @@ impl SurfaceComposite {
         Ok(bytes)
     }
 
-    /// GPU から読んだ回数（5.4 のテストの的）。
+    /// GPU から読んだ回数。
     #[cfg(test)]
     pub(crate) fn gpu_reads(&self) -> u64 {
         self.gpu_reads.load(Ordering::Relaxed)

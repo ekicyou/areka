@@ -1,4 +1,4 @@
-//! `AlphaMaskResource` 優先読みのヒットテスト（design Testing Strategy Unit #5・R2.2/2.3/2.5）
+//! `AlphaMaskResource` 優先読みのヒットテスト
 //!
 //! - `AlphaMaskResource` あり → 最優先で使用（`BitmapSourceResource`・矩形フォールバックより優先）
 //! - `AlphaMaskResource` なし → 従来 `BitmapSourceResource` → 矩形フォールバック（後方互換）
@@ -39,7 +39,6 @@ fn alpha_mask_resource(mask: AlphaMask) -> AlphaMaskResource {
 #[test]
 fn test_alpha_mask_resource_present_hit() {
     let mut world = World::new();
-    // bounds 0..2 × 0..2、マスク 2x2（恒等マッピング）
     let entity = world
         .spawn((
             make_global_arrangement(0.0, 0.0, 2.0, 2.0),
@@ -48,7 +47,6 @@ fn test_alpha_mask_resource_present_hit() {
         ))
         .id();
 
-    // point (0.5,0.5) → rel(0.25,0.25) → mask(0,0)＝不透明 → ヒット
     let point = PointF::new(0.5, 0.5);
     assert!(hit_test_entity(&world, entity, point));
 }
@@ -69,7 +67,6 @@ fn test_alpha_mask_resource_present_miss_overrides_rect_fallback() {
         ))
         .id();
 
-    // bounds 内（矩形なら hit）だが全透明マスク → ミス
     let point = PointF::new(0.5, 0.5);
     assert!(!hit_test_entity(&world, entity, point));
 }
@@ -82,12 +79,10 @@ fn test_alpha_mask_resource_absent_falls_back_to_rect() {
         .spawn((
             make_global_arrangement(0.0, 0.0, 2.0, 2.0),
             HitTest::alpha_mask(),
-            // AlphaMaskResource / BitmapSourceResource いずれもなし
         ))
         .id();
 
     let point = PointF::new(0.5, 0.5);
-    // 供給者不在 → 矩形フォールバックでヒット（従来挙動不変）
     assert!(hit_test_entity(&world, entity, point));
 }
 
@@ -103,7 +98,6 @@ fn test_alpha_mask_resource_outside_bounds_miss() {
         ))
         .id();
 
-    // bounds 外
     let point = PointF::new(100.0, 100.0);
     assert!(!hit_test_entity(&world, entity, point));
 }
@@ -111,7 +105,7 @@ fn test_alpha_mask_resource_outside_bounds_miss() {
 // ========================================================================
 // hit_test_in_window（hit_test_in_window_ex → hit_test_ex → hit_test_entity_ex 経由）経路
 //   clickthrough evaluate_targets → hit_test_in_window → hit_test_in_window_ex → hit_test_ex → hit_test_entity_ex
-//   と同一経路を檻に含める（design Validation 明示要求）
+//   と同一経路を檻に含める
 // ========================================================================
 
 /// window 経由でも `AlphaMaskResource` が使用される（不透明 → Some(surface)）
@@ -136,7 +130,6 @@ fn test_alpha_mask_resource_via_window_hit() {
         .id();
     world.entity_mut(window).add_children(&[surface]);
 
-    // client (0.5,0.5) → screen (0.5,0.5) → mask(0,0)＝不透明
     let client = PointF::new(0.5, 0.5);
     assert_eq!(hit_test_in_window(&world, window, client), Some(surface));
 }
@@ -167,7 +160,6 @@ fn test_alpha_mask_resource_via_window_miss_overrides_rect_fallback() {
     world.entity_mut(window).add_children(&[surface]);
 
     let client = PointF::new(0.5, 0.5);
-    // 全透明 → surface はミス、他にヒット対象なし → None
     assert_eq!(hit_test_in_window(&world, window, client), None);
 }
 
@@ -243,7 +235,6 @@ fn test_alpha_mask_resource_priority_over_bitmap_source_direct() {
         hit_test_entity(&world, entity, point)
     });
 
-    // AlphaMaskResource（miss）が BitmapSourceResource（hit）より優先 → false
     assert!(
         !result,
         "AlphaMaskResource(miss) must take priority over BitmapSourceResource(hit)"
@@ -282,7 +273,6 @@ fn test_alpha_mask_resource_priority_over_bitmap_source_via_window() {
         hit_test_in_window(&world, window, client)
     });
 
-    // AlphaMaskResource(miss) 優先 → surface はヒットせず None
     assert_eq!(
         result, None,
         "AlphaMaskResource(miss) must take priority over BitmapSourceResource(hit) via window path"

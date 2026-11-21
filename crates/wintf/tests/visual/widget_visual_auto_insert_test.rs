@@ -1,4 +1,4 @@
-//! ウィジェット Visual 自動追加テスト (R4)
+//! ウィジェット Visual 自動追加テスト
 //!
 //! Label/Rectangle コンポーネント追加時に Visual が自動的に挿入されることをテストする。
 
@@ -12,7 +12,6 @@ use wintf::ecs::widget::text::Label;
 fn test_label_auto_inserts_visual() {
     let mut world = World::new();
 
-    // Label を追加
     let entity = world
         .spawn(Label {
             text: "Hello".to_string(),
@@ -20,7 +19,6 @@ fn test_label_auto_inserts_visual() {
         })
         .id();
 
-    // Visual が自動的に追加されていることを確認
     let visual = world.get::<Visual>(entity);
     assert!(
         visual.is_some(),
@@ -33,10 +31,8 @@ fn test_label_auto_inserts_visual() {
 fn test_rectangle_auto_inserts_visual() {
     let mut world = World::new();
 
-    // Rectangle を追加
     let entity = world.spawn(Rectangle::new()).id();
 
-    // Visual が自動的に追加されていることを確認
     let visual = world.get::<Visual>(entity);
     assert!(
         visual.is_some(),
@@ -49,7 +45,6 @@ fn test_rectangle_auto_inserts_visual() {
 fn test_label_with_existing_visual() {
     let mut world = World::new();
 
-    // 先にVisualを持つEntityを作成
     let entity = world
         .spawn((
             Visual {

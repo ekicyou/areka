@@ -31,14 +31,12 @@ pub fn sync_simple_transforms<L, G, M>(
     G: Component<Mutability = Mutable> + Copy + PartialEq + Mul<L, Output = G>,
     M: Component<Mutability = Mutable>,
 {
-    // 変更されたエンティティを更新
     query
         .p0()
         .par_iter_mut()
         .for_each(|(transform, mut global_transform)| {
             *global_transform = (*transform).into();
         });
-    // 孤立したエンティティを更新
     let mut query = query.p1();
     let mut iter = query.iter_many_mut(orphaned.read());
     while let Some((transform, mut global_transform)) = iter.fetch_next() {
@@ -93,7 +91,6 @@ pub fn propagate_parent_transforms<L, G, M>(
     G: Component<Mutability = Mutable> + Copy + PartialEq + Mul<L, Output = G>,
     M: Component<Mutability = Mutable>,
 {
-    // ルートを並列処理し、ワークキューを準備する
     roots.par_iter_mut().for_each_init(
         || queue.local_queue.borrow_local_mut(),
         |outbox, (parent, transform, mut parent_transform, children)| {
@@ -111,11 +108,8 @@ pub fn propagate_parent_transforms<L, G, M>(
                     &nodes,
                     outbox,
                     &queue,
-                    // より代表的なシーンでプロファイリングして、この単一最大深度を再検討する必要がある。
-                    // ワーカーを開始する前に、階層の深部に進んで良好なタスクキューを構築することが
-                    // 実際に有益である可能性がある。しかし、現時点では、単一のスレッドが階層の深部に
-                    // 進む間、他のスレッドがアイドル状態になるケースを防ぐために、これを避けている。
-                    // これは、タスク共有ワーカーが既に解決している問題である。
+                    // 単一のスレッドが階層の深部に進む間、他のスレッドがアイドルになるのを避けるため
+                    // 深さ 1 に留める。代表的なシーンでプロファイリングして再検討する余地がある。
                     1,
                 );
             }
@@ -127,16 +121,14 @@ pub fn propagate_parent_transforms<L, G, M>(
 
     if let Ok(rx) = queue.receiver.try_lock() {
         if let Some(task) = rx.try_iter().next() {
-            // 少し馬鹿げているが、作業があるかどうかを確認する唯一の方法はタスクを取得することである。
-            // peekはnextを呼び出さなくてもタスクを削除してしまい、タスクがドロップされる結果になる。
-            // ここで行っているのは、最初のタスクがあればそれを取得し、すぐにキューの後ろに送り返すことである。
+            // 作業の有無を確かめる手段はタスクを取ることだけ（peek は next を呼ばなくてもタスクを
+            // 削除し、ドロップさせてしまう）。取った最初のタスクはすぐにキューの後ろへ送り返す。
             queue.sender.send(task).ok();
         } else {
             return; // 作業がない場合、タスクを生成する必要はない
         }
     }
 
-    // タスクプールにワーカーを生成し、階層を並列に再帰的に伝播する。
     let task_pool = ComputeTaskPool::get_or_init(TaskPool::default);
     task_pool.scope(|s| {
         (1..task_pool.thread_num()) // 最初のワーカーはタスクプールではなくローカルで実行される
@@ -166,7 +158,7 @@ where
         // ループを終了してタスクを終了する。
         let Some(mut tasks) = rx.try_iter().next() else {
             if queue.busy_threads.load(Ordering::Relaxed) == 0 {
-                break; // すべての作業が完了、ワーカーを終了
+                break;
             }
             continue; // 今は作業がないが、別のスレッドがさらに作業を作成している
         };
@@ -249,7 +241,6 @@ unsafe fn propagate_descendants_unchecked<L, G, M>(
     G: Component<Mutability = Mutable> + Copy + PartialEq + Mul<L, Output = G>,
     M: Component<Mutability = Mutable>,
 {
-    // 反復的な深さ優先探索に使用する入力変数のミュータブルコピーを作成
     let (mut parent, mut p_global_transform, mut p_children) =
         (parent, p_global_transform, p_children);
 
@@ -280,7 +271,6 @@ unsafe fn propagate_descendants_unchecked<L, G, M>(
                 global_transform.set_if_neq(a * b);
 
                 children.map(|children| {
-                    // エンティティが子を持つ場合にのみ伝播を続ける
                     last_child = Some((child, global_transform, children));
                     child
                 })
@@ -294,7 +284,6 @@ unsafe fn propagate_descendants_unchecked<L, G, M>(
 
         // 最適化: タスクは可能な限りスレッド同期を避けるために、できる限りローカルで作業を消費する
         if let Some(last_child) = last_child {
-            // 親データを子で上書きし、ループして子孫を反復処理する
             (parent, p_global_transform, p_children) = last_child;
             outbox.pop();
 

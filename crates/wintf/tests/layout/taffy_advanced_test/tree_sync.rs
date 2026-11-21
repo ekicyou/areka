@@ -1,4 +1,4 @@
-//! Task 7.4-7.6: ECS階層変更とtaffyツリー同期、増分計算、エンティティ削除クリーンアップテスト
+//! ECS階層変更とtaffyツリー同期、増分計算、エンティティ削除クリーンアップテスト
 use bevy_ecs::prelude::*;
 use wintf::ecs::ChildOf;
 use wintf::ecs::layout::systems::{
@@ -8,35 +8,29 @@ use wintf::ecs::layout::systems::{
 use wintf::ecs::layout::taffy::{TaffyComputedLayout, TaffyLayoutResource, TaffyStyle};
 use wintf::ecs::layout::{Arrangement, BoxSize, BoxStyle, Dimension, LayoutRoot};
 
-// ===== Task 7.4: ECS階層変更とtaffyツリー同期テスト =====
+// ===== ECS階層変更とtaffyツリー同期テスト =====
 
 #[test]
 fn test_hierarchy_addition_syncs_taffy_tree() {
     let mut world = World::new();
     world.init_resource::<TaffyLayoutResource>();
 
-    // 親エンティティ
     let parent = world
         .spawn((TaffyStyle::default(), BoxStyle::default()))
         .id();
 
-    // 子エンティティ
     let child = world
         .spawn((TaffyStyle::default(), BoxStyle::default()))
         .id();
 
-    // システム実行（TaffyStyleからノード作成）
     let mut schedule = Schedule::default();
     schedule.add_systems((build_taffy_styles_system, sync_taffy_tree_system));
     schedule.run(&mut world);
 
-    // 親子関係を設定
     world.entity_mut(child).insert(ChildOf(parent));
 
-    // 階層変更を同期
     schedule.run(&mut world);
 
-    // Taffyツリー内で親子関係が確立されていることを確認
     let taffy_res = world.resource::<TaffyLayoutResource>();
     let parent_node = taffy_res.get_node(parent).unwrap();
     let child_node = taffy_res.get_node(child).unwrap();
@@ -51,7 +45,6 @@ fn test_hierarchy_removal_syncs_taffy_tree() {
     let mut world = World::new();
     world.init_resource::<TaffyLayoutResource>();
 
-    // 親子関係を持つエンティティを作成
     let parent = world
         .spawn((TaffyStyle::default(), BoxStyle::default()))
         .id();
@@ -59,17 +52,14 @@ fn test_hierarchy_removal_syncs_taffy_tree() {
         .spawn((TaffyStyle::default(), BoxStyle::default(), ChildOf(parent)))
         .id();
 
-    // システム実行
     let mut schedule = Schedule::default();
     schedule.add_systems((build_taffy_styles_system, sync_taffy_tree_system));
     schedule.run(&mut world);
 
-    // 親子関係を削除
     world.entity_mut(child).remove::<ChildOf>();
 
     schedule.run(&mut world);
 
-    // Taffyツリー内で親子関係が解除されていることを確認
     let taffy_res = world.resource::<TaffyLayoutResource>();
     let parent_node = taffy_res.get_node(parent).unwrap();
 
@@ -96,12 +86,10 @@ fn test_deep_hierarchy_sync() {
         .spawn((TaffyStyle::default(), BoxStyle::default(), ChildOf(b)))
         .id();
 
-    // システム実行
     let mut schedule = Schedule::default();
     schedule.add_systems((build_taffy_styles_system, sync_taffy_tree_system));
     schedule.run(&mut world);
 
-    // Taffyツリーの階層構造を検証
     let taffy_res = world.resource::<TaffyLayoutResource>();
     let root_node = taffy_res.get_node(root).unwrap();
     let a_node = taffy_res.get_node(a).unwrap();
@@ -128,7 +116,7 @@ fn test_deep_hierarchy_sync() {
     assert_eq!(c_children.len(), 0);
 }
 
-// ===== Task 7.5: 増分計算の変更検知テスト =====
+// ===== 増分計算の変更検知テスト =====
 
 #[test]
 fn test_no_change_no_compute() {
@@ -221,10 +209,8 @@ fn test_high_level_component_change_triggers_compute() {
     );
     schedule.run(&mut world);
 
-    // 初回のArrangementを記録
     let initial_arrangement = *world.get::<Arrangement>(root).unwrap();
 
-    // BoxStyleを変更
     world.entity_mut(root).insert(BoxStyle {
         size: Some(BoxSize {
             width: Some(Dimension::Px(1024.0)),
@@ -233,10 +219,8 @@ fn test_high_level_component_change_triggers_compute() {
         ..Default::default()
     });
 
-    // システム再実行
     schedule.run(&mut world);
 
-    // Arrangementが更新されていることを確認
     let updated_arrangement = *world.get::<Arrangement>(root).unwrap();
     assert_ne!(
         initial_arrangement.size.width,
@@ -281,7 +265,6 @@ fn test_hierarchy_change_triggers_compute() {
     // 親の無い子は根の計算に入らない
     assert_eq!(world.get::<Arrangement>(child).unwrap().size.height, 0.0);
 
-    // 子を追加
     world.entity_mut(child).insert(ChildOf(root));
     schedule.run(&mut world);
 
@@ -298,7 +281,7 @@ fn test_hierarchy_change_triggers_compute() {
     assert_eq!(world.get::<Arrangement>(child).unwrap().size.height, 600.0);
 }
 
-// ===== Task 7.6: エンティティ削除のクリーンアップテスト =====
+// ===== エンティティ削除のクリーンアップテスト =====
 
 #[test]
 fn test_entity_removal_cleans_both_mappings() {
@@ -337,7 +320,6 @@ fn test_mapping_cleanup_prevents_memory_leak() {
     let mut cleanup_schedule = Schedule::default();
     cleanup_schedule.add_systems(cleanup_removed_entities_system);
 
-    // 複数のエンティティを作成・削除
     let mut removed = Vec::new();
     for _ in 0..10 {
         let entity = world.spawn(TaffyStyle::default()).id();

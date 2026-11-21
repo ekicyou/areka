@@ -1,8 +1,8 @@
-//! テスト7.x: ユニット・統合テスト
+//! ユニット・統合テスト
 
 use super::*;
 
-/// テスト7.5: Dimensionのconst constructorテスト
+/// Dimensionのconst constructorテスト
 #[test]
 fn test_dimension_const_constructors() {
     const DIM_LENGTH: Dimension = Dimension::length(100.0);
@@ -16,7 +16,7 @@ fn test_dimension_const_constructors() {
     assert_eq!(DIM_ZERO, Dimension::Px(0.0));
 }
 
-/// テスト7.9: EcsWorldを使った3階層ウィジェットツリーの総合レイアウトテスト
+/// EcsWorldを使った3階層ウィジェットツリーの総合レイアウトテスト
 ///
 /// このテストは、BoxSize変更から最終的なGlobalArrangementの更新までを検証します。
 /// - 3階層のウィジェットツリー（Root → Container → Child）を構築
@@ -30,17 +30,14 @@ fn test_full_layout_pipeline_with_ecs_world() {
     use wintf::ecs::ChildOf;
     use wintf::ecs::world::EcsWorld;
 
-    // EcsWorldを作成（デフォルトのシステムスケジュールが登録済み）
     let mut ecs_world = EcsWorld::new();
 
-    // 3階層のウィジェットツリーを構築
     let (root, container, child) = {
         let world = ecs_world.world_mut();
 
-        // Root (ルートエンティティ - LayoutRootマーカーを使用)
         let root = world
             .spawn((
-                LayoutRoot, // レイアウト計算のルートを示すマーカー
+                LayoutRoot,
                 BoxStyle {
                     size: Some(BoxSize {
                         width: Some(Dimension::Px(800.0)),
@@ -51,11 +48,10 @@ fn test_full_layout_pipeline_with_ecs_world() {
                     align_items: Some(AlignItems::STRETCH),
                     ..Default::default()
                 },
-                Arrangement::default(), // Arrangementを明示的に追加
+                Arrangement::default(),
             ))
             .id();
 
-        // Container (中間層)
         let container = world
             .spawn((
                 BoxStyle {
@@ -68,12 +64,11 @@ fn test_full_layout_pipeline_with_ecs_world() {
                     align_items: Some(AlignItems::CENTER),
                     ..Default::default()
                 },
-                Arrangement::default(), // Arrangementを明示的に追加
-                ChildOf(root),          // 親子関係を設定
+                Arrangement::default(),
+                ChildOf(root),
             ))
             .id();
 
-        // Child (末端)
         let child = world
             .spawn((
                 BoxStyle {
@@ -83,18 +78,16 @@ fn test_full_layout_pipeline_with_ecs_world() {
                     }),
                     ..Default::default()
                 },
-                Arrangement::default(), // Arrangementを明示的に追加
-                ChildOf(container),     // 親子関係を設定
+                Arrangement::default(),
+                ChildOf(container),
             ))
             .id();
 
         (root, container, child)
     };
 
-    // 初回レイアウト計算を実行
     ecs_world.try_tick_world();
 
-    // 検証1: すべてのエンティティにTaffyStyleが生成されている
     {
         let world = ecs_world.world();
         assert!(
@@ -111,7 +104,6 @@ fn test_full_layout_pipeline_with_ecs_world() {
         );
     }
 
-    // 検証2: すべてのエンティティにArrangementが生成されている
     {
         let world = ecs_world.world();
         assert!(
@@ -128,7 +120,6 @@ fn test_full_layout_pipeline_with_ecs_world() {
         );
     }
 
-    // 検証3: すべてのエンティティにGlobalArrangementが生成されている
     {
         let world = ecs_world.world();
         assert!(
@@ -145,7 +136,6 @@ fn test_full_layout_pipeline_with_ecs_world() {
         );
     }
 
-    // 初回のArrangementとGlobalArrangementを保存
     let (initial_container_arrangement, initial_container_global) = {
         let world = ecs_world.world();
         (
@@ -154,21 +144,18 @@ fn test_full_layout_pipeline_with_ecs_world() {
         )
     };
 
-    // Containerのサイズを変更
     {
         let world = ecs_world.world_mut();
         if let Some(mut style) = world.entity_mut(container).get_mut::<BoxStyle>() {
             if let Some(ref mut size) = style.size {
-                size.width = Some(Dimension::Px(600.0)); // 400 → 600
-                size.height = Some(Dimension::Px(450.0)); // 300 → 450
+                size.width = Some(Dimension::Px(600.0));
+                size.height = Some(Dimension::Px(450.0));
             }
         }
     }
 
-    // レイアウト再計算を実行（1 tickで完了するはず）
     ecs_world.try_tick_world();
 
-    // 検証4: Containerのサイズ変更後、Arrangementが更新されている
     {
         let world = ecs_world.world();
         let updated_container_arrangement = *world.entity(container).get::<Arrangement>().unwrap();
@@ -178,7 +165,6 @@ fn test_full_layout_pipeline_with_ecs_world() {
         );
     }
 
-    // 検証5: Containerのサイズ変更後、GlobalArrangementが更新されている
     {
         let world = ecs_world.world();
         let updated_container_global = *world.entity(container).get::<GlobalArrangement>().unwrap();
@@ -189,8 +175,6 @@ fn test_full_layout_pipeline_with_ecs_world() {
         );
     }
 
-    // 検証7: レイアウト計算が正しく完了していることを確認
-    // ContainerのArrangementサイズが期待値（600x?）に近いことを確認
     {
         let world = ecs_world.world();
         let container_size = world.entity(container).get::<Arrangement>().unwrap().size;

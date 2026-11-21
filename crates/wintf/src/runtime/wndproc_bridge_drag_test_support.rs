@@ -2,18 +2,15 @@
 //!
 //! 再入＝画面更新が World を可変で借りている間に、OS から同期でメッセージが届くこと。
 //! テストは `world.borrow_mut()` を握ったまま入口へメッセージを渡してその状態を作り、
-//! 借用を返してから本物の知らせを配る段（`dispatch_drag_events`）を回して数える
-//! （要件 8.1・8.5）。ハンドラを入口を通さずに直に呼ぶ形は使わない。
+//! 借用を返してから本物の知らせを配る段（`dispatch_drag_events`）を回して数える。
+//! ハンドラを入口を通さずに直に呼ぶ形は使わない。
 //!
-//! 組み立て（[`Rig`]）: 本番の World（`EcsWorld::new()`）→ 対象（`Window`＋`DragConfig`）→
-//! 押しは `start_preparing` を直に呼ぶ（押しの当たり判定はレイアウトが要り、押しの道は
-//! 本 spec の対象外）→ 閾値を越える `WM_MOUSEMOVE` を入口から渡す（開始の種は本番の
-//! `mouse_move.rs` が積む）→ 配る段を 1 回回して開始の知らせを配る。実時間の待機は 0 か所。
+//! 押しは `start_preparing` を直に呼ぶ（押しの当たり判定はレイアウトが要り、ここでは
+//! 確かめない）。閾値を越える `WM_MOUSEMOVE` は入口から渡す（開始の種は本番の
+//! `mouse_move.rs` が積む）。実時間の待機は 0 か所。
 //!
 //! 座標と捕捉を確かめるテストは [`Rig::with_real_window`] で、隠れた実物の窓を決まった
-//! 位置に作る（窓の手続きは本番の入口そのもの）。テストは「取り消し」
-//! （`wndproc_bridge_drag_cancel_tests.rs`）と「離し」（`wndproc_bridge_drag_release_tests.rs`）
-//! の 2 ファイルに分けてある。テストの番号は design.md の Testing Strategy の表の番号。
+//! 位置に作る（窓の手続きは本番の入口そのもの）。
 
 use std::cell::RefCell;
 use std::pin::Pin;
@@ -205,7 +202,7 @@ impl Rig {
             .clone()
     }
 
-    /// 対象が部品 `C` を持っているか。
+    /// 対象がコンポーネント `C` を持っているか。
     pub fn target_has<C: bevy_ecs::component::Component>(&self) -> bool {
         self.world
             .borrow()
@@ -232,7 +229,7 @@ pub(super) fn spawn_drag_window(world: &Rc<RefCell<EcsWorld>>, origin: PhysicalP
                 }),
                 ..Default::default()
             },
-            // ドラッグ中に SetWindowPos を呼ばせない（窓を動かすのは本 spec の対象外）。
+            // ドラッグ中に SetWindowPos を呼ばせない（窓を動かすことはここでは確かめない）。
             DragConfig {
                 move_window: false,
                 ..Default::default()

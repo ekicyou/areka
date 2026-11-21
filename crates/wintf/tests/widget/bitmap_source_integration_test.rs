@@ -1,6 +1,5 @@
 //! BitmapSource 画像読み込み統合テスト
 //!
-//! Task 7.2: 画像読み込みテストの実装
 //! - test_8x8_rgba.png（αチャネル付き）の正常読み込み確認
 //! - test_8x8_rgb.bmp（αなし）のPBGRA32変換確認
 //! - invalid.binのエラーハンドリング確認
@@ -21,7 +20,6 @@ fn test_load_png_with_alpha() {
         let wic_core = WicCore::new().expect("WicCore creation failed");
         let path = test_asset_path("test_8x8_rgba.png");
 
-        // 画像読み込み
         let result = load_bitmap_source(wic_core.factory(), &path);
         assert!(
             result.is_ok(),
@@ -31,7 +29,6 @@ fn test_load_png_with_alpha() {
 
         let (source, _has_alpha) = result.unwrap();
 
-        // 画像サイズの確認（8x8）
         let (width, height) = get_bitmap_size(&source);
         assert_eq!(width, 8, "width should be 8");
         assert_eq!(height, 8, "height should be 8");
@@ -44,7 +41,6 @@ fn test_load_png_16x16() {
         let wic_core = WicCore::new().expect("WicCore creation failed");
         let path = test_asset_path("test_16x16_rgba.png");
 
-        // 画像読み込み
         let result = load_bitmap_source(wic_core.factory(), &path);
         assert!(
             result.is_ok(),
@@ -54,7 +50,6 @@ fn test_load_png_16x16() {
 
         let (source, _has_alpha) = result.unwrap();
 
-        // 画像サイズの確認（16x16）
         let (width, height) = get_bitmap_size(&source);
         assert_eq!(width, 16, "width should be 16");
         assert_eq!(height, 16, "height should be 16");
@@ -71,7 +66,6 @@ fn test_load_bmp_without_alpha() {
         let wic_core = WicCore::new().expect("WicCore creation failed");
         let path = test_asset_path("test_8x8_rgb.bmp");
 
-        // 画像読み込み（PBGRA32に変換される）
         let result = load_bitmap_source(wic_core.factory(), &path);
         assert!(
             result.is_ok(),
@@ -81,12 +75,10 @@ fn test_load_bmp_without_alpha() {
 
         let (source, _has_alpha) = result.unwrap();
 
-        // 画像サイズの確認（8x8）
         let (width, height) = get_bitmap_size(&source);
         assert_eq!(width, 8, "width should be 8");
         assert_eq!(height, 8, "height should be 8");
 
-        // PBGRA32形式に変換されていることを確認
         let format = get_pixel_format(&source);
         // GUID_WICPixelFormat32bppPBGRA = 6fddc324-4e03-4bfe-b185-3d77768dc910
         let expected_format =
@@ -96,7 +88,7 @@ fn test_load_bmp_without_alpha() {
 }
 
 // ============================================================
-// has_alpha 判定テスト（Task 1.2: 変換前フレームの α 有無取得）
+// has_alpha 判定テスト（変換前フレームの α 有無取得）
 // ============================================================
 
 #[test]
@@ -141,7 +133,6 @@ fn test_load_invalid_file() {
         let wic_core = WicCore::new().expect("WicCore creation failed");
         let path = test_asset_path("invalid.bin");
 
-        // 無効なファイルの読み込みはエラーになるはず
         let result = load_bitmap_source(wic_core.factory(), &path);
         assert!(result.is_err(), "Invalid file should fail to load");
     });
@@ -153,7 +144,6 @@ fn test_load_nonexistent_file() {
         let wic_core = WicCore::new().expect("WicCore creation failed");
         let path = test_asset_path("nonexistent_file.png");
 
-        // 存在しないファイルの読み込みはエラーになるはず
         let result = load_bitmap_source(wic_core.factory(), &path);
         assert!(result.is_err(), "Nonexistent file should fail to load");
     });

@@ -1,4 +1,4 @@
-//! 範囲だけの描き直しの答え（WARP・要件 7.3 の写し以外）。範囲だけで合成した入れ物と、全部合成した入れ物が
+//! 範囲だけの描き直しの答え（WARP）。範囲だけで合成した入れ物と、全部合成した入れ物が
 //! バイトで一致する。
 
 use super::composite::{SurfaceComposite, compose_or_drop, compose_planned};
@@ -137,7 +137,7 @@ fn shift_copies_previous_pixels_through_work_bitmap() {
     let commands = tree_commands(&mut world, root, None);
     let (dc, mut comp, prev) = composed(1.0, None, &commands);
     let size = comp.size();
-    // 元と先が重なる写し（作業用の絵を通す・D6）。
+    // 元と先が重なる写し（作業用の絵を通す）。
     let shift = RegionShift {
         src: px(1, 1, 11, 11),
         dst: (4, 3),
@@ -231,7 +231,7 @@ fn planned_skip_keeps_generation_and_pixels() {
     );
 }
 
-/// 記録の水準を閉じた回と開いた回で、計画と入れ物の画素が同じ（6.3）。
+/// 記録の水準を閉じた回と開いた回で、計画と入れ物の画素が同じ。
 #[test]
 fn record_level_does_not_change_plan_or_pixels() {
     let run = |directives: &str| {
@@ -312,9 +312,9 @@ fn failed_partial_returns_err_and_drops_the_composite() {
     assert!(slot.is_none());
 }
 
-// ---- 範囲だけの描き直しと全部の答えのバイトの一致（6.1・R1） ----
+// ---- 範囲だけの描き直しと全部の答えのバイトの一致 ----
 
-/// 6.1 の木の根の大きさ（DIP）。拡大 1.25 でも にじみの余白で全面にならない大きさ。
+/// 木の根の大きさ（DIP）。拡大 1.25 でも にじみの余白で全面にならない大きさ。
 const SIDE: f32 = 40.0;
 pub(super) const BOTH: &[f32] = &[1.0, 1.25];
 pub(super) const GREEN: [u8; 4] = [0, 255, 0, 255];
@@ -425,9 +425,9 @@ pub(super) type Change = fn(&mut World, &[Entity]);
 
 /// `setup` で組んだ木を全部で合成し、`steps` の各回に木を変えて本番と同じ `compose_planned` で合成する。
 /// 毎回、計画が `Want` の形で、入れ物が今の列で全部合成した答えとバイトで一致する。範囲だけの回は世代が
-/// 1 上がり・絵が変わり・描く矩形と写しの先の外が前の答えのまま（2.3）。何もしない回は世代と画素が
-/// 変わらない（3.2）。拡大は `scales` の各値。変化の覚えを持ち続けるので、変えない節の版は上がらない。
-/// 根の命令の列も持つ（`with_root`）と、範囲だけの回は `Full(Undecidable)` になる（R1）。
+/// 1 上がり・絵が変わり・描く矩形と写しの先の外が前の答えのまま。何もしない回は世代と画素が
+/// 変わらない。拡大は `scales` の各値。変化の覚えを持ち続けるので、変えない節の版は上がらない。
+/// 根の命令の列も持つ（`with_root`）と、範囲だけの回は `Full(Undecidable)` になる。
 pub(super) fn check_frames(
     scales: &[f32],
     with_root: bool,
@@ -547,7 +547,7 @@ const ITEM_STEPS: &[(&str, Want, Change)] = &[
 #[test]
 fn items_added_removed_moved_replaced_reordered_match_full_bytes() {
     check_frames(BOTH, false, &three_items, ITEM_STEPS);
-    // 根の命令の列と木を両方持つ（範囲だけにしない・R1）。
+    // 根の命令の列と木を両方持つ（範囲だけにしない）。
     check_frames(BOTH, true, &three_items, ITEM_STEPS);
 }
 
@@ -635,7 +635,7 @@ fn opacity_layer_added_changed_removed_matches_full_bytes() {
             ("不透明度の層を足す", Want::Partial, |w, n| {
                 w.entity_mut(n[1]).insert(faded(0.5));
             }),
-            // 描く矩形は動いた青とかかる赤を丸ごと含み、層の中の件を切らない（R1）。
+            // 描く矩形は動いた青とかかる赤を丸ごと含み、層の中の件を切らない。
             (
                 "層の中の件を小数の位置へ動かす",
                 Want::Partial,
@@ -716,8 +716,8 @@ fn blend_and_non_source_over_items_match_full_bytes() {
                     w.entity_mut(n[3]).insert(at(8.25, 0.0, 8.0, 8.0));
                 },
             ),
-            // 消す件は切り抜きの中の全部を変えうる（D4）ので、描く矩形はかかるその件の範囲（切り抜き）まで
-            // 広がる（R1）。絵は変わらない。
+            // 消す件は切り抜きの中の全部を変えうるので、描く矩形はかかるその件の範囲（切り抜き）まで
+            // 広がる。絵は変わらない。
             (
                 "SOURCE_OVER でない件に消される件を動かす",
                 Want::Hidden,
@@ -793,7 +793,7 @@ fn interpolated_items_moved_to_fractional_positions_match_full_bytes() {
                     w.entity_mut(n[2]).insert(at(16.5, 5.75, 8.0, 8.0));
                 },
             ),
-            // にじみの余白（2.1）は回転で核の広がりが列の長さを越えうるので、ここで確かめる。
+            // にじみの余白は回転で核の広がりが列の長さを越えうるので、ここで確かめる。
             (
                 "回転した HIGH_QUALITY_CUBIC の件を小数の位置へ動かす",
                 Want::Partial,
@@ -838,7 +838,7 @@ fn six_frames_of_changes_match_full_bytes_each_frame() {
     );
 }
 
-/// 全部へ倒す各回（3.1・3.3）も入れ物は全部の答えとバイトで一致する。項にできない回は控えを空にし、
+/// 全部へ倒す各回も入れ物は全部の答えとバイトで一致する。項にできない回は控えを空にし、
 /// 次の回が `Full(NoPrev)` になる。
 #[test]
 fn planned_full_reasons_match_full_bytes() {
@@ -875,7 +875,7 @@ fn planned_full_reasons_match_full_bytes() {
                 ));
             },
         ),
-        // 物理の値が i32 に収まらない件（項にできない・3.3）。
+        // 物理の値が i32 に収まらない件（項にできない）。
         (
             ComposePlan::Full(FullReason::Undecidable),
             1.25,
@@ -926,7 +926,7 @@ fn planned_full_reasons_match_full_bytes() {
     }
 }
 
-/// 絵を変形して描く件は描く範囲で D2D の答えが 1 段変わりうる（R1）ので、描く矩形は交わる件を丸ごと含む。
+/// 絵を変形して描く件は描く範囲で D2D の答えが 1 段変わりうるので、描く矩形は交わる件を丸ごと含む。
 /// 矩形が件の縁を切る（A を動かす）・件の中に在る（B の上の件を動かす）の両方を、変形と補間の組ごとに。
 #[test]
 fn bitmap_items_transformed_and_moved_match_full_bytes() {
@@ -971,7 +971,7 @@ fn bitmap_items_transformed_and_moved_match_full_bytes() {
             check_frames(BOTH, false, &|w, r| checker_pair(w, r, tr, mode, 8), &steps);
         }
     }
-    // 縮める HIGH_QUALITY_CUBIC の件は全面まで広がる（2.1・R1）
+    // 縮める HIGH_QUALITY_CUBIC の件は全面まで広がる
     let shrink = t(0.6, 0.6, 0.0);
     let steps = MOVES.map(|(m, c)| (m, Want::Full(FullReason::CoversSurface), c));
     check_frames(

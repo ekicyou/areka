@@ -13,10 +13,8 @@ const ITEM2_W: f32 = 233.0;
 
 #[test]
 fn test_taffy_flex_layout_pure() {
-    // EcsWorldを作成（デフォルトのシステムスケジュールが登録済み）
     let mut ecs_world = EcsWorld::new();
 
-    // 1. 初期エンティティツリーを構築（taffy_flex_demoと同じ構造）
     let (root, flex_container, item1, item2, item3) = {
         let world = ecs_world.world_mut();
 
@@ -114,7 +112,6 @@ fn test_taffy_flex_layout_pure() {
     verify_initial_layout(&ecs_world, root, flex_container, item1, item2, item3);
 }
 
-/// 初期レイアウト結果を検証
 fn verify_initial_layout(
     ecs_world: &EcsWorld,
     root: Entity,
@@ -164,7 +161,6 @@ fn verify_initial_layout(
             (a.offset.x, a.offset.y, a.size.width, a.size.height),
             (x, y, w, h)
         );
-        // GlobalArrangementは親座標+相対オフセット
         let g = global(item);
         assert_eq!(g.bounds.left, parent_global.bounds.left + a.offset.x);
         assert_eq!(g.bounds.top, parent_global.bounds.top + a.offset.y);

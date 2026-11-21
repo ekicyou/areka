@@ -1,4 +1,4 @@
-//! Task 7.7: 境界値シナリオテスト
+//! 境界値シナリオテスト
 use bevy_ecs::prelude::*;
 use wintf::ecs::ChildOf;
 use wintf::ecs::layout::systems::{
@@ -8,14 +8,11 @@ use wintf::ecs::layout::systems::{
 use wintf::ecs::layout::taffy::{TaffyComputedLayout, TaffyLayoutResource, TaffyStyle};
 use wintf::ecs::layout::{Arrangement, BoxSize, BoxStyle, Dimension, LayoutRoot};
 
-// ===== Task 7.7: 境界値シナリオテスト =====
-
 #[test]
 fn test_empty_tree() {
     let mut world = World::new();
     world.init_resource::<TaffyLayoutResource>();
 
-    // エンティティなしでシステム実行
     let mut schedule = Schedule::default();
     schedule.add_systems((
         build_taffy_styles_system,
@@ -23,7 +20,6 @@ fn test_empty_tree() {
         compute_taffy_layout_system,
     ));
 
-    // クラッシュしないことを確認
     schedule.run(&mut world);
 }
 
@@ -60,13 +56,10 @@ fn test_single_node_tree() {
     );
     schedule.run(&mut world);
 
-    // TaffyComputedLayoutが設定されていることを確認
     assert!(world.entity(entity).contains::<TaffyComputedLayout>());
 
-    // Arrangementも設定されていることを確認
     assert!(world.entity(entity).contains::<Arrangement>());
 
-    // Arrangementの値を検証
     let arrangement = world.get::<Arrangement>(entity).unwrap();
     assert_eq!(arrangement.size.width, 100.0);
     assert_eq!(arrangement.size.height, 100.0);
@@ -109,7 +102,6 @@ fn test_many_siblings() {
         ))
         .id();
 
-    // 100個の兄弟ノードを作成
     let children: Vec<Entity> = (0..100)
         .map(|_| world.spawn((BoxStyle::default(), ChildOf(root))).id())
         .collect();
@@ -130,7 +122,6 @@ fn test_deep_hierarchy() {
     let mut world = World::new();
     world.init_resource::<TaffyLayoutResource>();
 
-    // 20階層の深いツリーを作成
     let mut parent = world
         .spawn((
             BoxStyle {

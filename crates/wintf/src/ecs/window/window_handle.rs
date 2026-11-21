@@ -98,8 +98,7 @@ impl WindowHandle {
 
     /// ウィンドウ全体RECTをクライアント領域RECTに変換（逆変換）
     ///
-    /// AdjustWindowRectExForDpiの逆変換を行う。
-    /// 原点(0,0)での差分を計算し、その差分を使って変換する。
+    /// `AdjustWindowRectExForDpi` の逆変換。
     ///
     /// # Arguments
     /// * `window_rect` - ウィンドウ全体の矩形
@@ -108,7 +107,6 @@ impl WindowHandle {
     /// * `Ok(RECT)` - クライアント領域の矩形
     /// * `Err(String)` - 変換失敗時のエラーメッセージ
     pub fn window_to_client_rect(&self, window_rect: RECT) -> Result<RECT, String> {
-        // 原点でクライアント→ウィンドウ変換を行い、差分を計算
         let origin_client = RECT {
             left: 0,
             top: 0,
@@ -117,13 +115,11 @@ impl WindowHandle {
         };
         let origin_window = self.client_to_window_rect(origin_client)?;
 
-        // 差分: ウィンドウ座標 - クライアント座標
         let left_diff = origin_window.left - origin_client.left;
         let top_diff = origin_window.top - origin_client.top;
         let right_diff = origin_window.right - origin_client.right;
         let bottom_diff = origin_window.bottom - origin_client.bottom;
 
-        // 逆変換: クライアント座標 = ウィンドウ座標 - 差分
         Ok(RECT {
             left: window_rect.left - left_diff,
             top: window_rect.top - top_diff,
@@ -217,13 +213,12 @@ fn on_window_handle_add(
             "WindowHandle added"
         );
 
-        // DPIコンポーネントを更新（on_window_addでシステムDPIで事前挿入済み）
-        // GetDpiForWindow()の実際値が事前値と異なる場合のみ更新（マルチモニタ対応）
+        // on_window_add がシステム DPI で事前挿入済み。実際値と違うときだけ更新する（マルチモニタ）。
         let dpi_value = unsafe { GetDpiForWindow(hwnd) };
         let dpi_component = if dpi_value > 0 {
             DPI::from_dpi(dpi_value as u16, dpi_value as u16)
         } else {
-            DPI::default() // 取得失敗時はデフォルト96
+            DPI::default()
         };
         let existing_dpi = world.get::<DPI>(entity).copied();
         if existing_dpi != Some(dpi_component) {
@@ -244,9 +239,6 @@ fn on_window_handle_add(
             );
         }
 
-        // Note: WindowPosは on_window_add で挿入済み（CreateWindow前に必要なため）
-
-        // アプリに通知
         if let Some(mut app) = world.get_resource_mut::<crate::ecs::app::App>() {
             app.on_window_created(entity);
         }
@@ -281,11 +273,8 @@ fn on_window_handle_remove(
 mod tests {
     use super::*;
 
-    /// `WindowHandle` は `hwnd: HWND`（`*mut c_void`
-    /// newtype・非 Send/Sync）を内包するため手動 `unsafe impl Send/Sync` で Send+Sync を
-    /// 表明している。本テストはその不変条件をコンパイル時に固定する回帰検知器
-    /// （device 非依存・実 HWND 不要）。将来フィールドが追加され手動 impl が撤去されて
-    /// Send/Sync が壊れた場合に検出する。
+    /// `WindowHandle` は手動 `unsafe impl Send/Sync` で Send+Sync を表明している。
+    /// 手動 impl が外れて Send/Sync が壊れたらコンパイル時に検出する。
     #[test]
     fn test_window_handle_is_send_sync() {
         fn assert_send_sync<T: Send + Sync>() {}

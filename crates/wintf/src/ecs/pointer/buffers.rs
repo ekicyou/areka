@@ -31,7 +31,7 @@ thread_local! {
 // バッファ操作ヘルパー（窓の手続きが使う）
 // ============================================================================
 
-/// 入力を投入したことを起床の旗へ伝える（設計 C16 の `POINTER`）。
+/// 入力を投入したことを起床の旗へ伝える（`POINTER`）。
 ///
 /// 呼ぶのは WndProc スレッドである。旗は原子的な OR で錠を取らず、何度立てても
 /// 同じ（冪等）なので、投入のたびに素直に呼んでよい。
@@ -130,12 +130,10 @@ pub(crate) fn set_modifier_state(entity: Entity, shift: bool, ctrl: bool) {
 /// WndProcスレッド（メインスレッド）で収集したポインター情報を、
 /// マルチスレッドで実行されるシステムがアクセスできるように転送する。
 pub(crate) fn transfer_buffers_to_world(world: &mut World) {
-    // POINTER_BUFFERSからPointerStateへ位置情報を転送
     // 1 tick 分だけ渡す（取り出して空にする）
     let points: Vec<(Entity, PhysicalPoint)> =
         POINTER_BUFFERS.with(|buffers| buffers.borrow_mut().drain().collect());
     for (entity, point) in points {
-        // Worldから該当エンティティのPointerStateを取得（無ければ捨てる）
         if let Some(mut pointer_state) = world.get_mut::<PointerState>(entity) {
             pointer_state.client_point = point;
 
@@ -167,7 +165,6 @@ pub(crate) fn transfer_buffers_to_world(world: &mut World) {
         }
 
         if buf.down_received {
-            // ボタンが押された瞬間
             if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
                 match button {
                     PointerButton::Left => pointer_state.left_down = true,
@@ -187,7 +184,7 @@ pub(crate) fn transfer_buffers_to_world(world: &mut World) {
     }
 
     // WHEEL_BUFFERS（窓ごと）から、その窓の中でポインタの状態を持つ entity（高々 1 つ）へ移す。
-    // 持ち主が居なければ捨てる（要件 6.10）。どちらでも溜めは毎回空にする（1 tick 分だけ渡す）。
+    // 持ち主が居なければ捨てる。どちらでも溜めは毎回空にする（1 tick 分だけ渡す）。
     let wheels: Vec<(Entity, WheelBuffer)> =
         WHEEL_BUFFERS.with(|buffers| buffers.borrow_mut().drain().collect());
     if !wheels.is_empty() {
@@ -218,7 +215,6 @@ pub(crate) fn transfer_buffers_to_world(world: &mut World) {
         }
     }
 
-    // MODIFIER_STATEからPointerStateへ修飾キー状態を転送
     // 届かない tick は前の値のまま（PointerState の欄が持つ）
     let modifiers: Vec<(Entity, (bool, bool))> =
         MODIFIER_STATE.with(|state| state.borrow_mut().drain().collect());
@@ -376,11 +372,9 @@ mod tests {
         transfer_buffers_to_world(&mut world);
 
         let state = world.get::<PointerState>(e).unwrap();
-        // 最新の位置が client/local へ反映
         assert_eq!(state.client_point, PhysicalPoint::new(150, 200));
         assert_eq!(state.local_point, PhysicalPoint::new(150, 200));
 
-        // 転送後にポインターバッファは空になる
         POINTER_BUFFERS.with(|buffers| {
             assert!(buffers.borrow().get(&e).is_none(), "転送後は空");
         });
@@ -513,7 +507,6 @@ mod tests {
         record_button_down(e, PointerButton::Left);
         set_modifier_state(e, true, false);
 
-        // PointerState がなくてもパニックしない（get_mut が None → スキップ）
         transfer_buffers_to_world(&mut world);
 
         assert!(

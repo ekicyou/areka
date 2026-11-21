@@ -39,7 +39,6 @@ use windows_core::BOOL;
 /// Arrangementを自動挿入する（既に存在する場合はスキップ）
 fn on_monitor_add(mut world: DeferredWorld, context: HookContext) {
     let entity = context.entity;
-    // Arrangementがまだ存在しない場合のみ挿入
     if world
         .get::<crate::ecs::layout::Arrangement>(entity)
         .is_none()
@@ -110,7 +109,6 @@ impl Monitor {
     /// HMONITORからMonitorを構築
     pub fn from_hmonitor(hmonitor: HMONITOR) -> Result<Self, MonitorError> {
         unsafe {
-            // GetMonitorInfoWでモニター情報を取得
             let mut monitor_info: MONITORINFOEXW = std::mem::zeroed();
             monitor_info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
 
@@ -120,7 +118,6 @@ impl Monitor {
                 return Err(MonitorError::GetMonitorInfoFailed);
             }
 
-            // GetDpiForMonitorでDPI取得
             let mut dpi_x: u32 = 0;
             let mut dpi_y: u32 = 0;
             let hr = GetDpiForMonitor(hmonitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y);
@@ -150,7 +147,7 @@ impl Monitor {
         (self.bounds.left as f32, self.bounds.top as f32)
     }
 
-    /// **追従対象フィールドの値**が異なるかを判定する（Req 7.2・設計決定 D14）。
+    /// **追従対象フィールドの値**が異なるかを判定する。
     ///
     /// # [`PartialEq`] とは別物である
     ///
@@ -159,14 +156,13 @@ impl Monitor {
     /// **変化検出**の意味論で、`handle` は**意図的に見ない**（同一モニタ同士を比べる
     /// 前提のため）。この 2 つを取り違えると、拡大率変更のように識別子が不変のまま
     /// 値だけが変わる表示構成変更で更新分岐が構造的に恒偽となる——実際にそれが
-    /// 起きていた（診断レポート §2.7 の欠陥 S4）。呼出点はどちらの意味論を要求して
-    /// いるのかを名前で明示すること。
+    /// 起きていた。呼出点はどちらの意味論を要求しているのかを名前で明示すること。
     ///
     /// # フィールド追加時の漏れ防止
     ///
     /// 本体は構造体分解パターンで書いてある。`Monitor` にフィールドを追加すると
     /// パターンが網羅でなくなりコンパイルエラーになる——追随漏れが静かに起きない
-    /// ことが D14 帰結⑵ の要求である。`handle` を無視することも `handle: _` として
+    /// ようにするためである。`handle` を無視することも `handle: _` として
     /// 明示的に記述する（省略ではなく宣言）。
     ///
     /// # 例
@@ -245,7 +241,6 @@ pub fn enumerate_monitors() -> Vec<Monitor> {
 pub(crate) fn try_enumerate_monitors() -> (Option<Vec<Monitor>>, Vec<(HMONITOR, MonitorError)>) {
     let mut found: (Vec<Monitor>, Vec<(HMONITOR, MonitorError)>) = (Vec::new(), Vec::new());
 
-    // EnumDisplayMonitorsのコールバック関数
     extern "system" fn enum_proc(
         hmonitor: HMONITOR,
         _hdc: windows::Win32::Graphics::Gdi::HDC,
@@ -332,7 +327,7 @@ mod tests {
         assert_ne!(a, c, "handle が異なれば非等価");
     }
 
-    /// Req 7.2: 値差分の述語は同一性（`handle`）を**見ない**。
+    /// 値差分の述語は同一性（`handle`）を**見ない**。
     ///
     /// `handle` だけが違う同値のモニタは「値の変化なし」。これが `PartialEq` との
     /// 意味論の分離そのものであり、本メソッドを `handle` 比較へ変異させれば赤になる。
@@ -348,7 +343,7 @@ mod tests {
         assert_ne!(a, b);
     }
 
-    /// Req 7.2: 追従対象フィールド（bounds／work_area／dpi／is_primary）を**網羅**する。
+    /// 追従対象フィールド（bounds／work_area／dpi／is_primary）を**網羅**する。
     ///
     /// どれか 1 つでも比較から落とせば、対応する探針が赤になる。
     #[test]
@@ -390,8 +385,7 @@ mod tests {
         );
     }
 
-    /// S4 の核心: 実機セッション②と同型（識別子・bounds 不変／work_area・dpi のみ変化）の
-    /// 構成で、同一性は「等価」・値差分は「変化あり」と**逆の答え**を返す。
+    /// 拡大率変更と同型（識別子・bounds 不変／work_area・dpi のみ変化）の構成で、同一性は「等価」・値差分は「変化あり」と**逆の答え**を返す。
     #[test]
     fn test_scale_change_is_identical_but_differs_in_value() {
         let before = make_monitor(0xABCD, 0, 0, 3840, 2160);

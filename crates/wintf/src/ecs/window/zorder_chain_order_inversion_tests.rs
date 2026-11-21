@@ -1,6 +1,6 @@
 //! 逆転・非隣接の鎖を**実窓 4 枚**へ本番の確立系と鎖の適用系で書き、前面走査の可視の
 //! 並びが宣言どおりになることと、解除で鎖が無くなったとき各スコープが組へ戻ることを
-//! 固定するテスト（`areka-P0-zorder-scope-inversion` 要件 1.2・2.2・4.5・8.3）。
+//! 固定するテスト。
 //!
 //! 兄弟の [`zorder_chain_apply_release_tests`](super::zorder_chain_apply_release_tests) は
 //! 替え玉で「窓口を何の順に呼んだか」を固定する。本ファイルはその先——**呼んだことが
@@ -15,9 +15,9 @@
 //!    `b1,s0,s1,b0`（非隣接）を公開して 1 巡回すと、所有関係が計画の連続対どおりの
 //!    一直線になり、本番の前面走査（[`measure_windows_in_front`]・可視の窓だけを拾う）の
 //!    並びが宣言どおりになる。**不可視の補助窓**（既定の IME 窓と同じ 0x0・不可視・
-//!    鎖の窓に所有される窓）を鎖の間に挟んでも読み飛ばされる（設計の R2）。
+//!    鎖の窓に所有される窓）を鎖の間に挟んでも読み飛ばされる。
 //! 2. 続けて解除（望む鎖 `None`）を公開して 1 巡回すると、各スコープでバルーンが
-//!    キャラクターのすぐ手前へ戻る（要件 4.5）。
+//!    キャラクターのすぐ手前へ戻る。
 //!
 //! 始点は組の重なりなので、どちらの計画も**少なくとも 1 組が外れなければ**着かない
 //! （組が張られたままでは `s` が自分の `b` より手前に出られない）。始点がそうなって
@@ -100,12 +100,10 @@ fn inversion_then_reset(order: [usize; 4], title: PCWSTR) {
     let mut schedule = scope_chain_schedule();
     let all_visible = set.iter().all(|h| is_visible(*h));
 
-    // 始点——確立系が組を張る（計画はまだ無い）。
     schedule.run(&mut world);
     let start_owners = owner_shape(&set);
     let start = z_shape(&set);
 
-    // 刺激①——逆転・非隣接の計画。
     publish_chain(&mut world, &entities, &order);
     schedule.run(&mut world);
     let landed = z_shape(&set);
@@ -118,14 +116,12 @@ fn inversion_then_reset(order: [usize; 4], title: PCWSTR) {
     with_helper.push(helper);
     let raw = z_shape(&with_helper);
     let helper_visible = is_visible(helper);
-    // 本番の前面走査（根から手前へ・可視の窓だけ）。
     let front_scan: Vec<usize> = measure_windows_in_front(set[order[3]])
         .windows
         .iter()
         .filter_map(|found| with_helper.iter().position(|w| w == found))
         .collect();
 
-    // 刺激②——解除（望む鎖そのものが無くなる）。
     world.insert_resource(ZOrderChainPlan {
         chain: None,
         dirty: true,
@@ -142,7 +138,6 @@ fn inversion_then_reset(order: [usize; 4], title: PCWSTR) {
     all.push(helper);
     teardown(&all);
 
-    // 足場の自己検査。
     assert!(all_visible, "4 枚が表示状態になっていない");
     assert_eq!(
         start_owners,
@@ -166,7 +161,7 @@ fn inversion_then_reset(order: [usize; 4], title: PCWSTR) {
         "実窓の並びが宣言どおりでない（要件 1.2・2.2）"
     );
 
-    // ⑵ 不可視の補助窓は鎖の間に挟まっているが、前面走査は読み飛ばす（R2）。
+    // ⑵ 不可視の補助窓は鎖の間に挟まっているが、前面走査は読み飛ばす。
     assert!(
         !helper_visible,
         "補助窓が可視になっている（檻の前提が崩れた）"
@@ -182,7 +177,7 @@ fn inversion_then_reset(order: [usize; 4], title: PCWSTR) {
         "前面走査の可視の並びが宣言どおりでない、または不可視の補助窓を拾った"
     );
 
-    // ⑶ 解除で各スコープが組へ戻る（要件 4.5）。
+    // ⑶ 解除で各スコープが組へ戻る。
     assert_eq!(
         reset_owners,
         vec![Some(S0), None, Some(S1), None],

@@ -2,7 +2,7 @@
 //!
 //! 名簿はプロセス共有で、テストは既定で並列に走る——**全体の件数は決して当てにしない**。
 //! 各テストは自分の TID と用途札から一意な役割名を作り、その役割名の項目だけを検査する。
-//! 実時間・CPU の閾値は 1 つも使わない（要件 6.5）。
+//! 実時間・CPU の閾値は 1 つも使わない。
 
 use super::*;
 
@@ -128,7 +128,6 @@ fn role_actor_builds_a_prefixed_role_and_only_known_roles_are_accepted() {
         }
     }
 
-    // 語彙に無いもの（対照）。
     assert!(!is_known_role(""));
     assert!(!is_known_role("actor"));
     assert!(!is_known_role("ticker"));

@@ -1,4 +1,4 @@
-//! `fill_world_visuals` の純粋なテスト（装置なし・`World` だけ・要件 1.2〜1.11, 2.2, 3.9, 4.1〜4.4, 5.3, 5.4, 6.7）。
+//! `fill_world_visuals` の純粋なテスト（装置なし・`World` だけ）。
 
 use super::draw_content_test_support::solid_rect_content;
 use super::promotion::Phase;
@@ -177,7 +177,6 @@ fn two_levels_multiply_transform_then_offset() {
     };
     assert_eq!(wv(&world, b).world_mat, want);
     assert!(wv(&world, b).axis_aligned);
-    // 同じ値なら書かない。
     assert!(!filler.run(&mut world, root));
 }
 

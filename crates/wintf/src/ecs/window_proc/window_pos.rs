@@ -28,13 +28,9 @@ type HandlerResult = Option<LRESULT>;
 // 外部由来の重なり変化について
 // ============================================================================
 //
-// かつてここには「外部由来の位置変化を捉えてグループ維持系へ是正を促す」引き金が在った
-// （`wants_group_follow`／`note_external_zorder_change`）。所有の鎖による維持
-// （`window/zorder_chain.rs`）へ移った時点で、その引き金は**担う要件を 1 つも持たなく
-// なった**——利用者の操作で窓が持ち上がっても、鎖は「所有される窓は所有者より手前」という
-// OS の不変条件そのものが保つので、観測も是正も要らない（要件 14.2／14.3）。
-// 引き金を残せば、要件 14.2 が退役させた「繰り返しの観測と是正」を別経路で復活させることに
-// なるため、実装ごと撤去してある。本ハンドラは重なりについて何も立てない。
+// 利用者の操作で窓が持ち上がっても、所有の鎖（`window/zorder_chain.rs`）が OS の不変条件
+// 「所有される窓は所有者より手前」そのものによって保つので、外部由来の位置変化を観測して
+// 是正を促す引き金は持たない。本ハンドラは重なりについて何も立てない。
 
 /// WM_WINDOWPOSCHANGED: ウィンドウ位置/サイズ変更通知
 ///
@@ -59,12 +55,10 @@ pub(super) fn WM_WINDOWPOSCHANGED(
     // echo 判定: TLS フラグを参照（ステップ①冒頭で1回のみ）
     let is_echo = crate::ecs::window::is_self_initiated();
 
-    // 受理の記録（要件 2.1）。`in_swp` は上の echo 判定そのもの——「自アプリの
-    // `SetWindowPos` の内側で同期送達されたか」であり、`since_flush_us` が非番兵なら
-    // その `SetWindowPos` は一括 flush の区間内で撃たれたことになる。
+    // 受理の記録。`in_swp` は上の echo 判定そのもの——自アプリの `SetWindowPos` の内側で同期送達
+    // されたか。`since_flush_us` が非番兵なら、その `SetWindowPos` は一括 flush の区間内で撃たれた。
     //
-    // **前置ガードの内側だけ**で組む。本ハンドラはドラッグ中も含めて絶えず走るため
-    // （要件 10.6 の追従比 1.000・定常の窓書込 0 を壊さない）、観測が無効な運転では
+    // 前置ガードの内側だけで組む。本ハンドラはドラッグ中も含めて絶えず走るため、観測が無効な運転では
     // 行の組立も時刻の読み取りも一切行わない。
     if transition_diag::is_enabled() {
         transition_diag::emit_line(&transition_diag::msg_line(&MsgRecord {
@@ -80,24 +74,20 @@ pub(super) fn WM_WINDOWPOSCHANGED(
     // ① 第1借用セクション: DPI更新, echo判定に基づきWindowPos更新, BoxStyle更新
     // ------------------------------------------------------------------
     // DpiChangeContextを先に取得（② の流しの前に消費する必要がある）
-    // is_echo にかかわらず常に実行
     let dpi_context = crate::ecs::window::DpiChangeContext::take();
 
-    // RefCellが既に借用されている場合はスキップ（再入時）
     if let Ok(mut world_borrow) = world.try_borrow_mut() {
         let windowpos = lparam.0 as *const WINDOWPOS;
         if !windowpos.is_null() {
             let wp = unsafe { &*windowpos };
 
             if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(entity) {
-                // DPI コンポーネントの読み取り（更新は WM_DPICHANGED で直接実行済み）
                 // DpiChangeContext の読み取りは echo bypass / BoxStyle skip の判定にのみ使用
                 let dpi = entity_ref
                     .get::<crate::ecs::window::DPI>()
                     .copied()
                     .unwrap_or_default();
 
-                // WindowHandleを取得してウィンドウ座標→クライアント座標に変換
                 let client_coords = entity_ref
                     .get::<crate::ecs::window::WindowHandle>()
                     .and_then(|handle| {
@@ -106,7 +96,6 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                             .ok()
                     });
 
-                // クライアント座標が取得できた場合のみ処理
                 if let Some((client_pos, client_size)) = client_coords {
                     debug!(
                         is_echo = is_echo,
@@ -216,13 +205,9 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                         }
                     }
 
-                    // BoxStyle.size のサイズ変更判定と条件付き更新
-                    // BoxStyle.inset への書き込みは行わない（Window位置はWindowPosが唯一のsource of truth）
-                    //
-                    // skip_box_style = is_echo || dpi_context.is_some()
-                    // - echo（自アプリ由来、DPI変更なし）: ループ防止のためスキップ
-                    // - DPI変更時: BoxStyle.size は不変（レイアウトシステム主導でサイズ決定）
-                    // - 外部リサイズ時のみ: 物理px / DPI.scale → 論理px に変換して更新
+                    // BoxStyle.inset は書かない（Window 位置は WindowPos が唯一の source of truth）。
+                    // skip_box_style = is_echo || dpi_context.is_some(): echo はループ防止、DPI 変更時は
+                    // サイズをレイアウトシステムが決めるためスキップする
                     let skip_box_style = is_echo || dpi_context.is_some();
                     if !skip_box_style {
                         use crate::ecs::layout::{BoxSize, Dimension};
@@ -230,7 +215,6 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                         let physical_width = client_size.width as f32;
                         let physical_height = client_size.height as f32;
 
-                        // 物理ピクセルを DPI スケールで除算して論理ピクセルに変換
                         // BoxStyle は論理 px（96 DPI / 100% 相当）を唯一の座標系とする
                         let logical_width = physical_width / dpi.scale_x();
                         let logical_height = physical_height / dpi.scale_y();
@@ -240,7 +224,6 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                             height: Some(Dimension::Px(logical_height)),
                         });
 
-                        // Step 1: 現在のサイズを読み取り（immutable borrow）
                         let current_size = entity_ref
                             .get::<crate::ecs::layout::BoxStyle>()
                             .map(|bs| bs.size);
@@ -282,13 +265,12 @@ pub(super) fn WM_WINDOWPOSCHANGED(
             }
         }
     }
-    // world_borrowスコープ終了: 借用解放
 
     // ------------------------------------------------------------------
     // ② flush_window_pos_commands_guarded() (再入ガードを取って流す)
     // ------------------------------------------------------------------
     crate::ecs::world::flush_window_pos_commands_guarded();
-    None // DefWindowProcWに委譲
+    None
 }
 
 /// WM_DPICHANGED: DPI変更通知（モニター間移動など）
@@ -303,7 +285,7 @@ pub(super) fn WM_WINDOWPOSCHANGED(
 /// ② DpiChangeContext::set: echo bypass 防止信号
 /// ③ guarded_set_window_pos: suggested_rect の位置のみ（SWP_NOSIZE 維持）
 ///
-/// ## 提案位置の採否（areka-P0-dpi-window-vanish S1 是正・D3・Req 4.3）
+/// ## 提案位置の採否
 ///
 /// ②③は [`dpi_suggested_position_decision`] の戻り値で **1 個の `if let Some((x, y))`
 /// にまとめて**分岐する。位置権威が外部（ECS 側の配置システム）にある窓
@@ -327,9 +309,8 @@ pub(super) fn WM_DPICHANGED(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    // 受理の記録（要件 2.1）。再観測 §5 の 24/24——各窓の最初の `SetWindowPos` の内側で
-    // 当該窓の `WM_DPICHANGED` が同期処理される——は `in_swp`／`since_flush_us` の
-    // 組で読む。判定より前に置くのは「受理そのもの」の刻印だからである。
+    // 受理の記録。各窓の最初の `SetWindowPos` の内側で当該窓の `WM_DPICHANGED` が同期処理される
+    // ことは `in_swp`／`since_flush_us` の組で読む。判定より前に置くのは「受理そのもの」の刻印だから。
     if transition_diag::is_enabled() {
         transition_diag::emit_line(&transition_diag::msg_line(&MsgRecord {
             stamp: transition_diag::stamp(),
@@ -342,7 +323,6 @@ pub(super) fn WM_DPICHANGED(
 
     let new_dpi = crate::ecs::window::DPI::from_WM_DPICHANGED(wparam, lparam);
 
-    // lparam から suggested_rect を取得
     let suggested_rect_ptr = lparam.0 as *const RECT;
     let suggested_rect = if !suggested_rect_ptr.is_null() {
         unsafe { *suggested_rect_ptr }
@@ -391,15 +371,13 @@ pub(super) fn WM_DPICHANGED(
                     new_dpi_y = new_dpi.dpi_y,
                     "[WM_DPICHANGED] DPI component directly updated (Changed<DPI>)"
                 );
-                // 窓の拡大率が変わったことを表す**起点**（task 8.3）。上の `debug` 行と
-                // 同じ事実を、1 回の遷移の時系列へ並べられる形（刻印つき・単一 target）で
-                // 出す。発行するのは component を**実際に書き換えたこの腕だけ**であり、
-                // `DPI` を持たない窓・entity へ到達できなかった経路からは 1 行も出ない。
+                // 窓の拡大率が変わったことを表す起点。上の `debug` 行と同じ事実を、1 回の遷移の時系列へ
+                // 並べられる形（刻印つき・単一 target）で出す。発行するのは component を実際に書き換えた
+                // この腕だけで、`DPI` を持たない窓・entity へ到達できなかった経路からは 1 行も出ない。
                 //
-                // 刻印はスレッド局所ミラーから組む（D1）——wndproc は UI スレッドで走り、
-                // ここは World の借用を持っているが `FrameCount`／`TickStart` を
-                // 引数で受け取っていないため、同ファイルの受理記録（`msg_line`）と
-                // 同じ流儀に倣う。
+                // 刻印はスレッド局所ミラーから組む——wndproc は UI スレッドで走り、ここは World の借用を
+                // 持っているが `FrameCount`／`TickStart` を引数で受け取っていないため、同ファイルの受理記録
+                // （`msg_line`）と同じ流儀に倣う。
                 if transition_diag::is_enabled() {
                     transition_diag::emit_line(&transition_diag::windpi_line(&WindowDpiRecord {
                         stamp: transition_diag::stamp(),
@@ -411,22 +389,20 @@ pub(super) fn WM_DPICHANGED(
             }
         }
     }
-    // world_borrow スコープ終了: 借用解放
 
-    // 提案位置の採否を純関数へ委ねる（D3・Req 4.3）。戻り値の `Option` が②③の
+    // 提案位置の採否を純関数へ委ねる。戻り値の `Option` が②③の
     // **共通の**分岐条件であり、「書かない」を番兵座標ではなく型で表す。
     let decision =
         super::dpi_helpers::dpi_suggested_position_decision(policy.as_ref(), &suggested_rect);
     let applied = decision.is_some();
 
-    // Req 1.3: 「OS 提案位置に基づく位置変更を実際に行ったか否か」は診断手順書が有効化する
-    // 水準（`wintf::ecs::window_proc=debug`）で必ず出す。旧 `trace!` は当該手順で点灯せず、
-    // 2026-07-18 の実機診断で「発生 0 回」という偽陰性を生んだ直接原因である。
+    // 「OS 提案位置に基づく位置変更を実際に行ったか否か」は診断手順書が有効化する水準
+    // （`wintf::ecs::window_proc=debug`）で必ず出す。`trace!` では当該手順で点灯せず、
+    // 「発生 0 回」という偽陰性を生む。
     //
-    // `policy` は判断の根拠（design.md「dpi_suggested_position_decision > Validation」の
-    // フィールド）。網羅 match ゆえ、政策に腕が増えたらコンパイラがここを指す。
-    // 「到達不能」を専用語にしているのは Req 1.5 の趣旨——読めなかったことを
-    // 「宣言が無かった」と同じ語で報告すると、事後の突合で偽の結論を作る。
+    // `policy` は判断の根拠。網羅 match ゆえ、政策に腕が増えたらコンパイラがここを指す。
+    // 「到達不能」を専用語にするのは、読めなかったことを「宣言が無かった」と同じ語で報告すると、
+    // 事後の突合で偽の結論を作るため。
     let policy_label = match (entity_reached, policy) {
         (false, _) => "unreachable",
         (true, None) => "unset",
@@ -440,7 +416,7 @@ pub(super) fn WM_DPICHANGED(
         hwnd = ?hwnd,
         // `format_args!` で包むのは引用符を付けないため（`policy = policy_label` だと
         // `policy="unset"` と出て、同行の他フィールドと grep の当たり方が変わる。
-        // 書式のばらつきが突合を静かにゼロ件にする罠は本 spec で既知＝`hwnd` の前例）。
+        // 書式のばらつきが突合を静かにゼロ件にする罠がある）。
         policy = format_args!("{policy_label}"),
         applied = applied,
         suggested_left = suggested_rect.left,
@@ -448,7 +424,7 @@ pub(super) fn WM_DPICHANGED(
         "[WM_DPICHANGED] suggested position write decision"
     );
 
-    // ②③をまとめて分岐する（D3）。片側だけ実行すると、書かないのにコンテキストだけ
+    // ②③をまとめて分岐する。片側だけ実行すると、書かないのにコンテキストだけ
     // 残る／書くのに echo 判定が効かない、のどちらかの競合を新設することになる。
     if let Some((x, y)) = decision {
         // ② DpiChangeContextをスレッドローカルに保存（echo bypass 防止 + BoxStyle skip 信号）
@@ -465,9 +441,8 @@ pub(super) fn WM_DPICHANGED(
         // が算出するため、suggested_rect のサイズは使わない。
         let flags = SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE;
 
-        // 観測（要件 2.1）。**書込 1 回を数える点はここ 1 箇所**であり、経路 A
-        // （メッセージ受理時の同期書込）として一括 flush（`stage=flush`）と区別する。
-        // 前置ガードが偽なら計時も読み戻しも行わない。
+        // **書込 1 回を数える点はここ 1 箇所**であり、経路 A（メッセージ受理時の同期書込）として
+        // 一括 flush（`stage=flush`）と区別する。前置ガードが偽なら計時も読み戻しも行わない。
         let observe = transition_diag::is_enabled();
         let call_started = observe.then(Instant::now);
 
@@ -481,10 +456,9 @@ pub(super) fn WM_DPICHANGED(
                 stage: WriteStage::Sync,
                 seq: 0,
                 hwnd,
-                // 経路語は wintf 自身が名乗る（`origin` は「どの経路が書込を要求したか」＝
-                // 要件 2.1 のフィールドであり、実在する要求元を番兵で埋めると
-                // 「タグの付け忘れ」と区別が付かなくなる）。キャラ番号と窓種別は areka の
-                // 語彙であり表示基盤からは判らないので、そこは番兵のままにする。
+                // 経路語は wintf 自身が名乗る（`origin` は「どの経路が書込を要求したか」を表すので、実在する
+                // 要求元を番兵で埋めると「タグの付け忘れ」と区別が付かなくなる）。キャラ番号と窓種別は areka の
+                // 語彙で表示基盤からは判らないので、そこは番兵のままにする。
                 tag: WriteTag {
                     origin: ORIGIN_DPI_SUGGESTED,
                     ..WriteTag::UNTAGGED

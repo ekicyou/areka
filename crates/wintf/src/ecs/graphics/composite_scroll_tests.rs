@@ -1,4 +1,4 @@
-//! 平行移動の写しの答え（WARP・要件 7.3 の平行移動・5.1）。写しと帯の描き直しで作った入れ物と、全部合成した
+//! 平行移動の写しの答え（WARP）。写しと帯の描き直しで作った入れ物と、全部合成した
 //! 入れ物がバイトで一致する。
 
 use super::composite_damage_tests::{
@@ -26,7 +26,7 @@ fn group(
 
 /// 動かす中身の節 `content` の下に、赤 (2,2)・小数の位置の青・下の外の緑（入る）・上へはみ出す黄（出る）と、
 /// 入れ子の矩形の切り抜き (14,24)-(24,34)（はみ出す赤を持つ）。黄は上へ 4 で余白ごと切り抜きの外へ出る位置
-/// （-5 だと前の余白がずらした先で切り抜きにかかり S7 で写さない）。
+/// （-5 だと前の余白がずらした先で切り抜きにかかり写さない）。
 fn fill_content(world: &mut World, content: Entity) {
     item(world, content, 2.0, 2.0, RED);
     item(world, content, 13.5, 11.25, BLUE);
@@ -91,7 +91,7 @@ const INTEGER_STEPS: &[(&str, Want, Change)] = &[
     ("下へ 8", Want::Shift(1), |w, n| scroll(w, n, 0.0, 8.0)),
 ];
 
-/// 切り抜きの中の後の 2 歩は、帯を交わる件で閉じると写しの先を覆うので写しを落として描き直す（R1）。
+/// 切り抜きの中の後の 2 歩は、帯を交わる件で閉じると写しの先を覆うので写しを落として描き直す。
 const RECT_CLIP_STEPS: &[(&str, Want, Change)] = &[
     INTEGER_STEPS[0],
     INTEGER_STEPS[1],
@@ -104,7 +104,7 @@ const RECT_CLIP_STEPS: &[(&str, Want, Change)] = &[
 #[test]
 fn integer_scroll_inside_rect_clip_copies_and_matches_full_bytes() {
     check_frames(BOTH, false, &scroll_box, RECT_CLIP_STEPS);
-    // 根の命令の列を持つ描画面では写さない（S1）
+    // 根の命令の列を持つ描画面では写さない
     check_frames(BOTH, true, &scroll_box, RECT_CLIP_STEPS);
 }
 
@@ -113,7 +113,7 @@ fn integer_scroll_of_whole_surface_copies_and_matches_full_bytes() {
     check_frames(BOTH, false, &whole_surface, INTEGER_STEPS);
 }
 
-/// 拡大 1.0 でも 1.25 でも整数にならない量（2.5 DIP＝2.5 px・3.125 px）は写さない（S4・5.2）。
+/// 拡大 1.0 でも 1.25 でも整数にならない量（2.5 DIP＝2.5 px・3.125 px）は写さない。
 const FRACTIONAL_STEPS: &[(&str, Want, Change)] = &[
     ("上へ 2.5", Want::Partial, |w, n| scroll(w, n, 0.0, -2.5)),
     ("左へ 2.5", Want::Partial, |w, n| scroll(w, n, -2.5, -2.5)),
@@ -125,7 +125,7 @@ fn fractional_scroll_is_redrawn_without_copy_and_matches_full_bytes() {
     check_frames(BOTH, false, &whole_surface, FRACTIONAL_STEPS);
 }
 
-/// 切り抜きの下に重なる絵が在れば写さない（S8・5.2）。
+/// 切り抜きの下に重なる絵が在れば写さない。
 #[test]
 fn scroll_over_an_item_below_is_redrawn_without_copy_and_matches_full_bytes() {
     let steps: &[(&str, Want, Change)] = &[

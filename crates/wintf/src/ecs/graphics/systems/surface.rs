@@ -66,8 +66,8 @@ type SurfaceCreationFilter = (
 
 /// 変更検知システム：描画内容に変更があった場合、SurfaceGraphicsDirtyを更新する
 ///
-/// Phase 4以降の自己描画方式では、各EntityがSurfaceを持ち、自分自身のみを描画するため、
-/// 親をたどる必要はない。変更があったEntity自身のSurfaceGraphicsDirtyを更新する。
+/// 各EntityがSurfaceを持ち自分自身のみを描画するため、親をたどる必要はない。
+/// 変更があったEntity自身のSurfaceGraphicsDirtyを更新する。
 ///
 /// 検知対象:
 /// - GraphicsCommandList: 描画コマンドの変更
@@ -102,21 +102,9 @@ pub fn mark_dirty_surfaces(
 /// GraphicsCommandList か DrawTree が存在するEntityに対してSurfaceを条件付きで作成する。
 /// - 対象: VisualGraphics + (GraphicsCommandList か DrawTree) を持つEntity
 /// - サイズ: GlobalArrangement.boundsから物理ピクセルサイズを計算。自動で上げた持ち主（相が用意中か上げた）は
-///   置き場（`SurfacePlacement::Auto`）の大きさ＝部分木の描く範囲（要件 2.7）。置き場は 0×0 を書かない
+///   置き場（`SurfacePlacement::Auto`）の大きさ＝部分木の描く範囲。置き場は 0×0 を書かない
 /// - 条件: サイズが有効（幅・高さが1以上）な場合のみ作成
 /// - サイズ変更: 既存Surfaceとサイズ不一致の場合は再作成
-///
-/// # Requirements
-/// - Req 1.1: CommandList追加時にSurface作成
-/// - Req 1.2: CommandListなしならスキップ（クエリ条件で実現）
-/// - Req 2.2: deferred_surface_creation唯一化
-/// - Req 2.3: トリガーをCommandList存在のみに
-/// - Req 3.1: GlobalArrangement.boundsから計算
-/// - Req 3.2: スケール適用後のサイズ（物理ピクセル）
-/// - Req 3.3: サイズ0の場合はスキップ
-/// - Req 3.4: サイズ変更時にSurface再作成
-/// - Req 5.1: スキップ理由ログ
-/// - Req 5.2: 作成ログ（物理サイズ）
 ///
 /// Note: SurfaceGraphicsは Visual の on_add（と後から窓へつなぐ係）で事前に空で配置されているため、
 /// ここでは直接更新（set_surface）する。commands.insert() は使用しない。
@@ -161,12 +149,10 @@ pub fn deferred_surface_creation_system(
         if placement.is_none() && !wants_own_surface(has_list, has_own, is_node, auto_owner) {
             continue;
         }
-        // 自動の持ち主は置き場の大きさ、ほかはGlobalArrangementからサイズを計算
         let Some((width, height)) = placement
             .and_then(SurfacePlacement::auto_size_px)
             .or_else(|| calculate_surface_size_from_global_arrangement(global_arrangement))
         else {
-            // Req 5.1: スキップ理由ログ
             trace!(
                 entity = %format_entity_name(entity, name),
                 bounds = ?global_arrangement.bounds,
@@ -176,14 +162,12 @@ pub fn deferred_surface_creation_system(
             continue;
         };
 
-        // サイズが同じなら何もしない（既にSurfaceが有効な場合）
         if surface_graphics.is_valid() && surface_graphics.size == (width, height) {
             continue;
         }
         // 名前は作る・作り直す部品の分だけ作る（位置が動くたびに全部の部品が通る道）
         let entity_name = format_entity_name(entity, name);
 
-        // 新規作成かリサイズかを判定
         let is_new = !surface_graphics.is_valid();
 
         if is_new {
@@ -203,8 +187,7 @@ pub fn deferred_surface_creation_system(
             );
         }
 
-        // Surface作成（B8G8R8A8・Premultiplied・要件 6.4。DComp の
-        // DXGI_FORMAT_B8G8R8A8_UNORM + DXGI_ALPHA_MODE_PREMULTIPLIED と等価）。
+        // Surface作成（B8G8R8A8・Premultiplied）。
         let surface_res = graphics_device.CreateDrawingSurface(
             Size {
                 Width: width as f32,
@@ -216,8 +199,6 @@ pub fn deferred_surface_creation_system(
 
         match surface_res {
             Ok(surface) => {
-                // WUC: surface を SurfaceBrush で束ね、SpriteVisual.SetBrush で適用する
-                // （DComp の visual.SetContent(surface) 一段に対し、brush が一段挟まる・要件 6.3）。
                 let brush = match compositor.CreateSurfaceBrushWithSurface(&surface) {
                     Ok(b) => b,
                     Err(e) => {
@@ -230,7 +211,6 @@ pub fn deferred_surface_creation_system(
                     }
                 };
 
-                // VisualにBrushを設定（SpriteVisual へ cast して SetBrush）
                 if let Some(visual) = visual_graphics.visual() {
                     trace!(
                         entity = %entity_name,
@@ -238,11 +218,8 @@ pub fn deferred_surface_creation_system(
                     );
                     match visual.cast::<SpriteVisual>() {
                         Ok(sprite) => {
-                            // WUC 固有: SpriteVisual は自身の Size 内にのみ brush を描画する
-                            // （DComp の SetContent(surface) は surface の自然サイズで描画するため
-                            // Visual サイズ設定が不要だった）。live パイプラインは Visual に Size を
-                            // 設定しないため、surface と同一の物理サイズを SpriteVisual に設定して
-                            // 空描画を防ぎ、DComp の SetContent と等価な描画範囲を保つ（要件 6.3/8.2）。
+                            // SpriteVisual は自身の Size 内にのみ brush を描画する。live パイプラインは Visual に Size を
+                            // 設定しないので、surface と同一の物理サイズを設定して空描画を防ぐ。
                             if let Err(e) = sprite.SetSize(windows_numerics::Vector2 {
                                 X: width as f32,
                                 Y: height as f32,
@@ -280,7 +257,6 @@ pub fn deferred_surface_creation_system(
 
                 // 直接更新（commands.insert()ではなく）。surface と brush を保持（brush 寿命固定）。
                 surface_graphics.set_surface(surface, brush, (width, height));
-                // SurfaceGraphicsDirtyのChangedをトリガー
                 dirty.requested_frame = dirty.requested_frame.wrapping_add(1);
 
                 if is_new {
@@ -319,10 +295,6 @@ pub fn deferred_surface_creation_system(
 /// 命令の列も木の列もまだ無い部品だけを片づける（`Without<GraphicsCommandList>`・`Without<DrawTree>`）。立ち直りで外した
 /// 命令の列が同じ回に付き直り、作り直したばかりの描画面を空にしないため。
 ///
-/// # Requirements
-/// - Req 1.3: CommandList削除時にSurface解放
-/// - Req 1.4: 専用クリーンアップシステム
-///
 /// Note: commands.remove()ではなくclear()を使用し、
 /// コンポーネントの存在自体は維持する（事前配置パターン）。
 #[allow(clippy::type_complexity)]
@@ -344,9 +316,7 @@ pub fn cleanup_surface_on_commandlist_removed(
             dirty.set_changed();
             continue;
         }
-        // SurfaceGraphicsを持つEntityのみ処理
         if let Ok((entity, visual_graphics, mut surface_graphics, name)) = query.get_mut(entity) {
-            // 既にinvalidな場合はスキップ
             if !surface_graphics.is_valid() {
                 continue;
             }
@@ -358,7 +328,6 @@ pub fn cleanup_surface_on_commandlist_removed(
                 "[cleanup_surface_on_commandlist_removed] Clearing SurfaceGraphics"
             );
 
-            // Visual の Brush をクリア（Req 1.3）。DComp の SetContent(None) に対応。
             // 係には Err を返す先が無いので、失敗は記録だけ。
             if let Some(visual) = visual_graphics.visual()
                 && let Ok(sprite) = visual.cast::<SpriteVisual>()
@@ -371,7 +340,6 @@ pub fn cleanup_surface_on_commandlist_removed(
                 );
             }
 
-            // SurfaceGraphics（surface + brush）をクリア（コンポーネント自体は残す）
             surface_graphics.clear();
 
             stats.record_deleted();

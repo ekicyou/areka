@@ -12,7 +12,6 @@ pub(crate) fn on_red_box_pressed(
     ev: &Phase<PointerState>,
 ) -> bool {
     let wlabel = window_label(world, entity);
-    // Bubble フェーズでのみ処理
     if !ev.is_bubble() {
         info!(
             "[Tunnel] RedBox: Passing through, sender={:?}, entity={:?}, {}",
@@ -23,7 +22,6 @@ pub(crate) fn on_red_box_pressed(
 
     let state = ev.value();
 
-    // 左クリック検出
     if state.left_down {
         info!(
             "[Bubble] RedBox: Left-click, sender={:?}, entity={:?}, client=({:.1},{:.1}), local=({:.1},{:.1}), L={}, R={}, Ctrl={}",
@@ -38,14 +36,12 @@ pub(crate) fn on_red_box_pressed(
             state.ctrl_down,
         );
 
-        // 色をトグル（赤 ⇔ 黄）
         if let Some(mut brushes) = world.get_mut::<Brushes>(entity) {
             let is_red = match brushes.foreground.as_color() {
                 Some(c) => c.r > 0.9 && c.g < 0.1,
                 None => false,
             };
             if is_red {
-                // 黄色に変更
                 brushes.foreground = wintf::ecs::widget::brushes::Brush::Solid(D2D1_COLOR_F {
                     r: 1.0,
                     g: 1.0,
@@ -56,7 +52,6 @@ pub(crate) fn on_red_box_pressed(
                     "[AlphaMask Demo] BACKGROUND clicked (transparent area) - color: RED -> YELLOW"
                 );
             } else {
-                // 赤に戻す
                 brushes.foreground = wintf::ecs::widget::brushes::Brush::Solid(D2D1_COLOR_F {
                     r: 1.0,
                     g: 0.0,
@@ -86,14 +81,12 @@ pub(crate) fn on_image_pressed(
     _entity: Entity,
     ev: &Phase<PointerState>,
 ) -> bool {
-    // Bubble フェーズでのみ処理
     if !ev.is_bubble() {
         return false;
     }
 
     let state = ev.value();
 
-    // 左クリック検出
     if state.left_down {
         info!(
             "[AlphaMask Demo] IMAGE clicked (opaque area) - event consumed, background unchanged"
@@ -126,7 +119,6 @@ pub(crate) fn on_green_box_pressed(
 ) -> bool {
     match ev {
         Phase::Tunnel(state) => {
-            // 左クリックでキャプチャ
             if state.left_down {
                 tracing::info!(
                     double_click = ?state.double_click,
@@ -134,14 +126,12 @@ pub(crate) fn on_green_box_pressed(
                     "[Tunnel] GreenBox: Button pressed, checking double-click"
                 );
 
-                // ダブルクリック判定
                 if state.double_click == wintf::ecs::pointer::DoubleClick::Left {
                     info!(
                         "[Tunnel] GreenBox: DOUBLE-CLICK detected, toggling size, sender={:?}, entity={:?}",
                         sender, entity,
                     );
 
-                    // サイズをトグル（100x100 ⇔ 150x150）
                     if let Some(mut box_style) =
                         world.get_mut::<wintf::ecs::layout::BoxStyle>(entity)
                     {
@@ -171,7 +161,6 @@ pub(crate) fn on_green_box_pressed(
                     return true;
                 }
 
-                // 通常の左クリック：色をトグル（緑 ⇔ 黄緑）
                 info!(
                     "[Tunnel] GreenBox: Captured event, stopping propagation (Left), sender={:?}, entity={:?}, client=({:.1},{:.1}), local=({:.1},{:.1})",
                     sender,
@@ -188,7 +177,6 @@ pub(crate) fn on_green_box_pressed(
                         None => false,
                     };
                     if is_green {
-                        // 黄緑に変更
                         brushes.foreground =
                             wintf::ecs::widget::brushes::Brush::Solid(D2D1_COLOR_F {
                                 r: 0.5,
@@ -198,7 +186,6 @@ pub(crate) fn on_green_box_pressed(
                             });
                         info!("[Tunnel] GreenBox: Color changed GREEN -> YELLOW-GREEN");
                     } else {
-                        // 緑に戻す
                         brushes.foreground =
                             wintf::ecs::widget::brushes::Brush::Solid(D2D1_COLOR_F {
                                 r: 0.0,
@@ -220,7 +207,6 @@ pub(crate) fn on_green_box_pressed(
             false
         }
         Phase::Bubble(state) => {
-            // 右クリック処理
             if state.right_down {
                 info!(
                     "[Bubble] GreenBox: Right-click, sender={:?}, entity={:?}, client=({:.1},{:.1}), local=({:.1},{:.1})",
@@ -232,7 +218,6 @@ pub(crate) fn on_green_box_pressed(
                     state.local_point.y,
                 );
 
-                // 色を変更
                 if let Some(mut brushes) = world.get_mut::<Brushes>(entity) {
                     brushes.foreground = wintf::ecs::widget::brushes::Brush::Solid(D2D1_COLOR_F {
                         r: 0.0,
@@ -283,7 +268,6 @@ pub(crate) fn on_green_child_pressed(
             false
         }
         Phase::Bubble(_) => {
-            // 右クリック処理
             if state.right_down {
                 info!(
                     "[Bubble] GreenBoxChild: Right-click detected, changing to orange, sender={:?}, entity={:?}, client=({:.1},{:.1}), local=({:.1},{:.1})",
@@ -295,7 +279,6 @@ pub(crate) fn on_green_child_pressed(
                     state.local_point.y,
                 );
 
-                // 色をオレンジに変更
                 if let Some(mut brushes) = world.get_mut::<Brushes>(entity) {
                     brushes.foreground = wintf::ecs::widget::brushes::Brush::Solid(D2D1_COLOR_F {
                         r: 1.0,
@@ -356,7 +339,6 @@ pub(crate) fn on_blue_box_pressed(
     entity: Entity,
     ev: &Phase<PointerState>,
 ) -> bool {
-    // Bubble フェーズでのみ処理
     if !ev.is_bubble() {
         info!(
             "[Tunnel] BlueBox: Passing through, sender={:?}, entity={:?}",
@@ -367,7 +349,6 @@ pub(crate) fn on_blue_box_pressed(
 
     let state = ev.value();
 
-    // 左クリック検出
     if state.left_down {
         info!(
             "[Bubble] BlueBox: Left-click detected! Toggling size, sender={:?}, entity={:?}, client=({:.1},{:.1}), local=({:.1},{:.1}), L={}, R={}, Ctrl={}",
@@ -382,7 +363,6 @@ pub(crate) fn on_blue_box_pressed(
             state.ctrl_down,
         );
 
-        // サイズをトグル
         if let Some(mut style) = world.get_mut::<BoxStyle>(entity) {
             if let Some(ref mut size) = style.size {
                 let new_size = if size.width == Some(Dimension::Px(100.0)) {

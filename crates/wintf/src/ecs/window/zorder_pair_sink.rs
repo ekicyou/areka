@@ -1,5 +1,5 @@
 //! 他アプリ活性化時の沈降観測——非活性化の巡には目印を付けるだけに留め、実測と記録は
-//! 次の巡で行う（design.md「WM_ACTIVATE 沈降観測（読み取り専用・両案共通・遅延 1 巡）」）。
+//! 次の巡で行う。
 //!
 //! # なぜ遅らせるのか（即時に測ってはならない理由）
 //!
@@ -9,13 +9,12 @@
 //! **偽の失敗**が記録として残る。遅らせた観測はこの偽陽性を断つ。
 //!
 //! **ここを「即時に測ればよい」と書き換えてはならない。** 非活性化の枝は「前面から外れる
-//! 瞬間を確実に知る自窓イベント」としてのみ使い、実測は状態が落ち着いた次の巡で行う、
-//! という分業である（research.md §8-10 の解・設計ディスカッション CI3 の裁定）。
+//! 瞬間を確実に知る自窓イベント」としてのみ使い、実測は状態が落ち着いた次の巡で行う。
 //!
 //! # 何を測るのか
 //!
-//! - **ペアの隣接が保たれているか**（要件 4.4）——沈んでもバルーンはキャラのすぐ手前に居るか。
-//! - **前面窓より背面に居るか**（要件 4.1／4.2）——ゴーストが前面に居座っていないか。
+//! - **ペアの隣接が保たれているか**——沈んでもバルーンはキャラのすぐ手前に居るか。
+//! - **前面窓より背面に居るか**——ゴーストが前面に居座っていないか。
 //!
 //! 前面窓との相対を測るのはペアの**手前側の窓**（バルーン窓）である。ペアの中で最も手前に
 //! 居る窓が前面窓より背面なら、その背後に居るキャラ窓も当然に背面である——最も強い 1 点を
@@ -24,9 +23,8 @@
 //! # 窓の挙動は一切変えない
 //!
 //! 本モジュールは読み取りだけを行う。指令を 1 本も出さず、重なり・位置・寸法・窓スタイル・
-//! 表示状態のいずれにも書き込まない。要件 4.1 を「沈んだ状態を妨げない」という受動実装で
-//! 満たす設計（design.md Requirements Traceability 4.1）に対し、本モジュールはその
-//! **証跡だけを残す**役である。
+//! 表示状態のいずれにも書き込まない。沈んだ状態を妨げない受動実装に対し、本モジュールは
+//! その**証跡だけを残す**役である。
 //!
 //! 記録を出すマクロは [`zorder_pair`](super::zorder_pair) に置く（出力先は組のモジュール 1 つに
 //! 揃える。読み手の絞り込みは前方一致なので漏れはしないが、記録の関数を 1 つのファイルに集めて固定する）。
@@ -77,8 +75,7 @@ pub(crate) type SinkMarkQuery<'w, 's> =
 ///
 /// 付ける先を**宣言を持つ側（バルーン窓）に揃える**のは、記録の `entity` 欄を他の記録
 /// （確立・是正・見送り・検証不一致）と同じ側に揃えるためである。揃っていれば、areka が出す
-/// ペア宣言の記録との entity 結合が 1 通りに定まり、スコープの 2 段 grep が成立する
-/// （design.md「診断ログ語彙」の結合キーの約束）。
+/// ペア宣言の記録との entity 結合が 1 通りに定まり、スコープの 2 段 grep が成立する。
 ///
 /// 非活性化されるのはキャラ窓・バルーン窓のどちらもありうる。前者は宣言を持たない側
 /// （`peer` として参照されている側）なので、宣言の側から引き当てる。
@@ -108,7 +105,7 @@ pub(crate) fn mark_pair_sink_observation(world: &mut World, deactivated: Entity)
 /// Win32 には 2 つの窓の前後を直接比べる API が無いため、判定は「対象より手前の列に前面窓が
 /// 居るか」で行う。列の組立（実測）は [`measure_windows_in_front`] が、判定は本関数が担う
 /// ——この分割が、前面窓が何になるか決まらない環境でも判定を決定論的テストで固定できる根拠
-/// である（要件 7.1）。
+/// である。
 ///
 /// | 状況 | 返り値 |
 /// |---|---|
@@ -151,10 +148,10 @@ pub(crate) fn is_behind_foreground(
 ///
 /// 目印は測れても測れなくてもこの巡で外す——一回限りの観測であり、残せば毎巡の走査になる。
 /// 測れない巡（相手が消えた・ハンドルが未付与）は理由つきの見送りとして記録する
-/// （要件 6.3・黙って諦めない）。相手の消滅は正常系であり error にはしない（要件 1.5）。
+/// （黙って諦めない）。相手の消滅は正常系であり error にはしない。
 ///
 /// 鎖が結び目を外している組（`chain` で `pair_released_by_chain` が真）は、測らずに
-/// 目印を外して `ReleasedByChain` を記録する（要件 5.1・5.4）。
+/// 目印を外して `ReleasedByChain` を記録する。
 ///
 /// 読み取りだけを行う——指令を積まず、重なりにも位置にも書き込まない。
 pub(crate) fn observe_marked_pair_sinks(
@@ -167,7 +164,7 @@ pub(crate) fn observe_marked_pair_sinks(
         commands.entity(entity).remove::<SinkObservationPending>();
 
         let Some(declaration) = declaration else {
-            // 目印を付けてから測るまでの間に宣言が外れた。観測すべきペアが特定できない。
+            // 目印を付けてから測るまでの間に宣言が外れた。
             log_orphan_sink_mark_dropped(entity);
             continue;
         };
@@ -183,7 +180,7 @@ pub(crate) fn observe_marked_pair_sinks(
 
         let above_hwnd = handles.get(entity).ok().flatten().map(|h| h.hwnd);
         let Ok(peer_handle) = handles.get(peer) else {
-            // 相手の実体が既に無い。残る窓には一切書き込まない（要件 1.5）。
+            // 相手の実体が既に無い。残る窓には一切書き込まない。
             record_decision(entity, peer, PairFixDecision::Skip(SkipReason::PeerMissing));
             continue;
         };
@@ -198,19 +195,17 @@ pub(crate) fn observe_marked_pair_sinks(
             continue;
         };
 
-        // 隣接の正準判定は「手前側の最も近い可視の背後が背後側か」（design.md Invariants）。
+        // 隣接の正準判定は「手前側の最も近い可視の背後が背後側か」。
         // 維持系の検証と同じ向きで測る——判定の向きが 2 通りあると記録が読めなくなる。
         let adjacency_ok = measure_window_below(above_hwnd) == Some(below_hwnd);
 
-        // 前面窓との相対は手前側の窓で測る（ペアの中で最も手前に居る窓が背面なら、
-        // その背後に居る窓も当然に背面である）。
         let foreground = get_foreground_window();
         let scan = measure_windows_in_front(above_hwnd);
         let foreground_visible = foreground.is_some_and(is_window_visible);
         let behind_foreground =
             is_behind_foreground(above_hwnd, foreground, foreground_visible, &scan);
 
-        // 帯に居るあいだは沈まないのが正しい動き。記録の読み手が読み分ける欄（要件 6.6）。
+        // 帯に居るあいだは沈まないのが正しい動き。記録の読み手が読み分ける欄。
         let in_band = is_window_always_on_top(above_hwnd).ok();
 
         log_sink_observed(entity, adjacency_ok, foreground, behind_foreground, in_band);

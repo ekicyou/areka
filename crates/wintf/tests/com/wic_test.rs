@@ -1,9 +1,7 @@
-//! com/wic.rs — WIC ラッパーのヘッドレステスト
+//! WIC ラッパーのヘッドレステスト。
 //!
-//! WIC は CPU のみで動作するため GPU デバイス不要。CoInitializeEx の
-//! 既存パターン（tests/widget/bitmap_source_integration_test.rs）に従う。
-//! 既存の widget テストは上位 API（load_bitmap_source）経由のため、
-//! 本テストは com::wic の各 Ext トレイトを直接検証する。
+//! WIC は CPU のみで動作するため GPU デバイス不要。widget のテストは上位 API
+//! （load_bitmap_source）経由なので、ここでは com::wic の各 Ext トレイトを直接検証する。
 
 use windows::Win32::Foundation::GENERIC_READ;
 use windows::Win32::Graphics::Imaging::D2D::IWICImagingFactory2;
@@ -90,7 +88,6 @@ fn format_converter_init_to_pbgra32_succeeds() {
             )
             .expect("converter init");
 
-        // 変換後もサイズは保存される
         let converted: IWICBitmapSource = converter.cast().expect("cast");
         assert_eq!(converted.get_size().expect("get_size"), (8, 8));
     });

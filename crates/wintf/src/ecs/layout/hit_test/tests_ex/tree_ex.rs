@@ -29,14 +29,12 @@ fn test_hit_test_ex_returns_region_name() {
     let root = world.spawn_empty().id();
     world.entity_mut(root).add_children(&[entity]);
 
-    // head 領域
     let result = hit_test_ex(&world, root, PointF::new(50.0, 25.0));
     assert!(result.is_some());
     let result = result.unwrap();
     assert_eq!(result.entity, entity);
     assert_eq!(result.region.as_deref(), Some("head"));
 
-    // body 領域
     let result = hit_test_ex(&world, root, PointF::new(50.0, 75.0));
     assert!(result.is_some());
     let result = result.unwrap();

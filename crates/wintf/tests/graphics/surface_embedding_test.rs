@@ -1,5 +1,4 @@
-//! 節の下の持ち主と持ち主の変形が WUC に写ることの実 GPU のテスト（要件 4.1, 4.3〜4.7, 4.10, 4.11,
-//! 5.1, 5.2, 8.4〜8.7）。
+//! 節の下の持ち主と持ち主の変形が WUC に写ることの実 GPU のテスト。
 //!
 //! 本物の登録（`EcsWorld` の `PreRenderSurface`・`RenderSurface`・`Composition`）を実の装置と WUC の資源で
 //! 回す。窓は HWND の無い `Window` の部品だけで、画面の画素は読まない。WUC の Visual の親・位置・
@@ -281,7 +280,7 @@ fn embedded_tree(world: &mut World, window: Entity, s: f32) -> (Entity, Entity, 
 
 /// 節の下の手動の持ち主は祖先の持ち主の WUC の子になり、位置（DPI の拡大込み）・祖先の不透明度の積・
 /// 祖先の矩形の切り抜きを写す。祖先の節が見えない回は不透明度 0、祖先の節が動いた回は同じ回に位置を
-/// 合わせ直す（要件 4.1, 4.3, 4.4, 4.5, 4.7, 8.4）。
+/// 合わせ直す。
 #[test]
 fn embedded_owner_follows_ancestor_node_at_dpi_scales() {
     crate::common::on_gpu_owner_thread(move || {
@@ -330,7 +329,7 @@ fn embedded_owner_follows_ancestor_node_at_dpi_scales() {
 }
 
 /// `Children` の並びだけを変えた回・別の持ち主の下の節への付け替え・節へ戻った回・消えた回に、
-/// WUC の子の並びと親を同じ回に合わせ直し、古い親の下に残さない（要件 4.5, 4.6, 4.10, 4.11, 8.4）。
+/// WUC の子の並びと親を同じ回に合わせ直し、古い親の下に残さない。
 #[test]
 fn embedded_owner_reorders_reattaches_and_detaches() {
     crate::common::on_gpu_owner_thread(move || {
@@ -398,7 +397,7 @@ fn embedded_owner_reorders_reattaches_and_detaches() {
 
 /// `VisualTransform` を持つ持ち主は局所の行列を WUC の行列へ写し（平行移動だけ拡大）、節の下で回した
 /// 持ち主は祖先の矩形の切り抜きを親の持ち主の物理ピクセルの図形と逆行列の切り抜きの変形で写す
-/// （要件 5.1, 5.2, 4.4。WARP の写しの仮定＝切り抜きは Visual の局所・`CompositionClip.TransformMatrix`
+/// （WARP の写しの仮定＝切り抜きは Visual の局所・`CompositionClip.TransformMatrix`
 /// は図形に掛かる、の値の側）。
 #[test]
 fn owner_transform_and_rotated_clip_reach_wuc() {
@@ -474,7 +473,7 @@ fn owner_transform_and_rotated_clip_reach_wuc() {
         assert!(version.is_some(), "中身を持つ M は版を持つ");
         world.entity_mut(m).remove::<VisualTransform>();
         frame(world);
-        // 持ち主の変形は WUC の Visual が受け持つので、見た目の版を上げない（4.2 の申し送り）
+        // 持ち主の変形は WUC の Visual が受け持つので、見た目の版を上げない
         assert_eq!(world.get::<VisualVersion>(m).map(|v| v.0), version);
         assert_matrix(&mv, identity4(), "変形を外した M");
         assert_offset(&mv, 15.0 * s, 26.0 * s, "変形を外した M");
@@ -505,7 +504,7 @@ fn image(world: &mut World, e: Entity) -> (u32, u32, Vec<u8>) {
     }
 }
 
-/// `e` の WUC の描画面そのものを `CopySurface` で読む（要件 8.5）。
+/// `e` の WUC の描画面そのものを `CopySurface` で読む。
 fn wuc_image(world: &World, e: Entity) -> (u32, u32, Vec<u8>) {
     let (w, h) = world.get::<SurfaceGraphics>(e).unwrap().size;
     let bytes = crate::composite_systems_test::read_wuc_surface(world, e);
@@ -620,8 +619,7 @@ fn promoted(s: f32) -> Promoted {
 }
 
 /// 上げた回の自動の持ち主 A は手動の持ち主 P の下に繋がり、整数の位置に置かれ、自分の描画面に
-/// 部分木を描き、親の描画面からは消える。落ち着いて戻した回は親の子から外れ、親の描画面に戻る
-/// （要件 4.3, 4.6, 4.10, 8.5, 8.6）。
+/// 部分木を描き、親の描画面からは消える。落ち着いて戻した回は親の子から外れ、親の描画面に戻る。
 #[test]
 fn auto_promoted_node_moves_between_surfaces_and_wuc_children() {
     crate::common::on_gpu_owner_thread(move || {
@@ -723,8 +721,7 @@ fn auto_promoted_node_moves_between_surfaces_and_wuc_children() {
 }
 
 /// 上げた A に手動の目印を入れた回は、親も `Children` も変わらず相だけが変わる。その回のうちに
-/// 自動の持ち主の位置（一番下）から手動の持ち主の前順の位置（P の上）へ並べ直す（要件 4.6、
-/// 4.1 の申し送り: 下の節の相の変化での並べ直し）。
+/// 自動の持ち主の位置（一番下）から手動の持ち主の前順の位置（P の上）へ並べ直す。
 #[test]
 fn manual_mark_on_promoted_node_reorders_on_phase_change_only() {
     crate::common::on_gpu_owner_thread(move || {

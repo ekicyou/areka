@@ -14,7 +14,6 @@ fn test_surface_graphics_dirty_component_exists() {
     let entity = world.spawn(SurfaceGraphicsDirty::default()).id();
     assert!(world.entity(entity).contains::<SurfaceGraphicsDirty>());
 
-    // デフォルトのrequested_frameは0
     let dirty = world.entity(entity).get::<SurfaceGraphicsDirty>().unwrap();
     assert_eq!(dirty.requested_frame, 0);
 }
@@ -22,11 +21,10 @@ fn test_surface_graphics_dirty_component_exists() {
 #[test]
 fn test_mark_dirty_surfaces_updates_frame() {
     let mut world = World::new();
-    world.insert_resource(FrameCount(1)); // フレーム番号1
+    world.insert_resource(FrameCount(1));
     let mut schedule = Schedule::default();
     schedule.add_systems(mark_dirty_surfaces);
 
-    // SurfaceGraphics と SurfaceGraphicsDirty を持つエンティティを作成
     let entity = world
         .spawn((
             SurfaceGraphics::default(),
@@ -35,13 +33,10 @@ fn test_mark_dirty_surfaces_updates_frame() {
         ))
         .id();
 
-    // 最初の回でChangeトラッカーを初期化
     schedule.run(&mut world);
 
-    // フレーム番号を更新
     world.resource_mut::<FrameCount>().0 = 42;
 
-    // GraphicsCommandListを変更（強制的に変更検出をトリガー）
     world
         .get_mut::<GraphicsCommandList>(entity)
         .unwrap()
@@ -49,12 +44,11 @@ fn test_mark_dirty_surfaces_updates_frame() {
 
     schedule.run(&mut world);
 
-    // SurfaceGraphicsDirtyのrequested_frameがフレーム番号で更新されていることを確認
     let dirty = world.get::<SurfaceGraphicsDirty>(entity).unwrap();
     assert_eq!(dirty.requested_frame, 42);
 }
 
-/// 命令の列を持たず根の部品（DrawTree）だけを持つ根も、根の部品の変化で描き直しの印が立つ（1.8・1.9）。
+/// 命令の列を持たず根の部品（DrawTree）だけを持つ根も、根の部品の変化で描き直しの印が立つ。
 #[test]
 fn test_mark_dirty_surfaces_on_draw_tree_change() {
     use wintf::ecs::DrawTree;
@@ -81,11 +75,11 @@ fn test_mark_dirty_surfaces_on_draw_tree_change() {
     assert_eq!(dirty.requested_frame, 42);
 }
 
-// ========== Task 1.1: SurfaceCreationStats テスト ==========
+// ========== SurfaceCreationStats テスト ==========
 
 #[test]
 fn test_surface_creation_stats_default() {
-    // Req 5.3: デバッグビルド時のSurface生成統計
+    // デバッグビルド時のSurface生成統計
     let stats = SurfaceCreationStats::default();
     assert_eq!(stats.created_count, 0);
     assert_eq!(stats.skipped_count, 0);
@@ -123,11 +117,11 @@ fn test_surface_creation_stats_record_resized() {
     assert_eq!(stats.resize_count, 1);
 }
 
-// ========== Task 1.2: 物理ピクセルサイズ計算ヘルパーテスト ==========
+// ========== 物理ピクセルサイズ計算ヘルパーテスト ==========
 
 #[test]
 fn test_calculate_surface_size_from_global_arrangement_normal() {
-    // Req 3.1, 3.2: GlobalArrangement.boundsから物理ピクセルサイズを計算
+    // GlobalArrangement.boundsから物理ピクセルサイズを計算
     use wintf::ecs::Rect;
 
     let ga = GlobalArrangement {
@@ -146,7 +140,7 @@ fn test_calculate_surface_size_from_global_arrangement_normal() {
 
 #[test]
 fn test_calculate_surface_size_from_global_arrangement_fractional() {
-    // Req 3.2: 小数点以下の切り上げ
+    // 小数点以下の切り上げ
     use wintf::ecs::Rect;
 
     let ga = GlobalArrangement {
@@ -165,7 +159,7 @@ fn test_calculate_surface_size_from_global_arrangement_fractional() {
 
 #[test]
 fn test_calculate_surface_size_from_global_arrangement_zero_width() {
-    // Req 3.3: サイズ0の場合はNone
+    // サイズ0の場合はNone
     use wintf::ecs::Rect;
 
     let ga = GlobalArrangement {
@@ -184,7 +178,7 @@ fn test_calculate_surface_size_from_global_arrangement_zero_width() {
 
 #[test]
 fn test_calculate_surface_size_from_global_arrangement_zero_height() {
-    // Req 3.3: サイズ0の場合はNone
+    // サイズ0の場合はNone
     use wintf::ecs::Rect;
 
     let ga = GlobalArrangement {
@@ -220,11 +214,11 @@ fn test_calculate_surface_size_from_global_arrangement_negative() {
     assert_eq!(result, None);
 }
 
-// ========== W3a-V: NaN / inf 境界値の特性化テスト ==========
+// ========== NaN / inf 境界値の特性化テスト ==========
 
 #[test]
 fn test_calculate_surface_size_nan_bounds_returns_none() {
-    // W3a-V: NaN 幅は `width <= 0.0` 比較（false）を素通りするが、
+    // NaN 幅は `width <= 0.0` 比較（false）を素通りするが、
     // `NaN.ceil() as u32 == 0`（float→int 飽和キャスト）により
     // width_px == 0 ガードで None に収束する（現行挙動の特性化）。
     use wintf::ecs::Rect;
@@ -245,7 +239,7 @@ fn test_calculate_surface_size_nan_bounds_returns_none() {
 
 #[test]
 fn test_calculate_surface_size_infinite_width_saturates_to_u32_max() {
-    // W3a-V: +inf 幅は `inf as u32` の飽和キャストで u32::MAX となり
+    // +inf 幅は `inf as u32` の飽和キャストで u32::MAX となり
     // Some を返す（現行挙動の特性化。下流の create_surface が Err となり
     // error ログで完結する。有限性検証の追加は挙動変更のため未実施）。
     use wintf::ecs::Rect;

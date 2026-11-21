@@ -7,8 +7,6 @@
 //!
 //! ## 構成
 //!
-//! - **GPU 合成ウィンドウ** — WUC パイプラインでのクリップ
-//!
 //! ウィンドウに3つのクリップ領域を配置:
 //! 1. `ClipShape::Rectangle` — 矩形クリップ
 //! 2. `ClipShape::RoundedRectangle { radius: 20.0 }` — 均一角丸クリップ
@@ -72,21 +70,18 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// 非同期デモ実行
 async fn run_demo(tx: wintf::ecs::widget::bitmap_source::CommandSender) {
     info!("[ClipDemo] Creating WUC clip window");
     let _ = tx.send(Box::new(|world: &mut World| {
         create_wuc_clip_window(world);
     }));
 
-    // 60秒後に自動終了
     async_io::Timer::after(Duration::from_secs(60)).await;
 
     info!("[ClipDemo] Closing windows");
     let _ = tx.send(Box::new(close_all_windows));
 }
 
-/// 全デモウィンドウを閉じる
 fn close_all_windows(world: &mut World) {
     let mut query = world.query_filtered::<Entity, With<WucClipWindow>>();
     let entities: Vec<Entity> = query.iter(world).collect();
@@ -103,7 +98,6 @@ fn close_all_windows(world: &mut World) {
 /// クリップ付き要素を3つ（Rectangle, RoundedRectangle, RoundedRectangleIndividual）
 /// 縦に並べた構成を親コンテナに追加する。
 fn create_clip_demo_children(world: &mut World, parent: Entity) {
-    // セクション 1: Rectangle クリップ
     create_clip_section(
         world,
         parent,
@@ -123,7 +117,6 @@ fn create_clip_demo_children(world: &mut World, parent: Entity) {
         }, // 赤系の子（はみ出し用）
     );
 
-    // セクション 2: RoundedRectangle クリップ（radius=20）
     create_clip_section(
         world,
         parent,
@@ -143,7 +136,6 @@ fn create_clip_demo_children(world: &mut World, parent: Entity) {
         }, // 黄色系の子
     );
 
-    // セクション 3: RoundedRectangleIndividual クリップ
     create_clip_section(
         world,
         parent,
@@ -174,7 +166,6 @@ fn create_clip_section(
     parent_color: D2D1_COLOR_F,
     child_color: D2D1_COLOR_F,
 ) {
-    // ラベル
     world.spawn((
         Name::new(format!("Label-{}", label_text)),
         Label {
@@ -205,7 +196,6 @@ fn create_clip_section(
         ChildOf(parent),
     ));
 
-    // クリップ親要素（flex_grow で可変幅、クリップ適用）
     let clip_parent = world
         .spawn((
             Name::new(format!("ClipParent-{}", label_text)),
@@ -279,7 +269,6 @@ fn create_wuc_clip_window(world: &mut World) {
         ))
         .id();
 
-    // メインコンテナ（白背景）
     let container = world
         .spawn((
             Name::new("WUC-Container"),
@@ -299,7 +288,6 @@ fn create_wuc_clip_window(world: &mut World) {
         ))
         .id();
 
-    // ヘッダー
     world.spawn((
         Name::new("WUC-Header"),
         Label {

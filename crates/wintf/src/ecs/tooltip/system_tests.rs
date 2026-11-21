@@ -135,7 +135,7 @@ fn notice_callback_component_attaches_to_window() {
     world.entity_mut(w).insert(OnTooltip(on));
     assert!(world.get::<OnTooltip>(w).is_some());
 
-    // 公開の型の名前が crate::ecs から引けること（中身の組み立ては後の段で確かめる）。
+    // 公開の型の名前が crate::ecs から引けること。
     let _: Option<(
         TooltipTurn,
         TooltipSupply,

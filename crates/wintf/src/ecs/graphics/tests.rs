@@ -1,11 +1,5 @@
-// タスク7.3: GraphicsCoreからのCOMオブジェクト作成テスト
-//
-// WUC 移行: DComp デバイス/Visual/Commit を直接叩いていた旧テスト
-// （test_create_visual / test_create_multiple_visuals / test_commit）は、
-// (1) create_visual は WUC の Compositor::CreateSpriteVisual へ写像され、
-// (2) commit は暗黙反映化で廃止された（要件 7.1）ため、WUC 等価テストへ更新した。
-// WUC デバイス群のライフサイクル/往復は wuc_resource.rs・com/wuc.rs の統合テストが
-// 別途担保する。ここでは GraphicsCore＋WUC Compositor から Visual を作れることを確認する。
+// GraphicsCore＋WUC Compositor から Visual を作れることを確認する。
+// WUC デバイス群のライフサイクル/往復は wuc_resource.rs・com/wuc.rs の統合テストが担保する。
 //
 // COM は MTA 初期化してから WucGraphicsResource::new を呼ぶ（本番 UI スレッド再現）。
 
@@ -27,7 +21,6 @@ mod graphics_core_tests {
     fn test_graphics_core_creation() {
         let _graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
 
-        // GraphicsCoreが正常に作成されたことを確認（すべてのフィールドが初期化されている）
         println!("[TEST PASS] GraphicsCore created successfully with all valid devices");
     }
 
@@ -52,7 +45,6 @@ mod graphics_core_tests {
         let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource作成失敗");
 
         let compositor = wuc_resource.compositor().expect("Compositorが無効");
-        // DComp の create_visual に対応する WUC 生成（全 Visual を SpriteVisual で統一）。
         let _visual = compositor
             .CreateSpriteVisual()
             .expect("SpriteVisual作成失敗");
@@ -67,7 +59,6 @@ mod graphics_core_tests {
         use crate::com::d2d::D2D1DeviceExt;
         let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
 
-        // 複数のDeviceContextを作成できることを確認
         let _dc1 = d2d
             .create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
             .expect("DeviceContext1作成失敗");
@@ -92,7 +83,6 @@ mod graphics_core_tests {
 
         let compositor = wuc_resource.compositor().expect("Compositorが無効");
 
-        // 複数のVisualを作成できることを確認
         let _v1 = compositor
             .CreateSpriteVisual()
             .expect("SpriteVisual1作成失敗");
@@ -106,11 +96,10 @@ mod graphics_core_tests {
         println!("[TEST PASS] Multiple WUC SpriteVisual created successfully");
     }
 
-    // Note: 旧 test_commit（IDCompositionDevice3::Commit）は WUC 移行で削除。
-    // WUC は DispatcherQueue 経由の暗黙反映のため明示 commit が存在しない（要件 7.1）。
+    // 明示 commit は無い（WUC は DispatcherQueue 経由の暗黙反映）。
 }
 
-// 入れ物の寿命（要件 4.3, 4.5）: 描画面の入れ替え（大きさの変化）と放し（持ち主から外れる・
+// 入れ物の寿命: 描画面の入れ替え（大きさの変化）と放し（持ち主から外れる・
 // 装置の失い。どちらも `clear` を通る）の後に入れ物が残らない。
 #[cfg(test)]
 mod surface_composite_lifetime_tests {
@@ -179,7 +168,7 @@ mod surface_composite_lifetime_tests {
         assert!(sg.composite().is_none(), "描画面を放した後に入れ物が残る");
     }
 
-    // 入れ物を作る回の理由（要件 3.1, 3.4）: 初めての作成は First、捨てた後・同じ大きさで
+    // 入れ物を作る回の理由: 初めての作成は First、捨てた後・同じ大きさで
     // 描画面を差し替えた後の作成は Recreated。
     #[test]
     fn note_composite_created_tells_first_from_recreated() {

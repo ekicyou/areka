@@ -52,7 +52,7 @@ fn recreated_visual_gets_offset_and_opacity() {
     );
 }
 
-/// 描画面の持ち主の欄へ直に書かれた NaN は 1.0 として写し、`warn!` を変わったときに 1 度残す（2.8・6.3）。
+/// 描画面の持ち主の欄へ直に書かれた NaN は 1.0 として写し、`warn!` を変わったときに 1 度残す。
 /// 持ち主は fill_world_visuals が訪れないので、ここで記録しないと黙って消える。
 #[test]
 fn owner_nan_opacity_syncs_as_one_and_warns_once_per_change() {
@@ -91,7 +91,7 @@ fn owner_nan_opacity_syncs_as_one_and_warns_once_per_change() {
     assert!(log.contains("nan-owner"), "実体名が要る: {log}");
 }
 
-// --- WUC の木の同期: 祖先の持ち主・節の通り抜け・並べ直し（要件 3.1, 4.3, 4.6, 4.10, 4.11） ---
+// --- WUC の木の同期: 祖先の持ち主・節の通り抜け・並べ直し ---
 
 /// 親の WUC の子の並び（下→上）。
 fn wuc_children(parent: &WucVisual) -> Vec<*mut core::ffi::c_void> {
@@ -246,7 +246,7 @@ fn active_auto_owner_attaches_to_its_parent_owner_below_manual_owners() {
     );
 }
 
-/// 持ち主の変形・節の下の持ち主・自動の持ち主の写しと、置き場・変形の外れを同じ回に写す（4.4・4.5・4.7・4.8・5.1・5.2）。
+/// 持ち主の変形・節の下の持ち主・自動の持ち主の写しと、置き場・変形の外れを同じ回に写す。
 #[test]
 fn owner_transform_and_placement_map_and_revert_on_removal() {
     use crate::ecs::graphics::{PlacementClip, PlacementKind, SurfacePlacement, VisualTransform};

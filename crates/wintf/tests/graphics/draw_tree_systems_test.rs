@@ -1,4 +1,4 @@
-//! 描画の木の配線の実 GPU のテスト（wintf-visual-tree 7.4・要件 1.8, 1.9, 3.4）
+//! 描画の木の配線の実 GPU のテスト
 //!
 //! 本物の登録（`EcsWorld` の `PreRenderSurface`）を実の装置と WUC の資源で回す。窓は HWND の無い
 //! `Window` の部品だけ（画面に出さない）。装置の失いの立ち直りは表示しない実の窓で通す
@@ -91,7 +91,7 @@ fn surface_valid(world: &World, e: Entity) -> bool {
     world.get::<SurfaceGraphics>(e).unwrap().is_valid()
 }
 
-/// 節を足すと根の部品が入り描画面が作られ、全部外すと根の部品が消え描画面が片づく（1.8）
+/// 節を足すと根の部品が入り描画面が作られ、全部外すと根の部品が消え描画面が片づく
 #[test]
 fn draw_tree_enters_with_nodes_and_leaves_when_all_removed() {
     crate::common::on_gpu_owner_thread(move || {
@@ -133,7 +133,7 @@ fn draw_tree_enters_with_nodes_and_leaves_when_all_removed() {
     });
 }
 
-/// 節の部品が外れた回に（他に変化が無くても）木が組み直される（1.9）
+/// 節の部品が外れた回に（他に変化が無くても）木が組み直される
 #[test]
 fn draw_tree_rebuilt_when_node_part_removed() {
     crate::common::on_gpu_owner_thread(move || {
@@ -170,7 +170,7 @@ fn draw_tree_rebuilt_when_node_part_removed() {
     });
 }
 
-/// 節が持ち主へ上がった回（目印か命令の列を足した）に、元の根の列から外れる（7.1 レビュー）
+/// 節が持ち主へ上がった回（目印か命令の列を足した）に、元の根の列から外れる
 #[test]
 fn promoted_node_drops_out_of_root_tree() {
     fn check(promote: impl Fn(&mut EntityWorldMut)) {
@@ -207,7 +207,7 @@ fn promoted_node_drops_out_of_root_tree() {
 }
 
 /// 中身を持つ節が持ち主へ上がったら（直下に節が無くても）自分の中身の 1 件で根の部品が入り、
-/// 描画面が作られる。中身の差し替えで同一性が変わり、中身を外せば根の部品も描画面も消える（1.2b）
+/// 描画面が作られる。中身の差し替えで同一性が変わり、中身を外せば根の部品も描画面も消える
 #[test]
 fn promoted_node_with_own_content_gets_tree_and_surface() {
     crate::common::on_gpu_owner_thread(move || {
@@ -255,7 +255,7 @@ fn promoted_node_with_own_content_gets_tree_and_surface() {
     });
 }
 
-/// 命令の列を持つ根から木の列だけが外れたら、描画面を残して描き直しの印を立てる（7.2）
+/// 命令の列を持つ根から木の列だけが外れたら、描画面を残して描き直しの印を立てる
 #[test]
 fn cleanup_marks_dirty_when_only_draw_tree_removed() {
     crate::common::on_gpu_owner_thread(move || {
@@ -288,7 +288,7 @@ fn cleanup_marks_dirty_when_only_draw_tree_removed() {
     });
 }
 
-/// 装置の失いの立ち直りの後に、木を持つ描画面が作り直され描き直される（3.4）
+/// 装置の失いの立ち直りの後に、木を持つ描画面が作り直され描き直される
 #[test]
 fn device_loss_recovery_redraws_tree_surface() {
     crate::common::on_gpu_owner_thread(move || {

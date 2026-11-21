@@ -31,7 +31,6 @@ fn test_hit_test_entity_bounds_alpha_boundary_above() {
         ))
         .id();
 
-    // 合成α = 0.502 * 1.0 = 0.502 ≥ 128/255 ≈ 0.50196 → ヒット
     assert!(hit_test_entity(&world, entity, PointF::new(50.0, 50.0)));
 }
 
@@ -59,7 +58,6 @@ fn test_hit_test_entity_bounds_alpha_boundary_below() {
         ))
         .id();
 
-    // 合成α = 0.501 * 1.0 = 0.501 < 128/255 ≈ 0.50196 → 透明
     assert!(!hit_test_entity(&world, entity, PointF::new(50.0, 50.0)));
 }
 
@@ -87,7 +85,6 @@ fn test_hit_test_entity_bounds_low_opacity() {
         ))
         .id();
 
-    // 合成α = 0.4 * 1.0 = 0.4 < 128/255 → 透明
     assert!(!hit_test_entity(&world, entity, PointF::new(50.0, 50.0)));
 }
 
@@ -115,7 +112,6 @@ fn test_hit_test_entity_bounds_low_foreground_alpha() {
         ))
         .id();
 
-    // 合成α = 1.0 * 0.4 = 0.4 < 128/255 → 透明
     assert!(!hit_test_entity(&world, entity, PointF::new(50.0, 50.0)));
 }
 
@@ -130,7 +126,6 @@ fn test_hit_test_entity_bounds_no_opacity_no_brushes() {
         ))
         .id();
 
-    // Opacity=1.0(default), foreground.a=1.0(DEFAULT_FOREGROUND=BLACK) → ヒット
     assert!(hit_test_entity(&world, entity, PointF::new(50.0, 50.0)));
 }
 
@@ -149,11 +144,9 @@ fn test_hit_test_entity_bounds_inherit_foreground() {
                 opacity: 0.502,
                 ..Default::default()
             },
-            Brushes::default(), // foreground = Inherit
+            Brushes::default(),
         ))
         .id();
 
-    // Inherit → DEFAULT_FOREGROUND (BLACK, a=1.0)
-    // 合成α = 0.502 * 1.0 ≥ 128/255 → ヒット
     assert!(hit_test_entity(&world, entity, PointF::new(50.0, 50.0)));
 }
