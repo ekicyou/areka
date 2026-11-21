@@ -9,16 +9,18 @@
 
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{EmoWorld, ScaleRatio};
-use areka_emo_present::EmoPresenter;
+use areka_emo_present::{EmoPresenter, NeverShown};
 use wintf::ecs::Point;
 
 use crate::move_cue::{MoveDirective, PositionCue, parse_move_directive};
 use crate::target_map::shell_target;
 use areka_placement::sticky_group_ledger::StickyGroupLedger;
 
+use super::reset_hold_test_support::SettledSource;
 use super::shared_test_support::{steady_harness, wiring};
 use super::test_support::{
-    FrameHarness, PerTargetSizes, SPAWN_SIZE_1, all_shown, capture_logs, pos_of, size_of,
+    FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, all_shown, capture_logs, pos_of,
+    size_of,
 };
 use super::{run_move_drain_phase, run_move_drain_with};
 
@@ -227,10 +229,10 @@ fn groups_of(harness: &FrameHarness) -> Vec<Vec<u32>> {
         .collect()
 }
 
-/// 最初の面を表示しない窓への移動の後の並べ直しは、その移動を捨てて（記録を残して）当たり、続く
+/// 最初の面の前に隠した窓への移動の後の並べ直しは、その移動を捨てて（記録を残して）当たり、続く
 /// 表示済みの窓への指令も当たる（表示されない窓が 1 つで列全体を詰まらせない）。
 #[test]
-fn a_reset_after_a_move_to_a_never_shown_window_supersedes_it() {
+fn a_reset_after_a_move_to_a_hidden_window_supersedes_it() {
     let mut harness = steady_harness();
     let (tx, wiring) = wiring();
     let scope1 = harness.char_window(1);
@@ -239,9 +241,12 @@ fn a_reset_after_a_move_to_a_never_shown_window_supersedes_it() {
     tx.send(PositionCue::ResetWindowPos)
         .expect("送出は成功する");
     tx.send(to_global(0, 30)).expect("送出は成功する");
+    let partner_hidden = SettledSource::new()
+        .shown(0, SPAWN_SIZE_0)
+        .unshown(1, NeverShown::Hidden);
 
     let logs = capture_logs(|| {
-        run_move_drain_with(&wiring, &shown_only(&[0]), &mut harness.world);
+        run_move_drain_with(&wiring, &partner_hidden, &mut harness.world);
     });
 
     assert!(

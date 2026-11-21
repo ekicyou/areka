@@ -7,6 +7,9 @@
 //!
 //! 預かった指令に関わる窓への後の指令は追い越さない（同じ窓への順を保つ）。関わりの無い窓の指令は
 //! 先に当てる（表示されない窓が 1 つあっても列全体を詰まらせない）。預かる間は順のまま取りこぼさない。
+//! 並べ直しは、窓のある全部のスコープの表示が決まる（表示した、または表示しないまま決まった）まで
+//! 預かる。仮の大きさで並べると、表示の後の照合で縮んだ分だけ先頭の窓が作業領域の端から離れる。
+//!
 //! 判定はゴースト・初回起動・特定のイベントを見ない。入力は窓の在庫・表示の拡大率・窓の組の帳簿だけである。
 
 use std::collections::{BTreeSet, VecDeque};
@@ -28,13 +31,6 @@ use super::PositionCue;
 ///
 /// `None` は「まだ最初の面を表示していない」（または表示層に登録の無いスコープ）。
 // 公開の `run_move_drain_with` が名指すので開ける
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "never_shown と physical_size は判定が使い始めたら外す"
-    )
-)]
 pub trait ShownRatioSource {
     fn shown_ratio(&self, scope: u32) -> Option<ScaleRatio>;
 
@@ -44,6 +40,10 @@ pub trait ShownRatioSource {
     }
 
     /// 実際に表示した窓の物理寸（まだ表示していなければ `None`）。
+    #[cfg_attr(
+        not(any(test, feature = "test-support")),
+        expect(dead_code, reason = "窓の大きさの着地の判定が使い始めたら外す")
+    )]
     fn physical_size(&self, _scope: u32) -> Option<(u32, u32)> {
         None
     }
@@ -153,6 +153,43 @@ fn touched_scopes(
     }
 }
 
+/// スコープの表示の決まり（窓のあるスコープだけを判定する）。
+enum Settle {
+    Shown,
+    NeverShown(NeverShown),
+    Pending,
+}
+
+fn settle<S: ShownRatioSource + ?Sized>(scope: u32, shown: &S) -> Settle {
+    if shown.shown_ratio(scope).is_some() {
+        return Settle::Shown;
+    }
+    match shown.never_shown(scope) {
+        // 面の指令をまだ受けていない窓には、これから面が来うる。
+        None | Some(NeverShown::NotRequested) => Settle::Pending,
+        Some(reason) => Settle::NeverShown(reason),
+    }
+}
+
+fn reason_word(reason: NeverShown) -> &'static str {
+    match reason {
+        NeverShown::Hidden => "hidden",
+        NeverShown::Failed => "failed",
+        NeverShown::NotRequested => "not_requested",
+    }
+}
+
+fn window_scopes(windows: &GhostWindows) -> impl Iterator<Item = u32> + '_ {
+    windows.scopes().map(|s| s as u32)
+}
+
+/// 窓があり、表示の決まっていないスコープ（昇順）。空なら並べ直しを当ててよい。
+fn pending_scopes<S: ShownRatioSource + ?Sized>(windows: &GhostWindows, shown: &S) -> Vec<u32> {
+    window_scopes(windows)
+        .filter(|&s| matches!(settle(s, shown), Settle::Pending))
+        .collect()
+}
+
 /// 移動が表示を待つスコープのうち、まだ最初の面を表示していないもの（無ければ当ててよい）。
 ///
 /// 窓の無いスコープは待っても表示されないので待たない（動かす窓が無ければ当てる側が `warn!` で残し、
@@ -169,7 +206,7 @@ fn unshown_scope<S: ShownRatioSource + ?Sized>(
     std::iter::once(d.scope)
         .chain(base)
         .filter(|&s| windows.char_window(s as usize).is_some())
-        .find(|&s| shown.shown_ratio(s).is_none())
+        .find(|&s| !matches!(settle(s, shown), Settle::Shown))
 }
 
 /// 預かった指令が関わる窓（この巡の判定の中で積む）。
@@ -203,8 +240,9 @@ impl Blocked {
 /// 前の巡から預かっている指令（先）と、この巡に届いた指令（後）を順に判定し、今当てる指令を順のまま
 /// 返す。当てない指令は `held` へ順のまま戻す（取りこぼさない）。
 ///
-/// 預かる理由は 2 つ: 移動の対象か基準の窓がまだ最初の面を表示していない／それより前に預かった指令と
-/// 同じ窓に関わる（追い越さない）。記録は届いた巡に 1 度だけ残す（預かり続ける巡ごとには出さない）。
+/// 預かる理由は 3 つ: 移動の対象か基準の窓がまだ最初の面を表示していない／並べ直しのとき窓のある
+/// どれかのスコープの表示がまだ決まっていない／それより前に預かった指令と同じ窓に関わる（追い越さない）。
+/// 記録は届いた巡に 1 度だけ残す（預かり続ける巡ごとには出さない）。
 ///
 /// 並べ直し（`\![execute,resetwindowpos]`）は、それより前に預かった移動を当てずに捨てる。並べ直しは
 /// 全部の窓を既定の位置へ置くので、順のまま当てても移動の結果は残らない（結果は順のまま当てたのと同じ）。
@@ -262,6 +300,10 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
             PositionCue::Move(d) => unshown_scope(d, windows, shown).map(|w| (d.scope, w)),
             _ => None,
         };
+        let reset_waiting = match &cue {
+            PositionCue::ResetWindowPos => pending_scopes(windows, shown),
+            _ => Vec::new(),
+        };
         if blocked.overlaps(&touched) {
             if just_arrived {
                 debug!(
@@ -280,7 +322,27 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
                     "表示の前なので \\![move] を預かる（対象と基準の窓が最初の面を表示した巡で当てる）"
                 );
             }
+        } else if !reset_waiting.is_empty() {
+            if just_arrived {
+                info!(
+                    event = "reset_window_pos_held",
+                    waiting = ?reset_waiting,
+                    "表示の決まっていない窓があるので並べ直しを預かる（窓のある全部のスコープの表示が決まった巡で当てる）"
+                );
+            }
         } else {
+            if matches!(cue, PositionCue::ResetWindowPos) {
+                for scope in window_scopes(windows) {
+                    if let Settle::NeverShown(reason) = settle(scope, shown) {
+                        info!(
+                            event = "reset_window_pos_unshown",
+                            scope,
+                            reason = reason_word(reason),
+                            "最初の面を表示しないまま決まった窓は待たずに並べ直す（今の大きさで入れる）"
+                        );
+                    }
+                }
+            }
             if let PositionCue::SetSticky { tokens } = &cue {
                 groups
                     .added
