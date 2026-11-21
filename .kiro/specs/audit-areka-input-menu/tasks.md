@@ -116,7 +116,7 @@
   - _Dispatch: standard — 3 つの crate をまたいでテストを移す統合の作業_
   - _Requirements: 3.3, 3.4, 4.7, 6.1, 6.6, 7.2, 7.4, 7.6_
 
-- [ ] 4. 説明と名を今の事実に合わせる
+- [x] 4. 説明と名を今の事実に合わせる
 
 - [x] 4.1 本番の説明を直す（G12・指摘 35〜38・45〜49 の本番の分・件 1・2・7・9）
   - 右クリックメニューの説明を「本ハンドラでは扱わない（引き金は右ボタンの解放）」だけに（指摘 35・件 1）、本体の中にあった頃の説明を crate の今の事実で書き直す（指摘 36・件 2）、本体の呼び手の道つきの名指しを役目か関数名で書く（指摘 37・38・件 9）。
@@ -132,7 +132,7 @@
   - _Dispatch: mechanical — 直す箇所と言い方を design が与える説明の直し_
   - _Requirements: 3.1, 5.4, 5.5, 7.12_
 
-- [ ] 4.3 テストのファイル名と範囲の外の説明・README を直す（G14・指摘 41・44・50・52・件 6）
+- [x] 4.3 テストのファイル名と範囲の外の説明・README を直す（G14・指摘 41・44・50・52・件 6）
   - `input_events_` の 3 つのテストのファイルを design.md「設計の段で決めた事項」3 の 6 の新しい名へ変え（mod の名は変えない）、`lib.rs` の `#[path]`・ファイルの中の相互の名指し・`collision-probe.rs` 66 行を直す（指摘 52）。
   - `collision-probe.rs` 63 行と `collision-probe/setup.rs` 75〜76 行の理由を依存の向きに直す（指摘 41・件 6）。カーソルの README のパスと「（要件 6.2）」を直す（指摘 44・50）。
   - 旧名をツリー全体で grep し、残る当たりが本体の 1 件と `doc/COMPAT_ARCHITECTURE.md:412` だけ（申し送り）であることを確かめる。`session-module-gather` のセッションへ新しい名を伝え、向こうが着地済みでファイルを触るセッションが居なければ 412 行の 1 語をこちらで直す。
@@ -168,3 +168,4 @@
 - `balloon_test_support.rs::runtime_wiring_showing_talk` は `TextLayerRuntime::new(TextLayerConfig::default())` を直に組む。3.1 で `empty_runtime()` を支えへ寄せたらそれに替える。
 - `balloon_pointer_handler_tests.rs` の押下の節の見出しに「stale 棄却は click_selection 純関数檻が網羅済み」・「pass-through 檻」が残る（3.1 で消したテストを指す古い説明）。4.2（指摘 43）で直す。
 - `crates/areka-placement/src/spawn_assembly_tests.rs:352` の表明の文字列に「本檻」が残る（3.3 で移したテスト）。5.2 のかけ直しで見る。
+- 4.3: `doc/COMPAT_ARCHITECTURE.md:412` の旧名の 1 語は直していない（11-21 時点で `session-module-gather` が main に未着地・そのセッションが動いている）。新しい名は `session-module-gather` のセッションへ知らせた。本体 `crates/areka/src/app_exit_tests.rs:182` の旧名は 5.1 で `audit-areka-app` へ申し送る。

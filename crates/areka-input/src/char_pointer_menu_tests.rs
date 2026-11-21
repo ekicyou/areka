@@ -1,7 +1,7 @@
 //! 右ダブルクリックの預かりと、終了指示に載るスコープのテスト。
 //!
 //! 合成した `PointerState` で押下ハンドラを直接呼び、kanade 宛ての受信端で「届いた／届かない」を
-//! 観測する（実窓も GPU も要らない）。`input_events_tests.rs` と同じ観測方法である。
+//! 観測する（実窓も GPU も要らない）。`char_pointer_tests.rs` と同じ観測方法である。
 
 use super::pointer_test_support::*;
 use super::*;

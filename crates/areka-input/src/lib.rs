@@ -560,18 +560,18 @@ pub fn on_char_pointer_pressed(
 }
 
 #[cfg(test)]
-#[path = "input_events_tests.rs"]
+#[path = "char_pointer_tests.rs"]
 mod tests;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod pointer_test_support;
 
 #[cfg(test)]
-#[path = "input_events_menu_tests.rs"]
+#[path = "char_pointer_menu_tests.rs"]
 mod menu_tests;
 
 #[cfg(test)]
-#[path = "input_events_char_clamp_tests.rs"]
+#[path = "char_clamp_tests.rs"]
 mod char_clamp_tests;
 
 #[cfg(test)]

@@ -60,10 +60,10 @@
 //!
 //! ダブルクリックでは終了しない。この probe が装着するポインタハンドラは `OnPointerMoved`（`pointer::on_probe_pointer_moved`）だけで、
 //! `OnPointerPressed` は付いていない（キャラ窓のポインタハンドラは本体の
-//! `areka_input::attach_char_pointer_handlers` が装着するが、`pub(crate)` で内部が `crate::` パスを使うため
+//! `areka_input::attach_char_pointer_handlers` が装着するが、`areka-input` は `areka-runtime` に依存するので
 //! runtime の example からは使えない）。本番で利用者が終了を指示する道は右クリックメニューの「終了」
 //! （`menu::request_close`）だけで、結線済みの Ctrl+左ダブルクリックはふつうの左ダブルクリックとして配る。
-//! この配り方は `areka-input` の `input_events_tests.rs` が確かめる。
+//! この配り方は `areka-input` の `char_pointer_tests.rs` が確かめる。
 //!
 //! # 起動時のパス（絶対パスの要否）
 //!
