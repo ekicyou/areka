@@ -19,7 +19,7 @@ pub const FIXED_FAREWELL_SCRIPT: &str = r"\0\s[0]またね\e-";
 // Fixture — イベント id → 応答の対応（シナリオ構成可能）
 // ============================================================================
 
-/// mock shiori の応答表（Req 7.1）。シナリオごとに構成する。
+/// mock shiori の応答表。シナリオごとに構成する。
 ///
 /// 基調は fixture 表どおり（OnInitialize→Notified／OnFirstBoot→204／OnBoot→固定 Value／
 /// basewareversion→Notified／OnSecondChange→204 基調／Unload→Unloaded）。可変部は 4 欄で、
@@ -32,14 +32,14 @@ pub const FIXED_FAREWELL_SCRIPT: &str = r"\0\s[0]またね\e-";
 ///   無言終了（204）なら `false`。
 #[derive(Debug, Clone)]
 pub struct Fixture {
-    /// `OnBoot` が起動挨拶 Value を返すか（DD-IT-12）。`true`＝固定スクリプトの Value（挨拶 talk を
+    /// `OnBoot` が起動挨拶 Value を返すか。`true`＝固定スクリプトの Value（挨拶 talk を
     /// 起こし `Steady{talk: Some(_)}` へ完了）。`false`＝204（挨拶なし・`Steady{talk: None}` へ直行）。
     ///
-    /// DD-IT-12 で boot は挨拶 talk を正規追跡するようになった。挨拶 talk の TalkDone は mock sakura
+    /// boot は挨拶 talk を正規追跡するようになった。挨拶 talk の TalkDone は mock sakura
     /// が別スレッドから返すため、その到着は後続 Tick と inbox 上で競合する（GET/NOTIFY・Ref3 が
-    /// 非決定になる）。定常 pump（`Steady{None}` の GET・Req 2.1/2.3/3.3）を**決定的に**観測する
+    /// 非決定になる）。定常 pump（`Steady{None}` の GET）を**決定的に**観測する
     /// テストは、この挨拶を出さない（`false`）ことで boot→`Steady{None}` へ直行させ競合を発生源から
-    /// 断つ（設計 Testing Strategy「boot が 204 を返す fixture」）。挨拶 boot 自体の観測は
+    /// 断つ。挨拶 boot 自体の観測は
     /// full_run_test が担う。
     pub boot_greets: bool,
     /// `OnSecondChange`（GET）で Value を返す出現インデックス集合（0 始まり）。
@@ -50,7 +50,7 @@ pub struct Fixture {
     ///
     /// キーは wire 形のイベント id（`"OnMouseMove"`・`"OnChoiceSelectEx"`・`\q` の任意名 ID）または
     /// SHIORI リソース名（`"readmebutton.caption"` 等）。含まれない id は 204（未知 GET と同じ）。
-    /// 空文字の値は **200 の空文字**であり 204 とは別物である（リソースの要件 3.3／3.4 の「空を返す」と
+    /// 空文字の値は **200 の空文字**であり 204 とは別物である（リソースの「空を返す」と
     /// 「値なしを返す」の区別はここで作る）。
     pub responses: HashMap<&'static str, String>,
 }
@@ -82,10 +82,10 @@ impl Fixture {
         self
     }
 
-    /// 起動挨拶（`OnBoot` Value）を出さない構成にする（`OnBoot`→204・DD-IT-12・連鎖記法）。
+    /// 起動挨拶（`OnBoot` Value）を出さない構成にする（`OnBoot`→204・連鎖記法）。
     ///
     /// boot→`Steady{talk: None}` へ直行させ、挨拶 talk の TalkDone と後続 Tick の競合を発生源から
-    /// 断つ。定常 pump（`Steady{None}` の GET）を決定的に観測するテスト専用（設計 Testing Strategy）。
+    /// 断つ。定常 pump（`Steady{None}` の GET）を決定的に観測するテスト専用。
     pub fn without_boot_greeting(mut self) -> Self {
         self.boot_greets = false;
         self
@@ -123,7 +123,7 @@ impl FixtureState {
             }
             ShioriCall::Get { id, .. } => match id.as_str() {
                 "OnFirstBoot" => ShioriOutcome::NoContent,
-                // DD-IT-12: 挨拶ありは固定 Value（`Steady{Some}` 完了）、なしは 204（`Steady{None}` 直行）。
+                // 挨拶ありは固定 Value（`Steady{Some}` 完了）、なしは 204（`Steady{None}` 直行）。
                 "OnBoot" => {
                     if self.fixture.boot_greets {
                         ShioriOutcome::Value(

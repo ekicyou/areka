@@ -40,7 +40,6 @@ fn far_budget() -> WaitBudget {
     }
 }
 
-/// GET の往復の最中。
 fn get(id: &str) -> ShioriBusy {
     ShioriBusy::Request {
         id: id.into(),
@@ -48,7 +47,6 @@ fn get(id: &str) -> ShioriBusy {
     }
 }
 
-/// NOTIFY の往復の最中。
 fn notify(id: &str) -> ShioriBusy {
     ShioriBusy::Request {
         id: id.into(),

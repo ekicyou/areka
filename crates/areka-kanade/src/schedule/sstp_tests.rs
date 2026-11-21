@@ -20,7 +20,7 @@ use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
 
-/// 任意の名前の GET は `EventId::Sstp` で、渡された Reference をそのまま載せる（要件 2.1・2.2）。
+/// 任意の名前の GET は `EventId::Sstp` で、渡された Reference をそのまま載せる。
 #[test]
 fn sstp_notify_is_a_get_with_the_given_references_verbatim() {
     let cases: [&[&str]; 4] = [&[], &["a"], &["", "x", ""], &["0\u{1}1", "改\r行"]];
@@ -47,7 +47,7 @@ fn sstp_notify_is_a_get_with_the_given_references_verbatim() {
     }
 }
 
-/// 許可の表に在る名前でも Reference を補わない（0 個なら 0 個・要件 2.2）。
+/// 許可の表に在る名前でも Reference を補わない（0 個なら 0 個）。
 #[test]
 fn sstp_notify_does_not_pad_references_for_listed_names() {
     for name in [
@@ -66,7 +66,7 @@ fn sstp_notify_does_not_pad_references_for_listed_names() {
     }
 }
 
-/// SSTP SEND の台本の `OnTranslate`: Ref0＝展開済み・Ref1＝`sstp-send,owned`・Ref2 以降なし（要件 4.4）。
+/// SSTP SEND の台本の `OnTranslate`: Ref0＝展開済み・Ref1＝`sstp-send,owned`・Ref2 以降なし。
 #[test]
 fn on_translate_sstp_has_reference0_and_reference1_only() {
     let status = ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE);
@@ -104,7 +104,7 @@ fn send(script: &str, strict: Option<bool>) -> Input {
     }
 }
 
-/// 受け付けない状態: 空の一括・状態は変わらない・warn 以上 0 件・`debug!` 1 件（要件 3.6・3.9）。
+/// 受け付けない状態: 空の一括・状態は変わらない・warn 以上 0 件・`debug!` 1 件。
 fn assert_rejected(label: &str, state: State) {
     assert!(!accepts(&state), "{label}: 受け付けないはず");
     let before = fingerprint(&state);
@@ -155,7 +155,7 @@ fn assert_playing(state: &State, talk_id: u64) {
     }
 }
 
-/// ⑴ 普段の状態（トーク無し）で新しいトークになり、strict 真のときだけ再生の開始に印を立てる（要件 1.1・1.2・5.1・6.3）。
+/// 普段の状態（トーク無し）で新しいトークになり、strict 真のときだけ再生の開始に印を立てる。
 #[test]
 fn send_in_idle_steady_starts_a_new_talk_and_notes_strict() {
     for strict in [Some(true), Some(false), None] {
@@ -227,7 +227,7 @@ fn send_strips_line_breaks_before_playing_and_translating() {
     ));
 }
 
-/// strict の台本の後に外から頼まれたイベントが返した台本は印を持たない。起動の挨拶も既定で印を持たない（要件 3.8）。
+/// strict の台本の後に外から頼まれたイベントが返した台本は印を持たない。起動の挨拶も既定で印を持たない。
 #[test]
 fn own_talks_after_a_strict_send_are_not_strict() {
     let cfg = config();
@@ -275,7 +275,7 @@ fn own_talks_after_a_strict_send_are_not_strict() {
     assert!(!greeting.strict, "起動の挨拶は strict でない");
 }
 
-/// ⑵ 再生中は次の番号で差し替わる（中断の無効化モードでも同じ・要件 3.1・3.4）。
+/// 再生中は次の番号で差し替わる（中断の無効化モードでも同じ）。
 #[test]
 fn send_during_playback_replaces_with_the_next_id_even_with_no_user_break() {
     for no_user_break in [false, true] {
@@ -298,7 +298,7 @@ fn send_during_playback_replaces_with_the_next_id_even_with_no_user_break() {
     }
 }
 
-/// ⑶ 選択肢の最中は帳簿が消え、その後の時間切れ・選択のイベントは 0 回（要件 3.3）。
+/// 選択肢の最中は帳簿が消え、その後の時間切れ・選択のイベントは 0 回。
 #[test]
 fn send_during_choice_clears_the_ledger_and_no_choice_events_follow() {
     let mut state = steady(active(9, "OnMouseDoubleClick"));
@@ -321,7 +321,7 @@ fn send_during_choice_clears_the_ledger_and_no_choice_events_follow() {
     assert_no_choice_events_follow(state, &cfg);
 }
 
-/// ⑷ 起動前・起動の手順・終了と切替の手順・保留の終了と切替では受け付けない（要件 3.6・3.9）。
+/// 起動前・起動の手順・終了と切替の手順・保留の終了と切替では受け付けない。
 #[test]
 fn send_is_not_accepted_outside_the_steady_state() {
     for (label, state) in non_steady_states() {

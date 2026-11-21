@@ -1,4 +1,4 @@
-//! SSTP の 2 つの入口の返事（[`crate::actor_sstp`]）の檻（areka-P0-mcp-kanade-tools 要件 1.3・2.3・3.6）。
+//! SSTP の 2 つの入口の返事（[`crate::actor_sstp`]）の檻。
 //!
 //! 本物の殻と偽の shiori（`actor_raise_reply_tests` の組）で、返信端へ値がちょうど 1 回返ることを見る。
 
@@ -16,8 +16,7 @@ use std::sync::mpsc::{self, Receiver};
 use tracing::Level;
 
 // ---------------------------------------------------------------------------
-// 本物の殻と偽の shiori で 2 つの入口を固定する（要件 1.3・1.7・2.1・2.3・2.4・2.5・2.7・2.8・
-// 3.6・3.7・3.8・6.1・6.2・6.5・7.1）。
+// 本物の殻と偽の shiori で 2 つの入口を固定する。
 //
 // 待ちはすべて受信端の受け取り（返事・運行の通知・偽の shiori の記録・再生の起動）で揃える。返事は
 // その依頼の一括の処理を実行し終えた後に送られるので、返事を受けた時点で偽の shiori の記録と再生の
@@ -410,7 +409,7 @@ fn translate_transport_failure_is_failed_then_stops() {
     stops_by_fault(rig);
 }
 
-/// ⑸ 返事の受け手を落としてから送っても、再生は始まり殻は止まらない（要件 3.8）。
+/// ⑸ 返事の受け手を落としてから送っても、再生は始まり殻は止まらない。
 #[test]
 fn dropped_reply_receiver_still_plays_and_keeps_running() {
     let rig = spawn_with(outside_answers(|| {

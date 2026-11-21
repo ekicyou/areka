@@ -1,8 +1,8 @@
-//! 翻訳の口（`TranslateSeams`）の兄弟テスト（要件 7.1・7.2・7.4）。
+//! 翻訳の口（`TranslateSeams`）の兄弟テスト。
 
 use super::*;
 
-/// 素通しは展開も MAKOTO の口も台詞を 1 文字も変えずに返す（要件 7.2）。
+/// 素通しは展開も MAKOTO の口も台詞を 1 文字も変えずに返す。
 /// 環境変数の綴り・さくらスクリプトのタグ・全角・空文字を混ぜて、どれも手を付けないことを見る。
 #[test]
 fn passthrough_returns_the_script_unchanged() {

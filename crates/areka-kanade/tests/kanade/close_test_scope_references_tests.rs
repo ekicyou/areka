@@ -1,5 +1,4 @@
-//! 利用者の終了の指示のスコープ番号が `OnClose` の References まで届くことの通しの檻
-//! （popup-menu-residue 要件 7.1〜7.4）。
+//! 利用者の終了の指示のスコープ番号が `OnClose` の References まで届くことの通しの檻。
 //!
 //! kanade の入口へ `CloseRequest { reason: CloseReason::User { scope } }` を入れ、偽の SHIORI の
 //! 記録列に現れる `OnClose` の GET の References を、スコープ 0 と 1 で確かめる（挨拶なしの足場・
@@ -8,8 +7,8 @@
 //! # 足場の決まりの意図した例外
 //! 足場（`common/common_recording.rs`）は「期待する References は `events::*` から組み、書き下さない」
 //! と決めている。このテストはその意図した例外で、`events::on_close` そのものの誤りに気付くため
-//! 期待値を `["user","0","0"]`・`["user","1","1"]` と書き下す（要件 7.3）。足場の決まりに戻さないこと。
-//! 書き下した `["user","1","1"]` が Reference1＝Reference2 も檻に入れる（要件 7.4）。
+//! 期待値を `["user","0","0"]`・`["user","1","1"]` と書き下す。足場の決まりに戻さないこと。
+//! 書き下した `["user","1","1"]` が Reference1＝Reference2 も檻に入れる。
 
 use super::{
     CallMethod, CloseReason, Driven, Fixture, KanadeConfig, KanadeMsg, QuitPolicy, send,

@@ -1,4 +1,4 @@
-//! 終了系列の完了を UI へ知らせる停止通知の統合檻（areka-P0-emo2-conformance-e2e R15.3）。
+//! 終了系列の完了を UI へ知らせる停止通知の統合檻。
 //!
 //! `Action::StopSelf`（終了系列完了）で `KanadeStopped` がちょうど 1 件届くこと、原因が
 //! 終了の起因どおりであること、受信端が既に落ちていても停止が完走することを、実アクターを
@@ -40,7 +40,7 @@ fn harness_with_stop_channel(fixture: Fixture) -> (Harness, mpsc::Receiver<Kanad
     (harness, stop_rx)
 }
 
-/// 強制終了（`ForceQuit`）の終了系列完了で `KanadeStopped{Forced}` が 1 件届く（R15.3）。
+/// 強制終了（`ForceQuit`）の終了系列完了で `KanadeStopped{Forced}` が 1 件届く。
 ///
 /// # 非空虚性
 /// 通知が出ていなければ `try_recv` が空で落ちる。原因を取り違えていれば `Forced` と一致しない。
@@ -106,7 +106,7 @@ fn silent_close_delivers_the_close_silent_cause() {
     );
 }
 
-/// 受信端（UI）が既に落ちていても停止は完走する——送出失敗で止まらない（R15.3・log-first）。
+/// 受信端（UI）が既に落ちていても停止は完走する——送出失敗で止まらない（log-first）。
 ///
 /// # 非空虚性
 /// 送出失敗を `expect`／`unwrap` で扱えばアクタースレッドが panic し、join が

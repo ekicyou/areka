@@ -21,9 +21,9 @@ use super::bounded::run_join_bounded;
 /// シナリオ指示（quit 真偽）に応じた [`KanadeMsg::TalkDone`] を kanade inbox へ返す。sink
 /// スレッドは `TalkCommand` の全 Sender drop（＝kanade 停止）で自然終了する。
 ///
-/// # 観測面（design C7 Ordering / delivery・Testing Strategy）
+/// # 観測面
 /// - [`commands`](Self::commands): 3 形（`Start`/`ResolveChoice`/`CancelChoice`）の**到着順**の
-///   記録列。`TalkCommand` が単一チャンネルを流れることによる FIFO 順序保存（DD-4 の前提）を
+///   記録列。`TalkCommand` が単一チャンネルを流れることによる FIFO 順序保存を
 ///   観測する面である。
 /// - [`started`](Self::started): 記録列のうち `TalkCommand::Start` の射影。
 ///

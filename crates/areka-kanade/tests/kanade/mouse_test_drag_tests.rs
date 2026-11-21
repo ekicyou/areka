@@ -1,5 +1,4 @@
-//! ドラッグの開始・終了（`OnMouseDragStart`／`OnMouseDragEnd`）の決定論の檻
-//! （areka-P0-mouse-drag-events 設計 Testing Strategy「kanade」K3・K4・K7・要件 9.1 ⑴⑸⑹⑼・9.2。
+//! ドラッグの開始・終了（`OnMouseDragStart`／`OnMouseDragEnd`）の決定論の檻（K3・K4・K7。
 //! K5・K6 は `mouse_test_phase_guard_tests.rs` の cage 5a・5b・6 の中）。
 //!
 //! mock の SHIORI を結線したハーネスへ `KanadeMsg::Mouse`（種類 `DragStart`／`DragEnd`）を入れ、
@@ -42,7 +41,7 @@ fn finish(harness: Harness, label: &str) -> (Vec<RecordedCall>, Vec<String>) {
 }
 
 // ============================================================================
-// K3: 定常で開始 → 終了（要件 1.1・2.1・2.4・4.8・5.1・5.5・9.1 ⑴⑸⑼）
+// K3: 定常で開始 → 終了
 // ============================================================================
 
 /// 挨拶なしの起動で `Steady{None}` へ直行し、`DragStart` → `DragEnd` を入れると、記録に組み立てから
@@ -57,7 +56,7 @@ fn drag_start_then_end_in_steady_records_both_gets_in_order() {
     let harness = spawn_harness(
         KanadeConfig::new("master", "1.0.0"),
         Fixture::quitting().without_boot_greeting(),
-        // 挨拶なし・マウスは 204 ゆえ唯一の StartTalk は close talk（index 0）＝quit:true で終了を駆動。
+        // マウスは 204 ゆえ唯一の StartTalk は close talk（index 0）＝quit:true で終了を駆動。
         QuitPolicy::PerTalk(vec![true]),
     );
 
@@ -101,7 +100,7 @@ fn drag_start_then_end_in_steady_records_both_gets_in_order() {
 }
 
 // ============================================================================
-// K4: 会話の再生中でも送り、実行状態に talking が付く（要件 4.8・5.1）
+// K4: 会話の再生中でも送り、実行状態に talking が付く
 // ============================================================================
 
 /// 挨拶の talk（受領 index 0）を保留して `Steady{Some(挨拶)}` を保ったまま開始 → 終了を入れると、
@@ -149,7 +148,6 @@ fn drag_during_active_talk_is_sent_with_talking_status() {
         "再生中もドラッグの GET は出て、talk_active の snapshot から組んだ期待と一致するはず: {:?}",
         recorded
     );
-    // 握手は完走: 挨拶の後に close talk が 1 本起動し、末尾は Unload。
     assert_eq!(
         started
             .iter()
@@ -163,7 +161,7 @@ fn drag_during_active_talk_is_sent_with_talking_status() {
 }
 
 // ============================================================================
-// K7: 開始を送った後に終了を要求すると、後の終了は送らない（要件 5.4・9.1 ⑹）
+// K7: 開始を送った後に終了を要求すると、後の終了は送らない
 // ============================================================================
 
 /// 定常で `DragStart`（送られる）→ CloseRequest → `DragEnd` の順に入れると、開始の GET だけが記録に
@@ -223,7 +221,7 @@ fn drag_end_after_close_request_is_not_sent() {
         "開始だけが送られ、終了の要求の後の終了は送られないはず: {:?}",
         recorded
     );
-    // drag_gets は GET だけを拾うので、NOTIFY に化けて出ていないことも見る。
+    // drag_gets は GET だけを拾うので、NOTIFY で出ていないことも見る。
     assert!(
         !recorded.iter().any(|c| c.id == "OnMouseDragEnd"),
         "終了の要求の後の OnMouseDragEnd は GET でも NOTIFY でも送られないはず: {recorded:?}"

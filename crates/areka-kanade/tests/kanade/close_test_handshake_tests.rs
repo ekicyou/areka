@@ -6,18 +6,12 @@ use super::{
 };
 
 // ============================================================================
-// シナリオ 1: 別れの台詞は `\-` 無しで終わっても終了する（Req 3.6・3.7）
+// シナリオ 1: 別れの台詞は `\-` 無しで終わっても終了する
 // ============================================================================
 
 /// OnClose の別れの台詞が `\-` に辿り着かずに終わっても（TalkDone が quit:false）、kanade は
 /// 定常運転へ戻らずそのまま終了系列を完走する。終了の握手から定常へ戻る経路は 1 本も無い
-/// （完了 spec `areka-P0-kanade` の要件 4.5 を上書きする 2026-09-20 開発者裁定）。
-///
-/// # 決定的な駆動（Tick 0 本・deadline 無効）
-/// 1. Boot → 挨拶なし boot（`Steady{None}` 直行・挨拶 talk の TalkDone 競合を断つ）。
-/// 2. CloseRequest{User}（active talk なし＝即握手）→ OnClose GET → 別れの Value →
-///    close talk（受領 index 0・quit:false＝`Ended`）。
-/// 3. close talk の TalkDone{Ended} 着弾 → **終了へ進む** → Unload → StopSelf。
+/// （2026-09-20 の開発者裁定: 別れの台詞が `\-` 無しで終わっても終了する）。
 ///
 /// Tick を 1 本も送らないので `last_now` は None のまま＝握手入口の deadline も None のままで、
 /// 再生完了待ちの上限は永久に設定されない（`close_talk_deadline_ms` も `u64::MAX` にしてある）。
@@ -122,16 +116,11 @@ fn farewell_talk_without_quit_tag_still_terminates() {
 }
 
 // ============================================================================
-// シナリオ 2: 無言終了（Req 4.6）
+// シナリオ 2: 無言終了
 // ============================================================================
 
 /// OnClose が 204（応答なし）のとき、kanade は追加イベントを発行せず終了系列へ直行する
-/// （OnCloseAll 非発行・close talk 非起動＝DD-11）。
-///
-/// # 駆動
-/// Boot → CloseRequest{User}（active talk なしなら即握手・挨拶の再生中なら TalkDone の後に握手）→
-/// OnClose GET(204) →
-/// `Unloading{CloseSilent}` → Unload → StopSelf。
+/// （OnCloseAll 非発行・close talk 非起動）。
 ///
 /// # 非空虚性
 /// - OnClose の後に GET/NOTIFY が挟まれば（例: OnCloseAll）記録の末尾が `[.., OnClose GET, Unload]`
@@ -165,7 +154,7 @@ fn silent_close_on_204_terminates_without_extra_events() {
         .expect("OnClose GET（Ref0=user）が記録列に現れるはず");
 
     // (b) 最初の OnClose GET の直後は Unload（末尾）で、間に追加の GET/NOTIFY は一切ない
-    //     （OnCloseAll 非発行・追加 OnClose なし＝OnClose はちょうど 1 度・DD-11・Req 4.6）。
+    //     （OnCloseAll 非発行・追加 OnClose なし＝OnClose はちょうど 1 度）。
     assert_eq!(
         onclose_index,
         recorded.len() - 2,
@@ -189,7 +178,7 @@ fn silent_close_on_204_terminates_without_extra_events() {
 }
 
 // ============================================================================
-// シナリオ 3: 再生完了待ちの時間超過（Req 4.7）
+// シナリオ 3: 再生完了待ちの時間超過
 // ============================================================================
 
 /// close talk の TalkDone が来ないまま `close_talk_deadline_ms` を超える Tick が届くと、kanade は
@@ -214,7 +203,7 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
     config.close_talk_deadline_ms = 5_000;
 
     // 挨拶なし boot（without_boot_greeting）で boot→Steady{None} へ直行させ、CloseRequest を確実に
-    // `Steady{None}` の即握手にする（DD-IT-12 の挨拶 talk race を断つ）。close talk（受領 index 0・挨拶
+    // `Steady{None}` の即握手にする（挨拶 talk の TalkDone との競合を断つ）。close talk（受領 index 0・挨拶
     // なし boot ゆえ先頭 StartTalk）の TalkDone を保留し、CloseTalkWait を維持したまま Tick を注入する。
     // quit_policy は使われない（保留 talk は解放されない・deadline で終了する）が、契約上与える。
     let (harness, _gate) = spawn_harness_gated(
@@ -264,18 +253,15 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
 }
 
 // ============================================================================
-// シナリオ 4: 強制終了直行（Req 4.4・DD-10）
+// シナリオ 4: 強制終了直行
 // ============================================================================
 
-/// ForceQuit は close 握手を経ず終了系列へ直行する（DD-10: best-effort OnClose NOTIFY →
+/// ForceQuit は close 握手を経ず終了系列へ直行する（best-effort OnClose NOTIFY →
 /// Unload → StopSelf）。
-///
-/// # 駆動
-/// Boot →（定常運転へ落ち着く）→ ForceQuit{User} → OnClose NOTIFY → Unload → StopSelf。
 ///
 /// # 非空虚性
 /// - ForceQuit が終了へ直行しなければ join が期限超過して panic する。
-/// - DD-10 の best-effort NOTIFY は force_quit が `events::on_close_notify` で組む OnClose（Ref0=reason）であり、
+/// - best-effort NOTIFY は force_quit が `events::on_close_notify` で組む OnClose（Ref0=reason）であり、
 ///   events 表の OnClose **GET** とは Method が異なる。GET と NOTIFY を取り違えると (b) が落ちる。
 #[test]
 fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
@@ -289,7 +275,7 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
     send(&harness, KanadeMsg::Boot);
     tick(&harness, 1_000);
 
-    // 強制終了指示 → 終了系列へ直行（DD-10）。
+    // 強制終了指示 → 終了系列へ直行。
     send(
         &harness,
         KanadeMsg::ForceQuit {
@@ -308,9 +294,9 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
         "ForceQuit 終了系列の末尾は Unload で閉じる"
     );
 
-    // (b) DD-10 の best-effort OnClose NOTIFY（Ref0=user）が Unload の直前に現れる。
-    //     DD-IT-8: NOTIFY は `events::on_close_notify` が組む（通常握手の `events::on_close` は GET）。
-    //     snapshot は Unloading{Forced} 遷移後の INACTIVE（Status 行なし・DD-IT-4）。
+    // (b) best-effort OnClose NOTIFY（Ref0=user）が Unload の直前に現れる。
+    //     NOTIFY は `events::on_close_notify` が組む（通常握手の `events::on_close` は GET）。
+    //     snapshot は Unloading{Forced} 遷移後の INACTIVE（Status 行なし）。
     let force_notify = expected_call(events::on_close_notify(
         CloseReason::User { scope: 0 },
         &ExecutionSnapshot::INACTIVE,

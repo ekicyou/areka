@@ -1,4 +1,4 @@
-//! 時間切れの知らせ（表 D）の檻（areka-P0-balloon-lifecycle-events）。
+//! 時間切れの知らせ（表 D）の檻。
 //!
 //! 最上位の `step` に時間切れの知らせ（`Input::BalloonTimeout`）を入れて駆動する。定常でない相・
 //! 終了の保留は本番の流れで作ると長くなるので、トークを 1 つ再生し終えた控えを持つ状態の相だけを
@@ -34,8 +34,8 @@ fn assert_one_timeout_get(actions: &[Action]) {
 }
 
 /// D6: 番号が控えと合い、再生中のトークの無い定常なら `OnBalloonTimeout` を 1 本送り、送り済みの
-/// 印を立てて記録する（要件 2.1〜2.3・7.1）。
-/// D4: 同じ番号の 2 通目は送らず、理由を記録する（要件 4.5）。
+/// 印を立てて記録する。
+/// D4: 同じ番号の 2 通目は送らず、理由を記録する。
 #[test]
 fn d6_matching_notice_sends_one_balloon_timeout_then_d4_refuses_the_second() {
     let (mut s, talk) = steady_after_talk();
@@ -65,7 +65,7 @@ fn d6_matching_notice_sends_one_balloon_timeout_then_d4_refuses_the_second() {
 }
 
 /// D5: 完了の知らせより先に届いた知らせは預かって記録し、何も送らない。同じトークの完了で
-/// 表 B の B5 が `OnBalloonTimeout` を送る（要件 2.1・4.5）。預かり中の 2 通目は D4 で止まる。
+/// 表 B の B5 が `OnBalloonTimeout` を送る。預かり中の 2 通目は D4 で止まる。
 #[test]
 fn d5_notice_before_completion_is_held_and_sent_on_completion() {
     let mut s = steady_none();
@@ -92,7 +92,7 @@ fn d5_notice_before_completion_is_held_and_sent_on_completion() {
 }
 
 /// D2: 次のトークが再生中なら、前のトークの知らせは送らず「次のトークが既に始まっていた」と
-/// 記録する。預かりもしない（要件 2.6）。
+/// 記録する。預かりもしない。
 #[test]
 fn d2_next_talk_playing_refuses_the_old_notice() {
     let (mut s, old) = steady_after_talk();
@@ -113,7 +113,7 @@ fn d2_next_talk_playing_refuses_the_old_notice() {
 
 /// D2: 次のトークの台本を翻訳へ預けている間（相は次のトークを再生中・控えは前のトークのまま）に
 /// 届いた前のトークの知らせも、次のトークが既に始まっていたとして捨てる。預かると、出口の掃除が
-/// `talk_gone` と取り違えて捨て直すことになる（要件 2.6）。
+/// `talk_gone` と取り違えて捨て直すことになる。
 #[test]
 fn d2_notice_while_next_talk_awaits_translation_is_refused_not_held() {
     let (mut s, old) = steady_after_talk();
@@ -136,9 +136,9 @@ fn d2_notice_while_next_talk_awaits_translation_is_refused_not_held() {
     assert!(s.shown.as_ref().is_some_and(|shown| !shown.timeout_pending));
 }
 
-/// D2: 次のトークが始まって終わっていたら、前のトークの知らせは送らない（要件 2.6）。
+/// D2: 次のトークが始まって終わっていたら、前のトークの知らせは送らない。
 /// 控えが無いときも同じ行に落ちる。cue を 1 つも出さないトーク（`\e` だけ）を挟んだときも、
-/// 表示の側は前のトークの番号のまま知らせるのでこの行で捨てる（設計の記録して許す行）。
+/// 表示の側は前のトークの番号のまま知らせるのでこの行で捨てる。
 #[test]
 fn d2_next_talk_started_and_ended_refuses_the_old_notice() {
     let (mut s, old) = steady_after_talk();
@@ -155,7 +155,7 @@ fn d2_next_talk_started_and_ended_refuses_the_old_notice() {
     assert_not_sent(&ev, "OnBalloonTimeout", "next_talk_started", "Steady");
 }
 
-/// D1: 相が定常でなければ送らず、理由と相を記録する。印も預かりも立てない（要件 2.6・4.4・7.2）。
+/// D1: 相が定常でなければ送らず、理由と相を記録する。印も預かりも立てない。
 #[test]
 fn d1_not_steady_phases_send_nothing_and_record_why() {
     let phases = [

@@ -1,8 +1,8 @@
 //! balloon_events — バルーンの 3 つのイベント（`OnBalloonBreak`・`OnBalloonClose`・`OnBalloonTimeout`）
-//! を送るかどうかの判断を 1 か所に集める（areka-P0-balloon-lifecycle-events）。
+//! を送るかどうかの判断を 1 か所に集める。
 //!
 //! ここが持つのは 2 つの控えと、[`super::step`] の出口の処理 [`settle`]、トークの完了の後の判断
-//! [`after_talk_done`]（設計の表 B）、再生中のトークが無いとき・押されたバルーンが今のトークでないときの
+//! [`after_talk_done`]、再生中のトークが無いとき・押されたバルーンが今のトークでないときの
 //! ダブルクリックの判断 [`on_idle_double_click`]（表 C）、時間切れの知らせの判断 [`on_timeout_notice`]（表 D）である。
 //! - [`ShownTalk`]（`State.shown`）——最後に再生を始めたトークの番号と最終の台本・出どころ。3 つのイベントの
 //!   Reference0 の源で、古い時間切れの知らせを退ける照合の相手。
@@ -25,7 +25,7 @@ pub(crate) struct ShownTalk {
     pub talk_id: TalkId,
     /// 再生を始めた最終の台本（`OnTranslate` で書き換えた後）。
     pub script: String,
-    /// 再生を始めた最終の出どころ（翻訳の後）。選択肢の `script:` が引き継ぐ（要件 1.6）。
+    /// 再生を始めた最終の出どころ（翻訳の後）。選択肢の `script:` が引き継ぐ。
     pub origin: ScriptOrigin,
     /// このトークで `OnBalloonClose` を送ったか。
     pub close_sent: bool,
@@ -47,7 +47,7 @@ pub(crate) struct BreakNote {
 /// ⑴ 掃除: 中断の控え・預かった時間切れの知らせの相手が、もう現行トークでなければ捨てて理由
 /// `talk_gone` を 1 行記録する（完了を通らずに相が変わった・別の応答に置き換えられた）。
 /// 中断の控えは今も「現行トークの完了で取り出すと相手が違うので何も起きない」だけなので、
-/// ここで早く捨てても中断の振る舞いは変わらない（要件 1.9）。
+/// ここで早く捨てても中断の振る舞いは変わらない。
 /// ⑵ 返す指示の列に再生の開始があれば、控えをそのトークで丸ごと置き換える。翻訳にかけた台本は
 /// 翻訳の結果の入力の `step` で最終の台本になって出るので、ここで取るのは常に最終の台本である。
 pub(super) fn settle(state: &mut State, actions: &[Action]) {
@@ -81,7 +81,7 @@ pub(super) fn settle(state: &mut State, actions: &[Action]) {
     }
 }
 
-/// 送る場面に当たったが送らなかった、の 1 行（要件 7.2）。`talk_id` は控えが無いとき載せない。
+/// 送る場面に当たったが送らなかった、の 1 行。`talk_id` は控えが無いとき載せない。
 fn log_not_sent(state: &State, id: &'static str, reason: &'static str, talk_id: Option<TalkId>) {
     tracing::info!(
         target: "kanade",
@@ -123,14 +123,14 @@ impl Cause {
     }
 }
 
-/// 現行トークの完了の振り分けが返った直後に呼ぶ（設計の表 B。上から最初に当たった行だけを採る）。
+/// 現行トークの完了の振り分けが返った直後に呼ぶ（上から最初に当たった行だけを採る）。
 ///
 /// - B1: 中断の控えも預かった時間切れの知らせも無い → 何もしない（記録しない）。
 /// - B2: 完了の後が再生中のトークの無い定常でない・終了の要求を保留している → 送らず、きっかけごと
-///   に理由を記録する（要件 1.6・4.4・設計 D3・D8）。
-/// - B3: 中断の控えがあり `Interrupted` → `OnBalloonBreak`（要件 1.1〜1.5）。
-/// - B4: 中断の控えがあり、トークは自分で終わっていた → `OnBalloonClose`（設計 D7）。
-/// - B5: 預かった時間切れの知らせ → `OnBalloonTimeout`（要件 2.1）。
+///   に理由を記録する。
+/// - B3: 中断の控えがあり `Interrupted` → `OnBalloonBreak`。
+/// - B4: 中断の控えがあり、トークは自分で終わっていた → `OnBalloonClose`。
+/// - B5: 預かった時間切れの知らせ → `OnBalloonTimeout`。
 ///
 /// B3・B4 と B5 が同時なら中断の側を採り、預かりを捨てたことを記録する。預かりはどの行でもここで
 /// 下ろす（出口の掃除が `talk_gone` と取り違えないため）。GET は渡された指示の列の末尾に高々 1 本
@@ -175,14 +175,13 @@ pub(super) fn after_talk_done(
     (state, actions)
 }
 
-/// 読み終えたバルーンをダブルクリックで閉じた、の知らせ（設計の表 C。上から最初に当たった行だけを採る）。
+/// 読み終えたバルーンをダブルクリックで閉じた、の知らせ（上から最初に当たった行だけを採る）。
 /// 相手は控えのトーク（直前に終えたトーク）。呼び手は [`super::user_break::on_user_break`] の 2 か所で、
 /// 再生中のトークが無いとき（`pressed`＝`None`）と、押されたバルーンのトーク `pressed` が再生中の
 /// トークと違うとき（C1 で断る）である。断った記録の番号は `pressed` があればそれ、無ければ控えのトーク。
 ///
-/// - C1・C2: 再生中のトークの無い定常でない・終了の要求を保留している → 送らず理由を記録する
-///   （要件 3.4・4.4）。
-/// - C3: 控えのトークで `OnBalloonClose` を送り済み → 送らず理由を記録する（要件 4.5）。
+/// - C1・C2: 再生中のトークの無い定常でない・終了の要求を保留している → 送らず理由を記録する。
+/// - C3: 控えのトークで `OnBalloonClose` を送り済み → 送らず理由を記録する。
 /// - C4: それ以外 → `OnBalloonClose`（Reference0＝控えの台本。控えが無ければ空で送って警告）。
 ///
 /// 中断の受理の規則（止める・二重に止めない）には触れない。scope は呼び手
@@ -202,14 +201,14 @@ pub(super) fn on_idle_double_click(
     (state, actions)
 }
 
-/// 時間切れでバルーンを隠した知らせ（設計の表 D。上から最初に当たった行だけを採る）。`talk_id` は
+/// 時間切れでバルーンを隠した知らせ（上から最初に当たった行だけを採る）。`talk_id` は
 /// 表示の側が隠したバルーンに出ていたトークの番号で、控えのトーク（最後に再生を始めたトーク）と比べる。
 ///
-/// - D1: 相が定常でない → 送らず理由を記録する（要件 2.6・4.4）。
+/// - D1: 相が定常でない → 送らず理由を記録する。
 /// - D2: 番号が控えと違う（控えが無い場合を含む）、または別のトークが再生中（台本を翻訳へ預けている
-///   間は控えが前のトークのまま）→ 次のトークが既に始まっていた。送らず記録する（2.6）。
+///   間は控えが前のトークのまま）→ 次のトークが既に始まっていた。送らず記録する。
 /// - D3: 終了の要求を保留している → 送らず理由を記録する。
-/// - D4: 控えのトークで送り済み・預かり済み → 送らず理由を記録する（要件 4.5）。
+/// - D4: 控えのトークで送り済み・預かり済み → 送らず理由を記録する。
 /// - D5: そのトークがまだ再生中（完了の知らせが未着）→ 預かって記録する。完了で表 B の B5 が裁く。
 /// - D6: 再生中のトークの無い定常 → `OnBalloonTimeout`（Reference0＝控えの台本・Reference1＝`0`）。
 pub(super) fn on_timeout_notice(mut state: State, talk_id: TalkId) -> (State, Vec<Action>) {
@@ -256,7 +255,7 @@ pub(super) fn on_timeout_notice(mut state: State, talk_id: TalkId) -> (State, Ve
     (state, actions)
 }
 
-/// 2 つの入口（[`after_talk_done`]・[`on_idle_double_click`]）に共通する門（要件 4.4・設計 D8）: 相が `Steady{talk: None}` で、終了の要求を保留して
+/// 2 つの入口（[`after_talk_done`]・[`on_idle_double_click`]）に共通する門: 相が `Steady{talk: None}` で、終了の要求を保留して
 /// いないこと。送れなければ記録に載せる理由を返す。
 fn steady_idle(state: &State) -> Result<(), &'static str> {
     if !matches!(state.phase, Phase::Steady { talk: None }) {
@@ -269,7 +268,7 @@ fn steady_idle(state: &State) -> Result<(), &'static str> {
 }
 
 /// `talk_id` のトークについて `cause` のイベントを組み立てて返す。`OnBalloonClose`・
-/// `OnBalloonTimeout` はそのトークで送り済みなら送らず理由を記録し、送るなら印を立てる（設計 D10）。
+/// `OnBalloonTimeout` はそのトークで送り済みなら送らず理由を記録し、送るなら印を立てる。
 fn send(state: &mut State, cause: Cause, talk_id: Option<TalkId>) -> Option<Action> {
     let already = match (cause, state.shown.as_mut()) {
         (Cause::Close, Some(shown)) if Some(shown.talk_id) == talk_id => {
@@ -307,7 +306,7 @@ fn send(state: &mut State, cause: Cause, talk_id: Option<TalkId>) -> Option<Acti
 }
 
 /// `talk_id` のトークの台本（Reference0 の源）。控えが無い・番号が食い違う（構造上は起きない）
-/// ときは空を返して記録する（出来事そのものは起きているので送る・設計 D9）。
+/// ときは空を返して記録する（出来事そのものは起きているので送る）。
 fn shown_script<'a>(state: &'a State, id: &'static str, talk_id: Option<TalkId>) -> &'a str {
     let talk_id = talk_id.map(|t| t.0);
     match &state.shown {

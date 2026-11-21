@@ -1,4 +1,4 @@
-//! SHIORI の応答で始まるトークと外からの台本の出どころ（要件 1.1〜1.4・3.1・3.2）。
+//! SHIORI の応答で始まるトークと外からの台本の出どころ。
 //!
 //! どの確かめも最上位の [`step`] を通す: 元のイベント（ゴースト自身の毎秒・外から頼まれたイベント）を
 //! 送らせ、その台詞の応答を入れ、翻訳の結果を入れ直して、最後に出る再生の開始の出どころを見る。
@@ -130,7 +130,7 @@ fn external_reply_lowers_and_local_translate_reply_does_not_raise() {
     logged_once(&ev, Level::INFO, "script_security_lowered");
 }
 
-/// 最後に再生を始めたトークの控えは、翻訳の後の最終の出どころを写す（選択肢の `script:` の引き継ぎの源・要件 1.6）。
+/// 最後に再生を始めたトークの控えは、翻訳の後の最終の出どころを写す（選択肢の `script:` の引き継ぎの源）。
 #[test]
 fn shown_talk_keeps_the_final_origin_after_translation() {
     let cfg = cfg();

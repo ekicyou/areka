@@ -1,7 +1,7 @@
 //! anchor — アンカー（`\_a`）の選択の受理と 2 段の送出。
 //!
 //! 選択肢（[`super::choice`]・[`super::steady`] の選択の腕）と違い、帳簿・期限・照合の鍵を持たない。
-//! 届いた知らせはそのまま送り（areka-P0-anchor-tag-canon 要件 4.12）、覚えるのは「どの段の応答を
+//! 届いた知らせはそのまま送り、覚えるのは「どの段の応答を
 //! 待っているか」（[`AnchorStage`]）だけである。
 //!
 //! - [`plan_anchor`]: ID からイベントの列を決める（`On` 始まりか、それ以外か）。
@@ -19,9 +19,9 @@ use crate::msg::ShioriOutcome;
 /// アンカーの ID から決まるイベントの列（選択肢の `script:` の約束はアンカーには無い）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AnchorPlan {
-    /// `On` で始まる ID → ID と同じ名前のイベントを 1 本だけ送る（要件 4.4）。
+    /// `On` で始まる ID → ID と同じ名前のイベントを 1 本だけ送る。
     Named,
-    /// それ以外 → `OnAnchorSelectEx` を送り、204 なら `OnAnchorSelect` を続ける（要件 4.1・4.2）。
+    /// それ以外 → `OnAnchorSelectEx` を送り、204 なら `OnAnchorSelect` を続ける。
     Canonical,
 }
 
@@ -48,7 +48,7 @@ pub(crate) enum AnchorStage {
 /// アンカーの知らせの受理。定常でだけ受理し、それ以外は警告を残して棄却する（状態は変えない）。
 ///
 /// 受理したら [`plan_anchor`] の決めた最初のイベントの GET を 1 本積み、応答待ちの段を置く。
-/// 再生中の台詞にも選択待ちの帳簿にも触れない（話している最中でも送る・要件 4.8／4.9 は応答の側）。
+/// 再生中の台詞にも選択待ちの帳簿にも触れない（話している最中でも送る は応答の側）。
 /// Status は送る時点の状態から導く（選択待ちの有無は帳簿から。アンカー自身は `choosing` を立てない）。
 pub(super) fn on_anchor(mut state: State, input: AnchorInput) -> (State, Vec<Action>) {
     if !matches!(state.phase, Phase::Steady { .. }) {
@@ -92,9 +92,9 @@ pub(super) fn on_anchor(mut state: State, input: AnchorInput) -> (State, Vec<Act
 /// アンカーのイベントの応答。`stage` は呼び手が [`State::anchor`](super::State) から取り出した段。
 ///
 /// - 台本（`Value`）→ `None`。呼び手が今までの応答の腕へ流す（話していなければ起動・話していれば
-///   置き換え）。続きのイベントは送らない（要件 4.3・4.8）。
+///   置き換え）。続きのイベントは送らない。
 /// - 204・送信の失敗（`error!`）・GET では起きない応答（`warn!`）→ `Some`。`OnAnchorSelectEx` の段なら
-///   `OnAnchorSelect` の GET を積んで最終段を置き、最終段なら何もしない（要件 4.2・4.9・4.10）。
+///   `OnAnchorSelect` の GET を積んで最終段を置き、最終段なら何もしない。
 pub(super) fn on_anchor_reply(
     state: &mut State,
     stage: AnchorStage,

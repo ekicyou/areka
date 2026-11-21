@@ -1,33 +1,33 @@
-//! choice — 選択確定（`\q` 選択肢）の判定純関数（設計 C3 の純関数部分）。
+//! choice — 選択確定（`\q` 選択肢）の判定純関数（の純関数部分）。
 //!
 //! 本モジュールは選択確定にまつわる**判断分岐だけ**を副作用なしの純関数として置く層である
 //! （ログも出さない・時刻も config も引数で受け取る）。状態型・Reference 構築・状態機械への
-//! 配線は本層の外（設計 C3 の `schedule/events.rs` 側・C4 の `schedule/steady.rs` 側）が持つ。
+//! 配線は本層の外（`schedule/events.rs` ・`schedule/steady.rs` 側）が持つ。
 //!
 //! # 本層が確定する 2 つの写像
-//! 1. [`plan_cascade`]: 選択肢 ID → 発火段列（[`CascadePlan`] の 3 分岐・Req2.1/2.2/2.5）。
+//! 1. [`plan_cascade`]: 選択肢 ID → 発火段列（[`CascadePlan`] の 3 分岐）。
 //!    `script:` の後ろの台本は [`script_body`] が取り出す。
-//! 2. [`choice_deadline`]: タイムアウト指令 → 選択待ちの期限（DD-8 の 3 値語彙・Req7.6/7.7）。
+//! 2. [`choice_deadline`]: タイムアウト指令 → 選択待ちの期限（3 値語彙）。
 //!
-//! いずれも同一入力に対して常に同一の結果を返す（Req2.5）。外部状態を読まないため、
+//! いずれも同一入力に対して常に同一の結果を返す。外部状態を読まないため、
 //! 呼び手が既定値・起点時刻を渡す形にしてある（config への依存を純関数へ持ち込まない）。
 
 use super::events;
 use crate::msg::MonotonicMs;
 
-/// 選択肢 ID から決まる発火段列（設計 C3・「カスケード則の正典裁定」1/7）。
+/// 選択肢 ID から決まる発火段列。
 ///
-/// 段列の実発行は C4（steady 調停）が担い、本 enum は「どの列を辿るか」だけを表す。
+/// 段列の実発行は（steady 調停）が担い、本 enum は「どの列を辿るか」だけを表す。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CascadePlan {
-    /// `On` 始まり ID → 当該 ID と同名イベントの**任意名 1 段のみ**（Req2.1）。
+    /// `On` 始まり ID → 当該 ID と同名イベントの**任意名 1 段のみ**。
     ///
-    /// `OnChoiceSelectEx`／`OnChoiceSelect` を先行発火しない（裁定 1・provenance=areka_discretion。
+    /// `OnChoiceSelectEx`／`OnChoiceSelect` を先行発火しない（
     /// 正典の OnID 記述は先行段の有無に沈黙し、emo2 実物は直接発火に依存する）。
     Named,
-    /// 正典形（`On` 始まりでない ID）→ `OnChoiceSelectEx` 先行・204 なら `OnChoiceSelect` 後続（Req2.2）。
+    /// 正典形（`On` 始まりでない ID）→ `OnChoiceSelectEx` 先行・204 なら `OnChoiceSelect` 後続。
     ///
-    /// 先行段が応答スクリプトを返したら後続段を発行しない（裁定 2・Req2.4）。
+    /// 先行段が応答スクリプトを返したら後続段を発行しない。
     Canonical,
     /// `script:` で始まる ID → SHIORI のイベントを起こさず、`script:` の後ろの台本を
     /// 新しいトークとして実行する。
@@ -45,7 +45,7 @@ pub(crate) fn script_body(id: &str) -> Option<&str> {
     id.strip_prefix("script:")
 }
 
-/// 選択肢 ID から発火段列を一意に決める（Req2.1/2.2/2.5・設計 C3）。
+/// 選択肢 ID から発火段列を一意に決める。
 ///
 /// # 判定規則（この 3 分岐で全 ID を尽くす）
 /// 1. [`script_body`] が `Some` → [`CascadePlan::Script`]
@@ -58,7 +58,7 @@ pub(crate) fn script_body(id: &str) -> Option<&str> {
 /// 規則 2 の境界（`"On"` 単独・大小文字・空文字列）は [`events::is_allowed_choice_event`] の規則に
 /// 従う（境界の檻も `events_tests.rs` の `is_allowed_choice_event_accepts_only_on_prefixed_names_verbatim`）。
 ///
-/// 外部状態を読まないため、同一 ID に対して常に同一の [`CascadePlan`] を返す（Req2.5）。
+/// 外部状態を読まないため、同一 ID に対して常に同一の [`CascadePlan`] を返す。
 pub(crate) fn plan_cascade(id: &str) -> CascadePlan {
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1
     if script_body(id).is_some() {
@@ -70,19 +70,19 @@ pub(crate) fn plan_cascade(id: &str) -> CascadePlan {
     }
 }
 
-/// タイムアウト指令から選択待ちの期限を写す（DD-8・Req7.6/7.7・設計 F3）。
+/// タイムアウト指令から選択待ちの期限を写す。
 ///
 /// # 引数
-/// - `display_end`: 起点＝当該トークの表示完了時刻（duration 権威から dispatcher が換算済み・Req7.2）。
+/// - `display_end`: 起点＝当該トークの表示完了時刻（duration 権威から dispatcher が換算済み）。
 /// - `timeout_directive_secs`: バリアの生の指令値（`BarrierKind::WaitForChoice{timeout}`）。
 /// - `default_ms`: 未指定時に委譲する既定値。呼び手が `KanadeConfig::choice_timeout_default_ms`
 ///   を渡す（config 依存を純関数へ持ち込まないための引数化）。
 ///
-/// # 写像（DD-8 の 3 値語彙。入口値は単一で、既定値かどうかで規律を変えない・Req7.7）
+/// # 写像（3 値語彙。入口値は単一で、既定値かどうかで規律を変えない）
 /// | 指令 | 意味 | 戻り値 |
 /// |---|---|---|
 /// | `None` | 未指定（既定へ委譲） | `Some(display_end + default_ms)` |
-/// | `Some(v)`, `v <= 0.0` | 無効化 | `None`（無期限・計測を開始しない・Req7.6） |
+/// | `Some(v)`, `v <= 0.0` | 無効化 | `None`（無期限・計測を開始しない） |
 /// | `Some(v)`, `v > 0.0` | 明示秒指定 | `Some(display_end + v*1000 ms)` |
 ///
 /// 戻り値の `None` は「期限なし＝無期限に選択待ちを継続する」を表す。引数の `None`（未指定）とは
@@ -94,7 +94,7 @@ pub(crate) fn plan_cascade(id: &str) -> CascadePlan {
 ///   あり、無期限（`None`）とは区別される。
 /// - `f64::INFINITY` や u64 を超える巨大値は飽和キャストと [`u64::saturating_add`] で
 ///   [`u64::MAX`] に留まり、オーバーフローしない。
-/// - `f64::NAN` は DD-8 の 3 値語彙の外にあるため、無効化と同じ無期限（`None`）へ畳む。
+/// - `f64::NAN` は 3 値語彙の外にあるため、無効化と同じ無期限（`None`）へ畳む。
 ///   NaN は `v <= 0.0` にも `v > 0.0` にも一致しない（順序が部分的）ため、
 ///   [`f64::is_nan`] による明示判定を無効化アームへ併記して決定論を構造で固定する。
 pub(crate) fn choice_deadline(
@@ -103,11 +103,11 @@ pub(crate) fn choice_deadline(
     default_ms: u64,
 ) -> Option<MonotonicMs> {
     let elapsed_ms = match timeout_directive_secs {
-        // 未指定＝既定へ委譲（DD-8）。
+        // 未指定＝既定へ委譲。
         None => default_ms,
-        // 0／負値＝無効化＝無期限（Req7.6・DD-8）。語彙外の NaN も同じ側へ畳む。
+        // 0／負値＝無効化＝無期限。語彙外の NaN も同じ側へ畳む。
         Some(v) if v.is_nan() || v <= 0.0 => return None,
-        // 明示秒指定（DD-8）。飽和キャストにより INFINITY・巨大値は u64::MAX へ留まる。
+        // 明示秒指定。飽和キャストにより INFINITY・巨大値は u64::MAX へ留まる。
         Some(v) => (v * 1000.0).round() as u64,
     };
     Some(MonotonicMs(display_end.0.saturating_add(elapsed_ms)))
@@ -117,22 +117,22 @@ pub(crate) fn choice_deadline(
 mod tests {
     use super::*;
 
-    // === plan_cascade: 3 分岐の全網羅（Req2.1/2.2/2.5）と script_body ===
+    // === plan_cascade: 3 分岐の全網羅と script_body ===
 
-    /// Req2.1: `On` 始まりの任意名 ID は任意名 1 段（emo2 実物 `menu.pasta` の依存形）。
+    /// `On` 始まりの任意名 ID は任意名 1 段（emo2 実物 `menu.pasta` の依存形）。
     #[test]
     fn plan_cascade_named_for_on_prefixed_arbitrary_id() {
         assert_eq!(plan_cascade("Onおしゃべり頻度メニュー"), CascadePlan::Named);
         assert_eq!(plan_cascade("OnFoo"), CascadePlan::Named);
-        // 正典固定 ID と同名でも `On` 始まりゆえ任意名 1 段（逐語発火・裁定 1）。
+        // 正典固定 ID と同名でも `On` 始まりゆえ任意名 1 段（逐語発火）。
         assert_eq!(plan_cascade("OnChoiceSelect"), CascadePlan::Named);
         assert_eq!(plan_cascade("OnChoiceSelectEx"), CascadePlan::Named);
-        // Req2.9: スケジューラ起源の恒久禁止 ID も、選択起源では逐語で 1 段に載せる。
+        // スケジューラ起源の恒久禁止 ID も、選択起源では逐語で 1 段に載せる。
         assert_eq!(plan_cascade("OnTalk"), CascadePlan::Named);
         assert_eq!(plan_cascade("OnHour"), CascadePlan::Named);
     }
 
-    /// Req2.2: 通常の非 `On` 始まり ID と空文字列はいずれも正典形。
+    /// 通常の非 `On` 始まり ID と空文字列はいずれも正典形。
     #[test]
     fn plan_cascade_canonical_for_plain_and_empty_id() {
         assert_eq!(plan_cascade("choice1"), CascadePlan::Canonical);
@@ -165,11 +165,11 @@ mod tests {
         assert_eq!(script_body("script:"), Some(""));
     }
 
-    // === choice_deadline: DD-8 の 3 値語彙（Req7.6/7.7） ===
+    // === choice_deadline: 3 値語彙 ===
 
     const DEFAULT_MS: u64 = 30_000;
 
-    /// DD-8: `None`＝未指定→既定値加算。
+    /// `None`＝未指定→既定値加算。
     #[test]
     fn choice_deadline_none_delegates_to_default() {
         assert_eq!(
@@ -183,7 +183,7 @@ mod tests {
         );
     }
 
-    /// Req7.7: 既定値以外の `default_ms` でも同一規律で動く（入口値は単一）。
+    /// 既定値以外の `default_ms` でも同一規律で動く（入口値は単一）。
     #[test]
     fn choice_deadline_none_uses_supplied_default_verbatim() {
         assert_eq!(
@@ -192,7 +192,7 @@ mod tests {
         );
     }
 
-    /// Req7.6・DD-8: `0` は無効化＝無期限。
+    /// `0` は無効化＝無期限。
     #[test]
     fn choice_deadline_zero_is_indefinite() {
         assert_eq!(
@@ -206,7 +206,7 @@ mod tests {
         );
     }
 
-    /// Req7.6・DD-8: 負値（正典の `-1`）は無効化＝無期限。
+    /// 負値（正典の `-1`）は無効化＝無期限。
     #[test]
     fn choice_deadline_negative_is_indefinite() {
         assert_eq!(
@@ -223,7 +223,7 @@ mod tests {
         );
     }
 
-    /// DD-8: 正値は明示秒指定＝起点＋秒*1000ms。
+    /// 正値は明示秒指定＝起点＋秒*1000ms。
     #[test]
     fn choice_deadline_positive_adds_seconds() {
         assert_eq!(

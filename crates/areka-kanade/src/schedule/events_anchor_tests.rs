@@ -1,5 +1,4 @@
-//! アンカーの 2 イベント（`OnAnchorSelectEx`・`OnAnchorSelect`）の組み立てのテスト
-//! （areka-P0-anchor-tag-canon 要件 4.1・4.2・4.6・4.7）。
+//! アンカーの 2 イベント（`OnAnchorSelectEx`・`OnAnchorSelect`）の組み立てのテスト。
 //!
 //! どちらも GET で、Reference の個数と値を列ごと突き合わせる。
 
@@ -28,8 +27,8 @@ fn on_anchor_select_ex_is_get_with_text_id_then_arguments_in_written_order() {
     assert_eq!(
         refs,
         vec![
-            "くわしく".to_string(),   // Reference0＝範囲の文字（要件 4.1）
-            "Anchor詳細".to_string(), // Reference1＝ID（要件 4.1）
+            "くわしく".to_string(),   // Reference0＝範囲の文字
+            "Anchor詳細".to_string(), // Reference1＝ID
             " 二番目  ".to_string(),  // Reference2 以降＝引数を記述順のまま
             String::new(),
             "a,b".to_string(),
@@ -65,7 +64,7 @@ fn on_anchor_select_is_get_with_id_only() {
     );
 }
 
-/// 実行状態の行は、他の組み立てと同じく渡された状態から導く（要件 4.7）。
+/// 実行状態の行は、他の組み立てと同じく渡された状態から導く。
 #[test]
 fn anchor_builders_derive_status_from_the_snapshot() {
     let talking = ExecutionSnapshot {

@@ -30,7 +30,7 @@ pub(super) fn stamp(reply_origin: Option<ScriptOrigin>, mut actions: Vec<Action>
 }
 
 /// 選択肢の `script:` で始める台本の出どころ: 最後に再生を始めたトークの控えが元のトーク
-/// （`prev_talk_id`）なら、その最終の出どころ（翻訳の後・外部扱いを含む）をそのまま写す（要件 1.6）。
+/// （`prev_talk_id`）なら、その最終の出どころ（翻訳の後・外部扱いを含む）をそのまま写す。
 ///
 /// 一致しない・控えが無い（構造上は起きない）ときは error `choice_script_origin_missing` を残し、
 /// 外部扱いへ倒す（止める側）。

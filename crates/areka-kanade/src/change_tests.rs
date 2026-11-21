@@ -1,4 +1,4 @@
-//! 切替の語彙の綴りのテスト（areka-P0-ghost-shell-balloon-switch 要件 2.1）。
+//! 切替の語彙の綴りのテスト。
 //!
 //! `OnGhostChanging` の Ref1 に載る出どころの 2 語を固定する。`KanadeConfig::new` が入れる
 //! 起動の由来の既定は `msg_tests.rs` の既定値のテストが見る。

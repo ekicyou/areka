@@ -37,7 +37,7 @@ fn active(talk_id: TalkId) -> ActiveTalk {
 /// 「再生中のトークが在る」場面のうち 3 つ（普段の会話・起動の挨拶・終了の挨拶。`fn current_talk_id` は
 /// 切り替えのお別れの 2 つの相でも番号を返すが、そこでの中断は切り替えの中止という別の結論なので並べない）。
 ///
-/// 場面で結論を変えない（要件 2.5）ことを確かめるため、判断分岐 ⑴ のテストはこの 3 つを一律に踏む。
+/// 場面で結論を変えないことを確かめるため、判断分岐 ⑴ のテストはこの 3 つを一律に踏む。
 fn playing_states(talk_id: TalkId) -> Vec<(&'static str, State)> {
     vec![
         (
@@ -62,7 +62,7 @@ fn playing_states(talk_id: TalkId) -> Vec<(&'static str, State)> {
     ]
 }
 
-/// 指示の列に `OnChoiceTimeout` の GET が 1 件も無いことを表明する（要件 2.6・3.9）。
+/// 指示の列に `OnChoiceTimeout` の GET が 1 件も無いことを表明する。
 fn assert_no_choice_timeout(actions: &[Action], at: &str) {
     assert!(
         !actions.iter().any(|a| matches!(
@@ -73,7 +73,7 @@ fn assert_no_choice_timeout(actions: &[Action], at: &str) {
     );
 }
 
-/// 中断の合図に返った指示の列に SHIORI への要求が 1 件も無いことを表明する（要件 3.9・9.1）。
+/// 中断の合図に返った指示の列に SHIORI への要求が 1 件も無いことを表明する。
 ///
 /// 押されたバルーンが今のトークでない合図は何も止めず、表 C も再生中なので何も送らない。
 fn assert_no_shiori_request(actions: &[Action], at: &str) {
@@ -90,11 +90,11 @@ fn assert_no_shiori_request(actions: &[Action], at: &str) {
 /// 場面の名と、その場面を組む関数の組。
 type PhaseCase = (&'static str, fn() -> Phase);
 
-// --- 判断分岐 ⑵: 止める再生が無い（要件 2.2・6.2） ---
+// --- 判断分岐 ⑵: 止める再生が無い ---
 
-/// 再生中のトークが無ければ、中断の要求は何も止めず、状態を変えない（要件 2.2）。場面で
-/// 振り分けない（要件 2.5）ので、定常でない場面でも止めない。読み終えたバルーンを閉じた知らせ
-/// `OnBalloonClose` だけは定常で 1 本出る（表 C・areka-P0-balloon-lifecycle-events。行ごとの檻は
+/// 再生中のトークが無ければ、中断の要求は何も止めず、状態を変えない。場面で
+/// 振り分けないので、定常でない場面でも止めない。読み終えたバルーンを閉じた知らせ
+/// `OnBalloonClose` だけは定常で 1 本出る（表 C。行ごとの檻は
 /// `balloon_events_idle_tests.rs`）。
 #[test]
 fn user_break_without_playing_talk_stops_nothing() {
@@ -102,7 +102,7 @@ fn user_break_without_playing_talk_stops_nothing() {
         ("Steady{None}", || Phase::Steady { talk: None }),
         ("Idle", || Phase::Idle),
         ("Stopped", || Phase::Stopped),
-        // `OnClose` の応答待ち。再生中のトークが無いので同じ腕に落ちる（設計「on_user_break の規則」）。
+        // `OnClose` の応答待ち。再生中のトークが無いので同じ腕に落ちる。
         ("ClosePending", || Phase::ClosePending),
     ];
     for (label, phase) in phases {
@@ -164,10 +164,10 @@ fn user_break_without_playing_talk_stops_nothing() {
     }
 }
 
-// --- 判断分岐 ⑴: 再生中なら止める（要件 2.1・3.1・3.2・6.1・9.1） ---
+// --- 判断分岐 ⑴: 再生中なら止める ---
 
 /// 再生中のトークが在れば、場面を問わず停止の指示を**ちょうど 1 件**返し、相手を帳簿に控える。
-/// 返す指示は停止の 1 種だけで、SHIORI への要求は 1 件も積まない（要件 3.9・9.1）。
+/// 返す指示は停止の 1 種だけで、SHIORI への要求は 1 件も積まない。
 #[test]
 fn user_break_while_playing_cancels_the_current_talk_in_every_phase() {
     for (label, state) in playing_states(TalkId(3)) {
@@ -218,7 +218,7 @@ fn user_break_while_playing_cancels_the_current_talk_in_every_phase() {
     }
 }
 
-/// 要件 2.4: 同じ操作の 2 件目は止める対象が無いものとして扱い、二重に止めない。
+/// 同じ操作の 2 件目は止める対象が無いものとして扱い、二重に止めない。
 #[test]
 fn second_user_break_for_the_same_talk_is_ignored() {
     let cfg = config();
@@ -265,7 +265,7 @@ fn second_user_break_for_the_same_talk_is_ignored() {
     );
 }
 
-/// 要件 2.5: スコープ番号は「どこで起きたか」を運ぶだけで、受理の結論を変えない。
+/// スコープ番号は「どこで起きたか」を運ぶだけで、受理の結論を変えない。
 #[test]
 fn scope_number_does_not_change_the_verdict() {
     let cfg = config();
@@ -310,7 +310,7 @@ fn scope_number_does_not_change_the_verdict() {
     }
 }
 
-// --- 判断分岐 ⑷: 押されたバルーンのトークが今のトークでない（要件 9.9） ---
+// --- 判断分岐 ⑷: 押されたバルーンのトークが今のトークでない ---
 
 /// 読み終えたトーク X のバルーンを押した瞬間に Y が始まっていたら、Y は止めず、帳簿も控えず、
 /// 理由 `other_talk` を 1 行残して表 C（読み終えたバルーンを閉じた知らせ）へ渡す。表 C は再生中なら
@@ -387,10 +387,10 @@ fn a_break_without_a_talk_id_stops_the_current_talk() {
     }
 }
 
-// --- 判断分岐 ⑶: 選択肢を待っている最中の中断（要件 2.6・9.4） ---
+// --- 判断分岐 ⑶: 選択肢を待っている最中の中断 ---
 
 /// 選択待ちの最中に中断を受け入れたら、その時点で帳簿を消す。完了通知の前でも後でも、
-/// 期限を過ぎた刻みで `OnChoiceTimeout` が SHIORI へ出ない（要件 2.6・3.9・裁定 4）。
+/// 期限を過ぎた刻みで `OnChoiceTimeout` が SHIORI へ出ない。
 #[test]
 fn user_break_while_choice_waiting_drops_the_ledger_before_any_timeout() {
     let cfg = config();
@@ -453,7 +453,7 @@ fn user_break_while_choice_waiting_drops_the_ledger_before_any_timeout() {
     assert_no_choice_timeout(&late_tick, "完了通知の後の刻み");
 }
 
-// --- 判断分岐 ⑺: 終了の予約（要件 3.4・3.8・7.2） ---
+// --- 判断分岐 ⑺: 終了の予約 ---
 
 /// 中断を受け入れた状態（定常で `TalkId(3)` を再生中 → 中断 1 件）を組む。
 fn after_user_break(cfg: &KanadeConfig) -> State {
@@ -480,7 +480,7 @@ fn interrupted(quit_reserved: bool) -> Input {
     })
 }
 
-/// 利用者の中断で止めた台本が終了を予約していたら、`\-` に辿り着いたのと同じ終了へ進む（要件 3.8）。
+/// 利用者の中断で止めた台本が終了を予約していたら、`\-` に辿り着いたのと同じ終了へ進む。
 #[test]
 fn user_break_with_reserved_quit_ends_the_ghost() {
     let cfg = config();
@@ -511,8 +511,8 @@ fn user_break_with_reserved_quit_ends_the_ghost() {
     );
 }
 
-/// 予約が無ければ、中断は従来どおり定常へ戻るだけで終了しない（要件 3.4）。定常へ戻ったので
-/// `OnBalloonBreak` の GET が 1 本だけ出る（areka-P0-balloon-lifecycle-events 要件 1.1）。
+/// 予約が無ければ、中断は従来どおり定常へ戻るだけで終了しない。定常へ戻ったので
+/// `OnBalloonBreak` の GET が 1 本だけ出る。
 #[test]
 fn user_break_without_reserved_quit_returns_to_steady() {
     let cfg = config();
@@ -532,7 +532,7 @@ fn user_break_without_reserved_quit_returns_to_steady() {
 }
 
 /// 利用者の中断を出していないのに予約つきで止まったとき（選択肢の時間切れの解除など）は
-/// 終了しない——終了が効くのは利用者の中断のときだけである（要件 3.8 の対偶）。
+/// 終了しない——終了が効くのは利用者の中断のときだけである。
 #[test]
 fn reserved_quit_without_user_break_does_not_end_the_ghost() {
     let cfg = config();
@@ -551,7 +551,7 @@ fn reserved_quit_without_user_break_does_not_end_the_ghost() {
     assert!(actions.is_empty(), "終了の要求は出さない");
 }
 
-/// 要件 7.2: 中断で定常へ戻った後、次の刻みで普通に次のトークの要求が出る。
+/// 中断で定常へ戻った後、次の刻みで普通に次のトークの要求が出る。
 #[test]
 fn next_tick_after_user_break_asks_for_the_next_talk() {
     let cfg = config();
@@ -572,7 +572,7 @@ fn next_tick_after_user_break_asks_for_the_next_talk() {
     );
 }
 
-/// 別れの台詞の最中の中断は、終了の予約が無くてもただちに終了へ進む（要件 3.7）。
+/// 別れの台詞の最中の中断は、終了の予約が無くてもただちに終了へ進む。
 ///
 /// 受理（判断分岐 ⑴）と別れの台詞の新しい規則（判断分岐 ⑻）の合成である。予約が無いので
 /// `fn on_talk_done` の予約の腕は通らず、終了の握手の腕がそのまま終了を決める。

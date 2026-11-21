@@ -1,4 +1,4 @@
-//! エラー応答の写しの檻（shiori-fault-notice 要件 6.1・7.3）。
+//! エラー応答の写しの檻。
 //!
 //! 送出点 `round_trip_request` を直接呼び、SHIORI が返した失敗を呼出の種別ごとにどう写すかを
 //! 固定する: エラー応答は GET なら NoContent・NOTIFY なら Notified（記録 1 件）、他の失敗は
@@ -118,7 +118,7 @@ fn probe_sstp_call(event: &str, references: &[&str]) -> ShioriCall {
     get(EventId::Sstp(event.to_string()), references)
 }
 
-/// 送出の檻の `EventId::Sstp` の受理（mcp-kanade-tools 要件 2.1・2.7・6.1）: 検査を満たす名前は
+/// 送出の檻の `EventId::Sstp` の受理: 検査を満たす名前は
 /// 許可の表にも `On` 接頭にも依らず逐語で送られ、警告もエラーも出ない。スケジューラ起源の
 /// 恒久禁止（`OnTalk`）も効かない。
 #[test]

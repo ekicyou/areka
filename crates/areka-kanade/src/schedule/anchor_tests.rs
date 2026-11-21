@@ -1,4 +1,4 @@
-//! アンカーの知らせの受理と 2 段の送出のテスト（areka-P0-anchor-tag-canon 要件 4.1〜4.5・4.9・4.10）。
+//! アンカーの知らせの受理と 2 段の送出のテスト。
 //!
 //! 受理（[`on_anchor`]）と応答（[`on_anchor_reply`]）を直に呼ぶ単体の判定を置く。最上位の `step` から
 //! 通すテストは `anchor_step_tests.rs` に置く。
@@ -55,7 +55,7 @@ fn failed() -> ShioriOutcome {
 
 // --- 段の決め方 ---
 
-/// 要件 4.1・4.4: `On` で始まる ID だけが同じ名前のイベントになる。`script:` の約束は無い。
+/// `On` で始まる ID だけが同じ名前のイベントになる。`script:` の約束は無い。
 #[test]
 fn plan_is_named_only_for_on_prefixed_ids() {
     assert_eq!(plan_anchor("OnMenu"), AnchorPlan::Named);
@@ -67,7 +67,7 @@ fn plan_is_named_only_for_on_prefixed_ids() {
 
 // --- 受理 ---
 
-/// 要件 4.1: `On` で始まらない ID は `OnAnchorSelectEx` を 1 本積み、段を覚える。
+/// `On` で始まらない ID は `OnAnchorSelectEx` を 1 本積み、段を覚える。
 #[test]
 fn canonical_id_queues_select_ex_and_remembers_the_stage() {
     let mut out = None;
@@ -101,7 +101,7 @@ fn canonical_id_queues_select_ex_and_remembers_the_stage() {
     logged_once(&events, Level::INFO, "anchor_accepted");
 }
 
-/// 要件 4.4・4.5: `On` で始まる ID はその名前のイベント 1 本（Reference は引数だけ）で、最終段。
+/// `On` で始まる ID はその名前のイベント 1 本（Reference は引数だけ）で、最終段。
 #[test]
 fn on_prefixed_id_queues_the_named_event_as_the_final_stage() {
     let (state, actions) = on_anchor(
@@ -124,7 +124,7 @@ fn on_prefixed_id_queues_the_named_event_as_the_final_stage() {
 
 // --- 応答 ---
 
-/// 要件 4.3・4.8: 台本はどの段でも腕で扱わない（呼び手が既存の応答の腕へ流す）。
+/// 台本はどの段でも腕で扱わない（呼び手が既存の応答の腕へ流す）。
 #[test]
 fn script_reply_is_left_to_the_existing_reply_arm() {
     for stage in [
@@ -145,7 +145,7 @@ fn script_reply_is_left_to_the_existing_reply_arm() {
     }
 }
 
-/// 要件 4.2: `OnAnchorSelectEx` が 204 なら `OnAnchorSelect`（Reference0＝ID）を積んで最終段へ。
+/// `OnAnchorSelectEx` が 204 なら `OnAnchorSelect`（Reference0＝ID）を積んで最終段へ。
 #[test]
 fn no_content_at_select_ex_queues_select_and_moves_to_final() {
     let mut state = steady_none();
@@ -165,7 +165,7 @@ fn no_content_at_select_ex_queues_select_and_moves_to_final() {
     assert_eq!(state.anchor, Some(final_of("詳細")));
 }
 
-/// 要件 4.9: 最終段の 204 では何もしない（段の記憶も残らない）。
+/// 最終段の 204 では何もしない（段の記憶も残らない）。
 #[test]
 fn no_content_at_final_does_nothing() {
     let mut state = steady_talking();
@@ -181,7 +181,7 @@ fn no_content_at_final_does_nothing() {
     assert!(matches!(state.phase, Phase::Steady { talk: Some(_) }));
 }
 
-/// 要件 4.10: 送信の失敗と想定外の応答は、記録を残して 204 と同じに進む。
+/// 送信の失敗と想定外の応答は、記録を残して 204 と同じに進む。
 #[test]
 fn failure_and_unexpected_reply_advance_like_no_content_with_a_record() {
     for (outcome, level, event) in [

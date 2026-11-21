@@ -1,6 +1,6 @@
-//! 要求の出どころの規則の檻（要件 1.1・1.3・1.7・2.2〜2.7・3.3・3.4）。
+//! 要求の出どころの規則の檻。
 //!
-//! design の写しの表の 5 行・5 つのカテゴリの基本の出どころ・応答のレベルの解釈の 4 通りを見る。
+//! 写しの表の 5 行・5 つのカテゴリの基本の出どころ・応答のレベルの解釈の 4 通りを見る。
 
 use super::*;
 use crate::schedule::log_capture::{capture, logged_once};
@@ -18,7 +18,7 @@ fn row(security_level: &'static str, sender: &'static str, sender_type: &str) ->
 
 #[test]
 fn areka_events_are_areka_internal_local() {
-    // 表の 1 行目: 運行表・選択肢・アンカーのイベント（2.2・1.7）。
+    // 表の 1 行目: 運行表・選択肢・アンカーのイベント。
     for id in [
         EventId::Static("OnBoot"),
         EventId::Static("OnAnchorSelectEx"),
@@ -34,7 +34,7 @@ fn areka_events_are_areka_internal_local() {
 
 #[test]
 fn raise_event_is_mcp_external_sstp() {
-    // 表の 2 行目: MCP の raise_event（2.3）。
+    // 表の 2 行目: MCP の raise_event。
     let id = EventId::Sstp("OnInstallCompleteEx".to_string());
     assert_eq!(
         RequestOrigin::of_event(&id).wire(),
@@ -44,7 +44,7 @@ fn raise_event_is_mcp_external_sstp() {
 
 #[test]
 fn sakurascript_translate_is_mcp_internal() {
-    // 表の 3 行目: MCP の sakurascript の OnTranslate（2.4）。
+    // 表の 3 行目: MCP の sakurascript の OnTranslate。
     let id = EventId::Translate(RequestOrigin::MCP_SEND_TRANSLATE);
     assert_eq!(
         RequestOrigin::of_event(&id).wire(),
@@ -55,7 +55,7 @@ fn sakurascript_translate_is_mcp_internal() {
 
 #[test]
 fn ghost_reply_translate_is_areka_internal() {
-    // 表の 4 行目: ゴースト自身の応答の OnTranslate（2.5）。
+    // 表の 4 行目: ゴースト自身の応答の OnTranslate。
     for source in [
         EventId::Static("OnBoot"),
         EventId::Choice("OnMyChoice".to_string()),
@@ -71,7 +71,7 @@ fn ghost_reply_translate_is_areka_internal() {
 
 #[test]
 fn raise_event_reply_translate_is_areka_external_sstp() {
-    // 表の 5 行目: raise_event の応答の OnTranslate（2.6）。
+    // 表の 5 行目: raise_event の応答の OnTranslate。
     let source = EventId::Sstp("OnInstallCompleteEx".to_string());
     let id = EventId::Translate(RequestOrigin::for_translated(&source));
     assert_eq!(
@@ -82,7 +82,7 @@ fn raise_event_reply_translate_is_areka_external_sstp() {
 
 #[test]
 fn property_event_is_areka_internal_property_local() {
-    // `\![get,property]` の返しのイベント（shell-scale-linkage 要件 1.3）。名前を問わず同じ 4 つの文字。
+    // `\![get,property]` の返しのイベント。名前を問わず同じ 4 つの文字。
     for name in ["OnPastaShellScale", "PastaShellScale"] {
         let id = EventId::Property(name.to_string());
         assert_eq!(
@@ -95,7 +95,6 @@ fn property_event_is_areka_internal_property_local() {
 
 #[test]
 fn base_origins_of_the_five_categories() {
-    // 応答の台本の基本の出どころ（1.1・1.3・1.7）。
     assert_eq!(
         RequestOrigin::base_of(&EventId::Static("OnBoot")),
         ScriptOrigin::GHOST

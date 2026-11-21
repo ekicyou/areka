@@ -1,4 +1,4 @@
-//! 台詞の切れ目の口の返信端の檻（areka-P0-shell-balloon-switch 要件 1.14・2.3・5.7・8.11）。
+//! 台詞の切れ目の口の返信端の檻。
 //!
 //! 本物の殻（[`spawn_kanade_with_stop_sink`]）を偽の shiori につなぎ（汎用の入口の檻の組み立てを
 //! 借りる）、`KanadeMsg::AwaitTalkGap` の返信端へ結果がちょうど 1 回届くこと・見張りの最中に
@@ -146,7 +146,7 @@ fn second_request_drops_the_first_sender_and_watches_the_new_one() {
 }
 
 /// 殻は時間切れの知らせ（`KanadeMsg::BalloonTimeout`）を運行表へそのまま写し、終えたトークの番号なら
-/// `OnBalloonTimeout` の GET が 1 本出る（areka-P0-balloon-lifecycle-events 要件 2.1・設計 D4）。
+/// `OnBalloonTimeout` の GET が 1 本出る。
 /// 台詞の切れ目の檻のトークの組み立てを借りる。
 #[test]
 fn balloon_timeout_message_reaches_shiori_as_one_get() {

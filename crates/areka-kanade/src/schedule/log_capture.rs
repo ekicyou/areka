@@ -1,14 +1,12 @@
-//! テスト専用ログ捕捉ヘルパ（Req 6.1／6.3）。
+//! テスト専用ログ捕捉ヘルパ。
 //!
 //! 純粋関数 [`crate::schedule::step`]（および各サブモジュール `step`）は、失敗・防御
-//! アームごとに `tracing::{error,warn}!` を発行する（steering:
-//! areka-log-first-no-silent-failure・「ログ無しの失敗経路を持たない」）。本モジュールは
+//! アームごとに `tracing::{error,warn}!` を発行する（ログ無しの失敗経路を持たない）。本モジュールは
 //! その発行を**実行可能なテストで**捕捉し、各アームが規約どおりの `target="kanade"`・
 //! `event=<語彙>`・レベル（ERROR/WARN）でログを出していることを検証可能にする。
 //!
 //! # 硬化機構は 1 箇所にしかない
-//! 捕捉窓そのものは**共有 crate [`log_capture_kit`] へ委譲**する（spec:
-//! areka-P0-test-cage-determinism・要件 1.5／2.2）。本モジュールが持つのは
+//! 捕捉窓そのものは**共有 crate [`log_capture_kit`] へ委譲**する。本モジュールが持つのは
 //! 「この crate の檻が照合する形（[`CapturedEvent`]）への変換」と表明ヘルパだけで、
 //! subscriber の設置も interest の管理も自前では行わない。
 //!
@@ -42,7 +40,7 @@ pub(crate) struct CapturedEvent {
     pub target: String,
     /// 構造化フィールド `event`（区別語彙）の値。未設定なら `None`。
     pub event: Option<String>,
-    /// 構造化フィールド `outcome`（リソース照会 prefetch 完了固定ログの分類値・R9.3）。未設定なら `None`。
+    /// 構造化フィールド `outcome`（リソース照会 prefetch 完了固定ログの分類値）。未設定なら `None`。
     pub outcome: Option<String>,
     /// イベントメッセージ本文（固定ログ `"shiori resource prefetch done"` の照合に使う）。未設定なら `None`。
     pub message: Option<String>,
@@ -55,12 +53,11 @@ pub(crate) struct CapturedEvent {
     pub fields: BTreeMap<String, String>,
 }
 
-/// 正準イベントから 1 フィールドの値を、移行前の visitor と同じ規則で取り出す。
+/// 正準イベントから 1 フィールドの値を取り出す。
 ///
-/// 移行前の `EventFieldVisitor` は `record_str` 経路を `insert`（後勝ち）で、`record_debug`
-/// 経路を `or_insert_with`（先勝ち・生値があれば上書きしない）で記録していた。すなわち
-/// **生値が 1 つでもあれば最後の生値、無ければ最初の Debug 表現**である。ここではその規則を
-/// そのまま再現する。
+/// 生値（`record_str` 経路）は `insert`（後勝ち）、Debug 経路（`record_debug`）は
+/// `or_insert_with`（先勝ち・生値があれば上書きしない）で記録する。すなわち
+/// **生値が 1 つでもあれば最後の生値、無ければ最初の Debug 表現**である。
 ///
 /// 戻り値の第 2 要素は「生値（`record_str` 経路）だったか」で、`event`／`outcome` の
 /// 引用符剥がしを Debug 経路だけに限るために使う。
@@ -88,8 +85,7 @@ fn field_of(ev: &CanonicalEvent, name: &str) -> Option<(String, bool)> {
     }
 }
 
-/// `event`／`outcome` の語彙値。生値はそのまま、Debug 表現は囲みの引用符を剥がして返す
-/// （移行前の `format!("{value:?}").trim_matches('"')` と同じ保険）。
+/// `event`／`outcome` の語彙値。生値はそのまま、Debug 表現は囲みの引用符を剥がして返す。
 fn label_of(ev: &CanonicalEvent, name: &str) -> Option<String> {
     field_of(ev, name).map(|(value, from_str)| {
         if from_str {
@@ -117,7 +113,7 @@ impl CapturedEvent {
             event: label_of(ev, "event"),
             outcome: label_of(ev, "outcome"),
             // メッセージ本文は `fmt::Arguments` ゆえ Debug 経路で届き、その `{:?}` は整形済みの
-            // 本文そのもの（引用符なし）になる——移行前も引用符は剥がしていない。
+            // 本文そのもの（引用符なし）になる。
             message: field_of(ev, "message").map(|(value, _)| value),
             level: ev.level,
             fields,
@@ -148,7 +144,7 @@ pub(crate) fn step_capturing(
 
 /// 捕捉列に `target="kanade"`・`event=event_name`・`level` のイベントが存在することを表明する。
 ///
-/// アームのログが削除・語彙変更・レベル変更されると本表明は失敗する（Req 6.1／6.3 の回帰檻）。
+/// アームのログが削除・語彙変更・レベル変更されると本表明は失敗する（回帰檻）。
 pub(crate) fn assert_logged(events: &[CapturedEvent], level: Level, event_name: &str) {
     let hit = events.iter().any(|e| {
         e.target == "kanade" && e.level == level && e.event.as_deref() == Some(event_name)
@@ -162,7 +158,7 @@ pub(crate) fn assert_logged(events: &[CapturedEvent], level: Level, event_name: 
 /// 捕捉列に `target="kanade"`・`event=event_name` のイベントが**存在しない**ことを表明する。
 ///
 /// [`assert_logged`] の否定側。「この経路では当該語彙が発火してはならない」ことが要求である檻
-/// （例: 1 世代 stale 防御が効いているとき `unknown_talk_done` は発火しない・C4 規則 9）で使う。
+/// （例: 1 世代 stale 防御が効いているとき `unknown_talk_done` は発火しない）で使う。
 pub(crate) fn assert_not_logged(events: &[CapturedEvent], event_name: &str) {
     assert!(
         !events
@@ -210,10 +206,10 @@ pub(crate) fn logged_once<'a>(
     first
 }
 
-/// リソース照会 prefetch の完了固定ログ（R9.3 grep 証跡）が**ちょうど 1 回**発火したことを表明する。
+/// リソース照会 prefetch の完了固定ログ（grep 証跡）が**ちょうど 1 回**発火したことを表明する。
 ///
 /// 固定ログは `info!(target: "areka_kanade::resource", id = "username", outcome = <outcome_label>,
-/// "shiori resource prefetch done")`（design Postconditions・研究 §12-10）。target・level(INFO)・
+/// "shiori resource prefetch done")`。target・level(INFO)・
 /// `outcome` フィールド値・message 本文の全一致で照合し、発火回数が 1 であることまで固定する
 /// （target が `kanade` でなく `areka_kanade::resource` ゆえ [`assert_logged`] は使えない・専用檻）。
 pub(crate) fn assert_resource_prefetch_logged_once(events: &[CapturedEvent], outcome_label: &str) {

@@ -239,13 +239,13 @@ fn steady_some_notified_stays_and_emits_nothing() {
     assert!(actions.is_empty());
 }
 
-// === origin 別 reply 政策: 置換 vs DD-6 防御破棄（Req 4.1／4.3／4.4・DD-IE-2／DD-IE-3） ===
-// 置換檻（置き換える出所→置換）と DD-6 保存檻（OnSecondChange→warn＋破棄）は**対**であり
+// === origin 別 reply 政策: 置換 vs 防御破棄 ===
+// 置換檻（置き換える出所→置換）と 保存檻（OnSecondChange→warn＋破棄）は**対**であり
 // 同一テスト群に配置する。実機では実 pasta の talking 自衛（204 相当）により置換が構造的に
 // 発火しないため mock 檻が唯一の検証手段。置き換えるかは `events::value_replaces_active_talk` が
-// 決め、倍率の 2 語は info!＋破棄、残り（今は OnSecondChange だけ）は `_` の腕で DD-6 破棄。
+// 決め、倍率の 2 語は info!＋破棄、残り（今は OnSecondChange だけ）は `_` の腕で 破棄。
 
-// --- (c) Steady{None} + Value（マウス origin）→ StartTalk・ActiveTalk.origin=マウス名（4.1・DD-IE-3） ---
+// --- (c) Steady{None} + Value（マウス origin）→ StartTalk・ActiveTalk.origin=マウス名 ---
 
 #[test]
 fn steady_none_mouse_value_starts_talk_with_mouse_origin() {
@@ -338,9 +338,9 @@ fn steady_some_mouse_value_replaces_slot_with_new_talk_id() {
     }
 }
 
-// --- DD-6 保存: Steady{Some} + Value + origin(OnSecondChange) → warn＋破棄・維持（4.3/4.4） ---
+// --- 保存: Steady{Some} + Value + origin(OnSecondChange) → warn＋破棄・維持（4.3/4.4） ---
 // 置換檻（上）と対。置き換える出どころ（OnSecondChange・倍率の 2 語以外）と倍率の 2 語は別の腕へ抜けるため、
-// DD-6 破棄はそれ以外の出どころでだけ起きる。
+// 破棄はそれ以外の出どころでだけ起きる。
 
 #[test]
 fn steady_some_second_change_value_is_discarded_dd6() {
@@ -431,7 +431,7 @@ fn steady_talk_done_ended_resumes_steady_and_pump_restarts() {
     );
     assert!(actions.is_empty(), "TalkDone 自体は副作用なし");
 
-    // 復帰後の次 Tick で pump（GET）が再開することを確認（Req 3.4）。
+    // 復帰後の次 Tick で pump（GET）が再開することを確認。
     let now = MonotonicMs(9_000);
     let (after, tick_actions) = step(next, Input::Tick { now }, &config());
     assert!(matches!(after.phase, Phase::Steady { talk: None }));
@@ -536,7 +536,7 @@ fn steady_some_close_request_records_pending_only() {
     assert!(actions.is_empty(), "OnClose はまだ発行しない");
 }
 
-// === マウス GET 発行（Req 1.4／2.1／3.1・DD-IE-1／DD-IE-8） ===
+// === マウス GET 発行 ===
 // step() 経由（横断アーム込み）で駆動し、期待 GET は
 // events:: の構築子と共有する（Reference 手書き重複を作らない）。
 
@@ -627,7 +627,7 @@ fn steady_none_mouse_double_click_right_emits_get_ref5_one() {
     );
 }
 
-// --- Steady{Some(active)} + Move → GET は抑止せず発行・Status: talking を帯びる（DD-IE-1） ---
+// --- Steady{Some(active)} + Move → GET は抑止せず発行・Status: talking を帯びる ---
 // active talk 中でもマウス GET は NOTIFY 化せず GET のまま。State::snapshot()（Steady{Some}）から
 // talking が導出され Status ヘッダに載る。active talk は維持される。
 
@@ -663,7 +663,7 @@ fn steady_some_mouse_move_emits_get_with_talking_status() {
     assert_shiori(&actions[0], &expected);
 }
 
-// --- pending_close 中は Steady でもマウス GET を発行しない（close 優先・DD-IE-8） ---
+// --- pending_close 中は Steady でもマウス GET を発行しない（close 優先） ---
 
 #[test]
 fn steady_mouse_with_pending_close_emits_no_get() {
@@ -684,7 +684,7 @@ fn steady_mouse_with_pending_close_emits_no_get() {
     );
 }
 
-// --- pending_change 中も Steady でマウス GET を発行しない（要件 9.3・切替の保留と同じ決まり） ---
+// --- pending_change 中も Steady でマウス GET を発行しない（切替の保留と同じ決まり） ---
 
 #[test]
 fn steady_mouse_with_pending_change_emits_no_get() {
@@ -705,7 +705,7 @@ fn steady_mouse_with_pending_change_emits_no_get() {
     );
 }
 
-// === 会話中の 204 は想定外ではない（Req19.1／19.2） ===
+// === 会話中の 204 は想定外ではない ===
 //
 // 会話中（`status="talking"`）の撫でで発行した `OnMouseMove` GET に台本が無いのは普通の
 // 応答であり、`steady_unexpected_reply` の警告にしない（生ログの警告の数を異常の数と一致させる）。

@@ -1,5 +1,4 @@
-//! 切替の 2 イベント・汎用の組み立て・`OnBoot` の Ref6/7・許可表の照合・置き換えの述語のテスト
-//! （areka-P0-ghost-shell-balloon-switch 要件 2.1・4.1・6.2・7.2・7.3・11.5・11.7・11.10）。
+//! 切替の 2 イベント・汎用の組み立て・`OnBoot` の Ref6/7・許可表の照合・置き換えの述語のテスト。
 //!
 //! どの組み立ても番号を詰めない（使わない番号は空文字で埋め、位置を保つ）ことを列ごと突き合わせる。
 
@@ -27,9 +26,9 @@ fn allowed_static_returns_the_table_spelling_and_none_off_the_table() {
         "onghostchanging",
         "OnGhostChangingX",
         "",
-        // 送り先を他のゴーストへ移す場面は作らない（要件 2.11）。
+        // 送り先を他のゴーストへ移す場面は作らない。
         "OnInstallReroute",
-        // 更新オプション `checkonly` の系・エクスプローラ・作る側は送らない（要件 2.15）。
+        // 更新オプション `checkonly` の系・エクスプローラ・作る側は送らない。
         "OnUpdateCheckComplete",
         "OnUpdateCheckFailure",
         "OnUpdateCheckResult",

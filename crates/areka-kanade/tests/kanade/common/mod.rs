@@ -1,16 +1,16 @@
-//! 観測ハーネス基盤（設計「検証層 → 観測ハーネス（tests/kanade/）」）。
+//! 観測ハーネス基盤。
 //!
 //! 統合テストが運行表を決定的に観測できるよう、以下を提供する:
 //!
 //! - [`RecordedCall`]: 受理された shiori 呼出（Method・id・References）の記録単位。
 //! - [`spawn_mock_shiori`]: real と**同一の [`areka_kanade::ShioriMsg`] 型**を受け、
 //!   [`Fixture`] 表に従い同梱 `reply` へ**即時**応答する mock shiori アクター
-//!   （trait 不要＝Req 5.1 の型レベル差し替え）。受理呼出を [`RecordedCall`] 列へ蓄積。
+//!   （trait 不要＝型レベルで差し替え）。受理呼出を [`RecordedCall`] 列へ蓄積。
 //! - [`spawn_mock_sakura`]: [`TalkCommand`] を到着順に受領・記録し、`Start` についてシナリオ指示（quit true/false・
 //!   遅延なし）どおり [`KanadeMsg::TalkDone`] を kanade inbox へ返す mock 再生系宛先。
 //! - [`expected_call`]: `areka_kanade::events::*` の [`ShioriCall`] を [`RecordedCall`] へ
-//!   変換する導出関数（fixture・検証・実装が単一の正本＝events 表を共有・Req 7.1）。
-//! - [`join_bounded`]: 期限付き待機によるハング検出ヘルパ（どのテストもハングしない・Req 7.3）。
+//!   変換する導出関数（fixture・検証・実装が単一の正本＝events 表を共有）。
+//! - [`join_bounded`]: 期限付き待機によるハング検出ヘルパ（どのテストもハングしない）。
 //! - [`Harness`] / [`spawn_harness`]: mock shiori・mock sakura sink・`spawn_kanade` を
 //!   組み立てた駆動ハーネス（各テストのファイルが再利用する）。
 
@@ -52,7 +52,7 @@ mod window_actor;
 mod smoke;
 
 // ============================================================================
-// ファサード再輸出（消費側の `super::common::X` を 0 変更に保つ・§17.5 に従い明示列挙）
+// ファサード再輸出（消費側の `super::common::X` を 0 変更に保つ・明示列挙）
 //
 // 子モジュール同士も、公開項目はこのファサード経由（`use super::{…}`）で引く。兄弟の直接
 // パスを使うのは、ファサードに載らない `pub(super)` の内部項目（`FixtureState`・

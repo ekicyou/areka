@@ -1,4 +1,4 @@
-//! 切替の中止と終了要求への譲りのテスト（areka-P0-ghost-shell-balloon-switch 要件 2.9・5.1〜5.4・5.6・5.7・10.4）。
+//! 切替の中止と終了要求への譲りのテスト。
 //!
 //! 送り出しの台詞を利用者が中断したら（`\-` の予約が在っても）切替を中止して定常へ戻ること、
 //! 中止のあとの終了要求が定常と同じく `OnClose` を出すこと、切替の 4 相に届いた終了要求が切替を
@@ -19,7 +19,7 @@ fn on_close_sends(actions: &[Action]) -> usize {
         .count()
 }
 
-// ---- 利用者の中断で中止（要件 5.1・5.2・5.4・5.6・5.7） ----
+// ---- 利用者の中断で中止 ----
 
 #[test]
 fn user_break_in_either_farewell_cancels_back_to_steady_even_with_quit_reserved() {
@@ -41,7 +41,7 @@ fn user_break_in_either_farewell_cancels_back_to_steady_even_with_quit_reserved(
                 "{label}: 切替の相では `\\-` の予約を終了へ結ばない"
             );
             // 中止の通知が先、その後に定常へ戻った中断の `OnBalloonBreak` の GET が 1 本
-            // （降ろす要求は出ない・areka-P0-balloon-lifecycle-events 要件 1.1・設計 E）。
+            // （降ろす要求は出ない）。
             assert!(
                 matches!(
                     actions.first(),
@@ -59,7 +59,7 @@ fn user_break_in_either_farewell_cancels_back_to_steady_even_with_quit_reserved(
             assert!(s.change.is_none(), "{label}: 切替の帳簿は消える");
             assert!(s.user_break_talk.is_none(), "{label}: 中断の帳簿も空");
 
-            // 中止のあとの終了要求は定常と同じく OnClose を出す（要件 5.6）。
+            // 中止のあとの終了要求は定常と同じく OnClose を出す。
             let (after, actions) = close_request(s);
             assert_eq!(only_get(&actions).0, "OnClose", "{label}");
             assert!(matches!(after.phase, Phase::ClosePending), "{label}");
@@ -83,7 +83,7 @@ fn new_change_request_is_accepted_right_after_cancel() {
     assert_eq!(only_get(&actions).0, "OnGhostChanging");
 }
 
-// ---- 終了要求への譲り（要件 2.9） ----
+// ---- 終了要求への譲り ----
 
 /// 終了要求を送り、取りやめ（通知 1 件・`info!(change_yield_to_close)`）を確かめて返す。
 fn yield_to_close(s: State) -> State {

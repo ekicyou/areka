@@ -1,4 +1,4 @@
-//! close 握手の Phase 分岐（Req 4・OnClose GET・期限判定・終了系列）。
+//! close 握手の Phase 分岐（OnClose GET・期限判定・終了系列）。
 //!
 //! 本モジュールは close 各待ち点（[`Phase::ClosePending`] の OnClose 応答待ち・
 //! [`Phase::CloseTalkWait`] の close talk 再生完了待ち／期限判定）の遷移本体を担う。
@@ -7,24 +7,23 @@
 //! （後者は終了要求で `yield_to_close` が `ClosePending` へ移す）、本モジュールはその応答
 //! （Value／NoContent）分岐から先を実装する。
 //!
-//! # close 握手の状態遷移（Req 4.1〜4.7・DD-11）
+//! # close 握手の状態遷移
 //! - `ClosePending` + `ShioriReply{Value(script)}` → 応答スクリプトを一意 talk_id
 //!   で再生起動要求（StartTalk）として配送し、`CloseTalkWait` へ遷移して再生完了通知を
-//!   待つ（Req 4.2・2.1・運行保留）。
+//!   待つ（運行保留）。
 //! - `ClosePending` + `ShioriReply{NoContent}`（204）→ **応答なし＝無言終了**
-//!   （DD-11: 204 は拒否ではない・OnCloseAll は発行しない）。追加イベントを発行せず
-//!   `Unloading{CloseSilent}` へ直行する（Req 4.6）。
+//!   （204 は拒否ではない・OnCloseAll は発行しない）。追加イベントを発行せず
+//!   `Unloading{CloseSilent}` へ直行する。
 //! - `CloseTalkWait{talk_id}` + `TalkDone{talk_id, reason: Ended | Interrupted}` →
-//!   **終了へ進む**（Req 3.6・3.7）。別れの台詞は末尾に `\-` が在るのと同じ結果として扱うため、
+//!   **終了へ進む**。別れの台詞は末尾に `\-` が在るのと同じ結果として扱うため、
 //!   最後まで再生されても中断されても `Unloading{Quit}`＋`ShioriUnload` になる。よって close 握手
-//!   から `Steady` へ戻る経路は **0 本**である（完了 spec `areka-P0-kanade` の Req 4.5 を上書きする
-//!   2026-09-20 開発者裁定）。（`Quit` は横断アームが `Unloading{Quit}` へ送るため本層には届かない。）
+//!   から `Steady` へ戻る経路は **0 本**である（`Quit` は横断アームが `Unloading{Quit}` へ送るため本層には届かない）。
 //! - `CloseTalkWait` + `Tick` → 再生完了待ちに時刻基準の上限（deadline）を設け、上限超過を
-//!   判定して超過なら `error!` の上で `Unloading{DeadlineExceeded}` へ進む（Req 4.7）。
+//!   判定して超過なら `error!` の上で `Unloading{DeadlineExceeded}` へ進む。
 //!   握手入口で `last_now` が None（Tick 未受領）だった場合は deadline を None のまま入り、
 //!   CloseTalkWait 最初の Tick 受領時点を起点に上限を設定する。
 //!
-//! # ログ規律（steering: areka-log-first-no-silent-failure）
+//! # ログ規律
 //! すべての遷移・防御アームは `tracing` を発行する。沈黙の失敗経路は存在しない。
 
 use super::{Action, Input, Phase, State, TermCause, to_unloading_quit};
@@ -64,8 +63,6 @@ fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (S
     match input {
         Input::ShioriReply { outcome, .. } => match outcome {
             ShioriOutcome::Value(script, _) => {
-                // 応答スクリプトあり: 一意 talk_id を採番し再生起動要求として配送、
-                // CloseTalkWait へ遷移して再生完了通知まで運行を保留する（Req 4.2・2.1）。
                 let talk_id = super::take_talk_id(&mut state);
                 let deadline = deadline_from(state.last_now, config);
                 tracing::info!(target: "kanade", event = "close_talk_start", talk_id = talk_id.0, "OnClose 応答スクリプト——close talk を再生起動し完了を待機");
@@ -76,8 +73,6 @@ fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (S
                 )
             }
             ShioriOutcome::NoContent => {
-                // 204 = 応答なし（≠拒否・DD-11）。追加イベントを発行せず無言終了へ直行する
-                // （OnCloseAll は発行しない・Req 4.6）。
                 tracing::info!(target: "kanade", event = "close_silent", "OnClose 応答なし（204）——追加イベントなしで無言終了へ");
                 state.phase = Phase::Unloading {
                     cause: TermCause::CloseSilent,
@@ -85,7 +80,6 @@ fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (S
                 (state, vec![Action::ShioriUnload])
             }
             ShioriOutcome::Notified => {
-                // OnClose は GET ゆえ Notified は構造上あり得ない（防御アーム）。
                 tracing::warn!(target: "kanade", event = "close_notified_unexpected", "ClosePending で Notified——OnClose は GET・構造上想定外・維持");
                 (state, Vec::new())
             }
@@ -110,8 +104,8 @@ fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (S
 /// `CloseTalkWait`（close talk 再生完了待ち／期限判定）の遷移。
 ///
 /// - `TalkDone{reason: Ended | Interrupted}` → **終了へ進む**・`Unloading{Quit}`＋`ShioriUnload`
-///   （Req 3.6・3.7・終わり方で振り分けない）。
-/// - `Tick{now}` → 期限判定（Req 4.7・注入時刻のみで決定的）:
+///   （終わり方で振り分けない）。
+/// - `Tick{now}` → 期限判定（注入時刻のみで決定的）:
 ///   - deadline 未設定（None）→ 本 Tick を起点に設定・維持。
 ///   - `now >= deadline` → error!＋`Unloading{DeadlineExceeded}`（終了系列継続）。
 ///   - `now < deadline` → `last_now` 更新のみ・維持。
@@ -127,7 +121,7 @@ fn on_close_talk_wait(
         Input::TalkDone(done) => {
             // mod.rs は既知 talk の Ended／Interrupted のみを委譲する（Quit と「利用者の中断＋
             // 終了の予約」は横断アームが先に終了系列へ送る）。別れの台詞は末尾に `\-` が在るのと
-            // 同じ結果として扱うので、どの終わり方で届いてもここで終了へ進む（Req 3.6・3.7）。
+            // 同じ結果として扱うので、どの終わり方で届いてもここで終了へ進む。
             // talk_id 突合は mod.rs 済み。
             tracing::info!(target: "kanade", event = "close_talk_done_quit", talk_id = talk_id.0, reason = ?done.reason, "別れの台詞の再生が終わった——終わり方によらず終了系列（Quit）へ");
             to_unloading_quit(state, "close_talk_done_quit")
@@ -136,7 +130,6 @@ fn on_close_talk_wait(
             state.last_now = Some(now);
             match talk_wait_tick(deadline, now, config) {
                 TalkWaitTick::Armed(d) => {
-                    // 握手入口で last_now が None だった場合、本 Tick を起点に上限を設定する。
                     tracing::info!(target: "kanade", event = "close_deadline_armed", talk_id = talk_id.0, deadline_ms = d.0, "CloseTalkWait 最初の Tick——再生完了待ち上限を設定");
                     state.phase = Phase::CloseTalkWait {
                         talk_id,
@@ -145,14 +138,12 @@ fn on_close_talk_wait(
                     (state, Vec::new())
                 }
                 TalkWaitTick::Exceeded { overshoot_ms } => {
-                    // 上限超過（Req 4.7）: error! の上で終了系列を継続する。
                     tracing::error!(target: "kanade", event = "close_deadline_exceeded", talk_id = talk_id.0, overshoot_ms = overshoot_ms, "close talk 再生完了待ちが上限超過——終了系列を継続");
                     state.phase = Phase::Unloading {
                         cause: TermCause::DeadlineExceeded,
                     };
                     (state, vec![Action::ShioriUnload])
                 }
-                // 未超過: last_now を更新し CloseTalkWait を維持する（発行なし）。
                 TalkWaitTick::Waiting => (state, Vec::new()),
             }
         }
@@ -163,7 +154,7 @@ fn on_close_talk_wait(
     }
 }
 
-/// CloseTalkWait 入口の deadline を計算する（DD 表 close 再生完了待ち上限）。
+/// CloseTalkWait 入口の deadline を計算する。
 ///
 /// `last_now == Some(n)` なら `n + close_talk_deadline_ms` を上限とする。`None`（Tick 未受領で
 /// 握手に入った場合）は None のまま入り、CloseTalkWait 最初の Tick 受領時点で確定する。
@@ -268,9 +259,8 @@ mod tests {
 
     #[test]
     fn value_starts_close_talk_then_quit_unloads() {
-        let d = 30_000; // 既定。
+        let d = 30_000;
         let (s1, actions1) = close_value(close_pending(Some(MonotonicMs(1_000))), "bye");
-        // StartTalk(5, "bye") + CloseTalkWait{5, deadline=Some(1000+D)}。
         match s1.phase {
             Phase::CloseTalkWait { talk_id, deadline } => {
                 assert_eq!(talk_id, TalkId(5));
@@ -294,7 +284,6 @@ mod tests {
             _ => panic!("expected StartTalk"),
         }
 
-        // reason=Quit TalkDone（既知 talk）→ 横断アームで Unloading{Quit} + ShioriUnload。
         let (s2, actions2) = step(
             s1,
             Input::TalkDone(TalkDone {
@@ -313,7 +302,7 @@ mod tests {
         assert!(matches!(actions2.as_slice(), [Action::ShioriUnload]));
     }
 
-    // === 分岐2: 応答スクリプトあり（reason=Ended／Interrupted）→ 終了へ進む（要件 3.6・3.7） ===
+    // === 分岐2: 応答スクリプトあり（reason=Ended／Interrupted）→ 終了へ進む ===
     // 別れの台詞は末尾に `\-` が在るのと同じ結果として扱う。台本が最後まで再生されても、
     // 中断で終わっても終了へ進み（終わり方で振り分けない）、終了の握手から定常運転へ戻る経路は 1 本も無い。
 
@@ -353,7 +342,6 @@ mod tests {
                 "終了の要求が出る"
             );
 
-            // 終了へ進んだことを相手の talk_id と終わり方つきで 1 行記録する。
             let logged = logged_once(&ev, Level::INFO, "close_talk_done_quit");
             assert_eq!(
                 logged.fields.get("talk_id").map(String::as_str),
@@ -393,7 +381,6 @@ mod tests {
             next.next_talk_id, 5,
             "無言終了は talk 起動しない・採番しない"
         );
-        // ShioriUnload のみ・追加イベント（ShioriRequest = OnCloseAll 等）は発行しない（Req 4.6）。
         assert!(
             matches!(actions.as_slice(), [Action::ShioriUnload]),
             "無言終了は追加イベントを発行しない（OnCloseAll 非発行・DD-11）"
@@ -405,9 +392,7 @@ mod tests {
     #[test]
     fn deadline_exceeded_continues_termination() {
         let d = 30_000;
-        // CloseTalkWait に deadline=Some(1000+D) で入る。
         let s = close_talk_wait(TalkId(7), Some(MonotonicMs(1_000 + d)));
-        // now = 1000 + D（>= deadline）→ 超過。
         let (next, actions) = step(
             s,
             Input::Tick {
@@ -432,9 +417,7 @@ mod tests {
     #[test]
     fn deadline_armed_on_first_tick_when_entered_without_now() {
         let small = 100;
-        // 入口 last_now None → deadline None で CloseTalkWait に入る。
         let s = close_talk_wait(TalkId(2), None);
-        // 最初の Tick{now=500} → deadline = Some(500+100)・未超過・維持。
         let (s1, a1) = step(
             s,
             Input::Tick {
@@ -456,7 +439,6 @@ mod tests {
         assert_eq!(s1.last_now, Some(MonotonicMs(500)));
         assert!(a1.is_empty(), "起点設定のみ・発行なし");
 
-        // 後続 Tick{now=600}（>= deadline）→ 超過 → Unloading{DeadlineExceeded}。
         let (s2, a2) = step(
             s1,
             Input::Tick {
@@ -479,7 +461,7 @@ mod tests {
     fn tick_before_deadline_stays_and_updates_last_now() {
         let d = 30_000;
         let s = close_talk_wait(TalkId(4), Some(MonotonicMs(1_000 + d)));
-        let now = MonotonicMs(1_000 + d - 1); // deadline 未満。
+        let now = MonotonicMs(1_000 + d - 1);
         let (next, actions) = step(s, Input::Tick { now }, &config());
         match next.phase {
             Phase::CloseTalkWait { talk_id, deadline } => {

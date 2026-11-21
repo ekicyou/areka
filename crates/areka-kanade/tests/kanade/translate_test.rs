@@ -1,18 +1,16 @@
-//! 翻訳（`OnTranslate`）の殻の結合テスト（areka-P0-translate-pipeline 要件 3.6・4.5・
-//! 5.3・5.4・5.6・8.1 ⑺）。
+//! 翻訳（`OnTranslate`）の殻の結合テスト。
 //!
 //! 本物の殻（`spawn_kanade_translating`）に、SHIORI と再生側の両方の受け口を 1 本のスレッドで
 //! 受ける偽物（[`spawn_rig`]）をつなぐ。偽物は SHIORI の要求を 1 件受けるたびに、その前に届いて
 //! いた再生側の指示をすべて記録へ移してから要求を記録する。kanade は 1 本のスレッドで「再生の
-//! 指示を送る → 次の往復を送る」の順に送るので、記録の並びは kanade が送った順と一致する
-//! （再生の開始と、その後の SHIORI の要求の前後を 1 本の列で比べられる）。
+//! 指示を送る → 次の往復を送る」の順に送るので、記録の並びは kanade が送った順と一致する。
 //!
 //! 偽物は最初の `OnTranslate` を、テストが放すまで握れる。握っている間は kanade が応答待ちで
 //! 止まっている。放したときに偽物の受け口へ次の要求が積まれていないことを確かめてから応答する
-//! （＝待ちの間に SHIORI へ何も送られていない・要件 5.3）。再生側は TalkDone を返さないので、
+//! （＝待ちの間に SHIORI へ何も送られていない）。再生側は TalkDone を返さないので、
 //! 始めた台詞はテストが TalkDone を送るまで再生中のまま（「再生中」の規則で入力が処理される）。
 //!
-//! 見出し（要件 3.6）は、kanade が SHIORI へ渡す呼出（GET・ID・Reference・Status）までをこの層で
+//! 見出しは、kanade が SHIORI へ渡す呼出（GET・ID・Reference・Status）までをこの層で
 //! 見て、線の見出しは本物の組み立て（`shiori_host32_host::build_request`）に同じ呼出を通して比べる。
 //! 本番の線の層（`shiori::real` の `handle_call` → `Shiori3Client::get` → `build_request`）は ID で
 //! 分岐しないので、同じ形の呼出からは同じ見出しが出る。
@@ -300,7 +298,7 @@ fn calls_of<'a>(seen: &'a [Seen], id: &str) -> Vec<&'a RecordedCall> {
 /// 待ちの間に届いた入力の 1 行（名前, 握っている間に送る入力, 放した後に期待する列の続き）。
 type WaitCase = (&'static str, fn() -> Vec<KanadeMsg>, fn() -> Vec<Seen>);
 
-/// 要件 5.3・5.4・8.1 ⑺: `OnTranslate` を握っている間にマウス・毎秒の時刻・終了の要求・切替の
+/// `OnTranslate` を握っている間にマウス・毎秒の時刻・終了の要求・切替の
 /// 要求・外からの依頼を送る。握っている間は SHIORI へ何も送られず、放した後に再生の開始が先に
 /// 出て、その後で各入力が「再生中」の規則で処理される。
 ///
@@ -409,7 +407,7 @@ fn inputs_during_translate_wait_run_after_start_under_talking_rules() {
     }
 }
 
-/// 要件 5.6・8.1 ⑷: 台詞 1 つにつき `OnTranslate` は 1 回だけ。204 の元のイベント（起動・毎秒の
+/// 台詞 1 つにつき `OnTranslate` は 1 回だけ。204 の元のイベント（起動・毎秒の
 /// 時刻）と中身が空の 200（マウス移動）では 0 回。
 #[test]
 fn one_on_translate_per_script_and_none_for_no_content_or_empty() {
@@ -489,7 +487,7 @@ fn header_shape(recorded: &RecordedCall) -> Vec<String> {
         .collect()
 }
 
-/// 要件 3.6・設計の論点 9: `OnTranslate` の Status は再生を始める時点の状態（`talking` を含む）で
+/// `OnTranslate` の Status は再生を始める時点の状態（`talking` を含む）で
 /// 届く。定常（再生なし）から始まる台詞では元の GET に Status の行が無くても `OnTranslate` は
 /// `talking` を持つ。見出しは同じ時点に送った他の GET（再生中のダブルクリック）と同じ。
 #[test]
@@ -551,7 +549,7 @@ fn run_failing(fail: &'static str, inputs: Vec<KanadeMsg>) -> (Vec<Seen>, Option
     (from_first(&log.seen, fail).to_vec(), stopped)
 }
 
-/// 要件 4.5: `OnTranslate` の輸送路の失敗で止まるときの停止の原因と後の運びは、元のイベントの
+/// `OnTranslate` の輸送路の失敗で止まるときの停止の原因と後の運びは、元のイベントの
 /// GET が同じ輸送路の失敗をしたときの故障と同じ（再生は始まらず、降ろして止まる）。
 #[test]
 fn transport_failure_on_translate_stops_like_the_source_event_fault() {
@@ -575,7 +573,7 @@ fn transport_failure_on_translate_stops_like_the_source_event_fault() {
     );
 }
 
-/// 停止通知の切替の中身（要件 6.2・4.5）は、`OnGhostChanging` の台詞なら翻訳の
+/// 停止通知の切替の中身は、`OnGhostChanging` の台詞なら翻訳の
 /// 後の台詞を運ぶ。切替の送り出しの翻訳で輸送路が失敗したら、中身は空（`None`）で、原因は
 /// `OnGhostChanging` そのものが同じ失敗をしたときの故障と同じ。
 #[test]
@@ -622,7 +620,7 @@ fn change_handoff_carries_translated_script_or_none_on_transport_failure() {
     assert_eq!(after_translate[1..], [Seen::Call(expected_unload())]);
 }
 
-/// お別れの台詞の 1 場面を殻ごと通す（areka-P0-farewell-talk-status 要件 2.1〜2.3・3.3・4.2・4.3）。
+/// お別れの台詞の 1 場面を殻ごと通す。
 /// `script_id` の GET だけが台詞を返す。`trigger` がきっかけの入力、`handshakes` がそれで送られる
 /// 握手の要求の列（最後の 1 件が台詞を返す）。
 ///

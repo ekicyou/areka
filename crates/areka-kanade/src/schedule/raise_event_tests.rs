@@ -1,4 +1,4 @@
-//! 汎用の通知の入口のテスト（areka-P0-ghost-shell-balloon-switch 要件 7.1〜7.4・7.6・10.8）。
+//! 汎用の通知の入口のテスト。
 //!
 //! 許可表に無いイベント・定常以外での依頼は `warn!` 1 件で捨てて動作 0、定常なら渡した
 //! Reference のまま GET／NOTIFY を出すこと、その応答が再生中のトークを置き換えること
@@ -132,7 +132,7 @@ fn second_change_reply_during_talk_is_still_discarded() {
     assert!(matches!(s.phase, Phase::Steady { talk: Some(t) } if t.talk_id == TalkId(4)));
 }
 
-/// 倍率の 2 つのイベント（shell-scale-linkage 要件 5.1・5.2・5.11）: 話している最中の応答は台詞を
+/// 倍率の 2 つのイベント: 話している最中の応答は台詞を
 /// 差し替えず情報の段で記録を残し、黙っているときは再生する。ほかのイベントは今までどおり差し替える。
 #[test]
 fn scale_event_reply_keeps_the_talk_while_talking_and_plays_when_silent() {

@@ -10,7 +10,7 @@ use crate::talk::{ScriptOrigin, TalkId};
 use areka_talk::SecurityLevel;
 use tracing::Level;
 
-/// 要件 7.1: `\q[バルーンを閉じる,script:\e]` を選ぶと、SHIORI のイベントも翻訳も起こさず、
+/// `\q[バルーンを閉じる,script:\e]` を選ぶと、SHIORI のイベントも翻訳も起こさず、
 /// 待ちを閉じて `\e` を新しいトークとして始める。
 #[test]
 fn script_choice_starts_new_talk_with_text_after_prefix() {
@@ -83,7 +83,7 @@ fn script_choice_starts_new_talk_with_text_after_prefix() {
     assert_not_logged(&ev, "choice_script_origin_missing");
 }
 
-/// 要件 7.2・2.3・2.4: 正典の入れ子の例 `\q[その１,"script:\q[その２,script:その３はない]"]`。
+/// 正典の入れ子の例 `\q[その１,"script:\q[その２,script:その３はない]"]`。
 /// 「その１」を選ぶと選択肢「その２」の台本が始まり、その待ちで「その２」を選ぶと
 /// `その３はない` が始まる。
 #[test]
@@ -159,7 +159,7 @@ fn nested_script_choice_runs_two_stages() {
     assert_eq!(next.prev_talk, Some(TalkId(6)));
 }
 
-/// 要件 7.3・3.1・3.2・5.3: `script:` の後ろが空なら、トークを始めず待ちだけを閉じる。
+/// `script:` の後ろが空なら、トークを始めず待ちだけを閉じる。
 #[test]
 fn empty_script_choice_only_resolves() {
     let s = steady_with_ledger(TalkId(3), 6, &["script:"], ChoicePhase::Waiting);
@@ -200,7 +200,7 @@ fn empty_script_choice_only_resolves() {
     assert_not_logged(&ev, "choice_script_started");
 }
 
-/// 要件 7.3・3.3: 第 3 引数以降は台本に含めず、数だけを警告に残す。
+/// 第 3 引数以降は台本に含めず、数だけを警告に残す。
 #[test]
 fn script_choice_ignores_extra_arguments_and_warns_count() {
     let s = shown_as(
@@ -239,7 +239,7 @@ fn script_choice_ignores_extra_arguments_and_warns_count() {
     assert_not_logged(&ev, "choice_script_origin_missing");
 }
 
-/// 要件 7.3・1.6: 大文字の `Script:x` は `script:` ではなく、通常の選択肢のイベントへ進む。
+/// 大文字の `Script:x` は `script:` ではなく、通常の選択肢のイベントへ進む。
 #[test]
 fn capitalized_script_prefix_goes_to_choice_select_ex() {
     let s = steady_with_ledger(TalkId(3), 6, &["Script:x"], ChoicePhase::Waiting);
@@ -269,7 +269,7 @@ fn position_of(events: &[CapturedEvent], event_name: &str) -> usize {
         .unwrap_or_else(|| panic!("記録 {event_name} が無い"))
 }
 
-// --- 出どころの引き継ぎ（要件 1.6・1.7） ---
+// --- 出どころの引き継ぎ ---
 
 /// `shown_talk_id` のトークを最後に再生を始めたトークとして控える（実運行では待ちの元のトークが必ず控えにある）。
 fn shown_as(
@@ -326,7 +326,7 @@ fn origin_after(
     )
 }
 
-/// ⑹ 選択肢の `script:` は元のトークの出どころ（外部扱いを含む）をそのまま写す（要件 1.6）。
+/// ⑹ 選択肢の `script:` は元のトークの出どころ（外部扱いを含む）をそのまま写す。
 #[test]
 fn script_choice_copies_origin_of_original_talk() {
     for origin in [
@@ -371,7 +371,7 @@ fn script_choice_without_matching_shown_talk_falls_to_external() {
     }
 }
 
-/// ⑺ 選択肢の ID のイベントの応答は、元のトークが外部扱いでもゴースト自身（要件 1.7）。
+/// ⑺ 選択肢の ID のイベントの応答は、元のトークが外部扱いでもゴースト自身。
 #[test]
 fn choice_id_event_reply_is_ghost_even_if_original_was_external() {
     let (started, _, ev) = origin_after(

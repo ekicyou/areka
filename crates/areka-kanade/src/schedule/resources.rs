@@ -1,13 +1,13 @@
 //! resources — SHIORI Resource 照会の許可集合（イベント檻とは別族の単一正本）。
 //!
-//! 本モジュールは kanade の **SHIORI リソース照会増分**（design「kanade（リソース照会増分）」）
+//! 本モジュールは kanade の **SHIORI リソース照会増分**
 //! の許可語彙 [`ALLOWED_RESOURCE_IDS`] とその判定 [`is_allowed_resource_id`] を提供する。
 //! イベント発火の許可集合（[`crate::schedule::events::ALLOWED_EVENT_IDS`]）とは**別族**であり、
 //! egress チョークポイント（`actor.rs` の `round_trip_raw` が呼ぶ `refuse_unless_allowed`）の submit ガードは
 //! 「`is_allowed_event_id(id)` ∨ `is_allowed_resource_id(id)`」で判定する（既存イベント檻は
-//! 無改変・許可外は従来どおり `ShioriFailure::Internal`・Req4.1）。
+//! 無改変・許可外は従来どおり `ShioriFailure::Internal`）。
 //!
-//! # 別族である理由（design 論点1・Boundary Commitments）
+//! # 別族である理由
 //! リソース照会は「イベント発火」ではなく「値源への問い合わせ」であり、`OnTalk`/`OnHour` を
 //! 恒久禁止するイベント檻の語彙とは意味論が異なる。両者を混ぜず別集合として保つことで、
 //! イベント語彙の不変量を保存したままリソース ID を additive に増分する。
@@ -22,18 +22,18 @@
 use crate::msg::{EventId, ShioriCall, ShioriOutcome};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
-/// SHIORI Resource 照会で送出し得るリソース ID の確定ホワイトリスト（利用者名＋メニュー 12 名＋更新 2 名の 15 名・Req4.1）。
+/// SHIORI Resource 照会で送出し得るリソース ID の確定ホワイトリスト（利用者名＋メニュー 12 名＋更新 2 名の 15 名）。
 ///
 /// イベント発火の許可集合（[`crate::schedule::events::ALLOWED_EVENT_IDS`]）とは**別族**である。
 /// egress ガードは「イベント許可 ∨ リソース許可」で判定するため、本集合の要素は許可外拒否を
 /// 免れて送出される（ただし送出経路・往復規律はイベントと共通）。
 ///
-/// 内訳は利用者名（boot prefetch）・メニュー枠 7 種の項目名（要件 3.1）・本体側／相方側の
-/// メニュー表示可否（要件 3.6）・更新先と番号の起点・「シェル位置初期化」の項目名
-/// （areka-P0-move-canon 要件 8.2）・「バルーン位置初期化」の項目名（areka-P0-window-link-directives
-/// 要件 7.6）・「ネットワーク更新」の項目名の古い名前 `updatebuttoncaption`（popup-menu-extra-resources
-/// 要件 4.1）である。`popupmenu.type` 系は**問い合わせない**裁定なので載せない
-/// （要件 3.8）。n≧2 の `char*.popupmenu.visible` も n≧2 の窓が無いので載せない（要件 3.6）。
+/// 内訳は利用者名（boot prefetch）・メニュー枠 7 種の項目名・本体側／相方側の
+/// メニュー表示可否・更新先と番号の起点・「シェル位置初期化」の項目名
+/// ・「バルーン位置初期化」の項目名
+/// ・「ネットワーク更新」の項目名の古い名前 `updatebuttoncaption`
+/// である。`popupmenu.type` 系は**問い合わせない**裁定なので載せない。
+/// n≧2 の `char*.popupmenu.visible` も n≧2 の窓が無いので載せない。
 ///
 /// SEAM(159 項目汎用化): SHIORI Resource は正典で 159 項目ある。語彙拡張は本集合への
 /// ID 追加（additive）で行い、判定側と構築側（[`resource_get`]）は無改変で追随する。
@@ -58,24 +58,24 @@ pub const ALLOWED_RESOURCE_IDS: &[&str] = &[
     "sakura.popupmenu.visible",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#kero.popupmenu.visible:1
     "kero.popupmenu.visible",
-    // ネットワーク更新の更新先と番号の起点（areka-P0-network-update）。Reference 付きの照会になる
-    // `other_homeurl_override` は載せない（裁定 11）。
+    // ネットワーク更新の更新先と番号の起点。Reference 付きの照会になる
+    // `other_homeurl_override` は載せない。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#homeurl:1
     "homeurl",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#useorigin1:1
     "useorigin1",
-    // 右クリックのメニューの「シェル位置初期化」の項目名（areka-P0-move-canon 要件 8.2）。
+    // 右クリックのメニューの「シェル位置初期化」の項目名。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#switchmovetodefaultpositionbutton.caption:1
     "switchmovetodefaultpositionbutton.caption",
-    // 右クリックのメニューの「バルーン位置初期化」の項目名（areka-P0-window-link-directives 要件 7.6）。
+    // 右クリックのメニューの「バルーン位置初期化」の項目名。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#resetballoonpositionbutton.caption:1
     "resetballoonpositionbutton.caption",
-    // 右クリックのメニューの「ネットワーク更新」の項目名の古い名前（popup-menu-extra-resources 要件 4.1）。
+    // 右クリックのメニューの「ネットワーク更新」の項目名の古い名前。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#updatebuttoncaption:1
     "updatebuttoncaption",
 ];
 
-/// `id` がリソース送出許可集合（[`ALLOWED_RESOURCE_IDS`]）に属するかを判定する（Req4.1）。
+/// `id` がリソース送出許可集合（[`ALLOWED_RESOURCE_IDS`]）に属するかを判定する。
 ///
 /// イベント許可判定（[`crate::schedule::events::is_allowed_event_id`]）とは独立した別族の判定で
 /// あり、submit ガードは両者の論理和で送出可否を決める。
@@ -84,15 +84,15 @@ pub fn is_allowed_resource_id(id: &str) -> bool {
 }
 
 /// 任意のリソース ID への照会（GET・References なし・Status は snapshot から導出）を組み立てる
-/// 純粋関数（副作用なし・要件 3.2）。
+/// 純粋関数（副作用なし）。
 ///
 /// `id` は [`ALLOWED_RESOURCE_IDS`] の要素であることを**求めない**——メニューと更新の照会
 /// （`actor_resources::answer`）は往復の前に許可表に無い ID を断り、本関数で組んだ GET の最後の
 /// 番は egress チョークポイント（`actor.rs` の `round_trip_raw` が呼ぶ `refuse_unless_allowed`）が
-/// [`is_allowed_resource_id`] で行い、許可外は `ShioriFailure::Internal` で拒否される（Req4.1）。
+/// [`is_allowed_resource_id`] で行い、許可外は `ShioriFailure::Internal` で拒否される。
 ///
 /// `&'static str` に据えるのは [`ShioriCall`] の `id: EventId::Static(&'static str)` 契約
-/// （スケジューラ起源・DD-1）に従うためで、呼び手は許可表の要素そのものを渡す。
+/// （スケジューラ起源）に従うためで、呼び手は許可表の要素そのものを渡す。
 pub fn resource_get(id: &'static str, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Static(id),
@@ -105,14 +105,14 @@ pub fn resource_get(id: &'static str, snapshot: &ExecutionSnapshot) -> ShioriCal
 /// メニューの照会（`actor_resources.rs`）は返信端へ渡す）。
 ///
 /// - [`Value`](ResourceOutcome::Value): 200 応答の値（不透明文字列）。
-/// - [`NoContent`](ResourceOutcome::NoContent): 204（値なし）（既定値縮退は消費側 sakura の責務・R4.2）。
+/// - [`NoContent`](ResourceOutcome::NoContent): 204（値なし）（既定値縮退は消費側 sakura の責務）。
 /// - [`Failed`](ResourceOutcome::Failed): タイムアウト・IPC 断等の照会失敗（理由文字列を保持）。
-///   失敗でも boot は殺さず続行する（prefetch 段が warn＋本語彙を sink へ渡す・R4.1）。
+///   失敗でも boot は殺さず続行する（prefetch 段が warn＋本語彙を sink へ渡す）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResourceOutcome {
     /// 200 応答の値（不透明文字列）。
     Value(String),
-    /// 204（値なし）（既定値縮退は消費側 sakura に残置・R4.2）。
+    /// 204（値なし）（既定値縮退は消費側 sakura に残置）。
     NoContent,
     /// 照会失敗（タイムアウト・IPC 断等・理由文字列を保持）。
     Failed(String),
@@ -123,7 +123,7 @@ pub enum ResourceOutcome {
 /// 200→`Value`（空文字もそのまま・既定名へ倒すのは受け手）／204→`NoContent`／失敗→`Failed`
 /// （理由の文字列を保持）。GET の応答としてあり得ない完了語彙（`Notified`／`Unloaded`）は
 /// `warn!` を残して `Failed("unexpected")` へ倒す。失敗の利用者向けの記録（`warn!` 1 回）は
-/// 受け手が残す（要件 3.4）。送出失敗・拒否そのものの記録は往復側が既に残している。
+/// 受け手が残す。送出失敗・拒否そのものの記録は往復側が既に残している。
 pub(crate) fn outcome_of(id: &'static str, outcome: ShioriOutcome) -> ResourceOutcome {
     match outcome {
         ShioriOutcome::Value(body, _) => ResourceOutcome::Value(body),
@@ -146,9 +146,9 @@ pub(crate) fn outcome_of(id: &'static str, outcome: ShioriOutcome) -> ResourceOu
 ///
 /// `SystemVarSource` と同型の疎結合シームであり、kanade は結果の消費側（ghost/sylphya）へ**依存しない**
 /// （sink は素のクロージャ）。prefetch 段は `(id, outcome)` を渡して sink が**返るまで boot を進めない**
-/// （ghost が据える sink 内の publish＋barrier により初回 talk までの反映が決定論化する・研究 §12-1）。
+/// （ghost が据える sink 内の publish＋barrier により初回 talk までの反映が決定論化する）。
 ///
-/// # 契約（design Preconditions）
+/// # 契約
 /// sink は `Send`（別スレッドの kanade アクターから呼ばれる）であり、呼出で panic しない（ghost 結線の
 /// 責務）。既存テストのように結果を使わない構成では no-op sink（`Box::new(|_, _| {})`）を注入してよい。
 pub type ResourceSink = Box<dyn Fn(&'static str, ResourceOutcome) + Send>;
@@ -157,9 +157,7 @@ pub type ResourceSink = Box<dyn Fn(&'static str, ResourceOutcome) + Send>;
 mod tests {
     use super::*;
 
-    /// リソース許可集合は厳密にこの 15 名（語彙の凍結檻・Req4.1／要件 3.2・
-    /// areka-P0-network-update 要件 9.13・areka-P0-move-canon 要件 8.2・
-    /// areka-P0-window-link-directives 要件 7.6・popup-menu-extra-resources 要件 5.3）。
+    /// リソース許可集合は厳密にこの 15 名（語彙の凍結檻）。
     #[test]
     fn allowed_resource_ids_are_exactly_the_fifteen_names() {
         assert_eq!(
@@ -185,7 +183,7 @@ mod tests {
         );
     }
 
-    /// 問い合わせない裁定の名前（`popupmenu.type` 系・要件 3.8）と n≧2 の表示可否は
+    /// 問い合わせない裁定の名前（`popupmenu.type` 系）と n≧2 の表示可否は
     /// 許可集合に**入れない**——従来どおり拒否される。
     #[test]
     fn unqueried_menu_names_are_not_allowed() {
@@ -194,7 +192,7 @@ mod tests {
             "kero.popupmenu.type",
             "char2.popupmenu.type",
             "char2.popupmenu.visible",
-            // Reference 付きの照会は送らない（areka-P0-network-update 裁定 11）。
+            // Reference 付きの照会は送らない。
             "other_homeurl_override",
         ] {
             assert!(
@@ -204,9 +202,9 @@ mod tests {
         }
     }
 
-    /// windows-reactor 待ちの名前（⑵ の 8 つ・`char*.recommend*` の 3 つ）と、取らない裁定の
-    /// `readmebuttoncaption`・`sakura.updatebuttoncaption` は許可集合に**入れない**
-    /// （popup-menu-extra-resources 要件 4.1・5.3・6.1）。問い合わせない裁定の名前とは理由が違うので別のテストに置く。
+    /// windows-reactor 待ちの名前（8 つ・`char*.recommend*` の 3 つ）と、取らない裁定の
+    /// `readmebuttoncaption`・`sakura.updatebuttoncaption` は許可集合に**入れない**。
+    /// 問い合わせない裁定の名前とは理由が違うので別のテストに置く。
     #[test]
     fn deferred_menu_item_names_are_not_allowed() {
         for id in [
@@ -236,7 +234,7 @@ mod tests {
     }
 
     /// イベント許可集合とは**別族**であること: イベント ID はリソース判定を通らない
-    /// （族の分離檻・design 論点1／Boundary Commitments）。
+    /// （族の分離檻）。
     #[test]
     fn event_ids_are_not_resource_ids() {
         for ev in crate::schedule::events::ALLOWED_EVENT_IDS {
@@ -248,7 +246,7 @@ mod tests {
     }
 
     /// `resource_get` は任意の許可名について `"username"` と同じ形の GET を組む
-    /// （id だけが違う・References なし・Status は snapshot 由来・要件 3.2）。
+    /// （id だけが違う・References なし・Status は snapshot 由来）。
     #[test]
     fn resource_get_builds_the_same_shape_for_any_allowed_id() {
         let call = resource_get("readmebutton.caption", &ExecutionSnapshot::INACTIVE);

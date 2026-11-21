@@ -1,11 +1,11 @@
-//! 台詞の切れ目の口のテスト（areka-P0-shell-balloon-switch 要件 1.14・2.3・3.1・5.4・5.7・8.11）。
+//! 台詞の切れ目の口のテスト。
 //!
 //! 印の無い依頼（`Input::AwaitTalkGap { raise: None }`）を `step` 経由で駆動し、始め方（定常でない・
 //! 終了の保留あり → 定常でない／それ以外 → 見張り）と、毎 `step` の後の見極めの結果
 //! （達した・終了で達しない・ゴースト切替で達しない）が 1 度決まったら変わらないことを固定する。
 //! 許可表に無い印は送らずに「送らなかった」になることも見る。
 //!
-//! 印の付いた依頼（`OnShellChanging`・要件 2.1・2.2・5.1・5.2・8.11・12.8）は、印のイベントの GET の
+//! 印の付いた依頼（`OnShellChanging`）は、印のイベントの GET の
 //! 送出と、その応答の台詞の終わり方（最後まで・置き換え・台詞なし）・利用者の中断の例外（`\-` の
 //! 予約があっても終了系列へ進めない）・自ら `\-` に達したときの終了を固定する。
 
@@ -40,7 +40,6 @@ fn steady_some() -> State {
     }
 }
 
-/// 印の無い依頼を 1 件 `step` へ渡す。
 fn await_gap(s: State) -> (State, Vec<Action>) {
     step(s, Input::AwaitTalkGap { raise: None }, &cfg())
 }
@@ -376,7 +375,6 @@ fn reached_is_logged_once_at_info() {
 // 印の付いた依頼（`OnShellChanging`）
 // ============================================================
 
-/// 印のイベントの名前。
 const SHELL_CHANGING: &str = "OnShellChanging";
 
 /// 印の台詞の番号（`steady_none` の採番 5 から始まる）。
@@ -397,7 +395,6 @@ fn shell_changing() -> GapRaise {
     }
 }
 
-/// 印の付いた依頼を 1 件 `step` へ渡す。
 fn await_marked(s: State) -> (State, Vec<Action>) {
     step(
         s,
@@ -461,7 +458,6 @@ fn is_playing(s: &State, id: TalkId) -> bool {
     matches!(&s.phase, Phase::Steady { talk: Some(active) } if active.talk_id == id)
 }
 
-/// 印の依頼を送り、その応答の台本で印の台詞（[`MARKED`]）を始めた状態。
 fn marked_talk_playing() -> State {
     let (s, _) = await_marked(steady_none());
     let (s, actions) = reply(s, value(), SHELL_CHANGING);
@@ -723,8 +719,7 @@ fn user_break_of_the_marked_talk_is_cancelled_by_user_even_with_quit_reserved() 
             matches!(s.phase, Phase::Steady { talk: None }),
             "quit_reserved={quit_reserved}: 定常に戻る"
         );
-        // 終了系列の指示は 0。定常へ戻った中断なので `OnBalloonBreak` の GET が 1 本だけ出る
-        // （areka-P0-balloon-lifecycle-events 要件 1.1）。
+        // 終了系列の指示は 0。定常へ戻った中断なので `OnBalloonBreak` の GET が 1 本だけ出る。
         assert!(
             matches!(
                 actions.as_slice(),

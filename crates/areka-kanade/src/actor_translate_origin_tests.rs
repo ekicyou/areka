@@ -1,7 +1,7 @@
-//! 殻が送る `OnTranslate` の要求の出どころ（要件 1.5・2.4〜2.6）。
+//! 殻が送る `OnTranslate` の要求の出どころ。
 //!
 //! ゴースト自身・`raise_event` の応答の台本と外からの台本の 3 つで、偽の SHIORI が受けた要求の
-//! カテゴリから導く 4 つのヘッダが要件どおりになり、`Reference*` の並びが今のままであることを確かめる。
+//! カテゴリから導く 4 つのヘッダが想定どおりになり、`Reference*` の並びが今のままであることを確かめる。
 
 use super::*;
 use crate::actor::tests::fake_shiori;
@@ -51,7 +51,7 @@ fn wire(level: &'static str, sender: &'static str, sender_type: &str) -> OriginW
 
 #[test]
 fn ghost_reply_translate_carries_areka_internal() {
-    // 要件 2.5: ゴースト自身のイベント（運行表・選択肢）の応答の翻訳。
+    // ゴースト自身のイベント（運行表・選択肢）の応答の翻訳。
     for source in [
         EventId::Static("OnBoot"),
         EventId::Choice("OnMyChoice".to_string()),
@@ -72,7 +72,7 @@ fn ghost_reply_translate_carries_areka_internal() {
 
 #[test]
 fn raise_event_reply_translate_carries_areka_external_sstp() {
-    // 要件 2.6: raise_event の応答の翻訳（Reference1 は今どおり欠番）。
+    // raise_event の応答の翻訳（Reference1 は今どおり欠番）。
     let source = EventId::Sstp("OnInstallCompleteEx".to_string());
     let (id, references) = sent(reply_of(source.clone()));
     assert_eq!(
@@ -89,7 +89,7 @@ fn raise_event_reply_translate_carries_areka_external_sstp() {
 
 #[test]
 fn sstp_send_translate_carries_mcp_internal() {
-    // 要件 2.4: 外からの台本の翻訳（Reference1 は今どおり `sstp-send,owned`）。
+    // 外からの台本の翻訳（Reference1 は今どおり `sstp-send,owned`）。
     let (id, references) = sent(ScriptSource::SstpSend);
     assert_eq!(id, EventId::Translate(RequestOrigin::MCP_SEND_TRANSLATE));
     assert_eq!(

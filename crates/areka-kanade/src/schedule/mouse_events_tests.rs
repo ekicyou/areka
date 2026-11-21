@@ -1,5 +1,4 @@
-//! マウスの解放・ホイール・出入りの受理と、クリックの段の列の表のテスト
-//! （mouse-click-wheel-events 要件 1.1・1.7・2.1・2.4・2.6・3.2・6.1・6.2・7.5・8.2・8.3・9.1）。
+//! マウスの解放・ホイール・出入りの受理と、クリックの段の列の表のテスト。
 //!
 //! 表（[`plan_click`]）と受理（[`on_mouse_extended`]）は直に、定常の入口の委譲・閉じの握手の保留は
 //! 最上位の `step` から通す（定常以外の棄却は `schedule_tests.rs` の
@@ -67,7 +66,7 @@ fn refs(ref2: &str, ref5: &str) -> Vec<String> {
 
 // --- 段の列の表 ---
 
-/// 要件 1.1・2.1・2.4・2.6・3.2: ボタン 5 つ × ふつう／2 回目の 10 通り。
+/// ボタン 5 つ × ふつう／2 回目の 10 通り。
 #[test]
 fn plan_click_table_has_ten_rows() {
     use ClickButton::*;
@@ -116,7 +115,7 @@ fn plan_click_table_has_ten_rows() {
 
 // --- 解放の受理 ---
 
-/// 要件 1.1・1.7・2.1・9.1: 1 段目の GET を 1 本だけ積み（Reference の 7 並び）、段の記憶を置き、
+/// 1 段目の GET を 1 本だけ積み（Reference の 7 並び）、段の記憶を置き、
 /// `mouse_event_sent` を info で残す。ボタン 5 つ × 2 回目か、のどれでも同じ形。
 #[test]
 fn button_up_sends_first_step_and_keeps_the_chain() {
@@ -149,7 +148,7 @@ fn button_up_sends_first_step_and_keeps_the_chain() {
     }
 }
 
-/// 要件 1.1: 当たり判定の無い解放は Ref4 が空。
+/// 当たり判定の無い解放は Ref4 が空。
 #[test]
 fn button_up_without_region_leaves_ref4_empty() {
     let mut m = input(up(ClickButton::Left, false));
@@ -160,7 +159,7 @@ fn button_up_without_region_leaves_ref4_empty() {
 
 // --- ホイールと出入り ---
 
-/// 要件 6.1・6.2・9.1: ホイールは `OnMouseWheel`（Ref2＝回転量・Ref5＝0）を 1 本だけ。段の記憶は置かない。
+/// ホイールは `OnMouseWheel`（Ref2＝回転量・Ref5＝0）を 1 本だけ。段の記憶は置かない。
 #[test]
 fn wheel_sends_one_get_with_delta_in_ref2() {
     for delta in [120, -240] {
@@ -180,7 +179,7 @@ fn wheel_sends_one_get_with_delta_in_ref2() {
     }
 }
 
-/// 要件 7.5・9.1: 出入りは 4 語のどれか（Ref2・Ref5＝0）を 1 本だけ。段の記憶は置かない。
+/// 出入りは 4 語のどれか（Ref2・Ref5＝0）を 1 本だけ。段の記憶は置かない。
 #[test]
 fn hover_sends_one_of_the_four_names() {
     for (edge, want) in [
@@ -207,7 +206,7 @@ fn hover_sends_one_of_the_four_names() {
 
 // --- 定常の入口からの委譲 ---
 
-/// 要件 8.3: 閉じの握手の保留中は 3 つとも送らない（段の記憶も置かない）。
+/// 閉じの握手の保留中は 3 つとも送らない（段の記憶も置かない）。
 #[test]
 fn step_sends_nothing_while_close_is_pending() {
     for kind in [
@@ -269,7 +268,7 @@ const ALL: [(ClickButton, bool); 10] = {
     ]
 };
 
-/// 要件 1.2・2.2・2.4・3.2・3.6・9.3: 204 なら次の 1 本だけ（同じ Reference）、最後の段の後は何もしない。
+/// 204 なら次の 1 本だけ（同じ Reference）、最後の段の後は何もしない。
 /// 2 回目の解放は 1 段目の系だけで終え、`mouse_click_not_sent`（理由＝2 回目）を残す。
 #[test]
 fn no_content_sends_exactly_the_next_step_until_the_last() {
@@ -307,7 +306,7 @@ fn no_content_sends_exactly_the_next_step_until_the_last() {
     }
 }
 
-/// 要件 1.3・2.3・2.5・9.2: どの段でも台本なら止めて再生し、以降の段は送らない。
+/// どの段でも台本なら止めて再生し、以降の段は送らない。
 /// 送らなかった段があれば `mouse_click_chain_stopped` にその名前の列を残す。
 #[test]
 fn script_at_any_step_plays_and_stops_the_chain() {
@@ -336,7 +335,7 @@ fn script_at_any_step_plays_and_stops_the_chain() {
                     Some(format!("{skipped:?}").as_str())
                 );
             }
-            // 要件 3.6・9.3: 2 回目の解放の列は、台本で止めても `mouse_click_not_sent` を 1 回だけ残す。
+            // 2 回目の解放の列は、台本で止めても `mouse_click_not_sent` を 1 回だけ残す。
             if second {
                 let ev = logged_once(&events, Level::INFO, "mouse_click_not_sent");
                 assert_eq!(
@@ -350,7 +349,7 @@ fn script_at_any_step_plays_and_stops_the_chain() {
     }
 }
 
-/// 要件 1.6・1.8・9.3: 送信の失敗は `error!` を残して 204 と同じに次へ。終了の系列へ倒れない。
+/// 送信の失敗は `error!` を残して 204 と同じに次へ。終了の系列へ倒れない。
 #[test]
 fn send_failure_at_each_step_moves_on_without_closing() {
     for (button, second) in ALL {
@@ -389,7 +388,7 @@ fn unexpected_reply_moves_on_like_no_content() {
     }
 }
 
-/// 要件 5.4・8.1・8.2: 話の最中でも送り（入口の委譲を `step` から通す）、話の最中の台本は話を置き換える
+/// 話の最中でも送り（入口の委譲を `step` から通す）、話の最中の台本は話を置き換える
 /// （出所は返事のあったイベントの名前）。
 #[test]
 fn script_while_talking_replaces_the_talk() {

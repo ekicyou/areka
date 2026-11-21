@@ -1,4 +1,4 @@
-//! 読み直しの起動（[`BootOrigin::Reloaded`]）のテスト（areka-P0-mcp-reload 要件 3.3・3.4・4.3・12.2）。
+//! 読み直しの起動（[`BootOrigin::Reloaded`]）のテスト。
 //!
 //! 起動記録の有無（`first_boot`）と読み直しの対象（[`ReloadScope`]）の組ごとに、起動の系列が
 //! 台詞を求める GET を 1 つも送らず（username 照会だけ）・basewareversion を送って定常へ入ること、
@@ -37,13 +37,13 @@ fn reload_sends_no_talk_get_even_on_first_boot() {
         for scope in [ReloadScope::Ghost, ReloadScope::Shiori] {
             let c = reload_cfg(first_boot, scope);
             let steps = drive_to_steady(&c);
-            // GET は username 照会だけ（OnFirstBoot・OnGhostChanged・OnBoot を送らない・要件 3.3・4.3）。
+            // GET は username 照会だけ（OnFirstBoot・OnGhostChanged・OnBoot を送らない）。
             assert_eq!(
                 get_ids(steps.iter().flatten()),
                 ["username"],
                 "first_boot={first_boot} scope={scope:?}"
             );
-            // 照会の応答の直後は [sink, basewareversion]（情報の通知は送る・要件 3.4）。
+            // 照会の応答の直後は [sink, basewareversion]（情報の通知は送る）。
             let prefetch = &steps[2];
             assert_eq!(prefetch.len(), 2, "first_boot={first_boot} scope={scope:?}");
             assert!(matches!(

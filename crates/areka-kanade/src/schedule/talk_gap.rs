@@ -1,22 +1,14 @@
-//! 台詞の切れ目の口（`src/schedule/talk_gap.rs`・areka-P0-shell-balloon-switch）。
+//! 台詞の切れ目の口: 依頼した側（UI）へ「台詞の切れ目に達した／達しないと決まった」を 1 回だけ返すための判断。
 //!
-//! 依頼した側（UI）へ「台詞の切れ目に達した／達しないと決まった」を 1 回だけ返すための判断を置く。
 //! UI は kanade が終了系列へ入ったことも、台詞が置き換わったことも知らないので、切れ目の判定は
-//! 推し量らずに kanade へ任せる（設計「kanade の口の広さ」）。
-//!
-//! - 始め方（[`begin`]）: 横断の腕 `Input::AwaitTalkGap` から呼ばれ、見張り（[`GapWatch`]）を 1 つ立てる。
-//!   届いたときに定常でないものは、ここで「定常でない」に決まる。
-//! - 見極め（[`observe`]）: [`super::step`] の末尾で毎回 1 度だけ走り、設計 Flow 2 の順で結果を決める。
-//!   1 度決まった結果は変えない。
-//! - 取り出し（[`take_outcome`]）: 殻（`actor.rs`）が各依頼の処理の後に呼び、決まっていれば見張りを
-//!   終えて結果を返信端へ 1 回だけ送る。
+//! 推し量らずに kanade へ任せる。
 //!
 //! 判断は純粋で、返信の送り手は殻が持つ。`RaiseEvent` と [`super::change::on_raise_event`] には
-//! 触れない（印の無い依頼の振る舞いは 1 行も変えない＝要件 8.3）。
+//! 触れない（印の無い依頼の振る舞いは 1 行も変えない）。
 //!
 //! 印の付いた依頼（`OnShellChanging`）は、印のイベントを送ってその応答の台詞を追う
 //! （[`Marked`]）。印の台詞の終わり方は完了通知（[`note_marked_done`]）と番号の食い違いで知り、
-//! 印の台詞の利用者の中断は終了の予約があっても終了系列へ結ばない（[`is_marked_break`]・要件 5.2）。
+//! 印の台詞の利用者の中断は終了の予約があっても終了系列へ結ばない（[`is_marked_break`]）。
 
 use super::change::is_change_phase;
 use super::{Action, Input, Phase, State, current_talk_id, events};
@@ -45,13 +37,13 @@ pub(crate) enum Marked {
     BrokenByUser,
 }
 
-/// 横断の腕 `Input::AwaitTalkGap` の始め方（設計 State Management の `begin`）。
+/// 横断の腕 `Input::AwaitTalkGap` の始め方。
 ///
-/// 次の順で判定する。受けた時点で定常でないものは、どれも「届いたときに定常にない」＝要件 1.14
+/// 次の順で判定する。受けた時点で定常でないものは、どれも「届いたときに定常にない」
 /// として `Left{NotSteady}` にまとめる。見張りが既に在れば新しい依頼で置き換える（古い返信端を
 /// 捨てる記録は、送り手を持つ殻が残す）。
 /// 1. 相が定常でない → `Left{NotSteady}`
-/// 2. 終了の保留あり → `Left{NotSteady}`（終了の保留に印のイベントを送らない＝要件 5.7）
+/// 2. 終了の保留あり → `Left{NotSteady}`（終了の保留に印のイベントを送らない）
 /// 3. 切替の保留あり → `Left{GhostChange}`（印のイベントを送らない・[`decide`] の決めと揃える）
 /// 4. 印が許可表に無い → `NotSent{NotAllowed}`
 /// 5. 印あり → 印のイベントを送り（許可表の照合と組み立ては汎用の入口と同じ関数）、応答を待つ
@@ -124,7 +116,7 @@ pub(super) fn marked_reply(state: &State, input: &Input) -> Option<MarkedReply> 
 
 /// 印の台詞を利用者が中断したか（[`super::on_talk_done`] が中断の帳簿を空にする前に呼ぶ）。
 ///
-/// 真なら、終了の予約があっても終了系列へ結ばない（要件 5.2）。結果が決まった後の見張りには
+/// 真なら、終了の予約があっても終了系列へ結ばない。。結果が決まった後の見張りには
 /// 効かせない（殻は決まった時点で見張りを取り出すので、例外を効かせる相手がもう居ない）。
 pub(super) fn is_marked_break(state: &State, done: &TalkDone) -> bool {
     matches!(
@@ -156,7 +148,7 @@ pub(super) fn note_marked_done(state: &mut State, done: &TalkDone, broken_by_use
     }
 }
 
-/// 毎 `step` の後の見極め（設計 Flow 2）。見張りが無いか、既に決まっていれば何もしない。
+/// 毎 `step` の後の見極め。見張りが無いか、既に決まっていれば何もしない。
 ///
 /// `reply` が在れば（入力が印のイベントの応答だった）、先に印の追跡を進める: 応答の直後に今の
 /// トークが変わっていればそれを印の台詞として控え、変わっていなければ「台詞なし」にする。
@@ -191,7 +183,7 @@ pub(crate) fn take_outcome(state: &mut State) -> Option<TalkGap> {
     state.talk_gap.take()?.outcome
 }
 
-/// 設計 Flow 2 の順で結果を決める（`None` はまだ決まらない）。
+/// 次の順で結果を決める（`None` はまだ決まらない）。
 ///
 /// 1. 相が定常でない（切替の相・ゴースト切替で降ろす途中なら `GhostChange`、それ以外は `Closing`）
 /// 2. 終了の保留 → `Closing`

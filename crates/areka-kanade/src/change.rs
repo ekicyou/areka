@@ -1,4 +1,4 @@
-//! 切替の語彙（areka-P0-ghost-shell-balloon-switch）。
+//! 切替の語彙。
 //!
 //! ゴーストの切替の要求・停止通知に載せる切替の中身・運行の通知・起動の由来の型だけを置く。
 //! 判断は持たない。どの型も `Debug, Clone, PartialEq, Eq` を持ち、決定論テストで丸ごと
@@ -81,18 +81,18 @@ pub enum BootOrigin {
     /// 前回のゴーストが落ちて既定へ戻った（`OnBoot` の Ref6＝`halt`・Ref7＝落ちたゴースト名）。
     Halted { ghost_name: String },
     /// ネットワーク更新で読み直した。`id`（許可表の綴り）と Reference を起動の知らせとして送る
-    /// （`OnGhostChanged`・`OnBoot` の代わり・204 でも `OnBoot` へ続けない・areka-P0-network-update 要件 5.5）。
+    /// （`OnGhostChanged`・`OnBoot` の代わり・204 でも `OnBoot` へ続けない）。
     Updated {
         id: &'static str,
         references: Vec<String>,
     },
     /// 読み直しで起こし直した。起動の知らせ（台詞を求める GET）を 1 つも送らない
-    /// （`OnFirstBoot` も送らない・情報の通知は送る・areka-P0-mcp-reload 要件 3.3・3.4・4.3）。
+    /// （`OnFirstBoot` も送らない・情報の通知は送る・3.4・4.3）。
     Reloaded { scope: ReloadScope },
 }
 
 /// 読み直しの対象（[`BootOrigin::Reloaded`] の中身）。`Shiori` のときだけ `OnInitialize` の
-/// Ref0 に `reload` を載せる（areka-P0-mcp-reload 要件 4.3）。
+/// Ref0 に `reload` を載せる。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReloadScope {
     /// ゴーストごと読み直した（`OnInitialize` は References なし）。
@@ -137,7 +137,7 @@ pub enum RaiseOutcome {
 /// 台詞の切れ目の口に添える印のイベント（シェルの切替の `OnShellChanging` と shiori の読み直しの `OnDestroy`）。
 ///
 /// 口（`KanadeMsg::AwaitTalkGap`）は印の有無で振る舞いを分ける。印が無ければ切れ目を待つだけで、
-/// 印があれば先にこのイベントを送り、その応答の台詞を追う（areka-P0-shell-balloon-switch 要件 8.11）。
+/// 印があれば先にこのイベントを送り、その応答の台詞を追う。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GapRaise {
     /// イベント名（許可表 `ALLOWED_EVENT_IDS` の要素）。
@@ -161,7 +161,7 @@ pub enum TalkGap {
     NotSent { outcome: RaiseOutcome },
 }
 
-/// 印の台詞の終わり方（要件 8.11 ⑴）。
+/// 印の台詞の終わり方。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MarkedEnd {
     /// 印の台詞が最後まで流れた（選択肢の時間切れの解除を含む）。

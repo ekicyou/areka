@@ -410,7 +410,7 @@ fn warn_mouse_extended_unexpected_kind_logs() {
 }
 
 // ============================================================
-// 選択確定の受領検証とカスケード駆動（設計ログ語彙表）
+// 選択確定の受領検証とカスケード駆動
 // ============================================================
 
 /// 檻用の選択確定入力。
@@ -435,7 +435,7 @@ fn state_with_ledger(candidates: &[&str], phase: ChoicePhase) -> State {
     s
 }
 
-/// Req1.3: 選択待ち不在・対象 talk 不一致・非 Steady の 3 経路とも warn で記録する。
+/// 選択待ち不在・対象 talk 不一致・非 Steady の 3 経路とも warn で記録する。
 #[test]
 fn warn_choice_rejected_no_wait_logs() {
     // 選択待ち帳簿が無い（解決済み・未成立）。
@@ -458,7 +458,7 @@ fn warn_choice_rejected_no_wait_logs() {
     assert_logged(&ev, Level::WARN, "choice_rejected_no_wait");
 }
 
-/// Req1.4: 候補集合に無い ID の棄却は warn で記録する。
+/// 候補集合に無い ID の棄却は warn で記録する。
 #[test]
 fn warn_choice_rejected_unknown_id_logs() {
     let ev = run_step(
@@ -468,7 +468,7 @@ fn warn_choice_rejected_unknown_id_logs() {
     assert_logged(&ev, Level::WARN, "choice_rejected_unknown_id");
 }
 
-/// Req1.1: 段の進行中（`Cascading`／`TimeoutInFlight`）の二重確定は warn で記録する。
+/// 段の進行中（`Cascading`／`TimeoutInFlight`）の二重確定は warn で記録する。
 #[test]
 fn warn_choice_rejected_busy_logs() {
     for phase in [
@@ -486,7 +486,7 @@ fn warn_choice_rejected_busy_logs() {
     }
 }
 
-/// Req1.6: 受理は info で記録し、判定した段列をフィールドに載せる。
+/// 受理は info で記録し、判定した段列をフィールドに載せる。
 #[test]
 fn info_choice_accepted_logs_plan() {
     let ev = run_step(
@@ -506,7 +506,7 @@ fn info_choice_accepted_logs_plan() {
     );
 }
 
-/// 各段の GET 送出は trace で記録する（設計ログ語彙表）。
+/// 各段の GET 送出は trace で記録する。
 #[test]
 fn trace_choice_cascade_stage_logs() {
     let ev = run_step(
@@ -516,7 +516,7 @@ fn trace_choice_cascade_stage_logs() {
     assert_logged(&ev, Level::TRACE, "choice_cascade_stage");
 }
 
-/// Req5.1: `ResolveChoice` 発行は info で記録する。
+/// `ResolveChoice` 発行は info で記録する。
 #[test]
 fn info_choice_resolved_logs() {
     let ev = run_step(
@@ -535,11 +535,11 @@ fn info_choice_resolved_logs() {
     assert_logged(&ev, Level::INFO, "choice_resolved");
 }
 
-/// Req4.5: カスケード段の失敗は error で記録し 204 相当で継続する。
+/// カスケード段の失敗は error で記録し 204 相当で継続する。
 ///
 /// 本檻は steady 側の 204 相当処理と error 語彙**そのもの**を層局所に固定するため
 /// `steady::step` を直接駆動する。`step()` 経由の end-to-end（横断 `Failed` アームの免除＝
-/// DD-12 が実際に効き `Unloading{Fault}` へ倒れないこと）は
+/// が実際に効き `Unloading{Fault}` へ倒れないこと）は
 /// `tests/kanade/choice_test.rs` の統合檻が免除の正・非 choice 経路の負の両方向で固定する。
 #[test]
 fn error_choice_shiori_failed_as_204_logs() {
@@ -563,10 +563,10 @@ fn error_choice_shiori_failed_as_204_logs() {
 }
 
 // ============================================================
-// 選択待ち帳簿の確立・棄却（設計ログ語彙表）
+// 選択待ち帳簿の確立・棄却
 // ============================================================
 
-/// 帳簿確立は info で記録し、**候補数と期限をフィールドに載せる**（設計ログ語彙表）。
+/// 帳簿確立は info で記録し、**候補数と期限をフィールドに載せる**。
 ///
 /// 「ログに載っていること」自体が要求であるため、発火だけでなくフィールド実値まで突合する。
 #[test]
@@ -593,7 +593,7 @@ fn info_choice_waiting_established_logs_candidate_count_and_deadline() {
     );
 }
 
-/// Req7.6: 無効化指令で確立された帳簿は、期限フィールドが無期限（`None`）として観測できる。
+/// 無効化指令で確立された帳簿は、期限フィールドが無期限（`None`）として観測できる。
 #[test]
 fn info_choice_waiting_established_logs_indefinite_deadline() {
     let ev = run_step(
@@ -645,7 +645,7 @@ fn warn_choice_waiting_stale_logs() {
 #[test]
 fn info_talk_done_interrupted_as_non_quit_logs() {
     // 既知 talk の reason=Interrupted → 非 quit 扱い（Ended と同一経路）へ委譲。
-    // 選択タイムアウトの解除経路の正規の到達点（DD-11）で、どの reason だったかを info で観測できることを検証する。
+    // 選択タイムアウトの解除経路の正規の到達点で、どの reason だったかを info で観測できることを検証する。
     let ev = run_step(
         state_in(steady_with_talk(TalkId(5))),
         Input::TalkDone(TalkDone {
@@ -658,7 +658,7 @@ fn info_talk_done_interrupted_as_non_quit_logs() {
 }
 
 // ============================================================
-// ドラッグの知らせを送らない 2 経路（areka-P0-mouse-drag-events K8・K9・要件 5.2／5.3／8.2）
+// ドラッグの知らせを送らない 2 経路
 // ============================================================
 
 /// 檻用のドラッグの知らせ（座標・判定名は本檻で load-bearing でない＝種類だけを見る）。
@@ -672,7 +672,7 @@ fn drag_input(kind: crate::msg::MouseEventKind) -> Input {
     })
 }
 
-/// K8: 定常でない状態へ入れた開始／終了は、`mouse_input_ignored`（trace）がちょうど 1 件で、
+/// 定常でない状態へ入れた開始／終了は、`mouse_input_ignored`（trace）がちょうど 1 件で、
 /// 捨てた知らせの中身（種類）が `input` 欄に載る（決定 D3）。記録か中身の欄を消すと赤。
 #[test]
 fn trace_mouse_input_ignored_logs_dropped_drag_input() {
@@ -693,7 +693,7 @@ fn trace_mouse_input_ignored_logs_dropped_drag_input() {
     }
 }
 
-/// K9: 終了の握手の待ち（`pending_close` 在り）へ入れた開始／終了は、`mouse_close_pending`
+/// 終了の握手の待ち（`pending_close` 在り）へ入れた開始／終了は、`mouse_close_pending`
 /// （trace）がちょうど 1 件で、GET は出さない。記録を消すと赤。
 #[test]
 fn trace_mouse_close_pending_logs_once_for_drag_input() {

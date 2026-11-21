@@ -1,4 +1,4 @@
-//! 再生中のトークが無いときのダブルクリック（表 C）の檻（areka-P0-balloon-lifecycle-events）。
+//! 再生中のトークが無いときのダブルクリック（表 C）の檻。
 //!
 //! 最上位の `step` に中断の合図（`Input::UserBreak`）を入れて駆動する。定常でない相・終了の保留は
 //! 本番の流れで作ると長くなるので、トークを 1 つ再生し終えた控えを持つ状態の相だけを差し替える。
@@ -12,8 +12,8 @@ use crate::schedule::Action;
 use tracing::Level;
 
 /// C4: 再生中のトークが無い定常のダブルクリックで、`OnBalloonClose`（Reference0＝直前に終えた
-/// トークの台本）を 1 本送る。何も止めず、中断の控えも立てない（要件 3.1・3.2・7.1）。
-/// C3: 同じトークのバルーンへの 2 回目は送らず、理由を記録する（要件 4.5）。
+/// トークの台本）を 1 本送る。何も止めず、中断の控えも立てない。
+/// C3: 同じトークのバルーンへの 2 回目は送らず、理由を記録する。
 #[test]
 fn c4_idle_double_click_sends_balloon_close_then_c3_refuses_the_second() {
     let (mut s, talk) = steady_after_talk();
@@ -60,7 +60,7 @@ fn c4_idle_double_click_sends_balloon_close_then_c3_refuses_the_second() {
     assert_not_sent(&ev, "OnBalloonClose", "already_sent", "Steady");
 }
 
-/// C4 の守り: 控えが無ければ Reference0 を空で送り、警告を残す（設計 D9）。
+/// C4 の守り: 控えが無ければ Reference0 を空で送り、警告を残す。
 #[test]
 fn c4_without_shown_talk_sends_empty_script_with_a_warning() {
     let mut s = steady_none();
@@ -80,7 +80,7 @@ fn c4_without_shown_talk_sends_empty_script_with_a_warning() {
 }
 
 /// C1: 相が定常でない（起動の途中・終了の握手の待ち・切替の途中・降ろす途中）なら送らず、理由と
-/// 相を記録する。控えの印も立てない（要件 3.4・4.4・7.2）。
+/// 相を記録する。控えの印も立てない。
 #[test]
 fn c1_not_steady_phases_send_nothing_and_record_why() {
     let phases = [
@@ -115,7 +115,7 @@ fn c1_not_steady_phases_send_nothing_and_record_why() {
     }
 }
 
-/// C2: 終了の要求を保留している間は送らず、理由を記録する（要件 3.4）。
+/// C2: 終了の要求を保留している間は送らず、理由を記録する。
 #[test]
 fn c2_close_pending_sends_nothing_and_records_why() {
     let (mut s, _) = steady_after_talk();

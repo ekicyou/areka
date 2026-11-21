@@ -24,7 +24,7 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F
     }
 }
 
-/// リソース照会結果を捨てる no-op sink（結果を使わない結線・R4.1 Implementation Notes）。
+/// リソース照会結果を捨てる no-op sink（結果を使わない結線 Implementation Notes）。
 /// prefetch は駆動されるが sink は何もしない——本モジュールの停止・順序・失敗系テストは
 /// prefetch 結果に依存しないため、副作用のないクロージャで十分。
 fn noop_sink() -> crate::schedule::resources::ResourceSink {
@@ -82,7 +82,7 @@ fn benign(rec: &Recorded) -> ShioriOutcome {
     }
 }
 
-// --- 1. 停止観測（Req 4.8）: Close 送信 → join 成功（有界時間内） ---
+// --- 1. 停止観測: Close 送信 → join 成功（有界時間内） ---
 
 #[test]
 fn close_message_terminates_and_join_succeeds() {
@@ -91,7 +91,6 @@ fn close_message_terminates_and_join_succeeds() {
 
     let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
-    // 停止駆動: Close 送信後、送信端を drop（残余 Sender で inbox を生かさない）。
     kanade_tx.send(KanadeMsg::Close).expect("send Close");
     drop(kanade_tx);
 
@@ -117,7 +116,6 @@ fn sakura_disconnected_start_talk_failure_continues_run() {
     let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(|rec| match rec {
         Recorded::Notify(_) => ShioriOutcome::Notified,
         Recorded::Unload => ShioriOutcome::Unloaded,
-        // OnFirstBoot(GET)→204、OnBoot(GET)→Value でグリーティング talk を起こす。
         Recorded::Get(id) if id == "OnBoot" => {
             ShioriOutcome::Value(r"\0hi\e".to_string(), areka_talk::SecurityLevel::Local)
         }
@@ -125,15 +123,12 @@ fn sakura_disconnected_start_talk_failure_continues_run() {
         Recorded::Close => ShioriOutcome::Notified,
     });
 
-    // sakura の Receiver を即 drop → talk 指示の送出は必ず失敗する。
     let (sakura_tx, sakura_rx) = mpsc::channel::<TalkCommand>();
     drop(sakura_rx);
 
     let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
-    // Boot → boot 系列を最後まで駆動（OnBoot Value で起動指示の送出が失敗するが継続）。
     kanade_tx.send(KanadeMsg::Boot).expect("send Boot");
-    // 運行が継続していることを確認するため、Close で明示的に停止させる。
     kanade_tx.send(KanadeMsg::Close).expect("send Close");
     drop(kanade_tx);
 
@@ -156,7 +151,7 @@ fn sakura_disconnected_start_talk_failure_continues_run() {
 }
 
 // --- 3. Mouse 写像: KanadeMsg::Mouse → Input::Mouse・非 Steady（Idle）では ---
-//         SHIORI 問い合わせを一切発行せず、その後 Close で正常停止する（DD-IE-8）。
+//         SHIORI 問い合わせを一切発行せず、その後 Close で正常停止する。
 
 #[test]
 fn mouse_msg_maps_to_input_and_is_ignored_in_idle_phase() {
@@ -167,7 +162,6 @@ fn mouse_msg_maps_to_input_and_is_ignored_in_idle_phase() {
 
     let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
-    // 起動前（Idle）にマウス入力を注入 → KanadeMsg::Mouse→Input::Mouse 写像→非 Steady 無視。
     kanade_tx
         .send(KanadeMsg::Mouse(MouseInput {
             scope: 0,
@@ -179,7 +173,6 @@ fn mouse_msg_maps_to_input_and_is_ignored_in_idle_phase() {
             },
         }))
         .expect("send Mouse");
-    // 停止させて有界に join する。
     kanade_tx.send(KanadeMsg::Close).expect("send Close");
     drop(kanade_tx);
 
@@ -201,7 +194,7 @@ fn mouse_msg_maps_to_input_and_is_ignored_in_idle_phase() {
     drop(shiori_handle);
 }
 
-// --- 4. ForceQuit 順序（DD-10）: OnClose NOTIFY → Unload → Close の順で shiori が受領 ---
+// --- 4. ForceQuit 順序: OnClose NOTIFY → Unload → Close の順で shiori が受領 ---
 
 #[test]
 fn force_quit_emits_onclose_notify_then_unload_then_close_in_order() {
@@ -217,7 +210,6 @@ fn force_quit_emits_onclose_notify_then_unload_then_close_in_order() {
         .expect("send ForceQuit");
     drop(kanade_tx);
 
-    // 記録列を有界時間で 3 件収集する（別スレッドで recv_timeout・ハング防止）。
     let (collected_tx, collected_rx) = mpsc::channel::<Vec<Recorded>>();
     thread::spawn(move || {
         let mut seq = Vec::new();
@@ -235,7 +227,7 @@ fn force_quit_emits_onclose_notify_then_unload_then_close_in_order() {
         .recv_timeout(Duration::from_secs(6))
         .expect("collector should finish within bound");
 
-    // DD-10: OnClose NOTIFY（一報）→ Unload → Close の順。
+    // OnClose NOTIFY（一報）→ Unload → Close の順。
     assert_eq!(
         seq,
         vec![
@@ -258,7 +250,7 @@ fn force_quit_emits_onclose_notify_then_unload_then_close_in_order() {
     drop(shiori_handle);
 }
 
-// --- 5. アクターシェルの失敗ログ＋応答写像（Req 6.1／6.2） ---
+// --- 5. アクターシェルの失敗ログ＋応答写像 ---
 //
 // シェルの往復ヘルパ（round_trip 系）をテストスレッド上で**直接**呼び、二つの失敗
 // サブ経路が (i) いずれも `ShioriOutcome::Failed(ShioriFailure::Ipc)` へ写像され、
@@ -313,12 +305,10 @@ fn shiori_send_failure_maps_to_ipc_and_logs() {
         outcome = Some(round_trip_request(&shiori_tx, probe_get_call()));
     });
 
-    // (i) Failed(Ipc) 写像（ShioriOutcome は Debug 非実装ゆえ variant を match）。
     assert!(
         matches!(outcome, Some(ShioriOutcome::Failed(ShioriFailure::Ipc(_)))),
         "shiori 送出失敗は Failed(Ipc) へ写像されるべき"
     );
-    // (ii) 規約の error! 発火（削除・語彙変更・レベル変更で失敗する回帰檻）。
     assert_logged(&events, Level::ERROR, "shiori_send_failed");
 }
 
@@ -330,8 +320,6 @@ fn shiori_send_failure_maps_to_ipc_and_logs() {
 fn shiori_reply_dropped_maps_to_ipc_and_logs() {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
 
-    // 受領ヘルパ: 1 件の Request を受け、その reply を send せず drop する。
-    // 受領完了を done_tx で通知し、親は有界待機する（recv_timeout・sleep なし）。
     let (done_tx, done_rx) = mpsc::sync_channel::<()>(0);
     let helper = thread::spawn(move || {
         if let Ok(ShioriMsg::Request { call: _, reply }) = shiori_rx.recv() {
@@ -345,15 +333,12 @@ fn shiori_reply_dropped_maps_to_ipc_and_logs() {
         outcome = Some(round_trip_request(&shiori_tx, probe_get_call()));
     });
 
-    // (i) 応答切断は Failed(Ipc) へ写像される。
     assert!(
         matches!(outcome, Some(ShioriOutcome::Failed(ShioriFailure::Ipc(_)))),
         "応答 oneshot 切断は Failed(Ipc) へ写像されるべき"
     );
-    // (ii) 規約の error! 発火（削除・語彙変更・レベル変更で失敗する回帰檻）。
     assert_logged(&events, Level::ERROR, "shiori_reply_dropped");
 
-    // 受領ヘルパの有界 join（ハング防止）。
     assert!(
         done_rx.recv_timeout(Duration::from_secs(5)).is_ok(),
         "reply-drop helper が期限内に受領を完了すべき（possible hang）"
@@ -361,7 +346,7 @@ fn shiori_reply_dropped_maps_to_ipc_and_logs() {
     helper.join().expect("reply-drop helper joins cleanly");
 }
 
-// --- 6. talk 指示送出の失敗ログ＋運行継続（Req 4.4／5.6・design C6） ---
+// --- 6. talk 指示送出の失敗ログ＋運行継続 ---
 //
 // talk 再生系へ出る唯一の実行点 `send_talk_command` を**直接**呼び、受信端が切断された
 // 状態で (i) 規約の `error!`（event=talk_command_send_failed）を発火し、(ii) 返り値も
@@ -391,7 +376,6 @@ fn talk_command_send_failure_logs_error_and_continues() {
         send_talk_command(&sakura_tx, TalkCommand::CancelChoice { talk_id: TalkId(1) });
     });
 
-    // 規約の error! 発火（削除・語彙変更・レベル変更で失敗する回帰檻）。
     assert_logged(&events, Level::ERROR, "talk_command_send_failed");
     // 3 回とも記録される（黙って捨てる経路が 1 本も無い・log-first）。
     assert_eq!(
@@ -404,13 +388,13 @@ fn talk_command_send_failure_logs_error_and_continues() {
     );
 }
 
-// --- 7. egress チョークポイント判断分岐檻（Req 3.1／3.2／6.2・DD-IT-7／DD-IT-11） ---
+// --- 7. egress チョークポイント判断分岐檻 ---
 //
 // SHIORI へ出る唯一の実行点 `round_trip_request` を**直接**呼び、送出 ID の許可判定という
 // 入力依存の判断分岐を両側から檻に入れる（test-only-decision-branches-not-proven-wiring）。
 // ヘルパは同期関数ゆえログはテストスレッドで発行され `log_capture::capture` で確実に捕捉される。
 
-// (a) 許可 ID（OnBoot）→ チャネルへ送出され、送出前の wire 証跡 trace! が残る（Req6.2）。
+// (a) 許可 ID（OnBoot）→ チャネルへ送出され、送出前の wire 証跡 trace! が残る。
 #[test]
 fn allowed_event_id_is_sent_and_wire_trace_logged() {
     let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
@@ -420,21 +404,18 @@ fn allowed_event_id_is_sent_and_wire_trace_logged() {
         outcome = Some(round_trip_request(&shiori_tx, probe_get_call()));
     });
 
-    // 許可 ID の GET は送出され mock の良性応答（NoContent）が返る。
     assert!(
         matches!(outcome, Some(ShioriOutcome::NoContent)),
         "許可 ID の GET は送出され mock の良性応答が返るべき"
     );
-    // mock が当該 Request を受領した＝チャネルへ送出された（Req3.1 許可路）。
     assert_eq!(
         rec_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("許可 ID はチャネルへ送出され mock が受領するはず"),
         Recorded::Get("OnBoot".to_string())
     );
-    // Method・ID・参照値・実行状態の wire 証跡（Req6.2・DD-IT-7）。
     assert_logged(&events, Level::TRACE, "shiori_request");
-    // 出どころの 3 項目（運行表のイベント＝areka・internal・local・要件 2.2）。
+    // 出どころの 3 項目（運行表のイベント＝areka・internal・local）。
     let request = events
         .iter()
         .find(|e| e.event.as_deref() == Some("shiori_request"))
@@ -448,7 +429,7 @@ fn allowed_event_id_is_sent_and_wire_trace_logged() {
     drop(shiori_handle);
 }
 
-// (b) 禁止 ID（OnTalk／OnHour）→ 送出されず error! を残し Failed(Internal) へ写像される（Req3.2）。
+// (b) 禁止 ID（OnTalk／OnHour）→ 送出されず error! を残し Failed(Internal) へ写像される。
 //     チャネルへ何も届かないことを保持した record Receiver の try_recv=Empty で確認する。
 #[test]
 fn forbidden_event_id_is_not_sent_maps_to_internal_and_logs_error() {
@@ -463,7 +444,6 @@ fn forbidden_event_id_is_not_sent_maps_to_internal_and_logs_error() {
             ));
         });
 
-        // (i) 送出せず内部規律違反の失敗語彙へ写像（DD-IT-11・状態機械は既存 fault 経路を使う）。
         assert!(
             matches!(
                 outcome,
@@ -471,9 +451,7 @@ fn forbidden_event_id_is_not_sent_maps_to_internal_and_logs_error() {
             ),
             "{forbidden} は送出せず Failed(Internal) へ写像されるべき"
         );
-        // (ii) 規約の error! 発火（削除・語彙変更・レベル変更で失敗する回帰檻）。
         assert_logged(&events, Level::ERROR, "event_id_not_allowed");
-        // (iii) チャネルへ何も届かない＝禁止 ID は送出前に返る（Req3.2 恒久不送出）。
         assert!(
             rec_rx.try_recv().is_err(),
             "{forbidden} はチャネルへ送出されてはならない（Req3.2）"
@@ -484,7 +462,7 @@ fn forbidden_event_id_is_not_sent_maps_to_internal_and_logs_error() {
     }
 }
 
-// --- 8. boot prefetch → ResourceSink 同期呼出（R4.1・design boot 図） ---
+// --- 8. boot prefetch → ResourceSink 同期呼出 ---
 //
 // アクター経路（spawn_kanade）で boot を駆動し、username リソース照会（prefetch）が
 // (i) OnInitialize NOTIFY の後・OnFirstBoot GET の前に mock shiori へ 1 回だけ届き、
@@ -496,8 +474,6 @@ fn boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink
     use crate::schedule::resources::{ResourceOutcome, ResourceSink};
     use std::sync::{Arc, Mutex};
 
-    // mock shiori: OnInitialize→Notified・username GET→Value("bob")・他 GET→NoContent・Unload→Unloaded。
-    // username=Value で prefetch 経路の Value 写像を踏む（boot は挨拶なし 204 経路で Steady へ）。
     let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(|rec| match rec {
         Recorded::Notify(_) => ShioriOutcome::Notified,
         Recorded::Unload => ShioriOutcome::Unloaded,
@@ -509,7 +485,6 @@ fn boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink
     });
     let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
-    // 記録 sink: 呼出 (id, outcome) を蓄積する（同期呼出・別スレッドから）。
     let seen: Arc<Mutex<Vec<(&'static str, ResourceOutcome)>>> = Arc::new(Mutex::new(Vec::new()));
     let seen_body = Arc::clone(&seen);
     let sink: ResourceSink =
@@ -517,7 +492,6 @@ fn boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink
 
     let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, sink);
 
-    // 起動を駆動 → boot 系列（prefetch 含む）が同期完走する。その後 Close で停止。
     kanade_tx.send(KanadeMsg::Boot).expect("send Boot");
     kanade_tx.send(KanadeMsg::Close).expect("send Close");
     drop(kanade_tx);
@@ -532,8 +506,6 @@ fn boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink
         },
     );
 
-    // (i) mock 受領列の先頭 3 件: OnInitialize NOTIFY → username GET → OnFirstBoot GET。
-    //     prefetch が OnInitialize 後・OnFirstBoot 前に 1 回だけ挟まる（design boot 図）。
     let mut seq: Vec<Recorded> = Vec::new();
     while seq.len() < 3 {
         match rec_rx.recv_timeout(Duration::from_secs(5)) {
@@ -551,7 +523,6 @@ fn boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink
         "prefetch（username GET）は OnInitialize 後・OnFirstBoot 前に 1 回だけ届く"
     );
 
-    // (ii) sink は ("username", Value("bob")) で同期的に呼ばれた（ちょうど 1 回）。
     let calls = seen.lock().unwrap().clone();
     assert_eq!(
         calls,
@@ -562,19 +533,19 @@ fn boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink
     drop(shiori_handle);
 }
 
-// --- 9. egress ガードの出所カテゴリ分岐（Req 2.6／2.9・design C6／DD-2／裁定 8） ---
+// --- 9. egress ガードの出所カテゴリ分岐 ---
 //
 // submit ガードが `EventId` の出所カテゴリで分かれることを、両カテゴリの実送出パスから
 // 檻に入れる。スケジューラ起源（`Static`）は固定表 ∨ リソース表——`OnTalk`／`OnHour`
 // の恒久禁止はセクション 7 (b) が見る——選択起源（`Choice`）は `On` 接頭のみで受理し、
-// 恒久禁止 ID であっても逐語で送出される（Req2.9・恒久禁止の根拠は選択起源に該当しない）。
+// 恒久禁止 ID であっても逐語で送出される（恒久禁止の根拠は選択起源に該当しない）。
 
 /// テスト用の選択起源 GET 呼出（任意名イベント・[`EventId::Choice`]）。
 fn probe_choice_call(id: &str) -> ShioriCall {
     get(EventId::Choice(id.to_string()), &[])
 }
 
-// (a) 選択起源の恒久禁止 ID（OnTalk／OnHour）→ ガードを通過して逐語で送出される（Req2.9）。
+// (a) 選択起源の恒久禁止 ID（OnTalk／OnHour）→ ガードを通過して逐語で送出される。
 //     同じ ID がスケジューラ起源では拒否されること（セクション 7 (b) の既存檻）と対になる、
 //     完了状態が要求する「両方向」の許可側。
 #[test]
@@ -588,7 +559,6 @@ fn choice_origin_scheduler_forbidden_ids_are_sent_verbatim() {
             matches!(outcome, ShioriOutcome::NoContent),
             "{forbidden_for_scheduler} は選択起源なら送出され mock の良性応答が返るべき（Req2.9）"
         );
-        // wire へ載る ID は逐語（イベント名の書き換え・別 ID への写像をしない・Req2.6）。
         assert_eq!(
             rec_rx
                 .recv_timeout(Duration::from_secs(5))
@@ -602,7 +572,7 @@ fn choice_origin_scheduler_forbidden_ids_are_sent_verbatim() {
 }
 
 // (b) 選択起源の `On` 非接頭 ID → 送出されず `event_id_not_allowed` を記録して
-//     Failed(Internal) へ写像される（受理規則違反も従来どおりの拒否語彙・design C6）。
+//     Failed(Internal) へ写像される（受理規則違反も従来どおりの拒否語彙）。
 #[test]
 fn choice_origin_without_on_prefix_is_not_sent_and_logs_error() {
     for rejected in ["foo", "on", ""] {
@@ -653,7 +623,7 @@ fn choice_origin_bare_on_is_accepted_and_sent() {
     drop(shiori_handle);
 }
 
-// (d) 選択関連の固定 3 ID は**スケジューラ起源**（`Static`）として送出される（DD-2 の表追加）。
+// (d) 選択関連の固定 3 ID は**スケジューラ起源**（`Static`）として送出される。
 #[test]
 fn choice_fixed_ids_pass_the_static_guard_and_are_sent() {
     for id in ["OnChoiceSelectEx", "OnChoiceSelect", "OnChoiceTimeout"] {
@@ -677,7 +647,7 @@ fn choice_fixed_ids_pass_the_static_guard_and_are_sent() {
     }
 }
 
-// --- 10. Action → TalkCommand 写像（design C6・Req4.4） ---
+// --- 10. Action → TalkCommand 写像 ---
 //
 // drive の Action バッチ実行本体（[`execute_actions`]）を**直接**呼び、選択系 2 Action が
 // `TalkCommand::{ResolveChoice, CancelChoice}` へそのまま包まれて単一チャンネルへ出ることを
@@ -758,7 +728,7 @@ fn choice_actions_map_to_talk_commands_and_preserve_order() {
 }
 
 // 送出失敗（受信端 drop）でも `error!(talk_command_send_failed)` を残して**バッチ実行は継続**する
-// （design「Error Strategy」: 選択・再生の失敗でゴーストを終了させない）。継続の証跡として、
+// （選択・再生の失敗でゴーストを終了させない）。継続の証跡として、
 // 失敗する talk 指示 2 件の**後ろ**に置いた ShioriUnload が実行され last_reply が満ちることを見る。
 #[test]
 fn talk_command_send_failure_does_not_abort_the_action_batch() {

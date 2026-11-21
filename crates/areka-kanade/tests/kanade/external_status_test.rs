@@ -1,5 +1,4 @@
-//! 外から届く実行状態（balloon・nouserbreak・online）が送り口の `Status` に載ることの統合檻
-//! （areka-P0-status-execution-states 要件 2.3／2.6／3.1／3.2／4.1／5.1／7.2／8.2）。
+//! 外から届く実行状態（balloon・nouserbreak・online）が送り口の `Status` に載ることの統合檻。
 //!
 //! mock shiori＋mock sakura sink を kanade に結線し（`super::common` のハーネス）、
 //! `KanadeMsg::ExecutionState` の知らせと、構成で差し替えた通信中の数だけで観測する。
@@ -23,8 +22,7 @@ use super::common::{
     spawn_harness, spawn_harness_gated, tick,
 };
 
-/// バルーンの組と中断の旗の知らせが、送り口を通って次の周期リクエストの `Status` に載る
-/// （要件 3.1／3.2／4.1／5.1／8.2）。
+/// バルーンの組と中断の旗の知らせが、送り口を通って次の周期リクエストの `Status` に載る。
 ///
 /// 駆動: Boot（挨拶なし）→ `Balloons([0=2,1=0])` → Tick1（トーク無し・GET Value で talk id=1 を起こし
 /// TalkDone を保留）→ `Balloons([0=0])` → Tick2 → `Balloons([])` → `NoUserBreak(true)` → Tick3 →
@@ -125,7 +123,7 @@ fn balloon_and_no_user_break_updates_ride_the_next_pump_status() {
 }
 
 /// 通信中の数を立てたまま kanade を起こすと最初のリクエスト（OnInitialize）から `online` が載り
-/// （要件 2.6／5.1）、守り手を落とした後の次の Tick からは載らない（要件 2.3）。
+/// 、守り手を落とした後の次の Tick からは載らない。
 ///
 /// 数は関数内の `static` を `KanadeConfig.online` で渡す（`online::PROCESS` には触れない）。
 #[test]

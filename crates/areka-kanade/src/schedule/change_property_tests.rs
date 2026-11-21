@@ -1,4 +1,4 @@
-//! `\![get,property]` の返しのイベントの運行表の腕のテスト（shell-scale-linkage 要件 1.2・1.3・1.7・2.1〜2.3・7.1）。
+//! `\![get,property]` の返しのイベントの運行表の腕のテスト。
 //!
 //! 定常でだけ逐語の名前の GET を 1 つ出し（Reference は欠番を詰めず台本の順）、起動の段・終了の段と
 //! 名前か Reference の検査に落ちたものは `warn!` 1 件で捨てて動作 0 であること、応答の台本が
@@ -85,7 +85,7 @@ fn boot_and_shutdown_phases_drop_with_one_warn() {
 
 #[test]
 fn raise_and_property_events_are_dropped_while_close_or_change_is_pending() {
-    // 終了・切替の保留中は、汎用の通知の入口も返しの入口も送らずに捨てる（要件 9.3）。
+    // 終了・切替の保留中は、汎用の通知の入口も返しの入口も送らずに捨てる。
     let pending = |reason: &str| match reason {
         "close_pending" => State {
             pending_close: Some(CloseReason::System),

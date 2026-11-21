@@ -1,4 +1,4 @@
-//! 殻で答える複数件のリソース照会（`KanadeMsg::ResourceQuery`・要件 3.2〜3.4／3.10）。
+//! 殻で答える複数件のリソース照会（`KanadeMsg::ResourceQuery`）。
 //!
 //! UI（右クリックメニュー）が任意の時点で SHIORI リソースを複数件引くための入口である。
 //! 運行状態機械（[`crate::schedule::step`]）を**経ない**——`actor.rs` の閉包が停止指示
@@ -6,7 +6,7 @@
 //! メッセージへ進む。状態機械を経ないので、`drive_translating` の「バッチ最後の応答だけを再投入する」
 //! 規律に乗らず、複数件の応答が 1 件も落ちない。運行状態は読むだけで書き換えない。
 //!
-//! # 会話できる状態のときだけ往復する（要件 3.10）
+//! # 会話できる状態のときだけ往復する
 //! [`queryable`] が真（`Phase::Steady`）のときだけ SHIORI へ往復する。起動中・終了中・停止後は
 //! SHIORI へ 1 通も送らず、全件 [`ResourceOutcome::NoContent`] を返す（受け手は既定名で出す）。
 //! 起動系列・終了系列の SHIORI 呼出順（固定の運行表）へ照会を割り込ませないためである。
@@ -32,7 +32,7 @@ use crate::schedule::{Phase, State};
 ///
 /// 会話できる状態（`Steady`・会話の有無を問わない）だけが真。起動系（`Idle`〜`BootVersion`）・
 /// 終了握手（`ClosePending`／`CloseTalkWait`）・切替の 4 相（`ChangePending`／`ChangeTalkWait`／
-/// `ChangeClosePending`／`ChangeCloseTalkWait`）・`Unloading`・`Stopped` は偽（要件 3.10）。
+/// `ChangeClosePending`／`ChangeCloseTalkWait`）・`Unloading`・`Stopped` は偽。
 fn queryable(phase: &Phase) -> bool {
     matches!(phase, Phase::Steady { .. })
 }

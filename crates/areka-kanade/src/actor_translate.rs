@@ -1,4 +1,4 @@
-//! 殻が翻訳の依頼（`Action::Translate`）を実行する（要件 2.1・2.2・4.1・4.4・7.3）。
+//! 殻が翻訳の依頼（`Action::Translate`）を実行する。
 //!
 //! 順序は「展開 → `OnTranslate` の組み立て → 生の往復 → 応答の読み → MAKOTO の口」。展開と
 //! MAKOTO の口は外から渡された関数（[`TranslateSeams`]）で、kanade のスレッドで同期に呼ぶ。
@@ -17,11 +17,11 @@ use crate::translate::TranslateSeams;
 
 /// 展開 → `OnTranslate` の往復 → 応答の読み → MAKOTO の口、の順に実行する。
 ///
-/// `OnTranslate` の組み立ては出どころで選ぶ: イベントへの応答は [`on_translate`]（要件 4.5・4.6）、
-/// 外からの台本は [`on_translate_sstp`]（Reference1＝`sstp-send,owned`・要件 4.4）。
+/// `OnTranslate` の組み立ては出どころで選ぶ: イベントへの応答は [`on_translate`]、
+/// 外からの台本は [`on_translate_sstp`]（Reference1＝`sstp-send,owned`）。
 ///
 /// Status は依頼に載った値（運行表が捕まえた時点の状態）をそのまま送る。MAKOTO の口は応答の
-/// 種類（200・204・エラー応答）に依らず（台詞, [`ScriptSource::makoto_id`]）で 1 回呼ぶ（要件 7.3）。
+/// 種類（200・204・エラー応答）に依らず（台詞, [`ScriptSource::makoto_id`]）で 1 回呼ぶ。
 /// 輸送路の失敗だけは口を呼ばずに `Err` で返す（故障の判断と記録は運行表）。
 pub(crate) fn run_translate(
     request: TranslateRequest,

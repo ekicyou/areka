@@ -64,7 +64,7 @@ fn phases() -> Vec<(&'static str, Phase)> {
     ]
 }
 
-/// 要件 3.1・3.2・4.5・4.6・5.1: 知らせはどの相でも写しを変え、行動を返さず、相も変えない。
+/// 知らせはどの相でも写しを変え、行動を返さず、相も変えない。
 #[test]
 fn execution_state_updates_the_copy_in_every_phase_without_actions() {
     for (label, phase) in phases() {
@@ -125,7 +125,7 @@ fn execution_state_updates_the_copy_in_every_phase_without_actions() {
     }
 }
 
-/// 要件 3.3: 旗の写しが真でも、トークが無ければ nouserbreak は載らず、トーク中なら載る。
+/// 旗の写しが真でも、トークが無ければ nouserbreak は載らず、トーク中なら載る。
 /// online と balloons は写しのまま載る（talking・choosing の計算は変えない）。
 #[test]
 fn snapshot_gates_nouserbreak_by_talk_and_copies_online_and_balloons() {
@@ -154,7 +154,7 @@ fn snapshot_gates_nouserbreak_by_talk_and_copies_online_and_balloons() {
 }
 
 // -----------------------------------------------------------------------------
-// 会話なしの作り方と、それを使う各リクエスト（要件 3.3・5.1・8.1）
+// 会話なしの作り方と、それを使う各リクエスト
 // -----------------------------------------------------------------------------
 
 /// 旗・online・バルーンがすべて立った写し（旗は会話なしの作り方では落ちるはず）。
@@ -185,7 +185,7 @@ fn last_request(actions: &[Action]) -> (String, Option<String>) {
     }
 }
 
-/// 要件 3.3・5.1: 会話なしの作り方は、トーク中の相から作っても talk・choice・
+/// 会話なしの作り方は、トーク中の相から作っても talk・choice・
 /// nouserbreak を落とし、online とバルーンだけを写しから残す。
 #[test]
 fn snapshot_without_talk_keeps_only_online_and_balloons() {
@@ -236,10 +236,10 @@ fn expected(rows: &[(&str, &str)]) -> Vec<(String, Option<String>)> {
         .collect()
 }
 
-/// 要件 5.1: 起動の各段（OnInitialize・username の照会・起動の根 3 種（OnFirstBoot・OnGhostChanged・
+/// 起動の各段（OnInitialize・username の照会・起動の根 3 種（OnFirstBoot・OnGhostChanged・
 /// ネットワーク更新の知らせ）・OnBoot の 2 経路・基盤バージョン）
 /// のリクエストに写しの online とバルーンが載る。基盤バージョンだけは送出時点の作り方なので、
-/// 挨拶のトーク中ならトークと旗も載る（要件 3.3）。
+/// 挨拶のトーク中ならトークと旗も載る。
 #[test]
 fn every_boot_stage_request_carries_online_and_balloons_from_the_copy() {
     use crate::msg::ShioriOutcome::{NoContent, Notified, Value};
@@ -364,7 +364,7 @@ fn steady_idle() -> State {
     }
 }
 
-/// 要件 5.1: 切替の OnGhostChanging と、その 204 の後の OnClose に写しの online とバルーンが載る。
+/// 切替の OnGhostChanging と、その 204 の後の OnClose に写しの online とバルーンが載る。
 #[test]
 fn switching_requests_carry_online_and_balloons_from_the_copy() {
     let seen = walk(
@@ -381,7 +381,7 @@ fn switching_requests_carry_online_and_balloons_from_the_copy() {
     );
 }
 
-/// 要件 5.1: 終了の握手の OnClose に写しの online とバルーンが載る。
+/// 終了の握手の OnClose に写しの online とバルーンが載る。
 #[test]
 fn close_handshake_request_carries_online_and_balloons_from_the_copy() {
     let seen = walk(
@@ -394,7 +394,7 @@ fn close_handshake_request_carries_online_and_balloons_from_the_copy() {
     assert_eq!(seen, expected(&[("OnClose", WITHOUT_TALK)]));
 }
 
-/// 要件 5.1: 強制終了の OnClose は、トーク中に届いてもトークと旗を落とし、写しの online と
+/// 強制終了の OnClose は、トーク中に届いてもトークと旗を落とし、写しの online と
 /// バルーンだけを載せる。
 #[test]
 fn force_quit_request_carries_online_and_balloons_from_the_copy() {
@@ -412,7 +412,7 @@ fn force_quit_request_carries_online_and_balloons_from_the_copy() {
 }
 
 // -----------------------------------------------------------------------------
-// お別れの台詞の再生中の `talking`（areka-P0-farewell-talk-status 要件 1〜4）
+// お別れの台詞の再生中の `talking`
 // -----------------------------------------------------------------------------
 
 /// 「再生中か」の期待の表（手書き。相を足すとここでコンパイルが止まり、判断が求められる）。
@@ -432,7 +432,7 @@ fn plays_a_talk(phase: &Phase) -> bool {
     }
 }
 
-/// 要件 4.1・4.6（1.4・1.5・1.7・3.2）: 運行の相のすべての種類で、判定（再生中のトークの番号が
+/// 運行の相のすべての種類で、判定（再生中のトークの番号が
 /// 引けるか）・実行の状態の素の 2 つが、手書きの表と一致する。食い違う相はまとめて挙げる。
 #[test]
 fn talk_judgment_matches_the_table_in_every_phase() {
@@ -505,7 +505,7 @@ fn done(talk_id: TalkId, reason: TalkEndReason) -> Input {
 
 /// 写しを満たしたトーク無しの定常から、場面の握手を実際の入力で進め、台詞の応答が返した
 /// (状態, 一括) を返す。応答待ちのたびに、握手の要求も、その時点の状態から導いた `Status` も
-/// 会話なしであることを見る（要件 1.5・3.1）。
+/// 会話なしであることを見る。
 fn farewell_reply(label: &str, requests: &[&str]) -> (State, Vec<Action>) {
     let trigger = match requests[0] {
         "OnClose" => Input::CloseRequest {
@@ -542,7 +542,7 @@ fn farewell_reply(label: &str, requests: &[&str]) -> (State, Vec<Action>) {
 }
 
 /// 場面の台詞の再生が始まったところまで進め、(状態, 再生中のトークの番号) を返す。
-/// 翻訳の結果を入れて返るのは再生の開始だけ（SHIORI への要求は 0・要件 3.3）。
+/// 翻訳の結果を入れて返るのは再生の開始だけ（SHIORI への要求は 0）。
 fn farewell_playing(label: &str, requests: &[&str]) -> (State, TalkId) {
     let (state, actions) = pass_translate(farewell_reply(label, requests), &config());
     let [Action::StartTalk(start)] = actions.as_slice() else {
@@ -551,7 +551,7 @@ fn farewell_playing(label: &str, requests: &[&str]) -> (State, TalkId) {
     (state, start.talk_id)
 }
 
-/// 要件 1.1〜1.3・1.6・2.2・3.4・4.3・4.4: お別れの 3 つの場面とも、台詞の翻訳の依頼の `Status` と
+/// お別れの 3 つの場面とも、台詞の翻訳の依頼の `Status` と
 /// 再生中の `Status` に talking と nouserbreak が載り、旗を下ろす知らせの後は nouserbreak だけ消える。
 #[test]
 fn farewell_talk_carries_talking_from_the_translation_through_the_playback() {
@@ -591,7 +591,7 @@ fn farewell_talk_carries_talking_from_the_translation_through_the_playback() {
 /// お別れの台詞の終わり方（再生中の状態とトークの番号から、終わった後の状態と一括を返す）。
 type Ending = fn(State, TalkId) -> (State, Vec<Action>);
 
-/// 要件 1.4（3.3）: 終わり方 4 通りのどれでも、再生中に載っていた talking と nouserbreak が
+/// 終わり方 4 通りのどれでも、再生中に載っていた talking と nouserbreak が
 /// 終わった後は消える（旗の写しは立てたまま）。切り替えの場面の利用者の中断は切り替えを中止して
 /// 定常へ戻り、その後に送る `OnBalloonBreak` も会話なし。ほかは降ろすだけで、SHIORI への要求は 0。
 ///
@@ -658,8 +658,8 @@ fn farewell_talk_drops_talking_after_every_ending() {
     }
 }
 
-/// 要件 3.1・4.5 の ⑴: 普段の会話の再生中に届いた終了の要求は会話の完了まで保留し、完了の後に
-/// 送る `OnClose` は会話なし（⑵⑶＝`OnGhostChanging` とその応答なしの後の `OnClose` は、同じ写しで
+/// 普段の会話の再生中に届いた終了の要求は会話の完了まで保留し、完了の後に
+/// 送る `OnClose` は会話なし（`OnGhostChanging` とその応答なしの後の `OnClose` は、同じ写しで
 /// 流す `switching_requests_carry_online_and_balloons_from_the_copy` が固定している）。
 #[test]
 fn close_request_held_through_a_talk_sends_on_close_without_talk() {
@@ -685,7 +685,7 @@ fn close_request_held_through_a_talk_sends_on_close_without_talk() {
     );
 }
 
-/// 要件 3.1・4.5 の ⑷: お別れの 3 つの場面のどの再生中に強制終了が届いても、`OnClose` の通知は
+/// お別れの 3 つの場面のどの再生中に強制終了が届いても、`OnClose` の通知は
 /// 会話なし（talking も nouserbreak も載せない）。
 #[test]
 fn force_quit_during_a_farewell_talk_notifies_on_close_without_talk() {

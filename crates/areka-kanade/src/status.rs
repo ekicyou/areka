@@ -6,22 +6,22 @@
 //! ## 依存規律
 //!
 //! 本モジュールは `std` のみに依存する（host32 型・areka-actor 型に非依存）。`areka-talk` と
-//! 同じ**葉の契約型**の規律であり、将来の契約クレート切り出しは機械的移動で済む（DD-1）。
+//! 同じ**葉の契約型**の規律であり、将来の契約クレート切り出しは機械的移動で済む。
 //!
-//! ## 語彙と下位書式（DD-IT-9）
+//! ## 語彙と下位書式
 //!
 //! パラメータ付き状態の下位書式は ukadoc 正典どおり内部区切りに `/` を用いる
 //! （`opening(communicate/input/teach/dialog)`／`balloon(0=2/1=0)`）。トップレベルの状態
 //! 連結は `,` であり、内部 `/` と分離されているため `,` 分割が曖昧にならない。実 SSP 2.3.86 は
 //! `balloon(0=2,1=0)` を送る差異があるが、areka は ukadoc 正典の `/` を送る
-//! （`areka-P0-status-execution-states` で `balloon` を実導出・SSP 実測主義は取らない）。
+//! （SSP 実測主義は取らない）。
 
 /// ukadoc `Status [SSP拡張]` の実行状態語彙（正典全10状態を第一級保持）。
 ///
-/// 実導出するのは `Talking`（idle-talk）・`Choosing`（choice-select-events）と、
-/// `NoUserBreak`・`Online`・`Balloon`（status-execution-states）の 5 状態。
-/// 残 5 状態は語彙に留め、非アクティブへ縮退する（status-execution-states Req6.1/6.2）。
-/// variant の宣言順は正典の語彙定義順（Data Model の正典順）そのものである。
+/// 実導出するのは `Talking`・`Choosing`と、
+/// `NoUserBreak`・`Online`・`Balloon`の 5 状態。
+/// 残 5 状態は語彙に留め、非アクティブへ縮退する。
+/// variant の宣言順は正典の語彙定義順そのものである。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionState {
     Talking,
@@ -39,7 +39,7 @@ pub enum ExecutionState {
 }
 
 impl ExecutionState {
-    /// 正典順の序数（Data Model の語彙定義順）。集合の正典順ソート・重複判定の鍵。
+    /// 正典順の序数。集合の正典順ソート・重複判定の鍵。
     fn canonical_index(&self) -> u8 {
         match self {
             ExecutionState::Talking => 0,
@@ -55,7 +55,7 @@ impl ExecutionState {
         }
     }
 
-    /// 単一状態の wire トークン。パラメータ付き状態は下位書式（内部 `/`・DD-IT-9）を含む。
+    /// 単一状態の wire トークン。パラメータ付き状態は下位書式（内部 `/`）を含む。
     fn render_token(&self) -> String {
         match self {
             ExecutionState::Talking => "talking".to_string(),
@@ -82,7 +82,7 @@ impl OpeningKinds {
         OpeningKinds(kinds)
     }
 
-    /// 種類を `/` 区切りで連結した下位書式（DD-IT-9）。
+    /// 種類を `/` 区切りで連結した下位書式。
     fn render_inner(&self) -> String {
         self.0
             .iter()
@@ -126,7 +126,7 @@ impl BalloonBindings {
         BalloonBindings(bindings)
     }
 
-    /// `charID=balloonID` を `/` 区切りで連結した下位書式（DD-IT-9）。
+    /// `charID=balloonID` を `/` 区切りで連結した下位書式。
     fn render_inner(&self) -> String {
         self.0
             .iter()
@@ -168,32 +168,32 @@ impl ExecutionStatus {
     pub fn derive(snapshot: &ExecutionSnapshot) -> ExecutionStatus {
         let mut states: Vec<ExecutionState> = Vec::new();
 
-        // 導出表（正典順の10行）。行の存在自体が語彙保持の表明である（Req2.5）。
+        // 導出表（正典順の10行）。行の存在自体が語彙保持の表明である。
         // 非アクティブ行は Reference1/Reference2 の固定 "0" と同型の縮退であり、源着地時は
         // `ExecutionSnapshot` へフィールドを 1 本足して当該行を差し替える（送出契約は不変）。
         //
-        //  0. talking      ← snapshot.talk_active（M1 実導出・Req2.4/2.7）
+        //  0. talking      ← snapshot.talk_active（実導出）
         if snapshot.talk_active {
             states.push(ExecutionState::Talking);
         }
-        //  1. choosing     ← snapshot.choice_active（実導出・areka-P0-choice-select-events Req6.1/6.2）
+        //  1. choosing     ← snapshot.choice_active（実導出）
         if snapshot.choice_active {
             states.push(ExecutionState::Choosing);
         }
-        //  2. minimizing   ← SEAM(Req6.1/6.3): 出どころ未着地。持ち主＝要件 6.3 の宛先。非アクティブ確定。
-        //  3. induction    ← SEAM(Req6.1/6.3): 出どころ未着地。持ち主＝要件 6.3 の宛先。非アクティブ確定。
-        //  4. passive      ← SEAM(Req6.1/6.3): 出どころ未着地。持ち主＝要件 6.3 の宛先。非アクティブ確定。
-        //  5. timecritical ← SEAM(Req6.1/6.3): 出どころ未着地。持ち主＝要件 6.3 の宛先。非アクティブ確定。
-        //  6. nouserbreak  ← snapshot.no_user_break（実導出・areka-P0-status-execution-states Req3）
+        //  2. minimizing   ← SEAM: 出どころ未着地・非アクティブ確定。
+        //  3. induction    ← SEAM: 出どころ未着地・非アクティブ確定。
+        //  4. passive      ← SEAM: 出どころ未着地・非アクティブ確定。
+        //  5. timecritical ← SEAM: 出どころ未着地・非アクティブ確定。
+        //  6. nouserbreak  ← snapshot.no_user_break（実導出）
         if snapshot.no_user_break {
             states.push(ExecutionState::NoUserBreak);
         }
-        //  7. online       ← snapshot.online（実導出・areka-P0-status-execution-states Req2）
+        //  7. online       ← snapshot.online（実導出）
         if snapshot.online {
             states.push(ExecutionState::Online);
         }
-        //  8. opening      ← SEAM(Req6.1/6.3): 出どころ未着地。持ち主＝要件 6.3 の宛先。非アクティブ確定。
-        //  9. balloon      ← snapshot.balloons（実導出・Req4。空の組は行を出さない＝Req4.4）
+        //  8. opening      ← SEAM: 出どころ未着地・非アクティブ確定。
+        //  9. balloon      ← snapshot.balloons（実導出。空の組は行を出さない）
         if !snapshot.balloons.is_empty() {
             states.push(ExecutionState::Balloon(BalloonBindings::new(
                 snapshot.balloons.clone(),
@@ -203,7 +203,7 @@ impl ExecutionStatus {
         ExecutionStatus::from_states(states)
     }
 
-    /// wire 値への写像。**`None` ⇔ 空集合 ⇔ `Status` ヘッダ行を出さない**（Req2.3・DD-IT-5）。
+    /// wire 値への写像。**`None` ⇔ 空集合 ⇔ `Status` ヘッダ行を出さない**。
     /// `Some` のときは正典順でカンマ連結した値であり、空文字列は決して返さない。
     pub fn render(&self) -> Option<String> {
         if self.states.is_empty() {
@@ -221,20 +221,20 @@ impl ExecutionStatus {
 
 /// リクエスト送出時点のゴースト実行状態スナップショット。
 /// `Status` 実行状態集合と OnSecondChange の Reference 値の**共通の源**であり、
-/// 両者の不整合（例: Ref3="1" かつ `Status: talking`）を構造的に排除する（DD-IT-3）。
+/// 両者の不整合（例: Ref3="1" かつ `Status: talking`）を構造的に排除する。
 ///
 /// `balloons` が `Vec` を持つため `Copy` は持たない（`Clone` で複製する）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionSnapshot {
-    /// トーク再生中か（Req2.4）。源＝運行の相から再生中のトークの番号が引けること——普段の会話・
+    /// トーク再生中か。源＝運行の相から再生中のトークの番号が引けること——普段の会話・
     /// 起動の挨拶・お別れの台詞（終了の挨拶・切り替えの送り出しの台詞・切り替えの別れの台詞）の再生中。
-    /// `Status: talking`（Req2.4/2.7）と Reference3（Req1.4/1.5）の双方を駆動する。
+    /// `Status: talking`と Reference3の双方を駆動する。
     pub talk_active: bool,
     /// 選択待ちが継続中か。源＝kanade の選択帳簿 `State.choice`——その 3 段フェーズ
     /// （`Waiting`／`Cascading`／`TimeoutInFlight`）の**いずれでも継続中**である
     /// （`Cascading`／`TimeoutInFlight` は SHIORI 応答待ちであって選択待ちの終了ではない）。
-    /// `Status: choosing`（Req6.1/6.2）を駆動する。talk slot の占有は選択待ち中も継続する
-    /// ため、`talk_active` と同時に真になり複合値 `talking,choosing` を成す（裁定 6）。
+    /// `Status: choosing`を駆動する。talk slot の占有は選択待ち中も継続する
+    /// ため、`talk_active` と同時に真になり複合値 `talking,choosing` を成す。
     pub choice_active: bool,
     /// 再生中のトークが中断の無効化モード中か（`\![enter,nouserbreakmode]`〜`\![leave,…]`）。
     /// 源＝kanade の写し（UI の中断を禁じる旗）。再生中でないときに真にしないのは作り手
@@ -246,10 +246,10 @@ pub struct ExecutionSnapshot {
     /// 見えているバルーンの組（`charID=balloonID`）。空なら `balloon` を出さない。
     /// 源＝UI のバルーン可視性の相が差分で送る写し。`Status: balloon(…)` を駆動する。
     pub balloons: Vec<BalloonBinding>,
-    // SEAM(Req1.6): 見切れ／重なりの実測供給時に `offscreen`／`overlapping` を追加する。
-    //   源＝窓 geometry（UI スレッド）・運搬＝Tick 付帯。所有＝将来増分（本 spec 外）。
-    // SEAM(Req6.3): minimizing/induction/passive/timecritical/opening は出どころが着地したら
-    //   フィールドを 1 本追加し、導出表の該当行を差し替える（持ち主＝要件 6.3 の宛先）。
+    // SEAM: 見切れ／重なりの実測供給時に `offscreen`／`overlapping` を追加する。
+    //   源＝窓 geometry（UI スレッド）・運搬＝Tick 付帯。所有＝将来増分。
+    // SEAM: minimizing/induction/passive/timecritical/opening は出どころが着地したら
+    //   フィールドを 1 本追加し、導出表の該当行を差し替える。
     //
     // NOTE(シームの実体＝「フィールド 1 本」では閉じない): 源が Phase の外にある状態は、
     //   欄に加えて**作り手**（`schedule/types.rs` の `State::snapshot`／`State::snapshot_with_choice`／
@@ -313,7 +313,7 @@ impl ExternalStates {
 mod tests {
     use super::*;
 
-    /// Unit Test #1（Req2.1）: 全10 variant が正典トークンへ写り、パラメータ付き状態の
+    /// 全10 variant が正典トークンへ写り、パラメータ付き状態の
     /// 下位書式が `opening(communicate/input/teach/dialog)`／`balloon(0=2/1=0)` を表現できる。
     #[test]
     fn every_state_renders_to_its_canonical_token() {
@@ -326,7 +326,7 @@ mod tests {
         assert_eq!(ExecutionState::NoUserBreak.render_token(), "nouserbreak");
         assert_eq!(ExecutionState::Online.render_token(), "online");
 
-        // opening(種類) — 種類は `/` 区切り列挙（DD-IT-9: 内部は `/`・トップレベルは `,`）
+        // opening(種類) — 種類は `/` 区切り列挙（内部は `/`・トップレベルは `,`）
         let opening = ExecutionState::Opening(OpeningKinds::new(vec![
             OpeningKind::Communicate,
             OpeningKind::Input,
@@ -338,7 +338,7 @@ mod tests {
             "opening(communicate/input/teach/dialog)"
         );
 
-        // balloon(ID群) — `charID=balloonID` を `/` 区切り列挙（DD-IT-9）
+        // balloon(ID群) — `charID=balloonID` を `/` 区切り列挙
         let balloon = ExecutionState::Balloon(BalloonBindings::new(vec![
             BalloonBinding {
                 character_id: 0,
@@ -352,11 +352,11 @@ mod tests {
         assert_eq!(balloon.render_token(), "balloon(0=2/1=0)");
     }
 
-    /// Unit Test #2（Req2.2/2.3）: 複数状態が正典順でカンマ連結される
+    /// 複数状態が正典順でカンマ連結される
     /// （`talking,choosing,balloon(0=2/1=0)`）／空集合 → `render() == None`。
     #[test]
     fn active_states_render_in_canonical_order_and_empty_omits_the_line() {
-        // 非正典順で与えても、構成が正典順を保証する（不変条件・DD Data Model 順）。
+        // 非正典順で与えても、構成が正典順を保証する（不変条件）。
         let status = ExecutionStatus::from_states(vec![
             ExecutionState::Balloon(BalloonBindings::new(vec![
                 BalloonBinding {
@@ -376,7 +376,7 @@ mod tests {
             Some("talking,choosing,balloon(0=2/1=0)".to_string())
         );
 
-        // 空集合 → ヘッダ行そのものを省略（DD-IT-5）。空値 `Status:` ではなく `None`。
+        // 空集合 → ヘッダ行そのものを省略。空値 `Status:` ではなく `None`。
         let empty = ExecutionStatus::from_states(vec![]);
         assert_eq!(empty.render(), None);
     }
