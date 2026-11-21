@@ -1,4 +1,4 @@
-//! コマ替えの矩形の重ね直し（`animated-surface-log-flood` 要件 3.1・3.3〜3.6・4.1・4.2・8.3・8.5）。
+//! コマ替えの矩形の重ね直し。
 //!
 //! 控えに外れて成立した適用ごとに、表示の行の直前に重ね直しの範囲の行が 1 行出る。動きのある面は、
 //! 前に成立した適用が下敷き形の合成だったときだけ矩形（`partial`）で、それ以外はいちから（`full`）。
@@ -75,7 +75,7 @@ fn show(presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState) 
     );
 }
 
-/// 表示中の絵が、同じ入力を新しい合成器でいちから合成した絵と同じこと（要件 3.3・4.1）。
+/// 表示中の絵が、同じ入力を新しい合成器でいちから合成した絵と同じこと。
 fn assert_picture(presenter: &EmoPresenter, emo_world: &EmoWorld, atlas: &AtlasTable, x: i64) {
     let (golden, _) = native_golden_with(emo_world, atlas, BASE_ID, &BindSet::default(), &frame(x));
     assert_eq!(
@@ -100,7 +100,7 @@ fn num(ev: &CapturedEvent, name: &str) -> u32 {
 }
 
 /// 範囲の行を順に読む。どの範囲の行も直後が `cache_hit=false` の表示の行、その直後が perf の行
-/// （要件 2.3・3.5）で、`cache_hit=false` の表示の行の数と範囲の行の数は同じ。
+/// で、`cache_hit=false` の表示の行の数と範囲の行の数は同じ。
 fn ranges(events: &[CapturedEvent]) -> Vec<Range> {
     let misses = events
         .iter()
@@ -149,7 +149,7 @@ fn ranges(events: &[CapturedEvent]) -> Vec<Range> {
     out
 }
 
-/// 要件 3.1・3.3・3.5・8.3: 動く絵の N 回のコマ替えで、範囲の行は最初の 1 回だけ `full`、残りは
+/// 動く絵の N 回のコマ替えで、範囲の行は最初の 1 回だけ `full`、残りは
 /// `partial` で、矩形は動く絵の範囲（コマが重なりうる帯）に収まる。どの回の絵も正しい。
 #[test]
 fn animated_frame_changes_recompose_partially_after_the_first() {
@@ -183,7 +183,7 @@ fn animated_frame_changes_recompose_partially_after_the_first() {
     }
 }
 
-/// 要件 3.3・4.1: 下敷きの印が真のまま、同じコマで下の面を替えた回の絵も、新しい合成器でいちから
+/// 下敷きの印が真のまま、同じコマで下の面を替えた回の絵も、新しい合成器でいちから
 /// 合成した絵と同じ（矩形がコマの帯の外の下の面の画素を覆い損ねると前の面の画素が残る）。
 #[test]
 fn switching_the_surface_on_the_same_frame_matches_a_from_scratch_compose() {
@@ -225,7 +225,7 @@ fn switching_the_surface_on_the_same_frame_matches_a_from_scratch_compose() {
     );
 }
 
-/// 要件 3.4: 動きの無い面（`pattern` が空）は毎回いちからで、合成の回数（外れの回数）は前と同じ
+/// 動きの無い面（`pattern` が空）は毎回いちからで、合成の回数（外れの回数）は前と同じ
 /// ——違う入力の数だけ。控えに当たる回は範囲の行を出さない。
 #[test]
 fn static_surface_always_recomposes_from_scratch() {
@@ -253,7 +253,7 @@ fn static_surface_always_recomposes_from_scratch() {
     assert_eq!(hits, 2, "控えに当たる回が 2 回");
 }
 
-/// 要件 3.1・3.5: 控えに当たった次の外れはいちから（当たりの回は下敷きの印を立てない）。
+/// 控えに当たった次の外れはいちから（当たりの回は下敷きの印を立てない）。
 #[test]
 fn miss_after_cache_hit_recomposes_from_scratch() {
     let (mut world, mut presenter, emo_world, atlas) = setup();
@@ -277,7 +277,7 @@ fn miss_after_cache_hit_recomposes_from_scratch() {
     );
 }
 
-/// 要件 3.1・4.2: 控えを捨てる指令の次はいちからで、絵が正しい。指令は下敷きの印を偽にする。
+/// 控えを捨てる指令の次はいちからで、絵が正しい。指令は下敷きの印を偽にする。
 #[test]
 fn miss_after_invalidate_recomposes_from_scratch() {
     let (mut world, mut presenter, emo_world, atlas) = setup();
@@ -299,7 +299,7 @@ fn miss_after_invalidate_recomposes_from_scratch() {
     assert_eq!(got[2], Range::Full, "控えを捨てた次はいちから");
 }
 
-/// 要件 4.1・4.2・8.5: 表示の記録の失敗を注入した適用の次はいちからで、絵が正しい。失敗のあいだも
+/// 表示の記録の失敗を注入した適用の次はいちからで、絵が正しい。失敗のあいだも
 /// 前の表示（絵・表示記録・面・原寸）が残る。
 ///
 /// 失敗した適用でも合成器の前の命令列は替わる（合成は成功している）。印を合成の前に偽にしないと、

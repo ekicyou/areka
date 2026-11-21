@@ -1,12 +1,11 @@
 //! `FrameTiming`（timing.rs）の単体檻。
 //!
-//! 本ファイルが固定するのは **perf サマリ行のスキーマそのもの**（design.md §Data Models
-//! 「perf サマリ行スキーマ（コード⇔判定スクリプト間の唯一のデータ契約）」）である。判定
-//! スクリプト `tools/perf/judge-perf.py` はこの固定文言とフィールド名だけを頼りに行を機械
-//! 抽出するため、文言・水準・フィールド集合は観測状態と同格の契約であり、1 つでも欠ければ
-//! 下流の集計が黙って部分集計になる（Requirement 2.5 の行単位欠落検出が成立しなくなる）。
+//! 固定するのは perf サマリ行のスキーマそのもの（コード⇔判定スクリプト間の唯一のデータ契約）である。
+//! 判定スクリプト `tools/perf/judge-perf.py` はこの固定文言とフィールド名だけを頼りに行を機械抽出するため、
+//! 文言・水準・フィールド集合は観測状態と同格の契約であり、1 つでも欠ければ下流の集計が黙って部分集計になる
+//! （行単位欠落検出が成立しなくなる）。
 //!
-//! # 実時間を合否条件に使わない（Requirement 6.2）
+//! # 実時間を合否条件に使わない
 //!
 //! 段の所要は私有シーム `start_at` / `mark_at` / `emit_at` へ**任意の [`Instant`] を注入**して
 //! 与える。単調時計の差分だけで値が決まるため、測定マシンの速度・スケジューリングに一切
@@ -15,23 +14,19 @@
 //!
 //! # 捕捉の流儀
 //!
-//! 捕捉窓は硬化機構の唯一の定義元 [`log_capture_kit::capture`] へ委譲する（spec:
-//! areka-P0-test-cage-determinism・要件 1.5／2.2）。ここに在った自前の最小 subscriber は
-//! 撤去した。
+//! 捕捉窓は硬化機構の唯一の定義元 [`log_capture_kit::capture`] へ委譲する。
 //!
-//! 「`tracing::subscriber::with_default` はスレッドローカルだから安全」は**誤り**である。
-//! 差し替わるのはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める
-//! callsite の interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点をプロセス内で
-//! 最初に踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドの既定は `NoSubscriber` で
-//! 判定は「不要」なので、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を
-//! 差していても以後そのイベントは早期 return で捨てられる。つまり問題は他テストのイベントの
-//! **混入**ではなく、自分が見るはずのイベントの**取りこぼし**であり、存在を主張する本ファイル
-//! の檻はその場合に捕捉 0 件で確率的に赤になる（偽陽性）。共有機構は ⑴ プロセス寿命の probe
-//! 常駐 ⑵ 窓の内側での interest 再計算 ⑶ 窓の内側で発火する対照イベント（番兵）による空振り
-//! 検出、の 3 点でこれを塞ぐ（番兵は返却前に取り除かれるので件数は変わらない）。
+//! 「`tracing::subscriber::with_default` はスレッドローカルだから安全」は誤りである。callsite の interest
+//! キャッシュはプロセス全体で 1 つしかなく、その発行点をプロセス内で最初に踏んだスレッドの判定が焼き付く。
+//! 捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は「不要」なので、先に踏まれると `never` が大域へ
+//! 焼き付き、自分のスレッドへ捕捉先を差していても以後そのイベントは早期 return で捨てられる。つまり問題は
+//! 他テストのイベントの混入ではなく自分が見るはずのイベントの取りこぼしで、存在を主張する本ファイルの檻は
+//! 捕捉 0 件で確率的に赤になる（偽陽性）。共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 窓の内側での interest
+//! 再計算 ⑶ 窓の内側で発火する対照イベント（番兵）による空振り検出、の 3 点でこれを塞ぐ（番兵は返却前に
+//! 取り除かれるので件数は変わらない）。
 //!
-//! 本ファイルは「ログが**出ない**こと」は主張しない。既存の表示成立点の行の不変性と陰陽対の観測は
-//! task 1.4 の `presenter_perf_log_tests` が担う。
+//! 本ファイルは「ログが出ないこと」は主張しない。既存の表示成立点の行の不変性と陰陽対の観測は
+//! `presenter_perf_log_tests` が担う。
 
 use super::*;
 
@@ -50,10 +45,10 @@ fn perf_lines(events: &[CapturedEvent]) -> Vec<CapturedEvent> {
         .collect()
 }
 
-/// perf サマリ行スキーマの全段フィールド名（design.md §Data Models・`judge-perf.py` の契約面）。
+/// perf サマリ行スキーマの全段フィールド名（`judge-perf.py` の契約面）。
 ///
-/// 段は 4（キャッシュ照会・合成・マスク生成・表示の記録）で、リサンプル段は撤去済み
-/// （`t_resample_us` は行に現れない・T-N6）。
+/// 段は 4（キャッシュ照会・合成・マスク生成・表示の記録）。リサンプル段は撤去済みで `t_resample_us` は
+/// 行に現れない。
 const STAGE_FIELDS: [&str; 5] = [
     "t_cache_us",
     "t_compose_us",
@@ -64,11 +59,10 @@ const STAGE_FIELDS: [&str; 5] = [
 
 /// perf サマリ行スキーマの確保計数フィールド名。
 ///
-/// リサンプル関連の確保計数（`alloc_resample_dst`／`alloc_xmap`）は消費者が 0 になり撤去済み
-/// （T-N6）。
+/// リサンプル関連の確保計数（`alloc_resample_dst`／`alloc_xmap`）は行に現れない。
 const ALLOC_FIELDS: [&str; 2] = ["alloc_compose_dst", "alloc_mask"];
 
-/// フィールド集合スキーマ（design.md 「11 フィールド＋末尾 `frame`」）: 段・確保計数の他に
+/// フィールド集合スキーマ（11 フィールド＋末尾 `frame`）: 段・確保計数の他に
 /// 同定 4 種（`target_id`／`surface_id`／`cache_hit`／`key_hash`）と `frame` を持つ。
 /// `STAGE_FIELDS`（5）＋ `ALLOC_FIELDS`（2）＋ 同定 4 ＋ `frame` 1 ＝ 12（`message` を除く）。
 fn expected_field_names() -> Vec<&'static str> {
@@ -88,8 +82,7 @@ fn ctx() -> EmitContext {
         surface_id: 1410,
         cache_hit: false,
         key_hash: 0xdead_beef,
-        // 遷移観測と突合するためのフレーム番号（`areka-P0-dpi-transition-atomicity` Requirement 2.8）。
-        // 本ファイルは注入時刻シームで `FrameTiming` を単体検査するだけなので、値は任意の固定値でよい。
+        // 値は任意の固定値でよい（注入時刻シームで `FrameTiming` を単体検査するだけ）。
         frame: 909,
     }
 }
@@ -103,17 +96,13 @@ fn allocs() -> BudgetDelta {
 
 // ── 檻 ────────────────────────────────────────────────────────────────────────────────
 
-/// Requirement 1.1／1.2 観測完了（design.md §FrameTiming・§Data Models）: 1 適用 = 1 行で、
-/// 固定文言・debug 水準・**全段フィールド常時出現**・実行されなかった段は 0、が成立する。
+/// 1 適用 = 1 行で、固定文言・debug 水準・全段フィールド常時出現・実行されなかった段は 0、が成立する。
 ///
-/// 注入した [`Instant`] は互いに弁別可能な区間（1ms / 7ms / 2ms・合計 12ms）で組むため、
-/// 段の取り違え（cache と compose の入替・total と upload の混同）はすべて RED になる。
-/// MaskGen は **`mark` を呼ばない**——これが「実行されなかった段」であり、フィールドが
-/// 消えても 0 以外が出ても RED になる。
-///
-/// T-N6（design.md §Testing Strategy・段 4・フィールド 11）: フィールド名の集合を
-/// **ちょうどで**固定し（部分一致でなく名前集合の等価）、撤去済みフィールド（リサンプル段・
-/// その確保計数）が行に現れないことを併せて固定する。
+/// 注入した [`Instant`] は互いに弁別可能な区間（1ms / 7ms / 2ms・合計 12ms）で組むため、段の取り違え
+/// （cache と compose の入替・total と upload の混同）はすべて RED になる。MaskGen は `mark` を呼ばない
+/// ——これが「実行されなかった段」で、フィールドが消えても 0 以外が出ても RED になる。フィールド名の集合は
+/// ちょうどで固定し（部分一致でなく名前集合の等価）、撤去済みフィールド（リサンプル段・その確保計数）が
+/// 行に現れないことも併せて固定する。
 ///
 /// # 殺す誤実装
 ///
@@ -168,19 +157,18 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
         "合計は起点〜emit の全区間（段の総和ではない）"
     );
 
-    // 適用対象の識別子・引き当ての可否・合成キーのハッシュ（Requirement 1.1／7.2）。
+    // 適用対象の識別子・引き当ての可否・合成キーのハッシュ。
     assert_eq!(field(ev, "target_id"), "TargetId(7)");
     assert_eq!(field(ev, "surface_id"), "1410");
     assert_eq!(field(ev, "cache_hit"), "false");
     assert_eq!(field(ev, "key_hash"), format!("{}", 0xdead_beef_u64));
 
-    // 確保計数（Requirement 1.3 の供給先・値は呼び手から素通し）。
+    // 確保計数（値は呼び手から素通し）。
     assert_eq!(field(ev, "alloc_compose_dst"), "1");
     assert_eq!(field(ev, "alloc_mask"), "4");
 
-    // T-N6: フィールド名の集合を「ちょうど」で固定する（部分一致でなく名前集合の等価・
-    // Requirement 3.4／6.5／6.8）。全段・確保計数の常時出現と撤去済みフィールドの不在もこれが
-    // 見る。`message` は tracing の既定フィールドなので比較対象から除く。
+    // フィールド名の集合を「ちょうど」で固定する（部分一致でなく名前集合の等価）。`message` は tracing の
+    // 既定フィールドなので比較対象から除く。
     let actual_names: Vec<&str> = ev
         .field_names_sorted()
         .into_iter()
@@ -194,8 +182,8 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
     );
 }
 
-/// Requirement 1.1 観測完了: **1 段も記録されなかった適用**でも 4 段すべてのフィールドが 0 で
-/// 出る（早期の成立・全段スキップという極端形でも行の形が崩れない）。
+/// 1 段も記録されなかった適用でも 4 段すべてのフィールドが 0 で出る（早期の成立・全段スキップという
+/// 極端形でも行の形が崩れない）。
 ///
 /// これは「フィールドを記録済みの段だけ出す」実装を構造的に殺す檻である。
 #[test]
@@ -228,15 +216,12 @@ fn all_stage_fields_appear_as_zero_when_nothing_was_marked() {
     }
 }
 
-/// Requirement 1.5／design.md D5 観測完了: 公開シーム（実時計）でも同一スキーマの行が 1 本出る。
+/// 公開シーム（実時計）でも同一スキーマの行が 1 本出る。
 ///
-/// 計測は無条件に実行され、フィルタに委ねるのは emit だけである——`start`／`mark` は
-/// subscriber 未設置でも呼べて panic しないこと（＝表示経路がログ設定で分岐しないこと）を、
-/// **subscriber スコープの外**で計測してから中で emit する形で示す。実時間の値には一切
-/// assert しない（Requirement 6.2）。
+/// `start`／`mark` は subscriber 未設置でも呼べて panic しない（＝表示経路がログ設定で分岐しない）ことを、
+/// subscriber スコープの外で計測してから中で emit する形で示す。実時間の値には assert しない。
 #[test]
 fn public_clock_seam_emits_the_same_schema() {
-    // subscriber 未設置のまま計測する（ログ設定に依存せず計測が走ることの実演）。
     let mut timing = FrameTiming::start();
     timing.mark(Stage::CacheLookup);
     timing.mark(Stage::Compose);
@@ -260,7 +245,7 @@ fn public_clock_seam_emits_the_same_schema() {
     assert_eq!(field(ev, "t_mask_us"), "0");
 }
 
-/// 同一段の二重記録は `debug_assert` で拒否する（design.md §FrameTiming Service Interface）。
+/// 同一段の二重記録は `debug_assert` で拒否する。
 ///
 /// 常時テストは debug_assertions 有効で走るため檻として成立する。release ビルドでは
 /// `debug_assert` が消えるので、このテストは `debug_assertions` 下でのみ有効にする。
@@ -274,12 +259,11 @@ fn marking_the_same_stage_twice_is_rejected() {
     timing.mark_at(Stage::Compose, t0 + Duration::from_millis(2));
 }
 
-/// Requirement 7.2 観測完了: `key_hash` は **run 内で安定**（同一キー → 同一値）かつ、
-/// キー要素（surface_id・binds・pattern）の**いずれか 1 つでも違えば別値**になる。
+/// `key_hash` は run 内で安定（同一キー → 同一値）かつ、キー要素（surface_id・binds・pattern）の
+/// いずれか 1 つでも違えば別値になる。
 ///
-/// 表示スケール k はキー要素ではない（`compose_key_hash` は 3.1 で k 引数を撤去済み・
-/// 合成結果は原寸であり k に依らない・timing.rs のモジュール doc 参照）ため、k 差を
-/// 弁別する檻はここでは持たない。
+/// 表示スケール k はキー要素ではない（`compose_key_hash` は k 引数を持たず、合成結果は原寸で k に依らない）
+/// ので、k 差を弁別する檻はここでは持たない。
 ///
 /// 判定スクリプトはこの値の異なり数を「必要スロット数の実測根拠」として数えるため、
 /// ⑴同一キーで揺れる（プロセス毎ランダム化ハッシュ）→ 異なり数が過大になり裁定材料が壊れる
@@ -336,7 +320,7 @@ fn compose_key_hash_is_stable_and_separates_every_key_element() {
 
     // ⑶ コマの描画メソッド差。`ComposeMethod` は判別子で混ぜるが、`Blend` は**内側の
     // [`BlendMode`] が意味を分ける**ため、判別子だけでは `Blend(Multiply)` と `Blend(Screen)` が
-    // 同一ハッシュになる（系統的衝突＝異なりキー数を過少に見積もる向き・tasks.md 申し送り 1.1→1.3）。
+    // 同一ハッシュになる（系統的衝突＝異なりキー数を過少に見積もる向き）。
     let with_method = |method: ComposeMethod| {
         let mut p = PatternState::default();
         p.set(
@@ -371,10 +355,10 @@ fn compose_key_hash_is_stable_and_separates_every_key_element() {
     );
 }
 
-/// 要件 7.5（task 4.1）: 部品の欄・動く絵の子の欄・「消えている」も鍵に混ざる。どれか 1 つだけが
+/// 部品の欄・動く絵の子の欄・「消えている」も鍵に混ざる。どれか 1 つだけが
 /// 違う形で鍵が分かれないと、動く部品と動く絵の異なりキー数が過少になる。
 ///
-/// 一番上の欄だけの `PatternState` の鍵は、混ぜる欄を足す前（task 4.1 の前の HEAD で採った値）と
+/// 一番上の欄だけの `PatternState` の鍵は、混ぜる欄を足す前に採った値と
 /// 同じ値に固定する——前の run の perf の行と異なりキー数を比べられるようにするため。
 #[test]
 fn compose_key_hash_mixes_part_film_and_blank_cells_and_keeps_top_only_keys() {
@@ -394,7 +378,7 @@ fn compose_key_hash_mixes_part_film_and_blank_cells_and_keeps_top_only_keys() {
         p
     };
 
-    // 一番上の欄だけの鍵は前と同じ値（task 4.1 の前の HEAD で採った値）。
+    // 一番上の欄だけの鍵は前と同じ値（混ぜる欄を足す前に採った値）。
     assert_eq!(
         compose_key_hash(1000, &binds, &top_only),
         TOP_ONLY_KEY_BEFORE_4_1,
@@ -471,7 +455,7 @@ fn compose_key_hash_mixes_part_film_and_blank_cells_and_keeps_top_only_keys() {
     );
 }
 
-/// task 4.1 の前の HEAD（`fb2fe2da`）で採った、一番上の欄だけの鍵（`top_only`）。
+/// 混ぜる欄を足す前（`fb2fe2da`）で採った、一番上の欄だけの鍵（`top_only`）。
 const TOP_ONLY_KEY_BEFORE_4_1: u64 = 14_085_681_545_705_343_205;
 /// 同じく、空の pattern の鍵。
 const EMPTY_KEY_BEFORE_4_1: u64 = 15_420_910_580_374_833_391;

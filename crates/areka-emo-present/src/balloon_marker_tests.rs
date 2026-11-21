@@ -24,7 +24,7 @@ fn s(v: &str) -> Option<String> {
     Some(v.to_string())
 }
 
-/// 要件 2.1: スコープ 0・1・2 の連鎖の順（旧名 `arrow` が最後）。
+/// スコープ 0・1・2 の連鎖の順（旧名 `arrow` が最後）。
 #[test]
 fn arrow_chain_order_per_scope() {
     assert_eq!(
@@ -41,7 +41,7 @@ fn arrow_chain_order_per_scope() {
     );
 }
 
-/// 要件 2.7: クリック待ちの族も同じ順（旧名 `clickwait` が最後）。
+/// クリック待ちの族も同じ順（旧名 `clickwait` が最後）。
 #[test]
 fn clickwait_chain_order_per_scope() {
     assert_eq!(
@@ -70,7 +70,7 @@ fn clickwait_chain_order_per_scope() {
     );
 }
 
-/// 要件 2.1: 番号ごとに別に辿る（`arrows0` と `arrow1` だけなら上＝`arrows0`・下＝`arrow1`）。
+/// 番号ごとに別に辿る（`arrows0` と `arrow1` だけなら上＝`arrows0`・下＝`arrow1`）。
 #[test]
 fn each_number_walks_the_chain_separately() {
     assert_eq!(
@@ -89,7 +89,7 @@ fn each_number_walks_the_chain_separately() {
     );
 }
 
-/// 要件 2.1: スコープ 1・2 は自分の名前 → `arrowk` → 本体の名前の順で、番号ごとに落ちる。
+/// スコープ 1・2 は自分の名前 → `arrowk` → 本体の名前の順で、番号ごとに落ちる。
 #[test]
 fn scope1_and_scope2_fall_back_per_number() {
     let names = ["arrowk0.png", "arrow1.png", "arrowp2def1.png"];
@@ -108,7 +108,7 @@ fn scope1_and_scope2_fall_back_per_number() {
     );
 }
 
-/// 要件 2.2/2.3: 書かれた名前は全スコープで先頭。無い番号は既定の連鎖へ落ちる。
+/// 書かれた名前は全スコープで先頭。無い番号は既定の連鎖へ落ちる。
 #[test]
 fn explicit_name_heads_the_chain_for_every_scope() {
     let names = [
@@ -142,7 +142,7 @@ fn explicit_name_heads_the_chain_for_every_scope() {
     );
 }
 
-/// 要件 2.6: 大小を区別せず照らし、`.png` だけを採る。実ファイル名は原形のまま。番号 0・1 以外は見ない。
+/// 大小を区別せず照らし、`.png` だけを採る。実ファイル名は原形のまま。番号 0・1 以外は見ない。
 #[test]
 fn case_insensitive_png_only_numbers_0_and_1() {
     assert_eq!(
@@ -176,7 +176,7 @@ fn case_insensitive_png_only_numbers_0_and_1() {
     assert_eq!(a.0, s("ARROW0.png"));
 }
 
-/// 要件 2.4/2.5: 片方だけ・0 枚。
+/// 片方だけ・0 枚。
 #[test]
 fn one_side_only_and_none() {
     assert_eq!(
@@ -198,7 +198,7 @@ fn one_side_only_and_none() {
     );
 }
 
-/// 要件 2.7: クリック待ちの族も矢印と同じ規則で解ける（番号ごと・書かれた名前が先頭・落ちる）。
+/// クリック待ちの族も矢印と同じ規則で解ける（番号ごと・書かれた名前が先頭・落ちる）。
 #[test]
 fn clickwait_resolves_like_arrow() {
     assert_eq!(
@@ -239,7 +239,7 @@ fn clickwait_resolves_like_arrow() {
     );
 }
 
-/// script-small-tags 要件 5.2: 行の中の印の族の連鎖の順（スコープ 0・1・2・旧名 `marker` が最後）。
+/// 行の中の印の族の連鎖の順（スコープ 0・1・2・旧名 `marker` が最後）。
 #[test]
 fn inline_marker_chain_order_per_scope() {
     assert_eq!(
@@ -256,7 +256,7 @@ fn inline_marker_chain_order_per_scope() {
     );
 }
 
-/// script-small-tags 要件 5.2: 番号の無い 1 枚を、書いた名前 → 連鎖の順で選ぶ（番号つきは選ばない）。
+/// 番号の無い 1 枚を、書いた名前 → 連鎖の順で選ぶ（番号つきは選ばない）。
 #[test]
 fn single_marker_name_prefers_explicit_and_ignores_numbered() {
     let pick = |names: &[&str], scope: u32, explicit: Option<&str>| {

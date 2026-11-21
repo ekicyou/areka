@@ -33,7 +33,7 @@ fn hook_runs_on_the_spawned_thread_and_only_the_first_install_wins() {
 
     let caller = thread::current().id();
     let (tx, handle) = spawn_actor::<(), _>("hook-probe", |_rx| {});
-    drop(tx); // 全 Sender drop → body は即座に終わる。
+    drop(tx);
     handle.join().expect("body は正常終了するはず");
 
     let seen = OBSERVED
@@ -54,9 +54,7 @@ fn hook_runs_on_the_spawned_thread_and_only_the_first_install_wins() {
         "2 度目の導入は Err（最初の導入が勝つ）"
     );
 
-    // 導入済みでもアクターの挙動は変わらない（body が走り、join できる）。
     let (tx2, handle2) = spawn_actor::<(), _>("hook-probe-2", |rx| {
-        // 全 Sender drop まで待つ受信ループ相当（切断で正常終了）。
         while rx.recv_timeout(Duration::from_millis(50)).is_ok() {}
     });
     drop(tx2);

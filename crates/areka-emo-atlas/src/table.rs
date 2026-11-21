@@ -1,7 +1,5 @@
 //! 成果物契約型（正本）: `AtlasTable` / `AtlasEntry` / `AtlasKey` / `AtlasPage`。
 //!
-//! 設計決定 **D3**（要件 **R6**）。
-//!
 //! 本層が emo-compose と共有する成果物契約を**正本として定義**する。識別子は二層で、
 //! ランタイムキー＝`ElementId(u32)`（密 index・決定的採番・毎フレーム O(1) 引き）／
 //! ソースキー＝`AtlasKey{ set, rel_path }`（無改変相対パス・重複排除／golden／
@@ -9,12 +7,12 @@
 //! `AtlasEntry.placement: Option<Placement>`（`None`＝転写スキップ）で表現する。
 //! 頁バッファは `AtlasPage{ bytes: Arc<[u8]>, width, height, stride }`
 //! （premultiplied BGRA・stride 明示）。
-//!
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
 /// ランタイムキー＝密 index（ECS エンティティ ID と同じ発想）。
-/// (SetId 昇順, 相対パス昇順) で bake 時に決定的採番（D7・golden 安定）。
+/// (SetId 昇順, 相対パス昇順) で bake 時に決定的採番（golden 安定）。
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ElementId(pub u32);
 
@@ -23,7 +21,7 @@ pub struct ElementId(pub u32);
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SetId(pub u32);
 
-/// ソースキー＝出所セット＋無改変相対パス（1.5・環境非依存・デバッグ逆引き用に保持）。
+/// ソースキー＝出所セット＋無改変相対パス（環境非依存・デバッグ逆引き用に保持）。
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AtlasKey {
     /// shell / balloon 等の出所（同名ファイル誤同一視を防ぐ）。
@@ -55,10 +53,10 @@ pub struct Rect {
     pub h: u32,
 }
 
-/// アトラス 1 エントリ。`placement=None` は転写スキップ（全透明・6.2/4.4）。
+/// アトラス 1 エントリ。`placement=None` は転写スキップ（全透明）。
 #[derive(Clone, Debug)]
 pub struct AtlasEntry {
-    /// 原寸（4.2/4.5）。
+    /// 原寸。
     pub original: Size,
     /// `None`＝空エントリ（転写スキップ）。
     pub placement: Option<Placement>,
@@ -67,26 +65,26 @@ pub struct AtlasEntry {
 /// アトラス頁への配置情報。
 #[derive(Clone, Debug)]
 pub struct Placement {
-    /// 頁番号（6.1）。
+    /// 頁番号。
     pub page: u32,
-    /// 頁内 UV（padding 非包含・5.3）。
+    /// 頁内 UV（padding 非包含）。
     pub uv_rect: Rect,
-    /// 原画像内 bbox 左上（4.2/4.5）。
+    /// 原画像内 bbox 左上。
     pub trim_offset: Point,
 }
 
-/// 頁バッファ（premultiplied BGRA・stride 明示・`Arc` 共有・6.3/6.4）。
+/// 頁バッファ（premultiplied BGRA・stride 明示・`Arc` 共有）。
 #[derive(Clone, Debug)]
 pub struct AtlasPage {
     pub width: u32,
     pub height: u32,
-    /// stride を明示（6.3）。
+    /// stride を明示。
     pub stride: u32,
-    /// premultiplied BGRA・共有参照（6.4）。
+    /// premultiplied BGRA・共有参照。
     pub bytes: Arc<[u8]>,
 }
 
-/// 繰り返し回数。APNG と WebP で同じ意味（2.5）。
+/// 繰り返し回数。APNG と WebP で同じ意味。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoopCount {
     /// 終わりなく繰り返す。
@@ -95,7 +93,7 @@ pub enum LoopCount {
     Finite(std::num::NonZeroU32),
 }
 
-/// 動く絵 1 つのコマの並び（4.2）。
+/// 動く絵 1 つのコマの並び。
 #[derive(Clone, Debug)]
 pub struct Animation {
     /// `frames[n]` が n 番のコマ。`frames[0]` は親（今までの鍵の `ElementId`）。
@@ -105,7 +103,7 @@ pub struct Animation {
     pub loop_count: LoopCount,
 }
 
-/// 索引表＋頁群（bake の成果物・channel 非依存・6.5）。
+/// 索引表＋頁群（bake の成果物・channel 非依存）。
 ///
 /// `entries`/`keys` は `ElementId`（= index）で整列した密 `Vec`（毎フレーム O(1)）。
 /// `bake` が一度構築し以後不変（immutable snapshot）。欄は全部 `Arc` で共有するので、`Clone` は `Arc` の写しだけ。
@@ -134,11 +132,11 @@ impl AtlasTable {
         Self::with_frames(keys, entries, pages, Vec::new())
     }
 
-    /// 動く絵つきの表を組む（`bake` とテストの入口・4.2〜4.5）。
+    /// 動く絵つきの表を組む（`bake` とテストの入口）。
     ///
     /// 2 枚目以降のコマは鍵のエントリの後ろに並び、鍵の欄には親と同じ `AtlasKey` が入る。
     /// ゆえに同じ鍵が複数あるときは、いちばん小さい番号（＝親・0 番のコマ）を `resolve`
-    /// の答えにする（4.3）。
+    /// の答えにする。
     ///
     /// # Panics
     /// `keys.len() != entries.len()`、コマの並びが 2 未満か待ち時間と長さが違う、
@@ -189,12 +187,12 @@ impl AtlasTable {
     }
 
     /// 【ランタイム】`id` が動く絵の親なら `Some`。静止画と 2 枚目以降のコマの `id` には
-    /// `None`（4.6）。
+    /// `None`。
     pub fn animation(&self, id: ElementId) -> Option<&Animation> {
         self.animations.get(&id)
     }
 
-    /// 【ランタイム正準・毎フレーム】`ElementId`→エントリ（O(1) Vec index・6.1）。
+    /// 【ランタイム正準・毎フレーム】`ElementId`→エントリ（O(1) Vec index）。
     ///
     /// `id` は本テーブルの `resolve`／列挙由来のみを前提とする（密 index の契約）。
     ///
@@ -234,7 +232,7 @@ impl AtlasTable {
         self.len() == 0
     }
 
-    /// 頁バッファ（6.3）。範囲外は `None`。
+    /// 頁バッファ。範囲外は `None`。
     pub fn page(&self, index: u32) -> Option<&AtlasPage> {
         self.pages.get(index as usize)
     }
@@ -292,7 +290,6 @@ mod tests {
                 }),
             },
             AtlasEntry {
-                // 全透明＝空エントリ（転写スキップ・6.2/4.4）
                 original: Size { w: 32, h: 32 },
                 placement: None,
             },
@@ -300,24 +297,21 @@ mod tests {
         AtlasTable::new(keys, entries, vec![page(64, 64)])
     }
 
-    /// 6.1: 既知 path→Some・未知 path→None・別 SetId→None（set がキーの一部）。
+    /// 既知 path→Some・未知 path→None・別 SetId→None（set がキーの一部）。
     #[test]
     fn resolve_known_unknown_and_set_scoped() {
         let t = sample_table();
         assert_eq!(t.resolve(SetId(0), "surface0.png"), Some(ElementId(0)));
         assert_eq!(t.resolve(SetId(0), "surface1.png"), Some(ElementId(1)));
-        // 未知の相対パス
         assert_eq!(t.resolve(SetId(0), "missing.png"), None);
-        // 同名だが別 SetId → None（set がキーに含まれる証明）
         assert_eq!(t.resolve(SetId(1), "surface0.png"), None);
     }
 
-    /// 6.1/6.2: known-with-placement / known-empty / unknown の 3 分岐。
+    /// known-with-placement / known-empty / unknown の 3 分岐。
     #[test]
     fn entry_placement_three_way() {
         let t = sample_table();
 
-        // known-with-placement
         let id0 = t.resolve(SetId(0), "surface0.png").unwrap();
         let e0 = t.entry(id0);
         assert_eq!(e0.original, Size { w: 100, h: 80 });
@@ -334,15 +328,13 @@ mod tests {
         );
         assert_eq!(p.trim_offset, Point { x: 10, y: 12 });
 
-        // known-empty（全透明・転写スキップ）
         let id1 = t.resolve(SetId(0), "surface1.png").unwrap();
         assert!(t.entry(id1).placement.is_none());
 
-        // unknown（resolve が None）
         assert_eq!(t.resolve(SetId(0), "nope.png"), None);
     }
 
-    /// D3: key(id) 逆引きが元の AtlasKey を返す（デバッグツリーダンプ）。
+    /// key(id) 逆引きが元の AtlasKey を返す（デバッグツリーダンプ）。
     #[test]
     fn key_reverse_lookup_round_trip() {
         let t = sample_table();
@@ -358,7 +350,7 @@ mod tests {
         assert!(!t.is_empty());
     }
 
-    /// 6.4: AtlasTable / AtlasPage が Send + Sync（スレッド間安全手渡し）。
+    /// AtlasTable / AtlasPage が Send + Sync（スレッド間安全手渡し）。
     #[test]
     fn table_and_page_are_send_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
@@ -366,7 +358,7 @@ mod tests {
         assert_send_sync::<AtlasPage>();
     }
 
-    /// 6.3: page 取得・stride 明示・範囲外は None・pages() スライス長一致。
+    /// page 取得・stride 明示・範囲外は None・pages() スライス長一致。
     #[test]
     fn page_accessors() {
         let t = sample_table();

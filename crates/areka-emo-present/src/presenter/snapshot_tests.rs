@@ -1,6 +1,5 @@
-//! 読むだけの口 3 本（`has_surface`／`last_shown`／`compose_alone`・spec `areka-P0-mcp-dump-images`
-//! タスク 2.2）と写しの口 2 本（`alias_snapshot`／`surface_ids`・spec `areka-P0-mcp-author-tools`
-//! タスク 2.2）の決定論テスト（GPU なし）。
+//! 読むだけの口 3 本（`has_surface`／`last_shown`／`compose_alone`）と写しの口 2 本
+//! （`alias_snapshot`／`surface_ids`）の決定論テスト（GPU なし）。
 //!
 //! # GPU なしで「表示」を成立させる方法
 //!
@@ -141,7 +140,7 @@ fn bytes_of(c: &ComposedSurface) -> (Vec<u8>, u32, u32) {
     (c.bytes().to_vec(), c.width(), c.height())
 }
 
-/// ⑴ 一度も表示していない target は「最後に表示した surface」が無く、「surface の有無」は答える。
+/// 一度も表示していない target は「最後に表示した surface」が無く、「surface の有無」は答える。
 #[test]
 fn never_shown_target_has_no_last_shown_but_answers_has_surface() {
     let (presenter, _world) = setup();
@@ -151,7 +150,7 @@ fn never_shown_target_has_no_last_shown_but_answers_has_surface() {
     assert_eq!(presenter.has_surface(NEVER_SHOWN, ABSENT), Some(false));
 }
 
-/// ⑵ 表示の後は ID と絵が返り、隠した後も同じ ID と同じ絵が返る。
+/// 表示の後は ID と絵が返り、隠した後も同じ ID と同じ絵が返る。
 #[test]
 fn last_shown_returns_id_and_picture_and_keeps_them_after_hide() {
     let (mut presenter, mut world) = setup();
@@ -211,7 +210,7 @@ fn last_shown_returns_id_and_picture_and_keeps_them_after_hide() {
     assert_eq!(presenter.last_binds(UNREGISTERED), None, "未登録は無し");
 }
 
-/// ⑵' 合成メモを捨てた後も、最後に表示した ID は返り、絵だけが無い（`Some((id, None))`）。
+/// 合成メモを捨てた後も、最後に表示した ID は返り、絵だけが無い（`Some((id, None))`）。
 #[test]
 fn last_shown_after_invalidate_cache_keeps_id_without_picture() {
     let (mut presenter, mut world) = setup();
@@ -233,7 +232,7 @@ fn last_shown_after_invalidate_cache_keeps_id_without_picture() {
     );
 }
 
-/// ⑶ 「surface の有無」は生の ID にだけ真で、別名の表にだけ在る番号と無い番号は偽、未登録は無し。
+/// 「surface の有無」は生の ID にだけ真で、別名の表にだけ在る番号と無い番号は偽、未登録は無し。
 #[test]
 fn has_surface_is_true_only_for_raw_ids() {
     let (presenter, _world) = setup();
@@ -254,7 +253,7 @@ fn has_surface_is_true_only_for_raw_ids() {
     assert!(presenter.compose_alone(UNREGISTERED, BASE).is_none());
 }
 
-/// ⑷ 単体の合成は着せ替えなし・アニメーションなしの合成と一致し、表示の後は最後に表示したときの
+/// 単体の合成は着せ替えなし・アニメーションなしの合成と一致し、表示の後は最後に表示したときの
 /// 着せ替えが掛かる（アニメーションは掛からない）。
 #[test]
 fn compose_alone_uses_last_shown_binds_and_no_animation() {
@@ -295,7 +294,7 @@ fn compose_alone_uses_last_shown_binds_and_no_animation() {
     );
 }
 
-/// ⑹ 3 本とも記録を出さない。`has_surface`／`last_shown` は全水準で 0 件。`compose_alone` は
+/// 3 本とも記録を出さない。`has_surface`／`last_shown` は全水準で 0 件。`compose_alone` は
 /// 合成の層が正常な経路でも `trace!`／`debug!` を出しうるため ERROR／WARN の 0 件で判定する。
 #[test]
 fn reads_emit_no_records() {
@@ -343,8 +342,8 @@ fn reads_emit_no_records() {
     );
 }
 
-/// ⑺ 別名の表と面の ID の集合の写し（spec `areka-P0-mcp-author-tools` タスク 2.2）は、組んだ資産
-/// どおりに返り、未登録は無し。記録も出さない（表示の状態を変えないことは `&self` の型が保証する）。
+/// 別名の表と面の ID の集合の写しは、組んだ資産どおりに返り、未登録は無し。記録も出さない
+/// （表示の状態を変えないことは `&self` の型が保証する）。
 #[test]
 fn alias_snapshot_and_surface_ids_copy_the_built_assets() {
     let (mut presenter, mut world) = setup();

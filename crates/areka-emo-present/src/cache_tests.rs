@@ -3,13 +3,12 @@ use crate::presenter::test_support::{bake_world, elem, pattern_overlay_at, shell
 use areka_emo_compose::{BindSet, Composer};
 
 // ── ComposedSurface 生成補助 ──────────────────────────────────────────────
-// `ComposedSurface::bytes_mut` は emo-compose の pub(crate) ゆえ本クレートから画素を直接
-// 焼けない。よって「全透明」は公開 `new(w,h)` で、「不透明画素を含む結果」は上流公開 API
-// （atlas bake → EmoWorld → Composer::compose_into）で本物を合成して得る。後者はマスクが
-// composed の bytes 由来であることを実合成経路で保証する（模造バッファでの偽陽性を避ける）。
+// `ComposedSurface::bytes_mut` は emo-compose の pub(crate) で画素を直接焼けないため、
+// 「全透明」は公開 `new(w,h)`、「不透明画素を含む結果」は上流公開 API（atlas bake → EmoWorld →
+// Composer::compose_into）で本物を合成して得る。後者はマスクが composed の bytes 由来であることを
+// 実合成経路で保証する。
 
-/// 原寸の合成面の bytes からマスクを生成する（設計 D4 でマスク生成が挿入の外へ出たため、
-/// **呼び手側**の責務になった手順を檻でもそのまま踏む）。
+/// 原寸の合成面の bytes からマスクを生成する（マスク生成は呼び手側の責務で、その手順を檻でも踏む）。
 fn mask_of(composed: &ComposedSurface) -> Arc<AlphaMask> {
     Arc::new(AlphaMask::from_pbgra32(
         composed.bytes(),
@@ -19,13 +18,9 @@ fn mask_of(composed: &ComposedSurface) -> Arc<AlphaMask> {
     ))
 }
 
-/// 「原寸の合成面＋その bytes 由来マスク」の原子対を組んで挿入する（既存檻の署名追随）。
+/// 「原寸の合成面＋その bytes 由来マスク」の原子対を組んで挿入する。
 ///
-/// 設計 D4 で `insert` は生成済みマスクを引数で受ける形になった。檻側でマスクを別出所から
-/// 作ると原子対の主張が空虚になるため、生成は必ず `composed` の bytes からのみ行う。
-///
-/// 表示スケール k は引数に無い——エントリが持つのは native 原寸の面だけで、k はキー要素でも
-/// 保持内容でもない（要件 5.1／5.2）。
+/// マスクを別出所から作ると原子対の主張が空虚になるため、生成は必ず `composed` の bytes からのみ行う。
 fn insert_with_mask(
     cache: &mut ComposeCache,
     surface_id: u32,
@@ -43,10 +38,8 @@ fn insert_with_mask(
 /// 3×1 の単一画像（不透明赤 / 透明 / 不透明赤）を 1 element として合成する。両端が不透明の
 /// ため α=0 除外トリムでも中央の透明画素が矩形内に残る（＝合成結果に不透明・透明が共存）。
 ///
-/// 出力先を受け取る形なのは、回収したバッファへの書き戻しを**リサンプルに依らず**測るためで
-/// ある（要件 3.1）——本仕様で表示スケールは描画経路の変換行列へ移り、合成層の出力は常に
-/// native 原寸になった。`Composer::compose_into` は出力先の確保を再利用するので、回収した
-/// 容量がそのまま引き継がれているかがここで観測できる。
+/// 出力先を受け取るのは、回収したバッファへの書き戻しをリサンプルに依らず測るため。
+/// `Composer::compose_into` は出力先の確保を再利用するので、回収した容量の引き継ぎがここで観測できる。
 fn compose_small_into(out: &mut ComposedSurface) {
     // 3×1 premultiplied BGRA: (0,0)不透明赤・(1,0)透明・(2,0)不透明赤。
     let img: Vec<u8> = vec![
@@ -105,7 +98,7 @@ fn find_opaque_and_transparent(cs: &ComposedSurface) -> ((u32, u32), (u32, u32))
 // ── 容量政策の檻用の最小補助 ─────────────────────────────────────────────
 //
 // 既定キー（`BindSet::default()`／`PatternState::default()`）で **surface id だけ**を変える。
-// 容量・置換方式は「キーが違う」ことだけで駆動されるため、弁別に要る差はこれで足りる。
+// 容量・置換方式は「キーが違う」ことだけで駆動される。
 
 /// 既定キーの surface id `id` で挿入する。
 fn insert_id(cache: &mut ComposeCache, id: u32) {
@@ -120,8 +113,8 @@ fn insert_id(cache: &mut ComposeCache, id: u32) {
 
 /// 既定キーの surface id `id` が保持されているか。
 ///
-/// [`ComposeCache::get`] は**最近使用順を動かさない**（[`ComposeCache::touch`] だけが動かす）ため、
-/// この観測は LRU の状態を乱さない——檻が自分の観測で置換順を書き換えてしまう罠を構造で避ける。
+/// [`ComposeCache::get`] は最近使用順を動かさない（動かすのは [`ComposeCache::touch`] だけ）ので、
+/// この観測は LRU の状態を乱さない。
 fn holds(cache: &ComposeCache, id: u32) -> bool {
     cache
         .get(id, &BindSet::default(), &PatternState::default())
@@ -135,9 +128,8 @@ fn touch_id(cache: &mut ComposeCache, id: u32) -> bool {
 
 /// 回帰檻（キャッシュ仕様バグ）: **同一 surface id でも bind 集合が異なればミス**する。
 ///
-/// surface id のみをキーにした旧設計では、同一 surface の着せ替え・まばたき（bind 差分）が
-/// 古い合成結果にヒットし表示が更新されなかった。合成入力（id＋binds）の完全一致のみを
-/// ヒットとすることを固定する。
+/// surface id のみをキーにした旧キーの形では、着せ替え・まばたき（bind 差分）が古い合成結果に
+/// ヒットし表示が更新されなかった。合成入力の完全一致のみをヒットとすることを固定する。
 #[test]
 fn different_binds_on_same_surface_must_miss() {
     let mut cache = ComposeCache::new();
@@ -165,7 +157,7 @@ fn different_binds_on_same_surface_must_miss() {
         "同一 surface でも bind 集合が異なればミスしなければならない（着せ替えバグの回帰檻）"
     );
 
-    // 異なる binds を挿入すると**別エントリ**として共存する（容量 3・要件 7.1）。まばたきの
+    // 異なる binds を挿入すると**別エントリ**として共存する（容量 3）。まばたきの
     // 開閉のように行き来する入力で再合成を省けることが、容量 3 の裁定の狙いそのものである。
     insert_with_mask(
         &mut cache,
@@ -205,11 +197,9 @@ fn different_binds_on_same_surface_must_miss() {
     );
 }
 
-/// R5.2 回帰檻（pattern がキー要素）: **surface id ＋ bind 集合が完全同一でも pattern が異なれば
-/// ミス**する。pattern を合成入力キーへ加えた（task 8.1）ことの load-bearing な証拠——この 1 点が
+/// 回帰檻（pattern がキー要素）: **surface id ＋ bind 集合が完全同一でも pattern が異なれば
+/// ミス**する。pattern を合成入力キーへ加えたことの load-bearing な証拠——この 1 点が
 /// 欠けると seriko のアニメ pattern 進行が古い合成結果に衝突し表示が更新されない。
-///
-/// 同値 pattern ではヒット、pattern を 1 コマ変えるとミス、を同一 (id, binds) で固定する。
 #[test]
 fn different_pattern_on_same_surface_and_binds_must_miss() {
     let mut cache = ComposeCache::new();
@@ -227,12 +217,10 @@ fn different_pattern_on_same_surface_and_binds_must_miss() {
         ComposedSurface::new(4, 4),
     );
 
-    // (1) 同一 (id, binds, pattern) → ヒット。
     assert!(
         cache.get(id, &binds, &pattern_a).is_some(),
         "surface id・binds・pattern が完全一致すればヒットする"
     );
-    // (2) surface id・binds は同一だが pattern が異なる → ミス（新キー要素が load-bearing）。
     assert!(
         cache.get(id, &binds, &pattern_b).is_none(),
         "surface id・binds 同一でも pattern が異なればミスしなければならない（R5.2・pattern がキー要素）"
@@ -263,9 +251,8 @@ fn different_pattern_on_same_surface_and_binds_must_miss() {
     );
 }
 
-/// R5.4 の逆側檻（空 pattern はキーへ寄与しない＝拡張前と観測等価）と、非空 pattern の同値
-/// ヒットを固定する。空 pattern で挿入したエントリは空 pattern の get にヒットし、非空 pattern の
-/// get にはミスする（＝空と非空が別キー）。
+/// 逆側檻（空 pattern はキーへ寄与しない＝pattern を持たない入力と観測等価）と、非空 pattern の
+/// 同値ヒットを固定する。空と非空は別キーである。
 #[test]
 fn empty_vs_nonempty_pattern_are_distinct_keys() {
     let mut cache = ComposeCache::new();
@@ -273,7 +260,6 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
     let binds = BindSet::default();
     let pat = pattern_overlay_at(3000, 5000, 0, 0);
 
-    // 空 pattern で挿入 → 空 pattern はヒット・非空 pattern はミス。
     insert_with_mask(
         &mut cache,
         id,
@@ -290,9 +276,8 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
         "空 pattern で挿入 → 非空 pattern の get はミス（空と非空は別キー）"
     );
 
-    // 逆向き: 非空 pattern **だけ**を入れた表では、同値の非空 pattern はヒットし空 pattern は
-    // ミスする。**新しい表で測る**——同じ表へ足すと容量 3 では両方が共存してしまい、「空と非空が
-    // 別キーである」という主張が観測できなくなる（測っているのは弁別であって置換ではない）。
+    // 逆向き: 非空 pattern **だけ**を入れた**新しい表**で測る。同じ表へ足すと容量 3 では両方が共存し、
+    // 「空と非空が別キーである」という弁別が観測できなくなる（測っているのは弁別であって置換ではない）。
     let mut cache = ComposeCache::new();
     insert_with_mask(
         &mut cache,
@@ -311,11 +296,7 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
     );
 }
 
-/// R2.1/R2.4: 呼び手が composed の bytes から作ったマスクが、表示バッファと対で保持され正しく引ける。
-///
-/// 不透明・透明を両方含む本物の合成結果を挿入し、その bytes から見つけた不透明/透明座標で
-/// エントリの `mask` がヒット/非ヒットを返すことを固定する（マスクが同一 bytes 由来で、
-/// 表示バッファと対で保持される証拠）。
+/// 呼び手が composed の bytes から作ったマスクが、表示バッファと対で保持され正しく引ける。
 #[test]
 fn mask_from_composed_bytes_is_kept_with_the_entry() {
     let composed = composed_with_opaque_and_transparent();
@@ -332,7 +313,6 @@ fn mask_from_composed_bytes_is_kept_with_the_entry() {
         composed,
     );
 
-    // エントリは composed とマスクを対で保持し、マスクが composed の α を反映する。
     let got = cache
         .get(1000, &binds, &PatternState::default())
         .expect("entry retained");
@@ -348,10 +328,9 @@ fn mask_from_composed_bytes_is_kept_with_the_entry() {
     );
 }
 
-/// R4.3 変わらず: `invalidate_all` は**保持中の全エントリ**を破棄する（挙動不変）。
+/// 変わらず: `invalidate_all` は**保持中の全エントリ**を破棄する（挙動不変）。
 ///
-/// 上限いっぱいの 3 キーを入れてから無効化し、どれ 1 つ残らないことを見る。1 件だけの表で
-/// 測ると「先頭 1 件しか消さない」実装を通してしまうため、満杯の表で測る。
+/// 1 件だけの表では「先頭 1 件しか消さない」実装を通してしまうため、満杯の表で測る。
 #[test]
 fn invalidate_all_clears_every_entry() {
     let mut cache = ComposeCache::new();
@@ -383,15 +362,13 @@ fn invalidate_all_clears_every_entry() {
     );
 }
 
-// ── 容量回収（`take_recycled`・要件 3.1・設計 D2⑵） ─────────────────────────
+// ── 容量回収（`take_recycled`） ─────────────────────────
 
-/// 要件 3.1・設計 D2⑵: **容量回収を挟んでも承認済み意味論は不変**である。
+/// **容量回収を挟んでも承認済み意味論は不変**である。
 ///
-/// 承認済み意味論（`completed/areka-P0-emo-present` R4.1・2026-08-15 の裁定で容量のみ 1 → 3 へ
-/// 改訂）は ⑴上限 3 件のメモ化表 ⑵キー完全一致のみヒット ⑶表示バッファとマスクの原子対、の
-/// 3 点である。`take_recycled` はバッファの容量を回収するだけの口であって政策を変えないため、
-/// 回収 → 挿入を経ても 3 点ともそのまま成立しなければならない。上限が緩む・キー比較が落ちる・
-/// 対が崩れる、のいずれもここで赤になる。
+/// 承認済み意味論（容量は 2026-08-15 の裁定で 3）は ⑴上限 3 件のメモ化表 ⑵キー完全一致のみヒット
+/// ⑶表示バッファとマスクの原子対、の 3 点である。`take_recycled` はバッファの容量を回収するだけで
+/// 政策を変えないため、回収 → 挿入を経ても 3 点とも成立しなければならない。
 #[test]
 fn insert_after_take_recycled_preserves_approved_semantics() {
     let mut cache = ComposeCache::new();
@@ -410,7 +387,6 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
     insert_id(&mut cache, 8001);
     insert_id(&mut cache, 8002);
 
-    // 回収: エントリは**対のまま**出てきて、その席だけが空く。
     let recycled = cache.take_recycled().expect("満杯なら 1 本追い出される");
     assert_eq!(
         (recycled.composed.width(), recycled.composed.height()),
@@ -437,7 +413,6 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
     let (w, h) = (composed.width(), composed.height());
     insert_with_mask(&mut cache, id, binds.clone(), pattern.clone(), composed);
 
-    // ⑵ キー完全一致のみヒットし、⑶ 対で引ける。
     let entry = cache
         .get(id, &binds, &pattern)
         .expect("回収後の挿入でも完全一致キーはヒットする");
@@ -451,7 +426,6 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
         "透明画素 ({tx},{ty}) は同一エントリのマスクでヒットしない（原子対）"
     );
 
-    // ⑵ キー 3 成分のいずれか 1 つでも異なればミスする（回収を挟んでも比較は落ちない）。
     assert!(
         cache.get(1001, &binds, &pattern).is_none(),
         "surface id が異なればミスする"
@@ -469,8 +443,6 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
         "pattern が異なればミスする"
     );
 
-    // ⑴ 上限 3 件: 保持件数は上限を超えず、超える挿入は最も古い引き当てから落とす
-    //    （回収を挟んでも容量政策は動かない・要件 7.1）。
     assert_eq!(cache.len(), 3, "回収 → 挿入で保持件数が上限を超えている");
     insert_id(&mut cache, 8003);
     assert_eq!(cache.len(), 3, "上限を超える挿入の後も保持件数は上限のまま");
@@ -484,17 +456,16 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
     );
 }
 
-/// 要件 3.1・設計 D2⑵ の**本題**: 回収したバッファの容量が次の表示バッファへ引き継がれる。
+/// **本題**: 回収したバッファの容量が次の表示バッファへ引き継がれる。
 ///
-/// 「容量回収」を名乗る以上、返るのは**挿入したその確保**でなければならない——複製や新規確保を
-/// 返す実装は、キーの意味論だけを見る檻ではすべて緑のまま素通りする（4.1／4.2 で実測した構図）。
-/// ゆえに ⑴挿入したバッファの先頭ポインタが回収したエントリにそのまま現れること ⑵回収バッファを
-/// **より小さい出力**の書き戻し先に使っても再確保が起きないこと（＝同寸反復だけを見る檻が
-/// 見逃す新規確保形を捕まえる）⑶その確保のまま再挿入できること、の 3 点で固定する。
+/// 返るのが挿入したその確保でなければ「容量回収」にならない——複製や新規確保を返す実装は、キーの
+/// 意味論だけを見る檻ではすべて緑のまま素通りする。ゆえに ⑴挿入したバッファの先頭ポインタが回収
+/// エントリにそのまま現れること ⑵回収バッファを**より小さい出力**の書き戻し先に使っても再確保が
+/// 起きないこと（同寸反復だけを見る檻が見逃す新規確保形を捕まえる）⑶その確保のまま再挿入できること、
+/// の 3 点で固定する。
 ///
-/// ⑵ の「より小さい出力」は**小さな原寸合成**（3×1）で作る。本仕様で表示スケールは描画経路の
-/// 変換行列へ移り、この層に縮小出力を作る口は無くなったため、書き戻しは合成そのもの
-/// （`Composer::compose_into`）で測る——本番の書き戻し経路と同じ口である。
+/// ⑵ の「より小さい出力」は小さな原寸合成（3×1）で作り、書き戻しは本番と同じ
+/// `Composer::compose_into` で測る。
 #[test]
 fn take_recycled_carries_over_buffer_capacity() {
     let mut cache = ComposeCache::new();
@@ -508,12 +479,11 @@ fn take_recycled_carries_over_buffer_capacity() {
     let big_len = big.bytes().len();
     assert_eq!(big_len, 64 * 4 * 64, "前提: 追跡対象は 16,384 バイトの確保");
     insert_with_mask(&mut cache, id, binds.clone(), pattern.clone(), big);
-    // 回収は満杯のときだけ成立する（容量 3・要件 7.1）。追跡対象が最も古い引き当てのまま
+    // 回収は満杯のときだけ成立する（容量 3）。追跡対象が最も古い引き当てのまま
     // 残るよう、別キーで表を埋める。
     insert_id(&mut cache, 9001);
     insert_id(&mut cache, 9002);
 
-    // ⑴ 回収されるのは**挿入したその確保**である（複製・新規確保では容量を回収したことにならない）。
     let recycled = cache.take_recycled().expect("満杯なら 1 本追い出される");
     assert_eq!(
         recycled.composed.bytes().as_ptr(),
@@ -522,9 +492,9 @@ fn take_recycled_carries_over_buffer_capacity() {
     );
     assert_eq!(recycled.composed.bytes().len(), big_len);
 
-    // ⑵ 回収バッファを次の合成面として使い回す。**より小さい出力**（3×1）を書き戻しても
-    // 再確保が起きない＝回収した容量（16,384）がそのまま引き継がれている。
-    // 同寸の反復だけを見る檻は、毎回ちょうど同じ大きさを確保し直す実装を捕まえられない。
+    // 回収バッファへ**より小さい出力**（3×1）を書き戻しても再確保が起きない＝回収した容量
+    // （16,384）がそのまま引き継がれている。同寸の反復だけを見る檻は、毎回同じ大きさを確保し直す
+    // 実装を捕まえられない。
     let mut reused = recycled.composed;
     compose_small_into(&mut reused);
     assert!(
@@ -539,7 +509,6 @@ fn take_recycled_carries_over_buffer_capacity() {
         "回収した容量が引き継がれていれば、より小さい出力への書き戻しで再確保は起きない"
     );
 
-    // ⑶ 引き継いだ確保のまま再挿入でき、エントリはその確保を保持する。
     let mask = mask_of(&reused);
     cache.insert(
         id,
@@ -561,9 +530,8 @@ fn take_recycled_carries_over_buffer_capacity() {
 
 /// 空きのある表からの回収は `None` を返し、キャッシュは以後も従来どおり使える。
 ///
-/// 回収は「満杯なら最も古い引き当てを 1 本外す」だけの操作であり、空きがあるときは何も起こらない
-/// （べき等）。未挿入・回収直後・無効化後のいずれから呼んでも `None` で、その後の挿入・引き当ては
-/// 正常に動く。
+/// 回収は「満杯なら最も古い引き当てを 1 本外す」だけの操作で、未挿入・回収直後・無効化後など空きが
+/// あれば何も起こらない（べき等）。
 #[test]
 fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
     let mut cache = ComposeCache::new();
@@ -609,7 +577,6 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
         "回収されたのは最も古い引き当て（このキー）である"
     );
 
-    // 回収の後も表は従来どおり使える（回収がキャッシュを壊さない）。
     insert_with_mask(
         &mut cache,
         id,
@@ -622,7 +589,6 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
         "回収後に挿入し直せば再びヒットする"
     );
 
-    // 無効化と回収が二重に効いても壊れない。
     cache.invalidate_all();
     assert!(
         cache.take_recycled().is_none(),
@@ -634,13 +600,13 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
     );
 }
 
-// ── 容量 3・LRU 置換（要件 7.1・2026-08-15 開発者裁定） ──────────────────────
+// ── 容量 3・LRU 置換（2026-08-15 開発者裁定） ──────────────────────
 
-/// 要件 7.1 観測完了（**容量の上限そのもの**）: 4 本目の挿入は**ちょうど 1 本**を追い出す。
+/// （**容量の上限そのもの**）: 4 本目の挿入は**ちょうど 1 本**を追い出す。
 ///
-/// 2026-08-15 の開発者裁定で容量は 1 → 3 へ改訂された（実測の根拠は `remeasure-2026-08-15.md`
-/// §4）。**追い出しが起きること**と**落ちるのが 1 本だけであること**を対で固定して初めて容量が
-/// 3 に決まる（容量 1・2・4 以上のどれへ変えても保持の列が変わって赤になる）。
+/// 容量は 2026-08-15 の開発者裁定で 1 → 3 に決まった。**追い出しが起きること**と**落ちるのが
+/// 1 本だけであること**を対で固定して初めて容量が 3 に決まる（容量 1・2・4 以上のどれへ変えても
+/// 保持の列が変わって赤になる）。
 #[test]
 fn a_fourth_distinct_key_evicts_exactly_one_entry() {
     let mut cache = ComposeCache::new();
@@ -661,7 +627,7 @@ fn a_fourth_distinct_key_evicts_exactly_one_entry() {
     assert_eq!(cache.len(), 3, "保持件数が容量を超えている");
 }
 
-/// 要件 7.1 観測完了（**置換方式そのもの**）: 追い出されるのは**最近最も使われていない**もので
+/// （**置換方式そのもの**）: 追い出されるのは**最近最も使われていない**もので
 /// あって、挿入順の最古（FIFO）ではない。
 ///
 /// # LRU と FIFO が食い違う形を作る（さもなくば檻は両者を区別できない）
@@ -677,10 +643,9 @@ fn a_fourth_distinct_key_evicts_exactly_one_entry() {
 ///
 /// # なぜ置換方式が load-bearing なのか
 ///
-/// 容量 3 という裁定は、実走行の適用列を **LRU で再生**した命中率（キャラ面 56.2%）を根拠に
-/// 下りている（`remeasure-2026-08-15.md` §4）。FIFO へ退化すると、まばたきのように「直前に
-/// 使った面へ戻る」列で命中しなくなり、数字の出所が実装と対応しなくなる。**表示バイトも確保
-/// 計数も 1 つも変わらない**ため、この檻だけが退化を捕まえる。
+/// 容量 3 の裁定は、実走行の適用列を **LRU で再生**した命中率（キャラ面 56.2%）を根拠にしている。
+/// FIFO へ退化すると、まばたきのように「直前に使った面へ戻る」列で命中せず、数字の出所が実装と
+/// 対応しなくなる。**表示バイトも確保計数も 1 つも変わらない**ため、この檻だけが退化を捕まえる。
 #[test]
 fn eviction_picks_the_least_recently_used_not_the_oldest_inserted() {
     let mut cache = ComposeCache::new();
@@ -705,11 +670,10 @@ fn eviction_picks_the_least_recently_used_not_the_oldest_inserted() {
     assert!(holds(&cache, 1003), "いま入れたキーは保持される");
 }
 
-/// 要件 7.1 観測完了（**回収も LRU に従う**）: [`ComposeCache::take_recycled`] が返すのも
+/// （**回収も LRU に従う**）: [`ComposeCache::take_recycled`] が返すのも
 /// 最近最も使われていない 1 本である。
 ///
-/// 上の檻と同じ「挿入順と最近使用順が食い違う」状態を作り、回収された実体を**外形で**弁別する
-/// （どのエントリが出てきたかを、残ったキーだけでなく回収物そのものでも言う）。
+/// 上の檻と同じ「挿入順と最近使用順が食い違う」状態を作り、回収された実体を**外形で**弁別する。
 #[test]
 fn take_recycled_picks_the_least_recently_used_entry() {
     let mut cache = ComposeCache::new();
@@ -741,11 +705,10 @@ fn take_recycled_picks_the_least_recently_used_entry() {
 /// # なぜこの区別が要るのか
 ///
 /// `show.rs` の表示成立点も `read.rs` の `read_back` も、引き当て済みエントリを `get` で読む。
-/// 読み取りが順序を動かす形だと「観測しただけで最近使用を打ち直す」ことになり、
-/// 檻もまた自分の観測で LRU の状態を書き換えてしまう（本ファイルの [`holds`] がそれである）。
+/// 読み取りが順序を動かす形だと観測しただけで最近使用を打ち直してしまい、檻もまた自分の観測で
+/// LRU の状態を書き換えてしまう（本ファイルの [`holds`] がそれである）。
 ///
-/// 逆向きの退化——`touch` が順序を動かさない——は上の 2 本の檻が捕まえる。本檻はその対で、
-/// 「両方が同じことをする」形（`get` も動かす／どちらも動かさない）を残さない。
+/// 逆向きの退化（`touch` が順序を動かさない）は上の 2 本の檻が捕まえる。本檻はその対である。
 #[test]
 fn get_does_not_disturb_the_recency_order() {
     let mut cache = ComposeCache::new();
@@ -753,7 +716,6 @@ fn get_does_not_disturb_the_recency_order() {
         insert_id(&mut cache, id);
     }
 
-    // 読み取りだけ（`get`）を最古のキーへ何度当てても、順序は動かない。
     for _ in 0..4 {
         assert!(holds(&cache, 1000), "前提: 1000 は保持されている");
     }
@@ -768,9 +730,9 @@ fn get_does_not_disturb_the_recency_order() {
 
 /// 引き当ての判定規則は [`ComposeCache::touch`] と [`ComposeCache::get`] で 1 ビットも違わない。
 ///
-/// `touch` が「ヒットしたか」を `bool` で返す別経路である以上、判定が `get` と食い違うと
-/// `show.rs` は「ミスだと思って合成したのに `get` では引ける」あるいはその逆に落ちる。キー 3 成分の
-/// それぞれについて、両者の答えが一致することを見る。
+/// `touch` が「ヒットしたか」を `bool` で返す別経路である以上、判定が `get` と食い違うと `show.rs` は
+/// 「ミスだと思って合成したのに `get` では引ける」あるいはその逆に落ちる。キー 3 成分のそれぞれで
+/// 両者の答えが一致することを見る。
 #[test]
 fn touch_and_get_agree_on_every_key_component() {
     let mut cache = ComposeCache::new();
@@ -807,18 +769,15 @@ fn touch_and_get_agree_on_every_key_component() {
     }
 }
 
-/// 要件 7.1 観測完了（**上限が実効的であること**）: 同一キーの再挿入は重複エントリを作らず、
+/// （**上限が実効的であること**）: 同一キーの再挿入は重複エントリを作らず、
 /// 後から入れた対で置き換える。
 ///
 /// # なぜ専用の檻が要るのか（変異検査が見つけた穴）
 ///
-/// `insert` が重複を許すと、表の席が同じキーで埋まって**実効容量が縮む**（3 席のうち 2 席が
-/// 同じキーになれば、実際に保持できる異なりキーは 2 個である）。しかも引き当ては先に見つかった
-/// 側を返すので、**古い絵が返る**経路までできる。容量 3 の裁定はどちらも前提にしていない。
-///
-/// 本番経路では `insert` はミス時にしか呼ばれないため同一キーの再挿入は起きないが、`insert` は
-/// 公開 API であり、この不変条件は呼び手の規律ではなく本層の構造で守るべきものである。実際、
-/// 重複を作る変異（同一キーの席を外す枝を殺す）を当てたところ**クレート全体が緑のまま**だった。
+/// `insert` が重複を許すと、同じキーが席を埋めて**実効容量が縮み**、しかも引き当ては先に見つかった
+/// 側を返すので**古い絵が返る**経路までできる。本番経路では `insert` はミス時にしか呼ばれず同一キーの
+/// 再挿入は起きないが、`insert` は公開 API であり、この不変条件は呼び手の規律ではなく本層の構造で守る
+/// べきものである。重複を作る変異（同一キーの席を外す枝を殺す）を当てても**クレート全体が緑のまま**だった。
 #[test]
 fn reinserting_the_same_key_replaces_the_entry_without_duplicating_it() {
     let mut cache = ComposeCache::new();

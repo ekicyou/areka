@@ -1,12 +1,11 @@
-//! 供給の成功経路の檻（T-G1・GPU）: 恒等変換のオフスクリーン往復 golden。
+//! 供給の成功経路の檻（GPU）: 恒等変換のオフスクリーン往復 golden。
 //!
 //! [`record_display`] が返した**閉じた**コマンドリストを、恒等変換（k=1）でオフスクリーンの
 //! D2D ターゲット（透明クリア）へ再生し、CPU 読み取り用 bitmap へ複写して読み戻したバイト列が
 //! [`ComposedSurface::bytes`]（原寸・premultiplied BGRA）と**バイト単位で一致**することを固定する。
 //!
 //! この 1 本で成功経路の 5 点——`CreateBitmap` の寸・pitch・premultiplied・宛先矩形・`Close`——が
-//! まとめて檻に入る。撤去した自前供給面の往復テストの
-//! 正当な後継である。
+//! まとめて檻に入る。
 //!
 //! バイト一致が成り立つ条件は k=1・整数矩形・LINEAR が texel 中心で恒等・透明地への
 //! SOURCE_OVER が src そのもの、の 4 点。DC の既定 DPI だけは実行機に左右されるため、記録にも
@@ -180,7 +179,7 @@ pub(crate) fn replay_and_read_back(
     out
 }
 
-/// T-G1: 恒等変換の往復が合成結果の原寸バイトと**バイト単位で一致**する。
+/// 恒等変換の往復が合成結果の原寸バイトと**バイト単位で一致**する。
 #[test]
 fn identity_offscreen_roundtrip_equals_composed_native_bytes() {
     let (_core, dc) = gpu_dc();

@@ -10,9 +10,9 @@ use super::test_support::{
     tamper_face_1000_slot,
 };
 
-// ── applied_scale／refresh_scale（タスク 3.5・design Flow 2）───────────────────────────────
+// ── applied_scale／refresh_scale───────────────────────────────
 
-/// 要件 1.2 観測完了（照会契約 `applied_scale`）: 未登録 target と表示成立前は `None`、k≠1 の表示
+/// 照会契約 `applied_scale`: 未登録 target と表示成立前は `None`、k≠1 の表示
 /// 成立後は**実適用 k** を返す。
 ///
 /// 恒常 1.0 を返す実装・`attach` 時点で 1.0 を確定させる実装のいずれも RED になる
@@ -52,18 +52,18 @@ fn applied_scale_is_none_before_display_and_reports_applied_k_after() {
     );
 }
 
-/// タスク 3.5 の名指し受け入れ基準・要件 4.1/4.2／5.3 観測完了: k=1/1 で表示を確立したのち窓 `DPI` を
+/// k=1/1 で表示を確立したのち窓 `DPI` を
 /// 192 へ差し替えて `refresh_scale` を呼ぶと——(a) 戻り値が `scaled_extent(2/1, native)`、
 /// (b) `applied_scale` が 2.0、(c) **引き当てが成立する**（`cache_hit=true`＝再合成しない）、
 /// (d) 配置は原寸のまま `scale` だけが 2.0 へ動き、(e) メモの原寸バイトは k に依らず同一。
 ///
-/// (c) が本仕様で加わった観測点である（付録 A′ #13）。エントリは原寸の面・原寸マスク・原寸の
+/// (c) は観測点の 1 つである。エントリは原寸の面・原寸マスク・原寸の
 /// 表示記録だけを持ち **k はキーに参加しない**ので、k だけが変わった再適用は同じエントリに当たる
 /// ——「k 変化＝ミス＋再サンプル」だった旧正典と正反対であり、ヒットを主張しなければ静かに
 /// 再合成へ退化しても緑のままになる。
 ///
 /// さらに (f) `refresh_scale` が返した要求は**消費済み**であり、続く `take_pending_resize` は
-/// `None` を返す——タスク 4.2 が `run_dpi_phase`（`refresh_scale`）と drain フェーズ
+/// `None` を返す——`run_dpi_phase`（`refresh_scale`）と drain フェーズ
 /// （`take_pending_resize`）の**両方**を呼ぶため、同一の reconcile が二度出ないことが結線契約である。
 #[test]
 fn refresh_scale_after_dpi_change_reapplies_new_k() {
@@ -79,7 +79,6 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // k=1/1 の表示確立（初回表示が積む k₀ 補正要求は取り出して捨てる）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(presenter.applied_scale(TargetId(0)), Some(1.0));
     assert_eq!(
@@ -104,7 +103,6 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
         "前提: 初回表示の要求を取り出しておく"
     );
 
-    // モニタ跨ぎ移動・表示スケール変更の決定論的代替（WM_DPICHANGED 相当）。
     set_window_dpi(&mut world, window, 192);
 
     // (a) 戻り値＝新物理寸。同時に表示成立点のログを捕まえて (c) を読む。
@@ -120,7 +118,7 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
         Some(2.0),
         "refresh_scale 後も照会値が旧 k のまま（要件 4.2 の一貫更新が成立していない）"
     );
-    // (c) 引き当てが成立している（要件 5.3・k はキーに参加しない）。
+    // (c) 引き当てが成立している（k はキーに参加しない）。
     let ev = events
         .iter()
         .find(|e| e.message() == INFO_LINE_MESSAGE)
@@ -153,7 +151,7 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
         "ヒットしたのに表示記録が作り直された（記録が k に依存している）"
     );
 
-    // (f) 要求は refresh_scale が消費済み＝drain フェーズと二重に resize しない（タスク 4.2 の結線契約）。
+    // (f) 要求は refresh_scale が消費済み＝drain フェーズと二重に resize しない（結線契約）。
     assert_eq!(
         presenter.take_pending_resize(TargetId(0)),
         None,
@@ -161,7 +159,7 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
     );
 }
 
-/// 要件 4.1 観測完了（**k 不変なら何もしない**）: DPI を変えずに `refresh_scale` を呼んでも
+/// **k 不変なら何もしない**: DPI を変えずに `refresh_scale` を呼んでも
 /// `None` を返し、**再表示を一切行わない**。
 ///
 /// 「何もしない」は戻り値だけでは証明できない（同寸再表示でも `None` になる）ため、2 つの独立した
@@ -243,12 +241,12 @@ fn refresh_scale_without_dpi_change_does_nothing() {
     );
 }
 
-/// 要件 4.1 観測完了（**再表示入力が無ければ何もしない**）: 一度も表示が成立していない target は
+/// **再表示入力が無ければ何もしない**: 一度も表示が成立していない target は
 /// DPI が変わっても `refresh_scale` が `None`＝副作用なしであること。
 ///
 /// 実際に閉じるのは**可視ゲート**である（`visible` と `last_show` はいずれも表示成立点でのみ
 /// 真になるため、未表示 target は `visible == false` で先に弾かれる）。`last_show` ゲートは
-/// 多層防御であり、可視ゲートを外す変異を単独で捕まえる（設計の 3 ゲート記述をそのまま保つ）。
+/// 多層防御であり、可視ゲートを外す変異を単独で捕まえる（3 ゲートの記述をそのまま保つ）。
 ///
 /// 未登録 target も同様に `None`（登録有無で panic しない）——こちらが本テストの非自明な檻。
 #[test]
@@ -265,7 +263,6 @@ fn refresh_scale_without_last_show_input_does_nothing() {
     );
 
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-    // 一度も show していない状態で DPI を変える。
     set_window_dpi(&mut world, window, 192);
 
     let (got, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(0)));
@@ -292,7 +289,7 @@ fn refresh_scale_without_last_show_input_does_nothing() {
     );
 }
 
-/// 要件 4.1/3.2 観測完了（**`Hide` 済み target を蘇らせない**）: 非表示の target は DPI が変わっても
+/// **`Hide` 済み target を蘇らせない**: 非表示の target は DPI が変わっても
 /// 再表示しない——DPI 変化は「見えているものを描き直す」事象であって表示を復活させる事象ではない。
 ///
 /// 可視ゲートを外した実装では、`Hide` した窓が DPI 変化だけで再出現する（`current_surface_id` が
@@ -352,7 +349,7 @@ fn refresh_scale_does_not_resurrect_hidden_target() {
     );
 }
 
-/// 要件 1.4/4.1 観測完了（**DPI 取得不能を 96 で捏造しない**・ゲート判定の帰属可能性）: 窓の `DPI`
+/// **DPI 取得不能を 96 で捏造しない**・ゲート判定の帰属可能性: 窓の `DPI`
 /// component が失われても `refresh_scale` は縮退 k（`app_scale × 1/1`）を導出し、前回適用 k と等しい
 /// ため**再表示しない**。
 ///
@@ -409,7 +406,7 @@ fn refresh_scale_does_not_fabricate_dpi_when_component_is_absent() {
     );
 }
 
-/// 要件 4.4 観測完了（**再表示の失敗は前 k・前表示を維持し、黙らない**）: `refresh_scale` の内部
+/// **再表示の失敗は前 k・前表示を維持し、黙らない**: `refresh_scale` の内部
 /// 再 show が失敗しても、直前の k による表示がそのまま残る。
 ///
 /// 失敗は `last_show` の surface id を解決不能値へ差し替えて注入する——ゴースト再読込で
@@ -523,19 +520,19 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
     );
 }
 
-/// 捕捉イベント列のうち **R1.6 の防御 warn** の件数（level と固有文言の双方で選別する）。
+/// 捕捉イベント列のうち **防御 warn** の件数（level と固有文言の双方で選別する）。
 fn applied_absent_warn_count(events: &[CapturedEvent]) -> usize {
     events.iter().filter(|e| is_applied_absent_warn(e)).count()
 }
 
-/// R1.6 の防御 warn か。
+/// 防御 warn か。
 fn is_applied_absent_warn(e: &CapturedEvent) -> bool {
     e.level == tracing::Level::WARN
         && e.field("message")
             .is_some_and(|m| m.contains("適用スケール未確定"))
 }
 
-/// 要件 1.6 観測完了（DD-5 の防御分岐・**述語そのものの檻**）: 「表示中サーフェスがあるのに
+/// DD-5 の防御分岐・**述語そのものの檻**: 「表示中サーフェスがあるのに
 /// `applied` が無い」状態でのみ `warn!` が呼出 1 回につき 1 件鳴り、正常縮退（未表示 scope・
 /// 未登録 target）では **1 件も鳴らない**。あわせて (a) panic しない (b) k=1.0 と同一結果を返す、
 /// を固定する。
@@ -562,7 +559,7 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
     let mut world = make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
 
-    // T0: 面あり・applied なし（R1.6 の防御分岐・現行公開 API では作れない状態）。
+    // T0: 面あり・applied なし（防御分岐・現行公開 API では作れない状態）。
     attach_and_show_hit_target(&mut presenter, &mut world, TargetId(0), 96);
     force_applied(&mut presenter, TargetId(0), None);
     // T1: attach のみ（未表示 scope）＝正常縮退。TargetId(9) は未登録＝正常縮退。
@@ -651,7 +648,7 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
     );
 }
 
-/// 装置の作り直し（audit-wintf-graphics-world 6 番・要件 3.1）: `GraphicsCore` を入れ替えた後の
+/// 装置の作り直し（audit-wintf-graphics-world 6 番）: `GraphicsCore` を入れ替えた後の
 /// `refresh_after_device_change` は控えを捨てて出し直し、面の命令の列が新しい物になる。印が
 /// 立たない回は何もしない（列はそのまま）。
 #[test]

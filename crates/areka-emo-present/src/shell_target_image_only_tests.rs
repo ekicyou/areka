@@ -1,5 +1,4 @@
-//! シェルの透過の宣言が焼きに届く檻（spec: areka-P0-self-alpha-declaration 要件 1.1・1.3・1.4・
-//! 1.5・1.7・2.8・5.7・6.4・7.4）。
+//! シェルの透過の宣言が焼きに届く檻。
 //!
 //! 入口 [`load_shell_target`] が呼ばれるたびにシェルの descript.txt の `seriko.use_self_alpha` を
 //! 読み、その値で絵を焼くことを、一時フォルダのシェルと焼いた画素で固定する。復号器はメモリ上の
@@ -61,7 +60,7 @@ fn baked_pixels(dir: &TempPath, dec: &MemoryDecoder) -> Option<Vec<[u8; 4]>> {
     Some(out)
 }
 
-/// `full`: α なしの面の画像の左上の色を抜かない（要件 1.4・1.1・6.4）。対照の `1` は抜く。
+/// `full`: α なしの面の画像の左上の色を抜かない。対照の `1` は抜く。
 #[test]
 fn full_keeps_the_top_left_color_of_an_alphaless_face() {
     let dir = shell_with(
@@ -80,7 +79,7 @@ fn full_keeps_the_top_left_color_of_an_alphaless_face() {
     );
 }
 
-/// `0`: α ありの絵の半透明が無くなる（要件 1.5）。対照の `1` は半透明のまま。
+/// `0`: α ありの絵の半透明が無くなる。対照の `1` は半透明のまま。
 #[test]
 fn zero_makes_an_alpha_picture_opaque() {
     // 左上（半透明）・半透明・不透明の 3 画素（premultiplied）。
@@ -102,7 +101,7 @@ fn zero_makes_an_alpha_picture_opaque() {
     );
 }
 
-/// 行が無ければ宣言なしの決まり（要件 1.3）: 透明な画素を持たない絵は、α の印があっても左上の
+/// 行が無ければ宣言なしの決まり: 透明な画素を持たない絵は、α の印があっても左上の
 /// 色を抜く（`1` なら α の印のある絵は抜かない）。
 #[test]
 fn no_line_is_undeclared() {
@@ -117,14 +116,14 @@ fn no_line_is_undeclared() {
     );
 }
 
-/// バルーンのキー `use_self_alpha` だけを書いたシェルは宣言なし（要件 2.8）。
+/// バルーンのキー `use_self_alpha` だけを書いたシェルは宣言なし。
 #[test]
 fn balloon_key_alone_is_undeclared() {
     let dir = shell_with("shell-alpha-balloon-key", b"use_self_alpha,full\n");
     assert_eq!(baked_pixels(&dir, &decoder(&dir, &[PX, PX], true)), None);
 }
 
-/// 同じフォルダの descript.txt を書き換えて入口を呼び直すと、後の宣言で描く（要件 1.7）。
+/// 同じフォルダの descript.txt を書き換えて入口を呼び直すと、後の宣言で描く。
 #[test]
 fn reload_after_rewriting_descript_uses_the_new_declaration() {
     let dir = shell_with("shell-alpha-rewrite", b"seriko.use_self_alpha,full\n");
@@ -151,7 +150,7 @@ fn shift_jis_descript_is_read() {
     assert_eq!(baked_pixels(&dir, &dec), Some(vec![PX, PX]));
 }
 
-/// descript.txt が読めないときは `warn!` を 1 行出し、宣言なしとして続ける（要件 7.4）。
+/// descript.txt が読めないときは `warn!` を 1 行出し、宣言なしとして続ける。
 #[test]
 fn unreadable_descript_warns_and_is_undeclared() {
     let dir = TempPath::new("shell-alpha-no-descript");
@@ -165,7 +164,7 @@ fn unreadable_descript_warns_and_is_undeclared() {
     assert!(warns[0].message().contains("descript.txt"), "{warns:?}");
 }
 
-/// 焼いた絵に `.pna` が添えてあれば、数つきの `warn!` を 1 行出す（要件 5.7）。
+/// 焼いた絵に `.pna` が添えてあれば、数つきの `warn!` を 1 行出す。
 #[test]
 fn ignored_pna_is_recorded_once_with_the_count() {
     let dir = shell_with("shell-alpha-pna", b"seriko.use_self_alpha,1\n");
@@ -179,7 +178,7 @@ fn ignored_pna_is_recorded_once_with_the_count() {
     assert_eq!(warns[0].field("ignored_pna"), Some("1"), "{warns:?}");
 }
 
-// ── 画像だけのシェル（要件 6.1・6.2・6.3・6.5・6.6・7.3）──────────────────────────
+// ── 画像だけのシェル──────────────────────────
 
 /// `surfaces` を（`Some` なら）surfaces.txt に書き、`images` の名前の面の画像を置いた一時フォルダの
 /// シェル（descript.txt は `seriko.use_self_alpha,1`）。画像の画素は復号器が持つ。
@@ -230,14 +229,14 @@ fn assert_image_only(dir: &TempPath, dec: &MemoryDecoder, surfaces_txt: &str, co
     assert_eq!(infos[0].field("surfaces"), Some(count), "{infos:?}");
 }
 
-/// `surfaces.txt` が無く `surface0.png` だけのシェルが起動する（要件 6.1・6.3・7.3）。
+/// `surfaces.txt` が無く `surface0.png` だけのシェルが起動する。
 #[test]
 fn missing_surfaces_txt_with_an_image_builds_from_images() {
     let (dir, dec) = image_only_shell("shell-image-only-missing", None, &["surface0.png"]);
     assert_image_only(&dir, &dec, "missing", "1");
 }
 
-/// 空の `surfaces.txt`＋画像で起動し、記録の面の数は認めた画像の数（要件 6.2・6.3・7.3）。
+/// 空の `surfaces.txt`＋画像で起動し、記録の面の数は認めた画像の数。
 #[test]
 fn empty_surfaces_txt_with_images_builds_from_images() {
     let (dir, dec) = image_only_shell(
@@ -248,7 +247,7 @@ fn empty_surfaces_txt_with_images_builds_from_images() {
     assert_image_only(&dir, &dec, "empty", "2");
 }
 
-/// 波括弧 0 個の `surfaces.txt`＋画像で起動する（要件 6.2）。
+/// 波括弧 0 個の `surfaces.txt`＋画像で起動する。
 #[test]
 fn surfaces_txt_without_braces_with_an_image_builds_from_images() {
     let (dir, dec) = image_only_shell(
@@ -259,7 +258,7 @@ fn surfaces_txt_without_braces_with_an_image_builds_from_images() {
     assert_image_only(&dir, &dec, "empty", "1");
 }
 
-/// 面も画像も無ければ `Empty`（場所はシェルのフォルダ）で、`error!` を 1 行伴う（要件 6.5・7.4）。
+/// 面も画像も無ければ `Empty`（場所はシェルのフォルダ）で、`error!` を 1 行伴う。
 #[test]
 fn no_surface_and_no_image_yields_empty_at_the_shell_dir() {
     for (label, surfaces) in [
@@ -277,7 +276,7 @@ fn no_surface_and_no_image_yields_empty_at_the_shell_dir() {
     }
 }
 
-/// `surfaces.txt` が在るのに読めない（フォルダ）なら、画像が在っても今までどおり `Read`（要件 6.6）。
+/// `surfaces.txt` が在るのに読めない（フォルダ）なら、画像が在っても `Read`。
 #[test]
 fn unreadable_surfaces_txt_yields_read_even_with_images() {
     let (dir, dec) = image_only_shell("shell-image-only-unreadable", None, &["surface0.png"]);
@@ -288,7 +287,7 @@ fn unreadable_surfaces_txt_yields_read_even_with_images() {
     }
 }
 
-/// 面を定義する `surfaces.txt` では画像だけで組んだ記録を出さない（要件 6.7 の対照）。
+/// 面を定義する `surfaces.txt` では画像だけで組んだ記録を出さない（対照）。
 #[test]
 fn defined_surfaces_do_not_record_image_only() {
     let dir = shell_with("shell-image-only-control", b"seriko.use_self_alpha,1\n");

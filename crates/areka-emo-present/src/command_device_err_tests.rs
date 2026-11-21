@@ -1,5 +1,5 @@
 //! [`device_err`] の「前に記録した原因」: 同じ文脈・同じ HRESULT なら `debug!`、それ以外は今と同じ
-//! `error!`（要件 1.6・4.3）。文言・欄・target は水準によらず同じ。
+//! `error!`。文言・欄・target は水準によらず同じ。
 
 use super::*;
 

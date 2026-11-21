@@ -1,17 +1,14 @@
 //! Baker: 頁バッファ確保・stride 決定・トリム矩形 blit（`bake_pages`）。
 //!
-//! 要件 **R4.3 / R6.3**。
-//!
 //! packing で算出した配置座標（[`crate::pack::PackOutput`]）に従い、premultiplied
 //! BGRA の頁バッファ（[`crate::table::AtlasPage`]）を確保し stride を決定して、
 //! トリム済み矩形（[`crate::trim::Trimmed`]）を各頁へ blit する。空エントリ
 //! （全透明）は上流（Trimmer）が既に `pack.entries` から除外しているため、Baker は
 //! `pack.entries` に載る矩形のみを blit する（空エントリを索引表へ入れるのは `bake` の入口）。
 //!
-//! **設計決定 D8**: blit は premultiplied を素通しし、画素変換を一切行わない。
-//! **Critical Issue 3**（packing と焼付の分離）: Packer は座標のみ（`page`/`uv_rect`）を
-//! 算出し、Baker が頁バッファを確保して画素を blit する。Baker は Packer 出力の座標を
-//! 改変しない。padding（UV 非包含）に相当する余白画素は初期値 0（完全透明 premultiplied）
+//! blit は premultiplied を素通しし、画素変換を一切行わない。Packer は座標のみ
+//! （`page`/`uv_rect`）を算出し、Baker が頁バッファを確保して画素を blit する。
+//! Baker は Packer 出力の座標を改変しない。padding（UV 非包含）に相当する余白画素は初期値 0（完全透明 premultiplied）
 //! のまま保たれ、隣接画像との滲みが生じない。
 
 use std::collections::HashMap;
@@ -38,35 +35,29 @@ impl Baker {
     ///
     /// # Postconditions
     /// - 各 `AtlasPage.bytes.len() == stride * height`（`stride == width*4`）。
-    /// - blit は premultiplied を保存（無変換・D8）。
+    /// - blit は premultiplied を保存（無変換）。
     ///
     /// # Invariants
-    /// - Packer 出力の座標（`page`/`uv_rect`）を改変しない（Critical Issue 3）。
-    /// - `uv_rect` 外の画素は初期値 0（透明）のまま（bleed 防止・5.2/5.3）。
+    /// - Packer 出力の座標（`page`/`uv_rect`）を改変しない。
+    /// - `uv_rect` 外の画素は初期値 0（透明）のまま（bleed 防止）。
     pub(crate) fn bake_pages(
         &self,
         items: &[(ElementId, Trimmed)],
         pack: &PackOutput,
     ) -> (Vec<AtlasPage>, Vec<(ElementId, Placement)>) {
-        // 1. 頁ごとの大きさで可変バッファを確保（初期値 0＝完全透明 premultiplied・6.3）。
-        //    長さは usize で掛ける。blit 後に Arc<[u8]> へ変換する。
         let mut page_bufs: Vec<Vec<u8>> = pack
             .pages
             .iter()
             .map(|sz| vec![0u8; sz.w as usize * 4 * sz.h as usize])
             .collect();
 
-        // 2. id→Trimmed 逆引き（blit と trim_offset 参照用）。
         let lookup: HashMap<ElementId, &Trimmed> = items.iter().map(|(id, t)| (*id, t)).collect();
 
-        // 3. 各 PackedEntry を対応頁へ blit（トリム後矩形のみ・premultiplied 素通し・4.3/D8）。
         let mut placements: Vec<(ElementId, Placement)> = Vec::with_capacity(pack.entries.len());
         for entry in &pack.entries {
             let trimmed = match lookup.get(&entry.id) {
                 Some(t) => *t,
                 None => {
-                    // Precondition 違反（pack.entries のキーは items に存在するはず）。
-                    // 「ログ無し失敗経路の禁止」に従い error! でログし、当該矩形をスキップ。
                     tracing::error!(
                         element_id = entry.id.0,
                         page = entry.page,
@@ -90,21 +81,16 @@ impl Baker {
                 }
             };
 
-            // 行ごとに tightly-packed 元 stride → 頁 stride へ verbatim コピー（無変換・D8）。
-            // 元: src_offset = row * trimmed.stride（tightly packed・== uv.w*4）。
-            // 先: dest_offset = (uv.y + row) * stride + uv.x * 4（頁 stride）。
             let src_stride = trimmed.stride as usize;
             let stride = pack.pages[entry.page as usize].w as usize * 4;
             let dest_row_bytes = uv.w as usize * 4;
             for row in 0..uv.h {
                 let src_off = (row as usize) * src_stride;
                 let dest_off = (uv.y + row) as usize * stride + uv.x as usize * 4;
-                // in-range スライスへ copy_from_slice（premultiplied バイトを素通し）。
                 page_buf[dest_off..dest_off + dest_row_bytes]
                     .copy_from_slice(&trimmed.pbgra[src_off..src_off + dest_row_bytes]);
             }
 
-            // 4. Placement を収集（page/uv_rect は Packer 由来・trim_offset は Trimmed 由来）。
             placements.push((
                 entry.id,
                 Placement {
@@ -115,7 +101,6 @@ impl Baker {
             ));
         }
 
-        // 5. 可変バッファを AtlasPage（Arc 共有・stride 明示）へ確定。
         let pages: Vec<AtlasPage> = page_bufs
             .into_iter()
             .zip(&pack.pages)
@@ -198,7 +183,7 @@ mod tests {
         }
     }
 
-    /// （4.3/D8）: 2 矩形を既知 uv へ手組み配置し、頁画素が元 pbgra と byte 単位で一致。
+    /// 2 矩形を既知 uv へ手組み配置し、頁画素が元 pbgra と byte 単位で一致。
     /// premultiplied を verbatim 転写する（無変換）ことを証明する。
     #[test]
     fn blit_verbatim_correctness() {
@@ -252,7 +237,7 @@ mod tests {
         assert_region_matches(page, &uv1, &t1);
     }
 
-    /// （4.3）: blit した uv_rect の外側画素（padding gap・隅）は 0（完全透明）のまま。
+    /// blit した uv_rect の外側画素（padding gap・隅）は 0（完全透明）のまま。
     /// 初期化 0 の保存＝bleed なしを証明する。
     #[test]
     fn padding_and_gaps_stay_transparent() {
@@ -330,7 +315,7 @@ mod tests {
         );
     }
 
-    /// （6.3）: 頁 2 枚で両頁にエントリ。返り Vec 長 2・各頁 width/height/stride/len。
+    /// 頁 2 枚で両頁にエントリ。返り Vec 長 2・各頁 width/height/stride/len。
     /// page 1 への blit が page[0] を汚さないことも確認。
     #[test]
     fn multi_page_allocation() {
@@ -393,7 +378,7 @@ mod tests {
         );
     }
 
-    /// （4.2/6.1）: 返る (id, Placement) が page/uv_rect（Packer 由来）・trim_offset
+    /// 返る (id, Placement) が page/uv_rect（Packer 由来）・trim_offset
     /// （Trimmed 由来）を正しく運ぶ。
     #[test]
     fn placement_mapping() {
@@ -460,7 +445,7 @@ mod tests {
         assert_eq!(p9.trim_offset, off1);
     }
 
-    /// （統合・end-to-end blit sanity）: Packer::pack → bake_pages。
+    /// 統合: Packer::pack → bake_pages。
     /// 各 placed id の頁領域が元 pbgra と一致することを確認。
     #[test]
     fn integration_pack_then_bake() {

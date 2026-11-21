@@ -1,5 +1,4 @@
-//! `image_arm` の兄弟テスト（spec: areka-P0-animated-image-decode 要件 2.1〜2.5・2.7・2.8・3.2・
-//! 3.4・6.4・8.2・8.3・8.6）。
+//! `image_arm` の兄弟テスト。
 //!
 //! 検体（`testdata/animated/`・中身は同じフォルダの README）を本物の `image` で読み、枚数・決め手の
 //! 画素・待ち時間・繰り返し回数・透明度の有無を判定する。「重ねる」指定のコマの不透明な画素だけ
@@ -54,7 +53,7 @@ fn delays(anim: &AnimatedImage) -> Vec<u32> {
     anim.frames.iter().map(|f| f.delay_ms).collect()
 }
 
-// ---- 2 形式の中身（要件 8.2） ----
+// ---- 2 形式の中身 ----
 
 #[test]
 fn basic_apng_frames_delays_loop_and_pixels() {
@@ -135,7 +134,7 @@ fn default_image_apng_starts_with_first_animation_frame() {
     assert_px(&anim.frames[1].image, 0, 0, GREEN, 0, "f1");
 }
 
-// ---- 透明度の有無（要件 3.2・3.4） ----
+// ---- 透明度の有無 ----
 
 #[test]
 fn rgb_samples_have_no_alpha() {
@@ -161,7 +160,7 @@ fn trns_apng_has_alpha_and_premultiplies_the_key() {
     assert_px(&anim.frames[1].image, 7, 7, BLUE, 0, "f1");
 }
 
-// ---- 失敗（要件 6.4・8.3） ----
+// ---- 失敗 ----
 
 #[test]
 fn truncated_apng_fails_all_frames_but_reads_first() {
@@ -279,7 +278,7 @@ fn non_apng_webp_and_missing_files_fail() {
     assert!(read_frames(&sample("no_such_file.apng"), info(2)).is_err());
 }
 
-// ---- 同じ答え（要件 2.8・8.6） ----
+// ---- 同じ答え ----
 
 fn same(a: &DecodedImage, b: &DecodedImage) -> bool {
     (a.width, a.height, a.stride, a.has_alpha, &a.bgra)

@@ -1,4 +1,4 @@
-//! 透過の宣言の読みのテスト（spec: areka-P0-self-alpha-declaration 要件 1.2〜1.6・2.2〜2.6・7.1・7.2・8.8）。
+//! 透過の宣言の読みのテスト。
 //!
 //! 値の読みの表と、記録の 3 つの場合（宣言あり・行なし・読めない値）の行数を固定する。
 //! ログの捕捉は硬化機構の唯一の定義元 `log_capture_kit::capture` に任せる（呼んだスレッドの分だけ拾う）。
@@ -14,7 +14,7 @@ use crate::load_records::LoadRecords;
 const KIND: &str = "shell";
 const KEY: &str = "seriko.use_self_alpha";
 
-/// 値の読みの表（要件 1.2〜1.6・2.2〜2.6）。前後の空白を除き、英字の大小を区別しない。
+/// 値の読みの表。前後の空白を除き、英字の大小を区別しない。
 #[test]
 fn parse_reads_only_the_four_canonical_spellings() {
     let table: &[(&str, Option<UseSelfAlpha>)] = &[
@@ -72,7 +72,7 @@ fn read(descript: Option<&str>) -> (UseSelfAlpha, Vec<CapturedEvent>) {
     })
 }
 
-/// 宣言あり: 値どおりの扱いを返し、info! が 1 行・warn! は無い（要件 1.3・7.1）。
+/// 宣言あり: 値どおりの扱いを返し、info! が 1 行・warn! は無い。
 #[test]
 fn declared_value_logs_one_info_and_no_warn() {
     let (got, events) = read(Some("charset,UTF-8\r\nseriko.use_self_alpha,full\r\n"));
@@ -91,7 +91,7 @@ fn later_line_wins() {
     assert_one_info(&events, "0", true);
 }
 
-/// 行なし（本文が読めない場合を含む）: 宣言なしとし、info! が 1 行・warn! は無い（要件 1.5・7.1）。
+/// 行なし（本文が読めない場合を含む）: 宣言なしとし、info! が 1 行・warn! は無い。
 #[test]
 fn missing_line_logs_one_info_and_no_warn() {
     for descript in [None, Some("charset,UTF-8\n")] {
@@ -102,7 +102,7 @@ fn missing_line_logs_one_info_and_no_warn() {
     }
 }
 
-/// 読めない値: 宣言なしとし、値つきの warn! が 1 行と info! が 1 行（要件 1.6・7.2）。
+/// 読めない値: 宣言なしとし、値つきの warn! が 1 行と info! が 1 行。
 #[test]
 fn unreadable_value_logs_one_warn_with_value_and_one_info() {
     let (got, events) = read(Some("seriko.use_self_alpha,false\n"));
@@ -117,7 +117,7 @@ fn unreadable_value_logs_one_warn_with_value_and_one_info() {
     assert_eq!(warns[0].field_str("key"), Some(KEY), "{:?}", warns[0]);
 }
 
-/// `use_input_alpha` だけの本文は行なしと同じ（要件 8.8）。
+/// `use_input_alpha` だけの本文は行なしと同じ。
 #[test]
 fn use_input_alpha_alone_is_same_as_missing_line() {
     let (got, events) = read(Some("use_input_alpha,1\n"));
@@ -126,8 +126,7 @@ fn use_input_alpha_alone_is_same_as_missing_line() {
     assert_eq!(count(&events, tracing::Level::WARN), 0, "{events:?}");
 }
 
-/// 記録を出さない口: 宣言あり・読めない値のどちらでも記録は 0 行で、戻りは出す口と同じ（spec:
-/// placement-measure-bake-once 要件 3.4）。
+/// 記録を出さない口: 宣言あり・読めない値のどちらでも記録は 0 行で、戻りは出す口と同じ。
 #[test]
 fn quiet_emits_no_records_and_returns_the_same_value() {
     for descript in [

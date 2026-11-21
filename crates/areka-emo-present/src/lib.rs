@@ -9,12 +9,9 @@
 //!
 //! ## 指令 API 契約正本（command-API contract source of truth）
 //!
-//! 本クレートは **指令 API（`PresentCommand`）の契約正本**である。surface 切替・
-//! 非表示（`\s[-1]` 相当）・キャッシュ無効化を運ぶ指令の形（scope・surface id・
-//! BindSet・非表示・reply 口）は本 spec が定義し、下流の seriko-engine が消費する。
-//! 指令はメッセージ enum の variant へそのまま転写できる `Send + 'static` 所有形
-//! （`areka-actor` の envelope 規約準拠）を採る。`\s[-1]` → 非表示・alias → u32 解決は
-//! 発行側（seriko）の責務であり、本段は解決済みの指令を受け取って適用する。
+//! 指令 API（`PresentCommand`）の形は本クレートが定義し、下流の seriko-engine が消費する。指令は
+//! `Send + 'static` 所有形（`areka-actor` の envelope 規約準拠）で、非表示への写像と alias → u32 解決は
+//! 発行側（seriko）の責務。本段は解決済みの指令を受け取って適用する。
 //!
 //! ## 依存方向（強制）
 //!
@@ -47,11 +44,9 @@ pub(crate) mod display;
 pub(crate) mod hit_shapes;
 /// 読み込みの記録を出すかどうかの口（`LoadRecords`）。読み込みの権威の入口が記録の行を切り替える。
 pub(crate) mod load_records;
-/// 窓装着・text 層スロット予約・非表示切替（`VisualMount`）。`pub(crate)` 内部モジュール
-/// （公開 API ではない）。後続の `presenter`（`EmoPresenter`）が `crate::mount::VisualMount` を消費する。
+/// 窓装着・text 層スロット予約・非表示切替（`VisualMount`）。`pub(crate)` 内部モジュール（公開 API ではない）。
 pub(crate) mod mount;
-/// 提示統括（`EmoPresenter`）。合成・キャッシュ・表示の記録・窓装着・マスク同期を UI スレッド上で結線する
-/// 統括ハブ。`command`/`cache`/`display`/`mount` を消費する提示段の一点集約層。
+/// 提示統括（`EmoPresenter`）。合成・キャッシュ・表示の記録・窓装着・マスク同期を UI スレッド上で結線する統括ハブ。
 pub mod presenter;
 /// k の政策（`ScalePolicy`・`derive_scale`）。author_dpi・アプリ管理拡大率シーム・DPI 不在縮退を
 /// presenter の外で純関数化する層（k の**数学**は上流 `areka-emo-compose` の `scale` が担う）。
@@ -60,17 +55,16 @@ pub mod scale;
 /// 採った扱いを記録する。シェルとバルーンの入口が共用する `pub(crate)` 内部モジュール。
 pub(crate) mod self_alpha;
 /// シェルの読み込みの権威（`shell_target`）。シェルのフォルダから「焼いた絵＋面の表を必要な数だけ
-/// 組める値」（`ShellTarget`）を作る入口（`load_shell_target`・記録を黙らせた `load_shell_target_quiet`）と、fs を触らない核
-/// （`build_core`・テストは `build_shell_target` 経由）を持つ。シェルのフォルダ直下のファイル名から「番号 → 面の画像」を決める
-/// 純粋な判定（`select_surface_images`）の名前の判定は、バルーンの系列解決と同じ 1 つの実装
-/// （`balloon::face_digits_of`）を接頭辞 `surface` で共有する。
+/// 組める値」（`ShellTarget`）を作る入口（`load_shell_target`・記録を黙らせた `load_shell_target_quiet`）と、
+/// fs を触らない核（`build_core`・テストは `build_shell_target` 経由）を持つ。「番号 → 面の画像」の
+/// 名前の判定（`select_surface_images`）は、バルーンの系列解決と同じ実装（`balloon::face_digits_of`）を
+/// 接頭辞 `surface` で共有する。
 pub mod shell_target;
 
 /// 実適用 k の厳密型（上流 `areka-emo-compose` の正本を再輸出）。
 ///
-/// [`EmoPresenter::applied_ratio`] の戻り型・[`derive_scale`] の戻り型として既に公開署名へ現出して
-/// いるため、消費側（結線・実機 probe の期待ゲート）が上流 crate を直接依存に加えずとも型を名指し
-/// できるようにする（再輸出であって別型の新設ではない——`areka_emo_compose::ScaleRatio` と同一型）。
+/// [`EmoPresenter::applied_ratio`]・[`derive_scale`] の戻り型として公開署名に現れるため、消費側が上流
+/// crate を直接依存に加えずとも型を名指しできるようにする（`areka_emo_compose::ScaleRatio` と同一型）。
 pub use areka_emo_compose::ScaleRatio;
 pub use balloon::{BalloonLoadError, build_balloon_target, build_balloon_target_from_faces};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};

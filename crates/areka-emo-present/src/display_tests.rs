@@ -1,13 +1,13 @@
-//! 記録レシピ（T-N1）と丸めの一致（T-N3）を固定する GPU 非依存の檻。
+//! 記録レシピと丸めの一致を固定する GPU 非依存の檻。
 //!
-//! T-N1 が固定する性質は 4 点のみ：bitmap 寸＝合成結果の原寸・pitch＝合成結果の stride・
+//! 固定する性質は 4 点のみ：bitmap 寸＝合成結果の原寸・pitch＝合成結果の stride・
 //! 宛先矩形＝`(0, 0, w, h)`・補間＝`D2D1_INTERPOLATION_MODE_LINEAR`。`ComposedSurface` は常に
 //! stride＝w*4 なので、pitch を w*4 から算出しても区別できない（詰め物つきの面を作る口が無い）。
 //! 拡大率 k を引数に取らないことは `DisplayRecipe::for_surface` の署名そのものが保証する
 //! （コンパイル時の性質であり、実行時テストでは検証しない）。
 //!
-//! T-N3 は「利用者から見える物理寸＝[`ScaleRatio::scaled_extent`]」と「wintf の描画面寸＝
-//! `GlobalArrangement.bounds` の `ceil`」の関係を表で固定する（設計 §丸めの一致）。
+//! 丸めの一致は「利用者から見える物理寸＝[`ScaleRatio::scaled_extent`]」と「wintf の描画面寸＝
+//! `GlobalArrangement.bounds` の `ceil`」の関係を表で固定する。
 
 use super::*;
 
@@ -45,7 +45,7 @@ fn recipe_uses_native_size_stride_full_dest_and_linear() {
     }
 }
 
-/// **T-N3**: 本番と同じ式で導いた境界幅が原寸×拡大率と一致し、上流（wintf）の面寸算出と
+/// 本番と同じ式で導いた境界幅が原寸×拡大率と一致し、上流（wintf）の面寸算出と
 /// 丸め権威（[`ScaleRatio::scaled_extent`]）の差が 0 か +1 に収まり、整数の拡大率では 0 になること。
 ///
 /// 式は本番どおり「窓の `GlobalArrangement`（scale 1.0・原点は窓のスクリーン位置）×
@@ -54,10 +54,10 @@ fn recipe_uses_native_size_stride_full_dest_and_linear() {
 /// `scaled_extent`（round half away from zero）が利用者から見える物理寸を出す。
 ///
 /// `ceil ≥ round` ゆえ差は負にならず、小数部が (0, 0.5) のときだけ wintf が 1 px 大きい。
-/// その 1 px は窓 client（`scaled_extent` 寸）の外にあり見えない（要件 2.1・4.3 の許容）。
+/// その 1 px は窓 client（`scaled_extent` 寸）の外にあり見えない（許容範囲）。
 ///
-/// 表の 4 行目までは設計 §丸めの一致の表そのもの。5 行目は整数の拡大率 k=1（差 0）、6 行目は
-/// 端数 0.5 ちょうど（両者とも切り上げ＝差 0）、7 行目は小数部 (0, 0.5) の追加例（差 +1）である。
+/// 5 行目は整数の拡大率 k=1（差 0）、6 行目は端数 0.5 ちょうど（両者とも切り上げ＝差 0）、
+/// 7 行目は小数部 (0, 0.5) の追加例（差 +1）である。
 #[test]
 fn surface_size_matches_scaled_extent_within_one_pixel() {
     // (原寸 w, 原寸 h, k の分子, k の分母, 期待する差 (w, h))
@@ -110,7 +110,6 @@ fn surface_size_matches_scaled_extent_within_one_pixel() {
             let wintf_size = calculate_surface_size_from_global_arrangement(&surface_global)
                 .expect("非ゼロ寸なら面寸は決まる");
 
-            // wintf（ceil）は scaled_extent（round）以上。
             assert!(
                 wintf_size.0 >= scaled.0 && wintf_size.1 >= scaled.1,
                 "ceil >= round ゆえ wintf の面寸が小さくなることはない: {w}x{h} k={num}/{den} \

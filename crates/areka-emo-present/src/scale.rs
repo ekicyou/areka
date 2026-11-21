@@ -1,28 +1,26 @@
 //! k の**政策**（`ScalePolicy`・[`derive_scale`]）＝ 作者基準 DPI・アプリ管理拡大率シーム・
 //! DPI 取得不能時の縮退を、提示段（`presenter`）の外へ純関数として括り出した層。
 //!
-//! 責務分界（design「Architecture Integration」）: k の**数学**（既約有理表現・寸法の丸め・座標の縮約）は
+//! 責務分界: k の**数学**（既約有理表現・寸法の丸め・座標の縮約）は
 //! 上流 `areka-emo-compose` の `scale`（[`ScaleRatio`]）が単一権威として持ち、本モジュールは
 //! 「どの数を掛けるか」という**政策**のみを決める。k の**適用点**は `presenter` の表示経路 1 箇所、
 //! k の**時間軸**（DPI 変化・初期 k₀）は上位アプリ（`areka`）の領分である。
 //!
-//! - **導出規約**（要件 1.1・設計 D2）: k ＝ アプリ管理拡大率 × `窓 dpi_x ÷ author_dpi`。
+//! - **導出規約**: k ＝ アプリ管理拡大率 × `窓 dpi_x ÷ author_dpi`。
 //!   整数段階へ量子化せず**連続**（既約有理数）で保持する——125% 表示スケール（120/96＝5/4）が
-//!   段階丸めで潰れないため（要件 2.2）。
-//! - **2 因子モデル**（要件 1.6）: 最終拡大率はアプリ管理拡大率と DPI 由来 k の**乗算合成**である。
-//!   本仕様のアプリ管理拡大率は [`ScaleRatio::ONE`] 固定の**縮退シーム**（実設定手段は将来 spec）
+//!   段階丸めで潰れないため。
+//! - **2 因子モデル**: 最終拡大率はアプリ管理拡大率と DPI 由来 k の**乗算合成**である。
+//!   アプリ管理拡大率は [`ScaleRatio::ONE`] 固定の**縮退シーム**（実設定手段は未実装）
 //!   だが、乗算そのものは実在の経路として実装・テストされる（席を潰さない）。
-//! - **表示を失わない縮退**（要件 1.4）: DPI 取得不能・窓 DPI 不正・author_dpi 不正のいずれでも
+//! - **表示を失わない縮退**: DPI 取得不能・窓 DPI 不正・author_dpi 不正のいずれでも
 //!   パニックせず、最悪でも `app_scale × 1/1`（＝等倍表示）へ落として表示を継続する。
-//! - **log-first・無言縮退の禁止**（steering `logging.md`）: 上記の縮退分岐はすべて
+//! - **log-first・無言縮退の禁止**: 上記の縮退分岐はすべて
 //!   `error!`／`warn!` で観測可能にする。ログ無しで静かに 1.0 へ落ちる経路を作らない。
 //!
-//! 本モジュールは GPU・wintf いずれにも依存しない純関数であり、全分岐が in-crate の
-//! `#[cfg(test)]` で実行テストされる（設計「Testing Strategy > Unit Tests」）。
 
 use areka_emo_compose::ScaleRatio;
 
-/// 作者基準 DPI の既定値（ukadoc 正典・設計 D1）。
+/// 作者基準 DPI の既定値（ukadoc 正典）。
 ///
 /// shell は descript の `seriko.dpi`、balloon は descript の `dpi` で宣言する。無宣言・不正・0 は
 /// この値を採る（読み取り側＝`areka` の placement source が担い、本モジュールは受け取った値の
@@ -31,20 +29,19 @@ pub const DEFAULT_AUTHOR_DPI: u16 = 96;
 
 /// target（窓）ごとの拡大政策（attach 時に確定・以後不変）。
 ///
-/// 窓ごとに保持されることで、DPI の異なる複数モニタに窓が同時に存在しても各窓が自窓の DPI 由来 k
-/// で表示される（要件 1.5・保持は `presenter` の `PresentTarget` が行う）。
+/// 窓ごとに保持される（`presenter` の `PresentTarget`）ので、DPI の異なる複数モニタに窓が同時に存在しても
+/// 各窓が自窓の DPI 由来 k で表示される。
 ///
 /// # 不変条件と構築（`author_dpi != 0`）
 ///
 /// `author_dpi == 0` は k の分母ゼロ＝導出不能ゆえ、[`ScalePolicy::new`] が構築時に
-/// [`DEFAULT_AUTHOR_DPI`] へ正規化して `warn!` を出す（設計「Error Handling」の
-/// 「author_dpi 不正・0」行）。欄は私有ゆえ、作る口は [`ScalePolicy::new`] と `Default` だけで、
+/// [`DEFAULT_AUTHOR_DPI`] へ正規化して `warn!` を出す。欄は私有ゆえ、作る口は [`ScalePolicy::new`] と `Default` だけで、
 /// どちらも分母を 0 にしない（正規化はこの 1 か所・[`derive_scale`] は正規化し直さない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScalePolicy {
     /// 作者基準 DPI（既定 [`DEFAULT_AUTHOR_DPI`]・k の分母）。
     author_dpi: u16,
-    /// アプリ管理拡大率（本仕様は [`ScaleRatio::ONE`] 固定の縮退シーム・要件 1.6）。
+    /// アプリ管理拡大率（[`ScaleRatio::ONE`] 固定の縮退シーム）。
     app_scale: ScaleRatio,
 }
 
@@ -61,8 +58,8 @@ impl Default for ScalePolicy {
 impl ScalePolicy {
     /// 政策を構築する（`author_dpi == 0` は [`DEFAULT_AUTHOR_DPI`] へ正規化＋`warn!`）。
     ///
-    /// 本仕様の呼び手（`attach_target`）は `app_scale` に [`ScaleRatio::ONE`] を渡す
-    /// （アプリ管理拡大率 1.0 固定シーム・要件 1.6）。将来 spec がアプリ管理拡大率を導入する際は
+    /// 呼び手（`attach_target`）は `app_scale` に [`ScaleRatio::ONE`] を渡す
+    /// （アプリ管理拡大率 1.0 固定シーム）。将来アプリ管理拡大率を導入する際は
     /// ここへ非 ONE を渡すだけで 2 因子乗算が成立する。
     pub fn new(author_dpi: u16, app_scale: ScaleRatio) -> ScalePolicy {
         ScalePolicy {
@@ -110,21 +107,21 @@ fn normalize_author_dpi(author_dpi: u16) -> u16 {
 struct ScaleDecision {
     /// 実適用 k（縮退経路でも常に有効値＝表示を失わない）。
     scale: ScaleRatio,
-    /// 窓 DPI が取得できなかった（`DPI` component 不在・要件 1.4）。
+    /// 窓 DPI が取得できなかった（`DPI` component 不在）。
     dpi_missing: bool,
     /// 窓 DPI の値が不正（`dpi_x == 0`＝比を構築できない）。
     window_dpi_invalid: bool,
-    /// `dpi_x != dpi_y`（設計 D2: `dpi_x` を採用）。
+    /// `dpi_x != dpi_y`（`dpi_x` を採用）。
     anisotropic: bool,
 }
 
 /// 政策と窓 DPI から k と縮退分岐を決める**ログ無しの純粋関数**。
 ///
-/// 縮退の事後条件（要件 1.4）: どの分岐でも `scale` は有効な有理数であり、最悪でも
+/// 縮退の事後条件: どの分岐でも `scale` は有効な有理数であり、最悪でも
 /// `policy.app_scale`（＝アプリ管理拡大率のみ・DPI 由来 k は 1/1）へ落ちる。表示は失われない。
 fn classify(policy: ScalePolicy, dpi: Option<(u16, u16)>) -> ScaleDecision {
     let Some((dpi_x, dpi_y)) = dpi else {
-        // DPI component 不在＝取得不能: DPI 由来 k を 1/1 とみなす（要件 1.4 の k=1.0 縮退）。
+        // DPI component 不在＝取得不能: DPI 由来 k を 1/1 とみなす。
         return ScaleDecision {
             scale: policy.app_scale,
             dpi_missing: true,
@@ -133,11 +130,11 @@ fn classify(policy: ScalePolicy, dpi: Option<(u16, u16)>) -> ScaleDecision {
         };
     };
 
-    // 単一スカラー規約（設計 D2）: 軸ごとに DPI が異なる環境では dpi_x を採用する。
+    // 単一スカラー規約: 軸ごとに DPI が異なる環境では dpi_x を採用する。
     let anisotropic = dpi_x != dpi_y;
 
     match ScaleRatio::new(dpi_x as u32, policy.author_dpi as u32) {
-        // 正常経路: 最終拡大率＝アプリ管理拡大率 × DPI 由来 k（要件 1.6 の 2 因子乗算）。
+        // 正常経路: 最終拡大率＝アプリ管理拡大率 × DPI 由来 k。
         Some(k) => ScaleDecision {
             scale: policy.app_scale.mul(k),
             dpi_missing: false,
@@ -157,21 +154,20 @@ fn classify(policy: ScalePolicy, dpi: Option<(u16, u16)>) -> ScaleDecision {
 
 /// 実適用 k を導出する（表示 show 適用ごとに呼ぶ・数命令）。
 ///
-/// design「emo-present / scale.rs」の Service Interface どおり:
 ///
-/// - **正常**: `app_scale × ScaleRatio::new(dpi_x, author_dpi)`（要件 1.1/1.6）。
+/// - **正常**: `app_scale × ScaleRatio::new(dpi_x, author_dpi)`。
 /// - **`dpi == None`**（`DPI` component 不在＝窓 DPI 取得不能）: `error!` ＋ `app_scale × 1/1`
-///   （要件 1.4 の k=1.0 縮退・表示を失わない）。
-/// - **`dpi_x != dpi_y`**: `warn!` ＋ `dpi_x` 採用（設計 D2 の単一スカラー規約）。
+///   （k=1.0 縮退・表示を失わない）。
+/// - **`dpi_x != dpi_y`**: `warn!` ＋ `dpi_x` 採用（単一スカラー規約）。
 /// - **`dpi_x == 0`**（窓 DPI の値が不正）: `error!` ＋ `app_scale × 1/1`。
 ///
 /// # 不変条件
 ///
 /// - **純関数**: 同一入力→同一出力。内部に可変状態を持たない（ログ抑止のための静的カウンタ等も
-///   持たない——design のコメントは `dpi_x != dpi_y` の `warn!` を「初回」と記すが、抑止状態は
-///   純関数性と両立しないため**毎回警告する**方を採る。異軸 DPI は稀環境ゆえ実害は小さく、
+///   持たない。`dpi_x != dpi_y` の `warn!` を初回だけにすると抑止状態が
+///   純関数性と両立しないため**毎回警告する**。異軸 DPI は稀環境ゆえ実害は小さく、
 ///   「無言で dpi_y を捨てた」痕跡が必ず残る方が log-first に適う）。
-/// - **恒等**（要件 1.3）: `author_dpi == dpi_x` かつ `app_scale == ONE` なら
+/// - **恒等**: `author_dpi == dpi_x` かつ `app_scale == ONE` なら
 ///   [`ScaleRatio::is_identity`] が真（＝既存の等倍表示と同一寸・同一バイト）。
 /// - **非パニック**: あらゆる入力（0・`u16::MAX`）でパニックしない。
 pub fn derive_scale(policy: ScalePolicy, dpi: Option<(u16, u16)>) -> ScaleRatio {

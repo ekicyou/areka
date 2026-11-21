@@ -1,4 +1,4 @@
-//! 装着の置き換え（`presenter/replace.rs`）の檻（GPU・要件 4.3・4.6・11.9）。
+//! 装着の置き換え（`presenter/replace.rs`）の檻（GPU）。
 //!
 //! | 檻 | 固定する性質 |
 //! |---|---|
@@ -40,7 +40,7 @@ fn attached_target(
     window
 }
 
-/// 要件 4.6: 登録を消す口は表から外し、装着の子 2 つを消し、引き継ぐ値をそのまま返す。
+/// 登録を消す口は表から外し、装着の子 2 つを消し、引き継ぐ値をそのまま返す。
 ///
 /// 外部所有・k=2 の表示で、`pending_resize` は取り出さずに残す（引き継ぐ値がどれも既定値と
 /// 違う形にして、「既定値を返しているだけ」で緑にならないようにする）。
@@ -77,7 +77,7 @@ fn detach_target_unregisters_despawns_children_and_returns_the_carried_values() 
     assert!(world.get_entity(slot).is_err());
 }
 
-/// 要件 4.6: 一度も表示していない（装着の子が無い）target も外せる。子を消す対象は無い。
+/// 一度も表示していない（装着の子が無い）target も外せる。子を消す対象は無い。
 #[test]
 fn detach_target_without_a_mount_returns_the_registration_defaults() {
     let mut world = make_world_with_gpu();
@@ -95,7 +95,7 @@ fn detach_target_without_a_mount_returns_the_registration_defaults() {
     assert_eq!(presenter.target_visible(target), None);
 }
 
-/// 要件 4.6: 未登録の target は `error!` 1 件と `Err(TargetNotAttached)`。表は変わらない
+/// 未登録の target は `error!` 1 件と `Err(TargetNotAttached)`。表は変わらない
 /// （他の登録の表示・窓の子はそのまま）。同じ target を 2 度外すのも未登録として扱う。
 #[test]
 fn detach_target_of_an_unregistered_target_fails_and_leaves_the_table_unchanged() {
@@ -124,7 +124,6 @@ fn detach_target_of_an_unregistered_target_fails_and_leaves_the_table_unchanged(
     assert_eq!(mount_entities(&presenter, kept), (surface, slot));
     assert_eq!(child_count(&world, window), 2, "他の登録の窓の子は不変");
 
-    // 2 度目は未登録。
     presenter
         .detach_target(&mut world, kept)
         .expect("1 度目は外せる");
@@ -134,7 +133,7 @@ fn detach_target_of_an_unregistered_target_fails_and_leaves_the_table_unchanged(
     ));
 }
 
-// ── 置き換え（`PresentCommand::ReplaceTarget`・要件 4.1〜4.3・4.5・4.6・5.6・11.9）──────────────
+// ── 置き換え（`PresentCommand::ReplaceTarget`）──────────────
 
 /// 面 [`FACE`] だけを持つ大きさ `size` の新しい資産で `target` を置き換え、返信を返す。
 fn replace(
@@ -173,7 +172,7 @@ fn present_error_count(events: &[CapturedEvent]) -> usize {
         .count()
 }
 
-/// 要件 4.1・4.6: 置き換えの後、窓の子は新しい 1 組だけ（古い 2 つは消えている）で、新しい面が
+/// 置き換えの後、窓の子は新しい 1 組だけ（古い 2 つは消えている）で、新しい面が
 /// 見えている（指令駆動の target）。
 #[test]
 fn replace_target_leaves_only_the_new_pair_of_children() {
@@ -203,7 +202,7 @@ fn replace_target_leaves_only_the_new_pair_of_children() {
     assert_eq!(presenter.target_physical_size(target), Some((6, 5)));
 }
 
-/// 要件 4.3: 外部所有（バルーン窓）の持ち主は引き継がれ、置き換えの直後も隠れたまま（新しい子は
+/// 外部所有（バルーン窓）の持ち主は引き継がれ、置き換えの直後も隠れたまま（新しい子は
 /// entity の段でも不可視）。
 #[test]
 fn replace_target_keeps_external_ownership_and_stays_hidden() {
@@ -237,7 +236,7 @@ fn replace_target_keeps_external_ownership_and_stays_hidden() {
     assert_eq!(carried.ownership, VisibilityOwnership::External);
 }
 
-/// 要件 4.3・4.5・11.9: 窓寸の要求は引き継いだ前回の物理寸と比べて積まれる——同じ物理寸なら
+/// 窓寸の要求は引き継いだ前回の物理寸と比べて積まれる——同じ物理寸なら
 /// 要求なし、違えば新しい物理寸の要求あり。拡大率 1（96）と 2（192）で同じ手順が同じ答えを出す。
 #[test]
 fn replace_target_requests_resize_only_when_the_physical_size_changes() {
@@ -253,7 +252,6 @@ fn replace_target_requests_resize_only_when_the_physical_size_changes() {
             "較正: 初回表示は要求を積む（dpi {dpi}）"
         );
 
-        // 同じ物理寸: 要求なし。
         let outcome = replace(
             &mut presenter,
             &mut world,
@@ -274,7 +272,6 @@ fn replace_target_requests_resize_only_when_the_physical_size_changes() {
             "dpi {dpi}: 拡大率が違う"
         );
 
-        // 違う物理寸: 新しい物理寸の要求あり。
         let outcome = replace(&mut presenter, &mut world, target, (6, 5), 96, Some(FACE));
         assert!(matches!(outcome, Ok(())), "dpi {dpi}: {outcome:?}");
         assert_eq!(
@@ -286,7 +283,7 @@ fn replace_target_requests_resize_only_when_the_physical_size_changes() {
     }
 }
 
-/// 要件 4.3: 取り出されていない窓寸の要求は、同じ物理寸の置き換えを越えて生き残る（引き継ぎ）。
+/// 取り出されていない窓寸の要求は、同じ物理寸の置き換えを越えて生き残る（引き継ぎ）。
 #[test]
 fn replace_target_carries_an_untaken_resize_request() {
     let mut world = make_world_with_gpu();
@@ -312,7 +309,7 @@ fn replace_target_carries_an_untaken_resize_request() {
     );
 }
 
-/// design「Present」手順 3・4: `show` が無ければ登録だけ（古い子は消え、新しい子はまだ無い）。
+/// `show` が無ければ登録だけ（古い子は消え、新しい子はまだ無い）。
 /// 拡大政策は新しい作者 DPI から作る（窓 192・新しい作者 192 → 次の表示の k は 1）。
 #[test]
 fn replace_target_without_show_only_registers_with_the_new_author_dpi() {
@@ -343,7 +340,7 @@ fn replace_target_without_show_only_registers_with_the_new_author_dpi() {
     assert_eq!(child_count(&world, window), 2);
 }
 
-/// 要件 2.6（今日の「無い面」の扱い）・5.6: 新しいシェルに面が無ければ `error!` 1 件で、その
+/// 新しいシェルに面が無ければ `error!` 1 件で、その
 /// target は表示なしのまま。登録は済んでいるので返信は `Ok`（置き換えの失敗は未登録だけ）。
 #[test]
 fn replace_target_with_a_missing_face_logs_one_error_and_shows_nothing() {
@@ -380,7 +377,7 @@ fn replace_target_with_a_missing_face_logs_one_error_and_shows_nothing() {
     assert_eq!(presenter.current_surface_id(target), None);
 }
 
-/// 要件 4.6・5.6: 未登録の target の置き換えは `error!` 1 件と `Err(TargetNotAttached)`。表は
+/// 未登録の target の置き換えは `error!` 1 件と `Err(TargetNotAttached)`。表は
 /// 変わらない（他の登録の表示・窓の子はそのまま）。
 #[test]
 fn replace_target_of_an_unregistered_target_fails_and_leaves_the_table_unchanged() {

@@ -1,4 +1,4 @@
-//! 既定バルーンの文のファイル（spec: default-balloon-selfmade 要件 3.5・3.6・5・6.2・6.3・7・9）。
+//! 既定バルーンの文のファイル。
 //!
 //! 行の並びで持ち、CRLF で連結して印なしの UTF-8 のバイト列にする（git の改行の変換に左右されないため）。
 
@@ -40,7 +40,7 @@ const DESCRIPT: &[&str] = &[
     "",
     "validrect.left,0",
     "validrect.top,0",
-    // 手本の 0 は SSP と areka で読みが割れるので、面の幅の正の値で書く（要件 6.2・6.3）。
+    // 手本の 0 は SSP と areka で読みが割れるので、面の幅の正の値で書く。
     "validrect.right,326",
     "validrect.bottom,-20",
     "",
@@ -70,7 +70,7 @@ const DESCRIPT: &[&str] = &[
     "arrow1.x,303",
     "arrow1.y,-20",
     "",
-    // オンラインの印は 1 枚の動く絵 `online0.webp`。`onlinemarker.filename`／`interval` は書かない（要件 3.5）。
+    // オンラインの印は 1 枚の動く絵 `online0.webp`。`onlinemarker.filename`／`interval` は書かない。
     "onlinemarker.x,4",
     "onlinemarker.y,-39",
     "",
@@ -99,7 +99,7 @@ const DESCRIPT: &[&str] = &[
     "communicatebox.height,20",
 ];
 
-// 面別の設定は手本の値で、`windowpos.*`（正典の鍵でない・値 0 は既定と同じ）を写さない（要件 5.5・5.7）。
+// 面別の設定は手本の値で、`windowpos.*`（正典の鍵でない・値 0 は既定と同じ）を写さない。
 const BALLOONS0S: &[&str] = &[
     "charset,UTF-8",
     "origin.x,14",

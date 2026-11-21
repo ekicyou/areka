@@ -1,5 +1,4 @@
-//! 可視性の所有権と、可視化を伴わない表示確立の檻（`areka-P0-balloon-visibility` Requirement 1.1・
-//! 1.3・6.1・6.2・6.6・6.8・6.9／design §Testing Strategy > Unit Tests 5「presenter 所有権」）。
+//! 可視性の所有権と、可視化を伴わない表示確立の檻。
 //!
 //! 檻の軸は 4 つである——⑴ 外部所有では表示指令が可視化を伴わず、配置先（text 層スロット）と面が
 //! 確立すること、⑵ 不可視のまま面切替・ループ由来の再指令を何度受けても可視にならず結果だけが
@@ -24,7 +23,7 @@ use super::test_support::{
 // 食い違いを見逃す。可視性の主張は必ず **entity の実 component 値**でも裏を取る
 // （`mount_entities` は `presenter_test_support.rs` の共有補助）。
 
-/// 枠の面・文字層スロットの双方が不可視かつポインタ透過であること（Requirement 1.2/1.4/1.8）。
+/// 枠の面・文字層スロットの双方が不可視かつポインタ透過であること。
 fn assert_entities_hidden(world: &World, presenter: &EmoPresenter, target: TargetId, ctx: &str) {
     let (surface, slot) = mount_entities(presenter, target);
     assert!(
@@ -108,9 +107,9 @@ fn external_target_after_first_show(
     (world, window, presenter, TargetId(0), golden)
 }
 
-// ── ⑴ 外部所有: 表示指令は確立のみ（Requirement 1.1/1.3）──────────────────────────────
+// ── ⑴ 外部所有: 表示指令は確立のみ──────────────────────────────
 
-/// Requirement 1.1／1.3: `External` の target へ `ShowSurface` を与えても**不可視のまま**、配置先
+/// `External` の target へ `ShowSurface` を与えても**不可視のまま**、配置先
 /// （text 層スロット）と面・合成メモ・実適用 k・物理寸がすべて確立する。
 ///
 /// 1.3 が要求するのは「可視化を伴わずに配置先を確保する」ことである。ゆえに檻は `target_visible` が
@@ -118,7 +117,7 @@ fn external_target_after_first_show(
 /// 揃っている）ことを**同時に**主張する。片方だけでは「出ないが文字も流せない」縮退を見逃す。
 ///
 /// メモのバイト（readback）まで golden 一致を見るのは、可視化手順を落とした結果として
-/// 合成とメモへの取り込みまで一緒に落ちていないこと（design「それ以外の全手順は所有権に依らず共通」）
+/// 合成とメモへの取り込みまで一緒に落ちていないこと（それ以外の全手順は所有権に依らず共通）
 /// を実行で確かめるためである。
 #[test]
 fn external_show_establishes_display_without_making_it_visible() {
@@ -174,7 +173,6 @@ fn command_driven_target_is_still_visualized_by_show_surface() {
 
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-    // 所有権を設定しない＝既定（CommandDriven）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     assert_eq!(
@@ -190,7 +188,7 @@ fn command_driven_target_is_still_visualized_by_show_surface() {
     );
 }
 
-/// Requirement 1.3: 表示倍率が等倍でない窓（192dpi／author 96 ＝ k=2/1）でも、外部所有の確立は
+/// 表示倍率が等倍でない窓（192dpi／author 96 ＝ k=2/1）でも、外部所有の確立は
 /// **不可視のまま k を導出し切る**。
 ///
 /// 既存の外部所有テストはすべて 96dpi で確立するため k=1/1 に縮退しており、「k 導出を所有権で
@@ -234,7 +232,7 @@ fn external_establish_at_non_identity_dpi_derives_scale_without_visualizing() {
         "配置先の物理寸が確立時の k を反映していない"
     );
     assert_eq!(view.scale(), 2.0, "配置先が読む実適用 k が等倍のまま");
-    // 面・マスクは**原寸**で、k は配置の係数としてだけ現れる（裁定 D）。
+    // 面・マスクは**原寸**で、k は配置の係数としてだけ現れる。
     assert_eq!(
         presenter.read_back(target).expect("read_back 失敗"),
         golden,
@@ -257,9 +255,9 @@ fn external_establish_at_non_identity_dpi_derives_scale_without_visualizing() {
     );
 }
 
-// ── ⑵ 不可視のままの面切替・ループ由来指令（Requirement 6.2/6.9）─────────────────────────
+// ── ⑵ 不可視のままの面切替・ループ由来指令─────────────────────────
 
-/// Requirement 6.2／6.9: 不可視の外部所有 target へ面切替（`\b[ID]` 相当）と、同一面の再指令
+/// 不可視の外部所有 target へ面切替（`\b[ID]` 相当）と、同一面の再指令
 /// （面切替側のアニメーション反復再生由来の指令に相当）を重ねても、**可視にならず結果だけが更新**される。
 ///
 /// 反復再生由来の指令を「同一面の再 `ShowSurface`」で代表させているのは、可視化のゲートが面 id の
@@ -283,7 +281,6 @@ fn external_reshow_updates_result_without_becoming_visible() {
         golden_1000
     );
 
-    // 面切替（`\b[ID]` 相当）。
     show_ok(&mut presenter, &mut world, TargetId(0), 3000);
     assert_eq!(
         presenter.target_visible(TargetId(0)),
@@ -301,7 +298,6 @@ fn external_reshow_updates_result_without_becoming_visible() {
         "不可視でも表示中のメモは新しい面へ入れ替わる"
     );
 
-    // ループ由来の再指令相当（同一面を繰り返し指令する）。
     for _ in 0..3 {
         show_ok(&mut presenter, &mut world, TargetId(0), 3000);
         assert_eq!(
@@ -323,7 +319,7 @@ fn external_reshow_updates_result_without_becoming_visible() {
     );
 }
 
-/// Requirement 1.3／6.6 の土台: 不可視の期間中に表示倍率が変わった後の再指令で、**可視性に依らない
+/// 不可視の期間中に表示倍率が変わった後の再指令で、**可視性に依らない
 /// 手順**（k 導出・配置の係数・物理寸の照会値）がすべて新しい倍率へ揃う。
 ///
 /// 可視化の手順以外を所有権でゲートした実装（配置やマスクの更新を可視のときだけ行う等）は、
@@ -331,7 +327,7 @@ fn external_reshow_updates_result_without_becoming_visible() {
 /// 組むため、配置の更新手順が働くのは**再指令の経路だけ**だからである。ゆえに確立時の値を
 /// 起点として先に主張し、遷移として検査する。
 ///
-/// # 何が動き、何が動かないか（裁定 D で入れ替わった側）
+/// # 何が動き、何が動かないか
 ///
 /// 動くのは `Arrangement.scale`（＝変換の係数）と物理寸の照会値だけで、**面もマスクも配置の論理寸も
 /// 原寸のまま動かない**。旧正典はこの 3 つが k 倍に伸びることを固定していたので、期待値は正反対に
@@ -415,11 +411,11 @@ fn external_reshow_while_invisible_updates_scale_and_physical_size_but_keeps_mas
     );
 }
 
-/// Requirement 6.9: 一度可視になったバルーンを非表示にした後、面切替側の反復再生由来の表示指令を
+/// 一度可視になったバルーンを非表示にした後、面切替側の反復再生由来の表示指令を
 /// 何度受けても**可視へ復帰しない**（結果だけが更新される）。
 ///
 /// 既存の反復指令テストは一度も可視になっていない target を駆動するため、「不可視のものは不可視の
-/// まま」しか語らない。要件 6.9 が名指しで禁じているのは**タイムアウトで消したバルーンが反復再生で
+/// まま」しか語らない。名指しで禁じているのは**タイムアウトで消したバルーンが反復再生で
 /// 戻る**経路であり、それは可視 → 非表示を経た target でしか観測できない。
 #[test]
 fn show_surface_does_not_revive_an_external_target_hidden_after_being_visible() {
@@ -431,7 +427,6 @@ fn show_surface_does_not_revive_an_external_target_hidden_after_being_visible() 
         .expect("確立済みの外部所有 target の可視化は Ok");
     assert_entities_visible(&world, &presenter, target, "前提: 一度可視になっている");
 
-    // タイムアウト非表示に相当（可視性制御が使う既存経路）。
     hide_ok(&mut presenter, &mut world, target);
     assert_entities_hidden(&world, &presenter, target, "前提: 非表示にした直後");
     assert_eq!(
@@ -440,7 +435,6 @@ fn show_surface_does_not_revive_an_external_target_hidden_after_being_visible() 
         "前提: Hide は現サーフェス無しへ落とす"
     );
 
-    // 反復再生由来の表示指令が繰り返し届く。
     for _ in 0..3 {
         show_ok(&mut presenter, &mut world, target, 1000);
         assert_eq!(
@@ -467,9 +461,9 @@ fn show_surface_does_not_revive_an_external_target_hidden_after_being_visible() 
     );
 }
 
-// ── ⑶ 専用入口による可視化と k の再導出（Requirement 6.6）───────────────────────────────
+// ── ⑶ 専用入口による可視化と k の再導出───────────────────────────────
 
-/// Requirement 6.6: `show_target` は**現在の**窓 DPI から k を導出し直した上で可視化する。
+/// `show_target` は**現在の**窓 DPI から k を導出し直した上で可視化する。
 ///
 /// 不可視の期間中に窓 DPI が 96 → 192 へ変わった状況を作る。可視化が「不可視化した時点の絵をそのまま
 /// 出す」実装なら k=1/1 のまま出てしまい、非表示期間中に生じた変化を取りこぼす。ゆえに檻は
@@ -550,12 +544,12 @@ fn show_target_without_dpi_change_only_adds_visibility() {
     );
 }
 
-/// Requirement 6.6 の成立経路を固定する: 不可視の間の表示倍率変化は**DPI 追従の相では拾われず**
+/// 成立経路を固定する: 不可視の間の表示倍率変化は**DPI 追従の相では拾われず**
 /// （`refresh_scale` の可視ゲート・`presenter/refresh.rs` の `if !visible` の枝）、
 /// 可視化の入口が同じ経路を再通過することで埋め合わされる。
 ///
 /// この 2 段の役割分担を明示的に固定しておかないと、可視ゲートを外す是正（不可視の target まで
-/// DPI 追従で再表示する）が「要件 6.6 のため」という理由で持ち込まれかねない——それは非表示の
+/// DPI 追従で再表示する）が「見えていなかった間も表示を成立させるため」という理由で持ち込まれかねない——それは非表示の
 /// バルーンを表示倍率の変化だけで蘇らせる経路になる。
 #[test]
 fn invisible_period_dpi_change_is_ignored_by_refresh_and_applied_by_show_target() {
@@ -600,16 +594,15 @@ fn invisible_period_dpi_change_is_ignored_by_refresh_and_applied_by_show_target(
     assert_entities_visible(&world, &presenter, target, "可視化の入口を通した後");
 }
 
-// ── ⑷ 非表示側は所有権に依らず即時（Requirement 6.1）────────────────────────────────────
+// ── ⑷ 非表示側は所有権に依らず即時────────────────────────────────────
 
-/// Requirement 6.1: `\b[-1]` 相当の `Hide` は所有権に依らず**即時**に効く（可視化側だけが所有権で
+/// `\b[-1]` 相当の `Hide` は所有権に依らず**即時**に効く（可視化側だけが所有権で
 /// ゲートされる非対称を保つ）。外部所有・既定所有権の双方で同一の結果になることを見る。
 ///
 /// 非表示の直前は照会値だけでなく **entity の実可視**でも前提を主張する。照会値だけの前提は
 /// 「元から不可視だった」場合と区別できず、事後状態が同一になるため非表示が効いた証拠にならない。
 #[test]
 fn hide_is_immediate_regardless_of_ownership() {
-    // 外部所有: show_target で可視にした後の Hide。
     let (mut world, _window, mut presenter, target, _golden) =
         external_target_after_first_show(96, 0x25);
     presenter
@@ -631,7 +624,6 @@ fn hide_is_immediate_regardless_of_ownership() {
     );
     assert_entities_hidden(&world, &presenter, target, "外部所有の Hide 後");
 
-    // 既定所有権: 従来どおり。
     let mut world2 = make_world_with_gpu();
     let window2 = spawn_window_with_dpi(&mut world2, 96);
     let (emo_world, atlas, _g) = build_target_assets(3, 2, 0x26);

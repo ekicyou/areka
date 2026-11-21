@@ -1,15 +1,13 @@
 //! 表示の記録（`display::record_display`）が失敗したときに **presenter 側の状態が 1 つも書き換わらない**
-//! ことを、**4 注入点 × 3 場面**で固定する実行テスト（要件 7.1／7.2・設計 Flow 1・付録 A′ #19）。
+//! ことを、**4 注入点 × 3 場面**で固定する実行テスト。
 //!
-//! # 前身との違い（撤去した供給面の失敗注入のテストからの導き直し）
+//! # 失敗点と前状態の集合
 //!
-//! 前身は自前 swap chain 供給面の `upload` 7 点を注入し、presenter 側 5 項目の保持を見ていた。供給面が
-//! 消えて失敗点が「記録」の 4 点（`CreateBitmap`／`CreateCommandList`／`EndDraw`／`Close`）になり、その
-//! 位置が**容量回収（`take_recycled`）より手前**へ移った。手前になったことで保たれる範囲が広がる——
-//! 失敗した適用は合成メモを 1 件も増やさず、追い出しも起こさない。ゆえに前状態の集合に**メモの件数**
-//! （と表示中エントリのバイト）が加わる。
+//! 失敗点は「記録」の 4 点（`CreateBitmap`／`CreateCommandList`／`EndDraw`／`Close`）で、その
+//! 位置は**容量回収（`take_recycled`）より手前**である。手前なので保たれる範囲は広い——
+//! 失敗した適用は合成メモを 1 件も増やさず、追い出しも起こさない。ゆえに前状態の集合に**メモの件数**と表示中エントリのバイトが入る。
 //!
-//! # 何を「前の状態」と呼ぶか（design Flow 1「記録の失敗は回収より手前」）
+//! # 何を「前の状態」と呼ぶか（記録の失敗は回収より手前）
 //!
 //! [`PresenterState`] の 8 項目である——`visible`／`applied`／`native_size`／`current_surface`／
 //! `pending_resize`／メモの件数と表示中エントリのバイト／枠の面 entity の `GraphicsCommandList`
@@ -248,7 +246,7 @@ fn failed_show(
     });
 
     let err = match outcome {
-        // 要件 7.1／7.2: 呼出元へ失敗が返る（`display.rs` が `device_err` 経由で error! 済み）。
+        // 呼出元へ失敗が返る（`display.rs` が `device_err` 経由で error! 済み）。
         Err(e) => e,
         Ok(()) => panic!(
             "注入した失敗点 {at:?} で ShowSurface が Ok を返した（注入が届いていない＝前状態維持を判定できない）"
@@ -258,7 +256,7 @@ fn failed_show(
 }
 
 /// 注入の失敗が本番と同じ形（`PresentError::Device` ＋ 注入点の文脈 ＋ E_FAIL）で返り、
-/// `error!` が**ちょうど 1 行**出ていること（要件 7.1／7.2: ログ無しで縮退しない・二重に鳴らさない）。
+/// `error!` が**ちょうど 1 行**出ていること（ログ無しで縮退しない・二重に鳴らさない）。
 fn assert_injected_failure(err: &PresentError, events: &[CapturedEvent], at: DisplayFault) {
     match err {
         PresentError::Device { hresult, context } => {
@@ -353,7 +351,7 @@ fn assert_established_baseline(before: &PresenterState, visible: bool, current: 
 
 // ── 場面 ⑴ 初回（装着・メモが無から生じる場面）──────────────────────────
 
-/// 要件 7.1／7.2: **初回の適用**が 4 注入点のどこで失敗しても、装着も配置もマスクもメモも生じない。
+/// **初回の適用**が 4 注入点のどこで失敗しても、装着も配置もマスクもメモも生じない。
 ///
 /// この場面でだけ「失敗した適用が装着を作らない」が見られる（他の 2 場面は装着済みから始まる）。
 /// 失敗が回収（`take_recycled`）より手前にあることの直接の帰結として、メモの件数は 0 のままである。
@@ -418,7 +416,7 @@ fn display_failure_on_the_first_apply_creates_no_mount_no_memo_and_no_state() {
 
 // ── 場面 ⑵ 同形再表示（外形が変わらない別の面）────────────────────────────
 
-/// 要件 7.1／7.2: 表示確立後に**同形の別の面**を新しい k で試して失敗しても、前状態が 1 つも動かない。
+/// 表示確立後に**同形の別の面**を新しい k で試して失敗しても、前状態が 1 つも動かない。
 ///
 /// 成功していれば面 id・表示記録・マスク・メモ件数・k・配置の係数・窓寸要求が同時に動く場面である。
 /// 2 面は同じ外形で**α の穴だけが違う**ので、表示バイトとマスクの不変は恒真ではない。
@@ -490,7 +488,7 @@ fn display_failure_on_a_same_shape_reshow_keeps_every_previous_value() {
 
 // ── 場面 ⑶ Hide 後（`visible` に判別力がある場面）───────────────────────
 
-/// 要件 7.1／7.2: `Hide` 後に失敗した `ShowSurface` は target を**可視へ戻さない**（前状態すべて不変）。
+/// `Hide` 後に失敗した `ShowSurface` は target を**可視へ戻さない**（前状態すべて不変）。
 ///
 /// この場面でだけ `visible`／`current_surface` が判別力を持つ——成功していれば `visible` は true へ、
 /// `current_surface` は `Some(3000)` へ動く。entity 側（枠の面・文字層スロットの `Visual`）も併せて

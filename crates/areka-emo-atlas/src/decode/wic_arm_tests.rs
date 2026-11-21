@@ -1,6 +1,6 @@
 //! `WicDecoderArm` の兄弟テスト。
 //!
-//! - 動く絵の 3 メソッド（spec: areka-P0-animated-image-decode 要件 1.5・5.5）: 見分けは `sniff`、
+//! - 動く絵の 3 メソッド: 見分けは `sniff`、
 //!   コマの読みは `image_arm` の兄弟テストが検体（`testdata/animated/`）で見る。この腕は両方を包むだけ
 //!   なので、ここでは読めないときのパス付きの `DecodeError::Decode` と、無いファイルの見分けだけを見る。
 //! - α の有無を WIC に尋ねること（`pixel_format_has_alpha_asks_wic`）。
@@ -54,8 +54,8 @@ fn still_decode_and_probe_pna_unchanged_on_animated_file() {
     });
 }
 
-/// 15 番（audit-wintf-runtime）: 番号つきでない形式の α の有無は WIC の形式の情報で決まり、
-/// wintf の `pixel_format_has_alpha` と同じ答えを返す（emo-atlas-palette-alpha 要件 3.5）。
+/// 番号つきでない形式の α の有無は WIC の形式の情報で決まり、
+/// wintf の `pixel_format_has_alpha` と同じ答えを返す。
 #[test]
 fn pixel_format_has_alpha_asks_wic() {
     use super::pixel_format_has_alpha;
@@ -102,7 +102,7 @@ fn pixel_format_has_alpha_asks_wic() {
     });
 }
 
-/// 125 番（audit-wintf-runtime）: 対のないサロゲートを含む名のファイルも開ける
+/// 対のないサロゲートを含む名のファイルも開ける
 /// （wintf の `load_bitmap_source` と同じく名を UTF-16 のまま渡す）。置き場はワークツリーの `target` の下。
 #[test]
 fn decode_opens_name_with_lone_surrogate() {
@@ -130,7 +130,7 @@ fn wide_png(width: u32) -> PathBuf {
     path
 }
 
-/// 指摘 2: 一辺が上限（16,384）を越える絵は、画素の入れ物を確保する前に読めなかった絵になり、文に寸法と上限が出る。
+/// 一辺が上限（16,384）を越える絵は、画素の入れ物を確保する前に読めなかった絵になり、文に寸法と上限が出る。
 #[test]
 fn decode_refuses_side_over_max_before_alloc() {
     let path = wide_png(16_385);
@@ -148,7 +148,7 @@ fn decode_refuses_side_over_max_before_alloc() {
     );
 }
 
-/// 指摘 2: 一辺がちょうど上限の絵は今までどおり読める。
+/// 一辺がちょうど上限の絵は今までどおり読める。
 #[test]
 fn decode_reads_side_at_max() {
     let path = wide_png(16_384);

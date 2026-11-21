@@ -10,7 +10,7 @@ use super::test_support::{
     mount_entities, shell_of, show_ok, show_with, spawn_window_with_dpi, surface,
 };
 
-/// R3.4 観測完了（skip＋表示不変の回帰檻）: 有効 id で表示・マスクを確立後、**解決不能 id** の
+/// skip＋表示不変の回帰檻: 有効 id で表示・マスクを確立後、**解決不能 id** の
 /// `ShowSurface` は reply が `Err(Compose(SurfaceNotFound))`、かつ (a) `read_back` バイトと
 /// surface entity の `GraphicsCommandList`（＝画面へ渡っている描画命令そのもの）、
 /// (b) surface entity の `HitTest`（`AlphaMask`）、(c) `AlphaMaskResource`（設定済みマスク）の
@@ -27,10 +27,8 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // 有効 id で表示・マスク・hit-test を確立。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
-    // 表示器の適用前状態を捕捉（bytes ＋ HitTest ＋ mask 寸法/有無）。
     let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
 
     let bytes_before = presenter
@@ -66,7 +64,6 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         "有効表示後は可視"
     );
 
-    // 解決不能 id: error! ＋ skip（表示器不触）＋ reply Err（R3.4）。
     let outcome = show_with(
         &mut presenter,
         &mut world,
@@ -83,7 +80,6 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         "無効 id は Err(Compose(SurfaceNotFound(4242))) を返す: {outcome:?}"
     );
 
-    // (a) 表示バイト不変。
     let bytes_after = presenter
         .read_back(TargetId(0))
         .expect("read_back（後）失敗");
@@ -115,7 +111,7 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     );
 }
 
-/// 設計ディスカッション #1 観測完了（EmptyComposition → Hide 縮退＋reply Ok）: 有効表示で mount を
+/// （EmptyComposition → Hide 縮退＋reply Ok）: 有効表示で mount を
 /// 確立後、**外形 0×0 に退化する既存 surface**（定義層皆無）を `ShowSurface` すると reply は
 /// **`Ok(())`**（`Err` ではない）で、target は Hidden へ縮退（`Visual` 不可視＋`HitTest::none()`）し、
 /// 0×0 の表示記録を作ろうとして panic しない（既存のメモと表示記録は破棄されず保持）。
@@ -149,7 +145,6 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // 有効 1000 で mount と表示記録を確立し可視化。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
     assert!(
@@ -176,7 +171,6 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
         "EmptyComposition は Hide 縮退＋reply Ok（Err ではない）: {outcome:?}"
     );
 
-    // Hidden へ縮退: Visual 不可視 ＋ HitTest::none()。
     assert!(
         !world.get::<Visual>(surface_entity).unwrap().is_visible,
         "EmptyComposition は Hidden へ縮退（Visual 不可視）でなければならない"
@@ -205,7 +199,6 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
         display_before,
         "EmptyComposition で表示記録が差し替わった（既存の表示記録保持の不変条件違反）"
     );
-    // 7000 は非合成ゆえキャッシュへ載らない（0×0 を挿入しない）。
     assert!(
         presenter
             .targets
@@ -265,7 +258,7 @@ fn extent_too_large_degrades_to_hidden_and_replies_ok() {
     assert!(!presenter.targets.get(&TargetId(0)).unwrap().visible);
 }
 
-/// R3.3 観測完了（Hide → 再 ShowSurface 復帰）: 有効表示 → `Hide`（不可視＋`HitTest::none()`＋
+/// Hide → 再 ShowSurface 復帰: 有効表示 → `Hide`（不可視＋`HitTest::none()`＋
 /// 装着・表示記録・メモ保持）→ 同一有効 id を再 `ShowSurface` で表示復帰（可視＋`HitTest::alpha_mask()`）。
 /// 再表示はキャッシュヒットで再合成せず、`read_back` が初回表示バイトと一致する（キャッシュからの復帰）。
 #[test]
@@ -278,7 +271,6 @@ fn hide_then_reshow_recovers_display_from_cache() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // 初回表示（可視・αマスク判定確立）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
     let bytes_shown = presenter
@@ -290,7 +282,6 @@ fn hide_then_reshow_recovers_display_from_cache() {
         "初回表示後は αマスク判定"
     );
 
-    // Hide: 不可視 ＋ HitTest::none() ＋ 装着・表示記録・メモ保持。
     hide_ok(&mut presenter, &mut world, TargetId(0));
     assert!(
         !world.get::<Visual>(surface_entity).unwrap().is_visible,
@@ -303,8 +294,7 @@ fn hide_then_reshow_recovers_display_from_cache() {
     );
     {
         let target = presenter.targets.get(&TargetId(0)).unwrap();
-        // 装着（surface entity・表示記録の載る先）は Hide で剥がさない（R3.3）。かつての
-        // 「swap chain を保持する」の後継＝供給面が消えた今、保持されるのは装着そのものである。
+        // 装着（surface entity・表示記録の載る先）は Hide で剥がさない。保持されるのは装着そのものである。
         assert!(target.mount.is_some(), "Hide は装着を保持する（R3.3）");
         // 表示記録も剥がさない（再表示は記録し直さずに復帰する）。
         assert!(
@@ -323,7 +313,6 @@ fn hide_then_reshow_recovers_display_from_cache() {
         assert!(!target.visible, "Hide 後は target.visible=false");
     }
 
-    // 再 ShowSurface（同一有効 id）: キャッシュヒットで再合成せず表示復帰。
     let ((), events) = capture(|| show_ok(&mut presenter, &mut world, TargetId(0), 1000));
     let hits: Vec<_> = events
         .iter()
@@ -336,7 +325,6 @@ fn hide_then_reshow_recovers_display_from_cache() {
         "再表示は表示の行 1 行・控えに当たる（Hide の後に合成し直していない）"
     );
 
-    // 表示復帰: 可視 ＋ αマスク判定へ戻る。
     assert!(
         world.get::<Visual>(surface_entity).unwrap().is_visible,
         "再表示後は可視へ復帰"
@@ -361,7 +349,7 @@ fn hide_then_reshow_recovers_display_from_cache() {
     );
 }
 
-/// R9.1/9.2 観測完了（mount 未生成＝取得不可）: 未登録 target・登録済みだが初回 `ShowSurface` 前
+/// mount 未生成＝取得不可: 未登録 target・登録済みだが初回 `ShowSurface` 前
 /// （mount 遅延生成前）のいずれも `text_slot_view` が `None` を返す（取得結果が空）。
 ///
 /// mount 未生成経路は World に GPU 資源を要しない（`attach_target` は skeleton 登録のみ）ため、
@@ -373,21 +361,20 @@ fn text_slot_view_is_none_before_display_established() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x66);
 
     let mut presenter = EmoPresenter::new();
-    // 未登録 target: 取得結果は空。
     assert!(
         presenter.text_slot_view(TargetId(0)).is_none(),
         "未登録 target の text_slot_view は None"
     );
 
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-    // 登録済みでも初回 ShowSurface 前（mount 未生成）は空（design: mount は遅延生成・R9.2）。
+    // 登録済みでも初回 ShowSurface 前（mount 未生成）は空（mount は遅延生成）。
     assert!(
         presenter.text_slot_view(TargetId(0)).is_none(),
         "初回 ShowSurface 前（mount 未生成）の text_slot_view は None"
     );
 }
 
-/// R9.1/9.2 観測完了（表示確立後の正値）: 有効 `ShowSurface` で表示確立後、`text_slot_view` が
+/// 表示確立後の正値: 有効 `ShowSurface` で表示確立後、`text_slot_view` が
 /// `Some` を返し、(a) `slot()` ＝ mount の予約スロット（`Name("emo-text-layer-slot")` を持つ）、
 /// (b) `window()` ＝ 装着先窓 Entity、(c) `surface_size()` ＝ バルーン/シェル surface の物理 px 原寸、
 /// (d) `scale()` ＝ この入力（窓 DPI 96・author_dpi 96）での 1.0、をすべて満たす。
@@ -447,7 +434,7 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
     );
 }
 
-/// `areka-P0-recompose-budget` Requirement 3.1 ／ 設計 Flow 2「容量回収は合成成功後に限る」観測完了:
+/// 容量回収は合成成功後に限る:
 /// 有効 id で表示を確立したあと**解決不能 id** の適用で合成が失敗しても、合成メモのスロットは
 /// 適用前のエントリを**中身ごと**保持し続ける。ゆえに直後の同一入力の適用は再合成せず引き当てで
 /// 済み、表示も適用前のまま成立する。
@@ -459,7 +446,7 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
 /// 帰結であり、**スロットが空になったかどうかとは独立**である——空にしても差し替えは起きないので
 /// バイトは 1 つも変わらない。したがって `ComposeCache::take_recycled`（追い出しエントリの容量回収）を
 /// 合成の成否判定より**手前**へ置く誤りは、既存の檻を丸ごとすり抜ける。本檻はスロットそのものを
-/// 直接読み、Flow 2 の規律を固定する唯一の観測点である。
+/// 直接読み、この規律を固定する唯一の観測点である。
 ///
 /// # 「引き当てで済む」の観測形
 ///
@@ -476,10 +463,8 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // 有効 id でスロットを埋める（表示成立＝表示バッファとマスクの原子対が入る）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
-    // 適用前のスロットの中身を控える（バイトとマスク寸＝原子対の両側）。
     let (bytes_before, mask_dims_before) = {
         let entry = presenter
             .targets
@@ -501,7 +486,6 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
         .read_back(TargetId(0))
         .expect("read_back（前）失敗");
 
-    // 合成失敗（解決不能 id）: error! ＋ 表示不変 ＋ reply Err（R3.4）。
     assert!(
         matches!(
             show_with(
@@ -552,7 +536,7 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
     );
 }
 
-/// タスク 2.1・要件 5.4（表示記録の保持）: **外れのたびに表示記録が作られ、メモのエントリへ載る**。
+/// 表示記録の保持: **外れのたびに表示記録が作られ、メモのエントリへ載る**。
 ///
 /// 表示記録は原寸バイトを 1 度だけ GPU へ上げて描く閉じたコマンドリストで、エントリの絵・マスクと
 /// 同じ入れ物に束ねられる。ここで固定するのは「外れの回に記録が作られてエントリに載る」ことと、
@@ -571,7 +555,6 @@ fn a_cache_miss_records_a_display_list_into_the_entry() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // 1 回目＝外れ（記録が作られる）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     let recorded = {
         let entry = presenter
@@ -589,7 +572,6 @@ fn a_cache_miss_records_a_display_list_into_the_entry() {
         entry.display.clone()
     };
 
-    // 2 回目＝ヒット（記録は作り直されない）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     let entry = presenter
         .targets

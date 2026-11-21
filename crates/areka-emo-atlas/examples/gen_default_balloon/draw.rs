@@ -1,4 +1,4 @@
-//! 既定バルーンの絵柄の値と、面と印の絵の描き方（spec: default-balloon-selfmade）。
+//! 既定バルーンの絵柄の値と、面と印の絵の描き方。
 
 /// α 付き（乗算していない）RGBA の画素の並び。
 pub struct Picture {
@@ -11,7 +11,7 @@ pub struct Picture {
 type Color = [f32; 4];
 type P = (f32, f32);
 
-// 絵柄の値（design.md「絵柄の値」・議題 2 の案 A「白と灰」）。
+// 絵柄の値（白と灰）。
 /// 地: 白・不透明。
 const FILL: Color = [255.0, 255.0, 255.0, 1.0];
 /// 縁: 灰。

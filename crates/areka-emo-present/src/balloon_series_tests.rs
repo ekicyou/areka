@@ -3,7 +3,7 @@ use super::*;
 use super::test_support::{CapturedEvent, FieldUnquoted, TempDir};
 use log_capture_kit::capture;
 
-// ── 檻 1: scope→接頭辞優先連鎖の導出（R1.1/1.6/1.8/1.9/1.10・R7.1）─────────────
+// ── 檻 1: scope→接頭辞優先連鎖の導出─────────────
 
 /// `(接頭辞, tier)` の組で連鎖を突き合わせるための簡約形（表明の可読性のため）。
 fn chain_pairs(family: &SeriesFamily, scope: u32) -> Vec<(String, ChainTier)> {
@@ -13,7 +13,7 @@ fn chain_pairs(family: &SeriesFamily, scope: u32) -> Vec<(String, ChainTier)> {
         .collect()
 }
 
-/// R1.1: scope 0 の連鎖は `balloonp0def`（正規名）→ `balloons`（旧名）の 2 段で、
+/// scope 0 の連鎖は `balloonp0def`（正規名）→ `balloons`（旧名）の 2 段で、
 /// 双方とも当該 scope 自身の候補＝tier `Own`。scope 0 は相方系列段もデフォルト段も持たない。
 #[test]
 fn prefix_chain_scope0_is_canonical_then_legacy_all_own() {
@@ -27,7 +27,7 @@ fn prefix_chain_scope0_is_canonical_then_legacy_all_own() {
     );
 }
 
-/// R1.1: scope 1 の連鎖は Own（`balloonp1def` → `balloonk`）＋ Default（`balloonp0def` →
+/// scope 1 の連鎖は Own（`balloonp1def` → `balloonk`）＋ Default（`balloonp0def` →
 /// `balloons`）の 4 段。scope 1 は相方系列段を持たない（自身が相方系列そのもの）。
 #[test]
 fn prefix_chain_scope1_is_own_then_default() {
@@ -43,7 +43,7 @@ fn prefix_chain_scope1_is_own_then_default() {
     );
 }
 
-/// R1.1/R1.6: scope 5（n≧2 の代表）の連鎖は Own（`balloonp5def` のみ＝旧名なし）＋
+/// scope 5（n≧2 の代表）の連鎖は Own（`balloonp5def` のみ＝旧名なし）＋
 /// KeroNamed（`balloonk`）＋ Default（`balloonp0def` → `balloons`）。
 #[test]
 fn prefix_chain_scope5_names_kero_then_default() {
@@ -59,7 +59,7 @@ fn prefix_chain_scope5_names_kero_then_default() {
     );
 }
 
-/// R1.1: 相方系列の段は正典が名指しした系列（`balloonk`）であって、scope 1 の解決へ再帰的に
+/// 相方系列の段は正典が名指しした系列（`balloonk`）であって、scope 1 の解決へ再帰的に
 /// 縮退するものではない。ゆえに n≧2 の連鎖に scope 1 の正規名 `balloonp1def` は現れない。
 #[test]
 fn prefix_chain_ge2_excludes_scope1_canonical_name() {
@@ -82,7 +82,7 @@ fn prefix_chain_ge2_excludes_scope1_canonical_name() {
     }
 }
 
-/// R1.1/R1.8/R1.9: 各段は「正規名が先頭・旧名が後続」であり、scope を数値のみで扱う
+/// 各段は「正規名が先頭・旧名が後続」であり、scope を数値のみで扱う
 /// （2 値列挙もさくらスクリプト語彙も内部の正準表現にしない）ことを、任意 scope の
 /// 正規名 `balloonp{s}def` が常に連鎖先頭であることで固定する。
 #[test]
@@ -100,7 +100,7 @@ fn prefix_chain_head_is_scope_canonical_name_for_any_scope() {
     }
 }
 
-/// R1.9（縮退シーム）/R7.1(c): 装飾族の**一段深い旧名**（`arrows` → `arrow`）も、
+/// 装飾族の**一段深い旧名**（`arrows` → `arrow`）も、
 /// 同じ表構造（可変長の旧名候補列）で構造改変なしに表現できる（本物の矢印の族の表で固定する）。
 #[test]
 fn series_family_table_expresses_deeper_legacy_names() {
@@ -126,7 +126,7 @@ fn series_family_table_expresses_deeper_legacy_names() {
     );
 }
 
-// ── 檻 2-5: 面 ID 単位の連鎖探索（純核 `select_faces`・R1.2/1.3/1.4/1.5・R7.1）─────
+// ── 檻 2-5: 面 ID 単位の連鎖探索（純核 `select_faces`）─────
 
 /// `(surface_id, 採用接頭辞, tier, ファイル名)` の簡約形（表明の可読性のため）。
 fn selected(names: &[&str], scope: u32) -> Vec<(u32, String, ChainTier, String)> {
@@ -137,7 +137,7 @@ fn selected(names: &[&str], scope: u32) -> Vec<(u32, String, ChainTier, String)>
         .collect()
 }
 
-/// 檻 2（R1.2/R1.10）正規名優先: 正規名 `{base}p{s}def{ID}` と旧名が併存する場合、
+/// 正規名優先: 正規名 `{base}p{s}def{ID}` と旧名が併存する場合、
 /// 連鎖先頭の正規名が採られる（scope 0 の `balloonp0def`・scope 1 の `balloonp1def` とも）。
 #[test]
 fn select_faces_prefers_canonical_name_over_legacy() {
@@ -163,7 +163,7 @@ fn select_faces_prefers_canonical_name_over_legacy() {
     );
 }
 
-/// 檻 3（R1.3）ID 単位フォールバック: `balloonk0` があり `balloonk1` が無いとき、
+/// ID 単位フォールバック: `balloonk0` があり `balloonk1` が無いとき、
 /// scope 1 の面 0 は `balloonk0`（tier=Own）・面 1 は `balloons1`（tier=Default）。
 /// ある ID の欠落を理由に系列全体を後段の接頭辞へ切り替えない。
 #[test]
@@ -207,7 +207,7 @@ fn select_faces_falls_back_per_face_id_not_per_series() {
     );
 }
 
-/// R1.3（ID 集合の和）: 面 ID は連鎖内の**全**接頭辞にまたがる和であり、先頭接頭辞の
+/// ID 集合の和: 面 ID は連鎖内の**全**接頭辞にまたがる和であり、先頭接頭辞の
 /// ID 集合に閉じない。先頭にしか無い ID も後段にしか無い ID も双方が採られる。
 #[test]
 fn select_faces_unions_face_ids_across_all_prefixes() {
@@ -231,7 +231,7 @@ fn select_faces_unions_face_ids_across_all_prefixes() {
     );
 }
 
-/// 檻 4（R1.4）後方互換収束: 連鎖の先頭側接頭辞の画像を 1 枚も含まないバルーンでは、
+/// 後方互換収束: 連鎖の先頭側接頭辞の画像を 1 枚も含まないバルーンでは、
 /// 全 scope が `balloons` 系列へ解決され、同一の面集合（ID と採用ファイル）を得る。
 /// tier は連鎖上の地位ゆえ scope で異なる（scope 0 は Own・scope≧1 は Default）。
 #[test]
@@ -255,7 +255,7 @@ fn select_faces_converges_to_legacy_series_for_all_scopes() {
     }
 }
 
-/// 檻 5（R1.5）非バルーン面除外: 入力ウィンドウ用 `balloonc*`・装飾用 `arrow*`/`marker*`/
+/// 非バルーン面除外: 入力ウィンドウ用 `balloonc*`・装飾用 `arrow*`/`marker*`/
 /// `online*`・非数字・非 png はどの連鎖でも採用されない。接頭辞は完全一致ゆえ
 /// `balloonc0.png` を `balloonk` の面と誤認する事故は構造的に起こり得ない。
 #[test]
@@ -286,7 +286,7 @@ fn select_faces_rejects_non_balloon_faces() {
     );
 }
 
-/// R1.5（判定 3 段）: 接頭辞 strip（大小無視）→ `.png` strip → 残余の全数字化。
+/// 判定 3 段: 接頭辞 strip（大小無視）→ `.png` strip → 残余の全数字化。
 /// いずれか 1 段でも満たさなければ面でない。
 #[test]
 fn face_id_of_is_strict_three_stage_predicate() {
@@ -317,7 +317,7 @@ fn face_id_of_is_strict_three_stage_predicate() {
     );
 }
 
-/// 決定論（設計 Postconditions）: 戻りは surface id **昇順**であり、入力（ディレクトリ
+/// 決定論: 戻りは surface id **昇順**であり、入力（ディレクトリ
 /// 走査順）に依存しない。辞書順ではなく数値順である（`balloons10` は `balloons2` の後）。
 #[test]
 fn select_faces_is_deterministic_regardless_of_input_order() {
@@ -363,10 +363,10 @@ fn select_faces_preserves_original_file_name_case() {
     assert_eq!(a.len(), 1, "同一 ID の採用面は 1 つ");
 }
 
-// ── 檻 6: 採用接頭辞からの面別上書きファイル名導出（R2.2/R2.3・R7.1）─────────────
-// R2.3（後段へ縮退した面は後段接頭辞の上書き層）は `resolve_balloon_faces_falls_back_per_face_id_on_real_directory` が持つ。
+// ── 檻 6: 採用接頭辞からの面別上書きファイル名導出─────────────
+// 後段へ縮退した面は後段接頭辞の上書き層を使うことは `resolve_balloon_faces_falls_back_per_face_id_on_real_directory` が持つ。
 
-/// 檻 6（R2.2）: 正規名を採った面は正規名の上書き層を引き、実ファイル名の大小に
+/// 正規名を採った面は正規名の上書き層を引き、実ファイル名の大小に
 /// 依らず**連鎖上の接頭辞**（小文字正準形）から導出される。
 #[test]
 fn override_file_name_uses_chain_prefix_not_file_case() {
@@ -389,9 +389,9 @@ fn override_file_name_uses_chain_prefix_not_file_case() {
     );
 }
 
-// ── 公開 API `resolve_balloon_faces`（列挙 1 回＋選択核・R1.7/6.1/6.2/6.4）─────────
+// ── 公開 API `resolve_balloon_faces`（列挙 1 回＋選択核）─────────
 
-/// R1.7: 面 ID 0 がどの接頭辞でも解決できないとき、log-first で `Err` を返す
+/// 面 ID 0 がどの接頭辞でも解決できないとき、log-first で `Err` を返す
 /// （全消費者共通の単一施行点・既存縮退経路へ伝播させる）。
 #[test]
 fn resolve_balloon_faces_requires_face_zero() {
@@ -407,7 +407,7 @@ fn resolve_balloon_faces_requires_face_zero() {
     );
 }
 
-/// R6.4: バルーンディレクトリの走査自体に失敗したとき、log-first で `Err` を返す。
+/// バルーンディレクトリの走査自体に失敗したとき、log-first で `Err` を返す。
 #[test]
 fn resolve_balloon_faces_errors_on_unreadable_directory() {
     let dir = TempDir::new();
@@ -420,7 +420,7 @@ fn resolve_balloon_faces_errors_on_unreadable_directory() {
     );
 }
 
-/// 決定論（設計 Postconditions）: 同一ディレクトリに対する解決は surface id **昇順**で、
+/// 決定論: 同一ディレクトリに対する解決は surface id **昇順**で、
 /// 反復呼び出しで同一結果を返す（ディレクトリ走査順は非決定ゆえ明示ソートに依る）。
 /// 非バルーン面は列挙段を通り抜けても選択核で落ちる。
 #[test]
@@ -446,7 +446,7 @@ fn resolve_balloon_faces_is_deterministic_and_ascending() {
     );
 }
 
-/// R1.2/R1.3/R6.2: 実ディレクトリ経由でも ID 単位フォールバックが効き、scope 1 の面 0 は
+/// 実ディレクトリ経由でも ID 単位フォールバックが効き、scope 1 の面 0 は
 /// 相方側（tier=Own）・面 1 のみデフォルト段（tier=Default＝warn 対象）へ縮退する。
 /// 同ディレクトリを scope 0 で解決すると相方側の面を一切採らない。
 #[test]
@@ -486,7 +486,7 @@ fn resolve_balloon_faces_falls_back_per_face_id_on_real_directory() {
     );
 }
 
-/// R6.2 の本体側縮退 warn だけを抜き出す（他の warn 経路と混同しないよう level ＋ 文言で絞る）。
+/// 本体側縮退 warn だけを抜き出す（他の warn 経路と混同しないよう level ＋ 文言で絞る）。
 fn default_fallback_warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
@@ -498,7 +498,7 @@ fn default_fallback_warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .collect()
 }
 
-/// 檻 7-a（R6.2）発火する側: scope 1 で [`ChainTier::Default`] を採った面**だけ**に warn が出て、
+/// 発火する側: scope 1 で [`ChainTier::Default`] を採った面**だけ**に warn が出て、
 /// その 1 イベントに要求フィールド（scope・面 ID・採用ファイル）が揃う。同じ解決で
 /// [`ChainTier::Own`] を採った面 0（`balloonk0`）には warn が出ない。
 ///
@@ -552,7 +552,7 @@ fn resolve_warns_only_for_default_tier_face_at_scope1() {
     );
 }
 
-/// 檻 7-b（R6.2）発火しない側 その 1: scope 0 は連鎖にデフォルト段を持たない（末尾の
+/// 発火しない側 その 1: scope 0 は連鎖にデフォルト段を持たない（末尾の
 /// `balloons` が自身の Own 候補）ゆえ、縮退の概念が無く warn を一切出さない。
 #[test]
 fn resolve_emits_no_fallback_warn_at_scope0() {
@@ -572,7 +572,7 @@ fn resolve_emits_no_fallback_warn_at_scope0() {
     );
 }
 
-/// 檻 7-c（R6.2）発火しない側 その 2: scope 2 で [`ChainTier::KeroNamed`]（名指し相方系列
+/// 発火しない側 その 2: scope 2 で [`ChainTier::KeroNamed`]（名指し相方系列
 /// `balloonk`）を採った面には warn が出ず、同じ解決で [`ChainTier::Default`] へ落ちた面
 /// だけに出る。tier 述語が Default 以外へずれれば面の対応が崩れて RED になる。
 #[test]

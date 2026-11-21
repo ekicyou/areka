@@ -1,4 +1,4 @@
-//! バルーンの透過の宣言のテスト（spec: areka-P0-self-alpha-declaration 要件 2.1・2.3・2.4・2.7・2.8・5.7）。
+//! バルーンの透過の宣言のテスト。
 //!
 //! 宣言を読むのは基層の descript.txt だけで、面ごとの設定ファイルに上書きされないこと、シェルの
 //! キーを読まないこと、フォルダ直下の `.pna` の数を 1 行だけ記録すること、焼く関数が受けた値で
@@ -22,7 +22,7 @@ fn pna_warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .collect()
 }
 
-/// descript.txt の `0` は面ごとの設定ファイルの `1` に上書きされない（要件 2.1・2.4・2.7）。
+/// descript.txt の `0` は面ごとの設定ファイルの `1` に上書きされない。
 #[test]
 fn descript_declaration_is_not_overridden_by_face_settings() {
     let dir = TempDir::new();
@@ -33,7 +33,7 @@ fn descript_declaration_is_not_overridden_by_face_settings() {
     assert_eq!(load_balloon_use_self_alpha(dir.path()), UseSelfAlpha::Off);
 }
 
-/// シェルのキー（`seriko.use_self_alpha`）だけを書いたバルーンは宣言なし（要件 2.8）。
+/// シェルのキー（`seriko.use_self_alpha`）だけを書いたバルーンは宣言なし。
 #[test]
 fn shell_key_alone_is_undeclared() {
     let dir = TempDir::new();
@@ -48,7 +48,7 @@ fn shell_key_alone_is_undeclared() {
     );
 }
 
-/// フォルダ直下の `.pna` を拡張子の大小を問わず数え、`warn!` を 1 行だけ出す（要件 5.7）。
+/// フォルダ直下の `.pna` を拡張子の大小を問わず数え、`warn!` を 1 行だけ出す。
 #[test]
 fn pna_files_are_counted_once_in_one_warn() {
     let dir = TempDir::new();
@@ -69,7 +69,7 @@ fn pna_files_are_counted_once_in_one_warn() {
     );
 }
 
-/// `.pna` が 1 つも無ければ記録しない（要件 5.7）。
+/// `.pna` が 1 つも無ければ記録しない。
 #[test]
 fn no_pna_no_warn() {
     let dir = TempDir::new();
@@ -80,7 +80,7 @@ fn no_pna_no_warn() {
     assert!(pna_warns(&events).is_empty(), "{events:?}");
 }
 
-/// 焼く関数は受けた宣言で描く: `full` なら α なしの面の左上の色を抜かない（要件 2.3）。
+/// 焼く関数は受けた宣言で描く: `full` なら α なしの面の左上の色を抜かない。
 /// 対照として `1` では同じ絵が左上の色で抜かれて全部透明になる。
 #[test]
 fn full_keeps_the_top_left_color_of_an_alphaless_face() {

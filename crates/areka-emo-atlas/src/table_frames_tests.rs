@@ -1,4 +1,4 @@
-//! 表のコマの欄の単体テスト（spec: areka-P0-animated-image-decode 要件 2.5・4.2〜4.6）。
+//! 表のコマの欄の単体テスト。
 //!
 //! `with_frames` で組んだ表が、親の鍵で 0 番のコマを返し、親の番号でだけコマの並びを
 //! 答えることを、手組みの小さな表で確かめる。ファイルにも検体にも依存しない。
@@ -43,7 +43,7 @@ fn frames_table(animation: Animation) -> AtlasTable {
     )
 }
 
-/// 4.3: 親の鍵はいちばん小さい番号（0 番のコマ）を返す。静止画の番号は今と同じ。
+/// 親の鍵はいちばん小さい番号（0 番のコマ）を返す。静止画の番号は今と同じ。
 #[test]
 fn parent_key_resolves_to_frame_zero() {
     let t = frames_table(three_frames());
@@ -54,7 +54,7 @@ fn parent_key_resolves_to_frame_zero() {
     assert_eq!(t.len(), 4);
 }
 
-/// 4.2/4.5/2.5: 親の番号でコマの並び・待ち時間・繰り返し回数が答えられる。
+/// 親の番号でコマの並び・待ち時間・繰り返し回数が答えられる。
 #[test]
 fn animation_is_some_for_parent() {
     let t = frames_table(three_frames());
@@ -62,11 +62,11 @@ fn animation_is_some_for_parent() {
     assert_eq!(a.frames, vec![ElementId(1), ElementId(2), ElementId(3)]);
     assert_eq!(a.delays_ms, vec![100, 50, 0]);
     assert_eq!(a.loop_count, LoopCount::Finite(NonZeroU32::new(2).unwrap()));
-    // 4.4: 各コマは普通のエントリとして引ける。
+    // 各コマは普通のエントリとして引ける。
     assert_eq!(t.entry(a.frames[2]).original.w, 22);
 }
 
-/// 4.6: 静止画と 2 枚目以降のコマの番号では無し。
+/// 静止画と 2 枚目以降のコマの番号では無し。
 #[test]
 fn animation_is_none_for_still_and_later_frames() {
     let t = frames_table(three_frames());
@@ -147,7 +147,7 @@ fn panics_when_first_frame_is_not_parent() {
     frames_table(a);
 }
 
-/// 同じ鍵を 2 つ渡すと、`new` も `with_frames` も小さい方の番号を返す（指摘 11・4.3）。
+/// 同じ鍵を 2 つ渡すと、`new` も `with_frames` も小さい方の番号を返す。
 #[test]
 fn new_and_with_frames_resolve_duplicate_key_to_smaller_id() {
     let keys = || vec![key("dup.png"), key("dup.png")];

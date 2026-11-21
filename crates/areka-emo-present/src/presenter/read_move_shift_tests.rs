@@ -1,5 +1,5 @@
-//! ずれの読み口 `move_shift` と合図 `MoveShift` の決定論テスト（spec `seriko-pattern-calls`
-//! タスク 4.2・要件 7.1・7.6）。ずれが対象ごとに覚えられ、合成の覚えに触らないことを固定する。
+//! ずれの読み口 `move_shift` と合図 `MoveShift` の決定論テスト。ずれが対象ごとに覚えられ、
+//! 合成の覚えに触らないことを固定する。
 
 use bevy_ecs::world::World;
 

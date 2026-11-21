@@ -1,29 +1,29 @@
 //! toy(b) 統合試験（独立プロセス・bounded pump）: worker→UI pump 実走 echo 往復。
 //!
-//! # 目的（要件 8.2 / 8.3・design.md「toy tests」toy(b)・System Flows「UI 配送ブリッジ echo」）
-//! task 3 で実装した `ui` モジュール（`spawn_ui`／`UiSender`）と `reply` モジュール
+//! # 目的
+//! `ui` モジュール（`spawn_ui`／`UiSender`）と `reply` モジュール
 //! （`reply_channel`／`ReplyReceiver`）の**公開 API**を、`spawn_ui`＝内部で `spawn_local`／
 //! `MessageLoop::run`／`PostThreadMessageW` heartbeat の**実走 pump**上で駆動し、
-//! worker→UI アクターへの echo 往復が成立することを単一の機械 pass/fail（8.2/8.3）で観測する。
+//! worker→UI アクターへの echo 往復が成立することを単一の機械 pass/fail で観測する。
 //!
 //! # 縛ること
 //! 実際の `spawn_ui`／`UiSender` ブリッジと `reply_channel` の envelope パターンを**そのまま**
-//! 通して echo を往復させる（＝公開 API の正用法担保・design「正用法は toy(b) で担保」）。
+//! 通して echo を往復させる（＝公開 API の正用法担保）。
 //! あわせて受信のループの 2 つの枝を縛る: handler の `Err` の後も続く・全 `UiSender` を落とすと
-//! 終わる（audit-sylphya-actor #5）。pump は `ui_pump_support::run_pump_until` が回す。
+//! 終わる。pump は `ui_pump_support::run_pump_until` が回す。
 //!
-//! # スレッド構成（重要・tasks.md Implementation Notes / ui.rs Risks）
+//! # スレッド構成（重要）
 //! pump を回すスレッドが **UI（pump）スレッド**を演じる。`spawn_ui` は呼び出しスレッドの
 //! thread-local executor 窓へ drain タスクをスケジュールするため、`spawn_ui` と
 //! `MessageLoop::run` は**必ず同一スレッド**で実行する。別スレッドで `spawn_ui`
-//! すると drain タスクが走らず deadline 失敗（silent = case (c)）になる。worker と heartbeat は
+//! すると drain タスクが走らず deadline 失敗（静かに失敗する）になる。worker と heartbeat は
 //! 別スレッド。
 //!
 //! # bounded 保証（ハングしない）
 //! filter は「done フラグ or deadline 超過」で `msg_loop.quit()` する。heartbeat が
 //! 無入力でも ~25ms 間隔で `GetMessageW` を起こすため、echo が届かなくても deadline（5 秒）で
 //! 必ず pump を抜ける。deadline 超過・echo 内容不一致・応答不達はいずれも `assert!` 失敗として
-//! 観測される（8.3）。
+//! 観測される。
 
 mod ui_pump_support;
 
@@ -35,14 +35,14 @@ use std::time::Duration;
 use areka_actor::{ReplyError, ReplySender, reply_channel, spawn_ui};
 use ui_pump_support::run_pump_until;
 
-/// toy(b) の上限時間。echo 不達でもこの期限で必ず pump を抜ける（CI 余裕込み・design 例 5 秒）。
+/// toy(b) の上限時間。echo 不達でもこの期限で必ず pump を抜ける（CI 余裕込み）。
 const TEST_DEADLINE: Duration = Duration::from_secs(5);
 
 /// UI アクター宛メッセージ（消費者定義の enum・envelope 規約）。
 ///
-/// `Echo` は request/reply variant として返信端 [`ReplySender`] を同梱する（2.2 の oneshot 相当）。
+/// `Echo` は request/reply variant として返信端 [`ReplySender`] を同梱する。
 /// `Fail` は handler に `Err` を返させる（受信のループが止まらないことの確かめ）。
-/// `Close` は横断制御の停止メッセージ（3.1）で、drain タスクを即時終了させる。
+/// `Close` は横断制御の停止メッセージで、drain タスクを即時終了させる。
 enum UiMsg {
     /// echo 要求: `payload` をそのまま返信端へ返す。
     Echo {
@@ -108,7 +108,7 @@ fn echo_round_trip_after(before: Vec<UiMsg>) -> bool {
             }
 
             worker_done.store(true, Ordering::Release);
-            // drain タスクを止める（Close＝即時終了・3.2）。停止不達でも done＋deadline で pump は抜ける。
+            // drain タスクを止める（Close＝即時終了）。停止不達でも done＋deadline で pump は抜ける。
             let _ = ui_tx.send(UiMsg::Close);
         })
         .expect("worker thread must start");
@@ -119,7 +119,7 @@ fn echo_round_trip_after(before: Vec<UiMsg>) -> bool {
     done.load(Ordering::Acquire)
 }
 
-/// handler が `Err` を返した後も受信のループは続き、2 件目の Echo の返信が届く（#5）。
+/// handler が `Err` を返した後も受信のループは続き、2 件目の Echo の返信が届く。
 /// `Err` で止める直し間違いは返信が `Dropped`（または送信が Closed）になって worker が panic する。
 #[test]
 fn a_handler_error_does_not_stop_the_ui_actor() {
@@ -129,7 +129,7 @@ fn a_handler_error_does_not_stop_the_ui_actor() {
     );
 }
 
-/// 全 `UiSender` を落とすと UI アクターが終わる（#5・要件 5.3 の正規の終わり）。
+/// 全 `UiSender` を落とすと UI アクターが終わる（正規の終わり）。
 ///
 /// pump は子のスレッドで回す（`spawn_ui` もそのスレッド）。drain の終わりを `spawn_local` の
 /// 見張りで `ended` に映し、pump が止まったら子のスレッドが知らせを送る。テストのスレッドは

@@ -1,9 +1,9 @@
 //! 遷移観測の**サーフェス記録**（`kind=surface`）——語彙・レコード純関数・刻印の取り出し口。
 //!
-//! design.md の C3（`transition_record`＋`show.rs`／`refresh.rs`／`timing.rs`）が正本である。
-//! 表示 1 コマの適用で表示の物理寸か原寸の外形が変わった回と、その寸で可視化した回、および再表示を見送った回を
+//! 発行点は `show.rs`／`refresh.rs`／`timing.rs`、語彙とレコードの定義は本モジュールである。表示 1 コマの
+//! 適用で表示の物理寸か原寸の外形が変わった回と、その寸で可視化した回、および再表示を見送った回を
 //! wintf の観測チャネル（[`transition_diag::TRANSITION_TARGET`]）へ 1 行ずつ出し、窓書込・モニタ表
-//! 更新・メッセージ受理と**同一のフレーム番号系列**へ並べる（Requirement 2.2）。
+//! 更新・メッセージ受理と同一のフレーム番号系列へ並べる。
 //!
 //! # 行の形
 //!
@@ -11,25 +11,22 @@
 //! [transition] frame=<u32> t_us=<u64> kind=surface stage=<s> target_id=<u32> w=<w> h=<h> resized=<b> reason=<r>
 //! ```
 //!
-//! 接頭語（`frame`／`t_us`／`kind`）は [`transition_diag::record_prefix`] が組む。段階ごとに意味を
-//! 持たないフィールドは**落とさず**番兵 [`transition_diag::MISSING`]（`-`）で埋める——落とすと
-//! 「記録が出ていない」と「その段階にはその値が無い」の区別が事後に付かない（C1 と同じ規律）。
+//! 接頭語（`frame`／`t_us`／`kind`）は [`transition_diag::record_prefix`] が組む。段階ごとに意味を持たない
+//! フィールドは落とさず番兵 [`transition_diag::MISSING`]（`-`）で埋める。落とすと「記録が出ていない」と
+//! 「その段階にはその値が無い」の区別が事後に付かない。
 //!
 //! # `target_id` は数値で出す（`Debug` 表現ではない）
 //!
-//! [`TargetId`] の `Debug` は `TargetId(7)` だが、行には**内側の u32 だけ**を載せる。判定側
-//! （`areka-runtime` の `transition_judge`）は `target_id` から窓の scope と種別を規則
-//! 「shell = 2·scope ／ balloon = 2·scope+1」で写像するため、値が算術で読めることが要件である。
-//! scope・窓種別そのものを本レコードが運ばないのは、それが areka の語彙であり emo-present は
-//! 知らないからである（design C3・依存方向 wintf ← areka-emo-present ← areka）。
+//! [`TargetId`] の `Debug` は `TargetId(7)` だが、行には内側の u32 だけを載せる。判定側（`areka-runtime` の
+//! `transition_judge`）は `target_id` から窓の scope と種別を規則「shell = 2·scope ／ balloon = 2·scope+1」で
+//! 写像するため、値が算術で読めることが前提である。scope・窓種別そのものを本レコードが運ばないのは、
+//! それが areka の語彙で emo-present は知らないため（依存方向 wintf ← areka-emo-present ← areka）。
 //!
 //! # 既定 OFF・前置ガード
 //!
-//! 発行点（`show.rs`／`refresh.rs`）は [`transition_diag::is_enabled`] が真のときだけレコードを
-//! **組む**。`recompose-budget` が成立させた定常状態のアロケーション 0（Requirement 10.4）は
-//! 「既定運転で新たな確保が 1 バイトも起きない」ことを含むため、ガードが行の組立より外側に
-//! 無ければならない。発行が `debug!` である以上、濾過テストではこの退行を検出できない——
-//! 固定するのは `transition_record_tests.rs` の**本文走査**である。
+//! 発行点（`show.rs`／`refresh.rs`）は [`transition_diag::is_enabled`] が真のときだけレコードを組む。既定運転で
+//! 新たな確保を 1 バイトも起こさないため、ガードは行の組立より外側に無ければならない。発行が `debug!` なので
+//! 濾過テストではこの退行を検出できず、固定するのは `transition_record_tests.rs` の本文走査である。
 
 use wintf::ecs::FrameCount;
 use wintf::ecs::window::transition_diag::{self, FIELD_STAGE, MISSING, Stamp, TickStart};
@@ -77,13 +74,11 @@ pub const SURFACE_REASON_INVISIBLE: &str = "invisible";
 
 /// emo-present が発行する `reason` 語の全体。
 ///
-/// 発行側は 2 語とも記録するが、**判定側が Requirement 4.6（再導出結果が得られない窓は現状維持）の
-/// 対象として合否から除外するのは [`SURFACE_REASON_INVISIBLE`] だけ**である。
-/// [`SURFACE_REASON_K_UNCHANGED`] は記録されるが除外しない——あれは拡大率が変わらない限り定常
-/// フレームで全窓が出し続ける空振りであり、判定側の遷移区間は次の起点まで伸びるので、除外に使うと
-/// 毎遷移で全窓が除外側へ入って窓ごとの判定量が静かに消える（task 4.2 の実機採取で判明。裁定は
-/// 仕様 `areka-P0-dpi-transition-atomicity` の requirements.md 4.6 直下の注記〔2026-08-20〕。
-/// 除外の選り分けの実装は `areka-runtime` の `placement_tests::transition_judge::summarize`）。
+/// 発行側は 2 語とも記録するが、判定側が「再導出結果が得られない窓は現状維持」の対象として合否から
+/// 除外するのは [`SURFACE_REASON_INVISIBLE`] だけ。[`SURFACE_REASON_K_UNCHANGED`] は拡大率が変わらない限り
+/// 定常フレームで全窓が出し続ける空振りで、判定側の遷移区間は次の起点まで伸びるので、除外に使うと毎遷移で
+/// 全窓が除外側へ入って窓ごとの判定量が静かに消える（実機採取で判明）。除外の選り分けは `areka-runtime` の
+/// `placement_tests::transition_judge::summarize`。
 ///
 /// 語が増えたら除外の意味が変わるため、一覧を単一の定義元に置く。読み手は語彙の檻（テスト）だけ
 /// （判定側は [`SURFACE_REASON_INVISIBLE`] を直に名指す）。
@@ -195,24 +190,23 @@ pub(super) fn surface_line(record: &SurfaceRecord) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// 刻印の取り出し（D1＝World 資源が正）
+// 刻印の取り出し（World 資源が正）
 // ---------------------------------------------------------------------------
 
 /// World 資源（`FrameCount`＋`TickStart`）から刻印を組む。
 ///
-/// # スレッド局所ミラーを読まない（D1）
+/// # スレッド局所ミラーを読まない
 ///
-/// `apply_show`／`refresh_scale` はいずれも `&mut World` を受け取る**World を借りられる観測点**
-/// である。[`transition_diag::stamp`]（スレッド局所ミラー）を読んでよいのは World を借りられない
-/// 点（一括 flush・wndproc）だけであり、ライブラリである本 crate が「呼び手は UI スレッドに
-/// 居る」という**呼び手側の性質**へ寄りかかるのは退行である。資源から組めば、どのスレッドに
-/// 載っても同一 tick の全レコードが同じ `frame` を持つ。
+/// `apply_show`／`refresh_scale` は `&mut World` を受け取る、World を借りられる観測点である。
+/// [`transition_diag::stamp`]（スレッド局所ミラー）を読んでよいのは World を借りられない点（一括 flush・
+/// wndproc）だけで、ライブラリである本 crate が「呼び手は UI スレッドに居る」という呼び手側の性質へ寄りかかる
+/// のは退行である。資源から組めば、どのスレッドに載っても同一 tick の全レコードが同じ `frame` を持つ。
 ///
 /// # 資源が無い World（tick 前・テスト World）
 ///
 /// `EcsWorld::new` 以外で組まれた World には両資源が無い。その場合は `frame=0`・`t_us=0` を返す
-/// ——[`transition_diag::current_frame`] が tick 前に `0` を返すのと同じ意味であり、値を捏造
-/// しない。判定は `wrapping_sub` の差分だけで行う（D14）ため、この 0 は絶対値比較に晒されない。
+/// （[`transition_diag::current_frame`] が tick 前に `0` を返すのと同じ意味で、値を捏造しない）。判定は
+/// `wrapping_sub` の差分だけで行うため、この 0 は絶対値比較に晒されない。
 pub(super) fn stamp_of(world: &World) -> Stamp {
     match (
         world.get_resource::<FrameCount>(),

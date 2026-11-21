@@ -7,12 +7,12 @@ use super::test_support::{
     mount_entities, set_window_dpi, show_ok, show_with, spawn_window_with_dpi,
 };
 
-// ── 表示成立点の状態照合＝窓寸 reconcile 報告（タスク 3.4・議題 #2 裁定）────────────────────
-// design Flow 1 キー決定「表示成立点で今回 scaled 寸を前回適用寸と照合し、差分があれば新物理寸を
-// 呼び手（frame drain フェーズ）へ報告する」の檻。報告は `reply` ではなく取り出し可能な状態
+// ── 表示成立点の状態照合＝窓寸 reconcile 報告────────────────────
+// 表示成立点で今回 scaled 寸を前回適用寸と照合し、差分があれば新物理寸を
+// 呼び手（frame drain フェーズ）へ報告する檻。報告は `reply` ではなく取り出し可能な状態
 // （`take_pending_resize`）に置かれる——本番 drain 経路が `reply: None`（撃ちっぱなし）ゆえ。
 
-/// 要件 3.1/4.1/4.2 観測完了（**寸法変化が呼び手へ報告される**）: 同一 surface を k=1/1 で表示した
+/// **寸法変化が呼び手へ報告される**: 同一 surface を k=1/1 で表示した
 /// のち窓 `DPI` を 192 へ変えて再表示すると、表示成立点の状態照合が**新しい物理寸**を積み、
 /// `take_pending_resize` がそれを返す（呼び手＝drain フェーズが同一フレームで窓寸 reconcile に使う）。
 ///
@@ -28,7 +28,7 @@ fn dpi_change_reports_new_physical_size_to_caller() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // k=1/1 の初回表示（初回報告は Flow 3 手順 5 の領分ゆえ、ここでは取り出して捨てる）。
+    // k=1/1 の初回表示（初回報告は別の檻の領分ゆえ、ここでは取り出して捨てる）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.take_pending_resize(TargetId(0)),
@@ -69,7 +69,7 @@ fn dpi_change_reports_new_physical_size_to_caller() {
     );
 }
 
-/// 要件 4.2 観測完了（**べき等・churn を作らない**）: 物理寸が変わらない再表示は何も報告しない。
+/// **べき等・churn を作らない**: 物理寸が変わらない再表示は何も報告しない。
 ///
 /// 3 段で檻に入れる——(1) 初回表示の報告を取り出す、(2) 同一入力の再 show（**キャッシュヒット**）は
 /// `None`、(3) 別 surface（3000・**同一 native 原寸**＝キャッシュミスで再合成）も `None`。
@@ -119,7 +119,7 @@ fn unchanged_physical_size_reports_nothing() {
     );
 }
 
-/// 要件 3.1 観測完了（**初回表示も必ず報告する**・design Flow 3 手順 5）: 窓は起動時 k₀ 見積もり寸で
+/// **初回表示も必ず報告する**: 窓は起動時 k₀ 見積もり寸で
 /// 生成されており実窓 DPI 由来の k と一致する保証がないため、**前回適用寸が無い初回表示**も差分扱いで
 /// 物理寸を報告しなければ、k₀ と実 DPI の差分を補正する経路が永久に走らない。
 ///
@@ -134,7 +134,6 @@ fn first_show_reports_physical_size_for_initial_reconcile() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // 表示前は要求なし（attach しただけで窓を動かさない）。
     assert_eq!(
         presenter.take_pending_resize(TargetId(0)),
         None,
@@ -154,11 +153,11 @@ fn first_show_reports_physical_size_for_initial_reconcile() {
     );
 }
 
-/// 要件 4.4 観測完了（**失敗は何も報告しない・前値を維持する**）: 表示成立点より手前で early return
+/// **失敗は何も報告しない・前値を維持する**: 表示成立点より手前で early return
 /// する失敗経路は、窓寸 reconcile 要求を積まない。
 ///
 /// 2 種の失敗クラスで檻に入れる——(A) 表示未成立での device 失敗（表示記録が要る `GraphicsCore` を
-/// 一時退避する。2 個目のデバイスを作らない＝要件 5.3 の AV 非再導入を守る）、(C) 表示成立**後**の合成失敗
+/// 一時退避する。2 個目のデバイスを作らない＝アクセス違反を再導入しない）、(C) 表示成立**後**の合成失敗
 /// （`SurfaceNotFound`）。(C) は直前に窓 DPI を 192→96 へ変えてから失敗させるため、報告を
 /// 表示成立点より手前（例: `derive_scale` 直後）へ置いた実装なら `Some((4,3))` が積まれて RED になる。
 #[test]
@@ -232,7 +231,7 @@ fn failed_show_reports_no_resize_and_keeps_previous_values() {
         "表示成立前に early return した失敗が新 k の物理寸を報告している（報告点が表示成立点より手前）"
     );
 
-    // 前 k・前表示・照会契約はすべて据え置き（要件 4.4）。
+    // 前 k・前表示・照会契約はすべて据え置き。
     let t = presenter.targets.get(&TargetId(0)).unwrap();
     assert_eq!(t.applied, Some(k2), "失敗しても前 k を維持する");
     assert_eq!(

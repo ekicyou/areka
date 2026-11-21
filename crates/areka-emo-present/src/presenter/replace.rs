@@ -1,4 +1,4 @@
-//! 装着の置き換え（シェル・バルーンの差し替え・`areka-P0-shell-balloon-switch` 要件 4.6）。
+//! 装着の置き換え（シェル・バルーンの差し替え）。
 //!
 //! 置き換えの手順（`PresentCommand::ReplaceTarget` の適用・`apply_replace`）と、その中で使う
 //! 「登録を消す口」[`EmoPresenter::detach_target`] を持つ。`detach_target` は表から target を外し、
@@ -26,7 +26,7 @@ pub(super) struct DetachedState {
     pub native_size: Option<(u32, u32)>,
     /// まだ取り出されていない窓寸の要求（引き継がないと窓寸合わせが失われる）。
     pub pending_resize: Option<(u32, u32)>,
-    /// 出番の世代（窓が同じなので引き継ぐ・`animated-image-playback` 要件 2.3）。
+    /// 出番の世代（窓が同じなので引き継ぐ）。
     pub stage_generation: u64,
     /// 追い付いた世代（同上）。
     pub acked_generation: u64,
@@ -64,16 +64,15 @@ impl EmoPresenter {
 }
 
 impl EmoPresenter {
-    /// `ReplaceTarget` の適用（design「Present」の `apply_replace` の順）。
+    /// `ReplaceTarget` の適用。
     ///
-    /// 1 回の呼び出しの中で ⑴ 未登録なら `error!`（`detach_target` が残す）と `Err`・表は不変
-    /// → ⑵ 登録を消す（古い子 2 つはここで消える）→ ⑶ 引き継ぎの値で新しい装着を登録する（拡大政策
-    /// だけは新しい `author_dpi` から）→ ⑷ `show` があれば今日の `ShowSurface` と同じ経路で表示する
-    /// → ⑸ 返信、の順に行う。古い子と新しい子が同時に窓に在る瞬間は無い（要件 4.2）。
+    /// 未登録なら `error!`（`detach_target` が残す）と `Err` を返し表は不変。そうでなければ登録を消し
+    /// （古い子 2 つはここで消える）、引き継ぎの値で新しい装着を登録し（拡大政策だけは新しい
+    /// `author_dpi` から）、`show` があれば `ShowSurface` と同じ経路で表示して返信する。古い子と新しい
+    /// 子が同時に窓に在る瞬間は無い。
     ///
-    /// ⑷ の失敗（新しいシェルにその面が無い等）は `apply_show` が今日と同じく `error!` を残し、その
-    /// target は表示なしのまま残る。登録は済んでいるので返信は `Ok`——置き換えの失敗は窓が無い
-    /// （未登録の）ときだけである（要件 5.6・design の Error Handling）。
+    /// 表示の失敗（新しいシェルにその面が無い等）は `apply_show` が `error!` を残し、その target は表示
+    /// なしのまま残る。登録は済んでいるので返信は `Ok`。置き換えの失敗は未登録のときだけ。
     #[allow(clippy::too_many_arguments)]
     pub(super) fn apply_replace(
         &mut self,
@@ -95,7 +94,7 @@ impl EmoPresenter {
         self.attach_target(target_id, carried.window, emo_world, atlas, author_dpi);
         let target = self.targets.get_mut(&target_id).expect("直上で登録済み");
         target.ownership = carried.ownership;
-        // 前回の物理寸を引き継ぐので、⑷ の表示は物理寸が変わったときだけ窓寸の要求を積む。
+        // 前回の物理寸を引き継ぐので、続く表示は物理寸が変わったときだけ窓寸の要求を積む。
         target.applied = carried.applied;
         target.native_size = carried.native_size;
         target.pending_resize = carried.pending_resize;

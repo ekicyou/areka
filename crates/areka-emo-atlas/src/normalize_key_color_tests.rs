@@ -1,4 +1,4 @@
-//! 抜き色（キーカラー透過）の単体テスト（spec: areka-P0-shell-implicit-surface 要件 4.1〜4.10・5.4・7.3）。
+//! 抜き色（キーカラー透過）の単体テスト。
 //!
 //! α チャンネルを持たない絵は、左上の 1 画素（座標 0,0）と同じ 4 バイトの画素を
 //! すべて完全に透明（`0,0,0,0`）にし、それ以外の画素を 1 バイトも変えない。
@@ -16,7 +16,7 @@ fn key_out(img: DecodedImage) -> NormalizedImage {
     Normalizer.normalize(img, params(UseSelfAlpha::On))
 }
 
-/// 要件 4.2: 許容幅 0。1 成分だけ 1 違う色は不透明のまま 1 バイトも変わらない。
+/// 許容幅 0。1 成分だけ 1 違う色は不透明のまま 1 バイトも変わらない。
 #[test]
 fn color_off_by_one_in_a_single_component_stays_untouched() {
     let key = [10u8, 20, 30, 255];
@@ -32,7 +32,7 @@ fn color_off_by_one_in_a_single_component_stays_untouched() {
     assert_eq!(&out.pbgra[12..16], &near_r, "R が 1 違う色は不透明のまま");
 }
 
-/// 要件 4.7: 全画素が左上と同じ色の絵は失敗にならず、全画素が透明になる。
+/// 全画素が左上と同じ色の絵は失敗にならず、全画素が透明になる。
 #[test]
 fn image_of_a_single_color_is_ok_and_fully_transparent() {
     let key = [7u8, 7, 7, 255];
@@ -87,11 +87,11 @@ fn row_padding_is_neither_read_nor_written() {
     );
 }
 
-/// 要件 4.8: `tRNS` 相当（左上が完全に透明・他に半透明の画素）で、半透明はそのまま残る。
+/// `tRNS` 相当（左上が完全に透明・他に半透明の画素）で、半透明はそのまま残る。
 #[test]
 fn trns_like_semi_transparent_pixels_survive() {
     // 読み手が α を持たないとした絵に α<255 の画素が混じって届いた場合の備え（パレットの番号
-    // ごとの透明度を持つ絵は、emo-atlas-palette-alpha の後は `has_alpha` が真で、この腕へ来ない）。
+    // ごとの透明度を持つ絵は `has_alpha` が真で、この腕へ来ない）。
     let transparent = [0u8, 0, 0, 0]; // 左上＝tRNS で完全に透明
     let semi = [64u8, 0, 0, 128]; // 半透明（乗算済み）
     let opaque = [200u8, 100, 50, 255];

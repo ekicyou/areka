@@ -1,32 +1,28 @@
-//! 土台の絵の決定（要件 2.1 の表ア〜エ）と `surface.append`（要件 3.7・3.8）を、
-//! 権威の核 [`build_shell_target`] を通して外形で確かめる檻（要件 7.2・7.7）。
+//! 土台の絵の決定（表ア〜エ）と `surface.append` を、核 [`build_shell_target`] を通して外形で確かめる檻。
 //!
-//! 見るのは**合成した結果の外形**である。`areka-emo-compose` 側の檻（`base_image_tests.rs`）は
-//! 面の表の形（層 0 に何が入ったか）までしか見ないので、「足した層が焼く絵の一覧に載って
-//! いなかった」「載っていたが綴りが違って引けなかった」は素通りする——外形を算出する
-//! `flatten_extent` は索引表で引けない層を**記録なしで飛ばす**ため、そこが壊れていても
-//! 面の表の形だけなら緑のままである。ゆえに本ファイルは名前の判定から焼き付けまでを
-//! 通した外形で判定する。
+//! `areka-emo-compose` 側の檻（`base_image_tests.rs`）は面の表の形までしか見ないので、「足した層が
+//! 焼く絵の一覧に載っていない」「綴りが違って引けない」は素通りする（外形を算出する
+//! `flatten_extent` は索引表で引けない層を記録なしで飛ばす）。本ファイルは名前の判定から焼き付けまで
+//! を通した外形で判定する。
 //!
-//! fs には触れない。画像はメモリ上の復号器（[`MemoryDecoder`]）に実寸と色で登録し、
-//! シェルのフォルダは実在しないパスでよい（[`build_shell_target`] は fs を触らない核）。
+//! fs には触れない。画像はメモリ上の復号器（[`MemoryDecoder`]）に実寸と色で登録し、シェルの
+//! フォルダは実在しないパスでよい。
 //!
-//! # 表ア〜エの入力（画像の実寸の違いが外形に出る形）
+//! # 表ア〜エの入力
 //!
 //! | 面 | 宣言 | 画像 | 表 | 外形 |
 //! |---|---|---|---|---|
 //! | 1 | 無し | `surface1.png` 7×5 | ア | 7×5（画像の実寸） |
 //! | 0 | `element1` = `parts.png` 6×6 @(2,3) | `surface0.png` 4×12 | イ | 6×12（画像と `element1` を合わせた外形・画像が奥） |
 //! | 2 | `element0` = `front.png` 3×3 @(0,0) | `surface2.png` 20×20 | ウ | 3×3（`element0` の実寸・画像は使わない） |
-//! | 3 | `collision0` のみ（層 0 個） | 無し | エ | `EmptyComposition`（今日のまま） |
+//! | 3 | `collision0` のみ（層 0 個） | 無し | エ | `EmptyComposition` |
 //!
-//! イの 6×12 は幅が `element1` から・高さが画像から来ている——どちらか一方しか数えていなければ
-//! この値にならない。外形は層ごとの**原寸**の軸ごとの最大で決まり、層の位置は寄与しない
-//! （`compute_extent`・`crates/areka-emo-compose/src/plan_extent.rs`）ので、位置は画素の重なりを
-//! 見るためだけに与えてある。
+//! イの 6×12 は幅が `element1` から・高さが画像から来る。外形は層ごとの**原寸**の軸ごとの最大で
+//! 決まり、層の位置は寄与しない（`compute_extent`・`crates/areka-emo-compose/src/plan_extent.rs`）
+//! ので、位置は画素の重なりを見るためだけに与えてある。
 //!
-//! ウの画像を**わざと大きく別の絵**にしてあるのが較正である——`apply_base_images` の
-//! 「層 0 が在れば使わない」の判定を経路から外すと、面 2 の外形が 3×3 から 20×20 へ動いて
+//! ウの画像を**わざと大きく別の絵**にしてあるのが較正である。`apply_base_images` の
+//! 「層 0 が在れば使わない」の判定を外すと、面 2 の外形が 3×3 から 20×20 へ動いて
 //! [`case_c_layer_zero_present_keeps_the_declared_extent`] が赤くなる。
 
 use super::*;
@@ -66,13 +62,12 @@ const COLOR_APPENDEE: [u8; 4] = [90, 90, 90, 255];
 
 /// 檻の入力になるシェル（表ア〜エと `surface.append` の 2 例を 1 枚に同居させる）。
 ///
-/// 面 5 は波括弧を持たず画像だけで存在し、そこへ `surface.append` が層 1 を足す（要件 3.7）。
-/// 面 7 は宣言も画像も無い番号で、追記は新設せずに飛ばされる（要件 3.8）。
+/// 面 5 は波括弧を持たず画像だけで存在し、そこへ `surface.append` が層 1 を足す。
+/// 面 7 は宣言も画像も無い番号で、追記は新設せずに飛ばされる。
 ///
 /// 追記する絵に面 0 と同じ `parts.png` を使うのは、焼く絵の一覧が `shell.surfaces` から
 /// 導かれる（`ManifestDeriver::derive`）ためである——追記にしか現れない綴りは索引表に載らず、
 /// 外形を算出する `flatten_extent` が記録なしで飛ばすので、追記が届いたかどうかが外形に出ない。
-/// 本仕様は焼く絵の一覧を変えないので（design「Modified Files」）、ここは既に焼かれる綴りで組む。
 fn surfaces_txt() -> String {
     format!(
         "surface0\n{{\nelement1,overlay,parts.png,{px},{py}\n}}\n\
@@ -144,7 +139,7 @@ fn compose(
     )
 }
 
-/// 表ア（要件 2.2・3.9）: 宣言の無い番号は画像 1 枚で存在し、外形は**画像の実寸**になる。
+/// 表ア: 宣言の無い番号は画像 1 枚で存在し、外形は**画像の実寸**になる。
 #[test]
 fn case_a_image_only_surface_takes_the_image_extent() {
     let target = build_table_target();
@@ -173,7 +168,7 @@ fn case_a_image_only_surface_takes_the_image_extent() {
     );
 }
 
-/// 表イ（要件 2.1・2.5）: 層 0 の空いた面では、画像と `element1` を**合わせた**外形になり、
+/// 表イ: 層 0 の空いた面では、画像と `element1` を**合わせた**外形になり、
 /// 画像は最も奥（層 0）へ敷かれる。
 ///
 /// 外形 6×12 は画像だけ（4×12）でも `element1` だけ（6×6）でもない——幅は `element1` から、
@@ -208,7 +203,7 @@ fn case_b_empty_layer_zero_merges_the_image_underneath() {
     );
 }
 
-/// 表ウ（要件 2.1・10.3）: `element0` が在る面では画像を使わず、外形は**宣言どおり**のままである。
+/// 表ウ: `element0` が在る面では画像を使わず、外形は**宣言どおり**のままである。
 ///
 /// 較正: `apply_base_images`（`crates/areka-emo-compose/src/base_image.rs`）の
 /// 「層 0 の element が在るか」の判定を経路から外すと、面 2 の外形が 3×3 から 20×20 へ動いて
@@ -241,7 +236,7 @@ fn case_c_layer_zero_present_keeps_the_declared_extent() {
     );
 }
 
-/// 表エ（要件 2.1）: 画像の無い番号には触らない。層が皆無の面は今日どおり `EmptyComposition`。
+/// 表エ: 画像の無い番号には触らない。層が皆無の面は `EmptyComposition`。
 #[test]
 fn case_d_surface_without_image_stays_empty() {
     let target = build_table_target();
@@ -263,7 +258,7 @@ fn case_d_surface_without_image_stays_empty() {
     );
 }
 
-/// 土台の絵の決定の全体像（要件 2.1 の表の 4 通りが 1 枚のシェルで同時に成り立つ）。
+/// 土台の絵の決定の全体像（表の 4 通りが 1 枚のシェルで同時に成り立つ）。
 ///
 /// `used` と `shadowed` をそれぞれ値の一致で確かめるので、両者が重ならず和が「認めた画像」の
 /// 全体に等しいこと（[`BaseImageReport`] の不変条件・`crates/areka-emo-compose/src/base_image.rs`）も
@@ -287,7 +282,7 @@ fn every_image_is_either_used_or_shadowed_exactly_once() {
     );
 }
 
-/// 要件 3.7: `surface.append` は画像だけで存在する面にも効く（「既にある面」と数える）。
+/// `surface.append` は画像だけで存在する面にも効く（「既にある面」と数える）。
 ///
 /// 外形が画像（4×4）と追記した層（6×6）の軸ごとの最大になることが、追記が届いたことを示す。
 /// 層 0 が画像のままで、その画素が描かれていることが、追記が**画像を消していない**ことを示す。
@@ -319,7 +314,7 @@ fn append_reaches_a_surface_that_exists_only_as_an_image() {
     );
 }
 
-/// 要件 3.8: 宣言も画像も無い番号への `surface.append` は、既存の `warn!` を出して面を作らない。
+/// 宣言も画像も無い番号への `surface.append` は、既存の `warn!` を出して面を作らない。
 #[test]
 fn append_to_an_unknown_surface_warns_and_creates_nothing() {
     let (target, events) = capture(build_table_target);

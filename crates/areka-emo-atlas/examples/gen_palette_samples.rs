@@ -1,4 +1,4 @@
-//! パレットの絵の検体を作る（spec: emo-atlas-palette-alpha 要件 3.5・5.4・5.7・5.8）。
+//! パレットの絵の検体を作る。
 //!
 //! `cargo run -p areka-emo-atlas --example gen_palette_samples` で
 //! `src/testdata/palette/` に 8 本を書く。使うのは std だけ。

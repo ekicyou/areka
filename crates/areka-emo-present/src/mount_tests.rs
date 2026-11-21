@@ -2,10 +2,10 @@
 //!
 //! | 檻 | 固定する性質 |
 //! |---|---|
-//! | T-N2 | 論理配置（寸＝原寸・係数＝k・原点 0）と、`Visual::on_add` の連鎖挿入が実際に起きること |
-//! | T-N9 | T-N2 の対照: 親が窓でなければ連鎖挿入は起きないこと（片方だけでは恒真） |
-//! | T-N4 | 当たり判定で点が **1 回だけ** 縮約されること（二重縮約なし） |
-//! | T-N5 | 同値の書き込みでは変更検知が立たないこと |
+//! | 論理配置 | 論理配置（寸＝原寸・係数＝k・原点 0）と、`Visual::on_add` の連鎖挿入が実際に起きること |
+//! | 連鎖挿入の対照 | 親が窓でなければ連鎖挿入は起きないこと（片方だけでは恒真） |
+//! | 縮約 | 当たり判定で点が **1 回だけ** 縮約されること（二重縮約なし） |
+//! | 同値書き込み | 同値の書き込みでは変更検知が立たないこと |
 //!
 //! z 順の檻は本ファイル、非表示切替の檻は `mount_visibility_tests.rs` に残る。
 
@@ -24,7 +24,7 @@ use wintf::ecs::{
 
 use super::test_support::{attach_fixture, attach_fixture_under_window};
 
-/// R1.4: attach 後、text-layer slot が surface entity の**兄弟**かつ**上位 z**（`Children` 先頭）で
+/// attach 後、text-layer slot が surface entity の**兄弟**かつ**上位 z**（`Children` 先頭）で
 /// 存在し、`Name("emo-text-layer-slot")` を持ち、内容（描画リソース）を持たない予約 seam であること。
 ///
 /// z 典拠: `visual_hierarchy_sync_system` は `Children` を前方反復し `InsertAtBottom` するため
@@ -74,7 +74,7 @@ fn text_slot_is_higher_z_sibling_with_name() {
     );
 }
 
-/// **T-N2**: 窓の子として装着したとき、surface entity が
+/// 窓の子として装着したとき、surface entity が
 ///
 /// 1. 論理配置（`Arrangement` の寸＝原寸・係数＝k・**原点 0**）と表示側の一式
 ///    （`GraphicsCommandList`・`HitTest::alpha_mask`・`AlphaMaskResource`）を持ち、
@@ -89,7 +89,7 @@ fn text_slot_is_higher_z_sibling_with_name() {
 /// 「offset × 自身の累積スケール」と `impl Mul<Arrangement> for GlobalArrangement` の
 /// 「offset × 親スケール」は offset が 0 のときだけ一致する。
 ///
-/// 対照は [`chain_insertion_requires_owner_window`]（T-N9）。
+/// 対照は [`chain_insertion_requires_owner_window`]。
 #[test]
 fn arrangement_is_logical_native_with_scale_k_and_on_add_chain_runs() {
     let k = ScaleRatio::new(5, 4).expect("5/4");
@@ -178,10 +178,10 @@ fn arrangement_is_logical_native_with_scale_k_and_on_add_chain_runs() {
     );
 }
 
-/// **T-N9**（T-N2 の較正・対照）: 親が `Window` を持たなければ `Visual::on_add` の
+/// 対照（上の檻の較正）: 親が `Window` を持たなければ `Visual::on_add` の
 /// `VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty` は**挿さらない**。
 ///
-/// T-N2 だけでは「そもそもフックが動いていない」場合を排除できず、逆に本テストだけでは
+/// 上の檻だけでは「そもそもフックが動いていない」場合を排除できず、逆に本テストだけでは
 /// 「何も挿さらない」だけを見ることになる。対で置いて初めて「窓配下でのみ挿さる」が固定される。
 ///
 /// フック自体は走っていること（＝窓判定の分岐だけが落ちたこと）は、owner Window に依らず常に
@@ -242,13 +242,13 @@ fn known_mask() -> AlphaMask {
     AlphaMask::from_pbgra32(&pixels, 4, 4, 4 * 4)
 }
 
-/// **T-N4**: 原寸 4×4 のマスクを k=2 の非等倍で配置したとき、クリック透過の判定
+/// 原寸 4×4 のマスクを k=2 の非等倍で配置したとき、クリック透過の判定
 /// （`hit_test_in_window` → `alpha_mask_hit`）が「点を **1 回だけ** 縮約した表」と一致する。
 ///
 /// 経路は本番と同じ `evaluate_targets` → `hit_test_in_window` → `hit_test_in_window_ex` → `hit_test_ex` →
 /// `hit_test_entity_ex` → `bounds.contains` → `alpha_mask_hit`。`alpha_mask_hit` は境界に対する比例写像
 /// `⌊(p − left) / (native × k) × native⌋ = ⌊(p − left) / k⌋` を掛けるので、emo 側が点を
-/// 縮約していれば ÷k が二重に効いて判定がずれる（設計 §÷k の写像・要件 4.2／4.7）。
+/// 縮約していれば ÷k が二重に効いて判定がずれる。
 ///
 /// 期待値は原寸マスクを `⌊client / k⌋` で 1 回だけ読む式で組む。式そのものが誤っていないことは、
 /// 1 回縮約と 2 回縮約とで答えが変わる 2 点をベタ書きで押さえて較正する。
@@ -267,7 +267,6 @@ fn hit_test_reduces_the_point_by_k_exactly_once() {
         })
         .id();
 
-    // surface entity: 論理配置は本番と同じ [`logical_arrangement`]。
     let surface = world
         .spawn((
             logical_arrangement(native, k),
@@ -341,7 +340,7 @@ fn hit_test_reduces_the_point_by_k_exactly_once() {
     }
 }
 
-/// **T-N5**: `set_layout`／`set_display` は同値の書き込みで変更検知を立てない。
+/// `set_layout`／`set_display` は同値の書き込みで変更検知を立てない。
 ///
 /// `Changed<Arrangement>` は `GlobalArrangement` → 面の寸合わせ → 全面再描画の連鎖を引くため、
 /// 変化のない適用で毎コマ立ててはならない。恒真にならないよう、同じテスト内で
@@ -408,7 +407,7 @@ fn same_value_writes_do_not_trigger_change_detection() {
     );
 }
 
-/// 要件 4.6: 装着の子を消す口（`despawn`）の後、窓の子は 0 で、面と文字層スロットの entity は
+/// 装着の子を消す口（`despawn`）の後、窓の子は 0 で、面と文字層スロットの entity は
 /// どちらも World に残らない。親を実 `Window` にして `Visual::on_add` の連鎖挿入が起きた装着で踏む。
 ///
 /// 較正: 消す前に窓の子が 2（面とスロット）であることを先に確かめる（「最初から 0」で恒真に
@@ -441,7 +440,7 @@ fn despawn_removes_both_children_from_the_window() {
     assert!(world.get_entity(window).is_ok(), "窓そのものは消さない");
 }
 
-/// 指摘 19: 面と文字層の entity が先に消えた装着へ 4 つの口（`set_visible`・`set_layout`・
+/// 面と文字層の entity が先に消えた装着へ 4 つの口（`set_visible`・`set_layout`・
 /// `set_display`・`despawn`）を呼ぶと、装着契約の破綻の記録 5 つがそれぞれ 1 件以上残る
 /// （沈黙する失敗経路を作らない）。
 #[test]

@@ -1,4 +1,4 @@
-//! 印の絵の読み込みの入口 [`resolve_marker_pair`] のテスト（要件 2.3・2.4・2.5・9.1・9.4・11.1）。
+//! 印の絵の読み込みの入口 [`resolve_marker_pair`] のテスト。
 //!
 //! 一時フォルダ（ワークツリーの `target\` の下）に名前だけのファイルを置き、絵は偽の読み手
 //! （[`MemoryDecoder`]）が返す。戻り・片方だけ・0 枚・壊れた絵の答えと記録の行を固定する。
@@ -32,7 +32,7 @@ fn resolve(
     })
 }
 
-/// 番号ごとの選びと読み込み、解決 1 回につき debug 1 行（要件 2.1・9.1）。
+/// 番号ごとの選びと読み込み、解決 1 回につき debug 1 行。
 #[test]
 fn resolves_each_number_and_logs_one_debug_line() {
     let dir = TempDir::new();
@@ -54,7 +54,7 @@ fn resolves_each_number_and_logs_one_debug_line() {
     assert!(field(debugs[0], "down").ends_with("arrow1.png 8x6"));
 }
 
-/// 書かれた名前の絵が無い番号は既定の連鎖へ落ち、番号ごとに warn 1 回（要件 2.3）。
+/// 書かれた名前の絵が無い番号は既定の連鎖へ落ち、番号ごとに warn 1 回。
 #[test]
 fn explicit_name_missing_falls_back_with_warn_per_number() {
     let dir = TempDir::new();
@@ -84,7 +84,7 @@ fn explicit_name_missing_falls_back_with_warn_per_number() {
     );
 }
 
-/// 片方だけなら見つかった方だけ・無い番号を warn 1 回（要件 2.5）。
+/// 片方だけなら見つかった方だけ・無い番号を warn 1 回。
 #[test]
 fn only_one_side_warns_missing_number() {
     let dir = TempDir::new();
@@ -103,7 +103,7 @@ fn only_one_side_warns_missing_number() {
     assert_eq!(field(debugs[0], "down"), "none");
 }
 
-/// 1 枚も無ければ両方無し・warn 無し・debug 1 行（要件 2.4）。
+/// 1 枚も無ければ両方無し・warn 無し・debug 1 行。
 #[test]
 fn no_images_is_default_pair_with_debug_only() {
     let dir = TempDir::new();
@@ -120,7 +120,7 @@ fn no_images_is_default_pair_with_debug_only() {
     assert_eq!(field(debugs[0], "down"), "none");
 }
 
-/// 壊れた絵は場所と理由を warn し、その番号だけ無しで続ける（要件 9.4）。
+/// 壊れた絵は場所と理由を warn し、その番号だけ無しで続ける。
 #[test]
 fn broken_image_warns_path_and_reason_and_drops_only_that_number() {
     let dir = TempDir::new();
@@ -163,7 +163,7 @@ fn missing_dir_warns_once_and_returns_default_pair() {
     assert_eq!(field(warns[0], "dir"), missing.display().to_string());
 }
 
-/// フォルダの列は番号ごとに先頭から探す（先のフォルダに無い番号だけ次のフォルダ・要件 7.3）。
+/// フォルダの列は番号ごとに先頭から探す（先のフォルダに無い番号だけ次のフォルダ）。
 #[test]
 fn dirs_are_searched_in_order_per_number() {
     let first = TempDir::new();
@@ -223,7 +223,7 @@ fn resolve_single(
     })
 }
 
-/// script-small-tags 要件 5.2: 書いた名前の 1 枚を読み、無い印は立てない。
+/// 書いた名前の 1 枚を読み、無い印は立てない。
 #[test]
 fn single_marker_loads_explicit_name() {
     let dir = TempDir::new();
@@ -238,7 +238,7 @@ fn single_marker_loads_explicit_name() {
     assert!(marker_events(&events, Level::WARN).is_empty());
 }
 
-/// script-small-tags 要件 5.3: 書いた名前の絵が無ければ連鎖の残りで探し、無いことを結果に載せる。
+/// 書いた名前の絵が無ければ連鎖の残りで探し、無いことを結果に載せる。
 #[test]
 fn single_marker_explicit_missing_falls_back_and_flags() {
     let dir = TempDir::new();
@@ -260,7 +260,7 @@ fn single_marker_explicit_missing_falls_back_and_flags() {
     assert!(got.explicit_missing);
 }
 
-/// script-small-tags 要件 5.2: 壊れた絵は矢印と同じ warn を出し、次の候補へ進まず「絵なし」。
+/// 壊れた絵は矢印と同じ warn を出し、次の候補へ進まず「絵なし」。
 #[test]
 fn single_marker_broken_image_is_no_image() {
     let dir = TempDir::new();

@@ -1,5 +1,4 @@
-//! 表示成立点の倍率の記録（`presenter/scale_change.rs`）の檻（GPU・`shell-scale-linkage` 要件 3.3・
-//! 3.4・4.2・4.4・5.6・5.7）。
+//! 表示成立点の倍率の記録（`presenter/scale_change.rs`）の檻（GPU）。
 //!
 //! | 檻 | 固定する性質 |
 //! |---|---|

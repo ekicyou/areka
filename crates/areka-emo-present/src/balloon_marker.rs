@@ -1,10 +1,10 @@
-//! 印の族（スクロールの矢印・クリック待ち）の表と名前の連鎖、番号ごとの絵の選び（balloon_marker.rs）。
+//! 印の族（スクロールの矢印・クリック待ち）の表と名前の連鎖、番号ごとの絵の選び。
 //!
 //! 族の表は吹き出しの族と同じ `SeriesFamily` で持ち、連鎖は `prefix_chain` がそのまま作る
 //! （旧名 `arrow`／`clickwait` が最後）。descript の名前の鍵（`arrow.filename` など）で書かれた
 //! 名前は連鎖の先頭に置く。番号 `0`（上・縦書きでは右）と `1`（下・縦書きでは左）は、それぞれ
-//! 別に連鎖の先頭から辿る（番号ごと・要件 2.1）。名前の判定はバルーンの面と同じ
-//! `face_digits_of`（大小無視・`.png`・全数字）を共有する（要件 2.6）。
+//! 別に連鎖の先頭から辿る。名前の判定はバルーンの面と同じ
+//! `face_digits_of`（大小無視・`.png`・全数字）を共有する。
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -21,7 +21,7 @@ pub const ARROW_FAMILY: SeriesFamily = SeriesFamily {
     scope1_legacy: &["arrowk"],
 };
 
-/// クリック待ちの印の族（本 spec では表と決定論のテストだけ・絵は読まない・要件 2.7）。
+/// クリック待ちの印の族（ここでは表と決定論のテストだけ・絵は読まない）。
 pub const CLICKWAIT_FAMILY: SeriesFamily = SeriesFamily {
     base: "clickwait",
     scope0_legacy: &["clickwaits", "clickwait"],
@@ -31,7 +31,7 @@ pub const CLICKWAIT_FAMILY: SeriesFamily = SeriesFamily {
 /// 印の名前の連鎖（書かれた名前を先頭に、族の連鎖を後に辿る）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MarkerChain {
-    /// 名前の鍵で書かれた名前（無ければ `None`・全スコープ共通・要件 2.2）。
+    /// 名前の鍵で書かれた名前（無ければ `None`・全スコープ共通）。
     pub explicit: Option<String>,
     /// 族の連鎖（[`prefix_chain`] の答え）。
     pub chain: Vec<SeriesPrefix>,
@@ -135,11 +135,11 @@ pub struct MarkerPair {
 
 /// 印の絵を順の付いたフォルダの列から解いて読む（fs と記録の入口・読み込みの時だけ呼ぶ）。
 ///
-/// 番号ごとに、列の先頭のフォルダで連鎖を全部辿り、無ければ次のフォルダへ進む（要件 7.3）。
-/// 書かれた名前の絵が無ければ既定の連鎖へ落ちて番号ごとに `warn!`（要件 2.3）、片方だけなら
-/// 無い番号を `warn!`（要件 2.5）、1 枚も無ければ両方 `None`（要件 2.4）。絵はバルーンの面と同じ
+/// 番号ごとに、列の先頭のフォルダで連鎖を全部辿り、無ければ次のフォルダへ進む。
+/// 書かれた名前の絵が無ければ既定の連鎖へ落ちて番号ごとに `warn!`、片方だけなら
+/// 無い番号を `warn!`、1 枚も無ければ両方 `None`。絵はバルーンの面と同じ
 /// [`Normalizer`] と `alpha` で乗算済み BGRA にし、読めない絵は場所と理由を `warn!` してその番号
-/// だけ `None` で続ける（要件 9.4）。解決 1 回につき `debug!` を 1 行残す（要件 9.1）。
+/// だけ `None` で続ける。解決 1 回につき `debug!` を 1 行残す。
 pub fn resolve_marker_pair(
     dirs: &[&Path],
     family: &SeriesFamily,
@@ -152,7 +152,7 @@ pub fn resolve_marker_pair(
     resolve_marker_pair_listed(&listed, family, scope, explicit, decoder, alpha)
 }
 
-/// [`resolve_marker_pair`] の核。フォルダの一覧は呼び手が 1 回取って渡す（指摘 40）。
+/// [`resolve_marker_pair`] の核。フォルダの一覧は呼び手が 1 回取って渡す。
 pub(crate) fn resolve_marker_pair_listed(
     listed: &[(&Path, Vec<String>)],
     family: &SeriesFamily,
@@ -238,7 +238,7 @@ pub(crate) fn resolve_marker_pair_listed(
     pair
 }
 
-/// 印の絵 1 枚を乗算済み BGRA に読む。読めない絵は場所と理由を `warn!` して `None`（要件 9.4）。
+/// 印の絵 1 枚を乗算済み BGRA に読む。読めない絵は場所と理由を `warn!` して `None`。
 fn load_marker_image(
     path: &Path,
     decoder: &impl ElementDecoder,
@@ -257,7 +257,7 @@ fn load_marker_image(
     }
 }
 
-/// 行の中の印の族（`markerp{n}def`・`markers`／`markerk`・旧名 `marker` が最後・script-small-tags 要件 5.2）。
+/// 行の中の印の族（`markerp{n}def`・`markers`／`markerk`・旧名 `marker` が最後）。
 pub(crate) const MARKER_FAMILY: SeriesFamily = SeriesFamily {
     base: "marker",
     scope0_legacy: &["markers", "marker"],
@@ -291,7 +291,7 @@ pub(crate) fn select_single_marker_name<S: AsRef<str>>(
 pub(crate) struct SingleMarker {
     /// 読んだ絵（1 枚も無いか読めなければ `None`）。
     pub image: Option<Arc<MarkerImage>>,
-    /// 書いた名前があり、その絵がフォルダに無かった（記録は呼び手が出す・要件 5.3）。
+    /// 書いた名前があり、その絵がフォルダに無かった（記録は呼び手が出す）。
     pub explicit_missing: bool,
 }
 
@@ -299,7 +299,7 @@ pub(crate) struct SingleMarker {
 ///
 /// 列の先頭のフォルダで連鎖を全部辿り、無ければ次のフォルダへ進む（矢印と同じ）。読みは矢印と同じ
 /// 手順で、読めない絵は `warn!` して次の候補へは進まず「絵なし」とする。フォルダの一覧は呼び手が
-/// [`list_dirs`] で 1 回取って渡す（指摘 40）。
+/// [`list_dirs`] で 1 回取って渡す。
 pub(crate) fn resolve_single_marker_listed(
     listed: &[(&Path, Vec<String>)],
     family: &SeriesFamily,

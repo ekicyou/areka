@@ -5,11 +5,11 @@ use super::test_support::{
     force_applied, hide_ok, invalidate_ok, make_world_with_gpu, show_ok, spawn_window_with_dpi,
 };
 
-// ── CurrentSurfaceRead: 現サーフェス id 状態のライフサイクル固定（Task 2・R3.1-3.4）───────────
+// ── CurrentSurfaceRead: 現サーフェス id 状態のライフサイクル固定───────────
 // 現サーフェス id は「最後に表示が成立したサーフェス id」（画面の絵でなく表示成立の結果・α非依存）。
 // 書き込みは既存 `visible` 更新点と同一の3箇所のみ（表示成立/EmptyComposition 縮退/Hide）＝additive。
 
-/// テスト 10・R3.2 観測完了（未表示→None）: `attach_target` 直後（一度も `ShowSurface` していない）は
+/// テスト 10・未表示→None: `attach_target` 直後（一度も `ShowSurface` していない）は
 /// `current_surface_id` が `None`。`hit_region_client` も現サーフェス無しゆえ `None`。
 ///
 /// `attach_target` は skeleton 登録のみで World に触れないため、GPU 不要の素の `World` で決定論固定する。
@@ -34,7 +34,7 @@ fn current_surface_id_is_none_before_first_show() {
     );
 }
 
-/// テスト 12・R3.3 観測完了（切替→新 id）: 面 1000 表示中に同寸の別 id 3000 を `ShowSurface` すると、
+/// テスト 12・切替→新 id: 面 1000 表示中に同寸の別 id 3000 を `ShowSurface` すると、
 /// `current_surface_id` が `Some(3000)` へ追随する（以後の問い合わせは新 id）。
 #[test]
 fn current_surface_id_follows_surface_switch() {
@@ -60,7 +60,7 @@ fn current_surface_id_follows_surface_switch() {
     );
 }
 
-/// テスト 13・R3.2/4.4 観測完了（Hide→None）: 有効表示後の `Hide` で `current_surface_id` が `None`
+/// テスト 13・Hide→None: 有効表示後の `Hide` で `current_surface_id` が `None`
 /// （「未表示等」に Hide が含まれる＝`\s[-1]` 相当で表示していない）。
 #[test]
 fn current_surface_id_is_none_after_hide() {
@@ -138,7 +138,7 @@ fn read_back_after_invalidate_cache_is_entry_evicted() {
     );
 }
 
-/// テスト 15・R3.2 観測完了（未登録 target→None）: 一度も `attach_target` していない target に対し
+/// テスト 15・未登録 target→None: 一度も `attach_target` していない target に対し
 /// `current_surface_id`／`hit_region_client` の両アクセサが `None`（未登録＝現サーフェス無し）。
 ///
 /// 両アクセサとも `HashMap` 引きのみで GPU/World を要さないため、`EmoPresenter::new()` 単体で固定する。
@@ -157,7 +157,7 @@ fn unregistered_target_returns_none_for_both_accessors() {
     );
 }
 
-/// 要件 1.6/1.1 観測完了（正常縮退の値契約）: attach のみ（未表示）target と未登録 target は
+/// 正常縮退の値契約: attach のみ（未表示）target と未登録 target は
 /// `region: None` へ縮退しつつ、`surface_point` は**有効 k で縮約した座標**を返す。
 ///
 /// `applied` 不在の縮退では有効 k が [`ScaleRatio::ONE`] ゆえ `surface_point` は入力素通し
@@ -182,7 +182,7 @@ fn unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point() 
         (181, 97),
         "applied 不在の縮退は等倍縮約（入力素通し）であること"
     );
-    // 負値・窓外でも panic せず定義された結果を返す（要件 2.5 の配線層での保存）。
+    // 負値・窓外でも panic せず定義された結果を返す（配線層での保存）。
     let neg = presenter.hit_region_client(TargetId(0), -7, -13);
     assert_eq!(neg.region, None);
     assert_eq!(neg.surface_point, (-7, -13), "負値も等倍縮約で素通し");
@@ -197,7 +197,7 @@ fn unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point() 
     );
 
     // 対照: 未表示のまま applied だけ在る状態では、縮退経路も**有効 k で縮約する**。
-    // k=2（192/96）の期待値はハードコード: 181→90・97→48（DD-1 の画素中心逆写像）。
+    // k=2（192/96）の期待値はハードコード: 181→90・97→48（画素中心逆写像）。
     force_applied(
         &mut presenter,
         TargetId(0),

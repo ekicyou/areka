@@ -1,28 +1,23 @@
-//! emo2 fixture の bake 出力に対する決定性（golden）テスト（要件 **5.5**）。
+//! emo2 fixture の bake 出力に対する決定性（golden）テスト。
 //!
-//! 既に構築済みの bake パイプライン（マニフェスト導出 → デコード → 正規化 → トリム →
-//! packing → 焼付）を、実 fixture emo2 の shell surface 一式で駆動し、その配置結果
+//! 実 fixture emo2 の shell surface 一式を bake し、その配置結果
 //! （各キーの `(page, uv_rect, trim_offset, original)`）が
-//! **固定 golden スナップショットに一致**すること（以降のリグレッションを検出）を検証する。
-//! 毎回の実行が固定の golden と一致すれば、実行ごとに同じ（run-to-run 決定性・5.5）も成り立つので、
+//! **固定 golden スナップショットに一致**することを検証する。
+//! 毎回の実行が固定の golden と一致すれば run-to-run 決定性も成り立つので、
 //! 2 回焼いて比べる別のテストは置かない。失敗 0 件は `emo2_e2e.rs` の最初のテストが見る。
 //!
-//! 本物の焼きはこのファイルで 1 回だけ。production コードは変更せず（本モジュールは `#[cfg(test)]`）、
-//! WIC 腕（COM 隔離）越しに実 PNG を復号する。
+//! 本物の焼きはこのファイルで 1 回だけ。WIC 腕越しに実 PNG を復号する。
 //!
-//! ## golden が機械非依存で安定する理由（「継続的実行環境で安定して再現」）
+//! ## golden が機械非依存で安定する理由
 //! - 画像の寸法・α は **PNG のコンテンツから決まる**（WIC はバイト列を忠実に復号する
 //!   だけで、寸法/画素は WIC 内部の非決定的状態に依存しない）。
 //! - α-bbox トリムは復号画素に対する決定的計算。
 //! - `rectangle-pack` の配置は入力が整列済みなら決定的（`Packer` は最終 `ElementId`
 //!   ＝ manifest 昇順で採番済みの安定入力を渡す）。
-//! - マニフェスト採番は `SetId` 昇順・rel_path 昇順で決定的（D7）。
-//!
-//! ゆえに run-to-run 等値と固定 golden スナップショットの双方が、実行環境に依らず
-//! 安定・再現する。
+//! - マニフェスト採番は `SetId` 昇順・rel_path 昇順で決定的。
 //!
 //! ## golden の再生成手順
-//! 配置アルゴリズムを意図的に変更した場合など golden を更新する必要が生じたら、
+//! 配置アルゴリズムを意図的に変更して golden を更新するときは、
 //! 無視指定の `record_golden` テストを明示的に実行する:
 //!
 //! ```text
@@ -50,11 +45,7 @@ fn bake_emo2_shell(dec: &WicDecoderArm) -> crate::BakeResult {
 /// `<set>\t<rel_path>\t<placement>` を出力する。`<placement>` は
 /// - `entry.placement == None`（全透明）→ `EMPTY orig=<ow>x<oh>`
 /// - `Some(Placement)` → `page=<p> uv=<x>,<y>,<w>,<h> off=<ox>,<oy> orig=<ow>x<oh>`
-///
-/// これにより各キーの `(page, uv_rect, trim_offset, original)` を design 要求どおり
-/// 捕捉する。human-diffable な安定書式を保つ。
 fn snapshot_table(table: &AtlasTable) -> String {
-    // 全 ElementId を列挙し (key, entry) を収集。
     let mut rows: Vec<(u32, String, String)> = Vec::with_capacity(table.len());
     for i in 0..table.len() {
         let id = ElementId(i as u32);
@@ -78,7 +69,6 @@ fn snapshot_table(table: &AtlasTable) -> String {
         };
         rows.push((key.set.0, key.rel_path.clone(), placement));
     }
-    // AtlasKey 昇順 = (set, rel_path) 昇順で整列（安定順序・golden 決定性）。
     rows.sort_by(|a, b| (a.0, &a.1).cmp(&(b.0, &b.1)));
 
     let mut out = String::new();
@@ -91,19 +81,17 @@ fn snapshot_table(table: &AtlasTable) -> String {
     out
 }
 
-/// golden スナップショット・リグレッション検出（決定性 5.5 も兼ねる）。
+/// golden スナップショット・リグレッション検出（決定性も兼ねる）。
 ///
 /// emo2 shell を 1 度 bake し、その配置スナップショットをコミット済み golden
-/// （`src/testdata/emo2_shell_golden.txt`）と比較する。不一致（配置アルゴリズムの
-/// 意図しない変更）は `assert_eq!` が actual/expected を並べて検出する。
+/// （`src/testdata/emo2_shell_golden.txt`）と比較する。
 ///
 /// golden は 55 行＝参照される全 element を持つ。`purple/a/null.png` は番号ごとの透明度を
 /// 持つパレットの絵（番号 1 が透明度 0）として α の道を通り、全画素が透明になるため `0\tpurple/a/null.png\tEMPTY orig=382x547` の
-/// 行として載る（脱落ではない・R5.5/5.6）。残る 54 行は α チャンネルの腕を通った絵で、
-/// 抜き色の腕の追加によって 1 文字も変わらない（R5.4）。
+/// 行として載る（脱落ではない）。残る 54 行は α チャンネルの腕を通った絵で、
+/// 抜き色の腕の追加によって 1 文字も変わらない。
 ///
-/// golden の再生成が必要な場合はモジュール doc の手順（無視指定 `record_golden` を
-/// `--ignored` 付きで実行）に従い、生成物をコミットする。
+/// golden の再生成はモジュール doc の手順に従い、生成物をコミットする。
 #[test]
 fn emo2_shell_matches_golden() {
     let expected = include_str!("testdata/emo2_shell_golden.txt");
@@ -125,9 +113,7 @@ fn emo2_shell_matches_golden() {
     });
 }
 
-/// golden 再生成用の無視指定テスト。通常の `cargo test` では `#[ignore]` ゆえ実行
-/// されず、CI が golden を書き換えることはない。意図的な再生成時のみ
-/// `-- --ignored --nocapture` で明示実行する。
+/// golden 再生成用の無視指定テスト。意図的な再生成時のみ `-- --ignored --nocapture` で明示実行する。
 ///
 /// 実行すると emo2 shell を bake し、配置スナップショットを
 /// `src/testdata/emo2_shell_golden.txt` へ書き込む（末尾改行 1 つ付き）。
@@ -141,7 +127,6 @@ fn record_golden() {
             env!("CARGO_MANIFEST_DIR"),
             "/src/testdata/emo2_shell_golden.txt"
         );
-        // 末尾改行 1 つを付けて POSIX テキストとして書き込む。
         std::fs::write(path, format!("{snapshot}\n")).expect("write golden snapshot");
         eprintln!("wrote golden ({} bytes) to {path}", snapshot.len());
     });

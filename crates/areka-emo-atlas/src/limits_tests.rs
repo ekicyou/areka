@@ -1,4 +1,4 @@
-//! `limits.rs` の兄弟テスト（spec: areka-P0-animated-image-decode 要件 6.1・6.2・6.9〜6.11）。
+//! `limits.rs` の兄弟テスト。
 //!
 //! プロセスの環境変数は書き換えない。値は偽の引く関数（名前 → 値）で渡す。
 
@@ -64,7 +64,7 @@ fn resolve_not_present_is_default_without_warning() {
 #[test]
 fn resolve_positive_number_is_taken() {
     assert_eq!(resolve_limit("N", Ok("42".into()), 5), (42, None));
-    // 前後の空白は除いて読む（port.rs の先例）。
+    // 前後の空白は除いて読む。
     assert_eq!(resolve_limit("N", Ok(" 42 ".into()), 5), (42, None));
 }
 
@@ -171,7 +171,7 @@ fn from_lookup_not_unicode_falls_back_alone() {
     assert_eq!(warnings[0].name, MAX_TOTAL_PIXELS_ENV);
 }
 
-/// 指摘 6⑸: 読めない値を返す引き手では `WARN` が 1 行（変数の名と値を含む）で、その項目は既定。
+/// 読めない値を返す引き手では `WARN` が 1 行（変数の名と値を含む）で、その項目は既定。
 #[test]
 fn from_env_with_warns_once_for_the_unreadable_item() {
     let (limits, log) = crate::log_capture::capture_logs(|| {

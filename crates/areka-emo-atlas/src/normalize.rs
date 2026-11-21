@@ -1,21 +1,17 @@
 //! 透過正規化（`use_self_alpha` 解釈・premultiplied BGRA 統一）。
 //!
-//! 設計決定 **D5 / D8**（要件 **R3**）。
-//!
 //! `use_self_alpha` の宣言 4 通り（`1`／`true`・`full`・`0`・宣言なし）を、絵 1 枚ごとに
-//! 「α を 255 にするか」「どの 4 バイトを抜くか」（[`AlphaRule`]）へ読み替えて画素に当てる
-//! （spec: areka-P0-self-alpha-declaration 要件 3・4・5・9）。決めるのは [`Normalizer::plan`]
-//! の 1 か所で、当てるのは [`apply`]。動く絵は 1 枚目で決めた扱いを全部のコマに当てる。
-//! 描けない組み合わせは無く、失敗を返さない。`.pna` の有無は決定に使わない（要件 5.7）。
+//! 「α を 255 にするか」「どの 4 バイトを抜くか」（[`AlphaRule`]）へ読み替えて画素に当てる。決めるのは
+//! [`Normalizer::plan`] の 1 か所で、当てるのは [`apply`]。動く絵は 1 枚目で決めた扱いを全部のコマに当てる。
+//! 描けない組み合わせは無く、失敗を返さない。`.pna` の有無は決定に使わない。
 //! 宣言なしは areka 独自の決まりで、届いた画素に α<255 が在れば α、無ければ抜き色。
 //!
-//! 入力も出力も乗算済み（premultiplied）の BGRA で、色の乗算・割り戻しはしない（D8）。
-//! 宣言の値は呼び手が `SurfaceSet` の [`AlphaParams`] で運び、本モジュールは設定ファイルを
-//! 読まない（3.6）。
+//! 入力も出力も乗算済み（premultiplied）の BGRA で、色の乗算・割り戻しはしない。
+//! 宣言の値は呼び手が `SurfaceSet` の [`AlphaParams`] で運び、本モジュールは設定ファイルを読まない。
 
 use crate::decode::DecodedImage;
 
-/// 上流由来の透過パラメータ（`SurfaceSet` 単位で注入・自ら読まない・3.6）。
+/// 上流由来の透過パラメータ（`SurfaceSet` 単位で注入・自ら読まない）。
 ///
 /// descript（shell/balloon 別定義）由来の透過設定を束ねる。ManifestDeriver は本値を
 /// 運ぶのみで解釈せず、解釈は Normalizer が担う。
@@ -47,11 +43,9 @@ pub(crate) struct AlphaRule {
     pub key: Option<[u8; 4]>,
 }
 
-/// 正規化済み画像（常に premultiplied BGRA・3.4/D8）。
+/// 正規化済み画像（常に premultiplied BGRA）。
 ///
-/// `pbgra` の長さは常に `stride * height`。α チャンネル採用腕はデコード出力
-/// （WIC PBGRA）を素通しするため実質恒等で、premultiplied のまま保持される
-/// （straight α 混入禁止＝にじみ/暗縁防止・D8）。
+/// `pbgra` の長さは常に `stride * height`。straight α を混ぜない（にじみ・暗縁の防止）。
 #[derive(Clone, Debug)]
 pub struct NormalizedImage {
     pub width: u32,
@@ -62,27 +56,25 @@ pub struct NormalizedImage {
 }
 
 /// 透過正規化器（`use_self_alpha` 解釈・premultiplied BGRA 統一）。
-///
-/// 上流由来の `AlphaParams` を入力として受け、自ら設定ファイルを読まない（3.6）。
 pub struct Normalizer;
 
 impl Normalizer {
-    /// 宣言と絵から画素の扱いを決める（純粋・画素を変えない・設計の表の 7 行）。
+    /// 宣言と絵から画素の扱いを決める（純粋・画素を変えない）。
     ///
     /// `On`・`Full` の「α を持つ絵」は読み手の `has_alpha` で決める。`Undeclared` は
-    /// `has_alpha` を見ず、届いた画素に α<255 が 1 つでも在るかで決める（要件 9）。
-    /// `.pna` の有無は受け取らない（要件 5 の 7）。幅か高さが 0 の絵は `key` を持たない。
+    /// `has_alpha` を見ず、届いた画素に α<255 が 1 つでも在るかで決める。
+    /// `.pna` の有無は受け取らない。幅か高さが 0 の絵は `key` を持たない。
     pub(crate) fn plan(img: &DecodedImage, params: AlphaParams) -> AlphaRule {
         let top_left = top_left(img);
         let (opaque, key) = match params.use_self_alpha {
-            // 1 / true: α あり→そのまま、α なし→左上の 4 バイトを抜く（要件 3.1・3.2）。
+            // 1 / true: α あり→そのまま、α なし→左上の 4 バイトを抜く。
             UseSelfAlpha::On if img.has_alpha => (false, None),
             UseSelfAlpha::On => (false, top_left),
-            // full: α あり→そのまま、α なし→全画素 α=255（要件 4.1・4.2）。
+            // full: α あり→そのまま、α なし→全画素 α=255。
             UseSelfAlpha::Full => (!img.has_alpha, None),
-            // 0: α を捨てて全画素 α=255、その後の左上と同じ色を抜く（要件 5.1〜5.3）。
+            // 0: α を捨てて全画素 α=255、その後の左上と同じ色を抜く。
             UseSelfAlpha::Off => (true, top_left.map(|[b, g, r, _]| [b, g, r, 255])),
-            // 宣言なし: 透明な画素が在れば α、無ければ `On` × α なしと同じ抜き色（要件 9）。
+            // 宣言なし: 透明な画素が在れば α、無ければ `On` × α なしと同じ抜き色。
             UseSelfAlpha::Undeclared if has_translucent_pixel(img) => (false, None),
             UseSelfAlpha::Undeclared => (false, top_left),
         };
@@ -91,9 +83,7 @@ impl Normalizer {
 
     /// `Normalizer::plan` で決めた扱いを `apply` で当てた絵を返す（失敗しない）。
     ///
-    /// 入力も出力も乗算済みの BGRA で、色の乗算・割り戻しはしない（D8）。動く絵の
-    /// 2 枚目以降のコマは、焼きの段が 1 枚目で決めた扱いを `apply` で直に当てる。
-    /// 透過パラメータは入力として受け、自ら設定を読みに行かない（3.6）。
+    /// 動く絵の 2 枚目以降のコマは、焼きの段が 1 枚目で決めた扱いを `apply` で直に当てる。
     pub fn normalize(&self, img: DecodedImage, params: AlphaParams) -> NormalizedImage {
         let rule = Self::plan(&img, params);
         apply_to(img, rule)
@@ -140,7 +130,7 @@ fn has_translucent_pixel(img: &DecodedImage) -> bool {
 /// 扱いを画素に当てる（`opaque` → `key` の順）。行の詰め物は読まない。
 ///
 /// `opaque` は各画素の 4 バイト目だけを 255 にし、色のバイトは触らない。`key` は
-/// 既存の [`clear_key_color`]（完全一致・許容幅 0）で抜く（要件 5.3・5.4・9.5）。
+/// 既存の [`clear_key_color`]（完全一致・許容幅 0）で抜く。
 pub(crate) fn apply(bgra: &mut [u8], width: u32, height: u32, stride: u32, rule: AlphaRule) {
     if rule.opaque {
         let row_bytes = width as usize * 4;
@@ -170,8 +160,6 @@ fn clear_key_color(bgra: &mut [u8], width: u32, height: u32, stride: u32, key: [
         };
         let (pixels, _) = row.as_chunks_mut::<4>();
         for px in pixels {
-            // 完全一致（許容幅 0・要件 4.2）。一致しない画素は 1 バイトも
-            // 変えず、一致した画素には色を残さない（要件 4.6）。
             if *px == key {
                 *px = [0, 0, 0, 0];
             }

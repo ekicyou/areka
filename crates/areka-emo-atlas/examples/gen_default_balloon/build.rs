@@ -1,4 +1,4 @@
-//! 既定バルーンの 23 ファイルの組み立て（spec: default-balloon-selfmade 要件 2.2・4.1・8.2・8.3）。
+//! 既定バルーンの 23 ファイルの組み立て。
 //!
 //! 端末へ出さず、ファイルも書かない（書くのは入口だけ）。ずれの見張りのテストもこのファイルと
 //! 子を `#[path]` の兄弟として読むので、子は `super::` で参照する。
@@ -9,7 +9,7 @@ use super::webp;
 use image::codecs::png::PngEncoder;
 use image::{ExtendedColorType, ImageEncoder};
 
-/// 絵の寸法の表（design.md「ファイルの表」）。描いた絵がこれと 1 つでも違えば書かない。
+/// 絵の寸法の表。描いた絵がこれと 1 つでも違えば書かない。
 const SIZES: &[(&str, u32, u32)] = &[
     ("arrow0", 11, 10),
     ("arrow1", 11, 10),

@@ -1,18 +1,15 @@
 //! デコードポート定義（`ElementDecoder` trait ＋ `DecodedImage` / `DecodeError`）。
 //!
-//! 設計決定 **D4**（要件 **R2**）。
-//!
 //! デコード手段を差し替え可能にするための trait ポート。既定腕＝WIC（COM 必要・
 //! [`wic_arm`] に隔離）／テスト腕＝メモリ PBGRA。正規化以降のコアは COM 非依存で、
-//! 既定手段を上位へ露出しない（R2.3）。デコード出力は premultiplied BGRA を
+//! 既定手段を上位へ露出しない。デコード出力は premultiplied BGRA を
 //! 想定し、変換前フレームのピクセルフォーマット由来の α 有無を保持する。
 //!
 //! 既定の腕は、静止画が [`wic_arm`]、動く絵が `image_arm`。
 //!
 //! 動く絵（コマが 2 枚以上の APNG・WebP）は「見出しを聞く」（`probe_animation`）→
 //! 「全コマを読む」（`decode_frames`）／「動きの 1 枚目だけを読む」（`decode_first_frame`）
-//! で読む（spec: areka-P0-animated-image-decode 要件 1.1・2.1〜2.5）。3 つとも既定の実装を
-//! 持つので、静止画しか読まない読み手は書き換え不要。
+//! で読む。3 つとも既定の実装を持つので、静止画しか読まない読み手は書き換え不要。
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -70,7 +67,7 @@ pub(crate) fn check_image(img: &DecodedImage) -> Result<(), String> {
     Ok(())
 }
 
-/// デコード失敗の診断可能なエラー（不在・破損）。失敗パスを常に保持する（2.2）。
+/// デコード失敗の診断可能なエラー（不在・破損）。失敗パスを常に保持する。
 #[derive(Debug)]
 pub enum DecodeError {
     /// 対象パスが存在しない。
@@ -138,7 +135,7 @@ fn no_unmultiplied(path: &Path) -> DecodeError {
     }
 }
 
-/// 差替可能デコードポート。既定手段（WIC）を上位へ露出しない（2.3・D4）。
+/// 差替可能デコードポート。既定手段（WIC）を上位へ露出しない。
 ///
 /// trait 面は「パス→デコード済み BGRA 画像」の最小面のみで、WIC/COM 型を一切公開しない。
 pub trait ElementDecoder {
@@ -365,7 +362,7 @@ mod tests {
         (w, h, stride, bgra, has_alpha)
     }
 
-    /// 契約: 登録済みパスの decode は Ok を返し、寸法・stride・長さ・has_alpha が一致（2.3）。
+    /// 契約: 登録済みパスの decode は Ok を返し、寸法・stride・長さ・has_alpha が一致。
     #[test]
     fn port_contract_success() {
         let (w, h, stride, bgra, has_alpha) = small_image(true);
@@ -377,7 +374,6 @@ mod tests {
         assert_eq!(img.height, h);
         assert_eq!(img.stride, stride);
         assert_eq!(img.has_alpha, has_alpha);
-        // Postcondition: bgra.len() == stride * height。
         assert_eq!(img.bgra.len(), (img.stride * img.height) as usize);
         assert_eq!(img.bgra, bgra);
     }
@@ -421,7 +417,6 @@ mod tests {
 
         assert!(dec.probe_pna(&with));
         assert!(!dec.probe_pna(&without));
-        // 未登録パスも既定 false。
         assert!(!dec.probe_pna(Path::new("shell/nowhere.png")));
     }
 
@@ -487,7 +482,7 @@ mod tests {
         }
     }
 
-    /// 抽象境界（2.3）: trait object 経由でのみ decode/probe_pna を呼べる。
+    /// 抽象境界: trait object 経由でのみ decode/probe_pna を呼べる。
     /// 署名は WIC/COM 型を露出しない（std::path とプレーン型のみ）ことをコンパイルで示す。
     #[test]
     fn port_hides_concrete_means() {
@@ -505,7 +500,7 @@ mod tests {
         assert_eq!(img.bgra.len(), (img.stride * img.height) as usize);
     }
 
-    /// 指摘 2: 長さの関数は上限の端で u32 ならあふれる値も usize で正しく出し、越えたら寸法と上限を書いて断る。
+    /// 長さの関数は上限の端で u32 ならあふれる値も usize で正しく出し、越えたら寸法と上限を書いて断る。
     #[test]
     fn pixel_len_at_max_does_not_overflow_and_refuses_over() {
         // 上限の端の長さは 2^30。u32 の掛け算ならあふれる寸法（u32::MAX 四方）は掛ける前に断る。
@@ -525,7 +520,7 @@ mod tests {
         }
     }
 
-    /// 指摘 18: 約束（一辺・stride・長さ）を破る答えは断り、守る答えは通す。
+    /// 約束（一辺・stride・長さ）を破る答えは断り、守る答えは通す。
     #[test]
     fn check_image_rejects_broken_contract() {
         let img = |width, height, stride, len| DecodedImage {

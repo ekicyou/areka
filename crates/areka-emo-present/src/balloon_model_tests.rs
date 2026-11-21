@@ -17,15 +17,14 @@ fn emo2_face0(scope: u32) -> ResolvedFace {
     face0_of(&emo2_balloon_root(), scope)
 }
 
-/// 檻 8-a（R2.1/R2.2/R2.5）per-scope マージ実値: 実 fixture `emo2-kakukaku` で、
-/// scope 0（本体側 `balloons0s.txt`）と scope 1（相方側 `balloonk0s.txt`）が**互いに異なる実値**
-/// へマージされる。
+/// scope 0（本体側 `balloons0s.txt`）と scope 1（相方側 `balloonk0s.txt`）が互いに異なる実値へマージされる
+/// （実 fixture `emo2-kakukaku`）。
 ///
 /// - scope 0: `validrect 46,-56,36,-44` / `windowposition 266,-129`（`balloons0s.txt` 実測）
 /// - scope 1: `validrect 40,-70,24,-48` / `windowposition -190,-75`（`balloonk0s.txt` 実測）
 ///
-/// 採用面の上書き層のみが効くこと（R2.2）——scope 1 が `balloonk0` を採る以上、
-/// `balloons0s.txt` の値（266/-129・46/-56/36/-44）はどれも scope 1 の定義に現れない。
+/// 採用面の上書き層のみが効く: scope 1 が `balloonk0` を採る以上、`balloons0s.txt` の値
+/// （266/-129・46/-56/36/-44）はどれも scope 1 の定義に現れない。
 #[test]
 fn load_scope_balloon_model_merges_per_scope_on_emo2_fixture() {
     let dir = emo2_balloon_root();
@@ -75,19 +74,16 @@ fn load_scope_balloon_model_merges_per_scope_on_emo2_fixture() {
     );
 }
 
-/// 檻 8-b（R2.5）継承: 面別上書き層で**指定されなかった**項目は既定設定（`descript.txt`）から
-/// 継承され、指定された項目のみが上書きされる。
+/// 面別上書き層で指定されなかった項目は既定設定（`descript.txt`）から継承され、指定された項目のみが上書きされる。
 ///
-/// 実 fixture の `wordwrappoint.x` がこの 2 面性をそのまま体現する——`balloonk0s.txt` は
-/// `wordwrappoint` を持たないゆえ scope 1 は descript の `-34` を継承し、`balloons0s.txt` は
-/// `wordwrappoint.x,-49` を持つゆえ scope 0 はそちらで上書きされる。加えて双方の scope が
-/// 上書き層のどちらも触れない項目（`wordwrappoint.y` / `font.name` / `font.height`）を descript
-/// から等しく継承する。
+/// 実 fixture の `wordwrappoint.x` がその両面を体現する——`balloonk0s.txt` は `wordwrappoint` を持たないので
+/// scope 1 は descript の `-34` を継承し、`balloons0s.txt` は `wordwrappoint.x,-49` を持つので scope 0 は
+/// そちらで上書きされる。双方とも上書き層が触れない項目（`wordwrappoint.y` / `font.name` / `font.height`）を
+/// descript から等しく継承する。
 ///
-/// `origin` は**どちらの層にも宣言が無い**——`areka-P0-balloon-vertical-canon`（要件 3.10・10.9）が
-/// 正典 ukadoc の「通常は指定せず validrect の定義に任せる」に合わせて `descript.txt` の
-/// `origin.x,0`／`origin.y,0` を削除したためである。ここではその**未宣言形が両 scope で `None` の
-/// まま保たれる**ことを固定する（`Some(0)` が現れたら宣言の復活＝正典推奨形からの逸脱）。
+/// `origin` はどちらの層にも宣言が無い（ukadoc は「通常は指定せず validrect の定義に任せる」としており、
+/// `descript.txt` から `origin.x,0`／`origin.y,0` を削除してある）。未宣言形が両 scope で `None` のまま
+/// 保たれることを固定する（`Some(0)` が現れたら宣言の復活）。
 #[test]
 fn load_scope_balloon_model_inherits_unspecified_keys_from_descript() {
     let dir = emo2_balloon_root();
@@ -134,10 +130,8 @@ fn load_scope_balloon_model_inherits_unspecified_keys_from_descript() {
     }
 }
 
-/// 檻 8-c（R2.4・D8）上書きファイル不在: 面別上書きファイルが存在しないとき、
-/// 既定設定の値のみで正常な定義を返し、**失敗として扱わない**。ログレベルは
-/// `debug!`（正常縮退）であって `warn!`／`error!` ではない（D8——相方側で毎起動 warn が
-/// 鳴る事故を防ぐ）。
+/// 面別上書きファイルが存在しないとき、既定設定の値のみで正常な定義を返し、失敗として扱わない。
+/// ログレベルは `debug!`（正常縮退）で、`warn!`／`error!` ではない（相方側で毎起動 warn が鳴る事故を防ぐ）。
 #[test]
 fn load_scope_balloon_model_debug_logs_missing_override_and_continues() {
     let dir = TempDir::new();
@@ -150,7 +144,7 @@ fn load_scope_balloon_model_debug_logs_missing_override_and_continues() {
     let face0 = face0_of(dir.path(), 0);
     let (model, events) = capture(|| load_scope_balloon_model(dir.path(), 0, &face0));
 
-    // R2.4: 既定設定のみで正常な定義が返る（欠落は失敗でない）。
+    // 既定設定のみで正常な定義が返る（欠落は失敗でない）。
     assert_eq!(
         model.validrect().top(),
         Some(7),
@@ -163,7 +157,7 @@ fn load_scope_balloon_model_debug_logs_missing_override_and_continues() {
         "どちらの層にも無いキーは None（捏造しない）"
     );
 
-    // D8: 不在は debug!。warn!／error! を出さない。
+    // 不在は debug!。warn!／error! を出さない。
     let missing: Vec<&CapturedEvent> = events
         .iter()
         .filter(|e| e.field("message").is_some_and(|m| m.contains("面別上書き")))
@@ -192,13 +186,12 @@ fn load_scope_balloon_model_debug_logs_missing_override_and_continues() {
     );
 }
 
-/// 檻 8-c'（R2.4/R6.4・D8）上書き層のその他 I/O エラー: **不在ではない**読取失敗
-/// （権限・I/O 障害等）は `debug!` へ降格せず `warn!` で観測可能に残し、既定設定のみで継続する。
+/// 上書き層のその他 I/O エラー: 不在ではない読取失敗（権限・I/O 障害等）は `debug!` へ降格せず
+/// `warn!` で観測可能に残し、既定設定のみで継続する。
 ///
-/// 「不在か否か」の判定分岐そのものを押さえる檻である——分岐を落として全失敗を `debug!` に
-/// すればこの檻が、全失敗を `warn!` にすれば檻 8-c が RED になる。異常を決定論的に作るため、
-/// 上書きファイル名と同名の**ディレクトリ**を置く（`std::fs::read` は NotFound 以外の
-/// エラーを返す）。
+/// 「不在か否か」の判定分岐を押さえる——分岐を落として全失敗を `debug!` にすればこの檻が、全失敗を `warn!` に
+/// すれば上の不在の檻が RED になる。異常を決定論的に作るため、上書きファイル名と同名のディレクトリを置く
+/// （`std::fs::read` は NotFound 以外のエラーを返す）。
 #[test]
 fn load_scope_balloon_model_warns_on_non_notfound_override_error() {
     let dir = TempDir::new();
@@ -231,9 +224,8 @@ fn load_scope_balloon_model_warns_on_non_notfound_override_error() {
     );
 }
 
-/// 檻 8-d（R6.4・D8）基層読取失敗: 既定設定 `descript.txt` の読取失敗は現行どおり
-/// `warn!`＋空層継続（`debug!` へ降格しない）。両層とも欠ければ全スカラ `None` の
-/// 定義を返す（panic しない・parsers の寛容契約に整合）。
+/// 基層 `descript.txt` の読取失敗は `warn!`＋空層継続（`debug!` へ降格しない）。両層とも欠ければ
+/// 全スカラ `None` の定義を返す（panic しない・parsers の寛容契約に整合）。
 #[test]
 fn load_scope_balloon_model_warns_on_missing_descript() {
     let dir = TempDir::new();
@@ -269,11 +261,10 @@ fn load_scope_balloon_model_warns_on_missing_descript() {
     );
 }
 
-/// 檻 8-e（R6.3・観測点 3）確定値の記録: 2 層マージで確定した `windowposition` /
-/// `validrect` の**実値**が scope とともに `info!` で記録される。
+/// 2 層マージで確定した `windowposition` / `validrect` の実値が scope とともに `info!` で記録される。
 ///
-/// scope は `ResolvedFace` に無い（採用接頭辞は縮退で `balloons` にもなり得るため接頭辞から
-/// 逆算できない）ゆえ、この檻は引数として渡した scope がそのままログへ乗ることを固定する。
+/// scope は `ResolvedFace` に無く（採用接頭辞は縮退で `balloons` にもなり得るので逆算できない）、
+/// 引数で渡した scope がそのままログへ乗ることを固定する。
 #[test]
 fn load_scope_balloon_model_info_logs_scope_and_resolved_values() {
     let dir = emo2_balloon_root();

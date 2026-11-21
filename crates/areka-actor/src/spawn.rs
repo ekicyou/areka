@@ -28,9 +28,8 @@ use std::thread::{self, JoinHandle};
 /// # なぜフックなのか（依存の向き）
 ///
 /// スレッド 1 本ごとの CPU を役割名で読むために、生成されたスレッドは自分を wintf の
-/// スレッド名簿へ登録する必要がある（areka-P0-draw-load-parity 要件 2.3）。ところが本
-/// クレートも `areka-ghost` も **wintf に依存していない**し、依存を足すこともできない
-/// （`Cargo.toml` 非接触＝同 spec 要件 8.6）。そこで本クレートは登録の**呼ばれ口**だけを
+/// スレッド名簿へ登録する必要がある。ところが本クレートも `areka-ghost` も
+/// **wintf に依存していない**し、依存を足すこともできない。そこで本クレートは登録の**呼ばれ口**だけを
 /// 持ち、実際に何を登録するかは wintf と本クレートの双方を知る統合側（実行体 `areka` の
 /// `thread_roles`）が 1 箇所で宣言する。本クレートは相手を知らないままで済む。
 pub type ThreadStartHook = fn(&str);
@@ -78,13 +77,13 @@ pub fn install_thread_start_hook(
 /// アクターを名前付きスレッドとして起動し、inbox の送信端と join ハンドルを返す。
 ///
 /// inbox は本関数内部で [`mpsc::channel`] を生成し、`Receiver` を `body` へ move する
-/// （body が単独所有＝inbox 1 本の構造保証・Req 1.5）。`Sender` を呼び出し側へ返す
-/// （Req 1.1）。スレッドは [`std::thread::Builder::new`]`.name(name)` で名前付き起動され
-/// （Req 1.2）、body は [`tracing::info_span!`]`("actor", actor = %name)` の中で実行される
-/// ため、スレッド名＝アクター名が span に載る（Req 6.1）。
+/// （body が単独所有＝inbox 1 本の構造保証）。`Sender` を呼び出し側へ返す。
+/// スレッドは [`std::thread::Builder::new`]`.name(name)` で名前付き起動され、body は
+/// [`tracing::info_span!`]`("actor", actor = %name)` の中で実行されるため、スレッド名＝
+/// アクター名が span に載る。
 ///
-/// 追加の常駐機構（レジストリ・監督・stop_flag）は持たない素の thread spawn である
-/// （Req 1.4）。停止はメッセージ Close／全 Sender drop の 2 経路が原語（Req 3.2/3.5）。
+/// 追加の常駐機構（レジストリ・監督・stop_flag）は持たない素の thread spawn である。
+/// 停止はメッセージ Close／全 Sender drop の 2 経路が原語。
 ///
 /// [`install_thread_start_hook`] でフックが導入されている場合のみ、生成されたスレッドの中
 /// で `body` より前に 1 度フックを呼ぶ（引数はアクター名）。未導入なら何もしない。
@@ -118,12 +117,9 @@ where
     let spawn_result = thread::Builder::new()
         .name(name.to_string())
         .spawn(move || {
-            // 起こす時点の判定が窓だったときだけ据える（区間・フック・body の全部を覆う）。
             let _window = inherited.map(|d| tracing::dispatcher::set_default(&d));
             let span = tracing::info_span!("actor", actor = %span_name);
             let _enter = span.enter();
-            // 走り始めに 1 度だけフックを呼ぶ（body より前・生成された当のスレッドの中）。
-            // 未導入なら何も起きない。
             if let Some(hook) = THREAD_START_HOOK.get() {
                 hook(&span_name);
             }
@@ -141,7 +137,7 @@ where
     (tx, ActorHandle { name, handle })
 }
 
-/// 正準受信ループ。`handler` の戻りで挙動を固定する（Req 3.7・受信ループ耐障害規約）:
+/// 正準受信ループ。`handler` の戻りで挙動を固定する:
 ///
 /// - `Ok(ControlFlow::Continue(()))` → 次の recv へ。
 /// - `Ok(ControlFlow::Break(()))` → 即時 `return`（Close 受領時・積み残しは `rx` の drop で
@@ -153,7 +149,7 @@ where
 ///
 /// ＝ループの終了経路は `Ok(Break)` と Disconnected の 2 経路のみ（型と実装で強制される）。
 ///
-/// 周期 tick 等で自前ループ（`recv_timeout` 利用）を書く場合も、本規約（Req 3.7）に従うこと。
+/// 周期 tick 等で自前ループ（`recv_timeout` 利用）を書く場合も、本規約に従うこと。
 ///
 /// 失敗しない `handler` は `E = `[`std::convert::Infallible`] を使う。
 pub fn run_inbox<M, E>(rx: Receiver<M>, mut handler: impl FnMut(M) -> Result<ControlFlow<()>, E>)
@@ -192,7 +188,7 @@ impl ActorHandle {
     }
 
     /// body の終了を待つ。正常終了なら `Ok(())`。body が panic していた場合は panic を握り
-    /// 潰さず [`ActorError::Panicked`]（アクター名＋payload 文字列）へ写像して返す（Req 1.3）。
+    /// 潰さず [`ActorError::Panicked`]（アクター名＋payload 文字列）へ写像して返す。
     ///
     /// panic を観測した際は返す前に [`tracing::warn!`] でアクター名と payload を記録する
     /// （失敗経路のログ規律・黙って握り潰さない）。
@@ -254,7 +250,6 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
-    // スレッド名＝アクター名。
     #[test]
     fn thread_name_equals_actor_name() {
         let (name_tx, name_rx) = mpsc::channel::<Option<String>>();

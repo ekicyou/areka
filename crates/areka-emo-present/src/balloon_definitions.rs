@@ -1,5 +1,4 @@
-//! スコープのバルーンの面ごとの定義の束（balloon-scroll-arrows 要件 1.3・1.5・1.7・
-//! 設計「emo-present / ScopeBalloonDefinitions」）。
+//! スコープのバルーンの面ごとの定義の束。
 //!
 //! 読み込みの時に 1 度だけ、採用した面ごとに既存の [`crate::balloon::load_scope_balloon_model`] の核を呼んで
 //! 面の設定ファイルを重ねたモデルを作り、その面の矢印の絵と束ねる（2 層の重ね方の権威は増やさない）。
@@ -55,7 +54,7 @@ impl ScopeBalloonDefinitions {
         &self.face0
     }
 
-    /// 面の行の中の印の絵（無い面は面 0 の値・絵が無いバルーンは `None`・script-small-tags 要件 5.2〜5.4）。
+    /// 面の行の中の印の絵（無い面は面 0 の値・絵が無いバルーンは `None`）。
     pub fn inline_marker_for_face(&self, face: u32) -> Option<Arc<MarkerImage>> {
         self.inline_markers
             .get(&face)
@@ -91,12 +90,12 @@ pub fn load_scope_balloon_definitions(
     let mut defs: BTreeMap<u32, FaceDefinition> = BTreeMap::new();
     let mut markers_by_name: HashMap<Option<String>, Option<Arc<MarkerImage>>> = HashMap::new();
     let mut inline_markers: BTreeMap<u32, Option<Arc<MarkerImage>>> = BTreeMap::new();
-    // descript の本文とフォルダの一覧は読み込み 1 回につき 1 回だけ取る（指摘 40）。
+    // descript の本文とフォルダの一覧は読み込み 1 回につき 1 回だけ取る。
     let descript =
         read_descript_layer(&balloon_dir.join(DESCRIPT_TXT), LoadRecords::Emit).unwrap_or_default();
     let listed = list_dirs(&[balloon_dir]);
     for face in faces {
-        // 自分の設定ファイルを持たない面は面 0 の定義のまま（要件 1.6・for_face が面 0 へ落とす）。
+        // 自分の設定ファイルを持たない面は面 0 の定義のまま（for_face が面 0 へ落とす）。
         if face.surface_id != 0 && !balloon_dir.join(face.override_file_name()).exists() {
             continue;
         }
@@ -143,7 +142,7 @@ pub fn load_scope_balloon_definitions(
         inline_markers.insert(face.surface_id, marker);
         defs.insert(face.surface_id, FaceDefinition { model, arrows });
     }
-    // 読み込み 1 回につき 1 回だけ（名前の違う面が並んでも・フレームごとには出さない・要件 5.4）。
+    // 読み込み 1 回につき 1 回だけ（名前の違う面が並んでも・フレームごとには出さない）。
     if inline_markers.values().any(Option::is_none) {
         tracing::info!(
             balloon_dir = %balloon_dir.display(),

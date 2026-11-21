@@ -1,6 +1,4 @@
 //! 焼きの入口 [`bake`] の檻（結線・失敗の脱落と継続・密な採番・0 寸と全透明の記録・着せ替えの「無し」の絵）。
-//!
-//! もとは `lib.rs` の中のテスト（spec: audit-emo-atlas 指摘 19 で兄弟のファイルへ移した）。
 
 use super::*;
 use crate::decode::MemoryDecoder;
@@ -14,7 +12,7 @@ use areka_parsers::shell::{Interval, Surface};
 use std::path::Path;
 
 /// end-to-end 結線（複数セット）。shell + balloon の 2 セットを 1 度の bake で
-/// 処理し、索引表＋頁バッファが**値で直接**得られる（channel 非依存・R6.5 ＋ 1.x/4.x/5.x/6.x）。
+/// 処理し、索引表＋頁バッファが**値で直接**得られる（channel 非依存）。
 #[test]
 fn end_to_end_wiring_multiple_sets() {
     let shell_base = Path::new("shell/master");
@@ -34,7 +32,7 @@ fn end_to_end_wiring_multiple_sets() {
 
     let sets = [set(&shell, shell_base), set(&balloon, balloon_base)];
 
-    // BakeResult は素の値。channel/async を一切介さず直接受け取る（R6.5・構造的証明）。
+    // BakeResult は素の値。channel/async を一切介さず直接受け取る（構造的証明）。
     let result: BakeResult = bake(&sets, &dec, PackConfig::default());
 
     // 失敗なし。
@@ -65,7 +63,7 @@ fn end_to_end_wiring_multiple_sets() {
     assert_eq!(result.table.len(), 4, "4 survivors densely indexed");
 }
 
-/// デコード失敗は索引表に載せず・他エントリ継続（R2.2）。
+/// デコード失敗は索引表に載せず・他エントリ継続。
 /// 1 つだけ未登録（NotFound）にすると、その key は resolve が None・errors に Decode が
 /// 1 件・他の全 key は present（継続の実証）。
 #[test]
@@ -145,7 +143,7 @@ fn dense_renumbering_and_roundtrip_after_failure() {
     assert_eq!(result.table.resolve(SetId(0), "b.png"), None);
 }
 
-/// （設計ディスカッション #1 増分）: 全透明（α=0 トリム後 0 寸）element を
+/// 全透明（α=0 トリム後 0 寸）element を
 /// 含む bake で `warn!` が発火する（tracing capture で決定論 assert・当該 element を名指し）。
 /// **bake 結果自体は既存挙動不変**（全透明はエラーでなく空エントリ・placement None）。
 #[test]
@@ -227,7 +225,7 @@ fn no_warn_and_output_unchanged_for_normal_bake() {
     assert_eq!(placement.uv_rect.h, 2, "trim 高不変");
 }
 
-// ---- 檻 T9: 着せ替えの「無し」の絵の全透明は debug・それ以外は今の warn（real-run-log-noise 要件 3.2〜3.6・5.2）----
+// ---- 着せ替えの「無し」の絵の全透明は debug・それ以外は今の warn ----
 
 /// 面 0（不透明の絵）の `interval` のアニメーションが面 3000 を参照し、面 3000 が `rel` だけを持つシェル。
 fn shell_owned_by(interval: Interval, rel: &str) -> Vec<Surface> {
@@ -247,7 +245,7 @@ fn bake_owned(interval: Interval, rel: &str, spec: ImageSpec) -> (String, BakeRe
     (out, result)
 }
 
-/// T9 ⑴: `bind` だけから参照される面の全透明の絵は `warn` 0 件・`debug` 1 件（欄は今の `warn` と同じ）。
+/// `bind` だけから参照される面の全透明の絵は `warn` 0 件・`debug` 1 件（欄は今の `warn` と同じ）。
 /// 索引表は見分けの無い場合（同じ形を `runonce` で参照）と同じ。
 #[test]
 fn bind_only_all_transparent_logs_debug_not_warn() {
@@ -294,7 +292,7 @@ fn bind_only_all_transparent_logs_debug_not_warn() {
     }
 }
 
-/// T9 ⑵: `runonce` から参照される面の全透明の絵は今の `warn` 1 件（見分けない・debug 無し）。
+/// `runonce` から参照される面の全透明の絵は今の `warn` 1 件（見分けない・debug 無し）。
 #[test]
 fn runonce_owned_all_transparent_keeps_warn() {
     let (out, _) = bake_owned(Interval::Runonce, "null.png", transparent_2x2());
@@ -307,7 +305,7 @@ fn runonce_owned_all_transparent_keeps_warn() {
     assert!(!out.contains(BIND_DEBUG), "見分けの debug は出ない: {out}");
 }
 
-/// T9 ⑶: `bind` だけから参照される面の 0 寸の絵は、見分けの前の 0 寸の `warn` 1 件。
+/// `bind` だけから参照される面の 0 寸の絵は、見分けの前の 0 寸の `warn` 1 件。
 #[test]
 fn bind_only_zero_sized_keeps_zero_size_warn() {
     let (out, _) = bake_owned(Interval::Bind, "zero.png", zero_sized());
@@ -322,7 +320,7 @@ fn bind_only_zero_sized_keeps_zero_size_warn() {
     assert!(!out.contains(BIND_DEBUG), "0 寸は見分けに入らない: {out}");
 }
 
-/// 指摘 3: 余白込みで頁（2,048 四方）に入らない 1×2,100 の絵は、普通の絵と一緒に焼くと
+/// 余白込みで頁（2,048 四方）に入らない 1×2,100 の絵は、普通の絵と一緒に焼くと
 /// 普通の頁（0 番）の後ろの自頁（3×2,102）に載り、uv の画素は元の絵と同じ。
 #[test]
 fn tall_image_gets_own_page_after_normal_pages() {

@@ -1,21 +1,21 @@
 //! サーフェス記録（`kind=surface`）の檻——語彙の逐語固定・前置ガードの本文走査・実 `apply_show`
-//! 経由の配線検査（design.md C3・§Testing Strategy「Integration Tests」項目 8）。
+//! 経由の配線検査。
 //!
 //! 本ファイルが固定する契約は 4 つである。
 //!
-//! 1. **語彙**（Requirement 2.7・7.4）: `surface_line` の字面。正例の逐語再現と、判定語を壊した
+//! 1. **語彙**: `surface_line` の字面。正例の逐語再現と、判定語を壊した
 //!    入力が語彙照合で落ちること（負例）の両方を持つ。
-//! 2. **前置ガード**（Requirement 10.4）: 発行点はレコードを**組む前**に
+//! 2. **前置ガード**: 発行点はレコードを**組む前**に
 //!    [`transition_diag::is_enabled`] で分岐する。発行が `debug!` である以上、ログ濾過テストは
 //!    ガードの有無を**原理的に区別できない**（濾過されるかどうかは同じ結果になる）ため、
-//!    ここだけは本文走査で固定する。`recompose-budget` が成立させた定常アロケーション 0 を
+//!    ここだけは本文走査で固定する。定常アロケーション 0 を
 //!    守っているのはこの走査 1 本である。
-//! 3. **刻印の出所**（D1）: 発行点は World 資源から刻印を組む。スレッド局所ミラー
+//! 3. **刻印の出所**: 発行点は World 資源から刻印を組む。スレッド局所ミラー
 //!    （`transition_diag::stamp()`）は World を借りられない点の専用口であり、`&mut World` を
 //!    受け取る本 crate の観測点がこれを読むのは退行である。多スレッド実行器では読めない値に
 //!    なるが、**その退行はログ捕捉テストでは緑のまま通る**（本 crate のテストは UI スレッド上で
 //!    走るため）ゆえ、これも本文走査で固定する。
-//! 4. **配線**（Requirement 2.2・2.8・4.6）: 実 `apply_show`／`refresh_scale` を駆動して、寸が
+//! 4. **配線**: 実 `apply_show`／`refresh_scale` を駆動して、寸が
 //!    変わらない定常フレームでは 1 行も出ず、遷移では `upload`／`visualize` が出て、見送りでは
 //!    `skipped` が理由つきで出て、いずれも perf 行と同一フレーム番号で突合できること。
 //!
@@ -66,7 +66,7 @@ fn field_value<'a>(line: &'a str, name: &str) -> &'a str {
         .unwrap_or_else(|| panic!("行にフィールド `{name}` が無い: {line}"))
 }
 
-// ── 語彙の逐語固定（Requirement 2.7）────────────────────────────────────────────────────
+// ── 語彙の逐語固定────────────────────────────────────────────────────
 
 /// `stage=upload` の行は寸と `resized` を持ち、`reason` は番兵で埋まる。
 ///
@@ -218,7 +218,7 @@ fn the_stage_and_reason_words_are_distinct_and_disjoint_from_the_wintf_vocabular
     );
 }
 
-/// 負例（Requirement 7.4）: 判定語を 1 文字壊した行は語彙照合で落ちる。
+/// 負例: 判定語を 1 文字壊した行は語彙照合で落ちる。
 ///
 /// 正例だけの照合は「語彙表が空でも緑」になり得る。壊した側が確かに赤くなることまで見る。
 #[test]
@@ -262,7 +262,7 @@ fn code_lines(code: &str) -> Vec<&str> {
         .collect()
 }
 
-/// Requirement 10.4: `show.rs` の 2 つの発行点は「寸が変わったとき」かつ「観測が有効なとき」に
+/// `show.rs` の 2 つの発行点は「寸が変わったとき」かつ「観測が有効なとき」に
 /// **限って**レコードを組む。
 ///
 /// # 殺す誤実装
@@ -303,12 +303,12 @@ fn the_show_path_builds_the_surface_records_behind_the_front_guard() {
     );
 }
 
-/// 要件 7.6: 前値（原寸）は**上書きより手前**で読み、記録の失敗分岐は容量回収より手前に在る。
+/// 前値（原寸）は**上書きより手前**で読み、記録の失敗分岐は容量回収より手前に在る。
 ///
 /// 上書きが読みより手前へ動くと `resized`／`size_changed` が常に偽になり、遷移観測も窓寸
 /// reconcile 要求も静かに止まる（`debug!` ゆえ濾過テストでは見えない）。失敗分岐は
-/// `test-cage-determinism` ④の観測点で、記録が回収より手前で落ちることが「失敗時は適用前の
-/// まま」（R3.4）の根拠である。
+/// 観測点で、記録が回収より手前で落ちることが「失敗時は適用前の
+/// まま」の根拠である。
 #[test]
 fn the_previous_size_is_read_before_the_overwrite_and_the_error_branch_is_unmoved() {
     let code = code_only(include_str!("show.rs"));
@@ -335,7 +335,7 @@ fn the_previous_size_is_read_before_the_overwrite_and_the_error_branch_is_unmove
     assert_eq!(code.matches(write).count(), 1, "原寸の更新点が 1 つでない");
 
     let record_at = at(".native_scratch(|scratch| record_display(dc, scratch, repeat))");
-    // 失敗の原因を覚える 3 行（`failure_note`・要件 4.3）をはさんで早期復帰する。
+    // 失敗の原因を覚える 3 行（`failure_note`）をはさんで早期復帰する。
     assert_eq!(
         lines[record_at + 1..record_at + 8].join(" "),
         "{ Ok(list) => list, Err(e) => { if let PresentError::Device { hresult, context } = &e { target.failure_note = Some((*context, *hresult)); } return Err(e);",
@@ -347,7 +347,7 @@ fn the_previous_size_is_read_before_the_overwrite_and_the_error_branch_is_unmove
     );
 }
 
-/// Requirement 4.6: `refresh_scale` の 2 つの見送りは理由つきで記録され、いずれもガードの内側で
+/// `refresh_scale` の 2 つの見送りは理由つきで記録され、いずれもガードの内側で
 /// 組まれる。見送りの判定そのものは変えない。
 #[test]
 fn the_refresh_path_records_both_skips_behind_the_front_guard() {
@@ -373,7 +373,7 @@ fn the_refresh_path_records_both_skips_behind_the_front_guard() {
     );
 }
 
-/// D12: perf 行の `frame=` は**末尾**に足す（既存フィールドの順序・文言は不変）。
+/// perf 行の `frame=` は**末尾**に足す（既存フィールドの順序・文言は不変）。
 #[test]
 fn the_perf_line_appends_the_frame_field_at_the_very_end() {
     let code = code_only(include_str!("timing.rs"));
@@ -413,7 +413,7 @@ fn the_perf_line_appends_the_frame_field_at_the_very_end() {
     );
 }
 
-/// D1: World を借りられる観測点はスレッド局所ミラーを読まない。
+/// World を借りられる観測点はスレッド局所ミラーを読まない。
 ///
 /// ミラーを読む形（`transition_diag::stamp()`）は、本 crate のテストが UI スレッド上で走るため
 /// **ログ捕捉では一度も赤にならない**。本文走査だけがこの退行を捕まえる。
@@ -504,7 +504,7 @@ fn perf_line(events: &[CapturedEvent]) -> CapturedEvent {
     one.clone()
 }
 
-/// Requirement 2.2／2.8: 遷移（初回表示）では `upload`→`visualize` の 2 行が出て、perf 行と
+/// 遷移（初回表示）では `upload`→`visualize` の 2 行が出て、perf 行と
 /// **同一のフレーム番号**で突合できる。
 #[test]
 fn a_transition_records_upload_then_visualize_on_the_same_frame_as_the_perf_line() {
@@ -544,7 +544,7 @@ fn a_transition_records_upload_then_visualize_on_the_same_frame_as_the_perf_line
         );
     }
 
-    // `resized`＝**原寸の外形が前回表示から変わったか**（要件 7.6・T-N8）。初回表示は前値が
+    // `resized`＝**原寸の外形が前回表示から変わったか**。初回表示は前値が
     // 無い（`None != Some(native)`）ので必ず差分扱いになる——`show.rs` の (3a) が「初回を
     // 黙らせると窓寸の補正が永久に走らない」として意図してそう書いている。
     assert_eq!(
@@ -562,7 +562,7 @@ fn a_transition_records_upload_then_visualize_on_the_same_frame_as_the_perf_line
     );
 }
 
-/// Requirement 10.4: 寸が変わらない定常フレームでは `surface` 行が 1 本も増えない。
+/// 寸が変わらない定常フレームでは `surface` 行が 1 本も増えない。
 ///
 /// 陰性主張は同一捕捉スコープ内の perf 行 1 本（陽性）と対にする。
 #[test]
@@ -590,7 +590,7 @@ fn a_steady_reapply_with_an_unchanged_size_emits_no_surface_line() {
     );
 }
 
-/// Requirement 2.2／7.6（T-N8）: 拡大率だけが変わった回は、記録される寸（物理寸）が変わっても
+/// 拡大率だけが変わった回は、記録される寸（物理寸）が変わっても
 /// `resized` は**偽**である——述語は「原寸の外形が前回表示から変わったか」であり（`show.rs` (3a)
 /// `let resized = target.native_size != Some(native);`）、拡大は wintf の変換行列が掛けるので
 /// 原寸は動かない。行が出るのは物理寸が変わった側（`size_changed`）が真だからで、`w`／`h` は
@@ -632,7 +632,7 @@ fn a_scale_change_changes_the_recorded_size_without_being_a_resize() {
     }
 }
 
-/// Requirement 4.6: 再表示の見送りは理由つきで記録される（判定側が合否から除外できる）。
+/// 再表示の見送りは理由つきで記録される（判定側が合否から除外できる）。
 #[test]
 fn the_skipped_reapply_is_recorded_with_the_reason_that_gated_it() {
     let mut world = gpu_world_with_frame();

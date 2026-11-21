@@ -1,5 +1,4 @@
 //! 当たり判定の入口が、子から持ち込んだ領域の列で判定することの檻
-//! （spec: areka-P0-surface-element-nesting・タスク 6.2・要件 2.8・4.1・4.2）。
 //!
 //! 入れ子の検体（`areka-emo-compose/tests/fixtures/surface-nesting/`）の親 B（surface1）は自分の
 //! 領域を持たず、子 10 を (90,50) に置く。子 10 の Head（0,0〜20,10）と Eye（5,0〜15,10・後ろ＝手前）は

@@ -1,5 +1,4 @@
-//! 隠れているバルーンへの指令はコマを預かるだけにする（spec: areka-P0-animated-image-playback
-//! task 4.2・要件 1.8・1.13・2.3・3.3・3.7・6.2・6.4・6.5）。
+//! 隠れているバルーンへの指令はコマを預かるだけにする。
 //!
 //! 面 0 は 8×4 の全透明の枠に 2 つの動く絵（回数つき `fin.png`・終わりなし `end.png`）を横に
 //! 並べたもの、面 1 は静止画 1 枚の 8×4。絵は `MemoryDecoder` へ登録して本物の焼き・分解・合成を通す。合成の回数は
@@ -14,7 +13,7 @@ use super::test_support::{
 };
 
 /// 隠れている対象へコマだけ違う指令を 3 回送ると合成 0 回で、出した絵は最後の指令のコマ。
-/// その間も `last_shown`・`read_back` は成立済みの絵を返す（要件 6.4・3.7・3.3）。
+/// その間も `last_shown`・`read_back` は成立済みの絵を返す。
 #[test]
 fn hidden_frame_changes_are_held_and_the_last_one_is_shown() {
     let mut world = make_world_with_gpu();
@@ -57,7 +56,7 @@ fn hidden_frame_changes_are_held_and_the_last_one_is_shown() {
 }
 
 /// 回数つきが止まった状態で隠し、戻しの指令なしで出すと最初の絵は経過 0。終わりなしの欄は
-/// 外れない（要件 2.3・3.3）。
+/// 外れない。
 #[test]
 fn a_stopped_finite_film_restarts_from_rest_when_shown_again() {
     let mut world = make_world_with_gpu();
@@ -85,7 +84,7 @@ fn a_stopped_finite_film_restarts_from_rest_when_shown_again() {
 }
 
 /// 見えている対象へ `show_target` を重ねても、回数つきの欄は外さない（続けて見えていれば続き・
-/// 要件 2.8）。
+/// 続きとして扱う）。
 #[test]
 fn show_target_on_a_visible_target_keeps_the_finite_frame() {
     let mut world = make_world_with_gpu();
@@ -107,7 +106,7 @@ fn show_target_on_a_visible_target_keeps_the_finite_frame() {
 }
 
 /// 本番の隠し方（`PresentCommand::Hide`＝今の面を消す）の直後でも、コマだけが違う指令は預かる
-/// だけで合成 0 回。出すと最後に預かったコマ（要件 6.4・3.7）。
+/// だけで合成 0 回。出すと最後に預かったコマ。
 #[test]
 fn frame_changes_right_after_the_real_hide_command_are_held() {
     let mut world = make_world_with_gpu();
@@ -303,7 +302,6 @@ fn commands_outside_the_deferral_conditions_compose_as_before() {
         "成立済みのコマへ戻った後に、前に預かったコマで出した"
     );
 
-    // 着せ替えが違う。
     let mut presenter = established(&mut world);
     let ((), events) = capture(|| {
         send(
@@ -316,7 +314,6 @@ fn commands_outside_the_deferral_conditions_compose_as_before() {
     });
     assert_eq!(applies(&events), (1, 1), "着せ替えが違う指令が合成されない");
 
-    // 見えている。
     let mut presenter = shown(&mut world);
     let ((), events) = capture(|| {
         send(
@@ -361,8 +358,8 @@ fn commands_outside_the_deferral_conditions_compose_as_before() {
     assert_eq!(presenter.target_visible(T), Some(true));
 }
 
-/// 見えているバルーンでコマを替えても、文字のスロットと対象の寸法は同じ（要件 6.2）。透ける形は
-/// 表示中のコマに従い、作者の当たり判定の矩形は同じ（要件 1.13・1.8）。
+/// 見えているバルーンでコマを替えても、文字のスロットと対象の寸法は同じ。透ける形は
+/// 表示中のコマに従い、作者の当たり判定の矩形は同じ。
 #[test]
 fn frame_changes_keep_the_slot_and_size_and_follow_the_transparency() {
     let mut world = make_world_with_gpu();
@@ -410,7 +407,7 @@ fn frame_changes_keep_the_slot_and_size_and_follow_the_transparency() {
     );
 }
 
-/// 静止画だけのバルーンは、出す・隠す・同じ指令を何度送っても合成は最初の 1 回だけ（要件 6.5）。
+/// 静止画だけのバルーンは、出す・隠す・同じ指令を何度送っても合成は最初の 1 回だけ。
 #[test]
 fn a_still_only_balloon_composes_once_as_before() {
     let mut world = make_world_with_gpu();

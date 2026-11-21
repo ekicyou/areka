@@ -1,10 +1,9 @@
-//! シェルの読み込みが箱の表を作り、報告を 1 度だけ記録する檻（spec: areka-P0-shell-balloon・
-//! 要件 10.1・10.2・10.4・10.5）。
+//! シェルの読み込みが箱の表を作り、報告を 1 度だけ記録する檻。
 //!
 //! 見ているのは 3 つ——⑴ 検体（`areka-emo-text/tests/fixtures/shell-balloon/`）を読み込むと
 //! [`ShellTarget::boxes`] から箱の表が引けること ⑵ 誤りのある文面でも読み込みが成功し、
-//! 報告の各件が `warn!` で 1 度ずつ記録されること ⑶ 箱の無いシェルでは結果と記録が本 spec の
-//! 前と同じであること。
+//! 報告の各件が `warn!` で 1 度ずつ記録されること ⑶ 箱の無いシェルでは箱の表と報告が空で、
+//! 箱の記録が 1 行も出ないこと。
 //!
 //! 検体の element定義の overlay が指す画像はフォルダに無い。焼く段の脱落の `error!` が数を
 //! 濁さないよう、復号器はメモリ上のものにその名前で絵を入れておく（復号器はパスで引くだけで、
@@ -21,7 +20,7 @@ use super::test_support::{
 };
 use log_capture_kit::capture;
 
-/// ⑴ 検体を読み込むと箱の表が引ける（要件 10.4）。記録は `warn!` 0 行・箱の数の `info!` 1 行。
+/// ⑴ 検体を読み込むと箱の表が引ける。記録は `warn!` 0 行・箱の数の `info!` 1 行。
 #[test]
 fn fixture_shell_loads_with_a_box_layout() {
     let dir = boxes_fixture_dir();
@@ -75,7 +74,7 @@ fn fixture_shell_loads_with_a_box_layout() {
     assert_eq!(infos[0].field("surfaces"), Some("3"));
 }
 
-/// ⑵ 誤りのある定義を混ぜても読み込みは成功し、報告の各件が 1 度ずつ記録される（要件 10.1・10.2）。
+/// ⑵ 誤りのある定義を混ぜても読み込みは成功し、報告の各件が 1 度ずつ記録される。
 #[test]
 fn erroneous_boxes_still_load_and_each_issue_is_logged_once() {
     let dir = TempPath::new("shell-target-boxes-erroneous");
@@ -101,7 +100,7 @@ fn erroneous_boxes_still_load_and_each_issue_is_logged_once() {
     let (target, events) =
         capture(|| load_shell_target(dir.path(), &dec).expect("箱の誤りで読み込みは失敗しない"));
 
-    // 誤りの無い定義で表示できる（要件 10.2）。
+    // 誤りの無い定義で表示できる。
     let placed: Vec<&str> = target
         .boxes()
         .placements(0)
@@ -150,7 +149,7 @@ fn erroneous_boxes_still_load_and_each_issue_is_logged_once() {
     assert_eq!(append.field_str("name"), Some("ok"));
 }
 
-/// ⑶ 箱の無いシェル: 結果と記録が本 spec の前と同じ（要件 10.5）。
+/// ⑶ 箱の無いシェルでは箱の表と報告が空で、箱の記録は出ない。
 #[test]
 fn shell_without_boxes_keeps_result_and_records() {
     let text = "charset,UTF-8\nsurface0\n{\nelement0,overlay,base.png,0,0\n}\n";

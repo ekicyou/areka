@@ -1,5 +1,4 @@
-//! 実 GPU で、矩形の重ね直しの絵がいちからの合成と同じこと（`animated-surface-log-flood`
-//! 要件 3.2・3.7・8.4）。
+//! 実 GPU で、矩形の重ね直しの絵がいちからの合成と同じこと。
 //!
 //! 動く絵の見本でコマ替えを続け、各回に窓の面へ載った表示の記録（閉じたコマンドリスト）を
 //! `display_gpu_tests.rs` の [`replay_and_read_back`] で実 GPU に再生して読み戻し、同じ面・同じコマを
@@ -69,7 +68,7 @@ fn show(presenter: &mut EmoPresenter, world: &mut World, x: i64) {
     );
 }
 
-/// 要件 3.2・3.7・8.4: コマ替えのたびに、窓の面へ載った表示の記録を実 GPU で読み戻したバイトが
+/// コマ替えのたびに、窓の面へ載った表示の記録を実 GPU で読み戻したバイトが
 /// いちからの合成と同じで、当たりのマスクもいちから合成した絵から作ったマスクと同じ。
 #[test]
 fn partial_recompose_display_matches_from_scratch_on_real_gpu() {

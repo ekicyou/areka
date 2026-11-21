@@ -1,49 +1,24 @@
-//! `shell_target`: シェルのフォルダから面の絵を組み立てる**読み込みの権威**。
+//! シェルのフォルダから面の絵を組み立てる読み込みの入口（`shell_target`）。
 //!
-//! シェルのフォルダを読んで「焼いた絵（`AtlasTable`）＋面の表を必要な数だけ組める値」
-//! （[`ShellTarget`]）を作る入口である。fs を触るのは [`load_shell_target`]（上限を渡す兄弟 [`load_shell_target_with_limits`]）と [`load_shell_target_quiet`]（中身は 1 つ）だけで、
-//! 触らない核は `build_core` に分かれている（テストは `build_shell_target` 経由でメモリ上の復号器で核を通せる）。
+//! fs を触るのは [`load_shell_target`]（上限を渡す兄弟 [`load_shell_target_with_limits`]）と
+//! [`load_shell_target_quiet`] だけで、触らない核は `build_core`（テストは `build_shell_target`
+//! 経由でメモリ上の復号器で通す）。
 //!
-//! 本モジュールはまず「シェルのフォルダ直下のファイル名から、どの番号の面の画像がどれか」を
-//! 決める純粋な判定 `select_surface_images` を持つ（R1.1〜R1.6・R1.8）。正典は
-//! `surface<数字>.png` というファイル名の慣習だけで置かれた絵を、その番号の面の画像として
-//! 認める——`surfaces.txt` に `element` 行が 1 本も無いシェル（里々・YAYA の標準テンプレート）は
-//! この慣習にすべてを委ねている。
+//! `select_surface_images` は `surface<数字>.png` というファイル名の慣習だけで置かれた絵を、
+//! その番号の面の画像として認める。`surfaces.txt` に `element` 行が 1 本も無いシェル
+//! （里々・YAYA の標準テンプレート）はこれにすべてを委ねる。名前の判定はバルーン側と同じ
+//! `crate::balloon::face_digits_of`（接頭辞 `surface`）。
 //!
-//! 名前の判定そのものはバルーン側と**同じ 1 つの実装**（`crate::balloon::face_digits_of`・
-//! 接頭辞を大小無視で外す → `.png` を外す → 残りが空でなく全部 ASCII 数字）を接頭辞
-//! `surface` で呼ぶ。ゆえに「バルーンの `face_id_of` と同じ扱いにそろえる」（R1.4）は申し合わせ
-//! ではなく構造で成り立つ。
+//! # 記録を出す場所
 //!
-//! # 記録を出す場所（要件 6）
-//!
-//! `select_surface_images` は fs にも記録にも触れない純粋な関数であり、重複（R1.5 の `warn!`）
-//! と桁溢れ（R1.6 の `debug!`）は**事実として戻り値に載せるだけ**である。`build_core` は自分では記録を
-//! 足さず（結果を [`ShellTarget`] に載せるだけ）、受け取った `records` を面の表の組み立てと
-//! 焼く段へ渡すだけである（畳み込み・土台の画像・1 枚ごとの絵の記録はそちらが出す）。
-//!
-//! **本モジュールの記録を出すのは fs を触る入口 [`load_shell_target`] だけ**で、読み込み 1 回につき
-//! それぞれ 1 度だけ出る——一覧の結果の `info!`（R6.1）・使わなかった画像の `debug!`（R6.2）・
-//! 同じ番号の重複の `warn!`（R1.5）・桁溢れの `debug!`（R1.6）・相手の無いコマの `warn!`（R3.5）・
-//! 焼く段で落ちた絵の `error!`・3 つの失敗の `error!`（R1.7・R6.4）、および箱の報告の各件の
-//! `warn!` と箱の数の `info!`（spec: areka-P0-shell-balloon 要件 10.1）、入れ子の報告（無い番号・
-//! 循環）の各件の `warn!`（spec: areka-P0-surface-element-nesting 要件 3.1・3.2）、描けない
-//! 描画メソッドの element定義の各行の `warn!`（spec: areka-P0-element-base-method 要件 2.1・4.2）、
-//! descript.txt が読めない `warn!` と添えてあった `.pna` の数の `warn!`
-//! （spec: areka-P0-self-alpha-declaration 要件 5.7・7.4・透過の扱いの `info!` は `self_alpha` の
-//! 宛先で 1 行）、画像だけで面を組んだ `info!`（同 要件 7.3）である。一覧の 1 件だけが
-//! 取れないときは `warn!` を出してその 1 件を飛ばす（`list_file_names`）。
-//! 形の誤り（`shape_issues`）の各件の `warn!`（spec: areka-P0-offline-surface-dump 要件 7.5）も
-//! ここで 1 度だけ出す。surfaces.txt の読みの崩れの各件は `RangeTooWide` を `error!`、ほかを `warn!`（audit-parsers-sakura）。
-//! [`ShellTarget::build_world`] は新しい記録を出さず、畳み込みと面の画像の記録も
-//! 出さない（読み込みの核が 1 度だけ出す・emo-bake-log-overlap 要件 2.2）。装着の記録は組むたびに出る。
-//!
-//! 同じ中身を通る [`load_shell_target_quiet`]（採寸の読み）は上の読み込みの記録を 1 本も出さず、
-//! 読み込みを `Err` で終える 3 つの失敗の `error!` だけを出す（spec: placement-measure-bake-once
-//! 要件 3.1・3.6）。
+//! 読み込みの記録を出すのは fs を触る入口 [`load_shell_target`] だけで、読み込み 1 回につき
+//! 各 1 度。`select_surface_images`・`build_core`・[`ShellTarget::build_world`] は記録を出さず、
+//! 事実を戻り値や報告に載せて返す（装着の記録だけは `build_world` を呼ぶたびに出る）。
+//! [`load_shell_target_quiet`]（採寸の読み）は読み込みの記録を出さず、`Err` で終える 3 つの
+//! 失敗の `error!` だけを出す。
 //!
 //! 宛先は既定の target（`areka_emo_present::shell_target`）、文言はスコープの接頭辞 `shell:`
-//! で始め、値は構造化フィールドで渡す（steering `logging.md`・design「Monitoring」）。
+//! で始め、値は構造化フィールドで渡す。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -75,14 +50,14 @@ const SURFACE_PREFIX: &str = "surface";
 
 /// 名前の一覧から決まった「番号 → 採ったファイル名」と、その過程で捨てたもの。
 ///
-/// 3 つの欄はどれも**入力の順に依存しない**（R1.8）。番号は数値の昇順、名前は辞書順である。
+/// 3 つの欄はどれも**入力の順に依存しない**。番号は数値の昇順、名前は辞書順である。
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct SurfaceImageSelection {
     /// 番号 → 採ったファイル名（**元の綴りのまま**——焼く側が実パスを開くため）。
     pub images: BTreeMap<u32, String>,
-    /// 同じ番号に複数あったもの: `(番号, 採った名前, 捨てた名前の一覧)`。番号の昇順（R1.5）。
+    /// 同じ番号に複数あったもの: `(番号, 採った名前, 捨てた名前の一覧)`。番号の昇順。
     pub duplicates: Vec<(u32, String, Vec<String>)>,
-    /// 形は面の画像だが、数字が `u32` に収まらなかった名前。辞書順（R1.6）。
+    /// 形は面の画像だが、数字が `u32` に収まらなかった名前。辞書順。
     pub overflow: Vec<String>,
 }
 
@@ -92,21 +67,19 @@ pub(crate) struct SurfaceImageSelection {
 ///
 /// 1. **名前の判定**: [`face_digits_of`] に接頭辞 `surface` を与え、`surface{数字列}.png`
 ///    （接頭辞・拡張子は大小無視）の数字列を得る。`surfaces.txt`・`surface.png`・
-///    `surface+0.png`・`surface0.pna` のように 3 段のどれかを満たさない名前は 0 件である
-///    （R1.3）。同名の `.pna` を読まない（R2.6）のは、この拡張子の判定の帰結である。
+///    `surface+0.png`・`surface0.pna` のように満たさない名前は 0 件（同名の `.pna` は読まない）。
 /// 2. **番号の読み**: 数字列を 10 進数として読む。先頭の 0 は無視され、`surface0.png`・
 ///    `surface00.png`・`surface000.png`・`surface0000.png` はすべて面 0、`surface0010.png` は
-///    面 10 になる（R1.2）。`u32` に収まらない数字列は画像と認めず
-///    [`SurfaceImageSelection::overflow`] へ送る（R1.6）。
+///    面 10 になる。`u32` に収まらない数字列は画像と認めず
+///    [`SurfaceImageSelection::overflow`] へ送る。
 /// 3. **重複の裁き**: 同じ番号に複数の名前が解決したら**ファイル名の辞書順で最小**を採り、
-///    残りを [`SurfaceImageSelection::duplicates`] に積む（R1.5・バルーンの `select_faces` と
+///    残りを [`SurfaceImageSelection::duplicates`] に積む（バルーンの `select_faces` と
 ///    同じ規則）。フォルダの走査順に結果が左右されないためである。
 ///
 /// 入力はファイル名だけ——フォルダそのものやサブフォルダの中身を除くのは一覧を採る側の
-/// 責務であり（R1.3）、本関数は渡された名前の列だけを見る。
+/// 責務であり、本関数は渡された名前の列だけを見る。
 pub(crate) fn select_surface_images<S: AsRef<str>>(names: &[S]) -> SurfaceImageSelection {
-    // 番号 → 候補名の集合。集合を辞書順に保つことで、採用（最小）と不採用の並びが
-    // 入力の順に依存しなくなる（R1.8）。
+    // BTreeSet にして、採用（最小）と不採用の並びを入力の順に依存させない。
     let mut candidates: BTreeMap<u32, BTreeSet<String>> = BTreeMap::new();
     let mut overflow: BTreeSet<String> = BTreeSet::new();
 
@@ -115,7 +88,6 @@ pub(crate) fn select_surface_images<S: AsRef<str>>(names: &[S]) -> SurfaceImageS
         let Some(digits) = face_digits_of(SURFACE_PREFIX, name) else {
             continue;
         };
-        // 数字列であることは判定済みゆえ、失敗は桁溢れだけである（R1.6）。
         match digits.parse::<u32>() {
             Ok(id) => {
                 candidates.entry(id).or_default().insert(name.to_string());
@@ -130,7 +102,6 @@ pub(crate) fn select_surface_images<S: AsRef<str>>(names: &[S]) -> SurfaceImageS
     let mut duplicates: Vec<(u32, String, Vec<String>)> = Vec::new();
     for (id, names) in candidates {
         let mut names = names.into_iter();
-        // 候補の無い番号は作られないため、最初の 1 件が辞書順最小＝採用名である。
         let Some(adopted) = names.next() else {
             continue;
         };
@@ -148,14 +119,13 @@ pub(crate) fn select_surface_images<S: AsRef<str>>(names: &[S]) -> SurfaceImageS
     }
 }
 
-/// シェルの読み込みの失敗（R1.7・既存の 2 つの失敗）。
+/// シェルの読み込みの失敗。
 ///
-/// 呼び手はこの 3 つを既存の失敗へ写すだけでよい（新しい枝は要らない）——起動は
-/// `BootWiringError::ShellRead`／`ShellEmpty`、採寸は
-/// `PlacementError::Measure` である。
+/// 呼び手は起動なら `BootWiringError::ShellRead`／`ShellEmpty`、採寸なら
+/// `PlacementError::Measure` へ写す。
 #[derive(Debug, thiserror::Error)]
 pub enum ShellLoadError {
-    /// シェルのフォルダの一覧が取れなかった（R1.7）。「画像 0 件」として先へ進まない。
+    /// シェルのフォルダの一覧が取れなかった。「画像 0 件」として先へ進まない。
     #[error("shell フォルダの一覧に失敗: {path}")]
     List {
         /// 一覧しようとしたシェルのフォルダ。
@@ -164,8 +134,7 @@ pub enum ShellLoadError {
         #[source]
         source: std::io::Error,
     },
-    /// `surfaces.txt` が在るのに読めなかった（無いときは失敗にせず画像だけで組む・
-    /// spec: areka-P0-self-alpha-declaration 要件 6.1・6.6）。
+    /// `surfaces.txt` が在るのに読めなかった（無いときは失敗にせず画像だけで組む）。
     #[error("surfaces.txt の読み取りに失敗: {path}")]
     Read {
         /// 読もうとした `surfaces.txt` の絶対パス。
@@ -174,8 +143,7 @@ pub enum ShellLoadError {
         #[source]
         source: std::io::Error,
     },
-    /// シェルに面が 1 つも無い——`surfaces.txt` が無いか面を定義せず、面の画像も無い
-    /// （spec: areka-P0-self-alpha-declaration 要件 6.5）。
+    /// シェルに面が 1 つも無い——`surfaces.txt` が無いか面を定義せず、面の画像も無い。
     #[error("シェルに面が 1 つも無い: {path}")]
     Empty {
         /// シェルのフォルダ（`surfaces.txt` が無い場合があるため、そのファイルではない）。
@@ -198,26 +166,21 @@ pub struct ShellTarget {
     atlas: AtlasTable,
     /// 焼く段で落ちた絵（記録を出すのは [`load_shell_target`]）。
     bake_errors: Vec<BakeError>,
-    /// 土台の絵の決定の結果（R6.1 の数と R6.2 の一覧の出どころ）。
-    ///
-    /// 決めるのに要る面の表は `build_core` が既に 1 つ組んでいるので、その結果を
-    /// ここへ写して持つ。入口が記録のために面の表を組み直さないためである（design
-    /// 「頻度の単位」の回数が増えない）。
+    /// 土台の絵の決定の結果。`build_core` が組んだ面の表から写して持つ（記録のために組み直さない）。
     base_images: BaseImageReport,
-    /// 相手の面が存在しないコマの「(コマを持つ面, 相手の番号)」（R3.5・出どころは同上）。
+    /// 相手の面が存在しないコマの「(コマを持つ面, 相手の番号)」。
     dangling: BTreeSet<(u32, u32)>,
-    /// 箱の定義の表とサーフェス番号ごとの置き場所の表（spec: areka-P0-shell-balloon）。
+    /// 箱の定義の表とサーフェス番号ごとの置き場所の表。
     boxes: BoxLayout,
     /// 箱の畳み込みで読み捨てた事実（記録を出すのは [`load_shell_target`]）。
     box_report: BoxReport,
     /// 箱の置き場所を持つサーフェスの数（[`load_shell_target`] の `info!` の出どころ）。
     box_surfaces: usize,
-    /// 入れ子の無い番号と循環の報告（記録を出すのは [`load_shell_target`]・要件 3.1・3.2）。
+    /// 入れ子の無い番号と循環の報告（記録を出すのは [`load_shell_target`]）。
     nest_report: NestReport,
-    /// 焼いた絵のうち同じ名前の `.pna` が添えてあったものの数（`BakeResult::ignored_pna` の写し・
-    /// `.pna` は使っていない・記録を出すのは [`load_shell_target`]・要件 5.7）。
+    /// 焼いた絵のうち同じ名前の `.pna` が添えてあったものの数（`.pna` は使わない）。
     ignored_pna: usize,
-    /// cursorブレスの転記（[`load_shell_target`] が 1 度だけ転記する・検証は下流）。
+    /// cursorブレスの転記（検証は下流）。
     cursor_braces: Vec<CursorBrace>,
     /// 透過の宣言（面の絵を焼いたのと同じ値・箱の矢印の絵も同じ扱いで読む）。
     use_self_alpha: UseSelfAlpha,
@@ -276,12 +239,9 @@ impl ShellTarget {
         self.use_self_alpha
     }
 
-    /// 面の表を 1 つ組む（`EmoWorld::build_with_images_quiet` → `bind_atlas(SetId(0))`）。
+    /// 面の表を 1 つ組む。スコープの数だけ呼んでよく、内容は毎回同じ。
     ///
-    /// スコープの数だけ呼んでよい。同じ入力から組むので、返る面の表の内容は毎回同じである。
-    /// 本仕様が足す記録はここでは出さない（0 本・要件 6 の記録はすべて [`load_shell_target`]
-    /// が読み込み 1 回につき 1 度だけ出す）。畳み込みと面の画像の記録も出さない（読み込みの核が
-    /// 1 度だけ出す・spec: emo-bake-log-overlap 要件 2.2）。装着の記録は組むたびに出る。
+    /// 読み込みの記録は出さない（装着の記録だけが組むたびに出る）。
     pub fn build_world(&self) -> EmoWorld {
         let mut world = EmoWorld::build_with_images_quiet(&self.shell, &self.images);
         world.bind_atlas(&self.atlas, SetId(0));
@@ -289,8 +249,7 @@ impl ShellTarget {
         world
     }
 
-    /// 1 度目は読み込みで組んだ面の表に atlas を装着して渡す（組み直さない＝読み込みで組んだ表を
-    /// そのまま渡し、同じ表をもう一度組む手間を省く）。2 度目からは [`ShellTarget::build_world`] と同じ。
+    /// 1 度目は読み込みで組んだ面の表に atlas を装着して渡す。2 度目からは [`ShellTarget::build_world`] と同じ。
     pub fn take_world(&mut self) -> EmoWorld {
         match self.world.take() {
             Some(mut world) => {
@@ -304,28 +263,23 @@ impl ShellTarget {
 
 /// シェルのフォルダを読んで [`ShellTarget`] を作る（fs を触る入口・記録を黙らせた版は [`load_shell_target_quiet`]）。
 ///
-/// 順序は「一覧 → `surfaces.txt` の読取と解析 → 面の表 → 使う画像を聞く → 焼く」である。
 /// 焼くのを最後に回すのは、どの面の画像を土台に**使う**かが面の表を組んでみないと決まらない
-/// ためで、[`EmoWorld`] の構築は焼いた結果を要しないので入れ替えられる。
+/// ため（[`EmoWorld`] の構築は焼いた結果を要しない）。
 ///
-/// 文字コードの扱いは今までと同じ——`surfaces.txt` 自身の `charset,<名前>` 宣言に従い、
-/// 未宣言は既定（Ansi）へ後退する。
+/// 文字コードは `surfaces.txt` 自身の `charset,<名前>` 宣言に従い、未宣言は既定（Ansi）。
 ///
 /// # Errors
 ///
-/// フォルダの一覧が取れない（[`ShellLoadError::List`]・R1.7）・`surfaces.txt` が在るのに読めない
+/// フォルダの一覧が取れない（[`ShellLoadError::List`]）・`surfaces.txt` が在るのに読めない
 /// （[`ShellLoadError::Read`]）・面が 1 つも無い（[`ShellLoadError::Empty`]）。
 /// 一覧の中の 1 件だけが取れない場合は、その 1 件を飛ばして続行する（失敗にしない）。
 ///
 /// `surfaces.txt` が無い、または面を 1 つも定義しないときは、面の画像が 1 つ以上在れば画像だけで
-/// 面を組み、そのことと面の数を `info!` で 1 行残す（spec: areka-P0-self-alpha-declaration
-/// 要件 6.1・6.2・7.3）。
+/// 面を組み、そのことと面の数を `info!` で 1 行残す。
 ///
 /// # 記録
 ///
-/// 要件 6 の記録はすべて本関数が出す（読み込み 1 回につきそれぞれ 1 度だけ・モジュール冒頭
-/// 「記録を出す場所」）。3 つの失敗はいずれも `error!` を伴う（記録の無い失敗経路を持たない・
-/// R6.4）。
+/// 記録はすべて本関数が出す（モジュール冒頭「記録を出す場所」）。3 つの失敗はいずれも `error!` を伴う。
 pub fn load_shell_target(
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
@@ -334,7 +288,7 @@ pub fn load_shell_target(
 }
 
 /// [`load_shell_target`] の動く絵の上限を外から渡す版（記録も失敗も同じ・上限だけが違う）。
-/// 環境変数に左右されないテストのための口（spec: audit-placement-core 要件 2.7・2.8）。
+/// 環境変数に左右されないテストのための口。
 ///
 /// # Errors
 ///
@@ -347,8 +301,7 @@ pub fn load_shell_target_with_limits(
     load_shell_target_with(shell_dir, decoder, LoadRecords::Emit, limits)
 }
 
-/// [`load_shell_target`] と同じ中身で読み、読み込みの記録を出さない（採寸の読み・
-/// spec: placement-measure-bake-once 要件 3.1・3.6）。戻り値は [`load_shell_target`] と等しい。
+/// [`load_shell_target`] と同じ中身で読み、読み込みの記録を出さない（採寸の読み）。戻り値は [`load_shell_target`] と等しい。
 ///
 /// # Errors
 ///
@@ -395,8 +348,6 @@ fn load_shell_target_with(
         }
     }
 
-    // `surfaces.txt` が無い（NotFound）ときは空の定義として続け、面の画像だけで組む（要件 6.1）。
-    // 在るのに読めないときだけ今までどおりの失敗である（要件 6.6）。
     let surfaces_path = shell_dir.join(SURFACES_TXT);
     let (content, surfaces_txt) = match std::fs::read(&surfaces_path) {
         Ok(bytes) => (decode(&bytes, DefaultEncoding::Ansi), "empty"),
@@ -420,8 +371,6 @@ fn load_shell_target_with(
         cursor_braces,
         issues,
     } = areka_parsers::shell::parse_all(&content);
-    // 面を 1 つも定義しないときは、今の「書かれていない番号を画像から認める」枝
-    // （`EmoWorld::build_with_images`）が面の画像から面を組む（要件 6.2・6.3）。画像も無ければ失敗。
     let image_only = shell.surfaces.is_empty();
     if image_only && selection.images.is_empty() {
         tracing::error!(
@@ -434,7 +383,6 @@ fn load_shell_target_with(
         });
     }
 
-    // 透過の宣言は呼ばれるたびに読む（状態を持たないので切り替えで前の宣言を持ち越さない・要件 1.7）。
     // 昔からのシェルの descript.txt は Shift_JIS が普通なので、UTF-8 として読まず ANSI を既定にする。
     let descript_path = shell_dir.join(DESCRIPT_TXT);
     let descript = match std::fs::read(&descript_path) {
@@ -553,11 +501,7 @@ fn load_shell_target_with(
 /// fs を触らない核（復号器を除く）: 面の表を組んで使う画像を決め、焼いて [`ShellTarget`] にする。
 ///
 /// 焼く絵の一覧は「`shell.surfaces` の複製＋**使う**画像 1 枚につき `element0` だけを持つ
-/// 面 1 個」である（[`base_image_surface`]）。マニフェスト導出は渡された全 `Surface` の
-/// `elements` を無条件に集めるので、`SurfaceSet`・`ManifestDeriver`・`bake` の変更は要らない。
-/// 使わなかった画像は焼かない（索引表に載らない）。
-///
-/// 透過の扱いは引数 `use_self_alpha`（入口がシェルの descript.txt から読んだ宣言）で決まる。
+/// 面 1 個」（[`base_image_surface`]）。使わなかった画像は焼かない（索引表に載らない）。
 #[cfg(test)] // 呼び手はテストだけ（本番の入口は `build_core` を直に呼ぶ）。
 pub(crate) fn build_shell_target(
     shell: Shell,
@@ -571,10 +515,8 @@ pub(crate) fn build_shell_target(
 
 /// `build_shell_target` に箱の転記（[`parse_boxes`](areka_parsers::shell::parse_boxes) の結果）を足した fs を触らない核。
 ///
-/// 箱の表は [`fold_boxes`] が作り、読み捨てた事実は報告として [`ShellTarget`] に載せるだけで
-/// 記録を出さない（記録は [`load_shell_target`] が読み込み 1 回につき 1 度だけ出す）。入れ子の
-/// 報告（[`EmoWorld::nest_report`]）も同じく載せるだけである。焼く一覧は `shell.surfaces` の
-/// 複製から画像でない element（数字だけの欄）を外したもので、その名前の絵を読みに行かない。
+/// 箱の表は [`fold_boxes`] が作り、読み捨てた事実と入れ子の報告（[`EmoWorld::nest_report`]）は
+/// [`ShellTarget`] に載せるだけで記録は出さない。焼く一覧は画像でない element（数字だけの欄）を外す。
 #[cfg(test)] // 呼び手はテストだけ（本番の入口は `build_core` を直に呼ぶ）。
 pub(crate) fn build_shell_target_with_boxes(
     shell: Shell,
@@ -596,7 +538,7 @@ pub(crate) fn build_shell_target_with_boxes(
     )
 }
 
-/// 核の中身（1 本）。`records` は焼く段と面の表の記録を出すかどうかだけを切り替える（要件 2.1）。
+/// 核の中身（1 本）。`records` は焼く段と面の表の記録を出すかどうかだけを切り替える。
 #[allow(clippy::too_many_arguments)] // 中の核 1 本の引数（上限を足して 8 つ）。束ねる型は作らない。
 fn build_core(
     shell: Shell,
@@ -610,9 +552,8 @@ fn build_core(
 ) -> ShellTarget {
     let images = selection.images;
 
-    // どの画像を土台に使うかは面の表を組んで初めて決まる（`element0` が在る面では使わない）。
-    // ここで組む面の表で「使う画像と、相手の無いコマ」を聞き、捨てずに持つ（`take_world` が 1 度渡す）。
-    // 入口が記録に使う事実もここで採る（記録のために組み直さないため）。
+    // 土台に使う画像は面の表を組んで初めて決まる（`element0` が在る面では使わない）。
+    // この表は捨てずに持ち、`take_world` が 1 度渡す。
     let mut probe = if records.emits() {
         EmoWorld::build_with_images(&shell, &images)
     } else {
@@ -629,8 +570,8 @@ fn build_core(
     let region_masks = regions::load_region_masks(&probe, shell_dir, decoder, records);
     probe.set_region_masks(region_masks.clone());
 
-    // 数字だけの element定義はサーフェスを置くもので画像ではない。焼く一覧に入れると、その名前の
-    // 絵を読みに行き（在れば使い・無ければ脱落の error!）になるので、複製から外して渡す（要件 1.5・3.5）。
+    // 数字だけの element定義はサーフェスを置くもので画像ではない。焼く一覧に入れると
+    // その名前の絵を読みに行って脱落の `error!` になるので外す。
     let mut surfaces = shell.surfaces.clone();
     for surface in &mut surfaces {
         surface
@@ -675,7 +616,7 @@ fn build_core(
     }
 }
 
-/// 入れ子の報告の 1 件を `warn!` 1 行にする（親・element・指した番号・要件 3.1・3.2・8.1）。
+/// 入れ子の報告の 1 件を `warn!` 1 行にする（親・element・指した番号）。
 fn log_nest_issue(issue: &NestIssue) {
     match issue {
         NestIssue::MissingTarget {
@@ -702,9 +643,7 @@ fn log_nest_issue(issue: &NestIssue) {
 }
 
 /// 形の誤り（pattern定義の辺の循環・描かないメソッドの pattern・知らない sort）を 1 件 1 行の
-/// `warn!` にする（要件 7.5）。element定義の循環は [`log_nest_issue`]、描かない element定義は
-/// 読み込みの行が出す。描かないメソッドの pattern は合成がその先へ進まないので、同じ pattern の
-/// 循環は描かない 1 行に寄せる（1 つの誤りは 1 行）。
+/// `warn!` にする。描かないメソッドの pattern と同じ pattern の循環は、描かない 1 行に寄せる。
 fn log_shape_issues(issues: &[ShapeIssue]) {
     let undrawn: BTreeSet<(u32, u32, u32)> = issues
         .iter()
@@ -756,7 +695,7 @@ fn log_shape_issues(issues: &[ShapeIssue]) {
     }
 }
 
-/// 箱の報告の 1 件を `warn!` 1 行にする（欄は報告の対象の欄そのまま・要件 10.1）。
+/// 箱の報告の 1 件を `warn!` 1 行にする（欄は報告の対象の欄そのまま）。
 fn log_box_issue(issue: &BoxIssue) {
     match issue {
         BoxIssue::BraceEmptyName { heading } => tracing::warn!(
@@ -861,7 +800,7 @@ fn log_box_issue(issue: &BoxIssue) {
     }
 }
 
-/// シェルのフォルダ**直下**の**ファイル**の名前を 1 回の走査で集める（R1.3）。
+/// シェルのフォルダ**直下**の**ファイル**の名前を 1 回の走査で集める。
 ///
 /// フォルダそのものとサブフォルダの中身は 0 件である（`file_type().is_file()`）。非 UTF-8 の
 /// 名前は面の画像の名前の規約（ASCII の接頭辞＋数字＋拡張子）を満たし得ないのでここで落とす。
@@ -884,8 +823,7 @@ fn list_file_names(shell_dir: &Path, records: LoadRecords) -> Result<Vec<String>
 
     let mut names: Vec<String> = Vec::new();
     for entry in read_dir {
-        // 1 件の取得失敗・種別の読み取り失敗は致命ではない（その 1 件を飛ばして続行・
-        // バルーンの `enumerate_file_names` と同じ扱い）。
+        // 1 件の取得失敗・種別の読み取り失敗は致命ではない（その 1 件を飛ばして続行）。
         let entry = match entry {
             Ok(entry) => entry,
             Err(error) => {
@@ -901,7 +839,7 @@ fn list_file_names(shell_dir: &Path, records: LoadRecords) -> Result<Vec<String>
         };
         match entry.file_type() {
             Ok(file_type) if file_type.is_file() => {}
-            // フォルダ（とその他の種別）は面の画像と認めない＝失敗ではないので記録しない。
+            // フォルダ等は失敗ではないので記録しない。
             Ok(_) => continue,
             Err(error) => {
                 if records.emits() {
@@ -921,7 +859,7 @@ fn list_file_names(shell_dir: &Path, records: LoadRecords) -> Result<Vec<String>
     Ok(names)
 }
 
-/// 面の画像 1 枚だけを持つ合成 `Surface`（焼く絵の一覧へ足す入力・R2.2）。
+/// 面の画像 1 枚だけを持つ合成 `Surface`（焼く絵の一覧へ足す入力）。
 ///
 /// パスの綴りは採ったファイル名そのままで、面の表の層 0 の [`ElementPath`] と完全一致する。
 /// `AtlasTable::resolve` は文字列の完全一致で引くので、ここがずれると絵は記録も無く描かれない。

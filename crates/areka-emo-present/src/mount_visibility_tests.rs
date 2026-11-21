@@ -1,17 +1,16 @@
 //! `VisualMount` の非表示契約（枠の面＋文字層スロットの両 entity）を検証する。
 //!
-//! 対象 Acceptance Criteria（`areka-P0-balloon-visibility` requirements.md）:
-//! - 1.7: 非表示は枠の面と文字層の双方へ及ぶ（枠だけ消えて文字が残らない）。
-//! - 1.8: 不可視時のポインタ透過も双方へ及ぶ（文字層だけ判定が残らない）。
-//! - 1.4: 不可視時の枠のポインタ透過（従来挙動の維持）。
-//! - 1.2: 不可視構築は可視状態を一度も経由しない（構造保証——フレーム遅延や合成の
+//! 検証する契約:
+//! - 非表示は枠の面と文字層の双方へ及ぶ（枠だけ消えて文字が残らない）。
+//! - 不可視時のポインタ透過も双方へ及ぶ（文字層だけ判定が残らない）。
+//! - 不可視時の枠のポインタ透過（従来挙動の維持）。
+//! - 不可視構築は可視状態を一度も経由しない（構造保証——フレーム遅延や合成の
 //!   タイミングに成否を委ねない）。
 //!
-//! 文字層スロットが従来 `HitTest` component を持たなかったことは、`wintf` 側で
-//! 「未付与＝既定 `HitTestMode::Bounds`」（`ecs/layout/hit_test/mod.rs`）と扱われ、
-//! `Bounds` 判定の合成 α は `Visual::clamped_opacity()`（`ecs/graphics/visual.rs`）＝
-//! `is_visible` を見ないため、可視性を落としてもポインタが透過しない。ゆえに本層で
-//! スロットへも明示的に `HitTest` を付与して切り替える。
+//! 文字層スロットへも明示的に `HitTest` を付与して切り替えるのは、`wintf` 側で「未付与＝既定
+//! `HitTestMode::Bounds`」（`ecs/layout/hit_test/mod.rs`）と扱われ、`Bounds` 判定の合成 α は
+//! `Visual::clamped_opacity()`（`ecs/graphics/visual.rs`）＝`is_visible` を見ないため、可視性を落としても
+//! ポインタが透過しないからである。
 
 use super::*;
 
@@ -37,7 +36,7 @@ fn hit_mode(world: &World, entity: Entity, what: &str) -> HitTestMode {
         .mode
 }
 
-/// 1.7 / 1.8 / 1.4: `set_visible(false)` が枠の面と文字層スロットの双方を不可視かつ
+/// `set_visible(false)` が枠の面と文字層スロットの双方を不可視かつ
 /// ポインタ透過（`HitTest::None`）にし、`set_visible(true)` で双方が復帰すること。
 ///
 /// 可視時のスロットは `HitTestMode::Bounds`＝従来の「component 不在＝既定 Bounds」と同値。
@@ -66,7 +65,6 @@ fn hide_and_show_cover_both_surface_and_text_slot() {
         "可視時のスロットは既定 Bounds と同値の明示付与"
     );
 
-    // 非表示へ: 双方が不可視 ∧ 双方が HitTest::None。
     mount.set_visible(&mut world, false);
     assert!(
         !is_visible(&world, surface, "surface entity"),
@@ -87,7 +85,6 @@ fn hide_and_show_cover_both_surface_and_text_slot() {
         "非表示後は文字層スロットのポインタ判定も停止（1.8——既定 Bounds のまま残ってはならない）"
     );
 
-    // 再表示へ: 双方が復帰。
     mount.set_visible(&mut world, true);
     assert!(
         is_visible(&world, surface, "surface entity"),
@@ -109,7 +106,7 @@ fn hide_and_show_cover_both_surface_and_text_slot() {
     );
 }
 
-/// 指摘 5: 見えている装着へもう一度 `set_visible(true)` しても、面と文字層の両 entity とも
+/// 見えている装着へもう一度 `set_visible(true)` しても、面と文字層の両 entity とも
 /// `Visual`・`HitTest` に変更の印が立たない（同値は書かない・毎コマの COM 呼び出しを引かない）。
 ///
 /// 恒真にならないよう、続けて `set_visible(false)` で両方の印が立つこと（陽性対照）も見る。
@@ -147,7 +144,7 @@ fn showing_a_visible_mount_again_sets_no_change_flag() {
     changed(&world, true, "陽性対照の set_visible(false)");
 }
 
-/// 1.2: 不可視構築（`initially_visible=false`）では、surface entity・text-layer slot の
+/// 不可視構築（`initially_visible=false`）では、surface entity・text-layer slot の
 /// いずれの `Visual` も **可視の値で挿入されない**こと。
 ///
 /// 「装着直後に不可視であること」だけでは「可視で作ってから消した」経路を排除できないため、

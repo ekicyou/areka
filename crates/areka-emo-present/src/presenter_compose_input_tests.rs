@@ -75,7 +75,6 @@ fn bind_change_on_same_surface_updates_display() {
         );
     };
 
-    // bind 無し → golden_plain。
     show(&mut presenter, &mut world, BindSet::default());
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
@@ -91,7 +90,6 @@ fn bind_change_on_same_surface_updates_display() {
         "bind 追加が表示へ反映されない（合成入力キーの回帰＝着せ替えバグ再発）"
     );
 
-    // bind 無しへ戻す → 再合成されて golden_plain（往復の両方向を固定）。
     show(&mut presenter, &mut world, BindSet::default());
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
@@ -100,7 +98,7 @@ fn bind_change_on_same_surface_updates_display() {
     );
 }
 
-/// R6.1 観測完了（同寸・異 id 再 Show ＝ 新面提示 ＋ 文字スロット安定）: バルーン target が既に
+/// 同寸・異 id 再 Show ＝ 新面提示 ＋ 文字スロット安定: バルーン target が既に
 /// ある面（1000）を表示中に、**同寸の異なる面 id（3000）**を `ShowSurface` すると——(a) reply Ok・
 /// (b) 可視維持・(c) `HitTest::AlphaMask` 維持・(d) `read_back` が **新面 3000 の golden** と一致
 /// （新面が実際に提示された証跡）・(e) `text_slot_view()`（slot/window/surface_size/scale）が切替の
@@ -108,7 +106,7 @@ fn bind_change_on_same_surface_updates_display() {
 ///
 /// 装着（mount）は初回表示で一度だけ生成され（`apply_show` の `mount.is_none()` 分岐を踏まない）、
 /// 予約 text スロット entity は据え置かれる＝emo-text の描画資源を破壊しない
-/// （design §emo-present 回帰・文字層＝同寸保持）。本 crate 本体は無改変（test-only・R6.3）。
+/// （文字層は同寸なら保持される）。
 #[test]
 fn reshow_same_size_different_face_keeps_text_slot_stable() {
     let mut world = make_world_with_gpu();
@@ -119,7 +117,6 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    // 面 1000 を表示確立（可視・αマスク判定・装着を遅延生成）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     // 前提: 初回表示は面 1000 の golden（切替前の基準）。
     assert_eq!(
@@ -137,11 +134,8 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
         .text_slot_view(TargetId(0))
         .expect("表示確立後の text_slot_view は Some");
 
-    // 同寸・異 id 再 Show（面 3000）。
-    // (a) reply Ok。
     show_ok(&mut presenter, &mut world, TargetId(0), 3000);
 
-    // (b) 可視維持。
     assert!(
         world.get::<Visual>(surface_entity).unwrap().is_visible,
         "同寸・異 id 再表示後も可視のまま"
@@ -150,14 +144,13 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
         presenter.targets.get(&TargetId(0)).unwrap().visible,
         "同寸・異 id 再表示後も target.visible=true"
     );
-    // (c) HitTest::AlphaMask 維持。
     assert_eq!(
         world.get::<HitTest>(surface_entity).unwrap().mode,
         HitTestMode::AlphaMask,
         "同寸・異 id 再表示後も αマスク判定を維持"
     );
 
-    // (d) read_back が新面 3000 の golden と一致（新面が実際に提示された証跡・R6.1）。
+    // (d) read_back が新面 3000 の golden と一致（新面が実際に提示された証跡）。
     let rb = presenter
         .read_back(TargetId(0))
         .expect("read_back（面 3000）失敗");
@@ -166,7 +159,7 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
         "再表示のバイトが新面 3000 の golden と一致しない（新面が提示されていない）"
     );
 
-    // (e) 文字スロット表示が切替の前後で完全一致（slot/window/surface_size/scale が不変・R6.1）。
+    // (e) 文字スロット表示が切替の前後で完全一致（slot/window/surface_size/scale が不変）。
     let slot_after = presenter
         .text_slot_view(TargetId(0))
         .expect("再表示後の text_slot_view は Some");
@@ -222,13 +215,13 @@ fn build_target_assets_with_pattern(
     (world, atlas, golden_plain, golden_pattern)
 }
 
-/// Task 8.2 完了檻（pattern が presenter → compose ＋ cache を実際に貫く・R5.1/5.2/5.4）: 同一
+/// pattern が presenter → compose ＋ cache を実際に貫く）: 同一
 /// `(target, surface_id, binds)` でも `ShowSurface` が運ぶ **pattern が変われば表示が変わる**。
 ///
-/// (1) 空 pattern の Show → `read_back` が空 pattern 直接合成 golden と一致（R5.4: 拡張前と観測等価）。
+/// (1) 空 pattern の Show → `read_back` が空 pattern 直接合成 golden と一致（拡張前と観測等価）。
 /// (2) 同一 id・binds のまま **非空 pattern** の Show → `read_back` が非空 pattern 直接合成 golden と
 ///     一致し、かつ空 pattern の絵と**異なる**（pattern が compose へ届き ComposeKey も pattern 分だけ
-///     ミスして再合成された証跡・R5.1/5.2）。(3) 再び空 pattern の Show → 空 golden へ戻る（pattern が
+///     ミスして再合成された証跡）。(3) 再び空 pattern の Show → 空 golden へ戻る（pattern が
 ///     キー要素として往復両方向で効く）。presenter が pattern を既定（空）で握り潰していれば (2) が
 ///     空 golden のままとなり本テストは RED になる。
 #[test]
@@ -253,7 +246,7 @@ fn show_surface_pattern_flows_through_to_compose_and_cache() {
         );
     };
 
-    // (1) 空 pattern → golden_plain（拡張前と観測等価・R5.4）。
+    // (1) 空 pattern → golden_plain（拡張前と観測等価）。
     show(&mut presenter, &mut world, PatternState::default());
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),

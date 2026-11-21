@@ -1,5 +1,4 @@
-//! 鍵 1 つの読み込みの段取りと、動く絵の 2 枚目以降のコマの扱い
-//! （spec: areka-P0-animated-image-decode 要件 3.1〜3.5・4.1・4.7・5.1・6.2・6.4・6.9）。
+//! 鍵 1 つの読み込みの段取りと、動く絵の 2 枚目以降のコマの扱い。
 //!
 //! 見出しが無ければ今までの 1 枚読み（`decode` 1 回）をそのまま通す。見出しがあれば上限を
 //! 判定してから全コマを読み、超えたか読めなければ 1 枚へ縮める（動きの 1 枚目 → 今までの
@@ -31,7 +30,7 @@ pub(crate) enum Loaded {
 }
 
 /// 鍵 1 つを読む。`used` はこの `bake` で既に全コマを載せた動く絵の画素の合計
-/// （足すのは呼び手・要件 6.8）。
+/// （足すのは呼び手）。
 pub(crate) fn load(
     decoder: &impl ElementDecoder,
     path: &Path,
@@ -43,7 +42,7 @@ pub(crate) fn load(
     let Some(info) = decoder.probe_animation(path) else {
         return still(decoder, path);
     };
-    // 縮める道も同じ寸法で読むので、一辺の上限を越える見出しは縮めずに読めなかった絵にする（指摘 2）。
+    // 縮める道も同じ寸法で読むので、一辺の上限を越える見出しは縮めずに読めなかった絵にする。
     if let Err(source) = pixel_len(info.width, info.height) {
         return Loaded::Failed(DecodeError::Decode {
             path: path.to_path_buf(),
@@ -123,7 +122,7 @@ fn still(decoder: &impl ElementDecoder, path: &Path) -> Loaded {
     }
 }
 
-/// 読めた絵が読み手の約束（一辺・stride・長さ）を守るときだけ通す（指摘 18）。
+/// 読めた絵が読み手の約束（一辺・stride・長さ）を守るときだけ通す。
 fn accept(img: DecodedImage, path: &Path) -> Result<DecodedImage, DecodeError> {
     match check_image(&img) {
         Ok(()) => Ok(img),
@@ -134,7 +133,7 @@ fn accept(img: DecodedImage, path: &Path) -> Result<DecodedImage, DecodeError> {
     }
 }
 
-/// 動く絵を 1 枚へ縮める（要件 6.2・6.4〜6.6）。段 1 は動きの 1 枚目、段 2 はそれが読めない
+/// 動く絵を 1 枚へ縮める。段 1 は動きの 1 枚目、段 2 はそれが読めない
 /// ときだけ今までの 1 枚読み、段 3 はそれも読めないときの今までの失敗。段 1・段 2 の絵は
 /// 静止画の枝を通る（透明度が無ければ左上の色が抜ける）。
 fn shrink(
@@ -182,8 +181,7 @@ pub(crate) struct PendingFrames {
 }
 
 impl PendingFrames {
-    /// 0 番のコマを外した動く絵の残りに、0 番のコマで決めた扱い（`rule`）を当てて切り詰める
-    /// （要件 3.1〜3.3・3.5・spec: areka-P0-self-alpha-declaration 要件 4.4・5.5・9.4）。
+    /// 0 番のコマを外した動く絵の残りに、0 番のコマで決めた扱い（`rule`）を当てて切り詰める。
     /// コマごとに決め直さないので、全部のコマが 0 番と同じ側（α・不透明・抜き色）になる。
     pub(crate) fn new(
         parent: ElementId,
@@ -217,7 +215,7 @@ impl PendingFrames {
 }
 
 /// 全部の鍵を回り終えた後、貯めたコマに鍵のエントリの後ろから番号を振る
-/// （親の番号の昇順・コマの番号の昇順・要件 4.7）。
+/// （親の番号の昇順・コマの番号の昇順）。
 pub(crate) fn append_frames(
     pending: Vec<PendingFrames>,
     keys: &mut Vec<AtlasKey>,
