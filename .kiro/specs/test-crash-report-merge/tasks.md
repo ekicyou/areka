@@ -80,7 +80,7 @@
   - _Dispatch: mechanical — 既存の隣の前例の形を写す_
   - _Requirements: 6.1_
 
-- [ ] 3.4 古い道と置き場・武装の説明を直す
+- [x] 3.4 古い道と置き場・武装の説明を直す
   - 3.3 の一時の変更が戻った後に行う（`follow/window_move.rs` を両方が触るため）
   - `crates/areka-placement/` の下の古い道 `runtime::…`（21 ファイル 44 行・一覧は research の 2.8 節）を、設計の「古い道の書き換えの決まり」で直す。行ごとに、書き換え後の道の最後の項目が今その置き場に定義されていることを grep で確かめる。本当に `crates/areka/` を指す「本体の」は残す。`spawn.rs` は 350 行だけ
   - `chain_rule_tests.rs` 5 行目の置き場と、`chain_realign.rs` の `arm_chain_realign` の説明（160・167〜169 行）を設計の趣旨で書き直す

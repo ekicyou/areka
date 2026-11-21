@@ -81,7 +81,7 @@ pub use self::drag_follow::on_char_drag_end;
 pub use self::offset_space::BalloonFollow;
 /// 遷移時の唯一の変換規則と、その判定結果。
 ///
-/// 呼び手は追随の適用相（`runtime::…` の `balloon_offset_follow`）。
+/// 呼び手は追随の適用相（`areka_runtime::…` の `balloon_offset_follow`）。
 pub use self::offset_space::{OffsetRescale, rescale_follow_offset};
 /// 作者空間のオフセットを合流欄の空間（物理 px）へ換算する純関数と、その 1 軸ぶんの結果。
 ///
@@ -98,11 +98,11 @@ pub(crate) use self::work_area::{WorkAreaResolution, work_area_for_window_with_o
 /// 配置解決の出力（`resolver::ScopePlacement`）と復元 merge（`persist`）が運ぶため、
 /// ファサード再輸出に載せる。
 pub use super::resolver::OffsetBase;
-// 2 源の型と比較。呼び手は `runtime::…` の作業領域の同期。
+// 2 源の型と比較。呼び手は `areka_runtime::…` の作業領域の同期。
 pub use self::work_area::{MonitorDpiTable, MonitorSources, same_monitors};
 // モニタ別拡大率表の要素型。表の外から要素を組めないと `entries` が事実上読めない型になるので公開する。
 pub use self::work_area::MonitorDpiEntry;
-// 作業領域へ寄せる鎖の World の口と記録の語。呼び手は `runtime::…` の
+// 作業領域へ寄せる鎖の World の口と記録の語。呼び手は `areka_runtime::…` の
 // 起動の並べ直しと詰め直し。記録の語の残り 2 つと純関数の核は、檻が定義元の道で引く。
 pub use self::work_area_clamp::{
     ChainClampOutcome, ChainPlacement, ClampScene, place_chain_in_work_area,
@@ -118,7 +118,7 @@ pub(crate) use self::work_area_clamp::{RestoredWindow, keep_restored_groups};
 #[allow(unused_imports)]
 pub(crate) use self::work_area_clamp::GroupShift;
 
-// 窓の移動・寸の口。呼び手は `runtime::…`（`anchor_changed_system` は schedule に登録しない見本）。
+// 窓の移動・寸の口。呼び手は `areka_runtime::…`（`anchor_changed_system` は schedule に登録しない見本）。
 pub use self::window_move::{
     anchor_changed_system, move_window_to, resize_window_keep_position, resize_window_to,
 };
@@ -128,14 +128,14 @@ pub use self::window_move::move_window_with_route;
 #[cfg(not(feature = "test-support"))]
 pub(crate) use self::window_move::move_window_with_route;
 
-// 私有・crate 内の再束縛と、`runtime::…` などが呼ぶ公開の口（呼び手は下の各行の注）。
+// 私有・crate 内の再束縛と、`areka_runtime::…` などが呼ぶ公開の口（呼び手は下の各行の注）。
 // サブモジュール間の相互参照とテストモジュールからの `super::` 参照は、いずれもここを経由する。
-// 追随相（`runtime::…`）が収束の保証で `follow_balloon` を呼ぶため、次の 2 項目は公開する。
+// 追随相（`areka_runtime::…`）が収束の保証で `follow_balloon` を呼ぶため、次の 2 項目は公開する。
 pub use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
 // キーワード由来のバルーン基本位置の一度きりの再導出（`resize_window_to` が使う）。
 use self::keyword_base::rederive_keyword_balloon_offset;
 // 面の `move` のずれ。当てる口の呼び手は毎フレームのずれの相
-// （`runtime::…` の `move_shift`）。ドラッグの終わりと保存の側は当てた分を 0 にする・引く口、
+// （`areka_runtime::…` の `move_shift`）。ドラッグの終わりと保存の側は当てた分を 0 にする・引く口、
 // 位置の初期化は記録を外す口、絶対の位置への `\![move]` は軸ごとに当て直す口だけを使う。
 pub use self::move_shift::{
     apply_balloon_shift, apply_char_shift, rebase_shift_axes, shift_is_current,
@@ -151,7 +151,7 @@ pub(crate) use self::sticky_follow::sync_drag_writer;
 pub(crate) use self::sticky_follow::{is_char_drag_partner, is_char_dragging};
 // ドラッグの始めの控え。呼び手は areka の `areka_input::drag`。
 pub use self::sticky_follow::{CharDragSession, begin_char_drag};
-// `\![move]` の連れ動き。呼び手は `runtime::…` の `move_cue_place`。
+// `\![move]` の連れ動き。呼び手は `areka_runtime::…` の `move_cue_place`。
 pub use self::sticky_follow::{follow_sticky_move, log_sticky_ignored};
 use self::visibility::{
     VISIBILITY_UNRESOLVED_TAG, apply_visibility_guard, evaluate_visibility_guard,

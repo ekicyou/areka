@@ -2,7 +2,7 @@
 // 鎖の規則の檻（World を持たない行）。
 //
 // 道ごとの答えを 1 つの規則（`chain_rule`）から引けることを、表の形のまま確かめる。
-// World の要る行（起動の確定・詰め直し・保存の実際の窓）は本体の `frame_chain_rule_tests.rs` ほか。
+// World の要る行（起動の確定・詰め直し・保存の実際の窓）は`crates/areka-runtime/src/frame_chain_rule_tests.rs` ほか。
 // =============================================================================
 
 use std::collections::BTreeMap;

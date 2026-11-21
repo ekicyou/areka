@@ -31,7 +31,7 @@
 //! 同期から）・[`log_hold`]（整合ゲートの 5 点＝拡大率の相・報告寸の突合・実表示寸の再スナップ・
 //! 作業領域変化を契機とする再スナップ・面の `move` のずれの相）・[`log_chain`]
 //! （遷移後の連鎖再解決から）・[`log_offset_rescale`]（拡大率遷移でのバルーン追従
-//! オフセットの追随。呼び手は `runtime::frame::balloon_offset_follow`）である。
+//! オフセットの追随。呼び手は `areka_runtime::frame::balloon_offset_follow`）である。
 //!
 //! # 語彙は先に建てる
 //!
