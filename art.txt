@@ -1,0 +1,61 @@
+balloon.rs 14 `balloonc*`（入力ボックス）・`arrow*`（スクロール矢印）・`marker*`（行の中の印）・
+balloon_definitions_tests.rs 220 。同じ名前は 1 回だけ読み、面どうしで共有する。
+balloon_marker.rs 73 見ない。同じ名前・番号に大小違いのファイルが並ぶときは辞書順最小を採る（走査順に依らない・
+balloon_quiet_tests.rs 2 。
+balloon_quiet_tests.rs 4 見ているのは 3 つ——⑴ 読み込みの記録を出す検体（相方側の系列を持たず縮退するバルーン・
+balloon_quiet_tests.rs 120 フォルダが無くても、出さない入口は走査の失敗の `error!` を 1 行出す（系列の解決は `Err`・
+balloon_test_support.rs 93 本 fixture は実資産である——`descript.txt`（基層）・`balloons0s.txt`（本体側の面別上書き層）・
+cache.rs 93 `composed.bytes()`（原寸バイト）から呼び手が 1 回だけ生成した当たり判定マスク・
+cache.rs 144 [`get`] は**順序を動かさない**。読み取りだけの引き当てで置換順が変わると、観測（テスト・
+cache.rs 224 ）。本メソッドは表示バッファと `Arc` マスクを**同時に**受け取るため、「1 apply に
+cache_tests.rs 393 回収 → 挿入を経ても 3 点ともそのまま成立しなければならない。上限が緩む・キー比較が落ちる・
+command.rs 34 できる（areka-actor envelope 規約準拠）。各 variant の `reply` は任意（`None` は撃ちっぱなし・
+command.rs 77 。失敗（reply `Err`）は target が未装着のときだけで、そのとき表は変わらない。
+display_tests.rs 3 T-N1 が固定する性質は 4 点のみ：bitmap 寸＝合成結果の原寸・pitch＝合成結果の stride・
+lib.rs 7 ヒットテストへ供給する。合成そのものは上流の責務であり、本段は「表示の記録・キャッシュ・
+lib.rs 12 本クレートは **指令 API（`PresentCommand`）の契約正本**である。surface 切替・
+lib.rs 13 非表示（`\s[-1]` 相当）・キャッシュ無効化を運ぶ指令の形（scope・surface id・
+lib.rs 27 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）・シェルの読み込み（[`shell_target`]）・
+lib.rs 28 合成キャッシュ（`cache`）・表示の記録（`display`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・
+mount.rs 214 **現値と同値なら書かない**——`Changed<Arrangement>` → `GlobalArrangement` → 面の寸合わせ・
+mount_tests.rs 444 面と文字層の entity が先に消えた装着へ 4 つの口（`set_visible`・`set_layout`・
+presenter/budget.rs 22 。ゆえに [`FrameBudget::note_alloc`] は「呼び手が確保したと申告したとき」ではなく
+presenter/budget.rs 71 2. 実体を差し替えつつ高水位を持ち越す改変（`display_buffer` が回収バッファを捨てて空を返す・
+presenter/budget.rs 346 。計数の API 面は席の導入で変わっていない。
+presenter/budget.rs 377 呼ばない——「呼ばれた回数」ではなく「確保した回数」を数えることが、再利用の成立・
+presenter/hit.rs 27 窓 client 物理 px の点を**実適用 k で縮約**して当たり判定を解決する（DPI 追従の正準判定入口・
+presenter/hit.rs 28 ）。
+presenter/hub.rs 138 合図 `MoveShift` の適用: 対象の欄にずれを書くだけ（合成・可視性・合成の覚えには触らない・
+presenter/hub.rs 154 合図 `StageAck` の適用: 追い付いた世代を「今の値と受けた番号の大きい方」にするだけ（合成・
+presenter/read.rs 1 読み取り専用の照会契約——text 層スロット view（`TextSlotView`）・物理寸・実適用 k・現サーフェス id・
+presenter/read.rs 77 窓 DPI ＝ author_dpi なら 1.0、192dpi／author 96 なら 2.0 を返す。下流（
+presenter/read.rs 87 mount は初回 `ShowSurface` で原寸確定後に遅延生成されるため、未登録 target・
+presenter/read.rs 183 画面の絵ではなく表示確立の結果を返す（α 非依存）。未表示（一度も `ShowSurface` していない）・
+presenter/read.rs 208 ）。未登録・まだ受けていない target は `(0, 0)`。
+presenter/read.rs 216 で、その更新点は「表示確立点の可視化手順（[`VisibilityOwnership::CommandDriven`] のみ）」・
+presenter/read.rs 237 が返していたバイト列と同一バイト・
+presenter/read_move_shift_tests.rs 2 ）。ずれが対象ごとに覚えられ、合成の覚えに触らないことを固定する。
+presenter/refresh.rs 129 表示更新は既存の単一漏斗をそのまま通し、成否は戻り値で読む。成立点の記録・
+presenter/refresh.rs 220 client を新物理寸へ合わせる。未登録 target・
+presenter/replace.rs 15 合成の入力（`EmoWorld`・アトラス・キャッシュ）と拡大政策は引き継がない——新しいシェル・
+presenter/scale_change.rs 5 [`ScaleChange`] を積む。取り出すのは呼び手（毎フレームの相）で、表示層は kanade・sylphya・
+presenter/show.rs 1 `ShowSurface` の適用（`EmoPresenter::apply_show`）——k 導出・引き当て／合成＋表示記録・装着の遅延生成・
+presenter/show.rs 23 (0) 窓の `DPI` component と target 政策から**この適用に使う k**を導出する（[`derive_scale`]・
+presenter/show.rs 346 `External` の target では表示状態の確立（合成・表示記録・配置・マスク・k・面 id・再表示入力・
+presenter/show.rs 482 表示成立点の観測ログ。**最初の表示と状態の替わりは INFO・
+presenter/show.rs 485 適用は `areka_emo_present=debug` で同じ文言・同じ欄のまま 1 適用 1 行で読める。k 導出値（`k`・
+presenter/snapshot.rs 4 加えて、別名の表と生の surface ID の集合の写し 2 本（MCP の台本の検査 `check_script` が使う・
+presenter/snapshot.rs 32 target の `EmoWorld::alias_snapshot` をそのまま返す（再生の `SurfaceResolver` と同じ材料・
+presenter/snapshot_tests.rs 2 ）と写しの口 2 本（`alias_snapshot`／`surface_ids`・spec `areka-P0-mcp-author-tools`
+presenter/snapshot_tests.rs 3 ）の決定論テスト（GPU なし）。
+presenter/snapshot_tests.rs 9 同じ入力の合成結果を先に target の合成メモへ入れ（表示の記録は `GraphicsCommandList::empty()`・
+presenter/target.rs 3 合成入力（`emo_world`／`atlas`／`composer`／`cache`）・装着資源（`window`／`mount`）・
+presenter/target.rs 53 `mount` は **初回 `ShowSurface` で原寸が確定してから遅延生成**する（表示記録と原寸の配置が要る・
+presenter/target.rs 114 異なる複数モニタに窓が同時に存在しても各窓が自窓の k で表示される。政策自体（author_dpi・
+presenter/target.rs 135 依らず常に、いま表示に使ったキャッシュエントリの `composed` の外形（[`CacheEntry::composed`]・
+presenter/target.rs 155 置くのは指令の入口（`hub.rs` の `ShowSurface` の腕）だけで、外から所有され・見えておらず・
+presenter/timing.rs 272 `BindSet` と `PatternState` は `Hash` を実装しないため、公開アクセサ（昇順正準の `ids()`・
+presenter/timing_tests.rs 113 **ちょうどで**固定し（部分一致でなく名前集合の等価）、撤去済みフィールド（リサンプル段・
+presenter/timing_tests.rs 179 T-N6: フィールド名の集合を「ちょうど」で固定する（部分一致でなく名前集合の等価・
+presenter/timing_tests.rs 180 ）。全段・確保計数の常時出現と撤去済みフィールドの不在もこれが
+presenter/timing_tests.rs 278 表示スケール k はキー要素ではない（`compose_key_hash` は 3.1 で k 引数を撤去済み・
