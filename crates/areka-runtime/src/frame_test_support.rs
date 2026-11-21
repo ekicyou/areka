@@ -2,7 +2,6 @@ use crate::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, EmoWorld};
 use areka_emo_text::state::TextLayerConfig;
-#[cfg(test)]
 use areka_placement::follow::OffsetBase;
 use areka_placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
 use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
