@@ -14,11 +14,11 @@ use bevy_ecs::prelude::*;
 
 use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::boot_config::BootContext;
-use crate::exit_wait;
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::exit_wait;
 use crate::session::ghost_quit::run_ghost_quit_phase;
 use crate::session::ghost_switch::SwitchInFlight;
-use crate::write_failure;
+use crate::session::write_failure;
 use crate::{MarkInputs, Teardown, settle_session_mark};
 
 /// OS のセッションの終了を 1 回処理した印（プロセスに高々 1 つ）。`fn main` の後始末はこれを見て

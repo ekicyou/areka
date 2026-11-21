@@ -12,7 +12,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-use crate::exit_wait::{self, WorkGate};
+use crate::session::exit_wait::{self, WorkGate};
 
 mod before_boot_ports;
 pub(crate) mod desk;

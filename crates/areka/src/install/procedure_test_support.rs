@@ -14,10 +14,10 @@ use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
 use super::{InstallPorts, InstalledRecord, Overwritten, Raised};
-use crate::alert::YesNo;
 use crate::install::judge::GhostFacts;
 use crate::install::terms::TermsNotice;
 use crate::install::{InstallOrder, InstallOrigin};
+use crate::session::alert::YesNo;
 
 /// 起動中のゴーストのフォルダ名。
 pub(super) const RUNNING: &str = "running";

@@ -113,13 +113,6 @@ pub(crate) use boot_config::{
     is_benign_boot_error,
 };
 
-/// 無いときの告知（根なし／ゴーストなし／バルーンなし／起動窓を開けない）と
-/// 告知の抑止（`AREKA_NO_ALERT`）。
-mod alert;
-
-/// 記憶を書けない失敗を集める致命の机。
-mod write_failure;
-
 /// 起動解決の純粋な判断（ゴースト 6 分岐・バルーン 8 分岐）と既定の定数。
 /// 起動前の解決は `install::startup::resolve_boot` が、記憶の書き込みは boot 成功直後の `on_boot_ok` が結線する。
 mod boot_resolve;
@@ -130,8 +123,6 @@ mod install;
 /// ゴースト・シェル・バルーンのネットワーク更新。
 mod update;
 
-/// 終了の後始末が、背景で書いている仕事の終わりを上限つきで待つ口。
-mod exit_wait;
 mod file_drop;
 
 /// ベースウェアの根の並びの決め方。
@@ -158,6 +149,7 @@ mod scope_bind_fixture_test_support;
 // ---------------------------------------------------------------------------
 
 fn main() -> Result<()> {
+    use session::{alert, exit_wait, write_failure};
     human_panic::setup_panic!();
 
     // RUST_LOG が未設定・非UTF-8・不正な構文なら "info" へフォールバックする（panic 経路なし）。
@@ -511,7 +503,7 @@ struct AfterRun {
     /// 降ろす単位（置き場が空＝切替の途中の致命か、OS のセッションの終了で降ろし済みなら `None`）。
     session: Option<ghost_session::GhostSession>,
     /// 告知の場面（最初の出所が Fault か記憶を書けなかったもので、OS のセッションの終了を処理していないときだけ）。
-    scene: Option<alert::AlertScene>,
+    scene: Option<session::alert::AlertScene>,
     /// 起動中の印の判定の材料（起動の文脈が無いか、OS のセッションの終了で済んでいれば `None`＝
     /// 印に触れない）。判定は降ろした後。
     mark: Option<MarkInputs>,
@@ -549,6 +541,7 @@ struct Teardown {
 /// ゴーストのまま残るので、起こそうとしていた既定ゴーストの名前（フォルダ名）と場所で組む
 /// （致命になるのは既定ゴーストを起こせなかったときだけ＝`ghost_switch::fatal` の呼び手）。
 fn after_run(world: &mut World) -> AfterRun {
+    use session::alert;
     let session = world
         .get_non_send_mut::<ghost_session::GhostSlot>()
         .and_then(|mut slot| slot.0.take());

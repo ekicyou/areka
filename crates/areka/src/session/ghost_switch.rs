@@ -624,7 +624,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
             RuntimeRebuild::Rebuilt => set_stage(world, WelcomeAttempt::Target),
             RuntimeRebuild::WriteFailed(failure) => {
                 end_switch(world, SwitchEnd::WriteFailure);
-                crate::write_failure::fatal(world, failure);
+                crate::session::write_failure::fatal(world, failure);
             }
             RuntimeRebuild::BootFailed
                 if same_folder_name(&target.folder, DEFAULT_GHOST_FOLDER) =>
@@ -659,7 +659,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
                 (!ctx.argv_session).then_some(target.name.as_str()),
             ) {
                 end_switch(world, SwitchEnd::WriteFailure);
-                crate::write_failure::fatal(world, failure);
+                crate::session::write_failure::fatal(world, failure);
                 return;
             }
         }

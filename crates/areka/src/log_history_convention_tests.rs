@@ -153,7 +153,7 @@ const TARGETS: [&str; 9] = [
     "areka::update::desk",
     "areka::log::script",
     "areka::log::error",
-    "areka::alert",
+    "areka::session::alert",
     "log",
     "",
 ];
@@ -182,14 +182,14 @@ fn a_query_that_is_not_an_event_always_passes_and_is_never_wanted() {
 fn an_event_is_wanted_and_passes_exactly_when_classify_hits() {
     let cases = [
         (Level::WARN, "wintf::tick_diag", true),
-        (Level::ERROR, "areka::alert", true),
+        (Level::ERROR, "areka::session::alert", true),
         (Level::INFO, "areka::boot_config", true),
         (Level::INFO, "areka::log::script", true),
         (Level::INFO, "areka::update::desk", true),
         (Level::DEBUG, "areka::log::script", false),
         (Level::DEBUG, "areka::perf", false),
         (Level::TRACE, "areka::boot_config", false),
-        (Level::INFO, "areka::alert", false),
+        (Level::INFO, "areka::session::alert", false),
         (Level::INFO, "log", false),
     ];
     for (level, target, hit) in cases {

@@ -15,8 +15,8 @@ use bevy_ecs::world::World;
 use log_capture_kit::capture;
 
 use super::*;
-use crate::exit_wait::begin_close;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring, wire_menu};
+use crate::session::exit_wait::begin_close;
 
 /// メニューを結線し「インストール」枠を登記した World（`desk` が真なら窓口も据える）。
 fn wired_world(desk: bool) -> World {

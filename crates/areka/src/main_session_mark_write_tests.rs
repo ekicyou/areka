@@ -10,11 +10,11 @@ use temp_path_kit::TempPath;
 
 use super::{MarkVerdict, Teardown, after_run, finish_after_run, session_mark_verdict};
 use crate::ConfigInputs;
-use crate::alert::{AlertScene, WriteMoment};
 use crate::app_exit::{ExitOrigin, FirstExit};
 use crate::boot_config::{BootContext, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::alert::{AlertScene, WriteMoment};
 
 /// 根 `tmp`・ゴースト A・置き場に単位 1 つ・最初の出所 `first` を組んだ World。
 fn world_with(tmp: &TempPath, first: ExitOrigin) -> World {
@@ -274,7 +274,7 @@ fn clear_mark_unwritable_tells_running_once() {
     assert_eq!(verdict, MarkVerdict::Clear);
     let failed = failed.expect("印を消せない失敗が返る");
     let (told, events) = log_capture_kit::capture(|| {
-        crate::write_failure::tell_at_close(None, Some(failed), None, true)
+        crate::session::write_failure::tell_at_close(None, Some(failed), None, true)
     });
     let alerts: Vec<_> = events
         .iter()

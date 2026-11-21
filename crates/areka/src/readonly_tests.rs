@@ -209,7 +209,7 @@ fn boot_check_passes_readonly_without_touching_the_tree() {
     let before = tree(tmp.path());
 
     let (result, events) =
-        log_capture_kit::capture(|| crate::write_failure::check_boot(true, &cfg, &app));
+        log_capture_kit::capture(|| crate::session::write_failure::check_boot(true, &cfg, &app));
 
     assert!(result.is_ok(), "{result:?}");
     let skipped = events
@@ -226,9 +226,10 @@ fn boot_check_without_readonly_is_the_current_check() {
     let tmp = temp_path_kit::TempPath::under_target("readonly-boot-check-normal");
     let (cfg, app) = unwritable_places(&tmp);
 
-    let expected = crate::write_failure::check_boot_dirs(&cfg, &app).expect_err("書けない");
+    let expected =
+        crate::session::write_failure::check_boot_dirs(&cfg, &app).expect_err("書けない");
     let (result, events) =
-        log_capture_kit::capture(|| crate::write_failure::check_boot(false, &cfg, &app));
+        log_capture_kit::capture(|| crate::session::write_failure::check_boot(false, &cfg, &app));
 
     assert_eq!(result.expect_err("今の確かめと同じく止まる"), expected);
     assert!(

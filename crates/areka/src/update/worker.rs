@@ -25,7 +25,7 @@ use areka_update::{Fetch, FetchError, Progress, UpdateRequest, WinHttpFetch};
 
 use super::procedure::{EngineRun, GhostResources, Raised, UpdatePorts, run_order};
 use super::{TargetKind, TargetSpec, UpdateOrder};
-use crate::exit_wait::WorkGate;
+use crate::session::exit_wait::WorkGate;
 
 /// 照会する SHIORI リソース（1 回の照会で 2 つ）。窓口の `homeurl` の照会も同じ名前を使う。
 pub(super) const HOMEURL: &str = "homeurl";

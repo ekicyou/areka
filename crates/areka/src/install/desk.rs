@@ -36,8 +36,8 @@ use super::startup::CarriedInstall;
 use super::worker::{DeskAsk, spawn_worker};
 use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
 use crate::boot_config::BootContext;
-use crate::exit_wait::WorkGate;
 use crate::ghost_session::GhostSlot;
+use crate::session::exit_wait::WorkGate;
 use crate::session::ghost_switch::{SwitchInFlight, record_last_installed};
 use areka_runtime::shell_balloon_resolve::{record_installed_balloon, record_installed_shell};
 
@@ -172,7 +172,11 @@ pub(crate) fn can_pick(world: &World) -> bool {
 /// メニューの動作: 選ぶ画面のスレッド `install-pick` を起こす。出ている最中なら
 /// `debug!` で無視し、`AREKA_NO_ALERT` で抑止されていればスレッドを起こさず取り消しと同じに扱う。
 pub(crate) fn pick_and_submit(world: &mut World) {
-    start_pick(world, crate::alert::suppressed(), pick::pick_archive);
+    start_pick(
+        world,
+        crate::session::alert::suppressed(),
+        pick::pick_archive,
+    );
 }
 
 /// [`pick_and_submit`] の中身（テストは抑止の判定と選ぶ画面の代わりを差し込む）。起こしたスレッドの

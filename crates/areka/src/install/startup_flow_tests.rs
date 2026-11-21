@@ -8,9 +8,9 @@ use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::alert::AlertScene;
 use crate::boot_config::BootResolved;
 use crate::boot_resolve::{DEFAULT_BALLOON_FOLDER, GhostRoute};
+use crate::session::alert::AlertScene;
 
 /// 告知を出さない・読み取りだけでない走り。
 const QUIET: BeforeBootEnv = BeforeBootEnv {

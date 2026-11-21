@@ -20,10 +20,10 @@ use tracing::Level;
 use super::*;
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::exit_wait::begin_close;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::install::procedure::{InstalledRecord, Overwritten};
 use crate::install::{InstallOrigin, SubmitVerdict, register, submit};
+use crate::session::exit_wait::begin_close;
 use crate::session::ghost_switch::{
     PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, on_notice,
 };

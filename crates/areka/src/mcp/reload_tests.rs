@@ -149,7 +149,7 @@ fn closing_drops_the_reply() {
     let mut world = World::new();
     world.init_resource::<Schedules>();
     crate::session::reload::register(&mut world);
-    let _ = crate::exit_wait::begin_close(&mut world);
+    let _ = crate::session::exit_wait::begin_close(&mut world);
 
     let (pending, events) = call(&mut world, "shell");
 

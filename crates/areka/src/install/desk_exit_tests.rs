@@ -12,7 +12,7 @@ use areka_kanade::WaitBudget;
 use wintf::AppExit;
 
 use super::*;
-use crate::exit_wait::EXIT_WAIT_LIMIT;
+use crate::session::exit_wait::EXIT_WAIT_LIMIT;
 use crate::session::ghost_quit::KanadeNoticeRx;
 use crate::session_end::end_session_from;
 

@@ -15,9 +15,9 @@ use areka_sylphya::{PersistFailure, PersistFailureCause, PersistScope};
 use bevy_ecs::prelude::*;
 use wintf::ecs::Update;
 
-use crate::alert::{self, AlertScene, WriteMoment, remembered_text};
 use crate::app_exit::{ExitOrigin, quit_app};
 use crate::boot_config::ConfigInputs;
+use crate::session::alert::{self, AlertScene, WriteMoment, remembered_text};
 
 /// 受け口の送り手（World の NonSend・プロセスに 1 つ）。
 pub(crate) struct WriteFailureTx(pub(crate) Sender<PersistFailure>);

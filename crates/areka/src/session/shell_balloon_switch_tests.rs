@@ -541,7 +541,7 @@ fn exit_cleanup_drops_the_marker_with_one_info() {
     );
     let had = marker_folder(&rig.world);
     let ((), events) = capture(|| {
-        crate::exit_wait::begin_close(&mut rig.world);
+        crate::session::exit_wait::begin_close(&mut rig.world);
     });
     let dropped: Vec<_> = events
         .iter()

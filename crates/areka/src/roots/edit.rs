@@ -285,7 +285,7 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
                     reason = ?failure.cause,
                     "[RootsEdit] 置き場の並びを記憶へ書けません（終了します）"
                 );
-                crate::write_failure::fatal(world, failure);
+                crate::session::write_failure::fatal(world, failure);
             }
         }
     }

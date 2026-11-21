@@ -34,7 +34,7 @@ use crate::session::ghost_switch::{
     PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
 };
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::write_failure::sites_tests::{KINDS, drain_desk};
+use crate::session::write_failure::sites_tests::{KINDS, drain_desk};
 use crate::{MarkInputs, Teardown, boot_first_ghost, insert_persist_wiring, settle_session_mark};
 use areka_placement::AuthorDpi;
 use areka_placement::persist::{char_pos_entries, persist_entries};
@@ -442,7 +442,7 @@ fn every_write_kind_is_withheld_under_the_guard() {
         },
     );
     assert_eq!(verdict, crate::MarkVerdict::Clear);
-    let told = crate::write_failure::tell_at_close(None, clear_failed.clone(), None, true);
+    let told = crate::session::write_failure::tell_at_close(None, clear_failed.clone(), None, true);
     let kind = "印を消す";
     judge(
         kind,

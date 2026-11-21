@@ -46,7 +46,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     // 受け口 `KanadeNoticeRx` はプロセスに 1 つなので、分割せずそのまま呼ぶ。
     crate::session::ghost_quit::wire_kanade_stop(world, kanade_stop_rx);
     // 記憶を書けない失敗の受け口と汲み出し（プロセスに 1 回）。
-    crate::write_failure::install(world);
+    crate::session::write_failure::install(world);
 
     readme::register_readme_drain(world);
     crate::session::ghost_switch::register_change_drain(world);
@@ -709,7 +709,7 @@ pub(crate) fn boot_ghost(
         Some(kanade_stop),
         BootOrigin::Plain,
         shell.as_deref(),
-        crate::write_failure::sender(world),
+        crate::session::write_failure::sender(world),
     ) {
         Ok(runtime) => {
             tracing::info!("LogSink フォールバックで起動しました（runtime wire 不成立）");

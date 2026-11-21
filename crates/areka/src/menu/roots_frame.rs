@@ -47,7 +47,11 @@ fn add_item(world: &World, _ctx: &MenuContext) -> MenuItem {
         enabled: editable(world) && desk::can_pick(world),
         checked: None,
         body: ItemBody::Action(Rc::new(|world: &mut World, _: &MenuContext| {
-            let _ = desk::start_pick(world, crate::alert::suppressed(), pick::pick_folder);
+            let _ = desk::start_pick(
+                world,
+                crate::session::alert::suppressed(),
+                pick::pick_folder,
+            );
         })),
     }
 }

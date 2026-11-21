@@ -16,7 +16,7 @@ use super::judge::GhostFacts;
 use super::procedure::{InstallPorts, InstalledRecord, ON_INSTALL_REFUSE, Overwritten, Raised};
 use super::startup::CarriedInstall;
 use super::terms::TermsNotice;
-use crate::alert::{self, YesNo};
+use crate::session::alert::{self, YesNo};
 
 /// 起動の前の口。根の並びと告知の抑止と、入れた物の控えを持つ。
 pub(crate) struct BootPorts {

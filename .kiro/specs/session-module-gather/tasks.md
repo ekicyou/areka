@@ -20,7 +20,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 9.3_
 
 - [ ] 3. 葉のモジュールを集める（段 2）
-- [ ] 3.1 `alert`・`exit_wait`・`write_failure` を `session/` へ移す
+- [x] 3.1 `alert`・`exit_wait`・`write_failure` を `session/` へ移す
   - 本番とテストを `git mv` で `crates/areka/src/session/` へ移し、`session/mod.rs` に `pub(crate) mod` を足し、`main.rs` の宣言と、その上の説明を `session/mod.rs` の宣言の上へ移す
   - 呼び手の `crate::<名>` を `crate::session::<名>` へ、`use crate::{a, b};` の束は集めた名前を `crate::session::{…}` の束へ分ける
   - `main.rs` の `fn main` ほかが使う `write_failure::stop_boot`・`alert::…`・`exit_wait::…` は、本文の先頭の `use session::{…};` で引いて字面を保つ（`.map_err(write_failure::stop_boot)?;` を `zorder_wiring_tests.rs` が読む）。`scene: Option<alert::AlertScene>` のような署名・欄は `session::alert::…` の道で書く。最上位の `use` は足さない
@@ -178,3 +178,4 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
 ## Implementation Notes
 
 - 1.1: 名前の多重集合は doctest の名前を `(line N)` 付きで持つ（66 件）。doctest のあるファイルの行がずれると、最後の比べで行番号の差として出る（テストが消えたのではない）。
+- 3.1: `"areka::alert"` の文字列（log_history の 2 本のテスト）は 3.1 で直し済み。3.3 では二度直さない。

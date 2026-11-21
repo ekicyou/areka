@@ -3,11 +3,11 @@
 //! 起動の解決の中身 `resolve_boot_with` に callghost の相手（入れたゴーストのフォルダ名）を渡し、
 //! 経路・場所・起動中の印の値を見る。根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::alert::AlertScene;
 use crate::boot_config::{BootResolved, resolve_boot_with};
 use crate::boot_resolve::{
     DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, write_session_mark,
 };
+use crate::session::alert::AlertScene;
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
 

@@ -263,7 +263,7 @@ fn missing_ghost_or_kanade_is_no_context() {
 fn closing_returns_closing_and_exit_drops_the_mark() {
     let mut rig = rig("areka-reload-closing");
     plant_reload(&mut rig.world);
-    let (_, events) = capture(|| crate::exit_wait::begin_close(&mut rig.world));
+    let (_, events) = capture(|| crate::session::exit_wait::begin_close(&mut rig.world));
     let dropped = named(&events, "reload_dropped")
         .into_iter()
         .map(|e| {

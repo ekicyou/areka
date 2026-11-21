@@ -21,9 +21,9 @@ use tracing::Level;
 
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::exit_wait::begin_close;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::readonly::ReadOnlyRun;
+use crate::session::exit_wait::begin_close;
 use crate::update::desk::{self, Stage, UpdateDesk};
 use crate::update::{RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason, register, submit};
 

@@ -19,9 +19,9 @@ fn config_inputs_holds_resolved_roots() {
 // （ゴースト・バルーンの 13 分岐は `boot_resolve_tests.rs`、実プロセスの配線は smoke）。
 
 mod boot {
-    use crate::alert::AlertScene;
     use crate::boot_config::resolve_boot_from;
     use crate::boot_resolve::{BalloonRoute, GhostRoute};
+    use crate::session::alert::AlertScene;
     use log_capture_kit::capture;
     use std::path::Path;
     use temp_path_kit::TempPath;

@@ -24,6 +24,16 @@ pub(crate) mod shell_balloon_switch;
 /// ゴーストの切替で同梱のゴーストを書ける根へ背景で写す。
 pub(crate) mod switch_copy;
 
+/// 無いときの告知（根なし／ゴーストなし／バルーンなし／起動窓を開けない）と
+/// 告知の抑止（`AREKA_NO_ALERT`）。
+pub(crate) mod alert;
+
+/// 記憶を書けない失敗を集める致命の机。
+pub(crate) mod write_failure;
+
+/// 終了の後始末が、背景で書いている仕事の終わりを上限つきで待つ口。
+pub(crate) mod exit_wait;
+
 // 偽の SHIORI を持つゴーストを同じ World で起こす統合テストの土台。
 #[cfg(test)]
 pub(crate) mod ghost_switch_test_support;

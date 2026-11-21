@@ -203,7 +203,7 @@ pub(crate) fn resolve_boot_from(
     app_profile_dir: &std::path::Path,
     pick: fn(usize) -> usize,
     prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
-) -> Result<BootResolved, crate::alert::AlertScene> {
+) -> Result<BootResolved, crate::session::alert::AlertScene> {
     resolve_boot_with(
         resolved,
         &crate::cli::parse::parse(args).options.boot,
@@ -234,10 +234,10 @@ pub(crate) fn resolve_boot_with(
     app_profile_dir: &std::path::Path,
     pick: fn(usize) -> usize,
     prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
-) -> Result<BootResolved, crate::alert::AlertScene> {
-    use crate::alert::AlertScene;
+) -> Result<BootResolved, crate::session::alert::AlertScene> {
     use crate::boot_resolve::{self, BalloonInputs, GhostInputs, NoBalloon, NoGhost};
     use crate::roots::report::{self, ReportOccasion};
+    use crate::session::alert::AlertScene;
     use areka_ghost::catalog;
 
     let mut resolved = resolved.map_err(|err| {

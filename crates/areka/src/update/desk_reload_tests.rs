@@ -20,7 +20,7 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use super::UpdateDesk;
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
-use crate::exit_wait::begin_close;
+use crate::session::exit_wait::begin_close;
 use crate::session::ghost_switch::{
     GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
     request_ghost_switch,

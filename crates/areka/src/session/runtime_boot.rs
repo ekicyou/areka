@@ -131,7 +131,7 @@ pub(crate) fn boot_runtime(
         Some(kanade_stop),
         boot_origin,
         shell,
-        crate::write_failure::sender(world),
+        crate::session::write_failure::sender(world),
     ) {
         Ok(runtime) => runtime,
         Err(err) => {

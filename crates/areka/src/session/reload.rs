@@ -30,9 +30,9 @@ use super::ghost_switch::{
 use super::hooks;
 use super::shell_balloon_switch::{SwitchContext, accept_skin};
 use crate::boot_config::BootContext;
-use crate::exit_wait::{self, WorkGate};
 use crate::ghost_session::GhostSlot;
 use crate::log_history::TARGET_ERROR;
+use crate::session::exit_wait::{self, WorkGate};
 use areka_runtime::reload_args::{DescriptNotes, DescriptParts, ReloadTarget, ScriptReload};
 use areka_runtime::reload_cue::ReloadRx;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
