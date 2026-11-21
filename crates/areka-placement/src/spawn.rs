@@ -762,6 +762,9 @@ fn register_ghost_windows_via<R: ClickThroughRegistrar>(
 }
 
 #[cfg(test)]
+#[path = "spawn_assembly_tests.rs"]
+mod assembly_tests;
+#[cfg(test)]
 #[path = "spawn_cleanup_tests.rs"]
 mod cleanup_tests;
 #[cfg(test)]

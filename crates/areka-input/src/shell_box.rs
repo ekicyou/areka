@@ -13,10 +13,8 @@ use wintf::ecs::pointer::DoubleClick;
 
 use super::balloon::{ChoiceSelection, click_selection, hit_choice_row};
 use areka_runtime::user_break_cue::NoUserBreakSignal;
-// 箱の滞在の型と整えは runtime の持ち物（可視性の相が読む）。呼び手とテストはここから引く。
+// 箱の滞在の型は runtime の持ち物（可視性の相が読む）。呼び手はここから引く。
 pub use areka_runtime::shell_box_hover::ShellBoxHover;
-#[cfg(test)]
-pub(crate) use areka_runtime::shell_box_hover::settle_box_hover;
 
 /// 届いた座標の下にある、文字の出ている箱を 1 つ選ぶ。
 ///

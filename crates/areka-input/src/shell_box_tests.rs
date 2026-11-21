@@ -452,51 +452,6 @@ fn hover_leave_box() {
 }
 
 // ---------------------------------------------------------------------------
-// settle_box_hover・ShellBoxHover
-// ---------------------------------------------------------------------------
-
-/// 滞在している箱が `shown_boxes` から消えたら無し・残っていればそのまま・もともと無しなら無し。
-#[test]
-fn settle_drops_vanished_box() {
-    let boxes = shown();
-    let a = box_name(SHELL, "a");
-    assert_eq!(settle_box_hover(Some(&a), &boxes), Some(a.clone()));
-    assert_eq!(
-        settle_box_hover(Some(&a), &boxes[..1]),
-        None,
-        "a だけ消えた"
-    );
-    assert_eq!(settle_box_hover(Some(&a), &[]), None);
-    assert_eq!(settle_box_hover(None, &boxes), None);
-}
-
-/// 印が残らないことの通し: 箱へ入る → 箱の文字が消える → 整える の後、観測の滞在は偽。
-/// 他のスコープの記録には触れない。
-#[test]
-fn hover_mark_does_not_survive_vanished_text_or_window_leave() {
-    let mut hover = ShellBoxHover::default();
-    let boxes = shown();
-
-    let mv = judge_box_move(box_under_point(&boxes, 10.0, 10.0), &[], 10.0, 10.0);
-    let (next, _) = next_box_hover(hover.get(0), &mv);
-    hover.set(0, next);
-    let mv = judge_box_move(box_under_point(&boxes, 120.0, 30.0), &[], 120.0, 30.0);
-    let (next, _) = next_box_hover(hover.get(1), &mv);
-    hover.set(1, next);
-    assert_eq!(hover.get(0), Some(&box_name(SHELL, "a")));
-    assert!(hover.get(1).is_some());
-
-    let settled = settle_box_hover(hover.get(0), &[]);
-    hover.set(0, settled);
-    assert!(hover.get(0).is_none(), "時間切れの観測の hover は偽");
-    assert_eq!(
-        hover.get(1),
-        Some(&box_name(SHELL, "b")),
-        "他のスコープはそのまま"
-    );
-}
-
-// ---------------------------------------------------------------------------
 // fold_talking
 // ---------------------------------------------------------------------------
 
