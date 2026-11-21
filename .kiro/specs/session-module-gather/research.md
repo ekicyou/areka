@@ -595,3 +595,20 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 
 - `pwsh -NoProfile -File tools/test-all.ps1`（排他テストの机の中で 1 回・約 10 分 23 秒）: **all steps green**（終了 0）。x64 の全体テスト 398 秒・テスト結果 176 行で 15,035 件 pass・失敗 0。整形・i686・各検査・perf loop selftest もすべて OK。
 - 出力にあった `sample-ghost-kit: cleanup failed (os error 5)` は `target\nar-samples\work` の前回の残りの木を片づけられなかった旨の記録で、手順は緑。この spec とは関係ない。
+
+## 16. 実機テスト 2 つの走行（タスク 10.2・要件 2.5・4.4・7.6・7.7・10.6・10.7）
+
+排他テストの机の中で、新しい出所の名前（`areka::session::boot_config`）のまま、各 1 回だけ走らせた。どちらも `#[ignore]` ではなく、根・一時の置き場は実機の道具（real-run-kit）が `target\` の下に取る。
+
+- `cargo test -p areka --test emo2_mcp_real_run`: **1 件成功・失敗 0**（27.19 秒）。
+  - 使った `RUST_LOG`: `warn,areka::session::boot_config=info,kanade=trace,areka_input::user_break=debug`（テストの `.rust_log(...)`、114〜116 行目）。標準出力の前置きは `areka::session::boot_config: `（`BOOT_CONFIG_PREFIX`、32 行目）。
+- `cargo test -p areka --test smoke_boot_loop_exit`: **5 件成功・失敗 0**（2.77 秒）。
+
+標準出力の中身は読んでいない。成功したことが次の検査を通ったことを示す（`crates/areka/tests/emo2_mcp_real_run.rs`）。
+
+- 起動の記録の行: 283 行目で標準出力の各行を `BOOT_CONFIG_PREFIX` で分け、287 行目で履歴の `ghost_resolved` の行がちょうど 1 行であること、298 行目でそれが分けた標準出力の本文と 1 字も違わないことを確かめる。新しい出所の名前の行が出ていなければ通らない。
+- 要求の出どころ（`kanade=trace` で出る `shiori_request` の行）: 307・313 行目で `raise_event` の要求が 1 行でその出どころが MCP であること、322 行目で `sakurascript` の `OnTranslate` の出どころ、335〜349 行目で起動の道の要求が全部ゴースト自身であることを確かめる。
+- MCP の窓口: 123 行目で `get_log`（`status`）を実際の MCP 経由で問い合わせ、本物の窓が開いた旨の行（`REAL_WINDOWS`）が返るまで待つ。174 行目で `sakurascript` の応答が失敗でないこと、220〜227 行目の `get_log`（`error`）で strict の記録を取り、358〜369 行目で 2 件の種類・位置・綴りを確かめる。窓口に繋がらなければ通らない。
+- `ghost_session` を `RUST_LOG` に入れていないので、255 行目で標準出力に `REAL_WINDOWS` が出ないことも確かめる。
+
+結論: 起動の記録の行と MCP の窓口は、いずれもテストの検査を通った（成功した）という形で確かめた。再走・修正はなし。

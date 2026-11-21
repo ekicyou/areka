@@ -159,7 +159,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 決めた式を当てて記録する_
   - _Requirements: 1.3, 5.3, 6.8, 6.9, 7.2, 7.8, 8.1, 8.2, 8.3, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 10.1_
 
-- [ ] 10. 振る舞いが変わらないことの最終の検証（段 9）
+- [x] 10. 振る舞いが変わらないことの最終の検証（段 9）
 - [x] 10.1 テストの名前・警告・全体テスト・移動の検出を確かめる
   - 1.1 と同じ取り方で名前の末尾の多重集合を作り、前と比べる。差は 9.1 の 1 本だけであることを対応表で説明する
   - `cargo check --workspace --all-targets` が警告 0 件・`pwsh -NoProfile -File tools/test-all.ps1` が緑（裏で回す）
@@ -168,7 +168,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 決めた手順を回して記録する_
   - _Requirements: 1.1, 10.2, 10.3, 10.4, 10.5_
 
-- [ ] 10.2 実機テスト 2 つを新しい出所の名前で 1 回ずつ走らせる
+- [x] 10.2 実機テスト 2 つを新しい出所の名前で 1 回ずつ走らせる
   - 排他テストの机で順を取り、`crates/areka/tests/emo2_mcp_real_run.rs`（`rust_log("warn,areka::session::boot_config=info,…")` と前置き `areka::session::boot_config: `）と `crates/areka/tests/smoke_boot_loop_exit.rs` を 1 回ずつ走らせ、終わったら机をすぐ返す。実機の根と一時フォルダはワークツリーの `target\` の下・絶対パス
   - 実機で回すのはこの 2 つだけにする
   - 完了の形: 2 つが緑で、`research.md` に走らせた `RUST_LOG`・結果・起動の記録と MCP の窓口が拾えたことが書かれている
