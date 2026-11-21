@@ -642,17 +642,15 @@ flowchart TB
 - 段 7 の網羅台帳の作り直しと文書は、モジュールが全部移った後にまとめて行う（1 回の作り直しで済む）。
 - 戻すきっかけ: 段の終わりにテストの名前の数か合否が変わったら、その段の中で直す（次の段へ持ち越さない）。
 
-## 設計の討議への持ち越し（OPEN QUESTIONS）
+## 設計の討議で決めたこと（2026-11-21・全議題を推奨案で一括承認）
 
-入力からは決めきれない選び方を、仮定を置いて上のとおり書いた。設計の討議で決める。
+1. **本体だけの系の登録の形**（4.1・4.2）: `register_systems` が `BodySystems`（関数のポインタ 2 つ）を受け、`main.rs` の `BODY_SYSTEMS` が `menu::register_menu_poll` と `install`→`update`→`mcp` を渡す。名前 `ghost_session::register_systems` と 25 の呼び出しの順が残り、触れない crate の説明 26 か所が古くならない。次の spec で向きを逆にするときもこの形をそのまま使える。
+2. **新しいファイルの名前**（2.1・3.3）: `session/session_mark.rs`・`session/boot_seam.rs`・`session/boot_request.rs`。移すテストは `boot_config_{input,ghost_wiring,module_policy}_tests.rs`・`boot_seam_{restore,persist_wiring,monitor_snapshot}_tests.rs`。
+3. **残る roots の宣言の置き場**（3.1・1.1）: `src/roots.rs`。新しい `src/roots/mod.rs` を同じ道に置くと、`roots/mod.rs` が移動として追えなくなる（1.1）。同じ crate の `readme.rs` ＋ `readme/` と同じ形。
+4. **`main.rs` の書き方**（2.3・5）: 最上位に `use session::…` を置かず、`fn` の本文の先頭の `use session::{…};` で字面を保つ（grep の式 6 で守る）。
+5. **較正のテストの取り方**（10.8）: `std::any::type_name`／`type_name_of_val` から導いたパスを `assert_eq!` で期待の字面と比べてから種別を引く。移したファイルの中身に触れない。
 
-1. **本体だけの系の登録の形**（4.1・4.2）。仮定: `register_systems` が `BodySystems`（関数のポインタ 2 つ）を受け、`main.rs` の `BODY_SYSTEMS` が `menu::register_menu_poll` と `install`→`update`→`mcp` を渡す。次点: `register_systems` を 3 つ（前・入力・後）に分け、`main.rs` に全部を順に呼ぶ関数を置く。
-2. **新しいファイルの名前**（2.1・3.3）。仮定: `session/session_mark.rs`・`session/boot_seam.rs`・`session/boot_request.rs`・移すテストは `boot_config_{input,ghost_wiring,module_policy}_tests.rs`・`boot_seam_{restore,persist_wiring,monitor_snapshot}_tests.rs`。
-3. **残る roots の宣言の置き場**（3.1・1.1）。仮定: `src/roots.rs`。次点: 新しい `src/roots/mod.rs`。
-4. **`main.rs` の書き方**（2.3・5）。仮定: 最上位に `use session::…` を置かず、`fn` の本文の先頭の `use session::{…};` で字面を保つ。
-5. **較正のテストの取り方**（10.8）。仮定: `std::any::type_name`／`type_name_of_val` から導いたパスを `assert_eq!` で確かめてから種別を引く。
-
-- 設計の生成のときの持ち越し 6（`briefing-assets.md` の `main.rs:141`）と 7（`roadmap.md` の新旧のパスの対応表はこの spec のタスクで触らず、`/kiro-complete` の roadmap の更新で Supporting References の表を写す）は、要件の範囲どおりなので討議の議題にせず上の本文で決めた。
+- 設計の生成のときの持ち越し 6（`briefing-assets.md` の `main.rs:141`）と 7（`roadmap.md` の新旧のパスの対応表はこの spec のタスクで触らず、`/kiro-complete` の roadmap の更新で Supporting References の表を写す）は、要件の範囲どおり本文で決めた。
 
 ## Supporting References
 
