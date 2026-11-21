@@ -32,10 +32,11 @@
   - 直しのために要るテストの追加と直し。
   - brief に預かった件と、ほかの brief からこの spec へ寄せられた件（要件 5）。
   - 直しのために要る、範囲の外の呼び出し元の直し（要件 7 の約束に従う）。
+  - 範囲の中にある、範囲の外の crate（`areka-runtime`・`areka-placement`）の持ち物だけを試すテストを、持ち主の crate へ移すこと（指摘 31〜33・要件 7.4・2026-11-21 開発者「今実施すれば？安易に新規起票して欲しくない。他のセッションとぶつかるなら協議せよ。」）。
 - **Out of scope**:
   - 本体（`crates/areka/`）のファイル全部。名前や中身が入力に関わっても、次のファイルは範囲の外（C24 の約束 ⑶）:
     - `crates/areka/src/file_drop.rs`・`file_drop_*tests.rs`・`app_exit_escape_tests.rs`（棚卸㊶で `audit-areka-app` の範囲へ寄せた）。
-    - `crates/areka/src/menu/` の全部（`menu/shortcut.rs`・`shortcut_tests.rs` を含む）。2026-11-01 の開発者の決め（右クリックメニューを見直しの範囲から外す）による。見直すかどうかは開発者が決める（OPEN QUESTION 2）。
+    - `crates/areka/src/menu/` の全部（`menu/shortcut.rs`・`shortcut_tests.rs` を含む）。2026-11-01 の開発者の決め（右クリックメニューを見直しの範囲から外す）による。見直さない（2026-11-21 要件の討議の議題 2 で確定）。
   - 範囲の外のファイルの見直し（ほかの見直しの spec の持ち物）。
   - 新しい機能。
   - `vendors/` の下。
@@ -43,8 +44,8 @@
   - 開発者の裁定（roadmap の「生きている決まり」・記憶の決めごと・完了した spec の要件）を覆す直し。直さずに議題にする（要件 2）。
 - **Adjacent expectations**:
   - 本体は `use areka_input as input_events;` で入力の crate を出し直して使っている（`structure.md` の「Input Crate」）。同じウェーブの `session-module-gather` が、この出し直しを外して本体の 26 の呼び手を `areka_input::…` へ書き換える。この spec は、その呼び手が使う項目（`MouseWiring`・`user_break::drain_no_user_break_signals`〔本体の `runtime_tests/frame_shell_box_arrow_tests.rs`〕・`attach_*`・`register_*` ほか）の形を変えない（要件 7.3）。
-  - `areka-input` は `areka-runtime` の `crash_report_test_support`（落ちの報告の据え付け）を `src/crash_report_tests.rs` から使う。同じウェーブの `test-crash-report-merge` はこの落ちの報告の写し 3 本をまとめる spec で、その brief は「`areka-input` は落ちの報告を使わない」と書いている。事実と違うので、要件の討議で扱いを決める（OPEN QUESTION 1）。
-  - `areka-runtime`・`areka-placement` は、`crates/areka-runtime/examples/collision-probe.rs`・`collision-probe/setup.rs` の説明の文を直すほかは触らない（要件 5.6・C24 の約束 ⑶）。
+  - `areka-input` は `areka-runtime` の `crash_report_test_support`（落ちの報告の据え付け）を `src/crash_report_tests.rs` から使う。同じウェーブの `test-crash-report-merge` はこの落ちの報告の写し 3 本をまとめる spec で、その brief は「`areka-input` は落ちの報告を使わない」と書いていた（誤り）。2026-11-21 に向こうのセッションへ知らせ、向こうは `install`・`installed` の 2 つの名と働きを `areka-runtime` に残す方針を自分の要件に書いた（向こうの要件 4.2・7.2）。この spec は `crash_report_tests.rs` の使い方を変えない（要件 7.12・議題 1）。
+  - `areka-runtime`・`areka-placement` は、要件 7.4 に挙げたファイルのほかは触らない（C24 の約束 ⑶ を議題 3・7 の裁定で広げた）。
   - v0.2.0 の `collisionex-regions` の後継と `instant-to-interrupt-ticks`・`dola-interrupt-ticks` は、この見直しと触るファイルが重なり、この見直しの着地を待つ（roadmap の spec 台帳）。この spec の側に約束は無い。
 
 ## Requirements
@@ -57,7 +58,7 @@
 
 1. When ギャップ分析を行うとき, the ギャップ分析 shall `crates/areka-input/` の全部（`src/`・`Cargo.toml`・`cursor/`）だけを対象にして `/ponytail:ponytail-audit` をかける
 2. The ギャップ分析 shall audit の作法のうち「最大 20 件」を外し、指摘を件数の上限なしで全件出して、省いた件を残さない
-3. The ギャップ分析 shall audit の作法のうち「読まなかった所（Not checked）」を外し、範囲のファイルを全部読んで、読まなかった所を残さない（`cursor/` の絵は中身を読まず、置き場・名前・使われ方と `README.md` の記述との食い違いを見る＝仮定 3）
+3. The ギャップ分析 shall audit の作法のうち「読まなかった所（Not checked）」を外し、範囲のファイルを全部読んで、読まなかった所を残さない（`cursor/` の絵は中身を読まず、置き場・名前・使われ方と `README.md` の記述との食い違いを見る＝確定の議題 9）
 4. The ギャップ分析 shall 指摘の一覧を、audit の番号と 3 つの組（必ず直す・直したほうがよい・できれば）を付けたまま、ギャップ分析の報告に残す
 5. The ギャップ分析 shall 要件 5 の預かった件のうち、audit の指摘と重なるものを、どの番号と重なるかを書いて報告に残す
 6. The ギャップ分析 shall 着手のときの `main` で範囲のファイル数と行数（本番・テストの別）を数え直し、上の表と食い違えば報告に書く
@@ -77,7 +78,7 @@
 3. When 3 種類目に当たるかを判断するとき, the 本 spec shall ukadoc の該当箇所（URL と原文の引用）で確かめてから議題にする。ukadoc で読めない点は、開発者の許しを得て SSP の MCP で測ってから議題にする（要件 8.2）
 4. If 指摘の直しが 3 種類のどれにも当たらないとき, then the 本 spec shall その指摘を残すことを議題にせず直す
 5. When 開発者が指摘を残すと裁定したとき, the 本 spec shall 裁定とその理由をこの文書に残し、要件 9 の「新しい指摘 0 件」の数から外す
-6. If 確定した指摘の直しが 20 タスクを越えそうなとき, then the 本 spec shall 要件の討議で、指摘の組ごとに同じ範囲の 2 本目の spec として切ることを議題にする（見込みは 10〜16 タスク＝棚卸㊶。仮定 5）
+6. If 確定した指摘の直しが 20 タスクを越えそうなとき, then the 本 spec shall 要件の討議で、指摘の組ごとに同じ範囲の 2 本目の spec として切ることを議題にする（見込みは 10〜16 タスク＝棚卸㊶。確定の議題 9）
 
 ### Requirement 3: 確定した指摘を全部直し切る
 
@@ -116,14 +117,14 @@
 1. The 本 spec の直し shall `crates/areka-input/src/lib.rs` 508 行の「The Hand／collisionex は実装しない」を、`collisionex-regions` の着地の後の事実に合う文に直すか、理由を持たない文なら消す（件 1＝`collisionex-regions` の申し送り・棚卸㊶の ⑵）
 2. The 本 spec の直し shall `crates/areka-input/src/lib.rs` の冒頭の説明ほか、本体の中にあった頃の書き方のまま残る説明を、入力の crate の今の事実に合う文に直す（件 2＝`input-crate-split` の申し送り）
 3. The 本 spec の直し shall 強制退避の枝へ落ちない側のテスト 3 本（`input_events_tests.rs` の `handler_wired_ctrl_left_double_click_…`・`handler_left_double_click_without_ctrl_…`、`input_events_menu_tests.rs` の `wired_ctrl_left_double_click_…_partner_window`）の「窓が消えて件数が落ちる」という説明を、今の事実（入力の crate のテストの World には口が据わらず、合否は `try_recv` の表明が保つ）に合う文に直す（件 3＝同）
-4. The 本 spec の直し shall `input_events_tests.rs` 362 行の「強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。」を、テストが本体の `app_exit_escape_tests.rs` へ移った今の事実に合う文に直すか、パスを書かずに指す形に直す（件 4＝同。本体のファイルの名は `session-module-gather` が動かしうるので、パスで書かない＝仮定 6）
+4. The 本 spec の直し shall `input_events_tests.rs` 362 行の「強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。」を、テストが本体の `app_exit_escape_tests.rs` へ移った今の事実に合う文に直すか、パスを書かずに指す形に直す（件 4＝同。本体のファイルの名は `session-module-gather` が動かしうるので、パスで書かない＝確定の議題 9）
 5. The 本 spec の直し shall `spawn_assembly_tests.rs` 167〜173 行の「input_events→placement」「input_events の檻」の言い方と、同じ crate の中を `areka_input::…` と外の道で書く所を、入力の crate の今の名（`crate::`）で言う文に直す（件 5＝同。ギャップ分析で行が 170〜181 から動いたと確かめた）
 6. The 本 spec の直し shall `crates/areka-runtime/examples/collision-probe.rs` 63 行と `collision-probe/setup.rs` 75〜76 行の「`pub(crate)`・内部が `crate::` パスを使う」という理由の文を、今の事実（`attach_char_pointer_handlers` は `pub`。example から使えない本当の理由は依存の向き＝`areka-input` が `areka-runtime` に依存するので、`areka-runtime` の example は `areka-input` を使えない）に合う文に直す（件 6＝同。範囲の外のファイルだが、C24 の約束 ⑶ で説明の文に限って触ってよい）
 7. The 本 spec の直し shall `cargo doc -p areka-input --no-deps` の警告（ギャップ分析で数え直して 19 件＝私有の項目へのリンク 18 件・`MouseWiring::with_clock` の解けないリンク 1 件。brief の値は 20 件）を 0 件にする（件 7＝同）
-8. The 本 spec の直し shall `input-crate-split` が開けた項目（9 モジュールと `pub mod hooks`・根の 8 項目・子の 18 項目・メソッド 7 つ・`test-support` の機能で開けた `pointer_test_support`・`MouseWiring::with_clock`・`user_break` の `flag_rx`・`flag_source_connected`）ごとに、`areka-input` の外に実在の使い手があるかを確かめ、使い手の無いものは狭めるか消す。本体のテストだけが使う項目は使い手に数え、本体が使う項目は狭めない（件 8＝同・C24 の約束 ⑶・仮定 4。ギャップ分析では、開けた項目は全部本体の本番かテストに使い手があり、狭められる項目は 0 件だった＝research.md 6 節 (4)）
+8. The 本 spec の直し shall `input-crate-split` が開けた項目（9 モジュールと `pub mod hooks`・根の 8 項目・子の 18 項目・メソッド 7 つ・`test-support` の機能で開けた `pointer_test_support`・`MouseWiring::with_clock`・`user_break` の `flag_rx`・`flag_source_connected`）ごとに、`areka-input` の外に実在の使い手があるかを確かめ、使い手の無いものは狭めるか消す。本体のテストだけが使う項目は使い手に数え、本体が使う項目は狭めない（件 8＝同・C24 の約束 ⑶・＝確定の議題 9。ギャップ分析では、開けた項目は全部本体の本番かテストに使い手があり、狭められる項目は 0 件だった＝research.md 6 節 (4)）
 9. The 本 spec の直し shall `crates/areka-input/src/user_break.rs` 201 行の `crates/areka/src/readme.rs` のパスと、同じ形の 220 行の `crates/wintf/src/ecs/world/mod.rs` のパスを、パスを書かずに関数の名で指す形に直す（件 9＝C24 の約束 ⑶。`session-module-gather` が本体のファイルを移すため）
 10. The 本 spec の直し shall `crates/areka-input/src/choice_drain.rs` 253 行あたりの私有の `capture_logs` の写しを、範囲の中か上流にある共通の捕捉の補助を使う形に寄せる（件 10＝`audit-areka-app` の brief の「`audit-emo2-boot-frame` からの申し送り」のサ・棚卸㊶で持ち主へ寄せた。範囲の中には `balloon_test_support.rs` 185 行に同じ形の `capture_logs` がある）
-11. The 本 spec の直し shall `crates/areka-input/src/drag_test_support.rs` 283 行の `let _ = self.parts.handle.join();` を、待ちに上限を持ち、書き手の panic を捨てない形（`areka_runtime::spine::join_bounded` と同じ扱い）に直す（件 11＝`audit-areka-app` の brief の同じ申し送りのコ・仮定 7）
+11. The 本 spec の直し shall `crates/areka-input/src/drag_test_support.rs` 283 行の `let _ = self.parts.handle.join();` を、待ちに上限を持ち、書き手の panic を捨てない形（`areka_runtime::spine::join_bounded` と同じ扱い）に直す（件 11＝`audit-areka-app` の brief の同じ申し送りのコ・＝確定の議題 9）
 12. The 本 spec shall 件 1〜11 を片づけたことを、預かった件の出どころ（`collisionex-regions`・`input-crate-split` の申し送り・`audit-areka-app` の brief のサ・コ・C24 の約束 ⑶）と一緒に記録に残す
 
 ### Requirement 6: 直しの中でも守る決まり
@@ -152,7 +153,9 @@
 1. When 直しで関数や型の形を変えたとき, the 本 spec の直し shall ツリー全体で呼び出し元を探して、全部直す
 2. While 範囲の外のファイルを受け持つ spec のセッションが走っているあいだ, when 直しがそのファイルへ及ぶとき, the 本 spec shall そのセッションと申し合わせてから触る
 3. While C24 のあいだ, the 本 spec の直し shall 本体（`crates/areka/`）のファイルに手を入れず、本体（本番とテスト）・`crates/real-run-kit/`・examples が使う `areka-input` の公開の項目の名と形を変えない（C24 の約束 ⑶）
-4. While C24 のあいだ, the 本 spec の直し shall `crates/areka-runtime/` と `crates/areka-placement/` に、要件 5.6 の説明の文のほかは手を入れない
+4. While C24 のあいだ, the 本 spec の直し shall `crates/areka-runtime/` と `crates/areka-placement/` に、次のほかは手を入れない（どちらの `lib.rs`・`Cargo.toml` にも手を入れない）
+   1. 要件 5.6 の説明の文と、テストのファイル名を変えると古びる `collision-probe.rs` 66 行の 1 行（議題 7）
+   2. 範囲の外の持ち物だけを試すテストの移し先（議題 3）: `crates/areka-runtime/src/balloon_hover.rs`・`shell_box_hover.rs` の末尾のテストの mod の行と、その兄弟の新しいテストのファイル、`crates/areka-placement/src/spawn.rs` の末尾のテストの mod の行と、その兄弟の新しいテストのファイル。移す前に、C24 のほかの 3 本のセッションと触るファイルを申し合わせる（要件 7.2）
 5. While C24 のあいだ, the 本 spec の直し shall `Cargo.lock` と `crates/log-capture-kit/` に手を入れない
 6. The 本 spec の直し shall 範囲の外のファイルについて、直しのために要る変更のほかは手を入れない（範囲の外の指摘を見つけても、その範囲の持ち主の件として残す）
 7. If 確定した指摘が外への約束を変えずには直せないとき, then the 本 spec shall 約束を黙って破って直さず、要件の討議でその指摘を議題にし、扱い（約束を変えない直し方・読み手を同じ変更で全部直す・後の spec へ回す）を開発者の裁定で決める
@@ -160,7 +163,7 @@
 9. If 直しが C24 のほかの 3 本の触るファイルに及ぶとき, then the 本 spec shall そのファイルを触らずに、相手のセッションへ申し送り、申し送った件と相手を記録に残す
 10. If 指摘の直しを後の spec へ回すと裁定されたとき, then the 本 spec shall 受け持つ spec が実在する（`completed/` でない）ことを確かめ、その spec の brief に件として書き足し、回した指摘と回し先を記録に残す
 11. The 本 spec shall ギャップ分析で範囲の外に見つけた件を、その範囲の持ち主の brief に件として書き足し、回した件と回し先を記録に残す
-12. When `test-crash-report-merge` が `areka_runtime::crash_report_test_support` の置き場や名を変えるとき, the 本 spec shall `crates/areka-input/src/crash_report_tests.rs` の使い方を、要件の討議で決めた分担に従って追従させる（仮定 1・OPEN QUESTION 1）
+12. The 本 spec の直し shall `crates/areka-input/src/crash_report_tests.rs` が使う `areka_runtime::crash_report_test_support::{install, installed}` の使い方を変えない。`test-crash-report-merge` がこの 2 つの名を `areka-runtime` に残す（向こうの要件 4.2・7.2）。If 向こうの設計で 2 つの名を消す方向に変わったとき, then the 本 spec shall 後に着地する側が `crash_report_tests.rs` の 2 行を付け替える形で、向こうのセッションと申し合わせる（議題 1）
 13. The 本 spec の直し shall `vendors/` の下に手を入れない
 
 ### Requirement 8: 副作用の大きい操作をウェーブの中で回さない
@@ -185,19 +188,39 @@
 2. When もう一度かけた audit が指摘を出したとき, the 本 spec の直し shall 直しが生んだ指摘も含めて直し、新しい指摘が 0 件になるまで繰り返す（要件 2 で残すと裁定された指摘と、要件 7.7・7.10 で後へ回すと裁定された指摘は数えない。打ち切りは 9.6）
 3. The 検証 shall かけ直した audit の結果（回ごとの組ごとの件数と、0 件または打ち切りの判定）を記録に残す
 4. When 直しを全部終えたとき, the 全体テスト（`pwsh -NoProfile -File tools/test-all.ps1`） shall 緑で終わる
-5. When 直しを全部終えたとき, the 検証 shall 要件 7.3〜7.5 と 6.6 の約束が守られている（本体のファイルに差分が無い・`areka-runtime` と `areka-placement` の差分が要件 5.6 の説明の文だけ・`Cargo.lock` と `log-capture-kit` に差分が無い）ことと、外への約束の変わった所が要件 7.7 の裁定の分だけであることを、既定のブランチとの差分で確かめて記録に残す
+5. When 直しを全部終えたとき, the 検証 shall 要件 7.3〜7.5 と 6.6 の約束が守られている（本体のファイルに差分が無い・`areka-runtime` と `areka-placement` の差分が要件 7.4 に挙げたものだけ・`Cargo.lock` と `log-capture-kit` に差分が無い）ことと、外への約束の変わった所が要件 7.7 の裁定の分だけであることを、既定のブランチとの差分で確かめて記録に残す
 6. If かけ直しが 5 回目になっても 0 件に収まらず、5 回目の指摘に「必ず直す」と本番の振る舞い（SHIORI へ送るもの・カーソル・ログの行・公開の面）に関わるものが 1 件も無いとき, then the 本 spec shall 開発者に一言知らせたうえで、5 回目の指摘を直したところで打ち切り、検証の記録に「5 回目で打ち切った・残りは直し済み」と書いて全体テストへ進む（2026-11-06 開発者の決め・`audit-seriko` と同じ形）
 7. If かけ直しのたびに同じ所から「必ず直す」が出続けるとき, then the 本 spec shall 打ち切らずに、その所の直しを Fable で総括し直し、その結果を議題として開発者へ出す（2026-11-15 `audit-placement-core` の決め）
 8. If かけ直しの指摘が、前の回の直しが呼んだ連鎖（直しが次の指摘を生んだもの）であるとき, then the 本 spec shall 関連する指摘を Fable でまとめて、回をまたいで矛盾の無い形に直す。前の回と関わらない単なる追加の指摘は普通に直して閉じる（2026-11-17 開発者の決め）
 
-## 仮定と要件の討議への持ち越し
+## 要件の討議で確定したこと（2026-11-21）
 
-brief で決まらなかった点は、次の仮定で書いた。どれも要件の討議の議題にする（本文の「仮定 N」）。
+開発者の答え: 「議題３：今実施すれば？安易に新規起票して欲しくない。他のセッションとぶつかるなら協議せよ。他は承認」。議題 3 は開発者の指定どおり、ほかの 8 件は推奨案で確定した。
 
-1. **落ちの報告の分担（要件 7.12・OPEN QUESTION 1）**: `crates/areka-input/src/crash_report_tests.rs` は `areka_runtime::crash_report_test_support::{install, installed}` を使う。けれども `test-crash-report-merge` の brief は使い手を 3 crate と本体の `runtime_tests/mod.rs` だけとし、「`areka-input` は落ちの報告を使わない」と書いている。同 spec は C24 の約束 ⑷ で `crates/areka-input/` に触らない。仮定＝後から着地する側が追従する（先に向こうが着地したら、この spec が rebase して `crash_report_tests.rs` の参照を新しい置き場へ機械的に付け替える。こちらが先なら、向こうが付け替えるか、`areka-runtime` に出し直しを残す）。この食い違いは、要件の討議の前に `test-crash-report-merge` のセッションへ知らせる。
-2. **右クリックメニューと spec の名（OPEN QUESTION 2）**: spec の名には「menu」が残るが、2026-11-01 の決めで `crates/areka/src/menu/`（`menu/shortcut*.rs` を含む）は範囲の外。仮定＝見直さない。入力の crate の中でメニューの側から呼ばれる口（`lib.rs` の右ダブルクリックの預かりの取り出しと送出・右クリックされた窓のスコープ・`send_close_request`、それを確かめる `input_events_menu_tests.rs` ほか）は `crates/areka-input/` のファイルなので範囲に入れる。ただし本体のメニューが使う項目なので、名と形は変えない（要件 7.3）。
-3. **カーソルの絵（要件 1.3）**: 仮定＝`cursor/` の 4 つの絵は中身を読まない（audit が読める形でない）。置き場・名前・使われ方と `README.md` の記述との食い違いを見る。
-4. **使い手の数え方（要件 5.8）**: 仮定＝本体のテストだけが使う項目も使い手に数える（`audit-emo2-boot-frame` の確定 5 と同じ）。`session-module-gather` が本体の 26 の呼び手を書き換えても、使う項目の集合は変わらない前提で数える。
-5. **規模（要件 2.6）**: 仮定＝1 本のまま進める（見込み 10〜16 タスク）。タスクを作って 20 を越えたら、そのとき 2 本目へ切ることを議題にし直す。
-6. **本体のファイルを名指す説明（要件 5.4・5.9）**: 仮定＝本体のファイルのパスを書かず、関数やテストの名で指す（`session-module-gather` が本体のファイルを `session/` へ移すため）。
-7. **`drag_test_support.rs` の待ち（要件 5.11）**: この件はこの spec の brief には無く、`audit-areka-app` の brief の申し送り（コ）が「`audit-areka-input-menu` の持ち物」と書いている。仮定＝引き受ける。`join_bounded` は `areka-runtime` の公開の関数で、`areka-input` は前から `areka-runtime` に依存しているので依存は増えない。待つ相手の型が合わないときの直し方は設計で決める。
+### 確定した指摘の一覧（要件 2.1）
+
+- 直す対象は、ギャップ分析（`research.md` 4 節）の指摘 1〜77 の全部（必ず直す 0・直したほうがよい 52・できれば 25）。下請けが「必ず直す」と付けた指摘 1・2 は、本番の振る舞いが正しくテストが落ちる力を持たないだけなので「直したほうがよい」とした。
+- 要件 2.2 の 3 種類に当たって残すと裁定した指摘は 0 件。後の spec へ回す指摘も 0 件（指摘 31〜33 も今回直す＝議題 3）。
+- 指摘 30 の消すテストを名で指す本体のコメント（`app_exit_escape_tests.rs` 73 行）は範囲の外なので、持ち主の `audit-areka-app` の brief へ件として書き足す（要件 7.9〜7.11・議題 4）。
+
+### 議題ごとの確定
+
+1. **落ちの報告の分担**: `test-crash-report-merge` が `areka_runtime::crash_report_test_support::{install, installed}` の 2 つの名と働きを `areka-runtime` に残す。この spec は `crash_report_tests.rs` を変えない（要件 7.12）。向こうのセッションも同じ方針を自分の要件に書いた（2026-11-21 の返事）。
+2. **メニュー**: 本体の `menu/` は見直さない。入力の crate の中のメニュー向けの口（`take_pending_right_double_click`・`send_pending_right_double_click`・`send_close_request`・`char_scope`・`click::on_char_pointer_released`・`attach_char_pointer_handlers`・`PendingDoubleClick`）は範囲に入れ、直すのは説明の文だけ。名と形は変えない（要件 7.3）。
+3. **範囲の外の持ち物を試すテスト（指摘 31〜33）**: 今回直す。新しく起票しない。`balloon_hover_flag_tests.rs` の `BalloonHover` だけを見るテストは `areka-runtime` の `balloon_hover.rs` の兄弟へ、`spawn_assembly_tests.rs` の `spawn_ghost_windows` だけを見る 13 本は `areka-placement` の `spawn.rs` の兄弟へ、`shell_box_tests.rs` の `settle_box_hover` のテストは `areka-runtime` の `shell_box_hover.rs` の兄弟へ移し、`shell_box.rs` のテスト専用の再輸出を消す。触るファイルは要件 7.4 の 2 に限り、移す前に C24 のほかのセッションと申し合わせる（要件 7.2）。申し合わせの結果は下の「並走のセッションとの申し合わせ」に残す。
+4. **本体のコメントが名で指すテスト（指摘 30）**: 消す。本体の名指しの直しは `audit-areka-app` の brief へ申し送る。
+5. **写しを寄せたときの記録**: 記録の名と欄は変えない。範囲の外に読み手のある 4 つの出所（`areka_input::user_break`・`areka_input::char_watch::cursor_answer`・`areka_input::hover_region::cursor_pick`・`areka_input::throttle`）は動かさない。それ以外の出所は寄せで変わってよく、寄せ先ごとの出所の変化は設計で表にする。
+6. **送り失敗の二重の記録（指摘 14）**: 呼び手の ERROR を 1 行残し、`send_selection` は成否を返すだけにする。ログの行が 1 行減るのは外への約束の変化に当たり、要件 7.7 の裁定としてここに記録する（範囲の外の読み手は 0）。
+7. **テストのファイル名の `input_events_`（指摘 52）**: 名を変える。同じ変更で `collision-probe.rs` 66 行の 1 行も直す（要件 7.4 の 1）。
+8. **`RegionSource::Mock` の `#[allow(dead_code)]`（指摘 68）**: わざと置いた先送りの印に当たらない（理由は「テスト専用」・そもそも効いていない）ので消す。
+9. **下書きの仮定**:
+   - カーソルの絵: `cursor/` の 4 つの絵は中身を読まず、置き場・名前・使われ方と `README.md` の記述との食い違いを見る（要件 1.3）。
+   - 使い手の数え方: 本体のテストだけが使う項目も使い手に数える。`session-module-gather` が本体の呼び手を書き換えても使う項目の集合は変わらない前提で数える。ギャップ分析の結果、狭められる項目は 0 件（要件 5.8）。
+   - 規模: 1 本のまま進める（見込み 14〜18 タスク）。タスクを作って 20 を越えたら、そのとき 2 本目へ切ることを議題にし直す（要件 2.6）。
+   - 本体を指す説明: 本体のファイルのパスもモジュールの道も書かず、役目か関数・テストの名で指す（要件 5.4・5.9、指摘 37・48）。
+   - `drag_test_support.rs` の待ち: 引き受ける。`areka_runtime::spine::join_bounded` を直に呼ぶ（待つ相手は `ActorHandle` で型が合う・dev-dependency の test-support から届くので依存は増えない）。`barrier()` の期限つきの形が `areka-sylphya` の公開の面に在るかは設計で確かめ、無ければ `join` だけ直して `barrier` は設計の議題に戻す（要件 5.11）。
+
+### 並走のセッションとの申し合わせ（要件 7.2・7.9）
+
+- `test-crash-report-merge`: 落ちの報告の 2 つの名を残す方針で一致（議題 1）。議題 3 で触るファイルを 2026-11-21 に知らせて返事を待っている。
+- `window-resetwindowpos-hold`: 議題 3 で触るファイルを 2026-11-21 に知らせた（向こうは `areka-runtime` の `frame/`・`frame_*tests.rs` を触る・重なりは無い見込み）。
