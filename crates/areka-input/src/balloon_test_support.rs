@@ -24,7 +24,7 @@ use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::world::World;
 use log_capture_kit::{LineFormat, capture_lines};
-use wintf::ecs::pointer::{Phase, PointerLeave, PointerState};
+use wintf::ecs::pointer::{DoubleClick, Phase, PointerLeave, PointerState};
 use wintf::ecs::{Point, Visual, Window};
 
 use areka_placement::spawn::BalloonWindowMarker;
@@ -255,10 +255,7 @@ pub(super) fn spawn_balloon_leave_child(world: &mut World, scope: usize) -> Enti
 
 /// 窓の client 物理 px の移動（Bubble）。
 pub(crate) fn bubble_move(x: i32, y: i32) -> Phase<PointerState> {
-    Phase::Bubble(PointerState {
-        client_point: Point { x, y },
-        ..Default::default()
-    })
+    crate::pointer_test_support::bubble_pointer(x, y, DoubleClick::None, false)
 }
 
 /// 左シングルクリック（窓の client 物理 px）。

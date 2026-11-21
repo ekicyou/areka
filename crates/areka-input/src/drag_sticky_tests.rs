@@ -208,6 +208,7 @@ fn cancel_returns_the_partner_to_its_start() {
         saved_pos(&saved, 0),
         Some(bottom_form(&rig, partner, partner_start))
     );
+    assert_eq!(saved_pos(&saved, 1), Some(bottom_form(&rig, char_w, start)));
     rig.close();
 }
 

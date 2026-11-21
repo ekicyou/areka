@@ -298,14 +298,14 @@ pub(crate) fn hit_choice_row(rows: &[ChoiceHitRow], x: f32, y: f32) -> Option<us
 /// hover 遷移の決定。`hover_action` が返し、移動ハンドラと離脱システムの双方が解釈する。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum HoverAction {
-    /// choice 非表示かつ自前状態も None——何もしない。
+    /// 押せる範囲が無く自前状態も None——何もしない。
     NoopInactive,
-    /// choice 非表示だが自前状態が残っている——自前状態のみ None へ整合
+    /// 押せる範囲が無いが自前状態が残っている——自前状態のみ None へ整合
     /// （inject はしない・上流原子性が正本）。
     ResetOwnState,
-    /// 表示中・hover 対象が前回注入値と同一——再注入しない（遷移なし）。
+    /// 押せる範囲がある・hover 対象が前回注入値と同一——再注入しない（遷移なし）。
     Keep,
-    /// 表示中・hover 対象が変化——`apply_hover` で注入する
+    /// 押せる範囲がある・hover 対象が変化——`apply_hover` で注入する
     /// （`Some(ordinal)`＝行ハイライト・`None`＝ハイライト無し）。
     Inject(Option<usize>),
 }
@@ -314,12 +314,12 @@ pub(crate) enum HoverAction {
 ///
 /// 表示中フラグ・hit 結果（ordinal 展開済）・前回注入値の 3 入力から決める。
 ///
-/// - `active == false`（choice 非表示）:
+/// - `active == false`（押せる範囲が無い）:
 ///   - `last_injected == None` → [`HoverAction::NoopInactive`]（未注入ゆえ何もしない）。
 ///   - `last_injected == Some(_)` → [`HoverAction::ResetOwnState`]（注入済ハイライトを消滅時に
 ///     自前状態のみ `None` 整合・inject はしない＝上流原子性が正本）。
-///   - この分岐で `hit_ordinal` は無視される（非表示中は hover 追従なし）。
-/// - `active == true`（choice 表示中）:
+///   - この分岐で `hit_ordinal` は無視される（hover 追従なし）。
+/// - `active == true`（押せる範囲がある）:
 ///   - `hit_ordinal == last_injected` → [`HoverAction::Keep`]（同値既注入・遷移なし・
 ///     `Some==Some`／`None==None` 双方を含む）。
 ///   - `hit_ordinal != last_injected` → [`HoverAction::Inject`]`(hit_ordinal)`（遷移・新値注入。

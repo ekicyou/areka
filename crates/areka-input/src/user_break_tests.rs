@@ -430,6 +430,9 @@ fn second_click_after_selecting_an_anchor_is_not_a_break() {
 #[test]
 fn on_left_press_asks_the_presenter_and_ignores_when_no_balloon_is_shown() {
     let mut lines = Lines::wired();
+    lines
+        .world
+        .insert_non_send(runtime_wiring_showing_talk(TalkId(7)));
     let (accepted, events) =
         capture(|| on_left_press(&mut lines.world, 0, DoubleClick::Left, false));
 
@@ -691,7 +694,7 @@ fn register_user_break_drain_alone_adds_one_system_to_the_input_schedule() {
     );
 }
 
-/// 結線は持ち物を置くだけで、系は登録しない（登録は本体のゴースト起動の側が行う）。
+/// 結線は持ち物を置くだけで、系は登録しない（登録は `register_user_break_drain`）。
 #[test]
 fn wire_user_break_inserts_the_wiring_without_registering() {
     let mut world = World::new();

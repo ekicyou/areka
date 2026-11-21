@@ -33,7 +33,7 @@ use super::{BalloonWiring, click_selection, dispatch_selection};
 /// `resolve_choice` は本 crate から呼ばない（発行まで・カスケードは kanade 側）。
 /// 座標は窓 client 物理 px を**無変換**で照合する（理由は [`hit_choice_row`] の座標契約 doc）。
 ///
-/// **戻り値**: `ChoiceSelection` を発行したとき、または利用者の中断を受け入れたとき `true`
+/// **戻り値**: 矢印の押下を取ったとき、`ChoiceSelection` を発行したとき、または利用者の中断を受け入れたとき `true`
 /// （棄却・縮退・非左押下・Tunnel 時は `false`。途中の早期復帰では中断も作らない）。
 ///
 /// [`attach_balloon_pointer_handlers`] が `BalloonWindowMarker` 窓へ `OnPointerPressed` として挿入する。

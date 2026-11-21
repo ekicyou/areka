@@ -185,6 +185,10 @@ fn hover_active_leaves_row_injects_none() {
     );
 }
 
+// -------------------------------------------------------------------------
+// apply_hover（場所への注入・借用の失敗）
+// -------------------------------------------------------------------------
+
 fn emo_text_debugs(
     events: &[log_capture_kit::CapturedEvent],
 ) -> Vec<&log_capture_kit::CapturedEvent> {

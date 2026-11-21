@@ -38,12 +38,10 @@ use throttle::{MouseMoveThrottle, plan_mouse_move};
 /// 1 資源に束ねる。[`Sender`] 単体は `Send` だが、resolver（presenter 読み）と間引き状態が
 /// UI スレッド所有ゆえ NonSend 1 個に束ねる（`RuntimeWiring` 前例と同型・順序依存なし self-gating）。
 ///
-/// ポインタハンドラ（`on_char_pointer_moved` / `on_char_pointer_pressed`）と送出ヘルパを持つ。`wire_mouse_input`
-/// が World へ挿入する（本体がゴーストの起動に成功するごとに呼ぶ）。
-/// 送出ヘルパ群はポインタハンドラ経由でのみ参照される。ハンドラのキャラ窓登録は
-/// [`attach_char_pointer_handlers`]（本体がキャラ窓の生成直後に呼ぶ）が行う。
+/// 送出ヘルパを呼ぶのはこの crate のハンドラ（移動・押下・解放・ドラッグ）と見張りの系（`char_watch`）。
+/// `wire_mouse_input` が World へ挿入する（本体がゴーストの起動に成功するごとに呼ぶ）。
 ///
-/// 例外はメニュー側から呼ばれる 3 つである: 右ダブルクリックの預かりの取り出しと送出
+/// crate の外から呼べるのはメニュー側が使う 3 つである: 右ダブルクリックの預かりの取り出しと送出
 /// （`take_pending_right_double_click`／`send_pending_right_double_click`・[`PendingDoubleClick`] の
 /// 不変条件）と、メニューの「終了」が呼ぶ `send_close_request`。
 pub struct MouseWiring {

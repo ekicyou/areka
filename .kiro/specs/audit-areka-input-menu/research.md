@@ -352,8 +352,11 @@
 |---|---|---|---|---|---|
 | 1 | 0 | 20 | 25 | 3 | 全部直した |
 | 2 | 0 | 15 | 7 | 5 | 18 件を直した。4 件は回 1 の直しが呼んだ連鎖（要件 9.8）で、直さずに Fable の総括へ回す |
+| 3 | 0 | 6 | 8 | 1 | 12 件を直した。2 件は前の回の直しが拾い残した連鎖（要件 9.8）で、直さずに Fable の総括へ回す（下の 12.4 の回 3） |
 
 回 1 の芯は、落ちる力の無いテスト（Tunnel の押下の表明・`choice_active` 不変の表明・÷k の持ち上げの檻・`hover_arrives_before_move…`・`MouseWiring` を直に叩く 4 本）、重なったテストと支えの写し（GPU の組み立て・`pump_until_idle`・`TWO_BOX_SHELL`・預かりの取り出し・`drain_mouse`）、古い説明（`send_selection` の記録・`inject_choice_hover` の名・`hover_region` の「後から足すカーソル」・`spawn_assembly_tests.rs:352` の「本檻」・`collision-probe.rs` のテストのファイル名）。`HitTest::none()` の表明は持ち主の `areka-placement` の `spawn_assembly_tests.rs` へ移した。
+
+回 3 の芯は、落ちる力の足りないテスト（`on_left_press_asks_the_presenter…` が `RuntimeWiring` を置かず照会を通らない・取り消しのテストがドラッグした窓の保存を見ない）と、言えないことを言う説明（`fast_drag_in_one_dispatch…` の「開始の座標は動く前の窓から」・`MouseWiring` の「送出ヘルパはポインタハンドラ経由でのみ」・`wire_user_break…` の「登録は本体のゴースト起動の側」・`HoverAction` の「choice 非表示」・押下の戻り値の矢印の抜け）。ほかに `bubble_move` と `bubble_pointer` の写し・`plan_mouse_move` の同じ 2 つの返し・テストの名の「stock」・wintf の doc の crate の無い名指し。足した・強めた表明 2 本（`on_left_press…` と取り消しの保存）は、本番を一時だけ壊して赤を確かめてから戻した（照会を `.map(|_| true)` に・取り消しのときドラッグした窓の保存を飛ばす）。
 
 回 2 の芯は、回 1 で見落とした同じ種類の古い説明と重なり（`attach_balloon…` が受け手を上書きしても落ちない表明・`throttle.rs` の per-scope の 1 本・`identity_scale…`・Tunnel の Ctrl+左が Shift 無しで落ちない表明・`ShellBoxHover::set` の強調の記録の分岐のテスト抜け）。
 
@@ -369,6 +372,7 @@
 | 2 | `shell_box_tests.rs` の局所の `anchor_row` | ギャップ分析の指摘 66 で、`test_support` を `..` で使う今の形と決めた |
 | 2 | `shell_box::ShellBoxHover` の `pub use` を狭める | 本体のテスト（`input_events::shell_box::ShellBoxHover`）が使っている。狭められない |
 | 2 | crate の中のファイル名（`shell_box.rs` など）をコメントに書く | 決まりが禁じるのは本体のファイルのパス。crate の中の兄弟の名は指摘に当たらない |
+| 3 | `areka-placement` の `spawn_assembly_tests.rs:152` が `t_i4_…` のテストの名を指す（作業の番号の札が残る名） | 名の持ち主は `spawn_follow_pipeline_tests.rs` ほか（`t_i4_`・`t_i5_` が 8 本・design.md「Modified Files（範囲の外）」の表に無い）。名を変えるなら 152 行も一緒に変える。完了の棚卸で申し送る |
 
 ### 12.4 回 2 の連鎖（要件 9.8・Fable の総括へ）
 
@@ -391,6 +395,13 @@
 | 落ちない表明（R2-A7） | `balloon_pointer_handler_tests.rs` の headless の押下と移動のテストから、落ちる道の無い表明を全部消した: 押下の縮退のループの「hover は Some(2) のまま」・`try_recv` が空・`choice_selected` 無し（押下は強調を書かず、headless は当たり行が空で選択を作れない）、移動の縮退のループの `try_recv` が空（移動は選択を送らない）、`pressed_inactive…`・`pressed_active_non_hit…`・`pressed_on_anchor_only…` の同じ 2 種。`pressed_non_left_button_is_noop_false` は残る表明が戻り値だけになり落ちなかったので、Tunnel と同じ「何も記録しない」へ替えた。節の見出しと doc の「零 send」「Inbox Empty」も合わせた | 本番を一時だけ壊して赤を確かめた: 押下と移動の Tunnel の早期復帰を外すと縮退の 2 本が赤、押下の `left_down` の早期復帰を外すと `pressed_non_left…` が赤。当たり行の上の押下が選択を送ることは `balloon_gpu_hit_tests.rs` と `balloon_choice_settle_tests.rs` の実 GPU のテストが見る。離脱（`balloon_leave_tests.rs`）の「hover 不変」は離脱の道が強調を書くので落ちる |
 | GPU の許可を落とす順（R2-A10） | `gpu_balloon_world` で許可を World より先に束ねた（`areka-runtime` の `manual_balloon_runtime` と同じ形） | `areka-input` で GPU の許可を取る所はこの関数と `manual_balloon_runtime` の 2 つだけで、受ける側は組の先頭か構造体の最後の欄（`GpuPermit` の doc の決まりどおり） |
 | 消した表明を doc が言う（R2-B5） | `send_failure_records_one_failure` の doc から「知らせ 0 件」を消した。兄弟の `no_wiring_records_one_drop` は送り手が外した `MouseWiring` の中にしか無く `rig.drain()` が落ちないので、表明と doc の「知らせ 0 件」を消した | 残る 3 本（`target_mismatch`・`no_scope`・`no_window_pos`）は送り先が在るので `rig.drain()` が落ちる。doc の「知らせ 0 件」は表明のある所にだけ残る |
+
+#### 回 3 の連鎖（要件 9.8・Fable の総括へ）
+
+| 番号 | 場所 | 中身 | 呼んだ前の回の直し |
+|---|---|---|---|
+| R3-C1 | `balloon_test_support.rs` `row` の doc | 「rect 以外は当たりの判定に使わない」。`hit_choice_row` は `kind` でも分ける（`anchor_row` が効くのはそのため） | 回 1 でこの 1 文を書き直したとき（「3.1 の判定に無関係」を消した）に誤りを残した |
+| R3-A3 | `balloon_pointer_handler_tests.rs:5` の節の見出し | 適用の腕を「Noop」と書く。腕の名は `HoverAction::NoopInactive` | 回 1 で同じ見出しの古い名（`inject_choice_hover`）を `apply_hover` へ直したときに拾い残した |
 
 範囲の外で同じ形を 1 つ見つけた（直していない）: `areka-runtime` の `frame_test_support.rs` `gpu_attach_world` は `gpu_balloon_world` の直す前と同じ順（World を先に束ねる）。design.md「Modified Files（範囲の外）」の表に無いファイルなので触らず、完了の棚卸で申し送る。
 

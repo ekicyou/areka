@@ -89,7 +89,7 @@ fn debugs(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 }
 
 #[test]
-fn char_window_gets_the_expected_stock_shapes() {
+fn char_window_gets_the_expected_shapes() {
     let mut assets = ShellCursorAssets::default();
     // スコープ 1 の Head だけ乗る形を help にする（スコープ 0 は既定のまま）。
     assets.rows.rows.insert(

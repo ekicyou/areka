@@ -37,17 +37,6 @@ pub(crate) fn plan_mouse_move(
     now_ms: u64,
 ) -> (MouseMoveThrottle, bool) {
     let moved = state.last_pos != Some(pos);
-
-    if !moved {
-        return (
-            MouseMoveThrottle {
-                last_pos: Some(pos),
-                ..state.clone()
-            },
-            false,
-        );
-    }
-
     let region_changed = match &state.last_sent_region {
         None => true,
         Some(prev) => prev != region,
@@ -56,7 +45,7 @@ pub(crate) fn plan_mouse_move(
         Some(t) => now_ms.saturating_sub(t) >= MOUSE_MOVE_MIN_INTERVAL_MS,
         None => true,
     };
-    let send = region_changed || interval_elapsed;
+    let send = moved && (region_changed || interval_elapsed);
 
     if send {
         (

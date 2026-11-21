@@ -339,7 +339,7 @@ fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
 /// 本番と同じ形のゴースト窓へ確立系と維持系を通しても、常時最前面の印は付かない。
 ///
 /// areka 側の組立が `WindowStyle` に常時最前面を含めないことは
-/// `spawn_assembly_tests::no_window_has_ws_ex_topmost` が固定している（`ex_style` を
+/// `areka_placement` の `spawn_assembly_tests::no_window_has_ws_ex_topmost` が固定している（`ex_style` を
 /// 完全一致で押さえているので、最小化・タスクバー露出の印が紛れ込む余地も無い）。
 /// 本テストが足すのは**その後**である——ペアの機構（owner の確立と是正の適用）を実際に
 /// 通したあとに、OS から拡張スタイルを読み戻して 1 ビットも変わっていないことを測る。
