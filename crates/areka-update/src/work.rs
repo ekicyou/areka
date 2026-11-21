@@ -1,4 +1,4 @@
-//! 作業場所（要件 4.1・4.7・4.8・5.5・5.9）。
+//! 作業場所。
 //!
 //! `<対象>/.update-work/<プロセス識別子>-<連番>/` に、落とした物（`new/<相対パス>`）と
 //! 退避した元の内容（`old/<相対パス>`）を置く。`areka-nar` の `.nar-work` と同じ置き方。
@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 /// 同一プロセス内で単調増加する連番。プロセス間の一意性はプロセス識別子が担う。
 static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
 
-/// 全部戻せた後（成功・戻せた失敗）の後片付けで消せなかった走行フォルダに置く印（空ファイル・5.9）。
+/// 全部戻せた後（成功・戻せた失敗）の後片付けで消せなかった走行フォルダに置く印（空ファイル）。
 pub(crate) const COMMITTED_MARK: &str = "committed";
 
 /// 失敗は `(触ったパス, io::Error)`。
@@ -31,9 +31,9 @@ pub(crate) struct WorkArea {
 
 impl WorkArea {
     /// 棚の他の走行の残骸を先に消し（消せなければ `residue`）、自分のフォルダを作る。
-    /// `old/` に中身が残るフォルダ（戻せなかった走行の元の内容＝5.5）は消さずに `residue` へ。
+    /// `old/` に中身が残るフォルダ（戻せなかった走行の元の内容）は消さずに `residue` へ。
     /// ただし印 [`COMMITTED_MARK`] の在るフォルダは全部戻せた後（成功・戻せた失敗）の残りなので消しにかかり、
-    /// 消せなくても `residue` に挙げない（5.9）。
+    /// 消せなくても `residue` に挙げない。
     /// 自分の名前のフォルダが既に在れば（プロセス識別子の再利用）作らずに失敗する。
     pub(crate) fn create(target: &Path) -> Result<WorkArea, Failed> {
         let shelf = target.join(WORK_DIR);
@@ -63,7 +63,7 @@ impl WorkArea {
         self.dir.join("old").join(rel)
     }
 
-    /// `new/<rel>` の親を作って書く。バイト列は変換しない（4.7）。
+    /// `new/<rel>` の親を作って書く。バイト列は変換しない。
     pub(crate) fn put(&self, rel: &str, bytes: &[u8]) -> Result<(), Failed> {
         let path = self.fresh(rel);
         if let Some(parent) = path.parent() {
@@ -72,14 +72,14 @@ impl WorkArea {
         at(&path, fs::write(&path, bytes))
     }
 
-    /// 自分のフォルダを消し、空なら棚も消す。消せなかった物と `residue` を返す（4.8）。
-    /// 自分のフォルダを消せなかったときは印 [`COMMITTED_MARK`] を置く（5.9）。
+    /// 自分のフォルダを消し、空なら棚も消す。消せなかった物と `residue` を返す。
+    /// 自分のフォルダを消せなかったときは印 [`COMMITTED_MARK`] を置く。
     pub(crate) fn cleanup(self) -> Vec<PathBuf> {
         let mut leftovers = self.residue;
         if let Err(e) = fs::remove_dir_all(&self.dir)
             && e.kind() != ErrorKind::NotFound
         {
-            // 印が書けなくても挙げ方は同じ（次の走行が今日どおり残骸に挙げるだけ）。
+            // 印が書けなくても挙げ方は同じ（次の走行が残骸に挙げるだけ）。
             let _ = fs::write(self.dir.join(COMMITTED_MARK), b"");
             leftovers.push(self.dir.clone());
         }
@@ -92,7 +92,7 @@ impl WorkArea {
         leftovers
     }
 
-    /// 戻せなかったとき: 片付けずに自分のフォルダと `residue` を返す（5.5）。
+    /// 戻せなかったとき: 片付けずに自分のフォルダと `residue` を返す。
     pub(crate) fn keep(self) -> (PathBuf, Vec<PathBuf>) {
         (self.dir, self.residue)
     }
@@ -147,7 +147,7 @@ pub struct Purge {
     pub held: Vec<PathBuf>,
 }
 
-/// 全部戻せた後（成功・戻せた失敗）の残り（印 `COMMITTED_MARK`＝`"committed"` の在る走行フォルダ）だけを消す（5.9）。
+/// 全部戻せた後（成功・戻せた失敗）の残り（印 `COMMITTED_MARK`＝`"committed"` の在る走行フォルダ）だけを消す。
 ///
 /// `<target>/.update-work/` の直下だけを見る。印の無いフォルダ（戻せなかった走行の元の内容）と
 /// フォルダでない物は触らない。棚が無ければ何もしない。何か消せて棚が空になれば棚も消す。

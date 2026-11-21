@@ -1,4 +1,4 @@
-//! `delete.txt` の固定入力（要件 6.1〜6.7・9.5）。
+//! `delete.txt` の固定入力。
 
 use super::*;
 use crate::testkit::{SHARING_VIOLATION, hold, junction, sjis, target_fixture, tree, txt};

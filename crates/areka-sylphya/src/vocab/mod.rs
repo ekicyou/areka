@@ -4,7 +4,7 @@ pub mod dotted;
 pub mod flat;
 pub mod shiori_resource;
 
-/// backing 実体層（研究 §9 の 5 層タクソノミー・R3.6）。
+/// backing 実体層（5 層タクソノミー）。
 ///
 /// M1 実導出は `StaticConfig` の一部・`ShioriQuery`(username)・`Persistent`。
 /// `RuntimeState` / `SystemEnv` は縮退のまま層の存在を型で表現する。
@@ -22,7 +22,7 @@ pub enum BackingLayer {
     Persistent,
 }
 
-/// 縮退政策（R3.1）。
+/// 縮退政策。
 ///
 /// `ConsumerDefault` は「既定値は消費側の唯一定義点が持つ」ことのマーカーで、sylphya は値を持たない。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,7 +44,7 @@ pub enum M1Status {
     Degraded,
 }
 
-/// SET の 2 意味論（R3.4）。
+/// SET の 2 意味論。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SetSemantics {
     /// 運行コマンド書込（`surface.num` SET＝`\s[]` 等価などランタイムへの命令）。

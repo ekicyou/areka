@@ -1,5 +1,4 @@
-//! 隣り合いの印（`PersistKey::WindowAdjacent`・表 `[window-adjacent]`）の檻
-//! （spec dpi-realign-remembered-chain 要件 6.2）。
+//! 隣り合いの印（`PersistKey::WindowAdjacent`・表 `[window-adjacent]`）のテスト。
 //!
 //! - 正準 key `areka.window.scope(ID).adjacent` が `parse_dotted` → `to_canonical_string` で往復する。
 //! - 書く → 読むで値が戻る・表 `[window-adjacent]` に載る・書き出しの版は 1 のまま。
@@ -59,7 +58,6 @@ fn adjacent_save_load_round_trip_under_its_table_with_version_1() {
 
 #[test]
 fn merge_keeps_other_keys_both_orders() {
-    // 位置 → 印
     let io = FakePersistIo::new();
     save_scope(
         PersistScope::Ghost,
@@ -80,7 +78,6 @@ fn merge_keeps_other_keys_both_orders() {
         "{loaded:?}"
     );
 
-    // 印 → 位置・起動記録（印が消えない）
     let io = FakePersistIo::new();
     save_scope(
         PersistScope::Ghost,

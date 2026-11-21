@@ -1,5 +1,4 @@
-//! 「．さくら」のシェル `master` で 8 語に由来する WARN が 0 件であることの檻
-//! （spec: seriko-pattern-calls 要件 1.4・9.3）。
+//! 「．さくら」のシェル `master` で 8 語に由来する WARN が 0 件であることの檻。
 //!
 //! 検体の `surfaces.txt` を解析を経る実経路で読み、再生表と合成の形の記録（`shape_issues`）を作る。
 //! 検体は共有の受け口 `sample_test_support` 経由でだけ受ける。
@@ -28,7 +27,7 @@ fn build(text: &str) -> (AnimationTable, Vec<u32>, Vec<ShapeIssue>, Vec<String>)
 }
 
 /// 8 語に由来する WARN の行（`check_calls` の 6 種）。合成の「未知の合成メソッド名」は `debug!`
-/// なので WARN には出ない（audit-emo-compose 10.1）。
+/// なので WARN には出ない。
 fn word_warns(lines: &[String]) -> Vec<&String> {
     warns(lines)
         .into_iter()
@@ -43,7 +42,7 @@ fn dot_sakura_text() -> String {
     decode(&bytes, DefaultEncoding::Ansi)
 }
 
-/// 8 語に由来する WARN が 0 件で、形の記録にも 8 語のコマが載らない（要件 1.4・9.3）。
+/// 8 語に由来する WARN が 0 件で、形の記録にも 8 語のコマが載らない。
 #[test]
 fn dot_sakura_has_no_warn_from_the_eight_words() {
     let (table, ids, issues, lines) = build(&dot_sakura_text());
@@ -75,7 +74,7 @@ fn dot_sakura_has_no_warn_from_the_eight_words() {
     assert!(undrawn.is_empty(), "8 語の形の記録: {undrawn:#?}");
 }
 
-/// `surface0` の animation2 は「並び [0, 1] から 1 つを選んで開始」（要件 1.4）。
+/// `surface0` の animation2 は「並び [0, 1] から 1 つを選んで開始」。
 #[test]
 fn dot_sakura_surface0_animation2_starts_one_of_0_and_1() {
     let (table, _, _, _) = build(&dot_sakura_text());

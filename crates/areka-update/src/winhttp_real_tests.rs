@@ -1,4 +1,4 @@
-//! 本物の取得口（WinHTTP）で実機の一周を回す（要件 3.3〜3.5・9.7・`#[ignore]`）。
+//! 本物の取得口（WinHTTP）で実機の一周を回す（`#[ignore]`）。
 //!
 //! 実行: `cargo test -p areka-update --release winhttp_real -- --ignored --nocapture`
 //!
@@ -136,7 +136,7 @@ fn round(label: &str, homeurl: &str, target: &Path, fetch: &WinHttpFetch, log: &
     }
 }
 
-/// 記録は info 2 件（開始と成功の終了）だけで、終了の欄が結果と件数に合う（8.3）。
+/// 記録は info 2 件（開始と成功の終了）だけで、終了の欄が結果と件数に合う。
 fn assert_records(records: &[CapturedEvent], outcome: &str, placed: usize, removed: usize) {
     let levels: Vec<tracing::Level> = records.iter().map(|r| r.level).collect();
     assert_eq!(levels, [tracing::Level::INFO; 2], "{records:#?}");
@@ -162,7 +162,7 @@ fn winhttp_real_two_rounds_update_then_unchanged() {
     let homeurl = format!("{base}/r/");
     let fetch = WinHttpFetch::new().expect("WinHTTP のセッションを開ける");
 
-    // 状態コードの判定（3.5）: 404 は「無い」、500 はコード付き。
+    // 404 は「無い」、500 はコード付き。
     assert_eq!(
         fetch.get(&format!("{base}/missing.txt")),
         Err(FetchError::NotFound)
@@ -228,14 +228,14 @@ fn winhttp_real_two_rounds_update_then_unchanged() {
     });
     assert_eq!(r1.seen, progress, "1 周目の段の順序");
     assert_records(&r1.records, "updated", 3, 1);
-    // 取得はどれも 302 を経て本体へ届いた（3.4）。
+    // 取得はどれも 302 を経て本体へ届いた。
     let hops = |names: &[&str]| -> Vec<String> {
         names
             .iter()
             .flat_map(|n| [format!("/r/{n}"), format!("/{n}")])
             .collect()
     };
-    // 非 ASCII のパスは符号化されて届き、配信側の復号で本体に当たった（1.15）。
+    // 非 ASCII のパスは符号化されて届き、配信側の復号で本体に当たった。
     assert_eq!(urlpath::encode(NEW), NEW_ENCODED);
     assert_eq!(
         r1.requests,

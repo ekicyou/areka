@@ -1,5 +1,4 @@
-//! 定義の差し替えの依頼（[`SerikoMsg::Replace`]）の決定論テスト
-//! （spec: areka-P0-shell-balloon-switch 要件 2.6・2.8・3.5・12.6）。
+//! 定義の差し替えの依頼（[`SerikoMsg::Replace`]）の決定論テスト。
 //!
 //! 依頼はアクターの受信の閉包が捌くので、`spawn_seriko` の実のアクターへ cue・tick・依頼を
 //! 同じ inbox で送り、出力先の記録の並びで確かめる（tick は注入の絶対時刻・乱数は常に発火）。
@@ -46,7 +45,7 @@ fn carries_frame(cmd: &DisplayCommand, sid: u32) -> bool {
 }
 
 /// シェルの差し替え: 同じ面・新しい既定の着せ替えの `Rebased` が 1 件。前に処理した指令は前に、
-/// 古い表のループの指令は後に 0 件。新しい表・新しい別名表で続く（要件 2.6・2.8・12.6）。
+/// 古い表のループの指令は後に 0 件。新しい表・新しい別名表で続く。
 #[test]
 fn shell_replace_emits_one_rebased_with_same_surface_and_new_default_binds() {
     // 古い表: 面 2100 で 2106 → 150ms 後に 2110。
@@ -137,7 +136,7 @@ fn shell_replace_emits_one_rebased_with_same_surface_and_new_default_binds() {
 }
 
 /// バルーンの差し替え: シェル側（面・着せ替え・ループの進行）は変えず、各スコープのバルーンの
-/// 今の面（無ければ 0）を `Rebased` で 1 件出す（要件 3.5）。
+/// 今の面（無ければ 0）を `Rebased` で 1 件出す。
 #[test]
 fn balloon_replace_keeps_shell_side_and_reports_balloon_surfaces() {
     let shell = table_single(
@@ -218,7 +217,7 @@ fn balloon_replace_keeps_shell_side_and_reports_balloon_surfaces() {
 }
 
 /// バルーンの差し替え: seriko が `\s`・`\b` を見ていないスコープも、新しい表の鍵（装着の全スコープ）
-/// から面 0 で載る（起動時の装着は全スコープのバルーンを面 0 で確立している・要件 3.5）。
+/// から面 0 で載る（起動時の装着は全スコープのバルーンを面 0 で確立している）。
 #[test]
 fn balloon_replace_reports_unseen_scopes_from_new_tables_with_surface_zero() {
     let out = MockSurfaceOutput::new();
@@ -294,7 +293,7 @@ fn replace_reaching_handle_message_directly_logs_error_and_is_dropped() {
 }
 
 /// シェルの差し替え: 新しいシェルに無い面を出していたスコープは、`Rebased` が最初から戻り先の面を
-/// 載せ、seriko の今の面も同じになる。非表示のスコープは替えない（spec: descript-window-keys 要件 3.2・3.5）。
+/// 載せ、seriko の今の面も同じになる。非表示のスコープは替えない。
 #[test]
 fn shell_replace_rebased_carries_fallback_surface_for_missing_current_surface() {
     let out = MockSurfaceOutput::new();
@@ -361,7 +360,7 @@ fn shell_replace_rebased_carries_fallback_surface_for_missing_current_surface() 
     );
 }
 
-/// 書き換えの記録はスコープごとに 1 件・事象名で見分けられる（descript-window-keys 要件 3.3）。
+/// 書き換えの記録はスコープごとに 1 件・事象名で見分けられる。
 #[test]
 fn shell_fallback_outcomes_log_one_warn_each() {
     let (logs, ()) = capture_logs_flow(|| {

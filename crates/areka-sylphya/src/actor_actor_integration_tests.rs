@@ -56,7 +56,6 @@ fn spawn_publish_static_barrier_then_read_sees_value() {
 
 #[test]
 fn initial_load_projects_persist_into_dotted_without_publish() {
-    // fake IO に ghost スコープを事前確定（窓位置＋起動記録）。
     let io = FakePersistIo::new();
     let roots = ScopeRoots {
         ghost: Some(PathBuf::from("/g")),
@@ -84,7 +83,7 @@ fn initial_load_projects_persist_into_dotted_without_publish() {
     });
 
     // publish も barrier もせず即読み: 初期像は spawn 内で同期構築済みゆえレースなく見える
-    // （＝読み経路はアクター処理を一切待たない・R2.7 無ブロック）。
+    // （＝読み経路はアクター処理を一切待たない）。
     assert_eq!(
         parts
             .reader
@@ -132,7 +131,6 @@ fn set_runtime_command_vocab_writes_nothing_in_m1() {
         .publisher
         .set(a("ghost/a"), "surface.num".into(), "5".into());
     parts.publisher.barrier().expect("barrier");
-    // RuntimeCommand は reserved seam（sink 未登録）→ どの区画にも載らない。
     assert_eq!(
         parts
             .reader
@@ -154,12 +152,11 @@ fn publish_shiori_some_sets_flat_none_records_absence() {
         .publish_shiori(a("ghost/b"), "username".into(), None);
     parts.publisher.barrier().expect("barrier");
 
-    // Some → per-asker フラットへ値が載る。
     assert_eq!(
         parts.reader.resolve_flat(&ctx("ghost/a"), "username"),
         FlatResolution::Value("Alice".into())
     );
-    // None → 不在記録のみ（既定値は書かない）→ 台帳の ConsumerDefault へ縮退（R4.2）。
+    // None → 不在記録のみ（既定値は書かない）→ 台帳の ConsumerDefault へ縮退。
     assert_eq!(
         parts.reader.resolve_flat(&ctx("ghost/b"), "username"),
         FlatResolution::Degraded(DegradePolicy::ConsumerDefault)
@@ -171,7 +168,6 @@ fn publish_shiori_some_sets_flat_none_records_absence() {
 #[test]
 fn barrier_fences_all_prior_messages_last_write_wins() {
     let parts = spawn_sylphya(init_empty());
-    // 同一 key へ 0..10 を連投（FIFO 直列なら最後の 9 が最終値）。
     for i in 0..10u32 {
         parts.publisher.publish_static(
             a("ghost/a"),
@@ -198,7 +194,7 @@ fn persist_put_projects_to_mirror_areka_region() {
     );
     parts.publisher.barrier().expect("barrier");
     // 保存先 root が None でも（save_scope は Degraded・warn）鏡像 dotted 投影は独立に成立し、
-    // アクターは panic せず継続する（R6.7）。
+    // アクターは panic せず継続する。
     assert_eq!(
         parts
             .reader
@@ -339,7 +335,7 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
         "expected Panicked, got {err:?}"
     );
 
-    // reader は panic 前の最終鏡像を読み続けられる（表示系を殺さない・R6.7）。
+    // reader は panic 前の最終鏡像を読み続けられる（表示系を殺さない）。
     assert_eq!(
         reader.resolve_flat(&ctx("ghost/a"), "selfname"),
         FlatResolution::Value("生前値".into())
@@ -357,7 +353,7 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
 fn reader_does_not_block_on_actor_supply() {
     let parts = spawn_sylphya(init_empty());
     // 一切の barrier なしで即読み: 読み経路は鏡像 read lock 内 Arc clone のみで、アクターの
-    // メッセージ処理・チャネル送受信を一切待たない（R2.7 無ブロック・大域ロック不在）。
+    // メッセージ処理・チャネル送受信を一切待たない（大域ロック不在）。
     assert_eq!(
         parts.reader.resolve_flat(&ctx("ghost/a"), "username"),
         FlatResolution::Degraded(DegradePolicy::ConsumerDefault)
@@ -392,7 +388,6 @@ fn spawn_publish_barrier_read_is_deterministic_over_iterations() {
             parts.reader.resolve_flat(&ctx("ghost/a"), "selfname"),
             FlatResolution::Value(format!("v{i}"))
         );
-        // 正典終了で確実に畳む。
         parts.publisher.close();
         parts.handle.join().expect("join");
     }

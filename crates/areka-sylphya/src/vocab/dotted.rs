@@ -1,18 +1,18 @@
 //! 点付き語彙台帳: ルート枝 10・汎用名 17・SET 有効群・ext 亜枝イベント名予約。
 //!
 //! ukadoc `list_propertysystem.html` の点付きプロパティ木を key モデル上の第一級
-//! 語彙として保持する（R1.2）。M1 は `baseware.*` のみ実導出し、他ルート枝配下は
-//! NOT_FOUND へ縮退する（R5.2・backing 登録だけで実導出化できる差替シーム付き）。
+//! 語彙として保持する。M1 は `baseware.*` のみ実導出し、他ルート枝配下は
+//! NOT_FOUND へ縮退する（backing 登録だけで実導出化できる差替シーム付き）。
 //!
-//! SET 有効群は書込 API の型シームのみを予約し、M1 では実書込を行わない（R3.4）。
+//! SET 有効群は書込 API の型シームのみを予約し、M1 では実書込を行わない。
 //! ext 亜枝（`activeghostlist(...).ext.*`・`pluginlist(...).ext.*`）の対応イベント名は
-//! 予約のみで、M1 ではイベント発火を行わない（R3.5）。
+//! 予約のみで、M1 ではイベント発火を行わない。
 
 use crate::vocab::SetSemantics;
 
-/// 点付き語彙のルート枝 10 本（顔ぶれと重複の無さはテスト `dotted_roots_match_exactly` が縛る・並びは縛らない・R1.2）。
+/// 点付き語彙のルート枝 10 本（顔ぶれと重複の無さはテスト `dotted_roots_match_exactly` が縛る・並びは縛らない）。
 ///
-/// ukadoc 一次 HTML 全文検証でルート枝はちょうど 10 本（`calendarlist` 等は存在しない）。
+/// ukadoc のルート枝はちょうど 10 本（`calendarlist` 等は存在しない）。
 /// M1 実導出は `baseware` のみ・他は NOT_FOUND 縮退（key モデル上は第一級で保持）。
 pub const DOTTED_ROOTS: &[&str] = &[
     "system",
@@ -27,12 +27,11 @@ pub const DOTTED_ROOTS: &[&str] = &[
     "rateofuselist",
 ];
 
-/// 汎用プロパティ名 17 種（顔ぶれはテスト `generic_prop_names_match_exactly` が縛る・並びは縛らない・R1.2）。
+/// 汎用プロパティ名 17 種（顔ぶれはテスト `generic_prop_names_match_exactly` が縛る・並びは縛らない）。
 ///
 /// リスト系ルート枝（ghostlist / currentghost 等）配下で共通に現れる名前族。
 /// `shiori.変数名`・`char*.bind.menu` はテンプレート形（変数名/キャラクタ番号を含む名の型）
-/// で、語彙台帳としては型どおりに第一級保持する（brief.md Scope 節「汎用プロパティ名 17 種」
-/// を逐語転記）。`[SET]` 印の 4 名（menu / sakura.bind.menu / kero.bind.menu / char*.bind.menu）
+/// で、語彙台帳としては型どおりに第一級保持する。`[SET]` 印の 4 名（menu / sakura.bind.menu / kero.bind.menu / char*.bind.menu）
 /// は SET 有効群にも登録される（`SET_EFFECTIVE` 参照）。
 pub const GENERIC_PROP_NAMES: &[&str] = &[
     "name",
@@ -54,17 +53,16 @@ pub const GENERIC_PROP_NAMES: &[&str] = &[
     "char*.bind.menu",
 ];
 
-/// SET 有効群（正準語彙のうち SET が有効な名前族・件数 25・R3.4）。
+/// SET 有効群（正準語彙のうち SET が有効な名前族・件数 25）。
 ///
 /// 書込 API の**型シームのみ**を予約し、M1 では実書込を行わない。全項目を
 /// [`SetSemantics::RuntimeCommand`]（運行コマンド書込・ランタイムへの命令）へ写す——
-/// 設計判断（design.md「sylphya アクター」Responsibilities）で「SET 有効群 → RuntimeCommand」
-/// と確定しており、[`SetSemantics::StoreWrite`] は**正準語彙外の自由 dotted key**（asker 別
+/// [`SetSemantics::StoreWrite`] は**正準語彙外の自由 dotted key**（asker 別
 /// host 区画への反映）に予約され、SET 有効群の正準語彙には現れない。SET 無効な正準語彙への
 /// 書込は `NotSettable`（受理＋警告＋非反映）として扱う（`doc/COMPAT_ARCHITECTURE.md` 対応表・
 /// 正典沈黙の areka 裁量）。
 ///
-/// 群構成（brief.md Scope 節「SET 有効群」・ukadoc `list_propertysystem.html`）:
+/// 群構成（ukadoc `list_propertysystem.html`）:
 /// - 基本 3 項: `surface.num`（SET=`\s[]` 等価）・`animation.num`（SET=`\i[]` 連続等価）・`seriko.defaultsurface`
 /// - mousecursor 群 10 項: 本体側 6・balloon 側 4
 /// - seriko.cursor / tooltip 群 4 項: cursor の path/name・tooltip の text/name
@@ -73,11 +71,11 @@ pub const GENERIC_PROP_NAMES: &[&str] = &[
 ///
 /// ## 件数 25 の導出（2 通り）
 ///
-/// - **登記の側**: 既存の 21 項に、本機能（`areka-P0-sylphya-set-ledger`）が足した 4 項
+/// - **登記の側**: 21 項（基本・mousecursor・cursor/tooltip・menu の各群）に、正典追随の 4 項
 ///   （`seriko.sticky-window`・`pause`・`playing`・`position`）を加えて 25。
 /// - **照合元の側**: 調査台帳 `doc/ukadoc-coverage/ledger/property.toml` で
 ///   「書き込み: 正典 SET有効」と記録する行は 26 行。そこから先送り中の 1 行（窓の重なり順の
-///   プロパティ。所有は互換記録 `doc/COMPAT_ARCHITECTURE.md` §8 の該当行を参照）を除いて 25 行。
+///   プロパティ。所有は互換記録 `doc/COMPAT_ARCHITECTURE.md` の該当行を参照）を除いて 25 行。
 ///   このうち `seriko.cursor.path` と `seriko.tooltip.text` はセレクタの書き方違い（当たり判定名で
 ///   指す形と番号で指す形）で台帳が 2 行ずつに分かれているが、本表では 1 項目ずつなので 2 項目ぶん
 ///   縮んで 23 項目。これに、正典に設定の定めが無いまま areka が先取りで登記している
@@ -90,21 +88,19 @@ pub const GENERIC_PROP_NAMES: &[&str] = &[
 /// 26 行に数えないもの: `activeghostlist(...).ext.拡張プロパティ名`・`pluginlist(...).ext.拡張プロパティ名`
 /// 系の 4 行。正典本文は `property.set` を起こして設定すると述べるが `[SET有効]` の印は無く、
 /// ext 亜枝の中継形なので 26 行に含めない（台帳の当該行の note のとおり）。この 4 行の語彙と
-/// 運搬の担い手は `property-ipc-transport` であり、本機能の範囲外。
+/// 運搬は本表の範囲外。
 ///
 /// 既知の食い違い: 先取り 2 項（`seriko.cursor.name`・`seriko.tooltip.name`）は、正典が SET 有効と
-/// 定めていない名前を登記している状態である（完了 spec `areka-P0-ukadoc-survey-property` の
-/// design.md 規則 8 突合表・区分 ⑶「印が無く、族の頭の継承も無い＝areka の先取り」）。
-/// 本機能はこの食い違いを記録するだけで解消しない。
+/// 定めていない名前を登記している状態である（印が無く、族の頭の継承も無い＝areka の先取り）。
+/// この食い違いは記録するだけで解消していない。
 ///
 /// 正典に根拠のない作り（本表が末尾形で持たれ実キーと突き合わされないこと等）の記録と引受先は
 /// [`SOUND_PROP_NAMES`] の説明文を参照。
 pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
-    // 基本 3 項（surface/animation/defaultsurface）。
     ("surface.num", SetSemantics::RuntimeCommand),
     ("animation.num", SetSemantics::RuntimeCommand),
     ("seriko.defaultsurface", SetSemantics::RuntimeCommand),
-    // mousecursor 群 10 項（本体側 6）。
+    // mousecursor 群（本体側 6）。
     ("mousecursor", SetSemantics::RuntimeCommand),
     ("mousecursor.text", SetSemantics::RuntimeCommand),
     ("mousecursor.wait", SetSemantics::RuntimeCommand),
@@ -126,7 +122,7 @@ pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
     ("sakura.bind.menu", SetSemantics::RuntimeCommand),
     ("kero.bind.menu", SetSemantics::RuntimeCommand),
     ("char*.bind.menu", SetSemantics::RuntimeCommand),
-    // 正典追随 4 項（本 spec）。`pause`・`playing`・`position` の URL は記録用の表
+    // 正典追随 4 項。`pause`・`playing`・`position` の URL は記録用の表
     // `SOUND_PROP_NAMES` の同名要素に置く（正典の項目としては各 1 つ）。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#currentghost.seriko.sticky-window:1
     ("seriko.sticky-window", SetSemantics::RuntimeCommand),
@@ -150,7 +146,7 @@ pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
 /// 定めている。本表はサウンド族の記録なので汎用名の表からは引かない（汎用名の表の件数 17 は
 /// 動かさない）。`pause`・`playing`・`position` は [`SET_EFFECTIVE`] にも載るが本表からは外さない。
 ///
-/// ## 正典に根拠のない areka 固有の作り 2 点（記録のみ・本機能では是正しない）
+/// ## 正典に根拠のない areka 固有の作り 2 点（記録のみ・是正していない）
 ///
 /// 1. **葉の名前だけで正準語彙とみなす判定**: 書き込みの仕分け（`actor.rs` の正準語彙判定の
 ///    第 2 項）は、キーの根が [`DOTTED_ROOTS`] に無くても、葉の名前が [`GENERIC_PROP_NAMES`] に
@@ -164,9 +160,8 @@ pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
 /// 自由な名前としての「保存して読み戻せる」から「受理して捨てる」へ変わり得る（葉の名前が
 /// 汎用名の表に載っているだけで扱いが切り替わる）。
 ///
-/// 引受先: `property-query-channels`（`.kiro/specs/property-query-channels/brief.md`
-/// の実在を確認済み）。`\![set,property,...]` の経路を開通させ、フルキーが初めて仕分けへ流れ込む
-/// spec であり、上記 2 点の是正はそこで扱う。
+/// 是正は、`\![set,property,...]` の経路を開通させてフルキーが初めて仕分けへ流れ込む
+/// ようになる作業で扱う。
 pub const SOUND_PROP_NAMES: &[&str] = &[
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#duration:1
     "duration",
@@ -206,14 +201,14 @@ pub const SOUND_PROP_NAMES: &[&str] = &[
     "meta.year",
 ];
 
-/// ext 亜枝の GET イベント名（予約のみ・M1 では発火しない・R3.5）。
+/// ext 亜枝の GET イベント名（予約のみ・M1 では発火しない）。
 ///
 /// `activeghostlist(...).ext.*`・`pluginlist(...).ext.*` は所有者（ゴースト/プラグイン）側へ
 /// この名の SHIORI/PLUGIN イベントを発生させて値を取得する語彙。M1 は名前の予約に留め、
 /// イベント発火（ext 亜枝の実働）は α 後の領分。
 pub const EXT_EVENT_GET: &str = "property.get";
 
-/// ext 亜枝の SET イベント名（予約のみ・M1 では発火しない・R3.5）。
+/// ext 亜枝の SET イベント名（予約のみ・M1 では発火しない）。
 pub const EXT_EVENT_SET: &str = "property.set";
 
 #[cfg(test)]
@@ -221,7 +216,7 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    /// ルート枝 10 本の集合が過不足なく一致（タイポ・重複・欠落を檻化）。
+    /// ルート枝 10 本の集合が過不足なく一致（タイポ・重複・欠落を検出）。
     #[test]
     fn dotted_roots_match_exactly() {
         let expected: [&str; 10] = [
@@ -239,7 +234,6 @@ mod tests {
         let got: BTreeSet<&str> = DOTTED_ROOTS.iter().copied().collect();
         let exp: BTreeSet<&str> = expected.iter().copied().collect();
         assert_eq!(got, exp);
-        // 重複なし（集合サイズ＝配列長）。
         assert_eq!(DOTTED_ROOTS.len(), got.len(), "DOTTED_ROOTS に重複あり");
     }
 
@@ -254,7 +248,7 @@ mod tests {
         );
     }
 
-    /// 汎用名 17 種が過不足なく一致（brief.md Scope 節を逐語転記した集合）。
+    /// 汎用名 17 種が過不足なく一致。
     #[test]
     fn generic_prop_names_match_exactly() {
         let expected: [&str; 17] = [
@@ -292,16 +286,14 @@ mod tests {
         );
     }
 
-    /// SET 有効群「全項目の網羅」檻: task 2.3 が名指しする全群メンバーが登録済み（R3.4）。
+    /// SET 有効群の全群メンバーが登録済み。
     #[test]
     fn set_effective_covers_all_named_group_members() {
         let keys: BTreeSet<&str> = SET_EFFECTIVE.iter().map(|(k, _)| *k).collect();
         let required: [&str; 25] = [
-            // 基本 3 項。
             "surface.num",
             "animation.num",
             "seriko.defaultsurface",
-            // mousecursor 群 10 項。
             "mousecursor",
             "mousecursor.text",
             "mousecursor.wait",
@@ -312,17 +304,14 @@ mod tests {
             "balloon.mousecursor.text",
             "balloon.mousecursor.wait",
             "balloon.mousecursor.arrow",
-            // seriko.cursor / tooltip 群 4 項。
             "seriko.cursor.path",
             "seriko.cursor.name",
             "seriko.tooltip.text",
             "seriko.tooltip.name",
-            // menu / bind.menu 群 4 項。
             "menu",
             "sakura.bind.menu",
             "kero.bind.menu",
             "char*.bind.menu",
-            // 正典追随 4 項（sticky-window 1・サウンド SET 3）。
             "seriko.sticky-window",
             "pause",
             "playing",
@@ -331,12 +320,11 @@ mod tests {
         for member in required {
             assert!(keys.contains(member), "SET 有効群に {member} が欠落");
         }
-        // 網羅＝過不足なし（余剰も許さない）。
         let exp: BTreeSet<&str> = required.iter().copied().collect();
         assert_eq!(keys, exp);
     }
 
-    /// SET 有効群の意味論は全て RuntimeCommand（design.md 確定・StoreWrite は正準語彙外の自由 key 用）。
+    /// SET 有効群の意味論は全て RuntimeCommand（StoreWrite は正準語彙外の自由 key 用）。
     #[test]
     fn set_effective_all_runtime_command() {
         for (key, sem) in SET_EFFECTIVE {
@@ -346,7 +334,6 @@ mod tests {
                 "{key} は RuntimeCommand であるべき"
             );
         }
-        // 代表的な運行コマンド書込の意味論写像を確認（surface.num SET＝\s[] 等価）。
         let surface = SET_EFFECTIVE
             .iter()
             .find(|(k, _)| *k == "surface.num")
@@ -354,7 +341,7 @@ mod tests {
         assert_eq!(surface.1, SetSemantics::RuntimeCommand);
     }
 
-    /// ext 亜枝イベント名は予約定数として厳密一致し、どの解決の表にも入らない（R3.5・発火しない）。
+    /// ext 亜枝イベント名は予約定数として厳密一致し、どの解決の表にも入らない。
     #[test]
     fn ext_event_names_reserved_exact() {
         assert_eq!(EXT_EVENT_GET, "property.get");
@@ -378,7 +365,7 @@ mod tests {
     }
 }
 
-/// 本機能が足した項目（記録用の表・設定可能語彙への登記）を項目ごとに判定する兄弟テスト。
+/// 記録用の表・設定可能語彙への登記を項目ごとに判定する兄弟テスト。
 #[cfg(test)]
 #[path = "dotted_set_ledger_tests.rs"]
 mod set_ledger_tests;

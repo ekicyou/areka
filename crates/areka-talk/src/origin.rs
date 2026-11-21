@@ -1,13 +1,11 @@
 //! 台本とイベントの出どころの語彙（ukadoc の `SenderType`・Owned SSTP・`SecurityLevel`）。
 //!
 //! 依存ゼロ・`std` のみ。導く規則（kanade）・線の書き読み（host32）・止める判断（受け口）は
-//! ここに持たない。下流は語の組を定数で足し、型の形は変えない（1.8）。
+//! ここに持たない。下流は語の組を定数で足し、型の形は変えない。
 //!
-//! # 対応する Requirements（areka-P0-script-security-level）
-//! - 1.8: `SenderType` の 9 語・Owned かどうか・`local`／`external` で出どころを表す。
-//! - 2.7: `SenderType` は先頭の語（`internal`／`external`）が必ず 1 つ在り、残りをカンマでつなぐ。
-//! - 3.2: 実効のレベルは下げるだけで上げない。
-//! - 3.3: レベルの値は英字の大文字小文字を区別せずに読む。
+//! `SenderType` は 9 語・Owned かどうか・`local`／`external` で出どころを表す。先頭の語
+//! （`internal`／`external`）が必ず 1 つ在り、残りをカンマでつなぐ。実効のレベルは下げるだけで
+//! 上げない。レベルの値は英字の大文字小文字を区別せずに読む。
 
 /// セキュリティレベル（ukadoc の `SecurityLevel` の 2 値）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,7 +23,7 @@ impl SecurityLevel {
         }
     }
 
-    /// 前後の空白を落とし、英字の大文字小文字を区別せずに読む。どちらでもなければ `None`（3.3）。
+    /// 前後の空白を落とし、英字の大文字小文字を区別せずに読む。どちらでもなければ `None`。
     pub fn parse(raw: &str) -> Option<SecurityLevel> {
         let raw = raw.trim();
         if raw.eq_ignore_ascii_case("local") {
@@ -37,7 +35,7 @@ impl SecurityLevel {
         }
     }
 
-    /// 下げるだけ: どちらかが `External` なら `External`（3.2）。
+    /// 下げるだけ: どちらかが `External` なら `External`。
     pub fn lowered_by(self, other: SecurityLevel) -> SecurityLevel {
         if self == SecurityLevel::External || other == SecurityLevel::External {
             SecurityLevel::External
@@ -47,7 +45,7 @@ impl SecurityLevel {
     }
 }
 
-/// `SenderType` の先頭の語（必ず 1 つ在る・2.7）。
+/// `SenderType` の先頭の語（必ず 1 つ在る）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SenderHead {
     Internal,
@@ -97,7 +95,7 @@ pub struct SenderType {
 }
 
 impl SenderType {
-    /// 先頭の語の後ろに残りをカンマでつなぐ（例 `"internal,raise"`・2.7）。
+    /// 先頭の語の後ろに残りをカンマでつなぐ（例 `"internal,raise"`）。
     pub fn render(&self) -> String {
         let mut s = String::from(self.head.wire());
         for w in self.rest {
@@ -125,7 +123,7 @@ pub struct ScriptOrigin {
 }
 
 impl ScriptOrigin {
-    /// ゴースト自身: `internal`・SSTP でない・`local`（1.1）。
+    /// ゴースト自身: `internal`・SSTP でない・`local`。
     pub const GHOST: ScriptOrigin = ScriptOrigin {
         sender_type: SenderType {
             head: SenderHead::Internal,
@@ -135,7 +133,7 @@ impl ScriptOrigin {
         level: SecurityLevel::Local,
     };
 
-    /// MCP の SEND（Owned SSTP 相当）: `internal`・Owned・`local`（1.2・SSP の実測で
+    /// MCP の SEND（Owned SSTP 相当）: `internal`・Owned・`local`（SSP の実測で
     /// `OnTranslate` の `SenderType` は `internal`）。
     pub const MCP_SEND: ScriptOrigin = ScriptOrigin {
         sender_type: SenderType {
@@ -146,7 +144,7 @@ impl ScriptOrigin {
         level: SecurityLevel::Local,
     };
 
-    /// MCP の NOTIFY（Owned SSTP 相当）: `external,sstp`・Owned・`local`（1.3）。
+    /// MCP の NOTIFY（Owned SSTP 相当）: `external,sstp`・Owned・`local`。
     pub const MCP_NOTIFY: ScriptOrigin = ScriptOrigin {
         sender_type: SenderType {
             head: SenderHead::External,
@@ -157,7 +155,7 @@ impl ScriptOrigin {
     };
 
     /// `\![get,property]` の返しのイベント: `internal,property`・SSTP でない・`local`
-    /// （shell-scale-linkage 1.3・SSP の実測どおり）。
+    /// （SSP の実測どおり）。
     pub const PROPERTY: ScriptOrigin = ScriptOrigin {
         sender_type: SenderType {
             head: SenderHead::Internal,
@@ -167,7 +165,7 @@ impl ScriptOrigin {
         level: SecurityLevel::Local,
     };
 
-    /// 実効のレベルを下げるだけ（`External` を `Local` に戻さない・3.2）。
+    /// 実効のレベルを下げるだけ（`External` を `Local` に戻さない）。
     pub fn lowered_by(self, level: SecurityLevel) -> ScriptOrigin {
         ScriptOrigin {
             level: self.level.lowered_by(level),
@@ -175,7 +173,7 @@ impl ScriptOrigin {
         }
     }
 
-    /// 外部扱い: 実効のレベルが `External` か、Owned でない SSTP（要件の用語の定義）。
+    /// 外部扱い: 実効のレベルが `External` か、Owned でない SSTP。
     pub fn is_external_treated(&self) -> bool {
         self.level == SecurityLevel::External || self.sstp == SstpKind::NotOwned
     }

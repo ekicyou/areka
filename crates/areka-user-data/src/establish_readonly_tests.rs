@@ -1,5 +1,5 @@
 //! 読み取りだけの準備（`establish_readonly_from`）と記憶の置き場（`readonly_app_profile_dir`）の
-//! 決定論テスト（spec: readonly-mode 要件 4.1〜4.3・4.5・10.5・11.2）。`Signals` を注入し、
+//! 決定論テスト。`Signals` を注入し、
 //! 本物の `%LOCALAPPDATA%\areka` と実行ファイルの隣に触れない。根はすべて `target\` の下。
 //! どの腕も、呼ぶ前と後で木（フォルダとファイルの中身）が同じことを確かめる。
 

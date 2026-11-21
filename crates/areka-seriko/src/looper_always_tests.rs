@@ -1,5 +1,4 @@
-//! 一番上の `always`・出来事の直後の評価・表の差し替えの檻（spec: areka-P0-animated-image-playback
-//! 要件 3.6・4.1・4.3・4.7・7.2・tasks.md 3.4）。
+//! 一番上の `always`・出来事の直後の評価・表の差し替えの檻。
 //!
 //! 面の切り替えはアクターと同じ順（`apply` → `on_surface_shown` → `on_surface_changed` →
 //! `refresh`）で踏む。刻みは `on_tick(now_ms)`、乱数は注入列で、どちらも決定論。出来事の時刻は
@@ -26,7 +25,7 @@ const TOP_ALWAYS: &str = "surface0\n{\nanimation0.interval,always\n\
     surface101\n{\n}\nsurface102\n{\n}\nsurface103\n{\n}\n";
 
 /// 一番上の `always` は抽選を待たず（乱数を引かず、境界の前から）始まり、切り替えで捨てられ、
-/// 戻ると戻った出来事の時刻から頭で始め直す（要件 4.1・4.3）。
+/// 戻ると戻った出来事の時刻から頭で始め直す。
 #[test]
 fn top_always_starts_without_lottery_and_restarts_from_head_on_switch() {
     let (rng, probe) = counting_rng(&[]);
@@ -116,7 +115,7 @@ surface201
 ";
 
 /// `random` だけの表と、同じ面に `always` を足した表で、同じ乱数の列を与えると `random` の発火の
-/// 時刻（欄の移り変わり）と乱数を引いた回数が同じ（要件 4.7）。
+/// 時刻（欄の移り変わり）と乱数を引いた回数が同じ。
 #[test]
 fn adding_always_keeps_random_fire_times() {
     let draws = [1, 0, 1, 1, 0, 0, 1, 0];
@@ -155,7 +154,7 @@ fn adding_always_keeps_random_fire_times() {
 }
 
 /// 回数つきの子を置く 3 から、置かない 2 へ、刻みの間に 3 へ戻ると、2 で見えなくなった時計は
-/// 捨てられ、3 に戻った出来事の時刻から頭で始め直す（要件 2.3・2.7・design「PartClocks」）。
+/// 捨てられ、3 に戻った出来事の時刻から頭で始め直す。
 #[test]
 fn finite_film_restarts_from_head_after_away_and_back_within_one_tick() {
     let (rng, _probe) = counting_rng(&[]);
@@ -199,7 +198,7 @@ fn finite_film_restarts_from_head_after_away_and_back_within_one_tick() {
     );
 }
 
-/// 一番上が隠れた（`\s[-1]`）ら、シェルの面の回数つきの時計を捨てる。終わりなしは残す（要件 2.3）。
+/// 一番上が隠れた（`\s[-1]`）ら、シェルの面の回数つきの時計を捨てる。終わりなしは残す。
 #[test]
 fn hiding_top_drops_finite_shell_clocks_only() {
     let (rng, _probe) = counting_rng(&[]);
@@ -225,7 +224,7 @@ fn hiding_top_drops_finite_shell_clocks_only() {
 }
 
 /// 表の差し替えは、その面の種類の時計だけを捨てる（バルーンの表ならバルーンの面・シェルの表なら
-/// シェルの面・要件 3.6）。
+/// シェルの面）。
 #[test]
 fn table_replacement_drops_clocks_of_that_face_kind_only() {
     let (mut rng, _probe) = counting_rng(&[]);
@@ -271,7 +270,7 @@ fn table_replacement_drops_clocks_of_that_face_kind_only() {
 }
 
 /// 出来事の時刻は刻みの単調性の番人に入れない: 刻み（480）より後の出来事の時刻（500）で時計を
-/// 作っても、次の刻み 480 は捨てられず、経過は 0 で止まる（design「LoopRuntime」）。
+/// 作っても、次の刻み 480 は捨てられず、経過は 0 で止まる。
 #[test]
 fn event_time_is_not_fed_into_tick_guard() {
     let (rng, _probe) = counting_rng(&[]);
@@ -296,7 +295,7 @@ fn event_time_is_not_fed_into_tick_guard() {
 }
 
 /// 一番上の `always` の再生は、出来事の時刻が分からない（刻みの前に表示した・表を差し替えた）ときは
-/// 次の刻みの時刻で生まれる（要件 4.1）。
+/// 次の刻みの時刻で生まれる。
 #[test]
 fn top_always_is_born_on_the_tick_when_no_event_time_is_known() {
     let (rng, _probe) = counting_rng(&[]);
@@ -330,8 +329,7 @@ fn top_always_is_born_on_the_tick_when_no_event_time_is_known() {
 }
 
 /// 境界の抽選の時点で `always` の再生がまだ無くても（境界を跨ぐ刻みの直前に表を差し替えた）、
-/// `always` は乱数を引かない: `random` だけの表と、引いた乱数の数と `random` の発火の時刻が同じ
-/// （要件 4.7）。
+/// `always` は乱数を引かない: `random` だけの表と、引いた乱数の数と `random` の発火の時刻が同じ。
 #[test]
 fn always_draws_no_rng_even_when_unborn_at_the_boundary() {
     let draws = [1, 0, 1, 0, 0, 1, 0, 1];
@@ -374,8 +372,8 @@ fn always_draws_no_rng_even_when_unborn_at_the_boundary() {
     assert_eq!(mixed, plain, "random の発火の時刻が変わらない");
 }
 
-/// 一番上の `always` の途中の `-1` は「消えている」になり、再生は捨てずに周の頭へ戻って繰り返す
-/// （要件 4.2・4.5）。101（待ち 0＝経過 0）→ 100ms で `-1` → 100ms で 103（周期 200・103 は
+/// 一番上の `always` の途中の `-1` は「消えている」になり、再生は捨てずに周の頭へ戻って繰り返す。
+/// 101（待ち 0＝経過 0）→ 100ms で `-1` → 100ms で 103（周期 200・103 は
 /// 0 ミリ秒しか出ない）。
 #[test]
 fn top_always_blanks_on_negative_frame_and_keeps_looping() {

@@ -1,8 +1,8 @@
-//! 今のシェルとバルーンの事実と、`\s`・数の `\b` の判定（spec: mcp-strict-errors）。
+//! 今のシェルとバルーンの事実と、`\s`・数の `\b` の判定。
 //!
-//! `check_script`（`areka` の `mcp/check_script_judge.rs`）から移した判定で、strict の記録と
-//! `check_script` が同じ関数を使う。判定は自分で持たず、再生が使う解決器（`SurfaceResolver::resolve`・
-//! `resolve_balloon_key`）の答えを検出点へ写すだけにする。
+//! strict の記録と `check_script`（`areka` の `mcp/check_script_judge.rs`）が同じ関数を使う。
+//! 判定は自分で持たず、再生が使う解決器（`SurfaceResolver::resolve`・`resolve_balloon_key`）の
+//! 答えを検出点へ写すだけにする。
 
 use std::collections::{BTreeMap, BTreeSet};
 

@@ -1,4 +1,4 @@
-//! [`apply_named_bind`] の 4 つの結果の試験（spec: areka-P0-offline-surface-dump 要件 5.1・5.3・5.4・14.2）。
+//! [`apply_named_bind`] の 4 つの結果の試験。
 
 use super::tests::groups_of;
 use super::*;
@@ -82,8 +82,8 @@ fn mustselect_off_is_kept() {
     assert_eq!(states.current_binds(&scope).ids(), &[1500]);
 }
 
-/// スコープ 2（`char2`）も自分の表で当てる: 既定のカテゴリは排他で、`mustselect` の OFF は外さない
-/// （要件 14.2）。本体側の同じ名前は引かない。
+/// スコープ 2（`char2`）も自分の表で当てる: 既定のカテゴリは排他で、`mustselect` の OFF は外さない。
+/// 本体側の同じ名前は引かない。
 #[test]
 fn scope_two_applies_exclusive_and_keeps_mustselect() {
     let r = BindResolver::from_groups(&groups_of(

@@ -1,5 +1,4 @@
-//! 表が `runonce`・`periodic,数値`・`talk,数値` を採る檻
-//! （spec: areka-P0-seriko-trigger-intervals 要件 1.5・7.1・7.2・7.4・8.1）。
+//! 表が `runonce`・`periodic,数値`・`talk,数値` を採る檻。
 //!
 //! 入力は `surfaces.txt` の本文そのもの（解析を経る実経路）で組む。
 

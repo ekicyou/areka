@@ -1,4 +1,4 @@
-//! 表が `always` を採る檻（spec: areka-P0-animated-image-playback 要件 4.1・4.6・4.8・4.9・8.1・8.3・8.4）。
+//! 表が `always` を採る檻。
 //!
 //! 入力は `surfaces.txt` の本文そのもの（解析を経る実経路）で組む。
 
@@ -53,8 +53,8 @@ fn exact_always_is_adopted_with_period_and_no_laps() {
     assert_eq!(table.part_animations(PartKey::Surface(0)), anims);
 }
 
-/// 組み合わせ・大文字・ほかの語は採らず、元の綴りつきの `debug!` を残す（要件 4.8・4.9）。
-/// `never` は呼ばれるだけとして採る（spec: seriko-pattern-calls 要件 11.1・`table_calls_tests.rs`）。
+/// 組み合わせ・大文字・ほかの語は採らず、元の綴りつきの `debug!` を残す。
+/// `never` は呼ばれるだけとして採る（`table_calls_tests.rs`）。
 #[test]
 fn combinations_and_other_words_keep_the_debug_arm() {
     for word in ["bind+always", "always+bind", "Always", "yen-e"] {
@@ -71,7 +71,7 @@ fn combinations_and_other_words_keep_the_debug_arm() {
 }
 
 /// 待ち時間の合計が 0 の `always` は採らず、サーフェスの番号・animation の番号・理由を `warn!` で
-/// ちょうど 1 回出す（要件 4.6・8.4）。
+/// ちょうど 1 回出す。
 #[test]
 fn zero_total_always_is_not_adopted_and_warns_once() {
     let text = "surface7\n{\nanimation2.interval,always\n\

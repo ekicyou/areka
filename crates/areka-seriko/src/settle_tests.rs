@@ -1,6 +1,6 @@
-//! 面 1 つを時点 T まで進める口の檻（spec: areka-P0-offline-surface-dump 要件 4.1・4.7・4.9・12.2）。
+//! 面 1 つを時点 T まで進める口の檻。
 //!
-//! 表は research.md §10.1・§10.2 の SSP 2.9.23 の測りを写す。100・101・102 はコマの面、200 は
+//! 表は SSP 2.9.23 の測りを写す。100・101・102 はコマの面、200 は
 //! `always` のコマの頭。刻みの位相は書き出しの決め方（合図と同じ時刻 0 から 16ms ごと）。
 
 use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternState};

@@ -8,26 +8,10 @@ use crate::output::{DisplayCommand, MockSurfaceOutput};
 use areka_emo_compose::BindSet;
 use areka_parsers::shell::{Animation, Interval};
 
-// 刻みの道の役者テスト（spec: audit-seriko 指摘 2）。R の番号は areka-P0-seriko-loop の要件。
-// ─────────────────────────────────────────────────────────────────────
-// Tick 経路（SerikoMsg::Tick・send_tick・handle_message Tick 腕・on_surface_changed
-// 連動）の網羅檻（R1.1/6.1/6.3/7.1/7.5/8.3）。
-//
-// 檻の要点:
-// - (A) 表示中 slot が 1 つもない Tick は完全 no-op（無発行）——on_tick が空を返す 2.1 表示中
-//       ゲートの自然帰結。
-// - (B) live な loop_config（実表＋注入 rng）＋表示中 slot で境界跨ぎ Tick が pattern を載せた
-//       Show を**単一発行点 emit_display** から発行する（handle_message→on_tick→emit_display
-//       の end-to-end 配線・looper の層で on_tick をじかに呼ぶ檻とは別の配線証明）。
-// - (C) アクター停止後の send_tick は debug!（shutdown 期待事象）で panic しない（7.5/6.3）。
-// - (D) Emote の Changed で on_surface_changed が呼ばれ、切替後の Tick が旧アニメの残再生を
-//       復活させない（playback リセット・R2.3 表示従属）。
-//
-// すべて Tick 直投函＋注入 rng で決定論（sleep 不使用・7.1）。表構築は looper.rs 檻と同じ
-// from_world 実構築パスを通す。
-// ─────────────────────────────────────────────────────────────────────
+// Tick 経路（`SerikoMsg::Tick`・`send_tick`・`handle_message` の Tick 腕・`on_surface_changed` の連動）の檻。
+// Tick と乱数を注入して決定論にする（sleep は使わない）。表は looper.rs の檻と同じ `from_world` で組む。
 
-/// (A・R6.1/2.1) 表示中 slot が 1 つもない Tick は完全 no-op（無発行）。
+/// 表示中 slot が 1 つもない Tick は完全 no-op（無発行）。
 ///
 /// live な表（常時発火 rng）でも Show 前は表示中 slot ゼロ＝on_tick は評価対象なし＝空を返す。
 /// handle_message Tick 腕は空列を回すだけで emit_display を一度も呼ばない（単一発行点の
@@ -60,7 +44,7 @@ fn tick_with_no_shown_slot_is_complete_no_op() {
     );
 }
 
-/// (B・R1.1/6.3/7.1) 表示中 slot＋live config で境界跨ぎ Tick が pattern を載せた Show を
+/// 表示中 slot＋live config で境界跨ぎ Tick が pattern を載せた Show を
 /// 単一発行点 emit_display から発行する（handle_message→on_tick→emit_display の end-to-end）。
 ///
 /// looper の層で on_tick をじかに呼ぶ檻と異なり、**Tick メッセージが handle_message を貫通**して発行に至る
@@ -125,7 +109,7 @@ fn tick_boundary_cross_emits_show_carrying_pattern() {
     }
 }
 
-/// (C・R7.5/6.3) アクター停止後の send_tick は debug! を残し panic しない（shutdown 期待事象）。
+/// アクター停止後の send_tick は debug! を残し panic しない（shutdown 期待事象）。
 ///
 /// spawn_seriko→close→join でアクター完全停止（inbox 受信端消失）→その後テストスレッドで
 /// send_tick を capture_text 直下で呼ぶ。send 失敗が debug!（error! でない）として観測でき、
@@ -144,7 +128,7 @@ fn send_tick_after_actor_stopped_logs_debug_no_panic() {
     handle.join().expect("Close で正常終了する");
 
     let logs = capture_text(|| {
-        sink.send_tick(1234); // 停止後の tick 送出。
+        sink.send_tick(1234);
     });
     assert!(
         logs.contains("level=DEBUG"),
@@ -159,10 +143,9 @@ fn send_tick_after_actor_stopped_logs_debug_no_panic() {
         logs.contains("target=areka_seriko"),
         "本クレート target で発火すること: {logs}"
     );
-    // panic せず本行へ到達したこと自体が「処理系が異常終了しない」証跡（R6.3）。
 }
 
-/// (D・R2.3・8.3) Emote の Changed で on_surface_changed が呼ばれ、面切替後の Tick が旧アニメの
+/// Emote の Changed で on_surface_changed が呼ばれ、面切替後の Tick が旧アニメの
 /// 残再生を復活させない（playback リセット）。
 ///
 /// 同一 anim id 0 を surface10（コマ 500/501）と surface20（コマ 700/701）が持つ表で、

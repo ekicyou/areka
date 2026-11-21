@@ -2,21 +2,21 @@
 //!
 //! 受け口（単一の出力契約 [`dola::cue::CueSink`] を実装する [`SerikoSink`] ブリッジ）と inbox
 //! メッセージ列挙（[`SerikoMsg`]）・停止経路（mpsc チャネル）に加え、アクター本体の spawn
-//! （[`spawn_seriko`]）・inbox ハンドラ（解釈 2.1→状態更新 2.2→発行 2.3 を一本の経路で結ぶ）・
+//! （[`spawn_seriko`]）・inbox ハンドラ（解釈→状態更新→発行を一本の経路で結ぶ）・
 //! 単一発行点（[`emit_display`]）を持つ。
 //!
 //! # 一本の経路（解釈→状態→発行）
 //!
 //! [`spawn_seriko`] は解決テーブル・静的 bind 集合・出力先を受け、独立スレッド上で
-//! [`areka_actor::run_inbox`] ループを回す（1.3）。各発火は到着順（FIFO・単一スレッド）に
+//! [`areka_actor::run_inbox`] ループを回す。各発火は到着順（FIFO・単一スレッド）に
 //! `cue_target_of` で分類され、Shell 系 `Emote{key}` のみが「解決（[`SurfaceResolver`]）→
 //! 状態確定（[`ScopeStates::apply`]）→発行（[`emit_display`]）」の一本経路を通る。状態確定から
 //! 表示指令発行までは単一関数 [`emit_display`] に集約され、時間駆動ループ（`seriko-loop`）の刻みも
-//! 同じ発行点を使う。broadcast（D4）で seriko は全 cue を受け取るため、担当外
+//! 同じ発行点を使う。broadcast で seriko は全 cue を受け取るため、担当外
 //! （非 Shell）・純粋 Wait の受信は「正常な担当外受信」＝良性 `debug!`＋skip（action を無視し
-//! duration を honor・R2.2/2.3/5.4）、名前形バルーン key（NameForm）は文字の層が読むので `debug!`＋skip、
+//! duration を honor）、名前形バルーン key（NameForm）は文字の層が読むので `debug!`＋skip、
 //! 破損入力（Unresolved/Invalid=`error!`）などが真の異常（着せ替えの腕の記録は
-//! `actor_bind.rs`）。いずれもループは継続する。停止は Close 受領・全 Sender drop の 2 経路（1.4）。
+//! `actor_bind.rs`）。いずれもループは継続する。停止は Close 受領・全 Sender drop の 2 経路。
 //!
 //! # 結線契約（受け口＝単一の出力契約）
 //!
@@ -36,7 +36,7 @@
 //! 単一の出力契約 [`dola::cue::CueSink`] の `emit` は infallible（`()` 返し）で送出本体
 //! [`SerikoSink::deliver`] を用いる。inbox 全受信端が消失した後の送出は `send` が `Err`
 //! を返すが、`unwrap`／`expect` で panic させず [`tracing::error!`] で観測して戻る
-//! （log-first・R6.3／通常入力で panic しない・R6.4）。
+//! （log-first／通常入力で panic しない）。
 
 use std::collections::BTreeMap;
 use std::ops::ControlFlow;
@@ -54,30 +54,30 @@ use crate::state::{ApplyOutcome, ScopeStates, Slot, StageNote};
 use crate::table::AnimationTable;
 
 /// seriko が名前自己選別で消費するキャリアの命令名（`\![bind,...]`）。areka の受け取り手の台帳も
-/// これを引き、綴りを 1 か所に保つ（spec: areka-P0-mcp-reload 要件 13.5）。
+/// これを引き、綴りを 1 か所に保つ。
 pub const BIND_COMMAND: &str = "bind";
 
 /// `\![bind-noevent,...]` の命令名。`bind` と同じに当て、記録の `name` の欄だけで分かれる
-/// （SHIORI へ送るイベントは 0・spec: script-small-tags 要件 3.1〜3.6）。
+/// （SHIORI へ送るイベントは 0）。
 pub const BIND_NOEVENT_COMMAND: &str = "bind-noevent";
 
 /// seriko アクターの inbox メッセージ（areka-actor inbox 規約・投函経路は inbox 一貫）。
 ///
-/// 共有 Close 型は無い規約に従い、`SakuraMsg::Close` を先例に自前 `Close` を持つ（DD3）。
+/// 共有 Close 型は無い規約に従い、`SakuraMsg::Close` を先例に自前 `Close` を持つ。
 #[derive(Debug)]
 pub enum SerikoMsg {
-    /// broadcast された 1 発火（`SerikoSink::emit` が橋渡しする・到着順に適用＝R1.5）。
+    /// broadcast された 1 発火（`SerikoSink::emit` が橋渡しする・到着順に適用）。
     Cue(TalkCue),
-    /// 時間駆動ループの 1 tick（絶対時刻 ms・素の `u64`＝新規依存なし・D-1）。
+    /// 時間駆動ループの 1 tick（絶対時刻 ms・素の `u64`）。
     ///
     /// cue と同一 inbox を FIFO 共有し、`SerikoSink::send_tick` が橋渡しする。`handle_message` の
-    /// Tick 腕が `LoopRuntime::on_tick` を回し、単一発行点 `emit_display` から発行する（R1.1/6.3）。
+    /// Tick 腕が `LoopRuntime::on_tick` を回し、単一発行点 `emit_display` から発行する。
     Tick { now_ms: u64 },
-    /// 定義の差し替えの依頼（spec: areka-P0-shell-balloon-switch 要件 2.6・2.8・3.5）。
+    /// 定義の差し替えの依頼。
     ///
     /// [`spawn_seriko`] の受信の閉包が `handle_message` より先に捌く（定義を所有する殻の仕事）。
     Replace(Box<SerikoReplace>),
-    /// 表示層からの窓の知らせ（spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
+    /// 表示層からの窓の知らせ。
     ///
     /// `at_ms` は送り手が送るときに読んだ時計の値（時計が無ければ `None`＝直前の刻みの時刻）。
     /// [`SerikoSink::send_stage`] が橋渡しする。
@@ -86,7 +86,7 @@ pub enum SerikoMsg {
     Close,
 }
 
-/// 定義の差し替えの依頼の中身（spec: areka-P0-shell-balloon-switch 要件 2.6・2.8・3.5）。
+/// 定義の差し替えの依頼の中身。
 ///
 /// `epoch` は UI の差し替えの世代で、出力の合図 [`DisplayCommand::Rebased`] にそのまま載る。
 #[expect(
@@ -101,7 +101,7 @@ pub enum SerikoReplace {
         static_binds: crate::bind::DefaultBinds,
         bind_resolver: BindResolver,
         shell_table: AnimationTable,
-        /// 今の面が新しいシェルに無いときの戻り先（spec: descript-window-keys 要件 3.2）。
+        /// 今の面が新しいシェルに無いときの戻り先。
         fallback: crate::ShellSurfaceFallback,
     },
     /// バルーンの定義（スコープごとのバルーンのアニメ表）。
@@ -140,7 +140,7 @@ pub struct SerikoSink {
     clock: Option<SerikoClock>,
     /// 今のシェルとバルーンの事実（複製はみな同じ置き場を指す・装着の前は `None`）。
     /// 差し替えの依頼は書き込みの鍵の中で、知らせ付きの合図は読みの鍵の中で送るので、
-    /// どの合図も seriko の本体が使う定義と同じ事実で判定される（spec: mcp-strict-errors 要件 4.1）。
+    /// どの合図も seriko の本体が使う定義と同じ事実で判定される。
     facts: Arc<RwLock<Option<SkinFacts>>>,
 }
 
@@ -157,7 +157,7 @@ impl SerikoSink {
         }
     }
 
-    /// アクターへ [`SerikoMsg::Close`] を送り、正常停止を要求する（R1.4）。
+    /// アクターへ [`SerikoMsg::Close`] を送り、正常停止を要求する。
     ///
     /// 明示の停止の口（今はテストが使い、`ActorHandle::join` と対にする）。本番は送り手を全部 drop
     /// して止める。受信端消失時は `send` が `Err` を返すが、
@@ -166,12 +166,12 @@ impl SerikoSink {
         self.tx.send(SerikoMsg::Close)
     }
 
-    /// 時間駆動ループの 1 tick（絶対時刻 ms）を inbox へ橋渡しする（R1.1）。
+    /// 時間駆動ループの 1 tick（絶対時刻 ms）を inbox へ橋渡しする。
     ///
     /// loop ticker（本番）／テストの直接注入がアクターへ tick を届ける最小 API。cue と同一 inbox を
     /// FIFO 共有するため、tick と cue は構造的に直列化され状態競合しない。受信端消失時（アクター
     /// 停止後）は `send` が `Err` を返すが、それは **shutdown 中の期待事象**（PresentBridge 先例）
-    /// ゆえ `error!` でなく [`tracing::debug!`] で観測して戻る（silent failure 禁止・panic しない・R7.5/6.3）。
+    /// ゆえ `error!` でなく [`tracing::debug!`] で観測して戻る（silent failure 禁止・panic しない）。
     pub fn send_tick(&self, now_ms: u64) {
         if self.tx.send(SerikoMsg::Tick { now_ms }).is_err() {
             tracing::debug!(
@@ -181,7 +181,7 @@ impl SerikoSink {
         }
     }
 
-    /// 窓の知らせを inbox へ送る（spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
+    /// 窓の知らせを inbox へ送る。
     ///
     /// 時計が在れば、送るときの時刻を載せる。受信端消失（アクター停止後）は shutdown 中の期待事象
     /// ゆえ [`SerikoSink::send_tick`] と同じく `debug!` で観測して戻る。
@@ -195,15 +195,15 @@ impl SerikoSink {
         }
     }
 
-    /// 装着の時に、判定に使う事実を入れる（spec: mcp-strict-errors 要件 4.1）。
+    /// 装着の時に、判定に使う事実を入れる。
     pub fn set_facts(&self, facts: SkinFacts) {
         // 毒は前の持ち主の panic で、置き場そのものは壊れていない。
         *self.facts.write().unwrap_or_else(PoisonError::into_inner) = Some(facts);
     }
 
-    /// 定義の差し替えの依頼を inbox へ送る（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。
+    /// 定義の差し替えの依頼を inbox へ送る。
     ///
-    /// 書き込みの鍵の中で事実を `facts` へ替えてから送る（spec: mcp-strict-errors 要件 4.1）。
+    /// 書き込みの鍵の中で事実を `facts` へ替えてから送る。
     /// 受信端が消えていれば `false` を返す（呼び手が `error!` を残す）。
     pub fn send_replace(&self, replace: SerikoReplace, facts: SkinFacts) -> bool {
         let mut cell = self.facts.write().unwrap_or_else(PoisonError::into_inner);
@@ -216,7 +216,7 @@ impl SerikoSink {
     ///
     /// 受信端（inbox／アクター）が消失していると `send` は `Err` を返すが、`unwrap`／`expect`
     /// では panic するため用いず、[`tracing::error!`] で落とした発火を記録して戻る
-    /// （silent failure 禁止・R6.3／通常運転で panic しない・R6.4）。
+    /// （silent failure 禁止／通常運転で panic しない）。
     fn deliver(&mut self, cue: TalkCue) {
         if let Err(err) = self.tx.send(SerikoMsg::Cue(cue)) {
             // Err の内側に move された SerikoMsg::Cue から発火の識別情報を復元してログへ載せる。
@@ -233,11 +233,11 @@ impl SerikoSink {
     }
 }
 
-/// **単一の出力契約**（R11.6）: 演者非依存の [`dola::cue::CueSink`] を実装する。
+/// **単一の出力契約**: 演者非依存の [`dola::cue::CueSink`] を実装する。
 ///
 /// `CuePlayer` は登録された全 sink へ全 cue を **broadcast** し、seriko は担当（Shell）か否かを
 /// 演者側 relevance（`cue_target_of`）で選別する——action を無視しても duration は honor する
-/// （担当外 cue も本 sink 経由で inbox へ届き、`handle_message` が良性に読み飛ばす・R2.2/R2.3）。
+/// （担当外 cue も本 sink 経由で inbox へ届き、`handle_message` が良性に読み飛ばす）。
 /// 配送先は broadcast＋演者側 relevance で選ぶので、出力の契約は `CueSink` 1 つで、役割ごとの
 /// 受け口は持たない。
 impl dola::cue::CueSink for SerikoSink {
@@ -245,8 +245,7 @@ impl dola::cue::CueSink for SerikoSink {
         self.deliver(cue);
     }
 
-    /// 読みの鍵の中で、事実が在れば `\s`・数の `\b` を判定して知らせてから `deliver` で送る
-    /// （spec: mcp-strict-errors 要件 2.7・4.1・4.2）。
+    /// 読みの鍵の中で、事実が在れば `\s`・数の `\b` を判定して知らせてから `deliver` で送る。
     fn emit_with(&mut self, cue: TalkCue, probe: &dola::cue::CueProbe) {
         let cell = Arc::clone(&self.facts);
         let facts = cell.read().unwrap_or_else(PoisonError::into_inner);
@@ -277,7 +276,7 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 }
 
 /// アクター起動: 解決テーブル＋静的 bind 集合＋bind 名前解決層＋出力先を受け、独立スレッドで
-/// 稼働させる（1.3）。
+/// 稼働させる。
 ///
 /// [`areka_actor::spawn_actor`]`::<SerikoMsg, _>("seriko", body)` で名前付きスレッドを起動し
 /// （span `actor="seriko"` は spawn 原語が付与する）、返した `Sender` から組んだ [`SerikoSink`] を
@@ -290,20 +289,20 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 /// 出さない。その根拠は宣言集合が空であることではなく、
 /// **名前表が空＝[`BindResolver::resolve`] が常に `None`** であること——空リゾルバは
 /// 全カテゴリが正典の既定（[`BindChoicePolicy::Default`](crate::BindChoicePolicy::Default)＝着衣は排他置換）になるが、そもそも
-/// 着せ替え ID を解決できず適用へ到達しないため発行に影響しない（bindopt 設計 D3）。
+/// 着せ替え ID を解決できず適用へ到達しないため発行に影響しない。
 ///
-/// # 停止（1.4）
+/// # 停止
 ///
 /// [`SerikoMsg::Close`] 受領（handler が `Break`）または全 `Sender` drop（inbox 切断）の
 /// 2 経路で正常終了する。前者は [`SerikoSink::close`]、後者は全 [`SerikoSink`] drop で駆動する。
 ///
-/// # 失敗経路・担当外受信（6.1/6.2/6.3/6.4）
+/// # 失敗経路・担当外受信
 ///
 /// 真の異常——解決不能（[`SurfaceTarget::Unresolved`]）・破損バルーン数値（`Invalid`）は
 /// `error!`＋skip など（着せ替えの腕の記録は `actor_bind.rs`）。名前形バルーン key（`NameForm`）は文字の層が
 /// 読むので `debug!`＋skip。
 /// 対して broadcast の担当外受信——非 Shell（Balloon 系）・純粋 Wait は「正常経路」ゆえ良性
-/// `debug!`＋skip（action 無視・duration honor・新ローカル遅延なし・R2.2/2.3/5.4）。いずれも
+/// `debug!`＋skip（action 無視・duration honor・新ローカル遅延なし）。いずれも
 /// ループを殺さず継続する（silent failure 禁止・入力起因では panic しない）。
 pub fn spawn_seriko<O>(
     resolver: SurfaceResolver,
@@ -325,13 +324,13 @@ where
     )
 }
 
-/// 刻みと同じ時計（単調・ミリ秒・spec: areka-P0-animated-image-playback 要件 1.6・2.9・3.1）。
+/// 刻みと同じ時計（単調・ミリ秒）。
 pub type SerikoClock = std::sync::Arc<dyn Fn() -> u64 + Send + Sync>;
 
 /// 時計つきの起動（[`spawn_seriko`] は `clock = None` でここへ委ねる）。
 ///
 /// 台本の合図（`\s`・`\b`・着せ替え）を処理するときに `clock` を読み、その時刻で時計を始める。
-/// `clock` が無ければ直前の刻みの時刻を使う（design「時計の開始の時刻」）。経過は「今の時刻 −
+/// `clock` が無ければ直前の刻みの時刻を使う。経過は「今の時刻 −
 /// 開始の時刻」を 0 で止めて求める（別スレッドが読んだ刻みの時刻が開始より僅かに前でも負にならない）。
 pub fn spawn_seriko_clocked<O>(
     resolver: SurfaceResolver,
@@ -351,13 +350,12 @@ where
         // 定義（別名表・着せ替えの名前表）は差し替えの依頼でだけ替わる。
         let mut resolver = resolver;
         let mut bind_resolver = bind_resolver;
-        // アクター本体が SERIKO ループ統括器を単独所有する（スレッド内・ロック不要・単一所有者）。
-        // 表・乱数は `loop_config` から構築して以後この 1 スレッドで進める。
+        // アクター本体が SERIKO ループ統括器を単独所有する（スレッド内・ロック不要）。
         let mut loop_runtime = LoopRuntime::new(loop_config).with_clock(clock);
         areka_actor::run_inbox::<SerikoMsg, std::convert::Infallible>(rx, move |msg| {
             // 差し替えの依頼は定義を所有するこの殻が先に捌く（handle_message の署名は不変）。
             if let SerikoMsg::Replace(replace) = msg {
-                // 設計の順: 定義 → スコープの状態 → ループの表 → 合図 1 件。
+                // 順序: 定義 → スコープの状態 → ループの表 → 合図 1 件。
                 // `extra` は合図に必ず載せるスコープ（バルーンは新しい表の鍵＝装着の全スコープ）。
                 let (epoch, kind, extra) = match *replace {
                     SerikoReplace::Shell {
@@ -371,7 +369,7 @@ where
                         resolver = new_resolver;
                         bind_resolver = new_bind_resolver;
                         states.rebase_shell(static_binds);
-                        // 合図の前に今の面を戻り先へ替える＝最初から戻り先の面を出す（要件 3.5）。
+                        // 合図の前に今の面を戻り先へ替える＝最初から戻り先の面を出す。
                         for outcome in states.fall_back_shell_surfaces(&fallback) {
                             log_shell_fallback(&outcome);
                         }
@@ -390,7 +388,7 @@ where
                 };
                 tracing::info!(epoch, ?kind, "seriko: 定義を差し替えた");
                 let command = rebased(epoch, kind, &states, extra);
-                // 差し替えも面を出す合図（spec: seriko-pattern-calls 3.5）。
+                // 差し替えも面を出す合図。
                 if let DisplayCommand::Rebased { shows, .. } = &command {
                     let slot = match kind {
                         RebaseKind::Shell => Slot::Shell,
@@ -401,7 +399,7 @@ where
                     }
                 }
                 emit_display(&mut out, command);
-                // 面を出したので戻したずれ（(0, 0)）を合図の後に出す（spec: seriko-pattern-calls 7.6）。
+                // 面を出したので戻したずれ（(0, 0)）を合図の後に出す。
                 for shift in loop_runtime.take_shifts() {
                     emit_display(&mut out, shift);
                 }
@@ -425,7 +423,7 @@ where
     (sink, actor)
 }
 
-/// シェルの差し替えで今の面を替えたスコープ 1 つぶんの記録（spec: descript-window-keys 要件 3.3）。
+/// シェルの差し替えで今の面を替えたスコープ 1 つぶんの記録。
 fn log_shell_fallback(outcome: &crate::ShellFallbackOutcome) {
     match outcome {
         crate::ShellFallbackOutcome::FellBack { scope, missing, to } => tracing::warn!(
@@ -449,7 +447,7 @@ fn log_shell_fallback(outcome: &crate::ShellFallbackOutcome) {
     }
 }
 
-/// 差し替えの後の最初の表示を載せた合図（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。
+/// 差し替えの後の最初の表示を載せた合図。
 ///
 /// シェルは各スコープの今の面（無ければ `None`）と新しい既定の着せ替え、バルーンは各スコープの
 /// バルーンの今の面（無ければ既定の 0）と空の着せ替えを載せる。スコープは seriko が見た
@@ -486,7 +484,7 @@ fn rebased(
     DisplayCommand::Rebased { epoch, kind, shows }
 }
 
-/// 窓の知らせ（spec: areka-P0-animated-image-playback 要件 2.3・6.1・design「ScopeStates・アクター」）。
+/// 窓の知らせ。
 ///
 /// 順に: ①世代が覚えている値より新しければ合図 `StageAck` を先に 1 件出し、回数つきの時計を捨てる
 /// （閉じた知らせを見ていなくても新しい出番は始め直し）②`note_stage` ③`refresh`（閉じた知らせなら
@@ -518,7 +516,7 @@ fn on_stage<O: SurfaceOutput>(
 }
 
 /// 面を出す合図を解いた後に、ずれを 0 へ戻し、止めた `always` の印を消す（変わった・同じ面の出し直しの
-/// どちらでも・spec: seriko-pattern-calls 3.5・7.6・M2・M3）。同じ面の出し直しで印を消したら、合図の時刻で始め直した絵を
+/// どちらでも）。同じ面の出し直しで印を消したら、合図の時刻で始め直した絵を
 /// 出す（変わったときは続く [`LoopRuntime::refresh`] が始める）。
 fn on_surface_shown<O: SurfaceOutput>(
     states: &mut ScopeStates,
@@ -537,7 +535,7 @@ fn on_surface_shown<O: SurfaceOutput>(
 }
 
 /// inbox メッセージ 1 件を処理し、`run_inbox` 用の [`ControlFlow`] を返す。処理の中で変わったずれの
-/// 命令は、その後にまとめて出す（同じ合図の `Show` の後・spec: seriko-pattern-calls 7.1・7.6）。
+/// 命令は、その後にまとめて出す（同じ合図の `Show` の後）。
 pub(crate) fn handle_message<O: SurfaceOutput>(
     resolver: &SurfaceResolver,
     bind_resolver: &BindResolver,
@@ -555,11 +553,11 @@ pub(crate) fn handle_message<O: SurfaceOutput>(
 
 /// inbox メッセージ 1 件の振り分け（[`handle_message`] の本体）。
 ///
-/// - [`SerikoMsg::Close`] → `Break`（正常終了・1.4）。
-/// - [`SerikoMsg::Cue`] → 演者側 relevance（`cue_target_of`・D4 単一権威）で担当（Shell）を選別し、
+/// - [`SerikoMsg::Close`] → `Break`（正常終了）。
+/// - [`SerikoMsg::Cue`] → 演者側 relevance（`cue_target_of`・単一権威）で担当（Shell）を選別し、
 ///   `Emote{key}`／`BalloonSurface` のみが解決層へ進む一本経路。担当外（非 Shell・純粋 Wait）は
 ///   良性 `debug!`＋skip（正常経路・duration honor）、破損入力は `warn!`/`error!`＋skip。常に `Continue`。
-///   `cue_target_of == None` 枝の内側（Wait 判定より前・D1）に `\![bind]` 名前自己選別分岐を持ち、
+///   `cue_target_of == None` 枝の内側（Wait 判定より前）に `\![bind]` 名前自己選別分岐を持ち、
 ///   名前が `bind` か `bind-noevent` のキャリアだけを着せ替えの腕（`actor_bind.rs`）へ渡す。
 fn dispatch_message<O: SurfaceOutput>(
     resolver: &SurfaceResolver,
@@ -570,11 +568,10 @@ fn dispatch_message<O: SurfaceOutput>(
     msg: SerikoMsg,
 ) -> ControlFlow<()> {
     let cue = match msg {
-        // 正常停止（1.4）。積み残しは run_inbox の即時 return で破棄される。
+        // 積み残しは run_inbox の即時 return で破棄される。
         SerikoMsg::Close => return ControlFlow::Break(()),
-        // 時間駆動ループの 1 tick（1.1/6.3）: LoopRuntime へ委譲し、返る指令列を
-        // 単一発行点 `emit_display` だけで発行する（新発行点を作らない・R6.3）。表示中 slot が 1 つも
-        // ない tick は on_tick が空を返す＝完全 no-op（無発行・2.1 の表示中ゲートの自然帰結）。
+        // 時間駆動ループの 1 tick: LoopRuntime へ委譲し、返る指令列を単一発行点 `emit_display`
+        // だけで発行する。表示中 slot が 1 つもない tick は on_tick が空を返す＝完全 no-op。
         SerikoMsg::Tick { now_ms } => {
             for cmd in loop_runtime.on_tick(now_ms, states) {
                 emit_display(out, cmd);
@@ -597,20 +594,18 @@ fn dispatch_message<O: SurfaceOutput>(
     };
 
     // 文字の時刻の写しへ、種類で振り分ける前に 1 回だけ渡す（文字でない cue も起点の見積もりを動かす。
-    // 表に `talk` が無ければ真偽 1 つで戻る・spec: areka-P0-seriko-trigger-intervals 要件 4.10・6.4・8.1）。
+    // 表に `talk` が無ければ真偽 1 つで戻る）。
     loop_runtime.observe_cue(&cue);
 
-    // 分類（DD1/D4/6.2）: Shell 系のみ本アクターが action する。broadcast（D4）で seriko は
-    // 全 cue を受け取るため、担当外（非 Shell）・純粋 Wait の受信は「異常」でなく「正常な担当外
-    // 受信」——action を無視しつつ duration を honor（seriko は自前 reveal/timeline を持たず
-    // タイミングは焼き込み絶対時刻が担うので、skip が新ローカル遅延を生まない＝否定的 no-op）。
-    // ゆえに良性 debug!＋skip（warn/error でない・実害ない水準・R2.2/2.3/5.4）。genuine anomaly
-    // （Unresolved/Invalid=error!）は下流で severity を維持する。
+    // Shell 系のみ本アクターが action する。broadcast で seriko は全 cue を受け取るため、
+    // 担当外（非 Shell）・純粋 Wait の受信は「異常」でなく「正常な担当外受信」——action を無視
+    // しつつ duration を honor（seriko は自前 reveal/timeline を持たずタイミングは焼き込み
+    // 絶対時刻が担うので、skip が新ローカル遅延を生まない）。ゆえに良性 debug!＋skip。
+    // genuine anomaly（Unresolved/Invalid=error!）は下流で severity を維持する。
     match cue_target_of(&cue.command) {
         Some(CueTarget::Shell) => {}
         Some(other) => {
-            // Balloon 系（Text/NewLine/Clear/ClearAll/Choice→emo-text の担当）。broadcast の
-            // 正常な担当外受信ゆえ action を無視し duration は honor（新ローカル遅延なし）して skip。
+            // Balloon 系（Text/NewLine/Clear/ClearAll/Choice→emo-text の担当）。
             tracing::debug!(
                 target = ?other,
                 command = ?cue.command,
@@ -620,9 +615,9 @@ fn dispatch_message<O: SurfaceOutput>(
         }
         None => {
             // `cue_target_of==None` は Wait（純粋な待ち・action なし）と Custom（`\!` 汎用キャリア）。
-            // bind 消費分岐（D1）: Wait 判定より前に `\![bind]` を名前自己選別で捌く。キャリアを
+            // bind 消費分岐: Wait 判定より前に `\![bind]` を名前自己選別で捌く。キャリアを
             // 開封し `name` が `bind` か `bind-noevent` のキャリアだけが着せ替えの腕へ入る。非該当・非キャリアは
-            // 良性 skip へフォールスルー（dola の名前写像 API は退役ゆえ参照しない・D1/D10）。
+            // 良性 skip へフォールスルーする。
             match cue.command.as_command_carrier() {
                 // 非キャリア（純粋 Wait・非正準 params の Custom・その他）。
                 None => {
@@ -633,7 +628,7 @@ fn dispatch_message<O: SurfaceOutput>(
                             "seriko: 純粋 Wait cue を broadcast 受信; どの演者の担当でもない待ち＝action なし・duration は焼き込み絶対時刻が担うため読み飛ばす（正常経路・R5.4）"
                         );
                     } else if let CueCommand::Custom { command, .. } = &cue.command {
-                        // 非正準 params の Custom: 宛名規律（D8④）で severity を峻別する。`Custom{command}`
+                        // 非正準 params の Custom: 宛名で severity を峻別する。`Custom{command}`
                         // フィールドは開封失敗でも読めるため宛名で判断する——宛名 `bind`＝自分宛の壊れ物
                         // ゆえ warn!（ワイヤ破損は宛名の担当者が報告）・他人宛/未知名＝担当外ゆえ debug!。
                         if command == BIND_COMMAND || command == BIND_NOEVENT_COMMAND {
@@ -664,7 +659,7 @@ fn dispatch_message<O: SurfaceOutput>(
                     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bbind-noevent_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1
                     if name != BIND_COMMAND && name != BIND_NOEVENT_COMMAND {
                         // 未登記/他担当名（move 等）は静かに読み流す。2 つの名前のどちらかに限り、
-                        // 前置きの一致では選ばない（名前自己選別・R2.5・一意性は areka 消費者台帳が保証・D1/D10）。
+                        // 前置きの一致では選ばない（名前自己選別・一意性は areka 消費者台帳が保証）。
                         tracing::debug!(
                             name,
                             command = ?cue.command,
@@ -687,7 +682,7 @@ fn dispatch_message<O: SurfaceOutput>(
         }
     }
 
-    // バルーン面切替は早期分岐で処理する（key 抽出 match の前段・Emote の経路とは別の腕・R4.6）。
+    // バルーン面切替は早期分岐で処理する（Emote の経路とは別の腕）。
     // 解決→適用→発行を arm 内で完結し値を返さないため、値を返す key 抽出 match には混ぜず早期 return する。
     if let CueCommand::BalloonSurface { key } = &cue.command {
         let target = match resolve_balloon_key(key) {
@@ -695,8 +690,7 @@ fn dispatch_message<O: SurfaceOutput>(
             BalloonResolve::Hide => SurfaceTarget::Hide,
             BalloonResolve::NameForm => {
                 // 名前形（\b[バルーン１]）: 行き先は文字の層（emo-text）が箱の名前で決める正当構文。
-                // seriko は debug!＋skip・発行なし・状態不変。名前形についての警告は文字の層だけが出す
-                // （shell-balloon 4.8/4.9）。
+                // seriko は debug!＋skip・発行なし・状態不変。名前形についての警告は文字の層だけが出す。
                 tracing::debug!(
                     key = %key,
                     scope = %cue.actor,
@@ -705,7 +699,7 @@ fn dispatch_message<O: SurfaceOutput>(
                 return ControlFlow::Continue(());
             }
             BalloonResolve::Invalid => {
-                // 破損数値（-2・範囲外・u32 超過）: 作者入力の破損＝error!＋skip・発行なし（シェル経路と同水準・R4.5）。
+                // 破損数値（-2・範囲外・u32 超過）: 作者入力の破損＝error!＋skip・発行なし（シェル経路と同水準）。
                 tracing::error!(
                     key = %key,
                     scope = %cue.actor,
@@ -714,7 +708,7 @@ fn dispatch_message<O: SurfaceOutput>(
                 return ControlFlow::Continue(());
             }
         };
-        // 状態更新（2.2 の鏡映）＋発行: 状態が実際に変化したときだけ単一発行点から発行する（冪等・R4.3）。
+        // 状態更新＋発行: 状態が実際に変化したときだけ単一発行点から発行する（冪等）。
         let outcome = states.apply_balloon(&cue.actor, target);
         on_surface_shown(
             states,
@@ -725,16 +719,16 @@ fn dispatch_message<O: SurfaceOutput>(
             &outcome,
         );
         if let ApplyOutcome::Changed(command) = outcome {
-            // バルーン面切替／Hide でループ再生をリセット（当該 slot の playback 全除去・R2.3 表示従属）。
+            // バルーン面切替／Hide でループ再生をリセット（当該 slot の playback 全除去）。
             // PatternState クリアは apply_balloon の責務、playback クリアはループ統括器の責務。
             loop_runtime.on_surface_changed(&cue.actor, Slot::Balloon);
             // 一番上の `always` を出来事の時刻で始めた絵が在ればそれを、無ければ apply の指令を 1 件だけ
-            // 出す（spec: areka-P0-animated-image-playback 要件 4.1・4.3）。時計は合図を処理する今読む（要件 3.1）。
+            // 出す。時計は合図を処理する今読む。
             let at_ms = loop_runtime.event_ms();
             let command = loop_runtime
                 .refresh(&cue.actor, Slot::Balloon, at_ms, states)
                 .unwrap_or(command);
-            emit_display(out, command); // 単一発行点共用（R4.1/4.2/4.3）
+            emit_display(out, command);
         }
         return ControlFlow::Continue(());
     }
@@ -742,8 +736,8 @@ fn dispatch_message<O: SurfaceOutput>(
     // Shell 系の command 内訳。BalloonSurface は上で処理済みゆえ、ここへ来るのは Emote{key} のみ。
     let key = match &cue.command {
         CueCommand::Emote { key } => key,
-        // cue_target_of が Shell と分類する残りの variant は Emote のみ（分類表と整合）。
-        // 万一新 variant が Shell 分類されたら記録して skip（非 panic・6.4）。
+        // cue_target_of が Shell と分類する残りの variant は Emote のみ。
+        // 万一新 variant が Shell 分類されたら記録して skip（panic しない）。
         other => {
             tracing::warn!(
                 command = ?other,
@@ -753,7 +747,7 @@ fn dispatch_message<O: SurfaceOutput>(
         }
     };
 
-    // 解釈（2.1）: Emote{key} を SurfaceTarget へ。Unresolved は error!＋skip（状態不変・6.1）。
+    // 解釈: Emote{key} を SurfaceTarget へ。Unresolved は error!＋skip（状態不変）。
     let target = resolver.resolve(key);
     if target == SurfaceTarget::Unresolved {
         tracing::error!(
@@ -764,16 +758,15 @@ fn dispatch_message<O: SurfaceOutput>(
         return ControlFlow::Continue(());
     }
 
-    // 状態更新（2.2）＋発行（2.3）: 状態が実際に変化したときだけ単一発行点から発行する（冪等ガード）。
+    // 状態更新＋発行: 状態が実際に変化したときだけ単一発行点から発行する（冪等ガード）。
     let outcome = states.apply(&cue.actor, target);
     on_surface_shown(states, loop_runtime, out, &cue.actor, Slot::Shell, &outcome);
     if let ApplyOutcome::Changed(command) = outcome {
-        // シェル面切替／Hide でループ再生をリセット（当該 slot の playback 全除去・R2.3 表示従属）。
+        // シェル面切替／Hide でループ再生をリセット（当該 slot の playback 全除去）。
         // PatternState クリアは apply の責務、playback クリアはループ統括器の責務。部品の時計は捨てない。
         loop_runtime.on_surface_changed(&cue.actor, Slot::Shell);
-        // 部品のコマが在ればそれを載せた Show に差し替えて、切り替えの発行は 1 件だけ
-        // （spec: areka-P0-surface-element-nesting 要件 5.6・5.9）。時計は合図を処理する今読む
-        // （spec: areka-P0-animated-image-playback 要件 3.1）。
+        // 部品のコマが在ればそれを載せた Show に差し替えて、切り替えの発行は 1 件だけ。
+        // 時計は合図を処理する今読む。
         let at_ms = loop_runtime.event_ms();
         let command = loop_runtime
             .refresh(&cue.actor, Slot::Shell, at_ms, states)

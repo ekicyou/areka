@@ -1,5 +1,4 @@
-//! 一番上の面の働きのコマの配線（spec: seriko-pattern-calls 要件 1.3・3.1・3.4・3.5・3.8・3.9・4.1・
-//! 4.5・7.7）。
+//! 一番上の面の働きのコマの配線。
 //!
 //! 面の段の再生の表と作りかけの欄を一緒に [`CallPlays`] として貸し、[`run_calls`] で当てる。呼ぶ所は
 //! 2 つ: 引き金の判定（`fire_top_triggers`）が開始の時刻ごとにその時刻まで当て（順はその doc の
@@ -20,13 +19,12 @@ use crate::state::Slot;
 use crate::table::{LoopAnimation, LoopTrigger};
 use crate::timeline::{AlwaysView, LoopRng, always_visible, visible_frame};
 
-/// 止めた `always` の印（スコープ, 面の段, animation）。印がある間は始め直さず、面を出したときに消す
-/// （SSP の測り M2・2026-10-30 設計議題 1）。
+/// 止めた `always` の印（スコープ, 面の段, animation）。印がある間は始め直さず、面を出したときに消す。
 pub(super) type StoppedAlways = HashSet<(ActorKey, Slot, u32)>;
 
-/// ずれの持ち主（spec: seriko-pattern-calls 要件 3.8・7.1・7.2・7.6・9.6）: (スコープ, 面の段) ごとの
+/// ずれの持ち主: (スコープ, 面の段) ごとの
 /// 今のずれ（無ければ 0）と、まだ出していないずれの命令。ずれは `PatternState` に入れない（書き出しに
-/// 写らない・M8）。
+/// 写らない）。
 #[derive(Default)]
 pub(super) struct Shifts {
     now: HashMap<(ActorKey, Slot), (i64, i64)>,
@@ -35,7 +33,7 @@ pub(super) struct Shifts {
 
 impl Shifts {
     /// 一番上と部品を合わせた結果に move があれば、その段のずれにする（部品の move もキャラクター
-    /// 全体のずれ・3.8）。
+    /// 全体のずれ）。
     pub(super) fn apply(&mut self, scope: &ActorKey, slot: Slot, outcome: CallOutcome) {
         if let Some((_, x, y)) = outcome.shift {
             self.set(scope, slot, (x, y));
@@ -43,12 +41,11 @@ impl Shifts {
     }
 
     /// 面を出した（同じ面の出し直し・シェルの差し替えを含む）: 0 へ戻す。終わり・`stop`・`-1` では
-    /// 呼ばない（7.6・M3）。
+    /// 呼ばない。
     pub(super) fn reset(&mut self, scope: &ActorKey, slot: Slot) {
         self.set(scope, slot, (0, 0));
     }
 
-    /// 積んだ命令を順に取り出す。
     pub(super) fn take_all(&mut self) -> Vec<DisplayCommand> {
         std::mem::take(&mut self.outbox)
     }
@@ -97,7 +94,7 @@ struct TopPlays<'a> {
 }
 
 impl CallPlays for TopPlays<'_> {
-    // 再生の表に在るものが再生中（終わって最後のコマを残したものは進行が表から外している）。
+    // 終わって最後のコマを残した再生は進行が表から外しているので、表に在れば再生中。
     fn playing(&self, animation: u32) -> Option<(u64, Option<u64>)> {
         self.plays
             .get(&animation)
@@ -190,11 +187,10 @@ pub(super) fn put_visible(pattern: &mut PatternState, anim: &LoopAnimation, i: u
 }
 
 /// 一番上の `always` の経過 `elapsed_ms` の答えを欄へ置く: 経過 0 の答えと同じなら載せない／
-/// コマならコマ／何も出さないなら「消えている」（spec: areka-P0-animated-image-playback 要件 4.1・
-/// 4.2・4.5・7.4）。再生は末尾でも負の番号でも捨てない（周の頭へ戻って続く）。
+/// コマならコマ／何も出さないなら「消えている」。再生は末尾でも負の番号でも捨てない（周の頭へ戻って続く）。
 ///
 /// 今のコマが働きのコマなら、その周の最後の描くコマを置く。周の頭から働きのコマなら前の周の最後の
-/// 描くコマを残し、1 周目なら欄を外す（spec: seriko-pattern-calls 1.3・7.7）。
+/// 描くコマを残し、1 周目なら欄を外す。
 pub(super) fn put_top_always(pattern: &mut PatternState, anim: &LoopAnimation, elapsed_ms: u64) {
     let LoopTrigger::Always { period_ms, laps } = anim.trigger else {
         return;

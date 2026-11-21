@@ -2,27 +2,27 @@
 //!
 //! `Emote{key}` の不透明文字列（数値 id／`-1` 非表示／alias・name）を [`SurfaceTarget`] へ
 //! 写す純粋層。実行時 `EmoWorld` に依存せず、構築時に emo-compose から取り出した所有
-//! スナップショット（`BTreeMap<String, Vec<u32>>`）のみで解決する（design 決定1・DD2）。
+//! スナップショット（`BTreeMap<String, Vec<u32>>`）のみで解決する。
 //! ログや状態変更などの副作用は一切持たず、失敗（[`SurfaceTarget::Unresolved`]）の
-//! error ログ＋skip は呼び手（actor）の責務（要件 2.4/6.1）。
+//! error ログ＋skip は呼び手（actor）の責務。
 
 use std::collections::BTreeMap;
 
-/// 解決結果（非表示センチネル・未解決を型で区別する・要件 2.1/2.2/3.3/2.4）。
+/// 解決結果（非表示センチネル・未解決を型で区別する）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SurfaceTarget {
-    /// 表示すべき surface id（数値 id または alias／name 解決・要件 2.1/2.2）。
+    /// 表示すべき surface id（数値 id または alias／name 解決）。
     Show(u32),
-    /// 非表示（`\s[-1]` 相当・要件 3.3）。
+    /// 非表示（`\s[-1]` 相当）。
     Hide,
-    /// 解決不能（未知 alias・範囲外数値など。呼び手が error ログ＋skip・要件 2.4/6.1）。
+    /// 解決不能（未知 alias・範囲外数値など。呼び手が error ログ＋skip）。
     Unresolved,
 }
 
 /// surface 引数の解釈（解決層）。
 ///
 /// emo-compose の alias 解決表を所有スナップショットとして保持し、`Emote{key}` を
-/// 決定論的に [`SurfaceTarget`] へ写す。同一入力に対し常に同一出力（要件 7・純粋）。
+/// 決定論的に [`SurfaceTarget`] へ写す。同一入力に対し常に同一出力（純粋）。
 #[derive(Clone)]
 pub struct SurfaceResolver {
     /// alias／name → surface id 群（emo-compose の `alias_snapshot()` 由来・正本二重定義しない）。
@@ -32,23 +32,22 @@ pub struct SurfaceResolver {
 impl SurfaceResolver {
     /// emo-compose スナップショット（所有）から構築する。
     ///
-    /// `aliases` は emo-compose の `EmoWorld::alias_snapshot()` 由来を想定する（正本・
-    /// 二重定義しない・design 決定1）。
+    /// `aliases` は emo-compose の `EmoWorld::alias_snapshot()` 由来を想定する（正本・二重定義しない）。
     pub fn new(aliases: BTreeMap<String, Vec<u32>>) -> Self {
         Self { aliases }
     }
 
     /// `Emote{key}` の文字列を解決結果へ写す（純粋・副作用なし・ログは呼び手）。
     ///
-    /// 分岐（design 決定5・DD1）:
+    /// 分岐:
     /// 1. `key` を `i64` として parse
-    ///    - 成功かつ `== -1` → [`SurfaceTarget::Hide`]（非表示センチネル・要件 3.3）
-    ///    - 成功かつ非負で `u32` に収まる → [`SurfaceTarget::Show`]（要件 2.1）
+    ///    - 成功かつ `== -1` → [`SurfaceTarget::Hide`]（非表示センチネル）
+    ///    - 成功かつ非負で `u32` に収まる → [`SurfaceTarget::Show`]
     ///    - 成功だが負の非 `-1`（`-2` 等）→ [`SurfaceTarget::Unresolved`]（防御）
     ///    - 成功だが `u32` 範囲外（`4294967296` 等）→ [`SurfaceTarget::Unresolved`]（防御）
-    /// 2. parse 失敗（非数値）→ 所有 alias 表を引く（要件 2.2・alias/name 同一経路 2.3）
-    ///    - 見つかり非空 `Vec<u32>` → [`SurfaceTarget::Show`]`(ids[0])`（**先頭固定・決定論**・DD6）
-    ///    - 見つからない（または空 Vec）→ [`SurfaceTarget::Unresolved`]（要件 2.4）
+    /// 2. parse 失敗（非数値）→ 所有 alias 表を引く（alias/name は同一経路）
+    ///    - 見つかり非空 `Vec<u32>` → [`SurfaceTarget::Show`]`(ids[0])`（**先頭固定・決定論**）
+    ///    - 見つからない（または空 Vec）→ [`SurfaceTarget::Unresolved`]
     pub fn resolve(&self, key: &str) -> SurfaceTarget {
         // 数値枝: `-1` は i64 で受けて判定し、それ以外の非負を u32 へ写す。
         if let Ok(value) = key.parse::<i64>() {
@@ -62,7 +61,7 @@ impl SurfaceResolver {
             };
         }
 
-        // 非数値枝: alias／name を所有表から引く（複数 id は先頭固定・DD6）。
+        // 非数値枝: alias／name を所有表から引く（複数 id は先頭固定）。
         match self.aliases.get(key) {
             Some(ids) => match ids.first() {
                 Some(&id) => SurfaceTarget::Show(id),
@@ -74,33 +73,33 @@ impl SurfaceResolver {
 }
 
 /// バルーン面 key 解決結果（seriko バルーン専用・シェルの [`SurfaceTarget`] とは別型ゆえ
-/// シェルの経路に干渉しない・要件 4.6）。名前形と破損数値をログ水準のために類別する。
+/// シェルの経路に干渉しない）。名前形と破損数値をログ水準のために類別する。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum BalloonResolve {
-    /// `0..=u32::MAX` の数値 id（→ 後段 [`SurfaceTarget::Show`] で `apply_balloon`・要件 4.1/4.4）。
+    /// `0..=u32::MAX` の数値 id（→ 後段 [`SurfaceTarget::Show`] で `apply_balloon`）。
     Show(u32),
-    /// 非表示センチネル `-1`（→ 後段 [`SurfaceTarget::Hide`] で `apply_balloon`・要件 4.2）。
+    /// 非表示センチネル `-1`（→ 後段 [`SurfaceTarget::Hide`] で `apply_balloon`）。
     Hide,
     /// 非数値（名前形 `\b[バルーン１]`）＝文字の層（emo-text）が箱の名前で読む正当構文。
-    /// alias 表は引かず（数値解決のみ・要件 4.4）、呼び手（actor）は `debug!`＋skip する。
+    /// alias 表は引かず（数値解決のみ）、呼び手（actor）は `debug!`＋skip する。
     NameForm,
     /// 数値だが不正（`-2`・負の非 `-1`・`u32` 超過）＝破損入力。
-    /// 呼び手（actor）が error!＋skip する（シェル経路と同水準・要件 4.5）。
+    /// 呼び手（actor）が error!＋skip する（シェル経路と同水準）。
     Invalid,
 }
 
-/// バルーン面 key の数値解決（alias／名前解決なし・要件 4.4/4.5）。
+/// バルーン面 key の数値解決（alias／名前解決なし）。
 ///
 /// 純関数（`self` 不要・alias 表を一切引かない・決定論）。[`SurfaceResolver::resolve`] は
 /// 非数値を alias 表で引くが、本関数は**引かず** [`BalloonResolve::NameForm`] で止める
 /// （名前の形は文字の層が読む。seriko は数だけを読む）。
 ///
-/// 分岐（design「seriko バルーン面契約」Service Interface・要件 4.4/4.5）:
+/// 分岐:
 /// 1. `key` を `i64` として parse
-///    - 成功かつ `== -1` → [`BalloonResolve::Hide`]（非表示センチネル・要件 4.2）
-///    - 成功かつ非負で `u32` に収まる → [`BalloonResolve::Show`]（要件 4.1）
-///    - 成功だが負の非 `-1`（`-2` 等）・`u32` 範囲外（`4294967296` 等）→ [`BalloonResolve::Invalid`]（破損入力・要件 4.5）
-/// 2. parse 失敗（非数値・名前形）→ [`BalloonResolve::NameForm`]（要件 4.5・alias 非適用）
+///    - 成功かつ `== -1` → [`BalloonResolve::Hide`]（非表示センチネル）
+///    - 成功かつ非負で `u32` に収まる → [`BalloonResolve::Show`]
+///    - 成功だが負の非 `-1`（`-2` 等）・`u32` 範囲外（`4294967296` 等）→ [`BalloonResolve::Invalid`]（破損入力）
+/// 2. parse 失敗（非数値・名前形）→ [`BalloonResolve::NameForm`]（alias 非適用）
 pub(crate) fn resolve_balloon_key(key: &str) -> BalloonResolve {
     // 数値枝: `-1` は i64 で受けて判定し、それ以外の非負を u32 へ写す
     //（SurfaceResolver::resolve の数値枝と同型の判定・ただし帰結の型が異なる）。
@@ -178,7 +177,7 @@ mod tests {
     #[test]
     fn multi_candidate_alias_picks_first_deterministically() {
         let r = hand_built();
-        // 静観→[2106,2206]。先頭固定（DD6・ランダム選択しない）。
+        // 静観→[2106,2206]。先頭固定（ランダム選択しない）。
         assert_eq!(r.resolve("静観"), SurfaceTarget::Show(2106));
     }
 
@@ -203,7 +202,7 @@ mod tests {
         assert_eq!(r.resolve("空"), SurfaceTarget::Unresolved);
     }
 
-    /// emo2 fixture（実上流データ）の alias スナップショットで全パターンを追験（要件 7.3）。
+    /// emo2 fixture（実上流データ）の alias スナップショットで全パターンを追験。
     ///
     /// emo-compose の `EmoWorld::alias_snapshot()` 由来の所有 `BTreeMap` を
     /// そのまま `SurfaceResolver::new` へ渡し、単一候補・複数候補・未知キーを確認する。
@@ -245,7 +244,7 @@ mod tests {
 
     #[test]
     fn balloon_numeric_positive_is_show() {
-        // 数値 id → Show（→ 後段 SurfaceTarget::Show で apply_balloon・4.4）。
+        // 数値 id → Show（→ 後段 SurfaceTarget::Show で apply_balloon）。
         assert_eq!(resolve_balloon_key("2"), BalloonResolve::Show(2));
     }
 
@@ -257,26 +256,26 @@ mod tests {
 
     #[test]
     fn balloon_minus_one_is_hide() {
-        // 非表示センチネル `-1` → Hide（4.2）。
+        // 非表示センチネル `-1` → Hide。
         assert_eq!(resolve_balloon_key("-1"), BalloonResolve::Hide);
     }
 
     #[test]
     fn balloon_name_form_is_name_form() {
         // 名前形（非数値 `\b[バルーン１]`）は alias 表を引かず NameForm で止める
-        //（名前の形は文字の層が読む。seriko は数だけを読む・4.5）。
+        //（名前の形は文字の層が読む。seriko は数だけを読む）。
         assert_eq!(resolve_balloon_key("バルーン１"), BalloonResolve::NameForm);
     }
 
     #[test]
     fn balloon_negative_non_minus_one_is_invalid() {
-        // 負の非 `-1`（破損数値）→ Invalid（4.5）。
+        // 負の非 `-1`（破損数値）→ Invalid。
         assert_eq!(resolve_balloon_key("-2"), BalloonResolve::Invalid);
     }
 
     #[test]
     fn balloon_out_of_u32_range_is_invalid() {
-        // u32::MAX + 1 は i64 で parse 成功するが u32 に収まらない → Invalid（4.5）。
+        // u32::MAX + 1 は i64 で parse 成功するが u32 に収まらない → Invalid。
         assert_eq!(resolve_balloon_key("4294967296"), BalloonResolve::Invalid);
     }
 

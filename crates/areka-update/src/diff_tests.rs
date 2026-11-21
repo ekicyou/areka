@@ -1,4 +1,4 @@
-//! 差分の 4 形・読めないローカル・大きさの上限・外へ解決されるエントリ（要件 2.1・2.3・2.4・2.6・9.2）。
+//! 差分の 4 形・読めないローカル・大きさの上限・外へ解決されるエントリ。
 
 use super::*;
 use crate::manifest::parse;
@@ -54,7 +54,7 @@ fn missing_and_different_are_required_in_manifest_order_same_is_not() {
     let need = plan(&f.target, &f.target_real, &m).expect("差分を計算できる");
 
     assert_eq!(need, vec![0, 2, 3]);
-    // 定義に無いファイルを含め、木はバイト単位で前後同一（2.3）。
+    // 定義に無いファイルを含め、木はバイト単位で前後同一。
     assert_eq!(tree(&f.target), before);
 }
 

@@ -24,7 +24,7 @@ fn spawn_with_mirror_observer() -> (SharedMirror, SylphyaPublisher, areka_actor:
 
 // === (A) epoch 単調増加: アクターの publish swap 経路で各変異メッセージ→後継 epoch+1 ===
 
-/// 鏡像 epoch が **アクターの publish 経路** で単調増加する（R3.3/2.5）。
+/// 鏡像 epoch が **アクターの publish 経路** で単調増加する。
 ///
 /// 観測条件: `SharedMirror::load().epoch`（保持した鏡像 clone・アクターが `apply` の効果列を
 /// 実行して `SharedMirror::publish` で swap する経路を突く）。核檻:
@@ -37,7 +37,6 @@ fn spawn_with_mirror_observer() -> (SharedMirror, SylphyaPublisher, areka_actor:
 fn epoch_increments_monotonically_through_actor_publishes() {
     let (shared, publisher, handle) = spawn_with_mirror_observer();
 
-    // 初期像 epoch 0。
     let e0 = shared.load().epoch;
     assert_eq!(e0, 0, "initial mirror epoch must be 0");
 
@@ -127,7 +126,7 @@ fn epoch_increments_monotonically_through_actor_publishes() {
     handle.join().expect("clean close joins without panic");
 }
 
-/// epoch 単調増加の決定論反復（スレッド配線が flake しないこと・R9.1）。
+/// epoch 単調増加の決定論反復（スレッド配線が flake しないこと）。
 ///
 /// 連投 N 件（全変異）→ barrier → epoch == N を反復検証する（毎周新規アクター）。
 #[test]
@@ -153,9 +152,9 @@ fn epoch_advance_is_deterministic_over_iterations() {
     }
 }
 
-// === (B) 死亡後 send／barrier の WARN 記録（無音失敗禁止・R6.7/8.1）===
+// === (B) 死亡後 send／barrier の WARN 記録（無音失敗禁止）===
 
-/// アクター死亡後の投函縮退が **無音でない**（WARN を出す）ことを檻化する（R8.1）。
+/// アクター死亡後の投函縮退が **無音でない**（WARN を出す）ことを檻化する。
 ///
 /// 死亡後の fire-and-forget send（[`SylphyaPublisher::send`] 経由）と barrier
 /// （[`SylphyaPublisher::barrier`]）はいずれも `SendError` を warn 記録して縮退する

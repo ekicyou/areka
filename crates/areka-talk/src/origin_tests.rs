@@ -1,13 +1,12 @@
-//! 出どころの型（[`SecurityLevel`]・[`SenderType`]・[`ScriptOrigin`]）の検証テスト
-//! （Requirements 1.8, 2.7, 3.2, 3.3）。
+//! 出どころの型（[`SecurityLevel`]・[`SenderType`]・[`ScriptOrigin`]）の検証テスト。
 
 use super::*;
 
-// ── SenderType::render（2.7） ──
+// ── SenderType::render ──
 
 #[test]
 fn render_all_rest_words_in_order() {
-    // 残りの 7 語の綴りを ukadoc の語で固定する（1.8）。
+    // 残りの 7 語の綴りを ukadoc の語で固定する。
     let t = SenderType {
         head: SenderHead::External,
         rest: &[
@@ -26,7 +25,7 @@ fn render_all_rest_words_in_order() {
     );
 }
 
-// ── SecurityLevel::wire／parse（3.3） ──
+// ── SecurityLevel::wire／parse ──
 
 #[test]
 fn wire_spelling() {
@@ -60,7 +59,7 @@ fn parse_unreadable_is_none() {
     assert_eq!(SecurityLevel::parse("local,external"), None);
 }
 
-// ── lowered_by の 4 通り（3.2・上がらない） ──
+// ── lowered_by の 4 通り（上がらない） ──
 
 #[test]
 fn lowered_by_four_cases() {
@@ -81,7 +80,7 @@ fn origin_lowered_by_never_raises() {
     assert_eq!(lowered.lowered_by(SecurityLevel::Local), lowered);
 }
 
-// ── 3 定数（1.8） ──
+// ── 3 定数 ──
 
 #[test]
 fn constants_render_and_level() {
@@ -101,7 +100,7 @@ fn constants_render_and_level() {
     assert_eq!(ScriptOrigin::MCP_NOTIFY.level, SecurityLevel::Local);
 }
 
-// ── 返しのイベントの出どころ（shell-scale-linkage 1.3） ──
+// ── 返しのイベントの出どころ──
 
 #[test]
 fn property_constant_renders_internal_property() {

@@ -1,27 +1,22 @@
 //! sylphya アクター: `SylphyaMsg` / `SylphyaCore`（純関数中核）/ `spawn_sylphya` / `SylphyaPublisher`。
 //!
-//! 本タスク（5.1）が実体化するのは **メッセージ封筒 [`SylphyaMsg`]**・**純関数中核
-//! [`SylphyaCore`]**（判断分岐の檻）・**SET 分類器 [`classify_set`]**・**運行コマンド配送先
-//! シーム [`RuntimeCommandSink`]**（M1 は型予約のみ・未配線）である。アクター spawn／鏡像
-//! swap／永続 IO／barrier reply の実配線は薄い受信ループ（Task 5.2）の領分であり、本モジュールは
-//! その配線が実行する **効果列 [`Effect`]** の型と、それを算出する純関数のみを提供する。
+//! メッセージ封筒 [`SylphyaMsg`]・純関数中核 [`SylphyaCore`]（判断分岐の檻）・SET 分類器 [`classify_set`]・
+//! 運行コマンド配送先シーム [`RuntimeCommandSink`]（M1 は型予約のみ・未配線）と、その配線が実行する
+//! 効果列 [`Effect`] の型、薄い受信ループを置く。
 //!
-//! ## 判断分岐は純関数中核へ寄せる（記憶知見「檻に入れるのは判断分岐のみ・配線は再テストしない」）
+//! ## 判断分岐は純関数中核へ寄せる
 //!
 //! [`SylphyaCore::apply`] は受信した [`SylphyaMsg`] を検査して **効果列 `Vec<Effect>`** を返す。
-//! 鏡像の変異・永続保存・reply 送信・sink 配送といった I/O／副作用は一切行わず、返す効果列だけが
-//! 決定である。受信ループ（5.2）はこの効果列を copy-on-write 後継鏡像へ適用し・永続保存を実行し・
-//! reply を返し・停止する薄い配線に徹する。この分離により決定論檻は `apply` の返す `Vec<Effect>` を
-//! 突くだけで全判断分岐（SET 3 分類・204 不在・publish 着地区画・永続投影）を網羅できる。
+//! 鏡像の変異・永続保存・reply 送信・sink 配送といった副作用は一切行わず、返す効果列だけが
+//! 決定である。受信ループはこの効果列を実行する薄い配線に徹する。決定論檻は `apply` の返す
+//! `Vec<Effect>` を突くだけで全判断分岐（SET 3 分類・204 不在・publish 着地区画・永続投影）を網羅できる。
 //!
-//! ## 純粋性とログの両立（R8.1 無音失敗禁止との調停）
+//! ## 純粋性とログの両立
 //!
 //! `apply` は判断点で `tracing` の warn!/debug! を発火する（RuntimeCommand 予約・NotSettable・
 //! 204 不在・parse 失敗の各縮退アーム）。`tracing` は subscriber 未登録なら no-op で、**返す効果列を
-//! 変えない**。決定論檻が突くのは「返された `Vec<Effect>` が同一入力で同一であること」であり、
-//! ログ発火はこの不変を破らない（同一入力なら同一ログ・同一効果列）。判断の「理由」を最もよく知る
-//! のは判断点＝`apply` なので、縮退記録はここで出す（無音失敗禁止を檻の内側で満たす）。効果列は
-//! 純粋な変異意図の搬送に徹し、5.2 はそれを実行する（二重ログにしない）。
+//! 変えない**。判断の「理由」を最もよく知るのは判断点＝`apply` なので、縮退記録はここで出す
+//! （二重ログにしない）。
 
 use crate::asker::AskerId;
 use crate::key::parse_dotted;
@@ -36,22 +31,21 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
-/// ログ target（steering: areka-log-first-no-silent-failure・design Monitoring 固定名）。
+/// ログ target（固定名）。
 const LOG_TARGET: &str = "areka_sylphya::actor";
 
-/// 永続の失敗まわりのログ target（`persist` と同じ名・design「書き手のアクターの受け口」）。
+/// 永続の失敗まわりのログ target（`persist` と同じ名）。
 const PERSIST_LOG_TARGET: &str = "areka_sylphya::persist";
 
-/// sylphya アクター宛メッセージ封筒（`areka-actor` envelope 規約・design Service Interface）。
+/// sylphya アクター宛メッセージ封筒（`areka-actor` envelope 規約）。
 ///
 /// 変異側（供給者）が投函する全 variant を 1 つの enum で網羅する。判断分岐は
 /// [`SylphyaCore::apply`] が担い、本 enum は搬送のみ。
 pub enum SylphyaMsg {
     /// ①静的構成層の publish（ghost 結線が boot 時に投函・フラット/点付き両区画）。
     ///
-    /// `flat` はゴースト相対＝`asker` の per-asker フラット区画へ着地（設計討議 #1）。
-    /// `dotted`（`baseware.*` 等）は大域点付き区画へ着地する（design State Management:
-    /// 「dotted_global — 点付き語彙〔system.* 等〕の大域区画」）。
+    /// `flat` はゴースト相対＝`asker` の per-asker フラット区画へ着地。
+    /// `dotted`（`baseware.*` 等）は大域点付き区画へ着地する。
     PublishStatic {
         /// 問い合わせ元（フラットの per-asker 着地先）。
         asker: AskerId,
@@ -74,7 +68,7 @@ pub enum SylphyaMsg {
         asker: AskerId,
         /// フラット名（% 抜き・例 `username`）。
         name: String,
-        /// 照会値。`None` は 204/失敗（不在——既定値は書かない・R4.2）。
+        /// 照会値。`None` は 204/失敗（不在——既定値は書かない）。
         value: Option<String>,
     },
     /// SET コマンド（分類・中継・host 区画書込。即応答不要＝投函して即返る）。
@@ -114,13 +108,13 @@ pub enum SylphyaMsg {
 ///
 /// [`SetClass::RuntimeCommand`] に分類された SET を実際のランタイム（seriko 等）へ橋渡しする
 /// 差替シーム。M1 では sink 登録を行わず、[`SylphyaCore::apply`] は
-/// [`Effect::RuntimeCommandReserved`] を返して warn 記録するのみで実配送しない（R3.4）。
+/// [`Effect::RuntimeCommandReserved`] を返して warn 記録するのみで実配送しない。
 pub trait RuntimeCommandSink: Send {
     /// 運行コマンドを配送する（M1 未配線・α 後に seriko 等へ橋渡し）。
     fn dispatch(&self, asker: &AskerId, key: &str, value: &str);
 }
 
-/// SET 分類の 3 分岐（design「sylphya アクター」Responsibilities & Constraints・R3.4）。
+/// SET 分類の 3 分岐。
 ///
 /// [`classify_set`] が key を検査して返す。各分岐は [`SylphyaCore::apply`] の Set アームで
 /// 対応する [`Effect`] へ写る。
@@ -134,7 +128,7 @@ pub enum SetClass {
     NotSettable,
 }
 
-/// SET 対象 key を 3 分岐へ分類する純関数（no I/O・決定論・R3.4）。
+/// SET 対象 key を 3 分岐へ分類する純関数（no I/O・決定論）。
 ///
 /// ## 「正準語彙」の判定述語
 ///
@@ -153,18 +147,15 @@ pub enum SetClass {
 /// `menu`/`sakura.bind.menu` 等（[`SET_EFFECTIVE`] と [`GENERIC_PROP_NAMES`] の双方に載る名）は
 /// RuntimeCommand に確定する（二重帰属の曖昧さを排除）。
 pub fn classify_set(key: &str) -> SetClass {
-    // 1. SET 有効群（英字の大小を区別しない一致・空白は削らない・最優先）→ RuntimeCommand。
     if SET_EFFECTIVE
         .iter()
         .any(|(k, _)| k.eq_ignore_ascii_case(key))
     {
         return SetClass::RuntimeCommand;
     }
-    // 2. 正準語彙（根 ∈ DOTTED_ROOTS ∨ 葉 ∈ GENERIC_PROP_NAMES）だが SET 無効 → NotSettable。
     if is_canonical_vocab(key) {
         return SetClass::NotSettable;
     }
-    // 3. 自由/カスタム dotted key（parse 不能を含む）→ StoreWrite。
     SetClass::StoreWrite
 }
 
@@ -182,14 +173,13 @@ fn is_canonical_vocab(key: &str) -> bool {
                 .is_some_and(|s| GENERIC_PROP_NAMES.contains(&s.name.as_str()));
             root_canonical || leaf_canonical
         }
-        // parse 不能 → 正準語彙表に載り得ない → 非正準（StoreWrite へ）。
         Err(_) => false,
     }
 }
 
 /// [`SylphyaCore::apply`] が返す純粋な効果（判断の出力・変異意図）。
 ///
-/// 受信ループ（Task 5.2）がこれを copy-on-write 後継鏡像へ適用し・永続保存を実行し・停止する。
+/// 受信ループがこれを copy-on-write 後継鏡像へ適用し・永続保存を実行し・停止する。
 /// 効果は I/O を含まない純データで、`apply` の決定論檻はこの列の同値性を突く。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Effect {
@@ -230,14 +220,14 @@ pub enum Effect {
         /// 値。
         value: String,
     },
-    /// 不在の観測記録（`PublishShiori{None}`＝204/失敗）。鏡像へは書かない（既定値は sakura 所有・R4.2）。
+    /// 不在の観測記録（`PublishShiori{None}`＝204/失敗）。鏡像へは書かない（既定値は sakura 所有）。
     RecordAbsentFlat {
         /// 対象 asker。
         asker: AskerId,
         /// フラット名（% 抜き）。
         name: String,
     },
-    /// 永続 put（write-through の保存側）。5.2 が [`crate::persist::save_scope`] を実行する。
+    /// 永続 put（write-through の保存側）。受信ループが [`crate::persist::save_scope`] を実行する。
     PersistSave {
         /// スコープ。
         scope: PersistScope,
@@ -269,13 +259,13 @@ pub enum Effect {
         /// 反映されない値（観測用に保持・書込は行わない）。
         value: String,
     },
-    /// 反映フェンス（5.2 が処理完了後に reply を返す）。
+    /// 反映フェンス（受信ループが処理完了後に reply を返す）。
     Barrier,
-    /// 停止（5.2 が受信ループを抜ける）。
+    /// 停止（受信ループを抜ける）。
     Stop,
 }
 
-/// 判断分岐の純関数中核（design「sylphya アクター」Responsibilities）。
+/// 判断分岐の純関数中核。
 ///
 /// [`apply`](SylphyaCore::apply) が [`SylphyaMsg`] → `Vec<Effect>` を算出する。状態を持たない
 /// （分類は const 台帳のみ参照）ゼロサイズ型で、I/O・チャネル・ロック・時計を含まない。
@@ -288,12 +278,12 @@ impl SylphyaCore {
         SylphyaCore
     }
 
-    /// メッセージを検査して効果列を算出する（純関数・no I/O・決定論・R2.5/R2.7/R8.3）。
+    /// メッセージを検査して効果列を算出する（純関数・no I/O・決定論）。
     ///
-    /// 返す `Vec<Effect>` だけが決定である。鏡像 swap・永続保存・reply 送信・sink 配送は 5.2 の配線が
+    /// 返す `Vec<Effect>` だけが決定である。鏡像 swap・永続保存・reply 送信・sink 配送は配線が
     /// 効果列を実行する形で行う。判断点の縮退（RuntimeCommand 予約・NotSettable・204 不在・parse
     /// 失敗）は `tracing` で warn!/debug! を発火するが、返す効果列は同一入力で常に同一（ログは効果列を
-    /// 変えない・R8.1 を檻の内側で満たす）。
+    /// 変えない）。
     pub fn apply(&self, msg: &SylphyaMsg) -> Vec<Effect> {
         match msg {
             SylphyaMsg::PublishStatic {
@@ -331,7 +321,7 @@ impl SylphyaCore {
                     value: v.clone(),
                 }],
                 None => {
-                    // 204/失敗 → 不在記録のみ（既定値は sakura の唯一定義点・鏡像へ書かない・R4.2）。
+                    // 204/失敗 → 不在記録のみ（既定値は sakura の唯一定義点・鏡像へ書かない）。
                     tracing::debug!(
                         target: LOG_TARGET,
                         asker = asker.as_str(),
@@ -346,7 +336,7 @@ impl SylphyaCore {
             },
             SylphyaMsg::Set { asker, key, value } => match classify_set(key) {
                 SetClass::RuntimeCommand => {
-                    // M1: sink 未登録 → 予約シームのみ・実書込なし（R3.4）。
+                    // M1: sink 未登録 → 予約シームのみ・実書込なし。
                     tracing::warn!(
                         target: LOG_TARGET,
                         asker = asker.as_str(),
@@ -360,7 +350,6 @@ impl SylphyaCore {
                     }]
                 }
                 SetClass::StoreWrite => {
-                    // 自由 key → asker 別 host 区画へ正準形で反映（reader 往復整合）。
                     let canon = match parse_dotted(key) {
                         Ok(path) => path.to_canonical_string(),
                         Err(e) => {
@@ -389,7 +378,6 @@ impl SylphyaCore {
                     }]
                 }
                 SetClass::NotSettable => {
-                    // 正準語彙だが SET 無効 → warn ＋ 書込なし（呼出は Ok・正典沈黙裁量・対応表記録）。
                     tracing::warn!(
                         target: LOG_TARGET,
                         asker = asker.as_str(),
@@ -404,7 +392,6 @@ impl SylphyaCore {
                 }
             },
             SylphyaMsg::PersistPut { scope, entries } => {
-                // write-through: 各 entry を大域点付き区画へ areka.* 正準 key で投影し・スコープ保存。
                 let mut effects = Vec::with_capacity(entries.len() + 1);
                 for (key, value) in entries {
                     effects.push(Effect::SetDottedGlobal {
@@ -419,7 +406,6 @@ impl SylphyaCore {
                 effects
             }
             SylphyaMsg::PersistRemove { scope, keys } => {
-                // 鏡像から鍵ごとに消し、記憶から 1 回で消す（PersistPut と同じ形）。
                 let mut effects: Vec<Effect> = keys
                     .iter()
                     .map(|key| Effect::RemoveDottedGlobal {
@@ -455,17 +441,17 @@ fn canonicalize_or_raw(key: &str) -> String {
 }
 
 // ============================================================================
-// Task 5.2: アクター起動・Publisher・Barrier（薄い配線）
+// アクター起動・Publisher・Barrier（薄い配線）
 // ============================================================================
 //
 // 掲示板（マテリアライズド・ビュー）モデルの **供給側単独所有者**。`SylphyaCore::apply`
-// （5.1・判断分岐の純関数中核）が返す効果列 [`Effect`] を、単一のアクタースレッドが
+// （判断分岐の純関数中核）が返す効果列 [`Effect`] を、単一のアクタースレッドが
 // 直列に実行する: copy-on-write で後継 [`MirrorImage`] を組み立て・[`SharedMirror::publish`]
 // で swap し（single-writer）・[`PersistSave`](Effect::PersistSave) を注入 [`PersistIo`] で
 // write-through 保存し・[`Barrier`](Effect::Barrier) の
 // reply を返し・[`Stop`](Effect::Stop) で受信ループを畳む。
 //
-// ## areka-actor 5 規約（design「Responsibilities & Constraints」）
+// ## areka-actor 5 規約
 //
 // 1. **inbox = 単一 `Receiver<SylphyaMsg>`**: [`spawn_actor`](areka_actor::spawn_actor) が
 //    内部生成した `Receiver` を body が単独所有する（送信端は [`SylphyaPublisher`] が保持）。
@@ -476,13 +462,13 @@ fn canonicalize_or_raw(key: &str) -> String {
 //    [`ActorError::Panicked`](areka_actor::ActorError) へ写像する（本モジュールは握り潰さない）。
 // 5. **拡張機構を足さない**: レジストリ・監督・stop_flag を持たない素の thread spawn。
 //
-// ## barrier フェンス（Postcondition・design「Ordering / delivery guarantees」）
+// ## barrier フェンス
 //
 // inbox は mpsc FIFO・アクターは直列処理ゆえ、[`SylphyaPublisher::barrier`] の reply が
 // 復帰した時点で、それ以前に **同一送信端** から投函した全メッセージの効果は鏡像へ反映済み
 // （publish は各メッセージ処理内で barrier reply 送信より前に行われる）。
 //
-// ## アクター死亡の観測（design「Error Handling → アクター系」・R6.7）
+// ## アクター死亡の観測
 //
 // アクター停止（`Close` 処理後の `return`／panic による unwind）で body が `Receiver` を drop
 // すると、以降の送信端 `send` は `SendError` を返す。[`SylphyaPublisher`] の fire-and-forget
@@ -491,7 +477,7 @@ fn canonicalize_or_raw(key: &str) -> String {
 // 読み手（[`SylphyaReader`]）は最後に publish された鏡像を保持し続けるため、供給停止後も
 // 最終鏡像で読み続行できる（表示系を殺さない）。
 
-/// [`spawn_sylphya`] の起動パラメータ（design「Service Interface」）。
+/// [`spawn_sylphya`] の起動パラメータ。
 pub struct SylphyaInit {
     /// 層別永続スコープの保存先ルート（不在スコープは寛容ロードで空扱い）。
     pub roots: ScopeRoots,
@@ -501,7 +487,7 @@ pub struct SylphyaInit {
     pub runtime_sink: Option<Box<dyn RuntimeCommandSink>>,
 }
 
-/// [`spawn_sylphya`] の返却物（読み口・送信端・join ハンドルの三点セット・design「Service Interface」）。
+/// [`spawn_sylphya`] の返却物（読み口・送信端・join ハンドルの三点セット）。
 pub struct SylphyaParts {
     /// 同期・無待機の読み口（複数消費エンジンへ clone 可）。
     pub reader: SylphyaReader,
@@ -511,7 +497,7 @@ pub struct SylphyaParts {
     pub handle: areka_actor::ActorHandle,
 }
 
-/// 変異投函の送信端（design「Service Interface」・`areka-actor` envelope 規約）。
+/// 変異投函の送信端（`areka-actor` envelope 規約）。
 ///
 /// `Clone` は内部 `Sender` の clone のみ——複数供給者（ghost 結線・kanade・SET sink）が
 /// 同一 inbox を安価に共有する。全メソッドは投函のみで鏡像を直接触らない（single-writer は
@@ -566,8 +552,7 @@ impl SylphyaPublisher {
     ///
     /// 復帰時、それ以前に同一送信端から投函した全メッセージは鏡像へ反映済み（mpsc FIFO＋
     /// 直列処理）。アクター死亡（`Close`／panic 後）で投函できない、または reply 端が応答せず
-    /// drop された場合は [`ReplyError`](areka_actor::ReplyError) を返す（送信端で死亡観測可能・
-    /// R6.7）。
+    /// drop された場合は [`ReplyError`](areka_actor::ReplyError) を返す（送信端で死亡観測可能）。
     pub fn barrier(&self) -> Result<(), areka_actor::ReplyError> {
         self.post_barrier()?.recv()
     }
@@ -596,7 +581,7 @@ impl SylphyaPublisher {
         Ok(rx)
     }
 
-    /// 停止規約: `Close` を投函する（正典終了経路・design「shutdown: Close＋join」）。
+    /// 停止規約: `Close` を投函する（正典終了経路）。
     ///
     /// アクターは [`Effect::Stop`] で受信ループを即畳む（積み残しは破棄）。停止済みへの
     /// 再送は warn＋縮退（panic しない）。停止完了は [`SylphyaParts::handle`] の join で待つ。
@@ -605,7 +590,7 @@ impl SylphyaPublisher {
     }
 
     /// fire-and-forget 投函の共通経路。アクター死亡時は `SendError` を **warn 記録して縮退**
-    /// （panic しない・R8.1／design「アクター系: SendError＝warn＋以降縮退」）。
+    /// （panic しない）。
     fn send(&self, msg: SylphyaMsg) {
         if self.tx.send(msg).is_err() {
             tracing::warn!(
@@ -616,7 +601,7 @@ impl SylphyaPublisher {
     }
 }
 
-/// sylphya アクターを起動する（design「Service Interface」）。
+/// sylphya アクターを起動する。
 ///
 /// 起動時に全永続スコープを寛容ロードして初期鏡像へ投影し（[`build_initial_image`]）、その像を
 /// [`SharedMirror`] へ封じてから供給アクターを spawn する。初期像の構築は本関数（＝アクター
@@ -631,8 +616,7 @@ pub fn spawn_sylphya(init: SylphyaInit) -> SylphyaParts {
     spawn_sylphya_with_failures(init, None)
 }
 
-/// [`spawn_sylphya`] の派生（[`SylphyaInit`] に欄を足さない・spec areka-P0-write-failure-notice
-/// 要件 1.3）。`failures` が `Some` なら、投函の保存が `Degraded` になるたびに中身を 1 件送る
+/// [`spawn_sylphya`] の派生（[`SylphyaInit`] に欄を足さない）。`failures` が `Some` なら、投函の保存が `Degraded` になるたびに中身を 1 件送る
 /// （成功では送らない）。アクターは直列なので、同じ書き手の失敗は投函の順に届く。
 pub fn spawn_sylphya_with_failures(
     init: SylphyaInit,
@@ -653,17 +637,14 @@ pub(crate) fn spawn_parts(
         runtime_sink,
     } = init;
 
-    // 1. 起動時: 全スコープを寛容ロードし初期鏡像を構築（永続 areka.* を大域点付き区画へ投影）。
     let initial = build_initial_image(&roots, io.as_ref());
     let shared = SharedMirror::new(Arc::new(initial));
 
-    // 2. 供給アクターを spawn（inbox は spawn_actor が内部生成・body が Receiver を単独所有）。
     let actor_shared = shared.clone();
     let (tx, handle) = areka_actor::spawn_actor::<SylphyaMsg, _>("sylphya", move |rx| {
         run_actor(rx, actor_shared, roots, io, runtime_sink, failures);
     });
 
-    // 3. 読み口・送信端・ハンドルを返す（reader は初期像を保持する shared を共有）。
     let parts = SylphyaParts {
         reader: SylphyaReader::new(shared.clone()),
         publisher: SylphyaPublisher { tx },
@@ -673,9 +654,9 @@ pub(crate) fn spawn_parts(
 }
 
 /// 全永続スコープを寛容ロードし、初期鏡像（epoch 0）の大域点付き区画へ `areka.*` 正準 key で
-/// 投影する（design「Implementation Notes: ロードは spawn init 時に全スコープ実施」）。
+/// 投影する。
 ///
-/// root 不在・読取障害・破損はすべて [`load_scope`] が空へ縮退する（panic なし・R6.7）。
+/// root 不在・読取障害・破損はすべて [`load_scope`] が空へ縮退する（panic なし）。
 /// 投影先は大域区画（[`MirrorImage::dotted_global`]）——永続は層スコープ別であって asker 別
 /// ではなく、reader の per-asker → global 解決順で global 側に載る（[`PersistKey::to_canonical_key`]
 /// と reader/persist の往復整合）。
@@ -716,11 +697,10 @@ fn run_actor(
             Err(_) => return,
         };
 
-        // 判断分岐は純関数中核が算出（借用）。配線はその効果列を実行するのみ。
         let effects = core.apply(&msg);
 
         // copy-on-write 後継像は書き換える 5 つの枝が初めて要るときだけ作る（反映待ち・停止・
-        // 書けない名前・204 の記録・保存だけの知らせでは複製しない・#20）。
+        // 書けない名前・204 の記録・保存だけの知らせでは複製しない）。
         // 書き手はこのアクター 1 つなので、遅らせて作っても元の像は同じ（epoch も同じ）。
         let mut next: Option<MirrorImage> = None;
         let mut stop = false;
@@ -763,12 +743,12 @@ fn run_actor(
                         .insert(key, value);
                 }
                 Effect::RecordAbsentFlat { .. } => {
-                    // 204/失敗の不在記録: 鏡像へは書かない（既定値は sakura 所有・R4.2）。
+                    // 204/失敗の不在記録: 鏡像へは書かない（既定値は sakura 所有）。
                     // apply 側で debug 記録済み（二重ログにしない）。
                 }
                 Effect::PersistSave { scope, entries } => {
                     // write-through: 注入 IO で当該スコープを原子的保存。失敗は save_scope が
-                    // error!＋Degraded で縮退（panic しない・R6.7）——ここは失敗を受け口へ中継。
+                    // error!＋Degraded で縮退（panic しない）——ここは失敗を受け口へ中継。
                     let outcome = save_scope(scope, &roots, io.as_ref(), entries);
                     forward_failure(scope, outcome, failures.as_ref());
                 }
@@ -812,12 +792,10 @@ fn run_actor(
 
         // reply 送信（reply 端は msg が所有・効果適用＝反映完了の後に返す）。
         if let SylphyaMsg::Barrier { reply } = msg {
-            // 反映済みをフェンスとして通知（受信端 drop 済みなら未達値を破棄・非 panic）。
             let _ = reply.send(());
         }
 
         if stop {
-            // Close 即時停止: 積み残しは rx の drop で破棄（areka-actor 停止規約）。
             return;
         }
     }
@@ -845,47 +823,46 @@ fn forward_failure(
 #[path = "actor_tests.rs"]
 mod tests;
 
-/// 名前の畳みの書き込みの仕分けの檻（spec areka-P0-property-name-case-fold）。
+/// 名前の畳みの書き込みの仕分けの檻。
 #[cfg(test)]
 #[path = "actor_case_fold_tests.rs"]
 mod case_fold_tests;
 
-/// 書き手のアクターの失敗の受け口（spec areka-P0-write-failure-notice タスク 1.2）。
+/// 書き手のアクターの失敗の受け口。
 #[cfg(test)]
 #[path = "actor_failure_sink_tests.rs"]
 mod failure_sink_tests;
 
-/// 期限つきの反映待ちの檻（audit-sylphya-actor #4）。
+/// 期限つきの反映待ちの檻。
 #[cfg(test)]
 #[path = "actor_barrier_within_tests.rs"]
 mod barrier_within_tests;
 
-/// Task 5.2 アクター統合 決定論檻: spawn→publish→barrier→read の配線・barrier フェンス・
+/// アクター統合 決定論檻: spawn→publish→barrier→read の配線・barrier フェンス・
 /// アクター死亡観測（SendError／ReplyError／join panic）・reader 無ブロック・write-through 投影。
 ///
 /// 全て純 x64（[`FakePersistIo`]・実 FS なし・時計なし）。同期は **barrier／join** で取り、
-/// `thread::sleep` を一切使わない（決定論・記憶知見「檻に入れるのは判断分岐のみ」＋実装第一の
-/// 配線檻）。barrier が「それ以前の投函が反映済み」を保証するので、read はレースなく確定する。
+/// `thread::sleep` を一切使わない。barrier が「それ以前の投函が反映済み」を保証するので、
+/// read はレースなく確定する。
 #[cfg(test)]
 #[path = "actor_actor_integration_tests.rs"]
 mod actor_integration_tests;
 
-/// アクター 決定論単体テスト群（Task 5.3・consolidated criterion-mapped cage）。
+/// アクター 決定論単体テスト群（criterion-mapped cage）。
 ///
-/// design §Testing Strategy → Unit Tests 5（SylphyaCore SET 分類）・4（publish 後の epoch 単調
-/// 増加）と Error Handling「アクター系」「SET 系」の判断分岐を決定論檻として集約する。全て
-/// x64 純粋（[`FakePersistIo`]・実 FS/実時計/実 SHIORI なし）で、同期は **barrier／join** のみ
+/// `SylphyaCore` の SET 分類と publish 後の epoch 単調増加、アクター系・SET 系の判断分岐を決定論檻として
+/// 集約する。全て x64 純粋（[`FakePersistIo`]・実 FS/実時計/実 SHIORI なし）で、同期は **barrier／join** のみ
 /// （`thread::sleep` 皆無・スレッド配線が flake しない）。既存の強い檻は重複させず、監査で判明
 /// した 2 つの空隙を補う:
 ///
-/// - **(A) 鏡像 epoch の「アクター publish 経路」単調増加**（R3.3/2.5）: 純核単調増加
+/// - **(A) 鏡像 epoch の「アクター publish 経路」単調増加**: 純核単調増加
 ///   （`mirror::tests::epoch_monotonic_on_successors`）・`SharedMirror` 直 publish
 ///   （`mirror::tests::predecessor_image_unchanged_after_publish`）は既存だが、**アクターが
 ///   `apply` の効果列を実行して行う publish swap** で epoch が単調増加することを突く檻は無い。
-///   reader は epoch を露出しない（設計: epoch はフェンス予約シームで読み API に非露出）ため、
+///   reader は epoch を露出しない（epoch はフェンス予約シームで読み API に非露出）ため、
 ///   本檻は本番と同じ組み立て（[`spawn_parts`]）を通り [`SharedMirror`] の clone を保持し
 ///   `SharedMirror::load().epoch` で直接観測する。
-/// - **(B) アクター死亡後 send の WARN 記録**（R6.7/8.1・無音失敗禁止）: 死亡後投函が panic せず
+/// - **(B) アクター死亡後 send の WARN 記録**（無音失敗禁止）: 死亡後投函が panic せず
 ///   縮退することは既存檻（[`actor_integration_tests::actor_death_via_close_makes_sends_observable_and_reader_continues`]）
 ///   が突くが、その縮退が **無音でない**（WARN を出す）ことは檻化されていない。本檻は
 ///   [`crate::test_log_capture::capture`]（共有機構への委譲・決定論）で fire-and-forget send と
@@ -893,20 +870,20 @@ mod actor_integration_tests;
 ///
 /// ## 判断分岐 → 檻 の対応（criterion → test）
 ///
-/// - **SET 分類 3 パターン**（R3.4）: `super::tests::{classify_set_effective_key_is_runtime_command,
+/// - **SET 分類 3 パターン**: `super::tests::{classify_set_effective_key_is_runtime_command,
 ///   classify_set_free_dotted_key_is_store_write, classify_set_canonical_non_effective_is_not_settable,
 ///   classify_set_unparseable_key_is_store_write}` ＋
 ///   apply 面 `super::tests::{apply_set_effective_emits_runtime_command_reserved,
-///   apply_set_free_emits_host_store_write, apply_set_not_settable_emits_no_write}`（既存 5.1）。
-/// - **epoch 単調増加（アクター publish 経路）**（R3.3/2.5）: 本群
+///   apply_set_free_emits_host_store_write, apply_set_not_settable_emits_no_write}`。
+/// - **epoch 単調増加（アクター publish 経路）**: 本群
 ///   [`epoch_increments_monotonically_through_actor_publishes`]（初出・観測は保持した
 ///   `SharedMirror::load().epoch`）。
-/// - **Barrier フェンス決定論**（R2.7）: `super::actor_integration_tests::{barrier_fences_all_prior_messages_last_write_wins,
-///   spawn_publish_static_barrier_then_read_sees_value, spawn_publish_barrier_read_is_deterministic_over_iterations}`（既存 5.2）。
-/// - **アクター死亡縮退**（R6.7/8.1）: 非 panic 送信＋barrier Err＋reader 継続は
+/// - **Barrier フェンス決定論**: `super::actor_integration_tests::{barrier_fences_all_prior_messages_last_write_wins,
+///   spawn_publish_static_barrier_then_read_sees_value, spawn_publish_barrier_read_is_deterministic_over_iterations}`。
+/// - **アクター死亡縮退**: 非 panic 送信＋barrier Err＋reader 継続は
 ///   `super::actor_integration_tests::actor_death_via_close_makes_sends_observable_and_reader_continues`、
 ///   join panic 検出（[`areka_actor::ActorError::Panicked`]）は
-///   `super::actor_integration_tests::actor_panic_is_detected_by_join_and_reader_continues`（既存 5.2）。
+///   `super::actor_integration_tests::actor_panic_is_detected_by_join_and_reader_continues`。
 ///   死亡後 send／barrier の **WARN 記録**（無音失敗禁止の檻）は本群
 ///   [`send_after_death_logs_warn_not_silent`]（初出・`test_log_capture`）。
 #[cfg(test)]

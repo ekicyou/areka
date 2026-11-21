@@ -1,4 +1,4 @@
-//! `delete.txt`／`delete[数字].txt` の安全な適用（要件 6.1〜6.7・10.7）。
+//! `delete.txt`／`delete[数字].txt` の安全な適用。
 //!
 //! 確定の後始末なので一周を失敗にしない。拒否・種別の食い違い・読めないファイルは警告、
 //! 取り除けなかった物は `undeletable` に列挙して返す（記録は `lib.rs`）。
@@ -55,7 +55,7 @@ pub(crate) fn delete_files(target: &Path) -> io::Result<Vec<PathBuf>> {
 }
 
 /// 全ファイルを順に適用する。読めないファイルは `DeleteFileUnreadable` を警告して飛ばす
-/// （削除は一周を失敗にしない＝6.6）。並べられなければ `file` を `delete*.txt` として同じ警告にする。
+/// （削除は一周を失敗にしない）。並べられなければ `file` を `delete*.txt` として同じ警告にする。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#_76f8_5bfe_30d1_30b9:1
 pub(crate) fn apply(target: &Path, target_real: &Path, charset: &'static Encoding) -> DeleteReport {
     let mut report = DeleteReport {

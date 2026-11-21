@@ -24,32 +24,32 @@
 
 mod actor;
 mod bind;
-// 働きのコマを時刻の順に当てる係（spec: seriko-pattern-calls）。
+// 働きのコマを時刻の順に当てる係。
 mod calls;
 mod looper;
 mod output;
-// 部品の時計（spec: areka-P0-surface-element-nesting）。持ち主は looper。
+// 部品の時計。持ち主は looper。
 mod parts;
 mod resolve;
-// 面 1 つを時点 T まで進める口（spec: areka-P0-offline-surface-dump）。
+// 面 1 つを時点 T まで進める口。
 mod settle;
-// シェルの差し替えの戻り先（spec: descript-window-keys）。
+// シェルの差し替えの戻り先。
 mod shell_fallback;
-// 今のシェルとバルーンの事実と `\s`・数の `\b` の判定（spec: mcp-strict-errors）。
+// 今のシェルとバルーンの事実と `\s`・数の `\b` の判定。
 mod skin_facts;
 mod state;
 mod table;
 mod table_calls;
-// 文字が現れる時刻の写し（spec: areka-P0-seriko-trigger-intervals）。使うのは一番上の面の配線。
+// 文字が現れる時刻の写し。使うのは一番上の面の配線。
 mod talk;
 mod timeline;
-// 引き金の判定（spec: areka-P0-seriko-trigger-intervals）。使うのは一番上と部品の配線。
+// 引き金の判定。使うのは一番上と部品の配線。
 mod trigger;
 
-// 検体を窓口から取得しプロセス寿命で保持する共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
+// 検体を窓口から取得しプロセス寿命で保持する共有の受け口。
 #[cfg(test)]
 mod sample_test_support;
-// 層をまたぐテストの道具の受け口（spec: audit-seriko 指摘 6）。
+// 層をまたぐテストの道具の受け口。
 #[cfg(test)]
 #[path = "lib_test_support.rs"]
 mod test_support;

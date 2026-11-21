@@ -1,5 +1,4 @@
-//! 窓の知らせとバルーンの面の番号の檻（spec: areka-P0-animated-image-playback 要件 6.1・6.3・
-//! tasks.md 3.6）。
+//! 窓の知らせとバルーンの面の番号の檻。
 //!
 //! バルーンの面の番号は、`\b[番号]` を受けていればその番号（`\b[-1]` なら面なし）、受けていなければ
 //! 知らせの面。`stage_slots` と `commit_pattern` のバルーンの腕は同じ番号を使う。
@@ -116,8 +115,8 @@ fn without_notes_stage_slots_match_shown_slots() {
     );
 }
 
-/// 出ている面の列（`shown_slots`）もスコープの昇順 → シェル → バルーン（抽選で乱数を引く順・
-/// audit-seriko 指摘 11）。スコープを回し終えてからバルーンを回す形では 0 バルーンが 1 シェルの後へずれる。
+/// 出ている面の列（`shown_slots`）もスコープの昇順 → シェル → バルーン（抽選で乱数を引く順）。
+/// スコープを回し終えてからバルーンを回す形では 0 バルーンが 1 シェルの後へずれる。
 #[test]
 fn shown_slots_go_scope_ascending_then_shell_then_balloon() {
     let mut states = fresh_states();

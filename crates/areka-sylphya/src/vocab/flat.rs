@@ -1,8 +1,8 @@
 //! フラット 26 トークン台帳＋構文記録（`%*` は解決対象外・`\%` は語彙外）。
 //!
-//! 全 26 トークンを key モデル上の第一級エントリとして保持する（R1.1）。
+//! 全 26 トークンを key モデル上の第一級エントリとして保持する。
 //! lexer が届かない `%m?` も第一級（token に `?` を残す・lexer 非依存）。
-//! backing 層は brief.md Scope 節の typology に従って割り当て、実導出は
+//! 実導出は
 //! M1 で源に着地する 4 件（username/selfname/selfname2/keroname）と、インストールの後に
 //! areka が載せる 2 件（lastghostname/lastobjectname）のみ。
 
@@ -13,17 +13,17 @@ use crate::vocab::{BackingLayer, DegradePolicy, M1Status};
 pub struct FlatEntry {
     /// 例 "username"（先頭 `%` を除いた名。`%m?` は "m?" と `?` を残す）。
     pub token: &'static str,
-    /// backing 実体層（R3.6・5 層タクソノミー）。
+    /// backing 実体層（5 層タクソノミー）。
     pub layer: BackingLayer,
     /// M1 実導出状態（源着地済みか、縮退中か）。
     pub m1: M1Status,
-    /// 縮退政策（R3.1）。username のみ ConsumerDefault・他は PassThroughRaw。
+    /// 縮退政策。username のみ ConsumerDefault・他は PassThroughRaw。
     pub degrade: DegradePolicy,
 }
 
-/// フラット 26 トークン全数（顔ぶれはテスト `flat_vocab_tokens_match_exactly` が縛る・並びは縛らない・R1.1）。
+/// フラット 26 トークン全数（顔ぶれはテスト `flat_vocab_tokens_match_exactly` が縛る・並びは縛らない）。
 ///
-/// 層割当（brief.md Scope typology）:
+/// 層割当:
 /// - `username` = ShioriQuery（SHIORI Resource 照会）。
 /// - `selfname`/`selfname2`/`keroname` = StaticConfig（descript 由来）。
 /// - 暦時計・時刻ネタ・画面・OS 起動時間（month..second/et/wronghour/
@@ -31,9 +31,9 @@ pub struct FlatEntry {
 /// - 単語ランダム系（ms..dms）= RuntimeState（他エンジン所有の運行状態・出所は正典未規定＝
 ///   縮退のまま予約）。
 /// - インストール文脈（lastghostname/lastobjectname）= RuntimeState（インストールの後に
-///   areka が載せる・areka-P0-ghost-install）。
+///   areka が載せる）。
 pub const FLAT_VOCAB: &[FlatEntry] = &[
-    // 暦時計（SystemEnv・縮退・素通し）。
+    // 暦時計。
     FlatEntry {
         token: "month",
         layer: BackingLayer::SystemEnv,
@@ -64,7 +64,7 @@ pub const FLAT_VOCAB: &[FlatEntry] = &[
         m1: M1Status::Degraded,
         degrade: DegradePolicy::PassThroughRaw,
     },
-    // M1 実導出（源着地済み）。username のみ ConsumerDefault。
+    // M1 実導出（源着地済み）。
     FlatEntry {
         token: "username",
         layer: BackingLayer::ShioriQuery,
@@ -89,7 +89,7 @@ pub const FLAT_VOCAB: &[FlatEntry] = &[
         m1: M1Status::Derived,
         degrade: DegradePolicy::PassThroughRaw,
     },
-    // 画面・OS 起動時間・時刻ネタ（SystemEnv・縮退・素通し）。
+    // 画面・OS 起動時間・時刻ネタ。
     FlatEntry {
         token: "screenwidth",
         layer: BackingLayer::SystemEnv,
@@ -120,7 +120,7 @@ pub const FLAT_VOCAB: &[FlatEntry] = &[
         m1: M1Status::Degraded,
         degrade: DegradePolicy::PassThroughRaw,
     },
-    // 単語ランダム系 10（RuntimeState・縮退・素通し・出所は正典未規定）。
+    // 単語ランダム系 10（出所は正典未規定）。
     // `m?` は lexer で `?` がトークン化不能だが key モデル上は第一級（token に `?` を残す）。
     FlatEntry {
         token: "ms",
@@ -182,8 +182,8 @@ pub const FLAT_VOCAB: &[FlatEntry] = &[
         m1: M1Status::Degraded,
         degrade: DegradePolicy::PassThroughRaw,
     },
-    // インストール文脈（RuntimeState・実導出・素通し）。値は areka がインストールの後に載せる
-    // （areka-P0-ghost-install・`install/names.rs`）。まだ入れていなければ値が無く素通し。
+    // インストール文脈。値は areka がインストールの後に載せる（`install/names.rs`）。
+    // まだ入れていなければ値が無く素通し。
     FlatEntry {
         token: "lastghostname",
         layer: BackingLayer::RuntimeState,
@@ -198,7 +198,7 @@ pub const FLAT_VOCAB: &[FlatEntry] = &[
     },
 ];
 
-/// 構文記録（`%*`・`%property[...]`）——解決対象外の別記法として語彙記録のみ行う（R1.6）。
+/// 構文記録（`%*`・`%property[...]`）——解決対象外の別記法として語彙記録のみ行う。
 ///
 /// `\%`（エスケープ記法）はここにも `FLAT_VOCAB` にも含めない。
 pub const SYNTAX_RECORDS: &[&str] = &["*", "property[...]"];
@@ -207,7 +207,7 @@ pub const SYNTAX_RECORDS: &[&str] = &["*", "property[...]"];
 mod tests {
     use super::*;
 
-    /// 26 トークン全数が過不足なく一致（タイポ・重複を檻化）。
+    /// 26 トークン全数が過不足なく一致（タイポ・重複を検出）。
     #[test]
     fn flat_vocab_tokens_match_exactly() {
         let expected: [&str; 26] = [
@@ -245,7 +245,7 @@ mod tests {
         assert_eq!(got, exp);
     }
 
-    /// `username` のみ ConsumerDefault・他は全て PassThroughRaw（R3.1）。
+    /// `username` のみ ConsumerDefault・他は全て PassThroughRaw。
     #[test]
     fn only_username_is_consumer_default() {
         for e in FLAT_VOCAB {
@@ -260,7 +260,6 @@ mod tests {
                 );
             }
         }
-        // NotFound はフラット語彙には出現しない。
         assert!(
             FLAT_VOCAB
                 .iter()
@@ -269,7 +268,7 @@ mod tests {
     }
 
     /// 実導出は M1 の 4 件（username/selfname/selfname2/keroname）と、インストールの後に
-    /// 載せる 2 件（lastghostname/lastobjectname・areka-P0-ghost-install）の 6 件だけ Derived。
+    /// 載せる 2 件（lastghostname/lastobjectname）の 6 件だけ Derived。
     #[test]
     fn only_four_tokens_are_m1_derived() {
         let derived: Vec<&str> = FLAT_VOCAB
@@ -290,20 +289,17 @@ mod tests {
                 "username"
             ]
         );
-        // 代表的な縮退トークンは Degraded。
         for t in ["month", "screenwidth", "ms", "dms"] {
             let e = FLAT_VOCAB.iter().find(|e| e.token == t).unwrap();
             assert_eq!(e.m1, M1Status::Degraded, "{t}");
         }
     }
 
-    /// `%*`・`%property[...]` は構文記録のみ・`\%` はどちらの表にも出ない（R1.6）。
+    /// `%*`・`%property[...]` は構文記録のみ・`\%` はどちらの表にも出ない。
     #[test]
     fn syntax_records_are_star_and_property() {
         assert_eq!(SYNTAX_RECORDS, &["*", "property[...]"]);
-        // `%*` は解決対象語彙に漏れない。
         assert!(FLAT_VOCAB.iter().all(|e| e.token != "*"));
-        // `\%`（エスケープ）はいずれの表にも含まれない。
         assert!(
             FLAT_VOCAB
                 .iter()

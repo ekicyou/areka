@@ -1,5 +1,4 @@
-//! 窓の知らせ `SerikoMsg::Stage` と合図 `StageAck`（spec: areka-P0-animated-image-playback
-//! 要件 2.3・6.1・6.3・6.7・tasks.md 5.1・design「出し直しの前に出た指令を見分ける」）。
+//! 窓の知らせ `SerikoMsg::Stage` と合図 `StageAck` の決定論テスト。
 //!
 //! バルーンの表はスコープ 0 に `parts_film_tests` の子の表（面 1 は終わりなしの子 `ENDLESS`＝コマ
 //! 10・11・12 各 100ms と、合計 1 回の子 `ONCE`＝コマ 20・21 各 100ms を置く）。刻みと知らせの時刻は
@@ -85,7 +84,7 @@ fn rig_running() -> Rig {
 }
 
 /// 世代が進んだ知らせ（閉じた知らせを挟まない）: 出力は「合図 → `ShowBalloon`」の順で、回数つきは
-/// 捨てられて知らせの時刻 1150 で作り直され、終わりなしは続きから（要件 2.3・6.1）。
+/// 捨てられて知らせの時刻 1150 で作り直され、終わりなしは続きから。
 #[test]
 fn newer_generation_acks_first_then_restarts_finite_clocks_at_the_note_time() {
     let mut rig = rig_running();
@@ -104,8 +103,7 @@ fn newer_generation_acks_first_then_restarts_finite_clocks_at_the_note_time() {
     assert_eq!(film(&cmds[0], ONCE), Some(21), "1150 から 110ms");
 }
 
-/// 同じ世代・古い世代の知らせでは合図が出ず、回数つきの時計も捨てない（design「世代が同じか古い
-/// 知らせでは合図を出さない」）。
+/// 同じ世代・古い世代の知らせでは合図が出ず、回数つきの時計も捨てない。
 #[test]
 fn same_or_older_generation_sends_no_ack_and_keeps_finite_clocks() {
     let mut rig = rig_running();
@@ -124,7 +122,7 @@ fn same_or_older_generation_sends_no_ack_and_keeps_finite_clocks() {
 }
 
 /// 閉じた知らせは合図を出さず回数つきを捨てる。知らせだけでは `HideBalloon`・`Hide` を出さない
-/// （窓の開け閉めは表示層の持ち物）。次の出番で合図が先に出る（要件 2.3・6.1）。
+/// （窓の開け閉めは表示層の持ち物）。次の出番で合図が先に出る。
 #[test]
 fn closed_note_drops_finite_clocks_and_notes_never_hide() {
     let mut rig = rig_running();
@@ -154,7 +152,7 @@ fn closed_note_drops_finite_clocks_and_notes_never_hide() {
 }
 
 /// 知らせの無い流れ（emo2 のシェルの表・子の表のバルーンを `\b` で出して刻む）では合図が 1 件も
-/// 出ない（要件 6.7）。
+/// 出ない。
 #[test]
 fn flows_without_notes_emit_no_stage_ack() {
     let mut rig = Rig::with_config(SerikoLoopConfig {
@@ -201,7 +199,7 @@ fn flows_without_notes_emit_no_stage_ack() {
 }
 
 /// 時計つきの起動の `send_stage` は送るときの時計の値を載せ、実のアクターが合図を先に出す。
-/// 受け手が消えた後の `send_stage` は `debug!` で捨てる（design「受け手が消えた後は `debug!`」）。
+/// 受け手が消えた後の `send_stage` は `debug!` で捨てる。
 #[test]
 fn send_stage_carries_the_clock_and_logs_debug_after_the_actor_is_gone() {
     let clock: SerikoClock = Arc::new(|| 1000);

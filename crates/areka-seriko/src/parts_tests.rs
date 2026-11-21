@@ -1,5 +1,4 @@
-//! 部品の時計の檻（spec: areka-P0-surface-element-nesting 要件 5.1〜5.5・5.7・5.11〜5.14・8.3・
-//! tasks.md 7.2）。
+//! 部品の時計の檻。
 //!
 //! 表は `surfaces.txt` の本文から解析 → 畳み込み → [`AnimationTable::from_world`] の実経路で組む。
 //! 刻みは `advance` の `now_ms`／`crossed`、乱数は呼ばれた回数を数える注入列で、どちらも決定論。
@@ -101,7 +100,7 @@ const BLINK: &str = "surface0\n{\nelement0,overlay,100,10,20\n}\n\
     animation0.pattern1,overlay,-1,50,0,0\n}\n\
     surface101\n{\n}\n";
 
-/// 見える刻みの境界でだけ抽選し、当たれば経過から 101 → 停止まで進む（要件 5.1・5.5）。
+/// 見える刻みの境界でだけ抽選し、当たれば経過から 101 → 停止まで進む。
 /// 境界を跨がない刻みは乱数を呼ばない。初めて見えた刻みの後の境界から抽選の対象になる。
 #[test]
 fn lottery_only_at_visible_boundary_ticks_then_progress() {
@@ -138,7 +137,7 @@ fn lottery_only_at_visible_boundary_ticks_then_progress() {
     assert_eq!(calls(&probe), 1, "抽選は境界の 1 回だけ");
 }
 
-/// 見えない部品には触らない: 境界を何度跨いでも乱数を呼ばず、欄にも書かない（要件 5.11）。
+/// 見えない部品には触らない: 境界を何度跨いでも乱数を呼ばず、欄にも書かない。
 /// 渡された部品の欄は先に空にされる。
 #[test]
 fn invisible_part_draws_no_rng_and_writes_nothing() {
@@ -166,7 +165,7 @@ fn invisible_part_draws_no_rng_and_writes_nothing() {
     assert_eq!(clocks.clock(&scope(), 100, 0), None);
 }
 
-/// 再生中に見えなくなり、戻った刻みのコマは経過から決まる（巻き戻らない・要件 5.7）。
+/// 再生中に見えなくなり、戻った刻みのコマは経過から決まる（巻き戻らない）。
 /// 見えない間は時計に触らない（開始の時刻を持ち続ける）。
 #[test]
 fn playing_part_resumes_from_elapsed_after_being_hidden() {
@@ -198,7 +197,7 @@ fn playing_part_resumes_from_elapsed_after_being_hidden() {
 }
 
 /// 見えない間に境界を跨いでも、戻った刻みが境界を跨がなければ抽選しない。
-/// `-1` の無い末尾は最後のコマを保ち、保っている間は次の境界で再び抽選の対象になる（要件 5.1・5.5）。
+/// `-1` の無い末尾は最後のコマを保ち、保っている間は次の境界で再び抽選の対象になる。
 #[test]
 fn residual_keeps_last_frame_and_is_drawn_again_at_next_visible_boundary() {
     let table = table_of(
@@ -234,7 +233,7 @@ fn residual_keeps_last_frame_and_is_drawn_again_at_next_visible_boundary() {
 }
 
 /// 子の中の `bind+random` は着せ替えが有効なときだけ抽選し、外れたら時計を消して止まる。
-/// そのコマは有効な間だけ欄に載る（要件 5.12）。
+/// そのコマは有効な間だけ欄に載る。
 #[test]
 fn bind_random_in_child_fires_only_while_active_and_stops_when_removed() {
     let table = table_of(
@@ -272,7 +271,7 @@ fn bind_random_in_child_fires_only_while_active_and_stops_when_removed() {
     assert_eq!(part_frames(&p, 100), Vec::<(u32, u32)>::new());
 }
 
-/// 部品のコマが別のサーフェスを指すと、その先も同じ刻みで部品として評価される（要件 5.2・5.13）。
+/// 部品のコマが別のサーフェスを指すと、その先も同じ刻みで部品として評価される。
 /// 抽選の消費順は 繰り返しの回 → 部品の番号の昇順。
 #[test]
 fn frame_pointing_to_another_surface_is_evaluated_in_the_same_tick() {
@@ -304,8 +303,7 @@ fn frame_pointing_to_another_surface_is_evaluated_in_the_same_tick() {
     assert_eq!(clocks.clock(&scope(), 200, 0), part_playing(1000));
 }
 
-/// element定義で置いた子と、一番上のコマ（pattern定義）が指した同じ番号は 1 つの時計を使う
-/// （要件 5.13・5.14）。コマが消えても時計は捨てない。
+/// element定義で置いた子と、一番上のコマ（pattern定義）が指した同じ番号は 1 つの時計を使う。コマが消えても時計は捨てない。
 #[test]
 fn element_child_and_pattern_target_share_one_clock() {
     let table = table_of(BLINK);
@@ -347,7 +345,7 @@ fn element_child_and_pattern_target_share_one_clock() {
     assert_eq!(clocks.clock(&scope(), 100, 0), part_playing(1000));
 }
 
-/// 同じ子を 1 つの親の何か所にも、内側の子からも置いても、抽選は 1 回・欄は 1 つ（要件 5.2・5.4）。
+/// 同じ子を 1 つの親の何か所にも、内側の子からも置いても、抽選は 1 回・欄は 1 つ。
 #[test]
 fn same_child_in_several_places_has_one_clock_and_one_field() {
     let table = table_of(
@@ -377,7 +375,7 @@ fn same_child_in_several_places_has_one_clock_and_one_field() {
 }
 
 /// 親の着せ替えのコマが刻みの間に 40 から 41 へ移ると、40 のコマは欄に残らない（部品の欄の番号は
-/// `visible_parts` の答えに含まれる・design.md「Data Models」）。見えない間の 40 は評価も抽選もされず、
+/// `visible_parts` の答えに含まれる）。見えない間の 40 は評価も抽選もされず、
 /// 抽選の時計は残る。同じ刻みで隠れる場合は
 /// `parts_always_tests::blank_survives_when_a_part_hidden_in_the_same_tick_is_dropped` が受け持つ。
 ///
@@ -445,7 +443,7 @@ fn part_hidden_by_the_parent_frame_change_is_not_left_in_the_field_and_keeps_its
     );
 }
 
-// ── areka-P0-surface-element-nesting tasks.md 7.3: 出来事の直後の作り直し・時計を捨てる口・記録 ──
+// ── 出来事の直後の作り直し・時計を捨てる口・記録 ──
 
 /// 子 100 は 50ms で 101 → さらに 50ms で 102（`-1` の無い末尾＝保つ）。
 const HOLD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\nsurface1\n{\n}\n\
@@ -481,7 +479,7 @@ pub(super) fn refresh_at(
 
 /// 出来事の直後の作り直しは抽選の乱数を呼ばず、抽選の animation の時計を変えない。末尾に着いた時刻を
 /// 見ても `Residual` へ移さない（移すのは次の刻み）。何度呼んでも、次の刻みの結果は呼ばなかったときと
-/// 同じ（要件 5.6）。
+/// 同じ。
 #[test]
 fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     let table = table_of(HOLD);
@@ -576,7 +574,7 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
 }
 
 /// 出来事の直後の作り直しでも、有効でない `bind+random` のコマは欄に書かない。時計は消さない
-/// （消すのは次の刻み・要件 5.12）。
+/// （消すのは次の刻み）。
 #[test]
 fn peek_does_not_write_inactive_bind_random_frames() {
     let table = table_of(
@@ -617,7 +615,7 @@ fn peek_does_not_write_inactive_bind_random_frames() {
     assert_eq!(clocks.clock(&scope(), 100, 5), None);
 }
 
-/// 時計を捨てる口は全スコープの時計を捨てる（要件 5.8）。
+/// 時計を捨てる口は全スコープの時計を捨てる。
 #[test]
 fn clear_drops_clocks_of_every_scope() {
     let table = table_of(HOLD);
@@ -674,7 +672,7 @@ pub(super) fn count(lines: &[String], needles: &[&str]) -> usize {
 }
 
 /// `-1` 以外の負の番号は (スコープ, 部品, animation) ごとに初回だけ `warn!` を出し、その animation を
-/// 止める。捨てた後は再び初回として扱う（要件 8.1）。`-1` では出さない。
+/// 止める。捨てた後は再び初回として扱う。`-1` では出さない。
 #[test]
 fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
     let table = table_of(
@@ -846,7 +844,7 @@ fn part_fire_hold_and_stop_lines_carry_the_part_number() {
 }
 
 /// 呼ばれるだけ（純 `bind`）の部品の animation は、着せ替えに無くても在る時計を消さずに進め、
-/// 自分では始めない（spec: seriko-pattern-calls 要件 11.1・5.6）。着せ替えの番人は `bind+random` だけ。
+/// 自分では始めない。着せ替えの番人は `bind+random` だけ。
 #[test]
 fn call_only_part_keeps_and_advances_an_existing_clock_without_starting_itself() {
     let table = table_of(
@@ -940,7 +938,7 @@ fn play_that_ended_while_hidden_is_lotteried_on_the_reshow_tick() {
 
 /// 部品でも、`-1` と `-2` のすぐ後に待ち 0 の働きのコマがあるとき、warn の番号は止めた描くコマの番号:
 /// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する。続くのが待ち 0 の描くコマでも
-/// 同じ（spec: audit-seriko 要件 4.1）。
+/// 同じ。
 #[test]
 fn part_negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
     for tail in ["insert,0,0,0,0", "overlay,42,0,0,0"] {

@@ -1,9 +1,8 @@
-//! calls: 働きのコマを予定の時刻の順に当てる純粋な係（spec: seriko-pattern-calls 要件 3.1–3.9・
-//! 4.1–4.4・5.2・7.2・7.3・8.1）。
+//! calls: 働きのコマを予定の時刻の順に当てる純粋な係。
 //!
 //! 再生中の各 animation の、まだ当てていない働きのコマのうち予定の時刻（開始 ＋ 累積の待ち・
 //! `always` は周ごと）が今以下のものを、時刻・animation・pattern の昇順の待ち行列で 1 つずつ当てる。
-//! 再生の表は [`CallPlays`] の口だけで見る（一番上は面の段の再生、部品は部品の時計・5.2/5.3）。
+//! 再生の表は [`CallPlays`] の口だけで見る（一番上は面の段の再生、部品は部品の時計）。
 //! 時刻は丸めない（遅れた刻みでも、呼ばれた側は呼び出しの予定の時刻で始まる）。
 
 use crate::table::{FrameAct, LoopAnimation, LoopTrigger};
@@ -32,7 +31,7 @@ pub(crate) struct CallOutcome {
 }
 
 impl CallOutcome {
-    /// 後に当てた側 `next` と合わせる: ずれは時刻が後のものが勝つ（同じ時刻なら `next`・7.2・7.3）。
+    /// 後に当てた側 `next` と合わせる: ずれは時刻が後のものが勝つ（同じ時刻なら `next`）。
     pub(crate) fn then(self, next: CallOutcome) -> CallOutcome {
         match (self.shift, next.shift) {
             (Some((a, ..)), Some((b, ..))) if a > b => self,
@@ -64,7 +63,7 @@ pub(crate) fn run_calls<'a>(
         push_next(&mut queue, &*plays, &animation_of, id, None, now_ms);
     }
     let mut outcome = CallOutcome::default();
-    // 1 つの時刻の中で呼び出しが始めた animation（巡回の止め・5.2）。
+    // 1 つの時刻の中で呼び出しが始めた animation（巡回の止め）。
     let mut instant = None;
     let mut started: HashSet<u32> = HashSet::new();
     while let Some((at, id, k, start)) = queue.pop_first() {
@@ -82,7 +81,7 @@ pub(crate) fn run_calls<'a>(
         match &frame.act {
             FrameAct::Start { targets, pick_one } => {
                 for target in chosen(targets, *pick_one, pick) {
-                    // 表に無い相手は何もしない（記録は読み込みのときに 1 度出し済み・5.1）。
+                    // 表に無い相手は何もしない（記録は読み込みのときに 1 度出し済み）。
                     if animation_of(target).is_none() {
                         continue;
                     }
@@ -102,7 +101,7 @@ pub(crate) fn run_calls<'a>(
             }
             FrameAct::Stop { targets, pick_one } => {
                 for target in chosen(targets, *pick_one, pick) {
-                    // 再生していない相手は何もしない（4.4・M2）。
+                    // 再生していない相手は何もしない。
                     if plays.playing(target).is_some() {
                         let always = animation_of(target)
                             .is_some_and(|a| matches!(a.trigger, LoopTrigger::Always { .. }));
@@ -110,7 +109,7 @@ pub(crate) fn run_calls<'a>(
                     }
                 }
             }
-            // ずれは元の表示位置からの絶対値で、後の時刻が勝つ（7.2・7.3）。
+            // ずれは元の表示位置からの絶対値で、後の時刻が勝つ。
             FrameAct::Move => outcome.shift = Some((at, frame.x, frame.y)),
             FrameAct::Draw | FrameAct::Inert => {}
         }
@@ -136,7 +135,7 @@ pub(crate) fn run_calls<'a>(
     outcome
 }
 
-/// 相手の並びから当てる番号（`pick_one` なら並びの全部から等しく 1 つ・3.3・4.3）。
+/// 相手の並びから当てる番号（`pick_one` なら並びの全部から等しく 1 つ）。
 fn chosen(targets: &[u32], pick_one: bool, pick: &mut LoopRng) -> Vec<u32> {
     if !pick_one {
         return targets.to_vec();

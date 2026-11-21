@@ -1,4 +1,4 @@
-//! 名前の畳みの解釈の段の檻（spec areka-P0-property-name-case-fold タスク 1.1・要件 5.1）。
+//! 名前の畳みの解釈の段の檻。
 //!
 //! `parse_dotted` は各部分の名前と括弧の中の名前の半角の英字だけを小文字へ畳む。
 //! 全角の英字・かな・空白は変えず、書式の誤りは小文字の同じ名前と同じ `Err` になる。
@@ -12,7 +12,7 @@ fn canon(input: &str) -> String {
 
 #[test]
 fn segment_names_fold_ascii_letters() {
-    // 1. 各部分の名前の大小違い（要件 1.1）。
+    // 1. 各部分の名前の大小違い。
     assert_eq!(canon("BASEWARE.NAME"), "baseware.name");
     assert_eq!(canon("Baseware.Name"), "baseware.name");
     assert_eq!(parse_dotted("BASEWARE.NAME"), parse_dotted("baseware.name"));
@@ -20,7 +20,7 @@ fn segment_names_fold_ascii_letters() {
 
 #[test]
 fn bracket_names_fold_ascii_letters() {
-    // 2. 括弧の中の名前（要件 1.2）。
+    // 2. 括弧の中の名前。
     assert_eq!(canon("test(ABC).key"), "test(abc).key");
     assert_eq!(
         canon("ghostlist(えも2DEBUG).path"),
@@ -31,21 +31,21 @@ fn bracket_names_fold_ascii_letters() {
 
 #[test]
 fn non_ascii_letters_are_not_folded() {
-    // 3. 全角の英字とかなは畳まない（`to_lowercase` との取り違えを捕まえる・要件 1.3）。
+    // 3. 全角の英字とかなは畳まない（`to_lowercase` との取り違えを捕まえる）。
     assert_eq!(canon("ＴＥＳＴ.ｋｅｙ"), "ＴＥＳＴ.ｋｅｙ");
     assert_eq!(canon("test.ア"), "test.ア");
 }
 
 #[test]
 fn surrounding_spaces_are_kept() {
-    // 4. 前後の空白は削らない（要件 1.4）。
+    // 4. 前後の空白は削らない。
     assert_eq!(canon(" BASEWARE.NAME"), " baseware.name");
     assert_eq!(canon("BASEWARE.NAME "), "baseware.name ");
 }
 
 #[test]
 fn malformed_keys_give_same_err_as_lowercase() {
-    // 5. 書式の誤りは大小にかかわらず小文字と同じ Err（要件 1.6）。
+    // 5. 書式の誤りは大小にかかわらず小文字と同じ Err。
     assert_eq!(
         parse_dotted("index(abc)"),
         Err(KeyParseError::BadIndex { at: 0 })

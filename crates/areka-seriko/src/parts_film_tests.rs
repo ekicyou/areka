@@ -1,5 +1,4 @@
-//! 動く絵の子の時計の檻（spec: areka-P0-animated-image-playback 要件 2.3・2.7・2.8・3.1〜3.5・6.6・
-//! tasks.md 3.3）。
+//! 動く絵の子の時計の檻。
 //!
 //! seriko は読み込みの側（アトラス）に依存しないので、子の定義は分解が作る値と同じ形を手で組み、
 //! 面の表の element の種類も分解と同じに `ElementKind::Film` へ替えて
@@ -84,7 +83,7 @@ fn clock(clocks: &PartClocks, slot: Slot, film: FilmId) -> Option<PartAnim> {
     clocks.clock_at(&scope(), slot, PartKey::Film(film), 0)
 }
 
-/// 見えた刻みの時刻で、乱数を引かずに時計が生まれる。経過 0（1 枚目）は欄に載らない（要件 3.1・7.4）。
+/// 見えた刻みの時刻で、乱数を引かずに時計が生まれる。経過 0（1 枚目）は欄に載らない。
 #[test]
 fn film_clock_is_born_when_it_becomes_visible() {
     let table = table();
@@ -106,7 +105,7 @@ fn film_clock_is_born_when_it_becomes_visible() {
 }
 
 /// 終わりなし: 同じ絵を置く別のサーフェスへ替えても続き。置いていないサーフェスへ行って戻っても、
-/// 見えなかった間も進んでいる（要件 3.2・3.3）。
+/// 見えなかった間も進んでいる。
 #[test]
 fn endless_film_continues_across_surfaces_and_while_hidden() {
     let table = table();
@@ -136,7 +135,7 @@ fn endless_film_continues_across_surfaces_and_while_hidden() {
     );
 }
 
-/// 子のサーフェスに置いた絵も、親の切り替えで巻き戻らない（要件 1.9・4.4）。
+/// 子のサーフェスに置いた絵も、親の切り替えで巻き戻らない。
 #[test]
 fn film_in_child_surface_does_not_rewind() {
     let table = table();
@@ -156,7 +155,7 @@ fn film_in_child_surface_does_not_rewind() {
     );
 }
 
-/// 回数つき: 見えなくなった評価で捨てられ、戻ると頭から（要件 2.3）。生まれた・捨てたは `debug!`。
+/// 回数つき: 見えなくなった評価で捨てられ、戻ると頭から。生まれた・捨てたは `debug!`。
 #[test]
 fn finite_film_is_dropped_when_hidden_and_restarts_from_head() {
     let table = table();
@@ -200,7 +199,7 @@ fn finite_film_is_dropped_when_hidden_and_restarts_from_head() {
 }
 
 /// 回数つき: 続けて見えていれば（同じ絵を置く別のサーフェスへ替えても）始め直さず、止まっていれば
-/// 止まったまま（要件 2.2・2.7・2.8）。
+/// 止まったまま。
 #[test]
 fn finite_film_continuously_visible_keeps_going_and_stays_stopped() {
     let table = table();
@@ -220,7 +219,7 @@ fn finite_film_continuously_visible_keeps_going_and_stays_stopped() {
     assert_eq!(clock(&clocks, Slot::Shell, ONCE), playing(1000));
 }
 
-/// スコープごと・面の種類ごとに別の時計。片方で捨てても他は残る（要件 3.5・6.6）。
+/// スコープごと・面の種類ごとに別の時計。片方で捨てても他は残る。
 #[test]
 fn clocks_are_separate_per_scope_and_face_kind() {
     let table = table();

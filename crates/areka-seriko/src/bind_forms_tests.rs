@@ -1,6 +1,6 @@
-//! [`apply_bind_directive`] の試験（spec: script-small-tags 要件 3.3・3.8〜3.10・8.1）。
+//! [`apply_bind_directive`] の試験。
 //!
-//! 期待値は SSP の測りの 7 行（research.md 2.11）をそのまま使う。カテゴリ「ボール」は定義の順に
+//! 期待値は SSP の測りの 7 行をそのまま使う。カテゴリ「ボール」は定義の順に
 //! おじさん・男の子・ギャル・妹（番号は定義と逆に振り、番号の順でなく定義の順に当てることも見る）・
 //! 排他・既定なし。「目」は `mustselect`・既定はノーマル。「腕輪」は `multiple`（測っていない形）。
 
@@ -188,7 +188,7 @@ fn ssp_row7_part_toggle_takes_off_worn_part() {
     assert_eq!(ids(&states, &scope), vec![NORMAL]);
 }
 
-/// パーツ名つきの `1`／`0` はそのパーツへ 1 回当てる（要件 3.3）。
+/// パーツ名つきの `1`／`0` はそのパーツへ 1 回当てる。
 #[test]
 fn named_form_applies_once() {
     let (mut states, resolver, scope) = setup();
@@ -200,7 +200,7 @@ fn named_form_applies_once() {
     assert_eq!(ids(&states, &scope), vec![NORMAL]);
 }
 
-/// `,,0` は排他のカテゴリのパーツを全部脱がせる（要件 3.8）。
+/// `,,0` は排他のカテゴリのパーツを全部脱がせる。
 #[test]
 fn category_off_takes_off_all_parts() {
     let (mut states, resolver, scope) = setup();
@@ -211,7 +211,7 @@ fn category_off_takes_off_all_parts() {
     assert_eq!(ids(&states, &scope), vec![NORMAL]);
 }
 
-/// `multiple` の `,,1` は全部着る（要件 3.10・同じ規則から）。
+/// `multiple` の `,,1` は全部着る。
 #[test]
 fn multiple_category_on_wears_all() {
     let (mut states, resolver, scope) = setup();
@@ -230,7 +230,7 @@ fn multiple_category_toggle_flips_each() {
     assert_eq!(ids(&states, &scope), vec![NORMAL, 31]);
 }
 
-/// 名前の無いカテゴリは「見つからない」を 1 つ（空の列を返さない・要件 3.10）。状態は変わらない。
+/// 名前の無いカテゴリは「見つからない」を 1 つ（空の列を返さない）。状態は変わらない。
 #[test]
 fn unknown_category_reports_not_found_once() {
     let (mut states, resolver, scope) = setup();

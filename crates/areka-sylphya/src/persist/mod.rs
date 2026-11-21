@@ -1,21 +1,20 @@
 //! 永続層: `PersistScope` / `ScopeRoots` / `PersistKey`（4 key 族 typed）/ 載せ替え orchestration。
 //!
-//! [`format`]（Task 4.1・TOML スキーマ／寛容読取）と [`io`]（Task 4.2・原子的 IO シーム）の
-//! 上に、**typed な 4 key 族モデル**（design「永続層 → Service Interface」）と、その
+//! [`format`]（TOML スキーマ／寛容読取）と [`io`]（原子的 IO シーム）の
+//! 上に、**typed な 4 key 族モデル**と、その
 //! **層別スコープごとのロード／保存編成**（[`load_scope`]／[`save_scope`]）を載せる。
 //!
 //! ## 責務境界
 //!
 //! - スコープは 4 層固定 enum（[`PersistScope`]・App/Ghost/Shell/Balloon）。各スコープの保存先
-//!   ルートは呼び出し側供給（[`ScopeRoots`]・sylphya はパスを解釈しない・最下層規律）。M1 の本番
-//!   key はすべて Ghost スコープに載るが（design「Physical Data Model」）、App/Shell/Balloon も
-//!   器として実装しスコープ分離檻で検証する。
+//!   ルートは呼び出し側供給（[`ScopeRoots`]・sylphya はパスを解釈しない）。本番の key の多くは
+//!   Ghost スコープに載るが、App/Shell/Balloon も器として実装しスコープ分離をテストで検証する。
 //! - key は 4 族の typed enum（[`PersistKey`]）。自由 key の汎用永続は将来シーム（2 例目が要求
 //!   してから）。各 key は 2 通りに写像される:
 //!   1. **正準 key 文字列**（[`PersistKey::to_canonical_key`]）——鏡像 dotted 区画へ投影する形
 //!      （`areka.window.scope(0).x` 等）。これは [`crate::key::parse_dotted`] →
 //!      [`crate::PropPath::to_canonical_string`] と往復整合する（読み口 1 本化の要石）。
-//!   2. **TOML 写像**（[`FormatDoc`]）——`[window."0"]` x/y 等（Task 4.1 の物理スキーマ）。
+//!   2. **TOML 写像**（[`FormatDoc`]）——`[window."0"]` x/y 等。
 //!
 //! ## load / save 編成
 //!
@@ -25,11 +24,11 @@
 //! - [`save_scope`]: 当該スコープの原子的保存（write-through）。**read-modify-write マージ**で
 //!   既存の表に entries を重ね（無関係な key・知らない表を温存し）、直列化し、[`PersistIo::commit`]
 //!   で原子的確定する。成功 → [`PersistOutcome::Saved`]、root 不在・錠が取れない・既存が使えない・
-//!   commit 失敗 → error!/warn! ＋ [`PersistOutcome::Degraded`]（R6.7・無音失敗なし）、読み取りだけの
+//!   commit 失敗 → error!/warn! ＋ [`PersistOutcome::Degraded`]、読み取りだけの
 //!   走り → [`PersistOutcome::Withheld`]。
 //! - [`remove_scope_keys`]: 名指しの鍵だけを消す（[`save_scope`] と同じ道・空になった表は書かない）。
 //!
-//! 鏡像／アクターへの結線は行わない（Task 5.x の領分）。本モジュールは注入された [`PersistIo`]
+//! 鏡像／アクターへの結線は行わない。本モジュールは注入された [`PersistIo`]
 //! の上で typed モデル＋ load/save 編成のみを提供する。
 
 pub mod format;
@@ -42,22 +41,20 @@ pub use io::{FakePersistIo, FsPersistIo, PersistIo};
 use format::AxisPair;
 use std::path::{Path, PathBuf};
 
-/// ログ target（steering: areka-log-first-no-silent-failure）。
 const LOG_TARGET: &str = "areka_sylphya::persist";
 
-/// 各スコープの永続ファイル名（`<scope root>/sylphya.toml`・design「Physical Data Model」）。
+/// 各スコープの永続ファイル名（`<scope root>/sylphya.toml`）。
 const PERSIST_FILE_NAME: &str = "sylphya.toml";
 
-/// 層別永続スコープ（R6.5・伺か慣行の profile フォルダ準拠）。
+/// 層別永続スコープ（伺か慣行の profile フォルダ準拠）。
 ///
 /// 各層の永続情報は対応する層の profile フォルダ（[`ScopeRoots`] が供給するルート）へ保存する。
-/// M1 の本番 key はすべて [`PersistScope::Ghost`] に載るが（design「Physical Data Model」）、
-/// 他 3 層も器として実装しスコープ分離を檻で検証する。
+/// 他の層も器として実装しスコープ分離をテストで検証する。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PersistScope {
     /// areka アプリレベル。
     App,
-    /// SHIORI（ゴースト）レベル。M1 の 4 key 族はここに載る。
+    /// SHIORI（ゴースト）レベル。
     Ghost,
     /// シェルレベル。
     Shell,
@@ -69,7 +66,7 @@ pub enum PersistScope {
 ///
 /// 実ファイルは `<root>/sylphya.toml`（root 自体を `profile/areka/` に取る運用は結線側の契約）。
 /// sylphya はパスを解釈しない（最下層規律）——所属実体（ゴースト等）の分離は per-実体 profile
-/// ディレクトリの物理分離が担う（R6.5・design「Responsibilities & Constraints」）。
+/// ディレクトリの物理分離が担う。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ScopeRoots {
     /// [`PersistScope::App`] のルート。
@@ -118,7 +115,7 @@ impl Axis {
     }
 }
 
-/// 4 key 族（R6.1・typed——W4 が消費する契約の正本。値ドメインは文字列）。
+/// 4 key 族（typed。値ドメインは文字列）。
 ///
 /// 各 variant は正準 key 文字列（[`PersistKey::to_canonical_key`]）と TOML 写像
 /// （[`FormatDoc`]）の双方へ決定論的に対応する。
@@ -167,7 +164,7 @@ pub enum PersistKey {
 }
 
 impl PersistKey {
-    /// 鏡像 dotted 区画へ投影する正準 key 文字列（design「正準 key 投影」）。
+    /// 鏡像 dotted 区画へ投影する正準 key 文字列。
     ///
     /// **不変条件**: `parse_dotted(k).unwrap().to_canonical_string() == k`（[`crate::key`] と往復
     /// 整合——この投影で格納された値は [`crate::reader::SylphyaReader::resolve_dotted`] が同じ
@@ -192,7 +189,7 @@ impl PersistKey {
     }
 }
 
-/// 保存できなかった 1 回の中身（spec areka-P0-write-failure-notice 要件 1.4）。
+/// 保存できなかった 1 回の中身。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PersistFailure {
     /// 書けなかったスコープ。
@@ -214,23 +211,23 @@ pub enum PersistFailureCause {
     Io(String),
 }
 
-/// 永続保存の結果（design「永続層 → Service Interface」）。
+/// 永続保存の結果。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PersistOutcome {
-    /// 原子的確定に成功（以後のロードで同値復元・R6.6）。
+    /// 原子的確定に成功（以後のロードで同値復元）。
     Saved,
-    /// 保存失敗（root 不在・commit 失敗）→ ログ済み・縮退（鏡像反映はアクターの領分・R6.7）。
+    /// 保存失敗（root 不在・commit 失敗）→ ログ済み・縮退（鏡像反映はアクターの領分）。
     /// 書けなかった 1 回の中身を運ぶ。
     Degraded(PersistFailure),
     /// 読み取りだけの走りで書かずに控えた（中身は走る間だけ読み返せる）。
     Withheld,
 }
 
-/// 当該スコープの永続状態を一括ロードする（起動時・R6.1/R6.3/R6.5）。
+/// 当該スコープの永続状態を一括ロードする（起動時）。
 ///
 /// - root 不在（[`ScopeRoots`] の該当が `None`）→ 空（当該スコープ不在縮退・debug）。
 /// - `<root>/sylphya.toml` を [`PersistIo::read`] で読む。不在（`Ok(None)`）→ 空。read 障害
-///   （`Err`）→ warn! ＋ 空（縮退・panic なし・R6.7）。
+///   （`Err`）→ warn! ＋ 空（縮退・panic なし）。
 /// - 読めた content は [`format::read_toml_str`] で寛容パースし、実在値のみ `(PersistKey, String)`
 ///   へ変換する。非数値スコープ ID（typed [`u32`] に載らない）は debug ＋ 当該エントリskip（寛容）。
 ///
@@ -258,7 +255,6 @@ pub fn load_scope(
             return Vec::new();
         }
         Err(e) => {
-            // 真の IO 障害（権限等）→ warn ＋ 不在縮退（無音失敗なし・R6.7）。
             tracing::warn!(
                 target: LOG_TARGET,
                 ?scope,
@@ -282,20 +278,20 @@ fn save_gate() -> std::sync::MutexGuard<'static, ()> {
     SAVE_GATE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// 当該スコープへ entries を原子的に保存する（write-through・R6.1/R6.2/R6.6）。
+/// 当該スコープへ entries を原子的に保存する（write-through）。
 ///
 /// **read-modify-write マージ**: 既存 `<root>/sylphya.toml` を読み、その表の上に entries を重ねて
 /// から直列化・確定する。これにより例えば `boot.count` だけを保存しても `window.*` 等の無関係な
 /// key も、この版の知らない表・値も消えない（マージ檻で保証）。
 ///
-/// - root 不在 → warn! ＋ [`PersistOutcome::Degraded`]（保存先が無い・panic なし・R6.7）。
+/// - root 不在 → warn! ＋ [`PersistOutcome::Degraded`]（保存先が無い・panic なし）。
 /// - 読む前にプロセスの中の門と [`PersistIo::lock_for_update`] の錠を取り、書いた後に放す。錠が
 ///   取れない → 書かずに error! `persist_lock_failed` ＋ [`PersistOutcome::Degraded`]（`Io(理由)`）。
 /// - 既存が無い・空 → 空の土台に重ねる。既存が読めない・壊れている・版が違う → 書かずに
 ///   error! `persist_existing_unusable` ＋ [`PersistOutcome::Degraded`]（`Io(理由)`）。ただし控える
 ///   範囲の中は何も書かないので、warn! を出して空の土台で続ける。
 /// - [`PersistIo::commit`] 失敗 → error! ＋ [`PersistOutcome::Degraded`]（既存ファイルは temp→rename
-///   ゆえ無傷・R6.2。鏡像更新はアクターの領分——ここは結果のみ報告）。
+///   ゆえ無傷。鏡像更新はアクターの領分——ここは結果のみ報告）。
 /// - 控える範囲の中（[`PersistIo::withholds`]）→ 控えへ入れて debug `persist_withheld` ＋
 ///   [`PersistOutcome::Withheld`]（読み取りだけの走り・「書けたか」の判定に入らない）。
 /// - 成功 → [`PersistOutcome::Saved`]。
@@ -422,7 +418,7 @@ fn update_scope(
         }
     };
 
-    // read-modify-write: 既存 doc を土台にマージ（無関係 key・知らない表と値を温存）。使えない既存は上書きしない。
+    // 使えない既存は上書きしない。
     // 控える道（読み取りだけの走り）は何も書かない＝守る物が無いので、寛容な読みで続ける。
     let withheld = io.withholds(&path);
     let (mut doc, mut base) = match read_existing(io, &path) {
@@ -459,7 +455,6 @@ fn update_scope(
     edit(&mut doc, &mut base);
 
     let content = format::to_toml_string_over(base, &doc);
-    // 控える道は「書けたか」の判定に入らない（読み取りだけの走り・控えへの入れはメモリの中）。
     match io.commit(&path, &content) {
         Ok(()) if withheld => {
             let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();
@@ -507,7 +502,7 @@ fn read_existing(io: &dyn PersistIo, path: &Path) -> Result<(FormatDoc, toml::Ta
     }
 }
 
-/// 1 entry を [`FormatDoc`] へ適用する（TOML 写像・design「TOML mapping」）。`None` は消す。
+/// 1 entry を [`FormatDoc`] へ適用する（TOML 写像）。`None` は消す。
 fn apply_entry(doc: &mut FormatDoc, key: PersistKey, value: Option<String>) {
     match key {
         PersistKey::WindowPos { scope, axis } => {
@@ -622,7 +617,6 @@ fn doc_to_entries(scope: PersistScope, doc: &FormatDoc) -> Vec<(PersistKey, Stri
         }
     }
     for (id, v) in &doc.window_adjacent {
-        // 数でない ID は window と同じく debug ＋ skip（寛容）。
         let Ok(scope_id) = id.parse::<u32>() else {
             tracing::debug!(
                 target: LOG_TARGET,
@@ -646,8 +640,7 @@ fn push_axis_family(
     make: impl Fn(u32, Axis) -> PersistKey,
 ) {
     for (id, pair) in map {
-        // typed スコープは u32。非数値 ID（format 層は不透明文字列を許す）は載せられない——
-        // debug ＋ skip（寛容・panic なし・R6.7）。
+        // typed スコープは u32。format 層は不透明文字列を許すので、非数値 ID は載せられない。
         let Ok(scope_id) = id.parse::<u32>() else {
             tracing::debug!(
                 target: LOG_TARGET,
@@ -686,7 +679,7 @@ mod unreadable_tests;
 #[path = "persist_lock_tests.rs"]
 mod lock_tests;
 
-/// 記憶の鍵を消す口の檻（audit-placement-core 指摘 17）。
+/// 記憶の鍵を消す口のテスト。
 #[cfg(test)]
 #[path = "persist_remove_tests.rs"]
 mod remove_tests;

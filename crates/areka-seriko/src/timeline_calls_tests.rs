@@ -1,4 +1,4 @@
-//! 働きのコマと今のコマの計算の決定論テスト（spec: seriko-pattern-calls 要件 1.3・7.7）。
+//! 働きのコマと今のコマの計算の決定論テスト。
 //!
 //! 働きのコマ（`move`・呼び出し・`insert`）は番号の欄が `-1` でも止まらず、欄に置くのは
 //! [`visible_frame`]（その位置以下で最後の描くコマ）。描くコマが無ければ欄は外れる。
@@ -40,7 +40,7 @@ fn move_with_minus_one_does_not_stop() {
     assert_eq!(frame_at(&frames, 50), FrameStatus::Stopped);
 }
 
-/// `move` や呼び出しのコマが今のコマでも、前の描くコマが選ばれる（`base,2` を含む・7.7）。
+/// `move` や呼び出しのコマが今のコマでも、前の描くコマが選ばれる（`base,2` を含む）。
 #[test]
 fn action_frame_keeps_the_previous_draw_frame() {
     let base = LoopFrame {
@@ -106,7 +106,7 @@ fn minus_one_followed_by_zero_wait_action_frame_stops() {
 }
 
 /// `-1` のすぐ後に待ち 0 の描くコマがあっても、`-1` に着いた時点で止まる（後ろの描くコマへ進まない・
-/// ukadoc「サーフェス番号に-1でそのアニメーションの停止」・areka-P0-seriko-loop 要件 4.3）。
+/// ukadoc「サーフェス番号に-1でそのアニメーションの停止」）。
 #[test]
 fn minus_one_followed_by_a_zero_wait_draw_frame_stops() {
     let frames = vec![draw(100, 0), draw(-1, 50), draw(101, 0)];

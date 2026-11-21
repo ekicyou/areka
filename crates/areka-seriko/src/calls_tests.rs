@@ -1,5 +1,4 @@
-//! 働きのコマを時刻の順に当てる係の決定論テスト（spec: seriko-pattern-calls 要件 3.1–3.5・3.9・
-//! 4.1–4.4・5.2・7.2・7.3・8.1 の M1・M2・9.1）。再生の表は偽の表、選びは決め打った乱数。
+//! 働きのコマを時刻の順に当てる係の決定論テスト。再生の表は偽の表、選びは決め打った乱数。
 
 use super::*;
 use crate::table::{LoopFrame, LoopTrigger};
@@ -97,7 +96,7 @@ fn run(table: &[LoopAnimation], p: &mut FakePlays, now_ms: u64) -> CallOutcome {
     )
 }
 
-/// 遅れた刻みでも、呼ばれた側は呼び出しの予定の時刻で始まり、頭の働きのコマも同じ刻みで当たる（3.1・3.5）。
+/// 遅れた刻みでも、呼ばれた側は呼び出しの予定の時刻で始まり、頭の働きのコマも同じ刻みで当たる。
 #[test]
 fn late_tick_starts_target_at_scheduled_time() {
     let table = [
@@ -115,7 +114,7 @@ fn late_tick_starts_target_at_scheduled_time() {
     assert_eq!(out.shift, Some((150, 3, 4)));
 }
 
-/// 再生中の相手を呼ぶと、頭からやり直す（3.9・M1）。
+/// 再生中の相手を呼ぶと、頭からやり直す。
 #[test]
 fn restarting_a_playing_target_restarts_from_head() {
     let table = [
@@ -129,7 +128,7 @@ fn restarting_a_playing_target_restarts_from_head() {
     assert_eq!(out.shift, Some((100, 7, 7)), "やり直した頭の move も当たる");
 }
 
-/// parallelstart は並びの全部を同じ時刻に始める（3.2）。parallelstop は全部を止める（4.2）。
+/// parallelstart は並びの全部を同じ時刻に始める。parallelstop は全部を止める。
 #[test]
 fn parallel_start_and_stop_act_on_all_at_the_same_time() {
     let table = [
@@ -147,7 +146,7 @@ fn parallel_start_and_stop_act_on_all_at_the_same_time() {
     assert_eq!(p.playing_ids(), vec![0, 3]);
 }
 
-/// alternativestart は選びの乱数で並びの全部から 1 つを選ぶ（3.3）。
+/// alternativestart は選びの乱数で並びの全部から 1 つを選ぶ。
 #[test]
 fn alternative_start_picks_one_with_the_pick_rng() {
     let table = [
@@ -170,7 +169,7 @@ fn alternative_start_picks_one_with_the_pick_rng() {
     assert_eq!(q.playing_ids(), vec![0, 1]);
 }
 
-/// alternativestop は再生中で絞らず並びの全部から選び、再生していない相手を選べば何もしない（4.3・4.4・M2）。
+/// alternativestop は再生中で絞らず並びの全部から選び、再生していない相手を選べば何もしない。
 #[test]
 fn alternative_stop_choosing_a_not_playing_target_does_nothing() {
     let table = [
@@ -191,7 +190,7 @@ fn alternative_stop_choosing_a_not_playing_target_does_nothing() {
     assert_eq!(p.playing_ids(), vec![0]);
 }
 
-/// 自分を呼ぶ・呼び合う巡回は、待ちが 0 でも同じ時刻の 2 度目の開始で止まる（5.2）。
+/// 自分を呼ぶ・呼び合う巡回は、待ちが 0 でも同じ時刻の 2 度目の開始で止まる。
 #[test]
 fn self_and_mutual_calls_terminate() {
     let table = [
@@ -209,7 +208,7 @@ fn self_and_mutual_calls_terminate() {
     assert_eq!(p.playing(0), Some((1000, Some(1050))));
 }
 
-/// 抽選などでこの時刻に始まった再生を、同じ時刻の呼び出しが始め直さない（5.2・3.3）。
+/// 抽選などでこの時刻に始まった再生を、同じ時刻の呼び出しが始め直さない。
 #[test]
 fn playback_started_this_instant_is_not_restarted_by_a_call() {
     use std::sync::Arc;
@@ -229,7 +228,7 @@ fn playback_started_this_instant_is_not_restarted_by_a_call() {
     assert_eq!(p.playing_ids(), vec![0, 1], "始まる相手は 1 つだけ");
 }
 
-/// 止めた再生の後の出来事は捨てる（4.1）。止める前の move は残る。
+/// 止めた再生の後の出来事は捨てる。止める前の move は残る。
 #[test]
 fn events_after_stop_are_dropped() {
     let table = [
@@ -242,7 +241,7 @@ fn events_after_stop_are_dropped() {
     assert_eq!(out.shift, Some((50, 1, 1)));
 }
 
-/// `move` は後の時刻の値が勝ち、同じ時刻なら当てる順の後ろが勝つ（7.2・7.3）。
+/// `move` は後の時刻の値が勝ち、同じ時刻なら当てる順の後ろが勝つ。
 #[test]
 fn last_move_value_wins() {
     let table = [
@@ -293,7 +292,7 @@ fn always_repeats_per_lap_and_stop_frame_cuts_others() {
     assert_eq!(p.playing(1), None);
 }
 
-/// 表に無い相手は何もしない（5.1）。
+/// 表に無い相手は何もしない。
 #[test]
 fn targets_not_in_the_table_do_nothing() {
     let table = [anim(0, RANDOM, vec![start(&[9], false), stop(&[8], false)])];
@@ -375,7 +374,7 @@ fn long_gap_always_restarting_always_does_work_in_proportion_to_hits() {
 }
 
 /// ずれを合わせるとき、先の時刻の `next` は負け、同じ時刻なら `next` が勝ち、`next` が無ければ元のまま
-/// （一番上と部品が同じ刻みで両方 move したとき・7.2・7.3）。
+/// （一番上と部品が同じ刻みで両方 move したとき）。
 #[test]
 fn then_prefers_the_later_shift_and_next_on_a_tie() {
     let at = |t, x| CallOutcome {

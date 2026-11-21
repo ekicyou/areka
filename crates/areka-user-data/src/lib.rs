@@ -1,4 +1,4 @@
-//! 書ける根（利用者ごとの置き場）を使う形の判断と記憶の置き場の決め方（spec: areka-P0-user-data-root）。
+//! 書ける根（利用者ごとの置き場）を使う形の判断と記憶の置き場の決め方。
 //!
 //! areka と中継（`areka-mcp-bridge`）が共有する葉のクレート。判断（[`decide`]）と
 //! 記憶の置き場（[`app_profile_dir`]）は値だけで決まる純粋な関数で、本物の入力を読む口
@@ -17,13 +17,13 @@ pub use establish::{
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
-/// 書ける根の場所を指す環境変数（要件 2.3）。在れば winget の控え・書けるかに関わらず書ける根を使う（要件 1.3）。
+/// 書ける根の場所を指す環境変数。在れば winget の控え・書けるかに関わらず書ける根を使う。
 pub const USER_ROOT_ENV: &str = "AREKA_USER_ROOT";
-/// areka の記憶の置き場を指す環境変数（今のまま・要件 5.1）。
+/// areka の記憶の置き場を指す環境変数（今のまま）。
 pub const PROFILE_DIR_ENV: &str = "AREKA_PROFILE_DIR";
-/// winget の控えのファイルの名前の頭（`<名乗り>_<出どころ>.db`・要件 1.1・7.5）。
+/// winget の控えのファイルの名前の頭（`<名乗り>_<出どころ>.db`）。
 pub const WINGET_MARKER_PREFIX: &str = "Areka.Areka.Portable_";
-/// 既定の書ける根の、`LOCALAPPDATA` の下のフォルダ名（要件 2.1）。
+/// 既定の書ける根の、`LOCALAPPDATA` の下のフォルダ名。
 pub const USER_ROOT_DIR_NAME: &str = "areka";
 /// 写しの作業フォルダの棚（書ける根の直下）。
 pub const COPY_WORK: &str = ".copy-work";
@@ -38,7 +38,7 @@ pub enum Writability {
     Unknown(String),
 }
 
-/// 判断の入力（すべて値）。`probe` が本物を詰め、テストは直接組む（要件 10.6）。
+/// 判断の入力（すべて値）。`probe` が本物を詰め、テストは直接組む。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signals {
     pub user_root_env: Option<OsString>,
@@ -65,7 +65,7 @@ pub struct UserRoot {
     pub origin: UserRootOrigin,
 }
 
-/// 書ける根を使う形にした理由（要件 1.5）。
+/// 書ける根を使う形にした理由。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Reason {
     WingetInstall {
@@ -77,7 +77,7 @@ pub enum Reason {
     Neither,
 }
 
-/// 書ける根を決められない理由（要件 2.4・作れないは `create` が記録する）。
+/// 書ける根を決められない理由（作れないは `create` が記録する）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unlocatable {
     EnvEmpty,
@@ -117,7 +117,7 @@ pub struct Layout {
     pub reason: Reason,
 }
 
-/// 記憶の置き場を決めるだけの答え（作らない・写さない。spec: bridge-store-user-root 要件 2.1〜2.9）。
+/// 記憶の置き場を決めるだけの答え（作らない・写さない）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AppProfile {
     /// 記憶の置き場。[`app_profile_dir`] と同じ値（[`PROFILE_DIR_ENV`]・在る書ける根の
@@ -131,7 +131,7 @@ pub enum AppProfile {
     Unlocatable,
 }
 
-/// 純粋な判断（要件 1.1〜1.4・2.1・2.3・2.4 の「決められない」）。フォルダを作るのは `establish`。
+/// 純粋な判断。フォルダを作るのは `establish`。
 ///
 /// 順: 環境変数 → winget の控え → 書けない → どれでもない（書けるか分からないも「どれでもない」）。
 /// 場所: 環境変数の値（空・相対は [`Unlocatable`]）→ `LOCALAPPDATA\areka`（無い・空・相対は [`Unlocatable`]）。
@@ -214,7 +214,7 @@ pub fn usable_profile_env(profile_env: Option<&OsStr>) -> Option<PathBuf> {
     dir
 }
 
-/// areka の記憶の置き場（要件 5.1〜5.3・6.1）。純粋。
+/// areka の記憶の置き場。純粋。
 ///
 /// `profile_env`（絶対パスのときだけ・空と相対は捨てる。記録は入口の [`usable_profile_env`]）→ `<書ける根>\profile\areka` → `<exe_dir>\profile\areka` → `None`（`exe_dir` も無い）。
 pub fn app_profile_dir(

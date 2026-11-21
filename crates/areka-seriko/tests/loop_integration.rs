@@ -1,13 +1,13 @@
-//! SERIKO ループ統合テスト — アクター全経路の決定論檻（spec: areka-P0-seriko-loop 要件 6.2/7.2/7.3/9.4）。
+//! SERIKO ループ統合テスト — アクター全経路の決定論檻。
 //!
 //! looper.rs の単体テストは `LoopRuntime::on_tick` を**直接**呼んで純関数コアの分岐を檻に入れる。
 //! 本ファイルはそれと**別の観測面**——seriko アクター**全体**を `SerikoSink::send_tick` と
 //! `CueSink::emit`（表示中 surface の設定）で駆動し、`SerikoMsg::Tick` → `handle_message` Tick 腕 →
 //! `LoopRuntime::on_tick` → `emit_display` 単一発行点 → `MockSurfaceOutput` の全経路を貫通させる。
 //! 固定注入 tick 列＋固定注入乱数列に対して、`MockSurfaceOutput` の**発行 `DisplayCommand` 列**（各
-//! `Show` が同梱する `PatternState` 込み）が期待列と**順序・全値で完全一致**することを主張する（7.2）。
+//! `Show` が同梱する `PatternState` 込み）が期待列と**順序・全値で完全一致**することを主張する。
 //!
-//! # 同期（sleep/polling ゼロ・要件 7.3）
+//! # 同期（sleep/polling ゼロ）
 //!
 //! 全ステップ（cue と tick）は seriko の単一 inbox を FIFO 共有する。送り終えたら `close()`→`join()`
 //! の 1 点のみで同期する。`join` 復帰時点で全ステップは単一スレッドで処理済みゆえ、`records()` の
@@ -23,17 +23,17 @@
 //!
 //! 1. kero 型: 発火→先頭コマ→…→`-1`→停止→ベース復帰（PatternState 空へ）。
 //! 2. sakura 型: bind ON→発火→フレーム→末尾非負残留（残留保持・playback 除去）。
-//! 3. 再生中の非再抽選（R2.3）: 再生中の境界跨ぎで再抽選しない（乱数非消費）。
-//! 4. bind OFF 乱数非消費（R3.1）: bind+random で bindgroup OFF は乱数を 1 度も消費せず無発行。
-//! 5. bind ON 発火（R3.2）: 同一アニメが bindgroup ON で発火。
-//! 6. 変化なし tick 無発行（R6.2）: PatternState 不変の tick は発行しない。
+//! 3. 再生中の非再抽選: 再生中の境界跨ぎで再抽選しない（乱数非消費）。
+//! 4. bind OFF 乱数非消費: bind+random で bindgroup OFF は乱数を 1 度も消費せず無発行。
+//! 5. bind ON 発火: 同一アニメが bindgroup ON で発火。
+//! 6. 変化なし tick 無発行: PatternState 不変の tick は発行しない。
 //! 7. surface 切替でコマ消滅: 表示 surface 切替で当該 slot の playback＋PatternState がクリアされ、
 //!    後続 tick が陳腐コマを蘇生させない。
 //! 8. 残留→再発火の即時クリア: IdleResidual が再発火した瞬間に残留コマが即消えベース復帰し、
 //!    先頭コマは自身のデッドラインで現れる。
 //! 9. `-2`（他負 surface）warn-once: `-2` コマで自アニメのみ停止（`-1` と同様
 //!    ベース復帰）し `warn!` が **1 回だけ**発火（2 度目の走査では dedup で再 warn しない）。かつ `-2` は
-//!    **他アニメを停止させない**（R8.2）——同時再生の別アニメが停止を跨いで生存し続けることを発行列で示す。
+//!    **他アニメを停止させない**——同時再生の別アニメが停止を跨いで生存し続けることを発行列で示す。
 
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -211,7 +211,7 @@ struct RngProbe {
 }
 
 /// 指定した値列を順に返し、呼ばれた回数を計数する rng（尽きたら 1＝非発火）。返す `Arc` から
-/// 消費回数を照合できる（bind OFF での**非消費**・再生中の**非再抽選**の檻・要件 3.1/2.3）。
+/// 消費回数を照合できる（bind OFF での**非消費**・再生中の**非再抽選**の檻）。
 fn counting_rng(values: &[u32]) -> (LoopRng, Arc<Mutex<RngProbe>>) {
     let probe = Arc::new(Mutex::new(RngProbe {
         calls: 0,
@@ -236,8 +236,7 @@ fn always_fire() -> LoopRng {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// kero 型（`interval,random,N`・末尾 `-1`）: 発火で先頭コマから再生し、`-1` 到達でコマ除去＋
-/// ベース復帰（空 PatternState の Show）する。固定 tick 列に対する発行列＋各 PatternState を完全一致で檻る
-/// （要件 2.2/4.1/4.3/6.1/7.2）。
+/// ベース復帰（空 PatternState の Show）する。固定 tick 列に対する発行列＋各 PatternState を完全一致で檻る。
 #[test]
 fn kero_negative_tail_restores_base_full_path() {
     let empty = BindSet::from_ids([]);
@@ -285,7 +284,7 @@ fn kero_negative_tail_restores_base_full_path() {
 
 /// sakura 型（`interval,bind+random,N`・末尾非負）: bindgroup ON で発火し、末尾コマ到達で最終コマを
 /// **残したまま** playback 除去（IdleResidual）する。残留は恒久（後続 tick は無発行）。固定 tick 列の
-/// 発行列＋PatternState を完全一致で檻る（要件 3.2/4.4/6.2/9.4）。
+/// 発行列＋PatternState を完全一致で檻る。
 #[test]
 fn sakura_residual_tail_keeps_frame_full_path() {
     let on = BindSet::from_ids([7]); // anim id 7 の bindgroup を ON（BindRandom ゲート通過）
@@ -324,11 +323,11 @@ fn sakura_residual_tail_keeps_frame_full_path() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 檻 3: 再生中の非再抽選（R2.3）— 再生中の境界跨ぎで再抽選しない（乱数非消費）
+// 檻 3: 再生中の非再抽選 — 再生中の境界跨ぎで再抽選しない（乱数非消費）
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// 再生中（先頭コマが長く継続）のまま次の 1000ms 境界を跨いでも、当該アニメは再抽選対象外＝
-/// **乱数を追加消費しない**（要件 2.3）。同一コマ継続ゆえ発行も増えない（要件 6.2）。
+/// **乱数を追加消費しない**。同一コマ継続ゆえ発行も増えない。
 #[test]
 fn playing_anim_not_relotteried_across_boundary_full_path() {
     let empty = BindSet::from_ids([]);
@@ -363,11 +362,11 @@ fn playing_anim_not_relotteried_across_boundary_full_path() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 檻 4: bind OFF は乱数非消費（R3.1）
+// 檻 4: bind OFF は乱数非消費
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// `bind+random` で bindgroup が OFF のとき、境界を跨いでも judgment そのものが不発＝
-/// **乱数を 1 度も消費しない**（要件 3.1・CRITICAL）。発行は初回 Show のみ。
+/// **乱数を 1 度も消費しない**。発行は初回 Show のみ。
 #[test]
 fn bindrandom_off_consumes_no_rng_full_path() {
     let empty = BindSet::from_ids([]); // anim id 7 の bindgroup は不在＝OFF
@@ -398,11 +397,11 @@ fn bindrandom_off_consumes_no_rng_full_path() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 檻 5: bind ON で発火（R3.2）
+// 檻 5: bind ON で発火
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// 檻 4 と同一アニメが bindgroup ON なら発火し、先頭コマ（単一コマ＝即残留）を発行する。乱数は
-/// 1 回だけ消費される（要件 3.2）。
+/// 1 回だけ消費される。
 #[test]
 fn bindrandom_on_fires_full_path() {
     let on = BindSet::from_ids([7]);
@@ -431,10 +430,10 @@ fn bindrandom_on_fires_full_path() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 檻 6: 変化なし tick は無発行（R6.2）
+// 檻 6: 変化なし tick は無発行
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// PatternState が変化しない tick（境界も跨がず同一コマ継続）は単一発行点から発行しない（要件 6.2）。
+/// PatternState が変化しない tick（境界も跨がず同一コマ継続）は単一発行点から発行しない。
 #[test]
 fn unchanged_tick_emits_nothing_full_path() {
     let empty = BindSet::from_ids([]);
@@ -468,7 +467,7 @@ fn unchanged_tick_emits_nothing_full_path() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// 再生中に表示 surface を切り替えると、当該 slot の playback＋PatternState がクリアされ、後続 tick が
-/// 陳腐コマを蘇生させない。切替 Show は空 pattern・以降のコマ発行は起きない（surface 従属・要件 2.3）。
+/// 陳腐コマを蘇生させない。切替 Show は空 pattern・以降のコマ発行は起きない（surface 従属）。
 #[test]
 fn surface_switch_clears_playback_and_frame_full_path() {
     let empty = BindSet::from_ids([]);
@@ -547,12 +546,12 @@ fn residual_immediately_cleared_on_refire_full_path() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 檻 9: `-2`（他負 surface）warn-once ＋ 他アニメ非停止（R8.2）
+// 檻 9: `-2`（他負 surface）warn-once ＋ 他アニメ非停止
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// `-2`（他負 surface）コマは自アニメのみ停止（`-1` と同様ベース復帰）し `warn!` を **1 回だけ**発火する
 /// （2 度目の `-2` 走査では dedup で再 warn しない）。かつ `-2` は**他アニメを停止させない**——同時再生の
-/// 別アニメ（id 1）が id 0 の停止・再発火・再停止を跨いで生存し続けることを発行列で示す（要件 8.2/9.4）。
+/// 別アニメ（id 1）が id 0 の停止・再発火・再停止を跨いで生存し続けることを発行列で示す。
 ///
 /// `-2` の warn-once 分岐を、本統合檻がアクター全経路で確かめる。
 #[test]
@@ -589,9 +588,9 @@ fn other_negative_surface_warns_once_and_spares_others_full_path() {
         vec![
             show("0", 10, &empty, PatternState::default()), // Emote 初回
             show("0", 10, &empty, pattern(&[(0, 2106), (1, 3000)])), // 両発火
-            show("0", 10, &empty, pattern(&[(1, 3000)])),   // id0 停止・id1 生存（R8.2）
+            show("0", 10, &empty, pattern(&[(1, 3000)])),   // id0 停止・id1 生存
             show("0", 10, &empty, pattern(&[(0, 2106), (1, 3000)])), // id0 再発火・id1 継続
-            show("0", 10, &empty, pattern(&[(1, 3000)])),   // id0 再停止・id1 なお生存（R8.2）
+            show("0", 10, &empty, pattern(&[(1, 3000)])),   // id0 再停止・id1 なお生存
         ],
         "`-2` は自アニメのみ停止し他アニメ（id1）は停止を跨いで生存する（R8.2）"
     );

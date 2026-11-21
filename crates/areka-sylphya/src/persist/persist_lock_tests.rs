@@ -1,4 +1,4 @@
-//! 保存の「読んで重ねて書く」を錠で 1 本ずつにする檻（#3・要件 4.1・4.2）。
+//! 保存の「読んで重ねて書く」を錠で 1 本ずつにするテスト。
 //!
 //! - 同じプロセスの 2 つの書き手: A が読みで止まっている間 B は終わらず、門を開けると両方の値が残る。
 //! - 錠が取れない: `Degraded(Io(..))`・書き込みは呼ばれない・ERROR `persist_lock_failed` が 1 件。
@@ -77,7 +77,7 @@ fn two_writers_in_one_process_do_not_lose_an_update() {
             outcome
         });
         let early = done_rx.recv_timeout(Duration::from_millis(200));
-        drop(open_tx); // 門を開ける
+        drop(open_tx);
         let outcomes = (a.join().unwrap(), b.join().unwrap());
         (early != Err(RecvTimeoutError::Timeout), outcomes)
     });

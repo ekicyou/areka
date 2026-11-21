@@ -1,4 +1,4 @@
-//! 成功の結果と進捗の型（要件 7.1・7.2・7.6）。
+//! 成功の結果と進捗の型。
 
 use std::path::PathBuf;
 
@@ -19,7 +19,7 @@ impl ManifestName {
     }
 }
 
-/// 起きた順に観測者へ渡す進捗。番号は 0 始まり（7.6）。
+/// 起きた順に観測者へ渡す進捗。番号は 0 始まり。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Progress {
     ManifestFetched {
@@ -47,7 +47,7 @@ pub enum Progress {
     },
 }
 
-/// 成功の 2 形（7.2）。
+/// 成功の 2 形。
 #[derive(Debug)]
 pub enum UpdateOutcome {
     /// 差分 0。対象フォルダには何も書いていない。
@@ -62,7 +62,7 @@ pub enum UpdateOutcome {
     },
 }
 
-/// `delete.txt` の行が指すのに取り除けなかった物（6.6）。
+/// `delete.txt` の行が指すのに取り除けなかった物。
 #[derive(Debug)]
 pub struct Undeletable {
     pub path: PathBuf,

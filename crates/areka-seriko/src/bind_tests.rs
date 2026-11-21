@@ -1,11 +1,8 @@
-//! `bind.rs` のテスト（bind.rs の中にあったものを純移動・areka-P0-mcp-reload 8.3 で 1,000 行を超えないように）。
-//!
-//! 番号の出どころ: R・D は areka-P0-mayuna-compose、「bindopt」は areka-P0-bindoption-exclusivity、
-//! 決定3 は areka-P0-seriko-engine の design、要件 14.x は areka-P0-offline-surface-dump（後ろの節）。
+//! `bind.rs` のテスト。
 
 use super::*;
 
-/// 恒等写像（KEY・emo2 追験値）: 既定オン集合の番号がそのまま bind 集合の
+/// 恒等写像（emo2 追験値）: 既定オン集合の番号がそのまま bind 集合の
 /// animation ID になる。emo2 実測の `default,1` 集合 `{1100,1207,1302,1500,1800}`
 /// （既に昇順）を渡し、`ids()` が同一スライスを返すことを全値比較で確認する。
 #[test]
@@ -30,7 +27,7 @@ fn sort_and_dedup_passthrough() {
     );
 }
 
-/// 空入力: kero 側は emo2 で空（design Risks）。空スライスから空 BindSet を得る。
+/// 空入力: kero 側は emo2 で空。空スライスから空 BindSet を得る。
 #[test]
 fn empty_input_yields_empty_bindset() {
     let set = build_static_bindset(&[]);
@@ -59,7 +56,7 @@ fn tiny_resolver() -> BindResolver {
     ))
 }
 
-/// `mustselect` 宣言を持つ名前解決表を組む（bindopt 設計 D2）。
+/// `mustselect` 宣言を持つ名前解決表を組む。
 /// sakura: (目,笑)→1301 / (目,普)→1303 / (目,閉)→1304 / (紅,あり)→1207。
 /// mustselect カテゴリ = {目}（紅は非宣言＝正典の既定）。
 fn mustselect_resolver() -> BindResolver {
@@ -73,7 +70,7 @@ fn mustselect_resolver() -> BindResolver {
     ))
 }
 
-/// `bindoption` 宣言なしの表は全カテゴリ既定（bindopt 設計 D3）。空リゾルバは
+/// `bindoption` 宣言なしの表は全カテゴリ既定。空リゾルバは
 /// `empty_resolver_is_default_policy_and_never_reaches_apply` が見る。
 #[test]
 fn policy_empty_or_absent_is_default() {
@@ -85,11 +82,10 @@ fn policy_empty_or_absent_is_default() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// `policy()` 導出マトリクスの檻（bindopt 4.2/4.3・設計 §Testing Strategy
-// → Unit Tests（seriko・bind.rs）1-2）。宣言 3 形（mustselect／multiple／非宣言）に
+// `policy()` 導出マトリクスの檻。宣言 3 形（mustselect／multiple／非宣言）に
 // 併記・未知カテゴリを加えた全ケースを 2 名前空間で固定し、本体（sakura）／相方（kero）の
 // 名前空間隔離も併せて固定する。`empty()` は全カテゴリ既定かつ名前解決が常に不成立
-// ＝適用に到達しない（bindopt 設計 D3 の「実害なし」根拠）を檻に固定する。
+// ＝適用に到達しないことも固定する。
 // ─────────────────────────────────────────────────────────────────────
 
 /// 導出マトリクス用の名前解決表（本体・相方それぞれに宣言 3 形＋併記を持たせる）。
@@ -118,7 +114,7 @@ fn policy_matrix_resolver() -> BindResolver {
     ))
 }
 
-/// 本体側（sakura）の導出マトリクス全ケース（bindopt 4.2/4.3）。
+/// 本体側（sakura）の導出マトリクス全ケース。
 /// mustselect 宣言→MustSelect／multiple 宣言→Multiple／非宣言→既定／併記→Multiple／未知→既定。
 #[test]
 fn policy_matrix_sakura_covers_all_declaration_forms() {
@@ -150,7 +146,7 @@ fn policy_matrix_sakura_covers_all_declaration_forms() {
     );
 }
 
-/// 相方側（kero）の導出マトリクス全ケース——本体側と同一の規則が独立に成り立つ（bindopt 4.2/4.3）。
+/// 相方側（kero）の導出マトリクス全ケース——本体側と同一の規則が独立に成り立つ。
 #[test]
 fn policy_matrix_kero_covers_all_declaration_forms() {
     let r = policy_matrix_resolver();
@@ -181,7 +177,7 @@ fn policy_matrix_kero_covers_all_declaration_forms() {
     );
 }
 
-/// 名前空間の隔離（bindopt 4.3）: 本体の宣言は相方で効かず、相方の宣言も本体で効かない。
+/// 名前空間の隔離: 本体の宣言は相方で効かず、相方の宣言も本体で効かない。
 ///
 /// mustselect・multiple・併記のいずれの宣言形についても、反対側の名前空間で引くと
 /// 正典の既定（[`BindChoicePolicy::Default`]）へ落ちる。
@@ -204,8 +200,7 @@ fn policy_is_namespace_isolated_between_sakura_and_kero() {
     }
 }
 
-/// `empty()` は全カテゴリ既定であり、かつ名前解決が常に不成立ゆえ**適用に到達しない**
-/// （bindopt 設計 D3 の「署名不変でも実害なし」根拠の檻）。
+/// `empty()` は全カテゴリ既定であり、かつ名前解決が常に不成立ゆえ**適用に到達しない**。
 ///
 /// 既定は「高々 1 個」＝排他置換の意味を持つが、空リゾルバでは `resolve` が常に `None`
 /// ＝呼び手（actor）が着せ替え ID を得られないため、排他置換の適用そのものに達しない。
@@ -234,7 +229,7 @@ fn empty_resolver_is_default_policy_and_never_reaches_apply() {
     }
 }
 
-/// category_ids はカテゴリの全 ID を昇順・重複除去で返す（bindopt 2.1/3.1・排他置換の
+/// category_ids はカテゴリの全 ID を昇順・重複除去で返す（排他置換の
 /// off 対象集合）。
 #[test]
 fn category_ids_collects_category_members_ascending() {
@@ -261,7 +256,7 @@ fn category_ids_collects_category_members_ascending() {
     );
 }
 
-/// 宣言済みの (カテゴリ, パーツ) は名前空間ごとに着せ替え ID を返す（R3.2）。
+/// 宣言済みの (カテゴリ, パーツ) は名前空間ごとに着せ替え ID を返す。
 #[test]
 fn resolve_declared_returns_id_per_namespace() {
     let r = tiny_resolver();
@@ -277,7 +272,7 @@ fn resolve_declared_returns_id_per_namespace() {
     );
 }
 
-/// 名前空間は隔離される: sakura 宣言のキーを kero で引くと未宣言＝None（R3.7）。
+/// 名前空間は隔離される: sakura 宣言のキーを kero で引くと未宣言＝None。
 #[test]
 fn resolve_is_namespace_isolated() {
     let r = tiny_resolver();
@@ -293,7 +288,7 @@ fn resolve_is_namespace_isolated() {
     );
 }
 
-/// 未宣言の (カテゴリ, パーツ) は None（捏造しない・R3.7）。
+/// 未宣言の (カテゴリ, パーツ) は None（捏造しない）。
 #[test]
 fn resolve_unknown_returns_none() {
     let r = tiny_resolver();
@@ -309,7 +304,7 @@ fn resolve_unknown_returns_none() {
     );
 }
 
-/// scope 写像（D7・要件 14.2）: "0"→Sakura・"1"→Kero・2 以上の数→Char(n)・非数値→None。
+/// scope 写像: "0"→Sakura・"1"→Kero・2 以上の数→Char(n)・非数値→None。
 #[test]
 fn scope_namespace_maps_two_and_above_to_char() {
     assert_eq!(
@@ -345,7 +340,7 @@ fn scope_namespace_maps_two_and_above_to_char() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// spec: areka-P0-offline-surface-dump: シェルの読みからの既定と名前の表（要件 14.1〜14.3・5.2・5.9）。
+// シェルの読みからの既定と名前の表。
 
 /// 3 種類のスコープで既定と名前が分かれるシェルの descript.txt。`服` の A（3 番）は B（20 番）より
 /// 前の行に書く（キーの順では `bindgroup20` が先＝行の順で並べないと赤）。B は 21 番でも書き直す。
@@ -382,7 +377,7 @@ pub(crate) fn groups_of(shell: &str) -> areka_parsers::package::BindGroupDefault
 }
 
 /// 既定の組: スコープ 0 に `sakura.*`・1 に `kero.*`・2 に `char2.*`・書かれていない 3 と数でない
-/// スコープは空（要件 14.1）。
+/// スコープは空。
 #[test]
 fn default_binds_from_groups_splits_by_scope() {
     let defaults = DefaultBinds::from_groups(&groups_of(SCOPED_SHELL));
@@ -397,7 +392,7 @@ fn default_binds_from_groups_splits_by_scope() {
 }
 
 /// 名前の表: 3 種類のスコープがそれぞれ自分の表を引き、ほかのスコープの名前は引かない。
-/// `char2` の `multiple` は `char2` だけに効く（要件 14.2・14.3）。
+/// `char2` の `multiple` は `char2` だけに効く。
 #[test]
 fn bind_resolver_from_groups_reads_three_kinds_of_scope() {
     let r = BindResolver::from_groups(&groups_of(SCOPED_SHELL));
@@ -485,11 +480,11 @@ fn name_of_undeclared_is_none_and_overlap_takes_first_in_table_order() {
 
 // ─────────────────────────────────────────────────────────────────────
 // bind コマンド引数の類別（parse_bind_directive）純関数。
-// Observable = 正常形（Apply）/トグル形（Toggle）/カテゴリ単位形（CategoryWide）/
-// 破損形（Malformed）それぞれが期待どおり区分される（D8・R4.1/R4.2）。
+// 正常形（Apply）/トグル形（Toggle）/カテゴリ単位形（CategoryWide）/
+// 破損形（Malformed）それぞれが期待どおり区分される。
 // ─────────────────────────────────────────────────────────────────────
 
-/// 正常形（R4.1）: 名前キー＋明示 on/off。"1"→on:true・"0"→on:false の Apply。
+/// 正常形: 名前キー＋明示 on/off。"1"→on:true・"0"→on:false の Apply。
 #[test]
 fn parse_apply_explicit_on_off() {
     assert_eq!(
@@ -512,7 +507,7 @@ fn parse_apply_explicit_on_off() {
     );
 }
 
-/// トグル形（R4.2）: 数値欄が空欄／省略 → Toggle（当てるときは今の着脱の反対・`apply_bind_directive`）。
+/// トグル形: 数値欄が空欄／省略 → Toggle（当てるときは今の着脱の反対・`apply_bind_directive`）。
 #[test]
 fn parse_toggle_empty_or_absent_value() {
     assert_eq!(
@@ -533,7 +528,7 @@ fn parse_toggle_empty_or_absent_value() {
     );
 }
 
-/// カテゴリ単位形（R4.2）: パーツ名が空欄／省略 → CategoryWide。
+/// カテゴリ単位形: パーツ名が空欄／省略 → CategoryWide。
 /// on は寛容に読む（パーツを定義の順に 1 つずつ当てるときの on/off・None はパーツごとのトグル）: "1"→Some(true)・
 /// "0"→Some(false)・欠落/空/その他→None（Malformed にしない）。
 #[test]
@@ -629,7 +624,7 @@ fn parse_ignores_fourth_token() {
     );
 }
 
-/// trim: 各トークンは trim され、返る文字列も trim 済みが格納される（parsers D2 整合）。
+/// trim: 各トークンは trim され、返る文字列も trim 済みが格納される。
 #[test]
 fn parse_trims_tokens_and_stores_trimmed() {
     assert_eq!(
@@ -645,13 +640,13 @@ fn parse_trims_tokens_and_stores_trimmed() {
 
 // ─────────────────────────────────────────────────────────────────────
 // 着せ替え集合の on/off 積算（accumulate）純関数。
-// Observable = 冪等（on→on・off→off で結果集合不変）＋順序不感（適用列の順序を
-// 入れ替えても同一 BindSet）。BindSet が昇順 dedup ゆえ集合同値が冪等判定の正準形（D9）。
+// 冪等（on→on・off→off で結果集合不変）と順序不感（適用列の順序を入れ替えても同一 BindSet）。
+// BindSet が昇順 dedup ゆえ集合同値が冪等判定の正準形。
 // ─────────────────────────────────────────────────────────────────────
 
 use areka_emo_compose::BindSet;
 
-/// 基本（R3.3）: 空集合に on で追加→単一集合、続けて off で除去→空集合。
+/// 基本: 空集合に on で追加→単一集合、続けて off で除去→空集合。
 #[test]
 fn accumulate_basic_on_then_off() {
     let empty = BindSet::default();
@@ -666,7 +661,7 @@ fn accumulate_basic_on_then_off() {
     assert_eq!(after_off, empty, "off で元の空集合へ戻る");
 }
 
-/// on は直前状態を保持したまま当該 ID を追加する（複数 cue 積算・R3.4）。
+/// on は直前状態を保持したまま当該 ID を追加する（複数 cue 積算）。
 #[test]
 fn accumulate_on_preserves_existing() {
     let base = BindSet::from_ids([1100]);
@@ -678,7 +673,7 @@ fn accumulate_on_preserves_existing() {
     );
 }
 
-/// off は当該 ID のみ除去し、他は保持する（R3.3/R3.4）。
+/// off は当該 ID のみ除去し、他は保持する。
 #[test]
 fn accumulate_off_removes_only_target() {
     let base = BindSet::from_ids([1100, 1207]);
@@ -686,7 +681,7 @@ fn accumulate_off_removes_only_target() {
     assert_eq!(after.ids(), &[1207], "1100 のみ除去し 1207 は保持（R3.3）");
 }
 
-/// 冪等 on→on（D9）: 同一 (id, on=true) を 2 回適用しても 1 回と同一集合。
+/// 冪等 on→on: 同一 (id, on=true) を 2 回適用しても 1 回と同一集合。
 #[test]
 fn accumulate_idempotent_on_on() {
     let base = BindSet::from_ids([1207]);
@@ -700,7 +695,7 @@ fn accumulate_idempotent_on_on() {
     );
 }
 
-/// 冪等 off→off（D9）: 含まない ID を off しても不変、2 回連打でも不変。
+/// 冪等 off→off: 含まない ID を off しても不変、2 回連打でも不変。
 #[test]
 fn accumulate_idempotent_off_off() {
     let base = BindSet::from_ids([1207]);
@@ -710,7 +705,7 @@ fn accumulate_idempotent_off_off() {
     assert_eq!(twice, base, "off→off 連打でも不変（冪等・D9）");
 }
 
-/// 順序不感（KEY Observable・D9）: 適用列の順序を入れ替えても同一 BindSet。
+/// 順序不感: 適用列の順序を入れ替えても同一 BindSet。
 /// [on 1207, on 1100] と [on 1100, on 1207] が同一集合へ至る（fold で畳む）。
 #[test]
 fn accumulate_order_insensitive() {
@@ -730,7 +725,7 @@ fn accumulate_order_insensitive() {
     assert_eq!(result_a.ids(), &[1100, 1207], "両順序とも昇順正準形へ収束");
 }
 
-/// `DefaultBinds::uniform` はどのスコープ（数でないスコープも）にも同じ組を返す（要件 14.3）。
+/// `DefaultBinds::uniform` はどのスコープ（数でないスコープも）にも同じ組を返す。
 #[test]
 fn default_binds_uniform_returns_same_set_for_every_scope() {
     let set = areka_emo_compose::BindSet::from_ids([1100, 1207]);
@@ -744,7 +739,7 @@ fn default_binds_uniform_returns_same_set_for_every_scope() {
     }
 }
 
-/// `DefaultBinds::single` はそのスコープだけに組を持ち、ほかのスコープ・数でないスコープは空（要件 14.3）。
+/// `DefaultBinds::single` はそのスコープだけに組を持ち、ほかのスコープ・数でないスコープは空。
 #[test]
 fn default_binds_single_holds_one_scope_and_others_are_empty() {
     let set = areka_emo_compose::BindSet::from_ids([3000]);
@@ -760,7 +755,7 @@ fn default_binds_single_holds_one_scope_and_others_are_empty() {
     }
 }
 
-/// `DefaultBinds::default` はどのスコープにも空の組を返す（要件 14.3）。
+/// `DefaultBinds::default` はどのスコープにも空の組を返す。
 #[test]
 fn default_binds_default_is_empty_for_every_scope() {
     let binds = DefaultBinds::default();

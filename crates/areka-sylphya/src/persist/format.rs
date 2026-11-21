@@ -1,11 +1,10 @@
-//! TOML 直列化形式（`format-version = 1`）と寛容読取（R6.3・R6.4）。
+//! TOML 直列化形式（`format-version = 1`）と寛容読取。
 //!
 //! 1 スコープの永続状態（`<scope root>/sylphya.toml`）の **format 層**——スキーマ定義・
-//! 直列化・寛容パース——を担う。この層は語彙台帳（Major 2）にも鏡像（Major 3）にも依存
-//! しない自己完結モジュールであり、std ＋ `toml` ＋ `tracing` のみに依る（design
-//! 「永続層 → 自己完結モジュール」）。
+//! 直列化・寛容パース——を担う。語彙台帳にも鏡像にも依存しない自己完結モジュールで、
+//! std ＋ `toml` ＋ `tracing` のみに依る。
 //!
-//! ## 物理スキーマ（design「Physical Data Model」の正本）
+//! ## 物理スキーマ
 //!
 //! ```toml
 //! format-version = 1
@@ -39,40 +38,39 @@
 //!
 //! - `format-version` は最上位の **整数 key**（本バージョン = [`FORMAT_VERSION`] = 1）。
 //! - `window` / `balloon-offset` の各エントリ key はスコープ ID（本 format 層では不透明文字列。
-//!   typed な [`u32`] スコープへの写像は Task 4.3 の `PersistKey` の領分）。
-//! - 値はすべて TOML 文字列（design「値はすべて TOML 文字列・R6.6 の往復自明性」）。
+//!   typed な [`u32`] スコープへの写像は `PersistKey` の領分）。
+//! - 値はすべて TOML 文字列（往復が自明になる）。
 //!
-//! ## 寛容読取 3 段（design「永続層 → Responsibilities」・R6.3/R6.4）
+//! ## 寛容読取 3 段
 //!
 //! [`read_toml_str`] は **content 段**（下記 2・3）を担う。ファイル不在段（debug＋全不在）は
-//! IO 層（Task 4.2）の領分ゆえここには無い。
+//! IO 層の領分ゆえここには無い。
 //!
 //! 1. （IO 層）ファイル不在 → debug ＋ 全不在。
 //! 2. **parse 失敗**（不正 TOML）／**未知・欠落 `format-version`**（≠ 1）→ `warn!` ＋ 全不在
 //!    （[`FormatDoc::default`]）。呼び出し側はファイルを削除しない（削除は IO 関心）。未知
-//!    バージョンの warn は「旧形式判別可能」（R6.4）の唯一の観測点。
+//!    バージョンの warn は旧形式を判別できる唯一の観測点。
 //! 3. **有効バージョン・key 欠落** → 当該 key のみ不在（`None`）。欠落 key に warn は出さない
 //!    （単なる不在）。型外れ（文字列でない値）も当該 key 不在として寛容に無視する。
 //!
-//! いかなる入力でも panic しない（R6.7・R8.1「無音失敗なし」——縮退は必ず warn 記録）。
+//! いかなる入力でも panic しない（縮退は必ず warn 記録）。
 
 use std::collections::BTreeMap;
 
-/// 本モジュールが読み書きする TOML 形式のバージョン（design「Physical Data Model」）。
+/// 本モジュールが読み書きする TOML 形式のバージョン。
 ///
 /// `format-version` 増分時は新旧判別のうえ読取側でマイグレーションする（旧形式は warn ＋不在
-/// 縮退が最低保証・R6.4）。[`read_toml_str`] はこの値に一致するファイルのみ本文を採用する。
+/// 縮退が最低保証）。[`read_toml_str`] はこの値に一致するファイルのみ本文を採用する。
 pub const FORMAT_VERSION: i64 = 1;
 
-/// ログ target（steering: areka-log-first-no-silent-failure）。
 const LOG_TARGET: &str = "areka_sylphya::persist::format";
 
 /// 1 スコープの永続ドキュメントの中立 in-memory 表現（`sylphya.toml` 相当）。
 ///
-/// 4 key 族（design「Physical Data Model」）を format 層の素の器として保持する:
+/// 4 key 族を format 層の素の器として保持する:
 /// 窓位置（`window`）・バルーン相対オフセット（`balloon_offset`）・起動記録（`boot_count`）・
-/// vanish 回数（`vanish_count`）。値はすべて文字列（R6.6 の往復自明性）。スコープ ID は
-/// 不透明文字列（typed 化は Task 4.3）。
+/// vanish 回数（`vanish_count`）。値はすべて文字列（往復が自明）。スコープ ID は
+/// 不透明文字列。
 ///
 /// マップは [`BTreeMap`] ゆえ直列化順序は ID 昇順で決定論的（同一 doc → 同一出力）。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -118,7 +116,7 @@ impl AxisPair {
 }
 
 /// `base`（既存のファイルの表）の上に [`FormatDoc`] の値だけを `format-version = 1` の TOML 文字列へ
-/// 重ねて直列化する（design スキーマ）。値はすべて TOML 文字列で出力し、空のマップ・`None` の key は
+/// 重ねて直列化する。値はすべて TOML 文字列で出力し、空のマップ・`None` の key は
 /// テーブル自体を省略する。[`BTreeMap`] の昇順走査ゆえ出力は決定論的。`doc` が持たない表・key・
 /// 型の違う値は `base` のまま残す（版が 1 のまま足された表を保存で消さない）。
 pub(crate) fn to_toml_string_over(mut base: toml::Table, doc: &FormatDoc) -> String {
@@ -140,7 +138,6 @@ pub(crate) fn to_toml_string_over(mut base: toml::Table, doc: &FormatDoc) -> Str
     if let Some(c) = &doc.vanish_count {
         root.insert("vanish".into(), count_table(c));
     }
-    // [last]: 値のある欄だけ書く（1 つも無ければ表を書かない）。
     let mut last = toml::Table::new();
     for (field, value) in [
         ("ghost", &doc.last_ghost),
@@ -171,7 +168,7 @@ pub(crate) fn to_toml_string_over(mut base: toml::Table, doc: &FormatDoc) -> Str
     merge_table(&mut base, root);
 
     // toml の直列化は読んだ TOML の表とこの関数が足す値からは失敗しない。万一の
-    // 失敗も panic させず、空 doc の最小形へ縮退する（R6.7・無音失敗なし）。
+    // 失敗も panic させず、空 doc の最小形へ縮退する。
     toml::to_string(&base).unwrap_or_else(|e| {
         tracing::error!(
             target: LOG_TARGET,
@@ -220,13 +217,13 @@ fn count_table(value: &str) -> toml::Value {
     toml::Value::Table(t)
 }
 
-/// TOML 文字列を寛容にパースして [`FormatDoc`] を得る（寛容読取の content 段・R6.3/R6.4）。
+/// TOML 文字列を寛容にパースして [`FormatDoc`] を得る（寛容読取の content 段）。
 ///
 /// - parse 失敗 → `warn!` ＋ 全不在（空 doc）。panic しない。
-/// - `format-version` 欠落・≠ [`FORMAT_VERSION`] → `warn!`（旧形式判別可能・R6.4）＋ 全不在。
+/// - `format-version` 欠落・≠ [`FORMAT_VERSION`] → `warn!`（旧形式を判別できる）＋ 全不在。
 /// - 有効バージョン・key 欠落 → 当該 key のみ `None`（warn なし）。
 ///
-/// 同一 content からは常に同一 doc を返す（決定論・R2.5 の永続版）。
+/// 同一 content からは常に同一 doc を返す。
 pub fn read_toml_str(content: &str) -> FormatDoc {
     parse_toml_str(content)
         .map(|(doc, _)| doc)
@@ -250,7 +247,6 @@ pub(crate) fn parse_toml_str(content: &str) -> Result<(FormatDoc, toml::Table), 
         }
     };
 
-    // 未知/欠落バージョンは全不在（R6.4「未知バージョン→warn・旧形式判別可能」）。
     let version = table
         .get("format-version")
         .and_then(toml::Value::as_integer);
@@ -270,7 +266,6 @@ pub(crate) fn parse_toml_str(content: &str) -> Result<(FormatDoc, toml::Table), 
         }
     }
 
-    // 有効バージョン: 存在する key のみ採用（欠落・型外れは当該 key 不在・warn なし）。
     let last = table.get("last").and_then(toml::Value::as_table);
     let read_last = |field| last.and_then(|t| read_str(t, field));
     let doc = FormatDoc {
@@ -299,7 +294,7 @@ fn read_axis_map(root: &toml::Table, key: &str) -> BTreeMap<String, AxisPair> {
     };
     for (id, entry) in table {
         let Some(axis) = entry.as_table() else {
-            continue; // 型外れエントリは当該スコープ不在として無視。
+            continue;
         };
         let pair = AxisPair {
             x: read_str(axis, "x"),
@@ -345,7 +340,7 @@ mod tests {
     use crate::test_log_capture::{assert_logged, capture};
     use tracing::Level;
 
-    // --- 直列化・往復・寛容読取の決定論檻（R6.3/R6.4/R6.6・design「Validation」）---
+    // --- 直列化・往復・寛容読取 ---
 
     #[test]
     fn round_trip_preserves_all_string_values() {
@@ -432,7 +427,6 @@ mod tests {
 
     #[test]
     fn string_values_survive_as_strings() {
-        // "1024" は往復後も文字列 "1024"（整数化しない）。
         let doc = FormatDoc {
             boot_count: Some("1024".into()),
             ..FormatDoc::default()
@@ -449,7 +443,6 @@ mod tests {
 
     #[test]
     fn unknown_version_yields_all_absent() {
-        // 有効 TOML だが format-version = 2（未知）→ 本文があっても全不在へ縮退。
         let doc = read_toml_str("format-version = 2\n[boot]\ncount = \"7\"\n");
         assert_eq!(doc, FormatDoc::default());
     }
@@ -479,7 +472,6 @@ mod tests {
 
     #[test]
     fn missing_key_is_per_key_absent() {
-        // 有効バージョン・boot テーブル欠落 → boot_count None、window は解決される。
         let doc = read_toml_str("format-version = 1\n[window.\"0\"]\nx = \"5\"\n");
         assert_eq!(doc.boot_count, None);
         assert_eq!(doc.vanish_count, None);
@@ -493,25 +485,22 @@ mod tests {
 
     #[test]
     fn type_mismatch_value_is_absent_not_panic() {
-        // count が整数（型外れ）→ 当該 key 不在（panic しない・寛容）。
         let doc = read_toml_str("format-version = 1\n[boot]\ncount = 7\n");
         assert_eq!(doc.boot_count, None);
     }
 
-    // --- 未知バージョンの warn 発火檻（R6.4「未知バージョン→warn・旧形式判別可能」）---
+    // --- 未知バージョンの warn 発火 ---
     //
     // ログ捕捉は共有ヘルパ [`crate::test_log_capture`] を経由する。並列 `cargo test` 負荷下で
-    // tracing callsite の Interest が `Never` に焼き付いて warn が偽消失する確率欠陥は、当該
+    // tracing callsite の Interest が `Never` に焼き付いて warn が偽消失する欠陥は、当該
     // ヘルパが委譲する共有 crate `log-capture-kit`（probe 常駐＋窓内の interest 再計算＋番兵）で
-    // 根絶される（Task 4.1 flaky 根治・R9.1「テスト可能領域は決定論的に檻へ」）。
+    // 防いでいる。
 
     #[test]
     fn unknown_version_emits_warn() {
         let events = capture(|| {
             let _ = read_toml_str("format-version = 99\n[boot]\ncount = \"1\"\n");
         });
-        // 未知バージョンの縮退アームが LOG_TARGET・WARN で「unknown/absent format-version」を
-        // 発火することを表明（ログ削除・語彙変更・レベル降格で赤になる）。
         assert_logged(
             &events,
             Level::WARN,
@@ -522,9 +511,7 @@ mod tests {
 
     #[test]
     fn missing_version_emits_warn() {
-        // 欠落バージョン（format-version 不在）は未知バージョンと同一縮退アームを踏む。
-        // warn 語彙「unknown/absent format-version」が absent 側でも発火することを明示的に檻へ
-        // 入れる（Task 4.4 Criterion 2「未知/欠落バージョン→warn」）。
+        // 欠落バージョンは未知バージョンと同一の縮退アームを踏む。
         let events = capture(|| {
             let _ = read_toml_str("[boot]\ncount = \"1\"\n");
         });
@@ -541,13 +528,12 @@ mod tests {
         let events = capture(|| {
             let _ = read_toml_str("[[[ broken");
         });
-        // parse 失敗の縮退アームが LOG_TARGET・WARN で「parse failed」を発火することを表明。
         assert_logged(&events, Level::WARN, LOG_TARGET, "parse failed");
     }
 
     #[test]
     fn valid_version_missing_key_emits_no_warn() {
-        // key 欠落は単なる不在——warn を出さない（design「key 欠落→当該 key 不在」）。
+        // key 欠落は単なる不在で warn を出さない。
         let events = capture(|| {
             let _ = read_toml_str("format-version = 1\n[window.\"0\"]\nx = \"5\"\n");
         });

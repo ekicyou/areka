@@ -1,5 +1,4 @@
-//! 面の切り替えと着せ替えの変化の発行列（spec: areka-P0-surface-element-nesting 要件 5.6・5.7・
-//! 5.9・5.12・8.3・tasks.md 7.5・design.md「一番上のサーフェスの切り替え」）。
+//! 面の切り替えと着せ替えの変化の発行列。
 //!
 //! 表は `surfaces.txt` の本文から実経路で組み、cue と刻みを同じ `handle_message` へ順に流して、
 //! 発行先の記録の並びで確かめる（刻みは注入の絶対時刻・乱数は常に発火）。
@@ -67,7 +66,7 @@ impl Rig {
 }
 
 /// 子が閉じ目のコマの途中で `\s` を、同じ子を置く面へ切り替える: `Show` は 1 件だけで閉じ目を
-/// 載せている（要件 5.6）。一番上の animation は載らず、次の境界で最初のコマから始まる（要件 5.9）。
+/// 載せている。一番上の animation は載らず、次の境界で最初のコマから始まる。
 /// 次の刻みで同じ `Show` は二重に出ない。
 #[test]
 fn switch_mid_blink_emits_one_show_carrying_the_closed_eye_frame() {
@@ -101,7 +100,7 @@ fn switch_mid_blink_emits_one_show_carrying_the_closed_eye_frame() {
     assert_eq!(part_frames(&p, 100), vec![(0, 101)], "子も最初から");
 }
 
-/// 子を置いていない面へ行って戻っても、子は見えなかった間も進んでいた続きから出る（要件 5.7）。
+/// 子を置いていない面へ行って戻っても、子は見えなかった間も進んでいた続きから出る。
 #[test]
 fn leaving_to_a_face_without_the_child_and_back_resumes_without_rewind() {
     let mut rig = Rig::from_text(BLINK, BindSet::from_ids([]));
@@ -126,7 +125,7 @@ fn leaving_to_a_face_without_the_child_and_back_resumes_without_rewind() {
 }
 
 /// 着せ替えの変化でも `Show` は 1 件だけ。外した瞬間の `Show` に外れた側の部品のコマは載らず、
-/// 付け直した瞬間の `Show` は時計の続きのコマを載せる（要件 5.12・5.6）。
+/// 付け直した瞬間の `Show` は時計の続きのコマを載せる。
 #[test]
 fn bind_change_emits_one_show_without_the_removed_side_frames() {
     let mut rig = Rig::from_text(BIND_CHILD, BindSet::from_ids([5]));
@@ -154,7 +153,7 @@ fn bind_change_emits_one_show_without_the_removed_side_frames() {
     assert!(rig.tick(1700).is_empty(), "同じ Show を二重に出さない");
 }
 
-/// 出来事の直後の作り直し（`refresh`）は `-1` 以外の負の番号のコマを書かない（tasks.md 7.3 の申し送り）。
+/// 出来事の直後の作り直し（`refresh`）は `-1` 以外の負の番号のコマを書かない。
 /// 見えない間に負のコマへ着いた子の面へ戻ると、部品のコマの無い `Show` が 1 件だけ出る。
 #[test]
 fn switch_back_onto_a_negative_frame_carries_no_part_frame() {

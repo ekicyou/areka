@@ -1,6 +1,6 @@
 //! 試験の道具（`#[cfg(test)]` だけ・本番からは参照しない）。
 //!
-//! 常時テストはここの [`FakeFetch`] だけで一周を回し、ネットワークに触れない（9.6）。
+//! 常時テストはここの [`FakeFetch`] だけで一周を回し、ネットワークに触れない。
 //! 作業場所は `sample_ghost_kit::WorkDir`（OS の一時フォルダは使わない）。
 
 use crate::error::FetchError;
@@ -35,7 +35,7 @@ type Answer = Result<Vec<u8>, FetchError>;
 /// 取得のたびの差し込み。
 type Hook = Box<dyn Fn(&str)>;
 
-/// URL → バイト列または失敗の固定表（3.2）。呼ばれた URL を記録し、取得のたびに `on_get` を呼ぶ。
+/// URL → バイト列または失敗の固定表。呼ばれた URL を記録し、取得のたびに `on_get` を呼ぶ。
 #[derive(Default)]
 pub(crate) struct FakeFetch {
     table: BTreeMap<String, Answer>,
@@ -86,7 +86,7 @@ impl Fetch for FakeFetch {
     }
 }
 
-/// 相対パス → バイト列（フォルダは末尾 `/`・値は空）。9.4 のバイト単位の比較に使う。
+/// 相対パス → バイト列（フォルダは末尾 `/`・値は空）。バイト単位の比較に使う。
 ///
 /// フォルダが無ければ空（`areka-nar` の `lib_tests.rs` の `tree` の写し）。
 pub(crate) fn tree(root: &Path) -> BTreeMap<String, Vec<u8>> {

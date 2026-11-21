@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-// テストの道具は層をまたぐ受け口の 1 か所の定義（spec: audit-seriko 指摘 6）。
+// テストの道具は層をまたぐ受け口の 1 か所の定義。
 pub(super) use crate::test_support::{capture_text, clear_all, cue, fresh_states, text};
 
 /// テスト用の TalkCue（Shell 系 Emote・at/actor 込み）を組む。
@@ -137,7 +137,7 @@ pub(super) fn noncanonical_custom_cue(scope: &str, command: &str) -> TalkCue {
         },
         0.0,
     );
-    // 前提: この構成は必ずキャリア開封に失敗する（宛名規律 D8④ の入口条件）。
+    // 前提: この構成は必ずキャリア開封に失敗する。
     assert!(
         cue.command.as_command_carrier().is_none(),
         "非 Array params の Custom は as_command_carrier() が None（宛名規律の入口）"

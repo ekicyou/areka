@@ -1,4 +1,4 @@
-//! 表情の受け口が合図を受け取った場の判定の決定論テスト（spec: mcp-strict-errors 要件 2.7・4.1・4.2）。
+//! 表情の受け口が合図を受け取った場の判定の決定論テスト。
 //!
 //! 知らせ付きの合図（`emit_with`）を実のアクターの受け口へ送り、知らせの口に届いた検出点の並びで
 //! 確かめる。事実は手で組む（[`SkinFacts::new`]）。
@@ -146,7 +146,7 @@ fn judges_surface_and_numeric_balloon_by_facts() {
     );
 }
 
-/// 差し替えの前に配った合図は古い事実で、後に配った合図は新しい事実で判定する（要件 4.1）。
+/// 差し替えの前に配った合図は古い事実で、後に配った合図は新しい事実で判定する。
 #[test]
 fn replace_swaps_facts_between_cues() {
     let (mut sink, handle, _out) = spawn();

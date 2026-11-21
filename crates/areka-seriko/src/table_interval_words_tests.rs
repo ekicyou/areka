@@ -1,9 +1,8 @@
-//! 間隔の語 `sometimes`・`rarely` の読み替えの檻
-//! （spec: areka-P0-shell-implicit-surface 要件 11.1〜11.7・7.10・7.11・7.12）。
+//! 間隔の語 `sometimes`・`rarely` の読み替えの檻。
 //!
 //! 入力は `surfaces.txt` の本文そのもの（解析を経る実経路）で組む。構造体を直に積むと
 //! 「解析が `Interval::Other(語)` として運んでくる」ところが檻の外へ落ちるためである。
-//! 検体は共有の受け口 `sample_test_support` 経由でだけ受ける（要件 7.11）。
+//! 検体は共有の受け口 `sample_test_support` 経由でだけ受ける。
 
 use areka_parsers::charset::{DefaultEncoding, decode};
 
@@ -34,7 +33,7 @@ fn animations_for(interval: &str) -> Vec<LoopAnimation> {
         .to_vec()
 }
 
-/// `sometimes` は `random,2` と**同じ表の項目**になる（要件 11.1）。
+/// `sometimes` は `random,2` と**同じ表の項目**になる。
 #[test]
 fn sometimes_records_the_same_entry_as_random_2() {
     let rewritten = animations_for("sometimes");
@@ -47,7 +46,7 @@ fn sometimes_records_the_same_entry_as_random_2() {
     assert_eq!(rewritten[0].trigger, LoopTrigger::Random { k: 2 });
 }
 
-/// `rarely` は `random,4` と**同じ表の項目**になる（要件 11.2）。
+/// `rarely` は `random,4` と**同じ表の項目**になる。
 #[test]
 fn rarely_records_the_same_entry_as_random_4() {
     let rewritten = animations_for("rarely");
@@ -60,7 +59,7 @@ fn rarely_records_the_same_entry_as_random_4() {
     assert_eq!(rewritten[0].trigger, LoopTrigger::Random { k: 4 });
 }
 
-/// 他の語と、大文字の `Sometimes` は採らず、元の語を `debug!` に残す（要件 11.4）。
+/// 他の語と、大文字の `Sometimes` は採らず、元の語を `debug!` に残す。
 /// 比べ方は小文字の完全一致なので、大文字は読み替えの対象にならない。
 #[test]
 fn other_interval_words_are_not_recorded_and_keep_their_original_vocab() {
@@ -77,7 +76,7 @@ fn other_interval_words_are_not_recorded_and_keep_their_original_vocab() {
     }
 }
 
-/// 読み替えたときは元の語と読み替え先の `k` が `debug!` から読める（要件 11.7）。
+/// 読み替えたときは元の語と読み替え先の `k` が `debug!` から読める。
 #[test]
 fn rewrite_is_debug_logged_with_the_original_vocab() {
     let (_, logs) = table_and_text(&surfaces_txt_with("sometimes"));
@@ -96,7 +95,7 @@ fn rewrite_is_debug_logged_with_the_original_vocab() {
 }
 
 /// 検体 `konnoyayame` の `surfaces.txt` から組んだ表で、面 0 のアニメ 0 が採られる
-/// （ちょうど 1 件・要件 11.5・7.10）。
+/// （ちょうど 1 件）。
 #[test]
 fn konnoyayame_surface0_animation0_is_recorded() {
     let path = konnoyayame_shell_root().join("surfaces.txt");

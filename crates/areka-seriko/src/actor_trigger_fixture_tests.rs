@@ -1,5 +1,4 @@
-//! 口パクの検体を本物の読み手・本物の表・本物のアクターで通す（spec: areka-P0-seriko-trigger-intervals
-//! 要件 1.5・7.1・7.2・9.6・9.7・11.1・tasks.md 7.1・design「口パクの検体」）。
+//! 口パクの検体を本物の読み手・本物の表・本物のアクターで通す。
 //!
 //! 検体 `tests/fixtures/trigger-intervals/surfaces.txt` を読み手で読み、表を組み、アクターの受け口へ
 //! 面の切り替え・文字・刻みを届いた順に流して、出てくる指令のコマで確かめる。固定するのは「読み手・
@@ -46,7 +45,7 @@ fn config() -> SerikoLoopConfig {
 /// - `warn!` は検体の全体でちょうど 3 件＝9103 の無効な数値 2 件（`talk,abc`・`periodic,0`）＋ 9104 の
 ///   空のコマ列 1 件。9103 の `Talk,3`（大文字混じり）は `debug!` だけ。
 ///
-/// 採らなかった animation は表に無い（要件 1.5・7.1・7.2）。
+/// 採らなかった animation は表に無い。
 #[test]
 fn fixture_table_logs_five_adoptions_and_exactly_three_warnings() {
     let (table, logs) = table_and_all_logs(FIXTURE);
@@ -238,7 +237,7 @@ fn spawned_actor_plays_the_three_words_of_the_fixture() {
     );
 }
 
-/// 検体は実機の確かめで emo2 の `surfaces.txt` の末尾へ書き足す（tasks.md 9.2）。書き足した本文でも
+/// 検体は実機の確かめで emo2 の `surfaces.txt` の末尾へ書き足す。書き足した本文でも
 /// 記録の件数は同じで（emo2 の側は `warn!` 0 件・3 語 0 本）、検体の番号は emo2 と当たらず、検体が
 /// 番号で指す絵（コマの先の面・element定義のファイル）は emo2 に全部在る。
 #[test]

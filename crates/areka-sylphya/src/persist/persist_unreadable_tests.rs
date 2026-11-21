@@ -1,4 +1,4 @@
-//! 使えない記憶のファイルを上書きしない檻（#1・要件 4.1・4.2・4.5）。
+//! 使えない記憶のファイルを上書きしないテスト。
 //!
 //! - 新しい版・壊れた TOML・読みの失敗 → 保存は `Degraded(Io(理由))`・中身はバイトで同じ・
 //!   ERROR `persist_existing_unusable` が 1 件。
@@ -9,7 +9,7 @@ use super::*;
 use crate::test_log_capture::capture;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Ghost の根を `/g` に置いた根の組（persist の兄弟の檻も使う）。
+/// Ghost の根を `/g` に置いた根の組（persist の兄弟のテストも使う）。
 pub(super) fn ghost_roots() -> ScopeRoots {
     ScopeRoots {
         ghost: Some(PathBuf::from("/g")),
@@ -91,7 +91,6 @@ fn a_read_failure_keeps_the_file_and_the_save_degrades() {
     );
     let content = io.read(&ghost_file()).unwrap().unwrap();
     io.fail_next_read();
-    // 共有違反でない読みの失敗は待たずに縮退する。
     assert_kept_and_degraded(&io, &content, "読めない");
 }
 
@@ -151,7 +150,6 @@ fn a_transient_sharing_violation_on_load_is_retried() {
         inner,
         violated: AtomicBool::new(false),
     };
-    // 起動の読みも一時の掴みで覚えていた値を忘れない。
     assert_eq!(
         load_scope(PersistScope::Ghost, &ghost_roots(), &io),
         vec![(PersistKey::LastGhost, "emo2".into())]

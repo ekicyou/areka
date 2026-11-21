@@ -2,8 +2,6 @@
 
 use super::*;
 
-// ── StartTalk::new / epilogue（Requirements 3.4・design C11） ──
-
 /// 従来形コンストラクタ `StartTalk::new` は epilogue を空で構築する（従来挙動）。
 #[test]
 fn start_talk_new_has_empty_epilogue() {
@@ -13,8 +11,7 @@ fn start_talk_new_has_empty_epilogue() {
     assert!(msg.epilogue.is_empty());
 }
 
-/// 従来形コンストラクタ `StartTalk::new` は出どころにゴースト自身を入れる
-/// （製品の呼び手の振る舞いを据え置く・areka-P0-script-security-level 1.4）。
+/// 従来形コンストラクタ `StartTalk::new` は出どころにゴースト自身を入れる。
 #[test]
 fn start_talk_new_origin_is_ghost() {
     let msg = StartTalk::new(TalkId(1), "hi");
@@ -22,7 +19,7 @@ fn start_talk_new_origin_is_ghost() {
 }
 
 /// 従来形コンストラクタ `StartTalk::new` は strict の印を立てない
-/// （kanade が自分で始める台本へ strict は及ばない・mcp-strict-errors 3.8）。
+/// （kanade が自分で始める台本へ strict は及ばない）。
 #[test]
 fn start_talk_new_is_not_strict() {
     let msg = StartTalk::new(TalkId(1), "hi");

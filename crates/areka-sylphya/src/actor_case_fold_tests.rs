@@ -1,4 +1,4 @@
-//! 名前の畳みのアクターの檻（spec areka-P0-property-name-case-fold タスク 1.2・要件 5.2）。
+//! 名前の畳みのアクターの檻。
 //!
 //! 書き込みの仕分けは半角の英字の大小で変わらない。効果と `warn!` が運ぶ名前は書かれた綴りの
 //! まま、自由な名前の書き込みの鍵は畳んだ正準の綴りになる。
@@ -44,7 +44,7 @@ fn set(key: &str, value: &str) -> Vec<Effect> {
 
 #[test]
 fn non_settable_names_in_any_case_stay_not_settable() {
-    // 1. 書けない名前の大小違い（要件 3.1）。
+    // 1. 書けない名前の大小違い。
     assert_eq!(classify_set("CURRENTGHOST.NAME"), SetClass::NotSettable);
     assert_eq!(classify_set("Baseware.Name"), SetClass::NotSettable);
 
@@ -68,7 +68,7 @@ fn non_settable_names_in_any_case_stay_not_settable() {
 
 #[test]
 fn runtime_command_names_in_any_case_stay_runtime_command() {
-    // 2. 書ける名前の大小違い（要件 3.2）。1 段目を畳まずに比べると MENU が自由な名前へ落ちる。
+    // 2. 書ける名前の大小違い。1 段目を畳まずに比べると MENU が自由な名前へ落ちる。
     assert_eq!(classify_set("MENU"), SetClass::RuntimeCommand);
     assert_eq!(classify_set("Surface.Num"), SetClass::RuntimeCommand);
 
@@ -92,7 +92,7 @@ fn runtime_command_names_in_any_case_stay_runtime_command() {
 
 #[test]
 fn free_names_in_any_case_write_the_folded_key() {
-    // 3. 自由な名前の大小違い 2 綴り（要件 3.3・3.4）。
+    // 3. 自由な名前の大小違い 2 綴り。
     for key in ["My.Flag", "MY.FLAG"] {
         assert_eq!(classify_set(key), SetClass::StoreWrite);
         assert_eq!(
@@ -106,11 +106,11 @@ fn free_names_in_any_case_write_the_folded_key() {
     }
 }
 
-// === アクターを立てて書いて読む段（タスク 1.3・barrier で反映を待つ）===
+// === アクターを立てて書いて読む段（barrier で反映を待つ）===
 
 #[test]
 fn reads_in_any_case_return_the_same_value() {
-    // 4. 読みの大小違い・括弧の中の名前の大小違い（要件 1.1・1.2）。
+    // 4. 読みの大小違い・括弧の中の名前の大小違い。
     let parts = spawn_empty();
     parts.publisher.publish_static(
         asker(),
@@ -128,7 +128,7 @@ fn reads_in_any_case_return_the_same_value() {
 
 #[test]
 fn fullwidth_letters_and_kana_are_different_names() {
-    // 5. 畳まない文字（要件 1.3）。
+    // 5. 畳まない文字。
     let parts = spawn_empty();
     parts
         .publisher
@@ -143,7 +143,7 @@ fn fullwidth_letters_and_kana_are_different_names() {
 
 #[test]
 fn surrounding_spaces_are_not_trimmed() {
-    // 6. 前後の空白（要件 1.4）。
+    // 6. 前後の空白。
     let parts = spawn_empty();
     parts.publisher.publish_static(
         asker(),
@@ -157,7 +157,7 @@ fn surrounding_spaces_are_not_trimmed() {
 
 #[test]
 fn values_keep_their_spelling() {
-    // 7. 値の綴りは畳まない（要件 1.5）。
+    // 7. 値の綴りは畳まない。
     let parts = spawn_empty();
     parts
         .publisher
@@ -168,7 +168,7 @@ fn values_keep_their_spelling() {
 
 #[test]
 fn per_asker_value_wins_in_any_case() {
-    // 8. ゴーストごとの値が全体の値に先立つ（要件 1.7）。
+    // 8. ゴーストごとの値が全体の値に先立つ。
     let parts = spawn_empty();
     parts
         .publisher
@@ -182,7 +182,7 @@ fn per_asker_value_wins_in_any_case() {
 
 #[test]
 fn malformed_names_are_not_found_in_any_case() {
-    // 9. 書式の誤り: 生の綴りで保存されても、どの綴りの問いでも当たらない（要件 1.6）。
+    // 9. 書式の誤り: 生の綴りで保存されても、どの綴りの問いでも当たらない。
     let parts = spawn_empty();
     parts
         .publisher
@@ -194,7 +194,7 @@ fn malformed_names_are_not_found_in_any_case() {
 
 #[test]
 fn free_name_spellings_share_one_name_last_write_wins() {
-    // 10. 自由な名前の書きと読み・大小だけ違う 2 綴りへの続けての書き込み（要件 3.3・3.4）。
+    // 10. 自由な名前の書きと読み・大小だけ違う 2 綴りへの続けての書き込み。
     let parts = spawn_empty();
     parts.publisher.set(asker(), "My.Flag".into(), "1".into());
     parts.publisher.set(asker(), "MY.FLAG".into(), "2".into());
@@ -206,7 +206,7 @@ fn free_name_spellings_share_one_name_last_write_wins() {
 
 #[test]
 fn upper_case_writes_do_not_hide_real_values() {
-    // 11. 書けない名前を大文字で書いても本物の値が残る（要件 3.5）。
+    // 11. 書けない名前を大文字で書いても本物の値が残る。
     let parts = spawn_empty();
     parts.publisher.publish_static(
         asker(),
@@ -229,7 +229,7 @@ fn upper_case_writes_do_not_hide_real_values() {
 
 #[test]
 fn persisted_values_read_in_any_case() {
-    // 12. 保存された値を大小違いの名前で引く（要件 4.1・4.2）。
+    // 12. 保存された値を大小違いの名前で引く。
     let io = FakePersistIo::new();
     let roots = ScopeRoots {
         ghost: Some(PathBuf::from("/g")),

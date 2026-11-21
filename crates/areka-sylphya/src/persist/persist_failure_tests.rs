@@ -1,4 +1,4 @@
-//! 書けなかった 1 回の中身（[`PersistFailure`]）を保存の結果が運ぶことの檻（要件 1.4・6.3）。
+//! 書けなかった 1 回の中身（[`PersistFailure`]）を保存の結果が運ぶことのテスト。
 //!
 //! - 書けない置き場（置き場の位置に普通のファイルを置く）→ 置き場・key の並び・OS の理由。
 //! - 置き場の無いスコープ → `NoRoot`・`dir: None`。
@@ -29,7 +29,6 @@ fn unwritable_dir_returns_dir_keys_and_os_reason() {
         ghost: Some(root.clone()),
         ..ScopeRoots::default()
     };
-    // OS の理由は同じ置き場へ同じ操作をしたときの表示と一致する。
     let expected_reason = std::fs::create_dir_all(&root)
         .expect_err("前提: 普通のファイルの位置にはディレクトリを作れない")
         .to_string();

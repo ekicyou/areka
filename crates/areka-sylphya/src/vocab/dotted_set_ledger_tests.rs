@@ -1,4 +1,4 @@
-//! 本機能（サウンドプロパティ名の記録用の表と設定可能語彙への登記）が足した項目の判定。
+//! サウンドプロパティ名の記録用の表と設定可能語彙への登記の判定。
 //!
 //! 期待値は実装や表から導出せず、テストの中に文字として書く。
 
@@ -67,7 +67,7 @@ fn sound_set_leaves_appear_in_both_tables() {
     assert_eq!(in_both.len(), 3, "設定可能語彙にも載る葉の数");
 }
 
-/// 本機能より前からある設定可能語彙のキーが、先頭で順序込みで変わっていない（要件 1.6）。
+/// 正典追随の 4 項より前からある設定可能語彙のキーが、先頭で順序込みで変わっていない。
 #[test]
 fn set_effective_entries_before_this_spec_are_unchanged_in_order() {
     let before: &[&str] = &[
@@ -145,7 +145,6 @@ fn record_only_leaves_keep_their_previous_classification() {
     use std::sync::Arc;
 
     let expected: &[(&str, SetClass)] = &[
-        // 自由な名前としての保存 13 件。
         ("duration", SetClass::StoreWrite),
         ("error", SetClass::StoreWrite),
         ("id", SetClass::StoreWrite),
@@ -199,7 +198,7 @@ fn record_only_leaves_keep_their_previous_classification() {
     }
 }
 
-/// 仕分け（`classify_set`）の実装とその兄弟テスト 3 本が記録用の表を読まない（要件 3.3／3.7／7.2）。
+/// 仕分け（`classify_set`）の実装とその兄弟テスト 3 本が記録用の表を読まない。
 #[test]
 fn classifier_source_does_not_reference_the_record_only_table() {
     let sources: &[(&str, &str)] = &[
@@ -229,7 +228,7 @@ fn classifier_source_does_not_reference_the_record_only_table() {
     );
 }
 
-/// 語彙表の本体に正典ページのアンカー付き URL 注記がちょうど 19 行あり、アンカー無しのページ URL 行は 0（要件 5.1／5.4）。
+/// 語彙表の本体に正典ページのアンカー付き URL 注記がちょうど 19 行あり、アンカー無しのページ URL 行は 0。
 #[test]
 fn exactly_19_anchored_ukadoc_notes_and_no_page_url_line() {
     // 探し語は行頭に置かない（証拠抽出器がこのファイルの行を拾わないように）。

@@ -1,4 +1,4 @@
-//! 層をまたぐテストの道具の受け口（spec: audit-seriko 指摘 6）。`lib.rs` がテストのときだけ
+//! 層をまたぐテストの道具の受け口。`lib.rs` がテストのときだけ
 //! `crate::test_support` として繋ぐ。表・役者・状態・部品・時刻の各テストが同じ定義を使う。
 
 use areka_emo_compose::{
@@ -10,7 +10,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 use crate::parts::PartAnim;
 use crate::table::{AnimationTable, FrameAct, LoopFrame};
 
-/// `check_calls` の 6 種の記録の目印（seriko-pattern-calls の要件の番号）。
+/// `check_calls` の 6 種の記録の目印。
 pub(crate) const KINDS: [&str; 6] = [
     "要件 2.5",
     "要件 5.1",

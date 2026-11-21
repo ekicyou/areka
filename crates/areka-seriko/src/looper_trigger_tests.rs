@@ -1,5 +1,4 @@
-//! 一番上の面の `runonce`・`periodic` の檻（spec: areka-P0-seriko-trigger-intervals 要件 2・3・5.1〜5.3・
-//! 5.5・5.7・5.8・6.1・6.2・7.5・8.1・8.2・9.2・9.3・9.6・tasks.md 4.1）。
+//! 一番上の面の `runonce`・`periodic` の檻。
 //!
 //! 面の切り替えはアクターと同じ順（`apply` → `on_surface_shown` → `on_surface_changed` →
 //! `refresh`）で踏む。刻みは `on_tick(now_ms)`、出来事の時刻は `refresh` の `at_ms`、乱数は注入列で、
@@ -32,8 +31,7 @@ const TRIGGERS: &str = "surface0\n{\n\
     surface301\n{\n}\nsurface302\n{\n}\nsurface401\n{\n}\nsurface402\n{\n}\n";
 
 /// 起動後の最初の表示で `runonce` が 1 回だけ鳴る。開始は出来事の時刻そのもので、切り替えの指令が
-/// 頭のコマを載せ、遅れた刻みは過ぎた分だけ進み、`-1` で消して終え、その後は鳴らない（要件 2.1・
-/// 2.2・5.1・5.2・6.1・6.2）。境界を何度跨いでも乱数を引かない（要件 5.7）。
+/// 頭のコマを載せ、遅れた刻みは過ぎた分だけ進み、`-1` で消して終え、その後は鳴らない。境界を何度跨いでも乱数を引かない。
 #[test]
 fn runonce_plays_once_from_the_event_time_on_first_show() {
     let (rng, probe) = counting_rng(&[]);
@@ -88,7 +86,7 @@ fn runonce_plays_once_from_the_event_time_on_first_show() {
     assert_eq!(probe.lock().unwrap().calls, 0, "3 語は乱数を引かない");
 }
 
-/// 同じ面の再指定と、着せ替えだけの変化では `runonce` は鳴らない（要件 2.3・2.4）。
+/// 同じ面の再指定と、着せ替えだけの変化では `runonce` は鳴らない。
 #[test]
 fn runonce_stays_silent_on_same_surface_and_dress_change() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
@@ -118,7 +116,7 @@ fn runonce_stays_silent_on_same_surface_and_dress_change() {
 }
 
 /// 別の面から戻ったとき・非表示から戻ったときは、戻った出来事の時刻でもう 1 回鳴る。3 語の無い面と
-/// 非表示の間は引き金の状態を持たない（要件 2.5・2.6・8.1）。
+/// 非表示の間は引き金の状態を持たない。
 #[test]
 fn runonce_replays_on_return_and_after_hidden() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
@@ -164,7 +162,7 @@ fn runonce_waits_for_the_first_tick_when_no_time_is_known() {
 }
 
 /// `periodic` は切り替わった瞬間には鳴らず、出来事の時刻を起点に数値秒ちょうどの境目で鳴る。開始は
-/// 境目そのもので、遅れた刻みは過ぎた分だけ進んだコマを同じ刻みで出す（要件 3.1・3.5・6.1・6.2）。
+/// 境目そのもので、遅れた刻みは過ぎた分だけ進んだコマを同じ刻みで出す。
 #[test]
 fn periodic_fires_at_exact_laps_from_the_event_time() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
@@ -197,7 +195,7 @@ fn periodic_fires_at_exact_laps_from_the_event_time() {
     assert_eq!(cell(&states, Slot::Shell, 1), Some(401));
 }
 
-/// 面を離れたら定期の再生は止まり、戻った出来事の時刻が新しい起点になる（要件 3.2）。
+/// 面を離れたら定期の再生は止まり、戻った出来事の時刻が新しい起点になる。
 #[test]
 fn periodic_stops_on_leaving_and_restarts_from_the_return_time() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
@@ -233,7 +231,7 @@ const LONG_PERIODIC: &str = "surface0\n{\n\
     surface401\n{\n}\nsurface402\n{\n}\n";
 
 /// 境目が来たときに同じ animation がまだ再生中なら、その回は始めず（コマを乱さず）、飛ばした回が
-/// 後から鳴ることも無い。次の境目で鳴る（要件 3.3・5.3）。
+/// 後から鳴ることも無い。次の境目で鳴る。
 #[test]
 fn periodic_skips_a_lap_while_still_playing() {
     let (mut rt, mut states) = shell_runtime(LONG_PERIODIC);
@@ -283,7 +281,7 @@ const EXACT_PERIODIC_RESIDUAL: &str = "surface0\n{\n\
 
 /// 長さが周期ちょうどの再生は、終わりと次の境目が同じ時刻になる。境目の時刻にはもう再生中でないので
 /// 毎周鳴る（1 周おきにならない）。終えたのにまだ片付けていなかった前の再生は、終わりの記録を 1 件
-/// 残して入れ替わり、絵は新しい再生の経過のコマになる（要件 3.1・3.3・3.5・6.1・6.2）。
+/// 残して入れ替わり、絵は新しい再生の経過のコマになる。
 #[test]
 fn periodic_as_long_as_its_period_fires_at_every_lap() {
     for (text, end) in [
@@ -323,7 +321,7 @@ fn periodic_as_long_as_its_period_fires_at_every_lap() {
 }
 
 /// 境目の時刻にまだ再生中だった周は、その境目を見る刻みが再生の終わりより後に来ても飛ばす
-/// （「再生中か」は刻みの時刻でなく境目の時刻で測る・要件 3.3・3.5）。
+/// （「再生中か」は刻みの時刻でなく境目の時刻で測る）。
 #[test]
 fn periodic_skips_a_lap_playing_at_the_boundary_even_when_seen_by_a_late_tick() {
     let (mut rt, mut states) = shell_runtime(LONG_PERIODIC);
@@ -352,7 +350,7 @@ fn periodic_skips_a_lap_playing_at_the_boundary_even_when_seen_by_a_late_tick() 
 }
 
 /// 前の再生の終わりと次の境目の両方をまたいだ刻み（終わり < 境目 < 刻み）は、境目で 1 回だけ鳴らす。
-/// 前の再生の終わりの記録は 1 件（要件 3.4・3.5・6.2）。
+/// 前の再生の終わりの記録は 1 件。
 #[test]
 fn periodic_fires_at_the_boundary_when_a_late_tick_spans_the_previous_end() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
@@ -382,7 +380,7 @@ fn periodic_fires_at_the_boundary_when_a_late_tick_spans_the_previous_end() {
 }
 
 /// 1 回の刻みで境目を 2 つまたいでも、始めるのは 1 回だけ（開始は最新の境目）で、またいだ数を
-/// 積み上げない（要件 3.4）。
+/// 積み上げない。
 #[test]
 fn periodic_fires_once_when_a_tick_spans_two_laps() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
@@ -445,8 +443,7 @@ const NO_TRIGGER_WORDS: &str = "surface0\n{\n\
     animation1.pattern1,overlay,-1,300,0,0\n}\n\
     surface101\n{\n}\nsurface102\n{\n}\nsurface201\n{\n}\n";
 
-/// 3 語の無い表では、`random` が再生中でも `always` が回っていても、引き金の状態も記録も生まれない
-/// （要件 8.1・8.2）。
+/// 3 語の無い表では、`random` が再生中でも `always` が回っていても、引き金の状態も記録も生まれない。
 #[test]
 fn tables_without_trigger_words_keep_no_trigger_state() {
     let mut rt = LoopRuntime::new(cfg(table_of(NO_TRIGGER_WORDS), always_fire()));
@@ -490,7 +487,7 @@ const RANDOM_WITH_TRIGGERS: &str = "surface0\n{\n\
     surface201\n{\n}\nsurface301\n{\n}\nsurface401\n{\n}\n";
 
 /// `random` だけの表と、同じ面に `runonce`・`periodic` を足した表で、同じ乱数の列を与えると `random` の
-/// 発火の時刻と乱数を引いた回数が同じで、足した 2 本もそれぞれの決まりで鳴る（要件 5.7・5.8・8.2）。
+/// 発火の時刻と乱数を引いた回数が同じで、足した 2 本もそれぞれの決まりで鳴る。
 #[test]
 fn trigger_words_beside_random_do_not_interfere() {
     let draws = [1, 0, 1, 1, 0, 0, 1, 0];
@@ -564,7 +561,7 @@ fn talk_elsewhere_in_the_table_arms_and_plays_nothing() {
 }
 
 /// バルーンの窓が閉じている間は非表示（`periodic` は止まる）。開き直しで `runonce` は鳴らず、
-/// `periodic` は開いた出来事の時刻が新しい起点になる（要件 3.2・5.5）。
+/// `periodic` は開いた出来事の時刻が新しい起点になる。
 #[test]
 fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
     let (rng, _probe) = counting_rng(&[]);
@@ -623,8 +620,7 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
 
 /// 見え始めの時刻にもう再生中だった `runonce` は、その回を見送って印を付ける。再生が終わって表から
 /// 外れた後に、過ぎた見え始めの時刻で鳴り直して働きのコマ（`start,2`）を 2 度当てることは無い
-/// （窓が閉じている間に抽選の `start,0` が 0 を 1000 に始め、窓は 1050 に開く・
-/// areka-P0-seriko-trigger-intervals 要件 2.1・2.2・5.3）。
+/// （窓が閉じている間に抽選の `start,0` が 0 を 1000 に始め、窓は 1050 に開く）。
 #[test]
 fn runonce_playing_when_it_becomes_visible_is_skipped_for_good() {
     const PLAYING: &str = "surface0\n{\n\
@@ -668,7 +664,7 @@ fn runonce_playing_when_it_becomes_visible_is_skipped_for_good() {
 }
 
 /// 記録: 面に入ったら `debug!` を 1 件、`runonce`・`periodic` の開始は `info!`。始めない経路（境目の前・
-/// 面を離れた・3 語の無い面）は何も記録しない（要件 7.5）。
+/// 面を離れた・3 語の無い面）は何も記録しない。
 #[test]
 fn entering_and_starts_are_logged_and_discards_are_silent() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
@@ -718,7 +714,7 @@ fn entering_and_starts_are_logged_and_discards_are_silent() {
 }
 
 /// 窓が列に無い序数を尋ねても（決まりの破れ）、どのビルドでも止まらず刻みの時刻で代え、序数と時刻の
-/// 欄を持つ `warn!` を 1 行残す（audit-seriko 指摘 9・要件 4.1・6.2）。
+/// 欄を持つ `warn!` を 1 行残す。
 #[test]
 fn glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn() {
     let mut epoch = TalkEpoch::default();
@@ -740,8 +736,7 @@ fn glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn() {
 }
 
 /// 合図の更新（着せ替えなど・2010）も、その時刻までの `periodic` を判定してから呼び出しを当てる:
-/// 境目 2000 に始まった 1 は、別の再生の 2005 の `stop,1` で止まる（areka-P0-seriko-trigger-intervals
-/// 要件 3.1・6.1・seriko-pattern-calls 要件 3.1・4.1）。
+/// 境目 2000 に始まった 1 は、別の再生の 2005 の `stop,1` で止まる。
 #[test]
 fn refresh_judges_periodic_before_applying_calls_up_to_the_event_time() {
     const TEXT: &str = "surface0\n{\n\
@@ -769,8 +764,7 @@ fn refresh_judges_periodic_before_applying_calls_up_to_the_event_time() {
 }
 
 /// 合図の更新（2010）で境目 2000 に鳴り直した `periodic` が先頭の待ちの前（経過 10）なら、前の周が
-/// 残した最後のコマを刻みと同じく外す（古い絵を 1 刻み残さない・areka-P0-seriko-loop 要件 4.2・
-/// areka-P0-seriko-trigger-intervals 要件 6.2）。
+/// 残した最後のコマを刻みと同じく外す（古い絵を 1 刻み残さない）。
 #[test]
 fn refresh_clears_the_leftover_frame_when_the_refired_head_is_pending() {
     const TEXT: &str = "surface0\n{\n\
@@ -799,8 +793,7 @@ fn refresh_clears_the_leftover_frame_when_the_refired_head_is_pending() {
 }
 
 /// 合図の更新（200）で、呼び出しが始め直した頭がもう止まっている（60 に `start,1` で始め直され、経過
-/// 140 で `-1` を過ぎた）なら、前の再生が残したコマを刻みと同じく外す（`start` は欄に触らない・
-/// areka-P0-seriko-loop 要件 4.3・seriko-pattern-calls 要件 3.5・3.9）。
+/// 140 で `-1` を過ぎた）なら、前の再生が残したコマを刻みと同じく外す（`start` は欄に触らない）。
 #[test]
 fn refresh_clears_the_leftover_frame_when_the_called_head_is_stopped() {
     const TEXT: &str = "surface0\n{\n\

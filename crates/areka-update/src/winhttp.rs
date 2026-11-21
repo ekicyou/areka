@@ -1,4 +1,4 @@
-//! 取得の境界の本物の実装＝WinHTTP（要件 3.3〜3.6）。
+//! 取得の境界の本物の実装＝WinHTTP。
 //!
 //! `unsafe` と WinHTTP の綴りはこのファイルだけに置く。常時テストは純粋な判定（`winhttp_tests.rs`）
 //! だけを呼び、OS とネットを呼ぶ振る舞いは `#[ignore]` の実機の一周で確かめる。
@@ -60,7 +60,7 @@ impl Drop for Handle {
 
 /// セッション（`WinHttpOpen`）を 1 つ持ち回る。呼び出し側が一周ごとに作る。
 ///
-/// 生ポインタを持つので `Send`／`Sync` ではない（作ったスレッドで同期に使う＝3.7）。
+/// 生ポインタを持つので `Send`／`Sync` ではない（作ったスレッドで同期に使う）。
 pub struct WinHttpFetch {
     session: Handle,
 }
@@ -94,8 +94,7 @@ impl Fetch for WinHttpFetch {
         let url: Vec<u16> = url.encode_utf16().collect();
         check_url(&url)?;
 
-        // 1. scheme・host・port・path＋query を分ける。長さに非 0 を入れると、
-        //    各欄は `url` の中を指すポインタと長さで返る（複写しない）。
+        // 長さに非 0 を入れた欄は、`url` の中を指すポインタと長さで返る（複写しない）。
         let mut parts = URL_COMPONENTS {
             dwStructSize: size_of::<URL_COMPONENTS>() as u32,
             dwSchemeLength: u32::MAX,
@@ -137,7 +136,6 @@ impl Fetch for WinHttpFetch {
             )
         };
 
-        // 2. 接続と要求。落ちる順は宣言の逆＝request → connect（6.）。
         // SAFETY: セッションは `self` が生きている間有効。`host` は NUL 終端で呼出の間生きる。
         let connect = Handle::new(unsafe {
             WinHttpConnect(self.session.0, PCWSTR(host.as_ptr()), parts.nPort, 0)
@@ -160,10 +158,7 @@ impl Fetch for WinHttpFetch {
             )
         })?;
 
-        // 3. 転送の方針（3xx の自動追随・https → http の降格拒否）と圧縮の扱い（自動伸長しない）は
-        //    WinHTTP の既定のまま変えない。
-
-        // 4. 送って受け、状態コードを数値で取る。
+        // 3xx の自動追随・https → http の降格拒否・圧縮の自動伸長なしは WinHTTP の既定のまま変えない。
         // SAFETY: `request` は生存中。追加のヘッダ・本文は無い。
         unsafe { WinHttpSendRequest(request.0, None, None, 0, 0, 0) }.map_err(|e| from_os(&e))?;
         // SAFETY: `request` は生存中。第 2 引数は予約で null。
@@ -185,7 +180,6 @@ impl Fetch for WinHttpFetch {
         .map_err(|e| from_os(&e))?;
         status_to_result(code)?;
 
-        // 5. 0 バイトまで読む。上限は実際に読んだ量で判定する。
         let mut body = Vec::new();
         loop {
             let mut available: u32 = 0;
@@ -218,7 +212,7 @@ impl Fetch for WinHttpFetch {
                 break;
             }
         }
-        // 6. `request` → `connect` の順に、この関数を抜けるときに閉じる（`?` の経路も同じ）。
+        // 閉じる順は宣言の逆＝request → connect（`?` の経路も同じ）。
         Ok(body)
     }
 }
@@ -241,7 +235,7 @@ fn wide(units: impl Iterator<Item = u16>) -> Vec<u16> {
     units.chain(core::iter::once(0)).collect()
 }
 
-/// 状態コードを判定する（3.5）。404 は「無い」、2xx 以外はコード付きの失敗。
+/// 状態コードを判定する。404 は「無い」、2xx 以外はコード付きの失敗。
 /// 3xx は自動追随の後なので、ここに来るのは追随できなかったものだけ。
 fn status_to_result(code: u32) -> Result<(), FetchError> {
     match code {
@@ -253,7 +247,7 @@ fn status_to_result(code: u32) -> Result<(), FetchError> {
     }
 }
 
-/// OS のエラー（`HRESULT_FROM_WIN32`）の下位 16 ビット＝Win32 エラー番号を写す（3.6）。
+/// OS のエラー（`HRESULT_FROM_WIN32`）の下位 16 ビット＝Win32 エラー番号を写す。
 fn from_os(e: &Error) -> FetchError {
     from_win32(e.code().0 as u32 & 0xFFFF)
 }

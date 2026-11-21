@@ -1,5 +1,4 @@
-//! 受け口から口パクまで（spec: areka-P0-seriko-trigger-intervals 要件 2.6・4.8〜4.10・6.3・6.4・9.2・
-//! 9.4・9.6・tasks.md 6.1・design「cue の受け口」）。
+//! 受け口から口パクまで。
 //!
 //! アクターの受け口 `handle_message` へ cue と刻みを届いた順に流し、出てくる指令で確かめる。固定する
 //! のは受け口の配線（届いた cue が種類を問わず文字の写しへ渡ること）と、スコープ・表示／非表示の
@@ -56,7 +55,7 @@ impl Rig {
 }
 
 /// 届いた文字で口のコマが出る。開始は刻みの時刻でなく文字が現れた時刻で、文字の数は待ちと塊を
-/// またいで積み上がる（要件 4.1・4.3・4.5 の到着の側・6.3）。
+/// またいで積み上がる。
 #[test]
 fn arriving_text_moves_the_mouth_from_the_glyph_reveal_time() {
     let mut rig = Rig::new();
@@ -99,7 +98,7 @@ fn arriving_text_moves_the_mouth_from_the_glyph_reveal_time() {
     );
 }
 
-/// 文字でない cue も起点の見積もりを動かす（受け口は種類で振り分ける前に写しへ渡す・要件 6.4）。
+/// 文字でない cue も起点の見積もりを動かす（受け口は種類で振り分ける前に写しへ渡す）。
 ///
 /// 待ちの cue（振り分けでは「どの演者の担当でもない」腕へ行く）が起点を 1000 にする。続く文字の cue は
 /// 10 ms 早く届く（「今 − cue の時刻」＝990）が、最大に負けて起点を戻さない。渡すのを文字の腕（または
@@ -124,7 +123,7 @@ fn cue_that_is_not_text_moves_the_time_origin() {
     );
 }
 
-/// `\0` の文字で `\1` の口は動かない（要件 4.8）。`\1` も同じ口を持ち、自分の文字では動く。
+/// `\0` の文字で `\1` の口は動かない。`\1` も同じ口を持ち、自分の文字では動く。
 #[test]
 fn text_of_one_scope_does_not_move_the_other_scope() {
     let mut rig = Rig::new();
@@ -146,7 +145,7 @@ fn text_of_one_scope_does_not_move_the_other_scope() {
     assert_eq!(frames(&rig.tick(1610), MOUTH), [("1", Some(601))]);
 }
 
-/// 選択肢の文字は数える。改行・待ち・`\!` のコマンドは数えない（要件 4.10）。
+/// 選択肢の文字は数える。改行・待ち・`\!` のコマンドは数えない。
 #[test]
 fn choice_text_counts_and_newline_wait_and_command_do_not() {
     let mut rig = Rig::new();
@@ -180,8 +179,8 @@ fn choice_text_counts_and_newline_wait_and_command_do_not() {
     );
 }
 
-/// 面が非表示（`\s[-1]`）のスコープでは、文字が届いても指令も記録も増えない（要件 4.9）。戻ると
-/// `runonce` がもう 1 回鳴り（要件 2.6）、文字は戻った時点で現れていた次から数える。
+/// 面が非表示（`\s[-1]`）のスコープでは、文字が届いても指令も記録も増えない。戻ると
+/// `runonce` がもう 1 回鳴り、文字は戻った時点で現れていた次から数える。
 #[test]
 fn hidden_scope_stays_still_and_runonce_fires_again_on_return() {
     let mut rig = Rig::new();

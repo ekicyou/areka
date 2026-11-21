@@ -1,4 +1,4 @@
-//! 定義の相対パスとローカルパスの橋渡し（要件 1.13・5.6・6.3）。
+//! 定義の相対パスとローカルパスの橋渡し。
 //! 読み手・差分・確定・削除・作業場所が借りる。`manifest`・`md5` は見ない。
 
 use std::io::ErrorKind;
@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 /// 作業場所（`<対象>/.update-work/`）の名前。
 pub(crate) const WORK_DIR: &str = ".update-work";
 
-/// `\` を `/` に揃える（1.13・`..\` を `..` の要素として捕まえるため）。
+/// `\` を `/` に揃える（`..\` を `..` の要素として捕まえるため）。
 pub(crate) fn normalize_separators(s: &str) -> String {
     s.replace('\\', "/")
 }
@@ -20,7 +20,7 @@ pub(crate) fn local_path(target: &Path, rel: &str) -> PathBuf {
 
 /// 対象フォルダの配下で、かつ作業場所の外に実パスが解決されるか。
 /// `candidate` の最も深い実在する祖先を `canonicalize` して判定する。ジャンクションや
-/// シンボリックリンクで外へ解決されるパスを捕まえる（5.6・6.3）。作業場所の除外も実パスで見る:
+/// シンボリックリンクで外へ解決されるパスを捕まえる。作業場所の除外も実パスで見る:
 /// 8.3 短縮名（`UPDATE~1`）や作業場所を指すジャンクションは綴りの検査（`is_in_work_area`）を抜けるため。
 /// 在るのに実パスを確かめられない祖先（行き先の消えたリンク）は外扱い（安全側）。
 pub(crate) fn resolves_under(target_real: &Path, candidate: &Path) -> std::io::Result<bool> {

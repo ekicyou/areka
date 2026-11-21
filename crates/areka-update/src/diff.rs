@@ -1,4 +1,4 @@
-//! 要取得の選別（要件 2.1・2.3・2.4・2.6）。定義の側だけを定義の順に歩く。
+//! 要取得の選別。定義の側だけを定義の順に歩く。
 
 use crate::manifest::Manifest;
 use crate::md5::md5_hex;
@@ -19,7 +19,7 @@ pub(crate) enum DiffFailure {
 }
 
 /// 各エントリを定義の順に見て、無い／MD5 が違う → 要取得（`entries` の添字）、同じ → 対象外。
-/// 定義に無いローカルのファイルは走査しない（2.3＝定義の側だけを歩く）。
+/// 定義に無いローカルのファイルは走査しない（定義の側だけを歩く）。
 /// 失敗のパスは `target.join(rel)` で組む（`UpdateError::file()` の綴り）。
 pub(crate) fn plan(
     target: &Path,

@@ -1,5 +1,4 @@
-//! 部品の `runonce`・`periodic`・`talk` の檻（spec: areka-P0-seriko-trigger-intervals 要件 4.1・4.5・4.7・
-//! 5.1・5.2・5.4・5.6・5.7・5.9・6.1・6.2・7.3・8.1・8.2・9.5・9.6・tasks.md 5.1・5.2）。
+//! 部品の `runonce`・`periodic`・`talk` の檻。
 //!
 //! 表は `surfaces.txt` の本文から実経路で組む。刻みは `advance` の `now_ms`、出来事の時刻は `refresh` の
 //! `at_ms`、乱数は呼ばれた回数を数える注入列で、どれも決定論。刻みは全部「境界を跨いだ」扱いで回す
@@ -157,8 +156,7 @@ const NESTED: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\nsurface1\n{\n}\n
 
 /// 見えている部品の `runonce` は見えた刻みに 1 回鳴り、そのコマが見せた子の `runonce` も同じ刻みで
 /// 鳴って子のコマまで出る（1 刻み遅れない）。遅れた刻みは過ぎた分だけ進み、`-1` で終えた後は鳴らない。
-/// `periodic` は見えた瞬間には鳴らず、見えた時刻から数えた周の境目を開始にする。乱数は引かない
-/// （要件 5.1・5.2・5.4・5.7・5.9・6.2）。
+/// `periodic` は見えた瞬間には鳴らず、見えた時刻から数えた周の境目を開始にする。乱数は引かない。
 #[test]
 fn visible_part_fires_runonce_and_its_revealed_child_in_the_same_tick() {
     let mut rig = Rig::new(NESTED, &[]);
@@ -233,7 +231,7 @@ const HIDDEN_BY_FRAME: &str = "surface0\n{\nelement0,overlay,200,0,0\n}\n\
 
 /// 外側のコマで見えなくなった部品は、再生中の 3 語の時計と引き金の状態を捨てる。見えない間は 1 段目の
 /// 評価を受けても構えず、再生も始まらない。再び見えた刻みが新しい起点で、頭のコマから始まる
-/// （途中のコマから始まらない・要件 5.6・5.9）。
+/// （途中のコマから始まらない）。
 #[test]
 fn part_hidden_by_the_outer_frame_is_dropped_and_restarts_from_the_top_when_seen_again() {
     let mut rig = Rig::new(HIDDEN_BY_FRAME, &[]);
@@ -305,7 +303,7 @@ const LATE: &str = "surface0\n{\n}\n\
     animation0.pattern1,overlay,-1,300,0,0\n}\n";
 
 /// 外側のコマの変化で後から見えた部品は、見えた刻みを起点に周を数える（外側の面に入った時刻からでは
-/// ない）。見えなくなったら止まり、再び見えた刻みが新しい起点になる（要件 5.9・3.2）。
+/// ない）。見えなくなったら止まり、再び見えた刻みが新しい起点になる。
 #[test]
 fn part_revealed_later_counts_its_period_from_the_tick_it_appeared() {
     let mut rig = Rig::new(LATE, &[]);
@@ -367,8 +365,7 @@ const PLAYING_AT_REVEAL: &str = "surface0\n{\n}\n\
 
 /// 見え直した刻みに、隠れていた間に進んでいた抽選の `start,0`（2000）を当てると、`runonce` は見え始め
 /// （2050）にもう再生中なので、その回を見送って印を付ける。再生が終わって時計が外れた後に、過ぎた
-/// 見え始めの時刻で鳴り直して `start,2` を 2 度当てることは無い（一番上と同じ・
-/// areka-P0-seriko-trigger-intervals 要件 2.1・5.3・5.9）。
+/// 見え始めの時刻で鳴り直して `start,2` を 2 度当てることは無い（一番上と同じ）。
 #[test]
 fn part_runonce_playing_when_it_becomes_visible_is_skipped_for_good() {
     let mut rig = Rig::new(PLAYING_AT_REVEAL, &[0]);
@@ -412,7 +409,7 @@ const LAPS: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
 
 /// 「再生中か」は刻みの時刻でなく周の境目の時刻で測る: 長さが周期ちょうどの animation は毎周鳴り、
 /// 境目の時刻に再生中だった animation は、遅れた刻みが来た時点でもう終えていてもその周を飛ばす。
-/// 終えた再生の終わりの記録は 1 回ずつ（要件 3.1・3.3・3.5・5.3・5.4）。
+/// 終えた再生の終わりの記録は 1 回ずつ。
 #[test]
 fn periodic_part_is_judged_playing_at_the_lap_boundary() {
     let mut rig = Rig::new(LAPS, &[]);
@@ -466,7 +463,7 @@ fn periodic_part_is_judged_playing_at_the_lap_boundary() {
 }
 
 /// 末尾のコマを保っている `periodic` が鳴り直した刻みに、頭のコマの待ちの前なら保っていたコマを消す
-/// （鳴り直した後は開始からの経過だけで決まる・一番上と同じ・要件 5.1・5.4）。
+/// （鳴り直した後は開始からの経過だけで決まる・一番上と同じ）。
 #[test]
 fn refired_part_clears_its_held_frame_while_the_first_frame_is_pending() {
     let mut rig = Rig::new(
@@ -497,9 +494,8 @@ const NO_WORDS: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
     surface100\n{\nanimation0.interval,random,2\n\
     animation0.pattern0,overlay,101,0,0,0\n\
     animation0.pattern1,overlay,-1,50,0,0\n}\n";
-
-/// 表に 3 語が無ければ、動く部品が見えて再生していても引き金の状態は生まれず、記録も増えない
-/// （要件 8.1）。同じ形で 3 語を書いた表では生まれる（陽性対照）。
+/// 表に 3 語が無ければ、動く部品が見えて再生していても引き金の状態は生まれず、記録も増えない。同じ形で 3 語を書いた表では生まれる（陽性対照）。
+/// 。同じ形で 3 語を書いた表では生まれる（陽性対照）。
 #[test]
 fn table_without_the_three_words_never_arms_a_part() {
     let run = |text: &str| {
@@ -536,7 +532,7 @@ const WINDOW: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
 
 /// 窓が閉じている間は部品の 3 語は鳴らず、再生中の 3 語の時計は捨てる。開いた時刻が `periodic` の
 /// 新しい起点になり、`runonce` は最初に開いたときに 1 回だけ鳴って、開き直しでは鳴らない
-/// （一番上と同じ・要件 5.4・5.5）。
+/// （一番上と同じ）。
 #[test]
 fn closed_window_silences_part_triggers_and_reopening_rebases_the_period() {
     let mut rig = Rig::new(WINDOW, &[]);
@@ -568,7 +564,7 @@ fn closed_window_silences_part_triggers_and_reopening_rebases_the_period() {
 
 /// 面が隠れた（`\s[-1]`）ら 3 語の時計と引き金の状態を捨て、戻った刻みでもう 1 回 `runonce` が鳴る。
 /// 新しい出番（窓の知らせ）は時計を捨てて隠すだけで、`runonce` の 1 回は使い済みのまま。表の差し替えは
-/// 全部捨てる（要件 5.9・2.6）。
+/// 全部捨てる。
 #[test]
 fn hidden_surface_forgets_part_triggers_and_a_new_turn_only_hides_them() {
     let mut rig = Rig::new(WINDOW, &[]);
@@ -611,7 +607,7 @@ const EVENT: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
 /// 外側の面の切り替えで最初から見えた部品は、出来事の時刻（刻みの境目に丸めない）が起点: その評価が
 /// `runonce` を鳴らして頭のコマを載せ、次の刻みは出来事の時刻からの経過で進む。構えた後の評価
 /// （着せ替えの変化）は `runonce` を鳴らさず、出来事の時刻までに来た `periodic` の境目は刻みと同じく
-/// 境目の時刻で鳴らす。時刻が分からない評価は構えない（要件 3.1・5.9・6.1・6.2・2.4）。
+/// 境目の時刻で鳴らす。時刻が分からない評価は構えない。
 #[test]
 fn refresh_arms_at_the_event_time_and_judges_up_to_it() {
     let mut rig = Rig::new(EVENT, &[]);
@@ -693,7 +689,7 @@ const PART_MOUTH: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
 
 /// 見えている部品の `talk` は、面の文字の数えが区切り（3 文字ごと）を越えた刻みに鳴る。開始は刻みの
 /// 時刻でなく区切りの文字が現れた時刻で、同じ刻みのうちに経過の分のコマと、そのコマが見せた子の
-/// コマまで出る。乱数は引かない（要件 4.1・4.5・5.4・5.7・6.2）。
+/// コマまで出る。乱数は引かない。
 #[test]
 fn visible_part_talk_fires_at_each_boundary_from_the_glyph_time() {
     let mut rig = Rig::new(PART_MOUTH, &[]);
@@ -742,7 +738,7 @@ const LATE_MOUTH: &str = "surface0\n{\n}\n\
 
 /// 見えていない部品の `talk` は、区切りを越えても始まらない。後から見えた部品は数え直さずに面の
 /// 数えを借りる: 見えなかった間に越えた区切りは後から鳴らず、面の数えの次の区切りで鳴る（見えてから
-/// 3 文字目ではない・要件 5.6・9.5）。
+/// 3 文字目ではない）。
 #[test]
 fn hidden_part_talk_stays_silent_and_joins_the_slot_count_when_it_appears() {
     let mut rig = Rig::new(LATE_MOUTH, &[]);
@@ -789,7 +785,7 @@ fn hidden_part_talk_stays_silent_and_joins_the_slot_count_when_it_appears() {
 }
 
 /// 区切りの文字（3 文字目・1100）が、部品の見えた刻み（1160）の窓の中で、見え始めより前に現れたら、
-/// 開始は見え始めの時刻（部品は 1100 にはまだ見えていない・時刻は正確に扱う・要件 4.1・5.6・5.9）。
+/// 開始は見え始めの時刻（部品は 1100 にはまだ見えていない・時刻は正確に扱う）。
 #[test]
 fn part_talk_crossed_in_the_revealing_tick_starts_at_the_reveal() {
     let mut rig = Rig::new(LATE_MOUTH, &[]);
@@ -814,8 +810,7 @@ const MOUTH_GAPS: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
 
 /// 部品の `talk` の「再生中か」は刻みの時刻でなく区切りの文字が現れた時刻で測る: 長さが区切りの間隔
 /// ちょうどの口は区切りごとに毎回動き、区切りの時刻に再生中だった口は、遅れた刻みが来た時点でもう
-/// 終えていてもその区切りを見送る。`talk` の開始と終わりの記録は `debug!` で、再生 1 本につき 1 件ずつ
-/// （要件 4.1・4.7・5.3・7.3）。
+/// 終えていてもその区切りを見送る。`talk` の開始と終わりの記録は `debug!` で、再生 1 本につき 1 件ずつ。
 #[test]
 fn part_talk_is_judged_playing_at_the_boundary_glyph_time() {
     let mut rig = Rig::new(MOUTH_GAPS, &[]);
@@ -877,7 +872,7 @@ const INSTANT_MOUTH: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
 
 /// 開始の時刻にもう終えている口（待ち 0 のコマ 1 枚）は、区切りを越えた刻みにちょうど 1 回鳴る。同じ
 /// 刻みに別の部品の引き金が鳴って評価が 2 段目をもう 1 回通っても、判定済みの部品は判定し直さない
-/// （判定し直すと「再生中でない」ので同じ区切りでもう 1 回鳴る・要件 4.6・5.4）。
+/// （判定し直すと「再生中でない」ので同じ区切りでもう 1 回鳴る）。
 #[test]
 fn part_talk_that_ends_at_its_start_fires_once_when_the_evaluation_loops() {
     let mut rig = Rig::new(INSTANT_MOUTH, &[]);

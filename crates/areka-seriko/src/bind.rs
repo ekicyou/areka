@@ -3,15 +3,15 @@
 //! bindgroup の既定オン集合（番号）から、合成入力が要求する静的 bind 集合
 //! （[`areka_emo_compose::BindSet`]）をアクター構築時に一度だけ組み立てる。
 //!
-//! bindgroup 番号は animation ID の**恒等写像**（決定3 / R-2）。中間変換・添字付け・
+//! bindgroup 番号は animation ID の**恒等写像**。中間変換・添字付け・
 //! 特別扱いは一切行わず、番号をそのまま [`BindSet::from_ids`] へ流す。整列・重複除去は
 //! `from_ids` が担う（`BindSet` は昇順・dedup 済み）。
 
 /// bindgroup default 番号集合 → 静的 [`BindSet`]（恒等写像・`from_ids` が整列/dedup）。
 ///
-/// bindgroup 番号 = animation ID（決定3 / R-2）。呼び手（アクター構築時）が渡した
+/// bindgroup 番号 = animation ID。呼び手（アクター構築時）が渡した
 /// 既定オン集合をそのまま `BindSet::from_ids` へ渡すのみ。状態を持たず、構築時に一度だけ
-/// 呼ばれる純関数（要件 4.1）。
+/// 呼ばれる純関数。
 ///
 /// [`BindSet`]: areka_emo_compose::BindSet
 /// [`BindSet::from_ids`]: areka_emo_compose::BindSet::from_ids
@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_parsers::package::{BindGroupDefaults, ScopeBinds};
 use areka_sakura::ActorKey;
 
-/// スコープの番号ごとの既定の着せ替えの組（spec: areka-P0-offline-surface-dump 要件 14.3）。
+/// スコープの番号ごとの既定の着せ替えの組。
 ///
 /// [`DefaultBinds::uniform`] はどのスコープにも同じ組を返す（1 組を全スコープで共有する）。
 /// [`DefaultBinds::single`] は 1 つのスコープだけに組を持つ。[`DefaultBinds::for_scope`]
@@ -55,7 +55,7 @@ impl DefaultBinds {
     }
 
     /// シェルの着せ替えの読みから、スコープ 0 に `sakura.*`・1 に `kero.*`・2 以上に `char*.*` の
-    /// `default,1` を当てる。書かれていないスコープは空の組（要件 14.1）。
+    /// `default,1` を当てる。書かれていないスコープは空の組。
     pub fn from_groups(groups: &BindGroupDefaults) -> Self {
         Self {
             by_scope: groups
@@ -77,7 +77,7 @@ impl DefaultBinds {
     }
 }
 
-/// bind 名前解決の**名前空間**（本体側＝sakura／相方側＝kero を型で峻別する・D7）。
+/// bind 名前解決の**名前空間**（本体側＝sakura／相方側＝kero を型で峻別する）。
 ///
 /// scope（`ActorKey`）から [`scope_namespace`] が写像し、[`BindResolver::resolve`] が
 /// どの名前表を引くかを選ぶ。3 人目以降（`char{N}.bindgroup`）は番号つきの [`BindNamespace::Char`]。
@@ -87,11 +87,11 @@ pub enum BindNamespace {
     Sakura,
     /// 相方側（scope `"1"`・shell の `kero.bindgroup`）。名前表まで持つが機構は scope 非依存。
     Kero,
-    /// 3 人目以降（scope `"N"`・N は 2 以上・shell の `char{N}.bindgroup`・要件 14.2）。
+    /// 3 人目以降（scope `"N"`・N は 2 以上・shell の `char{N}.bindgroup`）。
     Char(u32),
 }
 
-/// カテゴリの着せ替え選択ポリシー（ukadoc 正典の 3 値・bindopt 設計 D2）。
+/// カテゴリの着せ替え選択ポリシー（ukadoc 正典の 3 値）。
 ///
 /// `bindoption*.group` のオプション宣言から [`BindResolver::policy`] が導出する。「排他か」
 /// 「解除できるか」の**解釈**はこの型へ一元化され、適用側（actor）は値を照合するだけになる。
@@ -118,13 +118,13 @@ pub enum BindChoicePolicy {
 pub struct BindResolver {
     /// 本体側（sakura）の名前表。
     sakura: ScopeNames,
-    /// 相方側（kero）の名前表。emo2 では空（Risks）。
+    /// 相方側（kero）の名前表。emo2 では空。
     kero: ScopeNames,
-    /// 3 人目以降（`char{N}`）の名前表（N ごと・要件 14.2）。
+    /// 3 人目以降（`char{N}`）の名前表（N ごと）。
     chars: BTreeMap<u32, ScopeNames>,
 }
 
-/// 1 つの名前空間の名前表と `bindoption*.group` 宣言（bindopt 設計 D2/D3）。
+/// 1 つの名前空間の名前表と `bindoption*.group` 宣言。
 ///
 /// `mustselect`／`multiple` は [`BindResolver::policy`] が 3 値ポリシーを導出する唯一の材料。
 /// 全集合空＝全カテゴリが正典の既定（[`BindChoicePolicy::Default`]）。
@@ -169,7 +169,7 @@ impl ScopeNames {
 
 impl BindResolver {
     /// シェルの着せ替えの読み（`sakura.*`・`kero.*`・`char{N}.*`）から 3 種類のスコープの名前表と
-    /// `mustselect`／`multiple` を組む（要件 14.2・14.3）。
+    /// `mustselect`／`multiple` を組む。
     pub fn from_groups(groups: &BindGroupDefaults) -> Self {
         let mut out = Self::default();
         for (n, binds) in groups {
@@ -195,7 +195,7 @@ impl BindResolver {
     }
 
     /// カテゴリのパーツ名を、シェルの descript.txt に書かれた順（行の順・同じパーツ名は 1 度）で返す。
-    /// 無いカテゴリは空（要件 5.2・5.9）。
+    /// 無いカテゴリは空。
     pub fn category_parts_in_order(&self, ns: BindNamespace, category: &str) -> Vec<String> {
         let mut parts: Vec<String> = Vec::new();
         for (_line, cat, part) in &self.scope(ns).written {
@@ -208,11 +208,10 @@ impl BindResolver {
 
     /// 空リゾルバ（本体側・相方側とも空表・`bindoption` 宣言も空）。
     ///
-    /// bind 名前表を供給しない経路（テスト・bind cue 不在経路）用。空表は
-    /// R4.3 のシームを「同一機構」で実現する——人工的な無効化コードを書かず、引きが自然に
-    /// 解決不能（`None`）へ落ちる（D7）。宣言集合も空ゆえ [`policy`] は全カテゴリで正典の既定
-    /// （[`BindChoicePolicy::Default`]）を返すが、名前表が空＝[`resolve`] が常に `None` ゆえ
-    /// 適用へ到達せず、挙動への実害はない（bindopt 設計 D3）。
+    /// bind 名前表を供給しない経路（テスト・bind cue 不在経路）用。空表なので引きは自然に
+    /// 解決不能（`None`）へ落ち、人工的な無効化コードは要らない。宣言集合も空ゆえ [`policy`] は
+    /// 全カテゴリで正典の既定（[`BindChoicePolicy::Default`]）を返すが、[`resolve`] が常に `None`
+    /// なので適用へ到達せず、挙動への実害はない。
     ///
     /// [`policy`]: BindResolver::policy
     /// [`resolve`]: BindResolver::resolve
@@ -222,9 +221,9 @@ impl BindResolver {
 
     /// `(カテゴリ名, パーツ名)` を名前空間 `ns` の表から引き、着せ替え ID を返す（純粋・副作用なし）。
     ///
-    /// 宣言済みの組み合わせは `Some(id)`、未宣言（キーが表に無い）は `None`（捏造しない・R3.7）。
+    /// 宣言済みの組み合わせは `Some(id)`、未宣言（キーが表に無い）は `None`（捏造しない）。
     /// 名前空間は隔離され、`Sakura` で引くのは sakura 表のみ、`Kero` は kero 表のみ。解決不能の
-    /// `error!`＋skip は呼び手（actor）の責務（R3.7）。
+    /// `error!`＋skip は呼び手（actor）の責務。
     pub fn resolve(&self, ns: BindNamespace, category: &str, part: &str) -> Option<u32> {
         let table = &self.scope(ns).table;
         // タプルキー `(String, String)` は借用キーでの直接引きができない（`Borrow` が
@@ -239,7 +238,7 @@ impl BindResolver {
     /// 導出順は `multiple` 所属 → [`BindChoicePolicy::Multiple`]、次に `mustselect` 所属 →
     /// [`BindChoicePolicy::MustSelect`]、どちらでもなければ [`BindChoicePolicy::Default`]。
     /// 併記（`mustselect+multiple`）は正典文言「multiple で複数のパーツを選択可能」に従い
-    /// **multiple 優先**（bindopt 設計 D4）。未知カテゴリ（名前表に無いカテゴリを含む）も
+    /// **multiple 優先**。未知カテゴリ（名前表に無いカテゴリを含む）も
     /// 正典の既定＝`Default`。名前空間は隔離され、`Sakura` は sakura 集合のみ、`Kero` は
     /// kero 集合のみを見る。
     pub fn policy(&self, ns: BindNamespace, category: &str) -> BindChoicePolicy {
@@ -253,13 +252,12 @@ impl BindResolver {
         }
     }
 
-    /// カテゴリに属する全着せ替え ID を名前空間 `ns` の名前表から集める（純粋・副作用なし・
-    /// bindopt 2.1/3.1）。
+    /// カテゴリに属する全着せ替え ID を名前空間 `ns` の名前表から集める（純粋・副作用なし）。
     ///
     /// `(カテゴリ, パーツ)→ID` 表を走査し `key.0 == category` の ID を昇順・重複除去して返す
     /// （排他置換の「同カテゴリ他パーツ off」の対象集合）。排他置換は mustselect
-    /// （[`BindChoicePolicy::MustSelect`]・bindopt 3.1）と非宣言の既定
-    /// （[`BindChoicePolicy::Default`]・bindopt 2.1）の**両方**の着衣で使われるため、本アクセサは
+    /// （[`BindChoicePolicy::MustSelect`]）と非宣言の既定
+    /// （[`BindChoicePolicy::Default`]）の**両方**の着衣で使われるため、本アクセサは
     /// カテゴリの宣言形に依存しない（名前表のみを引く）。宣言のないカテゴリは空 `Vec`。
     /// `BTreeSet` 経由で dedup＋昇順を保証する（emo2 は約 30 宣言ゆえ全走査で足りる）。
     pub fn category_ids(&self, ns: BindNamespace, category: &str) -> Vec<u32> {
@@ -276,7 +274,7 @@ impl BindResolver {
     /// 着せ替え ID から名前空間 `ns` の `(カテゴリ, パーツ)` を引く（[`resolve`] の逆引き・純粋）。
     ///
     /// 同じ ID に名前が複数あれば表の順（カテゴリ・パーツの昇順）で最初のもの。未宣言は `None`。
-    /// ゴーストの読み直しで着せ替えを読み直したシェルの名前で出し直すのに使う（areka-P0-mcp-reload 要件 3.8）。
+    /// ゴーストの読み直しで着せ替えを読み直したシェルの名前で出し直すのに使う。
     ///
     /// [`resolve`]: BindResolver::resolve
     pub fn name_of(&self, ns: BindNamespace, id: u32) -> Option<(&str, &str)> {
@@ -288,10 +286,10 @@ impl BindResolver {
     }
 }
 
-/// scope（`ActorKey`）→ bind 名前空間の写像（D7・純関数）。
+/// scope（`ActorKey`）→ bind 名前空間の写像（純関数）。
 ///
 /// `"0"` → [`Some(BindNamespace::Sakura)`]、`"1"` → [`Some(BindNamespace::Kero)`]、2 以上の数 →
-/// `Some(BindNamespace::Char(n))`（要件 14.2）、それ以外（非数値）→ `None`（写像なし＝判定なし）。
+/// `Some(BindNamespace::Char(n))`、それ以外（非数値）→ `None`（写像なし＝判定なし）。
 /// 写像なしは呼び手で自然に解決不能へ落ちる。
 ///
 /// [`Some(BindNamespace::Sakura)`]: BindNamespace::Sakura
@@ -308,14 +306,14 @@ pub fn scope_namespace(scope: &ActorKey) -> Option<BindNamespace> {
     }
 }
 
-/// `\![bind,...]` トークン列の類別（D8・純関数・不透明保持）。
+/// `\![bind,...]` トークン列の類別（純関数・不透明保持）。
 ///
 /// [`parse_bind_directive`] が返す区分。区分を当てるのは `apply_bind_directive`（Toggle は今の
 /// 着脱の反対・カテゴリ単位の形は定義の順に 1 つずつ）で、`Malformed` の `error!`＋skip は
-/// アクター（`actor_bind`）が出す（D8）。derive した `PartialEq`/`Eq` はテストの区分照合用。
+/// アクター（`actor_bind`）が出す。derive した `PartialEq`/`Eq` はテストの区分照合用。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum BindDirective {
-    /// 名前キー＋明示 on/off（`on` 欄が `"1"`/`"0"`）。実導出する（R4.1）。
+    /// 名前キー＋明示 on/off（`on` 欄が `"1"`/`"0"`）。実導出する。
     Apply {
         /// bindgroup カテゴリ名（trim 済み）。
         category: String,
@@ -324,14 +322,14 @@ pub(crate) enum BindDirective {
         /// `"1"`→`true`・`"0"`→`false`。
         on: bool,
     },
-    /// 数値欄が空欄／省略のトグル形。今の着脱の反対を当てる（`apply_bind_directive`・script-small-tags 3.9）。
+    /// 数値欄が空欄／省略のトグル形。今の着脱の反対を当てる（`apply_bind_directive`）。
     Toggle {
         /// bindgroup カテゴリ名（trim 済み）。
         category: String,
         /// bindgroup パーツ名（trim 済み）。
         part: String,
     },
-    /// パーツ名が空欄のカテゴリ単位形。定義の順にパーツを 1 つずつ当てる（`apply_bind_directive`・script-small-tags 3.8）。
+    /// パーツ名が空欄のカテゴリ単位形。定義の順にパーツを 1 つずつ当てる（`apply_bind_directive`）。
     ///
     /// `on` は `"1"`→`Some(true)`・`"0"`→`Some(false)`・欠落/空/その他→`None`（`None` はパーツごとのトグル）。
     /// 不正値でも `Malformed` にはしない。
@@ -341,15 +339,14 @@ pub(crate) enum BindDirective {
         /// on/off の緩やかな保持（`None` = 未指定または非 `"1"`/`"0"`）。
         on: Option<bool>,
     },
-    /// カテゴリ欠落／on/off 値破損（非 `"1"`/`"0"` の非空文字列）。`error!`＋skip（D8）。
+    /// カテゴリ欠落／on/off 値破損（非 `"1"`/`"0"` の非空文字列）。`error!`＋skip。
     Malformed,
 }
 
 /// `\![bind,...]` のトークン列（カテゴリ, パーツ, 値, …）を区分へ類別する純関数。
 ///
-/// 各トークンは trim してから判定し、返る文字列にも trim 済みの値を格納する（parsers D2
-/// の trim 規律に整合）。トークンは「不在」または「trim 後に空」のとき空とみなす。分岐は
-/// design（spec: areka-P0-mayuna-compose・`parse_bind_directive` の分岐）の順に厳密に従う:
+/// 各トークンは trim してから判定し、返る文字列にも trim 済みの値を格納する。
+/// トークンは「不在」または「trim 後に空」のとき空とみなす。分岐は次の順に厳密に従う:
 ///
 /// 1. カテゴリ欠落/空 → [`BindDirective::Malformed`]。
 /// 2. パーツ欠落/空 → [`BindDirective::CategoryWide`]（`on` は `"1"`/`"0"` のみ写し他は `None`）。
@@ -359,22 +356,19 @@ pub(crate) enum BindDirective {
 /// 6. 値が非空の非 `"1"`/`"0"` 文字列 → [`BindDirective::Malformed`]（on/off 値破損）。
 ///
 /// 第 4 トークン以降は無視する（正典に第 4 引数なし・不透明）。副作用なし・純粋。
-/// 区分を当てるのは `apply_bind_directive`、`Malformed` の `error!` はアクターが出す（D8）。
+/// 区分を当てるのは `apply_bind_directive`、`Malformed` の `error!` はアクターが出す。
 pub(crate) fn parse_bind_directive(tokens: &[&str]) -> BindDirective {
-    // トークンを trim して取り出す。不在または trim 後空を「空」とみなす（`None` へ畳む）。
     let trimmed =
         |i: usize| -> Option<&str> { tokens.get(i).map(|t| t.trim()).filter(|t| !t.is_empty()) };
     let category = trimmed(0);
     let part = trimmed(1);
     let value = trimmed(2);
 
-    // (1) カテゴリ欠落/空 → Malformed。
     let category = match category {
         Some(c) => c,
         None => return BindDirective::Malformed,
     };
 
-    // (2) パーツ欠落/空 → CategoryWide（on は "1"/"0" のみ写し、他は None・寛容）。
     let part = match part {
         Some(p) => p,
         None => {
@@ -390,9 +384,7 @@ pub(crate) fn parse_bind_directive(tokens: &[&str]) -> BindDirective {
         }
     };
 
-    // (3)-(6) 値の類別。
     match value {
-        // (3)(4) 明示 on/off → Apply。
         Some("1") => BindDirective::Apply {
             category: category.to_string(),
             part: part.to_string(),
@@ -403,17 +395,15 @@ pub(crate) fn parse_bind_directive(tokens: &[&str]) -> BindDirective {
             part: part.to_string(),
             on: false,
         },
-        // (5) 値欠落/空 → Toggle。
         None => BindDirective::Toggle {
             category: category.to_string(),
             part: part.to_string(),
         },
-        // (6) 非空の非 "1"/"0" → on/off 値破損 → Malformed。
         Some(_) => BindDirective::Malformed,
     }
 }
 
-/// [`apply_named_bind`] の結果（記録は呼び手が出す・spec: areka-P0-offline-surface-dump 要件 5.1・5.3・5.4）。
+/// [`apply_named_bind`] の結果（記録は呼び手が出す）。
 #[derive(Clone, Debug, PartialEq)]
 pub enum NamedBindResult {
     /// 名前を解決して当てた（`id` は解決した着せ替え ID）。
@@ -421,17 +411,17 @@ pub enum NamedBindResult {
         id: u32,
         outcome: crate::state::BindApplyOutcome,
     },
-    /// scope に名前の空間が無い（数でない scope・D7）。
+    /// scope に名前の空間が無い（数でない scope）。
     NoNamespace,
-    /// (カテゴリ, パーツ) が宣言に無い（R3.7）。
+    /// (カテゴリ, パーツ) が宣言に無い。
     NotFound,
-    /// mustselect のカテゴリの脱衣は外さない（正典・解除不可・bindopt 3.2）。
+    /// mustselect のカテゴリの脱衣は外さない（正典・解除不可）。
     MustSelectKept { id: u32 },
 }
 
 /// 名前で 1 パーツを当てる決め方（名前の解決 → 方針 → 当てる）。画面の `\![bind]` と
-/// `--dump-bind` が共有する（要件 14.2）。複数可でないカテゴリの着衣は排他置換（bindopt 2.1/3.1）、
-/// 複数可の着衣は加算・mustselect 以外の脱衣は除去（bindopt 2.2/3.3）、mustselect の脱衣は外さない。
+/// `--dump-bind` が共有する。複数可でないカテゴリの着衣は排他置換、
+/// 複数可の着衣は加算・mustselect 以外の脱衣は除去、mustselect の脱衣は外さない。
 pub fn apply_named_bind(
     states: &mut crate::state::ScopeStates,
     resolver: &BindResolver,
@@ -458,7 +448,7 @@ pub fn apply_named_bind(
     NamedBindResult::Applied { id, outcome }
 }
 
-/// パーツ 1 つを当てた結果と、当てたパーツ・着脱（記録の欄を呼び手が埋めるため・spec: script-small-tags）。
+/// パーツ 1 つを当てた結果と、当てたパーツ・着脱（記録の欄を呼び手が埋めるため）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct AppliedBind {
     pub category: String,
@@ -471,8 +461,8 @@ pub struct AppliedBind {
 
 /// 読んだ着せ替えの指令を、パーツ 1 つずつ [`apply_named_bind`] で当てる。返す列は当てた順。
 ///
-/// SSP の測り（research.md 2.11）に合わせ、トグル形は今の着脱の反対を 1 回、カテゴリ単位形は定義の順
-/// （[`BindResolver::category_parts_in_order`]）に `0`／`1`／その時点の反対を 1 つずつ当てる（要件 3.8〜3.10）。
+/// SSP の測りに合わせ、トグル形は今の着脱の反対を 1 回、カテゴリ単位形は定義の順
+/// （[`BindResolver::category_parts_in_order`]）に `0`／`1`／その時点の反対を 1 つずつ当てる。
 /// カテゴリにパーツが無ければ `NotFound`、スコープに名前の空間が無ければ `NoNamespace` を 1 つ返す
 /// （空の列を返さない）。`Malformed` は呼び手が先に除く前提で、渡されたら空の列（状態を変えない）。
 pub fn apply_bind_directive(
@@ -527,18 +517,18 @@ pub fn apply_bind_directive(
     }
 }
 
-/// on/off 積算（純関数・[`BindSet`] は昇順 dedup ゆえ集合同値が冪等判定・D9・spec: areka-P0-mayuna-compose）。
+/// on/off 積算（純関数・[`BindSet`] は昇順 dedup ゆえ集合同値が冪等判定）。
 ///
 /// 現在の着せ替え集合 `current` に対し、対象 animation ID `id` を `on` に従って積算した
 /// 新しい [`BindSet`] を返す。状態を持たず、同一入力に常に同一出力（純粋・副作用/ログ/panic
-/// なし・R3.3/R3.4）。
+/// なし）。
 ///
 /// - `on == true`  → `current` の全 ID に `id` を加えた集合。`from_ids` が dedup するため、
-///   既に含む ID を重ねても集合として不変（冪等・D9）。
+///   既に含む ID を重ねても集合として不変（冪等）。
 /// - `on == false` → `current` から `id` を除いた集合。含まない ID を除いても集合として不変。
 ///
-/// 直前状態は保持したまま当該 ID のみ更新する（複数 cue 積算・R3.4）。結果は昇順 dedup 済みの
-/// 正準形ゆえ、順序違い・重複適用でも集合同値に至る（D9 冪等ガードの単位＝結果 BindSet の同値）。
+/// 直前状態は保持したまま当該 ID のみ更新する（複数 cue 積算）。結果は昇順 dedup 済みの
+/// 正準形ゆえ、順序違い・重複適用でも集合同値に至る。
 ///
 /// [`BindSet`]: areka_emo_compose::BindSet
 pub(crate) fn accumulate(
@@ -547,12 +537,10 @@ pub(crate) fn accumulate(
     on: bool,
 ) -> areka_emo_compose::BindSet {
     if on {
-        // 今着ている ID に id を足す。from_ids が整列＋dedup するため重複適用は集合として no-op。
         areka_emo_compose::BindSet::from_ids(
             current.ids().iter().copied().chain(std::iter::once(id)),
         )
     } else {
-        // id を除いた ID 群から再構築。含まない id の除去は集合として no-op。
         areka_emo_compose::BindSet::from_ids(current.ids().iter().copied().filter(|&x| x != id))
     }
 }

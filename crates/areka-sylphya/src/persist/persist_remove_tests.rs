@@ -1,4 +1,4 @@
-//! 記憶の鍵を消す口（[`remove_scope_keys`]）の檻（audit-placement-core 指摘 17・要件 6.6・9.2）。
+//! 記憶の鍵を消す口（[`remove_scope_keys`]）のテスト。
 //!
 //! - 消すのは名指しの鍵だけ。知らない表・知らない値・ほかの鍵は残り、空になった表は消える。
 //! - 錠が取れない・commit の失敗は `save_scope` と同じ道で ERROR＋`Degraded` になり、書かない。
@@ -118,7 +118,6 @@ fn removing_one_axis_keeps_the_other_and_the_last_key_drops_the_whole_table() {
         }],
     );
     let all_offsets = {
-        // 知らない値の無いファイルで、表の最後の鍵を消すと表ごと消える。
         let io2 = FakePersistIo::new();
         io2.commit(
             &ghost_file(),
