@@ -8,7 +8,7 @@
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/` のうち、上の 7 本の持ち物でないもの全部（`src/cli/`・`main.rs`・`boot_*`・`ghost_session*`・`shiori_host*`・`app_exit*` ほか・`tests/`・`Cargo.toml`・`build.rs`・`shell/`）。
+- 受け持つファイル: `crates/areka/` のうち、上の 7 本の持ち物でないもの全部（`src/cli/`・`src/main.rs`・`src/session/boot_*`・`src/session/ghost_session*`・`src/shiori_host*`・`src/session/app_exit*` ほか・`tests/`・`Cargo.toml`・`build.rs`・`shell/`）。
 - 大きさ: 211 ファイル・コード 12,594 行・テスト 18,655 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 

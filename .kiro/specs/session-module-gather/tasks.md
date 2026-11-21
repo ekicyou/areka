@@ -115,7 +115,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 決めた試しを回して結果を書くだけ_
   - _Requirements: 4.2_
 
-- [ ] 8. 本体の外の説明・文書・steering のパスを追従させる（段 7・モジュールが全部移った後）
+- [x] 8. 本体の外の説明・文書・steering のパスを追従させる（段 7・モジュールが全部移った後）
 - [x] 8.1 (P) ほかの crate の説明と `tools/` のパスを直す
   - `crates/areka-runtime/src/placement_tests/transition_judge_offset_signoff_tests.rs:57`（`crates/areka-runtime/` で触るのはこの 1 か所だけ）・`crates/areka-kanade/src/schedule/script_log.rs:16`・`crates/pilot/examples/pilot-windows-rs-next/REWRITE_TABLE.md:66`・`crates/areka/tests/emo2_real_run.rs:58` のパスを移した先へ。`crates/real-run-kit/` の説明に残る本体のパスは `git grep` で所と行を挙げてから直す
   - `tools/package.ps1:149`・`:153`・`:695`・`tools/perf/judge-perf.py:96` は説明のパスだけを直し、道具が字面で読む目印の本文は変えない
@@ -133,7 +133,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 設計が所と行き先を与える文書のパスの書き換えと決まった作り直し_
   - _Requirements: 6.5, 7.3, 9.4_
 
-- [ ] 8.3 (P) steering 3 本と audit 2 本の brief を移した先へ合わせる
+- [x] 8.3 (P) steering 3 本と audit 2 本の brief を移した先へ合わせる
   - `.kiro/steering/structure.md` の本体の節（`session/`・`roots/`・`cli/`・`readme`・起動と終了の最上位のファイル・`log_history.rs`・`:281` の出し直し・`:319`・`:348`・`:418`・`:419`）・`.kiro/steering/tech.md:171`・`.kiro/steering/logging.md:103` を移した先と新しい出所へ
   - `.kiro/specs/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md` の「受け持つファイル」のパスだけを書き換え、持ち主は変えない（roots の芯と readme は `audit-areka-install-update` のまま）
   - 完了の形: steering 3 本が `session/` の新しい形と `main.rs` の残る範囲を述べ、audit 2 本の brief の受け持つファイルが全部実在するパスを指す
@@ -187,3 +187,4 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
 - 7.1: 触らない crate `areka-placement` に `main.rs` の `restore_merged_placements`／`boot_monitor_snapshot` を名指す古い説明が 4 か所（`src/diag.rs:46`・`src/persist.rs:330`・`src/resolver.rs:97`・`src/resolver_resolve_balloon_tests.rs:123`）。9.2 の申し送りに載せる。
 - 7.2: 本体の説明 5 か所（`menu/mod.rs:223`・`:254`・`install/mod.rs:132`・`update/mod.rs:224`・`mcp/mod.rs:48`）が呼び手を `ghost_session::register_systems` と書く（関数ポインタ経由で今も正しい）。9.2 の申し送りに「名目上の渡し手は `main.rs` の `BODY_SYSTEMS`」と載せる。
 - 8.2: `doc/COMPAT_ARCHITECTURE.md` が HEAD の時点から無い `runtime_tests/shell_balloon_resolve_tests.rs` を 5 か所名指す（移動と関係ない古い参照）。9.2 の申し送りに載せる。
+- 8.3: `.kiro/steering/product.md:81` が `crates/areka/src/boot_resolve.rs` を名指す（6.6・式 3 の範囲の外）。9.2 の申し送りに載せる（`/kiro-complete` の steering の同期で直してよい）。audit 2 本の brief の所見の文に残る古いパスも範囲の外として申し送る。
