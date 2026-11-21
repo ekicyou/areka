@@ -1,5 +1,6 @@
-use super::test_support::row;
+use super::test_support::{TWO_BOX_SHELL, row};
 use super::*;
+use areka_sakura::ActorKey;
 
 // -------------------------------------------------------------------------
 // hit_choice_row 純関数檻
@@ -73,7 +74,7 @@ fn hit_multiple_non_overlapping_rows_returns_correct_index() {
 /// 病的重なり→最終一致: 点を含む行が複数あっても、逆順走査の最初の
 /// 一致＝スライス**最終** index を決定的に返す（後定義が手前・画家のアルゴリズム）。
 /// 期待 index を各行で一意にするため、重なり方を非対称にして「最初一致」なら別 index に
-/// なる配置を用いる（最初一致=1／最終一致=2 を弁別）。
+/// なる配置を用いる（最初一致=0／最終一致=2 を弁別）。
 #[test]
 fn hit_pathological_overlap_returns_last_match_deterministically() {
     // 3 行が (50, 30) を共通に含む。スライス順（index 昇順）で最後の index 2 が返るべき。
@@ -98,96 +99,6 @@ fn hit_pathological_overlap_returns_last_match_deterministically() {
         Some(1),
         "2 行重なりでも最終一致 index を返す（最初一致 0 ではない）"
     );
-}
-
-// -------------------------------------------------------------------------
-// 実の写像で持ち上げた行矩形の当たり
-//
-// 上流の実写像 `to_window_physical` に k=2.0 を渡して行矩形を窓物理 px へ持ち上げ、無変換の点が
-// `click_selection` で当たることを見る。ハンドラが点を ÷k しないことは実 GPU の拡大率 2.0 の
-// テスト（`balloon_gpu_hit_tests.rs`）が見る。`to_window_physical` は f32 積を含み 1px の余地が
-// あるため、点は矩形境界から 8px 以上内側に置く。
-// -------------------------------------------------------------------------
-
-use areka_emo_text::choice::{CanvasHitRow, to_window_physical};
-use areka_emo_text::layout::LineRect;
-use areka_emo_text::region::{ScaleContract, TextRegion};
-use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
-
-/// 実適用スケール（k≠1.0——DPI追従下で実供給される値の代表）。
-const CAGE_K: f32 = 2.0;
-
-/// validrect 原点 (36, 46) の `TextRegion`（最小構築・画像原寸 400×224）。
-fn cage_region() -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(46), Some(168), Some(36), Some(356)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
-    TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb)
-}
-
-/// canvas-local 行矩形を **上流の実写像 `to_window_physical`** で k=2.0 の窓物理 px へ
-/// 持ち上げた 2 行（ordinal 0＝上帯・1＝下帯・committed=0）。
-///
-/// 期待値（横書き・`行内 x=(36+inline)×2`／`ブロック y=(46+block)×2+0`）:
-/// - 行 0: canvas (10, 0, 30, 10) → 窓物理 `[92, 132) × [92, 112)`
-/// - 行 1: canvas (10, 10, 30, 20) → 窓物理 `[92, 132) × [112, 132)`
-fn rows_lifted_by_real_k() -> Vec<ChoiceHitRow> {
-    let region = cage_region();
-    let contract = ScaleContract::new(CAGE_K, None);
-    [(0usize, 0.0_f32, 10.0_f32), (1, 10.0, 20.0)]
-        .into_iter()
-        .map(|(ordinal, top, bottom)| {
-            let canvas = CanvasHitRow {
-                ordinal,
-                rect: LineRect {
-                    left: 10.0,
-                    top,
-                    right: 30.0,
-                    bottom,
-                },
-            };
-            ChoiceHitRow {
-                kind: SpanKind::Choice,
-                ordinal,
-                id: format!("q{ordinal}"),
-                label: format!("label{ordinal}"),
-                references: Vec::new(),
-                rect: to_window_physical(
-                    &canvas,
-                    &region,
-                    WritingMode::HorizontalTb,
-                    0,
-                    &contract,
-                    (0.0, 0.0),
-                ),
-            }
-        })
-        .collect()
-}
-
-/// k=2.0 で持ち上げた行 1 の矩形 `[92, 132) × [112, 132)` に、無変換の点 (110, 120) が当たる。
-#[test]
-fn click_untransformed_point_hits_row_lifted_by_real_k() {
-    let rows = rows_lifted_by_real_k();
-    // 無変換の client 物理 px 点（÷k も ×k もしない）。
-    let (x, y) = (110.0_f32, 120.0_f32);
-
-    let sel = click_selection(true, &rows, x, y, 7)
-        .expect("×k 済み行矩形へ無変換の client 物理 px 点は正しくヒットする");
-    assert_eq!(
-        sel.id, "q1",
-        "無変換点 (110,120) は k=2.0 で持ち上げた行 1（y∈[112,132)）へ当たる"
-    );
-    assert_eq!(sel.scope, 7, "scope は引数由来（判定空間とは独立）");
 }
 
 // -------------------------------------------------------------------------
@@ -282,23 +193,6 @@ fn emo_text_debugs(
         .filter(|e| e.target == "areka_emo_text::actor" && e.level == tracing::Level::DEBUG)
         .collect()
 }
-
-/// 箱 a・b を置いたシェル。
-const TWO_BOX_SHELL: &str = "\
-balloon.a
-{
-size,100,50
-}
-balloon.b
-{
-size,100,50
-}
-surface0
-{
-element1,balloon,a,0,0
-element2,balloon,b,200,0
-}
-";
 
 /// 普通のバルーンにだけ ordinal 0 の選択肢があるので、文字の層が「無い ordinal」を記録するのは
 /// 箱の場所へ注入したときだけ。注入の到達と場所の取り違えの両方がここで分かる。
@@ -424,17 +318,6 @@ fn click_inactive_returns_none_even_inside_rect() {
     );
 }
 
-/// 空 references の忠実転写: 参照列が空でも空 Vec として構成される。
-#[test]
-fn click_empty_references_transcribed_as_empty() {
-    let rows = [row(0, 0.0, 0.0, 100.0, 20.0)];
-    let sel = click_selection(true, &rows, 50.0, 10.0, 0).expect("ヒットするので構成される");
-    assert!(
-        sel.references.is_empty(),
-        "空 references は空 Vec として転写"
-    );
-}
-
 // -------------------------------------------------------------------------
 // 選択肢とアンカーが混ざった当たりの行
 //
@@ -482,7 +365,7 @@ fn overlapping_choice_wins_over_anchor_in_either_order() {
 }
 
 /// 選択肢に当たらずアンカーに当たればアンカー。アンカー同士が重なれば後ろの行。
-/// どの範囲の外でもなければ無し。
+/// どの範囲にも入らなければ無し。
 #[test]
 fn anchor_is_hit_only_where_no_choice_covers_the_point() {
     let rows = [

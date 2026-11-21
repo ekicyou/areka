@@ -337,3 +337,54 @@
 | `session-module-gather` | `doc/COMPAT_ARCHITECTURE.md:412` が旧名 `input_events_char_clamp_tests.rs`（と `input_events_` 始まりの旧名）を指している | 4.3 では直していない（11-21 時点で向こうが main に未着地で、そのセッションが §8 を書き換える途中）。新しいテストのファイル名（`char_pointer_tests.rs`・`char_pointer_menu_tests.rs`・`char_clamp_tests.rs`）は向こうのセッションへ知らせた。412 行の 1 語は、向こうの着地の後に向こうか持ち主が直す |
 
 `audit-areka-app` の brief は `completed/` の下でなく、`.kiro/specs/audit-areka-app/brief.md` に在ることを確かめてから書き足した（要件 7.10）。
+
+## 12. かけ直しの audit と差分の確かめ（要件 9・実装の記録・2026-11-22）
+
+### 12.1 やり方
+
+- 仕上げの前に `cargo doc -p areka-input --no-deps` を回し、警告 0 を確かめた（件 7）。
+- 作法はギャップ分析（1 節）と同じ: `/ponytail:ponytail-audit`（5.3.3）から「最大 20 件」と「読まなかった所」を外す。範囲は `crates/areka-input/` の全部と、この spec が触った範囲の外のファイル（design.md「Modified Files（範囲の外）」の表のもの）。本番 19 ファイルはこの書き手が全行を読み、テストのファイルは 3 つの下請け（読むだけ）に分けて全行を読ませ、報告を本番のコードと突き合わせた。
+- 直した指摘のうち、テストを足した・強めたもの（下の回 1 の A1・C9、回 2 の A1・B1・C1）は、本番を一時だけ壊してそのテストが赤になることを確かめてから戻した。
+
+### 12.2 回ごとの件数と判定
+
+| 回 | 必ず直す | 直したほうがよい | できれば | 直さなかった（理由は下） | 判定 |
+|---|---|---|---|---|---|
+| 1 | 0 | 20 | 25 | 3 | 全部直した |
+| 2 | 0 | 15 | 7 | 5 | 18 件を直した。4 件は回 1 の直しが呼んだ連鎖（要件 9.8）で、直さずに Fable の総括へ回す |
+
+回 1 の芯は、落ちる力の無いテスト（Tunnel の押下の表明・`choice_active` 不変の表明・÷k の持ち上げの檻・`hover_arrives_before_move…`・`MouseWiring` を直に叩く 4 本）、重なったテストと支えの写し（GPU の組み立て・`pump_until_idle`・`TWO_BOX_SHELL`・預かりの取り出し・`drain_mouse`）、古い説明（`send_selection` の記録・`inject_choice_hover` の名・`hover_region` の「後から足すカーソル」・`spawn_assembly_tests.rs:352` の「本檻」・`collision-probe.rs` のテストのファイル名）。`HitTest::none()` の表明は持ち主の `areka-placement` の `spawn_assembly_tests.rs` へ移した。
+
+回 2 の芯は、回 1 で見落とした同じ種類の古い説明と重なり（`attach_balloon…` が受け手を上書きしても落ちない表明・`throttle.rs` の per-scope の 1 本・`identity_scale…`・Tunnel の Ctrl+左が Shift 無しで落ちない表明・`ShellBoxHover::set` の強調の記録の分岐のテスト抜け）。
+
+### 12.3 直さなかった指摘
+
+| 回 | 指摘 | 理由 |
+|---|---|---|
+| 1 | 本体 `app_exit_tests.rs:182`・`doc/COMPAT_ARCHITECTURE.md:412` の旧名 | 範囲の外。11.4 で持ち主（`audit-areka-app`・`session-module-gather`）へ申し送り済み（新しい指摘ではない） |
+| 1 | `areka-runtime` の `shell_box_hover_tests.rs` の箱の文面が入力の crate のテストと同じ | `areka-runtime` は `areka-input` に依存できず、共通にするには `areka-runtime` の test-support（要件 7.4 の表の外）に足すことになる。指摘に当たらない |
+| 1 | `balloon_hover.rs` の doc が `areka_input` の項目を名指す | 書いてあることは今の事実のとおり。指摘に当たらない |
+| 2 | `handler_double_click_left_and_right_send` の右半分が menu のテストと重なる | 名は `audit-areka-app` の brief へ申し送った件（11.4）が指している。名を変えると申し送りが古びる。重なりは小さい |
+| 2 | `char_watch_tests` の起こしの期限に「早すぎない」の表明を足す | 40 ms の窓を越えると落ちる、時間の長さに頼るテストになる（要件 4.3） |
+| 2 | `shell_box_tests.rs` の局所の `anchor_row` | ギャップ分析の指摘 66 で、`test_support` を `..` で使う今の形と決めた |
+| 2 | `shell_box::ShellBoxHover` の `pub use` を狭める | 本体のテスト（`input_events::shell_box::ShellBoxHover`）が使っている。狭められない |
+| 2 | crate の中のファイル名（`shell_box.rs` など）をコメントに書く | 決まりが禁じるのは本体のファイルのパス。crate の中の兄弟の名は指摘に当たらない |
+
+### 12.4 回 2 の連鎖（要件 9.8・Fable の総括へ）
+
+回 1 の直しが呼んだ、または回 1 の直しが同じ種類を拾い残した指摘。直さずに残している。
+
+| 番号 | 場所 | 中身 | 呼んだ回 1 の直し |
+|---|---|---|---|
+| R2-A5 | `balloon_choice_settle_tests.rs` `runtime_in_choice_wait` | `\q[はい,OnYes]` の合図を手で組んでいる。回 1 で足した `test_support::choice_cue` と同じ | `choice_cue` を足したとき（回 1 の C8）に拾い残した |
+| R2-A7 | `balloon_pointer_handler_tests.rs` の押下の縮退のループ | 「hover は Some(2) のまま」の表明は押下の道が `set_hover` を呼ばないので落ちない | 同じ種類の `choice_active` 不変の表明を消したとき（回 1 の A2）に拾い残した |
+| R2-A10 | `balloon_test_support.rs` `gpu_balloon_world` | `world` を `gpu` より先に束ねるので、関数の中で panic すると `GpuPermit` が World より先に落ちる | `gpu_on` へ寄せたとき（回 1 の A6）に入れた |
+| R2-B5 | `drag_tests.rs` `send_failure_records_one_failure` の doc | 「知らせ 0 件」と書くが、その表明は回 1 で消した | 落ちない `rig.drain()` の表明を消したとき（回 1 の B10） |
+
+### 12.5 既定のブランチとの差分（要件 9.5）
+
+`git diff --stat f6405e09`（`git merge-base HEAD origin/main`）の作業ツリーで数えた。
+
+- 本体（`crates/areka/`）・`Cargo.lock`・`crates/log-capture-kit/`・`vendors/`・`doc/`: 0 行。`doc/COMPAT_ARCHITECTURE.md:412` の 1 語は 4.3 で直していない（11.4 のとおり `session-module-gather` の着地を待つ）。
+- `areka-runtime`・`areka-placement`・wintf の差分は 12 ファイルで、どれも design.md「Modified Files（範囲の外）」の表に在る（`spawn.rs`・`spawn_assembly_tests.rs`・`spawn_zorder_pair_deferred_tests.rs`・`collision-probe.rs`・`collision-probe/setup.rs`・`balloon_hover.rs`・`balloon_hover_tests.rs`・`shell_box_hover.rs`・`shell_box_hover_tests.rs`・`shell_cursor_table.rs`・`shell_cursor_table_tests.rs`・wintf の `zorder_pair_maintain_always_on_top_tests.rs`）。両方の `lib.rs`・`Cargo.toml` と `areka-input/Cargo.toml` は 0 行。
+- 外への約束: SHIORI へ送るイベントとカーソルの選び方は変えていない。`areka-input` の公開の項目の名と形は変えていない（本体のビルドとテストは全体テストが見る）。ログは、差分から消えた `event = "…"` の名（`choice_selected`・`choice_selection_send_failed`・`choice_hover_inject`・`box_choice_hover_inject`・`balloon_wiring_missing`・`balloon_runtime_borrow_failed`・`mouse_send_failed`・`choice_leave_no_runtime`・`choice_pressed_no_runtime`）が全部本番に残っていることを grep で確かめた。変わったのは議題 6 の送り失敗の WARN 1 行の削除・指摘 17 の離脱の `balloon_wiring_missing` の行数（1＋スコープの数 → 1）と、寄せで変わった出所（指摘 16・design.md の表）だけ。

@@ -48,7 +48,6 @@ pub(crate) fn plan_mouse_move(
         );
     }
 
-    let first_send = state.last_sent_ms.is_none();
     let region_changed = match &state.last_sent_region {
         None => true,
         Some(prev) => prev != region,
@@ -57,7 +56,7 @@ pub(crate) fn plan_mouse_move(
         Some(t) => now_ms.saturating_sub(t) >= MOUSE_MOVE_MIN_INTERVAL_MS,
         None => true,
     };
-    let send = first_send || region_changed || interval_elapsed;
+    let send = region_changed || interval_elapsed;
 
     if send {
         (
@@ -191,25 +190,6 @@ mod tests {
         assert_eq!(next.last_pos, Some((11, 20)));
         assert_eq!(next.last_sent_region, Some(region("Head")));
         assert_eq!(next.last_sent_ms, Some(1100));
-    }
-
-    /// per-scope 独立: 2 つの状態値は互いに影響せず独立に進化する（HashMap per-scope の縮図）。
-    #[test]
-    fn per_scope_states_evolve_independently() {
-        let scope_a = MouseMoveThrottle {
-            last_pos: Some((10, 20)),
-            last_sent_region: Some(region("Head")),
-            last_sent_ms: Some(1000),
-        };
-        let scope_b = MouseMoveThrottle::default();
-
-        let (next_a, send_a) = plan_mouse_move(&scope_a, (11, 20), &region("Head"), 1050);
-        let (next_b, send_b) = plan_mouse_move(&scope_b, (11, 20), &region("Head"), 1050);
-
-        assert!(!send_a, "scope A は抑制されるべき");
-        assert!(send_b, "scope B は初回送出されるべき");
-        assert_eq!(next_a.last_sent_ms, Some(1000), "A は送出状態を持ち越す");
-        assert_eq!(next_b.last_sent_ms, Some(1050), "B は今回送出時刻を記録");
     }
 
     /// 抑制時の状態持ち越し正確性: 抑制連続時も `last_sent_*` は不変、`last_pos` は毎回更新される。

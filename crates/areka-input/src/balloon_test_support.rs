@@ -11,6 +11,8 @@ use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::HitRectPx;
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding, present_frame};
+use areka_emo_text::place::PlaceKey;
+use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir};
 use areka_emo_text::state::{SpanKind, TextLayerConfig};
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
@@ -23,18 +25,20 @@ use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::world::World;
 use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::pointer::{Phase, PointerLeave, PointerState};
-use wintf::ecs::{GraphicsCore, Point, Visual, Window, WucGraphicsResource};
+use wintf::ecs::{Point, Visual, Window};
 
 use areka_placement::spawn::BalloonWindowMarker;
 use areka_runtime::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
 use areka_runtime::balloon_visibility::phase::run_balloon_visibility_phase;
 use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::frame::test_support::gpu_on;
 use areka_runtime::move_cue::PositionCue;
+use areka_runtime::spine::GpuPermit;
 use areka_runtime::talk_clock::TalkClock;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 
 /// 窓物理 px の行矩形を持つ `ChoiceHitRow` を組む（ordinal は入力順昇順を模す）。
-/// rect 以外のフィールドは 3.1 の判定に無関係——不透明転写の placeholder。
+/// rect 以外は当たりの判定に使わない（不透明転写の placeholder）。
 pub(crate) fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
     ChoiceHitRow {
         kind: SpanKind::Choice,
@@ -159,7 +163,13 @@ pub(crate) fn runtime_wiring_showing_talk(talk_id: TalkId) -> RuntimeWiring {
 /// `choice_hit_rows` は `present_frame`（GPU）未実行ゆえ空のまま（headless の既知制約）。
 pub(super) fn runtime_with_active_choice(actor: &str) -> Rc<RefCell<TextLayerRuntime>> {
     let rt = empty_runtime();
-    rt.borrow_mut().apply_cue(&TalkCue {
+    rt.borrow_mut().apply_cue(&choice_cue(actor));
+    rt
+}
+
+/// 選択肢スパン `\q[はい,OnYes]` 1 つを載せる合図。
+pub(crate) fn choice_cue(actor: &str) -> TalkCue {
+    TalkCue {
         at: 0.0,
         actor: ActorKey::from(actor),
         command: CueCommand::Choice {
@@ -168,8 +178,7 @@ pub(super) fn runtime_with_active_choice(actor: &str) -> Rc<RefCell<TextLayerRun
             references: Vec::new(),
         },
         duration: 0.0,
-    });
-    rt
+    }
 }
 
 /// アンカーの範囲 1 つ（`\_a[x]あい\_a`）を作る合図の列。
@@ -283,22 +292,18 @@ pub(crate) fn plain_model(origin: (i32, i32)) -> BalloonModel {
 }
 
 /// 実 GPU の World に普通のバルーンの窓（scope 0）と差し込み口を置き、文字の層を拡大率 `scale` で
-/// 登録して 1 回提示する。COM の MTA は呼ぶ側のスレッドで初期化する。`GpuPermit` は呼ぶ側が持つ。
+/// 登録して 1 回提示する。返す `GpuPermit` は World より長く持つ（先頭に置いて最後に落とす）。
 pub(crate) fn gpu_balloon_world(
     rt: &Rc<RefCell<TextLayerRuntime>>,
     scale: f32,
     image: (u32, u32),
     origin: (i32, i32),
-) -> (World, Entity) {
+) -> (GpuPermit, World, Entity) {
     let mut world = World::new();
+    let gpu = gpu_on(&mut world);
     let window = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let slot = world.spawn((Visual::default(), ChildOf(window))).id();
     world.flush();
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
-        .expect("WucGraphicsResource::new 失敗");
-    world.insert_resource(core);
-    world.insert_resource(wuc);
     let surface = (
         (image.0 as f32 * scale).round() as u32,
         (image.1 as f32 * scale).round() as u32,
@@ -309,5 +314,39 @@ pub(crate) fn gpu_balloon_world(
         ResolvedBalloonText::resolve(&plain_model(origin), image),
     );
     present_frame(&mut rt.borrow_mut(), &mut world, 10.0).expect("提示");
-    (world, window)
+    (gpu, world, window)
 }
+
+/// scope 0 の普通のバルーンを新しい側へ 1 行送ったときの変化。
+pub(crate) fn newer_by_one(runtime: &RefCell<TextLayerRuntime>) -> ScrollChange {
+    runtime.borrow_mut().scroll_manual_at(
+        &PlaceKey::balloon(&ActorKey::from("0")),
+        ScrollDir::Newer,
+        1,
+    )
+}
+
+/// 行の矩形の中心（窓のクライアント物理 px）。
+pub(crate) fn row_center(row: &ChoiceHitRow) -> (i32, i32) {
+    (
+        ((row.rect.left + row.rect.right) / 2.0) as i32,
+        ((row.rect.top + row.rect.bottom) / 2.0) as i32,
+    )
+}
+
+/// 箱 a（0,0〜100,50）と箱 b（200,0〜300,50）を置いたシェル。
+pub(crate) const TWO_BOX_SHELL: &str = "\
+balloon.a
+{
+size,100,50
+}
+balloon.b
+{
+size,100,50
+}
+surface0
+{
+element1,balloon,a,0,0
+element2,balloon,b,200,0
+}
+";

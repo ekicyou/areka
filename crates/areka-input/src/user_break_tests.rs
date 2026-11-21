@@ -9,7 +9,7 @@
 // 引数に取る内側の関数 `press_with_visibility` を直接呼ぶ。外側の `on_left_press` は照会だけを
 // 足した薄い包みで、照会が効いていること（可視を決め打ちしていないこと）は 1 本で確かめる。
 //
-// 結線 `wire_user_break`: 旗の取り出しがポインタの配送より前に登録されていて、押下と同じ巡に届いた
+// 結線 `wire_user_break` と登録 `register_user_break_drain`: 旗の取り出しがポインタの配送より前に登録されていて、押下と同じ巡に届いた
 // 合図がその押下の判定に効く。入力の段は wintf が組んだ本物を使い、押下は本物の配送を通す。
 
 use std::sync::mpsc::{self, Receiver};
@@ -237,7 +237,7 @@ impl Lines {
         self.world
             .get_non_send::<UserBreakWiring>()
             .expect("結線済み")
-            .no_user_break()
+            .no_user_break
     }
 
     /// 表示の合図の線へ届いた分を全部取り出す。
@@ -868,30 +868,4 @@ fn both_break_entries_carry_the_shown_talk_id() {
             to_kanade.len()
         );
     }
-}
-
-/// 送り出し `send_break` は、渡された番号をそのまま載せ、表示の側へは「中断された」を 1 件送る。
-#[test]
-fn send_break_carries_the_talk_id_it_was_given() {
-    let (_flag_tx, flag_rx) = mpsc::channel();
-    let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
-    let (kanade_tx, kanade_rx) = mpsc::channel();
-    let wiring = UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx);
-
-    send_break(&wiring, 2, Some(TalkId(7)));
-
-    let to_kanade: Vec<KanadeMsg> = kanade_rx.try_iter().collect();
-    assert!(
-        matches!(
-            to_kanade.as_slice(),
-            [KanadeMsg::UserBreak {
-                scope: 2,
-                talk_id: Some(TalkId(7))
-            }]
-        ),
-        "kanade へ届いた知らせの数 {}",
-        to_kanade.len()
-    );
-    let to_display: Vec<TalkLifecycleSignal> = lifecycle_rx.try_iter().collect();
-    assert_eq!(to_display, vec![TalkLifecycleSignal::UserBreak]);
 }

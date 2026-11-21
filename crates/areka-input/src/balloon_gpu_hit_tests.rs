@@ -6,23 +6,12 @@ use std::rc::Rc;
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::SpanKind;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::test_support::{
     bubble_move, capture_logs, empty_runtime, gpu_balloon_world, headless_runtime_wiring,
-    insert_wiring, left_press,
+    insert_wiring, left_press, row_center,
 };
-use super::{
-    BalloonWiring, ChoiceHitRow, hit_choice_row, on_balloon_pointer_moved,
-    on_balloon_pointer_pressed,
-};
-
-fn init_com() {
-    // SAFETY: 描画資源に要る COM の MTA 初期化（既初期化の S_FALSE は無視・テストスレッドごと）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-}
+use super::{BalloonWiring, hit_choice_row, on_balloon_pointer_moved, on_balloon_pointer_pressed};
 
 /// 普通のバルーン（scope 0）に選択肢を順に載せた文字の層。
 fn runtime_with_choices(choices: &[(&str, &str)]) -> Rc<RefCell<TextLayerRuntime>> {
@@ -42,20 +31,11 @@ fn runtime_with_choices(choices: &[(&str, &str)]) -> Rc<RefCell<TextLayerRuntime
     rt
 }
 
-fn center(row: &ChoiceHitRow) -> (i32, i32) {
-    (
-        ((row.rect.left + row.rect.right) / 2.0) as i32,
-        ((row.rect.top + row.rect.bottom) / 2.0) as i32,
-    )
-}
-
 /// 拡大率 2.0 の行の中心で、移動は強調をその行の ordinal に当て、押下は選択を送って INFO を 1 行残す。
 #[test]
 fn handlers_hit_rows_presented_at_scale_two_without_dividing_the_point() {
-    init_com();
-    let _gpu = areka_runtime::spine::GpuPermit::take();
     let rt = runtime_with_choices(&[("OnYes", "はい")]);
-    let (mut world, window) = gpu_balloon_world(&rt, 2.0, (120, 60), (20, 20));
+    let (_gpu, mut world, window) = gpu_balloon_world(&rt, 2.0, (120, 60), (20, 20));
 
     let rows = rt.borrow().choice_hit_rows(&ActorKey::from("0")).to_vec();
     let row = rows
@@ -63,7 +43,7 @@ fn handlers_hit_rows_presented_at_scale_two_without_dividing_the_point() {
         .find(|r| r.kind == SpanKind::Choice)
         .cloned()
         .expect("前提: 選択肢の当たり行がある");
-    let (x, y) = center(&row);
+    let (x, y) = row_center(&row);
     assert!(
         hit_choice_row(&rows, x as f32, y as f32).is_some(),
         "前提: 行の中心は行の中: {row:?}"
@@ -109,13 +89,11 @@ fn handlers_hit_rows_presented_at_scale_two_without_dividing_the_point() {
 /// 折り返した選択肢の後の行では index と ordinal が食い違い、移動は ordinal を強調する。
 #[test]
 fn hover_on_a_row_after_a_wrapped_choice_highlights_its_ordinal() {
-    init_com();
-    let _gpu = areka_runtime::spine::GpuPermit::take();
     let rt = runtime_with_choices(&[
         ("OnLong", "あいうえおかきくけこさしすせそたちつてと"),
         ("OnShort", "な"),
     ]);
-    let (mut world, window) = gpu_balloon_world(&rt, 1.0, (60, 200), (0, 0));
+    let (_gpu, mut world, window) = gpu_balloon_world(&rt, 1.0, (60, 200), (0, 0));
 
     let rows = rt.borrow().choice_hit_rows(&ActorKey::from("0")).to_vec();
     let (index, row) = rows
@@ -124,7 +102,7 @@ fn hover_on_a_row_after_a_wrapped_choice_highlights_its_ordinal() {
         .find(|(i, r)| *i != r.ordinal)
         .map(|(i, r)| (i, r.clone()))
         .unwrap_or_else(|| panic!("前提: index と ordinal が食い違う行がある: {rows:?}"));
-    let (x, y) = center(&row);
+    let (x, y) = row_center(&row);
     assert_eq!(
         hit_choice_row(&rows, x as f32, y as f32),
         Some(index),

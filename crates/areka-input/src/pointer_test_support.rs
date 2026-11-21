@@ -15,9 +15,6 @@ pub fn bubble_pointer(
 }
 
 /// Bubble 相の合成 `PointerState`（Ctrl／Shift を別々に指定する版）。
-///
-/// [`bubble_pointer`] は Ctrl だけを取る（既存の呼び手 20 箇所以上がそのまま動く）。結線済みでは
-/// 強制退避と通常の左ダブルクリックが Shift の有無で分かれるため、両方を指定できる口をここへ足す。
 pub fn bubble_pointer_mods(
     x: i32,
     y: i32,
@@ -85,6 +82,24 @@ pub(crate) fn drain_mouse(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput> {
             _ => panic!("マウス以外の知らせが届いた"),
         })
         .collect()
+}
+
+/// 預かっている右ダブルクリックを取り出す。
+#[cfg(test)]
+pub(crate) fn take_pending(world: &mut World) -> Option<PendingDoubleClick> {
+    world
+        .get_non_send_mut::<MouseWiring>()
+        .expect("MouseWiring は挿入済み")
+        .take_pending_right_double_click()
+}
+
+/// 取り出した預かりを送る（メニュー側が「送る」と決めたときの操作）。
+#[cfg(test)]
+pub(crate) fn send_pending(world: &mut World, pending: PendingDoubleClick) {
+    world
+        .get_non_send_mut::<MouseWiring>()
+        .expect("MouseWiring は挿入済み")
+        .send_pending_right_double_click(pending);
 }
 
 /// 単調増加する注入 clock を作る（毎呼出で +step ms）。

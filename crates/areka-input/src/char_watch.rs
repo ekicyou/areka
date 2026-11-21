@@ -77,7 +77,7 @@ pub(crate) fn char_watch(world: &mut World) {
     char_watch_with(world, os_wheel_lines);
 }
 
-/// 本体。`read_lines` は箱の送りへ回すホイールを受けた時だけ呼ぶ（テストは差し替える）。
+/// 系の中身。`read_lines` は箱の送りへ回すホイールを受けた時だけ呼ぶ（テストは差し替える）。
 pub fn char_watch_with(world: &mut World, mut read_lines: impl FnMut() -> WheelLines) {
     // 1. 結線の前は何もしない。
     let Some(wiring) = world.get_non_send::<MouseWiring>() else {

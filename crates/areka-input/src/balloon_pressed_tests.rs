@@ -23,7 +23,8 @@ use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, PointerState, dispatch_
 use wintf::ecs::{Point, Window};
 
 use super::super::test_support::{
-    capture_logs, headless_runtime_wiring, insert_wiring, left_press, runtime_with_active_choice,
+    capture_logs, headless_runtime_wiring, insert_wiring, left_press, newer_by_one,
+    runtime_with_active_choice,
 };
 use super::super::{BalloonWiring, ChoiceSelection, dispatch_selection};
 use super::on_balloon_pointer_pressed;
@@ -140,15 +141,6 @@ impl Rig {
         )
     }
 
-    /// 新しい側へ 1 行送ったときの変化（自動の 1 行上なら自動へ戻る `Stopped`）。
-    fn newer_by_one(&self) -> ScrollChange {
-        self.runtime.borrow_mut().scroll_manual_at(
-            &PlaceKey::balloon(&ActorKey::from("0")),
-            ScrollDir::Newer,
-            1,
-        )
-    }
-
     /// 選択肢・中断のどこへも流れていない。
     fn nothing_sent(&self) -> bool {
         self.selections.try_recv().is_err()
@@ -159,10 +151,10 @@ impl Rig {
 
 /// 送りが効いていない（押下前の「自動の 1 行上」のまま）。
 fn unmoved(rig: &Rig) -> bool {
-    matches!(rig.newer_by_one(), ScrollChange::Stopped(_))
+    matches!(newer_by_one(&rig.runtime), ScrollChange::Stopped(_))
 }
 
-/// 話し終えた後、印の面の上の上の矢印の押下は窓の受け口へ届き、古い側へ 2 行送って消費する
+/// 話し終えた後、印の面の上の上の矢印の押下は窓の受け口へ届き、古い側へ 2 行送って消費する。
 /// 左ダブルクリックでも中断・選択肢の確定へ流さない。
 #[test]
 fn finished_up_arrow_press_scrolls_older_and_is_consumed() {
@@ -180,10 +172,10 @@ fn finished_up_arrow_press_scrolls_older_and_is_consumed() {
     );
     assert!(rig.nothing_sent());
     // 自動の 1 行上から 2 行古い側へ＝自動の 3 行上。新しい側へ 2 回戻しても手動のまま。
-    assert_eq!(rig.newer_by_one(), ScrollChange::Moved);
-    assert_eq!(rig.newer_by_one(), ScrollChange::Moved);
+    assert_eq!(newer_by_one(&rig.runtime), ScrollChange::Moved);
+    assert_eq!(newer_by_one(&rig.runtime), ScrollChange::Moved);
     assert!(
-        matches!(rig.newer_by_one(), ScrollChange::Stopped(_)),
+        matches!(newer_by_one(&rig.runtime), ScrollChange::Stopped(_)),
         "送ったのはちょうど 2 行"
     );
 }
@@ -199,7 +191,7 @@ fn finished_down_arrow_press_scrolls_newer() {
     );
     assert!(rig.nothing_sent());
     assert_eq!(
-        rig.newer_by_one(),
+        newer_by_one(&rig.runtime),
         ScrollChange::Unchanged,
         "自動へ戻っている"
     );

@@ -9,7 +9,7 @@
 // headless では現行 rows が常に空＝hit=None。ゆえに「Some(ordinal) ハイライト追従」はここでは
 // 作れない（GPU を使う `balloon_gpu_hit_tests.rs` が見る）。ここはハンドラ経由の実注入として
 // Inject(None) 遷移（active かつ hit=None かつ last=Some → ハイライト解除注入）を観測する
-// （`inject_choice_hover` を実 runtime へ呼び、BalloonWiring.hover の更新と debug marker を固定する）。
+// （`apply_hover` が実 runtime へ注入し、BalloonWiring.hover の更新と debug marker を固定する）。
 // -------------------------------------------------------------------------
 
 use std::rc::Rc;
@@ -49,8 +49,8 @@ fn moved_missing_marker_errors_and_noop() {
 }
 
 /// hover 遷移注入（Inject アーム）: choice 表示中・現行 hit=None（headless snapshot 空）・
-/// 前回注入 Some(2) → `Inject(None)`。ハンドラが実 runtime へ `inject_choice_hover(actor, None)` を
-/// 呼び、自前状態 `BalloonWiring.hover[scope]` を None へ更新し、`choice_hover_inject` を DEBUG 発火する。
+/// 前回注入 Some(2) → `Inject(None)`。ハンドラが `apply_hover` で実 runtime へ `None` を
+/// 注入し、自前状態 `BalloonWiring.hover[scope]` を None へ更新し、`choice_hover_inject` を DEBUG 発火する。
 #[test]
 fn moved_active_choice_transition_injects_and_updates_own_state() {
     let mut world = World::new();
@@ -81,7 +81,7 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
     assert_eq!(
         world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
-        "Inject(None) 遷移で BalloonWiring.hover[scope] が None へ更新される（⑤）"
+        "Inject(None) 遷移で BalloonWiring.hover[scope] が None へ更新される"
     );
     assert!(
         logs.iter()
@@ -320,9 +320,8 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
 // 資源縮退・Tunnel 素通しで副作用が無いこと
 //
 // 縮退の判断分岐（Tunnel 短絡／RuntimeWiring 不在=debug／BalloonWiring 不在=error）を、観測資源を
-// 同居させた副作用ゼロの三点——(a) send なし（`ChoiceSelectionInbox.try_recv()==Empty`）、
-// (b) `BalloonWiring.hover` 不変、(c) runtime へ `inject_choice_hover` 未適用（`choice_active` 不変）——
-// とあわせて、両ハンドラ×{Tunnel, RuntimeWiring 不在, BalloonWiring 不在} で固定する。
+// 同居させた副作用ゼロの二点——(a) send なし（`ChoiceSelectionInbox.try_recv()==Empty`）、
+// (b) `BalloonWiring.hover` 不変——とあわせて、両ハンドラ×{Tunnel, RuntimeWiring 不在, BalloonWiring 不在} で固定する。
 //
 // スレッド親和（NonSend 借用は Input スケジュール排他システム内）: ここは各ハンドラを単一スレッドの
 // `&mut World` 排他呼出で直接叩く——NonSend 資源（`RuntimeWiring`／`BalloonWiring`・`Rc<RefCell>`）の借用が
@@ -345,8 +344,7 @@ enum Degrade {
 ///
 /// 各シナリオで観測資源（RuntimeWiring の active runtime・hover=Some(2) 仕込みの BalloonWiring・Inbox）を
 /// 可能な限り同居させ、(1) 戻り値 false、(2) 対応ログレベル（Tunnel=無縮退ログ・RuntimeWiring 不在=DEBUG・
-/// BalloonWiring 不在=ERROR）、(3) 副作用ゼロ三点（choice_hover_inject なし／hover 不変／Inbox Empty／
-/// runtime 借用・active 不変）を固定する。
+/// BalloonWiring 不在=ERROR）、(3) 副作用ゼロ（choice_hover_inject なし／hover 不変／Inbox Empty）を固定する。
 #[test]
 fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
     for scenario in [
@@ -358,14 +356,9 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
         let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
         // RuntimeWiring（active choice runtime）は Tunnel／BalloonWiringAbsent で present。
-        let runtime = match scenario {
-            Degrade::Tunnel | Degrade::BalloonWiringAbsent => {
-                let rt = runtime_with_active_choice("0");
-                world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
-                Some(rt)
-            }
-            Degrade::RuntimeAbsent => None,
-        };
+        if !matches!(scenario, Degrade::RuntimeAbsent) {
+            world.insert_non_send(headless_runtime_wiring(runtime_with_active_choice("0")));
+        }
 
         // BalloonWiring（hover=Some(2) 仕込み）＋Inbox は Tunnel／RuntimeAbsent で present。
         let inbox_rx = match scenario {
@@ -422,7 +415,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
             ),
         }
 
-        // ── (3) 副作用ゼロ: runtime へ inject_choice_hover 未適用（全シナリオ共通）───────────
+        // ── (3) 副作用ゼロ: runtime へ強調を注入しない（全シナリオ共通）───────────
         assert!(
             !logs.iter().any(|l| l.contains("choice_hover_inject")),
             "縮退では runtime へ hover を注入しない（choice_hover_inject なし）: {logs:?}"
@@ -440,21 +433,13 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
                 "縮退では ChoiceSelection を発行しない（Inbox は Empty）"
             );
         }
-
-        // ── (3) 副作用ゼロ: runtime 未変更（present の場合）active 不変 ─────
-        if let Some(rt) = &runtime {
-            assert!(
-                rt.borrow().choice_active(&ActorKey::from("0")),
-                "縮退では runtime の choice 状態を動かさない（active 不変）"
-            );
-        }
     }
 }
 
 /// pressed: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する。
 ///
 /// moved 版と対称。pressed の副作用は発行（send）ゆえ副作用ゼロ観測は choice_selected info の非発火＋
-/// present な Inbox の `try_recv()==Empty`＋BalloonWiring.hover 不変＋runtime 借用/active 不変で固定する。
+/// present な Inbox の `try_recv()==Empty`＋BalloonWiring.hover 不変で固定する。
 #[test]
 fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
     for scenario in [
@@ -465,14 +450,9 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
         let mut world = World::new();
         let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
-        let runtime = match scenario {
-            Degrade::Tunnel | Degrade::BalloonWiringAbsent => {
-                let rt = runtime_with_active_choice("0");
-                world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
-                Some(rt)
-            }
-            Degrade::RuntimeAbsent => None,
-        };
+        if !matches!(scenario, Degrade::RuntimeAbsent) {
+            world.insert_non_send(headless_runtime_wiring(runtime_with_active_choice("0")));
+        }
 
         let inbox_rx = match scenario {
             Degrade::Tunnel | Degrade::RuntimeAbsent => {
@@ -505,12 +485,9 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
 
         // ── (2) 縮退時の対応ログレベル─────────────────────────────────
         match scenario {
-            Degrade::Tunnel => assert!(
-                !logs
-                    .iter()
-                    .any(|l| l.contains("choice_selected") || l.contains("level=ERROR")),
-                "Tunnel は短絡ゆえ choice_selected も error も出さない: {logs:?}"
-            ),
+            Degrade::Tunnel => {
+                assert!(logs.is_empty(), "Tunnel は短絡ゆえ何も記録しない: {logs:?}")
+            }
             Degrade::RuntimeAbsent => {
                 assert!(
                     logs.iter()
@@ -546,14 +523,6 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
             assert!(
                 rx.try_recv().is_err(),
                 "縮退では ChoiceSelection を発行しない（Inbox は Empty）"
-            );
-        }
-
-        // ── (3) 副作用ゼロ: runtime 未変更（present の場合）active 不変 ─────
-        if let Some(rt) = &runtime {
-            assert!(
-                rt.borrow().choice_active(&ActorKey::from("0")),
-                "縮退では runtime の choice 状態を動かさない（active 不変）"
             );
         }
     }

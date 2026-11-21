@@ -1,4 +1,4 @@
-//! 右ダブルクリックの預かりと、終了指示に載るスコープのテスト。
+//! 右ダブルクリックの預かりと、結線済みの Ctrl＋左ダブルクリックのテスト。
 //!
 //! 合成した `PointerState` で押下ハンドラを直接呼び、kanade 宛ての受信端で「届いた／届かない」を
 //! 観測する（実窓も GPU も要らない）。`char_pointer_tests.rs` と同じ観測方法である。
@@ -6,7 +6,7 @@
 use super::pointer_test_support::*;
 use super::*;
 use areka_kanade::MouseInput;
-use areka_placement::spawn::{CharWindowMarker, GhostWindowMarker};
+use areka_placement::spawn::CharWindowMarker;
 use std::sync::mpsc;
 
 /// 当たり判定の代役。面座標は窓座標の半分にする——恒等だと「面座標を預かったのか窓座標を
@@ -22,13 +22,6 @@ fn half_scale_bust(_scope: u32, x: i64, y: i64) -> HitRegion {
 /// 代役の当たり判定を持つ `MouseWiring` を挿入した World と、kanade 宛ての受信端を組む。
 fn world_with_half_scale_bust() -> (World, mpsc::Receiver<KanadeMsg>) {
     world_with_wiring(half_scale_bust, Box::new(|| 1000))
-}
-
-fn take_pending(world: &mut World) -> Option<PendingDoubleClick> {
-    world
-        .get_non_send_mut::<MouseWiring>()
-        .expect("MouseWiring は挿入済み")
-        .take_pending_right_double_click()
 }
 
 /// 右ダブルクリックは SHIORI へ何も届けず、スコープ・面座標・領域を預かる。
@@ -100,10 +93,7 @@ fn sending_the_pending_one_delivers_one_right_double_click_in_surface_coordinate
     assert!(on_char_pointer_pressed(&mut world, partner, partner, &ev));
 
     let pending = take_pending(&mut world).expect("預かりが残る");
-    world
-        .get_non_send_mut::<MouseWiring>()
-        .expect("MouseWiring は挿入済み")
-        .send_pending_right_double_click(pending);
+    send_pending(&mut world, pending);
 
     match rx.try_recv().expect("1 件届く") {
         KanadeMsg::Mouse(m) => assert_eq!(
@@ -134,10 +124,7 @@ fn sending_the_pending_one_delivers_one_right_double_click_in_surface_coordinate
 #[test]
 fn wired_ctrl_left_double_click_sends_no_close_request_on_the_partner_window() {
     let (mut world, rx) = world_with_half_scale_bust();
-    world.spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }));
-    let partner = world
-        .spawn((GhostWindowMarker, CharWindowMarker { scope: 1 }))
-        .id();
+    let partner = world.spawn(CharWindowMarker { scope: 1 }).id();
 
     let ev = bubble_pointer_mods(10, 20, DoubleClick::Left, true, false);
     assert!(on_char_pointer_pressed(&mut world, partner, partner, &ev));

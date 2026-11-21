@@ -1,60 +1,12 @@
 use super::test_support::{
-    headless_runtime_wiring, insert_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
+    headless_runtime_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
 };
 use super::*;
 use areka_runtime::balloon_hover::BalloonHover;
 use bevy_ecs::world::World;
 use std::sync::mpsc;
 
-fn sample() -> ChoiceSelection {
-    ChoiceSelection {
-        kind: SpanKind::Choice,
-        id: "q0".to_string(),
-        label: "はい".to_string(),
-        scope: 0,
-        references: vec!["ref0".to_string(), "ref1".to_string()],
-    }
-}
-
-/// NonSend 挿入と受信の観測: `BalloonWiring` を `World` へ
-/// **NonSend 挿入**でき、`ChoiceSelectionInbox` の `Receiver` 経由で発行シンクへ送った
-/// `ChoiceSelection` を一度だけ観測できる（送信値と等価・2 度目は `Empty`）。
-///
-/// mpsc `Sender`/`Receiver` は `!Sync` ゆえ NonSend 資源として挿入する（`insert_non_send`）。
-/// 実際の受信は drain 排他システムの仕事。ここでは
-/// 発行が mpsc 上で観測できることのみを固定し、`resolve_choice` は一切呼ばない。
-#[test]
-fn wiring_inserts_non_send_and_selection_observed_via_inbox() {
-    let mut world = World::new();
-    let rx = insert_wiring(&mut world);
-    world.insert_non_send(ChoiceSelectionInbox(rx));
-
-    assert!(
-        world.get_non_send::<BalloonWiring>().is_some(),
-        "BalloonWiring は NonSend 挿入されている"
-    );
-
-    // 発行シンク経由で ChoiceSelection を送る。
-    let sel = sample();
-    let sent = world
-        .get_non_send::<BalloonWiring>()
-        .expect("直上で存在確認済み")
-        .send_selection(sel.clone());
-    assert!(sent, "Receiver 生存中の発行は成功する（Err にならない）");
-
-    // seam の Receiver 経由で送信値を観測する。
-    let inbox = world
-        .get_non_send::<ChoiceSelectionInbox>()
-        .expect("ChoiceSelectionInbox は NonSend 挿入されている");
-    let received = inbox.0.try_recv().expect("発行した ChoiceSelection が届く");
-    assert_eq!(received, sel, "受信値は送信値と等価（`PartialEq`）");
-    assert!(
-        inbox.0.try_recv().is_err(),
-        "発行は一度きり（2 度目の try_recv は Empty）"
-    );
-}
-
-/// hover 自前追跡（B-2）: `set_hover`/`hover` で scope 別の last-injected ordinal を
+/// hover 自前追跡: `set_hover`/`hover` で scope 別の last-injected ordinal を
 /// 記録・回収でき、消滅時整合の `None` 上書きが反映される。
 #[test]
 fn hover_tracks_last_injected_ordinal_per_scope() {
@@ -77,11 +29,11 @@ fn hover_tracks_last_injected_ordinal_per_scope() {
 // -------------------------------------------------------------------------
 // post-spawn 装着・NonSend 結線・スケジュール登録
 //
-// (1) 装着: bare World → spawn_ghost_windows → attach_char（キャラ窓の装着を先に済ませる）
+// (1) 装着: bare World → spawn_ghost_windows → attach_char_pointer_handlers（キャラ窓の装着を先に済ませる）
 //     → attach_balloon_pointer_handlers で、全バルーン窓に OnPointerMoved＋OnPointerPressed が
 //     装着され、キャラ窓のハンドラ集合は不変であること。
-// (2) NonSend 結線: wire_balloon_choice 後に BalloonWiring＋ChoiceSelectionInbox が NonSend
-//     資源として存在すること。
+// (2) NonSend 結線: wire_balloon_choice 後に BalloonWiring・ChoiceSelectionInbox・BalloonHover・
+//     ShellBoxHover が NonSend 資源として存在すること。
 // (3) スケジュール登録: register_balloon_leave_system が
 //     clear_balloon_hover_on_leave を Input スケジュールへ登録すること（wire_balloon_choice は登録しない）——
 //     構造（systems_len）と行動（Input 実行で hover 解除）の双方で固定する。
@@ -90,7 +42,7 @@ fn hover_tracks_last_injected_ordinal_per_scope() {
 
 use bevy_ecs::schedule::Schedules;
 use wintf::ecs::Input;
-use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed};
+use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed, PointerEventHandler};
 
 use crate::attach_char_pointer_handlers;
 use areka_placement::spawn::test_support::{titles, two_scope_placements};
@@ -112,6 +64,15 @@ fn char_window_entities(world: &mut World) -> Vec<Entity> {
 
 fn has_pointer_handlers(world: &World, e: Entity) -> bool {
     world.get::<OnPointerMoved>(e).is_some() && world.get::<OnPointerPressed>(e).is_some()
+}
+
+/// キャラ窓の受け手が `attach_char_pointer_handlers` の付けたもののままか（関数の番地で比べる）。
+fn has_char_handlers(world: &World, e: Entity) -> bool {
+    world.get::<OnPointerMoved>(e).is_some_and(|h| {
+        h.0 as usize == (crate::on_char_pointer_moved as PointerEventHandler) as usize
+    }) && world.get::<OnPointerPressed>(e).is_some_and(|h| {
+        h.0 as usize == (crate::on_char_pointer_pressed as PointerEventHandler) as usize
+    })
 }
 
 /// 全バルーン窓へハンドラが付き、キャラ窓のハンドラ集合は変わらない。
@@ -141,8 +102,8 @@ fn attach_installs_handlers_on_all_balloon_windows_and_leaves_char_unchanged() {
     // キャラ窓は装着済み。
     for &e in &chars {
         assert!(
-            has_pointer_handlers(&world, e),
-            "キャラ窓は attach_char でハンドラ装着済み"
+            has_char_handlers(&world, e),
+            "キャラ窓は attach_char_pointer_handlers でハンドラ装着済み"
         );
     }
 
@@ -158,15 +119,15 @@ fn attach_installs_handlers_on_all_balloon_windows_and_leaves_char_unchanged() {
     // キャラ窓のハンドラ集合は不変。
     for &e in &chars {
         assert!(
-            has_pointer_handlers(&world, e),
-            "キャラ窓のハンドラ集合は attach_balloon で不変"
+            has_char_handlers(&world, e),
+            "キャラ窓のハンドラは attach_balloon_pointer_handlers で不変"
         );
     }
 }
 
-/// wire_balloon_choice が BalloonWiring＋ChoiceSelectionInbox を NonSend 挿入。
+/// wire_balloon_choice が BalloonWiring・ChoiceSelectionInbox・BalloonHover・ShellBoxHover を NonSend 挿入。
 #[test]
-fn wire_inserts_both_non_sends() {
+fn wire_inserts_its_non_sends() {
     let mut world = World::new();
     world.init_resource::<Schedules>();
 
@@ -225,8 +186,7 @@ fn register_leave_system_alone_adds_one_system_without_wiring() {
 }
 
 /// 登録済みシステムが Input 実行で走り、
-/// バルーン所有 leave の hover を解除する（登録が「clear_balloon_hover_on_leave」であることの行動的証明・
-/// debug feature 非依存）。
+/// バルーン所有 leave の hover を解除する（登録が「clear_balloon_hover_on_leave」であることの行動的証明）。
 #[test]
 fn registered_leave_system_runs_in_input_schedule_and_clears_balloon_hover() {
     let mut world = World::new();

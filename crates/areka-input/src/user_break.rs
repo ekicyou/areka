@@ -5,7 +5,8 @@
 //!
 //! 判断は純関数 2 本（`judge_press`・`fold_no_user_break`）が担い、持ち物
 //! [`UserBreakWiring`]・旗の取り出し [`drain_no_user_break_signals`]・押下の入口 [`on_left_press`] が
-//! それを World の上で動かす。持ち物を World へ据える結線が [`wire_user_break`]（ゴーストごと）、
+//! それを World の上で動かす。箱の押下の入口は `on_box_press`（判断は `shell_box` の
+//! `judge_box_press`・`fold_talking`）。持ち物を World へ据える結線が [`wire_user_break`]（ゴーストごと）、
 //! 取り出しの登録が [`register_user_break_drain`]（本体の系の登録の口からプロセスに 1 回）。
 
 use std::sync::mpsc::{Receiver, Sender};
@@ -57,12 +58,6 @@ impl UserBreakWiring {
             prev_press_selected: false,
             talking: false,
         }
-    }
-
-    /// 旗の読み口。読み手は [`drain_no_user_break_signals`] の送出で、畳んだ後の旗を
-    /// kanade へ届ける。
-    pub(crate) fn no_user_break(&self) -> bool {
-        self.no_user_break
     }
 
     /// 話している最中か（読み手は話し終えたかの判断 `finished_talking`・`balloon_pressed.rs`。
@@ -182,7 +177,7 @@ pub fn drain_no_user_break_signals(world: &mut World) {
             );
         }
     }
-    let value = wiring.no_user_break();
+    let value = wiring.no_user_break;
     if !drained || value == wiring.reported_no_user_break {
         return;
     }
@@ -324,10 +319,9 @@ fn shown_talk_id(world: &World) -> Option<TalkId> {
         .and_then(RuntimeWiring::shown_talk_id)
 }
 
-/// 中断の送り出し: 「隠せ」→「止めろ」を 1 件ずつ。どちらの失敗も記録し、もう一方の送出は
-/// やめない——止める要求だけ落ちると「バルーンは消えたのに再生が続く」になるので、隣の
-/// `fn send_selection` より重い水準で記録する。普通のバルーンの窓と箱の
-/// 両方の入口が使う。
+/// 中断の送り出し: 「隠せ」→「止めろ」を 1 件ずつ。どちらの失敗も `error!` で記録し、もう一方の
+/// 送出はやめない（止める要求だけ落ちると「バルーンは消えたのに再生が続く」）。普通のバルーンの
+/// 窓と箱の両方の入口が使う。
 fn send_break(wiring: &UserBreakWiring, scope: usize, talk_id: Option<TalkId>) {
     if wiring
         .lifecycle_tx

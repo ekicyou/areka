@@ -4,7 +4,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_ACCEPTFILES, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
 };
 use wintf::ecs::drag::{DragConfig, DragConstraint, OnDrag, OnDragEnd};
-use wintf::ecs::layout::BoxStyle;
+use wintf::ecs::layout::{BoxStyle, HitTest};
 use wintf::ecs::{
     DpiSuggestedRectPolicy, KeepDirectlyAbove, Point, SizeI, Window, WindowPos, WindowStyle,
 };
@@ -23,6 +23,18 @@ use log_capture_kit::capture;
 // -------------------------------------------------------------------------
 // spawn 組立
 // -------------------------------------------------------------------------
+
+/// 全窓が `HitTest::none()`（全面ヒットで透過を殺さない）を持つ。
+#[test]
+fn every_window_has_hit_test_none() {
+    let mut world = World::new();
+
+    spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
+
+    for e in ghost_window_entities(&mut world) {
+        assert_eq!(world.get::<HitTest>(e).copied(), Some(HitTest::none()));
+    }
+}
 
 /// bare World で 2 スコープぶん spawn → 窓 4 entity・markers 正値・
 /// `GhostWindows` の scope×種別引き当てが `ScopePlacement` と一致する。
@@ -329,7 +341,7 @@ fn no_window_has_ws_ex_topmost() {
 // 外部権威宣言
 //
 // 付与漏れが OS 提案位置の素通しの穴になる。wintf 側は
-// 「component 未付与＝従来どおり提案位置を適用」ゆえ、**落とした窓だけが静かに
+// 「component が無ければ提案位置を適用」ゆえ、**落とした窓だけが静かに
 // OS 直書きへ戻る**——落ちたことはログにも型にも現れない。よって
 // 「全 scope × 窓 2 種」をテストで数え上げて固定する。
 // -------------------------------------------------------------------------
@@ -349,7 +361,7 @@ fn external_authority_attached_to_every_ghost_window_of_every_scope() {
     assert_ne!(
         DpiSuggestedRectPolicy::default(),
         DpiSuggestedRectPolicy::ExternalAuthority,
-        "既定値が ExternalAuthority なら本檻は不動点に落ちて何も検出しない"
+        "既定値が ExternalAuthority ならこのテストは何も検出しない"
     );
 
     let mut world = World::new();

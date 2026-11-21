@@ -17,7 +17,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_emo_compose::BoxName;
 use areka_emo_text::actor::{HitRectPx, ShownBox, TextLayerRuntime};
-use areka_emo_text::state::{SpanKind, TextLayerConfig};
+use areka_emo_text::state::SpanKind;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
 use bevy_ecs::hierarchy::ChildOf;
@@ -28,39 +28,25 @@ use wintf::ecs::{Input, Point, Window};
 
 use super::*;
 use crate::balloon::test_support::{
-    anchor_cues, anchor_row, box_name, events_named, headless_runtime_wiring, row,
+    TWO_BOX_SHELL, anchor_cues, anchor_row, box_name, choice_cue, empty_runtime, events_named,
+    headless_runtime_wiring, row,
 };
 use crate::balloon::{ChoiceSelectionInbox, click_selection, wire_balloon_choice};
+use crate::pointer_test_support::world_with_wiring;
 use crate::shell_box::ShellBoxHover;
 use crate::user_break::{UserBreakWiring, drain_no_user_break_signals};
-use crate::{MouseWiring, RegionSource, on_char_pointer_moved, on_char_pointer_pressed};
+use crate::{on_char_pointer_moved, on_char_pointer_pressed};
 use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::hit_region::HitRegion;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use areka_runtime::user_break_cue::NoUserBreakSignal;
 use log_capture_kit::capture;
 
-const SHELL: &str = "\
-balloon.a
-{
-size,100,50
-}
-balloon.b
-{
-size,100,50
-}
-surface0
-{
-element1,balloon,a,0,0
-element2,balloon,b,200,0
-}
-";
-
 /// 箱 a（0,0〜100,50）に当たった写し。選択肢の行は (10,10)〜(90,20) の 1 本。
 fn on_a(active: bool) -> BoxPoint {
     BoxPoint {
         hit: Some(ShownBox {
-            name: box_name(SHELL, "a"),
+            name: box_name(TWO_BOX_SHELL, "a"),
             element: 1,
             rect: HitRectPx {
                 left: 0.0,
@@ -78,7 +64,7 @@ fn on_a(active: bool) -> BoxPoint {
 fn on_b() -> BoxPoint {
     BoxPoint {
         hit: Some(ShownBox {
-            name: box_name(SHELL, "b"),
+            name: box_name(TWO_BOX_SHELL, "b"),
             element: 2,
             rect: HitRectPx {
                 left: 200.0,
@@ -111,24 +97,19 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let (shell_tx, shell_rx) = mpsc::channel();
         let (break_tx, break_rx) = mpsc::channel();
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
         let (flag_tx, flag_rx) = mpsc::channel();
-        let mut world = World::new();
-        world.insert_non_send(MouseWiring::with_clock(
-            shell_tx,
-            RegionSource::Mock(|scope, x, y| HitRegion {
+        let (mut world, shell_rx) = world_with_wiring(
+            |scope, x, y| HitRegion {
                 scope,
                 region: Some("Head".to_owned()),
                 surface_point: (x, y),
-            }),
+            },
             Box::new(|| 1000),
-        ));
+        );
         world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, break_tx));
-        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        )));
+        let runtime = empty_runtime();
         wire_balloon_choice(&mut world);
         let entity = world.spawn(CharWindowMarker { scope: 0 }).id();
         Fixture {
@@ -224,14 +205,6 @@ fn hover_injections(events: &[log_capture_kit::CapturedEvent]) -> usize {
 }
 
 // ---------------------------------------------------------------- 結線
-
-/// 箱の上の滞在の資源は `wire_balloon_choice` が入れる（ゴーストの切替でも同じ関数が呼ばれる）。
-#[test]
-fn wire_balloon_choice_inserts_the_box_hover() {
-    let mut world = World::new();
-    wire_balloon_choice(&mut world);
-    assert!(world.get_non_send::<ShellBoxHover>().is_some());
-}
 
 /// 離脱の系の登録は入力の段へ 1 本だけ足す。
 #[test]
@@ -344,7 +317,7 @@ fn move_over_box_choice_highlights_once_without_sending_to_the_shell() {
         first && second
     });
     assert!(handled, "処理した");
-    assert_eq!(f.hover(), (Some(box_name(SHELL, "a")), Some(0)));
+    assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "a")), Some(0)));
     assert_eq!(hover_injections(&events), 1, "同値は注入しない: {events:?}");
     assert!(f.shell().is_empty(), "シェルへの移動は 0 件");
 }
@@ -359,7 +332,7 @@ fn move_over_box_body_records_hover_and_reaches_the_shell() {
         f.moved(BODY, on_a(true));
         f.moved((52, 41), on_a(true));
     });
-    assert_eq!(f.hover(), (Some(box_name(SHELL, "a")), None));
+    assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "a")), None));
     assert_eq!(hover_injections(&events), 1, "外すのは 1 度: {events:?}");
     let moves = f
         .shell()
@@ -378,7 +351,7 @@ fn move_to_another_box_and_outside() {
     let mut f = Fixture::new();
     f.moved(ROW, on_a(true));
     let (_, events) = capture(|| f.moved((250, 10), on_b()));
-    assert_eq!(f.hover(), (Some(box_name(SHELL, "b")), None));
+    assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "b")), None));
     assert_eq!(hover_injections(&events), 1, "前の箱の強調を外す");
     assert!(!f.moved((500, 400), BoxPoint::default()));
     assert_eq!(f.hover(), (None, None));
@@ -406,18 +379,7 @@ fn leaving_the_shell_window_clears_hover_and_highlight() {
     f.moved(ROW, on_a(true));
     let mut f = f.with_runtime();
     // 強調を外す注入は「選択肢が出ている」ときだけ（普通のバルーンと同じ hover_action）。
-    f.runtime
-        .borrow_mut()
-        .apply_cue(&areka_sakura::contract::TalkCue {
-            at: 0.0,
-            actor: areka_sakura::contract::ActorKey::from("0"),
-            command: areka_sakura::contract::CueCommand::Choice {
-                id: "OnYes".into(),
-                text: "はい".into(),
-                references: Vec::new(),
-            },
-            duration: 0.0,
-        });
+    f.runtime.borrow_mut().apply_cue(&choice_cue("0"));
     let win = f
         .world
         .spawn((CharWindowMarker { scope: 0 }, Window::default()))
@@ -494,7 +456,7 @@ fn read_point_is_active_with_only_an_anchor() {
 fn leaving_the_shell_window_clears_an_anchor_highlight() {
     let mut f = Fixture::new();
     assert!(f.moved(ROW, anchor_on_a()), "アンカーの上の移動は強調する");
-    assert_eq!(f.hover(), (Some(box_name(SHELL, "a")), Some(0)));
+    assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "a")), Some(0)));
     let mut f = with_anchor_only(f.with_runtime());
     let win = f
         .world

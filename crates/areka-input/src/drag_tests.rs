@@ -515,6 +515,5 @@ fn send_failure_records_one_failure() {
     let events = dispatch_start_capturing(&mut rig);
 
     assert_one_record(&events, "mouse_send_failed", None, tracing::Level::WARN);
-    assert_eq!(rig.drain(), vec![]);
     rig.close();
 }

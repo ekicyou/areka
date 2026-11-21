@@ -407,17 +407,26 @@ fn get_with_borrowed_region_returns_the_same_row_as_the_string_key() {
 {
 mouseup0,Head,system:hand
 mousedown0,Head,a.cur
+mouseup0,Face,system:help
+mousedown0,Bust,system:grip
+}
+kero.cursor
+{
+mouseup0,Face,b.cur
+mousedown0,Head,system:wait
 }
 ",
     );
     let rows = CursorRows { rows };
-    let region = String::from("Head");
-    assert_eq!(
-        rows.get(0, &region, CursorScene::Down),
-        rows.rows.get(&key(0, "Head", CursorScene::Down))
-    );
-    assert_eq!(rows.get(0, "Head", CursorScene::Down), Some(&file("a.cur")));
+    assert_eq!(rows.rows.len(), 6);
+    for ((scope, region, scene), shape) in &rows.rows {
+        assert_eq!(
+            rows.get(*scope, region.as_str(), *scene),
+            Some(shape),
+            "{scope} {region} {scene:?}"
+        );
+    }
     assert_eq!(rows.get(0, "Head", CursorScene::Hover), None);
-    assert_eq!(rows.get(1, "Head", CursorScene::Up), None);
-    assert_eq!(rows.get(0, "Face", CursorScene::Up), None);
+    assert_eq!(rows.get(1, "Bust", CursorScene::Down), None);
+    assert_eq!(rows.get(0, "Tail", CursorScene::Up), None);
 }

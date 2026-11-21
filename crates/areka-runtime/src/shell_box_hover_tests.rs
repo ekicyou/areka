@@ -93,3 +93,21 @@ fn hover_mark_does_not_survive_vanished_text() {
     assert!(hover.get(0).is_none(), "時間切れの観測の hover は偽");
     assert_eq!(hover.get(1), Some(&box_name("b")), "他のスコープはそのまま");
 }
+
+/// 強調の記録は同じ箱の滞在の書き直しでは残り、別の箱へ替わると落ちる。滞在の無いスコープへは
+/// 書かない。
+#[test]
+fn injected_survives_the_same_box_and_drops_on_another() {
+    let mut hover = ShellBoxHover::default();
+    hover.set(0, Some(box_name("a")));
+    hover.set_injected(0, Some(2));
+
+    hover.set(0, Some(box_name("a")));
+    assert_eq!(hover.injected(0), Some(2), "同じ箱のままなら残る");
+
+    hover.set(0, Some(box_name("b")));
+    assert_eq!(hover.injected(0), None, "別の箱へ替わると落ちる");
+
+    hover.set_injected(1, Some(3));
+    assert_eq!((hover.get(1), hover.injected(1)), (None, None));
+}

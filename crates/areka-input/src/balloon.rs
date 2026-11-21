@@ -24,8 +24,6 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use areka_emo_text::actor::{ChoiceHitRow, TextLayerRuntime};
 use areka_emo_text::place::{PlaceKey, TextPlace};
 use areka_emo_text::state::SpanKind;
-#[cfg(test)]
-use areka_sakura::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::query::With;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
@@ -54,7 +52,7 @@ pub(crate) use pressed::{finished_talking, on_balloon_pointer_pressed};
 /// 解決キーは `id`（`SakuraMsg::ResolveChoice { id }` と整合）であり、表示層内部の主キーである
 /// `ordinal` はワイヤ形に含めない（漏洩防止）。
 ///
-/// 発行は `on_balloon_pointer_pressed`→`BalloonWiring::send_selection`、全フィールドの消費は
+/// 発行は押下の 2 か所（普通のバルーン・箱）から `dispatch_selection` を通り、全フィールドの消費は
 /// `choice_drain` の `to_choice_input`（`ChoiceInput` へ不透明転写）と、種類がアンカーのときの
 /// `to_anchor_input`（`AnchorInput` へ同じく転写）。`resolve_choice` は本 crate から呼ばない
 /// （発行までが本 mod の範囲・カスケードは kanade 側）。
@@ -76,7 +74,7 @@ pub struct ChoiceSelection {
 /// 選択の発行の記録の名前（送れたとき・送れなかったときの順）。
 ///
 /// アンカーは `anchor_` で始まる名前にして、ログで選択肢と見分ける
-/// （1 回の発行に両方の名前は出さない）。押下の 2 か所（普通のバルーン・箱）と送り口が同じ表を引く。
+/// （1 回の発行に両方の名前は出さない）。
 pub(super) fn selection_events(kind: SpanKind) -> (&'static str, &'static str) {
     match kind {
         SpanKind::Choice => ("choice_selected", "choice_selection_send_failed"),
@@ -88,8 +86,8 @@ pub(super) fn selection_events(kind: SpanKind) -> (&'static str, &'static str) {
 ///
 /// 種類が選択肢のときだけ、押した場所の選択肢を済みにする（済んだ行は光らず、押しても選択に
 /// ならない）。アンカーはトークが終わっても押せるので済みにしない。選択待ちに入る前の押下では
-/// 文字の層の口が何もしない（kanade が捨てる押下なので押し直せるまま残す）。呼び手は普通のバルーンの
-/// 押下（`balloon_pressed.rs`）と箱の押下（`shell_box_handler.rs`）で、送出に成功したときだけ呼ぶ。
+/// 文字の層の口が何もしない（kanade が捨てる押下なので押し直せるまま残す）。呼び手は
+/// [`dispatch_selection`] で、送出に成功したときだけ呼ぶ。
 ///
 /// 文字の層を借りられなければ `error!` を残して何もしない（選択は送れているので、その場所の
 /// 選択肢はトークの終わりで済む）。
@@ -307,7 +305,7 @@ pub(crate) enum HoverAction {
     ResetOwnState,
     /// 表示中・hover 対象が前回注入値と同一——再注入しない（遷移なし）。
     Keep,
-    /// 表示中・hover 対象が変化——`inject_choice_hover(actor, value)` を行う
+    /// 表示中・hover 対象が変化——`apply_hover` で注入する
     /// （`Some(ordinal)`＝行ハイライト・`None`＝ハイライト無し）。
     Inject(Option<usize>),
 }

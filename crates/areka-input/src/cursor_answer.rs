@@ -1,7 +1,7 @@
 //! キャラクターの窓の形の問い合わせへの答えと、その登録。
 //!
 //! wintf の窓の手続きが `CursorQuery` の関数を呼ぶ。キャラクターの窓だけ受け持ち、当たり判定は
-//! 見張り（`char_watch`）と同じ解決の関数で引き、形は CursorPick の純関数で選ぶ。
+//! 見張り（`char_watch`）と同じ解決の関数で引き、形は `cursor_pick` の純関数で選ぶ。
 
 use std::cell::RefCell;
 use std::collections::HashMap;

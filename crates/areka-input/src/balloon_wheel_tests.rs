@@ -8,16 +8,15 @@ use std::rc::Rc;
 use std::sync::mpsc;
 
 use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::place::PlaceKey;
-use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir, WheelLines};
-use areka_sakura::ActorKey;
+use areka_emo_text::scroll_marker::{ScrollChange, WheelLines};
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
-use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::Window;
 use wintf::ecs::pointer::{PointerState, WheelDelta};
 
-use super::super::balloon::test_support::{capture_logs, empty_runtime, headless_runtime_wiring};
+use super::super::balloon::test_support::{
+    capture_logs, empty_runtime, headless_runtime_wiring, newer_by_one,
+};
 use super::super::char_watch::char_watch;
 use super::super::{MouseWiring, RegionSource};
 use super::balloon_wheel_with;
@@ -68,15 +67,6 @@ fn rig(
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     spawn_rotation(&mut world, vertical, horizontal);
     (permit, world, runtime)
-}
-
-/// 新しい側へ 1 行送ったときの変化（自動の 1 行上なら自動へ戻る＝`Stopped`、2 行上なら `Moved`）。
-fn newer_by_one(runtime: &RefCell<TextLayerRuntime>) -> ScrollChange {
-    runtime.borrow_mut().scroll_manual_at(
-        &PlaceKey::balloon(&ActorKey::from("0")),
-        ScrollDir::Newer,
-        1,
-    )
 }
 
 /// 上へ（向こう側・正の回転）回すと古い側へ送る。
@@ -183,13 +173,13 @@ fn balloon_wheel_does_not_queue_on_mouse_wheel() {
 fn without_runtime_wiring_does_nothing() {
     let mut world = World::new();
     spawn_rotation(&mut world, 120, 0);
-    let (reads, lines) = capture_lines(LineFormat::LevelFields, || run(&mut world));
+    let mut reads = 0;
+    let logs = capture_logs(|| reads = run(&mut world));
     assert_eq!(reads, 0);
     assert!(
-        lines
-            .iter()
-            .any(|l| l.contains("DEBUG") && l.contains("balloon_wheel_no_runtime")),
-        "{lines:?}"
+        logs.iter()
+            .any(|l| l.contains("level=DEBUG") && l.contains("balloon_wheel_no_runtime")),
+        "{logs:?}"
     );
 }
 

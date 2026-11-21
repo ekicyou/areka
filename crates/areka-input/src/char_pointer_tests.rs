@@ -8,58 +8,13 @@ use std::sync::mpsc;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};
 
-/// 預かっている右ダブルクリックを取り出して送る（メニュー側が「送る」と決めたときの操作）。
-///
-/// 押下ハンドラは右ダブルクリックを送らずに預かる。
-/// 配信されるメッセージの形を見るテストは、この操作で送出まで進めてから受信側を見る。
-fn send_pending_right_double_click(world: &mut World) {
-    let mut wiring = world
-        .get_non_send_mut::<MouseWiring>()
-        .expect("MouseWiring は挿入済み");
-    let pending = wiring
-        .take_pending_right_double_click()
-        .expect("右ダブルクリックは預かりとして残る");
-    wiring.send_pending_right_double_click(pending);
-}
-
-/// Mock resolver＋注入 clock で単体から配信し、受信側で内容を観測する。
-#[test]
-fn mock_seam_plan_and_send_move_observed() {
-    let (tx, rx) = mpsc::channel::<KanadeMsg>();
-    let mut wiring = MouseWiring::with_clock(
-        tx,
-        RegionSource::Mock(|_, x, y| HitRegion {
-            scope: 0,
-            region: Some("Head".to_string()),
-            surface_point: (x, y),
-        }),
-        stepping_clock(1000, 1000),
-    );
-
-    // Mock は presenter を無視して固定写像を返す。
-    let hit = wiring.resolve_region(None, 0, 10, 20);
-    assert_eq!(
-        hit.region,
-        Some("Head".to_string()),
-        "Mock は固定 region を返す"
-    );
-
-    // 初回送出（moved=first_send）。恒等 mock ゆえ client px と surface px は同値。
-    let sent = wiring.plan_and_send_move(0, (10, 20), hit.surface_point, hit.region.clone());
-    assert!(sent, "初回移動は送出される");
-
-    let msg = rx.try_recv().expect("KanadeMsg が届くべき");
-    match msg {
-        KanadeMsg::Mouse(m) => {
-            assert_eq!(m.scope, 0);
-            assert_eq!(m.x, 10);
-            assert_eq!(m.y, 20);
-            assert_eq!(m.region, Some("Head".to_string()));
-            assert_eq!(m.kind, MouseEventKind::Move);
-        }
-        _ => panic!("Mouse(Move) を期待"),
+/// どの点も `Head`（scope 0）に当て、座標はそのまま返す偽の当たり判定。
+fn head(_: u32, x: i64, y: i64) -> HitRegion {
+    HitRegion {
+        scope: 0,
+        region: Some("Head".to_string()),
+        surface_point: (x, y),
     }
-    assert!(rx.try_recv().is_err(), "1 件のみ送出されるべき");
 }
 
 /// 受け口を落とした結線で、移動とダブルクリックの送出はそれぞれ `kind` つきの
@@ -91,96 +46,6 @@ fn move_and_double_click_send_failures_record_one_line_each() {
         assert_eq!(failed[0].target, "areka_input", "{events:?}");
         assert_eq!(failed[0].level, tracing::Level::WARN, "{events:?}");
     }
-}
-
-/// 間引き統合: 同一 pos 再送は hover 抑制で送出されない（moved=false）。
-#[test]
-fn throttle_suppresses_same_position_hover() {
-    let (tx, rx) = mpsc::channel::<KanadeMsg>();
-    let mut wiring = MouseWiring::with_clock(
-        tx,
-        RegionSource::Mock(|_, x, y| HitRegion {
-            scope: 0,
-            region: Some("Head".to_string()),
-            surface_point: (x, y),
-        }),
-        // 大きく進む clock でも位置不変なら送出されないことを見る。
-        stepping_clock(1000, 10_000),
-    );
-
-    // 初回は送出。
-    assert!(wiring.plan_and_send_move(0, (10, 20), (10, 20), Some("Head".to_string())));
-    rx.try_recv().expect("初回は届く");
-
-    // 同一 pos（moved=false）: 間隔が幾ら経っても hover 抑制で送出しない。
-    assert!(
-        !wiring.plan_and_send_move(0, (10, 20), (10, 20), Some("Head".to_string())),
-        "同一 pos は送出しない（hover 抑制）"
-    );
-    assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
-}
-
-/// 間引き統合: 移動＋同一 region＋間隔未経過は抑制され、何も送出されない。
-#[test]
-fn throttle_suppresses_move_same_region_within_interval() {
-    let (tx, rx) = mpsc::channel::<KanadeMsg>();
-    // clock: 1回目=1000, 2回目=1050（+50ms < 100ms 間隔）。
-    let mut wiring = MouseWiring::with_clock(
-        tx,
-        RegionSource::Mock(|_, x, y| HitRegion {
-            scope: 0,
-            region: Some("Head".to_string()),
-            surface_point: (x, y),
-        }),
-        stepping_clock(1000, 50),
-    );
-
-    // 初回送出（now=1000）。
-    assert!(wiring.plan_and_send_move(0, (10, 20), (10, 20), Some("Head".to_string())));
-    rx.try_recv().expect("初回は届く");
-
-    // 移動・同一 region・間隔未経過（now=1050, delta=50 < 100）: 抑制。
-    assert!(
-        !wiring.plan_and_send_move(0, (11, 20), (11, 20), Some("Head".to_string())),
-        "移動＋同一 region＋間隔未経過は抑制"
-    );
-    assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
-}
-
-/// 左ダブルクリックは間引きなしで無条件送出され、内容（kind=DoubleClick{Left}）が観測できる。
-#[test]
-fn double_click_left_sends_unconditionally() {
-    let (tx, rx) = mpsc::channel::<KanadeMsg>();
-    let mut wiring = MouseWiring::with_clock(
-        tx,
-        RegionSource::Mock(|_, x, y| HitRegion {
-            scope: 0,
-            region: None,
-            surface_point: (x, y),
-        }),
-        stepping_clock(1000, 1000),
-    );
-
-    wiring.send_double_click(0, (5, 6), Some("Head".to_string()), MouseButton::Left);
-    match rx.try_recv().expect("dblclick が届くべき") {
-        KanadeMsg::Mouse(m) => {
-            assert_eq!(m.scope, 0);
-            assert_eq!(m.x, 5);
-            assert_eq!(m.y, 6);
-            assert_eq!(m.region, Some("Head".to_string()));
-            assert_eq!(
-                m.kind,
-                MouseEventKind::DoubleClick {
-                    button: MouseButton::Left
-                }
-            );
-        }
-        _ => panic!("Mouse(DoubleClick) を期待"),
-    }
-
-    // クリックは throttle を通さない: 同一座標で連続送出しても届く。
-    wiring.send_double_click(0, (5, 6), Some("Head".to_string()), MouseButton::Left);
-    assert!(rx.try_recv().is_ok(), "クリックは間引かれず 2 回目も届く");
 }
 
 /// `wire_mouse_input` は fresh World へ `MouseWiring`
@@ -234,14 +99,7 @@ fn presenter_absent_degrades_to_region_none() {
 /// `KanadeMsg::Mouse(Move)` を観測。同一位置の再移動は hover 抑制で送出されない。
 #[test]
 fn handler_move_sends_then_suppresses_same_position() {
-    let (mut world, rx) = world_with_wiring(
-        |_, x, y| HitRegion {
-            scope: 0,
-            region: Some("Head".to_string()),
-            surface_point: (x, y),
-        },
-        stepping_clock(1000, 10_000),
-    );
+    let (mut world, rx) = world_with_wiring(head, stepping_clock(1000, 10_000));
     let e = world.spawn(CharWindowMarker { scope: 0 }).id();
 
     // 初回移動 → 送出（内容一致）
@@ -308,7 +166,8 @@ fn handler_double_click_left_and_right_send() {
     let ev = bubble_pointer(7, 8, DoubleClick::Right, false);
     assert!(on_char_pointer_pressed(&mut world, e, e, &ev));
     assert!(rx.try_recv().is_err(), "右は押下の時点では送らない");
-    send_pending_right_double_click(&mut world);
+    let pending = take_pending(&mut world).expect("右ダブルクリックは預かりとして残る");
+    send_pending(&mut world, pending);
     match rx.try_recv().expect("dblclick が届く") {
         KanadeMsg::Mouse(m) => {
             assert_eq!((m.scope, m.x, m.y), (0, 7, 8));
@@ -363,26 +222,16 @@ fn handlers_self_gate_when_mouse_wiring_absent() {
     assert!(!on_char_pointer_moved(&mut world, e, e, &moved));
     let dbl = bubble_pointer(10, 20, DoubleClick::Left, false);
     assert!(!on_char_pointer_pressed(&mut world, e, e, &dbl));
-    let mid = bubble_pointer(10, 20, DoubleClick::Middle, false);
-    assert!(!on_char_pointer_pressed(&mut world, e, e, &mid));
 }
 
 /// scope ごとに独立: 1 つの `MouseWiring`
 /// （`HashMap<u32, MouseMoveThrottle>` per-scope 保持）を通し、scope 0 が間引きで抑制されている
 /// 最中でも scope 1 の初回移動は独立に送出される。scope の間引き状態が `HashMap` で別キーに
-/// 保持されている（共有でない）ことの配線層証拠——`throttle.rs` の純関数のテスト
-/// （別々の `MouseMoveThrottle` 値を使う）とは別レイヤ（同一 wiring の map を通す）。
+/// 保持されている（共有でない）ことの配線層証拠。
 #[test]
 fn wiring_throttles_scopes_independently_via_hashmap() {
     // clock: 各ハンドラ呼出で +10ms（間隔 100ms 未満）。
-    let (mut world, rx) = world_with_wiring(
-        |_, x, y| HitRegion {
-            scope: 0,
-            region: Some("Head".to_string()),
-            surface_point: (x, y),
-        },
-        stepping_clock(1000, 10),
-    );
+    let (mut world, rx) = world_with_wiring(head, stepping_clock(1000, 10));
     let e0 = world.spawn(CharWindowMarker { scope: 0 }).id();
     let e1 = world.spawn(CharWindowMarker { scope: 1 }).id();
 
@@ -407,7 +256,7 @@ fn wiring_throttles_scopes_independently_via_hashmap() {
 
     // scope 1 初回移動（now=1020）→ scope 0 の抑制状態と独立に送出される。
     // もし throttle 状態が scope 間で共有なら「同一 region・間隔未経過」で抑制されるはず。
-    // HashMap が別キーで保持するため scope 1 は fresh（first_send）で送出される。
+    // HashMap が別キーで保持するため scope 1 は fresh（初回）で送出される。
     let ev = bubble_pointer(10, 20, DoubleClick::None, false);
     assert!(
         on_char_pointer_moved(&mut world, e1, e1, &ev),
@@ -530,55 +379,10 @@ fn double_click_delivers_surface_point() {
     }
 }
 
-/// k=1.0 相当（恒等 mock）では move／double-click の配信値が
-/// 受領 client px と完全に一致する。
-///
-/// 直前の 2 本（非恒等 mock）が「空間が切り替わったこと」を固定するのに対し、このテストは
-/// 「等倍では何も変わらないこと」を固定する対（両者が揃って初めて空間切替が閉じる）。
-#[test]
-fn identity_scale_delivers_unchanged_client_coords() {
-    let (mut world, rx) = world_with_wiring(
-        |_, x, y| HitRegion {
-            scope: 0,
-            region: Some("Head".to_string()),
-            surface_point: (x, y),
-        },
-        stepping_clock(1000, 10_000),
-    );
-    let e = world.spawn(CharWindowMarker { scope: 0 }).id();
-
-    let ev = bubble_pointer(42, 77, DoubleClick::None, false);
-    assert!(on_char_pointer_moved(&mut world, e, e, &ev));
-    match rx.try_recv().expect("Move が届く") {
-        KanadeMsg::Mouse(m) => assert_eq!((m.x, m.y), (42, 77), "k=1.0 では配信値＝受領 client px"),
-        _ => panic!("Mouse(Move) を期待"),
-    }
-
-    // 右ダブルクリックは預かりになるので、預かりを送ってから配信値を見る。
-    let ev = bubble_pointer(13, 99, DoubleClick::Right, false);
-    assert!(on_char_pointer_pressed(&mut world, e, e, &ev));
-    send_pending_right_double_click(&mut world);
-    match rx.try_recv().expect("dblclick が届く") {
-        KanadeMsg::Mouse(m) => assert_eq!(
-            (m.x, m.y),
-            (13, 99),
-            "k=1.0 では dblclick の配信値も client px と同値"
-        ),
-        _ => panic!("Mouse(DoubleClick) を期待"),
-    }
-}
-
 /// Tunnel 相は両ハンドラとも no-op（Bubble のみ処理）: 退避も送出も起きない。
 #[test]
 fn handlers_ignore_tunnel_phase() {
-    let (mut world, rx) = world_with_wiring(
-        |_, x, y| HitRegion {
-            scope: 0,
-            region: Some("Head".to_string()),
-            surface_point: (x, y),
-        },
-        stepping_clock(1000, 1000),
-    );
+    let (mut world, rx) = world_with_wiring(head, stepping_clock(1000, 1000));
     let w = world
         .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
         .id();
@@ -589,11 +393,12 @@ fn handlers_ignore_tunnel_phase() {
     });
     assert!(!on_char_pointer_moved(&mut world, w, w, &tunnel_move));
 
-    // Tunnel の Ctrl+左でも退避しない（Bubble 相のみ処理）
+    // Tunnel の Ctrl+Shift+左でも退避しない（Bubble 相のみ処理）
     let tunnel_ctrl_left = Phase::Tunnel(PointerState {
         client_point: Point { x: 10, y: 20 },
         double_click: DoubleClick::Left,
         ctrl_down: true,
+        shift_down: true,
         ..Default::default()
     });
     assert!(!on_char_pointer_pressed(

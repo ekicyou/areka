@@ -25,19 +25,17 @@ use super::test_support::{
 use super::*;
 use areka_placement::spawn::BalloonWindowMarker;
 
-/// `hover[scope]=Some(k)`（`ordinal=Some`）を仕込んだ `BalloonWiring` を World へ NonSend 挿入する。
-fn insert_wiring_with_hover(world: &mut World, scope: usize, ordinal: Option<usize>) {
+/// `hover[scope]=Some(ordinal)` を仕込んだ `BalloonWiring` を World へ NonSend 挿入する。
+fn insert_wiring_with_hover(world: &mut World, scope: usize, ordinal: usize) {
     let _rx = insert_wiring(world);
-    if let Some(o) = ordinal {
-        world
-            .get_non_send_mut::<BalloonWiring>()
-            .unwrap()
-            .set_hover(scope, Some(o));
-    }
+    world
+        .get_non_send_mut::<BalloonWiring>()
+        .unwrap()
+        .set_hover(scope, Some(ordinal));
 }
 
 /// バルーン所有 leave→hover 解除（Inject(None) アーム）: choice 表示中・現行 hit=None
-/// （窓外離脱ゆえエッジ非採取）・前回注入 Some(2) → `inject_choice_hover(actor, None)`＋自前状態
+/// （窓外離脱ゆえエッジ非採取）・前回注入 Some(2) → `apply_hover` による `None` の注入＋自前状態
 /// `BalloonWiring.hover[scope]` を None 更新＋`choice_hover_inject` を DEBUG 発火する。
 #[test]
 fn leave_balloon_owned_clears_hover_via_inject_none() {
@@ -50,7 +48,7 @@ fn leave_balloon_owned_clears_hover_via_inject_none() {
         "前提: choice_active=true（選択肢スパンあり）"
     );
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    insert_wiring_with_hover(&mut world, 0, Some(2));
+    insert_wiring_with_hover(&mut world, 0, 2);
 
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
@@ -78,7 +76,7 @@ fn leave_anchor_only_balloon_clears_hover_via_inject_none() {
         "前提: 選択肢は無い"
     );
     world.insert_non_send(headless_runtime_wiring(runtime));
-    insert_wiring_with_hover(&mut world, 0, Some(0));
+    insert_wiring_with_hover(&mut world, 0, 0);
 
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
@@ -105,7 +103,7 @@ fn leave_balloon_owned_inactive_resets_own_state_without_inject() {
         "前提: choice_active=false（選択肢スパン無し）"
     );
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    insert_wiring_with_hover(&mut world, 0, Some(3));
+    insert_wiring_with_hover(&mut world, 0, 3);
 
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
@@ -131,7 +129,7 @@ fn leave_non_balloon_window_is_ignored() {
 
     let runtime = runtime_with_active_choice("0");
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    insert_wiring_with_hover(&mut world, 0, Some(5));
+    insert_wiring_with_hover(&mut world, 0, 5);
     world
         .get_non_send_mut::<BalloonHover>()
         .unwrap()
@@ -167,7 +165,7 @@ fn leave_no_marker_is_full_noop() {
 
     let runtime = runtime_with_active_choice("0");
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    insert_wiring_with_hover(&mut world, 0, Some(1));
+    insert_wiring_with_hover(&mut world, 0, 1);
 
     clear_balloon_hover_on_leave(&mut world);
 
@@ -185,7 +183,7 @@ fn leave_runtime_absent_degrades_with_debug_and_leaves_hover() {
     let mut world = World::new();
     spawn_balloon_leave_child(&mut world, 0);
     // RuntimeWiring は挿入しない。BalloonWiring のみ present。
-    insert_wiring_with_hover(&mut world, 0, Some(1));
+    insert_wiring_with_hover(&mut world, 0, 1);
 
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
@@ -221,7 +219,7 @@ fn leave_borrow_failure_is_recorded_and_skips_the_highlight() {
     spawn_balloon_leave_child(&mut world, 0);
     let runtime = runtime_with_active_choice("0");
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    insert_wiring_with_hover(&mut world, 0, Some(2));
+    insert_wiring_with_hover(&mut world, 0, 2);
     world
         .get_non_send_mut::<BalloonHover>()
         .unwrap()
@@ -250,7 +248,7 @@ fn leave_of_two_entities_in_one_window_is_handled_once() {
     world.spawn((PointerLeave, ChildOf(win)));
     let runtime = runtime_with_active_choice("0");
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    insert_wiring_with_hover(&mut world, 0, Some(2));
+    insert_wiring_with_hover(&mut world, 0, 2);
 
     assert_eq!(leave_borrow_failures(&mut world, &runtime), 1);
 }

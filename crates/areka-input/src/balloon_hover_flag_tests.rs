@@ -2,9 +2,8 @@
 // バルーン滞在フラグ
 //
 // 「ポインタがバルーン窓の上に居る」を選択肢行の追跡（`BalloonWiring.hover`）とは**独立の軸**として
-// 記録することを確かめる。観測点は 3 つ——(a) 記録（`on_balloon_pointer_moved` が選択肢の有無に
-// 依らず当該 scope を真にする）、(b) 解除（`clear_balloon_hover_on_leave` が `PointerLeave` で偽へ戻す）、
-// (c) 掃除口（`clear_balloon_hover`＝非表示遷移時にコントローラが呼ぶ）。
+// 記録することを確かめる。観測点は 2 つ——(a) 記録（`on_balloon_pointer_moved` が選択肢の有無に
+// 依らず当該 scope を真にする）、(b) 解除（`clear_balloon_hover_on_leave` が `PointerLeave` で偽へ戻す）。
 //
 // 記録側と解除側の縮退方向は意図的に非対称である（消えないまま固着する側へ倒さない）:
 // 記録は上流資源が揃うときだけ行い（抑止を増やす側は保守的）、解除は上流 runtime の可否に依らず行う
@@ -23,6 +22,7 @@ use super::test_support::{
 };
 use super::*;
 use areka_placement::spawn::BalloonWindowMarker;
+use areka_sakura::ActorKey;
 
 /// World 中の `BalloonHover` へ滞在を照会する短縮形。
 fn hovered(world: &World, scope: usize) -> bool {
@@ -30,31 +30,6 @@ fn hovered(world: &World, scope: usize) -> bool {
         .get_non_send::<BalloonHover>()
         .expect("BalloonHover はテストの支えが挿入済み")
         .is_balloon_hovered(scope)
-}
-
-/// 記録: 選択肢が**一つも表示されていない**バルーン窓上の移動でも滞在は真になる。
-/// 選択肢行の上に居るときだけ記録する実装をここで落とす。
-#[test]
-fn moved_over_balloon_records_hover_without_any_choice() {
-    let mut world = World::new();
-    let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    let rt = empty_runtime();
-    assert!(
-        !rt.borrow().choice_active(&ActorKey::from("0")),
-        "前提: 選択肢は非表示（choice_active=false）"
-    );
-    world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
-    let _rx = insert_wiring(&mut world);
-
-    assert!(
-        !on_balloon_pointer_moved(&mut world, e, e, &bubble_move(10, 20)),
-        "moved は常に false（非侵襲）"
-    );
-
-    assert!(
-        hovered(&world, 0),
-        "バルーン窓上の移動は選択肢の有無に依らず滞在を記録する"
-    );
 }
 
 /// 記録: 選択肢表示中でも**行に当たっていない**移動で滞在は真になる
@@ -65,7 +40,7 @@ fn moved_records_hover_when_choice_active_but_no_row_hit() {
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let rt = runtime_with_active_choice("0");
     // 前提を自前で主張する（ヘルパが劣化して choice_active=false・行あり になると、このテストは
-    // 隣の `moved_over_balloon_records_hover_without_any_choice` の重複へ静かに退化する）。
+    // 隣の `moved_records_hover_per_scope_independently` の重複へ静かに退化する）。
     assert!(
         rt.borrow().choice_active(&ActorKey::from("0")),
         "前提: 選択肢は表示中（choice_active=true）"
@@ -87,7 +62,7 @@ fn moved_records_hover_when_choice_active_but_no_row_hit() {
     );
 }
 
-/// per-scope 独立: 別 scope の滞在は互いに影響しない。
+/// per-scope 独立: 選択肢の無いバルーンでも、別 scope の滞在は互いに影響しない。
 #[test]
 fn moved_records_hover_per_scope_independently() {
     let mut world = World::new();
@@ -147,24 +122,6 @@ fn moved_without_runtime_wiring_does_not_record_hover() {
     on_balloon_pointer_moved(&mut world, e, e, &bubble_move(10, 20));
 
     assert!(!hovered(&world, 0), "観測基盤が無い間は抑止側へ倒さない");
-}
-
-/// 解除: バルーン所有の `PointerLeave` で当該 scope の滞在が偽へ戻る。
-#[test]
-fn leave_on_balloon_window_clears_balloon_hover() {
-    let mut world = World::new();
-    spawn_balloon_leave_child(&mut world, 0);
-    world.insert_non_send(headless_runtime_wiring(empty_runtime()));
-    let _rx = insert_wiring(&mut world);
-    world
-        .get_non_send_mut::<BalloonHover>()
-        .unwrap()
-        .set_balloon_hover(0);
-    assert!(hovered(&world, 0), "前提: 滞在は真");
-
-    clear_balloon_hover_on_leave(&mut world);
-
-    assert!(!hovered(&world, 0), "離脱で滞在は偽へ戻る");
 }
 
 /// 解除側の縮退方向: 観測基盤（`RuntimeWiring`）が無くても解除は行う

@@ -1,6 +1,6 @@
 //! 窓 1 つの形の状態の遷移と、出す形とその出どころを決める純関数。
 //!
-//! 状態の置き場所と結線は CursorAnswer（`cursor_answer.rs`）。当たり判定はここでは引かず、
+//! 状態の置き場所と結線は `cursor_answer`。当たり判定はここでは引かず、
 //! 引くときだけ渡された `resolve` を呼ぶ。
 
 use wintf::ecs::cursor::CursorTrigger;

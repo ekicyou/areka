@@ -244,7 +244,7 @@ impl Rig {
     /// 開始の配りで入った `DraggingState.initial_window_pos` を窓の位置にする（製品と同じ意味の値）。
     ///
     /// 偽の HWND では wintf の開始の腕の枠の座標変換が失敗し、`None` のまま入る。
-    pub(super) fn set_initial_window_pos(&mut self, entity: Entity, at: Point) {
+    fn set_initial_window_pos(&mut self, entity: Entity, at: Point) {
         self.world
             .get_mut::<DraggingState>(entity)
             .expect("開始が配られて DraggingState があるはず")

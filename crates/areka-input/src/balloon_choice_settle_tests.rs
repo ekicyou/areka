@@ -14,21 +14,14 @@ use areka_emo_text::actor::{TextLayerRuntime, present_frame, spawn_emo_text};
 use areka_emo_text::place::PlaceKey;
 use areka_emo_text::sink::EmoTextSink;
 use areka_emo_text::state::SpanKind;
+use areka_runtime::spine::pump_until_idle;
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
-use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
+use wintf::executor::JoinHandle;
 
 use super::settle_after_selection;
 use super::test_support::{anchor_cues, capture_logs, empty_runtime};
 
 const ACTOR: &str = "0";
-
-/// このスレッドの待ち行列に積まれた伝言を全部汲んでから抜ける（`spine.rs` の `pump_until_idle` と同じ定石）。
-fn pump_until_idle() {
-    // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ。
-    unsafe { PostQuitMessage(0) };
-    MessageLoop::run(|_, _| FilterResult::Forward);
-}
 
 /// 普通のバルーンに選択肢 1 つとアンカー 1 つを載せ、選択待ちに入った文字の層。
 ///
@@ -116,26 +109,21 @@ fn settle_after_selection_borrow_failure_logs_one_error_and_does_nothing() {
 // 実 GPU で提示して当たり行を作り、本番の押下のハンドラ（`on_balloon_pointer_pressed`）で選択肢の行を
 // 押す。1 回目は選択を送って INFO `choice_selected` を 1 行残し、その場所の選択肢が済む。同じ座標の
 // 2 回目は選択を作らず WARN を出さない。
-// 箱の押下のハンドラ（`shell_box_handler.rs`）は同じ `settle_after_selection` を呼び、箱の場所の
+// 箱の押下のハンドラ（`shell_box_handler.rs`）も同じ `dispatch_selection` から `settle_after_selection` に至り、箱の場所の
 // 済んだ行は文字の層の実 GPU のテスト（`areka-emo-text` の `actor_choice_settle_tests.rs`）が固定する。
 // =============================================================================
 
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-
 use super::on_balloon_pointer_pressed;
-use super::test_support::{gpu_balloon_world, headless_runtime_wiring, insert_wiring, left_press};
+use super::test_support::{
+    gpu_balloon_world, headless_runtime_wiring, insert_wiring, left_press, row_center,
+};
 
 #[test]
 fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_warn() {
-    // SAFETY: 描画資源に要る COM の MTA 初期化（既初期化の S_FALSE は無視・テストスレッドごと）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let _gpu = areka_runtime::spine::GpuPermit::take();
     let (rt, _sink, _join) = runtime_in_choice_wait();
     let actor = ActorKey::from(ACTOR);
 
-    let (mut world, window) = gpu_balloon_world(&rt, 1.0, (120, 60), (0, 0));
+    let (_gpu, mut world, window) = gpu_balloon_world(&rt, 1.0, (120, 60), (0, 0));
     let row = rt
         .borrow()
         .choice_hit_rows(&actor)
@@ -143,8 +131,7 @@ fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_wa
         .find(|r| r.kind == SpanKind::Choice)
         .cloned()
         .expect("前提: 選択肢の当たり行がある");
-    let x = ((row.rect.left + row.rect.right) / 2.0) as i32;
-    let y = ((row.rect.top + row.rect.bottom) / 2.0) as i32;
+    let (x, y) = row_center(&row);
 
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
     let rx = insert_wiring(&mut world);

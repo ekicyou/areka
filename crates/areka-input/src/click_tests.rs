@@ -1,4 +1,4 @@
-//! 押下の控えとマウスの知らせの送出の口の檻。
+//! 押下の控えと解放の判定と、マウスの知らせの送出の口の檻。
 
 use super::super::pointer_test_support::{drain_mouse, fake_hit, world_with_wiring};
 use super::super::{MouseWiring, on_char_pointer_pressed};
@@ -8,7 +8,6 @@ use super::{
 };
 use areka_kanade::{ClickButton, KanadeMsg, MouseButton, MouseEventKind, MouseInput};
 use areka_placement::spawn::CharWindowMarker;
-use areka_runtime::hit_region::HitRegion;
 use bevy_ecs::prelude::*;
 use std::sync::mpsc;
 use windows::Win32::Foundation::HWND;
@@ -16,17 +15,9 @@ use wintf::ecs::drag::{end_dragging_on_release, start_dragging, start_preparing}
 use wintf::ecs::pointer::{ButtonReleased, DoubleClick, Phase, PointerState};
 use wintf::ecs::{PhysicalPoint, SizeI, WindowPos};
 
-fn mock(scope: u32, x: i64, y: i64) -> HitRegion {
-    HitRegion {
-        scope,
-        region: Some("Head".to_owned()),
-        surface_point: (x, y),
-    }
-}
-
 /// 結線済みの World・キャラ窓 1 つ・受信端。
 fn wired() -> (World, Entity, mpsc::Receiver<KanadeMsg>) {
-    let (mut world, rx) = world_with_wiring(mock, Box::new(|| 0));
+    let (mut world, rx) = world_with_wiring(fake_hit, Box::new(|| 0));
     let entity = world.spawn(CharWindowMarker { scope: 0 }).id();
     (world, entity, rx)
 }
@@ -483,7 +474,6 @@ fn release_on_a_window_without_size_sends_one_button_up() {
             ..Default::default()
         },
     );
-    rx.try_iter().for_each(drop);
     let released = ButtonReleased {
         right: true,
         ..Default::default()

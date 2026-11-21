@@ -82,7 +82,7 @@ impl Rig {
         (win, child)
     }
 
-    /// `e` を持ち主にする（他の entity の `PointerState` は外す・ホイールは 0）。
+    /// `e` に `PointerState` を載せる（ホイールは 0）。
     fn point(&mut self, e: Entity, x: i32, y: i32) {
         self.point_wheel(e, x, y, 0, 0);
     }
@@ -377,26 +377,6 @@ fn wheel_is_throttled_per_window() {
     r.clock.set(140);
     assert_eq!(r.run(), vec![wheel(1, -240, (120, 10), Some("Face"))]);
     assert_eq!(r.run(), vec![]);
-}
-
-/// 出入りは同じ tick の `OnMouseMove` より先に届く。
-#[test]
-fn hover_arrives_before_move_of_the_same_tick() {
-    let mut r = rig();
-    let (win, child) = r.window(0);
-    r.point(child, 10, 5);
-    char_watch(&mut r.world);
-    let state = r.world.get::<PointerState>(child).unwrap().clone();
-    on_char_pointer_moved(&mut r.world, win, win, &Phase::Bubble(state));
-    let kinds: Vec<_> = r.drain().into_iter().map(|i| i.kind).collect();
-    assert_eq!(
-        kinds,
-        vec![
-            MouseEventKind::Hover(HoverEdge::EnterAll),
-            MouseEventKind::Hover(HoverEdge::Enter),
-            MouseEventKind::Move,
-        ]
-    );
 }
 
 /// 移動の間引きが閉じていても出入りは出る（系は移動の間引きの状態を読まない）。

@@ -1,12 +1,9 @@
 use bevy_ecs::prelude::*;
-use wintf::ecs::layout::HitTest;
 use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed};
 
 use areka_placement::spawn::spawn_ghost_windows;
-use areka_placement::spawn::test_support::{ghost_window_entities, titles, two_scope_placements};
+use areka_placement::spawn::test_support::{titles, two_scope_placements};
 
-/// 全窓が `HitTest::none()`（全面ヒットで透過を殺さない）を持つ。
-/// `spawn_ghost_windows` 自体はポインタハンドラを付けない。
 /// spawn 直後に `crate::attach_char_pointer_handlers` を呼ぶと、キャラ窓は
 /// 正規ポインタハンドラ（`OnPointerMoved`＋`OnPointerPressed`）を持ち、キャラ窓のハンドラ装着はバルーン窓に
 /// 何も付けない（バルーン窓のハンドラは `crate::balloon::attach_balloon_pointer_handlers`
@@ -14,16 +11,12 @@ use areka_placement::spawn::test_support::{ghost_window_entities, titles, two_sc
 /// だけを固定する。装着の関数は `areka_placement` から見えない（依存の向き）ので、
 /// 本テストはこの crate に置く。
 #[test]
-fn all_windows_have_hit_test_none_and_char_has_pointer_handlers() {
+fn char_windows_get_pointer_handlers_and_balloons_do_not() {
     let mut world = World::new();
     let placements = two_scope_placements();
 
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
     crate::attach_char_pointer_handlers(&mut world);
-
-    for e in ghost_window_entities(&mut world) {
-        assert_eq!(world.get::<HitTest>(e).copied(), Some(HitTest::none()));
-    }
 
     for p in &placements {
         let char_e = gw.char_window(p.scope).unwrap();

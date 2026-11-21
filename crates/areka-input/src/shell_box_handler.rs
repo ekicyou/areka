@@ -1,6 +1,6 @@
 //! シェルの窓のハンドラの箱の前段。
 //!
-//! crate の根の `on_char_pointer_moved`・`on_char_pointer_pressed` の先頭（強制退避の判定の後）から
+//! crate の根の `on_char_pointer_moved` の先頭と `on_char_pointer_pressed` の強制退避の判定の後から
 //! 呼ばれ、「処理した」（`true`）なら呼び手は既存の道へ落とさない。判断は `shell_box.rs` の純関数に
 //! あり、ここは借用と送り出しだけを行う（借用の順は `balloon_pressed.rs` と同じ: `RuntimeWiring` から
 //! 文字の層の `Rc` を複製して world の借用を解く → 文字の層の不変借用で写しを取って解く →
