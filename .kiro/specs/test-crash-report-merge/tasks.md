@@ -99,7 +99,7 @@
   - _Requirements: 4.6_
 
 - [ ] 5. 仕上げの確かめと記録
-- [ ] 5.1 静的な確かめを走らせて記録する
+- [x] 5.1 静的な確かめを走らせて記録する
   - 設計の CompletionRecord の 5.6・6.7・6.8・7.1・7.2・7.4・7.5・8.2 の確かめを走らせ、結果を tasks.md の Implementation Notes に書く（`fn SetUnhandledExceptionFilter` が 1 件・`.CRT$XCU` が 6 件・約束のファイルの差分が空・`Cargo.lock` の差分の形・預かりの説明の直しがコメントの行だけ）
   - `frame_test_support.rs:886` の `window_move_lines` の写しは付け替えていない、と記録し、完了の未解決の棚卸の件として残す（寄せ先は placement の `test_support::window_move_lines`）。`carrier_cue` の残り（決定 5）と runtime の `INVARIANT_WARNING` の手写し（決定 6）も同じ棚卸の件として並べる
   - 終わった姿: Implementation Notes に各確かめのコマンドと出力の要点が並び、どれも期待どおり
@@ -124,3 +124,11 @@
 
 - 2.3: `areka` には lib のターゲットが無い。本体のテストは `cargo test -p areka --bins <名>` で回す（`--lib` は「no library targets」で落ちる）。
 - 3.1: `test_support.rs` には別の働きの `measure_template::code_only` も残る（設計どおり）。「`fn code_only` が placement の 1 件」は `//` の行を落とす方の定義が 1 件、の意味で読む。
+- 5.1（5.6）: `git grep -n "fn SetUnhandledExceptionFilter" -- crates` は `crates/crash-report-kit/src/lib.rs:104` の 1 件だけ。参考の `git grep -n 'link_section = ".CRT$XCU"' -- crates` は 6 件（kit の `lib_tests.rs`・wintf の `test_crash_report.rs`・areka-placement の `test_crash_report.rs`・areka-runtime の `crash_report_test_support.rs`・areka-input の `crash_report_tests.rs`・本体の `runtime_tests/mod.rs`）。どちらも期待どおり。
+- 5.1（6.7）: 基準は `origin/main`（merge-base と同じ `f6405e09`）。6.2・6.5・6.6 を担う古い道・置き場・武装の説明の直し（コミット `fc9ebe107`・`crates` の下で 22 ファイル 47 行ずつ）を `git show fc9ebe107 -U0 -- crates` で見て、`+`／`-` の行のうち `//` で始まらない行（空白の後の `//` も含めて除く）は 0 件。`git grep -nE '(^|[^_a-z])runtime::' -- crates/areka-placement` も 0 件。期待どおり。
+- 5.1（7.1・7.2・7.4・8.2）: `git diff --stat origin/main...HEAD -- crates/areka-runtime/src/frame_test_support.rs crates/areka-input crates/areka/src/runtime_tests/mod.rs crates/log-capture-kit/tests/file_length_guard_test.rs` は空。作業木の `git diff origin/main -- <同じファイル>` も空。期待どおり。
+- 5.1（7.3・8.2）: `git diff origin/main...HEAD -- Cargo.lock` は新しい塊 1 つ（`[[package]] name = "crash-report-kit"` `version = "0.1.0"` `dependencies = ["windows"]`）と、使い手 3 crate（areka-placement・areka-runtime・wintf）の依存の列に `"crash-report-kit",` を足した 3 行だけ（`+10` 行）。期待どおり。
+- 5.1（7.5）: 直しが約束のファイルへ及ぶことはなく、止まる場面は起きなかった。
+- 5.1（6.8・完了の未解決の棚卸の件 ア）: `crates/areka-runtime/src/frame_test_support.rs:886` の `pub fn window_move_lines` の写しは、C24 の約束（このファイルの差分 0）により付け替えていない。寄せ先は placement の `test_support::window_move_lines`。`/kiro-complete` の未解決の棚卸で持ち主を決める。
+- 5.1（棚卸の件 イ・決定 5）: `carrier_cue` の残りの写し。`crates/areka-ghost/src/prop_sink.rs:118`（引数 `actor, name, tokens`）と `crates/areka-seriko/src/actor_test_support.rs:124`（引数 `scope, name, tokens`）が残り、`crates/areka-runtime/src/consumer_ledger_test_support.rs:126` の `carrier_cue(name, args)` とは形が違う。このスペックでは足さない。完了の未解決の棚卸で「`dola` にテスト用の組み立て（`TalkCue`・`CueCommand` の組み立て）を置く」件として起票する。
+- 5.1（棚卸の件 ウ・決定 6）: `areka-runtime` の `INVARIANT_WARNING` の手写し。`crates/areka-runtime/src/frame_work_area_resnap_hold_tests.rs:60` の `const INVARIANT_WARNING` が placement の `follow_window_move_hold_watch_tests.rs:31` と同じ文字列の手写しのまま残る。完了の未解決の棚卸で、同じファイルの 372〜410 行にこの警告を数える檻が既に在るかを確かめる。
