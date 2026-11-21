@@ -131,9 +131,6 @@ mod roots;
 /// 自動 close の仕掛け（`AREKA_APP_SMOKE_EXIT_MS`・CI smoke）。
 mod smoke_exit;
 
-/// 1 回の走りが読み取りだけかを 1 度だけ立てて配る口。
-mod readonly;
-
 /// 起動オプションの読み方。
 mod cli;
 
@@ -149,7 +146,7 @@ mod scope_bind_fixture_test_support;
 // ---------------------------------------------------------------------------
 
 fn main() -> Result<()> {
-    use session::{alert, exit_wait, write_failure};
+    use session::{alert, exit_wait, readonly, write_failure};
     human_panic::setup_panic!();
 
     // RUST_LOG が未設定・非UTF-8・不正な構文なら "info" へフォールバックする（panic 経路なし）。

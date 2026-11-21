@@ -510,7 +510,7 @@ pub(crate) fn default_helper_exe_path() -> std::path::PathBuf {
 /// （呼び手は 1 回の走りで 3 か所以上・別の areka が途中で写しを終えても置き場が変わらないため）。
 pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
     static READONLY_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
-    let readonly = crate::readonly::is_on();
+    let readonly = crate::session::readonly::is_on();
     let decide = || {
         app_profile_dir_for(
             readonly,

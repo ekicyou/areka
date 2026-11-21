@@ -34,6 +34,9 @@ pub(crate) mod write_failure;
 /// 終了の後始末が、背景で書いている仕事の終わりを上限つきで待つ口。
 pub(crate) mod exit_wait;
 
+/// 1 回の走りが読み取りだけかを 1 度だけ立てて配る口。
+pub(crate) mod readonly;
+
 // 偽の SHIORI を持つゴーストを同じ World で起こす統合テストの土台。
 #[cfg(test)]
 pub(crate) mod ghost_switch_test_support;

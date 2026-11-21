@@ -109,13 +109,13 @@ fn rewiring_gives_a_fresh_registration_with_the_install_frame() {
     );
 }
 
-/// 読み取りだけの走り（World に [`crate::readonly::ReadOnlyRun`]）では、窓口が在っても灰色。
+/// 読み取りだけの走り（World に [`crate::session::readonly::ReadOnlyRun`]）では、窓口が在っても灰色。
 /// 対照: 印が無ければ今どおり選べる。
 #[test]
 fn item_is_greyed_in_a_readonly_run() {
     let plain = wired_world(true);
     let mut readonly = wired_world(true);
-    readonly.insert_resource(crate::readonly::ReadOnlyRun);
+    readonly.insert_resource(crate::session::readonly::ReadOnlyRun);
     assert_eq!(
         (
             install_item(&plain).map(|i| i.enabled),

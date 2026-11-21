@@ -79,7 +79,7 @@ fn engage_is_called_only_from_main() {
     let files = all_sources(&src);
     let def = ["fn engage", "("].concat();
     // 較正: 走査が main.rs の本文を見ている。
-    let calibration = ["mod ", "readonly;"].concat();
+    let calibration = ["mod ", "session;"].concat();
     assert!(files_calling(&files, &calibration, &def).contains(&"main.rs".to_owned()));
 
     let mut outside: Vec<String> = files_calling(&files, &["readonly::", "engage"].concat(), &def)
@@ -89,9 +89,13 @@ fn engage_is_called_only_from_main() {
     // `use super::*` で名前だけで呼べる所（このモジュールとその試験）は、裸の呼び出しも禁じる。
     let bare: Vec<(String, String)> = files
         .iter()
-        .filter(|(rel, _)| rel == "readonly.rs" || rel.starts_with("readonly_"))
+        .filter(|(rel, _)| rel == "session/readonly.rs" || rel.starts_with("session/readonly_"))
         .cloned()
         .collect();
+    assert!(
+        !bare.is_empty(),
+        "readonly のモジュールとその試験が走査に見えない"
+    );
     outside.extend(files_calling(&bare, &["engage", "("].concat(), &def));
     assert!(
         outside.is_empty(),
@@ -150,7 +154,7 @@ fn withhold_everything_is_called_only_from_readonly() {
             .to_string_lossy()
             .into_owned();
         for rel in files_calling(&all_sources(&src), &needle, &def) {
-            if krate == "areka" && rel == "readonly.rs" {
+            if krate == "areka" && rel == "session/readonly.rs" {
                 seen_in_readonly = true;
             } else {
                 outside.push(format!("{krate}/src/{rel}"));

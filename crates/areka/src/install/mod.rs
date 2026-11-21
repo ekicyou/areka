@@ -77,7 +77,7 @@ pub(crate) struct RawInstallRequest {
 pub(crate) fn submit(world: &mut World, order: InstallOrder) -> SubmitVerdict {
     let count = order.archives.len();
     let origin = order.origin;
-    if crate::readonly::of(world) {
+    if crate::session::readonly::of(world) {
         record_readonly_refused(origin, count);
         return SubmitVerdict::ReadOnly;
     }

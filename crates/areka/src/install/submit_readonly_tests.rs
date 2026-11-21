@@ -18,7 +18,7 @@ use tracing::Level;
 
 use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::readonly::ReadOnlyRun;
+use crate::session::readonly::ReadOnlyRun;
 
 /// どの出どころの依頼も断られ、積まれず、窓口は忙しくなく、記録は依頼ごとに info が 1 件で
 /// 断りの warn は無く、ゴーストへは何も送らない。

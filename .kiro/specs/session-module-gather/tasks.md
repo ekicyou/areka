@@ -28,7 +28,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 移動とパスの書き換えだけ_
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.6, 6.1, 7.9_
 
-- [ ] 3.2 `readonly` を移し、それを読むソースのテストを移した先へ向ける
+- [x] 3.2 `readonly` を移し、それを読むソースのテストを移した先へ向ける
   - 本番とテストを `git mv` で移し、宣言と呼び手を 3.1 と同じ形で直す
   - `readonly_tests.rs:82` の較正の針を `mod session;` に、`:92` の絞り込みを `session/readonly.rs`・`session/readonly_`（区切りは `all_sources` の書き方）にし、絞り込んだ集合が空でないことの `assert!` を足す。`:153` を `session/readonly.rs` にする
   - 完了の形: 警告 0 件で通り、`readonly_tests.rs` の 3 本が移した先を走査して緑。絞り込みの対象を一時的に実在しない名前にすると足した `assert!` で赤になることを確かめ、戻す

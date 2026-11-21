@@ -19,7 +19,7 @@ pub(crate) fn layout() -> &'static Layout {
     static LAYOUT: OnceLock<Layout> = OnceLock::new();
     LAYOUT.get_or_init(|| {
         let profile_env = std::env::var_os(areka_user_data::PROFILE_DIR_ENV);
-        let establish = if crate::readonly::is_on() {
+        let establish = if crate::session::readonly::is_on() {
             areka_user_data::establish_readonly
         } else {
             areka_user_data::establish
@@ -188,7 +188,7 @@ pub(crate) fn copy_unless_readonly(
 /// 本番の口: [`copy_unless_readonly`] に走りの旗と実行ファイルのフォルダを渡す。
 pub(crate) fn writable_copy(roots: &BasewareRoots, kind: StoreKind, dir: &Path) -> PathBuf {
     copy_unless_readonly(
-        crate::readonly::is_on(),
+        crate::session::readonly::is_on(),
         roots,
         exe_dir().as_deref(),
         kind,

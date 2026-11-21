@@ -44,7 +44,7 @@ pub(crate) struct InstallCueSink {
 
 impl InstallCueSink {
     pub(crate) fn new(tx: Sender<RawInstallRequest>) -> Self {
-        Self::with_fetch(tx, fetch_for(crate::readonly::is_on()))
+        Self::with_fetch(tx, fetch_for(crate::session::readonly::is_on()))
     }
 
     /// 取得の起こし方を差し替える口（テストが偽の取得口を差す）。

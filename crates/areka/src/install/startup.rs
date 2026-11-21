@@ -228,7 +228,7 @@ pub(crate) fn resolve_boot(
 ) -> Result<crate::boot_config::BootResolved, crate::session::alert::AlertScene> {
     let app_profile_dir = crate::boot_config::default_app_profile_dir();
     let before = BeforeBootEnv {
-        readonly: crate::readonly::is_on(),
+        readonly: crate::session::readonly::is_on(),
         alert_suppressed: before_boot_alert_suppressed(
             crate::session::alert::suppressed(),
             crate::smoke_exit::smoke_exit_ms(),

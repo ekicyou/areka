@@ -385,7 +385,7 @@ pub(crate) fn accept_switch(
     );
     let exe_dir = crate::roots::user_root::exe_dir();
     let copy = super::switch_copy::start(
-        crate::readonly::of(world),
+        crate::session::readonly::of(world),
         &ctx.roots,
         exe_dir.as_deref(),
         &target.dir,

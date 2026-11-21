@@ -159,7 +159,7 @@ fn judge(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> Subm
     if desk.gate.is_closing() {
         return SubmitVerdict::Closing;
     }
-    if crate::readonly::of(world) {
+    if crate::session::readonly::of(world) {
         readonly_refusal::refuse(world, &raw, reason);
         return SubmitVerdict::ReadOnly;
     }
