@@ -152,7 +152,8 @@ crates/crash-report-kit/
 | `crates/areka-input/` の全部 | 要件 7.2・入口の名を保つ |
 | `crates/areka/src/runtime_tests/mod.rs` | 要件 7.2・入口の名を保つ |
 | `crates/log-capture-kit/tests/file_length_guard_test.rs` | 要件 7.4 |
-| `crates/wintf/src/lib.rs`・`crates/areka-placement/src/lib.rs`・`crates/areka-runtime/src/lib.rs` | ファイルの名と `mod` の印を保つ |
+| `crates/wintf/src/lib.rs`・`crates/areka-runtime/src/lib.rs` | ファイルの名と `mod` の印を保つ |
+| `crates/areka-placement/src/lib.rs` の `mod test_crash_report;` の行とその説明（85〜86 行） | ファイルの名と `mod` の印を保つ。同じファイルの古い道のコメント 4 行（114・138・181・187 行）だけは PlacementCommentFixes で直す |
 | `crates/areka-runtime/src/spine_wait.rs`・`wire_tests.rs`・`assets_tests.rs`・`assets_shell_tests.rs`・`assets_markers_tests.rs` | 入口の名を保つので、コードも説明の名（`crash_report_test_support`）も今のまま正しい |
 | ワークスペースの根の `Cargo.toml` | members は `"crates/*"` |
 
