@@ -112,7 +112,7 @@
   - _Dispatch: mechanical — 設計が走らせ方と期待の行を示している_
   - _Requirements: 2.5, 3.1, 3.2, 5.5, 8.3_
 
-- [ ] 5.3 全体テストを緑で通し、ライセンスの一覧を作り直す
+- [x] 5.3 全体テストを緑で通し、ライセンスの一覧を作り直す
   - `pwsh -NoProfile -File tools/test-all.ps1 -License` を 1 度走らせる（排他のテストの机の決まりに従う）
   - 終わった姿: 全体テストが緑で、`THIRD-PARTY-NOTICES.md` の差分は `crash-report-kit 0.1.0` の 1 行だけ。その差分をコミットに含め、結果を Implementation Notes に書く
   - _Dispatch: mechanical — 決まったコマンドを走らせて記録する_
@@ -134,3 +134,4 @@
 - 5.1（棚卸の件 ウ・決定 6）: `areka-runtime` の `INVARIANT_WARNING` の手写し。`crates/areka-runtime/src/frame_work_area_resnap_hold_tests.rs:60` の `const INVARIANT_WARNING` が placement の `follow_window_move_hold_watch_tests.rs:31` と同じ文字列の手写しのまま残る。完了の未解決の棚卸で、同じファイルの 372〜410 行にこの警告を数える檻が既に在るかを確かめる。
 - 5.2（装置なし・2.5・3.1・5.5・8.3）: `cargo test -p crash-report-kit -- --ignored --exact lib_tests::crash_report_names_the_running_test` を 1 度走らせた。プロセスは落ち、終了コードは 139。出た行は stderr で、`AREKA-CRASH code=0xC0000005 addr=0x7ff809ec56ca tid=18792`・`AREKA-CRASH module=C:\WINDOWS\System32\KERNELBASE.dll+0xC56CA thread=""`・`AREKA-CRASH-THREAD`（`tid=30408 name="main"`・`tid=21188 name="lib_tests::crash_report_names_the_running_test"`・落ちたスレッド `tid=18792 name=""` を含む 6 行）・`AREKA-CRASH-STACK`（0〜22 段・`write_report` lib.rs:348 → `first_chance` lib.rs:249 → … → `crash_on_an_unnamed_thread::closure$0` lib.rs:507）。`AREKA-CRASH-HOLDER` の行は出ていない（期待どおり）。
 - 5.2（装置あり・3.2・5.5・8.3）: `cargo test -p areka-runtime --lib -- --ignored --exact crash_report_test_support::crash_report_names_the_running_test` を本物の GPU で 1 度走らせた。プロセスは落ち、終了コードは 139。`AREKA-CRASH code=0xC0000005 addr=0x7ff809ec56ca tid=21632`・`AREKA-CRASH module=C:\WINDOWS\System32\KERNELBASE.dll+0xC56CA thread=""` に続いて `AREKA-CRASH-HOLDER tid=27420 name="crash_report_test_support::crash_report_names_the_running_test"` が出た。`AREKA-CRASH-THREAD` は 9 行（`tid=26200 name="main"`・`tid=27420 name="crash_report_test_support::crash_report_names_the_running_test"`・落ちたスレッド `tid=21632 name=""` を含む）、`AREKA-CRASH-STACK` は 0〜22 段で装置なしと同じ形。持ち手の行にそのテストの名前が出ており期待どおり。
+- 5.3: `tools/test-all.ps1 -License` を 9c2daf312 で 1 度走らせ、23 段すべて緑（約 25 分・x64 ワークスペースのテストは 1071 s）。`THIRD-PARTY-NOTICES.md` の差分は `crash-report-kit 0.1.0` の 1 行と、それに伴う MIT License の数 264→265 の 1 行だけで、この差分をコミットに含める。ログの "panicked" の 3 件は合格したテストの名前で失敗ではない。
