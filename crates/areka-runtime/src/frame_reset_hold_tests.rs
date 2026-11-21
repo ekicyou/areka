@@ -371,3 +371,59 @@ fn a_move_to_a_partner_settling_as_hidden_is_placed_at_the_current_size() {
         "今の大きさで置かれない"
     );
 }
+
+/// 窓の大きさの着地を 1 巡遅らせる足場: 巡 A は本当の大きさで表示したが窓は作ったときの大きさのまま、
+/// 巡 B は再スナップで窓の大きさが着地してから位置の指令の相を回す。
+fn shown_before_landing(
+    harness: &mut FrameHarness,
+    wiring: &RuntimeWiring,
+) -> (Vec<String>, Vec<String>) {
+    let shown = SettledSource::new().shown(0, REAL[0]).shown(1, REAL[1]);
+    let before_landing = drain(harness, wiring, &shown);
+    harness.run_resnap(&PerTargetSizes::new([
+        (0, Some(REAL[0])),
+        (1, Some(REAL[1])),
+    ]));
+    let landed = drain(harness, wiring, &shown);
+    (before_landing, landed)
+}
+
+/// 窓の大きさが着地するまで並べ直しは預かられ、着地した巡のその相で当たる。
+#[test]
+fn a_reset_waits_for_the_window_size_to_land() {
+    let (mut harness, tx, wiring) = settled_rig();
+    tx.send(PositionCue::ResetWindowPos)
+        .expect("送出は成功する");
+    let (before_landing, landed) = shown_before_landing(&mut harness, &wiring);
+    assert!(
+        events(&before_landing, "reset_window_pos").is_empty()
+            && events(&before_landing, "reset_window_pos_held").len() == 1,
+        "窓の大きさが着地する前に並べ直しが当たった: {before_landing:?}"
+    );
+    assert_eq!(
+        events(&landed, "reset_window_pos").len(),
+        2,
+        "着地した巡に並べ直しが当たらない: {landed:?}"
+    );
+    assert!(wiring.move_held.borrow().is_empty(), "預かりが残った");
+}
+
+/// 窓の大きさが着地するまで `\![move]` は預かられ、着地した巡のその相で当たる。
+#[test]
+fn a_move_waits_for_the_window_size_to_land() {
+    let (mut harness, tx, wiring) = settled_rig();
+    let before0 = x_of(&harness, 0);
+    tx.send(to_global(0, 30)).expect("送出は成功する");
+    let held_round = drain(
+        &mut harness,
+        &wiring,
+        &SettledSource::new().shown(0, REAL[0]).shown(1, REAL[1]),
+    );
+    assert!(
+        events(&held_round, "move_ratio_unset").len() == 1 && x_of(&harness, 0) == before0,
+        "窓の大きさが着地する前に移動が当たった: {held_round:?}"
+    );
+    shown_before_landing(&mut harness, &wiring);
+    assert_eq!(x_of(&harness, 0), 30, "着地した巡に移動が当たらない");
+    assert!(wiring.move_held.borrow().is_empty(), "預かりが残った");
+}

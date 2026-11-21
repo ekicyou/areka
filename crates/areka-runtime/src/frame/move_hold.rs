@@ -40,10 +40,6 @@ pub trait ShownRatioSource {
     }
 
     /// 実際に表示した窓の物理寸（まだ表示していなければ `None`）。
-    #[cfg_attr(
-        not(any(test, feature = "test-support")),
-        expect(dead_code, reason = "窓の大きさの着地の判定が使い始めたら外す")
-    )]
     fn physical_size(&self, _scope: u32) -> Option<(u32, u32)> {
         None
     }
