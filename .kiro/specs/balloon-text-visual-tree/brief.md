@@ -98,3 +98,8 @@
 - **優先度の区分**: A（開発者 2026-11-14「本来、バルーンが使うはず。使ってないなら使うべきですね」）。版は v0.2.0。
 - **要件定義のモデル**: Opus（描画の木の使い方の前例は emo-present の `GraphicsCommandList`、節の下の持ち主の前例も wintf に入った。新しい境目や並行の保証は作らない）。
 - **分割の案**: 上限を越えるなら、箱の文字の面（`surface_window_child.rs`）と印の面（`marker_surface.rs`）を後の 1 本に切る（起票時のまま）。
+
+## 申し送り（balloon-flip-ssp-review より・2026-11-21）
+- **変わった事実**: バルーンの押し込みを押し込みだけにしたので、`crates/areka-placement/src/follow/other_chars.rs` から `shown_char_rects`・`is_shown`・定数 `TEXT_BOX_SURFACE_NAME` が外れた。同時に `follow_other_chars_tests.rs` の `shown_char_rects` の檻も外れた。名前 `emo-text-box-surface` を字で書く所は、いまは `crates/areka-emo-text/src/surface_window_child.rs` の 1 か所だけ。
+- **見直しの論点**: 96 行「配置とのつながり（まだ開いた穴）」の前提（3 か所に字で書いてある・置き場や名前を変えると表示している窓の判定が黙って変わる）は無くなった。配置の側はもうこの名前を読まないので、箱の文字の面の名前と置き場は、配置とのつながりを気にせずに要件で決めてよい。
+- **参照先**: `.kiro/specs/completed/balloon-flip-ssp-review/design.md` の Revalidation Triggers と決めごと D1・D6。

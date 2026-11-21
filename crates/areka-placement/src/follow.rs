@@ -38,7 +38,7 @@ mod keyword_base;
 mod move_shift;
 // バルーン位置オフセットの単位空間契約の定義元（areka-P0-balloon-offset-dpi・design C1）。
 mod offset_space;
-// 判定に入れるキャラ窓の矩形の列と、並べ直しの後の判定し直し（balloon-flip-side-rules・設計 OtherChars・RejudgeSystem）。
+// 並べ直しの後の判定し直し。
 mod other_chars;
 // 窓の組の連れ動き（areka-P0-window-link-directives・設計「sticky_follow」）。
 mod sticky_follow;
@@ -52,8 +52,8 @@ mod work_area_clamp;
 // （`window_move::enqueue_window_set_pos`）と解放時補正
 // （`balloon_drag::on_balloon_drag_end`）が消費する。
 use super::balloon_limit::{
-    BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT, BALLOON_LIMIT_RUNTIME_CONTEXT,
-    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonPlace, limit_correction, place_balloon_in_work_area,
+    BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_PUSHED_HOW, BALLOON_LIMIT_RELEASE_CONTEXT,
+    BALLOON_LIMIT_RUNTIME_CONTEXT, BALLOON_LIMIT_UNRESOLVED_TAG, limit_correction,
 };
 use super::diag::{self, DESPAWNED_SKIP_TAG, PlacementRoute, WindowKind, WindowMoveRecord};
 use super::persist::{
@@ -171,9 +171,7 @@ use self::visibility::{
 // 位置と大きさから窓の矩形を作る。crate 内の根の子（`balloon_limit`・`persist`・`reseed`）も使う。
 pub(crate) use self::visibility::rect_at;
 use self::window_move::enqueue_window_set_pos;
-// 書き込みの関門が判定へ渡す、表示しているキャラ窓の矩形の列。
-use self::other_chars::shown_char_rects;
-// 起動の並べ直しの後の判定し直し（設計 RejudgeSystem）。登録の口の呼び手は `ghost_session::register_systems`、
+// 起動の並べ直しの後の判定し直し。登録の口の呼び手は `ghost_session::register_systems`、
 // 判定し直しの関数の呼び手は `reset_pos`・`chain_realign`（書き込みの後）。
 pub use self::other_chars::register_balloon_rejudge;
 pub(crate) use self::other_chars::rejudge_all_balloons;

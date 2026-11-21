@@ -43,9 +43,7 @@ const RUNTIME_CONTEXT: &str = "runtime-gate";
 
 /// [`base_world`] のキャラ窓を下辺から 8px はみ出させた World（縦 600 → 640・下端 1051 > 1043）。
 ///
-/// 押し込みを主張する檻の前提合わせ（window-work-area-clamp task 5.2）: キャラ窓が収まって
-/// いてバルーンだけが横にはみ出すと反対の側へ並べ替える（`window-work-area-clamp` 要件 5.3）ため、キャラ窓を
-/// はみ出させて今の押し込みの経路を通す（`window-work-area-clamp` 要件 5.6）。中心は域内に残るので帰属は正常腕のまま。
+/// 中心は域内に残るので帰属は正常腕のまま。
 fn char_overflowing_world(balloon_limit: bool) -> (World, Entity, Entity) {
     let mut placement = base_placement(balloon_limit);
     placement.char_size.h = 640;

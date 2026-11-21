@@ -105,12 +105,10 @@ fn nothing_is_recorded_while_unarmed() {
     assert_eq!(recorded(&world), None);
 }
 
-/// balloon-flip-side-rules 要件 2.10: 詰め直しは本体（scope 1）を先に書くので、本体のバルーンは
-/// 相方（scope 2）がまだ遠くにいるうちに右の外から左（1200〜1500 × 500〜700）へ並べ替わる。
-/// 相方がその映した先に重なる位置（1300）へ付け直された後、全スコープを書き終えたところで
-/// 判定し直し、本体のバルーンを押し込みの位置（作業領域の右端の内側）に書く。
+/// 詰め直したあとも、本体のバルーンは押し込みの位置（作業領域の右端の内側）のまま。判定し直したか
+/// どうかはここでは見ない（系の檻が見る）。
 #[test]
-fn realign_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target() {
+fn realign_keeps_the_balloon_at_the_push_position_after_repacking() {
     use wintf::ecs::{Visual, WindowPos};
 
     use crate::chain_finalize::{ChainRect, ScopeChainState};
@@ -195,14 +193,10 @@ fn realign_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target()
         (p.x, p.y)
     };
     assert_eq!(pos(chars[1]), (1500, 500), "本体は鎖の頭の左へ付け直す");
-    assert_eq!(
-        pos(chars[2]),
-        (1300, 500),
-        "相方は本体の映した先に重なる位置へ"
-    );
+    assert_eq!(pos(chars[2]), (1300, 500), "相方は本体の左へ付け直す");
     assert_eq!(
         pos(gw.balloon_window(1).unwrap()),
         (1920 - 300, 500),
-        "本体のバルーンは押し込みの位置（並べ替えた位置 1200 のままにしない）"
+        "本体のバルーンは押し込みの位置"
     );
 }
