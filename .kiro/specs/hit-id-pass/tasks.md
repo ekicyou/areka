@@ -289,3 +289,5 @@
 - 6.4 の後: `crates/areka/examples/emo-present.rs` 104 行の `//!` に `hit_region`（native px）の文が残る。9.2 は `crates/areka/` の差分を禁じるので直さず、9.2 の検索では既知の残りとして扱う
 - 6.4 の後: 台帳 `doc/ukadoc-coverage/ledger/assets.toml` 7039 行あたりに「まだ働かない形」「ID の描き先に塗るのは `hit-id-pass`」の文が残る。8.1 で書き直す
 - 7.1 の後: 書き込みの道具が文字列の `\n` を生の改行に化かすことがある。テストのシェルの文字列を書いたら、python でバイトを読んで確かめる
+- 完了時にその場で解決: `presenter/hit.rs` の `ClientHit` の説明文から設計の文書を指す文言を外した
+- 完了時にその場で解決: `crates/areka/examples/emo-present.rs` 104 行の native px の当たり判定の文を `hit_region_client` の入口へ書き直した
