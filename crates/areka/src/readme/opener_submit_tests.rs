@@ -20,7 +20,7 @@ use super::{OpenJob, Opener, submit};
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::log_history::TARGET_ERROR;
+use crate::session::log_history::TARGET_ERROR;
 
 fn dest(url: &str) -> Destination {
     classify(JUMP_TAG_CARRIER, &[url])

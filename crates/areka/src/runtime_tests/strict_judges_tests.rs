@@ -30,8 +30,8 @@ mod doc_tables {
     use bevy_ecs::world::World;
     use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 
-    use crate::log_history::{FieldText, Kind, TARGET_ERROR, draft};
     use crate::mcp::check_script_judge::diagnose;
+    use crate::session::log_history::{FieldText, Kind, TARGET_ERROR, draft};
     // この中の汲み尽くしは背骨の足場（`spine.rs`）のものを使う。
     use crate::runtime_tests::spine::pump_until_idle;
     use areka_runtime::consumer_ledger::ConsumerLedger;

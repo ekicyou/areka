@@ -19,7 +19,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 名前の置き換えだけで形は設計が与える_
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 9.3_
 
-- [ ] 3. 葉のモジュールを集める（段 2）
+- [x] 3. 葉のモジュールを集める（段 2）
 - [x] 3.1 `alert`・`exit_wait`・`write_failure` を `session/` へ移す
   - 本番とテストを `git mv` で `crates/areka/src/session/` へ移し、`session/mod.rs` に `pub(crate) mod` を足し、`main.rs` の宣言と、その上の説明を `session/mod.rs` の宣言の上へ移す
   - 呼び手の `crate::<名>` を `crate::session::<名>` へ、`use crate::{a, b};` の束は集めた名前を `crate::session::{…}` の束へ分ける
@@ -35,7 +35,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: standard — 絞り込みの書き方と空振りの守りを実物に合わせて組む_
   - _Requirements: 1.1, 1.2, 1.6, 6.1, 6.2_
 
-- [ ] 3.3 `log_history` を移す
+- [x] 3.3 `log_history` を移す
   - 本番とテスト（`log_history_tests.rs`・`log_history_convention_tests.rs` ほか）を `git mv` で移し、宣言と呼び手（`main.rs` の `init` の呼び出しほか）を直す
   - `RULES` の行はここでは変えない（`RULES` に当たるモジュールは後の段で移り、その段で付け替える）。表の守りの探し方（`locate`）は変えない
   - 3.1 で移した `alert` の直書き `"areka::alert"`（`log_history_tests.rs:125`・`log_history_convention_tests.rs:156`・`:185`・`:192`）を `"areka::session::alert"` にし、`log-convention.md` の表に同じ行があれば合わせる（散文の `:135` は 8.2）（どちらも残さない種別なので赤にはならないが、9.2 の式 4 の 0 件を段の中で満たす）
@@ -179,3 +179,4 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
 
 - 1.1: 名前の多重集合は doctest の名前を `(line N)` 付きで持つ（66 件）。doctest のあるファイルの行がずれると、最後の比べで行番号の差として出る（テストが消えたのではない）。
 - 3.1: `"areka::alert"` の文字列（log_history の 2 本のテスト）は 3.1 で直し済み。3.3 では二度直さない。
+- 3.3: 宣言を移すとき、元に doc が無い宣言へ新しい doc を書くなら、モジュールの `//!` の 1 行目と同じにする（中身を言い換えると取り違える）。

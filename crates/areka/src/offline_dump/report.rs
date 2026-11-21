@@ -4,7 +4,7 @@ use std::path::Path;
 
 use tracing::Level;
 
-use crate::log_history::CapturedRecord;
+use crate::session::log_history::CapturedRecord;
 
 /// 写しが空なら 0・warn だけなら 1・error があれば 2。CSV の有無に関わらない。
 pub(crate) fn exit_code(records: &[CapturedRecord]) -> i32 {

@@ -30,7 +30,7 @@ pub(super) fn strict_note(since_id: u64) -> String {
 
 /// strict 真のときだけ、送る前の最後の通し番号を読む（後に読むとその台本の記録より後になりうる）。
 pub(super) fn since_id_if_strict(strict: Option<bool>) -> Option<u64> {
-    (strict == Some(true)).then(crate::log_history::last_id)
+    (strict == Some(true)).then(crate::session::log_history::last_id)
 }
 
 /// 宛先の kanade の送り口と、答える前に降りたときの文言。

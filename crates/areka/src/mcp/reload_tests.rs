@@ -15,7 +15,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
-use crate::log_history::TARGET_ERROR;
+use crate::session::log_history::TARGET_ERROR;
 
 fn ghost() -> ActiveGhost {
     ActiveGhost {

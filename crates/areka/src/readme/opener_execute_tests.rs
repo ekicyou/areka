@@ -12,7 +12,7 @@ use temp_path_kit::TempPath;
 use super::super::destination::{Destination, classify};
 use super::super::opener_test_support::{FakeOs, build_ghost_root};
 use super::{OpenContext, OpenJob, execute, serve};
-use crate::log_history::{Draft, FieldText, Kind, TARGET_ERROR, draft};
+use crate::session::log_history::{Draft, FieldText, Kind, TARGET_ERROR, draft};
 
 /// 一時フォルダの最小のゴースト（`ghost/master/readme.txt` を置く）と、その文脈。
 struct Fixture {

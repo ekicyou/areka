@@ -13,7 +13,7 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use super::offline_dump_test_support::{self as fixture, ShellSpec};
 use super::{read_scope, run};
 use crate::cli::OfflineDumpRequest;
-use crate::log_history::capture_tests::hold;
+use crate::session::log_history::capture_tests::hold;
 
 fn com_init() {
     // SAFETY: テストスレッドごとの COM 初期化。結果は既初期化でも続けてよいので捨てる。

@@ -58,7 +58,6 @@ mod session;
 
 /// 終了の統合操作。全窓を閉じてから終了を指示する `quit_app` と出所の語彙 `ExitOrigin` を持つ。
 mod app_exit;
-mod log_history;
 mod mcp;
 mod menu;
 /// 乗算済み BGRA → 透過 PNG（MCP とオフラインの書き出しが共有）。
@@ -146,7 +145,7 @@ mod scope_bind_fixture_test_support;
 // ---------------------------------------------------------------------------
 
 fn main() -> Result<()> {
-    use session::{alert, exit_wait, readonly, write_failure};
+    use session::{alert, exit_wait, log_history, readonly, write_failure};
     human_panic::setup_panic!();
 
     // RUST_LOG が未設定・非UTF-8・不正な構文なら "info" へフォールバックする（panic 経路なし）。
