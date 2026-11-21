@@ -54,7 +54,7 @@
 #### Acceptance Criteria
 
 1. The 落ちの報告 shall 例外の受け手・プロセスの寿命の MTA の据え付け・報告の行の組み立てと書き出しの本体を、ワークスペースの中に 1 か所だけ持つ（wintf・areka-placement・areka-runtime に自分の写しが残らない）
-2. The 落ちの報告の置き場 shall ワークスペースの中のどの crate にも依存しない（wintf が上位の crate に依存しない向きを壊さない）
+2. The 落ちの報告の置き場 shall 本番の依存（`[dependencies]`）にワークスペースの中の crate を持たない（wintf が上位の crate に依存しない向きを壊さない）
 3. Where 落ちの報告の置き場が既にほかの目的で使われている crate であるとき, the 落ちの報告の置き場 shall 落ちの報告を使わない使い手に、落ちの報告のための依存（Win32 の関数を呼ぶ crate）を新しく引かせない
 4. The 落ちの報告の置き場 shall ワークスペースの外の crate を新しく増やさない（`THIRD-PARTY-NOTICES.md` が変わらない）
 5. The 落ちの報告の置き場 shall windows-rs の API の数え（`q9-api-count`）がテストの道具に数える所である（本番の数が変わらない）
@@ -107,7 +107,7 @@
 
 #### Acceptance Criteria
 
-1. The 落ちの報告を据える各テストの実行ファイル（wintf・areka-placement・areka-runtime・areka-input・本体） shall 受け手がテストより先に据わっていることを確かめるテストを 1 本ずつ持つ
+1. The 落ちの報告を据える各テストの実行ファイル（wintf・areka-placement・areka-runtime・areka-input・本体と、まとめた本体の crate 自身） shall 受け手がテストより先に据わっていることを確かめるテストを 1 本ずつ持つ
 2. The まとめた本体のテスト shall プロセスの寿命の MTA が立っていること（COM を初期化していない新しいスレッドが暗黙の MTA に居る）を確かめる
 3. The まとめた本体のテスト shall 最初の受け手が書くのはアクセス違反だけであること（`OutputDebugString` の例外・C++ の例外は書かない）を確かめる
 4. The まとめた本体のテスト shall 1 行の溜めが短い行をそのまま改行つきで出し、長い行を字の境目で切って印を付けること（上限を越えない・切った後の書き足しを捨てる）を確かめる
@@ -121,7 +121,7 @@
 #### Acceptance Criteria
 
 1. The `crates/areka-placement/src/follow_window_move_hold_watch_tests.rs` の檻 shall 本番の警告の文（`follow/window_move.rs` 649 行の「整合待ちの札がある窓へ窓書込が到達した」）が変わったら赤になる（手写しの文を、在ることを確かめずに使わない）（申し送りウ）
-2. The `areka-placement` の説明 shall `config.rs`（106〜109 行）・`follow/work_area.rs`（27・231 行）・`follow_visibility_balloon_wiring_tests.rs`（812・816 行）の古い道 `runtime::frame::…` と「本体の」を、今の置き場 `areka_runtime::frame::…` で書く（申し送りエ・名指された行の外は仮定 A6・議題 6）
+2. The `areka-placement` の説明 shall `config.rs`（106〜109 行）・`follow/work_area.rs`（27・231 行）・`follow_visibility_balloon_wiring_tests.rs`（812・816 行）の古い道（`runtime::frame::…`・`runtime::wire_runtime`・「本体の」）を、今在る項目を指す道で書く（例: `areka_runtime::wire_runtime`・メソッドは `RuntimeWiring::seed_zorder_descript_base`・本体のファイルは `crates/areka/src/ghost_session.rs`）（申し送りエ・名指された行の外は仮定 A6・議題 6）
 3. The `areka-placement` の `test_support::zorder_pair_deferred::code_only` と `areka-runtime` の `source_text_test_support::code_only` shall 定義を 1 つにし、今の呼び手（`areka-placement` の `spawn_zorder_chain_wiring_tests.rs` ほか・`areka-runtime` と本体のテスト）は今の道のまま、または付け替えた道で同じ働きを使える（申し送りオ）
 4. The `areka-placement` の `follow_window_move_diag_tests.rs` の `window_move_lines` shall `areka-runtime` からも引ける `areka-placement` のテストの支え（`test-support`）へ移る（申し送りカ・仮定 A4）
 5. The `crates/areka-placement/src/chain_rule_tests.rs` の 5 行目 shall World の要る行の置き場を、今の `crates/areka-runtime/src/frame_chain_rule_tests.rs` として書く
@@ -156,7 +156,7 @@
 要件の討議で決めるまでの仮置き。本文の「仮定 An」はここを指す。
 
 - **A1（置き場）**: 置き場は ⑴ `log-capture-kit` に新しいファイルとして入れ、`windows`（ワークスペースの依存・`Cargo.lock` に在る）を既定では引かない任意の依存で足す、と仮に置く（brief の推し）。要件 1 は ⑴ と ⑵（テスト専用の新しい leaf の crate）のどちらでも満たせる形で書いた。
-- **A2（許可の持ち手の表）**: 置き方は設計の段で決める（要件 3.5）。要件は結果（表は `areka-runtime` だけ・行の形は今と同じ）だけを決める。
+- **A2（許可の持ち手の表）**: 置き方は設計の段で決める（要件 3 の末尾の段落）。要件は結果（表は `areka-runtime` だけ・行の形は今と同じ）だけを決める。
 - **A3（`carrier_cue` の残り）**: 落ちの報告の置き場へは寄せない（範囲の外のまま）と置く。
 - **A4（申し送りカ）**: `areka-placement` の側の写しを `areka-placement` のテストの支えへ移すところまでを行い、`areka-runtime` の `frame_test_support.rs` の写しの付け替えは申し送る、と置く。
 - **A5（`areka-input` の使い手）**: 入口 `areka_runtime::crash_report_test_support::{install, installed}` の名と働きを保ち、`crates/areka-input/` に触らない、と置く。
