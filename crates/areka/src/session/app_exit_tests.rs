@@ -179,7 +179,7 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
 /// 終了要求が kanade へちょうど 1 件届き、窓は消えない（閉じるのは終了の握手の完了後）。
 /// 対照アーム: 送り口の無い World（kanade 未結線の起動）では窓を閉じて終了を指示する。
 ///
-/// 送り口は `pub(crate)` の構築関数でここに直接組む（`input_events_tests.rs` の
+/// 送り口は `pub(crate)` の構築関数でここに直接組む（`runtime_tests/frame/window_state_tests.rs` の
 /// `world_with_wiring` は私有で流用できない）。当たり判定は受け手が読まないので代役で足りる。
 #[test]
 fn ghost_os_close_sends_close_request_with_the_window_scope() {
