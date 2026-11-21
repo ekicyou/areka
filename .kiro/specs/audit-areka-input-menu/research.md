@@ -295,3 +295,45 @@
 - `run_balloon_visibility_phase` を装着前の `RuntimeWiring` で回したとき、空の World で何かを要求する道が在れば指摘 10 のテストが組めない。調べた範囲（取り出し・畳み込み・`notify_timeout`・`clear_hover_residency`・時刻の解決は資源が無ければ素通り）では要求は無い。組めなければ要件 7.4 の範囲で置く口が無いので、議題に戻す（design.md の OPEN QUESTION）。
 - 実 GPU のテストを 2 本足す（`GpuPermit` で順を取る既存の作法）。拡大率 2.0 で「割った点が行の外」になる原点の置き方は字の大きさに依るので、テストの中で前提を表明してから押す。
 - 寄せで記録の出所が変わる（表のとおり）。読み手は 0 だが、実機の確かめで出所まで読む手順が後から足されたら古びる。
+
+## 11. 預かった件の記録と申し送り（実装の記録・2026-11-21）
+
+### 11.1 預かった件 1〜11 の出どころと直した所（要件 5.12）
+
+直した所の短い名は枝 `claude/kiro-start-audit-areka-input-menu-9b6b7a` のコミット（`git log --oneline main..HEAD`）。かっこの中は作業の組（design.md「タスクの見込み」）。
+
+| 件 | 出どころ | 直した所 |
+|---|---|---|
+| 1 | `collisionex-regions` の申し送り・棚卸㊶の ⑵（`lib.rs` の「The Hand／collisionex は実装しない」） | `ac55db486`（4.1・G12）で `lib.rs` の右クリックメニューの説明を「本ハンドラでは扱わない（引き金は右ボタンの解放）」だけにした（指摘 35） |
+| 2 | `input-crate-split` の申し送り（本体の中にあった頃の書き方の説明） | `ac55db486`（4.1・G12）で `lib.rs`・`shell_box.rs`・`shell_box_handler.rs`・`balloon.rs` の説明を入力の crate の今の事実で書き直した（指摘 36・37） |
+| 3 | `input-crate-split` の申し送り（強制退避の枝へ落ちない側のテスト 3 本の「窓が消えて件数が落ちる」という説明） | `e4b2fbd2f`（2.2・G6）で件数の表明を「終わりの指示が立たない」の表明に替えて説明を今の事実に直した。残りの 1 本は `cf05898f3`（3.2・G9）で重なる本ごと消した（指摘 2・29・30） |
+| 4 | `input-crate-split` の申し送り（「強制退避は下の 2 本が持つ」） | `4d1077640`（4.2・G13）で、パスを書かずに「本体の強制退避のテストが見る」と指す形にした（指摘 39） |
+| 5 | `input-crate-split` の申し送り（`spawn_assembly_tests.rs` の「入力の側」の言い方） | `e0af18b87`（3.3・G10）でそのテストの大半を `areka-placement` へ移し、`4d1077640`（4.2・G13）で残りの説明を `crate::`・「この crate」の言い方にした（指摘 40）。今は `crates/areka-input/src/spawn_assembly_tests.rs` に旧い言い方は残っていない（grep で 0） |
+| 6 | `input-crate-split` の申し送り（`collision-probe.rs`・`setup.rs` の「`pub(crate)`・内部が `crate::` パスを使う」） | `5757e6f7f`（4.3・G14）で、理由を依存の向き（`areka-input` が `areka-runtime` に依存するので `areka-runtime` の example は使えない）に直した。範囲の外だが説明の文だけ（要件 7.4 の例外）（指摘 41） |
+| 7 | `input-crate-split` の申し送り（`cargo doc` の警告） | `ac55db486`（4.1・G12）で私有の項目へのリンク 18 件と解けないリンク 1 件（計 19 件）を名だけにするか doc を短くして 0 件にした（指摘 45） |
+| 8 | `input-crate-split` の申し送り（開けた項目を狭められるかの見直し） | 狭められる項目 0（開けた項目は全部、本体の本番か本体のテストに使い手あり）。ギャップ分析の 6 節 (4) の使い手の一覧のとおり。直す所は無く、この記録で閉じる |
+| 9 | C24 の約束 ⑶（`user_break.rs` の `crates/areka/src/readme.rs`・`crates/wintf/src/ecs/world/mod.rs` のパス） | `ac55db486`（4.1・G12）で、パスを書かずに関数の名か役目で指す形にした（指摘 37・38）。`crates/areka-input/src` に本体のファイルのパスは残っていない（grep で 0） |
+| 10 | `audit-areka-app` の brief の `audit-emo2-boot-frame` からの申し送りのサ・棚卸㊶（`choice_drain.rs` の `capture_logs` の写し） | `3d75ca4c2`（3.1・G8）で写しを `balloon_test_support.rs` の捕捉に替えた（指摘 24） |
+| 11 | `audit-areka-app` の brief の同じ申し送りのコ（`drag_test_support.rs` の `let _ = ….join();`） | `f40d1cb39`（1.6・G11）で `join_bounded`・`barrier_within(SPIN_WAIT)` で待つ形にし、書き手の panic と詰まりは `expect` でテストを落とす（指摘 34） |
+
+### 11.2 要件 1 のギャップ分析の結果
+
+- 範囲は `crates/areka-input/` の全部だけ。audit の作法から「最大 20 件」と「読まなかった所」を外してかけた（要件 1.1〜1.3）。結果は 1 節・4 節のとおり、指摘 77 件（必ず直す 0・直したほうがよい 52・できれば 25）。番号と 3 つの組は 4 節にそのまま残してある（要件 1.4）。
+- 預かった件と重なる指摘の番号は 5 節の表（要件 1.5）。ファイル数と行数の数え直しと行番号の当て直しは 2 節（要件 1.6・1.7）。
+
+### 11.3 裁定と数
+
+- 残すと裁定した指摘: 0 件。
+- 後の spec へ回した指摘: 0 件（範囲の外の持ち物のテストは、議題 3 の裁定で今回持ち主の crate へ移した＝3.3）。
+- 要件 2.2 の 3 種類（開発者の裁定に反する直し・わざと置いた先送りの印・SSP 互換や ukadoc の正典に関わる直し）に当たる指摘: 0 件。指摘 68 の `RegionSource::Mock` の `#[allow(dead_code)]` は先送りの印でないと判断して消した（議題 10）。
+- タスクの数: 18（1.1〜1.6・2.1〜2.4・3.1〜3.3・4.1〜4.3・5.1〜5.2）。20 を越えない（要件 2.6）。
+
+### 11.4 申し送り（要件 7.9〜7.11）
+
+| 相手 | 件 | 扱い |
+|---|---|---|
+| `audit-areka-app` | 本体 `crates/areka/src/app_exit_escape_tests.rs:73` の説明が、3.2（`cf05898f3`）で消した `handler_left_double_click_without_ctrl_does_not_despawn_and_sends` を名で指している。Ctrl なしの左ダブルクリックの送出は入力の crate の `handler_double_click_left_and_right_send`（`crates/areka-input/src/char_pointer_tests.rs`）が見ている | `audit-areka-app` の brief に件として書き足した。grep で 73 行の名指しを確かめた。設計の「並走の兄弟と申し送り」の 2 件のうちの 1 件目 |
+| `audit-areka-app` | 本体 `crates/areka/src/app_exit_tests.rs:182` の説明が「`input_events_tests.rs` の `world_with_wiring` は私有」と古い名で指している。ファイルは 4.3（`5757e6f7f`）で `char_pointer_tests.rs` へ名を変えた。「私有」の言い方も既に事実でない | `audit-areka-app` の brief に件として書き足した。grep で 182 行の名指しを確かめた。設計の 2 件のうちの 2 件目 |
+| `session-module-gather` | `doc/COMPAT_ARCHITECTURE.md:412` が旧名 `input_events_char_clamp_tests.rs`（と `input_events_` 始まりの旧名）を指している | 4.3 では直していない（11-21 時点で向こうが main に未着地で、そのセッションが §8 を書き換える途中）。新しいテストのファイル名（`char_pointer_tests.rs`・`char_pointer_menu_tests.rs`・`char_clamp_tests.rs`）は向こうのセッションへ知らせた。412 行の 1 語は、向こうの着地の後に向こうか持ち主が直す |
+
+`audit-areka-app` の brief は `completed/` の下でなく、`.kiro/specs/audit-areka-app/brief.md` に在ることを確かめてから書き足した（要件 7.10）。
