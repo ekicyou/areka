@@ -72,8 +72,8 @@ fn build_and_spawn(world: &mut World) {
     };
 
     // ⑤ マウス経路照合の観測シーム。`OnPointerPressed` は付けない（冒頭 doc「使い方」参照・2026-08-05 実機で
-    // ダブルクリックでは終了しないことを確認）。`attach_char_pointer_handlers` は `pub(crate)` かつ内部が
-    // `crate::` パスを使うため example から使えず、終了は `AREKA_APP_SMOKE_EXIT_MS` の有界 auto-exit のみ。
+    // ダブルクリックでは終了しないことを確認）。`attach_char_pointer_handlers` を持つ `areka-input` は
+    // `areka-runtime` に依存するので example から使えず、終了は `AREKA_APP_SMOKE_EXIT_MS` の有界 auto-exit のみ。
     world
         .entity_mut(char_window)
         .insert(OnPointerMoved(on_probe_pointer_moved));

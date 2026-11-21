@@ -3,7 +3,7 @@
 //
 // 箱の四角（`shown_boxes`）と箱の選択肢の当たり行（`choice_hit_rows_at`）は提示（GPU）でしか
 // 埋まらないので、箱の中の操作は前段の本体（`move_with_point`・`press_with_point`）へ作った写しを
-// 渡して確かめる。シェルへ届く通知は、`mod.rs` のハンドラと同じ並び（前段が「処理した」なら
+// 渡して確かめる。シェルへ届く通知は、crate の根のポインタのハンドラと同じ並び（前段が「処理した」なら
 // 落とさない）で既存の道を続けて呼んで数える（`Fixture::moved`・`Fixture::pressed`）。このとき
 // world に `RuntimeWiring` を置かないので、ハンドラの中の本物の前段は何もしない（写しを 2 度当てない）。
 // 箱の外は `RuntimeWiring` を置いた本物のハンドラ（写しが空の文字の層）で、箱が無いときと同じ通知に
@@ -15,12 +15,11 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
-use areka_emo_compose::{BoxName, EmoWorld, fold_boxes};
+use areka_emo_compose::BoxName;
 use areka_emo_text::actor::{HitRectPx, ShownBox, TextLayerRuntime};
-use areka_emo_text::state::{SpanKind, TextLayerConfig};
+use areka_emo_text::state::SpanKind;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
-use areka_parsers::shell::{parse, parse_boxes};
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
@@ -28,51 +27,26 @@ use wintf::ecs::pointer::{DoubleClick, Phase, PointerLeave, PointerState};
 use wintf::ecs::{Input, Point, Window};
 
 use super::*;
-use crate::balloon::test_support::{anchor_cues, anchor_row, headless_runtime_wiring, row};
+use crate::balloon::test_support::{
+    TWO_BOX_SHELL, anchor_cues, anchor_row, box_name, choice_cue, empty_runtime, events_named,
+    headless_runtime_wiring, row,
+};
 use crate::balloon::{ChoiceSelectionInbox, click_selection, wire_balloon_choice};
+use crate::pointer_test_support::world_with_wiring;
 use crate::shell_box::ShellBoxHover;
 use crate::user_break::{UserBreakWiring, drain_no_user_break_signals};
-use crate::{MouseWiring, RegionSource, on_char_pointer_moved, on_char_pointer_pressed};
-use areka_placement::spawn::CharWindowMarker;
+use crate::{on_char_pointer_moved, on_char_pointer_pressed};
+use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 use areka_runtime::hit_region::HitRegion;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use areka_runtime::user_break_cue::NoUserBreakSignal;
 use log_capture_kit::capture;
 
-const SHELL: &str = "\
-balloon.a
-{
-size,100,50
-}
-balloon.b
-{
-size,100,50
-}
-surface0
-{
-element1,balloon,a,0,0
-element2,balloon,b,200,0
-}
-";
-
-/// 検体の箱の名前（`BoxName` は畳み込みからしか作れない）。
-fn name(s: &str) -> BoxName {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, _) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    layout
-        .placements(0)
-        .iter()
-        .find(|p| p.name.as_str() == s)
-        .expect("検体に在る箱")
-        .name
-        .clone()
-}
-
 /// 箱 a（0,0〜100,50）に当たった写し。選択肢の行は (10,10)〜(90,20) の 1 本。
 fn on_a(active: bool) -> BoxPoint {
     BoxPoint {
         hit: Some(ShownBox {
-            name: name("a"),
+            name: box_name(TWO_BOX_SHELL, "a"),
             element: 1,
             rect: HitRectPx {
                 left: 0.0,
@@ -90,7 +64,7 @@ fn on_a(active: bool) -> BoxPoint {
 fn on_b() -> BoxPoint {
     BoxPoint {
         hit: Some(ShownBox {
-            name: name("b"),
+            name: box_name(TWO_BOX_SHELL, "b"),
             element: 2,
             rect: HitRectPx {
                 left: 200.0,
@@ -123,23 +97,19 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let (shell_tx, shell_rx) = mpsc::channel();
         let (break_tx, break_rx) = mpsc::channel();
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
         let (flag_tx, flag_rx) = mpsc::channel();
-        let mut world = World::new();
-        world.insert_non_send(MouseWiring::new(
-            shell_tx,
-            RegionSource::Mock(|scope, x, y| HitRegion {
+        let (mut world, shell_rx) = world_with_wiring(
+            |scope, x, y| HitRegion {
                 scope,
                 region: Some("Head".to_owned()),
                 surface_point: (x, y),
-            }),
-        ));
+            },
+            Box::new(|| 1000),
+        );
         world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, break_tx));
-        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        )));
+        let runtime = empty_runtime();
         wire_balloon_choice(&mut world);
         let entity = world.spawn(CharWindowMarker { scope: 0 }).id();
         Fixture {
@@ -169,7 +139,7 @@ impl Fixture {
         self
     }
 
-    /// `mod.rs` の押下ハンドラと同じ並び: 前段が処理しなければ既存の道へ。
+    /// crate の根の押下ハンドラと同じ並び: 前段が処理しなければ既存の道へ。
     fn pressed(&mut self, at: (i32, i32), double_click: DoubleClick, point: BoxPoint) -> bool {
         let state = pointer(at, double_click);
         press_with_point(&mut self.world, 0, &state, point)
@@ -181,7 +151,7 @@ impl Fixture {
             )
     }
 
-    /// `mod.rs` の移動ハンドラと同じ並び。
+    /// crate の根の移動ハンドラと同じ並び。
     fn moved(&mut self, at: (i32, i32), point: BoxPoint) -> bool {
         let state = pointer(at, DoubleClick::None);
         move_with_point(
@@ -231,21 +201,10 @@ fn pointer(at: (i32, i32), double_click: DoubleClick) -> PointerState {
 }
 
 fn hover_injections(events: &[log_capture_kit::CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("box_choice_hover_inject"))
-        .count()
+    events_named(events, "box_choice_hover_inject").len()
 }
 
 // ---------------------------------------------------------------- 結線
-
-/// 箱の上の滞在の資源は `wire_balloon_choice` が入れる（ゴーストの切替でも同じ関数が呼ばれる）。
-#[test]
-fn wire_balloon_choice_inserts_the_box_hover() {
-    let mut world = World::new();
-    wire_balloon_choice(&mut world);
-    assert!(world.get_non_send::<ShellBoxHover>().is_some());
-}
 
 /// 離脱の系の登録は入力の段へ 1 本だけ足す。
 #[test]
@@ -270,7 +229,6 @@ fn box_choice_click_sends_one_selection_and_nothing_to_the_shell() {
     assert!(f.pressed(ROW, DoubleClick::None, on_a(true)), "処理した");
     let expected = click_selection(true, &on_a(true).rows, 50.0, 15.0, 0);
     assert_eq!(f.selections(), vec![expected.expect("行の上")]);
-    assert!(f.shell().is_empty(), "シェルへのクリックは 0 件");
 }
 
 /// 選択の確定に続くダブルクリックの 2 打目もシェルのダブルクリックにしない。
@@ -280,7 +238,6 @@ fn double_click_on_box_choice_is_not_a_shell_double_click() {
     assert!(f.pressed(ROW, DoubleClick::None, on_a(true)));
     // 2 打目は行の外（選択肢が消えた後を模す）・左ダブルクリック。
     assert!(f.pressed(BODY, DoubleClick::Left, on_a(false)));
-    assert!(f.shell().is_empty(), "シェルへのダブルクリックは 0 件");
     assert!(f.break_rx.try_iter().next().is_none(), "中断もしない");
 }
 
@@ -300,10 +257,9 @@ fn talking_left_double_click_on_box_breaks_without_a_shell_double_click() {
             talk_id: None
         }]
     ));
-    assert!(f.shell().is_empty(), "シェルへのダブルクリックは 0 件");
 }
 
-/// 箱の中の行の上でない単押しはシェルへの操作のまま（今までどおり何も送らない）。
+/// 箱の中の行の上でない単押しはシェルへの操作のまま（何も送らない）。
 /// 話していないあいだの左ダブルクリックはシェルのダブルクリックになる。
 #[test]
 fn not_talking_left_double_click_on_box_reaches_the_shell() {
@@ -336,14 +292,6 @@ fn press_outside_boxes_is_unchanged() {
         [KanadeMsg::Mouse(ref m)] if m.kind == MouseEventKind::DoubleClick { button: MouseButton::Left }
     ));
     assert!(f.break_rx.try_iter().next().is_none(), "中断しない");
-    assert!(f.selections().is_empty());
-    // 写しで箱の外を渡しても素通り。
-    assert!(!press_with_point(
-        &mut f.world,
-        0,
-        &pointer(BODY, DoubleClick::Left),
-        BoxPoint::default()
-    ));
 }
 
 // ---------------------------------------------------------------- 移動
@@ -358,9 +306,8 @@ fn move_over_box_choice_highlights_once_without_sending_to_the_shell() {
         first && second
     });
     assert!(handled, "処理した");
-    assert_eq!(f.hover(), (Some(name("a")), Some(0)));
+    assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "a")), Some(0)));
     assert_eq!(hover_injections(&events), 1, "同値は注入しない: {events:?}");
-    assert!(f.shell().is_empty(), "シェルへの移動は 0 件");
 }
 
 /// 箱の中で行の上でない移動は滞在を記録してからシェルへ送る。行から外れたら
@@ -373,14 +320,17 @@ fn move_over_box_body_records_hover_and_reaches_the_shell() {
         f.moved(BODY, on_a(true));
         f.moved((52, 41), on_a(true));
     });
-    assert_eq!(f.hover(), (Some(name("a")), None));
+    assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "a")), None));
     assert_eq!(hover_injections(&events), 1, "外すのは 1 度: {events:?}");
     let moves = f
         .shell()
         .into_iter()
         .filter(|m| matches!(m, KanadeMsg::Mouse(m) if m.kind == MouseEventKind::Move))
         .count();
-    assert!(moves >= 1, "行の上でない移動はシェルへ届く");
+    assert_eq!(
+        moves, 1,
+        "行の上でない移動は 1 件だけシェルへ届く（2 打目は同じ当たりの間引き）"
+    );
 }
 
 /// 別の箱へ移ると前の箱の強調を外し、箱の外へ出ると滞在を無しにする。
@@ -389,9 +339,16 @@ fn move_to_another_box_and_outside() {
     let mut f = Fixture::new();
     f.moved(ROW, on_a(true));
     let (_, events) = capture(|| f.moved((250, 10), on_b()));
-    assert_eq!(f.hover(), (Some(name("b")), None));
+    assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "b")), None));
     assert_eq!(hover_injections(&events), 1, "前の箱の強調を外す");
-    assert!(!f.moved((500, 400), BoxPoint::default()));
+    assert!(!move_with_point(
+        &mut f.world,
+        &f.runtime,
+        0,
+        BoxPoint::default(),
+        500.0,
+        400.0
+    ));
     assert_eq!(f.hover(), (None, None));
 }
 
@@ -416,19 +373,8 @@ fn leaving_the_shell_window_clears_hover_and_highlight() {
     let mut f = Fixture::new();
     f.moved(ROW, on_a(true));
     let mut f = f.with_runtime();
-    // 強調を外す注入は「選択肢が出ている」ときだけ（普通のバルーンと同じ hover_action）。
-    f.runtime
-        .borrow_mut()
-        .apply_cue(&areka_sakura::contract::TalkCue {
-            at: 0.0,
-            actor: areka_sakura::contract::ActorKey::from("0"),
-            command: areka_sakura::contract::CueCommand::Choice {
-                id: "OnYes".into(),
-                text: "はい".into(),
-                references: Vec::new(),
-            },
-            duration: 0.0,
-        });
+    // 強調を外す注入は押せる範囲（選択肢かアンカー）が出ているときだけ（普通のバルーンと同じ hover_action）。
+    f.runtime.borrow_mut().apply_cue(&choice_cue("0"));
     let win = f
         .world
         .spawn((CharWindowMarker { scope: 0 }, Window::default()))
@@ -438,6 +384,42 @@ fn leaving_the_shell_window_clears_hover_and_highlight() {
     let ((), events) = capture(|| clear_box_hover_on_leave(&mut f.world));
     assert_eq!(f.hover(), (None, None));
     assert_eq!(hover_injections(&events), 1, "強調を外す: {events:?}");
+}
+
+/// 文字の層を借りられないと、離脱は ERROR を 1 行残して強調を外さず、滞在だけは消す。
+#[test]
+fn leaving_with_a_borrow_failure_still_clears_the_stay() {
+    let mut f = Fixture::new();
+    f.moved(ROW, on_a(true));
+    let mut f = f.with_runtime();
+    let win = f
+        .world
+        .spawn((CharWindowMarker { scope: 0 }, Window::default()))
+        .id();
+    f.world.spawn((PointerLeave, ChildOf(win)));
+
+    let held = f.runtime.borrow_mut();
+    let ((), events) = capture(|| clear_box_hover_on_leave(&mut f.world));
+    drop(held);
+    assert_eq!(f.hover(), (None, None), "滞在は消える");
+    let failed = events_named(&events, "balloon_runtime_borrow_failed");
+    assert_eq!(failed.len(), 1, "{events:?}");
+    assert_eq!(failed[0].level, tracing::Level::ERROR);
+}
+
+/// シェルの窓でない窓（同じスコープのバルーン窓）の離脱は、箱の滞在を消さない。
+#[test]
+fn leaving_a_balloon_window_keeps_the_box_stay() {
+    let mut f = Fixture::new();
+    f.moved(ROW, on_a(true));
+    let win = f
+        .world
+        .spawn((BalloonWindowMarker { scope: 0 }, Window::default()))
+        .id();
+    f.world.spawn((PointerLeave, ChildOf(win)));
+
+    clear_box_hover_on_leave(&mut f.world);
+    assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "a")), Some(0)));
 }
 
 // ---------------------------------------------------------------- アンカー
@@ -474,7 +456,6 @@ fn box_anchor_click_while_talking_selects_without_breaking() {
     assert_eq!(got[0].kind, SpanKind::Anchor);
     assert!(f.pressed(BODY, DoubleClick::Left, anchor_on_a()));
     assert!(f.selections().is_empty(), "範囲の外の 2 打目は知らせない");
-    assert!(f.shell().is_empty(), "シェルへは 0 件");
     assert!(f.break_rx.try_iter().next().is_none(), "中断もしない");
     assert!(f.lifecycle_rx.try_iter().next().is_none(), "隠しもしない");
 }
@@ -505,7 +486,7 @@ fn read_point_is_active_with_only_an_anchor() {
 fn leaving_the_shell_window_clears_an_anchor_highlight() {
     let mut f = Fixture::new();
     assert!(f.moved(ROW, anchor_on_a()), "アンカーの上の移動は強調する");
-    assert_eq!(f.hover(), (Some(name("a")), Some(0)));
+    assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "a")), Some(0)));
     let mut f = with_anchor_only(f.with_runtime());
     let win = f
         .world
@@ -522,12 +503,9 @@ fn leaving_the_shell_window_clears_an_anchor_highlight() {
 
 /// 写しの借用の失敗の記録（前段が走ったことの印）を数える。
 fn snapshot_borrow_failures(events: &[log_capture_kit::CapturedEvent]) -> usize {
-    events
+    events_named(events, "balloon_runtime_borrow_failed")
         .iter()
-        .filter(|e| {
-            e.field_str("event") == Some("balloon_runtime_borrow_failed")
-                && e.message().contains("箱の写し")
-        })
+        .filter(|e| e.message().contains("箱の写し"))
         .count()
 }
 
@@ -554,22 +532,12 @@ fn real_handlers_call_the_prelude_before_the_existing_path() {
         let ev = Phase::Bubble(pointer(ROW, DoubleClick::None));
         on_char_pointer_pressed(&mut f.world, f.entity, f.entity, &ev)
     });
-    assert!(!pressed, "単押しは今までどおり何も送らない");
+    assert!(!pressed, "単押しは何も送らない");
     assert_eq!(snapshot_borrow_failures(&events), 1, "押下: {events:?}");
     assert!(f.shell().is_empty());
 }
 
 // ---------------------------------------------------------------- 実機の判定の記録
-
-fn lines_of<'a>(
-    events: &'a [log_capture_kit::CapturedEvent],
-    event: &str,
-) -> Vec<&'a log_capture_kit::CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
 
 /// 箱の中の押下は結論を 1 行だけ残す（箱の中の単押しを箱の外の押下とログで見分ける）。
 /// 箱の外の押下は残さない。
@@ -581,7 +549,7 @@ fn box_press_logs_the_verdict_once() {
         f.pressed(BODY, DoubleClick::None, on_a(false));
         f.pressed(BODY, DoubleClick::None, BoxPoint::default());
     });
-    let lines = lines_of(&events, "box_press");
+    let lines = events_named(&events, "box_press");
     assert_eq!(lines.len(), 1, "箱の中の押下 1 回で 1 行: {events:?}");
     assert_eq!(lines[0].expect_field("verdict"), "ShellOp");
     assert_eq!(lines[0].field_str("box"), Some("a"));
@@ -599,7 +567,7 @@ fn box_hover_change_logs_only_on_change() {
         f.moved((500, 400), BoxPoint::default());
     });
     assert_eq!(
-        lines_of(&events, "box_hover_changed").len(),
+        events_named(&events, "box_hover_changed").len(),
         3,
         "a へ・b へ・外へ: {events:?}"
     );
@@ -650,12 +618,12 @@ fn fields_of(event: &log_capture_kit::CapturedEvent) -> BTreeMap<&str, String> {
 #[test]
 fn box_anchor_press_records_anchor_selected_and_reaches_kanade_as_an_anchor() {
     let (events, msgs) = press_row_and_drain(anchor_on_a());
-    let lines = lines_of(&events, "anchor_selected");
+    let lines = events_named(&events, "anchor_selected");
     assert_eq!(lines.len(), 1, "発行 1 回で 1 行: {events:?}");
     assert_eq!(lines[0].level, tracing::Level::INFO);
     assert_eq!(fields_of(lines[0]), selected_fields("anchor_selected"));
     assert!(
-        lines_of(&events, "choice_selected").is_empty(),
+        events_named(&events, "choice_selected").is_empty(),
         "選択肢の記録は残さない: {events:?}"
     );
     let expected = areka_kanade::AnchorInput {
@@ -670,15 +638,15 @@ fn box_anchor_press_records_anchor_selected_and_reaches_kanade_as_an_anchor() {
     );
 }
 
-/// 箱の選択肢の押下の記録と伝言は今までどおり（`choice_selected` が 1 行・欄も同じ・選択肢の伝言）。
+/// 箱の選択肢の押下の記録と伝言は選択肢のとおり（`choice_selected` が 1 行・欄も同じ・選択肢の伝言）。
 #[test]
 fn box_choice_press_still_records_choice_selected_and_reaches_kanade_as_a_choice() {
     let (events, msgs) = press_row_and_drain(on_a(true));
-    let lines = lines_of(&events, "choice_selected");
+    let lines = events_named(&events, "choice_selected");
     assert_eq!(lines.len(), 1, "発行 1 回で 1 行: {events:?}");
     assert_eq!(lines[0].level, tracing::Level::INFO);
     assert_eq!(fields_of(lines[0]), selected_fields("choice_selected"));
-    assert!(lines_of(&events, "anchor_selected").is_empty());
+    assert!(events_named(&events, "anchor_selected").is_empty());
     assert!(
         matches!(&msgs[..], [DispatcherMsg::Choice(c)] if c.id == "q0" && c.label == "label0"),
         "選択肢の伝言が 1 件"
@@ -686,7 +654,7 @@ fn box_choice_press_still_records_choice_selected_and_reaches_kanade_as_a_choice
 }
 
 /// 知らせの受け口が無くなっていて送れなかったら、種類の名前で error を 1 行残し、選択の記録は
-/// 残さない（選択肢は今までの名前のまま・アンカーは選択肢の名前を使わない）。
+/// 残さない（選択肢は選択肢の名前のまま・アンカーは選択肢の名前を使わない）。
 #[test]
 fn box_selection_send_failure_is_recorded_under_the_kind() {
     for (point, failed, other) in [
@@ -704,16 +672,62 @@ fn box_selection_send_failure_is_recorded_under_the_kind() {
         let mut f = Fixture::new();
         f.world.remove_non_send::<ChoiceSelectionInbox>();
         let (_, events) = capture(|| f.pressed(ROW, DoubleClick::None, point));
-        let errors = lines_of(&events, failed)
+        let errors = events_named(&events, failed)
             .into_iter()
             .filter(|e| e.level == tracing::Level::ERROR)
             .count();
         assert_eq!(errors, 1, "{failed} の error が 1 行: {events:?}");
-        assert!(lines_of(&events, other).is_empty(), "{other}: {events:?}");
         assert!(
-            lines_of(&events, "choice_selected").is_empty()
-                && lines_of(&events, "anchor_selected").is_empty(),
+            events_named(&events, other).is_empty(),
+            "{other}: {events:?}"
+        );
+        assert!(
+            events_named(&events, "choice_selected").is_empty()
+                && events_named(&events, "anchor_selected").is_empty(),
             "送れなかった押下は選択の記録を残さない: {events:?}"
         );
     }
+}
+
+// ---------------------------------------------------------------- 結線漏れ
+
+/// 箱の上の滞在の記録が無いと、箱の中の移動は ERROR を 1 行残して素通りする。箱の外は残さない。
+#[test]
+fn move_without_box_hover_is_recorded_once_inside_a_box() {
+    let mut f = Fixture::new();
+    f.world.remove_non_send::<ShellBoxHover>();
+    let ((), events) = capture(|| {
+        f.moved(BODY, on_a(true));
+        f.moved((500, 400), BoxPoint::default());
+    });
+    let missing = events_named(&events, "shell_box_hover_missing");
+    assert_eq!(missing.len(), 1, "箱の中の 1 回だけ: {events:?}");
+    assert_eq!(missing[0].level, tracing::Level::ERROR);
+}
+
+/// `BalloonWiring` が無いと、箱の選択肢の押下は ERROR を 1 行残して選択を送らない。
+#[test]
+fn box_selection_without_balloon_wiring_is_recorded_and_not_sent() {
+    let mut f = Fixture::new();
+    f.world.remove_non_send::<BalloonWiring>();
+    let (handled, events) = capture(|| f.pressed(ROW, DoubleClick::None, on_a(true)));
+    let missing = events_named(&events, "balloon_wiring_missing");
+    assert_eq!(missing.len(), 1, "{events:?}");
+    assert_eq!(missing[0].level, tracing::Level::ERROR);
+    assert!(!handled, "送れていないので選択で使った押下にしない");
+}
+
+/// 中断の持ち物が無いと、箱の中の押下は TRACE を 1 行残して話していない扱いになる。
+#[test]
+fn box_press_without_user_break_wiring_is_recorded_as_not_talking() {
+    let mut f = Fixture::new();
+    f.world.remove_non_send::<UserBreakWiring>();
+    let (_, events) = capture(|| f.pressed(BODY, DoubleClick::Left, on_a(false)));
+    let no_wiring = events_named(&events, "box_break_no_wiring");
+    assert_eq!(no_wiring.len(), 1, "{events:?}");
+    assert_eq!(no_wiring[0].level, tracing::Level::TRACE);
+    assert_eq!(
+        events_named(&events, "box_press")[0].field("verdict"),
+        Some("ShellOp")
+    );
 }

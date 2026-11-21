@@ -1,7 +1,7 @@
 //! 箱の上のポインタの判断。
 //!
 //! シェルの窓に届いた操作を、箱の選択肢・箱での中断・シェルへの操作に振り分ける判断を
-//! 純関数で置く。ハンドラ（`mod.rs` の `on_char_pointer_moved`・`on_char_pointer_pressed`）は
+//! 純関数で置く。ハンドラ（crate の根の `on_char_pointer_moved`・`on_char_pointer_pressed`）は
 //! 借用と送り出しだけを行い、判断はここへ書く。
 //!
 //! 座標はシェルの窓の物理 px のまま、`shown_boxes` の四角と `choice_hit_rows_at` の行
@@ -13,10 +13,8 @@ use wintf::ecs::pointer::DoubleClick;
 
 use super::balloon::{ChoiceSelection, click_selection, hit_choice_row};
 use areka_runtime::user_break_cue::NoUserBreakSignal;
-// 箱の滞在の型と整えは runtime の持ち物（可視性の相が読む）。呼び手とテストはここから引く。
+// 箱の滞在の型は runtime の持ち物（可視性の相が読む）。呼び手はここから引く。
 pub use areka_runtime::shell_box_hover::ShellBoxHover;
-#[cfg(test)]
-pub(crate) use areka_runtime::shell_box_hover::settle_box_hover;
 
 /// 届いた座標の下にある、文字の出ている箱を 1 つ選ぶ。
 ///

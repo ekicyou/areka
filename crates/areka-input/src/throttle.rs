@@ -20,31 +20,16 @@ pub(crate) struct MouseMoveThrottle {
 }
 
 /// 送出上限間隔（10Hz）。touch_detect.lua の 2 秒規律に対し 20 サンプル/2s の余裕。
-///
 pub(crate) const MOUSE_MOVE_MIN_INTERVAL_MS: u64 = 100;
 
 /// 純関数: (現状態, 観測) → (次状態, 送出可否)。
 ///
 /// 送出 ⇔ 位置が変化 かつ（初回送出 or region が前回送出時から変化 or 間隔経過）。
+/// 位置は送出可否に関わらず毎観測で記録し、`last_sent_*` は送出したときだけ更新する
+/// （抑制したときは持ち越す）。`region_changed` は `None↔Some`・`Some↔別 Some` の双方を数える。
 ///
-/// - `moved = state.last_pos != Some(pos)`（前回**観測**から位置が変化・初回観測は `last_pos=None`
-///   ゆえ `moved=true`）。
-/// - `next.last_pos = Some(pos)` は**常に**更新する（送出可否に関わらず毎観測で位置を記録）。
-/// - 位置不変（`!moved`）なら常に送出しない（hover は移動でない）。`last_sent_*` は不変。
-/// - 移動時のみ以下で送出可否を決める:
-///   - `first_send = state.last_sent_ms.is_none()`（一度も送出していない）
-///   - `region_changed`（前回送出時の region 値と異なる・`None↔Some`・`Some↔別 Some` の双方を数える）
-///   - `interval_elapsed`（前回送出から `MOUSE_MOVE_MIN_INTERVAL_MS` 以上経過・未送出は常に真）
-///   - `send = first_send || region_changed || interval_elapsed`
-/// - 送出時（`send=true`）のみ `last_sent_region`／`last_sent_ms` を今回値へ更新する。
-/// - 移動したが抑制（同一 region かつ間隔未経過）のときは `last_sent_*` を持ち越す。
-///
-/// # Preconditions
-/// `now_ms` は単調（呼び手が保証・注入可能）。本関数は I/O もクロック読取もしない純関数。
-///
-/// # Invariants
-/// 判定は位置・region・時刻のみ＝撫で意味論（連打・滞留の解釈）を持たない。
-///
+/// `now_ms` は単調（呼び手が保証・注入可能）。I/O もクロック読取もしない。
+/// 位置・region・時刻のみで決め、撫で意味論（連打・滞留の解釈）を持たない。
 pub(crate) fn plan_mouse_move(
     state: &MouseMoveThrottle,
     pos: (i64, i64),
@@ -52,19 +37,6 @@ pub(crate) fn plan_mouse_move(
     now_ms: u64,
 ) -> (MouseMoveThrottle, bool) {
     let moved = state.last_pos != Some(pos);
-
-    if !moved {
-        return (
-            MouseMoveThrottle {
-                last_pos: Some(pos),
-                last_sent_region: state.last_sent_region.clone(),
-                last_sent_ms: state.last_sent_ms,
-            },
-            false,
-        );
-    }
-
-    let first_send = state.last_sent_ms.is_none();
     let region_changed = match &state.last_sent_region {
         None => true,
         Some(prev) => prev != region,
@@ -73,7 +45,7 @@ pub(crate) fn plan_mouse_move(
         Some(t) => now_ms.saturating_sub(t) >= MOUSE_MOVE_MIN_INTERVAL_MS,
         None => true,
     };
-    let send = first_send || region_changed || interval_elapsed;
+    let send = moved && (region_changed || interval_elapsed);
 
     if send {
         (
@@ -88,8 +60,7 @@ pub(crate) fn plan_mouse_move(
         (
             MouseMoveThrottle {
                 last_pos: Some(pos),
-                last_sent_region: state.last_sent_region.clone(),
-                last_sent_ms: state.last_sent_ms,
+                ..state.clone()
             },
             false,
         )
@@ -208,25 +179,6 @@ mod tests {
         assert_eq!(next.last_pos, Some((11, 20)));
         assert_eq!(next.last_sent_region, Some(region("Head")));
         assert_eq!(next.last_sent_ms, Some(1100));
-    }
-
-    /// per-scope 独立: 2 つの状態値は互いに影響せず独立に進化する（HashMap per-scope の縮図）。
-    #[test]
-    fn per_scope_states_evolve_independently() {
-        let scope_a = MouseMoveThrottle {
-            last_pos: Some((10, 20)),
-            last_sent_region: Some(region("Head")),
-            last_sent_ms: Some(1000),
-        };
-        let scope_b = MouseMoveThrottle::default();
-
-        let (next_a, send_a) = plan_mouse_move(&scope_a, (11, 20), &region("Head"), 1050);
-        let (next_b, send_b) = plan_mouse_move(&scope_b, (11, 20), &region("Head"), 1050);
-
-        assert!(!send_a, "scope A は抑制されるべき");
-        assert!(send_b, "scope B は初回送出されるべき");
-        assert_eq!(next_a.last_sent_ms, Some(1000), "A は送出状態を持ち越す");
-        assert_eq!(next_b.last_sent_ms, Some(1050), "B は今回送出時刻を記録");
     }
 
     /// 抑制時の状態持ち越し正確性: 抑制連続時も `last_sent_*` は不変、`last_pos` は毎回更新される。

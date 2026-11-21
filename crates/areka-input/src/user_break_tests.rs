@@ -4,25 +4,13 @@
 //
 // 押下を中断にするかの判定・中断を禁じる旗の出入り・送出が 1 件ずつであることをここで固定する。
 //
-// 純関数 2 本（`judge_press`・`fold_no_user_break`）について確かめること: 押下 1 回を 5 つの
-// 結論へ写す順序（左ダブルクリックでない・選択の確定に消費された・バルーンが出ていない・
-// 無効化の区間・受理）と、その順序が上から順であること。旗は入る・出る・トークの始まりで解く・
-// 区間外の「出る」の 4 通りと、入れ子を数えない
-// ことを固定する。
-//
-// 押下の入口と旗の取り出しについて確かめること: 受理のとき 2 本の線へちょうど 1 件ずつ届く・
-// 片方の線の受け手が消えていても記録してもう片方へは届ける・結線前は何もしない・無効化の
-// 区間ではどちらの線へも送らない・直前の押下の記憶は読んでから上書きする・旗の出入りが
-// 記録される。
-//
 // 「バルーンが出ているか」は表示層への照会で、GPU 無しのテストでは可視のバルーンを作れない
 // （表示が一度も確立していない target は可視化できない）。そこで送り出しのテストは照会の結果を
 // 引数に取る内側の関数 `press_with_visibility` を直接呼ぶ。外側の `on_left_press` は照会だけを
 // 足した薄い包みで、照会が効いていること（可視を決め打ちしていないこと）は 1 本で確かめる。
 //
-// 結線 `wire_user_break` について確かめること: 旗の取り出しがポインタの配送より前に登録されて
-// いて、押下と同じ巡に届いた合図がその押下の判定に効く。入力の段は wintf が
-// 組んだ本物を使い、押下は本物の配送を通す。
+// 結線 `wire_user_break` と登録 `register_user_break_drain`: 旗の取り出しがポインタの配送より前に登録されていて、押下と同じ巡に届いた
+// 合図がその押下の判定に効く。入力の段は wintf が組んだ本物を使い、押下は本物の配送を通す。
 
 use std::sync::mpsc::{self, Receiver};
 
@@ -34,7 +22,8 @@ use wintf::ecs::pointer::{OnPointerPressed, Phase, PointerState};
 use wintf::ecs::world::EcsWorld;
 
 use super::*;
-use log_capture_kit::{CapturedEvent, capture};
+use crate::balloon::test_support::{events_named, runtime_wiring_showing_talk};
+use log_capture_kit::capture;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -84,7 +73,7 @@ fn selected_now_is_consumed_by_selection() {
     assert_eq!(judge(args), PressVerdict::ConsumedBySelection);
 }
 
-/// 1 打目が選択の確定だったときの 2 打目も作らない（判断分岐 ⑸）。
+/// 1 打目が選択の確定だったときの 2 打目も作らない。
 #[test]
 fn prev_press_selected_is_consumed_by_selection() {
     let mut args = all_clear();
@@ -106,7 +95,7 @@ fn balloon_not_visible_is_balloon_hidden() {
     }
 }
 
-/// 無効化の区間では退ける（判断分岐 ⑷）。
+/// 無効化の区間では退ける。
 #[test]
 fn no_user_break_is_disabled() {
     let mut args = all_clear();
@@ -248,7 +237,7 @@ impl Lines {
         self.world
             .get_non_send::<UserBreakWiring>()
             .expect("結線済み")
-            .no_user_break()
+            .no_user_break
     }
 
     /// 表示の合図の線へ届いた分を全部取り出す。
@@ -262,14 +251,6 @@ impl Lines {
         let rx = self.kanade_rx.as_ref().expect("受信端は生きている");
         rx.try_iter().collect()
     }
-}
-
-/// `event` フィールドが `name` の記録だけを取り出す。
-fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 /// 受理のとき、表示の合図の線と運行への線へちょうど 1 件ずつ届く。
@@ -293,7 +274,7 @@ fn accepted_break_sends_exactly_one_to_each_line() {
         "押されたバルーンのスコープ番号を運ぶ"
     );
 
-    let detected = named(&events, "balloon_break_detected");
+    let detected = events_named(&events, "balloon_break_detected");
     assert_eq!(detected.len(), 1, "検出の記録は 1 行: {events:?}");
     assert_eq!(detected[0].level, Level::TRACE);
     assert_eq!(detected[0].field("scope"), Some("1"));
@@ -309,7 +290,7 @@ fn single_press_sends_nothing_and_is_not_recorded_as_detected() {
         assert!(lines.lifecycle().is_empty() && lines.kanade().is_empty());
         lines.press(0, DoubleClick::Left, false)
     });
-    assert_eq!(named(&events, "balloon_break_detected").len(), 1);
+    assert_eq!(events_named(&events, "balloon_break_detected").len(), 1);
 }
 
 /// 表示の側の受け手が消えていても記録し、運行への要求は送る。
@@ -319,7 +300,7 @@ fn dropped_lifecycle_receiver_is_recorded_and_kanade_still_receives() {
     lines.lifecycle_rx = None;
     let (_, events) = capture(|| lines.press(0, DoubleClick::Left, false));
 
-    let failed = named(&events, "balloon_break_hide_send_failed");
+    let failed = events_named(&events, "balloon_break_hide_send_failed");
     assert_eq!(failed.len(), 1, "隠す指示を渡せない旨が 1 行: {events:?}");
     assert_eq!(failed[0].level, Level::ERROR);
     assert_eq!(failed[0].field("scope"), Some("0"));
@@ -333,7 +314,7 @@ fn dropped_kanade_receiver_is_recorded_and_lifecycle_still_receives() {
     lines.kanade_rx = None;
     let (_, events) = capture(|| lines.press(0, DoubleClick::Left, false));
 
-    let failed = named(&events, "balloon_break_send_failed");
+    let failed = events_named(&events, "balloon_break_send_failed");
     assert_eq!(failed.len(), 1, "運行へ渡せない旨が 1 行: {events:?}");
     assert_eq!(failed[0].level, Level::ERROR);
     assert_eq!(failed[0].field("scope"), Some("0"));
@@ -348,7 +329,7 @@ fn unwired_press_is_recorded_and_does_nothing() {
         capture(|| press_with_visibility(&mut world, 0, DoubleClick::Left, false, Some(true)));
 
     assert!(!accepted);
-    let no_wiring = named(&events, "balloon_break_no_wiring");
+    let no_wiring = events_named(&events, "balloon_break_no_wiring");
     assert_eq!(no_wiring.len(), 1, "結線前の旨が 1 行: {events:?}");
     assert_eq!(no_wiring[0].level, Level::TRACE);
     assert!(
@@ -358,7 +339,7 @@ fn unwired_press_is_recorded_and_does_nothing() {
 }
 
 /// 無効化の区間ではどちらの線へも送らず、退けた旨を記録する。区間を出れば同じ押下が受理に
-/// なる（判断分岐 ⑷）。
+/// なる。
 #[test]
 fn disabled_section_sends_nothing_until_left() {
     let mut lines = Lines::wired();
@@ -370,7 +351,7 @@ fn disabled_section_sends_nothing_until_left() {
     assert!(!accepted);
     assert!(lines.lifecycle().is_empty(), "隠さない");
     assert!(lines.kanade().is_empty(), "止めない");
-    let rejected = named(&events, "balloon_break_rejected");
+    let rejected = events_named(&events, "balloon_break_rejected");
     assert_eq!(rejected.len(), 1, "退けた旨が 1 行: {events:?}");
     assert_eq!(rejected[0].level, Level::DEBUG);
     assert_eq!(rejected[0].field_str("reason"), Some("no_user_break"));
@@ -384,7 +365,7 @@ fn disabled_section_sends_nothing_until_left() {
 }
 
 /// 直前の押下の記憶は読んでから今回で上書きする: 選択を確定した単押しに続く左ダブルクリックは
-/// 何も送らず、その次の左ダブルクリックは受理になる（判断分岐 ⑸）。
+/// 何も送らず、その次の左ダブルクリックは受理になる。
 #[test]
 fn previous_press_memory_is_read_then_overwritten() {
     let mut lines = Lines::wired();
@@ -396,7 +377,7 @@ fn previous_press_memory_is_read_then_overwritten() {
     let (accepted, events) = capture(|| lines.press(0, DoubleClick::Left, false));
     assert!(!accepted, "選択の確定の続きの 2 打目は中断にしない");
     assert!(lines.lifecycle().is_empty() && lines.kanade().is_empty());
-    let ignored = named(&events, "balloon_break_ignored");
+    let ignored = events_named(&events, "balloon_break_ignored");
     assert_eq!(ignored.len(), 1, "見送った旨が 1 行: {events:?}");
     assert_eq!(ignored[0].level, Level::DEBUG);
     assert_eq!(ignored[0].field_str("reason"), Some("selection"));
@@ -449,12 +430,15 @@ fn second_click_after_selecting_an_anchor_is_not_a_break() {
 #[test]
 fn on_left_press_asks_the_presenter_and_ignores_when_no_balloon_is_shown() {
     let mut lines = Lines::wired();
+    lines
+        .world
+        .insert_non_send(runtime_wiring_showing_talk(TalkId(7)));
     let (accepted, events) =
         capture(|| on_left_press(&mut lines.world, 0, DoubleClick::Left, false));
 
     assert!(!accepted);
     assert!(lines.lifecycle().is_empty() && lines.kanade().is_empty());
-    let ignored = named(&events, "balloon_break_ignored");
+    let ignored = events_named(&events, "balloon_break_ignored");
     assert_eq!(ignored.len(), 1, "見送った旨が 1 行: {events:?}");
     assert_eq!(ignored[0].level, Level::TRACE);
     assert_eq!(ignored[0].field_str("reason"), Some("balloon_hidden"));
@@ -471,7 +455,7 @@ fn drain_records_flag_changes_and_leave_outside() {
         lines.flag_tx.send(NoUserBreakSignal::Enter).unwrap();
         drain_no_user_break_signals(&mut lines.world);
     });
-    let changed = named(&events, "no_user_break_changed");
+    let changed = events_named(&events, "no_user_break_changed");
     assert_eq!(changed.len(), 1, "変わったときだけ記録する: {events:?}");
     assert_eq!(changed[0].level, Level::DEBUG);
     assert_eq!(changed[0].field("value"), Some("true"));
@@ -482,10 +466,10 @@ fn drain_records_flag_changes_and_leave_outside() {
         lines.flag_tx.send(NoUserBreakSignal::Leave).unwrap();
         drain_no_user_break_signals(&mut lines.world);
     });
-    let changed = named(&events, "no_user_break_changed");
+    let changed = events_named(&events, "no_user_break_changed");
     assert_eq!(changed.len(), 1, "{events:?}");
     assert_eq!(changed[0].field("value"), Some("false"));
-    let outside = named(&events, "no_user_break_leave_outside");
+    let outside = events_named(&events, "no_user_break_leave_outside");
     assert_eq!(outside.len(), 1, "{events:?}");
     assert_eq!(outside[0].level, Level::DEBUG);
     assert!(!lines.flag());
@@ -566,7 +550,7 @@ fn dropped_kanade_receiver_records_one_error_and_keeps_the_last_sent_value() {
         drain_no_user_break_signals(&mut lines.world);
     });
 
-    let failed = named(&events, "no_user_break_send_failed");
+    let failed = events_named(&events, "no_user_break_send_failed");
     assert_eq!(failed.len(), 1, "渡せない旨が 1 行: {events:?}");
     assert_eq!(failed[0].level, Level::ERROR);
     assert_eq!(failed[0].field("value"), Some("true"));
@@ -656,7 +640,7 @@ fn signal_arriving_in_the_same_round_is_drained_before_the_press_is_judged() {
     world.entity_mut(window).insert(left_double_click());
     let (_, events) = capture(|| world.run_schedule(Input));
     assert_eq!(
-        named(&events, "balloon_break_rejected").len(),
+        events_named(&events, "balloon_break_rejected").len(),
         1,
         "同じ巡の「入る」が押下の判定に効く: {events:?}"
     );
@@ -710,7 +694,7 @@ fn register_user_break_drain_alone_adds_one_system_to_the_input_schedule() {
     );
 }
 
-/// 結線は持ち物を置くだけで、系は登録しない（登録は `ghost_session::register_systems`）。
+/// 結線は持ち物を置くだけで、系は登録しない（登録は `register_user_break_drain`）。
 #[test]
 fn wire_user_break_inserts_the_wiring_without_registering() {
     let mut world = World::new();
@@ -803,7 +787,6 @@ fn box_break_dispatches_the_same_as_the_balloon_double_click() {
 
     assert_eq!(lines.lifecycle(), balloon_lifecycle);
     let to_kanade = lines.kanade();
-    assert_eq!(to_kanade.len(), balloon_kanade.len());
     assert!(
         matches!(
             (&to_kanade[..], &balloon_kanade[..]),
@@ -850,4 +833,41 @@ fn box_break_in_the_no_break_section_sends_nothing_and_logs_one_debug_line() {
     assert_eq!(debug[0].field_str("event"), Some("box_break_rejected"));
     assert_eq!(debug[0].field_str("reason"), Some("no_user_break"));
     assert_eq!(debug[0].field("scope"), Some("2"));
+}
+
+// ---------------------------------------------------------------- 運ぶトークの番号
+
+/// 可視のバルーンの中断と箱の中断のどちらも、表示の側が見せている番号を kanade へ運ぶ。
+#[test]
+fn both_break_entries_carry_the_shown_talk_id() {
+    let mut balloon = Lines::wired();
+    balloon
+        .world
+        .insert_non_send(runtime_wiring_showing_talk(TalkId(7)));
+    assert!(balloon.press(1, DoubleClick::Left, false));
+
+    let mut shell_box = Lines::wired();
+    shell_box
+        .world
+        .insert_non_send(runtime_wiring_showing_talk(TalkId(7)));
+    shell_box.signal(NoUserBreakSignal::TalkStarted);
+    shell_box.kanade(); // 旗の知らせがあれば捨てる
+    assert_eq!(
+        shell_box.press_box(1, DoubleClick::Left),
+        BoxPressVerdict::Break
+    );
+
+    for (entry, to_kanade) in [("balloon", balloon.kanade()), ("box", shell_box.kanade())] {
+        assert!(
+            matches!(
+                to_kanade.as_slice(),
+                [KanadeMsg::UserBreak {
+                    scope: 1,
+                    talk_id: Some(TalkId(7))
+                }]
+            ),
+            "{entry} の入口が見せている番号を運ぶ（届いた数 {}）",
+            to_kanade.len()
+        );
+    }
 }

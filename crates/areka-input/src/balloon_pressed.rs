@@ -15,46 +15,26 @@ use areka_placement::spawn::BalloonWindowMarker;
 use areka_runtime::frame::RuntimeWiring;
 
 use super::user_break::UserBreakWiring;
-use super::{BalloonWiring, click_selection, selection_events, settle_after_selection};
+use super::{BalloonWiring, click_selection, dispatch_selection};
 
 /// バルーン窓のポインタ押下ハンドラ（Bubble のみ処理・確定クリック発行）。
 ///
-/// wintf `PointerEventHandler` 署名（移動ハンドラの鏡写し）。**Bubble 相のみ処理し Tunnel は伝播続行の
-/// ため即 `false`**。**左シングルクリック限定**＝`state.left_down` のみを確定として扱い、選択の確定は
-/// `double_click` フィールドを見ない（DBLCLK 2 打目も独立 press として扱う）。`double_click` は
-/// 末尾で利用者の中断の入口 `fn on_left_press`（`user_break.rs`）へ渡すだけである。右・中ボタン down は
-/// 確定でないため `false` 素通し（wheel/keyboard は未対応）。
+/// Tunnel は伝播続行のため即 `false`。**左シングルクリック限定**＝`state.left_down` のみを確定として扱い、
+/// 選択の確定は `double_click` を見ない（DBLCLK 2 打目も独立 press として扱う）。`double_click` は
+/// 末尾で利用者の中断の入口 `on_left_press` へ渡すだけである。右・中ボタン down は `false` 素通し。
+/// 単一クリックの二重発行は wintf dispatch のエッジ検出（dispatch 後 `left_down` クリア）が防ぎ、
+/// 本ハンドラは 1 dispatch＝高々 1 send を守る。
 ///
-/// 単一クリック二重発行は wintf dispatch のエッジ検出（dispatch 後 `left_down` クリア）が構造的に防止し、
-/// 本ハンドラは 1 dispatch＝高々 1 send を守る（`Some` 選択 1 つにつき `send_selection` を高々 1 回）。
+/// 借用の順は移動ハンドラと同じ（`RuntimeWiring` 共有借用で `Rc` を clone→world 側の借用を解放→runtime を
+/// 不変借用してスナップショット）。現行 rows のみを [`click_selection`] へ渡すことで stale 棄却が成立する。
+/// 棄却は `debug!(event = "choice_click_rejected", reason)`（`inactive`／`no_hit`）、選択は
+/// [`dispatch_selection`] で高々 1 回発行する。`RuntimeWiring` 不在は正常縮退（`debug!`＋no-op）、
+/// `BalloonWiring` 不在は結線漏れの `error!`＋no-op、`RefCell` の借用失敗も `error!`＋no-op（panic しない）。
+/// `resolve_choice` は本 crate から呼ばない（発行まで・カスケードは kanade 側）。
+/// 座標は窓 client 物理 px を**無変換**で照合する（理由は [`hit_choice_row`] の座標契約 doc）。
 ///
-/// **借用規律（移動ハンドラと固定同順）**:
-/// 1. `RuntimeWiring` 共有借用→`runtime()` で `Rc` clone→world 側借用解放。`RuntimeWiring` 不在（boot 前／失敗）は
-///    **正常縮退**＝`debug!(event = "choice_pressed_no_runtime")`＋no-op（donor presenter=None 同型）。
-/// 2. `BalloonWiring` 存在確認（共有借用即解放）。不在は結線漏れ＝**構成異常**
-///    `error!(event = "balloon_wiring_missing")`＋no-op。
-/// 3. runtime `try_borrow`（不変）でスナップショット——`hit_active`（押せる範囲＝選択肢かアンカーが
-///    あるか）＋**現行** `choice_hit_rows` を純関数
-///    [`click_selection`]へ渡し `Option<ChoiceSelection>` を得る（現行 rows のみ読むことで
-///    stale 棄却が成立）。`try_borrow` 失敗は構成異常
-///    `error!(event = "balloon_runtime_borrow_failed")`＋no-op。
-/// 4. `None`（非表示 or 非ヒット）→ `debug!(event = "choice_click_rejected", reason)`＋`false`（非発行・
-///    reason は `!active` なら `"inactive"`／それ以外は `"no_hit"`）。`Some(sel)` →
-///    `BalloonWiring::send_selection` で高々 1 回発行。成功時 `info!(event = "choice_selected", scope, id,
-///    label, references_len)` を **1 行**発火し `true`（実機サインオフのログ grep の対象）。送出失敗（受け口消滅）→
-///    `error!(event = "choice_selection_send_failed", scope, id)`＋`false`。当たった範囲がアンカーなら
-///    記録の名前だけが替わる（`anchor_selected`／`anchor_selection_send_failed`・欄は同じ・
-///    名前の表は [`selection_events`]）。送れた選択が選択肢なら、普通のバルーンの選択肢を済みにする
-///    （[`settle_after_selection`]・アンカーは済まない）。
-///
-/// `resolve_choice` は本 crate から呼ばない（発行まで・カスケードは kanade 側）。自前描画なし。
-/// `RefCell` は `try_borrow` のみ（panic しない）。座標は窓 client 物理 px を**無変換**で
-/// 照合する——行矩形が `to_window_physical` で既に実適用 k ×済みゆえ同一空間で一致する（k=1.0 だから
-/// ではない）。シェルの「点 ÷k」とは逆向きだが等価に正しく、本経路へ ÷k を足すと二重縮約になり正常
-/// 動作を壊す（詳細は [`hit_choice_row`] の座標契約 doc）。
-///
-/// **戻り値**: `ChoiceSelection` を発行したとき、または利用者の中断を受け入れたとき `true`
-/// （棄却・縮退・非左押下・Tunnel 時は `false`。途中の早期復帰では中断も作らない）。
+/// **戻り値**: 矢印の押下を取ったとき、`ChoiceSelection` を発行したとき、または利用者の中断を受け入れたとき `true`
+/// （縮退・非左押下・Tunnel 時は `false`・棄却は中断を受け入れなければ `false`。途中の早期復帰では中断も作らない）。
 ///
 /// [`attach_balloon_pointer_handlers`] が `BalloonWindowMarker` 窓へ `OnPointerPressed` として挿入する。
 pub(crate) fn on_balloon_pointer_pressed(
@@ -68,7 +48,6 @@ pub(crate) fn on_balloon_pointer_pressed(
         Phase::Bubble(s) => s,
     };
 
-    // 左シングルクリック限定。選択の確定は double_click を見ない（DBLCLK 2 打目も独立 press 扱い）。
     if !state.left_down {
         return false;
     }
@@ -140,7 +119,7 @@ pub(crate) fn on_balloon_pointer_pressed(
     };
 
     let selected_now = match selection {
-        // 非表示（active=false）or 非ヒット → 棄却（非発行）。理由を弁別して debug 発火。
+        // 押せる範囲が無い（active=false）か非ヒット → 棄却（非発行）。理由を弁別して debug 発火。
         None => {
             let reason = if !active { "inactive" } else { "no_hit" };
             tracing::debug!(
@@ -151,44 +130,14 @@ pub(crate) fn on_balloon_pointer_pressed(
             );
             false
         }
-        // ヒット確定: 高々 1 回だけ発行する（send_selection は 1 send・二重発行なし）。
-        Some(sel) => {
-            // info! 用の値を send 前に控える（send_selection が selection の所有権を消費するため）。
-            // 記録の名前は種類で決まる（選択肢は今までの名前・アンカーは anchor_ で始まる名前）。
-            let (selected, send_failed) = selection_events(sel.kind);
-            let kind = sel.kind;
-            let id = sel.id.clone();
-            let label = sel.label.clone();
-            let references_len = sel.references.len();
-            let sent = world
+        Some(sel) => dispatch_selection(
+            world
                 .get_non_send::<BalloonWiring>()
-                .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）")
-                .send_selection(sel);
-            if sent {
-                // 送れた選択が選択肢なら、普通のバルーンの選択肢を済みにする（アンカーは済まない）。
-                settle_after_selection(&runtime, &PlaceKey::balloon(&actor), kind);
-                // 実機サインオフ導線（ログ grep の対象）: 発行 1 回につき 1 行。
-                tracing::info!(
-                    event = selected,
-                    scope,
-                    id = %id,
-                    label = %label,
-                    references_len,
-                    "選択確定: ChoiceSelection を発行"
-                );
-                true
-            } else {
-                // 送出失敗（受け口消滅後の Sender エラー）は構成異常＝error!＋no-op 縮退
-                // （ログ grep の対象とは別導線）。
-                tracing::error!(
-                    event = send_failed,
-                    scope,
-                    id = %id,
-                    "ChoiceSelection 発行シンク送出失敗（受け口消滅後）: no-op 縮退"
-                );
-                false
-            }
-        }
+                .expect("BalloonWiring は直上で存在確認済み"),
+            Some(&runtime),
+            &PlaceKey::balloon(&actor),
+            sel,
+        ),
     };
 
     // 利用者の中断。選択を確定した押下とその続きは中断にしない。

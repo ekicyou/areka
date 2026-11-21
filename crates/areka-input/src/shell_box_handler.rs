@@ -1,6 +1,6 @@
 //! シェルの窓のハンドラの箱の前段。
 //!
-//! `mod.rs` の `on_char_pointer_moved`・`on_char_pointer_pressed` の先頭（強制退避の判定の後）から
+//! crate の根の `on_char_pointer_moved` の先頭と `on_char_pointer_pressed` の強制退避の判定の後から
 //! 呼ばれ、「処理した」（`true`）なら呼び手は既存の道へ落とさない。判断は `shell_box.rs` の純関数に
 //! あり、ここは借用と送り出しだけを行う（借用の順は `balloon_pressed.rs` と同じ: `RuntimeWiring` から
 //! 文字の層の `Rc` を複製して world の借用を解く → 文字の層の不変借用で写しを取って解く →
@@ -30,8 +30,8 @@ use wintf::ecs::pointer::{PointerLeave, PointerState, dispatch_pointer_events};
 use wintf::ecs::{Input, find_owner_window};
 
 use super::balloon::{
-    BalloonWiring, ChoiceSelection, HoverAction, finished_talking, hover_action, selection_events,
-    settle_after_selection,
+    BalloonWiring, ChoiceSelection, HoverAction, apply_hover, dispatch_selection, finished_talking,
+    hover_action,
 };
 use super::shell_box::{
     BoxMove, BoxPressVerdict, ShellBoxHover, box_under_point, judge_box_click, judge_box_move,
@@ -186,7 +186,6 @@ pub(super) fn move_with_point(
     }
 }
 
-/// 強調の決定を箱の場所へ当てる（`balloon_moved.rs` の適用と同じ腕）。
 fn apply_highlight(
     world: &mut World,
     runtime: &Rc<RefCell<TextLayerRuntime>>,
@@ -194,29 +193,8 @@ fn apply_highlight(
     name: &BoxName,
     action: HoverAction,
 ) {
-    let value = match action {
-        HoverAction::NoopInactive | HoverAction::Keep => return,
-        // 選択肢が消えた: 自前の記録だけ落とす（注入はしない・上流が正本）。
-        HoverAction::ResetOwnState => None,
-        HoverAction::Inject(value) => {
-            let Ok(mut rt) = runtime.try_borrow_mut() else {
-                tracing::error!(
-                    event = "balloon_runtime_borrow_failed",
-                    scope,
-                    "runtime try_borrow_mut 失敗（箱の強調）: no-op 縮退"
-                );
-                return;
-            };
-            rt.inject_choice_hover_at(&box_place(scope, name), value);
-            tracing::debug!(
-                event = "box_choice_hover_inject",
-                scope,
-                r#box = name.as_str(),
-                ordinal = ?value,
-                "箱の選択肢の強調を注入"
-            );
-            value
-        }
+    let Some(value) = apply_hover(runtime, &box_place(scope, name), scope, action) else {
+        return;
     };
     if let Some(mut hover) = world.get_non_send_mut::<ShellBoxHover>() {
         hover.set_injected(scope, value);
@@ -313,17 +291,9 @@ pub(super) fn press_with_point(
     verdict != BoxPressVerdict::ShellOp
 }
 
-/// 選択の確定を既存の送り口で送る（`balloon_pressed.rs` と同じ記録・箱の印つき）。送れたら `true`。
-/// 記録の名前は種類で決まる（選択肢は `choice_selected`・アンカーは `anchor_selected`）。
+/// 選択の確定を送る。`BalloonWiring` が無ければ記録して `false`。
 fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
-    let (selected, send_failed) = selection_events(sel.kind);
-    let kind = sel.kind;
-    let (scope, id, label, references_len) = (
-        sel.scope,
-        sel.id.clone(),
-        sel.label.clone(),
-        sel.references.len(),
-    );
+    let scope = sel.scope;
     let Some(wiring) = world.get_non_send::<BalloonWiring>() else {
         tracing::error!(
             event = "balloon_wiring_missing",
@@ -332,30 +302,12 @@ fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
         );
         return false;
     };
-    if wiring.send_selection(sel) {
-        // 送れた選択が選択肢なら、箱の選択肢を済みにする（アンカーは済まない）。
-        if let Some(runtime) = runtime_of(world) {
-            settle_after_selection(&runtime, &box_place(scope, &hit.name), kind);
-        }
-        tracing::info!(
-            event = selected,
-            scope,
-            id = %id,
-            label = %label,
-            references_len,
-            r#box = hit.name.as_str(),
-            "選択確定: ChoiceSelection を発行（箱）"
-        );
-        true
-    } else {
-        tracing::error!(
-            event = send_failed,
-            scope,
-            id = %id,
-            "ChoiceSelection 発行シンク送出失敗（受け口消滅後）: no-op 縮退"
-        );
-        false
-    }
+    dispatch_selection(
+        wiring,
+        runtime_of(world).as_ref(),
+        &box_place(scope, &hit.name),
+        sel,
+    )
 }
 
 /// シェルの窓から出たときの後始末（排他システム・`clear_balloon_hover_on_leave` の鏡写し）。
@@ -417,8 +369,8 @@ pub(crate) fn clear_box_hover_on_leave(world: &mut World) {
     }
 }
 
-/// [`clear_box_hover_on_leave`] を入力の段（`dispatch_pointer_events` の後）へ登録する。
-/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
+/// `clear_box_hover_on_leave` を入力の段（`dispatch_pointer_events` の後）へ登録する。
+/// 呼び手は本体の系の登録の口（プロセスに 1 回）。
 pub fn register_box_leave_system(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,

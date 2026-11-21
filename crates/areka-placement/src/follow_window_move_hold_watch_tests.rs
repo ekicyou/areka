@@ -149,7 +149,20 @@ fn the_explicit_script_move_reaches_a_waiting_window_without_tripping_the_watch(
 #[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]
 fn a_system_write_that_bypasses_its_deferral_still_trips_the_watch() {
     let (mut world, window) = held_world(true);
-    move_window_with_route(&mut world, window, 1301, 356, PlacementRoute::ChainRealign);
+    // `debug_assert!` の panic の前に、零件が数える `warn!` と同じ文が出ていることを数える。
+    let (written, events) = capture(|| {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            move_window_with_route(&mut world, window, 1301, 356, PlacementRoute::ChainRealign)
+        }))
+    });
+    assert_eq!(
+        warnings_containing(&events, INVARIANT_WARNING),
+        1,
+        "監視の警告の文が `INVARIANT_WARNING` と食い違っている: {events:?}"
+    );
+    if let Err(panic) = written {
+        std::panic::resume_unwind(panic);
+    }
 }
 
 /// 鳴る側が札の有無に関わらず常に落ちるわけではないことの対（札だけを外す）。

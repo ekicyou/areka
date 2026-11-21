@@ -190,7 +190,7 @@ fn is_intra_scope_pair(front: &GroupElement, back: &GroupElement) -> bool {
 }
 
 /// 望む鎖が前回と違っていれば受け口へ置き、印を立てる。
-/// 呼び手は本体の指令消化の相（`runtime::frame::zorder_drain`）と、実窓のテスト。
+/// 呼び手は指令消化の相（`areka_runtime::frame::zorder_drain`）と、実窓のテスト。
 ///
 /// # 同じ内容の巡では触れない
 ///

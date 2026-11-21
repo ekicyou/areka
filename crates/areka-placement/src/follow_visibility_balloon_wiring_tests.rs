@@ -809,11 +809,11 @@ fn both_windows_survive_a_single_write_onto_different_monitors() {
 /// **区分: 本檻は「寸法変化に対する不変」群である。拡大率遷移を一度も起こさないので、追随の証拠にはならない。**
 /// 本檻は `for dpi in DPIS` で**水準ごとに世界を組み直して** [`resize_window_to`] を直接呼ぶ
 /// だけであり、`DPI` を書き換えて `Changed<DPI>` のエッジを立てることは無い。追随の発火条件
-/// はそのエッジに限られる（本体の `runtime::frame::dpi` の相）ため、追随が入っても本檻には届かない
+/// はそのエッジに限られる（`areka_runtime::frame::dpi` の相）ため、追随が入っても本檻には届かない
 /// ——下の `stored_offset == offset`（窓相対契約＝リサイズで offset を補正しない）は追随の有無に
 /// よらず真のままである。
 ///
-/// 追随の適用（本体の `runtime::frame::balloon_offset_follow::rescale_balloon_follow_offset`
+/// 追随の適用（`areka_runtime::frame::balloon_offset_follow::rescale_balloon_follow_offset`
 /// の呼出）を外した走行でも、本件は**緑のまま**である（追随の檻は赤になる）。
 /// ゆえに**本件が緑であることを「追随を壊していない」の根拠に使ってはならない**。
 #[test]

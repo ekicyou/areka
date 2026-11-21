@@ -100,7 +100,7 @@ fn assert_both_paths_agree(template: &Template) {
         // 相方側の初期面（組み込みの既定の面＝10）。
         let measured10 = measured(builtin_default_surface(1), &mut composer);
 
-        // 表示経路（起動時の資産組立 `runtime::assets::build_shell_assets` が通る 2 段と同じ形）
+        // 表示経路（起動時の資産組立 `areka_runtime::assets::build_shell_assets` が通る 2 段と同じ形）
         let mut target = load_shell_target(&template.shell_dir, &decoder)
             .unwrap_or_else(|e| panic!("{}: 表示経路のシェル読み込みに失敗: {e}", template.name));
         let present_world = target.take_world();

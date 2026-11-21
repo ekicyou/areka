@@ -4,6 +4,8 @@
 //! 鍵（スコープ・当たり判定名・場面）→ 形の表と、ゴーストの差し替えにする純関数。記録はしない
 //! （報告を返し、記録は CursorAssets が読み込み 1 回につき 1 度残す）。ファイルの実在も見ない。
 
+use std::borrow::Borrow;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -44,6 +46,57 @@ pub enum Shape<F> {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CursorRows<F> {
     pub rows: BTreeMap<(u32, String, CursorScene), Shape<F>>,
+}
+
+impl<F> CursorRows<F> {
+    /// 鍵（スコープ・当たり判定名・場面）で行を引く。当たり判定名は借りたまま（複製しない）。
+    pub fn get(&self, scope: u32, region: &str, scene: CursorScene) -> Option<&Shape<F>> {
+        self.rows.get(&(scope, region, scene) as &dyn RowKey)
+    }
+}
+
+// `BTreeMap` の鍵 `(u32, String, _)` を `(u32, &str, _)` で引くための `dyn` の `Borrow`。
+// 比べる順は鍵のタプルの `Ord` と同じ（`String` と `str` の順は同じ）。
+trait RowKey {
+    fn parts(&self) -> (u32, &str, CursorScene);
+}
+
+impl RowKey for (u32, String, CursorScene) {
+    fn parts(&self) -> (u32, &str, CursorScene) {
+        (self.0, &self.1, self.2)
+    }
+}
+
+impl RowKey for (u32, &str, CursorScene) {
+    fn parts(&self) -> (u32, &str, CursorScene) {
+        *self
+    }
+}
+
+impl<'a> Borrow<dyn RowKey + 'a> for (u32, String, CursorScene) {
+    fn borrow(&self) -> &(dyn RowKey + 'a) {
+        self
+    }
+}
+
+impl PartialEq for dyn RowKey + '_ {
+    fn eq(&self, other: &Self) -> bool {
+        self.parts() == other.parts()
+    }
+}
+
+impl Eq for dyn RowKey + '_ {}
+
+impl PartialOrd for dyn RowKey + '_ {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for dyn RowKey + '_ {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.parts().cmp(&other.parts())
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

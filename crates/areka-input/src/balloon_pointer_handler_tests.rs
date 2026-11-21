@@ -1,110 +1,31 @@
 // -------------------------------------------------------------------------
-// on_balloon_pointer_moved 配線層檻
+// on_balloon_pointer_moved の配線
 //
-// 合成 `PointerState` を直接ハンドラへ与え、(a) Tunnel 素通し、(b) 資源不在の縮退経路を
-// 正しい**ログレベル**（RuntimeWiring 不在=debug／BalloonWiring 不在=error）で、(c) 適用アーム
-// （Inject／ResetOwnState／Noop）を実 `TextLayerRuntime` で決定的に檻へ入れる。判断分岐そのもの
-// （active×hit×last の全組合せ）は hover_action 純関数檻が網羅済み。
+// 合成 `PointerState` を直接ハンドラへ与え、(a) marker 不在の縮退を、(b) 適用アーム
+// （Inject／ResetOwnState／NoopInactive）を実 `TextLayerRuntime` で観測する。判断分岐そのもの
+// （active×hit×last の全組合せ）は `balloon_pure_core_tests.rs` の `hover_action` のテストが持つ。
 //
-// NOTE（runtime constructibility）: `choice_hit_rows` は `present_frame`（GPU）でしか
-// `choice_snapshot` を埋めないため、headless では現行 rows が常に空＝hit=None。ゆえに
-// 「Some(ordinal) ハイライト追従」は本層では実演できず hover_action 純関数檻と
-// pass-through 檻に委ねる。本檻はハンドラ経由の実注入として Inject(None) 遷移
-// （active かつ hit=None かつ last=Some → ハイライト解除注入）を観測する（inject_choice_hover を
-// 実 runtime へ実際に呼び、BalloonWiring.hover の更新と debug marker を固定する）。
+// `choice_hit_rows` は `present_frame`（GPU）でしか `choice_snapshot` を埋めないため、
+// headless では現行 rows が常に空＝hit=None。ゆえに「Some(ordinal) ハイライト追従」はここでは
+// 作れない（GPU を使う `balloon_gpu_hit_tests.rs` が見る）。ここはハンドラ経由の実注入として
+// Inject(None) 遷移（active かつ hit=None かつ last=Some → ハイライト解除注入）を観測する
+// （`apply_hover` が実 runtime へ注入し、BalloonWiring.hover の更新と debug marker を固定する）。
 // -------------------------------------------------------------------------
 
-use areka_runtime::balloon_hover::BalloonHover;
-use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
 
-use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::TextLayerConfig;
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::world::World;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{Phase, PointerState};
 
-use super::test_support::{capture_logs, headless_runtime_wiring, runtime_with_active_choice};
+use super::test_support::{
+    bubble_move, capture_logs, empty_runtime, headless_runtime_wiring, insert_wiring, left_press,
+    runtime_with_active_choice,
+};
 use super::*;
 use areka_placement::spawn::BalloonWindowMarker;
-
-/// Bubble 相の合成 `PointerState`（client 物理 px）を組む（moved ハンドラは double_click/ctrl 非参照）。
-fn bubble_move(x: i32, y: i32) -> Phase<PointerState> {
-    Phase::Bubble(PointerState {
-        client_point: Point { x, y },
-        ..Default::default()
-    })
-}
-
-/// Tunnel 素通し（donor 同型）: Tunnel 相は資源に一切触れず即 `false`（副作用なし）。
-#[test]
-fn moved_tunnel_phase_is_noop_false() {
-    let mut world = World::new();
-    let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    // 資源未挿入でも Tunnel は最初に短絡するため到達しない（副作用なしの担保）。
-    let tunnel = Phase::Tunnel(PointerState {
-        client_point: Point { x: 10, y: 20 },
-        ..Default::default()
-    });
-    assert!(
-        !on_balloon_pointer_moved(&mut world, e, e, &tunnel),
-        "Tunnel 相は即 false（伝播続行・非侵襲）"
-    );
-}
-
-/// RuntimeWiring 不在＝正常縮退（donor presenter=None 同型）: **DEBUG** レベルで no-op・`false`。
-#[test]
-fn moved_runtime_absent_degrades_with_debug_not_error() {
-    let mut world = World::new();
-    let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    let ev = bubble_move(10, 20);
-
-    let logs = capture_logs(|| {
-        assert!(
-            !on_balloon_pointer_moved(&mut world, e, e, &ev),
-            "RuntimeWiring 不在は no-op false"
-        );
-    });
-
-    assert!(
-        logs.iter()
-            .any(|l| l.contains("level=DEBUG") && l.contains("choice_moved_no_runtime")),
-        "RuntimeWiring 不在は DEBUG で正常縮退する（event=choice_moved_no_runtime）: {logs:?}"
-    );
-    assert!(
-        !logs.iter().any(|l| l.contains("level=ERROR")),
-        "RuntimeWiring 不在は構成異常ではない＝ERROR を出さない: {logs:?}"
-    );
-}
-
-/// BalloonWiring 不在＝構成異常（結線漏れ）: RuntimeWiring は present でも **ERROR** で no-op・`false`。
-/// （借用規律の固定順序＝RuntimeWiring→BalloonWiring ゆえ RuntimeWiring present が前提。）
-#[test]
-fn moved_balloon_wiring_absent_degrades_with_error() {
-    let mut world = World::new();
-    let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    // RuntimeWiring は present（空 runtime）・BalloonWiring は挿入しない。
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
-    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    let ev = bubble_move(10, 20);
-
-    let logs = capture_logs(|| {
-        assert!(
-            !on_balloon_pointer_moved(&mut world, e, e, &ev),
-            "BalloonWiring 不在は no-op false"
-        );
-    });
-
-    assert!(
-        logs.iter()
-            .any(|l| l.contains("level=ERROR") && l.contains("balloon_wiring_missing")),
-        "BalloonWiring 不在は ERROR の構成異常（event=balloon_wiring_missing）: {logs:?}"
-    );
-}
 
 /// BalloonWindowMarker 不在（理論上不到達の構成異常）: **ERROR** で no-op・`false`（silent 禁止）。
 #[test]
@@ -128,8 +49,8 @@ fn moved_missing_marker_errors_and_noop() {
 }
 
 /// hover 遷移注入（Inject アーム）: choice 表示中・現行 hit=None（headless snapshot 空）・
-/// 前回注入 Some(2) → `Inject(None)`。ハンドラが実 runtime へ `inject_choice_hover(actor, None)` を
-/// 呼び、自前状態 `BalloonWiring.hover[scope]` を None へ更新し、`choice_hover_inject` を DEBUG 発火する。
+/// 前回注入 Some(2) → `Inject(None)`。ハンドラが `apply_hover` で実 runtime へ `None` を
+/// 注入し、自前状態 `BalloonWiring.hover[scope]` を None へ更新し、`choice_hover_inject` を DEBUG 発火する。
 #[test]
 fn moved_active_choice_transition_injects_and_updates_own_state() {
     let mut world = World::new();
@@ -143,11 +64,11 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
 
     // 前回注入値 Some(2) を仕込む（遷移検出のため・現行 hit=None ゆえ Inject(None) へ遷移）。
-    let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
-    let mut bw = BalloonWiring::new(tx);
-    bw.set_hover(0, Some(2));
-    world.insert_non_send(bw);
-    world.insert_non_send(BalloonHover::default());
+    let _rx = insert_wiring(&mut world);
+    world
+        .get_non_send_mut::<BalloonWiring>()
+        .unwrap()
+        .set_hover(0, Some(2));
 
     let ev = bubble_move(10, 20);
     let logs = capture_logs(|| {
@@ -160,21 +81,16 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
     assert_eq!(
         world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
-        "Inject(None) 遷移で BalloonWiring.hover[scope] が None へ更新される（⑤）"
+        "Inject(None) 遷移で BalloonWiring.hover[scope] が None へ更新される"
     );
     assert!(
         logs.iter()
             .any(|l| l.contains("level=DEBUG") && l.contains("choice_hover_inject")),
-        "hover 遷移注入で choice_hover_inject を DEBUG 発火（DD-CI-7）: {logs:?}"
-    );
-    // 実 runtime へ inject 済みでも借用/poison を残さない（try_borrow_mut が成功する）。
-    assert!(
-        runtime.try_borrow_mut().is_ok(),
-        "inject 後も runtime に借用/poison を残さない"
+        "hover 遷移注入で choice_hover_inject を DEBUG 発火: {logs:?}"
     );
 }
 
-/// 消滅時整合（ResetOwnState アーム）: choice 非表示・前回注入 Some(3) → 自前状態のみ
+/// 消滅時整合（ResetOwnState アーム）: 押せる範囲が無い・前回注入 Some(3) → 自前状態のみ
 /// None 整合し、**inject はしない**（上流原子性が正本＝choice_hover_inject を発火しない）。
 #[test]
 fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
@@ -182,20 +98,18 @@ fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
     // 選択肢無しの runtime（choice_active=false）。
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
+    let runtime = empty_runtime();
     assert!(
         !runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=false（選択肢スパン無し）"
     );
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
 
-    let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
-    let mut bw = BalloonWiring::new(tx);
-    bw.set_hover(0, Some(3));
-    world.insert_non_send(bw);
-    world.insert_non_send(BalloonHover::default());
+    let _rx = insert_wiring(&mut world);
+    world
+        .get_non_send_mut::<BalloonWiring>()
+        .unwrap()
+        .set_hover(0, Some(3));
 
     let ev = bubble_move(10, 20);
     let logs = capture_logs(|| {
@@ -216,21 +130,16 @@ fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
     );
 }
 
-/// 完全 no-op（NoopInactive アーム）: choice 非表示・前回注入なし → 自前状態を触らず
-/// inject もしない（非表示中は hover 追従なし）。
+/// 完全 no-op（NoopInactive アーム）: 押せる範囲が無い・前回注入なし → inject しない。
 #[test]
 fn moved_inactive_no_prior_injection_is_full_noop() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
+    let runtime = empty_runtime();
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
 
-    let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
-    world.insert_non_send(BalloonWiring::new(tx)); // hover 空（未注入）
-    world.insert_non_send(BalloonHover::default());
+    let _rx = insert_wiring(&mut world); // hover 空（未注入）
 
     let ev = bubble_move(10, 20);
     let logs = capture_logs(|| {
@@ -240,11 +149,6 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
         );
     });
 
-    assert_eq!(
-        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
-        None,
-        "NoopInactive は自前状態を触らない（未注入のまま None）"
-    );
     assert!(
         !logs.iter().any(|l| l.contains("choice_hover_inject")),
         "NoopInactive は inject しない: {logs:?}"
@@ -252,57 +156,19 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
 }
 
 // -------------------------------------------------------------------------
-// on_balloon_pointer_pressed 配線層檻
+// on_balloon_pointer_pressed の配線
 //
-// 合成 `PointerState` を直接ハンドラへ与え、(a) Tunnel 素通し、(b) 非左押下（右/中 down）素通し、
-// (c) 資源不在の縮退経路を正しい**ログレベル**（RuntimeWiring 不在=debug／BalloonWiring 不在=error）で、
-// (d) 棄却経路（非表示=inactive／非ヒット=no_hit の reason 弁別・零 send）を実 `TextLayerRuntime` で
-// 決定的に檻へ入れる。確定発行のフィールド一致・stale 棄却は click_selection 純関数檻が
-// 網羅済み。
+// 合成 `PointerState` を直接ハンドラへ与え、(a) 非左押下（右 down）素通し、(b) marker 不在の縮退、
+// (c) 棄却経路（押せる範囲が無い=inactive／非ヒット=no_hit の reason 弁別）を実 `TextLayerRuntime` で
+// 観測する。確定発行のフィールド一致・消滅時の棄却は `balloon_pure_core_tests.rs` の
+// `click_selection` のテストが持つ。
 //
-// NOTE（runtime constructibility）: `choice_hit_rows` は `present_frame`（GPU）でしか
-// `choice_snapshot` を埋めないため headless では現行 rows が常に空＝hit=None。ゆえに
-// 「ヒット→send→choice_selected info」の full pass-through は本層では実演できず、
-// pass-through 檻へ委ねる。send 機構自体は `send_selection`／`ChoiceSelectionInbox` 檻で、
-// `Some` 構成は click_selection 檻で構造的に網羅済み。本檻はハンドラ経由の棄却・縮退・零 send を観測する。
+// `choice_hit_rows` は `present_frame`（GPU）でしか `choice_snapshot` を埋めないため
+// headless では現行 rows が常に空＝hit=None。ゆえに「ヒット→send→choice_selected info」は
+// ここでは作れない（GPU を使う `balloon_gpu_hit_tests.rs` が見る）。ここはハンドラ経由の棄却と縮退を、戻り値と記録で観測する。
 // -------------------------------------------------------------------------
 
-/// 左シングルクリックの合成 `PointerState`（client 物理 px・left_down=true）を組む。
-/// `double_click` フィールドは既定 `None` のまま——選択の確定は `double_click` を見ない。
-/// 押下ハンドラが `double_click` を読むのは、末尾で中断の入口へ渡すときだけである。
-fn bubble_left_press(x: i32, y: i32) -> Phase<PointerState> {
-    Phase::Bubble(PointerState {
-        client_point: Point { x, y },
-        left_down: true,
-        ..Default::default()
-    })
-}
-
-/// `BalloonWiring` と生存 `Receiver`（零 send 観測用）を組む。
-fn wiring_with_inbox() -> (BalloonWiring, Receiver<ChoiceSelection>) {
-    let (tx, rx) = mpsc::channel::<ChoiceSelection>();
-    (BalloonWiring::new(tx), rx)
-}
-
-/// Tunnel 素通し（donor 同型）: Tunnel 相は資源に一切触れず即 `false`（副作用なし・零 send）。
-#[test]
-fn pressed_tunnel_phase_is_noop_false() {
-    let mut world = World::new();
-    let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    // 資源未挿入でも Tunnel は最初に短絡するため到達しない（副作用なしの担保）。
-    let tunnel = Phase::Tunnel(PointerState {
-        client_point: Point { x: 10, y: 20 },
-        left_down: true,
-        ..Default::default()
-    });
-    assert!(
-        !on_balloon_pointer_pressed(&mut world, e, e, &tunnel),
-        "Tunnel 相は即 false（伝播続行・非侵襲）"
-    );
-}
-
-/// 非左押下は素通し: 右/中ボタン down（left_down=false）は確定でないため `false`・零 send。
-/// 左でない押下は `left_down` の分岐で先に戻るので、選択の確定にも中断の入口にも届かない。
+/// 非左押下は素通し: 右ボタン down（left_down=false）は確定でないため `false`・何も記録しない。
 #[test]
 fn pressed_non_left_button_is_noop_false() {
     let mut world = World::new();
@@ -311,9 +177,7 @@ fn pressed_non_left_button_is_noop_false() {
     // RuntimeWiring/BalloonWiring を present にしても、left_down=false なら手前で false 短絡する。
     let runtime = runtime_with_active_choice("0");
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    let (bw, rx) = wiring_with_inbox();
-    world.insert_non_send(bw);
-    world.insert_non_send(BalloonHover::default());
+    let _rx = insert_wiring(&mut world);
 
     // 右ボタン down（left_down=false）——確定ではない。
     let right = Phase::Bubble(PointerState {
@@ -330,63 +194,8 @@ fn pressed_non_left_button_is_noop_false() {
     });
 
     assert!(
-        rx.try_recv().is_err(),
-        "非左押下では send しない（Inbox は Empty）"
-    );
-    assert!(
-        !logs.iter().any(|l| l.contains("choice_selected")),
-        "非左押下では choice_selected を出さない: {logs:?}"
-    );
-}
-
-/// RuntimeWiring 不在＝正常縮退（donor presenter=None 同型）: **DEBUG** で no-op・`false`・零 send。
-#[test]
-fn pressed_runtime_absent_degrades_with_debug_not_error() {
-    let mut world = World::new();
-    let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    let ev = bubble_left_press(10, 20);
-
-    let logs = capture_logs(|| {
-        assert!(
-            !on_balloon_pointer_pressed(&mut world, e, e, &ev),
-            "RuntimeWiring 不在は no-op false"
-        );
-    });
-
-    assert!(
-        logs.iter()
-            .any(|l| l.contains("level=DEBUG") && l.contains("choice_pressed_no_runtime")),
-        "RuntimeWiring 不在は DEBUG で正常縮退（event=choice_pressed_no_runtime）: {logs:?}"
-    );
-    assert!(
-        !logs.iter().any(|l| l.contains("level=ERROR")),
-        "RuntimeWiring 不在は構成異常ではない＝ERROR を出さない: {logs:?}"
-    );
-}
-
-/// BalloonWiring 不在＝構成異常（結線漏れ）: RuntimeWiring は present でも **ERROR** で no-op・`false`。
-/// （借用規律の固定順序＝RuntimeWiring→BalloonWiring ゆえ RuntimeWiring present が前提。）
-#[test]
-fn pressed_balloon_wiring_absent_degrades_with_error() {
-    let mut world = World::new();
-    let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
-    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    let ev = bubble_left_press(10, 20);
-
-    let logs = capture_logs(|| {
-        assert!(
-            !on_balloon_pointer_pressed(&mut world, e, e, &ev),
-            "BalloonWiring 不在は no-op false"
-        );
-    });
-
-    assert!(
-        logs.iter()
-            .any(|l| l.contains("level=ERROR") && l.contains("balloon_wiring_missing")),
-        "BalloonWiring 不在は ERROR の構成異常（event=balloon_wiring_missing）: {logs:?}"
+        logs.is_empty(),
+        "非左押下は当たりの判定へ進まず何も記録しない: {logs:?}"
     );
 }
 
@@ -395,7 +204,7 @@ fn pressed_balloon_wiring_absent_degrades_with_error() {
 fn pressed_missing_marker_errors_and_noop() {
     let mut world = World::new();
     let e = world.spawn_empty().id(); // BalloonWindowMarker を持たない entity
-    let ev = bubble_left_press(10, 20);
+    let ev = left_press(10, 20);
 
     let logs = capture_logs(|| {
         assert!(
@@ -411,27 +220,23 @@ fn pressed_missing_marker_errors_and_noop() {
     );
 }
 
-/// 非表示中クリックは棄却: choice_active=false の実 runtime へ左クリック → 発行ゼロ・
-/// `debug!(choice_click_rejected, reason="inactive")`。Inbox の try_recv は Empty。
+/// 押せる範囲が無いときのクリックは棄却: 選択肢もアンカーも無い実 runtime へ左クリック →
+/// `debug!(choice_click_rejected, reason="inactive")`。
 #[test]
 fn pressed_inactive_choice_rejected_with_reason_inactive() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
     // 選択肢無しの runtime（choice_active=false）。
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
+    let runtime = empty_runtime();
     assert!(
         !runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=false（選択肢スパン無し）"
     );
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    let (bw, rx) = wiring_with_inbox();
-    world.insert_non_send(bw);
-    world.insert_non_send(BalloonHover::default());
+    let _rx = insert_wiring(&mut world);
 
-    let ev = bubble_left_press(10, 20);
+    let ev = left_press(10, 20);
     let logs = capture_logs(|| {
         assert!(
             !on_balloon_pointer_pressed(&mut world, e, e, &ev),
@@ -440,23 +245,15 @@ fn pressed_inactive_choice_rejected_with_reason_inactive() {
     });
 
     assert!(
-        rx.try_recv().is_err(),
-        "非表示中クリックは send しない（Inbox は Empty・R3.1）"
-    );
-    assert!(
         logs.iter().any(|l| l.contains("level=DEBUG")
             && l.contains("choice_click_rejected")
             && l.contains("inactive")),
         "非表示中は reason=inactive の choice_click_rejected を DEBUG 発火: {logs:?}"
     );
-    assert!(
-        !logs.iter().any(|l| l.contains("choice_selected")),
-        "棄却では choice_selected を出さない: {logs:?}"
-    );
 }
 
 /// 表示中・非ヒットは棄却: choice_active=true でも headless では choice_hit_rows が空ゆえ
-/// 常に非ヒット → 発行ゼロ・`debug!(choice_click_rejected, reason="no_hit")`。
+/// 常に非ヒット → `debug!(choice_click_rejected, reason="no_hit")`。
 #[test]
 fn pressed_active_non_hit_rejected_with_reason_no_hit() {
     let mut world = World::new();
@@ -475,11 +272,9 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
         "前提: headless では choice_hit_rows は空（GPU 未実行）＝常に非ヒット"
     );
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    let (bw, rx) = wiring_with_inbox();
-    world.insert_non_send(bw);
-    world.insert_non_send(BalloonHover::default());
+    let _rx = insert_wiring(&mut world);
 
-    let ev = bubble_left_press(10, 20);
+    let ev = left_press(10, 20);
     let logs = capture_logs(|| {
         assert!(
             !on_balloon_pointer_pressed(&mut world, e, e, &ev),
@@ -488,45 +283,28 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
     });
 
     assert!(
-        rx.try_recv().is_err(),
-        "非ヒットでは send しない（Inbox は Empty・R2.3）"
-    );
-    assert!(
         logs.iter().any(|l| l.contains("level=DEBUG")
             && l.contains("choice_click_rejected")
             && l.contains("no_hit")),
         "表示中・非ヒットは reason=no_hit の choice_click_rejected を DEBUG 発火: {logs:?}"
     );
-    assert!(
-        !logs.iter().any(|l| l.contains("choice_selected")),
-        "棄却では choice_selected を出さない: {logs:?}"
-    );
 }
 
 // -------------------------------------------------------------------------
-// 資源縮退・Tunnel 素通し 副作用ゼロ回帰檻
+// 資源縮退・Tunnel 素通し
 //
-// 判断分岐そのもの（Tunnel 短絡／RuntimeWiring 不在=debug 縮退／BalloonWiring 不在=error 縮退／
-// marker 不在=error）の**実行網羅**は moved／pressed の各縮退檻が既に閉じている
-// （moved_tunnel_phase_is_noop_false／moved_runtime_absent_degrades_with_debug_not_error／
-// moved_balloon_wiring_absent_degrades_with_error ほか・pressed 側も同型）。ただしそれらは
-// 「戻り値 false＋ログレベル」までで、**観測資源を同居させた副作用ゼロ三点**——(a) send なし
-// （present の `ChoiceSelectionInbox.try_recv()==Empty`）、(b) `BalloonWiring.hover` 不変、
-// (c) runtime へ `inject_choice_hover` 未適用（借用/poison を残さず `choice_active` 不変・moved は
-// `choice_hover_inject` を出さない）——までは固定していない（Tunnel 檻は資源を一切挿入せず、RuntimeWiring 不在
-// 檻は BalloonWiring を挿入しないため観測点が無かった）。
+// 縮退の判断分岐（Tunnel 短絡／RuntimeWiring 不在=debug／BalloonWiring 不在=error）を、両ハンドラ×
+// {Tunnel, RuntimeWiring 不在, BalloonWiring 不在} で、戻り値と記録で固定する。移動は観測資源を同居させて
+// `BalloonWiring.hover` の不変も見る。押下は強調を書かず、headless では当たり行が空で選択を作れないので、
+// 記録だけを見る（当たり行の上の押下が選択を送ることは `balloon_gpu_hit_tests.rs` が見る）。
 //
-// 本檻はその副作用ゼロ次元を**両ハンドラ×{Tunnel, RuntimeWiring 不在, BalloonWiring 不在}**へ
-// first-class に追試する（縮退時に対応ログ＝debug／error が出つつ、いかなる観測可能状態も動かない
-// ことを、観測資源を同居させて固定する）。判断分岐の重複網羅ではなく副作用ゼロ観測の追加ゆえ非重複。
-//
-// スレッド親和（NonSend 借用は Input スケジュール排他システム内）: 本檻は各ハンドラを単一スレッドの
+// スレッド親和（NonSend 借用は Input スケジュール排他システム内）: ここは各ハンドラを単一スレッドの
 // `&mut World` 排他呼出で直接叩く——NonSend 資源（`RuntimeWiring`／`BalloonWiring`・`Rc<RefCell>`）の借用が
 // 排他システム内でのみ起きるという構造契約は、ハンドラの `&mut World` シグネチャ自体が強制する
 // （別途スレッドテストは不要）。
 // -------------------------------------------------------------------------
 
-/// 縮退シナリオ（観測資源を同居させた副作用ゼロ回帰の分類）。
+/// 縮退シナリオの分類。
 #[derive(Clone, Copy)]
 enum Degrade {
     /// Tunnel 相（全資源 present でも即 false・一切触れない）。
@@ -539,10 +317,9 @@ enum Degrade {
 
 /// moved: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する。
 ///
-/// 各シナリオで観測資源（RuntimeWiring の active runtime・hover=Some(2) 仕込みの BalloonWiring・Inbox）を
+/// 各シナリオで観測資源（RuntimeWiring の active runtime・hover=Some(2) 仕込みの BalloonWiring）を
 /// 可能な限り同居させ、(1) 戻り値 false、(2) 対応ログレベル（Tunnel=無縮退ログ・RuntimeWiring 不在=DEBUG・
-/// BalloonWiring 不在=ERROR）、(3) 副作用ゼロ三点（choice_hover_inject なし／hover 不変／Inbox Empty／
-/// runtime 借用・active 不変）を固定する。判断分岐網羅は moved の各縮退檻、本檻は副作用ゼロ観測を担う。
+/// BalloonWiring 不在=ERROR）、(3) 副作用ゼロ（choice_hover_inject なし／hover 不変）を固定する。
 #[test]
 fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
     for scenario in [
@@ -554,27 +331,19 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
         let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
         // RuntimeWiring（active choice runtime）は Tunnel／BalloonWiringAbsent で present。
-        let runtime = match scenario {
-            Degrade::Tunnel | Degrade::BalloonWiringAbsent => {
-                let rt = runtime_with_active_choice("0");
-                world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
-                Some(rt)
-            }
-            Degrade::RuntimeAbsent => None,
-        };
+        if !matches!(scenario, Degrade::RuntimeAbsent) {
+            world.insert_non_send(headless_runtime_wiring(runtime_with_active_choice("0")));
+        }
 
-        // BalloonWiring（hover=Some(2) 仕込み）＋Inbox は Tunnel／RuntimeAbsent で present。
-        let inbox_rx = match scenario {
-            Degrade::Tunnel | Degrade::RuntimeAbsent => {
-                let (tx, rx) = mpsc::channel::<ChoiceSelection>();
-                let mut bw = BalloonWiring::new(tx);
-                bw.set_hover(0, Some(2));
-                world.insert_non_send(bw);
-                world.insert_non_send(BalloonHover::default());
-                Some(rx)
-            }
-            Degrade::BalloonWiringAbsent => None,
-        };
+        // BalloonWiring（hover=Some(2) 仕込み）は Tunnel／RuntimeAbsent で present。
+        let wired = !matches!(scenario, Degrade::BalloonWiringAbsent);
+        if wired {
+            insert_wiring(&mut world);
+            world
+                .get_non_send_mut::<BalloonWiring>()
+                .unwrap()
+                .set_hover(0, Some(2));
+        }
 
         // 事象: Tunnel は Tunnel 相（資源 present でも短絡）・それ以外は通常 Bubble move。
         let ev = match scenario {
@@ -592,13 +361,11 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
             );
         });
 
-        // ── (2) 縮退時の対応ログレベル（8.1 の観測条件）─────────────────────────────────
+        // ── (2) 縮退時の対応ログレベル─────────────────────────────────
         match scenario {
             Degrade::Tunnel => assert!(
-                !logs
-                    .iter()
-                    .any(|l| l.contains("choice_hover_inject") || l.contains("level=ERROR")),
-                "Tunnel は短絡ゆえ inject も error も出さない: {logs:?}"
+                !logs.iter().any(|l| l.contains("level=ERROR")),
+                "Tunnel は短絡ゆえ error を出さない: {logs:?}"
             ),
             Degrade::RuntimeAbsent => {
                 assert!(
@@ -618,46 +385,28 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
             ),
         }
 
-        // ── (3) 副作用ゼロ①: runtime へ inject_choice_hover 未適用（全シナリオ共通）───────────
+        // ── (3) 副作用ゼロ: runtime へ強調を注入しない（全シナリオ共通）───────────
         assert!(
             !logs.iter().any(|l| l.contains("choice_hover_inject")),
             "縮退では runtime へ hover を注入しない（choice_hover_inject なし）: {logs:?}"
         );
 
-        // ── (3) 副作用ゼロ②③: BalloonWiring.hover 不変＋send なし（present の場合）─────────────
-        if let Some(rx) = &inbox_rx {
+        // ── (3) 副作用ゼロ: BalloonWiring.hover 不変（present の場合）─────────────
+        if wired {
             assert_eq!(
                 world.get_non_send::<BalloonWiring>().unwrap().hover(0),
                 Some(2),
                 "縮退では BalloonWiring.hover[scope] を動かさない（仕込み Some(2) 不変）"
             );
-            assert!(
-                rx.try_recv().is_err(),
-                "縮退では ChoiceSelection を発行しない（Inbox は Empty）"
-            );
-        }
-
-        // ── (3) 副作用ゼロ④: runtime 未変更（present の場合）借用/poison を残さず active 不変 ─────
-        if let Some(rt) = &runtime {
-            assert!(
-                rt.try_borrow_mut().is_ok(),
-                "縮退では runtime に借用/poison を残さない"
-            );
-            assert!(
-                rt.borrow().choice_active(&ActorKey::from("0")),
-                "縮退では runtime の choice 状態を動かさない（active 不変）"
-            );
         }
     }
 }
 
-/// pressed: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する。
+/// pressed: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも false を返して縮退する。
 ///
-/// moved 版と対称。pressed の副作用は発行（send）ゆえ副作用ゼロ観測は choice_selected info の非発火＋
-/// present な Inbox の `try_recv()==Empty`＋BalloonWiring.hover 不変＋runtime 借用/active 不変で固定する。
-/// 判断分岐網羅は pressed の各縮退檻、本檻は副作用ゼロ観測を担う。
+/// 戻り値 false と対応する記録（Tunnel=記録なし・RuntimeWiring 不在=DEBUG・BalloonWiring 不在=ERROR）で固定する。
 #[test]
-fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
+fn pressed_tunnel_and_resource_degrade_return_false() {
     for scenario in [
         Degrade::Tunnel,
         Degrade::RuntimeAbsent,
@@ -666,26 +415,13 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
         let mut world = World::new();
         let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
-        let runtime = match scenario {
-            Degrade::Tunnel | Degrade::BalloonWiringAbsent => {
-                let rt = runtime_with_active_choice("0");
-                world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
-                Some(rt)
-            }
-            Degrade::RuntimeAbsent => None,
-        };
+        if !matches!(scenario, Degrade::RuntimeAbsent) {
+            world.insert_non_send(headless_runtime_wiring(runtime_with_active_choice("0")));
+        }
 
-        let inbox_rx = match scenario {
-            Degrade::Tunnel | Degrade::RuntimeAbsent => {
-                let (tx, rx) = mpsc::channel::<ChoiceSelection>();
-                let mut bw = BalloonWiring::new(tx);
-                bw.set_hover(0, Some(2));
-                world.insert_non_send(bw);
-                world.insert_non_send(BalloonHover::default());
-                Some(rx)
-            }
-            Degrade::BalloonWiringAbsent => None,
-        };
+        // BalloonWiring は Tunnel／RuntimeAbsent で present。
+        let _selections =
+            (!matches!(scenario, Degrade::BalloonWiringAbsent)).then(|| insert_wiring(&mut world));
 
         // 事象: Tunnel は Tunnel 相（left_down=true でも Tunnel 短絡が先）・それ以外は左シングル押下。
         let ev = match scenario {
@@ -694,7 +430,7 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
                 left_down: true,
                 ..Default::default()
             }),
-            _ => bubble_left_press(10, 20),
+            _ => left_press(10, 20),
         };
 
         let logs = capture_logs(|| {
@@ -704,14 +440,11 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
             );
         });
 
-        // ── (2) 縮退時の対応ログレベル（8.1 の観測条件）─────────────────────────────────
+        // ── (2) 縮退時の対応ログレベル─────────────────────────────────
         match scenario {
-            Degrade::Tunnel => assert!(
-                !logs
-                    .iter()
-                    .any(|l| l.contains("choice_selected") || l.contains("level=ERROR")),
-                "Tunnel は短絡ゆえ choice_selected も error も出さない: {logs:?}"
-            ),
+            Degrade::Tunnel => {
+                assert!(logs.is_empty(), "Tunnel は短絡ゆえ何も記録しない: {logs:?}")
+            }
             Degrade::RuntimeAbsent => {
                 assert!(
                     logs.iter()
@@ -730,41 +463,10 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
                 "BalloonWiring 不在は ERROR の構成異常（balloon_wiring_missing）: {logs:?}"
             ),
         }
-
-        // ── (3) 副作用ゼロ①: 選択発行 info（choice_selected）を出さない（全シナリオ共通）───────
-        assert!(
-            !logs.iter().any(|l| l.contains("choice_selected")),
-            "縮退では選択を発行しない（choice_selected info なし）: {logs:?}"
-        );
-
-        // ── (3) 副作用ゼロ②③: BalloonWiring.hover 不変＋send なし（present の場合）─────────────
-        if let Some(rx) = &inbox_rx {
-            assert_eq!(
-                world.get_non_send::<BalloonWiring>().unwrap().hover(0),
-                Some(2),
-                "縮退では BalloonWiring.hover[scope] を動かさない（pressed は元来非更新だが回帰固定）"
-            );
-            assert!(
-                rx.try_recv().is_err(),
-                "縮退では ChoiceSelection を発行しない（Inbox は Empty）"
-            );
-        }
-
-        // ── (3) 副作用ゼロ④: runtime 未変更（present の場合）借用/poison を残さず active 不変 ─────
-        if let Some(rt) = &runtime {
-            assert!(
-                rt.try_borrow_mut().is_ok(),
-                "縮退では runtime に借用/poison を残さない"
-            );
-            assert!(
-                rt.borrow().choice_active(&ActorKey::from("0")),
-                "縮退では runtime の choice 状態を動かさない（active 不変）"
-            );
-        }
     }
 }
 
-/// 押下ハンドラの末尾は、中断の入口（`super::user_break::on_left_press`）を必ず通る
+/// 押下ハンドラの末尾は、中断の入口（`super::user_break::on_left_press`）を必ず通る。
 /// GPU 無しではバルーンを出せないので受理までは進まないが、
 /// 左ダブルクリックの検出の記録が出ることで、この 1 行の呼び出しを固定する。
 #[test]
@@ -774,17 +476,15 @@ fn pressed_left_double_click_reaches_the_user_break_entry() {
 
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
+    let runtime = empty_runtime();
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    let (bw, _selection_rx) = wiring_with_inbox();
-    world.insert_non_send(bw);
-    world.insert_non_send(BalloonHover::default());
+    let _selection_rx = insert_wiring(&mut world);
     let (_flag_tx, flag_rx) = mpsc::channel();
-    let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
-    let (kanade_tx, kanade_rx) = mpsc::channel();
-    world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx));
+    world.insert_non_send(UserBreakWiring::new(
+        flag_rx,
+        mpsc::channel().0,
+        mpsc::channel().0,
+    ));
 
     let ev = Phase::Bubble(PointerState {
         client_point: Point { x: 10, y: 20 },
@@ -804,10 +504,6 @@ fn pressed_left_double_click_reaches_the_user_break_entry() {
             .any(|l| l.contains("level=TRACE") && l.contains("balloon_break_detected")),
         "押下ハンドラの末尾から中断の入口が呼ばれ、左ダブルクリックの検出が記録される: {logs:?}"
     );
-    assert!(
-        lifecycle_rx.try_recv().is_err() && kanade_rx.try_recv().is_err(),
-        "バルーンが出ていないので、どちらの線へも送らない（要件 1.9）"
-    );
 }
 
 // -------------------------------------------------------------------------
@@ -819,7 +515,7 @@ fn pressed_left_double_click_reaches_the_user_break_entry() {
 // -------------------------------------------------------------------------
 
 /// アンカーだけの runtime を載せた World（`BalloonWiring` の前回の強調は `last`）。
-fn anchor_only_world(last: Option<usize>) -> (World, Entity, Receiver<ChoiceSelection>) {
+fn anchor_only_world(last: Option<usize>) -> (World, Entity) {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let runtime = super::test_support::runtime_with_active_anchor("0");
@@ -829,17 +525,18 @@ fn anchor_only_world(last: Option<usize>) -> (World, Entity, Receiver<ChoiceSele
         "前提: 選択肢は無く、押せる範囲（アンカー）だけがある"
     );
     world.insert_non_send(headless_runtime_wiring(runtime));
-    let (mut bw, rx) = wiring_with_inbox();
-    bw.set_hover(0, last);
-    world.insert_non_send(bw);
-    world.insert_non_send(BalloonHover::default());
-    (world, e, rx)
+    insert_wiring(&mut world);
+    world
+        .get_non_send_mut::<BalloonWiring>()
+        .unwrap()
+        .set_hover(0, last);
+    (world, e)
 }
 
 /// 強調していたアンカーから外れる移動は、強調を外す注入をする。
 #[test]
 fn moved_off_an_anchor_injects_the_highlight_off() {
-    let (mut world, e, _rx) = anchor_only_world(Some(0));
+    let (mut world, e) = anchor_only_world(Some(0));
     let logs = capture_logs(|| {
         on_balloon_pointer_moved(&mut world, e, e, &bubble_move(10, 20));
     });
@@ -856,16 +553,15 @@ fn moved_off_an_anchor_injects_the_highlight_off() {
 /// アンカーだけのバルーンの押下は「範囲はあるが当たらなかった」と判定される。
 #[test]
 fn pressed_on_anchor_only_balloon_is_judged_against_the_ranges() {
-    let (mut world, e, rx) = anchor_only_world(None);
+    let (mut world, e) = anchor_only_world(None);
     let logs = capture_logs(|| {
         assert!(!on_balloon_pointer_pressed(
             &mut world,
             e,
             e,
-            &bubble_left_press(10, 20)
+            &left_press(10, 20)
         ));
     });
-    assert!(rx.try_recv().is_err(), "当たっていないので送らない");
     assert!(
         logs.iter()
             .any(|l| l.contains("choice_click_rejected") && l.contains("no_hit")),

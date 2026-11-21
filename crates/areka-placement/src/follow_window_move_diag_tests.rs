@@ -164,20 +164,12 @@ use wintf::ecs::DPI;
 
 use super::super::diag::{DESPAWNED_SKIP_TAG, DIAG_TARGET, WINDOW_MOVE_RECORD_TAG};
 use super::super::spawn::{BalloonWindowMarker, CharWindowMarker};
+use crate::test_support::window_move_lines;
 use log_capture_kit::{CapturedEvent, capture, ensure_interest_probes, expect_one};
-
-/// 捕捉イベントから窓移動レコード行だけを抜く（他の debug ログは無視）。
-fn window_move_lines(events: &[CapturedEvent]) -> Vec<String> {
-    events
-        .iter()
-        .map(|e| e.message().to_string())
-        .filter(|m| m.starts_with(WINDOW_MOVE_RECORD_TAG))
-        .collect()
-}
 
 /// ちょうど 1 行の窓移動レコードを取り出す（0 件・複数件は落とす）。
 fn only_window_move_line(events: &[CapturedEvent]) -> String {
-    let lines = window_move_lines(events);
+    let lines = window_move_lines(events.iter().map(|e| e.message()));
     assert_eq!(
         lines.len(),
         1,
@@ -284,7 +276,7 @@ fn anchor_changed_system_records_the_anchor_change_route() {
     // 初回 run はべき等 skip でレコードも出ない。
     let (_, first) = capture(|| schedule.run(&mut world));
     assert!(
-        window_move_lines(&first).is_empty(),
+        window_move_lines(first.iter().map(|e| e.message())).is_empty(),
         "べき等 skip でレコードが出た: {first:?}"
     );
 
@@ -356,7 +348,7 @@ fn move_cue_write_is_recorded_as_move_cue_with_a_balloon_follow_companion() {
     assert!(ok);
     // 発行順＝書込順。
     assert_eq!(
-        window_move_lines(&events),
+        window_move_lines(events.iter().map(|e| e.message())),
         vec![
             format!(
                 "[diag.window_move] route=MoveCue entity={char_window:?} kind=char scope=0 \
@@ -399,7 +391,7 @@ fn drag_path_records_only_the_balloon_follow_write() {
     let ev = Phase::Bubble(drag_event_at(char_window, (1300, 500), (1450, 520)));
     let (_, events) = capture(|| on_char_drag(&mut world, char_window, char_window, &ev));
 
-    let lines = window_move_lines(&events);
+    let lines = window_move_lines(events.iter().map(|e| e.message()));
     assert_eq!(
         lines.len(),
         1,
@@ -432,7 +424,7 @@ fn no_window_move_record_when_nothing_is_written() {
     });
     assert!(!wrote, "前提: 同寸・同位置はべき等 skip");
     assert!(
-        window_move_lines(&events).is_empty(),
+        window_move_lines(events.iter().map(|e| e.message())).is_empty(),
         "書込ゼロなのにレコードが出た: {events:?}"
     );
 
@@ -456,7 +448,7 @@ fn no_window_move_record_when_nothing_is_written() {
     });
     assert!(!wrote);
     assert!(
-        window_move_lines(&events).is_empty(),
+        window_move_lines(events.iter().map(|e| e.message())).is_empty(),
         "失敗経路でレコードが出た: {events:?}"
     );
 }

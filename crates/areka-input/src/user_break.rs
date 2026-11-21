@@ -3,10 +3,11 @@
 //! 中断を禁じる旗・直前の押下の記憶・送出端を持ち、押下のたびに「中断にするか」を決めて、
 //! 表示の側へ「隠せ」、kanade へ `KanadeMsg::UserBreak` を 1 件ずつ送る層がここへ入る。
 //!
-//! 判断は純関数 2 本（[`judge_press`]・[`fold_no_user_break`]）が担い、持ち物
+//! 判断は純関数 2 本（`judge_press`・`fold_no_user_break`）が担い、持ち物
 //! [`UserBreakWiring`]・旗の取り出し [`drain_no_user_break_signals`]・押下の入口 [`on_left_press`] が
-//! それを World の上で動かす。持ち物を World へ据える結線が [`wire_user_break`]（ゴーストごと）、
-//! 取り出しの登録が [`register_user_break_drain`]（`ghost_session::register_systems` からプロセスに 1 回）。
+//! それを World の上で動かす。箱の押下の入口は `on_box_press`（判断は `shell_box` の
+//! `judge_box_press`・`fold_talking`）。持ち物を World へ据える結線が [`wire_user_break`]（ゴーストごと）、
+//! 取り出しの登録が [`register_user_break_drain`]（本体の系の登録の口からプロセスに 1 回）。
 
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -57,12 +58,6 @@ impl UserBreakWiring {
             prev_press_selected: false,
             talking: false,
         }
-    }
-
-    /// 旗の読み口。読み手は [`drain_no_user_break_signals`] の送出で、畳んだ後の旗を
-    /// kanade へ届ける。
-    pub(crate) fn no_user_break(&self) -> bool {
-        self.no_user_break
     }
 
     /// 話している最中か（読み手は話し終えたかの判断 `finished_talking`・`balloon_pressed.rs`。
@@ -182,7 +177,7 @@ pub fn drain_no_user_break_signals(world: &mut World) {
             );
         }
     }
-    let value = wiring.no_user_break();
+    let value = wiring.no_user_break;
     if !drained || value == wiring.reported_no_user_break {
         return;
     }
@@ -198,11 +193,11 @@ pub fn drain_no_user_break_signals(world: &mut World) {
     }
 }
 
-/// 中断の持ち物を World へ入れる（`fn wire_readme`・`crates/areka/src/readme.rs` と同型）。
+/// 中断の持ち物を World へ入れる（`fn wire_readme` と同型）。
 /// 旗の取り出しの登録は [`register_user_break_drain`] が行う。
 ///
-/// 呼び手は boot 成功後の `wire_runtime`（`ghost_session::boot_ghost` からゴーストごとに n 回＝
-/// 状態の載せ替え。系の登録は `ghost_session::register_systems` からプロセスに 1 回）。
+/// 呼び手は本体の、実行系が成立した後に受信端を据える側（ゴーストの起動ごとに n 回＝
+/// 状態の載せ替え。系の登録は本体の系の登録の口からプロセスに 1 回）。
 pub fn wire_user_break(
     world: &mut World,
     flag_rx: Receiver<NoUserBreakSignal>,
@@ -216,12 +211,11 @@ pub fn wire_user_break(
 ///
 /// 並びは `dispatch_pointer_events` の**前**——押下と同じ巡に届いた「入る」「出る」を、その
 /// 押下の判定より先に旗へ畳み込むためである。後ろに置くと、旗が 1 巡遅れて
-/// 効く。`dispatch_pointer_events` 自身は wintf の既定の登録（`EcsWorld::new`・
-/// `crates/wintf/src/ecs/world/mod.rs`）で `drain_task_pool_commands` の後に置かれているだけ
+/// 効く。`dispatch_pointer_events` 自身は wintf の既定の登録（`EcsWorld::new`）で `drain_task_pool_commands` の後に置かれているだけ
 /// なので、前に 1 本置いても順序は循環しない。隣の取り出し（`fn register_readme_drain`・
-/// `fn register_choice_drain`）はどれも「後」で、「前」はここだけである。
+/// `fn register_choice_drain`）はどれも「後」で、取り出しで「前」に置くのはここだけである。
 ///
-/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
+/// 呼び手は本体の系の登録の口（プロセスに 1 回）。
 pub fn register_user_break_drain(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
@@ -229,10 +223,10 @@ pub fn register_user_break_drain(world: &mut World) {
     );
 }
 
-/// バルーン窓の押下ハンドラ（`fn on_balloon_pointer_pressed`・`balloon.rs`）の末尾から呼ばれる入口。
+/// バルーン窓の押下ハンドラ（`fn on_balloon_pointer_pressed`）の末尾から呼ばれる入口。
 /// 中断を受け入れたら `true`。
 ///
-/// 「バルーンが出ているか」を表示層へ照会し、残りを [`press_with_visibility`] に任せる。
+/// 「バルーンが出ているか」を表示層へ照会し、残りを `press_with_visibility` に任せる。
 /// `RuntimeWiring` が無い・表示層に相手が居ないはどちらも「観測できない」で、作らない側へ倒れる。
 pub fn on_left_press(
     world: &mut World,
@@ -267,22 +261,21 @@ fn press_with_visibility(
     // 読んでから上書きする。単押しでも上書きするのは、選択を確定した 1 打目が単押しとして届くため。
     let prev_press_selected = wiring.prev_press_selected;
     wiring.prev_press_selected = selected_now;
-    if double_click != DoubleClick::Left {
-        return false;
-    }
-    tracing::trace!(
-        event = "balloon_break_detected",
-        scope,
-        "バルーンの左ダブルクリックを検出"
-    );
-
-    match judge_press(
+    let verdict = judge_press(
         double_click,
         selected_now,
         prev_press_selected,
         balloon_visible,
         wiring.no_user_break,
-    ) {
+    );
+    if verdict != PressVerdict::NotDoubleClick {
+        tracing::trace!(
+            event = "balloon_break_detected",
+            scope,
+            "バルーンの左ダブルクリックを検出"
+        );
+    }
+    match verdict {
         PressVerdict::NotDoubleClick => false,
         PressVerdict::ConsumedBySelection => {
             tracing::debug!(
@@ -326,10 +319,9 @@ fn shown_talk_id(world: &World) -> Option<TalkId> {
         .and_then(RuntimeWiring::shown_talk_id)
 }
 
-/// 中断の送り出し: 「隠せ」→「止めろ」を 1 件ずつ。どちらの失敗も記録し、もう一方の送出は
-/// やめない——止める要求だけ落ちると「バルーンは消えたのに再生が続く」になるので、隣の
-/// `fn send_selection` より重い水準で記録する。普通のバルーンの窓と箱の
-/// 両方の入口が使う。
+/// 中断の送り出し: 「隠せ」→「止めろ」を 1 件ずつ。どちらの失敗も `error!` で記録し、もう一方の
+/// 送出はやめない（止める要求だけ落ちると「バルーンは消えたのに再生が続く」）。普通のバルーンの
+/// 窓と箱の両方の入口が使う。
 fn send_break(wiring: &UserBreakWiring, scope: usize, talk_id: Option<TalkId>) {
     if wiring
         .lifecycle_tx
@@ -402,7 +394,3 @@ pub(crate) fn on_box_press(
 #[cfg(test)]
 #[path = "user_break_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "user_break_talk_id_tests.rs"]
-mod talk_id_tests;

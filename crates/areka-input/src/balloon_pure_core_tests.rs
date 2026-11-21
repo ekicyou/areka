@@ -1,16 +1,14 @@
-use super::test_support::row;
+use super::test_support::{TWO_BOX_SHELL, row};
 use super::*;
+use areka_sakura::ActorKey;
 
 // -------------------------------------------------------------------------
 // hit_choice_row 純関数檻
 //
 // 上流実型 `ChoiceHitRow`／`HitRectPx`（全 pub フィールド）で fixture を組み、
 // 包含／境界（半開）／行外／空／複数行／病的重なりを GPU・実窓不要で決定的に判定する。
-// 座標を**無変換**で照合する不変条件（矩形側が実適用 k で ×k 済み
-// ゆえ正しい・÷k 追加は二重縮約）は後段の逆向き整合の檻が k=2.0 で固定する。
 // -------------------------------------------------------------------------
 
-use areka_emo_text::actor::HitRectPx;
 use areka_emo_text::state::SpanKind;
 
 /// 内側包含: 矩形の内部点はその行 index を返す。
@@ -76,7 +74,7 @@ fn hit_multiple_non_overlapping_rows_returns_correct_index() {
 /// 病的重なり→最終一致: 点を含む行が複数あっても、逆順走査の最初の
 /// 一致＝スライス**最終** index を決定的に返す（後定義が手前・画家のアルゴリズム）。
 /// 期待 index を各行で一意にするため、重なり方を非対称にして「最初一致」なら別 index に
-/// なる配置を用いる（最初一致=1／最終一致=2 を弁別）。
+/// なる配置を用いる（最初一致=0／最終一致=2 を弁別）。
 #[test]
 fn hit_pathological_overlap_returns_last_match_deterministically() {
     // 3 行が (50, 30) を共通に含む。スライス順（index 昇順）で最後の index 2 が返るべき。
@@ -104,167 +102,12 @@ fn hit_pathological_overlap_returns_last_match_deterministically() {
 }
 
 // -------------------------------------------------------------------------
-// バルーン逆向き整合の不変条件檻
-//
-// 本檻は上流の実写像 `to_window_physical` に **k=2.0** を実供給して行矩形を窓物理 px へ
-// 持ち上げ、そこへ (a) **無変換の** client 物理 px 点が正しくヒットすること、(b) 同じ点を
-// ÷k してしまうと外れること（＝二重縮約の退行検出）を `click_selection` で固定する。
-//
-// 成立根拠は「矩形側が既に ×k 済み」——k=1.0 であることではない。シェル窓は逆向き（矩形は
-// 作者定義サーフェス px のまま・点を ÷k）であり、両者は等価に正しい。バルーン経路へ ÷k を
-// 足すと矩形 ×k と点 ÷k の二重縮約になり正常動作を壊す。
-//
-// f32 誤差との無関係化: `to_window_physical` は f32 積を含み 1px の余地が
-// あるため、檻の点は矩形境界から **8px 以上**内側／外側に置く。
-// -------------------------------------------------------------------------
-
-use areka_emo_text::choice::{CanvasHitRow, to_window_physical};
-use areka_emo_text::layout::LineRect;
-use areka_emo_text::region::{ScaleContract, TextRegion};
-use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
-
-/// 檻に用いる実適用スケール（k≠1.0——DPI追従下で実供給される値の代表）。
-const CAGE_K: f32 = 2.0;
-
-/// validrect 原点 (36, 46) の `TextRegion`（choice.rs 檻と同型の最小構築・画像原寸 400×224）。
-fn cage_region() -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(46), Some(168), Some(36), Some(356)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
-    TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb)
-}
-
-/// canvas-local 行矩形を **上流の実写像 `to_window_physical`** で k=2.0 の窓物理 px へ
-/// 持ち上げた 2 行（ordinal 0＝上帯・1＝下帯・committed=0）。
-///
-/// 期待値（横書き・`行内 x=(36+inline)×2`／`ブロック y=(46+block)×2+0`）:
-/// - 行 0: canvas (10, 0, 30, 10) → 窓物理 `[92, 132) × [92, 112)`
-/// - 行 1: canvas (10, 10, 30, 20) → 窓物理 `[92, 132) × [112, 132)`
-fn rows_lifted_by_real_k() -> Vec<ChoiceHitRow> {
-    let region = cage_region();
-    let contract = ScaleContract::new(CAGE_K, None);
-    [(0usize, 0.0_f32, 10.0_f32), (1, 10.0, 20.0)]
-        .into_iter()
-        .map(|(ordinal, top, bottom)| {
-            let canvas = CanvasHitRow {
-                ordinal,
-                rect: LineRect {
-                    left: 10.0,
-                    top,
-                    right: 30.0,
-                    bottom,
-                },
-            };
-            ChoiceHitRow {
-                kind: SpanKind::Choice,
-                ordinal,
-                id: format!("q{ordinal}"),
-                label: format!("label{ordinal}"),
-                references: Vec::new(),
-                rect: to_window_physical(
-                    &canvas,
-                    &region,
-                    WritingMode::HorizontalTb,
-                    0,
-                    &contract,
-                    (0.0, 0.0),
-                ),
-            }
-        })
-        .collect()
-}
-
-/// 持ち上げ結果の固定（トートロジー回避の土台）: `to_window_physical` が k=2.0 で実際に
-/// 生む窓物理 px 矩形を**ハードコード期待値**で押さえる。以降 2 本の檻の座標判断は、
-/// この確定した矩形に対して行われる。
-#[test]
-fn cage_rows_are_lifted_to_window_physical_px_by_real_k() {
-    let rows = rows_lifted_by_real_k();
-    assert_eq!(
-        rows[0].rect,
-        HitRectPx {
-            left: 92.0,
-            top: 92.0,
-            right: 132.0,
-            bottom: 112.0
-        },
-        "行 0 は (36+10..30)×2 / (46+0..10)×2 の窓物理 px へ持ち上げられる"
-    );
-    assert_eq!(
-        rows[1].rect,
-        HitRectPx {
-            left: 92.0,
-            top: 112.0,
-            right: 132.0,
-            bottom: 132.0
-        },
-        "行 1 は (46+10..20)×2 のブロック帯へ持ち上げられる"
-    );
-}
-
-/// 檻 (a): k=2.0 で持ち上げた行矩形に対し、**無変換の** client 物理 px 点
-/// (110, 120) が正しく行 1 へヒットし `ChoiceSelection` を構成する。
-///
-/// 点は行 1 の矩形 `[92, 132) × [112, 132)` の内側で、最寄り境界（top=112）から 8px 離れて
-/// おり f32 誤差 1px と無関係に成立する。**成立根拠は矩形が ×k 済みであること**——k=1.0
-/// ではないことを直上の持ち上げ檻が示している。本経路へ ÷k を追加すれば本檻は落ちる。
-#[test]
-fn click_untransformed_point_hits_row_lifted_by_real_k() {
-    let rows = rows_lifted_by_real_k();
-    // 無変換の client 物理 px 点（÷k も ×k もしない）。
-    let (x, y) = (110.0_f32, 120.0_f32);
-
-    let sel = click_selection(true, &rows, x, y, 7)
-        .expect("×k 済み行矩形へ無変換の client 物理 px 点は正しくヒットする（R3.7）");
-    assert_eq!(
-        sel.id, "q1",
-        "無変換点 (110,120) は k=2.0 で持ち上げた行 1（y∈[112,132)）へ当たる"
-    );
-    assert_eq!(sel.scope, 7, "scope は引数由来（判定空間とは独立）");
-}
-
-/// 檻 (b)（二重縮約の退行検出）: 檻 (a) と**同一の行矩形・同一の点**に対し、点を
-/// ÷k してしまうと `(55, 60)` となり全行の外（最寄り境界 left=92 から 37px・top=92 から
-/// 32px 外）＝ヒットしない。
-///
-/// (a) と (b) は行矩形も k も同一で、**÷k の有無だけ**で結果が割れる。ゆえに「バルーン経路
-/// へ ÷k を足す」改変（＝矩形 ×k と点 ÷k の二重縮約）は (a) を落として必ず検出される。
-#[test]
-fn click_double_reduced_point_misses_row_lifted_by_real_k() {
-    let rows = rows_lifted_by_real_k();
-    let (x, y) = (110.0_f32, 120.0_f32);
-
-    // 誤って ÷k した座標（シェル経路の規約をバルーンへ一般化した場合の値）。
-    let (rx, ry) = (x / CAGE_K, y / CAGE_K);
-    assert_eq!((rx, ry), (55.0, 60.0), "÷k 後の座標（期待値ハードコード）");
-    assert_eq!(
-        click_selection(true, &rows, rx, ry, 7),
-        None,
-        "÷k した点は ×k 済み行矩形の外＝二重縮約は必ず外れる（R3.7 退行検出）"
-    );
-
-    // 同じ入力で無変換なら当たる——÷k の有無だけで結果が割れることをこの檻の中でも示す。
-    assert!(
-        click_selection(true, &rows, x, y, 7).is_some(),
-        "無変換なら当たる（÷k の有無だけが結果を分ける・非空虚性）"
-    );
-}
-
-// -------------------------------------------------------------------------
 // hover_action 純関数檻（全分岐）
 //
 // active・hit_ordinal・last_injected の 3 入力から hover 遷移を決める純関数の
 // 全分岐（非表示時無処理／消滅時自前整合／同値維持／新規注入／解除注入）を
-// World・runtime 不要で決定的に網羅する。
+// World・runtime 不要で決定的に網羅する。この檻と下の click_selection の檻の「表示中」「非表示」は
+// `active`（押せる範囲＝選択肢かアンカーがあるか）の真偽を指す。
 // -------------------------------------------------------------------------
 
 /// 非表示時無処理: `active == false` かつ `last_injected == None` は
@@ -279,7 +122,7 @@ fn hover_inactive_no_prior_injection_is_noop() {
     assert_eq!(
         hover_action(false, Some(3), None),
         HoverAction::NoopInactive,
-        "非表示・未注入は hit があっても NoopInactive（hit_ordinal 無視・R1.4）"
+        "非表示・未注入は hit があっても NoopInactive（hit_ordinal 無視）"
     );
 }
 
@@ -291,12 +134,12 @@ fn hover_inactive_with_prior_injection_resets_own_state() {
     assert_eq!(
         hover_action(false, None, Some(2)),
         HoverAction::ResetOwnState,
-        "非表示・注入済・hit なしは ResetOwnState（R3.4）"
+        "非表示・注入済・hit なしは ResetOwnState"
     );
     assert_eq!(
         hover_action(false, Some(5), Some(2)),
         HoverAction::ResetOwnState,
-        "非表示・注入済は hit があっても ResetOwnState（hit_ordinal 無視・R3.4）"
+        "非表示・注入済は hit があっても ResetOwnState（hit_ordinal 無視）"
     );
 }
 
@@ -323,12 +166,12 @@ fn hover_active_new_row_injects() {
     assert_eq!(
         hover_action(true, Some(1), None),
         HoverAction::Inject(Some(1)),
-        "表示中・None→Some(1) は Inject(Some(1))（初回ハイライト・R1.2）"
+        "表示中・None→Some(1) は Inject(Some(1))（初回ハイライト）"
     );
     assert_eq!(
         hover_action(true, Some(3), Some(1)),
         HoverAction::Inject(Some(3)),
-        "表示中・Some(1)→Some(3) は Inject(Some(3))（行遷移・R1.2）"
+        "表示中・Some(1)→Some(3) は Inject(Some(3))（行遷移）"
     );
 }
 
@@ -339,7 +182,81 @@ fn hover_active_leaves_row_injects_none() {
     assert_eq!(
         hover_action(true, None, Some(2)),
         HoverAction::Inject(None),
-        "表示中・Some(2)→None は Inject(None)（ハイライト解除・R1.3）"
+        "表示中・Some(2)→None は Inject(None)（ハイライト解除）"
+    );
+}
+
+// -------------------------------------------------------------------------
+// apply_hover（場所への注入・借用の失敗）
+// -------------------------------------------------------------------------
+
+fn emo_text_debugs(
+    events: &[log_capture_kit::CapturedEvent],
+) -> Vec<&log_capture_kit::CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.target == "areka_emo_text::actor" && e.level == tracing::Level::DEBUG)
+        .collect()
+}
+
+/// 普通のバルーンにだけ ordinal 0 の選択肢があるので、文字の層が「無い ordinal」を記録するのは
+/// 箱の場所へ注入したときだけ。注入の到達と場所の取り違えの両方がここで分かる。
+#[test]
+fn apply_hover_injects_at_the_given_place() {
+    let rt = super::test_support::runtime_with_active_choice("0");
+    let balloon = PlaceKey::balloon(&ActorKey::from("0"));
+    let boxed = PlaceKey {
+        actor: ActorKey::from("0"),
+        place: TextPlace::Box(super::test_support::box_name(TWO_BOX_SHELL, "b")),
+    };
+
+    let (written, events) =
+        log_capture_kit::capture(|| apply_hover(&rt, &balloon, 0, HoverAction::Inject(Some(0))));
+    assert_eq!(written, Some(Some(0)));
+    assert!(emo_text_debugs(&events).is_empty(), "{events:?}");
+
+    let (written, events) =
+        log_capture_kit::capture(|| apply_hover(&rt, &boxed, 0, HoverAction::Inject(Some(0))));
+    assert_eq!(written, Some(Some(0)));
+    let debugs = emo_text_debugs(&events);
+    assert_eq!(debugs.len(), 1, "{events:?}");
+    assert_eq!(debugs[0].field("ordinal"), Some("0"));
+}
+
+#[test]
+fn apply_hover_reset_own_state_does_not_inject() {
+    let rt = super::test_support::runtime_with_active_choice("0");
+    let boxed = PlaceKey {
+        actor: ActorKey::from("0"),
+        place: TextPlace::Box(super::test_support::box_name(TWO_BOX_SHELL, "b")),
+    };
+    let (written, events) =
+        log_capture_kit::capture(|| apply_hover(&rt, &boxed, 0, HoverAction::ResetOwnState));
+    assert_eq!(written, Some(None));
+    assert!(events.is_empty(), "{events:?}");
+}
+
+#[test]
+fn apply_hover_borrow_failure_writes_nothing_and_logs_one_error() {
+    let rt = super::test_support::runtime_with_active_choice("0");
+    let balloon = PlaceKey::balloon(&ActorKey::from("0"));
+    let held = rt.borrow();
+    let (written, events) =
+        log_capture_kit::capture(|| apply_hover(&rt, &balloon, 0, HoverAction::Inject(Some(0))));
+    drop(held);
+    assert_eq!(written, None);
+    let errors: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::ERROR)
+        .collect();
+    assert_eq!(errors.len(), 1, "{events:?}");
+    assert_eq!(
+        errors[0].field_str("event"),
+        Some("balloon_runtime_borrow_failed")
+    );
+    assert!(
+        events.iter().all(|e| e.level == tracing::Level::ERROR),
+        "{events:?}"
     );
 }
 
@@ -348,48 +265,23 @@ fn hover_active_leaves_row_injects_none() {
 //
 // active・現行 rows・click 座標・scope の入力から確定 ChoiceSelection の構成を
 // 決める純関数を、World・runtime・send 不要で決定的に判定する。
-// ヒット時のフィールド一致（scope は arg 由来・ordinal 非含有）、非 hit／非表示／
-// stale 行での非構成（None）を網羅する。
+// ヒット時のフィールド一致（scope は arg 由来・ordinal 非含有）、非 hit／非表示での
+// 非構成（None）を網羅する。
 // -------------------------------------------------------------------------
-
-/// `references` を明示指定できる `ChoiceHitRow` を組む（転写忠実性の検証用）。
-fn row_with_refs(
-    ordinal: usize,
-    left: f32,
-    top: f32,
-    right: f32,
-    bottom: f32,
-    references: Vec<String>,
-) -> ChoiceHitRow {
-    ChoiceHitRow {
-        kind: SpanKind::Choice,
-        ordinal,
-        id: format!("q{ordinal}"),
-        label: format!("label{ordinal}"),
-        references,
-        rect: HitRectPx {
-            left,
-            top,
-            right,
-            bottom,
-        },
-    }
-}
 
 /// ヒット確定: 表示中・ヒット座標では現行ヒット行の全フィールドを
 /// clone 転写した `ChoiceSelection` を返す。scope は arg 由来・ordinal は非含有。
 #[test]
 fn click_hit_builds_selection_from_current_row() {
     let rows = [
-        row_with_refs(0, 0.0, 0.0, 100.0, 20.0, vec!["a".to_string()]),
-        row_with_refs(
-            1,
-            0.0,
-            20.0,
-            100.0,
-            40.0,
-            vec!["r0".to_string(), "r1".to_string()],
-        ),
+        ChoiceHitRow {
+            references: vec!["a".to_string()],
+            ..row(0, 0.0, 0.0, 100.0, 20.0)
+        },
+        ChoiceHitRow {
+            references: vec!["r0".to_string(), "r1".to_string()],
+            ..row(1, 0.0, 20.0, 100.0, 40.0)
+        },
     ];
     // (50, 30) は index 1 の行内。
     let sel = click_selection(true, &rows, 50.0, 30.0, 7)
@@ -404,81 +296,6 @@ fn click_hit_builds_selection_from_current_row() {
         sel.references,
         vec!["r0".to_string(), "r1".to_string()],
         "references は現行ヒット行から忠実転写"
-    );
-}
-
-/// 非ヒット→非発行: 表示中でも全矩形外の座標なら None。
-#[test]
-fn click_non_hit_returns_none() {
-    let rows = [row_with_refs(0, 10.0, 20.0, 50.0, 40.0, Vec::new())];
-    assert_eq!(
-        click_selection(true, &rows, 5.0, 5.0, 0),
-        None,
-        "全矩形外の click は非構成（None・R2.3）"
-    );
-}
-
-/// 非表示中は非発行: `active == false` は、たとえ矩形内座標でも None。
-/// hit 判定より前に短絡する（消滅時の stale／原子性ガード）。
-#[test]
-fn click_inactive_returns_none_even_inside_rect() {
-    let rows = [row_with_refs(0, 10.0, 20.0, 50.0, 40.0, Vec::new())];
-    // (30, 30) は矩形内だが active=false ゆえ None。
-    assert_eq!(
-        click_selection(false, &rows, 30.0, 30.0, 0),
-        None,
-        "非表示中（active=false）は矩形内でも非構成（None・R3.1）"
-    );
-}
-
-/// stale 行棄却: 以前ヒットしていた座標に、現行 rows ではどの行も
-/// 存在しない（レイアウト差替後）場合、同座標の click は None。
-/// 現行ジオメトリのみを読むことを、キャッシュ座標を覆わない現行 rows で固定する。
-#[test]
-fn click_stale_coords_not_in_current_rows_returns_none() {
-    // hover 時代には座標 (30, 30) に行があったが、現行 rows はその座標を覆わない
-    // （行が消滅／別位置へ差し替わった）。
-    let current = [row_with_refs(0, 200.0, 200.0, 240.0, 220.0, Vec::new())];
-    assert_eq!(
-        click_selection(true, &current, 30.0, 30.0, 0),
-        None,
-        "現行 rows がクリック座標を覆わなければ stale 棄却で None（R3.2）"
-    );
-}
-
-/// stale 差替: 同座標に別行が現れた場合、確定は必ず**現行**行から
-/// 構成される（キャッシュではなく現行ジオメトリが正本）。
-#[test]
-fn click_replaced_row_builds_from_current_not_cached() {
-    // 現行 rows: 座標 (30, 30) を覆うのは ordinal 9 の別行のみ。
-    let current = [row_with_refs(
-        9,
-        10.0,
-        20.0,
-        50.0,
-        40.0,
-        vec!["z".to_string()],
-    )];
-    let sel =
-        click_selection(true, &current, 30.0, 30.0, 3).expect("現行行がヒットするので構成される");
-    assert_eq!(sel.id, "q9", "確定は現行ヒット行（差替後）から構成される");
-    assert_eq!(sel.label, "label9", "label も現行行から");
-    assert_eq!(
-        sel.references,
-        vec!["z".to_string()],
-        "references も現行行から"
-    );
-    assert_eq!(sel.scope, 3, "scope は引数由来");
-}
-
-/// 空 references の忠実転写: 参照列が空でも空 Vec として構成される。
-#[test]
-fn click_empty_references_transcribed_as_empty() {
-    let rows = [row_with_refs(0, 0.0, 0.0, 100.0, 20.0, Vec::new())];
-    let sel = click_selection(true, &rows, 50.0, 10.0, 0).expect("ヒットするので構成される");
-    assert!(
-        sel.references.is_empty(),
-        "空 references は空 Vec として転写"
     );
 }
 
@@ -513,7 +330,7 @@ fn overlapping_choice_wins_over_anchor_in_either_order() {
         Some(1),
         "選択肢が後ろにあれば、もちろん選択肢"
     );
-    // 選択肢が 2 つ重なる所にアンカーが挟まっても、後ろの選択肢（今までどおり）。
+    // 選択肢が 2 つ重なる所にアンカーが挟まっても、後ろの選択肢。
     let sandwiched = [
         row(0, 0.0, 0.0, 100.0, 100.0),
         anchor_row(1, 0.0, 0.0, 100.0, 100.0),
@@ -529,7 +346,7 @@ fn overlapping_choice_wins_over_anchor_in_either_order() {
 }
 
 /// 選択肢に当たらずアンカーに当たればアンカー。アンカー同士が重なれば後ろの行。
-/// どの範囲の外でもなければ今までどおり無し。
+/// どの範囲にも入らなければ無し。
 #[test]
 fn anchor_is_hit_only_where_no_choice_covers_the_point() {
     let rows = [
@@ -547,8 +364,7 @@ fn anchor_is_hit_only_where_no_choice_covers_the_point() {
     assert_eq!(hit_choice_row(&rows, 10.0, 50.0), None, "範囲の外");
 }
 
-/// 選択の知らせは当たった行の種類を写す。重なりでは選択肢の知らせになり、範囲の外では
-/// 今までどおり作らない。
+/// 選択の知らせは当たった行の種類を写す。重なりでは選択肢の知らせになり、範囲の外では作らない。
 #[test]
 fn click_selection_copies_the_kind_of_the_hit_row() {
     let rows = [
