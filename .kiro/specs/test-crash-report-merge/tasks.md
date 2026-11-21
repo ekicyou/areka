@@ -73,7 +73,7 @@
   - _Dispatch: mechanical — 今の本文の引数を替えて移す_
   - _Requirements: 6.4, 7.1_
 
-- [ ] 3.3 整合待ちの見張りの檻を、警告の文が変わったら赤になる形にする
+- [x] 3.3 整合待ちの見張りの檻を、警告の文が変わったら赤になる形にする
   - 3.1・3.2 の後に行う（摂動の確かめで `follow/window_move.rs` を一時に変え、同じ作業場で `areka-placement` を組むため並走できない）
   - 鳴る側の 1 本 `a_system_write_that_bypasses_its_deferral_still_trips_the_watch` を、捕捉の中で `catch_unwind` し警告の文をちょうど 1 件と数えてから panic を戻す形にする（前例 `crates/areka-runtime/src/frame_work_area_resnap_hold_tests.rs` の同じ働きのテスト）。`#[should_panic]` と release での ignore は残す
   - 終わった姿: debug の走行でこの 1 本が緑。`follow/window_move.rs` の警告の文を一時的に 1 字変えるとこの 1 本が赤になり、戻すと緑に戻る（一時の変更はコミットしない）。タスクを閉じる前に `git diff -- crates/areka-placement/src/follow/window_move.rs` が空
