@@ -68,8 +68,8 @@
 #### Acceptance Criteria
 
 1. The 集め直し作業 shall `main.rs` の `MarkInputs`・`Teardown`・`settle_session_mark`（`session_mark_verdict`・`MarkVerdict` を含む）・`restore_merged_placements`・`on_boot_ok`（`insert_persist_wiring`・`record_last_used_at_boot` を含む）・`record_last_used`・`boot_monitor_snapshot` を、`session/` の下へ移す。
-2. When 移動を終えたとき, the `main.rs` shall `fn main`・`finish_after_run`・`install_boot_context`・`first_boot_origin`・`boot_first_ghost` と、モジュールの宣言と最上位の段取りだけを持つ（brief の見込みは約 470 行・非空行）。（**仮定**: `after_run`・`AfterRun` は `main.rs` に残す。OPEN QUESTION 1）
-3. The 集め直し作業 shall `main.rs` の `pub(crate) use boot_config::{ConfigInputs, default_app_profile_dir, default_helper_exe_path, ghost_boot_options, is_benign_boot_error}` の出し直しを外し、呼び手が移した先のパスを指すようにする。（**仮定**: 出し直しは残さない。OPEN QUESTION 4）
+2. When 移動を終えたとき, the `main.rs` shall `fn main`・`finish_after_run`・`after_run`・`AfterRun`・`install_boot_context`・`first_boot_origin`・`boot_first_ghost` と、モジュールの宣言と最上位の段取りだけを持つ（2026-11-21 の測りで非空行は約 600。brief の約 470 は `after_run` も出す数え方）。`after_run` は、その info の行（出所 `areka`・`get_log` で status）の分け方を変えないために `main.rs` に残す（討議 1）。
+3. The 集め直し作業 shall `main.rs` の `pub(crate) use boot_config::{ConfigInputs, default_app_profile_dir, default_helper_exe_path, ghost_boot_options, is_benign_boot_error}` の出し直しを外し、呼び手が移した先のパスを指すようにし、出し直しを残さない（討議 4）。
 4. The 集め直し作業 shall 移した項目を確かめるテスト（`main_restore_seam_tests.rs`・`main_persist_wiring_seam_tests.rs`・`main_monitor_snapshot_seam_tests.rs`・`main_session_mark*_tests.rs`・`main_config_input_tests.rs`・`main_ghost_wiring_tests.rs`・`main_module_policy_tests.rs` ほか）を、確かめる相手と一緒に移すか `main.rs` に残すかを 1 本ずつ決め、どちらにしたかを記録する。`main.rs` に残る項目（`finish_after_run` ほか）を確かめるテストは `main.rs` に残す。
 5. The areka shall 起動の段取り（系の登録・口の据え付け・起動の文脈・最初のゴーストの起動・`run()`・`run()` の後の告知と印の始末・降ろす処理）を、前と同じ順で行う。
 
@@ -87,11 +87,11 @@
 
 ### Requirement 4: 系の登録の移し替え
 
-**Objective:** 開発者として、`register_systems` が登録している本体だけのモジュールの系を、`main.rs` の呼び手から登録したい。それにより集めた層が本体だけのモジュールを名指さずに済み、次の spec で向きを逆にする件数が減るため。
+**Objective:** 開発者として、`register_systems` が登録している本体だけのモジュール（`session/` の外の本体のモジュール）の系を、`main.rs` の呼び手から登録したい。それにより集めた層が本体だけのモジュールを登録のために名指さずに済み、次の spec で向きを逆にする件数が減るため。
 
 #### Acceptance Criteria
 
-1. The 集め直し作業 shall `ghost_session.rs` の `register_systems` が呼ぶ本体だけのモジュールの系の登録（brief の再測定で 11 本＝`readme`・`areka_input` の 6 本〔`user_break`・`balloon`・`shell_box_handler`・`choice_drain`・`char_watch`・`balloon_wheel`〕・`menu`・`install`・`update`・`mcp`）を、`main.rs` の呼び手（今は `main.rs:242`）へ移す。（**仮定**: 11 本とも移す。OPEN QUESTION 2）
+1. The 集め直し作業 shall `ghost_session.rs` の `register_systems` が呼ぶ系の登録のうち、`session/` の外の本体のモジュールのもの 4 本（`menu::register_menu_poll`・`install::register`・`update::register`・`mcp::register`）を、`main.rs` の呼び手（今は `main.rs:242`）へ移す。`readme`（この仕様で `session/` へ入る）と `areka_input` の 6 本（`user_break`・`balloon`・`shell_box_handler`・`choice_drain`・`char_watch`・`balloon_wheel`。本体の下の crate で、後の `areka-session` から引ける向き）の登録は `session/` に残す（討議 2。brief の「11 本」は入力が本体の中にあったころの数え方で、入力の登録を出すと、触れない `crates/areka-input/` の中の「呼び手は `register_systems`」の説明 15 か所が古くなる）。
 2. The areka shall 系の登録の呼び出しの順（`session::hooks::install`・`app_exit::install_input_hooks`・`register_frame_system`・`wire_kanade_stop`・`write_failure::install`・各モジュールの登録・`FrameFinalize` への足し込み・`wire_zorder_pair`）を、全体として前と同じにする。
 3. The areka shall 強制退避の口を、前と同じく `session::hooks::install` のすぐ後に `app_exit::install_input_hooks` で据え、固定のテスト `register_systems_installs_the_escape_hook` を前と同じ合否で通す。
 4. The areka shall 系の登録を、前と同じくプロセスに 1 回だけ行う。
@@ -120,7 +120,7 @@
 4. The 集め直し作業 shall `tools/` の中の説明のパス（`tools/package.ps1` の目印の出どころ・`tools/perf/judge-perf.py`）を、移した先へ書き換え、道具が字面で読む文（ログの目印の本文ほか）は変えない。
 5. The 集め直し作業 shall 文書の中の集めるモジュールのパスを、移した先へ書き換える: `doc/COMPAT_ARCHITECTURE.md`（§8 の既にある行のパスだけ）・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の根拠の場所（2026-11-21 の測りで約 33 か所）・`doc/ukadoc-coverage/briefing-assets.md`・`doc/README.md`・`doc/click-through.md`・`doc/testing.md`・`doc/ssp-mcp/log-convention.md`・`doc/pasta-real-run.md`・`doc/ideas/` の下の文書（`doc/ideas/novel-redesign-2026-11-20/` を含む）。残るファイル `main.rs` の名で移す項目を指す行（2026-11-21 の測りで `doc/COMPAT_ARCHITECTURE.md:189` の `restore_merged_placements`・`:318`・`:319` の `session_mark_verdict`）は、ファイル名の grep に当たらないので項目の名で引いて 1 件ずつ直す（同じ行の `after_run` ほか `main.rs` に残る項目は直さない）。網羅台帳は別々の行だけを書き換え、`doc/ukadoc-coverage/report/` は手で直さず作り直す。
 6. The 集め直し作業 shall `.kiro/steering/structure.md` の本体の節（src 直下の起動と終了のファイル・`session/`・`roots/`・`cli/`・`readme`）と、`.kiro/steering/tech.md`・`.kiro/steering/logging.md`（2026-11-21 の測りで `:103` の `log_history.rs`）の本体のパスを、移した先へ合わせる。
-7. The 集め直し作業 shall `audit-areka-app` と `audit-areka-install-update` の brief の「受け持つファイル」を、移した先のパスへ書き換える。（**仮定**: 受け持ちの持ち主は変えず、パスだけを書き換える＝roots の芯と readme は `audit-areka-install-update` のまま。OPEN QUESTION 3）
+7. The 集め直し作業 shall `audit-areka-app` と `audit-areka-install-update` の brief の「受け持つファイル」を、移した先のパスへ書き換える。受け持ちの持ち主は変えず、パスだけを書き換える＝roots の芯と readme は `audit-areka-install-update` のまま（討議 3。寄せ直すとウェーブ C26 の 3 本の範囲の組み直しになる）。
 8. When 書き換えを終えたとき, the 集め直し作業 shall 集めたモジュールのディレクトリを付けた古いパス（`crates/areka/src/ghost_session.rs`・`areka/src/ghost_session.rs`・`src/ghost_session.rs` の形ほか）を、`crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md`・`.kiro/steering/logging.md` で grep して 0 件であることを示す。ディレクトリを付けない素のファイル名（`ghost_session.rs` だけの書き方。2026-11-21 の測りで触れない crate に 9 か所・`areka-ghost`・`wintf` に 2 か所）は、6.9 のモジュールの名前と同じく移した後も読めるものとして当たりにせず、書き換えない。除くのは、歴史の文書（`roadmap-history.md`・`.kiro/specs/completed/`）・新旧のパスの対応表を持つ `roadmap.md`・日付つきの 1 枚の写し（`doc/roadmap-overview-2026-10-16.html` の形。`doc/ideas/novel-redesign-2026-11-20/` は当たらず書き換える側）・同じウェーブの約束で触らない所（`crates/areka-input/src/user_break.rs:201`〔`audit-areka-input-menu` がパスを書かない形に直す〕）だけで、除いた所は一覧で残す。
 9. The 集め直し作業 shall モジュールの名前だけで本体の層を指す説明（`crates/areka-runtime/src/lib.rs`・`crates/areka-placement/src/lib.rs` の「本体の `ghost_session`」・本体の `runtime_tests/mod.rs` の 25 行ほか）を、移した後も読めるものとして 6.8 の当たりにせず、書き換えない。
 
@@ -130,11 +130,11 @@
 
 #### Acceptance Criteria
 
-1. The areka shall 集めたモジュールの本番のログを、モジュールのパスから付く出所（`areka::session::…`）で出す。（**仮定**: モジュールの名前は今と同じ＝`areka::session::boot_config`・`areka::session::ghost_session`・`areka::session::app_exit`・`areka::session::readme` ほか。OPEN QUESTION 5）
+1. The areka shall 集めたモジュールの本番のログを、モジュールのパスから付く出所（`areka::session::…`）で出す。モジュールの名前と `#[path]` の入れ子は今と同じにする＝`areka::session::boot_config`・`areka::session::ghost_session`・`areka::session::ghost_session::ghost_session_runtime`・`areka::session::app_exit`・`areka::session::readme` ほか（討議 5。入れ子を平らにすると `ghost_session_runtime` の info の行が status から落ちる）。`log_history` の決まりの表は集めたモジュールごとに 1 行ずつ `areka::session::<名>` へ直し、`areka::session` を下まで含む 1 行に畳まない（畳むと、今は残さない `session/` の `reload` ほかの info の行が status に入る）。
 2. The 集め直し作業 shall 直書きの出所を、次の決まりで 1 件ずつ扱う。モジュールのパスを写したもの（`"areka::boot_config"`・`"areka::boot_resolve"`・`"areka::ghost_session"`・`"areka::alert"`・`"areka::readme"`・`"areka::readme::opener"`・`"areka::app_exit"` ほか、集めるモジュールの名前を写したもの）は新しい出所へ合わせる。語彙として付けたもの（`"areka::persist::*"`・`"areka::log::*"`・`"areka::perf"`）と、既に `session/` にあるもの（`"areka::session::ghost_switch"`・`"areka::session::reload"`）と、本体の根の `"areka"` は変えない。どの直書きをどちらにしたかは一覧で記録する。
 3. The 集め直し作業 shall ログの出所を名前で読む所を、新しい出所の名前へ書き換える: `log_history` の決まりの表（`RULES`・`UNKEPT_TARGETS`）とそのテスト・`crates/real-run-kit/src/launch.rs` の `RELIED_TARGETS` と `launch_tests.rs`・`close_tests.rs`・`bin/real-run-fake-areka.rs`・`crates/areka/tests/emo2_mcp_real_run.rs` の `rust_log` と標準出力の前置き（`"areka::boot_config: "`）と説明・`doc/testing.md`・`doc/ssp-mcp/log-convention.md`・`doc/pasta-real-run.md` の `RUST_LOG` と説明。
 4. The areka shall MCP の `get_log` の 5 種別への分け方で、移す前に各出所の行が当たっていた種別（`areka::boot_config`・`areka::boot_resolve`・`areka::ghost_session`・`areka::readme` の下は status・どの決まりにも当たらない `areka::alert`・`areka::app_exit` ほかは残さない）を、移した後の出所の行でも同じにする。
-5. If 移す項目の info の行の出所が移すことで本体の根 `areka`（完全一致で status に当たる）から外れる場合, then the 集め直し作業 shall その行の分け方を前と同じに保つ手当てを設計の段で決める。（2026-11-21 の測りで、`main.rs` から移す項目の info の行は 0 件。`after_run` の `session_end_already_handled` は `main.rs` に残す仮定のため当たらない）
+5. If 移す項目の info の行の出所が移すことで本体の根 `areka`（完全一致で status に当たる）から外れる場合, then the 集め直し作業 shall その行の分け方を前と同じに保つ手当てを設計の段で決める。（2026-11-21 の測りで、`main.rs` から移す項目の info の行は 0 件。`after_run` の `session_end_already_handled` は `main.rs` に残すため当たらない）
 6. When `RUST_LOG` に新しい出所の名前（例 `areka::session::boot_config=debug`）を与えたとき, the areka shall 移す前に古い出所の名前で出ていたものと同じだけのログを出す。
 7. When real-run-kit の窓口へ info より絞った記録の段を渡したとき, the real-run-kit shall 前と同じく窓口が頼る行の出所（`areka_mcp::server` と、新しい出所の名前の終了の行）を info で足す。
 8. When 書き換えを終えたとき, the 集め直し作業 shall 古い出所の名前（`areka::ghost_session`・`areka::boot_config`・`areka::boot_resolve`・`areka::app_exit`・`areka::alert`・`areka::readme`・`areka::session_end`・`areka::exit_wait`・`areka::write_failure`・`areka::readonly`・`areka::log_history`・`areka::roots`〔芯の分〕ほか）を、`crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep して 0 件であることを示す（歴史の文書と、新旧のパスの対応表を持つ `roadmap.md` は除く。本体に残る `roots/` の `edit`・`desk`・`pick` の出所は当たりにしない）。
@@ -177,7 +177,7 @@
 5. When 完了の前に, the 集め直し作業 shall `pwsh -NoProfile -File tools/test-all.ps1` が緑であることを示す。
 6. When 完了の前に, the 集め直し作業 shall ログの出所を名前で読む実機テスト 2 つ（real-run-kit を使い `areka::app_exit` を名指しの決まりで足す `crates/areka/tests/emo2_mcp_real_run.rs`・`crates/areka/tests/smoke_boot_loop_exit.rs`）を、新しい出所の名前で 1 回ずつ走らせて緑を示す。
 7. The 集め直し作業 shall 実機で回すテストを 10.6 の 2 つだけにし、ほかは構造の証跡（テストの名前の一覧の比べ・警告・全体テスト・grep・決定論のテスト）で足りるとする（向きを逆にした道はこの仕様には無い）。
-8. The 集め直し作業 shall MCP の `get_log` の 5 種別の分け方が前後で同じこと（7.4）を、`log_history` のテストで示す。
+8. The 集め直し作業 shall MCP の `get_log` の 5 種別の分け方が前後で同じこと（7.4）を、`log_history` のテストで示す。そのテストには、移したモジュールの実の出所（本番のコードの `module_path!()` の値）で種別を引く較正を 1 本足し、表の文字列とファイルの置き場がずれたときに赤になるようにする（討議 6。足したテストは 10.3 の対応表で説明する）。
 
 ## 設計の段への申し送り
 
@@ -186,12 +186,13 @@
 3. **roadmap の C24 の行の触るファイルの一覧に無かった所**（2026-11-21 の作業の木の測り・同じウェーブの兄弟の触るファイルと重ならないことは設計の段で確かめる）: `tools/package.ps1`・`tools/perf/judge-perf.py`（説明だけ）・`doc/click-through.md`・`doc/README.md`・`doc/ukadoc-coverage/briefing-assets.md`・`doc/ideas/novel-redesign-2026-11-20/` の 5 ファイル・`.kiro/steering/tech.md`・`crates/pilot/examples/pilot-windows-rs-next/REWRITE_TABLE.md`。
 4. **上限越えの例外表**: 2026-11-21 の測りで `crates/log-capture-kit/tests/file_length_guard_test.rs` の表と `temp_path_guard_test.rs` の表に集めるパスは 0 件＝`log-capture-kit` に触らずに済む見込み（9.2）。
 5. **`main.rs` の info の行**: 移す項目のうち info を出すのは無い（`after_run` の `session_end_already_handled` は出所 `areka` で status に当たる。`after_run` を移すなら 7.5 の手当てが要る）。
-6. **登録の順**: `readme` の登録は今 `session::ghost_switch` ほかの切替の登録より前にある。11 本を `main.rs` へ移しても全体の順を保つ形（`register_systems` を前後に分けるなど）は設計の段で決める（4.2）。
+6. **登録の順**: `menu` の登録は入力の登録（`user_break` と `balloon` ほか 5 本）の間に、`install`・`update`・`mcp` はその後ろにある。4 本を `main.rs` へ移しても全体の順を保つ形（`register_systems` を 3 つに分けるなど・ギャップ分析 4 章 (b)）は設計の段で決める（4.2）。Input の段の系は互いの並びの指定を持たないので、登録の順を変えない。
 
-## OPEN QUESTIONS（要件の討議で決めること）
+## 要件の討議で決めたこと（2026-11-21・全議題を推奨案で一括承認）
 
-1. **`after_run`・`AfterRun` の置き場**: brief の項目の一覧には無いが、再測定の「出せる項目は 527〜947 行」の範囲に `after_run` が入る。`after_run` は `fn main` から呼ばれ、info の行（出所 `areka`＝status）を持つ。**仮定**: `main.rs` に残す（2.2）。移すなら 7.5 の手当てが要る。
-2. **`main.rs` へ移す系の登録の範囲**: brief の再測定は「本体だけの系は 11 本」と数える。しかし `readme` はこの仕様で `session/` へ移り、入力は既に本体の下の crate `areka-input`（後の `areka-session` が引ける向き）にある。本当に本体に残るのは `menu`・`install`・`update`・`mcp` の 4 本。**仮定**: brief の字面どおり 11 本を移し、全体の順を保つ（4.1・4.2）。4 本だけにする案もある（移す行が減り、順を保つ手当ても小さくなる）。
-3. **roots の芯と readme の受け持ち**: `audit-areka-install-update` が今 `roots*`・`readme*` を受け持つ。`session/` へ移した後も同じ audit が受け持つか、`session/` を受け持つ `audit-areka-app` へ寄せるか。**仮定**: 持ち主は変えずパスだけ書き換える（6.7）。
-4. **`boot_config` の出し直し**: `main.rs` の `pub(crate) use boot_config::{…}` を外して呼び手を移した先へ向けるか、`main.rs` に出し直しを残すか。**仮定**: 外す（2.3・brief の「出し直しているだけ」の読み）。
-5. **`session/` の下のモジュールの名前**: 移したモジュールの名前を今と同じにするか（`session::boot_config`・`session::ghost_session`・`session::roots`・`session::readme` ほか。本体に残る `roots/` の `edit`・`desk`・`pick` と名前が並ぶ）。名前は `RUST_LOG` で開く出所の名前として開発者の目に見える。**仮定**: 今と同じ名前（7.1）。
+1. **`after_run`・`AfterRun` の置き場**: `main.rs` に残す（2.2・7.5）。
+2. **`main.rs` へ移す系の登録の範囲**: `session/` の外の本体のモジュールの 4 本（`menu`・`install`・`update`・`mcp`）だけ。`readme` と `areka_input` の 6 本は `session/` に残し、全体の順を保つ（4.1・4.2）。
+3. **roots の芯と readme の受け持ち**: 持ち主は変えず、パスだけ書き換える（6.7）。
+4. **`boot_config` の出し直し**: 外す（2.3）。
+5. **`session/` の下のモジュールの名前と入れ子**: 今と同じ。分け方の表はモジュールごとに 1 行（7.1）。
+6. **`get_log` の分け方の証跡**: 実の `module_path!()` で種別を引く較正を 1 本足す（10.8）。
