@@ -113,17 +113,6 @@
 - **キ（古い説明）**: `crates/areka/src/boot_config.rs:L617`・`L621-L622` の `is_benign_boot_error` の説明は「`wire_runtime` が再利用する」と書くが、呼び手は `ghost_session.rs:L783`・`session/runtime_boot.rs:L137` だけ。
 - **ク（古い説明）**: `crates/areka/examples/emo-present/setup.rs:L88` の「本番（`build_boot_assets`）」は古い（`audit-emo2-boot-spine` の 43 番と同じ形の文）。
 
-## 2026-11-20 棚卸㊵の再測定（main 67e0c70e）
-- **前提の変化**: `audit-emo2-boot-spine`（11-19）が上の申し送り（オ・キ・ク）を足した。キは同じ PR で直り、今の `boot_config.rs:616〜617` は「窓の在る起動（`session::runtime_boot::boot_runtime`）も…再利用する」＝残るのは窓の無い起動の呼び手 `ghost_session.rs:783` を挙げていないことだけ。オ（`tick_gate_config_producers_tests.rs:70` の `code_only`）・ク（`examples/emo-present/setup.rs:88` の「本番（`build_boot_assets`）」）は残る。同じ spec は本体の `boot_config.rs`・`ghost_session.rs`・`main_restore_seam_tests.rs`・`crate_source_test_support.rs`・`Cargo.toml` も直した（振る舞いは同じ）。
-- **2026-11-15 の申し送り（`audit-placement-core`）の読み替え**: パスの `src/runtime/` は `crates/areka-runtime/src/` へ移った。件 2 の略称は `scg` が 0（`audit-emo2-boot-spine` が正式の名へ直した）、`atom` が本体の `ghost_session.rs:227・230・259・286`・`main.rs:905`・`main_monitor_snapshot_seam_tests.rs:150` と `areka-runtime` の `frame*` に残る。件 3（`frame_diag_route_tests.rs:19`・名指す `areka_placement::test_support::capture_logs` は今も無い）・件 4（`frame_transition_branch_tests.rs:501・527・545`）・件 9（`frame/drain_resnap.rs:597`）と件 2 の `frame*` の分は `audit-emo2-boot-frame` の持ち物、件 10 の `move_cue_apply_move_tests.rs:52`・`move_cue_apply_move_sticky_tests.rs:201`・`move_cue_place_tests.rs:330` は `audit-emo2-boot-switch` の持ち物になった。件 10 の `input_events/drag_test_support.rs:104` は `audit-areka-input-menu`、`runtime_tests/frame/switch_finish_tests.rs:61` は `audit-emo2-boot-frame`。この spec に残るのは件 1・件 2 の本体の分・件 5・件 7・件 8・件 10 の `boot_resolve_tests.rs:422`・`main_persist_wiring_seam_tests.rs:13`。件 6（`assets_tests.rs`）は `areka-runtime` へ移り、持ち主の `audit-emo2-boot-spine` は着地済み＝着手のときに残っていれば引き取り先を決める。
-- **触るファイル**: `crates/areka/` のうちほかの見直しの持ち物でないもの（今の数え＝`.rs` 164・本番 約 14,500 行・テスト 約 34,500 行・`wc -l`＝起票の 211 ファイル・12,594・18,655 より大きい）。`session-module-gather`・`session-crate-split` の後は大半が `crates/areka-session/src/` へ移る。上限に近いのは `main.rs` 989・`tests/stay_on_top_real_run.rs` 966・`main_session_mark_tests.rs` 951。
-- **規模**: 指摘の数で決まる。範囲が起票より大きく、20 を越える見込みが高い＝要件の討議で指摘の組ごとに同じ範囲の 2 本目を切る（Constraints のとおり）。
-- **先に要るもの**: `session-crate-split`（その前に `input-crate-split`・`session-module-gather`）。見込み C26。
-- **同じウェーブに置けない相手**: crate 分けの 3 本（待つ）・`doc-compat-architecture-rename`（`ghost_session_scope_scale.rs`・`reference_brain.rs` が文書を名指す）・`balloon-flip-ssp-review`（案 ⑶ で `ghost_session.rs`）・`multi-ghost-runtime`。`audit-areka-install-update`・`audit-emo2-boot-switch` とは持ち物が分かれていて 0（同じ C26 でよい）。
-- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
-- **要件定義のモデル**: Opus（見直しの型どおり）。
-- **分割の案**: 起票のままでは無し。指摘が 20 を越えたら要件の討議で指摘の組で 2 本目。
-
 ## audit-emo2-boot-frame からの申し送り（2026-11-21）
 
 `audit-emo2-boot-frame` の範囲の外で見つけた、本体の側の件（`.kiro/specs/completed/audit-emo2-boot-frame/research.md` の 6 節オ・コ・サ・シ）。
@@ -135,3 +124,16 @@
   - `areka-runtime` の 2 か所（`move_cue_*`）は `audit-emo2-boot-switch` の brief へ回した。
 - **サ**: 本体の `capture_logs` の写し（`runtime_tests/spine.rs`・`input_events/choice_drain.rs`・`readme/readme_cue_tests.rs`）と、GPU の World の写し（`runtime_tests/spine.rs`。`areka-runtime` の `frame_test_support::gpu_on` を使える）。
 - **シ**: 起動の文脈 `BootContext` を組む補助の写しが 5 か所（`install/desk_tests.rs`・`menu/ghost_frame_tests.rs`・`readme/opener_submit_tests.rs`・`session/ghost_switch_tests.rs`・`session/reload_tests.rs`）。
+
+## 2026-11-21 棚卸㊶の再測定（main `31ac3eaf`）
+- **前提の変化**: PR#488（コメントだけの整理）で、次の件が消えた（`git grep` で 0）。2026-11-15 の申し送りの件 2（`atom` の本体の分）・件 7（記憶の帳面の名）・件 8 の `smoke_exit.rs` の「task 2.3」と、`audit-emo2-boot-spine` の申し送りのキ・ク。件 8 の `examples/collision-probe/` はもう無い。`input-crate-split`（PR#486）は `app_exit.rs`（`install_input_hooks`。新しい `app_exit_escape_tests.rs` は `audit-areka-input-menu` の持ち物）・`ghost_session.rs`（`file_drop`・`shortcut` のパス）・`main.rs`（`use areka_input as input_events;`）を直した。`audit-emo2-boot-frame`（PR#484）が上の申し送りのオ・コ・サ・シを足した。
+- **残る件**（行は今の main）:
+  - 件 1（見張りは `session_end_sync_send_tests.rs`・`readonly_tests.rs` の 2 本。`frame_attach_tests.rs` は `areka-runtime` へ移った）・件 5（`main.rs:906`・`ghost_session.rs:210` が `apply_restored_placements` と書く。今の呼び所は `restore_and_judge` → `apply_balloon_limit`）・件 8（`main_restore_seam_tests.rs:24`）・件 10（`boot_resolve_tests.rs:421`・`main_persist_wiring_seam_tests.rs:13` の `SharedFakeIo`）・オ（`tick_gate_config_producers_tests.rs:68`）。
+  - コ（`boot_resolve_tests.rs` の 482・575・756・804 行、`main_persist_wiring_seam_tests.rs` の 80・123 行、`install/names_tests.rs` の 28 行）・`MEMORY_WRITE_FIX`（`alert.rs:88`）・`Cargo.toml` の古い依存の説明（60・73 行ほか）。件 6 は着手のときに引き取り先を決める。
+- **ほかの見直しの持ち物を指す件（重なりの穴）**: コの `install/names_tests.rs`、サの `readme/readme_cue_tests.rs`、シの `install/desk_tests.rs`・`readme/opener_submit_tests.rs` は `audit-areka-install-update` の持ち物。シの `session/ghost_switch_tests.rs` は `audit-emo2-boot-switch`、シの `menu/ghost_frame_tests.rs` とサの `input_events/choice_drain.rs`（今は `crates/areka-input/src/choice_drain.rs`）は `audit-areka-input-menu` の持ち物。
+  - **棚卸㊶の決め**: 持ち主の分は持ち主が直す＝`install/names_tests.rs`・`readme/readme_cue_tests.rs`・`install/desk_tests.rs`・`readme/opener_submit_tests.rs` は `audit-areka-install-update`、`session/ghost_switch_tests.rs:84` は `audit-emo2-boot-switch`（どちらも向こうの brief の「ほかの brief から指される件」に在る）、サの `crates/areka-input/src/choice_drain.rs` は `audit-areka-input-menu`（C24）。この spec が直すのは残り（`boot_resolve_tests.rs`・`main_persist_wiring_seam_tests.rs`・`runtime_tests/spine.rs`・`menu/ghost_frame_tests.rs`・`session/reload_tests.rs`）。シの写しは持ち主ごとに、その範囲の中の補助へ寄せる。1 か所へまとめるのは 3 本の着地の後。これで C26 の 3 本は 0。
+  - 本体の `file_drop.rs`・`file_drop_*tests.rs`・`app_exit_escape_tests.rs` は、`audit-areka-input-menu` が C24 に入るために範囲から外したので、この spec の受け持つファイル（ほかの 7 本の持ち物でない本体の残り）に入る（棚卸㊶）。
+- **規模**: 指摘の数で決まる。範囲は起票の約 1.7 倍で、20 を越える見込みが高い＝要件の討議で指摘の組ごとに同じ範囲の 2 本目を切る（Constraints のとおり。今は切らない）。上限に近いのは `tests/stay_on_top_real_run.rs` 966・`main_session_mark_tests.rs` 947・`main.rs` 947。
+- **先に要るもの**: `session-crate-split`（その前に `session-module-gather`）。範囲の大半（`ghost_session*`・`boot_*`・`app_exit*`・`main.rs` ほか）がこの 2 本で動く＝先には始められない。見込み C26。
+- **同じウェーブに置けない相手**: crate 分けの 2 本（待つ）・`doc-compat-architecture-rename`（`ghost_session_scope_scale.rs` が文書を名指す。`reference_brain.rs` の名指しは PR#488 で消えた）・`multi-ghost-runtime`。`audit-areka-install-update`・`audit-emo2-boot-switch` とは、上の穴を持ち主へ寄せれば 0。
+- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。要件定義のモデル: Opus（見直しの型どおり）。分割の案: 起票のままでは無し（指摘が 20 を越えたら上のとおり）。

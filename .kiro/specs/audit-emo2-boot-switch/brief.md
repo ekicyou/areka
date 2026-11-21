@@ -105,18 +105,6 @@
 - **ウ（件 6 の 2 本）**: `crates/areka/src/runtime_tests/balloon_visibility_phase_tests.rs:L714`・`L789` のテスト関数 2 本は、補助ごと `areka-runtime` へ戻せる（`world_at` の写しは上の runtime-crate-split の申し送りに既にある）。
 - **オ（`code_only` の写し）**: `crates/areka-runtime/src/balloon_visibility_phase_zorder_chain_tests.rs:L257` の `code_only` は、`source_text_test_support::code_only` と 1 字も違わない。そちらを使う形に寄せる。
 
-## 2026-11-20 棚卸㊵の再測定（main 67e0c70e）
-- **前提の変化**: `audit-emo2-boot-spine`（11-19）が上の申し送り（ウ・オ）を足した。オは同じ PR で直り、`balloon_visibility_phase_zorder_chain_tests.rs:38` は `source_text_test_support::code_only` を使う＝済み。ウ（本体の `runtime_tests/balloon_visibility_phase_tests.rs` の 2 本と、146 行の `world_at` の写し）は残る。同じ spec は範囲の `balloon_hover.rs`・`shell_box_hover.rs`・`move_cue_place.rs`・`change_cue_tests.rs`・`move_cue_{balloon_lock,move_severity_log,move_sink}_tests.rs`・`session/ghost_switch_{talk_clock_tests,test_support}.rs` も直した（記録の捕まえ方の寄せ・振る舞いは同じ）。`runtime-module-untangle` の申し送り（`session/shell_balloon_switch.rs:37〜40` の出し直しが 10 項目）は残る。
-- **ほかの brief から移る件**: `audit-areka-app` の brief の 2026-11-15 の申し送り（`audit-placement-core`）の件 10 のうち、`crates/areka-runtime/src/move_cue_apply_move_tests.rs:52` の `attach_fake_handles`（`areka_placement::test_support::give_fake_handles` の写し）と、`move_cue_apply_move_sticky_tests.rs:201`・`move_cue_place_tests.rs:330` の `SharedFakeIo`（`areka_placement::test_support::SharedFakeIo` の写しか）は、crate 分けでこの spec の範囲になった。着手のときに拾う。
-- **触るファイル**: 範囲は Current State のまま。今の数え＝62 ファイル・本番 6,075 行・テスト 14,512 行（`wc -l`）。上限に近いのは `session/ghost_switch_tests.rs` 990・`balloon_visibility_tests.rs` 968・`session/ghost_switch.rs` 931。
-- **規模**: 指摘の数で決まる（20 を越えたら指摘の組で同じ範囲の 2 本目）。
-- **先に要るもの**: `session-crate-split`（`ghost_switch*`・`shell_balloon_switch*` を `crates/areka-session/src/` へ移し、`ghost_switch.rs` の install・update への知らせ〔C3〕を書き換える）。その前の `input-crate-split`（本体の `runtime_tests/balloon_visibility*` 4 本が input を引く）・`session-module-gather` も。見込み C26。
-- **待たれている**: `balloon-script-offset-align`（`move_cue*` に台本の 2 命令を足す見込み）はこの spec の後。
-- **同じウェーブに置けない相手**: crate 分けの 3 本・`balloon-script-offset-align`・`doc-compat-architecture-rename`（`move_cue_geometry.rs` が文書を名指す）。`audit-areka-app`・`audit-areka-install-update` とは持ち物が分かれていて 0。
-- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
-- **要件定義のモデル**: Opus（見直しの型どおり）。
-- **分割の案**: 無し。
-
 ## audit-emo2-boot-frame からの申し送り（2026-11-21）
 
 `audit-emo2-boot-frame` の範囲の外で見つけた、この spec の持ち物の件（`.kiro/specs/completed/audit-emo2-boot-frame/research.md` の 6 節キ・ク）。
@@ -124,3 +112,18 @@
 - **キ**: `crates/areka-runtime/src/move_cue_apply_move_tests.rs`・`move_cue_place_tests.rs` に、偽の HWND の輪（`areka_placement::test_support::give_fake_handles`）の写しがある（30 番と同じ形）。写しをやめて共通のものを使う。`move_cue_sink_reaches_runtime_wiring_receiver` の置き場の説明が誤っている件（63 番）は、向こうの直しで済ませるので渡さない。
 - **ク**: `crates/areka-runtime/src/balloon_visibility_phase.rs` の `marker.scope as u32` は、`audit-emo2-boot-frame` で置いた窓の scope の上限の関数（`crates/areka-runtime/src/target_map.rs` の `window_scope`）を使う形に直す（`i32::MAX` を越える scope を読み飛ばす・`warn!` を残す）。
 - **コ（`areka-runtime` の分）**: `crates/areka-runtime/src/move_cue_apply_move_sticky_tests.rs` の 256 行と `move_cue_place_tests.rs` の 395 行の `let _ = parts.handle.join();` が、記憶の書き手の panic を捨てている。`audit-emo2-boot-frame` の 20 番と同じ型で、`areka_runtime::spine::join_bounded` で待って panic を捨てない形に直す。
+
+## 2026-11-21 棚卸㊶の再測定（main `31ac3eaf`）
+- **前提の変化**: `audit-emo2-boot-frame`（PR#484）が上の申し送りのキ・ク・コを足した。どれも範囲の中のファイル（`move_cue_apply_move_tests.rs`・`move_cue_place_tests.rs`・`move_cue_apply_move_sticky_tests.rs`・`balloon_visibility_phase.rs`）で、範囲は広がっていない。クが使う `target_map::window_scope`（`crates/areka-runtime/src/target_map.rs:48`）とコが使う `spine::join_bounded` は呼ぶだけで、そのファイルには触らない。`input-crate-split`（PR#486）は範囲に触っていない（本体の `runtime_tests/balloon_visibility*` は今も `crate::input_events::…` を引く。書き換えは `session-module-gather`）。PR#488 はコメントだけで、行が動いた。
+- **残る件**（行は今の main）:
+  - `session/shell_balloon_switch.rs:36〜39` の出し直しが 10 項目。
+  - ウ: 本体の `runtime_tests/balloon_visibility_phase_tests.rs` の 2 本と、146 行の `world_at` の写し。
+  - 件 10 とキ: `move_cue_apply_move_tests.rs:44` の `attach_fake_handles`（`areka_placement::test_support::give_fake_handles` の写し）と `move_cue_place_tests.rs:82〜90` の偽の HWND、`SharedFakeIo`（`move_cue_apply_move_sticky_tests.rs:200`・`move_cue_place_tests.rs:321`）。
+  - ク: `balloon_visibility_phase.rs:459` の `marker.scope as u32`。コ: `move_cue_apply_move_sticky_tests.rs:255`・`move_cue_place_tests.rs:386`。
+- **ほかの brief から指される件**: `audit-areka-app` の申し送りシが、この範囲の `session/ghost_switch_tests.rs:84` の `boot_context` の写しを挙げる。この spec が直す（同じ範囲の `ghost_switch_test_support.rs` へ寄せる）形にしないと、C26 で `audit-areka-app` と同じファイルに触る（`audit-areka-app` の棚卸㊶の節）。
+- **触るファイル**: 範囲は Current State のまま。上限に近いのは `session/ghost_switch_tests.rs` 982・`balloon_visibility_tests.rs` 960・`session/ghost_switch.rs` 926。
+- **規模**: 指摘の数で決まる（20 を越えたら指摘の組で同じ範囲の 2 本目）。
+- **先に要るもの**: `session-crate-split` と、その前の `session-module-gather`。`session-crate-split` は `ghost_switch*`・`shell_balloon_switch*` を `crates/areka-session/src/` へ移し、C3・C4 の呼び所（`ghost_switch.rs:502〜523・673`・`shell_balloon_switch.rs:131`）を書き換える。`session-module-gather` は本体の `runtime_tests/balloon_visibility*` 5 本のパスを直す。`areka-runtime` の側だけなら crate 分けに触られないが、範囲の半分だけ先に始めるのは分割になる＝先には始めない。見込み C26。
+- **待たれている**: `balloon-script-offset-align`（`move_cue*`）はこの spec の後。
+- **同じウェーブに置けない相手**: crate 分けの 2 本・`balloon-script-offset-align`・`doc-compat-architecture-rename`（`move_cue_geometry.rs` が文書を名指す）。`audit-areka-app`・`audit-areka-install-update` とは、上のシを持ち主が直せば 0。
+- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。要件定義のモデル: Opus（見直しの型どおり）。分割の案: 無し。

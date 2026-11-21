@@ -67,19 +67,21 @@
 - **要件の段の議題**（答えで作業が変わるもの）:
   1. 並べ直しを預かるとき、前に預かった移動を捨てる今の決まりと、表示されない窓が 1 つで列が詰まらない決まりをどう合わせるか。
 
-## 2026-11-17 棚卸㊴の再測定（main 7f41b53e）
-- **前提の変化**: 本体の crate 分けの 3 本（`placement-crate-split`・`runtime-module-untangle`・`runtime-crate-split`）が着地し、触るファイルは移った＝預かり `crates/areka-runtime/src/frame/move_hold.rs`（271 行）・流す相 `crates/areka-runtime/src/frame/drain_resnap.rs`（759 行）・檻 `crates/areka-runtime/src/frame_move_hold_tests.rs`（382 行）。並べ直しの本体は `crates/areka-placement/src/reset_pos.rs`（141 行・読むだけ）。中身の変更は公開の範囲（`run_move_drain_with` を `pub`）と、`balloon-flip-side-rules` が `reset_window_positions` の終わりに足した全部のバルーンの判定し直し（`reset_pos.rs` 134 行の `rejudge_all_balloons`）だけ。並べ直しを預かれば判定し直しも一緒に表示の後になる（向きは合っている）。
-- **行の読み替え**: `move_hold.rs` の `touched_scopes` 84（`ResetWindowPos` は 127）・`unshown_scope` 135・`release_ready` 188・前に預かった移動を捨てる腕 207〜233（`move_hold_superseded` 219）、`drain_resnap.rs` の `run_move_drain_phase` 160・`run_move_drain_with` 165・並べ直しの腕 188、`reset_pos.rs` の `reset_window_positions` 52・`WindowPos.size` 78・`reset_window_pos_skipped` 55／90。本文の `emo2_boot/frame/` は `crates/areka-runtime/src/frame/`、`emo2_boot/frame_move_hold_tests.rs` は `crates/areka-runtime/src/frame_move_hold_tests.rs`、`placement/reset_pos.rs` は `crates/areka-placement/src/reset_pos.rs` と読む。
-- **規模**: S（3〜6 タスク）のまま。
-- **先に要るもの（C24 に置いた理由）**: 3 ファイルとも見直し `audit-emo2-boot-frame`（未完了・`frame/` と `frame_*` の持ち主）の範囲＝「v0.2.0 の作り直しと重なる見直しは先に」で、その着地を待つ。見込みでは `audit-emo2-boot-frame` が C23（`audit-placement-follow-residue` の後）なので、早くて C24。`drain_resnap.rs` は `balloon-text-visual-tree` とも重なる。
-- **同じウェーブに置けない相手**: `audit-emo2-boot-frame`（待つ）・`balloon-text-visual-tree`（`drain_resnap.rs`）・`balloon-script-offset-align`（`move_hold.rs` の場合分けと `drain_resnap.rs` の腕を触る見込み）・`install-live-target-hazards`（`drain_resnap.rs` を挙げる）。
-- **優先度の区分**: B（起動の直後の並べ直しで窓の間に隙間が残りうるバグ）。版は v0.2.0。
-- **要件定義のモデル**: Opus（今ある預かりの判定を並べ直しにも当てる形で、新しい境目・並行の設計には当たらない）。
-- **分割の案**: 無し。
-
 ## audit-emo2-boot-frame からの申し送り（2026-11-21）
 
 `audit-emo2-boot-frame` の洗い出し（`.kiro/specs/completed/audit-emo2-boot-frame/research.md` の 2 番・設計の確定 2）で見つけた、範囲の外の件。向こうでは預かりの判定の手間（件数に比例する形）だけを直し、振る舞いは変えていない。
 
 - **面を出さない窓への位置の指令が預かられ続ける件**: `crates/areka-runtime/src/frame/move_hold.rs` の預かりの列は、面を出さない窓（`unshown_scope`）へ向けた `\![move]` を、窓が出るまで預かり続ける。出ない窓へ送り続けると列が伸び続ける。捨てるか、上限で落とすかは、SSP が見えない窓への `\![move]` をどう扱うかを測ってから決める（ukadoc は沈黙・`doc/COMPAT_ARCHITECTURE.md` §8 の該当の行に SSP 2.9.26 の記録がある・SSP の測りは開発者の許しと排他テストの机が要る）。この spec の要件の段で議題にする。
 - 持ち主の `audit-emo2-boot-frame` が着地した後の `move_hold.rs` を読むこと（預かりの集合は `BTreeSet<u32>` になっている）。
+
+## 2026-11-21 棚卸㊶の再測定（main `31ac3eaf`）
+- **前提の変化**: `audit-emo2-boot-frame`（11-21・PR#484）が着地し、待つ相手は無くなった。預かりの集合は `BTreeSet<u32>`（`Blocked`）になり、件数に比例する手間だけが直った（振る舞いは同じ）。PR#488 で行がずれた＝`move_hold.rs`（275 行）の `touched_scopes` 84・`ResetWindowPos` 127・`unshown_scope` 135・`release_ready` 188・移動を捨てる腕 207〜233（`move_hold_superseded` 219）・`unshown` の判定 236〜239、`drain_resnap.rs`（728 行）の `run_move_drain_phase` 149・`run_move_drain_with` 154・並べ直しの腕 175、`reset_pos.rs`（139 行・読むだけ）の `reset_window_positions` 50・`reset_window_pos_skipped` 53／88・`WindowPos.size` 76・`rejudge_all_balloons` 132。
+- **触るファイル**: `crates/areka-runtime/src/frame/move_hold.rs`・`frame/drain_resnap.rs`・`frame_move_hold_tests.rs`（348 行）、兄弟のテストを足すなら `frame.rs` の `mod` の行。`frame_test_support.rs` は 945 行＝足場を足すなら新しいファイルへ。`doc/COMPAT_ARCHITECTURE.md` §8 の件 5 の行（既にある行の書き換え）。本文の `emo2_boot/frame/` は `crates/areka-runtime/src/frame/`、`placement/reset_pos.rs` は `crates/areka-placement/src/reset_pos.rs` と読む。
+- **規模**: S〜M（4〜8 タスク）。上の申し送りの「面を出さない窓への移動が預かられ続ける」件を議題に足した分だけ増えた。
+- **先に要るもの**: 無い。申し送りの件を SSP で測るなら、要件の段で開発者の許しと排他テストの机が要る。
+- **同じウェーブの相手との約束（C24）**: `session-module-gather` とは 0。ただし `run_move_drain_phase`・`run_move_drain_with` の形を変えると本体の呼び手（`runtime_tests/frame_move_order_tests.rs`＝向こうがパスを直す・`spine.rs`・`spine_conformance_lap_tests.rs`・`spine_move_cue_tests.rs`）に及ぶ＝形を変えず、本体にテストを足さない。`test-crash-report-merge` とは、向こうが `frame_test_support.rs` に触らなければ 0。`audit-areka-input-menu` とは 0。
+- **同じウェーブに置けない相手**: `balloon-text-visual-tree`（`drain_resnap.rs`）・`balloon-script-offset-align`（`move_hold.rs`・`drain_resnap.rs`）・`install-live-target-hazards`（`drain_resnap.rs`）。
+- **優先度の区分**: B（起動の直後の並べ直しで窓の間に隙間が残りうるバグ）。版は v0.2.0。
+- **要件定義のモデル**: Opus（今ある預かりの判定を並べ直しにも当てる形・新しい境目や並行の設計に当たらない）。
+- **分割の案**: 無し。
+- **古くなった記述**: Current State と Approach の行番号とパス（上の読み替え）。

@@ -84,3 +84,15 @@
 `runtime-module-untangle`（`emo2_boot` を `runtime` と `session` へ分けた spec）は振る舞いを変えなかった。作業中に直したくなった所は直さず、ここへ書いた。行番号は 2026-11-13（`93aca049f`）のもので、着手のときに確かめ直す。
 
 - **気を付ける所: `update::update_cue`・`readme::readme_cue` は記録の決まりの前方一致の下に入った**。`crates/areka/src/log_history.rs` の `areka::update`（Update）・`areka::readme`（Status）に当たる。今は 2 つとも `info!` を持たないので記録の分け方は前と同じだが、直しで `info!` を足すと記録に残るようになる。足すなら `UNKEPT_TARGETS` へ足すか、残すのが正しいかを決める（`areka::install::install_cue` は `UNKEPT_TARGETS` に入れてある）。
+
+## 2026-11-21 棚卸㊶の再測定（main `31ac3eaf`）
+- **前提の変化**: 起票の後に測り直した節は無かった。待ちに挙げた `mcp-reload`（`areka-P0-mcp-reload`）・`runtime-module-untangle`・`audit-sylphya-actor` は着地済み＝残る待ちは `session-crate-split`（その前に `session-module-gather`）だけ。`audit-sylphya-actor` の `barrier_within(Duration)` は `crates/areka-sylphya/src/actor.rs:562` に在るが、`install/desk.rs:377` はまだ `barrier()`＝追記の件は残る。`input-crate-split`（PR#486）が触ったのは `install/mod.rs`（説明の 1 行）と `update/worker_tests.rs`（字面の見張りに `areka-input` を足した）だけ。PR#488 はコメントだけ。`log_history.rs:136` の `UNKEPT_TARGETS`（`areka::install::install_cue` だけ）は申し送りのまま。
+- **触るファイル**: `crates/areka/src/` の `install*`・`update*`・`mcp*`・`roots*`・`readme*`。今の数えは 121 ファイル・約 35,600 行（`wc -l`・本番とテストの計。起票の 107 ファイル・30,277 行の約 1.2 倍）。上限に近いのは `update/worker_tests.rs` 967・`install/startup_tests.rs` 854。
+  - `mcp/dump_balloon.rs`（216 行）は今も範囲の中＝`balloon-text-visual-tree` はこの spec の後（roadmap の見込み C28 のまま）。
+  - `session-module-gather` で roots の芯（`mod`・`resolve`・`report`・`user_root`）と readme が `session/` へ、`session-crate-split` で `crates/areka-session/src/` へ移る。
+- **ほかの brief から指される件**: `audit-areka-app` の申し送り（`audit-emo2-boot-frame` の 6 節コ・サ・シ）が、この範囲の 4 ファイルを挙げる＝`install/names_tests.rs:28`（`let _ = parts.handle.join();`）・`readme/readme_cue_tests.rs:24`（`capture_logs` の写し）・`install/desk_tests.rs:726`・`readme/opener_submit_tests.rs:31`（`boot_context` の写し）。この spec が直す形にしないと、C26 で `audit-areka-app` と同じファイルに触る。
+- **規模**: 指摘の数で決まる（20 を越えたら指摘の組で同じ範囲の 2 本目）。
+- **先に要るもの**: `session-crate-split`。範囲の `install/desk.rs`・`update/desk.rs`（C3〜C5 の口）・`install/names.rs`・`install/install_cue.rs`・`update/update_cue.rs` を向こうが書き換え、`mcp/` のパスの直しと roots・readme の移動は `session-module-gather` が行う＝先には始められない。見込み C26。
+- **同じウェーブに置けない相手**: crate 分けの 2 本・`doc-compat-architecture-rename`（`install/judge.rs:90` が文書を名指す）・`balloon-text-visual-tree`（`mcp/dump_balloon.rs`・待つ側）。`audit-areka-app`・`audit-emo2-boot-switch` とは、上の件を持ち主が直せば 0。
+- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。要件定義のモデル: Opus（見直しの型どおり）。分割の案: 無し。
+- **古くなった記述**: Upstream の「`mcp-reload`（v0.1.0・2026-10-19 に着手中）」は着地済み。Current State の大きさ（107 ファイル）は起票のときの数え。
