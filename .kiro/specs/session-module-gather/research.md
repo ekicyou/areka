@@ -278,3 +278,46 @@
 5. **roots の分け方**（10 章の 8）: 残る `edit`・`desk`・`pick` のための新しい `src/roots/mod.rs` と、`edit.rs` の `super::` の書き換え。
 6. **書き換えの書き方**（10 章の 10・案 A）と **作業の順**（10 章の 11・案 C）。各段で `cargo check --workspace --all-targets` を緑に保ち、PR の前に `git diff -M --stat` で全部が移動として見えることを確かめる。
 7. **Research Needed**（7 章）: bevy_ecs 0.19.1 の並びの指定の無い系の走る順（順を保つので結論で作業は変わらない）・squash したときの移動の検出。
+
+## 12. 設計の段（2026-11-21・`/kiro-design`）
+
+- 測った木: 作業の木 `claude/kiro-start-session-module-gather-1375a8`（HEAD `cc912590`・main `f6405e09` に spec の文書のコミットだけ）。
+- 発見の種類: **light**（既にある本体の中の移動・新しい依存なし・外の調べなし）。前例 `completed/runtime-module-untangle/design.md` の形にそろえた。
+- 使った手引き: `kiro-spec-design` の `rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。領域の skill（Pasta・UI ほか）は当たらない。下請けの調べは出していない（ギャップ分析の測りが細かく、確かめ直しは数か所の grep で足りた）。
+
+### 12.1 測り直したもの
+
+- src 直下の候補は **62 ファイル**（本番 13・テスト 49・`boot_shell_tests.rs` を含む）。2 章の「78」は数え方が違う（`main_*` や roots を混ぜたとみられる）。設計の表（design.md の Supporting References）を正とし、実装の段の始めに `git ls-files` で数え直す。
+- `main.rs` 947 行。移す項目は 527〜547 行（`MarkInputs`・`Teardown`）と 643〜884 行（`MarkVerdict`〜`boot_monitor_snapshot`）。テストの宣言は 9 本（890〜947 行）。`main_session_mark_fallback_tests.rs` は `main_session_mark_tests.rs` の子（842 行）で `main.rs` は宣言しない。
+- `register_systems` は `ghost_session.rs:43-80`・25 の呼び出し（2.3 の表と一致）。呼び手は本番 `main.rs:242`・テスト 5 か所（一致）。
+- `crate::input_events` の呼び手 26 ファイル（一致）。語 `input_events` は `Cargo.toml:44`・`ghost_session.rs:276`・`menu/mod.rs:182` と、もとから古い `app_exit_tests.rs:182`。
+- `cli::BootRequest`・`cli::ModulePolicy` を引くのは 13 ファイル（`boot_config.rs` 5 か所ほか）。
+- 外への参照（本番）: 2026-11-21 の測りの 32 行と一致（9.1 の表）。登録の 4 行を出すと **28 行**＝`menu` 12・`menu::shortcut` 1・`install` 6・`update` 7・`file_drop` 1・`smoke_exit` 1。
+- 網羅台帳の古いパス: 32 行（43 か所）。`doc/COMPAT_ARCHITECTURE.md` 33 か所。`doc/ideas/novel-redesign-2026-11-20/` 5 ファイル 7 か所。`tools/package.ps1` 3・`tools/perf/judge-perf.py` 1。
+- 移す `main.rs` の項目の中の `info!` は 0 件（`settle_session_mark`・`record_last_used_at_boot` は debug、`record_last_used` は error）。`classify` は debug と trace を残さず、warn 以上を出所によらず error にするので、出所が根 `areka` から変わっても `get_log` の分け方は変わらない（要件 7.5 は手当て不要）。
+- `runtime_tests/mod.rs` は集めるモジュールをコードで引かない（説明の行だけ）。書き換えずに済む（要件 5.4・9.3）。
+- 移すファイルの `#[path]` に `../` を使うものは 0 件。`include_str!` を持つ移すファイルも 0 件。
+
+### 12.2 設計で分かったこと
+
+- **`#[path]` の読み方**: `mod.rs` でないファイル（`ghost_session.rs`）に書いた `#[path]` は、そのファイルのあるフォルダから読む。フォルダごと移せば `#[path]` は書き換え不要。
+- **`main.rs` の最上位の `use` は crate 全体の出し直しになる**: 根の私有の項目は crate のどこからも `crate::<名>` で引ける。今の `use areka_input as input_events;` はこの性質で働く。移した後に `main.rs` の最上位へ `use session::ghost_session;` を置くと、古い道 `crate::ghost_session::…` が黙って通る。`fn` の本文の中の `use` は外から見えないので、本文の字面（ソースを読むテストが読む）を保つのにはこちらを使う。
+- **`roots/mod.rs` の移動の検出**: 残る 3 本のために同じパスへ新しい `mod.rs` を置くと、squash の後に git は「書き換え＋追加」と見て、芯の履歴が `session/roots/mod.rs` へ続かない。`src/roots.rs`（`readme.rs` と同じ形）にすれば、`roots/mod.rs` は移動（R）になる。
+- **触れない crate の説明 25 か所**（`areka-input` 15・`areka-placement` 8・`areka-runtime` 2）が `ghost_session::register_systems` を名指す。入口を 3 つに分けて `main.rs` へ全体の入口を置くと、全部が古くなる。入口の名前と中身を残して本体だけの系を引数で受ければ、どれも古くならない。
+- **ソースを読むテスト**: `readonly_tests.rs:82` の較正の針 `mod readonly;` は `main.rs` から消えるので、`mod session;` に替える（同じ事実＝走査が `main.rs` の本文を見ている）。`:92` の絞り込みには空でないことの `assert!` を足す。`zorder_wiring_tests.rs` は `fn main` の本文の字面を保てば、読むファイルのパスだけの直しで済む。
+
+### 12.3 合成（design-synthesis）
+
+- **一般化**: 要件 1・3・6・7 は「1 つのモジュールの塊を移し、その名前を読む所（呼び手・出所・ソースを読むテスト・文書）を追従させる」同じ操作の繰り返し。塊ごとに 1 段で済ませ、段ごとに `cargo check` を緑にする手順を 1 つ決めた（design.md の Migration Strategy）。
+- **作るか使うか**: 道具は作らない（`git mv`・`git grep`・`cargo test -- --list`・`tools/test-all.ps1`・`git diff -M`）。較正のテストは標準の `std::any::type_name`／`type_name_of_val` を使い、移したファイルに定数を足さない。
+- **簡素化**: 出し直しを 1 つも足さない（研究の案 B を採らない）。新しい型は `BodySystems`（関数のポインタ 2 つ）だけで、本体だけの系の名指しを `main.rs` へ出しながら入口の名前と順を残す唯一の形として要る。入口を 3 つに分ける案は、関数が 2 つ増え、触れない crate の説明 25 か所が古くなるので採らない。`main.rs` の項目の行き先は 2 本（印の判定・起動のシーム）で、呼び手（`session_end` と `ghost_session`）が違うので 1 本にまとめない。
+
+### 12.4 Research Needed の閉じ方
+
+1. bevy_ecs の並びの指定の無い系の走る順: 登録の呼び出しを 25 行とも同じ順に保つ設計にしたので、調べなくてよい（結論で作業が変わらない）。
+2. squash したときの移動の検出: PR の前に `git diff -M --stat main...HEAD` で全部が `R` に見えることを確かめる手順を設計に入れた（design.md の VerificationRecord）。`roots/mod.rs` は `roots.rs` の形で `R` を保つ。
+3. 外への参照の一覧: 下書きを design.md に置いた（本番 28 行）。集め終えた木で数え直して、この記録の新しい節に置く（要件 8.1）。
+
+### 12.5 設計の討議へ持ち越したもの
+
+design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 件（登録の形・新しいファイルの名前・残る roots の宣言の置き場・`main.rs` の書き方・較正の取り方・`briefing-assets.md` の 2 か所・`roadmap.md` の対応表）。どれも仮定を置いて設計を書き切った。
