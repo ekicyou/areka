@@ -121,10 +121,10 @@
 5. The 本 spec の直し shall `spawn_assembly_tests.rs` 167〜173 行の「input_events→placement」「input_events の檻」の言い方と、同じ crate の中を `areka_input::…` と外の道で書く所を、入力の crate の今の名（`crate::`）で言う文に直す（件 5＝同。ギャップ分析で行が 170〜181 から動いたと確かめた）
 6. The 本 spec の直し shall `crates/areka-runtime/examples/collision-probe.rs` 63 行と `collision-probe/setup.rs` 75〜76 行の「`pub(crate)`・内部が `crate::` パスを使う」という理由の文を、今の事実（`attach_char_pointer_handlers` は `pub`。example から使えない本当の理由は依存の向き＝`areka-input` が `areka-runtime` に依存するので、`areka-runtime` の example は `areka-input` を使えない）に合う文に直す（件 6＝同。範囲の外のファイルだが、C24 の約束 ⑶ で説明の文に限って触ってよい）
 7. The 本 spec の直し shall `cargo doc -p areka-input --no-deps` の警告（ギャップ分析で数え直して 19 件＝私有の項目へのリンク 18 件・`MouseWiring::with_clock` の解けないリンク 1 件。brief の値は 20 件）を 0 件にする（件 7＝同）
-8. The 本 spec の直し shall `input-crate-split` が開けた項目（9 モジュールと `pub mod hooks`・根の 8 項目・子の 18 項目・メソッド 7 つ・`test-support` の機能で開けた `pointer_test_support`・`MouseWiring::with_clock`・`user_break` の `flag_rx`・`flag_source_connected`）ごとに、`areka-input` の外に実在の使い手があるかを確かめ、使い手の無いものは狭めるか消す。本体のテストだけが使う項目は使い手に数え、本体が使う項目は狭めない（件 8＝同・C24 の約束 ⑶・＝確定の議題 9。ギャップ分析では、開けた項目は全部本体の本番かテストに使い手があり、狭められる項目は 0 件だった＝research.md 6 節 (4)）
+8. The 本 spec の直し shall `input-crate-split` が開けた項目（9 モジュールと `pub mod hooks`・根の 8 項目・子の 18 項目・メソッド 7 つ・`test-support` の機能で開けた `pointer_test_support`・`MouseWiring::with_clock`・`user_break` の `flag_rx`・`flag_source_connected`）ごとに、`areka-input` の外に実在の使い手があるかを確かめ、使い手の無いものは狭めるか消す。本体のテストだけが使う項目は使い手に数え、本体が使う項目は狭めない（件 8＝同・C24 の約束 ⑶・確定の議題 9。ギャップ分析では、開けた項目は全部本体の本番かテストに使い手があり、狭められる項目は 0 件だった＝research.md 6 節 (4)）
 9. The 本 spec の直し shall `crates/areka-input/src/user_break.rs` 201 行の `crates/areka/src/readme.rs` のパスと、同じ形の 220 行の `crates/wintf/src/ecs/world/mod.rs` のパスを、パスを書かずに関数の名で指す形に直す（件 9＝C24 の約束 ⑶。`session-module-gather` が本体のファイルを移すため）
 10. The 本 spec の直し shall `crates/areka-input/src/choice_drain.rs` 253 行あたりの私有の `capture_logs` の写しを、範囲の中か上流にある共通の捕捉の補助を使う形に寄せる（件 10＝`audit-areka-app` の brief の「`audit-emo2-boot-frame` からの申し送り」のサ・棚卸㊶で持ち主へ寄せた。範囲の中には `balloon_test_support.rs` 185 行に同じ形の `capture_logs` がある）
-11. The 本 spec の直し shall `crates/areka-input/src/drag_test_support.rs` 283 行の `let _ = self.parts.handle.join();` を、待ちに上限を持ち、書き手の panic を捨てない形（`areka_runtime::spine::join_bounded` と同じ扱い）に直す（件 11＝`audit-areka-app` の brief の同じ申し送りのコ・＝確定の議題 9）
+11. The 本 spec の直し shall `crates/areka-input/src/drag_test_support.rs` 283 行の `let _ = self.parts.handle.join();` を、待ちに上限を持ち、書き手の panic を捨てない形（`areka_runtime::spine::join_bounded` と同じ扱い）に直す（件 11＝`audit-areka-app` の brief の同じ申し送りのコ・確定の議題 9）
 12. The 本 spec shall 件 1〜11 を片づけたことを、預かった件の出どころ（`collisionex-regions`・`input-crate-split` の申し送り・`audit-areka-app` の brief のサ・コ・C24 の約束 ⑶）と一緒に記録に残す
 
 ### Requirement 6: 直しの中でも守る決まり
@@ -222,5 +222,9 @@
 
 ### 並走のセッションとの申し合わせ（要件 7.2・7.9）
 
-- `test-crash-report-merge`: 落ちの報告の 2 つの名を残す方針で一致（議題 1）。議題 3 で触るファイルを 2026-11-21 に知らせて返事を待っている。
-- `window-resetwindowpos-hold`: 議題 3 で触るファイルを 2026-11-21 に知らせた（向こうは `areka-runtime` の `frame/`・`frame_*tests.rs` を触る・重なりは無い見込み）。
+- `test-crash-report-merge`: 落ちの報告の 2 つの名を残す方針で一致（議題 1）。議題 3 で触るファイルについて 2026-11-21 に返事を得た:
+  - `spawn.rs` で向こうが触りうるのは 350 行の説明の 1 行だけ（向こうの議題の承認しだい）。こちらは末尾の mod の並びに足すので、行は離れている。
+  - 向こうは `spawn_*_tests.rs` に触らない。落ちの報告の据え付けは crate の根に 1 つ置く形で、新しいテストのファイルに要るものは無い。
+  - `balloon_hover.rs`・`shell_box_hover.rs` と新しいファイルは向こうの触る所と重ならない。
+- `window-resetwindowpos-hold`: 議題 3 で触るファイルを 2026-11-21 に知らせた。向こうが触るのは `areka-runtime` の `frame/`・`frame_*tests.rs` で、重なりは無い。困ることがあれば知らせてもらう約束で、返事は無かった。
+- `session-module-gather`: C24 の約束 ⑵ で `crates/areka-placement/` に触らず、`crates/areka-runtime/` もコメント 1 か所（`transition_judge_offset_signoff_tests.rs`）だけなので、重なりは 0。
