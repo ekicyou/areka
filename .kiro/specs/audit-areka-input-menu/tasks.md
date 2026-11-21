@@ -55,7 +55,7 @@
   - _Dispatch: mechanical — 呼ぶ既存の口と形を design が与えている_
   - _Requirements: 4.3, 5.11, 6.2, 6.3_
 
-- [ ] 2. テストを強め、抜けたテストを足す
+- [x] 2. テストを強め、抜けたテストを足す
 
 - [x] 2.1 実 GPU でハンドラを通すテストを足す（G5・指摘 1・5・8・18）
   - バルーンのテストの支えに、実 GPU の World に普通のバルーンを置く組み立てほか design.md「テストの支え」の項目を足す（`capture_logs` は `pub(crate)` にし、3.1 がそのまま使えるようにする）。
@@ -81,7 +81,7 @@
   - _Dispatch: standard — 錠で順に回す起こしの確かめと失敗の枝の組み立てをコードで解く_
   - _Requirements: 4.1, 4.2, 4.3, 4.5, 6.2_
 
-- [ ] 2.4 中断が運ぶトークの番号の結線を試す（G7・指摘 10・51）
+- [x] 2.4 中断が運ぶトークの番号の結線を試す（G7・指摘 10・51）
   - バルーンのテストの支えに、トークの番号を見せている結線を作る項目を足す（design.md「テストの支え」の `runtime_wiring_showing_talk`：表示の線へ始まりを積み、可視性の相を 1 回回して置き、番号が置けたことを表明してから返す）。
   - 可視のバルーンの中断と箱の中断の 2 つの入口が、置いた番号を運ぶことを 1 本で見るテストを中断のテストのファイルに足す。番号のテストの別ファイルの 1 本を同じファイルの末尾へ寄せ、別ファイルとその mod の行を消す（指摘 51）。
   - 入口が番号の代わりに `None` を渡すと赤になることを一度確かめてあり、緑。中断のテストのファイルが 1,000 行を越えない。
@@ -165,3 +165,4 @@
 - `pointer_test_support.rs` は本体が `*` で読む。足す項目は必ず `#[cfg(test)] pub(crate)`（2.2 で一度 `pub` で足して差し戻し）。テスト名は本体の名指しがあるので、タスクが言わない名の変更をしない。
 - `shell_box_tests.rs` の `…_or_window_leave` は 2.2 で離脱の表明を消したので名と中身が食い違う。移す 3.3 で直す。
 - 2.3 で足した `click_tests.rs::release_on_a_window_without_size_sends_one_button_up` は `MouseWiring::with_clock` を直に組む。3.2 の指摘 64 で `world_with_wiring` へ寄せるときに一緒に寄せる。
+- `balloon_test_support.rs::runtime_wiring_showing_talk` は `TextLayerRuntime::new(TextLayerConfig::default())` を直に組む。3.1 で `empty_runtime()` を支えへ寄せたらそれに替える。

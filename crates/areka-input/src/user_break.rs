@@ -401,7 +401,3 @@ pub(crate) fn on_box_press(
 #[cfg(test)]
 #[path = "user_break_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "user_break_talk_id_tests.rs"]
-mod talk_id_tests;

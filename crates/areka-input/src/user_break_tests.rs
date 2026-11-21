@@ -34,6 +34,7 @@ use wintf::ecs::pointer::{OnPointerPressed, Phase, PointerState};
 use wintf::ecs::world::EcsWorld;
 
 use super::*;
+use crate::balloon::test_support::runtime_wiring_showing_talk;
 use log_capture_kit::{CapturedEvent, capture};
 
 // ---------------------------------------------------------------- 道具立て
@@ -850,4 +851,67 @@ fn box_break_in_the_no_break_section_sends_nothing_and_logs_one_debug_line() {
     assert_eq!(debug[0].field_str("event"), Some("box_break_rejected"));
     assert_eq!(debug[0].field_str("reason"), Some("no_user_break"));
     assert_eq!(debug[0].field("scope"), Some("2"));
+}
+
+// ---------------------------------------------------------------- 運ぶトークの番号
+
+/// 可視のバルーンの中断と箱の中断のどちらも、表示の側が見せている番号を kanade へ運ぶ。
+#[test]
+fn both_break_entries_carry_the_shown_talk_id() {
+    let mut balloon = Lines::wired();
+    balloon
+        .world
+        .insert_non_send(runtime_wiring_showing_talk(TalkId(7)));
+    assert!(balloon.press(1, DoubleClick::Left, false));
+
+    let mut shell_box = Lines::wired();
+    shell_box
+        .world
+        .insert_non_send(runtime_wiring_showing_talk(TalkId(7)));
+    shell_box.signal(NoUserBreakSignal::TalkStarted);
+    shell_box.kanade(); // 旗の知らせがあれば捨てる
+    assert_eq!(
+        shell_box.press_box(1, DoubleClick::Left),
+        BoxPressVerdict::Break
+    );
+
+    for (entry, to_kanade) in [("balloon", balloon.kanade()), ("box", shell_box.kanade())] {
+        assert!(
+            matches!(
+                to_kanade.as_slice(),
+                [KanadeMsg::UserBreak {
+                    scope: 1,
+                    talk_id: Some(TalkId(7))
+                }]
+            ),
+            "{entry} の入口が見せている番号を運ぶ（届いた数 {}）",
+            to_kanade.len()
+        );
+    }
+}
+
+/// 送り出し `send_break` は、渡された番号をそのまま載せ、表示の側へは「中断された」を 1 件送る。
+#[test]
+fn send_break_carries_the_talk_id_it_was_given() {
+    let (_flag_tx, flag_rx) = mpsc::channel();
+    let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
+    let (kanade_tx, kanade_rx) = mpsc::channel();
+    let wiring = UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx);
+
+    send_break(&wiring, 2, Some(TalkId(7)));
+
+    let to_kanade: Vec<KanadeMsg> = kanade_rx.try_iter().collect();
+    assert!(
+        matches!(
+            to_kanade.as_slice(),
+            [KanadeMsg::UserBreak {
+                scope: 2,
+                talk_id: Some(TalkId(7))
+            }]
+        ),
+        "kanade へ届いた知らせの数 {}",
+        to_kanade.len()
+    );
+    let to_display: Vec<TalkLifecycleSignal> = lifecycle_rx.try_iter().collect();
+    assert_eq!(to_display, vec![TalkLifecycleSignal::UserBreak]);
 }

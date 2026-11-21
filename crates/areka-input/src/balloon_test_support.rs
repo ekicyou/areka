@@ -16,6 +16,7 @@ use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
 use areka_runtime::balloon_hover::BalloonHover;
+use areka_sakura::TalkId;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use bevy_ecs::hierarchy::ChildOf;
@@ -26,6 +27,7 @@ use wintf::ecs::{GraphicsCore, Point, Visual, Window, WucGraphicsResource};
 
 use areka_placement::spawn::BalloonWindowMarker;
 use areka_runtime::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
+use areka_runtime::balloon_visibility::phase::run_balloon_visibility_phase;
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::move_cue::PositionCue;
 use areka_runtime::talk_clock::TalkClock;
@@ -120,6 +122,32 @@ pub(crate) fn headless_runtime_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) ->
         TalkClock::new(Arc::new(|| 0.0)),
         synth_boot_assets(),
     )
+}
+
+/// トークの番号 `talk_id` を見せている `RuntimeWiring`（装着前・GPU 不要）。
+/// 表示の線へ `TalkStarted` を積み、可視性の相を 1 回回して置く。
+pub(crate) fn runtime_wiring_showing_talk(talk_id: TalkId) -> RuntimeWiring {
+    let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        lifecycle_rx,
+        mpsc::channel::<areka_runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        TalkClock::new(Arc::new(|| 0.0)),
+        synth_boot_assets(),
+    );
+    lifecycle_tx
+        .send(TalkLifecycleSignal::TalkStarted {
+            talk_id: Some(talk_id),
+        })
+        .expect("受信端は結線が持つ");
+    run_balloon_visibility_phase(&mut wiring, &mut World::new());
+    assert_eq!(wiring.shown_talk_id(), Some(talk_id), "見せる番号が置けた");
+    wiring
 }
 
 /// 選択肢スパンを 1 つ載せて `choice_active(actor)==true` にした実 runtime を組む（GPU 不要）。
