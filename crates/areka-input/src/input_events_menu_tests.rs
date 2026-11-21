@@ -1,7 +1,7 @@
 //! 右ダブルクリックの預かりと、終了指示に載るスコープのテスト。
 //!
 //! 合成した `PointerState` で押下ハンドラを直接呼び、kanade 宛ての受信端で「届いた／届かない」を
-//! 観測する（実窓も GPU も要らない）。既存の `input_events_tests.rs` と同じ観測方法である。
+//! 観測する（実窓も GPU も要らない）。`input_events_tests.rs` と同じ観測方法である。
 
 use super::pointer_test_support::*;
 use super::*;
@@ -88,12 +88,12 @@ fn take_empties_the_pending_slot() {
     assert!(take_pending(&mut world).is_none(), "2 度目の取り出しは空");
 }
 
-/// 預かりを送ると、以前の即送出と同じ形の `OnMouseDoubleClick` がちょうど 1 件届く。
+/// 預かりを送ると、右ダブルクリックの `OnMouseDoubleClick` がちょうど 1 件届く。
 ///
-/// 以前の即送出は `MouseInput{scope, x, y, region, kind: DoubleClick{Right}}` を面座標で送っていた
-/// （kanade がこれを Ref0〜Ref5 へ写し、右ボタンは Ref5＝1 になる）。同じ押下から同じ値が届く。
+/// 届くのは `MouseInput{scope, x, y, region, kind: DoubleClick{Right}}` を面座標にした値
+/// （kanade がこれを Ref0〜Ref5 へ写し、右ボタンは Ref5＝1 になる）。
 #[test]
-fn sending_the_pending_one_delivers_the_same_message_as_the_old_immediate_path() {
+fn sending_the_pending_one_delivers_one_right_double_click_in_surface_coordinates() {
     let (mut world, rx) = world_with_half_scale_bust();
     let partner = world.spawn(CharWindowMarker { scope: 1 }).id();
     let ev = bubble_pointer_mods(14, 8, DoubleClick::Right, false, false);
@@ -130,9 +130,7 @@ fn sending_the_pending_one_delivers_the_same_message_as_the_old_immediate_path()
 /// 相方側（スコープ 1）で見る——Ctrl を見て早期に戻れば `rx` が空で落ち、強制退避の腕へ
 /// 落ちれば終了の指示が立って表明が落ちる。
 ///
-/// 「終了指示に操作した窓のスコープが載る」性質はメニュー側の檻が持つ
-/// （`menu::mod_wiring_tests::the_close_action_sends_exactly_one_close_request_with_the_window_scope`
-/// と `menu::trigger_wired_tests`）。ここでは重ねない。
+/// 「終了指示に操作した窓のスコープが載る」性質は本体のメニューのテストが持つ。ここでは重ねない。
 #[test]
 fn wired_ctrl_left_double_click_sends_no_close_request_on_the_partner_window() {
     let (mut world, rx) = world_with_half_scale_bust();

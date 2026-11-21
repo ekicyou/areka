@@ -16,7 +16,7 @@ fn sample() -> ChoiceSelection {
     }
 }
 
-/// NonSend 挿入＋シーム観測檻: `BalloonWiring` を `World` へ
+/// NonSend 挿入と受信の観測: `BalloonWiring` を `World` へ
 /// **NonSend 挿入**でき、`ChoiceSelectionInbox` の `Receiver` 経由で発行シンクへ送った
 /// `ChoiceSelection` を一度だけ観測できる（送信値と等価・2 度目は `Empty`）。
 ///
@@ -40,23 +40,17 @@ fn wiring_inserts_non_send_and_selection_observed_via_inbox() {
         .get_non_send::<BalloonWiring>()
         .expect("直上で存在確認済み")
         .send_selection(sel.clone());
-    assert!(
-        sent,
-        "Receiver 生存中の発行は成功する（Err にならない・5.3）"
-    );
+    assert!(sent, "Receiver 生存中の発行は成功する（Err にならない）");
 
     // seam の Receiver 経由で送信値を観測する。
     let inbox = world
         .get_non_send::<ChoiceSelectionInbox>()
         .expect("ChoiceSelectionInbox は NonSend 挿入されている");
     let received = inbox.0.try_recv().expect("発行した ChoiceSelection が届く");
-    assert_eq!(
-        received, sel,
-        "受信値は送信値と等価（task 2.1 の PartialEq 再利用）"
-    );
+    assert_eq!(received, sel, "受信値は送信値と等価（`PartialEq`）");
     assert!(
         inbox.0.try_recv().is_err(),
-        "発行は一度きり（2 度目の try_recv は Empty・2.4）"
+        "発行は一度きり（2 度目の try_recv は Empty）"
     );
 }
 
@@ -81,14 +75,14 @@ fn hover_tracks_last_injected_ordinal_per_scope() {
 }
 
 // -------------------------------------------------------------------------
-// post-spawn 装着・NonSend 結線・スケジュール登録檻
+// post-spawn 装着・NonSend 結線・スケジュール登録
 //
-// (1) 配線存在檻: bare World → spawn_ghost_windows → attach_char（キャラ窓 baseline）
+// (1) 装着: bare World → spawn_ghost_windows → attach_char（キャラ窓の装着を先に済ませる）
 //     → attach_balloon_pointer_handlers で、全バルーン窓に OnPointerMoved＋OnPointerPressed が
-//     装着され、キャラ窓のハンドラ集合は不変であること（非退行・donor attach 檻同型）。
-// (2) NonSend 結線檻: wire_balloon_choice 後に BalloonWiring＋ChoiceSelectionInbox が NonSend
-//     資源として存在すること（donor wire_mouse_input 同型）。
-// (3) スケジュール登録檻: register_balloon_leave_system が
+//     装着され、キャラ窓のハンドラ集合は不変であること。
+// (2) NonSend 結線: wire_balloon_choice 後に BalloonWiring＋ChoiceSelectionInbox が NonSend
+//     資源として存在すること。
+// (3) スケジュール登録: register_balloon_leave_system が
 //     clear_balloon_hover_on_leave を Input スケジュールへ登録すること（wire_balloon_choice は登録しない）——
 //     構造（systems_len）と行動（Input 実行で hover 解除）の双方で固定する。
 //     登録漏れは高速離脱時の hover 残置として実機目視でしか検出できないため。
@@ -120,12 +114,12 @@ fn has_pointer_handlers(world: &World, e: Entity) -> bool {
     world.get::<OnPointerMoved>(e).is_some() && world.get::<OnPointerPressed>(e).is_some()
 }
 
-/// 配線存在檻: 全バルーン窓へハンドラ装着・キャラ窓集合不変（非退行）。
+/// 全バルーン窓へハンドラが付き、キャラ窓のハンドラ集合は変わらない。
 #[test]
 fn attach_installs_handlers_on_all_balloon_windows_and_leaves_char_unchanged() {
     let mut world = World::new();
     spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
-    // キャラ窓へ donor ハンドラを装着（非退行の対象 baseline を非自明にする）。
+    // キャラ窓へ先にハンドラを装着する（「変わらない」ことの比較元を空でなくする）。
     attach_char_pointer_handlers(&mut world);
 
     let balloons = balloon_window_entities(&mut world);
@@ -144,11 +138,11 @@ fn attach_installs_handlers_on_all_balloon_windows_and_leaves_char_unchanged() {
             "attach 前のバルーン窓はポインタハンドラ未装着"
         );
     }
-    // キャラ窓は donor で装着済み（baseline）。
+    // キャラ窓は装着済み。
     for &e in &chars {
         assert!(
             has_pointer_handlers(&world, e),
-            "キャラ窓は donor（attach_char）でハンドラ装着済み（baseline）"
+            "キャラ窓は attach_char でハンドラ装着済み"
         );
     }
 
@@ -158,19 +152,19 @@ fn attach_installs_handlers_on_all_balloon_windows_and_leaves_char_unchanged() {
     for &e in &balloons {
         assert!(
             has_pointer_handlers(&world, e),
-            "attach 後は全バルーン窓に OnPointerMoved＋OnPointerPressed が装着される（6.6）"
+            "attach 後は全バルーン窓に OnPointerMoved＋OnPointerPressed が装着される"
         );
     }
-    // キャラ窓のハンドラ集合は不変（非退行）。
+    // キャラ窓のハンドラ集合は不変。
     for &e in &chars {
         assert!(
             has_pointer_handlers(&world, e),
-            "キャラ窓のハンドラ集合は attach_balloon で不変（非退行・R4.3）"
+            "キャラ窓のハンドラ集合は attach_balloon で不変"
         );
     }
 }
 
-/// NonSend 結線檻: wire_balloon_choice が BalloonWiring＋ChoiceSelectionInbox を NonSend 挿入。
+/// wire_balloon_choice が BalloonWiring＋ChoiceSelectionInbox を NonSend 挿入。
 #[test]
 fn wire_inserts_both_non_sends() {
     let mut world = World::new();
@@ -193,7 +187,7 @@ fn wire_inserts_both_non_sends() {
     );
     assert!(
         world.get_non_send::<ChoiceSelectionInbox>().is_some(),
-        "wire 後は ChoiceSelectionInbox が NonSend 挿入されている（発行 seam・5.3）"
+        "wire 後は ChoiceSelectionInbox が NonSend 挿入されている（発行の受け口）"
     );
     assert!(
         world.get_non_send::<BalloonHover>().is_some(),
@@ -207,7 +201,7 @@ fn wire_inserts_both_non_sends() {
     );
     assert!(
         !world.resource::<Schedules>().contains(Input),
-        "wire は系を登録しない（登録は ghost_session::register_systems・要件 2.1）"
+        "wire は系を登録しない（登録は本体のゴースト起動の側が行う）"
     );
 }
 
@@ -230,7 +224,7 @@ fn register_leave_system_alone_adds_one_system_without_wiring() {
     );
 }
 
-/// スケジュール登録檻・行動: 登録済みシステムが Input 実行で走り、
+/// 登録済みシステムが Input 実行で走り、
 /// バルーン所有 leave の hover を解除する（登録が「clear_balloon_hover_on_leave」であることの行動的証明・
 /// debug feature 非依存）。
 #[test]

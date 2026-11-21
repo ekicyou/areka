@@ -205,7 +205,7 @@ fn finished_down_arrow_press_scrolls_newer() {
     );
 }
 
-/// 話している最中の矢印の押下は今までどおりのクリック（中断の入口へ流れ、送らない）。
+/// 話している最中の矢印の押下は普通のクリック（中断の入口へ流れ、送らない）。
 #[test]
 fn talking_arrow_press_flows_to_the_usual_click() {
     let mut rig = rig();
@@ -222,7 +222,7 @@ fn talking_arrow_press_flows_to_the_usual_click() {
     assert!(unmoved(&rig), "送らない");
 }
 
-/// 矢印の絵の透けた画素と矢印の無い所は今までどおりのクリック。
+/// 矢印の絵の透けた画素と矢印の無い所は普通のクリック。
 #[test]
 fn transparent_pixel_and_no_arrow_flow_to_the_usual_click() {
     for point in [UP_TRANSPARENT, NO_ARROW] {

@@ -53,10 +53,10 @@ fn plan(
     (next, s, called.get())
 }
 
-// ---- plan_cursor: 表の 13 行 ----
+// ---- plan_cursor ----
 
 #[test]
-fn row01_move_same_position_keeps_everything_without_resolving() {
+fn move_same_position_keeps_everything_without_resolving() {
     for prev in [
         wc(P, region("head"), Hold::Free),
         wc(P, region("head"), pressed(Down, "head")),
@@ -72,7 +72,7 @@ fn row01_move_same_position_keeps_everything_without_resolving() {
 }
 
 #[test]
-fn row02_move_while_pressed_and_button_down_keeps_pressed_scene_and_region() {
+fn move_while_pressed_and_button_down_keeps_pressed_scene_and_region() {
     let prev = wc(P, region("head"), pressed(Down, "head"));
     let (next, s, called) = plan(Some(&prev), Move, Q, true, Spot::Plain);
     assert!(called);
@@ -81,7 +81,7 @@ fn row02_move_while_pressed_and_button_down_keeps_pressed_scene_and_region() {
 }
 
 #[test]
-fn row03_move_while_pressed_without_button_returns_to_free() {
+fn move_while_pressed_without_button_returns_to_free() {
     // 解放を落としたとき（メニューが食べた・窓の外で放した）の戻り。
     let prev = wc(P, region("head"), pressed(Down, "head"));
     let (next, s, called) = plan(Some(&prev), Move, Q, false, region("bust"));
@@ -91,18 +91,18 @@ fn row03_move_while_pressed_without_button_returns_to_free() {
 }
 
 #[test]
-fn row04_move_from_free_or_resting_resolves_and_frees() {
+fn move_from_free_or_resting_resolves_and_frees() {
     for hold in [Hold::Free, Hold::Resting(Hover), Hold::Resting(Wheel)] {
         let prev = wc(P, region("head"), hold);
         let (next, s, called) = plan(Some(&prev), Move, Q, false, region("head"));
         assert!(called);
         assert_eq!(next, wc(Q, region("head"), Hold::Free));
-        assert_eq!(s, shown(Up, "head"), "要件 4.4");
+        assert_eq!(s, shown(Up, "head"));
     }
 }
 
 #[test]
-fn row05_press_over_region_holds_down_or_right_down() {
+fn press_over_region_holds_down_or_right_down() {
     for (right, scene) in [(false, Down), (true, RightDown)] {
         for hold in [Hold::Free, Hold::Resting(Hover), Hold::Resting(Wheel)] {
             let prev = wc(P, region("head"), hold);
@@ -115,7 +115,7 @@ fn row05_press_over_region_holds_down_or_right_down() {
 }
 
 #[test]
-fn row06_press_off_region_keeps_the_place_shape() {
+fn press_off_region_keeps_the_place_shape() {
     // 当たり判定の無い所で押しても形を変えない。
     let prev = wc(P, Spot::Plain, Hold::Free);
     let (next, s, called) = plan(Some(&prev), Press { right: false }, P, true, Spot::Plain);
@@ -134,7 +134,7 @@ fn row06_press_off_region_keeps_the_place_shape() {
 }
 
 #[test]
-fn row07_second_press_keeps_the_first() {
+fn second_press_keeps_the_first() {
     let prev = wc(P, region("head"), pressed(Down, "head"));
     let (next, s, called) = plan(Some(&prev), Press { right: true }, Q, true, region("bust"));
     assert!(called);
@@ -143,7 +143,7 @@ fn row07_second_press_keeps_the_first() {
 }
 
 #[test]
-fn row08_release_resolves_and_frees_from_any_hold() {
+fn release_resolves_and_frees_from_any_hold() {
     for hold in [
         Hold::Free,
         pressed(Down, "head"),
@@ -154,7 +154,7 @@ fn row08_release_resolves_and_frees_from_any_hold() {
         let (next, s, called) = plan(Some(&prev), Release, P, false, region("bust"));
         assert!(called);
         assert_eq!(next, wc(P, region("bust"), Hold::Free));
-        assert_eq!(s, shown(Up, "bust"), "要件 3.4");
+        assert_eq!(s, shown(Up, "bust"));
     }
     let prev = wc(P, region("head"), pressed(Down, "head"));
     let (_, s, _) = plan(Some(&prev), Release, P, false, Spot::Plain);
@@ -162,7 +162,7 @@ fn row08_release_resolves_and_frees_from_any_hold() {
 }
 
 #[test]
-fn row09_hover_from_free_over_region_rests_without_resolving() {
+fn hover_from_free_over_region_rests_without_resolving() {
     let prev = wc(P, region("head"), Hold::Free);
     let (next, s, called) = plan(Some(&prev), CursorTrigger::Hover, P, false, Spot::Plain);
     assert!(!called);
@@ -171,7 +171,7 @@ fn row09_hover_from_free_over_region_rests_without_resolving() {
 }
 
 #[test]
-fn row10_hover_is_ignored_when_resting_pressed_or_off_region() {
+fn hover_is_ignored_when_resting_pressed_or_off_region() {
     for prev in [
         // ホイールの形を止まったで上書きしない。
         wc(P, region("head"), Hold::Resting(Wheel)),
@@ -190,7 +190,7 @@ fn row10_hover_is_ignored_when_resting_pressed_or_off_region() {
 }
 
 #[test]
-fn row11_wheel_over_region_rests_with_wheel() {
+fn wheel_over_region_rests_with_wheel() {
     for hold in [Hold::Free, Hold::Resting(Hover), Hold::Resting(Wheel)] {
         let prev = wc(P, region("head"), hold);
         let (next, s, called) = plan(Some(&prev), CursorTrigger::Wheel, P, false, region("head"));
@@ -201,12 +201,12 @@ fn row11_wheel_over_region_rests_with_wheel() {
 }
 
 #[test]
-fn row12_wheel_while_pressed_or_off_region_keeps_hold() {
+fn wheel_while_pressed_or_off_region_keeps_hold() {
     let prev = wc(P, region("head"), pressed(Down, "head"));
     let (next, s, called) = plan(Some(&prev), CursorTrigger::Wheel, P, true, region("head"));
     assert!(called);
     assert_eq!(next, prev);
-    assert_eq!(s, shown(Down, "head"), "要件 4.5");
+    assert_eq!(s, shown(Down, "head"));
     let prev = wc(P, Spot::Plain, Hold::Free);
     let (next, s, called) = plan(Some(&prev), CursorTrigger::Wheel, P, false, Spot::Plain);
     assert!(called);
@@ -215,7 +215,7 @@ fn row12_wheel_while_pressed_or_off_region_keeps_hold() {
 }
 
 #[test]
-fn row13_refresh_keeps_state_and_resolves_only_without_prev() {
+fn refresh_keeps_state_and_resolves_only_without_prev() {
     for (prev, want) in [
         (wc(P, region("head"), Hold::Free), shown(Up, "head")),
         (

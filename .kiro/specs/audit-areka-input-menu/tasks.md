@@ -125,7 +125,7 @@
   - _Dispatch: mechanical — 直す箇所と言い方を design が与える説明の直し_
   - _Requirements: 3.1, 5.1, 5.2, 5.7, 5.9_
 
-- [ ] 4.2 テストの説明を直す（G13・指摘 39・40・42・43・46〜49 のテストの分・件 4・5）
+- [x] 4.2 テストの説明を直す（G13・指摘 39・40・42・43・46〜49 のテストの分・件 4・5）
   - 強制退避の説明を「本体の強制退避のテストが見る」とパスを書かずに指す形に（指摘 39・件 4）、ハンドラの装着のテストの説明を `crate::`・「この crate」に（指摘 40・件 5）、落ちの報告のテストの 7 行の括弧を消す（指摘 42・`install`・`installed` の使い方は変えない）、古い説明を消す（指摘 43）。
   - テストの札・番号・経緯の語・本体の名指しを直し、テスト名の `row01_`〜`row13_`・`keeps_its_return_value`・`…_old_immediate_path` を今の振る舞いの名にする（直す前に範囲の外の読み手 0 を grep で確かめる）。
   - テストのファイルに設計の札・経緯の語・本体のファイルのパスが残っていない（grep で確かめる）こと、入力の crate のテストが全部緑であること。
@@ -167,3 +167,4 @@
 - 2.3 で足した `click_tests.rs::release_on_a_window_without_size_sends_one_button_up` は `MouseWiring::with_clock` を直に組む。3.2 の指摘 64 で `world_with_wiring` へ寄せるときに一緒に寄せる。
 - `balloon_test_support.rs::runtime_wiring_showing_talk` は `TextLayerRuntime::new(TextLayerConfig::default())` を直に組む。3.1 で `empty_runtime()` を支えへ寄せたらそれに替える。
 - `balloon_pointer_handler_tests.rs` の押下の節の見出しに「stale 棄却は click_selection 純関数檻が網羅済み」・「pass-through 檻」が残る（3.1 で消したテストを指す古い説明）。4.2（指摘 43）で直す。
+- `crates/areka-placement/src/spawn_assembly_tests.rs:352` の表明の文字列に「本檻」が残る（3.3 で移したテスト）。5.2 のかけ直しで見る。

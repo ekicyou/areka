@@ -1,11 +1,11 @@
 // -------------------------------------------------------------------------
-// clear_balloon_hover_on_leave 排他システム檻
+// clear_balloon_hover_on_leave 排他システム
 //
 // bare World で `PointerLeave` マーカー保持 entity を組み、(a) バルーン所有 leave のみ hover を
 // 解除する（親チェーン→`BalloonWindowMarker`）、(b) 非バルーン窓の leave は無視、(c) マーカー不在は
-// 完全 no-op、(d) RuntimeWiring 不在は DEBUG 縮退（hover 不変）を決定的に檻へ入れる。判断分岐そのもの
-// （active×hit=None×last の全組合せ）は hover_action 純関数檻が網羅済み。`PointerLeave`
-// の除去は本システムの責務外（FrameFinalize の機構不変）ゆえ検証しない。
+// 完全 no-op、(d) RuntimeWiring 不在は DEBUG 縮退（hover 不変）を決定的に観測する。判断分岐そのもの
+// （active×hit=None×last の全組合せ）は `balloon_pure_core_tests.rs` の `hover_action` のテストが持つ。
+// `PointerLeave` の除去は本システムの責務外（FrameFinalize の機構不変）ゆえ検証しない。
 // -------------------------------------------------------------------------
 
 use areka_runtime::balloon_hover::BalloonHover;
@@ -57,12 +57,12 @@ fn leave_balloon_owned_clears_hover_via_inject_none() {
     assert_eq!(
         world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
-        "バルーン所有 leave で hover[scope] が None へ解除される（Inject(None)・R1.3）"
+        "バルーン所有 leave で hover[scope] が None へ解除される（Inject(None)）"
     );
     assert!(
         logs.iter()
             .any(|l| l.contains("level=DEBUG") && l.contains("choice_hover_inject")),
-        "離脱 hover 解除注入で choice_hover_inject を DEBUG 発火（DD-CI-7）: {logs:?}"
+        "離脱 hover 解除注入で choice_hover_inject を DEBUG 発火: {logs:?}"
     );
 }
 
@@ -112,7 +112,7 @@ fn leave_balloon_owned_inactive_resets_own_state_without_inject() {
     assert_eq!(
         world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
-        "消滅時は自前状態のみ None 整合（ResetOwnState・Some(3)→None・R3.4）"
+        "消滅時は自前状態のみ None 整合（ResetOwnState・Some(3)→None）"
     );
     assert!(
         !logs.iter().any(|l| l.contains("choice_hover_inject")),
@@ -178,7 +178,7 @@ fn leave_no_marker_is_full_noop() {
     );
 }
 
-/// RuntimeWiring 不在＝正常縮退（donor presenter=None 同型）: バルーン所有 leave があっても
+/// RuntimeWiring 不在＝正常縮退: バルーン所有 leave があっても
 /// **DEBUG** で no-op・hover 不変（`event=choice_leave_no_runtime`・ERROR は出さない）。
 #[test]
 fn leave_runtime_absent_degrades_with_debug_and_leaves_hover() {

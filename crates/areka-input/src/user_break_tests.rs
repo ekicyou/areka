@@ -4,25 +4,13 @@
 //
 // 押下を中断にするかの判定・中断を禁じる旗の出入り・送出が 1 件ずつであることをここで固定する。
 //
-// 純関数 2 本（`judge_press`・`fold_no_user_break`）について確かめること: 押下 1 回を 5 つの
-// 結論へ写す順序（左ダブルクリックでない・選択の確定に消費された・バルーンが出ていない・
-// 無効化の区間・受理）と、その順序が上から順であること。旗は入る・出る・トークの始まりで解く・
-// 区間外の「出る」の 4 通りと、入れ子を数えない
-// ことを固定する。
-//
-// 押下の入口と旗の取り出しについて確かめること: 受理のとき 2 本の線へちょうど 1 件ずつ届く・
-// 片方の線の受け手が消えていても記録してもう片方へは届ける・結線前は何もしない・無効化の
-// 区間ではどちらの線へも送らない・直前の押下の記憶は読んでから上書きする・旗の出入りが
-// 記録される。
-//
 // 「バルーンが出ているか」は表示層への照会で、GPU 無しのテストでは可視のバルーンを作れない
 // （表示が一度も確立していない target は可視化できない）。そこで送り出しのテストは照会の結果を
 // 引数に取る内側の関数 `press_with_visibility` を直接呼ぶ。外側の `on_left_press` は照会だけを
 // 足した薄い包みで、照会が効いていること（可視を決め打ちしていないこと）は 1 本で確かめる。
 //
-// 結線 `wire_user_break` について確かめること: 旗の取り出しがポインタの配送より前に登録されて
-// いて、押下と同じ巡に届いた合図がその押下の判定に効く。入力の段は wintf が
-// 組んだ本物を使い、押下は本物の配送を通す。
+// 結線 `wire_user_break`: 旗の取り出しがポインタの配送より前に登録されていて、押下と同じ巡に届いた
+// 合図がその押下の判定に効く。入力の段は wintf が組んだ本物を使い、押下は本物の配送を通す。
 
 use std::sync::mpsc::{self, Receiver};
 
@@ -85,7 +73,7 @@ fn selected_now_is_consumed_by_selection() {
     assert_eq!(judge(args), PressVerdict::ConsumedBySelection);
 }
 
-/// 1 打目が選択の確定だったときの 2 打目も作らない（判断分岐 ⑸）。
+/// 1 打目が選択の確定だったときの 2 打目も作らない。
 #[test]
 fn prev_press_selected_is_consumed_by_selection() {
     let mut args = all_clear();
@@ -107,7 +95,7 @@ fn balloon_not_visible_is_balloon_hidden() {
     }
 }
 
-/// 無効化の区間では退ける（判断分岐 ⑷）。
+/// 無効化の区間では退ける。
 #[test]
 fn no_user_break_is_disabled() {
     let mut args = all_clear();
@@ -351,7 +339,7 @@ fn unwired_press_is_recorded_and_does_nothing() {
 }
 
 /// 無効化の区間ではどちらの線へも送らず、退けた旨を記録する。区間を出れば同じ押下が受理に
-/// なる（判断分岐 ⑷）。
+/// なる。
 #[test]
 fn disabled_section_sends_nothing_until_left() {
     let mut lines = Lines::wired();
@@ -377,7 +365,7 @@ fn disabled_section_sends_nothing_until_left() {
 }
 
 /// 直前の押下の記憶は読んでから今回で上書きする: 選択を確定した単押しに続く左ダブルクリックは
-/// 何も送らず、その次の左ダブルクリックは受理になる（判断分岐 ⑸）。
+/// 何も送らず、その次の左ダブルクリックは受理になる。
 #[test]
 fn previous_press_memory_is_read_then_overwritten() {
     let mut lines = Lines::wired();
@@ -703,7 +691,7 @@ fn register_user_break_drain_alone_adds_one_system_to_the_input_schedule() {
     );
 }
 
-/// 結線は持ち物を置くだけで、系は登録しない（登録は `ghost_session::register_systems`）。
+/// 結線は持ち物を置くだけで、系は登録しない（登録は本体のゴースト起動の側が行う）。
 #[test]
 fn wire_user_break_inserts_the_wiring_without_registering() {
     let mut world = World::new();

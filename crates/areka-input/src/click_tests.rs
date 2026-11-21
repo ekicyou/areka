@@ -1,4 +1,4 @@
-//! 押下の控えと新しい知らせの送出の口の檻。
+//! 押下の控えとマウスの知らせの送出の口の檻。
 
 use super::super::pointer_test_support::{drain_mouse, fake_hit, world_with_wiring};
 use super::super::{MouseWiring, on_char_pointer_pressed};
@@ -124,9 +124,10 @@ fn box_press_is_marked_by_box() {
     );
 }
 
-/// 押下の受け手が控えを書く。戻り値は今のまま（単発は false・右ダブルクリックは true）。
+/// 押下の受け手が控えを書く。戻り値は単発が false・右ダブルクリックが true。
 #[test]
-fn pressed_handler_writes_notes_and_keeps_its_return_value() {
+fn pressed_handler_writes_notes_and_returns_false_for_a_single_press_and_true_for_a_right_double_click()
+ {
     let (mut world, entity, _rx) = wired();
     let single = PointerState {
         middle_down: true,
@@ -164,7 +165,7 @@ fn pressed_handler_writes_notes_and_keeps_its_return_value() {
     );
 }
 
-/// 新しい知らせの送出の口: 送れたら true で受信端に届き、受信端が無ければ false（warn だけ）。
+/// マウスの知らせの送出の口: 送れたら true で受信端に届き、受信端が無ければ false（warn だけ）。
 #[test]
 fn send_mouse_reports_whether_it_was_sent() {
     let (world, _entity, rx) = wired();

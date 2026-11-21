@@ -117,7 +117,7 @@ fn settle_after_selection_borrow_failure_logs_one_error_and_does_nothing() {
 // 押す。1 回目は選択を送って INFO `choice_selected` を 1 行残し、その場所の選択肢が済む。同じ座標の
 // 2 回目は選択を作らず WARN を出さない。
 // 箱の押下のハンドラ（`shell_box_handler.rs`）は同じ `settle_after_selection` を呼び、箱の場所の
-// 済んだ行は文字の層の実 GPU の檻（`areka-emo-text` の `actor_choice_settle_tests.rs`）が固定する。
+// 済んだ行は文字の層の実 GPU のテスト（`areka-emo-text` の `actor_choice_settle_tests.rs`）が固定する。
 // =============================================================================
 
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};

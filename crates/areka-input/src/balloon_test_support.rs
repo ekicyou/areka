@@ -72,17 +72,17 @@ pub(crate) fn empty_runtime() -> Rc<RefCell<TextLayerRuntime>> {
     )))
 }
 
-/// 空 `EmoWorld`（空 shell から build・COM/GPU 不要の寛容契約・frame.rs 檻同型）。
+/// 空 `EmoWorld`（空 shell から build・COM/GPU 不要の寛容契約）。
 fn empty_world() -> EmoWorld {
     EmoWorld::build(&areka_parsers::shell::parse(""))
 }
 
-/// 空アトラス（headless 構築・frame.rs 檻同型）。
+/// 空アトラス（headless 構築）。
 fn empty_atlas() -> AtlasTable {
     AtlasTable::new(Vec::new(), Vec::new(), Vec::new())
 }
 
-/// 合成 `BootAssets`（scope0 の最小形・COM/GPU/fixture 不要の純合成・frame.rs synth_assets 同型）。
+/// 合成 `BootAssets`（scope0 の最小形・COM/GPU/fixture 不要の純合成）。
 fn synth_boot_assets() -> BootAssets {
     BootAssets {
         shells: vec![ScopeAssets {
@@ -117,7 +117,7 @@ fn synth_boot_assets() -> BootAssets {
 /// headless な `RuntimeWiring`（実 `EmoPresenter`／与えた runtime／合成 `BootAssets`・COM/GPU 不要）。
 ///
 /// ハンドラが `RuntimeWiring::runtime()` から借りる runtime を、テスト側が事前に populate した実体で
-/// 差し込むための最小結線（frame.rs の headless_wiring_with と同型）。
+/// 差し込むための最小結線。
 pub(crate) fn headless_runtime_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> RuntimeWiring {
     RuntimeWiring::new(
         EmoPresenter::new(),

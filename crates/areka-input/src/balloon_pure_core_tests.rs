@@ -117,10 +117,10 @@ use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
 
-/// 檻に用いる実適用スケール（k≠1.0——DPI追従下で実供給される値の代表）。
+/// 実適用スケール（k≠1.0——DPI追従下で実供給される値の代表）。
 const CAGE_K: f32 = 2.0;
 
-/// validrect 原点 (36, 46) の `TextRegion`（choice.rs 檻と同型の最小構築・画像原寸 400×224）。
+/// validrect 原点 (36, 46) の `TextRegion`（最小構築・画像原寸 400×224）。
 fn cage_region() -> TextRegion {
     let model = BalloonModel::new(
         WindowPosition::new(None, None),
@@ -182,7 +182,7 @@ fn click_untransformed_point_hits_row_lifted_by_real_k() {
     let (x, y) = (110.0_f32, 120.0_f32);
 
     let sel = click_selection(true, &rows, x, y, 7)
-        .expect("×k 済み行矩形へ無変換の client 物理 px 点は正しくヒットする（R3.7）");
+        .expect("×k 済み行矩形へ無変換の client 物理 px 点は正しくヒットする");
     assert_eq!(
         sel.id, "q1",
         "無変換点 (110,120) は k=2.0 で持ち上げた行 1（y∈[112,132)）へ当たる"
@@ -210,7 +210,7 @@ fn hover_inactive_no_prior_injection_is_noop() {
     assert_eq!(
         hover_action(false, Some(3), None),
         HoverAction::NoopInactive,
-        "非表示・未注入は hit があっても NoopInactive（hit_ordinal 無視・R1.4）"
+        "非表示・未注入は hit があっても NoopInactive（hit_ordinal 無視）"
     );
 }
 
@@ -222,12 +222,12 @@ fn hover_inactive_with_prior_injection_resets_own_state() {
     assert_eq!(
         hover_action(false, None, Some(2)),
         HoverAction::ResetOwnState,
-        "非表示・注入済・hit なしは ResetOwnState（R3.4）"
+        "非表示・注入済・hit なしは ResetOwnState"
     );
     assert_eq!(
         hover_action(false, Some(5), Some(2)),
         HoverAction::ResetOwnState,
-        "非表示・注入済は hit があっても ResetOwnState（hit_ordinal 無視・R3.4）"
+        "非表示・注入済は hit があっても ResetOwnState（hit_ordinal 無視）"
     );
 }
 
@@ -254,12 +254,12 @@ fn hover_active_new_row_injects() {
     assert_eq!(
         hover_action(true, Some(1), None),
         HoverAction::Inject(Some(1)),
-        "表示中・None→Some(1) は Inject(Some(1))（初回ハイライト・R1.2）"
+        "表示中・None→Some(1) は Inject(Some(1))（初回ハイライト）"
     );
     assert_eq!(
         hover_action(true, Some(3), Some(1)),
         HoverAction::Inject(Some(3)),
-        "表示中・Some(1)→Some(3) は Inject(Some(3))（行遷移・R1.2）"
+        "表示中・Some(1)→Some(3) は Inject(Some(3))（行遷移）"
     );
 }
 
@@ -270,7 +270,7 @@ fn hover_active_leaves_row_injects_none() {
     assert_eq!(
         hover_action(true, None, Some(2)),
         HoverAction::Inject(None),
-        "表示中・Some(2)→None は Inject(None)（ハイライト解除・R1.3）"
+        "表示中・Some(2)→None は Inject(None)（ハイライト解除）"
     );
 }
 
@@ -407,7 +407,7 @@ fn click_non_hit_returns_none() {
     assert_eq!(
         click_selection(true, &rows, 5.0, 5.0, 0),
         None,
-        "全矩形外の click は非構成（None・R2.3）"
+        "全矩形外の click は非構成（None）"
     );
 }
 
@@ -420,7 +420,7 @@ fn click_inactive_returns_none_even_inside_rect() {
     assert_eq!(
         click_selection(false, &rows, 30.0, 30.0, 0),
         None,
-        "非表示中（active=false）は矩形内でも非構成（None・R3.1）"
+        "非表示中（active=false）は矩形内でも非構成（None）"
     );
 }
 
@@ -466,7 +466,7 @@ fn overlapping_choice_wins_over_anchor_in_either_order() {
         Some(1),
         "選択肢が後ろにあれば、もちろん選択肢"
     );
-    // 選択肢が 2 つ重なる所にアンカーが挟まっても、後ろの選択肢（今までどおり）。
+    // 選択肢が 2 つ重なる所にアンカーが挟まっても、後ろの選択肢。
     let sandwiched = [
         row(0, 0.0, 0.0, 100.0, 100.0),
         anchor_row(1, 0.0, 0.0, 100.0, 100.0),
@@ -482,7 +482,7 @@ fn overlapping_choice_wins_over_anchor_in_either_order() {
 }
 
 /// 選択肢に当たらずアンカーに当たればアンカー。アンカー同士が重なれば後ろの行。
-/// どの範囲の外でもなければ今までどおり無し。
+/// どの範囲の外でもなければ無し。
 #[test]
 fn anchor_is_hit_only_where_no_choice_covers_the_point() {
     let rows = [
@@ -500,8 +500,7 @@ fn anchor_is_hit_only_where_no_choice_covers_the_point() {
     assert_eq!(hit_choice_row(&rows, 10.0, 50.0), None, "範囲の外");
 }
 
-/// 選択の知らせは当たった行の種類を写す。重なりでは選択肢の知らせになり、範囲の外では
-/// 今までどおり作らない。
+/// 選択の知らせは当たった行の種類を写す。重なりでは選択肢の知らせになり、範囲の外では作らない。
 #[test]
 fn click_selection_copies_the_kind_of_the_hit_row() {
     let rows = [

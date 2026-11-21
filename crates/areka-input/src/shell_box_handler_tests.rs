@@ -3,7 +3,7 @@
 //
 // 箱の四角（`shown_boxes`）と箱の選択肢の当たり行（`choice_hit_rows_at`）は提示（GPU）でしか
 // 埋まらないので、箱の中の操作は前段の本体（`move_with_point`・`press_with_point`）へ作った写しを
-// 渡して確かめる。シェルへ届く通知は、`mod.rs` のハンドラと同じ並び（前段が「処理した」なら
+// 渡して確かめる。シェルへ届く通知は、本体のポインタのハンドラと同じ並び（前段が「処理した」なら
 // 落とさない）で既存の道を続けて呼んで数える（`Fixture::moved`・`Fixture::pressed`）。このとき
 // world に `RuntimeWiring` を置かないので、ハンドラの中の本物の前段は何もしない（写しを 2 度当てない）。
 // 箱の外は `RuntimeWiring` を置いた本物のハンドラ（写しが空の文字の層）で、箱が無いときと同じ通知に
@@ -158,7 +158,7 @@ impl Fixture {
         self
     }
 
-    /// `mod.rs` の押下ハンドラと同じ並び: 前段が処理しなければ既存の道へ。
+    /// 本体の押下ハンドラと同じ並び: 前段が処理しなければ既存の道へ。
     fn pressed(&mut self, at: (i32, i32), double_click: DoubleClick, point: BoxPoint) -> bool {
         let state = pointer(at, double_click);
         press_with_point(&mut self.world, 0, &state, point)
@@ -170,7 +170,7 @@ impl Fixture {
             )
     }
 
-    /// `mod.rs` の移動ハンドラと同じ並び。
+    /// 本体の移動ハンドラと同じ並び。
     fn moved(&mut self, at: (i32, i32), point: BoxPoint) -> bool {
         let state = pointer(at, DoubleClick::None);
         move_with_point(
@@ -289,7 +289,7 @@ fn talking_left_double_click_on_box_breaks_without_a_shell_double_click() {
     assert!(f.shell().is_empty(), "シェルへのダブルクリックは 0 件");
 }
 
-/// 箱の中の行の上でない単押しはシェルへの操作のまま（今までどおり何も送らない）。
+/// 箱の中の行の上でない単押しはシェルへの操作のまま（何も送らない）。
 /// 話していないあいだの左ダブルクリックはシェルのダブルクリックになる。
 #[test]
 fn not_talking_left_double_click_on_box_reaches_the_shell() {
@@ -540,7 +540,7 @@ fn real_handlers_call_the_prelude_before_the_existing_path() {
         let ev = Phase::Bubble(pointer(ROW, DoubleClick::None));
         on_char_pointer_pressed(&mut f.world, f.entity, f.entity, &ev)
     });
-    assert!(!pressed, "単押しは今までどおり何も送らない");
+    assert!(!pressed, "単押しは何も送らない");
     assert_eq!(snapshot_borrow_failures(&events), 1, "押下: {events:?}");
     assert!(f.shell().is_empty());
 }
@@ -646,7 +646,7 @@ fn box_anchor_press_records_anchor_selected_and_reaches_kanade_as_an_anchor() {
     );
 }
 
-/// 箱の選択肢の押下の記録と伝言は今までどおり（`choice_selected` が 1 行・欄も同じ・選択肢の伝言）。
+/// 箱の選択肢の押下の記録と伝言は選択肢のとおり（`choice_selected` が 1 行・欄も同じ・選択肢の伝言）。
 #[test]
 fn box_choice_press_still_records_choice_selected_and_reaches_kanade_as_a_choice() {
     let (events, msgs) = press_row_and_drain(on_a(true));
@@ -662,7 +662,7 @@ fn box_choice_press_still_records_choice_selected_and_reaches_kanade_as_a_choice
 }
 
 /// 知らせの受け口が無くなっていて送れなかったら、種類の名前で error を 1 行残し、選択の記録は
-/// 残さない（選択肢は今までの名前のまま・アンカーは選択肢の名前を使わない）。
+/// 残さない（選択肢は選択肢の名前のまま・アンカーは選択肢の名前を使わない）。
 #[test]
 fn box_selection_send_failure_is_recorded_under_the_kind() {
     for (point, failed, other) in [

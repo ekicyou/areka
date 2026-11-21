@@ -22,7 +22,7 @@ fn send_pending_right_double_click(world: &mut World) {
     wiring.send_pending_right_double_click(pending);
 }
 
-/// RED（mock-seam send）: Mock resolver＋注入 clock で単体から配信し、受信側で内容を観測する。
+/// Mock resolver＋注入 clock で単体から配信し、受信側で内容を観測する。
 #[test]
 fn mock_seam_plan_and_send_move_observed() {
     let (tx, rx) = mpsc::channel::<KanadeMsg>();
@@ -183,7 +183,7 @@ fn double_click_left_sends_unconditionally() {
     assert!(rx.try_recv().is_ok(), "クリックは間引かれず 2 回目も届く");
 }
 
-/// 配線挿入檻: `wire_mouse_input` は fresh World へ `MouseWiring`
+/// `wire_mouse_input` は fresh World へ `MouseWiring`
 /// を NonSend 挿入する（Presenter region source・結線は存在確認で足る）。
 #[test]
 fn wire_mouse_input_inserts_mouse_wiring_non_send() {
@@ -224,13 +224,13 @@ fn presenter_absent_degrades_to_region_none() {
 }
 
 // -------------------------------------------------------------------------
-// ポインタハンドラ檻（配線存在檻/送出集合檻/暫定退避檻）
+// ポインタハンドラ
 //
 // 合成 `PointerState`／`Phase` でハンドラを直接呼び、mpsc で送出／非送出を観測する
-// （GPU/実窓不要・単一 pass/fail・[[areka-bin-crate-internal-tests-in-crate]]）。
+// （GPU/実窓不要）。
 // -------------------------------------------------------------------------
 
-/// 配線存在檻: Bubble 移動＋Mock region Some("Head")＋間引き通過で
+/// Bubble 移動＋Mock region Some("Head")＋間引き通過で
 /// `KanadeMsg::Mouse(Move)` を観測。同一位置の再移動は hover 抑制で送出されない。
 #[test]
 fn handler_move_sends_then_suppresses_same_position() {
@@ -270,7 +270,7 @@ fn handler_move_sends_then_suppresses_same_position() {
     assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
 }
 
-/// 送出集合檻: 左ダブルクリック（Ctrl なし）は当たり判定を解決して即
+/// 左ダブルクリック（Ctrl なし）は当たり判定を解決して即
 /// `KanadeMsg::Mouse(DoubleClick{Left})` を送出する。右ダブルクリックは押下の時点では送らずに
 /// 預かり、預かりを送ると `DoubleClick{Right}` が同じ形（スコープ・座標・当たり判定名）で届く。
 #[test]
@@ -324,8 +324,8 @@ fn handler_double_click_left_and_right_send() {
     }
 }
 
-/// 送出集合檻: 中／拡張ボタンのダブルクリックと単発クリックはいずれも
-/// 送出せず false を返す（OnMouseDoubleClickEx は α 後・OnMouseClick 単発は不送出）。
+/// 中／拡張ボタンのダブルクリックと単発クリックはいずれも
+/// 送出せず false を返す（`OnMouseDoubleClickEx` と `OnMouseClick` 単発は送らない）。
 #[test]
 fn handler_middle_xbutton_and_single_click_do_not_send() {
     let (mut world, rx) = world_with_wiring(
@@ -367,10 +367,10 @@ fn handlers_self_gate_when_mouse_wiring_absent() {
     assert!(!on_char_pointer_pressed(&mut world, e, e, &mid));
 }
 
-/// 配線層 per-scope 独立檻: 1 つの `MouseWiring`
+/// scope ごとに独立: 1 つの `MouseWiring`
 /// （`HashMap<u32, MouseMoveThrottle>` per-scope 保持）を通し、scope 0 が間引きで抑制されている
 /// 最中でも scope 1 の初回移動は独立に送出される。scope の間引き状態が `HashMap` で別キーに
-/// 保持されている（共有でない）ことの配線層証拠——throttle.rs の純関数 per-scope 檻
+/// 保持されている（共有でない）ことの配線層証拠——`throttle.rs` の純関数のテスト
 /// （別々の `MouseMoveThrottle` 値を使う）とは別レイヤ（同一 wiring の map を通す）。
 #[test]
 fn wiring_throttles_scopes_independently_via_hashmap() {
@@ -421,7 +421,7 @@ fn wiring_throttles_scopes_independently_via_hashmap() {
 }
 
 // -------------------------------------------------------------------------
-// 配信座標の空間切替檻
+// 配信座標の空間切替
 //
 // 恒等 mock（`surface_point: (x, y)`）では配信値が client 点と**数値的に区別できず**、切替の
 // 前後で同じ色のままになる＝何も証明しない。ゆえに以下 2 本は **非恒等 mock**
@@ -530,10 +530,10 @@ fn double_click_delivers_surface_point() {
     }
 }
 
-/// no-op 保存檻: k=1.0 相当（恒等 mock）では move／double-click の配信値が
-/// 受領 client px と完全に一致する＝DPI追従導入前の配信値を変更しない。
+/// k=1.0 相当（恒等 mock）では move／double-click の配信値が
+/// 受領 client px と完全に一致する。
 ///
-/// 上 2 本（非恒等 mock）が「空間が切り替わったこと」を固定するのに対し、本檻は
+/// 直前の 2 本（非恒等 mock）が「空間が切り替わったこと」を固定するのに対し、このテストは
 /// 「等倍では何も変わらないこと」を固定する対（両者が揃って初めて空間切替が閉じる）。
 #[test]
 fn identity_scale_delivers_unchanged_client_coords() {
@@ -550,11 +550,7 @@ fn identity_scale_delivers_unchanged_client_coords() {
     let ev = bubble_pointer(42, 77, DoubleClick::None, false);
     assert!(on_char_pointer_moved(&mut world, e, e, &ev));
     match rx.try_recv().expect("Move が届く") {
-        KanadeMsg::Mouse(m) => assert_eq!(
-            (m.x, m.y),
-            (42, 77),
-            "k=1.0 では配信値＝受領 client px（従前と同一）"
-        ),
+        KanadeMsg::Mouse(m) => assert_eq!((m.x, m.y), (42, 77), "k=1.0 では配信値＝受領 client px"),
         _ => panic!("Mouse(Move) を期待"),
     }
 
@@ -566,7 +562,7 @@ fn identity_scale_delivers_unchanged_client_coords() {
         KanadeMsg::Mouse(m) => assert_eq!(
             (m.x, m.y),
             (13, 99),
-            "k=1.0 では dblclick の配信値も従前どおり client px と同値"
+            "k=1.0 では dblclick の配信値も client px と同値"
         ),
         _ => panic!("Mouse(DoubleClick) を期待"),
     }

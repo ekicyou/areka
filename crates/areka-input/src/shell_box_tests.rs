@@ -99,10 +99,10 @@ fn outside_every_rect_is_none() {
 }
 
 // ---------------------------------------------------------------------------
-// judge_box_press（6 つの分岐）
+// judge_box_press
 // ---------------------------------------------------------------------------
 
-/// ⑴ この押下が選択の確定 → 処理した（シェルへは送らない）。単押しでも同じ。
+/// この押下が選択の確定 → 処理した（シェルへは送らない）。単押しでも同じ。
 #[test]
 fn press_selected_now_is_consumed() {
     for dc in [DoubleClick::None, DoubleClick::Left] {
@@ -113,7 +113,7 @@ fn press_selected_now_is_consumed() {
     }
 }
 
-/// ⑵ 左ダブルクリックでない → シェルへの操作。話している最中でも同じ。
+/// 左ダブルクリックでない → シェルへの操作。話している最中でも同じ。
 #[test]
 fn press_not_left_double_is_shell_op() {
     for dc in [DoubleClick::None, DoubleClick::Right, DoubleClick::Middle] {
@@ -124,7 +124,7 @@ fn press_not_left_double_is_shell_op() {
     }
 }
 
-/// ⑶ 直前の押下が選択の確定 → 処理した（続きのダブルクリックを中断にもシェルにもしない）。
+/// 直前の押下が選択の確定 → 処理した（続きのダブルクリックを中断にもシェルにもしない）。
 #[test]
 fn press_after_selection_is_consumed() {
     assert_eq!(
@@ -133,7 +133,7 @@ fn press_after_selection_is_consumed() {
     );
 }
 
-/// ⑷ 話していない → シェルへのダブルクリック。
+/// 話していない → シェルへのダブルクリック。
 #[test]
 fn press_not_talking_is_shell_op() {
     assert_eq!(
@@ -142,7 +142,7 @@ fn press_not_talking_is_shell_op() {
     );
 }
 
-/// ⑸ 中断を禁じる区間 → 止めず、シェルへも送らない。
+/// 中断を禁じる区間 → 止めず、シェルへも送らない。
 #[test]
 fn press_in_no_user_break_is_disabled() {
     assert_eq!(
@@ -151,7 +151,7 @@ fn press_in_no_user_break_is_disabled() {
     );
 }
 
-/// ⑹ それ以外 → 台詞を中断する。
+/// それ以外 → 台詞を中断する。
 #[test]
 fn press_while_talking_breaks() {
     assert_eq!(
@@ -370,7 +370,7 @@ fn anchor_in_box_is_hovered_and_choice_comes_first() {
     let kind = |y: f32| judge_box_click(hit, true, &rows, 5.0, y, 0).map(|s| s.kind);
     assert_eq!(kind(15.0), Some(SpanKind::Anchor));
     assert_eq!(kind(5.0), Some(SpanKind::Choice));
-    assert_eq!(kind(30.0), None, "範囲の外は今までどおり");
+    assert_eq!(kind(30.0), None, "範囲の外は無し");
 }
 
 // ---------------------------------------------------------------------------

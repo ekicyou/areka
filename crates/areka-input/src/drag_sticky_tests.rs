@@ -1,7 +1,7 @@
 //! ドラッグの受け手から組の連れ動きまでの結合の檻。
 //!
 //! 本番と同じ順に組んだ 2 スコープの窓（[`Rig`]・scope 1 をドラッグし scope 0 が組の相手）へ、
-//! 帳簿を 2.1 の `seed_sticky_descript` で直に据え、wintf の配り（`dispatch_drag_events`）で
+//! 帳簿を `seed_sticky_descript` で直に据え、wintf の配り（`dispatch_drag_events`）で
 //! 開始・途中・終わりを通す。台本で向きを変えた窓は `apply_script_alignment` と同じ部品
 //! （`Anchored`＋印つきの `AnchorSource`）を直に入れて作る。
 

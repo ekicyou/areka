@@ -1,16 +1,15 @@
 // -------------------------------------------------------------------------
-// on_balloon_pointer_moved 配線層檻
+// on_balloon_pointer_moved の配線
 //
 // 合成 `PointerState` を直接ハンドラへ与え、(a) marker 不在の縮退を、(b) 適用アーム
-// （Inject／ResetOwnState／Noop）を実 `TextLayerRuntime` で決定的に檻へ入れる。判断分岐そのもの
-// （active×hit×last の全組合せ）は hover_action 純関数檻が網羅済み。
+// （Inject／ResetOwnState／Noop）を実 `TextLayerRuntime` で観測する。判断分岐そのもの
+// （active×hit×last の全組合せ）は `balloon_pure_core_tests.rs` の `hover_action` のテストが持つ。
 //
-// NOTE（runtime constructibility）: `choice_hit_rows` は `present_frame`（GPU）でしか
-// `choice_snapshot` を埋めないため、headless では現行 rows が常に空＝hit=None。ゆえに
-// 「Some(ordinal) ハイライト追従」は本層では実演できず hover_action 純関数檻と
-// pass-through 檻に委ねる。本檻はハンドラ経由の実注入として Inject(None) 遷移
-// （active かつ hit=None かつ last=Some → ハイライト解除注入）を観測する（inject_choice_hover を
-// 実 runtime へ実際に呼び、BalloonWiring.hover の更新と debug marker を固定する）。
+// `choice_hit_rows` は `present_frame`（GPU）でしか `choice_snapshot` を埋めないため、
+// headless では現行 rows が常に空＝hit=None。ゆえに「Some(ordinal) ハイライト追従」はここでは
+// 作れない（GPU を使う `balloon_gpu_hit_tests.rs` が見る）。ここはハンドラ経由の実注入として
+// Inject(None) 遷移（active かつ hit=None かつ last=Some → ハイライト解除注入）を観測する
+// （`inject_choice_hover` を実 runtime へ呼び、BalloonWiring.hover の更新と debug marker を固定する）。
 // -------------------------------------------------------------------------
 
 use std::rc::Rc;
@@ -87,7 +86,7 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
     assert!(
         logs.iter()
             .any(|l| l.contains("level=DEBUG") && l.contains("choice_hover_inject")),
-        "hover 遷移注入で choice_hover_inject を DEBUG 発火（DD-CI-7）: {logs:?}"
+        "hover 遷移注入で choice_hover_inject を DEBUG 発火: {logs:?}"
     );
 }
 
@@ -163,22 +162,19 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
 }
 
 // -------------------------------------------------------------------------
-// on_balloon_pointer_pressed 配線層檻
+// on_balloon_pointer_pressed の配線
 //
 // 合成 `PointerState` を直接ハンドラへ与え、(a) 非左押下（右/中 down）素通し、(b) marker 不在の縮退、
 // (c) 棄却経路（非表示=inactive／非ヒット=no_hit の reason 弁別・零 send）を実 `TextLayerRuntime` で
-// 決定的に檻へ入れる。確定発行のフィールド一致・stale 棄却は click_selection 純関数檻が
-// 網羅済み。
+// 観測する。確定発行のフィールド一致・消滅時の棄却は `balloon_pure_core_tests.rs` の
+// `click_selection` のテストが持つ。
 //
-// NOTE（runtime constructibility）: `choice_hit_rows` は `present_frame`（GPU）でしか
-// `choice_snapshot` を埋めないため headless では現行 rows が常に空＝hit=None。ゆえに
-// 「ヒット→send→choice_selected info」の full pass-through は本層では実演できず、
-// pass-through 檻へ委ねる。send 機構自体は `send_selection`／`ChoiceSelectionInbox` 檻で、
-// `Some` 構成は click_selection 檻で構造的に網羅済み。本檻はハンドラ経由の棄却・縮退・零 send を観測する。
+// `choice_hit_rows` は `present_frame`（GPU）でしか `choice_snapshot` を埋めないため
+// headless では現行 rows が常に空＝hit=None。ゆえに「ヒット→send→choice_selected info」は
+// ここでは作れない（GPU を使う `balloon_gpu_hit_tests.rs` が見る）。ここはハンドラ経由の棄却・縮退・零 send を観測する。
 // -------------------------------------------------------------------------
 
 /// 非左押下は素通し: 右/中ボタン down（left_down=false）は確定でないため `false`・零 send。
-/// 左でない押下は `left_down` の分岐で先に戻るので、選択の確定にも中断の入口にも届かない。
 #[test]
 fn pressed_non_left_button_is_noop_false() {
     let mut world = World::new();
@@ -260,7 +256,7 @@ fn pressed_inactive_choice_rejected_with_reason_inactive() {
 
     assert!(
         rx.try_recv().is_err(),
-        "非表示中クリックは send しない（Inbox は Empty・R3.1）"
+        "非表示中クリックは send しない（Inbox は Empty）"
     );
     assert!(
         logs.iter().any(|l| l.contains("level=DEBUG")
@@ -306,7 +302,7 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
 
     assert!(
         rx.try_recv().is_err(),
-        "非ヒットでは send しない（Inbox は Empty・R2.3）"
+        "非ヒットでは send しない（Inbox は Empty）"
     );
     assert!(
         logs.iter().any(|l| l.contains("level=DEBUG")
@@ -321,20 +317,20 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
 }
 
 // -------------------------------------------------------------------------
-// 資源縮退・Tunnel 素通し 副作用ゼロ回帰檻
+// 資源縮退・Tunnel 素通しで副作用が無いこと
 //
 // 縮退の判断分岐（Tunnel 短絡／RuntimeWiring 不在=debug／BalloonWiring 不在=error）を、観測資源を
 // 同居させた副作用ゼロの三点——(a) send なし（`ChoiceSelectionInbox.try_recv()==Empty`）、
 // (b) `BalloonWiring.hover` 不変、(c) runtime へ `inject_choice_hover` 未適用（`choice_active` 不変）——
 // とあわせて、両ハンドラ×{Tunnel, RuntimeWiring 不在, BalloonWiring 不在} で固定する。
 //
-// スレッド親和（NonSend 借用は Input スケジュール排他システム内）: 本檻は各ハンドラを単一スレッドの
+// スレッド親和（NonSend 借用は Input スケジュール排他システム内）: ここは各ハンドラを単一スレッドの
 // `&mut World` 排他呼出で直接叩く——NonSend 資源（`RuntimeWiring`／`BalloonWiring`・`Rc<RefCell>`）の借用が
 // 排他システム内でのみ起きるという構造契約は、ハンドラの `&mut World` シグネチャ自体が強制する
 // （別途スレッドテストは不要）。
 // -------------------------------------------------------------------------
 
-/// 縮退シナリオ（観測資源を同居させた副作用ゼロ回帰の分類）。
+/// 縮退シナリオ（副作用ゼロを確かめる分類）。
 #[derive(Clone, Copy)]
 enum Degrade {
     /// Tunnel 相（全資源 present でも即 false・一切触れない）。
@@ -400,7 +396,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
             );
         });
 
-        // ── (2) 縮退時の対応ログレベル（8.1 の観測条件）─────────────────────────────────
+        // ── (2) 縮退時の対応ログレベル─────────────────────────────────
         match scenario {
             Degrade::Tunnel => assert!(
                 !logs
@@ -426,13 +422,13 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
             ),
         }
 
-        // ── (3) 副作用ゼロ①: runtime へ inject_choice_hover 未適用（全シナリオ共通）───────────
+        // ── (3) 副作用ゼロ: runtime へ inject_choice_hover 未適用（全シナリオ共通）───────────
         assert!(
             !logs.iter().any(|l| l.contains("choice_hover_inject")),
             "縮退では runtime へ hover を注入しない（choice_hover_inject なし）: {logs:?}"
         );
 
-        // ── (3) 副作用ゼロ②③: BalloonWiring.hover 不変＋send なし（present の場合）─────────────
+        // ── (3) 副作用ゼロ: BalloonWiring.hover 不変＋send なし（present の場合）─────────────
         if let Some(rx) = &inbox_rx {
             assert_eq!(
                 world.get_non_send::<BalloonWiring>().unwrap().hover(0),
@@ -445,7 +441,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
             );
         }
 
-        // ── (3) 副作用ゼロ④: runtime 未変更（present の場合）active 不変 ─────
+        // ── (3) 副作用ゼロ: runtime 未変更（present の場合）active 不変 ─────
         if let Some(rt) = &runtime {
             assert!(
                 rt.borrow().choice_active(&ActorKey::from("0")),
@@ -507,7 +503,7 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
             );
         });
 
-        // ── (2) 縮退時の対応ログレベル（8.1 の観測条件）─────────────────────────────────
+        // ── (2) 縮退時の対応ログレベル─────────────────────────────────
         match scenario {
             Degrade::Tunnel => assert!(
                 !logs
@@ -534,13 +530,13 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
             ),
         }
 
-        // ── (3) 副作用ゼロ①: 選択発行 info（choice_selected）を出さない（全シナリオ共通）───────
+        // ── (3) 副作用ゼロ: 選択発行 info（choice_selected）を出さない（全シナリオ共通）───────
         assert!(
             !logs.iter().any(|l| l.contains("choice_selected")),
             "縮退では選択を発行しない（choice_selected info なし）: {logs:?}"
         );
 
-        // ── (3) 副作用ゼロ②③: BalloonWiring.hover 不変＋send なし（present の場合）─────────────
+        // ── (3) 副作用ゼロ: BalloonWiring.hover 不変＋send なし（present の場合）─────────────
         if let Some(rx) = &inbox_rx {
             assert_eq!(
                 world.get_non_send::<BalloonWiring>().unwrap().hover(0),
@@ -553,7 +549,7 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
             );
         }
 
-        // ── (3) 副作用ゼロ④: runtime 未変更（present の場合）active 不変 ─────
+        // ── (3) 副作用ゼロ: runtime 未変更（present の場合）active 不変 ─────
         if let Some(rt) = &runtime {
             assert!(
                 rt.borrow().choice_active(&ActorKey::from("0")),
@@ -563,7 +559,7 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
     }
 }
 
-/// 押下ハンドラの末尾は、中断の入口（`super::user_break::on_left_press`）を必ず通る
+/// 押下ハンドラの末尾は、中断の入口（`super::user_break::on_left_press`）を必ず通る。
 /// GPU 無しではバルーンを出せないので受理までは進まないが、
 /// 左ダブルクリックの検出の記録が出ることで、この 1 行の呼び出しを固定する。
 #[test]
@@ -601,7 +597,7 @@ fn pressed_left_double_click_reaches_the_user_break_entry() {
     );
     assert!(
         lifecycle_rx.try_recv().is_err() && kanade_rx.try_recv().is_err(),
-        "バルーンが出ていないので、どちらの線へも送らない（要件 1.9）"
+        "バルーンが出ていないので、どちらの線へも送らない"
     );
 }
 
