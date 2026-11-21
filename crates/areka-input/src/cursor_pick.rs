@@ -1,6 +1,6 @@
 //! 窓 1 つの形の状態の遷移と、出す形とその出どころを決める純関数。
 //!
-//! 状態の置き場所と結線は CursorAnswer（`cursor_answer.rs`）。当たり判定はここでは引かず、
+//! 状態の置き場所と結線は `cursor_answer`。当たり判定はここでは引かず、
 //! 引くときだけ渡された `resolve` を呼ぶ。
 
 use wintf::ecs::cursor::CursorTrigger;
@@ -78,7 +78,7 @@ fn shown_of(c: &WindowCursor) -> Shown {
     }
 }
 
-/// 前の状態と引き金から、次の状態と出す場面を決める（13 行の表）。resolve は当たり判定を引くとき
+/// 前の状態と引き金から、次の状態と出す場面を決める。resolve は当たり判定を引くとき
 /// （位置が変わった・初めて・押した・放した・ホイール・前の状態が無い）だけ呼ぶ。
 pub(crate) fn plan_cursor(
     prev: Option<&WindowCursor>,
@@ -173,7 +173,7 @@ pub(crate) fn pick_shape<F: Clone>(
                 CursorScene::Hover | CursorScene::Wheel => CursorScene::Up,
                 s => *s,
             };
-            let row = |s| rows.rows.get(&(scope, region.clone(), s)).cloned();
+            let row = |s| rows.get(scope, region, s).cloned();
             if let Some(s) = row(*scene).or_else(|| row(base)) {
                 return Some((s, Origin::Brace));
             }

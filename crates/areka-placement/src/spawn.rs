@@ -29,7 +29,7 @@
 //!   `areka_input::attach_char_pointer_handlers` が spawn 直後に装着する（依存方向
 //!   areka_input→placement）。
 //!   **終了指示**（kanade の正規の握手へ入る・窓は握手の完了後に閉じる）は右クリック
-//!   メニューの「終了」が送る。Ctrl+Shift+左ダブルクリックと結線前の Ctrl+左ダブルクリックだけが
+//!   メニューの「終了」と OS の窓の閉鎖要求の受け口が送る。Ctrl+Shift+左ダブルクリックと結線前の Ctrl+左ダブルクリックだけが
 //!   強制退避（終了の統合操作＝全窓を閉じてから終了を指示する→`run()` 正常復帰）である。いずれも
 //!   areka_input 側ハンドラ／`ghost_session` の結線が担う。
 //!   全窓を閉じる操作は本モジュールには置かず、終了の指示と 1 つにした `app_exit::quit_app`
@@ -761,6 +761,9 @@ fn register_ghost_windows_via<R: ClickThroughRegistrar>(
     }
 }
 
+#[cfg(test)]
+#[path = "spawn_assembly_tests.rs"]
+mod assembly_tests;
 #[cfg(test)]
 #[path = "spawn_cleanup_tests.rs"]
 mod cleanup_tests;

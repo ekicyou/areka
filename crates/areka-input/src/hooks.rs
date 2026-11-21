@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-/// 本体が据える強制退避の口（本体の `app_exit::install_input_hooks` が `register_systems` で据える）。
+/// 本体が据える強制退避の口（本体が系の登録の口で据える）。
 #[derive(Resource, Clone, Copy)]
 pub struct InputHooks {
     /// 全窓を閉じて終了を指示する（本体の終了の統合操作・出所 `Escape`）。

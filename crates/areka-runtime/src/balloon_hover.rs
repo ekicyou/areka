@@ -37,3 +37,7 @@ impl BalloonHover {
         self.0.remove(&scope);
     }
 }
+
+#[cfg(test)]
+#[path = "balloon_hover_tests.rs"]
+mod tests;

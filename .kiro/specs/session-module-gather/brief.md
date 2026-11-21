@@ -126,3 +126,6 @@
 - **要件定義のモデル**: Opus（crate を作らない本体の中の移動・前例は `runtime-module-untangle`）。
 - **分割の案**: 無し。
 - **古くなった記述**: Current State の `main.rs` の 531〜910 行・`register_systems` の 72〜84 行・`main.rs:253`・「系を 10 本」（11 本）・切替の 9 ファイルの名前（今の `session/` の本番は `ghost_quit`・`ghost_switch`・`hooks`・`mod`・`reload`・`runtime_boot`・`same_folder_pin`・`shell_balloon_switch`・`switch_copy`）・`doc/testing.md:48`（47）。`tests/smoke_boot_loop_exit.rs` は出所の名前でなく文言で照合している。
+
+## `audit-areka-input-menu` からの申し送り（2026-11-22 完了）
+- **件 1（`doc/COMPAT_ARCHITECTURE.md` §8 の古いファイル名）**: 412 行の判定の欄の `crates/areka-input/src/input_events_char_clamp_tests.rs` は、`audit-areka-input-menu` で `crates/areka-input/src/char_clamp_tests.rs` に名を変えた（テストの名 `pointer_moves_over_every_emily_shaped_window_do_not_panic` は同じ）。この spec が §8 の 301〜473 行を直すので、向こうは触っていない（11-21 にセッションへも伝えた）。
