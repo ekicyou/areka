@@ -355,10 +355,8 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
    - 全部が `Shown` の定常では、今と同じ巡に当たり、新しい行は出ない（1.3・6.5）。
 2. **移動**（`PositionCue::Move`）: 今の `unshown_scope`（対象と基準のうち窓があってまだ表示していないもの）を、待つスコープの決まりで分ける。
    - `Pending` なら今どおり預かり、届いた巡に `move_ratio_unset` を残す（4.2）。
-   - `NeverShown(reason)` なら預からない。扱いは **【SSP の測りの後に決める】**:
-     - **枝 A（捨てる）**: 当てずに捨て、`info!(event = "move_hold_unshown", scope, waiting, reason, handling = "discarded")`。捨てた移動は `Blocked` に積まない。
-     - **枝 B（位置だけ置く）**: 今の大きさで当てる（`ready` へ積む）。`info!(event = "move_hold_unshown", scope, waiting, reason, handling = "placed")`。
-     - **仮の既定は枝 B**。理由: 並べ直しが表示しないと分かった窓を今の大きさで入れる決め（3.2）と同じ扱いになる・取りこぼさない（2.5）・SSP は窓を隠しても窓そのものは残すので、隠した窓へ動かす形は位置だけ動く見込みが高い（測りで確かめる）。測りの結果が枝 A を示したら枝 A に替える。どちらでも切り替えの設定や分岐の口は作らず、片方だけを実装する。
+   - `NeverShown(reason)` なら預からず、**位置だけ置く**（今の大きさで当てる・`ready` へ積む）。`info!(event = "move_hold_unshown", scope, waiting, reason, handling = "placed")`。
+     - 決めの根拠: SSP 2.9.34 の測り（`research.md` §10.7）で、隠した窓・まだ出していない窓への `\![move]` は捨てられず、窓の位置として残り、出した後もその位置に出た。隠した窓は基準としても使われた。並べ直しが表示しないと分かった窓を今の大きさで入れる決め（3.2）とも同じ扱いで、取りこぼさない（2.5）。捨てる形（旧の枝 A）は取らない。
    - 記録は扱った巡に、移動ごとに 1 件（4.1）。前の巡から `Pending` で預かっていた移動は、待つ窓が `NeverShown` に決まった巡にこの腕を通る。
 3. `Blocked` と組の扱い・並べ直し以外の指令の判定は変えない（2.2・3.3）。
 
@@ -394,7 +392,7 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
 |---|---|---|---|
 | `reset_window_pos_held` | info | 並べ直しを表示待ちで預かった、届いた巡に 1 度 | `waiting`（待っているスコープの並び） |
 | `reset_window_pos_unshown` | info | 表示しないと分かった窓を待たずに並べ直したとき、スコープごとに 1 件 | `scope`・`reason`（`hidden`／`failed`） |
-| `move_hold_unshown` | info | 表示しないと分かった窓への移動を扱ったとき、移動ごとに 1 件 | `scope`・`waiting`・`reason`・`handling`（`discarded`／`placed`） |
+| `move_hold_unshown` | info | 表示しないと分かった窓への移動を扱ったとき、移動ごとに 1 件 | `scope`・`waiting`・`reason`・`handling`（`placed`） |
 | `move_ratio_unset`・`move_hold_behind`・`move_hold_superseded`・`reset_window_pos`・`reset_window_pos_skipped` | 今のまま | 今のまま | 今のまま |
 
 語を `move_ratio_unset` の広げでなく新しく作るのは、`move_ratio_unset` が「移動の対象と基準」を欄に持つ測りの語で、並べ直しの待ち（スコープの並び）と形が違うためである。`reset_window_pos_` で始めるので、`grep reset_window_pos` で並べ直しの行が全部引ける。
@@ -410,7 +408,7 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
 2. **前の移動を捨てて預かる（2.1・2.6・5.3）**: 相方 `Pending` で移動を預けた後に並べ直し → 移動は `move_hold_superseded` で捨てられ、並べ直しは預かられる。相方の表示の巡に並べ直しが当たり、捨てた移動は当たらない。
 3. **追い越さない・届いた順（2.3〜2.5）**: 並べ直しを預かっている間に届いた本体への移動は預かられ（`move_hold_behind`）、表示の巡に並べ直しの後で当たる（最後の位置は移動の位置）。
 4. **表示しないと分かった窓で詰まらない（3.1〜3.4・5.4）**: 相方を `NeverShown(Hidden)` にした `SettledSource` で並べ直しを送る → その巡に当たり、`reset_window_pos_unshown scope=1 reason=hidden` が 1 行、後の本体への指令も同じ巡に当たる。`Pending` → `Hidden` に変わった巡に、預かっていた並べ直しが当たる形も見る。
-5. **表示しないと分かった窓への移動（4.1・4.2）**: `Pending` の間は預かる（`move_ratio_unset`）。`Hidden` に決まった巡に預かりの列から出て、移動ごとに `move_hold_unshown` が 1 行（枝 A なら位置は変わらない・枝 B なら今の大きさで置かれる）。
+5. **表示しないと分かった窓への移動（4.1・4.2）**: `Pending` の間は預かる（`move_ratio_unset`）。`Hidden` に決まった巡に預かりの列から出て、移動ごとに `move_hold_unshown` が 1 行で、今の大きさで置かれる。
 6. **定常（6.5・1.3）**: 全部 `Shown` では並べ直しが届いた巡に当たり、`reset_window_pos_held`・`reset_window_pos_unshown` は出ない。
 
 ### 今の檻の改め（7.3）
@@ -431,5 +429,5 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
 ## Open Questions / Risks
 
 1. **面の指令が一度も来ない窓**（3.4 の読み）: 窓があるのに `\s` が一度も届かないスコープは「表示しないと分かった窓」の定義（隠した・出せなかった）に入らないので `Pending` のままで、並べ直しと後の位置の指令を預かり続ける。仮置き: 3.4 の「表示しない窓」を用語の「表示しないと分かった窓」と読み、この形は起動の確定のゴースト待ちと同じく待つ（議題 2 の決め「時間の上限・イベントでは決めない」に従う）。
-2. **表示しないと分かった窓への移動の扱い**（4.1）: 【SSP の測りの後に決める】。仮の既定は枝 B（位置だけ置く）。測りの手順は `research.md` §10、測った結果は §10.6（SSP 2.9.34 は隠した窓への `\![move]` で窓の位置を動かした。出し直した後の値は、ゴーストが毎秒流す位置の指令に混ざって読めなかった）。
+2. ~~表示しないと分かった窓への移動の扱い~~（4.1）: **決まった**＝位置だけ置く（`research.md` §10.7 の SSP 2.9.34 の測り）。
 3. **表示層の装着が来ないスコープ**（GPU が使えないまま・装着の失敗でそのスコープを飛ばした）: target が無いので `Pending` のまま待つ。仮置き: 表示がそもそも成り立たない形で、起動の確定も同じく待つので揃える。
