@@ -421,8 +421,8 @@ fn only_the_os_port_spells_shell_execute() {
     }
     assert_eq!(
         hits,
-        vec!["areka/readme/os_port.rs".to_owned()],
-        "綴るのは本体の readme/os_port.rs だけ"
+        vec!["areka/session/readme/os_port.rs".to_owned()],
+        "綴るのは本体の session/readme/os_port.rs だけ"
     );
 }
 

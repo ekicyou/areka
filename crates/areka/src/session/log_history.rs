@@ -128,7 +128,7 @@ pub(crate) const RULES: &[Rule] = &[
     rule("ghost-boot", Kind::Status, false),
     rule("ghost-shutdown", Kind::Status, false),
     // 外のもの（説明書・ファイル・URL・フォルダ・メール）を開いた記録。
-    rule("areka::readme", Kind::Status, false),
+    rule("areka::session::readme", Kind::Status, false),
 ];
 
 /// [`RULES`] を当てる前に引く「残さない出所」（完全一致）。`areka::install` の下にあっても

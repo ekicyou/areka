@@ -44,7 +44,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Requirements: 1.1, 1.2, 1.6, 6.1, 7.3_
 
 - [ ] 4. readme と roots の芯を集める（段 3）
-- [ ] 4.1 readme を移し、出所の名前を読む所をそろえる
+- [x] 4.1 readme を移し、出所の名前を読む所をそろえる
   - `readme.rs`・`readme_tests.rs`・`readme/` の 11 本を `git mv` で `session/` へ移し、宣言と呼び手を直す
   - `RULES` の `areka::readme` を `areka::session::readme` へ、`doc/ssp-mcp/log-convention.md` の表の同じ行と、`log_history_tests.rs`・`log_history_convention_tests.rs` の `"areka::readme"`・`"areka::readme::opener"` を同じコミットで直す
   - `readme_tests.rs:424` の `"areka/readme/os_port.rs"` を `"areka/session/readme/os_port.rs"` にする

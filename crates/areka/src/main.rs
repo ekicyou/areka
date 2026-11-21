@@ -62,7 +62,6 @@ mod mcp;
 mod menu;
 /// 乗算済み BGRA → 透過 PNG（MCP とオフラインの書き出しが共有）。
 mod png_image;
-mod readme;
 /// OS のセッションの終了（`WM_ENDSESSION`）を窓の手続きの中できれいな終わりにする受け手。
 mod session_end;
 

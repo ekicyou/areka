@@ -3,7 +3,7 @@
 // =============================================================================
 
 use super::*;
-use crate::readme::destination::{Destination, OpenKind, classify, link_destinations};
+use crate::session::readme::destination::{Destination, OpenKind, classify, link_destinations};
 use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use areka_runtime::consumer_ledger::test_support::carrier_cue;
 use areka_runtime::frame::test_support::count_level;

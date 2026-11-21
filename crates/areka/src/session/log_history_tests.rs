@@ -107,8 +107,8 @@ fn status_rows_and_areka_is_exact_only() {
         "ghost-boot",
         "ghost-shutdown",
         // 外のものを開いた記録。
-        "areka::readme",
-        "areka::readme::opener",
+        "areka::session::readme",
+        "areka::session::readme::opener",
     ] {
         assert_eq!(
             classify(Level::INFO, target),
@@ -171,7 +171,7 @@ fn rules_table_is_the_designed_fourteen_rows_in_order() {
             ("areka::session::ghost_switch", Kind::Status, false),
             ("ghost-boot", Kind::Status, false),
             ("ghost-shutdown", Kind::Status, false),
-            ("areka::readme", Kind::Status, false),
+            ("areka::session::readme", Kind::Status, false),
         ]
     );
 }

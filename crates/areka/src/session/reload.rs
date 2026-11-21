@@ -647,9 +647,9 @@ fn reload_names(world: &mut World) -> bool {
         .and_then(|mut slot| slot.0.as_mut().map(|s| s.set_names(model.names)))
         .unwrap_or(false);
     if replaced {
-        crate::readme::set_path(
+        crate::session::readme::set_path(
             world,
-            crate::readme::resolve_path(&root, model.readme.as_deref()),
+            crate::session::readme::resolve_path(&root, model.readme.as_deref()),
         );
     }
     replaced

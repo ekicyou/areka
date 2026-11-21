@@ -42,7 +42,7 @@ use windows::Win32::Foundation::HWND;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::{OnPointerReleased, dispatch_pointer_events};
 
-use crate::readme;
+use crate::session::readme;
 use areka_input::MouseWiring;
 use areka_placement::spawn::CharWindowMarker;
 use trigger::PendingQuery;

@@ -40,6 +40,9 @@ pub(crate) mod readonly;
 /// ログの履歴。
 pub(crate) mod log_history;
 
+/// ゴーストの説明書。
+pub(crate) mod readme;
+
 // 偽の SHIORI を持つゴーストを同じ World で起こす統合テストの土台。
 #[cfg(test)]
 pub(crate) mod ghost_switch_test_support;

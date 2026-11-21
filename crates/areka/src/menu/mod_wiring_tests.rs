@@ -161,8 +161,8 @@ fn the_readme_item_follows_the_file_at_snapshot_time() {
 
     let dir = TempPath::new("menu-readme-item");
     let path = dir.child("readme.txt");
-    let (_tx, requests) = channel::<crate::readme::ReadmeRequest>();
-    crate::readme::wire_readme(&mut world, path.clone(), requests);
+    let (_tx, requests) = channel::<crate::session::readme::ReadmeRequest>();
+    crate::session::readme::wire_readme(&mut world, path.clone(), requests);
     assert!(
         !item_of(&world, Frame::Readme).enabled,
         "ファイルが無ければ無効"

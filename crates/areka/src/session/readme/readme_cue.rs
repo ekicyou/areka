@@ -4,7 +4,7 @@
 //! 他人宛のコマンドも届く。ここで行うのは次の 2 つに限る。
 //!
 //! 1. **自己選別**——`("open", "readme")` の組と、行き先の規則
-//!    （[`crate::readme::destination::classify`]）が開く系とみなすもの
+//!    （[`crate::session::readme::destination::classify`]）が開く系とみなすもの
 //!    （`\![open,file|browser|explorer|editor|mailer,…]` と運搬名 `\j` の `\j[ID]`）だけを
 //!    受理し、それ以外（他の名前・`\![open,help]` など他の選別子・裸の `\![open]`・
 //!    キャリアでない cue）は担当外として読み飛ばす。
@@ -35,8 +35,8 @@ use tracing::{debug, warn};
 
 use areka_parsers::sakura::JUMP_TAG_CARRIER;
 
-use crate::readme::ReadmeRequest;
-use crate::readme::destination::classify;
+use crate::session::readme::ReadmeRequest;
+use crate::session::readme::destination::classify;
 
 /// コマンド名（作り付けの窓や外部を開く汎用の名前）。
 const NAME_OPEN: &str = "open";

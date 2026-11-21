@@ -56,7 +56,7 @@ target の照合は 2 通りある。
 | status | `areka::session::ghost_switch` | 下も含む |
 | status | `ghost-boot` | 下も含む |
 | status | `ghost-shutdown` | 下も含む |
-| status | `areka::readme` | 下も含む |
+| status | `areka::session::readme` | 下も含む |
 <!-- log-rules:end -->
 
 - `ghost-boot`・`ghost-shutdown` は `crates/areka-ghost/src/runtime.rs` が `target: "…"` で明示している target で、ゴースト自体の起動と終了の節目。

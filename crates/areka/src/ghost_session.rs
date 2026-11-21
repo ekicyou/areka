@@ -18,7 +18,7 @@ use wintf::ecs::widget::bitmap_source::{BoxedCommand, CommandSender, WintfTaskPo
 use crate::app_exit::{self, WindowsClosed};
 use crate::boot_resolve::{BalloonDecision, GhostDecision};
 use crate::menu;
-use crate::readme;
+use crate::session::readme;
 use crate::session::runtime_boot::CueSinkSources;
 use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
