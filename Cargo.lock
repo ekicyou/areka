@@ -354,6 +354,7 @@ dependencies = [
  "areka-sylphya",
  "async-io",
  "bevy_ecs",
+ "crash-report-kit",
  "log-capture-kit",
  "sample-ghost-kit",
  "temp-path-kit",
@@ -382,6 +383,7 @@ dependencies = [
  "areka-sylphya",
  "async-io",
  "bevy_ecs",
+ "crash-report-kit",
  "dola",
  "image",
  "log-capture-kit",
@@ -903,6 +905,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ca28b0ae3115b884660db4118d803791fd6756b6e88f39c0f3f7859060d7566"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "crash-report-kit"
+version = "0.1.0"
+dependencies = [
+ "windows",
 ]
 
 [[package]]
@@ -2781,6 +2790,7 @@ dependencies = [
  "bevy_tasks",
  "bevy_utils",
  "bitflags",
+ "crash-report-kit",
  "dola",
  "event-listener",
  "human-panic",

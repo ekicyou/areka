@@ -347,7 +347,7 @@ impl GhostWindows {
     ///
     /// # 呼び手は 3 つある（互いに重ならない）
     ///
-    /// - 連鎖確定（`runtime::frame::drain_resnap::finalize_chain_once_with`）——反映は
+    /// - 連鎖確定（`areka_runtime::frame::drain_resnap::finalize_chain_once_with`）——反映は
     ///   `move_window_to`＝`PlacementRoute::MoveCue` で行うため、下の追随規則には掛からない。
     ///   ゆえに確定後の X をここで明示的に揃える必要がある。
     /// - 単一の窓書込口（`follow::window_move::enqueue_window_set_pos`）——システム由来の

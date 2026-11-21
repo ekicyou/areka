@@ -3,7 +3,7 @@
 //! 提示が覚えたずれ（作者基準）に倍率をかけ、元の位置（今の位置 − 当てた分）へ足してから、
 //! 今の置き方の決まり（吸い付き・作業領域の中への寄せ・見える範囲の守り）を後から当てる。
 //! 書くのは位置だけで、窓の寸は変えない。補わずに一度で当てる。
-//! 呼び手は毎フレームのずれの相（`runtime::frame::move_shift`）。
+//! 呼び手は毎フレームのずれの相（`areka_runtime::frame::move_shift`）。
 
 use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::*;

@@ -329,7 +329,7 @@ fn build_and_spawn(world: &mut World) {
 /// 一覧・`surfaces.txt` の読取と解析・面の画像の決定・焼くまでは権威が 1 回で行う
 /// （`areka_emo_present::shell_target`）。文字コードの扱い（`charset` 宣言に従う）・焼く段で
 /// 落ちた絵の `warn!` も権威側が持つので、この example は呼ぶだけである——本番の資産
-/// （`runtime::assets` の `build_shell_assets`）・採寸（`measure.rs` の `build_shell_assets`）と同じ入口を
+/// （`areka_runtime::assets` の `build_shell_assets`）・採寸（`measure.rs` の `build_shell_assets`）と同じ入口を
 /// 通るため、この example が見る絵は本番と食い違わない。
 fn build_shell_material(
     shell_dir: &std::path::Path,
