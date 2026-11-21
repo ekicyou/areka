@@ -61,6 +61,40 @@ fn mock_seam_plan_and_send_move_observed() {
     assert!(rx.try_recv().is_err(), "1 件のみ送出されるべき");
 }
 
+/// 受け口を落とした結線で、移動とダブルクリックの送出はそれぞれ `kind` つきの
+/// `mouse_send_failed` を 1 行だけ出し、移動は送れなかったと返す。
+#[test]
+fn move_and_double_click_send_failures_record_one_line_each() {
+    let (tx, rx) = mpsc::channel::<KanadeMsg>();
+    drop(rx);
+    let mut wiring = MouseWiring::with_clock(
+        tx,
+        RegionSource::Mock(|_, x, y| HitRegion {
+            scope: 0,
+            region: None,
+            surface_point: (x, y),
+        }),
+        stepping_clock(1000, 1000),
+    );
+
+    let (sent, moved) =
+        log_capture_kit::capture(|| wiring.plan_and_send_move(0, (1, 2), (1, 2), None));
+    assert!(!sent, "受け口が無ければ送れなかったと返す");
+    let (_, clicked) =
+        log_capture_kit::capture(|| wiring.send_double_click(0, (1, 2), None, MouseButton::Left));
+
+    for (events, kind) in [(moved, "move"), (clicked, "double_click")] {
+        let failed: Vec<_> = events
+            .iter()
+            .filter(|e| e.field_str("event") == Some("mouse_send_failed"))
+            .collect();
+        assert_eq!(failed.len(), 1, "{kind}: {events:?}");
+        assert_eq!(failed[0].field_str("kind"), Some(kind), "{events:?}");
+        assert_eq!(failed[0].target, "areka_input", "{events:?}");
+        assert_eq!(failed[0].level, tracing::Level::WARN, "{events:?}");
+    }
+}
+
 /// 間引き統合: 同一 pos 再送は hover 抑制で送出されない（moved=false）。
 #[test]
 fn throttle_suppresses_same_position_hover() {

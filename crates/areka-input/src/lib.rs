@@ -224,23 +224,16 @@ impl MouseWiring {
         }
 
         let (x, y) = surface_pos;
-        let msg = KanadeMsg::Mouse(MouseInput {
-            scope,
-            x,
-            y,
-            region,
-            kind: MouseEventKind::Move,
-        });
-        if self.sender.send(msg).is_err() {
-            tracing::warn!(
-                event = "mouse_send_failed",
+        self.send_mouse(
+            MouseInput {
                 scope,
-                kind = "move",
-                "kanade Sender 送出失敗（actor 停止後）: no-op で継続"
-            );
-            return false;
-        }
-        true
+                x,
+                y,
+                region,
+                kind: MouseEventKind::Move,
+            },
+            "move",
+        )
     }
 
     /// 終了指示（[`KanadeMsg::CloseRequest`]）を 1 件送る。
@@ -284,21 +277,16 @@ impl MouseWiring {
         button: MouseButton,
     ) {
         let (x, y) = surface_pos;
-        let msg = KanadeMsg::Mouse(MouseInput {
-            scope,
-            x,
-            y,
-            region,
-            kind: MouseEventKind::DoubleClick { button },
-        });
-        if self.sender.send(msg).is_err() {
-            tracing::warn!(
-                event = "mouse_send_failed",
+        self.send_mouse(
+            MouseInput {
                 scope,
-                kind = "double_click",
-                "kanade Sender 送出失敗（actor 停止後）: no-op で継続"
-            );
-        }
+                x,
+                y,
+                region,
+                kind: MouseEventKind::DoubleClick { button },
+            },
+            "double_click",
+        );
     }
 
     /// 新しい知らせ（解放・ホイール・出入り）の送出。失敗は warn＋何もしない（今の送出と同じ扱い）。

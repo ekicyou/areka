@@ -26,7 +26,7 @@
   - _Dispatch: standard — 3 か所の写しを書く値を返す 1 関数へ寄せ、新しい単体テストを組む_
   - _Requirements: 3.1, 3.3, 3.5, 4.1, 4.2, 4.7, 6.2, 7.1_
 
-- [ ] 1.3 マウスの送出を全部 `send_mouse` 経由にする（G3）
+- [x] 1.3 マウスの送出を全部 `send_mouse` 経由にする（G3）
   - 移動・ダブルクリック・ドラッグの始めと終わりの送出を、既にある送出の 1 か所（design.md「`send_mouse` への寄せ」）へ寄せる。ドラッグの知らせは記録の名を引数に取り、種類の名を決める `match` を消す（指摘 69）。
   - 記録の出所は design.md「設計の段で決めた事項」1 の指摘 16 の表のとおり（ドラッグの分だけ `areka_input` へ移る）。
   - 受け口を落とした `MouseWiring` で、移動・ダブルクリック・ドラッグの始めの送出がそれぞれ `kind` の欄つきの `mouse_send_failed` を 1 行出すテストが緑で、各送出の失敗の枝を消すと赤になる。
@@ -160,3 +160,4 @@
 ## Implementation Notes
 - clippy は `cargo clippy -p areka-input --all-targets --no-deps -- -D warnings` で見る。`--no-deps` が無いと依存の crate（areka-parsers・dola）にある clippy 1.100 の `collapsible_if` で止まる（範囲の外・この spec の前からある）。
 - 1.2 で足した `box_name(shell, name)`（`balloon_test_support.rs`）と `emo_text_debugs`（`balloon_pure_core_tests.rs`）は、3.2 で箱の名前の写しと `events_named` へ寄せる相手。
+- `lib.rs` の `send_mouse` の doc（「新しい知らせ（解放・ホイール・出入り）の送出」）は 1.3 の後は全部のマウスの送出なので古い。4.1 で直す。

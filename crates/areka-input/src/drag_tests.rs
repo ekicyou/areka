@@ -412,6 +412,9 @@ fn assert_one_record(
     assert_eq!(got.field_str("event"), Some(event), "{got:?}");
     assert_eq!(got.field_str("reason"), reason, "{got:?}");
     assert_eq!(got.field_str("kind"), Some("drag_start"), "{got:?}");
+    if event == "mouse_send_failed" {
+        assert_eq!(got.target, "areka_input", "{got:?}");
+    }
     assert_eq!(got.level, level, "{got:?}");
 }
 
