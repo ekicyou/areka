@@ -31,7 +31,7 @@
   - _Requirements: 1.4, 1.7, 7.3_
 
 - [ ] 2. 使い手を 1 つの本体へ付け替える
-- [ ] 2.1 (P) wintf の据え付けを小さなファイルに替える
+- [x] 2.1 (P) wintf の据え付けを小さなファイルに替える
   - `crates/wintf/src/test_crash_report.rs` の中身を、`crates/areka-input/src/crash_report_tests.rs` と同じ形（`//!` 1 行・`crash_report_kit::install` を指す `.CRT$XCU` の静的変数・据え付けの確かめ 1 本）に替える。ファイルの名と `lib.rs` の `mod` の行は変えない
   - 「写しの相手」を挙げる説明を残さない
   - 終わった姿: `cargo test -p wintf --lib test_crash_report` で据え付けの確かめが緑。`crates/wintf/src/lib.rs` の差分が 0
