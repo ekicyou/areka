@@ -555,7 +555,7 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 
 | # | 所 | 内容 | 渡し先 |
 |---|---|---|---|
-| 1 | `crates/areka-input/src/user_break.rs:201` | 説明が `crates/areka/src/readme.rs` を名指す（今は `crates/areka/src/session/readme.rs`）。触らない crate | `audit-areka-input-menu`（か後の見直し） |
+| 1 | `crates/areka-input/src/user_break.rs:201` | 説明が `crates/areka/src/readme.rs` を名指す（今は `crates/areka/src/session/readme.rs`）。触らない crate | `audit-areka-input-menu`（か後の見直し）＝**済み（PR#492）**: パスを書かない形に直された（main の上で `crates/areka/src/readme.rs` の名指しは 0 件・2026-11-22 確かめ） |
 | 2 | `doc/click-through.md:3`・`:136` | `crates/areka/src/main.rs` を実装の場所と書く（DComp オプトインと窓登録・`register_click_through_windows` システム相当）。もとから古い | `audit-areka-app` |
 | 3 | `tools/perf/invoke-perf-run.ps1:29` | `crates/areka/src/main.rs の SMOKE_EXIT_ENV` を名指す。もとから古い | `audit-areka-app` |
 | 4 | `crates/areka/src/session/app_exit_tests.rs:182` | doc が `input_events_tests.rs` を名指す（式 2 の語の唯一の当たり） | `audit-areka-app` |
