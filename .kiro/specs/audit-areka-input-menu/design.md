@@ -30,7 +30,7 @@
 - `crates/areka-input/` の全部（`src/` の 49 ファイル・`Cargo.toml`・`cursor/README.md`）の、確定した指摘の直しと、そのためのテストの追加・直し・削除・名の変更。
 - 本番の 3 つの寄せ先: 選択の送り出し（`balloon.rs` の `dispatch_selection`）・強調の当て方（`balloon.rs` の `apply_hover`）・マウスの送出（`lib.rs` の `MouseWiring::send_mouse`）。どれも crate の中の私有の関数で、公開の面は増えない。
 - テストの支えの 3 ファイル（`balloon_test_support.rs`・`pointer_test_support.rs`・`drag_test_support.rs`）への寄せ。`pointer_test_support` に足す項目は `#[cfg(test)] pub(crate)` にし、本体が `*` で読む面を広げない（`test-support` だけの組み立てで使われない項目の警告も出さない）。
-- 範囲の外の、要件 7.4 に挙げたファイルだけ: `areka-runtime` の `examples/collision-probe.rs`（63・66 行）・`examples/collision-probe/setup.rs`（75〜76 行）・`src/balloon_hover.rs` と `src/shell_box_hover.rs` の末尾のテストの mod の行と兄弟の新しいテストのファイル、`areka-placement` の `src/spawn.rs` の末尾のテストの mod の行と兄弟の新しいテストのファイル、`areka-runtime` の `src/shell_cursor_table.rs` の `CursorRows::get` とそのテスト（指摘 74）、移すテストの名を doc コメントで指す 3 行（`areka-placement` の `spawn_zorder_pair_deferred_tests.rs`・wintf の `zorder_pair_maintain_always_on_top_tests.rs`）。
+- 範囲の外の、要件 7.4 に挙げたファイルだけ: `areka-runtime` の `examples/collision-probe.rs`（62・63・65・66 行と 232 行の `println!`）・`examples/collision-probe/setup.rs`（75〜76 行）・`src/balloon_hover.rs` と `src/shell_box_hover.rs` の末尾のテストの mod の行と兄弟の新しいテストのファイル、`areka-placement` の `src/spawn.rs` の末尾のテストの mod の行と兄弟の新しいテストのファイル、`areka-runtime` の `src/shell_cursor_table.rs` の `CursorRows::get` とそのテスト（指摘 74）、移すテストの名を doc コメントで指す 3 行（`areka-placement` の `spawn_zorder_pair_deferred_tests.rs`・wintf の `zorder_pair_maintain_always_on_top_tests.rs`）。
 - 申し送りの書き足し: `.kiro/specs/audit-areka-app/brief.md`（本体の名指し 2 件）と、`session-module-gather` のセッションへの伝言（`doc/COMPAT_ARCHITECTURE.md:412` のパス）。
 
 ### Out of Boundary
@@ -185,7 +185,7 @@ crates/areka-placement/src/
 
 | ファイル | 変えること | 根拠 |
 |---|---|---|
-| `crates/areka-runtime/examples/collision-probe.rs` | 63 行の理由を依存の向き（`areka-input` が `areka-runtime` に依存するので example から使えない）に。66 行のファイル名を `char_pointer_tests.rs` に | 件 6・指摘 41・52・要件 7.4 の 1 |
+| `crates/areka-runtime/examples/collision-probe.rs` | 63 行の理由を依存の向き（`areka-input` が `areka-runtime` に依存するので example から使えない）に。66 行のファイル名を `char_pointer_tests.rs` に。かけ直しで 62・65 行の doc と 232 行の `println!` の文を同じ事実にそろえる | 件 6・指摘 41・52・要件 7.4 の 1 |
 | `crates/areka-runtime/examples/collision-probe/setup.rs` | 75〜76 行の理由を依存の向きに | 件 6・指摘 41 |
 | `crates/areka-runtime/src/balloon_hover.rs` | 末尾に `#[cfg(test)] #[path = "balloon_hover_tests.rs"] mod tests;` の 3 行 | 指摘 31・要件 7.4 の 2 |
 | `crates/areka-runtime/src/balloon_hover_tests.rs`（新） | `balloon_hover_defaults_to_false_for_every_scope`・`clear_balloon_hover_clears_that_scope_only_and_is_idempotent` | 指摘 31 |

@@ -140,7 +140,7 @@
   - _Dispatch: mechanical — 新しい名と直す行を design が与えている_
   - _Requirements: 3.3, 3.4, 5.6, 7.1, 7.4, 7.6, 7.9_
 
-- [ ] 5. 記録を残し、かけ直しと全体テストで確かめる
+- [x] 5. 記録を残し、かけ直しと全体テストで確かめる
 
 - [x] 5.1 預かった件と申し送りを記録する（G15・件 8・12）
   - `research.md` の新しい節に、件 1〜11 ごとの出どころと直した所を残す（件 12）。件 8 は「狭められる項目 0（開けた項目は全部本体の本番かテストに使い手あり）」で記録して閉じる。要件 1 のギャップ分析の結果と、残すと裁定した指摘 0 件・後の spec へ回した指摘 0 件・裁定を仰ぐ 3 種類に当たる指摘 0 件・タスクが 20 を越えないことも同じ節に書く。
@@ -149,7 +149,7 @@
   - _Dispatch: mechanical — 記録の中身を design と requirements が与えている_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.2, 5.8, 5.12, 7.9, 7.10, 7.11_
 
-- [ ] 5.2 かけ直しの audit と全体テストで仕上げる（G16）
+- [x] 5.2 かけ直しの audit と全体テストで仕上げる（G16）
   - `cargo doc -p areka-input --no-deps` の警告 0 を確かめる。同じ範囲へ audit を上限なし・全部読む作法でかけ直し、新しい指摘を直して 0 件になるまで繰り返す。打ち切り・Fable での総括・連鎖のまとめは要件 9.6〜9.8 のとおり。回ごとの組ごとの件数と判定を `research.md` に残す。
   - 既定のブランチとの差分で、本体・`Cargo.lock`・`log-capture-kit`・`vendors/` が 0 行、`areka-runtime`・`areka-placement`・wintf の差分が design.md「Modified Files（範囲の外）」の表のファイルだけ、`doc/` の差分は `COMPAT_ARCHITECTURE.md:412` の 1 語だけ（4.3 で直したときだけ・直したかどうかも記録する）、外への約束の変化がログの 2 件（議題 6・指摘 17）と出所の表の分だけであることを確かめて `research.md` に残す。
   - 実機の確かめ・SSP の測り・静かな机は回さない。全体テスト `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回し、赤なら赤のテストだけを短く回し直す。
@@ -172,3 +172,5 @@
 - 範囲の外（完了の棚卸へ）: `crates/areka-runtime/src/frame_test_support.rs` の `gpu_attach_world` は World を GPU の許可より先に束ねる（panic のとき許可が World より先に落ちる）。5.2 で `gpu_balloon_world` の同じ形を直した。design の範囲の外の表に無いので触っていない。
 - 範囲の外（完了の棚卸で `audit-areka-app` へ）: 本体 `crates/areka/src/ghost_session.rs` のコメント「`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入」は、`wire_balloon_choice` が 4 つを挿すので古い。
 - `emo_text_debugs` を `events_named` へ寄せる上の申し送りは成り立たない（DEBUG の行に `event` の欄が無い）。寄せずに閉じる。
+- 5.2 の全体テストで、この spec が触っていない wintf の単体テストが GPU の描画のテスト 14 本の赤のあと止まった（wintf の差分は doc コメント 1 行だけ）。wintf だけを 1 回回し直して緑（1603 passed）。wintf より前のクレートは全部緑。wintf より後の段は最終検証の全体テストで見る。
+- 5.2 の 5 回目の連鎖 5 件は要件 9.8 の Fable のまとめを通さず、その回の中で直して grep で見回した（打ち切りの回のため）。
