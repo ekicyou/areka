@@ -372,7 +372,7 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
 3. `Blocked` と組の扱い・並べ直し以外の指令の判定は変えない（2.2・3.3）。
 
 ##### State Management
-- 状態は今の `RuntimeWiring.move_held`（`RefCell<VecDeque<PositionCue>>`）だけ。新しい状態は持たない（記録の「1 度だけ」は今の `just_arrived` の印で足りる）。
+- 状態は今の `RuntimeWiring.move_held` と、トークの終わりの通し番号の欄 1 つ（「スコープの表示の決まり」）。`move_held` の要素は、各指令に届いたときの通し番号を添える形に改める（`pub(super)` の中だけ。`release_ready` の引数も合わせる）。記録の「1 度だけ」は今の `just_arrived` の印で足りる。
 - 預かった並べ直しの「待っているスコープ」は覚えない。毎巡 `pending_scopes` で読み直す（表示層が一次情報源・プル）。
 
 **Implementation Notes**
