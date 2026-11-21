@@ -41,9 +41,9 @@ use throttle::{MouseMoveThrottle, plan_mouse_move};
 /// 送出ヘルパを呼ぶのはこの crate のハンドラ（移動・押下・解放・ドラッグ）と見張りの系（`char_watch`）。
 /// `wire_mouse_input` が World へ挿入する（本体がゴーストの起動に成功するごとに呼ぶ）。
 ///
-/// crate の外から呼べるのはメニュー側が使う 3 つである: 右ダブルクリックの預かりの取り出しと送出
+/// crate の外の本番のコードが呼ぶ操作は 3 つである: メニュー側が使う右ダブルクリックの預かりの取り出しと送出
 /// （`take_pending_right_double_click`／`send_pending_right_double_click`・[`PendingDoubleClick`] の
-/// 不変条件）と、メニューの「終了」が呼ぶ `send_close_request`。
+/// 不変条件）と、メニューの「終了」と OS の窓の閉鎖要求の受け口が呼ぶ `send_close_request`。
 pub struct MouseWiring {
     /// `GhostRuntime::kanade()` クローン（std mpsc）。
     sender: Sender<KanadeMsg>,
@@ -237,8 +237,8 @@ impl MouseWiring {
     /// 送出失敗（kanade 停止後の [`Sender`] エラー）は warn＋no-op。既に kanade が
     /// 止まっているなら終了は進行済みであり、ここで新たに始めるものは無い。
     ///
-    /// モジュール外から呼べるのは、メニューの「終了」がここを使うためである。
-    /// 利用者起因の終了指示を送る本番の呼び手はそれだけである。
+    /// モジュール外から呼べるのは、メニューの「終了」と OS の窓の閉鎖要求の受け口がここを使うためである。
+    /// 利用者起因の終了指示を送る本番の呼び手はその 2 つである。
     /// 操作した窓のスコープは呼び手が `reason` に載せる。
     pub fn send_close_request(&mut self, reason: CloseReason) {
         if self

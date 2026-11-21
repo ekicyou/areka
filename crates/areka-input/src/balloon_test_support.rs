@@ -38,7 +38,7 @@ use areka_runtime::talk_clock::TalkClock;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 
 /// 窓物理 px の行矩形を持つ `ChoiceHitRow` を組む（ordinal は入力順昇順を模す）。
-/// rect 以外は当たりの判定に使わない（不透明転写の placeholder）。
+/// 当たりの判定が見るのは種類（ここでは選択肢）と rect だけ（ほかは不透明転写の placeholder）。
 pub(crate) fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
     ChoiceHitRow {
         kind: SpanKind::Choice,

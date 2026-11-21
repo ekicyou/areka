@@ -2,7 +2,7 @@
 // on_balloon_pointer_moved の配線
 //
 // 合成 `PointerState` を直接ハンドラへ与え、(a) marker 不在の縮退を、(b) 適用アーム
-// （Inject／ResetOwnState／Noop）を実 `TextLayerRuntime` で観測する。判断分岐そのもの
+// （Inject／ResetOwnState／NoopInactive）を実 `TextLayerRuntime` で観測する。判断分岐そのもの
 // （active×hit×last の全組合せ）は `balloon_pure_core_tests.rs` の `hover_action` のテストが持つ。
 //
 // `choice_hit_rows` は `present_frame`（GPU）でしか `choice_snapshot` を埋めないため、

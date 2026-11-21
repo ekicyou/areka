@@ -405,6 +405,18 @@
 
 範囲の外で同じ形を 1 つ見つけた（直していない）: `areka-runtime` の `frame_test_support.rs` `gpu_attach_world` は `gpu_balloon_world` の直す前と同じ順（World を先に束ねる）。design.md「Modified Files（範囲の外）」の表に無いファイルなので触らず、完了の棚卸で申し送る。
 
+##### 回 3 の総括（Fable・2026-11-22）
+
+2 件はどちらも「前の回が書き直した説明の行に、古い事実が残った」形。2 件を直し、回 1〜3 が書き直した説明の行（`git diff 93c075d8d..HEAD -- crates/` のコメントと doc の行）を全部、今のコードと突き合わせた。直したのは説明だけで、コードは変えていない。
+
+| 連鎖 | 直した所 | 連鎖が閉じた根拠 |
+|---|---|---|
+| 当たりの判定が見るもの（R3-C1） | `row` の doc を「当たりの判定が見るのは種類と rect だけ」へ | `hit_choice_row` が読む欄は `kind` と `rect` の 2 つだけ。`anchor_row` の doc（「種類だけが違う」）と食い違わない |
+| 腕の名（R3-A3） | 見出しの「Noop」を `NoopInactive` へ | `HoverAction` の腕は `NoopInactive`・`ResetOwnState`・`Keep`・`Inject` の 4 つ。範囲のファイルのコメントに、この 4 つのほかの腕の名は無い |
+| 同じ形の兄弟（洗い出しで見つけた 2 つ） | `balloon_wheel_with` の doc の「縦の回転を受けた tick に 1 回だけ」（`RuntimeWiring` が無いと呼ばない・バルーン窓の回転だけ。`without_runtime_wiring_does_nothing` が 0 回を表明している）。`MouseWiring` の doc の「crate の外から呼べるのはメニュー側が使う 3 つ」（`new` と `defer_right_double_click` も `pub`・`send_close_request` は OS の窓の閉鎖要求の受け口も呼ぶ）を「crate の外の本番のコードが呼ぶ操作は 3 つ」へ。同じ事実を言う `send_close_request` の doc（「本番の呼び手はそれだけ」）も 2 つの呼び手に合わせた | 範囲のファイルのコメントが `` ` `` で囲んで名指す識別子とファイル名は、全部が今のコードに在る（機械で照合・在りもしない名が照合に掛かることは先に確かめた）。書き直した行の言い分は、乗っているコードを読んで 1 行ずつ確かめ、食い違いは上の 2 つだけだった |
+
+洗い出しの外で 2 つ見つけた（回 1〜3 が書き直していない行なので直していない・完了の棚卸で扱う）: `user_break.rs` の `wire_user_break` の doc の「呼び手は boot 成功後の `wire_runtime`」（呼ぶのは本体の起動の組み立てで、`wire_runtime` は `areka-runtime` の関数）、`collision-probe.rs` の「利用者が終了を指示する道は右クリックメニューの「終了」だけ」（OS の窓の閉鎖要求も同じ終了要求を送る）。
+
 ### 12.5 既定のブランチとの差分（要件 9.5）
 
 `git diff --stat f6405e09`（`git merge-base HEAD origin/main`）の作業ツリーで数えた。

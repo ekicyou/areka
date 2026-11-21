@@ -38,7 +38,8 @@ pub(crate) fn balloon_wheel(world: &mut World) {
     balloon_wheel_with(world, os_wheel_lines);
 }
 
-/// 系の中身。`read_lines` は縦の回転を受けた tick に 1 回だけ呼ぶ（テストは数えて差し替える）。
+/// 系の中身。`read_lines` はバルーン窓が縦の回転を受け、`RuntimeWiring` がある tick に 1 回だけ呼ぶ
+/// （テストは数えて差し替える）。
 pub(super) fn balloon_wheel_with(world: &mut World, read_lines: impl FnOnce() -> WheelLines) {
     // 持ち主（1 窓に高々 1 つ）の縦の回転をバルーン窓のスコープへ写す。横は読まない。
     let owners: Vec<(Entity, i16)> = world
