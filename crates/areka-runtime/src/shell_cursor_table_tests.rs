@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use areka_parsers::shell::parse_cursor_braces;
 
 use super::{
-    CursorIssue, CursorScene, GhostCursorKeys, RowReason, Shape, ShapeReason, SystemCursor,
-    candidate_paths, parse_shape, read_cursor_braces, read_ghost_cursor_keys,
+    CursorIssue, CursorRows, CursorScene, GhostCursorKeys, RowReason, Shape, ShapeReason,
+    SystemCursor, candidate_paths, parse_shape, read_cursor_braces, read_ghost_cursor_keys,
 };
 
 type Rows = BTreeMap<(u32, String, CursorScene), Shape<String>>;
@@ -398,4 +398,26 @@ fn candidate_paths_are_shell_then_ghost_master() {
             PathBuf::from("C:\\ghost\\master\\a..b.cur")
         ])
     );
+}
+
+#[test]
+fn get_with_borrowed_region_returns_the_same_row_as_the_string_key() {
+    let (rows, _) = rows_of(
+        "sakura.cursor
+{
+mouseup0,Head,system:hand
+mousedown0,Head,a.cur
+}
+",
+    );
+    let rows = CursorRows { rows };
+    let region = String::from("Head");
+    assert_eq!(
+        rows.get(0, &region, CursorScene::Down),
+        rows.rows.get(&key(0, "Head", CursorScene::Down))
+    );
+    assert_eq!(rows.get(0, "Head", CursorScene::Down), Some(&file("a.cur")));
+    assert_eq!(rows.get(0, "Head", CursorScene::Hover), None);
+    assert_eq!(rows.get(1, "Head", CursorScene::Up), None);
+    assert_eq!(rows.get(0, "Face", CursorScene::Up), None);
 }

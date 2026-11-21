@@ -41,7 +41,7 @@
   - _Dispatch: mechanical — どの直しも design が形を与え、既存のテストが振る舞いを保つ_
   - _Requirements: 3.1, 3.3, 3.5, 4.1, 6.4, 7.1_
 
-- [ ] 1.5 カーソルの表を借りた文字列で引く口を足し、`WM_SETCURSOR` ごとの複製をなくす（G4・指摘 74）
+- [x] 1.5 カーソルの表を借りた文字列で引く口を足し、`WM_SETCURSOR` ごとの複製をなくす（G4・指摘 74）
   - `areka-runtime` のカーソルの表に、借りた `&str` のまま引くメソッドを 1 つ足す（design.md 指摘 74 の行：私有の鍵の trait による `dyn` の `Borrow`）。公開の欄の型は変えない（本体のテストが欄を直に使うため）。
   - 入力の crate のカーソルの選びはそのメソッドで引き、文字列の複製が 0 回になる。
   - カーソルの表のテストの兄弟のファイルに、足したメソッドが同じ鍵の `String` での引きと同じ行を返し、無い鍵では `None` を返すテストが 1 本緑。既存のカーソルの選びのテストも緑。
@@ -161,3 +161,4 @@
 - clippy は `cargo clippy -p areka-input --all-targets --no-deps -- -D warnings` で見る。`--no-deps` が無いと依存の crate（areka-parsers・dola）にある clippy 1.100 の `collapsible_if` で止まる（範囲の外・この spec の前からある）。
 - 1.2 で足した `box_name(shell, name)`（`balloon_test_support.rs`）と `emo_text_debugs`（`balloon_pure_core_tests.rs`）は、3.2 で箱の名前の写しと `events_named` へ寄せる相手。
 - `lib.rs` の `send_mouse` の doc（「新しい知らせ（解放・ホイール・出入り）の送出」）は 1.3 の後は全部のマウスの送出なので古い。4.1 で直す。
+- 範囲の外（完了の棚卸へ）: `cargo clippy -p areka-runtime --all-targets --no-deps -- -D warnings` は、この spec が触らない areka-runtime のファイル（frame/wiring.rs・frame/zorder_drain.rs・frame_test_support.rs・hover_inject.rs・skin_switch.rs・switch_assets.rs・lib.rs・balloon_visibility_tests.rs・frame_dpi_reproject_tests.rs）の clippy 1.100 の指摘 11〜12 件で止まる。areka-parsers・dola にも同じ種類がある。

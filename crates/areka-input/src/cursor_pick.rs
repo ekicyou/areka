@@ -173,7 +173,7 @@ pub(crate) fn pick_shape<F: Clone>(
                 CursorScene::Hover | CursorScene::Wheel => CursorScene::Up,
                 s => *s,
             };
-            let row = |s| rows.rows.get(&(scope, region.clone(), s)).cloned();
+            let row = |s| rows.get(scope, region, s).cloned();
             if let Some(s) = row(*scene).or_else(|| row(base)) {
                 return Some((s, Origin::Brace));
             }
