@@ -243,3 +243,55 @@
 - 指摘 34: `areka-sylphya` の publisher に期限つきの barrier が在るか。
 - 指摘 75: `windows` 0.62 に `WHEEL_PAGESCROLL` が在るか。
 - 指摘 15: 箱の強調の当て方（場所の鍵が違う）をバルーンの 2 つと同じ関数に寄せられるか。
+
+## 10. 設計の段の調べ（2026-11-21・kiro-spec-design）
+
+- **やり方**: 軽い調べ（既にある crate の直し・新しい依存なし）。外の資料は `windows` 0.62.2 の写し（`C:\rust\cargo\registry` の中）だけを読んだ。下請けは使わず、この書き手が範囲の外のコードを読んで確かめた。
+- **使った作法**: kiro-spec-design の rules（discovery-light・synthesis・review-gate・principles）、ponytail（いちばん小さな完全な変更）、CLAUDE.md の「## Comments」（説明の削りの的）。
+
+### 10.1 Research Needed の答え
+
+| 問い | 答え | 根拠 |
+|---|---|---|
+| 指摘 1・5: `choice_settle` の GPU の組み立てで拡大率 2.0 と折り返しを作れるか | **作れる**。拡大率は `TextSlotBinding::new(slot, window, scale, surface_size, image_size)` の第 3 引数（今のテストは `1.0`・`(120,60)` を両方に渡す）。2.0 なら `surface_size` を倍にして渡す。折り返しは長い選択肢と狭い画像で作れる（折り返した 1 つの範囲の行は同じ `ordinal` を持つ＝`areka-emo-text` の `choice_tests.rs:64-108`）。当たり行は窓の物理 px（`ChoiceHitRow::rect` の doc） | `areka-emo-text/src/actor.rs:62-87,147-160`・`balloon_choice_settle_tests.rs:183-189` |
+| 指摘 10: `RuntimeWiring::shown_talk_id` に番号を置く口が `areka-runtime` の test-support に在るか | **直の口は無い**（`BalloonVisibilityState::talk_id` は私有・書くのは判断中核の `apply_lifecycle_signals` の `TalkStarted` の腕だけ）。ただし **`areka-runtime` を触らずに置ける**: 表示の線の受け口を持った `RuntimeWiring::new` を組み、送り手へ `TalkLifecycleSignal::TalkStarted { talk_id: Some(..) }` を積み、`areka_runtime::balloon_visibility::phase::run_balloon_visibility_phase`（`test-support` で `pub mod phase`）を 1 回回す。装着前（`balloon_models` が空）なら対象の scope は 0 件で、信号の取り出しと畳み込みだけが走る（相の doc の「事前条件」）。`areka-input` の dev-dependency は `test-support` を開けている | `areka-runtime/src/balloon_visibility.rs:502-509`・`balloon_visibility_phase.rs:66-130`・`balloon_visibility_decision.rs:107-125`・本体の `runtime_tests/balloon_visibility_lifecycle_e2e_tests.rs:170` が同じ道 |
+| 指摘 34: `areka-sylphya` に期限つきの barrier が在るか | **在る**。`SylphyaPublisher::barrier_within(timeout) -> Result<(), ReplyError>`（期限越えは `ReplyError::Timeout` と `error!` 1 件）。期限は `areka_runtime::spine::SPIN_WAIT`（`pub use`・test-support の中）を使う | `areka-sylphya/src/actor.rs:550-567`・`areka-runtime/src/spine.rs:321` |
+| 指摘 75: `windows` 0.62 に `WHEEL_PAGESCROLL` が在るか | **無い**（0.62.2 の `src/` 全体に `WHEEL_PAGESCROLL` は 0 件・`PAGESCROLL` を含むのは `ICC_PAGESCROLLER_CLASS`・`WC_PAGESCROLLER*` だけ）。自前の定義と説明「windows クレートに無い」は正しい | `windows-0.62.2/src/Windows/Win32/UI/{WindowsAndMessaging,Controls}/mod.rs` |
+| 指摘 15: 箱の強調の当て方をバルーンの 2 つと同じ関数に寄せられるか | **寄せられる**。バルーンの `inject_choice_hover(actor, v)` は `inject_choice_hover_at(&PlaceKey::balloon(actor), v)` をそのまま呼ぶだけで、違いは場所の鍵・自前の記録の置き場（`BalloonWiring::set_hover` と `ShellBoxHover::set_injected`）・記録の名だけ。場所の鍵を引数に取り、自前の記録に書く値を返す形にすれば、記録は呼び手が書ける | `areka-emo-text/src/actor.rs:498-519`・`shell_box_handler.rs:188-224`・`balloon_moved.rs:133-166`・`balloon_exit.rs:143-176` |
+
+### 10.2 設計の段で新しく分かったこと
+
+- **ログの出所の読み手**: 範囲の外で `areka_input` の出所を読むのは、根の `areka_input=debug`（`doc/pasta-real-run.md:127,141,217`）と、動かさない 4 つ（`user_break`・`char_watch::cursor_answer`・`hover_region::cursor_pick`・`throttle`）だけ。`areka_input::balloon`・`::drag`・`::shell_box` の字面は `areka-runtime`・`areka-placement` の doc の中の名指しで、出所の濾しではない。範囲の中のテストで出所を比べるのは `cursor_answer_tests.rs:26` の `TARGET` だけ。寄せで出所の変わる記録（下の設計の表）に読み手は無い。
+- **記録の文の読み手**: 寄せる記録の文（「選択確定: ChoiceSelection を発行」「hover 遷移を上流 runtime へ注入」ほか）を読むのは完了した spec の記録だけ（`.kiro/specs/completed/`）。生きた読み手は 0。
+- **テストの名とファイルの名の読み手**（消す・名を変えるテストの照合）:
+  - `doc/COMPAT_ARCHITECTURE.md:412` が `crates/areka-input/src/input_events_char_clamp_tests.rs` の `pointer_moves_over_every_emily_shaped_window_do_not_panic` を名指す。この行は `session-module-gather` が書き換える §8（301〜473 行）の中（向こうの brief 118 行）。
+  - `crates/areka-runtime/examples/collision-probe.rs:66` が `input_events_tests.rs` を名指す（要件 7.4 の 1 で直してよい）。
+  - 本体の `crates/areka/src/app_exit_tests.rs:182` が「`input_events_tests.rs` の `world_with_wiring` は私有」と書く（今は `pointer_test_support` の `pub` なので既に誤り・本体は触れない）。
+  - 本体の `app_exit_escape_tests.rs:73` が消すテスト `handler_left_double_click_without_ctrl_does_not_despawn_and_sends` を名指す（議題 4 で申し送り済みの件）。
+  - `crates/areka-placement/src/spawn_zorder_pair_deferred_tests.rs:17` と `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs:342` が `spawn_assembly_tests::t_i2_no_window_has_ws_ex_topmost` を名指す（移すテストの名を変えると古びる）。
+  - 範囲の外の doc が名指すほかのテスト（`drag_tests.rs` の 4 本・`balloon_pointer_handler_tests.rs` の `moved_off_an_anchor_injects_the_highlight_off`・`balloon_pure_core_tests.rs` の 2 本・`shell_box_handler_tests.rs` の 1 本・`shell_box_tests.rs` の 1 本・`user_break_tests.rs` の 1 本）は、消す・名を変える対象に入っていない。
+- **起こしの旗はプロセス共有**: `wintf::ecs::world::tick_wake` は `static GLOBAL` の 1 つで、`take(now)` は読むと同時に倒す。wintf は自分のテストを `TICK_WAKE_TEST_LOCK`（`cfg(test)` の私有）で順に回す。`areka-input` の中で期限を預けるのは `char_watch` のホイールの溜めだけ（テストは `char_watch_tests.rs` だけが溜めを作る）。
+- **注入の到達の見え方**: `TextLayerRuntime` に強調の注入の値を読む公開の口は無い（`choice_hover` は私有・読むのは描画の `FrameKey`）。`present_frame` は `()` を返すので「描き直したか」も見えない。範囲の外を触らずに注入の到達が見えるのは、在しない ordinal を注入したときに `areka_emo_text::actor` が出す `debug!`（`actor.rs:506-517`）だけ。
+- **移すテストの依存**: `areka-placement` の dev-dependency に `log-capture-kit` が在り、`wintf`・`windows`・`bevy_ecs` は本番の依存に在る（`spawn_assembly_tests.rs` の 13 本はそのまま組める）。`areka-runtime` のテストは `BoxName` を `fold_boxes`＋`parse_boxes` で作る前例を持つ（`shell_box_assets_tests.rs:9-36`）。どちらの `Cargo.toml` も触らない。
+- **`shell_box_tests.rs` の 2 本目（`hover_mark_does_not_survive_vanished_text_or_window_leave`）**: 入力の側の `judge_box_move`・`next_box_hover`・`box_under_point` で滞在を置いてから `settle_box_hover` を見る。入力の側の部分は同じファイルのほかのテスト（`hover_leave_box` ほか）が見ているので、移すときは滞在を `ShellBoxHover::set` で直に置く形に書き直す（依存の向きのため入力の関数は `areka-runtime` から呼べない）。
+
+### 10.3 合成（synthesis）
+
+- **一般化**: 選択の送り出し（指摘 14）・強調の当て方（15）・マウスの送出（16）はどれも「同じ腕が場所違いで写してある」問題で、場所（`PlaceKey`・`MouseInput`）を引数に取る 1 つの関数へ寄せる。強調は自前の記録の置き場が 2 つあるので、関数は記録に書く値を返し、書くのは呼び手（記録の型を 1 つにまとめる案は、`ShellBoxHover` が `areka-runtime` の型なので採らない）。
+- **採るか作るか**: 待ちの上限は `areka_runtime::spine::join_bounded` と `SylphyaPublisher::barrier_within` を採る（作らない）。ログの捕捉は `log-capture-kit` の `capture`／`capture_lines` を採る。`WHEEL_PAGESCROLL` は `windows` に無いので今の自前の定義を残す。
+- **削り**: 新しい本番のモジュール・型・機能は作らない。新しいテストの支えのファイルも作らない（既にある `balloon_test_support.rs`・`pointer_test_support.rs`・`drag_test_support.rs` に寄せる＝8 節の案 A）。新しいテストのファイルは、実 GPU のハンドラの通し 1 つ（`balloon_gpu_hit_tests.rs`）と、持ち主の crate へ移すテストの 3 つだけ。
+
+### 10.4 設計の判断（design.md の「設計の段で決めた事項」の根拠）
+
+- **選択の送り出しの置き場**: `balloon.rs` の新しい関数 1 つ。`BalloonWiring::send_selection` は成否だけを返す（議題 6）。箱の印 `box` の欄は、場所が箱のときだけ値を持つ `Option<&str>` で渡す（tracing は `None` の欄を書かないので、普通のバルーンの行の欄は今と同じ）。
+- **強調の当て方の置き場**: `balloon.rs` の新しい関数 1 つ。記録の名は場所で決める（普通のバルーン＝`choice_hover_inject`・箱＝`box_choice_hover_inject`）。
+- **トークの番号の結線のテスト**: `balloon_test_support.rs` に「番号を見せている `RuntimeWiring`」を組む支えを足し、`user_break_tests.rs`（`user_break_talk_id_tests.rs` を寄せた先）で `on_left_press` と `on_box_press` の 2 つの入口を通す。
+- **起こしの預け直しのテスト**: `char_watch_tests.rs` の組み立て（`rig()`）がファイルの中の錠を持ち、溜めを作るテストを順に回す。旗を読むのはこのテストだけ。
+- **テストのファイル名**: `input_events_tests.rs` → `char_pointer_tests.rs`・`input_events_menu_tests.rs` → `char_pointer_menu_tests.rs`・`input_events_char_clamp_tests.rs` → `char_clamp_tests.rs`（どれもキャラ窓のポインタの受け手〔`lib.rs` の `on_char_pointer_*`〕を試す・mod の名は今のまま）。
+- **移すテストの名**: 名は変えない（`t_i2_no_window_has_ws_ex_topmost` を範囲の外の 2 ファイルが名で指す・移すのは中身を変えない移動）。入力の側に残る 1 本だけ `t_i1_` の札を外す。
+
+### 10.5 危うさ
+
+- `run_balloon_visibility_phase` を装着前の `RuntimeWiring` で回したとき、空の World で何かを要求する道が在れば指摘 10 のテストが組めない。調べた範囲（取り出し・畳み込み・`notify_timeout`・`clear_hover_residency`・時刻の解決は資源が無ければ素通り）では要求は無い。組めなければ要件 7.4 の範囲で置く口が無いので、議題に戻す（design.md の OPEN QUESTION）。
+- 実 GPU のテストを 2 本足す（`GpuPermit` で順を取る既存の作法）。拡大率 2.0 で「割った点が行の外」になる原点の置き方は字の大きさに依るので、テストの中で前提を表明してから押す。
+- 寄せで記録の出所が変わる（表のとおり）。読み手は 0 だが、実機の確かめで出所まで読む手順が後から足されたら古びる。
