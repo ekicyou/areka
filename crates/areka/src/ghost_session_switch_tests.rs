@@ -15,8 +15,8 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use wintf::ecs::{FrameFinalize, Input, Update};
 
 use super::GhostBootInputsSource;
-use crate::app_exit::{ExitOrigin, FirstExit};
 use crate::menu::{Frame, MenuWiring};
+use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::ghost_quit::KanadeNoticeRx;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{

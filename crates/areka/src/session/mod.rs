@@ -58,6 +58,15 @@ pub(crate) mod boot_config;
 /// 起動前の解決は `install::startup::resolve_boot` が、記憶の書き込みは boot 成功直後の `on_boot_ok` が結線する。
 pub(crate) mod boot_resolve;
 
+/// 終了の統合操作。全窓を閉じてから終了を指示する `quit_app` と出所の語彙 `ExitOrigin` を持つ。
+pub(crate) mod app_exit;
+
+/// OS のセッションの終了（`WM_ENDSESSION`）を窓の手続きの中できれいな終わりにする受け手。
+pub(crate) mod session_end;
+
+/// 後始末と OS のセッションの終了が共有する起動中の印の判定。
+pub(crate) mod session_mark;
+
 // 偽の SHIORI を持つゴーストを同じ World で起こす統合テストの土台。
 #[cfg(test)]
 pub(crate) mod ghost_switch_test_support;

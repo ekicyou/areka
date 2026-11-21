@@ -15,7 +15,7 @@
 use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
 
-use crate::app_exit::ExitOrigin;
+use crate::session::app_exit::ExitOrigin;
 use areka_ghost::catalog::{BalloonEntry, GhostEntry};
 use areka_ghost::same_folder_name;
 use areka_ghost::sylphya_wiring::profile_areka_root;

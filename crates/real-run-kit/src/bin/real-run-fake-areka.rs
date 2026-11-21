@@ -14,7 +14,7 @@
 //! - `listen-drop`: `start` の直後に取っ手を捨てて受け口を閉じ、次へ。
 //! - `window`: 表示しない最上位の窓を 1 枚作って知らせを待つ。閉じる知らせで、本物の areka と同じ形の
 //!   受け取りの行（`event="os_close_request"`）と終わり方の行（`event="app_exit" origin=KanadeStopped(Quit)`）を
-//!   出所 `areka::app_exit` で出し、`REAL_RUN_FAKE_MARK` があればそのパスへ `closed` を書いて 0 で終わる。
+//!   出所 `areka::session::app_exit` で出し、`REAL_RUN_FAKE_MARK` があればそのパスへ `closed` を書いて 0 で終わる。
 //! - `window-deaf`: 同じ窓を作るが、閉じる知らせを無視する。
 //! - `window-linger:<ms>`: 同じ窓を作り、閉じる知らせで受け取りの行だけを出し、最初の知らせから `<ms>` 後に
 //!   終わり方の行を出して 0 で終わる（その間の閉じる知らせにも受け取りの行を出す＝送り直しを数えられる）。
@@ -55,7 +55,7 @@ const ENV_NAMES: [&str; 9] = [
 ];
 
 /// 終わり方の行の出所（本物の `quit_app`・`on_ghost_os_close` と同じ）。
-const EXIT_TARGET: &str = "areka::app_exit";
+const EXIT_TARGET: &str = "areka::session::app_exit";
 
 /// `window-deaf` のとき真（窓の手続きが閉じる知らせを無視する）。
 static DEAF: AtomicBool = AtomicBool::new(false);

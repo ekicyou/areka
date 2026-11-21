@@ -19,8 +19,8 @@ use temp_path_kit::TempPath;
 use wintf::ecs::{FrameTime, Update};
 
 use super::*;
-use crate::app_exit::FirstExit;
 use crate::ghost_session::GhostSlot;
+use crate::session::app_exit::FirstExit;
 use crate::session::boot_config::BootContext;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 

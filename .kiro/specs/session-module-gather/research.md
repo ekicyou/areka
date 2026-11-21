@@ -394,3 +394,15 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 - 残る `main_persist_wiring_seam_tests.rs` は `use super::*` で `boot_resolve` を引いていたので、`use crate::session::boot_resolve::{…}` に直した（段 6 で移る）。
 - 残る 4 本（`finish_after_run`・`session_mark`・`session_mark_fallback`・`session_mark_write`）と段 6 の 3 本は 6.1・6.2 で足す。
 - real-run-kit の `bin/real-run-fake-areka.rs` に `"areka::boot_config"` は無かった（出所は `areka::app_exit` だけ・段 5 で直す）。この段で直したのは `launch_tests.rs:211`・`:212` だけ。
+
+### 13.7 `main_*_tests.rs` の仕分け（段 5・タスク 6.1・要件 2.4）
+
+| 前のファイル | 行き先 | 宣言する所とモジュール名 | 引き方の直し |
+|---|---|---|---|
+| `main_session_mark_tests.rs` | 残す | `main.rs`・`session_mark_tests` | `use super::{…}` から移った 5 項目（`MarkInputs`・`MarkVerdict`・`Teardown`・`session_mark_verdict`・`settle_session_mark`）を外し、`use crate::session::session_mark::{…}` で引く。残る項目（`AfterRun`・`after_run`・`boot_first_ghost`・`first_boot_origin`・`install_boot_context`・`finish_after_run`）は `super` のまま |
+| `main_session_mark_fallback_tests.rs`（`main_session_mark_tests.rs` の子 `fallback`） | 残す | `main_session_mark_tests.rs`・`fallback` | `crate::session_end::end_session_within` を `crate::session::session_end::…` へ（移った項目は使っていない） |
+| `main_session_mark_write_tests.rs` | 残す | `main.rs`・`session_mark_write_tests` | `use super::{…}` から `MarkVerdict`・`Teardown`・`session_mark_verdict` を外し、本文の `super::settle_session_mark`・`super::MarkInputs` と合わせて `use crate::session::session_mark::{…}` で引く。`after_run`・`finish_after_run` は `super` のまま |
+
+- テストの名前の末尾と数（`session_mark_tests` 12・`fallback` 5・`session_mark_write_tests` 4）は前と同じで、道も `session_mark_tests::…`・`session_mark_write_tests::…` のまま。21 本とも緑。
+- `session/session_mark.rs` へは 5 項目を doc と `[main]` の前置きのある記録の文ごと写し、変えたのは可視性（項目と構造体の欄を `pub(crate)`）と引く道（ファイルの頭の `use crate::session::app_exit;`・`settle_session_mark` の本文の `use session::boot_resolve;` を `use crate::session::boot_resolve;`）だけ。写した項目の中の `info!` の呼び出しは 0 件（doc の字面に 2 か所あるだけ）。
+- `log_history` のテストと `doc/ssp-mcp/log-convention.md` には、この段の着手の時点で `areka::app_exit`・`areka::session_end` の字面が無かった（直す所 0）。real-run-kit は `launch.rs:372`・`launch_tests.rs`（`:76`・`:207`・`:237`・`:238` と `compose_rust_log_table` の前方一致の 2 組 `:246`〜`:247`・`:252`〜`:253`）・`close_tests.rs:8`・`bin/real-run-fake-areka.rs:17`・`:58` を `areka::session::app_exit`（ほか `areka::session::app`・`areka::session::app_exits`）へ直した。

@@ -6,7 +6,7 @@ use areka_sylphya::{PersistKey, PersistScope};
 use wintf::AppExit;
 
 use super::*;
-use crate::app_exit::FirstExit;
+use crate::session::app_exit::FirstExit;
 use log_capture_kit::{CapturedEvent, capture};
 
 fn failure(key: PersistKey, reason: &str) -> PersistFailure {
@@ -134,7 +134,7 @@ fn stop_boot_with_suppressed_still_returns_the_error() {
 #[test]
 fn take_receiver_is_none_after_os_session_end() {
     let mut world = installed_world();
-    world.insert_resource(crate::session_end::SessionEnded);
+    world.insert_resource(crate::session::session_end::SessionEnded);
     assert!(take_receiver(&mut world).is_none());
 
     let mut world = installed_world();

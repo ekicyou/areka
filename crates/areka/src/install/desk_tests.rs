@@ -618,16 +618,18 @@ fn a_busy_overwrite_is_not_retried_after_the_exit_was_instructed() {
     assert!(change_requests(&kanade).is_empty(), "予約の間は頼まない");
 
     rig.world.remove_non_send::<SwitchInFlight>();
-    rig.world.insert_resource(crate::app_exit::FirstExit(
-        crate::app_exit::ExitOrigin::Escape,
-    ));
+    rig.world
+        .insert_resource(crate::session::app_exit::FirstExit(
+            crate::session::app_exit::ExitOrigin::Escape,
+        ));
     rig.drain();
     assert!(
         change_requests(&kanade).is_empty(),
         "終了の指示の後は頼まない"
     );
 
-    rig.world.remove_resource::<crate::app_exit::FirstExit>();
+    rig.world
+        .remove_resource::<crate::session::app_exit::FirstExit>();
     rig.drain();
     assert_eq!(
         change_requests(&kanade),

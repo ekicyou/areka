@@ -18,8 +18,8 @@ use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use super::{SessionEnded, end_session_within, on_os_session_end};
-use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::session::boot_config::ConfigInputs;
 use crate::session::boot_config::{BootContext, CurrentGhost};
 use crate::session::boot_resolve::{

@@ -10,7 +10,7 @@ use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::app_exit::{ExitOrigin, FirstExit};
+use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::boot_config::{ConfigInputs, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 

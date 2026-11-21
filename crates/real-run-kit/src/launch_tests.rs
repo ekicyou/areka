@@ -73,7 +73,7 @@ fn logical_settings_then_caller_env_wins_last() {
     assert_eq!(set(&e, "AREKA_APP_SMOKE_EXIT_MS"), "1500");
     assert_eq!(
         set(&e, "RUST_LOG"),
-        "warn,areka_mcp::server=info,areka::app_exit=info"
+        "warn,areka_mcp::server=info,areka::session::app_exit=info"
     );
     assert_eq!(set(&e, "NO_COLOR"), "0");
     assert_eq!(set(&e, "AREKA_USER_ROOT"), "u");
@@ -204,7 +204,7 @@ fn i686_target_is_two_levels_above_areka_exe() {
 #[test]
 fn compose_rust_log_table() {
     const S: &str = ",areka_mcp::server=info";
-    const X: &str = ",areka::app_exit=info";
+    const X: &str = ",areka::session::app_exit=info";
     let table: &[(&str, String)] = &[
         // 全体が warn 以下で、どちらの出所も親も名指していない → 両方足す。
         (
@@ -234,8 +234,8 @@ fn compose_rust_log_table() {
         ),
         // 出所そのものを名指していれば足さない（段が何であっても）。
         (
-            "warn,areka::app_exit=trace",
-            format!("warn,areka::app_exit=trace{S}"),
+            "warn,areka::session::app_exit=trace",
+            format!("warn,areka::session::app_exit=trace{S}"),
         ),
         (
             "warn,areka_mcp::server=off",
@@ -243,14 +243,14 @@ fn compose_rust_log_table() {
         ),
         // `::` の切れ目が無くても前方一致すれば名指し（EnvFilter と同じ規則）。
         (
-            "warn,areka_m=debug,areka::app=debug",
-            "warn,areka_m=debug,areka::app=debug".into(),
+            "warn,areka_m=debug,areka::session::app=debug",
+            "warn,areka_m=debug,areka::session::app=debug".into(),
         ),
         ("warn,areka_m=trace", format!("warn,areka_m=trace{X}")),
         // 前方一致しない名前は名指しではない。
         (
-            "warn,areka_mcp::client=debug,areka::app_exits=debug",
-            format!("warn,areka_mcp::client=debug,areka::app_exits=debug{S}{X}"),
+            "warn,areka_mcp::client=debug,areka::session::app_exits=debug",
+            format!("warn,areka_mcp::client=debug,areka::session::app_exits=debug{S}{X}"),
         ),
         // 段の無い出所の指定も名指し。
         ("warn,areka", "warn,areka".into()),

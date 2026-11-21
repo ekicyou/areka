@@ -79,8 +79,8 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: standard — 出し直しを外して呼び手と `main.rs` の本文の引き方を組み直す_
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.6, 2.3, 2.4, 6.1, 7.1, 7.3, 7.9_
 
-- [ ] 6. 終わり方と起動中の印を集める（段 5）
-- [ ] 6.1 `app_exit`・`session_end` を移し、`session_mark.rs` を作る
+- [x] 6. 終わり方と起動中の印を集める（段 5）
+- [x] 6.1 `app_exit`・`session_end` を移し、`session_mark.rs` を作る
   - `app_exit*` 3 本（`app_exit_escape_tests.rs` を含む）・`session_end*` 4 本を `git mv` で移し、宣言と呼び手を直す
   - `main.rs` の `MarkInputs`・`Teardown`・`MarkVerdict`・`session_mark_verdict`・`settle_session_mark` を、doc と `[main]` の前置きのある記録の文を含む字面のまま新しい `session/session_mark.rs` へ写し、可視性だけを `pub(crate)` に上げる。`main.rs` の残す項目は本文の先頭の `use session::{…};` で引く
   - `main_session_mark_tests.rs`（子 `main_session_mark_fallback_tests.rs`）・`main_session_mark_write_tests.rs` は `main.rs` に残し、移った項目を `crate::session::session_mark::…` で引く

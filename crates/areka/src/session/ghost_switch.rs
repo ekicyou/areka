@@ -25,11 +25,11 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-use crate::app_exit::{ExitOrigin, WindowsClosed, close_windows_for_restart, quit_app};
 use crate::ghost_session::{
     GhostBootInputsSource, GhostSlot, RuntimeRebuild, boot_ghost_strict, commit_ghost_windows,
     rebuild_runtime_in_place, reopen_ghost_windows,
 };
+use crate::session::app_exit::{ExitOrigin, WindowsClosed, close_windows_for_restart, quit_app};
 use crate::session::boot_config::{
     BootContext, ConfigInputs, CurrentGhost, resolve_balloon_for_ghost,
 };
@@ -523,7 +523,7 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
                     "切替は中止された——予約を下ろす（元のゴーストは定常へ戻るか、終了要求が勝っていれば今日どおり終わる）"
                 );
                 crate::update::desk::on_switch_end(world, false);
-            } else if world.contains_resource::<crate::session_end::SessionEnded>() {
+            } else if world.contains_resource::<crate::session::session_end::SessionEnded>() {
                 tracing::debug!(
                     event = "ghost_switch_cancelled",
                     reason = ?reason,

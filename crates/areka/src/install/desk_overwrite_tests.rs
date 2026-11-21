@@ -27,9 +27,9 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::InstallDesk;
 use super::overwrite::take;
-use crate::app_exit::{ExitOrigin, FirstExit};
 use crate::install::procedure::Overwritten;
 use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
+use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::DEFAULT_GHOST_FOLDER;
 use crate::session::ghost_switch::{
@@ -675,13 +675,13 @@ fn an_overwritten_default_ghost_that_cannot_boot_is_fatal() {
         1,
         "{events:?}"
     );
-    let end = crate::Teardown {
+    let end = crate::session::session_mark::Teardown {
         run_ok: true,
         down_ok: true,
         shiori_cut: false,
     };
     assert_eq!(
-        crate::session_mark_verdict(first.as_ref(), false, false, end),
-        crate::MarkVerdict::Keep("switch_fatal")
+        crate::session::session_mark::session_mark_verdict(first.as_ref(), false, false, end),
+        crate::session::session_mark::MarkVerdict::Keep("switch_fatal")
     );
 }

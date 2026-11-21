@@ -15,8 +15,8 @@ use bevy_ecs::world::World;
 use wintf::ecs::FrameFinalize;
 use wintf::ecs::widget::bitmap_source::{BoxedCommand, CommandSender, WintfTaskPool};
 
-use crate::app_exit::{self, WindowsClosed};
 use crate::menu;
+use crate::session::app_exit::{self, WindowsClosed};
 use crate::session::boot_config::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 use crate::session::boot_resolve::{BalloonDecision, GhostDecision};
 use crate::session::readme;
@@ -41,7 +41,7 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 /// `HitTest::none()` のままで `PointerLeave` が立たず、そこへは届かない。
 pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<KanadeNotice>) {
     crate::session::hooks::install(world);
-    crate::app_exit::install_input_hooks(world);
+    crate::session::app_exit::install_input_hooks(world);
     areka_runtime::register_frame_system(world);
     // 受け口 `KanadeNoticeRx` はプロセスに 1 つなので、分割せずそのまま呼ぶ。
     crate::session::ghost_quit::wire_kanade_stop(world, kanade_stop_rx);

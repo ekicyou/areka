@@ -406,11 +406,11 @@ const ALLOWED_DEADLINE_CALLS: [(&str, &str); 3] = [
         "let (result, fired) = runtime.shutdown_within(reason, budget);",
     ),
     (
-        "areka/session_end.rs",
+        "areka/session/session_end.rs",
         "end_session_within(world, SESSION_END_SHIORI_LIMIT)",
     ),
     (
-        "areka/session_end.rs",
+        "areka/session/session_end.rs",
         "session.shutdown_within(CloseReason::System, WaitBudget { started, limit });",
     ),
 ];
@@ -516,7 +516,7 @@ fn deadline_call_scan_turns_red_on_one_line_removed_or_added() {
     let removed: Vec<(String, String)> = files
         .iter()
         .map(|(rel, src)| {
-            let src = if rel == "areka/session_end.rs" {
+            let src = if rel == "areka/session/session_end.rs" {
                 src.replace("end_session_within(world, SESSION_END_SHIORI_LIMIT)", "")
             } else {
                 src.clone()
@@ -530,7 +530,7 @@ fn deadline_call_scan_turns_red_on_one_line_removed_or_added() {
         (
             vec![],
             vec![(
-                "areka/session_end.rs".to_owned(),
+                "areka/session/session_end.rs".to_owned(),
                 "end_session_within(world, SESSION_END_SHIORI_LIMIT)".to_owned()
             )]
         ),

@@ -14,8 +14,8 @@ use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use super::*;
-use crate::app_exit::{ExitOrigin, FirstExit};
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 

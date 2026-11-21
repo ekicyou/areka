@@ -23,8 +23,8 @@ use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load
 use bevy_ecs::prelude::*;
 use temp_path_kit::TempPath;
 
-use crate::app_exit::{ExitOrigin, FirstExit};
 use crate::ghost_session::{GhostSlot, StartupDescriptValues};
+use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::{
     BalloonRoute, DEFAULT_GHOST_FOLDER, GhostRoute, LastUsed, record_last_balloon,
@@ -34,8 +34,9 @@ use crate::session::ghost_switch::{
     PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
 };
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::session_mark::{MarkInputs, Teardown, settle_session_mark};
 use crate::session::write_failure::sites_tests::{KINDS, drain_desk};
-use crate::{MarkInputs, Teardown, boot_first_ghost, insert_persist_wiring, settle_session_mark};
+use crate::{boot_first_ghost, insert_persist_wiring};
 use areka_placement::AuthorDpi;
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;
@@ -441,7 +442,7 @@ fn every_write_kind_is_withheld_under_the_guard() {
             shiori_cut: false,
         },
     );
-    assert_eq!(verdict, crate::MarkVerdict::Clear);
+    assert_eq!(verdict, crate::session::session_mark::MarkVerdict::Clear);
     let told = crate::session::write_failure::tell_at_close(None, clear_failed.clone(), None, true);
     let kind = "印を消す";
     judge(

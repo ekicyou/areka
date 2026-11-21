@@ -10,7 +10,7 @@ use areka_sylphya::{PersistKey, PersistScope};
 use wintf::AppExit;
 
 use super::*;
-use crate::app_exit::FirstExit;
+use crate::session::app_exit::FirstExit;
 use log_capture_kit::{CapturedEvent, capture};
 
 fn failure(reason: &str) -> PersistFailure {
@@ -89,7 +89,7 @@ fn a_failure_after_a_write_failure_is_still_drained() {
 #[test]
 fn a_failure_after_os_session_end_is_drained_and_logged() {
     let mut world = installed_world();
-    world.insert_resource(crate::session_end::SessionEnded);
+    world.insert_resource(crate::session::session_end::SessionEnded);
     quit_app(&mut world, ExitOrigin::SessionEnd);
     sender(&world).unwrap().send(failure("late")).unwrap();
 

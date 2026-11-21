@@ -18,11 +18,11 @@ use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
 use super::finish_after_run;
-use super::{AfterRun, MarkInputs, MarkVerdict, Teardown, after_run, boot_first_ghost};
-use super::{first_boot_origin, install_boot_context, session_mark_verdict, settle_session_mark};
-use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
+use super::{AfterRun, after_run, boot_first_ghost};
+use super::{first_boot_origin, install_boot_context};
 use crate::ghost_session::{GhostBootInputsSource, GhostSession, GhostSlot, StartupDescriptValues};
 use crate::session::alert::AlertScene;
+use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::session::boot_config::ConfigInputs;
 use crate::session::boot_config::{BootContext, CurrentGhost, resolve_boot_from};
 use crate::session::boot_resolve::{
@@ -30,6 +30,9 @@ use crate::session::boot_resolve::{
     read_last_ghost, read_session_mark, write_session_mark,
 };
 use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
+use crate::session::session_mark::{
+    MarkInputs, MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
+};
 use areka_placement::AuthorDpi;
 use areka_runtime::spine::RecordedCall;
 

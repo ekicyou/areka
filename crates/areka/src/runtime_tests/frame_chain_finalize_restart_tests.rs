@@ -16,7 +16,7 @@ use super::test_support::{
 use super::*;
 use log_capture_kit::{LineFormat, capture_lines};
 
-use crate::app_exit::{WindowsEpoch, close_windows_for_restart};
+use crate::session::app_exit::{WindowsEpoch, close_windows_for_restart};
 use areka_placement::chain_finalize::{
     CHAIN_FINALIZE_STALL_FRAMES, ChainFinalizeStall, ChainFinalized,
 };

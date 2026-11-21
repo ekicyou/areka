@@ -14,7 +14,7 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{LogLevel, ScheduleBuildSettings, Schedules};
 use wintf::ecs::Update;
 
-use crate::app_exit::{ExitOrigin, FirstExit};
+use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::ghost_quit::{ghost_quit_system, wire_kanade_stop};
 use areka_runtime::frame::frame_system;
 use std::any::TypeId;

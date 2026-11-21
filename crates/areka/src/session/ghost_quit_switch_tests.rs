@@ -22,8 +22,8 @@ use shiori_host32_host::ExitKind;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::*;
-use crate::app_exit::FirstExit;
 use crate::ghost_session::GhostSlot;
+use crate::session::app_exit::FirstExit;
 use crate::session::ghost_switch::{
     GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
     request_ghost_switch,

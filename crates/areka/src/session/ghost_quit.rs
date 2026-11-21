@@ -7,7 +7,7 @@ use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
 use wintf::ecs::Update;
 
-use crate::app_exit::{ExitOrigin, quit_app};
+use crate::session::app_exit::{ExitOrigin, quit_app};
 use crate::session::ghost_switch::{self, SwitchInFlight};
 use areka_runtime::frame::frame_system;
 

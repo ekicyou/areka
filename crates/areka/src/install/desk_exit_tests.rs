@@ -14,7 +14,7 @@ use wintf::AppExit;
 use super::*;
 use crate::session::exit_wait::EXIT_WAIT_LIMIT;
 use crate::session::ghost_quit::KanadeNoticeRx;
-use crate::session_end::end_session_from;
+use crate::session::session_end::end_session_from;
 
 /// 待っている依頼（2 本の依頼と 1 本の依頼）は始めずに捨て、`warn!(install_pending_discarded)` を
 /// 1 件残す。件数は捨てた書庫の数（まだ始めていない書庫）で、パスと

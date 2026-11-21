@@ -201,7 +201,10 @@ fn logsink_fallback_ended_by_os_session_end_keeps_mark() {
     first_boot_memory(&mut rig, "A");
     let app = app_dir(&rig);
     let ((), events) = capture(|| {
-        crate::session_end::end_session_within(&mut rig.world, std::time::Duration::from_secs(60))
+        crate::session::session_end::end_session_within(
+            &mut rig.world,
+            std::time::Duration::from_secs(60),
+        )
     });
     let kept: Vec<String> = events
         .iter()

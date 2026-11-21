@@ -12,15 +12,16 @@ use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, load_scope};
 
 use super::fallback_tests::{B_NAME, default_ghost, fallback_rig};
 use super::*;
-use crate::app_exit::quit_app;
+use crate::after_run;
 use crate::ghost_session::GhostSlot;
+use crate::session::app_exit::quit_app;
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::{
     DEFAULT_GHOST_FOLDER, read_last_ghost, read_session_mark, write_session_mark,
 };
 use crate::session::ghost_switch::{SwitchStage, WelcomeAttempt};
 use crate::session::ghost_switch_test_support::BALLOON;
-use crate::{MarkVerdict, Teardown, after_run, settle_session_mark};
+use crate::session::session_mark::{MarkVerdict, Teardown, settle_session_mark};
 
 /// App スコープの記憶: （最後に使ったゴースト, 起動中の印）。
 type AppMemory = (Option<String>, Option<String>);

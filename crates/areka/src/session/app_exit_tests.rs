@@ -573,7 +573,7 @@ fn attach_os_close_request_puts_both_receivers_on_ghost_windows() {
             world.get::<OnSessionEnd>(e).is_some_and(|c| {
                 std::ptr::fn_addr_eq(
                     c.0,
-                    crate::session_end::on_os_session_end as fn(&mut World, Entity),
+                    crate::session::session_end::on_os_session_end as fn(&mut World, Entity),
                 )
             }),
         )

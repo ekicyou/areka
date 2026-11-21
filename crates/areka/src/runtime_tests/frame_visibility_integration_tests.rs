@@ -555,7 +555,7 @@ fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
     );
     drop(old_wiring);
 
-    let _ = crate::app_exit::close_windows_for_restart(&mut world);
+    let _ = crate::session::app_exit::close_windows_for_restart(&mut world);
     let gw = spawn_resnap_windows(&mut world);
     dress_dpi_windows(&mut world, &gw);
     let old_balloon = old_gw.balloon_window(0).expect("balloon 窓がある");

@@ -23,7 +23,7 @@ use bevy_ecs::prelude::With;
 use log_capture_kit::{LineFormat, capture_lines};
 
 use super::*;
-use crate::app_exit::FirstExit;
+use crate::session::app_exit::FirstExit;
 use areka_placement::spawn::GhostWindowMarker;
 
 /// `GhostWindowMarker` 窓を `count` 枚並べた素の World を組む（無関係 entity を 1 つ混ぜる）。

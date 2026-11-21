@@ -16,7 +16,7 @@ use wintf::AppExit;
 
 use super::fallback_tests::{count_event, root_with, switching_world};
 use super::*;
-use crate::app_exit::{ExitOrigin, FirstExit};
+use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::boot_resolve::DEFAULT_GHOST_FOLDER;
 
 fn set_stage_to(world: &mut World, stage: SwitchStage) {

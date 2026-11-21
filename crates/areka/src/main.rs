@@ -56,14 +56,10 @@ mod tick_gate_config;
 /// 本体に頼る切替・読み直し・起動・終わる相の層。
 mod session;
 
-/// 終了の統合操作。全窓を閉じてから終了を指示する `quit_app` と出所の語彙 `ExitOrigin` を持つ。
-mod app_exit;
 mod mcp;
 mod menu;
 /// 乗算済み BGRA → 透過 PNG（MCP とオフラインの書き出しが共有）。
 mod png_image;
-/// OS のセッションの終了（`WM_ENDSESSION`）を窓の手続きの中できれいな終わりにする受け手。
-mod session_end;
 
 /// 起こし直しの単位。系の登録の入口 `register_systems` を持つ。
 mod ghost_session;
@@ -129,7 +125,9 @@ fn main() -> Result<()> {
     use session::{
         alert,
         boot_config::{self, default_app_profile_dir, default_helper_exe_path},
-        boot_request, boot_resolve, exit_wait, log_history, readonly, write_failure,
+        boot_request, boot_resolve, exit_wait, log_history, readonly,
+        session_mark::{Teardown, settle_session_mark},
+        write_failure,
     };
     human_panic::setup_panic!();
 
@@ -488,32 +486,9 @@ struct AfterRun {
     scene: Option<session::alert::AlertScene>,
     /// 起動中の印の判定の材料（起動の文脈が無いか、OS のセッションの終了で済んでいれば `None`＝
     /// 印に触れない）。判定は降ろした後。
-    mark: Option<MarkInputs>,
+    mark: Option<session::session_mark::MarkInputs>,
     /// 終了コードを 1 にするか（最初の出所に失敗の中身がある＝`fault_of`／`write_failure_of`・告知の場面の有無とは独立）。
     fault: bool,
-}
-
-/// 起動中の印の判定の材料（`run()` の後に組み、降ろした後に [`settle_session_mark`] へ渡す）。
-struct MarkInputs {
-    /// 記憶の置き場（App スコープ）。
-    app_profile_dir: std::path::PathBuf,
-    /// 起動の文脈の argv の旗。
-    argv_session: bool,
-    /// 最初に終了を指示した出所（無ければ `None`）。
-    first: Option<app_exit::ExitOrigin>,
-    /// 最初の起動が LogSink へ倒れたか（倒れた先の成否を問わない）。
-    logsink_fallback: bool,
-}
-
-/// 降ろした結果（`fn main` の後始末は `shiori_cut=false`・OS のセッションの終了は見張りの結果）。
-#[derive(Debug, Clone, Copy)]
-struct Teardown {
-    /// メッセージループ（`run()`）が成功したか。
-    run_ok: bool,
-    /// 降ろす処理が成功したか。
-    down_ok: bool,
-    /// OS のセッションの終了で SHIORI の待ちを上限で打ち切ったか。
-    shiori_cut: bool,
 }
 
 /// 置き場の単位を取り出し、最初に終了を指示した出所から告知の場面と印の判定の材料を組む。
@@ -523,7 +498,9 @@ struct Teardown {
 /// ゴーストのまま残るので、起こそうとしていた既定ゴーストの名前（フォルダ名）と場所で組む
 /// （致命になるのは既定ゴーストを起こせなかったときだけ＝`ghost_switch::fatal` の呼び手）。
 fn after_run(world: &mut World) -> AfterRun {
-    use session::{alert, boot_config, boot_resolve};
+    use session::{
+        alert, app_exit, boot_config, boot_resolve, session_end, session_mark::MarkInputs,
+    };
     let session = world
         .get_non_send_mut::<ghost_session::GhostSlot>()
         .and_then(|mut slot| slot.0.take());
@@ -609,99 +586,6 @@ fn after_run(world: &mut World) -> AfterRun {
         mark: Some(mark),
         fault: fault_exit,
     }
-}
-
-/// きれいな終わりの判定の結論。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MarkVerdict {
-    /// きれいに終わった＝印を消す。
-    Clear,
-    /// きれいに終わらなかった＝印を残す（理由は記録の `reason`）。
-    Keep(&'static str),
-    /// argv で始まったプロセス＝印に触れない。
-    Untouched,
-}
-
-/// きれいな終わりの判定（後始末と OS のセッションの終了が共有する唯一の判定）。
-///
-/// 時系列で最初に起きた理由を採る。上から順に: argv で始まったプロセスは触らない → 最初の起動が
-/// LogSink へ倒れた → 最初の出所が無い → 出所が失敗（SHIORI の失敗・既定へ戻せない致命）→ `run()` の
-/// 失敗 → OS のセッションの終了で SHIORI の待ちを上限で打ち切った → 降ろす処理の失敗 → それ以外は
-/// 消す。出所は網羅の match で見るので、出所を足すとこの判定の漏れがコンパイルで止まる。
-/// 名前は見ないので、倒れたのが既定ゴースト自身でも同じく残す。
-fn session_mark_verdict(
-    first: Option<&app_exit::ExitOrigin>,
-    argv_session: bool,
-    logsink_fallback: bool,
-    end: Teardown,
-) -> MarkVerdict {
-    use app_exit::ExitOrigin;
-    use areka_kanade::KanadeStopCause;
-    if argv_session {
-        return MarkVerdict::Untouched;
-    }
-    if logsink_fallback {
-        return MarkVerdict::Keep("logsink_fallback");
-    }
-    let Some(first) = first else {
-        return MarkVerdict::Keep("no_exit_origin");
-    };
-    match first {
-        ExitOrigin::KanadeStopped(KanadeStopCause::Fault(_)) => return MarkVerdict::Keep("fault"),
-        ExitOrigin::GhostFallbackFailed(_) => return MarkVerdict::Keep("switch_fatal"),
-        ExitOrigin::KanadeStopped(
-            KanadeStopCause::Quit
-            | KanadeStopCause::Forced
-            | KanadeStopCause::CloseSilent
-            | KanadeStopCause::DeadlineExceeded,
-        )
-        | ExitOrigin::Escape
-        | ExitOrigin::Smoke
-        | ExitOrigin::OsClose
-        | ExitOrigin::SessionEnd
-        | ExitOrigin::MemoryWriteFailed(_) => {}
-    }
-    if !end.run_ok {
-        return MarkVerdict::Keep("run_failed");
-    }
-    if end.shiori_cut {
-        return MarkVerdict::Keep("session_end_deadline");
-    }
-    if !end.down_ok {
-        return MarkVerdict::Keep("down_failed");
-    }
-    MarkVerdict::Clear
-}
-
-/// 降ろした後の印の始末: 判定して、消すなら消し（`info!(session_mark_cleared)`）、残すなら理由つきの
-/// `info!(session_mark_kept)`（`boot_resolve::keep_session_mark`）、argv なら `debug!` だけ。
-/// 呼ぶのはゴーストの実行系が 0 の時点だけ。印を消せなかった失敗は組の 2 つ目で返す（記録済み）。
-fn settle_session_mark(
-    mark: &MarkInputs,
-    end: Teardown,
-) -> (MarkVerdict, Option<areka_sylphya::PersistFailure>) {
-    use session::boot_resolve;
-    let verdict = session_mark_verdict(
-        mark.first.as_ref(),
-        mark.argv_session,
-        mark.logsink_fallback,
-        end,
-    );
-    let failed = match verdict {
-        MarkVerdict::Clear => boot_resolve::clear_session_mark(&mark.app_profile_dir).err(),
-        MarkVerdict::Keep(reason) => {
-            boot_resolve::keep_session_mark(&mark.app_profile_dir, reason, mark.first.as_ref());
-            None
-        }
-        MarkVerdict::Untouched => {
-            tracing::debug!(
-                event = "session_mark_untouched_argv",
-                "[main] argv で始まったプロセスなので起動中の印に触れません"
-            );
-            None
-        }
-    };
-    (verdict, failed)
 }
 
 // ---------------------------------------------------------------------------

@@ -317,7 +317,7 @@ pub(crate) fn attach_os_close_request(
     for e in &new_windows {
         commands.entity(e).insert((
             OnCloseRequest(on_ghost_os_close),
-            OnSessionEnd(crate::session_end::on_os_session_end),
+            OnSessionEnd(crate::session::session_end::on_os_session_end),
         ));
     }
 }

@@ -369,7 +369,7 @@ fn log_file(path: &Path) -> File {
 }
 
 /// 窓口が頼る行の出所（待受の行・閉じる知らせの受け取りと終わり方の行）。
-const RELIED_TARGETS: [&str; 2] = ["areka_mcp::server", "areka::app_exit"];
+const RELIED_TARGETS: [&str; 2] = ["areka_mcp::server", "areka::session::app_exit"];
 
 /// 全体の段が info より絞られていて、窓口が頼る出所を名指す指定が無いときだけ、その出所に
 /// `,<出所>=info` を足す。

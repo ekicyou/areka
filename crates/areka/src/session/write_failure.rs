@@ -15,8 +15,8 @@ use areka_sylphya::{PersistFailure, PersistFailureCause, PersistScope};
 use bevy_ecs::prelude::*;
 use wintf::ecs::Update;
 
-use crate::app_exit::{ExitOrigin, quit_app};
 use crate::session::alert::{self, AlertScene, WriteMoment, remembered_text};
+use crate::session::app_exit::{ExitOrigin, quit_app};
 use crate::session::boot_config::ConfigInputs;
 
 /// 受け口の送り手（World の NonSend・プロセスに 1 つ）。
@@ -81,9 +81,9 @@ fn drain_system(world: &mut World) {
         return;
     };
     let other_origin = world
-        .get_resource::<crate::app_exit::FirstExit>()
+        .get_resource::<crate::session::app_exit::FirstExit>()
         .is_some_and(|first| !matches!(first.0, ExitOrigin::MemoryWriteFailed(_)));
-    if other_origin && !world.contains_resource::<crate::session_end::SessionEnded>() {
+    if other_origin && !world.contains_resource::<crate::session::session_end::SessionEnded>() {
         return;
     }
     let failures: Vec<PersistFailure> = rx.0.try_iter().collect();
@@ -180,7 +180,7 @@ pub(crate) fn check_boot_dirs(
 
 /// 後始末で受け手を取り出す（OS のセッションの終了を処理済みなら `None`＝告げない）。
 pub(crate) fn take_receiver(world: &mut World) -> Option<Receiver<PersistFailure>> {
-    if world.contains_resource::<crate::session_end::SessionEnded>() {
+    if world.contains_resource::<crate::session::session_end::SessionEnded>() {
         return None;
     }
     world.remove_non_send::<WriteFailureRx>().map(|rx| rx.0)

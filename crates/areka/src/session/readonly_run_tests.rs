@@ -28,17 +28,18 @@ use areka_user_data::{Signals, Writability, establish_readonly_from, readonly_ap
 use log_capture_kit::capture;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
-use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::ghost_session::GhostSlot;
 use crate::install::{InstallOrder, InstallOrigin};
+use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::session::boot_config::BootContext;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::session::readonly::ReadOnlyRun;
 use crate::session::roots::user_root::copy_unless_readonly;
+use crate::session::session_mark::{MarkVerdict, Teardown, settle_session_mark};
 use crate::session::write_failure::check_boot;
 use crate::update::{RawUpdateRequest, TargetKind, UpdateReason};
-use crate::{MarkVerdict, Teardown, after_run, insert_persist_wiring, settle_session_mark};
+use crate::{after_run, insert_persist_wiring};
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;
 use areka_runtime::spine::RecordedCall;
@@ -281,7 +282,7 @@ fn readonly_run_leaves_the_tree_as_it_was() {
         check(
             rig.world
                 .get_resource::<FirstExit>()
-                .is_some_and(|f| crate::app_exit::write_failure_of(&f.0).is_none()),
+                .is_some_and(|f| crate::session::app_exit::write_failure_of(&f.0).is_none()),
             "書けない失敗が致命の机に届いた",
         );
     });

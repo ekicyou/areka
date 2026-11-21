@@ -215,7 +215,7 @@ fn running_a_with(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
 /// 窓を閉じた回数（`close_windows_for_restart` が進める）。
 fn windows_epoch(rig: &SwitchRig) -> Option<u64> {
     rig.world
-        .get_resource::<crate::app_exit::WindowsEpoch>()
+        .get_resource::<crate::session::app_exit::WindowsEpoch>()
         .map(|e| e.0)
 }
 
@@ -475,7 +475,7 @@ fn a_failed_shiori_rebuild_of_the_default_ghost_is_fatal() {
 /// 打ち切られて赤。
 #[test]
 fn a_shiori_rebuild_that_cannot_write_the_drop_memory_is_fatal() {
-    use crate::app_exit::{ExitOrigin, FirstExit};
+    use crate::session::app_exit::{ExitOrigin, FirstExit};
 
     let mut rig = running_a_with(vec![("A", a_shiori_script())]);
     let profile = rig.app_dir();

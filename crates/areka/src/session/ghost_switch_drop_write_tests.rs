@@ -11,7 +11,7 @@ use wintf::AppExit;
 
 use super::fallback_tests::{count_event, root_with, switching_world};
 use super::*;
-use crate::app_exit::{ExitOrigin, FirstExit};
+use crate::session::app_exit::{ExitOrigin, FirstExit};
 
 #[test]
 fn switch_drop_write_failure_is_fatal_and_does_not_boot_target() {

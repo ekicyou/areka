@@ -13,7 +13,7 @@ use areka_runtime::frame::persist_test_support::{
 
 use std::collections::HashMap;
 
-use crate::app_exit::close_windows_for_restart;
+use crate::session::app_exit::close_windows_for_restart;
 use areka_emo_compose::ScaleRatio;
 use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::follow::{Anchored, move_window_to};
