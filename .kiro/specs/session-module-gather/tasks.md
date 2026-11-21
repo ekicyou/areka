@@ -2,8 +2,8 @@
 
 design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終わりに `cargo check --workspace --all-targets` が警告 0 件で通る形を保ち、段の差分は混ぜない。各段は、その塊の `git mv`・`session/mod.rs` の宣言・`main.rs` の宣言の削除・呼び手の書き換え・その塊の出所を名前で読む所（`RULES` の行・`doc/ssp-mcp/log-convention.md` の表の行・テストの文字列・real-run-kit）・ソースを読むテストを、まとめて済ませる。移したファイルの中身はパスのほかに変えず、可視性は `pub(crate)` までにし、`main.rs` の最上位に `use` を足さない。`main.rs` の残す `fn` が移したモジュールを使う所は、その本文の先頭の `use session::{…};` で引き、本文の字面を変えない（`runtime_tests/zorder_wiring_tests.rs` と `readonly_tests.rs` が `fn main` の字面を読む）。署名と構造体の欄は `session::…` の道で書く。`RULES` の行は、そのモジュールのファイルを移す段と同じ段で付け替える（表の守り `locate` は出所の文字列からファイルを探すので、両方が同じ段でそろえば各段で緑）。各段は、その段で移すファイルを、ディレクトリを付けて名指す説明のパスも直す（9.2 を記録だけの段に保つ）。直したくなった不具合ともとから古い説明は直さず、9.2 で申し送りに載せる。同じウェーブの約束で触らない所（`crates/areka-runtime/` の 1 か所のほか・`crates/areka-placement/`・`crates/areka-input/`・`crates/log-capture-kit/`・本体の `runtime_tests/mod.rs`・`Cargo.lock`・ルートの `Cargo.toml`・`THIRD-PARTY-NOTICES.md`）には、どの段でも触れない。
 
-- [ ] 1. 着手の測り（コードを触る前の「前」を取る）
-- [ ] 1.1 テストの名前・警告・設計の数を今の木で取り直す
+- [x] 1. 着手の測り（コードを触る前の「前」を取る）
+- [x] 1.1 テストの名前・警告・設計の数を今の木で取り直す
   - `cargo test --workspace --no-fail-fast -- --list` の `: test$` の行から名前の末尾（最後の `::` から後ろ）の多重集合を作り、比べる「前」として置き場を `research.md` に書く
   - `cargo check --workspace --all-targets` の警告が 0 件であることを記録する
   - 設計の数を `git ls-files`・`git grep` で数え直す: 移すファイルの一覧（設計の表の 62 本・`main_*_tests.rs` 6 本・readme 13 本・roots の芯 7 本）・`main.rs` の移す項目の行の範囲・`register_systems` の 25 の呼び出し・`crate::input_events` の呼び手 26 ファイル・名指す本体のファイル・`include_str!|CARGO_MANIFEST_DIR|crate_path\(` で読む所（集めたファイルの名前を字面に持つものを、設計の SourceReadingTests の表に足りない分も含めて列挙）・移す項目の中の `info!` が 0 件であること
@@ -174,3 +174,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - 完了の形: 2 つが緑で、`research.md` に走らせた `RUST_LOG`・結果・起動の記録と MCP の窓口が拾えたことが書かれている
   - _Dispatch: mechanical — 決めた 2 本を回して記録する_
   - _Requirements: 2.5, 4.4, 7.6, 7.7, 10.6, 10.7_
+
+## Implementation Notes
+
+- 1.1: 名前の多重集合は doctest の名前を `(line N)` 付きで持つ（66 件）。doctest のあるファイルの行がずれると、最後の比べで行番号の差として出る（テストが消えたのではない）。

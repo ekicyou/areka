@@ -321,3 +321,56 @@
 ### 12.5 設計の討議へ持ち越したもの
 
 design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 件（登録の形・新しいファイルの名前・残る roots の宣言の置き場・`main.rs` の書き方・較正の取り方・`briefing-assets.md` の 2 か所・`roadmap.md` の対応表）。どれも仮定を置いて設計を書き切った。
+
+## 13. 着手の取り直し（実装の段・タスク 1.1・2026-11-21）
+
+- 着手の木: HEAD `8a1581cebf399cc6c93bbd1cddbc46d127fcce04`（作業の木 `claude/kiro-start-session-module-gather-1375a8`）。`git merge-base HEAD main` ＝ `main` ＝ `f6405e09f9cb94e469bb7e23c84162b0a0151b94`（main は動いていない・HEAD は spec の文書のコミットだけ先）。コードの変更は 0。
+
+### 13.1 テストの名前の多重集合（比べる「前」・要件 10.2）
+
+- 取り方: `cargo test --workspace --no-fail-fast -- --list`（ビルドと一覧のみ・机なし）の `: test$` の行 **14,437 行**。名前の末尾＝行から `: test` を落とし、最後の `::` から後ろだけを残した（`::` が無い名前はそのまま）。`LC_ALL=C sort` した全行（重複を残す＝多重集合）。同じ名前の別のテストは別の行として数える。
+- 置き場（`.kiro/specs/session-module-gather/` の下に置くのは名前の一覧だけ）:
+  - `baseline-test-names.txt` — 末尾の名前の多重集合（14,437 行・ソート済み・異なる名前 14,318）。完了のときに同じ式で作った一覧と `diff` で比べる（差は KindCalibration の 1 本だけのはず・10.3）。
+  - 末尾を切る前の `: test$` の行（モジュールのパス付き・14,437 行）は重いのでコミットしない。差が出たときは、`cargo test --workspace --no-fail-fast -- --list | grep ': test$'`（13.1 の式から末尾を切る `sed` の段を除いたもの）で作り直して、どのモジュールから移ったかを引く。
+- 作り直しの式（完了のとき・同じ式）: `cargo test --workspace --no-fail-fast -- --list | grep ': test$' | tr -d '\r' | sed -E 's/: test$//; s/^.*:://' | LC_ALL=C sort`。
+
+### 13.2 警告（要件 10.4）
+
+- `cargo check --workspace --all-targets`: 終了 0・`^warning` **0 件**（`pilot` を含め全 crate を `Checking` した出力）。
+- 参考（比べるときに取り違えない）: `cargo test --workspace -- --list` のテストのプロファイルの組み立てでは、`pilot` の**マニフェストの警告 2 件**（`crates/pilot/Cargo.toml` の `event-listener`・`wintf-winmsg-executor` の `unused dependency`・`cargo::unused_dependencies`）が出る。`cargo check --workspace --all-targets` には出ず、この spec とも関係ない（もとから）。10.4 の対象は `cargo check --workspace --all-targets` の警告 0 件。
+
+### 13.3 設計の数の数え直し（`git ls-files`・`git grep`・差と行き先）
+
+| 項目 | 設計の数 | 今の木の数 | 差 | 行き先 |
+|---|---|---|---|---|
+| src 直下の移す候補（本番／テスト） | 62（13／49） | 62（13／49） | 0 | — |
+| 　内訳 `ghost_session*`・`shell_balloon_switch_session_*`・`boot_shell_tests.rs` | 4／18 | 4／18 | 0 | — |
+| 　内訳 `boot_resolve*`・`boot_config*` | 2／12 | 2／12 | 0 | — |
+| 　内訳 `app_exit*`・`session_end*`・`exit_wait*`・`write_failure*` | 4／10 | 4／10 | 0 | — |
+| 　内訳 `alert*`・`readonly*`・`log_history*` | 3／9 | 3／9 | 0 | — |
+| `main_*_tests.rs`（src 直下の全部／移す） | 6 本移す | 10 本ある・移す 6（`config_input`・`ghost_wiring`・`module_policy`・`restore_seam`・`persist_wiring_seam`・`monitor_snapshot_seam`）・残す 4（`finish_after_run`・`session_mark`・`session_mark_fallback`・`session_mark_write`） | 0 | 設計の仕分け表どおり |
+| `readme`（`readme.rs`・`readme_tests.rs`・`readme/`） | 13 | 13（本番 5・テスト 8） | 0 | — |
+| `roots/` の芯 | 7（本番 4＋テスト 3） | 7（`mod.rs`・`resolve.rs`・`report.rs`・`user_root.rs` と `resolve_tests.rs`・`report_tests.rs`・`user_root_tests.rs`） | 0 | 残る 3 本は `desk`・`edit`・`pick` とテスト 5 本（`desk_tests`・`edit_tests`・`edit_temporary_tests`・`edit_write_failure_tests`・`pick_tests`）の計 8 本 |
+| `main.rs` の行数 | 947 | 947 | 0 | — |
+| `main.rs` の移す項目の行 | 527〜547・643〜884 | `struct MarkInputs` 527〜`Teardown` の閉じ 547（doc は 526〜）・`MarkVerdict` の doc 643〜`boot_monitor_snapshot` の閉じ 884 | 0 | 間の 548〜642 は `after_run` で残る。734〜736 の区切りのコメントと `// Startup Window` は 643〜884 の範囲に入るので移す側に付く |
+| `main.rs` のテストの宣言 | 9（890〜947 行） | 9（`config_input`・`ghost_wiring`・`restore_seam`・`persist_wiring_seam`・`monitor_snapshot_seam`・`finish_after_run`・`module_policy`・`session_mark`・`session_mark_write`） | 0 | 移す 6・残す 3 |
+| `register_systems`（`ghost_session.rs:43-80`）の呼び出し | 25（11 番目と 17〜19 番目が本体だけ） | 25（`hooks::install`・`install_input_hooks`・`register_frame_system`・`wire_kanade_stop`・`write_failure::install`・`register_readme_drain`・`register_change_drain`・`register_switch_drain`・`reload::register`・`register_user_break_drain`・`menu::register_menu_poll`・入力 5 本（balloon・box・choice・char_watch・wheel）の 5・`install`・`update`・`mcp`・`add_systems` 2・`wire_zorder_pair`・`scope_rect`・`syncscale`・`rejudge`）。11 番目＝`menu::register_menu_poll`（入力の間）・17〜19 番目＝`install`・`update`・`mcp` | 0 | — |
+| `register_systems` の呼び手（本番 1・テスト 5） | 本番 `main.rs:242`・テスト 5 | 本番 `main.rs:242`・テスト `app_exit_escape_tests.rs:137`・`ghost_session_reload_tests.rs:71`・`:179`・`ghost_session_restart_tests.rs:455`・`session/ghost_switch_test_support.rs:237` | 0 | — |
+| `crate::input_events` の呼び手 | 26 ファイル（`runtime_tests/` 8・`menu/` 含む） | 26（`runtime_tests/` 8・`menu/` 6） | 0 | `runtime_tests/mod.rs` は引かない（0 件）ので書き換えない |
+| 語 `input_events` の当たり（出し直しの道を除く） | `Cargo.toml:44`・`ghost_session.rs:276`・`menu/mod.rs:182`・`app_exit_tests.rs:182` | 同じ 4 か所＋`main.rs:61`（出し直しそのもの・外す） | 0 | `app_exit_tests.rs:182` は直さず申し送る |
+| `cli::BootRequest`・`cli::ModulePolicy` を引くファイル | 13 | 15（`main.rs`・`cli/parse_tests.rs`・`cli/parse_readonly_tests.rs` を含む。この 3 本を除くと 12） | +2 | 設計は呼び手の数の目安。書き換えはコンパイルが漏れを止めるので設計は変えない。`main.rs`（`:184`・`:431` の 2 か所）は `session::boot_request::ModulePolicy` の道へ、`cli/` の 2 本は `cli/mod.rs` の私有の `use` を通る形に合わせる（実装の段で確かめる） |
+| 集めるモジュールの名前を `crate::…` で引く本体のファイル | 186 | 183（`crate::<名>`・`crate::{…}` の束・`crate::ConfigInputs` ほか `main.rs` の項目の名で引く所の和集合）／`cli::BootRequest` 等も足して 188 | −3（名前の式）／+2（cli を足した式） | 設計の 186 は数え方が分からず再現できない。差は数え方による（行をまたぐ束 `crate::{…}` を含めて数えた）。**実装は漏れをコンパイルが止める**ので、この数は目安にとどめる。移す側のファイル自身（60 本）を含む |
+| 移す `main.rs` の項目の中の `info!` | 0 | 0（マクロの呼び出しは debug 4・error 1。`info!` の字面は `settle_session_mark` の doc コメントの 2 行だけ） | 0 | `get_log` の分け方は変わらない（7.5 は手当て不要） |
+
+### 13.4 ソースを読む所（`include_str!|CARGO_MANIFEST_DIR|crate_path\(`・要件 6.2）
+
+`git grep -n -E 'include_str!|CARGO_MANIFEST_DIR|crate_path\(' -- crates/areka/src` は 40 行。集めるファイルの名前を字面に持つものは設計の表に全部ある（足りない分は 0）。
+
+- 設計の表にある所: `runtime_tests/zorder_wiring_tests.rs:68`・`readonly_tests.rs:82`・`:92`・`:153`・`session_end_deadline_tests.rs:405`・`:409`・`:413`・`:519`・`:533`・`readme_tests.rs:424`・`session_end_sync_send_tests.rs:437`・`:445`（直さない）。
+- 集めるファイルの名前を持たず、書き換えが要らない所（確かめた）:
+  - `runtime_tests/zorder_wiring_tests.rs:33`（`../session/runtime_boot.rs`・既に `session/`）・`:71`（`../main.rs`・残る）。
+  - `readonly_tests.rs:78`・`:105`（`src/main.rs`・残る）・`:130`（`crates/` の走査）。
+  - `log_history_convention_tests.rs:275`（文書）・`:319`〜`:339`（`src` の走査・根のファイルは `main.rs`）。表の文字列 `areka::…` は 7.2 の表（`:152`・`:156`・`:185`〜`:192`）。
+  - `readme_tests.rs:383`・`session_end_deadline_tests.rs:450`・`tick_gate_config_producers_tests.rs:187`・`update/worker_tests.rs:887`（いずれも `src` の木の走査・ファイルを名で絞らない）。
+  - `boot_shell_tests.rs:347`（`areka-emo-compose` のフィクスチャを `crate_path` で引く・本体のファイル名は含まない）・`placement_tests/measure_bake_count_tests.rs:159`・`file_drop_wiring_tests.rs:443`（`file_drop.rs`・残る）・`png_image_tests.rs:151`・`mcp/*`・`update/*` ほか。
+- 表に足す分: 0 件。実装の段（段 2 の `readonly_tests.rs`・段 5 の `session_end_deadline_tests.rs`・段 3 の `readme_tests.rs`・段 6 の `zorder_wiring_tests.rs`）で、その塊の移動と一緒に直す。
