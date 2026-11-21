@@ -1,4 +1,4 @@
-//! 広がりの予算（指摘 3・21・22・129・130）: 入れ子をたどる走査が 1 回の範囲でたどってよい仕事の量を数え、
+//! 広がりの予算（21・22・129・130）: 入れ子をたどる走査が 1 回の範囲でたどってよい仕事の量を数え、
 //! 尽きたら入るのを断る。菱形の参照（1 つの面が同じ面を何度も insert する）で広がりが
 //! 指数になっても、走査が固まらないようにする。深さではなく「入る面となめる行と積み荷の数」を数える。
 //! どの走査も面に入るときに「入る 1 ＋その面の行の全部（[`surface_rows`]）」を引き、足りなければ入らない
@@ -11,13 +11,13 @@ use crate::normalized::SurfaceMaster;
 use crate::world::Records;
 
 /// 1 回の走査の範囲で数えてよい「入る面とその面の行の全部と積み荷」の数。
-/// 根拠（3.2・2026-11-06）: 面の数だけを数えていたときの測り。release・NAGI（Intel Core Ultra 9 185H）・15 段の菱形で 1 面あたり約 226 ns＝16.667 ms に約 73,000 面→2^16 に切り下げ。
-/// 6.1 で積み荷も、7.1 でなめる行も、8.1 で面の行の全部（[`surface_rows`]）も数える単位に変えたので、測り直しの候補
+/// 根拠（2026-11-06）: 面の数だけを数えていたときの測り。release・NAGI（Intel Core Ultra 9 185H）・15 段の菱形で 1 面あたり約 226 ns＝16.667 ms に約 73,000 面→2^16 に切り下げ。
+/// 今は積み荷・なめる行・面の行の全部（[`surface_rows`]）も数える単位なので、測り直しの候補
 /// （`examples/compose_timing.rs` の `diamond13` が 1 単位あたりの時間を出す）。
 pub(crate) const VISIT_BUDGET: usize = 1 << 16;
 
 /// 面 1 つの行の全部の数（element・collision と、animation ごとに interval の 1 行＋pattern の数・飽和）。
-/// 面に入った走査がなめうる行の上限なので、どの走査も入るときにこれで予算から引く（指摘 129・130）。
+/// 面に入った走査がなめうる行の上限なので、どの走査も入るときにこれで予算から引く（130）。
 pub(crate) fn surface_rows(master: &SurfaceMaster) -> usize {
     rows(
         master
@@ -73,7 +73,7 @@ impl Budget {
         self.take_up_to(n, walk, root) == n
     }
 
-    /// 積み荷 `n` 個を積む前に呼ぶ（指摘 21・22）。残りの内の数（`n` 以下）を引いて返し、足りなければ
+    /// 積み荷 `n` 個を積む前に呼ぶ（22）。残りの内の数（`n` 以下）を引いて返し、足りなければ
     /// [`Budget::enter`] と同じく範囲で初めてのときだけ `error!` を出す。呼び手は返った数だけ積む。
     pub(crate) fn take_up_to(&mut self, n: usize, walk: &'static str, root: u32) -> usize {
         let granted = n.min(self.left);

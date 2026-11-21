@@ -1,4 +1,4 @@
-//! 動く絵を子へ分解する（`film.rs`・spec: areka-P0-animated-image-playback）。
+//! 動く絵を子へ分解する（`film.rs`）。
 //!
 //! 絵は `MemoryDecoder` へ登録して本物の `bake_with_limits` で焼く（`plan_test_support::bake_decoded`・上限は
 //! 既定値を渡し、環境変数に依らない）。焼く経路が作れない形（コマの並びが約束と違う）だけは `AtlasTable::with_frames`
@@ -84,7 +84,7 @@ fn assert_every_film_resolves(world: &EmoWorld) {
     }
 }
 
-/// 要件 1.1・1.4: 動く絵の element は種類だけが替わり、番号・X,Y・描画メソッドは静止画のときと同じ。
+/// 動く絵の element は種類だけが替わり、番号・X,Y・描画メソッドは静止画のときと同じ。
 /// 束縛は空になり、子の定義がファイルの値を運ぶ。
 #[test]
 fn film_element_keeps_layer_xy_and_method() {
@@ -105,7 +105,6 @@ fn film_element_keeps_layer_xy_and_method() {
     let parent = id_of(&atlas, "anim.png");
     let world = bound_world(&shell, &[], &atlas);
 
-    // 対照: 同じ名前を静止画で焼いた面の表。
     let still_atlas = Pics::default()
         .still("body.png")
         .still("top.png")
@@ -169,7 +168,7 @@ fn film_element_keeps_layer_xy_and_method() {
     assert_every_film_resolves(&world);
 }
 
-/// 要件 1.2: 面の画像（`surface<数字>.png`）が動く絵なら、土台の element として分解される。
+/// 面の画像（`surface<数字>.png`）が動く絵なら、土台の element として分解される。
 #[test]
 fn animated_base_image_is_decomposed() {
     let shell = shell_of(vec![surface(0, vec![elem(0, "body.png", 0, 0)])]);
@@ -188,7 +187,7 @@ fn animated_base_image_is_decomposed() {
     assert_every_film_resolves(&world);
 }
 
-/// 要件 1.3: `element0` が在るサーフェスの動く `surface<数字>.png` は土台に使われず、分解もされない。
+/// `element0` が在るサーフェスの動く `surface<数字>.png` は土台に使われず、分解もされない。
 #[test]
 fn animated_base_image_under_element0_is_not_decomposed() {
     let shell = shell_of(vec![surface(2, vec![elem(0, "body.png", 0, 0)])]);
@@ -254,7 +253,7 @@ fn crafted_atlas() -> AtlasTable {
     )
 }
 
-/// 要件 2.5・8.2: 検査で落ちる 6 通り（①0 番が親でない ②コマと待ち時間の数が違う ③原寸が揃わない
+/// 検査で落ちる 6 通り（①0 番が親でない ②コマと待ち時間の数が違う ③原寸が揃わない
 /// ④待ち時間の合計が 0 ⑤コマが 2 枚未満 ⑥コマの番号が表の外）。①②⑤⑥は焼く経路も `with_frames` も作れない
 /// ので、並びを手で渡す（⑥は表を引く前に断らないと `AtlasTable::entry` が panic する）。
 #[test]
@@ -312,7 +311,7 @@ fn check_rejects_six_ways() {
     );
 }
 
-/// 要件 2.5・8.2: 落ちた絵は画像の element のまま（束縛も残る＝ 1 枚目の静止画）で、理由つきで
+/// 落ちた絵は画像の element のまま（束縛も残る＝ 1 枚目の静止画）で、理由つきで
 /// 相対パスの昇順に `film_skips` へ載る。通った絵だけが子になる。
 #[test]
 fn rejected_pictures_stay_images_and_are_listed() {
@@ -359,7 +358,7 @@ fn rejected_pictures_stay_images_and_are_listed() {
     assert_every_film_resolves(&world);
 }
 
-/// 要件 3.4: 同じファイルは、置いた場所・サーフェスに依らず同じ子（子の定義は 1 つ）。
+/// 同じファイルは、置いた場所・サーフェスに依らず同じ子（子の定義は 1 つ）。
 #[test]
 fn same_picture_is_the_same_child() {
     let shell = shell_of(vec![
@@ -379,7 +378,7 @@ fn same_picture_is_the_same_child() {
     assert_eq!(world.film_sheets().next().unwrap().laps, None);
 }
 
-/// 要件 7.1: 動く絵が 0 の面の表には何も載らず、element と束縛は分解の前と同じ。
+/// 動く絵が 0 の面の表には何も載らず、element と束縛は分解の前と同じ。
 #[test]
 fn no_films_stores_nothing() {
     let shell = shell_of(vec![surface(

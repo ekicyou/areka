@@ -1,4 +1,4 @@
-//! 相手の欄の読みの檻（seriko-pattern-calls 要件 2.1〜2.3・9.2・8 語の見分けの檻は areka-parsers の
+//! 相手の欄の読みの檻（8 語の見分けの檻は areka-parsers の
 //! `shell/pattern_word_tests.rs`）。
 
 use super::{PatternWord, UnreadableTarget, call_targets};
@@ -14,7 +14,7 @@ fn ok(ids: &[u32]) -> Result<Box<[u32]>, UnreadableTarget> {
     Ok(ids.into())
 }
 
-/// start・stop・insert は番号 1 つを読む（要件 2.1）。
+/// start・stop・insert は番号 1 つを読む。
 #[test]
 fn single_words_read_one_number() {
     for word in [PatternWord::Start, PatternWord::Stop, PatternWord::Insert] {
@@ -28,7 +28,7 @@ fn single_words_read_one_number() {
     }
 }
 
-/// 番号 1 つの語で、空・名前・符号つきの数・並び・u32 を越える数は読めない（要件 2.5）。
+/// 番号 1 つの語で、空・名前・符号つきの数・並び・u32 を越える数は読めない。
 #[test]
 fn single_words_reject_unreadable_columns() {
     for word in [PatternWord::Start, PatternWord::Stop, PatternWord::Insert] {
@@ -52,7 +52,7 @@ fn single_words_reject_unreadable_columns() {
     }
 }
 
-/// 並びの 4 語は `( )`・`[ ]`・`,`・`.`・括弧なしを同じ並びとして読み、順と重複を保つ（要件 2.2・2.3）。
+/// 並びの 4 語は `( )`・`[ ]`・`,`・`.`・括弧なしを同じ並びとして読み、順と重複を保つ。
 #[test]
 fn list_words_read_every_list_form() {
     for word in LISTS {
@@ -77,7 +77,7 @@ fn list_words_read_every_list_form() {
     }
 }
 
-/// 並びの 4 語で、空・空の並び・空の項・名前・符号つきの数・閉じない括弧・u32 を越える数は読めない（要件 2.5）。
+/// 並びの 4 語で、空・空の並び・空の項・名前・符号つきの数・閉じない括弧・u32 を越える数は読めない。
 #[test]
 fn list_words_reject_unreadable_columns() {
     for word in LISTS {

@@ -80,23 +80,23 @@ pub use scale::ScaleRatio;
 use areka_emo_atlas::AtlasTable;
 
 /// 合成ファサード: fold 済み・`bind_atlas` 済みの [`EmoWorld`] から surface を静的合成し
-/// [`ComposedSurface`]（premultiplied BGRA・要件 9.1）を返す（三段 fold→plan→execute の結線点）。
+/// [`ComposedSurface`]（premultiplied BGRA）を返す（三段 fold→plan→execute の結線点）。
 ///
-/// design「Composer facade（lib.rs）」に厳密に従う:
+/// 次の性質を持つ:
 ///
-/// - **同期・値返し**（要件 9.3/10.4）: スレッド生成・async・channel を一切持たず、合成結果を
+/// - **同期・値返し**: スレッド生成・async・channel を一切持たず、合成結果を
 ///   値（[`compose`]）または呼び手のバッファ（[`compose_into`]）へ直接書いて返す。wintf の
 ///   visual/window/WUC 描画 API には依存しない。
-/// - **結果を保持しない**（要件 9.4）: `Composer` の内部フィールドは走査スクラッチ（`ops`／`scratch`・
+/// - **結果を保持しない**: `Composer` の内部フィールドは走査スクラッチ（`ops`／`scratch`・
 ///   `scratch` は記録済みの印＝面ごとに 1 度だけ記録するための面の番号の集合も持つ）と、下敷き形
 ///   （[`compose_into_reusing`]）が最後に成功させた合成の命令列 1 本（`base_ops`）で、[`ComposedSurface`]
 ///   （絵）を一切キャッシュしない。前回の合成結果は次回呼び出しへ持ち越さず、surface→結果のキャッシュ・
 ///   無効化は下流 `emo-present` の責務である。
-/// - **buffer 再利用**（要件 10.3）: [`compose_into`] は呼び手の `out` と自身のスクラッチ（`ops`／
+/// - **buffer 再利用**: [`compose_into`] は呼び手の `out` と自身のスクラッチ（`ops`／
 ///   `scratch`）を再利用し、外形は束縛のときの表から引く（合成のたびにたどらない）。同じ入力を繰り返す
 ///   合成で `out` の先頭と命令列・作業場の列の容量が初回から変わらないことはテストで確かめている
 ///   （`golden_tests_determinism_budget_tests.rs`）。入力が変わるときの確保の有無は確かめていない。
-/// - **アトラス解決は構築時一度きり**（要件 4.3・design 主要決定）: hot path（[`compose_into`]/
+/// - **アトラス解決は構築時一度きり**: hot path（[`compose_into`]/
 ///   [`compose`]）は [`AtlasTable::resolve`] を一切呼ばず、束縛済み `ElementId` の
 ///   [`AtlasTable::entry`] O(1) 引きのみを行う（束縛は事前の [`EmoWorld::bind_atlas`] で完了済み）。
 ///
@@ -105,13 +105,13 @@ use areka_emo_atlas::AtlasTable;
 /// `world` は fold 済み（[`EmoWorld::build`]）かつ [`EmoWorld::bind_atlas`] 済みであること。
 /// 未束縛 element は plan 段でスキップされる（非パニック）。
 ///
-/// # 失敗経路（要件 10.5）
+/// # 失敗経路
 ///
 /// 合成対象 surface 不在 → [`ComposeError::SurfaceNotFound`]、外形の幅か高さが 0 の退化 →
 /// [`ComposeError::EmptyComposition`]、外形が一辺か面積の上限を越える → [`ComposeError::ExtentTooLarge`]。
 /// いずれも `error` ログ＋`Err`（[`crate::plan::build_plan`]
-/// が分類・ログ済み）で、パニックしない（要件 1.4）。描画可能命令ゼロでも定義層があれば正常系
-/// （外形どおりの全透明 [`ComposedSurface`] を `Ok` で返す・要件 6.6）。
+/// が分類・ログ済み）で、パニックしない。描画可能命令ゼロでも定義層があれば正常系
+/// （外形どおりの全透明 [`ComposedSurface`] を `Ok` で返す）。
 #[derive(Debug, Default)]
 pub struct Composer {
     /// plan 段が積む転写命令のスクラッチ（毎回 `build_plan` 入口で clear・再利用）。
@@ -125,23 +125,23 @@ pub struct Composer {
 }
 
 impl Composer {
-    /// 空スクラッチの `Composer` を構築する（合成結果は保持しない・要件 9.4）。
+    /// 空スクラッチの `Composer` を構築する（合成結果は保持しない）。
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// 合成先バッファ再利用形（毎フレーム経路・要件 10.3）。
+    /// 合成先バッファ再利用形（毎フレーム経路）。
     ///
     /// `world`／`atlas`／`surface_id`／`active_binds` から plan を導出（[`crate::plan::build_plan`]）し、
     /// 命令列を `out` へ転写（[`crate::blit::execute`]）する。`out` と自身のスクラッチ（`ops`／`scratch`）
     /// を再利用する（同じ入力の反復で容量が伸びないことは `golden_tests_determinism_budget_tests.rs` が確かめる）。
     ///
     /// `build_plan` が `Err`（surface 不在・外形の幅か高さが 0 の退化・外形の上限越え）を返せば、そのまま伝播する（記録済み＝
-    /// 合成器 1 つにつき面ごとに初めは `error`・後は `debug`・要件 10.5）。`Ok(extent)` なら `execute` が `out` を `extent` へ `resize_and_clear`
+    /// 合成器 1 つにつき面ごとに初めは `error`・後は `debug`）。`Ok(extent)` なら `execute` が `out` を `extent` へ `resize_and_clear`
     /// してから転写し、`Ok(())` を返す。描画可能命令ゼロ（全透明・空 bind 集合）でも正常系として
-    /// 外形どおりの全透明バッファを書く（要件 6.6）。
+    /// 外形どおりの全透明バッファを書く。
     ///
-    /// # hot path 不変条件（要件 4.3）
+    /// # hot path 不変条件
     ///
     /// 本経路は [`AtlasTable::resolve`] を一切呼ばない。plan/blit は束縛済み `ElementId` の
     /// [`AtlasTable::entry`] O(1) 引きのみを用いる（アトラス束縛は事前の
@@ -155,8 +155,8 @@ impl Composer {
         active_binds: &BindSet,
         pattern: &PatternState,
     ) -> Result<(), ComposeError> {
-        // plan: 命令列＋外形を導出（Err は記録済み＝面ごとに初めは error・後は debug・そのまま伝播・要件 10.5）。
-        // ops／scratch は build_plan 入口で clear され再利用される（要件 10.3）。
+        // plan: 命令列＋外形を導出（Err は記録済み＝面ごとに初めは error・後は debug・そのまま伝播）。
+        // ops／scratch は build_plan 入口で clear され再利用される。
         let extent = crate::plan::build_plan(
             &mut self.ops,
             &mut self.scratch,
@@ -166,7 +166,6 @@ impl Composer {
             active_binds,
             pattern,
         )?;
-        // execute: 命令列を out へ premultiplied SourceOver 転写（out は resize_and_clear で再利用）。
         crate::blit::execute(out, extent, &self.ops, atlas);
         Ok(())
     }
@@ -214,8 +213,8 @@ impl Composer {
     /// 新規割り当て形（初回・テスト向け便宜）。
     ///
     /// 新しい [`ComposedSurface`] を確保し、[`compose_into`] へ委譲して合成結果を書き、値で返す。
-    /// `Composer` はこの結果を保持しない（要件 9.4）。毎フレーム経路では代わりに [`compose_into`]
-    /// でバッファを再利用すること（要件 10.3）。
+    /// `Composer` はこの結果を保持しない。毎フレーム経路では代わりに [`compose_into`]
+    /// でバッファを再利用すること。
     ///
     /// [`compose_into`]: Composer::compose_into
     pub fn compose(
@@ -233,12 +232,12 @@ impl Composer {
     }
 }
 
-/// テスト専用の `tracing` ログ捕捉ハーネス（本番影響ゼロ・要件 1.4/3.3/7.3/8.4/10.5 の
+/// テスト専用の `tracing` ログ捕捉ハーネス（本番影響ゼロ。
 /// ログ発火経路を檻に入れるための共有土台）。`#[cfg(test)]` 限定ゆえ出荷クロージャに現れない。
 #[cfg(test)]
 mod log_capture;
 
-// 検体を窓口から取得しプロセス寿命で保持する共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
+// 検体を窓口から取得しプロセス寿命で保持する共有の受け口。
 #[cfg(test)]
 mod sample_test_support;
 
@@ -255,19 +254,19 @@ mod composer_tests;
 #[cfg(test)]
 mod log_firing_tests;
 
-// 深い鎖・菱形・insert の連鎖を、入れ子をたどる走査へ同じ検体で通す（指摘 3）。
+// 深い鎖・菱形・insert の連鎖を、入れ子をたどる走査へ同じ検体で通す。
 #[cfg(test)]
 mod walk_limits_tests;
 
-// 線形の探索で 2 乗に伸びていた所を、大きな検体で通す（指摘 25〜30）。
+// 線形の探索で 2 乗に伸びていた所を、大きな検体で通す。
 #[cfg(test)]
 mod linear_lookup_tests;
 
-// 予算が数えなかった仕事の量（なめる行・重ねる画素・範囲の写し・根をまたぐ持ち込み・指摘 76〜79）。
+// 予算が数えなかった仕事の量（なめる行・重ねる画素・範囲の写し・根をまたぐ持ち込み）。
 #[cfg(test)]
 mod work_limits_tests;
 
-// 予算を面の行の全部で数える（どの走査も入るときに引く）・重なりの記録・持ち込みの切り方（指摘 129〜137）。
+// 予算を面の行の全部で数える（どの走査も入るときに引く）・重なりの記録・持ち込みの切り方。
 #[cfg(test)]
 mod row_budget_tests;
 
@@ -278,7 +277,7 @@ mod contract_tests {
     /// 型 `T` が `Send` であることをコンパイル時に要求するヘルパ。
     fn _assert_send<T: Send>() {}
 
-    /// Req 9.2: `BindSet` / `ComposedSurface` が `Send` 所有であることをコンパイル時に固定する。
+    /// `BindSet` / `ComposedSurface` が `Send` 所有であることをコンパイル時に固定する。
     ///
     /// いずれかが `Send` でなくなるとこのテストのコンパイルが失敗し、公開データ契約の
     /// スレッド越え受け渡し不変条件の逸脱を静的に検出する。

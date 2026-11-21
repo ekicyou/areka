@@ -1,9 +1,8 @@
-//! 合成が着せ替えの手順を積み、`insert` を展開する（seriko-pattern-calls 要件 5.5〜5.7・
-//! 6.1〜6.4・6.7・6.8・8.1）。
+//! 合成が着せ替えの手順を積み、`insert` を展開する。
 //!
 //! 有効な純 `bind` は全部のコマを番号の順に重ね、`insert,B` の位置に B の寄与を B 自身の座標で
-//! 積む（SSP の測り M6）。無効の純 `bind` も呼ばれて始まったコマは描き、有効の純 `bind` は
-//! コマが消えても静的な寄与に戻る（M5）。面 `N` の絵は `sN.png`（2×2 の不透明）。
+//! 積む。無効の純 `bind` も呼ばれて始まったコマは描き、有効の純 `bind` は
+//! コマが消えても静的な寄与に戻る。面 `N` の絵は `sN.png`（2×2 の不透明）。
 
 use std::path::Path;
 
@@ -52,7 +51,7 @@ animation2.interval,bind
 animation2.pattern0,overlay,20,0,3,4
 ";
 
-/// A の全部のコマを順に重ね、`insert` の位置に B を B 自身の座標で積む。B は本来の位置に出ない（6.1・6.7・6.8・M6）。
+/// A の全部のコマを順に重ね、`insert` の位置に B を B 自身の座標で積む。B は本来の位置に出ない。
 #[test]
 fn insert_places_b_between_a_patterns_at_b_coordinates() {
     assert_eq!(
@@ -66,7 +65,7 @@ fn insert_places_b_between_a_patterns_at_b_coordinates() {
     );
 }
 
-/// 差し込まれる B の番号が A より前（描く順で先）でも、B は本来の位置に積まない（6.1）。
+/// 差し込まれる B の番号が A より前（描く順で先）でも、B は本来の位置に積まない。
 #[test]
 fn inserted_b_is_not_drawn_at_its_own_earlier_position() {
     let anims = "\
@@ -88,7 +87,7 @@ animation2.pattern2,overlay,12,0,5,6
     );
 }
 
-/// B が無効なら `insert` の位置に何も積まない（6.2）。
+/// B が無効なら `insert` の位置に何も積まない。
 #[test]
 fn inactive_b_inserts_nothing() {
     assert_eq!(
@@ -97,7 +96,7 @@ fn inactive_b_inserts_nothing() {
     );
 }
 
-/// 差し込む A が無効で展開されなければ、B は本来の位置に積む（設計議題 4）。
+/// 差し込む A が無効で展開されなければ、B は本来の位置に積む。
 #[test]
 fn b_is_drawn_at_its_own_position_when_a_is_inactive() {
     assert_eq!(
@@ -122,7 +121,7 @@ fn inserted_b_with_a_frame_draws_the_frame_in_place() {
     );
 }
 
-/// 入れ子: A が B を、B が C を差し込む（6.3）。
+/// 入れ子: A が B を、B が C を差し込む。
 #[test]
 fn nested_inserts_expand_recursively() {
     let anims = "\
@@ -150,7 +149,7 @@ animation3.pattern0,overlay,30,0,0,0
     );
 }
 
-/// 巡回（A→B→A）と自分自身への `insert` は打ち切り、各着せ替えを 1 度だけ積む（6.4）。
+/// 巡回（A→B→A）と自分自身への `insert` は打ち切り、各着せ替えを 1 度だけ積む。
 #[test]
 fn cyclic_and_self_inserts_draw_each_once() {
     let anims = "\
@@ -174,7 +173,7 @@ animation2.pattern2,overlay,22,0,0,0
     );
 }
 
-/// 2 つの着せ替えが同じ C を差し込むときは、描く順で先の方だけが積む（6.4）。
+/// 2 つの着せ替えが同じ C を差し込むときは、描く順で先の方だけが積む。
 #[test]
 fn of_two_inserters_only_the_earlier_draws_c() {
     let anims = "\
@@ -198,7 +197,7 @@ animation3.pattern0,overlay,30,0,0,0
     );
 }
 
-/// 無効の純 `bind` でも、呼ばれて始まった今のコマは描く（5.6・M5）。
+/// 無効の純 `bind` でも、呼ばれて始まった今のコマは描く。
 #[test]
 fn inactive_pure_bind_frame_is_drawn() {
     let mut pattern = PatternState::default();
@@ -209,7 +208,7 @@ fn inactive_pure_bind_frame_is_drawn() {
     );
 }
 
-/// 有効の純 `bind` はコマが静的な寄与を置き換え、コマが消えれば（`stop`）静的な寄与に戻る（5.7・M5）。
+/// 有効の純 `bind` はコマが静的な寄与を置き換え、コマが消えれば（`stop`）静的な寄与に戻る。
 #[test]
 fn active_pure_bind_falls_back_to_steps_after_its_frame_is_gone() {
     let mut pattern = PatternState::default();
@@ -226,7 +225,7 @@ fn active_pure_bind_falls_back_to_steps_after_its_frame_is_gone() {
     );
 }
 
-/// 着せ替えの未知の語は合成を何度組んでも「未知の合成メソッド名」を出さない（5.5）。
+/// 着せ替えの未知の語は合成を何度組んでも「未知の合成メソッド名」を出さない。
 #[test]
 fn repeated_composes_log_no_unknown_method_name() {
     let anims = "\

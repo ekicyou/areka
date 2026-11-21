@@ -1,4 +1,4 @@
-//! element定義の子の合成（要件 1.6・1.7・1.8・2.1〜2.4・2.7・3.1〜3.4・7.1・8.3）。
+//! element定義の子の合成。
 //!
 //! 層 (i) は element定義を番号の昇順（同じ番号は書いた順）に見て、画像は命令に、サーフェスの番号は
 //! 同じ順の位置で子の段へ入る（位置は親の位置＋ element定義の X,Y）。先祖へ戻る・面の表に無い・範囲を
@@ -57,7 +57,7 @@ fn ops_of(text: &str, top: u32) -> Vec<(&'static str, i64, i64)> {
     compose(text, &[], top, &BindSet::default()).0
 }
 
-/// 子の画像の左上が、親の element定義の X,Y と子の中の X,Y の和に来る（要件 2.1）。
+/// 子の画像の左上が、親の element定義の X,Y と子の中の X,Y の和に来る。
 #[test]
 fn child_image_position_is_parent_plus_child_offset() {
     let ops = ops_of(
@@ -68,7 +68,7 @@ fn child_image_position_is_parent_plus_child_offset() {
     assert_eq!(ops, vec![("body.png", 0, 0), ("eye.png", 21, 32)]);
 }
 
-/// 子の絵は、親の element定義の番号の順に画像の間へ挟まる（同じ番号は書いた順・要件 2.2）。
+/// 子の絵は、親の element定義の番号の順に画像の間へ挟まる（同じ番号は書いた順）。
 #[test]
 fn child_is_interleaved_by_parent_element_order() {
     let ops = ops_of(
@@ -90,7 +90,7 @@ fn child_is_interleaved_by_parent_element_order() {
     );
 }
 
-/// 3 段の入れ子は各段の X,Y を足した位置に描く（要件 2.3）。
+/// 3 段の入れ子は各段の X,Y を足した位置に描く。
 #[test]
 fn three_levels_sum_every_offset() {
     let ops = ops_of(FIXTURE, 30);
@@ -103,7 +103,7 @@ fn three_levels_sum_every_offset() {
     assert!(ops.contains(&("part.png", 10, 10)), "{ops:?}");
 }
 
-/// 同じ子を 1 つの親の 2 か所にも、2 つの親にも置ける（要件 1.6・1.7・3.4）。
+/// 同じ子を 1 つの親の 2 か所にも、2 つの親にも置ける。
 #[test]
 fn same_child_at_two_places_and_in_two_parents() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,0,0\n\
@@ -122,7 +122,7 @@ fn same_child_at_two_places_and_in_two_parents() {
     assert_eq!(ops_of(text, 1), vec![("body.png", 0, 0), ("eye.png", 8, 9)]);
 }
 
-/// `element0` が子を指す親では、`surface*.png` を使わず子の絵で置き換える（要件 2.4）。
+/// `element0` が子を指す親では、`surface*.png` を使わず子の絵で置き換える。
 #[test]
 fn element0_child_replaces_surface_image() {
     let (ops, _) = compose(
@@ -135,7 +135,7 @@ fn element0_child_replaces_surface_image() {
     assert_eq!(ops, vec![("eye.png", 0, 0)]);
 }
 
-/// ブレスを持たずファイル名の慣習だけで建つ子も部品として置く（要件 1.8）。
+/// ブレスを持たずファイル名の慣習だけで建つ子も部品として置く。
 #[test]
 fn filename_convention_child_is_drawn() {
     let (ops, logs) = compose(
@@ -148,7 +148,7 @@ fn filename_convention_child_is_drawn() {
     assert!(skipped(&logs).is_empty(), "{logs}");
 }
 
-/// pattern定義が指すサーフェスの中の子も、同じ規則で重ねる（要件 2.7）。
+/// pattern定義が指すサーフェスの中の子も、同じ規則で重ねる。
 #[test]
 fn child_inside_pattern_target_surface() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\n\
@@ -167,7 +167,7 @@ fn child_inside_pattern_target_surface() {
 }
 
 /// 循環でも命令列は有限で、先祖へ戻る element定義だけが抜け、切る辺は 1 本・1 行。警告は出さない
-/// （読み込みのときに出ている・合成の中は `debug!`・要件 3.2・3.3）。切った辺が 3.2 の報告に在ることは
+/// （読み込みのときに出ている・合成の中は `debug!`）。切った辺が読み込みの報告に在ることは
 /// `nesting_visible_tests.rs` の `cut_cycle_edges_from_every_top_are_reported` が確かめる。
 #[test]
 fn cycles_are_finite_and_cut_edges_are_reported() {
@@ -188,7 +188,7 @@ fn cycles_are_finite_and_cut_edges_are_reported() {
     }
 }
 
-/// 無い番号・範囲を超える数の element定義だけが抜け、同じサーフェスの他の element定義は描く（要件 3.1・1.9）。
+/// 無い番号・範囲を超える数の element定義だけが抜け、同じサーフェスの他の element定義は描く。
 #[test]
 fn only_the_missing_element_is_dropped() {
     let (ops, logs) = compose(
@@ -206,7 +206,7 @@ fn only_the_missing_element_is_dropped() {
     assert!(!logs.contains("level=WARN"), "合成の中は debug!: {logs}");
 }
 
-// ── 部品の段のコマの合流（要件 5.1・5.2・5.10・5.12・5.13） ──
+// ── 部品の段のコマの合流 ──
 
 /// 子 10 を (20,30) に置く親 0。子と親は同じ番号の animation0 を持つ。
 const PART_TEXT: &str = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,20,30\n\
@@ -216,7 +216,7 @@ const PART_TEXT: &str = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,ov
                          surface12\n{\nelement0,overlay,eye_closed.png,0,0\n}\n\
                          surface13\n{\nelement0,overlay,c.png,0,0\n}\n";
 
-/// 部品のコマは部品の段で使い、一番上の同じ番号のコマとは混ざらない（要件 5.1・5.10）。
+/// 部品のコマは部品の段で使い、一番上の同じ番号のコマとは混ざらない。
 #[test]
 fn part_frames_are_used_in_the_part_stage_only() {
     let binds = BindSet::default();
@@ -224,7 +224,6 @@ fn part_frames_are_used_in_the_part_stage_only() {
     let base = vec![("body.png", 0, 0), ("eye.png", 20, 30)];
     assert_eq!(run(&PatternState::default()), base);
 
-    // 部品 10 の animation0 のコマ → 子の段で、子の位置に重なる。
     let mut part = PatternState::default();
     part.set_part(10, 0, frame(12, 0, 0));
     assert_eq!(
@@ -236,7 +235,6 @@ fn part_frames_are_used_in_the_part_stage_only() {
         ]
     );
 
-    // 一番上の animation0 のコマは一番上の段だけ（子の段へ漏れない）。
     let mut top = PatternState::default();
     top.set(0, frame(13, 1, 1));
     assert_eq!(
@@ -244,7 +242,6 @@ fn part_frames_are_used_in_the_part_stage_only() {
         vec![("body.png", 0, 0), ("eye.png", 20, 30), ("c.png", 1, 1)]
     );
 
-    // 両方の欄に同じ番号 0 のコマ → それぞれの段に 1 つずつ。
     let mut both = part.clone();
     both.set(0, frame(13, 1, 1));
     assert_eq!(
@@ -257,13 +254,12 @@ fn part_frames_are_used_in_the_part_stage_only() {
         ]
     );
 
-    // 一番上の番号 0 を部品の欄に置いても、一番上の段は部品の欄を見ない。
     let mut misplaced = PatternState::default();
     misplaced.set_part(0, 0, frame(13, 1, 1));
     assert_eq!(run(&misplaced), base);
 }
 
-/// 子の中の着せ替えの pattern0 は、全段で同じ着せ替えの集合で出る（要件 5.12）。
+/// 子の中の着せ替えの pattern0 は、全段で同じ着せ替えの集合で出る。
 #[test]
 fn bind_pattern0_inside_child_follows_the_bind_set() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,20,30\n}\n\
@@ -285,7 +281,7 @@ fn bind_pattern0_inside_child_follows_the_bind_set() {
 }
 
 /// 着せ替えから外れた部品のコマは合流せず、有効ならコマが pattern0 を置き換える。描画メソッドの
-/// 番人も一番上と同じ（要件 5.12・一番上と同じ 1 本の経路）。
+/// 番人も一番上と同じ（一番上と同じ 1 本の経路）。
 #[test]
 fn part_frames_go_through_the_same_bind_and_method_rules() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,20,30\n}\n\
@@ -295,7 +291,7 @@ fn part_frames_go_through_the_same_bind_and_method_rules() {
                 surface41\n{\nelement0,overlay,mouth_open.png,0,0\n}\n";
     let mut pattern = PatternState::default();
     pattern.set_part(10, 100, frame(41, 1, 1));
-    // 外れた `bind+random` のコマは合流しない（D9-3 の門）。
+    // 外れた `bind+random` のコマは合流しない。
     let random = text.replace(
         "animation100.interval,bind",
         "animation100.interval,bind+random,4",
@@ -306,8 +302,7 @@ fn part_frames_go_through_the_same_bind_and_method_rules() {
         logs.contains("bind 集合に属さない"),
         "外れたコマを捨てた記録: {logs}"
     );
-    // 純 `bind` のコマは呼ばれて始まったものだけなので、無効でも描く（seriko-pattern-calls 5.6・
-    // SSP の測り M5 で期待を直した）。
+    // 純 `bind` のコマは呼ばれて始まったものだけなので、無効でも描く。
     assert_eq!(
         compose_with(text, &[], 0, &BindSet::default(), &pattern).0,
         vec![
@@ -340,7 +335,7 @@ fn part_frames_go_through_the_same_bind_and_method_rules() {
     assert!(logs.contains("非 Overlay method の現在コマ"), "{logs}");
 }
 
-/// 多段の内側の部品のコマも使い、部品の欄のコマは、その部品が出ている段の絵だけを変える（要件 5.13）。
+/// 多段の内側の部品のコマも使い、部品の欄のコマは、その部品が出ている段の絵だけを変える。
 #[test]
 fn inner_multi_level_part_frames_are_used() {
     let binds = BindSet::default();
@@ -367,7 +362,7 @@ fn inner_multi_level_part_frames_are_used() {
 }
 
 /// 合成 1 回の広がりの予算が尽きたら、まだ入っていない子を捨てる。予算は入る面と、子の段でなめる行
-/// （element 1 行）と、子の段の積み荷（ここでは絵 1 枚）を数える（子 1 つで 3）。根の面の自分の層は必ず描き、`error!` は 1 行だけ（指摘 3・21）。
+/// （element 1 行）と、子の段の積み荷（ここでは絵 1 枚）を数える（子 1 つで 3）。根の面の自分の層は必ず描き、`error!` は 1 行だけ。
 #[test]
 fn spent_budget_drops_children_not_yet_entered() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,1,1\n\
@@ -399,7 +394,7 @@ fn spent_budget_drops_children_not_yet_entered() {
     assert_eq!(ops, vec![("body.png", 0, 0)], "根の面の自分の層は必ず描く");
 }
 
-/// 指摘 31: 子の段の位置が i64::MAX でも、子の中の X=1 の足し算は飽和して panic しない
+/// 子の段の位置が i64::MAX でも、子の中の X=1 の足し算は飽和して panic しない
 /// （element の位置と、子の着せ替えの段へ入る位置の両方）。
 #[test]
 fn child_position_at_i64_max_saturates() {

@@ -1,5 +1,4 @@
-//! 定義だけで決まる形の誤り（[`ShapeIssue`]）を面の表から集める（areka-P0-offline-surface-dump
-//! 要件 7.5・design ShapeIssuesOnce）。
+//! 定義だけで決まる形の誤り（[`ShapeIssue`]）を面の表から集める。
 //!
 //! 合成は面を組むたびに同じ誤りに出会うので、その知らせは `debug!` に留め、ここで集めた誤りを
 //! 読み込みの側がシェルごとに 1 度だけ warn で出す。判定は合成と読み込みの報告が使う関数
@@ -52,11 +51,11 @@ pub fn shape_issues(world: &EmoWorld) -> Vec<ShapeIssue> {
 }
 
 /// [`shape_issues`] の中身。`limit` は [`reaches`] 1 回の予算（本番は [`VISIT_BUDGET`]・テストは小さな数）。
-/// 予算が尽きた `error!` は呼び出し 1 回につき 1 度だけ（指摘 2）。
+/// 予算が尽きた `error!` は呼び出し 1 回につき 1 度だけ。
 pub(crate) fn shape_issues_limited(world: &EmoWorld, limit: usize) -> Vec<ShapeIssue> {
     let edges = nest_edges(world);
     let mut reported = false;
-    // 同じ（先, 面）の組は答えが同じなので 1 度だけたどる（指摘 132 と同じ型）。
+    // 同じ（先, 面）の組は答えが同じなので 1 度だけたどる。
     let mut cycles: HashMap<(u32, u32), bool> = HashMap::new();
     let mut issues = Vec::new();
     if let SortOrder::Other(value) = world.animation_sort() {

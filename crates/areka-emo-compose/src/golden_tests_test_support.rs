@@ -90,7 +90,7 @@ pub(super) fn surface1000_bind_parts() -> [BindPart; 3] {
     ]
 }
 
-/// surface1000 用 `AtlasTable` を構築する（COM/WIC 非依存・要件 11.4）。
+/// surface1000 用 `AtlasTable` を構築する（COM/WIC 非依存）。
 ///
 /// surfaces.txt 全体を bake するが、MemoryDecoder には [`surface1000_bind_parts`] の各 rel のみ
 /// 既知の単色画像を挿入する。他パーツ（1101/1201/…）は `NotFound` として bake の errors に

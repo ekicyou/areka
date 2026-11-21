@@ -1,4 +1,4 @@
-//! シェル全体の外形（[`ShellBounds`]）の算出（areka-P0-offline-surface-dump 要件 4.3）。
+//! シェル全体の外形（[`ShellBounds`]）の算出。
 //!
 //! 面ごとの外形（`plan_extent.rs` の `compute_extent_limited`）と同じ辿り方（入れ子・経路にある面の集合で循環を
 //! 避ける・明示のスタック・`outline_walk.rs` の 1 本）を使い、座標を符号つきで持つ。違いは、⑴ すべての面を数える、⑵ 負の座標を原点で
@@ -29,7 +29,7 @@ pub struct ShellBounds {
 }
 
 /// シェルのすべての面の土台・element・element定義が置くサーフェス・すべての animation の描く
-/// pattern を土台の原点に重ねた外形を返す（要件 4.3）。
+/// pattern を土台の原点に重ねた外形を返す。
 ///
 /// 着せ替えにも `PatternState` にもよらない（1 つのシェルで 1 つ）。負の番号の pattern と描かない
 /// メソッドの pattern は数えない。未束縛の element（原寸不明）は数えない。
@@ -39,7 +39,7 @@ pub fn shell_bounds(world: &EmoWorld, atlas: &AtlasTable) -> ShellBounds {
 
 /// [`shell_bounds`] の中身。`limit` は根の面 1 つの広がりの予算（本番は [`VISIT_BUDGET`]・テストは
 /// 小さな数）。きれいに終わった面の覚えと作業場は根の間で 1 つを共有する（予算が尽きた `error!` は
-/// 呼び出し 1 回につき 1 度だけ・指摘 1）。根ごとの外形は表から引く（予算は表を作ったときの [`VISIT_BUDGET`]）。
+/// 呼び出し 1 回につき 1 度だけ）。根ごとの外形は表から引く（予算は表を作ったときの [`VISIT_BUDGET`]）。
 pub(crate) fn shell_bounds_limited(
     world: &EmoWorld,
     atlas: &AtlasTable,
@@ -110,7 +110,7 @@ impl Outline for [i64; 4] {
 
 /// 根の面 `root` からたどり、根の原点からの外形を返す（面の表に無ければ `None`）。たどり方（明示のスタック・
 /// 循環は黙って打ち切る・予算・覚え）は面ごとの外形と共有する [`crate::outline_walk::walk`] で、ここは面ごとの
-/// 寄与（element → pattern の順の子と、自分の層の外形）だけを渡す（指摘 84）。
+/// 寄与（element → pattern の順の子と、自分の層の外形）だけを渡す。
 pub(crate) fn walk(
     s: &mut BoundsScratch,
     memo: Option<&mut BoundsMemo>,
@@ -154,7 +154,6 @@ pub(crate) fn walk(
             if !is_implemented_name(pattern.method.as_str()) {
                 continue;
             }
-            // 循環は黙って打ち切る（warn は読み込みが出す）。
             stack.push(Step::Enter {
                 surface: child,
                 x: pattern.x,

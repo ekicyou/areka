@@ -1,9 +1,9 @@
-//! 動く絵の子の鍵（要件 1.12）と、`always` の見分け・経過 0 の求め方（要件 4.8・4.9）。
+//! 動く絵の子の鍵と、`always` の見分け・経過 0 の求め方。
 //!
 //! `NestReport::from_world` の振り分けは `_` の腕で「無い番号」に落ちるので、`ElementKind::Film`
 //! の扱いを書き漏らしてもコンパイラは教えない。ここを檻にする。
 //!
-//! 後半は見える部品と見える子（要件 1.9・3.7）: `SurfaceParts` の `films`・`always_rest`、
+//! 後半は見える部品と見える子: `SurfaceParts` の `films`・`always_rest`、
 //! `walk` の経過 0 の辺（欄が「載っていない」ときだけ・「消えている」では進まない）、`visible_films`。
 
 use std::path::Path;
@@ -27,7 +27,7 @@ fn other(s: &str) -> Interval {
     Interval::Other(s.into())
 }
 
-/// `always` の単独・小文字の完全一致だけが真（要件 4.8・4.9）。
+/// `always` の単独・小文字の完全一致だけが真。
 #[test]
 fn only_exact_lowercase_always_is_always() {
     assert!(is_always_interval(&other("always")));
@@ -56,7 +56,7 @@ fn rest_index_is_last_index_with_zero_cumulative_wait() {
     assert_eq!(rest_index(std::iter::empty()), None);
 }
 
-/// 作者の欄の読み分けは動く絵の子を返さない（作者は子を書けない・要件 1.12）。
+/// 作者の欄の読み分けは動く絵の子を返さない（作者は子を書けない）。
 #[test]
 fn element_kind_never_reads_as_film() {
     for s in ["0", "7", "0100", "4294967296", "body.png", "", "-1"] {
@@ -148,7 +148,7 @@ fn films_of(atlas: &AtlasTable, rels: &[&str]) -> Vec<FilmId> {
     v
 }
 
-/// 要件 1.9・3.7: 検体の各サーフェスを一番上にしたとき（コマの欄は空＝全部が経過 0）の見える部品と
+/// 検体の各サーフェスを一番上にしたとき（コマの欄は空＝全部が経過 0）の見える部品と
 /// 見える子。子は一番上（0・1・3）にも部品（0 の element4 が置く 20 の rgb.webp）にも数える。
 /// 経過 0 の先は、待ち 0 で始まる `always` の 10 だけ（0・20 の `always` は先頭から待つので無い・
 /// 11 の `bind+always` は `always` ではない）。
@@ -177,7 +177,7 @@ fn fixture_visible_parts_and_films_at_rest() {
     }
 }
 
-/// 要件 1.9: pattern の先に置かれた子も見える。コマが在れば経過 0 の先は数えず、コマの先を数える。
+/// pattern の先に置かれた子も見える。コマが在れば経過 0 の先は数えず、コマの先を数える。
 #[test]
 fn fixture_films_behind_pattern_targets_are_visible() {
     let (world, atlas) = fixture_world();
@@ -296,7 +296,7 @@ fn always_rest_edge_follows_only_rest_cells() {
     assert_eq!(table.parts(40), None);
 }
 
-/// 動く絵も `always` も無い表では、足した 2 欄はどの行でも空（答えは本 spec の前と同じ）。
+/// 動く絵も `always` も無い表では、足した 2 欄はどの行でも空（答えは動く絵を足す前と同じ）。
 #[test]
 fn tables_without_films_or_always_keep_new_columns_empty() {
     let fixture = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -312,7 +312,7 @@ fn tables_without_films_or_always_keep_new_columns_empty() {
     }
 }
 
-// ---- 合成がたどった先との突き合わせ（要件 1.9・3.7） ----
+// ---- 合成がたどった先との突き合わせ ----
 //
 // 見える部品・見える子（`walk`・`visible_films`）と合成の平坦化（`flatten_surface`・`plan_always::film_op`）は
 // 別々に書いてあるので、片方だけを変えるとずれる。nesting_visible_tests の一致の檻と同じ型で、検体の
@@ -348,7 +348,7 @@ fn walk_patterns(world: &EmoWorld) -> Vec<(&'static str, PatternState)> {
     rows
 }
 
-/// 要件 1.9・3.7: 合成がたどったサーフェスと子の集合＝`visible_parts`＋`visible_films` の答え。
+/// 合成がたどったサーフェスと子の集合＝`visible_parts`＋`visible_films` の答え。
 #[test]
 fn compose_walk_equals_visible_parts_and_films() {
     let marker = format!(

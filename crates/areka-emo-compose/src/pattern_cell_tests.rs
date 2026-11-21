@@ -1,4 +1,4 @@
-//! `PatternState` の欄の 3 つの意味と動く絵の子の欄（要件 1.10, 4.5, 7.4）。
+//! `PatternState` の欄の 3 つの意味と動く絵の子の欄。
 //!
 //! 欄の読み `Cell` は「載っていない（経過 0）」「サーフェスを指すコマ」「絵を指すコマ」「消えている」の
 //! 4 つ。等しさは足した欄も比べる（`ComposeKey` に自動で入る）。ここでは 4 つの読みが区別されること、
@@ -25,12 +25,10 @@ fn four_readings_are_distinct() {
     assert_eq!(s.cell(TOP, 1), Cell::Frame(&frame(10, 0, 0)));
     s.set_blank(1);
     assert_eq!(s.cell(TOP, 1), Cell::Blank);
-    // 「消えている」はコマではない（今までの読み口には現れない）。
     assert_eq!(s.get(1), None);
     assert_eq!(s.iter().count(), 0);
     s.set_film(FilmId(7), 3);
     assert_eq!(s.cell(film(7), 0), Cell::Picture(3));
-    // `remove` は「載っていない」へ戻す（「消えている」も消える）。
     s.remove(1);
     assert_eq!(s.cell(TOP, 1), Cell::Rest);
     s.remove_film(FilmId(7));
@@ -74,7 +72,7 @@ fn frame_and_blank_replace_each_other() {
 }
 
 /// 入れた順に依らず等しい（全部の欄を使う）。emo-present の `ComposeKey` のキャッシュ等価判定に使うので
-/// 挿入順非依存の `Eq` が要る（要件 5.2/5.4）。
+/// 挿入順非依存の `Eq` が要る。
 #[test]
 fn eq_is_insertion_order_stable_over_all_cells() {
     let mut a = PatternState::default();
@@ -163,7 +161,6 @@ fn same_number_in_top_part_and_film_never_mix() {
     s.set_film(FilmId(0), 7);
     assert_eq!(s.cell(film(0), 1), Cell::Rest);
 
-    // 一番上を消しても部品は残る（要件 5.10）。
     s.remove(0);
     assert_eq!(s.cell(part(0), 0), Cell::Blank);
     // 同じコマを一番上に置いた状態と部品に置いた状態は等しくない。

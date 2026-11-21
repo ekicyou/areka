@@ -1,4 +1,4 @@
-//! 読み分け（要件 1.1・1.2・1.3・1.5・1.9・3.5）: 数字だけの欄はサーフェスの番号、
+//! 読み分け: 数字だけの欄はサーフェスの番号、
 //! それ以外は今までどおり画像。番号の element は畳み込みで番号として正規化され、アトラスを引かない。
 
 use std::path::Path;
@@ -106,8 +106,8 @@ fn base_image_element_is_image() {
     );
 }
 
-/// 数字だけの名前の画像がアトラスに在っても、番号の element は引かれず、警告も出ない
-/// （要件 1.5・3.5）。画像の element は今までどおり引かれる。
+/// 数字だけの名前の画像がアトラスに在っても、番号の element は引かれず、警告も出ない。
+/// 画像の element は今までどおり引かれる。
 #[test]
 fn number_elements_are_not_bound_and_emit_no_warning() {
     let base = Path::new("shell/master");

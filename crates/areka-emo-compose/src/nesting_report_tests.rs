@@ -1,4 +1,4 @@
-//! 無い番号と循環の報告（要件 1.8・1.9・3.1・3.2・3.4・8.1・8.3）。
+//! 無い番号と循環の報告。
 //!
 //! 無い番号: element定義が指した番号が面の表に無い、または範囲を超える数。
 //! 循環: element定義の辺 (親, element, 子) について、子から element定義の辺とすべての pattern定義の辺
@@ -36,7 +36,7 @@ fn cycle(surface: u32, element: u32, target: u32) -> NestIssue {
     }
 }
 
-/// 無い番号・範囲を超える数が無い番号として、欄の原文のまま載る（要件 3.1・1.9）。画像の element定義は載らない。
+/// 無い番号・範囲を超える数が無い番号として、欄の原文のまま載る。画像の element定義は載らない。
 #[test]
 fn missing_number_and_out_of_range_are_missing_targets() {
     let issues = report_of(
@@ -50,7 +50,7 @@ fn missing_number_and_out_of_range_are_missing_targets() {
     );
 }
 
-/// 自分自身・2 つの相互・element定義と pattern定義が混ざった循環が、辺 1 本につき 1 件載る（要件 3.2）。
+/// 自分自身・2 つの相互・element定義と pattern定義が混ざった循環が、辺 1 本につき 1 件載る。
 ///
 /// 5→5＝自分自身／6→7・7→6＝2 つの相互／8 →(element) 9 →(pattern) 8＝混ざった循環
 /// （pattern定義の辺そのものは報告に載らない）。
@@ -111,7 +111,7 @@ fn pattern_edges_skip_the_seven_animation_id_words_and_move() {
     assert_eq!(issues, vec![]);
 }
 
-/// 同じ子を 2 つの経路から置いても循環にならない（要件 3.4）。同じ親の中で 2 度置いても同じ。
+/// 同じ子を 2 つの経路から置いても循環にならない。同じ親の中で 2 度置いても同じ。
 #[test]
 fn same_child_by_two_paths_is_not_a_cycle() {
     let issues = report_of(
@@ -125,7 +125,7 @@ fn same_child_by_two_paths_is_not_a_cycle() {
     assert_eq!(issues, vec![]);
 }
 
-/// ファイル名の慣習だけで建つ子は無い番号にならない（要件 1.8）。画像の対応が無ければ無い番号。
+/// ファイル名の慣習だけで建つ子は無い番号にならない。画像の対応が無ければ無い番号。
 #[test]
 fn filename_convention_child_is_not_missing() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,11,0,0\n}\n";
@@ -155,7 +155,7 @@ fn order_is_parent_then_element_then_source_order() {
 }
 
 /// 検体: 仕込んだ誤り（無い番号 2・循環の辺 3）が 1 件につき 1 件ずつ決まった順で並び、他は 0 件。
-/// 報告を作る間は記録を 1 行も出さない（要件 8.1 の記録は入口の役目）。
+/// 報告を作る間は記録を 1 行も出さない（記録は入口の役目）。
 #[test]
 fn fixture_yields_exactly_the_planted_issues() {
     let images = image_map(&[(2, "surface2.png"), (11, "surface11.png")]);
@@ -175,8 +175,8 @@ fn fixture_yields_exactly_the_planted_issues() {
     assert!(logs.is_empty(), "報告は記録を出さない: {logs}");
 }
 
-/// 広がりの予算（指摘 3）: 呼び出し 1 回の予算が尽きたら着かないと答え、`error!` を 1 行だけ出す。
-/// 取り出す面は「1 ＋出る辺の数」を数える（指摘 130・出発の 0 と着いた 3 は数えない）ので、0 → 1 → 2 → 3 の
+/// 広がりの予算: 呼び出し 1 回の予算が尽きたら着かないと答え、`error!` を 1 行だけ出す。
+/// 取り出す面は「1 ＋出る辺の数」を数える（出発の 0 と着いた 3 は数えない）ので、0 → 1 → 2 → 3 の
 /// 鎖は 1・2 の 2＋2＝4 で 3 へ着き、予算 3 なら着かない。
 #[test]
 fn spent_budget_answers_not_reached() {
@@ -196,7 +196,7 @@ fn spent_budget_answers_not_reached() {
     );
 }
 
-/// どの予算にも収まらない面（出る辺が予算より多い）を経ても、循環を取りこぼさない（6 回目の指摘 1）。
+/// どの予算にも収まらない面（出る辺が予算より多い）を経ても、循環を取りこぼさない。
 /// 1 → 3 → 1 で面 1 は辺 9 本、予算 4: 1 は着いた先か出発なので開かずに済む。
 #[test]
 fn oversized_surface_on_the_cycle_is_still_reported() {
@@ -217,7 +217,7 @@ fn oversized_surface_on_the_cycle_is_still_reported() {
     assert!(!logs.contains("level=ERROR"), "{logs}");
 }
 
-/// どの予算にも収まらない面は開かないだけで、探しは続く（6 回目の指摘 1 の continue）。0 から 1 と 2 を積み、
+/// どの予算にも収まらない面は開かないだけで、探しは続く。0 から 1 と 2 を積み、
 /// 先に取り出す 1（辺 11 本＝12 > 予算 4）は断られて ERROR 1 行、その後 2 を開いて 3 へ着く。
 #[test]
 fn refused_surface_is_skipped_and_the_walk_goes_on() {

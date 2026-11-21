@@ -201,7 +201,6 @@ fn dressup_added_and_removed() {
     };
     assert_eq!(reuse_once(EXT, &without, &with, &a), want);
     assert_eq!(reuse_once(EXT, &with, &without, &a), want);
-    // 末尾に足す・末尾から外す。
     let top = [op(0, 0, 0), op(2, 40, 30), op(1, 10, 12)];
     assert_eq!(reuse_once(EXT, &without, &top, &a), want);
     assert_eq!(reuse_once(EXT, &top, &without, &a), want);
@@ -391,7 +390,7 @@ fn unchanged_layer_between_movers_240_frames() {
     });
 }
 
-// ── 合成器の口 `Composer::compose_into_reusing`（要件 3.1・3.6） ──
+// ── 合成器の口 `Composer::compose_into_reusing` ──
 
 /// 面 1 枚（不透明の背景 8×6 と半透明の小物 3×2）を fold・bind 済みの world と atlas。
 fn composer_world() -> (crate::EmoWorld, AtlasTable) {
@@ -495,7 +494,7 @@ fn composer_failure_keeps_previous_ops() {
     assert_eq!(again.bytes(), first.bytes());
 }
 
-// ── uv が頁をはみ出す表（指摘 19・要件 4.4・6.2） ──
+// ── uv が頁をはみ出す表 ──
 
 /// 面 0（背景 a）と面 1（背景 a＋小物 b）を束縛した world と、b の uv が頁の右へ 1 画素はみ出す表。
 fn uv_overflow_world() -> (crate::EmoWorld, AtlasTable) {
@@ -563,7 +562,6 @@ fn uv_past_page_edge_is_skipped_with_warn_on_both_paths() {
         );
     };
 
-    // いちからの合成。
     let mut full = ComposedSurface::new(0, 0);
     let logs = crate::log_capture::capture_logs(|| {
         c.compose_into(&mut full, &world, &atlas, 1, &binds, &pat)
@@ -591,7 +589,7 @@ fn uv_past_page_edge_is_skipped_with_warn_on_both_paths() {
     assert_eq!(out.bytes(), without_b.bytes(), "矩形: b だけ飛ばす");
 }
 
-/// 指摘 31: i64 の端の位置でも置き場と転写先の足し算は飽和し、panic せず絵の外として切られる。
+/// i64 の端の位置でも置き場と転写先の足し算は飽和し、panic せず絵の外として切られる。
 #[test]
 fn extreme_position_saturates_without_panic() {
     let a = sample_atlas();

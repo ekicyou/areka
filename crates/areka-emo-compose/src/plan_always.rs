@@ -1,4 +1,4 @@
-//! 合成で、動く絵の子と `always` の経過 0 を描く（要件 1.4・3.1・4.1・4.5・4.6・7.1）。
+//! 合成で、動く絵の子と `always` の経過 0 を描く。
 //!
 //! - 動く絵の子（[`ElementKind::Film`](crate::nesting::ElementKind::Film)）は element を持たず、今の
 //!   コマの絵 1 枚だけを、置いた element の位置・描画メソッドで命令にする（下に何も敷かない）。
@@ -50,7 +50,6 @@ pub(crate) fn film_op(
         Cell::Rest | Cell::Frame(_) => rest,
     };
     let element = ElementId(picture);
-    // 全透明のコマ（通常系）は命令にしない。
     atlas.entry(element).placement.as_ref()?;
     Some(BlitOp {
         element,

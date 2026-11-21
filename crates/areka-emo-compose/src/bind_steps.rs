@@ -1,13 +1,12 @@
-//! 着せ替え（interval が `bind` 種の animation）の描く手順を、読み込みのときに 1 度だけ作る
-//! （seriko-pattern-calls 要件 5.5・6.5・6.7・6.8）。
+//! 着せ替え（interval が `bind` 種の animation）の描く手順を、読み込みのときに 1 度だけ作る。
 //!
 //! 純 `bind` だけが手順を持ち、全部の pattern を番号の昇順にたどる。`bind+random` は手順を持たない
-//! （コマがあるときだけ描く・animated-surface-log-flood 件 26。手順を作ると入れ子の表が描かない先を
+//! （コマがあるときだけ描く。手順を作ると入れ子の表が描かない先を
 //! 見える部品に数える）。描く語で番号が 0 以上のコマは [`BindStep::Draw`]、`insert` で相手が同じ面の
 //! 純 `bind` なら [`BindStep::Insert`]、それ以外は手順に入れない。記録は出さない（描かない語は `shape_issues`、8 語は seriko が 1 度出す）。
 //!
 //! 合成はコマの無い有効な着せ替えの寄与としてこの手順を積み、`insert,B` の位置に B の寄与を
-//! B 自身の座標で積む（[`push_bind_contribution`]・要件 5.7・6.1〜6.4・SSP の測り M6）。
+//! B 自身の座標で積む（[`push_bind_contribution`]・SSP の測りに合わせる）。
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -92,8 +91,8 @@ impl BindSteps {
 ///
 /// 描く順（`s.merged_ids`）に有効でコマの無い着せ替えの手順をたどり、`insert,B` の B が有効で、まだ誰にも
 /// 差し込まれておらず、展開中の祖先でもなければ A のものにする（巡回は打ち切る・2 つの差し込み手は
-/// 描く順で先の方だけ・6.4）。差し込まれた B は本来の位置では積まない（6.1）。差し込む A が無効か
-/// コマを持つ（展開されない）なら B は誰のものにもならず、本来の位置に積む（設計議題 4）。
+/// 描く順で先の方だけ）。差し込まれた B は本来の位置では積まない。差し込む A が無効か
+/// コマを持つ（展開されない）なら B は誰のものにもならず、本来の位置に積む。
 pub(crate) fn claim_inserts(s: &mut PlanScratch, level: &Level<'_>) {
     s.claims.clear();
     s.expanded.clear();
@@ -104,7 +103,7 @@ pub(crate) fn claim_inserts(s: &mut PlanScratch, level: &Level<'_>) {
 }
 
 /// `a` から差し込みの連鎖を、作業場の小さなスタック（`s.chain`＝展開中の祖先と手順の読み位置）でたどる。
-/// 手順の表はスタックの頭の着せ替えが変わったときだけ引き直す（指摘 4）。
+/// 手順の表はスタックの頭の着せ替えが変わったときだけ引き直す。
 fn claim_from(s: &mut PlanScratch, level: &Level<'_>, root: u32) {
     open_claim(s, level, root);
     let (mut head, mut steps) = (None, &[][..]);
@@ -122,7 +121,7 @@ fn claim_from(s: &mut PlanScratch, level: &Level<'_>, root: u32) {
             continue;
         };
         // 展開中の祖先（`s.chain`）は根 `root` のほかは差し込み済み（`s.claims` に在る）なので、
-        // 祖先の確かめは根と比べて表を引くだけで足りる（列を順に引かない・指摘 26）。
+        // 祖先の確かめは根と比べて表を引くだけで足りる（列を順に引かない）。
         if level.binds.contains(b) && b != root && !s.claims.contains_key(&b) {
             s.claims.insert(b, a);
             open_claim(s, level, b);
@@ -145,9 +144,9 @@ fn expands(level: &Level<'_>, id: u32) -> bool {
 
 /// コマの無い有効な着せ替え `a` の手順を積み荷にする。`Draw` は段の位置＋コマの座標に入る積み荷、
 /// `Insert { B }` は [`claim_inserts`] が B を A のものにしたときだけ、その位置に B の寄与（B の今のコマか
-/// B の手順）を B 自身の座標で積む（6.1・6.3・6.7）。`s.done` は段の中で積んだ B（同じ B を 2 度積まない）。
+/// B の手順）を B 自身の座標で積む。`s.done` は段の中で積んだ B（同じ B を 2 度積まない）。
 /// `insert` の連鎖は作業場の小さなスタック（`s.chain`）でたどる。`a` の手順は空でないこと（呼び手が
-/// [`push_direct`] で確かめる）。手順の表はスタックの頭の着せ替えが変わったときだけ引き直す（指摘 4）。
+/// [`push_direct`] で確かめる）。手順の表はスタックの頭の着せ替えが変わったときだけ引き直す。
 pub(crate) fn push_bind_contribution(s: &mut PlanScratch, level: &Level<'_>, a: u32) {
     s.chain.push((a, 0));
     let (mut head, mut steps) = (None, &[][..]);

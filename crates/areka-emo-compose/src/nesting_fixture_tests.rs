@@ -1,4 +1,4 @@
-//! 検体を読み手から合成まで通す（要件 8.2・8.3）。
+//! 検体を読み手から合成まで通す。
 //!
 //! `tests/fixtures/surface-nesting/` の surfaces.txt を 解析 → 面の表 → 焼く → 合成 の順に通す。
 //! 焼く一覧は本番の入口（`areka-emo-present` の `build_shell_target_with_boxes`）と同じ形
@@ -149,7 +149,7 @@ fn fixture_pngs_have_the_documented_sizes() {
     }
 }
 
-/// 報告の件数が仕込んだ件数と一致し、仕込んでいない種類は 0 件（要件 8.2・design「検体を通す」）。
+/// 報告の件数が仕込んだ件数と一致し、仕込んでいない種類は 0 件。
 #[test]
 fn report_counts_equal_the_planted_counts() {
     assert_eq!(load(FIXTURE).tally, PLANTED);
@@ -180,7 +180,7 @@ fn removing_any_planted_line_breaks_the_count() {
     }
 }
 
-/// 3 つの親（0・1・2）がどれも同じ子 10 の絵（eye.png）を、置いた位置に含む（要件 8.2）。
+/// 3 つの親（0・1・2）がどれも同じ子 10 の絵（eye.png）を、置いた位置に含む。
 #[test]
 fn every_parent_contains_the_shared_child_image() {
     let loaded = load(FIXTURE);
@@ -201,7 +201,7 @@ fn every_parent_contains_the_shared_child_image() {
     assert_eq!(px(&s2, 30, 30), [0, 0, 0, 0], "surface2.png は描かれない");
 }
 
-/// 3 段目（32）の絵は各段の位置の和に出る（要件 2.3）。part.png（10x10）の右下の角で見る:
+/// 3 段目（32）の絵は各段の位置の和に出る。part.png（10x10）の右下の角で見る:
 /// 30・31 は 32 の右下の角を覆わないので、そこが part.png の色なのは 32 だけのため。
 #[test]
 fn third_level_image_is_at_the_sum_of_every_offset() {

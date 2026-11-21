@@ -1,19 +1,19 @@
-//! トリム等価の pixel テーマ（要件 11.3・6.2）。
+//! トリム等価の pixel テーマ。
 
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
 use super::{AtlasTable, BindSet, Composer, MemoryDecoder, Path, PatternState, SetId, Shell};
 use crate::plan_test_support::bound_world;
 
 // ============================================================================
-// トリム等価の pixel テスト（要件 **11.3**・**6.2**）。
+// トリム等価の pixel テスト。
 //
 // bake は透明マージンを α-bbox トリムで切り落とし、原画像内の bbox 左上を
 // `Placement.trim_offset`・原寸を `AtlasEntry.original` として記録する（`trim.rs`）。
 // blit は転写先を `transform.offset() + placement.trim_offset` として算出する（`blit.rs`）。
 // この 2 つが噛み合うと「不透明コアが原画像内で占めていた絶対位置」へコアが着弾し、
-// トリムは合成結果を一切変えない＝**トリムありの合成 == トリムなし理論配置**（要件 6.2）。
+// トリムは合成結果を一切変えない＝**トリムありの合成 == トリムなし理論配置**。
 //
-// 本テストはこれを byte-equality で固定する（要件 11.3 の pixel テスト）:
+// 本テストはこれを byte-equality で固定する（pixel テスト）:
 //   - Scenario A（トリムあり）: 透明マージン付き 40×40 画像（不透明 10×10 コアが内側
 //     オフセット (12,15)・残り α=0）を surface0.png として挿入 → bake がトリム
 //     （uv=10×10・trim_offset=(12,15)・original=40×40）→ surface0 の element0（配置 (0,0)）
@@ -23,11 +23,10 @@ use crate::plan_test_support::bound_world;
 //     ＝原画像内でコアが占める位置ゆえ、透明マージンへの SourceOver は恒等で、合成結果は
 //     **原画像バイトそのもの**になる。
 //
-// これは blit テスト④（`trim_offset_shifts_destination`）を fixture 駆動の full-pipeline
+// これは blit のテスト `trim_offset_shifts_destination`を fixture 駆動の full-pipeline
 // 経路（parse→fold→bake トリム→bind→plan→blit）へ引き上げ、bake が現に記録する trim_offset を
-// blit が現に再加算することを end-to-end で保証する（design「Integration Tests item 3」・
-// 「BlitExecutor（転写先 = transform.offset()+trim_offset）」・Requirements Traceability 6.2/11.3）。
-// すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし・要件 11.4）。
+// blit が現に再加算することを end-to-end で保証する（転写先 = transform.offset()+trim_offset）。
+// すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし）。
 // ============================================================================
 
 /// 透明マージン付き画像スペック（原寸・不透明コアのオフセット/寸法/色）。
@@ -87,13 +86,13 @@ fn build_atlas_margined_surface0(shell: &Shell, base: &Path) -> (AtlasTable, Vec
     (bake_emo2(shell, base, &dec), bgra)
 }
 
-/// 要件 11.3・6.2: トリムありの合成結果 == トリムなし理論配置（原画像）とバイト等価。
+/// トリムありの合成結果 == トリムなし理論配置（原画像）とバイト等価。
 ///
 /// surface0 の element0 は配置 (0,0)（実 fixture・前提は `golden_tests_surface0_base_tests` が固定する）。透明マージン付き 40×40 を
 /// 挿入すると bake はトリム（trim_offset=(12,15)・original=40×40・uv=10×10）する。合成では
 /// dest = 配置 (0,0) ＋ trim_offset (12,15) = (12,15) へ不透明コアが着弾し、その他は透明のまま。
 /// これは原画像（コアが (12,15) に premultiplied・残り 0）とバイト単位で一致する。
-/// あわせて外形が**原寸 40×40**（トリム後コア 10×10 ではない・要件 6.5）であることを固定する。
+/// あわせて外形が**原寸 40×40**（トリム後コア 10×10 ではない）であることを固定する。
 #[test]
 fn surface0_trimmed_composite_equals_untrimmed_placement() {
     let shell = parse_emo2_shell();
@@ -133,7 +132,6 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
         "uv はトリム後コア 10×10（マージンが落ちている＝現にトリムされた）"
     );
 
-    // fold → bind → compose（surface0・空 BindSet）。
     let world = bound_world(&shell, &[], &atlas);
     let out = Composer::new()
         .compose(
@@ -145,7 +143,6 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
         )
         .expect("surface0 の単層合成は Ok（要件 11.1）");
 
-    // 外形は原寸 40×40（有効 bind 非依存の静的外形＝原点+original・トリム後コアではない）。
     assert_eq!(
         out.width(),
         ORIG_W,
@@ -158,7 +155,7 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
     );
     assert_eq!(out.stride(), ORIG_W * 4, "stride == 原寸*4");
 
-    // トリム等価の中核（要件 6.2/11.3）: トリムありの合成結果は原画像（トリムなし理論配置）と
+    // トリム等価の中核: トリムありの合成結果は原画像（トリムなし理論配置）と
     // バイト単位で一致する。配置 (0,0)＋trim_offset (12,15) がコアを原画像内の位置へ戻すため、
     // トリムは合成結果を一切変えない。
     assert_eq!(

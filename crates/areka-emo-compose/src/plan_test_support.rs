@@ -89,7 +89,7 @@ pub(crate) fn pattern(index: u32, method: &str, surface_id: i64) -> Pattern {
 /// bind animation 1 本（interval=`Interval::Bind`・pattern0 が入れ子 surface_id を x,y で参照）。
 ///
 /// pattern index は 0 を pattern0（先頭）とし、index=5 の余分な pattern（面の表に無い 999999）も加える。
-/// 純 `bind` は全部のコマをたどる（seriko-pattern-calls M6）ので pattern5 もたどるが、先が無いので何も積まない。
+/// 純 `bind` は全部のコマをたどるので pattern5 もたどるが、先が無いので何も積まない。
 pub(crate) fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
     Animation {
         id,
@@ -676,7 +676,7 @@ pub(crate) fn component_of<T: Component>(world: &World, id: u32) -> Option<&T> {
 /// `(id, SurfaceMaster)` を集める。`SurfaceMaster` は `PartialEq`（element/collision/animation の
 /// 深い等価）。(2) alias は `AliasMap`（`BTreeMap`＝キー順が決定的）を丸ごと複製する。
 /// この2値が等しければ、公開クエリ（`surface(id)`／`resolve_alias(key)`／`surface_ids()`）越しに
-/// 観測できる内容がバイト等価であることを意味する（要件 1.5/10.1）。
+/// 観測できる内容がバイト等価であることを意味する。
 pub(crate) type FoldSnapshot = (
     Vec<(u32, SurfaceMaster)>,
     std::collections::BTreeMap<String, Vec<u32>>,

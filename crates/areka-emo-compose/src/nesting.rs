@@ -1,7 +1,7 @@
 //! 入れ子（element定義でサーフェスを部品として置く・areka 独自の語）の静的な事実。
 //!
 //! element定義のファイル名の欄が半角の数字だけのとき、その欄を画像のファイル名でなく
-//! サーフェスの番号として読む（要件 1.1・1.2）。読み分けの実装は本モジュールの
+//! サーフェスの番号として読む。読み分けの実装は本モジュールの
 //! [`element_kind`] 1 関数だけで、畳み込み（[`crate::fold`]）と焼く前の除外（下流の
 //! `shell_target`）が同じ関数を呼ぶ。
 //!
@@ -28,10 +28,10 @@ pub enum ElementKind {
     Image,
     /// サーフェスの番号（欄が半角の数字だけで、u32 に収まる）。
     Surface(u32),
-    /// 欄は半角の数字だけだが u32 に収まらない。画像としては読まない（要件 1.9）。
+    /// 欄は半角の数字だけだが u32 に収まらない。画像としては読まない。
     SurfaceOutOfRange,
     /// 動く絵から作った子を置く（分解が画像の element を替える）。作者の欄の読み分け
-    /// （[`element_kind`]）からは出ない（要件 1.12）。
+    /// （[`element_kind`]）からは出ない。
     Film(FilmId),
 }
 
@@ -43,7 +43,7 @@ pub struct FilmId(pub u32);
 /// ふつうの大きさでは集合を確保しない。
 const LINEAR_SEEN_MAX: usize = 64;
 
-/// 部品を指す鍵。作者のサーフェスと動く絵の子は種類が違うので、番号が当たることが無い（要件 1.12）。
+/// 部品を指す鍵。作者のサーフェスと動く絵の子は種類が違うので、番号が当たることが無い。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PartKey {
     /// 作者が書いたサーフェス（番号）。
@@ -53,7 +53,7 @@ pub enum PartKey {
 }
 
 /// interval が `always` の単独（小文字の完全一致）か。`bind+always` などの組み合わせ・大文字・
-/// 空白つきは偽（要件 4.8・4.9）。合成・見える部品・seriko の表がこの 1 関数を使う。
+/// 空白つきは偽。合成・見える部品・seriko の表がこの 1 関数を使う。
 pub fn is_always_interval(interval: &Interval) -> bool {
     matches!(interval, Interval::Other(s) if &**s == "always")
 }
@@ -67,7 +67,7 @@ pub fn rest_index(waits_ms: impl Iterator<Item = u32>) -> Option<usize> {
 /// animation の経過 0 の pattern（pattern の番号の昇順・同じ番号は書いた順に並べ、待ちに
 /// [`rest_index`] を当てたのと同じ答え）。先頭から待つなら `None`。番号が負・描画メソッドが動くかは
 /// 呼び手が見る。合成のたびに呼ばれるので並べた写しは作らず、「最初に待つ pattern より前で最後の
-/// pattern」を 2 度なめて引く（指摘 29）。
+/// pattern」を 2 度なめて引く。
 pub(crate) fn rest_pattern(anim: &Animation) -> Option<&Pattern> {
     // 並べる鍵（番号, 書いた位置）。
     let key = |&(i, p): &(usize, &Pattern)| (p.index, i);
@@ -83,7 +83,7 @@ pub(crate) fn rest_pattern(anim: &Animation) -> Option<&Pattern> {
 }
 
 /// 欄が空でなく、全部が半角の数字（0〜9）なら番号として読む。`0100` は 100。
-/// 符号つき・全角の数字・拡張子つき・空は画像（要件 1.1・1.3・1.9）。
+/// 符号つき・全角の数字・拡張子つき・空は画像。
 pub fn element_kind(path: &ElementPath) -> ElementKind {
     let s = path.as_str();
     if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {
@@ -96,7 +96,7 @@ pub fn element_kind(path: &ElementPath) -> ElementKind {
     }
 }
 
-/// サーフェスごとの静的な参照（要件 5.11・5.13）。面の表から 1 度作る不変の値（Send・seriko が写しを持つ）。
+/// サーフェスごとの静的な参照。面の表から 1 度作る不変の値（Send・seriko が写しを持つ）。
 ///
 /// `children`・`bind_targets`・`bind_random_ids`・`films`・`always_rest` のどれかが空でない番号だけを載せる
 /// （載せる条件はこの 1 か所）。入れ子も着せ替えの種類の animation も動く絵の子も `always` の経過 0 の
@@ -117,7 +117,7 @@ pub struct SurfaceParts {
     /// 純 `bind` の全部のコマ（`bind+random` は手順を持たず、コマがあるときだけ③で数える）。昇順・重複なし。
     pub bind_targets: Vec<(u32, u32)>,
     /// `bind+random` の animation の番号（昇順・重複なし）。③ の合流の門が引く（無効ならコマを数えない）。
-    /// 純 `bind` のコマは呼ばれて始まったものだけなので門を通さない（seriko-pattern-calls 5.6・M5）。
+    /// 純 `bind` のコマは呼ばれて始まったものだけなので門を通さない（SSP の測りに合わせる）。
     pub bind_random_ids: Vec<u32>,
     /// element定義で置いた動く絵の子（昇順・重複なし）。
     pub films: Vec<FilmId>,
@@ -238,7 +238,7 @@ impl NestTable {
     /// 同じになる。そこで `out` 自身を「これから見る面」の列と訪れた印に使い（見つけた順に足し、
     /// 前から順に見る）、一番上と既に入った番号へは進まない。先祖は必ずそのどちらかなので、先祖へ戻る
     /// 辺も進まない。各面を 1 度しか見ないので広がりの予算は要らない。最後に昇順へ並べる。訪れた印は
-    /// 小さいうちは `out` を順に引き、[`LINEAR_SEEN_MAX`] 個を越えたら集合で引く（指摘 25）。確保は
+    /// 小さいうちは `out` を順に引き、[`LINEAR_SEEN_MAX`] 個を越えたら集合で引く。確保は
     /// `out` の伸びと、越えたときの集合だけ（ふつうのシェルは越えない）。
     pub fn visible_parts(
         &self,
@@ -296,9 +296,9 @@ impl NestTable {
                 }
             }
         }
-        // ③ コマ。`bind+random` なら有効なものだけ（純 `bind` のコマは無効でも数える・M5）。
+        // ③ コマ。`bind+random` なら有効なものだけ（純 `bind` のコマは無効でも数える）。
         let is_bind = |id: u32| parts.is_some_and(|p| p.bind_random_ids.binary_search(&id).is_ok());
-        // 段の種類で読む欄だけを回す（使わない欄を全部なめない・指摘 30）。
+        // 段の種類で読む欄だけを回す（使わない欄を全部なめない）。
         let top_frames = is_top.then(|| pattern.iter()).into_iter().flatten();
         let part_frames = (!is_top)
             .then(|| pattern.part(surface))
@@ -347,7 +347,7 @@ impl NestTable {
     }
 }
 
-/// 入れ子の読み飛ばし 1 件（要件 3.1・3.2・1.9）。記録の形は下流の入口が決める。
+/// 入れ子の読み飛ばし 1 件。記録の形は下流の入口が決める。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NestIssue {
     /// 指した番号のサーフェスが無い（u32 に収まらない数字を含む）。`target` は欄の原文。
@@ -384,11 +384,11 @@ impl NestReport {
     }
 
     /// [`NestReport::from_world`] の中身。`limit` は [`reaches`] 1 回の予算（本番は [`VISIT_BUDGET`]・テストは
-    /// 小さな数）。予算が尽きた `error!` は報告 1 つにつき 1 度だけ（指摘 2）。
+    /// 小さな数）。予算が尽きた `error!` は報告 1 つにつき 1 度だけ。
     pub(crate) fn from_world_limited(world: &EmoWorld, limit: usize) -> NestReport {
         let edges = nest_edges(world);
         let mut reported = false;
-        // 同じ（子, 親）の組は答えが同じなので 1 度だけたどる（同じ子を指す element定義の数だけたどり直さない・指摘 132）。
+        // 同じ（子, 親）の組は答えが同じなので 1 度だけたどる（同じ子を指す element定義の数だけたどり直さない）。
         let mut cycles: HashMap<(u32, u32), bool> = HashMap::new();
 
         let mut issues = Vec::new();
@@ -462,9 +462,9 @@ pub(crate) fn pattern_edge(p: &Pattern) -> Option<u32> {
 
 /// `from` から辺をたどって `to` へ着けるか（`from == to` も着いたに数える）。`limit` は呼び出し 1 回の
 /// 広がりの予算（本番は [`VISIT_BUDGET`]）。取り出した面を `from` の他は「1 ＋その面から出る辺の数」ずつ
-/// 数え（なめる辺も仕事・指摘 130 と同じ型）、断られた面は開かない（尽きたら残りの辺は循環として報告しない・
+/// 数え（なめる辺も仕事 と同じ型）、断られた面は開かない（尽きたら残りの辺は循環として報告しない・
 /// 合成の祖先の確かめが循環を止める）。着いたかは取り出したときに数える前に見る（`to` は開かない）。尽きた `error!` は `reported` が偽のときだけ出し、出したら真にする
-/// （呼び手は表 1 つのあいだ同じ印を渡す＝組の数だけ出さない・指摘 2）。
+/// （呼び手は表 1 つのあいだ同じ印を渡す＝組の数だけ出さない）。
 // ponytail: 呼び手は（子, 親）の組ごとに 1 度呼び、1 回は予算いっぱいまでなめる（組の数 × 予算）。読み込み 1 回だけなので、遅ければ強連結成分で 1 度に引く。
 pub(crate) fn reaches(
     edges: &BTreeMap<u32, Vec<u32>>,

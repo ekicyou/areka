@@ -1,4 +1,4 @@
-//! `boxes.rs` の型と置き場所の表の問い合わせのテスト（spec: areka-P0-shell-balloon 要件 2.3・2.4）。
+//! `boxes.rs` の型と置き場所の表の問い合わせのテスト。
 //!
 //! 表は畳み込み（`fold_boxes`）を通さず、子モジュールの特権で非公開の欄から手で組む。
 
@@ -53,7 +53,7 @@ fn layout_with_definitions_but_no_placements_is_empty() {
 
 #[test]
 fn hand_built_layout_answers_lookups() {
-    // 要件 2.3（1 つのサーフェスに複数の箱）・2.4（同じ名前を別の位置に）。
+    // 1 つのサーフェスに複数の箱・同じ名前を別の位置に。
     let layout = BoxLayout {
         defs: BTreeMap::from([
             (name("main"), def(200, 80, FontFollow::Scope)),
@@ -85,8 +85,7 @@ fn hand_built_layout_answers_lookups() {
     assert!(layout.placements(u32::MAX).is_empty());
 }
 
-// ---- `balloon.*`ブレスを定義として読む（fold_boxes の定義の側・要件 1.1〜1.5・1.8・1.9・
-// 3.14・3.17・3.18・10.1・10.2）。文面はテストの中に持つ（検体は読まない）。
+// ---- `balloon.*`ブレスを定義として読む（fold_boxes の定義の側）。文面はテストの中に持つ（検体は読まない）。
 
 use areka_parsers::shell::parse_boxes;
 
@@ -106,7 +105,7 @@ fn brace(name: &str, lines: &[&str]) -> String {
 
 #[test]
 fn valid_brace_enters_table_with_size_and_descript_defaults() {
-    // 要件 1.1・1.3・1.2（キーが無ければ descript.txt と同じ既定値）・3.17（書かなければ Scope）。
+    // キーが無ければ descript.txt と同じ既定値・書かなければ Scope。
     let (layout, report) = fold(&brace("main", &["size,200,80"]));
     assert_eq!(report.issues, vec![]);
     assert_eq!(
@@ -121,7 +120,7 @@ fn valid_brace_enters_table_with_size_and_descript_defaults() {
 
 #[test]
 fn brace_keys_are_read_with_the_descript_meaning() {
-    // 要件 1.2: 同じキーを descript.txt に書いたときと同じモデルになる（後勝ち・値の `,` を保つ）。
+    // 同じキーを descript.txt に書いたときと同じモデルになる（後勝ち・値の `,` を保つ）。
     let keys = [
         "origin.x,10",
         "origin.y,-5",
@@ -148,7 +147,6 @@ fn brace_keys_are_read_with_the_descript_meaning() {
 
 #[test]
 fn font_follow_is_read_and_a_bad_value_is_reported_as_scope() {
-    // 要件 3.14・3.17・3.18。
     for (value, want) in [
         ("scope", FontFollow::Scope),
         ("balloon", FontFollow::Balloon),
@@ -176,7 +174,7 @@ fn font_follow_is_read_and_a_bad_value_is_reported_as_scope() {
 
 #[test]
 fn inapplicable_keys_are_dropped_reported_and_the_rest_is_kept() {
-    // 要件 1.5: キーごとに 1 件・ブレスの残りは採る。windowposition は読み手へ渡らないので
+    // キーごとに 1 件・ブレスの残りは採る。windowposition は読み手へ渡らないので
     // モデルの windowposition は未指定のまま。
     let (layout, report) = fold(&brace(
         "w",
@@ -208,7 +206,7 @@ fn inapplicable_keys_are_dropped_reported_and_the_rest_is_kept() {
 
 #[test]
 fn size_follow_and_inapplicable_keys_never_reach_the_descript_table() {
-    // 要件 1.5・3.14: descript.txt の読み手へ渡る表を直に見る（モデルに現れないキーのため）。
+    // descript.txt の読み手へ渡る表を直に見る（モデルに現れないキーのため）。
     let lines: Vec<Vec<String>> = [
         "size,10,20",
         "font.follow,balloon",
@@ -248,7 +246,6 @@ fn size_follow_and_inapplicable_keys_never_reach_the_descript_table() {
 
 #[test]
 fn brace_without_size_is_not_taken() {
-    // 要件 1.4。
     let (layout, report) = fold(&brace("m", &["origin.x,1"]));
     assert_eq!(
         report.issues,
@@ -259,7 +256,7 @@ fn brace_without_size_is_not_taken() {
 
 #[test]
 fn brace_with_a_bad_size_is_not_taken() {
-    // 要件 1.4: 幅か高さが正の整数として読めない。
+    // 幅か高さが正の整数として読めない。
     for value in ["0,80", "200,0", "200", "-1,5", "a,b", "200,80,3", ""] {
         let line = format!("size,{value}");
         let (layout, report) = fold(&brace("b", &[&line]));
@@ -277,7 +274,7 @@ fn brace_with_a_bad_size_is_not_taken() {
 
 #[test]
 fn brace_with_a_numeric_name_is_not_taken() {
-    // 要件 1.9: `\b[ID番号]` と見分けがつかない名前。
+    // `\b[ID番号]` と見分けがつかない名前。
     for n in ["123", "-1", "0"] {
         let (layout, report) = fold(&brace(n, &["size,10,10"]));
         assert_eq!(
@@ -296,7 +293,6 @@ fn brace_with_a_numeric_name_is_not_taken() {
 
 #[test]
 fn brace_with_an_empty_name_is_not_taken() {
-    // 要件 10.1。
     let (layout, report) = fold(&brace("", &["size,10,10"]));
     assert_eq!(
         report.issues,
@@ -309,7 +305,7 @@ fn brace_with_an_empty_name_is_not_taken() {
 
 #[test]
 fn later_brace_with_the_same_name_replaces_wholesale() {
-    // 要件 1.8: 前のブレスのキーは混ざらない。
+    // 前のブレスのキーは混ざらない。
     let text = brace(
         "main",
         &["size,200,80", "origin.x,5", "font.follow,balloon"],
@@ -330,7 +326,7 @@ fn later_brace_with_the_same_name_replaces_wholesale() {
         })
     );
 
-    // 置き換えたブレスが採られなければ、前の定義へは戻さない（設計の Implementation Notes）。
+    // 置き換えたブレスが採られなければ、前の定義へは戻さない。
     let text = brace("main", &["size,200,80"]) + &brace("main", &["origin.y,6"]);
     let (layout, report) = fold(&text);
     assert_eq!(
@@ -349,7 +345,7 @@ fn later_brace_with_the_same_name_replaces_wholesale() {
 
 #[test]
 fn erroneous_braces_never_fail_the_fold_and_only_valid_ones_are_taken() {
-    // 要件 10.1・10.2: 誤り 1 件ごとに原因と名前を持つ報告が 1 件・誤りの無いブレスだけ採る。
+    // 誤り 1 件ごとに原因と名前を持つ報告が 1 件・誤りの無いブレスだけ採る。
     let text = [
         brace("ok1", &["size,10,10"]),
         brace("nosize", &["origin.x,1"]),
@@ -395,14 +391,13 @@ fn erroneous_braces_never_fail_the_fold_and_only_valid_ones_are_taken() {
 
 #[test]
 fn text_without_braces_folds_to_an_empty_layout_and_no_report() {
-    // 要件 1.7 の側から: 箱の無い文面では表も報告も空。
+    // 箱の無い文面では表も報告も空。
     let (layout, report) = fold("surface0\n{\nelement0,overlay,surface0.png,0,0\n}\n");
     assert_eq!(layout, BoxLayout::default());
     assert_eq!(report.issues, vec![]);
 }
 
-// ---- 箱の element定義をサーフェス番号ごとに配る（fold_boxes の置き場所の側・要件 2.1〜2.7・
-// 3.8・10.1・10.2）。文面はテストの中に持つ（検体は読まない）。
+// ---- 箱の element定義をサーフェス番号ごとに配る（fold_boxes の置き場所の側）。文面はテストの中に持つ（検体は読まない）。
 
 /// 面の画像の対応を渡して畳む（画像の World も同じ文面と同じ対応から組む）。
 fn fold_images(text: &str, given: &[(u32, &str)]) -> (BoxLayout, BoxReport, EmoWorld) {
@@ -432,7 +427,7 @@ const NONE: &[BoxPlacement] = &[];
 
 #[test]
 fn box_text_folds_to_expected_table_in_ascending_element_order() {
-    // 要件 2.1・2.3・2.4: 箱を 2 つ持つ面・同じ名前を別の位置に置く面・箱の無い面。
+    // 箱を 2 つ持つ面・同じ名前を別の位置に置く面・箱の無い面。
     // 列は element番号の昇順（書いた順ではない）・名前はすべて定義の表で引ける。
     let text = [
         two_braces(),
@@ -471,7 +466,7 @@ fn box_text_folds_to_expected_table_in_ascending_element_order() {
 
 #[test]
 fn shared_header_gives_every_id_the_same_boxes() {
-    // 要件 2.1: 見出しの展開は画像と同じ規則（列挙・範囲・除外）。
+    // 見出しの展開は画像と同じ規則（列挙・範囲・除外）。
     let text = [
         two_braces(),
         block("surface0,2-4,!3", &["element1,balloon,a,7,8"]),
@@ -490,8 +485,8 @@ fn shared_header_gives_every_id_the_same_boxes() {
 #[test]
 fn later_surface_brace_adds_to_the_placements() {
     // 同じ番号の `surface*`ブレスは前の置き場所へ足し、同じ element番号でも前の行を残して両方を
-    // 足す（面の `fold.rs` の `add_lines` と同じ規則・spec: audit-emo-compose 設計の議題 7 案 A）。
-    // 同じ名前 `a` が同じ element番号に 2 つ並ぶので、名前の重複の整理（要件 2.7）が先の行を採る。
+    // 足す（面の `fold.rs` の `add_lines` と同じ規則）。
+    // 同じ名前 `a` が同じ element番号に 2 つ並ぶので、名前の重複の整理が先の行を採る。
     let text = [
         two_braces(),
         block("surface0", &["element1,balloon,a,0,0"]),
@@ -521,7 +516,7 @@ fn later_surface_brace_adds_to_the_placements() {
 #[test]
 fn faces_and_boxes_fold_the_same_description_to_the_same_lines() {
     // 同じ element番号の行を波括弧・追記・2 つ目の波括弧で足すと、面も箱も 3 行とも残り、
-    // 書いた順に並ぶ（面と箱で同じ勝ち負け・spec: audit-emo-compose 指摘 9）。
+    // 書いた順に並ぶ（面と箱で同じ勝ち負け）。
     use crate::normalized::Transform;
     let text = [
         two_braces(),
@@ -561,7 +556,7 @@ fn faces_and_boxes_fold_the_same_description_to_the_same_lines() {
 
 #[test]
 fn append_adds_boxes_under_the_same_rules() {
-    // 要件 2.2: `surface.append*`ブレスの箱は `surface*`ブレスに書いた場合と同じ規則で置かれる。
+    // `surface.append*`ブレスの箱は `surface*`ブレスに書いた場合と同じ規則で置かれる。
     let text = [
         two_braces(),
         block("surface0", &["element3,balloon,a,1,1"]),
@@ -578,7 +573,7 @@ fn append_adds_boxes_under_the_same_rules() {
 
 #[test]
 fn element_with_an_unreadable_number_is_dropped_and_reported() {
-    // 要件 10.1: element番号が読めない element定義だけ捨てる。
+    // element番号が読めない element定義だけ捨てる。
     let text = [
         two_braces(),
         block(
@@ -600,7 +595,7 @@ fn element_with_an_unreadable_number_is_dropped_and_reported() {
 
 #[test]
 fn element_naming_a_missing_or_untaken_brace_is_dropped_and_reported() {
-    // 要件 2.5: 名前のブレスが無い・採られなかった（`size` 無し）element定義だけ捨て、他は採る。
+    // 名前のブレスが無い・採られなかった（`size` 無し）element定義だけ捨て、他は採る。
     let text = [
         brace("a", &["size,100,50"]),
         brace("nosize", &["origin.x,1"]),
@@ -638,7 +633,7 @@ fn element_naming_a_missing_or_untaken_brace_is_dropped_and_reported() {
 
 #[test]
 fn element_with_a_non_integer_position_is_dropped_and_reported() {
-    // 要件 2.6: X か Y が整数として読めない（欠けを含む）element定義だけ捨てる。
+    // X か Y が整数として読めない（欠けを含む）element定義だけ捨てる。
     let text = [
         two_braces(),
         block(
@@ -676,7 +671,7 @@ fn element_with_a_non_integer_position_is_dropped_and_reported() {
 
 #[test]
 fn same_name_keeps_the_smallest_element_number_across_surface_and_append() {
-    // 要件 2.7: `surface*` と `surface.append*` の両方が同じ名前を置いても element番号最小を採る。
+    // `surface*` と `surface.append*` の両方が同じ名前を置いても element番号最小を採る。
     let text = [
         two_braces(),
         block(
@@ -715,7 +710,7 @@ fn same_name_keeps_the_smallest_element_number_across_surface_and_append() {
 
 #[test]
 fn box_below_an_image_element_is_kept_and_reported() {
-    // 要件 3.8: 画像の element の最大の番号より小さい番号の箱は採ったうえで断る。
+    // 画像の element の最大の番号より小さい番号の箱は採ったうえで断る。
     let text = [
         two_braces(),
         block(

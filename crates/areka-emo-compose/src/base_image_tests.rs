@@ -33,7 +33,7 @@ fn masters_of(world: &EmoWorld) -> Vec<SurfaceMaster> {
 
 /// 複数番号の見出し（`surface0,1`）で展開された面は、番号ごとに**自分の**画像を層 0 に受け取る。
 ///
-/// 判定が展開前の見出し単位だと、面 0 と面 1 が同じ 1 枚を共有するか片方が空になる（要件 2.1 のア・2.2）。
+/// 判定が展開前の見出し単位だと、面 0 と面 1 が同じ 1 枚を共有するか片方が空になる。
 #[test]
 fn shared_header_gives_each_id_its_own_image() {
     let shell = shell_of(vec![surface_def(
@@ -63,7 +63,7 @@ fn shared_header_gives_each_id_its_own_image() {
     assert!(report.shadowed.is_empty());
 }
 
-/// 画像 0 件で組んだ面の表は、畳み込みだけを通した結果と同じである（本仕様の適用前と同じ・要件 5.1〜5.3）。
+/// 画像 0 件で組んだ面の表は、畳み込みだけを通した結果と同じである（本仕様の適用前と同じ）。
 #[test]
 fn no_images_leaves_the_folded_table_untouched() {
     let shell = shell_of(vec![
@@ -82,23 +82,20 @@ fn no_images_leaves_the_folded_table_untouched() {
     assert_eq!(*world.base_images(), BaseImageReport::default());
 }
 
-/// `used` と `shadowed` はキーが重ならず、和は渡した画像の全体に等しい（design「Invariants」）。
+/// `used` と `shadowed` はキーが重ならず、和は渡した画像の全体に等しい。
 ///
 /// 併せて表のウ（層 0 が在れば使わない）・イ（層の昇順に並べ直す）・エ（画像の無い番号に触らない）を留める。
 #[test]
 fn used_and_shadowed_partition_the_images() {
     let shell = shell_of(vec![
-        // ウ: 層 0 が在るので画像は使わない。
         surface_def(
             vec![AppendTarget::Single(0)],
             vec![elem(0, "body.png", 0, 0)],
         ),
-        // イ: 層 0 が空いているので画像が最も奥に入る。
         surface_def(
             vec![AppendTarget::Single(1)],
             vec![elem(1, "face.png", 7, 8)],
         ),
-        // エ: 画像が無いので触らない。
         surface_def(
             vec![AppendTarget::Single(2)],
             vec![elem(3, "hat.png", 0, 0)],
@@ -143,7 +140,7 @@ fn used_and_shadowed_partition_the_images() {
     assert_eq!(face2.elements.len(), 1);
     assert_eq!(face2.elements[0].layer, 3);
 
-    // ア: 宣言の無い面 5 は画像 1 枚を持つ「存在する面」になる（要件 2.2・3.9）。
+    // ア: 宣言の無い面 5 は画像 1 枚を持つ「存在する面」になる。
     let face5 = world.surface(5).expect("画像だけの面 5 が在る");
     assert_eq!(face5.id, 5);
     assert_eq!(face5.elements.len(), 1);
@@ -152,7 +149,7 @@ fn used_and_shadowed_partition_the_images() {
     assert!(face5.animations.is_empty());
 }
 
-/// `surface.append` は、波括弧が 1 行も無い「画像だけで存在する面」にも効く（要件 3.7・C6）。
+/// `surface.append` は、波括弧が 1 行も無い「画像だけで存在する面」にも効く。
 ///
 /// 追記で層 0 を足した面は画像を使わない（`shadowed`）。層 0 を足さなかった面は今までどおり
 /// 画像が層 0 に入る（`used`）。どちらも新設ではないので、重複の `warn!` は 0 件である。
@@ -221,7 +218,7 @@ fn append_reaches_image_only_faces() {
     );
 }
 
-/// 宣言も画像も無い番号への `surface.append` は、今までどおり新設せず `warn!` を出す（要件 3.8・変更 0）。
+/// 宣言も画像も無い番号への `surface.append` は、今までどおり新設せず `warn!` を出す（変更 0）。
 #[test]
 fn append_to_unknown_id_still_warns_and_creates_nothing() {
     let shell = shell_mixed(
@@ -326,7 +323,7 @@ fn world_with_patterns(patterns: Vec<Pattern>, images: &BTreeMap<u32, String>) -
     EmoWorld::build_with_images(&shell_of(vec![surface_with_patterns(0, patterns)]), images)
 }
 
-/// 停止を表す負の番号は相手に数えず、在る面を指すコマも数えない（要件 3.5）。
+/// 停止を表す負の番号は相手に数えず、在る面を指すコマも数えない。
 #[test]
 fn dangling_pattern_targets_skips_negative_targets_and_existing_faces() {
     let world = world_with_patterns(
@@ -347,7 +344,7 @@ fn dangling_pattern_targets_skips_negative_targets_and_existing_faces() {
 }
 
 /// 欄 2 がアニメーションの番号になる 7 語と、サーフェスの番号を無視する `move` のコマは、面の相手として
-/// 数えない（要件 3.5・指摘 133）。
+/// 数えない。
 ///
 /// 綴りの比べ方は `ComposeMethod::from_name` と同じ（前後の空白を落とし・小文字にし・`-` と `_`
 /// を除く）。`from_name` は未知の語で `debug!` を出すので、この照会からは呼ばない。
@@ -392,7 +389,7 @@ fn dangling_pattern_targets_skips_methods_that_take_animation_ids() {
     );
 }
 
-/// 画像だけで存在する面は「在る」に数える（要件 3.5・C7）。
+/// 画像だけで存在する面は「在る」に数える。
 #[test]
 fn dangling_pattern_targets_counts_image_only_faces_as_existing() {
     let patterns = vec![pattern(0, "overlay", 1031)];
@@ -416,7 +413,7 @@ fn dangling_pattern_targets_counts_image_only_faces_as_existing() {
 ///
 /// 面 0 のまばたきは面 1031・1032・1033 を指し、この 3 枚は `surfaces.txt` に 1 行も書かれず
 /// ファイル名だけで置かれている（`surface1031.png` ほか）。対応を渡さないと 3 組が相手の無い
-/// コマとして現れる（要件 3.5・設計「`dangling_pattern_targets` の母集合」の数え直し）。
+/// コマとして現れる（`dangling_pattern_targets` の母集合の数え直し）。
 #[test]
 fn konnoyayame_has_no_dangling_pattern_targets_with_images() {
     let shell_dir = crate::sample_test_support::konnoyayame_shell_root();
@@ -425,7 +422,7 @@ fn konnoyayame_has_no_dangling_pattern_targets_with_images() {
     let shell = areka_parsers::shell::parse(&content);
 
     // 面の画像の対応。番号 → ファイル名を決める権威は `areka-emo-present` に在り、本 crate から
-    // は使えないので、テストの中だけで `surface<数字>.png` を拾う（要件 1.1 の慣習のうち、この
+    // は使えないので、テストの中だけで `surface<数字>.png` を拾う（ukadoc の慣習のうち、この
     // 検体に現れる綴りだけ）。
     let images: BTreeMap<u32, String> = std::fs::read_dir(&shell_dir)
         .expect("konnoyayame のシェルのフォルダを一覧できること")

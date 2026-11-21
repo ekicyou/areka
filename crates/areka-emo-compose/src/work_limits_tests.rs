@@ -1,4 +1,4 @@
-//! 予算が数えなかった仕事の量（指摘 76〜79・82）: 面に入るたびになめる行・重ねる画素・範囲の見出しの写し・
+//! 予算が数えなかった仕事の量: 面に入るたびになめる行・重ねる画素・範囲の見出しの写し・
 //! 根をまたぐ持ち込み。どれも上限で止まり、記録は 1 度だけ出る。
 
 use std::collections::BTreeMap;
@@ -17,7 +17,7 @@ use crate::plan_test_support::{bake_atlas, bound_world, errors, ops_limited};
 use crate::world::{EmoWorld, Records};
 use crate::{ComposeError, Composer, fold_boxes};
 
-/// 指摘 76: 面 0 が置く面 1 は絵 1 枚と、命令にならない（絵の解決できない）element 1,000 行を持つ。入る 1 と
+/// 面 0 が置く面 1 は絵 1 枚と、命令にならない（絵の解決できない）element 1,000 行を持つ。入る 1 と
 /// 積み荷 1 は予算 100 の内でも、なめる行（1,001）が越えるので面 1 は開かず、`error!` は合成器 1 つで 1 行。
 /// 入る 1＋なめる 1,001＋積み荷 1＝1,003 なら切れず、1 つ少ない 1,002 では切れる（内訳の 3 つとも数える）。
 #[test]
@@ -41,9 +41,9 @@ fn plan_counts_the_scanned_rows_of_an_entered_surface() {
     assert_eq!(run(1_003), (1, 0), "予算の内なら絵を描き、記録は無い");
 }
 
-/// 指摘 77: 外形 2×2（面積 4）の面 0 と面 1 に 2×2 の絵を 100 枚ずつ重ねる（400 画素）。重ねてよいのは面積×64＝256
+/// 外形 2×2（面積 4）の面 0 と面 1 に 2×2 の絵を 100 枚ずつ重ねる（400 画素）。重ねてよいのは面積×64＝256
 /// 画素なので、命令は頭の 64 枚で止まり、`error!` は合成器 1 つにつき根ごとに 1 行（面 0 はいちからと矩形の重ね直しの
-/// 両方で 1 行・面 1 も合成して 2 行・7 回目の指摘 8）。
+/// 両方で 1 行・面 1 も合成して 2 行）。
 #[test]
 fn compose_stops_at_the_pixel_limit_once_per_composer() {
     let mut text = String::from("charset,UTF-8\n");
@@ -79,7 +79,7 @@ fn compose_stops_at_the_pixel_limit_once_per_composer() {
     assert_eq!(errors(&logs, "重ねる画素"), 2, "{logs}");
 }
 
-/// 指摘 78: 範囲の見出しで写す行の合計は畳み込み 1 回で 2^20 まで。面 0 の 1 行の後、`surface1-1024` に
+/// 範囲の見出しで写す行の合計は畳み込み 1 回で 2^20 まで。面 0 の 1 行の後、`surface1-1024` に
 /// 1,024 行を書くと合計 2^20＋1 で越えるので、その記述子だけを捨てて `error!` は 1 行（面 0 は残る）。
 #[test]
 fn fold_drops_the_descriptor_over_the_copied_line_limit() {
@@ -98,7 +98,7 @@ fn fold_drops_the_descriptor_over_the_copied_line_limit() {
     assert!(logs.contains("lines=1024"), "{logs}");
 }
 
-/// 指摘 78: animation の中の pattern の行も、animation ごとの interval の 1 行も写す行に数える。面 0 の 1 行の後、
+/// animation の中の pattern の行も、animation ごとの interval の 1 行も写す行に数える。面 0 の 1 行の後、
 /// `surface1-1024` に animation 1 つ・pattern 1,023 行を書くと 1,024×(1＋1,023)＝2^20 で合計 2^20＋1 になり
 /// 越えるので、その記述子を捨てて `error!` は 1 行（interval の 1 行を数え落とすと収まってしまう）。
 #[test]
@@ -118,7 +118,7 @@ fn fold_counts_the_pattern_rows_as_copied_lines() {
     assert_eq!(errors(&logs, "写す行"), 1, "{logs}");
 }
 
-/// 指摘 78: 写す行の合計がちょうど 2^20（`surface1-1024` に 1,024 行）なら上限の内で、記述子は残り
+/// 写す行の合計がちょうど 2^20（`surface1-1024` に 1,024 行）なら上限の内で、記述子は残り
 /// `error!` は出ない。
 #[test]
 fn fold_keeps_the_descriptor_at_exactly_the_copied_line_limit() {
@@ -134,7 +134,7 @@ fn fold_keeps_the_descriptor_at_exactly_the_copied_line_limit() {
     assert_eq!(errors(&logs, "写す行"), 0, "{logs}");
 }
 
-/// 指摘 78: 箱の行も同じ上限で、越えた記述子を捨てて `error!` は 1 行。記録は面の表を組んだときの出し分けに
+/// 箱の行も同じ上限で、越えた記述子を捨てて `error!` は 1 行。記録は面の表を組んだときの出し分けに
 /// 従い、黙らせる組み方の面の表なら 0 行。
 #[test]
 fn box_fold_drops_the_descriptor_over_the_copied_line_limit() {
@@ -160,7 +160,7 @@ fn box_fold_drops_the_descriptor_over_the_copied_line_limit() {
     assert_eq!(errors(&logs, "写す行"), 0, "{logs}");
 }
 
-/// 7 回目の指摘 23: 上限を越えた記述子がいくつ続いても `error!` は畳み込み 1 回で初めの 1 度だけ（以後は
+/// 上限を越えた記述子がいくつ続いても `error!` は畳み込み 1 回で初めの 1 度だけ（以後は
 /// `debug!`）。面 0 の 1 行の後、1,024 行の `surface1-1024` 類を 3 つ書くと 3 つとも捨て、記録は 1 行。
 #[test]
 fn fold_reports_the_copied_line_limit_once() {
@@ -189,7 +189,7 @@ fn fold_reports_the_copied_line_limit_once() {
     assert_eq!(debugs, 2, "{logs}");
 }
 
-/// 7 回目の指摘 23・24: 箱でも、上限で捨てた `surface*`ブレスがいくつ続いても `error!` は 1 行。捨てた記述子の
+/// 箱でも、上限で捨てた `surface*`ブレスがいくつ続いても `error!` は 1 行。捨てた記述子の
 /// 番号も在る番号に数えるので、後の `surface.append5` を「無い番号への追記」と報告しない。
 #[test]
 fn box_fold_counts_dropped_descriptor_numbers_as_existing() {
@@ -214,7 +214,7 @@ fn box_fold_counts_dropped_descriptor_numbers_as_existing() {
     assert_eq!(errors(&logs, "写す行"), 1, "{logs}");
 }
 
-/// 指摘 79: 面 0 … 9 がそれぞれ面 10（当たり判定 3 つ）を置く。根をまたぐ持ち込みの予算 10 は面 0〜2 の
+/// 面 0 … 9 がそれぞれ面 10（当たり判定 3 つ）を置く。根をまたぐ持ち込みの予算 10 は面 0〜2 の
 /// 9 本で残り 1 になり、面 3 から先には付けない。`error!` は 1 行で、黙らせる組み方では出ない。
 #[test]
 fn hit_import_counts_the_regions_across_roots_against_one_budget() {
@@ -246,7 +246,7 @@ fn hit_import_counts_the_regions_across_roots_against_one_budget() {
     }
 }
 
-/// 7 回目の指摘 6: 根をまたぐ持ち込みの予算に収まらない根だけを飛ばし、後ろの小さな根は残りで持ち込む。面 0 は
+/// 根をまたぐ持ち込みの予算に収まらない根だけを飛ばし、後ろの小さな根は残りで持ち込む。面 0 は
 /// 面 10（当たり判定 3 つ）を、面 1〜3 は面 11（1 つ）を置く。予算 2 では面 0 を飛ばし、面 1・2 に 1 つずつ付けて
 /// 残り 0 になり、面 3 も飛ばす。`error!` は初めの 1 度だけ（面 3 は `debug!`）。
 #[test]
@@ -281,7 +281,7 @@ fn hit_import_skips_only_the_roots_over_the_budget() {
     assert!(logs.contains("surface_id=0"), "{logs}");
 }
 
-/// 指摘 82: 面 0 が 2×2 の絵を持つ面 1 を (-2, 0) に置くと外形は幅 0・高さ 2。幅か高さが 0 なら
+/// 面 0 が 2×2 の絵を持つ面 1 を (-2, 0) に置くと外形は幅 0・高さ 2。幅か高さが 0 なら
 /// `EmptyComposition`。
 #[test]
 fn zero_width_extent_is_empty_composition() {
