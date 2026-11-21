@@ -59,7 +59,7 @@
 - 入口 `areka_runtime::crash_report_test_support::{install, installed, hold, release}` の名を変える → `areka-input`・本体の `runtime_tests/mod.rs`・`spine_wait.rs` を確かめ直す。
 - `crash-report-kit` にワークスペースの crate への依存を足す → wintf が上位の crate に依存しない向きを確かめ直す。
 - `areka-runtime` の `test-support` の機能の組み立てを変える → `areka-input` と本体のテストの据え付けを確かめ直す。
-- `areka_placement::test_support::zorder_pair_deferred::code_only` の置き場・署名を変える → `areka-runtime` の `source_text_test_support::code_only` の呼び手（runtime・本体・`audit-areka-app` の寄せ先）を確かめ直す。
+- `areka_placement::test_support::code_only` の置き場・署名を変える → `areka-runtime` の `source_text_test_support::code_only` の呼び手（runtime・本体・`audit-areka-app` の寄せ先）を確かめ直す。
 
 ## Architecture
 
@@ -136,8 +136,8 @@ crates/crash-report-kit/
 - `Cargo.lock` — 新しい `[[package]] name = "crash-report-kit"`（`dependencies = ["windows"]`）の塊と、wintf・areka-placement・areka-runtime の項の `dependencies` に `"crash-report-kit",` を 1 行ずつ（cargo が書く）。
 - `THIRD-PARTY-NOTICES.md` — `pwsh -NoProfile -File tools/test-all.ps1 -License` の 1 回で作り直す（MIT の対象 crate の並びに `crash-report-kit 0.1.0` が 1 行）。
 - `.kiro/steering/structure.md` — 「Temp Path Kit Crate」の節の後に「Crash Report Kit Crate（crash-report-kit）」の節を足す。runtime の節の Dependencies の「`shiori-host32-host` は `test-support` のときだけ付く optional の依存」に `crash-report-kit` を並べる。
-- `crates/areka-runtime/src/source_text_test_support.rs` — `code_only` の定義（3〜10 行）を `pub use areka_placement::test_support::zorder_pair_deferred::code_only;` に替える。
-- `crates/areka-placement/src/test_support.rs` — `window_move_lines` を `pub fn` で足す（`&str` の並びを受ける）。`zorder_pair_deferred::code_only` は今のまま（定義の 1 つ目）。
+- `crates/areka-runtime/src/source_text_test_support.rs` — `code_only` の定義（3〜10 行）を `pub use areka_placement::test_support::code_only;` に替える。
+- `crates/areka-placement/src/test_support.rs` — `window_move_lines` を `pub fn` で足す（`&str` の並びを受ける）。`code_only` の定義を `zorder_pair_deferred` から `test_support` の直下へ上げ、`zorder_pair_deferred` には `pub use super::code_only;` を残す（placement の呼び手は差分 0）。
 - `crates/areka-placement/src/follow_window_move_diag_tests.rs` — 私有の `window_move_lines`（169〜176 行）を消し、`crate::test_support::window_move_lines` を使う（`follow::test_support` と取り違えない）。呼び手 7 か所は `events.iter().map(CapturedEvent::message)` を渡す。
 - `crates/areka-placement/src/follow_window_move_hold_watch_tests.rs` — 鳴る側の 1 本 `a_system_write_that_bypasses_its_deferral_still_trips_the_watch` を、`capture` の中で `catch_unwind` し警告の文を数えてから `resume_unwind` する形（前例 `crates/areka-runtime/src/frame_work_area_resnap_hold_tests.rs` の `the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites`）に替える。
 - 古い道の説明 21 ファイル 44 行（`examples/window-placement.rs`・`balloon_offset_persist_roundtrip_tests.rs`・`chain_finalize.rs`・`chain_realign.rs`・`config.rs`・`diag.rs`・`follow.rs`・`follow/move_shift.rs`・`follow/offset_space.rs`・`follow/window_move.rs`・`follow/work_area.rs`・`follow/work_area_clamp.rs`・`follow_balloon_limit_tests.rs`・`follow_transition_diag_tests.rs`・`follow_visibility_balloon_wiring_tests.rs`・`lib.rs`・`measure.rs`・`measure_template_tests.rs`・`spawn.rs`（350 行だけ）・`transition_diag.rs`・`zorder_chain_compose.rs`。どれも `crates/areka-placement/` の下）— コメントの道だけを直す（「古い道の書き換えの決まり」）。
@@ -386,13 +386,20 @@ static INSTALL: extern "C" fn() = install;
 /// 記録の文の並びから窓移動レコードの行だけを抜く（ほかの debug の記録は無視）。
 pub fn window_move_lines<'a>(messages: impl IntoIterator<Item = &'a str>) -> Vec<String>;
 
+/// 行コメント（`//` で始まる行）を落としたソースの本文。
+pub fn code_only(src: &str) -> String;   // 定義は test_support の直下の 1 つだけ
+
+pub mod zorder_pair_deferred {
+    pub use super::code_only;            // 今の呼び手の道を保つ
+}
+
 // crates/areka-runtime/src/source_text_test_support.rs
-pub use areka_placement::test_support::zorder_pair_deferred::code_only;
+pub use areka_placement::test_support::code_only;
 ```
 
 - `window_move_lines` は `crate::diag::WINDOW_MOVE_RECORD_TAG` で始まる文だけを `String` にして並びの順に返す（今の本文のまま）。`log-capture-kit` を引かないので、`test-support` の機能だけで組んだ placement でも組める。
 - 呼び手（`follow_window_move_diag_tests.rs` の 7 か所・`only_window_move_line` を含む）は `window_move_lines(events.iter().map(CapturedEvent::message))` の形で渡す。
-- `code_only` の定義は placement の `zorder_pair_deferred::code_only` の 1 つになる。runtime の呼び手 6 ファイルと本体のテストは `areka_runtime::source_text_test_support::code_only` の道のまま使える（`audit-areka-app` の寄せ先もこの道）。runtime は `test-support` でも自分のテストでも placement の `test-support` を付けているので届く。
+- `code_only` の定義は placement の `test_support::code_only` の 1 つになる（汎用の道具を Z 順専用のモジュールに預けない）。placement の呼び手は `zorder_pair_deferred::code_only` の道のまま使える。runtime の呼び手 6 ファイルと本体のテストは `areka_runtime::source_text_test_support::code_only` の道のまま使える（`audit-areka-app` の寄せ先もこの道）。runtime は `test-support` でも自分のテストでも placement の `test-support` を付けているので届く。
 
 #### HoldWatchCage
 
@@ -474,13 +481,12 @@ pub use areka_placement::test_support::zorder_pair_deferred::code_only;
 
 - `pwsh -NoProfile -File tools/test-all.ps1 -License` が緑（8.1・1.4）。
 
-## Open Questions（設計の討議の議題の候補）
+## 設計の討議で決めたこと（2026-11-21・開発者「推奨どおり承認」）
 
-各項目は下書きでの仮定を本文に書いた。答えで本文が変わる。
-
-1. **較正の置き場と `RaiseException` の出所**（仮定: 装置なしの較正は kit の 1 本だけにし、wintf・placement の 2 本は消す。`RaiseException` は kit の中の宣言 1 つだけにし、較正の口 `crash_on_an_unnamed_thread` を公開して kit と runtime の較正が共に使う）。代わり: runtime に `RaiseException` の宣言を 1 つ残す／wintf・placement にも装置なしの較正を残す。
-2. **wintf・placement に残す小さなファイルの名と形**（仮定: 名 `test_crash_report.rs` を保ち＝`lib.rs` 差分 0、中身は `areka-input` の `crash_report_tests.rs` と同じ 11 行の形）。代わり: `crash_report_tests.rs` へ改名（隣の `*_tests.rs` の決まりにそろう・`lib.rs` の `mod` 行と `count_tests.rs:62` の例の文字列が古くなる）。
-3. **kit の檻の置き場**（仮定: 隣の `lib_tests.rs` に檻と kit 自身の据え付けの静的変数を置く＝`temp-path-kit` の前例）。代わり: 今の runtime の写しと同じく `lib.rs` の中に置く。
-4. **申し送りウの形**（仮定: 新しいテストを足さず、鳴る側の既存の 1 本を前例の「数えてから panic を戻す」形に替える）。代わり: 前例どおり新しい 1 本を足す。
-5. **申し送りカの runtime の写しの申し送り先**（仮定: 完了の未解決の棚卸の件として tasks.md に残し、持ち主の brief は `/kiro-complete` の棚卸で決める）。代わり: 今の段で `window-resetwindowpos-hold` の brief へ申し送る。
-6. **`crash-report-kit` の `windows` の指定**（仮定: `windows = { workspace = true }`＝ワークスペースの機能の表を丸ごと受ける・`Cargo.lock` の差分は同じ）。代わり: 使う 4 つの機能だけを自分で並べる（`version = "0.62"` を二重に持つ）。
+1. **`code_only` の置き場**: 定義を `areka_placement::test_support::code_only` に上げ、`zorder_pair_deferred` には `pub use super::code_only;` を残す。runtime は `pub use areka_placement::test_support::code_only;`（設計の検証の指摘）。
+2. **較正と `RaiseException`**: 装置なしの較正は kit の 1 本だけ（wintf・placement の 2 本は消す）。`RaiseException` の宣言は kit の 1 つだけで、較正の口 `crash_on_an_unnamed_thread` を kit と runtime の較正が共に使う。
+3. **wintf・placement の小さなファイル**: 名 `test_crash_report.rs` を保つ（`lib.rs` の `mod` の行は差分 0）。中身は `areka-input` の `crash_report_tests.rs` と同じ形。
+4. **kit の檻**: 隣の `lib_tests.rs` に、kit 自身の据え付けの静的変数・檻 4 本・装置なしの較正を置く。
+5. **申し送りウ**: 新しいテストは足さず、鳴る側の既存の 1 本を「数えてから panic を戻す」形に替える。
+6. **申し送りカの runtime の写し**: 完了の未解決の棚卸の件として tasks.md に残し、持ち主は `/kiro-complete` の棚卸で決める。
+7. **kit の `windows`**: `windows = { workspace = true }`。
