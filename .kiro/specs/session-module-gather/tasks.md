@@ -91,7 +91,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: standard — 項目の写しと、残すテストの引き方・real-run-kit の名指しを合わせる_
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.6, 2.1, 2.4, 6.1, 6.2, 7.3, 7.7, 7.9_
 
-- [ ] 7. ゴーストの単位と系の登録を集める（段 6）
+- [x] 7. ゴーストの単位と系の登録を集める（段 6）
 - [x] 7.1 `ghost_session` の家族を移し、`boot_seam.rs` を作る
   - `ghost_session*`（`_runtime`・`_scope_rect`・`_scope_scale` を含む）・`shell_balloon_switch_session_*`・`boot_shell_tests.rs` を `git mv` で移し、`#[path]` の入れ子とモジュール名は今のままにする
   - `main.rs` の `restore_merged_placements`・`insert_persist_wiring`・`on_boot_ok`・`record_last_used_at_boot`・`record_last_used`・`boot_monitor_snapshot` を字面のまま新しい `session/boot_seam.rs` へ写し、可視性だけを上げる。本番の呼び手（`ghost_session.rs:204`・`:227`・`:720`・`ghost_session_runtime.rs:55`・`session/ghost_switch.rs:569`）を `crate::session::boot_seam::…` へ
@@ -109,7 +109,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: standard — 設計が形を与える契約の変更と呼び手の追従_
   - _Requirements: 2.5, 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 7.3 `BODY_SYSTEMS` の欄の取り違えを一度だけ試して記録する
+- [x] 7.3 `BODY_SYSTEMS` の欄の取り違えを一度だけ試して記録する
   - `BODY_SYSTEMS` の 2 つの欄を一時的に入れ替えて本体のテストを回し、赤になるテストを一覧にする。入れ替えは戻し、コミットしない
   - 完了の形: `research.md` に赤になったテストの一覧か、0 件のときは「取り違えを止める守りは字面の見直しだけ」の記録があり、0 件のときは design.md の RegistrationInjection の Risks にも同じ一文がある。作業の木は入れ替える前と同じ
   - _Dispatch: mechanical — 決めた試しを回して結果を書くだけ_

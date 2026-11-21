@@ -433,3 +433,9 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 
 - 段 6 の 3 本は中身を変えていない（`use super::*` は `boot_seam.rs` の項目と `World` に当たる）。テストの名前の末尾と数（`restore_seam_tests` 5・`persist_wiring_seam_tests` 2・`monitor_snapshot_seam_tests` 5）は前と同じで、道が `session::boot_seam::…` に変わっただけ。
 - `cargo test -p areka --bin areka` は 1836 件が緑（無視 3）・`--list` は 1839 件。`zorder_wiring_tests` 2 本も緑。
+
+### 13.10 `BODY_SYSTEMS` の欄の取り違えの実験（段 7・タスク 7.3・要件 4.2）
+
+- やったこと: `main.rs` の `BODY_SYSTEMS` の `menu_poll` と `after_input` の中身を入れ替え、`cargo test -p areka --bin areka --no-fail-fast` を 1 回だけ回した（統合テストは回していない）。直後に `main.rs` を元へ戻し、`git diff -- crates/areka/src/main.rs` が空であることを確かめた。コミットなし。
+- 結果: 1836 passed・0 failed・3 ignored。落ちたテストは 0 件。
+- 結論: 取り違えを止める守りは字面の見直しだけ。

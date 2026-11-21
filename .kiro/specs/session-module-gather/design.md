@@ -341,7 +341,7 @@ fn register_body_after_input(world: &mut World);
 **Implementation Notes**
 - Integration: テスト 5 か所は `crate::BODY_SYSTEMS` を渡す（テストから根を引く参照として 8.2 に載せる。`session/ghost_switch_test_support.rs:237` の `SwitchRig::new` を通る 46 ファイルもこの 1 か所に頼る）。`session-crate-split` で `session/` が crate になると、これらのテストは本体の `BODY_SYSTEMS` を引けなくなる＝次の spec のいちばん大きい直しになる見込みとして `research.md` の申し送りに書く。
 - Validation: 固定のテスト `register_systems_installs_the_escape_hook`・`ghost_session_restart_tests.rs:455` の口の据え付け・`SwitchRig::new` を使う 46 ファイルが前と同じ合否。
-- Risks: 2 つの欄は同じ型 `fn(&mut World)` なので、取り違えてもコンパイルは通り、登録の順だけが変わる。`Input` の段の系は互いの並びの指定を持たないので、赤になるテストがあるとは限らない。欄の名前（`menu_poll`・`after_input`）で呼ぶ位置を固定したうえで、実装の段で一度だけ `BODY_SYSTEMS` の 2 つの欄を入れ替えて回し、赤になるテストを `research.md` に記録する（入れ替えは戻してコミットしない）。0 件なら、取り違えを止める守りは字面の見直しだけであることをこの文と `research.md` に書く。
+- Risks: 2 つの欄は同じ型 `fn(&mut World)` なので、取り違えてもコンパイルは通り、登録の順だけが変わる。`Input` の段の系は互いの並びの指定を持たないので、赤になるテストがあるとは限らない。欄の名前（`menu_poll`・`after_input`）で呼ぶ位置を固定したうえで、実装の段で一度だけ `BODY_SYSTEMS` の 2 つの欄を入れ替えて回し、赤になるテストを `research.md` に記録する（入れ替えは戻してコミットしない）。0 件なら、取り違えを止める守りは字面の見直しだけであることをこの文と `research.md` に書く。 実験で取り違えを試した結果、bin の単体テストは全部通った（取り違えを止める守りは字面の見直しだけ）。
 
 #### MainItemMove
 
