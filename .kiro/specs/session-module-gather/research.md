@@ -266,3 +266,15 @@
 13. **受け持ちの持ち主**（OPEN QUESTION 3）: 証跡は `audit-areka-install-update/brief.md:11`（`roots*`・`readme*`）・`audit-areka-app/brief.md:11`・`:49`・roadmap の棚卸㊶の裁定 8 の ⑴（C26 の 3 本の重なりを 0 に戻した）。推す案は「持ち主は変えず、パスだけ書き換える」（要件の仮定どおり）。持ち主を `session/` で 1 本に寄せると、C26 の 3 本の範囲の組み直しになる。
 14. **`get_log` の分け方の証跡の強さ**（要件 10.8・5 章の 9）: 推す案は、`log_history` のテストに、移したモジュールの実の `module_path!()` で種別を引く較正を 1 本足すこと（足したテストは要件 10.3 の対応表で説明する）。足さない次点の案は、表の守り（ファイルが在るか）と文字列のテストだけで示すもの。
 15. **ソースを読むテストの絞り込み**（5 章の 10）: 推す案は、`readonly_tests.rs:92` の絞り込みを移した先の道（`session/readonly.rs`・`session/readonly_`）へ直し、`:82` の較正を `session/mod.rs` の `mod readonly;` へ向けること。同じ事実を確かめる形を保つ（要件 6.2）。絞った結果が空でないことを確かめる行を足すかは、議題 14 と同じく、足したテストの扱いになる。
+
+## 11. 要件の討議で設計の段へ回したもの（カテゴリ B）
+
+10 章の候補のうち、how の判断で要件を変えないものは設計の段（`/kiro-design`）で決める。
+
+1. **登録の入口とテスト**（10 章の 3）: `fn main` とテストの 5 か所（`app_exit_escape_tests.rs:137`・`ghost_session_reload_tests.rs:71`・`:179`・`ghost_session_restart_tests.rs:455`・`session/ghost_switch_test_support.rs:237`）が同じ順で全部の登録を呼べる入口を 1 つ置く形。テストの側から根を引く参照は 9.2 に載せる。
+2. **`main.rs` から移す項目の置き場**（10 章の 4）: `session/` の新しいファイル 1〜2 本（起動中の印の判定・起動の後の結線）と、テストの兄弟への名前の改め。
+3. **`main_*_tests.rs` の仕分け**（10 章の 5）: 1 本ずつの行き先（要件 2.4）。
+4. **cli の型 2 つの置き場と引き方**（10 章の 6）。
+5. **roots の分け方**（10 章の 8）: 残る `edit`・`desk`・`pick` のための新しい `src/roots/mod.rs` と、`edit.rs` の `super::` の書き換え。
+6. **書き換えの書き方**（10 章の 10・案 A）と **作業の順**（10 章の 11・案 C）。各段で `cargo check --workspace --all-targets` を緑に保ち、PR の前に `git diff -M --stat` で全部が移動として見えることを確かめる。
+7. **Research Needed**（7 章）: bevy_ecs 0.19.1 の並びの指定の無い系の走る順（順を保つので結論で作業は変わらない）・squash したときの移動の検出。
