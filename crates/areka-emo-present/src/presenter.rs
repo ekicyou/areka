@@ -136,6 +136,9 @@ mod frame_log_tests;
 #[path = "presenter_hide_contract_tests.rs"]
 mod hide_contract_tests;
 #[cfg(test)]
+#[path = "presenter_hit_test_support.rs"]
+mod hit_test_support;
+#[cfg(test)]
 #[path = "presenter_partial_recompose_gpu_tests.rs"]
 mod partial_recompose_gpu_tests;
 #[cfg(test)]
