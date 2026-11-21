@@ -203,7 +203,11 @@ fn main() -> Result<()> {
     // 系の登録（プロセスに 1 回・ここ 1 か所）。停止通知の channel は 1 本だけ作り、受信端をここで
     // 受け口へ据え、送出端の写しを下の起動の 2 経路へ渡す。main 自身の送出端は起動の分岐の後で落とす。
     let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel();
-    ghost_session::register_systems(app.world().borrow_mut().world_mut(), kanade_stop_rx);
+    ghost_session::register_systems(
+        app.world().borrow_mut().world_mut(),
+        kanade_stop_rx,
+        BODY_SYSTEMS,
+    );
     mcp::install(app.world().borrow_mut().world_mut(), mcp_inbox);
     roots::install(app.world().borrow_mut().world_mut());
     readonly::install(app.world().borrow_mut().world_mut());
@@ -355,6 +359,20 @@ fn main() -> Result<()> {
 
         told
     })
+}
+
+/// 本体だけのモジュールの系の登録（`register_systems` へ渡す）。
+pub(crate) const BODY_SYSTEMS: session::ghost_session::BodySystems =
+    session::ghost_session::BodySystems {
+        menu_poll: menu::register_menu_poll,
+        after_input: register_body_after_input,
+    };
+
+/// `install::register` → `update::register` → `mcp::register` の順。
+fn register_body_after_input(world: &mut World) {
+    install::register(world);
+    update::register(world);
+    mcp::register(world);
 }
 
 /// `run()` の結果を受けて後始末へ進む判断。

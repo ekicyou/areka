@@ -31,6 +31,15 @@ pub(crate) mod ghost_session_scope_scale;
 mod ghost_session_runtime;
 pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place};
 
+/// 本体だけのモジュールの系の登録（`main.rs` が渡す）。
+#[derive(Clone, Copy)]
+pub(crate) struct BodySystems {
+    /// 入力の取り出しの系の間（`user_break` の後・`balloon` の前）で呼ぶ。
+    pub(crate) menu_poll: fn(&mut World),
+    /// 入力の系の後・`FrameFinalize` への足し込みの前で呼ぶ。
+    pub(crate) after_input: fn(&mut World),
+}
+
 /// 系の登録をプロセスに 1 回・1 か所から行う。
 ///
 /// 各系の並び（`before`／`after`・`chain`）は各登録関数が持つ。ここは順に呼ぶだけ。
@@ -39,7 +48,11 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 /// （`NonSend`）が無ければ無操作で戻る。バルーンの離脱の系だけは `BalloonWiring` 不在で
 /// `error!(balloon_wiring_missing)` の枝を持つが、LogSink の起動のバルーン窓は
 /// `HitTest::none()` のままで `PointerLeave` が立たず、そこへは届かない。
-pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<KanadeNotice>) {
+pub(crate) fn register_systems(
+    world: &mut World,
+    kanade_stop_rx: Receiver<KanadeNotice>,
+    body: BodySystems,
+) {
     crate::session::hooks::install(world);
     crate::session::app_exit::install_input_hooks(world);
     areka_runtime::register_frame_system(world);
@@ -53,15 +66,13 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     crate::session::shell_balloon_switch::register_switch_drain(world);
     crate::session::reload::register(world);
     areka_input::user_break::register_user_break_drain(world);
-    menu::register_menu_poll(world);
+    (body.menu_poll)(world);
     areka_input::balloon::register_balloon_leave_system(world);
     areka_input::shell_box_handler::register_box_leave_system(world);
     areka_input::choice_drain::register_choice_drain(world);
     areka_input::char_watch::register_char_watch(world);
     areka_input::balloon_wheel::register_balloon_wheel(world);
-    crate::install::register(world);
-    crate::update::register(world);
-    crate::mcp::register(world);
+    (body.after_input)(world);
 
     world.resource_mut::<Schedules>().add_systems(
         FrameFinalize,

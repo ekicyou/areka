@@ -234,7 +234,7 @@ impl SwitchRig {
         world.init_resource::<Schedules>();
         world.insert_non_send(AppExit::new());
         let (notice_tx, notice_rx) = mpsc::channel::<KanadeNotice>();
-        register_systems(&mut world, notice_rx);
+        register_systems(&mut world, notice_rx, crate::BODY_SYSTEMS);
 
         let boots: BootLedger = Rc::default();
         let scripts: HashMap<String, FakeShiori> = scripts

@@ -452,7 +452,7 @@ fn boots_twice_in_one_process_without_double_registration() {
     world.spawn(GhostWindowMarker);
 
     let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
-    register_systems(&mut world, kanade_stop_rx);
+    register_systems(&mut world, kanade_stop_rx, crate::BODY_SYSTEMS);
     // 本体の口は最初の巡より前に据わる（据え忘れは本番で `session_hooks_missing` の縮退になる）。
     assert!(
         world.contains_resource::<areka_runtime::session_hooks::SessionHooks>(),

@@ -68,7 +68,7 @@ fn split_keeps_window_side_and_attach_copies_new_kanade() {
     world.init_resource::<Schedules>();
     world.insert_non_send(AppExit::new());
     let (kanade_stop, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
-    register_systems(&mut world, kanade_stop_rx);
+    register_systems(&mut world, kanade_stop_rx, crate::BODY_SYSTEMS);
 
     let sample = acquire_emo2();
     let descript = StartupDescriptValues {
@@ -176,7 +176,7 @@ fn set_names_delegates_to_runtime_or_returns_false() {
     world.init_resource::<Schedules>();
     world.insert_non_send(AppExit::new());
     let (kanade_stop, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
-    register_systems(&mut world, kanade_stop_rx);
+    register_systems(&mut world, kanade_stop_rx, crate::BODY_SYSTEMS);
     let sample = acquire_emo2();
     let (wiring, shiori) = scripted_wiring(&sample);
     let ghost = GhostDecision {

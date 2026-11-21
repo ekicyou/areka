@@ -101,7 +101,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: standard — 最大の塊で、呼び手と入れ子とソースを読むテストを同時に合わせる_
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.6, 2.1, 2.2, 2.4, 6.1, 6.2, 7.1, 7.3, 7.9_
 
-- [ ] 7.2 本体だけの系の登録を `main.rs` から渡す
+- [x] 7.2 本体だけの系の登録を `main.rs` から渡す
   - `session/ghost_session.rs` に `BodySystems`（`menu_poll`・`after_input` の関数のポインタ 2 つ・`Clone, Copy`）を足し、`register_systems` に `body: BodySystems` を足して、`menu::register_menu_poll(world)` を `(body.menu_poll)(world)` に、`install`・`update`・`mcp` の 3 行を `(body.after_input)(world)` にする。ほかの呼び出しの順は変えない
   - `main.rs` に `BODY_SYSTEMS` と `register_body_after_input`（`install::register` → `update::register` → `mcp::register`）を足し、`fn main` の 1 か所で渡す
   - 登録を呼ぶテスト 5 か所（`app_exit_escape_tests.rs:137`・`ghost_session_reload_tests.rs:71`・`:179`・`ghost_session_restart_tests.rs:455`・`session/ghost_switch_test_support.rs:237`）に `crate::BODY_SYSTEMS` を足す
@@ -185,3 +185,4 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
 - 5.2: `crates/areka/tests/emo2_mcp_real_run.rs` の 1 本は `#[ignore]` が無く、`cargo test -p areka --test emo2_mcp_real_run` は実機で areka を起こす（排他テストの机が要る）。5.2 の実装中に机なしで 1 回走り、緑だった。
 - 5.2: 移した宣言の doc が「本ファイル」のように元の置き場を指す語を持つときは、行き先で誤りになるのでファイル名を名指しへ直す。
 - 7.1: 触らない crate `areka-placement` に `main.rs` の `restore_merged_placements`／`boot_monitor_snapshot` を名指す古い説明が 4 か所（`src/diag.rs:46`・`src/persist.rs:330`・`src/resolver.rs:97`・`src/resolver_resolve_balloon_tests.rs:123`）。9.2 の申し送りに載せる。
+- 7.2: 本体の説明 5 か所（`menu/mod.rs:223`・`:254`・`install/mod.rs:132`・`update/mod.rs:224`・`mcp/mod.rs:48`）が呼び手を `ghost_session::register_systems` と書く（関数ポインタ経由で今も正しい）。9.2 の申し送りに「名目上の渡し手は `main.rs` の `BODY_SYSTEMS`」と載せる。

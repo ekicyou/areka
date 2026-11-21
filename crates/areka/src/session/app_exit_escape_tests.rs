@@ -134,7 +134,11 @@ fn register_systems_installs_the_escape_hook() {
     world.init_resource::<Schedules>();
     world.insert_non_send(wintf::AppExit::new());
     let (_kanade_stop, kanade_stop_rx) = std::sync::mpsc::channel::<areka_kanade::KanadeNotice>();
-    crate::session::ghost_session::register_systems(&mut world, kanade_stop_rx);
+    crate::session::ghost_session::register_systems(
+        &mut world,
+        kanade_stop_rx,
+        crate::BODY_SYSTEMS,
+    );
     assert!(
         world.contains_resource::<areka_input::hooks::InputHooks>(),
         "register_systems が強制退避の口を据える"
