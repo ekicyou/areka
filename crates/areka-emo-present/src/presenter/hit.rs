@@ -12,7 +12,7 @@ use super::target::PresentTarget;
 /// 所有権を持たない借用ビューであり、寿命は presenter の不変借用に従う（マウス移動ごとの割当を
 /// 生まない）。フィールドは 2 つとも「同一の判定 1 回」から生まれた対であり、呼び手は
 /// **両者を分離して再計算してはならない**——[`surface_point`] は縮約の結果そのもの（唯一の生成点は
-/// `hit_region_client` 内の [`ScaleRatio::unscale_coord`] の呼出）であり、下流は横流しするのみである（二重縮約の構造的排除・design §Data Models 不変条件 (1)）。
+/// `hit_region_client` 内の [`ScaleRatio::unscale_coord`] の呼出）であり、下流は横流しするのみである（縮約を二重に掛けない）。
 ///
 /// [`surface_point`]: Self::surface_point
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
