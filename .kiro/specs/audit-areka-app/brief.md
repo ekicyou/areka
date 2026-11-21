@@ -144,3 +144,5 @@
 
 - **件 1（消したテストの名指し）**: `crates/areka/src/app_exit_escape_tests.rs:73` の説明が `handler_left_double_click_without_ctrl_does_not_despawn_and_sends` を名で指す。このテストは入力の crate の側で消した。Ctrl なしの左ダブルクリックの送出は入力の crate の `handler_double_click_left_and_right_send`（`crates/areka-input/src/char_pointer_tests.rs`）が見ており、窓を閉じない側は古い名を書いている当の `only_escape_terminates_ghost_windows` 自身が見ている。その説明を、消した名でなく役目（入力の crate の送出のテスト）で指す形に書き直す。
 - **件 2（テストのファイルの古い名）**: `crates/areka/src/app_exit_tests.rs:182` の説明が「`input_events_tests.rs` の `world_with_wiring` は私有」と書く。ファイルは `crates/areka-input/src/char_pointer_tests.rs` に名を変えた。`world_with_wiring` は入力の crate の `pointer_test_support` の公開の補助なので「私有」も事実でない。パスと名を書かずに、役目で指す形に直す。
+
+- **件 3（古いコメント・2026-11-22 完了の棚卸で追記）**: `crates/areka/src/ghost_session.rs:820` のコメント「`BalloonWiring`／`ChoiceSelectionInbox`」は、結線する `areka_input::balloon::wire_balloon_choice`（`crates/areka-input/src/balloon.rs` の 407〜412 行）が `BalloonWiring`・`BalloonHover`・`ChoiceSelectionInbox`・`ShellBoxHover` の 4 つを挿すので古い。本体のファイルは `audit-areka-input-menu` の範囲の外（要件 7.3）。

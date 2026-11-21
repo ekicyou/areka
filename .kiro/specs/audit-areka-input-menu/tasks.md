@@ -174,3 +174,4 @@
 - `emo_text_debugs` を `events_named` へ寄せる上の申し送りは成り立たない（DEBUG の行に `event` の欄が無い）。寄せずに閉じる。
 - 5.2 の全体テストで、この spec が触っていない wintf の単体テストが GPU の描画のテスト 14 本の赤のあと止まった（wintf の差分は doc コメント 1 行だけ）。wintf だけを 1 回回し直して緑（1603 passed）。wintf より前のクレートは全部緑。wintf より後の段は最終検証の全体テストで見る。
 - 5.2 の 5 回目の連鎖 5 件は要件 9.8 の Fable のまとめを通さず、その回の中で直して grep で見回した（打ち切りの回のため）。
+- 完了時の棚卸（2026-11-22）: その場で解決 1＝`frame_test_support.rs` の `gpu_attach_world` は、GPU の許可を取った後に panic する所が無い（装置を World へ入れるのは失敗しうる呼び出しの後）ので直す所が無いと確かめて閉じた。申し送り 3＝`audit-areka-app` の brief（件 3・`ghost_session.rs:820` のコメント）・`session-module-gather` の brief（`doc/COMPAT_ARCHITECTURE.md:412` の古いファイル名）・`clippy-199-lints` の brief（areka-runtime の clippy 1.100 の指摘）。起票 1＝`test-name-work-tags`（テストの名の作業番号の札 29 ファイル 284 本・規模が spec 1 本）。`emo_text_debugs` の申し送りは上のとおり成り立たず閉じた。
